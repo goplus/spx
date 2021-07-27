@@ -20,9 +20,11 @@ type Game struct {
 	Base
 }
 
+type SwitchAction int
+
 const (
-	Next = iota // TODO: type?
-	Prev
+	Prev SwitchAction = -1
+	Next SwitchAction = 1
 )
 
 // -----------------------------------------------------------------------------

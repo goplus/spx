@@ -19,9 +19,18 @@ package spx
 type Sprite struct {
 }
 
-const (
-	Mouse = iota // TODO: type?
-	Edge
+type Object interface {
+	objMark()
+}
+
+type specialObj int
+
+func (p specialObj) objMark() {}
+func (p *Sprite) objMark()    {}
+
+var (
+	Mouse Object = specialObj(1)
+	Edge  Object = specialObj(2)
 )
 
 const (
@@ -85,7 +94,7 @@ func (p *Sprite) Think(sth string, secs ...float64) {
 //   DistanceTo(sprite)
 //   DistanceTo(gox.Mouse)
 //   DistanceTo(gox.Edge)
-func (p *Sprite) DistanceTo(obj interface{}) float64 {
+func (p *Sprite) DistanceTo(obj Object) float64 {
 	panic("todo")
 }
 
@@ -96,7 +105,7 @@ func (p *Sprite) Step(n float64) {
 // Goto func:
 //   Goto(sprite)
 //   Goto(gox.Mouse)
-func (p *Sprite) Goto(obj interface{}) float64 {
+func (p *Sprite) Goto(obj Object) float64 {
 	panic("todo")
 }
 
@@ -195,7 +204,7 @@ type Color = float64
 //   Touching(sprite)
 //   Touching(spx.Mouse)
 //   Touching(spx.Edge)
-func (p *Sprite) Touching(obj interface{}) bool {
+func (p *Sprite) Touching(obj Object) bool {
 	panic("todo")
 }
 

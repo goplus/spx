@@ -19,18 +19,18 @@ package spx
 type Base struct {
 }
 
-type Object struct {
+type Value struct {
 }
 
-func (p Object) String() string {
+func (p Value) String() string {
 	panic("todo")
 }
 
-func (p Object) Int() int {
+func (p Value) Int() int {
 	panic("todo")
 }
 
-func (p Object) Float() float64 {
+func (p Value) Float() float64 {
 	panic("todo")
 }
 
@@ -78,7 +78,7 @@ func (p *Base) Ask(ask string) {
 	panic("todo")
 }
 
-func (p *Base) Answer() Object {
+func (p *Base) Answer() Value {
 	panic("todo")
 }
 
