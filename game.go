@@ -22,7 +22,8 @@ import (
 
 type Game struct {
 	Base
-	fs FileSystem
+	fs     FileSystem
+	turtle turtleCanvas
 
 	width  int
 	height int
@@ -39,6 +40,12 @@ const (
 	Prev SwitchAction = -1
 	Next SwitchAction = 1
 )
+
+// -----------------------------------------------------------------------------
+
+func (p *Game) sleep(tick int64) {
+	panic("todo")
+}
 
 // -----------------------------------------------------------------------------
 
@@ -66,6 +73,44 @@ func (p *Game) doSize() {
 		w, h := img.Size()
 		p.width, p.height = w/c.bitmapResolution, h/c.bitmapResolution
 	}
+}
+
+// -----------------------------------------------------------------------------
+
+func (p *Game) getTurtle() turtleCanvas {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	return p.turtle
+}
+
+func (p *Game) clearPenTrails() {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	p.turtle.clear()
+}
+
+func (p *Game) stampCostume(di *spriteDrawInfo) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	p.turtle.stampCostume(di)
+}
+
+func (p *Game) movePen(sp *Sprite, x, y float64) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	screenW, screenH := p.size()
+	p.turtle.penLine(&penLine{
+		x1:    (screenW >> 1) + int(sp.x),
+		y1:    (screenH >> 1) - int(sp.y),
+		x2:    (screenW >> 1) + int(x),
+		y2:    (screenH >> 1) - int(y),
+		clr:   sp.penColor,
+		width: int(sp.penWidth),
+	})
 }
 
 // -----------------------------------------------------------------------------

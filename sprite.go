@@ -18,6 +18,7 @@ package spx
 
 import (
 	"image/color"
+	"math"
 )
 
 type Sprite struct {
@@ -112,55 +113,120 @@ func (p *Sprite) Think(sth string, secs ...float64) {
 
 // -----------------------------------------------------------------------------
 
+func (p *Sprite) getXY() (x, y float64) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	return p.x, p.y
+}
+
 // DistanceTo func:
 //   DistanceTo(sprite)
 //   DistanceTo(gox.Mouse)
 //   DistanceTo(gox.Edge)
 func (p *Sprite) DistanceTo(obj Object) float64 {
+	p.mutex.Lock()
+	x, y := p.x, p.y
+	p.mutex.Unlock()
+
+	_, _ = x, y
 	panic("todo")
+	// return p.g.distanceTo(x, y, name)
 }
 
-func (p *Sprite) Step(n float64) {
-	panic("todo")
+func (p *Sprite) doMoveTo(x, y float64) {
+	if p.isPenDown {
+		p.g.movePen(p, x, y)
+	}
+	p.x, p.y = x, y
+}
+
+func (p *Sprite) Step(step float64) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	sin, cos := math.Sincos(toRadian(p.direction))
+	p.doMoveTo(p.x+step*sin, p.y+step*cos)
 }
 
 // Goto func:
 //   Goto(sprite)
 //   Goto(gox.Mouse)
-func (p *Sprite) Goto(obj Object) float64 {
+func (p *Sprite) Goto(obj Object) {
 	panic("todo")
+	// x, y := p.g.mouseOrSpritePos(where)
+	// p.setXY(x, y)
 }
+
+const (
+	glideTick = 1e8
+)
 
 func (p *Sprite) Glide(x, y float64, secs float64) {
-	panic("todo")
+	inDur := int64(secs * 1e9)
+	n := int(inDur / glideTick)
+	if n > 0 {
+		x0, y0 := p.getXY()
+		dx := (x - x0) / float64(n)
+		dy := (y - y0) / float64(n)
+		for i := 1; i < n; i++ {
+			p.g.sleep(glideTick)
+			inDur -= glideTick
+			x0 += dx
+			y0 += dy
+			p.SetXY(x0, y0)
+		}
+	}
+	p.g.sleep(inDur)
+	p.SetXY(x, y)
 }
 
-func (p *Sprite) GotoXY(x, y float64) {
-	panic("todo")
+func (p *Sprite) SetXY(x, y float64) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	p.doMoveTo(x, y)
 }
 
 func (p *Sprite) Xpos() float64 {
-	panic("todo")
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	return p.x
 }
 
 func (p *Sprite) SetXpos(x float64) {
-	panic("todo")
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	p.doMoveTo(x, p.y)
 }
 
 func (p *Sprite) ChangeXpos(dx float64) {
-	panic("todo")
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	p.doMoveTo(p.x+dx, p.y)
 }
 
 func (p *Sprite) Ypos() float64 {
-	panic("todo")
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	return p.y
 }
 
 func (p *Sprite) SetYpos(y float64) {
-	panic("todo")
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	p.doMoveTo(p.x, y)
 }
 
 func (p *Sprite) ChangeYpos(dy float64) {
-	panic("todo")
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	p.doMoveTo(p.x, p.y+dy)
 }
 
 // -----------------------------------------------------------------------------
@@ -220,7 +286,7 @@ func (p *Sprite) ChangeSize(delta float64) {
 
 // -----------------------------------------------------------------------------
 
-type Color = float64
+type Color = color.RGBA
 
 // Touching func:
 //   Touching(sprite)
