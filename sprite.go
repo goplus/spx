@@ -19,6 +19,8 @@ package spx
 import (
 	"image/color"
 	"math"
+
+	"github.com/goplus/spx/internal/gdi/clrutil"
 )
 
 type Sprite struct {
@@ -322,24 +324,32 @@ func (p *Sprite) GotoFront(n int) {
 
 // -----------------------------------------------------------------------------
 
-func (p *Sprite) Clear() {
-	panic("todo")
-}
-
 func (p *Sprite) Stamp() {
-	panic("todo")
+	p.stampCostume(p.getDrawInfo())
 }
 
 func (p *Sprite) PenUp() {
-	panic("todo")
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	p.isPenDown = false
 }
 
 func (p *Sprite) PenDown() {
-	panic("todo")
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	p.isPenDown = true
 }
 
 func (p *Sprite) SetPenColor(color Color) {
-	panic("todo")
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	h, _, v := clrutil.RGB2HSV(color.R, color.G, color.B)
+	p.penHue = (200 * h) / 360
+	p.penShade = 50 * v
+	p.penColor = color
 }
 
 func (p *Sprite) ChangePenColor(delta float64) {
@@ -347,27 +357,81 @@ func (p *Sprite) ChangePenColor(delta float64) {
 }
 
 func (p *Sprite) SetPenShade(shade float64) {
-	panic("todo")
+	p.setPenShade(shade, false)
 }
 
 func (p *Sprite) ChangePenShade(delta float64) {
-	panic("todo")
+	p.setPenShade(delta, true)
 }
 
-func (p *Sprite) SetPenSize(shade float64) {
-	panic("todo")
-}
-
-func (p *Sprite) ChangePenSize(delta float64) {
-	panic("todo")
-}
-
-func (p *Sprite) SetPenHue(shade float64) {
-	panic("todo")
+func (p *Sprite) SetPenHue(hue float64) {
+	p.setPenHue(hue, false)
 }
 
 func (p *Sprite) ChangePenHue(delta float64) {
-	panic("todo")
+	p.setPenHue(delta, true)
+}
+
+func (p *Sprite) setPenHue(v float64, change bool) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	if change {
+		v += p.penHue
+	}
+	v = math.Mod(v, 200)
+	if v < 0 {
+		v += 200
+	}
+	p.penHue = v
+	p.doUpdatePenColor()
+}
+
+func (p *Sprite) setPenShade(v float64, change bool) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	if change {
+		v += p.penShade
+	}
+	v = math.Mod(v, 200)
+	if v < 0 {
+		v += 200
+	}
+	p.penShade = v
+	p.doUpdatePenColor()
+}
+
+func (p *Sprite) doUpdatePenColor() {
+	r, g, b := clrutil.HSV2RGB((p.penHue*180)/100, 1, 1)
+	shade := p.penShade
+	if shade > 100 { // range 0..100
+		shade = 200 - shade
+	}
+	if shade < 50 {
+		r, g, b = clrutil.MixRGB(0, 0, 0, r, g, b, (10+shade)/60)
+	} else {
+		r, g, b = clrutil.MixRGB(r, g, b, 255, 255, 255, (shade-50)/60)
+	}
+	p.penColor = color.RGBA{R: r, G: g, B: b, A: p.penColor.A}
+}
+
+func (p *Sprite) SetPenSize(size float64) {
+	p.setPenWidth(size, true)
+}
+
+func (p *Sprite) ChangePenSize(delta float64) {
+	p.setPenWidth(delta, true)
+}
+
+func (p *Sprite) setPenWidth(w float64, change bool) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	if change {
+		w += p.penWidth
+	}
+	p.penWidth = w
 }
 
 // -----------------------------------------------------------------------------

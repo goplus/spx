@@ -84,7 +84,7 @@ func (p *Game) getTurtle() turtleCanvas {
 	return p.turtle
 }
 
-func (p *Game) clearPenTrails() {
+func (p *Sprite) Clear() {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
