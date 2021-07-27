@@ -16,8 +16,17 @@
 
 package spx
 
+import (
+	"io"
+)
+
 type Game struct {
 	Base
+}
+
+type FileSystem interface {
+	Open(file string) (io.ReadCloser, error)
+	Close() error
 }
 
 type SwitchAction int
@@ -30,11 +39,11 @@ const (
 // -----------------------------------------------------------------------------
 
 func (p *Game) SceneName() string {
-	panic("todo")
+	return p.costumeName()
 }
 
 func (p *Game) SceneIndex() int {
-	panic("todo")
+	return p.costumeIndex()
 }
 
 // StartScene func:
@@ -43,11 +52,13 @@ func (p *Game) SceneIndex() int {
 //   StartScene(spx.Next)
 //   StartScene(spx.Prev)
 func (p *Game) StartScene(scene interface{}, wait ...bool) {
-	panic("todo")
+	if p.setCostume(scene) {
+		// TODO: send event & wait
+	}
 }
 
 func (p *Game) NextScene(wait ...bool) {
-	panic("todo")
+	p.StartScene(Next, wait...)
 }
 
 // -----------------------------------------------------------------------------

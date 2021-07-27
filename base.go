@@ -16,7 +16,15 @@
 
 package spx
 
+import (
+	"sync"
+)
+
 type Base struct {
+	costumes []*costume
+
+	mutex               sync.Mutex
+	currentCostumeIndex int
 }
 
 type Value struct {
@@ -32,6 +40,81 @@ func (p Value) Int() int {
 
 func (p Value) Float() float64 {
 	panic("todo")
+}
+
+// -----------------------------------------------------------------------------
+
+func (p *Base) findCostume(name string) int {
+	for i, c := range p.costumes {
+		if c.name == name {
+			return i
+		}
+	}
+	return -1
+}
+
+func (p *Base) setCostume(val interface{}) bool {
+	switch v := val.(type) {
+	case string:
+		return p.setCostumeByName(v)
+	case int:
+		return p.setCostumeByIndex(v)
+	case SwitchAction:
+		if v == Prev {
+			p.prevCostume()
+		} else {
+			p.nextCostume()
+		}
+		return true
+	default:
+		panic("setCostume: invalid argument type")
+	}
+}
+
+func (p *Base) setCostumeByIndex(idx int) bool {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	if idx >= len(p.costumes) {
+		panic("invalid costume index")
+	}
+	if p.currentCostumeIndex != idx {
+		p.currentCostumeIndex = idx
+		return true
+	}
+	return false
+}
+
+func (p *Base) setCostumeByName(name string) bool {
+	if idx := p.findCostume(name); idx >= 0 {
+		return p.setCostumeByIndex(idx)
+	}
+	return false
+}
+
+func (p *Base) prevCostume() {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	p.currentCostumeIndex = (len(p.costumes) + p.currentCostumeIndex - 1) % len(p.costumes)
+}
+
+func (p *Base) nextCostume() {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	p.currentCostumeIndex = (p.currentCostumeIndex + 1) % len(p.costumes)
+}
+
+func (p *Base) costumeIndex() int {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	return p.currentCostumeIndex
+}
+
+func (p *Base) costumeName() string {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	return p.costumes[p.currentCostumeIndex].name
 }
 
 // -----------------------------------------------------------------------------

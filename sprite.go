@@ -16,7 +16,28 @@
 
 package spx
 
+import (
+	"image/color"
+)
+
 type Sprite struct {
+	Base
+
+	x, y          float64
+	scale         float64
+	direction     float64
+	rotationStyle RotationStyle
+	say           *sayOrThinker
+
+	penColor color.RGBA
+	penShade float64
+	penHue   float64
+	penWidth float64
+
+	visible     bool
+	isDraggable bool
+	isCloned    bool
+	isPenDown   bool
 }
 
 type Object interface {
@@ -63,19 +84,19 @@ func (p *Sprite) Show() {
 // -----------------------------------------------------------------------------
 
 func (p *Sprite) CostumeName() string {
-	panic("todo")
+	return p.costumeName()
 }
 
 func (p *Sprite) CostumeIndex() int {
-	panic("todo")
+	return p.costumeIndex()
 }
 
 func (p *Sprite) SetCostume(costume interface{}) {
-	panic("todo")
+	p.setCostume(costume)
 }
 
 func (p *Sprite) NextCostume() {
-	panic("todo")
+	p.nextCostume()
 }
 
 // -----------------------------------------------------------------------------
