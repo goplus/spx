@@ -18,6 +18,7 @@ package spx
 
 import (
 	"image"
+	"math"
 	"sync"
 
 	"github.com/hajimehoshi/ebiten"
@@ -28,12 +29,37 @@ const (
 	defaultFilterMode = ebiten.FilterLinear
 )
 
+func toRadian(dir float64) float64 {
+	return math.Pi * dir / 180
+}
+
+// -------------------------------------------------------------------------------------
+
+type drawContext struct {
+	*ebiten.Image
+}
+
+type hitContext struct {
+	Pos image.Point
+}
+
+type hitResult struct {
+	Target interface{}
+}
+
+type shape interface {
+	draw(dc drawContext)
+	hit(hc hitContext) (hr hitResult, ok bool)
+}
+
 // -------------------------------------------------------------------------------------
 
 // costume class.
 type costume struct {
 	name string
 	file string
+
+	bitmapResolution int
 
 	cx    float64
 	cy    float64

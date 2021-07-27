@@ -22,6 +22,7 @@ import (
 
 type Sprite struct {
 	Base
+	g *Game
 
 	x, y          float64
 	scale         float64

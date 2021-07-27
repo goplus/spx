@@ -1,4 +1,4 @@
-spx - A Graphical User Interface Game Engine for learning Go+
+A Graphical User Interface Game Engine for learning Go+
 ========
 
 [![Build Status](https://github.com/goplus/spx/actions/workflows/go.yml/badge.svg)](https://github.com/goplus/spx/actions/workflows/go.yml)

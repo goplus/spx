@@ -22,6 +22,10 @@ import (
 
 type Game struct {
 	Base
+	fs FileSystem
+
+	width  int
+	height int
 }
 
 type FileSystem interface {
@@ -35,6 +39,34 @@ const (
 	Prev SwitchAction = -1
 	Next SwitchAction = 1
 )
+
+// -----------------------------------------------------------------------------
+
+func (p *Game) getWidth() int {
+	if p.width == 0 {
+		p.doSize()
+	}
+	return p.width
+}
+
+func (p *Game) size() (int, int) {
+	if p.width == 0 {
+		p.doSize()
+	}
+	return p.width, p.height
+}
+
+func (p *Game) doSize() {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	if p.width == 0 {
+		c := p.costumes[p.currentCostumeIndex]
+		img, _, _ := c.needImage(p.fs)
+		w, h := img.Size()
+		p.width, p.height = w/c.bitmapResolution, h/c.bitmapResolution
+	}
+}
 
 // -----------------------------------------------------------------------------
 
