@@ -18,6 +18,9 @@ package spx
 
 import (
 	"io"
+	"math/rand"
+
+	"github.com/goplus/spx/internal/gdi"
 )
 
 type FileSystem interface {
@@ -76,6 +79,56 @@ func (p *Game) doSize() {
 	}
 }
 
+func (p *Game) getGdiPos(x, y float64) (int, int) {
+	screenW, screenH := p.size()
+	return int(x) + (screenW >> 1), (screenH >> 1) - int(y)
+}
+
+func (p *Game) touchingPoint(dst *Sprite, x, y float64) bool {
+	sp, pt := dst.getGdiSprite()
+	sx, sy := p.getGdiPos(x, y)
+	return gdi.TouchingPoint(sp, pt, sx, sy)
+}
+
+func (p *Game) touchingSpriteBy(dst *Sprite, name string) bool {
+	sp1, pt1 := dst.getGdiSprite()
+
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	for _, item := range p.items {
+		if sp, ok := item.(*Sprite); ok && sp != dst {
+			if sp.name == name {
+				sp2, pt2 := sp.getGdiSprite()
+				if gdi.Touching(sp1, pt1, sp2, pt2) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+func (p *Game) objectPos(obj interface{}) (float64, float64) {
+	switch v := obj.(type) {
+	case string:
+		if sp := p.findSprite(v); sp != nil {
+			return sp.getXY()
+		}
+		panic("objectPos: sprite not found - " + v)
+	case *Sprite:
+		return v.getXY()
+	case specialObj:
+		if v == Mouse {
+			return p.getMousePos()
+		} else if v == Random {
+			screenW, screenH := p.size()
+			mx, my := rand.Intn(screenW), rand.Intn(screenH)
+			return float64(mx - (screenW >> 1)), float64((screenH >> 1) - my)
+		}
+	}
+	panic("objectPos: unexpected input")
+}
+
 // -----------------------------------------------------------------------------
 
 func (p *Game) getTurtle() turtleCanvas {
@@ -85,7 +138,7 @@ func (p *Game) getTurtle() turtleCanvas {
 	return p.turtle
 }
 
-func (p *Sprite) Clear() {
+func (p *Game) Clear() {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -173,7 +226,7 @@ func (p *Game) activateShape(child shape) {
 	}
 }
 
-func (p *Game) goBackLayers(spr *Sprite, n int) {
+func (p *Game) goBackByLayers(spr *Sprite, n int) {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -244,6 +297,20 @@ func (p *Game) doFindSprite(src shape) int {
 	return -1
 }
 
+func (p *Game) findSprite(name string) *Sprite {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	for _, item := range p.items {
+		if sp, ok := item.(*Sprite); ok {
+			if !sp.isCloned && sp.name == name {
+				return sp
+			}
+		}
+	}
+	return nil
+}
+
 // -----------------------------------------------------------------------------
 
 func (p *Game) SceneName() string {
@@ -290,6 +357,10 @@ func (p *Game) MousePressed() bool {
 }
 
 func (p *Game) Username() string {
+	panic("todo")
+}
+
+func (p *Game) getMousePos() (x, y float64) {
 	panic("todo")
 }
 

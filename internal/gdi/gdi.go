@@ -41,7 +41,6 @@ type TextRender struct {
 // NewTextRender creates a text rendering engine.
 //
 func NewTextRender(face font.Face, width int, dy int) TextRender {
-
 	r := text.NewRender(face, fixed.I(width), fixed.I(dy))
 	return TextRender{r}
 }
@@ -49,7 +48,6 @@ func NewTextRender(face font.Face, width int, dy int) TextRender {
 // Size returns width and height of rendered text.
 //
 func (p TextRender) Size() (int, int) {
-
 	w, h := p.Render.Size()
 	return w.Ceil(), h.Ceil()
 }
@@ -57,14 +55,12 @@ func (p TextRender) Size() (int, int) {
 // Draw draws rendered text.
 //
 func (p TextRender) Draw(target *ebiten.Image, x, y int, clr color.Color, mode int) {
-
 	p.Render.Draw(target, fixed.I(x), fixed.I(y), clr, mode)
 }
 
 // DrawText draws input text.
 //
 func DrawText(target *ebiten.Image, f font.Face, x, y int, text string, clr color.Color, mode int) {
-
 	render := NewTextRender(f, 0x80000, 0)
 	render.AddText(text)
 	render.Draw(target, x, y, clr, mode)
@@ -73,7 +69,6 @@ func DrawText(target *ebiten.Image, f font.Face, x, y int, text string, clr colo
 // DrawLines draws multiline text.
 //
 func DrawLines(target *ebiten.Image, f font.Face, x, y int, width int, text string, clr color.Color, mode int) {
-
 	render := NewTextRender(f, width, 0)
 	render.AddText(text)
 	render.Draw(target, x, y, clr, mode)
@@ -91,7 +86,6 @@ type Canvas struct {
 // Start creates a canvas object.
 //
 func Start(target *ebiten.Image) Canvas {
-
 	w := new(bytes.Buffer)
 	s := svgo.New(w)
 	cx, cy := target.Size()
@@ -102,7 +96,6 @@ func Start(target *ebiten.Image) Canvas {
 // End draws canvas data onto the target image.
 //
 func (p Canvas) End() {
-
 	p.SVG.End()
 	img, err := svg.Decode(p.SVG.Writer.(*bytes.Buffer))
 	if err != nil {

@@ -58,7 +58,6 @@ func NewSpriteFromRectangle(rect image.Rectangle) *Sprite {
 
 // NewSpriteFromScreen func.
 func NewSpriteFromScreen(screen *ebiten.Image) *Sprite {
-
 	var bx, by, ex, ey int
 	var w, h = screen.Size()
 
@@ -105,19 +104,16 @@ lzNext4:
 
 // TouchingColor func.
 func TouchingColor(sp1 *Sprite, pt1 image.Point, sp2 *Sprite, pt2 image.Point, clr color.RGBA) bool {
-
 	if sp1 == nil || sp2 == nil {
 		return false
 	}
-
-	return false
+	panic("todo")
 }
 
 // -------------------------------------------------------------------------------------
 
 // Touching func.
 func Touching(sp1 *Sprite, pt1 image.Point, sp2 *Sprite, pt2 image.Point) bool {
-
 	if sp1 == nil || sp2 == nil {
 		return false
 	}
@@ -139,19 +135,16 @@ func Touching(sp1 *Sprite, pt1 image.Point, sp2 *Sprite, pt2 image.Point) bool {
 
 // TouchingPoint func.
 func TouchingPoint(sp *Sprite, pt image.Point, x, y int) bool {
-
 	return TouchingRect(sp, pt, x, y, x+1, y+1)
 }
 
 // TouchingRect func.
 func TouchingRect(sp *Sprite, pt image.Point, x1, y1, x2, y2 int) bool {
-
 	return TouchingRectangle(sp, pt, image.Rect(x1, y1, x2, y2))
 }
 
 // TouchingRectangle func.
 func TouchingRectangle(sp1 *Sprite, pt1 image.Point, rect2 image.Rectangle) bool {
-
 	src1 := (*image.RGBA)(sp1)
 	rect1 := src1.Rect.Add(pt1)
 	rectd := rect1.Intersect(rect2)
@@ -165,7 +158,6 @@ func TouchingRectangle(sp1 *Sprite, pt1 image.Point, rect2 image.Rectangle) bool
 }
 
 func rgbaNotNil(pix []uint8) bool {
-
 	for i := 3; i < len(pix); i += 4 {
 		if pix[i] != 0 {
 			return true
@@ -178,13 +170,11 @@ func rgbaNotNil(pix []uint8) bool {
 
 // Image func.
 func (p *Sprite) Image() *image.RGBA {
-
 	return (*image.RGBA)(p)
 }
 
 // GetTrackPos func.
 func (p *Sprite) GetTrackPos() image.Point {
-
 	off := rgbaFirstPix(p.Pix)
 	if off < 0 {
 		return p.Rect.Min
@@ -194,7 +184,6 @@ func (p *Sprite) GetTrackPos() image.Point {
 }
 
 func rgbaFirstPix(pix []uint8) (off int) {
-
 	for i := 3; i < len(pix); i += 4 {
 		if pix[i] != 0 {
 			return

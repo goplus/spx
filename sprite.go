@@ -20,12 +20,15 @@ import (
 	"image/color"
 	"math"
 
+	"github.com/goplus/spx/internal/gdi"
 	"github.com/goplus/spx/internal/gdi/clrutil"
 )
 
 type Sprite struct {
 	baseObj
 	*Game
+
+	name string
 
 	x, y          float64
 	scale         float64
@@ -54,8 +57,9 @@ func (p specialObj) objMark() {}
 func (p *Sprite) objMark()    {}
 
 var (
-	Mouse Object = specialObj(1)
-	Edge  Object = specialObj(2)
+	Mouse  = specialObj(1)
+	Edge   = specialObj(2)
+	Random = specialObj(3)
 )
 
 const (
@@ -285,10 +289,6 @@ func (p *Sprite) SetRotationStyle(style RotationStyle) {
 	panic("todo")
 }
 
-func (p *Sprite) BounceOffEdge() {
-	panic("todo")
-}
-
 func (p *Sprite) Heading() float64 {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
@@ -306,6 +306,8 @@ func (p *Sprite) Turn(delta float64) {
 
 // TurnTo func:
 //   TurnTo(sprite)
+//   TurnTo(spriteName)
+//   TurnTo(degree)
 //   TurnTo(gox.Mouse)
 //   TurnTo(gox.Left)
 //   TurnTo(gox.Right)
@@ -315,12 +317,14 @@ func (p *Sprite) TurnTo(obj interface{}) {
 	switch v := obj.(type) {
 	case int:
 		p.setDirection(float64(v), false)
-	case *Sprite:
-		panic("todo: TurnTo sprite")
-	case specialObj:
-		panic("todo: TurnTo mouse")
+	case float64:
+		p.setDirection(v, false)
 	default:
-		panic("TurnTo: unexpected input")
+		x, y := p.objectPos(obj)
+		dx := x - p.x
+		dy := y - p.y
+		angle := 90 - math.Atan2(dy, dx)*180/math.Pi
+		p.setDirection(angle, false)
 	}
 }
 
@@ -328,30 +332,11 @@ func (p *Sprite) setDirection(dir float64, change bool) {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
-	p.doSetDirection(dir, change)
-}
-
-func (p *Sprite) doSetDirection(dir float64, change bool) {
 	if change {
 		dir += p.direction
 	}
 	p.direction = normalizeDirection(dir)
 }
-
-/*
-func (p *Sprite) SetPointTowards(where string) {
-	x, y := p.mouseOrSpritePos(where)
-
-	dx := x - p.x
-	dy := y - p.y
-	angle := int(90 - math.Atan2(dy, dx)*180/math.Pi)
-
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
-	p.doSetDirection(angle, false)
-}
-*/
 
 // -----------------------------------------------------------------------------
 
@@ -381,26 +366,133 @@ func (p *Sprite) ChangeSize(delta float64) {
 
 type Color = color.RGBA
 
-// Touching func:
-//   Touching(sprite)
-//   Touching(spx.Mouse)
-//   Touching(spx.Edge)
-func (p *Sprite) Touching(obj Object) bool {
+func (p *Sprite) TouchingColor(color Color) bool {
 	panic("todo")
 }
 
-func (p *Sprite) TouchingColor(color Color) bool {
-	panic("todo")
+// Touching func:
+//   Touching(spriteName)
+//   Touching(sprite)
+//   Touching(spx.Mouse)
+//   Touching(spx.Edge)
+func (p *Sprite) Touching(obj interface{}) bool {
+	switch v := obj.(type) {
+	case string:
+		return p.touchingSpriteBy(p, v)
+	case *Sprite:
+		if touchingSprite(p, v) {
+			return true
+		}
+	case specialObj:
+		if v == Edge {
+			if p.checkTouchingScreen(touchingAllEdges) != 0 {
+				return true
+			}
+		} else if v == Mouse {
+			x, y := p.getMousePos()
+			return p.touchingPoint(p, float64(x), float64(y))
+		}
+	default:
+		panic("Touching: unexpected input")
+	}
+	return false
+}
+
+func touchingSprite(dst, src *Sprite) bool {
+	sp1, pt1 := dst.getGdiSprite()
+	sp2, pt2 := src.getGdiSprite()
+	return gdi.Touching(sp1, pt1, sp2, pt2)
+}
+
+const (
+	touchingScreenLeft   = 1
+	touchingScreenTop    = 2
+	touchingScreenRight  = 4
+	touchingScreenBottom = 8
+	touchingAllEdges     = 15
+)
+
+func (p *Sprite) BounceOffEdge() {
+	dir := p.Heading()
+	where := checkTouchingDirection(dir)
+	touching := p.checkTouchingScreen(where)
+	if touching == 0 {
+		return
+	}
+	if (touching & (touchingScreenLeft | touchingScreenRight)) != 0 {
+		dir = -dir
+	} else {
+		dir = 180 - dir
+	}
+
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	p.direction = normalizeDirection(dir)
+}
+
+func checkTouchingDirection(dir float64) int {
+	if dir > 0 {
+		if dir < 90 {
+			return touchingScreenRight | touchingScreenTop
+		}
+		if dir > 90 {
+			if dir == 180 {
+				return touchingScreenBottom
+			}
+			return touchingScreenRight | touchingScreenBottom
+		}
+		return touchingScreenRight
+	}
+	if dir < 0 {
+		if dir > -90 {
+			return touchingScreenLeft | touchingScreenTop
+		}
+		if dir < -90 {
+			return touchingScreenLeft | touchingScreenBottom
+		}
+		return touchingScreenLeft
+	}
+	return touchingScreenTop
+}
+
+func (p *Sprite) checkTouchingScreen(where int) (touching int) {
+	spr, pt := p.getGdiSprite()
+	if spr == nil {
+		return
+	}
+
+	if (where & touchingScreenLeft) != 0 {
+		if gdi.TouchingRect(spr, pt, -1e8, -1e8, 0, 1e8) {
+			return touchingScreenLeft
+		}
+	}
+	if (where & touchingScreenTop) != 0 {
+		if gdi.TouchingRect(spr, pt, -1e8, -1e8, 1e8, 0) {
+			return touchingScreenTop
+		}
+	}
+	w, h := p.size()
+	if (where & touchingScreenRight) != 0 {
+		if gdi.TouchingRect(spr, pt, w, -1e8, 1e8, 1e8) {
+			return touchingScreenRight
+		}
+	}
+	if (where & touchingScreenBottom) != 0 {
+		if gdi.TouchingRect(spr, pt, -1e8, h, 1e8, 1e8) {
+			return touchingScreenBottom
+		}
+	}
+	return
 }
 
 // -----------------------------------------------------------------------------
 
 func (p *Sprite) GoBackLayers(n int) {
-	panic("todo")
+	p.goBackByLayers(p, n)
 }
 
 func (p *Sprite) GotoFront(n int) {
-	panic("todo")
+	p.goBackByLayers(p, -1e8)
 }
 
 // -----------------------------------------------------------------------------
