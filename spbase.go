@@ -57,6 +57,13 @@ func (p Value) Float() float64 {
 	panic("todo")
 }
 
+type SwitchAction int
+
+const (
+	Prev SwitchAction = -1
+	Next SwitchAction = 1
+)
+
 // -------------------------------------------------------------------------------------
 
 type drawContext struct {

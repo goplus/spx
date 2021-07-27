@@ -38,13 +38,6 @@ type Game struct {
 	height int
 }
 
-type SwitchAction int
-
-const (
-	Prev SwitchAction = -1
-	Next SwitchAction = 1
-)
-
 // -----------------------------------------------------------------------------
 
 func (p *Game) sleep(tick int64) {
