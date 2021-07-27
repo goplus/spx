@@ -17,6 +17,10 @@
 package spx
 
 import (
+	"image/color"
+	"strconv"
+	"strings"
+
 	"github.com/goplus/spx/internal/gdi"
 	"golang.org/x/image/font"
 )
@@ -54,7 +58,6 @@ type sayOrThinker struct {
 	style int // 1: say, 2: think
 }
 
-/*
 const (
 	sayCornerSize = 8
 	screenGap     = 4
@@ -66,10 +69,10 @@ const (
 	minWidth      = leadingWidth + leadingWidth + gapWidth
 )
 
-func (p *sayOrThinker) Draw(dc DrawContext) {
+func (p *sayOrThinker) draw(dc drawContext) {
 	var direction int
 	var glyphTpl string
-	topx, topy := p.sp.GetTrackPos()
+	topx, topy := p.sp.getTrackPos()
 
 	render := gdi.NewTextRender(defaultFont, 135, 2)
 	render.AddText(p.msg)
@@ -84,7 +87,7 @@ func (p *sayOrThinker) Draw(dc DrawContext) {
 		w = minWidth
 	}
 
-	screenW := p.sp.proj.getWidth()
+	screenW := p.sp.g.getWidth()
 	if x < screenGap {
 		x = screenGap
 	} else if (x + w + screenGap) > screenW {
@@ -121,9 +124,8 @@ func (p *sayOrThinker) Draw(dc DrawContext) {
 	render.Draw(dc.Image, x+pad, y+pad, color.Black, 0)
 }
 
-func (p *sayOrThinker) Hit(hc HitContext) (hr HitResult, ok bool) {
+func (p *sayOrThinker) hit(hc hitContext) (hr hitResult, ok bool) {
 	return
 }
-*/
 
 // -------------------------------------------------------------------------------------

@@ -21,6 +21,7 @@ import (
 	"math"
 	"sync"
 
+	"github.com/goplus/spx/internal/gdi"
 	"github.com/hajimehoshi/ebiten"
 	"github.com/pkg/errors"
 )
@@ -95,6 +96,30 @@ func (p *costume) doNeedImage(fs FileSystem) {
 			panic(errors.Wrapf(err, "costume file `%s`: image is too big (or too small)", p.file))
 		}
 	}
+}
+
+// -------------------------------------------------------------------------------------
+
+func (p *Sprite) getGdiSprite() (spr *gdi.Sprite, pt image.Point) {
+	di := p.getDrawInfo()
+	if !di.visible {
+		return
+	}
+
+	spr = di.get(p)
+	pt = image.Pt(int(di.x), -int(di.y))
+	return
+}
+
+func (p *Sprite) getTrackPos() (topx, topy int) {
+	spr, pt := p.getGdiSprite()
+	if spr == nil {
+		return
+	}
+
+	trackp := getTrackPos(spr)
+	pt = trackp.Add(pt)
+	return pt.X, pt.Y
 }
 
 // -------------------------------------------------------------------------------------

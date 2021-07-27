@@ -74,8 +74,8 @@ type fontNameInit struct {
 
 func (p *DefaultFont) init(options *truetype.Options) {
 	fontFaceNames := map[string]*fontNameInit{
-		"Times New Roman": &fontNameInit{paths: []string{"Times New Roman Bold.ttf"}},
-		"SimSun":          &fontNameInit{paths: []string{"SimSun.ttf", "Songti.ttc"}},
+		"Times New Roman": {paths: []string{"Times New Roman Bold.ttf"}},
+		"SimSun":          {paths: []string{"SimSun.ttf", "Songti.ttc"}},
 	}
 	for _, findPath := range fontFindPaths {
 		for name, fontInit := range fontFaceNames {
