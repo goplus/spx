@@ -22,8 +22,8 @@ import (
 )
 
 type Sprite struct {
-	Base
-	g *Game
+	baseObj
+	*Game
 
 	x, y          float64
 	scale         float64
@@ -135,7 +135,7 @@ func (p *Sprite) DistanceTo(obj Object) float64 {
 
 func (p *Sprite) doMoveTo(x, y float64) {
 	if p.isPenDown {
-		p.g.movePen(p, x, y)
+		p.Game.movePen(p, x, y)
 	}
 	p.x, p.y = x, y
 }
@@ -169,14 +169,14 @@ func (p *Sprite) Glide(x, y float64, secs float64) {
 		dx := (x - x0) / float64(n)
 		dy := (y - y0) / float64(n)
 		for i := 1; i < n; i++ {
-			p.g.sleep(glideTick)
+			p.sleep(glideTick)
 			inDur -= glideTick
 			x0 += dx
 			y0 += dy
 			p.SetXY(x0, y0)
 		}
 	}
-	p.g.sleep(inDur)
+	p.sleep(inDur)
 	p.SetXY(x, y)
 }
 
@@ -273,15 +273,25 @@ func (p *Sprite) TurnTo(obj interface{}) {
 // -----------------------------------------------------------------------------
 
 func (p *Sprite) Size() float64 {
-	panic("todo")
+	p.mutex.Lock()
+	v := p.scale
+	p.mutex.Unlock()
+
+	return v
 }
 
 func (p *Sprite) SetSize(size float64) {
-	panic("todo")
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	p.scale = size
 }
 
 func (p *Sprite) ChangeSize(delta float64) {
-	panic("todo")
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	p.scale += delta
 }
 
 // -----------------------------------------------------------------------------

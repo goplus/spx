@@ -21,7 +21,6 @@ import (
 	"math"
 	"sync"
 
-	"github.com/goplus/spx/internal/gdi"
 	"github.com/hajimehoshi/ebiten"
 	"github.com/pkg/errors"
 )
@@ -32,6 +31,21 @@ const (
 
 func toRadian(dir float64) float64 {
 	return math.Pi * dir / 180
+}
+
+type Value struct {
+}
+
+func (p Value) String() string {
+	panic("todo")
+}
+
+func (p Value) Int() int {
+	panic("todo")
+}
+
+func (p Value) Float() float64 {
+	panic("todo")
 }
 
 // -------------------------------------------------------------------------------------
@@ -100,26 +114,84 @@ func (p *costume) doNeedImage(fs FileSystem) {
 
 // -------------------------------------------------------------------------------------
 
-func (p *Sprite) getGdiSprite() (spr *gdi.Sprite, pt image.Point) {
-	di := p.getDrawInfo()
-	if !di.visible {
-		return
-	}
+type baseObj struct {
+	costumes []*costume
 
-	spr = di.get(p)
-	pt = image.Pt(int(di.x), -int(di.y))
-	return
+	mutex               sync.Mutex
+	currentCostumeIndex int
 }
 
-func (p *Sprite) getTrackPos() (topx, topy int) {
-	spr, pt := p.getGdiSprite()
-	if spr == nil {
-		return
+func (p *baseObj) findCostume(name string) int {
+	for i, c := range p.costumes {
+		if c.name == name {
+			return i
+		}
 	}
+	return -1
+}
 
-	trackp := getTrackPos(spr)
-	pt = trackp.Add(pt)
-	return pt.X, pt.Y
+func (p *baseObj) setCostume(val interface{}) bool {
+	switch v := val.(type) {
+	case string:
+		return p.setCostumeByName(v)
+	case int:
+		return p.setCostumeByIndex(v)
+	case SwitchAction:
+		if v == Prev {
+			p.prevCostume()
+		} else {
+			p.nextCostume()
+		}
+		return true
+	default:
+		panic("setCostume: invalid argument type")
+	}
+}
+
+func (p *baseObj) setCostumeByIndex(idx int) bool {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	if idx >= len(p.costumes) {
+		panic("invalid costume index")
+	}
+	if p.currentCostumeIndex != idx {
+		p.currentCostumeIndex = idx
+		return true
+	}
+	return false
+}
+
+func (p *baseObj) setCostumeByName(name string) bool {
+	if idx := p.findCostume(name); idx >= 0 {
+		return p.setCostumeByIndex(idx)
+	}
+	return false
+}
+
+func (p *baseObj) prevCostume() {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	p.currentCostumeIndex = (len(p.costumes) + p.currentCostumeIndex - 1) % len(p.costumes)
+}
+
+func (p *baseObj) nextCostume() {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	p.currentCostumeIndex = (p.currentCostumeIndex + 1) % len(p.costumes)
+}
+
+func (p *baseObj) costumeIndex() int {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	return p.currentCostumeIndex
+}
+
+func (p *baseObj) costumeName() string {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	return p.costumes[p.currentCostumeIndex].name
 }
 
 // -------------------------------------------------------------------------------------

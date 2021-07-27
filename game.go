@@ -20,18 +20,18 @@ import (
 	"io"
 )
 
+type FileSystem interface {
+	Open(file string) (io.ReadCloser, error)
+	Close() error
+}
+
 type Game struct {
-	Base
+	baseObj
 	fs     FileSystem
 	turtle turtleCanvas
 
 	width  int
 	height int
-}
-
-type FileSystem interface {
-	Open(file string) (io.ReadCloser, error)
-	Close() error
 }
 
 type SwitchAction int
@@ -136,6 +136,101 @@ func (p *Game) StartScene(scene interface{}, wait ...bool) {
 
 func (p *Game) NextScene(wait ...bool) {
 	p.StartScene(Next, wait...)
+}
+
+// -----------------------------------------------------------------------------
+
+type Key int
+
+func (p *Game) KeyPressed(key Key) bool {
+	panic("todo")
+}
+
+func (p *Game) MouseX() float64 {
+	panic("todo")
+}
+
+func (p *Game) MouseY() float64 {
+	panic("todo")
+}
+
+func (p *Game) MousePressed() bool {
+	panic("todo")
+}
+
+func (p *Game) Username() string {
+	panic("todo")
+}
+
+// -----------------------------------------------------------------------------
+
+func (p *Game) Wait(secs float64) {
+	panic("todo")
+}
+
+func (p *Game) Timer() float64 {
+	panic("todo")
+}
+
+func (p *Game) ResetTimer() {
+	panic("todo")
+}
+
+// -----------------------------------------------------------------------------
+
+func (p *Game) Ask(ask string) {
+	panic("todo")
+}
+
+func (p *Game) Answer() Value {
+	panic("todo")
+}
+
+// -----------------------------------------------------------------------------
+
+type EffectKind int
+
+func (p *Game) SetEffect(kind EffectKind, val float64) {
+	panic("todo")
+}
+
+func (p *Game) ChangeEffect(kind EffectKind, delta float64) {
+	panic("todo")
+}
+
+func (p *Game) ClearEffects() {
+	panic("todo")
+}
+
+// -----------------------------------------------------------------------------
+
+// Play func:
+//   Play(sound)
+//   Play(video) -- maybe
+func (p *Game) Play(media interface{}, secs ...float64) {
+	panic("todo")
+}
+
+func (p *Game) StopAllSounds() {
+	panic("todo")
+}
+
+func (p *Game) Volume() float64 {
+	panic("todo")
+}
+
+func (p *Game) SetVolume(volume float64) {
+	panic("todo")
+}
+
+func (p *Game) ChangeVolume(delta float64) {
+	panic("todo")
+}
+
+// -----------------------------------------------------------------------------
+
+func (p *Game) Broadcast(msg string, data interface{}, wait ...bool) {
+	panic("todo")
 }
 
 // -----------------------------------------------------------------------------

@@ -87,7 +87,7 @@ func (p *sayOrThinker) draw(dc drawContext) {
 		w = minWidth
 	}
 
-	screenW := p.sp.g.getWidth()
+	screenW := p.sp.getWidth()
 	if x < screenGap {
 		x = screenGap
 	} else if (x + w + screenGap) > screenW {

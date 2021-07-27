@@ -45,14 +45,14 @@ func (p *sprKey) get(sp *Sprite) *gdi.Sprite {
 }
 
 func (p *sprKey) doGet(sp *Sprite) *gdi.Sprite {
-	w, h := sp.g.size()
+	w, h := sp.size()
 	img, err := ebiten.NewImage(w, h, defaultFilterMode)
 	if err != nil {
 		panic(err)
 	}
 	defer img.Dispose()
 
-	p.drawOn(img, 0, 0, sp.g.fs)
+	p.drawOn(img, 0, 0, sp.fs)
 	return gdi.NewSpriteFromScreen(img)
 }
 
@@ -147,6 +147,28 @@ func (p *Sprite) getDrawInfo() *spriteDrawInfo {
 		y:       p.y,
 		visible: p.visible,
 	}
+}
+
+func (p *Sprite) getGdiSprite() (spr *gdi.Sprite, pt image.Point) {
+	di := p.getDrawInfo()
+	if !di.visible {
+		return
+	}
+
+	spr = di.get(p)
+	pt = image.Pt(int(di.x), -int(di.y))
+	return
+}
+
+func (p *Sprite) getTrackPos() (topx, topy int) {
+	spr, pt := p.getGdiSprite()
+	if spr == nil {
+		return
+	}
+
+	trackp := getTrackPos(spr)
+	pt = trackp.Add(pt)
+	return pt.X, pt.Y
 }
 
 // -------------------------------------------------------------------------------------
