@@ -59,10 +59,10 @@ var (
 )
 
 const (
-	Right float64 = 90
-	Left  float64 = -90
-	Up    float64 = 0
-	Down  float64 = 180
+	Right = 90
+	Left  = -90
+	Up    = 0
+	Down  = 180
 )
 
 // -----------------------------------------------------------------------------
@@ -78,11 +78,17 @@ func (p *Sprite) Destroy() { // delete this clone
 // -----------------------------------------------------------------------------
 
 func (p *Sprite) Hide() {
-	panic("todo")
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	p.visible = false
 }
 
 func (p *Sprite) Show() {
-	panic("todo")
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	p.visible = true
 }
 
 // -----------------------------------------------------------------------------
@@ -172,7 +178,7 @@ func (p *Sprite) DistanceTo(obj Object) float64 {
 
 	_, _ = x, y
 	panic("todo")
-	// return p.g.distanceTo(x, y, name)
+	// return p.distanceTo(x, y, name)
 }
 
 func (p *Sprite) doMoveTo(x, y float64) {
@@ -284,33 +290,68 @@ func (p *Sprite) BounceOffEdge() {
 }
 
 func (p *Sprite) Heading() float64 {
-	panic("todo")
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	return p.direction
 }
 
 // Turn func:
 //   Turn(degree)
 //   Turn(gox.Left)
 //   Turn(gox.Right)
-//   Turn(gox.Up)
-//   Turn(gox.Down)
-func (p *Sprite) Turn(heading float64) {
-	panic("todo")
-}
-
-func (p *Sprite) TurnLeft() {
-	panic("todo")
-}
-
-func (p *Sprite) TurnRight() {
-	panic("todo")
+func (p *Sprite) Turn(delta float64) {
+	p.setDirection(delta, true)
 }
 
 // TurnTo func:
 //   TurnTo(sprite)
 //   TurnTo(gox.Mouse)
+//   TurnTo(gox.Left)
+//   TurnTo(gox.Right)
+//   TurnTo(gox.Up)
+//   TurnTo(gox.Down)
 func (p *Sprite) TurnTo(obj interface{}) {
-	panic("todo")
+	switch v := obj.(type) {
+	case int:
+		p.setDirection(float64(v), false)
+	case *Sprite:
+		panic("todo: TurnTo sprite")
+	case specialObj:
+		panic("todo: TurnTo mouse")
+	default:
+		panic("TurnTo: unexpected input")
+	}
 }
+
+func (p *Sprite) setDirection(dir float64, change bool) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	p.doSetDirection(dir, change)
+}
+
+func (p *Sprite) doSetDirection(dir float64, change bool) {
+	if change {
+		dir += p.direction
+	}
+	p.direction = normalizeDirection(dir)
+}
+
+/*
+func (p *Sprite) SetPointTowards(where string) {
+	x, y := p.mouseOrSpritePos(where)
+
+	dx := x - p.x
+	dy := y - p.y
+	angle := int(90 - math.Atan2(dy, dx)*180/math.Pi)
+
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	p.doSetDirection(angle, false)
+}
+*/
 
 // -----------------------------------------------------------------------------
 

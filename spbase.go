@@ -33,6 +33,15 @@ func toRadian(dir float64) float64 {
 	return math.Pi * dir / 180
 }
 
+func normalizeDirection(dir float64) float64 {
+	if dir <= -180 {
+		dir += 360
+	} else if dir > 180 {
+		dir -= 360
+	}
+	return dir
+}
+
 type Value struct {
 }
 
