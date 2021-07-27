@@ -173,16 +173,18 @@ func (p *Sprite) getXY() (x, y float64) {
 
 // DistanceTo func:
 //   DistanceTo(sprite)
+//   DistanceTo(spriteName)
 //   DistanceTo(gox.Mouse)
-//   DistanceTo(gox.Edge)
+//   DistanceTo(gox.Random)
 func (p *Sprite) DistanceTo(obj Object) float64 {
 	p.mutex.Lock()
 	x, y := p.x, p.y
 	p.mutex.Unlock()
 
-	_, _ = x, y
-	panic("todo")
-	// return p.distanceTo(x, y, name)
+	x2, y2 := p.objectPos(obj)
+	x -= x2
+	y -= y2
+	return math.Sqrt(x*x + y*y)
 }
 
 func (p *Sprite) doMoveTo(x, y float64) {
@@ -202,11 +204,12 @@ func (p *Sprite) Step(step float64) {
 
 // Goto func:
 //   Goto(sprite)
+//   Goto(spriteName)
 //   Goto(gox.Mouse)
+//   Goto(gox.Random)
 func (p *Sprite) Goto(obj Object) {
-	panic("todo")
-	// x, y := p.g.mouseOrSpritePos(where)
-	// p.setXY(x, y)
+	x, y := p.objectPos(obj)
+	p.SetXY(x, y)
 }
 
 const (
@@ -307,8 +310,9 @@ func (p *Sprite) Turn(delta float64) {
 // TurnTo func:
 //   TurnTo(sprite)
 //   TurnTo(spriteName)
-//   TurnTo(degree)
 //   TurnTo(gox.Mouse)
+//   TurnTo(gox.Random)
+//   TurnTo(degree)
 //   TurnTo(gox.Left)
 //   TurnTo(gox.Right)
 //   TurnTo(gox.Up)
