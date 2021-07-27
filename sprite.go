@@ -105,12 +105,52 @@ func (p *Sprite) NextCostume() {
 
 // -----------------------------------------------------------------------------
 
-func (p *Sprite) Say(sth string, secs ...float64) {
-	panic("todo")
+func (p *Sprite) Say(msg string, secs ...float64) {
+	p.sayOrThink(msg, styleSay)
+	if secs != nil {
+		p.waitStopSay(secs[0])
+	}
 }
 
-func (p *Sprite) Think(sth string, secs ...float64) {
-	panic("todo")
+func (p *Sprite) Think(msg string, secs ...float64) {
+	p.sayOrThink(msg, styleThink)
+	if secs != nil {
+		p.waitStopSay(secs[0])
+	}
+}
+
+func (p *Sprite) sayOrThink(msg string, style int) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	if msg == "" {
+		p.doStopSay()
+		return
+	}
+
+	old := p.say
+	if old == nil {
+		p.say = &sayOrThinker{sp: p, msg: msg, style: style}
+		p.addShape(p.say)
+	} else {
+		old.msg, old.style = msg, style
+		p.activateShape(old)
+	}
+}
+
+func (p *Sprite) waitStopSay(secs float64) {
+	p.Wait(secs)
+
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	p.doStopSay()
+}
+
+func (p *Sprite) doStopSay() {
+	if p.say != nil {
+		p.removeShape(p.say)
+		p.say = nil
+	}
 }
 
 // -----------------------------------------------------------------------------

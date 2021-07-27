@@ -171,6 +171,29 @@ func (p *Sprite) getTrackPos() (topx, topy int) {
 	return pt.X, pt.Y
 }
 
+func (p *Sprite) draw(dc drawContext) {
+	di := p.getDrawInfo()
+	if !di.visible {
+		return
+	}
+	di.draw(dc, p)
+}
+
+// Hit func.
+func (p *Sprite) hit(hc hitContext) (hr hitResult, ok bool) {
+	sp, pt := p.getGdiSprite()
+	if sp == nil {
+		return
+	}
+
+	pt = hc.Pos.Sub(pt)
+	_, _, _, a := sp.Image().At(pt.X, pt.Y).RGBA()
+	if a > 0 {
+		return hitResult{Target: p}, true
+	}
+	return
+}
+
 // -------------------------------------------------------------------------------------
 
 func getTrackPos(spr *gdi.Sprite) image.Point {

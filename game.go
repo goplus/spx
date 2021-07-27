@@ -29,6 +29,7 @@ type Game struct {
 	baseObj
 	fs     FileSystem
 	turtle turtleCanvas
+	items  []shape
 
 	width  int
 	height int
@@ -111,6 +112,136 @@ func (p *Game) movePen(sp *Sprite, x, y float64) {
 		clr:   sp.penColor,
 		width: int(sp.penWidth),
 	})
+}
+
+// -----------------------------------------------------------------------------
+
+func (p *Game) getItems() []shape {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	return p.items
+}
+
+func (p *Game) addShape(child shape) {
+
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	p.items = append(p.items, child)
+}
+
+func (p *Game) removeShape(child shape) {
+
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	items := p.items
+	for i, item := range items {
+		if item == child {
+			// getItems() requires immutable items, so we need clone them
+			//
+			newItems := make([]shape, len(items)-1)
+			copy(newItems, items[:i])
+			copy(newItems[i:], items[i+1:])
+			p.items = newItems
+			return
+		}
+	}
+}
+
+func (p *Game) activateShape(child shape) {
+
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	items := p.items
+	for i, item := range items {
+		if item == child {
+			if i == 0 {
+				return
+			}
+			// getItems() requires immutable items, so we need clone them
+			//
+			newItems := make([]shape, len(items))
+			copy(newItems, items[:i])
+			copy(newItems[i:], items[i+1:])
+			newItems[len(items)-1] = child
+			p.items = newItems
+			return
+		}
+	}
+}
+
+func (p *Game) goBackLayers(spr *Sprite, n int) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	idx := p.doFindSprite(spr)
+	if idx < 0 {
+		return
+	}
+	items := p.items
+	if n > 0 {
+		newIdx := idx
+		for newIdx > 0 {
+			newIdx--
+			item := items[newIdx]
+			if _, ok := item.(*Sprite); ok {
+				n--
+				if n == 0 {
+					break
+				}
+			}
+		}
+		if newIdx != idx {
+			// getItems() requires immutable items, so we need clone them
+			//
+			newItems := make([]shape, len(items))
+			copy(newItems, items[:newIdx])
+			copy(newItems[newIdx+1:], items[newIdx:idx])
+			copy(newItems[idx+1:], items[idx+1:])
+			newItems[newIdx] = spr
+			p.items = newItems
+		}
+	} else if n < 0 {
+		newIdx := idx
+		lastIdx := len(items) - 1
+		if newIdx < lastIdx {
+			for {
+				newIdx++
+				if newIdx >= lastIdx {
+					break
+				}
+				item := items[newIdx]
+				if _, ok := item.(*Sprite); ok {
+					n++
+					if n == 0 {
+						break
+					}
+				}
+			}
+		}
+		if newIdx != idx {
+			// getItems() requires immutable items, so we need clone them
+			//
+			newItems := make([]shape, len(items))
+			copy(newItems, items[:idx])
+			copy(newItems[idx:newIdx], items[idx+1:])
+			copy(newItems[newIdx+1:], items[newIdx+1:])
+			newItems[newIdx] = spr
+			p.items = newItems
+		}
+	}
+}
+
+func (p *Game) doFindSprite(src shape) int {
+	for idx, item := range p.items {
+		if item == src {
+			return idx
+		}
+	}
+	return -1
 }
 
 // -----------------------------------------------------------------------------

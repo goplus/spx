@@ -52,10 +52,15 @@ func init() {
 
 // -------------------------------------------------------------------------------------
 
+const (
+	styleSay   = 1
+	styleThink = 2
+)
+
 type sayOrThinker struct {
 	sp    *Sprite
 	msg   string
-	style int // 1: say, 2: think
+	style int // styleSay, styleThink
 }
 
 const (
