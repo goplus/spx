@@ -59,14 +59,7 @@ func (p *Sprite) init(base string, g *Game, name string, sprite *spriteConfig) {
 	p.isDraggable = sprite.IsDraggable
 }
 
-type Object interface {
-	objMark()
-}
-
 type specialObj int
-
-func (p specialObj) objMark() {}
-func (p *Sprite) objMark()    {}
 
 var (
 	Mouse  = specialObj(1)
@@ -188,7 +181,7 @@ func (p *Sprite) getXY() (x, y float64) {
 //   DistanceTo(spriteName)
 //   DistanceTo(gox.Mouse)
 //   DistanceTo(gox.Random)
-func (p *Sprite) DistanceTo(obj Object) float64 {
+func (p *Sprite) DistanceTo(obj interface{}) float64 {
 	p.mutex.Lock()
 	x, y := p.x, p.y
 	p.mutex.Unlock()
@@ -219,7 +212,7 @@ func (p *Sprite) Step(step float64) {
 //   Goto(spriteName)
 //   Goto(gox.Mouse)
 //   Goto(gox.Random)
-func (p *Sprite) Goto(obj Object) {
+func (p *Sprite) Goto(obj interface{}) {
 	x, y := p.objectPos(obj)
 	p.SetXY(x, y)
 }
