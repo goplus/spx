@@ -21,6 +21,7 @@ import (
 	"io"
 	"syscall"
 
+	"github.com/goplus/spx/fs"
 	"github.com/pkg/errors"
 )
 
@@ -30,10 +31,10 @@ import (
 type FS zip.ReadCloser
 
 // Open opens a zip filesystem object.
-func Open(file string) (fs *FS, err error) {
+func Open(file string) (fs.Dir, error) {
 	zipf, err := zip.OpenReader(file)
 	if err != nil {
-		return
+		return nil, err
 	}
 	return (*FS)(zipf), nil
 }
@@ -51,6 +52,10 @@ func (zipf *FS) Open(name string) (io.ReadCloser, error) {
 // Close closes the filesystem object.
 func (zipf *FS) Close() error {
 	return ((*zip.ReadCloser)(zipf)).Close()
+}
+
+func init() {
+	fs.RegisterSchema("zip", Open)
 }
 
 // -------------------------------------------------------------------------------------

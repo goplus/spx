@@ -21,6 +21,8 @@ import (
 	"image/color"
 
 	"github.com/goplus/spx/internal/gdi"
+
+	spxfs "github.com/goplus/spx/fs"
 )
 
 // -------------------------------------------------------------------------------------
@@ -59,7 +61,7 @@ func (p *turtleCanvas) stampCostume(obj *spriteDrawInfo) {
 	p.objs = append(p.objs, obj)
 }
 
-func (p turtleCanvas) draw(dc drawContext, fs FileSystem) {
+func (p turtleCanvas) draw(dc drawContext, fs spxfs.Dir) {
 	if p.objs == nil {
 		return
 	}

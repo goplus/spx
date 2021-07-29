@@ -23,6 +23,8 @@ import (
 
 	"github.com/hajimehoshi/ebiten"
 	"github.com/pkg/errors"
+
+	spxfs "github.com/goplus/spx/fs"
 )
 
 const (
@@ -66,64 +68,44 @@ const (
 
 // -------------------------------------------------------------------------------------
 
-type drawContext struct {
-	*ebiten.Image
-}
-
-type hitContext struct {
-	Pos image.Point
-}
-
-type hitResult struct {
-	Target interface{}
-}
-
-type shape interface {
-	draw(dc drawContext)
-	hit(hc hitContext) (hr hitResult, ok bool)
-}
-
-// -------------------------------------------------------------------------------------
-
 // costume class.
 type costume struct {
 	name string
-	file string
+	path string
 
 	bitmapResolution int
 
-	cx    float64
-	cy    float64
+	x, y  float64
 	cache *ebiten.Image
 	mutex sync.Mutex
 }
 
-func (p *costume) needImage(fs FileSystem) (*ebiten.Image, float64, float64) {
+func (p *costume) needImage(fs spxfs.Dir) (*ebiten.Image, float64, float64) {
 	if p.cache == nil {
 		p.doNeedImage(fs)
 	}
-	return p.cache, p.cx, p.cy
+	return p.cache, p.x, p.y
 }
 
-func (p *costume) doNeedImage(fs FileSystem) {
+func (p *costume) doNeedImage(fs spxfs.Dir) {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
 	if p.cache == nil {
-		f, err := fs.Open(p.file)
+		f, err := fs.Open(p.path)
 		if err != nil {
-			panic(errors.Wrapf(err, "costume open file `%s` failed", p.file))
+			panic(errors.Wrapf(err, "costume open file `%s` failed", p.path))
 		}
 		defer f.Close()
 
 		img, _, err := image.Decode(f)
 		if err != nil {
-			panic(errors.Wrapf(err, "costume file `%s` is not an image", p.file))
+			panic(errors.Wrapf(err, "costume file `%s` is not an image", p.path))
 		}
 
 		p.cache, err = ebiten.NewImageFromImage(img, defaultFilterMode)
 		if err != nil {
-			panic(errors.Wrapf(err, "costume file `%s`: image is too big (or too small)", p.file))
+			panic(errors.Wrapf(err, "costume file `%s`: image is too big (or too small)", p.path))
 		}
 	}
 }
@@ -137,6 +119,20 @@ type baseObj struct {
 	currentCostumeIndex int
 }
 
+func (p *baseObj) init(base string, costumes []costumeConfig, currentCostumeIndex int) {
+	p.costumes = make([]*costume, len(costumes))
+	for i, c := range costumes {
+		p.costumes[i] = &costume{
+			name: c.Name, path: base + c.Path, x: c.X, y: c.Y,
+			bitmapResolution: c.BitmapResolution,
+		}
+	}
+	if currentCostumeIndex >= len(costumes) || currentCostumeIndex < 0 {
+		currentCostumeIndex = 0
+	}
+	p.currentCostumeIndex = currentCostumeIndex
+}
+
 func (p *baseObj) findCostume(name string) int {
 	for i, c := range p.costumes {
 		if c.name == name {
@@ -146,7 +142,7 @@ func (p *baseObj) findCostume(name string) int {
 	return -1
 }
 
-func (p *baseObj) setCostume(val interface{}) bool {
+func (p *baseObj) goSetCostume(val interface{}) bool {
 	switch v := val.(type) {
 	case string:
 		return p.setCostumeByName(v)
@@ -154,9 +150,9 @@ func (p *baseObj) setCostume(val interface{}) bool {
 		return p.setCostumeByIndex(v)
 	case SwitchAction:
 		if v == Prev {
-			p.prevCostume()
+			p.goPrevCostume()
 		} else {
-			p.nextCostume()
+			p.goNextCostume()
 		}
 		return true
 	default:
@@ -184,27 +180,27 @@ func (p *baseObj) setCostumeByName(name string) bool {
 	return false
 }
 
-func (p *baseObj) prevCostume() {
+func (p *baseObj) goPrevCostume() {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
 	p.currentCostumeIndex = (len(p.costumes) + p.currentCostumeIndex - 1) % len(p.costumes)
 }
 
-func (p *baseObj) nextCostume() {
+func (p *baseObj) goNextCostume() {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
 	p.currentCostumeIndex = (p.currentCostumeIndex + 1) % len(p.costumes)
 }
 
-func (p *baseObj) costumeIndex() int {
+func (p *baseObj) getCostumeIndex() int {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 	return p.currentCostumeIndex
 }
 
-func (p *baseObj) costumeName() string {
+func (p *baseObj) getCostumeName() string {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 	return p.costumes[p.currentCostumeIndex].name

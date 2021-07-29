@@ -1,4 +1,6 @@
+.DS_Store
 _gsc/
+res/
 
 # Binaries for programs and plugins
 *.exe

@@ -19,6 +19,7 @@ package spx
 import (
 	"image/color"
 	"math"
+	"time"
 
 	"github.com/goplus/spx/internal/gdi"
 	"github.com/goplus/spx/internal/gdi/clrutil"
@@ -45,6 +46,17 @@ type Sprite struct {
 	isDraggable bool
 	isCloned    bool
 	isPenDown   bool
+}
+
+func (p *Sprite) init(base string, g *Game, name string, sprite *spriteConfig) {
+	p.baseObj.init(base, sprite.Costumes, sprite.CurrentCostumeIndex)
+	p.Game, p.name = g, name
+	p.x, p.y = sprite.X, sprite.Y
+	p.scale = sprite.Size
+	p.direction = sprite.Heading
+	p.rotationStyle = toRotationStyle(sprite.RotationStyle)
+	p.visible = sprite.Visible
+	p.isDraggable = sprite.IsDraggable
 }
 
 type Object interface {
@@ -98,19 +110,19 @@ func (p *Sprite) Show() {
 // -----------------------------------------------------------------------------
 
 func (p *Sprite) CostumeName() string {
-	return p.costumeName()
+	return p.getCostumeName()
 }
 
 func (p *Sprite) CostumeIndex() int {
-	return p.costumeIndex()
+	return p.getCostumeIndex()
 }
 
 func (p *Sprite) SetCostume(costume interface{}) {
-	p.setCostume(costume)
+	p.goSetCostume(costume)
 }
 
 func (p *Sprite) NextCostume() {
-	p.nextCostume()
+	p.goNextCostume()
 }
 
 // -----------------------------------------------------------------------------
@@ -217,21 +229,21 @@ const (
 )
 
 func (p *Sprite) Glide(x, y float64, secs float64) {
-	inDur := int64(secs * 1e9)
+	inDur := time.Duration(secs * 1e9)
 	n := int(inDur / glideTick)
 	if n > 0 {
 		x0, y0 := p.getXY()
 		dx := (x - x0) / float64(n)
 		dy := (y - y0) / float64(n)
 		for i := 1; i < n; i++ {
-			p.sleep(glideTick)
+			sleep(glideTick)
 			inDur -= glideTick
 			x0 += dx
 			y0 += dy
 			p.SetXY(x0, y0)
 		}
 	}
-	p.sleep(inDur)
+	sleep(inDur)
 	p.SetXY(x, y)
 }
 
@@ -288,8 +300,27 @@ func (p *Sprite) ChangeYpos(dy float64) {
 
 type RotationStyle int
 
+const (
+	None = iota
+	Normal
+	LeftRight
+)
+
+func toRotationStyle(style string) RotationStyle {
+	switch style {
+	case "leftRight":
+		return LeftRight
+	case "none":
+		return None
+	}
+	return Normal
+}
+
 func (p *Sprite) SetRotationStyle(style RotationStyle) {
-	panic("todo")
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	p.rotationStyle = style
 }
 
 func (p *Sprite) Heading() float64 {
@@ -384,22 +415,16 @@ func (p *Sprite) Touching(obj interface{}) bool {
 	case string:
 		return p.touchingSpriteBy(p, v)
 	case *Sprite:
-		if touchingSprite(p, v) {
-			return true
-		}
+		return touchingSprite(p, v)
 	case specialObj:
 		if v == Edge {
-			if p.checkTouchingScreen(touchingAllEdges) != 0 {
-				return true
-			}
+			return p.checkTouchingScreen(touchingAllEdges) != 0
 		} else if v == Mouse {
 			x, y := p.getMousePos()
-			return p.touchingPoint(p, float64(x), float64(y))
+			return p.touchingPoint(p, x, y)
 		}
-	default:
-		panic("Touching: unexpected input")
 	}
-	return false
+	panic("Touching: unexpected input")
 }
 
 func touchingSprite(dst, src *Sprite) bool {

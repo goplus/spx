@@ -17,31 +17,257 @@
 package spx
 
 import (
-	"io"
+	"encoding/json"
+	"fmt"
 	"math/rand"
+	"reflect"
+	"sync/atomic"
+	"time"
 
+	"github.com/goplus/spx/internal/coroutine"
 	"github.com/goplus/spx/internal/gdi"
-)
+	"github.com/hajimehoshi/ebiten"
+	"github.com/qiniu/x/log"
 
-type FileSystem interface {
-	Open(file string) (io.ReadCloser, error)
-	Close() error
-}
+	spxfs "github.com/goplus/spx/fs"
+	_ "github.com/goplus/spx/fs/local"
+	_ "github.com/goplus/spx/fs/zip"
+)
 
 type Game struct {
 	baseObj
-	fs     FileSystem
+	fs spxfs.Dir
+
+	sounds soundMgr
 	turtle turtleCanvas
-	items  []shape
+	shapes map[string]Shape
+	items  []Shape
+
+	input  inputMgr
+	events chan event
 
 	width  int
 	height int
+
+	gMouseX, gMouseY int64
+}
+
+type Gamer interface {
+	Load(sprite Shape, name string) Shape
+	Run(cfg ...*Config)
+}
+
+func Load(game Gamer, resource string) Gamer {
+	fs, err := spxfs.Open(resource)
+	if err != nil {
+		panic(err)
+	}
+	p, ok := game.(*Game)
+	if !ok {
+		fld := reflect.ValueOf(game).Elem().FieldByName("Game")
+		if !fld.IsValid() {
+			log.Panicf("type %v doesn't has field spx.Game", reflect.TypeOf(game))
+		}
+		p = fld.Addr().Interface().(*Game)
+	}
+	p.input.init(p)
+	p.sounds.init()
+	p.shapes = make(map[string]Shape)
+	p.events = make(chan event, 16)
+	p.fs = fs
+	return game
+}
+
+type costumeConfig struct {
+	Name             string  `json:"name"`
+	Path             string  `json:"path"`
+	X                float64 `json:"x"`
+	Y                float64 `json:"y"`
+	BitmapResolution int     `json:"bitmapResolution"`
+}
+
+type spriteConfig struct {
+	Heading             float64         `json:"heading"`
+	X                   float64         `json:"x"`
+	Y                   float64         `json:"y"`
+	Size                float64         `json:"size"`
+	RotationStyle       string          `json:"rotationStyle"`
+	Costumes            []costumeConfig `json:"costumes"`
+	CurrentCostumeIndex int             `json:"currentCostumeIndex"`
+	Visible             bool            `json:"visible"`
+	IsDraggable         bool            `json:"isDraggable"`
+}
+
+func (p *Game) Load(sprite Shape, name string) Shape {
+	var baseDir = "sprites/" + name + "/"
+	var conf spriteConfig
+	err := loadJson(&conf, p.fs, baseDir+"index.json")
+	if err != nil {
+		panic(err)
+	}
+	base, ok := sprite.(*Sprite)
+	if !ok {
+		fld := reflect.ValueOf(sprite).Elem().FieldByName("Sprite")
+		if !fld.IsValid() {
+			log.Panicf("type %v doesn't has field spx.Sprite", reflect.TypeOf(sprite))
+		}
+		base = fld.Addr().Interface().(*Sprite)
+	}
+	base.init(baseDir, p, name, &conf)
+	p.shapes[name] = sprite
+	return sprite
+}
+
+func loadJson(ret interface{}, fs spxfs.Dir, file string) (err error) {
+	f, err := fs.Open(file)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	return json.NewDecoder(f).Decode(ret)
+}
+
+type projConfig struct {
+	Zorder              []string        `json:"zorder"`
+	Costumes            []costumeConfig `json:"costumes"`
+	CurrentCostumeIndex int             `json:"currentCostumeIndex"`
+}
+
+func (p *Game) EndLoad() (err error) {
+	var proj projConfig
+	err = loadJson(&proj, p.fs, "index.json")
+	if err != nil {
+		return
+	}
+	p.init("", proj.Costumes, proj.CurrentCostumeIndex)
+	for _, name := range proj.Zorder {
+		if sp, ok := p.shapes[name]; ok {
+			p.addShape(sp)
+		} else {
+			return fmt.Errorf("sprite %s is not found", name)
+		}
+	}
+	return
+}
+
+func (p *Game) Run(cfg ...*Config) {
+	err := p.EndLoad()
+	if err != nil {
+		panic(err)
+	}
+	var gameConf *Config
+	if cfg != nil {
+		gameConf = cfg[0]
+	}
+	err = p.RunLoop(gameConf)
+	if err != nil {
+		panic(err)
+	}
 }
 
 // -----------------------------------------------------------------------------
 
-func (p *Game) sleep(tick int64) {
-	panic("todo")
+type Config struct {
+	Title               string
+	Scale               float64
+	FullScreen          bool
+	RunnableOnUnfocused bool
+}
+
+func (p *Game) RunLoop(cfg *Config) (err error) {
+	if cfg == nil {
+		cfg = &Config{}
+	}
+	width, height := p.size()
+	if cfg.RunnableOnUnfocused {
+		ebiten.SetRunnableOnUnfocused(false)
+	}
+	if cfg.FullScreen {
+		ebiten.SetFullscreen(true)
+	}
+	scale := 1.0
+	if cfg.Scale != 0 {
+		scale = cfg.Scale
+	}
+	title := cfg.Title
+	if title == "" {
+		title = "Game powered by Go+"
+	}
+	p.initEventLoop()
+	return ebiten.Run(p.update, width, height, scale, title)
+}
+
+func (p *Game) update(screen *ebiten.Image) error {
+	p.updateMousePos()
+	p.input.update()
+	p.sounds.update()
+	if ebiten.IsRunningSlowly() {
+		return nil
+	}
+	dc := drawContext{Image: screen}
+	p.draw(dc)
+	return nil
+}
+
+func (p *Game) doFireEvent(event event) {
+	/*	switch ev := event.(type) {
+		case *eventLeftButtonDown:
+			p.updateMousePos()
+			p.doWhenLeftButtonDown()
+		case *eventKeyDown:
+			p.doWhenKeyPressed(ev.Key)
+		case *eventInit:
+			p.doWhenInit()
+		}
+	*/
+}
+
+func (p *Game) fireEvent(ev event) {
+	select {
+	case p.events <- ev:
+	default:
+		log.Println("Event buffer is full. Skip event:", ev)
+	}
+}
+
+func (p *Game) eventLoop(me coroutine.Thread) int {
+	for {
+		var ev event
+		go func() {
+			ev = <-p.events
+			gco.Resume(me)
+		}()
+		gco.Yield(me)
+		p.doFireEvent(ev)
+	}
+}
+
+func (p *Game) initEventLoop() {
+	gco.Create(p.eventLoop)
+}
+
+func init() {
+	gco = coroutine.New()
+}
+
+var gco *coroutine.Coroutines
+
+func waitForChan(done chan bool) {
+	me := gco.Current()
+	go func() {
+		<-done
+		gco.Resume(me)
+	}()
+	gco.Yield(me)
+}
+
+func sleep(t time.Duration) {
+	me := gco.Current()
+	go func() {
+		time.Sleep(t)
+		gco.Resume(me)
+	}()
+	gco.Yield(me)
 }
 
 // -----------------------------------------------------------------------------
@@ -162,23 +388,21 @@ func (p *Game) movePen(sp *Sprite, x, y float64) {
 
 // -----------------------------------------------------------------------------
 
-func (p *Game) getItems() []shape {
+func (p *Game) getItems() []Shape {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
 	return p.items
 }
 
-func (p *Game) addShape(child shape) {
-
+func (p *Game) addShape(child Shape) {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
 	p.items = append(p.items, child)
 }
 
-func (p *Game) removeShape(child shape) {
-
+func (p *Game) removeShape(child Shape) {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -187,7 +411,7 @@ func (p *Game) removeShape(child shape) {
 		if item == child {
 			// getItems() requires immutable items, so we need clone them
 			//
-			newItems := make([]shape, len(items)-1)
+			newItems := make([]Shape, len(items)-1)
 			copy(newItems, items[:i])
 			copy(newItems[i:], items[i+1:])
 			p.items = newItems
@@ -196,8 +420,7 @@ func (p *Game) removeShape(child shape) {
 	}
 }
 
-func (p *Game) activateShape(child shape) {
-
+func (p *Game) activateShape(child Shape) {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -209,7 +432,7 @@ func (p *Game) activateShape(child shape) {
 			}
 			// getItems() requires immutable items, so we need clone them
 			//
-			newItems := make([]shape, len(items))
+			newItems := make([]Shape, len(items))
 			copy(newItems, items[:i])
 			copy(newItems[i:], items[i+1:])
 			newItems[len(items)-1] = child
@@ -243,7 +466,7 @@ func (p *Game) goBackByLayers(spr *Sprite, n int) {
 		if newIdx != idx {
 			// getItems() requires immutable items, so we need clone them
 			//
-			newItems := make([]shape, len(items))
+			newItems := make([]Shape, len(items))
 			copy(newItems, items[:newIdx])
 			copy(newItems[newIdx+1:], items[newIdx:idx])
 			copy(newItems[idx+1:], items[idx+1:])
@@ -271,7 +494,7 @@ func (p *Game) goBackByLayers(spr *Sprite, n int) {
 		if newIdx != idx {
 			// getItems() requires immutable items, so we need clone them
 			//
-			newItems := make([]shape, len(items))
+			newItems := make([]Shape, len(items))
 			copy(newItems, items[:idx])
 			copy(newItems[idx:newIdx], items[idx+1:])
 			copy(newItems[newIdx+1:], items[newIdx+1:])
@@ -281,7 +504,7 @@ func (p *Game) goBackByLayers(spr *Sprite, n int) {
 	}
 }
 
-func (p *Game) doFindSprite(src shape) int {
+func (p *Game) doFindSprite(src Shape) int {
 	for idx, item := range p.items {
 		if item == src {
 			return idx
@@ -306,12 +529,49 @@ func (p *Game) findSprite(name string) *Sprite {
 
 // -----------------------------------------------------------------------------
 
+func (p *Game) drawBackground(dc drawContext) {
+	c := p.costumes[p.currentCostumeIndex]
+	img, _, _ := c.needImage(p.fs)
+
+	var options *ebiten.DrawImageOptions
+	if c.bitmapResolution > 1 {
+		scale := 1.0 / float64(c.bitmapResolution)
+		options = new(ebiten.DrawImageOptions)
+		options.GeoM.Scale(scale, scale)
+	}
+	dc.DrawImage(img, options)
+}
+
+func (p *Game) draw(dc drawContext) {
+	p.drawBackground(dc)
+	p.getTurtle().draw(dc, p.fs)
+
+	items := p.getItems()
+	for _, item := range items {
+		item.draw(dc)
+	}
+}
+
+func (p *Game) hit(hc hitContext) (hr hitResult, ok bool) {
+	items := p.getItems()
+	i := len(items)
+	for i > 0 {
+		i--
+		if hr, ok = items[i].hit(hc); ok {
+			return
+		}
+	}
+	return hitResult{Target: p}, true
+}
+
+// -----------------------------------------------------------------------------
+
 func (p *Game) SceneName() string {
-	return p.costumeName()
+	return p.getCostumeName()
 }
 
 func (p *Game) SceneIndex() int {
-	return p.costumeIndex()
+	return p.getCostumeIndex()
 }
 
 // StartScene func:
@@ -320,7 +580,8 @@ func (p *Game) SceneIndex() int {
 //   StartScene(spx.Next)
 //   StartScene(spx.Prev)
 func (p *Game) StartScene(scene interface{}, wait ...bool) {
-	if p.setCostume(scene) {
+	if p.goSetCostume(scene) {
+		p.width = 0
 		// TODO: send event & wait
 	}
 }
@@ -331,36 +592,42 @@ func (p *Game) NextScene(wait ...bool) {
 
 // -----------------------------------------------------------------------------
 
-type Key int
-
 func (p *Game) KeyPressed(key Key) bool {
-	panic("todo")
+	return isKeyPressed(key)
 }
 
 func (p *Game) MouseX() float64 {
-	panic("todo")
+	return float64(atomic.LoadInt64(&p.gMouseX))
 }
 
 func (p *Game) MouseY() float64 {
-	panic("todo")
+	return float64(atomic.LoadInt64(&p.gMouseY))
 }
 
 func (p *Game) MousePressed() bool {
-	panic("todo")
+	return isMousePressed()
+}
+
+func (p *Game) getMousePos() (x, y float64) {
+	return p.MouseX(), p.MouseY()
+}
+
+func (p *Game) updateMousePos() {
+	x, y := ebiten.CursorPosition()
+	screenW, screenH := p.size()
+	mx, my := x-(screenW>>1), (screenH>>1)-y
+	atomic.StoreInt64(&p.gMouseX, int64(mx))
+	atomic.StoreInt64(&p.gMouseY, int64(my))
 }
 
 func (p *Game) Username() string {
 	panic("todo")
 }
 
-func (p *Game) getMousePos() (x, y float64) {
-	panic("todo")
-}
-
 // -----------------------------------------------------------------------------
 
 func (p *Game) Wait(secs float64) {
-	panic("todo")
+	sleep(time.Duration(secs * 1e9))
 }
 
 func (p *Game) Timer() float64 {

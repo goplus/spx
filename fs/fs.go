@@ -1,0 +1,64 @@
+/*
+ Copyright 2021 The GoPlus Authors (goplus.org)
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+*/
+
+package fs
+
+import (
+	"errors"
+	"io"
+	"strings"
+)
+
+// -------------------------------------------------------------------------------------
+
+type Dir interface {
+	Open(file string) (io.ReadCloser, error)
+	Close() error
+}
+
+func SplitSchema(path string) (schema, file string) {
+	idx := strings.IndexAny(path, ":/\\ ")
+	if idx < 0 || path[idx] != ':' {
+		return "", path
+	}
+	schema, file = path[:idx], path[idx+1:]
+	if strings.HasPrefix(file, "//") {
+		file = file[2:]
+	}
+	return
+}
+
+// -------------------------------------------------------------------------------------
+
+type OpenFunc = func(file string) (Dir, error)
+
+var (
+	openSchemas = map[string]OpenFunc{}
+)
+
+func RegisterSchema(schema string, open OpenFunc) {
+	openSchemas[schema] = open
+}
+
+func Open(path string) (Dir, error) {
+	schema, file := SplitSchema(path)
+	if open, ok := openSchemas[schema]; ok {
+		return open(file)
+	}
+	return nil, errors.New("fs.Open: unsupported schema - " + schema)
+}
+
+// -------------------------------------------------------------------------------------

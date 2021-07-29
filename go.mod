@@ -7,6 +7,7 @@ require (
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0
 	github.com/hajimehoshi/ebiten v1.11.0-wx-rc.2
 	github.com/pkg/errors v0.9.1
+	github.com/qiniu/audio v0.1.2
 	github.com/qiniu/x v1.11.5
 	github.com/srwiley/oksvg v0.1.2-no-charset
 	github.com/srwiley/rasterx v0.0.0-20210519020934-456a8d69b780

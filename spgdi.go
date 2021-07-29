@@ -23,7 +23,30 @@ import (
 
 	"github.com/hajimehoshi/ebiten"
 	"github.com/qiniu/x/objcache"
+
+	spxfs "github.com/goplus/spx/fs"
 )
+
+// -------------------------------------------------------------------------------------
+
+type drawContext struct {
+	*ebiten.Image
+}
+
+type hitContext struct {
+	Pos image.Point
+}
+
+type hitResult struct {
+	Target interface{}
+}
+
+type Shape interface {
+	draw(dc drawContext)
+	hit(hc hitContext) (hr hitResult, ok bool)
+}
+
+// -------------------------------------------------------------------------------------
 
 type sprKey struct {
 	scale         float64
@@ -56,7 +79,7 @@ func (p *sprKey) doGet(sp *Sprite) *gdi.Sprite {
 	return gdi.NewSpriteFromScreen(img)
 }
 
-func (p *sprKey) drawOn(target *ebiten.Image, x, y float64, fs FileSystem) {
+func (p *sprKey) drawOn(target *ebiten.Image, x, y float64, fs spxfs.Dir) {
 	c := p.costume
 	img, centerX, centerY := c.needImage(fs)
 
@@ -104,7 +127,7 @@ type spriteDrawInfo struct {
 	visible bool
 }
 
-func (p *spriteDrawInfo) drawOn(dc drawContext, fs FileSystem) {
+func (p *spriteDrawInfo) drawOn(dc drawContext, fs spxfs.Dir) {
 	sp := p.tryGet()
 	if sp == nil {
 		p.sprKey.drawOn(dc.Image, p.x, p.y, fs)

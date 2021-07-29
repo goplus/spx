@@ -81,6 +81,10 @@ func (p *Coroutines) CreateAndStart(fn func(me Thread) int, main Thread) Thread 
 	return id
 }
 
+func (p *Coroutines) Current() Thread {
+	return Thread(atomic.LoadInt64(&p.current))
+}
+
 func (p *Coroutines) notify(me Thread) {
 }
 
