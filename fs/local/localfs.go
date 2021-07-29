@@ -47,7 +47,7 @@ func (f *FS) Close() error {
 	return nil
 }
 
-// Open local:<app>:<path>
+// OpenLocal opens local:<app>:<path>
 func OpenLocal(base string) (fs.Dir, error) {
 	pos := strings.Index(base, ":")
 	if pos < 0 {
@@ -56,7 +56,7 @@ func OpenLocal(base string) (fs.Dir, error) {
 	app, base := base[:pos], base[pos+1:]
 	_, err := os.Lstat(base)
 	if err != nil {
-		base = "~/.spx/" + app + "/" + base
+		base = spxBaseDir + app + "/" + base
 		_, err = os.Lstat(base)
 		if err != nil {
 			return nil, err
@@ -65,7 +65,12 @@ func OpenLocal(base string) (fs.Dir, error) {
 	return Open(base)
 }
 
+var (
+	spxBaseDir string
+)
+
 func init() {
+	spxBaseDir = os.Getenv("HOME") + "/.spx/"
 	fs.RegisterSchema("", Open)
 	fs.RegisterSchema("local", OpenLocal)
 }
