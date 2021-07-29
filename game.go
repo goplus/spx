@@ -669,12 +669,16 @@ func (p *Game) ClearEffects() {
 // Play func:
 //   Play(sound)
 //   Play(video) -- maybe
-func (p *Game) Play(media interface{}, secs ...float64) {
-	panic("todo")
+func (p *Game) Play(media string, wait ...bool) {
+	f, err := p.fs.Open("sounds/" + media)
+	if err != nil {
+		panic(err)
+	}
+	p.sounds.play(f, wait...)
 }
 
 func (p *Game) StopAllSounds() {
-	panic("todo")
+	p.sounds.stopAll()
 }
 
 func (p *Game) Volume() float64 {
