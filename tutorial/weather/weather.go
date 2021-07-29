@@ -20,12 +20,6 @@ import (
 	"github.com/goplus/spx"
 )
 
-func check(err error) {
-	if err != nil {
-		panic(err)
-	}
-}
-
 func main() {
 	g := spx.Load(new(spx.Game), "local:weather:res")
 	g.Load(new(spx.Sprite), "Jaime")
