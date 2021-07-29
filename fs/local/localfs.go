@@ -17,10 +17,8 @@
 package local
 
 import (
-	"errors"
 	"io"
 	"os"
-	"strings"
 
 	"github.com/goplus/spx/fs"
 )
@@ -47,6 +45,7 @@ func (f *FS) Close() error {
 	return nil
 }
 
+/*
 // OpenLocal opens local:<app>:<path>
 func OpenLocal(base string) (fs.Dir, error) {
 	pos := strings.Index(base, ":")
@@ -66,13 +65,13 @@ func OpenLocal(base string) (fs.Dir, error) {
 }
 
 var (
-	spxBaseDir string
+	spxBaseDir = os.Getenv("HOME") + "/.spx/"
 )
+*/
 
 func init() {
-	spxBaseDir = os.Getenv("HOME") + "/.spx/"
 	fs.RegisterSchema("", Open)
-	fs.RegisterSchema("local", OpenLocal)
+	// fs.RegisterSchema("local", OpenLocal)
 }
 
 // -------------------------------------------------------------------------------------

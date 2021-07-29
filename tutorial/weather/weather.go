@@ -21,7 +21,7 @@ import (
 )
 
 func main() {
-	g := spx.Load(new(spx.Game), "local:weather:res")
+	g := spx.Load(new(spx.Game), "hzip://open.qiniu.us/weather/res.zip")
 	g.Load(new(spx.Sprite), "Jaime")
 	g.Load(new(spx.Sprite), "Kai")
 	g.Run()

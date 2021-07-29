@@ -19,6 +19,9 @@ package zip
 import (
 	"archive/zip"
 	"io"
+	"net/http"
+	"os"
+	"path"
 	"syscall"
 
 	"github.com/goplus/spx/fs"
@@ -54,8 +57,61 @@ func (zipf *FS) Close() error {
 	return ((*zip.ReadCloser)(zipf)).Close()
 }
 
+// OpenHttp opens hzip:<domain>/<path>
+// OpenHttp("open.qiniu.us/weather/res.zip")
+func OpenHttp(url string) (fs.Dir, error) {
+	return openHttpWith(url, "http://")
+}
+
+// OpenHttps opens hzips:<domain>/<path>
+// OpenHttps("open.qiniu.us/weather/res.zip")
+func OpenHttps(url string) (fs.Dir, error) {
+	return openHttpWith(url, "https://")
+}
+
+func openHttpWith(url string, schema string) (dir fs.Dir, err error) {
+	local := spxBaseDir + url
+	dir, err = Open(local)
+	if err == nil {
+		return
+	}
+
+	remote := schema + url
+	resp, err := http.Get(remote)
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+
+	err = saveTo(local, resp)
+	if err != nil {
+		return
+	}
+	return Open(local)
+}
+
+func saveTo(local string, resp *http.Response) (err error) {
+	dir := path.Dir(local)
+	os.MkdirAll(dir, 0777)
+
+	f, err := os.Create(local)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+
+	_, err = io.Copy(f, resp.Body)
+	return
+}
+
+var (
+	spxBaseDir = os.Getenv("HOME") + "/.spx/"
+)
+
 func init() {
 	fs.RegisterSchema("zip", Open)
+	fs.RegisterSchema("hzip", OpenHttp)
+	fs.RegisterSchema("hzips", OpenHttps)
 }
 
 // -------------------------------------------------------------------------------------
