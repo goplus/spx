@@ -214,7 +214,7 @@ func (p *Sprite) Step(step float64) {
 //   Goto(gox.Random)
 func (p *Sprite) Goto(obj interface{}) {
 	x, y := p.objectPos(obj)
-	p.SetXY(x, y)
+	p.SetXYpos(x, y)
 }
 
 const (
@@ -233,14 +233,14 @@ func (p *Sprite) Glide(x, y float64, secs float64) {
 			inDur -= glideTick
 			x0 += dx
 			y0 += dy
-			p.SetXY(x0, y0)
+			p.SetXYpos(x0, y0)
 		}
 	}
 	sleep(inDur)
-	p.SetXY(x, y)
+	p.SetXYpos(x, y)
 }
 
-func (p *Sprite) SetXY(x, y float64) {
+func (p *Sprite) SetXYpos(x, y float64) {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -513,7 +513,7 @@ func (p *Sprite) GoBackLayers(n int) {
 	p.goBackByLayers(p, n)
 }
 
-func (p *Sprite) GotoFront(n int) {
+func (p *Sprite) GotoFront() {
 	p.goBackByLayers(p, -1e8)
 }
 
