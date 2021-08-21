@@ -270,6 +270,24 @@ func sleep(t time.Duration) {
 	gco.Yield(me)
 }
 
+func SchedNow() int {
+	me := gco.Current()
+	gco.Sched(me)
+	return 0
+}
+
+func Sched() int {
+	now := time.Now()
+	if now.Sub(lastSched) >= 3e7 {
+		me := gco.Current()
+		gco.Sched(me)
+		lastSched = now
+	}
+	return 0
+}
+
+var lastSched time.Time
+
 // -----------------------------------------------------------------------------
 
 func (p *Game) getWidth() int {
