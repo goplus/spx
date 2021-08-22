@@ -35,9 +35,7 @@ func SplitSchema(path string) (schema, file string) {
 		return "", path
 	}
 	schema, file = path[:idx], path[idx+1:]
-	if strings.HasPrefix(file, "//") {
-		file = file[2:]
-	}
+	file = strings.TrimPrefix(file, "//")
 	return
 }
 
