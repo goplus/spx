@@ -1,5 +1,6 @@
 .gop
 .DS_Store
+gop_autogen.go
 _gsc/
 _test/
 res/

@@ -76,7 +76,7 @@ const (
 
 // -----------------------------------------------------------------------------
 
-func (p *Sprite) Clone(data interface{}) *Sprite {
+func (p *Sprite) Clone(data ...interface{}) *Sprite {
 	panic("todo")
 }
 

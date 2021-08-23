@@ -34,6 +34,13 @@ import (
 	_ "github.com/goplus/spx/fs/zip"
 )
 
+const (
+	GopPackage = true
+
+	Gop_title  = "on"
+	Gop_params = "onMsg(, _gop_data interface{}); onCloned(_gop_data interface{})"
+)
+
 type Game struct {
 	baseObj
 	fs spxfs.Dir
@@ -713,8 +720,20 @@ func (p *Game) ChangeVolume(delta float64) {
 
 // -----------------------------------------------------------------------------
 
-func (p *Game) Broadcast(msg string, data interface{}, wait ...bool) {
+func (p *Game) doBroadcast(msg string, data interface{}, wait bool) {
 	panic("todo")
+}
+
+func (p *Game) Broadcast__0(msg string) {
+	p.doBroadcast(msg, nil, false)
+}
+
+func (p *Game) Broadcast__1(msg string, wait bool) {
+	p.doBroadcast(msg, nil, wait)
+}
+
+func (p *Game) Broadcast__2(msg string, data interface{}, wait bool) {
+	p.doBroadcast(msg, data, wait)
 }
 
 // -----------------------------------------------------------------------------
