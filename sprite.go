@@ -35,7 +35,7 @@ type Sprite struct {
 	scale         float64
 	direction     float64
 	rotationStyle RotationStyle
-	say           *sayOrThinker
+	sayObj        *sayOrThinker
 
 	penColor color.RGBA
 	penShade float64
@@ -143,10 +143,10 @@ func (p *Sprite) sayOrThink(msg string, style int) {
 		return
 	}
 
-	old := p.say
+	old := p.sayObj
 	if old == nil {
-		p.say = &sayOrThinker{sp: p, msg: msg, style: style}
-		p.addShape(p.say)
+		p.sayObj = &sayOrThinker{sp: p, msg: msg, style: style}
+		p.addShape(p.sayObj)
 	} else {
 		old.msg, old.style = msg, style
 		p.activateShape(old)
@@ -162,9 +162,9 @@ func (p *Sprite) waitStopSay(secs float64) {
 }
 
 func (p *Sprite) doStopSay() {
-	if p.say != nil {
-		p.removeShape(p.say)
-		p.say = nil
+	if p.sayObj != nil {
+		p.removeShape(p.sayObj)
+		p.sayObj = nil
 	}
 }
 
