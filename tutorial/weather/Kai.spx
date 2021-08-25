@@ -1,4 +1,4 @@
-func onInit() {
+func onStart() {
 	setCostume("kai-a")
 	play("recordingWhere")
 	say("Where do you come from?", 2)
