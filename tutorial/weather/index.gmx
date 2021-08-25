@@ -1,1 +1,6 @@
+var (
+	Jaime Jaime
+	Kai Kai
+)
 
+run(this, "hzip://open.qiniu.us/weather/res.zip")

@@ -60,15 +60,13 @@ type Game struct {
 }
 
 type Gamer interface {
-	Load(sprite Shape, name string) Shape
-	Run(cfg ...*Config)
+	StartLoad(resource string) error
+	LoadSprite(sprite Shape, name string) error
+	EndLoad() error
+	RunLoop(cfg *Config) error
 }
 
-func Load(game Gamer, resource string) Gamer {
-	fs, err := spxfs.Open(resource)
-	if err != nil {
-		panic(err)
-	}
+func instance(game Gamer) *Game {
 	p, ok := game.(*Game)
 	if !ok {
 		fld := reflect.ValueOf(game).Elem().FieldByName("Game")
@@ -77,13 +75,39 @@ func Load(game Gamer, resource string) Gamer {
 		}
 		p = fld.Addr().Interface().(*Game)
 	}
-	p.input.init(p)
-	p.sounds.init()
-	p.shapes = make(map[string]Shape)
-	p.events = make(chan event, 16)
-	p.fs = fs
-	return game
+	return p
 }
+
+func Run(game Gamer, resource string, cfg ...*Config) (err error) {
+	g := instance(game)
+	if err = g.StartLoad(resource); err != nil {
+		return
+	}
+	v := reflect.ValueOf(game)
+	t := v.Type()
+	for i, n := 0, v.NumField(); i < n; i++ {
+		fld := t.Field(i)
+		fldPtr := reflect.PtrTo(fld.Type)
+		if fldPtr.Implements(tyShape) {
+			spr := v.Field(i).Addr().Interface().(Shape)
+			if err = g.LoadSprite(spr, fld.Name); err != nil {
+				return
+			}
+		}
+	}
+	if err = g.EndLoad(); err != nil {
+		return
+	}
+	var gameConf *Config
+	if cfg != nil {
+		gameConf = cfg[0]
+	}
+	return g.RunLoop(gameConf)
+}
+
+var (
+	tyShape = reflect.TypeOf((*Shape)(nil)).Elem()
+)
 
 type costumeConfig struct {
 	Name             string  `json:"name"`
@@ -105,12 +129,25 @@ type spriteConfig struct {
 	IsDraggable         bool            `json:"isDraggable"`
 }
 
-func (p *Game) Load(sprite Shape, name string) Shape {
+func (p *Game) StartLoad(resource string) error {
+	fs, err := spxfs.Open(resource)
+	if err != nil {
+		return err
+	}
+	p.input.init(p)
+	p.sounds.init()
+	p.shapes = make(map[string]Shape)
+	p.events = make(chan event, 16)
+	p.fs = fs
+	return nil
+}
+
+func (p *Game) LoadSprite(sprite Shape, name string) error {
 	var baseDir = "sprites/" + name + "/"
 	var conf spriteConfig
 	err := loadJson(&conf, p.fs, baseDir+"index.json")
 	if err != nil {
-		panic(err)
+		return err
 	}
 	base, ok := sprite.(*Sprite)
 	if !ok {
@@ -122,7 +159,7 @@ func (p *Game) Load(sprite Shape, name string) Shape {
 	}
 	base.init(baseDir, p, name, &conf)
 	p.shapes[name] = sprite
-	return sprite
+	return nil
 }
 
 func loadJson(ret interface{}, fs spxfs.Dir, file string) (err error) {
@@ -155,21 +192,6 @@ func (p *Game) EndLoad() (err error) {
 		}
 	}
 	return
-}
-
-func (p *Game) Run(cfg ...*Config) {
-	err := p.EndLoad()
-	if err != nil {
-		panic(err)
-	}
-	var gameConf *Config
-	if cfg != nil {
-		gameConf = cfg[0]
-	}
-	err = p.RunLoop(gameConf)
-	if err != nil {
-		panic(err)
-	}
 }
 
 // -----------------------------------------------------------------------------

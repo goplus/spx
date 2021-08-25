@@ -131,7 +131,7 @@ const (
 
 type event interface{}
 
-type eventStart struct{}
+// type eventStart struct{}
 
 type eventKeyDown struct {
 	Key ebiten.Key

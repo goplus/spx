@@ -68,14 +68,14 @@ func (p *sprKey) get(sp *Sprite) *gdi.Sprite {
 }
 
 func (p *sprKey) doGet(sp *Sprite) *gdi.Sprite {
-	w, h := sp.size()
+	w, h := sp.g.size()
 	img, err := ebiten.NewImage(w, h, defaultFilterMode)
 	if err != nil {
 		panic(err)
 	}
 	defer img.Dispose()
 
-	p.drawOn(img, 0, 0, sp.fs)
+	p.drawOn(img, 0, 0, sp.g.fs)
 	return gdi.NewSpriteFromScreen(img)
 }
 

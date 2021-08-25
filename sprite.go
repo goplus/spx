@@ -27,7 +27,7 @@ import (
 
 type Sprite struct {
 	baseObj
-	*Game
+	g *Game
 
 	name string
 
@@ -48,9 +48,13 @@ type Sprite struct {
 	isPenDown   bool
 }
 
+func (p *Sprite) Game() *Game {
+	return p.g
+}
+
 func (p *Sprite) init(base string, g *Game, name string, sprite *spriteConfig) {
 	p.baseObj.init(base, sprite.Costumes, sprite.CurrentCostumeIndex)
-	p.Game, p.name = g, name
+	p.g, p.name = g, name
 	p.x, p.y = sprite.X, sprite.Y
 	p.scale = sprite.Size
 	p.direction = sprite.Heading
@@ -146,15 +150,15 @@ func (p *Sprite) sayOrThink(msg string, style int) {
 	old := p.sayObj
 	if old == nil {
 		p.sayObj = &sayOrThinker{sp: p, msg: msg, style: style}
-		p.addShape(p.sayObj)
+		p.g.addShape(p.sayObj)
 	} else {
 		old.msg, old.style = msg, style
-		p.activateShape(old)
+		p.g.activateShape(old)
 	}
 }
 
 func (p *Sprite) waitStopSay(secs float64) {
-	p.Wait(secs)
+	p.g.Wait(secs)
 
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
@@ -163,7 +167,7 @@ func (p *Sprite) waitStopSay(secs float64) {
 
 func (p *Sprite) doStopSay() {
 	if p.sayObj != nil {
-		p.removeShape(p.sayObj)
+		p.g.removeShape(p.sayObj)
 		p.sayObj = nil
 	}
 }
@@ -186,7 +190,7 @@ func (p *Sprite) DistanceTo(obj interface{}) float64 {
 	x, y := p.x, p.y
 	p.mutex.Unlock()
 
-	x2, y2 := p.objectPos(obj)
+	x2, y2 := p.g.objectPos(obj)
 	x -= x2
 	y -= y2
 	return math.Sqrt(x*x + y*y)
@@ -194,7 +198,7 @@ func (p *Sprite) DistanceTo(obj interface{}) float64 {
 
 func (p *Sprite) doMoveTo(x, y float64) {
 	if p.isPenDown {
-		p.Game.movePen(p, x, y)
+		p.g.movePen(p, x, y)
 	}
 	p.x, p.y = x, y
 }
@@ -213,7 +217,7 @@ func (p *Sprite) Step(step float64) {
 //   Goto(gox.Mouse)
 //   Goto(gox.Random)
 func (p *Sprite) Goto(obj interface{}) {
-	x, y := p.objectPos(obj)
+	x, y := p.g.objectPos(obj)
 	p.SetXYpos(x, y)
 }
 
@@ -348,7 +352,7 @@ func (p *Sprite) TurnTo(obj interface{}) {
 	case float64:
 		p.setDirection(v, false)
 	default:
-		x, y := p.objectPos(obj)
+		x, y := p.g.objectPos(obj)
 		dx := x - p.x
 		dy := y - p.y
 		angle := 90 - math.Atan2(dy, dx)*180/math.Pi
@@ -406,15 +410,15 @@ func (p *Sprite) TouchingColor(color Color) bool {
 func (p *Sprite) Touching(obj interface{}) bool {
 	switch v := obj.(type) {
 	case string:
-		return p.touchingSpriteBy(p, v)
+		return p.g.touchingSpriteBy(p, v)
 	case *Sprite:
 		return touchingSprite(p, v)
 	case specialObj:
 		if v == Edge {
 			return p.checkTouchingScreen(touchingAllEdges) != 0
 		} else if v == Mouse {
-			x, y := p.getMousePos()
-			return p.touchingPoint(p, x, y)
+			x, y := p.g.getMousePos()
+			return p.g.touchingPoint(p, x, y)
 		}
 	}
 	panic("Touching: unexpected input")
@@ -493,7 +497,7 @@ func (p *Sprite) checkTouchingScreen(where int) (touching int) {
 			return touchingScreenTop
 		}
 	}
-	w, h := p.size()
+	w, h := p.g.size()
 	if (where & touchingScreenRight) != 0 {
 		if gdi.TouchingRect(spr, pt, w, -1e8, 1e8, 1e8) {
 			return touchingScreenRight
@@ -510,17 +514,17 @@ func (p *Sprite) checkTouchingScreen(where int) (touching int) {
 // -----------------------------------------------------------------------------
 
 func (p *Sprite) GoBackLayers(n int) {
-	p.goBackByLayers(p, n)
+	p.g.goBackByLayers(p, n)
 }
 
 func (p *Sprite) GotoFront() {
-	p.goBackByLayers(p, -1e8)
+	p.g.goBackByLayers(p, -1e8)
 }
 
 // -----------------------------------------------------------------------------
 
 func (p *Sprite) Stamp() {
-	p.stampCostume(p.getDrawInfo())
+	p.g.stampCostume(p.getDrawInfo())
 }
 
 func (p *Sprite) PenUp() {

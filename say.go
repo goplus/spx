@@ -26,9 +26,9 @@ import (
 )
 
 var (
-	defaultFont   font.Face
-	defaultFont2  font.Face
-	defaultFontSm font.Face
+	defaultFont font.Face
+	// defaultFont2  font.Face
+	// defaultFontSm font.Face
 )
 
 func init() {
@@ -38,16 +38,18 @@ func init() {
 		DPI:     dpi,
 		Hinting: font.HintingFull,
 	})
-	defaultFont2 = gdi.NewDefaultFont(&gdi.FontOptions{
-		Size:    12,
-		DPI:     dpi,
-		Hinting: font.HintingFull,
-	})
-	defaultFontSm = gdi.NewDefaultFont(&gdi.FontOptions{
-		Size:    11,
-		DPI:     dpi,
-		Hinting: font.HintingFull,
-	})
+	/*
+		defaultFont2 = gdi.NewDefaultFont(&gdi.FontOptions{
+			Size:    12,
+			DPI:     dpi,
+			Hinting: font.HintingFull,
+		})
+		defaultFontSm = gdi.NewDefaultFont(&gdi.FontOptions{
+			Size:    11,
+			DPI:     dpi,
+			Hinting: font.HintingFull,
+		})
+	*/
 }
 
 // -------------------------------------------------------------------------------------
@@ -92,7 +94,7 @@ func (p *sayOrThinker) draw(dc drawContext) {
 		w = minWidth
 	}
 
-	screenW := p.sp.getWidth()
+	screenW := p.sp.g.getWidth()
 	if x < screenGap {
 		x = screenGap
 	} else if (x + w + screenGap) > screenW {
