@@ -18,6 +18,7 @@ package spx
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"math/rand"
 	"reflect"
@@ -40,6 +41,21 @@ const (
 	Gop_title  = "on"
 	Gop_params = "onMsg(, _gop_data interface{}); onCloned(_gop_data interface{})"
 )
+
+const (
+	DbgFlagLoad = 1 << iota
+	DbgFlagAll  = DbgFlagLoad
+)
+
+var (
+	debugLoad bool
+)
+
+func SetDebug(flags int) {
+	debugLoad = (flags & DbgFlagLoad) != 0
+}
+
+// -------------------------------------------------------------------------------------
 
 type Game struct {
 	baseObj
@@ -78,31 +94,40 @@ func instance(game Gamer) *Game {
 	return p
 }
 
-func Run(game Gamer, resource string, cfg ...*Config) (err error) {
-	g := instance(game)
-	if err = g.StartLoad(resource); err != nil {
-		return
+func Run(game Gamer, resource string, gameConf ...*Config) {
+	var conf *Config
+	if gameConf != nil {
+		conf = gameConf[0]
 	}
-	v := reflect.ValueOf(game)
+	if conf == nil || !conf.DontParseFlags {
+		verbose := flag.CommandLine.Bool("v", false, "print verbose information")
+		flag.Parse()
+		if *verbose {
+			SetDebug(DbgFlagAll)
+		}
+	}
+	g := instance(game)
+	if err := g.StartLoad(resource); err != nil {
+		panic(err)
+	}
+	v := reflect.ValueOf(game).Elem()
 	t := v.Type()
 	for i, n := 0, v.NumField(); i < n; i++ {
 		fld := t.Field(i)
 		fldPtr := reflect.PtrTo(fld.Type)
 		if fldPtr.Implements(tyShape) {
 			spr := v.Field(i).Addr().Interface().(Shape)
-			if err = g.LoadSprite(spr, fld.Name); err != nil {
-				return
+			if err := g.LoadSprite(spr, fld.Name); err != nil {
+				panic(err)
 			}
 		}
 	}
-	if err = g.EndLoad(); err != nil {
-		return
+	if err := g.EndLoad(); err != nil {
+		panic(err)
 	}
-	var gameConf *Config
-	if cfg != nil {
-		gameConf = cfg[0]
+	if err := g.RunLoop(conf); err != nil {
+		panic(err)
 	}
-	return g.RunLoop(gameConf)
 }
 
 var (
@@ -130,6 +155,9 @@ type spriteConfig struct {
 }
 
 func (p *Game) StartLoad(resource string) error {
+	if debugLoad {
+		log.Println("==> StartLoad", resource)
+	}
 	fs, err := spxfs.Open(resource)
 	if err != nil {
 		return err
@@ -143,6 +171,9 @@ func (p *Game) StartLoad(resource string) error {
 }
 
 func (p *Game) LoadSprite(sprite Shape, name string) error {
+	if debugLoad {
+		log.Println("==> LoadSprite", name)
+	}
 	var baseDir = "sprites/" + name + "/"
 	var conf spriteConfig
 	err := loadJson(&conf, p.fs, baseDir+"index.json")
@@ -178,6 +209,9 @@ type projConfig struct {
 }
 
 func (p *Game) EndLoad() (err error) {
+	if debugLoad {
+		log.Println("==> EndLoad")
+	}
 	var proj projConfig
 	err = loadJson(&proj, p.fs, "index.json")
 	if err != nil {
@@ -201,9 +235,13 @@ type Config struct {
 	Scale               float64
 	FullScreen          bool
 	RunnableOnUnfocused bool
+	DontParseFlags      bool
 }
 
 func (p *Game) RunLoop(cfg *Config) (err error) {
+	if debugLoad {
+		log.Println("==> RunLoop")
+	}
 	if cfg == nil {
 		cfg = &Config{}
 	}
@@ -234,7 +272,7 @@ func (p *Game) update(screen *ebiten.Image) error {
 		return nil
 	}
 	dc := drawContext{Image: screen}
-	p.draw(dc)
+	p.onDraw(dc)
 	return nil
 }
 
@@ -589,7 +627,7 @@ func (p *Game) drawBackground(dc drawContext) {
 	dc.DrawImage(img, options)
 }
 
-func (p *Game) draw(dc drawContext) {
+func (p *Game) onDraw(dc drawContext) {
 	p.drawBackground(dc)
 	p.getTurtle().draw(dc, p.fs)
 
@@ -599,7 +637,8 @@ func (p *Game) draw(dc drawContext) {
 	}
 }
 
-func (p *Game) hit(hc hitContext) (hr hitResult, ok bool) {
+/*
+func (p *Game) onHit(hc hitContext) (hr hitResult, ok bool) {
 	items := p.getItems()
 	i := len(items)
 	for i > 0 {
@@ -610,6 +649,7 @@ func (p *Game) hit(hc hitContext) (hr hitResult, ok bool) {
 	}
 	return hitResult{Target: p}, true
 }
+*/
 
 // -----------------------------------------------------------------------------
 

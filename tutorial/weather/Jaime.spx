@@ -1,5 +1,9 @@
 func onMsg(msg string) {
 	switch msg {
+	case "1":
+		play("recordingComeFrom")
+		say("I come from England.", 2)
+		broadcast("2")
 	case "3":
 		play("recordingMild")
 		say("It's mild, but it's not always pleasant.", 4)
@@ -9,14 +13,6 @@ func onMsg(msg string) {
 		play("recordingSouth")
 		say("It's often wet in the West and sometimes warm in the South.", 5)
 		broadcast("4")
-	case "1":
-		play("recordingComeFrom")
-		say("I come from England.", 2)
-		broadcast("2")
-	case "7":
-		play("recordingBye")
-		say("Bye!", 2)
-		nextCostume
 	case "5":
 		nextCostume
 		play("recordingSummer")
@@ -38,5 +34,9 @@ func onMsg(msg string) {
 		play("recordingConversation")
 		say("It's our favourite subject of conversation.", 4)
 		broadcast("6")
+	case "7":
+		play("recordingBye")
+		say("Bye!", 2)
+		nextCostume
 	}
 }
