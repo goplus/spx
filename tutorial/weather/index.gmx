@@ -21,4 +21,4 @@ var (
 	recordingWinter       Sound
 )
 
-run(this, "hzip://open.qiniu.us/weather/res.zip")
+run(this, "hzip://open.qiniu.us/weather/res.zip", {Title: "Weather (by Go+)"})
