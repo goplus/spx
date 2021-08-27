@@ -1,6 +1,6 @@
 func onStart() {
 	setCostume("kai-a")
-	play("recordingWhere")
+	play(recordingWhere)
 	say("Where do you come from?", 2)
 	broadcast("1")
 }
@@ -8,15 +8,15 @@ func onStart() {
 func onMsg(msg string) {
 	switch msg {
 	case "2":
-		play("recordingCountry")
+		play(recordingCountry)
 		say("What's the climate like in your country?", 3)
 		broadcast("3")
 	case "4":
-		play("recordingBest")
+		play(recordingBest)
 		say("Which seasons do you like best?", 3)
 		broadcast("5")
 	case "6":
-		play("recordingBye2")
+		play(recordingBye2)
 		say("Thanks. Bye!", 2)
 		nextCostume
 		broadcast("7")

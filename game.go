@@ -123,16 +123,20 @@ func Run(game Gamer, resource string, gameConf ...*Config) {
 	}
 	vPtr := reflect.ValueOf(game)
 	tPtr, v := vPtr.Type(), vPtr.Elem()
-	t := v.Type()
 	for i, n := 0, v.NumField(); i < n; i++ {
-		fld := t.Field(i)
-		fldPtr := reflect.PtrTo(fld.Type)
-		if fldPtr.Implements(tyShape) {
-			vFld := v.Field(i)
-			spr := vFld.Addr().Interface().(Shape)
-			if err := g.LoadSprite(spr, fld.Name); err != nil {
+		name, val := getFieldPtr(v, i)
+		switch fld := val.(type) {
+		case *Sound:
+			media, err := g.LoadSound(name)
+			if err != nil {
 				panic(err)
 			}
+			*fld = media
+		case Shape:
+			if err := g.LoadSprite(fld, name); err != nil {
+				panic(err)
+			}
+			vFld := v.Field(i)
 			if vFld.NumField() > 1 {
 				if fldSub := vFld.Field(1); fldSub.Type() == tPtr {
 					*(*uintptr)(unsafe.Pointer(fldSub.Addr().Pointer())) = vPtr.Pointer()
@@ -148,9 +152,24 @@ func Run(game Gamer, resource string, gameConf ...*Config) {
 	}
 }
 
-var (
-	tyShape = reflect.TypeOf((*Shape)(nil)).Elem()
-)
+func getFieldPtr(v reflect.Value, i int) (name string, val interface{}) {
+	tFld := v.Type().Field(i)
+	word := v.Field(i).Addr().Pointer()
+	return tFld.Name, makeEmptyInterface(reflect.PtrTo(tFld.Type), word)
+}
+
+// emptyInterface is the header for an interface{} value.
+type emptyInterface struct {
+	typ  unsafe.Pointer
+	word unsafe.Pointer
+}
+
+func makeEmptyInterface(typ reflect.Type, word uintptr) (i interface{}) {
+	e := (*emptyInterface)(unsafe.Pointer(&i))
+	etyp := (*emptyInterface)(unsafe.Pointer(&typ))
+	e.typ, e.word = etyp.word, unsafe.Pointer(word)
+	return
+}
 
 type costumeConfig struct {
 	Name             string  `json:"name"`
@@ -827,14 +846,32 @@ func (p *Game) ClearEffects() {
 
 // -----------------------------------------------------------------------------
 
+type soundConfig struct {
+	Path        string `json:"path"`
+	Rate        int    `json:"rate"`
+	SampleCount int    `json:"sampleCount"`
+}
+
+type Sound *soundConfig
+
+func (p *Game) LoadSound(name string) (media Sound, err error) {
+	prefix := "sounds/" + name
+	media = new(soundConfig)
+	if err = loadJson(media, p.fs, prefix+"/index.json"); err != nil {
+		return
+	}
+	media.Path = prefix + "/" + media.Path
+	return
+}
+
 // Play func:
 //   Play(sound)
 //   Play(video) -- maybe
-func (p *Game) Play(media string, wait ...bool) {
+func (p *Game) Play__0(media Sound, wait ...bool) {
 	if debugInstr {
-		log.Println("Play", media, wait)
+		log.Println("Play", media.Path, wait)
 	}
-	f, err := p.fs.Open("sounds/" + media)
+	f, err := p.fs.Open(media.Path)
 	if err != nil {
 		panic(err)
 	}
