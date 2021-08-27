@@ -154,7 +154,7 @@ func Run(game Gamer, resource string, gameConf ...*Config) {
 
 func getFieldPtr(v reflect.Value, i int) (name string, val interface{}) {
 	tFld := v.Type().Field(i)
-	word := v.Field(i).Addr().Pointer()
+	word := unsafe.Pointer(v.Field(i).Addr().Pointer())
 	return tFld.Name, makeEmptyInterface(reflect.PtrTo(tFld.Type), word)
 }
 
@@ -164,10 +164,10 @@ type emptyInterface struct {
 	word unsafe.Pointer
 }
 
-func makeEmptyInterface(typ reflect.Type, word uintptr) (i interface{}) {
+func makeEmptyInterface(typ reflect.Type, word unsafe.Pointer) (i interface{}) {
 	e := (*emptyInterface)(unsafe.Pointer(&i))
 	etyp := (*emptyInterface)(unsafe.Pointer(&typ))
-	e.typ, e.word = etyp.word, unsafe.Pointer(word)
+	e.typ, e.word = etyp.word, word
 	return
 }
 
