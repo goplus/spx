@@ -76,8 +76,6 @@ const (
 	minWidth      = leadingWidth + leadingWidth + gapWidth
 )
 
-func (p *sayOrThinker) shapeNode() {}
-
 func (p *sayOrThinker) draw(dc drawContext) {
 	var direction int
 	var glyphTpl string

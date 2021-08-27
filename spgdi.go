@@ -44,7 +44,6 @@ type hitResult struct {
 type Shape interface {
 	draw(dc drawContext)
 	hit(hc hitContext) (hr hitResult, ok bool)
-	shapeNode()
 }
 
 // -------------------------------------------------------------------------------------
@@ -217,8 +216,6 @@ func (p *Sprite) hit(hc hitContext) (hr hitResult, ok bool) {
 	}
 	return
 }
-
-func (p *Sprite) shapeNode() {}
 
 // -------------------------------------------------------------------------------------
 

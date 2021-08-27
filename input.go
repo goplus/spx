@@ -17,6 +17,8 @@
 package spx
 
 import (
+	"sync"
+
 	"github.com/hajimehoshi/ebiten"
 )
 
@@ -131,7 +133,7 @@ const (
 
 type event interface{}
 
-// type eventStart struct{}
+type eventStart struct{}
 
 type eventKeyDown struct {
 	Key ebiten.Key
@@ -157,6 +159,7 @@ type inputMgr struct {
 	keyStates map[ebiten.Key]int
 	lbtnState int
 	firer     eventFirer
+	startFlag sync.Once
 }
 
 func (p *inputMgr) init(firer eventFirer) {
@@ -173,6 +176,9 @@ const (
 )
 
 func (i *inputMgr) update() {
+	i.startFlag.Do(func() {
+		i.firer.fireEvent(&eventStart{})
+	})
 	i.updateKeyboard()
 	i.updateMouse()
 }

@@ -133,6 +133,10 @@ func (p *baseObj) init(base string, costumes []costumeConfig, currentCostumeInde
 	p.currentCostumeIndex = currentCostumeIndex
 }
 
+func (p *baseObj) doClone(src *baseObj) {
+	p.mutex = sync.Mutex{}
+}
+
 func (p *baseObj) findCostume(name string) int {
 	for i, c := range p.costumes {
 		if c.name == name {

@@ -18,15 +18,33 @@ package spx
 
 import (
 	"image/color"
+	"log"
 	"math"
+	"reflect"
 	"time"
 
 	"github.com/goplus/spx/internal/gdi"
 	"github.com/goplus/spx/internal/gdi/clrutil"
 )
 
+type specialObj int
+
+var (
+	Mouse  = specialObj(1)
+	Edge   = specialObj(2)
+	Random = specialObj(3)
+)
+
+const (
+	Right = 90
+	Left  = -90
+	Up    = 0
+	Down  = 180
+)
+
 type Sprite struct {
 	baseObj
+	eventSinks
 	g *Game
 
 	name string
@@ -54,43 +72,63 @@ func (p *Sprite) Game() *Game {
 
 func (p *Sprite) init(base string, g *Game, name string, sprite *spriteConfig) {
 	p.baseObj.init(base, sprite.Costumes, sprite.CurrentCostumeIndex)
+	p.eventSinks.init(&g.sinkMgr, p)
+
 	p.g, p.name = g, name
 	p.x, p.y = sprite.X, sprite.Y
 	p.scale = sprite.Size
 	p.direction = sprite.Heading
 	p.rotationStyle = toRotationStyle(sprite.RotationStyle)
+
 	p.visible = sprite.Visible
 	p.isDraggable = sprite.IsDraggable
 }
 
-type specialObj int
+func (p *Sprite) doClone(src *Sprite) {
+	p.baseObj.doClone(&src.baseObj)
+	p.eventSinks.doClone(&src.eventSinks, p)
+	p.sayObj = nil
+	p.isCloned = true
+}
 
-var (
-	Mouse  = specialObj(1)
-	Edge   = specialObj(2)
-	Random = specialObj(3)
-)
+func Clone(sprite Shape, data interface{}) Shape {
+	in := reflect.ValueOf(sprite).Elem()
+	out := reflect.New(in.Type())
+	out.Elem().Set(in)
 
-const (
-	Right = 90
-	Left  = -90
-	Up    = 0
-	Down  = 180
-)
+	ret := out.Interface().(Shape)
+	src := spriteOf(sprite)
+	dest := spriteOf(ret)
+	dest.doClone(src)
 
-// -----------------------------------------------------------------------------
-
-func (p *Sprite) Clone(data ...interface{}) *Sprite {
-	panic("todo")
+	dest.mutex.Lock()
+	defer dest.mutex.Unlock()
+	dest.g.addClonedShape(src, dest)
+	dest.doWhenCloned(data)
+	return ret
 }
 
 func (p *Sprite) Destroy() { // delete this clone
-	panic("todo")
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	if p.isCloned {
+		if debugInstr {
+			log.Println("Destroy", p.name)
+		}
+		p.doStopSay()
+		p.doDeleteClone()
+		p.g.removeShape(p)
+		abortThread()
+	}
 }
 
 // -----------------------------------------------------------------------------
 
 func (p *Sprite) Hide() {
+	if debugInstr {
+		log.Println("Hide", p.name)
+	}
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -98,6 +136,9 @@ func (p *Sprite) Hide() {
 }
 
 func (p *Sprite) Show() {
+	if debugInstr {
+		log.Println("Show", p.name)
+	}
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -115,16 +156,25 @@ func (p *Sprite) CostumeIndex() int {
 }
 
 func (p *Sprite) SetCostume(costume interface{}) {
+	if debugInstr {
+		log.Println("SetCostume", p.name, costume)
+	}
 	p.goSetCostume(costume)
 }
 
 func (p *Sprite) NextCostume() {
+	if debugInstr {
+		log.Println("NextCostume", p.name)
+	}
 	p.goNextCostume()
 }
 
 // -----------------------------------------------------------------------------
 
 func (p *Sprite) Say(msg string, secs ...float64) {
+	if debugInstr {
+		log.Println("Say", p.name, msg, secs)
+	}
 	p.sayOrThink(msg, styleSay)
 	if secs != nil {
 		p.waitStopSay(secs[0])
@@ -132,6 +182,9 @@ func (p *Sprite) Say(msg string, secs ...float64) {
 }
 
 func (p *Sprite) Think(msg string, secs ...float64) {
+	if debugInstr {
+		log.Println("Think", p.name, msg, secs)
+	}
 	p.sayOrThink(msg, styleThink)
 	if secs != nil {
 		p.waitStopSay(secs[0])
@@ -204,6 +257,9 @@ func (p *Sprite) doMoveTo(x, y float64) {
 }
 
 func (p *Sprite) Step(step float64) {
+	if debugInstr {
+		log.Println("Step", p.name, step)
+	}
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -217,6 +273,9 @@ func (p *Sprite) Step(step float64) {
 //   Goto(gox.Mouse)
 //   Goto(gox.Random)
 func (p *Sprite) Goto(obj interface{}) {
+	if debugInstr {
+		log.Println("Goto", p.name, obj)
+	}
 	x, y := p.g.objectPos(obj)
 	p.SetXYpos(x, y)
 }
@@ -226,6 +285,9 @@ const (
 )
 
 func (p *Sprite) Glide(x, y float64, secs float64) {
+	if debugInstr {
+		log.Println("Glide", p.name, x, y, secs)
+	}
 	inDur := time.Duration(secs * 1e9)
 	n := int(inDur / glideTick)
 	if n > 0 {
@@ -245,6 +307,9 @@ func (p *Sprite) Glide(x, y float64, secs float64) {
 }
 
 func (p *Sprite) SetXYpos(x, y float64) {
+	if debugInstr {
+		log.Println("SetXYpos", p.name, x, y)
+	}
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -259,6 +324,9 @@ func (p *Sprite) Xpos() float64 {
 }
 
 func (p *Sprite) SetXpos(x float64) {
+	if debugInstr {
+		log.Println("SetXpos", p.name, x)
+	}
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -266,6 +334,9 @@ func (p *Sprite) SetXpos(x float64) {
 }
 
 func (p *Sprite) ChangeXpos(dx float64) {
+	if debugInstr {
+		log.Println("ChangeXpos", p.name, dx)
+	}
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -280,6 +351,9 @@ func (p *Sprite) Ypos() float64 {
 }
 
 func (p *Sprite) SetYpos(y float64) {
+	if debugInstr {
+		log.Println("SetYpos", p.name, y)
+	}
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -287,6 +361,9 @@ func (p *Sprite) SetYpos(y float64) {
 }
 
 func (p *Sprite) ChangeYpos(dy float64) {
+	if debugInstr {
+		log.Println("ChangeYpos", p.name, dy)
+	}
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -314,6 +391,9 @@ func toRotationStyle(style string) RotationStyle {
 }
 
 func (p *Sprite) SetRotationStyle(style RotationStyle) {
+	if debugInstr {
+		log.Println("SetRotationStyle", p.name, style)
+	}
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -332,6 +412,9 @@ func (p *Sprite) Heading() float64 {
 //   Turn(gox.Left)
 //   Turn(gox.Right)
 func (p *Sprite) Turn(delta float64) {
+	if debugInstr {
+		log.Println("Turn", p.name, delta)
+	}
 	p.setDirection(delta, true)
 }
 
@@ -346,6 +429,9 @@ func (p *Sprite) Turn(delta float64) {
 //   TurnTo(gox.Up)
 //   TurnTo(gox.Down)
 func (p *Sprite) TurnTo(obj interface{}) {
+	if debugInstr {
+		log.Println("TurnTo", p.name, obj)
+	}
 	switch v := obj.(type) {
 	case int:
 		p.setDirection(float64(v), false)
@@ -381,6 +467,9 @@ func (p *Sprite) Size() float64 {
 }
 
 func (p *Sprite) SetSize(size float64) {
+	if debugInstr {
+		log.Println("SetSize", p.name, size)
+	}
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -388,6 +477,9 @@ func (p *Sprite) SetSize(size float64) {
 }
 
 func (p *Sprite) ChangeSize(delta float64) {
+	if debugInstr {
+		log.Println("ChangeSize", p.name, delta)
+	}
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -439,6 +531,9 @@ const (
 )
 
 func (p *Sprite) BounceOffEdge() {
+	if debugInstr {
+		log.Println("BounceOffEdge", p.name)
+	}
 	dir := p.Heading()
 	where := checkTouchingDirection(dir)
 	touching := p.checkTouchingScreen(where)

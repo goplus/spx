@@ -20,15 +20,17 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"image"
+	"log"
 	"math/rand"
 	"reflect"
 	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"github.com/goplus/spx/internal/coroutine"
 	"github.com/goplus/spx/internal/gdi"
 	"github.com/hajimehoshi/ebiten"
-	"github.com/qiniu/x/log"
 
 	spxfs "github.com/goplus/spx/fs"
 	_ "github.com/goplus/spx/fs/local"
@@ -44,22 +46,31 @@ const (
 
 const (
 	DbgFlagLoad = 1 << iota
-	DbgFlagAll  = DbgFlagLoad
+	DbgFlagInstr
+	DbgFlagEvent
+	DbgFlagAll = DbgFlagLoad | DbgFlagInstr | DbgFlagEvent
 )
 
 var (
-	debugLoad bool
+	debugInstr bool
+	debugLoad  bool
+	debugEvent bool
 )
 
 func SetDebug(flags int) {
 	debugLoad = (flags & DbgFlagLoad) != 0
+	debugInstr = (flags & DbgFlagInstr) != 0
+	debugEvent = (flags & DbgFlagEvent) != 0
 }
 
 // -------------------------------------------------------------------------------------
 
 type Game struct {
 	baseObj
+	eventSinks
 	fs spxfs.Dir
+
+	sinkMgr eventSinkMgr
 
 	sounds soundMgr
 	turtle turtleCanvas
@@ -110,15 +121,22 @@ func Run(game Gamer, resource string, gameConf ...*Config) {
 	if err := g.StartLoad(resource); err != nil {
 		panic(err)
 	}
-	v := reflect.ValueOf(game).Elem()
+	vPtr := reflect.ValueOf(game)
+	tPtr, v := vPtr.Type(), vPtr.Elem()
 	t := v.Type()
 	for i, n := 0, v.NumField(); i < n; i++ {
 		fld := t.Field(i)
 		fldPtr := reflect.PtrTo(fld.Type)
 		if fldPtr.Implements(tyShape) {
-			spr := v.Field(i).Addr().Interface().(Shape)
+			vFld := v.Field(i)
+			spr := vFld.Addr().Interface().(Shape)
 			if err := g.LoadSprite(spr, fld.Name); err != nil {
 				panic(err)
+			}
+			if vFld.NumField() > 1 {
+				if fldSub := vFld.Field(1); fldSub.Type() == tPtr {
+					*(*uintptr)(unsafe.Pointer(fldSub.Addr().Pointer())) = vPtr.Pointer()
+				}
 			}
 		}
 	}
@@ -180,6 +198,14 @@ func (p *Game) LoadSprite(sprite Shape, name string) error {
 	if err != nil {
 		return err
 	}
+	base := spriteOf(sprite)
+	base.init(baseDir, p, name, &conf)
+	base.Sink(sprite)
+	p.shapes[name] = sprite
+	return nil
+}
+
+func spriteOf(sprite Shape) *Sprite {
 	base, ok := sprite.(*Sprite)
 	if !ok {
 		fld := reflect.ValueOf(sprite).Elem().FieldByName("Sprite")
@@ -188,9 +214,7 @@ func (p *Game) LoadSprite(sprite Shape, name string) error {
 		}
 		base = fld.Addr().Interface().(*Sprite)
 	}
-	base.init(baseDir, p, name, &conf)
-	p.shapes[name] = sprite
-	return nil
+	return base
 }
 
 func loadJson(ret interface{}, fs spxfs.Dir, file string) (err error) {
@@ -217,7 +241,8 @@ func (p *Game) EndLoad() (err error) {
 	if err != nil {
 		return
 	}
-	p.init("", proj.Costumes, proj.CurrentCostumeIndex)
+	p.baseObj.init("", proj.Costumes, proj.CurrentCostumeIndex)
+	p.eventSinks.init(&p.sinkMgr, p)
 	for _, name := range proj.Zorder {
 		if sp, ok := p.shapes[name]; ok {
 			p.addShape(sp)
@@ -276,17 +301,29 @@ func (p *Game) update(screen *ebiten.Image) error {
 	return nil
 }
 
-func (p *Game) doFireEvent(event event) {
-	/*	switch ev := event.(type) {
-		case *eventLeftButtonDown:
-			p.updateMousePos()
-			p.doWhenLeftButtonDown()
-		case *eventKeyDown:
-			p.doWhenKeyPressed(ev.Key)
-		case *eventInit:
-			p.doWhenInit()
+type clicker interface {
+	doWhenClick()
+}
+
+func (p *Game) doWhenLeftButtonDown(ev *eventLeftButtonDown) {
+	hc := hitContext{Pos: image.Pt(ev.X, ev.Y)}
+	if hr, ok := p.onHit(hc); ok {
+		if o, ok := hr.Target.(clicker); ok {
+			o.doWhenClick()
 		}
-	*/
+	}
+}
+
+func (p *Game) doFireEvent(event event) {
+	switch ev := event.(type) {
+	case *eventLeftButtonDown:
+		p.updateMousePos()
+		p.doWhenLeftButtonDown(ev)
+	case *eventKeyDown:
+		p.sinkMgr.doWhenKeyPressed(ev.Key)
+	case *eventStart:
+		p.sinkMgr.doWhenStart()
+	}
 }
 
 func (p *Game) fireEvent(ev event) {
@@ -318,6 +355,27 @@ func init() {
 }
 
 var gco *coroutine.Coroutines
+
+func createThread(start bool, f func(coroutine.Thread) int) {
+	var thMain coroutine.Thread
+	if start {
+		thMain = gco.Current()
+	}
+	gco.CreateAndStart(f, thMain)
+}
+
+func abortThread() {
+	panic("todo")
+}
+
+func waitToDo(fn func()) {
+	me := gco.Current()
+	go func() {
+		fn()
+		gco.Resume(me)
+	}()
+	gco.Yield(me)
+}
 
 func waitForChan(done chan bool) {
 	me := gco.Current()
@@ -487,6 +545,28 @@ func (p *Game) addShape(child Shape) {
 	p.items = append(p.items, child)
 }
 
+func (p *Game) addClonedShape(src, clone Shape) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	items := p.items
+	idx := p.doFindSprite(src)
+	if idx < 0 {
+		log.Println("addClonedShape: clone a deleted sprite")
+		abortThread()
+		return
+	}
+
+	// p.getItems() requires immutable items, so we need copy before modify
+	n := len(items)
+	newItems := make([]Shape, n+1)
+	copy(newItems[:idx], items)
+	copy(newItems[idx+2:], items[idx+1:])
+	newItems[idx] = clone
+	newItems[idx+1] = src
+	p.items = newItems
+}
+
 func (p *Game) removeShape(child Shape) {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
@@ -494,8 +574,7 @@ func (p *Game) removeShape(child Shape) {
 	items := p.items
 	for i, item := range items {
 		if item == child {
-			// getItems() requires immutable items, so we need clone them
-			//
+			// getItems() requires immutable items, so we need copy before modify
 			newItems := make([]Shape, len(items)-1)
 			copy(newItems, items[:i])
 			copy(newItems[i:], items[i+1:])
@@ -515,8 +594,7 @@ func (p *Game) activateShape(child Shape) {
 			if i == 0 {
 				return
 			}
-			// getItems() requires immutable items, so we need clone them
-			//
+			// getItems() requires immutable items, so we need copy before modify
 			newItems := make([]Shape, len(items))
 			copy(newItems, items[:i])
 			copy(newItems[i:], items[i+1:])
@@ -549,8 +627,7 @@ func (p *Game) goBackByLayers(spr *Sprite, n int) {
 			}
 		}
 		if newIdx != idx {
-			// getItems() requires immutable items, so we need clone them
-			//
+			// p.getItems() requires immutable items, so we need copy before modify
 			newItems := make([]Shape, len(items))
 			copy(newItems, items[:newIdx])
 			copy(newItems[newIdx+1:], items[newIdx:idx])
@@ -577,8 +654,7 @@ func (p *Game) goBackByLayers(spr *Sprite, n int) {
 			}
 		}
 		if newIdx != idx {
-			// getItems() requires immutable items, so we need clone them
-			//
+			// p.getItems() requires immutable items, so we need copy before modify
 			newItems := make([]Shape, len(items))
 			copy(newItems, items[:idx])
 			copy(newItems[idx:newIdx], items[idx+1:])
@@ -637,7 +713,6 @@ func (p *Game) onDraw(dc drawContext) {
 	}
 }
 
-/*
 func (p *Game) onHit(hc hitContext) (hr hitResult, ok bool) {
 	items := p.getItems()
 	i := len(items)
@@ -649,7 +724,6 @@ func (p *Game) onHit(hc hitContext) (hr hitResult, ok bool) {
 	}
 	return hitResult{Target: p}, true
 }
-*/
 
 // -----------------------------------------------------------------------------
 
@@ -669,7 +743,7 @@ func (p *Game) SceneIndex() int {
 func (p *Game) StartScene(scene interface{}, wait ...bool) {
 	if p.goSetCostume(scene) {
 		p.width = 0
-		// TODO: send event & wait
+		p.doWhenSceneStart(p.getCostumeName(), wait != nil && wait[0])
 	}
 }
 
@@ -757,6 +831,9 @@ func (p *Game) ClearEffects() {
 //   Play(sound)
 //   Play(video) -- maybe
 func (p *Game) Play(media string, wait ...bool) {
+	if debugInstr {
+		log.Println("Play", media, wait)
+	}
 	f, err := p.fs.Open("sounds/" + media)
 	if err != nil {
 		panic(err)
@@ -783,7 +860,10 @@ func (p *Game) ChangeVolume(delta float64) {
 // -----------------------------------------------------------------------------
 
 func (p *Game) doBroadcast(msg string, data interface{}, wait bool) {
-	panic("todo")
+	if debugInstr {
+		log.Println("Broadcast", msg, wait)
+	}
+	p.sinkMgr.doWhenIReceive(msg, data, wait)
 }
 
 func (p *Game) Broadcast__0(msg string) {
