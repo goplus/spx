@@ -1,5 +1,8 @@
+.vscode
 .gop
 .DS_Store
+go.json
+gop.json
 gop_autogen.go
 _gsc/
 _test/
