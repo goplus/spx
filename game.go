@@ -894,6 +894,10 @@ func (p *Game) ChangeVolume(delta float64) {
 	panic("todo")
 }
 
+func (p *Game) Stop(what string) {
+	panic("todo")
+}
+
 // -----------------------------------------------------------------------------
 
 func (p *Game) doBroadcast(msg string, data interface{}, wait bool) {
