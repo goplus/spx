@@ -224,7 +224,7 @@ func (ss *eventSinks) doWhenClick() {
 
 // -------------------------------------------------------------------------------------
 
-func (ss *eventSinks) WhenStart(onStart func()) {
+func (ss *eventSinks) OnStart(onStart func()) {
 	if debugEvent {
 		log.Println("Sink onStart", nameOf(ss.pthis))
 	}
@@ -235,27 +235,27 @@ func (ss *eventSinks) WhenStart(onStart func()) {
 	}
 }
 
-func (ss *eventSinks) WhenCloned(onCloned func(data interface{})) {
-	if debugEvent {
-		log.Println("Sink onCloned", nameOf(ss.pthis))
-	}
-	if ss.allWhenCloned != nil {
-		panic("Can't support multi WhenCloned event sink")
-	}
-	ss.allWhenCloned = onCloned
-}
-
-func (ss *eventSinks) WhenClick(onClick func()) {
+func (ss *eventSinks) OnClick(onClick func()) {
 	if debugEvent {
 		log.Println("Sink onClick", nameOf(ss.pthis))
 	}
 	if ss.allWhenClick != nil {
-		panic("Can't support multi WhenClicked event sink")
+		panic("Can't support multi onClick events")
 	}
 	ss.allWhenClick = onClick
 }
 
-func (ss *eventSinks) WhenKeyPressed(onKey func(key Key)) {
+func (ss *eventSinks) OnCloned__0(onCloned func(data interface{})) {
+	if debugEvent {
+		log.Println("Sink onCloned", nameOf(ss.pthis))
+	}
+	if ss.allWhenCloned != nil {
+		panic("Can't support multi onCloned events")
+	}
+	ss.allWhenCloned = onCloned
+}
+
+func (ss *eventSinks) OnKey__0(onKey func(key Key)) {
 	if debugEvent {
 		log.Println("Sink onKey", nameOf(ss.pthis))
 	}
@@ -266,7 +266,7 @@ func (ss *eventSinks) WhenKeyPressed(onKey func(key Key)) {
 	}
 }
 
-func (ss *eventSinks) WhenIReceive(onMsg func(msg string, data interface{})) {
+func (ss *eventSinks) OnMsg__0(onMsg func(msg string, data interface{})) {
 	if debugEvent {
 		log.Println("Sink onMsg", nameOf(ss.pthis))
 	}
@@ -277,7 +277,7 @@ func (ss *eventSinks) WhenIReceive(onMsg func(msg string, data interface{})) {
 	}
 }
 
-func (ss *eventSinks) WhenSceneStart(onScene func(name string)) {
+func (ss *eventSinks) OnScene__0(onScene func(name string)) {
 	if debugEvent {
 		log.Println("Sink onScene", nameOf(ss.pthis))
 	}
@@ -298,22 +298,22 @@ func (ss *eventSinks) WhenSceneStart(onScene func(name string)) {
 */
 func (ss *eventSinks) Sink(obj interface{}) {
 	if o, ok := obj.(interface{ OnStart() }); ok {
-		ss.WhenStart(o.OnStart)
+		ss.OnStart(o.OnStart)
 	}
 	if o, ok := obj.(interface{ OnClick() }); ok {
-		ss.WhenClick(o.OnClick)
+		ss.OnClick(o.OnClick)
 	}
 	if o, ok := obj.(interface{ OnKey(Key) }); ok {
-		ss.WhenKeyPressed(o.OnKey)
+		ss.OnKey__0(o.OnKey)
 	}
 	if o, ok := obj.(interface{ OnMsg(string, interface{}) }); ok {
-		ss.WhenIReceive(o.OnMsg)
+		ss.OnMsg__0(o.OnMsg)
 	}
 	if o, ok := obj.(interface{ OnScene(string) }); ok {
-		ss.WhenSceneStart(o.OnScene)
+		ss.OnScene__0(o.OnScene)
 	}
 	if o, ok := obj.(interface{ OnCloned(interface{}) }); ok {
-		ss.WhenCloned(o.OnCloned)
+		ss.OnCloned__0(o.OnCloned)
 	}
 }
 

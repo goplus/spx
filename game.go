@@ -105,7 +105,7 @@ func instance(game Gamer) *Game {
 	return p
 }
 
-func Run(game Gamer, resource string, gameConf ...*Config) {
+func Gopt_Game_Run(game Gamer, resource string, gameConf ...*Config) {
 	var conf *Config
 	if gameConf != nil {
 		conf = gameConf[0]

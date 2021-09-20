@@ -91,7 +91,11 @@ func (p *Sprite) doClone(src *Sprite) {
 	p.isCloned = true
 }
 
-func Clone(sprite Shape, data interface{}) Shape {
+func Gopt_Sprite_Clone__0(sprite Shape) Shape {
+	return Gopt_Sprite_Clone__1(sprite, nil)
+}
+
+func Gopt_Sprite_Clone__1(sprite Shape, data interface{}) Shape {
 	in := reflect.ValueOf(sprite).Elem()
 	out := reflect.New(in.Type())
 	out.Elem().Set(in)
