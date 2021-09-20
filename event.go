@@ -255,6 +255,12 @@ func (ss *eventSinks) OnCloned__0(onCloned func(data interface{})) {
 	ss.allWhenCloned = onCloned
 }
 
+func (ss *eventSinks) OnCloned__1(onCloned func()) {
+	ss.OnCloned__0(func(interface{}) {
+		onCloned()
+	})
+}
+
 func (ss *eventSinks) OnKey__0(onKey func(key Key)) {
 	if debugEvent {
 		log.Println("Sink onKey", nameOf(ss.pthis))
@@ -264,6 +270,14 @@ func (ss *eventSinks) OnKey__0(onKey func(key Key)) {
 		pthis: ss.pthis,
 		sink:  onKey,
 	}
+}
+
+func (ss *eventSinks) OnKey__1(key Key, onKey func()) {
+	ss.OnKey__0(func(keyIn Key) {
+		if keyIn == key {
+			onKey()
+		}
+	})
 }
 
 func (ss *eventSinks) OnMsg__0(onMsg func(msg string, data interface{})) {
