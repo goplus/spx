@@ -311,9 +311,6 @@ func (p *Sprite) Glide(x, y float64, secs float64) {
 }
 
 func (p *Sprite) SetXYpos(x, y float64) {
-	if debugInstr {
-		log.Println("SetXYpos", p.name, x, y)
-	}
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
