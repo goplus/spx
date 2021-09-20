@@ -18,6 +18,7 @@ package spx
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"image"
@@ -384,18 +385,31 @@ func init() {
 	gco = coroutine.New()
 }
 
-var gco *coroutine.Coroutines
+var (
+	gco            *coroutine.Coroutines
+	errAbortThread = errors.New("abort thread")
+)
 
 func createThread(start bool, f func(coroutine.Thread) int) {
 	var thMain coroutine.Thread
 	if start {
 		thMain = gco.Current()
 	}
-	gco.CreateAndStart(f, thMain)
+	fn := func(th coroutine.Thread) int {
+		defer func() {
+			if e := recover(); e != nil {
+				if e != errAbortThread {
+					panic(e)
+				}
+			}
+		}()
+		return f(th)
+	}
+	gco.CreateAndStart(fn, thMain)
 }
 
 func abortThread() {
-	panic("todo")
+	panic(errAbortThread)
 }
 
 func waitToDo(fn func()) {
