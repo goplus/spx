@@ -251,6 +251,10 @@ type projConfig struct {
 	CurrentCostumeIndex int             `json:"currentCostumeIndex"`
 }
 
+type initer interface {
+	Main()
+}
+
 func (p *Game) EndLoad() (err error) {
 	if debugLoad {
 		log.Println("==> EndLoad")
@@ -262,12 +266,19 @@ func (p *Game) EndLoad() (err error) {
 	}
 	p.baseObj.init("", proj.Costumes, proj.CurrentCostumeIndex)
 	p.eventSinks.init(&p.sinkMgr, p)
+	inits := make([]initer, 0, len(proj.Zorder))
 	for _, name := range proj.Zorder {
 		if sp, ok := p.shapes[name]; ok {
 			p.addShape(sp)
+			if ini, ok := sp.(initer); ok {
+				inits = append(inits, ini)
+			}
 		} else {
 			return fmt.Errorf("sprite %s is not found", name)
 		}
+	}
+	for _, ini := range inits {
+		ini.Main()
 	}
 	return
 }
@@ -275,11 +286,11 @@ func (p *Game) EndLoad() (err error) {
 // -----------------------------------------------------------------------------
 
 type Config struct {
-	Title               string
-	Scale               float64
-	FullScreen          bool
-	RunnableOnUnfocused bool
-	DontParseFlags      bool
+	Title              string
+	Scale              float64
+	FullScreen         bool
+	DontRunOnUnfocused bool
+	DontParseFlags     bool
 }
 
 func (p *Game) RunLoop(cfg *Config) (err error) {
@@ -290,8 +301,8 @@ func (p *Game) RunLoop(cfg *Config) (err error) {
 		cfg = &Config{}
 	}
 	width, height := p.size()
-	if cfg.RunnableOnUnfocused {
-		ebiten.SetRunnableOnUnfocused(false)
+	if !cfg.DontRunOnUnfocused {
+		ebiten.SetRunnableOnUnfocused(true)
 	}
 	if cfg.FullScreen {
 		ebiten.SetFullscreen(true)

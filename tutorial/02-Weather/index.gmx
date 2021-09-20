@@ -1,0 +1,24 @@
+var (
+	Jaime                 Jaime
+	Kai                   Kai
+	pop                   Sound
+	recordingBest         Sound
+	recordingBye          Sound
+	recordingBye2         Sound
+	recordingComeFrom     Sound
+	recordingConversation Sound
+	recordingCountry      Sound
+	recordingEarly        Sound
+	recordingEast         Sound
+	recordingInteresting  Sound
+	recordingLate         Sound
+	recordingLong         Sound
+	recordingMild         Sound
+	recordingShort        Sound
+	recordingSouth        Sound
+	recordingSummer       Sound
+	recordingWhere        Sound
+	recordingWinter       Sound
+)
+
+run "hzip://open.qiniu.us/weather/res.zip", {Title: "Weather (by Go+)"}

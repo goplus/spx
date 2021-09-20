@@ -1,0 +1,25 @@
+onStart => {
+	setCostume "kai-a"
+	play recordingWhere
+	say "Where do you come from?", 2
+	broadcast "1"
+}
+
+onMsg "2", => {
+	play recordingCountry
+	say "What's the climate like in your country?", 3
+	broadcast "3"
+}
+
+onMsg "4", => {
+	play recordingBest
+	say "Which seasons do you like best?", 3
+	broadcast "5"
+}
+
+onMsg "6", => {
+	play recordingBye2
+	say "Thanks. Bye!", 2
+	nextCostume
+	broadcast "7"
+}

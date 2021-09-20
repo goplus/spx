@@ -277,6 +277,14 @@ func (ss *eventSinks) OnMsg__0(onMsg func(msg string, data interface{})) {
 	}
 }
 
+func (ss *eventSinks) OnMsg__1(msg string, onMsg func()) {
+	ss.OnMsg__0(func(msgIn string, data interface{}) {
+		if msgIn == msg {
+			onMsg()
+		}
+	})
+}
+
 func (ss *eventSinks) OnScene__0(onScene func(name string)) {
 	if debugEvent {
 		log.Println("Sink onScene", nameOf(ss.pthis))

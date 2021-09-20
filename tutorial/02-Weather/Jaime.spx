@@ -1,0 +1,45 @@
+onMsg "1", => {
+	play recordingComeFrom
+	say "I come from England.", 2
+	broadcast "2"
+}
+
+onMsg "3", => {
+	play recordingMild
+	say "It's mild, but it's not always pleasant.", 4
+	nextCostume
+	play recordingEast
+	say "The weather's often cold in the North and windy in the East.", 5.5
+	play recordingSouth
+	say "It's often wet in the West and sometimes warm in the South.", 5
+	broadcast "4"
+}
+
+onMsg "5", => {
+	nextCostume
+	play recordingSummer
+	say "I like spring and summer.", 2
+	play recordingShort
+	say "The days are long and the nights are short.", 3
+	play recordingLate
+	say "The sun rises early and sets late. ", 3
+	nextCostume
+	play recordingWinter
+	say "I don't like autumn and winter.", 3
+	play recordingLong
+	say "The days are short and the nights are long.", 4
+	play recordingEarly
+	say "The sun rises late and sets early.", 4
+	nextCostume
+	play recordingInteresting
+	say "Our climate is not very good, but it's certainly interesting.", 5
+	play recordingConversation
+	say "It's our favourite subject of conversation.", 4
+	broadcast "6"
+}
+
+onMsg "7", => {
+	play recordingBye
+	say "Bye!", 2
+	nextCostume
+}
