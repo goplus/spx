@@ -1,7 +1,6 @@
 onStart => {
 	score = 0
 	for {
-		sched
 		turn rand(-30, 30)
 		step 5
 		if touching("Shark") {
