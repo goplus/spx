@@ -1,0 +1,8 @@
+var (
+	Dragon Dragon
+	Shark  Shark
+	chomp  Sound
+	score  int
+)
+
+run "res", {Title: "Dragon (by Go+)"}

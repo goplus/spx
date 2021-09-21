@@ -1,0 +1,13 @@
+onStart => {
+	score = 0
+	for {
+		sched
+		turn rand(-30, 30)
+		step 5
+		if touching("Dragon") {
+			score++
+			play chomp, true
+			step -100
+		}
+	}
+}
