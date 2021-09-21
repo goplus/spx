@@ -26,9 +26,9 @@ import (
 )
 
 var (
-	defaultFont font.Face
-	// defaultFont2  font.Face
-	// defaultFontSm font.Face
+	defaultFont   font.Face
+	defaultFont2  font.Face
+	defaultFontSm font.Face
 )
 
 func init() {
@@ -38,18 +38,16 @@ func init() {
 		DPI:     dpi,
 		Hinting: font.HintingFull,
 	})
-	/*
-		defaultFont2 = gdi.NewDefaultFont(&gdi.FontOptions{
-			Size:    12,
-			DPI:     dpi,
-			Hinting: font.HintingFull,
-		})
-		defaultFontSm = gdi.NewDefaultFont(&gdi.FontOptions{
-			Size:    11,
-			DPI:     dpi,
-			Hinting: font.HintingFull,
-		})
-	*/
+	defaultFont2 = gdi.NewDefaultFont(&gdi.FontOptions{ // for stageMonitor
+		Size:    12,
+		DPI:     dpi,
+		Hinting: font.HintingFull,
+	})
+	defaultFontSm = gdi.NewDefaultFont(&gdi.FontOptions{
+		Size:    11,
+		DPI:     dpi,
+		Hinting: font.HintingFull,
+	})
 }
 
 // -------------------------------------------------------------------------------------

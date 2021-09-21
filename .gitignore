@@ -4,8 +4,8 @@
 go.json
 gop.json
 gop_autogen.go
-_gsc/
-_test/
+_gsc
+_test
 haiyang/
 feijidazhan/
 res/

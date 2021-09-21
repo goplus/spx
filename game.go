@@ -40,6 +40,9 @@ import (
 
 const (
 	GopPackage = true
+
+	Gop_exts  = "gmx,spx"
+	Gop_sched = "Sched,SchedNow"
 )
 
 const (
@@ -87,7 +90,7 @@ type Game struct {
 type Gamer interface {
 	StartLoad(resource string) error
 	LoadSprite(sprite Shape, name string) error
-	EndLoad() error
+	EndLoad(g reflect.Value) error
 	RunLoop(cfg *Config) error
 }
 
@@ -142,7 +145,7 @@ func Gopt_Game_Run(game Gamer, resource string, gameConf ...*Config) {
 			}
 		}
 	}
-	if err := g.EndLoad(); err != nil {
+	if err := g.EndLoad(v); err != nil {
 		panic(err)
 	}
 	if err := g.RunLoop(conf); err != nil {
@@ -247,7 +250,7 @@ func loadJson(ret interface{}, fs spxfs.Dir, file string) (err error) {
 }
 
 type projConfig struct {
-	Zorder              []string        `json:"zorder"`
+	Zorder              []interface{}   `json:"zorder"`
 	Costumes            []costumeConfig `json:"costumes"`
 	CurrentCostumeIndex int             `json:"currentCostumeIndex"`
 }
@@ -256,7 +259,7 @@ type initer interface {
 	Main()
 }
 
-func (p *Game) EndLoad() (err error) {
+func (p *Game) EndLoad(g reflect.Value) (err error) {
 	if debugLoad {
 		log.Println("==> EndLoad")
 	}
@@ -268,8 +271,10 @@ func (p *Game) EndLoad() (err error) {
 	p.baseObj.init("", proj.Costumes, proj.CurrentCostumeIndex)
 	p.eventSinks.init(&p.sinkMgr, p)
 	inits := make([]initer, 0, len(proj.Zorder))
-	for _, name := range proj.Zorder {
-		if sp, ok := p.shapes[name]; ok {
+	for _, v := range proj.Zorder {
+		if name, ok := v.(string); !ok { // not a sprite
+			p.addSpecialShape(g, v.(specsp))
+		} else if sp, ok := p.shapes[name]; ok {
 			p.addShape(spriteOf(sp))
 			if ini, ok := sp.(initer); ok {
 				inits = append(inits, ini)
@@ -282,6 +287,21 @@ func (p *Game) EndLoad() (err error) {
 		ini.Main()
 	}
 	return
+}
+
+// -----------------------------------------------------------------------------
+
+type specsp = map[string]interface{}
+
+func (p *Game) addSpecialShape(g reflect.Value, v specsp) {
+	switch typ := v["type"].(string); typ {
+	case "stageMonitor":
+		if sm, err := newStageMonitor(g, v); err == nil {
+			p.addShape(sm)
+		}
+	default:
+		panic("addSpecialShape: unknown shape - " + typ)
+	}
 }
 
 // -----------------------------------------------------------------------------
