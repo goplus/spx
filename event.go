@@ -121,9 +121,6 @@ func (p *eventSinkMgr) doWhenStart() {
 func (p *eventSinkMgr) doWhenKeyPressed(key Key) {
 	p.mutex.Lock()
 	p.allWhenKeyPressed.asyncCall(nil, func(ev *eventSink) {
-		if debugEvent {
-			log.Println("==> onKey", nameOf(ev.pthis), key)
-		}
 		ev.sink.(func(Key))(key)
 	})
 	p.mutex.Unlock()
@@ -136,9 +133,6 @@ func (p *eventSinkMgr) doWhenIReceive(msg string, data interface{}, wait bool) {
 	}
 	p.mutex.Lock()
 	p.allWhenIReceive.asyncCall(wg, func(ev *eventSink) {
-		if debugEvent {
-			log.Println("==> onMsg", nameOf(ev.pthis), msg)
-		}
 		ev.sink.(func(string, interface{}))(msg, data)
 	})
 	p.mutex.Unlock()
@@ -154,9 +148,6 @@ func (p *eventSinkMgr) doWhenSceneStart(name string, wait bool) {
 	}
 	p.mutex.Lock()
 	p.allWhenSceneStart.asyncCall(wg, func(ev *eventSink) {
-		if debugEvent {
-			log.Println("==> onScene", nameOf(ev.pthis), name)
-		}
 		ev.sink.(func(string))(name)
 	})
 	p.mutex.Unlock()
@@ -266,6 +257,9 @@ func (ss *eventSinks) OnKey__0(onKey func(key Key)) {
 func (ss *eventSinks) OnKey__1(key Key, onKey func()) {
 	ss.OnKey__0(func(keyIn Key) {
 		if keyIn == key {
+			if debugEvent {
+				log.Println("==> onKey", key, nameOf(ss.pthis))
+			}
 			onKey()
 		}
 	})
@@ -282,6 +276,9 @@ func (ss *eventSinks) OnMsg__0(onMsg func(msg string, data interface{})) {
 func (ss *eventSinks) OnMsg__1(msg string, onMsg func()) {
 	ss.OnMsg__0(func(msgIn string, data interface{}) {
 		if msgIn == msg {
+			if debugEvent {
+				log.Println("==> onMsg", msg, nameOf(ss.pthis))
+			}
 			onMsg()
 		}
 	})
@@ -298,6 +295,9 @@ func (ss *eventSinks) OnScene__0(onScene func(name string)) {
 func (ss *eventSinks) OnScene__1(name string, onScene func()) {
 	ss.OnScene__0(func(nameIn string) {
 		if nameIn == name {
+			if debugEvent {
+				log.Println("==> onScene", name, nameOf(ss.pthis))
+			}
 			onScene()
 		}
 	})
