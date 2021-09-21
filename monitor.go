@@ -82,20 +82,20 @@ func getTarget(g reflect.Value, target string) (reflect.Value, int) {
 	for i, n := 0, g.NumField(); i < n; i++ {
 		_, val := getFieldPtr(g, i)
 		if fld, ok := val.(Shape); ok && spriteOf(fld).name == target {
-			return reflect.ValueOf(val).Elem(), 2 // (spx.Sprite, *spx.Game)
+			return reflect.ValueOf(val).Elem(), 2 // (spx.Sprite, *Game)
 		}
 	}
 	return reflect.Value{}, -1
 }
 
-func getValue(target reflect.Value, from int, name string) string {
+func getValueRef(target reflect.Value, from int, name string) reflect.Value {
 	for i, n := from, target.NumField(); i < n; i++ {
 		fldName, valPtr := getFieldPtr(target, i)
 		if name == fldName {
-			return fmt.Sprint(reflect.ValueOf(valPtr).Elem().Interface())
+			return reflect.ValueOf(valPtr).Elem()
 		}
 	}
-	return ""
+	return reflect.Value{}
 }
 
 func buildMonitorEval(g reflect.Value, v specsp) func() string {
@@ -110,11 +110,16 @@ func buildMonitorEval(g reflect.Value, v specsp) func() string {
 	switch {
 	case strings.HasPrefix(val, getVar):
 		name := val[len(getVar):]
-		return func() string {
-			return getValue(target, from, name)
+		ref := getValueRef(target, from, name)
+		if ref.IsValid() {
+			return func() string {
+				return fmt.Sprint(ref.Interface())
+			}
 		}
+		log.Println("[WARN] stageMonitor: var not found -", name, target)
+	default:
+		log.Println("[WARN] stageMonitor: unknown command -", val)
 	}
-	log.Println("[WARN] stageMonitor: unknown command -", val)
 	return nil
 }
 
