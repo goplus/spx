@@ -6,28 +6,14 @@
       "path": "1.svg",
       "x": 65,
       "y": 60
-    },
-    {
-      "bitmapResolution": 1,
-      "name": "dragon1-b",
-      "path": "2.svg",
-      "x": 84,
-      "y": 56
-    },
-    {
-      "bitmapResolution": 1,
-      "name": "shark-a ",
-      "path": "3.svg",
-      "x": 75,
-      "y": 75
     }
   ],
-  "currentCostumeIndex": 2,
-  "heading": 90,
+  "currentCostumeIndex": 0,
+  "heading": -165,
   "isDraggable": false,
   "rotationStyle": "normal",
-  "size": 0.95,
+  "size": 1.4000000000000004,
   "visible": true,
-  "x": 70,
-  "y": -21
+  "x": 168.08139823593658,
+  "y": 81.24749447883225
 }
