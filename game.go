@@ -226,15 +226,18 @@ func (p *Game) LoadSprite(sprite Shape, name string) error {
 }
 
 func spriteOf(sprite Shape) *Sprite {
-	base, ok := sprite.(*Sprite)
-	if !ok {
-		fld := reflect.ValueOf(sprite).Elem().FieldByName("Sprite")
-		if !fld.IsValid() {
-			log.Panicf("type %v doesn't has field spx.Sprite", reflect.TypeOf(sprite))
-		}
-		base = fld.Addr().Interface().(*Sprite)
+	if base, ok := sprite.(*Sprite); ok {
+		return base
 	}
-	return base
+	return getSpriteField(sprite)
+}
+
+func getSpriteField(sprite Shape) *Sprite {
+	fld := reflect.ValueOf(sprite).Elem().FieldByName("Sprite")
+	if !fld.IsValid() {
+		log.Panicf("type %v doesn't has field spx.Sprite", reflect.TypeOf(sprite))
+	}
+	return fld.Addr().Interface().(*Sprite)
 }
 
 func loadJson(ret interface{}, fs spxfs.Dir, file string) (err error) {
@@ -270,7 +273,7 @@ func (p *Game) EndLoad() (err error) {
 	inits := make([]initer, 0, len(proj.Zorder))
 	for _, name := range proj.Zorder {
 		if sp, ok := p.shapes[name]; ok {
-			p.addShape(sp)
+			p.addShape(spriteOf(sp))
 			if ini, ok := sp.(initer); ok {
 				inits = append(inits, ini)
 			}

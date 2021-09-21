@@ -84,11 +84,29 @@ func (p *Sprite) init(base string, g *Game, name string, sprite *spriteConfig) {
 	p.isDraggable = sprite.IsDraggable
 }
 
-func (p *Sprite) doClone(src *Sprite) {
-	p.baseObj.doClone(&src.baseObj)
-	p.eventSinks.doClone(&src.eventSinks, p)
+func (p *Sprite) InitFrom(src *Sprite) {
+	src.mutex.Lock()
+	defer src.mutex.Unlock()
+
+	p.baseObj.initFrom(&src.baseObj)
+	p.eventSinks.initFrom(&src.eventSinks, p)
+
+	p.g, p.name = src.g, src.name
+	p.x, p.y = src.x, src.y
+	p.scale = src.scale
+	p.direction = src.direction
+	p.rotationStyle = src.rotationStyle
 	p.sayObj = nil
+
+	p.penColor = src.penColor
+	p.penShade = src.penShade
+	p.penHue = src.penHue
+	p.penWidth = src.penWidth
+
+	p.visible = src.visible
+	p.isDraggable = src.isDraggable
 	p.isCloned = true
+	p.isPenDown = src.isPenDown
 }
 
 func Gopt_Sprite_Clone__0(sprite Shape) Shape {
@@ -96,18 +114,33 @@ func Gopt_Sprite_Clone__0(sprite Shape) Shape {
 }
 
 func Gopt_Sprite_Clone__1(sprite Shape, data interface{}) Shape {
+	src, ok := sprite.(*Sprite)
+	if !ok {
+		src = getSpriteField(sprite)
+	}
+	if debugInstr {
+		log.Println("Clone", src.name)
+	}
+
 	in := reflect.ValueOf(sprite).Elem()
 	out := reflect.New(in.Type())
-	out.Elem().Set(in)
-
 	ret := out.Interface().(Shape)
-	src := spriteOf(sprite)
 	dest := spriteOf(ret)
-	dest.doClone(src)
 
-	dest.mutex.Lock()
-	defer dest.mutex.Unlock()
-	dest.g.addClonedShape(src, dest)
+	if ok {
+		dest.InitFrom(src)
+	} else {
+		out = out.Elem()
+		out.Set(in)
+		for i, n := 0, out.NumField(); i < n; i++ {
+			fld := out.Field(i)
+			if ini := fld.MethodByName("InitFrom"); ini.IsValid() {
+				args := []reflect.Value{in.Field(i).Addr()}
+				ini.Call(args)
+			}
+		}
+	}
+	src.g.addClonedShape(src, dest)
 	dest.doWhenCloned(data)
 	return ret
 }

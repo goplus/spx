@@ -133,8 +133,10 @@ func (p *baseObj) init(base string, costumes []costumeConfig, currentCostumeInde
 	p.currentCostumeIndex = currentCostumeIndex
 }
 
-func (p *baseObj) doClone(src *baseObj) {
+func (p *baseObj) initFrom(src *baseObj) {
+	p.costumes = src.costumes
 	p.mutex = sync.Mutex{}
+	p.currentCostumeIndex = src.currentCostumeIndex
 }
 
 func (p *baseObj) findCostume(name string) int {

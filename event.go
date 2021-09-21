@@ -189,9 +189,12 @@ func (ss *eventSinks) init(mgr *eventSinkMgr, this interface{}) {
 	ss.pthis = this
 }
 
-func (ss *eventSinks) doClone(src *eventSinks, this interface{}) {
-	src.eventSinkMgr.doClone(src.pthis, this)
+func (ss *eventSinks) initFrom(src *eventSinks, this interface{}) {
+	ss.eventSinkMgr = src.eventSinkMgr
 	ss.pthis = this
+	ss.allWhenCloned = src.allWhenCloned
+	ss.allWhenClick = src.allWhenClick
+	src.eventSinkMgr.doClone(src.pthis, this)
 }
 
 func (ss *eventSinks) doDeleteClone() {
