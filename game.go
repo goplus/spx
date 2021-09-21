@@ -40,9 +40,6 @@ import (
 
 const (
 	GopPackage = true
-
-	Gop_title  = "on"
-	Gop_params = "onMsg(, _gop_data interface{}); onCloned(_gop_data interface{})"
 )
 
 const (
