@@ -13,17 +13,17 @@
     {
       "type": "stageMonitor",
       "target": "",
-			"val": "getVar:score",
-			"color": 15629590,
-			"label": "score",
-			"mode": 1,
-			"sliderMin": 0,
-			"sliderMax": 100,
-			"x": 5,
-			"y": 5,
-			"isDiscrete": true,
-			"visible": true
-		},
+      "val": "getVar:score",
+      "color": 15629590,
+      "label": "score",
+      "mode": 1,
+      "sliderMin": 0,
+      "sliderMax": 100,
+      "x": 5,
+      "y": 5,
+      "isDiscrete": true,
+      "visible": true
+    },
     "Dragon",
     "Shark"
   ]
