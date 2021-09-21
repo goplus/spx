@@ -1,0 +1,40 @@
+{
+  "costumes": [
+    {
+      "bitmapResolution": 1,
+      "name": "shark-a ",
+      "path": "3.svg",
+      "x": 75,
+      "y": 75
+    },
+    {
+      "bitmapResolution": 1,
+      "name": "shark-b ",
+      "path": "4.svg",
+      "x": 75,
+      "y": 75
+    },
+    {
+      "bitmapResolution": 1,
+      "name": "shark-c ",
+      "path": "5.svg",
+      "x": 77,
+      "y": 37
+    },
+    {
+      "bitmapResolution": 1,
+      "name": "dragon1-a",
+      "path": "1.svg",
+      "x": 65,
+      "y": 60
+    }
+  ],
+  "currentCostumeIndex": 3,
+  "heading": -165,
+  "isDraggable": false,
+  "rotationStyle": "normal",
+  "size": 1.4000000000000004,
+  "visible": true,
+  "x": 168.08139823593658,
+  "y": 81.24749447883225
+}

@@ -5,4 +5,4 @@ var (
 	score  int
 )
 
-run "res", {Title: "Dragon (by Go+)"}
+run "resources", {Title: "Dragon (by Go+)"}
