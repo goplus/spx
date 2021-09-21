@@ -19,13 +19,13 @@ package spx
 import (
 	"fmt"
 	"image/color"
+	"log"
 	"reflect"
 	"strconv"
 	"strings"
 	"syscall"
 
 	"github.com/goplus/spx/internal/gdi"
-	"github.com/qiniu/x/log"
 )
 
 // -------------------------------------------------------------------------------------
