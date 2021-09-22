@@ -38,7 +38,7 @@ onMsg "4", => {
 }
 ```
 
-We call `onStart` and `onMsg` to listen events. `onStart` is called when the program is started. And `onMsg` is called when someone call `broadcast` to broadcast a message.
+We call `onStart` and `onMsg` to listen events. `onStart` is called when the program is started. And `onMsg` is called when someone calls `broadcast` to broadcast a message.
 
 When the program starts, Kai says `Where do you come from?`, and then broadcasts the message `1`. Who will recieve this message? Let's see codes in [Jaime.spx](tutorial/01-Weather/Jaime.spx):
 
