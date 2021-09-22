@@ -52,14 +52,14 @@ onMsg "1", => {
 onMsg "3", => {
 	play recordingMild
 	say "It's mild, but it's not always pleasant.", 4
-    # ...
+	# ...
 	broadcast "4"
 }
 ```
 
 Yes, Jaime recieves the message `1` and says `I come from England.`. Then he broadcasts the message `2`. Kai recieves it and says `What's the climate like in your country?`.
 
-The following procedure is very similar. In this way you can implement dialogues between multiple actors.
+The following procedures are very similar. In this way you can implement dialogues between multiple actors.
 
 ### tutorial/02-Dragon
 
