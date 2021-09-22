@@ -17,7 +17,7 @@ Through this example you can learn how to listen events and do somethings.
 
 Here is some codes in [Kai.spx](tutorial/01-Weather/Kai.spx):
 
-```sh
+```coffee
 onStart => {
 	setCostume "kai-a"
 	play recordingWhere
@@ -42,7 +42,7 @@ We call `onStart` and `onMsg` to listen events. `onStart` is called when the pro
 
 When the program starts, Kai says `Where do you come from?`, and then broadcasts the message `1`. Who will recieve this message? Let's see codes in [Jaime.spx](tutorial/01-Weather/Jaime.spx):
 
-```sh
+```coffee
 onMsg "1", => {
 	play recordingComeFrom
 	say "I come from England.", 2
@@ -69,7 +69,7 @@ Through this example you can learn how to define variables and show them on the 
 
 Here is all the codes of [Dragon](tutorial/02-Dragon/Dragon.spx):
 
-```sh
+```coffee
 var (
 	score int
 )
