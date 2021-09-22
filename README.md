@@ -9,6 +9,17 @@ spx - A 2D Game Engine for learning Go+
 
 ## Tutorials
 
+How to run spx tutorials?
+
+* Download Go+ and build it. See https://github.com/goplus/gop#how-to-build.
+* Download spx and build it.
+  * git clone `git@github.com:goplus/spx.git`
+  * cd spx
+  * go install -v ./...
+* Build tutorials and run.
+  * cd tutorial/xxx
+  * gop run .
+
 ### tutorial/01-Weather
 
 ![Screen Shot1](tutorial/01-Weather/1.jpg) ![Screen Shot2](tutorial/01-Weather/2.jpg)
