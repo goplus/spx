@@ -2,7 +2,6 @@ var (
 	Dragon Dragon
 	Shark  Shark
 	chomp  Sound
-	score  int
 )
 
 run "resources", {Title: "Dragon (by Go+)"}

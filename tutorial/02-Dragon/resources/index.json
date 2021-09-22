@@ -12,7 +12,7 @@
   "zorder": [
     {
       "type": "stageMonitor",
-      "target": "",
+      "target": "Dragon",
       "val": "getVar:score",
       "color": 15629590,
       "label": "score",
