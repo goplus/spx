@@ -44,26 +44,11 @@ func normalizeDirection(dir float64) float64 {
 	return dir
 }
 
-type Value struct {
-}
-
-func (p Value) String() string {
-	panic("todo")
-}
-
-func (p Value) Int() int {
-	panic("todo")
-}
-
-func (p Value) Float() float64 {
-	panic("todo")
-}
-
-type SwitchAction int
+type switchAction int
 
 const (
-	Prev SwitchAction = -1
-	Next SwitchAction = 1
+	Prev switchAction = -1
+	Next switchAction = 1
 )
 
 // -------------------------------------------------------------------------------------
@@ -154,7 +139,7 @@ func (p *baseObj) goSetCostume(val interface{}) bool {
 		return p.setCostumeByName(v)
 	case int:
 		return p.setCostumeByIndex(v)
-	case SwitchAction:
+	case switchAction:
 		if v == Prev {
 			p.goPrevCostume()
 		} else {

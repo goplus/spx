@@ -29,10 +29,10 @@ import (
 
 type specialObj int
 
-var (
-	Mouse  = specialObj(1)
-	Edge   = specialObj(2)
-	Random = specialObj(3)
+const (
+	Mouse  = specialObj(-1)
+	Edge   = specialObj(-2)
+	Random = specialObj(-3)
 )
 
 const (
