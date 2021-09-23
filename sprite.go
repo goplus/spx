@@ -27,14 +27,6 @@ import (
 	"github.com/goplus/spx/internal/gdi/clrutil"
 )
 
-type specialObj int
-
-const (
-	Mouse  = specialObj(-1)
-	Edge   = specialObj(-2)
-	Random = specialObj(-3)
-)
-
 const (
 	Right = 90
 	Left  = -90

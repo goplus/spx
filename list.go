@@ -23,6 +23,20 @@ import (
 	"strings"
 )
 
+type specialObj = int
+
+const (
+	Invalid = specialObj(-1)
+	Last    = specialObj(-2)
+	All     = specialObj(-3)
+	Random  = specialObj(-4)
+
+	Mouse = specialObj(-5)
+	Edge  = specialObj(-6)
+)
+
+// -------------------------------------------------------------------------------------
+
 type obj = interface{}
 
 func toString(v obj) string {
@@ -63,13 +77,6 @@ func (p Value) Float() float64 {
 
 // -------------------------------------------------------------------------------------
 
-const (
-	PosInvalid = -1
-	PosLast    = -2
-	PosRandom  = -3
-	PosAll     = -4
-)
-
 type List struct {
 	data []obj
 }
@@ -87,10 +94,10 @@ func (p *List) InitFrom(src *List) {
 }
 
 func getListPos(i, n int) int {
-	if i == PosLast {
+	if i == Last {
 		return n - 1
 	}
-	if i == PosRandom {
+	if i == Random {
 		if n == 0 {
 			return 0
 		}
@@ -147,7 +154,7 @@ func (p *List) Set(i int, v obj) {
 func (p *List) Insert(i int, v obj) {
 	n := len(p.data)
 	if i < 0 {
-		if i == PosInvalid {
+		if i == Invalid {
 			return
 		}
 		i = getListPos(i, n+1)
@@ -163,7 +170,7 @@ func (p *List) Insert(i int, v obj) {
 func (p *List) Delete(i int) {
 	n := len(p.data)
 	if i < 0 {
-		if i == PosAll {
+		if i == All {
 			p.data = p.data[:0]
 			return
 		}

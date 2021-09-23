@@ -40,9 +40,7 @@ import (
 
 const (
 	GopPackage = true
-
-	Gop_exts  = "gmx,spx"
-	Gop_sched = "Sched,SchedNow"
+	Gop_sched  = "Sched,SchedNow"
 )
 
 const (
