@@ -24,6 +24,7 @@ import (
 	"image"
 	"log"
 	"math/rand"
+	"os"
 	"reflect"
 	"sync/atomic"
 	"time"
@@ -942,6 +943,9 @@ func (p *Game) ChangeVolume(delta float64) {
 }
 
 func (p *Game) Stop(what string) {
+	if what == "all" {
+		os.Exit(0)
+	}
 	panic("todo")
 }
 
