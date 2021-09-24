@@ -1,0 +1,26 @@
+{
+  "costumes": [
+    {
+      "bitmapResolution": 1,
+      "name": "Black",
+      "path": "1.svg",
+      "x": 57,
+      "y": 55
+    },
+    {
+      "bitmapResolution": 1,
+      "name": "White",
+      "path": "2.svg",
+      "x": 59,
+      "y": 58
+    }
+  ],
+  "currentCostumeIndex": 1,
+  "heading": 90,
+  "isDraggable": false,
+  "rotationStyle": "normal",
+  "size": 0.15000000000000024,
+  "visible": false,
+  "x": 106.5,
+  "y": 105.9
+}

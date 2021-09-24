@@ -1,0 +1,18 @@
+{
+  "costumes": [
+    {
+      "bitmapResolution": 2,
+      "name": "Stage",
+      "path": "7.png",
+      "x": 480,
+      "y": 360
+    }
+  ],
+  "currentCostumeIndex": 0,
+  "zorder": [
+    "Chess",
+    "Button4",
+    "CurrentChess",
+    "Cat1"
+  ]
+}

@@ -1,0 +1,13 @@
+onStart => {
+	hide
+}
+
+onMsg "game over", => {
+	show
+	if currentPlayer == _Black {
+		say "The black side won!", 3
+	} else {
+		say "The white side won!", 3
+	}
+	stop "all"
+}
