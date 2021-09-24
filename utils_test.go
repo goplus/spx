@@ -16,36 +16,22 @@
 
 package spx
 
-import (
-	"math/rand"
-	"time"
-)
+import "testing"
 
-// -----------------------------------------------------------------------------
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
-
-func Rand__0(from, to int) float64 {
-	if to < from {
-		to = from
+func TestRound(t *testing.T) {
+	if Round(0.5) != 1 {
+		t.Fatal("Round(0.5) != 1")
 	}
-	return float64(from + rand.Intn(to-from+1))
-}
-
-func Rand__1(from, to float64) float64 {
-	if to < from {
-		to = from
+	if Round(0.49) != 0 {
+		t.Fatal("Round(0.49) != 0")
 	}
-	return rand.Float64()*(to-from) + from
-}
-
-func Round(v float64) int {
-	if v >= 0 {
-		return int(v + 0.5)
+	if Round(-0.49) != 0 {
+		t.Fatal("Round(-0.49) != 0")
 	}
-	return int(v - 0.5)
+	if Round(-0.5) != -1 {
+		t.Fatal("Round(-0.5) != -1")
+	}
+	if Round(-0.6) != -1 {
+		t.Fatal("Round(-0.5) != -1")
+	}
 }
-
-// -----------------------------------------------------------------------------

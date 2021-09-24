@@ -310,7 +310,7 @@ func (ss *eventSinks) OnScene__1(name string, onScene func()) {
 	func onMsg(msg string, data interface{})
 	func onScene(name string)
 	func onCloned(data interface{})
-*/
+//
 func (ss *eventSinks) Sink(obj interface{}) {
 	if o, ok := obj.(interface{ OnStart() }); ok {
 		ss.OnStart(o.OnStart)
@@ -331,5 +331,6 @@ func (ss *eventSinks) Sink(obj interface{}) {
 		ss.OnCloned__0(o.OnCloned)
 	}
 }
+*/
 
 // -------------------------------------------------------------------------------------

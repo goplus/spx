@@ -218,7 +218,7 @@ func (p *Game) LoadSprite(sprite Shape, name string) error {
 	}
 	base := spriteOf(sprite)
 	base.init(baseDir, p, name, &conf)
-	base.Sink(sprite)
+	// base.Sink(sprite)
 	p.shapes[name] = sprite
 	return nil
 }
