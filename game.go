@@ -104,6 +104,10 @@ func instance(game Gamer) *Game {
 	return p
 }
 
+func (p *Game) Initialize() {
+	p.eventSinks.init(&p.sinkMgr, p)
+}
+
 func Gopt_Game_Run(game Gamer, resource string, gameConf ...*Config) {
 	var conf *Config
 	if gameConf != nil {
@@ -198,6 +202,7 @@ func (p *Game) StartLoad(resource string) error {
 	if err != nil {
 		return err
 	}
+	p.Initialize()
 	p.input.init(p)
 	p.sounds.init()
 	p.shapes = make(map[string]Shape)
@@ -267,7 +272,6 @@ func (p *Game) EndLoad(g reflect.Value) (err error) {
 		return
 	}
 	p.baseObj.init("", proj.Costumes, proj.CurrentCostumeIndex)
-	p.eventSinks.init(&p.sinkMgr, p)
 	inits := make([]initer, 0, len(proj.Zorder))
 	for _, v := range proj.Zorder {
 		if name, ok := v.(string); !ok { // not a sprite

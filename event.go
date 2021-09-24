@@ -176,8 +176,10 @@ func nameOf(this interface{}) string {
 }
 
 func (ss *eventSinks) init(mgr *eventSinkMgr, this interface{}) {
-	ss.eventSinkMgr = mgr
-	ss.pthis = this
+	if ss.pthis == nil {
+		ss.eventSinkMgr = mgr
+		ss.pthis = this
+	}
 }
 
 func (ss *eventSinks) initFrom(src *eventSinks, this interface{}) {
