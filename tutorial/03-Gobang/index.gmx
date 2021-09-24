@@ -39,7 +39,7 @@ func initGameState() {
 func calcScore(dx int, dy int) {
 	row = currentRow + dy
 	col = currentCol + dx
-	for !(row < 0 || col < 0 || (row > 18 || col > 18) || !(currentPlayer == gameState.at(row*19+(col+1)-1).int)) {
+	for row > 0 && col > 0 && row < 18 && col < 18 && currentPlayer == gameState.at(row*19+col).int {
 		score++
 		row += dy
 		col += dx
