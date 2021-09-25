@@ -101,11 +101,11 @@ func (p *Sprite) InitFrom(src *Sprite) {
 	p.isPenDown = src.isPenDown
 }
 
-func Gopt_Sprite_Clone__0(sprite Shape) Shape {
-	return Gopt_Sprite_Clone__1(sprite, nil)
+func Gopt_Sprite_Clone__0(sprite Shape) {
+	Gopt_Sprite_Clone__1(sprite, nil)
 }
 
-func Gopt_Sprite_Clone__1(sprite Shape, data interface{}) Shape {
+func Gopt_Sprite_Clone__1(sprite Shape, data interface{}) {
 	src, ok := sprite.(*Sprite)
 	if !ok {
 		src = getSpriteField(sprite)
@@ -116,8 +116,7 @@ func Gopt_Sprite_Clone__1(sprite Shape, data interface{}) Shape {
 
 	in := reflect.ValueOf(sprite).Elem()
 	out := reflect.New(in.Type())
-	ret := out.Interface().(Shape)
-	dest := spriteOf(ret)
+	dest := spriteOf(out.Interface().(Shape))
 
 	if ok {
 		dest.InitFrom(src)
@@ -134,7 +133,6 @@ func Gopt_Sprite_Clone__1(sprite Shape, data interface{}) Shape {
 	}
 	src.g.addClonedShape(src, dest)
 	dest.doWhenCloned(data)
-	return ret
 }
 
 func (p *Sprite) Destroy() { // delete this clone
