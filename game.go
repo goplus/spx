@@ -110,16 +110,25 @@ func (p *Game) Initialize() {
 }
 
 func Gopt_Game_Run(game Gamer, resource string, gameConf ...*Config) {
-	var conf *Config
+	var conf Config
 	if gameConf != nil {
-		conf = gameConf[0]
+		conf = *gameConf[0]
 	}
-	if conf == nil || !conf.DontParseFlags {
-		verbose := flag.CommandLine.Bool("v", false, "print verbose information")
+	if !conf.DontParseFlags {
+		f := flag.CommandLine
+		verbose := f.Bool("v", false, "print verbose information")
+		fullscreen := f.Bool("f", false, "full screen")
+		help := f.Bool("h", false, "show help information")
 		flag.Parse()
+		if *help {
+			fmt.Fprintf(os.Stderr, "Usage: %v [-v -f -h]\n", os.Args[0])
+			flag.PrintDefaults()
+			return
+		}
 		if *verbose {
 			SetDebug(DbgFlagAll)
 		}
+		conf.FullScreen = *fullscreen
 	}
 	g := instance(game)
 	if err := g.StartLoad(resource); err != nil {
@@ -151,7 +160,7 @@ func Gopt_Game_Run(game Gamer, resource string, gameConf ...*Config) {
 	if err := g.EndLoad(v); err != nil {
 		panic(err)
 	}
-	if err := g.RunLoop(conf); err != nil {
+	if err := g.RunLoop(&conf); err != nil {
 		panic(err)
 	}
 }

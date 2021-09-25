@@ -4,8 +4,6 @@ var (
 	CurrentChess  CurrentChess
 	Cat1          Cat1
 	gameState     List
-	_White        int
-	_Black        int
 	ret           int
 	col           int
 	score         int
@@ -15,32 +13,33 @@ var (
 	row           int
 )
 
+const (
+	_Black = 1
+	_White = 2
+	_BlackAndWhite = _Black + _White
+)
+
 func calcHitPosition(x float64, y float64) {
 	col = round((x + 159) / 17.7)
 	row = round((y - 159) / -17.7)
-	if row < 0 || col < 0 || (row > 18 || col > 18) {
+	if row < 0 || col < 0 || row > 18 || col > 18 {
 		ret = 0
 	} else {
-		ret = row*19 + (col + 1)
+		ret = row*19 + col + 1
 	}
 }
 
 func initGameState() {
 	gameState.delete All
-	for _spx1 := 361; _spx1 > 0; _spx1-- {
+	for i := 0; i < 361; i++ {
 		gameState.append 0
 	}
-}
-
-func initConsts() {
-	_Black = 1
-	_White = 2
 }
 
 func calcScore(dx int, dy int) {
 	row = currentRow + dy
 	col = currentCol + dx
-	for !(row < 0 || col < 0 || (row > 18 || col > 18) || !(currentPlayer == gameState.at(row*19+(col+1)-1).int)) {
+	for row > 0 && col > 0 && row < 18 && col < 18 && currentPlayer == gameState.at(row*19+col).int {
 		score++
 		row += dy
 		col += dx
@@ -64,7 +63,6 @@ func checkHasWonByRow(dx int, dy int) {
 }
 
 onStart => {
-	initConsts
 	initGameState
 	score = 0
 	currentPlayer = _Black
@@ -81,7 +79,7 @@ onClick => {
 
 onMsg "confirm to put chess", => {
 	if score < 5 {
-		gameState.set currentRow*19+(currentCol+1)-1, currentPlayer
+		gameState.set currentRow*19+currentCol, currentPlayer
 		checkHasWon
 		Chess.clone
 		broadcast "put chess done", true
