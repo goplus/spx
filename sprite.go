@@ -408,7 +408,7 @@ const (
 
 func toRotationStyle(style string) RotationStyle {
 	switch style {
-	case "leftRight":
+	case "left-right":
 		return LeftRight
 	case "none":
 		return None
