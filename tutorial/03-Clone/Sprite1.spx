@@ -1,0 +1,19 @@
+var (
+    id int
+)
+
+onClick => {
+    clone
+}
+
+onCloned => {
+    gid++
+    id = gid
+    step 50
+}
+
+onMsg "undo", => {
+    if id == gid {
+        destroy
+    }
+}

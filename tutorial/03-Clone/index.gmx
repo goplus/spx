@@ -1,0 +1,7 @@
+var (
+    Sprite1 Sprite1
+    Arrow1  Arrow1
+    gid int
+)
+
+run "resources", {Title: "Clone and Destory (by Go+)"}
