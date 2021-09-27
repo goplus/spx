@@ -77,7 +77,12 @@ func (p Value) Int() int {
 }
 
 func (p Value) Float() float64 {
-	panic("todo: spx.Value.Float()")
+	switch v := p.data.(type) {
+	case float64:
+		return v
+	default:
+		panic("todo: spx.Value.Float()")
+	}
 }
 
 // -------------------------------------------------------------------------------------
