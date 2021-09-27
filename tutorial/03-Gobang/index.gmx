@@ -20,8 +20,8 @@ const (
 )
 
 func calcHitPosition(x float64, y float64) {
-	col = round((x + 159) / 17.7)
-	row = round((y - 159) / -17.7)
+	col = iround((x + 159) / 17.7)
+	row = iround((y - 159) / -17.7)
 	if row < 0 || col < 0 || row > 18 || col > 18 {
 		ret = 0
 	} else {
