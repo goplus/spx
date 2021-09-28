@@ -112,7 +112,7 @@ func Gopt_Sprite_Clone__1(sprite Spriter, data interface{}) {
 	in := reflect.ValueOf(sprite).Elem()
 	v := reflect.New(in.Type())
 	out, outPtr := v.Elem(), v.Interface()
-	dest := spriteOf(outPtr)
+	dest := spriteOf(outPtr.(Shape))
 
 	func() {
 		src.mutex.Lock()
@@ -352,9 +352,6 @@ func (p *Sprite) Xpos() float64 {
 }
 
 func (p *Sprite) SetXpos(x float64) {
-	if debugInstr {
-		log.Println("SetXpos", p.name, x)
-	}
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -362,9 +359,6 @@ func (p *Sprite) SetXpos(x float64) {
 }
 
 func (p *Sprite) ChangeXpos(dx float64) {
-	if debugInstr {
-		log.Println("ChangeXpos", p.name, dx)
-	}
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -379,9 +373,6 @@ func (p *Sprite) Ypos() float64 {
 }
 
 func (p *Sprite) SetYpos(y float64) {
-	if debugInstr {
-		log.Println("SetYpos", p.name, y)
-	}
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -389,9 +380,6 @@ func (p *Sprite) SetYpos(y float64) {
 }
 
 func (p *Sprite) ChangeYpos(dy float64) {
-	if debugInstr {
-		log.Println("ChangeYpos", p.name, dy)
-	}
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 

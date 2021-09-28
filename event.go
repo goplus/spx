@@ -28,6 +28,7 @@ import (
 type eventSink struct {
 	prev  *eventSink
 	pthis interface{}
+	cond  func(interface{}) bool
 	sink  interface{}
 }
 
@@ -47,30 +48,21 @@ func (ss *eventSink) doDeleteClone(this interface{}) (ret *eventSink) {
 	}
 }
 
-/*
-func (ss *eventSink) doClone(src, copy interface{}) *eventSink {
-	for p := ss; p != nil; p = p.prev {
-		if p.pthis == src {
-			ss = &eventSink{prev: ss, pthis: copy, sink: p.sink}
-		}
-	}
-	return ss
-}
-*/
-
-func (ss *eventSink) asyncCall(wg *sync.WaitGroup, doSth func(*eventSink)) {
+func (ss *eventSink) asyncCall(wg *sync.WaitGroup, data interface{}, doSth func(*eventSink)) {
 	for ss != nil {
-		if wg != nil {
-			wg.Add(1)
-		}
-		copy := ss
-		createThread(false, func(coroutine.Thread) int {
+		if ss.cond == nil || ss.cond(data) {
 			if wg != nil {
-				defer wg.Done()
+				wg.Add(1)
 			}
-			doSth(copy)
-			return 0
-		})
+			copy := ss
+			createThread(false, func(coroutine.Thread) int {
+				if wg != nil {
+					defer wg.Done()
+				}
+				doSth(copy)
+				return 0
+			})
+		}
 		ss = ss.prev
 	}
 }
@@ -86,18 +78,6 @@ type eventSinkMgr struct {
 	calledStart       bool
 }
 
-/*
-func (p *eventSinkMgr) doClone(src, copy interface{}) {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
-	p.allWhenStart = p.allWhenStart.doClone(src, copy)
-	p.allWhenKeyPressed = p.allWhenKeyPressed.doClone(src, copy)
-	p.allWhenIReceive = p.allWhenIReceive.doClone(src, copy)
-	p.allWhenSceneStart = p.allWhenSceneStart.doClone(src, copy)
-}
-*/
-
 func (p *eventSinkMgr) doDeleteClone(this interface{}) {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
@@ -112,7 +92,7 @@ func (p *eventSinkMgr) doWhenStart() {
 	p.mutex.Lock()
 	if !p.calledStart {
 		p.calledStart = true
-		p.allWhenStart.asyncCall(nil, func(ev *eventSink) {
+		p.allWhenStart.asyncCall(nil, nil, func(ev *eventSink) {
 			if debugEvent {
 				log.Println("==> onStart", nameOf(ev.pthis))
 			}
@@ -124,7 +104,7 @@ func (p *eventSinkMgr) doWhenStart() {
 
 func (p *eventSinkMgr) doWhenKeyPressed(key Key) {
 	p.mutex.Lock()
-	p.allWhenKeyPressed.asyncCall(nil, func(ev *eventSink) {
+	p.allWhenKeyPressed.asyncCall(nil, key, func(ev *eventSink) {
 		ev.sink.(func(Key))(key)
 	})
 	p.mutex.Unlock()
@@ -136,7 +116,7 @@ func (p *eventSinkMgr) doWhenIReceive(msg string, data interface{}, wait bool) {
 		wg = new(sync.WaitGroup)
 	}
 	p.mutex.Lock()
-	p.allWhenIReceive.asyncCall(wg, func(ev *eventSink) {
+	p.allWhenIReceive.asyncCall(wg, msg, func(ev *eventSink) {
 		ev.sink.(func(string, interface{}))(msg, data)
 	})
 	p.mutex.Unlock()
@@ -151,7 +131,7 @@ func (p *eventSinkMgr) doWhenSceneStart(name string, wait bool) {
 		wg = new(sync.WaitGroup)
 	}
 	p.mutex.Lock()
-	p.allWhenSceneStart.asyncCall(wg, func(ev *eventSink) {
+	p.allWhenSceneStart.asyncCall(wg, name, func(ev *eventSink) {
 		ev.sink.(func(string))(name)
 	})
 	p.mutex.Unlock()
@@ -259,14 +239,19 @@ func (ss *eventSinks) OnKey__0(onKey func(key Key)) {
 }
 
 func (ss *eventSinks) OnKey__1(key Key, onKey func()) {
-	ss.OnKey__0(func(keyIn Key) {
-		if keyIn == key {
+	ss.allWhenKeyPressed = &eventSink{
+		prev:  ss.allWhenKeyPressed,
+		pthis: ss.pthis,
+		sink: func(Key) {
 			if debugEvent {
 				log.Println("==> onKey", key, nameOf(ss.pthis))
 			}
 			onKey()
-		}
-	})
+		},
+		cond: func(data interface{}) bool {
+			return data.(Key) == key
+		},
+	}
 }
 
 func (ss *eventSinks) OnMsg__0(onMsg func(msg string, data interface{})) {
@@ -278,14 +263,19 @@ func (ss *eventSinks) OnMsg__0(onMsg func(msg string, data interface{})) {
 }
 
 func (ss *eventSinks) OnMsg__1(msg string, onMsg func()) {
-	ss.OnMsg__0(func(msgIn string, data interface{}) {
-		if msgIn == msg {
+	ss.allWhenIReceive = &eventSink{
+		prev:  ss.allWhenIReceive,
+		pthis: ss.pthis,
+		sink: func(msg string, data interface{}) {
 			if debugEvent {
 				log.Println("==> onMsg", msg, nameOf(ss.pthis))
 			}
 			onMsg()
-		}
-	})
+		},
+		cond: func(data interface{}) bool {
+			return data.(string) == msg
+		},
+	}
 }
 
 func (ss *eventSinks) OnScene__0(onScene func(name string)) {
@@ -297,44 +287,19 @@ func (ss *eventSinks) OnScene__0(onScene func(name string)) {
 }
 
 func (ss *eventSinks) OnScene__1(name string, onScene func()) {
-	ss.OnScene__0(func(nameIn string) {
-		if nameIn == name {
+	ss.allWhenSceneStart = &eventSink{
+		prev:  ss.allWhenSceneStart,
+		pthis: ss.pthis,
+		sink: func(name string) {
 			if debugEvent {
 				log.Println("==> onScene", name, nameOf(ss.pthis))
 			}
 			onScene()
-		}
-	})
-}
-
-/*
-	func onStart()
-	func onClick()
-	func onKey(key Key)
-	func onMsg(msg string, data interface{})
-	func onScene(name string)
-	func onCloned(data interface{})
-//
-func (ss *eventSinks) Sink(obj interface{}) {
-	if o, ok := obj.(interface{ OnStart() }); ok {
-		ss.OnStart(o.OnStart)
-	}
-	if o, ok := obj.(interface{ OnClick() }); ok {
-		ss.OnClick(o.OnClick)
-	}
-	if o, ok := obj.(interface{ OnKey(Key) }); ok {
-		ss.OnKey__0(o.OnKey)
-	}
-	if o, ok := obj.(interface{ OnMsg(string, interface{}) }); ok {
-		ss.OnMsg__0(o.OnMsg)
-	}
-	if o, ok := obj.(interface{ OnScene(string) }); ok {
-		ss.OnScene__0(o.OnScene)
-	}
-	if o, ok := obj.(interface{ OnCloned(interface{}) }); ok {
-		ss.OnCloned__0(o.OnCloned)
+		},
+		cond: func(data interface{}) bool {
+			return data.(string) == name
+		},
 	}
 }
-*/
 
 // -------------------------------------------------------------------------------------

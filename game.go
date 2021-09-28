@@ -86,7 +86,7 @@ type Game struct {
 	gMouseX, gMouseY int64
 }
 
-type Spriter = interface{}
+type Spriter = Shape
 
 type Gamer interface {
 	StartLoad(resource string) error
