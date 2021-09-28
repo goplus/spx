@@ -1,4 +1,4 @@
 onClick => {
-    broadcast "undo", true
-    gid--
+	broadcast "undo", true
+	gid--
 }

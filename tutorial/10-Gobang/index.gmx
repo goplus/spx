@@ -14,8 +14,8 @@ var (
 )
 
 const (
-	_Black = 1
-	_White = 2
+	_Black         = 1
+	_White         = 2
 	_BlackAndWhite = _Black + _White
 )
 

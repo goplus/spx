@@ -1,20 +1,20 @@
 var (
-    id int
+	id int
 )
 
 onClick => {
-    clone
+	clone
 }
 
 onCloned => {
-    gid++
-    id = gid
-    step 50
-    say id, 0.5
+	gid++
+	id = gid
+	step 50
+	say id, 0.5
 }
 
 onMsg "undo", => {
-    if id == gid {
-        destroy
-    }
+	if id == gid {
+		destroy
+	}
 }
