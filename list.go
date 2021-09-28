@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"reflect"
 	"strings"
 )
 
@@ -71,8 +72,11 @@ func (p Value) Int() int {
 	switch v := p.data.(type) {
 	case int:
 		return v
+	case nil:
+		return 0
 	default:
-		panic("todo: spx.Value.Int()")
+		log.Panicln("todo: spx.Value.Int()", reflect.TypeOf(v))
+		return 0
 	}
 }
 
@@ -80,8 +84,11 @@ func (p Value) Float() float64 {
 	switch v := p.data.(type) {
 	case float64:
 		return v
+	case nil:
+		return 0
 	default:
-		panic("todo: spx.Value.Float()")
+		log.Panicln("todo: spx.Value.Float()", reflect.TypeOf(v))
+		return 0
 	}
 }
 
