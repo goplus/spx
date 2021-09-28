@@ -8,8 +8,6 @@ _gsc
 _test
 haiyang/
 feijidazhan/
-res/
-*.png
 
 # Binaries for programs and plugins
 *.exe
