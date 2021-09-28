@@ -74,7 +74,7 @@ type Game struct {
 
 	sounds soundMgr
 	turtle turtleCanvas
-	shapes map[string]Shape
+	shapes map[string]Spriter
 	items  []Shape
 
 	input  inputMgr
@@ -86,23 +86,21 @@ type Game struct {
 	gMouseX, gMouseY int64
 }
 
+type Spriter = interface{}
+
 type Gamer interface {
 	StartLoad(resource string) error
-	LoadSprite(sprite Shape, name string) error
+	LoadSprite(sprite Spriter, name string) error
 	EndLoad(g reflect.Value) error
 	RunLoop(cfg *Config) error
 }
 
 func instance(game Gamer) *Game {
-	p, ok := game.(*Game)
-	if !ok {
-		fld := reflect.ValueOf(game).Elem().FieldByName("Game")
-		if !fld.IsValid() {
-			log.Panicf("type %v doesn't has field spx.Game", reflect.TypeOf(game))
-		}
-		p = fld.Addr().Interface().(*Game)
+	fld := reflect.ValueOf(game).Elem().FieldByName("Game")
+	if !fld.IsValid() {
+		log.Panicf("type %v doesn't has field spx.Game", reflect.TypeOf(game))
 	}
-	return p
+	return fld.Addr().Interface().(*Game)
 }
 
 func (p *Game) Initialize() {
@@ -215,13 +213,13 @@ func (p *Game) StartLoad(resource string) error {
 	p.Initialize()
 	p.input.init(p)
 	p.sounds.init()
-	p.shapes = make(map[string]Shape)
+	p.shapes = make(map[string]Spriter)
 	p.events = make(chan event, 16)
 	p.fs = fs
 	return nil
 }
 
-func (p *Game) LoadSprite(sprite Shape, name string) error {
+func (p *Game) LoadSprite(sprite Spriter, name string) error {
 	if debugLoad {
 		log.Println("==> LoadSprite", name)
 	}
@@ -233,19 +231,11 @@ func (p *Game) LoadSprite(sprite Shape, name string) error {
 	}
 	base := spriteOf(sprite)
 	base.init(baseDir, p, name, &conf)
-	// base.Sink(sprite)
 	p.shapes[name] = sprite
 	return nil
 }
 
-func spriteOf(sprite Shape) *Sprite {
-	if base, ok := sprite.(*Sprite); ok {
-		return base
-	}
-	return getSpriteField(sprite)
-}
-
-func getSpriteField(sprite Shape) *Sprite {
+func spriteOf(sprite Spriter) *Sprite {
 	fld := reflect.ValueOf(sprite).Elem().FieldByName("Sprite")
 	if !fld.IsValid() {
 		log.Panicf("type %v doesn't has field spx.Sprite", reflect.TypeOf(sprite))

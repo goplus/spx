@@ -17,6 +17,7 @@
 package spx
 
 import (
+	"fmt"
 	"image/color"
 	"log"
 	"math"
@@ -77,9 +78,6 @@ func (p *Sprite) init(base string, g *Game, name string, sprite *spriteConfig) {
 }
 
 func (p *Sprite) InitFrom(src *Sprite) {
-	src.mutex.Lock()
-	defer src.mutex.Unlock()
-
 	p.baseObj.initFrom(&src.baseObj)
 	p.eventSinks.initFrom(&src.eventSinks, p)
 
@@ -101,35 +99,36 @@ func (p *Sprite) InitFrom(src *Sprite) {
 	p.isPenDown = src.isPenDown
 }
 
-func Gopt_Sprite_Clone__0(sprite Shape) {
+func Gopt_Sprite_Clone__0(sprite Spriter) {
 	Gopt_Sprite_Clone__1(sprite, nil)
 }
 
-func Gopt_Sprite_Clone__1(sprite Shape, data interface{}) {
-	src, ok := sprite.(*Sprite)
-	if !ok {
-		src = getSpriteField(sprite)
-	}
+func Gopt_Sprite_Clone__1(sprite Spriter, data interface{}) {
+	src := spriteOf(sprite)
 	if debugInstr {
 		log.Println("Clone", src.name)
 	}
 
 	in := reflect.ValueOf(sprite).Elem()
-	out := reflect.New(in.Type())
-	dest := spriteOf(out.Interface().(Shape))
+	v := reflect.New(in.Type())
+	out, outPtr := v.Elem(), v.Interface()
+	dest := spriteOf(outPtr)
 
-	if ok {
-		dest.InitFrom(src)
-	} else {
-		out = out.Elem()
+	func() {
+		src.mutex.Lock()
+		defer src.mutex.Unlock()
+
 		out.Set(in)
 		for i, n := 0, out.NumField(); i < n; i++ {
-			fld := out.Field(i)
+			fld := out.Field(i).Addr()
 			if ini := fld.MethodByName("InitFrom"); ini.IsValid() {
 				args := []reflect.Value{in.Field(i).Addr()}
 				ini.Call(args)
 			}
 		}
+	}()
+	if ini, ok := outPtr.(initer); ok {
+		ini.Main()
 	}
 	src.g.addClonedShape(src, dest)
 	dest.doWhenCloned(data)
@@ -198,7 +197,7 @@ func (p *Sprite) NextCostume() {
 
 // -----------------------------------------------------------------------------
 
-func (p *Sprite) Say(msg string, secs ...float64) {
+func (p *Sprite) Say(msg interface{}, secs ...float64) {
 	if debugInstr {
 		log.Println("Say", p.name, msg, secs)
 	}
@@ -208,7 +207,7 @@ func (p *Sprite) Say(msg string, secs ...float64) {
 	}
 }
 
-func (p *Sprite) Think(msg string, secs ...float64) {
+func (p *Sprite) Think(msg interface{}, secs ...float64) {
 	if debugInstr {
 		log.Println("Think", p.name, msg, secs)
 	}
@@ -218,7 +217,12 @@ func (p *Sprite) Think(msg string, secs ...float64) {
 	}
 }
 
-func (p *Sprite) sayOrThink(msg string, style int) {
+func (p *Sprite) sayOrThink(msgv interface{}, style int) {
+	msg, ok := msgv.(string)
+	if !ok {
+		msg = fmt.Sprint(msgv)
+	}
+
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 

@@ -47,6 +47,7 @@ func (ss *eventSink) doDeleteClone(this interface{}) (ret *eventSink) {
 	}
 }
 
+/*
 func (ss *eventSink) doClone(src, copy interface{}) *eventSink {
 	for p := ss; p != nil; p = p.prev {
 		if p.pthis == src {
@@ -55,6 +56,7 @@ func (ss *eventSink) doClone(src, copy interface{}) *eventSink {
 	}
 	return ss
 }
+*/
 
 func (ss *eventSink) asyncCall(wg *sync.WaitGroup, doSth func(*eventSink)) {
 	for ss != nil {
@@ -84,6 +86,7 @@ type eventSinkMgr struct {
 	calledStart       bool
 }
 
+/*
 func (p *eventSinkMgr) doClone(src, copy interface{}) {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
@@ -93,6 +96,7 @@ func (p *eventSinkMgr) doClone(src, copy interface{}) {
 	p.allWhenIReceive = p.allWhenIReceive.doClone(src, copy)
 	p.allWhenSceneStart = p.allWhenSceneStart.doClone(src, copy)
 }
+*/
 
 func (p *eventSinkMgr) doDeleteClone(this interface{}) {
 	p.mutex.Lock()
@@ -176,18 +180,16 @@ func nameOf(this interface{}) string {
 }
 
 func (ss *eventSinks) init(mgr *eventSinkMgr, this interface{}) {
-	if ss.pthis == nil {
-		ss.eventSinkMgr = mgr
-		ss.pthis = this
-	}
+	ss.eventSinkMgr = mgr
+	ss.pthis = this
 }
 
 func (ss *eventSinks) initFrom(src *eventSinks, this interface{}) {
 	ss.eventSinkMgr = src.eventSinkMgr
 	ss.pthis = this
-	ss.allWhenCloned = src.allWhenCloned
-	ss.allWhenClick = src.allWhenClick
-	src.eventSinkMgr.doClone(src.pthis, this)
+	ss.allWhenCloned = nil
+	ss.allWhenClick = nil
+	// src.eventSinkMgr.doClone(src.pthis, this)
 }
 
 func (ss *eventSinks) doDeleteClone() {

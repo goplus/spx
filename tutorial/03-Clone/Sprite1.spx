@@ -10,6 +10,7 @@ onCloned => {
     gid++
     id = gid
     step 50
+    say id, 0.5
 }
 
 onMsg "undo", => {
