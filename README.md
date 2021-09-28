@@ -26,7 +26,7 @@ How to run spx tutorials?
 
 Through this example you can learn how to listen events and do somethings.
 
-Here is some codes in [Kai.spx](tutorial/01-Weather/Kai.spx):
+Here are some codes in [Kai.spx](tutorial/01-Weather/Kai.spx):
 
 ```coffee
 onStart => {
@@ -78,7 +78,7 @@ The following procedures are very similar. In this way you can implement dialogu
 
 Through this example you can learn how to define variables and show them on the stage.
 
-Here is all the codes of [Dragon](tutorial/02-Dragon/Dragon.spx):
+Here are all the codes of [Dragon](tutorial/02-Dragon/Dragon.spx):
 
 ```coffee
 var (
@@ -118,5 +118,85 @@ How to show the `score` on the stage? You don't need write code, just add a `sta
       "visible": true
     }
   ]
+}
+```
+
+### tutorial/03-Clone
+
+![Screen Shot1](tutorial/03-Clone/1.jpg)
+
+Through this example you can learn:
+* Clone sprites and destory them.
+* Distinguish between sprite variables and shared variables that can access by all sprites.
+
+Here are some codes in [Cat.spx](tutorial/03-Clone/Cat.spx):
+
+```coffee
+var (
+	id int
+)
+
+onClick => {
+	clone
+}
+
+onCloned => {
+	gid++
+	...
+}
+```
+
+When we click the sprite `Cat`, it receives an `onClick` event. Then it calls `clone` to clone itself. And after cloning, the new `Cat` sprite will receive an `onCloned` event.
+
+In `onCloned` event, the new `Cat` sprite uses a variable named `gid`. It doesn't define in [Cat.spx](tutorial/03-Clone/Cat.spx), but in [index.gmx](tutorial/03-Clone/index.gmx).
+
+
+Here are all the codes of [index.gmx](tutorial/03-Clone/index.gmx):
+
+```coffee
+var (
+	Arrow Arrow
+	Cat   Cat
+	gid   int
+)
+
+run "resources", {Title: "Clone and Destory (by Go+)"}
+```
+
+All these three variables in [index.gmx](tutorial/03-Clone/index.gmx) are shared by all sprites. `Arrow` and `Cat` are sprites that exist in this project. `gid` means `global id`. It is used to allocate id for all cloned `Cat` sprites.
+
+Let's back to [Cat.spx](tutorial/03-Clone/Cat.spx) to see full coe of `onCloned`:
+
+```coffee
+onCloned => {
+	gid++
+	id = gid
+	step 50
+	say id, 0.5
+}
+```
+
+It increases `gid` value and assign it to sprite `id`. This makes all these `Cat` have different `id`. Then the cloned `Cat` moves forward 50 steps and says `id` of itself.
+
+Why these `Cat` sprites need different `id`? Because we want destory one of them by its `id`.
+
+Here are all the codes in [Allow.spx](tutorial/03-Clone/Allow.spx):
+
+```coffee
+onClick => {
+	broadcast "undo", true
+	gid--
+}
+```
+
+When we click `Allow`, it broadcasts an "undo" message (NOTE: We pass the second parameter `true` to broadcast to indicate we wait all sprites finish processing this message).
+
+All `Cat` sprites receive this message, but only the last cloned sprite finds its `id` is equal to `gid` then destroys itself. Here are the related codes in [Cat.spx](tutorial/03-Clone/Cat.spx):
+
+```coffee
+onMsg "undo", => {
+	if id == gid {
+		destroy
+	}
 }
 ```
