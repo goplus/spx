@@ -180,7 +180,7 @@ It increases `gid` value and assign it to sprite `id`. This makes all these `Cat
 
 Why these `Cat` sprites need different `id`? Because we want destory one of them by its `id`.
 
-Here are all the codes in [Allow.spx](tutorial/03-Clone/Allow.spx):
+Here are all the codes in [Arrow.spx](tutorial/03-Clone/Arrow.spx):
 
 ```coffee
 onClick => {
@@ -189,7 +189,7 @@ onClick => {
 }
 ```
 
-When we click `Allow`, it broadcasts an "undo" message (NOTE: We pass the second parameter `true` to broadcast to indicate we wait all sprites finish processing this message).
+When we click `Arrow`, it broadcasts an "undo" message (NOTE: We pass the second parameter `true` to broadcast to indicate we wait all sprites finish processing this message).
 
 All `Cat` sprites receive this message, but only the last cloned sprite finds its `id` is equal to `gid` then destroys itself. Here are the related codes in [Cat.spx](tutorial/03-Clone/Cat.spx):
 
