@@ -101,7 +101,7 @@ onStart => {
 
 We define a variable named `score` for `Dragon`. After the program starts, it moves randomly. And every time it touches `Shark`, it gains one score.
 
-How to show the `score` on the stage? You don't need write code, just add a `stageMonitor` object into [resources/index.json](tutorial/02-Dragon/resources/index.json):
+How to show the `score` on the stage? You don't need write code, just add a `stageMonitor` object into [res/index.json](tutorial/02-Dragon/res/index.json):
 
 ```json
 {
@@ -160,7 +160,7 @@ var (
 	gid   int
 )
 
-run "resources", {Title: "Clone and Destory (by Go+)"}
+run "res", {Title: "Clone and Destory (by Go+)"}
 ```
 
 All these three variables in [index.gmx](tutorial/03-Clone/index.gmx) are shared by all sprites. `Arrow` and `Cat` are sprites that exist in this project. `gid` means `global id`. It is used to allocate id for all cloned `Cat` sprites.

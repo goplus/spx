@@ -4,4 +4,4 @@ var (
 	chomp  Sound
 )
 
-run "resources", {Title: "Dragon (by Go+)"}
+run "res", {Title: "Dragon (by Go+)"}

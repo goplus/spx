@@ -86,4 +86,4 @@ onMsg "confirm to put chess", => {
 	}
 }
 
-run "resources", {Title: "Gobang (by Go+)"}
+run "res", {Title: "Gobang (by Go+)"}

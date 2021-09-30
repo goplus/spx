@@ -4,4 +4,4 @@ var (
 	gid   int
 )
 
-run "resources", {Title: "Clone and Destory (by Go+)"}
+run "res", {Title: "Clone and Destory (by Go+)"}
