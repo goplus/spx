@@ -1,0 +1,32 @@
+onStart => {
+	hide
+}
+
+onCloned => {
+	setXYpos rand(-90, 90), 237
+	show
+	for {
+		changeYpos -1.5
+		if ypos < -170 {
+			hide
+			destroy
+		}
+		if touching("MyAircraft") {
+			wait 0.12
+			hide
+			destroy
+		}
+		wait 0.05
+	}
+}
+
+onMsg "battle", => {
+	for i := 0; i < 50; i++ {
+		wait 20
+		clone
+	}
+}
+
+onMsg "start", => {
+	bombs = 0
+}

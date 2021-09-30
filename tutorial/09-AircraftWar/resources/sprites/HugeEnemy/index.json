@@ -1,0 +1,75 @@
+{
+  "costumes": [
+    {
+      "bitmapResolution": 2,
+      "name": "enemy3_n1",
+      "path": "20.png",
+      "x": 164,
+      "y": 246
+    },
+    {
+      "bitmapResolution": 2,
+      "name": "enemy3_n2",
+      "path": "21.png",
+      "x": 164,
+      "y": 248
+    },
+    {
+      "bitmapResolution": 2,
+      "name": "enemy3_hit",
+      "path": "22.png",
+      "x": 164,
+      "y": 254
+    },
+    {
+      "bitmapResolution": 2,
+      "name": "enemy3_down1",
+      "path": "23.png",
+      "x": 164,
+      "y": 254
+    },
+    {
+      "bitmapResolution": 2,
+      "name": "enemy3_down2",
+      "path": "24.png",
+      "x": 164,
+      "y": 254
+    },
+    {
+      "bitmapResolution": 2,
+      "name": "enemy3_down3",
+      "path": "25.png",
+      "x": 164,
+      "y": 254
+    },
+    {
+      "bitmapResolution": 2,
+      "name": "enemy3_down4",
+      "path": "26.png",
+      "x": 164,
+      "y": 254
+    },
+    {
+      "bitmapResolution": 2,
+      "name": "enemy3_down5",
+      "path": "27.png",
+      "x": 166,
+      "y": 256
+    },
+    {
+      "bitmapResolution": 2,
+      "name": "enemy3_down6",
+      "path": "28.png",
+      "x": 142,
+      "y": 200
+    }
+  ],
+  "currentCostumeIndex": 4,
+  "heading": 90,
+  "isDraggable": false,
+  "rotationStyle": "normal",
+  "size": 0.55,
+  "visible": false,
+  "x": -1,
+  "y": 243
+}

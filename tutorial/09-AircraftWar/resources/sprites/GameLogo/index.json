@@ -1,0 +1,19 @@
+{
+  "costumes": [
+    {
+      "bitmapResolution": 2,
+      "name": "shoot_copyright",
+      "path": "5.png",
+      "x": 426,
+      "y": 12
+    }
+  ],
+  "currentCostumeIndex": 0,
+  "heading": 90,
+  "isDraggable": false,
+  "rotationStyle": "normal",
+  "size": 0.4500000000000001,
+  "visible": false,
+  "x": 3,
+  "y": 151
+}

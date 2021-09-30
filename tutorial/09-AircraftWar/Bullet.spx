@@ -1,0 +1,24 @@
+onStart => {
+	gotoFront
+	hide
+}
+
+onCloned => {
+	setXYpos bulletX, bulletY
+	show
+	for {
+		changeYpos 10
+		wait 0.04
+		if touching(Edge) {
+			destroy
+		}
+		if touching("MiddleEnemy") || touching("HugeEnemy") || touching("SmallEnemy") {
+			hide
+			destroy
+		}
+	}
+}
+
+onMsg "battle", => {
+	show
+}

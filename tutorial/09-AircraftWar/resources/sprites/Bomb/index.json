@@ -1,0 +1,19 @@
+{
+  "costumes": [
+    {
+      "bitmapResolution": 2,
+      "name": "ufo1",
+      "path": "3.png",
+      "x": 58,
+      "y": 86
+    }
+  ],
+  "currentCostumeIndex": 0,
+  "heading": 90,
+  "isDraggable": false,
+  "rotationStyle": "normal",
+  "size": 0.6,
+  "visible": false,
+  "x": 8,
+  "y": -190
+}

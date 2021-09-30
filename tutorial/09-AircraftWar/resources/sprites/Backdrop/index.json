@@ -1,0 +1,19 @@
+{
+  "costumes": [
+    {
+      "bitmapResolution": 2,
+      "name": "background",
+      "path": "1.png",
+      "x": 202,
+      "y": 360
+    }
+  ],
+  "currentCostumeIndex": 0,
+  "heading": 90,
+  "isDraggable": false,
+  "rotationStyle": "normal",
+  "size": 1.5,
+  "visible": true,
+  "x": 0,
+  "y": 0
+}

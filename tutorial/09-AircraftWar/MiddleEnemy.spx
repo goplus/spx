@@ -1,0 +1,47 @@
+var life int
+
+onStart => {
+	gotoFront
+	hide
+}
+
+onCloned => {
+	setCostume "enemy2"
+	life = 10
+	setXYpos rand(-131, 131), 237
+	show
+	for {
+		changeYpos -1.5
+		if ypos < -170 {
+			destroy
+		}
+		if touching("Bullet") {
+			life--
+			if life == 0 {
+				for i := 0; i < 5; i++ {
+					wait 0.05
+					nextCostume
+				}
+				hide
+				score += 10
+			}
+		}
+		wait 0.05
+	}
+}
+
+onMsg "battle", => {
+	for {
+		wait 2
+		clone
+	}
+}
+
+onMsg "kill all", => {
+	for i := 0; i < 5; i++ {
+		wait 0.05
+		nextCostume
+	}
+	hide
+	score += 10
+}
