@@ -1,0 +1,26 @@
+{
+  "costumes": [
+    {
+      "bitmapResolution": 2,
+      "name": "game_resume_nor",
+      "path": "6.png",
+      "x": 36,
+      "y": 40
+    },
+    {
+      "bitmapResolution": 2,
+      "name": "game_resume_pressed",
+      "path": "7.png",
+      "x": 36,
+      "y": 40
+    }
+  ],
+  "currentCostumeIndex": 1,
+  "heading": 90,
+  "isDraggable": false,
+  "rotationStyle": "normal",
+  "size": 1,
+  "visible": false,
+  "x": 2,
+  "y": 4
+}

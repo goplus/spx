@@ -1,0 +1,19 @@
+{
+  "costumes": [
+    {
+      "bitmapResolution": 2,
+      "name": "readme",
+      "path": "4.png",
+      "x": 330,
+      "y": 234
+    }
+  ],
+  "currentCostumeIndex": 0,
+  "heading": 90,
+  "isDraggable": false,
+  "rotationStyle": "normal",
+  "size": 0.40000000000000013,
+  "visible": false,
+  "x": 0,
+  "y": -110
+}

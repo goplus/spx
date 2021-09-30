@@ -1,0 +1,8 @@
+onClick => {
+	hide
+	broadcast "battle"
+}
+
+onMsg "start", => {
+	show
+}

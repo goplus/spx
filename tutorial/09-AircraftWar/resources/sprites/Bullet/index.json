@@ -1,0 +1,33 @@
+{
+  "costumes": [
+    {
+      "bitmapResolution": 2,
+      "name": "bullet1",
+      "path": "29.png",
+      "x": 8,
+      "y": 20
+    },
+    {
+      "bitmapResolution": 2,
+      "name": "bullet2",
+      "path": "30.png",
+      "x": 8,
+      "y": 20
+    },
+    {
+      "bitmapResolution": 2,
+      "name": "bullet3",
+      "path": "31.png",
+      "x": 8,
+      "y": 20
+    }
+  ],
+  "currentCostumeIndex": 1,
+  "heading": 90,
+  "isDraggable": false,
+  "rotationStyle": "normal",
+  "size": 0.65,
+  "visible": true,
+  "x": 230,
+  "y": 185
+}

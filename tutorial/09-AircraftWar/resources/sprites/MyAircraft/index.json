@@ -1,0 +1,54 @@
+{
+  "costumes": [
+    {
+      "bitmapResolution": 2,
+      "name": "hero1",
+      "path": "8.png",
+      "x": 98,
+      "y": 122
+    },
+    {
+      "bitmapResolution": 2,
+      "name": "hero2",
+      "path": "9.png",
+      "x": 98,
+      "y": 120
+    },
+    {
+      "bitmapResolution": 2,
+      "name": "hero_blowup_n1",
+      "path": "10.png",
+      "x": 98,
+      "y": 122
+    },
+    {
+      "bitmapResolution": 2,
+      "name": "hero_blowup_n2",
+      "path": "11.png",
+      "x": 98,
+      "y": 122
+    },
+    {
+      "bitmapResolution": 2,
+      "name": "hero_blowup_n3",
+      "path": "12.png",
+      "x": 98,
+      "y": 122
+    },
+    {
+      "bitmapResolution": 2,
+      "name": "hero_blowup_n4",
+      "path": "13.png",
+      "x": 66,
+      "y": 76
+    }
+  ],
+  "currentCostumeIndex": 5,
+  "heading": 90,
+  "isDraggable": false,
+  "rotationStyle": "normal",
+  "size": 0.4500000000000001,
+  "visible": false,
+  "x": -131,
+  "y": -161
+}

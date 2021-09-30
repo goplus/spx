@@ -1,0 +1,48 @@
+var life int
+
+onStart => {
+	hide
+}
+
+onKey KeySpace, => {
+	if 0 < bombs {
+		bombs--
+		broadcast "kill all"
+	}
+}
+
+onMsg "battle", => {
+	setCostume "hero1"
+	show
+	score = 0
+	life = 1
+	for life >= 1 {
+		wait 0.1
+		bulletX = xpos
+		bulletY = ypos + 5
+		Bullet.clone
+		planeX = mouseX
+		planeY = mouseY
+		if planeX < -131 {
+			planeX = -131
+		} else {
+			if planeX > 131 {
+				planeX = 131
+			}
+		}
+		setXYpos planeX, planeY
+		if touching("HugeEnemy") || touching("SmallEnemy") || touching("MiddleEnemy") {
+			life--
+			for i := 0; i < 5; i++ {
+				wait 0.05
+				nextCostume
+			}
+			hide
+			broadcast "game over"
+		}
+		if touching("Bomb") {
+			bombs++
+			wait 0.8
+		}
+	}
+}

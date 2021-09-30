@@ -1,0 +1,14 @@
+onStart => {
+	hide
+}
+
+onMsg "game over", => {
+	gotoFront
+	show
+	wait 1
+	stop "all"
+}
+
+onMsg "start", => {
+	hide
+}

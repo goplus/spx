@@ -1,0 +1,7 @@
+onMsg "start", => {
+	show
+}
+
+onMsg "battle", => {
+	hide
+}
