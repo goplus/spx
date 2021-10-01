@@ -32,6 +32,8 @@ import (
 
 // stageMonitor class.
 type stageMonitor struct {
+	target  string
+	val     string
 	eval    func() string
 	mode    int
 	color   int
@@ -55,23 +57,21 @@ type stageMonitor struct {
 	"visible": true
 */
 func newStageMonitor(g reflect.Value, v specsp) (*stageMonitor, error) {
-	visible := v["visible"].(bool)
-	if !visible {
+	target := v["target"].(string)
+	val := v["val"].(string)
+	eval := buildMonitorEval(g, target, val)
+	if eval == nil {
 		return nil, syscall.ENOENT
 	}
-
-	eval := buildMonitorEval(g, v)
-	if eval == nil {
-		return nil, syscall.EINVAL
-	}
-
 	mode := int(v["mode"].(float64))
 	color := int(v["color"].(float64))
 	label := v["label"].(string)
 	x := v["x"].(float64)
 	y := v["y"].(float64)
+	visible := v["visible"].(bool)
 	return &stageMonitor{
-		visible: visible, mode: mode, color: color, x: x, y: y, label: label, eval: eval,
+		target: target, val: val, eval: eval,
+		visible: visible, mode: mode, color: color, x: x, y: y, label: label,
 	}, nil
 }
 
@@ -98,18 +98,18 @@ func getValueRef(target reflect.Value, from int, name string) reflect.Value {
 	return reflect.Value{}
 }
 
-func buildMonitorEval(g reflect.Value, v specsp) func() string {
-	const (
-		getVar = "getVar:"
-	)
-	target, from := getTarget(g, v["target"].(string))
+const (
+	getVarPrefix = "getVar:"
+)
+
+func buildMonitorEval(g reflect.Value, t, val string) func() string {
+	target, from := getTarget(g, t)
 	if from < 0 {
 		return nil
 	}
-	val := v["val"].(string)
 	switch {
-	case strings.HasPrefix(val, getVar):
-		name := val[len(getVar):]
+	case strings.HasPrefix(val, getVarPrefix):
+		name := val[len(getVarPrefix):]
 		ref := getValueRef(target, from, name)
 		if ref.IsValid() {
 			return func() string {
@@ -123,11 +123,9 @@ func buildMonitorEval(g reflect.Value, v specsp) func() string {
 	return nil
 }
 
-/*
 func (p *stageMonitor) setVisible(visible bool) {
 	p.visible = visible
 }
-*/
 
 const (
 	stmDefaultW      = 47
@@ -141,7 +139,7 @@ const (
 )
 
 func (p *stageMonitor) draw(dc drawContext) {
-	if !p.visible || p.eval == nil {
+	if !p.visible {
 		return
 	}
 	val := p.eval()

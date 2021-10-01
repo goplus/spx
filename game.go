@@ -970,3 +970,25 @@ func (p *Game) Broadcast__2(msg string, data interface{}, wait bool) {
 }
 
 // -----------------------------------------------------------------------------
+
+func (p *Game) setStageMonitor(target string, val string, visible bool) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	for _, item := range p.items {
+		if sp, ok := item.(*stageMonitor); ok && sp.val == val && sp.target == target {
+			sp.setVisible(visible)
+			return
+		}
+	}
+}
+
+func (p *Game) HideVar(name string) {
+	p.setStageMonitor("", getVarPrefix+name, false)
+}
+
+func (p *Game) ShowVar(name string) {
+	p.setStageMonitor("", getVarPrefix+name, true)
+}
+
+// -----------------------------------------------------------------------------

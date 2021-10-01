@@ -745,3 +745,13 @@ func (p *Sprite) setPenWidth(w float64, change bool) {
 }
 
 // -----------------------------------------------------------------------------
+
+func (p *Sprite) HideVar(name string) {
+	p.g.setStageMonitor(p.name, getVarPrefix+name, false)
+}
+
+func (p *Sprite) ShowVar(name string) {
+	p.g.setStageMonitor(p.name, getVarPrefix+name, true)
+}
+
+// -----------------------------------------------------------------------------
