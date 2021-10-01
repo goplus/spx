@@ -19,4 +19,4 @@ var (
 	score                                            int
 )
 
-run "resources", {Title: "Aircraft War (by Go+)"}
+run "res", {Title: "Aircraft War (by Go+)"}
