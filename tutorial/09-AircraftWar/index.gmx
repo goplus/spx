@@ -1,22 +1,22 @@
 var (
-	Backdrop                                         Backdrop
-	YouWin                                           YouWin
-	Bomb                                             Bomb
-	TextIntro                                        TextIntro
-	GameLogo                                         GameLogo
-	GameStart                                        GameStart
-	MyAircraft                                       MyAircraft
-	MiddleEnemy                                      MiddleEnemy
-	HugeEnemy                                        HugeEnemy
-	Bullet                                           Bullet
-	SmallEnemy                                       SmallEnemy
-	GameOver                                         GameOver
-	bulletX                                          float64
-	bulletY                                          float64
-	planeX                                           float64
-	planeY                                           float64
-	bombs                                            int
-	score                                            int
+	Backdrop    Backdrop
+	YouWin      YouWin
+	Bomb        Bomb
+	TextIntro   TextIntro
+	GameLogo    GameLogo
+	GameStart   GameStart
+	MyAircraft  MyAircraft
+	MiddleEnemy MiddleEnemy
+	HugeEnemy   HugeEnemy
+	Bullet      Bullet
+	SmallEnemy  SmallEnemy
+	GameOver    GameOver
+	bulletX     float64
+	bulletY     float64
+	planeX      float64
+	planeY      float64
+	bombs       int
+	score       int
 )
 
 run "res", {Title: "Aircraft War (by Go+)"}
