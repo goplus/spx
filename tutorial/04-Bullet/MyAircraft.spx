@@ -1,0 +1,7 @@
+onStart => {
+	for {
+		wait 0.1
+		Bullet.clone
+		setXYpos mouseX, mouseY
+	}
+}

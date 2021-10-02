@@ -1,0 +1,6 @@
+var (
+	MyAircraft                                       MyAircraft
+	Bullet                                           Bullet
+)
+
+run "res", {Title: "Bullet (by Go+)"}
