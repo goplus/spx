@@ -64,7 +64,11 @@ func (p *Sprite) Game() *Game {
 }
 
 func (p *Sprite) init(base string, g *Game, name string, sprite *spriteConfig) {
-	p.baseObj.init(base, sprite.Costumes, sprite.CurrentCostumeIndex)
+	if sprite.CostumeSet != nil {
+		p.baseObj.initWith(base, sprite.CostumeSet, sprite.CurrentCostumeIndex)
+	} else {
+		p.baseObj.init(base, sprite.Costumes, sprite.CurrentCostumeIndex)
+	}
 	p.eventSinks.init(&g.sinkMgr, p)
 
 	p.g, p.name = g, name

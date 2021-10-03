@@ -19,7 +19,11 @@ package spx
 import (
 	"image"
 	"math"
+	"strconv"
 	"sync"
+
+	_ "image/jpeg" // for image decode
+	_ "image/png"  // for image decode
 
 	"github.com/hajimehoshi/ebiten"
 	"github.com/pkg/errors"
@@ -53,46 +57,124 @@ const (
 
 // -------------------------------------------------------------------------------------
 
-// costume class.
-type costume struct {
-	name string
-	path string
-
-	bitmapResolution int
-
-	x, y  float64
-	cache *ebiten.Image
-	mutex sync.Mutex
+type imagePoint struct {
+	x, y float64
 }
 
-func (p *costume) needImage(fs spxfs.Dir) (*ebiten.Image, float64, float64) {
-	if p.cache == nil {
-		p.doNeedImage(fs)
+type imageLoaderByPath string
+
+func (path imageLoaderByPath) load(fs spxfs.Dir, pt *imagePoint) (*ebiten.Image, error) {
+	f, err := fs.Open(string(path))
+	if err != nil {
+		return nil, errors.Wrapf(err, "imageLoader: open file `%s` failed", path)
 	}
-	return p.cache, p.x, p.y
+	defer f.Close()
+
+	img, _, err := image.Decode(f)
+	if err != nil {
+		return nil, errors.Wrapf(err, "imageLoader: file `%s` is not an image", path)
+	}
+
+	ret, err := ebiten.NewImageFromImage(img, defaultFilterMode)
+	if err != nil {
+		return nil, errors.Wrapf(err, "imageLoader open `%s`: image is too big (or too small)", path)
+	}
+	return ret, nil
 }
 
-func (p *costume) doNeedImage(fs spxfs.Dir) {
+// -------------------------------------------------------------------------------------
+
+type delayloadImage struct {
+	mutex  sync.Mutex
+	cache  *ebiten.Image
+	pt     imagePoint
+	loader func(fs spxfs.Dir, pt *imagePoint) (*ebiten.Image, error)
+}
+
+func (p *delayloadImage) ensure(fs spxfs.Dir) {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
 	if p.cache == nil {
-		f, err := fs.Open(p.path)
-		if err != nil {
-			panic(errors.Wrapf(err, "costume open file `%s` failed", p.path))
-		}
-		defer f.Close()
-
-		img, _, err := image.Decode(f)
-		if err != nil {
-			panic(errors.Wrapf(err, "costume file `%s` is not an image", p.path))
-		}
-
-		p.cache, err = ebiten.NewImageFromImage(img, defaultFilterMode)
-		if err != nil {
-			panic(errors.Wrapf(err, "costume file `%s`: image is too big (or too small)", p.path))
+		var err error
+		if p.cache, err = p.loader(fs, &p.pt); err != nil {
+			panic(err)
 		}
 	}
+}
+
+type costumeSetImage struct {
+	mutex  sync.Mutex
+	cache  *ebiten.Image
+	loader func(fs spxfs.Dir, pt *imagePoint) (*ebiten.Image, error)
+	width  int
+	nx     int
+}
+
+func (p *costumeSetImage) ensure(fs spxfs.Dir) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	if p.cache == nil {
+		var err error
+		if p.cache, err = p.loader(fs, nil); err != nil {
+			panic(err)
+		}
+		p.width = p.cache.Bounds().Dx() / p.nx
+	}
+}
+
+type imageLoaderByCostumeSet struct {
+	costumeSet *costumeSetImage
+	index      int
+}
+
+func (p imageLoaderByCostumeSet) load(fs spxfs.Dir, pt *imagePoint) (*ebiten.Image, error) {
+	costumeSet := p.costumeSet
+	if costumeSet.cache == nil {
+		p.costumeSet.ensure(fs)
+	}
+	cache, width := costumeSet.cache, costumeSet.width
+	bounds := cache.Bounds()
+	min := image.Point{X: bounds.Min.X + width*p.index, Y: bounds.Min.Y}
+	max := image.Point{X: min.X + width, Y: bounds.Max.Y}
+	pt.x, pt.y = float64(width>>1), float64(bounds.Dy()>>1)
+	if img := cache.SubImage(image.Rectangle{Min: min, Max: max}); img != nil {
+		return img.(*ebiten.Image), nil
+	}
+	panic("disposed image")
+}
+
+// -------------------------------------------------------------------------------------
+
+type costume struct {
+	name string
+	img  delayloadImage
+
+	bitmapResolution int
+}
+
+func newCostumeWith(name string, img *costumeSetImage, i int, bitmapResolution int) *costume {
+	loader := imageLoaderByCostumeSet{costumeSet: img, index: i}.load
+	return &costume{
+		name: name, img: delayloadImage{loader: loader},
+		bitmapResolution: bitmapResolution,
+	}
+}
+
+func newCostume(base string, c *costumeConfig) *costume {
+	loader := imageLoaderByPath(base + c.Path).load
+	return &costume{
+		name: c.Name, img: delayloadImage{loader: loader, pt: imagePoint{c.X, c.Y}},
+		bitmapResolution: c.BitmapResolution,
+	}
+}
+
+func (p *costume) needImage(fs spxfs.Dir) (*ebiten.Image, float64, float64) {
+	if p.img.cache == nil {
+		p.img.ensure(fs)
+	}
+	return p.img.cache, p.img.pt.x, p.img.pt.y
 }
 
 // -------------------------------------------------------------------------------------
@@ -104,13 +186,38 @@ type baseObj struct {
 	currentCostumeIndex int
 }
 
+func (p *baseObj) initWith(base string, cs *costumeSet, currentCostumeIndex int) {
+	nx, bitmapResolution := cs.Nx, cs.BitmapResolution
+	costumeSetLoader := imageLoaderByPath(base + cs.Path).load
+	img := &costumeSetImage{loader: costumeSetLoader, nx: nx}
+	p.costumes = make([]*costume, nx)
+	if cs.Items == nil {
+		for index := 0; index < nx; index++ {
+			p.costumes[index] = newCostumeWith(strconv.Itoa(index), img, index, bitmapResolution)
+		}
+	} else {
+		index := 0
+		for _, item := range cs.Items {
+			for i := 0; i < item.N; i++ {
+				name := item.NamePrefix + strconv.Itoa(i)
+				p.costumes[i] = newCostumeWith(name, img, index, bitmapResolution)
+				index++
+			}
+		}
+		if index != nx {
+			panic("costumeSet load uncompleted")
+		}
+	}
+	if currentCostumeIndex >= nx || currentCostumeIndex < 0 {
+		currentCostumeIndex = 0
+	}
+	p.currentCostumeIndex = currentCostumeIndex
+}
+
 func (p *baseObj) init(base string, costumes []costumeConfig, currentCostumeIndex int) {
 	p.costumes = make([]*costume, len(costumes))
-	for i, c := range costumes {
-		p.costumes[i] = &costume{
-			name: c.Name, path: base + c.Path, x: c.X, y: c.Y,
-			bitmapResolution: c.BitmapResolution,
-		}
+	for i := range costumes {
+		p.costumes[i] = newCostume(base, &costumes[i])
 	}
 	if currentCostumeIndex >= len(costumes) || currentCostumeIndex < 0 {
 		currentCostumeIndex = 0

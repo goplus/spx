@@ -182,6 +182,18 @@ func makeEmptyInterface(typ reflect.Type, word unsafe.Pointer) (i interface{}) {
 	return
 }
 
+type costumeSetItem struct {
+	NamePrefix string `json:"namePrefix"`
+	N          int    `json:"n"`
+}
+
+type costumeSet struct {
+	Path             string           `json:"path"`
+	Nx               int              `json:"nx"`
+	BitmapResolution int              `json:"bitmapResolution"`
+	Items            []costumeSetItem `json:"items"`
+}
+
 type costumeConfig struct {
 	Name             string  `json:"name"`
 	Path             string  `json:"path"`
@@ -197,6 +209,7 @@ type spriteConfig struct {
 	Size                float64         `json:"size"`
 	RotationStyle       string          `json:"rotationStyle"`
 	Costumes            []costumeConfig `json:"costumes"`
+	CostumeSet          *costumeSet     `json:"costumeSet"`
 	CurrentCostumeIndex int             `json:"currentCostumeIndex"`
 	Visible             bool            `json:"visible"`
 	IsDraggable         bool            `json:"isDraggable"`
