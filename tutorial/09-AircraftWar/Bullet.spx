@@ -4,7 +4,7 @@ onStart => {
 }
 
 onCloned => {
-	setXYpos bulletX, bulletY
+	setXYpos MyAircraft.xpos, MyAircraft.ypos+5
 	show
 	for {
 		changeYpos 10

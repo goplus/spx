@@ -11,10 +11,6 @@ var (
 	Bullet      Bullet
 	SmallEnemy  SmallEnemy
 	GameOver    GameOver
-	bulletX     float64
-	bulletY     float64
-	planeX      float64
-	planeY      float64
 	bombs       int
 	score       int
 )

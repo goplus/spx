@@ -18,11 +18,9 @@ onMsg "battle", => {
 	life = 1
 	for life >= 1 {
 		wait 0.1
-		bulletX = xpos
-		bulletY = ypos + 5
 		Bullet.clone
-		planeX = mouseX
-		planeY = mouseY
+		planeX := mouseX
+		planeY := mouseY
 		if planeX < -131 {
 			planeX = -131
 		} else {
