@@ -244,8 +244,8 @@ onCloned => {
 	setXYpos MyAircraft.xpos, MyAircraft.ypos+5
 	show
 	for {
-		changeYpos 10
 		wait 0.04
+		changeYpos 10
 		if touching(Edge) {
 			destroy
 		}
