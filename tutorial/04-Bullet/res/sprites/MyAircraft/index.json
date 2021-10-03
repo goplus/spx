@@ -2,7 +2,7 @@
   "costumes": [
     {
       "bitmapResolution": 2,
-      "name": "hero1",
+      "name": "hero",
       "path": "8.png",
       "x": 98,
       "y": 122

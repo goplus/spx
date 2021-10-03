@@ -2,7 +2,7 @@
   "costumes": [
     {
       "bitmapResolution": 2,
-      "name": "bullet2",
+      "name": "bullet",
       "path": "30.png",
       "x": 8,
       "y": 20
