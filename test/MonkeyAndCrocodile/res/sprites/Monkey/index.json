@@ -1,0 +1,15 @@
+{
+  "costumeSet": {
+    "bitmapResolution": 1,
+    "path": "monkey.png",
+    "nx": 96
+  },
+  "currentCostumeIndex": 0,
+  "heading": 120,
+  "isDraggable": false,
+  "rotationStyle": "normal",
+  "size": 0.95,
+  "visible": true,
+  "x": 100,
+  "y": 21
+}
