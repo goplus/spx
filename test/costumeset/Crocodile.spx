@@ -1,8 +1,5 @@
 onStart => {
 	clone
-}
-
-onCloned => {
 	step 150
 	turn 90
 }
