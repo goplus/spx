@@ -1,0 +1,5 @@
+var (
+	Crocodile Crocodile
+)
+
+run "res", {Title: "Costume Set (by Go+)"}

@@ -80,6 +80,17 @@ func (p *Sprite) init(base string, g *Game, name string, sprite *spriteConfig) {
 
 	p.visible = sprite.Visible
 	p.isDraggable = sprite.IsDraggable
+
+	if sprite.Animations != nil {
+		p.anis = make(map[string]func(*Sprite))
+		for key, val := range sprite.Animations {
+			ani := val
+			p.anis[key] = func(obj *Sprite) {
+				// TODO: ani.Play
+				obj.goAnimate(ani.Wait, ani.From, ani.N, ani.Step)
+			}
+		}
+	}
 }
 
 func (p *Sprite) InitFrom(src *Sprite) {
@@ -212,6 +223,9 @@ func (p *Sprite) PrevCostume() {
 
 func (p *Sprite) goAnimate(secs float64, costume interface{}, n, step int) {
 	p.goSetCostume(costume)
+	if step == 0 {
+		step = 1
+	}
 	for i := 0; i < n; i++ {
 		p.g.Wait(secs)
 		p.goCostume(step)

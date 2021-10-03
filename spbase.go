@@ -214,10 +214,10 @@ func (p *baseObj) initWith(base string, cs *costumeSet, currentCostumeIndex int)
 	p.currentCostumeIndex = currentCostumeIndex
 }
 
-func (p *baseObj) init(base string, costumes []costumeConfig, currentCostumeIndex int) {
+func (p *baseObj) init(base string, costumes []*costumeConfig, currentCostumeIndex int) {
 	p.costumes = make([]*costume, len(costumes))
-	for i := range costumes {
-		p.costumes[i] = newCostume(base, &costumes[i])
+	for i, c := range costumes {
+		p.costumes[i] = newCostume(base, c)
 	}
 	if currentCostumeIndex >= len(costumes) || currentCostumeIndex < 0 {
 		currentCostumeIndex = 0

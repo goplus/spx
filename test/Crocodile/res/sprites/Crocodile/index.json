@@ -5,12 +5,27 @@
     "nx": 5,
     "items": [
       {
-        "namePrefix": "",
+        "namePrefix": "crocodile-",
         "n": 5
       }
     ]
   },
   "currentCostumeIndex": 0,
+  "animations": {
+    "sink": {
+      "play": "",
+      "wait": 0.05,
+      "from": "crocodile-0",
+      "n": 4
+    },
+    "surface": {
+      "play": "",
+      "wait": 0.05,
+      "from": "crocodile-4",
+      "n": 4,
+      "step": -1
+    }
+  },
   "heading": 120,
   "isDraggable": false,
   "rotationStyle": "normal",

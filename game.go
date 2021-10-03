@@ -202,17 +202,26 @@ type costumeConfig struct {
 	BitmapResolution int     `json:"bitmapResolution"`
 }
 
+type aniConfig struct {
+	Play string      `json:"play"`
+	Wait float64     `json:"wait"`
+	From interface{} `json:"from"`
+	N    int         `json:"n"`
+	Step int         `json:"step"`
+}
+
 type spriteConfig struct {
-	Heading             float64         `json:"heading"`
-	X                   float64         `json:"x"`
-	Y                   float64         `json:"y"`
-	Size                float64         `json:"size"`
-	RotationStyle       string          `json:"rotationStyle"`
-	Costumes            []costumeConfig `json:"costumes"`
-	CostumeSet          *costumeSet     `json:"costumeSet"`
-	CurrentCostumeIndex int             `json:"currentCostumeIndex"`
-	Visible             bool            `json:"visible"`
-	IsDraggable         bool            `json:"isDraggable"`
+	Heading             float64               `json:"heading"`
+	X                   float64               `json:"x"`
+	Y                   float64               `json:"y"`
+	Size                float64               `json:"size"`
+	RotationStyle       string                `json:"rotationStyle"`
+	Costumes            []*costumeConfig      `json:"costumes"`
+	CostumeSet          *costumeSet           `json:"costumeSet"`
+	CurrentCostumeIndex int                   `json:"currentCostumeIndex"`
+	Animations          map[string]*aniConfig `json:"animations"`
+	Visible             bool                  `json:"visible"`
+	IsDraggable         bool                  `json:"isDraggable"`
 }
 
 func (p *Game) StartLoad(resource string) error {
@@ -266,9 +275,9 @@ func loadJson(ret interface{}, fs spxfs.Dir, file string) (err error) {
 }
 
 type projConfig struct {
-	Zorder              []interface{}   `json:"zorder"`
-	Costumes            []costumeConfig `json:"costumes"`
-	CurrentCostumeIndex int             `json:"currentCostumeIndex"`
+	Zorder              []interface{}    `json:"zorder"`
+	Costumes            []*costumeConfig `json:"costumes"`
+	CurrentCostumeIndex int              `json:"currentCostumeIndex"`
 }
 
 type initer interface {
