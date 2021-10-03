@@ -47,6 +47,7 @@ type Sprite struct {
 	direction     float64
 	rotationStyle RotationStyle
 	sayObj        *sayOrThinker
+	anis          map[string]func(*Sprite)
 
 	penColor color.RGBA
 	penShade float64
@@ -91,6 +92,7 @@ func (p *Sprite) InitFrom(src *Sprite) {
 	p.direction = src.direction
 	p.rotationStyle = src.rotationStyle
 	p.sayObj = nil
+	p.anis = src.anis
 
 	p.penColor = src.penColor
 	p.penShade = src.penShade
@@ -199,6 +201,74 @@ func (p *Sprite) NextCostume() {
 	p.goNextCostume()
 }
 
+func (p *Sprite) PrevCostume() {
+	if debugInstr {
+		log.Println("PrevCostume", p.name)
+	}
+	p.goPrevCostume()
+}
+
+// -----------------------------------------------------------------------------
+
+func (p *Sprite) goAnimate(secs float64, costume interface{}, n, step int) {
+	p.goSetCostume(costume)
+	for i := 0; i < n; i++ {
+		p.g.Wait(secs)
+		p.goCostume(step)
+	}
+}
+
+func (p *Sprite) Animate__0(secs float64, costume interface{}, n, step int) {
+	if debugInstr {
+		log.Println("Animation", secs, costume, n, step)
+	}
+	p.goAnimate(secs, costume, n, step)
+}
+
+func (p *Sprite) Animate__1(secs float64, costume interface{}, n int) {
+	if debugInstr {
+		log.Println("Animation", secs, costume, n)
+	}
+	p.goAnimate(secs, costume, n, 1)
+}
+
+func (p *Sprite) Animate__2(name string) {
+	if debugInstr {
+		log.Println("==> Animation", name)
+	}
+	if ani := p.getAni(name); ani != nil {
+		ani(p)
+	}
+	if debugInstr {
+		log.Println("==> End Animation", name)
+	}
+}
+
+func (p *Sprite) SetAnimation(name string, ani func(*Sprite)) {
+	// animations are shared.
+	// don't need SetAnimation to cloned sprites.
+	if p.isCloned {
+		return
+	}
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	if p.anis == nil {
+		p.anis = make(map[string]func(*Sprite))
+	}
+	p.anis[name] = ani
+}
+
+func (p *Sprite) getAni(name string) func(*Sprite) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	if p.anis != nil {
+		return p.anis[name]
+	}
+	return nil
+}
+
 // -----------------------------------------------------------------------------
 
 func (p *Sprite) Say(msg interface{}, secs ...float64) {
@@ -291,15 +361,50 @@ func (p *Sprite) doMoveTo(x, y float64) {
 	p.x, p.y = x, y
 }
 
-func (p *Sprite) Step(step float64) {
-	if debugInstr {
-		log.Println("Step", p.name, step)
-	}
+func (p *Sprite) goMoveForward(step float64) {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
 	sin, cos := math.Sincos(toRadian(p.direction))
 	p.doMoveTo(p.x+step*sin, p.y+step*cos)
+}
+
+func (p *Sprite) Move(step float64) {
+	if debugInstr {
+		log.Println("Move", p.name, step)
+	}
+	p.goMoveForward(step)
+}
+
+func (p *Sprite) Step(step float64) {
+	if debugInstr {
+		log.Println("Step", p.name, step)
+	}
+	if p.anis == nil {
+		p.goMoveForward(step)
+		return
+	}
+	var backward = step < 0
+	var name string
+	if backward {
+		name = "backward"
+	} else {
+		name = "forward"
+	}
+	ani := p.getAni(name)
+	if ani == nil {
+		p.goMoveForward(step)
+		return
+	}
+	var n int
+	if backward {
+		n = int(-step + 0.5)
+	} else {
+		n = int(step + 0.5)
+	}
+	for ; n > 0; n-- {
+		ani(p)
+	}
 }
 
 // Goto func:

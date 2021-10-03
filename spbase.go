@@ -292,6 +292,13 @@ func (p *baseObj) goNextCostume() {
 	p.currentCostumeIndex = (p.currentCostumeIndex + 1) % len(p.costumes)
 }
 
+func (p *baseObj) goCostume(step int) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	p.currentCostumeIndex = (len(p.costumes) + p.currentCostumeIndex + step) % len(p.costumes)
+}
+
 func (p *baseObj) getCostumeIndex() int {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()

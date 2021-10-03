@@ -1,11 +1,14 @@
+onStart => {
+	clone
+}
+
+onCloned => {
+	step 150
+	turn 90
+}
+
 onClick => {
-	for i := 0; i < 5; i++ {
-		setCostume i
-		wait 0.05
-	}
-	wait 0.5
-	for i := 3; i >= 0; i-- {
-		setCostume i
-		wait 0.05
-	}
+	animate "sink"
+	wait 0.8
+	animate "surface"
 }
