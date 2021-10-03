@@ -1,6 +1,5 @@
 onStart => {
 	gotoFront
-	hide
 }
 
 onCloned => {
@@ -17,8 +16,4 @@ onCloned => {
 			destroy
 		}
 	}
-}
-
-onMsg "battle", => {
-	show
 }

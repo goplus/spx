@@ -23,10 +23,11 @@ onMsg "battle", => {
 		planeY := mouseY
 		if planeX < -131 {
 			planeX = -131
-		} else {
-			if planeX > 131 {
-				planeX = 131
-			}
+		} else if planeX > 131 {
+			planeX = 131
+		}
+		if planeY < -170 {
+			planeY = -170
 		}
 		setXYpos planeX, planeY
 		if touching("HugeEnemy") || touching("SmallEnemy") || touching("MiddleEnemy") {
