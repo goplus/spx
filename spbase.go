@@ -253,6 +253,8 @@ func (p *baseObj) goSetCostume(val interface{}) bool {
 			p.goNextCostume()
 		}
 		return true
+	case float64:
+		return p.setCostumeByIndex(int(v))
 	default:
 		panic("setCostume: invalid argument type")
 	}
