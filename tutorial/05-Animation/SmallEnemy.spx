@@ -1,0 +1,25 @@
+onStart => {
+	for {
+		wait 0.5
+		clone
+	}
+}
+
+onCloned => {
+	setXYpos rand(-131, 131), 237
+	show
+	life := 5
+	for {
+		wait 0.05
+		changeYpos -2.4
+		if ypos < -170 {
+			destroy
+		}
+		if touching("Bullet", "explode") {
+			life--
+			if life == 0 {
+				animate "explode"
+			}
+		}
+	}
+}

@@ -220,6 +220,7 @@ type aniConfig struct {
 	From interface{} `json:"from"`
 	N    int         `json:"n"`
 	Step int         `json:"step"`
+	Die  bool        `json:"die"`
 }
 
 type spriteConfig struct {
@@ -449,7 +450,7 @@ func (p *Game) eventLoop(me coroutine.Thread) int {
 }
 
 func (p *Game) initEventLoop() {
-	gco.Create(p.eventLoop)
+	gco.Create(nil, p.eventLoop)
 }
 
 func init() {
@@ -476,7 +477,7 @@ func createThread(start bool, f func(coroutine.Thread) int) {
 		}()
 		return f(th)
 	}
-	gco.CreateAndStart(fn, thMain)
+	gco.CreateAndStart(nil, fn, thMain)
 }
 
 func abortThread() {
@@ -567,7 +568,7 @@ func (p *Game) touchingPoint(dst *Sprite, x, y float64) bool {
 	return gdi.TouchingPoint(sp, pt, sx, sy)
 }
 
-func (p *Game) touchingSpriteBy(dst *Sprite, name string) bool {
+func (p *Game) touchingSpriteBy(dst *Sprite, name string) *Sprite {
 	sp1, pt1 := dst.getGdiSprite()
 
 	p.mutex.Lock()
@@ -577,12 +578,12 @@ func (p *Game) touchingSpriteBy(dst *Sprite, name string) bool {
 			if sp.name == name {
 				sp2, pt2 := sp.getGdiSprite()
 				if gdi.Touching(sp1, pt1, sp2, pt2) {
-					return true
+					return sp
 				}
 			}
 		}
 	}
-	return false
+	return nil
 }
 
 func (p *Game) objectPos(obj interface{}) (float64, float64) {

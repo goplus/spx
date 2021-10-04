@@ -21,6 +21,7 @@ import (
 	"runtime"
 	"sync"
 	"sync/atomic"
+	"unsafe"
 )
 
 var (
@@ -30,16 +31,19 @@ var (
 
 // -------------------------------------------------------------------------------------
 
+type threadObj struct {
+	tobj interface{}
+}
+
 // Thread represents a coroutine id.
 //
-type Thread int
+type Thread = *threadObj
 
 // Coroutines represents a coroutine manager.
 //
 type Coroutines struct {
 	suspended map[Thread]bool
-	nextID    int64
-	current   int64
+	current   Thread
 	mutex     sync.Mutex
 	cond      sync.Cond
 	sema      sync.Mutex
@@ -57,17 +61,17 @@ func New() *Coroutines {
 
 // Create creates a new coroutine.
 //
-func (p *Coroutines) Create(fn func(me Thread) int) Thread {
-	return p.CreateAndStart(fn, 0)
+func (p *Coroutines) Create(tobj interface{}, fn func(me Thread) int) Thread {
+	return p.CreateAndStart(tobj, fn, nil)
 }
 
 // CreateAndStart creates and executes the new coroutine.
 //
-func (p *Coroutines) CreateAndStart(fn func(me Thread) int, main Thread) Thread {
-	id := Thread(atomic.AddInt64(&p.nextID, 1))
+func (p *Coroutines) CreateAndStart(tobj interface{}, fn func(me Thread) int, main Thread) Thread {
+	id := &threadObj{tobj: tobj}
 	go func() {
 		p.sema.Lock()
-		atomic.StoreInt64(&p.current, int64(id))
+		atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&p.current)), unsafe.Pointer(id))
 		fn(id)
 		p.mutex.Lock()
 		delete(p.suspended, id)
@@ -75,14 +79,14 @@ func (p *Coroutines) CreateAndStart(fn func(me Thread) int, main Thread) Thread 
 		p.notify(id)
 		p.sema.Unlock()
 	}()
-	if main != 0 {
+	if main != nil {
 		runtime.Gosched()
 	}
 	return id
 }
 
 func (p *Coroutines) Current() Thread {
-	return Thread(atomic.LoadInt64(&p.current))
+	return Thread(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&p.current))))
 }
 
 func (p *Coroutines) notify(me Thread) {
@@ -91,7 +95,7 @@ func (p *Coroutines) notify(me Thread) {
 // Yield suspends a running coroutine.
 //
 func (p *Coroutines) Yield(me Thread) {
-	if atomic.LoadInt64(&p.current) != int64(me) {
+	if p.Current() != me {
 		panic(ErrCannotYieldANonrunningThread)
 	}
 	p.notify(me)
@@ -105,7 +109,7 @@ func (p *Coroutines) Yield(me Thread) {
 	p.mutex.Unlock()
 
 	p.sema.Lock()
-	p.current = int64(me)
+	p.current = me
 }
 
 // Resume resumes a suspended coroutine.

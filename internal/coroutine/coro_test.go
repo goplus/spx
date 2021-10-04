@@ -25,7 +25,7 @@ func TestCoroutine(t *testing.T) {
 	resume := make(chan bool)
 
 	var array []int
-	co.Create(func(th Thread) int {
+	co.Create(nil, func(th Thread) int {
 		for i := 1; i <= 10; i++ {
 			array = append(array, i+1)
 			go func() {

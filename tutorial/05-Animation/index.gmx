@@ -1,0 +1,7 @@
+var (
+	Bullet     Bullet
+	SmallEnemy SmallEnemy
+	explode    Sound
+)
+
+run "res", {Title: "Animation (by Go+)"}

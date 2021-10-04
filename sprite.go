@@ -88,8 +88,11 @@ func (p *Sprite) init(base string, g *Game, name string, sprite *spriteConfig, g
 	p.anis = make(map[string]func(*Sprite))
 	for key, val := range sprite.Animations {
 		var ani = val
-		var playSound = ani.Play != ""
 		var media Sound
+		var playSound = ani.Play != ""
+		if ani.Wait == 0 {
+			ani.Wait = 0.05
+		}
 		p.anis[key] = func(obj *Sprite) {
 			if playSound {
 				if media == nil {
@@ -100,7 +103,12 @@ func (p *Sprite) init(base string, g *Game, name string, sprite *spriteConfig, g
 				}
 				g.Play__0(media)
 			}
-			obj.goAnimate(ani.Wait, ani.From, ani.N, ani.Step, ani.Move)
+			if ani.N > 0 {
+				obj.goAnimate(ani.Wait, ani.From, ani.N, ani.Step, ani.Move)
+			}
+			if ani.Die { // TODO: destroy dead sprite
+				obj.Hide()
+			}
 		}
 	}
 }
@@ -659,14 +667,20 @@ func (p *Sprite) TouchingColor(color Color) bool {
 }
 
 // Touching func:
-//   Touching(spriteName)
+//   Touching(spriteName[, animation])
 //   Touching(sprite)
 //   Touching(spx.Mouse)
 //   Touching(spx.Edge)
-func (p *Sprite) Touching(obj interface{}) bool {
+func (p *Sprite) Touching(obj interface{}, ani ...string) bool {
 	switch v := obj.(type) {
 	case string:
-		return p.g.touchingSpriteBy(p, v)
+		if o := p.g.touchingSpriteBy(p, v); o != nil {
+			if ani != nil {
+				o.Animate__0(ani[0])
+			}
+			return true
+		}
+		return false
 	case *Sprite:
 		return touchingSprite(p, v)
 	case specialObj:
