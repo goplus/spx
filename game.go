@@ -18,7 +18,6 @@ package spx
 
 import (
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"image"
@@ -70,8 +69,6 @@ type Game struct {
 	eventSinks
 	fs spxfs.Dir
 
-	sinkMgr eventSinkMgr
-
 	sounds soundMgr
 	turtle turtleCanvas
 	shapes map[string]Spriter
@@ -84,6 +81,9 @@ type Game struct {
 	height int
 
 	gMouseX, gMouseY int64
+
+	sinkMgr   eventSinkMgr
+	isStopped bool
 }
 
 type Spriter = Shape
@@ -94,6 +94,10 @@ type Gamer interface {
 
 func (p *Game) Initialize() {
 	p.eventSinks.init(&p.sinkMgr, p)
+}
+
+func (p *Game) Stopped() bool {
+	return p.isStopped
 }
 
 func Gopt_Game_Run(game Gamer, resource string, gameConf ...*Config) {
@@ -458,30 +462,21 @@ func init() {
 }
 
 var (
-	gco            *coroutine.Coroutines
-	errAbortThread = errors.New("abort thread")
+	gco *coroutine.Coroutines
 )
 
-func createThread(start bool, f func(coroutine.Thread) int) {
+type threadObj = coroutine.ThreadObj
+
+func createThread(tobj threadObj, start bool, f func(coroutine.Thread) int) {
 	var thMain coroutine.Thread
 	if start {
 		thMain = gco.Current()
 	}
-	fn := func(th coroutine.Thread) int {
-		defer func() {
-			if e := recover(); e != nil {
-				if e != errAbortThread {
-					panic(e)
-				}
-			}
-		}()
-		return f(th)
-	}
-	gco.CreateAndStart(nil, fn, thMain)
+	gco.CreateAndStart(tobj, f, thMain)
 }
 
 func abortThread() {
-	panic(errAbortThread)
+	panic(coroutine.ErrAbortThread)
 }
 
 func waitToDo(fn func()) {
@@ -670,7 +665,6 @@ func (p *Game) addClonedShape(src, clone Shape) {
 	if idx < 0 {
 		log.Println("addClonedShape: clone a deleted sprite")
 		abortThread()
-		return
 	}
 
 	// p.getItems() requires immutable items, so we need copy before modify

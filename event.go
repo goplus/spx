@@ -27,7 +27,7 @@ import (
 
 type eventSink struct {
 	prev  *eventSink
-	pthis interface{}
+	pthis threadObj
 	cond  func(interface{}) bool
 	sink  interface{}
 }
@@ -55,7 +55,7 @@ func (ss *eventSink) asyncCall(wg *sync.WaitGroup, data interface{}, doSth func(
 				wg.Add(1)
 			}
 			copy := ss
-			createThread(false, func(coroutine.Thread) int {
+			createThread(ss.pthis, false, func(coroutine.Thread) int {
 				if wg != nil {
 					defer wg.Done()
 				}
@@ -144,7 +144,7 @@ func (p *eventSinkMgr) doWhenSceneStart(name string, wait bool) {
 
 type eventSinks struct {
 	*eventSinkMgr
-	pthis         interface{}
+	pthis         threadObj
 	allWhenCloned func(data interface{})
 	allWhenClick  func()
 }
@@ -159,12 +159,12 @@ func nameOf(this interface{}) string {
 	panic("eventSinks: unexpected this object")
 }
 
-func (ss *eventSinks) init(mgr *eventSinkMgr, this interface{}) {
+func (ss *eventSinks) init(mgr *eventSinkMgr, this threadObj) {
 	ss.eventSinkMgr = mgr
 	ss.pthis = this
 }
 
-func (ss *eventSinks) initFrom(src *eventSinks, this interface{}) {
+func (ss *eventSinks) initFrom(src *eventSinks, this threadObj) {
 	ss.eventSinkMgr = src.eventSinkMgr
 	ss.pthis = this
 	ss.allWhenCloned = nil
@@ -178,7 +178,7 @@ func (ss *eventSinks) doDeleteClone() {
 
 func (ss *eventSinks) doWhenCloned(data interface{}) {
 	if sink := ss.allWhenCloned; sink != nil {
-		createThread(true, func(coroutine.Thread) int {
+		createThread(ss.pthis, true, func(coroutine.Thread) int {
 			if debugEvent {
 				log.Println("==> onCloned", nameOf(ss.pthis))
 			}
@@ -190,7 +190,7 @@ func (ss *eventSinks) doWhenCloned(data interface{}) {
 
 func (ss *eventSinks) doWhenClick() {
 	if sink := ss.allWhenClick; sink != nil {
-		createThread(false, func(coroutine.Thread) int {
+		createThread(ss.pthis, false, func(coroutine.Thread) int {
 			if debugEvent {
 				log.Println("==> onClick", nameOf(ss.pthis))
 			}

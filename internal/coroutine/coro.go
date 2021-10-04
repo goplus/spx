@@ -27,17 +27,22 @@ import (
 var (
 	// ErrCannotYieldANonrunningThread represents an "can not yield a non-running thread" error.
 	ErrCannotYieldANonrunningThread = errors.New("can not yield a non-running thread")
+	ErrAbortThread                  = errors.New("abort thread")
 )
 
 // -------------------------------------------------------------------------------------
 
-type threadObj struct {
-	tobj interface{}
+type ThreadObj interface {
+	Stopped() bool
+}
+
+type threadImpl struct {
+	Obj ThreadObj
 }
 
 // Thread represents a coroutine id.
 //
-type Thread = *threadObj
+type Thread = *threadImpl
 
 // Coroutines represents a coroutine manager.
 //
@@ -61,23 +66,29 @@ func New() *Coroutines {
 
 // Create creates a new coroutine.
 //
-func (p *Coroutines) Create(tobj interface{}, fn func(me Thread) int) Thread {
+func (p *Coroutines) Create(tobj ThreadObj, fn func(me Thread) int) Thread {
 	return p.CreateAndStart(tobj, fn, nil)
 }
 
 // CreateAndStart creates and executes the new coroutine.
 //
-func (p *Coroutines) CreateAndStart(tobj interface{}, fn func(me Thread) int, main Thread) Thread {
-	id := &threadObj{tobj: tobj}
+func (p *Coroutines) CreateAndStart(tobj ThreadObj, fn func(me Thread) int, main Thread) Thread {
+	id := &threadImpl{Obj: tobj}
 	go func() {
 		p.sema.Lock()
-		atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&p.current)), unsafe.Pointer(id))
+		p.setCurrent(id)
+		defer func() {
+			p.mutex.Lock()
+			delete(p.suspended, id)
+			p.mutex.Unlock()
+			p.sema.Unlock()
+			if e := recover(); e != nil {
+				if e != ErrAbortThread {
+					panic(e)
+				}
+			}
+		}()
 		fn(id)
-		p.mutex.Lock()
-		delete(p.suspended, id)
-		p.mutex.Unlock()
-		p.notify(id)
-		p.sema.Unlock()
 	}()
 	if main != nil {
 		runtime.Gosched()
@@ -85,11 +96,12 @@ func (p *Coroutines) CreateAndStart(tobj interface{}, fn func(me Thread) int, ma
 	return id
 }
 
-func (p *Coroutines) Current() Thread {
-	return Thread(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&p.current))))
+func (p *Coroutines) setCurrent(id Thread) {
+	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&p.current)), unsafe.Pointer(id))
 }
 
-func (p *Coroutines) notify(me Thread) {
+func (p *Coroutines) Current() Thread {
+	return Thread(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&p.current))))
 }
 
 // Yield suspends a running coroutine.
@@ -98,18 +110,19 @@ func (p *Coroutines) Yield(me Thread) {
 	if p.Current() != me {
 		panic(ErrCannotYieldANonrunningThread)
 	}
-	p.notify(me)
 	p.sema.Unlock()
-
 	p.mutex.Lock()
 	p.suspended[me] = true
 	for p.suspended[me] {
 		p.cond.Wait()
 	}
 	p.mutex.Unlock()
-
 	p.sema.Lock()
-	p.current = me
+
+	p.setCurrent(me)
+	if me.Obj != nil && me.Obj.Stopped() { // check stopped
+		panic(ErrAbortThread)
+	}
 }
 
 // Resume resumes a suspended coroutine.

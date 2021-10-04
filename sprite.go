@@ -55,10 +55,14 @@ type Sprite struct {
 	penHue   float64
 	penWidth float64
 
-	visible     bool
-	isDraggable bool
-	isCloned    bool
-	isPenDown   bool
+	visible   bool
+	isCloned  bool
+	isPenDown bool
+	isStopped bool
+}
+
+func (p *Sprite) Stopped() bool {
+	return p.isStopped
 }
 
 func (p *Sprite) Game() *Game {
@@ -80,7 +84,7 @@ func (p *Sprite) init(base string, g *Game, name string, sprite *spriteConfig, g
 	p.rotationStyle = toRotationStyle(sprite.RotationStyle)
 
 	p.visible = sprite.Visible
-	p.isDraggable = sprite.IsDraggable
+	// p.isDraggable = sprite.IsDraggable
 
 	if sprite.Animations == nil {
 		return
@@ -106,8 +110,8 @@ func (p *Sprite) init(base string, g *Game, name string, sprite *spriteConfig, g
 			if ani.N > 0 {
 				obj.goAnimate(ani.Wait, ani.From, ani.N, ani.Step, ani.Move)
 			}
-			if ani.Die { // TODO: destroy dead sprite
-				obj.Hide()
+			if ani.Die { // destroy dead sprite
+				obj.Destroy()
 			}
 		}
 	}
@@ -131,7 +135,8 @@ func (p *Sprite) InitFrom(src *Sprite) {
 	p.penWidth = src.penWidth
 
 	p.visible = src.visible
-	p.isDraggable = src.isDraggable
+	// p.isDraggable = src.isDraggable
+	p.isStopped = false
 	p.isCloned = true
 	p.isPenDown = src.isPenDown
 }
@@ -182,7 +187,10 @@ func (p *Sprite) Destroy() { // delete this clone
 		p.doStopSay()
 		p.doDeleteClone()
 		p.g.removeShape(p)
-		abortThread()
+		p.isStopped = true
+		if p == gco.Current().Obj {
+			abortThread()
+		}
 	}
 }
 
