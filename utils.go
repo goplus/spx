@@ -18,6 +18,7 @@ package spx
 
 import (
 	"math/rand"
+	"os"
 	"time"
 )
 
@@ -55,6 +56,14 @@ func RGB(r, g, b uint8) Color {
 
 func RGBA(r, g, b, a uint8) Color {
 	return Color{R: r, G: g, B: b, A: a}
+}
+
+func Exit(code ...int) {
+	v := 0
+	if code != nil {
+		v = code[0]
+	}
+	os.Exit(v)
 }
 
 // -----------------------------------------------------------------------------

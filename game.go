@@ -991,12 +991,14 @@ func (p *Game) ChangeVolume(delta float64) {
 	panic("todo")
 }
 
+/*
 func (p *Game) Stop(what string) {
 	if what == "all" {
 		os.Exit(0)
 	}
 	panic("todo")
 }
+*/
 
 // -----------------------------------------------------------------------------
 

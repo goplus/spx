@@ -9,5 +9,5 @@ onMsg "game over", => {
 	} else {
 		say "The white side won!", 3
 	}
-	stop "all"
+	exit
 }
