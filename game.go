@@ -409,14 +409,15 @@ func (p *Game) Draw(screen *ebiten.Image) {
 }
 
 type clicker interface {
-	doWhenClick()
+	threadObj
+	doWhenClick(this threadObj)
 }
 
 func (p *Game) doWhenLeftButtonDown(ev *eventLeftButtonDown) {
 	hc := hitContext{Pos: image.Pt(ev.X, ev.Y)}
 	if hr, ok := p.onHit(hc); ok {
 		if o, ok := hr.Target.(clicker); ok {
-			o.doWhenClick()
+			o.doWhenClick(o)
 		}
 	}
 }

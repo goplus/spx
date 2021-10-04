@@ -1,6 +1,6 @@
 onStart => {
 	for {
-		wait 0.5
+		wait 0.3
 		clone
 	}
 }
@@ -8,13 +8,19 @@ onStart => {
 onCloned => {
 	setXYpos rand(-131, 131), 237
 	show
-	life := 5
 	for {
 		wait 0.05
 		changeYpos -2.4
 		if ypos < -170 {
 			destroy
 		}
+	}
+}
+
+onCloned => {
+	life := 5
+	for {
+		wait 0.05
 		if touching("Bullet", "explode") {
 			life--
 			if life == 0 {

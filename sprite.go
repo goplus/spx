@@ -173,7 +173,7 @@ func Gopt_Sprite_Clone__1(sprite Spriter, data interface{}) {
 		ini.Main()
 	}
 	src.g.addClonedShape(src, dest)
-	dest.doWhenCloned(data)
+	dest.doWhenCloned(dest, data)
 }
 
 func (p *Sprite) Destroy() { // delete this clone

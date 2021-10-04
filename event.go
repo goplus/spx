@@ -48,14 +48,14 @@ func (ss *eventSink) doDeleteClone(this interface{}) (ret *eventSink) {
 	}
 }
 
-func (ss *eventSink) asyncCall(wg *sync.WaitGroup, data interface{}, doSth func(*eventSink)) {
+func (ss *eventSink) asyncCall(start bool, wg *sync.WaitGroup, data interface{}, doSth func(*eventSink)) {
 	for ss != nil {
 		if ss.cond == nil || ss.cond(data) {
 			if wg != nil {
 				wg.Add(1)
 			}
 			copy := ss
-			createThread(ss.pthis, false, func(coroutine.Thread) int {
+			createThread(ss.pthis, start, func(coroutine.Thread) int {
 				if wg != nil {
 					defer wg.Done()
 				}
@@ -75,6 +75,8 @@ type eventSinkMgr struct {
 	allWhenKeyPressed *eventSink
 	allWhenIReceive   *eventSink
 	allWhenSceneStart *eventSink
+	allWhenCloned     *eventSink
+	allWhenClick      *eventSink
 	calledStart       bool
 }
 
@@ -86,13 +88,15 @@ func (p *eventSinkMgr) doDeleteClone(this interface{}) {
 	p.allWhenKeyPressed = p.allWhenKeyPressed.doDeleteClone(this)
 	p.allWhenIReceive = p.allWhenIReceive.doDeleteClone(this)
 	p.allWhenSceneStart = p.allWhenSceneStart.doDeleteClone(this)
+	p.allWhenCloned = p.allWhenCloned.doDeleteClone(this)
+	p.allWhenClick = p.allWhenClick.doDeleteClone(this)
 }
 
 func (p *eventSinkMgr) doWhenStart() {
 	p.mutex.Lock()
 	if !p.calledStart {
 		p.calledStart = true
-		p.allWhenStart.asyncCall(nil, nil, func(ev *eventSink) {
+		p.allWhenStart.asyncCall(false, nil, nil, func(ev *eventSink) {
 			if debugEvent {
 				log.Println("==> onStart", nameOf(ev.pthis))
 			}
@@ -104,8 +108,30 @@ func (p *eventSinkMgr) doWhenStart() {
 
 func (p *eventSinkMgr) doWhenKeyPressed(key Key) {
 	p.mutex.Lock()
-	p.allWhenKeyPressed.asyncCall(nil, key, func(ev *eventSink) {
+	p.allWhenKeyPressed.asyncCall(false, nil, key, func(ev *eventSink) {
 		ev.sink.(func(Key))(key)
+	})
+	p.mutex.Unlock()
+}
+
+func (p *eventSinkMgr) doWhenCloned(this threadObj, data interface{}) {
+	p.mutex.Lock()
+	p.allWhenCloned.asyncCall(true, nil, this, func(ev *eventSink) {
+		if debugEvent {
+			log.Println("==> onCloned", nameOf(ev.pthis))
+		}
+		ev.sink.(func(interface{}))(data)
+	})
+	p.mutex.Unlock()
+}
+
+func (p *eventSinkMgr) doWhenClick(this threadObj) {
+	p.mutex.Lock()
+	p.allWhenClick.asyncCall(false, nil, this, func(ev *eventSink) {
+		if debugEvent {
+			log.Println("==> onClick", nameOf(ev.pthis))
+		}
+		ev.sink.(func())()
 	})
 	p.mutex.Unlock()
 }
@@ -116,7 +142,7 @@ func (p *eventSinkMgr) doWhenIReceive(msg string, data interface{}, wait bool) {
 		wg = new(sync.WaitGroup)
 	}
 	p.mutex.Lock()
-	p.allWhenIReceive.asyncCall(wg, msg, func(ev *eventSink) {
+	p.allWhenIReceive.asyncCall(false, wg, msg, func(ev *eventSink) {
 		ev.sink.(func(string, interface{}))(msg, data)
 	})
 	p.mutex.Unlock()
@@ -131,7 +157,7 @@ func (p *eventSinkMgr) doWhenSceneStart(name string, wait bool) {
 		wg = new(sync.WaitGroup)
 	}
 	p.mutex.Lock()
-	p.allWhenSceneStart.asyncCall(wg, name, func(ev *eventSink) {
+	p.allWhenSceneStart.asyncCall(false, wg, name, func(ev *eventSink) {
 		ev.sink.(func(string))(name)
 	})
 	p.mutex.Unlock()
@@ -144,9 +170,7 @@ func (p *eventSinkMgr) doWhenSceneStart(name string, wait bool) {
 
 type eventSinks struct {
 	*eventSinkMgr
-	pthis         threadObj
-	allWhenCloned func(data interface{})
-	allWhenClick  func()
+	pthis threadObj
 }
 
 func nameOf(this interface{}) string {
@@ -167,37 +191,10 @@ func (ss *eventSinks) init(mgr *eventSinkMgr, this threadObj) {
 func (ss *eventSinks) initFrom(src *eventSinks, this threadObj) {
 	ss.eventSinkMgr = src.eventSinkMgr
 	ss.pthis = this
-	ss.allWhenCloned = nil
-	ss.allWhenClick = nil
-	// src.eventSinkMgr.doClone(src.pthis, this)
 }
 
 func (ss *eventSinks) doDeleteClone() {
 	ss.eventSinkMgr.doDeleteClone(ss.pthis)
-}
-
-func (ss *eventSinks) doWhenCloned(data interface{}) {
-	if sink := ss.allWhenCloned; sink != nil {
-		createThread(ss.pthis, true, func(coroutine.Thread) int {
-			if debugEvent {
-				log.Println("==> onCloned", nameOf(ss.pthis))
-			}
-			sink(data)
-			return 0
-		})
-	}
-}
-
-func (ss *eventSinks) doWhenClick() {
-	if sink := ss.allWhenClick; sink != nil {
-		createThread(ss.pthis, false, func(coroutine.Thread) int {
-			if debugEvent {
-				log.Println("==> onClick", nameOf(ss.pthis))
-			}
-			sink()
-			return 0
-		})
-	}
 }
 
 // -------------------------------------------------------------------------------------
@@ -211,17 +208,27 @@ func (ss *eventSinks) OnStart(onStart func()) {
 }
 
 func (ss *eventSinks) OnClick(onClick func()) {
-	if ss.allWhenClick != nil {
-		panic("Can't support multi onClick events")
+	pthis := ss.pthis
+	ss.allWhenClick = &eventSink{
+		prev:  ss.allWhenClick,
+		pthis: pthis,
+		sink:  onClick,
+		cond: func(data interface{}) bool {
+			return data == pthis
+		},
 	}
-	ss.allWhenClick = onClick
 }
 
 func (ss *eventSinks) OnCloned__0(onCloned func(data interface{})) {
-	if ss.allWhenCloned != nil {
-		panic("Can't support multi onCloned events")
+	pthis := ss.pthis
+	ss.allWhenCloned = &eventSink{
+		prev:  ss.allWhenCloned,
+		pthis: pthis,
+		sink:  onCloned,
+		cond: func(data interface{}) bool {
+			return data == pthis
+		},
 	}
-	ss.allWhenCloned = onCloned
 }
 
 func (ss *eventSinks) OnCloned__1(onCloned func()) {
