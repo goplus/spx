@@ -254,15 +254,15 @@ func (ss *eventSinks) OnKey__0(key Key, onKey func()) {
 	}
 }
 
-func (ss *eventSinks) OnKey__1(keys []Key, onKey func()) {
+func (ss *eventSinks) OnKey__1(keys []Key, onKey func(Key)) {
 	ss.allWhenKeyPressed = &eventSink{
 		prev:  ss.allWhenKeyPressed,
 		pthis: ss.pthis,
-		sink: func(Key) {
+		sink: func(key Key) {
 			if debugEvent {
 				log.Println("==> onKey", keys, nameOf(ss.pthis))
 			}
-			onKey()
+			onKey(key)
 		},
 		cond: func(data interface{}) bool {
 			keyIn := data.(Key)
@@ -274,6 +274,12 @@ func (ss *eventSinks) OnKey__1(keys []Key, onKey func()) {
 			return false
 		},
 	}
+}
+
+func (ss *eventSinks) OnKey__2(keys []Key, onKey func()) {
+	ss.OnKey__1(keys, func(Key) {
+		onKey()
+	})
 }
 
 func (ss *eventSinks) OnMsg__0(onMsg func(msg string, data interface{})) {
