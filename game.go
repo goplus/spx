@@ -89,7 +89,7 @@ type Game struct {
 type Spriter = Shape
 
 type Gamer interface {
-	StartLoad(resource string) error
+	StartLoad(resource string, cfg *Config) error
 	LoadSprite(sprite Spriter, name string) error
 	EndLoad(g reflect.Value) error
 	RunLoop(cfg *Config) error
@@ -129,7 +129,7 @@ func Gopt_Game_Run(game Gamer, resource string, gameConf ...*Config) {
 		conf.FullScreen = *fullscreen
 	}
 	g := instance(game)
-	if err := g.StartLoad(resource); err != nil {
+	if err := g.StartLoad(resource, &conf); err != nil {
 		panic(err)
 	}
 	vPtr := reflect.ValueOf(game)
@@ -224,7 +224,7 @@ type spriteConfig struct {
 	IsDraggable         bool                  `json:"isDraggable"`
 }
 
-func (p *Game) StartLoad(resource string) error {
+func (p *Game) StartLoad(resource string, cfg *Config) error {
 	if debugLoad {
 		log.Println("==> StartLoad", resource)
 	}
@@ -232,8 +232,12 @@ func (p *Game) StartLoad(resource string) error {
 	if err != nil {
 		return err
 	}
+	var keyDuration int
+	if cfg != nil {
+		keyDuration = cfg.KeyDuration
+	}
 	p.Initialize()
-	p.input.init(p)
+	p.input.init(p, keyDuration)
 	p.sounds.init()
 	p.shapes = make(map[string]Spriter)
 	p.events = make(chan event, 16)
@@ -333,6 +337,7 @@ func (p *Game) addSpecialShape(g reflect.Value, v specsp) {
 type Config struct {
 	Title              string
 	Scale              float64
+	KeyDuration        int
 	FullScreen         bool
 	DontRunOnUnfocused bool
 	DontParseFlags     bool

@@ -1,4 +1,17 @@
 onClick => {
+    animate "clap"
+}
+
+onKey KeySpace, => {
+    animate "think"
+}
+
+onKey KeyUp, => {
+    prevCostume
+    say costumeIndex
+}
+
+onKey KeyDown, => {
     nextCostume
-    say costumeIndex, 0.2
+    say costumeIndex
 }

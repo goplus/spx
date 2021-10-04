@@ -3,4 +3,12 @@ var (
 	Crocodile Crocodile
 )
 
+Monkey.setAnimation "think", obj => {
+	obj.animate 0.05, 10, 32
+}
+
+Monkey.setAnimation "clap", obj => {
+	obj.animate 0.05, 42, 26
+}
+
 run "res", {Title: "Costume Set (by Go+)"}

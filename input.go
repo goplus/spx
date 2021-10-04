@@ -156,16 +156,24 @@ type eventFirer interface {
 }
 
 type inputMgr struct {
-	keyStates map[ebiten.Key]int
-	lbtnState int
-	firer     eventFirer
-	startFlag sync.Once
+	keyStates   map[ebiten.Key]int
+	lbtnState   int
+	keyDuration int
+	firer       eventFirer
+	startFlag   sync.Once
 }
 
-func (p *inputMgr) init(firer eventFirer) {
-	p.keyStates = make(map[ebiten.Key]int)
-	p.lbtnState = mouseStateNone
-	p.firer = firer
+func (i *inputMgr) init(firer eventFirer, keyDuration int) {
+	const (
+		defaultKeyDuration = 15
+	)
+	if keyDuration == 0 {
+		keyDuration = defaultKeyDuration
+	}
+	i.keyStates = make(map[ebiten.Key]int)
+	i.lbtnState = mouseStateNone
+	i.keyDuration = keyDuration
+	i.firer = firer
 }
 
 // -------------------------------------------------------------------------------------
@@ -203,9 +211,7 @@ func (i *inputMgr) updateMouse() {
 }
 
 func (i *inputMgr) updateKeyboard() {
-	const (
-		keyDuration = 10
-	)
+	keyDuration := i.keyDuration
 	for key := ebiten.Key(0); key <= ebiten.KeyMax; key++ {
 		if ebiten.IsKeyPressed(key) {
 			n := i.keyStates[key]
