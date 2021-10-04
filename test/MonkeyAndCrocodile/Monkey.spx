@@ -16,7 +16,7 @@ onKey KeyDown, => {
 	say costumeIndex
 }
 
-onKey KeyEnter, => {
+onKey [KeyEnter, KeyS], => {
 	step 5
 	step -5
 }

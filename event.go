@@ -230,7 +230,7 @@ func (ss *eventSinks) OnCloned__1(onCloned func()) {
 	})
 }
 
-func (ss *eventSinks) OnKey__0(onKey func(key Key)) {
+func (ss *eventSinks) OnAnyKey(onKey func(key Key)) {
 	ss.allWhenKeyPressed = &eventSink{
 		prev:  ss.allWhenKeyPressed,
 		pthis: ss.pthis,
@@ -238,7 +238,7 @@ func (ss *eventSinks) OnKey__0(onKey func(key Key)) {
 	}
 }
 
-func (ss *eventSinks) OnKey__1(key Key, onKey func()) {
+func (ss *eventSinks) OnKey__0(key Key, onKey func()) {
 	ss.allWhenKeyPressed = &eventSink{
 		prev:  ss.allWhenKeyPressed,
 		pthis: ss.pthis,
@@ -250,6 +250,28 @@ func (ss *eventSinks) OnKey__1(key Key, onKey func()) {
 		},
 		cond: func(data interface{}) bool {
 			return data.(Key) == key
+		},
+	}
+}
+
+func (ss *eventSinks) OnKey__1(keys []Key, onKey func()) {
+	ss.allWhenKeyPressed = &eventSink{
+		prev:  ss.allWhenKeyPressed,
+		pthis: ss.pthis,
+		sink: func(Key) {
+			if debugEvent {
+				log.Println("==> onKey", keys, nameOf(ss.pthis))
+			}
+			onKey()
+		},
+		cond: func(data interface{}) bool {
+			keyIn := data.(Key)
+			for _, key := range keys {
+				if key == keyIn {
+					return true
+				}
+			}
+			return false
 		},
 	}
 }
