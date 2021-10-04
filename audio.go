@@ -45,6 +45,13 @@ func (p *readSeekCloser) Seek(offset int64, whence int) (int64, error) {
 	panic("can't seek")
 }
 
+func newReadSeeker(source io.ReadCloser) io.ReadSeeker {
+	if r, ok := source.(io.ReadSeeker); ok {
+		return r
+	}
+	return &readSeekCloser{source}
+}
+
 // -------------------------------------------------------------------------------------
 
 type soundMgr struct {
@@ -108,7 +115,7 @@ func (p *soundMgr) stopAll() {
 
 func (p *soundMgr) play(source io.ReadCloser, wait ...bool) (err error) {
 	audioContext := p.audioContext
-	d, _, err := qaudio.Decode(&readSeekCloser{source})
+	d, _, err := qaudio.Decode(newReadSeeker(source))
 	if err != nil {
 		source.Close()
 		return
