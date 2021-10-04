@@ -32,7 +32,7 @@ import (
 
 	"github.com/goplus/spx/internal/coroutine"
 	"github.com/goplus/spx/internal/gdi"
-	"github.com/hajimehoshi/ebiten"
+	"github.com/hajimehoshi/ebiten/v2"
 
 	spxfs "github.com/goplus/spx/fs"
 	_ "github.com/goplus/spx/fs/local"
@@ -362,35 +362,45 @@ func (p *Game) runLoop(cfg *Config) (err error) {
 	if cfg == nil {
 		cfg = &Config{}
 	}
-	width, height := p.size()
 	if !cfg.DontRunOnUnfocused {
 		ebiten.SetRunnableOnUnfocused(true)
 	}
 	if cfg.FullScreen {
 		ebiten.SetFullscreen(true)
 	}
-	scale := 1.0
-	if cfg.Scale != 0 {
-		scale = cfg.Scale
-	}
+	p.initEventLoop()
+	/*
+		scale := 1.0
+		if cfg.Scale != 0 {
+			scale = cfg.Scale
+		}
+		w, h := p.size()
+		ebiten.SetWindowSize(int(float64(w)*scale), int(float64(h)*scale))
+	*/
+	w, h := p.size()
+	ebiten.SetWindowSize(w, h)
 	title := cfg.Title
 	if title == "" {
 		title = "Game powered by Go+"
 	}
-	p.initEventLoop()
-	return ebiten.Run(p.update, width, height, scale, title)
+	ebiten.SetWindowTitle(title)
+	return ebiten.RunGame(p)
 }
 
-func (p *Game) update(screen *ebiten.Image) error {
+func (p *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
+	return p.size()
+}
+
+func (p *Game) Update() error {
 	p.updateMousePos()
 	p.input.update()
 	p.sounds.update()
-	if ebiten.IsRunningSlowly() {
-		return nil
-	}
+	return nil
+}
+
+func (p *Game) Draw(screen *ebiten.Image) {
 	dc := drawContext{Image: screen}
 	p.onDraw(dc)
-	return nil
 }
 
 type clicker interface {

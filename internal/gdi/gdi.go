@@ -24,7 +24,7 @@ import (
 	"golang.org/x/image/math/fixed"
 
 	"github.com/goplus/spx/internal/gdi/text"
-	"github.com/hajimehoshi/ebiten"
+	"github.com/hajimehoshi/ebiten/v2"
 
 	svgo "github.com/ajstarks/svgo"
 	svg "github.com/goplus/spx/internal/svgr"
@@ -101,10 +101,7 @@ func (p Canvas) End() {
 	if err != nil {
 		panic(err)
 	}
-	img2, err := ebiten.NewImageFromImage(img, ebiten.FilterLinear)
-	if err != nil {
-		panic(err)
-	}
+	img2 := ebiten.NewImageFromImage(img)
 	defer img2.Dispose()
 	p.Target.DrawImage(img2, nil)
 }

@@ -25,7 +25,7 @@ import (
 	_ "github.com/qiniu/audio/wav"       // support wav/pcm
 	_ "github.com/qiniu/audio/wav/adpcm" // support wav/adpcm
 
-	"github.com/hajimehoshi/ebiten/audio"
+	"github.com/hajimehoshi/ebiten/v2/audio"
 
 	qaudio "github.com/qiniu/audio"
 )
@@ -65,10 +65,7 @@ func (p *soundMgr) addPlayer(sp *audio.Player, done chan bool) {
 }
 
 func (p *soundMgr) init() {
-	audioContext, err := audio.NewContext(defaultSampleRate)
-	if err != nil {
-		panic(err)
-	}
+	audioContext := audio.NewContext(defaultSampleRate)
 	p.audioContext = audioContext
 	p.players = make(map[*audio.Player]chan bool)
 }
@@ -131,7 +128,7 @@ func (p *soundMgr) play(source io.ReadCloser, wait ...bool) (err error) {
 		done = make(chan bool, 1)
 	}
 	p.addPlayer(sp, done)
-	err = sp.Play()
+	sp.Play()
 	if waitDone {
 		waitForChan(done)
 	}

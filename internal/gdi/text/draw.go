@@ -25,7 +25,7 @@ import (
 
 	"github.com/qiniu/x/ctype"
 
-	"github.com/hajimehoshi/ebiten"
+	"github.com/hajimehoshi/ebiten/v2"
 
 	"golang.org/x/image/font"
 	"golang.org/x/image/math/fixed"
@@ -72,7 +72,7 @@ func (p *faceCache) glyph(f font.Face, c rune) (dr image.Rectangle, mask *ebiten
 				if dr0.Dx() > 0 { // maybe is <space> rune
 					tmp := image.NewRGBA(dr0)
 					draw.DrawMask(tmp, dr0, image.White, image.Point{}, mask0, maskp0, draw.Over)
-					img, _ = ebiten.NewImageFromImage(tmp, ebiten.FilterNearest)
+					img = ebiten.NewImageFromImage(tmp)
 				}
 				g, ok = &glyphCache{dr: dr0, mask: img}, true
 				p.glyphs[c] = g

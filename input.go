@@ -19,7 +19,7 @@ package spx
 import (
 	"sync"
 
-	"github.com/hajimehoshi/ebiten"
+	"github.com/hajimehoshi/ebiten/v2"
 )
 
 type Key = ebiten.Key
@@ -97,7 +97,6 @@ const (
 	KeyKP7          Key = ebiten.KeyKP7
 	KeyKP8          Key = ebiten.KeyKP8
 	KeyKP9          Key = ebiten.KeyKP9
-	KeyKPAdd        Key = ebiten.KeyKPAdd
 	KeyKPDecimal    Key = ebiten.KeyKPDecimal
 	KeyKPDivide     Key = ebiten.KeyKPDivide
 	KeyKPEnter      Key = ebiten.KeyKPEnter

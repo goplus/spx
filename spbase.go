@@ -25,14 +25,10 @@ import (
 	_ "image/jpeg" // for image decode
 	_ "image/png"  // for image decode
 
-	"github.com/hajimehoshi/ebiten"
+	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/pkg/errors"
 
 	spxfs "github.com/goplus/spx/fs"
-)
-
-const (
-	defaultFilterMode = ebiten.FilterLinear
 )
 
 func toRadian(dir float64) float64 {
@@ -75,10 +71,7 @@ func (path imageLoaderByPath) load(fs spxfs.Dir, pt *imagePoint) (*ebiten.Image,
 		return nil, errors.Wrapf(err, "imageLoader: file `%s` is not an image", path)
 	}
 
-	ret, err := ebiten.NewImageFromImage(img, defaultFilterMode)
-	if err != nil {
-		return nil, errors.Wrapf(err, "imageLoader open `%s`: image is too big (or too small)", path)
-	}
+	ret := ebiten.NewImageFromImage(img)
 	return ret, nil
 }
 

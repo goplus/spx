@@ -23,7 +23,7 @@ import (
 	"sync"
 
 	"github.com/golang/freetype/truetype"
-	"github.com/hajimehoshi/ebiten/ebitenutil"
+	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"golang.org/x/image/font"
 	"golang.org/x/image/math/fixed"
 )

@@ -21,7 +21,7 @@ import (
 
 	"github.com/goplus/spx/internal/gdi"
 
-	"github.com/hajimehoshi/ebiten"
+	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/qiniu/x/objcache"
 
 	spxfs "github.com/goplus/spx/fs"
@@ -69,10 +69,7 @@ func (p *sprKey) get(sp *Sprite) *gdi.Sprite {
 
 func (p *sprKey) doGet(sp *Sprite) *gdi.Sprite {
 	w, h := sp.g.size()
-	img, err := ebiten.NewImage(w, h, defaultFilterMode)
-	if err != nil {
-		panic(err)
-	}
+	img := ebiten.NewImage(w, h)
 	defer img.Dispose()
 
 	p.drawOn(img, 0, 0, sp.g.fs)
@@ -142,10 +139,7 @@ func (p *spriteDrawInfo) draw(dc drawContext, ctx *Sprite) {
 }
 
 func (p *spriteDrawInfo) doDrawOn(dc drawContext, sp *gdi.Sprite) {
-	src, err := ebiten.NewImageFromImage(sp.Image(), defaultFilterMode)
-	if err != nil {
-		panic(err)
-	}
+	src := ebiten.NewImageFromImage(sp.Image())
 	defer src.Dispose()
 
 	op := new(ebiten.DrawImageOptions)
