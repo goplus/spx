@@ -964,7 +964,10 @@ func (p *Game) Play__0(media Sound, wait ...bool) {
 	if err != nil {
 		panic(err)
 	}
-	p.sounds.play(f, wait...)
+	err = p.sounds.play(f, wait...)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func (p *Game) StopAllSounds() {
