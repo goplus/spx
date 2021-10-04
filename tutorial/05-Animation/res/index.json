@@ -10,7 +10,7 @@
   ],
   "currentCostumeIndex": 0,
   "zorder": [
-    "SmallEnemy",
-    "Bullet"
+    "Bullet",
+    "SmallEnemy"
   ]
 }
