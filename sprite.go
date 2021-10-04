@@ -98,7 +98,7 @@ func (p *Sprite) init(base string, g *Game, name string, sprite *spriteConfig, g
 						panic("lookupSound: media not found")
 					}
 				}
-				g.playSound(media)
+				g.Play__0(media)
 			}
 			obj.goAnimate(ani.Wait, ani.From, ani.N, ani.Step, ani.Move)
 		}

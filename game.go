@@ -180,15 +180,6 @@ func getFieldPtr(v reflect.Value, i int) (name string, val interface{}) {
 	return tFld.Name, makeEmptyInterface(reflect.PtrTo(tFld.Type), word)
 }
 
-func spriterToGamer(spr Spriter) reflect.Value {
-	const indexGamer = 1
-	v := reflect.ValueOf(spr).Elem()
-	tFld := v.Type().Field(indexGamer)
-	word := unsafe.Pointer(v.Field(indexGamer).Addr().Pointer())
-	gPtr := makeEmptyInterface(reflect.PtrTo(tFld.Type), word)
-	return reflect.ValueOf(gPtr).Elem()
-}
-
 // emptyInterface is the header for an interface{} value.
 type emptyInterface struct {
 	typ  unsafe.Pointer
@@ -962,7 +953,10 @@ func (p *Game) loadSound(name string) (media Sound, err error) {
 	return
 }
 
-func (p *Game) playSound(media Sound, wait ...bool) {
+// Play func:
+//   Play(sound)
+//   Play(video) -- maybe
+func (p *Game) Play__0(media Sound, wait ...bool) {
 	if debugInstr {
 		log.Println("Play", media.Path, wait)
 	}
@@ -971,30 +965,6 @@ func (p *Game) playSound(media Sound, wait ...bool) {
 		panic(err)
 	}
 	p.sounds.play(f, wait...)
-}
-
-// Play func:
-//   Play(sound)
-//   Play(video) -- maybe
-func Gopt_Game_Play(game Gamer, media interface{}, wait ...bool) {
-	var vGame reflect.Value
-	if spr, ok := game.(Shape); ok {
-		vGame = spriterToGamer(spr)
-	} else {
-		vGame = reflect.ValueOf(game)
-	}
-	g := instance(vGame)
-	switch v := media.(type) {
-	case Sound:
-		g.playSound(v, wait...)
-		return
-	case string:
-		if m, ok := lookupSound(vGame, v); ok {
-			g.playSound(m, wait...)
-			return
-		}
-	}
-	panic("play: media not found")
 }
 
 func (p *Game) StopAllSounds() {
