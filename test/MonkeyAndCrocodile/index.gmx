@@ -2,6 +2,7 @@ var (
 	Monkey    Monkey
 	Crocodile Crocodile
 	chomp     Sound
+	clap      Sound
 )
 
 Monkey.setAnimation "think", obj => {
@@ -9,6 +10,7 @@ Monkey.setAnimation "think", obj => {
 }
 
 Monkey.setAnimation "clap", obj => {
+	play clap
 	obj.animate 0.05, 42, 26
 }
 
