@@ -205,6 +205,7 @@ type costumeConfig struct {
 type aniConfig struct {
 	Play string      `json:"play"`
 	Wait float64     `json:"wait"`
+	Move float64     `json:"move"`
 	From interface{} `json:"from"`
 	N    int         `json:"n"`
 	Step int         `json:"step"`

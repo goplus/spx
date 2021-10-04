@@ -15,3 +15,13 @@ onKey KeyDown, => {
 	nextCostume
 	say costumeIndex
 }
+
+onKey KeyLeft, => {
+	step -5
+	step 5
+}
+
+onKey KeyRight, => {
+	step 5
+	step -5
+}

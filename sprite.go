@@ -46,8 +46,9 @@ type Sprite struct {
 	scale         float64
 	direction     float64
 	rotationStyle RotationStyle
-	sayObj        *sayOrThinker
-	anis          map[string]func(*Sprite)
+
+	sayObj *sayOrThinker
+	anis   map[string]func(*Sprite)
 
 	penColor color.RGBA
 	penShade float64
@@ -81,14 +82,15 @@ func (p *Sprite) init(base string, g *Game, name string, sprite *spriteConfig) {
 	p.visible = sprite.Visible
 	p.isDraggable = sprite.IsDraggable
 
-	if sprite.Animations != nil {
-		p.anis = make(map[string]func(*Sprite))
-		for key, val := range sprite.Animations {
-			ani := val
-			p.anis[key] = func(obj *Sprite) {
-				// TODO: ani.Play
-				obj.goAnimate(ani.Wait, ani.From, ani.N, ani.Step)
-			}
+	if sprite.Animations == nil {
+		return
+	}
+	p.anis = make(map[string]func(*Sprite))
+	for key, val := range sprite.Animations {
+		// TODO: ani.Play
+		var ani = val
+		p.anis[key] = func(obj *Sprite) {
+			obj.goAnimate(ani.Wait, ani.From, ani.N, ani.Step, ani.Move)
 		}
 	}
 }
@@ -221,32 +223,24 @@ func (p *Sprite) PrevCostume() {
 
 // -----------------------------------------------------------------------------
 
-func (p *Sprite) goAnimate(secs float64, costume interface{}, n, step int) {
+func (p *Sprite) goAnimate(secs float64, costume interface{}, n, step int, move float64) {
 	p.goSetCostume(costume)
+	index := p.getCostumeIndex()
+	toMove := move != 0
 	if step == 0 {
 		step = 1
 	}
 	for i := 0; i < n; i++ {
 		p.g.Wait(secs)
-		p.goCostume(step)
+		index += step
+		p.setCostumeByIndex(index)
+		if toMove {
+			p.goMoveForward(move)
+		}
 	}
 }
 
-func (p *Sprite) Animate__0(secs float64, costume interface{}, n, step int) {
-	if debugInstr {
-		log.Println("Animation", secs, costume, n, step)
-	}
-	p.goAnimate(secs, costume, n, step)
-}
-
-func (p *Sprite) Animate__1(secs float64, costume interface{}, n int) {
-	if debugInstr {
-		log.Println("Animation", secs, costume, n)
-	}
-	p.goAnimate(secs, costume, n, 1)
-}
-
-func (p *Sprite) Animate__2(name string) {
+func (p *Sprite) Animate__0(name string) {
 	if debugInstr {
 		log.Println("==> Animation", name)
 	}
@@ -256,6 +250,27 @@ func (p *Sprite) Animate__2(name string) {
 	if debugInstr {
 		log.Println("==> End Animation", name)
 	}
+}
+
+func (p *Sprite) Animate__1(secs float64, costume interface{}, n int) {
+	if debugInstr {
+		log.Println("Animation", secs, costume, n)
+	}
+	p.goAnimate(secs, costume, n, 1, 0)
+}
+
+func (p *Sprite) Animate__2(secs float64, costume interface{}, n, step int) {
+	if debugInstr {
+		log.Println("Animation", secs, costume, n, step)
+	}
+	p.goAnimate(secs, costume, n, step, 0)
+}
+
+func (p *Sprite) Animate__3(secs float64, costume interface{}, n, step int, move float64) {
+	if debugInstr {
+		log.Println("Animation", secs, costume, n, step, move)
+	}
+	p.goAnimate(secs, costume, n, step, move)
 }
 
 func (p *Sprite) SetAnimation(name string, ani func(*Sprite)) {
