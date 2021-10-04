@@ -13,7 +13,7 @@
   "currentCostumeIndex": 0,
   "animations": {
     "sink": {
-      "play": "",
+      "play": "chomp",
       "wait": 0.05,
       "from": 0,
       "n": 4

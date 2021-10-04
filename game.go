@@ -89,18 +89,7 @@ type Game struct {
 type Spriter = Shape
 
 type Gamer interface {
-	StartLoad(resource string, cfg *Config) error
-	LoadSprite(sprite Spriter, name string) error
-	EndLoad(g reflect.Value) error
-	RunLoop(cfg *Config) error
-}
-
-func instance(game Gamer) *Game {
-	fld := reflect.ValueOf(game).Elem().FieldByName("Game")
-	if !fld.IsValid() {
-		log.Panicf("type %v doesn't has field spx.Game", reflect.TypeOf(game))
-	}
-	return fld.Addr().Interface().(*Game)
+	runLoop(cfg *Config) error
 }
 
 func (p *Game) Initialize() {
@@ -128,23 +117,23 @@ func Gopt_Game_Run(game Gamer, resource string, gameConf ...*Config) {
 		}
 		conf.FullScreen = *fullscreen
 	}
-	g := instance(game)
-	if err := g.StartLoad(resource, &conf); err != nil {
+	vPtr := reflect.ValueOf(game)
+	g := instance(vPtr)
+	if err := g.startLoad(resource, &conf); err != nil {
 		panic(err)
 	}
-	vPtr := reflect.ValueOf(game)
 	tPtr, v := vPtr.Type(), vPtr.Elem()
 	for i, n := 0, v.NumField(); i < n; i++ {
 		name, val := getFieldPtr(v, i)
 		switch fld := val.(type) {
 		case *Sound:
-			media, err := g.LoadSound(name)
+			media, err := g.loadSound(name)
 			if err != nil {
 				panic(err)
 			}
 			*fld = media
 		case Shape:
-			if err := g.LoadSprite(fld, name); err != nil {
+			if err := g.loadSprite(fld, name, vPtr); err != nil {
 				panic(err)
 			}
 			vFld := v.Field(i)
@@ -155,18 +144,49 @@ func Gopt_Game_Run(game Gamer, resource string, gameConf ...*Config) {
 			}
 		}
 	}
-	if err := g.EndLoad(v); err != nil {
+	if err := g.endLoad(v); err != nil {
 		panic(err)
 	}
-	if err := g.RunLoop(&conf); err != nil {
+	if err := g.runLoop(&conf); err != nil {
 		panic(err)
 	}
+}
+
+func lookupSound(gamer reflect.Value, name string) (Sound, bool) {
+	v := gamer.Elem()
+	for i, n := 0, v.NumField(); i < n; i++ {
+		nameFld, val := getFieldPtr(v, i)
+		if nameFld == name {
+			if m, ok := val.(*Sound); ok {
+				return *m, true
+			}
+			break
+		}
+	}
+	return nil, false
+}
+
+func instance(gamer reflect.Value) *Game {
+	fld := gamer.Elem().FieldByName("Game")
+	if !fld.IsValid() {
+		log.Panicf("type %v doesn't has field spx.Game", gamer.Type())
+	}
+	return fld.Addr().Interface().(*Game)
 }
 
 func getFieldPtr(v reflect.Value, i int) (name string, val interface{}) {
 	tFld := v.Type().Field(i)
 	word := unsafe.Pointer(v.Field(i).Addr().Pointer())
 	return tFld.Name, makeEmptyInterface(reflect.PtrTo(tFld.Type), word)
+}
+
+func spriterToGamer(spr Spriter) reflect.Value {
+	const indexGamer = 1
+	v := reflect.ValueOf(spr).Elem()
+	tFld := v.Type().Field(indexGamer)
+	word := unsafe.Pointer(v.Field(indexGamer).Addr().Pointer())
+	gPtr := makeEmptyInterface(reflect.PtrTo(tFld.Type), word)
+	return reflect.ValueOf(gPtr).Elem()
 }
 
 // emptyInterface is the header for an interface{} value.
@@ -225,7 +245,7 @@ type spriteConfig struct {
 	IsDraggable         bool                  `json:"isDraggable"`
 }
 
-func (p *Game) StartLoad(resource string, cfg *Config) error {
+func (p *Game) startLoad(resource string, cfg *Config) error {
 	if debugLoad {
 		log.Println("==> StartLoad", resource)
 	}
@@ -246,7 +266,7 @@ func (p *Game) StartLoad(resource string, cfg *Config) error {
 	return nil
 }
 
-func (p *Game) LoadSprite(sprite Spriter, name string) error {
+func (p *Game) loadSprite(sprite Spriter, name string, gamer reflect.Value) error {
 	if debugLoad {
 		log.Println("==> LoadSprite", name)
 	}
@@ -257,7 +277,7 @@ func (p *Game) LoadSprite(sprite Spriter, name string) error {
 		return err
 	}
 	base := spriteOf(sprite)
-	base.init(baseDir, p, name, &conf)
+	base.init(baseDir, p, name, &conf, gamer)
 	p.shapes[name] = sprite
 	return nil
 }
@@ -289,7 +309,7 @@ type initer interface {
 	Main()
 }
 
-func (p *Game) EndLoad(g reflect.Value) (err error) {
+func (p *Game) endLoad(g reflect.Value) (err error) {
 	if debugLoad {
 		log.Println("==> EndLoad")
 	}
@@ -344,7 +364,7 @@ type Config struct {
 	DontParseFlags     bool
 }
 
-func (p *Game) RunLoop(cfg *Config) (err error) {
+func (p *Game) runLoop(cfg *Config) (err error) {
 	if debugLoad {
 		log.Println("==> RunLoop")
 	}
@@ -929,7 +949,10 @@ type soundConfig struct {
 
 type Sound *soundConfig
 
-func (p *Game) LoadSound(name string) (media Sound, err error) {
+func (p *Game) loadSound(name string) (media Sound, err error) {
+	if debugLoad {
+		log.Println("==> LoadSound", name)
+	}
 	prefix := "sounds/" + name
 	media = new(soundConfig)
 	if err = loadJson(media, p.fs, prefix+"/index.json"); err != nil {
@@ -939,10 +962,7 @@ func (p *Game) LoadSound(name string) (media Sound, err error) {
 	return
 }
 
-// Play func:
-//   Play(sound)
-//   Play(video) -- maybe
-func (p *Game) Play__0(media Sound, wait ...bool) {
+func (p *Game) playSound(media Sound, wait ...bool) {
 	if debugInstr {
 		log.Println("Play", media.Path, wait)
 	}
@@ -951,6 +971,30 @@ func (p *Game) Play__0(media Sound, wait ...bool) {
 		panic(err)
 	}
 	p.sounds.play(f, wait...)
+}
+
+// Play func:
+//   Play(sound)
+//   Play(video) -- maybe
+func Gopt_Game_Play(game Gamer, media interface{}, wait ...bool) {
+	var vGame reflect.Value
+	if spr, ok := game.(Shape); ok {
+		vGame = spriterToGamer(spr)
+	} else {
+		vGame = reflect.ValueOf(game)
+	}
+	g := instance(vGame)
+	switch v := media.(type) {
+	case Sound:
+		g.playSound(v, wait...)
+		return
+	case string:
+		if m, ok := lookupSound(vGame, v); ok {
+			g.playSound(m, wait...)
+			return
+		}
+	}
+	panic("play: media not found")
 }
 
 func (p *Game) StopAllSounds() {

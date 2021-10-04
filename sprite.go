@@ -65,7 +65,7 @@ func (p *Sprite) Game() *Game {
 	return p.g
 }
 
-func (p *Sprite) init(base string, g *Game, name string, sprite *spriteConfig) {
+func (p *Sprite) init(base string, g *Game, name string, sprite *spriteConfig, gamer reflect.Value) {
 	if sprite.CostumeSet != nil {
 		p.baseObj.initWith(base, sprite.CostumeSet, sprite.CurrentCostumeIndex)
 	} else {
@@ -87,9 +87,19 @@ func (p *Sprite) init(base string, g *Game, name string, sprite *spriteConfig) {
 	}
 	p.anis = make(map[string]func(*Sprite))
 	for key, val := range sprite.Animations {
-		// TODO: ani.Play
 		var ani = val
+		var playSound = ani.Play != ""
+		var media Sound
 		p.anis[key] = func(obj *Sprite) {
+			if playSound {
+				if media == nil {
+					media, playSound = lookupSound(gamer, ani.Play)
+					if !playSound {
+						panic("lookupSound: media not found")
+					}
+				}
+				g.playSound(media)
+			}
 			obj.goAnimate(ani.Wait, ani.From, ani.N, ani.Step, ani.Move)
 		}
 	}
