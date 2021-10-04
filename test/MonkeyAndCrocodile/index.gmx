@@ -11,4 +11,4 @@ Monkey.setAnimation "clap", obj => {
 	obj.animate 0.05, 42, 26
 }
 
-run "res", {Title: "Costume Set (by Go+)"}
+run "res", {Title: "Monkey And Crocodile (by Go+)"}
