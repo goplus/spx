@@ -16,12 +16,15 @@ onKey KeyDown, => {
 	say costumeIndex
 }
 
-onKey KeyLeft, => {
+onKey KeyEnter, => {
+	step 5
 	step -5
+}
+
+onKey KeyLeft, => {
 	step 5
 }
 
 onKey KeyRight, => {
-	step 5
 	step -5
 }
