@@ -240,6 +240,7 @@ func (p *Sprite) OnCloned__1(onCloned func()) {
 type MovingInfo struct {
 	OldX, OldY float64
 	NewX, NewY float64
+	Obj        *Sprite
 }
 
 func (p *Sprite) OnMoving(onMoving func(mi *MovingInfo)) {
@@ -464,7 +465,7 @@ func (p *Sprite) DistanceTo(obj interface{}) float64 {
 
 func (p *Sprite) doMoveTo(x, y float64) {
 	if p.hasOnMoving {
-		p.doWhenMoving(p, &MovingInfo{OldX: p.x, OldY: p.y, NewX: x, NewY: y})
+		p.doWhenMoving(p, &MovingInfo{OldX: p.x, OldY: p.y, NewX: x, NewY: y, Obj: p})
 	}
 	if p.isPenDown {
 		p.g.movePen(p, x, y)
