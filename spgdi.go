@@ -139,7 +139,11 @@ func (p *spriteDrawInfo) draw(dc drawContext, ctx *Sprite) {
 }
 
 func (p *spriteDrawInfo) doDrawOn(dc drawContext, sp *gdi.Sprite) {
-	src := ebiten.NewImageFromImage(sp.Image())
+	img := sp.Image()
+	if img.Rect.Empty() {
+		return
+	}
+	src := ebiten.NewImageFromImage(img)
 	defer src.Dispose()
 
 	op := new(ebiten.DrawImageOptions)

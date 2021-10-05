@@ -1,0 +1,15 @@
+{
+  "costumeSet": {
+    "bitmapResolution": 1,
+    "path": "banana.png",
+    "nx": 58
+  },
+  "currentCostumeIndex": 35,
+  "heading": 90,
+  "isDraggable": false,
+  "rotationStyle": "normal",
+  "size": 0.95,
+  "visible": true,
+  "x": -100,
+  "y": -21
+}
