@@ -1,9 +1,9 @@
 onKey KeyUp, => {
 	prevCostume
-	say costumeIndex
+	say costumeIndex, 0.5
 }
 
 onKey KeyDown, => {
 	nextCostume
-	say costumeIndex
+	say costumeIndex, 0.5
 }

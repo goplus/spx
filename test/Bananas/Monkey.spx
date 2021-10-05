@@ -1,0 +1,3 @@
+onClick => {
+    say bananas[1].costumeIndex, 1
+}
