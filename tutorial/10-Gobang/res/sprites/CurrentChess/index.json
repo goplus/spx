@@ -19,8 +19,8 @@
   "heading": 90,
   "isDraggable": false,
   "rotationStyle": "normal",
-  "size": 0.15000000000000024,
+  "size": 0.15,
   "visible": false,
-  "x": 35.69999999999999,
-  "y": -18
+  "x": 0,
+  "y": 0
 }

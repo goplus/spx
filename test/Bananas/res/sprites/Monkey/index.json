@@ -5,10 +5,10 @@
     "nx": 96
   },
   "currentCostumeIndex": 0,
-  "heading": 120,
+  "heading": 90,
   "isDraggable": false,
   "rotationStyle": "normal",
-  "size": 0.95,
+  "size": 1,
   "visible": true,
   "x": 100,
   "y": 50
