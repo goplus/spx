@@ -55,15 +55,20 @@ type Sprite struct {
 	penHue   float64
 	penWidth float64
 
+	visible     bool
 	isCloned    bool
 	isPenDown   bool
-	isStopped   bool
 	isDraggable bool
 
-	visible bool
+	isStopped bool
+	isDying   bool
 
 	hasOnMoving bool
 	hasOnCloned bool
+}
+
+func (p *Sprite) SetDying() { // dying: visible but can't be touched
+	p.isDying = true
 }
 
 func (p *Sprite) Stopped() bool {
@@ -88,8 +93,8 @@ func (p *Sprite) init(base string, g *Game, name string, sprite *spriteConfig, g
 	p.direction = sprite.Heading
 	p.rotationStyle = toRotationStyle(sprite.RotationStyle)
 
-	p.isDraggable = sprite.IsDraggable
 	p.visible = sprite.Visible
+	p.isDraggable = sprite.IsDraggable
 
 	if sprite.Animations == nil {
 		return
@@ -139,12 +144,13 @@ func (p *Sprite) InitFrom(src *Sprite) {
 	p.penHue = src.penHue
 	p.penWidth = src.penWidth
 
-	p.isDraggable = src.isDraggable
-	p.isStopped = false
+	p.visible = src.visible
 	p.isCloned = true
 	p.isPenDown = src.isPenDown
+	p.isDraggable = src.isDraggable
 
-	p.visible = src.visible
+	p.isStopped = false
+	p.isDying = false
 
 	p.hasOnMoving = false
 	p.hasOnCloned = false
@@ -699,6 +705,9 @@ func (p *Sprite) TouchingColor(color Color) bool {
 //   Touching(spx.Mouse)
 //   Touching(spx.Edge)
 func (p *Sprite) Touching(obj interface{}, ani ...string) bool {
+	if !p.visible || p.isDying {
+		return false
+	}
 	switch v := obj.(type) {
 	case string:
 		if o := p.g.touchingSpriteBy(p, v); o != nil {
@@ -722,6 +731,9 @@ func (p *Sprite) Touching(obj interface{}, ani ...string) bool {
 }
 
 func touchingSprite(dst, src *Sprite) bool {
+	if !src.visible || src.isDying {
+		return false
+	}
 	sp1, pt1 := dst.getGdiSprite()
 	sp2, pt2 := src.getGdiSprite()
 	return gdi.Touching(sp1, pt1, sp2, pt2)

@@ -643,7 +643,7 @@ func (p *Game) touchingSpriteBy(dst *Sprite, name string) *Sprite {
 
 	for _, item := range p.items {
 		if sp, ok := item.(*Sprite); ok && sp != dst {
-			if sp.name == name {
+			if sp.name == name && (sp.visible && !sp.isDying) {
 				sp2, pt2 := sp.getGdiSprite()
 				if gdi.Touching(sp1, pt1, sp2, pt2) {
 					return sp
