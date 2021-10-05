@@ -20,7 +20,6 @@ import (
 	"image"
 	"math"
 	"strconv"
-	"sync"
 
 	_ "image/jpeg" // for image decode
 	_ "image/png"  // for image decode
@@ -78,16 +77,12 @@ func (path imageLoaderByPath) load(fs spxfs.Dir, pt *imagePoint) (*ebiten.Image,
 // -------------------------------------------------------------------------------------
 
 type delayloadImage struct {
-	mutex  sync.Mutex
 	cache  *ebiten.Image
 	pt     imagePoint
 	loader func(fs spxfs.Dir, pt *imagePoint) (*ebiten.Image, error)
 }
 
 func (p *delayloadImage) ensure(fs spxfs.Dir) {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	if p.cache == nil {
 		var err error
 		if p.cache, err = p.loader(fs, &p.pt); err != nil {
@@ -97,7 +92,6 @@ func (p *delayloadImage) ensure(fs spxfs.Dir) {
 }
 
 type costumeSetImage struct {
-	mutex  sync.Mutex
 	cache  *ebiten.Image
 	loader func(fs spxfs.Dir, pt *imagePoint) (*ebiten.Image, error)
 	width  int
@@ -105,9 +99,6 @@ type costumeSetImage struct {
 }
 
 func (p *costumeSetImage) ensure(fs spxfs.Dir) {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	if p.cache == nil {
 		var err error
 		if p.cache, err = p.loader(fs, nil); err != nil {
