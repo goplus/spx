@@ -147,11 +147,27 @@ func applyFloat64(out *float64, in interface{}) {
 	}
 }
 
-func applySprite(out reflect.Value, sprite Spriter, v specsp) *Sprite {
+func applySpriteProps(dest *Sprite, v specsp) {
+	applyFloat64(&dest.x, v["x"])
+	applyFloat64(&dest.y, v["y"])
+	applyFloat64(&dest.scale, v["size"])
+	applyFloat64(&dest.direction, v["heading"])
+	if visible, ok := v["visible"]; ok {
+		dest.visible = visible.(bool)
+	}
+	if style, ok := v["rotationStyle"]; ok {
+		dest.rotationStyle = toRotationStyle(style.(string))
+	}
+	if idx, ok := v["currentCostumeIndex"]; ok {
+		dest.currentCostumeIndex = int(idx.(float64))
+	}
+}
+
+func applySprite(out reflect.Value, sprite Spriter, v specsp) (*Sprite, interface{}) {
 	src := spriteOf(sprite)
 	in := reflect.ValueOf(sprite).Elem()
 	outPtr := out.Addr().Interface()
-	return cloneSprite(out, outPtr, in, src, v)
+	return cloneSprite(out, outPtr, in, src, v), outPtr
 }
 
 func cloneSprite(out reflect.Value, outPtr interface{}, in reflect.Value, src *Sprite, v specsp) *Sprite {
@@ -170,21 +186,8 @@ func cloneSprite(out reflect.Value, outPtr interface{}, in reflect.Value, src *S
 		}
 	}()
 	if v != nil {
-		applyFloat64(&dest.x, v["x"])
-		applyFloat64(&dest.y, v["y"])
-		applyFloat64(&dest.scale, v["size"])
-		applyFloat64(&dest.direction, v["heading"])
-		if visible, ok := v["visible"]; ok {
-			dest.visible = visible.(bool)
-		}
-		if style, ok := v["rotationStyle"]; ok {
-			dest.rotationStyle = toRotationStyle(style.(string))
-		}
-		if idx, ok := v["currentCostumeIndex"]; ok {
-			dest.currentCostumeIndex = int(idx.(float64))
-		}
-	}
-	if ini, ok := outPtr.(initer); ok {
+		applySpriteProps(dest, v)
+	} else if ini, ok := outPtr.(initer); ok {
 		ini.Main()
 	}
 	return dest

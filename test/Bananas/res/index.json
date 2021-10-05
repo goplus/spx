@@ -1,30 +1,35 @@
 {
-    "costumes": [
-      {
-        "bitmapResolution": 1,
-        "name": "backdrop1",
-        "path": "lake.jpg",
-        "x": 240,
-        "y": 180
-      }
-    ],
-    "currentCostumeIndex": 0,
-    "zorder": [
-      {
-        "type": "sprites",
-        "target": "bananas",
-        "items": [
-          {
-            "x": -100,
-            "y": -21
-          },
-          {
-            "currentCostumeIndex": 46,
-            "x": 50,
-            "y": -21
-          }
-        ]
-      },
-      "Monkey"
-    ]
-  }
+  "costumes": [
+    {
+      "bitmapResolution": 1,
+      "name": "backdrop1",
+      "path": "lake.jpg",
+      "x": 240,
+      "y": 180
+    }
+  ],
+  "currentCostumeIndex": 0,
+  "zorder": [
+    {
+      "type": "sprites",
+      "target": "bananas",
+      "items": [
+        {
+          "x": -100,
+          "y": -21
+        },
+        {
+          "currentCostumeIndex": 46,
+          "x": 50,
+          "y": -21
+        }
+      ]
+    },
+    {
+      "type": "sprite",
+      "target": "monkey",
+      "x": 0,
+      "y": 50
+    }
+  ]
+}

@@ -325,7 +325,7 @@ func (p *Game) endLoad(g reflect.Value) (err error) {
 	inits := make([]initer, 0, len(proj.Zorder))
 	for _, v := range proj.Zorder {
 		if name, ok := v.(string); !ok { // not a sprite
-			p.addSpecialShape(g, v.(specsp))
+			inits = p.addSpecialShape(g, v.(specsp), inits)
 		} else if sp, ok := p.shapes[name]; ok {
 			p.addShape(spriteOf(sp))
 			if ini, ok := sp.(initer); ok {
@@ -345,17 +345,35 @@ func (p *Game) endLoad(g reflect.Value) (err error) {
 
 type specsp = map[string]interface{}
 
-func (p *Game) addSpecialShape(g reflect.Value, v specsp) {
+func (p *Game) addSpecialShape(g reflect.Value, v specsp, inits []initer) []initer {
 	switch typ := v["type"].(string); typ {
 	case "stageMonitor":
 		if sm, err := newStageMonitor(g, v); err == nil {
 			p.addShape(sm)
 		}
 	case "sprites":
-		p.addStageSprites(g, v)
+		return p.addStageSprites(g, v, inits)
+	case "sprite":
+		return p.addStageSprite(g, v, inits)
 	default:
 		panic("addSpecialShape: unknown shape - " + typ)
 	}
+	return inits
+}
+
+func (p *Game) addStageSprite(g reflect.Value, v specsp, inits []initer) []initer {
+	target := v["target"].(string)
+	if val := findFieldPtr(g, target, 0); val != nil {
+		if sp, ok := val.(Shape); ok {
+			dest := spriteOf(sp)
+			applySpriteProps(dest, v)
+			p.addShape(dest)
+			if ini, ok := val.(initer); ok {
+				inits = append(inits, ini)
+			}
+		}
+	}
+	return inits
 }
 
 /*
@@ -374,7 +392,7 @@ func (p *Game) addSpecialShape(g reflect.Value, v specsp) {
      ]
    }
 */
-func (p *Game) addStageSprites(g reflect.Value, v specsp) {
+func (p *Game) addStageSprites(g reflect.Value, v specsp, inits []initer) []initer {
 	target := v["target"].(string)
 	if val := findFieldPtr(g, target, 0); val != nil {
 		fldSlice := reflect.ValueOf(val).Elem()
@@ -394,11 +412,14 @@ func (p *Game) addStageSprites(g reflect.Value, v specsp) {
 				n := len(items)
 				newSlice := reflect.MakeSlice(typSlice, n, n)
 				for i := 0; i < n; i++ {
-					dest := applySprite(newSlice.Index(i), spr, items[i].(specsp))
+					dest, sp := applySprite(newSlice.Index(i), spr, items[i].(specsp))
 					p.addShape(dest)
+					if ini, ok := sp.(initer); ok {
+						inits = append(inits, ini)
+					}
 				}
 				fldSlice.Set(newSlice)
-				return
+				return inits
 			}
 		}
 	}

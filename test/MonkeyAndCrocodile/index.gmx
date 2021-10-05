@@ -1,24 +1,24 @@
 var (
-	Monkey    Monkey
-	Crocodile Crocodile
+	monkey    Monkey
+	crocodile Crocodile
 	chomp     Sound
 	clap      Sound
 )
 
-Monkey.setAnimation "think", obj => {
+monkey.setAnimation "think", obj => {
 	obj.animate 0.05, 10, 32
 }
 
-Monkey.setAnimation "clap", obj => {
+monkey.setAnimation "clap", obj => {
 	play clap
 	obj.animate 0.03, 42, 26
 }
 
-Monkey.setAnimation "forward", obj => {
+monkey.setAnimation "forward", obj => {
 	obj.animate 0.02, 0, 8, 1, -2.0
 }
 
-Monkey.setAnimation "backward", obj => {
+monkey.setAnimation "backward", obj => {
 	obj.animate 0.02, 0, 8, 1, 2.0
 }
 
