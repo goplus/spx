@@ -376,9 +376,37 @@ func (p *Game) addSpecialShape(g reflect.Value, v specsp) {
 */
 func (p *Game) addStageSprites(g reflect.Value, v specsp) {
 	target := v["target"].(string)
-	_ = target
-	panic("todo: addStageSprites")
+	if val := findFieldPtr(g, target, 0); val != nil {
+		fldSlice := reflect.ValueOf(val).Elem()
+		if fldSlice.Kind() == reflect.Slice {
+			typSlice := fldSlice.Type()
+			if typItem := typSlice.Elem(); reflect.PtrTo(typItem).Implements(tyShape) {
+				name := typItem.Name()
+				spr, ok := p.shapes[name]
+				if !ok {
+					spr = reflect.New(typItem).Interface().(Spriter)
+					if err := p.loadSprite(spr, name, g); err != nil {
+						panic(err)
+					}
+					p.shapes[name] = spr
+				}
+				items := v["items"].([]interface{})
+				n := len(items)
+				newSlice := reflect.MakeSlice(typSlice, n, n)
+				for i := 0; i < n; i++ {
+					applySprite(newSlice.Field(i), spr, items[i].(specsp))
+				}
+				fldSlice.Set(newSlice)
+				return
+			}
+		}
+	}
+	panic("addStageSprites: unexpected")
 }
+
+var (
+	tyShape = reflect.TypeOf((*Shape)(nil)).Elem()
+)
 
 // -----------------------------------------------------------------------------
 

@@ -141,21 +141,21 @@ func (p *Sprite) InitFrom(src *Sprite) {
 	p.isPenDown = src.isPenDown
 }
 
-func Gopt_Sprite_Clone__0(sprite Spriter) {
-	Gopt_Sprite_Clone__1(sprite, nil)
+func applyFloat64(out *float64, in interface{}) {
+	if in != nil {
+		*out = in.(float64)
+	}
 }
 
-func Gopt_Sprite_Clone__1(sprite Spriter, data interface{}) {
+func applySprite(out reflect.Value, sprite Spriter, v specsp) {
 	src := spriteOf(sprite)
-	if debugInstr {
-		log.Println("Clone", src.name)
-	}
-
 	in := reflect.ValueOf(sprite).Elem()
-	v := reflect.New(in.Type())
-	out, outPtr := v.Elem(), v.Interface()
-	dest := spriteOf(outPtr.(Shape))
+	outPtr := out.Addr().Interface()
+	cloneSprite(out, outPtr, in, src, v)
+}
 
+func cloneSprite(out reflect.Value, outPtr interface{}, in reflect.Value, src *Sprite, v specsp) *Sprite {
+	dest := spriteOf(outPtr.(Shape))
 	func() {
 		src.mutex.Lock()
 		defer src.mutex.Unlock()
@@ -169,10 +169,38 @@ func Gopt_Sprite_Clone__1(sprite Spriter, data interface{}) {
 			}
 		}
 	}()
+	if v != nil {
+		applyFloat64(&dest.x, v["x"])
+		applyFloat64(&dest.y, v["y"])
+		applyFloat64(&dest.scale, v["size"])
+		applyFloat64(&dest.direction, v["heading"])
+		if visible, ok := v["visible"]; ok {
+			dest.visible = visible.(bool)
+		}
+		if style, ok := v["rotationStyle"]; ok {
+			dest.rotationStyle = toRotationStyle(style.(string))
+		}
+	}
 	if ini, ok := outPtr.(initer); ok {
 		ini.Main()
 	}
 	src.g.addClonedShape(src, dest)
+	return dest
+}
+
+func Gopt_Sprite_Clone__0(sprite Spriter) {
+	Gopt_Sprite_Clone__1(sprite, nil)
+}
+
+func Gopt_Sprite_Clone__1(sprite Spriter, data interface{}) {
+	src := spriteOf(sprite)
+	if debugInstr {
+		log.Println("Clone", src.name)
+	}
+	in := reflect.ValueOf(sprite).Elem()
+	v := reflect.New(in.Type())
+	out, outPtr := v.Elem(), v.Interface()
+	dest := cloneSprite(out, outPtr, in, src, nil)
 	dest.doWhenCloned(dest, data)
 }
 
