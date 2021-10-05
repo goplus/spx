@@ -27,7 +27,7 @@
     },
     {
       "type": "sprite",
-      "target": "monkey",
+      "target": "Monkey",
       "x": 0,
       "y": 50
     }
