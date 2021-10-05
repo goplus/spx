@@ -12,7 +12,7 @@
   "zorder": [
     {
       "type": "sprites",
-      "target": "bananas",
+      "target": "Bananas",
       "items": [
         {
           "x": -100,
