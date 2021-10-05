@@ -187,6 +187,7 @@ func cloneSprite(out reflect.Value, outPtr interface{}, in reflect.Value, src *S
 	}()
 	if v != nil {
 		applySpriteProps(dest, v)
+		dest.isCloned = false
 	} else if ini, ok := outPtr.(initer); ok {
 		ini.Main()
 	}
