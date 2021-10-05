@@ -70,7 +70,7 @@ func (p *Sprite) Stopped() bool {
 	return p.isStopped
 }
 
-func (p *Sprite) Game() *Game {
+func (p *Sprite) Parent() *Game {
 	return p.g
 }
 

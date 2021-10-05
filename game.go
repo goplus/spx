@@ -121,8 +121,7 @@ func Gopt_Game_Run(game Gamer, resource string, gameConf ...*Config) {
 		}
 		conf.FullScreen = *fullscreen
 	}
-	vPtr := reflect.ValueOf(game)
-	tPtr, v := vPtr.Type(), vPtr.Elem()
+	v := reflect.ValueOf(game).Elem()
 	g := instance(v)
 	if err := g.startLoad(resource, &conf); err != nil {
 		panic(err)
@@ -139,12 +138,6 @@ func Gopt_Game_Run(game Gamer, resource string, gameConf ...*Config) {
 		case Shape:
 			if err := g.loadSprite(fld, name, v); err != nil {
 				panic(err)
-			}
-			vFld := v.Field(i)
-			if vFld.NumField() > 1 {
-				if fldSub := vFld.Field(1); fldSub.Type() == tPtr {
-					*(*uintptr)(unsafe.Pointer(fldSub.Addr().Pointer())) = vPtr.Pointer()
-				}
 			}
 		}
 	}
@@ -279,18 +272,21 @@ func (p *Game) loadSprite(sprite Spriter, name string, gamer reflect.Value) erro
 	if err != nil {
 		return err
 	}
-	base := spriteOf(sprite)
+	//
+	// init sprite (field 0)
+	vSpr := reflect.ValueOf(sprite).Elem()
+	base := vSpr.Field(0).Addr().Interface().(*Sprite)
 	base.init(baseDir, p, name, &conf, gamer)
 	p.shapes[name] = sprite
+	//
+	// init gamer pointer (field 1)
+	*(*uintptr)(unsafe.Pointer(vSpr.Field(1).Addr().Pointer())) = gamer.Addr().Pointer()
 	return nil
 }
 
 func spriteOf(sprite Spriter) *Sprite {
-	fld := reflect.ValueOf(sprite).Elem().FieldByName("Sprite")
-	if !fld.IsValid() {
-		log.Panicf("type %v doesn't has field spx.Sprite", reflect.TypeOf(sprite))
-	}
-	return fld.Addr().Interface().(*Sprite)
+	vSpr := reflect.ValueOf(sprite).Elem()
+	return vSpr.Field(0).Addr().Interface().(*Sprite)
 }
 
 func loadJson(ret interface{}, fs spxfs.Dir, file string) (err error) {
