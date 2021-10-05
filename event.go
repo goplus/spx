@@ -77,6 +77,7 @@ type eventSinkMgr struct {
 	allWhenSceneStart *eventSink
 	allWhenCloned     *eventSink
 	allWhenClick      *eventSink
+	allWhenMoving     *eventSink
 	calledStart       bool
 }
 
@@ -90,6 +91,7 @@ func (p *eventSinkMgr) doDeleteClone(this interface{}) {
 	p.allWhenSceneStart = p.allWhenSceneStart.doDeleteClone(this)
 	p.allWhenCloned = p.allWhenCloned.doDeleteClone(this)
 	p.allWhenClick = p.allWhenClick.doDeleteClone(this)
+	p.allWhenMoving = p.allWhenMoving.doDeleteClone(this)
 }
 
 func (p *eventSinkMgr) doWhenStart() {
@@ -118,9 +120,17 @@ func (p *eventSinkMgr) doWhenCloned(this threadObj, data interface{}) {
 	p.mutex.Lock()
 	p.allWhenCloned.asyncCall(true, nil, this, func(ev *eventSink) {
 		if debugEvent {
-			log.Println("==> onCloned", nameOf(ev.pthis))
+			log.Println("==> onCloned", nameOf(this))
 		}
 		ev.sink.(func(interface{}))(data)
+	})
+	p.mutex.Unlock()
+}
+
+func (p *eventSinkMgr) doWhenMoving(this threadObj, mi *MovingInfo) {
+	p.mutex.Lock()
+	p.allWhenMoving.asyncCall(true, nil, this, func(ev *eventSink) {
+		ev.sink.(func(*MovingInfo))(mi)
 	})
 	p.mutex.Unlock()
 }
@@ -129,7 +139,7 @@ func (p *eventSinkMgr) doWhenClick(this threadObj) {
 	p.mutex.Lock()
 	p.allWhenClick.asyncCall(false, nil, this, func(ev *eventSink) {
 		if debugEvent {
-			log.Println("==> onClick", nameOf(ev.pthis))
+			log.Println("==> onClick", nameOf(this))
 		}
 		ev.sink.(func())()
 	})
@@ -217,24 +227,6 @@ func (ss *eventSinks) OnClick(onClick func()) {
 			return data == pthis
 		},
 	}
-}
-
-func (ss *eventSinks) OnCloned__0(onCloned func(data interface{})) {
-	pthis := ss.pthis
-	ss.allWhenCloned = &eventSink{
-		prev:  ss.allWhenCloned,
-		pthis: pthis,
-		sink:  onCloned,
-		cond: func(data interface{}) bool {
-			return data == pthis
-		},
-	}
-}
-
-func (ss *eventSinks) OnCloned__1(onCloned func()) {
-	ss.OnCloned__0(func(interface{}) {
-		onCloned()
-	})
 }
 
 func (ss *eventSinks) OnAnyKey(onKey func(key Key)) {

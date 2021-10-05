@@ -28,3 +28,7 @@ onKey KeyLeft, => {
 onKey KeyRight, => {
 	step -5
 }
+
+onMoving mi => {
+	say sprintf("(%.0f, %.0f) => (%.0f, %.0f)", mi.oldX, mi.oldY, mi.newX, mi.newY)
+}

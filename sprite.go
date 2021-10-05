@@ -55,10 +55,15 @@ type Sprite struct {
 	penHue   float64
 	penWidth float64
 
-	visible   bool
-	isCloned  bool
-	isPenDown bool
-	isStopped bool
+	isCloned    bool
+	isPenDown   bool
+	isStopped   bool
+	isDraggable bool
+
+	visible bool
+
+	hasOnMoving bool
+	hasOnCloned bool
 }
 
 func (p *Sprite) Stopped() bool {
@@ -83,8 +88,8 @@ func (p *Sprite) init(base string, g *Game, name string, sprite *spriteConfig, g
 	p.direction = sprite.Heading
 	p.rotationStyle = toRotationStyle(sprite.RotationStyle)
 
+	p.isDraggable = sprite.IsDraggable
 	p.visible = sprite.Visible
-	// p.isDraggable = sprite.IsDraggable
 
 	if sprite.Animations == nil {
 		return
@@ -134,11 +139,15 @@ func (p *Sprite) InitFrom(src *Sprite) {
 	p.penHue = src.penHue
 	p.penWidth = src.penWidth
 
-	p.visible = src.visible
-	// p.isDraggable = src.isDraggable
+	p.isDraggable = src.isDraggable
 	p.isStopped = false
 	p.isCloned = true
 	p.isPenDown = src.isPenDown
+
+	p.visible = src.visible
+
+	p.hasOnMoving = false
+	p.hasOnCloned = false
 }
 
 func applyFloat64(out *float64, in interface{}) {
@@ -208,7 +217,44 @@ func Gopt_Sprite_Clone__1(sprite Spriter, data interface{}) {
 	out, outPtr := v.Elem(), v.Interface()
 	dest := cloneSprite(out, outPtr, in, src, nil)
 	src.g.addClonedShape(src, dest)
-	dest.doWhenCloned(dest, data)
+	if dest.hasOnCloned {
+		dest.doWhenCloned(dest, data)
+	}
+}
+
+func (p *Sprite) OnCloned__0(onCloned func(data interface{})) {
+	p.hasOnCloned = true
+	p.allWhenCloned = &eventSink{
+		prev:  p.allWhenCloned,
+		pthis: p,
+		sink:  onCloned,
+		cond: func(data interface{}) bool {
+			return data == p
+		},
+	}
+}
+
+func (p *Sprite) OnCloned__1(onCloned func()) {
+	p.OnCloned__0(func(interface{}) {
+		onCloned()
+	})
+}
+
+type MovingInfo struct {
+	OldX, OldY float64
+	NewX, NewY float64
+}
+
+func (p *Sprite) OnMoving(onMoving func(mi *MovingInfo)) {
+	p.hasOnMoving = true
+	p.allWhenMoving = &eventSink{
+		prev:  p.allWhenMoving,
+		pthis: p,
+		sink:  onMoving,
+		cond: func(data interface{}) bool {
+			return data == p
+		},
+	}
 }
 
 func (p *Sprite) Destroy() { // delete this clone
@@ -445,6 +491,9 @@ func (p *Sprite) DistanceTo(obj interface{}) float64 {
 }
 
 func (p *Sprite) doMoveTo(x, y float64) {
+	if p.hasOnMoving {
+		p.doWhenMoving(p, &MovingInfo{OldX: p.x, OldY: p.y, NewX: x, NewY: y})
+	}
 	if p.isPenDown {
 		p.g.movePen(p, x, y)
 	}
