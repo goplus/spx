@@ -394,7 +394,8 @@ func (p *Game) addStageSprites(g reflect.Value, v specsp) {
 				n := len(items)
 				newSlice := reflect.MakeSlice(typSlice, n, n)
 				for i := 0; i < n; i++ {
-					applySprite(newSlice.Field(i), spr, items[i].(specsp))
+					dest := applySprite(newSlice.Index(i), spr, items[i].(specsp))
+					p.addShape(dest)
 				}
 				fldSlice.Set(newSlice)
 				return

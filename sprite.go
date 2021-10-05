@@ -147,11 +147,11 @@ func applyFloat64(out *float64, in interface{}) {
 	}
 }
 
-func applySprite(out reflect.Value, sprite Spriter, v specsp) {
+func applySprite(out reflect.Value, sprite Spriter, v specsp) *Sprite {
 	src := spriteOf(sprite)
 	in := reflect.ValueOf(sprite).Elem()
 	outPtr := out.Addr().Interface()
-	cloneSprite(out, outPtr, in, src, v)
+	return cloneSprite(out, outPtr, in, src, v)
 }
 
 func cloneSprite(out reflect.Value, outPtr interface{}, in reflect.Value, src *Sprite, v specsp) *Sprite {
@@ -184,7 +184,6 @@ func cloneSprite(out reflect.Value, outPtr interface{}, in reflect.Value, src *S
 	if ini, ok := outPtr.(initer); ok {
 		ini.Main()
 	}
-	src.g.addClonedShape(src, dest)
 	return dest
 }
 
@@ -201,6 +200,7 @@ func Gopt_Sprite_Clone__1(sprite Spriter, data interface{}) {
 	v := reflect.New(in.Type())
 	out, outPtr := v.Elem(), v.Interface()
 	dest := cloneSprite(out, outPtr, in, src, nil)
+	src.g.addClonedShape(src, dest)
 	dest.doWhenCloned(dest, data)
 }
 

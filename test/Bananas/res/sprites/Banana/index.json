@@ -4,7 +4,7 @@
     "path": "banana.png",
     "nx": 58
   },
-  "currentCostumeIndex": 35,
+  "currentCostumeIndex": 0,
   "heading": 90,
   "isDraggable": false,
   "rotationStyle": "normal",
