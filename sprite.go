@@ -558,6 +558,10 @@ func (p *Sprite) SetXYpos(x, y float64) {
 	p.doMoveTo(x, y)
 }
 
+func (p *Sprite) ChangeXYpos(dx, dy float64) {
+	p.doMoveTo(p.x+dx, p.y+dy)
+}
+
 func (p *Sprite) Xpos() float64 {
 	return p.x
 }
