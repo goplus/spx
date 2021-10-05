@@ -71,8 +71,8 @@ type Game struct {
 
 	sounds soundMgr
 	turtle turtleCanvas
-	shapes map[string]Spriter
-	items  []Shape
+	shapes map[string]Spriter // sprite prototypes
+	items  []Shape            // sprites on stage
 
 	input  inputMgr
 	events chan event
@@ -122,11 +122,11 @@ func Gopt_Game_Run(game Gamer, resource string, gameConf ...*Config) {
 		conf.FullScreen = *fullscreen
 	}
 	vPtr := reflect.ValueOf(game)
-	g := instance(vPtr)
+	tPtr, v := vPtr.Type(), vPtr.Elem()
+	g := instance(v)
 	if err := g.startLoad(resource, &conf); err != nil {
 		panic(err)
 	}
-	tPtr, v := vPtr.Type(), vPtr.Elem()
 	for i, n := 0, v.NumField(); i < n; i++ {
 		name, val := getFieldPtr(v, i)
 		switch fld := val.(type) {
@@ -137,7 +137,7 @@ func Gopt_Game_Run(game Gamer, resource string, gameConf ...*Config) {
 			}
 			*fld = media
 		case Shape:
-			if err := g.loadSprite(fld, name, vPtr); err != nil {
+			if err := g.loadSprite(fld, name, v); err != nil {
 				panic(err)
 			}
 			vFld := v.Field(i)
@@ -156,32 +156,39 @@ func Gopt_Game_Run(game Gamer, resource string, gameConf ...*Config) {
 	}
 }
 
-func lookupSound(gamer reflect.Value, name string) (Sound, bool) {
-	v := gamer.Elem()
-	for i, n := 0, v.NumField(); i < n; i++ {
-		nameFld, val := getFieldPtr(v, i)
-		if nameFld == name {
-			if m, ok := val.(*Sound); ok {
-				return *m, true
-			}
-			break
-		}
-	}
-	return nil, false
-}
-
 func instance(gamer reflect.Value) *Game {
-	fld := gamer.Elem().FieldByName("Game")
+	fld := gamer.FieldByName("Game")
 	if !fld.IsValid() {
 		log.Panicf("type %v doesn't has field spx.Game", gamer.Type())
 	}
 	return fld.Addr().Interface().(*Game)
 }
 
+func lookupSound(gamer reflect.Value, name string) (Sound, bool) {
+	if val := findFieldPtr(gamer, name, 0); val != nil {
+		if m, ok := val.(*Sound); ok {
+			return *m, true
+		}
+	}
+	return nil, false
+}
+
 func getFieldPtr(v reflect.Value, i int) (name string, val interface{}) {
 	tFld := v.Type().Field(i)
 	word := unsafe.Pointer(v.Field(i).Addr().Pointer())
 	return tFld.Name, makeEmptyInterface(reflect.PtrTo(tFld.Type), word)
+}
+
+func findFieldPtr(v reflect.Value, name string, from int) interface{} {
+	t := v.Type()
+	for i, n := from, v.NumField(); i < n; i++ {
+		tFld := t.Field(i)
+		if tFld.Name == name {
+			word := unsafe.Pointer(v.Field(i).Addr().Pointer())
+			return makeEmptyInterface(reflect.PtrTo(tFld.Type), word)
+		}
+	}
+	return nil
 }
 
 // emptyInterface is the header for an interface{} value.
@@ -344,9 +351,33 @@ func (p *Game) addSpecialShape(g reflect.Value, v specsp) {
 		if sm, err := newStageMonitor(g, v); err == nil {
 			p.addShape(sm)
 		}
+	case "sprites":
+		p.addStageSprites(g, v)
 	default:
 		panic("addSpecialShape: unknown shape - " + typ)
 	}
+}
+
+/*
+   {
+     "type": "sprites",
+     "target": "bananas",
+     "items": [
+       {
+         "x": -100,
+         "y": -21
+       },
+       {
+         "x": 50,
+         "y": -21
+       }
+     ]
+   }
+*/
+func (p *Game) addStageSprites(g reflect.Value, v specsp) {
+	target := v["target"].(string)
+	_ = target
+	panic("todo: addStageSprites")
 }
 
 // -----------------------------------------------------------------------------

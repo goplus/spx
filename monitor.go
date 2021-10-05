@@ -79,21 +79,17 @@ func getTarget(g reflect.Value, target string) (reflect.Value, int) {
 	if target == "" {
 		return g, 1 // spx.Game
 	}
-	for i, n := 0, g.NumField(); i < n; i++ {
-		_, val := getFieldPtr(g, i)
-		if fld, ok := val.(Shape); ok && spriteOf(fld).name == target {
+	if val := findFieldPtr(g, target, 0); val != nil {
+		if _, ok := val.(Shape); ok {
 			return reflect.ValueOf(val).Elem(), 2 // (spx.Sprite, *Game)
 		}
 	}
 	return reflect.Value{}, -1
 }
 
-func getValueRef(target reflect.Value, from int, name string) reflect.Value {
-	for i, n := from, target.NumField(); i < n; i++ {
-		fldName, valPtr := getFieldPtr(target, i)
-		if name == fldName {
-			return reflect.ValueOf(valPtr).Elem()
-		}
+func getValueRef(target reflect.Value, name string, from int) reflect.Value {
+	if valPtr := findFieldPtr(target, name, from); valPtr != nil {
+		return reflect.ValueOf(valPtr).Elem()
 	}
 	return reflect.Value{}
 }
@@ -110,7 +106,7 @@ func buildMonitorEval(g reflect.Value, t, val string) func() string {
 	switch {
 	case strings.HasPrefix(val, getVarPrefix):
 		name := val[len(getVarPrefix):]
-		ref := getValueRef(target, from, name)
+		ref := getValueRef(target, name, from)
 		if ref.IsValid() {
 			return func() string {
 				return fmt.Sprint(ref.Interface())
