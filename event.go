@@ -32,8 +32,8 @@ type eventSink struct {
 	sink  interface{}
 }
 
-func (ss *eventSink) doDeleteClone(this interface{}) (ret *eventSink) {
-	ret = ss
+func (p *eventSink) doDeleteClone(this interface{}) (ret *eventSink) {
+	ret = p
 	pp := &ret
 	for {
 		p := *pp
@@ -48,14 +48,14 @@ func (ss *eventSink) doDeleteClone(this interface{}) (ret *eventSink) {
 	}
 }
 
-func (ss *eventSink) asyncCall(start bool, wg *sync.WaitGroup, data interface{}, doSth func(*eventSink)) {
-	for ss != nil {
-		if ss.cond == nil || ss.cond(data) {
+func (p *eventSink) asyncCall(start bool, wg *sync.WaitGroup, data interface{}, doSth func(*eventSink)) {
+	for p != nil {
+		if p.cond == nil || p.cond(data) {
 			if wg != nil {
 				wg.Add(1)
 			}
-			copy := ss
-			createThread(ss.pthis, start, func(coroutine.Thread) int {
+			copy := p
+			createThread(p.pthis, start, func(coroutine.Thread) int {
 				if wg != nil {
 					defer wg.Done()
 				}
@@ -63,7 +63,7 @@ func (ss *eventSink) asyncCall(start bool, wg *sync.WaitGroup, data interface{},
 				return 0
 			})
 		}
-		ss = ss.prev
+		p = p.prev
 	}
 }
 
@@ -175,34 +175,34 @@ func nameOf(this interface{}) string {
 	panic("eventSinks: unexpected this object")
 }
 
-func (ss *eventSinks) init(mgr *eventSinkMgr, this threadObj) {
-	ss.eventSinkMgr = mgr
-	ss.pthis = this
+func (p *eventSinks) init(mgr *eventSinkMgr, this threadObj) {
+	p.eventSinkMgr = mgr
+	p.pthis = this
 }
 
-func (ss *eventSinks) initFrom(src *eventSinks, this threadObj) {
-	ss.eventSinkMgr = src.eventSinkMgr
-	ss.pthis = this
+func (p *eventSinks) initFrom(src *eventSinks, this threadObj) {
+	p.eventSinkMgr = src.eventSinkMgr
+	p.pthis = this
 }
 
-func (ss *eventSinks) doDeleteClone() {
-	ss.eventSinkMgr.doDeleteClone(ss.pthis)
+func (p *eventSinks) doDeleteClone() {
+	p.eventSinkMgr.doDeleteClone(p.pthis)
 }
 
 // -------------------------------------------------------------------------------------
 
-func (ss *eventSinks) OnStart(onStart func()) {
-	ss.allWhenStart = &eventSink{
-		prev:  ss.allWhenStart,
-		pthis: ss.pthis,
+func (p *eventSinks) OnStart(onStart func()) {
+	p.allWhenStart = &eventSink{
+		prev:  p.allWhenStart,
+		pthis: p.pthis,
 		sink:  onStart,
 	}
 }
 
-func (ss *eventSinks) OnClick(onClick func()) {
-	pthis := ss.pthis
-	ss.allWhenClick = &eventSink{
-		prev:  ss.allWhenClick,
+func (p *eventSinks) OnClick(onClick func()) {
+	pthis := p.pthis
+	p.allWhenClick = &eventSink{
+		prev:  p.allWhenClick,
 		pthis: pthis,
 		sink:  onClick,
 		cond: func(data interface{}) bool {
@@ -211,21 +211,21 @@ func (ss *eventSinks) OnClick(onClick func()) {
 	}
 }
 
-func (ss *eventSinks) OnAnyKey(onKey func(key Key)) {
-	ss.allWhenKeyPressed = &eventSink{
-		prev:  ss.allWhenKeyPressed,
-		pthis: ss.pthis,
+func (p *eventSinks) OnAnyKey(onKey func(key Key)) {
+	p.allWhenKeyPressed = &eventSink{
+		prev:  p.allWhenKeyPressed,
+		pthis: p.pthis,
 		sink:  onKey,
 	}
 }
 
-func (ss *eventSinks) OnKey__0(key Key, onKey func()) {
-	ss.allWhenKeyPressed = &eventSink{
-		prev:  ss.allWhenKeyPressed,
-		pthis: ss.pthis,
+func (p *eventSinks) OnKey__0(key Key, onKey func()) {
+	p.allWhenKeyPressed = &eventSink{
+		prev:  p.allWhenKeyPressed,
+		pthis: p.pthis,
 		sink: func(Key) {
 			if debugEvent {
-				log.Println("==> onKey", key, nameOf(ss.pthis))
+				log.Println("==> onKey", key, nameOf(p.pthis))
 			}
 			onKey()
 		},
@@ -235,13 +235,13 @@ func (ss *eventSinks) OnKey__0(key Key, onKey func()) {
 	}
 }
 
-func (ss *eventSinks) OnKey__1(keys []Key, onKey func(Key)) {
-	ss.allWhenKeyPressed = &eventSink{
-		prev:  ss.allWhenKeyPressed,
-		pthis: ss.pthis,
+func (p *eventSinks) OnKey__1(keys []Key, onKey func(Key)) {
+	p.allWhenKeyPressed = &eventSink{
+		prev:  p.allWhenKeyPressed,
+		pthis: p.pthis,
 		sink: func(key Key) {
 			if debugEvent {
-				log.Println("==> onKey", keys, nameOf(ss.pthis))
+				log.Println("==> onKey", keys, nameOf(p.pthis))
 			}
 			onKey(key)
 		},
@@ -257,27 +257,27 @@ func (ss *eventSinks) OnKey__1(keys []Key, onKey func(Key)) {
 	}
 }
 
-func (ss *eventSinks) OnKey__2(keys []Key, onKey func()) {
-	ss.OnKey__1(keys, func(Key) {
+func (p *eventSinks) OnKey__2(keys []Key, onKey func()) {
+	p.OnKey__1(keys, func(Key) {
 		onKey()
 	})
 }
 
-func (ss *eventSinks) OnMsg__0(onMsg func(msg string, data interface{})) {
-	ss.allWhenIReceive = &eventSink{
-		prev:  ss.allWhenIReceive,
-		pthis: ss.pthis,
+func (p *eventSinks) OnMsg__0(onMsg func(msg string, data interface{})) {
+	p.allWhenIReceive = &eventSink{
+		prev:  p.allWhenIReceive,
+		pthis: p.pthis,
 		sink:  onMsg,
 	}
 }
 
-func (ss *eventSinks) OnMsg__1(msg string, onMsg func()) {
-	ss.allWhenIReceive = &eventSink{
-		prev:  ss.allWhenIReceive,
-		pthis: ss.pthis,
+func (p *eventSinks) OnMsg__1(msg string, onMsg func()) {
+	p.allWhenIReceive = &eventSink{
+		prev:  p.allWhenIReceive,
+		pthis: p.pthis,
 		sink: func(msg string, data interface{}) {
 			if debugEvent {
-				log.Println("==> onMsg", msg, nameOf(ss.pthis))
+				log.Println("==> onMsg", msg, nameOf(p.pthis))
 			}
 			onMsg()
 		},
@@ -287,21 +287,21 @@ func (ss *eventSinks) OnMsg__1(msg string, onMsg func()) {
 	}
 }
 
-func (ss *eventSinks) OnScene__0(onScene func(name string)) {
-	ss.allWhenSceneStart = &eventSink{
-		prev:  ss.allWhenSceneStart,
-		pthis: ss.pthis,
+func (p *eventSinks) OnScene__0(onScene func(name string)) {
+	p.allWhenSceneStart = &eventSink{
+		prev:  p.allWhenSceneStart,
+		pthis: p.pthis,
 		sink:  onScene,
 	}
 }
 
-func (ss *eventSinks) OnScene__1(name string, onScene func()) {
-	ss.allWhenSceneStart = &eventSink{
-		prev:  ss.allWhenSceneStart,
-		pthis: ss.pthis,
+func (p *eventSinks) OnScene__1(name string, onScene func()) {
+	p.allWhenSceneStart = &eventSink{
+		prev:  p.allWhenSceneStart,
+		pthis: p.pthis,
 		sink: func(name string) {
 			if debugEvent {
-				log.Println("==> onScene", name, nameOf(ss.pthis))
+				log.Println("==> onScene", name, nameOf(p.pthis))
 			}
 			onScene()
 		},
