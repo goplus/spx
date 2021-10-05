@@ -161,6 +161,7 @@ func applySpriteProps(dest *Sprite, v specsp) {
 	if idx, ok := v["currentCostumeIndex"]; ok {
 		dest.currentCostumeIndex = int(idx.(float64))
 	}
+	dest.isCloned = false
 }
 
 func applySprite(out reflect.Value, sprite Spriter, v specsp) (*Sprite, interface{}) {
@@ -187,7 +188,6 @@ func cloneSprite(out reflect.Value, outPtr interface{}, in reflect.Value, src *S
 	}()
 	if v != nil {
 		applySpriteProps(dest, v)
-		dest.isCloned = false
 	} else if ini, ok := outPtr.(initer); ok {
 		ini.Main()
 	}
