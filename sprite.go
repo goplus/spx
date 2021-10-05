@@ -180,6 +180,9 @@ func cloneSprite(out reflect.Value, outPtr interface{}, in reflect.Value, src *S
 		if style, ok := v["rotationStyle"]; ok {
 			dest.rotationStyle = toRotationStyle(style.(string))
 		}
+		if idx, ok := v["currentCostumeIndex"]; ok {
+			dest.currentCostumeIndex = int(idx.(float64))
+		}
 	}
 	if ini, ok := outPtr.(initer); ok {
 		ini.Main()
