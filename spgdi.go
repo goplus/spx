@@ -154,9 +154,6 @@ func (p *spriteDrawInfo) doDrawOn(dc drawContext, sp *gdi.Sprite) {
 }
 
 func (p *Sprite) getDrawInfo() *spriteDrawInfo {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	return &spriteDrawInfo{
 		sprKey: sprKey{
 			scale:         p.scale,

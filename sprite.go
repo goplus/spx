@@ -183,9 +183,6 @@ func applySprite(out reflect.Value, sprite Spriter, v specsp) (*Sprite, interfac
 func cloneSprite(out reflect.Value, outPtr interface{}, in reflect.Value, src *Sprite, v specsp) *Sprite {
 	dest := spriteOf(outPtr.(Shape))
 	func() {
-		src.mutex.Lock()
-		defer src.mutex.Unlock()
-
 		out.Set(in)
 		for i, n := 0, out.NumField(); i < n; i++ {
 			fld := out.Field(i).Addr()
@@ -258,9 +255,6 @@ func (p *Sprite) OnMoving(onMoving func(mi *MovingInfo)) {
 }
 
 func (p *Sprite) Destroy() { // delete this clone
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	if p.isCloned {
 		if debugInstr {
 			log.Println("Destroy", p.name)
@@ -281,9 +275,6 @@ func (p *Sprite) Hide() {
 	if debugInstr {
 		log.Println("Hide", p.name)
 	}
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	p.visible = false
 }
 
@@ -291,9 +282,6 @@ func (p *Sprite) Show() {
 	if debugInstr {
 		log.Println("Show", p.name)
 	}
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	p.visible = true
 }
 
@@ -386,9 +374,6 @@ func (p *Sprite) SetAnimation(name string, ani func(*Sprite)) {
 	if p.isCloned {
 		return
 	}
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	if p.anis == nil {
 		p.anis = make(map[string]func(*Sprite))
 	}
@@ -396,9 +381,6 @@ func (p *Sprite) SetAnimation(name string, ani func(*Sprite)) {
 }
 
 func (p *Sprite) getAni(name string) func(*Sprite) {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	if p.anis != nil {
 		return p.anis[name]
 	}
@@ -433,9 +415,6 @@ func (p *Sprite) sayOrThink(msgv interface{}, style int) {
 		msg = fmt.Sprint(msgv)
 	}
 
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	if msg == "" {
 		p.doStopSay()
 		return
@@ -454,8 +433,6 @@ func (p *Sprite) sayOrThink(msgv interface{}, style int) {
 func (p *Sprite) waitStopSay(secs float64) {
 	p.g.Wait(secs)
 
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
 	p.doStopSay()
 }
 
@@ -469,8 +446,6 @@ func (p *Sprite) doStopSay() {
 // -----------------------------------------------------------------------------
 
 func (p *Sprite) getXY() (x, y float64) {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
 	return p.x, p.y
 }
 
@@ -480,10 +455,7 @@ func (p *Sprite) getXY() (x, y float64) {
 //   DistanceTo(gox.Mouse)
 //   DistanceTo(gox.Random)
 func (p *Sprite) DistanceTo(obj interface{}) float64 {
-	p.mutex.Lock()
 	x, y := p.x, p.y
-	p.mutex.Unlock()
-
 	x2, y2 := p.g.objectPos(obj)
 	x -= x2
 	y -= y2
@@ -501,9 +473,6 @@ func (p *Sprite) doMoveTo(x, y float64) {
 }
 
 func (p *Sprite) goMoveForward(step float64) {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	sin, cos := math.Sincos(toRadian(p.direction))
 	p.doMoveTo(p.x+step*sin, p.y+step*cos)
 }
@@ -586,51 +555,30 @@ func (p *Sprite) Glide(x, y float64, secs float64) {
 }
 
 func (p *Sprite) SetXYpos(x, y float64) {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	p.doMoveTo(x, y)
 }
 
 func (p *Sprite) Xpos() float64 {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	return p.x
 }
 
 func (p *Sprite) SetXpos(x float64) {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	p.doMoveTo(x, p.y)
 }
 
 func (p *Sprite) ChangeXpos(dx float64) {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	p.doMoveTo(p.x+dx, p.y)
 }
 
 func (p *Sprite) Ypos() float64 {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	return p.y
 }
 
 func (p *Sprite) SetYpos(y float64) {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	p.doMoveTo(p.x, y)
 }
 
 func (p *Sprite) ChangeYpos(dy float64) {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	p.doMoveTo(p.x, p.y+dy)
 }
 
@@ -658,16 +606,10 @@ func (p *Sprite) SetRotationStyle(style RotationStyle) {
 	if debugInstr {
 		log.Println("SetRotationStyle", p.name, style)
 	}
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	p.rotationStyle = style
 }
 
 func (p *Sprite) Heading() float64 {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	return p.direction
 }
 
@@ -711,9 +653,6 @@ func (p *Sprite) TurnTo(obj interface{}) {
 }
 
 func (p *Sprite) setDirection(dir float64, change bool) {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	if change {
 		dir += p.direction
 	}
@@ -723,10 +662,7 @@ func (p *Sprite) setDirection(dir float64, change bool) {
 // -----------------------------------------------------------------------------
 
 func (p *Sprite) Size() float64 {
-	p.mutex.Lock()
 	v := p.scale
-	p.mutex.Unlock()
-
 	return v
 }
 
@@ -734,9 +670,6 @@ func (p *Sprite) SetSize(size float64) {
 	if debugInstr {
 		log.Println("SetSize", p.name, size)
 	}
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	p.scale = size
 }
 
@@ -744,9 +677,6 @@ func (p *Sprite) ChangeSize(delta float64) {
 	if debugInstr {
 		log.Println("ChangeSize", p.name, delta)
 	}
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	p.scale += delta
 }
 
@@ -816,8 +746,6 @@ func (p *Sprite) BounceOffEdge() {
 		dir = 180 - dir
 	}
 
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
 	p.direction = normalizeDirection(dir)
 }
 
@@ -893,23 +821,14 @@ func (p *Sprite) Stamp() {
 }
 
 func (p *Sprite) PenUp() {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	p.isPenDown = false
 }
 
 func (p *Sprite) PenDown() {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	p.isPenDown = true
 }
 
 func (p *Sprite) SetPenColor(color Color) {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	h, _, v := clrutil.RGB2HSV(color.R, color.G, color.B)
 	p.penHue = (200 * h) / 360
 	p.penShade = 50 * v
@@ -937,9 +856,6 @@ func (p *Sprite) ChangePenHue(delta float64) {
 }
 
 func (p *Sprite) setPenHue(v float64, change bool) {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	if change {
 		v += p.penHue
 	}
@@ -952,9 +868,6 @@ func (p *Sprite) setPenHue(v float64, change bool) {
 }
 
 func (p *Sprite) setPenShade(v float64, change bool) {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	if change {
 		v += p.penShade
 	}
@@ -989,9 +902,6 @@ func (p *Sprite) ChangePenSize(delta float64) {
 }
 
 func (p *Sprite) setPenWidth(w float64, change bool) {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	if change {
 		w += p.penWidth
 	}

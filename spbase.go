@@ -173,9 +173,7 @@ func (p *costume) needImage(fs spxfs.Dir) (*ebiten.Image, float64, float64) {
 // -------------------------------------------------------------------------------------
 
 type baseObj struct {
-	costumes []*costume
-
-	mutex               sync.Mutex
+	costumes            []*costume
 	currentCostumeIndex int
 }
 
@@ -220,7 +218,6 @@ func (p *baseObj) init(base string, costumes []*costumeConfig, currentCostumeInd
 
 func (p *baseObj) initFrom(src *baseObj) {
 	p.costumes = src.costumes
-	p.mutex = sync.Mutex{}
 	p.currentCostumeIndex = src.currentCostumeIndex
 }
 
@@ -254,8 +251,6 @@ func (p *baseObj) goSetCostume(val interface{}) bool {
 }
 
 func (p *baseObj) setCostumeByIndex(idx int) bool {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
 	if idx >= len(p.costumes) {
 		panic("invalid costume index")
 	}
@@ -274,28 +269,18 @@ func (p *baseObj) setCostumeByName(name string) bool {
 }
 
 func (p *baseObj) goPrevCostume() {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	p.currentCostumeIndex = (len(p.costumes) + p.currentCostumeIndex - 1) % len(p.costumes)
 }
 
 func (p *baseObj) goNextCostume() {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	p.currentCostumeIndex = (p.currentCostumeIndex + 1) % len(p.costumes)
 }
 
 func (p *baseObj) getCostumeIndex() int {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
 	return p.currentCostumeIndex
 }
 
 func (p *baseObj) getCostumeName() string {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
 	return p.costumes[p.currentCostumeIndex].name
 }
 

@@ -623,9 +623,6 @@ func (p *Game) size() (int, int) {
 }
 
 func (p *Game) doSize() {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	if p.width == 0 {
 		c := p.costumes[p.currentCostumeIndex]
 		img, _, _ := c.needImage(p.fs)
@@ -648,8 +645,6 @@ func (p *Game) touchingPoint(dst *Sprite, x, y float64) bool {
 func (p *Game) touchingSpriteBy(dst *Sprite, name string) *Sprite {
 	sp1, pt1 := dst.getGdiSprite()
 
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
 	for _, item := range p.items {
 		if sp, ok := item.(*Sprite); ok && sp != dst {
 			if sp.name == name {
@@ -687,30 +682,18 @@ func (p *Game) objectPos(obj interface{}) (float64, float64) {
 // -----------------------------------------------------------------------------
 
 func (p *Game) getTurtle() turtleCanvas {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	return p.turtle
 }
 
 func (p *Game) Clear() {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	p.turtle.clear()
 }
 
 func (p *Game) stampCostume(di *spriteDrawInfo) {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	p.turtle.stampCostume(di)
 }
 
 func (p *Game) movePen(sp *Sprite, x, y float64) {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	screenW, screenH := p.size()
 	p.turtle.penLine(&penLine{
 		x1:    (screenW >> 1) + int(sp.x),
@@ -725,23 +708,14 @@ func (p *Game) movePen(sp *Sprite, x, y float64) {
 // -----------------------------------------------------------------------------
 
 func (p *Game) getItems() []Shape {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	return p.items
 }
 
 func (p *Game) addShape(child Shape) {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	p.items = append(p.items, child)
 }
 
 func (p *Game) addClonedShape(src, clone Shape) {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	items := p.items
 	idx := p.doFindSprite(src)
 	if idx < 0 {
@@ -760,9 +734,6 @@ func (p *Game) addClonedShape(src, clone Shape) {
 }
 
 func (p *Game) removeShape(child Shape) {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	items := p.items
 	for i, item := range items {
 		if item == child {
@@ -777,9 +748,6 @@ func (p *Game) removeShape(child Shape) {
 }
 
 func (p *Game) activateShape(child Shape) {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	items := p.items
 	for i, item := range items {
 		if item == child {
@@ -798,9 +766,6 @@ func (p *Game) activateShape(child Shape) {
 }
 
 func (p *Game) goBackByLayers(spr *Sprite, n int) {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	idx := p.doFindSprite(spr)
 	if idx < 0 {
 		return
@@ -867,9 +832,6 @@ func (p *Game) doFindSprite(src Shape) int {
 }
 
 func (p *Game) findSprite(name string) *Sprite {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	for _, item := range p.items {
 		if sp, ok := item.(*Sprite); ok {
 			if !sp.isCloned && sp.name == name {
@@ -1106,9 +1068,6 @@ func (p *Game) Broadcast__2(msg string, data interface{}, wait bool) {
 // -----------------------------------------------------------------------------
 
 func (p *Game) setStageMonitor(target string, val string, visible bool) {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	for _, item := range p.items {
 		if sp, ok := item.(*stageMonitor); ok && sp.val == val && sp.target == target {
 			sp.setVisible(visible)

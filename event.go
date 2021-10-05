@@ -70,7 +70,6 @@ func (ss *eventSink) asyncCall(start bool, wg *sync.WaitGroup, data interface{},
 // -------------------------------------------------------------------------------------
 
 type eventSinkMgr struct {
-	mutex             sync.Mutex
 	allWhenStart      *eventSink
 	allWhenKeyPressed *eventSink
 	allWhenIReceive   *eventSink
@@ -82,9 +81,6 @@ type eventSinkMgr struct {
 }
 
 func (p *eventSinkMgr) doDeleteClone(this interface{}) {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	p.allWhenStart = p.allWhenStart.doDeleteClone(this)
 	p.allWhenKeyPressed = p.allWhenKeyPressed.doDeleteClone(this)
 	p.allWhenIReceive = p.allWhenIReceive.doDeleteClone(this)
@@ -95,7 +91,6 @@ func (p *eventSinkMgr) doDeleteClone(this interface{}) {
 }
 
 func (p *eventSinkMgr) doWhenStart() {
-	p.mutex.Lock()
 	if !p.calledStart {
 		p.calledStart = true
 		p.allWhenStart.asyncCall(false, nil, nil, func(ev *eventSink) {
@@ -105,45 +100,36 @@ func (p *eventSinkMgr) doWhenStart() {
 			ev.sink.(func())()
 		})
 	}
-	p.mutex.Unlock()
 }
 
 func (p *eventSinkMgr) doWhenKeyPressed(key Key) {
-	p.mutex.Lock()
 	p.allWhenKeyPressed.asyncCall(false, nil, key, func(ev *eventSink) {
 		ev.sink.(func(Key))(key)
 	})
-	p.mutex.Unlock()
 }
 
 func (p *eventSinkMgr) doWhenCloned(this threadObj, data interface{}) {
-	p.mutex.Lock()
 	p.allWhenCloned.asyncCall(true, nil, this, func(ev *eventSink) {
 		if debugEvent {
 			log.Println("==> onCloned", nameOf(this))
 		}
 		ev.sink.(func(interface{}))(data)
 	})
-	p.mutex.Unlock()
 }
 
 func (p *eventSinkMgr) doWhenMoving(this threadObj, mi *MovingInfo) {
-	p.mutex.Lock()
 	p.allWhenMoving.asyncCall(true, nil, this, func(ev *eventSink) {
 		ev.sink.(func(*MovingInfo))(mi)
 	})
-	p.mutex.Unlock()
 }
 
 func (p *eventSinkMgr) doWhenClick(this threadObj) {
-	p.mutex.Lock()
 	p.allWhenClick.asyncCall(false, nil, this, func(ev *eventSink) {
 		if debugEvent {
 			log.Println("==> onClick", nameOf(this))
 		}
 		ev.sink.(func())()
 	})
-	p.mutex.Unlock()
 }
 
 func (p *eventSinkMgr) doWhenIReceive(msg string, data interface{}, wait bool) {
@@ -151,11 +137,9 @@ func (p *eventSinkMgr) doWhenIReceive(msg string, data interface{}, wait bool) {
 	if wait {
 		wg = new(sync.WaitGroup)
 	}
-	p.mutex.Lock()
 	p.allWhenIReceive.asyncCall(false, wg, msg, func(ev *eventSink) {
 		ev.sink.(func(string, interface{}))(msg, data)
 	})
-	p.mutex.Unlock()
 	if wait {
 		waitToDo(wg.Wait)
 	}
@@ -166,11 +150,9 @@ func (p *eventSinkMgr) doWhenSceneStart(name string, wait bool) {
 	if wait {
 		wg = new(sync.WaitGroup)
 	}
-	p.mutex.Lock()
 	p.allWhenSceneStart.asyncCall(false, wg, name, func(ev *eventSink) {
 		ev.sink.(func(string))(name)
 	})
-	p.mutex.Unlock()
 	if wait {
 		waitToDo(wg.Wait)
 	}
