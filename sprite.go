@@ -246,6 +246,14 @@ type MovingInfo struct {
 	Obj        *Sprite
 }
 
+func (p *MovingInfo) Dx() float64 {
+	return p.NewX - p.OldX
+}
+
+func (p *MovingInfo) Dy() float64 {
+	return p.NewY - p.OldY
+}
+
 func (p *Sprite) OnMoving__0(onMoving func(mi *MovingInfo)) {
 	p.hasOnMoving = true
 	p.allWhenMoving = &eventSink{
