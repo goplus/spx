@@ -18,9 +18,9 @@ package local
 
 import (
 	"io"
-	"os"
 
 	"github.com/goplus/spx/fs"
+	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 )
 
 // -------------------------------------------------------------------------------------
@@ -36,7 +36,7 @@ func Open(base string) (fs.Dir, error) {
 
 // Open opens a zipped file object.
 func (p *FS) Open(name string) (io.ReadCloser, error) {
-	f, err := os.Open(p.base + name)
+	f, err := ebitenutil.OpenFile(p.base + name)
 	return f, err
 }
 
