@@ -224,7 +224,6 @@ type aniConfig struct {
 	From interface{} `json:"from"`
 	N    int         `json:"n"`
 	Step int         `json:"step"`
-	Die  bool        `json:"die"`
 }
 
 type spriteConfig struct {
@@ -643,7 +642,7 @@ func (p *Game) touchingSpriteBy(dst *Sprite, name string) *Sprite {
 
 	for _, item := range p.items {
 		if sp, ok := item.(*Sprite); ok && sp != dst {
-			if sp.name == name && (sp.visible && !sp.isDying) {
+			if sp.name == name && (sp.isVisible && !sp.isDying) {
 				sp2, pt2 := sp.getGdiSprite()
 				if gdi.Touching(sp1, pt1, sp2, pt2) {
 					return sp

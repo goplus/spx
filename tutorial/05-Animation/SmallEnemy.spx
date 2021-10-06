@@ -21,10 +21,10 @@ onCloned => {
 	life := 5
 	for {
 		wait 0.05
-		if touching("Bullet", "explode") {
+		if touching("Bullet", "die") {
 			life--
 			if life == 0 {
-				animate "explode"
+				die
 			}
 		}
 	}

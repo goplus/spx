@@ -9,11 +9,6 @@
     }
   ],
   "currentCostumeIndex": 0,
-  "animations": {
-    "explode": {
-      "die": true
-    }
-  },
   "heading": 90,
   "isDraggable": false,
   "rotationStyle": "normal",

@@ -55,7 +55,7 @@ type Sprite struct {
 	penHue   float64
 	penWidth float64
 
-	visible     bool
+	isVisible   bool
 	isCloned    bool
 	isPenDown   bool
 	isDraggable bool
@@ -93,7 +93,7 @@ func (p *Sprite) init(base string, g *Game, name string, sprite *spriteConfig, g
 	p.direction = sprite.Heading
 	p.rotationStyle = toRotationStyle(sprite.RotationStyle)
 
-	p.visible = sprite.Visible
+	p.isVisible = sprite.Visible
 	p.isDraggable = sprite.IsDraggable
 
 	if sprite.Animations == nil {
@@ -120,9 +120,6 @@ func (p *Sprite) init(base string, g *Game, name string, sprite *spriteConfig, g
 			if ani.N > 0 {
 				obj.goAnimate(ani.Wait, ani.From, ani.N, ani.Step, ani.Move)
 			}
-			if ani.Die { // destroy dead sprite
-				obj.Destroy()
-			}
 		}
 	}
 }
@@ -144,7 +141,7 @@ func (p *Sprite) InitFrom(src *Sprite) {
 	p.penHue = src.penHue
 	p.penWidth = src.penWidth
 
-	p.visible = src.visible
+	p.isVisible = src.isVisible
 	p.isCloned = true
 	p.isPenDown = src.isPenDown
 	p.isDraggable = src.isDraggable
@@ -168,7 +165,7 @@ func applySpriteProps(dest *Sprite, v specsp) {
 	applyFloat64(&dest.scale, v["size"])
 	applyFloat64(&dest.direction, v["heading"])
 	if visible, ok := v["visible"]; ok {
-		dest.visible = visible.(bool)
+		dest.isVisible = visible.(bool)
 	}
 	if style, ok := v["rotationStyle"]; ok {
 		dest.rotationStyle = toRotationStyle(style.(string))
@@ -261,6 +258,20 @@ func (p *Sprite) OnMoving(onMoving func(mi *MovingInfo)) {
 	}
 }
 
+func (p *Sprite) Die() { // prototype sprite can't be destoryed, but can die
+	p.SetDying()
+	ani := p.getAni("die")
+	if ani != nil {
+		ani(p)
+	}
+	if p.isCloned {
+		p.Destroy()
+	} else {
+		p.isStopped = true
+		p.Hide()
+	}
+}
+
 func (p *Sprite) Destroy() { // delete this clone
 	if p.isCloned {
 		if debugInstr {
@@ -276,20 +287,23 @@ func (p *Sprite) Destroy() { // delete this clone
 	}
 }
 
-// -----------------------------------------------------------------------------
-
 func (p *Sprite) Hide() {
 	if debugInstr {
 		log.Println("Hide", p.name)
 	}
-	p.visible = false
+	p.doStopSay()
+	p.isVisible = false
 }
 
 func (p *Sprite) Show() {
 	if debugInstr {
 		log.Println("Show", p.name)
 	}
-	p.visible = true
+	p.isVisible = true
+}
+
+func (p *Sprite) Visible() bool {
+	return p.isVisible
 }
 
 // -----------------------------------------------------------------------------
@@ -705,14 +719,14 @@ func (p *Sprite) TouchingColor(color Color) bool {
 //   Touching(spx.Mouse)
 //   Touching(spx.Edge)
 func (p *Sprite) Touching(obj interface{}, ani ...string) bool {
-	if !p.visible || p.isDying {
+	if !p.isVisible || p.isDying {
 		return false
 	}
 	switch v := obj.(type) {
 	case string:
 		if o := p.g.touchingSpriteBy(p, v); o != nil {
 			if ani != nil {
-				o.Animate__0(ani[0])
+				o.execTouchingAni(ani[0])
 			}
 			return true
 		}
@@ -730,8 +744,16 @@ func (p *Sprite) Touching(obj interface{}, ani ...string) bool {
 	panic("Touching: unexpected input")
 }
 
+func (p *Sprite) execTouchingAni(ani string) {
+	if ani == "die" {
+		p.Die()
+	} else {
+		p.Animate__0(ani)
+	}
+}
+
 func touchingSprite(dst, src *Sprite) bool {
-	if !src.visible || src.isDying {
+	if !src.isVisible || src.isDying {
 		return false
 	}
 	sp1, pt1 := dst.getGdiSprite()

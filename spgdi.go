@@ -163,7 +163,7 @@ func (p *Sprite) getDrawInfo() *spriteDrawInfo {
 		},
 		x:       p.x,
 		y:       p.y,
-		visible: p.visible,
+		visible: p.isVisible,
 	}
 }
 
