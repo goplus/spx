@@ -86,7 +86,8 @@ func (p *sprKey) drawOn(target *ebiten.Image, x, y float64, fs spxfs.Dir) {
 	op := new(ebiten.DrawImageOptions)
 	geo := &op.GeoM
 
-	if p.direction == 90 {
+	direction := p.direction + c.faceLeft
+	if direction == 90 {
 		x = float64(screenW>>1) + x - centerX*scale
 		y = float64(screenH>>1) - y - centerY*scale
 		if scale != 1 {
@@ -98,7 +99,7 @@ func (p *sprKey) drawOn(target *ebiten.Image, x, y float64, fs spxfs.Dir) {
 		if scale != 1 {
 			geo.Scale(scale, scale)
 		}
-		geo.Rotate(toRadian(p.direction - 90))
+		geo.Rotate(toRadian(direction - 90))
 		geo.Translate(float64(screenW>>1)+x, float64(screenH>>1)-y)
 	}
 

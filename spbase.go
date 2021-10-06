@@ -78,31 +78,6 @@ func (path imageLoaderByPath) load(fs spxfs.Dir, pt *imagePoint) (*ebiten.Image,
 	return ret, nil
 }
 
-type imageFaceLeftLoader struct {
-	path     string
-	faceLeft float64
-}
-
-func (p *imageFaceLeftLoader) load(fs spxfs.Dir, pt *imagePoint) (ret *ebiten.Image, err error) {
-	ret, err = imageLoaderByPath(p.path).load(fs, pt)
-	if err == nil && p.faceLeft != 0 {
-		ret = imageFaceLeft(ret, p.faceLeft)
-	}
-	return
-}
-
-func imageFaceLeft(org *ebiten.Image, faceLeft float64) *ebiten.Image {
-	w, h := org.Size()
-	cx, cy := float64(w)/2, float64(h)/2
-	ret := ebiten.NewImage(w, h)
-	op := &ebiten.DrawImageOptions{}
-	op.GeoM.Translate(-cx, -cy)
-	op.GeoM.Rotate(toRadian(faceLeft))
-	op.GeoM.Translate(cx, cy)
-	ret.DrawImage(org, op)
-	return ret
-}
-
 // -------------------------------------------------------------------------------------
 
 type delayloadImage struct {
@@ -139,7 +114,6 @@ func (p *costumeSetImage) ensure(fs spxfs.Dir) {
 
 type imageLoaderByCostumeSet struct {
 	costumeSet *costumeSetImage
-	faceLeft   float64
 	index      int
 }
 
@@ -154,11 +128,7 @@ func (p *imageLoaderByCostumeSet) load(fs spxfs.Dir, pt *imagePoint) (*ebiten.Im
 	max := image.Point{X: min.X + width, Y: bounds.Max.Y}
 	pt.x, pt.y = float64(width>>1), float64(bounds.Dy()>>1)
 	if img := cache.SubImage(image.Rectangle{Min: min, Max: max}); img != nil {
-		ret := img.(*ebiten.Image)
-		if p.faceLeft != 0 {
-			ret = imageFaceLeft(ret, p.faceLeft)
-		}
-		return ret, nil
+		return img.(*ebiten.Image), nil
 	}
 	panic("disposed image")
 }
@@ -169,22 +139,23 @@ type costume struct {
 	name string
 	img  delayloadImage
 
+	faceLeft         float64
 	bitmapResolution int
 }
 
 func newCostumeWith(name string, img *costumeSetImage, faceLeft float64, i, bitmapResolution int) *costume {
-	loader := &imageLoaderByCostumeSet{costumeSet: img, faceLeft: faceLeft, index: i}
+	loader := &imageLoaderByCostumeSet{costumeSet: img, index: i}
 	return &costume{
 		name: name, img: delayloadImage{loader: loader},
-		bitmapResolution: bitmapResolution,
+		faceLeft: faceLeft, bitmapResolution: bitmapResolution,
 	}
 }
 
 func newCostume(base string, c *costumeConfig) *costume {
-	loader := &imageFaceLeftLoader{path: base + c.Path, faceLeft: c.FaceLeft}
+	loader := imageLoaderByPath(base + c.Path)
 	return &costume{
 		name: c.Name, img: delayloadImage{loader: loader, pt: imagePoint{c.X, c.Y}},
-		bitmapResolution: c.BitmapResolution,
+		faceLeft: c.FaceLeft, bitmapResolution: c.BitmapResolution,
 	}
 }
 
