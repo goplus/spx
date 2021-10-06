@@ -56,21 +56,31 @@ type imagePoint struct {
 	x, y float64
 }
 
-type imageLoaderByPath string
+type imageLoader interface {
+	load(fs spxfs.Dir, pt *imagePoint) (*ebiten.Image, error)
+}
 
-func (path imageLoaderByPath) load(fs spxfs.Dir, pt *imagePoint) (*ebiten.Image, error) {
-	f, err := fs.Open(string(path))
+type imageLoaderByPath struct {
+	path     string
+	faceLeft float64
+}
+
+func (p *imageLoaderByPath) load(fs spxfs.Dir, pt *imagePoint) (*ebiten.Image, error) {
+	f, err := fs.Open(p.path)
 	if err != nil {
-		return nil, errors.Wrapf(err, "imageLoader: open file `%s` failed", path)
+		return nil, errors.Wrapf(err, "imageLoader: open file `%s` failed", p.path)
 	}
 	defer f.Close()
 
 	img, _, err := image.Decode(f)
 	if err != nil {
-		return nil, errors.Wrapf(err, "imageLoader: file `%s` is not an image", path)
+		return nil, errors.Wrapf(err, "imageLoader: file `%s` is not an image", p.path)
 	}
 
 	ret := ebiten.NewImageFromImage(img)
+	if p.faceLeft != 0 {
+		panic("todo: turnLeft")
+	}
 	return ret, nil
 }
 
@@ -79,13 +89,13 @@ func (path imageLoaderByPath) load(fs spxfs.Dir, pt *imagePoint) (*ebiten.Image,
 type delayloadImage struct {
 	cache  *ebiten.Image
 	pt     imagePoint
-	loader func(fs spxfs.Dir, pt *imagePoint) (*ebiten.Image, error)
+	loader imageLoader
 }
 
 func (p *delayloadImage) ensure(fs spxfs.Dir) {
 	if p.cache == nil {
 		var err error
-		if p.cache, err = p.loader(fs, &p.pt); err != nil {
+		if p.cache, err = p.loader.load(fs, &p.pt); err != nil {
 			panic(err)
 		}
 	}
@@ -93,7 +103,7 @@ func (p *delayloadImage) ensure(fs spxfs.Dir) {
 
 type costumeSetImage struct {
 	cache  *ebiten.Image
-	loader func(fs spxfs.Dir, pt *imagePoint) (*ebiten.Image, error)
+	loader imageLoader
 	width  int
 	nx     int
 }
@@ -101,7 +111,7 @@ type costumeSetImage struct {
 func (p *costumeSetImage) ensure(fs spxfs.Dir) {
 	if p.cache == nil {
 		var err error
-		if p.cache, err = p.loader(fs, nil); err != nil {
+		if p.cache, err = p.loader.load(fs, nil); err != nil {
 			panic(err)
 		}
 		p.width = p.cache.Bounds().Dx() / p.nx
@@ -113,7 +123,7 @@ type imageLoaderByCostumeSet struct {
 	index      int
 }
 
-func (p imageLoaderByCostumeSet) load(fs spxfs.Dir, pt *imagePoint) (*ebiten.Image, error) {
+func (p *imageLoaderByCostumeSet) load(fs spxfs.Dir, pt *imagePoint) (*ebiten.Image, error) {
 	costumeSet := p.costumeSet
 	if costumeSet.cache == nil {
 		p.costumeSet.ensure(fs)
@@ -139,7 +149,7 @@ type costume struct {
 }
 
 func newCostumeWith(name string, img *costumeSetImage, i int, bitmapResolution int) *costume {
-	loader := imageLoaderByCostumeSet{costumeSet: img, index: i}.load
+	loader := &imageLoaderByCostumeSet{costumeSet: img, index: i}
 	return &costume{
 		name: name, img: delayloadImage{loader: loader},
 		bitmapResolution: bitmapResolution,
@@ -147,7 +157,7 @@ func newCostumeWith(name string, img *costumeSetImage, i int, bitmapResolution i
 }
 
 func newCostume(base string, c *costumeConfig) *costume {
-	loader := imageLoaderByPath(base + c.Path).load
+	loader := &imageLoaderByPath{path: base + c.Path, faceLeft: c.FaceLeft}
 	return &costume{
 		name: c.Name, img: delayloadImage{loader: loader, pt: imagePoint{c.X, c.Y}},
 		bitmapResolution: c.BitmapResolution,
@@ -170,7 +180,7 @@ type baseObj struct {
 
 func (p *baseObj) initWith(base string, cs *costumeSet, currentCostumeIndex int) {
 	nx, bitmapResolution := cs.Nx, cs.BitmapResolution
-	costumeSetLoader := imageLoaderByPath(base + cs.Path).load
+	costumeSetLoader := &imageLoaderByPath{path: base + cs.Path, faceLeft: cs.FaceLeft}
 	img := &costumeSetImage{loader: costumeSetLoader, nx: nx}
 	p.costumes = make([]*costume, nx)
 	if cs.Items == nil {

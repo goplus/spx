@@ -206,6 +206,7 @@ type costumeSet struct {
 	Path             string           `json:"path"`
 	Nx               int              `json:"nx"`
 	BitmapResolution int              `json:"bitmapResolution"`
+	FaceLeft         float64          `json:"faceLeft"`
 	Items            []costumeSetItem `json:"items"`
 }
 
@@ -214,6 +215,7 @@ type costumeConfig struct {
 	Path             string  `json:"path"`
 	X                float64 `json:"x"`
 	Y                float64 `json:"y"`
+	FaceLeft         float64 `json:"faceLeft"`
 	BitmapResolution int     `json:"bitmapResolution"`
 }
 
