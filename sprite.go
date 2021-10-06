@@ -246,7 +246,7 @@ type MovingInfo struct {
 	Obj        *Sprite
 }
 
-func (p *Sprite) OnMoving(onMoving func(mi *MovingInfo)) {
+func (p *Sprite) OnMoving__0(onMoving func(mi *MovingInfo)) {
 	p.hasOnMoving = true
 	p.allWhenMoving = &eventSink{
 		prev:  p.allWhenMoving,
@@ -256,6 +256,12 @@ func (p *Sprite) OnMoving(onMoving func(mi *MovingInfo)) {
 			return data == p
 		},
 	}
+}
+
+func (p *Sprite) OnMoving__1(onMoving func()) {
+	p.OnMoving__0(func(mi *MovingInfo) {
+		onMoving()
+	})
 }
 
 func (p *Sprite) Die() { // prototype sprite can't be destoryed, but can die
@@ -679,7 +685,7 @@ func (p *Sprite) TurnTo(obj interface{}) {
 
 func (p *Sprite) setDirection(dir float64, change bool) {
 	if change {
-		dir += p.direction
+		dir -= p.direction
 	}
 	p.direction = normalizeDirection(dir)
 }
