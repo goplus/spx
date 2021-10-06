@@ -15,11 +15,11 @@ Monkey.setAnimation "clap", obj => {
 }
 
 Monkey.setAnimation "forward", obj => {
-	obj.animate 0.02, 0, 8, 1, -2.0
+	obj.animate 0.02, 0, 8, 1, 2.0
 }
 
 Monkey.setAnimation "backward", obj => {
-	obj.animate 0.02, 0, 8, 1, 2.0
+	obj.animate 0.02, 0, 8, 1, -2.0
 }
 
 run "res", {Title: "Monkey And Crocodile (by Go+)"}

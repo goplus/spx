@@ -60,28 +60,47 @@ type imageLoader interface {
 	load(fs spxfs.Dir, pt *imagePoint) (*ebiten.Image, error)
 }
 
-type imageLoaderByPath struct {
-	path     string
-	faceLeft float64
-}
+type imageLoaderByPath string
 
-func (p *imageLoaderByPath) load(fs spxfs.Dir, pt *imagePoint) (*ebiten.Image, error) {
-	f, err := fs.Open(p.path)
+func (path imageLoaderByPath) load(fs spxfs.Dir, pt *imagePoint) (*ebiten.Image, error) {
+	f, err := fs.Open(string(path))
 	if err != nil {
-		return nil, errors.Wrapf(err, "imageLoader: open file `%s` failed", p.path)
+		return nil, errors.Wrapf(err, "imageLoader: open file `%s` failed", path)
 	}
 	defer f.Close()
 
 	img, _, err := image.Decode(f)
 	if err != nil {
-		return nil, errors.Wrapf(err, "imageLoader: file `%s` is not an image", p.path)
+		return nil, errors.Wrapf(err, "imageLoader: file `%s` is not an image", path)
 	}
 
 	ret := ebiten.NewImageFromImage(img)
-	if p.faceLeft != 0 {
-		panic("todo: turnLeft")
-	}
 	return ret, nil
+}
+
+type imageFaceLeftLoader struct {
+	path     string
+	faceLeft float64
+}
+
+func (p *imageFaceLeftLoader) load(fs spxfs.Dir, pt *imagePoint) (ret *ebiten.Image, err error) {
+	ret, err = imageLoaderByPath(p.path).load(fs, pt)
+	if err == nil && p.faceLeft != 0 {
+		ret = imageFaceLeft(ret, p.faceLeft)
+	}
+	return
+}
+
+func imageFaceLeft(org *ebiten.Image, faceLeft float64) *ebiten.Image {
+	w, h := org.Size()
+	cx, cy := float64(w)/2, float64(h)/2
+	ret := ebiten.NewImage(w, h)
+	op := &ebiten.DrawImageOptions{}
+	op.GeoM.Translate(-cx, -cy)
+	op.GeoM.Rotate(toRadian(faceLeft))
+	op.GeoM.Translate(cx, cy)
+	ret.DrawImage(org, op)
+	return ret
 }
 
 // -------------------------------------------------------------------------------------
@@ -120,6 +139,7 @@ func (p *costumeSetImage) ensure(fs spxfs.Dir) {
 
 type imageLoaderByCostumeSet struct {
 	costumeSet *costumeSetImage
+	faceLeft   float64
 	index      int
 }
 
@@ -134,7 +154,11 @@ func (p *imageLoaderByCostumeSet) load(fs spxfs.Dir, pt *imagePoint) (*ebiten.Im
 	max := image.Point{X: min.X + width, Y: bounds.Max.Y}
 	pt.x, pt.y = float64(width>>1), float64(bounds.Dy()>>1)
 	if img := cache.SubImage(image.Rectangle{Min: min, Max: max}); img != nil {
-		return img.(*ebiten.Image), nil
+		ret := img.(*ebiten.Image)
+		if p.faceLeft != 0 {
+			ret = imageFaceLeft(ret, p.faceLeft)
+		}
+		return ret, nil
 	}
 	panic("disposed image")
 }
@@ -148,8 +172,8 @@ type costume struct {
 	bitmapResolution int
 }
 
-func newCostumeWith(name string, img *costumeSetImage, i int, bitmapResolution int) *costume {
-	loader := &imageLoaderByCostumeSet{costumeSet: img, index: i}
+func newCostumeWith(name string, img *costumeSetImage, faceLeft float64, i, bitmapResolution int) *costume {
+	loader := &imageLoaderByCostumeSet{costumeSet: img, faceLeft: faceLeft, index: i}
 	return &costume{
 		name: name, img: delayloadImage{loader: loader},
 		bitmapResolution: bitmapResolution,
@@ -157,7 +181,7 @@ func newCostumeWith(name string, img *costumeSetImage, i int, bitmapResolution i
 }
 
 func newCostume(base string, c *costumeConfig) *costume {
-	loader := &imageLoaderByPath{path: base + c.Path, faceLeft: c.FaceLeft}
+	loader := &imageFaceLeftLoader{path: base + c.Path, faceLeft: c.FaceLeft}
 	return &costume{
 		name: c.Name, img: delayloadImage{loader: loader, pt: imagePoint{c.X, c.Y}},
 		bitmapResolution: c.BitmapResolution,
@@ -179,20 +203,20 @@ type baseObj struct {
 }
 
 func (p *baseObj) initWith(base string, cs *costumeSet, currentCostumeIndex int) {
-	nx, bitmapResolution := cs.Nx, cs.BitmapResolution
-	costumeSetLoader := &imageLoaderByPath{path: base + cs.Path, faceLeft: cs.FaceLeft}
+	nx, faceLeft, bitmapResolution := cs.Nx, cs.FaceLeft, cs.BitmapResolution
+	costumeSetLoader := imageLoaderByPath(base + cs.Path)
 	img := &costumeSetImage{loader: costumeSetLoader, nx: nx}
 	p.costumes = make([]*costume, nx)
 	if cs.Items == nil {
 		for index := 0; index < nx; index++ {
-			p.costumes[index] = newCostumeWith(strconv.Itoa(index), img, index, bitmapResolution)
+			p.costumes[index] = newCostumeWith(strconv.Itoa(index), img, faceLeft, index, bitmapResolution)
 		}
 	} else {
 		index := 0
 		for _, item := range cs.Items {
 			for i := 0; i < item.N; i++ {
 				name := item.NamePrefix + strconv.Itoa(i)
-				p.costumes[i] = newCostumeWith(name, img, index, bitmapResolution)
+				p.costumes[i] = newCostumeWith(name, img, faceLeft, index, bitmapResolution)
 				index++
 			}
 		}
