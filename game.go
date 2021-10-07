@@ -89,21 +89,20 @@ type Game struct {
 type Spriter = Shape
 
 type Gamer interface {
-	Initialize()
-	runLoop(cfg *Config) (err error)
+	initGame()
 }
 
 func (p *Game) Stopped() bool {
 	return p.isStopped
 }
 
-func (p *Game) Initialize() {
+func (p *Game) initGame() {
 	p.eventSinks.init(&p.sinkMgr, p)
 }
 
 // Gopt_Game_Main is required by Go+ compiler as the entry of a .gmx project.
 func Gopt_Game_Main(game Gamer) {
-	game.Initialize()
+	game.initGame()
 	game.(interface{ MainEntry() }).MainEntry()
 }
 
@@ -266,7 +265,7 @@ func (p *Game) startLoad(resource interface{}, cfg *Config) (err error) {
 	if cfg != nil {
 		keyDuration = cfg.KeyDuration
 	}
-	p.Initialize()
+	p.initGame()
 	p.input.init(p, keyDuration)
 	p.sounds.init()
 	p.shapes = make(map[string]Spriter)
