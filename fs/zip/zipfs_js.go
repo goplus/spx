@@ -71,7 +71,7 @@ func openHttpWith(url string, schema string) (dir fs.Dir, err error) {
 	remote := schema + url
 	resp, err := http.Get(remote)
 	if err != nil {
-		return
+		return nil, err
 	}
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
