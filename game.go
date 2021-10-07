@@ -100,12 +100,15 @@ func (p *Game) initGame() {
 	p.eventSinks.init(&p.sinkMgr, p)
 }
 
+// Gopt_Game_Main is required by Go+ compiler as the entry of a .gmx project.
 func Gopt_Game_Main(game Gamer) {
 	game.initGame()
 	game.(interface{ MainEntry() }).MainEntry()
 }
 
-func Gopt_Game_Run(game Gamer, resource string, gameConf ...*Config) {
+// Gopt_Game_Run runs the game.
+// resource can be a string or fs.Dir object.
+func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 	var conf Config
 	if gameConf != nil {
 		conf = *gameConf[0]
@@ -247,13 +250,16 @@ type spriteConfig struct {
 	IsDraggable         bool                  `json:"isDraggable"`
 }
 
-func (p *Game) startLoad(resource string, cfg *Config) error {
+func (p *Game) startLoad(resource interface{}, cfg *Config) (err error) {
 	if debugLoad {
 		log.Println("==> StartLoad", resource)
 	}
-	fs, err := spxfs.Open(resource)
-	if err != nil {
-		return err
+	fs, ok := resource.(spxfs.Dir)
+	if !ok {
+		fs, err = spxfs.Open(resource.(string))
+		if err != nil {
+			return err
+		}
 	}
 	var keyDuration int
 	if cfg != nil {
@@ -265,7 +271,7 @@ func (p *Game) startLoad(resource string, cfg *Config) error {
 	p.shapes = make(map[string]Spriter)
 	p.events = make(chan event, 16)
 	p.fs = fs
-	return nil
+	return
 }
 
 func (p *Game) loadSprite(sprite Spriter, name string, gamer reflect.Value) error {
