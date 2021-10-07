@@ -152,6 +152,9 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 	if err := g.endLoad(v); err != nil {
 		panic(err)
 	}
+	if loader, ok := game.(interface{ OnLoaded() }); ok {
+		loader.OnLoaded()
+	}
 	if err := g.runLoop(&conf); err != nil {
 		panic(err)
 	}
