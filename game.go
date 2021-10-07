@@ -89,15 +89,20 @@ type Game struct {
 type Spriter = Shape
 
 type Gamer interface {
-	runLoop(cfg *Config) error
-}
-
-func (p *Game) Initialize() {
-	p.eventSinks.init(&p.sinkMgr, p)
+	initGame()
 }
 
 func (p *Game) Stopped() bool {
 	return p.isStopped
+}
+
+func (p *Game) initGame() {
+	p.eventSinks.init(&p.sinkMgr, p)
+}
+
+func Gopt_Game_Main(game Gamer) {
+	game.initGame()
+	game.(interface{ MainEntry() }).MainEntry()
 }
 
 func Gopt_Game_Run(game Gamer, resource string, gameConf ...*Config) {
@@ -254,7 +259,7 @@ func (p *Game) startLoad(resource string, cfg *Config) error {
 	if cfg != nil {
 		keyDuration = cfg.KeyDuration
 	}
-	p.Initialize()
+	p.initGame()
 	p.input.init(p, keyDuration)
 	p.sounds.init()
 	p.shapes = make(map[string]Spriter)
