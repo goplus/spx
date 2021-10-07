@@ -2,8 +2,6 @@ github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
 github.com/ajstarks/deck v0.0.0-20200831202436-30c9fc6549a9/go.mod h1:JynElWSGnm/4RlzPXRlREEwqTHAN3T56Bv2ITsFT3gY=
 github.com/ajstarks/deck/generate v0.0.0-20210309230005-c3f852c02e19/go.mod h1:T13YZdzov6OU0A1+RfKZiZN9ca6VeKdBdyDV+BY97Tk=
-github.com/ajstarks/svgo v0.0.0-20210406150507-75cfd577ce75 h1:tuK1xIp+jrEEF0l3xXab78w89ilYr0Am170KdSml2xc=
-github.com/ajstarks/svgo v0.0.0-20210406150507-75cfd577ce75/go.mod h1:K08gAheRH3/J6wwsYMMT4xOr94bZjxIelGM0+d/wbFw=
 github.com/ajstarks/svgo v0.0.0-20210927141636-6d70534b1098 h1:iiPTCsr/y6MEke5leED5Bi/0zlznD44tlHQvTgLOJcE=
 github.com/ajstarks/svgo v0.0.0-20210927141636-6d70534b1098/go.mod h1:1KcenG0jGWcpt8ov532z81sp/kMMUG485J2InIOyADM=
 github.com/go-gl/glfw/v3.3/glfw v0.0.0-20210727001814-0db043d8d5be h1:vEIVIuBApEBQTEJt19GfhoU+zFSV+sNTa9E9FdnRYfk=
@@ -32,11 +30,10 @@ github.com/kisielk/gotool v1.0.0/go.mod h1:XhKaO+MFFWcvkIS/tQcRk01m1F5IRFswLeQ+o
 github.com/pkg/browser v0.0.0-20180916011732-0a3d74bf9ce4/go.mod h1:4OwLy04Bl9Ef3GJJCoec+30X3LQs/0/m4HFRt/2LUSA=
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
 github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
-github.com/qiniu/audio v0.2.0 h1:WDPCxK1TohCsHha1KcoW4oD9gR1448uBvTbA5ZsphXk=
-github.com/qiniu/audio v0.2.0/go.mod h1:Ih9zcMx7Q1ZLXT8PIRolwgP8PrCxtwuXtGIpzwa7xjM=
+github.com/qiniu/audio v0.2.1 h1:lAc3dWfr7uAfn7mfee2u0/fl/QSQA9oTOqdBtxyFZAM=
+github.com/qiniu/audio v0.2.1/go.mod h1:APMJRPaS4toviejZnDzzZ8wVyr12jqZhd3xfKr/qYnE=
 github.com/qiniu/oksvg v0.1.2-no-charset h1:OecrJmiMB+3aj8yVbVW/p0ScD0Dosfndtnen8P5skaU=
 github.com/qiniu/oksvg v0.1.2-no-charset/go.mod h1:jofU/fE8XLv60JLqd4bpP6UdVkRGfpMGfV39KYKLfl8=
-github.com/qiniu/x v1.10.5/go.mod h1:03Ni9tj+N2h2aKnAz+6N0Xfl8FwMEDRC2PAlxekASDs=
 github.com/qiniu/x v1.11.5 h1:TYr5cl4g2yoHAZeDK4MTjKF6CMoG+IHlCDvvM5qym6U=
 github.com/qiniu/x v1.11.5/go.mod h1:03Ni9tj+N2h2aKnAz+6N0Xfl8FwMEDRC2PAlxekASDs=
 github.com/srwiley/rasterx v0.0.0-20200120212402-85cb7272f5e9/go.mod h1:mvWM0+15UqyrFKqdRjY6LuAVJR0HOVhJlEgZ5JWtSWU=
