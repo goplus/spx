@@ -10,12 +10,9 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/qiniu/audio v0.2.1
 	github.com/qiniu/x v1.11.5
-	github.com/srwiley/oksvg v0.1.2-no-charset
+	github.com/srwiley/oksvg v0.0.0-20210519022825-9fc0c575d5fe
 	github.com/srwiley/rasterx v0.0.0-20210519020934-456a8d69b780
 	golang.org/x/image v0.0.0-20210628002857-a66eb6448b8d
 )
 
-replace (
-	github.com/hajimehoshi/oto => github.com/hajimehoshi/oto v1.0.1
-	github.com/srwiley/oksvg => github.com/qiniu/oksvg v0.1.2-no-charset
-)
+replace github.com/hajimehoshi/oto => github.com/hajimehoshi/oto v1.0.1
