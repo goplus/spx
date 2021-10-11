@@ -7,7 +7,7 @@ onStart => {
 
 onCloned => {
 	setCostume "enemy1"
-	life = 5
+	life = 1
 	setXYpos rand(-131, 131), 237
 	show
 	for {
@@ -24,6 +24,9 @@ onCloned => {
 				}
 				hide
 				score += 5
+				if score>winscore {
+					broadcast "you win"
+				}
 			}
 		}
 		wait 0.05
@@ -44,4 +47,7 @@ onMsg "kill all", => {
 	}
 	hide
 	score += 5
+	if score>winscore {
+					broadcast "you win"
+				}
 }

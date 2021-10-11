@@ -15,4 +15,6 @@ var (
 	score       int
 )
 
+var winscore=2000
+
 run "res", {Title: "Aircraft War (by Go+)"}

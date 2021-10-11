@@ -10,17 +10,40 @@ onKey KeySpace, => {
 		broadcast "kill all"
 	}
 }
-
-onMsg "battle", => {
-	setCostume "hero1"
-	show
-	score = 0
-	life = 1
+onMsg "battle2", => {
 	for life >= 1 {
 		wait 0.1
 		Bullet.clone
-		planeX := mouseX
-		planeY := mouseY
+	}
+}
+onMsg "battle", => {
+	setCostume "hero1"
+	show
+	setXYpos 0, 0
+	score = 0
+	life = 1
+	broadcast "battle2"
+
+	for life >= 1 {
+		wait 0.01
+	
+		dis :=DistanceTo(Mouse)
+		xx := xpos
+		yy :=ypos
+		speed := 2.0
+
+		planeX := 0.0 
+		planeY := 0.0
+		
+
+		if dis>speed {
+			planeX = xx + (mouseX - xx)/dis * speed
+			planeY = yy + (mouseY - yy)/dis * speed
+		} else {
+			planeX = mouseX
+			planeY = mouseY
+		}
+
 		if planeX < -131 {
 			planeX = -131
 		} else if planeX > 131 {
@@ -41,7 +64,9 @@ onMsg "battle", => {
 		}
 		if touching("Bomb") {
 			bombs++
-			wait 0.8
+			wait 0.1 //Should not wait, can set Bomb not avaliable
 		}
 	}
 }
+
+//GOOS=windows GOARCH=amd64 go build main.go
