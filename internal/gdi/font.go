@@ -17,9 +17,11 @@
 package gdi
 
 import (
+	"fmt"
 	"image"
 	"io/ioutil"
 	"path"
+	"runtime"
 	"sync"
 
 	"github.com/golang/freetype/truetype"
@@ -43,7 +45,6 @@ var fontFindPaths = []string{
 	"/Library/Fonts",
 	"/System/Library/Fonts",
 	"/System/Library/Fonts/Supplemental",
-	"C:\\windows\\fonts\\",
 }
 
 func NewDefaultFont(options *FontOptions) *DefaultFont {
@@ -74,6 +75,16 @@ type fontNameInit struct {
 }
 
 func (p *DefaultFont) init(options *truetype.Options) {
+
+	switch runtime.GOOS {
+	case "darwin":
+	case "windows":
+		fontFindPaths = []string{
+			"C:\\windows\\fonts\\",
+		}
+	case "linux":
+	}
+
 	fontFaceNames := map[string]*fontNameInit{
 		"Times New Roman": {paths: []string{"Times New Roman Bold.ttf", "Times New Roman.ttf", "Times.ttf"}},
 		"SimSun":          {paths: []string{"SimSun.ttf", "SimSun.ttc", "Songti.ttc"}},
@@ -89,7 +100,7 @@ func (p *DefaultFont) init(options *truetype.Options) {
 	}
 	for name, fontInit := range fontFaceNames {
 		if !fontInit.inited {
-			panic("Font not found: " + name)
+			panic(fmt.Sprintf("Font not found: %s (%v not in %v)", name, fontInit.paths, fontFindPaths))
 		}
 	}
 	p.done <- nil
