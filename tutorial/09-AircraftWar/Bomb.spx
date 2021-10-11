@@ -12,7 +12,7 @@ onCloned => {
 			destroy
 		}
 		if touching("MyAircraft") {
-			wait 0.12
+			wait 0.01 //Engine need to improve
 			hide
 			destroy
 		}

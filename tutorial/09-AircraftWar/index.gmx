@@ -1,6 +1,5 @@
 var (
 	Backdrop    Backdrop
-	YouWin      YouWin
 	Bomb        Bomb
 	TextIntro   TextIntro
 	GameLogo    GameLogo
@@ -11,8 +10,10 @@ var (
 	Bullet      Bullet
 	SmallEnemy  SmallEnemy
 	GameOver    GameOver
+	YouWin      YouWin
 	bombs       int
 	score       int
 )
+var winscore = 1000
 
 run "res", {Title: "Aircraft War (by Go+)"}
