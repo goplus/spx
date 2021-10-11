@@ -43,6 +43,7 @@ var fontFindPaths = []string{
 	"/Library/Fonts",
 	"/System/Library/Fonts",
 	"/System/Library/Fonts/Supplemental",
+	"C:\\windows\\fonts\\",
 }
 
 func NewDefaultFont(options *FontOptions) *DefaultFont {
@@ -74,8 +75,8 @@ type fontNameInit struct {
 
 func (p *DefaultFont) init(options *truetype.Options) {
 	fontFaceNames := map[string]*fontNameInit{
-		"Times New Roman": {paths: []string{"Times New Roman Bold.ttf", "Times New Roman.ttf"}},
-		"SimSun":          {paths: []string{"SimSun.ttf", "Songti.ttc"}},
+		"Times New Roman": {paths: []string{"Times New Roman Bold.ttf", "Times New Roman.ttf", "Times.ttf"}},
+		"SimSun":          {paths: []string{"SimSun.ttf", "SimSun.ttc", "Songti.ttc"}},
 	}
 	for _, findPath := range fontFindPaths {
 		for name, fontInit := range fontFaceNames {
