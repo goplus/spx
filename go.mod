@@ -15,4 +15,7 @@ require (
 	golang.org/x/image v0.0.0-20210628002857-a66eb6448b8d
 )
 
-replace github.com/hajimehoshi/oto => github.com/hajimehoshi/oto v1.0.1
+replace (
+	github.com/hajimehoshi/oto => github.com/hajimehoshi/oto v1.0.1
+	github.com/srwiley/oksvg => github.com/qiniu/oksvg v0.1.2-no-charset
+)
