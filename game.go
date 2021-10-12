@@ -665,7 +665,9 @@ func (p *Game) objectPos(obj interface{}) (float64, float64) {
 	case specialObj:
 		if v == Mouse {
 			return p.getMousePos()
-		} else if v == Random {
+		}
+	case int:
+		if v == Random {
 			screenW, screenH := p.size()
 			mx, my := rand.Intn(screenW), rand.Intn(screenH)
 			return float64(mx - (screenW >> 1)), float64((screenH >> 1) - my)

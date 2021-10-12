@@ -12,11 +12,19 @@ import (
 	"github.com/goplus/spx/internal/gdi/clrutil"
 )
 
+type specialDir int
+type specialObj int
+
 const (
-	Right = 90
-	Left  = -90
-	Up    = 0
-	Down  = 180
+	Right specialDir = 90
+	Left  specialDir = -90
+	Up    specialDir = 0
+	Down  specialDir = 180
+)
+
+const (
+	Mouse specialObj = -5
+	Edge  specialObj = -6
 )
 
 type Sprite struct {
@@ -640,9 +648,18 @@ func (p *Sprite) Heading() float64 {
 //   Turn(degree)
 //   Turn(gox.Left)
 //   Turn(gox.Right)
-func (p *Sprite) Turn(delta float64) {
+func (p *Sprite) Turn(val interface{}) {
 	if debugInstr {
-		log.Println("Turn", p.name, delta)
+		log.Println("Turn", p.name, val)
+	}
+	var delta float64
+	switch v := val.(type) {
+	case specialDir:
+		delta = float64(-v)
+	case int:
+		delta = float64(v)
+	case float64:
+		delta = v
 	}
 	p.setDirection(delta, true)
 }
@@ -651,7 +668,6 @@ func (p *Sprite) Turn(delta float64) {
 //   TurnTo(sprite)
 //   TurnTo(spriteName)
 //   TurnTo(gox.Mouse)
-//   TurnTo(gox.Random)
 //   TurnTo(degree)
 //   TurnTo(gox.Left)
 //   TurnTo(gox.Right)
@@ -662,6 +678,8 @@ func (p *Sprite) TurnTo(obj interface{}) {
 		log.Println("TurnTo", p.name, obj)
 	}
 	switch v := obj.(type) {
+	case specialDir:
+		p.setDirection(float64(v), false)
 	case int:
 		p.setDirection(float64(v), false)
 	case float64:
@@ -677,7 +695,7 @@ func (p *Sprite) TurnTo(obj interface{}) {
 
 func (p *Sprite) setDirection(dir float64, change bool) {
 	if change {
-		dir -= p.direction
+		dir = p.direction - dir
 	}
 	p.direction = normalizeDirection(dir)
 }

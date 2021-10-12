@@ -8,16 +8,11 @@ import (
 	"strings"
 )
 
-type specialObj = int
-
 const (
-	Invalid = specialObj(-1)
-	Last    = specialObj(-2)
-	All     = specialObj(-3)
-	Random  = specialObj(-4)
-
-	Mouse = specialObj(-5)
-	Edge  = specialObj(-6)
+	Invalid = -1
+	Last    = -2
+	All     = -3
+	Random  = -4
 )
 
 // -------------------------------------------------------------------------------------
