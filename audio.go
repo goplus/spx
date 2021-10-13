@@ -107,7 +107,7 @@ func (p *soundMgr) play(source io.ReadCloser, wait ...bool) (err error) {
 
 	d = convert.ToStereo16(d)
 	d = convert.Resample(d, audioContext.SampleRate())
-	sp, err := audio.NewPlayer(audioContext, &readCloser{d, source})
+	sp, err := audioContext.NewPlayer(&readCloser{d, source})
 	if err != nil {
 		source.Close()
 		return

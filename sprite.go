@@ -271,25 +271,28 @@ func (p *Sprite) Die() { // prototype sprite can't be destoryed, but can die
 		ani(p)
 	}
 	if p.isCloned {
-		p.Destroy()
+		p.doDestroy()
 	} else {
-		p.isStopped = true
 		p.Hide()
 	}
 }
 
 func (p *Sprite) Destroy() { // delete this clone
 	if p.isCloned {
-		if debugInstr {
-			log.Println("Destroy", p.name)
-		}
-		p.doStopSay()
-		p.doDeleteClone()
-		p.g.removeShape(p)
-		p.isStopped = true
-		if p == gco.Current().Obj {
-			abortThread()
-		}
+		p.doDestroy()
+	}
+}
+
+func (p *Sprite) doDestroy() {
+	if debugInstr {
+		log.Println("Destroy", p.name)
+	}
+	p.doStopSay()
+	p.doDeleteClone()
+	p.g.removeShape(p)
+	p.isStopped = true
+	if p == gco.Current().Obj {
+		abortThread()
 	}
 }
 
@@ -310,6 +313,10 @@ func (p *Sprite) Show() {
 
 func (p *Sprite) Visible() bool {
 	return p.isVisible
+}
+
+func (p *Sprite) Cloned() bool {
+	return p.isCloned
 }
 
 // -----------------------------------------------------------------------------

@@ -1,5 +1,0 @@
-onStart => {
-	setXYpos 0, 0
-	goBackLayers 10
-	broadcast "start"
-}

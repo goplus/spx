@@ -15,12 +15,12 @@
       "y": 40
     }
   ],
-  "currentCostumeIndex": 1,
+  "currentCostumeIndex": 0,
   "heading": 90,
   "isDraggable": false,
   "rotationStyle": "normal",
   "size": 1,
-  "visible": false,
+  "visible": true,
   "x": 2,
   "y": 4
 }

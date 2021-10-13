@@ -13,7 +13,7 @@
   "isDraggable": false,
   "rotationStyle": "normal",
   "size": 0.4,
-  "visible": false,
+  "visible": true,
   "x": 0,
   "y": -110
 }
