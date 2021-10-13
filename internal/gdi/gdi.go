@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"image/color"
 
-	"golang.org/x/image/font"
 	"golang.org/x/image/math/fixed"
 
 	"github.com/goplus/spx/internal/gdi/text"
