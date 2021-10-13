@@ -1,3 +1,6 @@
+//go:build !canvas
+// +build !canvas
+
 package gdi
 
 import (
@@ -14,6 +17,8 @@ import (
 )
 
 // -------------------------------------------------------------------------------------
+
+type Font = font.Face
 
 type DefaultFont struct {
 	ascii  font.Face
