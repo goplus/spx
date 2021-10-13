@@ -4,16 +4,12 @@
 package gdi
 
 import (
-	"bytes"
 	"image/color"
 
 	"golang.org/x/image/math/fixed"
 
 	"github.com/goplus/spx/internal/gdi/text"
 	"github.com/hajimehoshi/ebiten/v2"
-
-	svgo "github.com/ajstarks/svgo"
-	svg "github.com/goplus/spx/internal/svgr"
 )
 
 // -------------------------------------------------------------------------------------
@@ -58,38 +54,6 @@ func DrawLines(target *ebiten.Image, f Font, x, y int, width int, text string, c
 	render := NewTextRender(f, width, 0)
 	render.AddText(text)
 	render.Draw(target, x, y, clr, mode)
-}
-
-// -------------------------------------------------------------------------------------
-
-// Canvas represents a gdi object.
-//
-type Canvas struct {
-	*svgo.SVG
-	Target *ebiten.Image
-}
-
-// Start creates a canvas object.
-//
-func Start(target *ebiten.Image) Canvas {
-	w := new(bytes.Buffer)
-	s := svgo.New(w)
-	cx, cy := target.Size()
-	s.Start(cx, cy)
-	return Canvas{s, target}
-}
-
-// End draws canvas data onto the target image.
-//
-func (p Canvas) End() {
-	p.SVG.End()
-	img, err := svg.Decode(p.SVG.Writer.(*bytes.Buffer))
-	if err != nil {
-		panic(err)
-	}
-	img2 := ebiten.NewImageFromImage(img)
-	defer img2.Dispose()
-	p.Target.DrawImage(img2, nil)
 }
 
 // -------------------------------------------------------------------------------------
