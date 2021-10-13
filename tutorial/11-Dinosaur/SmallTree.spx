@@ -38,12 +38,14 @@ onMsg "smallTree", => {
         clone
 
         // multi tree random
-        nums := int(rand(0,1))
-        for i:=0; i < nums; i++ {
-            seq = rand(0,5)
-            setCostume sprintf("smallTree%d", int(seq))
-            wait 0.23
-            clone
+        if score > 300 {
+            nums := int(rand(0,1))
+            for i:=0; i < nums; i++ {
+                seq = rand(0,5)
+                setCostume sprintf("smallTree%d", int(seq))
+                wait 0.2
+                clone
+            }
         }
     }
 }

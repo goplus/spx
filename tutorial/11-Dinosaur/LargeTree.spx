@@ -33,14 +33,12 @@ onMsg "largeTree", => {
         waitTime := rand(0,50) / 100
         wait waitTime
 
-        //seq := rand(0,4)
-        seq := 2
+        seq := rand(0,4)
         setCostume sprintf("largeTree%d", int(seq))
         clone
 
         // multi tree random
-        /*
-        if seq != 0 {
+        if seq != 0 && score > 300 {
             nums := int(rand(0,1))
             for i:=0; i < nums; i++ {
                 seq = rand(1,4)
@@ -49,7 +47,6 @@ onMsg "largeTree", => {
                 clone
             }
         }
-        */
     }
 }
 
