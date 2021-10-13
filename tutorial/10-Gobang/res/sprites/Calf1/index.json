@@ -2,10 +2,10 @@
   "costumes": [
     {
       "bitmapResolution": 1,
-      "name": "normal",
-      "path": "1.svg",
-      "x": 75,
-      "y": 75
+      "name": "calf1-a",
+      "path": "1.png",
+      "x": 47,
+      "y": 50
     }
   ],
   "currentCostumeIndex": 0,
@@ -13,7 +13,7 @@
   "isDraggable": false,
   "rotationStyle": "normal",
   "size": 1,
-  "visible": true,
-  "x": -100,
-  "y": -21
+  "visible": false,
+  "x": -59,
+  "y": 2
 }
