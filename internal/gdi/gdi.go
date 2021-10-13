@@ -1,3 +1,6 @@
+//go:build !canvas
+// +build !canvas
+
 package gdi
 
 import (
@@ -24,7 +27,7 @@ type TextRender struct {
 
 // NewTextRender creates a text rendering engine.
 //
-func NewTextRender(face font.Face, width int, dy int) TextRender {
+func NewTextRender(face Font, width int, dy int) TextRender {
 	r := text.NewRender(face, fixed.I(width), fixed.I(dy))
 	return TextRender{r}
 }
@@ -44,7 +47,7 @@ func (p TextRender) Draw(target *ebiten.Image, x, y int, clr color.Color, mode i
 
 // DrawText draws input text.
 //
-func DrawText(target *ebiten.Image, f font.Face, x, y int, text string, clr color.Color, mode int) {
+func DrawText(target *ebiten.Image, f Font, x, y int, text string, clr color.Color, mode int) {
 	render := NewTextRender(f, 0x80000, 0)
 	render.AddText(text)
 	render.Draw(target, x, y, clr, mode)
@@ -52,7 +55,7 @@ func DrawText(target *ebiten.Image, f font.Face, x, y int, text string, clr colo
 
 // DrawLines draws multiline text.
 //
-func DrawLines(target *ebiten.Image, f font.Face, x, y int, width int, text string, clr color.Color, mode int) {
+func DrawLines(target *ebiten.Image, f Font, x, y int, width int, text string, clr color.Color, mode int) {
 	render := NewTextRender(f, width, 0)
 	render.AddText(text)
 	render.Draw(target, x, y, clr, mode)

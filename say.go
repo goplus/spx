@@ -10,9 +10,9 @@ import (
 )
 
 var (
-	defaultFont   font.Face
-	defaultFont2  font.Face
-	defaultFontSm font.Face
+	defaultFont   gdi.Font
+	defaultFont2  gdi.Font
+	defaultFontSm gdi.Font
 )
 
 func init() {
