@@ -1,15 +1,9 @@
-package none
-
-import (
-	"testing"
-
-	_ "github.com/goplus/gop/builtin"
-)
+package gdi
 
 // -------------------------------------------------------------------------------------
 
-func TestBasic(t *testing.T) {
-	none()
+var fontFindPaths = []string{
+	"C:\\windows\\fonts",
 }
 
 // -------------------------------------------------------------------------------------

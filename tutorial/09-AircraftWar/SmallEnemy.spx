@@ -1,35 +1,5 @@
 var life int
 
-onStart => {
-	gotoFront
-	hide
-}
-
-onCloned => {
-	setCostume "enemy1"
-	life = 5
-	setXYpos rand(-131, 131), 237
-	show
-	for {
-		changeYpos -2.4
-		if ypos < -170 {
-			destroy
-		}
-		if touching("Bullet") {
-			life--
-			if life == 0 {
-				for i := 0; i < 4; i++ {
-					wait 0.05
-					nextCostume
-				}
-				hide
-				score += 5
-			}
-		}
-		wait 0.05
-	}
-}
-
 onMsg "battle", => {
 	for {
 		wait 1
@@ -37,11 +7,28 @@ onMsg "battle", => {
 	}
 }
 
-onMsg "kill all", => {
-	for i := 0; i < 4; i++ {
+onCloned => {
+	life = 1
+	setCostume 0
+	setXYpos rand(-131, 131), 237
+	show
+	for {
+		changeYpos -8
+		if ypos < -170 {
+			destroy
+		}
+		if touching("Bullet", "die") {
+			life--
+			if life == 0 {
+				addStore 5
+				die
+			}
+		}
 		wait 0.05
-		nextCostume
 	}
-	hide
-	score += 5
+}
+
+onMsg "kill all", => {
+	addStore 5
+	die
 }

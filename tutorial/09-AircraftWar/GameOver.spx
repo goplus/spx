@@ -1,14 +1,5 @@
-onStart => {
-	hide
-}
-
 onMsg "game over", => {
-	gotoFront
 	show
-	wait 1
+	wait 2
 	exit
-}
-
-onMsg "start", => {
-	hide
 }

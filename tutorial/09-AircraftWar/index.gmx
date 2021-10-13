@@ -1,6 +1,5 @@
 var (
 	Backdrop    Backdrop
-	YouWin      YouWin
 	Bomb        Bomb
 	TextIntro   TextIntro
 	GameLogo    GameLogo
@@ -11,8 +10,20 @@ var (
 	Bullet      Bullet
 	SmallEnemy  SmallEnemy
 	GameOver    GameOver
+	YouWin      YouWin
 	bombs       int
 	score       int
 )
+
+const (
+	winscore = 500
+)
+
+func addStore(val int) {
+	score += val
+	if score > winscore {
+		broadcast "you win"
+	}
+}
 
 run "res", {Title: "Aircraft War (by Go+)"}

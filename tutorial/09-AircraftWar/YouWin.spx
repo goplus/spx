@@ -1,1 +1,5 @@
-
+onMsg "you win", => {
+	show
+	wait 2
+	exit
+}

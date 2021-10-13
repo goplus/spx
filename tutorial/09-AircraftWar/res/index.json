@@ -11,8 +11,6 @@
   "currentCostumeIndex": 0,
   "zorder": [
     "Backdrop",
-    "YouWin",
-    "Bomb",
     "TextIntro",
     "GameLogo",
     "GameStart",
@@ -44,11 +42,13 @@
       "x": 7,
       "y": 0
     },
+    "Bomb",
     "MyAircraft",
     "MiddleEnemy",
     "HugeEnemy",
     "Bullet",
     "SmallEnemy",
+    "YouWin",
     "GameOver"
   ]
 }
