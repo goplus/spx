@@ -1,0 +1,78 @@
+{
+  "costumes": [
+    {
+      "bitmapResolution": 1,
+      "name": "smallTree0",
+      "path": "../common.png",
+      "x": 0,
+      "y": 0,
+      "minX": 314,
+      "minY": 2,
+      "maxX": 333,
+      "maxY": 55
+    },
+    {
+      "bitmapResolution": 1,
+      "name": "smallTree1",
+      "path": "../common.png",
+      "x": 0,
+      "y": 0,
+      "minX": 297,
+      "minY": 2,
+      "maxX": 314,
+      "maxY": 55
+    },
+    {
+      "bitmapResolution": 1,
+      "name": "smallTree2",
+      "path": "../common.png",
+      "x": 0,
+      "y": 0,
+      "minX": 280,
+      "minY": 2,
+      "maxX": 297,
+      "maxY": 55
+    },
+    {
+      "bitmapResolution": 1,
+      "name": "smallTree3",
+      "path": "../common.png",
+      "x": 0,
+      "y": 0,
+      "minX": 263,
+      "minY": 2,
+      "maxX": 280,
+      "maxY": 55
+    },
+    {
+      "bitmapResolution": 1,
+      "name": "smallTree4",
+      "path": "../common.png",
+      "x": 0,
+      "y": 0,
+      "minX": 245,
+      "minY": 2,
+      "maxX": 263,
+      "maxY": 55
+    },
+    {
+      "bitmapResolution": 1,
+      "name": "smallTree5",
+      "path": "../common.png",
+      "x": 0,
+      "y": 0,
+      "minX": 225,
+      "minY": 2,
+      "maxX": 245,
+      "maxY": 55
+    }
+  ],
+  "currentCostumeIndex": 0,
+  "heading": 90,
+  "isDraggable": true,
+  "rotationStyle": "normal",
+  "size": 1,
+  "visible": false,
+  "x": 1000,
+  "y": 0
+}

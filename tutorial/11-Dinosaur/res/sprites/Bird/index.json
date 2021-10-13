@@ -1,0 +1,34 @@
+{
+  "costumes": [
+    {
+      "bitmapResolution": 1,
+      "name": "bird0",
+      "path": "../common.png",
+      "x": 0,
+      "y": 0,
+      "minX": 182,
+      "minY": 2,
+      "maxX": 228,
+      "maxY": 55
+    },
+    {
+      "bitmapResolution": 1,
+      "name": "bird1",
+      "path": "../common.png",
+      "x": 0,
+      "y": 0,
+      "minX": 133,
+      "minY": 2,
+      "maxX": 182,
+      "maxY": 55
+    }
+  ],
+  "currentCostumeIndex": 0,
+  "heading": 90,
+  "isDraggable": true,
+  "rotationStyle": "normal",
+  "size": 1,
+  "visible": false,
+  "x": 1000,
+  "y": 0
+}

@@ -1,0 +1,50 @@
+var (
+    road_req int
+    setFinish bool
+)
+
+onMsg "start", => {
+    setFinish = false
+    if isWordInit {
+        return
+    }
+
+    isWordInit = true
+    for {
+        if  road_req > 5 {
+            break
+        }
+
+        currentCostume := sprintf("road%d", road_req)
+        setCostume currentCostume
+        clone
+        road_req++
+    }
+}
+
+onCloned => {
+    setXYpos float64(200 * road_req)-400, -30
+    show
+    for {
+        if isFinish && setFinish {
+            wait 0.01
+            continue
+        }
+
+        if isFinish {
+            //StillMoving
+            for i := 0; i < 8; i++ {
+                changeXpos -1
+                wait 0.01
+            }
+            setFinish = true
+        }
+
+        changeXpos -1 * speed
+        if xpos < -600 {
+            setXpos 400
+        }
+
+        wait 0.01
+    }
+}

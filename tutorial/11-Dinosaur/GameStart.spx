@@ -1,0 +1,63 @@
+var (
+    count int
+)
+
+onClick => {
+	hide
+	isFinish = false
+	broadcast "start"
+}
+
+onKey KeySpace, => {
+    if isFinish {
+	    hide
+	    isFinish = false
+	    broadcast "start"
+    }
+}
+
+onMsg "start", => {
+    speed = 1.5
+    score = 0
+    total := 0.0
+    for {
+        if isFinish {
+            break
+        }
+
+        if count%30 == 0 {
+            obstacle := rand(0, 2)
+            switch obstacle {
+            case 0:
+                broadcast "smallTree"
+            case 1:
+                broadcast "largeTree"
+            case 2:
+                broadcast "bird"
+            }
+        }
+
+        count++
+        total = total + speed
+        score = int(total)
+        if score % 100 == 0 && speed < 2 {
+            speed += 0.1
+        }
+
+        if score % 500 == 0 && speed < 4 {
+            speed += 0.1
+        }
+
+        wait 0.1
+    }
+}
+
+onMsg "finish", => {
+    wait 0.10
+	show
+	isFinish = true
+	if highScore < score {
+	    highScore = score
+	}
+}
+

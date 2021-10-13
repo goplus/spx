@@ -1,0 +1,67 @@
+{
+  "costumes": [
+    {
+      "bitmapResolution": 1,
+      "name": "road0",
+      "path": "../common.png",
+      "x": 0,
+      "y": 15,
+      "minX": 0,
+      "minY": 52,
+      "maxX": 200,
+      "maxY": 69
+    },
+    {
+      "bitmapResolution": 1,
+      "name": "road1",
+      "path": "../common.png",
+      "x": 0,
+      "y": 15,
+      "minX": 200,
+      "minY": 52,
+      "maxX": 400,
+      "maxY": 69
+    },
+    {
+      "bitmapResolution": 1,
+      "name": "road2",
+      "path": "../common.png",
+      "x": 0,
+      "y": 15,
+      "minX": 400,
+      "minY": 52,
+      "maxX": 600,
+      "maxY": 69
+    },
+    {
+      "bitmapResolution": 1,
+      "name": "road3",
+      "path": "../common.png",
+      "x": 0,
+      "y": 15,
+      "minX": 600,
+      "minY": 52,
+      "maxX": 800,
+      "maxY": 69
+    },
+    {
+      "bitmapResolution": 1,
+      "name": "road4",
+      "path": "../common.png",
+      "x": 0,
+      "y": 15,
+      "minX": 800,
+      "minY": 52,
+      "maxX": 1000,
+      "maxY": 69
+    }
+  ],
+  "currentCostumeIndex": 0,
+  "heading": 90,
+  "isDraggable": true,
+  "rotationStyle": "normal",
+  "size": 1,
+  "visible": false,
+  "x": -200,
+  "y": -50
+}
