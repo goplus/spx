@@ -47,7 +47,7 @@ type imageLoader interface {
 
 type imageLoaderByPath string
 
-func (path imageLoaderByPath) load(fs spxfs.Dir, pt,  minPt, maxPt *imagePoint) (*ebiten.Image, error) {
+func (path imageLoaderByPath) load(fs spxfs.Dir, pt, minPt, maxPt *imagePoint) (*ebiten.Image, error) {
 	f, err := fs.Open(string(path))
 	if err != nil {
 		return nil, errors.Wrapf(err, "imageLoader: open file `%s` failed", path)
@@ -75,11 +75,11 @@ func (path imageLoaderByPath) load(fs spxfs.Dir, pt,  minPt, maxPt *imagePoint) 
 // -------------------------------------------------------------------------------------
 
 type delayloadImage struct {
-	cache       *ebiten.Image
-	pt          imagePoint
-	minPt       imagePoint
-	maxPt       imagePoint
-	loader      imageLoader
+	cache  *ebiten.Image
+	pt     imagePoint
+	minPt  imagePoint
+	maxPt  imagePoint
+	loader imageLoader
 }
 
 func (p *delayloadImage) ensure(fs spxfs.Dir) {
@@ -142,7 +142,7 @@ type costume struct {
 func newCostumeWith(name string, img *costumeSetImage, faceLeft float64, i, bitmapResolution int) *costume {
 	loader := &imageLoaderByCostumeSet{costumeSet: img, index: i}
 	return &costume{
-		name: name, img: delayloadImage{ loader: loader},
+		name: name, img: delayloadImage{loader: loader},
 		faceLeft: faceLeft, bitmapResolution: bitmapResolution,
 	}
 }

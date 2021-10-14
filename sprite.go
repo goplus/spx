@@ -13,6 +13,7 @@ import (
 )
 
 type specialDir int
+
 type specialObj int
 
 const (

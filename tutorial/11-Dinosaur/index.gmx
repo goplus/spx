@@ -1,17 +1,16 @@
 var (
-    GameStart GameStart
+	GameStart  GameStart
 	Dinosaur   Dinosaur
-	SmallTree   SmallTree
-	LargeTree   LargeTree
-	Bird   Bird
-	Road   Road
-	score   int
-	highScore   int
-	isFinish bool
+	SmallTree  SmallTree
+	LargeTree  LargeTree
+	Bird       Bird
+	Road       Road
+	score      int
+	highScore  int
+	isFinish   bool
 	isWordInit bool
-	speed float64
+	speed      float64
 )
-
 
 isFinish = true
 run "res", {Title: "Dinosaur (by Go+)"}
