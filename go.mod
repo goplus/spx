@@ -1,4 +1,4 @@
-module github.com/peterSZW/spx
+module github.com/goplus/spx
 
 go 1.16
 
