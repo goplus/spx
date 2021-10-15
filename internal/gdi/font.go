@@ -1,18 +1,5 @@
-/*
- Copyright 2021 The GoPlus Authors (goplus.org)
-
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
-*/
+//go:build !canvas
+// +build !canvas
 
 package gdi
 
@@ -21,7 +8,6 @@ import (
 	"image"
 	"io/ioutil"
 	"path"
-	"runtime"
 	"sync"
 
 	"github.com/golang/freetype/truetype"
@@ -32,6 +18,8 @@ import (
 
 // -------------------------------------------------------------------------------------
 
+type Font = font.Face
+
 type DefaultFont struct {
 	ascii  font.Face
 	songti font.Face
@@ -40,12 +28,6 @@ type DefaultFont struct {
 }
 
 type FontOptions = truetype.Options
-
-var fontFindPaths = []string{
-	"/Library/Fonts",
-	"/System/Library/Fonts",
-	"/System/Library/Fonts/Supplemental",
-}
 
 func NewDefaultFont(options *FontOptions) *DefaultFont {
 	p := &DefaultFont{done: make(chan error)}
@@ -75,16 +57,6 @@ type fontNameInit struct {
 }
 
 func (p *DefaultFont) init(options *truetype.Options) {
-
-	switch runtime.GOOS {
-	case "darwin":
-	case "windows":
-		fontFindPaths = []string{
-			"C:\\windows\\fonts\\",
-		}
-	case "linux":
-	}
-
 	fontFaceNames := map[string]*fontNameInit{
 		"Times New Roman": {paths: []string{"Times New Roman Bold.ttf", "Times New Roman.ttf", "Times.ttf"}},
 		"SimSun":          {paths: []string{"SimSun.ttf", "SimSun.ttc", "Songti.ttc"}},

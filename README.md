@@ -123,13 +123,13 @@ How to show the `score` on the stage? You don't need write code, just add a `sta
 
 ### tutorial/03-Clone
 
-![Screen Shot1](tutorial/03-Clone/1.jpg)
+![Screen Shot1](tutorial/03-Clone/1.png)
 
 Through this example you can learn:
 * Clone sprites and destory them.
 * Distinguish between sprite variables and shared variables that can access by all sprites.
 
-Here are some codes in [Cat.spx](tutorial/03-Clone/Cat.spx):
+Here are some codes in [Calf.spx](tutorial/03-Clone/Calf.spx):
 
 ```coffee
 var (
@@ -146,9 +146,9 @@ onCloned => {
 }
 ```
 
-When we click the sprite `Cat`, it receives an `onClick` event. Then it calls `clone` to clone itself. And after cloning, the new `Cat` sprite will receive an `onCloned` event.
+When we click the sprite `Calf`, it receives an `onClick` event. Then it calls `clone` to clone itself. And after cloning, the new `Calf` sprite will receive an `onCloned` event.
 
-In `onCloned` event, the new `Cat` sprite uses a variable named `gid`. It doesn't define in [Cat.spx](tutorial/03-Clone/Cat.spx), but in [index.gmx](tutorial/03-Clone/index.gmx).
+In `onCloned` event, the new `Calf` sprite uses a variable named `gid`. It doesn't define in [Calf.spx](tutorial/03-Clone/Calf.spx), but in [index.gmx](tutorial/03-Clone/index.gmx).
 
 
 Here are all the codes of [index.gmx](tutorial/03-Clone/index.gmx):
@@ -156,16 +156,16 @@ Here are all the codes of [index.gmx](tutorial/03-Clone/index.gmx):
 ```coffee
 var (
 	Arrow Arrow
-	Cat   Cat
+	Calf  Calf
 	gid   int
 )
 
 run "res", {Title: "Clone and Destory (by Go+)"}
 ```
 
-All these three variables in [index.gmx](tutorial/03-Clone/index.gmx) are shared by all sprites. `Arrow` and `Cat` are sprites that exist in this project. `gid` means `global id`. It is used to allocate id for all cloned `Cat` sprites.
+All these three variables in [index.gmx](tutorial/03-Clone/index.gmx) are shared by all sprites. `Arrow` and `Calf` are sprites that exist in this project. `gid` means `global id`. It is used to allocate id for all cloned `Calf` sprites.
 
-Let's back to [Cat.spx](tutorial/03-Clone/Cat.spx) to see the full codes of `onCloned`:
+Let's back to [Calf.spx](tutorial/03-Clone/Calf.spx) to see the full codes of `onCloned`:
 
 ```coffee
 onCloned => {
@@ -176,9 +176,9 @@ onCloned => {
 }
 ```
 
-It increases `gid` value and assigns it to sprite `id`. This makes all these `Cat` sprites have different `id`. Then the cloned `Cat` moves forward 50 steps and says `id` of itself.
+It increases `gid` value and assigns it to sprite `id`. This makes all these `Calf` sprites have different `id`. Then the cloned `Calf` moves forward 50 steps and says `id` of itself.
 
-Why these `Cat` sprites need different `id`? Because we want destory one of them by its `id`.
+Why these `Calf` sprites need different `id`? Because we want destory one of them by its `id`.
 
 Here are all the codes in [Arrow.spx](tutorial/03-Clone/Arrow.spx):
 
@@ -191,7 +191,7 @@ onClick => {
 
 When we click `Arrow`, it broadcasts an "undo" message (NOTE: We pass the second parameter `true` to broadcast to indicate we wait all sprites to finish processing this message).
 
-All `Cat` sprites receive this message, but only the last cloned sprite finds its `id` is equal to `gid` then destroys itself. Here are the related codes in [Cat.spx](tutorial/03-Clone/Cat.spx):
+All `Calf` sprites receive this message, but only the last cloned sprite finds its `id` is equal to `gid` then destroys itself. Here are the related codes in [Calf.spx](tutorial/03-Clone/Calf.spx):
 
 ```coffee
 onMsg "undo", => {

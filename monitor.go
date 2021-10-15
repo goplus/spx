@@ -1,23 +1,8 @@
-/*
- Copyright 2021 The GoPlus Authors (goplus.org)
-
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
-*/
-
 package spx
 
 import (
 	"fmt"
+	"image"
 	"image/color"
 	"log"
 	"reflect"
@@ -26,6 +11,7 @@ import (
 	"syscall"
 
 	"github.com/goplus/spx/internal/gdi"
+	"github.com/hajimehoshi/ebiten/v2"
 )
 
 // -------------------------------------------------------------------------------------
@@ -175,7 +161,28 @@ func (p *stageMonitor) draw(dc drawContext) {
 	}
 }
 
+type rectKey struct {
+	x, y, w, h, clr, clrPen int
+}
+
+var (
+	rcMap = make(map[rectKey]*ebiten.Image)
+)
+
 func drawRoundRect(dc drawContext, x, y, w, h int, clr, clrPen int) {
+	key := rectKey{x, y, w, h, clr, clrPen}
+	if i, ok := rcMap[key]; ok {
+		dc.DrawImage(i, nil)
+		return
+	}
+	img, err := getRoundRect(dc, x, y, w, h, clr, clrPen)
+	if err != nil {
+		panic(err)
+	}
+	rcMap[key] = ebiten.NewImageFromImage(img)
+}
+
+func getRoundRect(dc drawContext, x, y, w, h int, clr, clrPen int) (image.Image, error) {
 	varTable := []string{
 		"$x", strconv.Itoa(x),
 		"$y2", strconv.Itoa(y + stmCornerSize),
@@ -190,9 +197,11 @@ func drawRoundRect(dc drawContext, x, y, w, h int, clr, clrPen int) {
 		(clr>>16)&0xff, (clr>>8)&0xff, clr&0xff,
 		(clrPen>>16)&0xff, (clrPen>>8)&0xff, clrPen&0xff)
 
-	canvas := gdi.Start(dc.Image)
-	canvas.Path(glyph, style)
-	canvas.End()
+	cx, cy := dc.Size()
+	svg := gdi.NewSVG(cx, cy)
+	svg.Path(glyph, style)
+	svg.End()
+	return svg.ToImage()
 }
 
 func (p *stageMonitor) hit(hc hitContext) (hr hitResult, ok bool) {

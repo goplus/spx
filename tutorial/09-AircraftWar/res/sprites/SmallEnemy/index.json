@@ -9,34 +9,41 @@
     },
     {
       "bitmapResolution": 2,
-      "name": "enemy1_down1",
+      "name": "die-0",
       "path": "33.png",
       "x": 50,
       "y": 36
     },
     {
       "bitmapResolution": 2,
-      "name": "enemy1_down2",
+      "name": "die-1",
       "path": "34.png",
       "x": 50,
       "y": 44
     },
     {
       "bitmapResolution": 2,
-      "name": "enemy1_down3",
+      "name": "die-2",
       "path": "35.png",
       "x": 56,
       "y": 50
     },
     {
       "bitmapResolution": 2,
-      "name": "enemy1_down4",
+      "name": "die-3",
       "path": "36.png",
       "x": 44,
       "y": 38
     }
   ],
-  "currentCostumeIndex": 3,
+  "currentCostumeIndex": 0,
+  "animations": {
+    "die": {
+      "wait": 0.05,
+      "from": "die-0",
+      "n": 3
+    }
+  },
   "heading": 90,
   "isDraggable": false,
   "rotationStyle": "normal",

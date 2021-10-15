@@ -8,6 +8,7 @@ _gsc
 _test
 haiyang/
 feijidazhan/
+.idea
 
 # Binaries for programs and plugins
 *.exe

@@ -16,34 +16,41 @@
     },
     {
       "bitmapResolution": 2,
-      "name": "hero_blowup_n1",
+      "name": "die-0",
       "path": "10.png",
       "x": 98,
       "y": 122
     },
     {
       "bitmapResolution": 2,
-      "name": "hero_blowup_n2",
+      "name": "die-1",
       "path": "11.png",
       "x": 98,
       "y": 122
     },
     {
       "bitmapResolution": 2,
-      "name": "hero_blowup_n3",
+      "name": "die-2",
       "path": "12.png",
       "x": 98,
       "y": 122
     },
     {
       "bitmapResolution": 2,
-      "name": "hero_blowup_n4",
+      "name": "die-3",
       "path": "13.png",
       "x": 66,
       "y": 76
     }
   ],
-  "currentCostumeIndex": 5,
+  "currentCostumeIndex": 0,
+  "animations": {
+    "die": {
+      "wait": 0.05,
+      "from": "die-0",
+      "n": 3
+    }
+  },
   "heading": 90,
   "isDraggable": false,
   "rotationStyle": "normal",

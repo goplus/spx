@@ -1,6 +1,6 @@
 var (
 	Arrow Arrow
-	Cat   Cat
+	Calf  Calf
 	gid   int
 )
 

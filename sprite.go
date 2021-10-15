@@ -1,19 +1,3 @@
-/*
- Copyright 2021 The GoPlus Authors (goplus.org)
-
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
-*/
-
 package spx
 
 import (
@@ -28,11 +12,19 @@ import (
 	"github.com/goplus/spx/internal/gdi/clrutil"
 )
 
+type specialDir int
+type specialObj int
+
 const (
-	Right = 90
-	Left  = -90
-	Up    = 0
-	Down  = 180
+	Right specialDir = 90
+	Left  specialDir = -90
+	Up    specialDir = 0
+	Down  specialDir = 180
+)
+
+const (
+	Mouse specialObj = -5
+	Edge  specialObj = -6
 )
 
 type Sprite struct {
@@ -280,25 +272,28 @@ func (p *Sprite) Die() { // prototype sprite can't be destoryed, but can die
 		ani(p)
 	}
 	if p.isCloned {
-		p.Destroy()
+		p.doDestroy()
 	} else {
-		p.isStopped = true
 		p.Hide()
 	}
 }
 
 func (p *Sprite) Destroy() { // delete this clone
 	if p.isCloned {
-		if debugInstr {
-			log.Println("Destroy", p.name)
-		}
-		p.doStopSay()
-		p.doDeleteClone()
-		p.g.removeShape(p)
-		p.isStopped = true
-		if p == gco.Current().Obj {
-			abortThread()
-		}
+		p.doDestroy()
+	}
+}
+
+func (p *Sprite) doDestroy() {
+	if debugInstr {
+		log.Println("Destroy", p.name)
+	}
+	p.doStopSay()
+	p.doDeleteClone()
+	p.g.removeShape(p)
+	p.isStopped = true
+	if p == gco.Current().Obj {
+		abortThread()
 	}
 }
 
@@ -319,6 +314,10 @@ func (p *Sprite) Show() {
 
 func (p *Sprite) Visible() bool {
 	return p.isVisible
+}
+
+func (p *Sprite) Cloned() bool {
+	return p.isCloned
 }
 
 // -----------------------------------------------------------------------------
@@ -673,9 +672,18 @@ func (p *Sprite) Heading() float64 {
 //   Turn(degree)
 //   Turn(gox.Left)
 //   Turn(gox.Right)
-func (p *Sprite) Turn(delta float64) {
+func (p *Sprite) Turn(val interface{}) {
 	if debugInstr {
-		log.Println("Turn", p.name, delta)
+		log.Println("Turn", p.name, val)
+	}
+	var delta float64
+	switch v := val.(type) {
+	case specialDir:
+		delta = float64(-v)
+	case int:
+		delta = float64(v)
+	case float64:
+		delta = v
 	}
 	p.setDirection(delta, true)
 }
@@ -684,7 +692,6 @@ func (p *Sprite) Turn(delta float64) {
 //   TurnTo(sprite)
 //   TurnTo(spriteName)
 //   TurnTo(gox.Mouse)
-//   TurnTo(gox.Random)
 //   TurnTo(degree)
 //   TurnTo(gox.Left)
 //   TurnTo(gox.Right)
@@ -695,6 +702,8 @@ func (p *Sprite) TurnTo(obj interface{}) {
 		log.Println("TurnTo", p.name, obj)
 	}
 	switch v := obj.(type) {
+	case specialDir:
+		p.setDirection(float64(v), false)
 	case int:
 		p.setDirection(float64(v), false)
 	case float64:
@@ -710,7 +719,7 @@ func (p *Sprite) TurnTo(obj interface{}) {
 
 func (p *Sprite) setDirection(dir float64, change bool) {
 	if change {
-		dir -= p.direction
+		dir = p.direction - dir
 	}
 	p.direction = normalizeDirection(dir)
 }

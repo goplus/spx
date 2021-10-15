@@ -1,15 +1,5 @@
-
-onStart => {
-    hide 
-}
-
 onMsg "you win", => {
-	gotoFront
 	show
-	wait 3
+	wait 2
 	exit
-}
-
-onMsg "start", => {
-	hide
 }
