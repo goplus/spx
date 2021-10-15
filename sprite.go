@@ -49,6 +49,7 @@ type Sprite struct {
 
 	sayObj *sayOrThinker
 	anis   map[string]func(*Sprite)
+	kv     map[string]string
 
 	penColor color.RGBA
 	penShade float64
@@ -420,6 +421,25 @@ func (p *Sprite) getAni(name string) func(*Sprite) {
 		return p.anis[name]
 	}
 	return nil
+}
+
+func (p *Sprite) SetKV(k string, v string) {
+
+	if p.isCloned {
+		return
+	}
+	if p.kv == nil {
+		p.kv = make(map[string]string)
+	}
+	p.kv[k] = v
+}
+
+// GetKV func:
+func (p *Sprite) GetKV(k string) string {
+	if p.kv != nil {
+		return p.kv[k]
+	}
+	return ""
 }
 
 // -----------------------------------------------------------------------------
