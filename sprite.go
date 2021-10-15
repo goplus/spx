@@ -425,9 +425,6 @@ func (p *Sprite) getAni(name string) func(*Sprite) {
 
 func (p *Sprite) SetKV(k string, v string) {
 
-	if p.isCloned {
-		return
-	}
 	if p.kv == nil {
 		p.kv = make(map[string]string)
 	}
