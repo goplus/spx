@@ -226,10 +226,6 @@ type costumeConfig struct {
 	Path             string  `json:"path"`
 	X                float64 `json:"x"`
 	Y                float64 `json:"y"`
-	MinX             float64 `json:"minX"`
-	MinY             float64 `json:"minY"`
-	MaxX             float64 `json:"maxX"`
-	MaxY             float64 `json:"maxY"`
 	FaceLeft         float64 `json:"faceLeft"`
 	BitmapResolution int     `json:"bitmapResolution"`
 }
