@@ -71,9 +71,10 @@ func (p *Sprite) Parent() *Game {
 	return p.g
 }
 
-func (p *Sprite) init(base string, g *Game, name string, sprite *spriteConfig, gamer reflect.Value) {
+func (p *Sprite) init(
+	base string, g *Game, name string, sprite *spriteConfig, gamer reflect.Value, shared *sharedImages) {
 	if sprite.CostumeSet != nil {
-		p.baseObj.initWith(base, sprite.CostumeSet, sprite.CurrentCostumeIndex)
+		p.baseObj.initWith(base, sprite.CostumeSet, sprite.CurrentCostumeIndex, shared)
 	} else {
 		p.baseObj.init(base, sprite.Costumes, sprite.CurrentCostumeIndex)
 	}

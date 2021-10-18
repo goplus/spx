@@ -3,6 +3,7 @@ package spx
 import (
 	"image"
 	"math"
+	"path"
 	"strconv"
 
 	_ "image/jpeg" // for image decode
@@ -43,6 +44,8 @@ type imagePoint struct {
 type imageLoader interface {
 	load(fs spxfs.Dir, pt *imagePoint) (*ebiten.Image, error)
 }
+
+// -------------------------------------------------------------------------------------
 
 type imageLoaderByPath string
 
@@ -95,6 +98,38 @@ func (p *costumeSetImage) ensure(fs spxfs.Dir) {
 		p.width = p.cache.Bounds().Dx() / p.nx
 	}
 }
+
+type sharedImages struct {
+	imgs map[string]*ebiten.Image
+}
+
+type sharedImage struct {
+	shared *sharedImages
+	path   string
+	rc     *costumeSetRect
+}
+
+func (p *sharedImage) load(fs spxfs.Dir, pt *imagePoint) (ret *ebiten.Image, err error) {
+	path := p.path
+	shared, ok := p.shared.imgs[path]
+	if !ok {
+		var tmp imagePoint
+		if shared, err = imageLoaderByPath(path).load(fs, &tmp); err != nil {
+			return
+		}
+		p.shared.imgs[path] = shared
+	}
+	rc := *p.rc
+	min := image.Point{X: int(rc.X), Y: int(rc.Y)}
+	max := image.Point{X: int(rc.X + rc.W), Y: int(rc.Y + rc.H)}
+	pt.x, pt.y = rc.W/2, rc.H/2
+	if sub := shared.SubImage(image.Rectangle{Min: min, Max: max}); sub != nil {
+		return sub.(*ebiten.Image), nil
+	}
+	panic("disposed image")
+}
+
+// -------------------------------------------------------------------------------------
 
 type imageLoaderByCostumeSet struct {
 	costumeSet *costumeSetImage
@@ -157,10 +192,17 @@ type baseObj struct {
 	currentCostumeIndex int
 }
 
-func (p *baseObj) initWith(base string, cs *costumeSet, currentCostumeIndex int) {
+func (p *baseObj) initWith(base string, cs *costumeSet, currentCostumeIndex int, shared *sharedImages) {
 	nx, faceLeft, bitmapResolution := cs.Nx, cs.FaceLeft, cs.BitmapResolution
-	costumeSetLoader := imageLoaderByPath(base + cs.Path)
-	img := &costumeSetImage{loader: costumeSetLoader, nx: nx}
+	imgPath := path.Join(base, cs.Path)
+	var img *costumeSetImage
+	if cs.Rect == nil {
+		costumeSetLoader := imageLoaderByPath(imgPath)
+		img = &costumeSetImage{loader: costumeSetLoader, nx: nx}
+	} else {
+		simg := &sharedImage{shared: shared, path: imgPath, rc: cs.Rect}
+		img = &costumeSetImage{loader: simg, nx: nx}
+	}
 	p.costumes = make([]*costume, nx)
 	if cs.Items == nil {
 		for index := 0; index < nx; index++ {
