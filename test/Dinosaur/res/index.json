@@ -1,0 +1,16 @@
+{
+  "costumes": [
+    {
+      "bitmapResolution": 1,
+      "name": "backdrop1",
+      "path": "6.png",
+      "x": 480,
+      "y": 360
+    }
+  ],
+  "currentCostumeIndex": 0,
+  "zorder": [
+    "Bird",
+    "Dinosaur"
+  ]
+}
