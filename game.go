@@ -51,7 +51,8 @@ func SetDebug(flags int) {
 type Game struct {
 	baseObj
 	eventSinks
-	fs spxfs.Dir
+	fs     spxfs.Dir
+	shared *sharedImages
 
 	sounds soundMgr
 	turtle turtleCanvas
@@ -78,6 +79,13 @@ type Gamer interface {
 
 func (p *Game) Stopped() bool {
 	return p.isStopped
+}
+
+func (p *Game) getSharedImgs() *sharedImages {
+	if p.shared == nil {
+		p.shared = &sharedImages{imgs: make(map[string]*ebiten.Image)}
+	}
+	return p.shared
 }
 
 func (p *Game) initGame() {
@@ -192,6 +200,13 @@ func makeEmptyInterface(typ reflect.Type, word unsafe.Pointer) (i interface{}) {
 	return
 }
 
+type costumeSetRect struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+	W float64 `json:"w"`
+	H float64 `json:"h"`
+}
+
 type costumeSetItem struct {
 	NamePrefix string `json:"namePrefix"`
 	N          int    `json:"n"`
@@ -199,6 +214,7 @@ type costumeSetItem struct {
 
 type costumeSet struct {
 	Path             string           `json:"path"`
+	Rect             *costumeSetRect  `json:"rect"`
 	Nx               int              `json:"nx"`
 	BitmapResolution int              `json:"bitmapResolution"`
 	FaceLeft         float64          `json:"faceLeft"`
@@ -279,7 +295,7 @@ func (p *Game) loadSprite(sprite Spriter, name string, gamer reflect.Value) erro
 	// init sprite (field 0)
 	vSpr := reflect.ValueOf(sprite).Elem()
 	base := vSpr.Field(0).Addr().Interface().(*Sprite)
-	base.init(baseDir, p, name, &conf, gamer)
+	base.init(baseDir, p, name, &conf, gamer, p.getSharedImgs())
 	p.shapes[name] = sprite
 	//
 	// init gamer pointer (field 1)
