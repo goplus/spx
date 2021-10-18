@@ -192,8 +192,34 @@ type baseObj struct {
 	currentCostumeIndex int
 }
 
-func (p *baseObj) initWith(base string, cs *costumeSet, currentCostumeIndex int, shared *sharedImages) {
-	nx, faceLeft, bitmapResolution := cs.Nx, cs.FaceLeft, cs.BitmapResolution
+func (p *baseObj) initWith(base string, sprite *spriteConfig, shared *sharedImages) {
+	if sprite.CostumeSet != nil {
+		initWithCS(p, base, sprite.CostumeSet, shared)
+	} else if sprite.CostumeMPSet != nil {
+		initWithCMPS(p, base, sprite.CostumeMPSet, shared)
+	} else {
+		panic("sprite.init should have one of costumes, costumeSet and costumeMPSet")
+	}
+	nx := len(p.costumes)
+	currentCostumeIndex := sprite.CurrentCostumeIndex
+	if currentCostumeIndex >= nx || currentCostumeIndex < 0 {
+		currentCostumeIndex = 0
+	}
+	p.currentCostumeIndex = currentCostumeIndex
+}
+
+func initWithCMPS(p *baseObj, base string, cmps *costumeMPSet, shared *sharedImages) {
+	faceLeft, bitmapResolution := cmps.FaceLeft, cmps.BitmapResolution
+	imgPath := path.Join(base, cmps.Path)
+	for _, cs := range cmps.Parts {
+		simg := &sharedImage{shared: shared, path: imgPath, rc: &cs.Rect}
+		img := &costumeSetImage{loader: simg, nx: cs.Nx}
+		initCSPart(p, img, faceLeft, bitmapResolution, cs.Nx, cs.Items)
+	}
+}
+
+func initWithCS(p *baseObj, base string, cs *costumeSet, shared *sharedImages) {
+	nx := cs.Nx
 	imgPath := path.Join(base, cs.Path)
 	var img *costumeSetImage
 	if cs.Rect == nil {
@@ -203,28 +229,30 @@ func (p *baseObj) initWith(base string, cs *costumeSet, currentCostumeIndex int,
 		simg := &sharedImage{shared: shared, path: imgPath, rc: cs.Rect}
 		img = &costumeSetImage{loader: simg, nx: nx}
 	}
-	p.costumes = make([]*costume, nx)
-	if cs.Items == nil {
+	p.costumes = make([]*costume, 0, nx)
+	initCSPart(p, img, cs.FaceLeft, cs.BitmapResolution, nx, cs.Items)
+}
+
+func initCSPart(p *baseObj, img *costumeSetImage, faceLeft float64, bitmapResolution, nx int, items []costumeSetItem) {
+	if items == nil {
 		for index := 0; index < nx; index++ {
-			p.costumes[index] = newCostumeWith(strconv.Itoa(index), img, faceLeft, index, bitmapResolution)
+			c := newCostumeWith(strconv.Itoa(index), img, faceLeft, index, bitmapResolution)
+			p.costumes = append(p.costumes, c)
 		}
 	} else {
 		index := 0
-		for _, item := range cs.Items {
+		for _, item := range items {
 			for i := 0; i < item.N; i++ {
 				name := item.NamePrefix + strconv.Itoa(i)
-				p.costumes[i] = newCostumeWith(name, img, faceLeft, index, bitmapResolution)
+				c := newCostumeWith(name, img, faceLeft, index, bitmapResolution)
+				p.costumes = append(p.costumes, c)
 				index++
 			}
 		}
 		if index != nx {
-			panic("costumeSet load uncompleted")
+			panic("initCostumeSetPart: load uncompleted")
 		}
 	}
-	if currentCostumeIndex >= nx || currentCostumeIndex < 0 {
-		currentCostumeIndex = 0
-	}
-	p.currentCostumeIndex = currentCostumeIndex
 }
 
 func (p *baseObj) init(base string, costumes []*costumeConfig, currentCostumeIndex int) {

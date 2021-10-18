@@ -214,11 +214,24 @@ type costumeSetItem struct {
 
 type costumeSet struct {
 	Path             string           `json:"path"`
-	Rect             *costumeSetRect  `json:"rect"`
-	Nx               int              `json:"nx"`
-	BitmapResolution int              `json:"bitmapResolution"`
 	FaceLeft         float64          `json:"faceLeft"`
+	BitmapResolution int              `json:"bitmapResolution"`
+	Nx               int              `json:"nx"`
+	Rect             *costumeSetRect  `json:"rect"`
 	Items            []costumeSetItem `json:"items"`
+}
+
+type costumeSetPart struct {
+	Nx    int              `json:"nx"`
+	Rect  costumeSetRect   `json:"rect"`
+	Items []costumeSetItem `json:"items"`
+}
+
+type costumeMPSet struct {
+	Path             string           `json:"path"`
+	FaceLeft         float64          `json:"faceLeft"`
+	BitmapResolution int              `json:"bitmapResolution"`
+	Parts            []costumeSetPart `json:"parts"`
 }
 
 type costumeConfig struct {
@@ -247,6 +260,7 @@ type spriteConfig struct {
 	RotationStyle       string                `json:"rotationStyle"`
 	Costumes            []*costumeConfig      `json:"costumes"`
 	CostumeSet          *costumeSet           `json:"costumeSet"`
+	CostumeMPSet        *costumeMPSet         `json:"costumeMPSet"`
 	CurrentCostumeIndex int                   `json:"currentCostumeIndex"`
 	Animations          map[string]*aniConfig `json:"animations"`
 	Visible             bool                  `json:"visible"`

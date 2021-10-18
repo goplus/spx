@@ -73,10 +73,10 @@ func (p *Sprite) Parent() *Game {
 
 func (p *Sprite) init(
 	base string, g *Game, name string, sprite *spriteConfig, gamer reflect.Value, shared *sharedImages) {
-	if sprite.CostumeSet != nil {
-		p.baseObj.initWith(base, sprite.CostumeSet, sprite.CurrentCostumeIndex, shared)
-	} else {
+	if sprite.Costumes != nil {
 		p.baseObj.init(base, sprite.Costumes, sprite.CurrentCostumeIndex)
+	} else {
+		p.baseObj.initWith(base, sprite, shared)
 	}
 	p.eventSinks.init(&g.sinkMgr, p)
 
