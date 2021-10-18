@@ -106,7 +106,7 @@ type sharedImages struct {
 type sharedImage struct {
 	shared *sharedImages
 	path   string
-	rc     *costumeSetRect
+	rc     costumeSetRect
 }
 
 func (p *sharedImage) load(fs spxfs.Dir, pt *imagePoint) (ret *ebiten.Image, err error) {
@@ -119,10 +119,12 @@ func (p *sharedImage) load(fs spxfs.Dir, pt *imagePoint) (ret *ebiten.Image, err
 		}
 		p.shared.imgs[path] = shared
 	}
-	rc := *p.rc
+	rc := p.rc
 	min := image.Point{X: int(rc.X), Y: int(rc.Y)}
 	max := image.Point{X: int(rc.X + rc.W), Y: int(rc.Y + rc.H)}
-	pt.x, pt.y = rc.W/2, rc.H/2
+	if pt != nil {
+		pt.x, pt.y = rc.W/2, rc.H/2
+	}
 	if sub := shared.SubImage(image.Rectangle{Min: min, Max: max}); sub != nil {
 		return sub.(*ebiten.Image), nil
 	}
@@ -163,7 +165,12 @@ type costume struct {
 }
 
 func newCostumeWith(name string, img *costumeSetImage, faceLeft float64, i, bitmapResolution int) *costume {
-	loader := &imageLoaderByCostumeSet{costumeSet: img, index: i}
+	var loader imageLoader
+	if i < 0 {
+		loader = img.loader
+	} else {
+		loader = &imageLoaderByCostumeSet{costumeSet: img, index: i}
+	}
 	return &costume{
 		name: name, img: delayloadImage{loader: loader},
 		faceLeft: faceLeft, bitmapResolution: bitmapResolution,
@@ -212,7 +219,7 @@ func initWithCMPS(p *baseObj, base string, cmps *costumeMPSet, shared *sharedIma
 	faceLeft, bitmapResolution := cmps.FaceLeft, cmps.BitmapResolution
 	imgPath := path.Join(base, cmps.Path)
 	for _, cs := range cmps.Parts {
-		simg := &sharedImage{shared: shared, path: imgPath, rc: &cs.Rect}
+		simg := &sharedImage{shared: shared, path: imgPath, rc: cs.Rect}
 		img := &costumeSetImage{loader: simg, nx: cs.Nx}
 		initCSPart(p, img, faceLeft, bitmapResolution, cs.Nx, cs.Items)
 	}
@@ -226,7 +233,7 @@ func initWithCS(p *baseObj, base string, cs *costumeSet, shared *sharedImages) {
 		costumeSetLoader := imageLoaderByPath(imgPath)
 		img = &costumeSetImage{loader: costumeSetLoader, nx: nx}
 	} else {
-		simg := &sharedImage{shared: shared, path: imgPath, rc: cs.Rect}
+		simg := &sharedImage{shared: shared, path: imgPath, rc: *cs.Rect}
 		img = &costumeSetImage{loader: simg, nx: nx}
 	}
 	p.costumes = make([]*costume, 0, nx)
@@ -234,18 +241,20 @@ func initWithCS(p *baseObj, base string, cs *costumeSet, shared *sharedImages) {
 }
 
 func initCSPart(p *baseObj, img *costumeSetImage, faceLeft float64, bitmapResolution, nx int, items []costumeSetItem) {
-	if items == nil {
+	if nx == 1 {
+		name := strconv.Itoa(len(p.costumes))
+		addCostumeWith(p, name, img, faceLeft, -1, bitmapResolution)
+	} else if items == nil {
 		for index := 0; index < nx; index++ {
-			c := newCostumeWith(strconv.Itoa(index), img, faceLeft, index, bitmapResolution)
-			p.costumes = append(p.costumes, c)
+			name := strconv.Itoa(len(p.costumes))
+			addCostumeWith(p, name, img, faceLeft, index, bitmapResolution)
 		}
 	} else {
 		index := 0
 		for _, item := range items {
 			for i := 0; i < item.N; i++ {
 				name := item.NamePrefix + strconv.Itoa(i)
-				c := newCostumeWith(name, img, faceLeft, index, bitmapResolution)
-				p.costumes = append(p.costumes, c)
+				addCostumeWith(p, name, img, faceLeft, index, bitmapResolution)
 				index++
 			}
 		}
@@ -253,6 +262,11 @@ func initCSPart(p *baseObj, img *costumeSetImage, faceLeft float64, bitmapResolu
 			panic("initCostumeSetPart: load uncompleted")
 		}
 	}
+}
+
+func addCostumeWith(p *baseObj, name string, img *costumeSetImage, faceLeft float64, i, bitmapResolution int) {
+	c := newCostumeWith(name, img, faceLeft, i, bitmapResolution)
+	p.costumes = append(p.costumes, c)
 }
 
 func (p *baseObj) init(base string, costumes []*costumeConfig, currentCostumeIndex int) {
