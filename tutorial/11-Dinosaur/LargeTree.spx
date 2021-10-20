@@ -1,5 +1,5 @@
 onCloned => {
-	setXYpos 400, 22
+	setXYpos 400, -5
 	show
 	for {
 		if isFinish {
@@ -16,7 +16,6 @@ onCloned => {
 
 		if touching("Dinosaur") {
 			broadcast "finish"
-			//StillMoving
 			for i := 0; i < 5; i++ {
 				changeXpos -1
 				wait 0.01
@@ -34,15 +33,14 @@ onMsg "largeTree", => {
 		wait waitTime
 
 		seq := rand(0, 4)
-		setCostume sprintf("largeTree%d", int(seq))
+		setCostume seq
 		clone
 
-		// multi tree random
 		if seq != 0 && score > 300 {
 			nums := int(rand(0, 1))
 			for i := 0; i < nums; i++ {
 				seq = rand(1, 4)
-				setCostume sprintf("largeTree%d", int(seq))
+				setCostume seq
 				wait 0.30
 				clone
 			}
@@ -53,5 +51,4 @@ onMsg "largeTree", => {
 onMsg "start", => {
 	hide
 	destroy
-	return
 }

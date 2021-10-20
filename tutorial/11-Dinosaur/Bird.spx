@@ -1,5 +1,5 @@
 onCloned => {
-	setXYpos 400+rand(-50, 50), rand(0, 40)+20
+	setXYpos 400+rand(-50, 50), rand(0, 40)-7
 	show
 	count := 0
 	wave := 0

@@ -11,12 +11,11 @@ onMsg "start", => {
 
 	isWordInit = true
 	for {
-		if road_req > 5 {
+		if road_req >= 5 {
 			break
 		}
 
-		currentCostume := sprintf("road%d", road_req)
-		setCostume currentCostume
+		setCostume road_req
 		clone
 		road_req++
 	}
@@ -32,7 +31,6 @@ onCloned => {
 		}
 
 		if isFinish {
-			//StillMoving
 			for i := 0; i < 8; i++ {
 				changeXpos -1
 				wait 0.01
