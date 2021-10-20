@@ -11,7 +11,7 @@ onCloned => {
 	for {
 		wait 0.05
 		changeYpos -2.4
-		if ypos < -170 {
+		if touching(EdgeBottom) {
 			destroy
 		}
 	}

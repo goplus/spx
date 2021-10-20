@@ -19,7 +19,7 @@ const (
 	winscore = 500
 )
 
-func addStore(val int) {
+func addScore(val int) {
 	score += val
 	if score > winscore {
 		broadcast "you win"
