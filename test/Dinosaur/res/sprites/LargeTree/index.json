@@ -25,7 +25,7 @@
   },
   "currentCostumeIndex": 0,
   "heading": 90,
-  "isDraggable": true,
+  "isDraggable": false,
   "rotationStyle": "normal",
   "size": 1,
   "visible": true,
