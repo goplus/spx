@@ -23,8 +23,12 @@ const (
 )
 
 const (
-	Mouse specialObj = -5
-	Edge  specialObj = -6
+	Mouse      specialObj = -5
+	Edge       specialObj = touchingAllEdges
+	EdgeLeft   specialObj = touchingScreenLeft
+	EdgeTop    specialObj = touchingScreenTop
+	EdgeRight  specialObj = touchingScreenRight
+	EdgeBottom specialObj = touchingScreenBottom
 )
 
 type Sprite struct {
@@ -742,6 +746,10 @@ func (p *Sprite) TouchingColor(color Color) bool {
 //   Touching(sprite)
 //   Touching(spx.Mouse)
 //   Touching(spx.Edge)
+//   Touching(spx.EdgeLeft)
+//   Touching(spx.EdgeTop)
+//   Touching(spx.EdgeRight)
+//   Touching(spx.EdgeBottom)
 func (p *Sprite) Touching(obj interface{}, ani ...string) bool {
 	if !p.isVisible || p.isDying {
 		return false
@@ -758,8 +766,8 @@ func (p *Sprite) Touching(obj interface{}, ani ...string) bool {
 	case *Sprite:
 		return touchingSprite(p, v)
 	case specialObj:
-		if v == Edge {
-			return p.checkTouchingScreen(touchingAllEdges) != 0
+		if v > 0 {
+			return p.checkTouchingScreen(int(v)) != 0
 		} else if v == Mouse {
 			x, y := p.g.getMousePos()
 			return p.g.touchingPoint(p, x, y)

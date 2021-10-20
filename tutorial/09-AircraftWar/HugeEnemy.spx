@@ -20,7 +20,7 @@ onCloned => {
 		if touching("Bullet", "die") {
 			life--
 			if life == 0 {
-				addStore 50
+				addScore 50
 				die
 			}
 		}
@@ -29,6 +29,6 @@ onCloned => {
 }
 
 onMsg "kill all", => {
-	addStore 50
+	addScore 50
 	die
 }

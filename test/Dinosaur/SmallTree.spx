@@ -1,0 +1,14 @@
+onClick => {
+    nextCostume
+    say costumeIndex
+}
+
+onKey KeyUp, => {
+    prevCostume
+    say costumeIndex
+}
+
+onKey KeyDown, => {
+    nextCostume
+    say costumeIndex
+}
