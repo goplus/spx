@@ -1,6 +1,7 @@
 var (
 	Bird      Bird
 	Dinosaur  Dinosaur
+	LargeTree LargeTree
 	SmallTree SmallTree
 	GameOver  GameOver
 )
