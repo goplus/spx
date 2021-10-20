@@ -1,0 +1,6 @@
+var (
+	Bird     Bird
+	Dinosaur Dinosaur
+)
+
+run "res", {Title: "Dinosaur (by Go+)"}

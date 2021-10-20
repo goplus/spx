@@ -1,0 +1,43 @@
+{
+  "costumeMPSet": {
+    "bitmapResolution": 1,
+    "path": "../common.png",
+    "parts": [
+      {
+        "rect": {
+          "x": 895,
+          "y": 2,
+          "w": 215,
+          "h": 46
+        },
+        "nx": 5
+      },
+      {
+        "rect": {
+          "x": 1110,
+          "y": 2,
+          "w": 120,
+          "h": 46
+        },
+        "nx": 2
+      },
+      {
+        "rect": {
+          "x": 1070,
+          "y": 2,
+          "w": 42,
+          "h": 46
+        },
+        "nx": 1
+      }
+    ]
+  },
+  "currentCostumeIndex": 0,
+  "heading": 90,
+  "isDraggable": true,
+  "rotationStyle": "normal",
+  "size": 1,
+  "visible": true,
+  "x": 30,
+  "y": 20
+}
