@@ -1,0 +1,21 @@
+{
+  "costumeSet": {
+    "bitmapResolution": 1,
+    "path": "../common.png",
+    "rect": {
+      "x": 133,
+      "y": 2,
+      "w": 96,
+      "h": 54
+    },
+    "nx": 2
+  },
+  "currentCostumeIndex": 0,
+  "heading": 90,
+  "isDraggable": true,
+  "rotationStyle": "normal",
+  "size": 1,
+  "visible": false,
+  "x": 1000,
+  "y": 0
+}
