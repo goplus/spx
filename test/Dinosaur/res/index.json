@@ -10,6 +10,7 @@
   ],
   "currentCostumeIndex": 0,
   "zorder": [
+    "Road",
     "Bird",
     "Dinosaur",
     "LargeTree",
