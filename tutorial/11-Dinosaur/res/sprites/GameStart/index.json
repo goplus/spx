@@ -13,17 +13,6 @@
       "path": "7.png",
       "x": 36,
       "y": 40
-    },
-    {
-      "bitmapResolution": 1,
-      "name": "game_over",
-      "path": "../common.png",
-      "x": 0,
-      "y": 0,
-      "minX": 500,
-      "minY": 0,
-      "maxX": 1000,
-      "maxY": 100
     }
   ],
   "currentCostumeIndex": 1,

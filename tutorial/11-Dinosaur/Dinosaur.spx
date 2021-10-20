@@ -53,7 +53,6 @@ onKey KeySpace, => {
 
 		glide -200, float64(s+20), 0.01
 	}
-
 }
 
 onKey KeyDown, => {
@@ -63,7 +62,7 @@ onKey KeyDown, => {
 
 	isDown = true
 	wait 0.05
-	setCostume "dinosaur4"
+	setCostume 4
 	isDown = false
 }
 
@@ -71,7 +70,6 @@ onMsg "start", => {
 	show
 	count := 0
 	countDown := 0
-	setXYpos -200, 20
 	for {
 		wait 0.05
 		if isJump {
@@ -89,17 +87,16 @@ onMsg "start", => {
 		if keyPressed(KeyDown) {
 			isDown = true
 			countDown = (countDown + 1) % 2
-			setCostume sprintf("dinosaur%d", countDown+4)
+			setCostume countDown+4
 			isDown = false
 			continue
 		}
 
 		count = (count + 1) % 4
-		setCostume sprintf("dinosaur%d", count)
-		// setCostume "dinosaur1"
+		setCostume count
 	}
 }
 
 onMsg "finish", => {
-	// setCostume "dinosaur6"
+	setCostume 6
 }

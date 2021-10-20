@@ -1,83 +1,37 @@
 {
-  "costumes": [
-    {
-      "bitmapResolution": 1,
-      "name": "dinosaur0",
-      "path": "../common.png",
-      "x": 0,
-      "y": 0,
-      "minX": 895,
-      "minY": 2,
-      "maxX": 938,
-      "maxY": 47
-    },
-    {
-      "bitmapResolution": 1,
-      "name": "dinosaur1",
-      "path": "../common.png",
-      "x": 0,
-      "y": 0,
-      "minX": 939,
-      "minY": 2,
-      "maxX": 982,
-      "maxY": 47
-    },
-    {
-      "bitmapResolution": 1,
-      "name": "dinosaur2",
-      "path": "../common.png",
-      "x": 0,
-      "y": 0,
-      "minX": 983,
-      "minY": 2,
-      "maxX": 1026,
-      "maxY": 47
-    },
-    {
-      "bitmapResolution": 1,
-      "name": "dinosaur3",
-      "path": "../common.png",
-      "x": 0,
-      "y": 0,
-      "minX": 1027,
-      "minY": 2,
-      "maxX": 1070,
-      "maxY": 47
-    },
-    {
-      "bitmapResolution": 1,
-      "name": "dinosaur4",
-      "path": "../common.png",
-      "x": 0,
-      "y": 0,
-      "minX": 1110,
-      "minY": 2,
-      "maxX": 1170,
-      "maxY": 47
-    },
-    {
-      "bitmapResolution": 1,
-      "name": "dinosaur5",
-      "path": "../common.png",
-      "x": 0,
-      "y": 0,
-      "minX": 1170,
-      "minY": 2,
-      "maxX": 1230,
-      "maxY": 47
-    },
-    {
-      "bitmapResolution": 1,
-      "name": "dinosaur6",
-      "path": "../common.png",
-      "x": 0,
-      "y": 0,
-      "minX": 1070,
-      "minY": 2,
-      "maxX": 1111,
-      "maxY": 47
-    }
-  ],
+  "costumeMPSet": {
+    "bitmapResolution": 1,
+    "path": "../common.png",
+    "parts": [
+      {
+        "rect": {
+          "x": 895,
+          "y": 2,
+          "w": 215,
+          "h": 46
+        },
+        "nx": 5
+      },
+      {
+        "rect": {
+          "x": 1110,
+          "y": 2,
+          "w": 120,
+          "h": 46
+        },
+        "nx": 2
+      },
+      {
+        "rect": {
+          "x": 1070,
+          "y": 2,
+          "w": 42,
+          "h": 46
+        },
+        "nx": 1
+      }
+    ]
+  },
   "currentCostumeIndex": 0,
   "heading": 90,
   "isDraggable": true,
@@ -85,5 +39,5 @@
   "size": 1,
   "visible": false,
   "x": -200,
-  "y": 20
+  "y": -3
 }

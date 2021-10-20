@@ -9,11 +9,10 @@ onCloned => {
 			continue
 		}
 
-		// bird  wave
 		count++
 		if count%20 == 0 {
 			wave = (wave + 1) % 2
-			setCostume sprintf("bird%d", wave)
+			setCostume wave
 		}
 
 		changeXpos -1*speed
@@ -25,7 +24,6 @@ onCloned => {
 
 		if touching("Dinosaur") {
 			broadcast "finish"
-			//StillMoving
 			for i := 0; i < 8; i++ {
 				changeXpos -1
 				wait 0.01
@@ -38,8 +36,7 @@ onCloned => {
 
 onMsg "bird", => {
 	if xpos == 1000 {
-		seq := rand(0, 1)
-		setCostume sprintf("bird%d", int(seq))
+		setCostume rand(0, 1)
 		clone
 	}
 }
@@ -47,5 +44,4 @@ onMsg "bird", => {
 onMsg "start", => {
 	hide
 	destroy
-	return
 }

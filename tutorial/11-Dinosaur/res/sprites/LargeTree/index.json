@@ -1,61 +1,28 @@
 {
-  "costumes": [
-    {
-      "bitmapResolution": 1,
-      "name": "largeTree0",
-      "path": "../common.png",
-      "x": 0,
-      "y": 0,
-      "minX": 432,
-      "minY": 2,
-      "maxX": 484,
-      "maxY": 55
-    },
-    {
-      "bitmapResolution": 1,
-      "name": "largeTree1",
-      "path": "../common.png",
-      "x": 0,
-      "y": 0,
-      "minX": 409,
-      "minY": 2,
-      "maxX": 432,
-      "maxY": 55
-    },
-    {
-      "bitmapResolution": 1,
-      "name": "largeTree2",
-      "path": "../common.png",
-      "x": 0,
-      "y": 0,
-      "minX": 383,
-      "minY": 2,
-      "maxX": 408,
-      "maxY": 55
-    },
-    {
-      "bitmapResolution": 1,
-      "name": "largeTree3",
-      "path": "../common.png",
-      "x": 0,
-      "y": 0,
-      "minX": 359,
-      "minY": 2,
-      "maxX": 382,
-      "maxY": 55
-    },
-    {
-      "bitmapResolution": 1,
-      "name": "largeTree4",
-      "path": "../common.png",
-      "x": 0,
-      "y": 0,
-      "minX": 334,
-      "minY": 2,
-      "maxX": 358,
-      "maxY": 55
-    }
-  ],
+  "costumeMPSet": {
+    "bitmapResolution": 1,
+    "path": "../common.png",
+    "parts": [
+      {
+        "rect": {
+          "x": 334,
+          "y": 2,
+          "w": 96,
+          "h": 53
+        },
+        "nx": 4
+      },
+      {
+        "rect": {
+          "x": 432,
+          "y": 2,
+          "w": 52,
+          "h": 53
+        },
+        "nx": 1
+      }
+    ]
+  },
   "currentCostumeIndex": 0,
   "heading": 90,
   "isDraggable": true,
