@@ -76,7 +76,7 @@ type delayloadImage struct {
 func (p *delayloadImage) ensure(fs spxfs.Dir) {
 	if p.cache == nil {
 		var err error
-		if p.cache, err = p.loader.load(fs, nil); err != nil {
+		if p.cache, err = p.loader.load(fs, &p.pt); err != nil {
 			panic(err)
 		}
 	}
