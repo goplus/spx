@@ -11,6 +11,7 @@
   "currentCostumeIndex": 0,
   "zorder": [
     "Bird",
-    "Dinosaur"
+    "Dinosaur",
+    "GameOver"
   ]
 }
