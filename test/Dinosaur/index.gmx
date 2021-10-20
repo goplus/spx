@@ -1,7 +1,8 @@
 var (
-	Bird     Bird
-	Dinosaur Dinosaur
-	GameOver GameOver
+	Bird      Bird
+	Dinosaur  Dinosaur
+	SmallTree SmallTree
+	GameOver  GameOver
 )
 
 run "res", {Title: "Dinosaur (by Go+)"}

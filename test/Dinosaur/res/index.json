@@ -12,6 +12,7 @@
   "zorder": [
     "Bird",
     "Dinosaur",
+    "SmallTree",
     "GameOver"
   ]
 }
