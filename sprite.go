@@ -241,6 +241,11 @@ type MovingInfo struct {
 	OldX, OldY float64
 	NewX, NewY float64
 	Obj        *Sprite
+	dontMoving bool
+}
+
+func (p *MovingInfo) StopMoving() {
+	p.dontMoving = true
 }
 
 func (p *MovingInfo) Dx() float64 {
@@ -503,7 +508,11 @@ func (p *Sprite) DistanceTo(obj interface{}) float64 {
 
 func (p *Sprite) doMoveTo(x, y float64) {
 	if p.hasOnMoving {
-		p.doWhenMoving(p, &MovingInfo{OldX: p.x, OldY: p.y, NewX: x, NewY: y, Obj: p})
+		mi := &MovingInfo{OldX: p.x, OldY: p.y, NewX: x, NewY: y, Obj: p}
+		p.doWhenMoving(p, mi)
+		if mi.dontMoving {
+			return
+		}
 	}
 	if p.isPenDown {
 		p.g.movePen(p, x, y)
