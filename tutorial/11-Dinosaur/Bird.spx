@@ -1,0 +1,47 @@
+onCloned => {
+	setXYpos 400+rand(-50, 50), rand(0, 40)-7
+	show
+	count := 0
+	wave := 0
+	for {
+		if isFinish {
+			wait 0.01
+			continue
+		}
+
+		count++
+		if count%20 == 0 {
+			wave = (wave + 1) % 2
+			setCostume wave
+		}
+
+		changeXpos -1*speed
+		if xpos < -400 {
+			hide
+			destroy
+			return
+		}
+
+		if touching("Dinosaur") {
+			broadcast "finish"
+			for i := 0; i < 8; i++ {
+				changeXpos -1
+				wait 0.01
+			}
+			return
+		}
+		wait 0.01
+	}
+}
+
+onMsg "bird", => {
+	if xpos == 1000 {
+		setCostume rand(0, 1)
+		clone
+	}
+}
+
+onMsg "start", => {
+	hide
+	destroy
+}

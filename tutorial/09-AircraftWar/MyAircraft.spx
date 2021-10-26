@@ -23,9 +23,9 @@ onMsg "battle", => {
 		speed := 3.0
 		planeX := 0.0
 		planeY := 0.0
-		if dis>speed {
-			planeX = xx + (mouseX - xx)/dis * speed
-			planeY = yy + (mouseY - yy)/dis * speed
+		if dis > speed {
+			planeX = xx + (mouseX-xx)/dis*speed
+			planeY = yy + (mouseY-yy)/dis*speed
 		} else {
 			planeX = mouseX
 			planeY = mouseY
