@@ -1,0 +1,8 @@
+onStart => {
+
+	for {
+		Camera.Zoom 0.96
+		Camera.Rotate 10
+		wait 2
+	}
+}

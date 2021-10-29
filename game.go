@@ -15,6 +15,7 @@ import (
 
 	"github.com/goplus/spx/internal/coroutine"
 	"github.com/goplus/spx/internal/gdi"
+	"github.com/goplus/spx/internal/math32"
 	"github.com/hajimehoshi/ebiten/v2"
 
 	spxfs "github.com/goplus/spx/fs"
@@ -61,6 +62,8 @@ type Game struct {
 
 	input  inputMgr
 	events chan event
+	Camera FreeCamera
+	world  *ebiten.Image
 
 	width  int
 	height int
@@ -285,6 +288,7 @@ func (p *Game) startLoad(resource interface{}, cfg *Config) (err error) {
 	p.initGame()
 	p.input.init(p, keyDuration)
 	p.sounds.init()
+
 	p.shapes = make(map[string]Spriter)
 	p.events = make(chan event, 16)
 	p.fs = fs
@@ -494,6 +498,9 @@ func (p *Game) runLoop(cfg *Config) (err error) {
 	if title == "" {
 		title = "Game powered by Go+"
 	}
+	p.Camera.init(math32.NewVector2(float64(w), float64(h)))
+	p.world = ebiten.NewImage(w, h)
+
 	ebiten.SetWindowTitle(title)
 	return ebiten.RunGame(p)
 }
@@ -510,8 +517,9 @@ func (p *Game) Update() error {
 }
 
 func (p *Game) Draw(screen *ebiten.Image) {
-	dc := drawContext{Image: screen}
+	dc := drawContext{Image: p.world}
 	p.onDraw(dc)
+	p.Camera.Render(dc.Image, screen)
 }
 
 type clicker interface {
