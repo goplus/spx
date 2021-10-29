@@ -4,6 +4,7 @@ import (
 	"image"
 
 	"github.com/goplus/spx/internal/gdi"
+	"github.com/goplus/spx/internal/math32"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/qiniu/x/objcache"
@@ -57,12 +58,18 @@ func (p *sprKey) doGet(sp *Sprite) *gdi.Sprite {
 	defer img.Dispose()
 
 	p.drawOn(img, 0, 0, sp.g.fs)
-	return gdi.NewSpriteFromScreen(img)
+
+	spi2 := gdi.NewSprite(img, p.costume.rect)
+	//spi := gdi.NewSpriteFromScreen(img)
+	//log.Printf(" spi %s, spi2 %s", spi.Rect, spi2.Rect)
+	return spi2
 }
 
 func (p *sprKey) drawOn(target *ebiten.Image, x, y float64, fs spxfs.Dir) {
 	c := p.costume
+
 	img, centerX, centerY := c.needImage(fs)
+	c.rect = img.Bounds()
 
 	scale := p.scale / float64(c.bitmapResolution)
 	screenW, screenH := target.Size()
@@ -72,12 +79,14 @@ func (p *sprKey) drawOn(target *ebiten.Image, x, y float64, fs spxfs.Dir) {
 
 	direction := p.direction + c.faceLeft
 	if direction == 90 {
+
 		x = float64(screenW>>1) + x - centerX*scale
 		y = float64(screenH>>1) - y - centerY*scale
 		if scale != 1 {
 			geo.Scale(scale, scale)
 		}
 		geo.Translate(x, y)
+
 	} else {
 		geo.Translate(-centerX, -centerY)
 		if scale != 1 {
@@ -85,9 +94,13 @@ func (p *sprKey) drawOn(target *ebiten.Image, x, y float64, fs spxfs.Dir) {
 		}
 		geo.Rotate(toRadian(direction - 90))
 		geo.Translate(float64(screenW>>1)+x, float64(screenH>>1)-y)
+
 	}
 
+	c.rect = math32.ApplyGeoForRect(c.rect, geo)
+
 	target.DrawImage(img, op)
+
 }
 
 func doGetSpr(ctx objcache.Context, key objcache.Key) (val objcache.Value, err error) {
