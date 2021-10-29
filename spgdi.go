@@ -69,7 +69,9 @@ func (p *sprKey) drawOn(target *ebiten.Image, x, y float64, fs spxfs.Dir) {
 	c := p.costume
 
 	img, centerX, centerY := c.needImage(fs)
-	c.rect = img.Bounds()
+	c.rect.Min.X = 0
+	c.rect.Min.Y = 0
+	c.rect.Max = img.Bounds().Size()
 
 	scale := p.scale / float64(c.bitmapResolution)
 	screenW, screenH := target.Size()
@@ -96,6 +98,8 @@ func (p *sprKey) drawOn(target *ebiten.Image, x, y float64, fs spxfs.Dir) {
 		geo.Translate(float64(screenW>>1)+x, float64(screenH>>1)-y)
 
 	}
+
+	//log.Printf("c.rect %s", c.rect.String())
 
 	c.rect = math32.ApplyGeoForRect(c.rect, geo)
 
