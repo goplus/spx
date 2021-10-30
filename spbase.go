@@ -157,9 +157,8 @@ func (p *imageLoaderByCostumeSet) load(fs spxfs.Dir, pt *imagePoint) (*ebiten.Im
 // -------------------------------------------------------------------------------------
 
 type costume struct {
-	name string
-	img  delayloadImage
-
+	name             string
+	img              delayloadImage
 	faceLeft         float64
 	bitmapResolution int
 }
@@ -180,8 +179,10 @@ func newCostumeWith(name string, img *costumeSetImage, faceLeft float64, i, bitm
 func newCostume(base string, c *costumeConfig) *costume {
 	loader := imageLoaderByPath(path.Join(base, c.Path))
 	return &costume{
-		name: c.Name, img: delayloadImage{loader: loader, pt: imagePoint{c.X, c.Y}},
-		faceLeft: c.FaceLeft, bitmapResolution: c.BitmapResolution,
+		name:             c.Name,
+		img:              delayloadImage{loader: loader, pt: imagePoint{c.X, c.Y}},
+		faceLeft:         c.FaceLeft,
+		bitmapResolution: c.BitmapResolution,
 	}
 }
 

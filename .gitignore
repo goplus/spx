@@ -9,6 +9,7 @@ _test
 haiyang/
 feijidazhan/
 .idea
+*.code-workspace 
 
 # Binaries for programs and plugins
 *.exe
