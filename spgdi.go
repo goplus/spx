@@ -37,6 +37,7 @@ type sprKey struct {
 	scale         float64
 	direction     float64
 	costume       *costume
+	rect          image.Rectangle
 	rotationStyle RotationStyle
 }
 
@@ -59,7 +60,7 @@ func (p *sprKey) doGet(sp *Sprite) *gdi.Sprite {
 
 	p.drawOn(img, 0, 0, sp.g.fs)
 
-	spi2 := gdi.NewSprite(img, p.costume.rect)
+	spi2 := gdi.NewSprite(img, p.rect)
 	//spi := gdi.NewSpriteFromScreen(img)
 	//log.Printf(" spi %s, spi2 %s", spi.Rect, spi2.Rect)
 	return spi2
@@ -69,9 +70,9 @@ func (p *sprKey) drawOn(target *ebiten.Image, x, y float64, fs spxfs.Dir) {
 	c := p.costume
 
 	img, centerX, centerY := c.needImage(fs)
-	c.rect.Min.X = 0
-	c.rect.Min.Y = 0
-	c.rect.Max = img.Bounds().Size()
+	p.rect.Min.X = 0
+	p.rect.Min.Y = 0
+	p.rect.Max = img.Bounds().Size()
 
 	scale := p.scale / float64(c.bitmapResolution)
 	screenW, screenH := target.Size()
@@ -99,9 +100,7 @@ func (p *sprKey) drawOn(target *ebiten.Image, x, y float64, fs spxfs.Dir) {
 
 	}
 
-	//log.Printf("c.rect %s", c.rect.String())
-
-	c.rect = math32.ApplyGeoForRect(c.rect, geo)
+	p.rect = math32.ApplyGeoForRect(p.rect, geo)
 
 	target.DrawImage(img, op)
 

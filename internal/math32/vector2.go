@@ -1,6 +1,9 @@
 package math32
 
-import "fmt"
+import (
+	"fmt"
+	"math"
+)
 
 type Vector2 struct {
 	X float64
@@ -11,7 +14,6 @@ func NewVector2(x, y float64) *Vector2 {
 	return &Vector2{x, y}
 }
 func NewVector2Zero() *Vector2 {
-
 	return &Vector2{0, 0}
 }
 
@@ -20,7 +22,7 @@ func (this *Vector2) Set(x, y float64) {
 	this.Y = y
 }
 func (this *Vector2) String() string {
-	return fmt.Sprintf("%f,%f\n", this.X, this.Y)
+	return fmt.Sprintf("%g,%g\n", this.X, this.Y)
 }
 
 func (this *Vector2) Coords() (float64, float64) {
@@ -52,7 +54,7 @@ func (this *Vector2) Multiply(otherVector *Vector2) *Vector2 {
 }
 
 func (this *Vector2) Length() float64 {
-	return Sqrt(this.X*this.X + this.Y*this.Y)
+	return math.Sqrt(this.X*this.X + this.Y*this.Y)
 }
 
 func (this *Vector2) LengthSquared() float64 {
@@ -61,13 +63,10 @@ func (this *Vector2) LengthSquared() float64 {
 
 func (this *Vector2) Normalize() {
 	len := this.Length()
-
 	if len == 0 {
 		return
 	}
-
 	num := 1.0 / len
-
 	this.X *= num
 	this.Y *= num
 }
@@ -85,7 +84,6 @@ func (this *Vector2) CopyFrom(source *Vector2) {
 func (this *Vector2) Lerp(end *Vector2, amount float64) *Vector2 {
 	x := this.X + ((end.X - this.X) * amount)
 	y := this.Y + ((end.Y - this.Y) * amount)
-
 	return NewVector2(x, y)
 }
 
