@@ -61,6 +61,7 @@ type eventSinkMgr struct {
 	allWhenCloned     *eventSink
 	allWhenClick      *eventSink
 	allWhenMoving     *eventSink
+	allWhenTurning    *eventSink
 	calledStart       bool
 }
 
@@ -72,6 +73,7 @@ func (p *eventSinkMgr) doDeleteClone(this interface{}) {
 	p.allWhenCloned = p.allWhenCloned.doDeleteClone(this)
 	p.allWhenClick = p.allWhenClick.doDeleteClone(this)
 	p.allWhenMoving = p.allWhenMoving.doDeleteClone(this)
+	p.allWhenTurning = p.allWhenTurning.doDeleteClone(this)
 }
 
 func (p *eventSinkMgr) doWhenStart() {
@@ -104,6 +106,12 @@ func (p *eventSinkMgr) doWhenCloned(this threadObj, data interface{}) {
 func (p *eventSinkMgr) doWhenMoving(this threadObj, mi *MovingInfo) {
 	p.allWhenMoving.asyncCall(true, nil, this, func(ev *eventSink) {
 		ev.sink.(func(*MovingInfo))(mi)
+	})
+}
+
+func (p *eventSinkMgr) doWhenTurning(this threadObj, mi *TurningInfo) {
+	p.allWhenTurning.asyncCall(true, nil, this, func(ev *eventSink) {
+		ev.sink.(func(*TurningInfo))(mi)
 	})
 }
 

@@ -59,8 +59,9 @@ type Sprite struct {
 	isStopped bool
 	isDying   bool
 
-	hasOnMoving bool
-	hasOnCloned bool
+	hasOnTurning bool
+	hasOnMoving  bool
+	hasOnCloned  bool
 }
 
 func (p *Sprite) SetDying() { // dying: visible but can't be touched
@@ -146,6 +147,7 @@ func (p *Sprite) InitFrom(src *Sprite) {
 	p.isStopped = false
 	p.isDying = false
 
+	p.hasOnTurning = false
 	p.hasOnMoving = false
 	p.hasOnCloned = false
 }
@@ -271,6 +273,34 @@ func (p *Sprite) OnMoving__0(onMoving func(mi *MovingInfo)) {
 func (p *Sprite) OnMoving__1(onMoving func()) {
 	p.OnMoving__0(func(mi *MovingInfo) {
 		onMoving()
+	})
+}
+
+type TurningInfo struct {
+	OldDir float64
+	NewDir float64
+	Obj    *Sprite
+}
+
+func (p *TurningInfo) Dir() float64 {
+	return p.NewDir - p.OldDir
+}
+
+func (p *Sprite) OnTurning__0(onTurning func(ti *TurningInfo)) {
+	p.hasOnTurning = true
+	p.allWhenTurning = &eventSink{
+		prev:  p.allWhenTurning,
+		pthis: p,
+		sink:  onTurning,
+		cond: func(data interface{}) bool {
+			return data == p
+		},
+	}
+}
+
+func (p *Sprite) OnTurning__1(onTurning func()) {
+	p.OnTurning__0(func(mi *TurningInfo) {
+		onTurning()
 	})
 }
 
@@ -698,25 +728,31 @@ func (p *Sprite) TurnTo(obj interface{}) {
 	if debugInstr {
 		log.Println("TurnTo", p.name, obj)
 	}
+	angle := 0.0
 	switch v := obj.(type) {
 	case specialDir:
-		p.setDirection(float64(v), false)
+		angle = float64(v)
 	case int:
-		p.setDirection(float64(v), false)
+		angle = float64(v)
 	case float64:
-		p.setDirection(v, false)
+		angle = v
 	default:
 		x, y := p.g.objectPos(obj)
 		dx := x - p.x
 		dy := y - p.y
-		angle := 90 - math.Atan2(dy, dx)*180/math.Pi
-		p.setDirection(angle, false)
+		angle = 90 - math.Atan2(dy, dx)*180/math.Pi
 	}
+
+	p.setDirection(angle, false)
+
 }
 
 func (p *Sprite) setDirection(dir float64, change bool) {
 	if change {
 		dir = p.direction - dir
+	}
+	if p.hasOnTurning {
+		p.doWhenTurning(p, &TurningInfo{NewDir: dir, OldDir: p.direction, Obj: p})
 	}
 	p.direction = normalizeDirection(dir)
 }
