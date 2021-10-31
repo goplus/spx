@@ -51,17 +51,17 @@ type Sprite struct {
 	penHue   float64
 	penWidth float64
 
-	isVisible   bool
-	isCloned    bool
-	isPenDown   bool
-	isDraggable bool
+	isVisible bool
+	isCloned  bool
+	isPenDown bool
+	//isDraggable bool
+	hasOnCloned bool
 
 	isStopped bool
 	isDying   bool
 
 	hasOnTurning bool
 	hasOnMoving  bool
-	hasOnCloned  bool
 }
 
 func (p *Sprite) SetDying() { // dying: visible but can't be touched
@@ -92,7 +92,7 @@ func (p *Sprite) init(
 	p.rotationStyle = toRotationStyle(sprite.RotationStyle)
 
 	p.isVisible = sprite.Visible
-	p.isDraggable = sprite.IsDraggable
+	//p.isDraggable = sprite.IsDraggable
 
 	if sprite.Animations == nil {
 		return
@@ -142,7 +142,7 @@ func (p *Sprite) InitFrom(src *Sprite) {
 	p.isVisible = src.isVisible
 	p.isCloned = true
 	p.isPenDown = src.isPenDown
-	p.isDraggable = src.isDraggable
+	//p.isDraggable = src.isDraggable
 
 	p.isStopped = false
 	p.isDying = false
@@ -299,7 +299,7 @@ func (p *Sprite) OnTurning__0(onTurning func(ti *TurningInfo)) {
 }
 
 func (p *Sprite) OnTurning__1(onTurning func()) {
-	p.OnTurning__0(func(mi *TurningInfo) {
+	p.OnTurning__0(func(*TurningInfo) {
 		onTurning()
 	})
 }
@@ -711,6 +711,8 @@ func (p *Sprite) Turn(val interface{}) {
 		delta = float64(v)
 	case float64:
 		delta = v
+	default:
+		panic("Turn: unexpected input")
 	}
 	p.setDirection(delta, true)
 }
@@ -728,7 +730,7 @@ func (p *Sprite) TurnTo(obj interface{}) {
 	if debugInstr {
 		log.Println("TurnTo", p.name, obj)
 	}
-	angle := 0.0
+	var angle float64
 	switch v := obj.(type) {
 	case specialDir:
 		angle = float64(v)
@@ -742,9 +744,7 @@ func (p *Sprite) TurnTo(obj interface{}) {
 		dy := y - p.y
 		angle = 90 - math.Atan2(dy, dx)*180/math.Pi
 	}
-
 	p.setDirection(angle, false)
-
 }
 
 func (p *Sprite) setDirection(dir float64, change bool) {
