@@ -272,11 +272,16 @@ func (p *Sprite) OnMoving__1(onMoving func()) {
 }
 
 type TurningInfo struct {
-	Dir float64
-	Obj *Sprite
+	OldDir float64
+	NewDir float64
+	Obj    *Sprite
 }
 
-func (p *Sprite) OnTurning__0(onTurning func(mi *TurningInfo)) {
+func (p *TurningInfo) Dir() float64 {
+	return p.NewDir - p.OldDir
+}
+
+func (p *Sprite) OnTurning__0(onTurning func(ti *TurningInfo)) {
 	p.hasOnTurning = true
 	p.allWhenTurning = &eventSink{
 		prev:  p.allWhenTurning,
@@ -738,7 +743,7 @@ func (p *Sprite) setDirection(dir float64, change bool) {
 		dir = p.direction - dir
 	}
 	if p.hasOnTurning {
-		p.doWhenTurning(p, &TurningInfo{Dir: dir, Obj: p})
+		p.doWhenTurning(p, &TurningInfo{NewDir: dir, OldDir: p.direction, Obj: p})
 	}
 	p.direction = normalizeDirection(dir)
 }
