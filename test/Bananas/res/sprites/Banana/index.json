@@ -1,7 +1,7 @@
 {
   "costumeSet": {
     "bitmapResolution": 1,
-    "faceLeft": 180,
+    "faceRight": 180,
     "path": "../../../../res/banana.png",
     "nx": 58
   },
