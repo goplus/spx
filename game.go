@@ -51,6 +51,7 @@ func SetDebug(flags int) {
 type Game struct {
 	baseObj
 	eventSinks
+
 	fs     spxfs.Dir
 	shared *sharedImages
 

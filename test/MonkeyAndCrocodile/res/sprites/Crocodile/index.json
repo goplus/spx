@@ -1,7 +1,7 @@
 {
   "costumeSet": {
     "bitmapResolution": 1,
-    "path": "crocodile.png",
+    "path": "../../../../res/crocodile.png",
     "nx": 5,
     "items": [
       {

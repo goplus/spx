@@ -1,7 +1,8 @@
 {
   "costumeSet": {
     "bitmapResolution": 1,
-    "path": "banana.png",
+    "faceLeft": 180,
+    "path": "../../../../res/banana.png",
     "nx": 58
   },
   "currentCostumeIndex": 0,

@@ -526,8 +526,8 @@ func (p *Sprite) getXY() (x, y float64) {
 // DistanceTo func:
 //   DistanceTo(sprite)
 //   DistanceTo(spriteName)
-//   DistanceTo(gox.Mouse)
-//   DistanceTo(gox.Random)
+//   DistanceTo(spx.Mouse)
+//   DistanceTo(spx.Random)
 func (p *Sprite) DistanceTo(obj interface{}) float64 {
 	x, y := p.x, p.y
 	x2, y2 := p.g.objectPos(obj)
@@ -596,8 +596,8 @@ func (p *Sprite) Step(step float64) {
 // Goto func:
 //   Goto(sprite)
 //   Goto(spriteName)
-//   Goto(gox.Mouse)
-//   Goto(gox.Random)
+//   Goto(spx.Mouse)
+//   Goto(spx.Random)
 func (p *Sprite) Goto(obj interface{}) {
 	if debugInstr {
 		log.Println("Goto", p.name, obj)
@@ -697,8 +697,8 @@ func (p *Sprite) Heading() float64 {
 
 // Turn func:
 //   Turn(degree)
-//   Turn(gox.Left)
-//   Turn(gox.Right)
+//   Turn(spx.Left)
+//   Turn(spx.Right)
 func (p *Sprite) Turn(val interface{}) {
 	if debugInstr {
 		log.Println("Turn", p.name, val)
@@ -720,12 +720,12 @@ func (p *Sprite) Turn(val interface{}) {
 // TurnTo func:
 //   TurnTo(sprite)
 //   TurnTo(spriteName)
-//   TurnTo(gox.Mouse)
+//   TurnTo(spx.Mouse)
 //   TurnTo(degree)
-//   TurnTo(gox.Left)
-//   TurnTo(gox.Right)
-//   TurnTo(gox.Up)
-//   TurnTo(gox.Down)
+//   TurnTo(spx.Left)
+//   TurnTo(spx.Right)
+//   TurnTo(spx.Up)
+//   TurnTo(spx.Down)
 func (p *Sprite) TurnTo(obj interface{}) {
 	if debugInstr {
 		log.Println("TurnTo", p.name, obj)
