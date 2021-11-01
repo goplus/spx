@@ -278,7 +278,7 @@ type TurningInfo struct {
 }
 
 func (p *TurningInfo) Dir() float64 {
-	return p.NewDir - p.OldDir
+	return -(p.NewDir - p.OldDir)
 }
 
 func (p *Sprite) OnTurning__0(onTurning func(ti *TurningInfo)) {
@@ -697,7 +697,7 @@ func (p *Sprite) Turn(val interface{}) {
 	var delta float64
 	switch v := val.(type) {
 	case specialDir:
-		delta = float64(-v)
+		delta = float64(v)
 	case int:
 		delta = float64(v)
 	case float64:
