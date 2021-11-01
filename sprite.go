@@ -12,7 +12,7 @@ import (
 	"github.com/goplus/spx/internal/gdi/clrutil"
 )
 
-type specialDir int
+type specialDir = int
 type specialObj int
 
 const (
@@ -705,8 +705,8 @@ func (p *Sprite) Turn(val interface{}) {
 	}
 	var delta float64
 	switch v := val.(type) {
-	case specialDir:
-		delta = float64(-v)
+	//case specialDir:
+	//	delta = float64(v)
 	case int:
 		delta = float64(v)
 	case float64:
@@ -732,8 +732,8 @@ func (p *Sprite) TurnTo(obj interface{}) {
 	}
 	var angle float64
 	switch v := obj.(type) {
-	case specialDir:
-		angle = float64(v)
+	//case specialDir:
+	//	angle = float64(v)
 	case int:
 		angle = float64(v)
 	case float64:
@@ -749,7 +749,7 @@ func (p *Sprite) TurnTo(obj interface{}) {
 
 func (p *Sprite) setDirection(dir float64, change bool) {
 	if change {
-		dir = p.direction - dir
+		dir += p.direction
 	}
 	if p.hasOnTurning {
 		p.doWhenTurning(p, &TurningInfo{NewDir: dir, OldDir: p.direction, Obj: p})
