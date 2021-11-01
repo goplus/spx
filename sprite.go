@@ -699,6 +699,7 @@ func (p *Sprite) Heading() float64 {
 //   Turn(degree)
 //   Turn(spx.Left)
 //   Turn(spx.Right)
+//   Turn(ti *spx.TurningInfo)
 func (p *Sprite) Turn(val interface{}) {
 	if debugInstr {
 		log.Println("Turn", p.name, val)
@@ -711,6 +712,9 @@ func (p *Sprite) Turn(val interface{}) {
 		delta = float64(v)
 	case float64:
 		delta = v
+	case *TurningInfo:
+		p.doTurnTogether(v) // don't animate
+		return
 	default:
 		panic("Turn: unexpected input")
 	}
@@ -755,6 +759,18 @@ func (p *Sprite) setDirection(dir float64, change bool) {
 		p.doWhenTurning(p, &TurningInfo{NewDir: dir, OldDir: p.direction, Obj: p})
 	}
 	p.direction = normalizeDirection(dir)
+}
+
+func (p *Sprite) doTurnTogether(ti *TurningInfo) {
+	/*
+		x’ = x0 + cos * (x-x0) - sin * (y-y0)
+		y’ = y0 + sin * (x-x0) + cos * (y-y0)
+	*/
+	x0, y0 := ti.Obj.x, ti.Obj.y
+	dir := ti.Dir()
+	sin, cos := math.Sincos(dir * (math.Pi / 180))
+	p.x, p.y = x0+cos*(p.x-x0)+sin*(p.y-y0), y0-sin*(p.x-x0)+cos*(p.y-y0)
+	p.direction = normalizeDirection(p.direction + dir)
 }
 
 // -----------------------------------------------------------------------------
