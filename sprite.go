@@ -555,14 +555,18 @@ func (p *Sprite) goMoveForward(step float64) {
 	p.doMoveTo(p.x+step*sin, p.y+step*cos)
 }
 
-func (p *Sprite) Move(step float64) {
+func (p *Sprite) Move__0(step float64) {
 	if debugInstr {
 		log.Println("Move", p.name, step)
 	}
 	p.goMoveForward(step)
 }
 
-func (p *Sprite) Step(step float64) {
+func (p *Sprite) Move__1(step int) {
+	p.Move__0(float64(step))
+}
+
+func (p *Sprite) Step__0(step float64) {
 	if debugInstr {
 		log.Println("Step", p.name, step)
 	}
@@ -591,6 +595,10 @@ func (p *Sprite) Step(step float64) {
 	for ; n > 0; n-- {
 		ani(p)
 	}
+}
+
+func (p *Sprite) Step__1(step int) {
+    p.Step__0(float64(step))
 }
 
 // Goto func:
