@@ -763,8 +763,8 @@ func (p *Sprite) setDirection(dir float64, change bool) {
 
 func (p *Sprite) doTurnTogether(ti *TurningInfo) {
 	/*
-		x’ = x0 + cos * (x-x0) - sin * (y-y0)
-		y’ = y0 + sin * (x-x0) + cos * (y-y0)
+		x’ = x0 + cos * (x-x0) + sin * (y-y0)
+		y’ = y0 - sin * (x-x0) + cos * (y-y0)
 	*/
 	x0, y0 := ti.Obj.x, ti.Obj.y
 	dir := ti.Dir()
