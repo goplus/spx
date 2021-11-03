@@ -707,6 +707,13 @@ func (p *Game) objectPos(obj interface{}) (float64, float64) {
 	panic("objectPos: unexpected input")
 }
 
+func (p *Game) IsExist(name string) bool {
+	if sp := p.findSprite(name); sp != nil {
+		return true
+	}
+	return false
+}
+
 // -----------------------------------------------------------------------------
 
 func (p *Game) getTurtle() turtleCanvas {
