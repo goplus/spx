@@ -2,6 +2,7 @@ package spx
 
 import (
 	"fmt"
+	"image"
 	"image/color"
 	"log"
 	"math"
@@ -1051,3 +1052,9 @@ func (p *Sprite) ShowVar(name string) {
 }
 
 // -----------------------------------------------------------------------------
+
+//get sprite bound
+func (p *Sprite) GetRect() image.Rectangle {
+	spi, _ := p.getGdiSprite()
+	return spi.Rect
+}
