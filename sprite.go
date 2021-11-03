@@ -12,7 +12,7 @@ import (
 	"github.com/goplus/spx/internal/gdi/clrutil"
 )
 
-type specialDir int
+type specialDir = int
 type specialObj int
 
 const (
@@ -51,17 +51,17 @@ type Sprite struct {
 	penHue   float64
 	penWidth float64
 
-	isVisible   bool
-	isCloned    bool
-	isPenDown   bool
-	isDraggable bool
+	isVisible bool
+	isCloned  bool
+	isPenDown bool
+	//isDraggable bool
+	hasOnCloned bool
 
 	isStopped bool
 	isDying   bool
 
 	hasOnTurning bool
 	hasOnMoving  bool
-	hasOnCloned  bool
 }
 
 func (p *Sprite) SetDying() { // dying: visible but can't be touched
@@ -92,7 +92,7 @@ func (p *Sprite) init(
 	p.rotationStyle = toRotationStyle(sprite.RotationStyle)
 
 	p.isVisible = sprite.Visible
-	p.isDraggable = sprite.IsDraggable
+	//p.isDraggable = sprite.IsDraggable
 
 	if sprite.Animations == nil {
 		return
@@ -142,7 +142,7 @@ func (p *Sprite) InitFrom(src *Sprite) {
 	p.isVisible = src.isVisible
 	p.isCloned = true
 	p.isPenDown = src.isPenDown
-	p.isDraggable = src.isDraggable
+	//p.isDraggable = src.isDraggable
 
 	p.isStopped = false
 	p.isDying = false
@@ -243,6 +243,11 @@ type MovingInfo struct {
 	OldX, OldY float64
 	NewX, NewY float64
 	Obj        *Sprite
+	dontMoving bool
+}
+
+func (p *MovingInfo) StopMoving() {
+	p.dontMoving = true
 }
 
 func (p *MovingInfo) Dx() float64 {
@@ -278,7 +283,7 @@ type TurningInfo struct {
 }
 
 func (p *TurningInfo) Dir() float64 {
-	return -(p.NewDir - p.OldDir)
+	return p.NewDir - p.OldDir
 }
 
 func (p *Sprite) OnTurning__0(onTurning func(ti *TurningInfo)) {
@@ -294,7 +299,7 @@ func (p *Sprite) OnTurning__0(onTurning func(ti *TurningInfo)) {
 }
 
 func (p *Sprite) OnTurning__1(onTurning func()) {
-	p.OnTurning__0(func(mi *TurningInfo) {
+	p.OnTurning__0(func(*TurningInfo) {
 		onTurning()
 	})
 }
@@ -521,8 +526,8 @@ func (p *Sprite) getXY() (x, y float64) {
 // DistanceTo func:
 //   DistanceTo(sprite)
 //   DistanceTo(spriteName)
-//   DistanceTo(gox.Mouse)
-//   DistanceTo(gox.Random)
+//   DistanceTo(spx.Mouse)
+//   DistanceTo(spx.Random)
 func (p *Sprite) DistanceTo(obj interface{}) float64 {
 	x, y := p.x, p.y
 	x2, y2 := p.g.objectPos(obj)
@@ -533,7 +538,11 @@ func (p *Sprite) DistanceTo(obj interface{}) float64 {
 
 func (p *Sprite) doMoveTo(x, y float64) {
 	if p.hasOnMoving {
-		p.doWhenMoving(p, &MovingInfo{OldX: p.x, OldY: p.y, NewX: x, NewY: y, Obj: p})
+		mi := &MovingInfo{OldX: p.x, OldY: p.y, NewX: x, NewY: y, Obj: p}
+		p.doWhenMoving(p, mi)
+		if mi.dontMoving {
+			return
+		}
 	}
 	if p.isPenDown {
 		p.g.movePen(p, x, y)
@@ -587,8 +596,8 @@ func (p *Sprite) Step(step float64) {
 // Goto func:
 //   Goto(sprite)
 //   Goto(spriteName)
-//   Goto(gox.Mouse)
-//   Goto(gox.Random)
+//   Goto(spx.Mouse)
+//   Goto(spx.Random)
 func (p *Sprite) Goto(obj interface{}) {
 	if debugInstr {
 		log.Println("Goto", p.name, obj)
@@ -688,20 +697,26 @@ func (p *Sprite) Heading() float64 {
 
 // Turn func:
 //   Turn(degree)
-//   Turn(gox.Left)
-//   Turn(gox.Right)
+//   Turn(spx.Left)
+//   Turn(spx.Right)
+//   Turn(ti *spx.TurningInfo)
 func (p *Sprite) Turn(val interface{}) {
 	if debugInstr {
 		log.Println("Turn", p.name, val)
 	}
 	var delta float64
 	switch v := val.(type) {
-	case specialDir:
-		delta = float64(v)
+	//case specialDir:
+	//	delta = float64(v)
 	case int:
 		delta = float64(v)
 	case float64:
 		delta = v
+	case *TurningInfo:
+		p.doTurnTogether(v) // don't animate
+		return
+	default:
+		panic("Turn: unexpected input")
 	}
 	p.setDirection(delta, true)
 }
@@ -709,20 +724,20 @@ func (p *Sprite) Turn(val interface{}) {
 // TurnTo func:
 //   TurnTo(sprite)
 //   TurnTo(spriteName)
-//   TurnTo(gox.Mouse)
+//   TurnTo(spx.Mouse)
 //   TurnTo(degree)
-//   TurnTo(gox.Left)
-//   TurnTo(gox.Right)
-//   TurnTo(gox.Up)
-//   TurnTo(gox.Down)
+//   TurnTo(spx.Left)
+//   TurnTo(spx.Right)
+//   TurnTo(spx.Up)
+//   TurnTo(spx.Down)
 func (p *Sprite) TurnTo(obj interface{}) {
 	if debugInstr {
 		log.Println("TurnTo", p.name, obj)
 	}
-	angle := 0.0
+	var angle float64
 	switch v := obj.(type) {
-	case specialDir:
-		angle = float64(v)
+	//case specialDir:
+	//	angle = float64(v)
 	case int:
 		angle = float64(v)
 	case float64:
@@ -733,19 +748,29 @@ func (p *Sprite) TurnTo(obj interface{}) {
 		dy := y - p.y
 		angle = 90 - math.Atan2(dy, dx)*180/math.Pi
 	}
-
 	p.setDirection(angle, false)
-
 }
 
 func (p *Sprite) setDirection(dir float64, change bool) {
 	if change {
-		dir = p.direction - dir
+		dir += p.direction
 	}
 	if p.hasOnTurning {
 		p.doWhenTurning(p, &TurningInfo{NewDir: dir, OldDir: p.direction, Obj: p})
 	}
 	p.direction = normalizeDirection(dir)
+}
+
+func (p *Sprite) doTurnTogether(ti *TurningInfo) {
+	/*
+		x’ = x0 + cos * (x-x0) + sin * (y-y0)
+		y’ = y0 - sin * (x-x0) + cos * (y-y0)
+	*/
+	x0, y0 := ti.Obj.x, ti.Obj.y
+	dir := ti.Dir()
+	sin, cos := math.Sincos(dir * (math.Pi / 180))
+	p.x, p.y = x0+cos*(p.x-x0)+sin*(p.y-y0), y0-sin*(p.x-x0)+cos*(p.y-y0)
+	p.direction = normalizeDirection(p.direction + dir)
 }
 
 // -----------------------------------------------------------------------------

@@ -1,0 +1,15 @@
+{
+  "costumes": [
+    {
+      "bitmapResolution": 2,
+      "name": "backdrop1",
+      "path": "1.png",
+      "x": 480,
+      "y": 360
+    }
+  ],
+  "currentCostumeIndex": 0,
+  "zorder": [
+    "Bullet"
+  ]
+}

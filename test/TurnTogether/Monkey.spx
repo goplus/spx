@@ -1,0 +1,7 @@
+onKey KeyUp, => {
+	turn -30
+}
+
+onKey KeyDown, => {
+	turn 30
+}

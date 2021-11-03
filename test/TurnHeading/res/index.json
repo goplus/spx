@@ -10,7 +10,11 @@
   ],
   "currentCostumeIndex": 0,
   "zorder": [
-    "Monkey",
-    "Crocodile"
+    {
+      "type": "sprite",
+      "target": "Monkey",
+      "x": 0,
+      "y": 50
+    }
   ]
 }

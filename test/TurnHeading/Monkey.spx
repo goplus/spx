@@ -1,0 +1,31 @@
+onKey KeyUp, => {
+	turnTo Up
+}
+
+onKey KeyRight, => {
+	turnTo Right
+}
+
+onKey KeyDown, => {
+	turnTo Down
+}
+
+onKey KeyLeft, => {
+	turnTo Left
+}
+
+onKey KeyA, => {
+	turn Left
+}
+
+onKey KeyD, => {
+	turn Right
+}
+
+onKey KeyW, => {
+	turn -90
+}
+
+onKey KeyX, => {
+	turn 90
+}

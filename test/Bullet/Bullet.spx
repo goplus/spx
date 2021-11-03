@@ -1,9 +1,16 @@
+onStart => {
+	for {
+		wait 0.1
+		clone
+	}
+}
+
 onCloned => {
-	setXYpos MyAircraft.xpos, MyAircraft.ypos+5
+	setXYpos mouseX, mouseY
 	show
 	for {
-		step 10
 		wait 0.04
+		step 10
 		if touching(Edge) {
 			destroy
 		}

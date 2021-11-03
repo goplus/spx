@@ -51,6 +51,7 @@ func SetDebug(flags int) {
 type Game struct {
 	baseObj
 	eventSinks
+
 	fs     spxfs.Dir
 	shared *sharedImages
 
@@ -214,7 +215,7 @@ type costumeSetItem struct {
 
 type costumeSet struct {
 	Path             string           `json:"path"`
-	FaceLeft         float64          `json:"faceLeft"`
+	FaceRight        float64          `json:"faceRight"` // turn face to right
 	BitmapResolution int              `json:"bitmapResolution"`
 	Nx               int              `json:"nx"`
 	Rect             *costumeSetRect  `json:"rect"`
@@ -229,7 +230,7 @@ type costumeSetPart struct {
 
 type costumeMPSet struct {
 	Path             string           `json:"path"`
-	FaceLeft         float64          `json:"faceLeft"`
+	FaceRight        float64          `json:"faceRight"` // turn face to right
 	BitmapResolution int              `json:"bitmapResolution"`
 	Parts            []costumeSetPart `json:"parts"`
 }
@@ -239,7 +240,7 @@ type costumeConfig struct {
 	Path             string  `json:"path"`
 	X                float64 `json:"x"`
 	Y                float64 `json:"y"`
-	FaceLeft         float64 `json:"faceLeft"`
+	FaceRight        float64 `json:"faceRight"` // turn face to right
 	BitmapResolution int     `json:"bitmapResolution"`
 }
 

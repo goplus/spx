@@ -1,0 +1,3 @@
+Monkey.onTurning ti => {
+	turn ti.dir
+}

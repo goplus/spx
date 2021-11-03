@@ -3,7 +3,7 @@ onCloned => {
 	show
 	for {
 		wait 0.04
-		changeYpos 10
+		step 10
 		if touching(Edge) {
 			destroy
 		}
