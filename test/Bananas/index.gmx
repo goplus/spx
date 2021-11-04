@@ -1,5 +1,5 @@
 var (
-	Bananas []Banana
+	Bananas []*Banana
 	Monkey  *Monkey
 )
 

@@ -443,9 +443,10 @@ func (p *Game) addStageSprite(g reflect.Value, v specsp, inits []initer) []inite
 			if ini, ok := val.(initer); ok {
 				inits = append(inits, ini)
 			}
+			return inits
 		}
 	}
-	return inits
+	panic("addStageSprite: unexpected - " + target)
 }
 
 /*
@@ -469,8 +470,16 @@ func (p *Game) addStageSprites(g reflect.Value, v specsp, inits []initer) []init
 	if val := findFieldPtr(g, target, 0); val != nil {
 		fldSlice := reflect.ValueOf(val).Elem()
 		if fldSlice.Kind() == reflect.Slice {
+			var typItemPtr reflect.Type
 			typSlice := fldSlice.Type()
-			if typItem := typSlice.Elem(); reflect.PtrTo(typItem).Implements(tyShape) {
+			typItem := typSlice.Elem()
+			isPtr := typItem.Kind() == reflect.Ptr
+			if isPtr {
+				typItem, typItemPtr = typItem.Elem(), typItem
+			} else {
+				typItemPtr = reflect.PtrTo(typItem)
+			}
+			if typItemPtr.Implements(tyShape) {
 				name := typItem.Name()
 				spr, ok := p.shapes[name]
 				if !ok {
@@ -484,7 +493,12 @@ func (p *Game) addStageSprites(g reflect.Value, v specsp, inits []initer) []init
 				n := len(items)
 				newSlice := reflect.MakeSlice(typSlice, n, n)
 				for i := 0; i < n; i++ {
-					dest, sp := applySprite(newSlice.Index(i), spr, items[i].(specsp))
+					newItem := newSlice.Index(i)
+					if isPtr {
+						newItem.Set(reflect.New(typItem))
+						newItem = newItem.Elem()
+					}
+					dest, sp := applySprite(newItem, spr, items[i].(specsp))
 					p.addShape(dest)
 					if ini, ok := sp.(initer); ok {
 						inits = append(inits, ini)
@@ -495,7 +509,7 @@ func (p *Game) addStageSprites(g reflect.Value, v specsp, inits []initer) []init
 			}
 		}
 	}
-	panic("addStageSprites: unexpected")
+	panic("addStageSprites: unexpected - " + target)
 }
 
 var (
