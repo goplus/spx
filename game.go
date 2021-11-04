@@ -138,7 +138,7 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 				panic(err)
 			}
 			*fld = media
-		case Shape:
+		case Spriter:
 			if err := g.loadSprite(fld, name, v); err != nil {
 				panic(err)
 			}
@@ -751,8 +751,6 @@ func (p *Game) objectPos(obj interface{}) (float64, float64) {
 			return sp.getXY()
 		}
 		panic("objectPos: sprite not found - " + v)
-	case *Sprite:
-		return v.getXY()
 	case specialObj:
 		if v == Mouse {
 			return p.getMousePos()
@@ -763,6 +761,8 @@ func (p *Game) objectPos(obj interface{}) (float64, float64) {
 			mx, my := rand.Intn(screenW), rand.Intn(screenH)
 			return float64(mx - (screenW >> 1)), float64((screenH >> 1) - my)
 		}
+	case Spriter:
+		return spriteOf(v).getXY()
 	}
 	panic("objectPos: unexpected input")
 }

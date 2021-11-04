@@ -598,7 +598,7 @@ func (p *Sprite) Step__0(step float64) {
 }
 
 func (p *Sprite) Step__1(step int) {
-    p.Step__0(float64(step))
+	p.Step__0(float64(step))
 }
 
 // Goto func:
@@ -832,8 +832,6 @@ func (p *Sprite) Touching(obj interface{}, ani ...string) bool {
 			return true
 		}
 		return false
-	case *Sprite:
-		return touchingSprite(p, v)
 	case specialObj:
 		if v > 0 {
 			return p.checkTouchingScreen(int(v)) != 0
@@ -841,6 +839,8 @@ func (p *Sprite) Touching(obj interface{}, ani ...string) bool {
 			x, y := p.g.getMousePos()
 			return p.g.touchingPoint(p, x, y)
 		}
+	case Spriter:
+		return touchingSprite(p, spriteOf(v))
 	}
 	panic("Touching: unexpected input")
 }
