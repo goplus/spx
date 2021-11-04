@@ -1,6 +1,6 @@
 var (
 	Bananas []Banana
-	Monkey  Monkey
+	Monkey  *Monkey
 )
 
 run "res", {Title: "Bananas (by Go+)"}

@@ -128,7 +128,9 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 		panic(err)
 	}
 	for i, n := 0, v.NumField(); i < n; i++ {
-		name, val := getFieldPtr(v, i)
+		name, val := getOrAllocObjPtr(v, i, func(typ reflect.Type) bool {
+			return typ.Implements(tyShape)
+		})
 		switch fld := val.(type) {
 		case *Sound:
 			media, err := g.loadSound(name)
@@ -140,6 +142,8 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 			if err := g.loadSprite(fld, name, v); err != nil {
 				panic(err)
 			}
+		default:
+
 		}
 	}
 	if err := g.endLoad(v); err != nil {
@@ -170,10 +174,34 @@ func lookupSound(gamer reflect.Value, name string) (Sound, bool) {
 	return nil, false
 }
 
+/*
 func getFieldPtr(v reflect.Value, i int) (name string, val interface{}) {
 	tFld := v.Type().Field(i)
 	word := unsafe.Pointer(v.Field(i).Addr().Pointer())
 	return tFld.Name, makeEmptyInterface(reflect.PtrTo(tFld.Type), word)
+}
+*/
+
+func getOrAllocObjPtr(v reflect.Value, i int, canAlloc func(reflect.Type) bool) (name string, val interface{}) {
+	tFld := v.Type().Field(i)
+	vFld := v.Field(i)
+	typ := tFld.Type
+	alloc := false
+	if vFld.Kind() == reflect.Ptr {
+		alloc = canAlloc(typ)
+		if !alloc {
+			word := unsafe.Pointer(vFld.Pointer())
+			return tFld.Name, makeEmptyInterface(typ, word)
+		}
+	}
+	word := unsafe.Pointer(vFld.Addr().Pointer())
+	ret := makeEmptyInterface(reflect.PtrTo(typ), word)
+	if alloc {
+		obj := reflect.New(typ.Elem())
+		reflect.ValueOf(ret).Elem().Set(obj)
+		ret = obj.Interface()
+	}
+	return tFld.Name, ret
 }
 
 func findFieldPtr(v reflect.Value, name string, from int) interface{} {
@@ -183,6 +211,24 @@ func findFieldPtr(v reflect.Value, name string, from int) interface{} {
 		if tFld.Name == name {
 			word := unsafe.Pointer(v.Field(i).Addr().Pointer())
 			return makeEmptyInterface(reflect.PtrTo(tFld.Type), word)
+		}
+	}
+	return nil
+}
+
+func findObjPtr(v reflect.Value, name string, from int) interface{} {
+	t := v.Type()
+	for i, n := from, v.NumField(); i < n; i++ {
+		tFld := t.Field(i)
+		if tFld.Name == name {
+			typ := tFld.Type
+			vFld := v.Field(i)
+			if vFld.Kind() == reflect.Ptr {
+				word := unsafe.Pointer(vFld.Pointer())
+				return makeEmptyInterface(typ, word)
+			}
+			word := unsafe.Pointer(vFld.Addr().Pointer())
+			return makeEmptyInterface(reflect.PtrTo(typ), word)
 		}
 	}
 	return nil
@@ -389,7 +435,7 @@ func (p *Game) addSpecialShape(g reflect.Value, v specsp, inits []initer) []init
 
 func (p *Game) addStageSprite(g reflect.Value, v specsp, inits []initer) []initer {
 	target := v["target"].(string)
-	if val := findFieldPtr(g, target, 0); val != nil {
+	if val := findObjPtr(g, target, 0); val != nil {
 		if sp, ok := val.(Shape); ok {
 			dest := spriteOf(sp)
 			applySpriteProps(dest, v)
