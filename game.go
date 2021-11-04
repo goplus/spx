@@ -142,8 +142,6 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 			if err := g.loadSprite(fld, name, v); err != nil {
 				panic(err)
 			}
-		default:
-
 		}
 	}
 	if err := g.endLoad(v); err != nil {
