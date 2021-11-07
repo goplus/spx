@@ -68,8 +68,9 @@ type Game struct {
 
 	gMouseX, gMouseY int64
 
-	sinkMgr   eventSinkMgr
-	isStopped bool
+	sinkMgr           eventSinkMgr
+	isStopped         bool
+	activeAnimatables []IAnimatable
 }
 
 type Spriter = Shape
@@ -507,6 +508,9 @@ func (p *Game) Update() error {
 	p.updateMousePos()
 	p.input.update()
 	p.sounds.update()
+
+	// Animations
+	p._animate()
 	return nil
 }
 
@@ -1120,3 +1124,14 @@ func (p *Game) ShowVar(name string) {
 }
 
 // -----------------------------------------------------------------------------
+
+//-------------anmi-----------
+
+func (p *Game) _animate() {
+	for index := 0; index < len(p.activeAnimatables); index++ {
+		if !p.activeAnimatables[index].Animate() {
+			p.activeAnimatables = append(p.activeAnimatables[:index], p.activeAnimatables[index+1:]...)
+			index--
+		}
+	}
+}
