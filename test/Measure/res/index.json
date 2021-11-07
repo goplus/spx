@@ -18,32 +18,32 @@
     },
     {
       "type": "measure",
-      "center_x": 0,
-      "center_y": 0,
+      "x": 0,
+      "y": 0,
       "heading": 0,
       "size": 150,
       "color": 15629590
     },
     {
       "type": "measure",
-      "center_x": -100,
-      "center_y": 0,
+      "x": -100,
+      "y": 0,
       "heading": 60,
       "size": 200,
       "color": 0
     },
     {
       "type": "measure",
-      "center_x": -100,
-      "center_y": 100,
+      "x": -100,
+      "y": 100,
       "heading": -30,
       "size": 100,
       "color": 65535
     },
     {
       "type": "measure",
-      "center_x": 0,
-      "center_y": 100,
+      "x": 0,
+      "y": 100,
       "heading": 90,
       "size": 10,
       "scale": 10,
