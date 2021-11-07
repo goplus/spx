@@ -1,0 +1,30 @@
+const oneStep = 50
+
+func turnOrStep(dir float64) {
+	if heading == dir {
+		say 50, 0.5
+		step oneStep
+	} else {
+		turnTo dir
+	}
+}
+
+onKey KeyUp, => {
+	turnOrStep(0)
+}
+
+onKey KeyDown, => {
+	turnOrStep(180)
+}
+
+onKey KeyLeft, => {
+	turnOrStep(-90)
+}
+
+onKey KeyRight, => {
+	turnOrStep(90)
+}
+
+onClick => {
+	say "press the arrorw keys", 1
+}
