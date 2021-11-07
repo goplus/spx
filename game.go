@@ -421,6 +421,8 @@ func (p *Game) addSpecialShape(g reflect.Value, v specsp, inits []initer) []init
 		if sm, err := newStageMonitor(g, v); err == nil {
 			p.addShape(sm)
 		}
+	case "measure":
+		p.addShape(newMeasure(v))
 	case "sprites":
 		return p.addStageSprites(g, v, inits)
 	case "sprite":
