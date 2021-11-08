@@ -12,8 +12,9 @@ import (
 )
 
 const (
-	measureEdgeLen   = 6
-	measureLineWidth = 2
+	measureEdgeLen    = 6
+	measureLineWidth  = 2
+	measureTextMargin = 8
 )
 
 type measure struct {
@@ -83,7 +84,9 @@ func (m *measure) draw(dc drawContext) {
 	// text
 	render := gdi.NewTextRender(defaultFont, 0x80000, 0)
 	render.AddText(m.text)
-	render.Draw(m.cachedImg, m.svgSize>>1, m.svgSize>>1, m.color, 0)
+	textW, textH := render.Size()
+	x, y := m.getTextPos(textW, textH)
+	render.Draw(m.cachedImg, x, y, m.color, 0)
 }
 
 func (m *measure) getLines() (image.Image, error) {
@@ -96,6 +99,38 @@ func (m *measure) getLines() (image.Image, error) {
 	svg.Gend()
 	svg.End()
 	return svg.ToImage()
+}
+
+func (m *measure) getTextPos(textW, textH int) (int, int) {
+	rotation := (int(m.heading)%360 + 360) % 360
+	center := m.svgSize / 2
+
+	switch {
+	case rotation == 0:
+		return center + measureTextMargin, center - textH/2 // right of center
+	case rotation == 90:
+		return center - textW/2, center - measureTextMargin - textH // above center
+	case rotation == 180:
+		return center - textW - measureTextMargin, center - textH/2 // left of center
+	case rotation == 270:
+		return center - textW/2, center + measureTextMargin // under center
+	case rotation > 0 && rotation <= 45:
+		return center + measureTextMargin, center + (measureTextMargin-textH)/2
+	case rotation > 45 && rotation < 90:
+		return center - (measureTextMargin+textW)/2, center - measureTextMargin - textH
+	case rotation > 90 && rotation <= 135:
+		return center + (measureTextMargin-textW)/2, center - measureTextMargin - textH
+	case rotation > 135 && rotation < 180:
+		return center - measureTextMargin - textW, center
+	case rotation > 180 && rotation <= 225:
+		return center - measureTextMargin - textW, center - textH
+	case rotation > 225 && rotation < 270:
+		return center - textW/3, center + measureTextMargin
+	case rotation > 270 && rotation <= 315:
+		return center - textW, center + measureTextMargin
+	default:
+		return center + measureTextMargin, center - textH
+	}
 }
 
 func (m *measure) hit(hc hitContext) (hr hitResult, ok bool) {

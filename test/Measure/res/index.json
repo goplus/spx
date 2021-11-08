@@ -19,35 +19,51 @@
     {
       "type": "measure",
       "x": 0,
-      "y": 0,
-      "heading": 0,
-      "size": 150,
-      "color": 15629590
-    },
-    {
-      "type": "measure",
-      "x": -100,
-      "y": 0,
-      "heading": 60,
-      "size": 200,
-      "color": 0
-    },
-    {
-      "type": "measure",
-      "x": -100,
-      "y": 100,
-      "heading": -30,
-      "size": 100,
-      "color": 65535
-    },
-    {
-      "type": "measure",
-      "x": 0,
       "y": 100,
       "heading": 90,
       "size": 10,
       "scale": 10,
+      "color": 15629590
+    },
+    {
+      "type": "measure",
+      "x": -50,
+      "y": 50,
+      "heading": 180,
+      "size": 100,
       "color": 16777215
+    },
+    {
+      "type": "measure",
+      "x": 0,
+      "y": 0,
+      "heading": -90,
+      "size": 100,
+      "color": 16777215
+    },
+    {
+      "type": "measure",
+      "x": 50,
+      "y": 50,
+      "heading": 0,
+      "size": 100,
+      "color": 16777215
+    },
+    {
+      "type": "measure",
+      "x": -200,
+      "y": 0,
+      "heading": 60,
+      "size": 100,
+      "color": 0
+    },
+    {
+      "type": "measure",
+      "x": 150,
+      "y": 0,
+      "heading": -30,
+      "size": 100,
+      "color": 65535
     }
   ]
 }
