@@ -31,7 +31,7 @@
       "y": 50,
       "heading": 180,
       "size": 100,
-      "color": 16777215
+      "color": "white"
     },
     {
       "type": "measure",
@@ -39,7 +39,7 @@
       "y": 0,
       "heading": -90,
       "size": 100,
-      "color": 16777215
+      "color": "#fff"
     },
     {
       "type": "measure",
@@ -47,15 +47,14 @@
       "y": 50,
       "heading": 0,
       "size": 100,
-      "color": 16777215
+      "color": "#ffffff"
     },
     {
       "type": "measure",
       "x": -200,
       "y": 0,
       "heading": 60,
-      "size": 100,
-      "color": 0
+      "size": 100
     },
     {
       "type": "measure",

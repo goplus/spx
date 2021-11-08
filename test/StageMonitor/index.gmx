@@ -1,0 +1,10 @@
+var (
+	Monkey Monkey
+	downs  int
+)
+
+onKey KeyDown, => {
+	downs++
+}
+
+run "res", {Title: "Measure (by Go+)"}

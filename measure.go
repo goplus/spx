@@ -3,7 +3,6 @@ package spx
 import (
 	"fmt"
 	"image"
-	"image/color"
 	"strconv"
 	"strings"
 
@@ -25,7 +24,7 @@ type measure struct {
 
 	// computed properties
 	text         string
-	color        color.Color
+	color        Color
 	cachedImg    *ebiten.Image
 	svgLineStyle string
 	svgRotate    string
@@ -39,16 +38,18 @@ func newMeasure(v specsp) *measure {
 	text = strings.TrimSuffix(text, ".0")
 	heading := getSpcspVal(v, "heading", 0.0).(float64)
 	svgSize := int(size*scale + 0.5 + measureLineWidth)
-	c := int(getSpcspVal(v, "color", 0.0).(float64))
-	r, g, b := uint8(c>>16), uint8((c>>8)&0xff), uint8(c&0xff)
+	c, err := parseColor(getSpcspVal(v, "color", 0.0))
+	if err != nil {
+		panic(err)
+	}
 	return &measure{
 		heading:      heading,
 		size:         size,
 		text:         text,
-		color:        color.RGBA{R: r, G: g, B: b, A: 0xff},
+		color:        c,
 		x:            v["x"].(float64),
 		y:            v["y"].(float64),
-		svgLineStyle: fmt.Sprintf("stroke-width:%d;stroke:rgb(%d, %d, %d);", measureLineWidth, r, g, b),
+		svgLineStyle: fmt.Sprintf("stroke-width:%d;stroke:rgb(%d, %d, %d);", measureLineWidth, c.R, c.G, c.B),
 		svgRotate:    fmt.Sprintf("rotate(%.1f %d %d)", heading, svgSize>>1, svgSize>>1),
 		svgSize:      svgSize,
 	}
