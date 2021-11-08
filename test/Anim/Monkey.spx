@@ -1,0 +1,24 @@
+
+var (
+	anim *Anim
+)
+
+onKey KeyUp, => {
+	//anim
+	anim = NewAnim("test", ANIMVALTYPE_FLOAT, 30, 100).SetLoop(true).AddKeyFrame(0,0).AddKeyFrame(50,40).AddKeyFrame(100,0)
+	anim.SetOnPlayingListener( (currframe, currval) => {
+		//println("playing anim   currframe ",currframe, "val:", currval)
+		TurnTo currval
+	} )
+
+	Game.AddActiveAnimate(anim, true)
+	//Game.AddActiveAnimate(anim, false)
+
+
+
+}
+
+onKey KeyDown, => {
+	rect := GetRect()
+	println( rect.Min, rect.Max)
+}

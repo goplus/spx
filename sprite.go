@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/goplus/spx/internal/anim"
 	"github.com/goplus/spx/internal/gdi"
 	"github.com/goplus/spx/internal/gdi/clrutil"
 )
@@ -64,7 +65,7 @@ type Sprite struct {
 	hasOnTurning bool
 	hasOnMoving  bool
 
-	_animations []IAnimation
+	_animations []anim.IAnimation
 }
 
 func (p *Sprite) SetDying() { // dying: visible but can't be touched
@@ -119,7 +120,7 @@ func (p *Sprite) init(
 				g.Play__0(media)
 			}
 			if ani.N > 0 {
-				obj.goAnimate(key, ani.Wait, ani.From, ani.N, ani.Step, ani.Move)
+				obj.goAnimate(key, ani.Wait, ani.From, ani.N, ani.Step, ani.Move, ani.Isseq)
 			}
 		}
 	}
@@ -395,99 +396,40 @@ func (p *Sprite) PrevCostume() {
 
 // -----------------------------------------------------------------------------
 
-//IAnimationTarget
-func (p *Sprite) addAnimation(val IAnimation) {
-	if p._animations == nil {
-		p._animations = make([]IAnimation, 0)
-	}
-	p._animations = append(p._animations, val)
-}
-
-func (p *Sprite) removeAnimation(val IAnimation) {
-	for index := 0; index < len(p._animations); index++ {
-		if p._animations[index].GetAnimId() == val.GetAnimId() {
-			p._animations = append(p._animations[:index], p._animations[index+1:]...)
-			index--
-		}
-	}
-}
-
-func (p *Sprite) GetAnimations() []IAnimation {
-	return p._animations
-}
-func (p *Sprite) GetAnimatables() []IAnimatable {
-	return nil
-}
-
-func (p *Sprite) goAnimate(animname string, secs float64, costume interface{}, n, step int, move float64) {
+func (p *Sprite) goAnimate(animname string, secs float64, costume interface{}, n, step int, move float64, isseq bool) {
 	p.goSetCostume(costume)
 	index := p.getCostumeIndex()
 	toMove := move != 0
 	if step == 0 {
 		step = 1
 	}
-	// for i := 0; i < n; i++ {
-	// 	p.g.Wait(secs)
-	// 	index += step
-	// 	log.Printf("%g", secs)
-	// 	p.setCostumeByIndex(index)
-	// 	if toMove {
-	// 		p.goMoveForward(move)
-	// 	}
-	// }
 
-	//anim max duration
-	maxduration := secs * (float64(n) - 1.0) //s
 	//anim frame
 	framenum := n
 	//anim fps
 	fps := 1.0 / float64(secs)
-
 	//add anim
 	animnamestr := p.getCostumeName() + "_" + animname
-	var animation = NewAnimation(animnamestr, fps, ANIMATIONTYPE_INT, ANIMATIONLOOPMODE_CYCLE)
 
-	log.Printf("add anim [name %s, id %d ] maxduration %g, framenum %d, fps %g ", animnamestr, animation.GetAnimId(), maxduration, framenum, fps)
+	anim := NewAnim(animnamestr, ANIMVALTYPE_INT, fps, framenum).AddKeyFrame(0, 0).AddKeyFrame(framenum, n*step).SetLoop(false)
+	log.Printf("New anim [name %s id %d]  fps:%f", anim.name, anim.id, fps)
 
-	animation.SetOnPlayingListener(func(a *Animation, currframe int, currval interface{}) {
+	anim.SetOnPlayingListener(func(currframe int, currval interface{}) {
 		val, ok := currval.(int)
 		if !ok {
 			log.Printf("Animation type is error")
 			return
 		}
 		newindex := index + val
-		log.Printf("playing anim [name %s, id %d ]  currframe %d, val %d", animnamestr, animation.GetAnimId(), currframe, val)
+		log.Printf("playing anim [name %s id %d]  currframe %d, val %d", anim.name, anim.id, currframe, val)
 
 		p.setCostumeByIndex(newindex)
 		if toMove {
 			p.goMoveForward(move)
 		}
-
 	})
-	animation.SetOnStopingListener(func(a *Animation) {
-		//clear anima
-		p.removeAnimation(a)
 
-		log.Printf("stoping anim [name %s, id %d ] ", animnamestr, a.GetAnimId())
-	})
-	//tween
-	//animation.SetEasingFunction(tools.NewBackEase())
-
-	var keys = make([]*AnimationKeyFrame, 0)
-	keys = append(keys, &AnimationKeyFrame{
-		Frame: 0,
-		Value: 0,
-	})
-	keys = append(keys, &AnimationKeyFrame{
-		Frame: framenum,
-		Value: n * step,
-	})
-	animation.SetKeys(keys)
-	p.addAnimation(animation)
-
-	//play
-	//
-	PlayAnimation(p.g, p, 0, framenum, false, 1.0)
+	p.g.AddActiveAnimate(anim, isseq)
 
 }
 
@@ -507,21 +449,28 @@ func (p *Sprite) Animate__1(secs float64, costume interface{}, n int) {
 	if debugInstr {
 		log.Println("Animation", secs, costume, n)
 	}
-	p.goAnimate("anonymous", secs, costume, n, 1, 0)
+	p.goAnimate("anonymous", secs, costume, n, 1, 0, false)
 }
 
 func (p *Sprite) Animate__2(secs float64, costume interface{}, n, step int) {
 	if debugInstr {
 		log.Println("Animation", secs, costume, n, step)
 	}
-	p.goAnimate("anonymous", secs, costume, n, step, 0)
+	p.goAnimate("anonymous", secs, costume, n, step, 0, false)
 }
 
 func (p *Sprite) Animate__3(secs float64, costume interface{}, n, step int, move float64) {
 	if debugInstr {
 		log.Println("Animation", secs, costume, n, step, move)
 	}
-	p.goAnimate("anonymous", secs, costume, n, step, move)
+	p.goAnimate("anonymous", secs, costume, n, step, move, false)
+}
+
+func (p *Sprite) Animate__4(secs float64, costume interface{}, n, step int, move float64, isseq bool) {
+	if debugInstr {
+		log.Println("Animation", secs, costume, n, step, move)
+	}
+	p.goAnimate("anonymous", secs, costume, n, step, move, isseq)
 }
 
 func (p *Sprite) SetAnimation(name string, ani func(*Sprite)) {
@@ -670,6 +619,7 @@ func (p *Sprite) Step(step float64) {
 	} else {
 		n = int(step + 0.5)
 	}
+
 	for ; n > 0; n-- {
 		ani(p)
 	}
@@ -1137,5 +1087,10 @@ func (p *Sprite) ShowVar(name string) {
 //get sprite bound
 func (p *Sprite) GetRect() image.Rectangle {
 	spi, _ := p.getGdiSprite()
-	return spi.Rect
+	bound := spi.Rect
+	log.Printf("bound %v", bound)
+	bound.Min.X, bound.Min.Y = p.g.getPosFormGdi(float64(bound.Min.X), float64(bound.Min.Y))
+	bound.Max.X, bound.Max.Y = p.g.getPosFormGdi(float64(bound.Max.X), float64(bound.Max.Y))
+
+	return bound
 }

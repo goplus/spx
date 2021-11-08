@@ -68,9 +68,10 @@ type Game struct {
 
 	gMouseX, gMouseY int64
 
-	sinkMgr           eventSinkMgr
-	isStopped         bool
-	activeAnimatables []IAnimatable
+	sinkMgr              eventSinkMgr
+	isStopped            bool
+	activeAnimatables    []*Anim
+	seqactiveAnimatables []*Anim
 }
 
 type Spriter = Shape
@@ -246,12 +247,13 @@ type costumeConfig struct {
 }
 
 type aniConfig struct {
-	Play string      `json:"play"`
-	Wait float64     `json:"wait"`
-	Move float64     `json:"move"`
-	From interface{} `json:"from"`
-	N    int         `json:"n"`
-	Step int         `json:"step"`
+	Play  string      `json:"play"`
+	Wait  float64     `json:"wait"`
+	Move  float64     `json:"move"`
+	From  interface{} `json:"from"`
+	N     int         `json:"n"`
+	Step  int         `json:"step"`
+	Isseq bool        `json:"isseq"`
 }
 
 type spriteConfig struct {
@@ -664,6 +666,12 @@ func (p *Game) doSize() {
 func (p *Game) getGdiPos(x, y float64) (int, int) {
 	screenW, screenH := p.size()
 	return int(x) + (screenW >> 1), (screenH >> 1) - int(y)
+}
+
+func (p *Game) getPosFormGdi(x, y float64) (int, int) {
+	screenW, screenH := p.size()
+	log.Printf("x %f,y%f,screenW%d, screenH%d", x, y, screenW, screenH)
+	return int(x) - (screenW >> 1), (screenH >> 1) - int(y)
 }
 
 func (p *Game) touchingPoint(dst *Sprite, x, y float64) bool {
@@ -1127,11 +1135,50 @@ func (p *Game) ShowVar(name string) {
 
 //-------------anmi-----------
 
+func (p *Game) AddActiveAnimate(anim *Anim, isseq bool) {
+	if isseq {
+		p.seqactiveAnimatables = append(p.seqactiveAnimatables, anim)
+	} else {
+		p.activeAnimatables = append(p.activeAnimatables, anim)
+	}
+}
+
 func (p *Game) _animate() {
+
+	//
 	for index := 0; index < len(p.activeAnimatables); index++ {
-		if !p.activeAnimatables[index].Animate() {
+		anim := p.activeAnimatables[index]
+		sts := anim.status
+		switch sts {
+		case ANIMSTATUS_STOP:
 			p.activeAnimatables = append(p.activeAnimatables[:index], p.activeAnimatables[index+1:]...)
 			index--
+			break
+		case ANIMSTATUS_PLAYING:
+			runing := anim.update()
+			if runing == false {
+				p.activeAnimatables = append(p.activeAnimatables[:index], p.activeAnimatables[index+1:]...)
+				index--
+			}
+			break
 		}
 	}
+
+	//seq anim
+	p._seqanimate(0)
+
+}
+
+func (p *Game) _seqanimate(index int) {
+	if len(p.seqactiveAnimatables) == 0 {
+		return
+	}
+	anim := p.seqactiveAnimatables[index]
+	anim.SetOnStopingListener(func() {
+		p.seqactiveAnimatables = append(p.seqactiveAnimatables[:index], p.seqactiveAnimatables[index+1:]...)
+		p._seqanimate(index)
+	})
+	//log.Printf("anim update %d len %d", anim.id, len(p.seqactiveAnimatables))
+	anim.update()
+
 }

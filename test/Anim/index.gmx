@@ -1,0 +1,6 @@
+var (
+	Monkey  Monkey
+	Anim    Anim
+)
+
+run "res", {Title: "Bananas (by Go+)"}
