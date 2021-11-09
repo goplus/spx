@@ -1,0 +1,11 @@
+var (
+	clicked, ups int
+)
+
+onClick => {
+	clicked++
+}
+
+onKey KeyUp, => {
+	ups++
+}

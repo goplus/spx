@@ -12,6 +12,7 @@ import (
 
 	"github.com/goplus/spx/internal/gdi"
 	"github.com/hajimehoshi/ebiten/v2"
+	"golang.org/x/image/colornames"
 )
 
 // -------------------------------------------------------------------------------------
@@ -22,7 +23,7 @@ type stageMonitor struct {
 	val     string
 	eval    func() string
 	mode    int
-	color   int
+	color   Color
 	x, y    float64
 	label   string
 	visible bool
@@ -50,7 +51,10 @@ func newStageMonitor(g reflect.Value, v specsp) (*stageMonitor, error) {
 		return nil, syscall.ENOENT
 	}
 	mode := int(v["mode"].(float64))
-	color := int(v["color"].(float64))
+	color, err := parseColor(getSpcspVal(v, "color"))
+	if err != nil {
+		panic(err)
+	}
 	label := v["label"].(string)
 	x := v["x"].(float64)
 	y := v["y"].(float64)
@@ -110,14 +114,17 @@ func (p *stageMonitor) setVisible(visible bool) {
 }
 
 const (
-	stmDefaultW      = 47
-	stmDefaultSmW    = 41
-	stmCornerSize    = 2
-	stmVertGapSm     = 4
-	stmHoriGapSm     = 5
-	stmBackground    = 193 | (196 << 8) | (199 << 16)
-	stmBackgroundPen = 0
-	stmTextRectPen   = 0xffffff
+	stmDefaultW   = 47
+	stmDefaultSmW = 41
+	stmCornerSize = 2
+	stmVertGapSm  = 4
+	stmHoriGapSm  = 5
+)
+
+var (
+	stmBackground    = Color{R: 0xc4, G: 0xc7, B: 0xc1, A: 0xff}
+	stmBackgroundPen = colornames.Black
+	stmTextRectPen   = colornames.White
 )
 
 func (p *stageMonitor) draw(dc drawContext) {
@@ -135,7 +142,7 @@ func (p *stageMonitor) draw(dc drawContext) {
 		if w < stmDefaultW {
 			w = stmDefaultW
 		}
-		drawRoundRect(dc, x, y, w, h, int(p.color), int(p.color))
+		drawRoundRect(dc, x, y, w, h, p.color, p.color)
 		render.Draw(dc.Image, x+((w-textW)>>1), y, color.White, 0)
 	default:
 		x, y := int(p.x), int(p.y)
@@ -156,7 +163,7 @@ func (p *stageMonitor) draw(dc drawContext) {
 		labelRender.Draw(dc.Image, x+stmHoriGapSm, y+stmVertGapSm, color.Black, 0)
 		x += labelW + (stmHoriGapSm * 2)
 		y += stmVertGapSm
-		drawRoundRect(dc, x, y, textRectW, textH, int(p.color), stmTextRectPen)
+		drawRoundRect(dc, x, y, textRectW, textH, p.color, stmTextRectPen)
 		textRender.Draw(dc.Image, x+((textRectW-textW)>>1), y, color.White, 0)
 	}
 }
@@ -169,8 +176,8 @@ var (
 	rcMap = make(map[rectKey]*ebiten.Image)
 )
 
-func drawRoundRect(dc drawContext, x, y, w, h int, clr, clrPen int) {
-	key := rectKey{x, y, w, h, clr, clrPen}
+func drawRoundRect(dc drawContext, x, y, w, h int, clr, clrPen Color) {
+	key := rectKey{x, y, w, h, getColorVal(clr), getColorVal(clrPen)}
 	if i, ok := rcMap[key]; ok {
 		dc.DrawImage(i, nil)
 		return
@@ -182,7 +189,7 @@ func drawRoundRect(dc drawContext, x, y, w, h int, clr, clrPen int) {
 	rcMap[key] = ebiten.NewImageFromImage(img)
 }
 
-func getRoundRect(dc drawContext, x, y, w, h int, clr, clrPen int) (image.Image, error) {
+func getRoundRect(dc drawContext, x, y, w, h int, clr, clrPen Color) (image.Image, error) {
 	varTable := []string{
 		"$x", strconv.Itoa(x),
 		"$y2", strconv.Itoa(y + stmCornerSize),
@@ -194,8 +201,8 @@ func getRoundRect(dc drawContext, x, y, w, h int, clr, clrPen int) (image.Image,
 
 	style := fmt.Sprintf(
 		"fill:rgb(%d, %d, %d);stroke-width:0.7;stroke:rgb(%d, %d, %d)",
-		(clr>>16)&0xff, (clr>>8)&0xff, clr&0xff,
-		(clrPen>>16)&0xff, (clrPen>>8)&0xff, clrPen&0xff)
+		clr.R, clr.G, clr.B,
+		clrPen.R, clrPen.G, clrPen.B)
 
 	cx, cy := dc.Size()
 	svg := gdi.NewSVG(cx, cy)

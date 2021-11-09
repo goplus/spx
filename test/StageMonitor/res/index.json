@@ -1,0 +1,51 @@
+{
+  "costumes": [
+    {
+      "bitmapResolution": 1,
+      "name": "backdrop1",
+      "path": "../../res/lake.jpg",
+      "x": 240,
+      "y": 180
+    }
+  ],
+  "currentCostumeIndex": 0,
+  "zorder": [
+    {
+      "type": "sprite",
+      "target": "Monkey",
+      "x": 0,
+      "y": 0
+    },{
+      "type": "stageMonitor",
+      "target": "Monkey",
+      "val": "getVar:clicked",
+      "color": 15629590,
+      "label": "clicked",
+      "mode": 1,
+      "x": 5,
+      "y": 5,
+      "visible": true
+    },{
+      "type": "stageMonitor",
+      "target": "Monkey",
+      "val": "getVar:ups",
+      "color": "orange",
+      "label": "ups",
+      "mode": 1,
+      "x": 125,
+      "y": 5,
+      "visible": true
+    },{
+      "type": "stageMonitor",
+      "target": "",
+      "val": "getVar:downs",
+      "color": "#ff7f50",
+      "label": "downs",
+      "mode": 2,
+      "x": 5,
+      "y": 50,
+      "visible": true
+    }
+
+  ]
+}
