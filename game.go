@@ -1134,6 +1134,31 @@ func (p *Game) ShowVar(name string) {
 // -----------------------------------------------------------------------------
 
 //-------------anmi-----------
+func (p *Game) playInnerAnimate(from interface{}, to interface{}, maxduration float64, fps float64, isseq bool, isloop bool, ani func(currframe int, currval interface{})) {
+
+	//anim frame
+	framenum := int(maxduration * fps)
+
+	anim := NewAnim("animnamename", AnimValTypeInt, fps, framenum).AddKeyFrame(0, from).AddKeyFrame(framenum, to).SetLoop(isloop)
+
+	if debugInstr {
+		log.Printf("New anim [name %s id %d]  fps:%f", anim.name, anim.id, fps)
+	}
+	anim.SetOnPlayingListener(func(currframe int, currval interface{}) {
+		if ani != nil {
+			ani(currframe, currval)
+		}
+	})
+
+	p.AddActiveAnimate(anim, isseq)
+}
+
+func (p *Game) PlayAnimate(from interface{}, to interface{}, maxduration float64, fps float64, ani func(currframe int, currval interface{})) {
+	p.playInnerAnimate(from, to, maxduration, fps, false, false, ani)
+}
+func (p *Game) PlayAnimateSeq(from interface{}, to interface{}, maxduration float64, fps float64, ani func(currframe int, currval interface{})) {
+	p.playInnerAnimate(from, to, maxduration, fps, true, false, ani)
+}
 
 func (p *Game) AddActiveAnimate(anim *Anim, isseq bool) {
 	if isseq {
@@ -1150,11 +1175,11 @@ func (p *Game) _animate() {
 		anim := p.activeAnimatables[index]
 		sts := anim.status
 		switch sts {
-		case ANIMSTATUS_STOP:
+		case AnimstatusStop:
 			p.activeAnimatables = append(p.activeAnimatables[:index], p.activeAnimatables[index+1:]...)
 			index--
 			break
-		case ANIMSTATUS_PLAYING:
+		case AnimstatusPlaying:
 			runing := anim.update()
 			if runing == false {
 				p.activeAnimatables = append(p.activeAnimatables[:index], p.activeAnimatables[index+1:]...)

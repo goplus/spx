@@ -411,7 +411,7 @@ func (p *Sprite) goAnimate(animname string, secs float64, costume interface{}, n
 	//add anim
 	animnamestr := p.getCostumeName() + "_" + animname
 
-	anim := NewAnim(animnamestr, ANIMVALTYPE_INT, fps, framenum).AddKeyFrame(0, 0).AddKeyFrame(framenum, n*step).SetLoop(false)
+	anim := NewAnim(animnamestr, AnimValTypeInt, fps, framenum).AddKeyFrame(0, 0).AddKeyFrame(framenum, n*step).SetLoop(false)
 	log.Printf("New anim [name %s id %d]  fps:%f", anim.name, anim.id, fps)
 
 	anim.SetOnPlayingListener(func(currframe int, currval interface{}) {

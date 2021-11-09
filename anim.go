@@ -8,16 +8,16 @@ import (
 type ANIMSTATUS uint8
 
 const (
-	ANIMSTATUS_PLAYING ANIMSTATUS = iota
-	ANIMSTATUS_STOP
+	AnimstatusPlaying ANIMSTATUS = iota
+	AnimstatusStop
 )
 
 type ANIMVALTYPE uint8
 
 const (
-	ANIMVALTYPE_INT ANIMVALTYPE = iota
-	ANIMVALTYPE_FLOAT
-	ANIMVALTYPE_VECTOR2
+	AnimValTypeInt ANIMVALTYPE = iota
+	AnimValTypeFloat
+	AnimValTypeVector2
 )
 
 type Anim struct {
@@ -43,7 +43,7 @@ func NewAnim(name string, valtype ANIMVALTYPE, fps float64, totalframe int) *Ani
 		fps:                  fps,
 		totalframe:           totalframe,
 		isloop:               false,
-		status:               ANIMSTATUS_PLAYING,
+		status:               AnimstatusPlaying,
 		animation:            nil,
 		animationStartedDate: 0,
 		keyframelist:         make([]*anim.AnimationKeyFrame, 0),
@@ -88,12 +88,12 @@ func (a *Anim) SetOnStopingListener(stopfuc func()) *Anim {
 }
 
 func (a *Anim) Play() *Anim {
-	a.status = ANIMSTATUS_PLAYING
+	a.status = AnimstatusPlaying
 	return a
 }
 
 func (a *Anim) Stop() *Anim {
-	a.status = ANIMSTATUS_STOP
+	a.status = AnimstatusStop
 	if a.stopCallback != nil {
 		a.stopCallback()
 	}
@@ -102,7 +102,7 @@ func (a *Anim) Stop() *Anim {
 
 //
 func (a *Anim) update() bool {
-	if a.status == ANIMSTATUS_STOP {
+	if a.status == AnimstatusStop {
 		return false
 	}
 	if a.animationStartedDate == 0 {

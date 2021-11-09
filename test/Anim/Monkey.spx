@@ -1,21 +1,16 @@
 
-var (
-	anim *Anim
-)
-
 onKey KeyUp, => {
-	//anim
-	anim = NewAnim("test", ANIMVALTYPE_FLOAT, 30, 100).SetLoop(true).AddKeyFrame(0,0).AddKeyFrame(50,40).AddKeyFrame(100,0)
-	anim.SetOnPlayingListener( (currframe, currval) => {
+
+	// PlayAnimate 并行播放动画  PlayAnimateSeq 播放串行动画
+	// 第一个参数 起始值
+	// 第二个参数 结束值
+	// 第三个参数 播放的时长 （单位S）
+	// 第四个参数 FPS
+	// 第五个参数 播放回调（当前帧，当前值）
+	Game.PlayAnimate 0, 50, 8, 30, (currframe, currval) => {
 		//println("playing anim   currframe ",currframe, "val:", currval)
 		TurnTo currval
-	} )
-
-	Game.AddActiveAnimate(anim, true)
-	//Game.AddActiveAnimate(anim, false)
-
-
-
+	}
 }
 
 onKey KeyDown, => {

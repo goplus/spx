@@ -36,7 +36,6 @@ type Coroutines struct {
 	mutex     sync.Mutex
 	cond      sync.Cond
 	sema      sync.Mutex
-	init      bool
 }
 
 // New creates a coroutine manager.
@@ -44,7 +43,6 @@ type Coroutines struct {
 func New() *Coroutines {
 	p := &Coroutines{
 		suspended: make(map[Thread]bool),
-		init:      false,
 	}
 	p.cond.L = &p.mutex
 	return p
@@ -74,7 +72,6 @@ func (p *Coroutines) CreateAndStart(tobj ThreadObj, fn func(me Thread) int, main
 				}
 			}
 		}()
-		p.init = true
 		fn(id)
 	}()
 	if main != nil {
@@ -96,10 +93,6 @@ func (p *Coroutines) Current() Thread {
 func (p *Coroutines) Yield(me Thread) {
 	if p.Current() != me {
 		panic(ErrCannotYieldANonrunningThread)
-	}
-	if p.init == false {
-		//log.Printf("Coroutines is not init success")
-		return
 	}
 	p.sema.Unlock()
 	p.mutex.Lock()
