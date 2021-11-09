@@ -12,9 +12,9 @@ github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 h1:DACJavvAHhabrF0
 github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0/go.mod h1:E/TSTwGwJL78qG/PmXZO1EjYhfJinVAhrmmHX6Z8B9k=
 github.com/goplus/canvas v0.1.0 h1:Vx3f2+U8UANvWf5/01YsQYKNbZDm1GZCjhlEBFrQkeU=
 github.com/goplus/canvas v0.1.0/go.mod h1:Rhcvo5qkpD9WuXFnvnXtrBSY97l6h7sXQuofrmiLNdM=
-github.com/goplus/gop v1.0.17 h1:tSE9HZRG+SuyBMrlTEVja1W6p9Tq1S0BUt4yMN5CFFI=
-github.com/goplus/gop v1.0.17/go.mod h1:oo5V2tps5zZxzPXqnO1ENeXOVBIjQnMRI8ZIRCQ72rk=
-github.com/goplus/gox v1.7.10/go.mod h1:orZ6Mr9qqB4BVaVCMp/cypMtkn0Fp5XUE7e5uqjZATA=
+github.com/goplus/gop v1.0.18 h1:W4Lo2iqewkDobZDKNjE+uRAXOUNR3HAt0hq9MrNgjXk=
+github.com/goplus/gop v1.0.18/go.mod h1:wTt/IQQnEhhEM7CdBb2NBfEvVLph661+mvX+rk9+32Y=
+github.com/goplus/gox v1.7.11/go.mod h1:orZ6Mr9qqB4BVaVCMp/cypMtkn0Fp5XUE7e5uqjZATA=
 github.com/hajimehoshi/bitmapfont/v2 v2.1.3/go.mod h1:2BnYrkTQGThpr/CY6LorYtt/zEPNzvE/ND69CRTaHMs=
 github.com/hajimehoshi/ebiten/v2 v2.2.0 h1:2mP9HrLLqiH9X3MajElYZEjVZU/CGh22iFkjatxhT4w=
 github.com/hajimehoshi/ebiten/v2 v2.2.0/go.mod h1:olKl/qqhMBBAm2oI7Zy292nCtE+nitlmYKNF3UpbFn0=
