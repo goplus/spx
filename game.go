@@ -1139,7 +1139,7 @@ func (p *Game) playInnerAnimate(from interface{}, to interface{}, maxduration fl
 	//anim frame
 	framenum := int(maxduration * fps)
 
-	anim := NewAnim("animnamename", AnimValTypeInt, fps, framenum).AddKeyFrame(0, from).AddKeyFrame(framenum, to).SetLoop(isloop)
+	anim := NewAnim("animnamename", AnimValTypeFloat, fps, framenum).AddKeyFrame(0, from).AddKeyFrame(framenum, to).SetLoop(isloop)
 
 	if debugInstr {
 		log.Printf("New anim [name %s id %d]  fps:%f", anim.name, anim.id, fps)
