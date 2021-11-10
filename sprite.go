@@ -709,9 +709,6 @@ func (p *Sprite) Heading() float64 {
 //   Turn(spx.Right)
 //   Turn(ti *spx.TurningInfo)
 func (p *Sprite) Turn(val interface{}) {
-	if debugInstr {
-		log.Println("Turn", p.name, val)
-	}
 	var delta float64
 	switch v := val.(type) {
 	//case specialDir:
@@ -726,7 +723,9 @@ func (p *Sprite) Turn(val interface{}) {
 	default:
 		panic("Turn: unexpected input")
 	}
-	p.setDirection(delta, true)
+	if p.setDirection(delta, true) && debugInstr {
+		log.Println("Turn", p.name, val)
+	}
 }
 
 // TurnTo func:
@@ -739,9 +738,6 @@ func (p *Sprite) Turn(val interface{}) {
 //   TurnTo(spx.Up)
 //   TurnTo(spx.Down)
 func (p *Sprite) TurnTo(obj interface{}) {
-	if debugInstr {
-		log.Println("TurnTo", p.name, obj)
-	}
 	var angle float64
 	switch v := obj.(type) {
 	//case specialDir:
@@ -756,17 +752,24 @@ func (p *Sprite) TurnTo(obj interface{}) {
 		dy := y - p.y
 		angle = 90 - math.Atan2(dy, dx)*180/math.Pi
 	}
-	p.setDirection(angle, false)
+	if p.setDirection(angle, false) && debugInstr {
+		log.Println("TurnTo", p.name, obj)
+	}
 }
 
-func (p *Sprite) setDirection(dir float64, change bool) {
+func (p *Sprite) setDirection(dir float64, change bool) bool {
 	if change {
 		dir += p.direction
+	}
+	dir = normalizeDirection(dir)
+	if p.direction == dir {
+		return false
 	}
 	if p.hasOnTurning {
 		p.doWhenTurning(p, &TurningInfo{NewDir: dir, OldDir: p.direction, Obj: p})
 	}
-	p.direction = normalizeDirection(dir)
+	p.direction = dir
+	return true
 }
 
 func (p *Sprite) doTurnTogether(ti *TurningInfo) {
