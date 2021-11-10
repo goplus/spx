@@ -396,6 +396,14 @@ func (p *Game) loadIndexFile(g reflect.Value, indexFile string) (err error) {
 	for _, ini := range inits {
 		ini.Main()
 	}
+	//
+	// set window size
+	p.width = 0
+	w, h := p.size()
+	if debugLoad {
+		log.Println("==> SetWindowSize", w, h)
+	}
+	ebiten.SetWindowSize(w, h)
 	return
 }
 
@@ -523,7 +531,6 @@ var (
 type Config struct {
 	Title              string
 	IndexFile          string // where is index.json
-	Scale              float64
 	KeyDuration        int
 	FullScreen         bool
 	DontRunOnUnfocused bool
@@ -544,16 +551,6 @@ func (p *Game) runLoop(cfg *Config) (err error) {
 		ebiten.SetFullscreen(true)
 	}
 	p.initEventLoop()
-	/*
-		scale := 1.0
-		if cfg.Scale != 0 {
-			scale = cfg.Scale
-		}
-		w, h := p.size()
-		ebiten.SetWindowSize(int(float64(w)*scale), int(float64(h)*scale))
-	*/
-	w, h := p.size()
-	ebiten.SetWindowSize(w, h)
 	title := cfg.Title
 	if title == "" {
 		title = "Game powered by Go+"
