@@ -65,6 +65,18 @@ type eventSinkMgr struct {
 	calledStart       bool
 }
 
+func (p *eventSinkMgr) reset() {
+	p.allWhenStart = nil
+	p.allWhenKeyPressed = nil
+	p.allWhenIReceive = nil
+	p.allWhenSceneStart = nil
+	p.allWhenCloned = nil
+	p.allWhenClick = nil
+	p.allWhenMoving = nil
+	p.allWhenTurning = nil
+	p.calledStart = false
+}
+
 func (p *eventSinkMgr) doDeleteClone(this interface{}) {
 	p.allWhenStart = p.allWhenStart.doDeleteClone(this)
 	p.allWhenKeyPressed = p.allWhenKeyPressed.doDeleteClone(this)

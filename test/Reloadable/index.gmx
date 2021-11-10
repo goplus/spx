@@ -1,0 +1,10 @@
+var (
+	Monkey  Monkey
+	Monkey2 Monkey2
+)
+
+onKey KeySpace, => {
+	reload "ch-2.json"
+}
+
+run "res", {Title: "Reloadable (by Go+)", IndexFile: "ch-1.json"}

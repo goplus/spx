@@ -89,6 +89,12 @@ func (p *Game) getSharedImgs() *sharedImages {
 	return p.shared
 }
 
+func (p *Game) reset() {
+	p.sinkMgr.reset()
+	p.input.reset()
+	p.items = nil
+}
+
 func (p *Game) initGame() {
 	p.eventSinks.init(&p.sinkMgr, p)
 }
@@ -142,7 +148,7 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 			}
 		}
 	}
-	if err := g.endLoad(v); err != nil {
+	if err := g.endLoad(v, conf.IndexFile); err != nil {
 		panic(err)
 	}
 	if loader, ok := game.(interface{ OnLoaded() }); ok {
@@ -364,19 +370,19 @@ type initer interface {
 	Main()
 }
 
-func (p *Game) endLoad(g reflect.Value) (err error) {
-	if debugLoad {
-		log.Println("==> EndLoad")
-	}
+func (p *Game) loadIndexFile(g reflect.Value, indexFile string) (err error) {
 	var proj projConfig
-	err = loadJson(&proj, p.fs, "index.json")
+	if indexFile == "" {
+		indexFile = "index.json"
+	}
+	err = loadJson(&proj, p.fs, indexFile)
 	if err != nil {
 		return
 	}
 	p.baseObj.init("", proj.Costumes, proj.CurrentCostumeIndex)
 	inits := make([]initer, 0, len(proj.Zorder))
 	for _, v := range proj.Zorder {
-		if name, ok := v.(string); !ok { // not a sprite
+		if name, ok := v.(string); !ok { // not a prototype sprite
 			inits = p.addSpecialShape(g, v.(specsp), inits)
 		} else if sp, ok := p.shapes[name]; ok {
 			p.addShape(spriteOf(sp))
@@ -391,6 +397,20 @@ func (p *Game) endLoad(g reflect.Value) (err error) {
 		ini.Main()
 	}
 	return
+}
+
+func (p *Game) endLoad(g reflect.Value, indexFile string) (err error) {
+	if debugLoad {
+		log.Println("==> EndLoad")
+	}
+	return p.loadIndexFile(g, indexFile)
+}
+
+func Gopt_Game_Reload(game Gamer, indexFile string) (err error) {
+	v := reflect.ValueOf(game).Elem()
+	g := instance(v)
+	g.reset()
+	return g.loadIndexFile(v, indexFile)
 }
 
 // -----------------------------------------------------------------------------
@@ -502,6 +522,7 @@ var (
 
 type Config struct {
 	Title              string
+	IndexFile          string // where is index.json
 	Scale              float64
 	KeyDuration        int
 	FullScreen         bool

@@ -159,6 +159,10 @@ func (i *inputMgr) init(firer eventFirer, keyDuration int) {
 	i.firer = firer
 }
 
+func (i *inputMgr) reset() {
+	i.startFlag = sync.Once{}
+}
+
 // -------------------------------------------------------------------------------------
 
 const (
