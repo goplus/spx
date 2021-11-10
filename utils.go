@@ -51,10 +51,6 @@ func RGBA(r, g, b, a uint8) Color {
 	return Color{R: r, G: g, B: b, A: a}
 }
 
-func getColorVal(c Color) int {
-	return int((c.R << 16) + (c.G << 8) + c.B)
-}
-
 // parseColor, s can be int, float64 or string
 func parseColor(s interface{}) (Color, error) {
 	if s == nil {

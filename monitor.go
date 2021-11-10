@@ -169,7 +169,8 @@ func (p *stageMonitor) draw(dc drawContext) {
 }
 
 type rectKey struct {
-	x, y, w, h, clr, clrPen int
+	x, y, w, h  int
+	clr, clrPen Color
 }
 
 var (
@@ -177,7 +178,7 @@ var (
 )
 
 func drawRoundRect(dc drawContext, x, y, w, h int, clr, clrPen Color) {
-	key := rectKey{x, y, w, h, getColorVal(clr), getColorVal(clrPen)}
+	key := rectKey{x, y, w, h, clr, clrPen}
 	if i, ok := rcMap[key]; ok {
 		dc.DrawImage(i, nil)
 		return
