@@ -678,16 +678,18 @@ func sleep(t time.Duration) {
 }
 
 func SchedNow() int {
-	me := gco.Current()
-	gco.Sched(me)
+	if me := gco.Current(); me != nil {
+		gco.Sched(me)
+	}
 	return 0
 }
 
 func Sched() int {
 	now := time.Now()
 	if now.Sub(lastSched) >= 3e7 {
-		me := gco.Current()
-		gco.Sched(me)
+		if me := gco.Current(); me != nil {
+			gco.Sched(me)
+		}
 		lastSched = now
 	}
 	return 0
