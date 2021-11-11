@@ -3,7 +3,8 @@ onClick => {
 }
 
 onKey KeySpace, => {
-	println GetRect()
+	println Width()
+	println Height()
 	animate "think"
 }
 

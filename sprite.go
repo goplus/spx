@@ -2,7 +2,6 @@ package spx
 
 import (
 	"fmt"
-	"image"
 	"image/color"
 	"log"
 	"math"
@@ -1064,12 +1063,15 @@ func (p *Sprite) ShowVar(name string) {
 
 // -----------------------------------------------------------------------------
 
-//get sprite bound
-func (p *Sprite) GetRect() image.Rectangle {
+//get sprite size
+func (p *Sprite) Width() int {
 	spi, _ := p.getGdiSprite()
 	bound := spi.Rect
-	bound.Min.X, bound.Min.Y = p.g.getPosFormGdi(float64(bound.Min.X), float64(bound.Min.Y))
-	bound.Max.X, bound.Max.Y = p.g.getPosFormGdi(float64(bound.Max.X), float64(bound.Max.Y))
+	return (bound.Max.X - bound.Min.X)
+}
 
-	return bound
+func (p *Sprite) Height() int {
+	spi, _ := p.getGdiSprite()
+	bound := spi.Rect
+	return (bound.Max.Y - bound.Min.Y)
 }
