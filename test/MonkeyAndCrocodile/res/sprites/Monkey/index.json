@@ -21,7 +21,7 @@
       }
     },
     "backward": {
-      "name": "forward",
+      "name": "backward",
       "maxduration":1.0,
       "fps":25,
       "from": 0,
@@ -33,6 +33,18 @@
           "to":8
         }
       }
+    },
+    "turn": {
+      "name": "turn",
+      "maxduration":0.5,
+      "fps":25,
+      "anitype":2
+    },
+    "turnto": {
+      "name": "turnto",
+      "maxduration":0.5,
+      "fps":25,
+      "anitype":2
     }
   },
   "currentCostumeIndex": 0,

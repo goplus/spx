@@ -38,7 +38,12 @@ onKey KeyLeft, => {
 }
 
 onKey KeyRight, => {
-	step -5
+	turn 45
+
+}
+onKey KeyA, => {
+	turnTo 90
+
 }
 
 onMoving mi => {

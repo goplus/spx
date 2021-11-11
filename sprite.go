@@ -66,7 +66,8 @@ type Sprite struct {
 	hasOnTurning bool
 	hasOnMoving  bool
 
-	animwg sync.WaitGroup
+	animwg     sync.WaitGroup
+	animations map[string]*aniConfig
 }
 
 func (p *Sprite) SetDying() { // dying: visible but can't be touched
@@ -99,6 +100,7 @@ func (p *Sprite) init(
 
 	p.isVisible = sprite.Visible
 	p.animwg = sync.WaitGroup{}
+	p.animations = sprite.Animations
 	//p.isDraggable = sprite.IsDraggable
 
 	if sprite.Animations == nil {
@@ -417,7 +419,7 @@ func (p *Sprite) goAnimate(ani *aniConfig) {
 	pre_direction := p.direction
 
 	anim := NewAnim(animnamestr, animtype, fps, framenum).AddKeyFrame(0, ani.From).AddKeyFrame(framenum, ani.To).SetLoop(false)
-	log.Printf("New anim [name %s id %d]  fps:%f", anim.name, anim.id, fps)
+	//log.Printf("New anim [name %s id %d]  fps:%f", anim.name, anim.id, fps)
 	anim.SetOnPlayingListener(func(currframe int, currval interface{}) {
 		log.Printf("playing anim [name %s id %d]  currframe %d, val %v", anim.name, anim.id, currframe, currval)
 
@@ -431,7 +433,7 @@ func (p *Sprite) goAnimate(ani *aniConfig) {
 			p.doMoveTo(pre_x+val*sin, pre_y+val*cos)
 			break
 		case aniTypeTurn:
-			p.TurnTo(pre_direction + val)
+			p.setDirection(pre_direction+val, false)
 			break
 		}
 
@@ -465,27 +467,6 @@ func (p *Sprite) Animate__0(name string) {
 		log.Println("==> End Animation", name)
 	}
 }
-
-// func (p *Sprite) Animate__1(secs float64, costume interface{}, n int) {
-// 	if debugInstr {
-// 		log.Println("Animation", secs, costume, n)
-// 	}
-// 	p.goAnimate(secs, costume, n, 1, 0)
-// }
-
-// func (p *Sprite) Animate__2(secs float64, costume interface{}, n, step int) {
-// 	if debugInstr {
-// 		log.Println("Animation", secs, costume, n, step)
-// 	}
-// 	p.goAnimate(secs, costume, n, step, 0)
-// }
-
-// func (p *Sprite) Animate__3(secs float64, costume interface{}, n, step int, move float64) {
-// 	if debugInstr {
-// 		log.Println("Animation", secs, costume, n, step, move)
-// 	}
-// 	p.goAnimate(secs, costume, n, step, move)
-// }
 
 func (p *Sprite) SetAnimation(name string, ani func(*Sprite)) {
 	// animations are shared.
@@ -769,6 +750,18 @@ func (p *Sprite) Turn(val interface{}) {
 	default:
 		panic("Turn: unexpected input")
 	}
+	ani := p.getAni("turn")
+	if ani != nil {
+		animaconfig, ok := p.animations["turn"]
+		if ok {
+			animaconfig.From = 0
+			animaconfig.To = delta
+			ani(p)
+			return
+		}
+
+	}
+
 	if p.setDirection(delta, true) && debugInstr {
 		log.Println("Turn", p.name, val)
 	}
@@ -797,6 +790,17 @@ func (p *Sprite) TurnTo(obj interface{}) {
 		dx := x - p.x
 		dy := y - p.y
 		angle = 90 - math.Atan2(dy, dx)*180/math.Pi
+	}
+	ani := p.getAni("turnto")
+	if ani != nil {
+		animaconfig, ok := p.animations["turnto"]
+		if ok {
+			animaconfig.From = 0
+			animaconfig.To = p.direction - angle
+			ani(p)
+			return
+		}
+
 	}
 	if p.setDirection(angle, false) && debugInstr {
 		log.Println("TurnTo", p.name, obj)
