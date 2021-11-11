@@ -437,7 +437,7 @@ func (p *Sprite) goAnimate(ani *aniConfig) {
 
 		callaction := ani.DoCallAction
 		if callaction != nil {
-			if ani.AniType != aniTypeFrame && callaction.PlayFrame.IsActionFrame == true {
+			if ani.AniType != aniTypeFrame && callaction.PlayFrame != nil {
 				playframe := callaction.PlayFrame
 				costumeval := ((playframe.To - playframe.From) + currframe) % playframe.To
 				p.setCostumeByIndex(costumeval)

@@ -287,9 +287,8 @@ const (
 )
 
 type actionFrameConfig struct {
-	IsActionFrame bool `json:"isactionframe"`
-	From          int  `json:"from"`
-	To            int  `json:"to"`
+	From int `json:"from"`
+	To   int `json:"to"`
 }
 
 type actionConfig struct {
@@ -298,7 +297,7 @@ type actionConfig struct {
 	//init Frameindex
 
 	//play frame
-	PlayFrame actionFrameConfig `json:"actionframe"`
+	PlayFrame *actionFrameConfig `json:"actionframeconfig"`
 }
 type aniConfig struct {
 	Name        string      `json:"name"`

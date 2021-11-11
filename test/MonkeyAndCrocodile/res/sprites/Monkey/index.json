@@ -14,8 +14,7 @@
       "to": 20,
       "anitype":1,
       "docallactive":{
-        "actionframe":{
-          "isactionframe":true,
+        "actionframeconfig":{
           "from":0,
           "to":8
         }
@@ -29,8 +28,7 @@
       "to": -20,
       "anitype":1,
       "docallactive":{
-        "actionframe":{
-          "isactionframe":true,
+        "actionframeconfig":{
           "from":0,
           "to":8
         }
