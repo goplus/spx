@@ -3,6 +3,7 @@ onClick => {
 }
 
 onKey KeySpace, => {
+	println GetRect()
 	animate "think"
 }
 
