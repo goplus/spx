@@ -5,21 +5,5 @@ var (
 	clap      Sound
 )
 
-Monkey.setAnimation "think", obj => {
-	obj.animate 0.05, 10, 32
-}
-
-Monkey.setAnimation "clap", obj => {
-	play clap
-	obj.animate 0.03, 42, 26
-}
-
-Monkey.setAnimation "forward", obj => {
-	obj.animate 0.02, 0, 8, 1, 2.0
-}
-
-Monkey.setAnimation "backward", obj => {
-	obj.animate 0.02, 0, 8, 1, -2.0
-}
 
 run "res", {Title: "Monkey And Crocodile (by Go+)"}

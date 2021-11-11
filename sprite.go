@@ -6,10 +6,12 @@ import (
 	"log"
 	"math"
 	"reflect"
+	"sync"
 	"time"
 
 	"github.com/goplus/spx/internal/gdi"
 	"github.com/goplus/spx/internal/gdi/clrutil"
+	"github.com/goplus/spx/internal/tools"
 )
 
 type specialDir = int
@@ -34,7 +36,8 @@ const (
 type Sprite struct {
 	baseObj
 	eventSinks
-	g *Game
+	g     *Game
+	gamer reflect.Value
 
 	name string
 
@@ -62,6 +65,8 @@ type Sprite struct {
 
 	hasOnTurning bool
 	hasOnMoving  bool
+
+	animwg sync.WaitGroup
 }
 
 func (p *Sprite) SetDying() { // dying: visible but can't be touched
@@ -85,6 +90,7 @@ func (p *Sprite) init(
 	}
 	p.eventSinks.init(&g.sinkMgr, p)
 
+	p.gamer = gamer
 	p.g, p.name = g, name
 	p.x, p.y = sprite.X, sprite.Y
 	p.scale = sprite.Size
@@ -92,6 +98,7 @@ func (p *Sprite) init(
 	p.rotationStyle = toRotationStyle(sprite.RotationStyle)
 
 	p.isVisible = sprite.Visible
+	p.animwg = sync.WaitGroup{}
 	//p.isDraggable = sprite.IsDraggable
 
 	if sprite.Animations == nil {
@@ -100,24 +107,8 @@ func (p *Sprite) init(
 	p.anis = make(map[string]func(*Sprite))
 	for key, val := range sprite.Animations {
 		var ani = val
-		var media Sound
-		var playSound = ani.Play != ""
-		if ani.Wait == 0 {
-			ani.Wait = 0.05
-		}
 		p.anis[key] = func(obj *Sprite) {
-			if playSound {
-				if media == nil {
-					media, playSound = lookupSound(gamer, ani.Play)
-					if !playSound {
-						panic("lookupSound: media not found")
-					}
-				}
-				g.Play__0(media)
-			}
-			if ani.N > 0 {
-				obj.goAnimate(ani.Wait, ani.From, ani.N, ani.Step, ani.Move)
-			}
+			obj.goAnimate(ani)
 		}
 	}
 }
@@ -392,21 +383,75 @@ func (p *Sprite) PrevCostume() {
 
 // -----------------------------------------------------------------------------
 
-func (p *Sprite) goAnimate(secs float64, costume interface{}, n, step int, move float64) {
-	p.goSetCostume(costume)
-	index := p.getCostumeIndex()
-	toMove := move != 0
-	if step == 0 {
-		step = 1
-	}
-	for i := 0; i < n; i++ {
-		p.g.Wait(secs)
-		index += step
-		p.setCostumeByIndex(index)
-		if toMove {
-			p.goMoveForward(move)
+func (p *Sprite) goAnimate(ani *aniConfig) {
+	p.animwg.Wait()
+	p.animwg.Add(1)
+
+	if ani.DoStartAction != nil {
+		if ani.DoStartAction.Play != "" {
+			media, playSound := lookupSound(p.gamer, ani.DoStartAction.Play)
+			if !playSound {
+				panic("lookupSound: media not found")
+			}
+			p.g.Play__0(media)
 		}
 	}
+
+	//anim frame
+	framenum := int(ani.MaxDuration * ani.Fps)
+	fps := ani.Fps
+	//add anim
+	animnamestr := ani.Name
+	animtype := AnimValTypeFloat
+	if ani.AniType == aniTypeFrame {
+		animtype = AnimValTypeInt
+		p.goSetCostume(ani.From)
+	}
+
+	//frame
+	//pre_index := p.getCostumeIndex()
+	//xy pos
+	pre_x := p.x
+	pre_y := p.y
+	//turn p.direction
+	pre_direction := p.direction
+
+	anim := NewAnim(animnamestr, animtype, fps, framenum).AddKeyFrame(0, ani.From).AddKeyFrame(framenum, ani.To).SetLoop(false)
+	log.Printf("New anim [name %s id %d]  fps:%f", anim.name, anim.id, fps)
+	anim.SetOnPlayingListener(func(currframe int, currval interface{}) {
+		log.Printf("playing anim [name %s id %d]  currframe %d, val %v", anim.name, anim.id, currframe, currval)
+
+		val, _ := tools.GetFloat(currval)
+		switch ani.AniType {
+		case aniTypeFrame:
+			p.setCostumeByIndex(int(val))
+			break
+		case aniTypeMove:
+			sin, cos := math.Sincos(toRadian(pre_direction))
+			p.doMoveTo(pre_x+val*sin, pre_y+val*cos)
+			break
+		case aniTypeTurn:
+			p.TurnTo(pre_direction + val)
+			break
+		}
+
+		callaction := ani.DoCallAction
+		if callaction != nil {
+			if ani.AniType != aniTypeFrame && callaction.PlayFrame.IsActionFrame == true {
+				playframe := callaction.PlayFrame
+				costumeval := ((playframe.To - playframe.From) + currframe) % playframe.To
+				p.setCostumeByIndex(costumeval)
+			}
+		}
+
+	})
+	anim.SetOnStopingListener(func() {
+		p.animwg.Done()
+	})
+	p.g.activeAnimatables = append(p.g.activeAnimatables, anim)
+
+	return
+
 }
 
 func (p *Sprite) Animate__0(name string) {
@@ -421,26 +466,26 @@ func (p *Sprite) Animate__0(name string) {
 	}
 }
 
-func (p *Sprite) Animate__1(secs float64, costume interface{}, n int) {
-	if debugInstr {
-		log.Println("Animation", secs, costume, n)
-	}
-	p.goAnimate(secs, costume, n, 1, 0)
-}
+// func (p *Sprite) Animate__1(secs float64, costume interface{}, n int) {
+// 	if debugInstr {
+// 		log.Println("Animation", secs, costume, n)
+// 	}
+// 	p.goAnimate(secs, costume, n, 1, 0)
+// }
 
-func (p *Sprite) Animate__2(secs float64, costume interface{}, n, step int) {
-	if debugInstr {
-		log.Println("Animation", secs, costume, n, step)
-	}
-	p.goAnimate(secs, costume, n, step, 0)
-}
+// func (p *Sprite) Animate__2(secs float64, costume interface{}, n, step int) {
+// 	if debugInstr {
+// 		log.Println("Animation", secs, costume, n, step)
+// 	}
+// 	p.goAnimate(secs, costume, n, step, 0)
+// }
 
-func (p *Sprite) Animate__3(secs float64, costume interface{}, n, step int, move float64) {
-	if debugInstr {
-		log.Println("Animation", secs, costume, n, step, move)
-	}
-	p.goAnimate(secs, costume, n, step, move)
-}
+// func (p *Sprite) Animate__3(secs float64, costume interface{}, n, step int, move float64) {
+// 	if debugInstr {
+// 		log.Println("Animation", secs, costume, n, step, move)
+// 	}
+// 	p.goAnimate(secs, costume, n, step, move)
+// }
 
 func (p *Sprite) SetAnimation(name string, ani func(*Sprite)) {
 	// animations are shared.
@@ -586,6 +631,7 @@ func (p *Sprite) Step__0(step float64) {
 		p.goMoveForward(step)
 		return
 	}
+
 	var n int
 	if backward {
 		n = int(-step + 0.5)

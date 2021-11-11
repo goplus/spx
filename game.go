@@ -68,8 +68,9 @@ type Game struct {
 
 	gMouseX, gMouseY int64
 
-	sinkMgr   eventSinkMgr
-	isStopped bool
+	sinkMgr           eventSinkMgr
+	isStopped         bool
+	activeAnimatables []*Anim
 }
 
 type Spriter = Shape
@@ -276,13 +277,43 @@ type costumeConfig struct {
 	BitmapResolution int     `json:"bitmapResolution"`
 }
 
+//frame aniConfig
+type aniTypeEnum int8
+
+const (
+	aniTypeFrame aniTypeEnum = iota
+	aniTypeMove
+	aniTypeTurn
+)
+
+type actionFrameConfig struct {
+	IsActionFrame bool `json:"isactionframe"`
+	From          int  `json:"from"`
+	To            int  `json:"to"`
+}
+
+type actionConfig struct {
+	//play music
+	Play string `json:"play"`
+	//init Frameindex
+
+	//play frame
+	PlayFrame actionFrameConfig `json:"actionframe"`
+}
 type aniConfig struct {
-	Play string      `json:"play"`
-	Wait float64     `json:"wait"`
-	Move float64     `json:"move"`
-	From interface{} `json:"from"`
-	N    int         `json:"n"`
-	Step int         `json:"step"`
+	Name        string      `json:"name"`
+	MaxDuration float64     `json:"maxduration"`
+	Fps         float64     `json:"fps"`
+	From        float64     `json:"from"`
+	To          float64     `json:"to"`
+	AniType     aniTypeEnum `json:"anitype"`
+
+	//start
+	DoStartAction *actionConfig `json:"dostartactive"`
+	//play
+	DoCallAction *actionConfig `json:"docallactive"`
+	//stop
+	//DoCompleteAction actionConfig `json:"docompleteactive"`
 }
 
 type spriteConfig struct {
@@ -567,6 +598,7 @@ func (p *Game) Update() error {
 	p.updateMousePos()
 	p.input.update()
 	p.sounds.update()
+	p._animate()
 	return nil
 }
 
@@ -1179,3 +1211,26 @@ func (p *Game) ShowVar(name string) {
 }
 
 // -----------------------------------------------------------------------------
+
+func (p *Game) _animate() {
+
+	//
+	for index := 0; index < len(p.activeAnimatables); index++ {
+		anim := p.activeAnimatables[index]
+		sts := anim.status
+		switch sts {
+		case AnimstatusStop:
+			p.activeAnimatables = append(p.activeAnimatables[:index], p.activeAnimatables[index+1:]...)
+			index--
+			break
+		case AnimstatusPlaying:
+			runing := anim.update()
+			if runing == false {
+				p.activeAnimatables = append(p.activeAnimatables[:index], p.activeAnimatables[index+1:]...)
+				index--
+			}
+			break
+		}
+	}
+
+}

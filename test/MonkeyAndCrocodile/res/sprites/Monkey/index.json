@@ -5,6 +5,38 @@
     "path": "../../../../res/monkey.png",
     "nx": 96
   },
+  "animations": {
+    "forward": {
+      "name": "forward",
+      "maxduration":1.0,
+      "fps":25,
+      "from": 0,
+      "to": 20,
+      "anitype":1,
+      "docallactive":{
+        "actionframe":{
+          "isactionframe":true,
+          "from":0,
+          "to":8
+        }
+      }
+    },
+    "backward": {
+      "name": "forward",
+      "maxduration":1.0,
+      "fps":25,
+      "from": 0,
+      "to": -20,
+      "anitype":1,
+      "docallactive":{
+        "actionframe":{
+          "isactionframe":true,
+          "from":0,
+          "to":8
+        }
+      }
+    }
+  },
   "currentCostumeIndex": 0,
   "heading": -60,
   "isDraggable": false,
