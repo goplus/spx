@@ -5,11 +5,13 @@ import (
 	"flag"
 	"fmt"
 	"image"
+	"io"
 	"log"
 	"math/rand"
 	"os"
 	"reflect"
 	"sync/atomic"
+	"syscall"
 	"time"
 	"unsafe"
 
@@ -148,7 +150,7 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 			}
 		}
 	}
-	if err := g.endLoad(v, conf.IndexFile); err != nil {
+	if err := g.endLoad(v, conf.Index); err != nil {
 		panic(err)
 	}
 	if loader, ok := game.(interface{ OnLoaded() }); ok {
@@ -370,12 +372,18 @@ type initer interface {
 	Main()
 }
 
-func (p *Game) loadIndexFile(g reflect.Value, indexFile string) (err error) {
+func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
 	var proj projConfig
-	if indexFile == "" {
-		indexFile = "index.json"
+	switch v := index.(type) {
+	case io.Reader:
+		err = json.NewDecoder(v).Decode(&proj)
+	case string:
+		err = loadJson(&proj, p.fs, v)
+	case nil:
+		err = loadJson(&proj, p.fs, "index.json")
+	default:
+		return syscall.EINVAL
 	}
-	err = loadJson(&proj, p.fs, indexFile)
 	if err != nil {
 		return
 	}
@@ -407,18 +415,18 @@ func (p *Game) loadIndexFile(g reflect.Value, indexFile string) (err error) {
 	return
 }
 
-func (p *Game) endLoad(g reflect.Value, indexFile string) (err error) {
+func (p *Game) endLoad(g reflect.Value, index interface{}) (err error) {
 	if debugLoad {
 		log.Println("==> EndLoad")
 	}
-	return p.loadIndexFile(g, indexFile)
+	return p.loadIndex(g, index)
 }
 
-func Gopt_Game_Reload(game Gamer, indexFile string) (err error) {
+func Gopt_Game_Reload(game Gamer, index interface{}) (err error) {
 	v := reflect.ValueOf(game).Elem()
 	g := instance(v)
 	g.reset()
-	return g.loadIndexFile(v, indexFile)
+	return g.loadIndex(v, index)
 }
 
 // -----------------------------------------------------------------------------
@@ -530,7 +538,7 @@ var (
 
 type Config struct {
 	Title              string
-	IndexFile          string // where is index.json
+	Index              interface{} // where is index, can be file (string) or io.Reader
 	KeyDuration        int
 	FullScreen         bool
 	DontRunOnUnfocused bool
