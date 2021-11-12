@@ -1063,7 +1063,7 @@ func (p *Sprite) ShowVar(name string) {
 
 // -----------------------------------------------------------------------------
 
-//get sprite width
+// Width returns sprite width
 func (p *Sprite) Width() float64 {
 	c := p.costumes[p.currentCostumeIndex]
 	img, _, _ := c.needImage(p.g.fs)
@@ -1071,10 +1071,12 @@ func (p *Sprite) Width() float64 {
 	return float64(w / c.bitmapResolution)
 }
 
-//get sprite height
+// Height returns sprite height
 func (p *Sprite) Height() float64 {
 	c := p.costumes[p.currentCostumeIndex]
 	img, _, _ := c.needImage(p.g.fs)
 	_, h := img.Size()
 	return float64(h / c.bitmapResolution)
 }
+
+// -----------------------------------------------------------------------------
