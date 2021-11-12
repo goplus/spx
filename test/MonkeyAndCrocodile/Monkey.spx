@@ -3,8 +3,7 @@ onClick => {
 }
 
 onKey KeySpace, => {
-	println Width()
-	println Height()
+	println width, height
 	animate "think"
 }
 

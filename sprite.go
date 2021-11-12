@@ -933,7 +933,7 @@ func (p *Sprite) checkTouchingScreen(where int) (touching int) {
 			return touchingScreenTop
 		}
 	}
-	w, h := p.g.size()
+	w, h := p.g.size_()
 	if (where & touchingScreenRight) != 0 {
 		if gdi.TouchingRect(spr, pt, w, -1e8, 1e8, 1e8) {
 			return touchingScreenRight
