@@ -731,6 +731,10 @@ func (p *Game) getGdiPos(x, y float64) (int, int) {
 	screenW, screenH := p.size()
 	return int(x) + (screenW >> 1), (screenH >> 1) - int(y)
 }
+func (p *Game) getPosFormGdi(x, y float64) (int, int) {
+	screenW, screenH := p.size()
+	return int(x) - (screenW >> 1), (screenH >> 1) - int(y)
+}
 
 func (p *Game) touchingPoint(dst *Sprite, x, y float64) bool {
 	sp, pt := dst.getGdiSprite()
