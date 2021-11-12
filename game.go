@@ -95,6 +95,7 @@ func (p *Game) reset() {
 	p.sinkMgr.reset()
 	p.input.reset()
 	p.items = nil
+	p.shapes = make(map[string]Spriter)
 }
 
 func (p *Game) initGame() {
@@ -426,6 +427,14 @@ func Gopt_Game_Reload(game Gamer, index interface{}) (err error) {
 	v := reflect.ValueOf(game).Elem()
 	g := instance(v)
 	g.reset()
+	for i, n := 0, v.NumField(); i < n; i++ {
+		name, val := getFieldPtrOrAlloc(v, i)
+		if fld, ok := val.(Spriter); ok {
+			if err := g.loadSprite(fld, name, v); err != nil {
+				panic(err)
+			}
+		}
+	}
 	return g.loadIndex(v, index)
 }
 
