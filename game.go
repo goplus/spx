@@ -65,8 +65,8 @@ type Game struct {
 	input  inputMgr
 	events chan event
 
-	width  int
-	height int
+	width_  int
+	height_ int
 
 	gMouseX, gMouseY int64
 
@@ -406,8 +406,8 @@ func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
 	}
 	//
 	// set window size
-	p.width = 0
-	w, h := p.size()
+	p.width_ = 0
+	w, h := p.size_()
 	if debugLoad {
 		log.Println("==> SetWindowSize", w, h)
 	}
@@ -568,7 +568,7 @@ func (p *Game) runLoop(cfg *Config) (err error) {
 }
 
 func (p *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
-	return p.size()
+	return p.size_()
 }
 
 func (p *Game) Update() error {
@@ -705,30 +705,30 @@ var lastSched time.Time
 // -----------------------------------------------------------------------------
 
 func (p *Game) getWidth() int {
-	if p.width == 0 {
+	if p.width_ == 0 {
 		p.doSize()
 	}
-	return p.width
+	return p.width_
 }
 
-func (p *Game) size() (int, int) {
-	if p.width == 0 {
+func (p *Game) size_() (int, int) {
+	if p.width_ == 0 {
 		p.doSize()
 	}
-	return p.width, p.height
+	return p.width_, p.height_
 }
 
 func (p *Game) doSize() {
-	if p.width == 0 {
+	if p.width_ == 0 {
 		c := p.costumes[p.currentCostumeIndex]
 		img, _, _ := c.needImage(p.fs)
 		w, h := img.Size()
-		p.width, p.height = w/c.bitmapResolution, h/c.bitmapResolution
+		p.width_, p.height_ = w/c.bitmapResolution, h/c.bitmapResolution
 	}
 }
 
 func (p *Game) getGdiPos(x, y float64) (int, int) {
-	screenW, screenH := p.size()
+	screenW, screenH := p.size_()
 	return int(x) + (screenW >> 1), (screenH >> 1) - int(y)
 }
 
@@ -767,7 +767,7 @@ func (p *Game) objectPos(obj interface{}) (float64, float64) {
 		}
 	case int:
 		if v == Random {
-			screenW, screenH := p.size()
+			screenW, screenH := p.size_()
 			mx, my := rand.Intn(screenW), rand.Intn(screenH)
 			return float64(mx - (screenW >> 1)), float64((screenH >> 1) - my)
 		}
@@ -792,7 +792,7 @@ func (p *Game) stampCostume(di *spriteDrawInfo) {
 }
 
 func (p *Game) movePen(sp *Sprite, x, y float64) {
-	screenW, screenH := p.size()
+	screenW, screenH := p.size_()
 	p.turtle.penLine(&penLine{
 		x1:    (screenW >> 1) + int(sp.x),
 		y1:    (screenH >> 1) - int(sp.y),
@@ -994,7 +994,7 @@ func (p *Game) SceneIndex() int {
 //   StartScene(spx.Prev)
 func (p *Game) StartScene(scene interface{}, wait ...bool) {
 	if p.goSetCostume(scene) {
-		p.width = 0
+		p.width_ = 0
 		p.doWhenSceneStart(p.getCostumeName(), wait != nil && wait[0])
 	}
 }
@@ -1027,7 +1027,7 @@ func (p *Game) getMousePos() (x, y float64) {
 
 func (p *Game) updateMousePos() {
 	x, y := ebiten.CursorPosition()
-	screenW, screenH := p.size()
+	screenW, screenH := p.size_()
 	mx, my := x-(screenW>>1), (screenH>>1)-y
 	atomic.StoreInt64(&p.gMouseX, int64(mx))
 	atomic.StoreInt64(&p.gMouseY, int64(my))

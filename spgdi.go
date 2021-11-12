@@ -54,7 +54,7 @@ func (p *sprKey) get(sp *Sprite) *gdi.Sprite {
 }
 
 func (p *sprKey) doGet(sp *Sprite) *gdi.Sprite {
-	w, h := sp.g.size()
+	w, h := sp.g.size_()
 	img := ebiten.NewImage(w, h)
 	defer img.Dispose()
 
