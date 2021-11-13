@@ -490,6 +490,9 @@ func (p *Sprite) goAnimate(ani *aniConfig) {
 	})
 	p.g.activeAnimatables = append(p.g.activeAnimatables, an)
 
+	//wait anim complete
+	p.animwg.Wait()
+
 	return
 
 }
