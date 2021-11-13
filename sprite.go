@@ -983,7 +983,7 @@ func (p *Sprite) checkTouchingScreen(where int) (touching int) {
 			return touchingScreenTop
 		}
 	}
-	w, h := p.g.size()
+	w, h := p.g.size_()
 	if (where & touchingScreenRight) != 0 {
 		if gdi.TouchingRect(spr, pt, w, -1e8, 1e8, 1e8) {
 			return touchingScreenRight
@@ -1113,15 +1113,20 @@ func (p *Sprite) ShowVar(name string) {
 
 // -----------------------------------------------------------------------------
 
-//get sprite size
-func (p *Sprite) Width() int {
-	spi, _ := p.getGdiSprite()
-	bound := spi.Rect
-	return (bound.Max.X - bound.Min.X)
+// Width returns sprite width
+func (p *Sprite) Width() float64 {
+	c := p.costumes[p.currentCostumeIndex]
+	img, _, _ := c.needImage(p.g.fs)
+	w, _ := img.Size()
+	return float64(w / c.bitmapResolution)
 }
 
-func (p *Sprite) Height() int {
-	spi, _ := p.getGdiSprite()
-	bound := spi.Rect
-	return (bound.Max.Y - bound.Min.Y)
+// Height returns sprite height
+func (p *Sprite) Height() float64 {
+	c := p.costumes[p.currentCostumeIndex]
+	img, _, _ := c.needImage(p.g.fs)
+	_, h := img.Size()
+	return float64(h / c.bitmapResolution)
 }
+
+// -----------------------------------------------------------------------------

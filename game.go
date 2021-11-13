@@ -5,11 +5,13 @@ import (
 	"flag"
 	"fmt"
 	"image"
+	"io"
 	"log"
 	"math/rand"
 	"os"
 	"reflect"
 	"sync/atomic"
+	"syscall"
 	"time"
 	"unsafe"
 
@@ -63,8 +65,8 @@ type Game struct {
 	input  inputMgr
 	events chan event
 
-	width  int
-	height int
+	width_  int
+	height_ int
 
 	gMouseX, gMouseY int64
 
@@ -94,6 +96,7 @@ func (p *Game) reset() {
 	p.sinkMgr.reset()
 	p.input.reset()
 	p.items = nil
+	p.shapes = make(map[string]Spriter)
 }
 
 func (p *Game) initGame() {
@@ -149,7 +152,7 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 			}
 		}
 	}
-	if err := g.endLoad(v, conf.IndexFile); err != nil {
+	if err := g.endLoad(v, conf.Index); err != nil {
 		panic(err)
 	}
 	if loader, ok := game.(interface{ OnLoaded() }); ok {
@@ -400,12 +403,18 @@ type initer interface {
 	Main()
 }
 
-func (p *Game) loadIndexFile(g reflect.Value, indexFile string) (err error) {
+func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
 	var proj projConfig
-	if indexFile == "" {
-		indexFile = "index.json"
+	switch v := index.(type) {
+	case io.Reader:
+		err = json.NewDecoder(v).Decode(&proj)
+	case string:
+		err = loadJson(&proj, p.fs, v)
+	case nil:
+		err = loadJson(&proj, p.fs, "index.json")
+	default:
+		return syscall.EINVAL
 	}
-	err = loadJson(&proj, p.fs, indexFile)
 	if err != nil {
 		return
 	}
@@ -428,8 +437,8 @@ func (p *Game) loadIndexFile(g reflect.Value, indexFile string) (err error) {
 	}
 	//
 	// set window size
-	p.width = 0
-	w, h := p.size()
+	p.width_ = 0
+	w, h := p.size_()
 	if debugLoad {
 		log.Println("==> SetWindowSize", w, h)
 	}
@@ -437,18 +446,26 @@ func (p *Game) loadIndexFile(g reflect.Value, indexFile string) (err error) {
 	return
 }
 
-func (p *Game) endLoad(g reflect.Value, indexFile string) (err error) {
+func (p *Game) endLoad(g reflect.Value, index interface{}) (err error) {
 	if debugLoad {
 		log.Println("==> EndLoad")
 	}
-	return p.loadIndexFile(g, indexFile)
+	return p.loadIndex(g, index)
 }
 
-func Gopt_Game_Reload(game Gamer, indexFile string) (err error) {
+func Gopt_Game_Reload(game Gamer, index interface{}) (err error) {
 	v := reflect.ValueOf(game).Elem()
 	g := instance(v)
 	g.reset()
-	return g.loadIndexFile(v, indexFile)
+	for i, n := 0, v.NumField(); i < n; i++ {
+		name, val := getFieldPtrOrAlloc(v, i)
+		if fld, ok := val.(Spriter); ok {
+			if err := g.loadSprite(fld, name, v); err != nil {
+				panic(err)
+			}
+		}
+	}
+	return g.loadIndex(v, index)
 }
 
 // -----------------------------------------------------------------------------
@@ -560,7 +577,7 @@ var (
 
 type Config struct {
 	Title              string
-	IndexFile          string // where is index.json
+	Index              interface{} // where is index, can be file (string) or io.Reader
 	KeyDuration        int
 	FullScreen         bool
 	DontRunOnUnfocused bool
@@ -590,7 +607,7 @@ func (p *Game) runLoop(cfg *Config) (err error) {
 }
 
 func (p *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
-	return p.size()
+	return p.size_()
 }
 
 func (p *Game) Update() error {
@@ -728,35 +745,31 @@ var lastSched time.Time
 // -----------------------------------------------------------------------------
 
 func (p *Game) getWidth() int {
-	if p.width == 0 {
+	if p.width_ == 0 {
 		p.doSize()
 	}
-	return p.width
+	return p.width_
 }
 
-func (p *Game) size() (int, int) {
-	if p.width == 0 {
+func (p *Game) size_() (int, int) {
+	if p.width_ == 0 {
 		p.doSize()
 	}
-	return p.width, p.height
+	return p.width_, p.height_
 }
 
 func (p *Game) doSize() {
-	if p.width == 0 {
+	if p.width_ == 0 {
 		c := p.costumes[p.currentCostumeIndex]
 		img, _, _ := c.needImage(p.fs)
 		w, h := img.Size()
-		p.width, p.height = w/c.bitmapResolution, h/c.bitmapResolution
+		p.width_, p.height_ = w/c.bitmapResolution, h/c.bitmapResolution
 	}
 }
 
 func (p *Game) getGdiPos(x, y float64) (int, int) {
-	screenW, screenH := p.size()
+	screenW, screenH := p.size_()
 	return int(x) + (screenW >> 1), (screenH >> 1) - int(y)
-}
-func (p *Game) getPosFormGdi(x, y float64) (int, int) {
-	screenW, screenH := p.size()
-	return int(x) - (screenW >> 1), (screenH >> 1) - int(y)
 }
 
 func (p *Game) touchingPoint(dst *Sprite, x, y float64) bool {
@@ -794,7 +807,7 @@ func (p *Game) objectPos(obj interface{}) (float64, float64) {
 		}
 	case int:
 		if v == Random {
-			screenW, screenH := p.size()
+			screenW, screenH := p.size_()
 			mx, my := rand.Intn(screenW), rand.Intn(screenH)
 			return float64(mx - (screenW >> 1)), float64((screenH >> 1) - my)
 		}
@@ -819,7 +832,7 @@ func (p *Game) stampCostume(di *spriteDrawInfo) {
 }
 
 func (p *Game) movePen(sp *Sprite, x, y float64) {
-	screenW, screenH := p.size()
+	screenW, screenH := p.size_()
 	p.turtle.penLine(&penLine{
 		x1:    (screenW >> 1) + int(sp.x),
 		y1:    (screenH >> 1) - int(sp.y),
@@ -1021,7 +1034,7 @@ func (p *Game) SceneIndex() int {
 //   StartScene(spx.Prev)
 func (p *Game) StartScene(scene interface{}, wait ...bool) {
 	if p.goSetCostume(scene) {
-		p.width = 0
+		p.width_ = 0
 		p.doWhenSceneStart(p.getCostumeName(), wait != nil && wait[0])
 	}
 }
@@ -1054,7 +1067,7 @@ func (p *Game) getMousePos() (x, y float64) {
 
 func (p *Game) updateMousePos() {
 	x, y := ebiten.CursorPosition()
-	screenW, screenH := p.size()
+	screenW, screenH := p.size_()
 	mx, my := x-(screenW>>1), (screenH>>1)-y
 	atomic.StoreInt64(&p.gMouseX, int64(mx))
 	atomic.StoreInt64(&p.gMouseY, int64(my))
