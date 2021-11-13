@@ -15,6 +15,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/goplus/spx/internal/anim"
 	"github.com/goplus/spx/internal/coroutine"
 	"github.com/goplus/spx/internal/gdi"
 	"github.com/hajimehoshi/ebiten/v2"
@@ -72,7 +73,7 @@ type Game struct {
 
 	sinkMgr           eventSinkMgr
 	isStopped         bool
-	activeAnimatables []*Anim
+	activeAnimatables []*anim.Anim
 }
 
 type Spriter = Shape
@@ -289,7 +290,7 @@ const (
 	aniTypeTurn
 )
 
-type actionFrameConfig struct {
+type costumesConfig struct {
 	From int `json:"from"`
 	To   int `json:"to"`
 }
@@ -297,23 +298,22 @@ type actionFrameConfig struct {
 type actionConfig struct {
 	//play music
 	Play string `json:"play"`
-	//init Frameindex
-
 	//play frame
-	PlayFrame *actionFrameConfig `json:"actionframeconfig"`
+	Costumes *costumesConfig `json:"costumes"`
 }
 type aniConfig struct {
-	Name        string      `json:"name"`
-	MaxDuration float64     `json:"maxduration"`
-	Fps         float64     `json:"fps"`
-	From        float64     `json:"from"`
-	To          float64     `json:"to"`
-	AniType     aniTypeEnum `json:"anitype"`
+	Name     string      `json:"name"`
+	Duration float64     `json:"duration"`
+	Fps      float64     `json:"fps"`
+	From     float64     `json:"from"`
+	To       float64     `json:"to"`
+	Unit     float64     `json:"unit"` //step unit
+	AniType  aniTypeEnum `json:"anitype"`
 
 	//start
-	DoStartAction *actionConfig `json:"dostartactive"`
+	OnStart *actionConfig `json:"onstart"`
 	//play
-	DoCallAction *actionConfig `json:"docallactive"`
+	OnPlay *actionConfig `json:"onplay"`
 	//stop
 	//DoCompleteAction actionConfig `json:"docompleteactive"`
 }
@@ -328,7 +328,9 @@ type spriteConfig struct {
 	CostumeSet          *costumeSet           `json:"costumeSet"`
 	CostumeMPSet        *costumeMPSet         `json:"costumeMPSet"`
 	CurrentCostumeIndex int                   `json:"currentCostumeIndex"`
-	Animations          map[string]*aniConfig `json:"animations"`
+	FAnimations         map[string]*aniConfig `json:"fAnimations"`
+	MAnimations         map[string]*aniConfig `json:"mAnimations"`
+	TAnimations         map[string]*aniConfig `json:"tAnimations"`
 	Visible             bool                  `json:"visible"`
 	IsDraggable         bool                  `json:"isDraggable"`
 }
@@ -1228,15 +1230,15 @@ func (p *Game) _animate() {
 
 	//
 	for index := 0; index < len(p.activeAnimatables); index++ {
-		anim := p.activeAnimatables[index]
-		sts := anim.status
+		an := p.activeAnimatables[index]
+		sts := an.Status()
 		switch sts {
-		case AnimstatusStop:
+		case anim.AnimstatusStop:
 			p.activeAnimatables = append(p.activeAnimatables[:index], p.activeAnimatables[index+1:]...)
 			index--
 			break
-		case AnimstatusPlaying:
-			runing := anim.update()
+		case anim.AnimstatusPlaying:
+			runing := an.Update()
 			if runing == false {
 				p.activeAnimatables = append(p.activeAnimatables[:index], p.activeAnimatables[index+1:]...)
 				index--

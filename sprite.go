@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/goplus/spx/internal/anim"
 	"github.com/goplus/spx/internal/gdi"
 	"github.com/goplus/spx/internal/gdi/clrutil"
 	"github.com/goplus/spx/internal/tools"
@@ -47,7 +48,6 @@ type Sprite struct {
 	rotationStyle RotationStyle
 
 	sayObj *sayOrThinker
-	anis   map[string]func(*Sprite)
 
 	penColor color.RGBA
 	penShade float64
@@ -66,8 +66,10 @@ type Sprite struct {
 	hasOnTurning bool
 	hasOnMoving  bool
 
-	animwg     sync.WaitGroup
-	animations map[string]*aniConfig
+	animwg      sync.WaitGroup
+	fAnimations map[string]*aniConfig
+	mAnimations map[string]*aniConfig
+	tAnimations map[string]*aniConfig
 }
 
 func (p *Sprite) SetDying() { // dying: visible but can't be touched
@@ -100,19 +102,52 @@ func (p *Sprite) init(
 
 	p.isVisible = sprite.Visible
 	p.animwg = sync.WaitGroup{}
-	p.animations = sprite.Animations
+	p.fAnimations = sprite.FAnimations
+	p.mAnimations = sprite.MAnimations
+	p.tAnimations = sprite.TAnimations
 	//p.isDraggable = sprite.IsDraggable
 
-	if sprite.Animations == nil {
-		return
+	//init
+	if p.fAnimations == nil {
+		p.fAnimations = make(map[string]*aniConfig)
 	}
-	p.anis = make(map[string]func(*Sprite))
-	for key, val := range sprite.Animations {
+	if p.mAnimations == nil {
+		p.mAnimations = make(map[string]*aniConfig)
+	}
+	if p.tAnimations == nil {
+		p.tAnimations = make(map[string]*aniConfig)
+	}
+
+	for key, val := range p.fAnimations {
 		var ani = val
-		p.anis[key] = func(obj *Sprite) {
-			obj.goAnimate(ani)
+		ani.Name = key
+		ani.AniType = aniTypeFrame
+		if ani.Fps == 0 {
+			ani.Fps = math.Abs(ani.To-ani.From) / ani.Duration
 		}
+		p.fAnimations[key] = ani
 	}
+
+	for key, val := range p.mAnimations {
+		var ani = val
+		ani.Name = key
+		ani.AniType = aniTypeMove
+		if ani.Fps == 0 {
+			ani.Fps = 25
+		}
+		p.mAnimations[key] = ani
+	}
+
+	for key, val := range p.tAnimations {
+		var ani = val
+		ani.Name = key
+		ani.AniType = aniTypeTurn
+		if ani.Fps == 0 {
+			ani.Fps = 25
+		}
+		p.tAnimations[key] = ani
+	}
+
 }
 
 func (p *Sprite) InitFrom(src *Sprite) {
@@ -125,7 +160,9 @@ func (p *Sprite) InitFrom(src *Sprite) {
 	p.direction = src.direction
 	p.rotationStyle = src.rotationStyle
 	p.sayObj = nil
-	p.anis = src.anis
+	p.fAnimations = src.fAnimations
+	p.mAnimations = src.mAnimations
+	p.tAnimations = src.tAnimations
 
 	p.penColor = src.penColor
 	p.penShade = src.penShade
@@ -299,10 +336,11 @@ func (p *Sprite) OnTurning__1(onTurning func()) {
 
 func (p *Sprite) Die() { // prototype sprite can't be destoryed, but can die
 	p.SetDying()
-	ani := p.getAni("die")
-	if ani != nil {
-		ani(p)
+	ani, ok := p.fAnimations["die"]
+	if ok {
+		p.goAnimate(ani)
 	}
+
 	if p.isCloned {
 		p.doDestroy()
 	} else {
@@ -389,9 +427,9 @@ func (p *Sprite) goAnimate(ani *aniConfig) {
 	p.animwg.Wait()
 	p.animwg.Add(1)
 
-	if ani.DoStartAction != nil {
-		if ani.DoStartAction.Play != "" {
-			media, playSound := lookupSound(p.gamer, ani.DoStartAction.Play)
+	if ani.OnStart != nil {
+		if ani.OnStart.Play != "" {
+			media, playSound := lookupSound(p.gamer, ani.OnStart.Play)
 			if !playSound {
 				panic("lookupSound: media not found")
 			}
@@ -400,13 +438,13 @@ func (p *Sprite) goAnimate(ani *aniConfig) {
 	}
 
 	//anim frame
-	framenum := int(ani.MaxDuration * ani.Fps)
+	framenum := int(ani.Duration * ani.Fps)
 	fps := ani.Fps
 	//add anim
 	animnamestr := ani.Name
-	animtype := AnimValTypeFloat
+	animtype := anim.AnimValTypeFloat
 	if ani.AniType == aniTypeFrame {
-		animtype = AnimValTypeInt
+		animtype = anim.AnimValTypeInt
 		p.goSetCostume(ani.From)
 	}
 
@@ -418,10 +456,10 @@ func (p *Sprite) goAnimate(ani *aniConfig) {
 	//turn p.direction
 	pre_direction := p.direction
 
-	anim := NewAnim(animnamestr, animtype, fps, framenum).AddKeyFrame(0, ani.From).AddKeyFrame(framenum, ani.To).SetLoop(false)
-	//log.Printf("New anim [name %s id %d]  fps:%f", anim.name, anim.id, fps)
-	anim.SetOnPlayingListener(func(currframe int, currval interface{}) {
-		log.Printf("playing anim [name %s id %d]  currframe %d, val %v", anim.name, anim.id, currframe, currval)
+	an := anim.NewAnim(animnamestr, animtype, fps, framenum).AddKeyFrame(0, ani.From).AddKeyFrame(framenum, ani.To).SetLoop(false)
+	//log.Printf("New anim [name %s id %d] from:%v to:%v framenum:%d fps:%f", an.Name, an.Id, ani.From, ani.To, framenum, fps)
+	an.SetOnPlayingListener(func(currframe int, currval interface{}) {
+		//log.Printf("playing anim [name %s id %d]  currframe %d, val %v", an.Name, an.Id, currframe, currval)
 
 		val, _ := tools.GetFloat(currval)
 		switch ani.AniType {
@@ -433,58 +471,66 @@ func (p *Sprite) goAnimate(ani *aniConfig) {
 			p.doMoveTo(pre_x+val*sin, pre_y+val*cos)
 			break
 		case aniTypeTurn:
-			p.setDirection(pre_direction+val, false)
+			p.setDirection(val, false)
 			break
 		}
 
-		callaction := ani.DoCallAction
-		if callaction != nil {
-			if ani.AniType != aniTypeFrame && callaction.PlayFrame != nil {
-				playframe := callaction.PlayFrame
-				costumeval := ((playframe.To - playframe.From) + currframe) % playframe.To
+		playaction := ani.OnPlay
+		if playaction != nil {
+			if ani.AniType != aniTypeFrame && playaction.Costumes != nil {
+				costumes := playaction.Costumes
+				costumeval := ((costumes.To - costumes.From) + currframe) % costumes.To
 				p.setCostumeByIndex(costumeval)
 			}
 		}
 
 	})
-	anim.SetOnStopingListener(func() {
+	an.SetOnStopingListener(func() {
 		p.animwg.Done()
 	})
-	p.g.activeAnimatables = append(p.g.activeAnimatables, anim)
+	p.g.activeAnimatables = append(p.g.activeAnimatables, an)
 
 	return
 
 }
 
-func (p *Sprite) Animate__0(name string) {
+func (p *Sprite) FAnimate__0(name string) {
 	if debugInstr {
 		log.Println("==> Animation", name)
 	}
-	if ani := p.getAni(name); ani != nil {
-		ani(p)
+	ani, ok := p.fAnimations[name]
+	if ok {
+		p.goAnimate(ani)
 	}
 	if debugInstr {
 		log.Println("==> End Animation", name)
 	}
 }
 
-func (p *Sprite) SetAnimation(name string, ani func(*Sprite)) {
-	// animations are shared.
-	// don't need SetAnimation to cloned sprites.
-	if p.isCloned {
-		return
+func (p *Sprite) MAnimate__0(name string) {
+	if debugInstr {
+		log.Println("==> Animation", name)
 	}
-	if p.anis == nil {
-		p.anis = make(map[string]func(*Sprite))
+	ani, ok := p.mAnimations[name]
+	if ok {
+		p.goAnimate(ani)
 	}
-	p.anis[name] = ani
+	if debugInstr {
+		log.Println("==> End Animation", name)
+	}
 }
 
-func (p *Sprite) getAni(name string) func(*Sprite) {
-	if p.anis != nil {
-		return p.anis[name]
+func (p *Sprite) TAnimate__0(name string) {
+	if debugInstr {
+		log.Println("==> Animation", name)
 	}
-	return nil
+	ani, ok := p.tAnimations[name]
+	if ok {
+		p.goAnimate(ani)
+	}
+	if debugInstr {
+		log.Println("==> End Animation", name)
+	}
 }
 
 // -----------------------------------------------------------------------------
@@ -596,32 +642,19 @@ func (p *Sprite) Step__0(step float64) {
 	if debugInstr {
 		log.Println("Step", p.name, step)
 	}
-	if p.anis == nil {
-		p.goMoveForward(step)
-		return
-	}
-	var backward = step < 0
-	var name string
-	if backward {
-		name = "backward"
-	} else {
-		name = "forward"
-	}
-	ani := p.getAni(name)
-	if ani == nil {
+	ani, ok := p.mAnimations["step"]
+	if !ok {
 		p.goMoveForward(step)
 		return
 	}
 
-	var n int
-	if backward {
-		n = int(-step + 0.5)
-	} else {
-		n = int(step + 0.5)
-	}
-	for ; n > 0; n-- {
-		ani(p)
-	}
+	//copy
+	anicopy := *ani
+	anicopy.From = 0
+	anicopy.To = step * anicopy.Unit
+	anicopy.Duration = math.Abs(step) * ani.Duration
+	p.goAnimate(&anicopy)
+
 }
 
 func (p *Sprite) Step__1(step int) {
@@ -750,16 +783,16 @@ func (p *Sprite) Turn(val interface{}) {
 	default:
 		panic("Turn: unexpected input")
 	}
-	ani := p.getAni("turn")
-	if ani != nil {
-		animaconfig, ok := p.animations["turn"]
-		if ok {
-			animaconfig.From = 0
-			animaconfig.To = delta
-			ani(p)
-			return
-		}
 
+	ani, ok := p.tAnimations["turn"]
+	if ok {
+		//copy
+		anicopy := *ani
+		anicopy.From = p.direction
+		anicopy.To = p.direction + delta
+		anicopy.Duration = ani.Duration / 360.0 * math.Abs(delta)
+		p.goAnimate(&anicopy)
+		return
 	}
 
 	if p.setDirection(delta, true) && debugInstr {
@@ -791,17 +824,20 @@ func (p *Sprite) TurnTo(obj interface{}) {
 		dy := y - p.y
 		angle = 90 - math.Atan2(dy, dx)*180/math.Pi
 	}
-	ani := p.getAni("turnto")
-	if ani != nil {
-		animaconfig, ok := p.animations["turnto"]
-		if ok {
-			animaconfig.From = 0
-			animaconfig.To = p.direction - angle
-			ani(p)
-			return
-		}
 
+	ani, ok := p.tAnimations["turn"]
+	if ok {
+		//copy
+		delta := p.direction - angle
+
+		anicopy := *ani
+		anicopy.From = p.direction
+		anicopy.To = angle
+		anicopy.Duration = ani.Duration / 360.0 * math.Abs(delta)
+		p.goAnimate(&anicopy)
+		return
 	}
+
 	if p.setDirection(angle, false) && debugInstr {
 		log.Println("TurnTo", p.name, obj)
 	}
@@ -902,7 +938,7 @@ func (p *Sprite) execTouchingAni(ani string) {
 	if ani == "die" {
 		p.Die()
 	} else {
-		p.Animate__0(ani)
+		p.FAnimate__0(ani)
 	}
 }
 

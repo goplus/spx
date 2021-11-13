@@ -5,46 +5,21 @@
     "path": "../../../../res/monkey.png",
     "nx": 96
   },
-  "animations": {
-    "forward": {
-      "name": "forward",
-      "maxduration":1.0,
-      "fps":25,
-      "from": 0,
-      "to": 20,
-      "anitype":1,
-      "docallactive":{
-        "actionframeconfig":{
+  "mAnimations": {
+    "step": {
+      "unit": 20,
+      "duration":0.3,
+      "onPlay":{
+        "costumes":{
           "from":0,
           "to":8
         }
       }
-    },
-    "backward": {
-      "name": "backward",
-      "maxduration":1.0,
-      "fps":25,
-      "from": 0,
-      "to": -20,
-      "anitype":1,
-      "docallactive":{
-        "actionframeconfig":{
-          "from":0,
-          "to":8
-        }
-      }
-    },
+    }
+  },
+ "tAnimations": {
     "turn": {
-      "name": "turn",
-      "maxduration":0.5,
-      "fps":25,
-      "anitype":2
-    },
-    "turnto": {
-      "name": "turnto",
-      "maxduration":0.5,
-      "fps":25,
-      "anitype":2
+      "duration":2.0
     }
   },
   "currentCostumeIndex": 0,

@@ -1,10 +1,10 @@
 onClick => {
-	animate "clap"
+	fAnimate "clap"
 }
 
 onKey KeySpace, => {
 	println width, height
-	animate "think"
+	fAnimate "think"
 }
 
 
@@ -33,16 +33,19 @@ onKey [KeyEnter, KeyS], => {
 }
 
 onKey KeyLeft, => {
+	step 1
+}
+onKey KeyZ, => {
 	step 5
 }
 
-onKey KeyRight, => {
-	turn 45
 
-}
 onKey KeyA, => {
 	turnTo 90
+}
 
+onKey KeyB, => {
+	turn 45
 }
 
 onMoving mi => {

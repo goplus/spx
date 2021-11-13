@@ -1,7 +1,6 @@
-package spx
+package anim
 
 import (
-	"github.com/goplus/spx/internal/anim"
 	"github.com/goplus/spx/internal/tools"
 )
 
@@ -21,14 +20,14 @@ const (
 )
 
 type Anim struct {
-	id                   int
-	name                 string
+	Id                   int
+	Name                 string
 	fps                  float64
 	totalframe           int
 	isloop               bool
 	status               ANIMSTATUS
-	animation            *anim.Animation
-	keyframelist         []*anim.AnimationKeyFrame
+	animation            *Animation
+	keyframelist         []*AnimationKeyFrame
 	animationStartedDate int
 
 	//playing
@@ -39,23 +38,23 @@ type Anim struct {
 
 func NewAnim(name string, valtype ANIMVALTYPE, fps float64, totalframe int) *Anim {
 	a := &Anim{
-		name:                 name,
+		Name:                 name,
 		fps:                  fps,
 		totalframe:           totalframe,
 		isloop:               false,
 		status:               AnimstatusPlaying,
 		animation:            nil,
 		animationStartedDate: 0,
-		keyframelist:         make([]*anim.AnimationKeyFrame, 0),
+		keyframelist:         make([]*AnimationKeyFrame, 0),
 	}
-	a.animation = anim.NewAnimation(name, fps, (int)(valtype), anim.ANIMATIONLOOPMODE_CYCLE)
-	a.id = int(a.animation.GetAnimId())
-	a.animation.SetOnPlayingListener(func(an *anim.Animation, currframe int, currval interface{}) {
+	a.animation = NewAnimation(name, fps, (int)(valtype), ANIMATIONLOOPMODE_CYCLE)
+	a.Id = int(a.animation.GetAnimId())
+	a.animation.SetOnPlayingListener(func(an *Animation, currframe int, currval interface{}) {
 		if a.playingCallback != nil {
 			a.playingCallback(currframe, currval)
 		}
 	})
-	a.animation.SetOnStopingListener(func(an *anim.Animation) {
+	a.animation.SetOnStopingListener(func(an *Animation) {
 		if a.stopCallback != nil {
 			a.stopCallback()
 		}
@@ -63,13 +62,17 @@ func NewAnim(name string, valtype ANIMVALTYPE, fps float64, totalframe int) *Ani
 	return a
 }
 func (a *Anim) AddKeyFrame(frameindex int, frameval interface{}) *Anim {
-	a.keyframelist = append(a.keyframelist, &anim.AnimationKeyFrame{
+	a.keyframelist = append(a.keyframelist, &AnimationKeyFrame{
 		Frame: frameindex,
 		Value: frameval,
 	})
 	a.animation.SetKeys(a.keyframelist)
 
 	return a
+}
+
+func (a *Anim) Status() ANIMSTATUS {
+	return a.status
 }
 
 func (a *Anim) SetLoop(isloop bool) *Anim {
@@ -101,7 +104,7 @@ func (a *Anim) Stop() *Anim {
 }
 
 //
-func (a *Anim) update() bool {
+func (a *Anim) Update() bool {
 	if a.status == AnimstatusStop {
 		return false
 	}

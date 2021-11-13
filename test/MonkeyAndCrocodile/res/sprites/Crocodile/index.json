@@ -11,26 +11,20 @@
     ]
   },
   "currentCostumeIndex": 0,
-  "animations": {
+  "fAnimations": {
     "sink": {
-      "name": "sink",
-      "maxduration":0.3,
-      "fps":15,
+      "duration":0.3,
       "from": 0,
       "to": 4,
-      "anitype":0,
-      "dostartactive":{
+      "onStart":{
         "play":"chomp"
       }
     },
     "surface": {
-      "name": "surface",
-      "maxduration":0.3,
-      "fps":15,
+      "duration":0.3,
       "from": 4,
       "to": 0,
-      "anitype":0,
-      "dostartactive":{
+      "onStart":{
         "play":"chomp"
       }
     }
