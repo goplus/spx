@@ -66,10 +66,7 @@ type Sprite struct {
 	hasOnTurning bool
 	hasOnMoving  bool
 
-	animwg      sync.WaitGroup
-	fAnimations map[string]*aniConfig
-	mAnimations map[string]*aniConfig
-	tAnimations map[string]*aniConfig
+	animations map[string]*aniConfig
 }
 
 func (p *Sprite) SetDying() { // dying: visible but can't be touched
@@ -101,51 +98,45 @@ func (p *Sprite) init(
 	p.rotationStyle = toRotationStyle(sprite.RotationStyle)
 
 	p.isVisible = sprite.Visible
-	p.animwg = sync.WaitGroup{}
-	p.fAnimations = sprite.FAnimations
-	p.mAnimations = sprite.MAnimations
-	p.tAnimations = sprite.TAnimations
-	//p.isDraggable = sprite.IsDraggable
 
-	//init
-	if p.fAnimations == nil {
-		p.fAnimations = make(map[string]*aniConfig)
-	}
-	if p.mAnimations == nil {
-		p.mAnimations = make(map[string]*aniConfig)
-	}
-	if p.tAnimations == nil {
-		p.tAnimations = make(map[string]*aniConfig)
-	}
+	p.animations = make(map[string]*aniConfig)
 
-	for key, val := range p.fAnimations {
+	for key, val := range sprite.FAnimations {
 		var ani = val
 		ani.Name = key
 		ani.AniType = aniTypeFrame
 		if ani.Fps == 0 {
 			ani.Fps = math.Abs(ani.To-ani.From) / ani.Duration
 		}
-		p.fAnimations[key] = ani
+		p.animations[key] = ani
 	}
 
-	for key, val := range p.mAnimations {
+	for key, val := range sprite.MAnimations {
+		_, ok := p.animations[key]
+		if ok {
+			log.Panicf("animation key [%s] is exist", key)
+		}
 		var ani = val
 		ani.Name = key
 		ani.AniType = aniTypeMove
 		if ani.Fps == 0 {
 			ani.Fps = 25
 		}
-		p.mAnimations[key] = ani
+		p.animations[key] = ani
 	}
 
-	for key, val := range p.tAnimations {
+	for key, val := range sprite.TAnimations {
+		_, ok := p.animations[key]
+		if ok {
+			log.Panicf("animation key [%s] is exist", key)
+		}
 		var ani = val
 		ani.Name = key
 		ani.AniType = aniTypeTurn
 		if ani.Fps == 0 {
 			ani.Fps = 25
 		}
-		p.tAnimations[key] = ani
+		p.animations[key] = ani
 	}
 
 }
@@ -160,9 +151,7 @@ func (p *Sprite) InitFrom(src *Sprite) {
 	p.direction = src.direction
 	p.rotationStyle = src.rotationStyle
 	p.sayObj = nil
-	p.fAnimations = src.fAnimations
-	p.mAnimations = src.mAnimations
-	p.tAnimations = src.tAnimations
+	p.animations = src.animations
 
 	p.penColor = src.penColor
 	p.penShade = src.penShade
@@ -336,7 +325,7 @@ func (p *Sprite) OnTurning__1(onTurning func()) {
 
 func (p *Sprite) Die() { // prototype sprite can't be destoryed, but can die
 	p.SetDying()
-	ani, ok := p.fAnimations["die"]
+	ani, ok := p.animations["die"]
 	if ok {
 		p.goAnimate(ani)
 	}
@@ -424,8 +413,9 @@ func (p *Sprite) PrevCostume() {
 // -----------------------------------------------------------------------------
 
 func (p *Sprite) goAnimate(ani *aniConfig) {
-	p.animwg.Wait()
-	p.animwg.Add(1)
+	animwg := sync.WaitGroup{}
+
+	animwg.Add(1)
 
 	if ani.OnStart != nil {
 		if ani.OnStart.Play != "" {
@@ -486,48 +476,22 @@ func (p *Sprite) goAnimate(ani *aniConfig) {
 
 	})
 	an.SetOnStopingListener(func() {
-		p.animwg.Done()
+		animwg.Done()
 	})
 	p.g.activeAnimatables = append(p.g.activeAnimatables, an)
 
 	//wait anim complete
-	p.animwg.Wait()
+	animwg.Wait()
 
 	return
 
 }
 
-func (p *Sprite) FAnimate__0(name string) {
+func (p *Sprite) Animate__0(name string) {
 	if debugInstr {
 		log.Println("==> Animation", name)
 	}
-	ani, ok := p.fAnimations[name]
-	if ok {
-		p.goAnimate(ani)
-	}
-	if debugInstr {
-		log.Println("==> End Animation", name)
-	}
-}
-
-func (p *Sprite) MAnimate__0(name string) {
-	if debugInstr {
-		log.Println("==> Animation", name)
-	}
-	ani, ok := p.mAnimations[name]
-	if ok {
-		p.goAnimate(ani)
-	}
-	if debugInstr {
-		log.Println("==> End Animation", name)
-	}
-}
-
-func (p *Sprite) TAnimate__0(name string) {
-	if debugInstr {
-		log.Println("==> Animation", name)
-	}
-	ani, ok := p.tAnimations[name]
+	ani, ok := p.animations[name]
 	if ok {
 		p.goAnimate(ani)
 	}
@@ -645,7 +609,7 @@ func (p *Sprite) Step__0(step float64) {
 	if debugInstr {
 		log.Println("Step", p.name, step)
 	}
-	ani, ok := p.mAnimations["step"]
+	ani, ok := p.animations["step"]
 	if !ok {
 		p.goMoveForward(step)
 		return
@@ -787,7 +751,7 @@ func (p *Sprite) Turn(val interface{}) {
 		panic("Turn: unexpected input")
 	}
 
-	ani, ok := p.tAnimations["turn"]
+	ani, ok := p.animations["turn"]
 	if ok {
 		//copy
 		anicopy := *ani
@@ -828,7 +792,7 @@ func (p *Sprite) TurnTo(obj interface{}) {
 		angle = 90 - math.Atan2(dy, dx)*180/math.Pi
 	}
 
-	ani, ok := p.tAnimations["turn"]
+	ani, ok := p.animations["turn"]
 	if ok {
 		//copy
 		delta := p.direction - angle
@@ -941,7 +905,7 @@ func (p *Sprite) execTouchingAni(ani string) {
 	if ani == "die" {
 		p.Die()
 	} else {
-		p.FAnimate__0(ani)
+		p.Animate__0(ani)
 	}
 }
 

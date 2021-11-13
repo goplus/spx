@@ -1,10 +1,10 @@
 onClick => {
-	fAnimate "clap"
+	animate "clap"
 }
 
 onKey KeySpace, => {
 	println width, height
-	fAnimate "think"
+	animate "think"
 }
 
 
