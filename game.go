@@ -15,6 +15,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/goplus/spx/internal/anim"
 	"github.com/goplus/spx/internal/coroutine"
 	"github.com/goplus/spx/internal/gdi"
 	"github.com/hajimehoshi/ebiten/v2"
@@ -70,8 +71,9 @@ type Game struct {
 
 	gMouseX, gMouseY int64
 
-	sinkMgr   eventSinkMgr
-	isStopped bool
+	sinkMgr           eventSinkMgr
+	isStopped         bool
+	activeAnimatables []*anim.Anim
 }
 
 type Spriter = Shape
@@ -279,13 +281,41 @@ type costumeConfig struct {
 	BitmapResolution int     `json:"bitmapResolution"`
 }
 
+//frame aniConfig
+type aniTypeEnum int8
+
+const (
+	aniTypeFrame aniTypeEnum = iota
+	aniTypeMove
+	aniTypeTurn
+)
+
+type costumesConfig struct {
+	From int `json:"from"`
+	To   int `json:"to"`
+}
+
+type actionConfig struct {
+	//play music
+	Play string `json:"play"`
+	//play frame
+	Costumes *costumesConfig `json:"costumes"`
+}
 type aniConfig struct {
-	Play string      `json:"play"`
-	Wait float64     `json:"wait"`
-	Move float64     `json:"move"`
-	From interface{} `json:"from"`
-	N    int         `json:"n"`
-	Step int         `json:"step"`
+	Name     string      `json:"name"`
+	Duration float64     `json:"duration"`
+	Fps      float64     `json:"fps"`
+	From     float64     `json:"from"`
+	To       float64     `json:"to"`
+	Unit     float64     `json:"unit"` //step unit
+	AniType  aniTypeEnum `json:"anitype"`
+
+	//start
+	OnStart *actionConfig `json:"onstart"`
+	//play
+	OnPlay *actionConfig `json:"onplay"`
+	//stop
+	//DoCompleteAction actionConfig `json:"docompleteactive"`
 }
 
 type spriteConfig struct {
@@ -298,7 +328,9 @@ type spriteConfig struct {
 	CostumeSet          *costumeSet           `json:"costumeSet"`
 	CostumeMPSet        *costumeMPSet         `json:"costumeMPSet"`
 	CurrentCostumeIndex int                   `json:"currentCostumeIndex"`
-	Animations          map[string]*aniConfig `json:"animations"`
+	FAnimations         map[string]*aniConfig `json:"fAnimations"`
+	MAnimations         map[string]*aniConfig `json:"mAnimations"`
+	TAnimations         map[string]*aniConfig `json:"tAnimations"`
 	Visible             bool                  `json:"visible"`
 	IsDraggable         bool                  `json:"isDraggable"`
 }
@@ -584,6 +616,7 @@ func (p *Game) Update() error {
 	p.updateMousePos()
 	p.input.update()
 	p.sounds.update()
+	p._animate()
 	return nil
 }
 
@@ -1192,3 +1225,26 @@ func (p *Game) ShowVar(name string) {
 }
 
 // -----------------------------------------------------------------------------
+
+func (p *Game) _animate() {
+
+	//
+	for index := 0; index < len(p.activeAnimatables); index++ {
+		an := p.activeAnimatables[index]
+		sts := an.Status()
+		switch sts {
+		case anim.AnimstatusStop:
+			p.activeAnimatables = append(p.activeAnimatables[:index], p.activeAnimatables[index+1:]...)
+			index--
+			break
+		case anim.AnimstatusPlaying:
+			runing := an.Update()
+			if runing == false {
+				p.activeAnimatables = append(p.activeAnimatables[:index], p.activeAnimatables[index+1:]...)
+				index--
+			}
+			break
+		}
+	}
+
+}

@@ -11,19 +11,22 @@
     ]
   },
   "currentCostumeIndex": 0,
-  "animations": {
+  "fAnimations": {
     "sink": {
-      "play": "chomp",
-      "wait": 0.05,
+      "duration":0.3,
       "from": 0,
-      "n": 4
+      "to": 4,
+      "onStart":{
+        "play":"chomp"
+      }
     },
     "surface": {
-      "play": "",
-      "wait": 0.05,
-      "from": "crocodile-4",
-      "n": 4,
-      "step": -1
+      "duration":0.3,
+      "from": 4,
+      "to": 0,
+      "onStart":{
+        "play":"chomp"
+      }
     }
   },
   "heading": 120,

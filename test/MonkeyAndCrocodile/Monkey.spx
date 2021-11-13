@@ -7,7 +7,7 @@ onKey KeySpace, => {
 	animate "think"
 }
 
-/*
+
 onKey KeyH, => {
 	if visible {
 		say "Hi"
@@ -33,14 +33,22 @@ onKey [KeyEnter, KeyS], => {
 }
 
 onKey KeyLeft, => {
+	step 1
+}
+onKey KeyZ, => {
 	step 5
 }
 
-onKey KeyRight, => {
-	step -5
+
+onKey KeyA, => {
+	turnTo 90
+}
+
+onKey KeyB, => {
+	turn 45
 }
 
 onMoving mi => {
 	say sprintf("(%.0f, %.0f) => (%.0f, %.0f)", mi.oldX, mi.oldY, mi.newX, mi.newY)
 }
-*/
+
