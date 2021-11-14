@@ -1,6 +1,7 @@
 .vscode
 .gop
 .DS_Store
+go.work
 go.json
 gop.json
 gop_autogen.go

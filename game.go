@@ -71,9 +71,10 @@ type Game struct {
 
 	gMouseX, gMouseY int64
 
-	sinkMgr           eventSinkMgr
-	isStopped         bool
 	activeAnimatables []*anim.Anim
+
+	sinkMgr   eventSinkMgr
+	isStopped bool
 }
 
 type Spriter = Shape
@@ -296,26 +297,20 @@ type costumesConfig struct {
 }
 
 type actionConfig struct {
-	//play music
-	Play string `json:"play"`
-	//play frame
-	Costumes *costumesConfig `json:"costumes"`
+	Play     string          `json:"play"`     //play sound
+	Costumes *costumesConfig `json:"costumes"` //play frame
 }
-type aniConfig struct {
-	Name     string      `json:"name"`
-	Duration float64     `json:"duration"`
-	Fps      float64     `json:"fps"`
-	From     float64     `json:"from"`
-	To       float64     `json:"to"`
-	Unit     float64     `json:"unit"` //step unit
-	AniType  aniTypeEnum `json:"anitype"`
 
-	//start
-	OnStart *actionConfig `json:"onstart"`
-	//play
-	OnPlay *actionConfig `json:"onplay"`
-	//stop
-	//DoCompleteAction actionConfig `json:"docompleteactive"`
+type aniConfig struct {
+	Duration float64       `json:"duration"`
+	Fps      float64       `json:"fps"`
+	From     float64       `json:"from"`
+	To       float64       `json:"to"`
+	Unit     float64       `json:"unit"` //step unit
+	AniType  aniTypeEnum   `json:"anitype"`
+	OnStart  *actionConfig `json:"onStart"` //start
+	OnPlay   *actionConfig `json:"onPlay"`  //play
+	//OnEnd *actionConfig  `json:"onEnd"`   //stop
 }
 
 type spriteConfig struct {
@@ -618,6 +613,24 @@ func (p *Game) Update() error {
 	p.sounds.update()
 	p._animate()
 	return nil
+}
+
+func (p *Game) _animate() {
+	for index := 0; index < len(p.activeAnimatables); index++ {
+		an := p.activeAnimatables[index]
+		sts := an.Status()
+		switch sts {
+		case anim.AnimstatusStop:
+			p.activeAnimatables = append(p.activeAnimatables[:index], p.activeAnimatables[index+1:]...)
+			index--
+		case anim.AnimstatusPlaying:
+			runing := an.Update()
+			if !runing {
+				p.activeAnimatables = append(p.activeAnimatables[:index], p.activeAnimatables[index+1:]...)
+				index--
+			}
+		}
+	}
 }
 
 func (p *Game) Draw(screen *ebiten.Image) {
@@ -1225,26 +1238,3 @@ func (p *Game) ShowVar(name string) {
 }
 
 // -----------------------------------------------------------------------------
-
-func (p *Game) _animate() {
-
-	//
-	for index := 0; index < len(p.activeAnimatables); index++ {
-		an := p.activeAnimatables[index]
-		sts := an.Status()
-		switch sts {
-		case anim.AnimstatusStop:
-			p.activeAnimatables = append(p.activeAnimatables[:index], p.activeAnimatables[index+1:]...)
-			index--
-			break
-		case anim.AnimstatusPlaying:
-			runing := an.Update()
-			if runing == false {
-				p.activeAnimatables = append(p.activeAnimatables[:index], p.activeAnimatables[index+1:]...)
-				index--
-			}
-			break
-		}
-	}
-
-}

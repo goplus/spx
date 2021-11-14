@@ -5,6 +5,4 @@ var (
 	clap      Sound
 )
 
-
-
 run "res", {Title: "Monkey And Crocodile (by Go+)"}

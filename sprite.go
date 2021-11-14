@@ -37,8 +37,7 @@ const (
 type Sprite struct {
 	baseObj
 	eventSinks
-	g     *Game
-	gamer reflect.Value
+	g *Game
 
 	name string
 
@@ -47,7 +46,8 @@ type Sprite struct {
 	direction     float64
 	rotationStyle RotationStyle
 
-	sayObj *sayOrThinker
+	sayObj     *sayOrThinker
+	animations map[string]*aniConfig
 
 	penColor color.RGBA
 	penShade float64
@@ -66,7 +66,7 @@ type Sprite struct {
 	hasOnTurning bool
 	hasOnMoving  bool
 
-	animations map[string]*aniConfig
+	gamer reflect.Value
 }
 
 func (p *Sprite) SetDying() { // dying: visible but can't be touched
@@ -103,7 +103,6 @@ func (p *Sprite) init(
 
 	for key, val := range sprite.FAnimations {
 		var ani = val
-		ani.Name = key
 		ani.AniType = aniTypeFrame
 		if ani.Fps == 0 {
 			ani.Fps = math.Abs(ani.To-ani.From) / ani.Duration
@@ -117,7 +116,6 @@ func (p *Sprite) init(
 			log.Panicf("animation key [%s] is exist", key)
 		}
 		var ani = val
-		ani.Name = key
 		ani.AniType = aniTypeMove
 		if ani.Fps == 0 {
 			ani.Fps = 25
@@ -131,14 +129,12 @@ func (p *Sprite) init(
 			log.Panicf("animation key [%s] is exist", key)
 		}
 		var ani = val
-		ani.Name = key
 		ani.AniType = aniTypeTurn
 		if ani.Fps == 0 {
 			ani.Fps = 25
 		}
 		p.animations[key] = ani
 	}
-
 }
 
 func (p *Sprite) InitFrom(src *Sprite) {
@@ -324,10 +320,11 @@ func (p *Sprite) OnTurning__1(onTurning func()) {
 }
 
 func (p *Sprite) Die() { // prototype sprite can't be destoryed, but can die
+	const aniName = "die"
 	p.SetDying()
-	ani, ok := p.animations["die"]
+	ani, ok := p.animations[aniName]
 	if ok {
-		p.goAnimate(ani)
+		p.goAnimate(aniName, ani)
 	}
 
 	if p.isCloned {
@@ -412,9 +409,8 @@ func (p *Sprite) PrevCostume() {
 
 // -----------------------------------------------------------------------------
 
-func (p *Sprite) goAnimate(ani *aniConfig) {
-	animwg := sync.WaitGroup{}
-
+func (p *Sprite) goAnimate(name string, ani *aniConfig) {
+	var animwg sync.WaitGroup
 	animwg.Add(1)
 
 	if ani.OnStart != nil {
@@ -431,7 +427,6 @@ func (p *Sprite) goAnimate(ani *aniConfig) {
 	framenum := int(ani.Duration * ani.Fps)
 	fps := ani.Fps
 	//add anim
-	animnamestr := ani.Name
 	animtype := anim.AnimValTypeFloat
 	if ani.AniType == aniTypeFrame {
 		animtype = anim.AnimValTypeInt
@@ -446,23 +441,17 @@ func (p *Sprite) goAnimate(ani *aniConfig) {
 	//turn p.direction
 	pre_direction := p.direction
 
-	an := anim.NewAnim(animnamestr, animtype, fps, framenum).AddKeyFrame(0, ani.From).AddKeyFrame(framenum, ani.To).SetLoop(false)
-	//log.Printf("New anim [name %s id %d] from:%v to:%v framenum:%d fps:%f", an.Name, an.Id, ani.From, ani.To, framenum, fps)
+	an := anim.NewAnim(name, animtype, fps, framenum).AddKeyFrame(0, ani.From).AddKeyFrame(framenum, ani.To).SetLoop(false)
 	an.SetOnPlayingListener(func(currframe int, currval interface{}) {
-		//log.Printf("playing anim [name %s id %d]  currframe %d, val %v", an.Name, an.Id, currframe, currval)
-
 		val, _ := tools.GetFloat(currval)
 		switch ani.AniType {
 		case aniTypeFrame:
 			p.setCostumeByIndex(int(val))
-			break
 		case aniTypeMove:
 			sin, cos := math.Sincos(toRadian(pre_direction))
 			p.doMoveTo(pre_x+val*sin, pre_y+val*cos)
-			break
 		case aniTypeTurn:
 			p.setDirection(val, false)
-			break
 		}
 
 		playaction := ani.OnPlay
@@ -482,18 +471,14 @@ func (p *Sprite) goAnimate(ani *aniConfig) {
 
 	//wait anim complete
 	animwg.Wait()
-
-	return
-
 }
 
 func (p *Sprite) Animate__0(name string) {
 	if debugInstr {
 		log.Println("==> Animation", name)
 	}
-	ani, ok := p.animations[name]
-	if ok {
-		p.goAnimate(ani)
+	if ani, ok := p.animations[name]; ok {
+		p.goAnimate(name, ani)
 	}
 	if debugInstr {
 		log.Println("==> End Animation", name)
@@ -615,13 +600,11 @@ func (p *Sprite) Step__0(step float64) {
 		return
 	}
 
-	//copy
 	anicopy := *ani
 	anicopy.From = 0
 	anicopy.To = step * anicopy.Unit
 	anicopy.Duration = math.Abs(step) * ani.Duration
-	p.goAnimate(&anicopy)
-
+	p.goAnimate("step", &anicopy)
 }
 
 func (p *Sprite) Step__1(step int) {
@@ -758,7 +741,7 @@ func (p *Sprite) Turn(val interface{}) {
 		anicopy.From = p.direction
 		anicopy.To = p.direction + delta
 		anicopy.Duration = ani.Duration / 360.0 * math.Abs(delta)
-		p.goAnimate(&anicopy)
+		p.goAnimate("turn", &anicopy)
 		return
 	}
 
@@ -801,7 +784,7 @@ func (p *Sprite) TurnTo(obj interface{}) {
 		anicopy.From = p.direction
 		anicopy.To = angle
 		anicopy.Duration = ani.Duration / 360.0 * math.Abs(delta)
-		p.goAnimate(&anicopy)
+		p.goAnimate("turn", &anicopy)
 		return
 	}
 

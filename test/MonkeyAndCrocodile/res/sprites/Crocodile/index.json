@@ -13,20 +13,17 @@
   "currentCostumeIndex": 0,
   "fAnimations": {
     "sink": {
-      "duration":0.3,
+      "duration": 0.3,
       "from": 0,
       "to": 4,
       "onStart":{
-        "play":"chomp"
+        "play": "chomp"
       }
     },
     "surface": {
-      "duration":0.3,
+      "duration": 0.3,
       "from": 4,
-      "to": 0,
-      "onStart":{
-        "play":"chomp"
-      }
+      "to": 0
     }
   },
   "heading": 120,
