@@ -3,5 +3,4 @@ var (
 	SmallEnemy SmallEnemy
 	explode    Sound
 )
-
 run "res", {Title: "Animation (by Go+)"}

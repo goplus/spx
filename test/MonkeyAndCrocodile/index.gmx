@@ -4,5 +4,4 @@ var (
 	chomp     Sound
 	clap      Sound
 )
-setDebug(2)
 run "res", {Title: "Monkey And Crocodile (by Go+)"}
