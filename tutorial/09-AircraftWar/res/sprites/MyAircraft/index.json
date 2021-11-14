@@ -46,7 +46,7 @@
   "currentCostumeIndex": 0,
   "fAnimations": {
     "die": {
-      "duration": 0.15,
+      "duration": 0.2,
       "from": "die-0",
       "to": "die-3"
     }
