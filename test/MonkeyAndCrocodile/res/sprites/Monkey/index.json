@@ -9,12 +9,12 @@
     "think": {
       "duration": 1.6,
       "from": 10,
-      "to": 43
+      "to": 42
     },
     "clap": {
       "duration": 0.78,
       "from": 42,
-      "to": 68,
+      "to": 67,
       "onStart": {
         "play": "clap"
       }
