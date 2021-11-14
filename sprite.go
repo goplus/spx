@@ -347,7 +347,7 @@ func (p *Sprite) doDestroy() {
 	p.g.removeShape(p)
 	p.isStopped = true
 	if p == gco.Current().Obj {
-		abortThread()
+		gco.Abort()
 	}
 }
 
@@ -406,10 +406,10 @@ func (p *Sprite) PrevCostume() {
 }
 
 // -----------------------------------------------------------------------------
+
 func (p *Sprite) getFromAnToForAni(anitype aniTypeEnum, from interface{}, to interface{}) (float64, float64) {
 	fromval := 0.0
 	toval := 0.0
-
 	if anitype == aniTypeFrame {
 		switch v := from.(type) {
 		case string:
@@ -417,10 +417,8 @@ func (p *Sprite) getFromAnToForAni(anitype aniTypeEnum, from interface{}, to int
 			if fromval < 0 {
 				log.Panicf("findCostume %s failed", v)
 			}
-			break
 		default:
 			fromval, _ = tools.GetFloat(from)
-			break
 		}
 
 		switch v := to.(type) {
@@ -429,18 +427,16 @@ func (p *Sprite) getFromAnToForAni(anitype aniTypeEnum, from interface{}, to int
 			if toval < 0 {
 				log.Panicf("findCostume %s failed", v)
 			}
-			break
 		default:
 			toval, _ = tools.GetFloat(to)
-			break
 		}
-
 	} else {
 		fromval, _ = tools.GetFloat(from)
 		toval, _ = tools.GetFloat(to)
 	}
 	return fromval, toval
 }
+
 func (p *Sprite) goAnimate(name string, ani *aniConfig) {
 	var animwg sync.WaitGroup
 	animwg.Add(1)

@@ -698,18 +698,6 @@ var (
 
 type threadObj = coroutine.ThreadObj
 
-func createThread(tobj threadObj, start bool, f func(coroutine.Thread) int) {
-	var thMain coroutine.Thread
-	if start {
-		thMain = gco.Current()
-	}
-	gco.CreateAndStart(tobj, f, thMain)
-}
-
-func abortThread() {
-	panic(coroutine.ErrAbortThread)
-}
-
 func waitToDo(fn func()) {
 	me := gco.Current()
 	go func() {
@@ -873,7 +861,7 @@ func (p *Game) addClonedShape(src, clone Shape) {
 	idx := p.doFindSprite(src)
 	if idx < 0 {
 		log.Println("addClonedShape: clone a deleted sprite")
-		abortThread()
+		gco.Abort()
 	}
 
 	// p.getItems() requires immutable items, so we need copy before modify

@@ -51,12 +51,12 @@ func New() *Coroutines {
 // Create creates a new coroutine.
 //
 func (p *Coroutines) Create(tobj ThreadObj, fn func(me Thread) int) Thread {
-	return p.CreateAndStart(tobj, fn, nil)
+	return p.CreateAndStart(false, tobj, fn)
 }
 
 // CreateAndStart creates and executes the new coroutine.
 //
-func (p *Coroutines) CreateAndStart(tobj ThreadObj, fn func(me Thread) int, main Thread) Thread {
+func (p *Coroutines) CreateAndStart(start bool, tobj ThreadObj, fn func(me Thread) int) Thread {
 	id := &threadImpl{Obj: tobj}
 	go func() {
 		p.sema.Lock()
@@ -74,10 +74,14 @@ func (p *Coroutines) CreateAndStart(tobj ThreadObj, fn func(me Thread) int, main
 		}()
 		fn(id)
 	}()
-	if main != nil {
+	if start {
 		runtime.Gosched()
 	}
 	return id
+}
+
+func (p *Coroutines) Abort() {
+	panic(ErrAbortThread)
 }
 
 func (p *Coroutines) setCurrent(id Thread) {

@@ -39,7 +39,7 @@ func (p *eventSink) asyncCall(start bool, wg *sync.WaitGroup, data interface{}, 
 				wg.Add(1)
 			}
 			copy := p
-			createThread(p.pthis, start, func(coroutine.Thread) int {
+			gco.CreateAndStart(start, p.pthis, func(coroutine.Thread) int {
 				if wg != nil {
 					defer wg.Done()
 				}
