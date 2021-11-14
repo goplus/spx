@@ -201,7 +201,7 @@ func (this *Animation) _interpolate(currentFrame int, repeatCount int, loopMode 
 			endValue_obj := this.keys[key+1].Value
 			gradient := (float64)(currentFrame-this.keys[key].Frame) / (float64)(this.keys[key+1].Frame-this.keys[key].Frame)
 
-			//log.Printf("pregradient %g ", gradient)
+			//log.Printf("pregradient %g  currentFrame %d, this.keys[key].Frame %d, this.keys[key+1].Frame %d ", gradient, currentFrame, this.keys[key].Frame, this.keys[key+1].Frame)
 			if this.easingFunction != nil {
 				gradient = this.easingFunction.Ease(this.easingFunction, gradient)
 				//log.Printf("gradient %g ", gradient)
@@ -331,8 +331,15 @@ func (this *Animation) Animate(target IAnimationTarget, delay float64, from int,
 		to = this.keys[len(this.keys)-1].Frame
 	}
 
+	if to == from {
+		if this.stopCallback != nil {
+			this.stopCallback(this)
+		}
+		return false
+	}
+
 	// Compute ratio
-	rangeval := float64(to - from)
+	rangeval := float64(to + 1 - from)
 	ratio := delay * float64(this.FramePerSecond*speedRatio) / 1000.0
 
 	if ratio >= rangeval && !loop { // If we are out of range and not looping get back to caller
@@ -347,7 +354,7 @@ func (this *Animation) Animate(target IAnimationTarget, delay float64, from int,
 	if rangeval != 0 {
 		this.currentFrame = from + int(ratio)%int(rangeval)
 	}
-	// log.Printf("this.currentFrame %d, val %d, rangeval %g, delay %g, this.FramePerSecond %g, speedRatio %f ratio %g", this.currentFrame, (int(ratio) % int(rangeval)), rangeval, delay, this.FramePerSecond, speedRatio, ratio)
+	//\\log.Printf("this.currentFrame %d, val %d, rangeval %g, delay %g, this.FramePerSecond %g, speedRatio %f ratio %g", this.currentFrame, (int(ratio) % int(rangeval)), rangeval, delay, this.FramePerSecond, speedRatio, ratio)
 
 	if this.currentFrame == this.preFrame {
 		//anti not stop

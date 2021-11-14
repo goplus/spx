@@ -292,8 +292,8 @@ const (
 )
 
 type costumesConfig struct {
-	From int `json:"from"`
-	To   int `json:"to"`
+	From interface{} `json:"from"`
+	To   interface{} `json:"to"`
 }
 
 type actionConfig struct {
@@ -304,8 +304,8 @@ type actionConfig struct {
 type aniConfig struct {
 	Duration float64       `json:"duration"`
 	Fps      float64       `json:"fps"`
-	From     float64       `json:"from"`
-	To       float64       `json:"to"`
+	From     interface{}   `json:"from"`
+	To       interface{}   `json:"to"`
 	Unit     float64       `json:"unit"` //step unit
 	AniType  aniTypeEnum   `json:"anitype"`
 	OnStart  *actionConfig `json:"onStart"` //start

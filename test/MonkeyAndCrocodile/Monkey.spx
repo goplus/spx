@@ -45,6 +45,7 @@ onKey KeyA, => {
 
 onKey KeyB, => {
 	turn 45
+	say heading, 1
 }
 
 onMoving mi => {

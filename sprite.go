@@ -104,9 +104,7 @@ func (p *Sprite) init(
 	for key, val := range sprite.FAnimations {
 		var ani = val
 		ani.AniType = aniTypeFrame
-		if ani.Fps == 0 {
-			ani.Fps = math.Abs(ani.To-ani.From) / ani.Duration
-		}
+
 		p.animations[key] = ani
 	}
 
@@ -408,7 +406,41 @@ func (p *Sprite) PrevCostume() {
 }
 
 // -----------------------------------------------------------------------------
+func (p *Sprite) getFromAnToForAni(anitype aniTypeEnum, from interface{}, to interface{}) (float64, float64) {
+	fromval := 0.0
+	toval := 0.0
 
+	if anitype == aniTypeFrame {
+		switch v := from.(type) {
+		case string:
+			fromval = float64(p.findCostume(v))
+			if fromval < 0 {
+				log.Panicf("findCostume %s failed", v)
+			}
+			break
+		default:
+			fromval, _ = tools.GetFloat(from)
+			break
+		}
+
+		switch v := to.(type) {
+		case string:
+			toval = float64(p.findCostume(v))
+			if toval < 0 {
+				log.Panicf("findCostume %s failed", v)
+			}
+			break
+		default:
+			toval, _ = tools.GetFloat(to)
+			break
+		}
+
+	} else {
+		fromval, _ = tools.GetFloat(from)
+		toval, _ = tools.GetFloat(to)
+	}
+	return fromval, toval
+}
 func (p *Sprite) goAnimate(name string, ani *aniConfig) {
 	var animwg sync.WaitGroup
 	animwg.Add(1)
@@ -424,14 +456,20 @@ func (p *Sprite) goAnimate(name string, ani *aniConfig) {
 	}
 
 	//anim frame
-	framenum := int(ani.Duration * ani.Fps)
-	fps := ani.Fps
-	//add anim
+	fromval, toval := p.getFromAnToForAni(ani.AniType, ani.From, ani.To)
 	animtype := anim.AnimValTypeFloat
 	if ani.AniType == aniTypeFrame {
 		animtype = anim.AnimValTypeInt
 		p.goSetCostume(ani.From)
+
+		//compute fps
+		if ani.Fps == 0 {
+			ani.Fps = math.Abs(toval-fromval) / ani.Duration
+		}
 	}
+
+	framenum := int(ani.Duration * ani.Fps)
+	fps := ani.Fps
 
 	//frame
 	//pre_index := p.getCostumeIndex()
@@ -441,8 +479,14 @@ func (p *Sprite) goAnimate(name string, ani *aniConfig) {
 	//turn p.direction
 	pre_direction := p.direction
 
-	an := anim.NewAnim(name, animtype, fps, framenum).AddKeyFrame(0, ani.From).AddKeyFrame(framenum, ani.To).SetLoop(false)
+	an := anim.NewAnim(name, animtype, fps, framenum).AddKeyFrame(0, fromval).AddKeyFrame(framenum, toval).SetLoop(false)
+	if debugInstr {
+		log.Printf("New anim [name %s id %d] from:%v to:%v framenum:%d fps:%f", an.Name, an.Id, fromval, toval, framenum, fps)
+	}
 	an.SetOnPlayingListener(func(currframe int, currval interface{}) {
+		if debugInstr {
+			log.Printf("playing anim [name %s id %d]  currframe %d, val %v", an.Name, an.Id, currframe, currval)
+		}
 		val, _ := tools.GetFloat(currval)
 		switch ani.AniType {
 		case aniTypeFrame:
@@ -458,7 +502,9 @@ func (p *Sprite) goAnimate(name string, ani *aniConfig) {
 		if playaction != nil {
 			if ani.AniType != aniTypeFrame && playaction.Costumes != nil {
 				costumes := playaction.Costumes
-				costumeval := ((costumes.To - costumes.From) + currframe) % costumes.To
+				costumesFrom, costumesTo := p.getFromAnToForAni(aniTypeFrame, costumes.From, costumes.To)
+
+				costumeval := ((int)(costumesTo-costumesFrom) + currframe) % (int)(costumesTo)
 				p.setCostumeByIndex(costumeval)
 			}
 		}
