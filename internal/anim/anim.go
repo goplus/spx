@@ -331,6 +331,13 @@ func (this *Animation) Animate(target IAnimationTarget, delay float64, from int,
 		to = this.keys[len(this.keys)-1].Frame
 	}
 
+	if to == from {
+		if this.stopCallback != nil {
+			this.stopCallback(this)
+		}
+		return false
+	}
+
 	// Compute ratio
 	rangeval := float64(to + 1 - from)
 	ratio := delay * float64(this.FramePerSecond*speedRatio) / 1000.0
@@ -347,7 +354,7 @@ func (this *Animation) Animate(target IAnimationTarget, delay float64, from int,
 	if rangeval != 0 {
 		this.currentFrame = from + int(ratio)%int(rangeval)
 	}
-	//log.Printf("this.currentFrame %d, val %d, rangeval %g, delay %g, this.FramePerSecond %g, speedRatio %f ratio %g", this.currentFrame, (int(ratio) % int(rangeval)), rangeval, delay, this.FramePerSecond, speedRatio, ratio)
+	//\\log.Printf("this.currentFrame %d, val %d, rangeval %g, delay %g, this.FramePerSecond %g, speedRatio %f ratio %g", this.currentFrame, (int(ratio) % int(rangeval)), rangeval, delay, this.FramePerSecond, speedRatio, ratio)
 
 	if this.currentFrame == this.preFrame {
 		//anti not stop

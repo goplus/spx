@@ -442,7 +442,13 @@ func (p *Sprite) goAnimate(name string, ani *aniConfig) {
 	pre_direction := p.direction
 
 	an := anim.NewAnim(name, animtype, fps, framenum).AddKeyFrame(0, ani.From).AddKeyFrame(framenum, ani.To).SetLoop(false)
+	if debugInstr {
+		log.Printf("New anim [name %s id %d] from:%v to:%v framenum:%d fps:%f", an.Name, an.Id, ani.From, ani.To, framenum, fps)
+	}
 	an.SetOnPlayingListener(func(currframe int, currval interface{}) {
+		if debugInstr {
+			log.Printf("playing anim [name %s id %d]  currframe %d, val %v", an.Name, an.Id, currframe, currval)
+		}
 		val, _ := tools.GetFloat(currval)
 		switch ani.AniType {
 		case aniTypeFrame:
