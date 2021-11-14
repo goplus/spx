@@ -449,13 +449,20 @@ func (p *Sprite) goAnimate(name string, ani *aniConfig) {
 		if debugInstr {
 			log.Printf("playing anim [name %s id %d]  currframe %d, val %v", an.Name, an.Id, currframe, currval)
 		}
+		iscall := false
+
 		val, _ := tools.GetFloat(currval)
 		switch ani.AniType {
 		case aniTypeFrame:
 			p.setCostumeByIndex(int(val))
 		case aniTypeMove:
 			sin, cos := math.Sincos(toRadian(pre_direction))
-			p.doMoveTo(pre_x+val*sin, pre_y+val*cos)
+			if currframe == 0 || currframe == framenum || ani.Unit == 0 {
+				iscall = true
+			} else if int(math.Abs(val))%int(ani.Unit) == 0 {
+				iscall = true
+			}
+			p.doMoveToForAnim(pre_x+val*sin, pre_y+val*cos, iscall)
 		case aniTypeTurn:
 			p.setDirection(val, false)
 		}
@@ -568,6 +575,19 @@ func (p *Sprite) DistanceTo(obj interface{}) float64 {
 
 func (p *Sprite) doMoveTo(x, y float64) {
 	if p.hasOnMoving {
+		mi := &MovingInfo{OldX: p.x, OldY: p.y, NewX: x, NewY: y, Obj: p}
+		p.doWhenMoving(p, mi)
+		if mi.dontMoving {
+			return
+		}
+	}
+	if p.isPenDown {
+		p.g.movePen(p, x, y)
+	}
+	p.x, p.y = x, y
+}
+func (p *Sprite) doMoveToForAnim(x, y float64, iscall bool) {
+	if iscall && p.hasOnMoving {
 		mi := &MovingInfo{OldX: p.x, OldY: p.y, NewX: x, NewY: y, Obj: p}
 		p.doWhenMoving(p, mi)
 		if mi.dontMoving {
