@@ -32,22 +32,41 @@ func (p *eventSink) doDeleteClone(this interface{}) (ret *eventSink) {
 	}
 }
 
-func (p *eventSink) asyncCall(start bool, wg *sync.WaitGroup, data interface{}, doSth func(*eventSink)) {
+func (p *eventSink) asyncCall(start bool, data interface{}, doSth func(*eventSink)) {
 	for p != nil {
 		if p.cond == nil || p.cond(data) {
-			if wg != nil {
-				wg.Add(1)
-			}
 			copy := p
 			gco.CreateAndStart(start, p.pthis, func(coroutine.Thread) int {
-				if wg != nil {
-					defer wg.Done()
-				}
 				doSth(copy)
 				return 0
 			})
 		}
 		p = p.prev
+	}
+}
+
+func (p *eventSink) syncCall(data interface{}, doSth func(*eventSink)) {
+	var wg sync.WaitGroup
+	for p != nil {
+		if p.cond == nil || p.cond(data) {
+			wg.Add(1)
+			copy := p
+			gco.CreateAndStart(false, p.pthis, func(coroutine.Thread) int {
+				defer wg.Done()
+				doSth(copy)
+				return 0
+			})
+		}
+		p = p.prev
+	}
+	waitToDo(wg.Wait)
+}
+
+func (p *eventSink) call(wait bool, data interface{}, doSth func(*eventSink)) {
+	if wait {
+		p.syncCall(data, doSth)
+	} else {
+		p.asyncCall(false, data, doSth)
 	}
 }
 
@@ -91,7 +110,7 @@ func (p *eventSinkMgr) doDeleteClone(this interface{}) {
 func (p *eventSinkMgr) doWhenStart() {
 	if !p.calledStart {
 		p.calledStart = true
-		p.allWhenStart.asyncCall(false, nil, nil, func(ev *eventSink) {
+		p.allWhenStart.asyncCall(false, nil, func(ev *eventSink) {
 			if debugEvent {
 				log.Println("==> onStart", nameOf(ev.pthis))
 			}
@@ -101,13 +120,22 @@ func (p *eventSinkMgr) doWhenStart() {
 }
 
 func (p *eventSinkMgr) doWhenKeyPressed(key Key) {
-	p.allWhenKeyPressed.asyncCall(false, nil, key, func(ev *eventSink) {
+	p.allWhenKeyPressed.asyncCall(false, key, func(ev *eventSink) {
 		ev.sink.(func(Key))(key)
 	})
 }
 
+func (p *eventSinkMgr) doWhenClick(this threadObj) {
+	p.allWhenClick.asyncCall(false, this, func(ev *eventSink) {
+		if debugEvent {
+			log.Println("==> onClick", nameOf(this))
+		}
+		ev.sink.(func())()
+	})
+}
+
 func (p *eventSinkMgr) doWhenCloned(this threadObj, data interface{}) {
-	p.allWhenCloned.asyncCall(true, nil, this, func(ev *eventSink) {
+	p.allWhenCloned.asyncCall(true, this, func(ev *eventSink) {
 		if debugEvent {
 			log.Println("==> onCloned", nameOf(this))
 		}
@@ -116,50 +144,27 @@ func (p *eventSinkMgr) doWhenCloned(this threadObj, data interface{}) {
 }
 
 func (p *eventSinkMgr) doWhenMoving(this threadObj, mi *MovingInfo) {
-	p.allWhenMoving.asyncCall(true, nil, this, func(ev *eventSink) {
+	p.allWhenMoving.syncCall(this, func(ev *eventSink) {
 		ev.sink.(func(*MovingInfo))(mi)
 	})
 }
 
 func (p *eventSinkMgr) doWhenTurning(this threadObj, mi *TurningInfo) {
-	p.allWhenTurning.asyncCall(true, nil, this, func(ev *eventSink) {
+	p.allWhenTurning.syncCall(this, func(ev *eventSink) {
 		ev.sink.(func(*TurningInfo))(mi)
 	})
 }
 
-func (p *eventSinkMgr) doWhenClick(this threadObj) {
-	p.allWhenClick.asyncCall(false, nil, this, func(ev *eventSink) {
-		if debugEvent {
-			log.Println("==> onClick", nameOf(this))
-		}
-		ev.sink.(func())()
-	})
-}
-
 func (p *eventSinkMgr) doWhenIReceive(msg string, data interface{}, wait bool) {
-	var wg *sync.WaitGroup
-	if wait {
-		wg = new(sync.WaitGroup)
-	}
-	p.allWhenIReceive.asyncCall(false, wg, msg, func(ev *eventSink) {
+	p.allWhenIReceive.call(wait, msg, func(ev *eventSink) {
 		ev.sink.(func(string, interface{}))(msg, data)
 	})
-	if wait {
-		waitToDo(wg.Wait)
-	}
 }
 
 func (p *eventSinkMgr) doWhenSceneStart(name string, wait bool) {
-	var wg *sync.WaitGroup
-	if wait {
-		wg = new(sync.WaitGroup)
-	}
-	p.allWhenSceneStart.asyncCall(false, wg, name, func(ev *eventSink) {
+	p.allWhenSceneStart.call(wait, name, func(ev *eventSink) {
 		ev.sink.(func(string))(name)
 	})
-	if wait {
-		waitToDo(wg.Wait)
-	}
 }
 
 // -------------------------------------------------------------------------------------
