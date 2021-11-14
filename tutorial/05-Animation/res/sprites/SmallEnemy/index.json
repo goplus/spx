@@ -37,12 +37,14 @@
     }
   ],
   "currentCostumeIndex": 0,
-  "animations": {
+  "fAnimations": {
     "die": {
-      "play": "explode",
-      "wait": 0.05,
+      "onStart":{
+        "play": "explode"
+      },
+      "duration": 0.15,
       "from": "die-0",
-      "n": 3
+      "to": "die-3"
     }
   },
   "heading": 90,
