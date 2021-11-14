@@ -5,14 +5,29 @@
     "path": "../../../../res/monkey.png",
     "nx": 96
   },
+  "fAnimations": {
+    "think": {
+      "duration": 1.6,
+      "from": 10,
+      "to": 42
+    },
+    "clap": {
+      "duration":0.78,
+      "from": 42,
+      "to": 68,
+      "onStart": {
+        "play": "clap"
+      }
+    }
+  },
   "mAnimations": {
     "step": {
       "unit": 20,
       "duration":0.3,
-      "onPlay":{
-        "costumes":{
-          "from":0,
-          "to":8
+      "onPlay": {
+        "costumes": {
+          "from": 0,
+          "to": 8
         }
       }
     }
