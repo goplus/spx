@@ -12,7 +12,7 @@
       "to": 43
     },
     "clap": {
-      "duration":0.78,
+      "duration": 0.78,
       "from": 42,
       "to": 68,
       "onStart": {
@@ -23,7 +23,7 @@
   "mAnimations": {
     "step": {
       "unit": 20,
-      "duration":0.3,
+      "duration": 0.3,
       "onPlay": {
         "costumes": {
           "from": 0,
@@ -34,7 +34,7 @@
   },
  "tAnimations": {
     "turn": {
-      "duration":2.0
+      "duration": 2.0
     }
   },
   "currentCostumeIndex": 0,

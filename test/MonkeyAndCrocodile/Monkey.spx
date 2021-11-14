@@ -40,6 +40,7 @@ onKey KeyZ, => {
 
 onKey KeyA, => {
 	turnTo 90
+	say heading, 1
 }
 
 onKey KeyB, => {
@@ -47,5 +48,5 @@ onKey KeyB, => {
 }
 
 onMoving mi => {
-	say sprintf("(%.0f, %.0f) => (%.0f, %.0f)", mi.oldX, mi.oldY, mi.newX, mi.newY)
+	say sprintf("(%.0f, %.0f) => (%.0f, %.0f)", mi.oldX, mi.oldY, mi.newX, mi.newY), 1
 }
