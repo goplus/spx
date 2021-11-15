@@ -611,7 +611,7 @@ func (p *Game) Update() error {
 	p.updateMousePos()
 	p.input.update()
 	p.sounds.update()
-	p._animate()
+	p.updateTick()
 	return nil
 }
 
@@ -652,8 +652,10 @@ func (p *Game) doWhenLeftButtonDown(ev *eventLeftButtonDown) {
 	}
 }
 
-func (p *Game) doFireEvent(event event) {
+func (p *Game) handleEvent(event event) {
 	switch ev := event.(type) {
+	case *eventTick:
+		p._animate()
 	case *eventLeftButtonDown:
 		p.updateMousePos()
 		p.doWhenLeftButtonDown(ev)
@@ -662,6 +664,12 @@ func (p *Game) doFireEvent(event event) {
 	case *eventStart:
 		p.sinkMgr.doWhenStart()
 	}
+}
+
+type eventTick struct{}
+
+func (p *Game) updateTick() {
+	p.fireEvent(&eventTick{})
 }
 
 func (p *Game) fireEvent(ev event) {
@@ -680,7 +688,7 @@ func (p *Game) eventLoop(me coroutine.Thread) int {
 			gco.Resume(me)
 		}()
 		gco.Yield(me)
-		p.doFireEvent(ev)
+		p.handleEvent(ev)
 	}
 }
 

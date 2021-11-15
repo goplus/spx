@@ -512,8 +512,7 @@ func (p *Sprite) goAnimate(name string, ani *aniConfig) {
 	})
 	p.g.activeAnimatables = append(p.g.activeAnimatables, an)
 
-	//wait anim complete
-	animwg.Wait()
+	waitToDo(animwg.Wait)
 }
 
 func (p *Sprite) Animate__0(name string) {
