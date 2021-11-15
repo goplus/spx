@@ -1,3 +1,11 @@
 onClick => {
 	say Bananas[1].costumeIndex, 1
 }
+
+onMoving mi => {
+	Bananas[1].changeXYpos mi.dx, mi.dy
+}
+
+onKey KeySpace, => {
+	testWaitToDo
+}
