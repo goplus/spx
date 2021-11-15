@@ -7,6 +7,13 @@ spx - A Go+ 2D Game Engine for STEM education
 [![Language](https://img.shields.io/badge/language-Go+-blue.svg)](https://github.com/goplus/gop)
 [![GoDoc](https://pkg.go.dev/badge/github.com/goplus/gox.svg)](https://pkg.go.dev/mod/github.com/goplus/spx)
 
+## Games powered by Go+ spx
+
+* [AircraftWar](https://github.com/goplus/spx/tree/main/tutorial/09-AircraftWar)
+* [BetaGo](https://github.com/xushiwei/BetaGo)
+* [Gobang](https://github.com/xushiwei/Gobang)
+* [Dinosaur](https://github.com/xushiwei/Dinosaur)
+
 ## Tutorials
 
 How to run spx tutorials?

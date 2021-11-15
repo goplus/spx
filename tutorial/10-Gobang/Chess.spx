@@ -1,6 +1,0 @@
-onCloned => {
-	setXYpos float64(currentCol)*17.7-159, float64(currentRow)*-17.7+159
-	setCostume currentPlayer-1
-	currentPlayer = _BlackAndWhite - currentPlayer
-	show
-}
