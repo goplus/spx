@@ -318,25 +318,14 @@ func (p *Sprite) OnTurning__1(onTurning func()) {
 }
 
 func (p *Sprite) Die() { // prototype sprite can't be destoryed, but can die
-	const aniName = "die"
 	p.SetDying()
-	ani, ok := p.animations[aniName]
-	if ok {
-		p.goAnimateWithCallback(aniName, ani, func() {
-			if p.isCloned {
-				p.doDestroy()
-			} else {
-				p.Hide()
-			}
-		})
-	} else {
+	p.Animate__0("die", func() {
 		if p.isCloned {
 			p.doDestroy()
 		} else {
 			p.Hide()
 		}
-	}
-
+	})
 }
 
 func (p *Sprite) Destroy() { // delete this clone
@@ -444,17 +433,9 @@ func (p *Sprite) getFromAnToForAni(anitype aniTypeEnum, from interface{}, to int
 	return fromval, toval
 }
 
-func (p *Sprite) goAnimate(name string, ani *aniConfig) {
-	p.goAnimateWithCallback(name, ani, nil)
-}
-func (p *Sprite) goAnimateWithCallback(name string, ani *aniConfig, stopfunc func()) {
-
+func (p *Sprite) goAnimate(wait bool, name string, ani *aniConfig, after func()) {
 	var animwg sync.WaitGroup
-	issyncwait := true
-	if ani.AniType == aniTypeFrame {
-		issyncwait = false
-	}
-	if issyncwait {
+	if wait {
 		animwg.Add(1)
 	}
 
@@ -474,9 +455,7 @@ func (p *Sprite) goAnimateWithCallback(name string, ani *aniConfig, stopfunc fun
 	if ani.AniType == aniTypeFrame {
 		animtype = anim.AnimValTypeInt
 		p.goSetCostume(ani.From)
-
-		//compute fps
-		if ani.Fps == 0 {
+		if ani.Fps == 0 { //compute fps
 			ani.Fps = math.Abs(toval-fromval) / ani.Duration
 		}
 	}
@@ -489,8 +468,7 @@ func (p *Sprite) goAnimateWithCallback(name string, ani *aniConfig, stopfunc fun
 	//xy pos
 	pre_x := p.x
 	pre_y := p.y
-	//turn p.direction
-	pre_direction := p.direction
+	pre_direction := p.direction //turn p.direction
 
 	an := anim.NewAnim(name, animtype, fps, framenum).AddKeyFrame(0, fromval).AddKeyFrame(framenum, toval).SetLoop(false)
 	if debugInstr {
@@ -524,31 +502,45 @@ func (p *Sprite) goAnimateWithCallback(name string, ani *aniConfig, stopfunc fun
 
 	})
 	an.SetOnStopingListener(func() {
-		if issyncwait {
+		if wait {
 			animwg.Done()
 		}
-
-		if stopfunc != nil {
-			stopfunc()
+		if after != nil {
+			after()
 		}
-
 	})
 	p.g.activeAnimatables = append(p.g.activeAnimatables, an)
-
-	if issyncwait {
+	if wait {
 		waitToDo(animwg.Wait)
 	}
 }
 
-func (p *Sprite) Animate__0(name string) {
+func (p *Sprite) Animate__0(name string, after func()) {
 	if debugInstr {
 		log.Println("==> Animation", name)
 	}
 	if ani, ok := p.animations[name]; ok {
-		p.goAnimate(name, ani)
+		p.goAnimate(false, name, ani, after)
+	} else {
+		log.Println("Animation not found:", name)
+		if after != nil {
+			after()
+		}
 	}
+}
+
+func (p *Sprite) Animate__1(name string) {
+	p.Animate__2(name, false)
+}
+
+func (p *Sprite) Animate__2(name string, wait bool) {
 	if debugInstr {
-		log.Println("==> End Animation", name)
+		log.Println("==> Animation", name, wait)
+	}
+	if ani, ok := p.animations[name]; ok {
+		p.goAnimate(wait, name, ani, nil)
+	} else {
+		log.Println("Animation not found:", name)
 	}
 }
 
@@ -661,17 +653,15 @@ func (p *Sprite) Step__0(step float64) {
 	if debugInstr {
 		log.Println("Step", p.name, step)
 	}
-	ani, ok := p.animations["step"]
-	if !ok {
-		p.goMoveForward(step)
+	if ani, ok := p.animations["step"]; ok {
+		anicopy := *ani
+		anicopy.From = 0
+		anicopy.To = step * anicopy.Unit
+		anicopy.Duration = math.Abs(step) * ani.Duration
+		p.goAnimate(true, "step", &anicopy, nil)
 		return
 	}
-
-	anicopy := *ani
-	anicopy.From = 0
-	anicopy.To = step * anicopy.Unit
-	anicopy.Duration = math.Abs(step) * ani.Duration
-	p.goAnimate("step", &anicopy)
+	p.goMoveForward(step)
 }
 
 func (p *Sprite) Step__1(step int) {
@@ -801,17 +791,14 @@ func (p *Sprite) Turn(val interface{}) {
 		panic("Turn: unexpected input")
 	}
 
-	ani, ok := p.animations["turn"]
-	if ok {
-		//copy
+	if ani, ok := p.animations["turn"]; ok {
 		anicopy := *ani
 		anicopy.From = p.direction
 		anicopy.To = p.direction + delta
 		anicopy.Duration = ani.Duration / 360.0 * math.Abs(delta)
-		p.goAnimate("turn", &anicopy)
+		p.goAnimate(true, "turn", &anicopy, nil)
 		return
 	}
-
 	if p.setDirection(delta, true) && debugInstr {
 		log.Println("Turn", p.name, val)
 	}
@@ -842,28 +829,25 @@ func (p *Sprite) TurnTo(obj interface{}) {
 		angle = 90 - math.Atan2(dy, dx)*180/math.Pi
 	}
 
-	ani, ok := p.animations["turn"]
-	if ok {
-		//copy
+	if ani, ok := p.animations["turn"]; ok {
 		delta := p.direction - angle
-
 		anicopy := *ani
 		anicopy.From = p.direction
 		anicopy.To = angle
 		anicopy.Duration = ani.Duration / 360.0 * math.Abs(delta)
-		p.goAnimate("turn", &anicopy)
+		p.goAnimate(true, "turn", &anicopy, nil)
 		return
 	}
-
 	if p.setDirection(angle, false) && debugInstr {
 		log.Println("TurnTo", p.name, obj)
 	}
 }
 
-func (p *Sprite) SetDir(dir float64) {
+func (p *Sprite) SetHeading(dir float64) {
 	p.setDirection(dir, false)
 }
-func (p *Sprite) ChangeDir(dir float64) {
+
+func (p *Sprite) ChangeHeading(dir float64) {
 	p.setDirection(dir, true)
 }
 
@@ -962,7 +946,7 @@ func (p *Sprite) execTouchingAni(ani string) {
 	if ani == "die" {
 		p.Die()
 	} else {
-		p.Animate__0(ani)
+		p.Animate__2(ani, false)
 	}
 }
 

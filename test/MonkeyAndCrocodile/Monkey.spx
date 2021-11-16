@@ -49,8 +49,9 @@ onKey KeyB, => {
 }
 
 onMoving mi => {
-	Crocodile.SetXYpos mi.newX, mi.newY
+	Crocodile.ChangeXYpos mi.dx, mi.dy
 }
+
 onTurning ti=> {
-	Crocodile.SetDir ti.newDir
+	Crocodile.SetHeading ti.newDir
 }
