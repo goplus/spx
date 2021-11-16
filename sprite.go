@@ -946,7 +946,7 @@ func (p *Sprite) execTouchingAni(ani string) {
 	if ani == "die" {
 		p.Die()
 	} else {
-		p.Animate__0(ani, nil)
+		p.Animate__2(ani, false)
 	}
 }
 
