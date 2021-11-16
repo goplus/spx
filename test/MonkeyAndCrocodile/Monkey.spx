@@ -49,5 +49,8 @@ onKey KeyB, => {
 }
 
 onMoving mi => {
-	printf("(%.0f, %.0f) => (%.0f, %.0f) \n", mi.oldX, mi.oldY, mi.newX, mi.newY)
+	Crocodile.SetXYpos mi.newX, mi.newY
+}
+onTurning ti=> {
+	Crocodile.SetDir ti.newDir
 }
