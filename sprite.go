@@ -256,11 +256,6 @@ type MovingInfo struct {
 	OldX, OldY float64
 	NewX, NewY float64
 	Obj        *Sprite
-	dontMoving bool
-}
-
-func (p *MovingInfo) StopMoving() {
-	p.dontMoving = true
 }
 
 func (p *MovingInfo) Dx() float64 {
@@ -318,14 +313,16 @@ func (p *Sprite) OnTurning__1(onTurning func()) {
 }
 
 func (p *Sprite) Die() { // prototype sprite can't be destoryed, but can die
+	const aniName = "die"
 	p.SetDying()
-	p.Animate__0("die", func() {
-		if p.isCloned {
-			p.doDestroy()
-		} else {
-			p.Hide()
-		}
-	})
+	if ani, ok := p.animations[aniName]; ok {
+		p.goAnimate(aniName, ani)
+	}
+	if p.isCloned {
+		p.doDestroy()
+	} else {
+		p.Hide()
+	}
 }
 
 func (p *Sprite) Destroy() { // delete this clone
@@ -433,11 +430,9 @@ func (p *Sprite) getFromAnToForAni(anitype aniTypeEnum, from interface{}, to int
 	return fromval, toval
 }
 
-func (p *Sprite) goAnimate(wait bool, name string, ani *aniConfig, after func()) {
+func (p *Sprite) goAnimate(name string, ani *aniConfig) {
 	var animwg sync.WaitGroup
-	if wait {
-		animwg.Add(1)
-	}
+	animwg.Add(1)
 
 	if ani.OnStart != nil {
 		if ani.OnStart.Play != "" {
@@ -502,43 +497,18 @@ func (p *Sprite) goAnimate(wait bool, name string, ani *aniConfig, after func())
 
 	})
 	an.SetOnStopingListener(func() {
-		if wait {
-			animwg.Done()
-		}
-		if after != nil {
-			after()
-		}
+		animwg.Done()
 	})
 	p.g.activeAnimatables = append(p.g.activeAnimatables, an)
-	if wait {
-		waitToDo(animwg.Wait)
-	}
+	waitToDo(animwg.Wait)
 }
 
-func (p *Sprite) Animate__0(name string, after func()) {
+func (p *Sprite) Animate(name string) {
 	if debugInstr {
 		log.Println("==> Animation", name)
 	}
 	if ani, ok := p.animations[name]; ok {
-		p.goAnimate(false, name, ani, after)
-	} else {
-		log.Println("Animation not found:", name)
-		if after != nil {
-			after()
-		}
-	}
-}
-
-func (p *Sprite) Animate__1(name string) {
-	p.Animate__2(name, false)
-}
-
-func (p *Sprite) Animate__2(name string, wait bool) {
-	if debugInstr {
-		log.Println("==> Animation", name, wait)
-	}
-	if ani, ok := p.animations[name]; ok {
-		p.goAnimate(wait, name, ani, nil)
+		p.goAnimate(name, ani)
 	} else {
 		log.Println("Animation not found:", name)
 	}
@@ -623,9 +593,6 @@ func (p *Sprite) doMoveTo(x, y float64) {
 	if p.hasOnMoving {
 		mi := &MovingInfo{OldX: p.x, OldY: p.y, NewX: x, NewY: y, Obj: p}
 		p.doWhenMoving(p, mi)
-		if mi.dontMoving {
-			return
-		}
 	}
 	if p.isPenDown {
 		p.g.movePen(p, x, y)
@@ -658,7 +625,7 @@ func (p *Sprite) Step__0(step float64) {
 		anicopy.From = 0
 		anicopy.To = step * anicopy.Unit
 		anicopy.Duration = math.Abs(step) * ani.Duration
-		p.goAnimate(true, "step", &anicopy, nil)
+		p.goAnimate("step", &anicopy)
 		return
 	}
 	p.goMoveForward(step)
@@ -796,7 +763,7 @@ func (p *Sprite) Turn(val interface{}) {
 		anicopy.From = p.direction
 		anicopy.To = p.direction + delta
 		anicopy.Duration = ani.Duration / 360.0 * math.Abs(delta)
-		p.goAnimate(true, "turn", &anicopy, nil)
+		p.goAnimate("turn", &anicopy)
 		return
 	}
 	if p.setDirection(delta, true) && debugInstr {
@@ -835,7 +802,7 @@ func (p *Sprite) TurnTo(obj interface{}) {
 		anicopy.From = p.direction
 		anicopy.To = angle
 		anicopy.Duration = ani.Duration / 360.0 * math.Abs(delta)
-		p.goAnimate(true, "turn", &anicopy, nil)
+		p.goAnimate("turn", &anicopy)
 		return
 	}
 	if p.setDirection(angle, false) && debugInstr {
@@ -946,7 +913,7 @@ func (p *Sprite) execTouchingAni(ani string) {
 	if ani == "die" {
 		p.Die()
 	} else {
-		p.Animate__2(ani, false)
+		p.Animate(ani)
 	}
 }
 

@@ -144,13 +144,13 @@ func (p *eventSinkMgr) doWhenCloned(this threadObj, data interface{}) {
 }
 
 func (p *eventSinkMgr) doWhenMoving(this threadObj, mi *MovingInfo) {
-	p.allWhenMoving.syncCall(this, func(ev *eventSink) {
+	p.allWhenMoving.asyncCall(true, this, func(ev *eventSink) {
 		ev.sink.(func(*MovingInfo))(mi)
 	})
 }
 
 func (p *eventSinkMgr) doWhenTurning(this threadObj, mi *TurningInfo) {
-	p.allWhenTurning.syncCall(this, func(ev *eventSink) {
+	p.allWhenTurning.asyncCall(true, this, func(ev *eventSink) {
 		ev.sink.(func(*TurningInfo))(mi)
 	})
 }
