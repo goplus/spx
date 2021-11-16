@@ -322,14 +322,21 @@ func (p *Sprite) Die() { // prototype sprite can't be destoryed, but can die
 	p.SetDying()
 	ani, ok := p.animations[aniName]
 	if ok {
-		p.goAnimate(aniName, ani)
+		p.goAnimateWithCallback(aniName, ani, func() {
+			if p.isCloned {
+				p.doDestroy()
+			} else {
+				p.Hide()
+			}
+		})
+	} else {
+		if p.isCloned {
+			p.doDestroy()
+		} else {
+			p.Hide()
+		}
 	}
 
-	if p.isCloned {
-		p.doDestroy()
-	} else {
-		p.Hide()
-	}
 }
 
 func (p *Sprite) Destroy() { // delete this clone
@@ -438,8 +445,18 @@ func (p *Sprite) getFromAnToForAni(anitype aniTypeEnum, from interface{}, to int
 }
 
 func (p *Sprite) goAnimate(name string, ani *aniConfig) {
+	p.goAnimateWithCallback(name, ani, nil)
+}
+func (p *Sprite) goAnimateWithCallback(name string, ani *aniConfig, stopfunc func()) {
+
 	var animwg sync.WaitGroup
-	animwg.Add(1)
+	issyncwait := true
+	if ani.AniType == aniTypeFrame {
+		issyncwait = false
+	}
+	if issyncwait {
+		animwg.Add(1)
+	}
 
 	if ani.OnStart != nil {
 		if ani.OnStart.Play != "" {
@@ -507,11 +524,20 @@ func (p *Sprite) goAnimate(name string, ani *aniConfig) {
 
 	})
 	an.SetOnStopingListener(func() {
-		animwg.Done()
+		if issyncwait {
+			animwg.Done()
+		}
+
+		if stopfunc != nil {
+			stopfunc()
+		}
+
 	})
 	p.g.activeAnimatables = append(p.g.activeAnimatables, an)
 
-	waitToDo(animwg.Wait)
+	if issyncwait {
+		waitToDo(animwg.Wait)
+	}
 }
 
 func (p *Sprite) Animate__0(name string) {
@@ -832,6 +858,13 @@ func (p *Sprite) TurnTo(obj interface{}) {
 	if p.setDirection(angle, false) && debugInstr {
 		log.Println("TurnTo", p.name, obj)
 	}
+}
+
+func (p *Sprite) SetDir(dir float64) {
+	p.setDirection(dir, false)
+}
+func (p *Sprite) ChangeDir(dir float64) {
+	p.setDirection(dir, true)
 }
 
 func (p *Sprite) setDirection(dir float64, change bool) bool {
