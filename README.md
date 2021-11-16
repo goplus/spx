@@ -7,18 +7,29 @@ spx - A Go+ 2D Game Engine for STEM education
 [![Language](https://img.shields.io/badge/language-Go+-blue.svg)](https://github.com/goplus/gop)
 [![GoDoc](https://pkg.go.dev/badge/github.com/goplus/gox.svg)](https://pkg.go.dev/mod/github.com/goplus/spx)
 
-## Tutorials
+## How to build
 
-How to run spx tutorials?
+How to run games powered by Go+ spx engine?
 
 * Download Go+ and build it. See https://github.com/goplus/gop#how-to-build.
 * Download spx and build it.
   * git clone `git@github.com:goplus/spx.git`
   * cd spx
   * go install -v ./...
-* Build tutorials and run.
-  * cd tutorial/xxx
+* Build a game and run.
+  * cd `game-root-dir`
   * gop run .
+
+
+## Games powered by spx
+
+* [AircraftWar](https://github.com/goplus/spx/tree/main/tutorial/09-AircraftWar)
+* [BetaGo](https://github.com/xushiwei/BetaGo)
+* [Gobang](https://github.com/xushiwei/Gobang)
+* [Dinosaur](https://github.com/xushiwei/Dinosaur)
+
+
+## Tutorials
 
 ### tutorial/01-Weather
 

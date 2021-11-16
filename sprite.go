@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/goplus/spx/internal/anim"
-	"github.com/goplus/spx/internal/coroutine"
 	"github.com/goplus/spx/internal/gdi"
 	"github.com/goplus/spx/internal/gdi/clrutil"
 	"github.com/goplus/spx/internal/tools"
@@ -1188,19 +1187,6 @@ func (p *Sprite) Height() float64 {
 	img, _, _ := c.needImage(p.g.fs)
 	_, h := img.Size()
 	return float64(h / c.bitmapResolution)
-}
-
-// -----------------------------------------------------------------------------
-
-func (p *Sprite) TestWaitToDo() {
-	var wg sync.WaitGroup
-	wg.Add(1)
-	gco.Create(nil, func(me coroutine.Thread) int {
-		defer wg.Done()
-		p.Move__0(50)
-		return 0
-	})
-	waitToDo(wg.Wait)
 }
 
 // -----------------------------------------------------------------------------
