@@ -255,7 +255,14 @@ func (p *Sprite) OnCloned__1(onCloned func()) {
 type MovingInfo struct {
 	OldX, OldY float64
 	NewX, NewY float64
+	ani        *anim.Anim
 	Obj        *Sprite
+}
+
+func (p *MovingInfo) StopMoving() {
+	if p.ani != nil {
+		p.ani.Stop()
+	}
 }
 
 func (p *MovingInfo) Dx() float64 {
@@ -479,7 +486,7 @@ func (p *Sprite) goAnimate(name string, ani *aniConfig) {
 			p.setCostumeByIndex(int(val))
 		case aniTypeMove:
 			sin, cos := math.Sincos(toRadian(pre_direction))
-			p.doMoveTo(pre_x+val*sin, pre_y+val*cos)
+			p.doMoveToForAnim(pre_x+val*sin, pre_y+val*cos, an)
 		case aniTypeTurn:
 			p.setDirection(val, false)
 		}
@@ -497,6 +504,9 @@ func (p *Sprite) goAnimate(name string, ani *aniConfig) {
 
 	})
 	an.SetOnStopingListener(func() {
+		if debugInstr {
+			log.Printf("stop anim [name %s id %d]  ", an.Name, an.Id)
+		}
 		animwg.Done()
 	})
 	p.g.activeAnimatables = append(p.g.activeAnimatables, an)
@@ -590,8 +600,12 @@ func (p *Sprite) DistanceTo(obj interface{}) float64 {
 }
 
 func (p *Sprite) doMoveTo(x, y float64) {
+	p.doMoveToForAnim(x, y, nil)
+}
+
+func (p *Sprite) doMoveToForAnim(x, y float64, ani *anim.Anim) {
 	if p.hasOnMoving {
-		mi := &MovingInfo{OldX: p.x, OldY: p.y, NewX: x, NewY: y, Obj: p}
+		mi := &MovingInfo{OldX: p.x, OldY: p.y, NewX: x, NewY: y, Obj: p, ani: ani}
 		p.doWhenMoving(p, mi)
 	}
 	if p.isPenDown {
