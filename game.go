@@ -614,6 +614,15 @@ func (p *Game) Update() error {
 	p.updateTick()
 	return nil
 }
+func (p *Game) findAnimate(name string) *anim.Anim {
+	for index := 0; index < len(p.activeAnimatables); index++ {
+		an := p.activeAnimatables[index]
+		if an.Name == name {
+			return an
+		}
+	}
+	return nil
+}
 
 func (p *Game) _animate() {
 	for index := 0; index < len(p.activeAnimatables); index++ {

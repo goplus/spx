@@ -430,6 +430,18 @@ func (p *Sprite) getFromAnToForAni(anitype aniTypeEnum, from interface{}, to int
 	return fromval, toval
 }
 
+func (p *Sprite) stopAnimate(name string) {
+	ani_name := fmt.Sprintf("%s_%s", p.name, name)
+	an := p.g.findAnimate(ani_name)
+	if an != nil {
+		if debugInstr {
+			log.Printf("manual stop anim [name %s id %d] ", an.Name, an.Id)
+		}
+		an.Stop()
+	}
+
+}
+
 func (p *Sprite) goAnimate(name string, ani *aniConfig) {
 	var animwg sync.WaitGroup
 	animwg.Add(1)
@@ -465,7 +477,8 @@ func (p *Sprite) goAnimate(name string, ani *aniConfig) {
 	pre_y := p.y
 	pre_direction := p.direction //turn p.direction
 
-	an := anim.NewAnim(name, animtype, fps, framenum).AddKeyFrame(0, fromval).AddKeyFrame(framenum, toval).SetLoop(false)
+	ani_name := fmt.Sprintf("%s_%s", p.name, name)
+	an := anim.NewAnim(ani_name, animtype, fps, framenum).AddKeyFrame(0, fromval).AddKeyFrame(framenum, toval).SetLoop(false)
 	if debugInstr {
 		log.Printf("New anim [name %s id %d] from:%v to:%v framenum:%d fps:%f", an.Name, an.Id, fromval, toval, framenum, fps)
 	}
@@ -497,6 +510,9 @@ func (p *Sprite) goAnimate(name string, ani *aniConfig) {
 
 	})
 	an.SetOnStopingListener(func() {
+		if debugInstr {
+			log.Printf("stop anim [name %s id %d] ", an.Name, an.Id)
+		}
 		animwg.Done()
 	})
 	p.g.activeAnimatables = append(p.g.activeAnimatables, an)
@@ -574,6 +590,10 @@ func (p *Sprite) doStopSay() {
 
 func (p *Sprite) getXY() (x, y float64) {
 	return p.x, p.y
+}
+
+func (p *Sprite) StopMoving() {
+	p.stopAnimate("step")
 }
 
 // DistanceTo func:

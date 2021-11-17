@@ -1,3 +1,6 @@
+var (
+	movnum int
+)
 onClick => {
 	animate "clap"
 }
@@ -27,14 +30,17 @@ onKey KeyDown, => {
 }
 
 onKey [KeyEnter, KeyS], => {
+	movnum = 0
 	step 5
 	step -5
 }
 
 onKey KeyLeft, => {
+	movnum = 0
 	step 1
 }
 onKey KeyZ, => {
+	movnum = 0
 	step 5
 }
 
@@ -49,7 +55,11 @@ onKey KeyB, => {
 }
 
 onMoving mi => {
-	Crocodile.ChangeXYpos mi.dx, mi.dy
+	movnum++
+	if movnum > 15 {
+		stopMoving
+	}
+	//Crocodile.ChangeXYpos mi.dx, mi.dy
 }
 
 onTurning ti=> {
