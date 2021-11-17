@@ -13,7 +13,7 @@ How to run games powered by Go+ spx engine?
 
 * Download Go+ and build it. See https://github.com/goplus/gop#how-to-build.
 * Download spx and build it.
-  * git clone `git@github.com:goplus/spx.git`
+  * git clone `https://github.com/goplus/spx.git`
   * cd spx
   * go install -v ./...
 * Build a game and run.
