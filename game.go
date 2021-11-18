@@ -626,8 +626,26 @@ func (p *Game) startTick(duration int64, onTick func(tick int64)) *tickHandler {
 
 // currentTPS returns the current TPS (ticks per second),
 // that represents how many update function is called in a second.
-func currentTPS() float64 {
-	return ebiten.CurrentTPS()
+func (p *Game) currentTPS() float64 {
+	return p.tickMgr.currentTPS
+}
+
+func (p *Game) TestStartTick() {
+	fmt.Println("currentTPS", p.currentTPS())
+	duration := 0.5
+	totalTick := int64(duration * p.currentTPS())
+	p.startTick(totalTick, func(tick int64) {
+		fmt.Println("startTick1:", tick, totalTick)
+		if tick == totalTick {
+			var h2 *tickHandler
+			h2 = p.startTick(totalTick, func(tick int64) {
+				fmt.Println("startTick2:", tick, totalTick)
+				if tick == 3 {
+					h2.Stop()
+				}
+			})
+		}
+	})
 }
 
 func (p *Game) _animate() {
