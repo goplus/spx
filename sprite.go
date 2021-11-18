@@ -501,7 +501,6 @@ func (p *Sprite) goAnimate(name string, ani *aniConfig) {
 				p.setCostumeByIndex(costumeval)
 			}
 		}
-
 	})
 	an.SetOnStopingListener(func() {
 		if debugInstr {
@@ -509,7 +508,15 @@ func (p *Sprite) goAnimate(name string, ani *aniConfig) {
 		}
 		animwg.Done()
 	})
-	p.g.activeAnimatables = append(p.g.activeAnimatables, an)
+
+	var h2 *tickHandler
+	h2 = p.g.startTick(-1, func(tick int64) {
+		runing := an.Update(1000.0 / p.g.currentTPS() * float64(tick))
+		if !runing {
+			h2.Stop()
+		}
+	})
+
 	waitToDo(animwg.Wait)
 }
 

@@ -1,9 +1,5 @@
 package anim
 
-import (
-	"github.com/goplus/spx/internal/tools"
-)
-
 type ANIMSTATUS uint8
 
 const (
@@ -20,15 +16,14 @@ const (
 )
 
 type Anim struct {
-	Id                   int
-	Name                 string
-	fps                  float64
-	totalframe           int
-	isloop               bool
-	status               ANIMSTATUS
-	animation            *Animation
-	keyframelist         []*AnimationKeyFrame
-	animationStartedDate int
+	Id           int
+	Name         string
+	fps          float64
+	totalframe   int
+	isloop       bool
+	status       ANIMSTATUS
+	animation    *Animation
+	keyframelist []*AnimationKeyFrame
 
 	//playing
 	playingCallback func(int, interface{})
@@ -38,14 +33,13 @@ type Anim struct {
 
 func NewAnim(name string, valtype ANIMVALTYPE, fps float64, totalframe int) *Anim {
 	a := &Anim{
-		Name:                 name,
-		fps:                  fps,
-		totalframe:           totalframe,
-		isloop:               false,
-		status:               AnimstatusPlaying,
-		animation:            nil,
-		animationStartedDate: 0,
-		keyframelist:         make([]*AnimationKeyFrame, 0),
+		Name:         name,
+		fps:          fps,
+		totalframe:   totalframe,
+		isloop:       false,
+		status:       AnimstatusPlaying,
+		animation:    nil,
+		keyframelist: make([]*AnimationKeyFrame, 0),
 	}
 	a.animation = NewAnimation(name, fps, (int)(valtype), ANIMATIONLOOPMODE_CYCLE)
 	a.Id = int(a.animation.GetAnimId())
@@ -71,6 +65,9 @@ func (a *Anim) AddKeyFrame(frameindex int, frameval interface{}) *Anim {
 	return a
 }
 
+func (a *Anim) Fps() float64 {
+	return a.fps
+}
 func (a *Anim) Status() ANIMSTATUS {
 	return a.status
 }
@@ -104,16 +101,10 @@ func (a *Anim) Stop() *Anim {
 }
 
 //
-func (a *Anim) Update() bool {
+func (a *Anim) Update(delay float64) bool {
 	if a.status == AnimstatusStop {
 		return false
 	}
-	if a.animationStartedDate == 0 {
-		a.animationStartedDate = tools.GetCurrentTimeMs()
-	}
-	//Getting time
-	var delay float64
-	delay = (float64)(tools.GetCurrentTimeMs() - a.animationStartedDate)
 	// Animating
 	ret := a.animation.Animate(nil, delay, 0, a.totalframe, a.isloop, 1.0)
 
