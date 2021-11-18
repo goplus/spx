@@ -344,6 +344,12 @@ func (this *Animation) Animate(target IAnimationTarget, delay float64, from int,
 
 	if ratio >= rangeval && !loop { // If we are out of range and not looping get back to caller
 
+		//add compete
+		if this.playingCallback != nil && this.preFrame != to && len(this.keys) > 1 {
+			this.playingCallback(this, to, this.keys[len(this.keys)-1].Value)
+		}
+
+		//stop callback
 		if this.stopCallback != nil {
 			this.stopCallback(this)
 		}
