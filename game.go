@@ -611,7 +611,6 @@ func (p *Game) Update() error {
 	p.input.update()
 	p.sounds.update()
 	p.tickMgr.update()
-	p.updateTick() // to be remove
 	return nil
 }
 
@@ -657,12 +656,6 @@ func (p *Game) handleEvent(event event) {
 	case *eventStart:
 		p.sinkMgr.doWhenStart()
 	}
-}
-
-type eventTick struct{}
-
-func (p *Game) updateTick() {
-	p.fireEvent(&eventTick{})
 }
 
 func (p *Game) fireEvent(ev event) {
