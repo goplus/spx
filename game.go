@@ -63,8 +63,9 @@ type Game struct {
 	shapes map[string]Spriter // sprite prototypes
 	items  []Shape            // sprites on stage
 
-	input  inputMgr
-	events chan event
+	tickMgr tickMgr
+	input   inputMgr
+	events  chan event
 
 	width_  int
 	height_ int
@@ -102,6 +103,7 @@ func (p *Game) reset() {
 }
 
 func (p *Game) initGame() {
+	p.tickMgr.init()
 	p.eventSinks.init(&p.sinkMgr, p)
 }
 
@@ -611,8 +613,39 @@ func (p *Game) Update() error {
 	p.updateMousePos()
 	p.input.update()
 	p.sounds.update()
-	p.updateTick()
+	p.tickMgr.update()
+	p.updateTick() // to be remove
 	return nil
+}
+
+// startTick creates tickHandler to handle `onTick` event.
+// You can call tickHandler.Stop to stop listening `onTick` event.
+func (p *Game) startTick(duration int64, onTick func(tick int64)) *tickHandler {
+	return p.tickMgr.start(duration, onTick)
+}
+
+// currentTPS returns the current TPS (ticks per second),
+// that represents how many update function is called in a second.
+func (p *Game) currentTPS() float64 {
+	return p.tickMgr.currentTPS
+}
+
+func (p *Game) TestStartTick() {
+	fmt.Println("currentTPS", p.currentTPS())
+	duration := 0.5
+	totalTick := int64(duration * p.currentTPS())
+	p.startTick(totalTick, func(tick int64) {
+		fmt.Println("startTick1:", tick, totalTick)
+		if tick == totalTick {
+			var h2 *tickHandler
+			h2 = p.startTick(totalTick, func(tick int64) {
+				fmt.Println("startTick2:", tick, totalTick)
+				if tick == 3 {
+					h2.Stop()
+				}
+			})
+		}
+	})
 }
 
 func (p *Game) _animate() {

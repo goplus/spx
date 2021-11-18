@@ -1,0 +1,96 @@
+package spx
+
+import (
+	"sync/atomic"
+	"unsafe"
+
+	"github.com/goplus/spx/internal/coroutine"
+	"github.com/hajimehoshi/ebiten/v2"
+)
+
+// -------------------------------------------------------------------------------------
+
+type tickHandlerBase struct {
+	prev, next *tickHandlerBase
+}
+
+func (p *tickHandlerBase) initList() {
+	p.prev, p.next = p, p
+}
+
+func (p *tickHandlerBase) removeFromList() {
+	prev, next := p.prev, p.next
+	prev.next, next.prev = next, prev
+	p.prev, p.next = nil, nil
+}
+
+func (p *tickHandlerBase) insertNext(this *tickHandler) *tickHandler {
+	next := p.next
+	h := (*tickHandlerBase)(unsafe.Pointer(this))
+	h.prev, h.next = p, next
+	p.next, next.prev = h, h
+	return this
+}
+
+type tickHandler struct {
+	tickHandlerBase
+	base      int64
+	totalTick int64
+	onTick    func(tick int64) // tick = 1..totalTick
+}
+
+// Stop stops listening `onTick` event.
+func (p *tickHandler) Stop() {
+	p.removeFromList()
+}
+
+// -------------------------------------------------------------------------------------
+
+type tickMgr struct {
+	tick       int64
+	currentTPS float64
+	list       tickHandlerBase
+}
+
+// currentTPS is the current TPS (ticks per second),
+// that represents how many update function is called in a second.
+func getCurrentTPS() float64 {
+	if tps := ebiten.CurrentTPS(); tps != 0 {
+		return tps
+	}
+	return ebiten.DefaultTPS
+}
+
+func (p *tickMgr) init() {
+	p.currentTPS = getCurrentTPS()
+	p.list.initList()
+}
+
+func (p *tickMgr) start(totalTick int64, onTick func(tick int64)) *tickHandler {
+	base := atomic.LoadInt64(&p.tick)
+	return p.list.insertNext(&tickHandler{
+		base:      base,
+		totalTick: totalTick,
+		onTick:    onTick,
+	})
+}
+
+func (p *tickMgr) update() {
+	curr := atomic.AddInt64(&p.tick, 1)
+	gco.CreateAndStart(true, nil, func(me coroutine.Thread) int {
+		var next *tickHandlerBase
+		tail := &p.list
+		for h := tail.next; h != tail; h = next {
+			next = h.next
+			this := (*tickHandler)(unsafe.Pointer(h))
+			tick := curr - this.base
+			if tick >= this.totalTick {
+				h.removeFromList()
+			}
+			this.onTick(tick)
+		}
+		return 0
+	})
+}
+
+// -------------------------------------------------------------------------------------
