@@ -67,6 +67,9 @@ func (p *tickMgr) init() {
 }
 
 func (p *tickMgr) start(totalTick int64, onTick func(tick int64)) *tickHandler {
+	if totalTick == -1 {
+		totalTick = (1 << 63) - 1
+	}
 	base := atomic.LoadInt64(&p.tick)
 	return p.list.insertNext(&tickHandler{
 		base:      base,
@@ -84,7 +87,7 @@ func (p *tickMgr) update() {
 			next = h.next
 			this := (*tickHandler)(unsafe.Pointer(h))
 			tick := curr - this.base
-			if tick >= this.totalTick && this.totalTick != -1 {
+			if tick >= this.totalTick {
 				h.removeFromList()
 			}
 			this.onTick(tick)

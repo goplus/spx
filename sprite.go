@@ -509,14 +509,13 @@ func (p *Sprite) goAnimate(name string, ani *aniConfig) {
 		animwg.Done()
 	})
 
-	var h2 *tickHandler
-	h2 = p.g.startTick(-1, func(tick int64) {
+	var h *tickHandler
+	h = p.g.startTick(-1, func(tick int64) {
 		runing := an.Update(1000.0 / p.g.currentTPS() * float64(tick))
 		if !runing {
-			h2.Stop()
+			h.Stop()
 		}
 	})
-
 	waitToDo(animwg.Wait)
 }
 
