@@ -15,7 +15,6 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/goplus/spx/internal/anim"
 	"github.com/goplus/spx/internal/coroutine"
 	"github.com/goplus/spx/internal/gdi"
 	"github.com/hajimehoshi/ebiten/v2"
@@ -71,8 +70,6 @@ type Game struct {
 	height_ int
 
 	gMouseX, gMouseY int64
-
-	activeAnimatables []*anim.Anim
 
 	sinkMgr   eventSinkMgr
 	isStopped bool
@@ -630,42 +627,6 @@ func (p *Game) currentTPS() float64 {
 	return p.tickMgr.currentTPS
 }
 
-func (p *Game) TestStartTick() {
-	fmt.Println("currentTPS", p.currentTPS())
-	duration := 0.5
-	totalTick := int64(duration * p.currentTPS())
-	p.startTick(totalTick, func(tick int64) {
-		fmt.Println("startTick1:", tick, totalTick)
-		if tick == totalTick {
-			var h2 *tickHandler
-			h2 = p.startTick(totalTick, func(tick int64) {
-				fmt.Println("startTick2:", tick, totalTick)
-				if tick == 3 {
-					h2.Stop()
-				}
-			})
-		}
-	})
-}
-
-func (p *Game) _animate() {
-	for index := 0; index < len(p.activeAnimatables); index++ {
-		an := p.activeAnimatables[index]
-		sts := an.Status()
-		switch sts {
-		case anim.AnimstatusStop:
-			p.activeAnimatables = append(p.activeAnimatables[:index], p.activeAnimatables[index+1:]...)
-			index--
-		case anim.AnimstatusPlaying:
-			runing := an.Update()
-			if !runing {
-				p.activeAnimatables = append(p.activeAnimatables[:index], p.activeAnimatables[index+1:]...)
-				index--
-			}
-		}
-	}
-}
-
 func (p *Game) Draw(screen *ebiten.Image) {
 	dc := drawContext{Image: screen}
 	p.onDraw(dc)
@@ -687,8 +648,7 @@ func (p *Game) doWhenLeftButtonDown(ev *eventLeftButtonDown) {
 
 func (p *Game) handleEvent(event event) {
 	switch ev := event.(type) {
-	case *eventTick:
-		p._animate()
+
 	case *eventLeftButtonDown:
 		p.updateMousePos()
 		p.doWhenLeftButtonDown(ev)

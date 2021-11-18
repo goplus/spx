@@ -84,7 +84,7 @@ func (p *tickMgr) update() {
 			next = h.next
 			this := (*tickHandler)(unsafe.Pointer(h))
 			tick := curr - this.base
-			if tick >= this.totalTick {
+			if tick >= this.totalTick && this.totalTick != -1 {
 				h.removeFromList()
 			}
 			this.onTick(tick)

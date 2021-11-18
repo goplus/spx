@@ -80,11 +80,11 @@ func (this *Animatable) GetTarget() IAnimationTarget {
 	return this.target
 }
 
-func (this *Animatable) Animate() bool {
+func (this *Animatable) Animate(delay float64) bool {
 
-	//Getting time
-	var delay float64
-	delay = (float64)(tools.GetCurrentTimeMs() - this.AnimationStartedDate)
+	// //Getting time
+	// var delay float64
+	// delay = (float64)(tools.GetCurrentTimeMs() - this.AnimationStartedDate)
 
 	// Animating
 	running := false
