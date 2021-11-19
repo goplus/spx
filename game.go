@@ -306,7 +306,6 @@ type aniConfig struct {
 	Fps      float64       `json:"fps"`
 	From     interface{}   `json:"from"`
 	To       interface{}   `json:"to"`
-	Unit     float64       `json:"unit"` //step unit
 	AniType  aniTypeEnum   `json:"anitype"`
 	OnStart  *actionConfig `json:"onStart"` //start
 	OnPlay   *actionConfig `json:"onPlay"`  //play
