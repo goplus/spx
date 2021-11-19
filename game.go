@@ -441,7 +441,7 @@ func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
 	}
 	p.stepUnit = proj.StepUnit
 	if p.stepUnit == 0 {
-		p.stepUnit = 20
+		p.stepUnit = 1
 	}
 
 	ebiten.SetWindowSize(w, h)
