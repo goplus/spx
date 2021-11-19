@@ -68,7 +68,7 @@ type Game struct {
 
 	width_   int
 	height_  int
-	stepUnit int //global step unit in game
+	stepUnit float64 //global step unit in game
 
 	gMouseX, gMouseY int64
 
@@ -393,7 +393,7 @@ type projConfig struct {
 	Zorder              []interface{}    `json:"zorder"`
 	Costumes            []*costumeConfig `json:"costumes"`
 	CurrentCostumeIndex int              `json:"currentCostumeIndex"`
-	StepUnit            int              `json:"stepunit"`
+	StepUnit            float64          `json:"stepunit"`
 }
 
 type initer interface {
