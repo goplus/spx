@@ -66,8 +66,9 @@ type Game struct {
 	input   inputMgr
 	events  chan event
 
-	width_  int
-	height_ int
+	width_   int
+	height_  int
+	stepUnit float64 //global step unit in game
 
 	gMouseX, gMouseY int64
 
@@ -305,7 +306,6 @@ type aniConfig struct {
 	Fps      float64       `json:"fps"`
 	From     interface{}   `json:"from"`
 	To       interface{}   `json:"to"`
-	Unit     float64       `json:"unit"` //step unit
 	AniType  aniTypeEnum   `json:"anitype"`
 	OnStart  *actionConfig `json:"onStart"` //start
 	OnPlay   *actionConfig `json:"onPlay"`  //play
@@ -393,6 +393,7 @@ type projConfig struct {
 	Zorder              []interface{}    `json:"zorder"`
 	Costumes            []*costumeConfig `json:"costumes"`
 	CurrentCostumeIndex int              `json:"currentCostumeIndex"`
+	StepUnit            float64          `json:"stepUnit"`
 }
 
 type initer interface {
@@ -438,6 +439,11 @@ func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
 	if debugLoad {
 		log.Println("==> SetWindowSize", w, h)
 	}
+	p.stepUnit = proj.StepUnit
+	if p.stepUnit == 0 {
+		p.stepUnit = 1
+	}
+
 	ebiten.SetWindowSize(w, h)
 	return
 }

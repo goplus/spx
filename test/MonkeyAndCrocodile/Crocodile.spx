@@ -1,6 +1,6 @@
 onStart => {
 	clone
-	step 150
+	step 10
 	turn 90
 }
 

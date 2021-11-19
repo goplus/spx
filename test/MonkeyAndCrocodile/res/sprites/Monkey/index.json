@@ -22,8 +22,25 @@
   },
   "mAnimations": {
     "step": {
-      "unit": 20,
       "duration": 0.3,
+      "onPlay": {
+        "costumes": {
+          "from": 0,
+          "to": 8
+        }
+      }
+    },
+    "faststep": {
+      "duration": 0.02,
+      "onPlay": {
+        "costumes": {
+          "from": 0,
+          "to": 8
+        }
+      }
+    },
+    "slowstep": {
+      "duration": 2.0,
       "onPlay": {
         "costumes": {
           "from": 0,

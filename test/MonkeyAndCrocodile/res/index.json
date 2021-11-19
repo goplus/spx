@@ -8,6 +8,7 @@
       "y": 180
     }
   ],
+  "stepUnit":20,
   "currentCostumeIndex": 0,
   "zorder": [
     "Monkey",
