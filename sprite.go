@@ -496,7 +496,6 @@ func (p *Sprite) goAnimate(name string, ani *aniConfig) {
 			if ani.AniType != aniTypeFrame && playaction.Costumes != nil {
 				costumes := playaction.Costumes
 				costumesFrom, costumesTo := p.getFromAnToForAni(aniTypeFrame, costumes.From, costumes.To)
-
 				costumeval := ((int)(costumesTo-costumesFrom) + currframe) % (int)(costumesTo)
 				p.setCostumeByIndex(costumeval)
 			}
@@ -605,6 +604,13 @@ func (p *Sprite) DistanceTo(obj interface{}) float64 {
 	y -= y2
 	return math.Sqrt(x*x + y*y)
 }
+func (p *Sprite) DistanceStepTo(obj interface{}) float64 {
+	x, y := p.x, p.y
+	x2, y2 := p.g.objectPos(obj)
+	x -= x2
+	y -= y2
+	return math.Sqrt(x*x+y*y) / float64(p.g.stepUnit)
+}
 
 func (p *Sprite) doMoveTo(x, y float64) {
 	p.doMoveToForAnim(x, y, nil)
@@ -638,22 +644,27 @@ func (p *Sprite) Move__1(step int) {
 }
 
 func (p *Sprite) Step__0(step float64) {
-	if debugInstr {
-		log.Println("Step", p.name, step)
-	}
-	if ani, ok := p.animations["step"]; ok {
-		anicopy := *ani
-		anicopy.From = 0
-		anicopy.To = step * anicopy.Unit
-		anicopy.Duration = math.Abs(step) * ani.Duration
-		p.goAnimate("step", &anicopy)
-		return
-	}
-	p.goMoveForward(step)
+
+	p.Step__2(step, "step")
 }
 
 func (p *Sprite) Step__1(step int) {
 	p.Step__0(float64(step))
+}
+
+func (p *Sprite) Step__2(step float64, animname string) {
+	if debugInstr {
+		log.Println("Step", p.name, step)
+	}
+	if ani, ok := p.animations[animname]; ok {
+		anicopy := *ani
+		anicopy.From = 0
+		anicopy.To = step * float64(p.g.stepUnit)
+		anicopy.Duration = math.Abs(step) * ani.Duration
+		p.goAnimate(animname, &anicopy)
+		return
+	}
+	p.goMoveForward(step * float64(p.g.stepUnit))
 }
 
 // Goto func:

@@ -35,14 +35,6 @@ onKey [KeyEnter, KeyS], => {
 	step -5
 }
 
-onKey KeyLeft, => {
-	movnum = 0
-	step 1
-}
-onKey KeyZ, => {
-	movnum = 0
-	step 5
-}
 
 onKey KeyA, => {
 	turnTo 90
@@ -54,12 +46,25 @@ onKey KeyB, => {
 	say heading, 1
 }
 
+onKey KeyC, => {
+	step 5, "faststep"
+	println distanceStepTo("Crocodile")
+}
+onKey KeyD, => {
+	step -5, "slowstep"
+	println distanceStepTo("Crocodile")
+}
+onKey KeyE, => {
+	step 5
+	println distanceStepTo("Crocodile")
+}
+onKey KeyF, => {
+	step 5, "animstep"
+	println distanceStepTo("Crocodile")
+}
+
 onMoving mi => {
-	movnum++
-	if movnum > 10 {
-		mi.stopMoving()
-	}
-	//Crocodile.ChangeXYpos mi.dx, mi.dy
+
 }
 
 onTurning ti=> {
