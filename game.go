@@ -393,7 +393,7 @@ type projConfig struct {
 	Zorder              []interface{}    `json:"zorder"`
 	Costumes            []*costumeConfig `json:"costumes"`
 	CurrentCostumeIndex int              `json:"currentCostumeIndex"`
-	StepUnit            float64          `json:"stepunit"`
+	StepUnit            float64          `json:"stepUnit"`
 }
 
 type initer interface {
