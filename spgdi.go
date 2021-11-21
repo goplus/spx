@@ -78,6 +78,7 @@ func (p *sprKey) drawOn(target *ebiten.Image, x, y float64, fs spxfs.Dir) {
 	screenW, screenH := target.Size()
 
 	op := new(ebiten.DrawImageOptions)
+	op.Filter = ebiten.FilterLinear
 	geo := &op.GeoM
 
 	direction := p.direction + c.faceRight
