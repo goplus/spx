@@ -1046,6 +1046,10 @@ func (p *Game) NextScene(wait ...bool) {
 	p.StartScene(Next, wait...)
 }
 
+func (p *Game) PrevScene(wait ...bool) {
+	p.StartScene(Prev, wait...)
+}
+
 // -----------------------------------------------------------------------------
 
 func (p *Game) KeyPressed(key Key) bool {
