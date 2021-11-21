@@ -1,6 +1,8 @@
 .vscode
 .gop
 .DS_Store
+sprite.txt
+game.txt
 go.work
 go.json
 gop.json

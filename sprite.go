@@ -683,7 +683,7 @@ const (
 	glideTick = 1e8
 )
 
-func (p *Sprite) Glide(x, y float64, secs float64) {
+func (p *Sprite) Glide__0(x, y float64, secs float64) {
 	if debugInstr {
 		log.Println("Glide", p.name, x, y, secs)
 	}
@@ -703,6 +703,14 @@ func (p *Sprite) Glide(x, y float64, secs float64) {
 	}
 	sleep(inDur)
 	p.SetXYpos(x, y)
+}
+
+func (p *Sprite) Glide__1(obj interface{}, secs float64) {
+	if debugInstr {
+		log.Println("Glide", obj, secs)
+	}
+	x, y := p.g.objectPos(obj)
+	p.Glide__0(x, y, secs)
 }
 
 func (p *Sprite) SetXYpos(x, y float64) {
@@ -1047,6 +1055,10 @@ func (p *Sprite) GoBackLayers(n int) {
 
 func (p *Sprite) GotoFront() {
 	p.g.goBackByLayers(p, -1e8)
+}
+
+func (p *Sprite) GotoBack() {
+	p.g.goBackByLayers(p, 1e8)
 }
 
 // -----------------------------------------------------------------------------
