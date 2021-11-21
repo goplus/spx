@@ -1120,7 +1120,7 @@ func (p *Game) ChangeEffect(kind EffectKind, delta float64) {
 	panic("todo")
 }
 
-func (p *Game) ClearEffects() {
+func (p *Game) ClearSoundEffects() {
 	panic("todo")
 }
 

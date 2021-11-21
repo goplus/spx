@@ -296,7 +296,7 @@ func (p *eventSinks) OnMsg__1(msg string, onMsg func()) {
 	}
 }
 
-func (p *eventSinks) OnScene__0(onScene func(name string)) {
+func (p *eventSinks) OnAnyScene(onScene func(name string)) {
 	p.allWhenSceneStart = &eventSink{
 		prev:  p.allWhenSceneStart,
 		pthis: p.pthis,
@@ -304,7 +304,7 @@ func (p *eventSinks) OnScene__0(onScene func(name string)) {
 	}
 }
 
-func (p *eventSinks) OnScene__1(name string, onScene func()) {
+func (p *eventSinks) OnScene(name string, onScene func()) {
 	p.allWhenSceneStart = &eventSink{
 		prev:  p.allWhenSceneStart,
 		pthis: p.pthis,
