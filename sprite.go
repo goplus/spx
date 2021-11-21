@@ -907,6 +907,20 @@ func (p *Sprite) ChangeSize(delta float64) {
 
 // -----------------------------------------------------------------------------
 
+func (p *Sprite) SetEffect(kind EffectKind, val float64) {
+	panic("todo")
+}
+
+func (p *Sprite) ChangeEffect(kind EffectKind, delta float64) {
+	panic("todo")
+}
+
+func (p *Sprite) ClearGraphEffects() {
+	panic("todo")
+}
+
+// -----------------------------------------------------------------------------
+
 type Color = color.RGBA
 
 func (p *Sprite) TouchingColor(color Color) bool {
