@@ -593,6 +593,10 @@ func (p *Sprite) Animate(name string) {
 
 // -----------------------------------------------------------------------------
 
+func (p *Sprite) Ask(msg interface{}) {
+	panic("todo")
+}
+
 func (p *Sprite) Say(msg interface{}, secs ...float64) {
 	if debugInstr {
 		log.Println("Say", p.name, msg, secs)
