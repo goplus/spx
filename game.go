@@ -1100,7 +1100,7 @@ func (p *Game) ResetTimer() {
 
 // -----------------------------------------------------------------------------
 
-func (p *Game) Ask(ask string) {
+func (p *Game) Ask(msg interface{}) {
 	panic("todo")
 }
 
