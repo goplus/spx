@@ -96,6 +96,11 @@ func (p *Game) getSharedImgs() *sharedImages {
 func (p *Game) reset() {
 	p.sinkMgr.reset()
 	p.input.reset()
+	for _, item := range p.items {
+		if sp, ok := item.(*Sprite); ok {
+			sp.isStopped = true
+		}
+	}
 	p.items = nil
 	p.shapes = make(map[string]Spriter)
 }
