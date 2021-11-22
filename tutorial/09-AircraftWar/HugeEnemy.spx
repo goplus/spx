@@ -17,7 +17,7 @@ onCloned => {
 		if ypos < -200 {
 			destroy
 		}
-		if touching("Bullet", "die") {
+		if touching("Bullet") {
 			life--
 			if life == 0 {
 				addScore 50

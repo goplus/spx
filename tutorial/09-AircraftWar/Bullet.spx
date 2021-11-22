@@ -1,3 +1,7 @@
+onTouched => {
+	destroy
+}
+
 onCloned => {
 	setXYpos MyAircraft.xpos, MyAircraft.ypos+5
 	show

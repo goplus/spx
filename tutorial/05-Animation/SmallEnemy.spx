@@ -21,7 +21,7 @@ onCloned => {
 	life := 5
 	for {
 		wait 0.05
-		if touching("Bullet", "die") {
+		if touching("Bullet") {
 			life--
 			if life == 0 {
 				die

@@ -57,14 +57,17 @@ type Sprite struct {
 	isVisible bool
 	isCloned  bool
 	isPenDown bool
-	//isDraggable bool
-	hasOnCloned bool
+	reserved1 bool
 
 	isStopped bool
 	isDying   bool
+	reserved2 bool
+	reserved3 bool
 
 	hasOnTurning bool
 	hasOnMoving  bool
+	hasOnCloned  bool
+	hasOnTouched bool
 
 	gamer reflect.Value
 }
@@ -155,14 +158,17 @@ func (p *Sprite) InitFrom(src *Sprite) {
 	p.isVisible = src.isVisible
 	p.isCloned = true
 	p.isPenDown = src.isPenDown
-	//p.isDraggable = src.isDraggable
+	p.reserved1 = false
 
 	p.isStopped = false
 	p.isDying = false
+	p.reserved2 = false
+	p.reserved3 = false
 
 	p.hasOnTurning = false
 	p.hasOnMoving = false
 	p.hasOnCloned = false
+	p.hasOnTouched = false
 }
 
 func applyFloat64(out *float64, in interface{}) {
@@ -249,6 +255,62 @@ func (p *Sprite) OnCloned__0(onCloned func(data interface{})) {
 func (p *Sprite) OnCloned__1(onCloned func()) {
 	p.OnCloned__0(func(interface{}) {
 		onCloned()
+	})
+}
+
+func (p *Sprite) fireTouched(obj *Sprite) {
+	if p.hasOnTouched {
+		p.doWhenTouched(p, obj)
+	}
+}
+
+func (p *Sprite) OnTouched__0(onTouched func(obj *Sprite)) {
+	p.hasOnTouched = true
+	p.allWhenTouched = &eventSink{
+		prev:  p.allWhenTouched,
+		pthis: p,
+		sink:  onTouched,
+		cond: func(data interface{}) bool {
+			return data == p
+		},
+	}
+}
+
+func (p *Sprite) OnTouched__1(onTouched func()) {
+	p.OnTouched__0(func(*Sprite) {
+		onTouched()
+	})
+}
+
+func (p *Sprite) OnTouched__2(name string, onTouched func(obj *Sprite)) {
+	p.OnTouched__0(func(obj *Sprite) {
+		if obj.name == name {
+			onTouched(obj)
+		}
+	})
+}
+
+func (p *Sprite) OnTouched__3(name string, onTouched func()) {
+	p.OnTouched__2(name, func(*Sprite) {
+		onTouched()
+	})
+}
+
+func (p *Sprite) OnTouched__4(names []string, onTouched func(obj *Sprite)) {
+	p.OnTouched__0(func(obj *Sprite) {
+		name := obj.name
+		for _, v := range names {
+			if v == name {
+				onTouched(obj)
+				return
+			}
+		}
+	})
+}
+
+func (p *Sprite) OnTouched__5(names []string, onTouched func()) {
+	p.OnTouched__4(names, func(*Sprite) {
+		onTouched()
 	})
 }
 
@@ -928,7 +990,7 @@ func (p *Sprite) TouchingColor(color Color) bool {
 }
 
 // Touching func:
-//   Touching(spriteName[, animation])
+//   Touching(spriteName)
 //   Touching(sprite)
 //   Touching(spx.Mouse)
 //   Touching(spx.Edge)
@@ -936,16 +998,14 @@ func (p *Sprite) TouchingColor(color Color) bool {
 //   Touching(spx.EdgeTop)
 //   Touching(spx.EdgeRight)
 //   Touching(spx.EdgeBottom)
-func (p *Sprite) Touching(obj interface{}, ani ...string) bool {
+func (p *Sprite) Touching(obj interface{}) bool {
 	if !p.isVisible || p.isDying {
 		return false
 	}
 	switch v := obj.(type) {
 	case string:
 		if o := p.g.touchingSpriteBy(p, v); o != nil {
-			if ani != nil {
-				o.execTouchingAni(ani[0])
-			}
+			o.fireTouched(p)
 			return true
 		}
 		return false
@@ -960,14 +1020,6 @@ func (p *Sprite) Touching(obj interface{}, ani ...string) bool {
 		return touchingSprite(p, spriteOf(v))
 	}
 	panic("Touching: unexpected input")
-}
-
-func (p *Sprite) execTouchingAni(ani string) {
-	if ani == "die" {
-		p.Die()
-	} else {
-		p.Animate(ani)
-	}
 }
 
 func touchingSprite(dst, src *Sprite) bool {
