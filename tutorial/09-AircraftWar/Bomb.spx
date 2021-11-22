@@ -1,3 +1,7 @@
+onTouched => {
+	destroy
+}
+
 onCloned => {
 	setXYpos rand(-90, 90), 237
 	show

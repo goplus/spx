@@ -5,7 +5,3 @@ onClick => {
 onMoving mi => {
 	Bananas[1].changeXYpos mi.dx, mi.dy
 }
-
-onStart => {
-	testStartTick
-}
