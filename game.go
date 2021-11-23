@@ -16,7 +16,7 @@ import (
 	"unsafe"
 
 	"github.com/goplus/spx/internal/coroutine"
-	"github.com/goplus/spx/internal/gdi"
+	"github.com/goplus/spx/internal/math32"
 	"github.com/hajimehoshi/ebiten/v2"
 
 	spxfs "github.com/goplus/spx/fs"
@@ -66,14 +66,21 @@ type Game struct {
 	input   inputMgr
 	events  chan event
 
-	width_   int
-	height_  int
+	//window
+	windowWidth_  int
+	windowHeight_ int
+	//world
+	worldWidth_  int
+	worldHeight_ int
+
 	stepUnit float64 //global step unit in game
 
 	gMouseX, gMouseY int64
 
 	sinkMgr   eventSinkMgr
 	isStopped bool
+
+	world *ebiten.Image
 }
 
 type Spriter = Shape
@@ -280,6 +287,7 @@ type costumeConfig struct {
 	Y                float64 `json:"y"`
 	FaceRight        float64 `json:"faceRight"` // turn face to right
 	BitmapResolution int     `json:"bitmapResolution"`
+	Mode             int     `json:"mode"`
 }
 
 //frame aniConfig
@@ -350,6 +358,8 @@ func (p *Game) startLoad(resource interface{}, cfg *Config) (err error) {
 	p.shapes = make(map[string]Spriter)
 	p.events = make(chan event, 16)
 	p.fs = fs
+	p.windowWidth_ = cfg.Width
+	p.windowHeight_ = cfg.Height
 	return
 }
 
@@ -429,22 +439,39 @@ func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
 			return fmt.Errorf("sprite %s is not found", name)
 		}
 	}
+
 	for _, ini := range inits {
 		ini.Main()
-	}
-	//
-	// set window size
-	p.width_ = 0
-	w, h := p.size_()
-	if debugLoad {
-		log.Println("==> SetWindowSize", w, h)
 	}
 	p.stepUnit = proj.StepUnit
 	if p.stepUnit == 0 {
 		p.stepUnit = 1
 	}
 
-	ebiten.SetWindowSize(w, h)
+	// set world size
+	p.worldWidth_ = 0
+	p.doWorldSize()
+
+	if debugLoad {
+		log.Println("==> SetWorldSize", p.worldWidth_, p.worldHeight_)
+	}
+
+	// set window size
+	p.doWindowSize()
+	if debugLoad {
+		log.Println("==> SetWindowSize", p.windowWidth_, p.windowHeight_)
+	}
+
+	if p.windowWidth_ > p.worldWidth_ {
+		p.worldWidth_ = p.windowWidth_
+	}
+
+	if p.windowHeight_ > p.worldHeight_ {
+		p.worldHeight_ = p.windowHeight_
+	}
+
+	p.world = ebiten.NewImage(p.worldWidth_, p.worldHeight_)
+	ebiten.SetWindowSize(p.windowWidth_, p.windowHeight_)
 	return
 }
 
@@ -584,6 +611,8 @@ type Config struct {
 	FullScreen         bool
 	DontRunOnUnfocused bool
 	DontParseFlags     bool
+	Width              int
+	Height             int
 }
 
 func (p *Game) runLoop(cfg *Config) (err error) {
@@ -604,12 +633,13 @@ func (p *Game) runLoop(cfg *Config) (err error) {
 	if title == "" {
 		title = "Game powered by Go+"
 	}
+
 	ebiten.SetWindowTitle(title)
 	return ebiten.RunGame(p)
 }
 
 func (p *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
-	return p.size_()
+	return p.windowSize_()
 }
 
 func (p *Game) Update() error {
@@ -633,8 +663,9 @@ func (p *Game) currentTPS() float64 {
 }
 
 func (p *Game) Draw(screen *ebiten.Image) {
-	dc := drawContext{Image: screen}
+	dc := drawContext{Image: p.world}
 	p.onDraw(dc)
+	screen.DrawImage(dc.Image, nil)
 }
 
 type clicker interface {
@@ -650,7 +681,6 @@ func (p *Game) doWhenLeftButtonDown(ev *eventLeftButtonDown) {
 		}
 	}
 }
-
 func (p *Game) handleEvent(event event) {
 	switch ev := event.(type) {
 
@@ -748,47 +778,61 @@ var lastSched time.Time
 // -----------------------------------------------------------------------------
 
 func (p *Game) getWidth() int {
-	if p.width_ == 0 {
-		p.doSize()
+	if p.windowWidth_ == 0 {
+		p.doWindowSize()
 	}
-	return p.width_
+	return p.windowWidth_
 }
 
-func (p *Game) size_() (int, int) {
-	if p.width_ == 0 {
-		p.doSize()
+func (p *Game) windowSize_() (int, int) {
+	if p.windowWidth_ == 0 {
+		p.doWindowSize()
 	}
-	return p.width_, p.height_
+	return p.windowWidth_, p.windowHeight_
 }
 
-func (p *Game) doSize() {
-	if p.width_ == 0 {
+func (p *Game) doWindowSize() {
+	if p.windowWidth_ == 0 {
 		c := p.costumes[p.currentCostumeIndex]
 		img, _, _ := c.needImage(p.fs)
 		w, h := img.Size()
-		p.width_, p.height_ = w/c.bitmapResolution, h/c.bitmapResolution
+		p.windowWidth_, p.windowHeight_ = w/c.bitmapResolution, h/c.bitmapResolution
 	}
 }
 
-func (p *Game) getGdiPos(x, y float64) (int, int) {
-	screenW, screenH := p.size_()
-	return int(x) + (screenW >> 1), (screenH >> 1) - int(y)
+func (p *Game) worldSize_() (int, int) {
+	if p.worldWidth_ == 0 {
+		p.doWorldSize()
+	}
+	return p.worldWidth_, p.worldHeight_
+}
+func (p *Game) doWorldSize() {
+	if p.worldWidth_ == 0 {
+		c := p.costumes[p.currentCostumeIndex]
+		img, _, _ := c.needImage(p.fs)
+		w, h := img.Size()
+		p.worldWidth_, p.worldHeight_ = w/c.bitmapResolution, h/c.bitmapResolution
+	}
 }
 
 func (p *Game) touchingPoint(dst *Sprite, x, y float64) bool {
-	sp, pt := dst.getGdiSprite()
-	sx, sy := p.getGdiPos(x, y)
-	return gdi.TouchingPoint(sp, pt, sx, sy)
+	rRect := dst.getRotatedRect()
+	if rRect == nil {
+		return false
+	}
+	return rRect.Contains(&math32.Vector2{X: x})
 }
 
 func (p *Game) touchingSpriteBy(dst *Sprite, name string) *Sprite {
-	sp1, pt1 := dst.getGdiSprite()
-
+	rRect1 := dst.getRotatedRect()
+	if rRect1 == nil {
+		return nil
+	}
 	for _, item := range p.items {
 		if sp, ok := item.(*Sprite); ok && sp != dst {
 			if sp.name == name && (sp.isVisible && !sp.isDying) {
-				sp2, pt2 := sp.getGdiSprite()
-				if gdi.Touching(sp1, pt1, sp2, pt2) {
+				rRect2 := sp.getRotatedRect()
+				if rRect2 != nil && rRect1.IsCollision(rRect2) {
 					return sp
 				}
 			}
@@ -810,9 +854,9 @@ func (p *Game) objectPos(obj interface{}) (float64, float64) {
 		}
 	case int:
 		if v == Random {
-			screenW, screenH := p.size_()
-			mx, my := rand.Intn(screenW), rand.Intn(screenH)
-			return float64(mx - (screenW >> 1)), float64((screenH >> 1) - my)
+			worldW, worldH := p.worldSize_()
+			mx, my := rand.Intn(worldW), rand.Intn(worldH)
+			return float64(mx - (worldW >> 1)), float64((worldH >> 1) - my)
 		}
 	case Spriter:
 		return spriteOf(v).getXY()
@@ -835,12 +879,12 @@ func (p *Game) stampCostume(di *spriteDrawInfo) {
 }
 
 func (p *Game) movePen(sp *Sprite, x, y float64) {
-	screenW, screenH := p.size_()
+	worldW, worldH := p.worldSize_()
 	p.turtle.penLine(&penLine{
-		x1:    (screenW >> 1) + int(sp.x),
-		y1:    (screenH >> 1) - int(sp.y),
-		x2:    (screenW >> 1) + int(x),
-		y2:    (screenH >> 1) - int(y),
+		x1:    (worldW >> 1) + int(sp.x),
+		y1:    (worldH >> 1) - int(sp.y),
+		x2:    (worldW >> 1) + int(x),
+		y2:    (worldH >> 1) - int(y),
 		clr:   sp.penColor,
 		width: int(sp.penWidth),
 	})
@@ -990,15 +1034,18 @@ func (p *Game) drawBackground(dc drawContext) {
 	img, _, _ := c.needImage(p.fs)
 
 	var options *ebiten.DrawImageOptions
+	options = new(ebiten.DrawImageOptions)
+	options.Filter = ebiten.FilterLinear
 	if c.bitmapResolution > 1 {
 		scale := 1.0 / float64(c.bitmapResolution)
-		options = new(ebiten.DrawImageOptions)
 		options.GeoM.Scale(scale, scale)
 	}
 	dc.DrawImage(img, options)
+
 }
 
 func (p *Game) onDraw(dc drawContext) {
+	dc.Clear()
 	p.drawBackground(dc)
 	p.getTurtle().draw(dc, p.fs)
 
@@ -1037,7 +1084,7 @@ func (p *Game) SceneIndex() int {
 //   StartScene(spx.Prev)
 func (p *Game) StartScene(scene interface{}, wait ...bool) {
 	if p.goSetCostume(scene) {
-		p.width_ = 0
+		p.windowWidth_ = 0
 		p.doWhenSceneStart(p.getCostumeName(), wait != nil && wait[0])
 	}
 }
@@ -1074,8 +1121,8 @@ func (p *Game) getMousePos() (x, y float64) {
 
 func (p *Game) updateMousePos() {
 	x, y := ebiten.CursorPosition()
-	screenW, screenH := p.size_()
-	mx, my := x-(screenW>>1), (screenH>>1)-y
+	worldW, worldH := p.worldSize_()
+	mx, my := x-(worldW>>1), (worldH>>1)-y
 	atomic.StoreInt64(&p.gMouseX, int64(mx))
 	atomic.StoreInt64(&p.gMouseY, int64(my))
 }

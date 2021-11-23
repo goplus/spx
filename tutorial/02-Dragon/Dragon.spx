@@ -6,11 +6,13 @@ onStart => {
 	score = 0
 	for {
 		turn rand(-30, 30)
-		step 5
+
+		step 0.1
 		if touching("Shark") {
+			println Xpos(),Ypos()
 			score++
 			play chomp, true
-			step -100
 		}
+		wait 1.0
 	}
 }

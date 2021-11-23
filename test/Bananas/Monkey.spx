@@ -6,6 +6,10 @@ onMoving mi => {
 	Bananas[1].changeXYpos mi.dx, mi.dy
 }
 
+onKey KeyA, => {
+	
+}
+
 onStart => {
-	testStartTick
+
 }

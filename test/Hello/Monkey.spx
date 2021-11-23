@@ -1,0 +1,16 @@
+
+onKey KeyA, => {
+	println GetRotatedRect().String()
+
+	Turn 45
+	println "Turn 45"
+	println GetRotatedRect().String()
+
+	Step 10
+	println "Step 10"
+	println GetRotatedRect().String()
+}
+
+onStart => {
+
+}

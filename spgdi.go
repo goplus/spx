@@ -3,11 +3,9 @@ package spx
 import (
 	"image"
 
-	"github.com/goplus/spx/internal/gdi"
 	"github.com/goplus/spx/internal/math32"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/qiniu/x/objcache"
 
 	spxfs "github.com/goplus/spx/fs"
 )
@@ -33,58 +31,42 @@ type Shape interface {
 
 // -------------------------------------------------------------------------------------
 
-type sprKey struct {
-	scale         float64
-	direction     float64
-	costume       *costume
-	rect          image.Rectangle
-	rotationStyle RotationStyle
+type spriteDrawInfo struct {
+	sprite  *Sprite
+	visible bool
 }
 
-func (p *sprKey) tryGet() *gdi.Sprite {
-	if val, ok := grpSpr.TryGet(*p); ok {
-		return val.(*gdi.Sprite)
-	}
-	return nil
+func (p *spriteDrawInfo) drawOn(dc drawContext, fs spxfs.Dir) {
+	p.doDrawOn(dc, fs)
 }
 
-func (p *sprKey) get(sp *Sprite) *gdi.Sprite {
-	val, _ := grpSpr.Get(sp, *p)
-	return val.(*gdi.Sprite)
+func (p *spriteDrawInfo) draw(dc drawContext, ctx *Sprite) {
+	p.doDrawOn(dc, ctx.g.fs)
 }
 
-func (p *sprKey) doGet(sp *Sprite) *gdi.Sprite {
-	w, h := sp.g.size_()
-	img := ebiten.NewImage(w, h)
-	defer img.Dispose()
-
-	p.drawOn(img, 0, 0, sp.g.fs)
-
-	spi2 := gdi.NewSprite(img, p.rect)
-	//spi := gdi.NewSpriteFromScreen(img)
-	//log.Printf(" spi %s, spi2 %s", spi.Rect, spi2.Rect)
-	return spi2
-}
-
-func (p *sprKey) drawOn(target *ebiten.Image, x, y float64, fs spxfs.Dir) {
-	c := p.costume
+func (p *spriteDrawInfo) doDrawOn(dc drawContext, fs spxfs.Dir) {
+	c := p.sprite.costumes[p.sprite.currentCostumeIndex]
 
 	img, centerX, centerY := c.needImage(fs)
-	p.rect.Min.X = 0
-	p.rect.Min.Y = 0
-	p.rect.Max = img.Bounds().Size()
+	rect := image.Rectangle{}
+	rect.Min.X = 0
+	rect.Min.Y = 0
+	rect.Max = img.Bounds().Size()
 
-	scale := p.scale / float64(c.bitmapResolution)
-	screenW, screenH := target.Size()
+	x := p.sprite.x
+	y := p.sprite.y
+
+	scale := p.sprite.scale / float64(c.bitmapResolution)
+	worldW, wolrdH := dc.Size()
 
 	op := new(ebiten.DrawImageOptions)
 	op.Filter = ebiten.FilterLinear
 	geo := &op.GeoM
 
-	direction := p.direction + c.faceRight
+	direction := p.sprite.direction + c.faceRight
 	if direction == 90 {
-		x = float64(screenW>>1) + x - centerX*scale
-		y = float64(screenH>>1) - y - centerY*scale
+		x = float64(worldW>>1) + x - centerX*scale
+		y = float64(wolrdH>>1) - y - centerY*scale
 		if scale != 1 {
 			geo.Scale(scale, scale)
 		}
@@ -95,95 +77,41 @@ func (p *sprKey) drawOn(target *ebiten.Image, x, y float64, fs spxfs.Dir) {
 			geo.Scale(scale, scale)
 		}
 		geo.Rotate(toRadian(direction - 90))
-		geo.Translate(float64(screenW>>1)+x, float64(screenH>>1)-y)
+		geo.Translate(float64(worldW>>1)+x, float64(wolrdH>>1)-y)
 	}
-	p.rect = math32.ApplyGeoForRect(p.rect, geo)
+	geo2 := *geo
+	geo2.Translate(-float64(worldW>>1), -float64(wolrdH>>1))
+	p.sprite.rRect = math32.ApplyGeoForRotatedRect(rect, &geo2)
 
-	target.DrawImage(img, op)
-}
-
-func doGetSpr(ctx objcache.Context, key objcache.Key) (val objcache.Value, err error) {
-	sp := ctx.(*Sprite)
-	di := key.(sprKey)
-	spr := di.doGet(sp)
-	return spr, nil
-}
-
-var (
-	grpSpr *objcache.Group = objcache.NewGroup("spr", 0, doGetSpr)
-)
-
-// -------------------------------------------------------------------------------------
-
-type spriteDrawInfo struct {
-	sprKey
-	x, y    float64
-	visible bool
-}
-
-func (p *spriteDrawInfo) drawOn(dc drawContext, fs spxfs.Dir) {
-	sp := p.tryGet()
-	if sp == nil {
-		p.sprKey.drawOn(dc.Image, p.x, p.y, fs)
-	} else {
-		p.doDrawOn(dc, sp)
-	}
-}
-
-func (p *spriteDrawInfo) draw(dc drawContext, ctx *Sprite) {
-	sp := p.get(ctx)
-	p.doDrawOn(dc, sp)
-}
-
-func (p *spriteDrawInfo) doDrawOn(dc drawContext, sp *gdi.Sprite) {
-	img := sp.Image()
-	if img.Rect.Empty() {
-		return
-	}
-	src := ebiten.NewImageFromImage(img)
-	defer src.Dispose()
-
-	op := new(ebiten.DrawImageOptions)
-	x := float64(sp.Rect.Min.X) + p.x
-	y := float64(sp.Rect.Min.Y) - p.y
-	op.GeoM.Translate(x, y)
-	dc.DrawImage(src, op)
+	dc.DrawImage(img, op)
 }
 
 func (p *Sprite) getDrawInfo() *spriteDrawInfo {
 	return &spriteDrawInfo{
-		sprKey: sprKey{
-			scale:         p.scale,
-			direction:     p.direction,
-			costume:       p.costumes[p.currentCostumeIndex],
-			rotationStyle: p.rotationStyle,
-		},
-		x:       p.x,
-		y:       p.y,
+		sprite:  p,
 		visible: p.isVisible,
 	}
 }
 
-func (p *Sprite) getGdiSprite() (spr *gdi.Sprite, pt image.Point) {
+func (p *Sprite) getRotatedRect() (rRect *math32.RotatedRect) {
 	di := p.getDrawInfo()
 	if !di.visible {
 		return
 	}
-
-	spr = di.get(p)
-	pt = image.Pt(int(di.x), -int(di.y))
+	rRect = di.sprite.rRect
 	return
 }
 
 func (p *Sprite) getTrackPos() (topx, topy int) {
-	spr, pt := p.getGdiSprite()
-	if spr == nil {
-		return
+	rRect := p.getRotatedRect()
+
+	worldW, wolrdH := p.g.worldSize_()
+	pos := &math32.Vector2{
+		X: float64(rRect.Center.X) + float64(worldW)/2.0,
+		Y: float64(rRect.Center.Y) + float64(wolrdH)/2.0,
 	}
 
-	trackp := getTrackPos(spr)
-	pt = trackp.Add(pt)
-	return pt.X, pt.Y
+	return int(pos.X), int(pos.Y) - int(rRect.Size.Height)/2.0
 }
 
 func (p *Sprite) draw(dc drawContext) {
@@ -196,34 +124,18 @@ func (p *Sprite) draw(dc drawContext) {
 
 // Hit func.
 func (p *Sprite) hit(hc hitContext) (hr hitResult, ok bool) {
-	sp, pt := p.getGdiSprite()
-	if sp == nil {
+	rRect := p.getRotatedRect()
+	if rRect == nil {
 		return
 	}
-
-	pt = hc.Pos.Sub(pt)
-	_, _, _, a := sp.Image().At(pt.X, pt.Y).RGBA()
-	if a > 0 {
+	worldW, wolrdH := p.g.worldSize_()
+	pos := &math32.Vector2{
+		X: float64(hc.Pos.X) - float64(worldW)/2.0,
+		Y: float64(hc.Pos.Y) - float64(wolrdH)/2.0,
+	}
+	if rRect.Contains(pos) {
 		return hitResult{Target: p}, true
 	}
+
 	return
 }
-
-// -------------------------------------------------------------------------------------
-
-func getTrackPos(spr *gdi.Sprite) image.Point {
-	pt, _ := grpTrackPos.Get(nil, spr)
-	return pt.(image.Point)
-}
-
-func doGetTrackPos(ctx objcache.Context, key objcache.Key) (val objcache.Value, err error) {
-	spr := key.(*gdi.Sprite)
-	pt := spr.GetTrackPos()
-	return pt, nil
-}
-
-var (
-	grpTrackPos *objcache.Group = objcache.NewGroup("tp", 0, doGetTrackPos)
-)
-
-// -------------------------------------------------------------------------------------

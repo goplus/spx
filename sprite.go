@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/goplus/spx/internal/anim"
-	"github.com/goplus/spx/internal/gdi"
 	"github.com/goplus/spx/internal/gdi/clrutil"
+	"github.com/goplus/spx/internal/math32"
 	"github.com/goplus/spx/internal/tools"
 )
 
@@ -45,6 +45,7 @@ type Sprite struct {
 	scale         float64
 	direction     float64
 	rotationStyle RotationStyle
+	rRect         *math32.RotatedRect
 
 	sayObj     *sayOrThinker
 	animations map[string]*aniConfig
@@ -974,9 +975,14 @@ func touchingSprite(dst, src *Sprite) bool {
 	if !src.isVisible || src.isDying {
 		return false
 	}
-	sp1, pt1 := dst.getGdiSprite()
-	sp2, pt2 := src.getGdiSprite()
-	return gdi.Touching(sp1, pt1, sp2, pt2)
+	rect1 := dst.getRotatedRect()
+	rect2 := dst.getRotatedRect()
+
+	if rect1 == nil || rect2 == nil {
+		return false
+	}
+
+	return rect1.IsCollision(rect2)
 }
 
 const (
@@ -1032,32 +1038,28 @@ func checkTouchingDirection(dir float64) int {
 }
 
 func (p *Sprite) checkTouchingScreen(where int) (touching int) {
-	spr, pt := p.getGdiSprite()
-	if spr == nil {
+	rect := p.getRotatedRect()
+	if rect == nil {
 		return
 	}
+	plist := rect.Points()
+	w, h := p.g.windowSize_()
 
-	if (where & touchingScreenLeft) != 0 {
-		if gdi.TouchingRect(spr, pt, -1e8, -1e8, 0, 1e8) {
+	for _, val := range plist {
+		if val.X < float64(-w/2) && (where&touchingScreenLeft) != 0 {
+			return touchingScreenLeft
+		}
+		if val.Y > float64(h/2) && (where&touchingScreenTop) != 0 {
+			return touchingScreenLeft
+		}
+		if val.X > float64(w/2) && (where&touchingScreenRight) != 0 {
+			return touchingScreenLeft
+		}
+		if val.Y < float64(-h/2) && (where&touchingScreenBottom) != 0 {
 			return touchingScreenLeft
 		}
 	}
-	if (where & touchingScreenTop) != 0 {
-		if gdi.TouchingRect(spr, pt, -1e8, -1e8, 1e8, 0) {
-			return touchingScreenTop
-		}
-	}
-	w, h := p.g.size_()
-	if (where & touchingScreenRight) != 0 {
-		if gdi.TouchingRect(spr, pt, w, -1e8, 1e8, 1e8) {
-			return touchingScreenRight
-		}
-	}
-	if (where & touchingScreenBottom) != 0 {
-		if gdi.TouchingRect(spr, pt, -1e8, h, 1e8, 1e8) {
-			return touchingScreenBottom
-		}
-	}
+
 	return
 }
 
@@ -1195,6 +1197,10 @@ func (p *Sprite) Height() float64 {
 	img, _, _ := c.needImage(p.g.fs)
 	_, h := img.Size()
 	return float64(h / c.bitmapResolution)
+}
+
+func (p *Sprite) GetRotatedRect() *math32.RotatedRect {
+	return p.rRect
 }
 
 // -----------------------------------------------------------------------------

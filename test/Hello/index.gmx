@@ -1,0 +1,5 @@
+var (
+	Monkey  *Monkey
+)
+
+run "res", {Title: "Hello (by Go+)"}
