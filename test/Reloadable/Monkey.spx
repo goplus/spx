@@ -1,3 +1,10 @@
+onStart => {
+	for {
+		wait 0.5
+		println "Hello spx"
+	}
+}
+
 onKey KeyUp, => {
 	turnTo Up
 }

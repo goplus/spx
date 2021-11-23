@@ -44,7 +44,7 @@ onMsg "battle", => {
 			broadcast "game over"
 			die
 		}
-		if touching("Bomb", "die") {
+		if touching("Bomb") {
 			bombs++
 		}
 	}

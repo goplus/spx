@@ -1,3 +1,7 @@
+onTouched => {
+	destroy
+}
+
 onStart => {
 	for {
 		wait 0.3
