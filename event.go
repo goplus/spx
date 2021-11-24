@@ -333,3 +333,53 @@ func (p *eventSinks) OnScene__1(name string, onScene func()) {
 }
 
 // -------------------------------------------------------------------------------------
+
+type StopKind int
+
+const (
+	_All                 StopKind = All  // stop all scripts of stage/sprites and abort this script
+	AllSprites           StopKind = -100 // stop all scripts of sprites
+	ThisSprite           StopKind = -101 // stop all scripts of this sprite
+	ThisScript           StopKind = -102 // abort this script
+	OtherScriptsInSprite StopKind = -103 // stop other scripts of this sprite
+)
+
+func (p *eventSinks) Stop(kind StopKind) {
+	var filter func(th coroutine.Thread) bool
+	switch kind {
+	case AllSprites:
+		filter = func(th coroutine.Thread) bool {
+			return isSprite(th.Obj)
+		}
+	case ThisSprite:
+		this := p.pthis
+		filter = func(th coroutine.Thread) bool {
+			return th.Obj == this
+		}
+	case OtherScriptsInSprite:
+		this := p.pthis
+		filter = func(th coroutine.Thread) bool {
+			return th.Obj == this && th != gco.Current()
+		}
+	case All:
+		gco.StopIf(func(th coroutine.Thread) bool {
+			return isSprite(th.Obj) || isGame(th.Obj)
+		})
+		fallthrough
+	case ThisScript:
+		gco.Abort()
+	}
+	gco.StopIf(filter)
+}
+
+func isGame(obj threadObj) bool {
+	_, ok := obj.(*Game)
+	return ok
+}
+
+func isSprite(obj threadObj) bool {
+	_, ok := obj.(*Sprite)
+	return ok
+}
+
+// -------------------------------------------------------------------------------------

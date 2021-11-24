@@ -72,18 +72,13 @@ type Game struct {
 
 	gMouseX, gMouseY int64
 
-	sinkMgr   eventSinkMgr
-	isStopped bool
+	sinkMgr eventSinkMgr
 }
 
 type Spriter = Shape
 
 type Gamer interface {
 	initGame()
-}
-
-func (p *Game) Stopped() bool {
-	return p.isStopped
 }
 
 func (p *Game) getSharedImgs() *sharedImages {
@@ -96,11 +91,7 @@ func (p *Game) getSharedImgs() *sharedImages {
 func (p *Game) reset() {
 	p.sinkMgr.reset()
 	p.input.reset()
-	for _, item := range p.items {
-		if sp, ok := item.(*Sprite); ok {
-			sp.isStopped = true
-		}
-	}
+	p.Stop(AllSprites)
 	p.items = nil
 	p.shapes = make(map[string]Spriter)
 }
@@ -831,10 +822,6 @@ func (p *Game) getTurtle() turtleCanvas {
 	return p.turtle
 }
 
-func (p *Game) Clear() {
-	p.turtle.clear()
-}
-
 func (p *Game) stampCostume(di *spriteDrawInfo) {
 	p.turtle.stampCostume(di)
 }
@@ -849,6 +836,10 @@ func (p *Game) movePen(sp *Sprite, x, y float64) {
 		clr:   sp.penColor,
 		width: int(sp.penWidth),
 	})
+}
+
+func (p *Game) EraseAll() {
+	p.turtle.eraseAll()
 }
 
 // -----------------------------------------------------------------------------
@@ -980,7 +971,7 @@ func (p *Game) doFindSprite(src Shape) int {
 func (p *Game) findSprite(name string) *Sprite {
 	for _, item := range p.items {
 		if sp, ok := item.(*Sprite); ok {
-			if !sp.isCloned && sp.name == name {
+			if !sp.isCloned_ && sp.name == name {
 				return sp
 			}
 		}
@@ -1184,15 +1175,6 @@ func (p *Game) SetVolume(volume float64) {
 func (p *Game) ChangeVolume(delta float64) {
 	panic("todo")
 }
-
-/*
-func (p *Game) Stop(what string) {
-	if what == "all" {
-		os.Exit(0)
-	}
-	panic("todo")
-}
-*/
 
 // -----------------------------------------------------------------------------
 
