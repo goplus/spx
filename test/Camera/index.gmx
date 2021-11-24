@@ -4,5 +4,4 @@ var (
 	chomp     Sound
 	clap      Sound
 )
-
 run "res", {Title: "Camera (by Go+)", Width:640, Height:480}

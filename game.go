@@ -453,6 +453,11 @@ func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
 	for _, ini := range inits {
 		ini.Main()
 	}
+	p.stepUnit = proj.StepUnit
+	if p.stepUnit == 0 {
+		p.stepUnit = 1
+	}
+
 	// set world size
 	p.worldWidth_ = 0
 	p.doWorldSize()
