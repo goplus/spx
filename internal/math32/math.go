@@ -2,6 +2,7 @@ package math32
 
 import (
 	"image"
+	"math"
 
 	"github.com/hajimehoshi/ebiten/v2"
 )
@@ -57,4 +58,9 @@ func ApplyGeoForRect(rect image.Rectangle, op *ebiten.GeoM) image.Rectangle {
 	}
 
 	return boxrect
+}
+func Clamp(curr, min, max float64) float64 {
+	curr = math.Max(curr, min)
+	curr = math.Min(curr, max)
+	return curr
 }
