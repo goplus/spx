@@ -22,7 +22,7 @@ func (this *Vector2) Set(x, y float64) {
 	this.Y = y
 }
 func (this *Vector2) String() string {
-	return fmt.Sprintf("%g,%g\n", this.X, this.Y)
+	return fmt.Sprintf("(%f,%f)", this.X, this.Y)
 }
 
 func (this *Vector2) Coords() (float64, float64) {
@@ -59,6 +59,13 @@ func (this *Vector2) Length() float64 {
 
 func (this *Vector2) LengthSquared() float64 {
 	return (this.X*this.X + this.Y*this.Y)
+}
+
+func (this *Vector2) Cross(otherVector *Vector2) float64 {
+	return (this.X*otherVector.Y - this.Y*otherVector.X)
+}
+func (this *Vector2) Ddot(otherVector *Vector2) float64 {
+	return (this.X*otherVector.X + this.Y*otherVector.Y)
 }
 
 func (this *Vector2) Normalize() {

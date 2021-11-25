@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/goplus/spx/internal/anim"
-	"github.com/goplus/spx/internal/gdi"
 	"github.com/goplus/spx/internal/gdi/clrutil"
+	"github.com/goplus/spx/internal/math32"
 	"github.com/goplus/spx/internal/tools"
 )
 
@@ -45,6 +45,7 @@ type Sprite struct {
 	scale         float64
 	direction     float64
 	rotationStyle RotationStyle
+	rRect         *math32.RotatedRect
 
 	sayObj     *sayOrThinker
 	animations map[string]*aniConfig
@@ -1030,9 +1031,8 @@ func touchingSprite(dst, src *Sprite) bool {
 	if !src.isVisible || src.isDying {
 		return false
 	}
-	sp1, pt1 := dst.getGdiSprite()
-	sp2, pt2 := src.getGdiSprite()
-	return gdi.Touching(sp1, pt1, sp2, pt2)
+	ret := src.touchingSprite(dst)
+	return ret
 }
 
 const (
@@ -1088,32 +1088,46 @@ func checkTouchingDirection(dir float64) int {
 }
 
 func (p *Sprite) checkTouchingScreen(where int) (touching int) {
-	spr, pt := p.getGdiSprite()
-	if spr == nil {
+	rect := p.getRotatedRect()
+	if rect == nil {
 		return
 	}
+	plist := rect.Points()
+	w, h := p.g.windowSize_()
 
-	if (where & touchingScreenLeft) != 0 {
-		if gdi.TouchingRect(spr, pt, -1e8, -1e8, 0, 1e8) {
-			return touchingScreenLeft
+	edge := 2.0
+
+	for _, val := range plist {
+		if val.X < float64(-w/2) && (where&touchingScreenLeft) != 0 {
+			//w/2-edge,-h/2   edge,h
+			rect := math32.NewRotatedRect1(math32.NewRect(float64(-w/2)-edge, float64(-h/2), edge, float64(h)))
+			if p.touchRotatedRect(rect) {
+				return touchingScreenLeft
+			}
+		}
+		if val.Y > float64(h/2) && (where&touchingScreenTop) != 0 {
+			//w/2,h/2+edge   w,edge
+			rect := math32.NewRotatedRect1(math32.NewRect(float64(-w/2), float64(h/2)+edge, float64(w), edge))
+			if p.touchRotatedRect(rect) {
+				return touchingScreenTop
+			}
+		}
+		if val.X > float64(w/2) && (where&touchingScreenRight) != 0 {
+			//w/2,-h/2   edge,h
+			rect := math32.NewRotatedRect1(math32.NewRect(float64(w/2), float64(-h/2), edge, float64(h)))
+			if p.touchRotatedRect(rect) {
+				return touchingScreenRight
+			}
+		}
+		if val.Y < float64(-h/2) && (where&touchingScreenBottom) != 0 {
+			//w/2,-h/2  w, edge
+			rect := math32.NewRotatedRect1(math32.NewRect(float64(-w/2), float64(-h/2), float64(w), edge))
+			if p.touchRotatedRect(rect) {
+				return touchingScreenBottom
+			}
 		}
 	}
-	if (where & touchingScreenTop) != 0 {
-		if gdi.TouchingRect(spr, pt, -1e8, -1e8, 1e8, 0) {
-			return touchingScreenTop
-		}
-	}
-	w, h := p.g.worldSize_()
-	if (where & touchingScreenRight) != 0 {
-		if gdi.TouchingRect(spr, pt, w, -1e8, 1e8, 1e8) {
-			return touchingScreenRight
-		}
-	}
-	if (where & touchingScreenBottom) != 0 {
-		if gdi.TouchingRect(spr, pt, -1e8, h, 1e8, 1e8) {
-			return touchingScreenBottom
-		}
-	}
+
 	return
 }
 
@@ -1251,6 +1265,20 @@ func (p *Sprite) Height() float64 {
 	img, _, _ := c.needImage(p.g.fs)
 	_, h := img.Size()
 	return float64(h / c.bitmapResolution)
+}
+func (p *Sprite) GetRotatedRect() *math32.RotatedRect {
+	return p.rRect
+}
+
+func (p *Sprite) GetPixel(x, y float64) color.Color {
+	c2 := p.costumes[p.currentCostumeIndex]
+	img, cx, cy := c2.needImageRGBA(p.g.fs)
+	geo := p.getDrawInfo().getGeo()
+	color1, p1 := p.getDrawInfo().getPixel(math32.NewVector2(x, y), img, geo, cx, cy)
+	if debugInstr {
+		log.Printf("<<<<getPixel x, y(%f,%F) p1(%v) color1(%v)  ", x, y, p1, color1)
+	}
+	return color1
 }
 
 // -----------------------------------------------------------------------------

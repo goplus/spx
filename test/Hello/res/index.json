@@ -1,0 +1,26 @@
+{
+  "costumes": [
+    {
+      "bitmapResolution": 1,
+      "name": "backdrop1",
+      "path": "../../res/lake.jpg",
+      "x": 240,
+      "y": 180
+    }
+  ],
+  "currentCostumeIndex": 0,
+  "zorder": [
+    {
+      "type": "sprite",
+      "target": "Monkey",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "type": "sprite",
+      "target": "Crocodile",
+      "x": 110,
+      "y": 0
+    }
+  ]
+}

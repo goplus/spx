@@ -17,7 +17,6 @@ import (
 
 	"github.com/goplus/spx/internal/camera"
 	"github.com/goplus/spx/internal/coroutine"
-	"github.com/goplus/spx/internal/gdi"
 	"github.com/hajimehoshi/ebiten/v2"
 
 	spxfs "github.com/goplus/spx/fs"
@@ -875,21 +874,21 @@ func (p *Game) getGdiPos(x, y float64) (int, int) {
 }
 
 func (p *Game) touchingPoint(dst *Sprite, x, y float64) bool {
-	sp, pt := dst.getGdiSprite()
-	sx, sy := p.getGdiPos(x, y)
-	return gdi.TouchingPoint(sp, pt, sx, sy)
+	return dst.touchPoint(x, y)
 }
 
 func (p *Game) touchingSpriteBy(dst *Sprite, name string) *Sprite {
-	sp1, pt1 := dst.getGdiSprite()
+	if dst == nil {
+		return nil
+	}
 
 	for _, item := range p.items {
 		if sp, ok := item.(*Sprite); ok && sp != dst {
 			if sp.name == name && (sp.isVisible && !sp.isDying) {
-				sp2, pt2 := sp.getGdiSprite()
-				if gdi.Touching(sp1, pt1, sp2, pt2) {
+				if sp.touchingSprite(dst) {
 					return sp
 				}
+
 			}
 		}
 	}
