@@ -17,11 +17,11 @@ var (
 // -------------------------------------------------------------------------------------
 
 type ThreadObj interface {
-	Stopped() bool
 }
 
 type threadImpl struct {
-	Obj ThreadObj
+	Obj     ThreadObj
+	stopped bool
 }
 
 // Thread represents a coroutine id.
@@ -54,6 +54,14 @@ func (p *Coroutines) Create(tobj ThreadObj, fn func(me Thread) int) Thread {
 	return p.CreateAndStart(false, tobj, fn)
 }
 
+func (p *Coroutines) setCurrent(id Thread) {
+	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&p.current)), unsafe.Pointer(id))
+}
+
+func (p *Coroutines) Current() Thread {
+	return Thread(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&p.current))))
+}
+
 // CreateAndStart creates and executes the new coroutine.
 //
 func (p *Coroutines) CreateAndStart(start bool, tobj ThreadObj, fn func(me Thread) int) Thread {
@@ -84,12 +92,12 @@ func (p *Coroutines) Abort() {
 	panic(ErrAbortThread)
 }
 
-func (p *Coroutines) setCurrent(id Thread) {
-	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&p.current)), unsafe.Pointer(id))
-}
-
-func (p *Coroutines) Current() Thread {
-	return Thread(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&p.current))))
+func (p *Coroutines) StopIf(filter func(th Thread) bool) {
+	for th := range p.suspended {
+		if filter(th) {
+			th.stopped = true
+		}
+	}
 }
 
 // Yield suspends a running coroutine.
@@ -108,7 +116,7 @@ func (p *Coroutines) Yield(me Thread) {
 	p.sema.Lock()
 
 	p.setCurrent(me)
-	if me.Obj != nil && me.Obj.Stopped() { // check stopped
+	if me.stopped { // check stopped
 		panic(ErrAbortThread)
 	}
 }
