@@ -12,27 +12,19 @@ onKey KeyB, => {
 	step 10
 }
 onKey KeyUp, => {
-	x,y := Game.Camera.GetXY()
-	y = y + 5.0
-	Game.Camera.SetXY(x,y)
+	Game.Camera.Move(0,5.0)
 }
 
 onKey KeyDown, => {
-	x,y := Game.Camera.GetXY()
-	y = y - 5.0
-	Game.Camera.SetXY(x,y)
+	Game.Camera.Move(0,-5.0)
 }
 
 onKey KeyLeft, => {
-	x,y := Game.Camera.GetXY()
-	x = x - 5.0
-	Game.Camera.SetXY(x,y)
+	Game.Camera.Move(-5.0,0.0)
 }
 
 onKey KeyRight, => {
-	x,y := Game.Camera.GetXY()
-	x = x + 5.0
-	Game.Camera.SetXY(x,y)
+	Game.Camera.Move(0.0,5.0)
 }
 
 

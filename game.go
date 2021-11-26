@@ -471,7 +471,7 @@ func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
 	}
 
 	p.world = ebiten.NewImage(p.worldWidth_, p.worldHeight_)
-	p.Camera = NewCamera(p, float64(p.windowWidth_), float64(p.windowHeight_), float64(p.worldWidth_), float64(p.worldHeight_))
+	p.Camera = newCamera(p, float64(p.windowWidth_), float64(p.windowHeight_), float64(p.worldWidth_), float64(p.worldHeight_))
 	if proj.Camera.On != "" {
 		p.Camera.On(proj.Camera.On)
 	}
