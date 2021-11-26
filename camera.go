@@ -2,11 +2,13 @@ package spx
 
 import (
 	"github.com/goplus/spx/internal/camera"
+	"github.com/hajimehoshi/ebiten/v2"
 )
 
 type Camera struct {
 	camera.FreeCamera
-	g *Game
+	g  *Game
+	on interface{}
 }
 
 func NewCamera(g *Game, winW, winH float64, worldW, worldH float64) *Camera {
@@ -21,20 +23,28 @@ func (c *Camera) GetXY() (float64, float64) {
 	return cx, cy
 }
 func (c *Camera) SetXY(x float64, y float64) {
+	c.on = nil
 	c.MoveTo(x, y)
 }
 func (c *Camera) Move(x float64, y float64) {
+	c.on = nil
 	c.Move(x, y)
 }
+
 func (c *Camera) On(obj interface{}) {
-	switch v := obj.(type) {
+	c.on = obj
+}
+func (c *Camera) updateOnObj() {
+	if c.on == nil {
+		return
+	}
+	switch v := c.on.(type) {
 	case string:
 		if sp := c.g.findSprite(v); sp != nil {
 			cx, cy := sp.getXY()
 			c.MoveTo(cx, cy)
 			return
 		}
-		panic("cameraOn: sprite not found - " + v)
 	case specialObj:
 		if v == Mouse {
 			cx := c.g.MouseX()
@@ -47,5 +57,11 @@ func (c *Camera) On(obj interface{}) {
 		c.MoveTo(cx, cy)
 		return
 	}
-	panic("cameraOn: unexpected input")
+	return
+}
+
+func (c *Camera) Render(world, screen *ebiten.Image) error {
+	c.updateOnObj()
+	c.FreeCamera.Render(world, screen)
+	return nil
 }

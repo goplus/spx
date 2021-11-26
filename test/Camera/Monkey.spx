@@ -37,7 +37,7 @@ onKey KeyRight, => {
 
 
 onMoving mi => {
-	Game.Camera.On("Monkey")
+
 }
 
 onTurning ti=> {
