@@ -33,7 +33,7 @@ type turtleCanvas struct {
 	objs []interface{}
 }
 
-func (p *turtleCanvas) clear() {
+func (p *turtleCanvas) eraseAll() {
 	p.objs = nil
 }
 

@@ -55,14 +55,9 @@ type Sprite struct {
 	penWidth float64
 
 	isVisible bool
-	isCloned  bool
+	isCloned_ bool
 	isPenDown bool
-	reserved1 bool
-
-	isStopped bool
 	isDying   bool
-	reserved2 bool
-	reserved3 bool
 
 	hasOnTurning bool
 	hasOnMoving  bool
@@ -74,10 +69,6 @@ type Sprite struct {
 
 func (p *Sprite) SetDying() { // dying: visible but can't be touched
 	p.isDying = true
-}
-
-func (p *Sprite) Stopped() bool {
-	return p.isStopped
 }
 
 func (p *Sprite) Parent() *Game {
@@ -156,14 +147,9 @@ func (p *Sprite) InitFrom(src *Sprite) {
 	p.penWidth = src.penWidth
 
 	p.isVisible = src.isVisible
-	p.isCloned = true
+	p.isCloned_ = true
 	p.isPenDown = src.isPenDown
-	p.reserved1 = false
-
-	p.isStopped = false
 	p.isDying = false
-	p.reserved2 = false
-	p.reserved3 = false
 
 	p.hasOnTurning = false
 	p.hasOnMoving = false
@@ -191,7 +177,7 @@ func applySpriteProps(dest *Sprite, v specsp) {
 	if idx, ok := v["currentCostumeIndex"]; ok {
 		dest.currentCostumeIndex = int(idx.(float64))
 	}
-	dest.isCloned = false
+	dest.isCloned_ = false
 }
 
 func applySprite(out reflect.Value, sprite Spriter, v specsp) (*Sprite, interface{}) {
@@ -387,7 +373,7 @@ func (p *Sprite) Die() { // prototype sprite can't be destoryed, but can die
 	if ani, ok := p.animations[aniName]; ok {
 		p.goAnimate(aniName, ani)
 	}
-	if p.isCloned {
+	if p.isCloned_ {
 		p.doDestroy()
 	} else {
 		p.Hide()
@@ -395,7 +381,7 @@ func (p *Sprite) Die() { // prototype sprite can't be destoryed, but can die
 }
 
 func (p *Sprite) Destroy() { // delete this clone
-	if p.isCloned {
+	if p.isCloned_ {
 		p.doDestroy()
 	}
 }
@@ -407,7 +393,7 @@ func (p *Sprite) doDestroy() {
 	p.doStopSay()
 	p.doDeleteClone()
 	p.g.removeShape(p)
-	p.isStopped = true
+	p.Stop(ThisSprite)
 	if p == gco.Current().Obj {
 		gco.Abort()
 	}
@@ -432,8 +418,8 @@ func (p *Sprite) Visible() bool {
 	return p.isVisible
 }
 
-func (p *Sprite) Cloned() bool {
-	return p.isCloned
+func (p *Sprite) IsCloned() bool {
+	return p.isCloned_
 }
 
 // -----------------------------------------------------------------------------

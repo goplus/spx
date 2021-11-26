@@ -109,6 +109,7 @@ func parseHexColor(s string) (Color, error) {
 }
 
 // -----------------------------------------------------------------------------
+
 func Exit(code ...int) {
 	v := 0
 	if code != nil {
