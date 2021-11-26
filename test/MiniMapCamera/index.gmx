@@ -1,0 +1,6 @@
+var (
+	Monkey    Monkey
+	Crocodile Crocodile
+)
+
+run "res", {Title: "Camera (by Go+)", Width:640, Height:480}

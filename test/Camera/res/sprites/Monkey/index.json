@@ -1,0 +1,65 @@
+{
+  "costumeSet": {
+    "bitmapResolution": 1,
+    "faceRight": 180,
+    "path": "../../../../res/monkey.png",
+    "nx": 96
+  },
+  "fAnimations": {
+    "think": {
+      "duration": 1.6,
+      "from": 10,
+      "to": 42
+    },
+    "clap": {
+      "duration": 0.78,
+      "from": 42,
+      "to": 67,
+      "onStart": {
+        "play": "clap"
+      }
+    }
+  },
+  "mAnimations": {
+    "step": {
+      "duration": 0.3,
+      "onPlay": {
+        "costumes": {
+          "from": 0,
+          "to": 8
+        }
+      }
+    },
+    "faststep": {
+      "duration": 0.02,
+      "onPlay": {
+        "costumes": {
+          "from": 0,
+          "to": 8
+        }
+      }
+    },
+    "slowstep": {
+      "duration": 2.0,
+      "onPlay": {
+        "costumes": {
+          "from": 0,
+          "to": 8
+        }
+      }
+    }
+  },
+ "tAnimations": {
+    "turn": {
+      "duration": 2.0
+    }
+  },
+  "currentCostumeIndex": 0,
+  "heading": -60,
+  "isDraggable": false,
+  "rotationStyle": "normal",
+  "size": 1,
+  "visible": true,
+  "x": 100,
+  "y": 50
+}

@@ -1,0 +1,5 @@
+onStart => {
+	clone
+	step 10
+	turn 90
+}

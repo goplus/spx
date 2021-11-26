@@ -1,0 +1,42 @@
+var (
+	movnum int
+)
+onClick => {
+	animate "clap"
+}
+
+onKey KeySpace, => {
+	Game.Camera.On("Monkey")
+}
+onKey KeyB, => {
+	step 10
+}
+
+onKey KeyE, => {
+	Game.Camera.MoveTo(0.0,0.0)
+}
+
+onKey KeyUp, => {
+	Game.Camera.ChangeXYpos(0,5.0)
+}
+
+onKey KeyDown, => {
+	Game.Camera.ChangeXYpos(0,-5.0)
+}
+
+onKey KeyLeft, => {
+	Game.Camera.ChangeXYpos(-5.0,0.0)
+}
+
+onKey KeyRight, => {
+	Game.Camera.ChangeXYpos(0.0,5.0)
+}
+
+
+onMoving mi => {
+
+}
+
+onTurning ti=> {
+	Crocodile.SetHeading ti.newDir
+}
