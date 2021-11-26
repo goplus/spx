@@ -6,29 +6,38 @@ onClick => {
 }
 
 onKey KeySpace, => {
-	println width, height
-	animate "think"
+	Game.Camera.On("Monkey")
+}
+onKey KeyB, => {
+	step 10
+}
+onKey KeyUp, => {
+	x,y := Game.Camera.GetXY()
+	y = y + 5.0
+	Game.Camera.SetXY(x,y)
 }
 
-onKey KeyC, => {
-	turn 45
+onKey KeyDown, => {
+	x,y := Game.Camera.GetXY()
+	y = y - 5.0
+	Game.Camera.SetXY(x,y)
 }
 
-onKey KeyE, => {
-	step 5
-	println distanceStepTo("Crocodile")
+onKey KeyLeft, => {
+	x,y := Game.Camera.GetXY()
+	x = x - 5.0
+	Game.Camera.SetXY(x,y)
 }
-onKey KeyF, => {
-	step 5, "animstep"
-	println distanceStepTo("Crocodile")
+
+onKey KeyRight, => {
+	x,y := Game.Camera.GetXY()
+	x = x + 5.0
+	Game.Camera.SetXY(x,y)
 }
-onKey KeyG, => {
-	step -5, "slowstep"
-	println distanceStepTo("Crocodile")
-}
+
 
 onMoving mi => {
-	Game.CameraMove mi.Dx(), mi.Dy()
+	Game.Camera.On("Monkey")
 }
 
 onTurning ti=> {

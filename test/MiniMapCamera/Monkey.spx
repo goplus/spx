@@ -28,9 +28,34 @@ onKey KeyG, => {
 }
 
 onMoving mi => {
-	Game.CameraMove mi.Dx(), mi.Dy()
+	
 }
 
 onTurning ti=> {
 	Crocodile.SetHeading ti.newDir
+}
+
+
+onKey KeyUp, => {
+	x,y := Game.Camera.GetXY()
+	y = y + 5.0
+	Game.Camera.SetXY(x,y)
+}
+
+onKey KeyDown, => {
+	x,y := Game.Camera.GetXY()
+	y = y - 5.0
+	Game.Camera.SetXY(x,y)
+}
+
+onKey KeyLeft, => {
+	x,y := Game.Camera.GetXY()
+	x = x - 5.0
+	Game.Camera.SetXY(x,y)
+}
+
+onKey KeyRight, => {
+	x,y := Game.Camera.GetXY()
+	x = x + 5.0
+	Game.Camera.SetXY(x,y)
 }

@@ -9,7 +9,7 @@
     }
   ],
   "camera":{
-    
+    "on":"Monkey"
   },
   "stepUnit":20,
   "currentCostumeIndex": 0,

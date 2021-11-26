@@ -15,7 +15,6 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/goplus/spx/internal/camera"
 	"github.com/goplus/spx/internal/coroutine"
 	"github.com/goplus/spx/internal/gdi"
 	"github.com/hajimehoshi/ebiten/v2"
@@ -80,9 +79,8 @@ type Game struct {
 	sinkMgr   eventSinkMgr
 	isStopped bool
 
-	world      *ebiten.Image
-	camera     *camera.FreeCamera
-	cameraConf *cameraConfig
+	world  *ebiten.Image
+	Camera *Camera
 }
 
 type Spriter = Shape
@@ -166,6 +164,7 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 	if loader, ok := game.(interface{ OnLoaded() }); ok {
 		loader.OnLoaded()
 	}
+
 	if err := g.runLoop(&conf); err != nil {
 		panic(err)
 	}
@@ -441,7 +440,6 @@ func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
 			return fmt.Errorf("sprite %s is not found", name)
 		}
 	}
-	p.cameraConf = proj.Camera
 	for _, ini := range inits {
 		ini.Main()
 	}
@@ -473,7 +471,11 @@ func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
 	}
 
 	p.world = ebiten.NewImage(p.worldWidth_, p.worldHeight_)
-	p.camera = camera.NewFreeCamera(float64(p.windowWidth_), float64(p.windowHeight_), float64(p.worldWidth_), float64(p.worldHeight_))
+	p.Camera = NewCamera(p, float64(p.windowWidth_), float64(p.windowHeight_), float64(p.worldWidth_), float64(p.worldHeight_))
+	if proj.Camera.On != "" {
+		p.Camera.On(proj.Camera.On)
+	}
+
 	ebiten.SetWindowSize(p.windowWidth_, p.windowHeight_)
 	return
 }
@@ -649,7 +651,6 @@ func (p *Game) Update() error {
 	p.input.update()
 	p.sounds.update()
 	p.tickMgr.update()
-	p.updateCamera()
 	return nil
 }
 
@@ -668,7 +669,7 @@ func (p *Game) currentTPS() float64 {
 func (p *Game) Draw(screen *ebiten.Image) {
 	dc := drawContext{Image: p.world}
 	p.onDraw(dc)
-	p.camera.Render(dc.Image, screen)
+	p.Camera.Render(dc.Image, screen)
 }
 
 type clicker interface {
@@ -683,48 +684,6 @@ func (p *Game) doWhenLeftButtonDown(ev *eventLeftButtonDown) {
 			o.doWhenClick(o)
 		}
 	}
-}
-
-func (p *Game) updateCamera() {
-	if p.camera == nil {
-		return
-	}
-
-	//
-
-	var cx, cy float64
-
-	mvunit := 5.0
-	cx = p.camera.GetPos().X
-	cy = p.camera.GetPos().Y
-	if ebiten.IsKeyPressed(ebiten.KeyA) || ebiten.IsKeyPressed(ebiten.KeyArrowLeft) {
-		cx -= mvunit
-	}
-	if ebiten.IsKeyPressed(ebiten.KeyD) || ebiten.IsKeyPressed(ebiten.KeyArrowRight) {
-		cx += mvunit
-	}
-	if ebiten.IsKeyPressed(ebiten.KeyW) || ebiten.IsKeyPressed(ebiten.KeyArrowUp) {
-		cy += mvunit
-	}
-	if ebiten.IsKeyPressed(ebiten.KeyS) || ebiten.IsKeyPressed(ebiten.KeyArrowDown) {
-		cy -= mvunit
-	}
-
-	if p.cameraConf != nil && p.cameraConf.On != "" {
-		switch p.cameraConf.On {
-		case "Mouse":
-			cx = p.MouseX()
-			cy = p.MouseY()
-		default:
-			if sp := p.findSprite(p.cameraConf.On); sp != nil {
-				cx, cy = sp.getXY()
-			}
-		}
-
-	}
-
-	p.camera.MoveTo(cx, cy)
-
 }
 
 func (p *Game) handleEvent(event event) {
@@ -1310,16 +1269,4 @@ func (p *Game) HideVar(name string) {
 
 func (p *Game) ShowVar(name string) {
 	p.setStageMonitor("", getVarPrefix+name, true)
-}
-
-// -----------------------------------------------------------------------------
-func (p *Game) CameraMove(x, y float64) {
-	if p.camera == nil {
-		return
-	}
-
-	//
-
-	p.camera.Move(x, y)
-
 }
