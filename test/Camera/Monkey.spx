@@ -11,20 +11,25 @@ onKey KeySpace, => {
 onKey KeyB, => {
 	step 10
 }
+
+onKey KeyE, => {
+	Game.Camera.MoveTo(0.0,0.0)
+}
+
 onKey KeyUp, => {
-	Game.Camera.Move(0,5.0)
+	Game.Camera.ChangeXYpos(0,5.0)
 }
 
 onKey KeyDown, => {
-	Game.Camera.Move(0,-5.0)
+	Game.Camera.ChangeXYpos(0,-5.0)
 }
 
 onKey KeyLeft, => {
-	Game.Camera.Move(-5.0,0.0)
+	Game.Camera.ChangeXYpos(-5.0,0.0)
 }
 
 onKey KeyRight, => {
-	Game.Camera.Move(0.0,5.0)
+	Game.Camera.ChangeXYpos(0.0,5.0)
 }
 
 

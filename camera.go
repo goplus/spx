@@ -22,7 +22,7 @@ func (c *Camera) MoveTo(x float64, y float64) {
 	c.on_ = nil
 	c.freecamera.MoveTo(x, y)
 }
-func (c *Camera) Move(x float64, y float64) {
+func (c *Camera) ChangeXYpos(x float64, y float64) {
 	c.on_ = nil
 	c.freecamera.Move(x, y)
 }
