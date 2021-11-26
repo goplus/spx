@@ -76,11 +76,9 @@ type Game struct {
 
 	gMouseX, gMouseY int64
 
-	sinkMgr   eventSinkMgr
-	isStopped bool
-
-	world  *ebiten.Image
-	Camera *Camera
+	sinkMgr eventSinkMgr
+	world   *ebiten.Image
+	Camera  *Camera
 }
 
 type Spriter = Shape
