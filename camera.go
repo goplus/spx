@@ -1,6 +1,8 @@
 package spx
 
 import (
+	"log"
+
 	"github.com/goplus/spx/internal/camera"
 	"github.com/hajimehoshi/ebiten/v2"
 )
@@ -11,52 +13,57 @@ type Camera struct {
 	on_        interface{}
 }
 
-func newCamera(g *Game, winW, winH float64, worldW, worldH float64) *Camera {
-	c := &Camera{}
-	c.g = g
+func (c *Camera) init(g *Game, winW, winH float64, worldW, worldH float64) {
 	c.freecamera = *camera.NewFreeCamera(winW, winH, worldW, worldH)
-	return c
+	c.g = g
 }
 
-func (c *Camera) MoveTo(x float64, y float64) {
+func (c *Camera) SetXYpos(x float64, y float64) {
 	c.on_ = nil
 	c.freecamera.MoveTo(x, y)
 }
+
 func (c *Camera) ChangeXYpos(x float64, y float64) {
 	c.on_ = nil
 	c.freecamera.Move(x, y)
 }
 
 func (c *Camera) On(obj interface{}) {
-	c.on_ = obj
-}
-func (c *Camera) updateOnObj() {
-	if c.on_ == nil {
-		return
-	}
 	switch v := c.on_.(type) {
 	case string:
-		if sp := c.g.findSprite(v); sp != nil {
-			cx, cy := sp.getXY()
-			c.freecamera.MoveTo(cx, cy)
+		sp := c.g.findSprite(v)
+		if sp == nil {
+			log.Println("Camera.On: sprite not found -", v)
 			return
 		}
+		obj = v
+	case nil:
+	case Spriter:
 	case specialObj:
-		if v == Mouse {
-			cx := c.g.MouseX()
-			cy := c.g.MouseY()
-			c.freecamera.MoveTo(cx, cy)
+		if v != Mouse {
+			log.Println("Camera.On: not support -", v)
 			return
 		}
+	default:
+		panic("Camera.On: unexpected parameter")
+	}
+	c.on_ = obj
+}
+
+func (c *Camera) updateOnObj() {
+	switch v := c.on_.(type) {
+	case nil:
 	case Spriter:
 		cx, cy := spriteOf(v).getXY()
 		c.freecamera.MoveTo(cx, cy)
-		return
+	case specialObj:
+		cx := c.g.MouseX()
+		cy := c.g.MouseY()
+		c.freecamera.MoveTo(cx, cy)
 	}
-	return
 }
 
-func (c *Camera) Render(world, screen *ebiten.Image) error {
+func (c *Camera) render(world, screen *ebiten.Image) error {
 	c.updateOnObj()
 	c.freecamera.Render(world, screen)
 	return nil

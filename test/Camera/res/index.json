@@ -3,13 +3,13 @@
     {
       "bitmapResolution": 1,
       "name": "backdrop1",
-      "path": "img/bg.jpg",
+      "path": "../../res/bg.jpg",
       "x": 0,
       "y": 0
     }
   ],
-  "camera":{
-    "on":"Monkey"
+  "camera": {
+    "on": "Monkey"
   },
   "stepUnit":20,
   "currentCostumeIndex": 0,
