@@ -53,6 +53,7 @@ func SetDebug(flags int) {
 type Game struct {
 	baseObj
 	eventSinks
+	Camera
 
 	fs     spxfs.Dir
 	shared *sharedImages
@@ -66,19 +67,20 @@ type Game struct {
 	input   inputMgr
 	events  chan event
 
-	//window
+	// window
 	windowWidth_  int
 	windowHeight_ int
-	//world
+
+	stepUnit float64 //global step unit in game
+
+	// world
 	worldWidth_  int
 	worldHeight_ int
-	stepUnit     float64 //global step unit in game
+	world        *ebiten.Image
 
 	gMouseX, gMouseY int64
 
 	sinkMgr eventSinkMgr
-	world   *ebiten.Image
-	Camera  *Camera
 }
 
 type Spriter = Shape
@@ -446,16 +448,14 @@ func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
 		p.stepUnit = 1
 	}
 
-	// set world size
 	p.worldWidth_ = 0
-	p.doWorldSize()
+	p.doWorldSize() // set world size
 
 	if debugLoad {
 		log.Println("==> SetWorldSize", p.worldWidth_, p.worldHeight_)
 	}
 
-	// set window size
-	p.doWindowSize()
+	p.doWindowSize() // set window size
 	if debugLoad {
 		log.Println("==> SetWindowSize", p.windowWidth_, p.windowHeight_)
 	}
@@ -463,13 +463,12 @@ func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
 	if p.windowWidth_ > p.worldWidth_ {
 		p.worldWidth_ = p.windowWidth_
 	}
-
 	if p.windowHeight_ > p.worldHeight_ {
 		p.worldHeight_ = p.windowHeight_
 	}
-
 	p.world = ebiten.NewImage(p.worldWidth_, p.worldHeight_)
-	p.Camera = newCamera(p, float64(p.windowWidth_), float64(p.windowHeight_), float64(p.worldWidth_), float64(p.worldHeight_))
+
+	p.Camera.init(p, float64(p.windowWidth_), float64(p.windowHeight_), float64(p.worldWidth_), float64(p.worldHeight_))
 	if proj.Camera != nil && proj.Camera.On != "" {
 		p.Camera.On(proj.Camera.On)
 	}
@@ -667,7 +666,7 @@ func (p *Game) currentTPS() float64 {
 func (p *Game) Draw(screen *ebiten.Image) {
 	dc := drawContext{Image: p.world}
 	p.onDraw(dc)
-	p.Camera.Render(dc.Image, screen)
+	p.Camera.render(dc.Image, screen)
 }
 
 type clicker interface {
@@ -809,6 +808,7 @@ func (p *Game) worldSize_() (int, int) {
 	}
 	return p.worldWidth_, p.worldHeight_
 }
+
 func (p *Game) doWorldSize() {
 	if p.worldWidth_ == 0 {
 		c := p.costumes[p.currentCostumeIndex]
@@ -1086,7 +1086,7 @@ func (p *Game) SceneIndex() int {
 //   StartScene(spx.Prev)
 func (p *Game) StartScene(scene interface{}, wait ...bool) {
 	if p.goSetCostume(scene) {
-		p.windowWidth_ = 0
+		p.windowWidth_ = 0 // TODO: need review
 		p.doWhenSceneStart(p.getCostumeName(), wait != nil && wait[0])
 	}
 }

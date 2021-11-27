@@ -1,7 +1,8 @@
 var (
-	Monkey    Monkey
-	Crocodile Crocodile
+	Monkey    *Monkey
+	Crocodile *Crocodile
 	chomp     Sound
 	clap      Sound
 )
-run "res", {Title: "Camera (by Go+)", Width:640, Height:480}
+
+run "res", {Title: "Camera (by Go+)", Width: 640, Height: 480}
