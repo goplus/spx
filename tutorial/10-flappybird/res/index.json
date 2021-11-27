@@ -1,0 +1,35 @@
+{
+    "costumes": [
+      {
+        "bitmapResolution": 1,
+        "name": "backdrop1",
+        "path": "img/day.png",
+        "x": 0,
+        "y": 0
+      }
+    ],
+    "currentCostumeIndex": 0,
+    "zorder": [
+      "Logo",
+      "Start",
+      "TapInfo",
+      "GameOver",
+      "Niu",
+      "Pipe",
+      "Ground",
+      {
+        "type": "stageMonitor",
+        "target": "",
+        "val": "getVar:userScore",
+        "color": 15629590,
+        "label": "得分",
+        "mode": 1,
+        "sliderMin": 0,
+        "sliderMax": 100,
+        "x": 5,
+        "y": 5,
+        "isDiscrete": true,
+        "visible": true
+      }
+    ]
+  }
