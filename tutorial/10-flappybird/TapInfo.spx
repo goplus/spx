@@ -1,0 +1,22 @@
+
+
+onStart => {
+    setXYpos 0,0
+    hide
+}
+
+onMsg "start", => {
+    show
+    wait 0.25
+    for !(keyPressed(KeySpace)  || mousePressed) {
+        wait 0.03
+    }
+    niuPlay = true
+    broadcast "tap"
+    hide
+
+}
+
+onMsg "menu", => {
+    hide
+}

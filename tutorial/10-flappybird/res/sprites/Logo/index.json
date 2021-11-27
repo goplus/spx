@@ -1,0 +1,19 @@
+{
+    "costumes": [
+      {
+        "bitmapResolution": 1,
+        "name": "Logo",
+        "path": "../../img/1.png",
+        "x": 36,
+        "y": 36
+      }
+    ],
+    "currentCostumeIndex": 0,
+    "heading": 90,
+    "isDraggable": false,
+    "rotationStyle": "normal",
+    "size": 1.2,
+    "visible": true,
+    "x": 0,
+    "y": 0
+  }
