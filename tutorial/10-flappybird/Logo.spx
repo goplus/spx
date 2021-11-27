@@ -1,0 +1,37 @@
+onStart => {
+    for {
+        if niuPlay == true {
+            return
+        }
+        if niuDie == false {
+            for i := 0; i < 10; i++ {
+                if niuPlay == false {
+                    changeYpos -0.5
+                }
+                wait 0.05
+            }
+
+            for i := 0; i < 10; i++ {
+                if niuPlay == false {
+                    changeYpos 0.5
+                }
+                wait 0.05
+            }
+        }
+
+
+    }
+}
+onMsg "menu", => {
+    setXYpos -23,55
+    gotoFront
+    show
+}
+
+onMsg "start", => {
+    hide
+}
+
+onMsg "tap", => {
+    hide
+}

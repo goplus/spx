@@ -1,0 +1,4 @@
+onStart =>{
+    setXYpos 0,-130
+    show
+}

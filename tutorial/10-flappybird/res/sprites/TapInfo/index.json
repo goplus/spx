@@ -1,0 +1,21 @@
+{
+    "costumes": [
+      {
+        "bitmapResolution": 2,
+        "faceRight": 0,
+        "name": "TapInfo",
+        "path": "../../img/tapinfo.png",
+        "x":230,
+        "y":168
+
+      }
+    ],
+    "currentCostumeIndex": 0,
+    "heading": 90,
+    "isDraggable": false,
+    "rotationStyle": "normal",
+    "size": 1.0,
+    "visible": true,
+    "x": 0,
+    "y": 0
+  }
