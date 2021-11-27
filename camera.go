@@ -36,9 +36,11 @@ func (c *Camera) On(obj interface{}) {
 			log.Println("Camera.On: sprite not found -", v)
 			return
 		}
-		obj = v
+		obj = sp
+	case *Sprite:
 	case nil:
 	case Spriter:
+		obj = spriteOf(v)
 	case specialObj:
 		if v != Mouse {
 			log.Println("Camera.On: not support -", v)
@@ -52,10 +54,10 @@ func (c *Camera) On(obj interface{}) {
 
 func (c *Camera) updateOnObj() {
 	switch v := c.on_.(type) {
-	case nil:
-	case Spriter:
-		cx, cy := spriteOf(v).getXY()
+	case *Sprite:
+		cx, cy := v.getXY()
 		c.freecamera.MoveTo(cx, cy)
+	case nil:
 	case specialObj:
 		cx := c.g.MouseX()
 		cy := c.g.MouseY()
