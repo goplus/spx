@@ -93,6 +93,8 @@ func (p *Coroutines) Abort() {
 }
 
 func (p *Coroutines) StopIf(filter func(th Thread) bool) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
 	for th := range p.suspended {
 		if filter(th) {
 			th.stopped = true
