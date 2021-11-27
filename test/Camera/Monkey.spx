@@ -7,6 +7,11 @@ onKey KeySpace, => {
 	Camera.on Monkey
 }
 
+onKey KeyEnter, => {
+	println "onKeyEnter"
+	Camera.on "Monkey"
+}
+
 onKey KeyB, => {
 	println "onKeyB"
 	step 10
