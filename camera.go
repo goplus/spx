@@ -34,7 +34,7 @@ func (c *Camera) screenToWorld(point *math32.Vector2) *math32.Vector2 {
 }
 
 func (c *Camera) On(obj interface{}) {
-	switch v := c.on_.(type) {
+	switch v := obj.(type) {
 	case string:
 		sp := c.g.findSprite(v)
 		if sp == nil {
