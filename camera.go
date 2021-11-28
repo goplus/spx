@@ -4,6 +4,7 @@ import (
 	"log"
 
 	"github.com/goplus/spx/internal/camera"
+	"github.com/goplus/spx/internal/math32"
 	"github.com/hajimehoshi/ebiten/v2"
 )
 
@@ -26,6 +27,10 @@ func (c *Camera) SetXYpos(x float64, y float64) {
 func (c *Camera) ChangeXYpos(x float64, y float64) {
 	c.on_ = nil
 	c.freecamera.Move(x, y)
+}
+
+func (c *Camera) screenToWorld(point *math32.Vector2) *math32.Vector2 {
+	return c.freecamera.ScreenToWorld(point)
 }
 
 func (c *Camera) On(obj interface{}) {

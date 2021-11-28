@@ -201,8 +201,9 @@ func (p *Sprite) hit(hc hitContext) (hr hitResult, ok bool) {
 		return
 	}
 
-	pt = hc.Pos.Sub(pt)
-	_, _, _, a := sp.Image().At(pt.X, pt.Y).RGBA()
+	pos := p.g.Camera.screenToWorld(math32.NewVector2(float64(hc.Pos.X), float64(hc.Pos.Y)))
+	ptv := pos.Sub(math32.NewVector2(float64(pt.X), float64(pt.Y)))
+	_, _, _, a := sp.Image().At(int(ptv.X), int(ptv.Y)).RGBA()
 	if a > 0 {
 		return hitResult{Target: p}, true
 	}
