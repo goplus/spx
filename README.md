@@ -25,6 +25,7 @@ How to run games powered by Go+ spx engine?
 
 * [HelloSpx](https://github.com/xushiwei/HelloSpx)
 * [AircraftWar](https://github.com/goplus/AircraftWar)
+* [FlappyBird](https://github.com/goplus/FlappyBird)
 * [BetaGo](https://github.com/xushiwei/BetaGo)
 * [Gobang](https://github.com/xushiwei/Gobang)
 * [Dinosaur](https://github.com/xushiwei/Dinosaur)
