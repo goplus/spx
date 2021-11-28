@@ -35,7 +35,7 @@ func (cam *FreeCamera) init(viewPort *math32.Vector2, worldSize *math32.Vector2)
 	cam.position = math32.NewVector2(0, 0)
 	cam.zoom = math32.NewVector2(1, 1)
 	cam.rotation = 0
-
+	cam.updateMatrix()
 	return
 }
 

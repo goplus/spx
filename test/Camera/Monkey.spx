@@ -1,36 +1,43 @@
-var (
-	movnum int
-)
 onClick => {
 	animate "clap"
 }
 
 onKey KeySpace, => {
-	println width, height
-	animate "think"
+	println "onKeySpace"
+	Camera.on Monkey
 }
 
-onKey KeyC, => {
-	turn 45
+onKey KeyEnter, => {
+	println "onKeyEnter"
+	Camera.on "Monkey"
+}
+
+onKey KeyB, => {
+	println "onKeyB"
+	step 10
 }
 
 onKey KeyE, => {
-	step 5
-	println distanceStepTo("Crocodile")
-}
-onKey KeyF, => {
-	step 5, "animstep"
-	println distanceStepTo("Crocodile")
-}
-onKey KeyG, => {
-	step -5, "slowstep"
-	println distanceStepTo("Crocodile")
+	println "onKeyE"
+	Camera.setXYpos 0, 0
 }
 
-onMoving mi => {
-	Game.CameraMove mi.Dx(), mi.Dy()
+onKey KeyUp, => {
+	Camera.changeXYpos 0, 5
 }
 
-onTurning ti=> {
-	Crocodile.SetHeading ti.newDir
+onKey KeyDown, => {
+	Camera.changeXYpos 0, -5
+}
+
+onKey KeyLeft, => {
+	Camera.changeXYpos -5, 0
+}
+
+onKey KeyRight, => {
+	Camera.changeXYpos 5, 0
+}
+
+onTurning ti => {
+	Crocodile.setHeading ti.newDir
 }
