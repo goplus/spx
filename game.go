@@ -17,6 +17,7 @@ import (
 
 	"github.com/goplus/spx/internal/camera"
 	"github.com/goplus/spx/internal/coroutine"
+	"github.com/goplus/spx/internal/gdi"
 	"github.com/goplus/spx/internal/math32"
 	"github.com/hajimehoshi/ebiten/v2"
 
@@ -94,7 +95,7 @@ type Gamer interface {
 
 func (p *Game) getSharedImgs() *sharedImages {
 	if p.shared == nil {
-		p.shared = &sharedImages{imgs: make(map[string]*spxImage)}
+		p.shared = &sharedImages{imgs: make(map[string]*gdi.SpxImage)}
 	}
 	return p.shared
 }
@@ -1046,7 +1047,7 @@ func (p *Game) drawBackground(dc drawContext) {
 		scale := 1.0 / float64(c.bitmapResolution)
 		options.GeoM.Scale(scale, scale)
 	}
-	dc.DrawImage(img, options)
+	dc.DrawImage(img.EbiImg(), options)
 }
 
 func (p *Game) onDraw(dc drawContext) {

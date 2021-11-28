@@ -677,6 +677,7 @@ func (p *Sprite) doMoveToForAnim(x, y float64, ani *anim.Anim) {
 		p.g.movePen(p, x, y)
 	}
 	p.x, p.y = x, y
+	p.getDrawInfo().updateMatrix()
 }
 
 func (p *Sprite) goMoveForward(step float64) {
@@ -922,6 +923,7 @@ func (p *Sprite) setDirection(dir float64, change bool) bool {
 		p.doWhenTurning(p, &TurningInfo{NewDir: dir, OldDir: p.direction, Obj: p})
 	}
 	p.direction = dir
+	p.getDrawInfo().updateMatrix()
 	return true
 }
 
@@ -949,6 +951,7 @@ func (p *Sprite) SetSize(size float64) {
 		log.Println("SetSize", p.name, size)
 	}
 	p.scale = size
+	p.getDrawInfo().updateMatrix()
 }
 
 func (p *Sprite) ChangeSize(delta float64) {
@@ -956,6 +959,7 @@ func (p *Sprite) ChangeSize(delta float64) {
 		log.Println("ChangeSize", p.name, delta)
 	}
 	p.scale += delta
+	p.getDrawInfo().updateMatrix()
 }
 
 // -----------------------------------------------------------------------------
@@ -1258,7 +1262,7 @@ func (p *Sprite) GetRotatedRect() *math32.RotatedRect {
 
 func (p *Sprite) GetPixel(x, y float64) color.Color {
 	c2 := p.costumes[p.currentCostumeIndex]
-	img, cx, cy := c2.needImageRGBA(p.g.fs)
+	img, cx, cy := c2.needImage(p.g.fs)
 	geo := p.getDrawInfo().getPixelGeo(cx, cy)
 	color1, p1 := p.getDrawInfo().getPixel(math32.NewVector2(x, y), img, geo)
 	if debugInstr {

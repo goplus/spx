@@ -14,6 +14,7 @@ import (
 	"github.com/pkg/errors"
 
 	spxfs "github.com/goplus/spx/fs"
+	"github.com/goplus/spx/internal/gdi"
 )
 
 func toRadian(dir float64) float64 {
@@ -36,11 +37,6 @@ const (
 	Next switchAction = 1
 )
 
-type spxImage struct {
-	ebiImg *ebiten.Image
-	img    *image.RGBA
-}
-
 // -------------------------------------------------------------------------------------
 
 type imagePoint struct {
@@ -48,14 +44,14 @@ type imagePoint struct {
 }
 
 type imageLoader interface {
-	load(fs spxfs.Dir, pt *imagePoint) (*spxImage, error)
+	load(fs spxfs.Dir, pt *imagePoint) (*gdi.SpxImage, error)
 }
 
 // -------------------------------------------------------------------------------------
 
 type imageLoaderByPath string
 
-func (path imageLoaderByPath) load(fs spxfs.Dir, pt *imagePoint) (*spxImage, error) {
+func (path imageLoaderByPath) load(fs spxfs.Dir, pt *imagePoint) (*gdi.SpxImage, error) {
 	f, err := fs.Open(string(path))
 	if err != nil {
 		return nil, errors.Wrapf(err, "imageLoader: open file `%s` failed", path)
@@ -71,18 +67,14 @@ func (path imageLoaderByPath) load(fs spxfs.Dir, pt *imagePoint) (*spxImage, err
 	draw.Draw(imgrgba, imgrgba.Bounds(), img, img.Bounds().Min, draw.Src)
 	ebiImg := ebiten.NewImageFromImage(img)
 
-	spximg := &spxImage{
-		ebiImg: ebiImg,
-		img:    imgrgba,
-	}
-
+	spximg := gdi.NewSpxImage(ebiImg, imgrgba)
 	return spximg, nil
 }
 
 // -------------------------------------------------------------------------------------
 
 type delayloadImage struct {
-	cache  *spxImage
+	cache  *gdi.SpxImage
 	pt     imagePoint
 	loader imageLoader
 }
@@ -97,7 +89,7 @@ func (p *delayloadImage) ensure(fs spxfs.Dir) {
 }
 
 type costumeSetImage struct {
-	cache  *spxImage
+	cache  *gdi.SpxImage
 	loader imageLoader
 	width  int
 	nx     int
@@ -109,12 +101,12 @@ func (p *costumeSetImage) ensure(fs spxfs.Dir) {
 		if p.cache, err = p.loader.load(fs, nil); err != nil {
 			panic(err)
 		}
-		p.width = p.cache.ebiImg.Bounds().Dx() / p.nx
+		p.width = p.cache.Bounds().Dx() / p.nx
 	}
 }
 
 type sharedImages struct {
-	imgs map[string]*spxImage
+	imgs map[string]*gdi.SpxImage
 }
 
 type sharedImage struct {
@@ -123,7 +115,7 @@ type sharedImage struct {
 	rc     costumeSetRect
 }
 
-func (p *sharedImage) load(fs spxfs.Dir, pt *imagePoint) (ret *spxImage, err error) {
+func (p *sharedImage) load(fs spxfs.Dir, pt *imagePoint) (ret *gdi.SpxImage, err error) {
 	path := p.path
 	shared, ok := p.shared.imgs[path]
 	if !ok {
@@ -140,14 +132,8 @@ func (p *sharedImage) load(fs spxfs.Dir, pt *imagePoint) (ret *spxImage, err err
 		pt.x, pt.y = rc.W/2, rc.H/2
 	}
 
-	if sub := shared.ebiImg.SubImage(image.Rectangle{Min: min, Max: max}); sub != nil {
-		originSub := shared.img.SubImage(image.Rectangle{Min: min, Max: max})
-		spximg := &spxImage{
-			ebiImg: sub.(*ebiten.Image),
-			img:    originSub.(*image.RGBA),
-		}
-
-		return spximg, nil
+	if sub := shared.SubImage(image.Rectangle{Min: min, Max: max}); sub != nil {
+		return sub, nil
 	}
 	panic("disposed image")
 }
@@ -159,23 +145,18 @@ type imageLoaderByCostumeSet struct {
 	index      int
 }
 
-func (p *imageLoaderByCostumeSet) load(fs spxfs.Dir, pt *imagePoint) (*spxImage, error) {
+func (p *imageLoaderByCostumeSet) load(fs spxfs.Dir, pt *imagePoint) (*gdi.SpxImage, error) {
 	costumeSet := p.costumeSet
 	if costumeSet.cache == nil {
 		p.costumeSet.ensure(fs)
 	}
 	cache, width := costumeSet.cache, costumeSet.width
-	bounds := cache.ebiImg.Bounds()
+	bounds := cache.Bounds()
 	min := image.Point{X: bounds.Min.X + width*p.index, Y: bounds.Min.Y}
 	max := image.Point{X: min.X + width, Y: bounds.Max.Y}
 	pt.x, pt.y = float64(width>>1), float64(bounds.Dy()>>1)
-	if img := cache.ebiImg.SubImage(image.Rectangle{Min: min, Max: max}); img != nil {
-		originImg := cache.img.SubImage(image.Rectangle{Min: min, Max: max})
-		spximg := &spxImage{
-			ebiImg: img.(*ebiten.Image),
-			img:    originImg.(*image.RGBA),
-		}
-		return spximg, nil
+	if img := cache.SubImage(image.Rectangle{Min: min, Max: max}); img != nil {
+		return img, nil
 	}
 	panic("disposed image")
 }
@@ -212,17 +193,11 @@ func newCostume(base string, c *costumeConfig) *costume {
 	}
 }
 
-func (p *costume) needImage(fs spxfs.Dir) (*ebiten.Image, float64, float64) {
+func (p *costume) needImage(fs spxfs.Dir) (*gdi.SpxImage, float64, float64) {
 	if p.img.cache == nil {
 		p.img.ensure(fs)
 	}
-	return p.img.cache.ebiImg, p.img.pt.x, p.img.pt.y
-}
-func (p *costume) needImageRGBA(fs spxfs.Dir) (*image.RGBA, float64, float64) {
-	if p.img.cache == nil {
-		p.img.ensure(fs)
-	}
-	return p.img.cache.img, p.img.pt.x, p.img.pt.y
+	return p.img.cache, p.img.pt.x, p.img.pt.y
 }
 
 // -------------------------------------------------------------------------------------

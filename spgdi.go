@@ -6,6 +6,7 @@ import (
 	"log"
 	"reflect"
 
+	"github.com/goplus/spx/internal/gdi"
 	"github.com/goplus/spx/internal/math32"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -35,8 +36,8 @@ type Shape interface {
 // -------------------------------------------------------------------------------------
 
 type spriteDrawInfo struct {
-	sprite *Sprite
-
+	sprite  *Sprite
+	geo     ebiten.GeoM
 	visible bool
 }
 
@@ -52,8 +53,9 @@ func (p *spriteDrawInfo) getPixelGeo(cx, cy float64) *ebiten.GeoM {
 
 	return geo
 }
-func (p *spriteDrawInfo) getPixel(pos *math32.Vector2, img *image.RGBA, geo *ebiten.GeoM) (color.Color, *math32.Vector2) {
+func (p *spriteDrawInfo) getPixel(pos *math32.Vector2, gdiImg *gdi.SpxImage, geo *ebiten.GeoM) (color.Color, *math32.Vector2) {
 
+	img := gdiImg.OriImg()
 	pos2 := math32.NewVector2(pos.X-p.sprite.x, pos.Y-p.sprite.y)
 	x, y := geo.Apply(pos2.X, pos2.Y)
 	pixelpos := math32.NewVector2(x, y)
@@ -73,13 +75,10 @@ func (p *spriteDrawInfo) draw(dc drawContext, ctx *Sprite) {
 	p.doDrawOn(dc, ctx.g.fs)
 }
 
-func (p *spriteDrawInfo) doDrawOn(dc drawContext, fs spxfs.Dir) {
-	if !p.visible {
-		return
-	}
+func (p *spriteDrawInfo) updateMatrix() {
 	c := p.sprite.costumes[p.sprite.currentCostumeIndex]
 
-	img, centerX, centerY := c.needImage(fs)
+	img, centerX, centerY := c.needImage(p.sprite.g.fs)
 	rect := image.Rectangle{}
 	rect.Min.X = 0
 	rect.Min.Y = 0
@@ -87,9 +86,6 @@ func (p *spriteDrawInfo) doDrawOn(dc drawContext, fs spxfs.Dir) {
 
 	scale := p.sprite.scale / float64(c.bitmapResolution)
 	worldW, wolrdH := p.sprite.g.worldSize_()
-
-	op := new(ebiten.DrawImageOptions)
-	op.Filter = ebiten.FilterLinear
 
 	geo := ebiten.GeoM{}
 	geo.Reset()
@@ -103,10 +99,24 @@ func (p *spriteDrawInfo) doDrawOn(dc drawContext, fs spxfs.Dir) {
 	geo2 := geo
 	geo2.Scale(1.0, -1.0)
 	p.sprite.rRect = math32.ApplyGeoForRotatedRect(rect, &geo2)
+	geo.Translate(float64(worldW>>1), float64(wolrdH>>1))
+	p.geo = geo
+}
 
-	op.GeoM = geo
-	op.GeoM.Translate(float64(worldW>>1), float64(wolrdH>>1))
-	dc.DrawImage(img, op)
+func (p *spriteDrawInfo) doDrawOn(dc drawContext, fs spxfs.Dir) {
+	if !p.visible {
+		return
+	}
+
+	c := p.sprite.costumes[p.sprite.currentCostumeIndex]
+	img, _, _ := c.needImage(fs)
+
+	p.updateMatrix()
+
+	op := new(ebiten.DrawImageOptions)
+	op.Filter = ebiten.FilterLinear
+	op.GeoM = p.geo
+	dc.DrawImage(img.EbiImg(), op)
 }
 
 func (p *Sprite) getDrawInfo() *spriteDrawInfo {
@@ -127,7 +137,7 @@ func (p *Sprite) touchPoint(x, y float64) bool {
 		return false
 	}
 	c := p.costumes[p.currentCostumeIndex]
-	img, cx, cy := c.needImageRGBA(p.g.fs)
+	img, cx, cy := c.needImage(p.g.fs)
 	geo := p.getDrawInfo().getPixelGeo(cx, cy)
 
 	pixel, _ := p.getDrawInfo().getPixel(pos, img, geo)
@@ -158,7 +168,7 @@ func (p *Sprite) touchRotatedRect(dstRect *math32.RotatedRect) bool {
 			currBoundRect.String(), dstRectBoundRect.String(), boundRect.String())
 	}
 	c := p.costumes[p.currentCostumeIndex]
-	img, cx, cy := c.needImageRGBA(p.g.fs)
+	img, cx, cy := c.needImage(p.g.fs)
 	geo := p.getDrawInfo().getPixelGeo(cx, cy)
 
 	//check boun rect pixel
@@ -197,11 +207,11 @@ func (p *Sprite) touchingSprite(dst *Sprite) bool {
 	}
 
 	c := p.costumes[p.currentCostumeIndex]
-	pimg, cx, cy := c.needImageRGBA(p.g.fs)
+	pimg, cx, cy := c.needImage(p.g.fs)
 	geo := p.getDrawInfo().getPixelGeo(cx, cy)
 
 	c2 := dst.costumes[dst.currentCostumeIndex]
-	dstimg, cx2, cy2 := c2.needImageRGBA(p.g.fs)
+	dstimg, cx2, cy2 := c2.needImage(p.g.fs)
 	geo2 := dst.getDrawInfo().getPixelGeo(cx2, cy2)
 	//check boun rect pixel
 	for x := boundRect.X; x < boundRect.Width+boundRect.X; x++ {
@@ -266,7 +276,7 @@ func (p *Sprite) hit(hc hitContext) (hr hitResult, ok bool) {
 		return
 	}
 	c2 := p.costumes[p.currentCostumeIndex]
-	img, cx, cy := c2.needImageRGBA(p.g.fs)
+	img, cx, cy := c2.needImage(p.g.fs)
 	geo := p.getDrawInfo().getPixelGeo(cx, cy)
 	color1, pos := p.getDrawInfo().getPixel(pos, img, geo)
 	if debugInstr {
