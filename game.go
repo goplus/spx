@@ -93,7 +93,7 @@ type Gamer interface {
 
 func (p *Game) getSharedImgs() *sharedImages {
 	if p.shared == nil {
-		p.shared = &sharedImages{imgs: make(map[string]*ebiten.Image)}
+		p.shared = &sharedImages{imgs: make(map[string]*spxImage)}
 	}
 	return p.shared
 }

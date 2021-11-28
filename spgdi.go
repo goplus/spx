@@ -254,12 +254,8 @@ func (p *Sprite) hit(hc hitContext) (hr hitResult, ok bool) {
 	if rRect == nil {
 		return
 	}
-	worldW, wolrdH := p.g.worldSize_()
-	pos := &math32.Vector2{
-		X: float64(hc.Pos.X) - float64(worldW)/2.0,
-		Y: float64(hc.Pos.Y) - float64(wolrdH)/2.0,
-	}
-	pos.Y = -pos.Y
+
+	pos := p.g.Camera.screenToWorld(math32.NewVector2(float64(hc.Pos.X), float64(hc.Pos.Y)))
 	if !rRect.Contains(pos) {
 		return
 	}

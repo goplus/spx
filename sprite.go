@@ -1079,7 +1079,7 @@ func (p *Sprite) checkTouchingScreen(where int) (touching int) {
 		return
 	}
 	plist := rect.Points()
-	w, h := p.g.windowSize_()
+	w, h := p.g.worldSize_()
 
 	edge := 2.0
 

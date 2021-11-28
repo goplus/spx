@@ -36,6 +36,11 @@ const (
 	Next switchAction = 1
 )
 
+type spxImage struct {
+	ebiImg *ebiten.Image
+	img    *image.RGBA
+}
+
 // -------------------------------------------------------------------------------------
 
 type imagePoint struct {
@@ -43,71 +48,73 @@ type imagePoint struct {
 }
 
 type imageLoader interface {
-	load(fs spxfs.Dir, pt *imagePoint) (*ebiten.Image, *image.RGBA, error)
+	load(fs spxfs.Dir, pt *imagePoint) (*spxImage, error)
 }
 
 // -------------------------------------------------------------------------------------
 
 type imageLoaderByPath string
 
-func (path imageLoaderByPath) load(fs spxfs.Dir, pt *imagePoint) (*ebiten.Image, *image.RGBA, error) {
+func (path imageLoaderByPath) load(fs spxfs.Dir, pt *imagePoint) (*spxImage, error) {
 	f, err := fs.Open(string(path))
 	if err != nil {
-		return nil, nil, errors.Wrapf(err, "imageLoader: open file `%s` failed", path)
+		return nil, errors.Wrapf(err, "imageLoader: open file `%s` failed", path)
 	}
 	defer f.Close()
 
 	img, _, err := image.Decode(f)
 	if err != nil {
-		return nil, nil, errors.Wrapf(err, "imageLoader: file `%s` is not an image", path)
+		return nil, errors.Wrapf(err, "imageLoader: file `%s` is not an image", path)
 	}
 
 	imgrgba := image.NewRGBA(image.Rect(0, 0, img.Bounds().Dx(), img.Bounds().Dy()))
 	draw.Draw(imgrgba, imgrgba.Bounds(), img, img.Bounds().Min, draw.Src)
+	ebiImg := ebiten.NewImageFromImage(img)
 
-	ret := ebiten.NewImageFromImage(img)
-	return ret, imgrgba, nil
+	spximg := &spxImage{
+		ebiImg: ebiImg,
+		img:    imgrgba,
+	}
+
+	return spximg, nil
 }
 
 // -------------------------------------------------------------------------------------
 
 type delayloadImage struct {
-	cache       *ebiten.Image
-	originCache *image.RGBA
-	pt          imagePoint
-	loader      imageLoader
+	cache  *spxImage
+	pt     imagePoint
+	loader imageLoader
 }
 
 func (p *delayloadImage) ensure(fs spxfs.Dir) {
 	if p.cache == nil {
 		var err error
-		if p.cache, p.originCache, err = p.loader.load(fs, &p.pt); err != nil {
+		if p.cache, err = p.loader.load(fs, &p.pt); err != nil {
 			panic(err)
 		}
 	}
 }
 
 type costumeSetImage struct {
-	cache     *ebiten.Image
-	cacheRGBA *image.RGBA
-	loader    imageLoader
-	width     int
-	nx        int
+	cache  *spxImage
+	loader imageLoader
+	width  int
+	nx     int
 }
 
 func (p *costumeSetImage) ensure(fs spxfs.Dir) {
 	if p.cache == nil {
 		var err error
-		if p.cache, p.cacheRGBA, err = p.loader.load(fs, nil); err != nil {
+		if p.cache, err = p.loader.load(fs, nil); err != nil {
 			panic(err)
 		}
-		p.width = p.cache.Bounds().Dx() / p.nx
+		p.width = p.cache.ebiImg.Bounds().Dx() / p.nx
 	}
 }
 
 type sharedImages struct {
-	imgs       map[string]*ebiten.Image
-	originImgs map[string]*image.RGBA
+	imgs map[string]*spxImage
 }
 
 type sharedImage struct {
@@ -116,17 +123,15 @@ type sharedImage struct {
 	rc     costumeSetRect
 }
 
-func (p *sharedImage) load(fs spxfs.Dir, pt *imagePoint) (ret *ebiten.Image, retRgba *image.RGBA, err error) {
+func (p *sharedImage) load(fs spxfs.Dir, pt *imagePoint) (ret *spxImage, err error) {
 	path := p.path
-	originImg, _ := p.shared.originImgs[path]
 	shared, ok := p.shared.imgs[path]
 	if !ok {
 		var tmp imagePoint
-		if shared, originImg, err = imageLoaderByPath(path).load(fs, &tmp); err != nil {
+		if shared, err = imageLoaderByPath(path).load(fs, &tmp); err != nil {
 			return
 		}
 		p.shared.imgs[path] = shared
-		p.shared.originImgs[path] = originImg
 	}
 	rc := p.rc
 	min := image.Point{X: int(rc.X), Y: int(rc.Y)}
@@ -135,9 +140,14 @@ func (p *sharedImage) load(fs spxfs.Dir, pt *imagePoint) (ret *ebiten.Image, ret
 		pt.x, pt.y = rc.W/2, rc.H/2
 	}
 
-	if sub := shared.SubImage(image.Rectangle{Min: min, Max: max}); sub != nil {
-		originSub := originImg.SubImage(image.Rectangle{Min: min, Max: max})
-		return sub.(*ebiten.Image), originSub.(*image.RGBA), nil
+	if sub := shared.ebiImg.SubImage(image.Rectangle{Min: min, Max: max}); sub != nil {
+		originSub := shared.img.SubImage(image.Rectangle{Min: min, Max: max})
+		spximg := &spxImage{
+			ebiImg: sub.(*ebiten.Image),
+			img:    originSub.(*image.RGBA),
+		}
+
+		return spximg, nil
 	}
 	panic("disposed image")
 }
@@ -149,19 +159,23 @@ type imageLoaderByCostumeSet struct {
 	index      int
 }
 
-func (p *imageLoaderByCostumeSet) load(fs spxfs.Dir, pt *imagePoint) (*ebiten.Image, *image.RGBA, error) {
+func (p *imageLoaderByCostumeSet) load(fs spxfs.Dir, pt *imagePoint) (*spxImage, error) {
 	costumeSet := p.costumeSet
 	if costumeSet.cache == nil {
 		p.costumeSet.ensure(fs)
 	}
-	cache, cacheRGBA, width := costumeSet.cache, costumeSet.cacheRGBA, costumeSet.width
-	bounds := cache.Bounds()
+	cache, width := costumeSet.cache, costumeSet.width
+	bounds := cache.ebiImg.Bounds()
 	min := image.Point{X: bounds.Min.X + width*p.index, Y: bounds.Min.Y}
 	max := image.Point{X: min.X + width, Y: bounds.Max.Y}
 	pt.x, pt.y = float64(width>>1), float64(bounds.Dy()>>1)
-	if img := cache.SubImage(image.Rectangle{Min: min, Max: max}); img != nil {
-		originImg := cacheRGBA.SubImage(image.Rectangle{Min: min, Max: max})
-		return img.(*ebiten.Image), originImg.(*image.RGBA), nil
+	if img := cache.ebiImg.SubImage(image.Rectangle{Min: min, Max: max}); img != nil {
+		originImg := cache.img.SubImage(image.Rectangle{Min: min, Max: max})
+		spximg := &spxImage{
+			ebiImg: img.(*ebiten.Image),
+			img:    originImg.(*image.RGBA),
+		}
+		return spximg, nil
 	}
 	panic("disposed image")
 }
@@ -202,13 +216,13 @@ func (p *costume) needImage(fs spxfs.Dir) (*ebiten.Image, float64, float64) {
 	if p.img.cache == nil {
 		p.img.ensure(fs)
 	}
-	return p.img.cache, p.img.pt.x, p.img.pt.y
+	return p.img.cache.ebiImg, p.img.pt.x, p.img.pt.y
 }
 func (p *costume) needImageRGBA(fs spxfs.Dir) (*image.RGBA, float64, float64) {
-	if p.img.originCache == nil {
+	if p.img.cache == nil {
 		p.img.ensure(fs)
 	}
-	return p.img.originCache, p.img.pt.x, p.img.pt.y
+	return p.img.cache.img, p.img.pt.x, p.img.pt.y
 }
 
 // -------------------------------------------------------------------------------------
