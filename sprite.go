@@ -1259,10 +1259,10 @@ func (p *Sprite) GetRotatedRect() *math32.RotatedRect {
 func (p *Sprite) GetPixel(x, y float64) color.Color {
 	c2 := p.costumes[p.currentCostumeIndex]
 	img, cx, cy := c2.needImageRGBA(p.g.fs)
-	geo := p.getDrawInfo().getGeo()
-	color1, p1 := p.getDrawInfo().getPixel(math32.NewVector2(x, y), img, geo, cx, cy)
+	geo := p.getDrawInfo().getPixelGeo(cx, cy)
+	color1, p1 := p.getDrawInfo().getPixel(math32.NewVector2(x, y), img, geo)
 	if debugInstr {
-		log.Printf("<<<<getPixel x, y(%f,%F) p1(%v) color1(%v)  ", x, y, p1, color1)
+		log.Printf("<<<<getPixel x, y(%f,%F) p1(%v) color1(%v) geo(%v)  ", x, y, p1, color1, geo)
 	}
 	return color1
 }

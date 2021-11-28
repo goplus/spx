@@ -40,22 +40,22 @@ type spriteDrawInfo struct {
 	visible bool
 }
 
-func (p *spriteDrawInfo) getGeo() *ebiten.GeoM {
+func (p *spriteDrawInfo) getPixelGeo(cx, cy float64) *ebiten.GeoM {
 	c := p.sprite.costumes[p.sprite.currentCostumeIndex]
 	scale := p.sprite.scale / float64(c.bitmapResolution)
 	direction := p.sprite.direction + c.faceRight
 	geo := &ebiten.GeoM{}
-	geo.Scale(scale, scale)
+	geo.Scale(1.0/scale, 1.0/scale)
 	geo.Rotate(toRadian(direction - 90))
 	geo.Scale(1.0, -1.0)
+	geo.Translate(cx, cy)
+
 	return geo
 }
-func (p *spriteDrawInfo) getPixel(pos *math32.Vector2, img *image.RGBA, geo *ebiten.GeoM, cx float64, cy float64) (color.Color, *math32.Vector2) {
+func (p *spriteDrawInfo) getPixel(pos *math32.Vector2, img *image.RGBA, geo *ebiten.GeoM) (color.Color, *math32.Vector2) {
 
 	pos2 := math32.NewVector2(pos.X-p.sprite.x, pos.Y-p.sprite.y)
 	x, y := geo.Apply(pos2.X, pos2.Y)
-	x = x + cx
-	y = y + cy
 	pixelpos := math32.NewVector2(x, y)
 
 	if x < 0 || y < 0 || x >= float64(img.Bounds().Size().X) || y >= float64(img.Bounds().Size().Y) {
@@ -126,11 +126,11 @@ func (p *Sprite) touchPoint(x, y float64) bool {
 	if !ret {
 		return false
 	}
-	geo := p.getDrawInfo().getGeo()
-
 	c := p.costumes[p.currentCostumeIndex]
 	img, cx, cy := c.needImageRGBA(p.g.fs)
-	pixel, _ := p.getDrawInfo().getPixel(pos, img, geo, cx, cy)
+	geo := p.getDrawInfo().getPixelGeo(cx, cy)
+
+	pixel, _ := p.getDrawInfo().getPixel(pos, img, geo)
 	if reflect.DeepEqual(pixel, color.Transparent) {
 		return false
 	}
@@ -157,16 +157,16 @@ func (p *Sprite) touchRotatedRect(dstRect *math32.RotatedRect) bool {
 		log.Printf("touchRotatedRect  currBoundRect(%s) dstRectBoundRect(%s) boundRect(%s)",
 			currBoundRect.String(), dstRectBoundRect.String(), boundRect.String())
 	}
-
-	geo := p.getDrawInfo().getGeo()
-
 	c := p.costumes[p.currentCostumeIndex]
 	img, cx, cy := c.needImageRGBA(p.g.fs)
+	geo := p.getDrawInfo().getPixelGeo(cx, cy)
+
 	//check boun rect pixel
 	for x := boundRect.X; x < boundRect.Width+boundRect.X; x++ {
 		for y := boundRect.Y; y < boundRect.Height+boundRect.Y; y++ {
-			color1, _ := p.getDrawInfo().getPixel(math32.NewVector2(x, y), img, geo, cx, cy)
-			if !reflect.DeepEqual(color1, color.Transparent) {
+			color1, _ := p.getDrawInfo().getPixel(math32.NewVector2(x, y), img, geo)
+			_, _, _, a := color1.RGBA()
+			if a != 0 {
 				return true
 			}
 		}
@@ -192,23 +192,23 @@ func (p *Sprite) touchingSprite(dst *Sprite) bool {
 	dstRectBoundRect := dstRect.BoundingRect()
 	boundRect := currBoundRect.Intersect(dstRectBoundRect)
 	if debugInstr {
-		log.Printf("touchingSprite  currBoundRect(%s) dstRectBoundRect(%s) boundRect(%s)",
-			currBoundRect.String(), dstRectBoundRect.String(), boundRect.String())
+		log.Printf("touchingSprite  curr(%f,%f) currRect(%s) currBoundRect(%s)  dst(%f,%f) dstRect(%s) dstRectBoundRect(%s) boundRect(%s)",
+			p.x, p.y, currRect, currBoundRect, dst.x, dst.y, dstRect, dstRectBoundRect, boundRect)
 	}
 
 	c := p.costumes[p.currentCostumeIndex]
 	pimg, cx, cy := c.needImageRGBA(p.g.fs)
-	geo := p.getDrawInfo().getGeo()
+	geo := p.getDrawInfo().getPixelGeo(cx, cy)
 
 	c2 := dst.costumes[dst.currentCostumeIndex]
 	dstimg, cx2, cy2 := c2.needImageRGBA(p.g.fs)
-	geo2 := dst.getDrawInfo().getGeo()
+	geo2 := dst.getDrawInfo().getPixelGeo(cx2, cy2)
 	//check boun rect pixel
 	for x := boundRect.X; x < boundRect.Width+boundRect.X; x++ {
 		for y := boundRect.Y; y < boundRect.Height+boundRect.Y; y++ {
 			pos := math32.NewVector2(x, y)
-			color1, _ := p.getDrawInfo().getPixel(pos, pimg, geo, cx, cy)
-			color2, _ := dst.getDrawInfo().getPixel(pos, dstimg, geo2, cx2, cy2)
+			color1, _ := p.getDrawInfo().getPixel(pos, pimg, geo)
+			color2, _ := dst.getDrawInfo().getPixel(pos, dstimg, geo2)
 			_, _, _, a1 := color1.RGBA()
 			_, _, _, a2 := color2.RGBA()
 			if a1 != 0 && a2 != 0 {
@@ -256,13 +256,19 @@ func (p *Sprite) hit(hc hitContext) (hr hitResult, ok bool) {
 	}
 
 	pos := p.g.Camera.screenToWorld(math32.NewVector2(float64(hc.Pos.X), float64(hc.Pos.Y)))
+	worldW, wolrdH := p.g.worldSize_()
+	pos = &math32.Vector2{
+		X: float64(pos.X) - float64(worldW)/2.0,
+		Y: float64(pos.Y) - float64(wolrdH)/2.0,
+	}
+	pos.Y = -pos.Y
 	if !rRect.Contains(pos) {
 		return
 	}
 	c2 := p.costumes[p.currentCostumeIndex]
 	img, cx, cy := c2.needImageRGBA(p.g.fs)
-	geo := p.getDrawInfo().getGeo()
-	color1, pos := p.getDrawInfo().getPixel(pos, img, geo, cx, cy)
+	geo := p.getDrawInfo().getPixelGeo(cx, cy)
+	color1, pos := p.getDrawInfo().getPixel(pos, img, geo)
 	if debugInstr {
 		log.Printf("hit color1(%v) p(%s)", color1, pos)
 	}

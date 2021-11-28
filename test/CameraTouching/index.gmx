@@ -1,4 +1,5 @@
 var (
+	Box  Box
 	Monkey  *Monkey
 	Crocodile  *Crocodile
 )

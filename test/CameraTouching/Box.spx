@@ -1,5 +1,4 @@
 
-
 onKey KeyUp, => {
 
 	TurnTo 0
@@ -66,10 +65,10 @@ onKey KeyB, => {
 
 
 onClick => {
-	println "Monkey-mouse", mouseX, mouseY
+	println "Box-mouse", mouseX, mouseY
 	pixel := GetPixel(mouseX, mouseY)
 	println GetRotatedRect().String()
-	println "Monkey-pixel", pixel
+	println "Box-pixel", pixel
 
 	if Touching(Mouse) {
 		println "Touching Mouse"
@@ -78,22 +77,21 @@ onClick => {
 
 
 
-onKey KeyW, => {
-	Camera.changeXYpos 0, 5
-}
-
-onKey KeyS, => {
-	Camera.changeXYpos 0, -5
-}
-
-onKey KeyA, => {
-	Camera.changeXYpos -5, 0
-}
-
-onKey KeyD, => {
-	Camera.changeXYpos 5, 0
-}
-
 onStart => {
+
+	for{
+
+		println "Box-mouse", mouseX, mouseY
+		pixel := GetPixel(mouseX, mouseY)
+		println GetRotatedRect().String()
+		println "Box-pixel", pixel
+
+		if Touching(Mouse) {
+			println "Touching Mouse"
+		}
+
+		wait 0.3
+
+	}
 
 }

@@ -1,6 +1,14 @@
 onClick => {
 	animate "clap"
 }
+onStart => {
+	for {
+		if touching("Crocodile") {
+			println "Crocodile touching"
+		}
+		wait 0.04
+	}
+}
 
 onKey KeySpace, => {
 	println "onKeySpace"
@@ -15,6 +23,10 @@ onKey KeyEnter, => {
 onKey KeyB, => {
 	println "onKeyB"
 	step 10
+}
+onKey KeyC, => {
+	println "onKeyC"
+	turn 10
 }
 
 onKey KeyE, => {

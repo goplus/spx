@@ -1,6 +1,6 @@
 {
   "costumeSet": {
-    "bitmapResolution": 1,
+    "bitmapResolution": 2,
     "faceRight": 180,
     "path": "../../../../res/monkey.png",
     "nx": 96

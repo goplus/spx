@@ -17,6 +17,7 @@ import (
 
 	"github.com/goplus/spx/internal/camera"
 	"github.com/goplus/spx/internal/coroutine"
+	"github.com/goplus/spx/internal/math32"
 	"github.com/hajimehoshi/ebiten/v2"
 
 	spxfs "github.com/goplus/spx/fs"
@@ -1125,8 +1126,10 @@ func (p *Game) getMousePos() (x, y float64) {
 
 func (p *Game) updateMousePos() {
 	x, y := ebiten.CursorPosition()
+	pos := p.g.Camera.screenToWorld(math32.NewVector2(float64(x), float64(y)))
+
 	worldW, worldH := p.worldSize_()
-	mx, my := x-(worldW>>1), (worldH>>1)-y
+	mx, my := int(pos.X)-(worldW>>1), (worldH>>1)-int(pos.Y)
 	atomic.StoreInt64(&p.gMouseX, int64(mx))
 	atomic.StoreInt64(&p.gMouseY, int64(my))
 }

@@ -21,6 +21,12 @@
       "target": "Crocodile",
       "x": 110,
       "y": 0
+    },
+    {
+      "type": "sprite",
+      "target": "Box",
+      "x": 0,
+      "y": 0
     }
   ]
 }
