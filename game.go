@@ -360,6 +360,19 @@ func (p *Game) startLoad(resource interface{}, cfg *Config) (err error) {
 	p.fs = fs
 	p.windowWidth_ = cfg.Width
 	p.windowHeight_ = cfg.Height
+
+	key := cfg.Capture
+	if key == "" {
+		key = os.Getenv("SPX_SCREENSHOT_KEY")
+	}
+
+	if key != "" {
+		err = os.Setenv("EBITEN_SCREENSHOT_KEY", cfg.Capture)
+		if err != nil {
+			return err
+		}
+	}
+
 	return
 }
 
@@ -615,6 +628,7 @@ type Config struct {
 	DontParseFlags     bool
 	Width              int
 	Height             int
+	Capture            string // iamge capture key
 }
 
 func (p *Game) runLoop(cfg *Config) (err error) {
