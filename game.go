@@ -15,7 +15,6 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/goplus/spx/internal/camera"
 	"github.com/goplus/spx/internal/coroutine"
 	"github.com/goplus/spx/internal/gdi"
 	"github.com/goplus/spx/internal/math32"
@@ -82,9 +81,7 @@ type Game struct {
 
 	sinkMgr eventSinkMgr
 
-	world      *ebiten.Image
-	camera     *camera.FreeCamera
-	cameraConf *cameraConfig
+	world *ebiten.Image
 }
 
 type Spriter = Shape
