@@ -362,14 +362,14 @@ func (p *eventSinks) Stop(kind StopKind) {
 		filter = func(th coroutine.Thread) bool {
 			return th.Obj == this && th != gco.Current()
 		}
-	case AllOtherScripts, All:
+	case AllOtherScripts:
 		filter = func(th coroutine.Thread) bool {
+			return (isSprite(th.Obj) || isGame(th.Obj)) && th != gco.Current()
+		}
+	case All:
+		gco.StopIf(func(th coroutine.Thread) bool {
 			return isSprite(th.Obj) || isGame(th.Obj)
-		}
-		if kind == AllOtherScripts {
-			break
-		}
-		gco.StopIf(filter)
+		})
 		fallthrough
 	case ThisScript:
 		gco.Abort()
