@@ -1,5 +1,3 @@
-//go:build android
-// +build android
 package util
 
 import (
