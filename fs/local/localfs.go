@@ -4,7 +4,7 @@ import (
 	"io"
 
 	"github.com/goplus/spx/fs"
-	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
+	"github.com/goplus/spx/fs/util"
 )
 
 // -------------------------------------------------------------------------------------
@@ -20,7 +20,7 @@ func Open(base string) (fs.Dir, error) {
 
 // Open opens a zipped file object.
 func (p *FS) Open(name string) (io.ReadCloser, error) {
-	f, err := ebitenutil.OpenFile(p.base + name)
+	f, err := util.OpenFile(p.base + name)
 	return f, err
 }
 
