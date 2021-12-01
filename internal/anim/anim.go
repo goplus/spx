@@ -166,8 +166,8 @@ func (this *Animation) Init(name string, framePerSecond float64, dataType int, l
 	this.Id = globalAnimId
 	this.FramePerSecond = framePerSecond
 	this.DataType = dataType
-	this.currentFrame = math.MaxInt64
-	this.preFrame = math.MinInt64
+	this.currentFrame = math.MaxInt32
+	this.preFrame = math.MinInt32
 
 	globalAnimId++
 

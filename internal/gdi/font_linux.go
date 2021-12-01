@@ -2,10 +2,8 @@ package gdi
 
 // -------------------------------------------------------------------------------------
 
-var fontFindPaths = []string{}
-
-func init() {
-	panic("TODO: init fontFindPaths")
+var fontFindPaths = []string{
+	"/system/fonts/",
 }
 
 // -------------------------------------------------------------------------------------

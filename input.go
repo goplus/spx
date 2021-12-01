@@ -139,6 +139,7 @@ type eventFirer interface {
 }
 
 type inputMgr struct {
+	touchIDs    []ebiten.TouchID
 	keyStates   map[ebiten.Key]int
 	lbtnState   int
 	keyDuration int
@@ -171,11 +172,22 @@ const (
 )
 
 func (i *inputMgr) update() {
+	i.touchIDs = ebiten.AppendTouchIDs(i.touchIDs[:0])
 	i.startFlag.Do(func() {
 		i.firer.fireEvent(&eventStart{})
 	})
 	i.updateKeyboard()
 	i.updateMouse()
+	i.updateTouch()
+
+}
+
+func (i *inputMgr) updateTouch() {
+	if len(i.touchIDs) > 0 {
+		x, y := ebiten.TouchPosition(i.touchIDs[0])
+		i.lbtnState = mouseStatePressing
+		i.firer.fireEvent(&eventLeftButtonDown{X: x, Y: y})
+	}
 }
 
 func (i *inputMgr) updateMouse() {
@@ -242,6 +254,10 @@ func isKeyPressed(key Key) bool {
 }
 
 func isMousePressed() bool {
+	touchids := ebiten.TouchIDs()
+	if len(touchids) > 0 {
+		return true
+	}
 	return ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft)
 }
 

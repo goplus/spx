@@ -1,0 +1,32 @@
+onMsg "1", => {
+	think "I come from England.", 2
+	broadcast "2"
+}
+
+onMsg "3", => {
+	think "It's mild, but it's not always pleasant.", 4
+	nextCostume
+	think "The weather's often cold in the North and windy in the East.", 5.5
+	think "It's often wet in the West and sometimes warm in the South.", 5
+	broadcast "4"
+}
+
+onMsg "5", => {
+	nextCostume
+	think "I like spring and summer.", 2
+	think "The days are long and the nights are short.", 3
+	think "The sun rises early and sets late. ", 3
+	nextCostume
+	think "I don't like autumn and winter.", 3
+	think "The days are short and the nights are long.", 4
+	think "The sun rises late and sets early.", 4
+	nextCostume
+	think "Our climate is not very good, but it's certainly interesting.", 5
+	think "It's our favourite subject of conversation.", 4
+	broadcast "6"
+}
+
+onMsg "7", => {
+	think "Bye!", 2
+	nextCostume
+}
