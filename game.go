@@ -474,6 +474,7 @@ func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
 		p.Camera.On(proj.Camera.On)
 	}
 
+	ebiten.SetWindowResizable(true)
 	ebiten.SetWindowSize(p.windowWidth_, p.windowHeight_)
 	return
 }
