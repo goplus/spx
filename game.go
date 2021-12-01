@@ -139,6 +139,18 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 		}
 		conf.FullScreen = *fullscreen
 	}
+
+	key := conf.ScreenshotKey
+	if key == "" {
+		key = os.Getenv("SPX_SCREENSHOT_KEY")
+	}
+	if key != "" {
+		err := os.Setenv("EBITEN_SCREENSHOT_KEY", conf.ScreenshotKey)
+		if err != nil {
+			panic(err)
+		}
+	}
+
 	v := reflect.ValueOf(game).Elem()
 	g := instance(v)
 	if err := g.startLoad(resource, &conf); err != nil {
@@ -361,6 +373,7 @@ func (p *Game) startLoad(resource interface{}, cfg *Config) (err error) {
 	p.fs = fs
 	p.windowWidth_ = cfg.Width
 	p.windowHeight_ = cfg.Height
+
 	return
 }
 
@@ -616,6 +629,7 @@ type Config struct {
 	DontParseFlags     bool
 	Width              int
 	Height             int
+	ScreenshotKey      string // screenshot image capture key
 }
 
 func (p *Game) runLoop(cfg *Config) (err error) {
