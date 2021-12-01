@@ -1,7 +1,8 @@
-package util
+package fsutil
 
 import (
 	"bytes"
+	"io"
 	"io/ioutil"
 	"net/http"
 )
@@ -14,7 +15,7 @@ func (f *file) Close() error {
 	return nil
 }
 
-func OpenFile(path string) (ReadSeekCloser, error) {
+func OpenFile(path string) (io.ReadSeekCloser, error) {
 	res, err := http.Get(path)
 	if err != nil {
 		return nil, err
