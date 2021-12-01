@@ -338,10 +338,11 @@ type StopKind int
 
 const (
 	_All                 StopKind = All  // stop all scripts of stage/sprites and abort this script
-	AllSprites           StopKind = -100 // stop all scripts of sprites
-	ThisSprite           StopKind = -101 // stop all scripts of this sprite
-	ThisScript           StopKind = -102 // abort this script
-	OtherScriptsInSprite StopKind = -103 // stop other scripts of this sprite
+	AllOtherScripts      StopKind = -100 // stop all other scripts
+	AllSprites           StopKind = -101 // stop all scripts of sprites
+	ThisSprite           StopKind = -102 // stop all scripts of this sprite
+	ThisScript           StopKind = -103 // abort this script
+	OtherScriptsInSprite StopKind = -104 // stop other scripts of this sprite
 )
 
 func (p *eventSinks) Stop(kind StopKind) {
@@ -360,6 +361,10 @@ func (p *eventSinks) Stop(kind StopKind) {
 		this := p.pthis
 		filter = func(th coroutine.Thread) bool {
 			return th.Obj == this && th != gco.Current()
+		}
+	case AllOtherScripts:
+		filter = func(th coroutine.Thread) bool {
+			return (isSprite(th.Obj) || isGame(th.Obj)) && th != gco.Current()
 		}
 	case All:
 		gco.StopIf(func(th coroutine.Thread) bool {

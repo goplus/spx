@@ -14,6 +14,7 @@ require (
 	github.com/srwiley/oksvg v0.0.0-20210519022825-9fc0c575d5fe
 	github.com/srwiley/rasterx v0.0.0-20210519020934-456a8d69b780
 	golang.org/x/image v0.0.0-20210628002857-a66eb6448b8d
+	golang.org/x/mobile v0.0.0-20210902104108-5d9a33257ab5
 )
 
 replace (

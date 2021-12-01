@@ -100,7 +100,7 @@ func (p *Game) getSharedImgs() *sharedImages {
 func (p *Game) reset() {
 	p.sinkMgr.reset()
 	p.input.reset()
-	p.Stop(AllSprites)
+	p.Stop(AllOtherScripts)
 	p.items = nil
 	p.shapes = make(map[string]Spriter)
 }

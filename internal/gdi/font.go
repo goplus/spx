@@ -11,7 +11,7 @@ import (
 	"sync"
 
 	"github.com/golang/freetype/truetype"
-	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
+	"github.com/goplus/spx/fs/fsutil"
 	"golang.org/x/image/font"
 	"golang.org/x/image/math/fixed"
 )
@@ -90,7 +90,7 @@ func (p *DefaultFont) findFontAtPath(
 }
 
 func (p *DefaultFont) tryFontFile(name, tryFile string, options *truetype.Options) bool {
-	fp, err := ebitenutil.OpenFile(tryFile)
+	fp, err := fsutil.OpenFile(tryFile)
 	if err != nil {
 		return false
 	}
