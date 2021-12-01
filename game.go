@@ -145,7 +145,7 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 		key = os.Getenv("SPX_SCREENSHOT_KEY")
 	}
 	if key != "" {
-		err := os.Setenv("EBITEN_SCREENSHOT_KEY", conf.ScreenshotKey)
+		err := os.Setenv("EBITEN_SCREENSHOT_KEY", key)
 		if err != nil {
 			panic(err)
 		}
@@ -831,11 +831,6 @@ func (p *Game) doWorldSize() {
 		w, h := img.Size()
 		p.worldWidth_, p.worldHeight_ = w/c.bitmapResolution, h/c.bitmapResolution
 	}
-}
-
-func (p *Game) getGdiPos(x, y float64) (int, int) {
-	worldW, worldH := p.worldSize_()
-	return int(x) + (worldW >> 1), (worldH >> 1) - int(y)
 }
 
 func (p *Game) touchingPoint(dst *Sprite, x, y float64) bool {
