@@ -1124,6 +1124,10 @@ func (p *Game) getMousePos() (x, y float64) {
 
 func (p *Game) updateMousePos() {
 	x, y := ebiten.CursorPosition()
+	touchids := ebiten.TouchIDs()
+	if len(touchids) > 0 {
+		x, y = ebiten.TouchPosition(touchids[0])
+	}
 	pos := p.g.Camera.screenToWorld(math32.NewVector2(float64(x), float64(y)))
 
 	worldW, worldH := p.worldSize_()
