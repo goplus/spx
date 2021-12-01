@@ -75,13 +75,13 @@ type Game struct {
 	stepUnit float64 //global step unit in game
 
 	// world
-	worldWidth_  int
-	worldHeight_ int
-	world        *ebiten.Image
-
+	worldWidth_      int
+	worldHeight_     int
 	gMouseX, gMouseY int64
 
 	sinkMgr eventSinkMgr
+
+	world *ebiten.Image
 }
 
 type Spriter = Shape
@@ -92,7 +92,7 @@ type Gamer interface {
 
 func (p *Game) getSharedImgs() *sharedImages {
 	if p.shared == nil {
-		p.shared = &sharedImages{imgs: make(map[string]*ebiten.Image)}
+		p.shared = &sharedImages{imgs: make(map[string]*gdi.SpxImage)}
 	}
 	return p.shared
 }
@@ -825,21 +825,21 @@ func (p *Game) getGdiPos(x, y float64) (int, int) {
 }
 
 func (p *Game) touchingPoint(dst *Sprite, x, y float64) bool {
-	sp, pt := dst.getGdiSprite()
-	sx, sy := p.getGdiPos(x, y)
-	return gdi.TouchingPoint(sp, pt, sx, sy)
+	return dst.touchPoint(x, y)
 }
 
 func (p *Game) touchingSpriteBy(dst *Sprite, name string) *Sprite {
-	sp1, pt1 := dst.getGdiSprite()
+	if dst == nil {
+		return nil
+	}
 
 	for _, item := range p.items {
 		if sp, ok := item.(*Sprite); ok && sp != dst {
 			if sp.name == name && (sp.isVisible && !sp.isDying) {
-				sp2, pt2 := sp.getGdiSprite()
-				if gdi.Touching(sp1, pt1, sp2, pt2) {
+				if sp.touchingSprite(dst) {
 					return sp
 				}
+
 			}
 		}
 	}
@@ -1044,7 +1044,7 @@ func (p *Game) drawBackground(dc drawContext) {
 		scale := 1.0 / float64(c.bitmapResolution)
 		options.GeoM.Scale(scale, scale)
 	}
-	dc.DrawImage(img, options)
+	dc.DrawImage(img.EbiImg(), options)
 }
 
 func (p *Game) onDraw(dc drawContext) {

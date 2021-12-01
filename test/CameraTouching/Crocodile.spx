@@ -1,0 +1,19 @@
+
+onStart => {
+	clone
+	step 10
+	turn 90
+}
+
+onClick => {
+	animate "sink"
+	wait 0.8
+	animate "surface"
+}
+
+onClick => {
+	println "Crocodile-mouse", mouseX, mouseY
+	pixel := GetPixel(mouseX, mouseY)
+	println GetRotatedRect().String()
+	println "Crocodile-pixel", pixel
+}

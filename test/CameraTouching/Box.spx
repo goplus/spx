@@ -1,0 +1,97 @@
+
+onKey KeyUp, => {
+
+	TurnTo 0
+	Step 10
+	println GetRotatedRect().String()
+	if Touching(EdgeTop) {
+		println "EdgeTop"
+	}
+
+}
+
+onKey KeyDown, => {
+	TurnTo 180
+	Step 10
+
+	if Touching(EdgeBottom) {
+		println "EdgeBottom"
+	}
+
+}
+
+onKey KeyLeft, => {
+	TurnTo -90
+	Step 10
+
+	if Touching(EdgeLeft) {
+		println "EdgeLeft"
+	}
+
+}
+
+onKey KeyRight, => {
+	TurnTo 90
+	Step 10
+
+
+	if Touching(EdgeRight) {
+		println "EdgeRight"
+	}
+
+}
+
+onKey KeyC, => {
+	Turn 15
+}
+
+onKey KeyE, => {
+	Step 2
+}
+
+
+onKey KeyB, => {
+
+	println GetRotatedRect().String()
+	println Crocodile.GetRotatedRect().String()
+
+	if Touching(Crocodile) {
+		println "Touch Crocodile"
+	}
+
+}
+
+
+
+
+onClick => {
+	println "Box-mouse", mouseX, mouseY
+	pixel := GetPixel(mouseX, mouseY)
+	println GetRotatedRect().String()
+	println "Box-pixel", pixel
+
+	if Touching(Mouse) {
+		println "Touching Mouse"
+	}
+}
+
+
+
+onStart => {
+
+	for{
+
+		println "Box-mouse", mouseX, mouseY
+		pixel := GetPixel(mouseX, mouseY)
+		println GetRotatedRect().String()
+		println "Box-pixel", pixel
+
+		if Touching(Mouse) {
+			println "Touching Mouse"
+		}
+
+		wait 0.3
+
+	}
+
+}
