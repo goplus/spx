@@ -174,9 +174,6 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 	if err := g.endLoad(v, conf.Index); err != nil {
 		panic(err)
 	}
-	if loader, ok := game.(interface{ OnLoaded() }); ok {
-		loader.OnLoaded()
-	}
 
 	if err := g.runLoop(&conf); err != nil {
 		panic(err)
@@ -486,8 +483,11 @@ func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
 	if proj.Camera != nil && proj.Camera.On != "" {
 		p.Camera.On(proj.Camera.On)
 	}
-
 	ebiten.SetWindowSize(p.windowWidth_, p.windowHeight_)
+
+	if loader, ok := g.Interface().(interface{ OnLoaded() }); ok {
+		loader.OnLoaded()
+	}
 	return
 }
 
