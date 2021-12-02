@@ -241,13 +241,19 @@ func (p *Sprite) getRotatedRect() (rRect *math32.RotatedRect) {
 func (p *Sprite) getTrackPos() (topx, topy int) {
 	rRect := p.getRotatedRect()
 
-	worldW, wolrdH := p.g.worldSize_()
 	pos := &math32.Vector2{
-		X: float64(rRect.Center.X) + float64(worldW)/2.0,
-		Y: float64(rRect.Center.Y) + float64(wolrdH)/2.0,
+		X: float64(rRect.Center.X),
+		Y: float64(rRect.Center.Y),
 	}
 
-	return int(pos.X), int(pos.Y) - int(rRect.Size.Height)/2.0
+	worldW, wolrdH := p.g.worldSize_()
+	pos.Y = -pos.Y
+	pos = &math32.Vector2{
+		X: float64(pos.X) + float64(worldW)/2.0,
+		Y: float64(pos.Y) + float64(wolrdH)/2.0,
+	}
+
+	return int(pos.X), int(pos.Y) - int(rRect.Size.Height)/2
 }
 
 func (p *Sprite) draw(dc drawContext) {
