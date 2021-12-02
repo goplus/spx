@@ -1,8 +1,6 @@
-
-
 onClick => {
 	println "Crocodile-mouse", mouseX, mouseY
-	pixel := GetPixel(mouseX, mouseY)
-	println GetRotatedRect().String()
+	pixel := pixel(mouseX, mouseY)
+	println bound
 	println "Crocodile-pixel", pixel
 }

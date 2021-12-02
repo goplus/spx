@@ -26,9 +26,9 @@ func NewOBB(centerPoint *Vector2, width, height, rotation float64) *OBB {
 	obb._rotation = rotation
 	return obb
 }
-func (this *OBB) getProjectionRadius(axis *Vector2) float64 {
-	return this.extents.X*math.Abs(axis.Ddot(this.axes[0])) + this.extents.Y*math.Abs(axis.Ddot(this.axes[1]))
 
+func (p *OBB) getProjectionRadius(axis *Vector2) float64 {
+	return p.extents.X*math.Abs(axis.Ddot(p.axes[0])) + p.extents.Y*math.Abs(axis.Ddot(p.axes[1]))
 }
 
 // FLT_EPSILON is the C++ FLT_EPSILON epsilon constant
@@ -47,6 +47,7 @@ func NewRotatedRect() (rcvr *RotatedRect) {
 	rcvr.Angle = 0
 	return
 }
+
 func NewRotatedRect1(r *Rect) (rcvr *RotatedRect) {
 	rcvr = &RotatedRect{}
 	rcvr.Center = NewVector2(r.Width/2.0+r.X, r.Height/2.0+r.Y)
@@ -54,6 +55,7 @@ func NewRotatedRect1(r *Rect) (rcvr *RotatedRect) {
 	rcvr.Angle = 0
 	return
 }
+
 func NewRotatedRect2(c *Vector2, s *Size, a float64) (rcvr *RotatedRect) {
 	rcvr = &RotatedRect{}
 	rcvr.Center = c.Clone()
@@ -61,6 +63,7 @@ func NewRotatedRect2(c *Vector2, s *Size, a float64) (rcvr *RotatedRect) {
 	rcvr.Angle = a
 	return
 }
+
 func NewRotatedRect3(v1 *Vector2, v2 *Vector2, v3 *Vector2) (rcvr *RotatedRect) {
 	rcvr = NewRotatedRect()
 	_center := v1.Add(v3).Scale(0.5)
@@ -91,6 +94,7 @@ func NewRotatedRect3(v1 *Vector2, v2 *Vector2, v3 *Vector2) (rcvr *RotatedRect) 
 
 	return rcvr
 }
+
 func (rcvr *RotatedRect) Contains(v *Vector2) bool {
 	hw := rcvr.Size.Width / 2.0
 	hh := rcvr.Size.Height / 2.0
@@ -180,10 +184,7 @@ func (rcvr *RotatedRect) IsCollision(other *RotatedRect) bool {
 	}
 
 	axisB2 := OBB2.axes[1]
-	if OBB1.getProjectionRadius(axisB2)+OBB2.getProjectionRadius(axisB2) <= math.Abs(nv.Ddot(axisB2)) {
-		return false
-	}
-	return true
+	return OBB1.getProjectionRadius(axisB2)+OBB2.getProjectionRadius(axisB2) > math.Abs(nv.Ddot(axisB2))
 }
 
 func (rcvr *RotatedRect) String() string {
