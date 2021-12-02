@@ -601,6 +601,7 @@ func (p *Game) addStageSprites(g reflect.Value, v specsp, inits []initer) []init
 						newItem = newItem.Elem()
 					}
 					dest, sp := applySprite(newItem, spr, items[i].(specsp))
+					dest.instanceName = fmt.Sprintf("%s[%d]", target, i)
 					p.addShape(dest)
 					if ini, ok := sp.(initer); ok {
 						inits = append(inits, ini)

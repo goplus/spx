@@ -1,0 +1,34 @@
+{
+  "costumes": [
+    {
+      "bitmapResolution": 1,
+      "name": "backdrop1",
+      "path": "../../res/lake.jpg",
+      "x": 240,
+      "y": 180
+    }
+  ],
+  "currentCostumeIndex": 0,
+  "zorder": [
+    {
+      "type": "sprites",
+      "target": "Bananas",
+      "items": [
+        {
+          "x": -100,
+          "y": -21
+        },
+        {
+          "x": 50,
+          "y": -21
+        }
+      ]
+    },
+    {
+      "type": "sprite",
+      "target": "Monkey",
+      "x": 0,
+      "y": 100
+    }
+  ]
+}

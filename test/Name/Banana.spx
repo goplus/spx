@@ -1,0 +1,3 @@
+onClick => {
+	say InstanceName(), 0.5
+}

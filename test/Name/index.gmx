@@ -1,0 +1,6 @@
+var (
+	Bananas []*Banana
+	Monkey  *Monkey
+)
+
+run "res", {Title: "Bananas (by Go+)"}

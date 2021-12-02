@@ -40,6 +40,8 @@ type Sprite struct {
 	g *Game
 
 	name string
+	// instanceName is generally equals to name, but different when the sprite is in a list, for example: Bananas[2]
+	instanceName string
 
 	x, y          float64
 	scale         float64
@@ -87,6 +89,7 @@ func (p *Sprite) init(
 
 	p.gamer = gamer
 	p.g, p.name = g, name
+	p.instanceName = name
 	p.x, p.y = sprite.X, sprite.Y
 	p.scale = sprite.Size
 	p.direction = sprite.Heading
@@ -1256,6 +1259,12 @@ func (p *Sprite) Height() float64 {
 	_, h := img.Size()
 	return float64(h / c.bitmapResolution)
 }
+
+// InstanceName returns sprite's instance name, for example: Monkey, Bananas[2]
+func (p *Sprite) InstanceName() string {
+	return p.instanceName
+}
+
 func (p *Sprite) GetRotatedRect() *math32.RotatedRect {
 	return p.rRect
 }
