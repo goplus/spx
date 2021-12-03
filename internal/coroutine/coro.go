@@ -20,8 +20,12 @@ type ThreadObj interface {
 }
 
 type threadImpl struct {
-	Obj     ThreadObj
-	stopped bool
+	Obj      ThreadObj
+	stopped_ bool
+}
+
+func (p *threadImpl) Stopped() bool {
+	return p.stopped_
 }
 
 // Thread represents a coroutine id.
@@ -97,7 +101,7 @@ func (p *Coroutines) StopIf(filter func(th Thread) bool) {
 	defer p.mutex.Unlock()
 	for th := range p.suspended {
 		if filter(th) {
-			th.stopped = true
+			th.stopped_ = true
 		}
 	}
 }
@@ -118,7 +122,7 @@ func (p *Coroutines) Yield(me Thread) {
 	p.sema.Lock()
 
 	p.setCurrent(me)
-	if me.stopped { // check stopped
+	if me.stopped_ { // check stopped
 		panic(ErrAbortThread)
 	}
 }
