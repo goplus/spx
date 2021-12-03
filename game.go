@@ -21,6 +21,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 
 	spxfs "github.com/goplus/spx/fs"
+	"github.com/goplus/spx/fs/fsutil"
 	_ "github.com/goplus/spx/fs/local"
 	_ "github.com/goplus/spx/fs/zip"
 )
@@ -113,6 +114,8 @@ func (p *Game) initGame() {
 
 // Gopt_Game_Main is required by Go+ compiler as the entry of a .gmx project.
 func Gopt_Game_Main(game Gamer) {
+	dir := fsutil.GetCurrDir()
+	os.Chdir(dir)
 	game.initGame()
 	game.(interface{ MainEntry() }).MainEntry()
 }
@@ -302,7 +305,8 @@ type cameraConfig struct {
 }
 
 type mapConfig struct {
-	Mode string `json:"mode"`
+	Mode      string `json:"mode"`
+	Resizable bool   `json:"resizable"`
 }
 
 //frame aniConfig
@@ -680,9 +684,11 @@ func (p *Game) runLoop(cfg *Config) (err error) {
 }
 
 func (p *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
-	p.windowWidth_ = outsideWidth
-	p.windowHeight_ = outsideHeight
-	p.resizeWindow()
+	if p.mapConfig != nil && p.mapConfig.Resizable == true {
+		p.windowWidth_ = outsideWidth
+		p.windowHeight_ = outsideHeight
+		p.resizeWindow()
+	}
 	return p.windowSize_()
 }
 
