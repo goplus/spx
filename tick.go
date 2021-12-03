@@ -21,7 +21,7 @@ func (p *tickHandlerBase) initList() {
 func (p *tickHandlerBase) removeFromList() {
 	prev, next := p.prev, p.next
 	prev.next, next.prev = next, prev
-	p.prev, p.next = nil, nil
+	p.prev, p.next = p, p
 }
 
 func (p *tickHandlerBase) insertNext(this *tickHandler) *tickHandler {
