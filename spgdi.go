@@ -50,11 +50,10 @@ func (p *spriteDrawInfo) getPixelGeo(cx, cy float64) *ebiten.GeoM {
 	geo.Rotate(toRadian(direction - 90))
 	geo.Scale(1.0, -1.0)
 	geo.Translate(cx, cy)
-
 	return geo
 }
-func (p *spriteDrawInfo) getPixel(pos *math32.Vector2, gdiImg *gdi.SpxImage, geo *ebiten.GeoM) (color.Color, *math32.Vector2) {
 
+func (p *spriteDrawInfo) getPixel(pos *math32.Vector2, gdiImg *gdi.SpxImage, geo *ebiten.GeoM) (color.Color, *math32.Vector2) {
 	img := gdiImg.OriImg()
 	pos2 := math32.NewVector2(pos.X-p.sprite.x, pos.Y-p.sprite.y)
 	x, y := geo.Apply(pos2.X, pos2.Y)
@@ -150,6 +149,7 @@ func (p *Sprite) touchPoint(x, y float64) bool {
 	}
 	return true
 }
+
 func (p *Sprite) touchRotatedRect(dstRect *math32.RotatedRect) bool {
 	currRect := p.getRotatedRect()
 	if currRect == nil {
@@ -184,7 +184,8 @@ func (p *Sprite) touchRotatedRect(dstRect *math32.RotatedRect) bool {
 	}
 	return false
 }
-func (p *Sprite) touchedColor(dst *Sprite, color Color) bool {
+
+func (p *Sprite) touchedColor_(dst *Sprite, color Color) bool {
 	currRect := p.getRotatedRect()
 	if currRect == nil {
 		return false
@@ -227,6 +228,7 @@ func (p *Sprite) touchedColor(dst *Sprite, color Color) bool {
 	}
 	return false
 }
+
 func (p *Sprite) touchingSprite(dst *Sprite) bool {
 	currRect := p.getRotatedRect()
 	if currRect == nil {

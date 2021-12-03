@@ -983,7 +983,7 @@ type Color = color.RGBA
 func (p *Sprite) TouchingColor(color Color) bool {
 	for _, item := range p.g.items {
 		if sp, ok := item.(*Sprite); ok && sp != p {
-			ret := p.touchedColor(sp, color)
+			ret := p.touchedColor_(sp, color)
 			if ret {
 				return true
 			}
