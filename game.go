@@ -301,18 +301,8 @@ type cameraConfig struct {
 	On string `json:"on"`
 }
 
-type mapModeEnum int8
-
-const (
-	mapModeDefault mapModeEnum = iota
-	mapModeRepeat
-	mapModeFill
-	mapModeFillRatio
-	mapModeFillCut
-)
-
 type mapConfig struct {
-	Mode mapModeEnum `json:"mode"`
+	Mode string `json:"mode"`
 }
 
 //frame aniConfig
@@ -1079,6 +1069,7 @@ func (p *Game) drawBackground(dc drawContext) {
 	options := new(ebiten.DrawTrianglesOptions)
 	options.Filter = ebiten.FilterLinear
 
+	//fill
 	srcWidth := float32(img.Bounds().Dx())
 	srcHeight := float32(img.Bounds().Dy())
 	dstWidth := float32(p.worldWidth_)
@@ -1086,21 +1077,15 @@ func (p *Game) drawBackground(dc drawContext) {
 	options.Address = ebiten.AddressClampToZero
 
 	//repeat
-	if p.mapConfig != nil && p.mapConfig.Mode == mapModeRepeat {
+	if p.mapConfig != nil && p.mapConfig.Mode == "repeat" {
 		srcWidth = float32(p.worldWidth_)
 		srcHeight = float32(p.worldHeight_)
 		dstWidth = float32(p.worldWidth_)
 		dstHeight = float32(p.worldHeight_)
 		options.Address = ebiten.AddressRepeat
 	}
-	//fill
-	if p.mapConfig != nil && p.mapConfig.Mode == mapModeFill {
-		dstWidth = float32(p.worldWidth_)
-		dstHeight = float32(p.worldHeight_)
-	}
 	//fill ratio
-	if p.mapConfig != nil && p.mapConfig.Mode == mapModeFillRatio {
-
+	if p.mapConfig != nil && p.mapConfig.Mode == "fillRatio" {
 		if srcWidth > srcHeight {
 			dstHeight = float32(p.worldHeight_)
 			dstWidth = float32(p.worldWidth_) * srcHeight / srcWidth
@@ -1109,9 +1094,8 @@ func (p *Game) drawBackground(dc drawContext) {
 			dstHeight = float32(p.worldHeight_) * srcHeight / srcWidth
 		}
 	}
-
 	//fill cut
-	if p.mapConfig != nil && p.mapConfig.Mode == mapModeFillCut {
+	if p.mapConfig != nil && p.mapConfig.Mode == "fillCut" {
 		if srcWidth > srcHeight {
 			dstHeight = float32(p.worldHeight_)
 			dstWidth = float32(p.worldWidth_) * srcWidth / srcHeight

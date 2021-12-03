@@ -9,7 +9,11 @@
     }
   ],
   "map":{
-    "mode":1
+    "mode":"fill",
+    "mode_test0":"repeat",
+    "mode_test1":"fill",
+    "mode_test2":"fillRatio",
+    "mode_test3":"fillCut"
   },
   "currentCostumeIndex": 0,
   "zorder": [
