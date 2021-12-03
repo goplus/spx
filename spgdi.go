@@ -63,7 +63,8 @@ func (p *spriteDrawInfo) getPixel(pos *math32.Vector2, gdiImg *gdi.SpxImage, geo
 	if x < 0 || y < 0 || x >= float64(img.Bounds().Size().X) || y >= float64(img.Bounds().Size().Y) {
 		return color.Transparent, pixelpos
 	}
-	color := img.At(int(x), int(y))
+	point := img.Rect.Min
+	color := img.At(point.X+int(x), point.Y+int(y))
 	return color, pixelpos
 }
 
