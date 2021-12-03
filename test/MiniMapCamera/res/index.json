@@ -12,7 +12,7 @@
     "on":"Monkey"
   },
   "map":{
-    "mode":1
+    "mode":"fill"
   },
   "stepUnit":20,
   "currentCostumeIndex": 0,
