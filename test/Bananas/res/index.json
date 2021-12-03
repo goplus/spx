@@ -9,7 +9,7 @@
     }
   ],
   "map":{
-    "model":2
+    "mode":1
   },
   "currentCostumeIndex": 0,
   "zorder": [
