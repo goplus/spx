@@ -42,7 +42,7 @@ onKey KeyD, => {
 
 onKey KeyB, => {
 	println bound
-	println Crocodile.bound
+	println Crocodile.bounds
 	if touching(Crocodile) {
 		println "Touch Crocodile"
 	}
