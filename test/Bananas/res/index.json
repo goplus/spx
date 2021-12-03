@@ -37,6 +37,12 @@
       "target": "Monkey",
       "x": 0,
       "y": 50
+    },
+    {
+      "type": "sprite",
+      "target": "Red",
+      "x": -100,
+      "y": -50
     }
   ]
 }
