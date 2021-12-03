@@ -533,7 +533,6 @@ func (p *Game) resizeWindow() {
 
 	p.Camera.init(p, float64(p.windowWidth_), float64(p.windowHeight_), float64(p.worldWidth_), float64(p.worldHeight_))
 
-	ebiten.SetWindowResizable(true)
 	ebiten.SetWindowSize(p.windowWidth_, p.windowHeight_)
 	ebiten.SetWindowResizable(true)
 
