@@ -33,9 +33,11 @@ func (c *Camera) screenToWorld(point *math32.Vector2) *math32.Vector2 {
 	return c.freecamera.ScreenToWorld(point)
 }
 
+/* unused:
 func (c *Camera) worldToScreen(point *math32.Vector2) *math32.Vector2 {
 	return c.freecamera.WorldToScreen(point)
 }
+*/
 
 func (c *Camera) On(obj interface{}) {
 	switch v := obj.(type) {
