@@ -334,6 +334,7 @@ const (
 	aniTypeFrame aniTypeEnum = iota
 	aniTypeMove
 	aniTypeTurn
+	aniTypeGlide
 )
 
 type costumesConfig struct {

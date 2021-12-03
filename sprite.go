@@ -7,7 +7,6 @@ import (
 	"math"
 	"reflect"
 	"sync"
-	"time"
 
 	"github.com/goplus/spx/internal/anim"
 	"github.com/goplus/spx/internal/gdi/clrutil"
@@ -456,10 +455,11 @@ func (p *Sprite) PrevCostume() {
 
 // -----------------------------------------------------------------------------
 
-func (p *Sprite) getFromAnToForAni(anitype aniTypeEnum, from interface{}, to interface{}) (float64, float64) {
-	fromval := 0.0
-	toval := 0.0
+func (p *Sprite) getFromAnToForAni(anitype aniTypeEnum, from interface{}, to interface{}) (interface{}, interface{}) {
+
 	if anitype == aniTypeFrame {
+		fromval := 0.0
+		toval := 0.0
 		switch v := from.(type) {
 		case string:
 			fromval = float64(p.findCostume(v))
@@ -479,11 +479,12 @@ func (p *Sprite) getFromAnToForAni(anitype aniTypeEnum, from interface{}, to int
 		default:
 			toval, _ = tools.GetFloat(to)
 		}
-	} else {
-		fromval, _ = tools.GetFloat(from)
-		toval, _ = tools.GetFloat(to)
+
+		return fromval, toval
 	}
-	return fromval, toval
+
+	return from, to
+
 }
 
 func (p *Sprite) goAnimate(name string, ani *aniConfig) {
@@ -507,8 +508,13 @@ func (p *Sprite) goAnimate(name string, ani *aniConfig) {
 		animtype = anim.AnimValTypeInt
 		p.goSetCostume(ani.From)
 		if ani.Fps == 0 { //compute fps
-			ani.Fps = math.Abs(toval-fromval) / ani.Duration
+			tovalf, _ := toval.(float64)
+			fromvalf, _ := fromval.(float64)
+			ani.Fps = math.Abs(tovalf-fromvalf) / ani.Duration
 		}
+	}
+	if ani.AniType == aniTypeGlide {
+		animtype = anim.AnimValTypeVector2
 	}
 
 	framenum := int(ani.Duration * ani.Fps)
@@ -529,15 +535,24 @@ func (p *Sprite) goAnimate(name string, ani *aniConfig) {
 		if debugInstr {
 			log.Printf("playing anim [name %s id %d]  currframe %d, val %v", an.Name, an.Id, currframe, currval)
 		}
-		val, _ := tools.GetFloat(currval)
+
 		switch ani.AniType {
 		case aniTypeFrame:
+			val, _ := tools.GetFloat(currval)
 			p.setCostumeByIndex(int(val))
 		case aniTypeMove:
+			val, _ := tools.GetFloat(currval)
 			sin, cos := math.Sincos(toRadian(pre_direction))
 			p.doMoveToForAnim(pre_x+val*sin, pre_y+val*cos, an)
 		case aniTypeTurn:
+			val, _ := tools.GetFloat(currval)
 			p.setDirection(val, false)
+		case aniTypeGlide:
+			val, ok := currval.(*math32.Vector2)
+			if ok {
+				p.SetXYpos(val.X, val.Y)
+			}
+
 		}
 
 		playaction := ani.OnPlay
@@ -545,7 +560,9 @@ func (p *Sprite) goAnimate(name string, ani *aniConfig) {
 			if ani.AniType != aniTypeFrame && playaction.Costumes != nil {
 				costumes := playaction.Costumes
 				costumesFrom, costumesTo := p.getFromAnToForAni(aniTypeFrame, costumes.From, costumes.To)
-				costumeval := ((int)(costumesTo-costumesFrom) + currframe) % (int)(costumesTo)
+				costumesFromf, _ := costumesFrom.(float64)
+				costumesTof, _ := costumesTo.(float64)
+				costumeval := ((int)(costumesTof-costumesFromf) + currframe) % (int)(costumesTof)
 				p.setCostumeByIndex(costumeval)
 			}
 		}
@@ -741,22 +758,16 @@ func (p *Sprite) Glide__0(x, y float64, secs float64) {
 	if debugInstr {
 		log.Println("Glide", p.name, x, y, secs)
 	}
-	inDur := time.Duration(secs * 1e9)
-	n := int(inDur / glideTick)
-	if n > 0 {
-		x0, y0 := p.getXY()
-		dx := (x - x0) / float64(n)
-		dy := (y - y0) / float64(n)
-		for i := 1; i < n; i++ {
-			sleep(glideTick)
-			inDur -= glideTick
-			x0 += dx
-			y0 += dy
-			p.SetXYpos(x0, y0)
-		}
+	x0, y0 := p.getXY()
+	ani := &aniConfig{
+		Duration: secs,
+		Fps:      24.0,
+		From:     math32.NewVector2(x0, y0),
+		To:       math32.NewVector2(x, y),
+		AniType:  aniTypeGlide,
 	}
-	sleep(inDur)
-	p.SetXYpos(x, y)
+	p.goAnimate("glide", ani)
+
 }
 
 func (p *Sprite) Glide__1(obj interface{}, secs float64) {
