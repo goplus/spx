@@ -1257,7 +1257,7 @@ func (p *Sprite) CostumeHeight() float64 {
 	return float64(h / c.bitmapResolution)
 }
 
-func (p *Sprite) Bound() *math32.RotatedRect {
+func (p *Sprite) Bounds() *math32.RotatedRect {
 	return p.rRect
 }
 
