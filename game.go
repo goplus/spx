@@ -52,6 +52,13 @@ func SetDebug(flags int) {
 
 // -------------------------------------------------------------------------------------
 
+const (
+	mapModeFill = iota
+	mapModeRepeat
+	mapModeFillRatio
+	mapModeFillCut
+)
+
 type Game struct {
 	baseObj
 	eventSinks
@@ -73,8 +80,8 @@ type Game struct {
 	windowWidth_  int
 	windowHeight_ int
 
-	stepUnit  float64 //global step unit in game
-	mapConfig *mapConfig
+	stepUnit float64 //global step unit in game
+	mapMode  int
 
 	// world
 	worldWidth_      int
@@ -300,6 +307,7 @@ type costumeConfig struct {
 	FaceRight        float64 `json:"faceRight"` // turn face to right
 	BitmapResolution int     `json:"bitmapResolution"`
 }
+
 type cameraConfig struct {
 	On string `json:"on"`
 }
@@ -307,6 +315,20 @@ type cameraConfig struct {
 type mapConfig struct {
 	Mode      string `json:"mode"`
 	Resizable bool   `json:"resizable"`
+}
+
+func (p *mapConfig) mapMode() int {
+	if p != nil {
+		switch p.Mode {
+		case "repeat":
+			return mapModeRepeat
+		case "fillCut":
+			return mapModeFillCut
+		case "fillRatio":
+			return mapModeFillRatio
+		}
+	}
+	return mapModeFill
 }
 
 //frame aniConfig
@@ -468,7 +490,7 @@ func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
 	if p.stepUnit == 0 {
 		p.stepUnit = 1
 	}
-	p.mapConfig = proj.Map
+	p.mapMode = proj.Map.mapMode()
 
 	p.worldWidth_ = 0
 	p.doWorldSize() // set world size
@@ -1084,46 +1106,43 @@ func (p *Game) drawBackground(dc drawContext) {
 	options := new(ebiten.DrawTrianglesOptions)
 	options.Filter = ebiten.FilterLinear
 
-	//fill
-	srcWidth := float32(img.Bounds().Dx())
-	srcHeight := float32(img.Bounds().Dy())
-	dstWidth := float32(p.worldWidth_)
-	dstHeight := float32(p.worldHeight_)
-	options.Address = ebiten.AddressClampToZero
-
-	//repeat
-	if p.mapConfig != nil && p.mapConfig.Mode == "repeat" {
+	var srcWidth, srcHeight, dstWidth, dstHeight float32
+	if p.mapMode == mapModeRepeat {
 		srcWidth = float32(p.worldWidth_)
 		srcHeight = float32(p.worldHeight_)
 		dstWidth = float32(p.worldWidth_)
 		dstHeight = float32(p.worldHeight_)
 		options.Address = ebiten.AddressRepeat
-	}
-	//fill ratio
-	if p.mapConfig != nil && p.mapConfig.Mode == "fillRatio" {
-		if srcWidth > srcHeight {
-			dstHeight = float32(p.worldHeight_)
-			dstWidth = float32(p.worldWidth_) * srcHeight / srcWidth
-		} else {
+	} else {
+		srcWidth = float32(img.Bounds().Dx())
+		srcHeight = float32(img.Bounds().Dy())
+		options.Address = ebiten.AddressClampToZero
+		switch p.mapMode {
+		default:
 			dstWidth = float32(p.worldWidth_)
-			dstHeight = float32(p.worldHeight_) * srcHeight / srcWidth
-		}
-	}
-	//fill cut
-	if p.mapConfig != nil && p.mapConfig.Mode == "fillCut" {
-		if srcWidth > srcHeight {
 			dstHeight = float32(p.worldHeight_)
-			dstWidth = float32(p.worldWidth_) * srcWidth / srcHeight
-		} else {
-			dstWidth = float32(p.worldWidth_)
-			dstHeight = float32(p.worldHeight_) * srcWidth / srcHeight
+		case mapModeFillCut:
+			if srcWidth > srcHeight {
+				dstHeight = float32(p.worldHeight_)
+				dstWidth = float32(p.worldWidth_) * srcWidth / srcHeight
+			} else {
+				dstWidth = float32(p.worldWidth_)
+				dstHeight = float32(p.worldHeight_) * srcWidth / srcHeight
+			}
+		case mapModeFillRatio:
+			if srcWidth > srcHeight {
+				dstHeight = float32(p.worldHeight_)
+				dstWidth = float32(p.worldWidth_) * srcHeight / srcWidth
+			} else {
+				dstWidth = float32(p.worldWidth_)
+				dstHeight = float32(p.worldHeight_) * srcHeight / srcWidth
+			}
 		}
 	}
 
 	var cx, cy float32
 	cx = (float32(p.worldWidth_) - dstWidth) / 2.0
 	cy = (float32(p.worldHeight_) - dstHeight) / 2.0
-
 	vs := []ebiten.Vertex{
 		{
 			DstX:   cx,
