@@ -21,6 +21,7 @@ onKey KeyEnter, => {
 }
 
 onKey KeyB, => {
+	say "Hello"
 	println "onKeyB"
 	step 10
 }

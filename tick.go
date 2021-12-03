@@ -21,7 +21,7 @@ func (p *tickHandlerBase) initList() {
 func (p *tickHandlerBase) removeFromList() {
 	prev, next := p.prev, p.next
 	prev.next, next.prev = next, prev
-	p.prev, p.next = nil, nil
+	p.prev, p.next = p, p
 }
 
 func (p *tickHandlerBase) insertNext(this *tickHandler) *tickHandler {
@@ -37,6 +37,7 @@ type tickHandler struct {
 	base      int64
 	totalTick int64
 	onTick    func(tick int64) // tick = 1..totalTick
+	self      coroutine.Thread
 }
 
 // Stop stops listening `onTick` event.
@@ -75,6 +76,7 @@ func (p *tickMgr) start(totalTick int64, onTick func(tick int64)) *tickHandler {
 		base:      base,
 		totalTick: totalTick,
 		onTick:    onTick,
+		self:      gco.Current(),
 	})
 }
 
@@ -87,6 +89,9 @@ func (p *tickMgr) update() {
 			next = h.next
 			this := (*tickHandler)(unsafe.Pointer(h))
 			tick := curr - this.base
+			if this.self.Stopped() {
+				tick = this.totalTick // ensure the last tick is always called
+			}
 			if tick >= this.totalTick {
 				h.removeFromList()
 			}

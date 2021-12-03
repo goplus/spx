@@ -1241,26 +1241,27 @@ func (p *Sprite) ShowVar(name string) {
 
 // -----------------------------------------------------------------------------
 
-// Width returns sprite width
-func (p *Sprite) Width() float64 {
+// CostumeWidth returns width of sprite current costume.
+func (p *Sprite) CostumeWidth() float64 {
 	c := p.costumes[p.currentCostumeIndex]
 	img, _, _ := c.needImage(p.g.fs)
 	w, _ := img.Size()
 	return float64(w / c.bitmapResolution)
 }
 
-// Height returns sprite height
-func (p *Sprite) Height() float64 {
+// CostumeHeight returns height of sprite current costume.
+func (p *Sprite) CostumeHeight() float64 {
 	c := p.costumes[p.currentCostumeIndex]
 	img, _, _ := c.needImage(p.g.fs)
 	_, h := img.Size()
 	return float64(h / c.bitmapResolution)
 }
-func (p *Sprite) GetRotatedRect() *math32.RotatedRect {
+
+func (p *Sprite) Bounds() *math32.RotatedRect {
 	return p.rRect
 }
 
-func (p *Sprite) GetPixel(x, y float64) color.Color {
+func (p *Sprite) Pixel(x, y float64) color.Color {
 	c2 := p.costumes[p.currentCostumeIndex]
 	img, cx, cy := c2.needImage(p.g.fs)
 	geo := p.getDrawInfo().getPixelGeo(cx, cy)

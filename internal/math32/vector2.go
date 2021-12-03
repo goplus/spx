@@ -13,6 +13,7 @@ type Vector2 struct {
 func NewVector2(x, y float64) *Vector2 {
 	return &Vector2{x, y}
 }
+
 func NewVector2Zero() *Vector2 {
 	return &Vector2{0, 0}
 }
@@ -21,6 +22,7 @@ func (this *Vector2) Set(x, y float64) {
 	this.X = x
 	this.Y = y
 }
+
 func (this *Vector2) String() string {
 	return fmt.Sprintf("(%f,%f)", this.X, this.Y)
 }
