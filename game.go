@@ -489,6 +489,15 @@ func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
 }
 
 func (p *Game) resizeWindow() {
+	c := p.costumes[p.currentCostumeIndex]
+	img, _, _ := c.needImage(p.fs)
+	if p.worldWidth_ > img.Bounds().Dx() && p.windowWidth_ < p.worldWidth_ {
+		p.worldWidth_ = img.Bounds().Dx()
+	}
+	if p.worldHeight_ > img.Bounds().Dy() && p.windowHeight_ < p.worldHeight_ {
+		p.worldHeight_ = img.Bounds().Dy()
+	}
+
 	if p.windowWidth_ > p.worldWidth_ {
 		p.worldWidth_ = p.windowWidth_
 	}
