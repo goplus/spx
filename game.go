@@ -314,8 +314,7 @@ type cameraConfig struct {
 }
 
 type mapConfig struct {
-	Mode      string `json:"mode"`
-	Resizable bool   `json:"resizable"`
+	Mode string `json:"mode"`
 }
 
 func (p *mapConfig) mapMode() int {
@@ -330,6 +329,10 @@ func (p *mapConfig) mapMode() int {
 		}
 	}
 	return mapModeFill
+}
+
+type windowConfig struct {
+	Resizable bool `json:"resizable"`
 }
 
 //frame aniConfig
@@ -449,6 +452,7 @@ type projConfig struct {
 	StepUnit            float64          `json:"stepUnit"`
 	Camera              *cameraConfig    `json:"camera"`
 	Map                 *mapConfig       `json:"map"`
+	Window              *windowConfig    `json:"window"`
 }
 
 type initer interface {
@@ -491,8 +495,12 @@ func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
 	if p.stepUnit == 0 {
 		p.stepUnit = 1
 	}
-	p.mapMode = proj.Map.mapMode()
-	p.resizable = proj.Map.Resizable
+	if proj.Map != nil {
+		p.mapMode = proj.Map.mapMode()
+	}
+	if proj.Window != nil {
+		p.resizable = proj.Window.Resizable
+	}
 
 	p.worldWidth_ = 0
 	p.doWorldSize() // set world size

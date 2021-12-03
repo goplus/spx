@@ -15,7 +15,6 @@ func GetCurrDir() string {
 	return dir
 }
 
-// 获取当前执行程序所在的绝对路径
 func getCurrentAbPathByExecutable() string {
 	exePath, err := os.Executable()
 	if err != nil {
