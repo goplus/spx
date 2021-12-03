@@ -80,8 +80,9 @@ type Game struct {
 	windowWidth_  int
 	windowHeight_ int
 
-	stepUnit float64 //global step unit in game
-	mapMode  int
+	stepUnit  float64 //global step unit in game
+	mapMode   int
+	resizable bool
 
 	// world
 	worldWidth_      int
@@ -491,6 +492,7 @@ func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
 		p.stepUnit = 1
 	}
 	p.mapMode = proj.Map.mapMode()
+	p.resizable = proj.Map.Resizable
 
 	p.worldWidth_ = 0
 	p.doWorldSize() // set world size
@@ -706,7 +708,7 @@ func (p *Game) runLoop(cfg *Config) (err error) {
 }
 
 func (p *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
-	if p.mapConfig != nil && p.mapConfig.Resizable == true {
+	if p.resizable == true {
 		p.windowWidth_ = outsideWidth
 		p.windowHeight_ = outsideHeight
 		p.resizeWindow()
