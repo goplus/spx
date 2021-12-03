@@ -8,6 +8,9 @@
       "y": 180
     }
   ],
+  "map":{
+    "model":2
+  },
   "currentCostumeIndex": 0,
   "zorder": [
     {

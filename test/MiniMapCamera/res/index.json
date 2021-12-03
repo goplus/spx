@@ -11,6 +11,9 @@
   "camera":{
     "on":"Monkey"
   },
+  "map":{
+    "model":1
+  },
   "stepUnit":20,
   "currentCostumeIndex": 0,
   "zorder": [
