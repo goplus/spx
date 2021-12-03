@@ -485,7 +485,7 @@ func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
 	}
 	ebiten.SetWindowSize(p.windowWidth_, p.windowHeight_)
 
-	if loader, ok := g.Interface().(interface{ OnLoaded() }); ok {
+	if loader, ok := g.Addr().Interface().(interface{ OnLoaded() }); ok {
 		loader.OnLoaded()
 	}
 	return
