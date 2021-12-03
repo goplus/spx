@@ -5,3 +5,19 @@ onClick => {
 onMoving mi => {
 	Bananas[1].changeXYpos mi.dx, mi.dy
 }
+
+onKey KeyB, => {
+	step 5
+}
+onKey KeyC, => {
+	turn 15
+}
+
+onKey KeySpace, => {
+	if touchingColor(RGB(255, 0, 0)) {
+		println "touchingColor Red"
+	}else{
+		println "no touchingColor Red"
+	}
+
+}

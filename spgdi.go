@@ -184,6 +184,49 @@ func (p *Sprite) touchRotatedRect(dstRect *math32.RotatedRect) bool {
 	}
 	return false
 }
+func (p *Sprite) touchedColor(dst *Sprite, color Color) bool {
+	currRect := p.getRotatedRect()
+	if currRect == nil {
+		return false
+	}
+	dstRect := dst.getRotatedRect()
+	if dstRect == nil {
+		return false
+	}
+	ret := currRect.IsCollision(dstRect)
+	if !ret {
+		return false
+	}
+
+	//get bound rect
+	currBoundRect := currRect.BoundingRect()
+	dstRectBoundRect := dstRect.BoundingRect()
+	boundRect := currBoundRect.Intersect(dstRectBoundRect)
+
+	c := p.costumes[p.currentCostumeIndex]
+	pimg, cx, cy := c.needImage(p.g.fs)
+	geo := p.getDrawInfo().getPixelGeo(cx, cy)
+
+	c2 := dst.costumes[dst.currentCostumeIndex]
+	dstimg, cx2, cy2 := c2.needImage(p.g.fs)
+	geo2 := dst.getDrawInfo().getPixelGeo(cx2, cy2)
+
+	cr, cg, cb, ca := color.RGBA()
+	//check boun rect pixel
+	for x := boundRect.X; x < boundRect.Width+boundRect.X; x++ {
+		for y := boundRect.Y; y < boundRect.Height+boundRect.Y; y++ {
+			pos := math32.NewVector2(x, y)
+			color1, _ := p.getDrawInfo().getPixel(pos, pimg, geo)
+			color2, _ := dst.getDrawInfo().getPixel(pos, dstimg, geo2)
+			_, _, _, a1 := color1.RGBA()
+			r, g, b, a2 := color2.RGBA()
+			if a1 != 0 && a2 != 0 && r == cr && g == cg && b == cb && a2 == ca {
+				return true
+			}
+		}
+	}
+	return false
+}
 func (p *Sprite) touchingSprite(dst *Sprite) bool {
 	currRect := p.getRotatedRect()
 	if currRect == nil {
