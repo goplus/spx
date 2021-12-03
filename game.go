@@ -1078,10 +1078,12 @@ func (p *Game) drawBackground(dc drawContext) {
 	ebiImg := img.EbiImg()
 	options := new(ebiten.DrawTrianglesOptions)
 	options.Filter = ebiten.FilterLinear
+
 	srcWidth := float32(img.Bounds().Dx())
 	srcHeight := float32(img.Bounds().Dy())
-	dstWidth := srcWidth
-	dstHeight := srcHeight
+	dstWidth := float32(p.worldWidth_)
+	dstHeight := float32(p.worldHeight_)
+	options.Address = ebiten.AddressClampToZero
 
 	//repeat
 	if p.mapConfig != nil && p.mapConfig.Model == mapModelRepeat {
@@ -1119,8 +1121,9 @@ func (p *Game) drawBackground(dc drawContext) {
 		}
 	}
 
-	cx := (float32(p.worldWidth_) - dstWidth) / 2.0
-	cy := (float32(p.worldHeight_) - dstHeight) / 2.0
+	var cx, cy float32
+	cx = (float32(p.worldWidth_) - dstWidth) / 2.0
+	cy = (float32(p.worldHeight_) - dstHeight) / 2.0
 
 	vs := []ebiten.Vertex{
 		{
