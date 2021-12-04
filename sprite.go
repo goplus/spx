@@ -64,7 +64,8 @@ type Sprite struct {
 	hasOnCloned  bool
 	hasOnTouched bool
 
-	gamer reflect.Value
+	gamer         reflect.Value
+	effectUniform map[EffectKind]float64
 }
 
 func (p *Sprite) SetDying() { // dying: visible but can't be touched
@@ -84,6 +85,7 @@ func (p *Sprite) init(
 	}
 	p.eventSinks.init(&g.sinkMgr, p)
 
+	p.effectUniform = make(map[EffectKind]float64)
 	p.gamer = gamer
 	p.g, p.name = g, name
 	p.x, p.y = sprite.X, sprite.Y
@@ -140,6 +142,7 @@ func (p *Sprite) InitFrom(src *Sprite) {
 	p.rotationStyle = src.rotationStyle
 	p.sayObj = nil
 	p.animations = src.animations
+	p.effectUniform = src.effectUniform
 
 	p.penColor = src.penColor
 	p.penShade = src.penShade
@@ -976,15 +979,19 @@ func (p *Sprite) ChangeSize(delta float64) {
 // -----------------------------------------------------------------------------
 
 func (p *Sprite) SetEffect(kind EffectKind, val float64) {
-	panic("todo")
+	p.effectUniform[kind] = val
 }
 
 func (p *Sprite) ChangeEffect(kind EffectKind, delta float64) {
-	panic("todo")
+	val, ok := p.effectUniform[kind]
+	if ok {
+		p.effectUniform[kind] = val + delta
+	}
+
 }
 
 func (p *Sprite) ClearGraphEffects() {
-	panic("todo")
+	p.effectUniform = make(map[EffectKind]float64)
 }
 
 // -----------------------------------------------------------------------------
