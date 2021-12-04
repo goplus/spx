@@ -3,9 +3,7 @@
     {
       "bitmapResolution": 1,
       "name": "backdrop1",
-      "path": "../../res/bg.jpg",
-      "x": 0,
-      "y": 0
+      "path": "../../res/bg.jpg"
     }
   ],
   "currentCostumeIndex": 0,

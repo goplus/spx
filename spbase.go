@@ -6,11 +6,9 @@ import (
 	"path"
 	"strconv"
 
-	"image/draw"
 	_ "image/jpeg" // for image decode
 	_ "image/png"  // for image decode
 
-	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/pkg/errors"
 
 	spxfs "github.com/goplus/spx/fs"
@@ -44,43 +42,39 @@ type imagePoint struct {
 }
 
 type imageLoader interface {
-	load(fs spxfs.Dir, pt *imagePoint) (*gdi.SpxImage, error)
+	load(fs spxfs.Dir, pt *imagePoint) (gdi.Image, error)
 }
 
 // -------------------------------------------------------------------------------------
 
 type imageLoaderByPath string
 
-func (path imageLoaderByPath) load(fs spxfs.Dir, pt *imagePoint) (*gdi.SpxImage, error) {
+func (path imageLoaderByPath) load(fs spxfs.Dir, pt *imagePoint) (ret gdi.Image, err error) {
 	f, err := fs.Open(string(path))
 	if err != nil {
-		return nil, errors.Wrapf(err, "imageLoader: open file `%s` failed", path)
+		err = errors.Wrapf(err, "imageLoader: open file `%s` failed", path)
+		return
 	}
 	defer f.Close()
 
 	img, _, err := image.Decode(f)
 	if err != nil {
-		return nil, errors.Wrapf(err, "imageLoader: file `%s` is not an image", path)
+		err = errors.Wrapf(err, "imageLoader: file `%s` is not an image", path)
+		return
 	}
-
-	imgrgba := image.NewRGBA(image.Rect(0, 0, img.Bounds().Dx(), img.Bounds().Dy()))
-	draw.Draw(imgrgba, imgrgba.Bounds(), img, img.Bounds().Min, draw.Src)
-	ebiImg := ebiten.NewImageFromImage(img)
-
-	spximg := gdi.NewSpxImage(ebiImg, imgrgba)
-	return spximg, nil
+	return gdi.NewImageFrom(img), nil
 }
 
 // -------------------------------------------------------------------------------------
 
 type delayloadImage struct {
-	cache  *gdi.SpxImage
+	cache  gdi.Image
 	pt     imagePoint
 	loader imageLoader
 }
 
 func (p *delayloadImage) ensure(fs spxfs.Dir) {
-	if p.cache == nil {
+	if !p.cache.IsValid() {
 		var err error
 		if p.cache, err = p.loader.load(fs, &p.pt); err != nil {
 			panic(err)
@@ -89,14 +83,14 @@ func (p *delayloadImage) ensure(fs spxfs.Dir) {
 }
 
 type costumeSetImage struct {
-	cache  *gdi.SpxImage
+	cache  gdi.Image
 	loader imageLoader
 	width  int
 	nx     int
 }
 
 func (p *costumeSetImage) ensure(fs spxfs.Dir) {
-	if p.cache == nil {
+	if !p.cache.IsValid() {
 		var err error
 		if p.cache, err = p.loader.load(fs, nil); err != nil {
 			panic(err)
@@ -106,7 +100,7 @@ func (p *costumeSetImage) ensure(fs spxfs.Dir) {
 }
 
 type sharedImages struct {
-	imgs map[string]*gdi.SpxImage
+	imgs map[string]gdi.Image
 }
 
 type sharedImage struct {
@@ -115,7 +109,7 @@ type sharedImage struct {
 	rc     costumeSetRect
 }
 
-func (p *sharedImage) load(fs spxfs.Dir, pt *imagePoint) (ret *gdi.SpxImage, err error) {
+func (p *sharedImage) load(fs spxfs.Dir, pt *imagePoint) (ret gdi.Image, err error) {
 	path := p.path
 	shared, ok := p.shared.imgs[path]
 	if !ok {
@@ -132,7 +126,7 @@ func (p *sharedImage) load(fs spxfs.Dir, pt *imagePoint) (ret *gdi.SpxImage, err
 		pt.x, pt.y = rc.W/2, rc.H/2
 	}
 
-	if sub := shared.SubImage(image.Rectangle{Min: min, Max: max}); sub != nil {
+	if sub := shared.SubImage(image.Rectangle{Min: min, Max: max}); sub.IsValid() {
 		return sub, nil
 	}
 	panic("disposed image")
@@ -145,9 +139,9 @@ type imageLoaderByCostumeSet struct {
 	index      int
 }
 
-func (p *imageLoaderByCostumeSet) load(fs spxfs.Dir, pt *imagePoint) (*gdi.SpxImage, error) {
+func (p *imageLoaderByCostumeSet) load(fs spxfs.Dir, pt *imagePoint) (gdi.Image, error) {
 	costumeSet := p.costumeSet
-	if costumeSet.cache == nil {
+	if !costumeSet.cache.IsValid() {
 		p.costumeSet.ensure(fs)
 	}
 	cache, width := costumeSet.cache, costumeSet.width
@@ -155,7 +149,7 @@ func (p *imageLoaderByCostumeSet) load(fs spxfs.Dir, pt *imagePoint) (*gdi.SpxIm
 	min := image.Point{X: bounds.Min.X + width*p.index, Y: bounds.Min.Y}
 	max := image.Point{X: min.X + width, Y: bounds.Max.Y}
 	pt.x, pt.y = float64(width>>1), float64(bounds.Dy()>>1)
-	if img := cache.SubImage(image.Rectangle{Min: min, Max: max}); img != nil {
+	if img := cache.SubImage(image.Rectangle{Min: min, Max: max}); img.IsValid() {
 		return img, nil
 	}
 	panic("disposed image")
@@ -168,6 +162,13 @@ type costume struct {
 	img              delayloadImage
 	faceRight        float64
 	bitmapResolution int
+}
+
+func newCostumeWithSize(width, height int) *costume {
+	return &costume{
+		img:              delayloadImage{cache: gdi.NewImageSize(width, height)},
+		bitmapResolution: 1,
+	}
 }
 
 func newCostumeWith(name string, img *costumeSetImage, faceRight float64, i, bitmapResolution int) *costume {
@@ -193,8 +194,8 @@ func newCostume(base string, c *costumeConfig) *costume {
 	}
 }
 
-func (p *costume) needImage(fs spxfs.Dir) (*gdi.SpxImage, float64, float64) {
-	if p.img.cache == nil {
+func (p *costume) needImage(fs spxfs.Dir) (gdi.Image, float64, float64) {
+	if !p.img.cache.IsValid() {
 		p.img.ensure(fs)
 	}
 	return p.img.cache, p.img.pt.x, p.img.pt.y
@@ -286,6 +287,12 @@ func (p *baseObj) init(base string, costumes []*costumeConfig, currentCostumeInd
 		currentCostumeIndex = 0
 	}
 	p.currentCostumeIndex = currentCostumeIndex
+}
+
+func (p *baseObj) initWithSize(width, height int) {
+	p.costumes = make([]*costume, 1)
+	p.costumes[0] = newCostumeWithSize(width, height)
+	p.currentCostumeIndex = 0
 }
 
 func (p *baseObj) initFrom(src *baseObj) {
