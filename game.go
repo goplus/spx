@@ -717,7 +717,7 @@ func (p *Game) runLoop(cfg *Config) (err error) {
 }
 
 func (p *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
-	if p.resizable == true && p.windowWidth_ != outsideWidth && p.windowHeight_ != outsideHeight {
+	if p.resizable && p.windowWidth_ != outsideWidth && p.windowHeight_ != outsideHeight {
 		p.windowWidth_ = outsideWidth
 		p.windowHeight_ = outsideHeight
 		p.resizeWindow()
