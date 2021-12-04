@@ -1,6 +1,6 @@
 package effect
 
-const ShaderFrag string = `package main
+var ShaderFrag = []byte(`package main
 
 var (
 	Color      float
@@ -95,4 +95,4 @@ func Fragment(position vec4, texCoord vec2, color vec4) vec4 {
 
 	return txtcolor
 }
-`
+`)

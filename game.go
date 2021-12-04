@@ -1309,6 +1309,15 @@ const (
 	BrightnessEffect
 )
 
+var greffNames = []string{
+	ColorEffect:      "Color",
+	BrightnessEffect: "Brightness",
+}
+
+func (kind EffectKind) String() string {
+	return greffNames[kind]
+}
+
 func (p *Game) SetEffect(kind EffectKind, val float64) {
 	panic("todo")
 }

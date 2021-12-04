@@ -114,32 +114,22 @@ func (p *spriteDrawInfo) doDrawOn(dc drawContext, fs spxfs.Dir) {
 
 	p.updateMatrix()
 
-	op := new(ebiten.DrawRectShaderOptions)
-	//op.Filter = ebiten.FilterLinear
-	op.GeoM = p.geo
-	op.Uniforms = map[string]interface{}{
-		"Color":      float32(0.0),
-		"Brightness": float32(0.0),
+	if effs := p.sprite.greffUniforms; effs != nil {
+		op := new(ebiten.DrawRectShaderOptions)
+		op.GeoM = p.geo
+		op.Uniforms = effs
+		s, err := ebiten.NewShader(effect.ShaderFrag)
+		if err != nil {
+			panic(err)
+		}
+		op.Images[0] = img.EbiImg()
+		dc.DrawRectShader(img.EbiImg().Bounds().Dx(), img.EbiImg().Bounds().Dy(), s, op)
+	} else {
+		op := new(ebiten.DrawImageOptions)
+		op.Filter = ebiten.FilterLinear
+		op.GeoM = p.geo
+		dc.DrawImage(img.EbiImg(), op)
 	}
-	color, ok := p.sprite.effectUniform[ColorEffect]
-	if ok {
-		//0~199
-		op.Uniforms["Color"] = float32(color / 199.0)
-	}
-	birghtness, ok := p.sprite.effectUniform[BrightnessEffect]
-	if ok {
-		//0~100
-		op.Uniforms["Brightness"] = float32(birghtness / 100.0)
-	}
-	s, err := ebiten.NewShader([]byte(effect.ShaderFrag))
-	if err != nil {
-		panic(err)
-	}
-
-	op.Images[0] = img.EbiImg()
-	dc.DrawRectShader(img.EbiImg().Bounds().Dx(), img.EbiImg().Bounds().Dy(), s, op)
-
-	//dc.DrawImage(img.EbiImg(), op)
 }
 
 func (p *Sprite) getDrawInfo() *spriteDrawInfo {

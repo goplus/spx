@@ -46,8 +46,9 @@ type Sprite struct {
 	rotationStyle RotationStyle
 	rRect         *math32.RotatedRect
 
-	sayObj     *sayOrThinker
-	animations map[string]*aniConfig
+	sayObj        *sayOrThinker
+	animations    map[string]*aniConfig
+	greffUniforms map[string]interface{} // graphic effects
 
 	penColor color.RGBA
 	penShade float64
@@ -64,8 +65,7 @@ type Sprite struct {
 	hasOnCloned  bool
 	hasOnTouched bool
 
-	gamer         reflect.Value
-	effectUniform map[EffectKind]float64
+	gamer reflect.Value
 }
 
 func (p *Sprite) SetDying() { // dying: visible but can't be touched
@@ -85,7 +85,6 @@ func (p *Sprite) init(
 	}
 	p.eventSinks.init(&g.sinkMgr, p)
 
-	p.effectUniform = make(map[EffectKind]float64)
 	p.gamer = gamer
 	p.g, p.name = g, name
 	p.x, p.y = sprite.X, sprite.Y
@@ -142,7 +141,7 @@ func (p *Sprite) InitFrom(src *Sprite) {
 	p.rotationStyle = src.rotationStyle
 	p.sayObj = nil
 	p.animations = src.animations
-	p.effectUniform = src.effectUniform
+	p.greffUniforms = cloneMap(src.greffUniforms)
 
 	p.penColor = src.penColor
 	p.penShade = src.penShade
@@ -158,6 +157,17 @@ func (p *Sprite) InitFrom(src *Sprite) {
 	p.hasOnMoving = false
 	p.hasOnCloned = false
 	p.hasOnTouched = false
+}
+
+func cloneMap(v map[string]interface{}) map[string]interface{} {
+	if v == nil {
+		return nil
+	}
+	ret := make(map[string]interface{}, len(v))
+	for k, v := range v {
+		ret[k] = v
+	}
+	return ret
 }
 
 func applyFloat64(out *float64, in interface{}) {
@@ -753,10 +763,6 @@ func (p *Sprite) Goto(obj interface{}) {
 	p.SetXYpos(x, y)
 }
 
-const (
-	glideTick = 1e8
-)
-
 func (p *Sprite) Glide__0(x, y float64, secs float64) {
 	if debugInstr {
 		log.Println("Glide", p.name, x, y, secs)
@@ -770,7 +776,6 @@ func (p *Sprite) Glide__0(x, y float64, secs float64) {
 		AniType:  aniTypeGlide,
 	}
 	p.goAnimate("glide", ani)
-
 }
 
 func (p *Sprite) Glide__1(obj interface{}, secs float64) {
@@ -978,20 +983,32 @@ func (p *Sprite) ChangeSize(delta float64) {
 
 // -----------------------------------------------------------------------------
 
+func (p *Sprite) requireGreffUniforms() map[string]interface{} {
+	effs := p.greffUniforms
+	if effs == nil {
+		effs = make(map[string]interface{})
+		p.greffUniforms = effs
+	}
+	return effs
+}
+
 func (p *Sprite) SetEffect(kind EffectKind, val float64) {
-	p.effectUniform[kind] = val
+	effs := p.requireGreffUniforms()
+	effs[kind.String()] = float32(val)
 }
 
 func (p *Sprite) ChangeEffect(kind EffectKind, delta float64) {
-	val, ok := p.effectUniform[kind]
-	if ok {
-		p.effectUniform[kind] = val + delta
+	effs := p.requireGreffUniforms()
+	key := kind.String()
+	newVal := float32(delta)
+	if oldVal, ok := effs[key]; ok {
+		newVal += oldVal.(float32)
 	}
-
+	effs[key] = newVal
 }
 
 func (p *Sprite) ClearGraphEffects() {
-	p.effectUniform = make(map[EffectKind]float64)
+	p.greffUniforms = nil
 }
 
 // -----------------------------------------------------------------------------
