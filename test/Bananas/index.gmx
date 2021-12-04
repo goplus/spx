@@ -1,6 +1,6 @@
 var (
 	Bananas []*Banana
 	Monkey  *Monkey
+	Red *Red
 )
-
 run "res", {Title: "Bananas (by Go+)" , Width: 800, Height: 600}
