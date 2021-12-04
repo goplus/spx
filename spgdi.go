@@ -54,8 +54,8 @@ func (p *spriteDrawInfo) getPixelGeo(cx, cy float64) *ebiten.GeoM {
 	return geo
 }
 
-func (p *spriteDrawInfo) getPixel(pos *math32.Vector2, gdiImg *gdi.SpxImage, geo *ebiten.GeoM) (color.Color, *math32.Vector2) {
-	img := gdiImg.OriImg()
+func (p *spriteDrawInfo) getPixel(pos *math32.Vector2, gdiImg gdi.Image, geo *ebiten.GeoM) (color.Color, *math32.Vector2) {
+	img := gdiImg.Origin()
 	pos2 := math32.NewVector2(pos.X-p.sprite.x, pos.Y-p.sprite.y)
 	x, y := geo.Apply(pos2.X, pos2.Y)
 	pixelpos := math32.NewVector2(x, y)
@@ -122,13 +122,14 @@ func (p *spriteDrawInfo) doDrawOn(dc drawContext, fs spxfs.Dir) {
 		if err != nil {
 			panic(err)
 		}
-		op.Images[0] = img.EbiImg()
-		dc.DrawRectShader(img.EbiImg().Bounds().Dx(), img.EbiImg().Bounds().Dy(), s, op)
+		op.Images[0] = img.Ebiten()
+		imgSize := img.Ebiten().Bounds().Size()
+		dc.DrawRectShader(imgSize.X, imgSize.Y, s, op)
 	} else {
 		op := new(ebiten.DrawImageOptions)
 		op.Filter = ebiten.FilterLinear
 		op.GeoM = p.geo
-		dc.DrawImage(img.EbiImg(), op)
+		dc.DrawImage(img.Ebiten(), op)
 	}
 }
 

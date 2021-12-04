@@ -100,7 +100,7 @@ type Gamer interface {
 
 func (p *Game) getSharedImgs() *sharedImages {
 	if p.shared == nil {
-		p.shared = &sharedImages{imgs: make(map[string]*gdi.SpxImage)}
+		p.shared = &sharedImages{imgs: make(map[string]gdi.Image)}
 	}
 	return p.shared
 }
@@ -310,19 +310,19 @@ type cameraConfig struct {
 }
 
 type mapConfig struct {
-	Mode string `json:"mode"`
+	Mode   string `json:"mode"`
+	Width  int    `json:"width"`
+	Height int    `json:"height"`
 }
 
-func (p *mapConfig) mapMode() int {
-	if p != nil {
-		switch p.Mode {
-		case "repeat":
-			return mapModeRepeat
-		case "fillCut":
-			return mapModeFillCut
-		case "fillRatio":
-			return mapModeFillRatio
-		}
+func toMapMode(mode string) int {
+	switch mode {
+	case "repeat":
+		return mapModeRepeat
+	case "fillCut":
+		return mapModeFillCut
+	case "fillRatio":
+		return mapModeFillRatio
 	}
 	return mapModeFill
 }
@@ -443,8 +443,8 @@ type projConfig struct {
 	Costumes            []*costumeConfig `json:"costumes"`
 	CurrentCostumeIndex int              `json:"currentCostumeIndex"`
 	StepUnit            float64          `json:"stepUnit"`
+	Map                 mapConfig        `json:"map"`
 	Camera              *cameraConfig    `json:"camera"`
-	Map                 *mapConfig       `json:"map"`
 }
 
 type initer interface {
@@ -466,7 +466,18 @@ func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
 	if err != nil {
 		return
 	}
-	p.baseObj.init("", proj.Costumes, proj.CurrentCostumeIndex)
+
+	if len(proj.Costumes) > 0 {
+		p.baseObj.init("", proj.Costumes, proj.CurrentCostumeIndex)
+	} else {
+		p.baseObj.initWithSize(proj.Map.Width, proj.Map.Height)
+	}
+	p.mapMode = toMapMode(proj.Map.Mode)
+	p.stepUnit = proj.StepUnit
+	if p.stepUnit == 0 {
+		p.stepUnit = 1
+	}
+
 	inits := make([]initer, 0, len(proj.Zorder))
 	for _, v := range proj.Zorder {
 		if name, ok := v.(string); !ok { // not a prototype sprite
@@ -483,11 +494,6 @@ func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
 	for _, ini := range inits {
 		ini.Main()
 	}
-	p.stepUnit = proj.StepUnit
-	if p.stepUnit == 0 {
-		p.stepUnit = 1
-	}
-	p.mapMode = proj.Map.mapMode()
 
 	p.worldWidth_ = 0
 	p.doWorldSize() // set world size
@@ -1097,7 +1103,6 @@ func (p *Game) findSprite(name string) *Sprite {
 func (p *Game) drawBackground(dc drawContext) {
 	c := p.costumes[p.currentCostumeIndex]
 	img, _, _ := c.needImage(p.fs)
-	ebiImg := img.EbiImg()
 	options := new(ebiten.DrawTrianglesOptions)
 	options.Filter = ebiten.FilterLinear
 
@@ -1140,47 +1145,23 @@ func (p *Game) drawBackground(dc drawContext) {
 	cy = (float32(p.worldHeight_) - dstHeight) / 2.0
 	vs := []ebiten.Vertex{
 		{
-			DstX:   cx,
-			DstY:   cy,
-			SrcX:   0,
-			SrcY:   0,
-			ColorR: 1,
-			ColorG: 1,
-			ColorB: 1,
-			ColorA: 1,
+			DstX: cx, DstY: cy, SrcX: 0, SrcY: 0,
+			ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1,
 		},
 		{
-			DstX:   dstWidth + cx,
-			DstY:   cy,
-			SrcX:   srcWidth,
-			SrcY:   0,
-			ColorR: 1,
-			ColorG: 1,
-			ColorB: 1,
-			ColorA: 1,
+			DstX: dstWidth + cx, DstY: cy, SrcX: srcWidth, SrcY: 0,
+			ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1,
 		},
 		{
-			DstX:   cx,
-			DstY:   dstHeight + cy,
-			SrcX:   0,
-			SrcY:   srcHeight,
-			ColorR: 1,
-			ColorG: 1,
-			ColorB: 1,
-			ColorA: 1,
+			DstX: cx, DstY: dstHeight + cy, SrcX: 0, SrcY: srcHeight,
+			ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1,
 		},
 		{
-			DstX:   dstWidth + cx,
-			DstY:   dstHeight + cy,
-			SrcX:   srcWidth,
-			SrcY:   srcHeight,
-			ColorR: 1,
-			ColorG: 1,
-			ColorB: 1,
-			ColorA: 1,
+			DstX: dstWidth + cx, DstY: dstHeight + cy, SrcX: srcWidth, SrcY: srcHeight,
+			ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1,
 		},
 	}
-	dc.DrawTriangles(vs, []uint16{0, 1, 2, 1, 2, 3}, ebiImg, options)
+	dc.DrawTriangles(vs, []uint16{0, 1, 2, 1, 2, 3}, img.Ebiten(), options)
 }
 
 func (p *Game) onDraw(dc drawContext) {
