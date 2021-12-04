@@ -13,6 +13,10 @@ onKey KeyC, => {
 	turn 15
 }
 
+onKey KeyE, => {
+	glide 100.0, -50.0, 2.0
+}
+
 onKey KeySpace, => {
 	if touchingColor(RGB(255, 0, 0)) {
 		println "touchingColor Red"
