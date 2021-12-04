@@ -1,0 +1,98 @@
+package effect
+
+const ShaderFrag string = `package main
+
+var (
+	Color      float
+	Brightness float
+)
+
+func convertRGB2HSV(rgb vec3) vec3 {
+	// Hue calculation has 3 cases, depending on which RGB component is largest, and one of those cases involves a "mod"
+	// operation. In order to avoid that "mod" we split the M==R case in two: one for G<B and one for B>G. The B>G case
+	// will be calculated in the negative and fed through abs() in the hue calculation at the end.
+	// See also: https://en.wikipedia.org/wiki/HSL_and_HSV#Hue_and_chroma
+	var hueOffsets vec4 = vec4(0.0, -1.0/3.0, 2.0/3.0, -1.0)
+
+	// temp1.xy = sort B & G (largest first)
+	// temp1.z = the hue offset we'll use if it turns out that R is the largest component (M==R)
+	// temp1.w = the hue offset we'll use if it turns out that R is not the largest component (M==G or M==B)
+	var temp1 vec4
+	if rgb.b > rgb.g {
+		temp1 = vec4(rgb.bg, hueOffsets.wz)
+	} else {
+		temp1 = vec4(rgb.gb, hueOffsets.xy)
+	}
+
+	// temp2.x = the largest component of RGB ("M" / "Max")
+	// temp2.yw = the smaller components of RGB, ordered for the hue calculation (not necessarily sorted by magnitude!)
+	// temp2.z = the hue offset we'll use in the hue calculation
+	var temp2 vec4
+	if rgb.b > rgb.g {
+		temp2 = vec4(rgb.r, temp1.yzx)
+	} else {
+		temp2 = vec4(temp1.xyw, rgb.r)
+	}
+
+	var m, C, V float
+	// m = the smallest component of RGB ("min")
+	m = min(temp2.y, temp2.w)
+
+	// Chroma = M - m
+	C = temp2.x - m
+
+	// Value = M
+	V = temp2.x
+
+	var epsilon float = 1e-3
+
+	return vec3(
+		abs(temp2.z+(temp2.w-temp2.y)/(6.0*C+epsilon)), // Hue
+		C/(temp2.x+epsilon),                            // Saturation
+		V)                                              // Value
+}
+
+func convertHue2RGB(hue float) vec3 {
+	var r float = abs(hue*6.0-3.0) - 1.0
+	var g float = 2.0 - abs(hue*6.0-2.0)
+	var b float = 2.0 - abs(hue*6.0-4.0)
+	return clamp(vec3(r, g, b), 0.0, 1.0)
+}
+
+func convertHSV2RGB(hsv vec3) vec3 {
+	var rgb vec3 = convertHue2RGB(hsv.x)
+	var c float = hsv.z * hsv.y
+	return rgb*c + hsv.z - c
+}
+
+func Fragment(position vec4, texCoord vec2, color vec4) vec4 {
+	var txtcolor vec4 = imageSrc0At(texCoord)
+	if txtcolor.a < 0.001 {
+		return vec4(0)
+	}
+
+	if Color > 0.0 {
+		var hsv vec3 = convertRGB2HSV(txtcolor.xyz)
+		const minLightness float = 0.11 / 2.0
+		const minSaturation float = 0.09
+		if hsv.z < minLightness {
+			hsv = vec3(0.0, 1.0, minLightness)
+		} else if hsv.y < minSaturation {
+			hsv = vec3(0.0, minSaturation, hsv.z)
+		}
+		hsv.x = mod(hsv.x+Color, 1.0)
+		if hsv.x < 0.0 {
+			hsv.x += 1.0
+		}
+		var rgb vec3 = convertHSV2RGB(hsv)
+		txtcolor = vec4(rgb, txtcolor.a)
+	}
+
+	if Brightness > 0.0 {
+		var rgb vec3 =  clamp(txtcolor.rgb + vec3(Brightness), vec3(0), vec3(1))
+		txtcolor = vec4(rgb,txtcolor.a)
+	}
+
+	return txtcolor
+}
+`

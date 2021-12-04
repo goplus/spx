@@ -1303,6 +1303,11 @@ func (p *Game) Answer() Value {
 
 type EffectKind int
 
+const (
+	ColorEffect EffectKind = iota
+	BrightnessEffect
+)
+
 func (p *Game) SetEffect(kind EffectKind, val float64) {
 	panic("todo")
 }

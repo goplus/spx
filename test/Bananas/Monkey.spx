@@ -13,6 +13,17 @@ onKey KeyC, => {
 	turn 15
 }
 
+
+onKey KeyF, => {
+	setEffect ColorEffect, 100
+}
+onKey KeyG, => {
+	setEffect BrightnessEffect, 50
+}
+onKey KeyJ, => {
+	clearGraphEffects
+}
+
 onKey KeySpace, => {
 	if touchingColor(RGB(255, 0, 0)) {
 		println "touchingColor Red"
