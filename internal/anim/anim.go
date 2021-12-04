@@ -275,12 +275,12 @@ func (this *Animation) _interpolate(currentFrame int, repeatCount int, loopMode 
 
 				startValue, ok := startValue_obj.(*math32.Vector2)
 				if !ok {
-					log.Printf("_interpolate The interface type is incorrect, request Quaternion ")
+					log.Printf("_interpolate The interface type is incorrect, request Vector2 ")
 					return math32.NewVector2Zero()
 				}
 				endValue, ok := endValue_obj.(*math32.Vector2)
 				if !ok {
-					log.Printf("_interpolate The interface type is incorrect, request Quaternion ")
+					log.Printf("_interpolate The interface type is incorrect, request Vector2 ")
 					return math32.NewVector2Zero()
 				}
 
