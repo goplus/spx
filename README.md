@@ -23,7 +23,6 @@ How to run games powered by Go+ spx engine?
 
 ## Games powered by spx
 
-* [HelloSpx](https://github.com/xushiwei/HelloSpx)
 * [AircraftWar](https://github.com/goplus/AircraftWar)
 * [FlappyCalf](https://github.com/goplus/FlappyCalf)
 * [MazePlay](https://github.com/goplus/MazePlay)
