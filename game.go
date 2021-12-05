@@ -22,6 +22,7 @@ import (
 
 	spxfs "github.com/goplus/spx/fs"
 	_ "github.com/goplus/spx/fs/asset"
+	"github.com/goplus/spx/fs/fsutil"
 	_ "github.com/goplus/spx/fs/zip"
 )
 
@@ -120,6 +121,9 @@ func (p *Game) initGame() {
 
 // Gopt_Game_Main is required by Go+ compiler as the entry of a .gmx project.
 func Gopt_Game_Main(game Gamer) {
+	dir := fsutil.GetWorkDir()
+	os.Chdir(dir)
+
 	game.initGame()
 	game.(interface{ MainEntry() }).MainEntry()
 }
