@@ -8,7 +8,7 @@
       "y": 122
     }
   ],
-  "currentCostumeIndex": 0,
+  "costumeIndex": 0,
   "heading": 90,
   "isDraggable": false,
   "rotationStyle": "normal",

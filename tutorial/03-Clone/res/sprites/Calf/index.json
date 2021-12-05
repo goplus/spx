@@ -1,14 +1,13 @@
 {
   "costumes": [
     {
-      "bitmapResolution": 1,
       "name": "normal",
       "path": "1.png",
       "x": 75,
       "y": 75
     }
   ],
-  "currentCostumeIndex": 0,
+  "costumeIndex": 0,
   "heading": 90,
   "isDraggable": false,
   "rotationStyle": "normal",

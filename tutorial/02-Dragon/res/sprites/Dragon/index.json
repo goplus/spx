@@ -1,14 +1,13 @@
 {
   "costumes": [
     {
-      "bitmapResolution": 1,
       "name": "dragon",
       "path": "1.svg",
       "x": 65,
       "y": 60
     }
   ],
-  "currentCostumeIndex": 0,
+  "costumeIndex": 0,
   "heading": -165,
   "isDraggable": false,
   "rotationStyle": "normal",

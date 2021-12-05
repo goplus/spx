@@ -36,7 +36,7 @@
       "y": 38
     }
   ],
-  "currentCostumeIndex": 0,
+  "costumeIndex": 0,
   "fAnimations": {
     "die": {
       "onStart":{
