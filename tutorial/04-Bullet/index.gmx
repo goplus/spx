@@ -3,4 +3,4 @@ var (
 	Bullet     Bullet
 )
 
-run "res", {Title: "Bullet (by Go+)"}
+run "assets", {Title: "Bullet (by Go+)"}
