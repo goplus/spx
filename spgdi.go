@@ -75,7 +75,31 @@ func (p *spriteDrawInfo) drawOn(dc drawContext, fs spxfs.Dir) {
 func (p *spriteDrawInfo) draw(dc drawContext, ctx *Sprite) {
 	p.doDrawOn(dc, ctx.g.fs)
 }
+func (p *spriteDrawInfo) getUpdateRotateRect(x, y float64) *math32.RotatedRect {
+	c := p.sprite.costumes[p.sprite.costumeIndex_]
 
+	img, centerX, centerY := c.needImage(p.sprite.g.fs)
+	rect := image.Rectangle{}
+	rect.Min.X = 0
+	rect.Min.Y = 0
+	rect.Max = img.Bounds().Size()
+
+	scale := p.sprite.scale / float64(c.bitmapResolution)
+
+	geo := ebiten.GeoM{}
+	geo.Reset()
+	direction := p.sprite.direction + c.faceRight
+
+	geo.Translate(-centerX, -centerY)
+	geo.Scale(scale, scale)
+	geo.Rotate(toRadian(direction - 90))
+	geo.Translate(x, -y)
+
+	geo2 := geo
+	geo2.Scale(1.0, -1.0)
+	rRect := math32.ApplyGeoForRotatedRect(rect, &geo2)
+	return rRect
+}
 func (p *spriteDrawInfo) updateMatrix() {
 	c := p.sprite.costumes[p.sprite.costumeIndex_]
 

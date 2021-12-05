@@ -2,15 +2,19 @@
   "scenes": [
     {
       "name": "backdrop1",
-      "path": "../../res/lake.jpg"
+      "path": "../../res/lake.jpg",
+      "mode": "repeat",
+      "mode_test0": "",
+      "mode_test1": "repeat",
+      "mode_test2": "fillRatio",
+      "mode_test3": "fillCut"
     }
   ],
   "map": {
-    "mode": "fillCut",
-    "mode_test0": "",
-    "mode_test1": "repeat",
-    "mode_test2": "fillRatio",
-    "mode_test3": "fillCut"
+    "width":500,
+    "height":400,
+    "stepUnit":1,
+    "behavior":"boxInside"
   },
   "zorder": [
     {

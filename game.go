@@ -52,10 +52,10 @@ func SetDebug(flags int) {
 // -------------------------------------------------------------------------------------
 
 const (
-	mapModeFill = iota
-	mapModeRepeat
-	mapModeFillRatio
-	mapModeFillCut
+	sceneModeFill = iota
+	sceneModeRepeat
+	sceneModeFillRatio
+	sceneModeFillCut
 )
 
 type Game struct {
@@ -78,10 +78,6 @@ type Game struct {
 	// window
 	windowWidth_  int
 	windowHeight_ int
-
-	stepUnit float64 //global step unit in game
-	mapMode  int
-
 	// world
 	worldWidth_      int
 	worldHeight_     int
@@ -89,7 +85,8 @@ type Game struct {
 
 	sinkMgr eventSinkMgr
 
-	world *ebiten.Image
+	world     *ebiten.Image
+	mapConfig mapConfig
 }
 
 type Spriter = Shape
@@ -303,6 +300,19 @@ type costumeConfig struct {
 	Y                float64 `json:"y"`
 	FaceRight        float64 `json:"faceRight"` // turn face to right
 	BitmapResolution int     `json:"bitmapResolution"`
+	Mode             string  `json:"mode"`
+}
+
+func toSceneMode(mode string) int {
+	switch mode {
+	case "repeat":
+		return sceneModeRepeat
+	case "fillCut":
+		return sceneModeFillCut
+	case "fillRatio":
+		return sceneModeFillRatio
+	}
+	return sceneModeFill
 }
 
 type cameraConfig struct {
@@ -310,21 +320,22 @@ type cameraConfig struct {
 }
 
 type mapConfig struct {
-	Mode   string `json:"mode"`
-	Width  int    `json:"width"`
-	Height int    `json:"height"`
+	Behavior string  `json:"behavior"`
+	StepUnit float64 `json:"stepUnit"`
+	Width    int     `json:"width"`
+	Height   int     `json:"height"`
 }
 
-func toMapMode(mode string) int {
-	switch mode {
-	case "repeat":
-		return mapModeRepeat
-	case "fillCut":
-		return mapModeFillCut
-	case "fillRatio":
-		return mapModeFillRatio
+const (
+	mapInsideForBox = iota
+)
+
+func toMapInsideBehavior(behavior string) int {
+	switch behavior {
+	case "boxInside":
+		return mapInsideForBox
 	}
-	return mapModeFill
+	return mapInsideForBox
 }
 
 //frame aniConfig
@@ -452,9 +463,9 @@ type projConfig struct {
 	Costumes            []*costumeConfig `json:"costumes"`
 	CurrentCostumeIndex *int             `json:"currentCostumeIndex"`
 	SceneIndex          int              `json:"sceneIndex"`
-	StepUnit            float64          `json:"stepUnit"`
-	Map                 mapConfig        `json:"map"`
-	Camera              *cameraConfig    `json:"camera"`
+
+	Map    mapConfig     `json:"map"`
+	Camera *cameraConfig `json:"camera"`
 }
 
 func (p *projConfig) getScenes() []*costumeConfig {
@@ -496,10 +507,9 @@ func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
 	} else {
 		p.baseObj.initWithSize(proj.Map.Width, proj.Map.Height)
 	}
-	p.mapMode = toMapMode(proj.Map.Mode)
-	p.stepUnit = proj.StepUnit
-	if p.stepUnit == 0 {
-		p.stepUnit = 1
+	p.mapConfig = proj.Map
+	if p.mapConfig.StepUnit == 0 {
+		p.mapConfig.StepUnit = 1
 	}
 
 	inits := make([]initer, 0, len(proj.Zorder))
@@ -733,9 +743,6 @@ func (p *Game) runLoop(cfg *Config) (err error) {
 }
 
 func (p *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
-	p.windowWidth_ = outsideWidth
-	p.windowHeight_ = outsideHeight
-	p.resizeWindow()
 	return p.windowSize_()
 }
 
@@ -1129,9 +1136,10 @@ func (p *Game) drawBackground(dc drawContext) {
 	img, _, _ := c.needImage(p.fs)
 	options := new(ebiten.DrawTrianglesOptions)
 	options.Filter = ebiten.FilterLinear
+	sceneMode := toSceneMode(c.mode)
 
 	var srcWidth, srcHeight, dstWidth, dstHeight float32
-	if p.mapMode == mapModeRepeat {
+	if sceneMode == sceneModeRepeat {
 		srcWidth = float32(p.worldWidth_)
 		srcHeight = float32(p.worldHeight_)
 		dstWidth = float32(p.worldWidth_)
@@ -1141,11 +1149,11 @@ func (p *Game) drawBackground(dc drawContext) {
 		srcWidth = float32(img.Bounds().Dx())
 		srcHeight = float32(img.Bounds().Dy())
 		options.Address = ebiten.AddressClampToZero
-		switch p.mapMode {
+		switch sceneMode {
 		default:
 			dstWidth = float32(p.worldWidth_)
 			dstHeight = float32(p.worldHeight_)
-		case mapModeFillCut:
+		case sceneModeFillCut:
 			if srcWidth > srcHeight {
 				dstHeight = float32(p.worldHeight_)
 				dstWidth = float32(p.worldWidth_) * srcWidth / srcHeight
@@ -1153,7 +1161,7 @@ func (p *Game) drawBackground(dc drawContext) {
 				dstWidth = float32(p.worldWidth_)
 				dstHeight = float32(p.worldHeight_) * srcWidth / srcHeight
 			}
-		case mapModeFillRatio:
+		case sceneModeFillRatio:
 			if srcWidth > srcHeight {
 				dstHeight = float32(p.worldHeight_)
 				dstWidth = float32(p.worldWidth_) * srcHeight / srcWidth

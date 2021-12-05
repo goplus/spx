@@ -162,6 +162,7 @@ type costume struct {
 	img              delayloadImage
 	faceRight        float64
 	bitmapResolution int
+	mode             string
 }
 
 func newCostumeWithSize(width, height int) *costume {
@@ -191,6 +192,7 @@ func newCostume(base string, c *costumeConfig) *costume {
 		img:              delayloadImage{loader: loader, pt: imagePoint{c.X, c.Y}},
 		faceRight:        c.FaceRight,
 		bitmapResolution: toBitmapResolution(c.BitmapResolution),
+		mode:             c.Mode,
 	}
 }
 

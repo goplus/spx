@@ -37,3 +37,24 @@ onKey KeySpace, => {
 		println "no touchingColor Red"
 	}
 }
+
+
+
+
+
+onKey KeyUp, => {
+	Camera.changeXYpos 0, 5
+}
+
+onKey KeyDown, => {
+	Camera.changeXYpos 0, -5
+}
+
+onKey KeyLeft, => {
+	Camera.changeXYpos -5, 0
+}
+
+onKey KeyRight, => {
+	Camera.changeXYpos 5, 0
+}
+
