@@ -1,15 +1,18 @@
 {
   "costumes": [
     {
-      "bitmapResolution": 1,
       "name": "backdrop1",
-      "path": "../../Dinosaur/res/6.png",
-      "x": 240,
-      "y": 180
+      "path": "../../Dinosaur/res/6.png"
     }
   ],
-  "currentCostumeIndex": 0,
+  "costumeIndex": 0,
   "zorder": [
+    {
+      "type": "sprite",
+      "target": "Monkey",
+      "x": 0,
+      "y": 50
+    },
     {
       "type": "sprite",
       "target": "Monkey2",

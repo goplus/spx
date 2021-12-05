@@ -21,7 +21,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 
 	spxfs "github.com/goplus/spx/fs"
-	_ "github.com/goplus/spx/fs/local"
+	_ "github.com/goplus/spx/fs/asset"
 	_ "github.com/goplus/spx/fs/zip"
 )
 
@@ -51,6 +51,13 @@ func SetDebug(flags int) {
 
 // -------------------------------------------------------------------------------------
 
+const (
+	mapModeFill = iota
+	mapModeRepeat
+	mapModeFillRatio
+	mapModeFillCut
+)
+
 type Game struct {
 	baseObj
 	eventSinks
@@ -73,15 +80,16 @@ type Game struct {
 	windowHeight_ int
 
 	stepUnit float64 //global step unit in game
+	mapMode  int
 
 	// world
-	worldWidth_  int
-	worldHeight_ int
-	world        *ebiten.Image
-
+	worldWidth_      int
+	worldHeight_     int
 	gMouseX, gMouseY int64
 
 	sinkMgr eventSinkMgr
+
+	world *ebiten.Image
 }
 
 type Spriter = Shape
@@ -92,7 +100,7 @@ type Gamer interface {
 
 func (p *Game) getSharedImgs() *sharedImages {
 	if p.shared == nil {
-		p.shared = &sharedImages{imgs: make(map[string]*ebiten.Image)}
+		p.shared = &sharedImages{imgs: make(map[string]gdi.Image)}
 	}
 	return p.shared
 }
@@ -112,6 +120,7 @@ func (p *Game) initGame() {
 
 // Gopt_Game_Main is required by Go+ compiler as the entry of a .gmx project.
 func Gopt_Game_Main(game Gamer) {
+	setupWorkDir()
 	game.initGame()
 	game.(interface{ MainEntry() }).MainEntry()
 }
@@ -139,6 +148,18 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 		}
 		conf.FullScreen = *fullscreen
 	}
+
+	key := conf.ScreenshotKey
+	if key == "" {
+		key = os.Getenv("SPX_SCREENSHOT_KEY")
+	}
+	if key != "" {
+		err := os.Setenv("EBITEN_SCREENSHOT_KEY", key)
+		if err != nil {
+			panic(err)
+		}
+	}
+
 	v := reflect.ValueOf(game).Elem()
 	g := instance(v)
 	if err := g.startLoad(resource, &conf); err != nil {
@@ -161,9 +182,6 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 	}
 	if err := g.endLoad(v, conf.Index); err != nil {
 		panic(err)
-	}
-	if loader, ok := game.(interface{ OnLoaded() }); ok {
-		loader.OnLoaded()
 	}
 
 	if err := g.runLoop(&conf); err != nil {
@@ -287,8 +305,27 @@ type costumeConfig struct {
 	FaceRight        float64 `json:"faceRight"` // turn face to right
 	BitmapResolution int     `json:"bitmapResolution"`
 }
+
 type cameraConfig struct {
 	On string `json:"on"`
+}
+
+type mapConfig struct {
+	Mode   string `json:"mode"`
+	Width  int    `json:"width"`
+	Height int    `json:"height"`
+}
+
+func toMapMode(mode string) int {
+	switch mode {
+	case "repeat":
+		return mapModeRepeat
+	case "fillCut":
+		return mapModeFillCut
+	case "fillRatio":
+		return mapModeFillRatio
+	}
+	return mapModeFill
 }
 
 //frame aniConfig
@@ -298,6 +335,7 @@ const (
 	aniTypeFrame aniTypeEnum = iota
 	aniTypeMove
 	aniTypeTurn
+	aniTypeGlide
 )
 
 type costumesConfig struct {
@@ -330,12 +368,20 @@ type spriteConfig struct {
 	Costumes            []*costumeConfig      `json:"costumes"`
 	CostumeSet          *costumeSet           `json:"costumeSet"`
 	CostumeMPSet        *costumeMPSet         `json:"costumeMPSet"`
-	CurrentCostumeIndex int                   `json:"currentCostumeIndex"`
+	CurrentCostumeIndex *int                  `json:"currentCostumeIndex"`
+	CostumeIndex        int                   `json:"costumeIndex"`
 	FAnimations         map[string]*aniConfig `json:"fAnimations"`
 	MAnimations         map[string]*aniConfig `json:"mAnimations"`
 	TAnimations         map[string]*aniConfig `json:"tAnimations"`
 	Visible             bool                  `json:"visible"`
 	IsDraggable         bool                  `json:"isDraggable"`
+}
+
+func (p *spriteConfig) getCostumeIndex() int {
+	if p.CurrentCostumeIndex != nil { // for backward compatibility
+		return *p.CurrentCostumeIndex
+	}
+	return p.CostumeIndex
 }
 
 func (p *Game) startLoad(resource interface{}, cfg *Config) (err error) {
@@ -361,6 +407,7 @@ func (p *Game) startLoad(resource interface{}, cfg *Config) (err error) {
 	p.fs = fs
 	p.windowWidth_ = cfg.Width
 	p.windowHeight_ = cfg.Height
+
 	return
 }
 
@@ -377,6 +424,7 @@ func (p *Game) loadSprite(sprite Spriter, name string, gamer reflect.Value) erro
 	//
 	// init sprite (field 0)
 	vSpr := reflect.ValueOf(sprite).Elem()
+	vSpr.Set(reflect.Zero(vSpr.Type()))
 	base := vSpr.Field(0).Addr().Interface().(*Sprite)
 	base.init(baseDir, p, name, &conf, gamer, p.getSharedImgs())
 	p.shapes[name] = sprite
@@ -402,10 +450,27 @@ func loadJson(ret interface{}, fs spxfs.Dir, file string) (err error) {
 
 type projConfig struct {
 	Zorder              []interface{}    `json:"zorder"`
+	Scenes              []*costumeConfig `json:"scenes"`
 	Costumes            []*costumeConfig `json:"costumes"`
-	CurrentCostumeIndex int              `json:"currentCostumeIndex"`
+	CurrentCostumeIndex *int             `json:"currentCostumeIndex"`
+	SceneIndex          int              `json:"sceneIndex"`
 	StepUnit            float64          `json:"stepUnit"`
+	Map                 mapConfig        `json:"map"`
 	Camera              *cameraConfig    `json:"camera"`
+}
+
+func (p *projConfig) getScenes() []*costumeConfig {
+	if p.Scenes != nil {
+		return p.Scenes
+	}
+	return p.Costumes
+}
+
+func (p *projConfig) getSceneIndex() int {
+	if p.CurrentCostumeIndex != nil {
+		return *p.CurrentCostumeIndex
+	}
+	return p.SceneIndex
 }
 
 type initer interface {
@@ -427,7 +492,18 @@ func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
 	if err != nil {
 		return
 	}
-	p.baseObj.init("", proj.Costumes, proj.CurrentCostumeIndex)
+
+	if scenes := proj.getScenes(); len(scenes) > 0 {
+		p.baseObj.init("", scenes, proj.getSceneIndex())
+	} else {
+		p.baseObj.initWithSize(proj.Map.Width, proj.Map.Height)
+	}
+	p.mapMode = toMapMode(proj.Map.Mode)
+	p.stepUnit = proj.StepUnit
+	if p.stepUnit == 0 {
+		p.stepUnit = 1
+	}
+
 	inits := make([]initer, 0, len(proj.Zorder))
 	for _, v := range proj.Zorder {
 		if name, ok := v.(string); !ok { // not a prototype sprite
@@ -444,10 +520,6 @@ func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
 	for _, ini := range inits {
 		ini.Main()
 	}
-	p.stepUnit = proj.StepUnit
-	if p.stepUnit == 0 {
-		p.stepUnit = 1
-	}
 
 	p.worldWidth_ = 0
 	p.doWorldSize() // set world size
@@ -461,21 +533,42 @@ func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
 		log.Println("==> SetWindowSize", p.windowWidth_, p.windowHeight_)
 	}
 
+	p.resizeWindow()
+	if proj.Camera != nil && proj.Camera.On != "" {
+		p.Camera.On(proj.Camera.On)
+	}
+	if loader, ok := g.Addr().Interface().(interface{ OnLoaded() }); ok {
+		loader.OnLoaded()
+	}
+	return
+}
+
+func (p *Game) resizeWindow() {
+	c := p.costumes[p.costumeIndex_]
+	img, _, _ := c.needImage(p.fs)
+	if p.worldWidth_ > img.Bounds().Dx() && p.windowWidth_ < p.worldWidth_ {
+		p.worldWidth_ = img.Bounds().Dx()
+	}
+	if p.worldHeight_ > img.Bounds().Dy() && p.windowHeight_ < p.worldHeight_ {
+		p.worldHeight_ = img.Bounds().Dy()
+	}
+
 	if p.windowWidth_ > p.worldWidth_ {
 		p.worldWidth_ = p.windowWidth_
 	}
 	if p.windowHeight_ > p.worldHeight_ {
 		p.worldHeight_ = p.windowHeight_
 	}
+	if p.world != nil {
+		p.world.Dispose()
+	}
 	p.world = ebiten.NewImage(p.worldWidth_, p.worldHeight_)
 
 	p.Camera.init(p, float64(p.windowWidth_), float64(p.windowHeight_), float64(p.worldWidth_), float64(p.worldHeight_))
-	if proj.Camera != nil && proj.Camera.On != "" {
-		p.Camera.On(proj.Camera.On)
-	}
 
 	ebiten.SetWindowSize(p.windowWidth_, p.windowHeight_)
-	return
+	ebiten.SetWindowResizable(true)
+
 }
 
 func (p *Game) endLoad(g reflect.Value, index interface{}) (err error) {
@@ -616,6 +709,7 @@ type Config struct {
 	DontParseFlags     bool
 	Width              int
 	Height             int
+	ScreenshotKey      string // screenshot image capture key
 }
 
 func (p *Game) runLoop(cfg *Config) (err error) {
@@ -641,6 +735,9 @@ func (p *Game) runLoop(cfg *Config) (err error) {
 }
 
 func (p *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
+	p.windowWidth_ = outsideWidth
+	p.windowHeight_ = outsideHeight
+	p.resizeWindow()
 	return p.windowSize_()
 }
 
@@ -796,7 +893,7 @@ func (p *Game) windowSize_() (int, int) {
 
 func (p *Game) doWindowSize() {
 	if p.windowWidth_ == 0 {
-		c := p.costumes[p.currentCostumeIndex]
+		c := p.costumes[p.costumeIndex_]
 		img, _, _ := c.needImage(p.fs)
 		w, h := img.Size()
 		p.windowWidth_, p.windowHeight_ = w/c.bitmapResolution, h/c.bitmapResolution
@@ -812,34 +909,29 @@ func (p *Game) worldSize_() (int, int) {
 
 func (p *Game) doWorldSize() {
 	if p.worldWidth_ == 0 {
-		c := p.costumes[p.currentCostumeIndex]
+		c := p.costumes[p.costumeIndex_]
 		img, _, _ := c.needImage(p.fs)
 		w, h := img.Size()
 		p.worldWidth_, p.worldHeight_ = w/c.bitmapResolution, h/c.bitmapResolution
 	}
 }
 
-func (p *Game) getGdiPos(x, y float64) (int, int) {
-	worldW, worldH := p.worldSize_()
-	return int(x) + (worldW >> 1), (worldH >> 1) - int(y)
-}
-
 func (p *Game) touchingPoint(dst *Sprite, x, y float64) bool {
-	sp, pt := dst.getGdiSprite()
-	sx, sy := p.getGdiPos(x, y)
-	return gdi.TouchingPoint(sp, pt, sx, sy)
+	return dst.touchPoint(x, y)
 }
 
 func (p *Game) touchingSpriteBy(dst *Sprite, name string) *Sprite {
-	sp1, pt1 := dst.getGdiSprite()
+	if dst == nil {
+		return nil
+	}
 
 	for _, item := range p.items {
 		if sp, ok := item.(*Sprite); ok && sp != dst {
 			if sp.name == name && (sp.isVisible && !sp.isDying) {
-				sp2, pt2 := sp.getGdiSprite()
-				if gdi.Touching(sp1, pt1, sp2, pt2) {
+				if sp.touchingSprite(dst) {
 					return sp
 				}
+
 			}
 		}
 	}
@@ -1035,16 +1127,67 @@ func (p *Game) findSprite(name string) *Sprite {
 // -----------------------------------------------------------------------------
 
 func (p *Game) drawBackground(dc drawContext) {
-	c := p.costumes[p.currentCostumeIndex]
+	c := p.costumes[p.costumeIndex_]
 	img, _, _ := c.needImage(p.fs)
-
-	options := new(ebiten.DrawImageOptions)
+	options := new(ebiten.DrawTrianglesOptions)
 	options.Filter = ebiten.FilterLinear
-	if c.bitmapResolution > 1 {
-		scale := 1.0 / float64(c.bitmapResolution)
-		options.GeoM.Scale(scale, scale)
+
+	var srcWidth, srcHeight, dstWidth, dstHeight float32
+	if p.mapMode == mapModeRepeat {
+		srcWidth = float32(p.worldWidth_)
+		srcHeight = float32(p.worldHeight_)
+		dstWidth = float32(p.worldWidth_)
+		dstHeight = float32(p.worldHeight_)
+		options.Address = ebiten.AddressRepeat
+	} else {
+		srcWidth = float32(img.Bounds().Dx())
+		srcHeight = float32(img.Bounds().Dy())
+		options.Address = ebiten.AddressClampToZero
+		switch p.mapMode {
+		default:
+			dstWidth = float32(p.worldWidth_)
+			dstHeight = float32(p.worldHeight_)
+		case mapModeFillCut:
+			if srcWidth > srcHeight {
+				dstHeight = float32(p.worldHeight_)
+				dstWidth = float32(p.worldWidth_) * srcWidth / srcHeight
+			} else {
+				dstWidth = float32(p.worldWidth_)
+				dstHeight = float32(p.worldHeight_) * srcWidth / srcHeight
+			}
+		case mapModeFillRatio:
+			if srcWidth > srcHeight {
+				dstHeight = float32(p.worldHeight_)
+				dstWidth = float32(p.worldWidth_) * srcHeight / srcWidth
+			} else {
+				dstWidth = float32(p.worldWidth_)
+				dstHeight = float32(p.worldHeight_) * srcHeight / srcWidth
+			}
+		}
 	}
-	dc.DrawImage(img, options)
+
+	var cx, cy float32
+	cx = (float32(p.worldWidth_) - dstWidth) / 2.0
+	cy = (float32(p.worldHeight_) - dstHeight) / 2.0
+	vs := []ebiten.Vertex{
+		{
+			DstX: cx, DstY: cy, SrcX: 0, SrcY: 0,
+			ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1,
+		},
+		{
+			DstX: dstWidth + cx, DstY: cy, SrcX: srcWidth, SrcY: 0,
+			ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1,
+		},
+		{
+			DstX: cx, DstY: dstHeight + cy, SrcX: 0, SrcY: srcHeight,
+			ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1,
+		},
+		{
+			DstX: dstWidth + cx, DstY: dstHeight + cy, SrcX: srcWidth, SrcY: srcHeight,
+			ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1,
+		},
+	}
+	dc.DrawTriangles(vs, []uint16{0, 1, 2, 1, 2, 3}, img.Ebiten(), options)
 }
 
 func (p *Game) onDraw(dc drawContext) {
@@ -1124,6 +1267,10 @@ func (p *Game) getMousePos() (x, y float64) {
 
 func (p *Game) updateMousePos() {
 	x, y := ebiten.CursorPosition()
+	touchids := ebiten.TouchIDs()
+	if len(touchids) > 0 {
+		x, y = ebiten.TouchPosition(touchids[0])
+	}
 	pos := p.g.Camera.screenToWorld(math32.NewVector2(float64(x), float64(y)))
 
 	worldW, worldH := p.worldSize_()
@@ -1163,6 +1310,20 @@ func (p *Game) Answer() Value {
 // -----------------------------------------------------------------------------
 
 type EffectKind int
+
+const (
+	ColorEffect EffectKind = iota
+	BrightnessEffect
+)
+
+var greffNames = []string{
+	ColorEffect:      "Color",
+	BrightnessEffect: "Brightness",
+}
+
+func (kind EffectKind) String() string {
+	return greffNames[kind]
+}
 
 func (p *Game) SetEffect(kind EffectKind, val float64) {
 	panic("todo")
@@ -1221,15 +1382,15 @@ func (p *Game) StopAllSounds() {
 }
 
 func (p *Game) Volume() float64 {
-	panic("todo")
+	return p.sounds.volume()
 }
 
 func (p *Game) SetVolume(volume float64) {
-	panic("todo")
+	p.sounds.SetVolume(volume)
 }
 
 func (p *Game) ChangeVolume(delta float64) {
-	panic("todo")
+	p.sounds.ChangeVolume(delta)
 }
 
 // -----------------------------------------------------------------------------

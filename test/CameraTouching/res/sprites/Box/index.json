@@ -1,0 +1,20 @@
+{
+  "costumes": [
+    {
+      "bitmapResolution": 2,
+      "name": "Box",
+      "path": "../../img/1.jpg",
+      "faceRight": 0,
+      "x": 60,
+      "y": 60
+    }
+  ],
+  "costumeIndex": 0,
+  "heading": 90,
+  "isDraggable": false,
+  "rotationStyle": "normal",
+  "size": 1,
+  "visible": true,
+  "x": 0,
+  "y": 0
+}

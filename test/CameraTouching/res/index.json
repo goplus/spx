@@ -1,0 +1,28 @@
+{
+  "scenes": [
+    {
+      "name": "backdrop1",
+      "path": "../../res/bg.jpg"
+    }
+  ],
+  "zorder": [
+    {
+      "type": "sprite",
+      "target": "Monkey",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "type": "sprite",
+      "target": "Crocodile",
+      "x": 110,
+      "y": 0
+    },
+    {
+      "type": "sprite",
+      "target": "Box",
+      "x": 0,
+      "y": 0
+    }
+  ]
+}

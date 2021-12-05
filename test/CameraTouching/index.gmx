@@ -1,0 +1,9 @@
+var (
+	Box       Box
+	Monkey    *Monkey
+	Crocodile *Crocodile
+	chomp     Sound
+	clap      Sound
+)
+
+run "res", {Title: "CameraTouching (by Go+)", Width: 640, Height: 480}

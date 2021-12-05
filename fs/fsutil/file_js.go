@@ -21,6 +21,7 @@ func OpenFile(path string) (io.ReadSeekCloser, error) {
 		return nil, err
 	}
 	body, err := ioutil.ReadAll(res.Body)
+	res.Body.Close()
 	if err != nil {
 		return nil, err
 	}

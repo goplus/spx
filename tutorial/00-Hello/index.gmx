@@ -1,0 +1,5 @@
+var (
+    Calf Calf
+)
+
+run "assets", {Title: "Hello (by Go+ spx engine)"}

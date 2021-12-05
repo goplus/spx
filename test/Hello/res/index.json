@@ -1,0 +1,22 @@
+{
+  "scenes": [
+    {
+      "name": "backdrop1",
+      "path": "../../res/lake.jpg"
+    }
+  ],
+  "zorder": [
+    {
+      "type": "sprite",
+      "target": "Monkey",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "type": "sprite",
+      "target": "Crocodile",
+      "x": 110,
+      "y": 0
+    }
+  ]
+}

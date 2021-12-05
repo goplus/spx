@@ -9,10 +9,10 @@ import (
 	_ "image/jpeg" // for image decode
 	_ "image/png"  // for image decode
 
-	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/pkg/errors"
 
 	spxfs "github.com/goplus/spx/fs"
+	"github.com/goplus/spx/internal/gdi"
 )
 
 func toRadian(dir float64) float64 {
@@ -42,39 +42,39 @@ type imagePoint struct {
 }
 
 type imageLoader interface {
-	load(fs spxfs.Dir, pt *imagePoint) (*ebiten.Image, error)
+	load(fs spxfs.Dir, pt *imagePoint) (gdi.Image, error)
 }
 
 // -------------------------------------------------------------------------------------
 
 type imageLoaderByPath string
 
-func (path imageLoaderByPath) load(fs spxfs.Dir, pt *imagePoint) (*ebiten.Image, error) {
+func (path imageLoaderByPath) load(fs spxfs.Dir, pt *imagePoint) (ret gdi.Image, err error) {
 	f, err := fs.Open(string(path))
 	if err != nil {
-		return nil, errors.Wrapf(err, "imageLoader: open file `%s` failed", path)
+		err = errors.Wrapf(err, "imageLoader: open file `%s` failed", path)
+		return
 	}
 	defer f.Close()
 
 	img, _, err := image.Decode(f)
 	if err != nil {
-		return nil, errors.Wrapf(err, "imageLoader: file `%s` is not an image", path)
+		err = errors.Wrapf(err, "imageLoader: file `%s` is not an image", path)
+		return
 	}
-
-	ret := ebiten.NewImageFromImage(img)
-	return ret, nil
+	return gdi.NewImageFrom(img), nil
 }
 
 // -------------------------------------------------------------------------------------
 
 type delayloadImage struct {
-	cache  *ebiten.Image
+	cache  gdi.Image
 	pt     imagePoint
 	loader imageLoader
 }
 
 func (p *delayloadImage) ensure(fs spxfs.Dir) {
-	if p.cache == nil {
+	if !p.cache.IsValid() {
 		var err error
 		if p.cache, err = p.loader.load(fs, &p.pt); err != nil {
 			panic(err)
@@ -83,14 +83,14 @@ func (p *delayloadImage) ensure(fs spxfs.Dir) {
 }
 
 type costumeSetImage struct {
-	cache  *ebiten.Image
+	cache  gdi.Image
 	loader imageLoader
 	width  int
 	nx     int
 }
 
 func (p *costumeSetImage) ensure(fs spxfs.Dir) {
-	if p.cache == nil {
+	if !p.cache.IsValid() {
 		var err error
 		if p.cache, err = p.loader.load(fs, nil); err != nil {
 			panic(err)
@@ -100,7 +100,7 @@ func (p *costumeSetImage) ensure(fs spxfs.Dir) {
 }
 
 type sharedImages struct {
-	imgs map[string]*ebiten.Image
+	imgs map[string]gdi.Image
 }
 
 type sharedImage struct {
@@ -109,7 +109,7 @@ type sharedImage struct {
 	rc     costumeSetRect
 }
 
-func (p *sharedImage) load(fs spxfs.Dir, pt *imagePoint) (ret *ebiten.Image, err error) {
+func (p *sharedImage) load(fs spxfs.Dir, pt *imagePoint) (ret gdi.Image, err error) {
 	path := p.path
 	shared, ok := p.shared.imgs[path]
 	if !ok {
@@ -125,8 +125,9 @@ func (p *sharedImage) load(fs spxfs.Dir, pt *imagePoint) (ret *ebiten.Image, err
 	if pt != nil {
 		pt.x, pt.y = rc.W/2, rc.H/2
 	}
-	if sub := shared.SubImage(image.Rectangle{Min: min, Max: max}); sub != nil {
-		return sub.(*ebiten.Image), nil
+
+	if sub := shared.SubImage(image.Rectangle{Min: min, Max: max}); sub.IsValid() {
+		return sub, nil
 	}
 	panic("disposed image")
 }
@@ -138,9 +139,9 @@ type imageLoaderByCostumeSet struct {
 	index      int
 }
 
-func (p *imageLoaderByCostumeSet) load(fs spxfs.Dir, pt *imagePoint) (*ebiten.Image, error) {
+func (p *imageLoaderByCostumeSet) load(fs spxfs.Dir, pt *imagePoint) (gdi.Image, error) {
 	costumeSet := p.costumeSet
-	if costumeSet.cache == nil {
+	if !costumeSet.cache.IsValid() {
 		p.costumeSet.ensure(fs)
 	}
 	cache, width := costumeSet.cache, costumeSet.width
@@ -148,8 +149,8 @@ func (p *imageLoaderByCostumeSet) load(fs spxfs.Dir, pt *imagePoint) (*ebiten.Im
 	min := image.Point{X: bounds.Min.X + width*p.index, Y: bounds.Min.Y}
 	max := image.Point{X: min.X + width, Y: bounds.Max.Y}
 	pt.x, pt.y = float64(width>>1), float64(bounds.Dy()>>1)
-	if img := cache.SubImage(image.Rectangle{Min: min, Max: max}); img != nil {
-		return img.(*ebiten.Image), nil
+	if img := cache.SubImage(image.Rectangle{Min: min, Max: max}); img.IsValid() {
+		return img, nil
 	}
 	panic("disposed image")
 }
@@ -161,6 +162,13 @@ type costume struct {
 	img              delayloadImage
 	faceRight        float64
 	bitmapResolution int
+}
+
+func newCostumeWithSize(width, height int) *costume {
+	return &costume{
+		img:              delayloadImage{cache: gdi.NewImageSize(width, height)},
+		bitmapResolution: 1,
+	}
 }
 
 func newCostumeWith(name string, img *costumeSetImage, faceRight float64, i, bitmapResolution int) *costume {
@@ -182,12 +190,19 @@ func newCostume(base string, c *costumeConfig) *costume {
 		name:             c.Name,
 		img:              delayloadImage{loader: loader, pt: imagePoint{c.X, c.Y}},
 		faceRight:        c.FaceRight,
-		bitmapResolution: c.BitmapResolution,
+		bitmapResolution: toBitmapResolution(c.BitmapResolution),
 	}
 }
 
-func (p *costume) needImage(fs spxfs.Dir) (*ebiten.Image, float64, float64) {
-	if p.img.cache == nil {
+func toBitmapResolution(v int) int {
+	if v == 0 {
+		return 1
+	}
+	return v
+}
+
+func (p *costume) needImage(fs spxfs.Dir) (gdi.Image, float64, float64) {
+	if !p.img.cache.IsValid() {
 		p.img.ensure(fs)
 	}
 	return p.img.cache, p.img.pt.x, p.img.pt.y
@@ -196,8 +211,8 @@ func (p *costume) needImage(fs spxfs.Dir) (*ebiten.Image, float64, float64) {
 // -------------------------------------------------------------------------------------
 
 type baseObj struct {
-	costumes            []*costume
-	currentCostumeIndex int
+	costumes      []*costume
+	costumeIndex_ int
 }
 
 func (p *baseObj) initWith(base string, sprite *spriteConfig, shared *sharedImages) {
@@ -209,15 +224,15 @@ func (p *baseObj) initWith(base string, sprite *spriteConfig, shared *sharedImag
 		panic("sprite.init should have one of costumes, costumeSet and costumeMPSet")
 	}
 	nx := len(p.costumes)
-	currentCostumeIndex := sprite.CurrentCostumeIndex
-	if currentCostumeIndex >= nx || currentCostumeIndex < 0 {
-		currentCostumeIndex = 0
+	costumeIndex := sprite.getCostumeIndex()
+	if costumeIndex >= nx || costumeIndex < 0 {
+		costumeIndex = 0
 	}
-	p.currentCostumeIndex = currentCostumeIndex
+	p.costumeIndex_ = costumeIndex
 }
 
 func initWithCMPS(p *baseObj, base string, cmps *costumeMPSet, shared *sharedImages) {
-	faceRight, bitmapResolution := cmps.FaceRight, cmps.BitmapResolution
+	faceRight, bitmapResolution := cmps.FaceRight, toBitmapResolution(cmps.BitmapResolution)
 	imgPath := path.Join(base, cmps.Path)
 	for _, cs := range cmps.Parts {
 		simg := &sharedImage{shared: shared, path: imgPath, rc: cs.Rect}
@@ -238,7 +253,7 @@ func initWithCS(p *baseObj, base string, cs *costumeSet, shared *sharedImages) {
 		img = &costumeSetImage{loader: simg, nx: nx}
 	}
 	p.costumes = make([]*costume, 0, nx)
-	initCSPart(p, img, cs.FaceRight, cs.BitmapResolution, nx, cs.Items)
+	initCSPart(p, img, cs.FaceRight, toBitmapResolution(cs.BitmapResolution), nx, cs.Items)
 }
 
 func initCSPart(p *baseObj, img *costumeSetImage, faceRight float64, bitmapResolution, nx int, items []costumeSetItem) {
@@ -270,20 +285,26 @@ func addCostumeWith(p *baseObj, name string, img *costumeSetImage, faceRight flo
 	p.costumes = append(p.costumes, c)
 }
 
-func (p *baseObj) init(base string, costumes []*costumeConfig, currentCostumeIndex int) {
+func (p *baseObj) init(base string, costumes []*costumeConfig, costumeIndex int) {
 	p.costumes = make([]*costume, len(costumes))
 	for i, c := range costumes {
 		p.costumes[i] = newCostume(base, c)
 	}
-	if currentCostumeIndex >= len(costumes) || currentCostumeIndex < 0 {
-		currentCostumeIndex = 0
+	if costumeIndex >= len(costumes) || costumeIndex < 0 {
+		costumeIndex = 0
 	}
-	p.currentCostumeIndex = currentCostumeIndex
+	p.costumeIndex_ = costumeIndex
+}
+
+func (p *baseObj) initWithSize(width, height int) {
+	p.costumes = make([]*costume, 1)
+	p.costumes[0] = newCostumeWithSize(width, height)
+	p.costumeIndex_ = 0
 }
 
 func (p *baseObj) initFrom(src *baseObj) {
 	p.costumes = src.costumes
-	p.currentCostumeIndex = src.currentCostumeIndex
+	p.costumeIndex_ = src.costumeIndex_
 }
 
 func (p *baseObj) findCostume(name string) int {
@@ -319,8 +340,8 @@ func (p *baseObj) setCostumeByIndex(idx int) bool {
 	if idx >= len(p.costumes) {
 		panic("invalid costume index")
 	}
-	if p.currentCostumeIndex != idx {
-		p.currentCostumeIndex = idx
+	if p.costumeIndex_ != idx {
+		p.costumeIndex_ = idx
 		return true
 	}
 	return false
@@ -334,19 +355,19 @@ func (p *baseObj) setCostumeByName(name string) bool {
 }
 
 func (p *baseObj) goPrevCostume() {
-	p.currentCostumeIndex = (len(p.costumes) + p.currentCostumeIndex - 1) % len(p.costumes)
+	p.costumeIndex_ = (len(p.costumes) + p.costumeIndex_ - 1) % len(p.costumes)
 }
 
 func (p *baseObj) goNextCostume() {
-	p.currentCostumeIndex = (p.currentCostumeIndex + 1) % len(p.costumes)
+	p.costumeIndex_ = (p.costumeIndex_ + 1) % len(p.costumes)
 }
 
 func (p *baseObj) getCostumeIndex() int {
-	return p.currentCostumeIndex
+	return p.costumeIndex_
 }
 
 func (p *baseObj) getCostumeName() string {
-	return p.costumes[p.currentCostumeIndex].name
+	return p.costumes[p.costumeIndex_].name
 }
 
 // -------------------------------------------------------------------------------------

@@ -7,17 +7,17 @@ onKey KeyE, => {
 }
 
 onKey KeyUp, => {
-	Game.Camera.ChangeXYpos(0,5.0)
+	Camera.changeXYpos 0, 5
 }
 
 onKey KeyDown, => {
-	Game.Camera.ChangeXYpos(0,-5.0)
+	Camera.changeXYpos 0, -5
 }
 
 onKey KeyLeft, => {
-	Game.Camera.ChangeXYpos(-5.0,0.0)
+	Camera.changeXYpos -5, 0
 }
 
 onKey KeyRight, => {
-	Game.Camera.ChangeXYpos(0.0,5.0)
+	Camera.changeXYpos 0, 5
 }

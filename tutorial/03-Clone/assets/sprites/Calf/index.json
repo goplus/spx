@@ -1,0 +1,18 @@
+{
+  "costumes": [
+    {
+      "name": "normal",
+      "path": "1.png",
+      "x": 75,
+      "y": 75
+    }
+  ],
+  "costumeIndex": 0,
+  "heading": 90,
+  "isDraggable": false,
+  "rotationStyle": "normal",
+  "size": 1,
+  "visible": true,
+  "x": -100,
+  "y": -21
+}

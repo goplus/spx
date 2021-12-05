@@ -3,4 +3,5 @@ var (
 	SmallEnemy SmallEnemy
 	explode    Sound
 )
-run "res", {Title: "Animation (by Go+)"}
+
+run "assets", {Title: "Animation (by Go+)"}

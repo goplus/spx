@@ -1,14 +1,17 @@
 {
-  "costumes": [
+  "scenes": [
     {
-      "bitmapResolution": 1,
       "name": "backdrop1",
-      "path": "../../res/lake.jpg",
-      "x": 240,
-      "y": 180
+      "path": "../../res/lake.jpg"
     }
   ],
-  "currentCostumeIndex": 0,
+  "map": {
+    "mode": "fillCut",
+    "mode_test0": "",
+    "mode_test1": "repeat",
+    "mode_test2": "fillRatio",
+    "mode_test3": "fillCut"
+  },
   "zorder": [
     {
       "type": "sprites",
@@ -19,7 +22,7 @@
           "y": -21
         },
         {
-          "currentCostumeIndex": 46,
+          "costumeIndex": 46,
           "x": 50,
           "y": -21
         }
@@ -30,6 +33,12 @@
       "target": "Monkey",
       "x": 0,
       "y": 50
+    },
+    {
+      "type": "sprite",
+      "target": "Red",
+      "x": -100,
+      "y": -50
     }
   ]
 }

@@ -4,6 +4,17 @@ onStart => {
 	turn 90
 }
 
+onKey KeyB, => {
+	println volume
+}
+onKey KeyC, => {
+	setVolume 10.0
+}
+
+onKey KeyE, => {
+ 	changeVolume 30.0
+}
+
 onClick => {
 	animate "sink"
 	wait 0.8

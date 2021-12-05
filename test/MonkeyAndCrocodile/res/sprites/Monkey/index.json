@@ -1,10 +1,10 @@
 {
   "costumeSet": {
-    "bitmapResolution": 1,
     "faceRight": 180,
     "path": "../../../../res/monkey.png",
     "nx": 96
   },
+  "costumeIndex": 0,
   "fAnimations": {
     "think": {
       "duration": 1.6,
@@ -54,7 +54,6 @@
       "duration": 2.0
     }
   },
-  "currentCostumeIndex": 0,
   "heading": -60,
   "isDraggable": false,
   "rotationStyle": "normal",

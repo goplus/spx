@@ -1,18 +1,14 @@
 {
-  "costumes": [
+  "scenes": [
     {
-      "bitmapResolution": 1,
       "name": "backdrop1",
-      "path": "../../res/bg.jpg",
-      "x": 0,
-      "y": 0
+      "path": "../../res/bg.jpg"
     }
   ],
   "camera": {
     "on": "Monkey"
   },
   "stepUnit":20,
-  "currentCostumeIndex": 0,
   "zorder": [
     "Monkey",
     "Crocodile"

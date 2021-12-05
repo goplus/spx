@@ -1,0 +1,81 @@
+onKey KeyUp, => {
+	turnTo 0
+	step 10
+	println bound
+	if touching(EdgeTop) {
+		println "EdgeTop"
+	}
+}
+
+onKey KeyDown, => {
+	turnTo 180
+	step 10
+
+	if touching(EdgeBottom) {
+		println "EdgeBottom"
+	}
+}
+
+onKey KeyLeft, => {
+	turnTo -90
+	step 10
+
+	if touching(EdgeLeft) {
+		println "EdgeLeft"
+	}
+
+}
+
+onKey KeyRight, => {
+	turnTo 90
+	step 10
+
+	if touching(EdgeRight) {
+		println "EdgeRight"
+	}
+}
+
+onKey KeyC, => {
+	turn 15
+}
+
+onKey KeyE, => {
+	step 2
+}
+
+onKey KeyB, => {
+	println bound
+	println Crocodile.bounds
+
+	if touching(Crocodile) {
+		println "Touch Crocodile"
+	}
+}
+
+onClick => {
+	println "Box-mouse", mouseX, mouseY
+	pixel := pixel(mouseX, mouseY)
+	println bound
+	println "Box-pixel", pixel
+
+	if touching(Mouse) {
+		println "touching Mouse"
+	}
+}
+
+onStart => {
+	for {
+		if !touching(Mouse) {
+			continue
+		}
+		println "Box-mouse", mouseX, mouseY
+		pixel := pixel(mouseX, mouseY)
+		println bound
+		println "Box-pixel", pixel
+
+		if touching(Mouse) {
+			println "touching Mouse"
+		}
+		wait 0.3
+	}
+}

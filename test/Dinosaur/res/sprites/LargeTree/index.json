@@ -1,6 +1,5 @@
 {
   "costumeMPSet": {
-    "bitmapResolution": 1,
     "path": "../common.png",
     "parts": [
       {
@@ -23,7 +22,7 @@
       }
     ]
   },
-  "currentCostumeIndex": 0,
+  "costumeIndex": 0,
   "heading": 90,
   "isDraggable": false,
   "rotationStyle": "normal",

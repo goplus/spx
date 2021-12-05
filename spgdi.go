@@ -2,12 +2,16 @@ package spx
 
 import (
 	"image"
+	"image/color"
+	"log"
+	"math"
+	"reflect"
 
+	"github.com/goplus/spx/internal/effect"
 	"github.com/goplus/spx/internal/gdi"
 	"github.com/goplus/spx/internal/math32"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/qiniu/x/objcache"
 
 	spxfs "github.com/goplus/spx/fs"
 )
@@ -33,157 +37,306 @@ type Shape interface {
 
 // -------------------------------------------------------------------------------------
 
-type sprKey struct {
-	scale         float64
-	direction     float64
-	costume       *costume
-	rect          image.Rectangle
-	rotationStyle RotationStyle
-}
-
-func (p *sprKey) tryGet() *gdi.Sprite {
-	if val, ok := grpSpr.TryGet(*p); ok {
-		return val.(*gdi.Sprite)
-	}
-	return nil
-}
-
-func (p *sprKey) get(sp *Sprite) *gdi.Sprite {
-	val, _ := grpSpr.Get(sp, *p)
-	return val.(*gdi.Sprite)
-}
-
-func (p *sprKey) doGet(sp *Sprite) *gdi.Sprite {
-	w, h := sp.g.worldSize_()
-	img := ebiten.NewImage(w, h)
-	defer img.Dispose()
-
-	p.drawOn(img, 0, 0, sp.g.fs)
-
-	spi2 := gdi.NewSprite(img, p.rect)
-	//spi := gdi.NewSpriteFromScreen(img)
-	//log.Printf(" spi %s, spi2 %s", spi.Rect, spi2.Rect)
-	return spi2
-}
-
-func (p *sprKey) drawOn(target *ebiten.Image, x, y float64, fs spxfs.Dir) {
-	c := p.costume
-
-	img, centerX, centerY := c.needImage(fs)
-	p.rect.Min.X = 0
-	p.rect.Min.Y = 0
-	p.rect.Max = img.Bounds().Size()
-
-	scale := p.scale / float64(c.bitmapResolution)
-	screenW, screenH := target.Size()
-
-	op := new(ebiten.DrawImageOptions)
-	op.Filter = ebiten.FilterLinear
-	geo := &op.GeoM
-
-	direction := p.direction + c.faceRight
-	if direction == 90 {
-		x = float64(screenW>>1) + x - centerX*scale
-		y = float64(screenH>>1) - y - centerY*scale
-		if scale != 1 {
-			geo.Scale(scale, scale)
-		}
-		geo.Translate(x, y)
-	} else {
-		geo.Translate(-centerX, -centerY)
-		if scale != 1 {
-			geo.Scale(scale, scale)
-		}
-		geo.Rotate(toRadian(direction - 90))
-		geo.Translate(float64(screenW>>1)+x, float64(screenH>>1)-y)
-	}
-	p.rect = math32.ApplyGeoForRect(p.rect, geo)
-
-	target.DrawImage(img, op)
-}
-
-func doGetSpr(ctx objcache.Context, key objcache.Key) (val objcache.Value, err error) {
-	sp := ctx.(*Sprite)
-	di := key.(sprKey)
-	spr := di.doGet(sp)
-	return spr, nil
-}
-
-var (
-	grpSpr *objcache.Group = objcache.NewGroup("spr", 0, doGetSpr)
-)
-
-// -------------------------------------------------------------------------------------
-
 type spriteDrawInfo struct {
-	sprKey
-	x, y    float64
+	sprite  *Sprite
+	geo     ebiten.GeoM
 	visible bool
 }
 
-func (p *spriteDrawInfo) drawOn(dc drawContext, fs spxfs.Dir) {
-	sp := p.tryGet()
-	if sp == nil {
-		p.sprKey.drawOn(dc.Image, p.x, p.y, fs)
-	} else {
-		p.doDrawOn(dc, sp)
+func (p *spriteDrawInfo) getPixelGeo(cx, cy float64) *ebiten.GeoM {
+	c := p.sprite.costumes[p.sprite.costumeIndex_]
+	scale := p.sprite.scale / float64(c.bitmapResolution)
+	direction := p.sprite.direction + c.faceRight
+	direction = direction - 90
+	geo := &ebiten.GeoM{}
+	geo.Scale(1.0/scale, 1.0/scale)
+
+	if p.sprite.rotationStyle == Normal {
+		geo.Rotate(toRadian(direction))
+	} else if p.sprite.rotationStyle == LeftRight {
+		if math.Abs(p.sprite.direction) > 155 && math.Abs(p.sprite.direction) < 205 {
+			geo.Scale(-1, 1)
+		}
+		if math.Abs(p.sprite.direction) > 0 && math.Abs(p.sprite.direction) < 25 {
+			geo.Scale(-1, 1)
+		}
 	}
+	geo.Scale(1.0, -1.0)
+	geo.Translate(cx, cy)
+	return geo
+}
+
+func (p *spriteDrawInfo) getPixel(pos *math32.Vector2, gdiImg gdi.Image, geo *ebiten.GeoM) (color.Color, *math32.Vector2) {
+	img := gdiImg.Origin()
+	pos2 := math32.NewVector2(pos.X-p.sprite.x, pos.Y-p.sprite.y)
+	x, y := geo.Apply(pos2.X, pos2.Y)
+	pixelpos := math32.NewVector2(x, y)
+
+	if x < 0 || y < 0 || x >= float64(img.Bounds().Size().X) || y >= float64(img.Bounds().Size().Y) {
+		return color.Transparent, pixelpos
+	}
+	point := img.Rect.Min
+	color := img.At(point.X+int(x), point.Y+int(y))
+	return color, pixelpos
+}
+
+func (p *spriteDrawInfo) drawOn(dc drawContext, fs spxfs.Dir) {
+	p.doDrawOn(dc, fs)
 }
 
 func (p *spriteDrawInfo) draw(dc drawContext, ctx *Sprite) {
-	sp := p.get(ctx)
-	p.doDrawOn(dc, sp)
+	p.doDrawOn(dc, ctx.g.fs)
 }
 
-func (p *spriteDrawInfo) doDrawOn(dc drawContext, sp *gdi.Sprite) {
-	img := sp.Image()
-	if img.Rect.Empty() {
+func (p *spriteDrawInfo) updateMatrix() {
+	c := p.sprite.costumes[p.sprite.costumeIndex_]
+
+	img, centerX, centerY := c.needImage(p.sprite.g.fs)
+	rect := image.Rectangle{}
+	rect.Min.X = 0
+	rect.Min.Y = 0
+	rect.Max = img.Bounds().Size()
+
+	scale := p.sprite.scale / float64(c.bitmapResolution)
+	worldW, wolrdH := p.sprite.g.worldSize_()
+
+	geo := ebiten.GeoM{}
+	geo.Reset()
+	direction := p.sprite.direction + c.faceRight
+	direction = direction - 90
+
+	geo.Translate(-centerX, -centerY)
+	geo.Scale(scale, scale)
+	if p.sprite.rotationStyle == Normal {
+		geo.Rotate(toRadian(direction - 90))
+	} else if p.sprite.rotationStyle == LeftRight {
+		if math.Abs(p.sprite.direction) > 155 && math.Abs(p.sprite.direction) < 205 {
+			geo.Scale(-1, 1)
+		}
+		if math.Abs(p.sprite.direction) > 0 && math.Abs(p.sprite.direction) < 25 {
+			geo.Scale(-1, 1)
+		}
+	}
+
+	geo.Translate(p.sprite.x, -p.sprite.y)
+
+	geo2 := geo
+	geo2.Scale(1.0, -1.0)
+	p.sprite.rRect = math32.ApplyGeoForRotatedRect(rect, &geo2)
+	geo.Translate(float64(worldW>>1), float64(wolrdH>>1))
+	p.geo = geo
+}
+
+func (p *spriteDrawInfo) doDrawOn(dc drawContext, fs spxfs.Dir) {
+	if !p.visible {
 		return
 	}
-	src := ebiten.NewImageFromImage(img)
-	defer src.Dispose()
 
-	op := new(ebiten.DrawImageOptions)
-	x := float64(sp.Rect.Min.X) + p.x
-	y := float64(sp.Rect.Min.Y) - p.y
-	op.GeoM.Translate(x, y)
-	dc.DrawImage(src, op)
+	c := p.sprite.costumes[p.sprite.costumeIndex_]
+	img, _, _ := c.needImage(fs)
+
+	p.updateMatrix()
+
+	if effs := p.sprite.greffUniforms; effs != nil {
+		op := new(ebiten.DrawRectShaderOptions)
+		op.GeoM = p.geo
+		op.Uniforms = effs
+		s, err := ebiten.NewShader(effect.ShaderFrag)
+		if err != nil {
+			panic(err)
+		}
+		op.Images[0] = img.Ebiten()
+		imgSize := img.Ebiten().Bounds().Size()
+		dc.DrawRectShader(imgSize.X, imgSize.Y, s, op)
+	} else {
+		op := new(ebiten.DrawImageOptions)
+		op.Filter = ebiten.FilterLinear
+		op.GeoM = p.geo
+		dc.DrawImage(img.Ebiten(), op)
+	}
 }
 
 func (p *Sprite) getDrawInfo() *spriteDrawInfo {
 	return &spriteDrawInfo{
-		sprKey: sprKey{
-			scale:         p.scale,
-			direction:     p.direction,
-			costume:       p.costumes[p.currentCostumeIndex],
-			rotationStyle: p.rotationStyle,
-		},
-		x:       p.x,
-		y:       p.y,
+		sprite:  p,
 		visible: p.isVisible,
 	}
 }
 
-func (p *Sprite) getGdiSprite() (spr *gdi.Sprite, pt image.Point) {
+func (p *Sprite) touchPoint(x, y float64) bool {
+	rRect := p.getRotatedRect()
+	if rRect == nil {
+		return false
+	}
+	pos := &math32.Vector2{X: x, Y: y}
+	ret := rRect.Contains(pos)
+	if !ret {
+		return false
+	}
+	c := p.costumes[p.costumeIndex_]
+	img, cx, cy := c.needImage(p.g.fs)
+	geo := p.getDrawInfo().getPixelGeo(cx, cy)
+
+	pixel, _ := p.getDrawInfo().getPixel(pos, img, geo)
+	if reflect.DeepEqual(pixel, color.Transparent) {
+		return false
+	}
+	if debugInstr {
+		log.Printf("touchPoint pixel pos(%s) color(%v)", pos.String(), pixel)
+	}
+	return true
+}
+
+func (p *Sprite) touchRotatedRect(dstRect *math32.RotatedRect) bool {
+	currRect := p.getRotatedRect()
+	if currRect == nil {
+		return false
+	}
+	ret := currRect.IsCollision(dstRect)
+	if !ret {
+		return false
+	}
+
+	//get bound rect
+	currBoundRect := currRect.BoundingRect()
+	dstRectBoundRect := dstRect.BoundingRect()
+	boundRect := currBoundRect.Intersect(dstRectBoundRect)
+	if debugInstr {
+		log.Printf("touchRotatedRect  currBoundRect(%s) dstRectBoundRect(%s) boundRect(%s)",
+			currBoundRect.String(), dstRectBoundRect.String(), boundRect.String())
+	}
+	c := p.costumes[p.costumeIndex_]
+	img, cx, cy := c.needImage(p.g.fs)
+	geo := p.getDrawInfo().getPixelGeo(cx, cy)
+
+	//check boun rect pixel
+	for x := boundRect.X; x < boundRect.Width+boundRect.X; x++ {
+		for y := boundRect.Y; y < boundRect.Height+boundRect.Y; y++ {
+			color1, _ := p.getDrawInfo().getPixel(math32.NewVector2(x, y), img, geo)
+			_, _, _, a := color1.RGBA()
+			if a != 0 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (p *Sprite) touchedColor_(dst *Sprite, color Color) bool {
+	currRect := p.getRotatedRect()
+	if currRect == nil {
+		return false
+	}
+	dstRect := dst.getRotatedRect()
+	if dstRect == nil {
+		return false
+	}
+	ret := currRect.IsCollision(dstRect)
+	if !ret {
+		return false
+	}
+
+	//get bound rect
+	currBoundRect := currRect.BoundingRect()
+	dstRectBoundRect := dstRect.BoundingRect()
+	boundRect := currBoundRect.Intersect(dstRectBoundRect)
+
+	c := p.costumes[p.costumeIndex_]
+	pimg, cx, cy := c.needImage(p.g.fs)
+	geo := p.getDrawInfo().getPixelGeo(cx, cy)
+
+	c2 := dst.costumes[dst.costumeIndex_]
+	dstimg, cx2, cy2 := c2.needImage(p.g.fs)
+	geo2 := dst.getDrawInfo().getPixelGeo(cx2, cy2)
+
+	cr, cg, cb, ca := color.RGBA()
+	//check boun rect pixel
+	for x := boundRect.X; x < boundRect.Width+boundRect.X; x++ {
+		for y := boundRect.Y; y < boundRect.Height+boundRect.Y; y++ {
+			pos := math32.NewVector2(x, y)
+			color1, _ := p.getDrawInfo().getPixel(pos, pimg, geo)
+			color2, _ := dst.getDrawInfo().getPixel(pos, dstimg, geo2)
+			_, _, _, a1 := color1.RGBA()
+			r, g, b, a2 := color2.RGBA()
+			if a1 != 0 && a2 != 0 && r == cr && g == cg && b == cb && a2 == ca {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (p *Sprite) touchingSprite(dst *Sprite) bool {
+	currRect := p.getRotatedRect()
+	if currRect == nil {
+		return false
+	}
+	dstRect := dst.getRotatedRect()
+	if dstRect == nil {
+		return false
+	}
+	ret := currRect.IsCollision(dstRect)
+	if !ret {
+		return false
+	}
+
+	//get bound rect
+	currBoundRect := currRect.BoundingRect()
+	dstRectBoundRect := dstRect.BoundingRect()
+	boundRect := currBoundRect.Intersect(dstRectBoundRect)
+	if debugInstr {
+		log.Printf("touchingSprite  curr(%f,%f) currRect(%s) currBoundRect(%s)  dst(%f,%f) dstRect(%s) dstRectBoundRect(%s) boundRect(%s)",
+			p.x, p.y, currRect, currBoundRect, dst.x, dst.y, dstRect, dstRectBoundRect, boundRect)
+	}
+
+	c := p.costumes[p.costumeIndex_]
+	pimg, cx, cy := c.needImage(p.g.fs)
+	geo := p.getDrawInfo().getPixelGeo(cx, cy)
+
+	c2 := dst.costumes[dst.costumeIndex_]
+	dstimg, cx2, cy2 := c2.needImage(p.g.fs)
+	geo2 := dst.getDrawInfo().getPixelGeo(cx2, cy2)
+	//check boun rect pixel
+	for x := boundRect.X; x < boundRect.Width+boundRect.X; x++ {
+		for y := boundRect.Y; y < boundRect.Height+boundRect.Y; y++ {
+			pos := math32.NewVector2(x, y)
+			color1, _ := p.getDrawInfo().getPixel(pos, pimg, geo)
+			color2, _ := dst.getDrawInfo().getPixel(pos, dstimg, geo2)
+			_, _, _, a1 := color1.RGBA()
+			_, _, _, a2 := color2.RGBA()
+			if a1 != 0 && a2 != 0 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (p *Sprite) getRotatedRect() (rRect *math32.RotatedRect) {
 	di := p.getDrawInfo()
 	if !di.visible {
 		return
 	}
-
-	spr = di.get(p)
-	pt = image.Pt(int(di.x), -int(di.y))
+	rRect = di.sprite.rRect
 	return
 }
 
 func (p *Sprite) getTrackPos() (topx, topy int) {
-	spr, pt := p.getGdiSprite()
-	if spr == nil {
-		return
+	rRect := p.getRotatedRect()
+
+	pos := &math32.Vector2{
+		X: float64(rRect.Center.X),
+		Y: float64(rRect.Center.Y),
 	}
 
-	trackp := getTrackPos(spr)
-	pt = trackp.Add(pt)
-	return pt.X, pt.Y
+	worldW, wolrdH := p.g.worldSize_()
+	pos.Y = -pos.Y
+	pos = &math32.Vector2{
+		X: float64(pos.X) + float64(worldW)/2.0,
+		Y: float64(pos.Y) + float64(wolrdH)/2.0,
+	}
+
+	return int(pos.X), int(pos.Y) - int(rRect.Size.Height)/2
 }
 
 func (p *Sprite) draw(dc drawContext) {
@@ -196,35 +349,31 @@ func (p *Sprite) draw(dc drawContext) {
 
 // Hit func.
 func (p *Sprite) hit(hc hitContext) (hr hitResult, ok bool) {
-	sp, pt := p.getGdiSprite()
-	if sp == nil {
+	rRect := p.getRotatedRect()
+	if rRect == nil {
 		return
 	}
 
 	pos := p.g.Camera.screenToWorld(math32.NewVector2(float64(hc.Pos.X), float64(hc.Pos.Y)))
-	ptv := pos.Sub(math32.NewVector2(float64(pt.X), float64(pt.Y)))
-	_, _, _, a := sp.Image().At(int(ptv.X), int(ptv.Y)).RGBA()
-	if a > 0 {
-		return hitResult{Target: p}, true
+	worldW, wolrdH := p.g.worldSize_()
+	pos = &math32.Vector2{
+		X: float64(pos.X) - float64(worldW)/2.0,
+		Y: float64(pos.Y) - float64(wolrdH)/2.0,
 	}
-	return
+	pos.Y = -pos.Y
+	if !rRect.Contains(pos) {
+		return
+	}
+	c2 := p.costumes[p.costumeIndex_]
+	img, cx, cy := c2.needImage(p.g.fs)
+	geo := p.getDrawInfo().getPixelGeo(cx, cy)
+	color1, pos := p.getDrawInfo().getPixel(pos, img, geo)
+	if debugInstr {
+		log.Printf("hit color1(%v) p(%s)", color1, pos)
+	}
+	_, _, _, a := color1.RGBA()
+	if a == 0 {
+		return
+	}
+	return hitResult{Target: p}, true
 }
-
-// -------------------------------------------------------------------------------------
-
-func getTrackPos(spr *gdi.Sprite) image.Point {
-	pt, _ := grpTrackPos.Get(nil, spr)
-	return pt.(image.Point)
-}
-
-func doGetTrackPos(ctx objcache.Context, key objcache.Key) (val objcache.Value, err error) {
-	spr := key.(*gdi.Sprite)
-	pt := spr.GetTrackPos()
-	return pt, nil
-}
-
-var (
-	grpTrackPos *objcache.Group = objcache.NewGroup("tp", 0, doGetTrackPos)
-)
-
-// -------------------------------------------------------------------------------------

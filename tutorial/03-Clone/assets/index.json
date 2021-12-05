@@ -1,0 +1,26 @@
+{
+  "scenes": [
+    {
+      "name": "backdrop1",
+      "path": "6.png"
+    }
+  ],
+  "zorder": [
+    {
+      "type": "stageMonitor",
+      "target": "",
+      "val": "getVar:gid",
+      "color": 15629590,
+      "label": "gid",
+      "mode": 1,
+      "sliderMin": 0,
+      "sliderMax": 100,
+      "x": 5,
+      "y": 5,
+      "isDiscrete": true,
+      "visible": true
+    },
+    "Calf",
+    "Arrow"
+  ]
+}

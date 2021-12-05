@@ -46,6 +46,7 @@ type soundMgr struct {
 
 const (
 	defaultSampleRate = 44100
+	defaultRatio      = 100.0
 )
 
 func (p *soundMgr) addPlayer(sp *audio.Player, done chan bool) {
@@ -124,6 +125,26 @@ func (p *soundMgr) play(source io.ReadCloser, wait ...bool) (err error) {
 		waitForChan(done)
 	}
 	return
+}
+
+func (p *soundMgr) volume() float64 {
+	for sp := range p.players {
+		return sp.Volume() * defaultRatio
+	}
+	return 0
+}
+
+func (p *soundMgr) SetVolume(volume float64) {
+	for sp := range p.players {
+		sp.SetVolume(volume / defaultRatio)
+	}
+}
+
+func (p *soundMgr) ChangeVolume(delta float64) {
+	v := p.volume()
+	for sp := range p.players {
+		sp.SetVolume((v + delta) / defaultRatio)
+	}
 }
 
 // -------------------------------------------------------------------------------------

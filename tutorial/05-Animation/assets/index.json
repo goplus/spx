@@ -1,0 +1,13 @@
+{
+  "scenes": [
+    {
+      "bitmapResolution": 2,
+      "name": "backdrop1",
+      "path": "1.png"
+    }
+  ],
+  "zorder": [
+    "Bullet",
+    "SmallEnemy"
+  ]
+}
