@@ -1,4 +1,4 @@
-package fsutil
+package spx
 
 import (
 	"log"
@@ -7,12 +7,12 @@ import (
 	"strings"
 )
 
-func GetWorkDir() string {
+func setupWorkDir() {
 	dir := getCurrentAbPathByExecutable()
 	if strings.Contains(dir, os.TempDir()) {
-		dir, _ = os.Getwd()
+		return
 	}
-	return dir
+	os.Chdir(dir)
 }
 
 func getCurrentAbPathByExecutable() string {
@@ -20,6 +20,9 @@ func getCurrentAbPathByExecutable() string {
 	if err != nil {
 		log.Fatal(err)
 	}
-	res, _ := filepath.EvalSymlinks(filepath.Dir(exePath))
-	return res
+	dir, err := filepath.EvalSymlinks(filepath.Dir(exePath))
+	if err != nil {
+		log.Fatal(err)
+	}
+	return dir
 }
