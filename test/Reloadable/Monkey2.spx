@@ -3,3 +3,11 @@ onStart => {
 		turnTo Mouse
 	}
 }
+
+onStart => {
+	for {
+		if touching("Monkey") {
+			say "You touch me!", 1
+		}
+	}
+}

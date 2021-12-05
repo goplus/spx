@@ -9,6 +9,12 @@
   "zorder": [
     {
       "type": "sprite",
+      "target": "Monkey",
+      "x": 0,
+      "y": 50
+    },
+    {
+      "type": "sprite",
       "target": "Monkey2",
       "x": -50,
       "y": 0
