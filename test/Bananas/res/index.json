@@ -1,7 +1,6 @@
 {
-  "costumes": [
+  "scenes": [
     {
-      "bitmapResolution": 1,
       "name": "backdrop1",
       "path": "../../res/lake.jpg"
     }
@@ -13,7 +12,6 @@
     "mode_test2": "fillRatio",
     "mode_test3": "fillCut"
   },
-  "currentCostumeIndex": 0,
   "zorder": [
     {
       "type": "sprites",
@@ -24,7 +22,7 @@
           "y": -21
         },
         {
-          "currentCostumeIndex": 46,
+          "costumeIndex": 46,
           "x": 50,
           "y": -21
         }

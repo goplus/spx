@@ -43,7 +43,7 @@ type spriteDrawInfo struct {
 }
 
 func (p *spriteDrawInfo) getPixelGeo(cx, cy float64) *ebiten.GeoM {
-	c := p.sprite.costumes[p.sprite.currentCostumeIndex]
+	c := p.sprite.costumes[p.sprite.costumeIndex_]
 	scale := p.sprite.scale / float64(c.bitmapResolution)
 	direction := p.sprite.direction + c.faceRight
 	geo := &ebiten.GeoM{}
@@ -77,7 +77,7 @@ func (p *spriteDrawInfo) draw(dc drawContext, ctx *Sprite) {
 }
 
 func (p *spriteDrawInfo) updateMatrix() {
-	c := p.sprite.costumes[p.sprite.currentCostumeIndex]
+	c := p.sprite.costumes[p.sprite.costumeIndex_]
 
 	img, centerX, centerY := c.needImage(p.sprite.g.fs)
 	rect := image.Rectangle{}
@@ -109,7 +109,7 @@ func (p *spriteDrawInfo) doDrawOn(dc drawContext, fs spxfs.Dir) {
 		return
 	}
 
-	c := p.sprite.costumes[p.sprite.currentCostumeIndex]
+	c := p.sprite.costumes[p.sprite.costumeIndex_]
 	img, _, _ := c.needImage(fs)
 
 	p.updateMatrix()
@@ -150,7 +150,7 @@ func (p *Sprite) touchPoint(x, y float64) bool {
 	if !ret {
 		return false
 	}
-	c := p.costumes[p.currentCostumeIndex]
+	c := p.costumes[p.costumeIndex_]
 	img, cx, cy := c.needImage(p.g.fs)
 	geo := p.getDrawInfo().getPixelGeo(cx, cy)
 
@@ -182,7 +182,7 @@ func (p *Sprite) touchRotatedRect(dstRect *math32.RotatedRect) bool {
 		log.Printf("touchRotatedRect  currBoundRect(%s) dstRectBoundRect(%s) boundRect(%s)",
 			currBoundRect.String(), dstRectBoundRect.String(), boundRect.String())
 	}
-	c := p.costumes[p.currentCostumeIndex]
+	c := p.costumes[p.costumeIndex_]
 	img, cx, cy := c.needImage(p.g.fs)
 	geo := p.getDrawInfo().getPixelGeo(cx, cy)
 
@@ -218,11 +218,11 @@ func (p *Sprite) touchedColor_(dst *Sprite, color Color) bool {
 	dstRectBoundRect := dstRect.BoundingRect()
 	boundRect := currBoundRect.Intersect(dstRectBoundRect)
 
-	c := p.costumes[p.currentCostumeIndex]
+	c := p.costumes[p.costumeIndex_]
 	pimg, cx, cy := c.needImage(p.g.fs)
 	geo := p.getDrawInfo().getPixelGeo(cx, cy)
 
-	c2 := dst.costumes[dst.currentCostumeIndex]
+	c2 := dst.costumes[dst.costumeIndex_]
 	dstimg, cx2, cy2 := c2.needImage(p.g.fs)
 	geo2 := dst.getDrawInfo().getPixelGeo(cx2, cy2)
 
@@ -266,11 +266,11 @@ func (p *Sprite) touchingSprite(dst *Sprite) bool {
 			p.x, p.y, currRect, currBoundRect, dst.x, dst.y, dstRect, dstRectBoundRect, boundRect)
 	}
 
-	c := p.costumes[p.currentCostumeIndex]
+	c := p.costumes[p.costumeIndex_]
 	pimg, cx, cy := c.needImage(p.g.fs)
 	geo := p.getDrawInfo().getPixelGeo(cx, cy)
 
-	c2 := dst.costumes[dst.currentCostumeIndex]
+	c2 := dst.costumes[dst.costumeIndex_]
 	dstimg, cx2, cy2 := c2.needImage(p.g.fs)
 	geo2 := dst.getDrawInfo().getPixelGeo(cx2, cy2)
 	//check boun rect pixel
@@ -341,7 +341,7 @@ func (p *Sprite) hit(hc hitContext) (hr hitResult, ok bool) {
 	if !rRect.Contains(pos) {
 		return
 	}
-	c2 := p.costumes[p.currentCostumeIndex]
+	c2 := p.costumes[p.costumeIndex_]
 	img, cx, cy := c2.needImage(p.g.fs)
 	geo := p.getDrawInfo().getPixelGeo(cx, cy)
 	color1, pos := p.getDrawInfo().getPixel(pos, img, geo)

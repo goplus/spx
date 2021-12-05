@@ -1,12 +1,10 @@
 {
-  "costumes": [
+  "scenes": [
     {
-      "bitmapResolution": 1,
       "name": "backdrop1",
       "path": "../../res/bg.jpg"
     }
   ],
-  "currentCostumeIndex": 0,
   "zorder": [
     {
       "type": "sprite",

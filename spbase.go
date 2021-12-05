@@ -190,8 +190,15 @@ func newCostume(base string, c *costumeConfig) *costume {
 		name:             c.Name,
 		img:              delayloadImage{loader: loader, pt: imagePoint{c.X, c.Y}},
 		faceRight:        c.FaceRight,
-		bitmapResolution: c.BitmapResolution,
+		bitmapResolution: toBitmapResolution(c.BitmapResolution),
 	}
+}
+
+func toBitmapResolution(v int) int {
+	if v == 0 {
+		return 1
+	}
+	return v
 }
 
 func (p *costume) needImage(fs spxfs.Dir) (gdi.Image, float64, float64) {
@@ -204,8 +211,8 @@ func (p *costume) needImage(fs spxfs.Dir) (gdi.Image, float64, float64) {
 // -------------------------------------------------------------------------------------
 
 type baseObj struct {
-	costumes            []*costume
-	currentCostumeIndex int
+	costumes      []*costume
+	costumeIndex_ int
 }
 
 func (p *baseObj) initWith(base string, sprite *spriteConfig, shared *sharedImages) {
@@ -217,15 +224,15 @@ func (p *baseObj) initWith(base string, sprite *spriteConfig, shared *sharedImag
 		panic("sprite.init should have one of costumes, costumeSet and costumeMPSet")
 	}
 	nx := len(p.costumes)
-	currentCostumeIndex := sprite.CurrentCostumeIndex
-	if currentCostumeIndex >= nx || currentCostumeIndex < 0 {
-		currentCostumeIndex = 0
+	costumeIndex := sprite.getCostumeIndex()
+	if costumeIndex >= nx || costumeIndex < 0 {
+		costumeIndex = 0
 	}
-	p.currentCostumeIndex = currentCostumeIndex
+	p.costumeIndex_ = costumeIndex
 }
 
 func initWithCMPS(p *baseObj, base string, cmps *costumeMPSet, shared *sharedImages) {
-	faceRight, bitmapResolution := cmps.FaceRight, cmps.BitmapResolution
+	faceRight, bitmapResolution := cmps.FaceRight, toBitmapResolution(cmps.BitmapResolution)
 	imgPath := path.Join(base, cmps.Path)
 	for _, cs := range cmps.Parts {
 		simg := &sharedImage{shared: shared, path: imgPath, rc: cs.Rect}
@@ -246,7 +253,7 @@ func initWithCS(p *baseObj, base string, cs *costumeSet, shared *sharedImages) {
 		img = &costumeSetImage{loader: simg, nx: nx}
 	}
 	p.costumes = make([]*costume, 0, nx)
-	initCSPart(p, img, cs.FaceRight, cs.BitmapResolution, nx, cs.Items)
+	initCSPart(p, img, cs.FaceRight, toBitmapResolution(cs.BitmapResolution), nx, cs.Items)
 }
 
 func initCSPart(p *baseObj, img *costumeSetImage, faceRight float64, bitmapResolution, nx int, items []costumeSetItem) {
@@ -278,26 +285,26 @@ func addCostumeWith(p *baseObj, name string, img *costumeSetImage, faceRight flo
 	p.costumes = append(p.costumes, c)
 }
 
-func (p *baseObj) init(base string, costumes []*costumeConfig, currentCostumeIndex int) {
+func (p *baseObj) init(base string, costumes []*costumeConfig, costumeIndex int) {
 	p.costumes = make([]*costume, len(costumes))
 	for i, c := range costumes {
 		p.costumes[i] = newCostume(base, c)
 	}
-	if currentCostumeIndex >= len(costumes) || currentCostumeIndex < 0 {
-		currentCostumeIndex = 0
+	if costumeIndex >= len(costumes) || costumeIndex < 0 {
+		costumeIndex = 0
 	}
-	p.currentCostumeIndex = currentCostumeIndex
+	p.costumeIndex_ = costumeIndex
 }
 
 func (p *baseObj) initWithSize(width, height int) {
 	p.costumes = make([]*costume, 1)
 	p.costumes[0] = newCostumeWithSize(width, height)
-	p.currentCostumeIndex = 0
+	p.costumeIndex_ = 0
 }
 
 func (p *baseObj) initFrom(src *baseObj) {
 	p.costumes = src.costumes
-	p.currentCostumeIndex = src.currentCostumeIndex
+	p.costumeIndex_ = src.costumeIndex_
 }
 
 func (p *baseObj) findCostume(name string) int {
@@ -333,8 +340,8 @@ func (p *baseObj) setCostumeByIndex(idx int) bool {
 	if idx >= len(p.costumes) {
 		panic("invalid costume index")
 	}
-	if p.currentCostumeIndex != idx {
-		p.currentCostumeIndex = idx
+	if p.costumeIndex_ != idx {
+		p.costumeIndex_ = idx
 		return true
 	}
 	return false
@@ -348,19 +355,19 @@ func (p *baseObj) setCostumeByName(name string) bool {
 }
 
 func (p *baseObj) goPrevCostume() {
-	p.currentCostumeIndex = (len(p.costumes) + p.currentCostumeIndex - 1) % len(p.costumes)
+	p.costumeIndex_ = (len(p.costumes) + p.costumeIndex_ - 1) % len(p.costumes)
 }
 
 func (p *baseObj) goNextCostume() {
-	p.currentCostumeIndex = (p.currentCostumeIndex + 1) % len(p.costumes)
+	p.costumeIndex_ = (p.costumeIndex_ + 1) % len(p.costumes)
 }
 
 func (p *baseObj) getCostumeIndex() int {
-	return p.currentCostumeIndex
+	return p.costumeIndex_
 }
 
 func (p *baseObj) getCostumeName() string {
-	return p.costumes[p.currentCostumeIndex].name
+	return p.costumes[p.costumeIndex_].name
 }
 
 // -------------------------------------------------------------------------------------
