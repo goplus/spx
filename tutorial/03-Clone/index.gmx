@@ -1,7 +1,8 @@
 var (
 	Arrow Arrow
 	Calf  Calf
-	gid   int
+
+	gid int
 )
 
-run "res", {Title: "Clone and Destory (by Go+)"}
+run "assets", {Title: "Clone and Destory (by Go+)"}

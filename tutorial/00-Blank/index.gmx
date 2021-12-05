@@ -1,1 +1,1 @@
-run "res", {Title: "Blank (by Go+ spx engine)"}
+run "assets", {Title: "Blank (by Go+ spx engine)"}

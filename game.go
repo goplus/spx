@@ -21,7 +21,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 
 	spxfs "github.com/goplus/spx/fs"
-	_ "github.com/goplus/spx/fs/local"
+	_ "github.com/goplus/spx/fs/asset"
 	_ "github.com/goplus/spx/fs/zip"
 )
 
