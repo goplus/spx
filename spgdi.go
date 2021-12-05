@@ -4,6 +4,7 @@ import (
 	"image"
 	"image/color"
 	"log"
+	"math"
 	"reflect"
 
 	"github.com/goplus/spx/internal/effect"
@@ -46,9 +47,20 @@ func (p *spriteDrawInfo) getPixelGeo(cx, cy float64) *ebiten.GeoM {
 	c := p.sprite.costumes[p.sprite.costumeIndex_]
 	scale := p.sprite.scale / float64(c.bitmapResolution)
 	direction := p.sprite.direction + c.faceRight
+	direction = direction - 90
 	geo := &ebiten.GeoM{}
 	geo.Scale(1.0/scale, 1.0/scale)
-	geo.Rotate(toRadian(direction - 90))
+
+	if p.sprite.rotationStyle == Normal {
+		geo.Rotate(toRadian(direction))
+	} else if p.sprite.rotationStyle == LeftRight {
+		if math.Abs(p.sprite.direction) > 155 && math.Abs(p.sprite.direction) < 205 {
+			geo.Scale(-1, 1)
+		}
+		if math.Abs(p.sprite.direction) > 0 && math.Abs(p.sprite.direction) < 25 {
+			geo.Scale(-1, 1)
+		}
+	}
 	geo.Scale(1.0, -1.0)
 	geo.Translate(cx, cy)
 	return geo
@@ -91,10 +103,21 @@ func (p *spriteDrawInfo) updateMatrix() {
 	geo := ebiten.GeoM{}
 	geo.Reset()
 	direction := p.sprite.direction + c.faceRight
+	direction = direction - 90
 
 	geo.Translate(-centerX, -centerY)
 	geo.Scale(scale, scale)
-	geo.Rotate(toRadian(direction - 90))
+	if p.sprite.rotationStyle == Normal {
+		geo.Rotate(toRadian(direction - 90))
+	} else if p.sprite.rotationStyle == LeftRight {
+		if math.Abs(p.sprite.direction) > 155 && math.Abs(p.sprite.direction) < 205 {
+			geo.Scale(-1, 1)
+		}
+		if math.Abs(p.sprite.direction) > 0 && math.Abs(p.sprite.direction) < 25 {
+			geo.Scale(-1, 1)
+		}
+	}
+
 	geo.Translate(p.sprite.x, -p.sprite.y)
 
 	geo2 := geo
