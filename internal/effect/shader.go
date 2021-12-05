@@ -80,7 +80,7 @@ func Fragment(position vec4, texCoord vec2, color vec4) vec4 {
 		} else if hsv.y < minSaturation {
 			hsv = vec3(0.0, minSaturation, hsv.z)
 		}
-		hsv.x = mod(hsv.x+Color, 1.0)
+		hsv.x = mod(hsv.x+Color/200.0, 1.0)
 		if hsv.x < 0.0 {
 			hsv.x += 1.0
 		}
@@ -89,7 +89,7 @@ func Fragment(position vec4, texCoord vec2, color vec4) vec4 {
 	}
 
 	if Brightness > 0.0 {
-		var rgb vec3 =  clamp(txtcolor.rgb + vec3(Brightness), vec3(0), vec3(1))
+		var rgb vec3 =  clamp(txtcolor.rgb + vec3(min(Brightness/100.0, 1.0)), vec3(0), vec3(1))
 		txtcolor = vec4(rgb,txtcolor.a)
 	}
 
