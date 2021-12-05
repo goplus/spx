@@ -6,7 +6,6 @@ onClick => {
 }
 
 onKey KeySpace, => {
-	println width, height
 	animate "think"
 }
 

@@ -1380,15 +1380,15 @@ func (p *Game) StopAllSounds() {
 }
 
 func (p *Game) Volume() float64 {
-	panic("todo")
+	return p.sounds.volume()
 }
 
 func (p *Game) SetVolume(volume float64) {
-	panic("todo")
+	p.sounds.SetVolume(volume)
 }
 
 func (p *Game) ChangeVolume(delta float64) {
-	panic("todo")
+	p.sounds.ChangeVolume(delta)
 }
 
 // -----------------------------------------------------------------------------
