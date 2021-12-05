@@ -690,13 +690,6 @@ func (p *Sprite) DistanceTo(obj interface{}) float64 {
 	y -= y2
 	return math.Sqrt(x*x + y*y)
 }
-func (p *Sprite) DistanceStepTo(obj interface{}) float64 {
-	x, y := p.x, p.y
-	x2, y2 := p.g.objectPos(obj)
-	x -= x2
-	y -= y2
-	return math.Sqrt(x*x+y*y) / float64(p.g.mapConfig.StepUnit)
-}
 
 func (p *Sprite) doMoveTo(x, y float64) {
 	p.doMoveToForAnim(x, y, nil)
@@ -752,12 +745,12 @@ func (p *Sprite) Step__2(step float64, animname string) {
 	if ani, ok := p.animations[animname]; ok {
 		anicopy := *ani
 		anicopy.From = 0
-		anicopy.To = step * float64(p.g.mapConfig.StepUnit)
+		anicopy.To = step * float64(p.g.gridUnit)
 		anicopy.Duration = math.Abs(step) * ani.Duration
 		p.goAnimate(animname, &anicopy)
 		return
 	}
-	p.goMoveForward(step * float64(p.g.mapConfig.StepUnit))
+	p.goMoveForward(step * float64(p.g.gridUnit))
 }
 
 // Goto func:
@@ -1332,21 +1325,16 @@ func (p *Sprite) isWorldRange(x, y float64) bool {
 	if rect == nil {
 		return false
 	}
-	behavior := toMapInsideBehavior(p.g.mapConfig.Behavior)
-	switch behavior {
-	case mapInsideForBox:
-		plist := rect.Points()
-		isInside := false
-		for _, val := range plist {
-			if p.g.isWorldRange(val) {
-				isInside = true
-				break
-			}
+	plist := rect.Points()
+	isInside := false
+	for _, val := range plist {
+		if p.g.isWorldRange(val) {
+			isInside = true
+			break
 		}
-		if !isInside {
-			return false
-		}
-	default:
+	}
+	if !isInside {
+		return false
 	}
 
 	return true

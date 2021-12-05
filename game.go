@@ -52,10 +52,10 @@ func SetDebug(flags int) {
 // -------------------------------------------------------------------------------------
 
 const (
-	sceneModeFill = iota
-	sceneModeRepeat
-	sceneModeFillRatio
-	sceneModeFillCut
+	mapModeFill = iota
+	mapModeRepeat
+	mapModeFillRatio
+	mapModeFillCut
 )
 
 type Game struct {
@@ -78,15 +78,19 @@ type Game struct {
 	// window
 	windowWidth_  int
 	windowHeight_ int
-	// world
-	worldWidth_      int
-	worldHeight_     int
+	//-------------------- MAP Start--------
+	// map world
+	worldWidth_  int
+	worldHeight_ int
+	mapMode      int
+	gridUnit     float64
+	//----------------------MAP End-----------
+
 	gMouseX, gMouseY int64
 
 	sinkMgr eventSinkMgr
 
-	world     *ebiten.Image
-	mapConfig mapConfig
+	world *ebiten.Image
 }
 
 type Spriter = Shape
@@ -301,19 +305,6 @@ type costumeConfig struct {
 	Y                float64 `json:"y"`
 	FaceRight        float64 `json:"faceRight"` // turn face to right
 	BitmapResolution int     `json:"bitmapResolution"`
-	Mode             string  `json:"mode"`
-}
-
-func toSceneMode(mode string) int {
-	switch mode {
-	case "repeat":
-		return sceneModeRepeat
-	case "fillCut":
-		return sceneModeFillCut
-	case "fillRatio":
-		return sceneModeFillRatio
-	}
-	return sceneModeFill
 }
 
 type cameraConfig struct {
@@ -321,22 +312,22 @@ type cameraConfig struct {
 }
 
 type mapConfig struct {
-	Behavior string  `json:"behavior"`
-	StepUnit float64 `json:"stepUnit"`
 	Width    int     `json:"width"`
 	Height   int     `json:"height"`
+	Mode     string  `json:"mode"`
+	GridUnit float64 `json:"gridUnit"`
 }
 
-const (
-	mapInsideForBox = iota
-)
-
-func toMapInsideBehavior(behavior string) int {
-	switch behavior {
-	case "boxInside":
-		return mapInsideForBox
+func tomapMode(mode string) int {
+	switch mode {
+	case "repeat":
+		return mapModeRepeat
+	case "fillCut":
+		return mapModeFillCut
+	case "fillRatio":
+		return mapModeFillRatio
 	}
-	return mapInsideForBox
+	return mapModeFill
 }
 
 //frame aniConfig
@@ -509,9 +500,11 @@ func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
 	} else {
 		p.baseObj.initWithSize(proj.Map.Width, proj.Map.Height)
 	}
-	p.mapConfig = proj.Map
-	if p.mapConfig.StepUnit == 0 {
-		p.mapConfig.StepUnit = 1
+
+	p.mapMode = tomapMode(proj.Map.Mode)
+	p.gridUnit = proj.Map.GridUnit
+	if p.gridUnit == 0 {
+		p.gridUnit = 1
 	}
 
 	inits := make([]initer, 0, len(proj.Zorder))
@@ -1138,10 +1131,9 @@ func (p *Game) drawBackground(dc drawContext) {
 	img, _, _ := c.needImage(p.fs)
 	options := new(ebiten.DrawTrianglesOptions)
 	options.Filter = ebiten.FilterLinear
-	sceneMode := toSceneMode(c.mode)
 
 	var srcWidth, srcHeight, dstWidth, dstHeight float32
-	if sceneMode == sceneModeRepeat {
+	if p.mapMode == mapModeRepeat {
 		srcWidth = float32(p.worldWidth_)
 		srcHeight = float32(p.worldHeight_)
 		dstWidth = float32(p.worldWidth_)
@@ -1151,11 +1143,11 @@ func (p *Game) drawBackground(dc drawContext) {
 		srcWidth = float32(img.Bounds().Dx())
 		srcHeight = float32(img.Bounds().Dy())
 		options.Address = ebiten.AddressClampToZero
-		switch sceneMode {
+		switch p.mapMode {
 		default:
 			dstWidth = float32(p.worldWidth_)
 			dstHeight = float32(p.worldHeight_)
-		case sceneModeFillCut:
+		case mapModeFillCut:
 			if srcWidth > srcHeight {
 				dstHeight = float32(p.worldHeight_)
 				dstWidth = float32(p.worldWidth_) * srcWidth / srcHeight
@@ -1163,7 +1155,7 @@ func (p *Game) drawBackground(dc drawContext) {
 				dstWidth = float32(p.worldWidth_)
 				dstHeight = float32(p.worldHeight_) * srcWidth / srcHeight
 			}
-		case sceneModeFillRatio:
+		case mapModeFillRatio:
 			if srcWidth > srcHeight {
 				dstHeight = float32(p.worldHeight_)
 				dstWidth = float32(p.worldWidth_) * srcHeight / srcWidth
