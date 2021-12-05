@@ -21,8 +21,8 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 
 	spxfs "github.com/goplus/spx/fs"
+	_ "github.com/goplus/spx/fs/asset"
 	"github.com/goplus/spx/fs/fsutil"
-	_ "github.com/goplus/spx/fs/local"
 	_ "github.com/goplus/spx/fs/zip"
 )
 
@@ -427,6 +427,7 @@ func (p *Game) loadSprite(sprite Spriter, name string, gamer reflect.Value) erro
 	//
 	// init sprite (field 0)
 	vSpr := reflect.ValueOf(sprite).Elem()
+	vSpr.Set(reflect.Zero(vSpr.Type()))
 	base := vSpr.Field(0).Addr().Interface().(*Sprite)
 	base.init(baseDir, p, name, &conf, gamer, p.getSharedImgs())
 	p.shapes[name] = sprite

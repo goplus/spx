@@ -128,23 +128,23 @@ func (p *soundMgr) play(source io.ReadCloser, wait ...bool) (err error) {
 }
 
 func (p *soundMgr) volume() float64 {
-	for sp, _ := range p.players {
+	for sp := range p.players {
 		return sp.Volume() * defaultRatio
 	}
 	return 0
 }
+
 func (p *soundMgr) SetVolume(volume float64) {
-	for sp, _ := range p.players {
+	for sp := range p.players {
 		sp.SetVolume(volume / defaultRatio)
 	}
-	return
 }
+
 func (p *soundMgr) ChangeVolume(delta float64) {
 	v := p.volume()
-	for sp, _ := range p.players {
+	for sp := range p.players {
 		sp.SetVolume((v + delta) / defaultRatio)
 	}
-	return
 }
 
 // -------------------------------------------------------------------------------------
