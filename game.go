@@ -117,6 +117,7 @@ func (p *Game) initGame() {
 
 // Gopt_Game_Main is required by Go+ compiler as the entry of a .gmx project.
 func Gopt_Game_Main(game Gamer) {
+	setupWorkDir()
 	game.initGame()
 	game.(interface{ MainEntry() }).MainEntry()
 }
