@@ -1,13 +1,11 @@
 {
-  "costumes": [
+  "scenes": [
     {
-      "bitmapResolution": 1,
       "name": "backdrop1",
       "path": "../../res/lake.jpg"
     }
   ],
   "stepUnit": 20,
-  "currentCostumeIndex": 0,
   "zorder": [
     "Monkey",
     "Crocodile"

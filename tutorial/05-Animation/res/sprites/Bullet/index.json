@@ -9,7 +9,7 @@
       "y": 20
     }
   ],
-  "currentCostumeIndex": 0,
+  "costumeIndex": 0,
   "heading": 0,
   "isDraggable": false,
   "rotationStyle": "normal",

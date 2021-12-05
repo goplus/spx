@@ -1,12 +1,10 @@
 {
-  "costumes": [
+  "scenes": [
     {
-      "bitmapResolution": 1,
       "name": "backdrop1",
       "path": "6.png"
     }
   ],
-  "currentCostumeIndex": 0,
   "zorder": [
     {
       "type": "stageMonitor",
