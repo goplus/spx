@@ -384,7 +384,7 @@ func (p *Sprite) OnTurning__1(onTurning func()) {
 	})
 }
 
-func (p *Sprite) Die() { // prototype sprite can't be destoryed, but can die
+func (p *Sprite) Die() { // prototype sprite can't be destroyed, but can die
 	const aniName = "die"
 	p.SetDying()
 	if ani, ok := p.animations[aniName]; ok {

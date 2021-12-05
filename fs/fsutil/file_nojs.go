@@ -1,15 +1,11 @@
-//go:build (darwin || freebsd || linux || windows) && !js && !android && !ios
-// +build darwin freebsd linux windows
+//go:build !js
 // +build !js
-// +build !android
-// +build !ios
 
 package fsutil
 
 import (
 	"io"
 	"os"
-	"path/filepath"
 )
 
 // OpenFile opens a file and returns a stream for its data.
@@ -18,5 +14,5 @@ import (
 //
 // Note that this doesn't work on mobiles.
 func OpenFile(path string) (io.ReadSeekCloser, error) {
-	return os.Open(filepath.FromSlash(path))
+	return os.Open(path)
 }

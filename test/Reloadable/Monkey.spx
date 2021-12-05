@@ -1,3 +1,11 @@
+func turnOrStep(where int) {
+	if int(heading) != where {
+		turnTo where
+	} else {
+		step 10
+	}
+}
+
 onStart => {
 	for {
 		wait 0.5
@@ -5,34 +13,23 @@ onStart => {
 	}
 }
 
+onClick => {
+	say "You killed me!", 1
+	die
+}
+
 onKey KeyUp, => {
-	turnTo Up
+	turnOrStep Up
 }
 
 onKey KeyRight, => {
-	turnTo Right
+	turnOrStep Right
 }
 
 onKey KeyDown, => {
-	turnTo Down
+	turnOrStep Down
 }
 
 onKey KeyLeft, => {
-	turnTo Left
-}
-
-onKey KeyA, => {
-	turn Left
-}
-
-onKey KeyD, => {
-	turn Right
-}
-
-onKey KeyW, => {
-	turn -90
-}
-
-onKey KeyX, => {
-	turn 90
+	turnOrStep Left
 }

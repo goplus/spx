@@ -15,11 +15,11 @@ onKey KeyC, => {
 }
 
 onKey KeyF, => {
-	setEffect ColorEffect, 0.50
+	setEffect ColorEffect, 100
 }
 
 onKey KeyG, => {
-	setEffect BrightnessEffect, 0.50
+	setEffect BrightnessEffect, 50
 }
 
 onKey KeyJ, => {
