@@ -5,7 +5,7 @@
     "path": "../../../../res/monkey.png",
     "nx": 96
   },
-  "currentCostumeIndex": 0,
+  "costumeIndex": 0,
   "heading": 90,
   "isDraggable": false,
   "rotationStyle": "normal",

@@ -367,12 +367,20 @@ type spriteConfig struct {
 	Costumes            []*costumeConfig      `json:"costumes"`
 	CostumeSet          *costumeSet           `json:"costumeSet"`
 	CostumeMPSet        *costumeMPSet         `json:"costumeMPSet"`
-	CurrentCostumeIndex int                   `json:"currentCostumeIndex"`
+	CurrentCostumeIndex *int                  `json:"currentCostumeIndex"`
+	CostumeIndex        int                   `json:"costumeIndex"`
 	FAnimations         map[string]*aniConfig `json:"fAnimations"`
 	MAnimations         map[string]*aniConfig `json:"mAnimations"`
 	TAnimations         map[string]*aniConfig `json:"tAnimations"`
 	Visible             bool                  `json:"visible"`
 	IsDraggable         bool                  `json:"isDraggable"`
+}
+
+func (p *spriteConfig) getCostumeIndex() int {
+	if p.CurrentCostumeIndex != nil { // for backward compatibility
+		return *p.CurrentCostumeIndex
+	}
+	return p.CostumeIndex
 }
 
 func (p *Game) startLoad(resource interface{}, cfg *Config) (err error) {
@@ -440,11 +448,27 @@ func loadJson(ret interface{}, fs spxfs.Dir, file string) (err error) {
 
 type projConfig struct {
 	Zorder              []interface{}    `json:"zorder"`
+	Scenes              []*costumeConfig `json:"scenes"`
 	Costumes            []*costumeConfig `json:"costumes"`
-	CurrentCostumeIndex int              `json:"currentCostumeIndex"`
+	CurrentCostumeIndex *int             `json:"currentCostumeIndex"`
+	SceneIndex          int              `json:"sceneIndex"`
 	StepUnit            float64          `json:"stepUnit"`
 	Map                 mapConfig        `json:"map"`
 	Camera              *cameraConfig    `json:"camera"`
+}
+
+func (p *projConfig) getScenes() []*costumeConfig {
+	if p.Scenes != nil {
+		return p.Scenes
+	}
+	return p.Costumes
+}
+
+func (p *projConfig) getSceneIndex() int {
+	if p.CurrentCostumeIndex != nil {
+		return *p.CurrentCostumeIndex
+	}
+	return p.SceneIndex
 }
 
 type initer interface {
@@ -467,8 +491,8 @@ func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
 		return
 	}
 
-	if len(proj.Costumes) > 0 {
-		p.baseObj.init("", proj.Costumes, proj.CurrentCostumeIndex)
+	if scenes := proj.getScenes(); len(scenes) > 0 {
+		p.baseObj.init("", scenes, proj.getSceneIndex())
 	} else {
 		p.baseObj.initWithSize(proj.Map.Width, proj.Map.Height)
 	}
@@ -518,7 +542,7 @@ func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
 }
 
 func (p *Game) resizeWindow() {
-	c := p.costumes[p.currentCostumeIndex]
+	c := p.costumes[p.costumeIndex_]
 	img, _, _ := c.needImage(p.fs)
 	if p.worldWidth_ > img.Bounds().Dx() && p.windowWidth_ < p.worldWidth_ {
 		p.worldWidth_ = img.Bounds().Dx()
@@ -867,7 +891,7 @@ func (p *Game) windowSize_() (int, int) {
 
 func (p *Game) doWindowSize() {
 	if p.windowWidth_ == 0 {
-		c := p.costumes[p.currentCostumeIndex]
+		c := p.costumes[p.costumeIndex_]
 		img, _, _ := c.needImage(p.fs)
 		w, h := img.Size()
 		p.windowWidth_, p.windowHeight_ = w/c.bitmapResolution, h/c.bitmapResolution
@@ -883,7 +907,7 @@ func (p *Game) worldSize_() (int, int) {
 
 func (p *Game) doWorldSize() {
 	if p.worldWidth_ == 0 {
-		c := p.costumes[p.currentCostumeIndex]
+		c := p.costumes[p.costumeIndex_]
 		img, _, _ := c.needImage(p.fs)
 		w, h := img.Size()
 		p.worldWidth_, p.worldHeight_ = w/c.bitmapResolution, h/c.bitmapResolution
@@ -1101,7 +1125,7 @@ func (p *Game) findSprite(name string) *Sprite {
 // -----------------------------------------------------------------------------
 
 func (p *Game) drawBackground(dc drawContext) {
-	c := p.costumes[p.currentCostumeIndex]
+	c := p.costumes[p.costumeIndex_]
 	img, _, _ := c.needImage(p.fs)
 	options := new(ebiten.DrawTrianglesOptions)
 	options.Filter = ebiten.FilterLinear

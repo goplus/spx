@@ -1,12 +1,12 @@
 {
-  "costumes": [
+  "scenes": [
     {
       "bitmapResolution": 2,
       "name": "backdrop1",
       "path": "1.png"
     }
   ],
-  "currentCostumeIndex": 0,
+  "sceneIndex": 0,
   "zorder": [
     "Bullet"
   ]

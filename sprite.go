@@ -79,7 +79,7 @@ func (p *Sprite) Parent() *Game {
 func (p *Sprite) init(
 	base string, g *Game, name string, sprite *spriteConfig, gamer reflect.Value, shared *sharedImages) {
 	if sprite.Costumes != nil {
-		p.baseObj.init(base, sprite.Costumes, sprite.CurrentCostumeIndex)
+		p.baseObj.init(base, sprite.Costumes, sprite.getCostumeIndex())
 	} else {
 		p.baseObj.initWith(base, sprite, shared)
 	}
@@ -187,8 +187,12 @@ func applySpriteProps(dest *Sprite, v specsp) {
 	if style, ok := v["rotationStyle"]; ok {
 		dest.rotationStyle = toRotationStyle(style.(string))
 	}
-	if idx, ok := v["currentCostumeIndex"]; ok {
-		dest.currentCostumeIndex = int(idx.(float64))
+	if _, ok := v["currentCostumeIndex"]; ok {
+		// TODO: to be removed
+		panic("please change `currentCostumeIndex` => `costumeIndex` in index.json")
+	}
+	if idx, ok := v["costumeIndex"]; ok {
+		dest.costumeIndex_ = int(idx.(float64))
 	}
 	dest.isCloned_ = false
 }
@@ -1286,7 +1290,7 @@ func (p *Sprite) ShowVar(name string) {
 
 // CostumeWidth returns width of sprite current costume.
 func (p *Sprite) CostumeWidth() float64 {
-	c := p.costumes[p.currentCostumeIndex]
+	c := p.costumes[p.costumeIndex_]
 	img, _, _ := c.needImage(p.g.fs)
 	w, _ := img.Size()
 	return float64(w / c.bitmapResolution)
@@ -1294,7 +1298,7 @@ func (p *Sprite) CostumeWidth() float64 {
 
 // CostumeHeight returns height of sprite current costume.
 func (p *Sprite) CostumeHeight() float64 {
-	c := p.costumes[p.currentCostumeIndex]
+	c := p.costumes[p.costumeIndex_]
 	img, _, _ := c.needImage(p.g.fs)
 	_, h := img.Size()
 	return float64(h / c.bitmapResolution)
@@ -1305,7 +1309,7 @@ func (p *Sprite) Bounds() *math32.RotatedRect {
 }
 
 func (p *Sprite) Pixel(x, y float64) color.Color {
-	c2 := p.costumes[p.currentCostumeIndex]
+	c2 := p.costumes[p.costumeIndex_]
 	img, cx, cy := c2.needImage(p.g.fs)
 	geo := p.getDrawInfo().getPixelGeo(cx, cy)
 	color1, p1 := p.getDrawInfo().getPixel(math32.NewVector2(x, y), img, geo)
