@@ -67,6 +67,8 @@ func (c *FreeCamera) updateMatrix() {
 		X: cx,
 		Y: cy,
 	}
+	c.position.X = pos.X
+	c.position.Y = -pos.Y
 
 	c.worldMatrix.Translate(c.worldSize.Sub(c.viewPort).Scale(0.5).Inverted().Coords())
 	c.worldMatrix.Translate(pos.Inverted().Coords())
@@ -124,4 +126,11 @@ func (c *FreeCamera) Reset() {
 	c.rotation = 0
 	c.zoom.Set(1, 1)
 	c.updateMatrix()
+}
+
+func (c *FreeCamera) IsWorldRange(pos *math32.Vector2) bool {
+	if pos.X >= -c.worldSize.X/2.0 && pos.X <= c.worldSize.X/2.0 && pos.Y >= -c.worldSize.Y/2.0 && pos.Y <= c.worldSize.Y/2.0 {
+		return true
+	}
+	return false
 }
