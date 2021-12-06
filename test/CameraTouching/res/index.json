@@ -5,6 +5,9 @@
       "path": "../../res/bg.jpg"
     }
   ],
+  "map":{
+    "gridUnit":20
+  },
   "zorder": [
     {
       "type": "sprite",

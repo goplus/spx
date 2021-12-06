@@ -1,7 +1,6 @@
 onKey KeyUp, => {
 	turnTo 0
 	step 10
-	println bound
 	if touching(EdgeTop) {
 		println "EdgeTop"
 	}
@@ -44,8 +43,8 @@ onKey KeyE, => {
 }
 
 onKey KeyB, => {
-	println bound
-	println Crocodile.bounds
+
+
 
 	if touching(Crocodile) {
 		println "Touch Crocodile"
@@ -55,7 +54,6 @@ onKey KeyB, => {
 onClick => {
 	println "Box-mouse", mouseX, mouseY
 	pixel := pixel(mouseX, mouseY)
-	println bound
 	println "Box-pixel", pixel
 
 	if touching(Mouse) {
@@ -70,7 +68,6 @@ onStart => {
 		}
 		println "Box-mouse", mouseX, mouseY
 		pixel := pixel(mouseX, mouseY)
-		println bound
 		println "Box-pixel", pixel
 
 		if touching(Mouse) {

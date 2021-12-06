@@ -87,7 +87,7 @@ func (p *Sprite) init(
 
 	p.gamer = gamer
 	p.g, p.name = g, name
-	p.x, p.y = sprite.X, sprite.Y
+	p.x, p.y = sprite.X/p.g.gridUnit, sprite.Y/p.g.gridUnit
 	p.scale = sprite.Size
 	p.direction = sprite.Heading
 	p.rotationStyle = toRotationStyle(sprite.RotationStyle)
@@ -179,6 +179,8 @@ func applyFloat64(out *float64, in interface{}) {
 func applySpriteProps(dest *Sprite, v specsp) {
 	applyFloat64(&dest.x, v["x"])
 	applyFloat64(&dest.y, v["y"])
+	dest.x = dest.x / dest.g.gridUnit
+	dest.y = dest.y / dest.g.gridUnit
 	applyFloat64(&dest.scale, v["size"])
 	applyFloat64(&dest.direction, v["heading"])
 	if visible, ok := v["visible"]; ok {
@@ -745,12 +747,12 @@ func (p *Sprite) Step__2(step float64, animname string) {
 	if ani, ok := p.animations[animname]; ok {
 		anicopy := *ani
 		anicopy.From = 0
-		anicopy.To = step * float64(p.g.gridUnit)
+		anicopy.To = step
 		anicopy.Duration = math.Abs(step) * ani.Duration
 		p.goAnimate(animname, &anicopy)
 		return
 	}
-	p.goMoveForward(step * float64(p.g.gridUnit))
+	p.goMoveForward(step)
 }
 
 // Goto func:

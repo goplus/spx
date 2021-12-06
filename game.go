@@ -161,7 +161,12 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 
 	v := reflect.ValueOf(game).Elem()
 	g := instance(v)
+
 	if err := g.startLoad(resource, &conf); err != nil {
+		panic(err)
+	}
+	projConfig, err := g.loadGameConfig(conf.Index)
+	if err != nil {
 		panic(err)
 	}
 	for i, n := 0, v.NumField(); i < n; i++ {
@@ -179,7 +184,7 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 			}
 		}
 	}
-	if err := g.endLoad(v, conf.Index); err != nil {
+	if err := g.endLoad(v, projConfig); err != nil {
 		panic(err)
 	}
 
@@ -476,8 +481,8 @@ type initer interface {
 	Main()
 }
 
-func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
-	var proj projConfig
+func (p *Game) loadGameConfig(index interface{}) (proj projConfig, err error) {
+
 	switch v := index.(type) {
 	case io.Reader:
 		err = json.NewDecoder(v).Decode(&proj)
@@ -486,11 +491,20 @@ func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
 	case nil:
 		err = loadJson(&proj, p.fs, "index.json")
 	default:
-		return syscall.EINVAL
+		err = syscall.EINVAL
+		return
 	}
 	if err != nil {
 		return
 	}
+	p.gridUnit = proj.Map.GridUnit
+	if p.gridUnit == 0 {
+		p.gridUnit = 1
+	}
+
+	return
+}
+func (p *Game) loadIndex(g reflect.Value, proj projConfig) (err error) {
 
 	if scenes := proj.getScenes(); len(scenes) > 0 {
 		p.baseObj.init("", scenes, proj.getSceneIndex())
@@ -506,10 +520,6 @@ func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
 	}
 	p.world = ebiten.NewImage(p.worldWidth_, p.worldHeight_)
 	p.mapMode = toMapMode(proj.Map.Mode)
-	p.gridUnit = proj.Map.GridUnit
-	if p.gridUnit == 0 {
-		p.gridUnit = 1
-	}
 
 	inits := make([]initer, 0, len(proj.Zorder))
 	for _, v := range proj.Zorder {
@@ -551,17 +561,21 @@ func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
 	return
 }
 
-func (p *Game) endLoad(g reflect.Value, index interface{}) (err error) {
+func (p *Game) endLoad(g reflect.Value, projConfig projConfig) (err error) {
 	if debugLoad {
 		log.Println("==> EndLoad")
 	}
-	return p.loadIndex(g, index)
+	return p.loadIndex(g, projConfig)
 }
 
 func Gopt_Game_Reload(game Gamer, index interface{}) (err error) {
 	v := reflect.ValueOf(game).Elem()
 	g := instance(v)
 	g.reset()
+	projConfig, err := g.loadGameConfig(index)
+	if err != nil {
+		panic(err)
+	}
 	for i, n := 0, v.NumField(); i < n; i++ {
 		name, val := getFieldPtrOrAlloc(v, i)
 		if fld, ok := val.(Spriter); ok {
@@ -570,7 +584,7 @@ func Gopt_Game_Reload(game Gamer, index interface{}) (err error) {
 			}
 		}
 	}
-	return g.loadIndex(v, index)
+	return g.loadIndex(v, projConfig)
 }
 
 // -----------------------------------------------------------------------------
@@ -951,10 +965,10 @@ func (p *Game) stampCostume(di *spriteDrawInfo) {
 func (p *Game) movePen(sp *Sprite, x, y float64) {
 	worldW, worldH := p.worldSize_()
 	p.turtle.penLine(&penLine{
-		x1:    (worldW >> 1) + int(sp.x),
-		y1:    (worldH >> 1) - int(sp.y),
-		x2:    (worldW >> 1) + int(x),
-		y2:    (worldH >> 1) - int(y),
+		x1:    (worldW >> 1) + int(sp.x)*int(p.gridUnit),
+		y1:    (worldH >> 1) - int(sp.y)*int(p.gridUnit),
+		x2:    (worldW >> 1) + int(x)*int(p.gridUnit),
+		y2:    (worldH >> 1) - int(y)*int(p.gridUnit),
 		clr:   sp.penColor,
 		width: int(sp.penWidth),
 	})

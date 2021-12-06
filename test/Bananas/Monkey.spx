@@ -6,8 +6,12 @@ onMoving mi => {
 	Bananas[1].changeXYpos mi.dx, mi.dy
 }
 
+onKey KeyA, => {
+	move 1
+}
+
 onKey KeyB, => {
-	step 5
+	step 1
 }
 
 onKey KeyC, => {

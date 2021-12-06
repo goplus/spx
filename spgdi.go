@@ -68,7 +68,7 @@ func (p *spriteDrawInfo) getPixelGeo(cx, cy float64) *ebiten.GeoM {
 
 func (p *spriteDrawInfo) getPixel(pos *math32.Vector2, gdiImg gdi.Image, geo *ebiten.GeoM) (color.Color, *math32.Vector2) {
 	img := gdiImg.Origin()
-	pos2 := math32.NewVector2(pos.X-p.sprite.x, pos.Y-p.sprite.y)
+	pos2 := math32.NewVector2(pos.X-p.sprite.x*p.sprite.g.gridUnit, pos.Y-p.sprite.y*p.sprite.g.gridUnit)
 	x, y := geo.Apply(pos2.X, pos2.Y)
 	pixelpos := math32.NewVector2(x, y)
 
@@ -105,7 +105,7 @@ func (p *spriteDrawInfo) getUpdateRotateRect(x, y float64) *math32.RotatedRect {
 	geo.Translate(-centerX, -centerY)
 	geo.Scale(scale, scale)
 	geo.Rotate(toRadian(direction - 90))
-	geo.Translate(x, -y)
+	geo.Translate(x*p.sprite.g.gridUnit, -y*p.sprite.g.gridUnit)
 
 	geo2 := geo
 	geo2.Scale(1.0, -1.0)
@@ -141,8 +141,7 @@ func (p *spriteDrawInfo) updateMatrix() {
 			geo.Scale(-1, 1)
 		}
 	}
-
-	geo.Translate(p.sprite.x, -p.sprite.y)
+	geo.Translate(p.sprite.x*p.sprite.g.gridUnit, -p.sprite.y*p.sprite.g.gridUnit)
 
 	geo2 := geo
 	geo2.Scale(1.0, -1.0)
