@@ -318,7 +318,7 @@ type mapConfig struct {
 	GridUnit float64 `json:"gridUnit"`
 }
 
-func tomapMode(mode string) int {
+func toMapMode(mode string) int {
 	switch mode {
 	case "repeat":
 		return mapModeRepeat
@@ -501,7 +501,7 @@ func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
 		p.baseObj.initWithSize(proj.Map.Width, proj.Map.Height)
 	}
 
-	p.mapMode = tomapMode(proj.Map.Mode)
+	p.mapMode = toMapMode(proj.Map.Mode)
 	p.gridUnit = proj.Map.GridUnit
 	if p.gridUnit == 0 {
 		p.gridUnit = 1
