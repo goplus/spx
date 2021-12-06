@@ -5,10 +5,13 @@ import (
 	"log"
 	"strconv"
 
+	_ "image/png"
+
 	"github.com/goplus/spx/internal/ebitenui"
 	"github.com/goplus/spx/internal/ebitenui/image"
 	"github.com/goplus/spx/internal/ebitenui/widget"
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"golang.org/x/image/font"
 
 	xfont "github.com/goplus/spx/internal/gdi/font"
@@ -65,6 +68,18 @@ func main() {
 	)
 
 	// add the button as a child of the container
+	idle, _, err := ebitenutil.NewImageFromFile("res/text-input-idle.png")
+	if err != nil {
+		log.Panicln(err)
+	}
+	disabled, _, err := ebitenutil.NewImageFromFile("res/text-input-disabled.png")
+	if err != nil {
+		log.Panicln(err)
+	}
+	image := &widget.TextInputImage{
+		Idle:     image.NewNineSlice(idle, [3]int{9, 14, 6}, [3]int{9, 14, 6}),
+		Disabled: image.NewNineSlice(disabled, [3]int{9, 14, 6}, [3]int{9, 14, 6}),
+	}
 	color := &widget.TextInputColor{
 		Idle:          hexToColor(textIdleColor),
 		Disabled:      hexToColor(textDisabledColor),
@@ -84,8 +99,12 @@ func main() {
 			Top:    7,
 			Bottom: 7,
 		}),
+		widget.TextInputOpts.Image(image),
 		widget.TextInputOpts.Color(color),
 		widget.TextInputOpts.Face(defaultFont),
+		widget.TextInputOpts.CaretOpts(
+			widget.CaretOpts.Size(defaultFont, 2),
+		),
 		widget.TextInputOpts.Placeholder("Enter text here"),
 	)
 	rootContainer.AddChild(t)
@@ -99,7 +118,7 @@ func main() {
 	}
 
 	// run Ebiten main loop
-	err := ebiten.RunGame(&game)
+	err = ebiten.RunGame(&game)
 	if err != nil {
 		log.Println(err)
 	}
