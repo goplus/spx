@@ -735,9 +735,6 @@ func (p *Game) runLoop(cfg *Config) (err error) {
 }
 
 func (p *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
-	p.windowWidth_ = outsideWidth
-	p.windowHeight_ = outsideHeight
-	p.resizeWindow()
 	return p.windowSize_()
 }
 
