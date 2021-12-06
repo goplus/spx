@@ -498,13 +498,15 @@ func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
 	if scenes := proj.getScenes(); len(scenes) > 0 {
 		p.baseObj.init("", scenes, proj.getSceneIndex())
 	} else {
-		if p.windowWidth_ > proj.Map.Width {
-			p.worldWidth_ = p.windowWidth_
+		p.worldWidth_ = proj.Map.Width
+		p.worldHeight_ = proj.Map.Height
+		if p.windowWidth_ > p.worldWidth_ {
+			p.windowWidth_ = p.worldWidth_
 		}
-		if p.windowHeight_ > proj.Map.Height {
-			p.worldHeight_ = p.windowHeight_
+		if p.windowHeight_ > p.worldHeight_ {
+			p.windowHeight_ = p.worldHeight_
 		}
-		p.baseObj.initWithSize(proj.Map.Width, proj.Map.Height)
+		p.baseObj.initWithSize(p.worldWidth_, p.worldHeight_)
 	}
 
 	p.mapMode = toMapMode(proj.Map.Mode)
@@ -542,7 +544,17 @@ func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
 		log.Println("==> SetWindowSize", p.windowWidth_, p.windowHeight_)
 	}
 
-	p.resizeWindow()
+	if p.windowWidth_ > p.worldWidth_ {
+		p.windowWidth_ = p.worldWidth_
+	}
+	if p.windowHeight_ > p.worldHeight_ {
+		p.windowHeight_ = p.worldHeight_
+	}
+	p.world = ebiten.NewImage(p.worldWidth_, p.worldHeight_)
+	p.Camera.init(p, float64(p.windowWidth_), float64(p.windowHeight_), float64(p.worldWidth_), float64(p.worldHeight_))
+
+	ebiten.SetWindowSize(p.windowWidth_, p.windowHeight_)
+	ebiten.SetWindowResizable(true)
 	if proj.Camera != nil && proj.Camera.On != "" {
 		p.Camera.On(proj.Camera.On)
 	}
@@ -550,34 +562,6 @@ func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
 		loader.OnLoaded()
 	}
 	return
-}
-
-func (p *Game) resizeWindow() {
-	c := p.costumes[p.costumeIndex_]
-	img, _, _ := c.needImage(p.fs)
-	if p.worldWidth_ > img.Bounds().Dx() && p.windowWidth_ < p.worldWidth_ {
-		p.worldWidth_ = img.Bounds().Dx()
-	}
-	if p.worldHeight_ > img.Bounds().Dy() && p.windowHeight_ < p.worldHeight_ {
-		p.worldHeight_ = img.Bounds().Dy()
-	}
-
-	if p.windowWidth_ > p.worldWidth_ {
-		p.worldWidth_ = p.windowWidth_
-	}
-	if p.windowHeight_ > p.worldHeight_ {
-		p.worldHeight_ = p.windowHeight_
-	}
-	if p.world != nil {
-		p.world.Dispose()
-	}
-	p.world = ebiten.NewImage(p.worldWidth_, p.worldHeight_)
-
-	p.Camera.init(p, float64(p.windowWidth_), float64(p.windowHeight_), float64(p.worldWidth_), float64(p.worldHeight_))
-
-	ebiten.SetWindowSize(p.windowWidth_, p.windowHeight_)
-	ebiten.SetWindowResizable(true)
-
 }
 
 func (p *Game) endLoad(g reflect.Value, index interface{}) (err error) {
