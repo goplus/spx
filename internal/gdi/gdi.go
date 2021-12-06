@@ -6,11 +6,14 @@ package gdi
 import (
 	"image/color"
 
+	"golang.org/x/image/font"
 	"golang.org/x/image/math/fixed"
 
 	"github.com/goplus/spx/internal/gdi/text"
 	"github.com/hajimehoshi/ebiten/v2"
 )
+
+type Font = font.Face
 
 // -------------------------------------------------------------------------------------
 
