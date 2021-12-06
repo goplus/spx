@@ -39,6 +39,17 @@ func (g *game) Draw(screen *ebiten.Image) {
 	g.ui.Draw(screen)
 }
 
+func newPageContentContainer() *widget.Container {
+	return widget.NewContainer(
+		widget.ContainerOpts.WidgetOpts(widget.WidgetOpts.LayoutData(widget.AnchorLayoutData{
+			StretchHorizontal: true,
+		})),
+		widget.ContainerOpts.Layout(widget.NewRowLayout(
+			widget.RowLayoutOpts.Direction(widget.DirectionVertical),
+			widget.RowLayoutOpts.Spacing(10),
+		)))
+}
+
 func hexToColor(h string) color.Color {
 	u, err := strconv.ParseUint(h, 16, 0)
 	if err != nil {
@@ -62,10 +73,7 @@ const (
 
 func main() {
 	// construct a new container that serves as the root of the UI hierarchy
-	rootContainer := widget.NewContainer(
-		// the container will use a plain color as its background
-		widget.ContainerOpts.BackgroundImage(image.NewNineSliceColor(color.RGBA{0x13, 0x1a, 0x22, 0xff})),
-	)
+	rootContainer := newPageContentContainer()
 
 	// add the button as a child of the container
 	idle, _, err := ebitenutil.NewImageFromFile("res/text-input-idle.png")
@@ -88,11 +96,14 @@ func main() {
 	}
 	const dpi = 72
 	defaultFont := xfont.NewDefault(&xfont.Options{
-		Size:    15,
+		Size:    17,
 		DPI:     dpi,
 		Hinting: font.HintingFull,
 	})
 	t := widget.NewTextInput(
+		widget.TextInputOpts.WidgetOpts(widget.WidgetOpts.LayoutData(widget.RowLayoutData{
+			Stretch: true,
+		})),
 		widget.TextInputOpts.Padding(widget.Insets{
 			Left:   13,
 			Right:  13,
@@ -107,6 +118,7 @@ func main() {
 		),
 		widget.TextInputOpts.Placeholder("Enter text here"),
 	)
+
 	rootContainer.AddChild(t)
 
 	// construct the UI
