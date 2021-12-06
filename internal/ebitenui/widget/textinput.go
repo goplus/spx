@@ -27,7 +27,6 @@ type TextInput struct {
 	face            font.Face
 	repeatDelay     time.Duration
 	repeatInterval  time.Duration
-	validationFunc  TextInputValidationFunc
 	placeholderText string
 
 	init            *MultiOnce
@@ -64,8 +63,6 @@ type TextInputColor struct {
 	Caret         color.Color
 	DisabledCaret color.Color
 }
-
-type TextInputValidationFunc func(newInputText string) bool
 
 type textInputState func() (textInputState, bool)
 
@@ -163,12 +160,6 @@ func (o TextInputOptions) Face(f font.Face) TextInputOpt {
 func (o TextInputOptions) RepeatInterval(i time.Duration) TextInputOpt {
 	return func(t *TextInput) {
 		t.repeatInterval = i
-	}
-}
-
-func (o TextInputOptions) Validation(f TextInputValidationFunc) TextInputOpt {
-	return func(t *TextInput) {
-		t.validationFunc = f
 	}
 }
 
@@ -322,11 +313,6 @@ func (t *TextInput) commandState(cmd textInputControlCommand, key ebiten.Key, de
 
 func (t *TextInput) doInsert(c []rune) {
 	s := string(insertChars([]rune(t.InputText), c, t.cursorPosition))
-
-	if t.validationFunc != nil && !t.validationFunc(s) {
-		return
-	}
-
 	t.InputText = s
 	t.cursorPosition += len(c)
 }
