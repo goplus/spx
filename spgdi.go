@@ -108,7 +108,7 @@ func (p *spriteDrawInfo) updateMatrix() {
 	geo.Translate(-centerX, -centerY)
 	geo.Scale(scale, scale)
 	if p.sprite.rotationStyle == Normal {
-		geo.Rotate(toRadian(direction - 90))
+		geo.Rotate(toRadian(direction))
 	} else if p.sprite.rotationStyle == LeftRight {
 		if math.Abs(p.sprite.direction) > 155 && math.Abs(p.sprite.direction) < 205 {
 			geo.Scale(-1, 1)
