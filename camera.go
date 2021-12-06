@@ -19,6 +19,10 @@ func (c *Camera) init(g *Game, winW, winH float64, worldW, worldH float64) {
 	c.g = g
 }
 
+func (c *Camera) isWorldRange(pos *math32.Vector2) bool {
+	return c.freecamera.IsWorldRange(pos)
+}
+
 func (c *Camera) SetXYpos(x float64, y float64) {
 	c.on_ = nil
 	c.freecamera.MoveTo(x, y)

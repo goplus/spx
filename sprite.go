@@ -690,19 +690,18 @@ func (p *Sprite) DistanceTo(obj interface{}) float64 {
 	y -= y2
 	return math.Sqrt(x*x + y*y)
 }
-func (p *Sprite) DistanceStepTo(obj interface{}) float64 {
-	x, y := p.x, p.y
-	x2, y2 := p.g.objectPos(obj)
-	x -= x2
-	y -= y2
-	return math.Sqrt(x*x+y*y) / float64(p.g.stepUnit)
-}
 
 func (p *Sprite) doMoveTo(x, y float64) {
 	p.doMoveToForAnim(x, y, nil)
 }
 
 func (p *Sprite) doMoveToForAnim(x, y float64, ani *anim.Anim) {
+	if !p.isWorldRange(x, y) {
+		if debugInstr {
+			log.Printf("sprite [%s] is not in the world range. ", p.name)
+		}
+		return
+	}
 	if p.hasOnMoving {
 		mi := &MovingInfo{OldX: p.x, OldY: p.y, NewX: x, NewY: y, Obj: p, ani: ani}
 		p.doWhenMoving(p, mi)
@@ -746,12 +745,12 @@ func (p *Sprite) Step__2(step float64, animname string) {
 	if ani, ok := p.animations[animname]; ok {
 		anicopy := *ani
 		anicopy.From = 0
-		anicopy.To = step * float64(p.g.stepUnit)
+		anicopy.To = step * float64(p.g.gridUnit)
 		anicopy.Duration = math.Abs(step) * ani.Duration
 		p.goAnimate(animname, &anicopy)
 		return
 	}
-	p.goMoveForward(step * float64(p.g.stepUnit))
+	p.goMoveForward(step * float64(p.g.gridUnit))
 }
 
 // Goto func:
@@ -1305,7 +1304,7 @@ func (p *Sprite) CostumeHeight() float64 {
 }
 
 func (p *Sprite) Bounds() *math32.RotatedRect {
-	return p.rRect
+	return p.getRotatedRect()
 }
 
 func (p *Sprite) Pixel(x, y float64) color.Color {
@@ -1314,9 +1313,23 @@ func (p *Sprite) Pixel(x, y float64) color.Color {
 	geo := p.getDrawInfo().getPixelGeo(cx, cy)
 	color1, p1 := p.getDrawInfo().getPixel(math32.NewVector2(x, y), img, geo)
 	if debugInstr {
-		log.Printf("<<<<getPixel x, y(%f,%F) p1(%v) color1(%v) geo(%v)  ", x, y, p1, color1, geo)
+		log.Printf("<<<< getPixel x, y(%f,%F) p1(%v) color1(%v) geo(%v)  ", x, y, p1, color1, geo)
 	}
 	return color1
 }
 
 // -----------------------------------------------------------------------------
+
+func (p *Sprite) isWorldRange(x, y float64) bool {
+	rect := p.getDrawInfo().getUpdateRotateRect(x, y)
+	if rect == nil {
+		return false
+	}
+	plist := rect.Points()
+	for _, val := range plist {
+		if p.g.isWorldRange(val) {
+			return true
+		}
+	}
+	return false
+}
