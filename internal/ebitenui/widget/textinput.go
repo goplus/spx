@@ -22,7 +22,6 @@ type TextInput struct {
 
 	widgetOpts      []WidgetOpt
 	caretOpts       []CaretOpt
-	image           *TextInputImage
 	color           *TextInputColor
 	padding         Insets
 	face            font.Face
@@ -58,11 +57,6 @@ type TextInputChangedEventArgs struct {
 }
 
 type TextInputChangedHandlerFunc func(args *TextInputChangedEventArgs)
-
-type TextInputImage struct {
-	Idle     *image.NineSlice
-	Disabled *image.NineSlice
-}
 
 type TextInputColor struct {
 	Idle          color.Color
@@ -145,12 +139,6 @@ func (o TextInputOptions) ChangedHandler(f TextInputChangedHandlerFunc) TextInpu
 		t.ChangedEvent.AddHandler(func(args interface{}) {
 			f(args.(*TextInputChangedEventArgs))
 		})
-	}
-}
-
-func (o TextInputOptions) Image(i *TextInputImage) TextInputOpt {
-	return func(t *TextInput) {
-		t.image = i
 	}
 }
 
@@ -247,8 +235,6 @@ func (t *TextInput) Render(screen *ebiten.Image, def DeferredRenderFunc) {
 	}
 
 	t.widget.Render(screen, def)
-
-	t.renderImage(screen)
 	t.renderTextAndCaret(screen, def)
 }
 
@@ -413,20 +399,6 @@ func removeChar(r []rune, pos int) []rune {
 	copy(res, r[:pos])
 	copy(res[pos:], r[pos+1:])
 	return res
-}
-
-func (t *TextInput) renderImage(screen *ebiten.Image) {
-	if t.image != nil {
-		i := t.image.Idle
-		if t.widget.Disabled && t.image.Disabled != nil {
-			i = t.image.Disabled
-		}
-
-		rect := t.widget.Rect
-		i.Draw(screen, rect.Dx(), rect.Dy(), func(opts *ebiten.DrawImageOptions) {
-			opts.GeoM.Translate(float64(rect.Min.X), float64(rect.Min.Y))
-		})
-	}
 }
 
 func (t *TextInput) renderTextAndCaret(screen *ebiten.Image, def DeferredRenderFunc) {
