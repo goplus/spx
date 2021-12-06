@@ -14,6 +14,16 @@ onKey KeyC, => {
 	turn 15
 }
 
+onKey KeyK, => {
+	setRotationStyle LeftRight
+	turnTo 180
+}
+onKey KeyL, => {
+	setRotationStyle LeftRight
+	turnTo 360
+}
+
+
 onKey KeyF, => {
 	setEffect ColorEffect, 100
 }
