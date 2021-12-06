@@ -559,9 +559,6 @@ func (p *Game) resizeWindow() {
 	if p.windowHeight_ > p.worldHeight_ {
 		p.worldHeight_ = p.windowHeight_
 	}
-	if p.world != nil {
-		p.world.Dispose()
-	}
 	p.world = ebiten.NewImage(p.worldWidth_, p.worldHeight_)
 
 	p.Camera.init(p, float64(p.windowWidth_), float64(p.windowHeight_), float64(p.worldWidth_), float64(p.worldHeight_))
