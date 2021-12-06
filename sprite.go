@@ -1313,7 +1313,7 @@ func (p *Sprite) Pixel(x, y float64) color.Color {
 	geo := p.getDrawInfo().getPixelGeo(cx, cy)
 	color1, p1 := p.getDrawInfo().getPixel(math32.NewVector2(x, y), img, geo)
 	if debugInstr {
-		log.Printf("<<<<getPixel x, y(%f,%F) p1(%v) color1(%v) geo(%v)  ", x, y, p1, color1, geo)
+		log.Printf("<<<< getPixel x, y(%f,%F) p1(%v) color1(%v) geo(%v)  ", x, y, p1, color1, geo)
 	}
 	return color1
 }
@@ -1326,16 +1326,10 @@ func (p *Sprite) isWorldRange(x, y float64) bool {
 		return false
 	}
 	plist := rect.Points()
-	isInside := false
 	for _, val := range plist {
 		if p.g.isWorldRange(val) {
-			isInside = true
-			break
+			return true
 		}
 	}
-	if !isInside {
-		return false
-	}
-
-	return true
+	return false
 }

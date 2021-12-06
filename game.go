@@ -75,22 +75,20 @@ type Game struct {
 	input   inputMgr
 	events  chan event
 
-	// window
-	windowWidth_  int
-	windowHeight_ int
-	//-------------------- MAP Start--------
 	// map world
 	worldWidth_  int
 	worldHeight_ int
 	mapMode      int
 	gridUnit     float64
-	//----------------------MAP End-----------
+	world        *ebiten.Image
+
+	// window
+	windowWidth_  int
+	windowHeight_ int
 
 	gMouseX, gMouseY int64
 
 	sinkMgr eventSinkMgr
-
-	world *ebiten.Image
 }
 
 type Spriter = Shape
@@ -409,7 +407,6 @@ func (p *Game) startLoad(resource interface{}, cfg *Config) (err error) {
 	p.fs = fs
 	p.windowWidth_ = cfg.Width
 	p.windowHeight_ = cfg.Height
-
 	return
 }
 
@@ -497,18 +494,17 @@ func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
 
 	if scenes := proj.getScenes(); len(scenes) > 0 {
 		p.baseObj.init("", scenes, proj.getSceneIndex())
+		p.worldWidth_ = 0
+		p.doWorldSize() // set world size
 	} else {
 		p.worldWidth_ = proj.Map.Width
 		p.worldHeight_ = proj.Map.Height
-		if p.windowWidth_ > p.worldWidth_ {
-			p.windowWidth_ = p.worldWidth_
-		}
-		if p.windowHeight_ > p.worldHeight_ {
-			p.windowHeight_ = p.worldHeight_
-		}
 		p.baseObj.initWithSize(p.worldWidth_, p.worldHeight_)
 	}
-
+	if debugLoad {
+		log.Println("==> SetWorldSize", p.worldWidth_, p.worldHeight_)
+	}
+	p.world = ebiten.NewImage(p.worldWidth_, p.worldHeight_)
 	p.mapMode = toMapMode(proj.Map.Mode)
 	p.gridUnit = proj.Map.GridUnit
 	if p.gridUnit == 0 {
@@ -532,25 +528,16 @@ func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
 		ini.Main()
 	}
 
-	p.worldWidth_ = 0
-	p.doWorldSize() // set world size
-
-	if debugLoad {
-		log.Println("==> SetWorldSize", p.worldWidth_, p.worldHeight_)
-	}
-
 	p.doWindowSize() // set window size
 	if debugLoad {
 		log.Println("==> SetWindowSize", p.windowWidth_, p.windowHeight_)
 	}
-
 	if p.windowWidth_ > p.worldWidth_ {
 		p.windowWidth_ = p.worldWidth_
 	}
 	if p.windowHeight_ > p.worldHeight_ {
 		p.windowHeight_ = p.worldHeight_
 	}
-	p.world = ebiten.NewImage(p.worldWidth_, p.worldHeight_)
 	p.Camera.init(p, float64(p.windowWidth_), float64(p.windowHeight_), float64(p.worldWidth_), float64(p.worldHeight_))
 
 	ebiten.SetWindowSize(p.windowWidth_, p.windowHeight_)
