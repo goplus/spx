@@ -498,6 +498,12 @@ func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
 	if scenes := proj.getScenes(); len(scenes) > 0 {
 		p.baseObj.init("", scenes, proj.getSceneIndex())
 	} else {
+		if p.windowWidth_ > proj.Map.Width {
+			p.worldWidth_ = p.windowWidth_
+		}
+		if p.windowHeight_ > proj.Map.Height {
+			p.worldHeight_ = p.windowHeight_
+		}
 		p.baseObj.initWithSize(proj.Map.Width, proj.Map.Height)
 	}
 
