@@ -66,8 +66,24 @@ func convertHSV2RGB(hsv vec3) vec3 {
 }
 
 func Fragment(position vec4, texCoord vec2, color vec4) vec4 {
-	var txtcolor vec4 = imageSrc0At(texCoord)
-	if txtcolor.a < 0.001 {
+	var txtcolor vec4
+	var source_size  vec2 = imageSrcTextureSize()
+	var texel_size   vec2= 1.0 / source_size
+
+	var p0  vec2= texCoord - (texel_size) / 2.0 + (texel_size / 512.0)
+	var p1  vec2= texCoord + (texel_size) / 2.0 + (texel_size / 512.0)
+  
+
+
+	var c0 vec4= imageSrc0At( p0)
+	var c1 vec4= imageSrc0At( vec2(p1.x, p0.y))
+	var c2 vec4= imageSrc0At( vec2(p0.x, p1.y))
+	var c3 vec4= imageSrc0At( p1)
+
+  
+	var rate  vec2= fract(p0 * source_size)
+	txtcolor = mix(mix(c0, c1, rate.x), mix(c2, c3, rate.x), rate.y)
+	if txtcolor.a == 0.0 {
 		return vec4(0)
 	}
 
