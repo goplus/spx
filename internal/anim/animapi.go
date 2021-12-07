@@ -49,6 +49,9 @@ func NewAnim(name string, valtype ANIMVALTYPE, fps float64, totalframe int) *Ani
 		}
 	})
 	a.animation.SetOnStopingListener(func(an *Animation) {
+		if a.status == AnimstatusStop {
+			return
+		}
 		if a.stopCallback != nil {
 			a.stopCallback()
 		}
@@ -93,6 +96,9 @@ func (a *Anim) Play() *Anim {
 }
 
 func (a *Anim) Stop() *Anim {
+	if a.status == AnimstatusStop {
+		return a
+	}
 	a.status = AnimstatusStop
 	if a.stopCallback != nil {
 		a.stopCallback()
