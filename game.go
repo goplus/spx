@@ -79,7 +79,6 @@ type Game struct {
 	worldWidth_  int
 	worldHeight_ int
 	mapMode      int
-	gridUnit     float64
 	world        *ebiten.Image
 
 	// window
@@ -310,10 +309,9 @@ type cameraConfig struct {
 }
 
 type mapConfig struct {
-	Width    int     `json:"width"`
-	Height   int     `json:"height"`
-	Mode     string  `json:"mode"`
-	GridUnit float64 `json:"gridUnit"`
+	Width  int    `json:"width"`
+	Height int    `json:"height"`
+	Mode   string `json:"mode"`
 }
 
 func toMapMode(mode string) int {
@@ -506,10 +504,6 @@ func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
 	}
 	p.world = ebiten.NewImage(p.worldWidth_, p.worldHeight_)
 	p.mapMode = toMapMode(proj.Map.Mode)
-	p.gridUnit = proj.Map.GridUnit
-	if p.gridUnit == 0 {
-		p.gridUnit = 1
-	}
 
 	inits := make([]initer, 0, len(proj.Zorder))
 	for _, v := range proj.Zorder {
