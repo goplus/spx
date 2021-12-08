@@ -745,12 +745,12 @@ func (p *Sprite) Step__2(step float64, animname string) {
 	if ani, ok := p.animations[animname]; ok {
 		anicopy := *ani
 		anicopy.From = 0
-		anicopy.To = step * float64(p.g.gridUnit)
+		anicopy.To = step
 		anicopy.Duration = math.Abs(step) * ani.Duration
 		p.goAnimate(animname, &anicopy)
 		return
 	}
-	p.goMoveForward(step * float64(p.g.gridUnit))
+	p.goMoveForward(step)
 }
 
 // Goto func:
@@ -912,10 +912,18 @@ func (p *Sprite) TurnTo(obj interface{}) {
 	}
 
 	if ani, ok := p.animations["turn"]; ok {
-		delta := p.direction - angle
+		fromangle := math.Mod(p.direction+360.0, 360.0)
+		toangle := math.Mod(angle+360.0, 360.0)
+		if toangle-fromangle > 180.0 {
+			fromangle = fromangle + 360.0
+		}
+		if fromangle-toangle > 180.0 {
+			toangle = toangle + 360.0
+		}
+		delta := math.Abs(fromangle - toangle)
 		anicopy := *ani
-		anicopy.From = p.direction
-		anicopy.To = angle
+		anicopy.From = fromangle
+		anicopy.To = toangle
 		anicopy.Duration = ani.Duration / 360.0 * math.Abs(delta)
 		p.goAnimate("turn", &anicopy)
 		return
