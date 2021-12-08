@@ -745,12 +745,12 @@ func (p *Sprite) Step__2(step float64, animname string) {
 	if ani, ok := p.animations[animname]; ok {
 		anicopy := *ani
 		anicopy.From = 0
-		anicopy.To = step * float64(p.g.gridUnit)
+		anicopy.To = step
 		anicopy.Duration = math.Abs(step) * ani.Duration
 		p.goAnimate(animname, &anicopy)
 		return
 	}
-	p.goMoveForward(step * float64(p.g.gridUnit))
+	p.goMoveForward(step)
 }
 
 // Goto func:
