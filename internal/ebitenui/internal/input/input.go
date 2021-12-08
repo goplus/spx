@@ -37,7 +37,7 @@ func Update() {
 	WheelX += wx
 	WheelY += wy
 
-	InputChars = append(InputChars, ebiten.InputChars()...)
+	InputChars = ebiten.AppendInputChars(InputChars)
 
 	AnyKeyPressed = false
 	for k := ebiten.Key(0); k <= ebiten.KeyMax; k++ {
