@@ -696,12 +696,7 @@ func (p *Sprite) doMoveTo(x, y float64) {
 }
 
 func (p *Sprite) doMoveToForAnim(x, y float64, ani *anim.Anim) {
-	if !p.isWorldRange(x, y) {
-		if debugInstr {
-			log.Printf("sprite [%s] is not in the world range. ", p.name)
-		}
-		return
-	}
+	x, y = p.fixWorldRange(x, y)
 	if p.hasOnMoving {
 		mi := &MovingInfo{OldX: p.x, OldY: p.y, NewX: x, NewY: y, Obj: p, ani: ani}
 		p.doWhenMoving(p, mi)
@@ -1328,16 +1323,34 @@ func (p *Sprite) Pixel(x, y float64) color.Color {
 
 // -----------------------------------------------------------------------------
 
-func (p *Sprite) isWorldRange(x, y float64) bool {
+func (p *Sprite) fixWorldRange(x, y float64) (float64, float64) {
 	rect := p.getDrawInfo().getUpdateRotateRect(x, y)
 	if rect == nil {
-		return false
+		return x, y
 	}
 	plist := rect.Points()
 	for _, val := range plist {
 		if p.g.isWorldRange(val) {
-			return true
+			return x, y
 		}
 	}
-	return false
+
+	worldW, worldH := p.g.worldSize_()
+	maxW := float64(worldW)/2.0 + float64(rect.Size.Width)
+	maxH := float64(worldH)/2.0 + float64(rect.Size.Height)
+
+	if x < -maxW {
+		x = -maxW
+	}
+	if x > maxW {
+		x = maxW
+	}
+	if y < -maxH {
+		y = -maxH
+	}
+	if y > maxH {
+		y = maxH
+	}
+
+	return x, y
 }
