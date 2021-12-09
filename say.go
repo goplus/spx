@@ -5,8 +5,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/goplus/spx/internal/gdi"
 	"golang.org/x/image/font"
+
+	"github.com/goplus/spx/internal/gdi"
+	xfont "github.com/goplus/spx/internal/gdi/font"
 )
 
 var (
@@ -17,17 +19,17 @@ var (
 
 func init() {
 	const dpi = 72
-	defaultFont = gdi.NewDefaultFont(&gdi.FontOptions{
+	defaultFont = xfont.NewDefault(&xfont.Options{
 		Size:    15,
 		DPI:     dpi,
 		Hinting: font.HintingFull,
 	})
-	defaultFont2 = gdi.NewDefaultFont(&gdi.FontOptions{ // for stageMonitor
+	defaultFont2 = xfont.NewDefault(&xfont.Options{ // for stageMonitor
 		Size:    12,
 		DPI:     dpi,
 		Hinting: font.HintingFull,
 	})
-	defaultFontSm = gdi.NewDefaultFont(&gdi.FontOptions{
+	defaultFontSm = xfont.NewDefault(&xfont.Options{
 		Size:    11,
 		DPI:     dpi,
 		Hinting: font.HintingFull,
