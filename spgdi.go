@@ -112,6 +112,7 @@ func (p *spriteDrawInfo) getUpdateRotateRect(x, y float64) *math32.RotatedRect {
 	rRect := math32.ApplyGeoForRotatedRect(rect, &geo2)
 	return rRect
 }
+
 func (p *spriteDrawInfo) updateMatrix() {
 	c := p.sprite.costumes[p.sprite.costumeIndex_]
 

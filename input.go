@@ -143,6 +143,8 @@ type inputMgr struct {
 	keyStates   map[ebiten.Key]int
 	lbtnState   int
 	keyDuration int
+	mouseX      int
+	mouseY      int
 	firer       eventFirer
 	startFlag   sync.Once
 }
@@ -167,8 +169,10 @@ func (i *inputMgr) reset() {
 // -------------------------------------------------------------------------------------
 
 const (
-	mouseStateNone     = 0
-	mouseStatePressing = 1
+	mouseStateNone     = 0x00
+	mouseStatePressing = 0x01
+	mouseFlagStates    = 0x7f
+	mouseFlagTouching  = 0x80
 )
 
 func (i *inputMgr) update() {
@@ -178,35 +182,52 @@ func (i *inputMgr) update() {
 	})
 	i.updateKeyboard()
 	i.updateMouse()
-	i.updateTouch()
-
-}
-
-func (i *inputMgr) updateTouch() {
-	if len(i.touchIDs) > 0 {
-		x, y := ebiten.TouchPosition(i.touchIDs[0])
-		i.lbtnState = mouseStatePressing
-		i.firer.fireEvent(&eventLeftButtonDown{X: x, Y: y})
-	}
 }
 
 func (i *inputMgr) updateMouse() {
-	switch i.lbtnState {
+	switch i.lbtnState & mouseFlagStates {
 	case mouseStateNone:
-		if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
-			x, y := ebiten.CursorPosition()
+		switch {
+		case len(i.touchIDs) > 0:
+			i.mouseX, i.mouseY = ebiten.TouchPosition(i.touchIDs[0])
+			i.lbtnState = mouseStatePressing | mouseFlagTouching
+		case ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft):
+			i.mouseX, i.mouseY = ebiten.CursorPosition()
 			i.lbtnState = mouseStatePressing
-			i.firer.fireEvent(&eventLeftButtonDown{X: x, Y: y})
+		default:
+			return
 		}
+		i.firer.fireEvent(&eventLeftButtonDown{X: i.mouseX, Y: i.mouseY})
 	case mouseStatePressing:
-		if !ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
-			x, y := ebiten.CursorPosition()
-			i.lbtnState = mouseStateNone
-			i.firer.fireEvent(&eventLeftButtonUp{X: x, Y: y})
+		if (i.lbtnState & mouseFlagTouching) != 0 {
+			if len(i.touchIDs) > 0 {
+				return
+			}
+		} else {
+			if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
+				return
+			}
+			i.mouseX, i.mouseY = ebiten.CursorPosition()
 		}
+		i.lbtnState = mouseStateNone
+		i.firer.fireEvent(&eventLeftButtonUp{X: i.mouseX, Y: i.mouseY})
 	default:
 		panic("unknown mouse state")
 	}
+}
+
+func (i *inputMgr) isMousePressed() bool {
+	return (i.lbtnState & mouseStatePressing) != 0
+}
+
+func (i *inputMgr) mouseXY() (int, int) {
+	if (i.lbtnState & mouseFlagTouching) != 0 {
+		if ids := i.touchIDs; len(ids) > 0 {
+			return ebiten.TouchPosition(ids[0])
+		}
+		return i.mouseX, i.mouseY
+	}
+	return ebiten.CursorPosition()
 }
 
 func (i *inputMgr) updateKeyboard() {
@@ -251,14 +272,6 @@ func isKeyPressed(key Key) bool {
 		return false
 	}
 	return ebiten.IsKeyPressed(key)
-}
-
-func isMousePressed() bool {
-	touchids := ebiten.TouchIDs()
-	if len(touchids) > 0 {
-		return true
-	}
-	return ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft)
 }
 
 // -------------------------------------------------------------------------------------

@@ -713,8 +713,8 @@ func (p *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeigh
 }
 
 func (p *Game) Update() error {
-	p.updateMousePos()
 	p.input.update()
+	p.updateMousePos()
 	p.sounds.update()
 	p.tickMgr.update()
 	return nil
@@ -1229,7 +1229,7 @@ func (p *Game) MouseY() float64 {
 }
 
 func (p *Game) MousePressed() bool {
-	return isMousePressed()
+	return p.input.isMousePressed()
 }
 
 func (p *Game) getMousePos() (x, y float64) {
@@ -1237,12 +1237,8 @@ func (p *Game) getMousePos() (x, y float64) {
 }
 
 func (p *Game) updateMousePos() {
-	x, y := ebiten.CursorPosition()
-	touchids := ebiten.TouchIDs()
-	if len(touchids) > 0 {
-		x, y = ebiten.TouchPosition(touchids[0])
-	}
-	pos := p.g.Camera.screenToWorld(math32.NewVector2(float64(x), float64(y)))
+	x, y := p.input.mouseXY()
+	pos := p.Camera.screenToWorld(math32.NewVector2(float64(x), float64(y)))
 
 	worldW, worldH := p.worldSize_()
 	mx, my := int(pos.X)-(worldW>>1), (worldH>>1)-int(pos.Y)
