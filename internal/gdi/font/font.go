@@ -1,7 +1,7 @@
 //go:build !canvas
 // +build !canvas
 
-package gdi
+package font
 
 import (
 	"fmt"
@@ -18,24 +18,22 @@ import (
 
 // -------------------------------------------------------------------------------------
 
-type Font = font.Face
-
-type DefaultFont struct {
+type Default struct {
 	ascii  font.Face
 	songti font.Face
 	done   chan error
 	once   sync.Once
 }
 
-type FontOptions = truetype.Options
+type Options = truetype.Options
 
-func NewDefaultFont(options *FontOptions) *DefaultFont {
-	p := &DefaultFont{done: make(chan error)}
+func NewDefault(options *Options) *Default {
+	p := &Default{done: make(chan error)}
 	go p.init(options)
 	return p
 }
 
-func (p *DefaultFont) Close() (err error) {
+func (p *Default) Close() (err error) {
 	if f := p.ascii; f != nil {
 		f.Close()
 	}
@@ -45,7 +43,7 @@ func (p *DefaultFont) Close() (err error) {
 	return nil
 }
 
-func (p *DefaultFont) ensureInited() {
+func (p *Default) ensureInited() {
 	p.once.Do(func() {
 		<-p.done
 	})
@@ -56,7 +54,7 @@ type fontNameInit struct {
 	inited bool
 }
 
-func (p *DefaultFont) init(options *truetype.Options) {
+func (p *Default) init(options *truetype.Options) {
 	fontFaceNames := map[string]*fontNameInit{
 		"Times New Roman": {paths: []string{"Times New Roman Bold.ttf", "Times New Roman.ttf", "Times.ttf"}},
 		"SimSun":          {paths: []string{"SimSun.ttf", "SimSun.ttc", "Songti.ttc"}},
@@ -78,7 +76,7 @@ func (p *DefaultFont) init(options *truetype.Options) {
 	p.done <- nil
 }
 
-func (p *DefaultFont) findFontAtPath(
+func (p *Default) findFontAtPath(
 	name string, findPath string, fontNames []string, options *truetype.Options) bool {
 	for _, fontName := range fontNames {
 		tryFile := path.Join(findPath, fontName)
@@ -89,7 +87,7 @@ func (p *DefaultFont) findFontAtPath(
 	return false
 }
 
-func (p *DefaultFont) tryFontFile(name, tryFile string, options *truetype.Options) bool {
+func (p *Default) tryFontFile(name, tryFile string, options *truetype.Options) bool {
 	fp, err := fsutil.OpenFile(tryFile)
 	if err != nil {
 		return false
@@ -116,7 +114,7 @@ func (p *DefaultFont) tryFontFile(name, tryFile string, options *truetype.Option
 	return true
 }
 
-func (p *DefaultFont) Glyph(dot fixed.Point26_6, r rune) (
+func (p *Default) Glyph(dot fixed.Point26_6, r rune) (
 	dr image.Rectangle, mask image.Image, maskp image.Point, advance fixed.Int26_6, ok bool) {
 	p.ensureInited()
 	if r < 0x100 {
@@ -125,7 +123,7 @@ func (p *DefaultFont) Glyph(dot fixed.Point26_6, r rune) (
 	return p.songti.Glyph(dot, r)
 }
 
-func (p *DefaultFont) GlyphBounds(r rune) (bounds fixed.Rectangle26_6, advance fixed.Int26_6, ok bool) {
+func (p *Default) GlyphBounds(r rune) (bounds fixed.Rectangle26_6, advance fixed.Int26_6, ok bool) {
 	p.ensureInited()
 	if r < 0x100 {
 		return p.ascii.GlyphBounds(r)
@@ -133,7 +131,7 @@ func (p *DefaultFont) GlyphBounds(r rune) (bounds fixed.Rectangle26_6, advance f
 	return p.songti.GlyphBounds(r)
 }
 
-func (p *DefaultFont) GlyphAdvance(r rune) (advance fixed.Int26_6, ok bool) {
+func (p *Default) GlyphAdvance(r rune) (advance fixed.Int26_6, ok bool) {
 	p.ensureInited()
 	if r < 0x100 {
 		return p.ascii.GlyphAdvance(r)
@@ -141,12 +139,12 @@ func (p *DefaultFont) GlyphAdvance(r rune) (advance fixed.Int26_6, ok bool) {
 	return p.songti.GlyphAdvance(r)
 }
 
-func (p *DefaultFont) Kern(r0, r1 rune) fixed.Int26_6 {
+func (p *Default) Kern(r0, r1 rune) fixed.Int26_6 {
 	p.ensureInited()
 	return p.ascii.Kern(r0, r1)
 }
 
-func (p *DefaultFont) Metrics() font.Metrics {
+func (p *Default) Metrics() font.Metrics {
 	p.ensureInited()
 	return p.ascii.Metrics()
 }

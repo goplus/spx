@@ -1,9 +1,11 @@
-package gdi
+package font
 
 // -------------------------------------------------------------------------------------
 
 var fontFindPaths = []string{
-	"C:\\windows\\fonts",
+	"/Library/Fonts",
+	"/System/Library/Fonts",
+	"/System/Library/Fonts/Supplemental",
 }
 
 // -------------------------------------------------------------------------------------

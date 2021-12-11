@@ -8,7 +8,6 @@
   "map": {
     "width":800,
     "height":600,
-    "gridUnit":1,
     "mode": "repeat",
     "mode_test0": "",
     "mode_test1": "repeat",

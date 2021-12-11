@@ -46,26 +46,25 @@ onKey KeyB, => {
 }
 
 onKey KeyC, => {
-	step 5, "faststep"
-	println distanceStepTo("Crocodile")
+	step 100, "faststep"
+	println distanceTo("Crocodile")
 }
 onKey KeyD, => {
-	step -5, "slowstep"
-	println distanceStepTo("Crocodile")
+	step -100, "slowstep"
+	println distanceTo("Crocodile")
 }
 onKey KeyE, => {
-	step 5
-	println distanceStepTo("Crocodile")
+	step 100
+	println distanceTo("Crocodile")
 }
 onKey KeyF, => {
-	step 5, "animstep"
-	println distanceStepTo("Crocodile")
+	step 100, "animstep"
+	println distanceTo("Crocodile")
 }
 
 onMoving mi => {
-
 }
 
 onTurning ti=> {
-	Crocodile.SetHeading ti.newDir
+	Crocodile.SetHeading ti.NewDir
 }

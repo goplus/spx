@@ -1,7 +1,7 @@
 //go:build canvas
 // +build canvas
 
-package gdi
+package font
 
 import (
 	"golang.org/x/image/font"

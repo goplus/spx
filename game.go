@@ -79,7 +79,6 @@ type Game struct {
 	worldWidth_  int
 	worldHeight_ int
 	mapMode      int
-	gridUnit     float64
 	world        *ebiten.Image
 
 	// window
@@ -310,10 +309,9 @@ type cameraConfig struct {
 }
 
 type mapConfig struct {
-	Width    int     `json:"width"`
-	Height   int     `json:"height"`
-	Mode     string  `json:"mode"`
-	GridUnit float64 `json:"gridUnit"`
+	Width  int    `json:"width"`
+	Height int    `json:"height"`
+	Mode   string `json:"mode"`
 }
 
 func toMapMode(mode string) int {
@@ -506,10 +504,6 @@ func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
 	}
 	p.world = ebiten.NewImage(p.worldWidth_, p.worldHeight_)
 	p.mapMode = toMapMode(proj.Map.Mode)
-	p.gridUnit = proj.Map.GridUnit
-	if p.gridUnit == 0 {
-		p.gridUnit = 1
-	}
 
 	inits := make([]initer, 0, len(proj.Zorder))
 	for _, v := range proj.Zorder {
@@ -719,8 +713,8 @@ func (p *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeigh
 }
 
 func (p *Game) Update() error {
-	p.updateMousePos()
 	p.input.update()
+	p.updateMousePos()
 	p.sounds.update()
 	p.tickMgr.update()
 	return nil
@@ -1235,7 +1229,7 @@ func (p *Game) MouseY() float64 {
 }
 
 func (p *Game) MousePressed() bool {
-	return isMousePressed()
+	return p.input.isMousePressed()
 }
 
 func (p *Game) getMousePos() (x, y float64) {
@@ -1243,12 +1237,8 @@ func (p *Game) getMousePos() (x, y float64) {
 }
 
 func (p *Game) updateMousePos() {
-	x, y := ebiten.CursorPosition()
-	touchids := ebiten.TouchIDs()
-	if len(touchids) > 0 {
-		x, y = ebiten.TouchPosition(touchids[0])
-	}
-	pos := p.g.Camera.screenToWorld(math32.NewVector2(float64(x), float64(y)))
+	x, y := p.input.mouseXY()
+	pos := p.Camera.screenToWorld(math32.NewVector2(float64(x), float64(y)))
 
 	worldW, worldH := p.worldSize_()
 	mx, my := int(pos.X)-(worldW>>1), (worldH>>1)-int(pos.Y)

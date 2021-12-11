@@ -696,12 +696,7 @@ func (p *Sprite) doMoveTo(x, y float64) {
 }
 
 func (p *Sprite) doMoveToForAnim(x, y float64, ani *anim.Anim) {
-	if !p.isWorldRange(x, y) {
-		if debugInstr {
-			log.Printf("sprite [%s] is not in the world range. ", p.name)
-		}
-		return
-	}
+	x, y = p.fixWorldRange(x, y)
 	if p.hasOnMoving {
 		mi := &MovingInfo{OldX: p.x, OldY: p.y, NewX: x, NewY: y, Obj: p, ani: ani}
 		p.doWhenMoving(p, mi)
@@ -745,12 +740,12 @@ func (p *Sprite) Step__2(step float64, animname string) {
 	if ani, ok := p.animations[animname]; ok {
 		anicopy := *ani
 		anicopy.From = 0
-		anicopy.To = step * float64(p.g.gridUnit)
+		anicopy.To = step
 		anicopy.Duration = math.Abs(step) * ani.Duration
 		p.goAnimate(animname, &anicopy)
 		return
 	}
-	p.goMoveForward(step * float64(p.g.gridUnit))
+	p.goMoveForward(step)
 }
 
 // Goto func:
@@ -912,10 +907,18 @@ func (p *Sprite) TurnTo(obj interface{}) {
 	}
 
 	if ani, ok := p.animations["turn"]; ok {
-		delta := p.direction - angle
+		fromangle := math.Mod(p.direction+360.0, 360.0)
+		toangle := math.Mod(angle+360.0, 360.0)
+		if toangle-fromangle > 180.0 {
+			fromangle = fromangle + 360.0
+		}
+		if fromangle-toangle > 180.0 {
+			toangle = toangle + 360.0
+		}
+		delta := math.Abs(fromangle - toangle)
 		anicopy := *ani
-		anicopy.From = p.direction
-		anicopy.To = angle
+		anicopy.From = fromangle
+		anicopy.To = toangle
 		anicopy.Duration = ani.Duration / 360.0 * math.Abs(delta)
 		p.goAnimate("turn", &anicopy)
 		return
@@ -1320,16 +1323,34 @@ func (p *Sprite) Pixel(x, y float64) color.Color {
 
 // -----------------------------------------------------------------------------
 
-func (p *Sprite) isWorldRange(x, y float64) bool {
+func (p *Sprite) fixWorldRange(x, y float64) (float64, float64) {
 	rect := p.getDrawInfo().getUpdateRotateRect(x, y)
 	if rect == nil {
-		return false
+		return x, y
 	}
 	plist := rect.Points()
 	for _, val := range plist {
 		if p.g.isWorldRange(val) {
-			return true
+			return x, y
 		}
 	}
-	return false
+
+	worldW, worldH := p.g.worldSize_()
+	maxW := float64(worldW)/2.0 + float64(rect.Size.Width)
+	maxH := float64(worldH)/2.0 + float64(rect.Size.Height)
+
+	if x < -maxW {
+		x = -maxW
+	}
+	if x > maxW {
+		x = maxW
+	}
+	if y < -maxH {
+		y = -maxH
+	}
+	if y > maxH {
+		y = maxH
+	}
+
+	return x, y
 }
