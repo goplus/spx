@@ -8,7 +8,6 @@
   "camera": {
     "on": "Monkey"
   },
-  "stepUnit":20,
   "zorder": [
     "Monkey",
     "Crocodile"

@@ -36,21 +36,21 @@ onKey KeyE, => {
 }
 
 onKey KeyUp, => {
-	Camera.changeXYpos 0, 5
+	Camera.changeXYpos 0, 100
 }
 
 onKey KeyDown, => {
-	Camera.changeXYpos 0, -5
+	Camera.changeXYpos 0, -100
 }
 
 onKey KeyLeft, => {
-	Camera.changeXYpos -5, 0
+	Camera.changeXYpos -100, 0
 }
 
 onKey KeyRight, => {
-	Camera.changeXYpos 5, 0
+	Camera.changeXYpos 100, 0
 }
 
 onTurning ti => {
-	Crocodile.setHeading ti.newDir
+	Crocodile.setHeading ti.NewDir
 }

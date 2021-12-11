@@ -1,7 +1,7 @@
 onKey KeyUp, => {
 	turnTo 0
-	step 10
-	println bound
+	step 200
+	println bounds
 
 	if touching(EdgeTop) {
 		println "EdgeTop"
@@ -10,7 +10,7 @@ onKey KeyUp, => {
 
 onKey KeyDown, => {
 	turnTo 180
-	step 10
+	step 200
 
 	if touching(EdgeBottom) {
 		println "EdgeBottom"
@@ -20,7 +20,7 @@ onKey KeyDown, => {
 
 onKey KeyLeft, => {
 	turnTo -90
-	step 10
+	step 200
 
 	if touching(EdgeLeft) {
 		println "EdgeLeft"
@@ -29,7 +29,7 @@ onKey KeyLeft, => {
 
 onKey KeyRight, => {
 	turnTo 90
-	step 10
+	step 200
 
 	if touching(EdgeRight) {
 		println "EdgeRight"
@@ -41,11 +41,11 @@ onKey KeyC, => {
 }
 
 onKey KeyE, => {
-	step 2
+	step 40
 }
 
 onKey KeyB, => {
-	println bound
+	println bounds
 	println Crocodile.bounds
 
 	if touching(Crocodile) {
@@ -56,7 +56,7 @@ onKey KeyB, => {
 onClick => {
 	println "Monkey-mouse", mouseX, mouseY
 	pixel := pixel(mouseX, mouseY)
-	println bound
+	println bounds
 	println "Monkey-pixel", pixel
 
 	if touching(Mouse) {
@@ -65,17 +65,17 @@ onClick => {
 }
 
 onKey KeyW, => {
-	Camera.changeXYpos 0, 5
+	Camera.changeXYpos 0, 100
 }
 
 onKey KeyS, => {
-	Camera.changeXYpos 0, -5
+	Camera.changeXYpos 0, -100
 }
 
 onKey KeyA, => {
-	Camera.changeXYpos -5, 0
+	Camera.changeXYpos -100, 0
 }
 
 onKey KeyD, => {
-	Camera.changeXYpos 5, 0
+	Camera.changeXYpos 100, 0
 }
