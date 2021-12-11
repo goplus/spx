@@ -5,7 +5,6 @@
       "path": "../../res/lake.jpg"
     }
   ],
-  "stepUnit": 20,
   "zorder": [
     "Monkey",
     "Crocodile"
