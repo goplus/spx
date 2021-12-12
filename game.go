@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"image"
+	"image/color"
 	"io"
 	"log"
 	"math/rand"
@@ -1163,7 +1164,8 @@ func (p *Game) drawBackground(dc drawContext) {
 }
 
 func (p *Game) onDraw(dc drawContext) {
-	dc.Clear()
+	//dc.Clear()
+	dc.Fill(color.White)
 	p.drawBackground(dc)
 	p.getTurtle().draw(dc, p.fs)
 
