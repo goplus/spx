@@ -527,6 +527,7 @@ func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
 	if debugLoad {
 		log.Println("==> SetWindowSize", p.windowWidth_, p.windowHeight_)
 	}
+	ebiten.SetWindowSize(p.windowWidth_, p.windowHeight_)
 	if p.windowWidth_ > p.worldWidth_ {
 		p.windowWidth_ = p.worldWidth_
 	}
@@ -535,7 +536,6 @@ func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
 	}
 	p.Camera.init(p, float64(p.windowWidth_), float64(p.windowHeight_), float64(p.worldWidth_), float64(p.worldHeight_))
 
-	ebiten.SetWindowSize(p.windowWidth_, p.windowHeight_)
 	ebiten.SetWindowResizable(true)
 	if proj.Camera != nil && proj.Camera.On != "" {
 		p.Camera.On(proj.Camera.On)
