@@ -3,4 +3,5 @@ var (
 	Monkey  *Monkey
 	Red *Red
 )
+
 run "res", {Title: "Bananas (by Go+)" , Width: 500, Height: 400}
