@@ -10,8 +10,11 @@ import (
 	"unicode/utf8"
 
 	"github.com/goplus/canvas"
+	"github.com/goplus/spx/internal/gdi/font"
 	"github.com/hajimehoshi/ebiten/v2"
 )
+
+type Font = font.Font
 
 // -------------------------------------------------------------------------------------
 

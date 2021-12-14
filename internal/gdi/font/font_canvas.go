@@ -12,28 +12,28 @@ type Font interface {
 	PointSize() int
 }
 
-type FontOptions struct {
+type Options struct {
 	Size    float64
 	DPI     float64
 	Hinting font.Hinting
 }
 
-func NewDefaultFont(options *FontOptions) Font {
-	return &DefaultFont{
+func NewDefault(options *Options) Font {
+	return &Default{
 		family: "Times New Roman,Times,serif",
 		size:   int(options.Size * options.DPI / 72),
 	}
 }
 
-type DefaultFont struct {
+type Default struct {
 	family string
 	size   int
 }
 
-func (font DefaultFont) Family() string {
+func (font Default) Family() string {
 	return font.family
 }
 
-func (font DefaultFont) PointSize() int {
+func (font Default) PointSize() int {
 	return font.size
 }
