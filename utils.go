@@ -110,12 +110,12 @@ func parseHexColor(s string) (Color, error) {
 
 // -----------------------------------------------------------------------------
 
-func Exit(code ...int) {
-	v := 0
-	if code != nil {
-		v = code[0]
-	}
-	os.Exit(v)
+func Exit__0(code int) {
+	os.Exit(code)
+}
+
+func Exit__1() {
+	os.Exit(0)
 }
 
 // -----------------------------------------------------------------------------
