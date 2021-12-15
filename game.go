@@ -88,7 +88,8 @@ type Game struct {
 
 	gMouseX, gMouseY int64
 
-	sinkMgr eventSinkMgr
+	sinkMgr  eventSinkMgr
+	isLoaded bool
 }
 
 type Spriter = Shape
@@ -109,6 +110,7 @@ func (p *Game) reset() {
 	p.input.reset()
 	p.Stop(AllOtherScripts)
 	p.items = nil
+	p.isLoaded = false
 	p.shapes = make(map[string]Spriter)
 }
 
@@ -544,6 +546,8 @@ func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
 	if loader, ok := g.Addr().Interface().(interface{ OnLoaded() }); ok {
 		loader.OnLoaded()
 	}
+	//game load success
+	p.isLoaded = true
 	return
 }
 
@@ -715,6 +719,9 @@ func (p *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeigh
 }
 
 func (p *Game) Update() error {
+	if !p.isLoaded {
+		return nil
+	}
 	p.input.update()
 	p.updateMousePos()
 	p.sounds.update()

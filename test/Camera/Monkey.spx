@@ -2,6 +2,7 @@ onClick => {
 	animate "clap"
 }
 onStart => {
+	println "Monkey onStart"
 	for {
 		if touching("Crocodile") {
 			println "Crocodile touching"
