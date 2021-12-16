@@ -4,9 +4,9 @@
 package audiorecord
 
 /*
-#cgo darwin   CFLAGS:  -DGOOS_darwin
-#cgo linux    CFLAGS:  -DGOOS_linux
-#cgo windows  CFLAGS:  -DGOOS_windows
+#cgo darwin   CFLAGS:  -DGOOS_darwin -Wno-deprecated-declarations
+#cgo linux    CFLAGS:  -DGOOS_linux -Wno-deprecated-declarations
+#cgo windows  CFLAGS:  -DGOOS_windows -Wno-deprecated-declarations
 #cgo darwin   LDFLAGS: -framework OpenAL
 #cgo linux    LDFLAGS: -lopenal
 #cgo windows  LDFLAGS: -lOpenAL32
