@@ -63,6 +63,7 @@ type Game struct {
 	baseObj
 	eventSinks
 	Camera
+	AudioRecord
 
 	fs     spxfs.Dir
 	shared *sharedImages
