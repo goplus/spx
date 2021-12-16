@@ -52,8 +52,13 @@ func StartRecorder() {
 		return
 	}
 	device.CaptureStart()
+	deviceIsStart = true
+
 	co.CreateAndStart(true, nil, func(me coroutine.Thread) int {
 		for {
+			if deviceIsStart == false {
+				return 0
+			}
 
 			fsize := audioFrameSize
 			buff := device.CaptureSamples(uint32(fsize))
@@ -70,7 +75,7 @@ func StartRecorder() {
 			time.Sleep(audioInterval)
 		}
 	})
-	deviceIsStart = true
+
 }
 
 func StopRecorder() {
@@ -80,7 +85,7 @@ func StopRecorder() {
 	if device != nil {
 		device.CaptureStop()
 	}
-	co.Abort()
+	//co.Abort()
 	deviceIsStart = false
 }
 
