@@ -70,6 +70,9 @@ func (p *sayOrThinker) draw(dc drawContext) {
 	render.AddText(p.msg)
 	w, h := render.Size()
 	x, y := topx+2, topy-h-(trackCy+24)
+	if y < h+(trackCy+44) {
+		y = h + (trackCy + 44)
+	}
 
 	pad := 9
 	w += (pad << 1)
