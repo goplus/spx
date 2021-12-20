@@ -1,7 +1,7 @@
 package audiorecord
 
 import (
-	"strings"
+	"github.com/goplus/spx/internal/coroutine"
 	"syscall/js"
 )
 
@@ -15,8 +15,8 @@ func initScript() {
 	}
 	scriptInited = true
 
-	window = js.Global().Get("window")
-	document = js.Global().Get("document")
+	window := js.Global().Get("window")
+	document := js.Global().Get("document")
 
 	// docuemnt is undefined on node.js
 	if !document.Truthy() {
@@ -46,7 +46,8 @@ func Open(gco *coroutine.Coroutines) *Recorder {
 	initScript()
 	audioRecorder := js.Global().Get("GopAudioRecorder")
 	audioRecorder.Call("start", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-		volume = args[0].Float()
+		volume := args[0].Float()
+		p.volume = volume
 		return nil
 	}))
 	return p
