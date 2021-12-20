@@ -5,6 +5,7 @@ import (
 	"runtime"
 	"sync"
 	"sync/atomic"
+	"time"
 	"unsafe"
 )
 
@@ -150,6 +151,15 @@ func (p *Coroutines) Resume(th Thread) {
 //
 func (p *Coroutines) Sched(me Thread) {
 	go func() {
+		p.Resume(me)
+	}()
+	p.Yield(me)
+}
+
+func (p *Coroutines) Sleep(t time.Duration) {
+	me := p.Current()
+	go func() {
+		time.Sleep(t)
 		p.Resume(me)
 	}()
 	p.Yield(me)

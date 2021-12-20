@@ -1,0 +1,19 @@
+onStart=>{
+    say "Hi"
+}
+
+onKey KeyUp, => {
+	Camera.changeXYpos 0, 10
+}
+
+onKey KeyDown, => {
+	Camera.changeXYpos 0, -10
+}
+
+onKey KeyLeft, => {
+	Camera.changeXYpos -10, 0
+}
+
+onKey KeyRight, => {
+	Camera.changeXYpos 10, 0
+}

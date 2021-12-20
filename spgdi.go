@@ -87,6 +87,7 @@ func (p *spriteDrawInfo) drawOn(dc drawContext, fs spxfs.Dir) {
 func (p *spriteDrawInfo) draw(dc drawContext, ctx *Sprite) {
 	p.doDrawOn(dc, ctx.g.fs)
 }
+
 func (p *spriteDrawInfo) getUpdateRotateRect(x, y float64) *math32.RotatedRect {
 	c := p.sprite.costumes[p.sprite.costumeIndex_]
 

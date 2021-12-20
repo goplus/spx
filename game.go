@@ -16,6 +16,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/goplus/spx/internal/audiorecord"
 	"github.com/goplus/spx/internal/coroutine"
 	"github.com/goplus/spx/internal/gdi"
 	"github.com/goplus/spx/internal/math32"
@@ -75,6 +76,7 @@ type Game struct {
 	tickMgr tickMgr
 	input   inputMgr
 	events  chan event
+	aurec   *audiorecord.Recorder
 
 	// map world
 	worldWidth_  int
@@ -88,7 +90,8 @@ type Game struct {
 
 	gMouseX, gMouseY int64
 
-	sinkMgr eventSinkMgr
+	sinkMgr  eventSinkMgr
+	isLoaded bool
 }
 
 type Spriter = Shape
@@ -109,6 +112,7 @@ func (p *Game) reset() {
 	p.input.reset()
 	p.Stop(AllOtherScripts)
 	p.items = nil
+	p.isLoaded = false
 	p.shapes = make(map[string]Spriter)
 }
 
@@ -186,6 +190,17 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 	if err := g.runLoop(&conf); err != nil {
 		panic(err)
 	}
+}
+
+// MouseHitItem returns the topmost item which is hit by mouse.
+func (p *Game) MouseHitItem() (target *Sprite, ok bool) {
+	x, y := p.input.mouseXY()
+	hc := hitContext{Pos: image.Pt(x, y)}
+	item, ok := p.onHit(hc)
+	if ok {
+		target, ok = item.Target.(*Sprite)
+	}
+	return
 }
 
 func instance(gamer reflect.Value) *Game {
@@ -544,6 +559,8 @@ func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
 	if loader, ok := g.Addr().Interface().(interface{ OnLoaded() }); ok {
 		loader.OnLoaded()
 	}
+	//game load success
+	p.isLoaded = true
 	return
 }
 
@@ -715,6 +732,9 @@ func (p *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeigh
 }
 
 func (p *Game) Update() error {
+	if !p.isLoaded {
+		return nil
+	}
 	p.input.update()
 	p.updateMousePos()
 	p.sounds.update()
@@ -814,15 +834,6 @@ func waitForChan(done chan bool) {
 	me := gco.Current()
 	go func() {
 		<-done
-		gco.Resume(me)
-	}()
-	gco.Yield(me)
-}
-
-func sleep(t time.Duration) {
-	me := gco.Current()
-	go func() {
-		time.Sleep(t)
 		gco.Resume(me)
 	}()
 	gco.Yield(me)
@@ -1255,7 +1266,7 @@ func (p *Game) Username() string {
 // -----------------------------------------------------------------------------
 
 func (p *Game) Wait(secs float64) {
-	sleep(time.Duration(secs * 1e9))
+	gco.Sleep(time.Duration(secs * 1e9))
 }
 
 func (p *Game) Timer() float64 {
@@ -1360,6 +1371,13 @@ func (p *Game) SetVolume(volume float64) {
 
 func (p *Game) ChangeVolume(delta float64) {
 	p.sounds.ChangeVolume(delta)
+}
+
+func (p *Game) Loudness() float64 {
+	if p.aurec == nil {
+		p.aurec = audiorecord.Open(gco)
+	}
+	return p.aurec.Loudness() * 100
 }
 
 // -----------------------------------------------------------------------------

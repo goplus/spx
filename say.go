@@ -71,6 +71,7 @@ func (p *sayOrThinker) draw(dc drawContext) {
 	w, h := render.Size()
 	x, y := topx+2, topy-h-(trackCy+24)
 
+
 	pad := 9
 	w += (pad << 1)
 	h += (pad << 1)
