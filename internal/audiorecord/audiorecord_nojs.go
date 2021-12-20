@@ -48,7 +48,7 @@ func Open(gco *coroutine.Coroutines) *Recorder {
 	device := CaptureOpenDevice("", audioSampleRate, FormatMono16, audioFrameSize)
 	device.CaptureStart()
 	p := &Recorder{device: device}
-	gco.CreateAndStart(false, nil, func(me coroutine.Thread) int {
+	gco.CreateAndStart(true, nil, func(me coroutine.Thread) int {
 		for {
 			fsize := audioFrameSize
 			buff := device.CaptureSamples(uint32(fsize))
@@ -61,7 +61,7 @@ func Open(gco *coroutine.Coroutines) *Recorder {
 				int16Buffer[i] = int16(binary.LittleEndian.Uint16(buff[i*2 : (i+1)*2]))
 			}
 			p.deviceVolume = doubleCalculateVolume(int16Buffer)
-			time.Sleep(audioInterval)
+			gco.Sleep(audioInterval)
 		}
 	})
 	return p
