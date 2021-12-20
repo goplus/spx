@@ -20,34 +20,23 @@ const (
 	// audioDefaultInterval is the default interval that audio packets are sent
 	audioInterval = 6 * 10 * time.Millisecond
 
-	MAV_VOLUME float64 = 39.11730073691797
+	VOLUMEMAX = 32767.0
+	VOLUMEMIN = -32768.0
 )
-
-func doubleCalculateVolume(buffer []int16) float64 {
-	sumVolume := 0.0
-	avgVolume := 0.0
-	volume := 0.0
-	for i := 0; i < len(buffer); i += 1 {
-		temp := buffer[i]
-		if int(temp) >= 0x8000 {
-			temp = int16(0xffff - int(temp))
-		}
-		sumVolume += math.Abs(float64(temp))
-	}
-	avgVolume = sumVolume / float64(len(buffer)) / 2.0
-	volume = math.Log10(1+avgVolume) * 10
-	return volume / MAV_VOLUME
-}
 
 type Recorder struct {
 	deviceVolume float64
 	device       *CaptureDevice
+	lastValue    float64
 }
 
 func Open(gco *coroutine.Coroutines) *Recorder {
 	device := CaptureOpenDevice("", audioSampleRate, FormatMono16, audioFrameSize)
 	device.CaptureStart()
-	p := &Recorder{device: device}
+	p := &Recorder{
+		device:       device,
+		deviceVolume: 0,
+	}
 	gco.CreateAndStart(true, nil, func(me coroutine.Thread) int {
 		for {
 			fsize := audioFrameSize
@@ -60,11 +49,42 @@ func Open(gco *coroutine.Coroutines) *Recorder {
 			for i := range int16Buffer {
 				int16Buffer[i] = int16(binary.LittleEndian.Uint16(buff[i*2 : (i+1)*2]))
 			}
-			p.deviceVolume = doubleCalculateVolume(int16Buffer)
+			p.deviceVolume = p.doubleCalculateVolume(int16Buffer)
 			gco.Sleep(audioInterval)
 		}
 	})
 	return p
+}
+
+//loudness scaled 0 to 100
+func (p *Recorder) doubleCalculateVolume(buffer []int16) float64 {
+
+	var sum float64 = 0
+	// compute the RMS of the sound
+	for i := 0; i < len(buffer); i++ {
+		// higher/lower values exceed 16bit
+		val := math.Min(VOLUMEMAX, float64(buffer[i]))
+		val = math.Max(VOLUMEMIN, val)
+		val = val / VOLUMEMAX
+		sum += math.Pow(val, 2)
+	}
+	rms := math.Sqrt(sum / float64(len(buffer)))
+	// smooth the value, if it is descending
+	if p.lastValue != 0 {
+		rms = math.Max(rms, p.lastValue*0.6)
+	}
+	p.lastValue = rms
+
+	// Scale the measurement so it's more sensitive to quieter sounds
+	rms *= 1.63
+	rms = math.Sqrt(rms)
+	// Scale it up to 0-100 and round
+	rms = math.Round(rms * 100)
+	//log.Printf("rms %f", rms)
+	// Prevent it from going above 100
+	rms = math.Min(rms, 100)
+
+	return rms / 100.0
 }
 
 func (p *Recorder) Close() error {
@@ -72,6 +92,7 @@ func (p *Recorder) Close() error {
 		p.device.CaptureStop()
 		p.device = nil
 	}
+	p.deviceVolume = 0
 	return nil
 }
 
