@@ -7,15 +7,3 @@ onKey KeyDown, => {
 	nextCostume
 	say costumeIndex, 0.5
 }
-
-onKey KeyK, => {
-	startRecord
-}
-
-onKey KeyM, => {
-	println loudness
-}
-onKey KeyL, => {
-	stopRecord
-}
-

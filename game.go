@@ -16,6 +16,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/goplus/spx/internal/audiorecord"
 	"github.com/goplus/spx/internal/coroutine"
 	"github.com/goplus/spx/internal/gdi"
 	"github.com/goplus/spx/internal/math32"
@@ -63,7 +64,6 @@ type Game struct {
 	baseObj
 	eventSinks
 	Camera
-	AudioRecord
 
 	fs     spxfs.Dir
 	shared *sharedImages
@@ -76,6 +76,7 @@ type Game struct {
 	tickMgr tickMgr
 	input   inputMgr
 	events  chan event
+	aurec   *audiorecord.Recorder
 
 	// map world
 	worldWidth_  int
@@ -827,15 +828,6 @@ func waitForChan(done chan bool) {
 	gco.Yield(me)
 }
 
-func sleep(t time.Duration) {
-	me := gco.Current()
-	go func() {
-		time.Sleep(t)
-		gco.Resume(me)
-	}()
-	gco.Yield(me)
-}
-
 func SchedNow() int {
 	if me := gco.Current(); me != nil {
 		gco.Sched(me)
@@ -1263,7 +1255,7 @@ func (p *Game) Username() string {
 // -----------------------------------------------------------------------------
 
 func (p *Game) Wait(secs float64) {
-	sleep(time.Duration(secs * 1e9))
+	gco.Sleep(time.Duration(secs * 1e9))
 }
 
 func (p *Game) Timer() float64 {
@@ -1368,6 +1360,13 @@ func (p *Game) SetVolume(volume float64) {
 
 func (p *Game) ChangeVolume(delta float64) {
 	p.sounds.ChangeVolume(delta)
+}
+
+func (p *Game) Loudness() float64 {
+	if p.aurec == nil {
+		p.aurec = audiorecord.Open(gco)
+	}
+	return p.aurec.Loudness() * 100
 }
 
 // -----------------------------------------------------------------------------

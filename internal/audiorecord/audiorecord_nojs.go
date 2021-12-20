@@ -11,11 +11,6 @@ import (
 	"github.com/goplus/spx/internal/coroutine"
 )
 
-var device *CaptureDevice
-var deviceIsStart bool
-var co *coroutine.Coroutines
-var deviceVolume float64
-
 const (
 	// is the audio sample rate (in hertz) for incoming and
 	audioSampleRate uint32 = 16000
@@ -44,25 +39,17 @@ func doubleCalculateVolume(buffer []int16) float64 {
 	return volume / MAV_VOLUME
 }
 
-func init() {
-
-	device = CaptureOpenDevice("", audioSampleRate, FormatMono16, audioFrameSize)
-	co = coroutine.New()
+type Recorder struct {
+	deviceVolume float64
+	device       *CaptureDevice
 }
 
-func StartRecorder() {
-	if deviceIsStart == true {
-		return
-	}
+func Open(gco *coroutine.Coroutines) *Recorder {
+	device := CaptureOpenDevice("", audioSampleRate, FormatMono16, audioFrameSize)
 	device.CaptureStart()
-	deviceIsStart = true
-
-	co.CreateAndStart(true, nil, func(me coroutine.Thread) int {
+	p := &Recorder{device: device}
+	gco.CreateAndStart(true, nil, func(me coroutine.Thread) int {
 		for {
-			if deviceIsStart == false {
-				return 0
-			}
-
 			fsize := audioFrameSize
 			buff := device.CaptureSamples(uint32(fsize))
 			if len(buff) != int(fsize)*2 {
@@ -73,25 +60,21 @@ func StartRecorder() {
 			for i := range int16Buffer {
 				int16Buffer[i] = int16(binary.LittleEndian.Uint16(buff[i*2 : (i+1)*2]))
 			}
-			deviceVolume = doubleCalculateVolume(int16Buffer)
-			//log.Printf("deviceVolume %f", deviceVolume)
-			time.Sleep(audioInterval)
+			p.deviceVolume = doubleCalculateVolume(int16Buffer)
+			gco.Sleep(audioInterval)
 		}
 	})
-
+	return p
 }
 
-func StopRecorder() {
-	if deviceIsStart == false {
-		return
+func (p *Recorder) Close() error {
+	if p.device != nil {
+		p.device.CaptureStop()
+		p.device = nil
 	}
-	if device != nil {
-		device.CaptureStop()
-	}
-	//co.Abort()
-	deviceIsStart = false
+	return nil
 }
 
-func Loudness() float64 {
-	return deviceVolume
+func (p *Recorder) Loudness() float64 {
+	return p.deviceVolume
 }

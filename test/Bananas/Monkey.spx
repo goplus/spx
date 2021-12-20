@@ -23,6 +23,9 @@ onKey KeyL, => {
 	turnTo 360
 }
 
+onKey KeyM, => {
+	println "loudness:", loudness
+}
 
 onKey KeyF, => {
 	setEffect ColorEffect, 100
@@ -48,10 +51,6 @@ onKey KeySpace, => {
 	}
 }
 
-
-
-
-
 onKey KeyUp, => {
 	Camera.changeXYpos 0, 5
 }
@@ -67,4 +66,3 @@ onKey KeyLeft, => {
 onKey KeyRight, => {
 	Camera.changeXYpos 5, 0
 }
-
