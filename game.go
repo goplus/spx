@@ -192,6 +192,17 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 	}
 }
 
+// HitMouseItem returns the topmost item(shape: sprite, widget) which hit the mouse
+func (p *Game) HitMouseItem() interface{} {
+	x, y := ebiten.CursorPosition()
+	hc := hitContext{Pos: image.Pt(x, y)}
+	item, ok := p.onHit(hc)
+	if !ok {
+		return nil
+	}
+	return item.Target
+}
+
 func instance(gamer reflect.Value) *Game {
 	fld := gamer.FieldByName("Game")
 	if !fld.IsValid() {
