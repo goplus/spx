@@ -1,0 +1,31 @@
+{
+  "costumeSet": {
+    "faceRight": 180,
+    "path": "../../../../res/monkey.png",
+    "nx": 96
+  },
+  "costumeIndex": 0,
+  "mAnimations": {
+    "step": {
+      "duration": 0.015,
+      "onPlay": {
+        "costumes": {
+          "from": 0,
+          "to": 8
+        }
+      }
+    }
+  },
+ "tAnimations": {
+    "turn": {
+      "duration": 2.0
+    }
+  },
+  "heading": -60,
+  "isDraggable": false,
+  "rotationStyle": "normal",
+  "size": 1,
+  "visible": true,
+  "x": 100,
+  "y": 21
+}

@@ -1,0 +1,12 @@
+{
+  "scenes": [
+    {
+      "name": "backdrop1",
+      "path": "../../res/lake.jpg"
+    }
+  ],
+  "zorder": [
+    "Monkey",
+    "Crocodile"
+  ]
+}
