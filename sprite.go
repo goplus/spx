@@ -47,6 +47,7 @@ type Sprite struct {
 	rRect         *math32.RotatedRect
 
 	sayObj        *sayOrThinker
+	quoteObj      *quoter
 	animations    map[string]*aniConfig
 	greffUniforms map[string]interface{} // graphic effects
 
@@ -635,6 +636,28 @@ func (p *Sprite) Think(msg interface{}, secs ...float64) {
 	p.sayOrThink(msg, styleThink)
 	if secs != nil {
 		p.waitStopSay(secs[0])
+	}
+}
+
+func (p *Sprite) Quote__0(message string) {
+	p.Quote__1(message, "")
+}
+
+func (p *Sprite) Quote__1(message, description string) {
+	p.Quote__3(message, description, -1)
+}
+
+func (p *Sprite) Quote__2(message string, secs float64) {
+	p.Quote__3(message, "", secs)
+}
+
+func (p *Sprite) Quote__3(message, description string, secs float64) {
+	if debugInstr {
+		log.Println("Quote", p.name, message, description, secs)
+	}
+	p.quote_(message, description)
+	if secs > 0 {
+		p.waitStopQuote(secs)
 	}
 }
 

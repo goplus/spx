@@ -1,0 +1,17 @@
+onStart => {
+	clone
+	step 200
+	turnTo 180
+}
+
+onMsg "quote", => {
+	quote "CC", "Crocodile"
+}
+
+
+onClick => {
+	quote ""
+	animate "sink"
+	wait 0.8
+	animate "surface"
+}
