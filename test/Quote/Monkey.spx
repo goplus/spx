@@ -7,6 +7,6 @@ onClick => {
 	broadcast "quote"
 }
 
-onKey keyQ,=> {
+onKey KeyQ,=> {
 	quote "mm", 1
 }

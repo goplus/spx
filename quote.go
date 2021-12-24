@@ -25,11 +25,6 @@ type quoter struct {
 }
 
 func (p *Sprite) quote_(message, description string) {
-	if message == "" {
-		p.doStopQuote()
-		return
-	}
-
 	old := p.quoteObj
 	if old == nil {
 		p.quoteObj = &quoter{sprite: p, message: message, description: description}
