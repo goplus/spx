@@ -11,8 +11,5 @@ onClick => {
 }
 
 onClick => {
-	println "Crocodile-mouse", mouseX, mouseY
-	pixel := pixel(mouseX, mouseY)
 	println bounds
-	println "Crocodile-pixel", pixel
 }

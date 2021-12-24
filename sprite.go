@@ -1,7 +1,6 @@
 package spx
 
 import (
-	"fmt"
 	"image/color"
 	"log"
 	"math"
@@ -640,58 +639,24 @@ func (p *Sprite) Think(msg interface{}, secs ...float64) {
 }
 
 func (p *Sprite) Quote__0(message string) {
-	p.Quote__1(message, "")
+	if message == "" {
+		p.doStopQuote()
+		return
+	}
+	p.Quote__2(message, "")
 }
 
-func (p *Sprite) Quote__1(message, description string) {
-	p.Quote__3(message, description, -1)
+func (p *Sprite) Quote__1(message string, secs float64) {
+	p.Quote__2(message, "", secs)
 }
 
-func (p *Sprite) Quote__2(message string, secs float64) {
-	p.Quote__3(message, "", secs)
-}
-
-func (p *Sprite) Quote__3(message, description string, secs float64) {
+func (p *Sprite) Quote__2(message, description string, secs ...float64) {
 	if debugInstr {
 		log.Println("Quote", p.name, message, description, secs)
 	}
 	p.quote_(message, description)
-	if secs > 0 {
-		p.waitStopQuote(secs)
-	}
-}
-
-func (p *Sprite) sayOrThink(msgv interface{}, style int) {
-	msg, ok := msgv.(string)
-	if !ok {
-		msg = fmt.Sprint(msgv)
-	}
-
-	if msg == "" {
-		p.doStopSay()
-		return
-	}
-
-	old := p.sayObj
-	if old == nil {
-		p.sayObj = &sayOrThinker{sp: p, msg: msg, style: style}
-		p.g.addShape(p.sayObj)
-	} else {
-		old.msg, old.style = msg, style
-		p.g.activateShape(old)
-	}
-}
-
-func (p *Sprite) waitStopSay(secs float64) {
-	p.g.Wait(secs)
-
-	p.doStopSay()
-}
-
-func (p *Sprite) doStopSay() {
-	if p.sayObj != nil {
-		p.g.removeShape(p.sayObj)
-		p.sayObj = nil
+	if secs != nil {
+		p.waitStopQuote(secs[0])
 	}
 }
 
@@ -1333,6 +1298,7 @@ func (p *Sprite) Bounds() *math32.RotatedRect {
 	return p.getRotatedRect()
 }
 
+/*
 func (p *Sprite) Pixel(x, y float64) color.Color {
 	c2 := p.costumes[p.costumeIndex_]
 	img, cx, cy := c2.needImage(p.g.fs)
@@ -1343,6 +1309,7 @@ func (p *Sprite) Pixel(x, y float64) color.Color {
 	}
 	return color1
 }
+*/
 
 // -----------------------------------------------------------------------------
 
