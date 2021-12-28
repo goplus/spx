@@ -349,6 +349,9 @@ func (p *Sprite) getRotatedRect() (rRect *math32.RotatedRect) {
 
 func (p *Sprite) getTrackPos() (topx, topy int) {
 	rRect := p.getRotatedRect()
+	if rRect == nil {
+		return
+	}
 
 	pos := &math32.Vector2{
 		X: float64(rRect.Center.X),
