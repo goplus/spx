@@ -1,13 +1,12 @@
 onStart => {
 	clone
-	step 200
+	step 260
 	turnTo 180
 }
 
 onMsg "quote", => {
-	quote "CC", "Crocodile"
+	quote "c", "Crocodiles[i]"
 }
-
 
 onClick => {
 	quote ""
