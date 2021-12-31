@@ -1,11 +1,16 @@
 package win
 
-
 import (
+	"archive/zip"
+	"bytes"
+	"crypto/sha256"
+	"errors"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 	"os"
 	"path/filepath"
-    "runtime"
+	"runtime"
 
 	"github.com/qiniu/x/log"
 
@@ -19,6 +24,7 @@ const (
 )
 
 const storageBase = "https://storage.googleapis.com/go-builder-data/release/"
+
 var windowsData = map[string]string{
 
 	"installer.wxs": `<?xml version="1.0" encoding="UTF-8"?>
@@ -267,11 +273,8 @@ var windowsData = map[string]string{
 	"images/gopher.ico":     storageBase + "windows/gopher.ico",
 }
 
-
-
-
 func windowsMSI(cwd string) error {
-	
+
 	// Install Wix tools.
 	wix := filepath.Join(cwd, "wix")
 	defer os.RemoveAll(wix)
@@ -288,7 +291,6 @@ func windowsMSI(cwd string) error {
 
 	execFile := filepath.Join(win, autoGenExec)
 	base.RunGoCmd(win, "build", "-o", execFile, "..")
-
 
 	// Gather files.
 	assertDir := filepath.Join(cwd, "assert")
@@ -317,13 +319,12 @@ func windowsMSI(cwd string) error {
 		}
 	}
 
-
-	if err :=  base.Run(win, filepath.Join(wix, "candle"),
+	if err := base.Run(win, filepath.Join(wix, "candle"),
 		"-nologo",
 		"-arch", msArch(),
-		"-dGoVersion="+version,
+		"-dGoVersion=1.0.0",
 		"-dWixGoVersion=1.0.0",
-		fmt.Sprintf("-dIsWinXPSupported=%v", wixIsWinXPSupported(version)),
+		"-dIsWinXPSupported=0.0.0",
 		"-dArch="+runtime.GOARCH,
 		"-dSourceDir="+assertDir,
 		filepath.Join(win, "installer.wxs"),
@@ -336,7 +337,7 @@ func windowsMSI(cwd string) error {
 	if err := os.Mkdir(msi, 0755); err != nil {
 		return err
 	}
-	return  base.Run(win, filepath.Join(wix, "light"),
+	return base.Run(win, filepath.Join(wix, "light"),
 		"-nologo",
 		"-dcl:high",
 		"-ext", "WixUIExtension",
@@ -408,11 +409,12 @@ func httpGet(url string) ([]byte, error) {
 	}
 	return body, nil
 }
+
 // -----------------------------------------------------------------------------
 
 // Cmd - gop build
 var Cmd = &base.Command{
-	UsageLine: "gopspx mac [-v] <gopSrcDir>",
+	UsageLine: "gopspx win [-v] <gopSrcDir>",
 	Short:     "",
 }
 
