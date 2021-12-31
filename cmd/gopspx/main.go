@@ -11,6 +11,7 @@ import (
 	"github.com/goplus/spx/cmd/internal/help"
 	"github.com/goplus/spx/cmd/internal/mac"
 	"github.com/goplus/spx/cmd/internal/web"
+	"github.com/goplus/spx/cmd/internal/win"
 	"github.com/qiniu/x/log"
 )
 
@@ -25,6 +26,7 @@ func init() {
 		web.Cmd,
 		mac.Cmd,
 		android.Cmd,
+		win.Cmd,
 	}
 }
 

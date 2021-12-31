@@ -11,7 +11,6 @@ import (
 )
 
 const runandroidsh string = `
-docker pull mpl7/go4droid
 mkdir -p $HOME/.gradle
 docker run  --user root --rm -v "$PWD":/home/gopher/project -v $HOME/.gradle:/home/gopher/.gradle -w /home/gopher/project --user root --name goandroid -i -t sunqirui1987/goandroid:v1.0.0 /bin/bash -c "gomobile build --tags canvas  -target=android"
 `
