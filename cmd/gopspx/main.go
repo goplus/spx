@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/goplus/spx/cmd/internal/android"
 	"github.com/goplus/spx/cmd/internal/base"
 	"github.com/goplus/spx/cmd/internal/help"
 	"github.com/goplus/spx/cmd/internal/mac"
@@ -23,6 +24,7 @@ func init() {
 	base.GopSpx.Commands = []*base.Command{
 		web.Cmd,
 		mac.Cmd,
+		android.Cmd,
 	}
 }
 

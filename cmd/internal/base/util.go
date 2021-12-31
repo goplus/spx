@@ -64,8 +64,8 @@ func RunGoCmd(dir string, op string, args ...string) {
 	}
 }
 
-func RunBashCmd(dir string, args string) {
-	cmd := exec.Command("bash", args)
+func RunBashCmd(dir string, args ...string) {
+	cmd := exec.Command("/bin/bash", append([]string{"-c"}, args...)...)
 	cmd.Dir = dir
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout

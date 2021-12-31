@@ -11,15 +11,9 @@ import (
 )
 
 const runandroidsh string = `
-go build .
-docker build -t go4droid . # or docker pull mpl7/go4droid
-mkdir $HOME/.gradle # for caching
-go get -d golang.org/x/mobile/example/bind/...
-cd $GOPATH/src/golang.org/x/mobile/example/bind/android
-docker run --rm -v "$PWD":/home/gopher/project -v $HOME/.gradle:/home/gopher/.gradle -w /home/gopher/project --name go4droid -i -t go4droid /bin/bash
-gomobile bind -o app/hello.aar -target=android golang.org/x/mobile/example/bind/hello
-gradle wrapper --gradle-version 4.4 # only needed once, to generate the gradle wrapper.
-./gradlew assembleDebug
+docker pull mpl7/go4droid
+mkdir -p $HOME/.gradle
+docker run --rm -v "$PWD":/home/gopher/project -v $HOME/.gradle:/home/gopher/.gradle -w /home/gopher/project --name go4droid -i -t mpl7/go4droid /bin/bash -c "gomobile build --tags canvas  -target=android"
 `
 
 const (
@@ -30,7 +24,7 @@ const (
 
 // Cmd - gop build
 var Cmd = &base.Command{
-	UsageLine: "gopspx mac [-v] <gopSrcDir>",
+	UsageLine: "gopspx android [-v] <gopSrcDir>",
 	Short:     "",
 }
 
