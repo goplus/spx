@@ -1,5 +1,5 @@
 onClick => {
-	quote "Monkey"
+	quote "m"
 	step 100
 	step -100
 	turn -360
@@ -7,6 +7,6 @@ onClick => {
 	broadcast "quote"
 }
 
-onKey KeyQ,=> {
-	quote "mm", 1
+onKey KeyQ, => {
+	quote "m", "monkey", 1
 }
