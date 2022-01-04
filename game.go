@@ -1294,11 +1294,13 @@ type EffectKind int
 const (
 	ColorEffect EffectKind = iota
 	BrightnessEffect
+	GhostEffect
 )
 
 var greffNames = []string{
 	ColorEffect:      "Color",
 	BrightnessEffect: "Brightness",
+	GhostEffect:      "Ghost",
 }
 
 func (kind EffectKind) String() string {
