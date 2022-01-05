@@ -123,7 +123,6 @@ func (p *Game) initGame() {
 
 // Gopt_Game_Main is required by Go+ compiler as the entry of a .gmx project.
 func Gopt_Game_Main(game Gamer) {
-	setupWorkDir()
 	game.initGame()
 	game.(interface{ MainEntry() }).MainEntry()
 }
@@ -1294,11 +1293,13 @@ type EffectKind int
 const (
 	ColorEffect EffectKind = iota
 	BrightnessEffect
+	GhostEffect
 )
 
 var greffNames = []string{
 	ColorEffect:      "Color",
 	BrightnessEffect: "Brightness",
+	GhostEffect:      "Ghost",
 }
 
 func (kind EffectKind) String() string {

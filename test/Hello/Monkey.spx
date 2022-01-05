@@ -49,10 +49,7 @@ onKey KeyB, => {
 }
 
 onClick => {
-	println "Monkey-mouse", mouseX, mouseY
-	pixel := pixel(mouseX, mouseY)
 	println bounds
-	println "Monkey-pixel", pixel
 	if touching(Mouse) {
 		println "Touching Mouse"
 	}

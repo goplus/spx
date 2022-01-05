@@ -1,0 +1,6 @@
+var (
+	Monkey    Monkey
+	Crocodile Crocodile
+	chomp     Sound
+)
+run "res", {Title: "Quote (by Go+)"}

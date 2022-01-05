@@ -53,11 +53,7 @@ onKey KeyB, => {
 }
 
 onClick => {
-	println "Box-mouse", mouseX, mouseY
-	pixel := pixel(mouseX, mouseY)
 	println bounds
-	println "Box-pixel", pixel
-
 	if touching(Mouse) {
 		println "touching Mouse"
 	}
@@ -68,11 +64,7 @@ onStart => {
 		if !touching(Mouse) {
 			continue
 		}
-		println "Box-mouse", mouseX, mouseY
-		pixel := pixel(mouseX, mouseY)
 		println bounds
-		println "Box-pixel", pixel
-
 		if touching(Mouse) {
 			println "touching Mouse"
 		}

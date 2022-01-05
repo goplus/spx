@@ -30,6 +30,9 @@ onKey KeyM, => {
 onKey KeyF, => {
 	setEffect ColorEffect, 100
 }
+onKey KeyH, => {
+	setEffect GhostEffect, 50
+}
 
 onKey KeyG, => {
 	setEffect BrightnessEffect, 50

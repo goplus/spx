@@ -1,6 +1,7 @@
 package spx
 
 import (
+	"fmt"
 	"image/color"
 	"strconv"
 	"strings"
@@ -70,7 +71,6 @@ func (p *sayOrThinker) draw(dc drawContext) {
 	render.AddText(p.msg)
 	w, h := render.Size()
 	x, y := topx+2, topy-h-(trackCy+24)
-
 
 	pad := 9
 	w += (pad << 1)
@@ -160,6 +160,41 @@ func (p *sayOrThinker) draw(dc drawContext) {
 
 func (p *sayOrThinker) hit(hc hitContext) (hr hitResult, ok bool) {
 	return
+}
+
+// -------------------------------------------------------------------------------------
+
+func (p *Sprite) sayOrThink(msgv interface{}, style int) {
+	msg, ok := msgv.(string)
+	if !ok {
+		msg = fmt.Sprint(msgv)
+	}
+
+	if msg == "" {
+		p.doStopSay()
+		return
+	}
+
+	old := p.sayObj
+	if old == nil {
+		p.sayObj = &sayOrThinker{sp: p, msg: msg, style: style}
+		p.g.addShape(p.sayObj)
+	} else {
+		old.msg, old.style = msg, style
+		p.g.activateShape(old)
+	}
+}
+
+func (p *Sprite) waitStopSay(secs float64) {
+	p.g.Wait(secs)
+	p.doStopSay()
+}
+
+func (p *Sprite) doStopSay() {
+	if p.sayObj != nil {
+		p.g.removeShape(p.sayObj)
+		p.sayObj = nil
+	}
 }
 
 // -------------------------------------------------------------------------------------
