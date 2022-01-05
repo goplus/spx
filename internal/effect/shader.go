@@ -5,6 +5,7 @@ var ShaderFrag = []byte(`package main
 var (
 	Color      float
 	Brightness float
+	Ghost      float
 )
 
 func convertRGB2HSV(rgb vec3) vec3 {
@@ -107,6 +108,12 @@ func Fragment(position vec4, texCoord vec2, color vec4) vec4 {
 	if Brightness > 0.0 {
 		var rgb vec3 =  clamp(txtcolor.rgb + vec3(min(Brightness/100.0, 1.0)), vec3(0), vec3(1))
 		txtcolor = vec4(rgb,txtcolor.a)
+	}
+
+	//0 ~ 100
+	if Ghost > 0.0{
+		//1 - (Math.max(0, Math.min(x, 100)) / 100)
+		txtcolor *= 1.0 - (max(0.0, min(Ghost, 100.0)) / 100.0)
 	}
 
 	return txtcolor
