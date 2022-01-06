@@ -1,6 +1,6 @@
 onStart => {
 	for {
-		//play chomp,true
+		play chomp,true
 	}
 }
 
