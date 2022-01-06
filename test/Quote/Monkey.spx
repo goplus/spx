@@ -1,6 +1,6 @@
 onStart => {
 	for {
-		play chomp,true
+		play chomp, true
 	}
 }
 
@@ -16,14 +16,14 @@ onClick => {
 onKey KeyQ, => {
 	quote "m", "monkey", 1
 }
-onKey KeyW, =>{
+onKey KeyW, => {
 	play clap
 }
 
-onKey KeyA, =>{
+onKey KeyA, => {
 	pauseSound clap
 }
 
-onKey KeyB, =>{
+onKey KeyB, => {
 	resumeSound clap
 }
