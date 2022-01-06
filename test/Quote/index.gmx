@@ -2,5 +2,6 @@ var (
 	Monkey    Monkey
 	Crocodile Crocodile
 	chomp     Sound
+	clap      Sound
 )
 run "res", {Title: "Quote (by Go+)"}
