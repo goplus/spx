@@ -414,7 +414,7 @@ func (p *Game) startLoad(resource interface{}, cfg *Config) (err error) {
 	}
 	p.initGame()
 	p.input.init(p, keyDuration)
-	p.sounds.init()
+	p.sounds.init(p)
 	p.shapes = make(map[string]Spriter)
 	p.events = make(chan event, 16)
 	p.fs = fs
@@ -1348,16 +1348,21 @@ func (p *Game) Play__0(media Sound, wait ...bool) {
 	if debugInstr {
 		log.Println("Play", media.Path, wait)
 	}
-	f, err := p.fs.Open(media.Path)
-	if err != nil {
-		panic(err)
-	}
-	err = p.sounds.play(f, wait...)
+
+	err := p.sounds.play(media, wait...)
 	if err != nil {
 		panic(err)
 	}
 }
-
+func (p *Game) PauseSound(media Sound) {
+	p.sounds.pause(media)
+}
+func (p *Game) ResumeSound(media Sound) {
+	p.sounds.resume(media)
+}
+func (p *Game) StopSound(media Sound) {
+	p.sounds.stop(media)
+}
 func (p *Game) StopAllSounds() {
 	p.sounds.stopAll()
 }

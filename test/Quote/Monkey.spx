@@ -1,3 +1,9 @@
+onStart => {
+	for {
+		play chomp, true
+	}
+}
+
 onClick => {
 	quote "m"
 	step 100
@@ -9,4 +15,15 @@ onClick => {
 
 onKey KeyQ, => {
 	quote "m", "monkey", 1
+}
+onKey KeyW, => {
+	play clap
+}
+
+onKey KeyA, => {
+	pauseSound clap
+}
+
+onKey KeyB, => {
+	resumeSound clap
 }
