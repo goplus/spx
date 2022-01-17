@@ -121,7 +121,7 @@ func (p *soundMgr) stopAll() {
 	}
 }
 
-func (p *soundMgr) play(media Sound, wait ...bool) (err error) {
+func (p *soundMgr) play(media Sound, option ...bool) (err error) {
 
 	source, err := p.g.fs.Open(media.Path)
 	if err != nil {
@@ -147,7 +147,7 @@ func (p *soundMgr) play(media Sound, wait ...bool) (err error) {
 	}
 
 	var waitDone = false
-	if len(wait) > 0 && wait[0] == true {
+	if len(option) > 0 && option[0] == true {
 		waitDone = true
 	}
 	var done chan bool
@@ -155,7 +155,7 @@ func (p *soundMgr) play(media Sound, wait ...bool) (err error) {
 		done = make(chan bool, 1)
 	}
 	sp.isLoop = false
-	if len(wait) > 1 && wait[1] == true {
+	if len(option) > 1 && option[1] == true {
 		sp.isLoop = true
 	}
 	p.addPlayer(sp, done)

@@ -1342,14 +1342,16 @@ func (p *Game) loadSound(name string) (media Sound, err error) {
 }
 
 // Play func:
-//   Play(sound)
+//   Play(sound) async play
 //   Play(video) -- maybe
-func (p *Game) Play__0(media Sound, wait ...bool) {
+//   Play(sound, true)  sync play
+//   Play(sound, true, true) sync loop play
+func (p *Game) Play__0(media Sound, option ...bool) {
 	if debugInstr {
-		log.Println("Play", media.Path, wait)
+		log.Println("Play", media.Path, option)
 	}
 
-	err := p.sounds.play(media, wait...)
+	err := p.sounds.play(media, option...)
 	if err != nil {
 		panic(err)
 	}
