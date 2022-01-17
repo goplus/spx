@@ -1,7 +1,8 @@
 onStart => {
-	for {
-		play chomp, true
-	}
+	//for {
+		//play chomp, true
+	//}
+	play chomp, true, true
 }
 
 onClick => {
@@ -18,6 +19,9 @@ onKey KeyQ, => {
 }
 onKey KeyW, => {
 	play clap
+}
+onKey KeyH, => {
+	stopSound chomp
 }
 
 onKey KeyA, => {

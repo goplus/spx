@@ -48,8 +48,9 @@ const (
 
 type soundPlayer struct {
 	*audio.Player
-	media Sound
-	state playerState
+	media  Sound
+	isLoop bool
+	state  playerState
 }
 type soundMgr struct {
 	g            *Game
@@ -84,12 +85,18 @@ func (p *soundMgr) update() {
 	var closed []*soundPlayer
 	for sp, done := range p.players {
 		if !sp.IsPlaying() && sp.state != playerPaused {
+			if sp.isLoop {
+				sp.Rewind()
+				sp.Play()
+				continue
+			}
 			sp.Close()
 			if done != nil {
 				done <- true
 			}
 			closed = append(closed, sp)
 		}
+
 	}
 	for _, sp := range closed {
 		delete(p.players, sp)
@@ -139,10 +146,17 @@ func (p *soundMgr) play(media Sound, wait ...bool) (err error) {
 		return
 	}
 
-	var waitDone = (wait != nil)
+	var waitDone = false
+	if len(wait) > 0 && wait[0] == true {
+		waitDone = true
+	}
 	var done chan bool
 	if waitDone {
 		done = make(chan bool, 1)
+	}
+	sp.isLoop = false
+	if len(wait) > 1 && wait[1] == true {
+		sp.isLoop = true
 	}
 	p.addPlayer(sp, done)
 	sp.Play()
