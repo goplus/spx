@@ -58,6 +58,11 @@ const (
 	ActionStop
 )
 
+type SoundAction struct {
+	Wait   bool        `json:"wait"`
+	Action ActionState `json:"action"`
+}
+
 type soundPlayer struct {
 	*audio.Player
 	media Sound
@@ -131,15 +136,15 @@ func (p *soundMgr) stopAll() {
 	}
 }
 
-func (p *soundMgr) playAction(media Sound, wait bool, action ActionState) (err error) {
+func (p *soundMgr) playAction(media Sound, actionPlay *SoundAction) (err error) {
 
-	switch action {
+	switch actionPlay.Action {
 	case ActionPlay:
-		err = p.play(media, wait, ActionPlay)
+		err = p.play(media, actionPlay.Wait, ActionPlay)
 	case ActionLoopPlay:
-		err = p.play(media, wait, ActionLoopPlay)
+		err = p.play(media, actionPlay.Wait, ActionLoopPlay)
 	case ActionLoopContinuePlay:
-		err = p.playContinue(media, wait)
+		err = p.playContinue(media, actionPlay.Wait)
 	case ActionStop:
 		p.stop(media)
 	case ActionResume:

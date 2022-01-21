@@ -1,6 +1,6 @@
 onStart => {
 	for {
-		play chomp, false, ActionLoopContinuePlay
+		play clap, &SoundAction{Action: ActionLoopContinuePlay,Wait:false}
 	}
 }
 

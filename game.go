@@ -1341,27 +1341,29 @@ func (p *Game) loadSound(name string) (media Sound, err error) {
 	return
 }
 
-func (p *Game) Play__0(media Sound) {
-	p.Play__1(media, false)
-}
-func (p *Game) Play__1(media Sound, wait bool) {
-	p.Play__3(media, wait, ActionPlay)
-}
-func (p *Game) Play__2(media Sound, action ActionState) {
-	p.Play__3(media, false, action)
-}
-
 // Play func:
 //   Play(sound)
 //   Play(video) -- maybe
 //   Play(sound, wait) -- sync
 //   Play(sound)
-func (p *Game) Play__3(media Sound, wait bool, action ActionState) {
+func (p *Game) Play__0(media Sound) {
+	p.Play__1(media, false)
+}
+func (p *Game) Play__1(media Sound, actions interface{}) {
 	if debugInstr {
-		log.Println("Play", media.Path, wait)
+		log.Println("Play", media.Path)
 	}
 
-	err := p.sounds.playAction(media, wait, action)
+	var err error
+	switch v := actions.(type) {
+	case bool:
+		err = p.sounds.playAction(media, &SoundAction{Wait: v, Action: ActionPlay})
+	case *SoundAction:
+		err = p.sounds.playAction(media, v)
+	default:
+		panic("Play: unexpected input")
+	}
+
 	if err != nil {
 		panic(err)
 	}
