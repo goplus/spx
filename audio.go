@@ -157,13 +157,11 @@ func (p *soundMgr) playAction(media Sound, actionPlay *PlayOptions) (err error) 
 func (p *soundMgr) playContinue(media Sound, wait bool) (err error) {
 	p.playersM.Lock()
 	isFound := false
-	for sp, done := range p.players {
+	for sp, _ := range p.players {
 		if sp.media.Path == media.Path {
 			sp.state = playerLoopPlay
 			isFound = true
-			if done != nil {
-				done <- true
-			}
+
 		}
 	}
 	p.playersM.Unlock()
@@ -241,13 +239,11 @@ func (p *soundMgr) pause(media Sound) {
 	p.playersM.Lock()
 	defer p.playersM.Unlock()
 
-	for sp, done := range p.players {
+	for sp, _ := range p.players {
 		if sp.media.Path == media.Path {
 			sp.Pause()
 			sp.state = playerPaused
-			if done != nil {
-				done <- true
-			}
+
 		}
 
 	}
@@ -256,13 +252,11 @@ func (p *soundMgr) pause(media Sound) {
 func (p *soundMgr) resume(media Sound) {
 	p.playersM.Lock()
 	defer p.playersM.Unlock()
-	for sp, done := range p.players {
+	for sp, _ := range p.players {
 		if sp.media.Path == media.Path {
 			sp.Play()
 			sp.state = playerPlay
-			if done != nil {
-				done <- true
-			}
+
 		}
 
 	}
