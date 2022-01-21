@@ -1349,20 +1349,16 @@ func (p *Game) loadSound(name string) (media Sound, err error) {
 func (p *Game) Play__0(media Sound) {
 	p.Play__1(media, false)
 }
-func (p *Game) Play__1(media Sound, actions interface{}) {
+func (p *Game) Play__1(media Sound, wait bool) {
+	p.Play__2(media, &PlayOptions{Wait: wait, Action: ActionPlay})
+}
+func (p *Game) Play__2(media Sound, action *PlayOptions) {
 	if debugInstr {
 		log.Println("Play", media.Path)
 	}
 
 	var err error
-	switch v := actions.(type) {
-	case bool:
-		err = p.sounds.playAction(media, &PlayOptions{Wait: v, Action: ActionPlay})
-	case *PlayOptions:
-		err = p.sounds.playAction(media, v)
-	default:
-		panic("Play: unexpected input")
-	}
+	err = p.sounds.playAction(media, action)
 
 	if err != nil {
 		panic(err)
