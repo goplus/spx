@@ -1357,8 +1357,8 @@ func (p *Game) Play__1(media Sound, actions interface{}) {
 	var err error
 	switch v := actions.(type) {
 	case bool:
-		err = p.sounds.playAction(media, &SoundAction{Wait: v, Action: ActionPlay})
-	case *SoundAction:
+		err = p.sounds.playAction(media, &PlayOptions{Wait: v, Action: ActionPlay})
+	case *PlayOptions:
 		err = p.sounds.playAction(media, v)
 	default:
 		panic("Play: unexpected input")

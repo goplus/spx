@@ -58,7 +58,7 @@ const (
 	ActionStop
 )
 
-type SoundAction struct {
+type PlayOptions struct {
 	Wait   bool        `json:"wait"`
 	Action ActionState `json:"action"`
 }
@@ -136,7 +136,7 @@ func (p *soundMgr) stopAll() {
 	}
 }
 
-func (p *soundMgr) playAction(media Sound, actionPlay *SoundAction) (err error) {
+func (p *soundMgr) playAction(media Sound, actionPlay *PlayOptions) (err error) {
 
 	switch actionPlay.Action {
 	case ActionPlay:

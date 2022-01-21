@@ -1,6 +1,6 @@
 onStart => {
 	for {
-		play clap, &SoundAction{Action: ActionLoopContinuePlay,Wait:false}
+		play clap, &PlayOptions{Action: ActionLoopContinuePlay,Wait:false}
 	}
 }
 
@@ -21,9 +21,9 @@ onKey KeyW, => {
 }
 
 onKey KeyA, => {
-	play clap, ActionStop
+	play clap, &PlayOptions{Action: ActionStop}
 }
 
 onKey KeyB, => {
-	play clap, ActionResume
+	play clap, &PlayOptions{Action: ActionResume}
 }
