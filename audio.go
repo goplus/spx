@@ -43,7 +43,19 @@ type playerState int
 const (
 	playerPaused playerState = iota
 	playerPlay
+	playerLoopPlay
 	playerClosed
+)
+
+type ActionState int
+
+const (
+	ActionPlay ActionState = iota
+	ActionLoopPlay
+	ActionLoopContinuePlay
+	ActionPause
+	ActionResume
+	ActionStop
 )
 
 type soundPlayer struct {
@@ -84,6 +96,11 @@ func (p *soundMgr) update() {
 	var closed []*soundPlayer
 	for sp, done := range p.players {
 		if !sp.IsPlaying() && sp.state != playerPaused {
+			if sp.state == playerLoopPlay {
+				sp.Rewind()
+				sp.Play()
+				continue
+			}
 			sp.Close()
 			if done != nil {
 				done <- true
@@ -114,7 +131,44 @@ func (p *soundMgr) stopAll() {
 	}
 }
 
-func (p *soundMgr) play(media Sound, wait ...bool) (err error) {
+func (p *soundMgr) playAction(media Sound, wait bool, action ActionState) (err error) {
+
+	switch action {
+	case ActionPlay:
+		err = p.play(media, wait, ActionPlay)
+	case ActionLoopPlay:
+		err = p.play(media, wait, ActionLoopPlay)
+	case ActionLoopContinuePlay:
+		err = p.playContinue(media, wait)
+	case ActionStop:
+		p.stop(media)
+	case ActionResume:
+		p.resume(media)
+	case ActionPause:
+		p.pause(media)
+	}
+	return
+}
+func (p *soundMgr) playContinue(media Sound, wait bool) (err error) {
+	p.playersM.Lock()
+	isFound := false
+	for sp, done := range p.players {
+		if sp.media.Path == media.Path {
+			sp.state = playerLoopPlay
+			isFound = true
+			if done != nil {
+				done <- true
+			}
+		}
+	}
+	p.playersM.Unlock()
+
+	if isFound == false {
+		err = p.play(media, wait, ActionLoopPlay)
+	}
+	return
+}
+func (p *soundMgr) play(media Sound, wait bool, action ActionState) (err error) {
 
 	source, err := p.g.fs.Open(media.Path)
 	if err != nil {
@@ -139,15 +193,20 @@ func (p *soundMgr) play(media Sound, wait ...bool) (err error) {
 		return
 	}
 
-	var waitDone = (wait != nil)
 	var done chan bool
-	if waitDone {
+	if wait {
 		done = make(chan bool, 1)
 	}
 	p.addPlayer(sp, done)
 	sp.Play()
-	sp.state = playerPlay
-	if waitDone {
+	switch action {
+	case ActionPlay:
+		sp.state = playerPlay
+	case ActionLoopPlay:
+		sp.state = playerLoopPlay
+	}
+
+	if wait {
 		waitForChan(done)
 	}
 	return
