@@ -43,8 +43,25 @@ type playerState int
 const (
 	playerPaused playerState = iota
 	playerPlay
+	playerLoopPlay
 	playerClosed
 )
+
+type ActionState int
+
+const (
+	ActionPlay ActionState = iota
+	ActionLoopPlay
+	ActionLoopContinuePlay
+	ActionPause
+	ActionResume
+	ActionStop
+)
+
+type PlayOptions struct {
+	Wait   bool        `json:"wait"`
+	Action ActionState `json:"action"`
+}
 
 type soundPlayer struct {
 	*audio.Player
@@ -84,6 +101,11 @@ func (p *soundMgr) update() {
 	var closed []*soundPlayer
 	for sp, done := range p.players {
 		if !sp.IsPlaying() && sp.state != playerPaused {
+			if sp.state == playerLoopPlay {
+				sp.Rewind()
+				sp.Play()
+				continue
+			}
 			sp.Close()
 			if done != nil {
 				done <- true
@@ -114,7 +136,42 @@ func (p *soundMgr) stopAll() {
 	}
 }
 
-func (p *soundMgr) play(media Sound, wait ...bool) (err error) {
+func (p *soundMgr) playAction(media Sound, actionPlay *PlayOptions) (err error) {
+
+	switch actionPlay.Action {
+	case ActionPlay:
+		err = p.play(media, actionPlay.Wait, ActionPlay)
+	case ActionLoopPlay:
+		err = p.play(media, actionPlay.Wait, ActionLoopPlay)
+	case ActionLoopContinuePlay:
+		err = p.playContinue(media, actionPlay.Wait)
+	case ActionStop:
+		p.stop(media)
+	case ActionResume:
+		p.resume(media)
+	case ActionPause:
+		p.pause(media)
+	}
+	return
+}
+func (p *soundMgr) playContinue(media Sound, wait bool) (err error) {
+	p.playersM.Lock()
+	isFound := false
+	for sp, _ := range p.players {
+		if sp.media.Path == media.Path {
+			sp.state = playerLoopPlay
+			isFound = true
+
+		}
+	}
+	p.playersM.Unlock()
+
+	if isFound == false {
+		err = p.play(media, wait, ActionLoopPlay)
+	}
+	return
+}
+func (p *soundMgr) play(media Sound, wait bool, action ActionState) (err error) {
 
 	source, err := p.g.fs.Open(media.Path)
 	if err != nil {
@@ -139,15 +196,20 @@ func (p *soundMgr) play(media Sound, wait ...bool) (err error) {
 		return
 	}
 
-	var waitDone = (wait != nil)
 	var done chan bool
-	if waitDone {
+	if wait {
 		done = make(chan bool, 1)
 	}
 	p.addPlayer(sp, done)
 	sp.Play()
-	sp.state = playerPlay
-	if waitDone {
+	switch action {
+	case ActionPlay:
+		sp.state = playerPlay
+	case ActionLoopPlay:
+		sp.state = playerLoopPlay
+	}
+
+	if wait {
 		waitForChan(done)
 	}
 	return
@@ -177,13 +239,11 @@ func (p *soundMgr) pause(media Sound) {
 	p.playersM.Lock()
 	defer p.playersM.Unlock()
 
-	for sp, done := range p.players {
+	for sp, _ := range p.players {
 		if sp.media.Path == media.Path {
 			sp.Pause()
 			sp.state = playerPaused
-			if done != nil {
-				done <- true
-			}
+
 		}
 
 	}
@@ -192,13 +252,11 @@ func (p *soundMgr) pause(media Sound) {
 func (p *soundMgr) resume(media Sound) {
 	p.playersM.Lock()
 	defer p.playersM.Unlock()
-	for sp, done := range p.players {
+	for sp, _ := range p.players {
 		if sp.media.Path == media.Path {
 			sp.Play()
 			sp.state = playerPlay
-			if done != nil {
-				done <- true
-			}
+
 		}
 
 	}
