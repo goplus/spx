@@ -38,36 +38,37 @@ func newReadSeeker(source io.ReadCloser) io.ReadSeeker {
 
 // -------------------------------------------------------------------------------------
 
-type playerState int
+type playerState byte
 
 const (
-	playerPaused playerState = iota
-	playerPlay
-	playerLoopPlay
+	playerPlay playerState = iota
 	playerClosed
+	playerPaused
 )
 
-type ActionState int
+type PlayAction int
 
 const (
-	ActionPlay ActionState = iota
-	ActionLoopPlay
-	ActionLoopContinuePlay
-	ActionPause
-	ActionResume
-	ActionStop
+	PlayRewind PlayAction = iota
+	PlayContinue
+	PlayPause
+	PlayResume
+	PlayStop
 )
 
 type PlayOptions struct {
-	Wait   bool        `json:"wait"`
-	Action ActionState `json:"action"`
+	Action PlayAction
+	Wait   bool
+	Loop   bool
 }
 
 type soundPlayer struct {
 	*audio.Player
 	media Sound
 	state playerState
+	loop  bool
 }
+
 type soundMgr struct {
 	g            *Game
 	audioContext *audio.Context
@@ -101,7 +102,7 @@ func (p *soundMgr) update() {
 	var closed []*soundPlayer
 	for sp, done := range p.players {
 		if !sp.IsPlaying() && sp.state != playerPaused {
-			if sp.state == playerLoopPlay {
+			if sp.loop {
 				sp.Rewind()
 				sp.Play()
 				continue
@@ -136,43 +137,40 @@ func (p *soundMgr) stopAll() {
 	}
 }
 
-func (p *soundMgr) playAction(media Sound, actionPlay *PlayOptions) (err error) {
-
-	switch actionPlay.Action {
-	case ActionPlay:
-		err = p.play(media, actionPlay.Wait, ActionPlay)
-	case ActionLoopPlay:
-		err = p.play(media, actionPlay.Wait, ActionLoopPlay)
-	case ActionLoopContinuePlay:
-		err = p.playContinue(media, actionPlay.Wait)
-	case ActionStop:
+func (p *soundMgr) playAction(media Sound, opts *PlayOptions) (err error) {
+	switch opts.Action {
+	case PlayRewind:
+		err = p.play(media, opts.Wait, opts.Loop)
+	case PlayContinue:
+		err = p.playContinue(media, opts.Wait, opts.Loop)
+	case PlayStop:
 		p.stop(media)
-	case ActionResume:
+	case PlayResume:
 		p.resume(media)
-	case ActionPause:
+	case PlayPause:
 		p.pause(media)
 	}
 	return
 }
-func (p *soundMgr) playContinue(media Sound, wait bool) (err error) {
-	p.playersM.Lock()
-	isFound := false
-	for sp, _ := range p.players {
-		if sp.media.Path == media.Path {
-			sp.state = playerLoopPlay
-			isFound = true
 
+func (p *soundMgr) playContinue(media Sound, wait, loop bool) (err error) {
+	p.playersM.Lock()
+	found := false
+	for sp := range p.players {
+		if sp.media.Path == media.Path {
+			sp.loop = loop
+			found = true
 		}
 	}
 	p.playersM.Unlock()
 
-	if isFound == false {
-		err = p.play(media, wait, ActionLoopPlay)
+	if !found {
+		err = p.play(media, wait, loop)
 	}
 	return
 }
-func (p *soundMgr) play(media Sound, wait bool, action ActionState) (err error) {
 
+func (p *soundMgr) play(media Sound, wait, loop bool) (err error) {
 	source, err := p.g.fs.Open(media.Path)
 	if err != nil {
 		panic(err)
@@ -188,8 +186,7 @@ func (p *soundMgr) play(media Sound, wait bool, action ActionState) (err error) 
 	d = convert.ToStereo16(d)
 	d = convert.Resample(d, audioContext.SampleRate())
 
-	sp := &soundPlayer{}
-	sp.media = media
+	sp := &soundPlayer{media: media, loop: loop}
 	sp.Player, err = audioContext.NewPlayer(&readCloser{d, source})
 	if err != nil {
 		source.Close()
@@ -202,13 +199,6 @@ func (p *soundMgr) play(media Sound, wait bool, action ActionState) (err error) 
 	}
 	p.addPlayer(sp, done)
 	sp.Play()
-	switch action {
-	case ActionPlay:
-		sp.state = playerPlay
-	case ActionLoopPlay:
-		sp.state = playerLoopPlay
-	}
-
 	if wait {
 		waitForChan(done)
 	}
@@ -239,7 +229,7 @@ func (p *soundMgr) pause(media Sound) {
 	p.playersM.Lock()
 	defer p.playersM.Unlock()
 
-	for sp, _ := range p.players {
+	for sp := range p.players {
 		if sp.media.Path == media.Path {
 			sp.Pause()
 			sp.state = playerPaused
@@ -252,7 +242,7 @@ func (p *soundMgr) pause(media Sound) {
 func (p *soundMgr) resume(media Sound) {
 	p.playersM.Lock()
 	defer p.playersM.Unlock()
-	for sp, _ := range p.players {
+	for sp := range p.players {
 		if sp.media.Path == media.Path {
 			sp.Play()
 			sp.state = playerPlay

@@ -1344,26 +1344,27 @@ func (p *Game) loadSound(name string) (media Sound, err error) {
 // Play func:
 //   Play(sound)
 //   Play(video) -- maybe
-//   Play(sound, wait) -- sync
-//   Play(sound)
+//   Play(media, wait) -- sync
+//   Play(media, opts)
 func (p *Game) Play__0(media Sound) {
-	p.Play__1(media, false)
+	p.Play__2(media, &PlayOptions{})
 }
+
 func (p *Game) Play__1(media Sound, wait bool) {
-	p.Play__2(media, &PlayOptions{Wait: wait, Action: ActionPlay})
+	p.Play__2(media, &PlayOptions{Wait: wait})
 }
+
 func (p *Game) Play__2(media Sound, action *PlayOptions) {
 	if debugInstr {
 		log.Println("Play", media.Path)
 	}
 
-	var err error
-	err = p.sounds.playAction(media, action)
-
+	err := p.sounds.playAction(media, action)
 	if err != nil {
 		panic(err)
 	}
 }
+
 func (p *Game) StopAllSounds() {
 	p.sounds.stopAll()
 }
