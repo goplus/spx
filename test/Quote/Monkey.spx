@@ -1,7 +1,5 @@
 onStart => {
-	for {
-		play clap, {Action: ActionLoopContinuePlay,Wait:false}
-	}
+	play clap, {Action: PlayContinue, Loop: true}
 }
 
 onClick => {
@@ -21,9 +19,9 @@ onKey KeyW, => {
 }
 
 onKey KeyA, => {
-	play clap, {Action: ActionStop}
+	play clap, {Action: PlayPause}
 }
 
 onKey KeyB, => {
-	play clap, {Action: ActionResume}
+	play clap, {Action: PlayResume}
 }
