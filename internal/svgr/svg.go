@@ -37,7 +37,6 @@ func decode(input []byte, width int, height int) (image.Image, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	w, h := int(icon.ViewBox.W), int(icon.ViewBox.H)
 	if width > 0 && height > 0 {
 		w, h = width, height
@@ -55,6 +54,10 @@ type md5hash string
 
 var cacheImg = map[md5hash]image.Image{}
 
+func md5Svg(bs []byte, width, height int) md5hash {
+	return md5hash(fmt.Sprintf("%s,d%,%d", md5.Sum(bs), width, height))
+}
+
 // Decode decodes the first frame of an SVG file into an image.
 //
 func Decode(r io.Reader) (image.Image, error) {
@@ -68,12 +71,7 @@ func DecodeSize(r io.Reader, width int, height int) (image.Image, error) {
 	if err != nil {
 		return nil, err
 	}
-	img, err := decode(b, width, height)
-	return img, err
-}
-
-func md5Svg(bs []byte, width, height int) md5hash {
-	return md5hash(fmt.Sprintf("%s,d%,%d", md5.Sum(bs), width, height))
+	return decode(b, width, height)
 }
 
 // DecodeConfig returns metadata.
