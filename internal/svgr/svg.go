@@ -55,7 +55,7 @@ type md5hash string
 var cacheImg = map[md5hash]image.Image{}
 
 func md5Svg(bs []byte, width, height int) md5hash {
-	return md5hash(fmt.Sprintf("%s,d%,%d", md5.Sum(bs), width, height))
+	return md5hash(fmt.Sprintf("%s,%d,%d", md5.Sum(bs), width, height))
 }
 
 // Decode decodes the first frame of an SVG file into an image.
