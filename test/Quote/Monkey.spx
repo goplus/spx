@@ -1,3 +1,7 @@
+onStart => {
+	play clap, {Action: PlayContinue, Loop: true}
+}
+
 onClick => {
 	quote "m"
 	step 100
@@ -9,4 +13,15 @@ onClick => {
 
 onKey KeyQ, => {
 	quote "m", "monkey", 1
+}
+onKey KeyW, => {
+	play clap
+}
+
+onKey KeyA, => {
+	play clap, {Action: PlayPause}
+}
+
+onKey KeyB, => {
+	play clap, {Action: PlayResume}
 }

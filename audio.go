@@ -21,7 +21,7 @@ type readSeekCloser struct {
 }
 
 type readCloser struct {
-	io.Reader
+	io.ReadSeeker
 	io.Closer
 }
 
@@ -38,9 +38,41 @@ func newReadSeeker(source io.ReadCloser) io.ReadSeeker {
 
 // -------------------------------------------------------------------------------------
 
+type playerState byte
+
+const (
+	playerPlay playerState = iota
+	playerClosed
+	playerPaused
+)
+
+type PlayAction int
+
+const (
+	PlayRewind PlayAction = iota
+	PlayContinue
+	PlayPause
+	PlayResume
+	PlayStop
+)
+
+type PlayOptions struct {
+	Action PlayAction
+	Wait   bool
+	Loop   bool
+}
+
+type soundPlayer struct {
+	*audio.Player
+	media Sound
+	state playerState
+	loop  bool
+}
+
 type soundMgr struct {
+	g            *Game
 	audioContext *audio.Context
-	players      map[*audio.Player]chan bool
+	players      map[*soundPlayer]chan bool
 	playersM     sync.Mutex
 }
 
@@ -49,26 +81,32 @@ const (
 	defaultRatio      = 100.0
 )
 
-func (p *soundMgr) addPlayer(sp *audio.Player, done chan bool) {
+func (p *soundMgr) addPlayer(sp *soundPlayer, done chan bool) {
 	p.playersM.Lock()
 	defer p.playersM.Unlock()
 
 	p.players[sp] = done
 }
 
-func (p *soundMgr) init() {
+func (p *soundMgr) init(g *Game) {
 	audioContext := audio.NewContext(defaultSampleRate)
 	p.audioContext = audioContext
-	p.players = make(map[*audio.Player]chan bool)
+	p.players = make(map[*soundPlayer]chan bool)
+	p.g = g
 }
 
 func (p *soundMgr) update() {
 	p.playersM.Lock()
 	defer p.playersM.Unlock()
 
-	var closed []*audio.Player
+	var closed []*soundPlayer
 	for sp, done := range p.players {
-		if !sp.IsPlaying() {
+		if !sp.IsPlaying() && sp.state != playerPaused {
+			if sp.loop {
+				sp.Rewind()
+				sp.Play()
+				continue
+			}
 			sp.Close()
 			if done != nil {
 				done <- true
@@ -85,12 +123,13 @@ func (p *soundMgr) stopAll() {
 	p.playersM.Lock()
 	defer p.playersM.Unlock()
 
-	closed := make([]*audio.Player, 0, len(p.players))
+	closed := make([]*soundPlayer, 0, len(p.players))
 	for sp, done := range p.players {
 		sp.Close()
 		if done != nil {
 			done <- true
 		}
+		sp.state = playerClosed
 		closed = append(closed, sp)
 	}
 	for _, sp := range closed {
@@ -98,7 +137,45 @@ func (p *soundMgr) stopAll() {
 	}
 }
 
-func (p *soundMgr) play(source io.ReadCloser, wait ...bool) (err error) {
+func (p *soundMgr) playAction(media Sound, opts *PlayOptions) (err error) {
+	switch opts.Action {
+	case PlayRewind:
+		err = p.play(media, opts.Wait, opts.Loop)
+	case PlayContinue:
+		err = p.playContinue(media, opts.Wait, opts.Loop)
+	case PlayStop:
+		p.stop(media)
+	case PlayResume:
+		p.resume(media)
+	case PlayPause:
+		p.pause(media)
+	}
+	return
+}
+
+func (p *soundMgr) playContinue(media Sound, wait, loop bool) (err error) {
+	p.playersM.Lock()
+	found := false
+	for sp := range p.players {
+		if sp.media.Path == media.Path {
+			sp.loop = loop
+			found = true
+		}
+	}
+	p.playersM.Unlock()
+
+	if !found {
+		err = p.play(media, wait, loop)
+	}
+	return
+}
+
+func (p *soundMgr) play(media Sound, wait, loop bool) (err error) {
+	source, err := p.g.fs.Open(media.Path)
+	if err != nil {
+		panic(err)
+	}
+
 	audioContext := p.audioContext
 	d, _, err := qaudio.Decode(newReadSeeker(source))
 	if err != nil {
@@ -108,23 +185,71 @@ func (p *soundMgr) play(source io.ReadCloser, wait ...bool) (err error) {
 
 	d = convert.ToStereo16(d)
 	d = convert.Resample(d, audioContext.SampleRate())
-	sp, err := audioContext.NewPlayer(&readCloser{d, source})
+
+	sp := &soundPlayer{media: media, loop: loop}
+	sp.Player, err = audioContext.NewPlayer(&readCloser{d, source})
 	if err != nil {
 		source.Close()
 		return
 	}
 
-	var waitDone = (wait != nil)
 	var done chan bool
-	if waitDone {
+	if wait {
 		done = make(chan bool, 1)
 	}
 	p.addPlayer(sp, done)
 	sp.Play()
-	if waitDone {
+	if wait {
 		waitForChan(done)
 	}
 	return
+}
+
+func (p *soundMgr) stop(media Sound) {
+	p.playersM.Lock()
+	defer p.playersM.Unlock()
+
+	closed := make([]*soundPlayer, 0, len(p.players))
+	for sp, done := range p.players {
+		if sp.media.Path == media.Path {
+			sp.Close()
+			if done != nil {
+				done <- true
+			}
+			sp.state = playerClosed
+			closed = append(closed, sp)
+		}
+	}
+	for _, sp := range closed {
+		delete(p.players, sp)
+	}
+}
+
+func (p *soundMgr) pause(media Sound) {
+	p.playersM.Lock()
+	defer p.playersM.Unlock()
+
+	for sp := range p.players {
+		if sp.media.Path == media.Path {
+			sp.Pause()
+			sp.state = playerPaused
+
+		}
+
+	}
+}
+
+func (p *soundMgr) resume(media Sound) {
+	p.playersM.Lock()
+	defer p.playersM.Unlock()
+	for sp := range p.players {
+		if sp.media.Path == media.Path {
+			sp.Play()
+			sp.state = playerPlay
+
+		}
+
+	}
 }
 
 func (p *soundMgr) volume() float64 {
