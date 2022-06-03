@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/md5"
 	"errors"
-	"fmt"
 	"image"
 	"io"
 	"io/ioutil"
@@ -28,7 +27,7 @@ func init() {
 // decode Encode SVG to image.Image object.
 //
 func decode(input []byte, width int, height int) (image.Image, error) {
-	key := md5Svg(input, width, height)
+	key := svgCacheKey(input, width, height)
 	if img, ok := cacheImg[key]; ok {
 		return img, nil
 	}
@@ -50,12 +49,16 @@ func decode(input []byte, width int, height int) (image.Image, error) {
 	return img, nil
 }
 
-type md5hash string
+type cacheKey struct {
+	md5    [16]byte
+	width  int
+	height int
+}
 
-var cacheImg = map[md5hash]image.Image{}
+var cacheImg = map[cacheKey]image.Image{}
 
-func md5Svg(bs []byte, width, height int) md5hash {
-	return md5hash(fmt.Sprintf("%s,%d,%d", md5.Sum(bs), width, height))
+func svgCacheKey(bs []byte, width, height int) cacheKey {
+	return cacheKey{md5.Sum(bs), width, height}
 }
 
 // Decode decodes the first frame of an SVG file into an image.
