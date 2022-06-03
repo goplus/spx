@@ -58,6 +58,7 @@ func NewAnim(name string, valtype ANIMVALTYPE, fps float64, totalframe int) *Ani
 	})
 	return a
 }
+
 func (a *Anim) AddKeyFrame(frameindex int, frameval interface{}) *Anim {
 	a.keyframelist = append(a.keyframelist, &AnimationKeyFrame{
 		Frame: frameindex,
@@ -71,6 +72,7 @@ func (a *Anim) AddKeyFrame(frameindex int, frameval interface{}) *Anim {
 func (a *Anim) Fps() float64 {
 	return a.fps
 }
+
 func (a *Anim) Status() ANIMSTATUS {
 	return a.status
 }

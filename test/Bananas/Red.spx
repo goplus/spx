@@ -1,5 +1,5 @@
-onStart=>{
-    say "Hi"
+onStart => {
+	say "Hi"
 }
 
 onKey KeyUp, => {

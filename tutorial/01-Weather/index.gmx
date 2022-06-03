@@ -1,6 +1,6 @@
 var (
-	Jaime                 Jaime
-	Kai                   Kai
+	Jaime Jaime
+	Kai   Kai
 )
 
 run "assets", {Title: "Weather (by Go+)"}

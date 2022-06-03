@@ -12,7 +12,7 @@ onKey KeyC, => {
 }
 
 onKey KeyE, => {
- 	changeVolume 30.0
+	changeVolume 30.0
 }
 
 onClick => {
