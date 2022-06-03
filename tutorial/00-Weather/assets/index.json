@@ -1,0 +1,16 @@
+{
+  "costumes": [
+    {
+      "bitmapResolution": 2,
+      "name": "urban1",
+      "path": "6.png",
+      "x": 480,
+      "y": 360
+    }
+  ],
+  "currentCostumeIndex": 0,
+  "zorder": [
+    "Jaime",
+    "Kai"
+  ]
+}
