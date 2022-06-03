@@ -135,6 +135,7 @@ func NewBounceEase() *BounceEase {
 		Bounciness: 2.0,
 	}
 }
+
 func (this *BounceEase) EaseInCore(gradient float64) float64 {
 	var y = math.Max(0.0, this.Bounces)
 	var bounciness = this.Bounciness

@@ -110,6 +110,7 @@ func (rcvr *RotatedRect) Contains(v *Vector2) bool {
 	}
 	return false
 }
+
 func (rcvr *RotatedRect) BoundingRect() *Rect {
 
 	pt := rcvr.Points()
@@ -123,9 +124,11 @@ func (rcvr *RotatedRect) BoundingRect() *Rect {
 	r.Height -= r.Y - 1
 	return r
 }
+
 func (rcvr *RotatedRect) Clone() *RotatedRect {
 	return NewRotatedRect2(rcvr.Center, rcvr.Size, rcvr.Angle)
 }
+
 func (rcvr *RotatedRect) Equals(obj interface{}) bool {
 	if rcvr == obj {
 		return true
@@ -136,6 +139,7 @@ func (rcvr *RotatedRect) Equals(obj interface{}) bool {
 	}
 	return rcvr.Center.Equals(it.Center) && rcvr.Size.Equals(it.Size) && rcvr.Angle == it.Angle
 }
+
 func (rcvr *RotatedRect) Points() []*Vector2 {
 	_angle := rcvr.Angle * math.Pi / 180.0
 	b := math.Cos(_angle) * 0.5

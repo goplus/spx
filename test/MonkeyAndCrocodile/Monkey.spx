@@ -1,6 +1,7 @@
 var (
 	movnum int
 )
+
 onClick => {
 	animate "clap"
 }
@@ -34,7 +35,6 @@ onKey [KeyEnter, KeyS], => {
 	step -5
 }
 
-
 onKey KeyA, => {
 	turnTo 90
 	say heading, 1
@@ -65,6 +65,6 @@ onKey KeyF, => {
 onMoving mi => {
 }
 
-onTurning ti=> {
+onTurning ti => {
 	Crocodile.SetHeading ti.NewDir
 }

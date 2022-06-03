@@ -66,6 +66,7 @@ func (this *Vector2) LengthSquared() float64 {
 func (this *Vector2) Cross(otherVector *Vector2) float64 {
 	return (this.X*otherVector.Y - this.Y*otherVector.X)
 }
+
 func (this *Vector2) Ddot(otherVector *Vector2) float64 {
 	return (this.X*otherVector.X + this.Y*otherVector.Y)
 }
