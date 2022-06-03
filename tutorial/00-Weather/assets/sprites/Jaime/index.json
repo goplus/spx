@@ -1,0 +1,26 @@
+{
+  "costumes": [
+    {
+      "bitmapResolution": 2,
+      "name": "jaime-a",
+      "path": "1.png",
+      "x": 76,
+      "y": 154
+    },
+    {
+      "bitmapResolution": 2,
+      "name": "jaime-b",
+      "path": "2.png",
+      "x": 68,
+      "y": 154
+    }
+  ],
+  "currentCostumeIndex": 1,
+  "heading": 90,
+  "isDraggable": false,
+  "rotationStyle": "normal",
+  "size": 0.95,
+  "visible": true,
+  "x": -45,
+  "y": -67
+}
