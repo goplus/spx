@@ -3,4 +3,4 @@ var (
 	Crocodile Crocodile
 )
 
-run "res", {Title: "Camera (by Go+)", Width:640, Height:480}
+run "res", {Title: "Camera (by Go+)", Width: 640, Height: 480}

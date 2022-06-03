@@ -1,6 +1,7 @@
 var (
 	Bananas []*Banana
 	Monkey  *Monkey
-	Red *Red
+	Red     *Red
 )
-run "assets", {Title: "Bananas (by Go+)" }
+
+run "assets", {Title: "Bananas (by Go+)"}

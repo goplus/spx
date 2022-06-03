@@ -49,7 +49,7 @@ onKey KeyE, => {
 onKey KeySpace, => {
 	if touchingColor(RGB(255, 0, 0)) {
 		println "touchingColor Red"
-	}else{
+	} else {
 		println "no touchingColor Red"
 	}
 }

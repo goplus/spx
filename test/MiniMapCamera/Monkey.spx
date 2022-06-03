@@ -1,4 +1,3 @@
-
 onKey KeyC, => {
 	turn 45
 }
