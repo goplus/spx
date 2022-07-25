@@ -7,7 +7,7 @@ require (
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0
 	github.com/goplus/canvas v0.1.0
 	github.com/goplus/gop v1.1.2
-	github.com/hajimehoshi/ebiten/v2 v2.3.4
+	github.com/hajimehoshi/ebiten/v2 v2.3.7
 	github.com/pkg/errors v0.9.1
 	github.com/qiniu/audio v0.2.1
 	github.com/qiniu/x v1.11.9
