@@ -6,7 +6,8 @@ package font
 import (
 	"fmt"
 	"image"
-	"io/ioutil"
+	"io"
+	"os"
 	"path"
 	"sync"
 
@@ -87,19 +88,43 @@ func (p *Default) findFontAtPath(
 	return false
 }
 
+// Each Default.(Font.Face) object holds all the content of the font file in memory,
+// in fact the file content is read-only.
+// Different Default-Objects with same file  should share the content,not allocate new memory.
+var fontFileCache = struct {
+	files map[string][]byte
+	sync.Mutex
+}{
+	files: map[string][]byte{},
+}
+
 func (p *Default) tryFontFile(name, tryFile string, options *truetype.Options) bool {
-	fp, err := fsutil.OpenFile(tryFile)
-	if err != nil {
-		return false
+	fontFileCache.Lock()
+	var bs []byte
+	var ok bool
+	if bs, ok = fontFileCache.files[tryFile]; !ok {
+		fp, err := fsutil.OpenFile(tryFile)
+		if err != nil {
+			fontFileCache.Unlock()
+			return false
+		}
+		defer fp.Close()
+		fi, err := os.Stat(tryFile)
+		if err != nil {
+			fontFileCache.Unlock()
+			return false
+		}
+		bs = make([]byte, fi.Size())
+		n, err := io.ReadFull(fp, bs)
+		if err != nil || n != len(bs) {
+			fontFileCache.Unlock()
+			return false
+		}
+		fontFileCache.files[tryFile] = bs
 	}
-	defer fp.Close()
+	fontFileCache.Unlock()
 
-	b, err := ioutil.ReadAll(fp)
-	if err != nil {
-		return false
-	}
-
-	tt, err := truetype.Parse(b)
+	tt, err := truetype.Parse(bs)
 	if err != nil {
 		return false
 	}
