@@ -224,7 +224,7 @@ func getFieldPtrOrAlloc(v reflect.Value, i int) (name string, val interface{}) {
 	vFld := v.Field(i)
 	typ := tFld.Type
 	word := unsafe.Pointer(vFld.Addr().Pointer())
-	ret := makeEmptyInterface(reflect.PtrTo(typ), word)
+	ret := reflect.NewAt(typ, word).Interface()
 	if vFld.Kind() == reflect.Ptr && typ.Implements(tyShape) {
 		obj := reflect.New(typ.Elem())
 		reflect.ValueOf(ret).Elem().Set(obj)
@@ -239,7 +239,7 @@ func findFieldPtr(v reflect.Value, name string, from int) interface{} {
 		tFld := t.Field(i)
 		if tFld.Name == name {
 			word := unsafe.Pointer(v.Field(i).Addr().Pointer())
-			return makeEmptyInterface(reflect.PtrTo(tFld.Type), word)
+			return reflect.NewAt(tFld.Type, word).Interface()
 		}
 	}
 	return nil
@@ -254,26 +254,13 @@ func findObjPtr(v reflect.Value, name string, from int) interface{} {
 			vFld := v.Field(i)
 			if vFld.Kind() == reflect.Ptr {
 				word := unsafe.Pointer(vFld.Pointer())
-				return makeEmptyInterface(typ, word)
+				return reflect.NewAt(typ.Elem(), word).Interface()
 			}
 			word := unsafe.Pointer(vFld.Addr().Pointer())
-			return makeEmptyInterface(reflect.PtrTo(typ), word)
+			return reflect.NewAt(typ, word).Interface()
 		}
 	}
 	return nil
-}
-
-// emptyInterface is the header for an interface{} value.
-type emptyInterface struct {
-	typ  unsafe.Pointer
-	word unsafe.Pointer
-}
-
-func makeEmptyInterface(typ reflect.Type, word unsafe.Pointer) (i interface{}) {
-	e := (*emptyInterface)(unsafe.Pointer(&i))
-	etyp := (*emptyInterface)(unsafe.Pointer(&typ))
-	e.typ, e.word = etyp.word, word
-	return
 }
 
 type costumeSetRect struct {
