@@ -13,6 +13,7 @@ require (
 	github.com/qiniu/x v1.11.9
 	github.com/srwiley/oksvg v0.0.0-20210519022825-9fc0c575d5fe
 	github.com/srwiley/rasterx v0.0.0-20210519020934-456a8d69b780
+	github.com/visualfc/gopherjs-fixed v0.1.1
 	golang.org/x/image v0.0.0-20220321031419-a8550c1d254a
 	golang.org/x/mobile v0.0.0-20220518205345-8578da9835fd
 )
