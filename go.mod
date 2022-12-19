@@ -7,14 +7,14 @@ require (
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0
 	github.com/goplus/canvas v0.1.0
 	github.com/goplus/gop v1.1.3
-	github.com/hajimehoshi/ebiten/v2 v2.3.4
+	github.com/hajimehoshi/ebiten/v2 v2.4.15
 	github.com/pkg/errors v0.9.1
 	github.com/qiniu/audio v0.2.1
 	github.com/qiniu/x v1.11.9
 	github.com/srwiley/oksvg v0.0.0-20210519022825-9fc0c575d5fe
 	github.com/srwiley/rasterx v0.0.0-20210519020934-456a8d69b780
-	golang.org/x/image v0.0.0-20220321031419-a8550c1d254a
-	golang.org/x/mobile v0.0.0-20220518205345-8578da9835fd
+	golang.org/x/image v0.1.0
+	golang.org/x/mobile v0.0.0-20220722155234-aaac322e2105
 )
 
 replace (
