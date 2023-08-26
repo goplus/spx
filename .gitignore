@@ -15,6 +15,7 @@ feijidazhan/
 .idea
 *.code-workspace
 *.wasm
+mv.sh
 
 # Binaries for programs and plugins
 *.exe
