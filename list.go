@@ -83,9 +83,7 @@ func (p *List) Init(data ...obj) {
 
 func (p *List) InitFrom(src *List) {
 	data := make([]obj, len(src.data))
-	for i, item := range src.data {
-		data[i] = item
-	}
+	copy(data, src.data)
 	p.data = data
 }
 
