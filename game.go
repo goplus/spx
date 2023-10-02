@@ -32,8 +32,10 @@ const (
 	Gop_sched  = "Sched,SchedNow"
 )
 
+type dbgFlags int
+
 const (
-	DbgFlagLoad = 1 << iota
+	DbgFlagLoad dbgFlags = 1 << iota
 	DbgFlagInstr
 	DbgFlagEvent
 	DbgFlagAll = DbgFlagLoad | DbgFlagInstr | DbgFlagEvent
@@ -45,7 +47,7 @@ var (
 	debugEvent bool
 )
 
-func SetDebug(flags int) {
+func SetDebug(flags dbgFlags) {
 	debugLoad = (flags & DbgFlagLoad) != 0
 	debugInstr = (flags & DbgFlagInstr) != 0
 	debugEvent = (flags & DbgFlagEvent) != 0
@@ -328,7 +330,7 @@ func toMapMode(mode string) int {
 	return mapModeFill
 }
 
-//frame aniConfig
+// frame aniConfig
 type aniTypeEnum int8
 
 const (
@@ -611,20 +613,20 @@ func (p *Game) addStageSprite(g reflect.Value, v specsp, inits []initer) []inite
 }
 
 /*
-   {
-     "type": "sprites",
-     "target": "bananas",
-     "items": [
-       {
-         "x": -100,
-         "y": -21
-       },
-       {
-         "x": 50,
-         "y": -21
-       }
-     ]
-   }
+	{
+	  "type": "sprites",
+	  "target": "bananas",
+	  "items": [
+	    {
+	      "x": -100,
+	      "y": -21
+	    },
+	    {
+	      "x": 50,
+	      "y": -21
+	    }
+	  ]
+	}
 */
 func (p *Game) addStageSprites(g reflect.Value, v specsp, inits []initer) []initer {
 	target := v["target"].(string)
@@ -919,7 +921,7 @@ func (p *Game) objectPos(obj interface{}) (float64, float64) {
 		if v == Mouse {
 			return p.getMousePos()
 		}
-	case int:
+	case Pos:
 		if v == Random {
 			worldW, worldH := p.worldSize_()
 			mx, my := rand.Intn(worldW), rand.Intn(worldH)
@@ -1194,10 +1196,11 @@ func (p *Game) SceneIndex() int {
 }
 
 // StartScene func:
-//   StartScene(sceneName) or
-//   StartScene(sceneIndex) or
-//   StartScene(spx.Next)
-//   StartScene(spx.Prev)
+//
+//	StartScene(sceneName) or
+//	StartScene(sceneIndex) or
+//	StartScene(spx.Next)
+//	StartScene(spx.Prev)
 func (p *Game) StartScene(scene interface{}, wait ...bool) {
 	if p.goSetCostume(scene) {
 		p.windowWidth_ = 0 // TODO: need review
@@ -1329,10 +1332,11 @@ func (p *Game) loadSound(name string) (media Sound, err error) {
 }
 
 // Play func:
-//   Play(sound)
-//   Play(video) -- maybe
-//   Play(media, wait) -- sync
-//   Play(media, opts)
+//
+//	Play(sound)
+//	Play(video) -- maybe
+//	Play(media, wait) -- sync
+//	Play(media, opts)
 func (p *Game) Play__0(media Sound) {
 	p.Play__2(media, &PlayOptions{})
 }
