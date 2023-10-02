@@ -32,10 +32,10 @@ const (
 	Gop_sched  = "Sched,SchedNow"
 )
 
-type DbgFlags int
+type dbgFlags int
 
 const (
-	DbgFlagLoad DbgFlags = 1 << iota
+	DbgFlagLoad dbgFlags = 1 << iota
 	DbgFlagInstr
 	DbgFlagEvent
 	DbgFlagAll = DbgFlagLoad | DbgFlagInstr | DbgFlagEvent
@@ -47,7 +47,7 @@ var (
 	debugEvent bool
 )
 
-func SetDebug(flags DbgFlags) {
+func SetDebug(flags dbgFlags) {
 	debugLoad = (flags & DbgFlagLoad) != 0
 	debugInstr = (flags & DbgFlagInstr) != 0
 	debugEvent = (flags & DbgFlagEvent) != 0
@@ -921,7 +921,7 @@ func (p *Game) objectPos(obj interface{}) (float64, float64) {
 		if v == Mouse {
 			return p.getMousePos()
 		}
-	case int:
+	case Pos:
 		if v == Random {
 			worldW, worldH := p.worldSize_()
 			mx, my := rand.Intn(worldW), rand.Intn(worldH)

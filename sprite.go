@@ -668,10 +668,11 @@ func (p *Sprite) getXY() (x, y float64) {
 }
 
 // DistanceTo func:
-//   DistanceTo(sprite)
-//   DistanceTo(spriteName)
-//   DistanceTo(spx.Mouse)
-//   DistanceTo(spx.Random)
+//
+//	DistanceTo(sprite)
+//	DistanceTo(spriteName)
+//	DistanceTo(spx.Mouse)
+//	DistanceTo(spx.Random)
 func (p *Sprite) DistanceTo(obj interface{}) float64 {
 	x, y := p.x, p.y
 	x2, y2 := p.g.objectPos(obj)
@@ -738,10 +739,11 @@ func (p *Sprite) Step__2(step float64, animname string) {
 }
 
 // Goto func:
-//   Goto(sprite)
-//   Goto(spriteName)
-//   Goto(spx.Mouse)
-//   Goto(spx.Random)
+//
+//	Goto(sprite)
+//	Goto(spriteName)
+//	Goto(spx.Mouse)
+//	Goto(spx.Random)
 func (p *Sprite) Goto(obj interface{}) {
 	if debugInstr {
 		log.Println("Goto", p.name, obj)
@@ -810,7 +812,7 @@ func (p *Sprite) ChangeYpos(dy float64) {
 type RotationStyle int
 
 const (
-	None = iota
+	None RotationStyle = iota
 	Normal
 	LeftRight
 )
@@ -837,10 +839,11 @@ func (p *Sprite) Heading() float64 {
 }
 
 // Turn func:
-//   Turn(degree)
-//   Turn(spx.Left)
-//   Turn(spx.Right)
-//   Turn(ti *spx.TurningInfo)
+//
+//	Turn(degree)
+//	Turn(spx.Left)
+//	Turn(spx.Right)
+//	Turn(ti *spx.TurningInfo)
 func (p *Sprite) Turn(val interface{}) {
 	var delta float64
 	switch v := val.(type) {
@@ -871,14 +874,15 @@ func (p *Sprite) Turn(val interface{}) {
 }
 
 // TurnTo func:
-//   TurnTo(sprite)
-//   TurnTo(spriteName)
-//   TurnTo(spx.Mouse)
-//   TurnTo(degree)
-//   TurnTo(spx.Left)
-//   TurnTo(spx.Right)
-//   TurnTo(spx.Up)
-//   TurnTo(spx.Down)
+//
+//	TurnTo(sprite)
+//	TurnTo(spriteName)
+//	TurnTo(spx.Mouse)
+//	TurnTo(degree)
+//	TurnTo(spx.Left)
+//	TurnTo(spx.Right)
+//	TurnTo(spx.Up)
+//	TurnTo(spx.Down)
 func (p *Sprite) TurnTo(obj interface{}) {
 	var angle float64
 	switch v := obj.(type) {
@@ -1023,14 +1027,15 @@ func (p *Sprite) TouchingColor(color Color) bool {
 }
 
 // Touching func:
-//   Touching(spriteName)
-//   Touching(sprite)
-//   Touching(spx.Mouse)
-//   Touching(spx.Edge)
-//   Touching(spx.EdgeLeft)
-//   Touching(spx.EdgeTop)
-//   Touching(spx.EdgeRight)
-//   Touching(spx.EdgeBottom)
+//
+//	Touching(spriteName)
+//	Touching(sprite)
+//	Touching(spx.Mouse)
+//	Touching(spx.Edge)
+//	Touching(spx.EdgeLeft)
+//	Touching(spx.EdgeTop)
+//	Touching(spx.EdgeRight)
+//	Touching(spx.EdgeBottom)
 func (p *Sprite) Touching(obj interface{}) bool {
 	if !p.isVisible || p.isDying {
 		return false
