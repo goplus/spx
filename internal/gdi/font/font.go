@@ -6,17 +6,131 @@ package font
 import (
 	"fmt"
 	"image"
+	"io"
 	"io/ioutil"
 	"path"
 	"sync"
 
-	"github.com/golang/freetype/truetype"
 	"github.com/goplus/spx/fs/fsutil"
 	"golang.org/x/image/font"
+	"golang.org/x/image/font/opentype"
+	"golang.org/x/image/font/sfnt"
 	"golang.org/x/image/math/fixed"
 )
 
 // -------------------------------------------------------------------------------------
+
+const (
+	fontTimesNewRoman = "Times New Roman"
+	fontSimSun        = "SimSun"
+)
+
+type fontInfo struct {
+	font   *opentype.Font
+	closer io.Closer
+}
+
+type fontCache struct {
+	cache map[string]*fontInfo
+	once  sync.Once
+}
+
+var (
+	cache fontCache
+)
+
+func (p *fontCache) clear() {
+	for k, info := range p.cache {
+		if info.closer != nil {
+			info.closer.Close()
+		}
+		delete(p.cache, k)
+	}
+}
+
+func (p *fontCache) init() {
+	p.once.Do(p._init)
+}
+
+func (p *fontCache) _init() {
+	fontFaceNames := map[string]*fontNameInit{
+		fontTimesNewRoman: {paths: []string{"Times New Roman Bold.ttf", "Times New Roman.ttf", "Times.ttf"}},
+		fontSimSun:        {paths: []string{"SimSun.ttf", "SimSun.ttc", "Songti.ttc"}},
+	}
+	p.cache = make(map[string]*fontInfo)
+	for _, findPath := range fontFindPaths {
+		for name, fontInit := range fontFaceNames {
+			if !fontInit.inited {
+				if p.findFontAtPath(name, findPath, fontInit.paths) {
+					fontInit.inited = true
+				}
+			}
+		}
+	}
+	for name, fontInit := range fontFaceNames {
+		if !fontInit.inited {
+			panic(fmt.Sprintf("Font not found: %s (%v not in %v)", name, fontInit.paths, fontFindPaths))
+		}
+	}
+}
+
+func (p *fontCache) findFontAtPath(
+	name string, findPath string, fontNames []string) bool {
+	for _, fontName := range fontNames {
+		tryFile := path.Join(findPath, fontName)
+		if fnt, err := p.loadFile(tryFile); err == nil {
+			p.cache[name] = fnt
+			return true
+		}
+	}
+	return false
+}
+
+func parseFont(r io.ReadSeekCloser, keepUse *bool) (*sfnt.Font, error) {
+	if reader, ok := r.(io.ReaderAt); ok {
+		s, err := opentype.ParseCollectionReaderAt(reader)
+		if err != nil {
+			return nil, err
+		}
+		f, err := s.Font(0)
+		if err == nil {
+			*keepUse = true
+		}
+		return f, err
+	} else {
+		data, err := ioutil.ReadAll(r)
+		if err != nil {
+			return nil, err
+		}
+		s, err := opentype.ParseCollection(data)
+		if err != nil {
+			return nil, err
+		}
+		return s.Font(0)
+	}
+}
+
+func (p *fontCache) loadFile(file string) (*fontInfo, error) {
+	r, err := fsutil.OpenFile(file)
+	if err != nil {
+		return nil, err
+	}
+	var keepUse bool
+	defer func() {
+		if !keepUse {
+			r.Close()
+		}
+	}()
+	font, err := parseFont(r, &keepUse)
+	if err != nil {
+		return nil, err
+	}
+	info := &fontInfo{font: font}
+	if keepUse {
+		info.closer = r
+	}
+	return info, nil
+}
 
 type Default struct {
 	ascii  font.Face
@@ -25,7 +139,7 @@ type Default struct {
 	once   sync.Once
 }
 
-type Options = truetype.Options
+type Options = opentype.FaceOptions
 
 func NewDefault(options *Options) *Default {
 	p := &Default{done: make(chan error)}
@@ -54,64 +168,18 @@ type fontNameInit struct {
 	inited bool
 }
 
-func (p *Default) init(options *truetype.Options) {
-	fontFaceNames := map[string]*fontNameInit{
-		"Times New Roman": {paths: []string{"Times New Roman Bold.ttf", "Times New Roman.ttf", "Times.ttf"}},
-		"SimSun":          {paths: []string{"SimSun.ttf", "SimSun.ttc", "Songti.ttc"}},
-	}
-	for _, findPath := range fontFindPaths {
-		for name, fontInit := range fontFaceNames {
-			if !fontInit.inited {
-				if p.findFontAtPath(name, findPath, fontInit.paths, options) {
-					fontInit.inited = true
-				}
-			}
-		}
-	}
-	for name, fontInit := range fontFaceNames {
-		if !fontInit.inited {
-			panic(fmt.Sprintf("Font not found: %s (%v not in %v)", name, fontInit.paths, fontFindPaths))
+func (p *Default) init(options *Options) {
+	cache.init()
+	for name, info := range cache.cache {
+		f, _ := opentype.NewFace(info.font, options)
+		switch name {
+		case "Times New Roman":
+			p.ascii = f
+		case "SimSun":
+			p.songti = f
 		}
 	}
 	p.done <- nil
-}
-
-func (p *Default) findFontAtPath(
-	name string, findPath string, fontNames []string, options *truetype.Options) bool {
-	for _, fontName := range fontNames {
-		tryFile := path.Join(findPath, fontName)
-		if p.tryFontFile(name, tryFile, options) {
-			return true
-		}
-	}
-	return false
-}
-
-func (p *Default) tryFontFile(name, tryFile string, options *truetype.Options) bool {
-	fp, err := fsutil.OpenFile(tryFile)
-	if err != nil {
-		return false
-	}
-	defer fp.Close()
-
-	b, err := ioutil.ReadAll(fp)
-	if err != nil {
-		return false
-	}
-
-	tt, err := truetype.Parse(b)
-	if err != nil {
-		return false
-	}
-
-	f := truetype.NewFace(tt, options)
-	switch name {
-	case "Times New Roman":
-		p.ascii = f
-	case "SimSun":
-		p.songti = f
-	}
-	return true
 }
 
 func (p *Default) Glyph(dot fixed.Point26_6, r rune) (
