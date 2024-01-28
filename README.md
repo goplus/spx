@@ -108,7 +108,7 @@ onStart => {
 
 We define a variable named `score` for `Dragon`. After the program starts, it moves randomly. And every time it touches `Shark`, it gains one score.
 
-How to show the `score` on the stage? You don't need write code, just add a `stageMonitor` object into [res/index.json](tutorial/02-Dragon/res/index.json):
+How to show the `score` on the stage? You don't need write code, just add a `stageMonitor` object into [assets/index.json](tutorial/02-Dragon/assets/index.json):
 
 ```json
 {
