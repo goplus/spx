@@ -1,7 +1,3 @@
 var (
-	Dragon Dragon
-	Shark  Shark
-	chomp  Sound
+	chomp Sound
 )
-
-run "assets", {Title: "Dragon (by Go+)"}

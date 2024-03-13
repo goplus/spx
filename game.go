@@ -111,7 +111,7 @@ type Spriter interface {
 }
 
 type Gamer interface {
-	initGame(sprites []Spriter)
+	initGame(sprites []Spriter) *Game
 }
 
 func (p *Game) getSharedImgs() *sharedImages {
@@ -160,7 +160,7 @@ func (p *Game) reset() {
 	p.sprs = make(map[string]Spriter)
 }
 
-func (p *Game) initGame(sprites []Spriter) {
+func (p *Game) initGame(sprites []Spriter) *Game {
 	p.tickMgr.init()
 	p.eventSinks.init(&p.sinkMgr, p)
 	p.sprs = make(map[string]Spriter)
@@ -169,12 +169,18 @@ func (p *Game) initGame(sprites []Spriter) {
 		tySpr := reflect.TypeOf(spr).Elem()
 		p.typs[tySpr.Name()] = tySpr
 	}
+	return p
 }
 
 // Gopt_Game_Main is required by Go+ compiler as the entry of a .gmx project.
 func Gopt_Game_Main(game Gamer, sprites ...Spriter) {
-	game.initGame(sprites)
-	game.(interface{ MainEntry() }).MainEntry()
+	g := game.initGame(sprites)
+	if me, ok := game.(interface{ MainEntry() }); ok {
+		me.MainEntry()
+	}
+	if !g.isRunned {
+		Gopt_Game_Run(game, "assets")
+	}
 }
 
 // Gopt_Game_Run runs the game.
@@ -200,7 +206,6 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 		panic(err)
 	}
 
-	appName := filepath.Base(os.Args[0])
 	if !conf.DontParseFlags {
 		f := flag.CommandLine
 		verbose := f.Bool("v", false, "print verbose information")
@@ -208,7 +213,7 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 		help := f.Bool("h", false, "show help information")
 		flag.Parse()
 		if *help {
-			fmt.Fprintf(os.Stderr, "Usage: %v [-v -f -h]\n", appName)
+			fmt.Fprintf(os.Stderr, "Usage: %v [-v -f -h]\n", os.Args[0])
 			flag.PrintDefaults()
 			return
 		}
@@ -218,6 +223,8 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 		conf.FullScreen = *fullscreen
 	}
 	if conf.Title == "" {
+		dir, _ := os.Getwd()
+		appName := filepath.Base(dir)
 		conf.Title = appName + " (by Go+ Builder)"
 	}
 
