@@ -133,7 +133,7 @@ func Gopt_Game_Main(game Gamer) {
 // resource can be a string or fs.Dir object.
 func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 	var conf Config
-	if gameConf != nil {
+	if gameConf != nil { // TODO(xsw): load from index.json
 		conf = *gameConf[0]
 	}
 	if !conf.DontParseFlags {
@@ -458,6 +458,8 @@ type projConfig struct {
 
 	Map    mapConfig     `json:"map"`
 	Camera *cameraConfig `json:"camera"`
+
+	Run *Config `json:"run"`
 }
 
 func (p *projConfig) getScenes() []*costumeConfig {
@@ -682,15 +684,15 @@ var (
 // -----------------------------------------------------------------------------
 
 type Config struct {
-	Title              string
-	Index              interface{} // where is index, can be file (string) or io.Reader
-	KeyDuration        int
-	FullScreen         bool
-	DontRunOnUnfocused bool
-	DontParseFlags     bool
-	Width              int
-	Height             int
-	ScreenshotKey      string // screenshot image capture key
+	Title              string      `json:"title,omitempty"`
+	Width              int         `json:"width,omitempty"`
+	Height             int         `json:"height,omitempty"`
+	KeyDuration        int         `json:"keyDuration,omitempty"`
+	ScreenshotKey      string      `json:"screenshotKey,omitempty"` // screenshot image capture key
+	Index              interface{} `json:"-"`                       // where is index.json, can be file (string) or io.Reader
+	DontParseFlags     bool        `json:"-"`
+	FullScreen         bool        `json:"fullScreen,omitempty"`
+	DontRunOnUnfocused bool        `json:"pauseOnUnfocused,omitempty"`
 }
 
 func (p *Game) runLoop(cfg *Config) (err error) {
