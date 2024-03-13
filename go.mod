@@ -1,6 +1,6 @@
 module github.com/goplus/spx
 
-go 1.16
+go 1.18
 
 require (
 	github.com/ajstarks/svgo v0.0.0-20210927141636-6d70534b1098
