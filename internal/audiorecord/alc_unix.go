@@ -1,5 +1,5 @@
-//go:build darwin || (linux && !android) || windows
-// +build darwin linux,!android windows
+//go:build darwin || (linux && !android)
+// +build darwin linux,!android
 
 package audiorecord
 

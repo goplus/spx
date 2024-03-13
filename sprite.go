@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2021 The GoPlus Authors (goplus.org). All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package spx
 
 import (
@@ -189,7 +205,7 @@ func applySpriteProps(dest *Sprite, v specsp) {
 		dest.rotationStyle = toRotationStyle(style.(string))
 	}
 	if _, ok := v["currentCostumeIndex"]; ok {
-		// TODO: to be removed
+		// TODO(xsw): to be removed
 		panic("please change `currentCostumeIndex` => `costumeIndex` in index.json")
 	}
 	if idx, ok := v["costumeIndex"]; ok {
@@ -198,15 +214,14 @@ func applySpriteProps(dest *Sprite, v specsp) {
 	dest.isCloned_ = false
 }
 
-func applySprite(out reflect.Value, sprite Spriter, v specsp) (*Sprite, interface{}) {
-	src := spriteOf(sprite)
+func applySprite(out reflect.Value, sprite Spriter, v specsp) (*Sprite, Spriter) {
 	in := reflect.ValueOf(sprite).Elem()
-	outPtr := out.Addr().Interface()
-	return cloneSprite(out, outPtr, in, src, v), outPtr
+	outPtr := out.Addr().Interface().(Spriter)
+	return cloneSprite(out, outPtr, in, v), outPtr
 }
 
-func cloneSprite(out reflect.Value, outPtr interface{}, in reflect.Value, src *Sprite, v specsp) *Sprite {
-	dest := spriteOf(outPtr.(Shape))
+func cloneSprite(out reflect.Value, outPtr Spriter, in reflect.Value, v specsp) *Sprite {
+	dest := spriteOf(outPtr)
 	func() {
 		out.Set(in)
 		for i, n := 0, out.NumField(); i < n; i++ {
@@ -217,10 +232,10 @@ func cloneSprite(out reflect.Value, outPtr interface{}, in reflect.Value, src *S
 			}
 		}
 	}()
-	if v != nil {
+	if v != nil { // in loadSprite
 		applySpriteProps(dest, v)
-	} else if ini, ok := outPtr.(initer); ok {
-		ini.Main()
+	} else { // in sprite.Clone
+		outPtr.Main()
 	}
 	return dest
 }
@@ -236,8 +251,8 @@ func Gopt_Sprite_Clone__1(sprite Spriter, data interface{}) {
 	}
 	in := reflect.ValueOf(sprite).Elem()
 	v := reflect.New(in.Type())
-	out, outPtr := v.Elem(), v.Interface()
-	dest := cloneSprite(out, outPtr, in, src, nil)
+	out, outPtr := v.Elem(), v.Interface().(Spriter)
+	dest := cloneSprite(out, outPtr, in, nil)
 	src.g.addClonedShape(src, dest)
 	if dest.hasOnCloned {
 		dest.doWhenCloned(dest, data)
@@ -668,10 +683,11 @@ func (p *Sprite) getXY() (x, y float64) {
 }
 
 // DistanceTo func:
-//   DistanceTo(sprite)
-//   DistanceTo(spriteName)
-//   DistanceTo(spx.Mouse)
-//   DistanceTo(spx.Random)
+//
+//	DistanceTo(sprite)
+//	DistanceTo(spriteName)
+//	DistanceTo(spx.Mouse)
+//	DistanceTo(spx.Random)
 func (p *Sprite) DistanceTo(obj interface{}) float64 {
 	x, y := p.x, p.y
 	x2, y2 := p.g.objectPos(obj)
@@ -738,10 +754,11 @@ func (p *Sprite) Step__2(step float64, animname string) {
 }
 
 // Goto func:
-//   Goto(sprite)
-//   Goto(spriteName)
-//   Goto(spx.Mouse)
-//   Goto(spx.Random)
+//
+//	Goto(sprite)
+//	Goto(spriteName)
+//	Goto(spx.Mouse)
+//	Goto(spx.Random)
 func (p *Sprite) Goto(obj interface{}) {
 	if debugInstr {
 		log.Println("Goto", p.name, obj)
@@ -810,7 +827,7 @@ func (p *Sprite) ChangeYpos(dy float64) {
 type RotationStyle int
 
 const (
-	None = iota
+	None RotationStyle = iota
 	Normal
 	LeftRight
 )
@@ -837,10 +854,11 @@ func (p *Sprite) Heading() float64 {
 }
 
 // Turn func:
-//   Turn(degree)
-//   Turn(spx.Left)
-//   Turn(spx.Right)
-//   Turn(ti *spx.TurningInfo)
+//
+//	Turn(degree)
+//	Turn(spx.Left)
+//	Turn(spx.Right)
+//	Turn(ti *spx.TurningInfo)
 func (p *Sprite) Turn(val interface{}) {
 	var delta float64
 	switch v := val.(type) {
@@ -871,14 +889,15 @@ func (p *Sprite) Turn(val interface{}) {
 }
 
 // TurnTo func:
-//   TurnTo(sprite)
-//   TurnTo(spriteName)
-//   TurnTo(spx.Mouse)
-//   TurnTo(degree)
-//   TurnTo(spx.Left)
-//   TurnTo(spx.Right)
-//   TurnTo(spx.Up)
-//   TurnTo(spx.Down)
+//
+//	TurnTo(sprite)
+//	TurnTo(spriteName)
+//	TurnTo(spx.Mouse)
+//	TurnTo(degree)
+//	TurnTo(spx.Left)
+//	TurnTo(spx.Right)
+//	TurnTo(spx.Up)
+//	TurnTo(spx.Down)
 func (p *Sprite) TurnTo(obj interface{}) {
 	var angle float64
 	switch v := obj.(type) {
@@ -1023,14 +1042,15 @@ func (p *Sprite) TouchingColor(color Color) bool {
 }
 
 // Touching func:
-//   Touching(spriteName)
-//   Touching(sprite)
-//   Touching(spx.Mouse)
-//   Touching(spx.Edge)
-//   Touching(spx.EdgeLeft)
-//   Touching(spx.EdgeTop)
-//   Touching(spx.EdgeRight)
-//   Touching(spx.EdgeBottom)
+//
+//	Touching(spriteName)
+//	Touching(sprite)
+//	Touching(spx.Mouse)
+//	Touching(spx.Edge)
+//	Touching(spx.EdgeLeft)
+//	Touching(spx.EdgeTop)
+//	Touching(spx.EdgeRight)
+//	Touching(spx.EdgeBottom)
 func (p *Sprite) Touching(obj interface{}) bool {
 	if !p.isVisible || p.isDying {
 		return false
@@ -1345,3 +1365,5 @@ func (p *Sprite) fixWorldRange(x, y float64) (float64, float64) {
 
 	return x, y
 }
+
+// -----------------------------------------------------------------------------

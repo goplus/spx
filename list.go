@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2021 The GoPlus Authors (goplus.org). All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package spx
 
 import (
@@ -8,11 +24,13 @@ import (
 	"strings"
 )
 
+type Pos int
+
 const (
-	Invalid = -1
-	Last    = -2
-	All     = -3
-	Random  = -4
+	Invalid Pos = -1
+	Last    Pos = -2
+	All         = -3 // Pos or StopKind
+	Random  Pos = -4
 )
 
 // -------------------------------------------------------------------------------------
@@ -83,13 +101,11 @@ func (p *List) Init(data ...obj) {
 
 func (p *List) InitFrom(src *List) {
 	data := make([]obj, len(src.data))
-	for i, item := range src.data {
-		data[i] = item
-	}
+	copy(data, src.data)
 	p.data = data
 }
 
-func getListPos(i, n int) int {
+func getListPos(i Pos, n int) int {
 	if i == Last {
 		return n - 1
 	}
@@ -99,7 +115,7 @@ func getListPos(i, n int) int {
 		}
 		return int(rand.Int31n(int32(n)))
 	}
-	return i
+	return int(i)
 }
 
 func (p *List) Len() int {
@@ -133,56 +149,56 @@ func (p *List) Append(v obj) {
 	p.data = append(p.data, fromObj(v))
 }
 
-func (p *List) Set(i int, v obj) {
+func (p *List) Set(i Pos, v obj) {
 	n := len(p.data)
 	if i < 0 {
-		i = getListPos(i, n)
+		i = Pos(getListPos(i, n))
 		if i < 0 {
-			log.Fatal("Set failed: invalid index -", i)
+			log.Panicln("Set failed: invalid index -", i)
 			return
 		}
 	}
-	if i < n {
+	if int(i) < n {
 		p.data[i] = fromObj(v)
 	}
 }
 
-func (p *List) Insert(i int, v obj) {
+func (p *List) Insert(i Pos, v obj) {
 	n := len(p.data)
 	if i < 0 {
 		if i == Invalid {
 			return
 		}
-		i = getListPos(i, n+1)
+		i = Pos(getListPos(i, n+1))
 	}
 	val := fromObj(v)
 	p.data = append(p.data, val)
-	if i < n {
+	if int(i) < n {
 		copy(p.data[i+1:], p.data[i:])
 		p.data[i] = val
 	}
 }
 
-func (p *List) Delete(i int) {
+func (p *List) Delete(i Pos) {
 	n := len(p.data)
 	if i < 0 {
 		if i == All {
 			p.data = p.data[:0]
 			return
 		}
-		i = getListPos(i, n)
+		i = Pos(getListPos(i, n))
 	}
-	if i >= 0 && i < n {
+	if i >= 0 && int(i) < n {
 		p.data = append(p.data[:i], p.data[i+1:]...)
 	}
 }
 
-func (p *List) At(i int) Value {
+func (p *List) At(i Pos) Value {
 	n := len(p.data)
 	if i < 0 {
-		i = getListPos(i, n)
+		i = Pos(getListPos(i, n))
 	}
-	if i < 0 || i >= n {
+	if i < 0 || int(i) >= n {
 		return Value{}
 	}
 	return Value{p.data[i]}

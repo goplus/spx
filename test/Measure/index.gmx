@@ -1,5 +1,0 @@
-var (
-	Monkey Monkey
-)
-
-run "res", {Title: "Measure (by Go+)"}

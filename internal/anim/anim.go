@@ -134,7 +134,7 @@ type Animation struct {
 
 var globalAnimId int64 = 1
 
-//loopmodel = -1
+// loopmodel = -1
 func NewAnimation(name string, framePerSecond float64, dataType int, loopMode int) *Animation {
 	this := &Animation{}
 	this.Init(name, framePerSecond, dataType, loopMode)

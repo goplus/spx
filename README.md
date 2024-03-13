@@ -108,7 +108,7 @@ onStart => {
 
 We define a variable named `score` for `Dragon`. After the program starts, it moves randomly. And every time it touches `Shark`, it gains one score.
 
-How to show the `score` on the stage? You don't need write code, just add a `stageMonitor` object into [res/index.json](tutorial/02-Dragon/res/index.json):
+How to show the `score` on the stage? You don't need write code, just add a `stageMonitor` object into [assets/index.json](tutorial/02-Dragon/assets/index.json):
 
 ```json
 {
@@ -155,10 +155,10 @@ onCloned => {
 
 When we click the sprite `Calf`, it receives an `onClick` event. Then it calls `clone` to clone itself. And after cloning, the new `Calf` sprite will receive an `onCloned` event.
 
-In `onCloned` event, the new `Calf` sprite uses a variable named `gid`. It doesn't define in [Calf.spx](tutorial/03-Clone/Calf.spx), but in [index.gmx](tutorial/03-Clone/index.gmx).
+In `onCloned` event, the new `Calf` sprite uses a variable named `gid`. It doesn't define in [Calf.spx](tutorial/03-Clone/Calf.spx), but in [main.spx](tutorial/03-Clone/main.spx).
 
 
-Here are all the codes of [index.gmx](tutorial/03-Clone/index.gmx):
+Here are all the codes of [main.spx](tutorial/03-Clone/main.spx):
 
 ```coffee
 var (
@@ -170,7 +170,7 @@ var (
 run "res", {Title: "Clone and Destory (by Go+)"}
 ```
 
-All these three variables in [index.gmx](tutorial/03-Clone/index.gmx) are shared by all sprites. `Arrow` and `Calf` are sprites that exist in this project. `gid` means `global id`. It is used to allocate id for all cloned `Calf` sprites.
+All these three variables in [main.spx](tutorial/03-Clone/main.spx) are shared by all sprites. `Arrow` and `Calf` are sprites that exist in this project. `gid` means `global id`. It is used to allocate id for all cloned `Calf` sprites.
 
 Let's back to [Calf.spx](tutorial/03-Clone/Calf.spx) to see the full codes of `onCloned`:
 

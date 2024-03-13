@@ -2,5 +2,3 @@ var (
 	MyAircraft MyAircraft
 	Bullet     Bullet
 )
-
-run "assets", {Title: "Bullet (by Go+)"}

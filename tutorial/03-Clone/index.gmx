@@ -1,8 +1,0 @@
-var (
-	Arrow Arrow
-	Calf  Calf
-
-	gid int
-)
-
-run "assets", {Title: "Clone and Destory (by Go+)"}

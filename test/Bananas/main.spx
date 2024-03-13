@@ -3,5 +3,3 @@ var (
 	Monkey  *Monkey
 	Red     *Red
 )
-
-run "assets", {Title: "Bananas (by Go+)"}

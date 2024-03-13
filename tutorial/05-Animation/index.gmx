@@ -1,7 +1,0 @@
-var (
-	Bullet     Bullet
-	SmallEnemy SmallEnemy
-	explode    Sound
-)
-
-run "assets", {Title: "Animation (by Go+)"}

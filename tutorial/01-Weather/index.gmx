@@ -1,6 +1,0 @@
-var (
-	Jaime Jaime
-	Kai   Kai
-)
-
-run "assets", {Title: "Weather (by Go+)"}
