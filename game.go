@@ -24,6 +24,7 @@ import (
 	"log"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"reflect"
 	"sync/atomic"
 	"time"
@@ -78,8 +79,9 @@ type Game struct {
 
 	sounds soundMgr
 	turtle turtleCanvas
-	shapes map[string]Spriter // sprite prototypes
-	items  []Shape            // sprites on stage
+	typs   map[string]reflect.Type // map: name => sprite type, for all sprites
+	sprs   map[string]Spriter      // map: name => sprite prototype, for loaded sprites
+	items  []Shape                 // shapes on stage (in Zorder), not only sprites
 
 	tickMgr tickMgr
 	input   inputMgr
@@ -100,12 +102,16 @@ type Game struct {
 
 	sinkMgr  eventSinkMgr
 	isLoaded bool
+	isRunned bool
 }
 
-type Spriter = Shape
+type Spriter interface {
+	Shape
+	Main()
+}
 
 type Gamer interface {
-	initGame()
+	initGame(sprites []Spriter)
 }
 
 func (p *Game) getSharedImgs() *sharedImages {
@@ -115,23 +121,59 @@ func (p *Game) getSharedImgs() *sharedImages {
 	return p.shared
 }
 
+func (p *Game) newSpriteAndLoad(name string, tySpr reflect.Type, g reflect.Value) Spriter {
+	spr := reflect.New(tySpr).Interface().(Spriter)
+	if err := p.loadSprite(spr, name, g); err != nil {
+		panic(err)
+	}
+	// p.sprs[name] = spr (has been set by loadSprite)
+	return spr
+}
+
+func (p *Game) getSpriteProto(tySpr reflect.Type, g reflect.Value) Spriter {
+	name := tySpr.Name()
+	spr, ok := p.sprs[name]
+	if !ok {
+		spr = p.newSpriteAndLoad(name, tySpr, g)
+	}
+	return spr
+}
+
+func (p *Game) getSpriteProtoByName(name string, g reflect.Value) Spriter {
+	spr, ok := p.sprs[name]
+	if !ok {
+		tySpr, ok := p.typs[name]
+		if !ok {
+			log.Panicf("sprite %s is not defined\n", name)
+		}
+		spr = p.newSpriteAndLoad(name, tySpr, g)
+	}
+	return spr
+}
+
 func (p *Game) reset() {
 	p.sinkMgr.reset()
 	p.input.reset()
 	p.Stop(AllOtherScripts)
 	p.items = nil
 	p.isLoaded = false
-	p.shapes = make(map[string]Spriter)
+	p.sprs = make(map[string]Spriter)
 }
 
-func (p *Game) initGame() {
+func (p *Game) initGame(sprites []Spriter) {
 	p.tickMgr.init()
 	p.eventSinks.init(&p.sinkMgr, p)
+	p.sprs = make(map[string]Spriter)
+	p.typs = make(map[string]reflect.Type)
+	for _, spr := range sprites {
+		tySpr := reflect.TypeOf(spr).Elem()
+		p.typs[tySpr.Name()] = tySpr
+	}
 }
 
 // Gopt_Game_Main is required by Go+ compiler as the entry of a .gmx project.
-func Gopt_Game_Main(game Gamer) { // TODO(xsw): sprites ...Spriter) {
-	game.initGame()
+func Gopt_Game_Main(game Gamer, sprites ...Spriter) {
+	game.initGame(sprites)
 	game.(interface{ MainEntry() }).MainEntry()
 }
 
@@ -149,8 +191,8 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 		conf = *gameConf[0]
 		err = loadProjConfig(&proj, fs, conf.Index)
 	} else {
-		// load Config from index.json
-		if err = loadProjConfig(&proj, fs, nil); err == nil {
+		err = loadProjConfig(&proj, fs, nil)
+		if proj.Run != nil { // load Config from index.json
 			conf = *proj.Run
 		}
 	}
@@ -158,6 +200,7 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 		panic(err)
 	}
 
+	appName := filepath.Base(os.Args[0])
 	if !conf.DontParseFlags {
 		f := flag.CommandLine
 		verbose := f.Bool("v", false, "print verbose information")
@@ -165,7 +208,7 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 		help := f.Bool("h", false, "show help information")
 		flag.Parse()
 		if *help {
-			fmt.Fprintf(os.Stderr, "Usage: %v [-v -f -h]\n", os.Args[0])
+			fmt.Fprintf(os.Stderr, "Usage: %v [-v -f -h]\n", appName)
 			flag.PrintDefaults()
 			return
 		}
@@ -173,6 +216,9 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 			SetDebug(DbgFlagAll)
 		}
 		conf.FullScreen = *fullscreen
+	}
+	if conf.Title == "" {
+		conf.Title = appName + " (by Go+ Builder)"
 	}
 
 	key := conf.ScreenshotKey
@@ -191,9 +237,7 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 	if debugLoad {
 		log.Println("==> StartLoad", resource)
 	}
-	if err := g.startLoad(fs, &conf); err != nil {
-		panic(err)
-	}
+	g.startLoad(fs, &conf)
 	for i, n := 0, v.NumField(); i < n; i++ {
 		name, val := getFieldPtrOrAlloc(v, i)
 		switch fld := val.(type) {
@@ -207,6 +251,7 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 			if err := g.loadSprite(fld, name, v); err != nil {
 				panic(err)
 			}
+			// p.sprs[name] = fld (has been set by loadSprite)
 		}
 	}
 	if err := g.endLoad(v, &proj); err != nil {
@@ -252,7 +297,7 @@ func getFieldPtrOrAlloc(v reflect.Value, i int) (name string, val interface{}) {
 	typ := tFld.Type
 	word := unsafe.Pointer(vFld.Addr().Pointer())
 	ret := reflect.NewAt(typ, word).Interface()
-	if vFld.Kind() == reflect.Ptr && typ.Implements(tyShape) {
+	if vFld.Kind() == reflect.Ptr && typ.Implements(tySpriter) {
 		obj := reflect.New(typ.Elem())
 		reflect.ValueOf(ret).Elem().Set(obj)
 		ret = obj.Interface()
@@ -290,20 +335,17 @@ func findObjPtr(v reflect.Value, name string, from int) interface{} {
 	return nil
 }
 
-func (p *Game) startLoad(fs spxfs.Dir, cfg *Config) (err error) {
+func (p *Game) startLoad(fs spxfs.Dir, cfg *Config) {
 	var keyDuration int
 	if cfg != nil {
 		keyDuration = cfg.KeyDuration
 	}
-	p.initGame()
 	p.input.init(p, keyDuration)
 	p.sounds.init(p)
-	p.shapes = make(map[string]Spriter)
 	p.events = make(chan event, 16)
 	p.fs = fs
 	p.windowWidth_ = cfg.Width
 	p.windowHeight_ = cfg.Height
-	return
 }
 
 func (p *Game) loadSprite(sprite Spriter, name string, gamer reflect.Value) error {
@@ -322,7 +364,7 @@ func (p *Game) loadSprite(sprite Spriter, name string, gamer reflect.Value) erro
 	vSpr.Set(reflect.Zero(vSpr.Type()))
 	base := vSpr.Field(0).Addr().Interface().(*Sprite)
 	base.init(baseDir, p, name, &conf, gamer, p.getSharedImgs())
-	p.shapes[name] = sprite
+	p.sprs[name] = sprite
 	//
 	// init gamer pointer (field 1)
 	*(*uintptr)(unsafe.Pointer(vSpr.Field(1).Addr().Pointer())) = gamer.Addr().Pointer()
@@ -332,10 +374,6 @@ func (p *Game) loadSprite(sprite Spriter, name string, gamer reflect.Value) erro
 func spriteOf(sprite Spriter) *Sprite {
 	vSpr := reflect.ValueOf(sprite).Elem()
 	return vSpr.Field(0).Addr().Interface().(*Sprite)
-}
-
-type initer interface {
-	Main()
 }
 
 func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
@@ -355,17 +393,15 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 	p.world = ebiten.NewImage(p.worldWidth_, p.worldHeight_)
 	p.mapMode = toMapMode(proj.Map.Mode)
 
-	inits := make([]initer, 0, len(proj.Zorder))
+	inits := make([]Spriter, 0, len(proj.Zorder))
 	for _, v := range proj.Zorder {
-		if name, ok := v.(string); !ok { // not a prototype sprite
-			inits = p.addSpecialShape(g, v.(specsp), inits)
-		} else if sp, ok := p.shapes[name]; ok {
+		if name, ok := v.(string); ok {
+			sp := p.getSpriteProtoByName(name, g)
 			p.addShape(spriteOf(sp))
-			if ini, ok := sp.(initer); ok {
-				inits = append(inits, ini)
-			}
+			inits = append(inits, sp)
 		} else {
-			return fmt.Errorf("sprite %s is not found", name)
+			// not a prototype sprite
+			inits = p.addSpecialShape(g, v.(specsp), inits)
 		}
 	}
 	for _, ini := range inits {
@@ -385,14 +421,14 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 	}
 	p.Camera.init(p, float64(p.windowWidth_), float64(p.windowHeight_), float64(p.worldWidth_), float64(p.worldHeight_))
 
-	ebiten.SetWindowResizable(true)
+	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeOnlyFullscreenEnabled)
 	if proj.Camera != nil && proj.Camera.On != "" {
 		p.Camera.On(proj.Camera.On)
 	}
 	if loader, ok := g.Addr().Interface().(interface{ OnLoaded() }); ok {
 		loader.OnLoaded()
 	}
-	//game load success
+	// game load success
 	p.isLoaded = true
 	return
 }
@@ -427,7 +463,7 @@ func Gopt_Game_Reload(game Gamer, index interface{}) (err error) {
 
 type specsp = map[string]interface{}
 
-func (p *Game) addSpecialShape(g reflect.Value, v specsp, inits []initer) []initer {
+func (p *Game) addSpecialShape(g reflect.Value, v specsp, inits []Spriter) []Spriter {
 	switch typ := v["type"].(string); typ {
 	case "stageMonitor":
 		if sm, err := newStageMonitor(g, v); err == nil {
@@ -445,16 +481,14 @@ func (p *Game) addSpecialShape(g reflect.Value, v specsp, inits []initer) []init
 	return inits
 }
 
-func (p *Game) addStageSprite(g reflect.Value, v specsp, inits []initer) []initer {
+func (p *Game) addStageSprite(g reflect.Value, v specsp, inits []Spriter) []Spriter {
 	target := v["target"].(string)
 	if val := findObjPtr(g, target, 0); val != nil {
-		if sp, ok := val.(Shape); ok {
+		if sp, ok := val.(Spriter); ok {
 			dest := spriteOf(sp)
 			applySpriteProps(dest, v)
 			p.addShape(dest)
-			if ini, ok := val.(initer); ok {
-				inits = append(inits, ini)
-			}
+			inits = append(inits, sp)
 			return inits
 		}
 	}
@@ -477,7 +511,7 @@ func (p *Game) addStageSprite(g reflect.Value, v specsp, inits []initer) []inite
 	  ]
 	}
 */
-func (p *Game) addStageSprites(g reflect.Value, v specsp, inits []initer) []initer {
+func (p *Game) addStageSprites(g reflect.Value, v specsp, inits []Spriter) []Spriter {
 	target := v["target"].(string)
 	if val := findFieldPtr(g, target, 0); val != nil {
 		fldSlice := reflect.ValueOf(val).Elem()
@@ -491,16 +525,8 @@ func (p *Game) addStageSprites(g reflect.Value, v specsp, inits []initer) []init
 			} else {
 				typItemPtr = reflect.PtrTo(typItem)
 			}
-			if typItemPtr.Implements(tyShape) {
-				name := typItem.Name()
-				spr, ok := p.shapes[name]
-				if !ok {
-					spr = reflect.New(typItem).Interface().(Spriter)
-					if err := p.loadSprite(spr, name, g); err != nil {
-						panic(err)
-					}
-					p.shapes[name] = spr
-				}
+			if typItemPtr.Implements(tySpriter) {
+				spr := p.getSpriteProto(typItem, g)
 				items := v["items"].([]interface{})
 				n := len(items)
 				newSlice := reflect.MakeSlice(typSlice, n, n)
@@ -512,9 +538,7 @@ func (p *Game) addStageSprites(g reflect.Value, v specsp, inits []initer) []init
 					}
 					dest, sp := applySprite(newItem, spr, items[i].(specsp))
 					p.addShape(dest)
-					if ini, ok := sp.(initer); ok {
-						inits = append(inits, ini)
-					}
+					inits = append(inits, sp)
 				}
 				fldSlice.Set(newSlice)
 				return inits
@@ -525,7 +549,7 @@ func (p *Game) addStageSprites(g reflect.Value, v specsp, inits []initer) []init
 }
 
 var (
-	tyShape = reflect.TypeOf((*Shape)(nil)).Elem()
+	tySpriter = reflect.TypeOf((*Spriter)(nil)).Elem()
 )
 
 // -----------------------------------------------------------------------------
@@ -534,21 +558,15 @@ func (p *Game) runLoop(cfg *Config) (err error) {
 	if debugLoad {
 		log.Println("==> RunLoop")
 	}
-	if cfg == nil {
-		cfg = &Config{}
-	}
 	if !cfg.DontRunOnUnfocused {
 		ebiten.SetRunnableOnUnfocused(true)
 	}
 	if cfg.FullScreen {
 		ebiten.SetFullscreen(true)
 	}
+	p.isRunned = true
 	p.initEventLoop()
-	title := cfg.Title
-	if title == "" {
-		title = "Game powered by Go+"
-	}
-	ebiten.SetWindowTitle(title)
+	ebiten.SetWindowTitle(cfg.Title)
 	return ebiten.RunGame(p)
 }
 
