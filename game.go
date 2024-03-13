@@ -124,7 +124,7 @@ func (p *Game) initGame() {
 }
 
 // Gopt_Game_Main is required by Go+ compiler as the entry of a .gmx project.
-func Gopt_Game_Main(game Gamer) {
+func Gopt_Game_Main(game Gamer) { // TODO(xsw): sprites ...Spriter) {
 	game.initGame()
 	game.(interface{ MainEntry() }).MainEntry()
 }
@@ -1420,3 +1420,5 @@ func (p *Game) HideVar(name string) {
 func (p *Game) ShowVar(name string) {
 	p.setStageMonitor("", getVarPrefix+name, true)
 }
+
+// -----------------------------------------------------------------------------
