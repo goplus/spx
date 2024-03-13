@@ -18,6 +18,8 @@ package spx
 
 import (
 	"encoding/json"
+	"io"
+	"syscall"
 
 	spxfs "github.com/goplus/spx/fs"
 )
@@ -37,6 +39,20 @@ func loadJson(ret interface{}, fs spxfs.Dir, file string) (err error) {
 	}
 	defer f.Close()
 	return json.NewDecoder(f).Decode(ret)
+}
+
+func loadProjConfig(proj *projConfig, fs spxfs.Dir, index interface{}) (err error) {
+	switch v := index.(type) {
+	case io.Reader:
+		err = json.NewDecoder(v).Decode(proj)
+	case string:
+		err = loadJson(&proj, fs, v)
+	case nil:
+		err = loadJson(&proj, fs, "index.json")
+	default:
+		return syscall.EINVAL
+	}
+	return
 }
 
 // -------------------------------------------------------------------------------------

@@ -17,18 +17,15 @@
 package spx
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"image"
 	"image/color"
-	"io"
 	"log"
 	"math/rand"
 	"os"
 	"reflect"
 	"sync/atomic"
-	"syscall"
 	"time"
 	"unsafe"
 
@@ -147,9 +144,20 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 	}
 
 	var conf Config
-	if gameConf != nil { // TODO(xsw): load from index.json
+	var proj projConfig
+	if gameConf != nil {
 		conf = *gameConf[0]
+		err = loadProjConfig(&proj, fs, conf.Index)
+	} else {
+		// load Config from index.json
+		if err = loadProjConfig(&proj, fs, nil); err == nil {
+			conf = *proj.Run
+		}
 	}
+	if err != nil {
+		panic(err)
+	}
+
 	if !conf.DontParseFlags {
 		f := flag.CommandLine
 		verbose := f.Bool("v", false, "print verbose information")
@@ -201,7 +209,7 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 			}
 		}
 	}
-	if err := g.endLoad(v, conf.Index); err != nil {
+	if err := g.endLoad(v, &proj); err != nil {
 		panic(err)
 	}
 
@@ -330,22 +338,7 @@ type initer interface {
 	Main()
 }
 
-func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
-	var proj projConfig
-	switch v := index.(type) {
-	case io.Reader:
-		err = json.NewDecoder(v).Decode(&proj)
-	case string:
-		err = loadJson(&proj, p.fs, v)
-	case nil:
-		err = loadJson(&proj, p.fs, "index.json")
-	default:
-		return syscall.EINVAL
-	}
-	if err != nil {
-		return
-	}
-
+func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 	if scenes := proj.getScenes(); len(scenes) > 0 {
 		p.baseObj.init("", scenes, proj.getSceneIndex())
 		p.worldWidth_ = proj.Map.Width
@@ -404,11 +397,11 @@ func (p *Game) loadIndex(g reflect.Value, index interface{}) (err error) {
 	return
 }
 
-func (p *Game) endLoad(g reflect.Value, index interface{}) (err error) {
+func (p *Game) endLoad(g reflect.Value, proj *projConfig) (err error) {
 	if debugLoad {
 		log.Println("==> EndLoad")
 	}
-	return p.loadIndex(g, index)
+	return p.loadIndex(g, proj)
 }
 
 func Gopt_Game_Reload(game Gamer, index interface{}) (err error) {
@@ -423,7 +416,11 @@ func Gopt_Game_Reload(game Gamer, index interface{}) (err error) {
 			}
 		}
 	}
-	return g.loadIndex(v, index)
+	var proj projConfig
+	if err = loadProjConfig(&proj, g.fs, index); err != nil {
+		return
+	}
+	return g.loadIndex(v, &proj)
 }
 
 // -----------------------------------------------------------------------------
