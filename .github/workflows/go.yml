@@ -14,7 +14,7 @@ jobs:
     - uses: actions/checkout@v3
 
     - name: Set up Go/Go+
-      uses: goplus/setup-goplus@v1.1.0
+      uses: goplus/setup-goplus@v1.1.1
       with:
         go-version: "1.18"
         gop-version: "main"
