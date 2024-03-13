@@ -6,4 +6,4 @@ var (
 	clap      Sound
 )
 
-run "res", {Title: "CameraTouching (by Go+)", Width: 640, Height: 480}
+run "assets", {Title: "CameraTouching (by Go+)", Width: 640, Height: 480}
