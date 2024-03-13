@@ -141,6 +141,11 @@ func Gopt_Game_Main(game Gamer) { // TODO(xsw): sprites ...Spriter) {
 // Gopt_Game_Run runs the game.
 // resource can be a string or fs.Dir object.
 func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
+	fs, err := resourceDir(resource)
+	if err != nil {
+		panic(err)
+	}
+
 	var conf Config
 	if gameConf != nil { // TODO(xsw): load from index.json
 		conf = *gameConf[0]
@@ -175,7 +180,10 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 
 	v := reflect.ValueOf(game).Elem()
 	g := instance(v)
-	if err := g.startLoad(resource, &conf); err != nil {
+	if debugLoad {
+		log.Println("==> StartLoad", resource)
+	}
+	if err := g.startLoad(fs, &conf); err != nil {
 		panic(err)
 	}
 	for i, n := 0, v.NumField(); i < n; i++ {
@@ -274,17 +282,7 @@ func findObjPtr(v reflect.Value, name string, from int) interface{} {
 	return nil
 }
 
-func (p *Game) startLoad(resource interface{}, cfg *Config) (err error) {
-	if debugLoad {
-		log.Println("==> StartLoad", resource)
-	}
-	fs, ok := resource.(spxfs.Dir)
-	if !ok {
-		fs, err = spxfs.Open(resource.(string))
-		if err != nil {
-			return err
-		}
-	}
+func (p *Game) startLoad(fs spxfs.Dir, cfg *Config) (err error) {
 	var keyDuration int
 	if cfg != nil {
 		keyDuration = cfg.KeyDuration

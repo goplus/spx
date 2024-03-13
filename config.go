@@ -22,6 +22,14 @@ import (
 	spxfs "github.com/goplus/spx/fs"
 )
 
+func resourceDir(resource interface{}) (fs spxfs.Dir, err error) {
+	fs, ok := resource.(spxfs.Dir)
+	if !ok {
+		fs, err = spxfs.Open(resource.(string))
+	}
+	return
+}
+
 func loadJson(ret interface{}, fs spxfs.Dir, file string) (err error) {
 	f, err := fs.Open(file)
 	if err != nil {
