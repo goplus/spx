@@ -199,13 +199,12 @@ func applySpriteProps(dest *Sprite, v specsp) {
 }
 
 func applySprite(out reflect.Value, sprite Spriter, v specsp) (*Sprite, interface{}) {
-	src := spriteOf(sprite)
 	in := reflect.ValueOf(sprite).Elem()
 	outPtr := out.Addr().Interface()
-	return cloneSprite(out, outPtr, in, src, v), outPtr
+	return cloneSprite(out, outPtr, in, v), outPtr
 }
 
-func cloneSprite(out reflect.Value, outPtr interface{}, in reflect.Value, src *Sprite, v specsp) *Sprite {
+func cloneSprite(out reflect.Value, outPtr interface{}, in reflect.Value, v specsp) *Sprite {
 	dest := spriteOf(outPtr.(Shape))
 	func() {
 		out.Set(in)
@@ -237,7 +236,7 @@ func Gopt_Sprite_Clone__1(sprite Spriter, data interface{}) {
 	in := reflect.ValueOf(sprite).Elem()
 	v := reflect.New(in.Type())
 	out, outPtr := v.Elem(), v.Interface()
-	dest := cloneSprite(out, outPtr, in, src, nil)
+	dest := cloneSprite(out, outPtr, in, nil)
 	src.g.addClonedShape(src, dest)
 	if dest.hasOnCloned {
 		dest.doWhenCloned(dest, data)
