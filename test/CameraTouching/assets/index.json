@@ -1,4 +1,8 @@
 {
+  "run": {
+    "width": 640,
+    "height": 480
+  },
   "scenes": [
     {
       "name": "backdrop1",

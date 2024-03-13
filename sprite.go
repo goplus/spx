@@ -205,7 +205,7 @@ func applySpriteProps(dest *Sprite, v specsp) {
 		dest.rotationStyle = toRotationStyle(style.(string))
 	}
 	if _, ok := v["currentCostumeIndex"]; ok {
-		// TODO: to be removed
+		// TODO(xsw): to be removed
 		panic("please change `currentCostumeIndex` => `costumeIndex` in index.json")
 	}
 	if idx, ok := v["costumeIndex"]; ok {
@@ -214,14 +214,14 @@ func applySpriteProps(dest *Sprite, v specsp) {
 	dest.isCloned_ = false
 }
 
-func applySprite(out reflect.Value, sprite Spriter, v specsp) (*Sprite, interface{}) {
+func applySprite(out reflect.Value, sprite Spriter, v specsp) (*Sprite, Spriter) {
 	in := reflect.ValueOf(sprite).Elem()
-	outPtr := out.Addr().Interface()
+	outPtr := out.Addr().Interface().(Spriter)
 	return cloneSprite(out, outPtr, in, v), outPtr
 }
 
-func cloneSprite(out reflect.Value, outPtr interface{}, in reflect.Value, v specsp) *Sprite {
-	dest := spriteOf(outPtr.(Shape))
+func cloneSprite(out reflect.Value, outPtr Spriter, in reflect.Value, v specsp) *Sprite {
+	dest := spriteOf(outPtr)
 	func() {
 		out.Set(in)
 		for i, n := 0, out.NumField(); i < n; i++ {
@@ -232,10 +232,10 @@ func cloneSprite(out reflect.Value, outPtr interface{}, in reflect.Value, v spec
 			}
 		}
 	}()
-	if v != nil {
+	if v != nil { // in loadSprite
 		applySpriteProps(dest, v)
-	} else if ini, ok := outPtr.(initer); ok {
-		ini.Main()
+	} else { // in sprite.Clone
+		outPtr.Main()
 	}
 	return dest
 }
@@ -251,7 +251,7 @@ func Gopt_Sprite_Clone__1(sprite Spriter, data interface{}) {
 	}
 	in := reflect.ValueOf(sprite).Elem()
 	v := reflect.New(in.Type())
-	out, outPtr := v.Elem(), v.Interface()
+	out, outPtr := v.Elem(), v.Interface().(Spriter)
 	dest := cloneSprite(out, outPtr, in, nil)
 	src.g.addClonedShape(src, dest)
 	if dest.hasOnCloned {

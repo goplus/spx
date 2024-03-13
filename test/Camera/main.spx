@@ -8,5 +8,3 @@ var (
 func OnLoaded() {
 	println "onLoad"
 }
-
-run "res", {Title: "Camera (by Go+)", Width: 640, Height: 480}
