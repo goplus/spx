@@ -114,6 +114,10 @@ type Gamer interface {
 	initGame(sprites []Spriter) *Game
 }
 
+func (p *Game) IsRunned() bool {
+	return p.isRunned
+}
+
 func (p *Game) getSharedImgs() *sharedImages {
 	if p.shared == nil {
 		p.shared = &sharedImages{imgs: make(map[string]gdi.Image)}
