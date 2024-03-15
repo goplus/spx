@@ -24,7 +24,7 @@ import (
 	"strings"
 )
 
-type Pos int
+type Pos = int
 
 const (
 	Invalid Pos = -1
