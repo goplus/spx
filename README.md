@@ -1,4 +1,4 @@
-spx - A Scratch Compatible Game Engine for STEM education
+spx - A Scratch Compatible Game Engine for Education
 ========
 
 [![Build Status](https://github.com/goplus/spx/actions/workflows/go.yml/badge.svg)](https://github.com/goplus/spx/actions/workflows/go.yml)
