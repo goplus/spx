@@ -301,6 +301,17 @@ func addCostumeWith(p *baseObj, name string, img *costumeSetImage, faceRight flo
 	p.costumes = append(p.costumes, c)
 }
 
+func (p *baseObj) initBackdrops(base string, costumes []*backdropConfig, costumeIndex int) {
+	p.costumes = make([]*costume, len(costumes))
+	for i, c := range costumes {
+		p.costumes[i] = newCostume(base, &c.costumeConfig) // has error how to fixed it
+	}
+	if costumeIndex >= len(costumes) || costumeIndex < 0 {
+		costumeIndex = 0
+	}
+	p.costumeIndex_ = costumeIndex
+}
+
 func (p *baseObj) init(base string, costumes []*costumeConfig, costumeIndex int) {
 	p.costumes = make([]*costume, len(costumes))
 	for i, c := range costumes {
