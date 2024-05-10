@@ -204,10 +204,6 @@ func applySpriteProps(dest *Sprite, v specsp) {
 	if style, ok := v["rotationStyle"]; ok {
 		dest.rotationStyle = toRotationStyle(style.(string))
 	}
-	if _, ok := v["currentCostumeIndex"]; ok {
-		// TODO(xsw): to be removed
-		panic("please change `currentCostumeIndex` => `costumeIndex` in index.json")
-	}
 	if idx, ok := v["costumeIndex"]; ok {
 		dest.costumeIndex_ = int(idx.(float64))
 	}
@@ -526,11 +522,7 @@ func (p *Sprite) goAnimate(name string, ani *aniConfig) {
 
 	if ani.OnStart != nil {
 		if ani.OnStart.Play != "" {
-			media, playSound := lookupSound(p.gamer, ani.OnStart.Play)
-			if !playSound {
-				panic("lookupSound: media not found")
-			}
-			p.g.Play__0(media)
+			p.g.Play__3(ani.OnStart.Play)
 		}
 	}
 
@@ -1367,3 +1359,7 @@ func (p *Sprite) fixWorldRange(x, y float64) (float64, float64) {
 }
 
 // -----------------------------------------------------------------------------
+
+func (p *Sprite) Get(name string) *Sprite {
+	return p.g.Get(name)
+}

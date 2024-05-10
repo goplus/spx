@@ -15,7 +15,7 @@
       "y": 154
     }
   ],
-  "currentCostumeIndex": 1,
+  "costumeIndex": 1,
   "heading": 90,
   "isDraggable": false,
   "rotationStyle": "normal",

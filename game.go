@@ -22,6 +22,7 @@ import (
 	"image"
 	"image/color"
 	"log"
+	"math"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -293,15 +294,6 @@ func instance(gamer reflect.Value) *Game {
 	return fld.Addr().Interface().(*Game)
 }
 
-func lookupSound(gamer reflect.Value, name string) (Sound, bool) {
-	if val := findFieldPtr(gamer, name, 0); val != nil {
-		if m, ok := val.(*Sound); ok {
-			return *m, true
-		}
-	}
-	return nil, false
-}
-
 func getFieldPtrOrAlloc(v reflect.Value, i int) (name string, val interface{}) {
 	tFld := v.Type().Field(i)
 	vFld := v.Field(i)
@@ -388,8 +380,8 @@ func spriteOf(sprite Spriter) *Sprite {
 }
 
 func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
-	if scenes := proj.getScenes(); len(scenes) > 0 {
-		p.baseObj.init("", scenes, proj.getSceneIndex())
+	if backdrops := proj.getBackdrops(); len(backdrops) > 0 {
+		p.baseObj.initBackdrops("", backdrops, proj.getBackdropIndex())
 		p.worldWidth_ = proj.Map.Width
 		p.worldHeight_ = proj.Map.Height
 		p.doWorldSize() // set world size
@@ -970,62 +962,68 @@ func (p *Game) drawBackground(dc drawContext) {
 	options := new(ebiten.DrawTrianglesOptions)
 	options.Filter = ebiten.FilterLinear
 
-	var srcWidth, srcHeight, dstWidth, dstHeight float32
 	if p.mapMode == mapModeRepeat {
-		srcWidth = float32(p.worldWidth_)
-		srcHeight = float32(p.worldHeight_)
-		dstWidth = float32(p.worldWidth_)
-		dstHeight = float32(p.worldHeight_)
-		options.Address = ebiten.AddressRepeat
-	} else {
-		srcWidth = float32(img.Bounds().Dx())
-		srcHeight = float32(img.Bounds().Dy())
-		options.Address = ebiten.AddressClampToZero
-		switch p.mapMode {
-		default:
-			dstWidth = float32(p.worldWidth_)
-			dstHeight = float32(p.worldHeight_)
-		case mapModeFillCut:
-			if srcWidth > srcHeight {
-				dstHeight = float32(p.worldHeight_)
-				dstWidth = float32(p.worldWidth_) * srcWidth / srcHeight
-			} else {
-				dstWidth = float32(p.worldWidth_)
-				dstHeight = float32(p.worldHeight_) * srcWidth / srcHeight
-			}
-		case mapModeFillRatio:
-			if srcWidth > srcHeight {
-				dstHeight = float32(p.worldHeight_)
-				dstWidth = float32(p.worldWidth_) * srcHeight / srcWidth
-			} else {
-				dstWidth = float32(p.worldWidth_)
-				dstHeight = float32(p.worldHeight_) * srcHeight / srcWidth
+		bgImage := img.Ebiten()
+		imgW := float64(img.Bounds().Dx())
+		imgH := float64(img.Bounds().Dy())
+		winW := float64(p.windowWidth_)
+		winH := float64(p.windowHeight_)
+		numW := int(math.Ceil(winW/imgW/2 - 0.5))
+		numH := int(math.Ceil(winH/imgH/2 - 0.5))
+		rawOffsetW := float64(p.worldWidth_-p.windowWidth_) / 2.0
+		rawOffsetH := float64(p.worldHeight_-p.windowHeight_) / 2.0
+		offsetW := rawOffsetW + winW*0.5 - imgW*0.5 // draw from center
+		offsetH := rawOffsetH + winH*0.5 - imgH*0.5
+		for w := -numW; w <= numW; w++ {
+			for h := -numH; h <= numH; h++ {
+				op := &ebiten.DrawImageOptions{}
+				op.GeoM.Translate(imgW*float64(w)+offsetW, imgH*float64(h)+offsetH)
+				dc.DrawImage(bgImage, op)
 			}
 		}
-	}
 
-	var cx, cy float32
-	cx = (float32(p.worldWidth_) - dstWidth) / 2.0
-	cy = (float32(p.worldHeight_) - dstHeight) / 2.0
-	vs := []ebiten.Vertex{
-		{
-			DstX: cx, DstY: cy, SrcX: 0, SrcY: 0,
-			ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1,
-		},
-		{
-			DstX: dstWidth + cx, DstY: cy, SrcX: srcWidth, SrcY: 0,
-			ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1,
-		},
-		{
-			DstX: cx, DstY: dstHeight + cy, SrcX: 0, SrcY: srcHeight,
-			ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1,
-		},
-		{
-			DstX: dstWidth + cx, DstY: dstHeight + cy, SrcX: srcWidth, SrcY: srcHeight,
-			ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1,
-		},
+	} else if p.mapMode == mapModeFillRatio {
+		var imgW, imgH, dstW, dstH float32
+		imgW = float32(img.Bounds().Dx())
+		imgH = float32(img.Bounds().Dy())
+		worldW := float32(p.worldWidth_)
+		worldH := float32(p.worldHeight_)
+
+		options.Address = ebiten.AddressClampToZero
+		imgRadio := (imgW / imgH)
+		winRadio := (worldW / worldH)
+		// scale image's height to fit window's height
+		isScaleHeight := imgRadio > winRadio
+		if isScaleHeight {
+			dstH = worldH
+			dstW = dstH * imgRadio
+		} else {
+			dstW = worldW
+			dstH = dstW / imgRadio
+		}
+		var cx, cy float32
+		cx = (worldW - dstW) / 2.0
+		cy = (worldH - dstH) / 2.0
+		vs := []ebiten.Vertex{
+			{
+				DstX: cx, DstY: cy, SrcX: 0, SrcY: 0,
+				ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1,
+			},
+			{
+				DstX: dstW + cx, DstY: cy, SrcX: imgW, SrcY: 0,
+				ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1,
+			},
+			{
+				DstX: cx, DstY: dstH + cy, SrcX: 0, SrcY: imgH,
+				ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1,
+			},
+			{
+				DstX: dstW + cx, DstY: dstH + cy, SrcX: imgW, SrcY: imgH,
+				ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1,
+			},
+		}
+		dc.DrawTriangles(vs, []uint16{0, 1, 2, 1, 2, 3}, img.Ebiten(), options)
 	}
-	dc.DrawTriangles(vs, []uint16{0, 1, 2, 1, 2, 3}, img.Ebiten(), options)
 }
 
 func (p *Game) onDraw(dc drawContext) {
@@ -1179,6 +1177,10 @@ func (p *Game) ClearSoundEffects() {
 type Sound *soundConfig
 
 func (p *Game) loadSound(name string) (media Sound, err error) {
+	if media, ok := p.sounds.audios[name]; ok {
+		return media, nil
+	}
+
 	if debugLoad {
 		log.Println("==> LoadSound", name)
 	}
@@ -1188,6 +1190,7 @@ func (p *Game) loadSound(name string) (media Sound, err error) {
 		return
 	}
 	media.Path = prefix + "/" + media.Path
+	p.sounds.audios[name] = media
 	return
 }
 
@@ -1197,6 +1200,9 @@ func (p *Game) loadSound(name string) (media Sound, err error) {
 //	Play(video) -- maybe
 //	Play(media, wait) -- sync
 //	Play(media, opts)
+//	Play(mediaName)
+//	Play(mediaName, wait) -- sync
+//	Play(mediaName, opts)
 func (p *Game) Play__0(media Sound) {
 	p.Play__2(media, &PlayOptions{})
 }
@@ -1214,6 +1220,22 @@ func (p *Game) Play__2(media Sound, action *PlayOptions) {
 	if err != nil {
 		panic(err)
 	}
+}
+func (p *Game) Play__3(mediaName string) {
+	p.Play__5(mediaName, &PlayOptions{})
+}
+
+func (p *Game) Play__4(mediaName string, wait bool) {
+	p.Play__5(mediaName, &PlayOptions{Wait: wait})
+}
+
+func (p *Game) Play__5(mediaName string, action *PlayOptions) {
+	media, err := p.loadSound(mediaName)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	p.Play__2(media, action)
 }
 
 func (p *Game) StopAllSounds() {
@@ -1280,3 +1302,14 @@ func (p *Game) ShowVar(name string) {
 }
 
 // -----------------------------------------------------------------------------
+
+func (p *Game) Get(name string) *Sprite {
+	for _, item := range p.items {
+		if sp, ok := item.(*Sprite); ok {
+			if sp.name == name && (sp.isVisible && !sp.isDying) {
+				return sp
+			}
+		}
+	}
+	return nil
+}

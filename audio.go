@@ -90,6 +90,7 @@ type soundMgr struct {
 	audioContext *audio.Context
 	players      map[*soundPlayer]chan bool
 	playersM     sync.Mutex
+	audios       map[string]Sound
 }
 
 const (
@@ -109,6 +110,7 @@ func (p *soundMgr) init(g *Game) {
 	p.audioContext = audioContext
 	p.players = make(map[*soundPlayer]chan bool)
 	p.g = g
+	p.audios = make(map[string]Sound)
 }
 
 func (p *soundMgr) update() {
