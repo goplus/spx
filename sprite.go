@@ -204,10 +204,6 @@ func applySpriteProps(dest *Sprite, v specsp) {
 	if style, ok := v["rotationStyle"]; ok {
 		dest.rotationStyle = toRotationStyle(style.(string))
 	}
-	if _, ok := v["currentCostumeIndex"]; ok {
-		// TODO(xsw): to be removed
-		panic("please change `currentCostumeIndex` => `costumeIndex` in index.json")
-	}
 	if idx, ok := v["costumeIndex"]; ok {
 		dest.costumeIndex_ = int(idx.(float64))
 	}
