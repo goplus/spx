@@ -80,22 +80,18 @@ type mapConfig struct {
 }
 
 const (
-	mapModeFill = iota
+	mapModeFillRatio = iota
 	mapModeRepeat
-	mapModeFillRatio
-	mapModeFillCut
 )
 
 func toMapMode(mode string) int {
 	switch mode {
 	case "repeat":
 		return mapModeRepeat
-	case "fillCut":
-		return mapModeFillCut
 	case "fillRatio":
 		return mapModeFillRatio
 	}
-	return mapModeFill
+	return mapModeFillRatio
 }
 
 type projConfig struct {
