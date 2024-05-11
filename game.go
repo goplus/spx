@@ -293,15 +293,6 @@ func instance(gamer reflect.Value) *Game {
 	return fld.Addr().Interface().(*Game)
 }
 
-func lookupSound(gamer reflect.Value, name string) (Sound, bool) {
-	if val := findFieldPtr(gamer, name, 0); val != nil {
-		if m, ok := val.(*Sound); ok {
-			return *m, true
-		}
-	}
-	return nil, false
-}
-
 func getFieldPtrOrAlloc(v reflect.Value, i int) (name string, val interface{}) {
 	tFld := v.Type().Field(i)
 	vFld := v.Field(i)
@@ -1179,6 +1170,10 @@ func (p *Game) ClearSoundEffects() {
 type Sound *soundConfig
 
 func (p *Game) loadSound(name string) (media Sound, err error) {
+	if media, ok := p.sounds.audios[name]; ok {
+		return media, nil
+	}
+
 	if debugLoad {
 		log.Println("==> LoadSound", name)
 	}
@@ -1188,6 +1183,7 @@ func (p *Game) loadSound(name string) (media Sound, err error) {
 		return
 	}
 	media.Path = prefix + "/" + media.Path
+	p.sounds.audios[name] = media
 	return
 }
 
@@ -1197,6 +1193,9 @@ func (p *Game) loadSound(name string) (media Sound, err error) {
 //	Play(video) -- maybe
 //	Play(media, wait) -- sync
 //	Play(media, opts)
+//	Play(mediaName)
+//	Play(mediaName, wait) -- sync
+//	Play(mediaName, opts)
 func (p *Game) Play__0(media Sound) {
 	p.Play__2(media, &PlayOptions{})
 }
@@ -1214,6 +1213,22 @@ func (p *Game) Play__2(media Sound, action *PlayOptions) {
 	if err != nil {
 		panic(err)
 	}
+}
+func (p *Game) Play__3(mediaName string) {
+	p.Play__5(mediaName, &PlayOptions{})
+}
+
+func (p *Game) Play__4(mediaName string, wait bool) {
+	p.Play__5(mediaName, &PlayOptions{Wait: wait})
+}
+
+func (p *Game) Play__5(mediaName string, action *PlayOptions) {
+	media, err := p.loadSound(mediaName)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	p.Play__2(media, action)
 }
 
 func (p *Game) StopAllSounds() {
