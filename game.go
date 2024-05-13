@@ -991,7 +991,7 @@ func (p *Game) drawBackground(dc drawContext) {
 			}
 		}
 
-	} else if p.mapMode == mapModeFillRatio {
+	} else {
 		var imgW, imgH, dstW, dstH float32
 		imgW = float32(img.Bounds().Dx())
 		imgH = float32(img.Bounds().Dy())
@@ -1000,16 +1000,31 @@ func (p *Game) drawBackground(dc drawContext) {
 
 		options.Address = ebiten.AddressClampToZero
 		imgRadio := (imgW / imgH)
-		winRadio := (worldW / worldH)
-		// scale image's height to fit window's height
-		isScaleHeight := imgRadio > winRadio
-		if isScaleHeight {
-			dstH = worldH
-			dstW = dstH * imgRadio
-		} else {
+		worldRadio := (worldW / worldH)
+		// scale image's height to fit world's height
+		isScaleHeight := imgRadio > worldRadio
+		switch p.mapMode {
+		default:
 			dstW = worldW
-			dstH = dstW / imgRadio
+			dstH = worldH
+		case mapModeFillCut:
+			if isScaleHeight {
+				dstW = worldW
+				dstH = dstW / imgRadio
+			} else {
+				dstH = worldH
+				dstW = dstH * imgRadio
+			}
+		case mapModeFillRatio:
+			if isScaleHeight {
+				dstH = worldH
+				dstW = dstH * imgRadio
+			} else {
+				dstW = worldW
+				dstH = dstW / imgRadio
+			}
 		}
+
 		var cx, cy float32
 		cx = (worldW - dstW) / 2.0
 		cy = (worldH - dstH) / 2.0
