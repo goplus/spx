@@ -105,14 +105,32 @@ type projConfig struct {
 	Map           mapConfig         `json:"map"`
 	Camera        *cameraConfig     `json:"camera"`
 	Run           *Config           `json:"run"`
+
+	// deprecated properties
+	Scenes              []*backdropConfig `json:"scenes"`              //this property is deprecated, use Backdrops instead
+	Costumes            []*backdropConfig `json:"costumes"`            //this property is deprecated, use Backdrops instead
+	CurrentCostumeIndex *int              `json:"currentCostumeIndex"` //this property is deprecated, use BackdropIndex instead
+	SceneIndex          int               `json:"sceneIndex"`          //this property is deprecated, use BackdropIndex instead
 }
 
 func (p *projConfig) getBackdrops() []*backdropConfig {
+	if p.Scenes != nil {
+		return p.Scenes
+	}
+	if p.Costumes != nil {
+		return p.Costumes
+	}
 	return p.Backdrops
 }
 
 func (p *projConfig) getBackdropIndex() int {
-	return p.BackdropIndex
+	if p.BackdropIndex != 0 {
+		return p.BackdropIndex
+	}
+	if p.CurrentCostumeIndex != nil {
+		return *p.CurrentCostumeIndex
+	}
+	return p.SceneIndex
 }
 
 // -------------------------------------------------------------------------------------
@@ -199,26 +217,26 @@ type aniConfig struct {
 // -------------------------------------------------------------------------------------
 
 type spriteConfig struct {
-	Heading       float64               `json:"heading"`
-	X             float64               `json:"x"`
-	Y             float64               `json:"y"`
-	Size          float64               `json:"size"`
-	RotationStyle string                `json:"rotationStyle"`
-	Costumes      []*costumeConfig      `json:"costumes"`
-	CostumeSet    *costumeSet           `json:"costumeSet"`
-	CostumeMPSet  *costumeMPSet         `json:"costumeMPSet"`
-	BackdropIndex *int                  `json:"backdropIndex"`
-	CostumeIndex  int                   `json:"costumeIndex"`
-	FAnimations   map[string]*aniConfig `json:"fAnimations"`
-	MAnimations   map[string]*aniConfig `json:"mAnimations"`
-	TAnimations   map[string]*aniConfig `json:"tAnimations"`
-	Visible       bool                  `json:"visible"`
-	IsDraggable   bool                  `json:"isDraggable"`
+	Heading             float64               `json:"heading"`
+	X                   float64               `json:"x"`
+	Y                   float64               `json:"y"`
+	Size                float64               `json:"size"`
+	RotationStyle       string                `json:"rotationStyle"`
+	Costumes            []*costumeConfig      `json:"costumes"`
+	CostumeSet          *costumeSet           `json:"costumeSet"`
+	CostumeMPSet        *costumeMPSet         `json:"costumeMPSet"`
+	CurrentCostumeIndex *int                  `json:"currentCostumeIndex"`
+	CostumeIndex        int                   `json:"costumeIndex"`
+	FAnimations         map[string]*aniConfig `json:"fAnimations"`
+	MAnimations         map[string]*aniConfig `json:"mAnimations"`
+	TAnimations         map[string]*aniConfig `json:"tAnimations"`
+	Visible             bool                  `json:"visible"`
+	IsDraggable         bool                  `json:"isDraggable"`
 }
 
 func (p *spriteConfig) getCostumeIndex() int {
-	if p.BackdropIndex != nil { // for backward compatibility
-		return *p.BackdropIndex
+	if p.CurrentCostumeIndex != nil { // for backward compatibility
+		return *p.CurrentCostumeIndex
 	}
 	return p.CostumeIndex
 }
