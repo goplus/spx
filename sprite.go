@@ -526,11 +526,7 @@ func (p *Sprite) goAnimate(name string, ani *aniConfig) {
 
 	if ani.OnStart != nil {
 		if ani.OnStart.Play != "" {
-			media, playSound := lookupSound(p.gamer, ani.OnStart.Play)
-			if !playSound {
-				panic("lookupSound: media not found")
-			}
-			p.g.Play__0(media)
+			p.g.Play__3(ani.OnStart.Play)
 		}
 	}
 
