@@ -22,6 +22,7 @@ import (
 	"image"
 	"image/color"
 	"log"
+	"math"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -970,62 +971,83 @@ func (p *Game) drawBackground(dc drawContext) {
 	options := new(ebiten.DrawTrianglesOptions)
 	options.Filter = ebiten.FilterLinear
 
-	var srcWidth, srcHeight, dstWidth, dstHeight float32
 	if p.mapMode == mapModeRepeat {
-		srcWidth = float32(p.worldWidth_)
-		srcHeight = float32(p.worldHeight_)
-		dstWidth = float32(p.worldWidth_)
-		dstHeight = float32(p.worldHeight_)
-		options.Address = ebiten.AddressRepeat
-	} else {
-		srcWidth = float32(img.Bounds().Dx())
-		srcHeight = float32(img.Bounds().Dy())
-		options.Address = ebiten.AddressClampToZero
-		switch p.mapMode {
-		default:
-			dstWidth = float32(p.worldWidth_)
-			dstHeight = float32(p.worldHeight_)
-		case mapModeFillCut:
-			if srcWidth > srcHeight {
-				dstHeight = float32(p.worldHeight_)
-				dstWidth = float32(p.worldWidth_) * srcWidth / srcHeight
-			} else {
-				dstWidth = float32(p.worldWidth_)
-				dstHeight = float32(p.worldHeight_) * srcWidth / srcHeight
-			}
-		case mapModeFillRatio:
-			if srcWidth > srcHeight {
-				dstHeight = float32(p.worldHeight_)
-				dstWidth = float32(p.worldWidth_) * srcHeight / srcWidth
-			} else {
-				dstWidth = float32(p.worldWidth_)
-				dstHeight = float32(p.worldHeight_) * srcHeight / srcWidth
+		bgImage := img.Ebiten()
+		imgW := float64(img.Bounds().Dx())
+		imgH := float64(img.Bounds().Dy())
+		winW := float64(p.windowWidth_)
+		winH := float64(p.windowHeight_)
+		numW := int(math.Ceil(winW/imgW/2 - 0.5))
+		numH := int(math.Ceil(winH/imgH/2 - 0.5))
+		rawOffsetW := float64(p.worldWidth_-p.windowWidth_) / 2.0
+		rawOffsetH := float64(p.worldHeight_-p.windowHeight_) / 2.0
+		offsetW := rawOffsetW + winW*0.5 - imgW*0.5 // draw from center
+		offsetH := rawOffsetH + winH*0.5 - imgH*0.5
+		for w := -numW; w <= numW; w++ {
+			for h := -numH; h <= numH; h++ {
+				op := &ebiten.DrawImageOptions{}
+				op.GeoM.Translate(imgW*float64(w)+offsetW, imgH*float64(h)+offsetH)
+				dc.DrawImage(bgImage, op)
 			}
 		}
-	}
 
-	var cx, cy float32
-	cx = (float32(p.worldWidth_) - dstWidth) / 2.0
-	cy = (float32(p.worldHeight_) - dstHeight) / 2.0
-	vs := []ebiten.Vertex{
-		{
-			DstX: cx, DstY: cy, SrcX: 0, SrcY: 0,
-			ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1,
-		},
-		{
-			DstX: dstWidth + cx, DstY: cy, SrcX: srcWidth, SrcY: 0,
-			ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1,
-		},
-		{
-			DstX: cx, DstY: dstHeight + cy, SrcX: 0, SrcY: srcHeight,
-			ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1,
-		},
-		{
-			DstX: dstWidth + cx, DstY: dstHeight + cy, SrcX: srcWidth, SrcY: srcHeight,
-			ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1,
-		},
+	} else {
+		var imgW, imgH, dstW, dstH float32
+		imgW = float32(img.Bounds().Dx())
+		imgH = float32(img.Bounds().Dy())
+		worldW := float32(p.worldWidth_)
+		worldH := float32(p.worldHeight_)
+
+		options.Address = ebiten.AddressClampToZero
+		imgRadio := (imgW / imgH)
+		worldRadio := (worldW / worldH)
+		// scale image's height to fit world's height
+		isScaleHeight := imgRadio > worldRadio
+		switch p.mapMode {
+		default:
+			dstW = worldW
+			dstH = worldH
+		case mapModeFillCut:
+			if isScaleHeight {
+				dstW = worldW
+				dstH = dstW / imgRadio
+			} else {
+				dstH = worldH
+				dstW = dstH * imgRadio
+			}
+		case mapModeFillRatio:
+			if isScaleHeight {
+				dstH = worldH
+				dstW = dstH * imgRadio
+			} else {
+				dstW = worldW
+				dstH = dstW / imgRadio
+			}
+		}
+
+		var cx, cy float32
+		cx = (worldW - dstW) / 2.0
+		cy = (worldH - dstH) / 2.0
+		vs := []ebiten.Vertex{
+			{
+				DstX: cx, DstY: cy, SrcX: 0, SrcY: 0,
+				ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1,
+			},
+			{
+				DstX: dstW + cx, DstY: cy, SrcX: imgW, SrcY: 0,
+				ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1,
+			},
+			{
+				DstX: cx, DstY: dstH + cy, SrcX: 0, SrcY: imgH,
+				ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1,
+			},
+			{
+				DstX: dstW + cx, DstY: dstH + cy, SrcX: imgW, SrcY: imgH,
+				ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1,
+			},
+		}
+		dc.DrawTriangles(vs, []uint16{0, 1, 2, 1, 2, 3}, img.Ebiten(), options)
 	}
-	dc.DrawTriangles(vs, []uint16{0, 1, 2, 1, 2, 3}, img.Ebiten(), options)
 }
 
 func (p *Game) onDraw(dc drawContext) {
