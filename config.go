@@ -101,7 +101,7 @@ func toMapMode(mode string) int {
 type projConfig struct {
 	Zorder        []interface{}     `json:"zorder"`
 	Backdrops     []*backdropConfig `json:"backdrops"`
-	BackdropIndex int               `json:"backdropIndex"`
+	BackdropIndex *int              `json:"backdropIndex"`
 	Map           mapConfig         `json:"map"`
 	Camera        *cameraConfig     `json:"camera"`
 	Run           *Config           `json:"run"`
@@ -114,18 +114,18 @@ type projConfig struct {
 }
 
 func (p *projConfig) getBackdrops() []*backdropConfig {
+	if p.Backdrops != nil {
+		return p.Backdrops
+	}
 	if p.Scenes != nil {
 		return p.Scenes
 	}
-	if p.Costumes != nil {
-		return p.Costumes
-	}
-	return p.Backdrops
+	return p.Costumes
 }
 
 func (p *projConfig) getBackdropIndex() int {
-	if p.BackdropIndex != 0 {
-		return p.BackdropIndex
+	if p.BackdropIndex != nil {
+		return *p.BackdropIndex
 	}
 	if p.CurrentCostumeIndex != nil {
 		return *p.CurrentCostumeIndex
