@@ -99,26 +99,34 @@ func toMapMode(mode string) int {
 }
 
 type projConfig struct {
-	Zorder              []interface{}    `json:"zorder"`
-	Scenes              []*costumeConfig `json:"scenes"`
-	Costumes            []*costumeConfig `json:"costumes"`
-	CurrentCostumeIndex *int             `json:"currentCostumeIndex"`
-	SceneIndex          int              `json:"sceneIndex"`
+	Zorder        []interface{}     `json:"zorder"`
+	Backdrops     []*backdropConfig `json:"backdrops"`
+	BackdropIndex *int              `json:"backdropIndex"`
+	Map           mapConfig         `json:"map"`
+	Camera        *cameraConfig     `json:"camera"`
+	Run           *Config           `json:"run"`
 
-	Map    mapConfig     `json:"map"`
-	Camera *cameraConfig `json:"camera"`
-
-	Run *Config `json:"run"`
+	// deprecated properties
+	Scenes              []*backdropConfig `json:"scenes"`              //this property is deprecated, use Backdrops instead
+	Costumes            []*backdropConfig `json:"costumes"`            //this property is deprecated, use Backdrops instead
+	CurrentCostumeIndex *int              `json:"currentCostumeIndex"` //this property is deprecated, use BackdropIndex instead
+	SceneIndex          int               `json:"sceneIndex"`          //this property is deprecated, use BackdropIndex instead
 }
 
-func (p *projConfig) getScenes() []*costumeConfig {
+func (p *projConfig) getBackdrops() []*backdropConfig {
+	if p.Backdrops != nil {
+		return p.Backdrops
+	}
 	if p.Scenes != nil {
 		return p.Scenes
 	}
 	return p.Costumes
 }
 
-func (p *projConfig) getSceneIndex() int {
+func (p *projConfig) getBackdropIndex() int {
+	if p.BackdropIndex != nil {
+		return *p.BackdropIndex
+	}
 	if p.CurrentCostumeIndex != nil {
 		return *p.CurrentCostumeIndex
 	}
@@ -168,6 +176,9 @@ type costumeConfig struct {
 	Y                float64 `json:"y"`
 	FaceRight        float64 `json:"faceRight"` // turn face to right
 	BitmapResolution int     `json:"bitmapResolution"`
+}
+type backdropConfig struct {
+	costumeConfig
 }
 
 // -------------------------------------------------------------------------------------

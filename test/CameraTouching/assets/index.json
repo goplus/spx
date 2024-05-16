@@ -3,7 +3,7 @@
     "width": 640,
     "height": 480
   },
-  "scenes": [
+  "backdrops": [
     {
       "name": "backdrop1",
       "path": "../../res/bg.jpg"

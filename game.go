@@ -380,8 +380,8 @@ func spriteOf(sprite Spriter) *Sprite {
 }
 
 func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
-	if scenes := proj.getScenes(); len(scenes) > 0 {
-		p.baseObj.init("", scenes, proj.getSceneIndex())
+	if backdrops := proj.getBackdrops(); len(backdrops) > 0 {
+		p.baseObj.initBackdrops("", backdrops, proj.getBackdropIndex())
 		p.worldWidth_ = proj.Map.Width
 		p.worldHeight_ = proj.Map.Height
 		p.doWorldSize() // set world size
