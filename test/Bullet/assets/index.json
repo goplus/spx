@@ -6,7 +6,7 @@
       "path": "1.png"
     }
   ],
-  "sceneIndex": 0,
+  "backdropIndex": 0,
   "zorder": [
     "Bullet"
   ]
