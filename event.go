@@ -89,23 +89,23 @@ func (p *eventSink) call(wait bool, data interface{}, doSth func(*eventSink)) {
 // -------------------------------------------------------------------------------------
 
 type eventSinkMgr struct {
-	allWhenStart      *eventSink
-	allWhenKeyPressed *eventSink
-	allWhenIReceive   *eventSink
-	allWhenSceneStart *eventSink
-	allWhenCloned     *eventSink
-	allWhenTouched    *eventSink
-	allWhenClick      *eventSink
-	allWhenMoving     *eventSink
-	allWhenTurning    *eventSink
-	calledStart       bool
+	allWhenStart           *eventSink
+	allWhenKeyPressed      *eventSink
+	allWhenIReceive        *eventSink
+	allWhenBackdropChanged *eventSink
+	allWhenCloned          *eventSink
+	allWhenTouched         *eventSink
+	allWhenClick           *eventSink
+	allWhenMoving          *eventSink
+	allWhenTurning         *eventSink
+	calledStart            bool
 }
 
 func (p *eventSinkMgr) reset() {
 	p.allWhenStart = nil
 	p.allWhenKeyPressed = nil
 	p.allWhenIReceive = nil
-	p.allWhenSceneStart = nil
+	p.allWhenBackdropChanged = nil
 	p.allWhenCloned = nil
 	p.allWhenTouched = nil
 	p.allWhenClick = nil
@@ -118,7 +118,7 @@ func (p *eventSinkMgr) doDeleteClone(this interface{}) {
 	p.allWhenStart = p.allWhenStart.doDeleteClone(this)
 	p.allWhenKeyPressed = p.allWhenKeyPressed.doDeleteClone(this)
 	p.allWhenIReceive = p.allWhenIReceive.doDeleteClone(this)
-	p.allWhenSceneStart = p.allWhenSceneStart.doDeleteClone(this)
+	p.allWhenBackdropChanged = p.allWhenBackdropChanged.doDeleteClone(this)
 	p.allWhenCloned = p.allWhenCloned.doDeleteClone(this)
 	p.allWhenTouched = p.allWhenTouched.doDeleteClone(this)
 	p.allWhenClick = p.allWhenClick.doDeleteClone(this)
@@ -189,8 +189,8 @@ func (p *eventSinkMgr) doWhenIReceive(msg string, data interface{}, wait bool) {
 	})
 }
 
-func (p *eventSinkMgr) doWhenSceneStart(name string, wait bool) {
-	p.allWhenSceneStart.call(wait, name, func(ev *eventSink) {
+func (p *eventSinkMgr) doWhenBackdropChanged(name string, wait bool) {
+	p.allWhenBackdropChanged.call(wait, name, func(ev *eventSink) {
 		ev.sink.(func(string))(name)
 	})
 }
@@ -324,23 +324,23 @@ func (p *eventSinks) OnMsg__1(msg string, onMsg func()) {
 	}
 }
 
-func (p *eventSinks) OnScene__0(onScene func(name string)) {
-	p.allWhenSceneStart = &eventSink{
-		prev:  p.allWhenSceneStart,
+func (p *eventSinks) OnBackdrop__0(onBackdrop func(name string)) {
+	p.allWhenBackdropChanged = &eventSink{
+		prev:  p.allWhenBackdropChanged,
 		pthis: p.pthis,
-		sink:  onScene,
+		sink:  onBackdrop,
 	}
 }
 
-func (p *eventSinks) OnScene__1(name string, onScene func()) {
-	p.allWhenSceneStart = &eventSink{
-		prev:  p.allWhenSceneStart,
+func (p *eventSinks) OnBackdrop__1(name string, onBackdrop func()) {
+	p.allWhenBackdropChanged = &eventSink{
+		prev:  p.allWhenBackdropChanged,
 		pthis: p.pthis,
 		sink: func(name string) {
 			if debugEvent {
-				log.Println("==> onScene", name, nameOf(p.pthis))
+				log.Println("==> onBackdrop", name, nameOf(p.pthis))
 			}
-			onScene()
+			onBackdrop()
 		},
 		cond: func(data interface{}) bool {
 			return data.(string) == name
