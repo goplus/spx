@@ -1066,33 +1066,33 @@ func (p *Game) onHit(hc hitContext) (hr hitResult, ok bool) {
 
 // -----------------------------------------------------------------------------
 
-func (p *Game) SceneName() string {
+func (p *Game) BackdropName() string {
 	return p.getCostumeName()
 }
 
-func (p *Game) SceneIndex() int {
+func (p *Game) BackdropIndex() int {
 	return p.getCostumeIndex()
 }
 
-// StartScene func:
+// StartBackdrop func:
 //
-//	StartScene(sceneName) or
-//	StartScene(sceneIndex) or
-//	StartScene(spx.Next)
-//	StartScene(spx.Prev)
-func (p *Game) StartScene(scene interface{}, wait ...bool) {
-	if p.goSetCostume(scene) {
+//	StartBackdrop(backdropName) or
+//	StartBackdrop(backdropIndex) or
+//	StartBackdrop(spx.Next)
+//	StartBackdrop(spx.Prev)
+func (p *Game) StartBackdrop(backdrop interface{}, wait ...bool) {
+	if p.goSetCostume(backdrop) {
 		p.windowWidth_ = 0 // TODO: need review
-		p.doWhenSceneStart(p.getCostumeName(), wait != nil && wait[0])
+		p.doWhenBackdropChanged(p.getCostumeName(), wait != nil && wait[0])
 	}
 }
 
-func (p *Game) NextScene(wait ...bool) {
-	p.StartScene(Next, wait...)
+func (p *Game) NextBackdrop(wait ...bool) {
+	p.StartBackdrop(Next, wait...)
 }
 
-func (p *Game) PrevScene(wait ...bool) {
-	p.StartScene(Prev, wait...)
+func (p *Game) PrevBackdrop(wait ...bool) {
+	p.StartBackdrop(Prev, wait...)
 }
 
 // -----------------------------------------------------------------------------
