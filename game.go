@@ -1082,7 +1082,8 @@ func (p *Game) BackdropIndex() int {
 //	StartBackdrop(spx.Prev)
 func (p *Game) StartBackdrop(backdrop interface{}, wait ...bool) {
 	if p.goSetCostume(backdrop) {
-		p.windowWidth_ = 0 // TODO: need review
+		p.windowWidth_ = 0
+		p.doWindowSize()
 		p.doWhenBackdropChanged(p.getCostumeName(), wait != nil && wait[0])
 	}
 }
