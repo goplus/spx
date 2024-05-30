@@ -7,9 +7,10 @@ import (
 )
 
 type SpritePrefabData struct {
-	Name      string           `json:"Name"`
-	Hierarchy []HierarchyData  `json:"Hierarchy"`
-	SkinMesh  []SpriteSkinData `json:"SkinMesh"`
+	Name        string           `json:"Name"`
+	Hierarchy   []HierarchyData  `json:"Hierarchy"`
+	SkinMesh    []SpriteSkinData `json:"SkinMesh"`
+	RenderOrder []int            `json:"RenderOrder"`
 }
 
 type HierarchyData struct {
@@ -30,6 +31,7 @@ type SpriteSkinData struct {
 	BoneWeights    []BoneWeight     `json:"BoneWeights"`
 	BindPoses      []math32.Matrix4 `json:"BindPoses"`
 	BoneTransforms []string         `json:"BoneTransforms"`
+	Uvs            []math32.Vector2 `json:"Uvs"`
 }
 
 type BoneWeight struct {

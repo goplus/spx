@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	_ "image/png"
 	"io/ioutil"
 	"log"
 	"math/rand"
+	"os"
 	"time"
 
 	"github.com/goplus/spx/internal/math32"
@@ -23,14 +25,6 @@ const (
 	starsCount   = 1024
 	vectexScale  = 30.0
 )
-
-var (
-	whiteImage = ebiten.NewImage(3, 3)
-)
-
-func init() {
-	whiteImage.Fill(color.White)
-}
 
 type Vertex struct {
 	X, Y float32
@@ -51,6 +45,7 @@ type Game struct {
 	animator   *skeleton.SpriteAnimator
 	verteies   [starsCount]Vertex
 	bones      [starsCount]Vertex
+	actorImg   *ebiten.Image
 }
 
 func NewGame() *Game {
@@ -74,18 +69,24 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 	meshes := g.animator.Vertices
 	skinMeshes := g.animator.PrefabData.SkinMesh
+	renderOrder := g.animator.PrefabData.RenderOrder
 	op := &ebiten.DrawTrianglesOptions{}
 	op.Address = ebiten.AddressUnsafe
-	for i := 0; i < len(meshes); i++ {
+	size := g.actorImg.Bounds().Size()
+
+	for k := 0; k < len(skinMeshes); k++ {
+		i := renderOrder[k]
 		vs := []ebiten.Vertex{}
 		vertices := meshes[i]
+		uvs := skinMeshes[i].Uvs
 		for j := 0; j < len(vertices); j++ {
 			pos := toVector3(vertices[j])
+			uv := toUV2(uvs[j], size)
 			vs = append(vs, ebiten.Vertex{
 				DstX:   pos.X,
 				DstY:   pos.Y,
-				SrcX:   0,
-				SrcY:   0,
+				SrcX:   uv.X,
+				SrcY:   uv.Y,
 				ColorR: 1,
 				ColorG: 1,
 				ColorB: 1,
@@ -93,7 +94,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			})
 		}
 		indices := skinMeshes[i].Indices
-		screen.DrawTriangles(vs, indices, whiteImage.SubImage(image.Rect(1, 1, 2, 2)).(*ebiten.Image), op)
+		screen.DrawTriangles(vs, indices, g.actorImg, op)
 	}
 }
 
@@ -128,6 +129,24 @@ func (g *Game) CreateCharacter() {
 			return
 		}
 	}
+
+	// Open the image
+	{
+		path := "assets/sprites/Tom/10.png"
+		file, err := os.Open(path)
+		if err != nil {
+			fmt.Println("Error: File could not be opened ", path)
+			os.Exit(1)
+		}
+		defer file.Close()
+		img, _, err := image.Decode(file)
+		if err != nil {
+			fmt.Println("Error: Image could not be decoded ", path)
+			os.Exit(1)
+		}
+		g.actorImg = ebiten.NewImageFromImage(img)
+	}
+
 	g.animator = skeleton.NewSpriteAnimator(&g.prefabData, &g.animData)
 	g.updateAnimation()
 
@@ -136,8 +155,13 @@ func toVector3(v math32.Vector3) Vertex {
 	x := float32(v.X*vectexScale) + screenWidth*0.5
 	y := screenHeight - (float32(v.Y*vectexScale) + screenHeight*0.5)
 	return Vertex{x, y}
-
 }
+func toUV2(v math32.Vector2, size image.Point) Vertex {
+	x := float32(v.X) * float32(size.X)
+	y := float32(size.Y) - float32(v.Y)*float32(size.Y) // flip y
+	return Vertex{x, y}
+}
+
 func toVector2(v math32.Vector2) Vertex {
 	x := float32(v.X*vectexScale) + screenWidth*0.5
 	y := screenHeight - (float32(v.Y*vectexScale) + screenHeight*0.5)
@@ -162,6 +186,7 @@ func (g *Game) updateAnimation() {
 }
 
 func main() {
+
 	game := NewGame()
 	game.CreateCharacter()
 
