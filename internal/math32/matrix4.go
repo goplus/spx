@@ -19,15 +19,15 @@ type Matrix4 struct {
 	M33 float64 `json:"e33"`
 }
 
-func (pself *Matrix4) Mul__0(value Vector3) Vector3 {
-	return Vector3{
+func (pself *Matrix4) Mul__0(value Vector3) *Vector3 {
+	return &Vector3{
 		X: pself.M00*value.X + pself.M01*value.Y + pself.M02*value.Z + pself.M03,
 		Y: pself.M10*value.X + pself.M11*value.Y + pself.M12*value.Z + pself.M13,
 		Z: pself.M20*value.X + pself.M21*value.Y + pself.M22*value.Z + pself.M23,
 	}
 }
 
-func (pself *Matrix4) Mul__1(value Matrix4) *Matrix4 {
+func (pself *Matrix4) Mul__1(value *Matrix4) *Matrix4 {
 	tmp := NewMatrix4Zero()
 	tmp.M00 = pself.M00*value.M00 + pself.M01*value.M10 + pself.M02*value.M20 + pself.M03*value.M30
 	tmp.M01 = pself.M00*value.M01 + pself.M01*value.M11 + pself.M02*value.M21 + pself.M03*value.M31

@@ -9,6 +9,7 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/goplus/spx/internal/math32"
 	"github.com/goplus/spx/internal/skeleton"
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/vector"
@@ -19,6 +20,7 @@ const (
 	screenHeight = 480
 	scale        = 64
 	starsCount   = 1024
+	vectexScale  = 30.0
 )
 
 type Vertex struct {
@@ -37,6 +39,7 @@ func (s *Vertex) Draw(screen *ebiten.Image) {
 type Game struct {
 	prefabData skeleton.SpritePrefabData
 	animData   skeleton.SpriteAnimData
+	animator   *skeleton.SpriteAnimator
 	verteies   [starsCount]Vertex
 	bones      [starsCount]Vertex
 }
@@ -47,6 +50,8 @@ func NewGame() *Game {
 }
 
 func (g *Game) Update() error {
+	g.animator.Update()
+	g.updateAnimation()
 	return nil
 }
 
@@ -90,25 +95,37 @@ func (g *Game) CreateCharacter() {
 			return
 		}
 	}
-	scale := 30.0
-	meshes := g.prefabData.SkinMesh
+	g.animator = skeleton.NewSpriteAnimator(&g.prefabData, &g.animData)
+	g.updateAnimation()
+
+}
+func toVector3(v math32.Vector3) Vertex {
+	x := float32(v.X*vectexScale) + screenWidth*0.5
+	y := screenHeight - (float32(v.Y*vectexScale) + screenHeight*0.5)
+	return Vertex{x, y}
+
+}
+func toVector2(v math32.Vector2) Vertex {
+	x := float32(v.X*vectexScale) + screenWidth*0.5
+	y := screenHeight - (float32(v.Y*vectexScale) + screenHeight*0.5)
+	return Vertex{x, y}
+
+}
+func (g *Game) updateAnimation() {
+	bones := g.animator.Bones
+	for i := 0; i < len(bones); i++ {
+		pos := bones[i].Pos
+		g.bones[i] = toVector2(pos)
+	}
+	meshes := g.animator.Vertices
 	idx := 0
 	for i := 0; i < len(meshes); i++ {
-		vertices := meshes[i].Vertices
+		vertices := meshes[i]
 		for j := 0; j < len(vertices); j++ {
-			g.verteies[idx].x = float32(vertices[j].X*scale) + screenWidth*0.5
-			g.verteies[idx].y = float32(vertices[j].Y*scale) + screenHeight*0.5
+			g.verteies[idx] = toVector3(vertices[j])
 			idx++
 		}
 	}
-	skeleton := skeleton.BuildSkeleton(g.prefabData.Hierarchy)
-	bones := skeleton.Bones
-	for i := 0; i < len(bones); i++ {
-		pos := bones[i].Pos
-		g.bones[i].x = float32(pos.X*scale) + screenHeight*0.5
-		g.bones[i].y = float32(pos.Y*scale) + screenHeight*0.5
-	}
-
 }
 
 func main() {
@@ -117,7 +134,7 @@ func main() {
 
 	rand.Seed(time.Now().UnixNano())
 	ebiten.SetWindowSize(screenWidth, screenHeight)
-	ebiten.SetWindowTitle("Stars (Ebitengine Demo)")
+	ebiten.SetWindowTitle("(Spx:06-Skeleton)")
 	if err := ebiten.RunGame(game); err != nil {
 		log.Fatal(err)
 	}
