@@ -2,9 +2,16 @@ package anim
 
 import (
 	"errors"
+	"log"
 	"math"
 
+	spxfs "github.com/goplus/spx/fs"
+	"github.com/goplus/spx/internal/anim/common"
+	"github.com/goplus/spx/internal/anim/skeleton"
+	"github.com/goplus/spx/internal/anim/vertex"
+	"github.com/goplus/spx/internal/math32"
 	"github.com/goplus/spx/internal/tools"
+	"github.com/hajimehoshi/ebiten/v2"
 )
 
 type ANIMSTATUS uint8
@@ -22,6 +29,12 @@ const (
 	ANIMATIONTYPE_VECTOR2 = 2
 )
 
+const (
+	ANIMATOR_TYPE_VERTEX   = "vertex"
+	ANIMATOR_TYPE_SKELETON = "skeleton"
+	ANIMATOR_TYPE_FRAME    = "frame"
+)
+
 type IAnimatable interface {
 	GetTarget() IAnimationTarget
 	Animate() bool
@@ -35,6 +48,24 @@ type IAnimation interface {
 type IAnimationTarget interface {
 	GetAnimations() []IAnimation
 	GetAnimatables() []IAnimatable
+}
+
+type IAnimator interface {
+	SetPosition(pos math32.Vector2)
+	Update()
+	Draw(screen *ebiten.Image)
+	Play(clipName string) *common.AnimClipState
+	GetClipState(clipName string) *common.AnimClipState
+	GetFrameData() common.AnimExportFrame
+	UpdateToFrame(frameIndex int)
+	GetClips() []string
+}
+type AnimatorExportData struct {
+	ClipsNames  []string
+	AvatarImage string
+}
+type AnimationExportData struct {
+	Frames []common.AnimExportFrame
 }
 
 const (
@@ -72,6 +103,41 @@ type Anim struct {
 var globalAnimId int = 1
 
 // loopmodel = -1
+func NewAnimator(fs spxfs.Dir, spriteDir string, animatorPath string, avatarPath string) IAnimator {
+	var config common.AnimatorConfig
+	err := common.LoadJson(&config, fs, spriteDir, animatorPath)
+	if err != nil {
+		log.Panicf("animator config [%s] not exist", animatorPath)
+	}
+
+	var avatarConfig common.AvatarConfig
+	err = common.LoadJson(&avatarConfig, fs, spriteDir, avatarPath)
+	if err != nil {
+		log.Panicf("avatar config [%s] not exist", animatorPath)
+	}
+
+	var animator IAnimator
+	if config.Type == ANIMATOR_TYPE_VERTEX {
+		animator = vertex.NewAnimator(fs, spriteDir, &config, &avatarConfig)
+	} else {
+		animator = skeleton.NewAnimator(fs, spriteDir, &config, &avatarConfig)
+	}
+	return animator
+}
+
+func GetExportData(pself IAnimator, animName string) (*AnimationExportData, error) {
+	data := &AnimationExportData{}
+	if pself.GetClipState(animName) == nil {
+		return data, errors.New("can not find animation clip " + animName)
+	}
+	state := pself.Play(animName)
+	data.Frames = make([]common.AnimExportFrame, state.FrameCount)
+	for i := 0; i < state.FrameCount; i++ {
+		pself.UpdateToFrame(i)
+		data.Frames[i] = pself.GetFrameData()
+	}
+	return data, nil
+}
 
 func NewAnim(name string, fps float64, totalframe int, isLoop bool) *Anim {
 	this := &Anim{}

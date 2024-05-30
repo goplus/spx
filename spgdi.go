@@ -404,7 +404,15 @@ func (p *Sprite) draw(dc drawContext) {
 	if !di.visible {
 		return
 	}
-	di.draw(dc, p)
+	// TODO(tanjp) unified rendering approach for frame sequences and skeletal animations
+	if p.animator != nil {
+		worldW, wolrdH := p.g.worldSize_()
+		p.animator.SetPosition(*math32.NewVector2(float64(worldW)/2.0+p.x, float64(wolrdH)/2.0-p.y))
+		p.animator.Update()
+		p.animator.Draw(dc.Image)
+	} else {
+		di.draw(dc, p)
+	}
 }
 
 // Hit func.

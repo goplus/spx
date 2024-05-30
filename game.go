@@ -31,8 +31,10 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/goplus/spx/internal/anim"
 	"github.com/goplus/spx/internal/audiorecord"
 	"github.com/goplus/spx/internal/coroutine"
+	"github.com/goplus/spx/internal/engine"
 	"github.com/goplus/spx/internal/gdi"
 	"github.com/goplus/spx/internal/math32"
 	"github.com/hajimehoshi/ebiten/v2"
@@ -394,6 +396,7 @@ func spriteOf(sprite Spriter) *Sprite {
 }
 
 func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
+	engine.Time.OnLevelLoaded()
 	if backdrops := proj.getBackdrops(); len(backdrops) > 0 {
 		p.baseObj.initBackdrops("", backdrops, proj.getBackdropIndex())
 		p.worldWidth_ = proj.Map.Width
@@ -602,6 +605,7 @@ func (p *Game) Update() error {
 	if !p.isLoaded {
 		return nil
 	}
+	engine.Time.Update()
 	p.input.update()
 	p.updateMousePos()
 	p.sounds.update()
@@ -1384,4 +1388,40 @@ func Gopt_Game_Gopx_GetWidget[T any](sg ShapeGetter, name string) *T {
 	} else {
 		panic("GetWidget: type mismatch")
 	}
+}
+
+// -----------------------------------------------------------------------------
+// editor func: export animation data
+func Editor_ParseSpriteAnimator(resource interface{}, sprite string) (*anim.AnimatorExportData, error) {
+	animator, conf, err := editorParseSpriteAnimator(resource, sprite)
+	if err != nil {
+		return nil, err
+	}
+	data := &anim.AnimatorExportData{}
+	data.AvatarImage = conf.Avatar
+	data.ClipsNames = animator.GetClips()
+	return data, err
+}
+
+func Editor_ParseSpriteAnimation(resource interface{}, sprite string, animName string) (*anim.AnimationExportData, error) {
+	animator, _, err := editorParseSpriteAnimator(resource, sprite)
+	if err != nil {
+		return nil, err
+	}
+	return anim.GetExportData(animator, animName)
+}
+
+func editorParseSpriteAnimator(resource interface{}, sprite string) (anim.IAnimator, *spriteConfig, error) {
+	fs, err := resourceDir(resource)
+	if err != nil {
+		return nil, nil, err
+	}
+	var baseDir = "sprites/" + sprite + "/"
+	var conf spriteConfig
+	err = loadJson(&conf, fs, baseDir+"index.json")
+	if err != nil {
+		return nil, nil, err
+	}
+	animator := anim.NewAnimator(fs, baseDir, conf.Animator, conf.Avatar)
+	return animator, &conf, err
 }

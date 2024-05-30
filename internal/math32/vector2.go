@@ -18,94 +18,94 @@ func NewVector2Zero() *Vector2 {
 	return &Vector2{0, 0}
 }
 
-func (this *Vector2) Set(x, y float64) {
-	this.X = x
-	this.Y = y
+func (pself *Vector2) Set(x, y float64) {
+	pself.X = x
+	pself.Y = y
 }
 
-func (this *Vector2) String() string {
-	return fmt.Sprintf("(%f,%f)", this.X, this.Y)
+func (pself *Vector2) String() string {
+	return fmt.Sprintf("(%f,%f)", pself.X, pself.Y)
 }
 
-func (this *Vector2) Coords() (float64, float64) {
-	return this.X, this.Y
+func (pself *Vector2) Coords() (float64, float64) {
+	return pself.X, pself.Y
 }
 
-func (this *Vector2) Add(otherVector *Vector2) *Vector2 {
-	return &Vector2{this.X + otherVector.X,
-		this.Y + otherVector.Y}
+func (pself *Vector2) Add(otherVector *Vector2) *Vector2 {
+	return &Vector2{pself.X + otherVector.X,
+		pself.Y + otherVector.Y}
 }
 
-func (this *Vector2) Sub(otherVector *Vector2) *Vector2 {
-	return &Vector2{this.X - otherVector.X,
-		this.Y - otherVector.Y}
+func (pself *Vector2) Sub(otherVector *Vector2) *Vector2 {
+	return &Vector2{pself.X - otherVector.X,
+		pself.Y - otherVector.Y}
 }
 
-func (this *Vector2) Scale(scale float64) *Vector2 {
-	return &Vector2{this.X * scale,
-		this.Y * scale}
+func (pself *Vector2) Scale(scale float64) *Vector2 {
+	return &Vector2{pself.X * scale,
+		pself.Y * scale}
 }
 
-func (this *Vector2) Equals(otherVector *Vector2) bool {
-	return this.X == otherVector.X && this.Y == otherVector.Y
+func (pself *Vector2) Equals(otherVector *Vector2) bool {
+	return pself.X == otherVector.X && pself.Y == otherVector.Y
 }
 
-func (this *Vector2) Multiply(otherVector *Vector2) *Vector2 {
-	return &Vector2{this.X * otherVector.X,
-		this.Y * otherVector.Y}
+func (pself *Vector2) Multiply(otherVector *Vector2) *Vector2 {
+	return &Vector2{pself.X * otherVector.X,
+		pself.Y * otherVector.Y}
 }
 
-func (this *Vector2) Length() float64 {
-	return math.Sqrt(this.X*this.X + this.Y*this.Y)
+func (pself *Vector2) Length() float64 {
+	return math.Sqrt(pself.X*pself.X + pself.Y*pself.Y)
 }
 
-func (this *Vector2) LengthSquared() float64 {
-	return (this.X*this.X + this.Y*this.Y)
+func (pself *Vector2) LengthSquared() float64 {
+	return (pself.X*pself.X + pself.Y*pself.Y)
 }
 
-func (this *Vector2) Cross(otherVector *Vector2) float64 {
-	return (this.X*otherVector.Y - this.Y*otherVector.X)
+func (pself *Vector2) Cross(otherVector *Vector2) float64 {
+	return (pself.X*otherVector.Y - pself.Y*otherVector.X)
 }
 
-func (this *Vector2) Ddot(otherVector *Vector2) float64 {
-	return (this.X*otherVector.X + this.Y*otherVector.Y)
+func (pself *Vector2) Ddot(otherVector *Vector2) float64 {
+	return (pself.X*otherVector.X + pself.Y*otherVector.Y)
 }
 
-func (this *Vector2) Normalize() {
-	len := this.Length()
+func (pself *Vector2) Normalize() {
+	len := pself.Length()
 	if len == 0 {
 		return
 	}
 	num := 1.0 / len
-	this.X *= num
-	this.Y *= num
+	pself.X *= num
+	pself.Y *= num
 }
 
-func (this *Vector2) Clone() *Vector2 {
-	return &Vector2{this.X,
-		this.Y}
+func (pself *Vector2) Clone() *Vector2 {
+	return &Vector2{pself.X,
+		pself.Y}
 }
 
-func (this *Vector2) CopyFrom(source *Vector2) {
-	this.X = source.X
-	this.Y = source.Y
+func (pself *Vector2) CopyFrom(source *Vector2) {
+	pself.X = source.X
+	pself.Y = source.Y
 }
 
-func (this *Vector2) Lerp(end *Vector2, amount float64) *Vector2 {
-	x := this.X + ((end.X - this.X) * amount)
-	y := this.Y + ((end.Y - this.Y) * amount)
+func (pself *Vector2) Lerp(end *Vector2, amount float64) *Vector2 {
+	x := pself.X + ((end.X - pself.X) * amount)
+	y := pself.Y + ((end.Y - pself.Y) * amount)
 	return NewVector2(x, y)
 }
 
 // Receiver is returned for easy chaning.
-func (this *Vector2) Invert() *Vector2 {
-	this.X = -this.X
-	this.Y = -this.Y
-	return this
+func (pself *Vector2) Invert() *Vector2 {
+	pself.X = -pself.X
+	pself.Y = -pself.Y
+	return pself
 }
 
 // Inverted returns a new *T which is receiver inverted.
-func (this *Vector2) Inverted() *Vector2 {
-	p := *this
+func (pself *Vector2) Inverted() *Vector2 {
+	p := *pself
 	return p.Invert()
 }

@@ -215,13 +215,12 @@ type aniConfig struct {
 	StepDuration   float64     `json:"stepDuration"`
 	TurnToDuration float64     `json:"turnToDuration"`
 
-	AniType      aniTypeEnum   `json:"anitype"`
-	OnStart      *actionConfig `json:"onStart"` //start
-	OnPlay       *actionConfig `json:"onPlay"`  //play
-	IsLoop       bool          `json:"isLoop"`
-	IsKeepOnStop bool          `json:"isKeepOnStop"` //After finishing playback, it stays on the last frame and does not need to switch to the default animation
-
+	AniType aniTypeEnum   `json:"anitype"`
+	OnStart *actionConfig `json:"onStart"` //start
+	OnPlay  *actionConfig `json:"onPlay"`  //play
 	//OnEnd *actionConfig  `json:"onEnd"`   //stop
+	IsLoop       bool `json:"isLoop"`
+	IsKeepOnStop bool `json:"isKeepOnStop"` //After finishing playback, it stays on the last frame and does not need to switch to the default animation
 }
 
 // -------------------------------------------------------------------------------------
@@ -245,6 +244,8 @@ type spriteConfig struct {
 	Pivot               math32.Vector2        `json:"pivot"`
 	DefaultAnimation    string                `json:"defaultAnimation"`
 	AnimBindings        map[string]string     `json:"animBindings"`
+	Animator            string                `json:"animator"`
+	Avatar              string                `json:"avatar"`
 }
 
 func (p *spriteConfig) getCostumeIndex() int {

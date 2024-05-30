@@ -101,6 +101,8 @@ type Sprite struct {
 	lastAnim            *anim.Anim
 	isWaitingStopAnim   bool
 	defaultCostumeIndex int
+
+	animator anim.IAnimator
 }
 
 func (p *Sprite) SetDying() { // dying: visible but can't be touched
@@ -222,6 +224,14 @@ func (p *Sprite) init(
 			ani.Fps = 25
 		}
 		p.animations[key] = ani
+	}
+
+	if sprite.Animator != "" {
+		if sprite.Avatar == "" {
+			log.Panicf("[%s] missing avatar config", name)
+		}
+
+		p.animator = anim.NewAnimator(g.fs, base, sprite.Animator, sprite.Avatar)
 	}
 }
 func (p *Sprite) awake() {
@@ -718,6 +728,11 @@ func (p *Sprite) goAnimateInternal(name string, ani *aniConfig, isBlocking bool)
 	if debugInstr {
 		log.Printf("New anim [name %s id %d] from:%v to:%v framenum:%d fps:%f", an.Name, an.Id, fromval, toval, framenum, fps)
 	}
+
+	if p.animator != nil && name != "" {
+		p.animator.Play(name)
+	}
+
 	an.SetOnPlayingListener(func(currframe int, isReplay bool, progress float64) {
 		if debugInstr {
 			log.Printf("playing anim [name %s id %d]  currframe %d", an.Name, an.Id, currframe)
@@ -730,7 +745,9 @@ func (p *Sprite) goAnimateInternal(name string, ani *aniConfig, isBlocking bool)
 		frameValue := an.SampleChannel(AnimChannelFrame)
 		if frameValue != nil {
 			val, _ := tools.GetFloat(frameValue)
-			p.setCostumeByIndex(int(val))
+			if p.animator == nil {
+				p.setCostumeByIndex(int(val))
+			}
 		}
 		moveValue := an.SampleChannel(AnimChannelMove)
 		if moveValue != nil {
@@ -752,7 +769,7 @@ func (p *Sprite) goAnimateInternal(name string, ani *aniConfig, isBlocking bool)
 		}
 		playaction := ani.OnPlay
 		if playaction != nil {
-			if ani.AniType != aniTypeFrame && playaction.Costumes != nil {
+			if p.animator == nil && ani.AniType != aniTypeFrame && playaction.Costumes != nil {
 				costumes := playaction.Costumes
 				costumesFrom, costumesTo := p.getFromAnToForAni(aniTypeFrame, costumes.From, costumes.To)
 				costumesFromf, _ := costumesFrom.(float64)
@@ -800,6 +817,10 @@ func (p *Sprite) Animate(name string) {
 	}
 	if ani, ok := p.animations[name]; ok {
 		p.goAnimate(name, ani)
+		return
+	}
+	if p.animator != nil {
+		p.animator.Play(name)
 	} else {
 		log.Println("Animation not found:", name)
 	}
