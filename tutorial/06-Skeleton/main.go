@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"image"
 	"image/color"
 	"io/ioutil"
 	"log"
@@ -23,8 +24,16 @@ const (
 	vectexScale  = 30.0
 )
 
+var (
+	whiteImage = ebiten.NewImage(3, 3)
+)
+
+func init() {
+	whiteImage.Fill(color.White)
+}
+
 type Vertex struct {
-	x, y float32
+	X, Y float32
 }
 
 func (s *Vertex) Draw(screen *ebiten.Image) {
@@ -33,7 +42,7 @@ func (s *Vertex) Draw(screen *ebiten.Image) {
 		G: uint8(0xdd * 128 / 0xff),
 		B: uint8(0xff * 128 / 0xff),
 		A: 0xff}
-	vector.StrokeLine(screen, s.x, s.y, s.x+3, s.y+3, 1, c, true)
+	vector.StrokeLine(screen, s.X, s.Y, s.X+3, s.Y+3, 1, c, true)
 }
 
 type Game struct {
@@ -61,6 +70,30 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	}
 	for i := 0; i < starsCount; i++ {
 		g.bones[i].Draw(screen)
+	}
+
+	meshes := g.animator.Vertices
+	skinMeshes := g.animator.PrefabData.SkinMesh
+	op := &ebiten.DrawTrianglesOptions{}
+	op.Address = ebiten.AddressUnsafe
+	for i := 0; i < len(meshes); i++ {
+		vs := []ebiten.Vertex{}
+		vertices := meshes[i]
+		for j := 0; j < len(vertices); j++ {
+			pos := toVector3(vertices[j])
+			vs = append(vs, ebiten.Vertex{
+				DstX:   pos.X,
+				DstY:   pos.Y,
+				SrcX:   0,
+				SrcY:   0,
+				ColorR: 1,
+				ColorG: 1,
+				ColorB: 1,
+				ColorA: 1,
+			})
+		}
+		indices := skinMeshes[i].Indices
+		screen.DrawTriangles(vs, indices, whiteImage.SubImage(image.Rect(1, 1, 2, 2)).(*ebiten.Image), op)
 	}
 }
 
