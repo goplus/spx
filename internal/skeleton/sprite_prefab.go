@@ -1,6 +1,10 @@
-package prefab
+package skeleton
 
-import "github.com/goplus/spx/internal/math32"
+import (
+	"fmt"
+
+	"github.com/goplus/spx/internal/math32"
+)
 
 type SpritePrefabData struct {
 	Name      string           `json:"Name"`
@@ -13,6 +17,10 @@ type HierarchyData struct {
 	PosRot math32.Vector3 `json:"PosRot"`
 	Order  int            `json:"Order"`
 	Parent string         `json:"Parent"`
+}
+
+func (h HierarchyData) String() string {
+	return fmt.Sprintf("Name : %s, PosRot : %v, Order : %d, Parent : %s", h.Name, h.PosRot, h.Order, h.Parent)
 }
 
 type SpriteSkinData struct {

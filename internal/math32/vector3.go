@@ -6,9 +6,9 @@ import (
 )
 
 type Vector3 struct {
-	X float64
-	Y float64
-	Z float64
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+	Z float64 `json:"z"`
 }
 
 func NewVector3(x, y, z float64) *Vector3 {
