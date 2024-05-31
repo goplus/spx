@@ -1,0 +1,22 @@
+{
+	"Name": "Tom",
+	"Prefab": "./assets/sprites/Tom/prefab.json",
+	"Image": "./assets/sprites/Tom/10.png",
+	"Scale": {
+		"x": 10,
+		"y": 10
+	},
+	"Offset": {
+		"x": 0,
+		"y": 6
+	},
+	"DefaultClip": "Run",
+	"Clips": [
+		{
+			"Name": "Run",
+			"Loop": true,
+			"Speed": 1,
+			"Path": "./assets/sprites/Tom/animation/run.json"
+		}
+	]
+}

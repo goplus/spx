@@ -20,7 +20,7 @@ type Bone struct {
 	LocalDeg float64
 }
 
-func (pself *Bone) GetLocal2WorldMatrix() *math32.Matrix4 {
+func (pself *Bone) getLocal2WorldMatrix() *math32.Matrix4 {
 	rad := pself.Deg * math.Pi / 180
 	c := math.Cos(rad)
 	s := math.Sin(rad)
@@ -31,7 +31,7 @@ func (pself *Bone) GetLocal2WorldMatrix() *math32.Matrix4 {
 		0, 0, 0, 1,
 	}
 }
-func (pself *Bone) Local2World(pos math32.Vector2) math32.Vector2 {
+func (pself *Bone) local2World(pos math32.Vector2) math32.Vector2 {
 	rad := pself.Deg * math.Pi / 180
 	c := math.Cos(rad)
 	s := math.Sin(rad)
@@ -41,19 +41,19 @@ func (pself *Bone) Local2World(pos math32.Vector2) math32.Vector2 {
 	}
 }
 
-func (pself *Skeleton) UpdateSkeleton(rootPos math32.Vector2, rootDeg float64) {
+func (pself *Skeleton) updateSkeleton(rootPos math32.Vector2, rootDeg float64) {
 	for _, bone := range pself.Bones {
 		if bone.Parent == nil {
 			bone.Pos = rootPos
 			bone.Deg = rootDeg
 			continue
 		}
-		bone.Pos = bone.Parent.Local2World(bone.LocalPos)
+		bone.Pos = bone.Parent.local2World(bone.LocalPos)
 		bone.Deg = bone.Parent.Deg + bone.LocalDeg
 	}
 }
 
-func BuildSkeleton(hierarchyData []HierarchyData) *Skeleton {
+func buildSkeleton(hierarchyData []hierarchyData) *Skeleton {
 	skeleton := &Skeleton{}
 	name2Bone := make(map[string]*Bone)
 	skeleton.Name2Bone = name2Bone
@@ -72,7 +72,7 @@ func BuildSkeleton(hierarchyData []HierarchyData) *Skeleton {
 		bone.Parent = parent
 		bone.LocalPos = math32.Vector2{X: data.PosRot.X, Y: data.PosRot.Y}
 		bone.LocalDeg = data.PosRot.Z
-		bone.Pos = parent.Local2World(bone.LocalPos)
+		bone.Pos = parent.local2World(bone.LocalPos)
 		bone.Deg = parent.Deg + data.PosRot.Z
 	}
 
