@@ -1,7 +1,7 @@
 {
 	"Name": "Tom",
-	"Prefab": "./assets/sprites/Tom/prefab.json",
-	"Image": "./assets/sprites/Tom/10.png",
+	"Prefab": "prefab.json",
+	"Image": "10.png",
 	"Scale": {
 		"x": 10,
 		"y": 10
@@ -16,7 +16,7 @@
 			"Name": "Run",
 			"Loop": true,
 			"Speed": 1,
-			"Path": "./assets/sprites/Tom/animation/run.json"
+			"Path": "animation/run.json"
 		}
 	]
 }

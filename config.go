@@ -232,6 +232,7 @@ type spriteConfig struct {
 	TAnimations         map[string]*aniConfig `json:"tAnimations"`
 	Visible             bool                  `json:"visible"`
 	IsDraggable         bool                  `json:"isDraggable"`
+	Animator            string                `json:"animator"`
 }
 
 func (p *spriteConfig) getCostumeIndex() int {

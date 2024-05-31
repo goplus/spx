@@ -5,16 +5,18 @@ import (
 	"fmt"
 	"image"
 	"image/color"
-	"io/ioutil"
+	"log"
 	"os"
+	"path"
 
+	spxfs "github.com/goplus/spx/fs"
 	"github.com/goplus/spx/internal/math32"
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/vector"
 )
 
 type SpriteAnimator struct {
-	Transform math32.Vector2
+	SpritePos math32.Vector2
 	Prefab    *spritePrefabData
 	Image     *ebiten.Image
 	// transform
@@ -37,19 +39,36 @@ type SpriteAnimator struct {
 	rederOrder     []int
 }
 
-func NewSpriteAnimator(config *SpriteAnimatorConfig) *SpriteAnimator {
+func NewSpriteAnimator(baseDir string, fs spxfs.Dir, animatorPath string) *SpriteAnimator {
+	var config SpriteAnimatorConfig
+	err := loadJson(&config, fs, path.Join(baseDir, animatorPath))
+	if err != nil {
+		log.Panicf("animator config [%s] not exist", animatorPath)
+	}
 	pself := &SpriteAnimator{}
 	pself.Clips = make(map[string]*SpriteAnimClip)
 	pself.CurClipName = ""
 	pself.CurFrame = 0
 	pself.Scale = config.Scale
 	pself.Offset = *config.Offset.Multiply(&config.Scale)
-
-	pself.Prefab = loadPrefab(config.Prefab)
-	pself.Image = loadImage(config.Image)
+	pself.Prefab = &spritePrefabData{}
+	err = loadJson(pself.Prefab, fs, path.Join(baseDir, config.Prefab))
+	if err != nil {
+		log.Panicf("animator prefab [%s] not exist", path.Join(baseDir, config.Prefab))
+	}
+	pself.Image, err = loadImage(fs, path.Join(baseDir, config.Image))
+	if err != nil {
+		log.Panicf("animator image [%s] not exist", path.Join(baseDir, config.Prefab))
+	}
 	for _, clipConfig := range config.Clips {
-		clip := loadClip(clipConfig)
-		pself.Clips[clip.Name] = clip
+		clip := &SpriteAnimClip{}
+		clip.Name = clipConfig.Name
+		clip.Config = clipConfig
+		err = loadJson(&clip.Data, fs, path.Join(baseDir, clipConfig.Path))
+		if err != nil {
+			log.Panicf("animator clip [%s] not exist", path.Join(baseDir, clipConfig.Path))
+		}
+		pself.Clips[clipConfig.Name] = clip
 	}
 	pself.Skeleton = buildSkeleton(pself.Prefab.Hierarchy)
 	for i := 0; i < int(lastBone); i++ {
@@ -86,7 +105,7 @@ func NewSpriteAnimator(config *SpriteAnimatorConfig) *SpriteAnimator {
 
 	pself.renderBones = make([]math32.Vector2, len(pself.logicBones))
 	pself.Play(config.DefaultClip)
-	pself.Transform = *math32.NewVector2(100, 100)
+	pself.SpritePos = *math32.NewVector2(100, 100)
 	return pself
 }
 
@@ -139,7 +158,6 @@ func (pself *SpriteAnimator) Update() {
 func (pself *SpriteAnimator) Draw(screen *ebiten.Image) {
 
 	//pself.drawBone(screen)
-
 	op := &ebiten.DrawTrianglesOptions{}
 	op.Address = ebiten.AddressUnsafe
 	for k := 0; k < len(pself.rederOrder); k++ {
@@ -163,7 +181,7 @@ func (pself *SpriteAnimator) Play(clipName string) {
 func (pself *SpriteAnimator) local2World(v math32.Vector2) math32.Vector2 {
 	vt := v.Multiply(&pself.Scale).Add(&pself.Offset)
 	vt.Y = -vt.Y
-	return *vt.Add(&pself.Transform)
+	return *vt.Add(&pself.SpritePos)
 }
 
 func (pself *SpriteAnimator) drawBone(screen *ebiten.Image) {
@@ -173,39 +191,16 @@ func (pself *SpriteAnimator) drawBone(screen *ebiten.Image) {
 		vector.StrokeLine(screen, float32(pos.X), float32(pos.Y), float32(pos.X)+3, float32(pos.Y)+3, 1, c, true)
 	}
 }
-
-func loadClip(config SpriteAnimClipConfig) *SpriteAnimClip {
-	jsonData, err := ioutil.ReadFile(config.Path)
+func loadJson(ret interface{}, fs spxfs.Dir, file string) (err error) {
+	f, err := fs.Open(file)
 	if err != nil {
-		fmt.Println("File reading error", err)
-		return nil
+		return
 	}
-	data := &SpriteAnimClip{}
-	data.Name = config.Name
-	data.Config = config
-	err = json.Unmarshal(jsonData, &data.Data)
-	if err != nil {
-		fmt.Println("Error parsing JSON", err)
-		return nil
-	}
-	return data
+	defer f.Close()
+	return json.NewDecoder(f).Decode(ret)
 }
-func loadPrefab(path string) *spritePrefabData {
-	jsonData, err := ioutil.ReadFile(path)
-	if err != nil {
-		fmt.Println("File reading error", err)
-		return nil
-	}
-	data := &spritePrefabData{}
-	err = json.Unmarshal(jsonData, data)
-	if err != nil {
-		fmt.Println("Error parsing JSON", err)
-		return nil
-	}
-	return data
-}
-func loadImage(path string) *ebiten.Image {
-	file, err := os.Open(path)
+func loadImage(fs spxfs.Dir, path string) (*ebiten.Image, error) {
+	file, err := fs.Open(path)
 	if err != nil {
 		fmt.Println("Error: File could not be opened ", path)
 		os.Exit(1)
@@ -216,7 +211,8 @@ func loadImage(path string) *ebiten.Image {
 		fmt.Println("Error: Image could not be decoded ", path)
 		os.Exit(1)
 	}
-	return ebiten.NewImageFromImage(data)
+	img := ebiten.NewImageFromImage(data)
+	return img, err
 }
 
 func deform(skinData *spriteSkinData, rootInv *math32.Matrix4, name2Trans map[string]*Bone, deformed []math32.Vector3) {
