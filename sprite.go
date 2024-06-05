@@ -24,9 +24,9 @@ import (
 	"sync"
 
 	"github.com/goplus/spx/internal/anim"
+	"github.com/goplus/spx/internal/anim/skeleton"
 	"github.com/goplus/spx/internal/gdi/clrutil"
 	"github.com/goplus/spx/internal/math32"
-	"github.com/goplus/spx/internal/skeleton"
 	"github.com/goplus/spx/internal/tools"
 )
 
