@@ -16,7 +16,7 @@
 		{
 			"name": "run",
 			"loop": true,
-			"speed": 1,
+			"frameRate": 30,
 			"path": "animation/run.json"
 		}
 	]

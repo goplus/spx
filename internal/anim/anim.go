@@ -48,9 +48,10 @@ type IAnimationTarget interface {
 
 type IAnimator interface {
 	SetPosition(pos math32.Vector2)
-	Play(clipName string)
 	Update()
 	Draw(screen *ebiten.Image)
+	Play(clipName string) *common.AnimClipState
+	GetClipState(clipName string) *common.AnimClipState
 }
 
 type Animatable struct {

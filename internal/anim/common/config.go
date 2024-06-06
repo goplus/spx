@@ -16,8 +16,8 @@ type AnimatorConfig struct {
 }
 
 type AnimClipConfig struct {
-	Name  string  `json:"name"`
-	Loop  bool    `json:"loop"`
-	Speed float64 `json:"speed"`
-	Path  string  `json:"path"`
+	Name      string `json:"name"`
+	Loop      bool   `json:"loop"`
+	FrameRate int    `json:"frameRate"`
+	Path      string `json:"path"`
 }

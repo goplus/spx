@@ -5,12 +5,6 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 )
 
-type IAnimClip interface {
-}
-type AnimClip struct {
-	Name   string `json:"Name"`
-	Config AnimClipConfig
-}
 type Animator struct {
 	Position math32.Vector2
 	Image    *ebiten.Image
@@ -21,8 +15,8 @@ type Animator struct {
 	// runtime data
 	Clips         map[string]IAnimClip
 	CurClipName   string
-	CurFrame      int
 	LogicVertices [][]math32.Vector3
+	ClipStates    map[string]*AnimClipState
 
 	// render data
 	RenderBones    []math32.Vector2
@@ -31,6 +25,24 @@ type Animator struct {
 	RederOrder     []int
 }
 
+func (pself *Animator) GetClipState(clipName string) *AnimClipState {
+	if !pself.HasClip(clipName) {
+		return nil
+	}
+	if pself.ClipStates == nil {
+		pself.ClipStates = make(map[string]*AnimClipState)
+	}
+	if _, ok := pself.ClipStates[clipName]; !ok {
+		clip := pself.Clips[clipName]
+		pself.ClipStates[clipName] = &AnimClipState{
+			AnimClipConfig: clip.GetConfig(),
+			FrameCount:     clip.GetFramesCount(),
+			Speed:          1,
+			Time:           0,
+		}
+	}
+	return pself.ClipStates[clipName]
+}
 func (pself *Animator) SetPosition(pos math32.Vector2) {
 	pself.Position = pos
 }
@@ -56,15 +68,18 @@ func (pself *Animator) Draw(screen *ebiten.Image) {
 	}
 }
 
-func (pself *Animator) Play(clipName string) {
-	if pself.CurClipName == clipName {
-		return
-	}
+func (pself *Animator) Play(clipName string) *AnimClipState {
 	if !pself.HasClip(clipName) {
-		return
+		return nil
+	}
+	if pself.CurClipName == clipName {
+		return pself.GetClipState(clipName)
 	}
 	pself.CurClipName = clipName
-	pself.CurFrame = 0
+	state := pself.GetClipState(clipName)
+	state.Time = 0
+	state.Speed = 1
+	return state
 }
 
 func (pself *Animator) Local2World(v math32.Vector2) math32.Vector2 {

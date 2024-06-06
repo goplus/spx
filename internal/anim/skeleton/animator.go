@@ -8,6 +8,7 @@ import (
 
 	spxfs "github.com/goplus/spx/fs"
 	"github.com/goplus/spx/internal/anim/common"
+	"github.com/goplus/spx/internal/engine"
 	"github.com/goplus/spx/internal/math32"
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/vector"
@@ -24,7 +25,6 @@ func NewAnimator(baseDir string, fs spxfs.Dir, config *common.AnimatorConfig) *A
 	pself := &Animator{}
 	pself.Clips = make(map[string]common.IAnimClip)
 	pself.CurClipName = ""
-	pself.CurFrame = 0
 	pself.Scale = config.Scale
 	pself.Offset = *config.Offset.Multiply(&config.Scale)
 	pself.Prefab = &AnimPrefab{}
@@ -44,6 +44,7 @@ func NewAnimator(baseDir string, fs spxfs.Dir, config *common.AnimatorConfig) *A
 		if err != nil {
 			log.Panicf("animator clip [%s] not exist", path.Join(baseDir, clipConfig.Path))
 		}
+		clip.FrameCount = len(clip.Data.AnimData)
 		pself.Clips[clipConfig.Name] = clip
 	}
 	pself.Skeleton = buildSkeleton(pself.Prefab.Hierarchy)
@@ -94,8 +95,11 @@ func (pself *Animator) Update() {
 	if len(animData) == 0 {
 		return
 	}
-	pself.CurFrame = (pself.CurFrame) % len(animData)
-	frame := animData[pself.CurFrame]
+	state := pself.GetClipState(pself.CurClipName)
+	state.Time += engine.Time.DeltaTime
+	frameIndex := state.GetCurFrame()
+	frame := animData[frameIndex]
+	println("animate time", state.Time, "frameIndex", frameIndex)
 	for i := 0; i < len(pself.LogicBones); i++ {
 		offset := i * 3
 		pos := math32.NewVector2Zero()
@@ -105,7 +109,6 @@ func (pself *Animator) Update() {
 		pself.LogicBones[i].LocalDeg = frame.PosDeg[offset+2]
 	}
 	pself.Skeleton.updateSkeleton(math32.Vector2{}, 0)
-	pself.CurFrame++
 
 	// deform
 	skinMeshes := pself.Prefab.SkinMesh

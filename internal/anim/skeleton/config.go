@@ -11,6 +11,7 @@ type AnimClip struct {
 	common.AnimClip
 	Data spriteAnimData
 }
+
 type AnimPrefab struct {
 	Name        string           `json:"Name"`
 	Hierarchy   []hierarchyData  `json:"Hierarchy"`

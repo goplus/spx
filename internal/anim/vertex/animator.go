@@ -6,6 +6,7 @@ import (
 
 	spxfs "github.com/goplus/spx/fs"
 	"github.com/goplus/spx/internal/anim/common"
+	"github.com/goplus/spx/internal/engine"
 	"github.com/goplus/spx/internal/math32"
 	"github.com/hajimehoshi/ebiten/v2"
 )
@@ -19,7 +20,6 @@ func NewAnimator(baseDir string, fs spxfs.Dir, config *common.AnimatorConfig) *A
 	pself := &Animator{}
 	pself.Clips = make(map[string]common.IAnimClip)
 	pself.CurClipName = ""
-	pself.CurFrame = 0
 	pself.Scale = config.Scale
 	pself.Offset = *config.Offset.Multiply(&config.Scale)
 	pself.Prefab = &AnimPrefab{}
@@ -39,6 +39,7 @@ func NewAnimator(baseDir string, fs spxfs.Dir, config *common.AnimatorConfig) *A
 		if err != nil {
 			log.Panicf("animator clip [%s] not exist", path.Join(baseDir, clipConfig.Path))
 		}
+		clip.FrameCount = clip.Data.FrameCount
 		pself.Clips[clipConfig.Name] = clip
 	}
 	cfg_triangles := pself.Prefab.Triangles
@@ -89,13 +90,15 @@ func (pself *Animator) Update() {
 	}
 	vertexCount := len(animData.AnimFramesVertex) / animData.FrameCount / 2
 
-	pself.CurFrame = (pself.CurFrame) % animData.FrameCount
+	state := pself.GetClipState(pself.CurClipName)
+	state.Time += engine.Time.DeltaTime
+	frame := state.GetCurFrame()
 
-	pself.RederOrder = animData.RenderOrders[pself.CurFrame]
+	pself.RederOrder = animData.RenderOrders[frame]
 
 	// convert2WorldSpace
 	RenderVerteies := pself.RenderVerteies[0]
-	offset := pself.CurFrame * vertexCount * 2
+	offset := frame * vertexCount * 2
 	for j := 0; j < vertexCount; j++ {
 		x := animData.AnimFramesVertex[offset+j*2+0]
 		y := animData.AnimFramesVertex[offset+j*2+1]
@@ -103,5 +106,4 @@ func (pself *Animator) Update() {
 		RenderVerteies[j].DstX = float32(pos.X)
 		RenderVerteies[j].DstY = float32(pos.Y)
 	}
-	pself.CurFrame++
 }
