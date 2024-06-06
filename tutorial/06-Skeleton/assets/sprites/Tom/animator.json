@@ -1,22 +1,23 @@
 {
-	"Name": "Tom",
-	"Prefab": "prefab.json",
-	"Image": "10.png",
-	"Scale": {
+	"name": "Tom",
+	"type": "skeleton",
+	"prefab": "prefab.json",
+	"image": "10.png",
+	"scale": {
 		"x": 10,
 		"y": 10
 	},
-	"Offset": {
+	"offset": {
 		"x": 0,
 		"y": 6
 	},
-	"DefaultClip": "Run",
-	"Clips": [
+	"defaultClip": "run",
+	"clips": [
 		{
-			"Name": "Run",
-			"Loop": true,
-			"Speed": 1,
-			"Path": "animation/run.json"
+			"name": "run",
+			"loop": true,
+			"speed": 1,
+			"path": "animation/run.json"
 		}
 	]
 }
