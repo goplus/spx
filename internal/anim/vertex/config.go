@@ -12,19 +12,9 @@ type AnimPrefab struct {
 }
 
 type animCfg struct {
-	Names            []string  `json:"names"`
-	Bones            []float64 `json:"bones"`
 	FrameCount       int       `json:"frame_count"`
 	RenderOrders     [][]int   `json:"render_orders"`
-	AnimFramesBone   []float64 `json:"anim_frames_bone"`
 	AnimFramesVertex []float64 `json:"anim_frames_vertex"`
-}
-
-type animData struct {
-	names        []string
-	renderOrders [][]int
-	bones        [][][2]float64
-	vertices     [][][2]float64
 }
 
 type AnimClip struct {
