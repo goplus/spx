@@ -28,6 +28,7 @@ const (
 
 	ANIMATOR_TYPE_VERTEX   = "vertex"
 	ANIMATOR_TYPE_SKELETON = "skeleton"
+	ANIMATOR_TYPE_FRAME    = "frame"
 )
 
 type IAnimatable interface {
