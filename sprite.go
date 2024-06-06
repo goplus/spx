@@ -24,7 +24,6 @@ import (
 	"sync"
 
 	"github.com/goplus/spx/internal/anim"
-	"github.com/goplus/spx/internal/anim/skeleton"
 	"github.com/goplus/spx/internal/gdi/clrutil"
 	"github.com/goplus/spx/internal/math32"
 	"github.com/goplus/spx/internal/tools"
@@ -84,7 +83,7 @@ type Sprite struct {
 	hasOnTouched bool
 
 	gamer    reflect.Value
-	animator *skeleton.SpriteAnimator
+	animator anim.IAnimator
 }
 
 func (p *Sprite) SetDying() { // dying: visible but can't be touched
@@ -149,7 +148,7 @@ func (p *Sprite) init(
 	}
 
 	if sprite.Animator != "" {
-		p.animator = skeleton.NewSpriteAnimator(base, g.fs, sprite.Animator)
+		p.animator = anim.NewAnimator(base, g.fs, sprite.Animator)
 	}
 }
 
