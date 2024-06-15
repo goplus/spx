@@ -236,6 +236,7 @@ type spriteConfig struct {
 	Visible             bool                  `json:"visible"`
 	IsDraggable         bool                  `json:"isDraggable"`
 	Animator            string                `json:"animator"`
+	Avatar              string                `json:"avatar"`
 }
 
 func (p *spriteConfig) getCostumeIndex() int {

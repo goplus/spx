@@ -9,7 +9,7 @@ type AnimClip struct {
 	Data animCfg
 }
 
-type AnimPrefab struct {
+type AnimMesh struct {
 	Names     []string   `json:"names"`
 	Vertices  []float64  `json:"vertices"`
 	Uvs       []float64  `json:"uv"`

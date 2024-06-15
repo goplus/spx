@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"image/color"
 	"log"
-	"path"
 
 	spxfs "github.com/goplus/spx/fs"
 	"github.com/goplus/spx/internal/anim/common"
@@ -16,53 +15,53 @@ import (
 
 type Animator struct {
 	common.Animator
-	Prefab     *AnimPrefab
+	Mesh       *AnimMesh
 	Skeleton   *Skeleton
 	LogicBones []*Bone
 }
 
-func NewAnimator(baseDir string, fs spxfs.Dir, config *common.AnimatorConfig) *Animator {
+func NewAnimator(fs spxfs.Dir, config *common.AnimatorConfig, avatarConfig *common.AvatarConfig) *Animator {
 	pself := &Animator{}
 	pself.Clips = make(map[string]common.IAnimClip)
 	pself.CurClipName = ""
-	pself.Scale = config.Scale
-	pself.Offset = *config.Offset.Multiply(&config.Scale)
-	pself.Prefab = &AnimPrefab{}
-	err := common.LoadJson(pself.Prefab, fs, path.Join(baseDir, config.Prefab))
+	pself.Scale = avatarConfig.Scale
+	pself.Offset = *avatarConfig.Offset.Multiply(&avatarConfig.Scale)
+	pself.Mesh = &AnimMesh{}
+	err := common.LoadJson(pself.Mesh, fs, avatarConfig.Mesh)
 	if err != nil {
-		log.Panicf("animator prefab [%s] not exist", path.Join(baseDir, config.Prefab))
+		log.Panicf("animator Mesh [%s] not exist", avatarConfig.Mesh)
 	}
-	pself.Image, err = common.LoadImage(fs, path.Join(baseDir, config.Image))
+	pself.Image, err = common.LoadImage(fs, avatarConfig.Image)
 	if err != nil {
-		log.Panicf("animator image [%s] not exist", path.Join(baseDir, config.Prefab))
+		log.Panicf("animator image [%s] not exist", avatarConfig.Mesh)
 	}
 	for _, clipConfig := range config.Clips {
 		clip := &AnimClip{}
 		clip.Name = clipConfig.Name
 		clip.Config = clipConfig
-		err = common.LoadJson(&clip.Data, fs, path.Join(baseDir, clipConfig.Path))
+		err = common.LoadJson(&clip.Data, fs, clipConfig.Path)
 		if err != nil {
-			log.Panicf("animator clip [%s] not exist", path.Join(baseDir, clipConfig.Path))
+			log.Panicf("animator clip [%s] not exist", clipConfig.Path)
 		}
 		clip.FrameCount = len(clip.Data.AnimData)
 		pself.Clips[clipConfig.Name] = clip
 	}
-	pself.Skeleton = buildSkeleton(pself.Prefab.Hierarchy)
+	pself.Skeleton = buildSkeleton(pself.Mesh.Hierarchy)
 	for i := 0; i < int(lastBone); i++ {
 		if bone, ok := pself.Skeleton.Name2Bone[EBoneNames(i).String()]; ok {
 			pself.LogicBones = append(pself.LogicBones, bone)
 		}
 	}
-	pself.LogicVertices = make([][]math32.Vector3, len(pself.Prefab.SkinMesh))
-	for k, skinData := range pself.Prefab.SkinMesh {
+	pself.LogicVertices = make([][]math32.Vector3, len(pself.Mesh.SkinMesh))
+	for k, skinData := range pself.Mesh.SkinMesh {
 		pself.LogicVertices[k] = make([]math32.Vector3, len(skinData.Vertices))
 	}
 
-	pself.RenderVerteies = make([][]ebiten.Vertex, len(pself.Prefab.SkinMesh))
-	pself.RenderIndeies = make([][]uint16, len(pself.Prefab.SkinMesh))
+	pself.RenderVerteies = make([][]ebiten.Vertex, len(pself.Mesh.SkinMesh))
+	pself.RenderIndeies = make([][]uint16, len(pself.Mesh.SkinMesh))
 	sizePoint := pself.Image.Bounds().Size()
 	size := math32.Vector2{X: float64(sizePoint.X), Y: float64(sizePoint.Y)}
-	for k, skinData := range pself.Prefab.SkinMesh {
+	for k, skinData := range pself.Mesh.SkinMesh {
 		// create render vertices
 		uvs := skinData.Uvs
 		vtxs := make([]ebiten.Vertex, len(skinData.Vertices))
@@ -78,7 +77,7 @@ func NewAnimator(baseDir string, fs spxfs.Dir, config *common.AnimatorConfig) *A
 		// bind to render data
 		pself.RenderIndeies[k] = skinData.Indices
 	}
-	pself.RederOrder = pself.Prefab.RenderOrder
+	pself.RederOrder = pself.Mesh.RenderOrder
 
 	pself.RenderBones = make([]math32.Vector2, len(pself.LogicBones))
 	pself.Play(config.DefaultClip)
@@ -110,7 +109,7 @@ func (pself *Animator) Update() {
 	pself.Skeleton.updateSkeleton(math32.Vector2{}, 0)
 
 	// deform
-	skinMeshes := pself.Prefab.SkinMesh
+	skinMeshes := pself.Mesh.SkinMesh
 	for i, skinData := range skinMeshes {
 		deform(&skinData, math32.NewMatrix4Indentity(), pself.Skeleton.Name2Bone, pself.LogicVertices[i])
 	}

@@ -5,24 +5,29 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 )
 
-type Animator struct {
-	Position math32.Vector2
-	Image    *ebiten.Image
+type Avatar struct {
+	Image *ebiten.Image
 	// transform
 	Scale  math32.Vector2
 	Offset math32.Vector2
 
-	// runtime data
-	Clips         map[string]IAnimClip
-	CurClipName   string
 	LogicVertices [][]math32.Vector3
-	ClipStates    map[string]*AnimClipState
-
 	// render data
 	RenderBones    []math32.Vector2
 	RenderVerteies [][]ebiten.Vertex
 	RenderIndeies  [][]uint16
 	RederOrder     []int
+}
+
+type Animator struct {
+	Position math32.Vector2
+
+	// runtime data
+	Clips       map[string]IAnimClip
+	CurClipName string
+	ClipStates  map[string]*AnimClipState
+
+	Avatar
 }
 
 func (pself *Animator) GetClipState(clipName string) *AnimClipState {

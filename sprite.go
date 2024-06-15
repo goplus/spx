@@ -148,7 +148,10 @@ func (p *Sprite) init(
 	}
 
 	if sprite.Animator != "" {
-		p.animator = anim.NewAnimator(base, g.fs, sprite.Animator)
+		if sprite.Avatar == "" {
+			log.Panicf("[%s] missing avatar config", name)
+		}
+		p.animator = anim.NewAnimator(g.fs, sprite.Animator, sprite.Avatar)
 	}
 }
 

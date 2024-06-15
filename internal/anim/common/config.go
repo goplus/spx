@@ -4,15 +4,19 @@ import (
 	"github.com/goplus/spx/internal/math32"
 )
 
+type AvatarConfig struct {
+	Image  string         `json:"image"`
+	Mesh   string         `json:"mesh"`
+	Scale  math32.Vector2 `json:"scale"`
+	Offset math32.Vector2 `json:"offset"`
+}
+
 type AnimatorConfig struct {
 	Name        string           `json:"name"`
-	Prefab      string           `json:"prefab"`
-	Image       string           `json:"image"`
-	Scale       math32.Vector2   `json:"scale"`
-	Offset      math32.Vector2   `json:"offset"`
+	Type        string           `json:"type"`
 	DefaultClip string           `json:"defaultClip"`
 	Clips       []AnimClipConfig `json:"clips"`
-	Type        string           `json:"type"`
+	// avatar
 }
 
 type AnimClipConfig struct {

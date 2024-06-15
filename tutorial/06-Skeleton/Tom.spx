@@ -1,6 +1,18 @@
 onStart => {
 	for {
-		wait 0.016
+		wait 1
+		animate "idle"
+		wait 1
+		animate "jump"
+		wait 1
+		animate "swim"
+		wait 1
+		animate "hitdown"
+	}
+}
+onStart => {
+	for {
+		wait 0.05
 		setXYpos mouseX, mouseY
 	}
 }

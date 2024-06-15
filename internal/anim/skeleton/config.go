@@ -12,7 +12,7 @@ type AnimClip struct {
 	Data spriteAnimData
 }
 
-type AnimPrefab struct {
+type AnimMesh struct {
 	Name        string           `json:"Name"`
 	Hierarchy   []hierarchyData  `json:"Hierarchy"`
 	SkinMesh    []spriteSkinData `json:"SkinMesh"`

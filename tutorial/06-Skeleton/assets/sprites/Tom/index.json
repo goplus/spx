@@ -7,7 +7,8 @@
       "y": 50
     }
   ],
-  "animator": "animator.json",
+  "animator": "animators/Stander.animator",
+	"avatar": "avatars/Stander.avatar",
   "costumeIndex": 0,
   "heading": 90,
   "isDraggable": false,

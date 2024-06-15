@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"math"
-	"path"
 
 	spxfs "github.com/goplus/spx/fs"
 	"github.com/goplus/spx/internal/anim/common"
@@ -66,17 +65,24 @@ type Animatable struct {
 	SpeedRatio float64
 }
 
-func NewAnimator(baseDir string, fs spxfs.Dir, animatorPath string) IAnimator {
+func NewAnimator(fs spxfs.Dir, animatorPath string, avatarPath string) IAnimator {
 	var config common.AnimatorConfig
-	err := common.LoadJson(&config, fs, path.Join(baseDir, animatorPath))
+	err := common.LoadJson(&config, fs, animatorPath)
 	if err != nil {
 		log.Panicf("animator config [%s] not exist", animatorPath)
 	}
+
+	var avatarConfig common.AvatarConfig
+	err = common.LoadJson(&avatarConfig, fs, avatarPath)
+	if err != nil {
+		log.Panicf("avatar config [%s] not exist", animatorPath)
+	}
+
 	var animator IAnimator
 	if config.Type == ANIMATOR_TYPE_VERTEX {
-		animator = vertex.NewAnimator(baseDir, fs, &config)
+		animator = vertex.NewAnimator(fs, &config, &avatarConfig)
 	} else {
-		animator = skeleton.NewAnimator(baseDir, fs, &config)
+		animator = skeleton.NewAnimator(fs, &config, &avatarConfig)
 	}
 	return animator
 }

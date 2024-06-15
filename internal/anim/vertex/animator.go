@@ -2,7 +2,6 @@ package vertex
 
 import (
 	"log"
-	"path"
 
 	spxfs "github.com/goplus/spx/fs"
 	"github.com/goplus/spx/internal/anim/common"
@@ -13,37 +12,37 @@ import (
 
 type Animator struct {
 	common.Animator
-	Prefab *AnimPrefab
+	Mesh *AnimMesh
 }
 
-func NewAnimator(baseDir string, fs spxfs.Dir, config *common.AnimatorConfig) *Animator {
+func NewAnimator(fs spxfs.Dir, config *common.AnimatorConfig, avatarConfig *common.AvatarConfig) *Animator {
 	pself := &Animator{}
 	pself.Clips = make(map[string]common.IAnimClip)
 	pself.CurClipName = ""
-	pself.Scale = config.Scale
-	pself.Offset = *config.Offset.Multiply(&config.Scale)
-	pself.Prefab = &AnimPrefab{}
-	err := common.LoadJson(pself.Prefab, fs, path.Join(baseDir, config.Prefab))
+	pself.Scale = avatarConfig.Scale
+	pself.Offset = *avatarConfig.Offset.Multiply(&avatarConfig.Scale)
+	pself.Mesh = &AnimMesh{}
+	err := common.LoadJson(pself.Mesh, fs, avatarConfig.Mesh)
 	if err != nil {
-		log.Panicf("animator prefab [%s] not exist", path.Join(baseDir, config.Prefab))
+		log.Panicf("animator Mesh [%s] not exist", avatarConfig.Mesh)
 	}
-	pself.Image, err = common.LoadImage(fs, path.Join(baseDir, config.Image))
+	pself.Image, err = common.LoadImage(fs, avatarConfig.Image)
 	if err != nil {
-		log.Panicf("animator image [%s] not exist", path.Join(baseDir, config.Prefab))
+		log.Panicf("animator image [%s] not exist", avatarConfig.Mesh)
 	}
 	for _, clipConfig := range config.Clips {
 		clip := &AnimClip{}
 		clip.Name = clipConfig.Name
 		clip.Config = clipConfig
-		err = common.LoadJson(&clip.Data, fs, path.Join(baseDir, clipConfig.Path))
+		err = common.LoadJson(&clip.Data, fs, clipConfig.Path)
 		if err != nil {
-			log.Panicf("animator clip [%s] not exist", path.Join(baseDir, clipConfig.Path))
+			log.Panicf("animator clip [%s] not exist", clipConfig.Path)
 		}
 		clip.FrameCount = clip.Data.FrameCount
 		pself.Clips[clipConfig.Name] = clip
 	}
-	cfg_triangles := pself.Prefab.Triangles
-	cfg_vreteices := pself.Prefab.Vertices
+	cfg_triangles := pself.Mesh.Triangles
+	cfg_vreteices := pself.Mesh.Vertices
 
 	vertexCount := len(cfg_vreteices) / 2
 	meshCount := len(cfg_triangles)
@@ -51,7 +50,7 @@ func NewAnimator(baseDir string, fs spxfs.Dir, config *common.AnimatorConfig) *A
 	sizePoint := pself.Image.Bounds().Size()
 	size := math32.Vector2{X: float64(sizePoint.X), Y: float64(sizePoint.Y)}
 	// init mesh verteies
-	uvs := pself.Prefab.Uvs
+	uvs := pself.Mesh.Uvs
 	vtxs := make([]ebiten.Vertex, vertexCount)
 	for j := 0; j < vertexCount; j++ {
 		vtxs[j].ColorR = 1
