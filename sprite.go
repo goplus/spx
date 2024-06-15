@@ -633,6 +633,10 @@ func (p *Sprite) Animate(name string) {
 	}
 	if ani, ok := p.animations[name]; ok {
 		p.goAnimate(name, ani)
+		return
+	}
+	if p.animator != nil {
+		p.animator.Play(name)
 	} else {
 		log.Println("Animation not found:", name)
 	}

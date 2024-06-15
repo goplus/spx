@@ -99,7 +99,6 @@ func (pself *Animator) Update() {
 	state.Time += engine.Time.DeltaTime
 	frameIndex := state.GetCurFrame()
 	frame := animData[frameIndex]
-	println("animate time", state.Time, "frameIndex", frameIndex)
 	for i := 0; i < len(pself.LogicBones); i++ {
 		offset := i * 3
 		pos := math32.NewVector2Zero()
