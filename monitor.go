@@ -26,6 +26,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/goplus/spx/internal/engine"
 	"github.com/goplus/spx/internal/gdi"
 	"github.com/hajimehoshi/ebiten/v2"
 	"golang.org/x/image/colornames"
@@ -196,7 +197,7 @@ var (
 func drawRoundRect(dc drawContext, x, y, w, h int, clr, clrPen Color) {
 	key := rectKey{x, y, w, h, clr, clrPen}
 	if i, ok := rcMap[key]; ok {
-		dc.DrawImage(i, nil)
+		engine.Draw(dc.Image, i)
 		return
 	}
 	img, err := getRoundRect(dc, x, y, w, h, clr, clrPen)
@@ -221,7 +222,7 @@ func getRoundRect(dc drawContext, x, y, w, h int, clr, clrPen Color) (image.Imag
 		clr.R, clr.G, clr.B,
 		clrPen.R, clrPen.G, clrPen.B)
 
-	cx, cy := dc.Size()
+	cx, cy := engine.GetDrawContextSize(dc.Image)
 	svg := gdi.NewSVG(cx, cy)
 	svg.Path(glyph, style)
 	svg.End()

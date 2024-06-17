@@ -19,7 +19,6 @@ type Font = font.Font
 // -------------------------------------------------------------------------------------
 
 // TextRender represents a text rendering engine.
-//
 type TextRender struct {
 	fnt      *canvas.Font
 	tm       *TextMetrics
@@ -34,7 +33,6 @@ type TextRender struct {
 }
 
 // NewTextRender creates a text rendering engine.
-//
 func NewTextRender(face Font, width int, dy int) TextRender {
 	fnt := canvas.NewFont(face.Family(), face.PointSize())
 	return TextRender{
@@ -46,13 +44,11 @@ func NewTextRender(face Font, width int, dy int) TextRender {
 }
 
 // Size returns width and height of rendered text.
-//
 func (p TextRender) Size() (int, int) {
 	return p.width, p.height
 }
 
 // Draw draws rendered text.
-//
 func (p TextRender) Draw(target *ebiten.Image, x, y int, clr color.Color, mode int) {
 	if p.dirty {
 		ctx := canvas.NewContext2D(p.width, p.height)
@@ -68,9 +64,7 @@ func (p TextRender) Draw(target *ebiten.Image, x, y int, clr color.Color, mode i
 		p.img = ebiten.NewImageFromImage(ctx.Image())
 		p.dirty = false
 	}
-	opt := &ebiten.DrawImageOptions{}
-	opt.GeoM.Translate(float64(x), float64(y))
-	target.DrawImage(p.img, opt)
+	engine.DrawWithPos(target, p.img, float64(x), float64(y))
 }
 
 func (p *TextRender) AddText(s string) {
@@ -89,7 +83,6 @@ func (p *TextRender) AddText(s string) {
 }
 
 // DrawText draws input text.
-//
 func DrawText(target *ebiten.Image, f Font, x, y int, text string, clr color.Color, mode int) {
 	render := NewTextRender(f, 0x80000, 0)
 	render.AddText(text)
@@ -97,7 +90,6 @@ func DrawText(target *ebiten.Image, f Font, x, y int, text string, clr color.Col
 }
 
 // DrawLines draws multiline text.
-//
 func DrawLines(target *ebiten.Image, f Font, x, y int, width int, text string, clr color.Color, mode int) {
 	render := NewTextRender(f, width, 0)
 	render.AddText(text)
