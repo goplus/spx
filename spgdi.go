@@ -24,6 +24,7 @@ import (
 	"reflect"
 
 	"github.com/goplus/spx/internal/effect"
+	"github.com/goplus/spx/internal/engine"
 	"github.com/goplus/spx/internal/gdi"
 	"github.com/goplus/spx/internal/math32"
 
@@ -130,6 +131,34 @@ func (p *spriteDrawInfo) getUpdateRotateRect(x, y float64) *math32.RotatedRect {
 	return rRect
 }
 
+func (p *spriteDrawInfo) getRenderMatrix() ebiten.GeoM {
+	c := p.sprite.costumes[p.sprite.costumeIndex_]
+	_, centerX, centerY := c.needImage(p.sprite.g.fs)
+	scale := p.sprite.scale / float64(c.bitmapResolution)
+	renderScale := engine.GetRenderScale()
+	geo := ebiten.GeoM{}
+	geo.Reset()
+	direction := p.sprite.direction + c.faceRight
+	direction = direction - 90
+
+	geo.Translate(-centerX, -centerY)               // move to the pivot of the sprite
+	geo.Scale(scale*renderScale, scale*renderScale) // scale the sprite
+	if p.sprite.rotationStyle == Normal {
+		geo.Rotate(toRadian(direction))
+	} else if p.sprite.rotationStyle == LeftRight {
+		if math.Abs(p.sprite.direction) > 155 && math.Abs(p.sprite.direction) < 205 {
+			geo.Scale(-1, 1)
+		}
+		if math.Abs(p.sprite.direction) > 0 && math.Abs(p.sprite.direction) < 25 {
+			geo.Scale(-1, 1)
+		}
+	}
+	worldW, wolrdH := p.sprite.g.worldSize_()
+	renderOffsetX := (p.sprite.x + float64(worldW>>1)) * renderScale
+	renderOffsetY := (-p.sprite.y + float64(wolrdH>>1)) * renderScale
+	geo.Translate(renderOffsetX, renderOffsetY)
+	return geo
+}
 func (p *spriteDrawInfo) updateMatrix() {
 	c := p.sprite.costumes[p.sprite.costumeIndex_]
 
@@ -176,25 +205,12 @@ func (p *spriteDrawInfo) doDrawOn(dc drawContext, fs spxfs.Dir) {
 
 	c := p.sprite.costumes[p.sprite.costumeIndex_]
 	img, _, _ := c.needImage(fs)
-
 	p.updateMatrix()
-
+	renderMatrix := p.getRenderMatrix()
 	if effs := p.sprite.greffUniforms; effs != nil {
-		op := new(ebiten.DrawRectShaderOptions)
-		op.GeoM = p.geo
-		op.Uniforms = effs
-		s, err := ebiten.NewShader(effect.ShaderFrag)
-		if err != nil {
-			panic(err)
-		}
-		op.Images[0] = img.Ebiten()
-		imgSize := img.Ebiten().Bounds().Size()
-		dc.DrawRectShader(imgSize.X, imgSize.Y, s, op)
+		engine.DrawSpriteRectShader(dc.Image, img.Ebiten(), renderMatrix, effect.ShaderFrag, effs)
 	} else {
-		op := new(ebiten.DrawImageOptions)
-		op.Filter = ebiten.FilterLinear
-		op.GeoM = p.geo
-		dc.DrawImage(img.Ebiten(), op)
+		engine.DrawSprite(dc.Image, img.Ebiten(), renderMatrix)
 	}
 }
 
@@ -400,12 +416,6 @@ func (p *Sprite) hit(hc hitContext) (hr hitResult, ok bool) {
 	}
 
 	pos := p.g.Camera.screenToWorld(math32.NewVector2(float64(hc.Pos.X), float64(hc.Pos.Y)))
-	worldW, wolrdH := p.g.worldSize_()
-	pos = &math32.Vector2{
-		X: float64(pos.X) - float64(worldW)/2.0,
-		Y: float64(pos.Y) - float64(wolrdH)/2.0,
-	}
-	pos.Y = -pos.Y
 	if !rRect.Contains(pos) {
 		return
 	}

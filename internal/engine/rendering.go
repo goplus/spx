@@ -1,24 +1,71 @@
 package engine
 
-import "github.com/hajimehoshi/ebiten/v2"
+import (
+	"github.com/hajimehoshi/ebiten/v2"
+)
+
+var (
+	renderTexture *ebiten.Image
+	worldWidth    int
+	worldHeight   int
+	renderScale   float64
+)
+
+func GetRenderScale() float64 {
+	if renderScale == 0 {
+		return 1
+	}
+	return renderScale
+}
+
+func worldPos2RenderPos(width float64, height float64) (float64, float64) {
+	return width * renderScale, height * renderScale
+}
+
+func SetRenderInfo(screen *ebiten.Image, width int, height int, scale float64) {
+	renderTexture = screen
+	worldWidth = width
+	worldHeight = height
+	renderScale = scale
+}
 
 func Draw(screen *ebiten.Image, img *ebiten.Image) {
-	screen.DrawImage(img, nil)
+	renderTexture.DrawImage(img, nil)
 }
 
 func DrawWithPos(screen *ebiten.Image, img *ebiten.Image, x float64, y float64) {
 	op := new(ebiten.DrawImageOptions)
 	op.GeoM.Translate(x, y)
-	screen.DrawImage(img, op)
+	renderTexture.DrawImage(img, op)
 }
 
 func DrawWithPosColor(screen *ebiten.Image, img *ebiten.Image, x float64, y float64, color ebiten.ColorScale) {
 	options := new(ebiten.DrawImageOptions)
 	options.GeoM.Translate(float64(x), float64(y))
 	options.ColorScale = color
-	screen.DrawImage(img, options)
+	renderTexture.DrawImage(img, options)
 }
 
 func GetDrawContextSize(screen *ebiten.Image) (int, int) {
-	return screen.Bounds().Dx(), screen.Bounds().Dy()
+	return worldWidth, worldHeight // TODO return the real renderTexture's size
+	//return screen.Bounds().Dx(), screen.Bounds().Dy()
+}
+
+func DrawSprite(screen *ebiten.Image, img *ebiten.Image, matrix ebiten.GeoM) {
+	op := new(ebiten.DrawImageOptions)
+	op.Filter = ebiten.FilterLinear
+	op.GeoM = matrix
+	renderTexture.DrawImage(img, op)
+}
+func DrawSpriteRectShader(screen *ebiten.Image, img *ebiten.Image, matrix ebiten.GeoM, shaderFrag []byte, uniforms map[string]any) {
+	op := new(ebiten.DrawRectShaderOptions)
+	op.GeoM = matrix
+	op.Uniforms = uniforms
+	shader, err := ebiten.NewShader(shaderFrag)
+	if err != nil {
+		panic(err)
+	}
+	op.Images[0] = img
+	imgSize := img.Bounds().Size()
+	renderTexture.DrawRectShader(imgSize.X, imgSize.Y, shader, op)
 }

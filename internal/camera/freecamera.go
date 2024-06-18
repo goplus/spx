@@ -3,17 +3,18 @@ package camera
 import (
 	"fmt"
 
+	"github.com/goplus/spx/internal/engine"
 	"github.com/goplus/spx/internal/math32"
 	"github.com/hajimehoshi/ebiten/v2"
 )
 
 type FreeCamera struct {
-	viewPort    *math32.Vector2
-	worldSize   *math32.Vector2
-	position    *math32.Vector2
-	zoom        *math32.Vector2
-	rotation    float64
-	worldMatrix ebiten.GeoM
+	viewPort           *math32.Vector2
+	worldSize          *math32.Vector2
+	position           *math32.Vector2
+	zoom               *math32.Vector2
+	rotation           float64
+	world2ScreenMatrix ebiten.GeoM
 }
 
 func NewFreeCamera(winW, winH float64, worldW, worldH float64) *FreeCamera {
@@ -54,11 +55,9 @@ func (c *FreeCamera) SetViewPort(width, height float64) {
 func (c *FreeCamera) CameraCenter() *math32.Vector2 {
 	return c.worldSize.Scale(0.5)
 }
-
 func (c *FreeCamera) updateMatrix() {
-	c.worldMatrix.Reset()
-
-	limit := c.worldSize.Sub(c.viewPort).Scale(0.5)
+	renderScale := engine.GetRenderScale()
+	limit := c.worldSize.Scale(renderScale).Sub(c.viewPort).Scale(0.5)
 	cx := c.position.X
 	cy := -c.position.Y
 	cx = math32.Clamp(cx, -limit.X, limit.X)
@@ -70,31 +69,32 @@ func (c *FreeCamera) updateMatrix() {
 	c.position.X = pos.X
 	c.position.Y = -pos.Y
 
-	c.worldMatrix.Translate(c.worldSize.Sub(c.viewPort).Scale(0.5).Inverted().Coords())
-	c.worldMatrix.Translate(pos.Inverted().Coords())
-
-	c.worldMatrix.Translate(c.CameraCenter().Inverted().Coords())
-	c.worldMatrix.Scale(c.zoom.Coords())
-	c.worldMatrix.Rotate(c.rotation)
-	c.worldMatrix.Translate(c.CameraCenter().Coords())
+	c.world2ScreenMatrix.Reset()
+	c.world2ScreenMatrix.Translate(c.position.Inverted().Coords())   // convert to camera's local space
+	c.world2ScreenMatrix.Scale(renderScale, renderScale)             // convert to render space
+	c.world2ScreenMatrix.Scale(1, -1)                                // invert Y // ebiten's (0,0) is top left corner
+	c.world2ScreenMatrix.Translate((c.viewPort).Scale(0.5).Coords()) // move the pose to cartesian coordinates //(0,0) is left bottom corner
+	// TODO @tanjp support rotation and scale
 }
 
 func (c *FreeCamera) Render(world, screen *ebiten.Image) error {
+
 	options := &ebiten.DrawImageOptions{
-		GeoM: c.worldMatrix,
+		//GeoM: c.world2ScreenMatrix, // TODO apply a world2renderspace  matrix
 	}
 	screen.DrawImage(world, options)
 	return nil
 }
 
 func (c *FreeCamera) ScreenToWorld(point *math32.Vector2) *math32.Vector2 {
-	inverseMatrix := c.worldMatrix
+	c.updateMatrix()
+	inverseMatrix := c.world2ScreenMatrix
 	inverseMatrix.Invert()
 	return math32.NewVector2(inverseMatrix.Apply(point.Coords()))
 }
 
 func (c *FreeCamera) WorldToScreen(point *math32.Vector2) *math32.Vector2 {
-	return math32.NewVector2(c.worldMatrix.Apply(point.Coords()))
+	return math32.NewVector2(c.world2ScreenMatrix.Apply(point.Coords()))
 }
 
 func (c *FreeCamera) GetPos() *math32.Vector2 {
