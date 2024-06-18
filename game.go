@@ -404,8 +404,6 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 	if debugLoad {
 		log.Println("==> SetWorldSize", p.worldWidth_, p.worldHeight_, "renderScale ", renderScale, "renderSize", renderWidth, renderHeight)
 	}
-	fmt.Println("==> SetWorldSize", p.worldWidth_, p.worldHeight_, "renderScale ", renderScale, "renderSize", renderWidth, renderHeight)
-	//p.world = ebiten.NewImage(p.worldWidth_, p.worldHeight_)
 	p.world = ebiten.NewImage(renderWidth, renderHeight)
 	p.mapMode = toMapMode(proj.Map.Mode)
 

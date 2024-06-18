@@ -18,10 +18,6 @@ func GetRenderScale() float64 {
 	return renderScale
 }
 
-func worldPos2RenderPos(width float64, height float64) (float64, float64) {
-	return width * renderScale, height * renderScale
-}
-
 func SetRenderInfo(screen *ebiten.Image, width int, height int, scale float64) {
 	renderTexture = screen
 	worldWidth = width
@@ -40,10 +36,10 @@ func DrawWithPos(screen *ebiten.Image, img *ebiten.Image, x float64, y float64) 
 }
 
 func DrawWithPosColor(screen *ebiten.Image, img *ebiten.Image, x float64, y float64, color ebiten.ColorScale) {
-	options := new(ebiten.DrawImageOptions)
-	options.GeoM.Translate(float64(x), float64(y))
-	options.ColorScale = color
-	renderTexture.DrawImage(img, options)
+	op := new(ebiten.DrawImageOptions)
+	op.GeoM.Translate(x, y)
+	op.ColorScale = color
+	renderTexture.DrawImage(img, op)
 }
 
 func GetDrawContextSize(screen *ebiten.Image) (int, int) {
