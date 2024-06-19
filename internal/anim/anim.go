@@ -117,8 +117,9 @@ type Animation struct {
 	currentFrame int
 	preFrame     int
 
+	preRepeatCount int
 	//playing
-	playingCallback func(*Animation, int, interface{})
+	playingCallback func(*Animation, int, bool, interface{})
 	//stop
 	stopCallback func(*Animation)
 	//error
@@ -149,7 +150,7 @@ func (this *Animation) SetEasingFunction(easingFunc tools.IEasingFunction) {
 	this.easingFunction = easingFunc
 }
 
-func (this *Animation) SetOnPlayingListener(playfuc func(*Animation, int, interface{})) {
+func (this *Animation) SetOnPlayingListener(playfuc func(*Animation, int, bool, interface{})) {
 	this.playingCallback = playfuc
 }
 
@@ -168,7 +169,7 @@ func (this *Animation) Init(name string, framePerSecond float64, dataType int, l
 	this.DataType = dataType
 	this.currentFrame = math.MaxInt32
 	this.preFrame = math.MinInt32
-
+	this.preRepeatCount = 0
 	globalAnimId++
 
 	if loopMode == -1 {
@@ -341,12 +342,15 @@ func (this *Animation) Animate(target IAnimationTarget, delay float64, from int,
 	// Compute ratio
 	rangeval := float64(to + 1 - from)
 	ratio := delay * float64(this.FramePerSecond*speedRatio) / 1000.0
-
+	repeatCount := int(ratio/rangeval) >> 0
+	isReplay := repeatCount != this.preRepeatCount
+	if isReplay {
+		this.preRepeatCount = repeatCount
+	}
 	if ratio >= rangeval && !loop { // If we are out of range and not looping get back to caller
-
 		//add compete
 		if this.playingCallback != nil && this.preFrame != to && len(this.keys) > 1 {
-			this.playingCallback(this, to, this.keys[len(this.keys)-1].Value)
+			this.playingCallback(this, to, isReplay, this.keys[len(this.keys)-1].Value)
 		}
 
 		//stop callback
@@ -355,7 +359,7 @@ func (this *Animation) Animate(target IAnimationTarget, delay float64, from int,
 		}
 		return false
 	}
-	repeatCount := int(ratio/rangeval) >> 0
+
 	this.currentFrame = from
 	if rangeval != 0 {
 		this.currentFrame = from + int(ratio)%int(rangeval)
@@ -412,7 +416,7 @@ func (this *Animation) Animate(target IAnimationTarget, delay float64, from int,
 	currentValue := this._interpolate(this.currentFrame, repeatCount, this.LoopMode, offsetValue, highLimitValue)
 
 	if this.playingCallback != nil {
-		this.playingCallback(this, this.currentFrame, currentValue)
+		this.playingCallback(this, this.currentFrame, isReplay, currentValue)
 	}
 
 	// // Set value

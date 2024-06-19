@@ -26,7 +26,7 @@ type Anim struct {
 	keyframelist []*AnimationKeyFrame
 
 	//playing
-	playingCallback func(int, interface{})
+	playingCallback func(int, bool, interface{})
 	//stop
 	stopCallback func()
 }
@@ -43,9 +43,9 @@ func NewAnim(name string, valtype ANIMVALTYPE, fps float64, totalframe int) *Ani
 	}
 	a.animation = NewAnimation(name, fps, (int)(valtype), ANIMATIONLOOPMODE_CYCLE)
 	a.Id = int(a.animation.GetAnimId())
-	a.animation.SetOnPlayingListener(func(an *Animation, currframe int, currval interface{}) {
+	a.animation.SetOnPlayingListener(func(an *Animation, currframe int, isReplay bool, currval interface{}) {
 		if a.playingCallback != nil {
-			a.playingCallback(currframe, currval)
+			a.playingCallback(currframe, isReplay, currval)
 		}
 	})
 	a.animation.SetOnStopingListener(func(an *Animation) {
@@ -82,7 +82,7 @@ func (a *Anim) SetLoop(isloop bool) *Anim {
 	return a
 }
 
-func (a *Anim) SetOnPlayingListener(playfuc func(int, interface{})) *Anim {
+func (a *Anim) SetOnPlayingListener(playfuc func(int, bool, interface{})) *Anim {
 	a.playingCallback = playfuc
 	return a
 }
@@ -108,7 +108,6 @@ func (a *Anim) Stop() *Anim {
 	return a
 }
 
-//
 func (a *Anim) Update(delay float64) bool {
 	if a.status == AnimstatusStop {
 		return false
