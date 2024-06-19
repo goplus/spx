@@ -608,13 +608,7 @@ func (p *Game) currentTPS() float64 {
 func (p *Game) Draw(screen *ebiten.Image) {
 	dc := drawContext{Image: p.world}
 	engine.SetRenderInfo(p.world, p.windowWidth_, p.windowHeight_, p.renderScale)
-	dc.Fill(color.White)
-	p.drawBackground(dc)
-	p.getTurtle().draw(dc, p.fs)
-	items := p.getItems()
-	for _, item := range items {
-		item.draw(dc)
-	}
+	p.onDraw(dc)
 	p.Camera.render(dc.Image, screen)
 }
 
@@ -982,8 +976,10 @@ func (p *Game) drawBackground(dc drawContext) {
 		winH := float64(p.windowHeight_)
 		numW := int(math.Ceil(winW/imgW/2 - 0.5))
 		numH := int(math.Ceil(winH/imgH/2 - 0.5))
-		rawOffsetW := float64(p.worldWidth_-p.windowWidth_) / 2.0
-		rawOffsetH := float64(p.worldHeight_-p.windowHeight_) / 2.0
+		worldW := float64(p.worldWidth_) * float64(p.renderScale)
+		worldH := float64(p.worldHeight_) * float64(p.renderScale)
+		rawOffsetW := (worldW - float64(p.windowWidth_)) / 2.0
+		rawOffsetH := (worldH - float64(p.windowHeight_)) / 2.0
 		offsetW := rawOffsetW + winW*0.5 - imgW*0.5 // draw from center
 		offsetH := rawOffsetH + winH*0.5 - imgH*0.5
 		for w := -numW; w <= numW; w++ {
