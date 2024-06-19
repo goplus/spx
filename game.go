@@ -427,6 +427,7 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 		log.Println("==> SetWindowSize", p.windowWidth_, p.windowHeight_)
 	}
 	ebiten.SetWindowSize(p.windowWidth_, p.windowHeight_)
+	engine.SetRenderInfo(p.world, p.windowWidth_, p.windowHeight_, p.renderScale)
 	p.Camera.init(p, float64(p.windowWidth_), float64(p.windowHeight_), float64(p.worldWidth_), float64(p.worldHeight_))
 
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeOnlyFullscreenEnabled)
@@ -607,7 +608,6 @@ func (p *Game) currentTPS() float64 {
 
 func (p *Game) Draw(screen *ebiten.Image) {
 	dc := drawContext{Image: p.world}
-	engine.SetRenderInfo(p.world, p.windowWidth_, p.windowHeight_, p.renderScale)
 	p.onDraw(dc)
 	p.Camera.render(dc.Image, screen)
 }
