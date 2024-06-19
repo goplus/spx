@@ -375,8 +375,19 @@ func (p *Game) loadSprite(sprite Spriter, name string, gamer reflect.Value) erro
 }
 
 func spriteOf(sprite Spriter) *Sprite {
-	vSpr := reflect.ValueOf(sprite).Elem()
-	return vSpr.Field(0).Addr().Interface().(*Sprite)
+	vSpr := reflect.ValueOf(sprite)
+	if vSpr.Kind() != reflect.Ptr {
+		return nil
+	}
+	vSpr = vSpr.Elem()
+	if vSpr.Kind() != reflect.Struct || vSpr.NumField() < 1 {
+		return nil
+	}
+	spriteField := vSpr.Field(0)
+	if spriteField.Type() != reflect.TypeOf(Sprite{}) {
+		return nil
+	}
+	return spriteField.Addr().Interface().(*Sprite)
 }
 
 func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
@@ -408,6 +419,12 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 		}
 	}
 	for _, ini := range inits {
+		spr := spriteOf(ini)
+		if spr != nil {
+			spr.OnAwake(func() {
+				spr.Awake()
+			})
+		}
 		ini.Main()
 	}
 
@@ -628,6 +645,8 @@ func (p *Game) handleEvent(event event) {
 		p.doWhenLeftButtonDown(ev)
 	case *eventKeyDown:
 		p.sinkMgr.doWhenKeyPressed(ev.Key)
+	case *eventAwake:
+		p.sinkMgr.doWhenAwake()
 	case *eventStart:
 		p.sinkMgr.doWhenStart()
 	}

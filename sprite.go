@@ -62,10 +62,11 @@ type Sprite struct {
 	rotationStyle RotationStyle
 	rRect         *math32.RotatedRect
 
-	sayObj        *sayOrThinker
-	quoteObj      *quoter
-	animations    map[string]*aniConfig
-	greffUniforms map[string]interface{} // graphic effects
+	sayObj           *sayOrThinker
+	quoteObj         *quoter
+	animations       map[string]*aniConfig
+	greffUniforms    map[string]interface{} // graphic effects
+	defaultAnimation string
 
 	penColor color.RGBA
 	penShade float64
@@ -82,7 +83,8 @@ type Sprite struct {
 	hasOnCloned  bool
 	hasOnTouched bool
 
-	gamer reflect.Value
+	gamer    reflect.Value
+	isAwaked bool
 }
 
 func (p *Sprite) SetDying() { // dying: visible but can't be touched
@@ -111,6 +113,7 @@ func (p *Sprite) init(
 
 	p.isVisible = sprite.Visible
 
+	p.defaultAnimation = sprite.DefaultAnimation
 	p.animations = make(map[string]*aniConfig)
 
 	for key, val := range sprite.FAnimations {
@@ -146,7 +149,15 @@ func (p *Sprite) init(
 		p.animations[key] = ani
 	}
 }
-
+func (p *Sprite) Awake() {
+	if p.isAwaked {
+		return
+	}
+	p.isAwaked = true
+	if p.defaultAnimation != "" {
+		p.Animate(p.defaultAnimation)
+	}
+}
 func (p *Sprite) InitFrom(src *Sprite) {
 	p.baseObj.initFrom(&src.baseObj)
 	p.eventSinks.initFrom(&src.eventSinks, p)
@@ -235,6 +246,11 @@ func cloneSprite(out reflect.Value, outPtr Spriter, in reflect.Value, v specsp) 
 	if v != nil { // in loadSprite
 		applySpriteProps(dest, v)
 	} else { // in sprite.Clone
+		dest.calledAwake = false
+		dest.isAwaked = false
+		dest.OnAwake(func() {
+			dest.Awake()
+		})
 		outPtr.Main()
 	}
 	return dest
@@ -254,6 +270,7 @@ func Gopt_Sprite_Clone__1(sprite Spriter, data interface{}) {
 	out, outPtr := v.Elem(), v.Interface().(Spriter)
 	dest := cloneSprite(out, outPtr, in, nil)
 	src.g.addClonedShape(src, dest)
+	dest.doWhenAwake()
 	if dest.hasOnCloned {
 		dest.doWhenCloned(dest, data)
 	}
@@ -524,10 +541,8 @@ func (p *Sprite) goAnimate(name string, ani *aniConfig) {
 	var animwg sync.WaitGroup
 	animwg.Add(1)
 
-	if ani.OnStart != nil {
-		if ani.OnStart.Play != "" {
-			p.g.Play__3(ani.OnStart.Play)
-		}
+	if ani.OnStart != nil && ani.OnStart.Play != "" {
+		p.g.Play__3(ani.OnStart.Play)
 	}
 
 	//anim frame
