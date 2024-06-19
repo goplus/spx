@@ -390,7 +390,7 @@ func (p *Sprite) getTrackPos() (topx, topy int) {
 		Y: float64(rRect.Center.Y),
 	}
 
-	renderScale := p.g.renderScale
+	renderScale := engine.GetRenderScale()
 	worldW, wolrdH := p.g.worldSize_()
 	pos.Y = -pos.Y
 	pos = &math32.Vector2{
