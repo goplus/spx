@@ -204,13 +204,16 @@ type actionConfig struct {
 }
 
 type aniConfig struct {
-	Duration float64       `json:"duration"`
-	Fps      float64       `json:"fps"`
-	From     interface{}   `json:"from"`
-	To       interface{}   `json:"to"`
-	AniType  aniTypeEnum   `json:"anitype"`
-	OnStart  *actionConfig `json:"onStart"` //start
-	OnPlay   *actionConfig `json:"onPlay"`  //play
+	Duration     float64       `json:"duration"`
+	Fps          float64       `json:"fps"`
+	From         interface{}   `json:"from"`
+	To           interface{}   `json:"to"`
+	AniType      aniTypeEnum   `json:"anitype"`
+	OnStart      *actionConfig `json:"onStart"` //start
+	OnPlay       *actionConfig `json:"onPlay"`  //play
+	AnimatorType string        `json:"type"`    // extention for skeleton animation
+	ClipName     string        `json:"clipName"`
+	ClipSpeed    float64       `json:"clipSpeed"`
 	//OnEnd *actionConfig  `json:"onEnd"`   //stop
 }
 
@@ -232,6 +235,8 @@ type spriteConfig struct {
 	TAnimations         map[string]*aniConfig `json:"tAnimations"`
 	Visible             bool                  `json:"visible"`
 	IsDraggable         bool                  `json:"isDraggable"`
+	Animator            string                `json:"animator"`
+	Avatar              string                `json:"avatar"`
 }
 
 func (p *spriteConfig) getCostumeIndex() int {

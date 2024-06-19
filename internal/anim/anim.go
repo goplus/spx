@@ -6,8 +6,13 @@ import (
 	"log"
 	"math"
 
+	spxfs "github.com/goplus/spx/fs"
+	"github.com/goplus/spx/internal/anim/common"
+	"github.com/goplus/spx/internal/anim/skeleton"
+	"github.com/goplus/spx/internal/anim/vertex"
 	"github.com/goplus/spx/internal/math32"
 	"github.com/goplus/spx/internal/tools"
+	"github.com/hajimehoshi/ebiten/v2"
 )
 
 const (
@@ -19,6 +24,10 @@ const (
 	ANIMATIONLOOPMODE_RELATIVE = 0
 	ANIMATIONLOOPMODE_CYCLE    = 1 //Restart the animation from initial value
 	ANIMATIONLOOPMODE_CONSTANT = 2 //Pause the animation at the final value
+
+	ANIMATOR_TYPE_VERTEX   = "vertex"
+	ANIMATOR_TYPE_SKELETON = "skeleton"
+	ANIMATOR_TYPE_FRAME    = "frame"
 )
 
 type IAnimatable interface {
@@ -36,6 +45,14 @@ type IAnimationTarget interface {
 	GetAnimatables() []IAnimatable
 }
 
+type IAnimator interface {
+	SetPosition(pos math32.Vector2)
+	Update()
+	Draw(screen *ebiten.Image)
+	Play(clipName string) *common.AnimClipState
+	GetClipState(clipName string) *common.AnimClipState
+}
+
 type Animatable struct {
 	target IAnimationTarget
 
@@ -46,6 +63,28 @@ type Animatable struct {
 	AnimationStartedDate int
 
 	SpeedRatio float64
+}
+
+func NewAnimator(fs spxfs.Dir, animatorPath string, avatarPath string) IAnimator {
+	var config common.AnimatorConfig
+	err := common.LoadJson(&config, fs, animatorPath)
+	if err != nil {
+		log.Panicf("animator config [%s] not exist", animatorPath)
+	}
+
+	var avatarConfig common.AvatarConfig
+	err = common.LoadJson(&avatarConfig, fs, avatarPath)
+	if err != nil {
+		log.Panicf("avatar config [%s] not exist", animatorPath)
+	}
+
+	var animator IAnimator
+	if config.Type == ANIMATOR_TYPE_VERTEX {
+		animator = vertex.NewAnimator(fs, &config, &avatarConfig)
+	} else {
+		animator = skeleton.NewAnimator(fs, &config, &avatarConfig)
+	}
+	return animator
 }
 
 func NewAnimatable(target IAnimationTarget, from int, to int, loop bool, speedRatio float64) *Animatable {

@@ -1,0 +1,30 @@
+{
+	"type": "skeleton",
+	"defaultClip": "roll",
+	"clips": [
+		{
+			"name": "idle",
+			"loop": true,
+			"frameRate": 30,
+			"path": "animations/Stander@Idle.anim"
+		},
+		{
+			"name": "jump",
+			"loop": true,
+			"frameRate": 30,
+			"path": "animations/Stander@Jump.anim"
+		},
+		{
+			"name": "swim",
+			"loop": true,
+			"frameRate": 30,
+			"path": "animations/Stander@Swim.anim"
+		},
+		{
+			"name": "hitdown",
+			"loop": true,
+			"frameRate": 30,
+			"path": "animations/Stander@HitDown.anim"
+		}
+	]
+}

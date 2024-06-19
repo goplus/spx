@@ -108,7 +108,6 @@ func (a *Anim) Stop() *Anim {
 	return a
 }
 
-//
 func (a *Anim) Update(delay float64) bool {
 	if a.status == AnimstatusStop {
 		return false

@@ -82,7 +82,8 @@ type Sprite struct {
 	hasOnCloned  bool
 	hasOnTouched bool
 
-	gamer reflect.Value
+	gamer    reflect.Value
+	animator anim.IAnimator
 }
 
 func (p *Sprite) SetDying() { // dying: visible but can't be touched
@@ -144,6 +145,13 @@ func (p *Sprite) init(
 			ani.Fps = 25
 		}
 		p.animations[key] = ani
+	}
+
+	if sprite.Animator != "" {
+		if sprite.Avatar == "" {
+			log.Panicf("[%s] missing avatar config", name)
+		}
+		p.animator = anim.NewAnimator(g.fs, sprite.Animator, sprite.Avatar)
 	}
 }
 
@@ -560,6 +568,14 @@ func (p *Sprite) goAnimate(name string, ani *aniConfig) {
 	if debugInstr {
 		log.Printf("New anim [name %s id %d] from:%v to:%v framenum:%d fps:%f", an.Name, an.Id, fromval, toval, framenum, fps)
 	}
+
+	if p.animator != nil && ani.ClipName != "" {
+		state := p.animator.Play(ani.ClipName)
+		if state != nil {
+			state.Speed = ani.ClipSpeed
+		}
+	}
+
 	an.SetOnPlayingListener(func(currframe int, currval interface{}) {
 		if debugInstr {
 			log.Printf("playing anim [name %s id %d]  currframe %d, val %v", an.Name, an.Id, currframe, currval)
@@ -568,7 +584,9 @@ func (p *Sprite) goAnimate(name string, ani *aniConfig) {
 		switch ani.AniType {
 		case aniTypeFrame:
 			val, _ := tools.GetFloat(currval)
-			p.setCostumeByIndex(int(val))
+			if p.animator == nil {
+				p.setCostumeByIndex(int(val))
+			}
 		case aniTypeMove:
 			val, _ := tools.GetFloat(currval)
 			sin, cos := math.Sincos(toRadian(pre_direction))
@@ -581,12 +599,11 @@ func (p *Sprite) goAnimate(name string, ani *aniConfig) {
 			if ok {
 				p.SetXYpos(val.X, val.Y)
 			}
-
 		}
 
 		playaction := ani.OnPlay
 		if playaction != nil {
-			if ani.AniType != aniTypeFrame && playaction.Costumes != nil {
+			if p.animator == nil && ani.AniType != aniTypeFrame && playaction.Costumes != nil {
 				costumes := playaction.Costumes
 				costumesFrom, costumesTo := p.getFromAnToForAni(aniTypeFrame, costumes.From, costumes.To)
 				costumesFromf, _ := costumesFrom.(float64)
@@ -619,6 +636,10 @@ func (p *Sprite) Animate(name string) {
 	}
 	if ani, ok := p.animations[name]; ok {
 		p.goAnimate(name, ani)
+		return
+	}
+	if p.animator != nil {
+		p.animator.Play(name)
 	} else {
 		log.Println("Animation not found:", name)
 	}

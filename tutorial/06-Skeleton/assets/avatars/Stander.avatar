@@ -1,0 +1,13 @@
+{
+	"type": "skeleton",
+	"image": "avatars/Stander.png",
+	"mesh": "avatars/Stander.mesh",
+	"scale": {
+		"x": 20,
+		"y": 20
+	},
+	"offset": {
+		"x": 0,
+		"y": 0
+	}
+}

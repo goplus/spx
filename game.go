@@ -33,6 +33,7 @@ import (
 
 	"github.com/goplus/spx/internal/audiorecord"
 	"github.com/goplus/spx/internal/coroutine"
+	"github.com/goplus/spx/internal/engine"
 	"github.com/goplus/spx/internal/gdi"
 	"github.com/goplus/spx/internal/math32"
 	"github.com/hajimehoshi/ebiten/v2"
@@ -380,6 +381,7 @@ func spriteOf(sprite Spriter) *Sprite {
 }
 
 func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
+	engine.Time.OnLevelLoaded()
 	if backdrops := proj.getBackdrops(); len(backdrops) > 0 {
 		p.baseObj.initBackdrops("", backdrops, proj.getBackdropIndex())
 		p.worldWidth_ = proj.Map.Width
@@ -581,6 +583,7 @@ func (p *Game) Update() error {
 	if !p.isLoaded {
 		return nil
 	}
+	engine.Time.Update()
 	p.input.update()
 	p.updateMousePos()
 	p.sounds.update()
