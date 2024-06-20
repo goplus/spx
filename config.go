@@ -41,12 +41,14 @@ func loadJson(ret interface{}, fs spxfs.Dir, file string) (err error) {
 	return json.NewDecoder(f).Decode(ret)
 }
 
-func loadsceneConfig(scene *sceneConfig, fs spxfs.Dir, index interface{}) (err error) {
+func loadsceneConfig(p *Game, scene *sceneConfig, fs spxfs.Dir, index interface{}) (err error) {
 	switch v := index.(type) {
 	case io.Reader:
 		err = json.NewDecoder(v).Decode(scene)
 	case string:
 		err = loadJson(&scene, fs, v)
+	case int:
+		err = loadJson(&scene, fs, p.setting.GetScene(v))
 	case nil:
 		err = loadJson(&scene, fs, "index.json")
 	default:
@@ -102,6 +104,18 @@ type projConfig struct {
 	Scenes            []string `json:"scenes"`
 	DefaultSceneIndex int      `json:"defaultSceneIndex"`
 }
+
+func (p *projConfig) GetDefaultScene() string {
+	return p.GetScene(p.DefaultSceneIndex)
+}
+
+func (p *projConfig) GetScene(sceneIndex int) string {
+	if sceneIndex < 0 || sceneIndex >= len(p.Scenes) {
+		panic("invalid scene index")
+	}
+	return p.Scenes[sceneIndex]
+}
+
 type sceneConfig struct {
 	Zorder        []interface{}     `json:"zorder"`
 	Backdrops     []*backdropConfig `json:"backdrops"`

@@ -164,6 +164,7 @@ func (p *Game) reset() {
 	p.items = nil
 	p.isLoaded = false
 	p.sprs = make(map[string]Spriter)
+	p.worldWidth_, p.worldHeight_ = 0, 0
 }
 
 func (p *Game) initGame(sprites []Spriter) *Game {
@@ -197,7 +198,6 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 		panic(err)
 	}
 
-	var conf Config
 	var proj projConfig
 	{
 		projPath := "setting.json"
@@ -209,16 +209,18 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 			proj.Scenes = []string{"index.json"}
 			proj.DefaultSceneIndex = 0
 		}
-		if proj.DefaultSceneIndex < 0 || proj.DefaultSceneIndex >= len(proj.Scenes) {
-			panic("invalid DefaultSceneIndex")
-		}
 	}
+	v := reflect.ValueOf(game).Elem()
+	g := instance(v)
+	g.setting = &proj
+
+	var conf Config
 	var scene sceneConfig
 	if gameConf != nil {
 		conf = *gameConf[0]
-		err = loadsceneConfig(&scene, fs, conf.Index)
+		err = loadsceneConfig(g, &scene, fs, conf.Index)
 	} else {
-		err = loadsceneConfig(&scene, fs, proj.Scenes[proj.DefaultSceneIndex])
+		err = loadsceneConfig(g, &scene, fs, proj.GetDefaultScene())
 		if scene.Run != nil { // load Config from index.json
 			conf = *scene.Run
 		}
@@ -260,9 +262,6 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 		}
 	}
 
-	v := reflect.ValueOf(game).Elem()
-	g := instance(v)
-	g.setting = &proj
 	if debugLoad {
 		log.Println("==> StartLoad", resource)
 	}
@@ -473,7 +472,7 @@ func Gopt_Game_Reload(game Gamer, index interface{}) (err error) {
 		}
 	}
 	var proj sceneConfig
-	if err = loadsceneConfig(&proj, g.fs, index); err != nil {
+	if err = loadsceneConfig(g, &proj, g.fs, index); err != nil {
 		return
 	}
 	return g.loadIndex(v, &proj)
