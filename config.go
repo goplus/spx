@@ -211,6 +211,7 @@ type aniConfig struct {
 	AniType  aniTypeEnum   `json:"anitype"`
 	OnStart  *actionConfig `json:"onStart"` //start
 	OnPlay   *actionConfig `json:"onPlay"`  //play
+	IsLoop   bool          `json:"isLoop"`
 	//OnEnd *actionConfig  `json:"onEnd"`   //stop
 }
 
