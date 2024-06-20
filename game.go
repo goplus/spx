@@ -395,25 +395,25 @@ func spriteOf(sprite Spriter) *Sprite {
 	return vSpr.Field(0).Addr().Interface().(*Sprite)
 }
 
-func (p *Game) loadIndex(g reflect.Value, proj *sceneConfig) (err error) {
-	if backdrops := proj.getBackdrops(); len(backdrops) > 0 {
-		p.baseObj.initBackdrops("", backdrops, proj.getBackdropIndex())
-		p.worldWidth_ = proj.Map.Width
-		p.worldHeight_ = proj.Map.Height
+func (p *Game) loadIndex(g reflect.Value, scene *sceneConfig) (err error) {
+	if backdrops := scene.getBackdrops(); len(backdrops) > 0 {
+		p.baseObj.initBackdrops("", backdrops, scene.getBackdropIndex())
+		p.worldWidth_ = scene.Map.Width
+		p.worldHeight_ = scene.Map.Height
 		p.doWorldSize() // set world size
 	} else {
-		p.worldWidth_ = proj.Map.Width
-		p.worldHeight_ = proj.Map.Height
+		p.worldWidth_ = scene.Map.Width
+		p.worldHeight_ = scene.Map.Height
 		p.baseObj.initWithSize(p.worldWidth_, p.worldHeight_)
 	}
 	if debugLoad {
 		log.Println("==> SetWorldSize", p.worldWidth_, p.worldHeight_)
 	}
 	p.world = ebiten.NewImage(p.worldWidth_, p.worldHeight_)
-	p.mapMode = toMapMode(proj.Map.Mode)
+	p.mapMode = toMapMode(scene.Map.Mode)
 
-	inits := make([]Spriter, 0, len(proj.Zorder))
-	for _, v := range proj.Zorder {
+	inits := make([]Spriter, 0, len(scene.Zorder))
+	for _, v := range scene.Zorder {
 		if name, ok := v.(string); ok {
 			sp := p.getSpriteProtoByName(name, g)
 			p.addShape(spriteOf(sp))
@@ -441,8 +441,8 @@ func (p *Game) loadIndex(g reflect.Value, proj *sceneConfig) (err error) {
 	p.Camera.init(p, float64(p.windowWidth_), float64(p.windowHeight_), float64(p.worldWidth_), float64(p.worldHeight_))
 
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeOnlyFullscreenEnabled)
-	if proj.Camera != nil && proj.Camera.On != "" {
-		p.Camera.On(proj.Camera.On)
+	if scene.Camera != nil && scene.Camera.On != "" {
+		p.Camera.On(scene.Camera.On)
 	}
 	if loader, ok := g.Addr().Interface().(interface{ OnLoaded() }); ok {
 		loader.OnLoaded()
@@ -452,11 +452,11 @@ func (p *Game) loadIndex(g reflect.Value, proj *sceneConfig) (err error) {
 	return
 }
 
-func (p *Game) endLoad(g reflect.Value, proj *sceneConfig) (err error) {
+func (p *Game) endLoad(g reflect.Value, scene *sceneConfig) (err error) {
 	if debugLoad {
 		log.Println("==> EndLoad")
 	}
-	return p.loadIndex(g, proj)
+	return p.loadIndex(g, scene)
 }
 
 func Gopt_Game_Reload(game Gamer, index interface{}) (err error) {
@@ -471,11 +471,11 @@ func Gopt_Game_Reload(game Gamer, index interface{}) (err error) {
 			}
 		}
 	}
-	var proj sceneConfig
-	if err = loadsceneConfig(g, &proj, g.fs, index); err != nil {
+	var scene sceneConfig
+	if err = loadsceneConfig(g, &scene, g.fs, index); err != nil {
 		return
 	}
-	return g.loadIndex(v, &proj)
+	return g.loadIndex(v, &scene)
 }
 
 // -----------------------------------------------------------------------------
