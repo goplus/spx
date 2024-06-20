@@ -22,6 +22,7 @@ import (
 	"syscall"
 
 	spxfs "github.com/goplus/spx/fs"
+	"github.com/goplus/spx/internal/math32"
 )
 
 func resourceDir(resource interface{}) (fs spxfs.Dir, err error) {
@@ -232,6 +233,7 @@ type spriteConfig struct {
 	TAnimations         map[string]*aniConfig `json:"tAnimations"`
 	Visible             bool                  `json:"visible"`
 	IsDraggable         bool                  `json:"isDraggable"`
+	Pivot               math32.Vector2        `json:"pivot"`
 }
 
 func (p *spriteConfig) getCostumeIndex() int {

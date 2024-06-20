@@ -134,6 +134,8 @@ func (p *spriteDrawInfo) updateMatrix() {
 	c := p.sprite.costumes[p.sprite.costumeIndex_]
 
 	img, centerX, centerY := c.needImage(p.sprite.g.fs)
+	centerX += p.sprite.pivot.X
+	centerY += p.sprite.pivot.Y
 	rect := image.Rectangle{}
 	rect.Min.X = 0
 	rect.Min.Y = 0
