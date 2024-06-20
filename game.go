@@ -75,8 +75,9 @@ type Game struct {
 	eventSinks
 	Camera
 
-	fs     spxfs.Dir
-	shared *sharedImages
+	fs      spxfs.Dir
+	shared  *sharedImages
+	setting *projConfig
 
 	sounds soundMgr
 	turtle turtleCanvas
@@ -198,13 +199,28 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 
 	var conf Config
 	var proj projConfig
+	{
+		projPath := "setting.json"
+		_, e := fs.Open(projPath)
+		if e == nil {
+			err = loadJson(&proj, fs, projPath)
+		} else {
+			proj = projConfig{}
+			proj.Scenes = []string{"index.json"}
+			proj.DefaultSceneIndex = 0
+		}
+		if proj.DefaultSceneIndex < 0 || proj.DefaultSceneIndex >= len(proj.Scenes) {
+			panic("invalid DefaultSceneIndex")
+		}
+	}
+	var scene sceneConfig
 	if gameConf != nil {
 		conf = *gameConf[0]
-		err = loadProjConfig(&proj, fs, conf.Index)
+		err = loadsceneConfig(&scene, fs, conf.Index)
 	} else {
-		err = loadProjConfig(&proj, fs, nil)
-		if proj.Run != nil { // load Config from index.json
-			conf = *proj.Run
+		err = loadsceneConfig(&scene, fs, proj.Scenes[proj.DefaultSceneIndex])
+		if scene.Run != nil { // load Config from index.json
+			conf = *scene.Run
 		}
 	}
 	if err != nil {
@@ -246,6 +262,7 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 
 	v := reflect.ValueOf(game).Elem()
 	g := instance(v)
+	g.setting = &proj
 	if debugLoad {
 		log.Println("==> StartLoad", resource)
 	}
@@ -266,7 +283,7 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 			// p.sprs[name] = fld (has been set by loadSprite)
 		}
 	}
-	if err := g.endLoad(v, &proj); err != nil {
+	if err := g.endLoad(v, &scene); err != nil {
 		panic(err)
 	}
 
@@ -379,7 +396,7 @@ func spriteOf(sprite Spriter) *Sprite {
 	return vSpr.Field(0).Addr().Interface().(*Sprite)
 }
 
-func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
+func (p *Game) loadIndex(g reflect.Value, proj *sceneConfig) (err error) {
 	if backdrops := proj.getBackdrops(); len(backdrops) > 0 {
 		p.baseObj.initBackdrops("", backdrops, proj.getBackdropIndex())
 		p.worldWidth_ = proj.Map.Width
@@ -436,7 +453,7 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 	return
 }
 
-func (p *Game) endLoad(g reflect.Value, proj *projConfig) (err error) {
+func (p *Game) endLoad(g reflect.Value, proj *sceneConfig) (err error) {
 	if debugLoad {
 		log.Println("==> EndLoad")
 	}
@@ -455,8 +472,8 @@ func Gopt_Game_Reload(game Gamer, index interface{}) (err error) {
 			}
 		}
 	}
-	var proj projConfig
-	if err = loadProjConfig(&proj, g.fs, index); err != nil {
+	var proj sceneConfig
+	if err = loadsceneConfig(&proj, g.fs, index); err != nil {
 		return
 	}
 	return g.loadIndex(v, &proj)
