@@ -89,7 +89,6 @@ func (p *eventSink) call(wait bool, data interface{}, doSth func(*eventSink)) {
 // -------------------------------------------------------------------------------------
 
 type eventSinkMgr struct {
-	allWhenAwake           *eventSink
 	allWhenStart           *eventSink
 	allWhenKeyPressed      *eventSink
 	allWhenIReceive        *eventSink
@@ -100,11 +99,9 @@ type eventSinkMgr struct {
 	allWhenMoving          *eventSink
 	allWhenTurning         *eventSink
 	calledStart            bool
-	calledAwake            bool
 }
 
 func (p *eventSinkMgr) reset() {
-	p.allWhenAwake = nil
 	p.allWhenStart = nil
 	p.allWhenKeyPressed = nil
 	p.allWhenIReceive = nil
@@ -115,11 +112,9 @@ func (p *eventSinkMgr) reset() {
 	p.allWhenMoving = nil
 	p.allWhenTurning = nil
 	p.calledStart = false
-	p.calledAwake = false
 }
 
 func (p *eventSinkMgr) doDeleteClone(this interface{}) {
-	p.allWhenAwake = p.allWhenAwake.doDeleteClone(this)
 	p.allWhenStart = p.allWhenStart.doDeleteClone(this)
 	p.allWhenKeyPressed = p.allWhenKeyPressed.doDeleteClone(this)
 	p.allWhenIReceive = p.allWhenIReceive.doDeleteClone(this)
@@ -129,17 +124,6 @@ func (p *eventSinkMgr) doDeleteClone(this interface{}) {
 	p.allWhenClick = p.allWhenClick.doDeleteClone(this)
 	p.allWhenMoving = p.allWhenMoving.doDeleteClone(this)
 	p.allWhenTurning = p.allWhenTurning.doDeleteClone(this)
-}
-func (p *eventSinkMgr) doWhenAwake() {
-	if !p.calledAwake {
-		p.calledAwake = true
-		p.allWhenAwake.asyncCall(false, nil, func(ev *eventSink) {
-			if debugEvent {
-				log.Println("==> onAwake", nameOf(ev.pthis))
-			}
-			ev.sink.(func())()
-		})
-	}
 }
 
 func (p *eventSinkMgr) doWhenStart() {
@@ -243,13 +227,6 @@ func (p *eventSinks) doDeleteClone() {
 }
 
 // -------------------------------------------------------------------------------------
-func (p *eventSinks) OnAwake(onStart func()) {
-	p.allWhenAwake = &eventSink{
-		prev:  p.allWhenAwake,
-		pthis: p.pthis,
-		sink:  onStart,
-	}
-}
 
 func (p *eventSinks) OnStart(onStart func()) {
 	p.allWhenStart = &eventSink{

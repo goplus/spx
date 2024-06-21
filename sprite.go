@@ -91,7 +91,6 @@ type Sprite struct {
 	hasOnTouched bool
 
 	gamer    reflect.Value
-	isAwaked bool
 	lastAnim *anim.Anim
 }
 
@@ -162,12 +161,10 @@ func (p *Sprite) init(
 	}
 }
 func (p *Sprite) Awake() {
-	if p.isAwaked {
-		return
-	}
-	p.isAwaked = true
 	if p.defaultAnimation != "" {
-		p.Animate(p.defaultAnimation)
+		if p.isVisible {
+			p.Animate(p.defaultAnimation)
+		}
 	}
 }
 func (p *Sprite) InitFrom(src *Sprite) {
@@ -258,9 +255,7 @@ func cloneSprite(out reflect.Value, outPtr Spriter, in reflect.Value, v specsp) 
 	if v != nil { // in loadSprite
 		applySpriteProps(dest, v)
 	} else { // in sprite.Clone
-		dest.calledAwake = false
-		dest.isAwaked = false
-		dest.OnAwake(func() {
+		dest.OnCloned__1(func() {
 			dest.Awake()
 		})
 		outPtr.Main()
@@ -282,7 +277,6 @@ func Gopt_Sprite_Clone__1(sprite Spriter, data interface{}) {
 	out, outPtr := v.Elem(), v.Interface().(Spriter)
 	dest := cloneSprite(out, outPtr, in, nil)
 	src.g.addClonedShape(src, dest)
-	dest.doWhenAwake()
 	if dest.hasOnCloned {
 		dest.doWhenCloned(dest, data)
 	}

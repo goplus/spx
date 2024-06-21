@@ -132,8 +132,6 @@ const (
 
 type event interface{}
 
-type eventAwake struct{}
-
 type eventStart struct{}
 
 type eventKeyDown struct {
@@ -196,7 +194,6 @@ const (
 func (i *inputMgr) update() {
 	i.touchIDs = ebiten.AppendTouchIDs(i.touchIDs[:0])
 	i.startFlag.Do(func() {
-		i.firer.fireEvent(&eventAwake{})
 		i.firer.fireEvent(&eventStart{})
 	})
 	i.updateKeyboard()
