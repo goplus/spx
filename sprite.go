@@ -66,6 +66,7 @@ type Sprite struct {
 	direction     float64
 	rotationStyle RotationStyle
 	rRect         *math32.RotatedRect
+	pivot         math32.Vector2
 
 	sayObj           *sayOrThinker
 	quoteObj         *quoter
@@ -91,6 +92,7 @@ type Sprite struct {
 
 	gamer    reflect.Value
 	isAwaked bool
+	lastAnim *anim.Anim
 }
 
 func (p *Sprite) SetDying() { // dying: visible but can't be touched
@@ -116,8 +118,8 @@ func (p *Sprite) init(
 	p.scale = sprite.Size
 	p.direction = sprite.Heading
 	p.rotationStyle = toRotationStyle(sprite.RotationStyle)
-
 	p.isVisible = sprite.Visible
+	p.pivot = sprite.Pivot
 
 	p.animBindings = make(map[string]string)
 	for key, val := range sprite.AnimBindings {
@@ -555,6 +557,9 @@ func (p *Sprite) getStateAnimName(stateName string) string {
 }
 
 func (p *Sprite) goAnimate(name string, ani *aniConfig) {
+	if p.lastAnim != nil {
+		p.lastAnim.Stop()
+	}
 	var animwg sync.WaitGroup
 	animwg.Add(1)
 
@@ -588,13 +593,19 @@ func (p *Sprite) goAnimate(name string, ani *aniConfig) {
 	pre_y := p.y
 	pre_direction := p.direction //turn p.direction
 
-	an := anim.NewAnim(name, animtype, fps, framenum).AddKeyFrame(0, fromval).AddKeyFrame(framenum, toval).SetLoop(false)
+	an := anim.NewAnim(name, animtype, fps, framenum).AddKeyFrame(0, fromval).AddKeyFrame(framenum, toval).SetLoop(ani.IsLoop)
+	p.lastAnim = an
 	if debugInstr {
 		log.Printf("New anim [name %s id %d] from:%v to:%v framenum:%d fps:%f", an.Name, an.Id, fromval, toval, framenum, fps)
 	}
-	an.SetOnPlayingListener(func(currframe int, currval interface{}) {
+	an.SetOnPlayingListener(func(currframe int, isReplay bool, currval interface{}) {
 		if debugInstr {
 			log.Printf("playing anim [name %s id %d]  currframe %d, val %v", an.Name, an.Id, currframe, currval)
+		}
+		if isReplay && ani.IsLoop {
+			if ani.OnStart != nil && ani.OnStart.Play != "" {
+				p.g.Play__3(ani.OnStart.Play)
+			}
 		}
 
 		switch ani.AniType {
@@ -633,6 +644,7 @@ func (p *Sprite) goAnimate(name string, ani *aniConfig) {
 			log.Printf("stop anim [name %s id %d]  ", an.Name, an.Id)
 		}
 		animwg.Done()
+		p.lastAnim = nil
 	})
 
 	var h *tickHandler

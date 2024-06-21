@@ -6,8 +6,8 @@ import (
 )
 
 type Vector2 struct {
-	X float64
-	Y float64
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
 }
 
 func NewVector2(x, y float64) *Vector2 {
