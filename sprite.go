@@ -160,7 +160,7 @@ func (p *Sprite) init(
 		p.animations[key] = ani
 	}
 }
-func (p *Sprite) Awake() {
+func (p *Sprite) awake() {
 	if p.defaultAnimation != "" {
 		if p.isVisible {
 			p.Animate(p.defaultAnimation)
@@ -256,7 +256,7 @@ func cloneSprite(out reflect.Value, outPtr Spriter, in reflect.Value, v specsp) 
 		applySpriteProps(dest, v)
 	} else { // in sprite.Clone
 		dest.OnCloned__1(func() {
-			dest.Awake()
+			dest.awake()
 		})
 		outPtr.Main()
 	}

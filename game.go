@@ -422,7 +422,7 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 		spr := spriteOf(ini)
 		if spr != nil {
 			spr.OnStart(func() {
-				spr.Awake()
+				spr.awake()
 			})
 		}
 		ini.Main()
