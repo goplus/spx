@@ -48,6 +48,11 @@ const (
 	EdgeRight  specialObj = touchingScreenRight
 	EdgeBottom specialObj = touchingScreenBottom
 )
+const (
+	StateDie   string = "die"
+	StateTurn  string = "turn"
+	StateGlide string = "glide"
+)
 
 type Sprite struct {
 	baseObj
@@ -63,10 +68,12 @@ type Sprite struct {
 	rRect         *math32.RotatedRect
 	pivot         math32.Vector2
 
-	sayObj        *sayOrThinker
-	quoteObj      *quoter
-	animations    map[string]*aniConfig
-	greffUniforms map[string]interface{} // graphic effects
+	sayObj           *sayOrThinker
+	quoteObj         *quoter
+	animations       map[string]*aniConfig
+	greffUniforms    map[string]interface{} // graphic effects
+	animBindings     map[string]string
+	defaultAnimation string
 
 	penColor color.RGBA
 	penShade float64
@@ -113,8 +120,13 @@ func (p *Sprite) init(
 	p.isVisible = sprite.Visible
 	p.pivot = sprite.Pivot
 
-	p.animations = make(map[string]*aniConfig)
+	p.animBindings = make(map[string]string)
+	for key, val := range sprite.AnimBindings {
+		p.animBindings[key] = val
+	}
 
+	p.defaultAnimation = sprite.DefaultAnimation
+	p.animations = make(map[string]*aniConfig)
 	for key, val := range sprite.FAnimations {
 		var ani = val
 		ani.AniType = aniTypeFrame
@@ -148,7 +160,13 @@ func (p *Sprite) init(
 		p.animations[key] = ani
 	}
 }
-
+func (p *Sprite) awake() {
+	if p.defaultAnimation != "" {
+		if p.isVisible {
+			p.Animate(p.defaultAnimation)
+		}
+	}
+}
 func (p *Sprite) InitFrom(src *Sprite) {
 	p.baseObj.initFrom(&src.baseObj)
 	p.eventSinks.initFrom(&src.eventSinks, p)
@@ -237,6 +255,9 @@ func cloneSprite(out reflect.Value, outPtr Spriter, in reflect.Value, v specsp) 
 	if v != nil { // in loadSprite
 		applySpriteProps(dest, v)
 	} else { // in sprite.Clone
+		dest.OnCloned__1(func() {
+			dest.awake()
+		})
 		outPtr.Main()
 	}
 	return dest
@@ -403,7 +424,7 @@ func (p *Sprite) OnTurning__1(onTurning func()) {
 }
 
 func (p *Sprite) Die() { // prototype sprite can't be destroyed, but can die
-	const aniName = "die"
+	aniName := p.getStateAnimName(StateDie)
 	p.SetDying()
 	if ani, ok := p.animations[aniName]; ok {
 		p.goAnimate(aniName, ani)
@@ -520,6 +541,13 @@ func (p *Sprite) getFromAnToForAni(anitype aniTypeEnum, from interface{}, to int
 
 	return from, to
 
+}
+
+func (p *Sprite) getStateAnimName(stateName string) string {
+	if bindingName, ok := p.animBindings[stateName]; ok {
+		return bindingName
+	}
+	return stateName
 }
 
 func (p *Sprite) goAnimate(name string, ani *aniConfig) {
@@ -785,7 +813,8 @@ func (p *Sprite) Glide__0(x, y float64, secs float64) {
 		To:       math32.NewVector2(x, y),
 		AniType:  aniTypeGlide,
 	}
-	p.goAnimate("glide", ani)
+	animName := p.getStateAnimName(StateGlide)
+	p.goAnimate(animName, ani)
 }
 
 func (p *Sprite) Glide__1(obj interface{}, secs float64) {
@@ -880,13 +909,13 @@ func (p *Sprite) Turn(val interface{}) {
 	default:
 		panic("Turn: unexpected input")
 	}
-
-	if ani, ok := p.animations["turn"]; ok {
+	animName := p.getStateAnimName(StateTurn)
+	if ani, ok := p.animations[animName]; ok {
 		anicopy := *ani
 		anicopy.From = p.direction
 		anicopy.To = p.direction + delta
 		anicopy.Duration = ani.Duration / 360.0 * math.Abs(delta)
-		p.goAnimate("turn", &anicopy)
+		p.goAnimate(animName, &anicopy)
 		return
 	}
 	if p.setDirection(delta, true) && debugInstr {
@@ -920,7 +949,8 @@ func (p *Sprite) TurnTo(obj interface{}) {
 		angle = 90 - math.Atan2(dy, dx)*180/math.Pi
 	}
 
-	if ani, ok := p.animations["turn"]; ok {
+	animName := p.getStateAnimName(StateTurn)
+	if ani, ok := p.animations[animName]; ok {
 		fromangle := math.Mod(p.direction+360.0, 360.0)
 		toangle := math.Mod(angle+360.0, 360.0)
 		if toangle-fromangle > 180.0 {
@@ -934,7 +964,7 @@ func (p *Sprite) TurnTo(obj interface{}) {
 		anicopy.From = fromangle
 		anicopy.To = toangle
 		anicopy.Duration = ani.Duration / 360.0 * math.Abs(delta)
-		p.goAnimate("turn", &anicopy)
+		p.goAnimate(animName, &anicopy)
 		return
 	}
 	if p.setDirection(angle, false) && debugInstr {

@@ -235,6 +235,8 @@ type spriteConfig struct {
 	Visible             bool                  `json:"visible"`
 	IsDraggable         bool                  `json:"isDraggable"`
 	Pivot               math32.Vector2        `json:"pivot"`
+	DefaultAnimation    string                `json:"defaultAnimation"`
+	AnimBindings        map[string]string     `json:"animBindings"`
 }
 
 func (p *spriteConfig) getCostumeIndex() int {
