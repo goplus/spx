@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/goplus/spx/internal/engine"
 	"github.com/goplus/spx/internal/gdi"
 	"github.com/hajimehoshi/ebiten/v2"
 )
@@ -85,11 +86,9 @@ func getSpcspVal(ss specsp, key string, defaultVal ...interface{}) interface{} {
 func (m *measure) draw(dc drawContext) {
 	if m.cachedImg != nil {
 		screenW, screenH := dc.Size()
-		op := new(ebiten.DrawImageOptions)
 		x := float64((screenW-m.svgSize)>>1) + m.x
 		y := float64((screenH-m.svgSize)>>1) - m.y
-		op.GeoM.Translate(x, y)
-		dc.DrawImage(m.cachedImg, op)
+		engine.DrawWithPos(dc.Image, m.cachedImg, x, y)
 		return
 	}
 	// lines

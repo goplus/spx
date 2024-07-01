@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/goplus/spx/internal/engine"
 	"github.com/goplus/spx/internal/gdi"
 	xfont "github.com/goplus/spx/internal/gdi/font"
 	"github.com/hajimehoshi/ebiten/v2"
@@ -93,11 +94,9 @@ func (p *quoter) draw(dc drawContext) {
 	}
 	imgW, imgH := img.Size()
 	w, h := dc.Size()
-	op := new(ebiten.DrawImageOptions)
 	x := p.sprite.x + float64(w)/2 - float64(imgW)/2
 	y := -p.sprite.y - quotePadding - float64(imgH) + float64(h)/2 + float64(imgH)/2
-	op.GeoM.Translate(x, y)
-	dc.DrawImage(img, op)
+	engine.DrawWithPos(dc.Image, img, x, y)
 }
 
 func (p *quoter) getImage() *ebiten.Image {

@@ -7,6 +7,7 @@ import (
 	"sync"
 	"unicode"
 
+	"github.com/goplus/spx/internal/engine"
 	"github.com/qiniu/x/ctype"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -133,14 +134,12 @@ func getFaceCache(f font.Face) *faceCache {
 // -------------------------------------------------------------------------------------
 
 // CachedFace represents a cached face
-//
 type CachedFace struct {
 	font.Face
 	*faceCache
 }
 
 // NewFace creates a cached face object.
-//
 func NewFace(f font.Face) CachedFace {
 	return CachedFace{f, getFaceCache(f)}
 }
@@ -148,21 +147,18 @@ func NewFace(f font.Face) CachedFace {
 // -------------------------------------------------------------------------------------
 
 // RenderGlyph represents a rendered text.
-//
 type RenderGlyph struct {
 	X fixed.Int26_6
 	C rune
 }
 
 // RenderLine represents a rendered line.
-//
 type RenderLine struct {
 	Items []RenderGlyph
 	LastX fixed.Int26_6
 }
 
 // Render represents a text rendering engine.
-//
 type Render struct {
 	Face    CachedFace
 	Width   fixed.Int26_6
@@ -174,7 +170,6 @@ type Render struct {
 }
 
 // NewRender creates a new text rendering engine.
-//
 func NewRender(face font.Face, width, dy fixed.Int26_6) *Render {
 	f := NewFace(face)
 	return &Render{
@@ -211,7 +206,6 @@ func getPunctSplit(line []RenderGlyph) int {
 }
 
 // AddText renders inputed text.
-//
 func (p *Render) AddText(s string) {
 	f := p.Face
 	for _, c := range s {
@@ -271,14 +265,12 @@ func (p *Render) getWidth() fixed.Int26_6 {
 }
 
 // Size returns width and height of rendered text.
-//
 func (p *Render) Size() (fixed.Int26_6, fixed.Int26_6) {
 	h := p.Face.Descent + p.Face.Ascent + p.Height.Mul(fixed.I(len(p.NotLast)))
 	return p.getWidth(), h
 }
 
 // Draw draws rendered text.
-//
 func (p *Render) Draw(dst *ebiten.Image, x, y fixed.Int26_6, clr color.Color, mode int) {
 	for _, line := range p.NotLast {
 		p.drawLine(dst, line.Items, x, y, clr, mode)
@@ -304,12 +296,12 @@ func (p *Render) drawLine(dst *ebiten.Image, line []RenderGlyph, x, y fixed.Int2
 		options := new(ebiten.DrawImageOptions)
 		x, y := dr.Min.X+(x+item.X).Round(), dr.Min.Y+y.Round()
 		options.GeoM.Translate(float64(x), float64(y))
-		rf := float64(cr) / float64(ca)
-		gf := float64(cg) / float64(ca)
-		bf := float64(cb) / float64(ca)
-		af := float64(ca) / 0xffff
-		options.ColorM.Scale(rf, gf, bf, af)
-		dst.DrawImage(mask, options)
+		rf := float32(cr) / float32(ca)
+		gf := float32(cg) / float32(ca)
+		bf := float32(cb) / float32(ca)
+		af := float32(ca) / 0xffff
+		options.ColorScale.Scale(rf, gf, bf, af)
+		engine.DrawWithPosColor(dst, mask, float64(x), float64(y), options.ColorScale)
 	}
 }
 
