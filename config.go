@@ -42,14 +42,16 @@ func loadJson(ret interface{}, fs spxfs.Dir, file string) (err error) {
 	return json.NewDecoder(f).Decode(ret)
 }
 
-func loadProjConfig(proj *projConfig, fs spxfs.Dir, index interface{}) (err error) {
+func loadsceneConfig(p *Game, scene *sceneConfig, fs spxfs.Dir, index interface{}) (err error) {
 	switch v := index.(type) {
 	case io.Reader:
-		err = json.NewDecoder(v).Decode(proj)
+		err = json.NewDecoder(v).Decode(scene)
 	case string:
-		err = loadJson(&proj, fs, v)
+		err = loadJson(&scene, fs, v)
+	case int:
+		err = loadJson(&scene, fs, p.setting.GetScene(v))
 	case nil:
-		err = loadJson(&proj, fs, "index.json")
+		err = loadJson(&scene, fs, "index.json")
 	default:
 		return syscall.EINVAL
 	}
@@ -100,6 +102,22 @@ func toMapMode(mode string) int {
 }
 
 type projConfig struct {
+	Scenes            []string `json:"scenes"`
+	DefaultSceneIndex int      `json:"defaultSceneIndex"`
+}
+
+func (p *projConfig) GetDefaultScene() string {
+	return p.GetScene(p.DefaultSceneIndex)
+}
+
+func (p *projConfig) GetScene(sceneIndex int) string {
+	if sceneIndex < 0 || sceneIndex >= len(p.Scenes) {
+		panic("invalid scene index")
+	}
+	return p.Scenes[sceneIndex]
+}
+
+type sceneConfig struct {
 	Zorder        []interface{}     `json:"zorder"`
 	Backdrops     []*backdropConfig `json:"backdrops"`
 	BackdropIndex *int              `json:"backdropIndex"`
@@ -114,7 +132,7 @@ type projConfig struct {
 	SceneIndex          int               `json:"sceneIndex"`          //this property is deprecated, use BackdropIndex instead
 }
 
-func (p *projConfig) getBackdrops() []*backdropConfig {
+func (p *sceneConfig) getBackdrops() []*backdropConfig {
 	if p.Backdrops != nil {
 		return p.Backdrops
 	}
@@ -124,7 +142,7 @@ func (p *projConfig) getBackdrops() []*backdropConfig {
 	return p.Costumes
 }
 
-func (p *projConfig) getBackdropIndex() int {
+func (p *sceneConfig) getBackdropIndex() int {
 	if p.BackdropIndex != nil {
 		return *p.BackdropIndex
 	}
