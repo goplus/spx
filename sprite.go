@@ -52,7 +52,7 @@ const (
 	StateDie   string = "die"
 	StateTurn  string = "turn"
 	StateGlide string = "glide"
-	StateStep string = "step"
+	StateStep  string = "step"
 )
 
 type Sprite struct {
