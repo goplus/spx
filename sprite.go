@@ -52,6 +52,7 @@ const (
 	StateDie   string = "die"
 	StateTurn  string = "turn"
 	StateGlide string = "glide"
+	StateStep string = "step"
 )
 
 type Sprite struct {
@@ -764,8 +765,8 @@ func (p *Sprite) Move__1(step int) {
 }
 
 func (p *Sprite) Step__0(step float64) {
-
-	p.Step__2(step, "step")
+	animName := p.getStateAnimName(StateStep)
+	p.Step__2(step, animName)
 }
 
 func (p *Sprite) Step__1(step int) {
