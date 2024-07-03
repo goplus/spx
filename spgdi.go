@@ -108,8 +108,7 @@ func (p *spriteDrawInfo) getUpdateRotateRect(x, y float64) *math32.RotatedRect {
 	c := p.sprite.costumes[p.sprite.costumeIndex_]
 
 	img, centerX, centerY := c.needImage(p.sprite.g.fs)
-	centerX += p.sprite.pivot.X * float64(c.bitmapResolution)
-	centerY -= p.sprite.pivot.Y * float64(c.bitmapResolution)
+	centerX, centerY = p.sprite.applyImagePivot(c, centerX, centerY)
 	rect := image.Rectangle{}
 	rect.Min.X = 0
 	rect.Min.Y = 0
@@ -136,8 +135,7 @@ func (p *spriteDrawInfo) updateMatrix() {
 	c := p.sprite.costumes[p.sprite.costumeIndex_]
 
 	img, centerX, centerY := c.needImage(p.sprite.g.fs)
-	centerX += p.sprite.pivot.X * float64(c.bitmapResolution)
-	centerY -= p.sprite.pivot.Y * float64(c.bitmapResolution)
+	centerX, centerY = p.sprite.applyImagePivot(c, centerX, centerY)
 	rect := image.Rectangle{}
 	rect.Min.X = 0
 	rect.Min.Y = 0
@@ -221,8 +219,7 @@ func (p *Sprite) touchPoint(x, y float64) bool {
 	}
 	c := p.costumes[p.costumeIndex_]
 	img, cx, cy := c.needImage(p.g.fs)
-	cx += p.pivot.X * float64(c.bitmapResolution)
-	cy -= p.pivot.Y * float64(c.bitmapResolution)
+	cx, cy = p.applyImagePivot(c, cx, cy)
 	geo := p.getDrawInfo().getPixelGeo(cx, cy)
 
 	pixel, _ := p.getDrawInfo().getPixel(pos, img, geo)
@@ -255,8 +252,7 @@ func (p *Sprite) touchRotatedRect(dstRect *math32.RotatedRect) bool {
 	}
 	c := p.costumes[p.costumeIndex_]
 	img, cx, cy := c.needImage(p.g.fs)
-	cx += p.pivot.X * float64(c.bitmapResolution)
-	cy -= p.pivot.Y * float64(c.bitmapResolution)
+	cx, cy = p.applyImagePivot(c, cx, cy)
 	geo := p.getDrawInfo().getPixelGeo(cx, cy)
 
 	//check boun rect pixel
@@ -293,14 +289,12 @@ func (p *Sprite) touchedColor_(dst *Sprite, color Color) bool {
 
 	c := p.costumes[p.costumeIndex_]
 	pimg, cx, cy := c.needImage(p.g.fs)
-	cx += p.pivot.X * float64(c.bitmapResolution)
-	cy -= p.pivot.Y * float64(c.bitmapResolution)
+	cx, cy = p.applyImagePivot(c, cx, cy)
 	geo := p.getDrawInfo().getPixelGeo(cx, cy)
 
 	c2 := dst.costumes[dst.costumeIndex_]
 	dstimg, cx2, cy2 := c2.needImage(p.g.fs)
-	cx2 += dst.pivot.X * float64(c2.bitmapResolution)
-	cy2 -= dst.pivot.Y * float64(c2.bitmapResolution)
+	cx2, cy2 = dst.applyImagePivot(c2, cx2, cy2)
 	geo2 := dst.getDrawInfo().getPixelGeo(cx2, cy2)
 
 	cr, cg, cb, ca := color.RGBA()
@@ -345,14 +339,12 @@ func (p *Sprite) touchingSprite(dst *Sprite) bool {
 
 	c := p.costumes[p.costumeIndex_]
 	pimg, cx, cy := c.needImage(p.g.fs)
-	cx += p.pivot.X * float64(c.bitmapResolution)
-	cy -= p.pivot.Y * float64(c.bitmapResolution)
+	cx, cy = p.applyImagePivot(c, cx, cy)
 	geo := p.getDrawInfo().getPixelGeo(cx, cy)
 
 	c2 := dst.costumes[dst.costumeIndex_]
 	dstimg, cx2, cy2 := c2.needImage(p.g.fs)
-	cx2 += dst.pivot.X * float64(c2.bitmapResolution)
-	cy2 -= dst.pivot.Y * float64(c2.bitmapResolution)
+	cx2, cy2 = dst.applyImagePivot(c2, cx2, cy2)
 	geo2 := dst.getDrawInfo().getPixelGeo(cx2, cy2)
 	//check boun rect pixel
 	for x := boundRect.X; x < boundRect.Width+boundRect.X; x++ {
@@ -425,10 +417,9 @@ func (p *Sprite) hit(hc hitContext) (hr hitResult, ok bool) {
 	if !rRect.Contains(pos) {
 		return
 	}
-	c2 := p.costumes[p.costumeIndex_]
-	img, cx, cy := c2.needImage(p.g.fs)
-	cx += p.pivot.X * float64(c2.bitmapResolution)
-	cy -= p.pivot.Y * float64(c2.bitmapResolution)
+	c := p.costumes[p.costumeIndex_]
+	img, cx, cy := c.needImage(p.g.fs)
+	cx, cy = p.applyImagePivot(c, cx, cy)
 	geo := p.getDrawInfo().getPixelGeo(cx, cy)
 	color1, pos := p.getDrawInfo().getPixel(pos, img, geo)
 	if debugInstr {
@@ -439,4 +430,10 @@ func (p *Sprite) hit(hc hitContext) (hr hitResult, ok bool) {
 		return
 	}
 	return hitResult{Target: p}, true
+}
+
+func (p *Sprite) applyImagePivot(c *costume, cx, cy float64) (float64, float64) {
+	cx += p.pivot.X * float64(c.bitmapResolution)
+	cy -= p.pivot.Y * float64(c.bitmapResolution)
+	return cx, cy
 }
