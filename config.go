@@ -205,14 +205,18 @@ type actionConfig struct {
 }
 
 type aniConfig struct {
-	Duration float64       `json:"duration"`
-	Fps      float64       `json:"fps"`
-	From     interface{}   `json:"from"`
-	To       interface{}   `json:"to"`
-	AniType  aniTypeEnum   `json:"anitype"`
-	OnStart  *actionConfig `json:"onStart"` //start
-	OnPlay   *actionConfig `json:"onPlay"`  //play
-	IsLoop   bool          `json:"isLoop"`
+	Duration      float64     `json:"duration"`
+	Fps           float64     `json:"fps"`
+	From          interface{} `json:"from"`
+	To            interface{} `json:"to"`
+	FrameFrom     string      `json:"frameFrom"`
+	FrameTo       string      `json:"frameTo"`
+	FrameDuration float64     `json:"frameDuration"`
+
+	AniType aniTypeEnum   `json:"anitype"`
+	OnStart *actionConfig `json:"onStart"` //start
+	OnPlay  *actionConfig `json:"onPlay"`  //play
+	IsLoop  bool          `json:"isLoop"`
 	//OnEnd *actionConfig  `json:"onEnd"`   //stop
 }
 

@@ -54,6 +54,12 @@ const (
 	StateGlide string = "glide"
 	StateStep  string = "step"
 )
+const (
+	AnimChannelFrame string = "@frame"
+	AnimChannelTurn  string = "@turn"
+	AnimChannelGlide string = "@glide"
+	AnimChannelMove  string = "@move"
+)
 
 type Sprite struct {
 	baseObj
@@ -130,8 +136,29 @@ func (p *Sprite) init(
 	p.animations = make(map[string]*aniConfig)
 	for key, val := range sprite.FAnimations {
 		var ani = val
-		ani.AniType = aniTypeFrame
-
+		_, ok := p.animations[key]
+		if ok {
+			log.Panicf("animation key [%s] is exist", key)
+		}
+		oldFps := ani.Fps
+		if oldFps == 0 {
+			ani.Fps = 25
+		}
+		switch ani.AniType {
+		case aniTypeFrame:
+			if ani.From != "" {
+				ani.FrameFrom = ani.From.(string)
+			}
+			if ani.To != "" {
+				ani.FrameTo = ani.To.(string)
+			}
+			ani.Fps = oldFps
+		case aniTypeMove:
+		case aniTypeTurn:
+		case aniTypeGlide:
+		default:
+			log.Panicf("unknown animation type [%s] is exist[%d]", key, ani.AniType)
+		}
 		p.animations[key] = ani
 	}
 
@@ -515,33 +542,37 @@ func (p *Sprite) PrevCostume() {
 func (p *Sprite) getFromAnToForAni(anitype aniTypeEnum, from interface{}, to interface{}) (interface{}, interface{}) {
 
 	if anitype == aniTypeFrame {
-		fromval := 0.0
-		toval := 0.0
-		switch v := from.(type) {
-		case string:
-			fromval = float64(p.findCostume(v))
-			if fromval < 0 {
-				log.Panicf("findCostume %s failed", v)
-			}
-		default:
-			fromval, _ = tools.GetFloat(from)
-		}
-
-		switch v := to.(type) {
-		case string:
-			toval = float64(p.findCostume(v))
-			if toval < 0 {
-				log.Panicf("findCostume %s failed", v)
-			}
-		default:
-			toval, _ = tools.GetFloat(to)
-		}
-
-		return fromval, toval
+		return p.getFromAnToForAniFrames(from, to)
 	}
 
 	return from, to
 
+}
+
+func (p *Sprite) getFromAnToForAniFrames(from interface{}, to interface{}) (float64, float64) {
+	fromval := 0.0
+	toval := 0.0
+	switch v := from.(type) {
+	case string:
+		fromval = float64(p.findCostume(v))
+		if fromval < 0 {
+			log.Panicf("findCostume %s failed", v)
+		}
+	default:
+		fromval, _ = tools.GetFloat(from)
+	}
+
+	switch v := to.(type) {
+	case string:
+		toval = float64(p.findCostume(v))
+		if toval < 0 {
+			log.Panicf("findCostume %s failed", v)
+		}
+	default:
+		toval, _ = tools.GetFloat(to)
+	}
+
+	return fromval, toval
 }
 
 func (p *Sprite) getStateAnimName(stateName string) string {
@@ -549,6 +580,10 @@ func (p *Sprite) getStateAnimName(stateName string) string {
 		return bindingName
 	}
 	return stateName
+}
+
+func lerp(a float64, b float64, progress float64) float64 {
+	return a + (b-a)*progress
 }
 
 func (p *Sprite) goAnimate(name string, ani *aniConfig) {
@@ -564,18 +599,18 @@ func (p *Sprite) goAnimate(name string, ani *aniConfig) {
 
 	//anim frame
 	fromval, toval := p.getFromAnToForAni(ani.AniType, ani.From, ani.To)
-	animtype := anim.AnimValTypeFloat
+	frameFrom, frameTo := 0.0, 0.0
+	hasExtraChannel := ani.FrameFrom != "" && ani.FrameTo != ""
+	if hasExtraChannel {
+		frameFrom, frameTo = p.getFromAnToForAniFrames(ani.FrameFrom, ani.FrameTo)
+	}
 	if ani.AniType == aniTypeFrame {
-		animtype = anim.AnimValTypeInt
 		p.goSetCostume(ani.From)
 		if ani.Fps == 0 { //compute fps
-			tovalf, _ := toval.(float64)
-			fromvalf, _ := fromval.(float64)
+			tovalf := frameFrom
+			fromvalf := frameTo
 			ani.Fps = math.Abs(tovalf-fromvalf) / ani.Duration
 		}
-	}
-	if ani.AniType == aniTypeGlide {
-		animtype = anim.AnimValTypeVector2
 	}
 
 	framenum := int(ani.Duration * ani.Fps)
@@ -588,40 +623,59 @@ func (p *Sprite) goAnimate(name string, ani *aniConfig) {
 	pre_y := p.y
 	pre_direction := p.direction //turn p.direction
 
-	an := anim.NewAnim(name, animtype, fps, framenum).AddKeyFrame(0, fromval).AddKeyFrame(framenum, toval).SetLoop(ani.IsLoop)
+	an := anim.NewAnim(name, fps, framenum, ani.IsLoop)
+	// create channels
+	defaultChannel := []*anim.AnimationKeyFrame{{Frame: 0, Value: fromval}, {Frame: framenum, Value: toval}}
+	switch ani.AniType {
+	case aniTypeFrame:
+		an.AddChannel(AnimChannelFrame, anim.AnimValTypeInt, defaultChannel)
+	case aniTypeMove:
+		an.AddChannel(AnimChannelMove, anim.AnimValTypeFloat, defaultChannel)
+	case aniTypeTurn:
+		an.AddChannel(AnimChannelTurn, anim.AnimValTypeFloat, defaultChannel)
+	case aniTypeGlide:
+		an.AddChannel(AnimChannelGlide, anim.AnimValTypeVector2, defaultChannel)
+	}
+	if hasExtraChannel && ani.AniType != aniTypeFrame {
+		an.AddChannel(AnimChannelFrame, anim.AnimValTypeInt, []*anim.AnimationKeyFrame{{Frame: 0, Value: frameFrom}, {Frame: framenum, Value: frameTo}})
+	}
+
 	p.lastAnim = an
 	if debugInstr {
 		log.Printf("New anim [name %s id %d] from:%v to:%v framenum:%d fps:%f", an.Name, an.Id, fromval, toval, framenum, fps)
 	}
-	an.SetOnPlayingListener(func(currframe int, isReplay bool, currval interface{}) {
+	an.SetOnPlayingListener(func(currframe int, isReplay bool, progress float64) {
 		if debugInstr {
-			log.Printf("playing anim [name %s id %d]  currframe %d, val %v", an.Name, an.Id, currframe, currval)
+			log.Printf("playing anim [name %s id %d]  currframe %d", an.Name, an.Id, currframe)
 		}
 		if isReplay && ani.IsLoop {
 			if ani.OnStart != nil && ani.OnStart.Play != "" {
 				p.g.Play__3(ani.OnStart.Play)
 			}
 		}
-
-		switch ani.AniType {
-		case aniTypeFrame:
-			val, _ := tools.GetFloat(currval)
+		frameValue := an.SampleChannel(AnimChannelFrame)
+		if frameValue != nil {
+			val, _ := tools.GetFloat(frameValue)
 			p.setCostumeByIndex(int(val))
-		case aniTypeMove:
-			val, _ := tools.GetFloat(currval)
+		}
+		moveValue := an.SampleChannel(AnimChannelMove)
+		if moveValue != nil {
+			val, _ := tools.GetFloat(moveValue)
 			sin, cos := math.Sincos(toRadian(pre_direction))
 			p.doMoveToForAnim(pre_x+val*sin, pre_y+val*cos, an)
-		case aniTypeTurn:
-			val, _ := tools.GetFloat(currval)
+		}
+		turnValue := an.SampleChannel(AnimChannelTurn)
+		if turnValue != nil {
+			val, _ := tools.GetFloat(turnValue)
 			p.setDirection(val, false)
-		case aniTypeGlide:
-			val, ok := currval.(*math32.Vector2)
+		}
+		glideValue := an.SampleChannel(AnimChannelGlide)
+		if glideValue != nil {
+			val, ok := glideValue.(*math32.Vector2)
 			if ok {
 				p.SetXYpos(val.X, val.Y)
 			}
-
 		}
-
 		playaction := ani.OnPlay
 		if playaction != nil {
 			if ani.AniType != aniTypeFrame && playaction.Costumes != nil {
