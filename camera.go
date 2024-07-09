@@ -49,6 +49,14 @@ func (c *Camera) ChangeXYpos(x float64, y float64) {
 	c.freecamera.Move(x, y)
 }
 
+func (c *Camera) SetRotation(deg float64) {
+	c.freecamera.RotateTo(deg)
+}
+
+func (c *Camera) ChangeRotation(deg float64) {
+	c.freecamera.Rotate(deg)
+}
+
 func (c *Camera) screenToWorld(point *math32.Vector2) *math32.Vector2 {
 	return c.freecamera.ScreenToWorld(point)
 }

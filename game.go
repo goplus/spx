@@ -33,6 +33,7 @@ import (
 
 	"github.com/goplus/spx/internal/audiorecord"
 	"github.com/goplus/spx/internal/coroutine"
+	"github.com/goplus/spx/internal/engine"
 	"github.com/goplus/spx/internal/gdi"
 	"github.com/goplus/spx/internal/math32"
 	"github.com/hajimehoshi/ebiten/v2"
@@ -94,6 +95,7 @@ type Game struct {
 	worldHeight_ int
 	mapMode      int
 	world        *ebiten.Image
+	renderScale  float64
 
 	// window
 	windowWidth_  int
@@ -401,10 +403,19 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 		p.worldHeight_ = proj.Map.Height
 		p.baseObj.initWithSize(p.worldWidth_, p.worldHeight_)
 	}
+	p.renderScale = 1.0
+
+	renderScale := math.Max(float64(p.windowWidth_)*1.0/float64(p.worldWidth_), float64(p.windowHeight_)*1.0/float64(p.worldHeight_))
+	renderScale = math.Max(renderScale, 1.0)
+	p.renderScale = renderScale
+
+	renderWidth := int(float64(p.worldWidth_) * renderScale)
+	renderHeight := int(float64(p.worldHeight_) * renderScale)
+
 	if debugLoad {
-		log.Println("==> SetWorldSize", p.worldWidth_, p.worldHeight_)
+		log.Println("==> SetWorldSize", p.worldWidth_, p.worldHeight_, "renderScale ", renderScale, "renderSize", renderWidth, renderHeight)
 	}
-	p.world = ebiten.NewImage(p.worldWidth_, p.worldHeight_)
+	p.world = ebiten.NewImage(renderWidth, renderHeight)
 	p.mapMode = toMapMode(proj.Map.Mode)
 
 	inits := make([]Spriter, 0, len(proj.Zorder))
@@ -433,12 +444,7 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 		log.Println("==> SetWindowSize", p.windowWidth_, p.windowHeight_)
 	}
 	ebiten.SetWindowSize(p.windowWidth_, p.windowHeight_)
-	if p.windowWidth_ > p.worldWidth_ {
-		p.windowWidth_ = p.worldWidth_
-	}
-	if p.windowHeight_ > p.worldHeight_ {
-		p.windowHeight_ = p.worldHeight_
-	}
+	engine.SetRenderInfo(p.world, p.windowWidth_, p.windowHeight_, p.renderScale)
 	p.Camera.init(p, float64(p.windowWidth_), float64(p.windowHeight_), float64(p.worldWidth_), float64(p.worldHeight_))
 
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeOnlyFullscreenEnabled)
@@ -987,8 +993,10 @@ func (p *Game) drawBackground(dc drawContext) {
 		winH := float64(p.windowHeight_)
 		numW := int(math.Ceil(winW/imgW/2 - 0.5))
 		numH := int(math.Ceil(winH/imgH/2 - 0.5))
-		rawOffsetW := float64(p.worldWidth_-p.windowWidth_) / 2.0
-		rawOffsetH := float64(p.worldHeight_-p.windowHeight_) / 2.0
+		worldW := float64(p.worldWidth_) * float64(p.renderScale)
+		worldH := float64(p.worldHeight_) * float64(p.renderScale)
+		rawOffsetW := (worldW - float64(p.windowWidth_)) / 2.0
+		rawOffsetH := (worldH - float64(p.windowHeight_)) / 2.0
 		offsetW := rawOffsetW + winW*0.5 - imgW*0.5 // draw from center
 		offsetH := rawOffsetH + winH*0.5 - imgH*0.5
 		for w := -numW; w <= numW; w++ {
@@ -1003,8 +1011,8 @@ func (p *Game) drawBackground(dc drawContext) {
 		var imgW, imgH, dstW, dstH float32
 		imgW = float32(img.Bounds().Dx())
 		imgH = float32(img.Bounds().Dy())
-		worldW := float32(p.worldWidth_)
-		worldH := float32(p.worldHeight_)
+		worldW := float32(p.worldWidth_) * float32(p.renderScale)
+		worldH := float32(p.worldHeight_) * float32(p.renderScale)
 
 		options.Address = ebiten.AddressClampToZero
 		imgRadio := (imgW / imgH)
@@ -1138,11 +1146,8 @@ func (p *Game) getMousePos() (x, y float64) {
 func (p *Game) updateMousePos() {
 	x, y := p.input.mouseXY()
 	pos := p.Camera.screenToWorld(math32.NewVector2(float64(x), float64(y)))
-
-	worldW, worldH := p.worldSize_()
-	mx, my := int(pos.X)-(worldW>>1), (worldH>>1)-int(pos.Y)
-	atomic.StoreInt64(&p.gMouseX, int64(mx))
-	atomic.StoreInt64(&p.gMouseY, int64(my))
+	atomic.StoreInt64(&p.gMouseX, int64(pos.X))
+	atomic.StoreInt64(&p.gMouseY, int64(pos.Y))
 }
 
 func (p *Game) Username() string {

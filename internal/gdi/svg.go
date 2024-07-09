@@ -5,19 +5,18 @@ import (
 	"image"
 
 	svgo "github.com/ajstarks/svgo"
+	"github.com/goplus/spx/internal/engine"
 	svg "github.com/goplus/spx/internal/svgr"
 	"github.com/hajimehoshi/ebiten/v2"
 )
 
 // Canvas represents a gdi object.
-//
 type Canvas struct {
 	*svgo.SVG
 	Target *ebiten.Image
 }
 
 // Start creates a canvas object.
-//
 func Start(target *ebiten.Image) Canvas {
 	w := new(bytes.Buffer)
 	s := svgo.New(w)
@@ -27,7 +26,6 @@ func Start(target *ebiten.Image) Canvas {
 }
 
 // End draws canvas data onto the target image.
-//
 func (p Canvas) End() {
 	p.SVG.End()
 	img, err := svg.Decode(p.SVG.Writer.(*bytes.Buffer))
@@ -36,7 +34,7 @@ func (p Canvas) End() {
 	}
 	img2 := ebiten.NewImageFromImage(img)
 	defer img2.Dispose()
-	p.Target.DrawImage(img2, nil)
+	engine.Draw(p.Target, img2)
 }
 
 type SVG struct {
