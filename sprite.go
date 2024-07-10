@@ -144,6 +144,9 @@ func (p *Sprite) init(
 		if oldFps == 0 {
 			ani.Fps = 25
 		}
+		if ani.FrameFps == 0 {
+			ani.FrameFps = 25
+		}
 		switch ani.AniType {
 		case aniTypeFrame:
 			if ani.From != "" {
@@ -153,6 +156,7 @@ func (p *Sprite) init(
 				ani.FrameTo = ani.To.(string)
 			}
 			ani.Fps = oldFps
+			ani.FrameFps = int(oldFps)
 		case aniTypeMove:
 		case aniTypeTurn:
 		case aniTypeGlide:
@@ -604,6 +608,7 @@ func (p *Sprite) goAnimate(name string, ani *aniConfig) {
 	if hasExtraChannel {
 		frameFrom, frameTo = p.getFromAnToForAniFrames(ani.FrameFrom, ani.FrameTo)
 	}
+
 	if ani.AniType == aniTypeFrame {
 		p.goSetCostume(ani.From)
 		if ani.Fps == 0 { //compute fps
@@ -616,9 +621,6 @@ func (p *Sprite) goAnimate(name string, ani *aniConfig) {
 	framenum := int(ani.Duration * ani.Fps)
 	fps := ani.Fps
 
-	//frame
-	//pre_index := p.getCostumeIndex()
-	//xy pos
 	pre_x := p.x
 	pre_y := p.y
 	pre_direction := p.direction //turn p.direction
@@ -637,7 +639,32 @@ func (p *Sprite) goAnimate(name string, ani *aniConfig) {
 		an.AddChannel(AnimChannelGlide, anim.AnimValTypeVector2, defaultChannel)
 	}
 	if hasExtraChannel && ani.AniType != aniTypeFrame {
-		an.AddChannel(AnimChannelFrame, anim.AnimValTypeInt, []*anim.AnimationKeyFrame{{Frame: 0, Value: frameFrom}, {Frame: framenum, Value: frameTo}})
+		iFrameFrom := int(math.Round(frameFrom))
+		iFrameTo := int(math.Round(frameTo))
+		frameCount := iFrameTo - iFrameFrom + 1
+		framePerIter := int(float64(frameCount) * ani.Fps / float64(ani.FrameFps))
+		iterCount := int(framenum / framePerIter)
+		is_need_ext := framenum != iterCount*int(ani.FrameFps)
+		arySize := iterCount * 2
+		if is_need_ext {
+			arySize += 2
+		}
+		keyFrames := make([]*anim.AnimationKeyFrame, arySize)
+		i := 0
+		for ; i < iterCount; i++ {
+			offset := framePerIter * i
+			keyFrames[i*2+0] = &anim.AnimationKeyFrame{Frame: offset + 0, Value: iFrameFrom}
+			keyFrames[i*2+1] = &anim.AnimationKeyFrame{Frame: offset + framePerIter - 1, Value: iFrameTo}
+		}
+		if is_need_ext {
+			offset := framePerIter * i
+			finalFrame := frameCount - offset
+			lastDuration := float64((framenum - offset)) / float64(framePerIter)
+			finalIFrame := int(lastDuration * float64(frameCount))
+			keyFrames[i*2+0] = &anim.AnimationKeyFrame{Frame: offset + 0, Value: iFrameFrom}
+			keyFrames[i*2+1] = &anim.AnimationKeyFrame{Frame: offset + finalFrame - 1, Value: iFrameFrom + finalIFrame}
+		}
+		an.AddChannel(AnimChannelFrame, anim.AnimValTypeInt, keyFrames)
 	}
 
 	p.lastAnim = an
@@ -667,13 +694,13 @@ func (p *Sprite) goAnimate(name string, ani *aniConfig) {
 		turnValue := an.SampleChannel(AnimChannelTurn)
 		if turnValue != nil {
 			val, _ := tools.GetFloat(turnValue)
-			p.setDirection(val, false)
+			p.setDirection(pre_direction+val, false)
 		}
 		glideValue := an.SampleChannel(AnimChannelGlide)
 		if glideValue != nil {
 			val, ok := glideValue.(*math32.Vector2)
 			if ok {
-				p.SetXYpos(val.X, val.Y)
+				p.SetXYpos(pre_x+val.X, pre_y+val.Y)
 			}
 		}
 		playaction := ani.OnPlay

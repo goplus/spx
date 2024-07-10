@@ -47,7 +47,7 @@ func (this *AnimChannel) interpolate(currentFrame int) interface{} {
 	}
 
 	// frame between two keys
-	for key := 0; key < len(this.keys); key++ {
+	for key := 0; key < len(this.keys)-1; key++ {
 		if this.keys[key+1].Frame >= currentFrame {
 			startValue_obj := this.keys[key].Value
 			endValue_obj := this.keys[key+1].Value

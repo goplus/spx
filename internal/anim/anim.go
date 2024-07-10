@@ -89,6 +89,7 @@ func NewAnim(name string, fps float64, totalframe int, isLoop bool) *Anim {
 	this.preRepeatCount = 0
 
 	this.keys = make([]*AnimChannel, 0)
+	this.evalValue = make(map[string]interface{}, 0)
 	this.Id = globalAnimId
 	globalAnimId++
 	return this
