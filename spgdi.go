@@ -154,10 +154,17 @@ func (p *spriteDrawInfo) updateMatrix() {
 	if p.sprite.rotationStyle == Normal {
 		geo.Rotate(toRadian(direction))
 	} else if p.sprite.rotationStyle == LeftRight {
-		if math.Abs(p.sprite.direction) > 155 && math.Abs(p.sprite.direction) < 205 {
-			geo.Scale(-1, 1)
+		dirDeg := p.sprite.direction
+		// convert to 0 ~ 360
+		dirDeg = math.Mod(dirDeg, 360.0)
+		if dirDeg < 0 {
+			dirDeg += 360
 		}
-		if math.Abs(p.sprite.direction) > 0 && math.Abs(p.sprite.direction) < 25 {
+		// convert to -180 ~ 180
+		if dirDeg > 180 {
+			dirDeg -= 360
+		}
+		if dirDeg < -45 || dirDeg > 135 {
 			geo.Scale(-1, 1)
 		}
 	}
