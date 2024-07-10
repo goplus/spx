@@ -658,8 +658,8 @@ func (p *Sprite) goAnimate(name string, ani *aniConfig) {
 		}
 		if is_need_ext {
 			offset := framePerIter * i
-			finalFrame := frameCount - offset
-			lastDuration := float64((framenum - offset)) / float64(framePerIter)
+			finalFrame := framenum - offset
+			lastDuration := float64(finalFrame) / float64(framePerIter)
 			finalIFrame := int(lastDuration * float64(frameCount))
 			keyFrames[i*2+0] = &anim.AnimationKeyFrame{Frame: offset + 0, Value: iFrameFrom}
 			keyFrames[i*2+1] = &anim.AnimationKeyFrame{Frame: offset + finalFrame - 1, Value: iFrameFrom + finalIFrame}
