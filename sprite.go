@@ -694,13 +694,13 @@ func (p *Sprite) goAnimate(name string, ani *aniConfig) {
 		turnValue := an.SampleChannel(AnimChannelTurn)
 		if turnValue != nil {
 			val, _ := tools.GetFloat(turnValue)
-			p.setDirection(pre_direction+val, false)
+			p.setDirection(val, false)
 		}
 		glideValue := an.SampleChannel(AnimChannelGlide)
 		if glideValue != nil {
 			val, ok := glideValue.(*math32.Vector2)
 			if ok {
-				p.SetXYpos(pre_x+val.X, pre_y+val.Y)
+				p.SetXYpos(val.X, val.Y)
 			}
 		}
 		playaction := ani.OnPlay
