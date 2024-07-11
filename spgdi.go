@@ -164,7 +164,7 @@ func (p *spriteDrawInfo) updateMatrix() {
 		if dirDeg > 180 {
 			dirDeg -= 360
 		}
-		if dirDeg < -45 || dirDeg > 135 {
+		if dirDeg < 0 {
 			geo.Scale(-1, 1)
 		}
 	}
