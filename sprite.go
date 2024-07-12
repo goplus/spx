@@ -862,6 +862,7 @@ func (p *Sprite) Step__2(step float64, animname string) {
 		anicopy := *ani
 		anicopy.From = 0
 		anicopy.To = step
+		anicopy.AniType = aniTypeMove
 		anicopy.Duration = math.Abs(step) * ani.Duration
 		p.goAnimate(animname, &anicopy)
 		return
@@ -1046,6 +1047,7 @@ func (p *Sprite) TurnTo(obj interface{}) {
 		anicopy.From = fromangle
 		anicopy.To = toangle
 		anicopy.Duration = ani.Duration / 360.0 * math.Abs(delta)
+		anicopy.AniType = aniTypeTurn
 		p.goAnimate(animName, &anicopy)
 		return
 	}
