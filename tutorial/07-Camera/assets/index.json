@@ -1,0 +1,15 @@
+{
+  "backdrops": [
+    {
+      "bitmapResolution": 2,
+      "name": "backdrop1",
+      "path": "1.png"
+    }
+  ],
+  "map": { "width": 240, "height": 240 },
+  "run": { "width": 720, "height": 720 },
+  "zorder": [
+    "MyAircraft",
+    "Bullet"
+  ]
+}

@@ -1,0 +1,31 @@
+onStart => {
+	for {
+		wait 0.3
+		clone
+	}
+}
+
+onCloned => {
+	setXYpos rand(-131, 131), 237
+	show
+	for {
+		wait 0.05
+		changeYpos -2.4
+		if touching(EdgeBottom) {
+			destroy
+		}
+	}
+}
+
+onCloned => {
+	life := 3
+	for {
+		wait 0.05
+		if touching("Bullet") {
+			life--
+			if life == 0 {
+				die
+			}
+		}
+	}
+}

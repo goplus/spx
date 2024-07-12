@@ -97,8 +97,9 @@ type Sprite struct {
 	hasOnCloned  bool
 	hasOnTouched bool
 
-	gamer    reflect.Value
-	lastAnim *anim.Anim
+	gamer             reflect.Value
+	lastAnim          *anim.Anim
+	isWaitingStopAnim bool
 }
 
 func (p *Sprite) SetDying() { // dying: visible but can't be touched
@@ -193,12 +194,9 @@ func (p *Sprite) init(
 	}
 }
 func (p *Sprite) awake() {
-	if p.defaultAnimation != "" {
-		if p.isVisible {
-			p.Animate(p.defaultAnimation)
-		}
-	}
+	p.playDefaultAnim()
 }
+
 func (p *Sprite) InitFrom(src *Sprite) {
 	p.baseObj.initFrom(&src.baseObj)
 	p.eventSinks.initFrom(&src.eventSinks, p)
@@ -592,7 +590,9 @@ func lerp(a float64, b float64, progress float64) float64 {
 
 func (p *Sprite) goAnimate(name string, ani *aniConfig) {
 	if p.lastAnim != nil {
+		p.isWaitingStopAnim = true
 		p.lastAnim.Stop()
+		p.isWaitingStopAnim = false
 	}
 	var animwg sync.WaitGroup
 	animwg.Add(1)
@@ -715,12 +715,19 @@ func (p *Sprite) goAnimate(name string, ani *aniConfig) {
 			}
 		}
 	})
+	isNeedPlayDefault := false
 	an.SetOnStopingListener(func() {
 		if debugInstr {
 			log.Printf("stop anim [name %s id %d]  ", an.Name, an.Id)
 		}
 		animwg.Done()
 		p.lastAnim = nil
+		if !p.isWaitingStopAnim && name != p.defaultAnimation && p.isVisible {
+			dieAnimName := p.getStateAnimName(StateDie)
+			if name != dieAnimName {
+				isNeedPlayDefault = true
+			}
+		}
 	})
 
 	var h *tickHandler
@@ -731,6 +738,9 @@ func (p *Sprite) goAnimate(name string, ani *aniConfig) {
 		}
 	})
 	waitToDo(animwg.Wait)
+	if isNeedPlayDefault {
+		p.playDefaultAnim()
+	}
 }
 
 func (p *Sprite) Animate(name string) {
@@ -868,6 +878,17 @@ func (p *Sprite) Step__2(step float64, animname string) {
 		return
 	}
 	p.goMoveForward(step)
+}
+
+func (p *Sprite) playDefaultAnim() {
+	animName := p.defaultAnimation
+	if animName != "" && p.isVisible {
+		if ani, ok := p.animations[animName]; ok {
+			anicopy := *ani
+			anicopy.IsLoop = true
+			p.goAnimate(animName, &anicopy)
+		}
+	}
 }
 
 // Goto func:

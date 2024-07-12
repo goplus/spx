@@ -1,0 +1,4 @@
+var (
+	explode Sound
+	Bullet     Bullet
+)

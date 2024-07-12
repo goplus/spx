@@ -1,0 +1,6 @@
+onStart => {
+	setXYpos 0,0
+	show
+	wait 1
+	animate "die"
+}

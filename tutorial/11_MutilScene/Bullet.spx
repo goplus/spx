@@ -1,0 +1,22 @@
+onTouched => {
+	destroy
+}
+
+onStart => {
+	for {
+		wait 0.3
+		clone
+	}
+}
+
+onCloned => {
+	setXYpos mouseX, mouseY
+	show
+	for {
+		wait 0.04
+		step 10
+		if touching(Edge) {
+			destroy
+		}
+	}
+}

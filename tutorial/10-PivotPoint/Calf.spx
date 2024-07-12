@@ -1,0 +1,27 @@
+import 	"math"
+onStart => {
+	say "Hello Go+"
+	updateInterval := 0.03
+	timer := 0.0
+	setXYpos 0, 0
+	for timer < 3{
+		timer += updateInterval
+		wait updateInterval
+		setXYpos mouseX, mouseY
+	}
+	timer=0.0
+	for timer < 3{
+		timer += updateInterval
+		wait updateInterval
+		setHeading timer*60
+
+		sin, _ := math.Sincos(timer*90 * math.Pi / 180)
+		setSize(sin*0.5+1.5)
+	}
+	timer=0.0
+	for timer < 5{
+		timer += updateInterval
+		wait updateInterval
+		step 40*updateInterval
+	}
+}

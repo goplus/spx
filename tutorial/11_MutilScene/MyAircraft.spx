@@ -1,0 +1,20 @@
+
+import	"github.com/goplus/spx"
+onStart => {
+	setXYpos 0, 0
+	for {
+		wait 0.1
+		setXYpos mouseX, mouseY
+	}
+}
+
+
+onStart => {
+	timer:=0.0
+	for timer < 3{
+		wait 0.1
+		timer+=0.1
+	}
+	println("Load Scene")
+	spx.Gopt_Game_Reload(this.Game, 0)
+}

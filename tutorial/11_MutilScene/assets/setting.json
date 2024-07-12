@@ -1,0 +1,7 @@
+{
+    "scenes": [
+      "scenes/scene1.json",
+      "scenes/scene2.json"
+    ],
+    "defaultSceneIndex": 1
+}

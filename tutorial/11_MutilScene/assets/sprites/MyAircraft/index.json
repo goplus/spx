@@ -1,0 +1,19 @@
+{
+  "costumes": [
+    {
+      "bitmapResolution": 2,
+      "name": "hero",
+      "path": "8.png",
+      "x": 98,
+      "y": 122
+    }
+  ],
+  "costumeIndex": 0,
+  "heading": 90,
+  "isDraggable": false,
+  "rotationStyle": "normal",
+  "size": 0.45,
+  "visible": true,
+  "x": -131,
+  "y": -161
+}

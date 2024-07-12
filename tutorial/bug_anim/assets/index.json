@@ -1,0 +1,25 @@
+{
+    "backdrops": [
+        {
+            "x": 0,
+            "y": 0,
+            "faceRight": 0,
+            "bitmapResolution": 2,
+            "name": "backdrop",
+            "path": "backdrop.png"
+        }
+    ],
+    "backdropIndex": 0,
+    "map": {
+        "width": 480,
+        "height": 360,
+        "mode": "fillRatio"
+    },
+    "run": {
+        "width": 480,
+        "height": 360
+    },
+    "zorder": [
+        "Fighter"
+    ]
+}

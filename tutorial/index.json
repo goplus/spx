@@ -1,0 +1,219 @@
+{
+    "heading": 90,
+    "x": -200,
+    "y": 0,
+    "size": 1.93,
+    "rotationStyle": "normal",
+    "costumeIndex": 0,
+    "visible": true,
+    "isDraggable": false,
+    "costumes": [
+        {
+            "x": 0,
+            "y": 0,
+            "faceRight": 0,
+            "bitmapResolution": 2,
+            "name": "default",
+            "path": "default.png"
+        },
+        {
+            "x": 0,
+            "y": 0,
+            "faceRight": 0,
+            "bitmapResolution": 2,
+            "name": "__animation_fight_attack_1-1",
+            "path": "__animation_fight_attack_1-1.png"
+        },
+        {
+            "x": 0,
+            "y": 0,
+            "faceRight": 0,
+            "bitmapResolution": 2,
+            "name": "__animation_fight_attack_1-2",
+            "path": "__animation_fight_attack_1-2.png"
+        },
+        {
+            "x": 0,
+            "y": 0,
+            "faceRight": 0,
+            "bitmapResolution": 2,
+            "name": "__animation_fight_attack_1-3",
+            "path": "__animation_fight_attack_1-3.png"
+        },
+        {
+            "x": 0,
+            "y": 0,
+            "faceRight": 0,
+            "bitmapResolution": 2,
+            "name": "__animation_fight_attack_1-4",
+            "path": "__animation_fight_attack_1-4.png"
+        },
+        {
+            "x": 0,
+            "y": 0,
+            "faceRight": 0,
+            "bitmapResolution": 2,
+            "name": "__animation_dying_dead-1",
+            "path": "__animation_dying_dead-1.png"
+        },
+        {
+            "x": 0,
+            "y": 0,
+            "faceRight": 0,
+            "bitmapResolution": 2,
+            "name": "__animation_dying_dead-2",
+            "path": "__animation_dying_dead-2.png"
+        },
+        {
+            "x": 0,
+            "y": 0,
+            "faceRight": 0,
+            "bitmapResolution": 2,
+            "name": "__animation_dying_dead-3",
+            "path": "__animation_dying_dead-3.png"
+        },
+        {
+            "x": 0,
+            "y": 0,
+            "faceRight": 0,
+            "bitmapResolution": 2,
+            "name": "__animation_walk_walk-1",
+            "path": "__animation_walk_walk-1.png"
+        },
+        {
+            "x": 0,
+            "y": 0,
+            "faceRight": 0,
+            "bitmapResolution": 2,
+            "name": "__animation_walk_walk-2",
+            "path": "__animation_walk_walk-2.png"
+        },
+        {
+            "x": 0,
+            "y": 0,
+            "faceRight": 0,
+            "bitmapResolution": 2,
+            "name": "__animation_walk_walk-3",
+            "path": "__animation_walk_walk-3.png"
+        },
+        {
+            "x": 0,
+            "y": 0,
+            "faceRight": 0,
+            "bitmapResolution": 2,
+            "name": "__animation_walk_walk-4",
+            "path": "__animation_walk_walk-4.png"
+        },
+        {
+            "x": 0,
+            "y": 0,
+            "faceRight": 0,
+            "bitmapResolution": 2,
+            "name": "__animation_walk_walk-5",
+            "path": "__animation_walk_walk-5.png"
+        },
+        {
+            "x": 0,
+            "y": 0,
+            "faceRight": 0,
+            "bitmapResolution": 2,
+            "name": "__animation_walk_walk-6",
+            "path": "__animation_walk_walk-6.png"
+        },
+        {
+            "x": 0,
+            "y": 0,
+            "faceRight": 0,
+            "bitmapResolution": 2,
+            "name": "__animation_walk_walk-7",
+            "path": "__animation_walk_walk-7.png"
+        },
+        {
+            "x": 0,
+            "y": 0,
+            "faceRight": 0,
+            "bitmapResolution": 2,
+            "name": "__animation_walk_walk-8",
+            "path": "__animation_walk_walk-8.png"
+        },
+        {
+            "x": 0,
+            "y": 0,
+            "faceRight": 0,
+            "bitmapResolution": 2,
+            "name": "__animation_default_idle-1",
+            "path": "__animation_default_idle-1.png"
+        },
+        {
+            "x": 0,
+            "y": 0,
+            "faceRight": 0,
+            "bitmapResolution": 2,
+            "name": "__animation_default_idle-2",
+            "path": "__animation_default_idle-2.png"
+        },
+        {
+            "x": 0,
+            "y": 0,
+            "faceRight": 0,
+            "bitmapResolution": 2,
+            "name": "__animation_default_idle-3",
+            "path": "__animation_default_idle-3.png"
+        },
+        {
+            "x": 0,
+            "y": 0,
+            "faceRight": 0,
+            "bitmapResolution": 2,
+            "name": "__animation_default_idle-4",
+            "path": "__animation_default_idle-4.png"
+        },
+        {
+            "x": 0,
+            "y": 0,
+            "faceRight": 0,
+            "bitmapResolution": 2,
+            "name": "__animation_default_idle-5",
+            "path": "__animation_default_idle-5.png"
+        },
+        {
+            "x": 0,
+            "y": 0,
+            "faceRight": 0,
+            "bitmapResolution": 2,
+            "name": "__animation_default_idle-6",
+            "path": "__animation_default_idle-6.png"
+        }
+    ],
+    "fAnimations": {
+        "fight": {
+            "from": "__animation_fight_attack_1-1",
+            "to": "__animation_fight_attack_1-4",
+            "duration": 0.4,
+            "anitype": 0
+        },
+        "dying": {
+            "from": "__animation_dying_dead-1",
+            "to": "__animation_dying_dead-3",
+            "duration": 0.6,
+            "anitype": 0
+        },
+        "walk": {
+            "from": "__animation_walk_walk-1",
+            "to": "__animation_walk_walk-8",
+            "duration": 0.8,
+            "anitype": 0
+        },
+        "default": {
+            "from": "__animation_default_idle-1",
+            "to": "__animation_default_idle-6",
+            "duration": 0.6,
+            "anitype": 0
+        }
+    },
+    "defaultAnimation": "default",
+    "animBindings": {
+        "die": "dying",
+        "step": "walk"
+    }
+}

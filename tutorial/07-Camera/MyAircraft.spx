@@ -1,0 +1,17 @@
+import 	"math"
+onStart => {
+	setXYpos 0, 0
+	for {
+		wait 0.1
+		Bullet.clone
+	}
+}
+
+onStart => {
+	setXYpos 0, 0
+	Camera.setXYpos 0, 0
+	for {
+		wait 0.03
+		setXYpos mouseX, mouseY
+	}
+}

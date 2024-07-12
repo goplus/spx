@@ -1,0 +1,4 @@
+onClick => {
+    say "clicked", 0.5
+    nextCostume
+}

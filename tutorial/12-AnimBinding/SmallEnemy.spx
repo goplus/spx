@@ -1,0 +1,14 @@
+onStart => {
+	clone
+}
+
+onCloned => {
+	setXYpos 0,0
+	show
+	for {
+		wait 1
+		step 10
+	}
+}
+
+

@@ -1,0 +1,23 @@
+onKey KeyUp, => {
+    say "animate fight", 0.3
+    animate "fight"
+}
+
+onKey KeyDown, => {
+    say "die", 0.3
+    die
+}
+
+onKey KeyLeft, => {
+    say "step left"
+    setRotationStyle LeftRight
+    turnTo Left
+    step 50
+}
+
+onKey KeyRight, => {
+    say "step right"
+    setRotationStyle LeftRight
+    turnTo Right
+    step 50
+}

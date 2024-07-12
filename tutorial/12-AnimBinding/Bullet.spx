@@ -1,0 +1,4 @@
+onTouched => {
+	destroy
+}
+
