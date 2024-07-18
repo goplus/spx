@@ -143,6 +143,7 @@ func (p *Sprite) init(
 			log.Panicf("animation key [%s] is exist", key)
 		}
 		oldFps := ani.Fps
+		oldFrameFps := ani.FrameFps
 		if oldFps == 0 {
 			ani.Fps = 25
 		}
@@ -172,8 +173,13 @@ func (p *Sprite) init(
 			if ani.From == nil {
 				ani.From, ani.To = p.getFromAnToForAniFrames(ani.From, ani.To)
 			}
-			ani.Fps = oldFps
-			ani.FrameFps = int(oldFps)
+			if oldFps == 0 && oldFrameFps != 0 {
+				ani.Fps = float64(oldFrameFps)
+				ani.FrameFps = oldFrameFps
+			} else {
+				ani.Fps = oldFps
+				ani.FrameFps = int(oldFps)
+			}
 		case aniTypeMove:
 		case aniTypeTurn:
 		case aniTypeGlide:
