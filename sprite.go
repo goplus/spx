@@ -151,11 +151,26 @@ func (p *Sprite) init(
 		}
 		switch ani.AniType {
 		case aniTypeFrame:
-			if ani.From != "" {
+			if ani.From != "" && ani.From != nil {
 				ani.FrameFrom = ani.From.(string)
+			} else {
+				if ani.FrameFrom != "" {
+					ani.From = ani.FrameFrom
+				} else {
+					log.Panicf("animation key [%s] missing FrameFrom ", key)
+				}
 			}
-			if ani.To != "" {
+			if ani.To != "" && ani.To != nil {
 				ani.FrameTo = ani.To.(string)
+			} else {
+				if ani.FrameTo != "" {
+					ani.To = ani.FrameTo
+				} else {
+					log.Panicf("animation key [%s] missing FrameTo ", key)
+				}
+			}
+			if ani.From == nil {
+				ani.From, ani.To = p.getFromAnToForAniFrames(ani.From, ani.To)
 			}
 			ani.Fps = oldFps
 			ani.FrameFps = int(oldFps)
