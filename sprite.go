@@ -97,9 +97,10 @@ type Sprite struct {
 	hasOnCloned  bool
 	hasOnTouched bool
 
-	gamer             reflect.Value
-	lastAnim          *anim.Anim
-	isWaitingStopAnim bool
+	gamer               reflect.Value
+	lastAnim            *anim.Anim
+	isWaitingStopAnim   bool
+	defaultCostumeIndex int
 }
 
 func (p *Sprite) SetDying() { // dying: visible but can't be touched
@@ -523,6 +524,7 @@ func (p *Sprite) SetCostume(costume interface{}) {
 		log.Println("SetCostume", p.name, costume)
 	}
 	p.goSetCostume(costume)
+	p.defaultCostumeIndex = p.costumeIndex_
 }
 
 func (p *Sprite) NextCostume() {
@@ -530,6 +532,7 @@ func (p *Sprite) NextCostume() {
 		log.Println("NextCostume", p.name)
 	}
 	p.goNextCostume()
+	p.defaultCostumeIndex = p.costumeIndex_
 }
 
 func (p *Sprite) PrevCostume() {
@@ -537,6 +540,7 @@ func (p *Sprite) PrevCostume() {
 		log.Println("PrevCostume", p.name)
 	}
 	p.goPrevCostume()
+	p.defaultCostumeIndex = p.costumeIndex_
 }
 
 // -----------------------------------------------------------------------------
@@ -882,13 +886,21 @@ func (p *Sprite) Step__2(step float64, animname string) {
 
 func (p *Sprite) playDefaultAnim() {
 	animName := p.defaultAnimation
-	if animName != "" && p.isVisible {
-		if ani, ok := p.animations[animName]; ok {
-			anicopy := *ani
-			anicopy.IsLoop = true
-			p.goAnimate(animName, &anicopy)
+	if p.isVisible {
+		isPlayAnim := false
+		if animName != "" {
+			if ani, ok := p.animations[animName]; ok {
+				isPlayAnim = true
+				anicopy := *ani
+				anicopy.IsLoop = true
+				p.goAnimate(animName, &anicopy)
+			}
+		}
+		if !isPlayAnim {
+			p.goSetCostume(p.defaultCostumeIndex)
 		}
 	}
+
 }
 
 // Goto func:
