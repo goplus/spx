@@ -637,8 +637,14 @@ func (p *Sprite) goAnimate(name string, ani *aniConfig) {
 	if ani.AniType == aniTypeFrame {
 		p.goSetCostume(ani.From)
 		if ani.Fps == 0 { //compute fps
-			tovalf := frameFrom
-			fromvalf := frameTo
+			fromvalf, tovalf := 0.0, 0.0
+			if hasExtraChannel {
+				fromvalf = frameFrom
+				tovalf = frameTo
+			} else {
+				fromvalf = fromval.(float64)
+				tovalf = toval.(float64)
+			}
 			ani.Fps = math.Abs(tovalf-fromvalf) / ani.Duration
 		}
 	}
