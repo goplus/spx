@@ -150,6 +150,12 @@ func (p *Sprite) init(
 		if ani.FrameFps == 0 {
 			ani.FrameFps = 25
 		}
+		if ani.TurnToDuration == 0 {
+			ani.TurnToDuration = 1
+		}
+		if ani.StepDuration == 0 {
+			ani.StepDuration = 0.01
+		}
 		switch ani.AniType {
 		case aniTypeFrame:
 			if ani.From != "" && ani.From != nil {
@@ -180,6 +186,8 @@ func (p *Sprite) init(
 				ani.Fps = oldFps
 				ani.FrameFps = int(oldFps)
 			}
+			from, to := p.getFromAnToForAniFrames(ani.From, ani.To)
+			ani.Duration = math.Abs(to-from) / ani.Fps
 		case aniTypeMove:
 		case aniTypeTurn:
 		case aniTypeGlide:
@@ -633,19 +641,21 @@ func (p *Sprite) goAnimate(name string, ani *aniConfig) {
 	if hasExtraChannel {
 		frameFrom, frameTo = p.getFromAnToForAniFrames(ani.FrameFrom, ani.FrameTo)
 	}
+	fromvalf, tovalf := 0.0, 0.0
+	if hasExtraChannel {
+		fromvalf = frameFrom
+		tovalf = frameTo
+	} else {
+		fromvalf = fromval.(float64)
+		tovalf = toval.(float64)
+	}
 
 	if ani.AniType == aniTypeFrame {
 		p.goSetCostume(ani.From)
 		if ani.Fps == 0 { //compute fps
-			fromvalf, tovalf := 0.0, 0.0
-			if hasExtraChannel {
-				fromvalf = frameFrom
-				tovalf = frameTo
-			} else {
-				fromvalf = fromval.(float64)
-				tovalf = toval.(float64)
-			}
 			ani.Fps = math.Abs(tovalf-fromvalf) / ani.Duration
+		} else {
+			ani.Duration = math.Abs(tovalf-fromvalf) / ani.Fps
 		}
 	}
 
@@ -904,7 +914,8 @@ func (p *Sprite) Step__2(step float64, animname string) {
 		anicopy.From = 0
 		anicopy.To = step
 		anicopy.AniType = aniTypeMove
-		anicopy.Duration = math.Abs(step) * ani.Duration
+		anicopy.Duration = math.Abs(step) * ani.StepDuration
+
 		p.goAnimate(animname, &anicopy)
 		return
 	}
@@ -1106,7 +1117,7 @@ func (p *Sprite) TurnTo(obj interface{}) {
 		anicopy := *ani
 		anicopy.From = fromangle
 		anicopy.To = toangle
-		anicopy.Duration = ani.Duration / 360.0 * math.Abs(delta)
+		anicopy.Duration = ani.TurnToDuration / 360.0 * math.Abs(delta)
 		anicopy.AniType = aniTypeTurn
 		p.goAnimate(animName, &anicopy)
 		return
