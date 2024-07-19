@@ -620,15 +620,20 @@ func (p *Sprite) getStateAnimName(stateName string) string {
 func lerp(a float64, b float64, progress float64) float64 {
 	return a + (b-a)*progress
 }
-
 func (p *Sprite) goAnimate(name string, ani *aniConfig) {
+	p.goAnimateInternal(name, ani, true)
+}
+func (p *Sprite) goAnimateInternal(name string, ani *aniConfig, isBlocking bool) {
 	if p.lastAnim != nil {
 		p.isWaitingStopAnim = true
 		p.lastAnim.Stop()
 		p.isWaitingStopAnim = false
 	}
+
 	var animwg sync.WaitGroup
-	animwg.Add(1)
+	if isBlocking {
+		animwg.Add(1)
+	}
 
 	if ani.OnStart != nil && ani.OnStart.Play != "" {
 		p.g.Play__3(ani.OnStart.Play)
@@ -761,7 +766,9 @@ func (p *Sprite) goAnimate(name string, ani *aniConfig) {
 		if debugInstr {
 			log.Printf("stop anim [name %s id %d]  ", an.Name, an.Id)
 		}
-		animwg.Done()
+		if isBlocking {
+			animwg.Done()
+		}
 		p.lastAnim = nil
 		if !p.isWaitingStopAnim && name != p.defaultAnimation && p.isVisible {
 			dieAnimName := p.getStateAnimName(StateDie)
@@ -778,7 +785,9 @@ func (p *Sprite) goAnimate(name string, ani *aniConfig) {
 			h.Stop()
 		}
 	})
-	waitToDo(animwg.Wait)
+	if isBlocking {
+		waitToDo(animwg.Wait)
+	}
 	if isNeedPlayDefault {
 		p.playDefaultAnim()
 	}
@@ -931,7 +940,7 @@ func (p *Sprite) playDefaultAnim() {
 				isPlayAnim = true
 				anicopy := *ani
 				anicopy.IsLoop = true
-				p.goAnimate(animName, &anicopy)
+				p.goAnimateInternal(animName, &anicopy, false)
 			}
 		}
 		if !isPlayAnim {
