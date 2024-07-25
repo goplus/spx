@@ -147,7 +147,8 @@ const (
 var (
 	stmBackground    = Color{R: 0xc4, G: 0xc7, B: 0xc1, A: 0xff}
 	stmBackgroundPen = colornames.Black
-	stmTextRectPen   = colornames.White
+	stmValueground   = Color{R: 33, G: 159, B: 252, A: 255}
+	stmValueRectPen  = Color{R: 33, G: 159, B: 252, A: 0}
 )
 
 func (p *MonitorWidget) draw(dc drawContext) {
@@ -180,14 +181,16 @@ func (p *MonitorWidget) draw(dc drawContext) {
 		if textRectW < stmDefaultSmW {
 			textRectW = stmDefaultSmW
 		}
-		w := labelW + textRectW + (stmHoriGapSm * 3)
+		w := labelW + textRectW + (stmHoriGapSm * 2)
 		h += (stmVertGapSm * 2)
 		drawRoundRect(dc, x, y, w, h, stmBackground, stmBackgroundPen)
 		labelRender.Draw(dc.Image, x+stmHoriGapSm, y+stmVertGapSm, color.Black, 0)
 		x += labelW + (stmHoriGapSm * 2)
-		y += stmVertGapSm
-		drawRoundRect(dc, x, y, textRectW, textH, p.color, stmTextRectPen)
-		textRender.Draw(dc.Image, x+((textRectW-textW)>>1), y, color.White, 0)
+		y += stmVertGapSm / 2
+		h2 := textH + stmVertGapSm*1.5
+		drawRoundRect(dc, x, y, textRectW, h2, stmValueground, stmValueRectPen)
+		y += stmVertGapSm / 2
+		textRender.Draw(dc.Image, x+((textRectW-textW)>>1)+h2/2, y, color.White, 0)
 	}
 }
 
@@ -206,11 +209,35 @@ func drawRoundRect(dc drawContext, x, y, w, h int, clr, clrPen Color) {
 		dc.DrawImage(i, nil)
 		return
 	}
-	img, err := getRoundRect(dc, x, y, w, h, clr, clrPen)
+	img, err := getCircleRect(dc, x, y, w, h, clr, clrPen)
 	if err != nil {
 		panic(err)
 	}
 	rcMap[key] = ebiten.NewImageFromImage(img)
+}
+
+func getCircleRect(dc drawContext, x, y, w, h int, clr, clrPen Color) (image.Image, error) {
+	varTable := []string{
+		"$x", strconv.Itoa(x + h/2),
+		"$y", strconv.Itoa(y),
+		"$rx", strconv.Itoa(h / 2),
+		"$ry", strconv.Itoa(h / 2),
+		"$w", strconv.Itoa(w - h/2),
+		"$h", strconv.Itoa(0),
+	}
+	glyphTpl := "M $x $y h $w a $rx $ry 0 0 1 $rx $ry v $h a $rx $ry 0 0 1 -$rx $ry h -$w a $rx $ry 0 0 1 -$rx -$ry v -$h a $rx $ry 0 0 1 $rx -$ry z"
+	glyph := strings.NewReplacer(varTable...).Replace(glyphTpl)
+
+	style := fmt.Sprintf(
+		"fill:rgb(%d, %d, %d);stroke-width:1;stroke:rgb(%d, %d, %d);fill-opacity:0.5",
+		clr.R, clr.G, clr.B,
+		clrPen.R, clrPen.G, clrPen.B)
+
+	cx, cy := dc.Size()
+	svg := gdi.NewSVG(cx, cy)
+	svg.Path(glyph, style)
+	svg.End()
+	return svg.ToImage()
 }
 
 func getRoundRect(dc drawContext, x, y, w, h int, clr, clrPen Color) (image.Image, error) {
