@@ -33,8 +33,10 @@ import (
 
 // -------------------------------------------------------------------------------------
 
-// stageMonitor class.
-type stageMonitor struct {
+// MonitorWidget class.
+type MonitorWidget struct {
+	name    string
+	size    float64
 	target  string
 	val     string
 	eval    func() string
@@ -46,7 +48,7 @@ type stageMonitor struct {
 }
 
 /*
-"type": "stageMonitor",
+"type": "MonitorWidget",
 "target": "",
 "val": "getVar:score",
 "color": 15629590,
@@ -59,9 +61,14 @@ type stageMonitor struct {
 "isDiscrete": true,
 "visible": true
 */
-func newStageMonitor(g reflect.Value, v specsp) (*stageMonitor, error) {
+func newMonitorWidget(g reflect.Value, v specsp) (*MonitorWidget, error) {
 	target := v["target"].(string)
 	val := v["val"].(string)
+	name := v["name"].(string)
+	size := v["size"].(float64)
+	if size == 0 {
+		size = 1
+	}
 	eval := buildMonitorEval(g, target, val)
 	if eval == nil {
 		return nil, syscall.ENOENT
@@ -75,8 +82,8 @@ func newStageMonitor(g reflect.Value, v specsp) (*stageMonitor, error) {
 	x := v["x"].(float64)
 	y := v["y"].(float64)
 	visible := v["visible"].(bool)
-	return &stageMonitor{
-		target: target, val: val, eval: eval,
+	return &MonitorWidget{
+		target: target, val: val, eval: eval, name: name, size: size,
 		visible: visible, mode: mode, color: color, x: x, y: y, label: label,
 	}, nil
 }
@@ -118,14 +125,14 @@ func buildMonitorEval(g reflect.Value, t, val string) func() string {
 				return fmt.Sprint(ref.Interface())
 			}
 		}
-		log.Println("[WARN] stageMonitor: var not found -", name, target)
+		log.Println("[WARN] MonitorWidget: var not found -", name, target)
 	default:
-		log.Println("[WARN] stageMonitor: unknown command -", val)
+		log.Println("[WARN] MonitorWidget: unknown command -", val)
 	}
 	return nil
 }
 
-func (p *stageMonitor) setVisible(visible bool) {
+func (p *MonitorWidget) setVisible(visible bool) {
 	p.visible = visible
 }
 
@@ -143,7 +150,7 @@ var (
 	stmTextRectPen   = colornames.White
 )
 
-func (p *stageMonitor) draw(dc drawContext) {
+func (p *MonitorWidget) draw(dc drawContext) {
 	if !p.visible {
 		return
 	}
@@ -228,8 +235,63 @@ func getRoundRect(dc drawContext, x, y, w, h int, clr, clrPen Color) (image.Imag
 	return svg.ToImage()
 }
 
-func (p *stageMonitor) hit(hc hitContext) (hr hitResult, ok bool) {
+func (p *MonitorWidget) hit(hc hitContext) (hr hitResult, ok bool) {
 	return
 }
 
 // -------------------------------------------------------------------------------------
+// IWidget
+func (pself *MonitorWidget) GetName() string {
+	return pself.name
+}
+
+func (pself *MonitorWidget) Visible() bool {
+	return pself.visible
+}
+func (pself *MonitorWidget) Show() {
+	pself.visible = true
+}
+func (pself *MonitorWidget) Hide() {
+	pself.visible = false
+}
+func (pself *MonitorWidget) Xpos() float64 {
+	return pself.x
+}
+func (pself *MonitorWidget) Ypos() float64 {
+	return pself.y
+}
+func (pself *MonitorWidget) SetXpos(x float64) {
+	pself.x = x
+}
+func (pself *MonitorWidget) SetYpos(y float64) {
+	pself.y = y
+}
+func (pself *MonitorWidget) SetXYpos(x float64, y float64) {
+	pself.x, pself.y = x, y
+}
+func (pself *MonitorWidget) ChangeXpos(dx float64) {
+	pself.x += dx
+}
+func (pself *MonitorWidget) ChangeYpos(dy float64) {
+	pself.y += dy
+}
+func (pself *MonitorWidget) ChangeXYpos(dx float64, dy float64) {
+	pself.x += dx
+	pself.y += dy
+}
+
+func (pself *MonitorWidget) Size() float64 {
+	return pself.size
+}
+func (pself *MonitorWidget) SetSize(size float64) {
+	pself.size = size
+	pself.updateSize()
+}
+func (pself *MonitorWidget) ChangeSize(delta float64) {
+	pself.size += delta
+	pself.updateSize()
+}
+
+func (pself *MonitorWidget) updateSize() {
+	// TODO(tanjp) updateSize not implemented
+}
