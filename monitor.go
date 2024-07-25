@@ -171,25 +171,29 @@ func (p *MonitorWidget) draw(dc drawContext) {
 	default:
 		x, y := int(p.x), int(p.y)
 		labelRender := gdi.NewTextRender(defaultFont2, 0x80000, 0)
+		labelRender.Scale = p.size
 		labelRender.AddText(p.label)
 		labelW, h := labelRender.Size()
 
 		textRender := gdi.NewTextRender(defaultFontSm, 0x80000, 0)
+		textRender.Scale = p.size
 		textRender.AddText(val)
 		textW, textH := textRender.Size()
 		textRectW := textW
-		if textRectW < stmDefaultSmW {
-			textRectW = stmDefaultSmW
+		if textRectW < int(stmDefaultSmW*p.size) {
+			textRectW = int(stmDefaultSmW * p.size)
 		}
-		w := labelW + textRectW + (stmHoriGapSm * 2)
-		h += (stmVertGapSm * 2)
+		hGap := stmHoriGapSm * p.size
+		vGap := stmVertGapSm * p.size
+		w := labelW + textRectW + int(hGap*2)
+		h += int(vGap * 2)
 		drawRoundRect(dc, x, y, w, h, stmBackground, stmBackgroundPen)
-		labelRender.Draw(dc.Image, x+stmHoriGapSm, y+stmVertGapSm, color.Black, 0)
-		x += labelW + (stmHoriGapSm * 2)
-		y += stmVertGapSm / 2
-		h2 := textH + stmVertGapSm*1.5
+		labelRender.Draw(dc.Image, x+int(hGap), y+int(vGap), color.Black, 0)
+		x += labelW + int(hGap*2)
+		y += int(vGap / 2)
+		h2 := textH + int(float64(vGap*1.3))
 		drawRoundRect(dc, x, y, textRectW, h2, stmValueground, stmValueRectPen)
-		y += stmVertGapSm / 2
+		y += int(vGap / 2)
 		textRender.Draw(dc.Image, x+((textRectW-textW)>>1)+h2/2, y, color.White, 0)
 	}
 }
