@@ -485,8 +485,8 @@ type specsp = map[string]interface{}
 
 func (p *Game) addSpecialShape(g reflect.Value, v specsp, inits []Spriter) []Spriter {
 	switch typ := v["type"].(string); typ {
-	case "stageMonitor", "monitorWidget":
-		if sm, err := newMonitorWidget(g, v); err == nil {
+	case "stageMonitor", "monitor":
+		if sm, err := newMonitor(g, v); err == nil {
 			p.addShape(sm)
 		}
 	case "measure":
@@ -1319,7 +1319,7 @@ func (p *Game) Broadcast__2(msg string, data interface{}, wait bool) {
 
 func (p *Game) setStageMonitor(target string, val string, visible bool) {
 	for _, item := range p.items {
-		if sp, ok := item.(*MonitorWidget); ok && sp.val == val && sp.target == target {
+		if sp, ok := item.(*Monitor); ok && sp.val == val && sp.target == target {
 			sp.setVisible(visible)
 			return
 		}

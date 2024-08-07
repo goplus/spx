@@ -33,8 +33,8 @@ import (
 
 // -------------------------------------------------------------------------------------
 
-// MonitorWidget class.
-type MonitorWidget struct {
+// Monitor class.
+type Monitor struct {
 	name    string
 	size    float64
 	target  string
@@ -48,7 +48,7 @@ type MonitorWidget struct {
 }
 
 /*
-"type": "MonitorWidget",
+"type": "Monitor",
 "target": "",
 "val": "getVar:score",
 "color": 15629590,
@@ -61,7 +61,7 @@ type MonitorWidget struct {
 "isDiscrete": true,
 "visible": true
 */
-func newMonitorWidget(g reflect.Value, v specsp) (*MonitorWidget, error) {
+func newMonitor(g reflect.Value, v specsp) (*Monitor, error) {
 	target := v["target"].(string)
 	val := v["val"].(string)
 	name := v["name"].(string)
@@ -82,7 +82,7 @@ func newMonitorWidget(g reflect.Value, v specsp) (*MonitorWidget, error) {
 	x := v["x"].(float64)
 	y := v["y"].(float64)
 	visible := v["visible"].(bool)
-	return &MonitorWidget{
+	return &Monitor{
 		target: target, val: val, eval: eval, name: name, size: size,
 		visible: visible, mode: mode, color: color, x: x, y: y, label: label,
 	}, nil
@@ -125,14 +125,14 @@ func buildMonitorEval(g reflect.Value, t, val string) func() string {
 				return fmt.Sprint(ref.Interface())
 			}
 		}
-		log.Println("[WARN] MonitorWidget: var not found -", name, target)
+		log.Println("[WARN] Monitor: var not found -", name, target)
 	default:
-		log.Println("[WARN] MonitorWidget: unknown command -", val)
+		log.Println("[WARN] Monitor: unknown command -", val)
 	}
 	return nil
 }
 
-func (p *MonitorWidget) setVisible(visible bool) {
+func (p *Monitor) setVisible(visible bool) {
 	p.visible = visible
 }
 
@@ -151,7 +151,7 @@ var (
 	stmValueRectPen  = Color{R: 33, G: 159, B: 252, A: 0}
 )
 
-func (p *MonitorWidget) draw(dc drawContext) {
+func (p *Monitor) draw(dc drawContext) {
 	if !p.visible {
 		return
 	}
@@ -266,63 +266,63 @@ func getRoundRect(dc drawContext, x, y, w, h int, clr, clrPen Color) (image.Imag
 	return svg.ToImage()
 }
 
-func (p *MonitorWidget) hit(hc hitContext) (hr hitResult, ok bool) {
+func (p *Monitor) hit(hc hitContext) (hr hitResult, ok bool) {
 	return
 }
 
 // -------------------------------------------------------------------------------------
 // IWidget
-func (pself *MonitorWidget) GetName() string {
+func (pself *Monitor) GetName() string {
 	return pself.name
 }
 
-func (pself *MonitorWidget) Visible() bool {
+func (pself *Monitor) Visible() bool {
 	return pself.visible
 }
-func (pself *MonitorWidget) Show() {
+func (pself *Monitor) Show() {
 	pself.visible = true
 }
-func (pself *MonitorWidget) Hide() {
+func (pself *Monitor) Hide() {
 	pself.visible = false
 }
-func (pself *MonitorWidget) Xpos() float64 {
+func (pself *Monitor) Xpos() float64 {
 	return pself.x
 }
-func (pself *MonitorWidget) Ypos() float64 {
+func (pself *Monitor) Ypos() float64 {
 	return pself.y
 }
-func (pself *MonitorWidget) SetXpos(x float64) {
+func (pself *Monitor) SetXpos(x float64) {
 	pself.x = x
 }
-func (pself *MonitorWidget) SetYpos(y float64) {
+func (pself *Monitor) SetYpos(y float64) {
 	pself.y = y
 }
-func (pself *MonitorWidget) SetXYpos(x float64, y float64) {
+func (pself *Monitor) SetXYpos(x float64, y float64) {
 	pself.x, pself.y = x, y
 }
-func (pself *MonitorWidget) ChangeXpos(dx float64) {
+func (pself *Monitor) ChangeXpos(dx float64) {
 	pself.x += dx
 }
-func (pself *MonitorWidget) ChangeYpos(dy float64) {
+func (pself *Monitor) ChangeYpos(dy float64) {
 	pself.y += dy
 }
-func (pself *MonitorWidget) ChangeXYpos(dx float64, dy float64) {
+func (pself *Monitor) ChangeXYpos(dx float64, dy float64) {
 	pself.x += dx
 	pself.y += dy
 }
 
-func (pself *MonitorWidget) Size() float64 {
+func (pself *Monitor) Size() float64 {
 	return pself.size
 }
-func (pself *MonitorWidget) SetSize(size float64) {
+func (pself *Monitor) SetSize(size float64) {
 	pself.size = size
 	pself.updateSize()
 }
-func (pself *MonitorWidget) ChangeSize(delta float64) {
+func (pself *Monitor) ChangeSize(delta float64) {
 	pself.size += delta
 	pself.updateSize()
 }
 
-func (pself *MonitorWidget) updateSize() {
+func (pself *Monitor) updateSize() {
 	// TODO(tanjp) updateSize not implemented
 }
