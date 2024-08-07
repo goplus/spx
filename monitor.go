@@ -28,7 +28,6 @@ import (
 
 	"github.com/goplus/spx/internal/gdi"
 	"github.com/hajimehoshi/ebiten/v2"
-	"golang.org/x/image/colornames"
 )
 
 // -------------------------------------------------------------------------------------
@@ -145,10 +144,10 @@ const (
 )
 
 var (
-	stmBackground    = Color{R: 0xc4, G: 0xc7, B: 0xc1, A: 0xff}
-	stmBackgroundPen = colornames.Black
-	stmValueground   = Color{R: 33, G: 159, B: 252, A: 255}
-	stmValueRectPen  = Color{R: 33, G: 159, B: 252, A: 0}
+	stmBackground    = Color{R: 0xf6, G: 0xf8, B: 0xfa, A: 0xff}
+	stmBackgroundPen = Color{R: 0xf6, G: 0xf8, B: 0xfa, A: 0xff}
+	stmValueground   = Color{R: 0x21, G: 0x9f, B: 0xfc, A: 0xff}
+	stmValueRectPen  = Color{R: 0xf6, G: 0xf8, B: 0xfa, A: 0xff}
 )
 
 func (p *Monitor) draw(dc drawContext) {
@@ -232,10 +231,11 @@ func getCircleRect(dc drawContext, x, y, w, h int, clr, clrPen Color) (image.Ima
 	glyphTpl := "M $x $y h $w a $rx $ry 0 0 1 $rx $ry v $h a $rx $ry 0 0 1 -$rx $ry h -$w a $rx $ry 0 0 1 -$rx -$ry v -$h a $rx $ry 0 0 1 $rx -$ry z"
 	glyph := strings.NewReplacer(varTable...).Replace(glyphTpl)
 
+	alpha := float32(clr.A) / 255
 	style := fmt.Sprintf(
-		"fill:rgb(%d, %d, %d);stroke-width:1;stroke:rgb(%d, %d, %d);fill-opacity:0.5",
+		"fill:rgb(%d, %d, %d);stroke-width:1;stroke:rgb(%d, %d, %d);fill-opacity:%f",
 		clr.R, clr.G, clr.B,
-		clrPen.R, clrPen.G, clrPen.B)
+		clrPen.R, clrPen.G, clrPen.B, alpha)
 
 	cx, cy := dc.Size()
 	svg := gdi.NewSVG(cx, cy)
