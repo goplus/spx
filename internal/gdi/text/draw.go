@@ -133,14 +133,12 @@ func getFaceCache(f font.Face) *faceCache {
 // -------------------------------------------------------------------------------------
 
 // CachedFace represents a cached face
-//
 type CachedFace struct {
 	font.Face
 	*faceCache
 }
 
 // NewFace creates a cached face object.
-//
 func NewFace(f font.Face) CachedFace {
 	return CachedFace{f, getFaceCache(f)}
 }
@@ -148,21 +146,18 @@ func NewFace(f font.Face) CachedFace {
 // -------------------------------------------------------------------------------------
 
 // RenderGlyph represents a rendered text.
-//
 type RenderGlyph struct {
 	X fixed.Int26_6
 	C rune
 }
 
 // RenderLine represents a rendered line.
-//
 type RenderLine struct {
 	Items []RenderGlyph
 	LastX fixed.Int26_6
 }
 
 // Render represents a text rendering engine.
-//
 type Render struct {
 	Face    CachedFace
 	Width   fixed.Int26_6
@@ -171,10 +166,10 @@ type Render struct {
 	Last    []RenderGlyph // last line
 	NotLast []RenderLine  // all lines except last
 	Prev    rune
+	Scale   float64
 }
 
 // NewRender creates a new text rendering engine.
-//
 func NewRender(face font.Face, width, dy fixed.Int26_6) *Render {
 	f := NewFace(face)
 	return &Render{
@@ -182,6 +177,7 @@ func NewRender(face font.Face, width, dy fixed.Int26_6) *Render {
 		Width:  width,
 		Height: f.Height + dy,
 		LastX:  0,
+		Scale:  1.0,
 	}
 }
 
@@ -211,7 +207,6 @@ func getPunctSplit(line []RenderGlyph) int {
 }
 
 // AddText renders inputed text.
-//
 func (p *Render) AddText(s string) {
 	f := p.Face
 	for _, c := range s {
@@ -271,23 +266,21 @@ func (p *Render) getWidth() fixed.Int26_6 {
 }
 
 // Size returns width and height of rendered text.
-//
 func (p *Render) Size() (fixed.Int26_6, fixed.Int26_6) {
 	h := p.Face.Descent + p.Face.Ascent + p.Height.Mul(fixed.I(len(p.NotLast)))
-	return p.getWidth(), h
+	return p.getWidth() * fixed.Int26_6(p.Scale), h * fixed.Int26_6(p.Scale)
 }
 
 // Draw draws rendered text.
-//
 func (p *Render) Draw(dst *ebiten.Image, x, y fixed.Int26_6, clr color.Color, mode int) {
 	for _, line := range p.NotLast {
-		p.drawLine(dst, line.Items, x, y, clr, mode)
-		y += p.Height
+		p.drawLine(dst, line.Items, x, y, clr, mode, p.Scale)
+		y += p.Height * fixed.Int26_6(p.Scale)
 	}
-	p.drawLine(dst, p.Last, x, y, clr, mode)
+	p.drawLine(dst, p.Last, x, y, clr, mode, p.Scale)
 }
 
-func (p *Render) drawLine(dst *ebiten.Image, line []RenderGlyph, x, y fixed.Int26_6, clr color.Color, mode int) {
+func (p *Render) drawLine(dst *ebiten.Image, line []RenderGlyph, x, y fixed.Int26_6, clr color.Color, mode int, scale float64) {
 	cr, cg, cb, ca := clr.RGBA()
 	if ca == 0 {
 		return
@@ -302,7 +295,8 @@ func (p *Render) drawLine(dst *ebiten.Image, line []RenderGlyph, x, y fixed.Int2
 			continue
 		}
 		options := new(ebiten.DrawImageOptions)
-		x, y := dr.Min.X+(x+item.X).Round(), dr.Min.Y+y.Round()
+		x, y := int(float64(dr.Min.X)*scale)+(x+item.X*fixed.Int26_6(scale)).Round(), dr.Min.Y+y.Round()
+		options.GeoM.Scale(scale, scale)
 		options.GeoM.Translate(float64(x), float64(y))
 		rf := float64(cr) / float64(ca)
 		gf := float64(cg) / float64(ca)

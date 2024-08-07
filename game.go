@@ -485,8 +485,8 @@ type specsp = map[string]interface{}
 
 func (p *Game) addSpecialShape(g reflect.Value, v specsp, inits []Spriter) []Spriter {
 	switch typ := v["type"].(string); typ {
-	case "stageMonitor":
-		if sm, err := newStageMonitor(g, v); err == nil {
+	case "stageMonitor", "monitor":
+		if sm, err := newMonitor(g, v); err == nil {
 			p.addShape(sm)
 		}
 	case "measure":
@@ -1319,7 +1319,7 @@ func (p *Game) Broadcast__2(msg string, data interface{}, wait bool) {
 
 func (p *Game) setStageMonitor(target string, val string, visible bool) {
 	for _, item := range p.items {
-		if sp, ok := item.(*stageMonitor); ok && sp.val == val && sp.target == target {
+		if sp, ok := item.(*Monitor); ok && sp.val == val && sp.target == target {
 			sp.setVisible(visible)
 			return
 		}
@@ -1335,3 +1335,16 @@ func (p *Game) ShowVar(name string) {
 }
 
 // -----------------------------------------------------------------------------
+// Widget
+
+// GetWidget returns the widget instance with given name. It panics if not found.
+func (p *Game) GetWidget(name string) Widget {
+	items := p.items
+	for _, item := range items {
+		widget, ok := item.(Widget)
+		if ok && widget.GetName() == name {
+			return widget
+		}
+	}
+	return nil
+}

@@ -28,13 +28,14 @@ import (
 
 	"github.com/goplus/spx/internal/gdi"
 	"github.com/hajimehoshi/ebiten/v2"
-	"golang.org/x/image/colornames"
 )
 
 // -------------------------------------------------------------------------------------
 
-// stageMonitor class.
-type stageMonitor struct {
+// Monitor class.
+type Monitor struct {
+	name    string
+	size    float64
 	target  string
 	val     string
 	eval    func() string
@@ -46,7 +47,7 @@ type stageMonitor struct {
 }
 
 /*
-"type": "stageMonitor",
+"type": "Monitor",
 "target": "",
 "val": "getVar:score",
 "color": 15629590,
@@ -59,9 +60,14 @@ type stageMonitor struct {
 "isDiscrete": true,
 "visible": true
 */
-func newStageMonitor(g reflect.Value, v specsp) (*stageMonitor, error) {
+func newMonitor(g reflect.Value, v specsp) (*Monitor, error) {
 	target := v["target"].(string)
 	val := v["val"].(string)
+	name := v["name"].(string)
+	size := v["size"].(float64)
+	if size == 0 {
+		size = 1
+	}
 	eval := buildMonitorEval(g, target, val)
 	if eval == nil {
 		return nil, syscall.ENOENT
@@ -75,8 +81,8 @@ func newStageMonitor(g reflect.Value, v specsp) (*stageMonitor, error) {
 	x := v["x"].(float64)
 	y := v["y"].(float64)
 	visible := v["visible"].(bool)
-	return &stageMonitor{
-		target: target, val: val, eval: eval,
+	return &Monitor{
+		target: target, val: val, eval: eval, name: name, size: size,
 		visible: visible, mode: mode, color: color, x: x, y: y, label: label,
 	}, nil
 }
@@ -118,14 +124,14 @@ func buildMonitorEval(g reflect.Value, t, val string) func() string {
 				return fmt.Sprint(ref.Interface())
 			}
 		}
-		log.Println("[WARN] stageMonitor: var not found -", name, target)
+		log.Println("[WARN] Monitor: var not found -", name, target)
 	default:
-		log.Println("[WARN] stageMonitor: unknown command -", val)
+		log.Println("[WARN] Monitor: unknown command -", val)
 	}
 	return nil
 }
 
-func (p *stageMonitor) setVisible(visible bool) {
+func (p *Monitor) setVisible(visible bool) {
 	p.visible = visible
 }
 
@@ -138,12 +144,13 @@ const (
 )
 
 var (
-	stmBackground    = Color{R: 0xc4, G: 0xc7, B: 0xc1, A: 0xff}
-	stmBackgroundPen = colornames.Black
-	stmTextRectPen   = colornames.White
+	stmBackground    = Color{R: 0xf6, G: 0xf8, B: 0xfa, A: 0xff}
+	stmBackgroundPen = Color{R: 0xf6, G: 0xf8, B: 0xfa, A: 0xff}
+	stmValueground   = Color{R: 0x21, G: 0x9f, B: 0xfc, A: 0xff}
+	stmValueRectPen  = Color{R: 0xf6, G: 0xf8, B: 0xfa, A: 0xff}
 )
 
-func (p *stageMonitor) draw(dc drawContext) {
+func (p *Monitor) draw(dc drawContext) {
 	if !p.visible {
 		return
 	}
@@ -163,24 +170,30 @@ func (p *stageMonitor) draw(dc drawContext) {
 	default:
 		x, y := int(p.x), int(p.y)
 		labelRender := gdi.NewTextRender(defaultFont2, 0x80000, 0)
+		labelRender.Scale = p.size
 		labelRender.AddText(p.label)
 		labelW, h := labelRender.Size()
 
 		textRender := gdi.NewTextRender(defaultFontSm, 0x80000, 0)
+		textRender.Scale = p.size
 		textRender.AddText(val)
 		textW, textH := textRender.Size()
 		textRectW := textW
-		if textRectW < stmDefaultSmW {
-			textRectW = stmDefaultSmW
+		if textRectW < int(stmDefaultSmW*p.size) {
+			textRectW = int(stmDefaultSmW * p.size)
 		}
-		w := labelW + textRectW + (stmHoriGapSm * 3)
-		h += (stmVertGapSm * 2)
+		hGap := stmHoriGapSm * p.size
+		vGap := stmVertGapSm * p.size
+		w := labelW + textRectW + int(hGap*2)
+		h += int(vGap * 2)
 		drawRoundRect(dc, x, y, w, h, stmBackground, stmBackgroundPen)
-		labelRender.Draw(dc.Image, x+stmHoriGapSm, y+stmVertGapSm, color.Black, 0)
-		x += labelW + (stmHoriGapSm * 2)
-		y += stmVertGapSm
-		drawRoundRect(dc, x, y, textRectW, textH, p.color, stmTextRectPen)
-		textRender.Draw(dc.Image, x+((textRectW-textW)>>1), y, color.White, 0)
+		labelRender.Draw(dc.Image, x+int(hGap), y+int(vGap), color.Black, 0)
+		x += labelW + int(hGap*2)
+		y += int(vGap / 2)
+		h2 := textH + int(float64(vGap*1.3))
+		drawRoundRect(dc, x, y, textRectW, h2, stmValueground, stmValueRectPen)
+		y += int(vGap / 2)
+		textRender.Draw(dc.Image, x+((textRectW-textW)>>1)+h2/2, y, color.White, 0)
 	}
 }
 
@@ -199,11 +212,36 @@ func drawRoundRect(dc drawContext, x, y, w, h int, clr, clrPen Color) {
 		dc.DrawImage(i, nil)
 		return
 	}
-	img, err := getRoundRect(dc, x, y, w, h, clr, clrPen)
+	img, err := getCircleRect(dc, x, y, w, h, clr, clrPen)
 	if err != nil {
 		panic(err)
 	}
 	rcMap[key] = ebiten.NewImageFromImage(img)
+}
+
+func getCircleRect(dc drawContext, x, y, w, h int, clr, clrPen Color) (image.Image, error) {
+	varTable := []string{
+		"$x", strconv.Itoa(x + h/2),
+		"$y", strconv.Itoa(y),
+		"$rx", strconv.Itoa(h / 2),
+		"$ry", strconv.Itoa(h / 2),
+		"$w", strconv.Itoa(w - h/2),
+		"$h", strconv.Itoa(0),
+	}
+	glyphTpl := "M $x $y h $w a $rx $ry 0 0 1 $rx $ry v $h a $rx $ry 0 0 1 -$rx $ry h -$w a $rx $ry 0 0 1 -$rx -$ry v -$h a $rx $ry 0 0 1 $rx -$ry z"
+	glyph := strings.NewReplacer(varTable...).Replace(glyphTpl)
+
+	alpha := float32(clr.A) / 255
+	style := fmt.Sprintf(
+		"fill:rgb(%d, %d, %d);stroke-width:1;stroke:rgb(%d, %d, %d);fill-opacity:%f",
+		clr.R, clr.G, clr.B,
+		clrPen.R, clrPen.G, clrPen.B, alpha)
+
+	cx, cy := dc.Size()
+	svg := gdi.NewSVG(cx, cy)
+	svg.Path(glyph, style)
+	svg.End()
+	return svg.ToImage()
 }
 
 func getRoundRect(dc drawContext, x, y, w, h int, clr, clrPen Color) (image.Image, error) {
@@ -228,8 +266,63 @@ func getRoundRect(dc drawContext, x, y, w, h int, clr, clrPen Color) (image.Imag
 	return svg.ToImage()
 }
 
-func (p *stageMonitor) hit(hc hitContext) (hr hitResult, ok bool) {
+func (p *Monitor) hit(hc hitContext) (hr hitResult, ok bool) {
 	return
 }
 
 // -------------------------------------------------------------------------------------
+// IWidget
+func (pself *Monitor) GetName() string {
+	return pself.name
+}
+
+func (pself *Monitor) Visible() bool {
+	return pself.visible
+}
+func (pself *Monitor) Show() {
+	pself.visible = true
+}
+func (pself *Monitor) Hide() {
+	pself.visible = false
+}
+func (pself *Monitor) Xpos() float64 {
+	return pself.x
+}
+func (pself *Monitor) Ypos() float64 {
+	return pself.y
+}
+func (pself *Monitor) SetXpos(x float64) {
+	pself.x = x
+}
+func (pself *Monitor) SetYpos(y float64) {
+	pself.y = y
+}
+func (pself *Monitor) SetXYpos(x float64, y float64) {
+	pself.x, pself.y = x, y
+}
+func (pself *Monitor) ChangeXpos(dx float64) {
+	pself.x += dx
+}
+func (pself *Monitor) ChangeYpos(dy float64) {
+	pself.y += dy
+}
+func (pself *Monitor) ChangeXYpos(dx float64, dy float64) {
+	pself.x += dx
+	pself.y += dy
+}
+
+func (pself *Monitor) Size() float64 {
+	return pself.size
+}
+func (pself *Monitor) SetSize(size float64) {
+	pself.size = size
+	pself.updateSize()
+}
+func (pself *Monitor) ChangeSize(delta float64) {
+	pself.size += delta
+	pself.updateSize()
+}
+
+func (pself *Monitor) updateSize() {
+	// TODO(tanjp) updateSize not implemented
+}
