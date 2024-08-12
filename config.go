@@ -219,7 +219,7 @@ type aniConfig struct {
 	OnStart      *actionConfig `json:"onStart"` //start
 	OnPlay       *actionConfig `json:"onPlay"`  //play
 	IsLoop       bool          `json:"isLoop"`
-	IsKeepOnStop bool          `json:"isKeepOnStop"`
+	IsKeepOnStop bool          `json:"isKeepOnStop"` //After finishing playback, it stays on the last frame and does not need to switch to the default animation
 
 	//OnEnd *actionConfig  `json:"onEnd"`   //stop
 }
