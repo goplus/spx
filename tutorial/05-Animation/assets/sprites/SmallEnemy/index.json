@@ -42,9 +42,9 @@
       "onStart":{
         "play": "explode"
       },
-      "duration": 0.2,
-      "from": "die-0",
-      "to": "die-3"
+      "frameFps": 20,
+      "frameFrom": "die-0",
+      "frameTo": "die-3"
     }
   },
   "heading": 90,

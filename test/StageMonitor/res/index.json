@@ -12,7 +12,9 @@
       "x": 0,
       "y": 0
     },{
-      "type": "stageMonitor",
+      "type": "monitor",
+      "name": "monitor-1",
+      "size": 1.0,
       "target": "Monkey",
       "val": "getVar:clicked",
       "color": 15629590,
@@ -22,7 +24,9 @@
       "y": 5,
       "visible": true
     },{
-      "type": "stageMonitor",
+      "type": "monitor",
+      "name": "monitor-2",
+      "size": 1.0,
       "target": "Monkey",
       "val": "getVar:ups",
       "color": "orange",
@@ -32,7 +36,9 @@
       "y": 5,
       "visible": true
     },{
-      "type": "stageMonitor",
+      "type": "monitor",
+      "name": "monitor-3",
+      "size": 1.0,
       "target": "",
       "val": "getVar:downs",
       "color": "#ff7f50",
