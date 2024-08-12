@@ -114,7 +114,9 @@ How to show the `score` on the stage? You don't need write code, just add a `sta
 {
   "zorder": [
     {
-      "type": "stageMonitor",
+      "type": "monitor",
+      "name": "dragon",
+      "size": 1,
       "target": "Dragon",
       "val": "getVar:score",
       "color": 15629590,
