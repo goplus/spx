@@ -215,10 +215,12 @@ type aniConfig struct {
 	StepDuration   float64     `json:"stepDuration"`
 	TurnToDuration float64     `json:"turnToDuration"`
 
-	AniType aniTypeEnum   `json:"anitype"`
-	OnStart *actionConfig `json:"onStart"` //start
-	OnPlay  *actionConfig `json:"onPlay"`  //play
-	IsLoop  bool          `json:"isLoop"`
+	AniType      aniTypeEnum   `json:"anitype"`
+	OnStart      *actionConfig `json:"onStart"` //start
+	OnPlay       *actionConfig `json:"onPlay"`  //play
+	IsLoop       bool          `json:"isLoop"`
+	IsKeepOnStop bool          `json:"isKeepOnStop"` //After finishing playback, it stays on the last frame and does not need to switch to the default animation
+
 	//OnEnd *actionConfig  `json:"onEnd"`   //stop
 }
 

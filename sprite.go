@@ -158,25 +158,22 @@ func (p *Sprite) init(
 		}
 		switch ani.AniType {
 		case aniTypeFrame:
-			if ani.From != "" && ani.From != nil {
-				ani.FrameFrom = ani.From.(string)
-			} else {
+			if ani.From == nil {
 				if ani.FrameFrom != "" {
 					ani.From = ani.FrameFrom
 				} else {
 					log.Panicf("animation key [%s] missing FrameFrom ", key)
 				}
-			}
-			if ani.To != "" && ani.To != nil {
-				ani.FrameTo = ani.To.(string)
-			} else {
 				if ani.FrameTo != "" {
 					ani.To = ani.FrameTo
 				} else {
 					log.Panicf("animation key [%s] missing FrameTo ", key)
 				}
-			}
-			if ani.From == nil {
+			} else {
+				if str, ok := ani.From.(string); ok && str != "" {
+					ani.FrameFrom = ani.From.(string)
+					ani.FrameTo = ani.To.(string)
+				}
 				ani.From, ani.To = p.getFromAnToForAniFrames(ani.From, ani.To)
 			}
 			if oldFps == 0 && oldFrameFps != 0 {
@@ -770,7 +767,7 @@ func (p *Sprite) goAnimateInternal(name string, ani *aniConfig, isBlocking bool)
 			animwg.Done()
 		}
 		p.lastAnim = nil
-		if !p.isWaitingStopAnim && name != p.defaultAnimation && p.isVisible {
+		if !p.isWaitingStopAnim && name != p.defaultAnimation && p.isVisible && !ani.IsKeepOnStop {
 			dieAnimName := p.getStateAnimName(StateDie)
 			if name != dieAnimName {
 				isNeedPlayDefault = true
@@ -1077,7 +1074,7 @@ func (p *Sprite) Turn(val interface{}) {
 		anicopy := *ani
 		anicopy.From = p.direction
 		anicopy.To = p.direction + delta
-		anicopy.Duration = ani.Duration / 360.0 * math.Abs(delta)
+		anicopy.Duration = ani.TurnToDuration / 360.0 * math.Abs(delta)
 		p.goAnimate(animName, &anicopy)
 		return
 	}

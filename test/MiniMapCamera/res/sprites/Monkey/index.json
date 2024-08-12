@@ -7,51 +7,39 @@
   "costumeIndex": 0,
   "fAnimations": {
     "think": {
-      "duration": 1.6,
-      "from": 10,
-      "to": 42
+      "frameFps": 20,
+      "frameFrom": "10",
+      "frameTo": "42"
+    },
+    "step": {
+      "stepDuration": 0.03,
+      "frameFps": 24,
+      "frameFrom": "0",
+      "frameTo": "8"
+    },
+    "slowstep": {
+      "stepDuration": 0.10,
+      "frameFps": 8,
+      "frameFrom": "0",
+      "frameTo": "8"
+    },
+    "faststep": {
+      "stepDuration": 0.01,
+      "frameFps": 72,
+      "frameFrom": "0",
+      "frameTo": "8"
+    },
+    "turn": {
+      "anitype": 2,
+      "turnToDuration": 2.0
     },
     "clap": {
-      "duration": 0.78,
-      "from": 42,
-      "to": 67,
+      "frameFps": 35,
+      "frameFrom": "42",
+      "frameTo": "67",
       "onStart": {
         "play": "clap"
       }
-    }
-  },
-  "mAnimations": {
-    "step": {
-      "duration": 0.3,
-      "onPlay": {
-        "costumes": {
-          "from": 0,
-          "to": 8
-        }
-      }
-    },
-    "faststep": {
-      "duration": 0.02,
-      "onPlay": {
-        "costumes": {
-          "from": 0,
-          "to": 8
-        }
-      }
-    },
-    "slowstep": {
-      "duration": 2.0,
-      "onPlay": {
-        "costumes": {
-          "from": 0,
-          "to": 8
-        }
-      }
-    }
-  },
- "tAnimations": {
-    "turn": {
-      "duration": 2.0
     }
   },
   "heading": -60,
