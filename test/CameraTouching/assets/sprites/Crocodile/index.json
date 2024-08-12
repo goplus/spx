@@ -13,17 +13,19 @@
   "costumeIndex": 0,
   "fAnimations": {
     "sink": {
-      "duration": 0.3,
-      "from": 0,
-      "to": 4,
+      "isKeepOnStop": true,
+      "frameFps": 12,
+      "frameFrom": "crocodile-0",
+      "frameTo": "crocodile-4",
       "onStart":{
         "play": "chomp"
       }
     },
     "surface": {
-      "duration": 0.3,
-      "from": 4,
-      "to": 0
+      "isKeepOnStop": true,
+      "frameFps": 12,
+      "frameFrom": "crocodile-4",
+      "frameTo": "crocodile-0"
     }
   },
   "heading": 120,
