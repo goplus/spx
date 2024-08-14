@@ -174,7 +174,7 @@ func (p *Monitor) draw(dc drawContext) {
 		labelRender.AddText(p.label)
 		labelW, h := labelRender.Size()
 
-		textRender := gdi.NewTextRender(defaultFontSm, 0x80000, 0)
+		textRender := gdi.NewTextRender(defaultFont2, 0x80000, 0)
 		textRender.Scale = p.size
 		textRender.AddText(val)
 		textW, textH := textRender.Size()
