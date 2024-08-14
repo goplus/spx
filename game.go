@@ -1346,5 +1346,5 @@ func (p *Game) GetWidget(name string) Widget {
 			return widget
 		}
 	}
-	return nil
+	panic("GetWidget: widget not found - " + name)
 }
