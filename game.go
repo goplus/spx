@@ -115,10 +115,6 @@ type Gamer interface {
 	initGame(sprites []Spriter) *Game
 }
 
-var (
-	gameInstance *Game
-)
-
 func (p *Game) IsRunned() bool {
 	return p.isRunned
 }
@@ -184,7 +180,6 @@ func (p *Game) initGame(sprites []Spriter) *Game {
 // Gopt_Game_Main is required by Go+ compiler as the entry of a .gmx project.
 func Gopt_Game_Main(game Gamer, sprites ...Spriter) {
 	g := game.initGame(sprites)
-	gameInstance = g
 	if me, ok := game.(interface{ MainEntry() }); ok {
 		me.MainEntry()
 	}
@@ -492,6 +487,7 @@ func (p *Game) addSpecialShape(g reflect.Value, v specsp, inits []Spriter) []Spr
 	switch typ := v["type"].(string); typ {
 	case "stageMonitor", "monitor":
 		if sm, err := newMonitor(g, v); err == nil {
+			sm.game = p
 			p.addShape(sm)
 		}
 	case "measure":
@@ -737,8 +733,8 @@ func (p *Game) getWidth() int {
 }
 
 // convert pos from win space(0,0 is top left) to game space(0,0 is center)
-func convertWinSpace2GameSpace(x, y float64) (float64, float64) {
-	winW, winH := gameInstance.getWindowSize()
+func (p *Game) convertWinSpace2GameSpace(x, y float64) (float64, float64) {
+	winW, winH := p.getWindowSize()
 	x += float64(winW) / 2
 	y = float64(winH)/2 - y
 	return x, y
@@ -1355,9 +1351,8 @@ func (p *Game) ShowVar(name string) {
 // Widget
 
 // GetWidget returns the widget instance with given name. It panics if not found.
-
-func Gopx_GetWidget[T any](name string) *T {
-	items := gameInstance.items
+func Gopt_Game_Gopx_GetWidget[T any](game interface{ Parent() *Game }, name string) *T {
+	items := game.Parent().items
 	for _, item := range items {
 		widget, ok := item.(Widget)
 		if ok && widget.GetName() == name {

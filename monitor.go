@@ -36,6 +36,7 @@ import (
 
 // Monitor class.
 type Monitor struct {
+	game    *Game
 	name    string
 	size    float64
 	target  string
@@ -178,7 +179,7 @@ func (p *Monitor) draw(dc drawContext) {
 	}
 	val := p.eval()
 	x, y := p.x, p.y
-	x, y = convertWinSpace2GameSpace(x, y)
+	x, y = p.game.convertWinSpace2GameSpace(x, y)
 	switch p.mode {
 	case 2:
 		render := gdi.NewTextRender(defaultFont, 0x80000, 0)
