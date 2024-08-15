@@ -110,9 +110,9 @@ type Spriter interface {
 	Shape
 	Main()
 }
-
 type Gamer interface {
 	initGame(sprites []Spriter) *Game
+	getGame() *Game
 }
 
 func (p *Game) IsRunned() bool {
@@ -163,6 +163,10 @@ func (p *Game) reset() {
 	p.items = nil
 	p.isLoaded = false
 	p.sprs = make(map[string]Spriter)
+}
+
+func (p *Game) getGame() *Game {
+	return p
 }
 
 func (p *Game) initGame(sprites []Spriter) *Game {
@@ -1358,6 +1362,8 @@ func Gopt_Game_Gopx_GetWidget[T any](game interface{}, name string) *T {
 		gamePtr = ptr
 	case interface{ Parent() *Game }:
 		gamePtr = ptr.Parent()
+	case Gamer:
+		gamePtr = ptr.getGame()
 	default:
 		panic("GetWidget: unexpected game type" + reflect.TypeOf(game).String())
 	}
