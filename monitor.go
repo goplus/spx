@@ -22,12 +22,13 @@ import (
 	"image/color"
 	"log"
 	"reflect"
-	"strconv"
 	"strings"
 	"syscall"
 
 	"github.com/goplus/spx/internal/gdi"
+	xfont "github.com/goplus/spx/internal/gdi/font"
 	"github.com/hajimehoshi/ebiten/v2"
+	"golang.org/x/image/font"
 )
 
 // -------------------------------------------------------------------------------------
@@ -150,6 +151,26 @@ var (
 	stmValueRectPen  = Color{R: 0xf6, G: 0xf8, B: 0xfa, A: 0xff}
 )
 
+var (
+	size2Font = make(map[int]gdi.Font)
+)
+
+func getOrCreateFont(size int) gdi.Font {
+	const dpi = 72
+	if size <= 0 {
+		size = 1
+	}
+	if font, ok := size2Font[size]; ok {
+		return font
+	}
+	size2Font[size] = xfont.NewDefault(&xfont.Options{
+		Size:    float64(size),
+		DPI:     dpi,
+		Hinting: font.HintingFull,
+	})
+	return size2Font[size]
+}
+
 func (p *Monitor) draw(dc drawContext) {
 	if !p.visible {
 		return
@@ -157,48 +178,57 @@ func (p *Monitor) draw(dc drawContext) {
 	val := p.eval()
 	switch p.mode {
 	case 2:
-		x, y := int(p.x)+2, int(p.y)+6
+		x, y := p.x, p.y
 		render := gdi.NewTextRender(defaultFont, 0x80000, 0)
 		render.AddText(val)
-		textW, h := render.Size()
+		intw, inth := render.Size()
+		textW, h := float64(intw), float64(inth)
 		w := textW
 		if w < stmDefaultW {
 			w = stmDefaultW
 		}
 		drawRoundRect(dc, x, y, w, h, p.color, p.color)
-		render.Draw(dc.Image, x+((w-textW)>>1), y, color.White, 0)
+		render.Draw(dc.Image, int(x+((w-textW)/2)), int(y), color.White, 0)
 	default:
-		x, y := int(p.x), int(p.y)
-		labelRender := gdi.NewTextRender(defaultFont2, 0x80000, 0)
-		labelRender.Scale = p.size
+		font := getOrCreateFont(int(p.size * 12))
+		x, y := p.x, p.y
+		labelRender := gdi.NewTextRender(font, 0x80000, 0)
 		labelRender.AddText(p.label)
-		labelW, h := labelRender.Size()
+		intw, inth := labelRender.Size()
+		labelW, labelH := float64(intw), float64(inth)
 
-		textRender := gdi.NewTextRender(defaultFontSm, 0x80000, 0)
-		textRender.Scale = p.size
+		textRender := gdi.NewTextRender(font, 0x80000, 0)
 		textRender.AddText(val)
-		textW, textH := textRender.Size()
+		intw, inth = textRender.Size()
+		textW, textH := float64(intw), float64(inth)
 		textRectW := textW
-		if textRectW < int(stmDefaultSmW*p.size) {
-			textRectW = int(stmDefaultSmW * p.size)
+		if textRectW < stmDefaultSmW*p.size {
+			textRectW = stmDefaultSmW * p.size
 		}
 		hGap := stmHoriGapSm * p.size
 		vGap := stmVertGapSm * p.size
-		w := labelW + textRectW + int(hGap*2)
-		h += int(vGap * 2)
+
+		w := labelW + textRectW + hGap*2
+		h := labelH + vGap*2
 		drawRoundRect(dc, x, y, w, h, stmBackground, stmBackgroundPen)
-		labelRender.Draw(dc.Image, x+int(hGap), y+int(vGap), color.Black, 0)
-		x += labelW + int(hGap*2)
-		y += int(vGap / 2)
-		h2 := textH + int(float64(vGap*1.3))
-		drawRoundRect(dc, x, y, textRectW, h2, stmValueground, stmValueRectPen)
-		y += int(vGap / 2)
-		textRender.Draw(dc.Image, x+((textRectW-textW)>>1)+h2/2, y, color.White, 0)
+		labelRender.Draw(dc.Image, int(x+hGap), int(y+vGap), color.Black, 0)
+
+		textGap2Right := -1.0
+		textGapV := 2.0
+		textGapH := 2.0
+		textPaddingOffset := 5.0
+		w2 := textRectW + textGapH*2
+		x2 := x + w - w2 - textGap2Right
+		y2 := y + textGapV
+		h2 := h - textGapV*2
+		drawRoundRect(dc, x2, y2, w2, h2, stmValueground, stmValueRectPen)
+		textRender.Draw(dc.Image, int(x2+(w2-textW)/2+textPaddingOffset), int(y+vGap+(labelH-textH)/2), color.White, 0)
+
 	}
 }
 
 type rectKey struct {
-	x, y, w, h  int
+	x, y, w, h  float64
 	clr, clrPen Color
 }
 
@@ -206,7 +236,7 @@ var (
 	rcMap = make(map[rectKey]*ebiten.Image)
 )
 
-func drawRoundRect(dc drawContext, x, y, w, h int, clr, clrPen Color) {
+func drawRoundRect(dc drawContext, x, y, w, h float64, clr, clrPen Color) {
 	key := rectKey{x, y, w, h, clr, clrPen}
 	if i, ok := rcMap[key]; ok {
 		dc.DrawImage(i, nil)
@@ -219,14 +249,14 @@ func drawRoundRect(dc drawContext, x, y, w, h int, clr, clrPen Color) {
 	rcMap[key] = ebiten.NewImageFromImage(img)
 }
 
-func getCircleRect(dc drawContext, x, y, w, h int, clr, clrPen Color) (image.Image, error) {
+func getCircleRect(dc drawContext, x, y, w, h float64, clr, clrPen Color) (image.Image, error) {
 	varTable := []string{
-		"$x", strconv.Itoa(x + h/2),
-		"$y", strconv.Itoa(y),
-		"$rx", strconv.Itoa(h / 2),
-		"$ry", strconv.Itoa(h / 2),
-		"$w", strconv.Itoa(w - h/2),
-		"$h", strconv.Itoa(0),
+		"$x", fmt.Sprintf("%f", x+h/2),
+		"$y", fmt.Sprintf("%f", y),
+		"$rx", fmt.Sprintf("%f", h/2),
+		"$ry", fmt.Sprintf("%f", h/2),
+		"$w", fmt.Sprintf("%f", w-h/2),
+		"$h", fmt.Sprintf("%f", 0.0),
 	}
 	glyphTpl := "M $x $y h $w a $rx $ry 0 0 1 $rx $ry v $h a $rx $ry 0 0 1 -$rx $ry h -$w a $rx $ry 0 0 1 -$rx -$ry v -$h a $rx $ry 0 0 1 $rx -$ry z"
 	glyph := strings.NewReplacer(varTable...).Replace(glyphTpl)
@@ -244,12 +274,12 @@ func getCircleRect(dc drawContext, x, y, w, h int, clr, clrPen Color) (image.Ima
 	return svg.ToImage()
 }
 
-func getRoundRect(dc drawContext, x, y, w, h int, clr, clrPen Color) (image.Image, error) {
+func getRoundRect(dc drawContext, x, y, w, h float64, clr, clrPen Color) (image.Image, error) {
 	varTable := []string{
-		"$x", strconv.Itoa(x),
-		"$y2", strconv.Itoa(y + stmCornerSize),
-		"$w2", strconv.Itoa(w - stmCornerSize*2),
-		"$h2", strconv.Itoa(h - stmCornerSize*2),
+		"$x", fmt.Sprintf("%f", x),
+		"$y2", fmt.Sprintf("%f", y+stmCornerSize),
+		"$w2", fmt.Sprintf("%f", w-stmCornerSize*2),
+		"$h2", fmt.Sprintf("%f", h-stmCornerSize*2),
 	}
 	glyphTpl := "M $x $y2 s 0 -2 2 -2 h $w2 s 2 0 2 2 v $h2 s 0 2 -2 2 h -$w2 s -2 0 -2 -2 z"
 	glyph := strings.NewReplacer(varTable...).Replace(glyphTpl)
@@ -324,5 +354,5 @@ func (pself *Monitor) ChangeSize(delta float64) {
 }
 
 func (pself *Monitor) updateSize() {
-	// TODO(tanjp) updateSize not implemented
+
 }
