@@ -177,9 +177,10 @@ func (p *Monitor) draw(dc drawContext) {
 		return
 	}
 	val := p.eval()
+	x, y := p.x, p.y
+	x, y = convertWinSpace2GameSpace(x, y)
 	switch p.mode {
 	case 2:
-		x, y := p.x, p.y
 		render := gdi.NewTextRender(defaultFont, 0x80000, 0)
 		render.AddText(val)
 		intw, inth := render.Size()
@@ -192,7 +193,6 @@ func (p *Monitor) draw(dc drawContext) {
 		render.Draw(dc.Image, int(x+((w-textW)/2)), int(y), color.White, 0)
 	default:
 		font := getOrCreateFont(int(p.size * 12))
-		x, y := p.x, p.y
 		labelRender := gdi.NewTextRender(font, 0x80000, 0)
 		labelRender.AddText(p.label)
 		intw, inth := labelRender.Size()

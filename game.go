@@ -736,6 +736,18 @@ func (p *Game) getWidth() int {
 	return p.windowWidth_
 }
 
+// convert pos from win space(0,0 is top left) to game space(0,0 is center)
+func convertWinSpace2GameSpace(x, y float64) (float64, float64) {
+	winW, winH := gameInstance.getWindowSize()
+	x += float64(winW) / 2
+	y = float64(winH)/2 - y
+	return x, y
+}
+
+func (p *Game) getWindowSize() (int, int) {
+	return p.windowSize_()
+}
+
 func (p *Game) windowSize_() (int, int) {
 	if p.windowWidth_ == 0 {
 		p.doWindowSize()
