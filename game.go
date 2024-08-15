@@ -114,9 +114,11 @@ type Spriter interface {
 type Gamer interface {
 	initGame(sprites []Spriter) *Game
 }
+
 var (
 	gameInstance *Game
 )
+
 func (p *Game) IsRunned() bool {
 	return p.isRunned
 }
@@ -1342,14 +1344,14 @@ func (p *Game) ShowVar(name string) {
 
 // GetWidget returns the widget instance with given name. It panics if not found.
 
-func Gopx_GetWidget[T any](name string) *T{
+func Gopx_GetWidget[T any](name string) *T {
 	items := gameInstance.items
 	for _, item := range items {
 		widget, ok := item.(Widget)
 		if ok && widget.GetName() == name {
 			if result, ok := widget.(interface{}).(*T); ok {
 				return result
-			}else{
+			} else {
 				panic("GetWidget: type mismatch - expected " + reflect.TypeOf((*T)(nil)).Elem().String() + ", got " + reflect.TypeOf(widget).String())
 			}
 		}
