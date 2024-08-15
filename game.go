@@ -110,9 +110,9 @@ type Spriter interface {
 	Shape
 	Main()
 }
-
 type Gamer interface {
 	initGame(sprites []Spriter) *Game
+	getGame() *Game
 }
 
 func (p *Game) IsRunned() bool {
@@ -163,6 +163,10 @@ func (p *Game) reset() {
 	p.items = nil
 	p.isLoaded = false
 	p.sprs = make(map[string]Spriter)
+}
+
+func (p *Game) getGame() *Game {
+	return p
 }
 
 func (p *Game) initGame(sprites []Spriter) *Game {
@@ -487,6 +491,7 @@ func (p *Game) addSpecialShape(g reflect.Value, v specsp, inits []Spriter) []Spr
 	switch typ := v["type"].(string); typ {
 	case "stageMonitor", "monitor":
 		if sm, err := newMonitor(g, v); err == nil {
+			sm.game = p
 			p.addShape(sm)
 		}
 	case "measure":
@@ -729,6 +734,18 @@ func (p *Game) getWidth() int {
 		p.doWindowSize()
 	}
 	return p.windowWidth_
+}
+
+// convert pos from win space(0,0 is top left) to game space(0,0 is center)
+func (p *Game) convertWinSpace2GameSpace(x, y float64) (float64, float64) {
+	winW, winH := p.getWindowSize()
+	x += float64(winW) / 2
+	y = float64(winH)/2 - y
+	return x, y
+}
+
+func (p *Game) getWindowSize() (int, int) {
+	return p.windowSize_()
 }
 
 func (p *Game) windowSize_() (int, int) {
@@ -1338,12 +1355,27 @@ func (p *Game) ShowVar(name string) {
 // Widget
 
 // GetWidget returns the widget instance with given name. It panics if not found.
-func (p *Game) GetWidget(name string) Widget {
-	items := p.items
+func Gopt_Game_Gopx_GetWidget[T any](game interface{}, name string) *T {
+	var gamePtr *Game
+	switch ptr := game.(type) {
+	case *Game:
+		gamePtr = ptr
+	case interface{ Parent() *Game }:
+		gamePtr = ptr.Parent()
+	case Gamer:
+		gamePtr = ptr.getGame()
+	default:
+		panic("GetWidget: unexpected game type" + reflect.TypeOf(game).String())
+	}
+	items := gamePtr.items
 	for _, item := range items {
 		widget, ok := item.(Widget)
 		if ok && widget.GetName() == name {
-			return widget
+			if result, ok := widget.(interface{}).(*T); ok {
+				return result
+			} else {
+				panic("GetWidget: type mismatch - expected " + reflect.TypeOf((*T)(nil)).Elem().String() + ", got " + reflect.TypeOf(widget).String())
+			}
 		}
 	}
 	panic("GetWidget: widget not found - " + name)

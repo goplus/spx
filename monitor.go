@@ -27,6 +27,7 @@ import (
 
 	"github.com/goplus/spx/internal/gdi"
 	xfont "github.com/goplus/spx/internal/gdi/font"
+	"github.com/goplus/spx/internal/tools"
 	"github.com/hajimehoshi/ebiten/v2"
 	"golang.org/x/image/font"
 )
@@ -35,6 +36,7 @@ import (
 
 // Monitor class.
 type Monitor struct {
+	game    *Game
 	name    string
 	size    float64
 	target  string
@@ -65,9 +67,9 @@ func newMonitor(g reflect.Value, v specsp) (*Monitor, error) {
 	target := v["target"].(string)
 	val := v["val"].(string)
 	name := v["name"].(string)
-	size := v["size"].(float64)
-	if size == 0 {
-		size = 1
+	size := 1.0
+	if v["size"] != nil {
+		size, _ = tools.GetFloat(v["size"])
 	}
 	eval := buildMonitorEval(g, target, val)
 	if eval == nil {
@@ -76,7 +78,7 @@ func newMonitor(g reflect.Value, v specsp) (*Monitor, error) {
 	mode := int(v["mode"].(float64))
 	color, err := parseColor(getSpcspVal(v, "color"))
 	if err != nil {
-		panic(err)
+		color = Color{R: 0xff, G: 0xff, B: 0xff, A: 0xff}
 	}
 	label := v["label"].(string)
 	x := v["x"].(float64)
@@ -176,9 +178,10 @@ func (p *Monitor) draw(dc drawContext) {
 		return
 	}
 	val := p.eval()
+	x, y := p.x, p.y
+	x, y = p.game.convertWinSpace2GameSpace(x, y)
 	switch p.mode {
 	case 2:
-		x, y := p.x, p.y
 		render := gdi.NewTextRender(defaultFont, 0x80000, 0)
 		render.AddText(val)
 		intw, inth := render.Size()
@@ -191,7 +194,6 @@ func (p *Monitor) draw(dc drawContext) {
 		render.Draw(dc.Image, int(x+((w-textW)/2)), int(y), color.White, 0)
 	default:
 		font := getOrCreateFont(int(p.size * 12))
-		x, y := p.x, p.y
 		labelRender := gdi.NewTextRender(font, 0x80000, 0)
 		labelRender.AddText(p.label)
 		intw, inth := labelRender.Size()
