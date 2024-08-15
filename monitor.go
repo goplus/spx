@@ -193,13 +193,11 @@ func (p *Monitor) draw(dc drawContext) {
 		font := getOrCreateFont(int(p.size * 12))
 		x, y := p.x, p.y
 		labelRender := gdi.NewTextRender(font, 0x80000, 0)
-		labelRender.Scale = 1
 		labelRender.AddText(p.label)
 		intw, inth := labelRender.Size()
 		labelW, labelH := float64(intw), float64(inth)
 
 		textRender := gdi.NewTextRender(font, 0x80000, 0)
-		textRender.Scale = 1
 		textRender.AddText(val)
 		intw, inth = textRender.Size()
 		textW, textH := float64(intw), float64(inth)
