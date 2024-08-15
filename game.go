@@ -114,7 +114,9 @@ type Spriter interface {
 type Gamer interface {
 	initGame(sprites []Spriter) *Game
 }
-
+var (
+	gameInstance *Game
+)
 func (p *Game) IsRunned() bool {
 	return p.isRunned
 }
@@ -180,6 +182,7 @@ func (p *Game) initGame(sprites []Spriter) *Game {
 // Gopt_Game_Main is required by Go+ compiler as the entry of a .gmx project.
 func Gopt_Game_Main(game Gamer, sprites ...Spriter) {
 	g := game.initGame(sprites)
+	gameInstance = g
 	if me, ok := game.(interface{ MainEntry() }); ok {
 		me.MainEntry()
 	}
@@ -1338,12 +1341,17 @@ func (p *Game) ShowVar(name string) {
 // Widget
 
 // GetWidget returns the widget instance with given name. It panics if not found.
-func (p *Game) GetWidget(name string) Widget {
-	items := p.items
+
+func Gopx_GetWidget[T any](name string) *T{
+	items := gameInstance.items
 	for _, item := range items {
 		widget, ok := item.(Widget)
 		if ok && widget.GetName() == name {
-			return widget
+			if result, ok := widget.(interface{}).(*T); ok {
+				return result
+			}else{
+				panic("GetWidget: type mismatch - expected " + reflect.TypeOf((*T)(nil)).Elem().String() + ", got " + reflect.TypeOf(widget).String())
+			}
 		}
 	}
 	panic("GetWidget: widget not found - " + name)
