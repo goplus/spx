@@ -18,16 +18,13 @@ package spx
 
 import (
 	"io"
+	"strings"
 	"sync"
 
-	"github.com/qiniu/audio/convert"
-	_ "github.com/qiniu/audio/mp3"       // support mp3
-	_ "github.com/qiniu/audio/wav"       // support wav/pcm
-	_ "github.com/qiniu/audio/wav/adpcm" // support wav/adpcm
-
 	"github.com/hajimehoshi/ebiten/v2/audio"
-
-	qaudio "github.com/qiniu/audio"
+	"github.com/hajimehoshi/ebiten/v2/audio/mp3"
+	"github.com/hajimehoshi/ebiten/v2/audio/vorbis"
+	"github.com/hajimehoshi/ebiten/v2/audio/wav"
 )
 
 // -------------------------------------------------------------------------------------
@@ -111,6 +108,17 @@ func (p *soundMgr) init(g *Game) {
 	p.players = make(map[*soundPlayer]chan bool)
 	p.g = g
 	p.audios = make(map[string]Sound)
+
+	// media formats supported
+	formats = make([]format, 4)
+	formats[0].name = "mp3"
+	formats[0].magic = "ID3"
+	formats[1].name = "mp3"
+	formats[1].magic = "\xff\xfb"
+	formats[2].name = "ogg"
+	formats[2].magic = "OggS"
+	formats[3].name = "wav"
+	formats[3].magic = "RIFF????WAVE"
 }
 
 func (p *soundMgr) update() {
@@ -188,6 +196,12 @@ func (p *soundMgr) playContinue(media Sound, wait, loop bool) (err error) {
 	return
 }
 
+type format struct {
+	name, magic string
+}
+
+var formats []format
+
 func (p *soundMgr) play(media Sound, wait, loop bool) (err error) {
 	source, err := p.g.fs.Open(media.Path)
 	if err != nil {
@@ -195,20 +209,41 @@ func (p *soundMgr) play(media Sound, wait, loop bool) (err error) {
 	}
 
 	audioContext := p.audioContext
-	d, _, err := qaudio.Decode(newReadSeeker(source))
-	if err != nil {
-		source.Close()
-		return
+	sp := &soundPlayer{media: media, loop: loop}
+	parts := strings.Split(media.Path, ".")
+	l := len(parts)
+	ext := ""
+	if l >= 1 {
+		ext = parts[l-1]
 	}
 
-	d = convert.ToStereo16(d)
-	d = convert.Resample(d, audioContext.SampleRate())
+	switch ext {
+	case "mp3":
+		var ms *mp3.Stream
+		ms, err = mp3.DecodeF32(source)
+		if err != nil {
+			return err
+		}
+		sp.Player, err = audioContext.NewPlayerF32(ms)
+	case "ogg":
+		var vs *vorbis.Stream
+		vs, err = vorbis.DecodeF32(source)
+		if err != nil {
+			return err
+		}
+		sp.Player, err = audioContext.NewPlayerF32(vs)
+	case "wav":
+		var ws *wav.Stream
+		ws, err = wav.DecodeF32(source)
+		if err != nil {
+			return err
+		}
+		sp.Player, err = audioContext.NewPlayerF32(ws)
+	}
 
-	sp := &soundPlayer{media: media, loop: loop}
-	sp.Player, err = audioContext.NewPlayer(&readCloser{d, source})
 	if err != nil {
 		source.Close()
-		return
+		return err
 	}
 
 	var done chan bool
