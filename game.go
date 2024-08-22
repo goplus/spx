@@ -112,7 +112,6 @@ type Spriter interface {
 }
 type Gamer interface {
 	initGame(sprites []Spriter) *Game
-	getGame() *Game
 }
 
 func (p *Game) IsRunned() bool {
@@ -1351,30 +1350,27 @@ func (p *Game) ShowVar(name string) {
 	p.setStageMonitor("", getVarPrefix+name, true)
 }
 
+func (p *Game) GetAllShapes() []Shape {
+	return p.items
+}
+
 // -----------------------------------------------------------------------------
 // Widget
 
+type ShapeGetter interface {
+	GetAllShapes() []Shape
+}
+
 // GetWidget returns the widget instance with given name. It panics if not found.
-func Gopt_Game_Gopx_GetWidget[T any](game interface{}, name string) *T {
-	var gamePtr *Game
-	switch ptr := game.(type) {
-	case *Game:
-		gamePtr = ptr
-	case interface{ Parent() *Game }:
-		gamePtr = ptr.Parent()
-	case Gamer:
-		gamePtr = ptr.getGame()
-	default:
-		panic("GetWidget: unexpected game type" + reflect.TypeOf(game).String())
-	}
-	items := gamePtr.items
+func Gopt_Game_Gopx_GetWidget[T any](sg ShapeGetter, name string) *T {
+	items := sg.GetAllShapes()
 	for _, item := range items {
 		widget, ok := item.(Widget)
 		if ok && widget.GetName() == name {
 			if result, ok := widget.(interface{}).(*T); ok {
 				return result
 			} else {
-				panic("GetWidget: type mismatch - expected " + reflect.TypeOf((*T)(nil)).Elem().String() + ", got " + reflect.TypeOf(widget).String())
+				panic("GetWidget: type mismatch")
 			}
 		}
 	}
