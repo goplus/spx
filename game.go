@@ -1350,7 +1350,7 @@ func (p *Game) ShowVar(name string) {
 	p.setStageMonitor("", getVarPrefix+name, true)
 }
 
-func (p *Game) GetAllShapes() []Shape {
+func (p *Game) getAllShapes() []Shape {
 	return p.items
 }
 
@@ -1358,7 +1358,7 @@ func (p *Game) GetAllShapes() []Shape {
 // Widget
 
 type ShapeGetter interface {
-	GetAllShapes() []Shape
+	getAllShapes() []Shape
 }
 
 // GetWidget_ returns the widget instance with given name. It panics if not found.
@@ -1366,7 +1366,7 @@ type ShapeGetter interface {
 // We extract `GetWidget_` to keep `Gopt_Game_Gopx_GetWidget` simple, which simplifies work in ispx,
 // see details in https://github.com/goplus/builder/issues/765#issuecomment-2313915805.
 func GetWidget_(sg ShapeGetter, name string) Widget {
-	items := sg.GetAllShapes()
+	items := sg.getAllShapes()
 	for _, item := range items {
 		widget, ok := item.(Widget)
 		if ok && widget.GetName() == name {

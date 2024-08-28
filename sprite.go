@@ -111,8 +111,8 @@ func (p *Sprite) Parent() *Game {
 	return p.g
 }
 
-func (p *Sprite) GetAllShapes() []Shape {
-	return p.g.GetAllShapes()
+func (p *Sprite) getAllShapes() []Shape {
+	return p.g.getAllShapes()
 }
 
 func (p *Sprite) init(
