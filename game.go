@@ -1393,12 +1393,12 @@ func Gopt_Game_Gopx_GetWidget[T any](sg ShapeGetter, name string) *T {
 // -----------------------------------------------------------------------------
 // editor func: export animation data
 func Editor_ParseSpriteAnimator(resource interface{}, sprite string) (*anim.AnimatorExportData, error) {
-	animator, conf, err := editorParseSpriteAnimator(resource, sprite)
+	animator, avatarPath, err := editorParseSpriteAnimator(resource, sprite)
 	if err != nil {
 		return nil, err
 	}
 	data := &anim.AnimatorExportData{}
-	data.AvatarImage = conf.Avatar
+	data.AvatarImage = avatarPath
 	data.ClipsNames = animator.GetClips()
 	return data, err
 }
@@ -1411,17 +1411,18 @@ func Editor_ParseSpriteAnimation(resource interface{}, sprite string, animName s
 	return anim.GetExportData(animator, animName)
 }
 
-func editorParseSpriteAnimator(resource interface{}, sprite string) (anim.IAnimator, *spriteConfig, error) {
+func editorParseSpriteAnimator(resource interface{}, sprite string) (anim.IAnimator, string, error) {
 	fs, err := resourceDir(resource)
 	if err != nil {
-		return nil, nil, err
+		return nil, "", err
 	}
 	var baseDir = "sprites/" + sprite + "/"
 	var conf spriteConfig
 	err = loadJson(&conf, fs, baseDir+"index.json")
 	if err != nil {
-		return nil, nil, err
+		return nil, "", err
 	}
+	avatar := anim.ReadAvatarConfig(fs, baseDir, conf.Avatar)
 	animator := anim.NewAnimator(fs, baseDir, conf.Animator, conf.Avatar)
-	return animator, &conf, err
+	return animator, baseDir + "/" + avatar.Image, err
 }

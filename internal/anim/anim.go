@@ -102,19 +102,27 @@ type Anim struct {
 
 var globalAnimId int = 1
 
-// loopmodel = -1
-func NewAnimator(fs spxfs.Dir, spriteDir string, animatorPath string, avatarPath string) IAnimator {
-	var config common.AnimatorConfig
-	err := common.LoadJson(&config, fs, spriteDir, animatorPath)
+func ReadAvatarConfig(fs spxfs.Dir, spriteDir string, avatarPath string) common.AvatarConfig {
+	var avatarConfig common.AvatarConfig
+	err := common.LoadJson(&avatarConfig, fs, spriteDir, avatarPath)
+	if err != nil {
+		log.Panicf("avatar config [%s] not exist", avatarPath)
+	}
+	return avatarConfig
+}
+func ReadAnimatorConfig(fs spxfs.Dir, spriteDir string, animatorPath string) common.AnimatorConfig {
+	var avatarConfig common.AnimatorConfig
+	err := common.LoadJson(&avatarConfig, fs, spriteDir, animatorPath)
 	if err != nil {
 		log.Panicf("animator config [%s] not exist", animatorPath)
 	}
+	return avatarConfig
+}
 
-	var avatarConfig common.AvatarConfig
-	err = common.LoadJson(&avatarConfig, fs, spriteDir, avatarPath)
-	if err != nil {
-		log.Panicf("avatar config [%s] not exist", animatorPath)
-	}
+// loopmodel = -1
+func NewAnimator(fs spxfs.Dir, spriteDir string, animatorPath string, avatarPath string) IAnimator {
+	config := ReadAnimatorConfig(fs, spriteDir, animatorPath)
+	avatarConfig := ReadAvatarConfig(fs, spriteDir, animatorPath)
 
 	var animator IAnimator
 	if config.Type == ANIMATOR_TYPE_VERTEX {
