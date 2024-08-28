@@ -1424,5 +1424,5 @@ func editorParseSpriteAnimator(resource interface{}, sprite string) (anim.IAnima
 	}
 	avatar := anim.ReadAvatarConfig(fs, baseDir, conf.Avatar)
 	animator := anim.NewAnimator(fs, baseDir, conf.Animator, conf.Avatar)
-	return animator, baseDir + "/" + avatar.Image, err
+	return animator, baseDir + avatar.Image, err
 }
