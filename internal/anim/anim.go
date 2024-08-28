@@ -122,7 +122,7 @@ func ReadAnimatorConfig(fs spxfs.Dir, spriteDir string, animatorPath string) com
 // loopmodel = -1
 func NewAnimator(fs spxfs.Dir, spriteDir string, animatorPath string, avatarPath string) IAnimator {
 	config := ReadAnimatorConfig(fs, spriteDir, animatorPath)
-	avatarConfig := ReadAvatarConfig(fs, spriteDir, animatorPath)
+	avatarConfig := ReadAvatarConfig(fs, spriteDir, avatarPath)
 
 	var animator IAnimator
 	if config.Type == ANIMATOR_TYPE_VERTEX {
