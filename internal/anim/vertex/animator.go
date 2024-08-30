@@ -12,7 +12,8 @@ import (
 
 type Animator struct {
 	common.Animator
-	Mesh *AnimMesh
+	Mesh          *AnimMesh
+	curFrameIndex int
 }
 
 func NewAnimator(fs spxfs.Dir, spriteDir string, config *common.AnimatorConfig, avatarConfig *common.AvatarConfig) *Animator {
@@ -97,6 +98,7 @@ func (pself *Animator) Update() {
 	state := pself.GetClipState(pself.CurClipName)
 	state.Time += engine.Time.DeltaTime
 	frameIndex := state.GetCurFrame()
+	pself.curFrameIndex = frameIndex
 	pself.UpdateToFrame(frameIndex)
 
 }
@@ -124,7 +126,7 @@ func (pself *Animator) GetFrameData() common.AnimExportFrame {
 	retVal := common.AnimExportFrame{}
 	retVal.Meshes = make([]common.AnimExportMesh, meshCount)
 	logicVertices := make([]math32.Vector3, vertexCount)
-	offset := animData.FrameCount * vertexCount * 2
+	offset := pself.curFrameIndex * vertexCount * 2
 	for j := 0; j < vertexCount; j++ {
 		x := animData.AnimFramesVertex[offset+j*2+0]
 		y := animData.AnimFramesVertex[offset+j*2+1]
