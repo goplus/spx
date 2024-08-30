@@ -98,11 +98,11 @@ func (pself *Animator) Update() {
 	state := pself.GetClipState(pself.CurClipName)
 	state.Time += engine.Time.DeltaTime
 	frameIndex := state.GetCurFrame()
-	pself.curFrameIndex = frameIndex
 	pself.UpdateToFrame(frameIndex)
 
 }
 func (pself *Animator) UpdateToFrame(frameIndex int) {
+	pself.curFrameIndex = frameIndex
 	animData := pself.Clips[pself.CurClipName].(*AnimClip).Data
 	vertexCount := len(animData.AnimFramesVertex) / animData.FrameCount / 2
 	pself.RederOrder = animData.RenderOrders[frameIndex]
