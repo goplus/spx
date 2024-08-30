@@ -132,13 +132,17 @@ func (pself *Animator) GetFrameData() common.AnimExportFrame {
 		y := animData.AnimFramesVertex[offset+j*2+1]
 		logicVertices[j] = *math32.NewVector3(x, y, 0)
 	}
-	for k := 0; k < meshCount; k++ {
-		i := pself.RederOrder[k]
-		item := common.AnimExportMesh{}
-		item.Indices = pself.Mesh.Triangles[k]
-		item.Uvs = pself.Mesh.RenderUvs
-		item.Vertices = logicVertices
-		retVal.Meshes[i] = item
+	retVal.RederOrder = pself.RederOrder
+	if pself.curFrameIndex == 0 {
+		for k := 0; k < meshCount; k++ {
+			item := common.AnimExportMesh{}
+			item.Indices = pself.Mesh.Triangles[k]
+			retVal.Meshes[k] = item
+		}
+		retVal.Meshes[0].Uvs = pself.Mesh.RenderUvs
+	} else {
+		retVal.Meshes[0] = common.AnimExportMesh{}
 	}
+	retVal.Meshes[0].Vertices = logicVertices
 	return retVal
 }

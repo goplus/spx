@@ -6,7 +6,8 @@ import (
 )
 
 type AnimExportFrame struct {
-	Meshes []AnimExportMesh
+	RederOrder []int
+	Meshes     []AnimExportMesh
 }
 
 type AnimExportMesh struct {
