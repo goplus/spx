@@ -122,6 +122,7 @@ func (p *Sprite) init(
 	} else {
 		p.baseObj.initWith(base, sprite, shared)
 	}
+	p.defaultCostumeIndex = p.baseObj.costumeIndex_
 	p.eventSinks.init(&g.sinkMgr, p)
 
 	p.gamer = gamer
