@@ -118,6 +118,7 @@ func (p *Sprite) init(
 	} else {
 		p.baseObj.initWith(base, sprite, shared)
 	}
+	p.defaultCostumeIndex = p.baseObj.costumeIndex_
 	p.eventSinks.init(&g.sinkMgr, p)
 
 	p.gamer = gamer
@@ -221,7 +222,7 @@ func (p *Sprite) init(
 	}
 }
 func (p *Sprite) awake() {
-	p.playDefaultAnim()
+	p.playDefaultAnim(false)
 }
 
 func (p *Sprite) InitFrom(src *Sprite) {
@@ -786,7 +787,7 @@ func (p *Sprite) goAnimateInternal(name string, ani *aniConfig, isBlocking bool)
 		waitToDo(animwg.Wait)
 	}
 	if isNeedPlayDefault {
-		p.playDefaultAnim()
+		p.playDefaultAnim(true)
 	}
 }
 
@@ -928,7 +929,7 @@ func (p *Sprite) Step__2(step float64, animname string) {
 	p.goMoveForward(step)
 }
 
-func (p *Sprite) playDefaultAnim() {
+func (p *Sprite) playDefaultAnim(resetCostume bool) {
 	animName := p.defaultAnimation
 	if p.isVisible {
 		isPlayAnim := false
@@ -940,7 +941,7 @@ func (p *Sprite) playDefaultAnim() {
 				p.goAnimateInternal(animName, &anicopy, false)
 			}
 		}
-		if !isPlayAnim {
+		if resetCostume && !isPlayAnim {
 			p.goSetCostume(p.defaultCostumeIndex)
 		}
 	}
