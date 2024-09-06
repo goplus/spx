@@ -653,8 +653,11 @@ func (p *Sprite) goAnimateInternal(name string, ani *aniConfig, isBlocking bool)
 		fromvalf = frameFrom
 		tovalf = frameTo
 	} else {
-		fromvalf = fromval.(float64)
-		tovalf = toval.(float64)
+		if ani.AniType != aniTypeGlide {
+			// glide animation, the type of value is vector2, not float
+			fromvalf = fromval.(float64)
+			tovalf = toval.(float64)
+		}
 	}
 
 	if ani.AniType == aniTypeFrame {
