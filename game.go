@@ -40,6 +40,10 @@ import (
 	spxfs "github.com/goplus/spx/fs"
 	_ "github.com/goplus/spx/fs/asset"
 	_ "github.com/goplus/spx/fs/zip"
+	_ "github.com/qiniu/audio"
+	_ "github.com/qiniu/audio/mp3"       // support mp3
+	_ "github.com/qiniu/audio/wav"       // support wav/pcm
+	_ "github.com/qiniu/audio/wav/adpcm" // support wav/adpcm
 )
 
 const (

@@ -25,6 +25,8 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/audio/mp3"
 	"github.com/hajimehoshi/ebiten/v2/audio/vorbis"
 	"github.com/hajimehoshi/ebiten/v2/audio/wav"
+	qaudio "github.com/qiniu/audio"
+	"github.com/qiniu/audio/convert"
 )
 
 // -------------------------------------------------------------------------------------
@@ -203,6 +205,50 @@ type format struct {
 var formats []format
 
 func (p *soundMgr) play(media Sound, wait, loop bool) (err error) {
+	err = p.playByEbitenAudio(media, wait, loop)
+	if err != nil {
+		err = p.playByQiniuAudio(media, wait, loop)
+	}
+	return err
+}
+
+func (p *soundMgr) playByQiniuAudio(media Sound, wait, loop bool) (err error) {
+	source, err := p.g.fs.Open(media.Path)
+	if err != nil {
+		panic(err)
+	}
+
+	audioContext := p.audioContext
+	d, _, err := qaudio.Decode(newReadSeeker(source))
+	if err != nil {
+		source.Close()
+		return
+	}
+
+	d = convert.ToStereo16(d)
+	d = convert.Resample(d, audioContext.SampleRate())
+
+	sp := &soundPlayer{media: media, loop: loop}
+	sp.Player, err = audioContext.NewPlayer(&readCloser{d, source})
+	if err != nil {
+		source.Close()
+		return
+	}
+
+	var done chan bool
+	if wait {
+		done = make(chan bool, 1)
+	}
+	p.addPlayer(sp, done)
+	sp.Play()
+	if wait {
+		waitForChan(done)
+	}
+	return
+
+}
+
+func (p *soundMgr) playByEbitenAudio(media Sound, wait, loop bool) (err error) {
 	source, err := p.g.fs.Open(media.Path)
 	if err != nil {
 		panic(err)
