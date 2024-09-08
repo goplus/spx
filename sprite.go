@@ -111,6 +111,10 @@ func (p *Sprite) Parent() *Game {
 	return p.g
 }
 
+func (p *Sprite) getAllShapes() []Shape {
+	return p.g.getAllShapes()
+}
+
 func (p *Sprite) init(
 	base string, g *Game, name string, sprite *spriteConfig, gamer reflect.Value, shared *sharedImages) {
 	if sprite.Costumes != nil {
@@ -118,6 +122,7 @@ func (p *Sprite) init(
 	} else {
 		p.baseObj.initWith(base, sprite, shared)
 	}
+	p.defaultCostumeIndex = p.baseObj.costumeIndex_
 	p.eventSinks.init(&g.sinkMgr, p)
 
 	p.gamer = gamer
