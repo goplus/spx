@@ -111,10 +111,6 @@ func (p *Sprite) Parent() *Game {
 	return p.g
 }
 
-func (p *Sprite) getAllShapes() []Shape {
-	return p.g.getAllShapes()
-}
-
 func (p *Sprite) init(
 	base string, g *Game, name string, sprite *spriteConfig, gamer reflect.Value, shared *sharedImages) {
 	if sprite.Costumes != nil {

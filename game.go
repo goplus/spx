@@ -112,6 +112,7 @@ type Spriter interface {
 }
 type Gamer interface {
 	initGame(sprites []Spriter) *Game
+	getGame() *Game
 }
 
 func (p *Game) IsRunned() bool {
@@ -1350,38 +1351,32 @@ func (p *Game) ShowVar(name string) {
 	p.setStageMonitor("", getVarPrefix+name, true)
 }
 
-func (p *Game) getAllShapes() []Shape {
-	return p.items
-}
-
 // -----------------------------------------------------------------------------
 // Widget
 
-type ShapeGetter interface {
-	getAllShapes() []Shape
-}
-
-// GetWidget_ returns the widget instance with given name. It panics if not found.
-// Instead of being used directly, it is meant to be called by `Gopt_Game_Gopx_GetWidget` only.
-// We extract `GetWidget_` to keep `Gopt_Game_Gopx_GetWidget` simple, which simplifies work in ispx,
-// see details in https://github.com/goplus/builder/issues/765#issuecomment-2313915805.
-func GetWidget_(sg ShapeGetter, name string) Widget {
-	items := sg.getAllShapes()
+// GetWidget returns the widget instance with given name. It panics if not found.
+func Gopt_Game_Gopx_GetWidget[T any](game interface{}, name string) *T {
+	var gamePtr *Game
+	switch ptr := game.(type) {
+	case *Game:
+		gamePtr = ptr
+	case interface{ Parent() *Game }:
+		gamePtr = ptr.Parent()
+	case Gamer:
+		gamePtr = ptr.getGame()
+	default:
+		panic("GetWidget: unexpected game type" + reflect.TypeOf(game).String())
+	}
+	items := gamePtr.items
 	for _, item := range items {
 		widget, ok := item.(Widget)
 		if ok && widget.GetName() == name {
-			return widget
+			if result, ok := widget.(interface{}).(*T); ok {
+				return result
+			} else {
+				panic("GetWidget: type mismatch - expected " + reflect.TypeOf((*T)(nil)).Elem().String() + ", got " + reflect.TypeOf(widget).String())
+			}
 		}
 	}
 	panic("GetWidget: widget not found - " + name)
-}
-
-// GetWidget returns the widget instance (in given type) with given name. It panics if not found.
-func Gopt_Game_Gopx_GetWidget[T any](sg ShapeGetter, name string) *T {
-	widget := GetWidget_(sg, name)
-	if result, ok := widget.(interface{}).(*T); ok {
-		return result
-	} else {
-		panic("GetWidget: type mismatch")
-	}
 }
