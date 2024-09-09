@@ -491,23 +491,16 @@ func (p *Sprite) Die() { // prototype sprite can't be destroyed, but can die
 	if ani, ok := p.animations[aniName]; ok {
 		p.goAnimate(aniName, ani)
 	}
-	if p.isCloned_ {
-		p.doDestroy()
-	} else {
-		p.Hide()
-	}
+
+	p.Hide()
+	p.Destroy()
 }
 
 func (p *Sprite) Destroy() { // delete this clone
-	if p.isCloned_ {
-		p.doDestroy()
-	}
-}
-
-func (p *Sprite) doDestroy() {
 	if debugInstr {
 		log.Println("Destroy", p.name)
 	}
+
 	p.doStopSay()
 	p.doDeleteClone()
 	p.g.removeShape(p)
