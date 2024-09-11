@@ -492,10 +492,10 @@ func (p *Sprite) Die() {
 		p.goAnimate(aniName, ani)
 	}
 
-	p.doDestroy()
+	p.Destroy()
 }
 
-func (p *Sprite) doDestroy() {
+func (p *Sprite) Destroy() { // destroy sprite, whether prototype or cloned
 	if debugInstr {
 		log.Println("Destroy", p.name)
 	}
@@ -509,12 +509,12 @@ func (p *Sprite) doDestroy() {
 	}
 }
 
-func (p *Sprite) DeleteThisClone() {
+func (p *Sprite) DeleteThisClone() { // delete only cloned sprite, no effect on prototype sprite
 	if !p.isCloned_ {
 		return
 	}
 
-	p.doDestroy()
+	p.Destroy()
 }
 
 func (p *Sprite) Hide() {
