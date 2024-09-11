@@ -492,10 +492,10 @@ func (p *Sprite) Die() {
 		p.goAnimate(aniName, ani)
 	}
 
-	p.Destroy()
+	p.doDestroy()
 }
 
-func (p *Sprite) Destroy() {
+func (p *Sprite) doDestroy() {
 	if debugInstr {
 		log.Println("Destroy", p.name)
 	}
@@ -507,6 +507,14 @@ func (p *Sprite) Destroy() {
 	if p == gco.Current().Obj {
 		gco.Abort()
 	}
+}
+
+func (p *Sprite) DeleteThisClone() {
+	if !p.isCloned_ {
+		return
+	}
+
+	p.doDestroy()
 }
 
 func (p *Sprite) Hide() {
