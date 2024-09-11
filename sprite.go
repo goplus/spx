@@ -509,7 +509,9 @@ func (p *Sprite) Destroy() { // destroy sprite, whether prototype or cloned
 	}
 }
 
-func (p *Sprite) DeleteThisClone() { // delete only cloned sprite, no effect on prototype sprite
+// delete only cloned sprite, no effect on prototype sprite.
+// Add this interface, to match Scratch.
+func (p *Sprite) DeleteThisClone() {
 	if !p.isCloned_ {
 		return
 	}
