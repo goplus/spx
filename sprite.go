@@ -497,7 +497,7 @@ func (p *Sprite) Die() {
 	p.Destroy()
 }
 
-func (p *Sprite) Destroy() {
+func (p *Sprite) Destroy() { // destroy sprite, whether prototype or cloned
 	if debugInstr {
 		log.Println("Destroy", p.name)
 	}
@@ -509,6 +509,16 @@ func (p *Sprite) Destroy() {
 	if p == gco.Current().Obj {
 		gco.Abort()
 	}
+}
+
+// delete only cloned sprite, no effect on prototype sprite.
+// Add this interface, to match Scratch.
+func (p *Sprite) DeleteThisClone() {
+	if !p.isCloned_ {
+		return
+	}
+
+	p.Destroy()
 }
 
 func (p *Sprite) Hide() {
