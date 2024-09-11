@@ -485,36 +485,38 @@ func (p *Sprite) OnTurning__1(onTurning func()) {
 	})
 }
 
-func (p *Sprite) Die() { // prototype sprite can't be destroyed, but can die
+func (p *Sprite) Die() {
 	aniName := p.getStateAnimName(StateDie)
 	p.SetDying()
 	if ani, ok := p.animations[aniName]; ok {
 		p.goAnimate(aniName, ani)
 	}
-	if p.isCloned_ {
-		p.doDestroy()
-	} else {
-		p.Hide()
-	}
+
+	p.Destroy()
 }
 
-func (p *Sprite) Destroy() { // delete this clone
-	if p.isCloned_ {
-		p.doDestroy()
-	}
-}
-
-func (p *Sprite) doDestroy() {
+func (p *Sprite) Destroy() { // destroy sprite, whether prototype or cloned
 	if debugInstr {
 		log.Println("Destroy", p.name)
 	}
-	p.doStopSay()
+
+	p.Hide()
 	p.doDeleteClone()
 	p.g.removeShape(p)
 	p.Stop(ThisSprite)
 	if p == gco.Current().Obj {
 		gco.Abort()
 	}
+}
+
+// delete only cloned sprite, no effect on prototype sprite.
+// Add this interface, to match Scratch.
+func (p *Sprite) DeleteThisClone() {
+	if !p.isCloned_ {
+		return
+	}
+
+	p.Destroy()
 }
 
 func (p *Sprite) Hide() {
