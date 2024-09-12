@@ -492,6 +492,7 @@ func (p *Sprite) Die() {
 		p.goAnimate(aniName, ani)
 	}
 
+	p.Stop(OtherScriptsInSprite)
 	p.Destroy()
 }
 
