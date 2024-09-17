@@ -5,7 +5,7 @@ go 1.18
 require (
 	github.com/ajstarks/svgo v0.0.0-20210927141636-6d70534b1098
 	github.com/goplus/canvas v0.1.0
-	github.com/hajimehoshi/ebiten/v2 v2.7.9
+	github.com/hajimehoshi/ebiten/v2 v2.7.10
 	github.com/pkg/errors v0.9.1
 	github.com/qiniu/audio v0.2.1
 	github.com/qiniu/x v1.13.10
