@@ -488,6 +488,8 @@ func (p *Sprite) OnTurning__1(onTurning func()) {
 func (p *Sprite) Die() {
 	aniName := p.getStateAnimName(StateDie)
 	p.SetDying()
+
+	p.Stop(OtherScriptsInSprite)
 	if ani, ok := p.animations[aniName]; ok {
 		p.goAnimate(aniName, ani)
 	}
