@@ -257,14 +257,18 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 		name, val := getFieldPtrOrAlloc(v, i)
 		switch fld := val.(type) {
 		case *Sound:
-			media, err := g.loadSound(name)
-			if err != nil {
-				panic(err)
+			if g.canBindSound(name) {
+				media, err := g.loadSound(name)
+				if err != nil {
+					panic(err)
+				}
+				*fld = media
 			}
-			*fld = media
 		case Spriter:
-			if err := g.loadSprite(fld, name, v); err != nil {
-				panic(err)
+			if g.canBindSprite(fld, name) {
+				if err := g.loadSprite(fld, name, v); err != nil {
+					panic(err)
+				}
 			}
 			// p.sprs[name] = fld (has been set by loadSprite)
 		}
@@ -352,6 +356,17 @@ func (p *Game) startLoad(fs spxfs.Dir, cfg *Config) {
 	p.fs = fs
 	p.windowWidth_ = cfg.Width
 	p.windowHeight_ = cfg.Height
+}
+
+func (p *Game) canBindSprite(sprite Spriter, name string) bool {
+	// auto bind the sprite, if assets/sprites/{name}/index.json exists.
+	var baseDir = "sprites/" + name + "/"
+	f, err := p.fs.Open(baseDir + "index.json")
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	return true
 }
 
 func (p *Game) loadSprite(sprite Spriter, name string, gamer reflect.Value) error {
@@ -1224,6 +1239,17 @@ func (p *Game) ClearSoundEffects() {
 // -----------------------------------------------------------------------------
 
 type Sound *soundConfig
+
+func (p *Game) canBindSound(name string) bool {
+	// auto bind the sound, if assets/sounds/{name}/index.json exists.
+	prefix := "sounds/" + name
+	f, err := p.fs.Open(prefix + "/index.json")
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	return true
+}
 
 func (p *Game) loadSound(name string) (media Sound, err error) {
 	if media, ok := p.sounds.audios[name]; ok {
