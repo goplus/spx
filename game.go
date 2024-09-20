@@ -265,7 +265,7 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 				*fld = media
 			}
 		case Spriter:
-			if g.canBindSprite(fld, name) {
+			if g.canBindSprite(name) {
 				if err := g.loadSprite(fld, name, v); err != nil {
 					panic(err)
 				}
@@ -358,7 +358,7 @@ func (p *Game) startLoad(fs spxfs.Dir, cfg *Config) {
 	p.windowHeight_ = cfg.Height
 }
 
-func (p *Game) canBindSprite(sprite Spriter, name string) bool {
+func (p *Game) canBindSprite(name string) bool {
 	// auto bind the sprite, if assets/sprites/{name}/index.json exists.
 	var baseDir = "sprites/" + name + "/"
 	f, err := p.fs.Open(baseDir + "index.json")
