@@ -153,12 +153,12 @@ func (p *eventSinkMgr) doWhenClick(this threadObj) {
 	})
 }
 
-func (p *eventSinkMgr) doWhenTouched(this threadObj, obj *Sprite) {
+func (p *eventSinkMgr) doWhenTouched(this threadObj, obj *SpriteImpl) {
 	p.allWhenTouched.asyncCall(false, this, func(ev *eventSink) {
 		if debugEvent {
 			log.Println("==> onTouched", nameOf(this), obj.name)
 		}
-		ev.sink.(func(*Sprite))(obj)
+		ev.sink.(func(*SpriteImpl))(obj)
 	})
 }
 
@@ -203,7 +203,7 @@ type eventSinks struct {
 }
 
 func nameOf(this interface{}) string {
-	if spr, ok := this.(*Sprite); ok {
+	if spr, ok := this.(*SpriteImpl); ok {
 		return spr.name
 	}
 	if _, ok := this.(*Game); ok {
@@ -399,7 +399,7 @@ func isGame(obj threadObj) bool {
 }
 
 func isSprite(obj threadObj) bool {
-	_, ok := obj.(*Sprite)
+	_, ok := obj.(*SpriteImpl)
 	return ok
 }
 

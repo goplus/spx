@@ -283,12 +283,12 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 }
 
 // MouseHitItem returns the topmost item which is hit by mouse.
-func (p *Game) MouseHitItem() (target *Sprite, ok bool) {
+func (p *Game) MouseHitItem() (target *SpriteImpl, ok bool) {
 	x, y := p.input.mouseXY()
 	hc := hitContext{Pos: image.Pt(x, y)}
 	item, ok := p.onHit(hc)
 	if ok {
-		target, ok = item.Target.(*Sprite)
+		target, ok = item.Target.(*SpriteImpl)
 	}
 	return
 }
@@ -383,7 +383,7 @@ func (p *Game) loadSprite(sprite Spriter, name string, gamer reflect.Value) erro
 	// init sprite (field 0)
 	vSpr := reflect.ValueOf(sprite).Elem()
 	vSpr.Set(reflect.Zero(vSpr.Type()))
-	base := vSpr.Field(0).Addr().Interface().(*Sprite)
+	base := vSpr.Field(0).Addr().Interface().(*SpriteImpl)
 	base.init(baseDir, p, name, &conf, gamer, p.getSharedImgs())
 	p.sprs[name] = sprite
 	//
@@ -392,7 +392,7 @@ func (p *Game) loadSprite(sprite Spriter, name string, gamer reflect.Value) erro
 	return nil
 }
 
-func spriteOf(sprite Spriter) *Sprite {
+func spriteOf(sprite Spriter) *SpriteImpl {
 	vSpr := reflect.ValueOf(sprite)
 	if vSpr.Kind() != reflect.Ptr {
 		return nil
@@ -402,10 +402,10 @@ func spriteOf(sprite Spriter) *Sprite {
 		return nil
 	}
 	spriteField := vSpr.Field(0)
-	if spriteField.Type() != reflect.TypeOf(Sprite{}) {
+	if spriteField.Type() != reflect.TypeOf(SpriteImpl{}) {
 		return nil
 	}
-	return spriteField.Addr().Interface().(*Sprite)
+	return spriteField.Addr().Interface().(*SpriteImpl)
 }
 
 func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
@@ -794,17 +794,17 @@ func (p *Game) doWorldSize() {
 	}
 }
 
-func (p *Game) touchingPoint(dst *Sprite, x, y float64) bool {
+func (p *Game) touchingPoint(dst *SpriteImpl, x, y float64) bool {
 	return dst.touchPoint(x, y)
 }
 
-func (p *Game) touchingSpriteBy(dst *Sprite, name string) *Sprite {
+func (p *Game) touchingSpriteBy(dst *SpriteImpl, name string) *SpriteImpl {
 	if dst == nil {
 		return nil
 	}
 
 	for _, item := range p.items {
-		if sp, ok := item.(*Sprite); ok && sp != dst {
+		if sp, ok := item.(*SpriteImpl); ok && sp != dst {
 			if sp.name == name && (sp.isVisible && !sp.isDying) {
 				if sp.touchingSprite(dst) {
 					return sp
@@ -849,7 +849,7 @@ func (p *Game) stampCostume(di *spriteDrawInfo) {
 	p.turtle.stampCostume(di)
 }
 
-func (p *Game) movePen(sp *Sprite, x, y float64) {
+func (p *Game) movePen(sp *SpriteImpl, x, y float64) {
 	worldW, worldH := p.worldSize_()
 	p.turtle.penLine(&penLine{
 		x1:    (worldW >> 1) + int(sp.x),
@@ -925,7 +925,7 @@ func (p *Game) activateShape(child Shape) {
 	}
 }
 
-func (p *Game) goBackByLayers(spr *Sprite, n int) {
+func (p *Game) goBackByLayers(spr *SpriteImpl, n int) {
 	idx := p.doFindSprite(spr)
 	if idx < 0 {
 		return
@@ -936,7 +936,7 @@ func (p *Game) goBackByLayers(spr *Sprite, n int) {
 		for newIdx > 0 {
 			newIdx--
 			item := items[newIdx]
-			if _, ok := item.(*Sprite); ok {
+			if _, ok := item.(*SpriteImpl); ok {
 				n--
 				if n == 0 {
 					break
@@ -962,7 +962,7 @@ func (p *Game) goBackByLayers(spr *Sprite, n int) {
 					break
 				}
 				item := items[newIdx]
-				if _, ok := item.(*Sprite); ok {
+				if _, ok := item.(*SpriteImpl); ok {
 					n++
 					if n == 0 {
 						break
@@ -991,9 +991,9 @@ func (p *Game) doFindSprite(src Shape) int {
 	return -1
 }
 
-func (p *Game) findSprite(name string) *Sprite {
+func (p *Game) findSprite(name string) *SpriteImpl {
 	for _, item := range p.items {
-		if sp, ok := item.(*Sprite); ok {
+		if sp, ok := item.(*SpriteImpl); ok {
 			if !sp.isCloned_ && sp.name == name {
 				return sp
 			}

@@ -61,7 +61,7 @@ const (
 	AnimChannelMove  string = "@move"
 )
 
-type Sprite struct {
+type SpriteImpl struct {
 	baseObj
 	eventSinks
 	g *Game
@@ -103,19 +103,19 @@ type Sprite struct {
 	defaultCostumeIndex int
 }
 
-func (p *Sprite) SetDying() { // dying: visible but can't be touched
+func (p *SpriteImpl) SetDying() { // dying: visible but can't be touched
 	p.isDying = true
 }
 
-func (p *Sprite) Parent() *Game {
+func (p *SpriteImpl) Parent() *Game {
 	return p.g
 }
 
-func (p *Sprite) getAllShapes() []Shape {
+func (p *SpriteImpl) getAllShapes() []Shape {
 	return p.g.getAllShapes()
 }
 
-func (p *Sprite) init(
+func (p *SpriteImpl) init(
 	base string, g *Game, name string, sprite *spriteConfig, gamer reflect.Value, shared *sharedImages) {
 	if sprite.Costumes != nil {
 		p.baseObj.init(base, sprite.Costumes, sprite.getCostumeIndex())
@@ -225,11 +225,11 @@ func (p *Sprite) init(
 		p.animations[key] = ani
 	}
 }
-func (p *Sprite) awake() {
+func (p *SpriteImpl) awake() {
 	p.playDefaultAnim()
 }
 
-func (p *Sprite) InitFrom(src *Sprite) {
+func (p *SpriteImpl) InitFrom(src *SpriteImpl) {
 	p.baseObj.initFrom(&src.baseObj)
 	p.eventSinks.initFrom(&src.eventSinks, p)
 
@@ -275,7 +275,7 @@ func applyFloat64(out *float64, in interface{}) {
 	}
 }
 
-func applySpriteProps(dest *Sprite, v specsp) {
+func applySpriteProps(dest *SpriteImpl, v specsp) {
 	applyFloat64(&dest.x, v["x"])
 	applyFloat64(&dest.y, v["y"])
 	applyFloat64(&dest.scale, v["size"])
@@ -296,13 +296,13 @@ func applySpriteProps(dest *Sprite, v specsp) {
 	dest.isCloned_ = false
 }
 
-func applySprite(out reflect.Value, sprite Spriter, v specsp) (*Sprite, Spriter) {
+func applySprite(out reflect.Value, sprite Spriter, v specsp) (*SpriteImpl, Spriter) {
 	in := reflect.ValueOf(sprite).Elem()
 	outPtr := out.Addr().Interface().(Spriter)
 	return cloneSprite(out, outPtr, in, v), outPtr
 }
 
-func cloneSprite(out reflect.Value, outPtr Spriter, in reflect.Value, v specsp) *Sprite {
+func cloneSprite(out reflect.Value, outPtr Spriter, in reflect.Value, v specsp) *SpriteImpl {
 	dest := spriteOf(outPtr)
 	func() {
 		out.Set(in)
@@ -344,7 +344,7 @@ func Gopt_Sprite_Clone__1(sprite Spriter, data interface{}) {
 	}
 }
 
-func (p *Sprite) OnCloned__0(onCloned func(data interface{})) {
+func (p *SpriteImpl) OnCloned__0(onCloned func(data interface{})) {
 	p.hasOnCloned = true
 	p.allWhenCloned = &eventSink{
 		prev:  p.allWhenCloned,
@@ -356,19 +356,19 @@ func (p *Sprite) OnCloned__0(onCloned func(data interface{})) {
 	}
 }
 
-func (p *Sprite) OnCloned__1(onCloned func()) {
+func (p *SpriteImpl) OnCloned__1(onCloned func()) {
 	p.OnCloned__0(func(interface{}) {
 		onCloned()
 	})
 }
 
-func (p *Sprite) fireTouched(obj *Sprite) {
+func (p *SpriteImpl) fireTouched(obj *SpriteImpl) {
 	if p.hasOnTouched {
 		p.doWhenTouched(p, obj)
 	}
 }
 
-func (p *Sprite) OnTouched__0(onTouched func(obj *Sprite)) {
+func (p *SpriteImpl) OnTouched__0(onTouched func(obj *SpriteImpl)) {
 	p.hasOnTouched = true
 	p.allWhenTouched = &eventSink{
 		prev:  p.allWhenTouched,
@@ -380,28 +380,28 @@ func (p *Sprite) OnTouched__0(onTouched func(obj *Sprite)) {
 	}
 }
 
-func (p *Sprite) OnTouched__1(onTouched func()) {
-	p.OnTouched__0(func(*Sprite) {
+func (p *SpriteImpl) OnTouched__1(onTouched func()) {
+	p.OnTouched__0(func(*SpriteImpl) {
 		onTouched()
 	})
 }
 
-func (p *Sprite) OnTouched__2(name string, onTouched func(obj *Sprite)) {
-	p.OnTouched__0(func(obj *Sprite) {
+func (p *SpriteImpl) OnTouched__2(name string, onTouched func(obj *SpriteImpl)) {
+	p.OnTouched__0(func(obj *SpriteImpl) {
 		if obj.name == name {
 			onTouched(obj)
 		}
 	})
 }
 
-func (p *Sprite) OnTouched__3(name string, onTouched func()) {
-	p.OnTouched__2(name, func(*Sprite) {
+func (p *SpriteImpl) OnTouched__3(name string, onTouched func()) {
+	p.OnTouched__2(name, func(*SpriteImpl) {
 		onTouched()
 	})
 }
 
-func (p *Sprite) OnTouched__4(names []string, onTouched func(obj *Sprite)) {
-	p.OnTouched__0(func(obj *Sprite) {
+func (p *SpriteImpl) OnTouched__4(names []string, onTouched func(obj *SpriteImpl)) {
+	p.OnTouched__0(func(obj *SpriteImpl) {
 		name := obj.name
 		for _, v := range names {
 			if v == name {
@@ -412,8 +412,8 @@ func (p *Sprite) OnTouched__4(names []string, onTouched func(obj *Sprite)) {
 	})
 }
 
-func (p *Sprite) OnTouched__5(names []string, onTouched func()) {
-	p.OnTouched__4(names, func(*Sprite) {
+func (p *SpriteImpl) OnTouched__5(names []string, onTouched func()) {
+	p.OnTouched__4(names, func(*SpriteImpl) {
 		onTouched()
 	})
 }
@@ -422,7 +422,7 @@ type MovingInfo struct {
 	OldX, OldY float64
 	NewX, NewY float64
 	ani        *anim.Anim
-	Obj        *Sprite
+	Obj        *SpriteImpl
 }
 
 func (p *MovingInfo) StopMoving() {
@@ -439,7 +439,7 @@ func (p *MovingInfo) Dy() float64 {
 	return p.NewY - p.OldY
 }
 
-func (p *Sprite) OnMoving__0(onMoving func(mi *MovingInfo)) {
+func (p *SpriteImpl) OnMoving__0(onMoving func(mi *MovingInfo)) {
 	p.hasOnMoving = true
 	p.allWhenMoving = &eventSink{
 		prev:  p.allWhenMoving,
@@ -451,7 +451,7 @@ func (p *Sprite) OnMoving__0(onMoving func(mi *MovingInfo)) {
 	}
 }
 
-func (p *Sprite) OnMoving__1(onMoving func()) {
+func (p *SpriteImpl) OnMoving__1(onMoving func()) {
 	p.OnMoving__0(func(mi *MovingInfo) {
 		onMoving()
 	})
@@ -460,14 +460,14 @@ func (p *Sprite) OnMoving__1(onMoving func()) {
 type TurningInfo struct {
 	OldDir float64
 	NewDir float64
-	Obj    *Sprite
+	Obj    *SpriteImpl
 }
 
 func (p *TurningInfo) Dir() float64 {
 	return p.NewDir - p.OldDir
 }
 
-func (p *Sprite) OnTurning__0(onTurning func(ti *TurningInfo)) {
+func (p *SpriteImpl) OnTurning__0(onTurning func(ti *TurningInfo)) {
 	p.hasOnTurning = true
 	p.allWhenTurning = &eventSink{
 		prev:  p.allWhenTurning,
@@ -479,13 +479,13 @@ func (p *Sprite) OnTurning__0(onTurning func(ti *TurningInfo)) {
 	}
 }
 
-func (p *Sprite) OnTurning__1(onTurning func()) {
+func (p *SpriteImpl) OnTurning__1(onTurning func()) {
 	p.OnTurning__0(func(*TurningInfo) {
 		onTurning()
 	})
 }
 
-func (p *Sprite) Die() {
+func (p *SpriteImpl) Die() {
 	aniName := p.getStateAnimName(StateDie)
 	p.SetDying()
 
@@ -497,7 +497,7 @@ func (p *Sprite) Die() {
 	p.Destroy()
 }
 
-func (p *Sprite) Destroy() { // destroy sprite, whether prototype or cloned
+func (p *SpriteImpl) Destroy() { // destroy sprite, whether prototype or cloned
 	if debugInstr {
 		log.Println("Destroy", p.name)
 	}
@@ -513,7 +513,7 @@ func (p *Sprite) Destroy() { // destroy sprite, whether prototype or cloned
 
 // delete only cloned sprite, no effect on prototype sprite.
 // Add this interface, to match Scratch.
-func (p *Sprite) DeleteThisClone() {
+func (p *SpriteImpl) DeleteThisClone() {
 	if !p.isCloned_ {
 		return
 	}
@@ -521,7 +521,7 @@ func (p *Sprite) DeleteThisClone() {
 	p.Destroy()
 }
 
-func (p *Sprite) Hide() {
+func (p *SpriteImpl) Hide() {
 	if debugInstr {
 		log.Println("Hide", p.name)
 	}
@@ -529,32 +529,32 @@ func (p *Sprite) Hide() {
 	p.isVisible = false
 }
 
-func (p *Sprite) Show() {
+func (p *SpriteImpl) Show() {
 	if debugInstr {
 		log.Println("Show", p.name)
 	}
 	p.isVisible = true
 }
 
-func (p *Sprite) Visible() bool {
+func (p *SpriteImpl) Visible() bool {
 	return p.isVisible
 }
 
-func (p *Sprite) IsCloned() bool {
+func (p *SpriteImpl) IsCloned() bool {
 	return p.isCloned_
 }
 
 // -----------------------------------------------------------------------------
 
-func (p *Sprite) CostumeName() string {
+func (p *SpriteImpl) CostumeName() string {
 	return p.getCostumeName()
 }
 
-func (p *Sprite) CostumeIndex() int {
+func (p *SpriteImpl) CostumeIndex() int {
 	return p.getCostumeIndex()
 }
 
-func (p *Sprite) SetCostume(costume interface{}) {
+func (p *SpriteImpl) SetCostume(costume interface{}) {
 	if debugInstr {
 		log.Println("SetCostume", p.name, costume)
 	}
@@ -562,7 +562,7 @@ func (p *Sprite) SetCostume(costume interface{}) {
 	p.defaultCostumeIndex = p.costumeIndex_
 }
 
-func (p *Sprite) NextCostume() {
+func (p *SpriteImpl) NextCostume() {
 	if debugInstr {
 		log.Println("NextCostume", p.name)
 	}
@@ -570,7 +570,7 @@ func (p *Sprite) NextCostume() {
 	p.defaultCostumeIndex = p.costumeIndex_
 }
 
-func (p *Sprite) PrevCostume() {
+func (p *SpriteImpl) PrevCostume() {
 	if debugInstr {
 		log.Println("PrevCostume", p.name)
 	}
@@ -580,7 +580,7 @@ func (p *Sprite) PrevCostume() {
 
 // -----------------------------------------------------------------------------
 
-func (p *Sprite) getFromAnToForAni(anitype aniTypeEnum, from interface{}, to interface{}) (interface{}, interface{}) {
+func (p *SpriteImpl) getFromAnToForAni(anitype aniTypeEnum, from interface{}, to interface{}) (interface{}, interface{}) {
 
 	if anitype == aniTypeFrame {
 		return p.getFromAnToForAniFrames(from, to)
@@ -590,7 +590,7 @@ func (p *Sprite) getFromAnToForAni(anitype aniTypeEnum, from interface{}, to int
 
 }
 
-func (p *Sprite) getFromAnToForAniFrames(from interface{}, to interface{}) (float64, float64) {
+func (p *SpriteImpl) getFromAnToForAniFrames(from interface{}, to interface{}) (float64, float64) {
 	fromval := 0.0
 	toval := 0.0
 	switch v := from.(type) {
@@ -616,7 +616,7 @@ func (p *Sprite) getFromAnToForAniFrames(from interface{}, to interface{}) (floa
 	return fromval, toval
 }
 
-func (p *Sprite) getStateAnimName(stateName string) string {
+func (p *SpriteImpl) getStateAnimName(stateName string) string {
 	if bindingName, ok := p.animBindings[stateName]; ok {
 		return bindingName
 	}
@@ -626,10 +626,10 @@ func (p *Sprite) getStateAnimName(stateName string) string {
 func lerp(a float64, b float64, progress float64) float64 {
 	return a + (b-a)*progress
 }
-func (p *Sprite) goAnimate(name string, ani *aniConfig) {
+func (p *SpriteImpl) goAnimate(name string, ani *aniConfig) {
 	p.goAnimateInternal(name, ani, true)
 }
-func (p *Sprite) goAnimateInternal(name string, ani *aniConfig, isBlocking bool) {
+func (p *SpriteImpl) goAnimateInternal(name string, ani *aniConfig, isBlocking bool) {
 	if p.lastAnim != nil {
 		p.isWaitingStopAnim = true
 		p.lastAnim.Stop()
@@ -802,7 +802,7 @@ func (p *Sprite) goAnimateInternal(name string, ani *aniConfig, isBlocking bool)
 	}
 }
 
-func (p *Sprite) Animate(name string) {
+func (p *SpriteImpl) Animate(name string) {
 	if debugInstr {
 		log.Println("==> Animation", name)
 	}
@@ -815,11 +815,11 @@ func (p *Sprite) Animate(name string) {
 
 // -----------------------------------------------------------------------------
 
-func (p *Sprite) Ask(msg interface{}) {
+func (p *SpriteImpl) Ask(msg interface{}) {
 	panic("todo")
 }
 
-func (p *Sprite) Say(msg interface{}, secs ...float64) {
+func (p *SpriteImpl) Say(msg interface{}, secs ...float64) {
 	if debugInstr {
 		log.Println("Say", p.name, msg, secs)
 	}
@@ -829,7 +829,7 @@ func (p *Sprite) Say(msg interface{}, secs ...float64) {
 	}
 }
 
-func (p *Sprite) Think(msg interface{}, secs ...float64) {
+func (p *SpriteImpl) Think(msg interface{}, secs ...float64) {
 	if debugInstr {
 		log.Println("Think", p.name, msg, secs)
 	}
@@ -839,7 +839,7 @@ func (p *Sprite) Think(msg interface{}, secs ...float64) {
 	}
 }
 
-func (p *Sprite) Quote__0(message string) {
+func (p *SpriteImpl) Quote__0(message string) {
 	if message == "" {
 		p.doStopQuote()
 		return
@@ -847,11 +847,11 @@ func (p *Sprite) Quote__0(message string) {
 	p.Quote__2(message, "")
 }
 
-func (p *Sprite) Quote__1(message string, secs float64) {
+func (p *SpriteImpl) Quote__1(message string, secs float64) {
 	p.Quote__2(message, "", secs)
 }
 
-func (p *Sprite) Quote__2(message, description string, secs ...float64) {
+func (p *SpriteImpl) Quote__2(message, description string, secs ...float64) {
 	if debugInstr {
 		log.Println("Quote", p.name, message, description, secs)
 	}
@@ -863,7 +863,7 @@ func (p *Sprite) Quote__2(message, description string, secs ...float64) {
 
 // -----------------------------------------------------------------------------
 
-func (p *Sprite) getXY() (x, y float64) {
+func (p *SpriteImpl) getXY() (x, y float64) {
 	return p.x, p.y
 }
 
@@ -873,7 +873,7 @@ func (p *Sprite) getXY() (x, y float64) {
 //	DistanceTo(spriteName)
 //	DistanceTo(spx.Mouse)
 //	DistanceTo(spx.Random)
-func (p *Sprite) DistanceTo(obj interface{}) float64 {
+func (p *SpriteImpl) DistanceTo(obj interface{}) float64 {
 	x, y := p.x, p.y
 	x2, y2 := p.g.objectPos(obj)
 	x -= x2
@@ -881,11 +881,11 @@ func (p *Sprite) DistanceTo(obj interface{}) float64 {
 	return math.Sqrt(x*x + y*y)
 }
 
-func (p *Sprite) doMoveTo(x, y float64) {
+func (p *SpriteImpl) doMoveTo(x, y float64) {
 	p.doMoveToForAnim(x, y, nil)
 }
 
-func (p *Sprite) doMoveToForAnim(x, y float64, ani *anim.Anim) {
+func (p *SpriteImpl) doMoveToForAnim(x, y float64, ani *anim.Anim) {
 	x, y = p.fixWorldRange(x, y)
 	if p.hasOnMoving {
 		mi := &MovingInfo{OldX: p.x, OldY: p.y, NewX: x, NewY: y, Obj: p, ani: ani}
@@ -898,32 +898,32 @@ func (p *Sprite) doMoveToForAnim(x, y float64, ani *anim.Anim) {
 	p.getDrawInfo().updateMatrix()
 }
 
-func (p *Sprite) goMoveForward(step float64) {
+func (p *SpriteImpl) goMoveForward(step float64) {
 	sin, cos := math.Sincos(toRadian(p.direction))
 	p.doMoveTo(p.x+step*sin, p.y+step*cos)
 }
 
-func (p *Sprite) Move__0(step float64) {
+func (p *SpriteImpl) Move__0(step float64) {
 	if debugInstr {
 		log.Println("Move", p.name, step)
 	}
 	p.goMoveForward(step)
 }
 
-func (p *Sprite) Move__1(step int) {
+func (p *SpriteImpl) Move__1(step int) {
 	p.Move__0(float64(step))
 }
 
-func (p *Sprite) Step__0(step float64) {
+func (p *SpriteImpl) Step__0(step float64) {
 	animName := p.getStateAnimName(StateStep)
 	p.Step__2(step, animName)
 }
 
-func (p *Sprite) Step__1(step int) {
+func (p *SpriteImpl) Step__1(step int) {
 	p.Step__0(float64(step))
 }
 
-func (p *Sprite) Step__2(step float64, animname string) {
+func (p *SpriteImpl) Step__2(step float64, animname string) {
 	if debugInstr {
 		log.Println("Step", p.name, step)
 	}
@@ -940,7 +940,7 @@ func (p *Sprite) Step__2(step float64, animname string) {
 	p.goMoveForward(step)
 }
 
-func (p *Sprite) playDefaultAnim() {
+func (p *SpriteImpl) playDefaultAnim() {
 	animName := p.defaultAnimation
 	if p.isVisible {
 		isPlayAnim := false
@@ -965,7 +965,7 @@ func (p *Sprite) playDefaultAnim() {
 //	Goto(spriteName)
 //	Goto(spx.Mouse)
 //	Goto(spx.Random)
-func (p *Sprite) Goto(obj interface{}) {
+func (p *SpriteImpl) Goto(obj interface{}) {
 	if debugInstr {
 		log.Println("Goto", p.name, obj)
 	}
@@ -973,7 +973,7 @@ func (p *Sprite) Goto(obj interface{}) {
 	p.SetXYpos(x, y)
 }
 
-func (p *Sprite) Glide__0(x, y float64, secs float64) {
+func (p *SpriteImpl) Glide__0(x, y float64, secs float64) {
 	if debugInstr {
 		log.Println("Glide", p.name, x, y, secs)
 	}
@@ -989,7 +989,7 @@ func (p *Sprite) Glide__0(x, y float64, secs float64) {
 	p.goAnimate(animName, ani)
 }
 
-func (p *Sprite) Glide__1(obj interface{}, secs float64) {
+func (p *SpriteImpl) Glide__1(obj interface{}, secs float64) {
 	if debugInstr {
 		log.Println("Glide", obj, secs)
 	}
@@ -997,35 +997,35 @@ func (p *Sprite) Glide__1(obj interface{}, secs float64) {
 	p.Glide__0(x, y, secs)
 }
 
-func (p *Sprite) SetXYpos(x, y float64) {
+func (p *SpriteImpl) SetXYpos(x, y float64) {
 	p.doMoveTo(x, y)
 }
 
-func (p *Sprite) ChangeXYpos(dx, dy float64) {
+func (p *SpriteImpl) ChangeXYpos(dx, dy float64) {
 	p.doMoveTo(p.x+dx, p.y+dy)
 }
 
-func (p *Sprite) Xpos() float64 {
+func (p *SpriteImpl) Xpos() float64 {
 	return p.x
 }
 
-func (p *Sprite) SetXpos(x float64) {
+func (p *SpriteImpl) SetXpos(x float64) {
 	p.doMoveTo(x, p.y)
 }
 
-func (p *Sprite) ChangeXpos(dx float64) {
+func (p *SpriteImpl) ChangeXpos(dx float64) {
 	p.doMoveTo(p.x+dx, p.y)
 }
 
-func (p *Sprite) Ypos() float64 {
+func (p *SpriteImpl) Ypos() float64 {
 	return p.y
 }
 
-func (p *Sprite) SetYpos(y float64) {
+func (p *SpriteImpl) SetYpos(y float64) {
 	p.doMoveTo(p.x, y)
 }
 
-func (p *Sprite) ChangeYpos(dy float64) {
+func (p *SpriteImpl) ChangeYpos(dy float64) {
 	p.doMoveTo(p.x, p.y+dy)
 }
 
@@ -1049,14 +1049,14 @@ func toRotationStyle(style string) RotationStyle {
 	return Normal
 }
 
-func (p *Sprite) SetRotationStyle(style RotationStyle) {
+func (p *SpriteImpl) SetRotationStyle(style RotationStyle) {
 	if debugInstr {
 		log.Println("SetRotationStyle", p.name, style)
 	}
 	p.rotationStyle = style
 }
 
-func (p *Sprite) Heading() float64 {
+func (p *SpriteImpl) Heading() float64 {
 	return p.direction
 }
 
@@ -1066,7 +1066,7 @@ func (p *Sprite) Heading() float64 {
 //	Turn(spx.Left)
 //	Turn(spx.Right)
 //	Turn(ti *spx.TurningInfo)
-func (p *Sprite) Turn(val interface{}) {
+func (p *SpriteImpl) Turn(val interface{}) {
 	var delta float64
 	switch v := val.(type) {
 	//case specialDir:
@@ -1105,7 +1105,7 @@ func (p *Sprite) Turn(val interface{}) {
 //	TurnTo(spx.Right)
 //	TurnTo(spx.Up)
 //	TurnTo(spx.Down)
-func (p *Sprite) TurnTo(obj interface{}) {
+func (p *SpriteImpl) TurnTo(obj interface{}) {
 	var angle float64
 	switch v := obj.(type) {
 	//case specialDir:
@@ -1145,15 +1145,15 @@ func (p *Sprite) TurnTo(obj interface{}) {
 	}
 }
 
-func (p *Sprite) SetHeading(dir float64) {
+func (p *SpriteImpl) SetHeading(dir float64) {
 	p.setDirection(dir, false)
 }
 
-func (p *Sprite) ChangeHeading(dir float64) {
+func (p *SpriteImpl) ChangeHeading(dir float64) {
 	p.setDirection(dir, true)
 }
 
-func (p *Sprite) setDirection(dir float64, change bool) bool {
+func (p *SpriteImpl) setDirection(dir float64, change bool) bool {
 	if change {
 		dir += p.direction
 	}
@@ -1169,7 +1169,7 @@ func (p *Sprite) setDirection(dir float64, change bool) bool {
 	return true
 }
 
-func (p *Sprite) doTurnTogether(ti *TurningInfo) {
+func (p *SpriteImpl) doTurnTogether(ti *TurningInfo) {
 	/*
 	 x’ = x0 + cos * (x-x0) + sin * (y-y0)
 	 y’ = y0 - sin * (x-x0) + cos * (y-y0)
@@ -1183,12 +1183,12 @@ func (p *Sprite) doTurnTogether(ti *TurningInfo) {
 
 // -----------------------------------------------------------------------------
 
-func (p *Sprite) Size() float64 {
+func (p *SpriteImpl) Size() float64 {
 	v := p.scale
 	return v
 }
 
-func (p *Sprite) SetSize(size float64) {
+func (p *SpriteImpl) SetSize(size float64) {
 	if debugInstr {
 		log.Println("SetSize", p.name, size)
 	}
@@ -1196,7 +1196,7 @@ func (p *Sprite) SetSize(size float64) {
 	p.getDrawInfo().updateMatrix()
 }
 
-func (p *Sprite) ChangeSize(delta float64) {
+func (p *SpriteImpl) ChangeSize(delta float64) {
 	if debugInstr {
 		log.Println("ChangeSize", p.name, delta)
 	}
@@ -1206,7 +1206,7 @@ func (p *Sprite) ChangeSize(delta float64) {
 
 // -----------------------------------------------------------------------------
 
-func (p *Sprite) requireGreffUniforms() map[string]interface{} {
+func (p *SpriteImpl) requireGreffUniforms() map[string]interface{} {
 	effs := p.greffUniforms
 	if effs == nil {
 		effs = make(map[string]interface{})
@@ -1215,12 +1215,12 @@ func (p *Sprite) requireGreffUniforms() map[string]interface{} {
 	return effs
 }
 
-func (p *Sprite) SetEffect(kind EffectKind, val float64) {
+func (p *SpriteImpl) SetEffect(kind EffectKind, val float64) {
 	effs := p.requireGreffUniforms()
 	effs[kind.String()] = float32(val)
 }
 
-func (p *Sprite) ChangeEffect(kind EffectKind, delta float64) {
+func (p *SpriteImpl) ChangeEffect(kind EffectKind, delta float64) {
 	effs := p.requireGreffUniforms()
 	key := kind.String()
 	newVal := float32(delta)
@@ -1230,7 +1230,7 @@ func (p *Sprite) ChangeEffect(kind EffectKind, delta float64) {
 	effs[key] = newVal
 }
 
-func (p *Sprite) ClearGraphEffects() {
+func (p *SpriteImpl) ClearGraphEffects() {
 	p.greffUniforms = nil
 }
 
@@ -1238,9 +1238,9 @@ func (p *Sprite) ClearGraphEffects() {
 
 type Color = color.RGBA
 
-func (p *Sprite) TouchingColor(color Color) bool {
+func (p *SpriteImpl) TouchingColor(color Color) bool {
 	for _, item := range p.g.items {
-		if sp, ok := item.(*Sprite); ok && sp != p {
+		if sp, ok := item.(*SpriteImpl); ok && sp != p {
 			ret := p.touchedColor_(sp, color)
 			if ret {
 				return true
@@ -1260,7 +1260,7 @@ func (p *Sprite) TouchingColor(color Color) bool {
 //	Touching(spx.EdgeTop)
 //	Touching(spx.EdgeRight)
 //	Touching(spx.EdgeBottom)
-func (p *Sprite) Touching(obj interface{}) bool {
+func (p *SpriteImpl) Touching(obj interface{}) bool {
 	if !p.isVisible || p.isDying {
 		return false
 	}
@@ -1284,7 +1284,7 @@ func (p *Sprite) Touching(obj interface{}) bool {
 	panic("Touching: unexpected input")
 }
 
-func touchingSprite(dst, src *Sprite) bool {
+func touchingSprite(dst, src *SpriteImpl) bool {
 	if !src.isVisible || src.isDying {
 		return false
 	}
@@ -1300,7 +1300,7 @@ const (
 	touchingAllEdges     = 15
 )
 
-func (p *Sprite) BounceOffEdge() {
+func (p *SpriteImpl) BounceOffEdge() {
 	if debugInstr {
 		log.Println("BounceOffEdge", p.name)
 	}
@@ -1344,7 +1344,7 @@ func checkTouchingDirection(dir float64) int {
 	return touchingScreenTop
 }
 
-func (p *Sprite) checkTouchingScreen(where int) (touching int) {
+func (p *SpriteImpl) checkTouchingScreen(where int) (touching int) {
 	rect := p.getRotatedRect()
 	if rect == nil {
 		return
@@ -1390,60 +1390,60 @@ func (p *Sprite) checkTouchingScreen(where int) (touching int) {
 
 // -----------------------------------------------------------------------------
 
-func (p *Sprite) GoBackLayers(n int) {
+func (p *SpriteImpl) GoBackLayers(n int) {
 	p.g.goBackByLayers(p, n)
 }
 
-func (p *Sprite) GotoFront() {
+func (p *SpriteImpl) GotoFront() {
 	p.g.goBackByLayers(p, -1e8)
 }
 
-func (p *Sprite) GotoBack() {
+func (p *SpriteImpl) GotoBack() {
 	p.g.goBackByLayers(p, 1e8)
 }
 
 // -----------------------------------------------------------------------------
 
-func (p *Sprite) Stamp() {
+func (p *SpriteImpl) Stamp() {
 	p.g.stampCostume(p.getDrawInfo())
 }
 
-func (p *Sprite) PenUp() {
+func (p *SpriteImpl) PenUp() {
 	p.isPenDown = false
 }
 
-func (p *Sprite) PenDown() {
+func (p *SpriteImpl) PenDown() {
 	p.isPenDown = true
 }
 
-func (p *Sprite) SetPenColor(color Color) {
+func (p *SpriteImpl) SetPenColor(color Color) {
 	h, _, v := clrutil.RGB2HSV(color.R, color.G, color.B)
 	p.penHue = (200 * h) / 360
 	p.penShade = 50 * v
 	p.penColor = color
 }
 
-func (p *Sprite) ChangePenColor(delta float64) {
+func (p *SpriteImpl) ChangePenColor(delta float64) {
 	panic("todo")
 }
 
-func (p *Sprite) SetPenShade(shade float64) {
+func (p *SpriteImpl) SetPenShade(shade float64) {
 	p.setPenShade(shade, false)
 }
 
-func (p *Sprite) ChangePenShade(delta float64) {
+func (p *SpriteImpl) ChangePenShade(delta float64) {
 	p.setPenShade(delta, true)
 }
 
-func (p *Sprite) SetPenHue(hue float64) {
+func (p *SpriteImpl) SetPenHue(hue float64) {
 	p.setPenHue(hue, false)
 }
 
-func (p *Sprite) ChangePenHue(delta float64) {
+func (p *SpriteImpl) ChangePenHue(delta float64) {
 	p.setPenHue(delta, true)
 }
 
-func (p *Sprite) setPenHue(v float64, change bool) {
+func (p *SpriteImpl) setPenHue(v float64, change bool) {
 	if change {
 		v += p.penHue
 	}
@@ -1455,7 +1455,7 @@ func (p *Sprite) setPenHue(v float64, change bool) {
 	p.doUpdatePenColor()
 }
 
-func (p *Sprite) setPenShade(v float64, change bool) {
+func (p *SpriteImpl) setPenShade(v float64, change bool) {
 	if change {
 		v += p.penShade
 	}
@@ -1467,7 +1467,7 @@ func (p *Sprite) setPenShade(v float64, change bool) {
 	p.doUpdatePenColor()
 }
 
-func (p *Sprite) doUpdatePenColor() {
+func (p *SpriteImpl) doUpdatePenColor() {
 	r, g, b := clrutil.HSV2RGB((p.penHue*180)/100, 1, 1)
 	shade := p.penShade
 	if shade > 100 { // range 0..100
@@ -1481,15 +1481,15 @@ func (p *Sprite) doUpdatePenColor() {
 	p.penColor = color.RGBA{R: r, G: g, B: b, A: p.penColor.A}
 }
 
-func (p *Sprite) SetPenSize(size float64) {
+func (p *SpriteImpl) SetPenSize(size float64) {
 	p.setPenWidth(size, true)
 }
 
-func (p *Sprite) ChangePenSize(delta float64) {
+func (p *SpriteImpl) ChangePenSize(delta float64) {
 	p.setPenWidth(delta, true)
 }
 
-func (p *Sprite) setPenWidth(w float64, change bool) {
+func (p *SpriteImpl) setPenWidth(w float64, change bool) {
 	if change {
 		w += p.penWidth
 	}
@@ -1498,18 +1498,18 @@ func (p *Sprite) setPenWidth(w float64, change bool) {
 
 // -----------------------------------------------------------------------------
 
-func (p *Sprite) HideVar(name string) {
+func (p *SpriteImpl) HideVar(name string) {
 	p.g.setStageMonitor(p.name, getVarPrefix+name, false)
 }
 
-func (p *Sprite) ShowVar(name string) {
+func (p *SpriteImpl) ShowVar(name string) {
 	p.g.setStageMonitor(p.name, getVarPrefix+name, true)
 }
 
 // -----------------------------------------------------------------------------
 
 // CostumeWidth returns width of sprite current costume.
-func (p *Sprite) CostumeWidth() float64 {
+func (p *SpriteImpl) CostumeWidth() float64 {
 	c := p.costumes[p.costumeIndex_]
 	img, _, _ := c.needImage(p.g.fs)
 	w, _ := img.Size()
@@ -1517,14 +1517,14 @@ func (p *Sprite) CostumeWidth() float64 {
 }
 
 // CostumeHeight returns height of sprite current costume.
-func (p *Sprite) CostumeHeight() float64 {
+func (p *SpriteImpl) CostumeHeight() float64 {
 	c := p.costumes[p.costumeIndex_]
 	img, _, _ := c.needImage(p.g.fs)
 	_, h := img.Size()
 	return float64(h / c.bitmapResolution)
 }
 
-func (p *Sprite) Bounds() *math32.RotatedRect {
+func (p *SpriteImpl) Bounds() *math32.RotatedRect {
 	return p.getRotatedRect()
 }
 
@@ -1543,7 +1543,7 @@ func (p *Sprite) Bounds() *math32.RotatedRect {
 
 // -----------------------------------------------------------------------------
 
-func (p *Sprite) fixWorldRange(x, y float64) (float64, float64) {
+func (p *SpriteImpl) fixWorldRange(x, y float64) (float64, float64) {
 	rect := p.getDrawInfo().getUpdateRotateRect(x, y)
 	if rect == nil {
 		return x, y
