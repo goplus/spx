@@ -54,7 +54,7 @@ type Shape interface {
 // -------------------------------------------------------------------------------------
 
 type spriteDrawInfo struct {
-	sprite  *Sprite
+	sprite  *SpriteImpl
 	geo     ebiten.GeoM
 	visible bool
 }
@@ -100,7 +100,7 @@ func (p *spriteDrawInfo) drawOn(dc drawContext, fs spxfs.Dir) {
 	p.doDrawOn(dc, fs)
 }
 
-func (p *spriteDrawInfo) draw(dc drawContext, ctx *Sprite) {
+func (p *spriteDrawInfo) draw(dc drawContext, ctx *SpriteImpl) {
 	p.doDrawOn(dc, ctx.g.fs)
 }
 
@@ -207,14 +207,14 @@ func (p *spriteDrawInfo) doDrawOn(dc drawContext, fs spxfs.Dir) {
 	}
 }
 
-func (p *Sprite) getDrawInfo() *spriteDrawInfo {
+func (p *SpriteImpl) getDrawInfo() *spriteDrawInfo {
 	return &spriteDrawInfo{
 		sprite:  p,
 		visible: p.isVisible,
 	}
 }
 
-func (p *Sprite) touchPoint(x, y float64) bool {
+func (p *SpriteImpl) touchPoint(x, y float64) bool {
 	rRect := p.getRotatedRect()
 	if rRect == nil {
 		return false
@@ -239,7 +239,7 @@ func (p *Sprite) touchPoint(x, y float64) bool {
 	return true
 }
 
-func (p *Sprite) touchRotatedRect(dstRect *math32.RotatedRect) bool {
+func (p *SpriteImpl) touchRotatedRect(dstRect *math32.RotatedRect) bool {
 	currRect := p.getRotatedRect()
 	if currRect == nil {
 		return false
@@ -275,7 +275,7 @@ func (p *Sprite) touchRotatedRect(dstRect *math32.RotatedRect) bool {
 	return false
 }
 
-func (p *Sprite) touchedColor_(dst *Sprite, color Color) bool {
+func (p *SpriteImpl) touchedColor_(dst *SpriteImpl, color Color) bool {
 	currRect := p.getRotatedRect()
 	if currRect == nil {
 		return false
@@ -321,7 +321,7 @@ func (p *Sprite) touchedColor_(dst *Sprite, color Color) bool {
 	return false
 }
 
-func (p *Sprite) touchingSprite(dst *Sprite) bool {
+func (p *SpriteImpl) touchingSprite(dst *SpriteImpl) bool {
 	currRect := p.getRotatedRect()
 	if currRect == nil {
 		return false
@@ -369,7 +369,7 @@ func (p *Sprite) touchingSprite(dst *Sprite) bool {
 	return false
 }
 
-func (p *Sprite) getRotatedRect() (rRect *math32.RotatedRect) {
+func (p *SpriteImpl) getRotatedRect() (rRect *math32.RotatedRect) {
 	di := p.getDrawInfo()
 	if !di.visible {
 		return
@@ -378,7 +378,7 @@ func (p *Sprite) getRotatedRect() (rRect *math32.RotatedRect) {
 	return
 }
 
-func (p *Sprite) getTrackPos() (topx, topy int) {
+func (p *SpriteImpl) getTrackPos() (topx, topy int) {
 	rRect := p.getRotatedRect()
 	if rRect == nil {
 		return
@@ -399,7 +399,7 @@ func (p *Sprite) getTrackPos() (topx, topy int) {
 	return int(pos.X), int(pos.Y) - int(rRect.Size.Height)/2
 }
 
-func (p *Sprite) draw(dc drawContext) {
+func (p *SpriteImpl) draw(dc drawContext) {
 	di := p.getDrawInfo()
 	if !di.visible {
 		return
@@ -408,7 +408,7 @@ func (p *Sprite) draw(dc drawContext) {
 }
 
 // Hit func.
-func (p *Sprite) hit(hc hitContext) (hr hitResult, ok bool) {
+func (p *SpriteImpl) hit(hc hitContext) (hr hitResult, ok bool) {
 	rRect := p.getRotatedRect()
 	if rRect == nil {
 		return
@@ -439,7 +439,7 @@ func (p *Sprite) hit(hc hitContext) (hr hitResult, ok bool) {
 	return hitResult{Target: p}, true
 }
 
-func (p *Sprite) applyPivot(c *costume, cx, cy *float64) {
+func (p *SpriteImpl) applyPivot(c *costume, cx, cy *float64) {
 	*cx += p.pivot.X * float64(c.bitmapResolution)
 	*cy -= p.pivot.Y * float64(c.bitmapResolution)
 }

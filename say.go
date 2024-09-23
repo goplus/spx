@@ -61,7 +61,7 @@ const (
 )
 
 type sayOrThinker struct {
-	sp    *Sprite
+	sp    *SpriteImpl
 	msg   string
 	style int // styleSay, styleThink
 }
@@ -180,7 +180,7 @@ func (p *sayOrThinker) hit(hc hitContext) (hr hitResult, ok bool) {
 
 // -------------------------------------------------------------------------------------
 
-func (p *Sprite) sayOrThink(msgv interface{}, style int) {
+func (p *SpriteImpl) sayOrThink(msgv interface{}, style int) {
 	msg, ok := msgv.(string)
 	if !ok {
 		msg = fmt.Sprint(msgv)
@@ -201,12 +201,12 @@ func (p *Sprite) sayOrThink(msgv interface{}, style int) {
 	}
 }
 
-func (p *Sprite) waitStopSay(secs float64) {
+func (p *SpriteImpl) waitStopSay(secs float64) {
 	p.g.Wait(secs)
 	p.doStopSay()
 }
 
-func (p *Sprite) doStopSay() {
+func (p *SpriteImpl) doStopSay() {
 	if p.sayObj != nil {
 		p.g.removeShape(p.sayObj)
 		p.sayObj = nil
