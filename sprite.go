@@ -61,6 +61,95 @@ const (
 	AnimChannelMove  string = "@move"
 )
 
+type Sprite interface {
+	IEventSinks
+	Animate(name string)
+	Ask(msg interface{})
+	BounceOffEdge()
+	Bounds() *math32.RotatedRect
+	ChangeEffect(kind EffectKind, delta float64)
+	ChangeHeading(dir float64)
+	ChangePenColor(delta float64)
+	ChangePenHue(delta float64)
+	ChangePenShade(delta float64)
+	ChangePenSize(delta float64)
+	ChangeSize(delta float64)
+	ChangeXpos(dx float64)
+	ChangeXYpos(dx, dy float64)
+	ChangeYpos(dy float64)
+	ClearGraphEffects()
+	CostumeHeight() float64
+	CostumeIndex() int
+	CostumeName() string
+	CostumeWidth() float64
+	DeleteThisClone()
+	Destroy()
+	Die()
+	DistanceTo(obj interface{}) float64
+	Glide__0(x, y float64, secs float64)
+	Glide__1(obj interface{}, secs float64)
+	GoBackLayers(n int)
+	Goto(obj interface{})
+	GotoBack()
+	GotoFront()
+	Heading() float64
+	Hide()
+	HideVar(name string)
+	InitFrom(src *SpriteImpl)
+	IsCloned() bool
+	Move__0(step float64)
+	Move__1(step int)
+	NextCostume()
+	OnCloned__0(onCloned func(data interface{}))
+	OnCloned__1(onCloned func())
+	OnMoving__0(onMoving func(mi *MovingInfo))
+	OnMoving__1(onMoving func())
+	OnTouched__0(onTouched func(obj *SpriteImpl))
+	OnTouched__1(onTouched func())
+	OnTouched__2(name string, onTouched func(obj *SpriteImpl))
+	OnTouched__3(name string, onTouched func())
+	OnTouched__4(names []string, onTouched func(obj *SpriteImpl))
+	OnTouched__5(names []string, onTouched func())
+	OnTurning__0(onTurning func(ti *TurningInfo))
+	OnTurning__1(onTurning func())
+	Parent() *Game
+	PenDown()
+	PenUp()
+	PrevCostume()
+	Quote__0(message string)
+	Quote__1(message string, secs float64)
+	Quote__2(message, description string, secs ...float64)
+	Say(msg interface{}, secs ...float64)
+	SetCostume(costume interface{})
+	SetDying()
+	SetEffect(kind EffectKind, val float64)
+	SetHeading(dir float64)
+	SetPenColor(color Color)
+	SetPenHue(hue float64)
+	SetPenShade(shade float64)
+	SetPenSize(size float64)
+	SetRotationStyle(style RotationStyle)
+	SetSize(size float64)
+	SetXpos(x float64)
+	SetXYpos(x, y float64)
+	SetYpos(y float64)
+	Show()
+	ShowVar(name string)
+	Size() float64
+	Stamp()
+	Step__0(step float64)
+	Step__1(step int)
+	Step__2(step float64, animname string)
+	Think(msg interface{}, secs ...float64) // Note: This method is a typo in the original list, corrected to Think
+	Touching(obj interface{}) bool
+	TouchingColor(color Color) bool
+	Turn(val interface{})
+	TurnTo(obj interface{})
+	Visible() bool
+	Xpos() float64
+	Ypos() float64
+}
+
 type SpriteImpl struct {
 	baseObj
 	eventSinks
