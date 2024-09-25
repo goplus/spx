@@ -140,7 +140,7 @@ type Sprite interface {
 	Step__0(step float64)
 	Step__1(step int)
 	Step__2(step float64, animname string)
-	Think(msg interface{}, secs ...float64) // Note: This method is a typo in the original list, corrected to Think
+	Think(msg interface{}, secs ...float64)
 	Touching(obj interface{}) bool
 	TouchingColor(color Color) bool
 	Turn(val interface{})
@@ -412,6 +412,25 @@ func cloneSprite(out reflect.Value, outPtr Spriter, in reflect.Value, v specsp) 
 		outPtr.Main()
 	}
 	return dest
+}
+
+func Gopt_SpriteImpl_Clone__0(sprite Spriter) {
+	Gopt_Sprite_Clone__1(sprite, nil)
+}
+
+func Gopt_SpriteImpl_Clone__1(sprite Spriter, data interface{}) {
+	src := spriteOf(sprite)
+	if debugInstr {
+		log.Println("Clone", src.name)
+	}
+	in := reflect.ValueOf(sprite).Elem()
+	v := reflect.New(in.Type())
+	out, outPtr := v.Elem(), v.Interface().(Spriter)
+	dest := cloneSprite(out, outPtr, in, nil)
+	src.g.addClonedShape(src, dest)
+	if dest.hasOnCloned {
+		dest.doWhenCloned(dest, data)
+	}
 }
 
 func Gopt_Sprite_Clone__0(sprite Spriter) {
