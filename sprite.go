@@ -17,12 +17,10 @@
 package spx
 
 import (
-	"fmt"
 	"image/color"
 	"log"
 	"math"
 	"reflect"
-	"runtime"
 	"sync"
 
 	"github.com/goplus/spx/internal/anim"
