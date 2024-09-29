@@ -17,10 +17,12 @@
 package spx
 
 import (
+	"fmt"
 	"image/color"
 	"log"
 	"math"
 	"reflect"
+	"runtime"
 	"sync"
 
 	"github.com/goplus/spx/internal/anim"
@@ -61,6 +63,47 @@ const (
 	AnimChannelMove  string = "@move"
 )
 
+type Collider struct {
+	sprite *Sprite
+	others map[*Sprite]bool
+}
+
+func (c *Collider) SetTouching(other *Sprite, on bool) {
+	if other == nil || c.sprite == nil {
+		return
+	}
+
+	if c.others == nil {
+		c.others = make(map[*Sprite]bool)
+	}
+
+	_, exist := c.others[other]
+	if on {
+		if !exist {
+			c.others[other] = true
+			c.sprite.fireTouchBegin(other)
+		} else {
+			c.sprite.fireTouched(other)
+		}
+	} else {
+		if exist {
+			delete(c.others, other) // shared container in multiple goroutines, any problem?
+			c.sprite.fireTouchEnd(other)
+		}
+	}
+}
+
+func (c *Collider) Reset() {
+	copy := make(map[*Sprite]bool, len(c.others))
+	for k, v := range c.others {
+		copy[k] = v
+	}
+	for other := range copy {
+		c.SetTouching(other, false)
+		other.collider.SetTouching(c.sprite, false)
+	}
+}
+
 type Sprite struct {
 	baseObj
 	eventSinks
@@ -92,15 +135,19 @@ type Sprite struct {
 	isPenDown bool
 	isDying   bool
 
-	hasOnTurning bool
-	hasOnMoving  bool
-	hasOnCloned  bool
-	hasOnTouched bool
+	hasOnTurning    bool
+	hasOnMoving     bool
+	hasOnCloned     bool
+	hasOnTouchBegin bool
+	hasOnTouched    bool
+	hasOnTouchEnd   bool
 
 	gamer               reflect.Value
 	lastAnim            *anim.Anim
 	isWaitingStopAnim   bool
 	defaultCostumeIndex int
+
+	collider Collider
 }
 
 func (p *Sprite) SetDying() { // dying: visible but can't be touched
@@ -224,7 +271,11 @@ func (p *Sprite) init(
 		}
 		p.animations[key] = ani
 	}
+
+	p.collider.others = make(map[*Sprite]bool)
+	p.collider.sprite = p
 }
+
 func (p *Sprite) awake() {
 	p.playDefaultAnim()
 }
@@ -255,7 +306,12 @@ func (p *Sprite) InitFrom(src *Sprite) {
 	p.hasOnTurning = false
 	p.hasOnMoving = false
 	p.hasOnCloned = false
+	p.hasOnTouchBegin = false
 	p.hasOnTouched = false
+	p.hasOnTouchEnd = false
+
+	p.collider.others = make(map[*Sprite]bool)
+	p.collider.sprite = p
 }
 
 func cloneMap(v map[string]interface{}) map[string]interface{} {
@@ -362,9 +418,33 @@ func (p *Sprite) OnCloned__1(onCloned func()) {
 	})
 }
 
+func (p *Sprite) fireTouchBegin(obj *Sprite) {
+	if p.hasOnTouchBegin {
+		p.doWhenTouchBegin(p, obj)
+	}
+}
+
 func (p *Sprite) fireTouched(obj *Sprite) {
 	if p.hasOnTouched {
 		p.doWhenTouched(p, obj)
+	}
+}
+
+func (p *Sprite) fireTouchEnd(obj *Sprite) {
+	if p.hasOnTouchEnd {
+		p.doWhenTouchEnd(p, obj)
+	}
+}
+
+func (p *Sprite) OnTouchBegin(onTouchBegin func(obj *Sprite)) {
+	p.hasOnTouchBegin = true
+	p.allWhenTouchBegin = &eventSink{
+		prev:  p.allWhenTouchBegin,
+		pthis: p,
+		sink:  onTouchBegin,
+		cond: func(data interface{}) bool {
+			return data == p
+		},
 	}
 }
 
@@ -416,6 +496,18 @@ func (p *Sprite) OnTouched__5(names []string, onTouched func()) {
 	p.OnTouched__4(names, func(*Sprite) {
 		onTouched()
 	})
+}
+
+func (p *Sprite) OnTouchEnd(onTouchEnd func(obj *Sprite)) {
+	p.hasOnTouchEnd = true
+	p.allWhenTouchEnd = &eventSink{
+		prev:  p.allWhenTouchEnd,
+		pthis: p,
+		sink:  onTouchEnd,
+		cond: func(data interface{}) bool {
+			return data == p
+		},
+	}
 }
 
 type MovingInfo struct {
@@ -502,6 +594,7 @@ func (p *Sprite) Destroy() { // destroy sprite, whether prototype or cloned
 		log.Println("Destroy", p.name)
 	}
 
+	p.collider.Reset()
 	p.Hide()
 	p.doDeleteClone()
 	p.g.removeShape(p)
@@ -525,6 +618,8 @@ func (p *Sprite) Hide() {
 	if debugInstr {
 		log.Println("Hide", p.name)
 	}
+
+	p.collider.Reset()
 	p.doStopSay()
 	p.isVisible = false
 }
@@ -1267,7 +1362,6 @@ func (p *Sprite) Touching(obj interface{}) bool {
 	switch v := obj.(type) {
 	case string:
 		if o := p.g.touchingSpriteBy(p, v); o != nil {
-			o.fireTouched(p)
 			return true
 		}
 		return false

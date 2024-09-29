@@ -53,19 +53,22 @@ const (
 	DbgFlagLoad dbgFlags = 1 << iota
 	DbgFlagInstr
 	DbgFlagEvent
-	DbgFlagAll = DbgFlagLoad | DbgFlagInstr | DbgFlagEvent
+	DbgFlagPerf
+	DbgFlagAll = DbgFlagLoad | DbgFlagInstr | DbgFlagEvent | DbgFlagPerf
 )
 
 var (
 	debugInstr bool
 	debugLoad  bool
 	debugEvent bool
+	debugPerf  bool
 )
 
 func SetDebug(flags dbgFlags) {
 	debugLoad = (flags & DbgFlagLoad) != 0
 	debugInstr = (flags & DbgFlagInstr) != 0
 	debugEvent = (flags & DbgFlagEvent) != 0
+	debugPerf = (flags & DbgFlagPerf) != 0
 }
 
 // -------------------------------------------------------------------------------------
@@ -617,11 +620,41 @@ func (p *Game) Update() error {
 	if !p.isLoaded {
 		return nil
 	}
+
+	p.updateColliders()
 	p.input.update()
 	p.updateMousePos()
 	p.sounds.update()
 	p.tickMgr.update()
 	return nil
+}
+
+func (p *Game) updateColliders() {
+	var startTime time.Time
+	if debugPerf {
+		startTime = time.Now()
+	}
+
+	items := p.items
+	n := len(items)
+	for i := 0; i < n; i++ {
+		s1, ok1 := items[i].(*Sprite)
+		if ok1 {
+			flag := s1.isVisible && !s1.isDying
+			for j := i + 1; j < n; j++ {
+				s2, ok2 := items[j].(*Sprite)
+				if ok2 && s1 != s2 {
+					flag2 := flag && s2.isVisible && !s2.isDying && s1.touchingSprite(s2)
+					s1.collider.SetTouching(s2, flag2)
+					s2.collider.SetTouching(s1, flag2)
+				}
+			}
+		}
+	}
+
+	if debugPerf {
+		log.Println("updateColliders shapes:", n, " cost:", time.Now().Sub(startTime))
+	}
 }
 
 // startTick creates tickHandler to handle `onTick` event.
