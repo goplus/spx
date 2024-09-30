@@ -79,7 +79,7 @@ func (c *Collider) SetTouching(other *Sprite, on bool) {
 	if on {
 		if !exist {
 			c.others[other] = true
-			c.sprite.fireTouchBegin(other)
+			c.sprite.fireTouchStart(other)
 		} else {
 			c.sprite.fireTouched(other)
 		}
@@ -136,7 +136,7 @@ type Sprite struct {
 	hasOnTurning    bool
 	hasOnMoving     bool
 	hasOnCloned     bool
-	hasOnTouchBegin bool
+	hasOnTouchStart bool
 	hasOnTouched    bool
 	hasOnTouchEnd   bool
 
@@ -304,7 +304,7 @@ func (p *Sprite) InitFrom(src *Sprite) {
 	p.hasOnTurning = false
 	p.hasOnMoving = false
 	p.hasOnCloned = false
-	p.hasOnTouchBegin = false
+	p.hasOnTouchStart = false
 	p.hasOnTouched = false
 	p.hasOnTouchEnd = false
 
@@ -416,9 +416,9 @@ func (p *Sprite) OnCloned__1(onCloned func()) {
 	})
 }
 
-func (p *Sprite) fireTouchBegin(obj *Sprite) {
-	if p.hasOnTouchBegin {
-		p.doWhenTouchBegin(p, obj)
+func (p *Sprite) fireTouchStart(obj *Sprite) {
+	if p.hasOnTouchStart {
+		p.doWhenTouchStart(p, obj)
 	}
 }
 
@@ -434,12 +434,12 @@ func (p *Sprite) fireTouchEnd(obj *Sprite) {
 	}
 }
 
-func (p *Sprite) OnTouchBegin(onTouchBegin func(obj *Sprite)) {
-	p.hasOnTouchBegin = true
-	p.allWhenTouchBegin = &eventSink{
-		prev:  p.allWhenTouchBegin,
+func (p *Sprite) OnTouchStart(onTouchStart func(obj *Sprite)) {
+	p.hasOnTouchStart = true
+	p.allWhenTouchStart = &eventSink{
+		prev:  p.allWhenTouchStart,
 		pthis: p,
-		sink:  onTouchBegin,
+		sink:  onTouchStart,
 		cond: func(data interface{}) bool {
 			return data == p
 		},
