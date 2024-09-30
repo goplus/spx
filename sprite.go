@@ -85,7 +85,7 @@ func (c *Collider) SetTouching(other *Sprite, on bool) {
 		}
 	} else {
 		if exist {
-			delete(c.others, other) // shared container in multiple goroutines, any problem?
+			delete(c.others, other)
 			c.sprite.fireTouchEnd(other)
 		}
 	}
