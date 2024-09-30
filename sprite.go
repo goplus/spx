@@ -478,24 +478,6 @@ func (p *Sprite) OnTouched__3(name string, onTouched func()) {
 	})
 }
 
-func (p *Sprite) OnTouched__4(names []string, onTouched func(obj *Sprite)) {
-	p.OnTouched__0(func(obj *Sprite) {
-		name := obj.name
-		for _, v := range names {
-			if v == name {
-				onTouched(obj)
-				return
-			}
-		}
-	})
-}
-
-func (p *Sprite) OnTouched__5(names []string, onTouched func()) {
-	p.OnTouched__4(names, func(*Sprite) {
-		onTouched()
-	})
-}
-
 func (p *Sprite) OnTouchEnd(onTouchEnd func(obj *Sprite)) {
 	p.hasOnTouchEnd = true
 	p.allWhenTouchEnd = &eventSink{
