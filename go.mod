@@ -5,28 +5,28 @@ go 1.18
 require (
 	github.com/ajstarks/svgo v0.0.0-20210927141636-6d70534b1098
 	github.com/goplus/canvas v0.1.0
-	github.com/hajimehoshi/ebiten/v2 v2.7.9
+	github.com/hajimehoshi/ebiten/v2 v2.8.1
 	github.com/pkg/errors v0.9.1
 	github.com/qiniu/audio v0.2.1
 	github.com/qiniu/x v1.13.10
 	github.com/srwiley/oksvg v0.0.0-20210519022825-9fc0c575d5fe
 	github.com/srwiley/rasterx v0.0.0-20210519020934-456a8d69b780
-	golang.org/x/image v0.18.0
+	golang.org/x/image v0.20.0
 	golang.org/x/mobile v0.0.0-20220518205345-8578da9835fd
 )
 
 require (
-	github.com/ebitengine/gomobile v0.0.0-20240518074828-e86332849895 // indirect
+	github.com/ebitengine/gomobile v0.0.0-20240911145611-4856209ac325 // indirect
 	github.com/ebitengine/hideconsole v1.0.0 // indirect
-	github.com/ebitengine/oto/v3 v3.2.0 // indirect
-	github.com/ebitengine/purego v0.7.0 // indirect
+	github.com/ebitengine/oto/v3 v3.3.1 // indirect
+	github.com/ebitengine/purego v0.8.0 // indirect
 	github.com/esimov/stackblur-go v1.0.1-0.20190121110005-00e727e3c7a9 // indirect
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
 	github.com/hajimehoshi/go-mp3 v0.3.4 // indirect
 	github.com/jezek/xgb v1.1.1 // indirect
-	golang.org/x/sync v0.7.0 // indirect
-	golang.org/x/sys v0.20.0 // indirect
-	golang.org/x/text v0.16.0 // indirect
+	golang.org/x/sync v0.8.0 // indirect
+	golang.org/x/sys v0.25.0 // indirect
+	golang.org/x/text v0.18.0 // indirect
 )
 
 replace (
