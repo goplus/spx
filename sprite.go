@@ -434,7 +434,7 @@ func (p *Sprite) fireTouchEnd(obj *Sprite) {
 	}
 }
 
-func (p *Sprite) OnTouchStart(onTouchStart func(obj *Sprite)) {
+func (p *Sprite) OnTouchStart__0(onTouchStart func(obj *Sprite)) {
 	p.hasOnTouchStart = true
 	p.allWhenTouchStart = &eventSink{
 		prev:  p.allWhenTouchStart,
@@ -446,48 +446,24 @@ func (p *Sprite) OnTouchStart(onTouchStart func(obj *Sprite)) {
 	}
 }
 
-func (p *Sprite) OnTouched__0(onTouched func(obj *Sprite)) {
-	p.hasOnTouched = true
-	p.allWhenTouched = &eventSink{
-		prev:  p.allWhenTouched,
-		pthis: p,
-		sink:  onTouched,
-		cond: func(data interface{}) bool {
-			return data == p
-		},
-	}
-}
-
-func (p *Sprite) OnTouched__1(onTouched func()) {
-	p.OnTouched__0(func(*Sprite) {
-		onTouched()
+func (p *Sprite) OnTouchStart__1(onTouchStart func()) {
+	p.OnTouchStart__0(func(*Sprite) {
+		onTouchStart()
 	})
 }
 
-func (p *Sprite) OnTouched__2(name string, onTouched func(obj *Sprite)) {
-	p.OnTouched__0(func(obj *Sprite) {
+func (p *Sprite) OnTouchStart__2(name string, onTouchStart func(*Sprite)) {
+	p.OnTouchStart__0(func(obj *Sprite) {
 		if obj.name == name {
-			onTouched(obj)
+			onTouchStart(obj)
 		}
 	})
 }
 
-func (p *Sprite) OnTouched__3(name string, onTouched func()) {
-	p.OnTouched__2(name, func(*Sprite) {
-		onTouched()
+func (p *Sprite) OnTouchStart__3(name string, onTouchStart func()) {
+	p.OnTouchStart__2(name, func(*Sprite) {
+		onTouchStart()
 	})
-}
-
-func (p *Sprite) OnTouchEnd(onTouchEnd func(obj *Sprite)) {
-	p.hasOnTouchEnd = true
-	p.allWhenTouchEnd = &eventSink{
-		prev:  p.allWhenTouchEnd,
-		pthis: p,
-		sink:  onTouchEnd,
-		cond: func(data interface{}) bool {
-			return data == p
-		},
-	}
 }
 
 type MovingInfo struct {
