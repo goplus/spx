@@ -94,7 +94,9 @@ type eventSinkMgr struct {
 	allWhenIReceive        *eventSink
 	allWhenBackdropChanged *eventSink
 	allWhenCloned          *eventSink
-	allWhenTouched         *eventSink
+	allWhenTouchStart      *eventSink
+	allWhenTouching        *eventSink
+	allWhenTouchEnd        *eventSink
 	allWhenClick           *eventSink
 	allWhenMoving          *eventSink
 	allWhenTurning         *eventSink
@@ -107,7 +109,9 @@ func (p *eventSinkMgr) reset() {
 	p.allWhenIReceive = nil
 	p.allWhenBackdropChanged = nil
 	p.allWhenCloned = nil
-	p.allWhenTouched = nil
+	p.allWhenTouchStart = nil
+	p.allWhenTouching = nil
+	p.allWhenTouchEnd = nil
 	p.allWhenClick = nil
 	p.allWhenMoving = nil
 	p.allWhenTurning = nil
@@ -120,7 +124,9 @@ func (p *eventSinkMgr) doDeleteClone(this interface{}) {
 	p.allWhenIReceive = p.allWhenIReceive.doDeleteClone(this)
 	p.allWhenBackdropChanged = p.allWhenBackdropChanged.doDeleteClone(this)
 	p.allWhenCloned = p.allWhenCloned.doDeleteClone(this)
-	p.allWhenTouched = p.allWhenTouched.doDeleteClone(this)
+	p.allWhenTouchStart = p.allWhenTouchStart.doDeleteClone(this)
+	p.allWhenTouching = p.allWhenTouching.doDeleteClone(this)
+	p.allWhenTouchEnd = p.allWhenTouchEnd.doDeleteClone(this)
 	p.allWhenClick = p.allWhenClick.doDeleteClone(this)
 	p.allWhenMoving = p.allWhenMoving.doDeleteClone(this)
 	p.allWhenTurning = p.allWhenTurning.doDeleteClone(this)
@@ -153,10 +159,28 @@ func (p *eventSinkMgr) doWhenClick(this threadObj) {
 	})
 }
 
-func (p *eventSinkMgr) doWhenTouched(this threadObj, obj *Sprite) {
-	p.allWhenTouched.asyncCall(false, this, func(ev *eventSink) {
+func (p *eventSinkMgr) doWhenTouchStart(this threadObj, obj *Sprite) {
+	p.allWhenTouchStart.asyncCall(false, this, func(ev *eventSink) {
 		if debugEvent {
-			log.Println("==> onTouched", nameOf(this), obj.name)
+			log.Println("===> onTouchStart", nameOf(this), obj.name)
+		}
+		ev.sink.(func(*Sprite))(obj)
+	})
+}
+
+func (p *eventSinkMgr) doWhenTouching(this threadObj, obj *Sprite) {
+	p.allWhenTouching.asyncCall(false, this, func(ev *eventSink) {
+		if debugEvent {
+			log.Println("==> onTouching", nameOf(this), obj.name)
+		}
+		ev.sink.(func(*Sprite))(obj)
+	})
+}
+
+func (p *eventSinkMgr) doWhenTouchEnd(this threadObj, obj *Sprite) {
+	p.allWhenTouchEnd.asyncCall(false, this, func(ev *eventSink) {
+		if debugEvent {
+			log.Println("===> onTouchEnd", nameOf(this), obj.name)
 		}
 		ev.sink.(func(*Sprite))(obj)
 	})
