@@ -95,7 +95,7 @@ type eventSinkMgr struct {
 	allWhenBackdropChanged *eventSink
 	allWhenCloned          *eventSink
 	allWhenTouchStart      *eventSink
-	allWhenTouched         *eventSink
+	allWhenTouching        *eventSink
 	allWhenTouchEnd        *eventSink
 	allWhenClick           *eventSink
 	allWhenMoving          *eventSink
@@ -110,7 +110,7 @@ func (p *eventSinkMgr) reset() {
 	p.allWhenBackdropChanged = nil
 	p.allWhenCloned = nil
 	p.allWhenTouchStart = nil
-	p.allWhenTouched = nil
+	p.allWhenTouching = nil
 	p.allWhenTouchEnd = nil
 	p.allWhenClick = nil
 	p.allWhenMoving = nil
@@ -125,7 +125,7 @@ func (p *eventSinkMgr) doDeleteClone(this interface{}) {
 	p.allWhenBackdropChanged = p.allWhenBackdropChanged.doDeleteClone(this)
 	p.allWhenCloned = p.allWhenCloned.doDeleteClone(this)
 	p.allWhenTouchStart = p.allWhenTouchStart.doDeleteClone(this)
-	p.allWhenTouched = p.allWhenTouched.doDeleteClone(this)
+	p.allWhenTouching = p.allWhenTouching.doDeleteClone(this)
 	p.allWhenTouchEnd = p.allWhenTouchEnd.doDeleteClone(this)
 	p.allWhenClick = p.allWhenClick.doDeleteClone(this)
 	p.allWhenMoving = p.allWhenMoving.doDeleteClone(this)
@@ -168,10 +168,10 @@ func (p *eventSinkMgr) doWhenTouchStart(this threadObj, obj *Sprite) {
 	})
 }
 
-func (p *eventSinkMgr) doWhenTouched(this threadObj, obj *Sprite) {
-	p.allWhenTouched.asyncCall(false, this, func(ev *eventSink) {
+func (p *eventSinkMgr) doWhenTouching(this threadObj, obj *Sprite) {
+	p.allWhenTouching.asyncCall(false, this, func(ev *eventSink) {
 		if debugEvent {
-			log.Println("==> onTouched", nameOf(this), obj.name)
+			log.Println("==> onTouching", nameOf(this), obj.name)
 		}
 		ev.sink.(func(*Sprite))(obj)
 	})

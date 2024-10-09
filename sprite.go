@@ -85,7 +85,7 @@ func (c *Collider) SetTouching(other *Sprite, on bool) {
 			c.others[other] = true
 			c.sprite.fireTouchStart(other)
 		} else {
-			c.sprite.fireTouched(other)
+			c.sprite.fireTouching(other)
 		}
 	} else {
 		if exist {
@@ -141,7 +141,7 @@ type Sprite struct {
 	hasOnMoving     bool
 	hasOnCloned     bool
 	hasOnTouchStart bool
-	hasOnTouched    bool
+	hasOnTouching   bool
 	hasOnTouchEnd   bool
 
 	gamer               reflect.Value
@@ -309,7 +309,7 @@ func (p *Sprite) InitFrom(src *Sprite) {
 	p.hasOnMoving = false
 	p.hasOnCloned = false
 	p.hasOnTouchStart = false
-	p.hasOnTouched = false
+	p.hasOnTouching = false
 	p.hasOnTouchEnd = false
 
 	p.collider.others = make(map[*Sprite]bool)
@@ -426,9 +426,9 @@ func (p *Sprite) fireTouchStart(obj *Sprite) {
 	}
 }
 
-func (p *Sprite) fireTouched(obj *Sprite) {
-	if p.hasOnTouched {
-		p.doWhenTouched(p, obj)
+func (p *Sprite) fireTouching(obj *Sprite) {
+	if p.hasOnTouching {
+		p.doWhenTouching(p, obj)
 	}
 }
 
