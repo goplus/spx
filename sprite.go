@@ -62,11 +62,15 @@ const (
 )
 
 type Collider struct {
-	sprite *Sprite
-	others map[*Sprite]bool
+	sprite  *Sprite
+	others  map[*Sprite]bool
+	othersM sync.Mutex
 }
 
 func (c *Collider) SetTouching(other *Sprite, on bool) {
+	c.othersM.Lock()
+	defer c.othersM.Unlock()
+
 	if other == nil || c.sprite == nil {
 		return
 	}
