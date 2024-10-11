@@ -807,7 +807,18 @@ func (p *Sprite) Animate(name string) {
 		log.Println("==> Animation", name)
 	}
 	if ani, ok := p.animations[name]; ok {
-		p.goAnimate(name, ani)
+		p.goAnimateInternal(name, ani, true)
+	} else {
+		log.Println("Animation not found:", name)
+	}
+}
+
+func (p *Sprite) StartAnimate(name string) {
+	if debugInstr {
+		log.Println("==> StartAnimation", name)
+	}
+	if ani, ok := p.animations[name]; ok {
+		p.goAnimateInternal(name, ani, false)
 	} else {
 		log.Println("Animation not found:", name)
 	}

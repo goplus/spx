@@ -74,7 +74,6 @@ const (
 
 type PlayOptions struct {
 	Action PlayAction
-	Wait   bool
 	Loop   bool
 }
 
@@ -155,18 +154,18 @@ func (p *soundMgr) stopAll() {
 	}
 }
 
-func (p *soundMgr) playAction(media Sound, opts *PlayOptions) (err error) {
+func (p *soundMgr) playAction(sound Sound, opts *PlayOptions, wait bool) (err error) {
 	switch opts.Action {
 	case PlayRewind:
-		err = p.play(media, opts.Wait, opts.Loop)
+		err = p.play(sound, wait, opts.Loop)
 	case PlayContinue:
-		err = p.playContinue(media, opts.Wait, opts.Loop)
+		err = p.playContinue(sound, wait, opts.Loop)
 	case PlayStop:
-		p.stop(media)
+		p.stop(sound)
 	case PlayResume:
-		p.resume(media)
+		p.resume(sound)
 	case PlayPause:
-		p.pause(media)
+		p.pause(sound)
 	}
 	return
 }
@@ -188,8 +187,8 @@ func (p *soundMgr) playContinue(media Sound, wait, loop bool) (err error) {
 	return
 }
 
-func (p *soundMgr) play(media Sound, wait, loop bool) (err error) {
-	source, err := p.g.fs.Open(media.Path)
+func (p *soundMgr) play(sound Sound, wait, loop bool) (err error) {
+	source, err := p.g.fs.Open(sound.Path)
 	if err != nil {
 		panic(err)
 	}
@@ -204,7 +203,7 @@ func (p *soundMgr) play(media Sound, wait, loop bool) (err error) {
 	d = convert.ToStereo16(d)
 	d = convert.Resample(d, audioContext.SampleRate())
 
-	sp := &soundPlayer{media: media, loop: loop}
+	sp := &soundPlayer{media: sound, loop: loop}
 	sp.Player, err = audioContext.NewPlayer(&readCloser{d, source})
 	if err != nil {
 		source.Close()

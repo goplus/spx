@@ -9,7 +9,7 @@ onStart => {
 		step 5
 		if touching("Shark") {
 			score++
-			play chomp, true
+			play chomp
 			step -100
 		}
 	}
