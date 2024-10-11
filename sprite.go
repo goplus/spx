@@ -642,7 +642,7 @@ func (p *Sprite) goAnimateInternal(name string, ani *aniConfig, isBlocking bool)
 	}
 
 	if ani.OnStart != nil && ani.OnStart.Play != "" {
-		p.g.Play__3(ani.OnStart.Play)
+		p.g.StartPlay__3(ani.OnStart.Play)
 	}
 
 	//anim frame
