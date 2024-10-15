@@ -61,6 +61,51 @@ const (
 	AnimChannelMove  string = "@move"
 )
 
+type Collider struct {
+	sprite  *Sprite
+	others  map[*Sprite]bool
+	othersM sync.Mutex
+}
+
+func (c *Collider) SetTouching(other *Sprite, on bool) {
+	c.othersM.Lock()
+	defer c.othersM.Unlock()
+
+	if other == nil || c.sprite == nil {
+		return
+	}
+
+	if c.others == nil {
+		c.others = make(map[*Sprite]bool)
+	}
+
+	_, exist := c.others[other]
+	if on {
+		if !exist {
+			c.others[other] = true
+			c.sprite.fireTouchStart(other)
+		} else {
+			c.sprite.fireTouching(other)
+		}
+	} else {
+		if exist {
+			delete(c.others, other)
+			c.sprite.fireTouchEnd(other)
+		}
+	}
+}
+
+func (c *Collider) Reset() {
+	copy := make(map[*Sprite]bool, len(c.others))
+	for k, v := range c.others {
+		copy[k] = v
+	}
+	for other := range copy {
+		c.SetTouching(other, false)
+		other.collider.SetTouching(c.sprite, false)
+	}
+}
+
 type Sprite struct {
 	baseObj
 	eventSinks
@@ -92,15 +137,19 @@ type Sprite struct {
 	isPenDown bool
 	isDying   bool
 
-	hasOnTurning bool
-	hasOnMoving  bool
-	hasOnCloned  bool
-	hasOnTouched bool
+	hasOnTurning    bool
+	hasOnMoving     bool
+	hasOnCloned     bool
+	hasOnTouchStart bool
+	hasOnTouching   bool
+	hasOnTouchEnd   bool
 
 	gamer               reflect.Value
 	lastAnim            *anim.Anim
 	isWaitingStopAnim   bool
 	defaultCostumeIndex int
+
+	collider Collider
 }
 
 func (p *Sprite) SetDying() { // dying: visible but can't be touched
@@ -224,7 +273,11 @@ func (p *Sprite) init(
 		}
 		p.animations[key] = ani
 	}
+
+	p.collider.others = make(map[*Sprite]bool)
+	p.collider.sprite = p
 }
+
 func (p *Sprite) awake() {
 	p.playDefaultAnim()
 }
@@ -255,7 +308,12 @@ func (p *Sprite) InitFrom(src *Sprite) {
 	p.hasOnTurning = false
 	p.hasOnMoving = false
 	p.hasOnCloned = false
-	p.hasOnTouched = false
+	p.hasOnTouchStart = false
+	p.hasOnTouching = false
+	p.hasOnTouchEnd = false
+
+	p.collider.others = make(map[*Sprite]bool)
+	p.collider.sprite = p
 }
 
 func cloneMap(v map[string]interface{}) map[string]interface{} {
@@ -362,59 +420,53 @@ func (p *Sprite) OnCloned__1(onCloned func()) {
 	})
 }
 
-func (p *Sprite) fireTouched(obj *Sprite) {
-	if p.hasOnTouched {
-		p.doWhenTouched(p, obj)
+func (p *Sprite) fireTouchStart(obj *Sprite) {
+	if p.hasOnTouchStart {
+		p.doWhenTouchStart(p, obj)
 	}
 }
 
-func (p *Sprite) OnTouched__0(onTouched func(obj *Sprite)) {
-	p.hasOnTouched = true
-	p.allWhenTouched = &eventSink{
-		prev:  p.allWhenTouched,
+func (p *Sprite) fireTouching(obj *Sprite) {
+	if p.hasOnTouching {
+		p.doWhenTouching(p, obj)
+	}
+}
+
+func (p *Sprite) fireTouchEnd(obj *Sprite) {
+	if p.hasOnTouchEnd {
+		p.doWhenTouchEnd(p, obj)
+	}
+}
+
+func (p *Sprite) OnTouchStart__0(onTouchStart func(obj *Sprite)) {
+	p.hasOnTouchStart = true
+	p.allWhenTouchStart = &eventSink{
+		prev:  p.allWhenTouchStart,
 		pthis: p,
-		sink:  onTouched,
+		sink:  onTouchStart,
 		cond: func(data interface{}) bool {
 			return data == p
 		},
 	}
 }
 
-func (p *Sprite) OnTouched__1(onTouched func()) {
-	p.OnTouched__0(func(*Sprite) {
-		onTouched()
+func (p *Sprite) OnTouchStart__1(onTouchStart func()) {
+	p.OnTouchStart__0(func(*Sprite) {
+		onTouchStart()
 	})
 }
 
-func (p *Sprite) OnTouched__2(name string, onTouched func(obj *Sprite)) {
-	p.OnTouched__0(func(obj *Sprite) {
+func (p *Sprite) OnTouchStart__2(name string, onTouchStart func(*Sprite)) {
+	p.OnTouchStart__0(func(obj *Sprite) {
 		if obj.name == name {
-			onTouched(obj)
+			onTouchStart(obj)
 		}
 	})
 }
 
-func (p *Sprite) OnTouched__3(name string, onTouched func()) {
-	p.OnTouched__2(name, func(*Sprite) {
-		onTouched()
-	})
-}
-
-func (p *Sprite) OnTouched__4(names []string, onTouched func(obj *Sprite)) {
-	p.OnTouched__0(func(obj *Sprite) {
-		name := obj.name
-		for _, v := range names {
-			if v == name {
-				onTouched(obj)
-				return
-			}
-		}
-	})
-}
-
-func (p *Sprite) OnTouched__5(names []string, onTouched func()) {
-	p.OnTouched__4(names, func(*Sprite) {
-		onTouched()
+func (p *Sprite) OnTouchStart__3(name string, onTouchStart func()) {
+	p.OnTouchStart__2(name, func(*Sprite) {
+		onTouchStart()
 	})
 }
 
@@ -502,6 +554,7 @@ func (p *Sprite) Destroy() { // destroy sprite, whether prototype or cloned
 		log.Println("Destroy", p.name)
 	}
 
+	p.collider.Reset()
 	p.Hide()
 	p.doDeleteClone()
 	p.g.removeShape(p)
@@ -525,6 +578,8 @@ func (p *Sprite) Hide() {
 	if debugInstr {
 		log.Println("Hide", p.name)
 	}
+
+	p.collider.Reset()
 	p.doStopSay()
 	p.isVisible = false
 }
@@ -1267,7 +1322,6 @@ func (p *Sprite) Touching(obj interface{}) bool {
 	switch v := obj.(type) {
 	case string:
 		if o := p.g.touchingSpriteBy(p, v); o != nil {
-			o.fireTouched(p)
 			return true
 		}
 		return false
