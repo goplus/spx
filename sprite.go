@@ -787,7 +787,7 @@ func (p *SpriteImpl) goAnimateInternal(name string, ani *aniConfig, isBlocking b
 	}
 
 	if ani.OnStart != nil && ani.OnStart.Play != "" {
-		p.g.Play__3(ani.OnStart.Play)
+		p.g.StartPlay__3(ani.OnStart.Play)
 	}
 
 	//anim frame
@@ -952,7 +952,18 @@ func (p *SpriteImpl) Animate(name string) {
 		log.Println("==> Animation", name)
 	}
 	if ani, ok := p.animations[name]; ok {
-		p.goAnimate(name, ani)
+		p.goAnimateInternal(name, ani, true)
+	} else {
+		log.Println("Animation not found:", name)
+	}
+}
+
+func (p *Sprite) StartAnimate(name string) {
+	if debugInstr {
+		log.Println("==> StartAnimation", name)
+	}
+	if ani, ok := p.animations[name]; ok {
+		p.goAnimateInternal(name, ani, false)
 	} else {
 		log.Println("Animation not found:", name)
 	}
