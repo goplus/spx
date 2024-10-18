@@ -159,30 +159,30 @@ func (p *eventSinkMgr) doWhenClick(this threadObj) {
 	})
 }
 
-func (p *eventSinkMgr) doWhenTouchStart(this threadObj, obj *Sprite) {
+func (p *eventSinkMgr) doWhenTouchStart(this threadObj, obj *SpriteImpl) {
 	p.allWhenTouchStart.asyncCall(false, this, func(ev *eventSink) {
 		if debugEvent {
 			log.Println("===> onTouchStart", nameOf(this), obj.name)
 		}
-		ev.sink.(func(*Sprite))(obj)
+		ev.sink.(func(Sprite))(obj.sprite)
 	})
 }
 
-func (p *eventSinkMgr) doWhenTouching(this threadObj, obj *Sprite) {
+func (p *eventSinkMgr) doWhenTouching(this threadObj, obj *SpriteImpl) {
 	p.allWhenTouching.asyncCall(false, this, func(ev *eventSink) {
 		if debugEvent {
 			log.Println("==> onTouching", nameOf(this), obj.name)
 		}
-		ev.sink.(func(*Sprite))(obj)
+		ev.sink.(func(Sprite))(obj.sprite)
 	})
 }
 
-func (p *eventSinkMgr) doWhenTouchEnd(this threadObj, obj *Sprite) {
+func (p *eventSinkMgr) doWhenTouchEnd(this threadObj, obj *SpriteImpl) {
 	p.allWhenTouchEnd.asyncCall(false, this, func(ev *eventSink) {
 		if debugEvent {
 			log.Println("===> onTouchEnd", nameOf(this), obj.name)
 		}
-		ev.sink.(func(*Sprite))(obj)
+		ev.sink.(func(Sprite))(obj.sprite)
 	})
 }
 
@@ -220,6 +220,19 @@ func (p *eventSinkMgr) doWhenBackdropChanged(name string, wait bool) {
 }
 
 // -------------------------------------------------------------------------------------
+type IEventSinks interface {
+	OnAnyKey(onKey func(key Key))
+	OnBackdrop__0(onBackdrop func(name string))
+	OnBackdrop__1(name string, onBackdrop func())
+	OnClick(onClick func())
+	OnKey__0(key Key, onKey func())
+	OnKey__1(keys []Key, onKey func(Key))
+	OnKey__2(keys []Key, onKey func())
+	OnMsg__0(onMsg func(msg string, data interface{}))
+	OnMsg__1(msg string, onMsg func())
+	OnStart(onStart func())
+	Stop(kind StopKind)
+}
 
 type eventSinks struct {
 	*eventSinkMgr
@@ -227,7 +240,7 @@ type eventSinks struct {
 }
 
 func nameOf(this interface{}) string {
-	if spr, ok := this.(*Sprite); ok {
+	if spr, ok := this.(*SpriteImpl); ok {
 		return spr.name
 	}
 	if _, ok := this.(*Game); ok {
@@ -423,7 +436,7 @@ func isGame(obj threadObj) bool {
 }
 
 func isSprite(obj threadObj) bool {
-	_, ok := obj.(*Sprite)
+	_, ok := obj.(*SpriteImpl)
 	return ok
 }
 
