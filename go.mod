@@ -2,8 +2,6 @@ module github.com/goplus/spx
 
 go 1.22.3
 
-toolchain go1.23.1
-
 require godot-ext/gdspx v0.0.0
 
 replace godot-ext/gdspx => github.com/realdream-ai/gdspx v0.0.0-20241021082413-21077ba5d509

@@ -1,6 +1,6 @@
 module github.com/goplus/spx/cmd/spx
 
-go 1.23.1
+go 1.22.3
 
 require (
 	github.com/otiai10/copy v1.14.0
