@@ -2,6 +2,7 @@ package math32
 
 import (
 	"fmt"
+	"godot-ext/gdspx/pkg/engine"
 	"math"
 )
 
@@ -12,6 +13,10 @@ type Vector2 struct {
 
 func NewVector2(x, y float64) *Vector2 {
 	return &Vector2{x, y}
+}
+
+func (p Vector2) ToVec2() engine.Vec2 {
+	return engine.Vec2{X: float32(p.X), Y: float32(p.Y)}
 }
 
 func NewVector2Zero() *Vector2 {

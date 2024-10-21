@@ -22,6 +22,7 @@ import (
 	"syscall"
 
 	spxfs "github.com/goplus/spx/fs"
+	"github.com/goplus/spx/internal/engine"
 	"github.com/goplus/spx/internal/math32"
 )
 
@@ -34,6 +35,12 @@ func resourceDir(resource interface{}) (fs spxfs.Dir, err error) {
 }
 
 func loadJson(ret interface{}, fs spxfs.Dir, file string) (err error) {
+	if _, ok := fs.(spxfs.GdDir); ok {
+		filePath := engine.ToAssetPath(file)
+		value := engine.SyncReadAllText(filePath)
+		json.Unmarshal([]byte(value), ret)
+		return
+	}
 	f, err := fs.Open(file)
 	if err != nil {
 		return
@@ -106,12 +113,14 @@ type projConfig struct {
 	Map           mapConfig         `json:"map"`
 	Camera        *cameraConfig     `json:"camera"`
 	Run           *Config           `json:"run"`
+	Debug         bool              `json:"debug"`
 
 	// deprecated properties
 	Scenes              []*backdropConfig `json:"scenes"`              //this property is deprecated, use Backdrops instead
 	Costumes            []*backdropConfig `json:"costumes"`            //this property is deprecated, use Backdrops instead
 	CurrentCostumeIndex *int              `json:"currentCostumeIndex"` //this property is deprecated, use BackdropIndex instead
 	SceneIndex          int               `json:"sceneIndex"`          //this property is deprecated, use BackdropIndex instead
+
 }
 
 func (p *projConfig) getBackdrops() []*backdropConfig {
@@ -245,6 +254,18 @@ type spriteConfig struct {
 	Pivot               math32.Vector2        `json:"pivot"`
 	DefaultAnimation    string                `json:"defaultAnimation"`
 	AnimBindings        map[string]string     `json:"animBindings"`
+	CollisionMask       int64                 `json:"collisionMask"`
+	CollisionLayer      int64                 `json:"collisionLayer"`
+	TriggerMask         int64                 `json:"triggerMask"`
+	TriggerLayer        int64                 `json:"triggerLayer"`
+	ColliderType        string                `json:"colliderType"`
+	ColliderCenter      math32.Vector2        `json:"colliderCenter"`
+	ColliderSize        math32.Vector2        `json:"colliderSize"`
+	ColliderRadius      float64               `json:"colliderRadius"`
+	TriggerType         string                `json:"triggerType"`
+	TriggerCenter       math32.Vector2        `json:"triggerCenter"`
+	TriggerSize         math32.Vector2        `json:"triggerSize"`
+	TriggerRadius       float64               `json:"triggerRadius"`
 }
 
 func (p *spriteConfig) getCostumeIndex() int {

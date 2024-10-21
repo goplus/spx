@@ -1,0 +1,18 @@
+[gd_resource type="Theme" load_steps=3 format=3 uid="uid://bugg7h7qx37im"]
+
+[ext_resource type="Texture2D" uid="uid://bcgss6q0fbi5" path="res://engine/textures/say/frame_say.png" id="1_7iee4"]
+
+[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_7y0yi"]
+texture = ExtResource("1_7iee4")
+texture_margin_left = 6.0
+texture_margin_top = 6.0
+texture_margin_right = 6.0
+texture_margin_bottom = 6.0
+expand_margin_left = 2.0
+expand_margin_top = 2.0
+expand_margin_right = 2.0
+expand_margin_bottom = 2.0
+
+[resource]
+Label/colors/font_color = Color(0.0196078, 0.027451, 0.0235294, 1)
+PanelContainer/styles/panel = SubResource("StyleBoxTexture_7y0yi")

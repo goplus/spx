@@ -1,49 +1,9 @@
 package math32
 
 import (
-	"image"
 	"log"
 	"math"
-
-	"github.com/hajimehoshi/ebiten/v2"
 )
-
-func ApplyGeoForVector2(p *Vector2, op *ebiten.GeoM) *Vector2 {
-	x, y := op.Apply(float64(p.X), float64(p.Y))
-	return NewVector2(x, y)
-}
-
-func ApplyGeoForRotatedRect(rect image.Rectangle, op *ebiten.GeoM) *RotatedRect {
-
-	v1 := &Vector2{
-		X: float64(rect.Min.X),
-		Y: float64(rect.Min.Y),
-	}
-
-	v2 := &Vector2{
-		X: float64(rect.Min.X),
-		Y: float64(rect.Max.Y),
-	}
-
-	v3 := &Vector2{
-		X: float64(rect.Max.X),
-		Y: float64(rect.Max.Y),
-	}
-
-	v4 := &Vector2{
-		X: float64(rect.Max.X),
-		Y: float64(rect.Min.Y),
-	}
-
-	varr := make([]*Vector2, 0)
-	varr = append(varr, ApplyGeoForVector2(v1, op))
-	varr = append(varr, ApplyGeoForVector2(v2, op))
-	varr = append(varr, ApplyGeoForVector2(v3, op))
-	varr = append(varr, ApplyGeoForVector2(v4, op))
-
-	rRect := NewRotatedRect3(varr[0], varr[1], varr[2])
-	return rRect
-}
 
 func Clamp(curr, min, max float64) float64 {
 	curr = math.Max(curr, min)

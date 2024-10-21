@@ -17,7 +17,6 @@
 package spx
 
 import (
-	"image"
 	"math"
 	"path"
 	"strconv"
@@ -25,10 +24,10 @@ import (
 	_ "image/jpeg" // for image decode
 	_ "image/png"  // for image decode
 
-	"github.com/pkg/errors"
+	gdspx "godot-ext/gdspx/pkg/engine"
 
-	spxfs "github.com/goplus/spx/fs"
-	"github.com/goplus/spx/internal/gdi"
+	"github.com/goplus/spx/internal/engine"
+	"github.com/goplus/spx/internal/math32"
 )
 
 func toRadian(dir float64) float64 {
@@ -53,161 +52,80 @@ const (
 
 // -------------------------------------------------------------------------------------
 
-type imagePoint struct {
-	x, y float64
-}
-
-type imageLoader interface {
-	load(fs spxfs.Dir, pt *imagePoint) (gdi.Image, error)
-}
-
-// -------------------------------------------------------------------------------------
-
-type imageLoaderByPath string
-
-func (path imageLoaderByPath) load(fs spxfs.Dir, pt *imagePoint) (ret gdi.Image, err error) {
-	f, err := fs.Open(string(path))
-	if err != nil {
-		err = errors.Wrapf(err, "imageLoader: open file `%s` failed", path)
-		return
-	}
-	defer f.Close()
-
-	img, _, err := image.Decode(f)
-	if err != nil {
-		err = errors.Wrapf(err, "imageLoader: file `%s` is not an image", path)
-		return
-	}
-	return gdi.NewImageFrom(img), nil
-}
-
-// -------------------------------------------------------------------------------------
-
-type delayloadImage struct {
-	cache  gdi.Image
-	pt     imagePoint
-	loader imageLoader
-}
-
-func (p *delayloadImage) ensure(fs spxfs.Dir) {
-	if !p.cache.IsValid() {
-		var err error
-		if p.cache, err = p.loader.load(fs, &p.pt); err != nil {
-			panic(err)
-		}
-	}
-}
-
 type costumeSetImage struct {
-	cache  gdi.Image
-	loader imageLoader
-	width  int
-	nx     int
-}
-
-func (p *costumeSetImage) ensure(fs spxfs.Dir) {
-	if !p.cache.IsValid() {
-		var err error
-		if p.cache, err = p.loader.load(fs, nil); err != nil {
-			panic(err)
-		}
-		p.width = p.cache.Bounds().Dx() / p.nx
-	}
-}
-
-type sharedImages struct {
-	imgs map[string]gdi.Image
-}
-
-type sharedImage struct {
-	shared *sharedImages
-	path   string
-	rc     costumeSetRect
-}
-
-func (p *sharedImage) load(fs spxfs.Dir, pt *imagePoint) (ret gdi.Image, err error) {
-	path := p.path
-	shared, ok := p.shared.imgs[path]
-	if !ok {
-		var tmp imagePoint
-		if shared, err = imageLoaderByPath(path).load(fs, &tmp); err != nil {
-			return
-		}
-		p.shared.imgs[path] = shared
-	}
-	rc := p.rc
-	min := image.Point{X: int(rc.X), Y: int(rc.Y)}
-	max := image.Point{X: int(rc.X + rc.W), Y: int(rc.Y + rc.H)}
-	if pt != nil {
-		pt.x, pt.y = rc.W/2, rc.H/2
-	}
-
-	if sub := shared.SubImage(image.Rectangle{Min: min, Max: max}); sub.IsValid() {
-		return sub, nil
-	}
-	panic("disposed image")
-}
-
-// -------------------------------------------------------------------------------------
-
-type imageLoaderByCostumeSet struct {
-	costumeSet *costumeSetImage
-	index      int
-}
-
-func (p *imageLoaderByCostumeSet) load(fs spxfs.Dir, pt *imagePoint) (gdi.Image, error) {
-	costumeSet := p.costumeSet
-	if !costumeSet.cache.IsValid() {
-		p.costumeSet.ensure(fs)
-	}
-	cache, width := costumeSet.cache, costumeSet.width
-	bounds := cache.Bounds()
-	min := image.Point{X: bounds.Min.X + width*p.index, Y: bounds.Min.Y}
-	max := image.Point{X: min.X + width, Y: bounds.Max.Y}
-	pt.x, pt.y = float64(width>>1), float64(bounds.Dy()>>1)
-	if img := cache.SubImage(image.Rectangle{Min: min, Max: max}); img.IsValid() {
-		return img, nil
-	}
-	panic("disposed image")
+	path  string
+	rc    costumeSetRect
+	width int
+	nx    int
 }
 
 // -------------------------------------------------------------------------------------
 
 type costume struct {
-	name             string
-	img              delayloadImage
+	name          string
+	width, height int
+	center        math32.Vector2 // center point
+
 	faceRight        float64
 	bitmapResolution int
+	path             string
+
+	setIndex   int // costume index
+	posX, posY int // left top
 }
 
 func newCostumeWithSize(width, height int) *costume {
-	return &costume{
-		img:              delayloadImage{cache: gdi.NewImageSize(width, height)},
+	value := &costume{
+		setIndex: -1,
+		width:    width, height: height,
 		bitmapResolution: 1,
 	}
+	value.posX = 0
+	value.posY = 0
+	return value
 }
 
 func newCostumeWith(name string, img *costumeSetImage, faceRight float64, i, bitmapResolution int) *costume {
-	var loader imageLoader
-	if i < 0 {
-		loader = img.loader
-	} else {
-		loader = &imageLoaderByCostumeSet{costumeSet: img, index: i}
-	}
-	return &costume{
-		name: name, img: delayloadImage{loader: loader},
+	value := &costume{
+		path: img.path,
+		name: name, setIndex: i,
 		faceRight: faceRight, bitmapResolution: bitmapResolution,
 	}
+	imageSize := getCustomeAssetPath(img.path)
+	value.width = int(imageSize.X) / img.nx
+	value.height = int(imageSize.Y)
+	value.posX = i * value.width
+	value.posY = 0
+	if img.rc.H != 0 {
+		value.width = int(img.rc.W) / img.nx
+		value.height = int(img.rc.H)
+		value.posX = int(img.rc.X) + i*value.width
+		value.posY = int(img.rc.Y)
+	}
+	return value
 }
 
 func newCostume(base string, c *costumeConfig) *costume {
-	loader := imageLoaderByPath(path.Join(base, c.Path))
-	return &costume{
+	path := path.Join(base, c.Path)
+	value := &costume{
 		name:             c.Name,
-		img:              delayloadImage{loader: loader, pt: imagePoint{c.X, c.Y}},
+		setIndex:         -1,
+		center:           math32.Vector2{X: c.X, Y: c.Y},
 		faceRight:        c.FaceRight,
 		bitmapResolution: toBitmapResolution(c.BitmapResolution),
+		path:             path,
 	}
+	imageSize := getCustomeAssetPath(path)
+	value.width = int(imageSize.X)
+	value.height = int(imageSize.Y)
+	value.posX = 0
+	value.posY = 0
+	return value
+}
+
+func getCustomeAssetPath(path string) gdspx.Vec2 {
+	assetPath := engine.ToAssetPath(path)
+	return engine.SyncResGetImageSize(assetPath)
 }
 
 func toBitmapResolution(v int) int {
@@ -217,11 +135,11 @@ func toBitmapResolution(v int) int {
 	return v
 }
 
-func (p *costume) needImage(fs spxfs.Dir) (gdi.Image, float64, float64) {
-	if !p.img.cache.IsValid() {
-		p.img.ensure(fs)
-	}
-	return p.img.cache, p.img.pt.x, p.img.pt.y
+func (p *costume) getSize() (int, int) {
+	return p.width / p.bitmapResolution, p.height / p.bitmapResolution
+}
+func (p *costume) isAltas() bool {
+	return p.setIndex >= 0
 }
 
 // -------------------------------------------------------------------------------------
@@ -229,13 +147,19 @@ func (p *costume) needImage(fs spxfs.Dir) (gdi.Image, float64, float64) {
 type baseObj struct {
 	costumes      []*costume
 	costumeIndex_ int
+	proxy         *engine.ProxySprite
+	HasDestroyed  bool
 }
 
-func (p *baseObj) initWith(base string, sprite *spriteConfig, shared *sharedImages) {
+func (p *baseObj) getProxy() *engine.ProxySprite {
+	return p.proxy
+}
+
+func (p *baseObj) initWith(base string, sprite *spriteConfig) {
 	if sprite.CostumeSet != nil {
-		initWithCS(p, base, sprite.CostumeSet, shared)
+		initWithCS(p, base, sprite.CostumeSet)
 	} else if sprite.CostumeMPSet != nil {
-		initWithCMPS(p, base, sprite.CostumeMPSet, shared)
+		initWithCMPS(p, base, sprite.CostumeMPSet)
 	} else {
 		panic("sprite.init should have one of costumes, costumeSet and costumeMPSet")
 	}
@@ -245,28 +169,27 @@ func (p *baseObj) initWith(base string, sprite *spriteConfig, shared *sharedImag
 		costumeIndex = 0
 	}
 	p.costumeIndex_ = costumeIndex
+	p.onCostumeChange()
 }
 
-func initWithCMPS(p *baseObj, base string, cmps *costumeMPSet, shared *sharedImages) {
+func initWithCMPS(p *baseObj, base string, cmps *costumeMPSet) {
 	faceRight, bitmapResolution := cmps.FaceRight, toBitmapResolution(cmps.BitmapResolution)
 	imgPath := path.Join(base, cmps.Path)
+
 	for _, cs := range cmps.Parts {
-		simg := &sharedImage{shared: shared, path: imgPath, rc: cs.Rect}
-		img := &costumeSetImage{loader: simg, nx: cs.Nx}
+		img := &costumeSetImage{path: imgPath, rc: cs.Rect, nx: cs.Nx}
 		initCSPart(p, img, faceRight, bitmapResolution, cs.Nx, cs.Items)
 	}
 }
 
-func initWithCS(p *baseObj, base string, cs *costumeSet, shared *sharedImages) {
+func initWithCS(p *baseObj, base string, cs *costumeSet) {
 	nx := cs.Nx
 	imgPath := path.Join(base, cs.Path)
 	var img *costumeSetImage
 	if cs.Rect == nil {
-		costumeSetLoader := imageLoaderByPath(imgPath)
-		img = &costumeSetImage{loader: costumeSetLoader, nx: nx}
+		img = &costumeSetImage{path: imgPath, nx: nx}
 	} else {
-		simg := &sharedImage{shared: shared, path: imgPath, rc: *cs.Rect}
-		img = &costumeSetImage{loader: simg, nx: nx}
+		img = &costumeSetImage{path: imgPath, rc: *cs.Rect, nx: nx}
 	}
 	p.costumes = make([]*costume, 0, nx)
 	initCSPart(p, img, cs.FaceRight, toBitmapResolution(cs.BitmapResolution), nx, cs.Items)
@@ -275,7 +198,7 @@ func initWithCS(p *baseObj, base string, cs *costumeSet, shared *sharedImages) {
 func initCSPart(p *baseObj, img *costumeSetImage, faceRight float64, bitmapResolution, nx int, items []costumeSetItem) {
 	if nx == 1 {
 		name := strconv.Itoa(len(p.costumes))
-		addCostumeWith(p, name, img, faceRight, -1, bitmapResolution)
+		addCostumeWith(p, name, img, faceRight, 0, bitmapResolution)
 	} else if items == nil {
 		for index := 0; index < nx; index++ {
 			name := strconv.Itoa(len(p.costumes))
@@ -310,6 +233,7 @@ func (p *baseObj) initBackdrops(base string, costumes []*backdropConfig, costume
 		costumeIndex = 0
 	}
 	p.costumeIndex_ = costumeIndex
+	p.onCostumeChange()
 }
 
 func (p *baseObj) init(base string, costumes []*costumeConfig, costumeIndex int) {
@@ -321,6 +245,7 @@ func (p *baseObj) init(base string, costumes []*costumeConfig, costumeIndex int)
 		costumeIndex = 0
 	}
 	p.costumeIndex_ = costumeIndex
+	p.onCostumeChange()
 }
 
 func (p *baseObj) initWithSize(width, height int) {
@@ -369,11 +294,14 @@ func (p *baseObj) setCostumeByIndex(idx int) bool {
 	}
 	if p.costumeIndex_ != idx {
 		p.costumeIndex_ = idx
+		p.onCostumeChange()
 		return true
 	}
 	return false
 }
-
+func (p *baseObj) onCostumeChange() {
+	p.proxy.OnCostumeChange(p.getCostumePath())
+}
 func (p *baseObj) setCostumeByName(name string) bool {
 	if idx := p.findCostume(name); idx >= 0 {
 		return p.setCostumeByIndex(idx)
@@ -395,6 +323,29 @@ func (p *baseObj) getCostumeIndex() int {
 
 func (p *baseObj) getCostumeName() string {
 	return p.costumes[p.costumeIndex_].name
+}
+func (p *baseObj) getCostumePath() string {
+	return p.costumes[p.costumeIndex_].path
+}
+func (p *baseObj) getCostumeRenderScale() float64 {
+	return 1.0 / float64(p.costumes[p.costumeIndex_].bitmapResolution)
+}
+func (p *baseObj) getCostumeSize() (float64, float64) {
+	x, y := p.costumes[p.costumeIndex_].getSize()
+	return float64(x), float64(y)
+}
+func (p *baseObj) isCostumeAltas() bool {
+	//println("p.costumeIndex_ ", p.costumeIndex_, " len ", len(p.costumes), " isAltas ", p.costumes[p.costumeIndex_].isAltas())
+	return p.costumes[p.costumeIndex_].isAltas()
+}
+
+func (p *baseObj) getCostumeAltasRegion() engine.Rect {
+	costume := p.costumes[p.costumeIndex_]
+	rect := engine.Rect{
+		Position: engine.NewVec2(float64(costume.posX), float64(costume.posY)),
+		Size:     engine.NewVec2(float64(costume.width), float64(costume.height)),
+	}
+	return rect
 }
 
 // -------------------------------------------------------------------------------------

@@ -19,23 +19,20 @@ package spx
 import (
 	"flag"
 	"fmt"
-	"image"
-	"image/color"
 	"log"
-	"math"
 	"math/rand"
 	"os"
 	"path/filepath"
 	"reflect"
+	"sync"
 	"sync/atomic"
 	"time"
 	"unsafe"
 
 	"github.com/goplus/spx/internal/audiorecord"
 	"github.com/goplus/spx/internal/coroutine"
-	"github.com/goplus/spx/internal/gdi"
-	"github.com/goplus/spx/internal/math32"
-	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/goplus/spx/internal/engine"
+	"github.com/goplus/spx/internal/ui"
 
 	spxfs "github.com/goplus/spx/fs"
 	_ "github.com/goplus/spx/fs/asset"
@@ -55,6 +52,12 @@ const (
 	DbgFlagEvent
 	DbgFlagPerf
 	DbgFlagAll = DbgFlagLoad | DbgFlagInstr | DbgFlagEvent | DbgFlagPerf
+)
+
+const (
+	MOUSE_BUTTON_LEFT   int64 = 1
+	MOUSE_BUTTON_RIGHT  int64 = 2
+	MOUSE_BUTTON_MIDDLE int64 = 3
 )
 
 var (
@@ -78,25 +81,24 @@ type Game struct {
 	eventSinks
 	Camera
 
-	fs     spxfs.Dir
-	shared *sharedImages
+	fs spxfs.Dir
 
-	sounds soundMgr
-	turtle turtleCanvas
-	typs   map[string]reflect.Type // map: name => sprite type, for all sprites
-	sprs   map[string]Sprite       // map: name => sprite prototype, for loaded sprites
-	items  []Shape                 // shapes on stage (in Zorder), not only sprites
+	sounds       soundMgr
+	turtle       turtleCanvas
+	typs         map[string]reflect.Type // map: name => sprite type, for all sprites
+	sprs         map[string]Sprite       // map: name => sprite prototype, for loaded sprites
+	items        []Shape                 // shapes on stage (in Zorder), not only sprites
+	destroyItems []Shape                 // shapes on stage (in Zorder), not only sprites
 
-	tickMgr tickMgr
-	input   inputMgr
-	events  chan event
-	aurec   *audiorecord.Recorder
+	tickMgr   tickMgr
+	events    chan event
+	aurec     *audiorecord.Recorder
+	startFlag sync.Once
 
 	// map world
 	worldWidth_  int
 	worldHeight_ int
 	mapMode      int
-	world        *ebiten.Image
 
 	// window
 	windowWidth_  int
@@ -107,21 +109,16 @@ type Game struct {
 	sinkMgr  eventSinkMgr
 	isLoaded bool
 	isRunned bool
+	gamer_   Gamer
 }
 
 type Gamer interface {
+	engine.Gamer
 	initGame(sprites []Sprite) *Game
 }
 
 func (p *Game) IsRunned() bool {
 	return p.isRunned
-}
-
-func (p *Game) getSharedImgs() *sharedImages {
-	if p.shared == nil {
-		p.shared = &sharedImages{imgs: make(map[string]gdi.Image)}
-	}
-	return p.shared
 }
 
 func (p *Game) newSpriteAndLoad(name string, tySpr reflect.Type, g reflect.Value) Sprite {
@@ -156,9 +153,10 @@ func (p *Game) getSpriteProtoByName(name string, g reflect.Value) Sprite {
 
 func (p *Game) reset() {
 	p.sinkMgr.reset()
-	p.input.reset()
+	p.startFlag = sync.Once{}
 	p.Stop(AllOtherScripts)
 	p.items = nil
+	p.destroyItems = nil
 	p.isLoaded = false
 	p.sprs = make(map[string]Sprite)
 }
@@ -182,17 +180,21 @@ func (p *Game) initGame(sprites []Sprite) *Game {
 // Gopt_Game_Main is required by Go+ compiler as the entry of a .gmx project.
 func Gopt_Game_Main(game Gamer, sprites ...Sprite) {
 	g := game.initGame(sprites)
-	if me, ok := game.(interface{ MainEntry() }); ok {
-		me.MainEntry()
-	}
-	if !g.isRunned {
-		Gopt_Game_Run(game, "assets")
-	}
+	g.gamer_ = game
+	engine.GdspxMain(game)
 }
 
 // Gopt_Game_Run runs the game.
 // resource can be a string or fs.Dir object.
 func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
+	switch resfld := resource.(type) {
+	case string:
+		if resfld != "" {
+			engine.SetAssetDir(resfld)
+		} else {
+			engine.SetAssetDir("assets")
+		}
+	}
 	fs, err := resourceDir(resource)
 	if err != nil {
 		panic(err)
@@ -218,7 +220,12 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 		verbose := f.Bool("v", false, "print verbose information")
 		fullscreen := f.Bool("f", false, "full screen")
 		help := f.Bool("h", false, "show help information")
+		projectPath := f.Bool("path", false, "gdspx project path")
+		editorMode := f.Bool("e", false, "editor mode")
 		flag.Parse()
+		if *projectPath || *editorMode {
+			println("======== gdspx debug mode ========")
+		}
 		if *help {
 			fmt.Fprintf(os.Stderr, "Usage: %v [-v -f -h]\n", os.Args[0])
 			flag.PrintDefaults()
@@ -240,7 +247,7 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 		key = os.Getenv("SPX_SCREENSHOT_KEY")
 	}
 	if key != "" {
-		err := os.Setenv("EBITEN_SCREENSHOT_KEY", key)
+		err := os.Setenv("SPX_SCREENSHOT_KEY", key)
 		if err != nil {
 			panic(err)
 		}
@@ -283,12 +290,8 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 
 // MouseHitItem returns the topmost item which is hit by mouse.
 func (p *Game) MouseHitItem() (target *SpriteImpl, ok bool) {
-	x, y := p.input.mouseXY()
-	hc := hitContext{Pos: image.Pt(x, y)}
-	item, ok := p.onHit(hc)
-	if ok {
-		target, ok = item.Target.(*SpriteImpl)
-	}
+	//x, y := engine.GetMousePos()
+	// TODO(tanjp) use engine api
 	return
 }
 
@@ -358,11 +361,6 @@ func findObjPtr(v reflect.Value, name string, from int) interface{} {
 }
 
 func (p *Game) startLoad(fs spxfs.Dir, cfg *Config) {
-	var keyDuration int
-	if cfg != nil {
-		keyDuration = cfg.KeyDuration
-	}
-	p.input.init(p, keyDuration)
 	p.sounds.init(p)
 	p.events = make(chan event, 16)
 	p.fs = fs
@@ -396,7 +394,7 @@ func (p *Game) loadSprite(sprite Sprite, name string, gamer reflect.Value) error
 	vSpr := reflect.ValueOf(sprite).Elem()
 	vSpr.Set(reflect.Zero(vSpr.Type()))
 	base := vSpr.Field(0).Addr().Interface().(*SpriteImpl)
-	base.init(baseDir, p, name, &conf, gamer, p.getSharedImgs(), sprite)
+	base.init(baseDir, p, name, &conf, gamer, sprite)
 	p.sprs[name] = sprite
 	//
 	// init gamer pointer (field 1)
@@ -421,6 +419,7 @@ func spriteOf(sprite Sprite) *SpriteImpl {
 }
 
 func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
+	engine.SyncSetDebugMode(proj.Debug)
 	if backdrops := proj.getBackdrops(); len(backdrops) > 0 {
 		p.baseObj.initBackdrops("", backdrops, proj.getBackdropIndex())
 		p.worldWidth_ = proj.Map.Width
@@ -434,8 +433,14 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 	if debugLoad {
 		log.Println("==> SetWorldSize", p.worldWidth_, p.worldHeight_)
 	}
-	p.world = ebiten.NewImage(p.worldWidth_, p.worldHeight_)
 	p.mapMode = toMapMode(proj.Map.Mode)
+	// setup proxy's property
+	p.proxy = engine.SyncNewBackdropProxy(p, p.getCostumePath())
+
+	p.doWindowSize() // set window size
+
+	ui.WinX = float64(p.windowWidth_)
+	ui.WinY = float64(p.windowHeight_)
 
 	inits := make([]Sprite, 0, len(proj.Zorder))
 	for _, v := range proj.Zorder {
@@ -458,11 +463,10 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 		ini.Main()
 	}
 
-	p.doWindowSize() // set window size
 	if debugLoad {
 		log.Println("==> SetWindowSize", p.windowWidth_, p.windowHeight_)
 	}
-	ebiten.SetWindowSize(p.windowWidth_, p.windowHeight_)
+	engine.SyncPlatformSetWindowSize(int64(p.windowWidth_), int64(p.windowHeight_))
 	if p.windowWidth_ > p.worldWidth_ {
 		p.windowWidth_ = p.worldWidth_
 	}
@@ -471,7 +475,6 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 	}
 	p.Camera.init(p, float64(p.windowWidth_), float64(p.windowHeight_), float64(p.worldWidth_), float64(p.worldHeight_))
 
-	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeOnlyFullscreenEnabled)
 	if proj.Camera != nil && proj.Camera.On != "" {
 		p.Camera.On(proj.Camera.On)
 	}
@@ -610,32 +613,19 @@ func (p *Game) runLoop(cfg *Config) (err error) {
 		log.Println("==> RunLoop")
 	}
 	if !cfg.DontRunOnUnfocused {
-		ebiten.SetRunnableOnUnfocused(true)
+		engine.SyncSetRunnableOnUnfocused(true)
 	}
 	if cfg.FullScreen {
-		ebiten.SetFullscreen(true)
+		engine.SyncPlatformSetWindowFullscreen(true)
 	}
-	p.isRunned = true
 	p.initEventLoop()
-	ebiten.SetWindowTitle(cfg.Title)
-	return ebiten.RunGame(p)
+	engine.SyncPlatformSetWindowTitle(cfg.Title)
+	p.isRunned = true
+	return nil
 }
 
 func (p *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
 	return p.windowSize_()
-}
-
-func (p *Game) Update() error {
-	if !p.isLoaded {
-		return nil
-	}
-
-	p.updateColliders()
-	p.input.update()
-	p.updateMousePos()
-	p.sounds.update()
-	p.tickMgr.update()
-	return nil
 }
 
 func (p *Game) updateColliders() {
@@ -675,25 +665,29 @@ func (p *Game) startTick(duration int64, onTick func(tick int64)) *tickHandler {
 // currentTPS returns the current TPS (ticks per second),
 // that represents how many update function is called in a second.
 func (p *Game) currentTPS() float64 {
-	return p.tickMgr.currentTPS
-}
-
-func (p *Game) Draw(screen *ebiten.Image) {
-	dc := drawContext{Image: p.world}
-	p.onDraw(dc)
-	p.Camera.render(dc.Image, screen)
+	return p.tickMgr.getCurrentTPS()
 }
 
 type clicker interface {
 	threadObj
 	doWhenClick(this threadObj)
+	getProxy() *engine.ProxySprite
 }
 
 func (p *Game) doWhenLeftButtonDown(ev *eventLeftButtonDown) {
-	hc := hitContext{Pos: image.Pt(ev.X, ev.Y)}
-	if hr, ok := p.onHit(hc); ok {
-		if o, ok := hr.Target.(clicker); ok {
-			o.doWhenClick(o)
+	point := engine.NewVec2(float64(ev.X), float64(ev.Y))
+	// TOOD(tanjp) avoid new a array every frame
+	newItems := make([]Shape, len(p.items))
+	copy(newItems, p.items)
+	for _, item := range newItems {
+		if o, ok := item.(clicker); ok {
+			proxy := o.getProxy()
+			if proxy != nil {
+				isClicked := engine.SyncSpriteCheckCollisionWithPoint(proxy.GetId(), point, true)
+				if isClicked {
+					o.doWhenClick(o)
+				}
+			}
 		}
 	}
 }
@@ -702,7 +696,6 @@ func (p *Game) handleEvent(event event) {
 	switch ev := event.(type) {
 
 	case *eventLeftButtonDown:
-		p.updateMousePos()
 		p.doWhenLeftButtonDown(ev)
 	case *eventKeyDown:
 		p.sinkMgr.doWhenKeyPressed(ev.Key)
@@ -731,12 +724,23 @@ func (p *Game) eventLoop(me coroutine.Thread) int {
 	}
 }
 
+func (p *Game) logicLoop(me coroutine.Thread) int {
+	for {
+		p.Wait(0.01)
+		if engine.SyncInputGetMouseState(MOUSE_BUTTON_LEFT) {
+			p.fireEvent(&eventLeftButtonDown{X: int(p.gMouseX), Y: int(p.gMouseY)})
+		}
+	}
+}
+
 func (p *Game) initEventLoop() {
 	gco.Create(nil, p.eventLoop)
+	gco.Create(nil, p.logicLoop)
 }
 
 func init() {
 	gco = coroutine.New()
+	engine.SetCoroutines(gco)
 }
 
 var (
@@ -814,9 +818,7 @@ func (p *Game) windowSize_() (int, int) {
 func (p *Game) doWindowSize() {
 	if p.windowWidth_ == 0 {
 		c := p.costumes[p.costumeIndex_]
-		img, _, _ := c.needImage(p.fs)
-		w, h := img.Size()
-		p.windowWidth_, p.windowHeight_ = w/c.bitmapResolution, h/c.bitmapResolution
+		p.windowWidth_, p.windowHeight_ = c.getSize()
 	}
 }
 
@@ -830,9 +832,7 @@ func (p *Game) worldSize_() (int, int) {
 func (p *Game) doWorldSize() {
 	if p.worldWidth_ == 0 {
 		c := p.costumes[p.costumeIndex_]
-		img, _, _ := c.needImage(p.fs)
-		w, h := img.Size()
-		p.worldWidth_, p.worldHeight_ = w/c.bitmapResolution, h/c.bitmapResolution
+		p.worldWidth_, p.worldHeight_ = c.getSize()
 	}
 }
 
@@ -887,7 +887,7 @@ func (p *Game) getTurtle() turtleCanvas {
 	return p.turtle
 }
 
-func (p *Game) stampCostume(di *spriteDrawInfo) {
+func (p *Game) stampCostume(di *SpriteImpl) {
 	p.turtle.stampCostume(di)
 }
 
@@ -943,6 +943,8 @@ func (p *Game) removeShape(child Shape) {
 			newItems := make([]Shape, len(items)-1)
 			copy(newItems, items[:i])
 			copy(newItems[i:], items[i+1:])
+			p.HasDestroyed = true
+			p.destroyItems = append(p.destroyItems, item)
 			p.items = newItems
 			return
 		}
@@ -1046,116 +1048,6 @@ func (p *Game) findSprite(name string) *SpriteImpl {
 
 // -----------------------------------------------------------------------------
 
-func (p *Game) drawBackground(dc drawContext) {
-	c := p.costumes[p.costumeIndex_]
-	img, _, _ := c.needImage(p.fs)
-	options := new(ebiten.DrawTrianglesOptions)
-	options.Filter = ebiten.FilterLinear
-
-	if p.mapMode == mapModeRepeat {
-		bgImage := img.Ebiten()
-		imgW := float64(img.Bounds().Dx())
-		imgH := float64(img.Bounds().Dy())
-		winW := float64(p.windowWidth_)
-		winH := float64(p.windowHeight_)
-		numW := int(math.Ceil(winW/imgW/2 - 0.5))
-		numH := int(math.Ceil(winH/imgH/2 - 0.5))
-		rawOffsetW := float64(p.worldWidth_-p.windowWidth_) / 2.0
-		rawOffsetH := float64(p.worldHeight_-p.windowHeight_) / 2.0
-		offsetW := rawOffsetW + winW*0.5 - imgW*0.5 // draw from center
-		offsetH := rawOffsetH + winH*0.5 - imgH*0.5
-		for w := -numW; w <= numW; w++ {
-			for h := -numH; h <= numH; h++ {
-				op := &ebiten.DrawImageOptions{}
-				op.GeoM.Translate(imgW*float64(w)+offsetW, imgH*float64(h)+offsetH)
-				dc.DrawImage(bgImage, op)
-			}
-		}
-
-	} else {
-		var imgW, imgH, dstW, dstH float32
-		imgW = float32(img.Bounds().Dx())
-		imgH = float32(img.Bounds().Dy())
-		worldW := float32(p.worldWidth_)
-		worldH := float32(p.worldHeight_)
-
-		options.Address = ebiten.AddressClampToZero
-		imgRadio := (imgW / imgH)
-		worldRadio := (worldW / worldH)
-		// scale image's height to fit world's height
-		isScaleHeight := imgRadio > worldRadio
-		switch p.mapMode {
-		default:
-			dstW = worldW
-			dstH = worldH
-		case mapModeFillCut:
-			if isScaleHeight {
-				dstW = worldW
-				dstH = dstW / imgRadio
-			} else {
-				dstH = worldH
-				dstW = dstH * imgRadio
-			}
-		case mapModeFillRatio:
-			if isScaleHeight {
-				dstH = worldH
-				dstW = dstH * imgRadio
-			} else {
-				dstW = worldW
-				dstH = dstW / imgRadio
-			}
-		}
-
-		var cx, cy float32
-		cx = (worldW - dstW) / 2.0
-		cy = (worldH - dstH) / 2.0
-		vs := []ebiten.Vertex{
-			{
-				DstX: cx, DstY: cy, SrcX: 0, SrcY: 0,
-				ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1,
-			},
-			{
-				DstX: dstW + cx, DstY: cy, SrcX: imgW, SrcY: 0,
-				ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1,
-			},
-			{
-				DstX: cx, DstY: dstH + cy, SrcX: 0, SrcY: imgH,
-				ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1,
-			},
-			{
-				DstX: dstW + cx, DstY: dstH + cy, SrcX: imgW, SrcY: imgH,
-				ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1,
-			},
-		}
-		dc.DrawTriangles(vs, []uint16{0, 1, 2, 1, 2, 3}, img.Ebiten(), options)
-	}
-}
-
-func (p *Game) onDraw(dc drawContext) {
-	dc.Fill(color.White)
-	p.drawBackground(dc)
-	p.getTurtle().draw(dc, p.fs)
-
-	items := p.getItems()
-	for _, item := range items {
-		item.draw(dc)
-	}
-}
-
-func (p *Game) onHit(hc hitContext) (hr hitResult, ok bool) {
-	items := p.getItems()
-	i := len(items)
-	for i > 0 {
-		i--
-		if hr, ok = items[i].hit(hc); ok {
-			return
-		}
-	}
-	return hitResult{Target: p}, true
-}
-
-// -----------------------------------------------------------------------------
-
 func (p *Game) BackdropName() string {
 	return p.getCostumeName()
 }
@@ -1189,7 +1081,7 @@ func (p *Game) PrevBackdrop(wait ...bool) {
 // -----------------------------------------------------------------------------
 
 func (p *Game) KeyPressed(key Key) bool {
-	return isKeyPressed(key)
+	return engine.SyncInputGetKey(key)
 }
 
 func (p *Game) MouseX() float64 {
@@ -1201,21 +1093,11 @@ func (p *Game) MouseY() float64 {
 }
 
 func (p *Game) MousePressed() bool {
-	return p.input.isMousePressed()
+	return engine.SyncInputMousePressed()
 }
 
 func (p *Game) getMousePos() (x, y float64) {
 	return p.MouseX(), p.MouseY()
-}
-
-func (p *Game) updateMousePos() {
-	x, y := p.input.mouseXY()
-	pos := p.Camera.screenToWorld(math32.NewVector2(float64(x), float64(y)))
-
-	worldW, worldH := p.worldSize_()
-	mx, my := int(pos.X)-(worldW>>1), (worldH>>1)-int(pos.Y)
-	atomic.StoreInt64(&p.gMouseX, int64(mx))
-	atomic.StoreInt64(&p.gMouseY, int64(my))
 }
 
 func (p *Game) Username() string {
@@ -1333,7 +1215,7 @@ func (p *Game) Play__2(media Sound, action *PlayOptions) {
 		log.Println("Play", media.Path)
 	}
 
-	err := p.sounds.playAction(media, action)
+	err := p.sounds.play(media, action)
 	if err != nil {
 		panic(err)
 	}
@@ -1360,15 +1242,15 @@ func (p *Game) StopAllSounds() {
 }
 
 func (p *Game) Volume() float64 {
-	return p.sounds.volume()
+	return p.sounds.getVolume()
 }
 
 func (p *Game) SetVolume(volume float64) {
-	p.sounds.SetVolume(volume)
+	p.sounds.setVolume(volume)
 }
 
 func (p *Game) ChangeVolume(delta float64) {
-	p.sounds.ChangeVolume(delta)
+	p.sounds.changeVolume(delta)
 }
 
 func (p *Game) Loudness() float64 {

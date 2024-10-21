@@ -18,18 +18,13 @@ package spx
 
 import (
 	"fmt"
-	"image"
-	"image/color"
 	"log"
 	"reflect"
 	"strings"
 	"syscall"
 
-	"github.com/goplus/spx/internal/gdi"
-	xfont "github.com/goplus/spx/internal/gdi/font"
 	"github.com/goplus/spx/internal/tools"
-	"github.com/hajimehoshi/ebiten/v2"
-	"golang.org/x/image/font"
+	"github.com/goplus/spx/internal/ui"
 )
 
 // -------------------------------------------------------------------------------------
@@ -47,6 +42,7 @@ type Monitor struct {
 	x, y    float64
 	label   string
 	visible bool
+	panel   *ui.UiMonitor
 }
 
 /*
@@ -84,12 +80,28 @@ func newMonitor(g reflect.Value, v specsp) (*Monitor, error) {
 	x := v["x"].(float64)
 	y := v["y"].(float64)
 	visible := v["visible"].(bool)
-	return &Monitor{
+
+	panel := ui.NewUiMonitor()
+	monitor := &Monitor{
 		target: target, val: val, eval: eval, name: name, size: size,
-		visible: visible, mode: mode, color: color, x: x, y: y, label: label,
-	}, nil
+		visible: visible, mode: mode, color: color, x: x, y: y, label: label, panel: panel,
+	}
+	panel.UpdateCallBack = func(delta float32) {
+		monitor.OnUpdate(delta)
+	}
+	return monitor, nil
 }
 
+func (pself *Monitor) OnUpdate(delta float32) {
+	// call on main thread !
+	if !pself.visible {
+		return
+	}
+	val := pself.eval()
+	pself.panel.UpdateScale(pself.size)
+	pself.panel.UpdatePos(pself.x, pself.y)
+	pself.panel.UpdateText(pself.label, val)
+}
 func getTarget(g reflect.Value, target string) (reflect.Value, int) {
 	if target == "" {
 		return g, 1 // spx.Game
@@ -153,153 +165,9 @@ var (
 	stmValueRectPen  = Color{R: 0xf6, G: 0xf8, B: 0xfa, A: 0xff}
 )
 
-var (
-	size2Font = make(map[int]gdi.Font)
-)
-
-func getOrCreateFont(size int) gdi.Font {
-	const dpi = 72
-	if size <= 0 {
-		size = 1
-	}
-	if font, ok := size2Font[size]; ok {
-		return font
-	}
-	size2Font[size] = xfont.NewDefault(&xfont.Options{
-		Size:    float64(size),
-		DPI:     dpi,
-		Hinting: font.HintingFull,
-	})
-	return size2Font[size]
-}
-
-func (p *Monitor) draw(dc drawContext) {
-	if !p.visible {
-		return
-	}
-	val := p.eval()
-	x, y := p.x, p.y
-	x, y = p.game.convertWinSpace2GameSpace(x, y)
-	switch p.mode {
-	case 2:
-		render := gdi.NewTextRender(defaultFont, 0x80000, 0)
-		render.AddText(val)
-		intw, inth := render.Size()
-		textW, h := float64(intw), float64(inth)
-		w := textW
-		if w < stmDefaultW {
-			w = stmDefaultW
-		}
-		drawRoundRect(dc, x, y, w, h, p.color, p.color)
-		render.Draw(dc.Image, int(x+((w-textW)/2)), int(y), color.White, 0)
-	default:
-		font := getOrCreateFont(int(p.size * 12))
-		labelRender := gdi.NewTextRender(font, 0x80000, 0)
-		labelRender.AddText(p.label)
-		intw, inth := labelRender.Size()
-		labelW, labelH := float64(intw), float64(inth)
-
-		textRender := gdi.NewTextRender(font, 0x80000, 0)
-		textRender.AddText(val)
-		intw, inth = textRender.Size()
-		textW, textH := float64(intw), float64(inth)
-		textRectW := textW
-		if textRectW < stmDefaultSmW*p.size {
-			textRectW = stmDefaultSmW * p.size
-		}
-		hGap := stmHoriGapSm * p.size
-		vGap := stmVertGapSm * p.size
-
-		w := labelW + textRectW + hGap*2
-		h := labelH + vGap*2
-		drawRoundRect(dc, x, y, w, h, stmBackground, stmBackgroundPen)
-		labelRender.Draw(dc.Image, int(x+hGap), int(y+vGap), color.Black, 0)
-
-		textGap2Right := -1.0
-		textGapV := 2.0
-		textGapH := 2.0
-		textPaddingOffset := 5.0
-		w2 := textRectW + textGapH*2
-		x2 := x + w - w2 - textGap2Right
-		y2 := y + textGapV
-		h2 := h - textGapV*2
-		drawRoundRect(dc, x2, y2, w2, h2, stmValueground, stmValueRectPen)
-		textRender.Draw(dc.Image, int(x2+(w2-textW)/2+textPaddingOffset), int(y+vGap+(labelH-textH)/2), color.White, 0)
-
-	}
-}
-
 type rectKey struct {
 	x, y, w, h  float64
 	clr, clrPen Color
-}
-
-var (
-	rcMap = make(map[rectKey]*ebiten.Image)
-)
-
-func drawRoundRect(dc drawContext, x, y, w, h float64, clr, clrPen Color) {
-	key := rectKey{x, y, w, h, clr, clrPen}
-	if i, ok := rcMap[key]; ok {
-		dc.DrawImage(i, nil)
-		return
-	}
-	img, err := getCircleRect(dc, x, y, w, h, clr, clrPen)
-	if err != nil {
-		panic(err)
-	}
-	rcMap[key] = ebiten.NewImageFromImage(img)
-}
-
-func getCircleRect(dc drawContext, x, y, w, h float64, clr, clrPen Color) (image.Image, error) {
-	varTable := []string{
-		"$x", fmt.Sprintf("%f", x+h/2),
-		"$y", fmt.Sprintf("%f", y),
-		"$rx", fmt.Sprintf("%f", h/2),
-		"$ry", fmt.Sprintf("%f", h/2),
-		"$w", fmt.Sprintf("%f", w-h/2),
-		"$h", fmt.Sprintf("%f", 0.0),
-	}
-	glyphTpl := "M $x $y h $w a $rx $ry 0 0 1 $rx $ry v $h a $rx $ry 0 0 1 -$rx $ry h -$w a $rx $ry 0 0 1 -$rx -$ry v -$h a $rx $ry 0 0 1 $rx -$ry z"
-	glyph := strings.NewReplacer(varTable...).Replace(glyphTpl)
-
-	alpha := float32(clr.A) / 255
-	style := fmt.Sprintf(
-		"fill:rgb(%d, %d, %d);stroke-width:1;stroke:rgb(%d, %d, %d);fill-opacity:%f",
-		clr.R, clr.G, clr.B,
-		clrPen.R, clrPen.G, clrPen.B, alpha)
-
-	cx, cy := dc.Size()
-	svg := gdi.NewSVG(cx, cy)
-	svg.Path(glyph, style)
-	svg.End()
-	return svg.ToImage()
-}
-
-func getRoundRect(dc drawContext, x, y, w, h float64, clr, clrPen Color) (image.Image, error) {
-	varTable := []string{
-		"$x", fmt.Sprintf("%f", x),
-		"$y2", fmt.Sprintf("%f", y+stmCornerSize),
-		"$w2", fmt.Sprintf("%f", w-stmCornerSize*2),
-		"$h2", fmt.Sprintf("%f", h-stmCornerSize*2),
-	}
-	glyphTpl := "M $x $y2 s 0 -2 2 -2 h $w2 s 2 0 2 2 v $h2 s 0 2 -2 2 h -$w2 s -2 0 -2 -2 z"
-	glyph := strings.NewReplacer(varTable...).Replace(glyphTpl)
-
-	style := fmt.Sprintf(
-		"fill:rgb(%d, %d, %d);stroke-width:0.7;stroke:rgb(%d, %d, %d)",
-		clr.R, clr.G, clr.B,
-		clrPen.R, clrPen.G, clrPen.B)
-
-	cx, cy := dc.Size()
-	svg := gdi.NewSVG(cx, cy)
-	svg.Path(glyph, style)
-	svg.End()
-	return svg.ToImage()
-}
-
-func (p *Monitor) hit(hc hitContext) (hr hitResult, ok bool) {
-	return
 }
 
 // -------------------------------------------------------------------------------------

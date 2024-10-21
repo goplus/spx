@@ -21,9 +21,10 @@ package asset
 
 import (
 	"io"
+	"os"
+	"path/filepath"
 
 	"github.com/goplus/spx/fs"
-	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 )
 
 // Open opens a local filesystem object.
@@ -32,5 +33,5 @@ func Open(base string) (fs.Dir, error) {
 }
 
 func openAsset(path string) (io.ReadSeekCloser, error) {
-	return ebitenutil.OpenFile(path)
+	return os.Open(filepath.FromSlash(path))
 }
