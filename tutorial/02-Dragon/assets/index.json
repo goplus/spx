@@ -7,7 +7,9 @@
   ],
   "zorder": [
     {
-      "type": "stageMonitor",
+      "type": "monitor",
+      "name": "monitor-1",
+      "size": 1.0,
       "target": "Dragon",
       "val": "getVar:score",
       "color": 15629590,

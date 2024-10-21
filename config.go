@@ -205,14 +205,22 @@ type actionConfig struct {
 }
 
 type aniConfig struct {
-	Duration float64       `json:"duration"`
-	Fps      float64       `json:"fps"`
-	From     interface{}   `json:"from"`
-	To       interface{}   `json:"to"`
-	AniType  aniTypeEnum   `json:"anitype"`
-	OnStart  *actionConfig `json:"onStart"` //start
-	OnPlay   *actionConfig `json:"onPlay"`  //play
-	IsLoop   bool          `json:"isLoop"`
+	Duration       float64     `json:"duration"`
+	Fps            float64     `json:"fps"`
+	From           interface{} `json:"from"`
+	To             interface{} `json:"to"`
+	FrameFrom      string      `json:"frameFrom"`
+	FrameTo        string      `json:"frameTo"`
+	FrameFps       int         `json:"frameFps"`
+	StepDuration   float64     `json:"stepDuration"`
+	TurnToDuration float64     `json:"turnToDuration"`
+
+	AniType      aniTypeEnum   `json:"anitype"`
+	OnStart      *actionConfig `json:"onStart"` //start
+	OnPlay       *actionConfig `json:"onPlay"`  //play
+	IsLoop       bool          `json:"isLoop"`
+	IsKeepOnStop bool          `json:"isKeepOnStop"` //After finishing playback, it stays on the last frame and does not need to switch to the default animation
+
 	//OnEnd *actionConfig  `json:"onEnd"`   //stop
 }
 
@@ -235,6 +243,8 @@ type spriteConfig struct {
 	Visible             bool                  `json:"visible"`
 	IsDraggable         bool                  `json:"isDraggable"`
 	Pivot               math32.Vector2        `json:"pivot"`
+	DefaultAnimation    string                `json:"defaultAnimation"`
+	AnimBindings        map[string]string     `json:"animBindings"`
 }
 
 func (p *spriteConfig) getCostumeIndex() int {

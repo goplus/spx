@@ -68,9 +68,9 @@ func (c *Camera) On(obj interface{}) {
 			return
 		}
 		obj = sp
-	case *Sprite:
+	case *SpriteImpl:
 	case nil:
-	case Spriter:
+	case Sprite:
 		obj = spriteOf(v)
 	case specialObj:
 		if v != Mouse {
@@ -85,7 +85,7 @@ func (c *Camera) On(obj interface{}) {
 
 func (c *Camera) updateOnObj() {
 	switch v := c.on_.(type) {
-	case *Sprite:
+	case *SpriteImpl:
 		cx, cy := v.getXY()
 		c.freecamera.MoveTo(cx, cy)
 	case nil:

@@ -55,14 +55,14 @@ func init() {
 }
 
 type quoter struct {
-	sprite      *Sprite
+	sprite      *SpriteImpl
 	message     string
 	description string
 
 	cachedImg *ebiten.Image
 }
 
-func (p *Sprite) quote_(message, description string) {
+func (p *SpriteImpl) quote_(message, description string) {
 	old := p.quoteObj
 	if old == nil {
 		p.quoteObj = &quoter{sprite: p, message: message, description: description}
@@ -74,12 +74,12 @@ func (p *Sprite) quote_(message, description string) {
 	}
 }
 
-func (p *Sprite) waitStopQuote(secs float64) {
+func (p *SpriteImpl) waitStopQuote(secs float64) {
 	p.g.Wait(secs)
 	p.doStopQuote()
 }
 
-func (p *Sprite) doStopQuote() {
+func (p *SpriteImpl) doStopQuote() {
 	if p.quoteObj != nil {
 		p.g.removeShape(p.quoteObj)
 		p.quoteObj = nil

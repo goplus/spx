@@ -1,3 +1,4 @@
+var life int
 onStart => {
 	for {
 		wait 0.3
@@ -6,6 +7,7 @@ onStart => {
 }
 
 onCloned => {
+	life = 3
 	setXYpos rand(-131, 131), 237
 	show
 	for {
@@ -17,15 +19,11 @@ onCloned => {
 	}
 }
 
-onCloned => {
-	life := 3
-	for {
-		wait 0.05
-		if touching("Bullet") {
-			life--
-			if life == 0 {
-				die
-			}
-		}
-	}
+onTouchStart "Bullet", => {
+	if life > 0 {
+        life --
+        if life <= 0 {
+            die
+        }
+    }
 }

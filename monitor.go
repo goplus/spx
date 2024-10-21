@@ -22,19 +22,23 @@ import (
 	"image/color"
 	"log"
 	"reflect"
-	"strconv"
 	"strings"
 	"syscall"
 
 	"github.com/goplus/spx/internal/gdi"
+	xfont "github.com/goplus/spx/internal/gdi/font"
+	"github.com/goplus/spx/internal/tools"
 	"github.com/hajimehoshi/ebiten/v2"
-	"golang.org/x/image/colornames"
+	"golang.org/x/image/font"
 )
 
 // -------------------------------------------------------------------------------------
 
-// stageMonitor class.
-type stageMonitor struct {
+// Monitor class.
+type Monitor struct {
+	game    *Game
+	name    string
+	size    float64
 	target  string
 	val     string
 	eval    func() string
@@ -46,7 +50,7 @@ type stageMonitor struct {
 }
 
 /*
-"type": "stageMonitor",
+"type": "Monitor",
 "target": "",
 "val": "getVar:score",
 "color": 15629590,
@@ -59,9 +63,14 @@ type stageMonitor struct {
 "isDiscrete": true,
 "visible": true
 */
-func newStageMonitor(g reflect.Value, v specsp) (*stageMonitor, error) {
+func newMonitor(g reflect.Value, v specsp) (*Monitor, error) {
 	target := v["target"].(string)
 	val := v["val"].(string)
+	name := v["name"].(string)
+	size := 1.0
+	if v["size"] != nil {
+		size, _ = tools.GetFloat(v["size"])
+	}
 	eval := buildMonitorEval(g, target, val)
 	if eval == nil {
 		return nil, syscall.ENOENT
@@ -69,14 +78,14 @@ func newStageMonitor(g reflect.Value, v specsp) (*stageMonitor, error) {
 	mode := int(v["mode"].(float64))
 	color, err := parseColor(getSpcspVal(v, "color"))
 	if err != nil {
-		panic(err)
+		color = Color{R: 0xff, G: 0xff, B: 0xff, A: 0xff}
 	}
 	label := v["label"].(string)
 	x := v["x"].(float64)
 	y := v["y"].(float64)
 	visible := v["visible"].(bool)
-	return &stageMonitor{
-		target: target, val: val, eval: eval,
+	return &Monitor{
+		target: target, val: val, eval: eval, name: name, size: size,
 		visible: visible, mode: mode, color: color, x: x, y: y, label: label,
 	}, nil
 }
@@ -118,14 +127,14 @@ func buildMonitorEval(g reflect.Value, t, val string) func() string {
 				return fmt.Sprint(ref.Interface())
 			}
 		}
-		log.Println("[WARN] stageMonitor: var not found -", name, target)
+		log.Println("[WARN] Monitor: var not found -", name, target)
 	default:
-		log.Println("[WARN] stageMonitor: unknown command -", val)
+		log.Println("[WARN] Monitor: unknown command -", val)
 	}
 	return nil
 }
 
-func (p *stageMonitor) setVisible(visible bool) {
+func (p *Monitor) setVisible(visible bool) {
 	p.visible = visible
 }
 
@@ -138,54 +147,90 @@ const (
 )
 
 var (
-	stmBackground    = Color{R: 0xc4, G: 0xc7, B: 0xc1, A: 0xff}
-	stmBackgroundPen = colornames.Black
-	stmTextRectPen   = colornames.White
+	stmBackground    = Color{R: 0xf6, G: 0xf8, B: 0xfa, A: 0xff}
+	stmBackgroundPen = Color{R: 0xf6, G: 0xf8, B: 0xfa, A: 0xff}
+	stmValueground   = Color{R: 0x21, G: 0x9f, B: 0xfc, A: 0xff}
+	stmValueRectPen  = Color{R: 0xf6, G: 0xf8, B: 0xfa, A: 0xff}
 )
 
-func (p *stageMonitor) draw(dc drawContext) {
+var (
+	size2Font = make(map[int]gdi.Font)
+)
+
+func getOrCreateFont(size int) gdi.Font {
+	const dpi = 72
+	if size <= 0 {
+		size = 1
+	}
+	if font, ok := size2Font[size]; ok {
+		return font
+	}
+	size2Font[size] = xfont.NewDefault(&xfont.Options{
+		Size:    float64(size),
+		DPI:     dpi,
+		Hinting: font.HintingFull,
+	})
+	return size2Font[size]
+}
+
+func (p *Monitor) draw(dc drawContext) {
 	if !p.visible {
 		return
 	}
 	val := p.eval()
+	x, y := p.x, p.y
+	x, y = p.game.convertWinSpace2GameSpace(x, y)
 	switch p.mode {
 	case 2:
-		x, y := int(p.x)+2, int(p.y)+6
 		render := gdi.NewTextRender(defaultFont, 0x80000, 0)
 		render.AddText(val)
-		textW, h := render.Size()
+		intw, inth := render.Size()
+		textW, h := float64(intw), float64(inth)
 		w := textW
 		if w < stmDefaultW {
 			w = stmDefaultW
 		}
 		drawRoundRect(dc, x, y, w, h, p.color, p.color)
-		render.Draw(dc.Image, x+((w-textW)>>1), y, color.White, 0)
+		render.Draw(dc.Image, int(x+((w-textW)/2)), int(y), color.White, 0)
 	default:
-		x, y := int(p.x), int(p.y)
-		labelRender := gdi.NewTextRender(defaultFont2, 0x80000, 0)
+		font := getOrCreateFont(int(p.size * 12))
+		labelRender := gdi.NewTextRender(font, 0x80000, 0)
 		labelRender.AddText(p.label)
-		labelW, h := labelRender.Size()
+		intw, inth := labelRender.Size()
+		labelW, labelH := float64(intw), float64(inth)
 
-		textRender := gdi.NewTextRender(defaultFontSm, 0x80000, 0)
+		textRender := gdi.NewTextRender(font, 0x80000, 0)
 		textRender.AddText(val)
-		textW, textH := textRender.Size()
+		intw, inth = textRender.Size()
+		textW, textH := float64(intw), float64(inth)
 		textRectW := textW
-		if textRectW < stmDefaultSmW {
-			textRectW = stmDefaultSmW
+		if textRectW < stmDefaultSmW*p.size {
+			textRectW = stmDefaultSmW * p.size
 		}
-		w := labelW + textRectW + (stmHoriGapSm * 3)
-		h += (stmVertGapSm * 2)
+		hGap := stmHoriGapSm * p.size
+		vGap := stmVertGapSm * p.size
+
+		w := labelW + textRectW + hGap*2
+		h := labelH + vGap*2
 		drawRoundRect(dc, x, y, w, h, stmBackground, stmBackgroundPen)
-		labelRender.Draw(dc.Image, x+stmHoriGapSm, y+stmVertGapSm, color.Black, 0)
-		x += labelW + (stmHoriGapSm * 2)
-		y += stmVertGapSm
-		drawRoundRect(dc, x, y, textRectW, textH, p.color, stmTextRectPen)
-		textRender.Draw(dc.Image, x+((textRectW-textW)>>1), y, color.White, 0)
+		labelRender.Draw(dc.Image, int(x+hGap), int(y+vGap), color.Black, 0)
+
+		textGap2Right := -1.0
+		textGapV := 2.0
+		textGapH := 2.0
+		textPaddingOffset := 5.0
+		w2 := textRectW + textGapH*2
+		x2 := x + w - w2 - textGap2Right
+		y2 := y + textGapV
+		h2 := h - textGapV*2
+		drawRoundRect(dc, x2, y2, w2, h2, stmValueground, stmValueRectPen)
+		textRender.Draw(dc.Image, int(x2+(w2-textW)/2+textPaddingOffset), int(y+vGap+(labelH-textH)/2), color.White, 0)
+
 	}
 }
 
 type rectKey struct {
-	x, y, w, h  int
+	x, y, w, h  float64
 	clr, clrPen Color
 }
 
@@ -193,25 +238,50 @@ var (
 	rcMap = make(map[rectKey]*ebiten.Image)
 )
 
-func drawRoundRect(dc drawContext, x, y, w, h int, clr, clrPen Color) {
+func drawRoundRect(dc drawContext, x, y, w, h float64, clr, clrPen Color) {
 	key := rectKey{x, y, w, h, clr, clrPen}
 	if i, ok := rcMap[key]; ok {
 		dc.DrawImage(i, nil)
 		return
 	}
-	img, err := getRoundRect(dc, x, y, w, h, clr, clrPen)
+	img, err := getCircleRect(dc, x, y, w, h, clr, clrPen)
 	if err != nil {
 		panic(err)
 	}
 	rcMap[key] = ebiten.NewImageFromImage(img)
 }
 
-func getRoundRect(dc drawContext, x, y, w, h int, clr, clrPen Color) (image.Image, error) {
+func getCircleRect(dc drawContext, x, y, w, h float64, clr, clrPen Color) (image.Image, error) {
 	varTable := []string{
-		"$x", strconv.Itoa(x),
-		"$y2", strconv.Itoa(y + stmCornerSize),
-		"$w2", strconv.Itoa(w - stmCornerSize*2),
-		"$h2", strconv.Itoa(h - stmCornerSize*2),
+		"$x", fmt.Sprintf("%f", x+h/2),
+		"$y", fmt.Sprintf("%f", y),
+		"$rx", fmt.Sprintf("%f", h/2),
+		"$ry", fmt.Sprintf("%f", h/2),
+		"$w", fmt.Sprintf("%f", w-h/2),
+		"$h", fmt.Sprintf("%f", 0.0),
+	}
+	glyphTpl := "M $x $y h $w a $rx $ry 0 0 1 $rx $ry v $h a $rx $ry 0 0 1 -$rx $ry h -$w a $rx $ry 0 0 1 -$rx -$ry v -$h a $rx $ry 0 0 1 $rx -$ry z"
+	glyph := strings.NewReplacer(varTable...).Replace(glyphTpl)
+
+	alpha := float32(clr.A) / 255
+	style := fmt.Sprintf(
+		"fill:rgb(%d, %d, %d);stroke-width:1;stroke:rgb(%d, %d, %d);fill-opacity:%f",
+		clr.R, clr.G, clr.B,
+		clrPen.R, clrPen.G, clrPen.B, alpha)
+
+	cx, cy := dc.Size()
+	svg := gdi.NewSVG(cx, cy)
+	svg.Path(glyph, style)
+	svg.End()
+	return svg.ToImage()
+}
+
+func getRoundRect(dc drawContext, x, y, w, h float64, clr, clrPen Color) (image.Image, error) {
+	varTable := []string{
+		"$x", fmt.Sprintf("%f", x),
+		"$y2", fmt.Sprintf("%f", y+stmCornerSize),
+		"$w2", fmt.Sprintf("%f", w-stmCornerSize*2),
+		"$h2", fmt.Sprintf("%f", h-stmCornerSize*2),
 	}
 	glyphTpl := "M $x $y2 s 0 -2 2 -2 h $w2 s 2 0 2 2 v $h2 s 0 2 -2 2 h -$w2 s -2 0 -2 -2 z"
 	glyph := strings.NewReplacer(varTable...).Replace(glyphTpl)
@@ -228,8 +298,63 @@ func getRoundRect(dc drawContext, x, y, w, h int, clr, clrPen Color) (image.Imag
 	return svg.ToImage()
 }
 
-func (p *stageMonitor) hit(hc hitContext) (hr hitResult, ok bool) {
+func (p *Monitor) hit(hc hitContext) (hr hitResult, ok bool) {
 	return
 }
 
 // -------------------------------------------------------------------------------------
+// IWidget
+func (pself *Monitor) GetName() string {
+	return pself.name
+}
+
+func (pself *Monitor) Visible() bool {
+	return pself.visible
+}
+func (pself *Monitor) Show() {
+	pself.visible = true
+}
+func (pself *Monitor) Hide() {
+	pself.visible = false
+}
+func (pself *Monitor) Xpos() float64 {
+	return pself.x
+}
+func (pself *Monitor) Ypos() float64 {
+	return pself.y
+}
+func (pself *Monitor) SetXpos(x float64) {
+	pself.x = x
+}
+func (pself *Monitor) SetYpos(y float64) {
+	pself.y = y
+}
+func (pself *Monitor) SetXYpos(x float64, y float64) {
+	pself.x, pself.y = x, y
+}
+func (pself *Monitor) ChangeXpos(dx float64) {
+	pself.x += dx
+}
+func (pself *Monitor) ChangeYpos(dy float64) {
+	pself.y += dy
+}
+func (pself *Monitor) ChangeXYpos(dx float64, dy float64) {
+	pself.x += dx
+	pself.y += dy
+}
+
+func (pself *Monitor) Size() float64 {
+	return pself.size
+}
+func (pself *Monitor) SetSize(size float64) {
+	pself.size = size
+	pself.updateSize()
+}
+func (pself *Monitor) ChangeSize(delta float64) {
+	pself.size += delta
+	pself.updateSize()
+}
+
+func (pself *Monitor) updateSize() {
+
+}

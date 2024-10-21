@@ -53,19 +53,22 @@ const (
 	DbgFlagLoad dbgFlags = 1 << iota
 	DbgFlagInstr
 	DbgFlagEvent
-	DbgFlagAll = DbgFlagLoad | DbgFlagInstr | DbgFlagEvent
+	DbgFlagPerf
+	DbgFlagAll = DbgFlagLoad | DbgFlagInstr | DbgFlagEvent | DbgFlagPerf
 )
 
 var (
 	debugInstr bool
 	debugLoad  bool
 	debugEvent bool
+	debugPerf  bool
 )
 
 func SetDebug(flags dbgFlags) {
 	debugLoad = (flags & DbgFlagLoad) != 0
 	debugInstr = (flags & DbgFlagInstr) != 0
 	debugEvent = (flags & DbgFlagEvent) != 0
+	debugPerf = (flags & DbgFlagPerf) != 0
 }
 
 // -------------------------------------------------------------------------------------
@@ -81,7 +84,7 @@ type Game struct {
 	sounds soundMgr
 	turtle turtleCanvas
 	typs   map[string]reflect.Type // map: name => sprite type, for all sprites
-	sprs   map[string]Spriter      // map: name => sprite prototype, for loaded sprites
+	sprs   map[string]Sprite       // map: name => sprite prototype, for loaded sprites
 	items  []Shape                 // shapes on stage (in Zorder), not only sprites
 
 	tickMgr tickMgr
@@ -106,13 +109,8 @@ type Game struct {
 	isRunned bool
 }
 
-type Spriter interface {
-	Shape
-	Main()
-}
-
 type Gamer interface {
-	initGame(sprites []Spriter) *Game
+	initGame(sprites []Sprite) *Game
 }
 
 func (p *Game) IsRunned() bool {
@@ -126,8 +124,8 @@ func (p *Game) getSharedImgs() *sharedImages {
 	return p.shared
 }
 
-func (p *Game) newSpriteAndLoad(name string, tySpr reflect.Type, g reflect.Value) Spriter {
-	spr := reflect.New(tySpr).Interface().(Spriter)
+func (p *Game) newSpriteAndLoad(name string, tySpr reflect.Type, g reflect.Value) Sprite {
+	spr := reflect.New(tySpr).Interface().(Sprite)
 	if err := p.loadSprite(spr, name, g); err != nil {
 		panic(err)
 	}
@@ -135,7 +133,7 @@ func (p *Game) newSpriteAndLoad(name string, tySpr reflect.Type, g reflect.Value
 	return spr
 }
 
-func (p *Game) getSpriteProto(tySpr reflect.Type, g reflect.Value) Spriter {
+func (p *Game) getSpriteProto(tySpr reflect.Type, g reflect.Value) Sprite {
 	name := tySpr.Name()
 	spr, ok := p.sprs[name]
 	if !ok {
@@ -144,7 +142,7 @@ func (p *Game) getSpriteProto(tySpr reflect.Type, g reflect.Value) Spriter {
 	return spr
 }
 
-func (p *Game) getSpriteProtoByName(name string, g reflect.Value) Spriter {
+func (p *Game) getSpriteProtoByName(name string, g reflect.Value) Sprite {
 	spr, ok := p.sprs[name]
 	if !ok {
 		tySpr, ok := p.typs[name]
@@ -162,13 +160,17 @@ func (p *Game) reset() {
 	p.Stop(AllOtherScripts)
 	p.items = nil
 	p.isLoaded = false
-	p.sprs = make(map[string]Spriter)
+	p.sprs = make(map[string]Sprite)
 }
 
-func (p *Game) initGame(sprites []Spriter) *Game {
+func (p *Game) getGame() *Game {
+	return p
+}
+
+func (p *Game) initGame(sprites []Sprite) *Game {
 	p.tickMgr.init()
 	p.eventSinks.init(&p.sinkMgr, p)
-	p.sprs = make(map[string]Spriter)
+	p.sprs = make(map[string]Sprite)
 	p.typs = make(map[string]reflect.Type)
 	for _, spr := range sprites {
 		tySpr := reflect.TypeOf(spr).Elem()
@@ -178,7 +180,7 @@ func (p *Game) initGame(sprites []Spriter) *Game {
 }
 
 // Gopt_Game_Main is required by Go+ compiler as the entry of a .gmx project.
-func Gopt_Game_Main(game Gamer, sprites ...Spriter) {
+func Gopt_Game_Main(game Gamer, sprites ...Sprite) {
 	g := game.initGame(sprites)
 	if me, ok := game.(interface{ MainEntry() }); ok {
 		me.MainEntry()
@@ -251,17 +253,21 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 	}
 	g.startLoad(fs, &conf)
 	for i, n := 0, v.NumField(); i < n; i++ {
-		name, val := getFieldPtrOrAlloc(v, i)
+		name, val := getFieldPtrOrAlloc(g, v, i)
 		switch fld := val.(type) {
 		case *Sound:
-			media, err := g.loadSound(name)
-			if err != nil {
-				panic(err)
+			if g.canBindSound(name) {
+				media, err := g.loadSound(name)
+				if err != nil {
+					panic(err)
+				}
+				*fld = media
 			}
-			*fld = media
-		case Spriter:
-			if err := g.loadSprite(fld, name, v); err != nil {
-				panic(err)
+		case Sprite:
+			if g.canBindSprite(name) {
+				if err := g.loadSprite(fld, name, v); err != nil {
+					panic(err)
+				}
 			}
 			// p.sprs[name] = fld (has been set by loadSprite)
 		}
@@ -276,12 +282,12 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 }
 
 // MouseHitItem returns the topmost item which is hit by mouse.
-func (p *Game) MouseHitItem() (target *Sprite, ok bool) {
+func (p *Game) MouseHitItem() (target *SpriteImpl, ok bool) {
 	x, y := p.input.mouseXY()
 	hc := hitContext{Pos: image.Pt(x, y)}
 	item, ok := p.onHit(hc)
 	if ok {
-		target, ok = item.Target.(*Sprite)
+		target, ok = item.Target.(*SpriteImpl)
 	}
 	return
 }
@@ -294,16 +300,25 @@ func instance(gamer reflect.Value) *Game {
 	return fld.Addr().Interface().(*Game)
 }
 
-func getFieldPtrOrAlloc(v reflect.Value, i int) (name string, val interface{}) {
+func getFieldPtrOrAlloc(g *Game, v reflect.Value, i int) (name string, val interface{}) {
 	tFld := v.Type().Field(i)
 	vFld := v.Field(i)
 	typ := tFld.Type
 	word := unsafe.Pointer(vFld.Addr().Pointer())
 	ret := reflect.NewAt(typ, word).Interface()
-	if vFld.Kind() == reflect.Ptr && typ.Implements(tySpriter) {
+
+	if vFld.Kind() == reflect.Ptr && typ.Implements(tySprite) {
 		obj := reflect.New(typ.Elem())
 		reflect.ValueOf(ret).Elem().Set(obj)
 		ret = obj.Interface()
+	}
+
+	if vFld.Kind() == reflect.Interface && typ.Implements(tySprite) {
+		if typ2, ok := g.typs[tFld.Name]; ok {
+			obj := reflect.New(typ2)
+			reflect.ValueOf(ret).Elem().Set(obj)
+			ret = obj.Interface()
+		}
 	}
 	return tFld.Name, ret
 }
@@ -331,6 +346,10 @@ func findObjPtr(v reflect.Value, name string, from int) interface{} {
 				word := unsafe.Pointer(vFld.Pointer())
 				return reflect.NewAt(typ.Elem(), word).Interface()
 			}
+			if vFld.Kind() == reflect.Interface {
+				word := unsafe.Pointer(vFld.Addr().Pointer())
+				return reflect.NewAt(tFld.Type, word).Elem().Interface()
+			}
 			word := unsafe.Pointer(vFld.Addr().Pointer())
 			return reflect.NewAt(typ, word).Interface()
 		}
@@ -351,7 +370,18 @@ func (p *Game) startLoad(fs spxfs.Dir, cfg *Config) {
 	p.windowHeight_ = cfg.Height
 }
 
-func (p *Game) loadSprite(sprite Spriter, name string, gamer reflect.Value) error {
+func (p *Game) canBindSprite(name string) bool {
+	// auto bind the sprite, if assets/sprites/{name}/index.json exists.
+	var baseDir = "sprites/" + name + "/"
+	f, err := p.fs.Open(baseDir + "index.json")
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	return true
+}
+
+func (p *Game) loadSprite(sprite Sprite, name string, gamer reflect.Value) error {
 	if debugLoad {
 		log.Println("==> LoadSprite", name)
 	}
@@ -365,8 +395,8 @@ func (p *Game) loadSprite(sprite Spriter, name string, gamer reflect.Value) erro
 	// init sprite (field 0)
 	vSpr := reflect.ValueOf(sprite).Elem()
 	vSpr.Set(reflect.Zero(vSpr.Type()))
-	base := vSpr.Field(0).Addr().Interface().(*Sprite)
-	base.init(baseDir, p, name, &conf, gamer, p.getSharedImgs())
+	base := vSpr.Field(0).Addr().Interface().(*SpriteImpl)
+	base.init(baseDir, p, name, &conf, gamer, p.getSharedImgs(), sprite)
 	p.sprs[name] = sprite
 	//
 	// init gamer pointer (field 1)
@@ -374,9 +404,20 @@ func (p *Game) loadSprite(sprite Spriter, name string, gamer reflect.Value) erro
 	return nil
 }
 
-func spriteOf(sprite Spriter) *Sprite {
-	vSpr := reflect.ValueOf(sprite).Elem()
-	return vSpr.Field(0).Addr().Interface().(*Sprite)
+func spriteOf(sprite Sprite) *SpriteImpl {
+	vSpr := reflect.ValueOf(sprite)
+	if vSpr.Kind() != reflect.Ptr {
+		return nil
+	}
+	vSpr = vSpr.Elem()
+	if vSpr.Kind() != reflect.Struct || vSpr.NumField() < 1 {
+		return nil
+	}
+	spriteField := vSpr.Field(0)
+	if spriteField.Type() != reflect.TypeOf(SpriteImpl{}) {
+		return nil
+	}
+	return spriteField.Addr().Interface().(*SpriteImpl)
 }
 
 func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
@@ -396,7 +437,7 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 	p.world = ebiten.NewImage(p.worldWidth_, p.worldHeight_)
 	p.mapMode = toMapMode(proj.Map.Mode)
 
-	inits := make([]Spriter, 0, len(proj.Zorder))
+	inits := make([]Sprite, 0, len(proj.Zorder))
 	for _, v := range proj.Zorder {
 		if name, ok := v.(string); ok {
 			sp := p.getSpriteProtoByName(name, g)
@@ -408,6 +449,12 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 		}
 	}
 	for _, ini := range inits {
+		spr := spriteOf(ini)
+		if spr != nil {
+			spr.OnStart(func() {
+				spr.awake()
+			})
+		}
 		ini.Main()
 	}
 
@@ -448,8 +495,8 @@ func Gopt_Game_Reload(game Gamer, index interface{}) (err error) {
 	g := instance(v)
 	g.reset()
 	for i, n := 0, v.NumField(); i < n; i++ {
-		name, val := getFieldPtrOrAlloc(v, i)
-		if fld, ok := val.(Spriter); ok {
+		name, val := getFieldPtrOrAlloc(g, v, i)
+		if fld, ok := val.(Sprite); ok {
 			if err := g.loadSprite(fld, name, v); err != nil {
 				panic(err)
 			}
@@ -466,10 +513,11 @@ func Gopt_Game_Reload(game Gamer, index interface{}) (err error) {
 
 type specsp = map[string]interface{}
 
-func (p *Game) addSpecialShape(g reflect.Value, v specsp, inits []Spriter) []Spriter {
+func (p *Game) addSpecialShape(g reflect.Value, v specsp, inits []Sprite) []Sprite {
 	switch typ := v["type"].(string); typ {
-	case "stageMonitor":
-		if sm, err := newStageMonitor(g, v); err == nil {
+	case "stageMonitor", "monitor":
+		if sm, err := newMonitor(g, v); err == nil {
+			sm.game = p
 			p.addShape(sm)
 		}
 	case "measure":
@@ -484,10 +532,10 @@ func (p *Game) addSpecialShape(g reflect.Value, v specsp, inits []Spriter) []Spr
 	return inits
 }
 
-func (p *Game) addStageSprite(g reflect.Value, v specsp, inits []Spriter) []Spriter {
+func (p *Game) addStageSprite(g reflect.Value, v specsp, inits []Sprite) []Sprite {
 	target := v["target"].(string)
 	if val := findObjPtr(g, target, 0); val != nil {
-		if sp, ok := val.(Spriter); ok {
+		if sp, ok := val.(Sprite); ok {
 			dest := spriteOf(sp)
 			applySpriteProps(dest, v)
 			p.addShape(dest)
@@ -514,7 +562,7 @@ func (p *Game) addStageSprite(g reflect.Value, v specsp, inits []Spriter) []Spri
 	  ]
 	}
 */
-func (p *Game) addStageSprites(g reflect.Value, v specsp, inits []Spriter) []Spriter {
+func (p *Game) addStageSprites(g reflect.Value, v specsp, inits []Sprite) []Sprite {
 	target := v["target"].(string)
 	if val := findFieldPtr(g, target, 0); val != nil {
 		fldSlice := reflect.ValueOf(val).Elem()
@@ -528,7 +576,7 @@ func (p *Game) addStageSprites(g reflect.Value, v specsp, inits []Spriter) []Spr
 			} else {
 				typItemPtr = reflect.PtrTo(typItem)
 			}
-			if typItemPtr.Implements(tySpriter) {
+			if typItemPtr.Implements(tySprite) {
 				spr := p.getSpriteProto(typItem, g)
 				items := v["items"].([]interface{})
 				n := len(items)
@@ -552,7 +600,7 @@ func (p *Game) addStageSprites(g reflect.Value, v specsp, inits []Spriter) []Spr
 }
 
 var (
-	tySpriter = reflect.TypeOf((*Spriter)(nil)).Elem()
+	tySprite = reflect.TypeOf((*Sprite)(nil)).Elem()
 )
 
 // -----------------------------------------------------------------------------
@@ -581,11 +629,41 @@ func (p *Game) Update() error {
 	if !p.isLoaded {
 		return nil
 	}
+
+	p.updateColliders()
 	p.input.update()
 	p.updateMousePos()
 	p.sounds.update()
 	p.tickMgr.update()
 	return nil
+}
+
+func (p *Game) updateColliders() {
+	var startTime time.Time
+	if debugPerf {
+		startTime = time.Now()
+	}
+
+	items := p.items
+	n := len(items)
+	for i := 0; i < n; i++ {
+		s1, ok1 := items[i].(*SpriteImpl)
+		if ok1 {
+			flag := s1.isVisible && !s1.isDying
+			for j := i + 1; j < n; j++ {
+				s2, ok2 := items[j].(*SpriteImpl)
+				if ok2 && s1 != s2 {
+					flag2 := flag && s2.isVisible && !s2.isDying && s1.touchingSprite(s2)
+					s1.collider.SetTouching(s2, flag2)
+					s2.collider.SetTouching(s1, flag2)
+				}
+			}
+		}
+	}
+
+	if debugPerf {
+		log.Println("updateColliders shapes:", n, " cost:", time.Now().Sub(startTime))
+	}
 }
 
 // startTick creates tickHandler to handle `onTick` event.
@@ -714,6 +792,18 @@ func (p *Game) getWidth() int {
 	return p.windowWidth_
 }
 
+// convert pos from win space(0,0 is top left) to game space(0,0 is center)
+func (p *Game) convertWinSpace2GameSpace(x, y float64) (float64, float64) {
+	winW, winH := p.getWindowSize()
+	x += float64(winW) / 2
+	y = float64(winH)/2 - y
+	return x, y
+}
+
+func (p *Game) getWindowSize() (int, int) {
+	return p.windowSize_()
+}
+
 func (p *Game) windowSize_() (int, int) {
 	if p.windowWidth_ == 0 {
 		p.doWindowSize()
@@ -746,17 +836,17 @@ func (p *Game) doWorldSize() {
 	}
 }
 
-func (p *Game) touchingPoint(dst *Sprite, x, y float64) bool {
+func (p *Game) touchingPoint(dst *SpriteImpl, x, y float64) bool {
 	return dst.touchPoint(x, y)
 }
 
-func (p *Game) touchingSpriteBy(dst *Sprite, name string) *Sprite {
+func (p *Game) touchingSpriteBy(dst *SpriteImpl, name string) *SpriteImpl {
 	if dst == nil {
 		return nil
 	}
 
 	for _, item := range p.items {
-		if sp, ok := item.(*Sprite); ok && sp != dst {
+		if sp, ok := item.(*SpriteImpl); ok && sp != dst {
 			if sp.name == name && (sp.isVisible && !sp.isDying) {
 				if sp.touchingSprite(dst) {
 					return sp
@@ -785,7 +875,7 @@ func (p *Game) objectPos(obj interface{}) (float64, float64) {
 			mx, my := rand.Intn(worldW), rand.Intn(worldH)
 			return float64(mx - (worldW >> 1)), float64((worldH >> 1) - my)
 		}
-	case Spriter:
+	case Sprite:
 		return spriteOf(v).getXY()
 	}
 	panic("objectPos: unexpected input")
@@ -801,7 +891,7 @@ func (p *Game) stampCostume(di *spriteDrawInfo) {
 	p.turtle.stampCostume(di)
 }
 
-func (p *Game) movePen(sp *Sprite, x, y float64) {
+func (p *Game) movePen(sp *SpriteImpl, x, y float64) {
 	worldW, worldH := p.worldSize_()
 	p.turtle.penLine(&penLine{
 		x1:    (worldW >> 1) + int(sp.x),
@@ -877,7 +967,7 @@ func (p *Game) activateShape(child Shape) {
 	}
 }
 
-func (p *Game) goBackByLayers(spr *Sprite, n int) {
+func (p *Game) goBackByLayers(spr *SpriteImpl, n int) {
 	idx := p.doFindSprite(spr)
 	if idx < 0 {
 		return
@@ -888,7 +978,7 @@ func (p *Game) goBackByLayers(spr *Sprite, n int) {
 		for newIdx > 0 {
 			newIdx--
 			item := items[newIdx]
-			if _, ok := item.(*Sprite); ok {
+			if _, ok := item.(*SpriteImpl); ok {
 				n--
 				if n == 0 {
 					break
@@ -914,7 +1004,7 @@ func (p *Game) goBackByLayers(spr *Sprite, n int) {
 					break
 				}
 				item := items[newIdx]
-				if _, ok := item.(*Sprite); ok {
+				if _, ok := item.(*SpriteImpl); ok {
 					n++
 					if n == 0 {
 						break
@@ -943,9 +1033,9 @@ func (p *Game) doFindSprite(src Shape) int {
 	return -1
 }
 
-func (p *Game) findSprite(name string) *Sprite {
+func (p *Game) findSprite(name string) *SpriteImpl {
 	for _, item := range p.items {
-		if sp, ok := item.(*Sprite); ok {
+		if sp, ok := item.(*SpriteImpl); ok {
 			if !sp.isCloned_ && sp.name == name {
 				return sp
 			}
@@ -1192,6 +1282,17 @@ func (p *Game) ClearSoundEffects() {
 
 type Sound *soundConfig
 
+func (p *Game) canBindSound(name string) bool {
+	// auto bind the sound, if assets/sounds/{name}/index.json exists.
+	prefix := "sounds/" + name
+	f, err := p.fs.Open(prefix + "/index.json")
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	return true
+}
+
 func (p *Game) loadSound(name string) (media Sound, err error) {
 	if media, ok := p.sounds.audios[name]; ok {
 		return media, nil
@@ -1302,7 +1403,7 @@ func (p *Game) Broadcast__2(msg string, data interface{}, wait bool) {
 
 func (p *Game) setStageMonitor(target string, val string, visible bool) {
 	for _, item := range p.items {
-		if sp, ok := item.(*stageMonitor); ok && sp.val == val && sp.target == target {
+		if sp, ok := item.(*Monitor); ok && sp.val == val && sp.target == target {
 			sp.setVisible(visible)
 			return
 		}
@@ -1317,4 +1418,38 @@ func (p *Game) ShowVar(name string) {
 	p.setStageMonitor("", getVarPrefix+name, true)
 }
 
+func (p *Game) getAllShapes() []Shape {
+	return p.items
+}
+
 // -----------------------------------------------------------------------------
+// Widget
+
+type ShapeGetter interface {
+	getAllShapes() []Shape
+}
+
+// GetWidget_ returns the widget instance with given name. It panics if not found.
+// Instead of being used directly, it is meant to be called by `Gopt_Game_Gopx_GetWidget` only.
+// We extract `GetWidget_` to keep `Gopt_Game_Gopx_GetWidget` simple, which simplifies work in ispx,
+// see details in https://github.com/goplus/builder/issues/765#issuecomment-2313915805.
+func GetWidget_(sg ShapeGetter, name string) Widget {
+	items := sg.getAllShapes()
+	for _, item := range items {
+		widget, ok := item.(Widget)
+		if ok && widget.GetName() == name {
+			return widget
+		}
+	}
+	panic("GetWidget: widget not found - " + name)
+}
+
+// GetWidget returns the widget instance (in given type) with given name. It panics if not found.
+func Gopt_Game_Gopx_GetWidget[T any](sg ShapeGetter, name string) *T {
+	widget := GetWidget_(sg, name)
+	if result, ok := widget.(interface{}).(*T); ok {
+		return result
+	} else {
+		panic("GetWidget: type mismatch")
+	}
+}
