@@ -1,0 +1,10 @@
+/test/go.mod
+/test/go.sum
+/test/gdspx.gdextension
+/test/.gitignore
+/test/engine
+/test/main.go
+/test/main.tscn
+/test/project.godot
+/test/**/*.import
+/temp

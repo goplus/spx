@@ -1,0 +1,28 @@
+# gdspx specific ignores
+/.godot
+/.import
+/.builds
+/extasset
+/engine
+/lib
+/Makefile
+/export.cfg
+/export_presets.cfg
+*.translation
+/.mono
+/data_*
+/mono_crash.*.json
+
+# auto generated ignores
+/go.mod
+/go.sum
+/gdspx.gdextension
+/main.go
+/main.tscn
+/project.godot
+/gop_autogen.go
+
+# user specify ignores
+# ...
+/assets/**/*.import
+

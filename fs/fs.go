@@ -29,6 +29,10 @@ type Dir interface {
 	Close() error
 }
 
+type GdDir interface {
+	GetPath() string
+}
+
 func SplitSchema(path string) (schema, file string) {
 	idx := strings.IndexAny(path, ":/\\ ")
 	if idx < 0 || path[idx] != ':' {

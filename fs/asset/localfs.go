@@ -39,6 +39,10 @@ func (f *FS) Close() error {
 	return nil
 }
 
+func (f *FS) GetPath() string {
+	return f.base
+}
+
 func init() {
 	fs.RegisterSchema("", Open)
 }

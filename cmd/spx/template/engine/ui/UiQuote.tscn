@@ -1,0 +1,90 @@
+[gd_scene load_steps=2 format=3 uid="uid://cyhb64mtc27be"]
+
+[ext_resource type="Texture2D" uid="uid://dxn0c72yygef8" path="res://engine/textures/quote/quote.png" id="1_leka2"]
+
+[node name="UiQuote" type="Control"]
+layout_mode = 3
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -576.0
+offset_top = -324.0
+offset_right = -476.0
+offset_bottom = -224.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="C" type="Control" parent="."]
+anchors_preset = 0
+offset_right = 100.0
+offset_bottom = 100.0
+
+[node name="LabelDes" type="Label" parent="C"]
+custom_minimum_size = Vector2(1, 0)
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = -1.0
+offset_top = -26.0
+offset_right = -1.0
+offset_bottom = 23.0
+grow_horizontal = 2
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/outline_size = 3
+theme_override_font_sizes/font_size = 18
+text = "a"
+horizontal_alignment = 1
+text_direction = 1
+
+[node name="LabelMsg" type="Label" parent="C"]
+custom_minimum_size = Vector2(1, 0)
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -12.0
+offset_bottom = 27.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/outline_size = 3
+theme_override_font_sizes/font_size = 28
+text = "a"
+horizontal_alignment = 1
+vertical_alignment = 1
+text_direction = 1
+
+[node name="ImageL" type="NinePatchRect" parent="C"]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_right = 35.0
+grow_vertical = 2
+texture = ExtResource("1_leka2")
+region_rect = Rect2(0, 0, 34.6219, 181.266)
+patch_margin_left = 35
+patch_margin_top = 13
+patch_margin_bottom = 13
+
+[node name="ImageR" type="NinePatchRect" parent="C"]
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -35.0
+grow_horizontal = 0
+grow_vertical = 2
+scale = Vector2(-1, 1)
+pivot_offset = Vector2(17, 0)
+texture = ExtResource("1_leka2")
+region_rect = Rect2(0, 0, 34.6219, 181.431)
+patch_margin_left = 35
+patch_margin_top = 13
+patch_margin_bottom = 13

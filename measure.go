@@ -18,12 +18,11 @@ package spx
 
 import (
 	"fmt"
-	"image"
+	"godot-ext/gdspx/pkg/engine"
 	"strconv"
 	"strings"
 
-	"github.com/goplus/spx/internal/gdi"
-	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/goplus/spx/internal/ui"
 )
 
 const (
@@ -41,10 +40,10 @@ type measure struct {
 	// computed properties
 	text         string
 	color        Color
-	cachedImg    *ebiten.Image
 	svgLineStyle string
 	svgRotate    string
 	svgSize      int // size*scale + 0.5 + measureLineWidth
+	panel        *ui.UiMeasure
 }
 
 func newMeasure(v specsp) *measure {
@@ -58,7 +57,8 @@ func newMeasure(v specsp) *measure {
 	if err != nil {
 		panic(err)
 	}
-	return &measure{
+	panel := ui.NewUiMeasure()
+	meansureObj := &measure{
 		heading:      heading,
 		size:         size,
 		text:         text,
@@ -68,7 +68,15 @@ func newMeasure(v specsp) *measure {
 		svgLineStyle: fmt.Sprintf("stroke-width:%d;stroke:rgb(%d, %d, %d);", measureLineWidth, c.R, c.G, c.B),
 		svgRotate:    fmt.Sprintf("rotate(%.1f %d %d)", heading, svgSize>>1, svgSize>>1),
 		svgSize:      svgSize,
+		panel:        panel,
 	}
+	panel.UpdateInfo(meansureObj.x, meansureObj.y, size*scale, heading, text, engine.Color{
+		R: float32(c.R) / 255.0,
+		G: float32(c.G) / 255.0,
+		B: float32(c.B) / 255.0,
+		A: float32(c.A) / 255.0,
+	})
+	return meansureObj
 }
 
 func getSpcspVal(ss specsp, key string, defaultVal ...interface{}) interface{} {
@@ -80,76 +88,4 @@ func getSpcspVal(ss specsp, key string, defaultVal ...interface{}) interface{} {
 		return defaultVal[0]
 	}
 	return v
-}
-
-func (m *measure) draw(dc drawContext) {
-	if m.cachedImg != nil {
-		screenW, screenH := dc.Size()
-		op := new(ebiten.DrawImageOptions)
-		x := float64((screenW-m.svgSize)>>1) + m.x
-		y := float64((screenH-m.svgSize)>>1) - m.y
-		op.GeoM.Translate(x, y)
-		dc.DrawImage(m.cachedImg, op)
-		return
-	}
-	// lines
-	lines, err := m.getLines()
-	if err != nil {
-		panic(err)
-	}
-	m.cachedImg = ebiten.NewImageFromImage(lines)
-	// text
-	render := gdi.NewTextRender(defaultFont, 0x80000, 0)
-	render.AddText(m.text)
-	textW, textH := render.Size()
-	x, y := m.getTextPos(textW, textH)
-	render.Draw(m.cachedImg, x, y, m.color, 0)
-}
-
-func (m *measure) getLines() (image.Image, error) {
-	size := m.svgSize
-	svg := gdi.NewSVG(size, size)
-	svg.Gtransform(m.svgRotate)
-	svg.Line((size+measureLineWidth)/2, 0, (size+measureLineWidth)/2, size, m.svgLineStyle)
-	svg.Line((size-measureEdgeLen)/2, 0, (size+measureEdgeLen)/2, 0, m.svgLineStyle)
-	svg.Line((size-measureEdgeLen)/2, size-measureLineWidth/2, (size+measureEdgeLen)/2, size-measureLineWidth/2, m.svgLineStyle)
-	svg.Gend()
-	svg.End()
-	return svg.ToImage()
-}
-
-func (m *measure) getTextPos(textW, textH int) (int, int) {
-	rotation := (int(m.heading)%360 + 360) % 360
-	center := m.svgSize / 2
-
-	switch {
-	case rotation == 0:
-		return center + measureTextMargin, center - textH/2 // right of center
-	case rotation == 90:
-		return center - textW/2, center - measureTextMargin - textH // above center
-	case rotation == 180:
-		return center - textW - measureTextMargin, center - textH/2 // left of center
-	case rotation == 270:
-		return center - textW/2, center + measureTextMargin // under center
-	case rotation > 0 && rotation <= 45:
-		return center + measureTextMargin, center + (measureTextMargin-textH)/2
-	case rotation > 45 && rotation < 90:
-		return center - (measureTextMargin+textW)/2, center - measureTextMargin - textH
-	case rotation > 90 && rotation <= 135:
-		return center + (measureTextMargin-textW)/2, center - measureTextMargin - textH
-	case rotation > 135 && rotation < 180:
-		return center - measureTextMargin - textW, center
-	case rotation > 180 && rotation <= 225:
-		return center - measureTextMargin - textW, center - textH
-	case rotation > 225 && rotation < 270:
-		return center - textW/3, center + measureTextMargin
-	case rotation > 270 && rotation <= 315:
-		return center - textW, center + measureTextMargin
-	default:
-		return center + measureTextMargin, center - textH
-	}
-}
-
-func (m *measure) hit(hc hitContext) (hr hitResult, ok bool) {
-	return
 }

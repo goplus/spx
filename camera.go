@@ -19,46 +19,45 @@ package spx
 import (
 	"log"
 
-	"github.com/goplus/spx/internal/camera"
+	"github.com/goplus/spx/internal/engine"
 	"github.com/goplus/spx/internal/math32"
-	"github.com/hajimehoshi/ebiten/v2"
 )
 
 type Camera struct {
-	freecamera camera.FreeCamera
-	g          *Game
-	on_        interface{}
+	g   *Game
+	on_ interface{}
 }
 
 func (c *Camera) init(g *Game, winW, winH float64, worldW, worldH float64) {
-	c.freecamera = *camera.NewFreeCamera(winW, winH, worldW, worldH)
 	c.g = g
 }
 
 func (c *Camera) isWorldRange(pos *math32.Vector2) bool {
-	return c.freecamera.IsWorldRange(pos)
+	return true // TODO tanjp
 }
 
 func (c *Camera) SetXYpos(x float64, y float64) {
-	c.on_ = nil
-	c.freecamera.MoveTo(x, y)
+	c.ChangeXYpos(x, y)
 }
 
 func (c *Camera) ChangeXYpos(x float64, y float64) {
 	c.on_ = nil
-	c.freecamera.Move(x, y)
+	engine.SyncCameraSetCameraPosition(engine.NewVec2(x, y))
 }
 
 func (c *Camera) screenToWorld(point *math32.Vector2) *math32.Vector2 {
-	return c.freecamera.ScreenToWorld(point)
+	return point // TODO tanjp
 }
 
-/* unused:
-func (c *Camera) worldToScreen(point *math32.Vector2) *math32.Vector2 {
-	return c.freecamera.WorldToScreen(point)
+func (c *Camera) getFollowPos() (bool, float64, float64) {
+	if c.on_ != nil {
+		switch v := c.on_.(type) {
+		case SpriteImpl:
+			return true, v.x, v.y
+		}
+	}
+	return false, 0, 0
 }
-*/
-
 func (c *Camera) On(obj interface{}) {
 	switch v := obj.(type) {
 	case string:
@@ -68,6 +67,7 @@ func (c *Camera) On(obj interface{}) {
 			return
 		}
 		obj = sp
+		println("Camera.On: sprite found -", sp.name)
 	case *SpriteImpl:
 	case nil:
 	case Sprite:
@@ -81,23 +81,4 @@ func (c *Camera) On(obj interface{}) {
 		panic("Camera.On: unexpected parameter")
 	}
 	c.on_ = obj
-}
-
-func (c *Camera) updateOnObj() {
-	switch v := c.on_.(type) {
-	case *SpriteImpl:
-		cx, cy := v.getXY()
-		c.freecamera.MoveTo(cx, cy)
-	case nil:
-	case specialObj:
-		cx := c.g.MouseX()
-		cy := c.g.MouseY()
-		c.freecamera.MoveTo(cx, cy)
-	}
-}
-
-func (c *Camera) render(world, screen *ebiten.Image) error {
-	c.updateOnObj()
-	c.freecamera.Render(world, screen)
-	return nil
 }
