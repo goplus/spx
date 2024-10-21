@@ -628,34 +628,6 @@ func (p *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeigh
 	return p.windowSize_()
 }
 
-func (p *Game) updateColliders() {
-	var startTime time.Time
-	if debugPerf {
-		startTime = time.Now()
-	}
-
-	items := p.items
-	n := len(items)
-	for i := 0; i < n; i++ {
-		s1, ok1 := items[i].(*SpriteImpl)
-		if ok1 {
-			flag := s1.isVisible && !s1.isDying
-			for j := i + 1; j < n; j++ {
-				s2, ok2 := items[j].(*SpriteImpl)
-				if ok2 && s1 != s2 {
-					flag2 := flag && s2.isVisible && !s2.isDying && s1.touchingSprite(s2)
-					s1.collider.SetTouching(s2, flag2)
-					s2.collider.SetTouching(s1, flag2)
-				}
-			}
-		}
-	}
-
-	if debugPerf {
-		log.Println("updateColliders shapes:", n, " cost:", time.Now().Sub(startTime))
-	}
-}
-
 // startTick creates tickHandler to handle `onTick` event.
 // You can call tickHandler.Stop to stop listening `onTick` event.
 func (p *Game) startTick(duration int64, onTick func(tick int64)) *tickHandler {
