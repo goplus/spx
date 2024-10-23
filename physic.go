@@ -29,6 +29,5 @@ func paserColliderType(typeName string) int64 {
 	case "rect":
 		return physicColliderRect
 	}
-	println("unknown collider type:", typeName)
 	return physicColliderNone
 }

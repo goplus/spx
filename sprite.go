@@ -62,51 +62,6 @@ const (
 	AnimChannelMove  string = "@move"
 )
 
-type Collider struct {
-	sprite  *SpriteImpl
-	others  map[*SpriteImpl]bool
-	othersM sync.Mutex
-}
-
-func (c *Collider) SetTouching(other *SpriteImpl, on bool) {
-	c.othersM.Lock()
-	defer c.othersM.Unlock()
-
-	if other == nil || c.sprite == nil {
-		return
-	}
-
-	if c.others == nil {
-		c.others = make(map[*SpriteImpl]bool)
-	}
-
-	_, exist := c.others[other]
-	if on {
-		if !exist {
-			c.others[other] = true
-			c.sprite.fireTouchStart(other)
-		} else {
-			c.sprite.fireTouching(other)
-		}
-	} else {
-		if exist {
-			delete(c.others, other)
-			c.sprite.fireTouchEnd(other)
-		}
-	}
-}
-
-func (c *Collider) Reset() {
-	copy := make(map[*SpriteImpl]bool, len(c.others))
-	for k, v := range c.others {
-		copy[k] = v
-	}
-	for other := range copy {
-		c.SetTouching(other, false)
-		other.collider.SetTouching(c.sprite, false)
-	}
-}
-
 type Sprite interface {
 	IEventSinks
 	Shape
@@ -239,8 +194,6 @@ type SpriteImpl struct {
 	lastAnim            *anim.Anim
 	isWaitingStopAnim   bool
 	defaultCostumeIndex int
-
-	collider Collider
 
 	collisionMask  int64
 	collisionLayer int64
@@ -397,8 +350,6 @@ func (p *SpriteImpl) init(
 		p.animations[key] = ani
 	}
 
-	p.collider.others = make(map[*SpriteImpl]bool)
-	p.collider.sprite = p
 }
 func (p *SpriteImpl) awake() {
 	p.playDefaultAnim()
@@ -450,8 +401,6 @@ func (p *SpriteImpl) InitFrom(src *SpriteImpl) {
 	p.triggerSize = src.triggerSize
 	p.triggerRadius = src.triggerRadius
 
-	p.collider.others = make(map[*SpriteImpl]bool)
-	p.collider.sprite = p
 }
 
 func cloneMap(v map[string]interface{}) map[string]interface{} {
@@ -696,7 +645,6 @@ func (p *SpriteImpl) Destroy() { // destroy sprite, whether prototype or cloned
 		log.Println("Destroy", p.name)
 	}
 
-	p.collider.Reset()
 	p.Hide()
 	p.doDeleteClone()
 	p.g.removeShape(p)
@@ -722,7 +670,6 @@ func (p *SpriteImpl) Hide() {
 		log.Println("Hide", p.name)
 	}
 
-	p.collider.Reset()
 	p.doStopSay()
 	p.isVisible = false
 }
