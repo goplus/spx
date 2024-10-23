@@ -10,7 +10,7 @@
     }
   ],
   "triggerMask":1,
-  "triggerLayer":2,
+  "triggerLayer":1,
   "costumeIndex": 0,
   "heading": 0,
   "isDraggable": false,
