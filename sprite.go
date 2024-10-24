@@ -306,15 +306,19 @@ func (p *SpriteImpl) init(
 				}
 				ani.From, ani.To = p.getFromAnToForAniFrames(ani.From, ani.To)
 			}
+			from, to := p.getFromAnToForAniFrames(ani.From, ani.To)
 			if oldFps == 0 && oldFrameFps != 0 {
 				ani.Fps = float64(oldFrameFps)
 				ani.FrameFps = oldFrameFps
-			} else {
+				ani.Duration = math.Abs(to-from) / ani.Fps
+			} else if oldFps != 0 {
 				ani.Fps = oldFps
 				ani.FrameFps = int(oldFps)
+				ani.Duration = math.Abs(to-from) / ani.Fps
+			} else {
+				ani.Fps = math.Abs(to-from) / ani.Duration
+				ani.FrameFps = int(ani.Fps)
 			}
-			from, to := p.getFromAnToForAniFrames(ani.From, ani.To)
-			ani.Duration = math.Abs(to-from) / ani.Fps
 		case aniTypeMove:
 		case aniTypeTurn:
 		case aniTypeGlide:
