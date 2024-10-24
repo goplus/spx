@@ -53,6 +53,6 @@ func (pself *ProxySprite) UpdatePosRot(x, y float64, rot float64) {
 func (pself *ProxySprite) OnTriggerEnter(target ISpriter) {
 	sprite, ok := target.(*ProxySprite)
 	if ok {
-		tempTriggerPairs = append(tempTriggerPairs, TriggerPair{Src: pself, Dst: sprite})
+		triggerEventsTemp = append(triggerEventsTemp, TriggerEvent{Src: pself, Dst: sprite})
 	}
 }
