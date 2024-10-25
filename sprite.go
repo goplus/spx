@@ -249,10 +249,10 @@ func (p *SpriteImpl) init(
 	}
 
 	// bind physic config
-	p.collisionMask = spriteCfg.CollisionMask
-	p.collisionLayer = spriteCfg.CollisionLayer
-	p.triggerMask = spriteCfg.TriggerMask
-	p.triggerLayer = spriteCfg.TriggerLayer
+	p.collisionMask = parseLayerMaskValue(spriteCfg.CollisionMask)
+	p.collisionLayer = parseLayerMaskValue(spriteCfg.CollisionLayer)
+	p.triggerMask = parseLayerMaskValue(spriteCfg.TriggerMask)
+	p.triggerLayer = parseLayerMaskValue(spriteCfg.TriggerLayer)
 
 	p.colliderType = paserColliderType(spriteCfg.ColliderType)
 	p.colliderCenter = spriteCfg.ColliderCenter
