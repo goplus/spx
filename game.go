@@ -368,14 +368,7 @@ func (p *Game) startLoad(fs spxfs.Dir, cfg *Config) {
 }
 
 func (p *Game) canBindSprite(name string) bool {
-	// auto bind the sprite, if assets/sprites/{name}/index.json exists.
-	var baseDir = "sprites/" + name + "/"
-	f, err := p.fs.Open(baseDir + "index.json")
-	if err != nil {
-		return false
-	}
-	defer f.Close()
-	return true
+	return hasAsset("sprites/" + name + "/index.json")
 }
 
 func (p *Game) loadSprite(sprite Sprite, name string, gamer reflect.Value) error {
@@ -1151,15 +1144,13 @@ func (p *Game) ClearSoundEffects() {
 
 type Sound *soundConfig
 
+func hasAsset(path string) bool {
+	finalPath := engine.ToAssetPath(path)
+	return engine.SyncResHasFile(finalPath)
+}
+
 func (p *Game) canBindSound(name string) bool {
-	// auto bind the sound, if assets/sounds/{name}/index.json exists.
-	prefix := "sounds/" + name
-	f, err := p.fs.Open(prefix + "/index.json")
-	if err != nil {
-		return false
-	}
-	defer f.Close()
-	return true
+	return hasAsset("sounds/" + name + "/index.json")
 }
 
 func (p *Game) loadSound(name string) (media Sound, err error) {
@@ -1173,6 +1164,7 @@ func (p *Game) loadSound(name string) (media Sound, err error) {
 	prefix := "sounds/" + name
 	media = new(soundConfig)
 	if err = loadJson(media, p.fs, prefix+"/index.json"); err != nil {
+		println("loadSound failed:", err.Error())
 		return
 	}
 	media.Path = prefix + "/" + media.Path
@@ -1190,6 +1182,9 @@ func (p *Game) loadSound(name string) (media Sound, err error) {
 //	Play(mediaName, wait) -- sync
 //	Play(mediaName, opts)
 func (p *Game) Play__0(media Sound) {
+	if media == nil {
+		panic("play media is nil")
+	}
 	p.Play__2(media, &PlayOptions{})
 }
 
