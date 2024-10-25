@@ -475,11 +475,11 @@ func cloneSprite(out reflect.Value, outPtr Sprite, in reflect.Value, v specsp) *
 	return dest
 }
 
-func Gopt_SpriteImpl_Clone__0(sprite Sprite) {
-	Gopt_SpriteImpl_Clone__1(sprite, nil)
+func Gopt_SpriteImpl_Clone__0(sprite Sprite) *SpriteImpl {
+	return Gopt_SpriteImpl_Clone__1(sprite, nil)
 }
 
-func Gopt_SpriteImpl_Clone__1(sprite Sprite, data interface{}) {
+func Gopt_SpriteImpl_Clone__1(sprite Sprite, data interface{}) *SpriteImpl {
 	src := spriteOf(sprite)
 	if debugInstr {
 		log.Println("Clone", src.name)
@@ -492,6 +492,7 @@ func Gopt_SpriteImpl_Clone__1(sprite Sprite, data interface{}) {
 	if dest.hasOnCloned {
 		dest.doWhenCloned(dest, data)
 	}
+	return dest
 }
 
 func (p *SpriteImpl) OnCloned__0(onCloned func(data interface{})) {
@@ -1495,6 +1496,9 @@ func checkTouchingDirection(dir float64) int {
 }
 
 func (p *SpriteImpl) checkTouchingScreen(where int) (touching int) {
+	if p.proxy == nil {
+		return 0
+	}
 	value := engine.SyncPhysicCheckTouchedCameraBoundary(p.proxy.Id, int64(where))
 	if value {
 		return where
