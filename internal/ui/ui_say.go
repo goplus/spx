@@ -34,6 +34,6 @@ func (pself *UiSay) SetText(x, y float64, msg string) {
 	if !isLeft {
 		label = pself.labelR.GetId()
 	}
-	engine.SyncUiSetPosition(pself.GetId(), PosGame2UI(x, y+65))
+	engine.SyncUiSetPosition(pself.GetId(), WorldToScreen(x, y+65))
 	engine.SyncUiSetText(label, msg)
 }

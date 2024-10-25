@@ -32,7 +32,6 @@ import (
 	"github.com/goplus/spx/internal/audiorecord"
 	"github.com/goplus/spx/internal/coroutine"
 	"github.com/goplus/spx/internal/engine"
-	"github.com/goplus/spx/internal/ui"
 
 	spxfs "github.com/goplus/spx/fs"
 	_ "github.com/goplus/spx/fs/asset"
@@ -439,8 +438,7 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 
 	p.doWindowSize() // set window size
 
-	ui.WinX = float64(p.windowWidth_)
-	ui.WinY = float64(p.windowHeight_)
+
 	inits := make([]Sprite, 0, len(proj.Zorder))
 	for _, v := range proj.Zorder {
 		if name, ok := v.(string); ok {

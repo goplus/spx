@@ -33,7 +33,7 @@ func (pself *UiMeasure) UpdateInfo(x, y float64, length, heading float64, name s
 	rad := engine.HeadingToRad(heading - 90)
 	s, c := math.Sincos(float64(rad))
 	halfX, halfY := (c * length / 2), (s * length / 2)
-	pos := PosGame2UI(x, y)
+	pos := WorldToScreen(x, y)
 	labelPos := pos
 	pos.X -= float32(halfX)
 	pos.Y -= float32(halfY)
