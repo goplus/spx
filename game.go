@@ -434,9 +434,10 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 	}
 	p.mapMode = toMapMode(proj.Map.Mode)
 	// setup proxy's property
-	p.proxy = engine.SyncNewBackdropProxy(p, p.getCostumePath())
+	p.proxy = engine.SyncNewBackdropProxy(p, p.getCostumePath(), p.getCostumeRenderScale())
 
 	p.doWindowSize() // set window size
+
 
 	inits := make([]Sprite, 0, len(proj.Zorder))
 	for _, v := range proj.Zorder {

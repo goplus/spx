@@ -52,11 +52,11 @@ func SyncCreateEmptySprite[T any]() *T {
 	return __ret
 }
 
-func SyncNewBackdropProxy(obj interface{}, path string) *ProxySprite {
+func SyncNewBackdropProxy(obj interface{}, path string, renderScale float64) *ProxySprite {
 	var __ret *ProxySprite
 	done := make(chan struct{})
 	job := func() {
-		__ret = newBackdropProxy(obj, path)
+		__ret = newBackdropProxy(obj, path, renderScale)
 		done <- struct{}{}
 	}
 	updateJobQueue <- job
@@ -64,12 +64,12 @@ func SyncNewBackdropProxy(obj interface{}, path string) *ProxySprite {
 	return __ret
 }
 
-func newBackdropProxy(obj interface{}, path string) *ProxySprite {
+func newBackdropProxy(obj interface{}, path string, renderScale float64) *ProxySprite {
 	__ret := CreateEmptySprite[ProxySprite]()
 	__ret.Target = obj
 	__ret.SetZIndex(-1)
 	__ret.DisablePhysic()
-	__ret.UpdateTexture(path, 1)
+	__ret.UpdateTexture(path, renderScale)
 	return __ret
 }
 
