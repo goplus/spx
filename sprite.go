@@ -823,6 +823,9 @@ func (p *SpriteImpl) goAnimateInternal(name string, ani *aniConfig, isBlocking b
 	}
 
 	framenum := int(ani.Duration * ani.Fps)
+	if !ani.IsLoop {
+		framenum = int(math.Round(math.Abs(tovalf - fromvalf)))
+	}
 	fps := ani.Fps
 
 	pre_x := p.x

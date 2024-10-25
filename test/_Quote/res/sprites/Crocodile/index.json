@@ -16,6 +16,7 @@
       "duration": 0.3,
       "from": 0,
       "to": 4,
+      "isKeepOnStop":true,
       "onStart":{
         "play": "chomp"
       }
@@ -23,7 +24,8 @@
     "surface": {
       "duration": 0.3,
       "from": 4,
-      "to": 0
+      "to": 0,
+      "isKeepOnStop":true
     }
   },
   "heading": -50,
