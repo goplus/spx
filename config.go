@@ -254,10 +254,10 @@ type spriteConfig struct {
 	Pivot               math32.Vector2        `json:"pivot"`
 	DefaultAnimation    string                `json:"defaultAnimation"`
 	AnimBindings        map[string]string     `json:"animBindings"`
-	CollisionMask       int64                 `json:"collisionMask"`
-	CollisionLayer      int64                 `json:"collisionLayer"`
-	TriggerMask         int64                 `json:"triggerMask"`
-	TriggerLayer        int64                 `json:"triggerLayer"`
+	CollisionMask       *int64                `json:"collisionMask"`
+	CollisionLayer      *int64                `json:"collisionLayer"`
+	TriggerMask         *int64                `json:"triggerMask"`
+	TriggerLayer        *int64                `json:"triggerLayer"`
 	ColliderType        string                `json:"colliderType"`
 	ColliderCenter      math32.Vector2        `json:"colliderCenter"`
 	ColliderSize        math32.Vector2        `json:"colliderSize"`
