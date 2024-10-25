@@ -33,7 +33,7 @@ func (pself *UiMonitor) UpdateScale(x float64) {
 	engine.SyncUiSetScale(pself.GetId(), engine.NewVec2(x, x))
 }
 func (pself *UiMonitor) UpdatePos(x, y float64) {
-	pos := PosGame2UI(x, y)
+	pos := WorldToScreen(x, y)
 	engine.SyncUiSetGlobalPosition(pself.GetId(), pos)
 }
 
