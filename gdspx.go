@@ -134,8 +134,8 @@ func (p *Game) updateProxy() {
 }
 
 func (*Game) updatePhysic() {
-	triggers := make([]engine.TriggerPair, 0)
-	triggers = engine.GetTriggerPairs(triggers)
+	triggers := make([]engine.TriggerEvent, 0)
+	triggers = engine.GetTriggerEvents(triggers)
 	for _, pair := range triggers {
 		src := pair.Src.Target
 		dst := pair.Dst.Target

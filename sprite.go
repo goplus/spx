@@ -249,10 +249,10 @@ func (p *SpriteImpl) init(
 	}
 
 	// bind physic config
-	p.collisionMask = spriteCfg.CollisionMask
-	p.collisionLayer = spriteCfg.CollisionLayer
-	p.triggerMask = spriteCfg.TriggerMask
-	p.triggerLayer = spriteCfg.TriggerLayer
+	p.collisionMask = parseLayerMaskValue(spriteCfg.CollisionMask)
+	p.collisionLayer = parseLayerMaskValue(spriteCfg.CollisionLayer)
+	p.triggerMask = parseLayerMaskValue(spriteCfg.TriggerMask)
+	p.triggerLayer = parseLayerMaskValue(spriteCfg.TriggerLayer)
 
 	p.colliderType = paserColliderType(spriteCfg.ColliderType)
 	p.colliderCenter = spriteCfg.ColliderCenter
@@ -306,15 +306,19 @@ func (p *SpriteImpl) init(
 				}
 				ani.From, ani.To = p.getFromAnToForAniFrames(ani.From, ani.To)
 			}
+			from, to := p.getFromAnToForAniFrames(ani.From, ani.To)
 			if oldFps == 0 && oldFrameFps != 0 {
 				ani.Fps = float64(oldFrameFps)
 				ani.FrameFps = oldFrameFps
-			} else {
+				ani.Duration = math.Abs(to-from) / ani.Fps
+			} else if oldFps != 0 {
 				ani.Fps = oldFps
 				ani.FrameFps = int(oldFps)
+				ani.Duration = math.Abs(to-from) / ani.Fps
+			} else {
+				ani.Fps = math.Abs(to-from) / ani.Duration
+				ani.FrameFps = int(ani.Fps)
 			}
-			from, to := p.getFromAnToForAniFrames(ani.From, ani.To)
-			ani.Duration = math.Abs(to-from) / ani.Fps
 		case aniTypeMove:
 		case aniTypeTurn:
 		case aniTypeGlide:
@@ -819,6 +823,9 @@ func (p *SpriteImpl) goAnimateInternal(name string, ani *aniConfig, isBlocking b
 	}
 
 	framenum := int(ani.Duration * ani.Fps)
+	if !ani.IsLoop {
+		framenum = int(math.Round(math.Abs(tovalf - fromvalf)))
+	}
 	fps := ani.Fps
 
 	pre_x := p.x

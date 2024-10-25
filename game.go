@@ -697,11 +697,29 @@ func (p *Game) eventLoop(me coroutine.Thread) int {
 }
 
 func (p *Game) logicLoop(me coroutine.Thread) int {
+	lastLbtnPressed := false
+	keyEvents := make([]engine.KeyEvent, 0)
 	for {
 		p.Wait(0.01)
-		if engine.SyncInputGetMouseState(MOUSE_BUTTON_LEFT) {
-			p.fireEvent(&eventLeftButtonDown{X: int(p.gMouseX), Y: int(p.gMouseY)})
+		curLbtnPressed := engine.SyncInputGetMouseState(MOUSE_BUTTON_LEFT)
+		if curLbtnPressed != lastLbtnPressed {
+			if lastLbtnPressed {
+				p.fireEvent(&eventLeftButtonUp{X: int(p.gMouseX), Y: int(p.gMouseY)})
+			} else {
+				p.fireEvent(&eventLeftButtonDown{X: int(p.gMouseX), Y: int(p.gMouseY)})
+			}
 		}
+		lastLbtnPressed = curLbtnPressed
+
+		keyEvents = engine.GetKeyEvents(keyEvents)
+		for _, ev := range keyEvents {
+			if ev.IsPressed {
+				p.fireEvent(&eventKeyDown{Key: ev.Id})
+			} else {
+				p.fireEvent(&eventKeyUp{Key: ev.Id})
+			}
+		}
+		keyEvents = keyEvents[:0]
 	}
 }
 

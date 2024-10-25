@@ -47,8 +47,6 @@
       "frameTo": "die-3"
     }
   },
-  "triggerMask":1,
-  "triggerLayer":1,
   "heading": 90,
   "isDraggable": false,
   "rotationStyle": "normal",

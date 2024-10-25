@@ -22,6 +22,15 @@ const (
 	physicColliderRect   = 0x02
 )
 
+func parseDefaultValue(pval *int64, defaultValue int64) int64 {
+	if pval == nil {
+		return defaultValue
+	}
+	return *pval
+}
+func parseLayerMaskValue(pval *int64) int64 {
+	return parseDefaultValue(pval, 1)
+}
 func paserColliderType(typeName string) int64 {
 	switch typeName {
 	case "circle":
