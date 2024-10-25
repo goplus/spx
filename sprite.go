@@ -1636,17 +1636,54 @@ func (p *SpriteImpl) CostumeHeight() float64 {
 	return float64(h)
 }
 
+func (p *SpriteImpl) applyPivot(c *costume, cx, cy float64) (float64, float64) {
+	cx += p.pivot.X * float64(c.bitmapResolution)
+	cy -= p.pivot.Y * float64(c.bitmapResolution)
+	return cx, cy
+}
+
 func (p *SpriteImpl) Bounds() *math32.RotatedRect {
 	if !p.isVisible {
 		return nil
 	}
-	return nil // TODO(tanjp) fixed by engine api
+	c := p.costumes[p.costumeIndex_]
+	x, y := p.applyPivot(c, p.x, p.y)
+	w, h := c.getSize()
+	ret := math32.RotatedRect{Center: math32.NewVector2(x, y),
+		Size: math32.NewSize(float64(w), float64(h)), Angle: p.direction}
+
+	return &ret
 }
 
 // -----------------------------------------------------------------------------
 
 func (p *SpriteImpl) fixWorldRange(x, y float64) (float64, float64) {
-	// TODO(tanjp) fixed by engine api
+	rect := p.Bounds()
+	if rect == nil {
+		return x, y
+	}
+	plist := rect.Points()
+	for _, val := range plist {
+		if p.g.isWorldRange(val) {
+			return x, y
+		}
+	}
+	viewport := engine.SyncCameraGetViewportRect()
+	minPos := engine.NewVec2(float64(viewport.Position.X-viewport.Size.X/2), float64(viewport.Position.Y-viewport.Size.Y/2))
+	maxPos := engine.NewVec2(float64(viewport.Position.X+viewport.Size.X/2), float64(viewport.Position.Y+viewport.Size.Y/2))
+	if x < float64(minPos.X) {
+		x = float64(minPos.X)
+	}
+	if x > float64(maxPos.X) {
+		x = float64(maxPos.X)
+	}
+	if y < float64(minPos.Y) {
+		y = float64(minPos.Y)
+	}
+	if y > float64(maxPos.Y) {
+		y = float64(maxPos.Y)
+	}
+
 	return x, y
 }
 
