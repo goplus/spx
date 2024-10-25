@@ -29,7 +29,7 @@ func (pself *UiQuote) OnStart() {
 }
 
 func (pself *UiQuote) SetText(x, y float64, width, height float64, msg, description string) {
-	engine.SyncUiSetGlobalPosition(pself.container.GetId(), PosGame2UI(x-width, y+height))
+	engine.SyncUiSetGlobalPosition(pself.container.GetId(), WorldToScreen(x-width, y+height))
 	engine.SyncUiSetSize(pself.container.GetId(), engine.NewVec2(width*2, height*2))
 	engine.SyncUiSetText(pself.labelMsg.GetId(), msg)
 	engine.SyncUiSetText(pself.labelDes.GetId(), description)
