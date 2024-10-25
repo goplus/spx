@@ -22,6 +22,8 @@ require (
 
 replace github.com/goplus/spx => ../../
 
+
 replace godot-ext/gdspx/cmd/gdspx => github.com/realdream-ai/gdspx/cmd/gdspx v0.0.0-20241024132745-d779ec70144d
 
 replace godot-ext/gdspx => github.com/realdream-ai/gdspx v0.0.0-20241024132745-d779ec70144d
+
