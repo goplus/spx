@@ -4,7 +4,7 @@ go 1.22.3
 
 require godot-ext/gdspx v0.0.0
 
-replace godot-ext/gdspx => github.com/realdream-ai/gdspx v0.0.0-20241021082413-21077ba5d509
+replace godot-ext/gdspx => github.com/realdream-ai/gdspx v0.0.0-20241024132745-d779ec70144d
 
 require (
 	github.com/pkg/errors v0.9.1
