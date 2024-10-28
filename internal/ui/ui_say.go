@@ -26,7 +26,7 @@ func (pself *UiSay) OnStart() {
 	pself.labelR = BindUI[UiNode](pself.GetId(), "VR/BG/Label")
 }
 
-func (pself *UiSay) SetText(x, y float64, msg string) {
+func (pself *UiSay) SetText(x, y float64, w, h float64, msg string) {
 	isLeft := x <= 0
 	engine.SyncUiSetVisible(pself.vboxL.GetId(), isLeft)
 	engine.SyncUiSetVisible(pself.vboxR.GetId(), !isLeft)
@@ -34,6 +34,6 @@ func (pself *UiSay) SetText(x, y float64, msg string) {
 	if !isLeft {
 		label = pself.labelR.GetId()
 	}
-	engine.SyncUiSetPosition(pself.GetId(), WorldToScreen(x, y+65))
+	engine.SyncUiSetPosition(pself.GetId(), WorldToScreen(x, y+h/2))
 	engine.SyncUiSetText(label, msg)
 }

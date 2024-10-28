@@ -38,8 +38,9 @@ type quoter struct {
 }
 
 func (p *quoter) refresh() {
-	// TODO use sprite's bounding box
-	p.panel.SetText(p.sprite.x, p.sprite.y, 80, 80, p.message, p.description)
+	size := p.sprite.Bounds().Size
+	extSize := 10.0
+	p.panel.SetText(p.sprite.x, p.sprite.y, size.Width/2+extSize, size.Height/2+extSize, p.message, p.description)
 }
 
 func (p *SpriteImpl) quote_(message, description string) {

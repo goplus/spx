@@ -52,6 +52,10 @@ func main() {
 		showHelpInfo()
 		return
 	}
+	if len(os.Args) > 3 {
+		port := os.Args[3]
+		impl.ServerPort, _ = strconv.Atoi(port)
+	}
 	switch os.Args[1] {
 	case "help", "version":
 		showHelpInfo()
@@ -72,7 +76,6 @@ func main() {
 	case "init":
 		prepareGoEnv()
 	}
-
 	if !impl.IsFileExist(path.Join(impl.TargetDir, "go.mod")) {
 		prepareGoEnv()
 	}

@@ -33,7 +33,14 @@ func (c *Camera) init(g *Game, winW, winH float64, worldW, worldH float64) {
 }
 
 func (c *Camera) isWorldRange(pos *math32.Vector2) bool {
-	return true // TODO tanjp
+	rect := engine.SyncCameraGetViewportRect()
+	if pos.X < float64(rect.Position.X-rect.Size.X/2) || pos.X > float64(rect.Position.X+rect.Size.X) {
+		return false
+	}
+	if pos.Y < float64(rect.Position.Y-rect.Size.Y/2) || pos.Y > float64(rect.Position.Y+rect.Size.Y) {
+		return false
+	}
+	return true
 }
 
 func (c *Camera) SetXYpos(x float64, y float64) {

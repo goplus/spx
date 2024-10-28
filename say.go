@@ -42,7 +42,8 @@ type sayOrThinker struct {
 }
 
 func (p *sayOrThinker) refresh() {
-	p.panel.SetText(p.sp.x, p.sp.y, p.msg)
+	size := p.sp.Bounds().Size
+	p.panel.SetText(p.sp.x, p.sp.y, size.Width, size.Height, p.msg)
 }
 
 const (

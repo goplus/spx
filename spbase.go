@@ -91,7 +91,7 @@ func newCostumeWith(name string, img *costumeSetImage, faceRight float64, i, bit
 		name: name, setIndex: i,
 		faceRight: faceRight, bitmapResolution: bitmapResolution,
 	}
-	imageSize := getCustomeAssetPath(img.path)
+	imageSize := getCustomeAssetSize(img.path)
 	value.width = int(imageSize.X) / img.nx
 	value.height = int(imageSize.Y)
 	value.posX = i * value.width
@@ -115,7 +115,7 @@ func newCostume(base string, c *costumeConfig) *costume {
 		bitmapResolution: toBitmapResolution(c.BitmapResolution),
 		path:             path,
 	}
-	imageSize := getCustomeAssetPath(path)
+	imageSize := getCustomeAssetSize(path)
 	value.width = int(imageSize.X)
 	value.height = int(imageSize.Y)
 	value.posX = 0
@@ -123,7 +123,7 @@ func newCostume(base string, c *costumeConfig) *costume {
 	return value
 }
 
-func getCustomeAssetPath(path string) gdspx.Vec2 {
+func getCustomeAssetSize(path string) gdspx.Vec2 {
 	assetPath := engine.ToAssetPath(path)
 	return engine.SyncResGetImageSize(assetPath)
 }
