@@ -18,9 +18,10 @@ package spx
 
 import (
 	"fmt"
-	"godot-ext/gdspx/pkg/engine"
 	"strconv"
 	"strings"
+
+	"github.com/realdream-ai/gdspx/pkg/engine"
 
 	"github.com/goplus/spx/internal/ui"
 )

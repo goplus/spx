@@ -1,9 +1,10 @@
 package engine
 
 import (
-	. "godot-ext/gdspx/pkg/engine"
-	"godot-ext/gdspx/pkg/gdspx"
 	"sync"
+
+	. "github.com/realdream-ai/gdspx/pkg/engine"
+	"github.com/realdream-ai/gdspx/pkg/gdspx"
 )
 
 type TriggerEvent struct {

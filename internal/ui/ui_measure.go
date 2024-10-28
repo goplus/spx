@@ -1,8 +1,9 @@
 package ui
 
 import (
-	. "godot-ext/gdspx/pkg/engine"
 	"math"
+
+	. "github.com/realdream-ai/gdspx/pkg/engine"
 
 	"github.com/goplus/spx/internal/engine"
 )

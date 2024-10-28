@@ -1,7 +1,7 @@
 package spx
 
 import (
-	gdspx "godot-ext/gdspx/pkg/engine"
+	gdspx "github.com/realdream-ai/gdspx/pkg/engine"
 
 	"github.com/goplus/spx/internal/engine"
 )

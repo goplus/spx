@@ -5,7 +5,6 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
-	"godot-ext/gdspx/cmd/gdspx/pkg/impl"
 	"io"
 	"log"
 	"os"
@@ -15,6 +14,8 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/realdream-ai/gdspx/cmd/gdspx/pkg/impl"
 
 	_ "embed"
 

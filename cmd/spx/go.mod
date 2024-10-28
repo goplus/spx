@@ -1,15 +1,15 @@
 module github.com/goplus/spx/cmd/spx
 
-go 1.22.3
+go 1.21.3
 
 require (
 	github.com/otiai10/copy v1.14.0
-	godot-ext/gdspx/cmd/gdspx v0.0.0
+	github.com/realdream-ai/gdspx/cmd/gdspx v0.0.0
 )
 
 require (
 	github.com/goplus/spx v0.0.0-00010101000000-000000000000
-	godot-ext/gdspx v0.0.0 // indirect
+	github.com/realdream-ai/gdspx v0.0.0 // indirect
 )
 
 require (
@@ -22,8 +22,6 @@ require (
 
 replace github.com/goplus/spx => ../../
 
+replace github.com/realdream-ai/gdspx/cmd/gdspx => github.com/realdream-ai/gdspx/cmd/gdspx v0.0.0-20241028072423-3577d7e1307f
 
-replace godot-ext/gdspx/cmd/gdspx => github.com/realdream-ai/gdspx/cmd/gdspx v0.0.0-20241024132745-d779ec70144d
-
-replace godot-ext/gdspx => github.com/realdream-ai/gdspx v0.0.0-20241024132745-d779ec70144d
-
+replace github.com/realdream-ai/gdspx => github.com/realdream-ai/gdspx v0.0.0-20241028072423-3577d7e1307f
