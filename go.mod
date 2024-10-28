@@ -2,12 +2,9 @@ module github.com/goplus/spx
 
 go 1.21.3
 
-require github.com/realdream-ai/gdspx v0.0.0
-
-replace github.com/realdream-ai/gdspx => github.com/realdream-ai/gdspx v0.0.0-20241028072423-3577d7e1307f
-
 require (
 	github.com/pkg/errors v0.9.1
+	github.com/realdream-ai/gdspx v0.0.0-20241031082444-3764efe8390a
 	golang.org/x/image v0.18.0
 	golang.org/x/mobile v0.0.0-20220518205345-8578da9835fd
 )
