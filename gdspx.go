@@ -22,7 +22,7 @@ import (
 
 	"github.com/goplus/spx/internal/engine"
 
-	gdspx "godot-ext/gdspx/pkg/engine"
+	gdspx "github.com/realdream-ai/gdspx/pkg/engine"
 )
 
 func (p *Game) OnEngineStart() {

@@ -17,7 +17,7 @@
 package spx
 
 import (
-	"godot-ext/gdspx/pkg/engine"
+	"github.com/realdream-ai/gdspx/pkg/engine"
 )
 
 type Key = int64

@@ -1,7 +1,7 @@
 package engine
 
 import (
-	. "godot-ext/gdspx/pkg/engine"
+	. "github.com/realdream-ai/gdspx/pkg/engine"
 )
 
 // =============== factory ===================

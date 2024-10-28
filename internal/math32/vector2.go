@@ -2,8 +2,9 @@ package math32
 
 import (
 	"fmt"
-	"godot-ext/gdspx/pkg/engine"
 	"math"
+
+	"github.com/realdream-ai/gdspx/pkg/engine"
 )
 
 type Vector2 struct {

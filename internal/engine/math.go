@@ -1,8 +1,8 @@
 package engine
 
 import (
-	. "godot-ext/gdspx/pkg/engine"
-	gdspx "godot-ext/gdspx/pkg/engine"
+	. "github.com/realdream-ai/gdspx/pkg/engine"
+	gdspx "github.com/realdream-ai/gdspx/pkg/engine"
 )
 
 type Rect gdspx.Rect2

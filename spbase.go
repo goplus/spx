@@ -24,7 +24,7 @@ import (
 	_ "image/jpeg" // for image decode
 	_ "image/png"  // for image decode
 
-	gdspx "godot-ext/gdspx/pkg/engine"
+	gdspx "github.com/realdream-ai/gdspx/pkg/engine"
 
 	"github.com/goplus/spx/internal/engine"
 	"github.com/goplus/spx/internal/math32"
