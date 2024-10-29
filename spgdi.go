@@ -81,6 +81,33 @@ func (p *spriteDrawInfo) getPixelGeo(cx, cy float64) *ebiten.GeoM {
 	geo.Translate(cx, cy)
 	return geo
 }
+func getImageBoundByPixels(gdiImg gdi.Image) (int, int, int, int) {
+	img := gdiImg.Origin()
+	boundRect := img.Bounds().Size()
+
+	minX, minY, maxX, maxY := boundRect.X, boundRect.Y, 0, 0
+	for x := 0; x < boundRect.X; x++ {
+		for y := 0; y < boundRect.Y; y++ {
+			color1 := img.At(int(x), int(y))
+			_, _, _, a := color1.RGBA()
+			if a >= 1 {
+				if x < minX {
+					minX = x
+				}
+				if y < minY {
+					minY = y
+				}
+				if x > maxX {
+					maxX = x
+				}
+				if y > maxY {
+					maxY = y
+				}
+			}
+		}
+	}
+	return minX, minY, maxX, maxY
+}
 
 func (p *spriteDrawInfo) getPixel(pos *math32.Vector2, gdiImg gdi.Image, geo *ebiten.GeoM) (color.Color, *math32.Vector2) {
 	img := gdiImg.Origin()
@@ -380,6 +407,15 @@ func (p *SpriteImpl) getRotatedRect() (rRect *math32.RotatedRect) {
 
 func (p *SpriteImpl) getTrackPos() (topx, topy int) {
 	rRect := p.getRotatedRect()
+
+	c := p.costumes[p.costumeIndex_]
+	img, _, _ := c.needImage(p.g.fs)
+	minX, minY, maxX, _ := getImageBoundByPixels(img)
+	bound := img.Bounds()
+	minRawX, maxRawX := bound.Min.X, bound.Max.X
+	scale := p.Size() / float64(c.bitmapResolution)
+	offsetX, offsetY := float64((maxRawX+minRawX)-(maxX+minX))/2*scale, float64(minY)*scale
+
 	if rRect == nil {
 		return
 	}
@@ -395,7 +431,8 @@ func (p *SpriteImpl) getTrackPos() (topx, topy int) {
 		X: float64(pos.X) + float64(worldW)/2.0,
 		Y: float64(pos.Y) + float64(wolrdH)/2.0,
 	}
-
+	pos.X -= offsetX
+	pos.Y += offsetY
 	return int(pos.X), int(pos.Y) - int(rRect.Size.Height)/2
 }
 
