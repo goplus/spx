@@ -54,14 +54,16 @@ const (
 	DbgFlagInstr
 	DbgFlagEvent
 	DbgFlagPerf
-	DbgFlagAll = DbgFlagLoad | DbgFlagInstr | DbgFlagEvent | DbgFlagPerf
+	DbgFlagTimeline
+	DbgFlagAll = DbgFlagLoad | DbgFlagInstr | DbgFlagEvent | DbgFlagPerf | DbgFlagTimeline
 )
 
 var (
-	debugInstr bool
-	debugLoad  bool
-	debugEvent bool
-	debugPerf  bool
+	debugInstr    bool
+	debugLoad     bool
+	debugEvent    bool
+	debugPerf     bool
+	debugTimeline bool
 )
 
 func SetDebug(flags dbgFlags) {
@@ -69,6 +71,7 @@ func SetDebug(flags dbgFlags) {
 	debugInstr = (flags & DbgFlagInstr) != 0
 	debugEvent = (flags & DbgFlagEvent) != 0
 	debugPerf = (flags & DbgFlagPerf) != 0
+	debugTimeline = (flags & DbgFlagTimeline) != 0
 }
 
 // -------------------------------------------------------------------------------------
@@ -81,11 +84,12 @@ type Game struct {
 	fs     spxfs.Dir
 	shared *sharedImages
 
-	sounds soundMgr
-	turtle turtleCanvas
-	typs   map[string]reflect.Type // map: name => sprite type, for all sprites
-	sprs   map[string]Sprite       // map: name => sprite prototype, for loaded sprites
-	items  []Shape                 // shapes on stage (in Zorder), not only sprites
+	sounds    soundMgr
+	turtle    turtleCanvas
+	typs      map[string]reflect.Type // map: name => sprite type, for all sprites
+	sprs      map[string]Sprite       // map: name => sprite prototype, for loaded sprites
+	items     []Shape                 // shapes on stage (in Zorder), not only sprites
+	timelines TimelineMgr
 
 	tickMgr tickMgr
 	input   inputMgr
@@ -625,16 +629,23 @@ func (p *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeigh
 	return p.windowSize_()
 }
 
+var ts int64
+
 func (p *Game) Update() error {
 	if !p.isLoaded {
 		return nil
 	}
 
+	old := ts
+	ts = time.Now().UnixMilli()
 	p.updateColliders()
 	p.input.update()
 	p.updateMousePos()
 	p.sounds.update()
 	p.tickMgr.update()
+	if old != 0 {
+		p.timelines.Update((float64(ts-old) / 1000.0))
+	}
 	return nil
 }
 
