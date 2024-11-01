@@ -78,7 +78,9 @@ func cacheTriggerEvents() {
 	triggerMutex.Unlock()
 	triggerEventsTemp = triggerEventsTemp[:0]
 }
-
+func IsWebIntepreterMode() bool {
+	return gdspx.IsWebIntepreterMode()
+}
 func GetTriggerEvents(lst []TriggerEvent) []TriggerEvent {
 	triggerMutex.Lock()
 	lst = append(lst, triggerEvents...)

@@ -5,12 +5,12 @@ go 1.21.3
 require (
 	github.com/goplus/spx v0.0.0-00010101000000-000000000000
 	github.com/otiai10/copy v1.14.0
-	github.com/realdream-ai/gdspx/cmd/gdspx v0.0.0-20241030013253-086e5f846004
+	github.com/realdream-ai/gdspx/cmd/gdspx v0.0.0-20241101061209-ec07b29e8341
 )
 
 require (
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/realdream-ai/gdspx v0.0.0-20241031082444-3764efe8390a // indirect
+	github.com/realdream-ai/gdspx v0.0.0-20241101061209-ec07b29e8341 // indirect
 	golang.org/x/image v0.18.0 // indirect
 	golang.org/x/mobile v0.0.0-20220518205345-8578da9835fd // indirect
 	golang.org/x/sync v0.3.0 // indirect
