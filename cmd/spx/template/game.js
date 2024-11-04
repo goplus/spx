@@ -6,7 +6,7 @@ class GameApp {
         this.persistentPath = '/home/web_user';
         this.tempZipPath = '/tmp/preload.zip';
         this.projectInstallName = config?.projectName || "Game";
-        this.zipData = config.zipData;
+        this.projectData = config.projectData;
         this.persistentPaths = [this.persistentPath];
         this.editorCanvas = config.editorCanvas;
         this.gameCanvas = config.gameCanvas;
@@ -149,9 +149,9 @@ class GameApp {
     async installProject() {
         try {
             console.log("merge zip files");
-			const engineZipResp = fetch("engineres.zip");
-			let engineZipData = await (await engineZipResp).arrayBuffer();
-            this.zipData = await this.mergeZips(this.zipData, engineZipData);
+			const engineDataResp = fetch("engineres.zip");
+			let engineData = await (await engineDataResp).arrayBuffer();
+            this.projectData = await this.mergeZips(this.projectData, engineData);
 
             let dbExists = await this.checkDBExist(this.persistentPath, this.getInstallPath());
             console.log(this.getInstallPath(), " DBExist result= ", dbExists);
@@ -163,7 +163,7 @@ class GameApp {
                 this.editor = new Engine(this.editorConfig);
                 this.exitFunc = this.importProject.bind(this);
                 this.editor.init('godot.editor').then(() => {
-                    this.editor.copyToFS(this.tempZipPath, this.zipData);
+                    this.editor.copyToFS(this.tempZipPath, this.projectData);
                     const args = ['--project-manager', '--single-window', "--install_project_name", this.projectInstallName];
                     this.editor.start({ 'args': args, 'persistentDrops': true });
                 });
@@ -220,7 +220,7 @@ class GameApp {
             this.game.start({ 'args': args, 'canvas': this.gameCanvas }).then(async () => {
                 this.gameCanvas.focus();
                 this.onProgress(0.9);
-                window.goLoadData(new Uint8Array(this.zipData));
+                window.goLoadData(new Uint8Array(this.projectData));
                 this.onProgress(1.0);
             });
         });

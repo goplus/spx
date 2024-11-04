@@ -41,6 +41,9 @@ var (
 	//go:embed template/index.html
 	index_html string
 
+	//go:embed template/runner.html
+	runner_html string
+
 	//go:embed template/main.go
 	main_go string
 
@@ -130,6 +133,7 @@ func exportInterpreterMode(webDir string) error {
 	packProject(impl.TargetDir, path.Join(webDir, "game.zip"))
 	os.WriteFile(path.Join(webDir, "engineres.zip"), engine_res_zip, 0644)
 	impl.SetupFile(true, path.Join(webDir, "index.html"), index_html)
+	impl.SetupFile(true, path.Join(webDir, "runner.html"), runner_html)
 	impl.SetupFile(true, path.Join(webDir, "game.js"), game_js)
 	impl.CopyFile(getISpxPath(), path.Join(webDir, "gdspx.wasm"))
 	return err
