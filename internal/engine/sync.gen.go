@@ -339,6 +339,27 @@ func SyncPhysicCheckTouchedCameraBoundary(obj Object, board_type int64) bool {
 }
 
 // IPlatformMgr
+func SyncPlatformSetWindowPosition(pos Vec2) {
+
+	done := make(chan struct{})
+	job := func() {
+		PlatformMgr.SetWindowPosition(pos)
+		done <- struct{}{}
+	}
+	updateJobQueue <- job
+	<-done
+}
+func SyncPlatformGetWindowPosition() Vec2 {
+	var __ret Vec2
+	done := make(chan struct{})
+	job := func() {
+		__ret = PlatformMgr.GetWindowPosition()
+		done <- struct{}{}
+	}
+	updateJobQueue <- job
+	<-done
+	return __ret
+}
 func SyncPlatformSetWindowSize(width int64, height int64) {
 
 	done := make(chan struct{})

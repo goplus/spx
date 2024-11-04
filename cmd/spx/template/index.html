@@ -1,351 +1,62 @@
 <!DOCTYPE html>
 <html lang="en">
-	<head>
-		<meta charset="utf-8">
-		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no">
-		<title>Godot Engine Web Editor (4.2.2.stable.custom_build)</title>
-		<style>
-			*:focus {
-				outline: none;
-				background-color: black;
-			}
-	
-			.spinner {
-				border: 16px solid #f3f3f3; 
-				border-top: 16px solid #3498db; 
-				border-radius: 50%;
-				width: 120px;
-				height: 120px;
-				animation: spin 2s linear infinite;
-				margin: auto;
-				position: absolute;
-				top: 50%;
-				left: 50%;
-				transform: translate(-50%, -50%);
-			}
-	
-			body {
-				background-color: black;
-				touch-action: none;
-				font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
-				margin: 0;
-				border: 0 none;
-				padding: 0;
-				text-align: center;
-				background-color: #333b4f;
-				overflow: hidden;
-			}
-	
-			#tab-game {
-				background-color: black;
-				min-height: 100vh;
-			}
-	
-			#canvas, #gameCanvas {
-				display: block;
-				margin: 0;
-				color: white;
-			}
-	
-			@keyframes spin {
-				0% {
-					transform: rotate(0deg);
-				}
-				100% {
-					transform: rotate(360deg);
-				}
-			}
-		</style>
-	</head>
-	
-	<body>
-		<div id="tabs">
-			<div id="tab-loader">
-				<div class="spinner"></div>
-			</div>
-			<div id="tab-editor" style="display: none;">
-				<div class="spinner"></div>
-			</div>
-			<div id="tab-game" style="display: none;">
-				<canvas id="game-canvas" tabindex="2">
-					HTML5 canvas appears to be unsupported in the current browser.<br >
-					Please try updating or use a different browser.
-				</canvas>
-			</div>
-			<div id="tab-status" style="display: none;">
-				<canvas id="editor-canvas" tabindex="1">
-				</canvas>
-			</div>
+
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport"
+		content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no">
+	<title>Go+ Builder</title>
+	<style>
+		*:focus {
+			outline: none;
+			background-color: black;
+		}
+
+		#canvas,
+		#gameCanvas {
+			display: block;
+			margin: 0;
+			color: white;
+		}
+	</style>
+</head>
+
+<body>
+	<div id="tabs">
+		<div id="tab-loader">
+			<progress id="progress-bar" value="0" max="1"></progress>
 		</div>
-		<script>
-window.addEventListener('load', () => {
-	if ('serviceWorker' in navigator) {
-		navigator.serviceWorker.register('service.worker.js').then(function (reg) {
-			if (reg.waiting) {
-				notifyUpdate(reg.waiting);
+		<div id="tab-game" style="display: none;">
+			<canvas id="game-canvas" tabindex="2">
+			</canvas>
+		</div>
+	</div>
+	<script src="godot.editor.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+	<script src="game.js"></script>
+	<script>
+		function onProgress(value) {
+			document.getElementById('progress-bar').value = value;
+			console.log("onProgress", value)
+			if (value >= 1) {
+				document.getElementById('tab-game').style.display = 'block';
+				document.getElementById('tab-loader').style.display = 'none';
 			}
-			reg.addEventListener('updatefound', function () {
-				const update = reg.installing;
-				update.addEventListener('statechange', function () {
-					if (update.state === 'installed') {
-						// It's a new install, claim and perform aggressive caching.
-						if (!reg.active) {
-							update.postMessage('claim');
-						} else {
-							notifyUpdate(update);
-						}
-					}
-				});
-			});
+		}
+		window.addEventListener('load',async () => {
+			projectZip = '/game.zip';
+			const zipResp = fetch(projectZip);
+			zipData = await (await zipResp).arrayBuffer();
+			const config = {
+				'projectName': "Game",
+				'onProgress': onProgress,
+				"gameCanvas": document.getElementById('game-canvas'),
+				"zipData":zipData
+			}; 
+			const gameApp = new GameApp(config);
+			gameApp.Start();
 		});
-	}
+	</script>
+</body>
 
-	runGame();
-});
-
-		</script>
-		<script src="godot.editor.js"></script>
-		<script>
-let editor = null;
-let game = null;
-let setStatusMode;
-let setStatusNotice;
-let video_driver = '';
-
-function clearPersistence() { // eslint-disable-line no-unused-vars
-	function deleteDB(path) {
-		return new Promise(function (resolve, reject) {
-			const req = indexedDB.deleteDatabase(path);
-			req.onsuccess = function () {
-				resolve();
-			};
-			req.onerror = function (err) {
-				reject(err);
-			};
-			req.onblocked = function (err) {
-				reject(err);
-			};
-		});
-	}
-	if (!window.confirm('Are you sure you want to delete all the locally stored files?\nClicking "OK" will permanently remove your projects and editor settings!')) {
-		return;
-	}
-	Promise.all([
-		deleteDB('/home/web_user/Preload'),
-	]).then(function (results) {
-		alert('Done.');
-	}).catch(function (err) {
-		alert('Error deleting local files. Please retry after reloading the page.');
-	});
-}
-
-
-
-const tabs = [
-	document.getElementById('tab-loader'),
-	document.getElementById('tab-editor'),
-	document.getElementById('tab-game'),
-];
-function showTab(name) {
-	tabs.forEach(function (elem) {
-		if (elem.id === `tab-${name}`) {
-			elem.style.display = 'block';
-			if (name === 'editor' || name === 'game') {
-				const canvas = document.getElementById(`${name}-canvas`);
-				canvas.focus();
-			}
-		} else {
-			elem.style.display = 'none';
-		}
-	});
-}
-
-var editorExitCount = 0
-function startEditor(zip) {
-	const INDETERMINATE_STATUS_STEP_MS = 100;
-	const persistentPaths = ['/home/web_user'];
-
-	let editorCanvas = document.getElementById('editor-canvas');
-	let gameCanvas = document.getElementById('game-canvas');
-
-	let initializing = true;
-	let statusMode = 'hidden';
-
-	showTab('status');
-
-	let lastScale = 0;
-	let lastWidth = 0;
-	let lastHeight = 0;
-
-	function replaceCanvas(from) {
-		const out = document.createElement('canvas');
-		out.id = from.id;
-		out.tabIndex = from.tabIndex;
-		from.parentNode.replaceChild(out, from);
-		lastScale = 0;
-		return out;
-	}
-
-
-	const gameConfig = {
-		'persistentPaths': persistentPaths,
-		'unloadAfterInit': false,
-		'canvas': gameCanvas,
-		'canvasResizePolicy': 1,
-		'onExit': function () {
-			gameCanvas = replaceCanvas(gameCanvas);
-			showTab('editor');
-			game = null;
-		},
-	};
-
-	let OnEditorExit = function () {
-		showTab('loader');
-	};
-	function Execute(args) {
-		const is_editor = args.filter(function (v) {
-			return v === '--editor' || v === '-e';
-		}).length !== 0;
-		const is_project_manager = args.filter(function (v) {
-			return v === '--project-manager';
-		}).length !== 0;
-		const is_game = !is_editor && !is_project_manager;
-		if (video_driver) {
-			args.push('--rendering-driver', video_driver);
-		}
-
-		if (is_game) {
-			if (game) {
-				console.error('A game is already running. Close it first');
-				return;
-			}
-			gameCanvas = replaceCanvas(gameCanvas);
-			game = new Engine(gameConfig);
-			showTab('game');
-			game.init('godot.editor').then(function () {
-				requestAnimationFrame(function () {
-					game.start({ 'args': args, 'canvas': gameCanvas }).then(function () {
-						gameCanvas.focus();
-					});
-				});
-			});
-		} else { // New editor instances will be run in the same canvas. We want to wait for it to exit.
-			OnEditorExit = function (code) {
-				setTimeout(function () {
-					editor.init().then(function () {
-						OnEditorExit = function () {
-							showTab('loader');
-						};
-						editor.start({ 'args': args, 'persistentDrops': is_project_manager, 'canvas': editorCanvas });
-					});
-				}, 0);
-				OnEditorExit = null;
-			};
-		}
-	}
-	
-	const editorConfig = {
-		'unloadAfterInit': false,
-		'onProgress': function progressFunction(current, total) {
-		},
-		'canvas': editorCanvas,
-		'canvasResizePolicy': 0,
-		'onExit': function () {
-			editorExitCount++
-			editorCanvas = replaceCanvas(editorCanvas);
-			if (OnEditorExit) {
-				OnEditorExit();
-			}
-			if(editorExitCount == 2){
-				console.log("Start game")
-				Execute([
-					"--path",
-					"/home/web_user/Preload",
-					"--editor-pid",
-					"0",
-					"--position",
-					"-115,126",
-					"res://main.tscn"
-				])
-			}
-		},
-		'onExecute': Execute,
-		'persistentPaths': persistentPaths,
-	};
-	editor = new Engine(editorConfig);
-
-	function displayFailureNotice(err) {
-		const msg = err.message || err;
-		console.error(msg);
-		initializing = false;
-	}
-
-	if (!Engine.isWebGLAvailable()) {
-		displayFailureNotice('WebGL not available');
-	} else {
-		editor.init('godot.editor').then(function () {
-			if (zip) {
-				editor.copyToFS('/tmp/preload.zip', zip);
-			}
-			try {
-				// Avoid user creating project in the persistent root folder.
-				editor.copyToFS('/home/web_user/keep', new Uint8Array());
-			} catch (e) {
-				// File exists
-			}
-			showTab('editor');
-			const args = ['--project-manager', '--single-window'];
-			if (video_driver) {
-				args.push('--rendering-driver', video_driver);
-			}
-			editor.start({ 'args': args, 'persistentDrops': true }).then(function () {
-				setStatusMode('hidden');
-				initializing = false;
-			});
-		}).catch(displayFailureNotice);
-	}
-}
-
-function preloadZip(target) {
-	return new Promise(function (resolve, reject) {
-		if (target.files.length > 0) {
-			target.files[0].arrayBuffer().then(function (data) {
-				resolve(data);
-			});
-		} else {
-			resolve();
-		}
-	});
-}
-
-function downloadAndSaveFile(url, savePath) {
-    return new Promise(function (resolve, reject) {
-        fetch(url)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Network response was not ok');
-                }
-                return response.arrayBuffer(); 
-            })
-            .then(data => {
-				resolve(data); 
-            })
-            .catch(error => {
-                console.error('Error downloading file:', error);
-                reject(error); 
-            });
-    });
-}
-function runGame() {
-    const url = 'http://127.0.0.1:8005/game.zip'; // TODO replace it to the real URL
-    const savePath = '/tmp/preload.zip';  
-    downloadAndSaveFile(url, savePath).then(function (zipData) {
-        console.log('File downloaded and saved successfully',zipData);
-		startEditor(zipData);
-    }).catch(function (error) {
-        console.error('Failed to download and save the file:', error);
-    });
-};
-		</script>
-	</body>
 </html>
