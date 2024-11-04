@@ -28,7 +28,6 @@ class GameApp {
     }
 
     Start() {
-        this.registerServiceWorker();
         this.installProject();
     }
     
@@ -57,27 +56,6 @@ class GameApp {
     onProgress(value){
         if (this.appConfig.onProgress != null) {
             this.appConfig.onProgress(value);
-        }
-    }
-    registerServiceWorker() {
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('service.worker.js').then((reg) => {
-                if (reg.waiting) {
-                    this.notifyUpdate(reg.waiting);
-                }
-                reg.addEventListener('updatefound', () => {
-                    const update = reg.installing;
-                    update.addEventListener('statechange', () => {
-                        if (update.state === 'installed') {
-                            if (!reg.active) {
-                                update.postMessage('claim');
-                            } else {
-                                this.notifyUpdate(update);
-                            }
-                        }
-                    });
-                });
-            });
         }
     }
     getInstallPath() {
