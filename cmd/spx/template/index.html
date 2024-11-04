@@ -2,59 +2,25 @@
 <html lang="en">
 
 <head>
-	<meta charset="utf-8">
-	<meta name="viewport"
-		content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no">
-	<title>Go+ Builder</title>
-	<style>
-		*:focus {
-			outline: none;
-			background-color: black;
-		}
-
-		#canvas,
-		#gameCanvas {
-			display: block;
-			margin: 0;
-			color: white;
-		}
-	</style>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Document</title>
 </head>
 
 <body>
-	<div id="tabs">
-		<div id="tab-loader">
-			<progress id="progress-bar" value="0" max="1"></progress>
-		</div>
-		<div id="tab-game" style="display: none;">
-			<canvas id="game-canvas" tabindex="2">
-			</canvas>
-		</div>
-	</div>
-	<script src="godot.editor.js"></script>
-	<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-	<script src="game.js"></script>
+	<h1>WASM data loading test</h1>
+	<iframe id="wasmFrame" src="runner.html"></iframe>
 	<script>
-		function onProgress(value) {
-			document.getElementById('progress-bar').value = value;
-			console.log("onProgress", value)
-			if (value >= 1) {
-				document.getElementById('tab-game').style.display = 'block';
-				document.getElementById('tab-loader').style.display = 'none';
-			}
-		}
-		window.addEventListener('load',async () => {
-			projectZip = '/game.zip';
-			const zipResp = fetch(projectZip);
-			zipData = await (await zipResp).arrayBuffer();
-			const config = {
-				'projectName': "Game",
-				'onProgress': onProgress,
-				"gameCanvas": document.getElementById('game-canvas'),
-				"zipData":zipData
-			}; 
-			const gameApp = new GameApp(config);
-			gameApp.Start();
+		"use strict";
+
+		const zipResp = fetch('/game.zip')
+
+		const iframe = document.getElementById('wasmFrame');
+		iframe.addEventListener('load', async () => {
+			const wasmWindow = iframe.contentWindow;
+			window.wasmWindow = wasmWindow;
+			let buffer = await (await (zipResp)).arrayBuffer();
+			wasmWindow.startWithZipBuffer(buffer);
 		});
 	</script>
 </body>
