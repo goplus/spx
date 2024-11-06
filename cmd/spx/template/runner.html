@@ -50,7 +50,8 @@
 				'projectName': "Game",
 				'onProgress': onProgress,
 				"gameCanvas": document.getElementById('game-canvas'),
-				"projectData": buffer
+				"projectData": buffer,
+				"isEditor": false,
 			};
 			const gameApp = new GameApp(config);
 			gameApp.Start();
