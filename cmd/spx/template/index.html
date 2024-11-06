@@ -2,26 +2,86 @@
 <html lang="en">
 
 <head>
-	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>Document</title>
+	<meta charset="utf-8">
+	<meta name="viewport"
+		content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no">
+	<title>Go+ Builder</title>
+	<style>
+		*:focus {
+			outline: none;
+			background-color: black;
+		}
+
+		#canvas,
+		#gameCanvas {
+			display: block;
+			margin: 0;
+			color: white;
+			width: 800px;
+			/* Adjust width as needed */
+			height: 600px;
+			/* Adjust height as needed */
+			border: none;
+			/* Optional: remove border */
+		}
+	</style>
 </head>
 
 <body>
-	<h1>WASM data loading test</h1>
-	<iframe id="wasmFrame" src="runner.html"></iframe>
+	<div id="tabs">
+		<div id="tab-loader">
+			<label for="editorToggle">Editor Mode</label>
+			<input type="checkbox" id="editorToggle">
+			<button id="startGameBtn">Start Game</button>
+			<progress id="progress-bar" value="0" max="1"></progress>
+		</div>
+		<div id="tab-game" style="display: none;">
+			<button id="updateProject">Update Project</button>
+			<canvas id="game-canvas" tabindex="2">
+			</canvas>
+		</div>
+
+	</div>
+	<script src="godot.editor.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+	<script src="game.js"></script>
 	<script>
-		"use strict";
-
-		const zipResp = fetch('/game.zip')
-
-		const iframe = document.getElementById('wasmFrame');
-		iframe.addEventListener('load', async () => {
-			const wasmWindow = iframe.contentWindow;
-			window.wasmWindow = wasmWindow;
-			let buffer = await (await (zipResp)).arrayBuffer();
-			wasmWindow.startWithZipBuffer(buffer);
+		let gameApp = {}
+		async function updateProject() {
+			console.log("Button clicked!");
+			newData = await (await fetch('/diff.zip')).arrayBuffer();
+			gameApp.UpdateProject(newData)
+		}
+		let isEditor = false
+		document.getElementById('editorToggle').addEventListener('change', function () {
+			isEditor = this.checked
 		});
+
+		document.getElementById('updateProject').addEventListener('click', updateProject);
+		document.getElementById('startGameBtn').addEventListener('click', startGame);
+		function onProgress(value) {
+			document.getElementById('progress-bar').value = value;
+			console.log("onProgress", value)
+			if (value >= 1) {
+				document.getElementById('tab-game').style.display = 'block';
+				document.getElementById('tab-loader').style.display = 'none';
+				let canvas = document.getElementById('game-canvas')
+				canvas.width = 1700;
+				canvas.height = 980;
+			}
+		}
+		async function startGame() {
+			zipData = await (await fetch('/game.zip')).arrayBuffer();
+			const config = {
+				'projectName': "Game",
+				'onProgress': onProgress,
+				"gameCanvas": document.getElementById('game-canvas'),
+				"projectData": zipData,
+				"isEditor": isEditor,
+			};
+			gameApp = new GameApp(config);
+			gameApp.StartProject();
+		}
 	</script>
 </body>
 
