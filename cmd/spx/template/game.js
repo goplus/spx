@@ -1,3 +1,78 @@
+async function GetZipDiffInfos(srcZip, dstZip) {
+    function areBuffersEqual(buffer1, buffer2) {
+        if (buffer1.byteLength !== buffer2.byteLength) return false;
+        const view1 = new Uint8Array(buffer1);
+        const view2 = new Uint8Array(buffer2);
+        for (let i = 0; i < view1.length; i++) {
+            if (view1[i] !== view2[i]) return false;
+        }
+        return true;
+    }
+    function mergeDeleteInfos(deleteInfos) {
+        deleteInfos.sort();
+        const merged = [];
+
+        for (let i = 0; i < deleteInfos.length; i++) {
+            const currentPath = deleteInfos[i];
+            if (
+                merged.length === 0 ||
+                !currentPath.startsWith(merged[merged.length - 1])
+            ) {
+                merged.push(currentPath);
+            }
+        }
+
+        return merged;
+    }
+    let addInfos = [];
+    let deleteInfos = [];
+    let updateInfos = [];
+
+    const zip1 = new JSZip();
+    const zip2 = new JSZip();
+
+    const srcZipContent = await zip1.loadAsync(srcZip);
+    const dstZipContent = await zip2.loadAsync(dstZip);
+
+    const srcFiles = new Set(Object.keys(srcZipContent.files));
+    const dstFiles = new Set(Object.keys(dstZipContent.files));
+
+    for (const filePath of dstFiles) {
+        if (!srcFiles.has(filePath)) {
+            addInfos.push(filePath);
+        }
+    }
+
+    for (const filePath of srcFiles) {
+        if (!dstFiles.has(filePath)) {
+            deleteInfos.push(filePath);
+        }
+    }
+
+    for (const filePath of dstFiles) {
+        if (srcFiles.has(filePath)) {
+            const srcFile = srcZipContent.files[filePath];
+            const dstFile = dstZipContent.files[filePath];
+
+            if (!srcFile.dir && !dstFile.dir) {
+                const srcContent = await srcFile.async('arraybuffer');
+                const dstContent = await dstFile.async('arraybuffer');
+
+                if (!areBuffersEqual(srcContent, dstContent)) {
+                    updateInfos.push(filePath);
+                }
+            }
+        }
+    }
+    addInfos.sort();
+    deleteInfos.sort();
+    updateInfos.sort();
+
+    deleteInfos = mergeDeleteInfos(deleteInfos);
+
+    return { addInfos, deleteInfos, updateInfos }
+}
+
 class GameApp {
     constructor(config) {
         this.appConfig = config || null;
