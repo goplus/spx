@@ -51,7 +51,9 @@ class GameApp {
     }
 
     StopGame() {
-        console.error("TODO stop game");
+        if(this.game != null){
+            this.game.requestQuit()
+        }
     }
 
     async addOrUpdateFiles(paths, zipData) {
@@ -323,7 +325,7 @@ class GameApp {
             this.getInstallPath(),
             "--editor-pid",
             "0",
-            "res://main.tscn"
+            "res://main.tscn",
         ];
         const gameConfig = {
             'persistentPaths': this.persistentPaths,
@@ -331,7 +333,8 @@ class GameApp {
             'canvas': this.gameCanvas,
             'canvasResizePolicy': 1,
             'onExit': () => {
-                this.game = null;
+                this.game = null
+                console.log("on game quit")
             },
         };
         console.log("RunGame ", args);
