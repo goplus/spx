@@ -24,73 +24,84 @@
 <body>
 	<div id="tabs">
 		<div id="tab-loader">
-			<progress id="progress-bar" value="0" max="1"></progress>
+		</div>
+		<div id="tab-editor" style="display: none;">
+			<canvas id="editor-canvas" tabindex="1"></canvas>
 		</div>
 		<div id="tab-game" style="display: none;">
-			<canvas id="game-canvas" tabindex="2">
-			</canvas>
+			<canvas id="game-canvas" tabindex="2"></canvas>
 		</div>
 	</div>
+
 	<script src="godot.editor.js"></script>
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 	<script src="game.js"></script>
 	<script>
 		"use strict";
-		function onProgress(value) {
-			document.getElementById('progress-bar').value = value;
-			console.log("onProgress", value)
-			if (value >= 1) {
-				document.getElementById('tab-game').style.display = 'block';
-				document.getElementById('tab-loader').style.display = 'none';
-			}
-		}
 		let gameApp = null
+		let isShowEditor = false
 
-		window.startWithZipBuffer = async (buffer, isEditor = false, addInfos = null, deleteInfos = null, updateInfos = null) => {
-			if (buffer == undefined || buffer == null) {
-				window.runGame()
-			} else {
-				if (addInfos == null) {
-					window.startProject(buffer, isEditor)
-				} else {
-					window.updateProject(buffer, addInfos, deleteInfos, updateInfos)
+		function onProgress(value) {
+			const progressEvent = new CustomEvent('onProgress', {
+				detail: {
+					progress: value
 				}
+			});
+			window.dispatchEvent(progressEvent);
+			if (value >= 1) {
+				document.getElementById('tab-game').style.display = 'none';
+				document.getElementById('tab-editor').style.display = 'none';
+				document.getElementById('tab-loader').style.display = 'none';
+				let canvas = null
+				if (gameApp.isEditor) {
+					if (isShowEditor) {
+						document.getElementById('tab-editor').style.display = 'block';
+					}
+					canvas = document.getElementById('editor-canvas')
+				} else {
+					document.getElementById('tab-game').style.display = 'block';
+					canvas = document.getElementById('game-canvas')
+				}
+				canvas.width = window.innerWidth;
+				canvas.height = window.innerHeight;
 			}
 		}
 
-		window.startProject = async (buffer, isEditor = false, projectName = "Game") => {
+
+		window.startProject = async (buffer, projectName = "Game", showEditor = false) => {
+			isShowEditor = showEditor
 			const config = {
 				'projectName': projectName,
 				'onProgress': onProgress,
 				"gameCanvas": document.getElementById('game-canvas'),
+				"editorCanvas": document.getElementById('editor-canvas'),
 				"projectData": new Uint8Array(buffer),
-				"isEditor": isEditor,
 			};
 			gameApp = new GameApp(config);
-			gameApp.StartProject();
+			await gameApp.StartProject();
 		}
 
 		window.updateProject = async (buffer, addInfos, deleteInfos, updateInfos) => {
 			if (gameApp == null) {
-				console.error("gameApp is null, should call startWithZipBuffer first")
+				console.error("gameApp is null, should call startProject first")
 				return
 			}
-			gameApp.UpdateProject(new Uint8Array(buffer), addInfos, deleteInfos, updateInfos)
+			await gameApp.UpdateProject(new Uint8Array(buffer), addInfos, deleteInfos, updateInfos)
 		}
 
 		window.runGame = async () => {
 			if (gameApp == null) {
-				console.error("gameApp is null, should call startWithZipBuffer first")
+				console.error("gameApp is null, should call startProject first")
 				return
 			}
-			gameApp.RunGame()
+			await gameApp.RunGame()
 		}
 		window.stopGame = async () => {
 			if (gameApp == null) {
-				console.error("gameApp is null, should call startWithZipBuffer first")
+				console.error("gameApp is null, should call startProject first")
 				return
 			}
-			gameApp.StopGame()
+			await gameApp.StopGame()
 		}
 	</script>
 </body>

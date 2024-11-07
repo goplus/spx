@@ -11,10 +11,10 @@ class GameApp {
         this.oldData = config.projectData;
         this.persistentPaths = [this.persistentPath];
         this.gameCanvas = config.gameCanvas;
-        this.editorCanvas = config.gameCanvas;// use the same canvas
+        this.editorCanvas = config.editorCanvas || config.gameCanvas;
         this.exitFunc = null;
         this.basePath = 'godot.editor'
-        this.isEditor = config.isEditor;
+        this.isEditor = true;
         this.editorConfig = {
             'unloadAfterInit': false,
             'canvas': this.editorCanvas,
@@ -32,27 +32,92 @@ class GameApp {
     }
 
     StartProject() {
-        this.installProject();
+        this.isEditor = true
+        if (this.editor != null) {
+            return new Promise((resolve, reject) => {
+                let error = new Error("project already loaded!");
+                console.log(error)
+                reject(error)
+            });
+        }
+        let promise = new Promise((resolve, reject) => {
+            this.startProjectResolve = resolve
+            this.startProject();
+        });
+        this.startProjectPromise = promise
+        return promise
     }
 
     async UpdateProject(newData, addInfos, deleteInfos, updateInfos) {
-        console.log("UpdateProject", this.oldData, newData)
-        if (addInfos == undefined) {
-            const diffInfos = await this.getZipDiffInfos(this.oldData, newData);
-            addInfos = diffInfos.addInfos;
-            deleteInfos = diffInfos.deleteInfos;
-            updateInfos = diffInfos.updateInfos;
+        if (this.startProjectPromise != null) {
+            await this.startProjectPromise
+        }
+        if (this.updateProjectPromise != null) {
+            await this.updateProjectPromise
+        }
+        let promise = new Promise(async (resolve, reject) => {
+            this.updateProjectResolve = resolve
+            this.updateProject(newData, addInfos, deleteInfos, updateInfos)
+        })
+        this.updateProjectPromise = promise
+        return promise
+    }
+
+    async RunGame() {
+        this.isEditor = false
+        if (this.startProjectPromise != null) {
+            await this.startProjectPromise
+        }
+        if (this.updateProjectPromise != null) {
+            await this.updateProjectPromise
+        }
+        if (this.runGamePromise != null) {
+            return this.runGamePromise
+        }
+        let promise = new Promise(async (resolve, reject) => {
+            this.runGameResolve = resolve
+            this.runGameReject = reject
+            this.runGame()
+        })
+        this.runGamePromise = promise
+        return promise
+    }
+
+    async StopGame() {
+        this.isEditor = true
+        return new Promise((resolve) => {
+            if (this.game != null) {
+                this.game.requestQuit()
+                if (this.runGameReject != null) {
+                    this.runGameReject()
+                    this.runGameResolve = null
+                    this.runGamePromise = null
+                    this.runGameReject = null
+                }
+            }
+            resolve();
+            this.onProgress(1.0);
+        });
+    }
+
+    async updateProject(newData, addInfos, deleteInfos, updateInfos) {
+        if (addInfos == null) {
+            addInfos = []
+        }
+        if (deleteInfos == null) {
+            deleteInfos = []
+        }
+        if (updateInfos == null) {
+            updateInfos = []
         }
         this.oldData = newData
-        console.log('DiffInfos :', addInfos, deleteInfos, updateInfos);
         let mergedArray = addInfos.concat(updateInfos);
         await this.addOrUpdateFiles(mergedArray, newData);
         this.deleteFiles(deleteInfos);
-    }
-
-    StopGame() {
-        if(this.game != null){
-            this.game.requestQuit()
+        if (this.updateProjectResolve != null) {
+            this.updateProjectResolve()
+            this.updateProjectResolve = null
+            this.updateProjectPromise = null
         }
     }
 
@@ -70,7 +135,7 @@ class GameApp {
         const evt = new CustomEvent('add_files', {
             detail: datas
         });
-        this.gameCanvas.dispatchEvent(evt);
+        this.editorCanvas.dispatchEvent(evt);
     }
 
     deleteFiles(paths) {
@@ -78,84 +143,15 @@ class GameApp {
         const evt = new CustomEvent('delete_files', {
             detail: paths
         });
-        this.gameCanvas.dispatchEvent(evt);
+        this.editorCanvas.dispatchEvent(evt);
     }
 
-    async getZipDiffInfos(srcZip, dstZip) {
-        function areBuffersEqual(buffer1, buffer2) {
-            if (buffer1.byteLength !== buffer2.byteLength) return false;
-            const view1 = new Uint8Array(buffer1);
-            const view2 = new Uint8Array(buffer2);
-            for (let i = 0; i < view1.length; i++) {
-                if (view1[i] !== view2[i]) return false;
-            }
-            return true;
-        }
-        function mergeDeleteInfos(deleteInfos) {
-            deleteInfos.sort();
-            const merged = [];
-
-            for (let i = 0; i < deleteInfos.length; i++) {
-                const currentPath = deleteInfos[i];
-                if (
-                    merged.length === 0 ||
-                    !currentPath.startsWith(merged[merged.length - 1])
-                ) {
-                    merged.push(currentPath);
-                }
-            }
-
-            return merged;
-        }
-        let addInfos = [];
-        let deleteInfos = [];
-        let updateInfos = [];
-
-        const zip1 = new JSZip();
-        const zip2 = new JSZip();
-
-        const srcZipContent = await zip1.loadAsync(srcZip);
-        const dstZipContent = await zip2.loadAsync(dstZip);
-
-        const srcFiles = new Set(Object.keys(srcZipContent.files));
-        const dstFiles = new Set(Object.keys(dstZipContent.files));
-
-        for (const filePath of dstFiles) {
-            if (!srcFiles.has(filePath)) {
-                addInfos.push(filePath);
-            }
-        }
-
-        for (const filePath of srcFiles) {
-            if (!dstFiles.has(filePath)) {
-                deleteInfos.push(filePath);
-            }
-        }
-
-        for (const filePath of dstFiles) {
-            if (srcFiles.has(filePath)) {
-                const srcFile = srcZipContent.files[filePath];
-                const dstFile = dstZipContent.files[filePath];
-
-                if (!srcFile.dir && !dstFile.dir) {
-                    const srcContent = await srcFile.async('arraybuffer');
-                    const dstContent = await dstFile.async('arraybuffer');
-
-                    if (!areBuffersEqual(srcContent, dstContent)) {
-                        updateInfos.push(filePath);
-                    }
-                }
-            }
-        }
-        addInfos.sort();
-        deleteInfos.sort();
-        updateInfos.sort();
-
-        deleteInfos = mergeDeleteInfos(deleteInfos);
-
-        return { addInfos, deleteInfos, updateInfos }
+    refresh_fs() {
+        const evt = new CustomEvent('refresh_fs', {
+            detail: ""
+        });
+        this.editorCanvas.dispatchEvent(evt);
     }
-
 
     async mergeZips(zipFile1, zipFile2) {
         const zip1 = new JSZip();
@@ -261,27 +257,25 @@ class GameApp {
         this.hasMergedProject = true
     }
 
-    async installProject() {
+    async startProject() {
         try {
+            this.onProgress(0.1);
+            this.editor = new Engine(this.editorConfig);
+            this.clearPersistence(this.tempZipPath);
             let dbExists = await this.checkDBExist(this.persistentPath, this.getInstallPath());
             console.log(this.getInstallPath(), " DBExist result= ", dbExists, "this.isEditor", this.isEditor);
-            if (dbExists && !this.isEditor) {
-                this.RunGame();
+            if (!dbExists) {
+                // install project
+                // TODO store project zip and hash to indexDB 
+                this.exitFunc = this.runEditor.bind(this);
+                this.editor.init(this.basePath).then(async () => {
+                    await this.mergeProjectWithEngineRes()
+                    this.editor.copyToFS(this.tempZipPath, this.projectData);
+                    const args = ['--project-manager', '--single-window', "--install_project_name", this.projectInstallName];
+                    this.editor.start({ 'args': args, 'persistentDrops': true });
+                });
             } else {
-                this.onProgress(0.1);
-                this.editor = new Engine(this.editorConfig);
-                this.clearPersistence(this.tempZipPath);
-                if (!dbExists) {
-                    this.exitFunc = this.runEditor.bind(this);
-                    this.editor.init(this.basePath).then(async () => {
-                        await this.mergeProjectWithEngineRes()
-                        this.editor.copyToFS(this.tempZipPath, this.projectData);
-                        const args = ['--project-manager', '--single-window', "--install_project_name", this.projectInstallName];
-                        this.editor.start({ 'args': args, 'persistentDrops': true });
-                    });
-                } else {
-                    this.runEditor(this.basePath)
-                }
+                this.runEditor(this.basePath)
             }
         } catch (error) {
             console.error("Error checking database existence: ", error);
@@ -295,31 +289,26 @@ class GameApp {
             "--single-window",
             "--editor",
         ];
-
         this.exitFunc = null;
-        if (!this.isEditor) {
-            args.push("--headless");
-            args.push("--quit-after");
-            args.push("30");
-            this.exitFunc = this.RunGame.bind(this);
-        }
-
         console.log("runEditor ", args);
         this.editor.init(basePath).then(() => {
             this.onProgress(0.4);
             this.editor.start({ 'args': args, 'persistentDrops': false, 'canvas': this.editorCanvas }).then(async () => {
-                if (this.isEditor) {
-                    this.editorCanvas.focus();
-                    this.onProgress(0.9);
-                    await this.mergeProjectWithEngineRes()
-                    window.goLoadData(new Uint8Array(this.projectData));
-                    this.onProgress(1.0);
+                this.editorCanvas.focus();
+                this.onProgress(0.9);
+                await this.mergeProjectWithEngineRes()
+                window.goLoadData(new Uint8Array(this.projectData));
+                this.onProgress(1.0);
+                if (this.startProjectResolve != null) {
+                    this.startProjectResolve()
+                    this.startProjectResolve = null
+                    this.startProjectPromise = null
                 }
             });
         });
     }
 
-    RunGame() {
+    async runGame() {
         const args = [
             "--path",
             this.getInstallPath(),
@@ -352,6 +341,12 @@ class GameApp {
                 this.onProgress(0.9);
                 window.goLoadData(new Uint8Array(this.projectData));
                 this.onProgress(1.0);
+                if (this.runGameResolve != null) {
+                    this.runGameResolve()
+                    this.runGameResolve = null
+                    this.runGamePromise = null
+                    this.runGameReject = null
+                }
             });
         });
     }
