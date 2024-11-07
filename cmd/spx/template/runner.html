@@ -44,19 +44,54 @@
 				document.getElementById('tab-loader').style.display = 'none';
 			}
 		}
-		window.startWithZipBuffer = async (buffer) => {
-			buffer = new Uint8Array(buffer);
-			const config = {
-				'projectName': "Game",
-				'onProgress': onProgress,
-				"gameCanvas": document.getElementById('game-canvas'),
-				"projectData": buffer,
-				"isEditor": false,
-			};
-			const gameApp = new GameApp(config);
-			gameApp.Start();
+		let gameApp = null
+
+		window.startWithZipBuffer = async (buffer, isEditor = false, addInfos = null, deleteInfos = null, updateInfos = null) => {
+			if (buffer == undefined || buffer == null) {
+				window.runGame()
+			} else {
+				if (addInfos == null) {
+					window.startProject(buffer, isEditor)
+				} else {
+					window.updateProject(buffer, addInfos, deleteInfos, updateInfos)
+				}
+			}
 		}
 
+		window.startProject = async (buffer, isEditor = false, projectName = "Game") => {
+			const config = {
+				'projectName': projectName,
+				'onProgress': onProgress,
+				"gameCanvas": document.getElementById('game-canvas'),
+				"projectData": new Uint8Array(buffer),
+				"isEditor": isEditor,
+			};
+			gameApp = new GameApp(config);
+			gameApp.StartProject();
+		}
+
+		window.updateProject = async (buffer, addInfos, deleteInfos, updateInfos) => {
+			if (gameApp == null) {
+				console.error("gameApp is null, should call startWithZipBuffer first")
+				return
+			}
+			gameApp.UpdateProject(new Uint8Array(buffer), addInfos, deleteInfos, updateInfos)
+		}
+
+		window.runGame = async () => {
+			if (gameApp == null) {
+				console.error("gameApp is null, should call startWithZipBuffer first")
+				return
+			}
+			gameApp.RunGame()
+		}
+		window.stopGame = async () => {
+			if (gameApp == null) {
+				console.error("gameApp is null, should call startWithZipBuffer first")
+				return
+			}
+			gameApp.StopGame()
+		}
 	</script>
 </body>
 
