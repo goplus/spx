@@ -105,10 +105,25 @@ class GameApp {
         }
         this.oldData = newData
         let mergedArray = addInfos.concat(updateInfos);
-        await this.addOrUpdateFiles(mergedArray, newData);
-        this.deleteFiles(deleteInfos);
-        // TODO wait syncFS finish
-        resolve()
+        const zip = new JSZip();
+        const zipContent = await zip.loadAsync(newData);
+        let datas = []
+        for (let path of mergedArray) {
+            const dstFile = zipContent.files[path];
+            let data = await dstFile.async('arraybuffer');
+            if (!dstFile.dir) {
+                datas.push({ "path": path, "data": data })
+            }
+        }
+        deleteInfos = deleteInfos.map(info => `res://${info}`);
+        const evt = new CustomEvent('update_project', {
+            detail: {
+                "resolve": resolve,
+                "dirtyInfos": datas,
+                "deleteInfos": deleteInfos,
+            }
+        });
+        this.editorCanvas.dispatchEvent(evt);
     }
 
     runEditor(resolve, reject, basePath) {
@@ -201,27 +216,23 @@ class GameApp {
     onGameExit() {
         this.game = null
         console.log("on game quit")
-        if(this.stopGameResolve){
+        if (this.stopGameResolve) {
             this.stopGameResolve()
         }
     }
 
     //------------------ update project ------------------
-    async addOrUpdateFiles(paths, zipData) {
-        const zip = new JSZip();
-        const zipContent = await zip.loadAsync(zipData);
-        let datas = []
-        for (let path of paths) {
-            const dstFile = zipContent.files[path];
-            let data = await dstFile.async('arraybuffer');
-            if (!dstFile.dir) {
-                datas.push({ "path": path, "data": data })
-            }
-        }
+    async addOrUpdateFiles(resolve, reject, paths, zipData) {
+
         const evt = new CustomEvent('add_files', {
             detail: datas
         });
         this.editorCanvas.dispatchEvent(evt);
+        const handler = () => {
+            callback();
+            this.editorCanvas.removeEventListener('update_files_handled', handler);
+        };
+        this.editorCanvas.addEventListener('update_files_handled', handler);
     }
 
     deleteFiles(paths) {
@@ -232,12 +243,6 @@ class GameApp {
         this.editorCanvas.dispatchEvent(evt);
     }
 
-    refresh_fs() {
-        const evt = new CustomEvent('refresh_fs', {
-            detail: ""
-        });
-        this.editorCanvas.dispatchEvent(evt);
-    }
 
 
     //------------------ install project ------------------
