@@ -1688,3 +1688,6 @@ func (p *SpriteImpl) fixWorldRange(x, y float64) (float64, float64) {
 }
 
 // -----------------------------------------------------------------------------
+func (p *SpriteImpl) getCostumeRenderScale() float64 {
+	return p.baseObj.getCostumeRenderScale() * p.scale
+}
