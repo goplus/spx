@@ -1,4 +1,5 @@
 
+
 class GameApp {
     constructor(config) {
         this.appConfig = config || null;
@@ -21,7 +22,7 @@ class GameApp {
             'canvasResizePolicy': 0,
             'persistentPaths': this.persistentPaths,
             'onExecute': (args) => {
-                console.log("onExecute  ", args);
+                this.logVerbose("onExecute  ", args);
             },
             'onExit': () => {
                 if (this.exitFunc) {
@@ -30,8 +31,14 @@ class GameApp {
             }
         };
         this.logicPromise = Promise.resolve();
+        this.isLogVerbose = config.logVerbose;
+        this.curProjectHash = ''
     }
-
+    logVerbose(...args) {
+        if (this.isLogVerbose) {
+            console.log(...args);
+        }
+    }
     startTask(prepareFunc, taskFunc, ...args) {
         if (prepareFunc != null) {
             prepareFunc()
@@ -71,17 +78,15 @@ class GameApp {
             this.editor = new Engine(this.editorConfig);
             this.clearPersistence(this.tempZipPath);
             // TODO get the old project's zip and compare the hash
-            let dbExists = await this.checkDBExist(this.persistentPath, this.getInstallPath());
-            console.log(this.getInstallPath(), " DBExist result= ", dbExists, "this.isEditor", this.isEditor);
-            if (!dbExists) {
-                // TODO store project zip and hash to indexDB 
+            let isCacheValid = await this.checkAndUpdateCache(this.projectData, true);
+            if (!isCacheValid) {
                 this.exitFunc = () => {
                     this.runEditor(resolve, reject)
                 };
                 // install project
                 this.editor.init(this.basePath).then(async () => {
                     await this.mergeProjectWithEngineRes()
-                    this.editor.copyToFS(this.tempZipPath, this.projectData);
+                    this.writePersistence(this.tempZipPath, this.projectData);
                     const args = ['--project-manager', '--single-window', "--install_project_name", this.projectInstallName];
                     this.editor.start({ 'args': args, 'persistentDrops': true });
                 });
@@ -118,7 +123,10 @@ class GameApp {
         deleteInfos = deleteInfos.map(info => `res://${info}`);
         const evt = new CustomEvent('update_project', {
             detail: {
-                "resolve": resolve,
+                "resolve": async () => {
+                    await this.checkAndUpdateCache(newData)
+                    resolve()
+                },
                 "dirtyInfos": datas,
                 "deleteInfos": deleteInfos,
             }
@@ -134,7 +142,8 @@ class GameApp {
             "--editor",
         ];
         this.exitFunc = null;
-        console.log("runEditor ", args);
+        this.logVerbose("runEditor ", args);
+        this.onProgress(0.2);
         this.editor.init(basePath).then(() => {
             this.onProgress(0.4);
             this.editor.start({ 'args': args, 'persistentDrops': false, 'canvas': this.editorCanvas }).then(async () => {
@@ -143,6 +152,7 @@ class GameApp {
                 await this.mergeProjectWithEngineRes()
                 window.goLoadData(new Uint8Array(this.projectData));
                 this.onProgress(1.0);
+                await this.updateProjectHash(this.curProjectHash)
                 resolve()
             });
         });
@@ -152,7 +162,7 @@ class GameApp {
         this.runGameTask--
         // if stopGame is called before runing game, then do nothing
         if (this.stopGameTask > 0) {
-            console.log("stopGame is called before runing game")
+            this.logVerbose("stopGame is called before runing game")
             resolve()
             return
         }
@@ -174,7 +184,7 @@ class GameApp {
                 this.onGameExit()
             },
         };
-        console.log("RunGame ", args);
+        this.logVerbose("RunGame ", args);
         if (this.game) {
             reject(new Error('A game is already running. Close it first'));
             return;
@@ -201,7 +211,7 @@ class GameApp {
         if (this.game == null) {
             // no game is running, do nothing
             resolve()
-            console.log("no game is running")
+            this.logVerbose("no game is running")
             return
         }
         this.stopGameResolve = () => {
@@ -215,7 +225,7 @@ class GameApp {
 
     onGameExit() {
         this.game = null
-        console.log("on game quit")
+        this.logVerbose("on game quit")
         if (this.stopGameResolve) {
             this.stopGameResolve()
         }
@@ -250,22 +260,34 @@ class GameApp {
         return `${this.persistentPath}/${this.projectInstallName}`;
     }
 
+    writePersistence(targetPath, value) {
+        if (this.editor == null) {
+            console.error("please init editor first!")
+            return
+        }
+        this.editor.copyToFS(targetPath, value);
+    }
     clearPersistence(targetPath) {
         const req = indexedDB.deleteDatabase(targetPath);
         req.onerror = (err) => {
             alert('Error deleting local files. Please retry after reloading the page.');
         };
-        console.log("clear persistence cache", targetPath);
+        this.logVerbose("clear persistence cache", targetPath);
     }
 
-
-    checkKeyExists(dbName, storeName, key) {
+    getObjectStore(dbName, storeName, mode, storeKeyPath) {
         return new Promise((resolve, reject) => {
             let request = indexedDB.open(dbName);
+
             request.onupgradeneeded = function (event) {
                 let db = event.target.result;
                 if (!db.objectStoreNames.contains(storeName)) {
-                    db.createObjectStore(storeName);
+                    if (storeKeyPath) {
+                        db.createObjectStore(storeName, { keyPath: storeKeyPath });
+                    } else {
+                        db.createObjectStore(storeName);
+                    }
+
                 }
             };
 
@@ -276,24 +298,10 @@ class GameApp {
                     db.close();
                     return;
                 }
-                let transaction = db.transaction(storeName, 'readonly');
+
+                let transaction = db.transaction(storeName, mode);
                 let objectStore = transaction.objectStore(storeName);
-                let getRequest = objectStore.getKey(key);
-                getRequest.onsuccess = function () {
-                    if (getRequest.result !== undefined) {
-                        resolve(true);
-                    } else {
-                        resolve(false);
-                    }
-                };
-
-                getRequest.onerror = function () {
-                    reject('Error checking key existence', dbName);
-                };
-
-                transaction.oncomplete = function () {
-                    db.close();
-                };
+                resolve({ db, objectStore, transaction });
             };
 
             request.onerror = function (event) {
@@ -302,16 +310,107 @@ class GameApp {
         });
     }
 
-    async checkDBExist(dbName, storeName) {
+    queryIndexDB(dbName, storeName, key) {
+        return this.getObjectStore(dbName, storeName, 'readonly').then(({ db, objectStore, transaction }) => {
+            return new Promise((resolve, reject) => {
+                let getRequest = objectStore.get(key);
+
+                getRequest.onsuccess = function () {
+                    resolve(getRequest.result);
+                };
+
+                getRequest.onerror = function () {
+                    reject('Error checking key existence');
+                };
+
+                transaction.oncomplete = function () {
+                    db.close();
+                };
+            });
+        });
+    }
+
+    updateIndexDB(dbName, storeName, key, value) {
+        return this.getObjectStore(dbName, storeName, 'readwrite', key).then(({ db, objectStore, transaction }) => {
+            return new Promise((resolve, reject) => {
+                let putRequest = objectStore.put(value, key);
+
+                putRequest.onsuccess = function () {
+                    resolve('Value successfully written to the database');
+                };
+
+                putRequest.onerror = function () {
+                    reject('Error writing value to the database');
+                };
+
+                transaction.oncomplete = function () {
+                    db.close();
+                };
+            });
+        });
+    }
+    async getCache(storeName) {
         try {
-            let exists = await this.checkKeyExists(dbName, 'FILE_DATA', storeName);
-            return exists;
+            let cacheValue = await this.queryIndexDB(this.persistentPath, 'FILE_DATA', storeName);
+            return cacheValue;
         } catch (error) {
             console.error(error);
-            return false;
+            return undefined;
         }
     }
 
+    async setCache(storeName, value) {
+        try {
+            let cacheValue = await this.updateIndexDB(this.persistentPath, 'FILE_DATA', storeName, value);
+            return cacheValue;
+        } catch (error) {
+            console.error(error);
+            return undefined;
+        }
+    }
+
+    async computeHash(data) {
+        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        return hashArray.map(byte => byte.toString(16).padStart(2, '0')).join('');
+    }
+    getProjectDataKey() {
+        return `${this.persistentPath}/.spx_cache_data/${this.projectInstallName}`
+    }
+    getProjectHashKey() {
+        return `${this.persistentPath}/.spx_cache_hash/${this.projectInstallName}`
+    }
+
+    async updateProjectHash(hash) {
+        this.logVerbose("updateProjectHash ", hash)
+        await this.setCache(this.getProjectHashKey(), hash);
+    }
+
+    async checkAndUpdateCache(curData, isClearIfDirty = false) {
+        // TODO only cache art resources
+        let curHash = await this.computeHash(curData);
+        let cachedHash = await this.getCache(this.getProjectHashKey());
+        this.curProjectHash = curHash
+        this.logVerbose("checkAndUpdateCache ", this.getProjectHashKey(), curHash, " old_hash = ", cachedHash)
+        if (cachedHash != undefined && curHash === cachedHash) {
+            return true;
+        }
+        if (isClearIfDirty) {
+            await this.updateProjectHash('')
+            // clear the dirty cache
+            this.clearPersistence(this.persistentPath);
+            // create a default indexDB
+            await this.getObjectStore(this.persistentPath, 'FILE_DATA', 'readonly')
+        } else {
+            await this.updateProjectHash(this.curProjectHash)
+        }
+        // cache is dirty, update it 
+        await this.setCache(this.getProjectDataKey(), curData);
+        return false;
+    }
+
+
+    //------------------ res merge ------------------
     async mergeZips(zipFile1, zipFile2) {
         const zip1 = new JSZip();
         const zip2 = new JSZip();
@@ -338,7 +437,7 @@ class GameApp {
         if (this.hasMergedProject) {
             return
         }
-        console.log("merge zip files");
+        this.logVerbose("merge zip files");
         const engineDataResp = fetch("engineres.zip");
         let engineData = await (await engineDataResp).arrayBuffer();
         this.projectData = await this.mergeZips(this.projectData, engineData);

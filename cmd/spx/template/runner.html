@@ -76,6 +76,7 @@
 				"gameCanvas": document.getElementById('game-canvas'),
 				"editorCanvas": document.getElementById('editor-canvas'),
 				"projectData": new Uint8Array(buffer),
+				"logVerbose": true,
 			};
 			gameApp = new GameApp(config);
 			await gameApp.StartProject();
