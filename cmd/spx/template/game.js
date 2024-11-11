@@ -60,6 +60,10 @@ class GameApp {
         return this.startTask(null, this.updateProject, newData, addInfos, deleteInfos, updateInfos)
     }
 
+    async StopProject() {
+        return this.startTask(null, this.stopProject)
+    }
+
     async RunGame() {
         return this.startTask(() => { this.runGameTask++ }, this.runGame)
     }
@@ -81,6 +85,7 @@ class GameApp {
             let isCacheValid = await this.checkAndUpdateCache(this.projectData, true);
             if (!isCacheValid) {
                 this.exitFunc = () => {
+                    this.exitFunc = null
                     this.runEditor(resolve, reject)
                 };
                 // install project
@@ -132,6 +137,26 @@ class GameApp {
             }
         });
         this.editorCanvas.dispatchEvent(evt);
+    }
+
+    async stopProject(resolve, reject) {
+        console.log("stop project")
+        if (this.editor == null) {
+            resolve()
+            return
+        }
+        this.stopGameTask++
+        await this.stopGame(() => {
+            this.isEditor = true
+            this.onProgress(1.0);
+            this.exitFunc = () => {
+                this.logVerbose("on editor quit")
+                this.editor = null
+                this.exitFunc = null
+                resolve();
+            }
+            this.editor.requestQuit()
+        }, null)
     }
 
     runEditor(resolve, reject, basePath) {
@@ -190,7 +215,6 @@ class GameApp {
             return;
         }
         this.onProgress(0.5);
-        this.exitFunc = null;
         this.game = new Engine(gameConfig);
         let curGame = this.game
         curGame.init(this.basePath).then(() => {

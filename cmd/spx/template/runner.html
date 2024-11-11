@@ -90,6 +90,14 @@
 			await gameApp.UpdateProject(new Uint8Array(buffer), addInfos, deleteInfos, updateInfos)
 		}
 
+		window.stopProject = async () => {
+			if (gameApp == null) {
+				console.error("gameApp is null, should call startProject first")
+				return
+			}
+			await gameApp.StopProject()
+		}
+
 		window.runGame = async () => {
 			if (gameApp == null) {
 				console.error("gameApp is null, should call startProject first")
