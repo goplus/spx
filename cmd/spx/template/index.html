@@ -26,6 +26,7 @@
 	<input type="checkbox" id="editorToggle" checked>
 	<button id="startProjectBtn">Start</button>
 	<button id="updateProjectBtn">Update</button>
+	<button id="stopProjectBtn">Stop</button>
 	<button id="runGameBtn">RunGame</button>
 	<button id="stopGameBtn">StopGame</button>
 	<progress id="progress-bar" value="0" max="1" style="display: none;"></progress>
@@ -46,6 +47,8 @@
 		});
 		document.getElementById('startProjectBtn').addEventListener('click', startProject);
 		document.getElementById('updateProjectBtn').addEventListener('click', updateProject);
+		document.getElementById('stopProjectBtn').addEventListener('click', stopProject);
+		
 		document.getElementById('runGameBtn').addEventListener('click', runGame);
 		document.getElementById('stopGameBtn').addEventListener('click', stopGame);
 
@@ -73,6 +76,10 @@
 			newData = await (await fetch('/diff.zip')).arrayBuffer();
 			const diffInfos = await getZipDiffInfos(oldData, newData);
 			runnerWindow.updateProject(newData, diffInfos.addInfos, diffInfos.deleteInfos, diffInfos.updateInfos);
+		}
+
+		async function stopProject() {
+			runnerWindow.stopProject()		
 		}
 
 		async function runGame() {
