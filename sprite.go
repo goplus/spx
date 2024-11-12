@@ -1636,19 +1636,20 @@ func (p *SpriteImpl) CostumeHeight() float64 {
 	return float64(h)
 }
 
-func (p *SpriteImpl) applyPivot(c *costume, cx, cy float64) (float64, float64) {
-	cx += p.pivot.X * float64(c.bitmapResolution)
-	cy -= p.pivot.Y * float64(c.bitmapResolution)
-	return cx, cy
-}
-
 func (p *SpriteImpl) Bounds() *math32.RotatedRect {
 	if !p.isVisible {
 		return nil
 	}
+	// TODO use gdspx's bounding box info
 	c := p.costumes[p.costumeIndex_]
-	x, y := p.applyPivot(c, p.x, p.y)
-	w, h := c.getSize()
+	// calc center
+	x, y := p.x, p.y
+	applyRenderOffset(p, &x, &y)
+
+	// calc scale
+	wi, hi := c.getSize()
+	w, h := float64(wi)*p.scale, float64(hi)*p.scale
+
 	ret := math32.RotatedRect{Center: math32.NewVector2(x, y),
 		Size: math32.NewSize(float64(w), float64(h)), Angle: p.direction}
 

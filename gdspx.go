@@ -187,8 +187,8 @@ func initSpritePhysicInfo(sprite *SpriteImpl, proxy *engine.ProxySprite) {
 }
 func applyRenderOffset(p *SpriteImpl, cx, cy *float64) {
 	cs := p.costumes[p.costumeIndex_]
-	x, y := cs.center.X, cs.center.Y
-	x, y = p.applyPivot(cs, x, y)
+	x, y := -(cs.center.X+p.pivot.X)/float64(cs.bitmapResolution)*p.scale,
+		(cs.center.Y+p.pivot.Y)/float64(cs.bitmapResolution)*p.scale
 
 	// spx's start point is top left, gdspx's start point is center
 	// so we should remove the offset to make the pivot point is the same
