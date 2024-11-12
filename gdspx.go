@@ -109,6 +109,7 @@ func (p *Game) updateProxy() {
 			// sync position
 			if sprite.isVisible {
 				x, y := sprite.getXY()
+				applyRenderOffset(sprite, &x, &y)
 				proxy.UpdatePosRot(x, y, sprite.Heading()-sprite.initDirection)
 				if sprite.isCostumeAltas() {
 					proxy.UpdateTextureAltas(sprite.getCostumePath(), sprite.getCostumeAltasRegion().ToRect2(), sprite.getCostumeRenderScale())
@@ -181,4 +182,18 @@ func initSpritePhysicInfo(sprite *SpriteImpl, proxy *engine.ProxySprite) {
 		proxy.SetTriggerRect(engine.NewVec2(0, 0), engine.NewVec2(w, h))
 	}
 
+}
+func applyRenderOffset(p *SpriteImpl, cx, cy *float64) {
+	cs := p.costumes[p.costumeIndex_]
+	x, y := cs.center.X, cs.center.Y
+	x, y = p.applyPivot(cs, x, y)
+
+	// spx's start point is top left, gdspx's start point is center
+	// so we should remove the offset to make the pivot point is the same
+	w, h := p.getCostumeSize()
+	x = x + float64(w)/2*p.scale
+	y = y - float64(h)/2*p.scale
+
+	*cx = *cx + x
+	*cy = *cy + y
 }
