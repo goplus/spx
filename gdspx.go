@@ -169,6 +169,7 @@ func initSpritePhysicInfo(sprite *SpriteImpl, proxy *engine.ProxySprite) {
 		proxy.SetColliderRect(sprite.colliderCenter.ToVec2(), sprite.colliderSize.ToVec2())
 	case physicColliderNone:
 		w, h := sprite.getCostumeSize()
+		w, h = w*sprite.scale, h*sprite.scale
 		proxy.SetColliderRect(engine.NewVec2(0, 0), engine.NewVec2(w, h))
 	}
 
@@ -179,6 +180,7 @@ func initSpritePhysicInfo(sprite *SpriteImpl, proxy *engine.ProxySprite) {
 		proxy.SetTriggerRect(sprite.triggerCenter.ToVec2(), sprite.triggerSize.ToVec2())
 	case physicColliderNone:
 		w, h := sprite.getCostumeSize()
+		w, h = w*sprite.scale, h*sprite.scale
 		proxy.SetTriggerRect(engine.NewVec2(0, 0), engine.NewVec2(w, h))
 	}
 
