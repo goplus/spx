@@ -24,6 +24,7 @@
 <body>	
 	<label for="editorToggle">ShowEditor</label>
 	<input type="checkbox" id="editorToggle" checked>
+	<button id="startProjectNewBtn">StartNew</button>
 	<button id="startProjectBtn">Start</button>
 	<button id="updateProjectBtn">Update</button>
 	<button id="stopProjectBtn">Stop</button>
@@ -45,6 +46,7 @@
 		document.getElementById('editorToggle').addEventListener('change', function () {
 			showEditor = this.checked
 		});
+		document.getElementById('startProjectNewBtn').addEventListener('click', startProjectNew);
 		document.getElementById('startProjectBtn').addEventListener('click', startProject);
 		document.getElementById('updateProjectBtn').addEventListener('click', updateProject);
 		document.getElementById('stopProjectBtn').addEventListener('click', stopProject);
@@ -61,6 +63,15 @@
 			document.getElementById('progress-bar').style.display = value >= 1 ? 'none': 'block';
 		}
 
+		async function startProjectNew() {
+			runnerWindow = document.getElementById('runnerFrame').contentWindow;
+			runnerWindow.addEventListener('onProgress', (event) => {
+				onProgress(event.detail.progress)
+			})
+
+			let buffer = await (await (fetch('/diff.zip'))).arrayBuffer();
+			runnerWindow.startProject(buffer, "Game", showEditor);
+		}
 		async function startProject() {
 			runnerWindow = document.getElementById('runnerFrame').contentWindow;
 			runnerWindow.addEventListener('onProgress', (event) => {
