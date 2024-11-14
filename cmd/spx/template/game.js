@@ -16,6 +16,8 @@ class GameApp {
         this.exitFunc = null;
         this.basePath = 'godot.editor'
         this.isEditor = true;
+        this.assetURLs = config.assetURLs;
+        this.useAssetCache = config.useAssetCache;
         this.editorConfig = {
             "executable": "godot.editor",
             'unloadAfterInit': false,
@@ -433,7 +435,7 @@ class GameApp {
         await this.setCache(this.getProjectDataKey(), curData);
         return false;
     }
-    
+
     async ensureCacheDB() {
         await this.getObjectStore(this.persistentPath, 'FILE_DATA', 'readonly')
     }
@@ -449,7 +451,7 @@ class GameApp {
         this.logVerbose("curHashes ", hashes)
         this.wasmGdspx = await this.checkEngineCacheAsset(hashes, "gdspx.wasm");
         this.wasmEngine = await this.checkEngineCacheAsset(hashes, "godot.editor.wasm");
-        this.logVerbose("wasm ",  this.wasmGdspx, this.wasmEngine)
+        this.logVerbose("wasm ", this.wasmGdspx, this.wasmEngine)
         this.editorConfig.wasmGdspx = this.wasmGdspx
         this.editorConfig.wasmEngine = this.wasmEngine
         this.gameConfig.wasmGdspx = this.wasmGdspx
@@ -458,6 +460,12 @@ class GameApp {
 
     async checkEngineCacheAsset(hashes, assetName) {
         try {
+            let url = this.assetURLs[assetName]
+            if (!this.useAssetCache) {
+                this.logVerbose("Direct download engine asset:", assetName, url);
+                return await (await fetch(url)).arrayBuffer();
+            }
+
             let curHash = hashes[assetName];
             await this.ensureCacheDB();
 
@@ -465,10 +473,8 @@ class GameApp {
             const isCacheValid = cachedHash !== undefined && curHash === cachedHash;
 
             if (!isCacheValid) {
-                this.logVerbose("Download engine asset:", assetName);
-                const response = await fetch('/' + assetName);
-                const curData = await response.arrayBuffer();
-
+                this.logVerbose("Download engine asset:", assetName, url);
+                const curData = await (await fetch(url)).arrayBuffer();
                 await this.setCache(this.getEngineDataKey(assetName), curData);
                 await this.setCache(this.getEngineHashKey(assetName), curHash);
 
