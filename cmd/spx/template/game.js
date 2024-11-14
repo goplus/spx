@@ -93,7 +93,10 @@ class GameApp {
                     await this.mergeProjectWithEngineRes()
                     this.writePersistence(this.tempZipPath, this.projectData);
                     const args = ['--project-manager', '--single-window', "--install_project_name", this.projectInstallName];
-                    this.editor.start({ 'args': args, 'persistentDrops': true });
+                    this.editor.start({ 'args': args, 'persistentDrops': true }).then(async () => {
+                        this.editorCanvas.focus();
+                        await this.waitFsSyncDone(this.editorCanvas)
+                    })
                 });
             } else {
                 this.runEditor(resolve, reject, this.basePath)
@@ -126,7 +129,7 @@ class GameApp {
             }
         }
         deleteInfos = deleteInfos.map(info => `res://${info}`);
-        const evt = new CustomEvent('update_project', {
+        const evt = new CustomEvent('spx_update_project', {
             detail: {
                 "resolve": async () => {
                     await this.checkAndUpdateCache(newData)
@@ -140,7 +143,6 @@ class GameApp {
     }
 
     async stopProject(resolve, reject) {
-        console.log("stop project")
         if (this.editor == null) {
             resolve()
             return
@@ -173,11 +175,13 @@ class GameApp {
             this.onProgress(0.4);
             this.editor.start({ 'args': args, 'persistentDrops': false, 'canvas': this.editorCanvas }).then(async () => {
                 this.editorCanvas.focus();
+                await this.waitFsSyncDone(this.editorCanvas)
                 this.onProgress(0.9);
                 await this.mergeProjectWithEngineRes()
                 window.goLoadData(new Uint8Array(this.projectData));
                 this.onProgress(1.0);
                 await this.updateProjectHash(this.curProjectHash)
+                this.logVerbose("==> editor start done")
                 resolve()
             });
         });
@@ -211,7 +215,8 @@ class GameApp {
         };
         this.logVerbose("RunGame ", args);
         if (this.game) {
-            reject(new Error('A game is already running. Close it first'));
+            this.logVerbose('A game is already running. Close it first');
+            resolve()
             return;
         }
         this.onProgress(0.5);
@@ -221,9 +226,11 @@ class GameApp {
             this.onProgress(0.7);
             curGame.start({ 'args': args, 'canvas': this.gameCanvas }).then(async () => {
                 this.gameCanvas.focus();
+                await this.waitFsSyncDone(this.gameCanvas)
                 this.onProgress(0.9);
                 window.goLoadData(new Uint8Array(this.projectData));
                 this.onProgress(1.0);
+                this.logVerbose("==> game start done")
                 resolve()
             });
         });
@@ -256,28 +263,20 @@ class GameApp {
     }
 
     //------------------ update project ------------------
-    async addOrUpdateFiles(resolve, reject, paths, zipData) {
-
-        const evt = new CustomEvent('add_files', {
-            detail: datas
-        });
-        this.editorCanvas.dispatchEvent(evt);
-        const handler = () => {
-            callback();
-            this.editorCanvas.removeEventListener('update_files_handled', handler);
-        };
-        this.editorCanvas.addEventListener('update_files_handled', handler);
+    async waitFsSyncDone(canvas) {
+        return new Promise((resolve, reject) => {
+            this.logVerbose("waitFsSyncDone start")
+            const evt = new CustomEvent('spx_wait_fs_sync_done', {
+                detail: {
+                    "resolve": async () => {
+                        this.logVerbose("waitFsSyncDone done")
+                        resolve()
+                    },
+                }
+            });
+            canvas.dispatchEvent(evt);
+        })
     }
-
-    deleteFiles(paths) {
-        paths = paths.map(info => `res://${info}`);
-        const evt = new CustomEvent('delete_files', {
-            detail: paths
-        });
-        this.editorCanvas.dispatchEvent(evt);
-    }
-
-
 
     //------------------ install project ------------------
     getInstallPath() {

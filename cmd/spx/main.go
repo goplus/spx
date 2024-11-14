@@ -49,6 +49,9 @@ var (
 
 	//go:embed template/game.js
 	game_js string
+
+	//go:embed template/jszip-3.10.1.min.js
+	jszip_min_js string
 )
 
 func stringInSlice(a string, list []string) bool {
@@ -135,6 +138,7 @@ func exportInterpreterMode(webDir string) error {
 	impl.SetupFile(true, path.Join(webDir, "index.html"), index_html)
 	impl.SetupFile(true, path.Join(webDir, "runner.html"), runner_html)
 	impl.SetupFile(true, path.Join(webDir, "game.js"), game_js)
+	impl.SetupFile(true, path.Join(webDir, "jszip-3.10.1.min.js"), jszip_min_js)
 	impl.CopyFile(getISpxPath(), path.Join(webDir, "gdspx.wasm"))
 	return err
 }
@@ -179,7 +183,7 @@ func packProject(baseFolder string, dstZipPath string) {
 		os.Remove(dstZipPath)
 	}
 	skipDirs := map[string]struct{}{
-		"lib": {}, ".godot": {}, ".builds": {},
+		".git": {}, "lib": {}, ".godot": {}, ".builds": {},
 		"engine": {}, "main.tscn": {}, "project.godot": {},
 		"gdspx.gdextension": {}, "go.mod": {}, "go.sum": {}, "gop.mod": {}, "main.go": {}, "export_presets.cfg": {},
 	}
@@ -203,6 +207,10 @@ func packProject(baseFolder string, dstZipPath string) {
 			return err
 		}
 		if rel == "." {
+			return nil
+		}
+		// skip .import files
+		if strings.HasSuffix(path, ".import") {
 			return nil
 		}
 		parts := strings.Split(rel, string(filepath.Separator))
@@ -234,7 +242,6 @@ func packProject(baseFolder string, dstZipPath string) {
 		if err != nil {
 			panic(err)
 		}
-
 		header.Name = strings.TrimPrefix(path, baseFolder)
 		header.Name = strings.ReplaceAll(header.Name, "\\", "/")
 		if info.IsDir() {
