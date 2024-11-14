@@ -17,6 +17,7 @@ class GameApp {
         this.basePath = 'godot.editor'
         this.isEditor = true;
         this.editorConfig = {
+            "executable": "godot.editor",
             'unloadAfterInit': false,
             'canvas': this.editorCanvas,
             'canvasResizePolicy': 0,
@@ -29,6 +30,16 @@ class GameApp {
                     this.exitFunc();
                 }
             }
+        };
+        this.gameConfig = {
+            "executable": "godot.editor",
+            'persistentPaths': this.persistentPaths,
+            'unloadAfterInit': false,
+            'canvas': this.gameCanvas,
+            'canvasResizePolicy': 1,
+            'onExit': () => {
+                this.onGameExit()
+            },
         };
         this.logicPromise = Promise.resolve();
         this.isLogVerbose = config.logVerbose;
@@ -79,17 +90,17 @@ class GameApp {
         this.isEditor = true
         try {
             this.onProgress(0.1);
-            this.editor = new Engine(this.editorConfig);
             this.clearPersistence(this.tempZipPath);
-            // TODO get the old project's zip and compare the hash
             let isCacheValid = await this.checkAndUpdateCache(this.projectData, true);
+            await this.checkEngineCache()
+            this.editor = new Engine(this.editorConfig);
             if (!isCacheValid) {
                 this.exitFunc = () => {
                     this.exitFunc = null
                     this.runEditor(resolve, reject)
                 };
                 // install project
-                this.editor.init(this.basePath).then(async () => {
+                this.editor.init().then(async () => {
                     await this.mergeProjectWithEngineRes()
                     this.writePersistence(this.tempZipPath, this.projectData);
                     const args = ['--project-manager', '--single-window', "--install_project_name", this.projectInstallName];
@@ -99,7 +110,7 @@ class GameApp {
                     })
                 });
             } else {
-                this.runEditor(resolve, reject, this.basePath)
+                this.runEditor(resolve, reject)
             }
         } catch (error) {
             console.error("Error checking database existence: ", error);
@@ -161,7 +172,7 @@ class GameApp {
         }, null)
     }
 
-    runEditor(resolve, reject, basePath) {
+    runEditor(resolve, reject) {
         let args = [
             "--path",
             this.getInstallPath(),
@@ -171,7 +182,7 @@ class GameApp {
         this.exitFunc = null;
         this.logVerbose("runEditor ", args);
         this.onProgress(0.2);
-        this.editor.init(basePath).then(() => {
+        this.editor.init().then(() => {
             this.onProgress(0.4);
             this.editor.start({ 'args': args, 'persistentDrops': false, 'canvas': this.editorCanvas }).then(async () => {
                 this.editorCanvas.focus();
@@ -204,15 +215,6 @@ class GameApp {
             "0",
             "res://main.tscn",
         ];
-        const gameConfig = {
-            'persistentPaths': this.persistentPaths,
-            'unloadAfterInit': false,
-            'canvas': this.gameCanvas,
-            'canvasResizePolicy': 1,
-            'onExit': () => {
-                this.onGameExit()
-            },
-        };
         this.logVerbose("RunGame ", args);
         if (this.game) {
             this.logVerbose('A game is already running. Close it first');
@@ -220,9 +222,9 @@ class GameApp {
             return;
         }
         this.onProgress(0.5);
-        this.game = new Engine(gameConfig);
+        this.game = new Engine(this.gameConfig);
         let curGame = this.game
-        curGame.init(this.basePath).then(() => {
+        curGame.init().then(() => {
             this.onProgress(0.7);
             curGame.start({ 'args': args, 'canvas': this.gameCanvas }).then(async () => {
                 this.gameCanvas.focus();
@@ -408,7 +410,6 @@ class GameApp {
         this.logVerbose("updateProjectHash ", hash)
         await this.setCache(this.getProjectHashKey(), hash);
     }
-
     async checkAndUpdateCache(curData, isClearIfDirty = false) {
         // TODO only cache art resources
         let curHash = await this.computeHash(curData);
@@ -421,15 +422,66 @@ class GameApp {
         if (isClearIfDirty) {
             await this.updateProjectHash('')
             // clear the dirty cache
+            // TOOD only clear the current project's cache data
             this.clearPersistence(this.persistentPath);
             // create a default indexDB
-            await this.getObjectStore(this.persistentPath, 'FILE_DATA', 'readonly')
+            await this.ensureCacheDB()
         } else {
             await this.updateProjectHash(this.curProjectHash)
         }
         // cache is dirty, update it 
         await this.setCache(this.getProjectDataKey(), curData);
         return false;
+    }
+    
+    async ensureCacheDB() {
+        await this.getObjectStore(this.persistentPath, 'FILE_DATA', 'readonly')
+    }
+
+    getEngineHashKey(assetName) {
+        return `${this.persistentPath}/.spx_engine_hash/${assetName}`
+    }
+    getEngineDataKey(assetName) {
+        return `${this.persistentPath}/.spx_engine_data/${assetName}`
+    }
+    async checkEngineCache() {
+        let hashes = GetEngineHashes()
+        this.logVerbose("curHashes ", hashes)
+        this.wasmGdspx = await this.checkEngineCacheAsset(hashes, "gdspx.wasm");
+        this.wasmEngine = await this.checkEngineCacheAsset(hashes, "godot.editor.wasm");
+        this.logVerbose("wasm ",  this.wasmGdspx, this.wasmEngine)
+        this.editorConfig.wasmGdspx = this.wasmGdspx
+        this.editorConfig.wasmEngine = this.wasmEngine
+        this.gameConfig.wasmGdspx = this.wasmGdspx
+        this.gameConfig.wasmEngine = this.wasmEngine
+    }
+
+    async checkEngineCacheAsset(hashes, assetName) {
+        try {
+            let curHash = hashes[assetName];
+            await this.ensureCacheDB();
+
+            const cachedHash = await this.getCache(this.getEngineHashKey(assetName));
+            const isCacheValid = cachedHash !== undefined && curHash === cachedHash;
+
+            if (!isCacheValid) {
+                this.logVerbose("Download engine asset:", assetName);
+                const response = await fetch('/' + assetName);
+                const curData = await response.arrayBuffer();
+
+                await this.setCache(this.getEngineDataKey(assetName), curData);
+                await this.setCache(this.getEngineHashKey(assetName), curHash);
+
+                return curData;
+            } else {
+                this.logVerbose("Load cached engine asset:", assetName);
+                const curData = await this.getCache(this.getEngineDataKey(assetName));
+                return curData;
+            }
+        } catch (error) {
+            console.error("Error checking engine cache asset:", error);
+            throw error;
+        }
     }
 
 
