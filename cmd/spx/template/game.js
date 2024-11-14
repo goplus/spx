@@ -462,7 +462,6 @@ class GameApp {
         try {
             let url = this.assetURLs[assetName]
             if (!this.useAssetCache) {
-                this.logVerbose("Direct download engine asset:", assetName, url);
                 return await (await fetch(url)).arrayBuffer();
             }
 
