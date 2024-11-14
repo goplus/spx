@@ -2,6 +2,7 @@ package main
 
 import (
 	"archive/zip"
+	"crypto/sha256"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -131,7 +132,9 @@ func execCmds() error {
 	}
 	return err
 }
+
 func exportInterpreterMode(webDir string) error {
+
 	err := impl.ExportWebEditor(impl.GdspxPath, impl.ProjectPath, impl.LibPath)
 	packProject(impl.TargetDir, path.Join(webDir, "game.zip"))
 	os.WriteFile(path.Join(webDir, "engineres.zip"), engine_res_zip, 0644)
@@ -140,6 +143,7 @@ func exportInterpreterMode(webDir string) error {
 	impl.SetupFile(true, path.Join(webDir, "game.js"), game_js)
 	impl.SetupFile(true, path.Join(webDir, "jszip-3.10.1.min.js"), jszip_min_js)
 	impl.CopyFile(getISpxPath(), path.Join(webDir, "gdspx.wasm"))
+	saveEngineHash(webDir)
 	return err
 }
 
@@ -365,4 +369,51 @@ func deleteImportFiles(dir string) error {
 
 		return nil
 	})
+}
+
+func computeHash(filePath string) (string, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	hasher := sha256.New()
+	if _, err := io.Copy(hasher, file); err != nil {
+		return "", err
+	}
+
+	hashBytes := hasher.Sum(nil)
+	return fmt.Sprintf("%x", hashBytes), nil
+}
+func saveEngineHash(webDir string) {
+	// calc and save wasm hash
+	files := []string{"gdspx.wasm", "godot.editor.wasm"}
+	outpuString := `
+function GetEngineHashes() { 
+	return {
+#HASHES
+	}
+}
+	`
+	line := ""
+	for _, file := range files {
+		hash, err := computeHash(path.Join(webDir, file))
+		if err != nil {
+			fmt.Printf("Error computing hash for %s: %v\n", file, err)
+			continue
+		}
+		line += fmt.Sprintf("\"%s\":\"%s\",\n", file, hash)
+	}
+	js := strings.Replace(outpuString, "#HASHES", line, -1)
+
+	// append to game.js
+	file, err := os.OpenFile(path.Join(webDir, "game.js"), os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+	if _, err := file.WriteString(js); err != nil {
+		panic(err)
+	}
 }

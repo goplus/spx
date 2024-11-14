@@ -68,7 +68,7 @@
 		}
 
 
-		window.startProject = async (buffer, projectName = "Game", showEditor = false) => {
+		window.startProject = async (buffer, projectName = "Game", showEditor = false, assetURLs = null) => {
 			isShowEditor = showEditor
 			const config = {
 				'projectName': projectName,
@@ -77,7 +77,14 @@
 				"editorCanvas": document.getElementById('editor-canvas'),
 				"projectData": new Uint8Array(buffer),
 				"logVerbose": true,
+				"assetURLs": {
+					"gdspx.wasm": "/gdspx.wasm",
+					"godot.editor.wasm": "/godot.editor.wasm",
+				},
 			};
+			if(assetURLs != null){
+				config.assetURLs = assetURLs
+			}
 			gameApp = new GameApp(config);
 			await gameApp.StartProject();
 		}
