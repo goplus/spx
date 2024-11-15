@@ -1,8 +1,8 @@
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
 github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
-github.com/realdream-ai/gdspx v0.0.0-20241115112104-50bd05d62a5c h1:5fIFZ5UofpbevCOFA7foRjl3S8yb4X4NFD6Dn0LKSwc=
-github.com/realdream-ai/gdspx v0.0.0-20241115112104-50bd05d62a5c/go.mod h1:IoJp7Z/RciFWJeURRncLxtoHhJbVQfqGOm4hrtTrtas=
+github.com/realdream-ai/gdspx v0.0.0-20241115132740-adf0aa4fb84a h1:qdwB3EwcDDhwYOX8r/R3HcgDLCIoikaW7aOa7QZQAGM=
+github.com/realdream-ai/gdspx v0.0.0-20241115132740-adf0aa4fb84a/go.mod h1:IoJp7Z/RciFWJeURRncLxtoHhJbVQfqGOm4hrtTrtas=
 github.com/yuin/goldmark v1.4.1/go.mod h1:mwnBkeHKe2W/ZEtQ+71ViKU8L12m81fl3OWwC1Zlc8k=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
 golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550/go.mod h1:yigFU9vqHzYiE8UmvKecakEJjdnWj3jj499lnFckfCI=
