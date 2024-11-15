@@ -99,6 +99,7 @@ class GameApp {
             if (!isCacheValid) {
                 this.exitFunc = () => {
                     this.exitFunc = null
+                    this.editor = new Engine(this.editorConfig);
                     this.runEditor(resolve, reject)
                 };
                 // install project
@@ -108,7 +109,6 @@ class GameApp {
                     const args = ['--project-manager', '--single-window', "--install_project_name", this.projectInstallName];
                     this.editor.start({ 'args': args, 'persistentDrops': true }).then(async () => {
                         this.editorCanvas.focus();
-                        await this.waitFsSyncDone(this.editorCanvas)
                     })
                 });
             } else {
@@ -451,7 +451,6 @@ class GameApp {
         this.logVerbose("curHashes ", hashes)
         this.wasmGdspx = await this.checkEngineCacheAsset(hashes, "gdspx.wasm");
         this.wasmEngine = await this.checkEngineCacheAsset(hashes, "godot.editor.wasm");
-        this.logVerbose("wasm ", this.wasmGdspx, this.wasmEngine)
         this.editorConfig.wasmGdspx = this.wasmGdspx
         this.editorConfig.wasmEngine = this.wasmEngine
         this.gameConfig.wasmGdspx = this.wasmGdspx
