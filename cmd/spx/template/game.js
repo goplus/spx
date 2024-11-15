@@ -2,12 +2,13 @@
 
 class GameApp {
     constructor(config) {
-        this.appConfig = config || null;
+        config = config || {};
+        this.config = config;
         this.editor = null;
         this.game = null;
         this.persistentPath = '/home/web_user';
         this.tempZipPath = '/tmp/preload.zip';
-        this.projectInstallName = config?.projectName || "Game";
+        this.projectInstallName = config.projectName || "Game";
         this.projectData = config.projectData;
         this.oldData = config.projectData;
         this.persistentPaths = [this.persistentPath];
@@ -525,8 +526,8 @@ class GameApp {
 
     //------------------ misc ------------------
     onProgress(value) {
-        if (this.appConfig.onProgress != null) {
-            this.appConfig.onProgress(value);
+        if (this.config.onProgress != null) {
+            this.config.onProgress(value);
         }
     }
 }
