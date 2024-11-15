@@ -431,7 +431,6 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 
 	p.doWindowSize() // set window size
 
-
 	inits := make([]Sprite, 0, len(proj.Zorder))
 	for _, v := range proj.Zorder {
 		if name, ok := v.(string); ok {
@@ -462,11 +461,9 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 	if p.windowHeight_ > p.worldHeight_ {
 		p.windowHeight_ = p.worldHeight_
 	}
-	if !engine.IsWebIntepreterMode() {
-		engine.SyncPlatformSetWindowSize(int64(p.windowWidth_), int64(p.windowHeight_))
-	} else {
-		println("WebIntepreterMode skip resize window")
-	}
+
+	engine.SyncPlatformSetWindowSize(int64(p.windowWidth_), int64(p.windowHeight_))
+
 	p.Camera.init(p, float64(p.windowWidth_), float64(p.windowHeight_), float64(p.worldWidth_), float64(p.worldHeight_))
 
 	if proj.Camera != nil && proj.Camera.On != "" {
