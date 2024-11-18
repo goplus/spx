@@ -251,15 +251,15 @@ func (p *SpriteImpl) init(
 	// bind physic config
 	p.collisionMask = parseLayerMaskValue(spriteCfg.CollisionMask)
 	p.collisionLayer = parseLayerMaskValue(spriteCfg.CollisionLayer)
-	p.triggerMask = parseLayerMaskValue(spriteCfg.TriggerMask)
-	p.triggerLayer = parseLayerMaskValue(spriteCfg.TriggerLayer)
-
-	p.colliderType = paserColliderType(spriteCfg.ColliderType)
+	// collider is disable by default
+	p.colliderType = paserColliderType(spriteCfg.ColliderType, physicColliderNone)
 	p.colliderCenter = spriteCfg.ColliderCenter
 	p.colliderSize = spriteCfg.ColliderSize
 	p.colliderRadius = spriteCfg.ColliderRadius
 
-	p.triggerType = paserColliderType(spriteCfg.TriggerType)
+	p.triggerMask = parseLayerMaskValue(spriteCfg.TriggerMask)
+	p.triggerLayer = parseLayerMaskValue(spriteCfg.TriggerLayer)
+	p.triggerType = paserColliderType(spriteCfg.TriggerType, physicColliderAuto)
 	p.triggerCenter = spriteCfg.TriggerCenter
 	p.triggerSize = spriteCfg.TriggerSize
 	p.triggerRadius = spriteCfg.TriggerRadius
