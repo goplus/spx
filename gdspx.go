@@ -21,6 +21,7 @@ import (
 	"sync/atomic"
 
 	"github.com/goplus/spx/internal/engine"
+	"github.com/goplus/spx/internal/math32"
 
 	gdspx "github.com/realdream-ai/gdspx/pkg/engine"
 )
@@ -39,7 +40,6 @@ func (p *Game) OnEngineUpdate(delta float32) {
 	// all these functions is called in main thread
 	p.updateInput()
 	p.updateCamera()
-	p.updateUI()
 	p.updateLogic()
 	p.updateProxy()
 	p.updatePhysic()
@@ -76,16 +76,6 @@ func (p *Game) updateInput() {
 	pos := gdspx.InputMgr.GetMousePos()
 	atomic.StoreInt64(&p.gMouseX, int64(pos.X))
 	atomic.StoreInt64(&p.gMouseY, int64(pos.Y))
-}
-
-func (p *Game) updateUI() {
-	newItems := make([]Shape, len(p.items))
-	copy(newItems, p.items)
-	for _, item := range newItems {
-		if result, ok := item.(interface{ OnUpdate(float32) }); ok {
-			result.OnUpdate(0.01)
-		}
-	}
 }
 
 func (p *Game) updateProxy() {
@@ -182,6 +172,7 @@ func initSpritePhysicInfo(sprite *SpriteImpl, proxy *engine.ProxySprite) {
 	case physicColliderCircle:
 		proxy.SetTriggerEnabled(true)
 		proxy.SetTriggerCircle(sprite.triggerCenter.ToVec2(), float32(math.Max(sprite.triggerRadius, 0.01)))
+		sprite.triggerSize = *math32.NewVector2(sprite.triggerRadius, sprite.triggerRadius)
 	case physicColliderRect:
 		proxy.SetTriggerEnabled(true)
 		proxy.SetTriggerRect(sprite.triggerCenter.ToVec2(), sprite.triggerSize.ToVec2())
@@ -189,7 +180,9 @@ func initSpritePhysicInfo(sprite *SpriteImpl, proxy *engine.ProxySprite) {
 		w, h := sprite.getCostumeSize()
 		w, h = w*sprite.scale, h*sprite.scale
 		proxy.SetTriggerEnabled(true)
-		proxy.SetTriggerRect(engine.NewVec2(0, 0), engine.NewVec2(w, h))
+		sprite.triggerSize = *math32.NewVector2(w, h)
+		sprite.triggerCenter = *math32.NewVector2(0, 0)
+		proxy.SetTriggerRect(sprite.triggerCenter.ToVec2(), sprite.triggerSize.ToVec2())
 	case physicColliderNone:
 		proxy.SetTriggerEnabled(false)
 	}
