@@ -86,14 +86,11 @@ func newMonitor(g reflect.Value, v specsp) (*Monitor, error) {
 		target: target, val: val, eval: eval, name: name, size: size,
 		visible: visible, mode: mode, color: color, x: x, y: y, label: label, panel: panel,
 	}
-	panel.UpdateCallBack = func(delta float32) {
-		monitor.OnUpdate(delta)
-	}
+
 	return monitor, nil
 }
 
-func (pself *Monitor) OnUpdate(delta float32) {
-	// call on main thread !
+func (pself *Monitor) onUpdate(delta float64) {
 	if !pself.visible {
 		return
 	}
@@ -102,6 +99,7 @@ func (pself *Monitor) OnUpdate(delta float32) {
 	pself.panel.UpdatePos(pself.x, pself.y)
 	pself.panel.UpdateText(pself.label, val)
 }
+
 func getTarget(g reflect.Value, target string) (reflect.Value, int) {
 	if target == "" {
 		return g, 1 // spx.Game

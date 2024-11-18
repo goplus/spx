@@ -42,10 +42,8 @@ type sayOrThinker struct {
 }
 
 func (p *sayOrThinker) refresh() {
-	size := p.sp.Bounds().Size
-	x, y := p.sp.x, p.sp.y
-	applyRenderOffset(p.sp, &x, &y)
-	p.panel.SetText(x, y, size.Width, size.Height, p.msg)
+	bound := p.sp.Bounds()
+	p.panel.SetText(float64(p.sp.g.getWidth()), float64(p.sp.g.getHeight()), bound.Center.X, bound.Center.Y, bound.Size.Width, bound.Size.Height, p.msg)
 }
 
 const (

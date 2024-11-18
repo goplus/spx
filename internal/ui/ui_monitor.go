@@ -8,9 +8,8 @@ import (
 
 type UiMonitor struct {
 	UiNode
-	labelName      *UiNode
-	labelValue     *UiNode
-	UpdateCallBack UpdateFunc
+	labelName  *UiNode
+	labelValue *UiNode
 }
 type UpdateFunc func(float32)
 
@@ -23,12 +22,6 @@ func (pself *UiMonitor) OnStart() {
 	pself.labelValue = BindUI[UiNode](pself.GetId(), "BG/H/C/H/LabelValue")
 }
 
-func (pself *UiMonitor) OnUpdate(delta float32) {
-	if pself.UpdateCallBack != nil {
-		pself.UpdateCallBack(delta)
-	}
-}
-
 func (pself *UiMonitor) UpdateScale(x float64) {
 	engine.SyncUiSetScale(pself.GetId(), engine.NewVec2(x, x))
 }
@@ -38,8 +31,6 @@ func (pself *UiMonitor) UpdatePos(x, y float64) {
 }
 
 func (pself *UiMonitor) UpdateText(name, value string) {
-	pself.labelName.SetText(name)
-	pself.labelValue.SetText(value)
 	engine.SyncUiSetText(pself.labelName.GetId(), name)
 	engine.SyncUiSetText(pself.labelValue.GetId(), value)
 }

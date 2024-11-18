@@ -195,20 +195,19 @@ type SpriteImpl struct {
 	isWaitingStopAnim   bool
 	defaultCostumeIndex int
 
-	collisionMask  int64
-	collisionLayer int64
-	triggerMask    int64
-	triggerLayer   int64
-
-	colliderType   int64
-	colliderCenter math32.Vector2
-	colliderSize   math32.Vector2
-	colliderRadius float64
-
+	triggerMask   int64
+	triggerLayer  int64
 	triggerType   int64
 	triggerCenter math32.Vector2
 	triggerSize   math32.Vector2
 	triggerRadius float64
+
+	collisionMask  int64
+	collisionLayer int64
+	colliderType   int64
+	colliderCenter math32.Vector2
+	colliderSize   math32.Vector2
+	colliderRadius float64
 }
 
 func (p *SpriteImpl) SetDying() { // dying: visible but can't be touched
@@ -1640,20 +1639,28 @@ func (p *SpriteImpl) Bounds() *math32.RotatedRect {
 	if !p.isVisible {
 		return nil
 	}
+	x, y, w, h := 0.0, 0.0, 0.0, 0.0
+
 	// TODO use gdspx's bounding box info
 	c := p.costumes[p.costumeIndex_]
 	// calc center
-	x, y := p.x, p.y
+	x, y = p.x, p.y
 	applyRenderOffset(p, &x, &y)
 
-	// calc scale
-	wi, hi := c.getSize()
-	w, h := float64(wi)*p.scale, float64(hi)*p.scale
-
+	if p.triggerType != physicColliderNone {
+		x += p.triggerCenter.X
+		y += p.triggerCenter.Y
+		w = p.triggerSize.X
+		h = p.triggerSize.Y
+	} else {
+		// calc scale
+		wi, hi := c.getSize()
+		w, h = float64(wi)*p.scale, float64(hi)*p.scale
+	}
 	ret := math32.RotatedRect{Center: math32.NewVector2(x, y),
 		Size: math32.NewSize(float64(w), float64(h)), Angle: p.direction}
-
 	return &ret
+
 }
 
 // -----------------------------------------------------------------------------
@@ -1691,4 +1698,14 @@ func (p *SpriteImpl) fixWorldRange(x, y float64) (float64, float64) {
 // -----------------------------------------------------------------------------
 func (p *SpriteImpl) getCostumeRenderScale() float64 {
 	return p.baseObj.getCostumeRenderScale() * p.scale
+}
+
+// ------------------------ Extra events ----------------------------------------
+func (pself *SpriteImpl) onUpdate(delta float64) {
+	if pself.quoteObj != nil {
+		pself.quoteObj.refresh()
+	}
+	if pself.sayObj != nil {
+		pself.sayObj.refresh()
+	}
 }
