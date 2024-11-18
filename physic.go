@@ -18,8 +18,9 @@ package spx
 
 const (
 	physicColliderNone   = 0x00
-	physicColliderCircle = 0x01
-	physicColliderRect   = 0x02
+	physicColliderAuto   = 0x01
+	physicColliderCircle = 0x02
+	physicColliderRect   = 0x03
 )
 
 func parseDefaultValue(pval *int64, defaultValue int64) int64 {
@@ -31,12 +32,16 @@ func parseDefaultValue(pval *int64, defaultValue int64) int64 {
 func parseLayerMaskValue(pval *int64) int64 {
 	return parseDefaultValue(pval, 1)
 }
-func paserColliderType(typeName string) int64 {
+func paserColliderType(typeName string, defaultValue int64) int64 {
 	switch typeName {
+	case "none":
+		return physicColliderNone
+	case "auto":
+		return physicColliderAuto
 	case "circle":
 		return physicColliderCircle
 	case "rect":
 		return physicColliderRect
 	}
-	return physicColliderNone
+	return defaultValue
 }

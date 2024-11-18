@@ -465,7 +465,6 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 	engine.SyncPlatformSetWindowSize(int64(p.windowWidth_), int64(p.windowHeight_))
 
 	p.Camera.init(p, float64(p.windowWidth_), float64(p.windowHeight_), float64(p.worldWidth_), float64(p.worldHeight_))
-
 	if proj.Camera != nil && proj.Camera.On != "" {
 		p.Camera.On(proj.Camera.On)
 	}
