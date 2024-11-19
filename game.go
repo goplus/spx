@@ -465,7 +465,6 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 	engine.SyncPlatformSetWindowSize(int64(p.windowWidth_), int64(p.windowHeight_))
 
 	p.Camera.init(p, float64(p.windowWidth_), float64(p.windowHeight_), float64(p.worldWidth_), float64(p.worldHeight_))
-
 	if proj.Camera != nil && proj.Camera.On != "" {
 		p.Camera.On(proj.Camera.On)
 	}
@@ -686,8 +685,29 @@ func (p *Game) eventLoop(me coroutine.Thread) int {
 		p.handleEvent(ev)
 	}
 }
-
 func (p *Game) logicLoop(me coroutine.Thread) int {
+	newItems := make([]Shape, 50)
+	deltaTime := 0.03
+	for {
+		p.Wait(deltaTime)
+		// copy to temp array
+		if cap(newItems) < len(p.items) {
+			newItems = make([]Shape, len(p.items))
+		} else {
+			newItems = newItems[:len(p.items)]
+		}
+		copy(newItems, p.items)
+		for _, item := range newItems {
+			if result, ok := item.(interface{ onUpdate(float64) }); ok {
+				result.onUpdate(deltaTime)
+			}
+		}
+		newItems = newItems[:0]
+	}
+}
+
+func (p *Game) inputEventLoop(me coroutine.Thread) int {
+
 	lastLbtnPressed := false
 	keyEvents := make([]engine.KeyEvent, 0)
 	for {
@@ -716,6 +736,7 @@ func (p *Game) logicLoop(me coroutine.Thread) int {
 
 func (p *Game) initEventLoop() {
 	gco.Create(nil, p.eventLoop)
+	gco.Create(nil, p.inputEventLoop)
 	gco.Create(nil, p.logicLoop)
 }
 
@@ -775,6 +796,13 @@ func (p *Game) getWidth() int {
 		p.doWindowSize()
 	}
 	return p.windowWidth_
+}
+
+func (p *Game) getHeight() int {
+	if p.windowHeight_ == 0 {
+		p.doWindowSize()
+	}
+	return p.windowHeight_
 }
 
 // convert pos from win space(0,0 is top left) to game space(0,0 is center)
