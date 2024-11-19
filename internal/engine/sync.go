@@ -97,3 +97,18 @@ func SyncReadAllText(path string) string {
 func SyncSetDebugMode(isDebug bool) {
 	SyncPlatformSetDebugMode(isDebug)
 }
+
+// =============== setting ===================
+func SyncGetCameraLocalPosition(x, y float64) (float64, float64) {
+	posX, posY := SyncGetCameraPosition()
+	x -= posX
+	y -= posY
+	return x, y
+}
+func SyncGetCameraPosition() (float64, float64) {
+	pos := SyncCameraGetCameraPosition()
+	return float64(pos.X), -float64(pos.Y)
+}
+func SyncSetCameraPosition(x, y float64) {
+	SyncCameraSetCameraPosition(NewVec2(float64(x), -float64(y)))
+}

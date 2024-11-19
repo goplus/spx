@@ -42,14 +42,18 @@ func (c *Camera) isWorldRange(pos *math32.Vector2) bool {
 	}
 	return true
 }
+func (c *Camera) GetXYpos() (float64, float64) {
+	return engine.SyncGetCameraPosition()
+}
 
 func (c *Camera) SetXYpos(x float64, y float64) {
-	c.ChangeXYpos(x, y)
+	engine.SyncSetCameraPosition(x, y)
 }
 
 func (c *Camera) ChangeXYpos(x float64, y float64) {
 	c.on_ = nil
-	engine.SyncCameraSetCameraPosition(engine.NewVec2(x, y))
+	posX, posY := c.GetXYpos()
+	c.SetXYpos(posX+x, posY+y)
 }
 
 func (c *Camera) screenToWorld(point *math32.Vector2) *math32.Vector2 {

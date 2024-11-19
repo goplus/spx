@@ -37,6 +37,7 @@ func (pself *UiSay) OnStart() {
 }
 
 func (pself *UiSay) SetText(winX, winY float64, x, y float64, w, h float64, msg string) {
+	x, y = engine.SyncGetCameraLocalPosition(x, y)
 	isLeft := x <= 0
 	xPos := x
 	yPos := y + h/2
