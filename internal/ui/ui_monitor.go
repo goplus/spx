@@ -22,6 +22,10 @@ func (pself *UiMonitor) OnStart() {
 	pself.labelValue = BindUI[UiNode](pself.GetId(), "BG/H/C/H/LabelValue")
 }
 
+func (pself *UiMonitor) SetVisible(isOn bool) {
+	engine.SyncUiSetVisible(pself.GetId(), isOn)
+}
+
 func (pself *UiMonitor) UpdateScale(x float64) {
 	engine.SyncUiSetScale(pself.GetId(), engine.NewVec2(x, x))
 }

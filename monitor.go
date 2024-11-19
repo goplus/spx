@@ -91,10 +91,11 @@ func newMonitor(g reflect.Value, v specsp) (*Monitor, error) {
 }
 
 func (pself *Monitor) onUpdate(delta float64) {
+	val := pself.eval()
+	pself.panel.SetVisible(pself.visible)
 	if !pself.visible {
 		return
 	}
-	val := pself.eval()
 	pself.panel.UpdateScale(pself.size)
 	pself.panel.UpdatePos(pself.x, pself.y)
 	pself.panel.UpdateText(pself.label, val)
