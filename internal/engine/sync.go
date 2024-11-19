@@ -85,7 +85,9 @@ func SyncGetCurrentTPS() float64 {
 
 // =============== window ===================
 func SyncSetRunnableOnUnfocused(flag bool) {
-	println("TODO tanjp SyncSetRunnableOnUnfocused")
+	if !flag {
+		println("TODO tanjp SyncSetRunnableOnUnfocused")
+	}
 }
 
 func SyncReadAllText(path string) string {
