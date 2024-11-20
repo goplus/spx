@@ -74,8 +74,9 @@ func (p *Game) updateCamera() {
 
 func (p *Game) updateInput() {
 	pos := gdspx.InputMgr.GetMousePos()
-	atomic.StoreInt64(&p.gMouseX, int64(pos.X))
-	atomic.StoreInt64(&p.gMouseY, int64(pos.Y))
+	posX, posY := engine.ScreenToWorld(float64(pos.X), float64(pos.Y))
+	atomic.StoreInt64(&p.gMouseX, int64(posX))
+	atomic.StoreInt64(&p.gMouseY, int64(posY))
 }
 
 func (p *Game) updateProxy() {
