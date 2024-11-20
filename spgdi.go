@@ -24,9 +24,15 @@ type Shape interface {
 // -------------------------------------------------------------------------------------
 
 func (p *SpriteImpl) touchPoint(x, y float64) bool {
+	if p.proxy == nil {
+		return false
+	}
 	return engine.SyncSpriteCheckCollisionWithPoint(p.proxy.GetId(), engine.NewVec2(x, y), true)
 }
 
 func (p *SpriteImpl) touchingSprite(dst *SpriteImpl) bool {
+	if p.proxy == nil || dst.proxy == nil {
+		return false
+	}
 	return engine.SyncSpriteCheckCollision(p.proxy.GetId(), dst.proxy.GetId(), true, true)
 }
