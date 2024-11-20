@@ -82,6 +82,8 @@ func newCostumeWithSize(width, height int) *costume {
 	}
 	value.posX = 0
 	value.posY = 0
+	value.center.X = float64(value.width) / 2
+	value.center.Y = float64(value.height) / 2
 	return value
 }
 
@@ -102,6 +104,8 @@ func newCostumeWith(name string, img *costumeSetImage, faceRight float64, i, bit
 		value.posX = int(img.rc.X) + i*value.width
 		value.posY = int(img.rc.Y)
 	}
+	value.center.X = float64(value.width) / 2
+	value.center.Y = float64(value.height) / 2
 	return value
 }
 

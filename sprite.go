@@ -1034,7 +1034,6 @@ func (p *SpriteImpl) doMoveTo(x, y float64) {
 }
 
 func (p *SpriteImpl) doMoveToForAnim(x, y float64, ani *anim.Anim) {
-	x, y = p.fixWorldRange(x, y)
 	if p.hasOnMoving {
 		mi := &MovingInfo{OldX: p.x, OldY: p.y, NewX: x, NewY: y, Obj: p, ani: ani}
 		p.doWhenMoving(p, mi)
