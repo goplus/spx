@@ -471,6 +471,10 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 	if loader, ok := g.Addr().Interface().(interface{ OnLoaded() }); ok {
 		loader.OnLoaded()
 	}
+
+	if proj.Bgm != "" {
+		p.Play__5(proj.Bgm, &PlayOptions{Music: true})
+	}
 	// game load success
 	p.isLoaded = true
 	return

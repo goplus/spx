@@ -114,6 +114,7 @@ type projConfig struct {
 	Camera        *cameraConfig     `json:"camera"`
 	Run           *Config           `json:"run"`
 	Debug         bool              `json:"debug"`
+	Bgm           string            `json:"bgm"`
 
 	// deprecated properties
 	Scenes              []*backdropConfig `json:"scenes"`              //this property is deprecated, use Backdrops instead

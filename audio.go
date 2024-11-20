@@ -34,6 +34,7 @@ type PlayOptions struct {
 	Action PlayAction
 	Wait   bool
 	Loop   bool
+	Music  bool
 }
 
 type soundMgr struct {
@@ -47,7 +48,11 @@ func (p *soundMgr) init(g *Game) {
 }
 
 func (p *soundMgr) play(media Sound, opts *PlayOptions) (err error) {
-	err = p.playSfx(media, opts.Wait, false)
+	if opts.Music {
+		err = p.playBgm(media, opts.Action)
+	} else {
+		err = p.playSfx(media)
+	}
 	return
 }
 
@@ -55,8 +60,29 @@ func (p *soundMgr) stopAll() {
 	engine.SyncAudioStopAll()
 }
 
-func (p *soundMgr) playSfx(media Sound, wait, loop bool) (err error) {
+func (p *soundMgr) playBgm(media Sound, action PlayAction) (err error) {
+	switch action {
+	case PlayRewind:
+		p.playMusic(media)
+	case PlayContinue:
+		p.resumeMusic(media)
+	case PlayPause:
+		p.pauseMusic(media)
+	case PlayResume:
+		p.resumeMusic(media)
+	case PlayStop:
+		p.stopMusic(media)
+	}
+	return
+}
+
+func (p *soundMgr) playSfx(media Sound) (err error) {
 	engine.SyncAudioPlaySfx(engine.ToAssetPath(media.Path))
+	return
+}
+
+func (p *soundMgr) playMusic(media Sound) (err error) {
+	engine.SyncAudioPlayMusic(engine.ToAssetPath(media.Path))
 	return
 }
 
