@@ -100,7 +100,8 @@ func (p *Game) updateProxy() {
 			if sprite.isVisible {
 				x, y := sprite.getXY()
 				applyRenderOffset(sprite, &x, &y)
-				proxy.UpdatePosRot(x, y, sprite.Heading()-sprite.initDirection)
+				rot := calcRenderRotation(sprite)
+				proxy.UpdatePosRot(x, y, rot)
 				if sprite.isCostumeAltas() {
 					proxy.UpdateTextureAltas(sprite.getCostumePath(), sprite.getCostumeAltasRegion().ToRect2(), sprite.getCostumeRenderScale())
 				} else {
@@ -188,6 +189,22 @@ func initSpritePhysicInfo(sprite *SpriteImpl, proxy *engine.ProxySprite) {
 	}
 
 }
+
+func calcRenderRotation(p *SpriteImpl) float64 {
+	cs := p.costumes[p.costumeIndex_]
+	degree := p.Heading() + cs.faceRight
+	degree -= 90
+	if p.rotationStyle == LeftRight {
+		if math.Abs(p.direction) > 155 && math.Abs(p.direction) < 205 {
+			degree = 180
+		}
+		if math.Abs(p.direction) > 0 && math.Abs(p.direction) < 25 {
+			degree = 180
+		}
+	}
+	return degree
+}
+
 func applyRenderOffset(p *SpriteImpl, cx, cy *float64) {
 	cs := p.costumes[p.costumeIndex_]
 	x, y := -(cs.center.X+p.pivot.X)/float64(cs.bitmapResolution)*p.scale,
