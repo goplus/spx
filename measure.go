@@ -21,8 +21,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/realdream-ai/gdspx/pkg/engine"
-
 	"github.com/goplus/spx/internal/ui"
 )
 
@@ -71,12 +69,7 @@ func newMeasure(v specsp) *measure {
 		svgSize:      svgSize,
 		panel:        panel,
 	}
-	panel.UpdateInfo(meansureObj.x, meansureObj.y, size*scale, heading, text, engine.Color{
-		R: float32(c.R) / 255.0,
-		G: float32(c.G) / 255.0,
-		B: float32(c.B) / 255.0,
-		A: float32(c.A) / 255.0,
-	})
+	panel.UpdateInfo(meansureObj.x, meansureObj.y, size*scale, heading, text, toEngineColor(c))
 	return meansureObj
 }
 

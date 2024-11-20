@@ -1,4 +1,4 @@
-[gd_scene load_steps=5 format=3 uid="uid://bsaqlmdsvus4d"]
+[gd_scene load_steps=8 format=3 uid="uid://bsaqlmdsvus4d"]
 
 [ext_resource type="Texture2D" uid="uid://cm2lync0vu3ot" path="res://engine/textures/monitor/frame_name.png" id="1_urp8p"]
 [ext_resource type="Texture2D" uid="uid://ccrnx7ptuijh0" path="res://engine/textures/monitor/frame_value.png" id="2_r5bje"]
@@ -17,22 +17,28 @@ texture_margin_top = 3.0
 texture_margin_right = 16.0
 texture_margin_bottom = 3.0
 expand_margin_right = 20.0
+modulate_color = Color(0.996078, 1, 1, 1)
+
+[sub_resource type="Theme" id="Theme_gvmbf"]
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_sbh8w"]
+
+[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_h4u5r"]
+texture = ExtResource("2_r5bje")
+texture_margin_left = 16.0
+texture_margin_top = 3.0
+texture_margin_right = 16.0
+texture_margin_bottom = 3.0
 
 [node name="Monitor" type="Control"]
 layout_mode = 3
 anchors_preset = 0
-offset_top = 100.0
-offset_bottom = 100.0
 
 [node name="BG" type="PanelContainer" parent="."]
 layout_mode = 1
-anchors_preset = 4
-anchor_top = 0.5
-anchor_bottom = 0.5
-offset_top = -11.0
-offset_right = 165.0
-offset_bottom = 12.0
-grow_vertical = 2
+offset_right = 147.0
+offset_bottom = 46.0
+scale = Vector2(0.45, 0.45)
 theme_override_styles/panel = SubResource("StyleBoxTexture_5mp4r")
 
 [node name="H" type="HBoxContainer" parent="BG"]
@@ -43,7 +49,7 @@ custom_minimum_size = Vector2(1, 0)
 layout_mode = 2
 theme_override_colors/font_color = Color(0, 0, 0, 1)
 theme_override_font_sizes/font_size = 26
-text = "a撒给"
+text = "a"
 vertical_alignment = 1
 text_direction = 1
 
@@ -68,8 +74,10 @@ layout_mode = 2
 [node name="LabelValue" type="Label" parent="BG/H/C/H"]
 custom_minimum_size = Vector2(1, 0)
 layout_mode = 2
+theme = SubResource("Theme_gvmbf")
 theme_override_font_sizes/font_size = 26
-text = "s六g"
+theme_override_styles/normal = SubResource("StyleBoxEmpty_sbh8w")
+text = "a"
 horizontal_alignment = 1
 vertical_alignment = 1
 
@@ -81,3 +89,25 @@ text = "  "
 horizontal_alignment = 1
 vertical_alignment = 1
 text_direction = 1
+
+[node name="ValueOnly" type="PanelContainer" parent="."]
+visible = false
+layout_mode = 1
+offset_right = 100.0
+offset_bottom = 42.0
+scale = Vector2(0.45, 0.45)
+size_flags_stretch_ratio = 0.0
+theme_override_styles/panel = SubResource("StyleBoxTexture_h4u5r")
+
+[node name="H" type="HBoxContainer" parent="ValueOnly"]
+visible = false
+layout_direction = 1
+layout_mode = 2
+
+[node name="LabelValue" type="Label" parent="ValueOnly"]
+custom_minimum_size = Vector2(1, 0)
+layout_mode = 2
+theme_override_font_sizes/font_size = 26
+text = "a"
+horizontal_alignment = 1
+vertical_alignment = 1

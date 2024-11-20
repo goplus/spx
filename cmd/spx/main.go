@@ -120,7 +120,10 @@ func main() {
 }
 
 func execCmds() error {
-	impl.CopyEmbed(engineFiles, "template/engine", filepath.Join(impl.TargetDir, "engine"))
+	targetDir := filepath.Join(impl.TargetDir, "engine")
+	if !impl.IsFileExist(targetDir) {
+		impl.CopyEmbed(engineFiles, "template/engine", targetDir)
+	}
 	webDir := path.Join(impl.ProjectPath, ".builds/web")
 	var err error = nil
 	err = impl.ExecCmds(buildDll)
