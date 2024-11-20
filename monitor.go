@@ -74,7 +74,7 @@ func newMonitor(g reflect.Value, v specsp) (*Monitor, error) {
 	mode := int(v["mode"].(float64))
 	color, err := parseColor(getSpcspVal(v, "color"))
 	if err != nil {
-		color = Color{R: 0xff, G: 0xff, B: 0xff, A: 0xff}
+		color = Color{R: 0x28, G: 0x9c, B: 0xfc, A: 0xff}
 	}
 	label := v["label"].(string)
 	x := v["x"].(float64)
@@ -96,9 +96,11 @@ func (pself *Monitor) onUpdate(delta float64) {
 	if !pself.visible {
 		return
 	}
+	pself.panel.ShowAll(pself.mode == 1)
 	pself.panel.UpdateScale(pself.size)
 	pself.panel.UpdatePos(pself.x, pself.y)
 	pself.panel.UpdateText(pself.label, val)
+	pself.panel.UpdateColor(toEngineColor(pself.color))
 }
 
 func getTarget(g reflect.Value, target string) (reflect.Value, int) {

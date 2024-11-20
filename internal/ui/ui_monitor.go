@@ -8,8 +8,12 @@ import (
 
 type UiMonitor struct {
 	UiNode
-	labelName  *UiNode
-	labelValue *UiNode
+	bgAll          *UiNode
+	valueOnly      *UiNode
+	labelName      *UiNode
+	labelBg        *UiNode
+	labelValue     *UiNode
+	labelValueOnly *UiNode
 }
 type UpdateFunc func(float32)
 
@@ -18,8 +22,18 @@ func NewUiMonitor() *UiMonitor {
 	return panel
 }
 func (pself *UiMonitor) OnStart() {
+	pself.bgAll = BindUI[UiNode](pself.GetId(), "BG")
 	pself.labelName = BindUI[UiNode](pself.GetId(), "BG/H/LabelName")
+	pself.labelBg = BindUI[UiNode](pself.GetId(), "BG/H/C")
 	pself.labelValue = BindUI[UiNode](pself.GetId(), "BG/H/C/H/LabelValue")
+
+	pself.valueOnly = BindUI[UiNode](pself.GetId(), "ValueOnly")
+	pself.labelValueOnly = BindUI[UiNode](pself.GetId(), "ValueOnly/LabelValue")
+
+}
+func (pself *UiMonitor) ShowAll(isOn bool) {
+	engine.SyncUiSetVisible(pself.bgAll.GetId(), isOn)
+	engine.SyncUiSetVisible(pself.valueOnly.GetId(), !isOn)
 }
 
 func (pself *UiMonitor) SetVisible(isOn bool) {
@@ -37,4 +51,9 @@ func (pself *UiMonitor) UpdatePos(x, y float64) {
 func (pself *UiMonitor) UpdateText(name, value string) {
 	engine.SyncUiSetText(pself.labelName.GetId(), name)
 	engine.SyncUiSetText(pself.labelValue.GetId(), value)
+	engine.SyncUiSetText(pself.labelValueOnly.GetId(), value)
+}
+func (pself *UiMonitor) UpdateColor(color Color) {
+	engine.SyncUiSetColor(pself.labelBg.GetId(), color)
+	engine.SyncUiSetColor(pself.valueOnly.GetId(), color)
 }

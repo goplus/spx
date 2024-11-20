@@ -22,6 +22,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/realdream-ai/gdspx/pkg/engine"
 	"golang.org/x/image/colornames"
 )
 
@@ -65,6 +66,15 @@ func RGB(r, g, b uint8) Color {
 
 func RGBA(r, g, b, a uint8) Color {
 	return Color{R: r, G: g, B: b, A: a}
+}
+
+func toEngineColor(c Color) engine.Color {
+	return engine.Color{
+		R: float32(c.R) / 255.0,
+		G: float32(c.G) / 255.0,
+		B: float32(c.B) / 255.0,
+		A: float32(c.A) / 255.0,
+	}
 }
 
 // parseColor, s can be int, float64 or string
