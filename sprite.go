@@ -161,7 +161,6 @@ type SpriteImpl struct {
 	x, y          float64
 	scale         float64
 	direction     float64
-	initDirection float64
 	rotationStyle RotationStyle
 	rRect         *math32.RotatedRect
 	pivot         math32.Vector2
@@ -237,7 +236,6 @@ func (p *SpriteImpl) init(
 	p.x, p.y = spriteCfg.X, spriteCfg.Y
 	p.scale = spriteCfg.Size
 	p.direction = spriteCfg.Heading
-	p.initDirection = spriteCfg.Heading
 	p.rotationStyle = toRotationStyle(spriteCfg.RotationStyle)
 	p.isVisible = spriteCfg.Visible
 	p.pivot = spriteCfg.Pivot
@@ -388,7 +386,6 @@ func (p *SpriteImpl) InitFrom(src *SpriteImpl) {
 	p.hasOnTouching = false
 	p.hasOnTouchEnd = false
 
-	p.initDirection = src.initDirection
 	p.collisionMask = src.collisionMask
 	p.collisionLayer = src.collisionLayer
 	p.triggerMask = src.triggerMask
