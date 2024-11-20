@@ -101,6 +101,45 @@ func SyncSetDebugMode(isDebug bool) {
 }
 
 // =============== setting ===================
+func ScreenToWorld(x, y float64) (float64, float64) {
+	camPos := CameraMgr.GetCameraPosition()
+	posX, posY := float64(camPos.X), -float64(camPos.Y)
+	x += posX
+	y += posY
+	return x, y
+}
+
+func WorldToScreen(x, y float64) (float64, float64) {
+	camPos := CameraMgr.GetCameraPosition()
+	posX, posY := float64(camPos.X), -float64(camPos.Y)
+	x -= posX
+	y -= posY
+	return x, y
+}
+
+func SyncScreenToWorld(x, y float64) (float64, float64) {
+	var _x, _y float64
+	done := make(chan struct{})
+	job := func() {
+		_x, _y = ScreenToWorld(x, y)
+		done <- struct{}{}
+	}
+	updateJobQueue <- job
+	<-done
+	return _x, _y
+}
+func SyncWorldToScreen(x, y float64) (float64, float64) {
+	var _x, _y float64
+	done := make(chan struct{})
+	job := func() {
+		_x, _y = WorldToScreen(x, y)
+		done <- struct{}{}
+	}
+	updateJobQueue <- job
+	<-done
+	return _x, _y
+}
+
 func SyncGetCameraLocalPosition(x, y float64) (float64, float64) {
 	posX, posY := SyncGetCameraPosition()
 	x -= posX
