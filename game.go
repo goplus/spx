@@ -429,8 +429,6 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 		log.Println("==> SetWorldSize", p.worldWidth_, p.worldHeight_)
 	}
 	p.mapMode = toMapMode(proj.Map.Mode)
-	// setup proxy's property
-	p.proxy = engine.SyncNewBackdropProxy(p, p.getCostumePath(), p.getCostumeRenderScale())
 
 	p.doWindowSize() // set window size
 
@@ -447,6 +445,9 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 
 	p.Camera.init(p, float64(p.windowWidth_), float64(p.windowHeight_), float64(p.worldWidth_), float64(p.worldHeight_))
 
+	// setup proxy's property
+	p.proxy = engine.SyncNewBackdropProxy(p, p.getCostumePath(), p.getCostumeRenderScale())
+	p.setupBackdrop()
 	inits := make([]Sprite, 0, len(proj.Zorder))
 	for _, v := range proj.Zorder {
 		if name, ok := v.(string); ok {
@@ -481,6 +482,43 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 	// game load success
 	p.isLoaded = true
 	return
+}
+
+func (p *Game) setupBackdrop() {
+	var imgW, imgH, dstW, dstH float64
+	imgW, imgH = p.getCostumeSize()
+	worldW := float64(p.worldWidth_)
+	worldH := float64(p.worldHeight_)
+	imgRadio := (imgW / imgH)
+	worldRadio := (worldW / worldH)
+	// scale image's height to fit world's height
+	isScaleHeight := imgRadio > worldRadio
+	switch p.mapMode {
+	default:
+		dstW = worldW
+		dstH = worldH
+	case mapModeRepeat:
+		println("TODO implement mapModeRepeat")
+	case mapModeFillCut:
+		if isScaleHeight {
+			dstW = worldW
+			dstH = dstW / imgRadio
+		} else {
+			dstH = worldH
+			dstW = dstH * imgRadio
+		}
+	case mapModeFillRatio:
+		if isScaleHeight {
+			dstH = worldH
+			dstW = dstH * imgRadio
+		} else {
+			dstW = worldW
+			dstH = dstW / imgRadio
+		}
+	}
+	scaleX := dstW / imgW
+	scaleY := dstH / imgH
+	engine.SyncSpriteSetScale(p.proxy.GetId(), engine.NewVec2(scaleX, scaleY))
 }
 
 func (p *Game) endLoad(g reflect.Value, proj *projConfig) (err error) {
