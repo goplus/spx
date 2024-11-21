@@ -209,8 +209,8 @@ func calcRenderRotation(p *SpriteImpl) float64 {
 
 func applyRenderOffset(p *SpriteImpl, cx, cy *float64) {
 	cs := p.costumes[p.costumeIndex_]
-	x, y := -(cs.center.X+p.pivot.X)/float64(cs.bitmapResolution)*p.scale,
-		(cs.center.Y+p.pivot.Y)/float64(cs.bitmapResolution)*p.scale
+	x, y := -((cs.center.X)/float64(cs.bitmapResolution)+p.pivot.X)*p.scale,
+		((cs.center.Y)/float64(cs.bitmapResolution)-p.pivot.Y)*p.scale
 
 	// spx's start point is top left, gdspx's start point is center
 	// so we should remove the offset to make the pivot point is the same
