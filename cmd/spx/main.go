@@ -27,9 +27,6 @@ var (
 	//go:embed template/engine/*
 	engineFiles embed.FS
 
-	//go:embed template/engineres.zip
-	engine_res_zip []byte
-
 	//go:embed template/go.mod.txt
 	go_mode_txt string
 
@@ -140,7 +137,8 @@ func exportInterpreterMode(webDir string) error {
 
 	err := impl.ExportWebEditor(impl.GdspxPath, impl.ProjectPath, impl.LibPath)
 	packProject(impl.TargetDir, path.Join(webDir, "game.zip"))
-	os.WriteFile(path.Join(webDir, "engineres.zip"), engine_res_zip, 0644)
+	packEngineRes(webDir)
+
 	impl.SetupFile(true, path.Join(webDir, "index.html"), index_html)
 	impl.SetupFile(true, path.Join(webDir, "runner.html"), runner_html)
 	impl.SetupFile(true, path.Join(webDir, "game.js"), game_js)
@@ -236,21 +234,27 @@ func packProject(baseFolder string, dstZipPath string) {
 	if err != nil {
 		panic(err)
 	}
+	packZip(zipWriter, baseFolder, paths)
+}
 
+func packZip(zipWriter *zip.Writer, baseFolder string, paths []DirInfos) {
+	baseFolder = strings.ReplaceAll(baseFolder, "\\", "/")
 	sort.Slice(paths, func(i, j int) bool {
 		return paths[i].path < paths[j].path
 	})
-
 	for _, dirInfo := range paths {
 		path := dirInfo.path
+		path = strings.ReplaceAll(path, "\\", "/")
 		info := dirInfo.info
-
 		header, err := zip.FileInfoHeader(info)
 		if err != nil {
 			panic(err)
 		}
 		header.Name = strings.TrimPrefix(path, baseFolder)
 		header.Name = strings.ReplaceAll(header.Name, "\\", "/")
+		if header.Name[0] == '/' {
+			header.Name = header.Name[1:]
+		}
 		if info.IsDir() {
 			header.Name += "/"
 			_, err := zipWriter.CreateHeader(header)
@@ -419,4 +423,82 @@ function GetEngineHashes() {
 	if _, err := file.WriteString(js); err != nil {
 		panic(err)
 	}
+}
+
+func packEngineRes(webDir string) {
+	directories := []string{"engine"}
+	files := []string{"main.tscn", "project.godot"}
+	for _, dir := range directories {
+		impl.CopyEmbed(engineFiles, "template/"+dir, path.Join(webDir, dir))
+	}
+	for _, file := range files {
+		absPath, _ := filepath.Abs(path.Join(impl.TargetDir, file))
+		impl.CopyFile(absPath, path.Join(webDir, file))
+	}
+	err := compressAndDelete(path.Join(webDir, "engineres.zip"), webDir, directories, files)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func compressAndDelete(zipName string, targetDir string, directories, files []string) error {
+	zipFile, err := os.Create(zipName)
+	if err != nil {
+		return err
+	}
+	defer zipFile.Close()
+
+	zipWriter := zip.NewWriter(zipFile)
+	defer zipWriter.Close()
+
+	paths := []DirInfos{}
+	for _, dir := range directories {
+		paths = addDirToZip(path.Join(targetDir, dir), paths)
+	}
+
+	for _, file := range files {
+		paths = addFileToZip(path.Join(targetDir, file), paths)
+	}
+
+	packZip(zipWriter, targetDir, paths)
+	for _, dir := range directories {
+		err := os.RemoveAll(dir)
+		if err != nil {
+			return err
+		}
+	}
+
+	for _, file := range files {
+		err := os.Remove(file)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func addDirToZip(dirPath string, paths []DirInfos) []DirInfos {
+	filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		paths = append(paths, DirInfos{path, info})
+		return nil
+	})
+	return paths
+}
+
+func addFileToZip(path string, paths []DirInfos) []DirInfos {
+	file, err := os.Open(path)
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		panic(err)
+	}
+	paths = append(paths, DirInfos{path, info})
+	return paths
 }
