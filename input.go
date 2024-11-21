@@ -17,6 +17,8 @@
 package spx
 
 import (
+	"time"
+
 	"github.com/realdream-ai/gdspx/pkg/engine"
 )
 
@@ -264,3 +266,32 @@ type eventFirer interface {
 }
 
 // -------------------------------------------------------------------------------------
+
+type inputManager struct {
+	tempItems []Shape
+	g         *Game
+	id2Timer  map[engine.Object]int64
+}
+
+const (
+	// minimum interval between two mouse click events
+	inputMouseClickIntervalMs = 50
+)
+
+func (p *inputManager) init(g *Game) {
+	p.tempItems = make([]Shape, 50)
+	p.id2Timer = make(map[engine.Object]int64)
+	p.g = g
+}
+
+func (p *inputManager) canTriggerClickEvent(id engine.Object) bool {
+	currentTime := time.Now()
+	milliseconds := currentTime.UnixNano() / int64(time.Millisecond)
+	if lastTime, ok := p.id2Timer[id]; ok {
+		if milliseconds-lastTime < inputMouseClickIntervalMs {
+			return false
+		}
+	}
+	p.id2Timer[id] = milliseconds
+	return true
+}
