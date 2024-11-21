@@ -196,12 +196,13 @@ func calcRenderRotation(p *SpriteImpl) float64 {
 	degree := p.Heading() + cs.faceRight
 	degree -= 90
 	if p.rotationStyle == LeftRight {
-		if math.Abs(p.direction) > 155 && math.Abs(p.direction) < 205 {
-			degree = 180
+		degree = 0
+		hScale := 1
+		isFlip := p.direction < 0
+		if isFlip {
+			hScale = -1
 		}
-		if math.Abs(p.direction) > 0 && math.Abs(p.direction) < 25 {
-			degree = 180
-		}
+		p.proxy.SetScaleX(float32(hScale))
 	}
 	return degree
 }
