@@ -82,12 +82,14 @@ type Game struct {
 
 	fs spxfs.Dir
 
+	inputs       inputManager
 	sounds       soundMgr
 	turtle       turtleCanvas
 	typs         map[string]reflect.Type // map: name => sprite type, for all sprites
 	sprs         map[string]Sprite       // map: name => sprite prototype, for loaded sprites
 	items        []Shape                 // shapes on stage (in Zorder), not only sprites
 	destroyItems []Shape                 // shapes on stage (in Zorder), not only sprites
+	tempItems    []Shape                 // temp items
 
 	tickMgr   tickMgr
 	events    chan event
@@ -361,6 +363,7 @@ func findObjPtr(v reflect.Value, name string, from int) interface{} {
 
 func (p *Game) startLoad(fs spxfs.Dir, cfg *Config) {
 	p.sounds.init(p)
+	p.inputs.init(p)
 	p.events = make(chan event, 16)
 	p.fs = fs
 	p.windowWidth_ = cfg.Width
@@ -642,16 +645,15 @@ type clicker interface {
 
 func (p *Game) doWhenLeftButtonDown(ev *eventLeftButtonDown) {
 	point := engine.NewVec2(float64(ev.X), float64(ev.Y))
-	// TOOD(tanjp) avoid new a array every frame
-	newItems := make([]Shape, len(p.items))
-	copy(newItems, p.items)
-	for _, item := range newItems {
+	tempItems := p.getTempShapes()
+	for _, item := range tempItems {
 		if o, ok := item.(clicker); ok {
 			proxy := o.getProxy()
 			if proxy != nil {
 				isClicked := engine.SyncSpriteCheckCollisionWithPoint(proxy.GetId(), point, true)
-				if isClicked {
+				if isClicked && p.inputs.canTriggerClickEvent(proxy.GetId()) {
 					o.doWhenClick(o)
+					return
 				}
 			}
 		}
@@ -690,23 +692,15 @@ func (p *Game) eventLoop(me coroutine.Thread) int {
 	}
 }
 func (p *Game) logicLoop(me coroutine.Thread) int {
-	newItems := make([]Shape, 50)
 	deltaTime := 0.03
 	for {
 		p.Wait(deltaTime)
-		// copy to temp array
-		if cap(newItems) < len(p.items) {
-			newItems = make([]Shape, len(p.items))
-		} else {
-			newItems = newItems[:len(p.items)]
-		}
-		copy(newItems, p.items)
-		for _, item := range newItems {
+		tempItems := p.getTempShapes()
+		for _, item := range tempItems {
 			if result, ok := item.(interface{ onUpdate(float64) }); ok {
 				result.onUpdate(deltaTime)
 			}
 		}
-		newItems = newItems[:0]
 	}
 }
 
@@ -1317,6 +1311,25 @@ func (p *Game) ShowVar(name string) {
 
 func (p *Game) getAllShapes() []Shape {
 	return p.items
+}
+
+func (p *Game) getTempShapes() []Shape {
+	p.tempItems = getTempShapes(p.tempItems, p.items)
+	return p.tempItems
+}
+
+func getTempShapes(dst []Shape, src []Shape) []Shape {
+	if dst == nil {
+		dst = make([]Shape, 50)
+	}
+	dst = dst[:0]
+	if cap(dst) < len(src) {
+		dst = make([]Shape, len(src))
+	} else {
+		dst = dst[:len(src)]
+	}
+	copy(dst, src)
+	return dst
 }
 
 // -----------------------------------------------------------------------------
