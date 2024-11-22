@@ -26,7 +26,12 @@ import (
 	gdspx "github.com/realdream-ai/gdspx/pkg/engine"
 )
 
+var (
+	cachedBounds map[string]gdspx.Rect2
+)
+
 func (p *Game) OnEngineStart() {
+	cachedBounds = make(map[string]gdspx.Rect2)
 	go p.onStartAsync()
 }
 
@@ -162,10 +167,9 @@ func initSpritePhysicInfo(sprite *SpriteImpl, proxy *engine.ProxySprite) {
 		proxy.SetCollisionEnabled(true)
 		proxy.SetColliderRect(sprite.colliderCenter.ToVec2(), sprite.colliderSize.ToVec2())
 	case physicColliderAuto:
-		w, h := sprite.getCostumeSize()
-		w, h = w*sprite.scale, h*sprite.scale
+		center, size := getCostumeBoundByAlpha(sprite, sprite.scale)
 		proxy.SetCollisionEnabled(true)
-		proxy.SetColliderRect(engine.NewVec2(0, 0), engine.NewVec2(w, h))
+		proxy.SetColliderRect(center.ToVec2(), size.ToVec2())
 	case physicColliderNone:
 		proxy.SetCollisionEnabled(false)
 	}
@@ -179,16 +183,41 @@ func initSpritePhysicInfo(sprite *SpriteImpl, proxy *engine.ProxySprite) {
 		proxy.SetTriggerEnabled(true)
 		proxy.SetTriggerRect(sprite.triggerCenter.ToVec2(), sprite.triggerSize.ToVec2())
 	case physicColliderAuto:
-		w, h := sprite.getCostumeSize()
-		w, h = w*sprite.scale, h*sprite.scale
+		sprite.triggerCenter, sprite.triggerSize = getCostumeBoundByAlpha(sprite, sprite.scale)
 		proxy.SetTriggerEnabled(true)
-		sprite.triggerSize = *math32.NewVector2(w, h)
-		sprite.triggerCenter = *math32.NewVector2(0, 0)
 		proxy.SetTriggerRect(sprite.triggerCenter.ToVec2(), sprite.triggerSize.ToVec2())
 	case physicColliderNone:
 		proxy.SetTriggerEnabled(false)
 	}
 
+}
+
+func getCostumeBoundByAlpha(p *SpriteImpl, pscale float64) (math32.Vector2, math32.Vector2) {
+	cs := p.costumes[p.costumeIndex_]
+	var rect gdspx.Rect2
+	// GetBoundFromAlpha is very slow, so we should cache the result
+	if cache, ok := cachedBounds[cs.path]; ok {
+		rect = cache
+	} else {
+		assetPath := engine.ToAssetPath(cs.path)
+		rect = gdspx.ResMgr.GetBoundFromAlpha(assetPath)
+		cachedBounds[cs.path] = rect
+	}
+	scale := pscale / float64(cs.bitmapResolution)
+	// top left
+	posX := float64(rect.Position.X) * scale
+	posY := float64(rect.Position.Y) * scale
+	sizeX := float64(rect.Size.X) * scale
+	sizeY := float64(rect.Size.Y) * scale
+
+	w, h := p.getCostumeSize()
+	w, h = w*p.scale, h*p.scale
+	offsetX := float64(posX + sizeX/2 - w/2)
+	offsetY := -float64(posY + sizeY/2 - h/2)
+
+	center := *math32.NewVector2(offsetX, offsetY)
+	size := *math32.NewVector2(sizeX, sizeY)
+	return center, size
 }
 
 func calcRenderRotation(p *SpriteImpl) float64 {

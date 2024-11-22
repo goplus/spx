@@ -446,6 +446,17 @@ func SyncPlatformIsDebugMode() bool {
 }
 
 // IResMgr
+func SyncResGetBoundFromAlpha(path string) Rect2 {
+	var __ret Rect2
+	done := make(chan struct{})
+	job := func() {
+		__ret = ResMgr.GetBoundFromAlpha(path)
+		done <- struct{}{}
+	}
+	updateJobQueue <- job
+	<-done
+	return __ret
+}
 func SyncResGetImageSize(path string) Vec2 {
 	var __ret Vec2
 	done := make(chan struct{})
