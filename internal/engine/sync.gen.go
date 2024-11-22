@@ -446,44 +446,65 @@ func SyncPlatformIsDebugMode() bool {
 }
 
 // IResMgr
-func SyncResGetBoundFromAlpha(path string) Rect2 {
-	var __ret Rect2
+func SyncResSetLoadMode(is_direct_mode bool) {
+
 	done := make(chan struct{})
 	job := func() {
-		__ret = ResMgr.GetBoundFromAlpha(path)
+		ResMgr.SetLoadMode(is_direct_mode)
 		done <- struct{}{}
 	}
 	updateJobQueue <- job
 	<-done
-	return __ret
 }
-func SyncResGetImageSize(path string) Vec2 {
-	var __ret Vec2
-	done := make(chan struct{})
-	job := func() {
-		__ret = ResMgr.GetImageSize(path)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
-}
-func SyncResReadAllText(path string) string {
-	var __ret string
-	done := make(chan struct{})
-	job := func() {
-		__ret = ResMgr.ReadAllText(path)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
-}
-func SyncResHasFile(path string) bool {
+func SyncResGetLoadMode() bool {
 	var __ret bool
 	done := make(chan struct{})
 	job := func() {
-		__ret = ResMgr.HasFile(path)
+		__ret = ResMgr.GetLoadMode()
+		done <- struct{}{}
+	}
+	updateJobQueue <- job
+	<-done
+	return __ret
+}
+func SyncResGetBoundFromAlpha(p_path string) Rect2 {
+	var __ret Rect2
+	done := make(chan struct{})
+	job := func() {
+		__ret = ResMgr.GetBoundFromAlpha(p_path)
+		done <- struct{}{}
+	}
+	updateJobQueue <- job
+	<-done
+	return __ret
+}
+func SyncResGetImageSize(p_path string) Vec2 {
+	var __ret Vec2
+	done := make(chan struct{})
+	job := func() {
+		__ret = ResMgr.GetImageSize(p_path)
+		done <- struct{}{}
+	}
+	updateJobQueue <- job
+	<-done
+	return __ret
+}
+func SyncResReadAllText(p_path string) string {
+	var __ret string
+	done := make(chan struct{})
+	job := func() {
+		__ret = ResMgr.ReadAllText(p_path)
+		done <- struct{}{}
+	}
+	updateJobQueue <- job
+	<-done
+	return __ret
+}
+func SyncResHasFile(p_path string) bool {
+	var __ret bool
+	done := make(chan struct{})
+	job := func() {
+		__ret = ResMgr.HasFile(p_path)
 		done <- struct{}{}
 	}
 	updateJobQueue <- job
