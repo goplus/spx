@@ -27,11 +27,11 @@ import (
 )
 
 var (
-	cachedBounds map[string]math32.Rect
+	cachedBounds map[string]gdspx.Rect2
 )
 
 func (p *Game) OnEngineStart() {
-	cachedBounds = make(map[string]math32.Rect)
+	cachedBounds = make(map[string]gdspx.Rect2)
 	go p.onStartAsync()
 }
 
@@ -194,12 +194,15 @@ func initSpritePhysicInfo(sprite *SpriteImpl, proxy *engine.ProxySprite) {
 
 func getCostumeBoundByAlpha(p *SpriteImpl, pscale float64) (math32.Vector2, math32.Vector2) {
 	cs := p.costumes[p.costumeIndex_]
+	var rect gdspx.Rect2
 	// GetBoundFromAlpha is very slow, so we should cache the result
 	if cache, ok := cachedBounds[cs.path]; ok {
-		return *math32.NewVector2(cache.X, cache.Y), *math32.NewVector2(cache.Width, cache.Height)
+		rect = cache
+	} else {
+		assetPath := engine.ToAssetPath(cs.path)
+		rect = gdspx.ResMgr.GetBoundFromAlpha(assetPath)
+		cachedBounds[cs.path] = rect
 	}
-	assetPath := engine.ToAssetPath(cs.path)
-	rect := gdspx.ResMgr.GetBoundFromAlpha(assetPath)
 	scale := pscale / float64(cs.bitmapResolution)
 	// top left
 	posX := float64(rect.Position.X) * scale
@@ -214,7 +217,6 @@ func getCostumeBoundByAlpha(p *SpriteImpl, pscale float64) (math32.Vector2, math
 
 	center := *math32.NewVector2(offsetX, offsetY)
 	size := *math32.NewVector2(sizeX, sizeY)
-	cachedBounds[cs.path] = math32.Rect{X: center.X, Y: center.Y, Width: size.X, Height: size.Y}
 	return center, size
 }
 
