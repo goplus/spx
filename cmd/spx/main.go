@@ -4,11 +4,9 @@ import (
 	"archive/zip"
 	"crypto/sha256"
 	"embed"
-	"encoding/json"
 	"fmt"
 	"go/build"
 	"io"
-	"log"
 	"os"
 	"path"
 	"path/filepath"
@@ -19,37 +17,14 @@ import (
 	"github.com/realdream-ai/gdspx/cmd/gdspx/pkg/impl"
 
 	_ "embed"
-
-	cp "github.com/otiai10/copy"
 )
 
 var (
-	//go:embed template/engine/*
+	//go:embed template/project/*
 	engineFiles embed.FS
 
-	//go:embed template/go.mod.txt
-	go_mode_txt string
-
-	//go:embed template/gop.mod.txt
-	gop_mod_txt string
-
-	//go:embed template/gitignore.txt
-	gitignore string
-
-	//go:embed template/index.html
-	index_html string
-
-	//go:embed template/runner.html
-	runner_html string
-
-	//go:embed template/main.go
-	main_go string
-
-	//go:embed template/game.js
-	game_js string
-
-	//go:embed template/jszip-3.10.1.min.js
-	jszip_min_js string
+	//go:embed template/.gitignore.txt
+	gitignore_txt string
 )
 
 func stringInSlice(a string, list []string) bool {
@@ -61,12 +36,17 @@ func stringInSlice(a string, list []string) bool {
 	return false
 }
 func main() {
-	impl.ReplaceTemplate(go_mode_txt, main_go, gitignore)
 	impl.CheckPresetEnvironment()
 	impl.TargetDir = "."
 	if len(os.Args) > 2 {
 		impl.TargetDir = os.Args[2]
 	}
+	impl.TargetDir = path.Join(impl.TargetDir, "project")
+
+	if !impl.IsFileExist(impl.TargetDir) {
+		initProject(impl.TargetDir)
+	}
+
 	if len(os.Args) <= 1 {
 		showHelpInfo()
 		return
@@ -96,18 +76,11 @@ func main() {
 		return
 	case "clear":
 		impl.StopWebServer()
-		if impl.IsFileExist(path.Join(impl.TargetDir, ".godot")) {
-			clearProject(impl.TargetDir)
-		}
+		clearProject(impl.TargetDir)
 		return
 	case "stopweb":
 		impl.StopWebServer()
 		return
-	case "init":
-		prepareGoEnv()
-	}
-	if !impl.IsFileExist(path.Join(impl.TargetDir, "go.mod")) {
-		prepareGoEnv()
 	}
 
 	if err := execCmds(); err != nil {
@@ -116,11 +89,18 @@ func main() {
 	}
 }
 
-func execCmds() error {
-	targetDir := filepath.Join(impl.TargetDir, "engine")
+func initProject(dir string) {
+	targetDir := dir
 	if !impl.IsFileExist(targetDir) {
-		impl.CopyEmbed(engineFiles, "template/engine", targetDir)
+		impl.CopyEmbed(engineFiles, "template/project", targetDir)
 	}
+	impl.SetupFile(false, path.Join(dir, "../.gitignore"), gitignore_txt)
+	os.Rename(path.Join(dir, "../.gitignore.txt"), path.Join(dir, "../.gitignore"))
+	os.Rename(path.Join(dir, ".gitignore.txt"), path.Join(dir, ".gitignore"))
+	os.Rename(path.Join(dir, "go.mod.txt"), path.Join(dir, "go.mod"))
+}
+
+func execCmds() error {
 	webDir := path.Join(impl.ProjectPath, ".builds/web")
 	var err error = nil
 	err = impl.ExecCmds(buildDll)
@@ -134,15 +114,9 @@ func execCmds() error {
 }
 
 func exportInterpreterMode(webDir string) error {
-
 	err := impl.ExportWebEditor(impl.GdspxPath, impl.ProjectPath, impl.LibPath)
 	packProject(impl.TargetDir, path.Join(webDir, "game.zip"))
 	packEngineRes(webDir)
-
-	impl.SetupFile(true, path.Join(webDir, "index.html"), index_html)
-	impl.SetupFile(true, path.Join(webDir, "runner.html"), runner_html)
-	impl.SetupFile(true, path.Join(webDir, "game.js"), game_js)
-	impl.SetupFile(true, path.Join(webDir, "jszip-3.10.1.min.js"), jszip_min_js)
 	impl.CopyFile(getISpxPath(), path.Join(webDir, "gdspx.wasm"))
 	saveEngineHash(webDir)
 	return err
@@ -168,12 +142,6 @@ func installISpx() {
 }
 
 func runInterpreterMode(webDir string) error {
-	if len(os.Args) > 3 {
-		port := os.Args[3]
-		impl.ServerPort, _ = strconv.Atoi(port)
-		newText := strings.Replace(index_html, "127.0.0.1:8005", "127.0.0.1:"+port, -1)
-		os.WriteFile(path.Join(webDir, "index.html"), []byte(newText), 0)
-	}
 	return impl.RunWebServer(impl.GdspxPath, impl.ProjectPath, impl.LibPath, impl.ServerPort)
 }
 
@@ -286,14 +254,20 @@ func showHelpInfo() {
 }
 
 func buildDll(project, outputPath string) {
+	project, _ = filepath.Abs(project)
+	outputPath, _ = filepath.Abs(outputPath)
+	spxProjPath, _ := filepath.Abs(project + "/..")
+	os.Remove(path.Join(spxProjPath, "gop_autogen.go"))
 	os.Remove(path.Join(project, "main.go"))
 	rawdir, _ := os.Getwd()
-	os.Chdir(project)
+	os.Chdir(spxProjPath)
 	envVars := []string{""}
-	impl.RunGoplus(envVars, "build")
+	impl.RunGoplus(envVars, "build", "-o", "gdspx-demo.exe")
+	os.Rename(path.Join(spxProjPath, "gop_autogen.go"), path.Join(project, "main.go"))
+	os.Remove(path.Join(spxProjPath, "gdspx-demo.exe"))
+	os.Chdir(project)
+	impl.RunGolang(nil, "mod", "tidy")
 	os.Chdir(rawdir)
-	os.Rename(path.Join(project, "gop_autogen.go"), path.Join(project, "main.go"))
-	os.Remove(path.Join(project, "gdspx-demo.exe"))
 	impl.BuildDll(project, outputPath)
 
 }
@@ -307,75 +281,13 @@ const (
 )
 
 func prepareGoEnv() {
-	impl.PrepareGoEnv()
-	impl.SetupFile(false, impl.TargetDir+"/gop.mod", gop_mod_txt)
-
-	configPath := path.Join(impl.TargetDir, ".config")
-	if impl.IsFileExist(configPath) && !impl.IsFileExist(path.Join(impl.TargetDir, extassetDir)) {
-		file, err := os.Open(configPath)
-		defer file.Close()
-		ctx, err := io.ReadAll(file)
-		if err != nil {
-			log.Fatalf("read config error:" + err.Error())
-		}
-		var config projctConfig
-		err = json.Unmarshal(ctx, &config)
-		if err != nil {
-			log.Fatalf("read config error:" + string(ctx) + err.Error())
-		}
-		println("src dir ", path.Join(impl.TargetDir, config.ExtAsset))
-		err = cp.Copy(path.Join(impl.TargetDir, config.ExtAsset), path.Join(impl.TargetDir, extassetDir))
-		if err != nil {
-			log.Fatalf("Error copying directory: %v", err)
-		}
-	}
+	clearProject(impl.TargetDir)
+	initProject(impl.TargetDir)
 }
 
 func clearProject(dir string) {
-	deleteFilesAndDirs(dir)
-	deleteImportFiles(dir)
-}
-func deleteFilesAndDirs(dir string) error {
-	files, err := os.ReadDir(dir)
-	if err != nil {
-		return err
-	}
-	for _, file := range files {
-		fullPath := filepath.Join(dir, file.Name())
-		if file.Name() == "assets" || file.Name() == "res" || file.Name() == ".config" || strings.HasSuffix(fullPath, ".spx") {
-			continue
-		}
-
-		if file.IsDir() {
-			err = os.RemoveAll(fullPath)
-			if err != nil {
-				println(err.Error())
-				return err
-			}
-		} else {
-			err = os.Remove(fullPath)
-			if err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-func deleteImportFiles(dir string) error {
-	return filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if !info.IsDir() && strings.HasSuffix(path, ".import") {
-			err = os.Remove(path)
-			if err != nil {
-				return fmt.Errorf("failed to delete file: %v", err)
-			}
-		}
-
-		return nil
-	})
+	os.RemoveAll(dir)
+	os.Remove(path.Join(dir, "../.gitignore"))
 }
 
 func computeHash(filePath string) (string, error) {

@@ -19,7 +19,7 @@ func NewSpriteProxy(obj interface{}) *ProxySprite {
 }
 
 func (pself *ProxySprite) OnCostumeChange(path string) {
-	//resPath := "res://assets/" + path
+	//resPath := enginePathPrefix + "assets/" + path
 	//println("OnCostumeChange", resPath)
 }
 

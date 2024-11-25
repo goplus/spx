@@ -7,12 +7,10 @@ import (
 )
 
 var (
-	extassetDir = ""
-	assetsDir   = "res://assets/"
-)
-
-const (
-	configPath         = "res://.config"
+	enginePathPrefix   = "../"
+	extassetDir        = ""
+	assetsDir          = enginePathPrefix + "assets/"
+	configPath         = enginePathPrefix + ".config"
 	engineExtAssetPath = "extasset"
 )
 
@@ -28,7 +26,7 @@ func SetAssetDir(dir string) {
 		json.Unmarshal([]byte(configJson), &config)
 		extassetDir = config.ExtAsset
 	}
-	assetsDir = "res://" + dir + "/"
+	assetsDir = enginePathPrefix + dir + "/"
 }
 
 func ToAssetPath(relPath string) string {
@@ -51,7 +49,7 @@ func replacePathIfInExtAssetDir(rpath string, extassetDir string, newAssetDir st
 		directDir := path[:idx]
 		directDir = strings.ReplaceAll(directDir, "../", "")
 		if len(directDir) <= 0 {
-			newPath := "res://" + filepath.Join(newAssetDir, path[:idx]+path[idx+len(prefix)+1:])
+			newPath := enginePathPrefix + filepath.Join(newAssetDir, path[:idx]+path[idx+len(prefix)+1:])
 			newPath = strings.ReplaceAll(newPath, "\\", "/")
 			return newPath
 		} else {
