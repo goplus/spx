@@ -8,6 +8,7 @@ class GameApp {
         this.game = null;
         this.persistentPath = '/home/web_user';
         this.tempZipPath = '/tmp/preload.zip';
+        this.tempGamePath = '/home/spx_game_cache';
         this.projectInstallName = config.projectName || "Game";
         this.projectData = config.projectData;
         this.oldData = config.projectData;
@@ -91,10 +92,14 @@ class GameApp {
             console.error("project already loaded!")
         }
         this.isEditor = true
+
+        let url = this.assetURLs["engineres.zip"]
+        let engineData = await (await fetch(url)).arrayBuffer();
+
         try {
             this.onProgress(0.1);
             this.clearPersistence(this.tempZipPath);
-            let isCacheValid = await this.checkAndUpdateCache(this.projectData, true);
+            let isCacheValid = await this.checkAndUpdateCache(engineData, true);
             await this.checkEngineCache()
             this.editor = new Engine(this.editorConfig);
             if (!isCacheValid) {
@@ -105,15 +110,15 @@ class GameApp {
                 };
                 // install project
                 this.editor.init().then(async () => {
-                    await this.mergeProjectWithEngineRes()
-                    this.writePersistence(this.tempZipPath, this.projectData);
+                    this.writePersistence(this.editor, this.tempZipPath, engineData);
                     const args = ['--project-manager', '--single-window', "--install_project_name", this.projectInstallName];
                     this.editor.start({ 'args': args, 'persistentDrops': true }).then(async () => {
                         this.editorCanvas.focus();
                     })
                 });
             } else {
-                this.runEditor(resolve, reject)
+                this.logVerbose("cache is valid, skip it")
+                resolve()
             }
         } catch (error) {
             console.error("Error checking database existence: ", error);
@@ -121,39 +126,8 @@ class GameApp {
     }
 
     async updateProject(resolve, reject, newData, addInfos, deleteInfos, updateInfos) {
-        if (addInfos == null) {
-            addInfos = []
-        }
-        if (deleteInfos == null) {
-            deleteInfos = []
-        }
-        if (updateInfos == null) {
-            updateInfos = []
-        }
-        this.oldData = newData
-        let mergedArray = addInfos.concat(updateInfos);
-        const zip = new JSZip();
-        const zipContent = await zip.loadAsync(newData);
-        let datas = []
-        for (let path of mergedArray) {
-            const dstFile = zipContent.files[path];
-            let data = await dstFile.async('arraybuffer');
-            if (!dstFile.dir) {
-                datas.push({ "path": path, "data": data })
-            }
-        }
-        deleteInfos = deleteInfos.map(info => `res://${info}`);
-        const evt = new CustomEvent('spx_update_project', {
-            detail: {
-                "resolve": async () => {
-                    await this.checkAndUpdateCache(newData)
-                    resolve()
-                },
-                "dirtyInfos": datas,
-                "deleteInfos": deleteInfos,
-            }
-        });
-        this.editorCanvas.dispatchEvent(evt);
+        this.projectData = newData
+        resolve()
     }
 
     async stopProject(resolve, reject) {
@@ -227,8 +201,10 @@ class GameApp {
         this.onProgress(0.5);
         this.game = new Engine(this.gameConfig);
         let curGame = this.game
-        curGame.init().then(() => {
+        curGame.init().then(async () => {
             this.onProgress(0.7);
+            await this.unpackGameData(curGame)
+            
             curGame.start({ 'args': args, 'canvas': this.gameCanvas }).then(async () => {
                 this.gameCanvas.focus();
                 await this.waitFsSyncDone(this.gameCanvas)
@@ -239,6 +215,19 @@ class GameApp {
                 resolve()
             });
         });
+    }
+
+    async unpackGameData(curGame) {
+        const zip1 = new JSZip();
+        const zip1Content = await zip1.loadAsync(this.projectData);
+        let datas = []
+        for (const [filePath, file] of Object.entries(zip1Content.files)) {
+            const content = await file.async('arraybuffer');
+            if (!file.dir) {
+                datas.push({ "path": filePath, "data": content })
+            }
+        }
+        curGame.unpackGameData(this.tempGamePath, datas)
     }
 
 
@@ -288,12 +277,12 @@ class GameApp {
         return `${this.persistentPath}/${this.projectInstallName}`;
     }
 
-    writePersistence(targetPath, value) {
-        if (this.editor == null) {
-            console.error("please init editor first!")
+    writePersistence(engine, targetPath, value) {
+        if (engine == null) {
+            console.error("please init egnine first!")
             return
         }
-        this.editor.copyToFS(targetPath, value);
+        engine.copyToFS(targetPath, value);
     }
     clearPersistence(targetPath) {
         const req = indexedDB.deleteDatabase(targetPath);
@@ -335,6 +324,10 @@ class GameApp {
             request.onerror = function (event) {
                 reject('Error opening database: ' + dbName + " " + storeName + " " + event.target.error);
             };
+            
+            request.onblocked = function (event) {
+                reject('Database is blocked. Please close other tabs or windows using this database. ', dbName + " " + storeName + " " + event.target.error);
+            }
         });
     }
 
