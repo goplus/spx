@@ -4,163 +4,102 @@ import (
 	"archive/zip"
 	"crypto/sha256"
 	"embed"
+	_ "embed"
 	"fmt"
 	"go/build"
 	"io"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
-	"github.com/realdream-ai/gdspx/cmd/gdspx/pkg/impl"
-
-	_ "embed"
+	"github.com/realdream-ai/gdspx/cmd/gdspx/pkg/cmdtool"
+	"github.com/realdream-ai/gdspx/cmd/gdspx/pkg/util"
 )
 
 var (
 	//go:embed template/project/*
-	engineFiles embed.FS
+	proejct_fs embed.FS
+
+	//go:embed template/version
+	version string
 
 	//go:embed template/.gitignore.txt
 	gitignore_txt string
 
 	rawProjPath string
+	webDir      string
 )
 
-func stringInSlice(a string, list []string) bool {
-	for _, b := range list {
-		if b == a {
-			return true
-		}
-	}
-	return false
+type CmdTool struct {
+	cmdtool.BaseCmdTool
 }
+
 func main() {
-	impl.CheckPresetEnvironment()
-	impl.TargetDir = "."
-	if len(os.Args) > 2 {
-		impl.TargetDir = os.Args[2]
-	}
-	rawProjPath, _ = filepath.Abs(impl.TargetDir)
-	impl.TargetDir, _ = filepath.Abs(path.Join(impl.TargetDir, "project"))
-
-	if len(os.Args) <= 1 {
-		showHelpInfo()
-		return
-	}
-	if len(os.Args) > 3 {
-		port := os.Args[3]
-		impl.ServerPort, _ = strconv.Atoi(port)
-	}
-	if !stringInSlice(os.Args[1], []string{"help", "version", "init", "run", "editor", "build",
-		"export", "runweb", "buildweb", "exportweb", "clear",
-		"exporti", "runi", "clearbuild", "stopweb", "installispx"}) {
-		println("invalid cmd, please refer to help")
-		showHelpInfo()
-		return
-	}
-
-	switch os.Args[1] {
-	case "help", "version":
-		showHelpInfo()
-		return
-	case "clearbuild":
-		impl.StopWebServer()
-		os.RemoveAll(path.Join(impl.TargetDir, ".builds"))
-		return
-	case "installispx":
-		installISpx()
-		return
-	case "clear":
-		impl.StopWebServer()
-		clearProject()
-		return
-	case "stopweb":
-		impl.StopWebServer()
-		return
-	}
-
-	if err := execCmds(); err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
-		os.Exit(1)
-	}
+	cmd := &CmdTool{}
+	cmdtool.RunCmd(cmd, "gdspx", version, proejct_fs, "template/project", "project", "installispx")
 }
-
-func execCmds() error {
-	initProject()
-	gdspxPath, project, libPath, err := impl.SetupEnv()
-	if err != nil {
-		return err
+func (pself *CmdTool) OnBeforeCheck(cmd string) error {
+	switch cmd {
+	case "installispx":
+		filePath := getISpxPath()
+		rawdir, _ := os.Getwd()
+		os.Chdir("../ispx")
+		envVars := []string{"GOOS=js", "GOARCH=wasm"}
+		util.RunGolang(envVars, "build", "-o", filePath)
+		os.Chdir(rawdir)
 	}
-	switch os.Args[1] {
-	case "init":
-		return nil
-	case "run", "editor", "export", "build":
-		buildDll(project, libPath)
-	}
-	webDir, _ := filepath.Abs(path.Join(impl.TargetDir, ".builds/web"))
-	switch os.Args[1] {
-	case "editor":
-		return impl.RunGdspx(gdspxPath, project, "-e")
-	case "export":
-		return impl.Export(gdspxPath, project)
-	case "run":
-		return impl.RunGdspx(gdspxPath, project, "")
-	case "exportweb":
-		return exportWeb(webDir)
-	case "runweb":
-		return runWeb(webDir)
-	}
+	webDir, _ = filepath.Abs(filepath.Join(cmdtool.ProjectDir, ".builds", "web"))
 	return nil
 }
 
-func initProject() {
-	if impl.IsFileExist(impl.TargetDir) {
-		return
-	}
-	dir := impl.TargetDir
-	if !impl.IsFileExist(dir) {
-		impl.CopyEmbed(engineFiles, "template/project", dir)
-	}
-	impl.SetupFile(false, path.Join(dir, "../.gitignore"), gitignore_txt)
-	os.Rename(path.Join(dir, "../.gitignore.txt"), path.Join(dir, "../.gitignore"))
-	os.Rename(path.Join(dir, ".gitignore.txt"), path.Join(dir, ".gitignore"))
-	os.Rename(path.Join(dir, "go.mod.txt"), path.Join(dir, "go.mod"))
+func (pself *CmdTool) Clear() {
+	os.RemoveAll(cmdtool.ProjectDir)
+	os.Remove(path.Join(cmdtool.ProjectDir, "../.gitignore"))
 }
 
-func exportWeb(webDir string) error {
-	clearProject()
-	initProject()
-	err := impl.ExportWebEditor(impl.GdspxPath, impl.ProjectPath, impl.LibPath)
-	impl.CopyEmbed(engineFiles, "template/project/.builds/web", webDir)
-	packProject(rawProjPath, path.Join(webDir, "game.zip"))
+func (pself *CmdTool) ExportWeb() error {
+	pself.Clear()
+	installProject()
+
+	err := cmdtool.ExportWebEditor()
+	util.CopyDir(proejct_fs, "template/project/.builds/web", webDir, true)
+	packProject(cmdtool.TargetDir, path.Join(webDir, "game.zip"))
 	packEngineRes(webDir)
-	impl.CopyFile(getISpxPath(), path.Join(webDir, "gdspx.wasm"))
+	util.CopyFile(getISpxPath(), path.Join(webDir, "gdspx.wasm"))
 	saveEngineHash(webDir)
 	return err
 }
+func installProject() {
+	// copy project files
+	util.CopyDir(proejct_fs, "template/project", cmdtool.ProjectDir, true)
+	dir := cmdtool.TargetDir
+	util.SetupFile(false, path.Join(dir, ".gitignore"), gitignore_txt)
+	os.Rename(path.Join(dir, ".gitignore.txt"), path.Join(dir, ".gitignore"))
+}
 
-func runWeb(webDir string) error {
-	port := impl.ServerPort
-	projPath := impl.ProjectPath
-	if !impl.IsFileExist(filepath.Join(projPath, ".builds", "web", "engineres.zip")) {
-		exportWeb(webDir)
+func (pself *CmdTool) RunWeb() error {
+	if !util.IsFileExist(filepath.Join(cmdtool.ProjectDir, ".builds", "web", "engineres.zip")) {
+		pself.ExportWeb()
 	}
-	impl.StopWebServer()
-	scriptPath := filepath.Join(projPath, ".godot", "gdspx_web_server.py")
-	scriptPath = strings.ReplaceAll(scriptPath, "\\", "/")
-	executeDir := filepath.Join(projPath, ".builds/web")
-	executeDir = strings.ReplaceAll(executeDir, "\\", "/")
-	println("web server running at http://127.0.0.1:" + fmt.Sprint(port))
-	cmd := exec.Command("python", scriptPath, "-r", executeDir, "-p", fmt.Sprint(port))
-	err := cmd.Start()
-	if err != nil {
-		return fmt.Errorf("error starting server: %v", err)
-	}
+	return cmdtool.RunWeb()
+}
+
+func (pself *CmdTool) BuildDll() error {
+	projectDir, _ := filepath.Abs(cmdtool.ProjectDir)
+	spxProjPath, _ := filepath.Abs(cmdtool.ProjectDir + "/..")
+
+	rawdir, _ := os.Getwd()
+	os.Chdir(spxProjPath)
+	envVars := []string{""}
+	util.RunGoplus(envVars, "go")
+	os.Rename(path.Join(spxProjPath, "gop_autogen.go"), path.Join(cmdtool.GoDir, "main.go"))
+	os.Chdir(projectDir)
+	util.RunGolang(nil, "mod", "tidy")
+	os.Chdir(rawdir)
+	cmdtool.BuildDll()
 	return nil
 }
 
@@ -174,15 +113,6 @@ func getISpxPath() string {
 	return filePath
 }
 
-func installISpx() {
-	filePath := getISpxPath()
-	rawdir, _ := os.Getwd()
-	os.Chdir("../ispx")
-	envVars := []string{"GOOS=js", "GOARCH=wasm"}
-	impl.RunGolang(envVars, "build", "-o", filePath)
-	os.Chdir(rawdir)
-}
-
 type DirInfos struct {
 	path string
 	info os.FileInfo
@@ -190,7 +120,7 @@ type DirInfos struct {
 
 func packProject(baseFolder string, dstZipPath string) {
 	paths := []DirInfos{}
-	if impl.IsFileExist(dstZipPath) {
+	if util.IsFileExist(dstZipPath) {
 		os.Remove(dstZipPath)
 	}
 	skipDirs := map[string]struct{}{
@@ -289,35 +219,6 @@ func packZip(zipWriter *zip.Writer, baseFolder string, paths []DirInfos) {
 	}
 }
 
-func showHelpInfo() {
-	impl.ShowHelpInfo("spx")
-}
-
-func buildDll(project, outputPath string) {
-	project, _ = filepath.Abs(project)
-	outputPath, _ = filepath.Abs(outputPath)
-	spxProjPath, _ := filepath.Abs(project + "/..")
-	os.Remove(path.Join(spxProjPath, "gop_autogen.go"))
-	os.Remove(path.Join(project, "main.go"))
-	rawdir, _ := os.Getwd()
-	os.Chdir(spxProjPath)
-	envVars := []string{""}
-	impl.RunGoplus(envVars, "build", "-o", "gdspx-demo.exe")
-	os.Rename(path.Join(spxProjPath, "gop_autogen.go"), path.Join(project, "main.go"))
-	os.Remove(path.Join(spxProjPath, "gdspx-demo.exe"))
-	os.Chdir(project)
-	impl.RunGolang(nil, "mod", "tidy")
-	os.Chdir(rawdir)
-	impl.BuildDll(project, outputPath)
-
-}
-
-func clearProject() {
-	dir := impl.TargetDir
-	os.RemoveAll(dir)
-	os.Remove(path.Join(dir, "../.gitignore"))
-}
-
 func computeHash(filePath string) (string, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -367,8 +268,7 @@ function GetEngineHashes() {
 
 func packEngineRes(webDir string) {
 	dstDir := path.Join(webDir, "project")
-	impl.CopyEmbed(engineFiles, "template/project", dstDir)
-	println(dstDir)
+	util.CopyDir(proejct_fs, "template/project", dstDir, true)
 
 	directories := []string{"engine"}
 	files := []string{"main.tscn", "project.godot"}
