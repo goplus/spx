@@ -21,15 +21,10 @@
 	</style>
 </head>
 
-<body>	
-	<label for="editorToggle">ShowEditor</label>
-	<input type="checkbox" id="editorToggle" checked>
-	<button id="startProjectNewBtn">StartNew</button>
-	<button id="startProjectBtn">Start</button>
-	<button id="updateProjectBtn">Update</button>
-	<button id="stopProjectBtn">Stop</button>
-	<button id="runGameBtn">RunGame</button>
-	<button id="stopGameBtn">StopGame</button>
+<body>
+	<button id="startGameBtn">Start</button>
+	<button id="stopGameBtn">Stop</button>
+	<button id="startNewGameBtn">StartNew</button>
 	<progress id="progress-bar" value="0" max="1" style="display: none;"></progress>
 	<div id="tabs">
 		<div id="tab-loader">
@@ -41,17 +36,9 @@
 
 	<script src="jszip-3.10.1.min.js"></script>
 	<script>
-		let runnerWindow = {}		
-		let showEditor = true
-		document.getElementById('editorToggle').addEventListener('change', function () {
-			showEditor = this.checked
-		});
-		document.getElementById('startProjectNewBtn').addEventListener('click', startProjectNew);
-		document.getElementById('startProjectBtn').addEventListener('click', startProject);
-		document.getElementById('updateProjectBtn').addEventListener('click', updateProject);
-		document.getElementById('stopProjectBtn').addEventListener('click', stopProject);
-		
-		document.getElementById('runGameBtn').addEventListener('click', runGame);
+		let runnerWindow = {}
+		document.getElementById('startNewGameBtn').addEventListener('click', startNewGame);
+		document.getElementById('startGameBtn').addEventListener('click', startGame);
 		document.getElementById('stopGameBtn').addEventListener('click', stopGame);
 
 		function onProgress(value) {
@@ -60,122 +47,30 @@
 				document.getElementById('tab-game').style.display = 'block';
 				document.getElementById('tab-loader').style.display = 'none';
 			}
-			document.getElementById('progress-bar').style.display = value >= 1 ? 'none': 'block';
+			document.getElementById('progress-bar').style.display = value >= 1 ? 'none' : 'block';
 		}
 
-		async function startProjectNew() {
-			runnerWindow = document.getElementById('runnerFrame').contentWindow;
-			runnerWindow.addEventListener('onProgress', (event) => {
-				onProgress(event.detail.progress)
-			})
-
-			let buffer = await (await (fetch('/diff.zip'))).arrayBuffer();
-			runnerWindow.startProject(buffer, "Game", showEditor);
-		}
-		async function startProject() {
-			runnerWindow = document.getElementById('runnerFrame').contentWindow;
-			runnerWindow.addEventListener('onProgress', (event) => {
-				onProgress(event.detail.progress)
-			})
-
-			let buffer = await (await (fetch('/game.zip'))).arrayBuffer();
-			runnerWindow.startProject(buffer, "Game", showEditor);
+		async function startNewGame() {
+			await startProject('/diff.zip')
 		}
 
-		async function updateProject() {
-			oldData = await (await fetch('/game.zip')).arrayBuffer();
-			newData = await (await fetch('/diff.zip')).arrayBuffer();
-			const diffInfos = await getZipDiffInfos(oldData, newData);
-			runnerWindow.updateProject(newData, diffInfos.addInfos, diffInfos.deleteInfos, diffInfos.updateInfos);
-		}
-
-		async function stopProject() {
-			runnerWindow.stopProject()		
-		}
-
-		async function runGame() {
-			runnerWindow.runGame()
+		async function startGame() {
+			await startProject('/game.zip')
 		}
 
 		async function stopGame() {
 			runnerWindow.stopGame()
 		}
 
-		async function getZipDiffInfos(srcZip, dstZip) {
-			function areBuffersEqual(buffer1, buffer2) {
-				if (buffer1.byteLength !== buffer2.byteLength) return false;
-				const view1 = new Uint8Array(buffer1);
-				const view2 = new Uint8Array(buffer2);
-				for (let i = 0; i < view1.length; i++) {
-					if (view1[i] !== view2[i]) return false;
-				}
-				return true;
-			}
-			function mergeDeleteInfos(deleteInfos) {
-				deleteInfos.sort();
-				const merged = [];
+		async function startProject(zipUrl) {
+			runnerWindow = document.getElementById('runnerFrame').contentWindow;
+			runnerWindow.addEventListener('onProgress', (event) => {
+				onProgress(event.detail.progress)
+			})
 
-				for (let i = 0; i < deleteInfos.length; i++) {
-					const currentPath = deleteInfos[i];
-					if (
-						merged.length === 0 ||
-						!currentPath.startsWith(merged[merged.length - 1])
-					) {
-						merged.push(currentPath);
-					}
-				}
-
-				return merged;
-			}
-			let addInfos = [];
-			let deleteInfos = [];
-			let updateInfos = [];
-
-			const zip1 = new JSZip();
-			const zip2 = new JSZip();
-
-			const srcZipContent = await zip1.loadAsync(srcZip);
-			const dstZipContent = await zip2.loadAsync(dstZip);
-
-			const srcFiles = new Set(Object.keys(srcZipContent.files));
-			const dstFiles = new Set(Object.keys(dstZipContent.files));
-
-			for (const filePath of dstFiles) {
-				if (!srcFiles.has(filePath)) {
-					addInfos.push(filePath);
-				}
-			}
-
-			for (const filePath of srcFiles) {
-				if (!dstFiles.has(filePath)) {
-					deleteInfos.push(filePath);
-				}
-			}
-
-			for (const filePath of dstFiles) {
-				if (srcFiles.has(filePath)) {
-					const srcFile = srcZipContent.files[filePath];
-					const dstFile = dstZipContent.files[filePath];
-
-					if (!srcFile.dir && !dstFile.dir) {
-						const srcContent = await srcFile.async('arraybuffer');
-						const dstContent = await dstFile.async('arraybuffer');
-
-						if (!areBuffersEqual(srcContent, dstContent)) {
-							updateInfos.push(filePath);
-						}
-					}
-				}
-			}
-			addInfos.sort();
-			deleteInfos.sort();
-			updateInfos.sort();
-
-			deleteInfos = mergeDeleteInfos(deleteInfos);
-
-			return { addInfos, deleteInfos, updateInfos }
+			let buffer = await (await (fetch(zipUrl))).arrayBuffer();
+			runnerWindow.startGame(buffer);
 		}
-
 	</script>
 </body>
 
