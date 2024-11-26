@@ -139,13 +139,11 @@ class GameApp {
         await this.stopGame(() => {
             this.isEditor = true
             this.onProgress(1.0);
-            this.exitFunc = () => {
-                this.logVerbose("on editor quit")
-                this.editor = null
-                this.exitFunc = null
-                resolve();
-            }
             this.editor.requestQuit()
+            this.logVerbose("on editor quit")
+            this.editor = null
+            this.exitFunc = null
+            resolve();
         }, null)
     }
 
@@ -204,7 +202,7 @@ class GameApp {
         curGame.init().then(async () => {
             this.onProgress(0.7);
             await this.unpackGameData(curGame)
-            
+
             curGame.start({ 'args': args, 'canvas': this.gameCanvas }).then(async () => {
                 this.gameCanvas.focus();
                 await this.waitFsSyncDone(this.gameCanvas)
@@ -324,7 +322,7 @@ class GameApp {
             request.onerror = function (event) {
                 reject('Error opening database: ' + dbName + " " + storeName + " " + event.target.error);
             };
-            
+
             request.onblocked = function (event) {
                 reject('Database is blocked. Please close other tabs or windows using this database. ', dbName + " " + storeName + " " + event.target.error);
             }
