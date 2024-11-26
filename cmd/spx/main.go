@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/realdream-ai/gdspx/cmd/gdspx/pkg/impl"
 
@@ -254,6 +255,9 @@ func packZip(zipWriter *zip.Writer, baseFolder string, paths []DirInfos) {
 		if err != nil {
 			panic(err)
 		}
+		// Set a fixed timestamp
+		header.Modified = time.Unix(0, 0)
+
 		header.Name = strings.TrimPrefix(path, baseFolder)
 		header.Name = strings.ReplaceAll(header.Name, "\\", "/")
 		if header.Name[0] == '/' {
