@@ -8,11 +8,13 @@ import (
 	"go/build"
 	"io"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/realdream-ai/gdspx/cmd/gdspx/pkg/impl"
 
@@ -25,6 +27,8 @@ var (
 
 	//go:embed template/.gitignore.txt
 	gitignore_txt string
+
+	rawProjPath string
 )
 
 func stringInSlice(a string, list []string) bool {
@@ -41,11 +45,8 @@ func main() {
 	if len(os.Args) > 2 {
 		impl.TargetDir = os.Args[2]
 	}
-	impl.TargetDir = path.Join(impl.TargetDir, "project")
-
-	if !impl.IsFileExist(impl.TargetDir) {
-		initProject(impl.TargetDir)
-	}
+	rawProjPath, _ = filepath.Abs(impl.TargetDir)
+	impl.TargetDir, _ = filepath.Abs(path.Join(impl.TargetDir, "project"))
 
 	if len(os.Args) <= 1 {
 		showHelpInfo()
@@ -76,7 +77,7 @@ func main() {
 		return
 	case "clear":
 		impl.StopWebServer()
-		clearProject(impl.TargetDir)
+		clearProject()
 		return
 	case "stopweb":
 		impl.StopWebServer()
@@ -89,10 +90,41 @@ func main() {
 	}
 }
 
-func initProject(dir string) {
-	targetDir := dir
-	if !impl.IsFileExist(targetDir) {
-		impl.CopyEmbed(engineFiles, "template/project", targetDir)
+func execCmds() error {
+	initProject()
+	gdspxPath, project, libPath, err := impl.SetupEnv()
+	if err != nil {
+		return err
+	}
+	switch os.Args[1] {
+	case "init":
+		return nil
+	case "run", "editor", "export", "build":
+		buildDll(project, libPath)
+	}
+	webDir, _ := filepath.Abs(path.Join(impl.TargetDir, ".builds/web"))
+	switch os.Args[1] {
+	case "editor":
+		return impl.RunGdspx(gdspxPath, project, "-e")
+	case "export":
+		return impl.Export(gdspxPath, project)
+	case "run":
+		return impl.RunGdspx(gdspxPath, project, "")
+	case "exportweb":
+		return exportWeb(webDir)
+	case "runweb":
+		return runWeb(webDir)
+	}
+	return nil
+}
+
+func initProject() {
+	if impl.IsFileExist(impl.TargetDir) {
+		return
+	}
+	dir := impl.TargetDir
+	if !impl.IsFileExist(dir) {
+		impl.CopyEmbed(engineFiles, "template/project", dir)
 	}
 	impl.SetupFile(false, path.Join(dir, "../.gitignore"), gitignore_txt)
 	os.Rename(path.Join(dir, "../.gitignore.txt"), path.Join(dir, "../.gitignore"))
@@ -100,26 +132,36 @@ func initProject(dir string) {
 	os.Rename(path.Join(dir, "go.mod.txt"), path.Join(dir, "go.mod"))
 }
 
-func execCmds() error {
-	webDir := path.Join(impl.ProjectPath, ".builds/web")
-	var err error = nil
-	err = impl.ExecCmds(buildDll)
-	switch os.Args[1] {
-	case "exporti":
-		return exportInterpreterMode(webDir)
-	case "runi":
-		return runInterpreterMode(webDir)
-	}
-	return err
-}
-
-func exportInterpreterMode(webDir string) error {
+func exportWeb(webDir string) error {
+	clearProject()
+	initProject()
 	err := impl.ExportWebEditor(impl.GdspxPath, impl.ProjectPath, impl.LibPath)
-	packProject(impl.TargetDir, path.Join(webDir, "game.zip"))
+	impl.CopyEmbed(engineFiles, "template/project/.builds/web", webDir)
+	packProject(rawProjPath, path.Join(webDir, "game.zip"))
 	packEngineRes(webDir)
 	impl.CopyFile(getISpxPath(), path.Join(webDir, "gdspx.wasm"))
 	saveEngineHash(webDir)
 	return err
+}
+
+func runWeb(webDir string) error {
+	port := impl.ServerPort
+	projPath := impl.ProjectPath
+	if !impl.IsFileExist(filepath.Join(projPath, ".builds", "web", "engineres.zip")) {
+		exportWeb(webDir)
+	}
+	impl.StopWebServer()
+	scriptPath := filepath.Join(projPath, ".godot", "gdspx_web_server.py")
+	scriptPath = strings.ReplaceAll(scriptPath, "\\", "/")
+	executeDir := filepath.Join(projPath, ".builds/web")
+	executeDir = strings.ReplaceAll(executeDir, "\\", "/")
+	println("web server running at http://127.0.0.1:" + fmt.Sprint(port))
+	cmd := exec.Command("python", scriptPath, "-r", executeDir, "-p", fmt.Sprint(port))
+	err := cmd.Start()
+	if err != nil {
+		return fmt.Errorf("error starting server: %v", err)
+	}
+	return nil
 }
 
 func getISpxPath() string {
@@ -141,10 +183,6 @@ func installISpx() {
 	os.Chdir(rawdir)
 }
 
-func runInterpreterMode(webDir string) error {
-	return impl.RunWebServer(impl.GdspxPath, impl.ProjectPath, impl.LibPath, impl.ServerPort)
-}
-
 type DirInfos struct {
 	path string
 	info os.FileInfo
@@ -156,9 +194,7 @@ func packProject(baseFolder string, dstZipPath string) {
 		os.Remove(dstZipPath)
 	}
 	skipDirs := map[string]struct{}{
-		".git": {}, "lib": {}, ".godot": {}, ".builds": {},
-		"engine": {}, "main.tscn": {}, "project.godot": {},
-		"gdspx.gdextension": {}, "go.mod": {}, "go.sum": {}, "gop.mod": {}, "main.go": {}, "export_presets.cfg": {},
+		".git": {}, "project": {},
 	}
 
 	file, err := os.Create(dstZipPath)
@@ -202,6 +238,7 @@ func packProject(baseFolder string, dstZipPath string) {
 	if err != nil {
 		panic(err)
 	}
+
 	packZip(zipWriter, baseFolder, paths)
 }
 
@@ -218,6 +255,9 @@ func packZip(zipWriter *zip.Writer, baseFolder string, paths []DirInfos) {
 		if err != nil {
 			panic(err)
 		}
+		// Set a fixed timestamp
+		header.Modified = time.Unix(0, 0)
+
 		header.Name = strings.TrimPrefix(path, baseFolder)
 		header.Name = strings.ReplaceAll(header.Name, "\\", "/")
 		if header.Name[0] == '/' {
@@ -272,20 +312,8 @@ func buildDll(project, outputPath string) {
 
 }
 
-type projctConfig struct {
-	ExtAsset string `json:"extasset"`
-}
-
-const (
-	extassetDir = "extasset"
-)
-
-func prepareGoEnv() {
-	clearProject(impl.TargetDir)
-	initProject(impl.TargetDir)
-}
-
-func clearProject(dir string) {
+func clearProject() {
+	dir := impl.TargetDir
 	os.RemoveAll(dir)
 	os.Remove(path.Join(dir, "../.gitignore"))
 }
@@ -338,22 +366,20 @@ function GetEngineHashes() {
 }
 
 func packEngineRes(webDir string) {
+	dstDir := path.Join(webDir, "project")
+	impl.CopyEmbed(engineFiles, "template/project", dstDir)
+	println(dstDir)
+
 	directories := []string{"engine"}
 	files := []string{"main.tscn", "project.godot"}
-	for _, dir := range directories {
-		impl.CopyEmbed(engineFiles, "template/"+dir, path.Join(webDir, dir))
-	}
-	for _, file := range files {
-		absPath, _ := filepath.Abs(path.Join(impl.TargetDir, file))
-		impl.CopyFile(absPath, path.Join(webDir, file))
-	}
-	err := compressAndDelete(path.Join(webDir, "engineres.zip"), webDir, directories, files)
+	err := packDirFiles(path.Join(webDir, "engineres.zip"), dstDir, directories, files)
 	if err != nil {
 		panic(err)
 	}
+	os.RemoveAll(dstDir)
 }
 
-func compressAndDelete(zipName string, targetDir string, directories, files []string) error {
+func packDirFiles(zipName string, targetDir string, directories, files []string) error {
 	zipFile, err := os.Create(zipName)
 	if err != nil {
 		return err
@@ -362,7 +388,6 @@ func compressAndDelete(zipName string, targetDir string, directories, files []st
 
 	zipWriter := zip.NewWriter(zipFile)
 	defer zipWriter.Close()
-
 	paths := []DirInfos{}
 	for _, dir := range directories {
 		paths = addDirToZip(path.Join(targetDir, dir), paths)
@@ -373,20 +398,6 @@ func compressAndDelete(zipName string, targetDir string, directories, files []st
 	}
 
 	packZip(zipWriter, targetDir, paths)
-	for _, dir := range directories {
-		err := os.RemoveAll(dir)
-		if err != nil {
-			return err
-		}
-	}
-
-	for _, file := range files {
-		err := os.Remove(file)
-		if err != nil {
-			return err
-		}
-	}
-
 	return nil
 }
 
