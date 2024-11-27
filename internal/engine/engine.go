@@ -3,6 +3,9 @@ package engine
 import (
 	"sync"
 
+	stime "time"
+
+	"github.com/goplus/spx/internal/time"
 	. "github.com/realdream-ai/gdspx/pkg/engine"
 	"github.com/realdream-ai/gdspx/pkg/gdspx"
 )
@@ -25,6 +28,11 @@ var (
 	keyEventsTemp []KeyEvent
 	keyEvents     []KeyEvent
 	keyMutex      sync.Mutex
+
+	// time
+	startTimestamp     stime.Time
+	lastTimestamp      stime.Time
+	timeSinceLevelLoad float64
 )
 
 type Gamer interface {
@@ -51,14 +59,34 @@ func onStart() {
 	keyEventsTemp = make([]KeyEvent, 0)
 	keyEvents = make([]KeyEvent, 0)
 
+	startTimestamp = stime.Now()
+	lastTimestamp = stime.Now()
+	time.Start(onSetTimeScale)
 	game.OnEngineStart()
 }
 
 func onUpdate(delta float32) {
+	updateTime(float64(delta))
 	cacheTriggerEvents()
 	cacheKeyEvents()
 	game.OnEngineUpdate(delta)
 	handleEngineCoroutines()
+}
+
+func onSetTimeScale(scale float64) {
+	SyncPlatformSetTimeScale(float32(scale))
+}
+
+func updateTime(delta float64) {
+	deltaTime := delta
+	timeSinceLevelLoad += deltaTime
+
+	curTime := stime.Now()
+	realTimeSinceStartup := curTime.Sub(startTimestamp).Seconds()
+	unscaledDeltaTime := curTime.Sub(lastTimestamp).Seconds()
+	lastTimestamp = curTime
+	timeScale := PlatformMgr.GetTimeScale()
+	time.Update(float64(timeScale), realTimeSinceStartup, timeSinceLevelLoad, deltaTime, unscaledDeltaTime)
 }
 
 func onDestroy() {

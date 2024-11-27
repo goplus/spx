@@ -444,6 +444,27 @@ func SyncPlatformIsDebugMode() bool {
 	<-done
 	return __ret
 }
+func SyncPlatformGetTimeScale() float32 {
+	var __ret float32
+	done := make(chan struct{})
+	job := func() {
+		__ret = PlatformMgr.GetTimeScale()
+		done <- struct{}{}
+	}
+	updateJobQueue <- job
+	<-done
+	return __ret
+}
+func SyncPlatformSetTimeScale(time_scale float32) {
+
+	done := make(chan struct{})
+	job := func() {
+		PlatformMgr.SetTimeScale(time_scale)
+		done <- struct{}{}
+	}
+	updateJobQueue <- job
+	<-done
+}
 
 // IResMgr
 func SyncResSetLoadMode(is_direct_mode bool) {
