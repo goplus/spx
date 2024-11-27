@@ -19,6 +19,7 @@ package spx
 import (
 	"fmt"
 
+	"github.com/goplus/spx/internal/engine"
 	"github.com/goplus/spx/internal/ui"
 )
 
@@ -84,7 +85,7 @@ func (p *SpriteImpl) sayOrThink(msgv interface{}, style int) {
 }
 
 func (p *SpriteImpl) waitStopSay(secs float64) {
-	p.g.Wait(secs)
+	engine.Wait(secs)
 	p.doStopSay()
 }
 

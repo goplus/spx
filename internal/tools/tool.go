@@ -2,12 +2,7 @@ package tools
 
 import (
 	"strconv"
-	"time"
 )
-
-func GetCurrentTimeMs() int {
-	return (int)(time.Now().UnixNano() / 1e6)
-}
 
 func GetFloat(unk interface{}) (float64, bool) {
 	switch i := unk.(type) {

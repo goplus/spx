@@ -6,9 +6,9 @@ package audiorecord
 import (
 	"encoding/binary"
 	"math"
-	"time"
 
 	"github.com/goplus/spx/internal/coroutine"
+	"github.com/goplus/spx/internal/engine"
 )
 
 const (
@@ -18,7 +18,7 @@ const (
 	audioFrameSize = 6 * audioSampleRate / 100
 
 	// audioDefaultInterval is the default interval that audio packets are sent
-	audioInterval = 6 * 10 * time.Millisecond
+	audioInterval = 0.06 //6 * 10 * time.Millisecond
 
 	VOLUMEMAX = 32767.0
 	VOLUMEMIN = -32768.0
@@ -50,13 +50,13 @@ func Open(gco *coroutine.Coroutines) *Recorder {
 				int16Buffer[i] = int16(binary.LittleEndian.Uint16(buff[i*2 : (i+1)*2]))
 			}
 			p.deviceVolume = p.doubleCalculateVolume(int16Buffer)
-			gco.Sleep(audioInterval)
+			engine.Wait(audioInterval)
 		}
 	})
 	return p
 }
 
-//loudness scaled 0 to 100
+// loudness scaled 0 to 100
 func (p *Recorder) doubleCalculateVolume(buffer []int16) float64 {
 
 	var sum float64 = 0

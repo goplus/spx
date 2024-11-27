@@ -71,7 +71,7 @@ type tickMgr struct {
 // currentTPS is the current TPS (ticks per second),
 // that represents how many update function is called in a second.
 func (p *tickMgr) getCurrentTPS() float64 {
-	return engine.SyncGetCurrentTPS()
+	return engine.GetTPS()
 }
 
 func (p *tickMgr) init() {

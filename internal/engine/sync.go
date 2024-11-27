@@ -6,81 +6,56 @@ import (
 
 // =============== factory ===================
 func SyncCreateUiNode[T any](path string) *T {
-	var __ret *T
-	done := make(chan struct{})
-	job := func() {
-		__ret = CreateUI[T](path)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 *T
+	WaitMainThread(func() {
+		_ret1 = CreateUI[T](path)
+	})
+	return _ret1
 }
 func SyncCreateEngineUiNode[T any](path string) *T {
-	var __ret *T
-	done := make(chan struct{})
-	job := func() {
-		__ret = CreateEngineUI[T](path)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 *T
+	WaitMainThread(func() {
+		_ret1 = CreateEngineUI[T](path)
+	})
+	return _ret1
 }
 
 func SyncCreateSprite[T any]() *T {
-	var __ret *T
-	done := make(chan struct{})
-	job := func() {
-		__ret = CreateSprite[T]()
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 *T
+	WaitMainThread(func() {
+		_ret1 = CreateSprite[T]()
+	})
+	return _ret1
 }
 
 func SyncCreateEmptySprite[T any]() *T {
-	var __ret *T
-	done := make(chan struct{})
-	job := func() {
-		__ret = CreateEmptySprite[T]()
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 *T
+	WaitMainThread(func() {
+		_ret1 = CreateEmptySprite[T]()
+	})
+	return _ret1
 }
 
 func SyncNewBackdropProxy(obj interface{}, path string, renderScale float64) *ProxySprite {
-	var __ret *ProxySprite
-	done := make(chan struct{})
-	job := func() {
-		__ret = newBackdropProxy(obj, path, renderScale)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 *ProxySprite
+	WaitMainThread(func() {
+		_ret1 = newBackdropProxy(obj, path, renderScale)
+	})
+	return _ret1
 }
 
 func newBackdropProxy(obj interface{}, path string, renderScale float64) *ProxySprite {
-	__ret := CreateEmptySprite[ProxySprite]()
-	__ret.Target = obj
-	__ret.SetZIndex(-1)
-	__ret.DisablePhysic()
-	__ret.UpdateTexture(path, renderScale)
-	return __ret
+	ret := CreateEmptySprite[ProxySprite]()
+	ret.Target = obj
+	ret.SetZIndex(-1)
+	ret.DisablePhysic()
+	ret.UpdateTexture(path, renderScale)
+	return ret
 }
 
 // =============== input ===================
 func SyncInputMousePressed() bool {
 	return SyncInputGetMouseState(0) || SyncInputGetMouseState(1)
-}
-
-// =============== time ===================
-func SyncGetCurrentTPS() float64 {
-	return 30 // TODO(tanjp) use engine api
 }
 
 // =============== window ===================
@@ -118,26 +93,18 @@ func WorldToScreen(x, y float64) (float64, float64) {
 }
 
 func SyncScreenToWorld(x, y float64) (float64, float64) {
-	var _x, _y float64
-	done := make(chan struct{})
-	job := func() {
-		_x, _y = ScreenToWorld(x, y)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return _x, _y
+	var _ret1, _ret2 float64
+	WaitMainThread(func() {
+		_ret1, _ret2 = ScreenToWorld(x, y)
+	})
+	return _ret1, _ret2
 }
 func SyncWorldToScreen(x, y float64) (float64, float64) {
-	var _x, _y float64
-	done := make(chan struct{})
-	job := func() {
-		_x, _y = WorldToScreen(x, y)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return _x, _y
+	var _ret1, _ret2 float64
+	WaitMainThread(func() {
+		_ret1, _ret2 = WorldToScreen(x, y)
+	})
+	return _ret1, _ret2
 }
 
 func SyncGetCameraLocalPosition(x, y float64) (float64, float64) {
