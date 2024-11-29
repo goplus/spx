@@ -90,30 +90,39 @@ func (p *Game) updateInput() {
 	atomic.StoreInt64(&p.gMouseY, int64(posY))
 }
 
+func (sprite *SpriteImpl) checkInitProxy() {
+	// bind proxy
+	if sprite.proxy == nil && !sprite.HasDestroyed {
+		sprite.proxy = engine.NewSpriteProxy(sprite)
+		initSpritePhysicInfo(sprite, sprite.proxy)
+		sprite.proxy.Name = sprite.name
+	}
+}
+
+func (sprite *SpriteImpl) updateProxyTransform(isSync bool) {
+	if sprite.proxy == nil {
+		return
+	}
+	x, y := sprite.getXY()
+	applyRenderOffset(sprite, &x, &y)
+	rot, scale := calcRenderRotation(sprite)
+	sprite.proxy.UpdateTransform(x, y, rot, scale, isSync)
+}
+
 func (p *Game) updateProxy() {
 	count := 0
 	items := p.getItems()
 	for _, item := range items {
 		sprite, ok := item.(*SpriteImpl)
 		if ok {
-			var proxy *engine.ProxySprite
-			// bind proxy
-			if sprite.proxy == nil && !sprite.HasDestroyed {
-				sprite.proxy = engine.NewSpriteProxy(sprite)
-				initSpritePhysicInfo(sprite, sprite.proxy)
-				//sprite.proxy.SetScale(engine.NewVec2(0.5, 0.5)) // TODO(tanjp) remove this hack
-			}
-			proxy = sprite.proxy
+			sprite.checkInitProxy()
 			if sprite.HasDestroyed {
 				continue
 			}
-			proxy.Name = sprite.name
+			proxy := sprite.proxy
 			// sync position
 			if sprite.isVisible {
-				x, y := sprite.getXY()
-				applyRenderOffset(sprite, &x, &y)
-				rot := calcRenderRotation(sprite)
-				proxy.UpdatePosRot(x, y, rot)
+				sprite.updateProxyTransform(false)
 				if sprite.isCostumeAltas() {
 					proxy.UpdateTextureAltas(sprite.getCostumePath(), sprite.getCostumeAltasRegion().ToRect2(), sprite.getCostumeRenderScale())
 				} else {
@@ -226,20 +235,19 @@ func getCostumeBoundByAlpha(p *SpriteImpl, pscale float64) (math32.Vector2, math
 	return center, size
 }
 
-func calcRenderRotation(p *SpriteImpl) float64 {
+func calcRenderRotation(p *SpriteImpl) (float64, float64) {
 	cs := p.costumes[p.costumeIndex_]
 	degree := p.Heading() + cs.faceRight
 	degree -= 90
+	hScale := 1.0
 	if p.rotationStyle == LeftRight {
 		degree = 0
-		hScale := 1
 		isFlip := p.direction < 0
 		if isFlip {
-			hScale = -1
+			hScale = -1.0
 		}
-		p.proxy.SetScaleX(float32(hScale))
 	}
-	return degree
+	return degree, hScale
 }
 
 func applyRenderOffset(p *SpriteImpl, cx, cy *float64) {

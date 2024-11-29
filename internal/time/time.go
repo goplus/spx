@@ -16,6 +16,10 @@ var (
 	fps                        float64
 )
 
+func Sleep(ms float64) {
+	stime.Sleep(stime.Microsecond * stime.Duration((ms * 1000)))
+}
+
 func RealTimeSinceStart() float64 {
 	return stime.Since(startTimestamp).Seconds()
 }

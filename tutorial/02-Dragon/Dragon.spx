@@ -8,6 +8,7 @@ onStart => {
 		turn rand(-30, 30)
 		step 5
 		if touching("Shark") {
+			waitNextFrame
 			score++
 			play chomp, true
 			step -100

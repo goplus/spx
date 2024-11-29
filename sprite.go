@@ -1037,6 +1037,7 @@ func (p *SpriteImpl) doMoveTo(x, y float64) {
 }
 
 func (p *SpriteImpl) doMoveToForAnim(x, y float64, ani *anim.Anim) {
+	x, y = p.fixWorldRange(x, y)
 	if p.hasOnMoving {
 		mi := &MovingInfo{OldX: p.x, OldY: p.y, NewX: x, NewY: y, Obj: p, ani: ani}
 		p.doWhenMoving(p, mi)
@@ -1045,10 +1046,10 @@ func (p *SpriteImpl) doMoveToForAnim(x, y float64, ani *anim.Anim) {
 		p.g.movePen(p, x, y)
 	}
 	p.x, p.y = x, y
-	p.updateMatrix()
+	p.updateTransform()
 }
-func (p *SpriteImpl) updateMatrix() {
-	// TODO(tanjp) update matrix, ps:remove this function
+func (p *SpriteImpl) updateTransform() {
+	p.updateProxyTransform(true)
 }
 
 func (p *SpriteImpl) goMoveForward(step float64) {
@@ -1322,7 +1323,7 @@ func (p *SpriteImpl) setDirection(dir float64, change bool) bool {
 		p.doWhenTurning(p, &TurningInfo{NewDir: dir, OldDir: p.direction, Obj: p})
 	}
 	p.direction = dir
-	p.updateMatrix()
+	p.updateTransform()
 	return true
 }
 
@@ -1350,7 +1351,7 @@ func (p *SpriteImpl) SetSize(size float64) {
 		log.Println("SetSize", p.name, size)
 	}
 	p.scale = size
-	p.updateMatrix()
+	p.updateTransform()
 }
 
 func (p *SpriteImpl) ChangeSize(delta float64) {
@@ -1358,7 +1359,7 @@ func (p *SpriteImpl) ChangeSize(delta float64) {
 		log.Println("ChangeSize", p.name, delta)
 	}
 	p.scale += delta
-	p.updateMatrix()
+	p.updateTransform()
 }
 
 // -----------------------------------------------------------------------------
@@ -1642,8 +1643,6 @@ func (p *SpriteImpl) Bounds() *math32.RotatedRect {
 		return nil
 	}
 	x, y, w, h := 0.0, 0.0, 0.0, 0.0
-
-	// TODO use gdspx's bounding box info
 	c := p.costumes[p.costumeIndex_]
 	// calc center
 	x, y = p.x, p.y
@@ -1672,26 +1671,20 @@ func (p *SpriteImpl) fixWorldRange(x, y float64) (float64, float64) {
 	if rect == nil {
 		return x, y
 	}
-	plist := rect.Points()
-	for _, val := range plist {
-		if p.g.isWorldRange(val) {
-			return x, y
-		}
+	worldW, worldH := p.g.worldSize_()
+	maxW := float64(worldW)/2.0 + float64(rect.Size.Width)
+	maxH := float64(worldH)/2.0 + float64(rect.Size.Height)
+	if x < -maxW {
+		x = -maxW
 	}
-	viewport := engine.SyncCameraGetViewportRect()
-	minPos := engine.NewVec2(float64(viewport.Position.X-viewport.Size.X/2), float64(viewport.Position.Y-viewport.Size.Y/2))
-	maxPos := engine.NewVec2(float64(viewport.Position.X+viewport.Size.X/2), float64(viewport.Position.Y+viewport.Size.Y/2))
-	if x < float64(minPos.X) {
-		x = float64(minPos.X)
+	if x > maxW {
+		x = maxW
 	}
-	if x > float64(maxPos.X) {
-		x = float64(maxPos.X)
+	if y < -maxH {
+		y = -maxH
 	}
-	if y < float64(minPos.Y) {
-		y = float64(minPos.Y)
-	}
-	if y > float64(maxPos.Y) {
-		y = float64(maxPos.Y)
+	if y > maxH {
+		y = maxH
 	}
 
 	return x, y
