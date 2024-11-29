@@ -26,12 +26,12 @@ import (
 	"reflect"
 	"sync"
 	"sync/atomic"
-	"time"
 	"unsafe"
 
 	"github.com/goplus/spx/internal/audiorecord"
 	"github.com/goplus/spx/internal/coroutine"
 	"github.com/goplus/spx/internal/engine"
+	gtime "github.com/goplus/spx/internal/time"
 
 	spxfs "github.com/goplus/spx/fs"
 	_ "github.com/goplus/spx/fs/asset"
@@ -215,7 +215,6 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 	if err != nil {
 		panic(err)
 	}
-
 	if !conf.DontParseFlags {
 		f := flag.CommandLine
 		verbose := f.Bool("v", false, "print verbose information")
@@ -721,33 +720,26 @@ func (p *Game) fireEvent(ev event) {
 func (p *Game) eventLoop(me coroutine.Thread) int {
 	for {
 		var ev event
-		go func() {
-			ev = <-p.events
-			gco.Resume(me)
-		}()
-		gco.Yield(me)
+		engine.WaitForChan(p.events, &ev)
 		p.handleEvent(ev)
 	}
 }
 func (p *Game) logicLoop(me coroutine.Thread) int {
-	deltaTime := 0.03
 	for {
-		p.Wait(deltaTime)
 		tempItems := p.getTempShapes()
 		for _, item := range tempItems {
 			if result, ok := item.(interface{ onUpdate(float64) }); ok {
-				result.onUpdate(deltaTime)
+				result.onUpdate(gtime.DeltaTime())
 			}
 		}
+		engine.WaitNextFrame()
 	}
 }
 
 func (p *Game) inputEventLoop(me coroutine.Thread) int {
-
 	lastLbtnPressed := false
 	keyEvents := make([]engine.KeyEvent, 0)
 	for {
-		p.Wait(0.01)
 		curLbtnPressed := engine.SyncInputGetMouseState(MOUSE_BUTTON_LEFT)
 		if curLbtnPressed != lastLbtnPressed {
 			if lastLbtnPressed {
@@ -767,6 +759,7 @@ func (p *Game) inputEventLoop(me coroutine.Thread) int {
 			}
 		}
 		keyEvents = keyEvents[:0]
+		engine.WaitNextFrame()
 	}
 }
 
@@ -787,43 +780,13 @@ var (
 
 type threadObj = coroutine.ThreadObj
 
-func waitToDo(fn func()) {
-	me := gco.Current()
-	go func() {
-		fn()
-		gco.Resume(me)
-	}()
-	gco.Yield(me)
-}
-
-func waitForChan(done chan bool) {
-	me := gco.Current()
-	go func() {
-		<-done
-		gco.Resume(me)
-	}()
-	gco.Yield(me)
-}
-
 func SchedNow() int {
-	if me := gco.Current(); me != nil {
-		gco.Sched(me)
-	}
 	return 0
 }
 
 func Sched() int {
-	now := time.Now()
-	if now.Sub(lastSched) >= 3e7 {
-		if me := gco.Current(); me != nil {
-			gco.Sched(me)
-		}
-		lastSched = now
-	}
 	return 0
 }
-
-var lastSched time.Time
 
 // -----------------------------------------------------------------------------
 
@@ -1150,9 +1113,12 @@ func (p *Game) Username() string {
 }
 
 // -----------------------------------------------------------------------------
+func (p *Game) WaitNextFrame() float64 {
+	return engine.WaitNextFrame()
+}
 
 func (p *Game) Wait(secs float64) {
-	gco.Sleep(time.Duration(secs * 1e9))
+	engine.Wait(secs)
 }
 
 func (p *Game) Timer() float64 {

@@ -16,7 +16,10 @@
 
 package spx
 
-import "github.com/goplus/spx/internal/ui"
+import (
+	"github.com/goplus/spx/internal/engine"
+	"github.com/goplus/spx/internal/ui"
+)
 
 const (
 	quotePadding     = 5.0
@@ -58,7 +61,7 @@ func (p *SpriteImpl) quote_(message, description string) {
 }
 
 func (p *SpriteImpl) waitStopQuote(secs float64) {
-	p.g.Wait(secs)
+	engine.Wait(secs)
 	p.doStopQuote()
 }
 

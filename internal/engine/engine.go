@@ -33,11 +33,19 @@ var (
 	startTimestamp     stime.Time
 	lastTimestamp      stime.Time
 	timeSinceLevelLoad float64
+
+	// statistic info
+	fps float64
+)
+var (
+	debugLastTime  float64 = 0
+	debugLastFrame int64   = 0
 )
 
 type Gamer interface {
 	OnEngineStart()
 	OnEngineUpdate(delta float32)
+	OnEngineRender(delta float32)
 	OnEngineDestroy()
 }
 
@@ -52,6 +60,10 @@ func GdspxMain(g Gamer) {
 	})
 }
 
+func OnGameStarted() {
+	gco.OnInited()
+}
+
 // callbacks
 func onStart() {
 	triggerEventsTemp = make([]TriggerEvent, 0)
@@ -59,9 +71,9 @@ func onStart() {
 	keyEventsTemp = make([]KeyEvent, 0)
 	keyEvents = make([]KeyEvent, 0)
 
+	time.Start(onSetTimeScale)
 	startTimestamp = stime.Now()
 	lastTimestamp = stime.Now()
-	time.Start(onSetTimeScale)
 	game.OnEngineStart()
 }
 
@@ -70,9 +82,20 @@ func onUpdate(delta float32) {
 	cacheTriggerEvents()
 	cacheKeyEvents()
 	game.OnEngineUpdate(delta)
-	handleEngineCoroutines()
+	gco.UpdateJobs()
+	game.OnEngineRender(delta)
 }
 
+func calcfps() {
+	curTime := time.RealTimeSinceStart()
+	timeDiff := curTime - debugLastTime
+	frameDiff := time.Frame() - debugLastFrame
+	if timeDiff > 0.25 {
+		fps = float64(frameDiff) / timeDiff
+		debugLastFrame = time.Frame()
+		debugLastTime = curTime
+	}
+}
 func onSetTimeScale(scale float64) {
 	SyncPlatformSetTimeScale(float32(scale))
 }
@@ -82,11 +105,12 @@ func updateTime(delta float64) {
 	timeSinceLevelLoad += deltaTime
 
 	curTime := stime.Now()
-	realTimeSinceStartup := curTime.Sub(startTimestamp).Seconds()
+	unscaledTimeSinceLevelLoad := curTime.Sub(startTimestamp).Seconds()
 	unscaledDeltaTime := curTime.Sub(lastTimestamp).Seconds()
 	lastTimestamp = curTime
 	timeScale := PlatformMgr.GetTimeScale()
-	time.Update(float64(timeScale), realTimeSinceStartup, timeSinceLevelLoad, deltaTime, unscaledDeltaTime)
+	calcfps()
+	time.Update(float64(timeScale), unscaledTimeSinceLevelLoad, timeSinceLevelLoad, deltaTime, unscaledDeltaTime, fps)
 }
 
 func onDestroy() {
@@ -129,4 +153,11 @@ func GetKeyEvents(lst []KeyEvent) []KeyEvent {
 	keyEvents = keyEvents[:0]
 	keyMutex.Unlock()
 	return lst
+}
+
+func GetFPS() float64 {
+	return fps
+}
+func GetTPS() float64 {
+	return 30
 }

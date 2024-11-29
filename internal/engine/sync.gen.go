@@ -13,1951 +13,1139 @@ import (
 
 // IAudioMgr
 func SyncAudioStopAll() {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		AudioMgr.StopAll()
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncAudioPlaySfx(path string) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		AudioMgr.PlaySfx(path)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncAudioPlayMusic(path string) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		AudioMgr.PlayMusic(path)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncAudioPauseMusic() {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		AudioMgr.PauseMusic()
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncAudioResumeMusic() {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		AudioMgr.ResumeMusic()
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncAudioGetMusicTimer() float32 {
-	var __ret float32
-	done := make(chan struct{})
-	job := func() {
-		__ret = AudioMgr.GetMusicTimer()
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 float32
+	WaitMainThread(func() {
+		_ret1 = AudioMgr.GetMusicTimer()
+	})
+	return _ret1
 }
 func SyncAudioSetMusicTimer(time float32) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		AudioMgr.SetMusicTimer(time)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncAudioIsMusicPlaying() bool {
-	var __ret bool
-	done := make(chan struct{})
-	job := func() {
-		__ret = AudioMgr.IsMusicPlaying()
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 bool
+	WaitMainThread(func() {
+		_ret1 = AudioMgr.IsMusicPlaying()
+	})
+	return _ret1
 }
 func SyncAudioSetSfxVolume(volume float32) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		AudioMgr.SetSfxVolume(volume)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncAudioGetSfxVolume() float32 {
-	var __ret float32
-	done := make(chan struct{})
-	job := func() {
-		__ret = AudioMgr.GetSfxVolume()
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 float32
+	WaitMainThread(func() {
+		_ret1 = AudioMgr.GetSfxVolume()
+	})
+	return _ret1
 }
 func SyncAudioSetMusicVolume(volume float32) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		AudioMgr.SetMusicVolume(volume)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncAudioGetMusicVolume() float32 {
-	var __ret float32
-	done := make(chan struct{})
-	job := func() {
-		__ret = AudioMgr.GetMusicVolume()
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 float32
+	WaitMainThread(func() {
+		_ret1 = AudioMgr.GetMusicVolume()
+	})
+	return _ret1
 }
 func SyncAudioSetMasterVolume(volume float32) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		AudioMgr.SetMasterVolume(volume)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncAudioGetMasterVolume() float32 {
-	var __ret float32
-	done := make(chan struct{})
-	job := func() {
-		__ret = AudioMgr.GetMasterVolume()
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 float32
+	WaitMainThread(func() {
+		_ret1 = AudioMgr.GetMasterVolume()
+	})
+	return _ret1
 }
 
 // ICameraMgr
 func SyncCameraGetCameraPosition() Vec2 {
-	var __ret Vec2
-	done := make(chan struct{})
-	job := func() {
-		__ret = CameraMgr.GetCameraPosition()
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 Vec2
+	WaitMainThread(func() {
+		_ret1 = CameraMgr.GetCameraPosition()
+	})
+	return _ret1
 }
 func SyncCameraSetCameraPosition(position Vec2) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		CameraMgr.SetCameraPosition(position)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncCameraGetCameraZoom() Vec2 {
-	var __ret Vec2
-	done := make(chan struct{})
-	job := func() {
-		__ret = CameraMgr.GetCameraZoom()
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 Vec2
+	WaitMainThread(func() {
+		_ret1 = CameraMgr.GetCameraZoom()
+	})
+	return _ret1
 }
 func SyncCameraSetCameraZoom(size Vec2) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		CameraMgr.SetCameraZoom(size)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncCameraGetViewportRect() Rect2 {
-	var __ret Rect2
-	done := make(chan struct{})
-	job := func() {
-		__ret = CameraMgr.GetViewportRect()
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 Rect2
+	WaitMainThread(func() {
+		_ret1 = CameraMgr.GetViewportRect()
+	})
+	return _ret1
 }
 
 // IInputMgr
 func SyncInputGetMousePos() Vec2 {
-	var __ret Vec2
-	done := make(chan struct{})
-	job := func() {
-		__ret = InputMgr.GetMousePos()
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 Vec2
+	WaitMainThread(func() {
+		_ret1 = InputMgr.GetMousePos()
+	})
+	return _ret1
 }
 func SyncInputGetKey(key int64) bool {
-	var __ret bool
-	done := make(chan struct{})
-	job := func() {
-		__ret = InputMgr.GetKey(key)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 bool
+	WaitMainThread(func() {
+		_ret1 = InputMgr.GetKey(key)
+	})
+	return _ret1
 }
 func SyncInputGetMouseState(mouse_id int64) bool {
-	var __ret bool
-	done := make(chan struct{})
-	job := func() {
-		__ret = InputMgr.GetMouseState(mouse_id)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 bool
+	WaitMainThread(func() {
+		_ret1 = InputMgr.GetMouseState(mouse_id)
+	})
+	return _ret1
 }
 func SyncInputGetKeyState(key int64) int64 {
-	var __ret int64
-	done := make(chan struct{})
-	job := func() {
-		__ret = InputMgr.GetKeyState(key)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 int64
+	WaitMainThread(func() {
+		_ret1 = InputMgr.GetKeyState(key)
+	})
+	return _ret1
 }
 func SyncInputGetAxis(neg_action string, pos_action string) float32 {
-	var __ret float32
-	done := make(chan struct{})
-	job := func() {
-		__ret = InputMgr.GetAxis(neg_action, pos_action)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 float32
+	WaitMainThread(func() {
+		_ret1 = InputMgr.GetAxis(neg_action, pos_action)
+	})
+	return _ret1
 }
 func SyncInputIsActionPressed(action string) bool {
-	var __ret bool
-	done := make(chan struct{})
-	job := func() {
-		__ret = InputMgr.IsActionPressed(action)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 bool
+	WaitMainThread(func() {
+		_ret1 = InputMgr.IsActionPressed(action)
+	})
+	return _ret1
 }
 func SyncInputIsActionJustPressed(action string) bool {
-	var __ret bool
-	done := make(chan struct{})
-	job := func() {
-		__ret = InputMgr.IsActionJustPressed(action)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 bool
+	WaitMainThread(func() {
+		_ret1 = InputMgr.IsActionJustPressed(action)
+	})
+	return _ret1
 }
 func SyncInputIsActionJustReleased(action string) bool {
-	var __ret bool
-	done := make(chan struct{})
-	job := func() {
-		__ret = InputMgr.IsActionJustReleased(action)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 bool
+	WaitMainThread(func() {
+		_ret1 = InputMgr.IsActionJustReleased(action)
+	})
+	return _ret1
 }
 
 // IPhysicMgr
 func SyncPhysicRaycast(from Vec2, to Vec2, collision_mask int64) Object {
-	var __ret Object
-	done := make(chan struct{})
-	job := func() {
-		__ret = PhysicMgr.Raycast(from, to, collision_mask)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 Object
+	WaitMainThread(func() {
+		_ret1 = PhysicMgr.Raycast(from, to, collision_mask)
+	})
+	return _ret1
 }
 func SyncPhysicCheckCollision(from Vec2, to Vec2, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) bool {
-	var __ret bool
-	done := make(chan struct{})
-	job := func() {
-		__ret = PhysicMgr.CheckCollision(from, to, collision_mask, collide_with_areas, collide_with_bodies)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 bool
+	WaitMainThread(func() {
+		_ret1 = PhysicMgr.CheckCollision(from, to, collision_mask, collide_with_areas, collide_with_bodies)
+	})
+	return _ret1
 }
 func SyncPhysicCheckTouchedCameraBoundary(obj Object, board_type int64) bool {
-	var __ret bool
-	done := make(chan struct{})
-	job := func() {
-		__ret = PhysicMgr.CheckTouchedCameraBoundary(obj, board_type)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 bool
+	WaitMainThread(func() {
+		_ret1 = PhysicMgr.CheckTouchedCameraBoundary(obj, board_type)
+	})
+	return _ret1
 }
 
 // IPlatformMgr
 func SyncPlatformSetWindowPosition(pos Vec2) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		PlatformMgr.SetWindowPosition(pos)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncPlatformGetWindowPosition() Vec2 {
-	var __ret Vec2
-	done := make(chan struct{})
-	job := func() {
-		__ret = PlatformMgr.GetWindowPosition()
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 Vec2
+	WaitMainThread(func() {
+		_ret1 = PlatformMgr.GetWindowPosition()
+	})
+	return _ret1
 }
 func SyncPlatformSetWindowSize(width int64, height int64) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		PlatformMgr.SetWindowSize(width, height)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncPlatformGetWindowSize() Vec2 {
-	var __ret Vec2
-	done := make(chan struct{})
-	job := func() {
-		__ret = PlatformMgr.GetWindowSize()
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 Vec2
+	WaitMainThread(func() {
+		_ret1 = PlatformMgr.GetWindowSize()
+	})
+	return _ret1
 }
 func SyncPlatformSetWindowTitle(title string) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		PlatformMgr.SetWindowTitle(title)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncPlatformGetWindowTitle() string {
-	var __ret string
-	done := make(chan struct{})
-	job := func() {
-		__ret = PlatformMgr.GetWindowTitle()
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 string
+	WaitMainThread(func() {
+		_ret1 = PlatformMgr.GetWindowTitle()
+	})
+	return _ret1
 }
 func SyncPlatformSetWindowFullscreen(enable bool) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		PlatformMgr.SetWindowFullscreen(enable)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncPlatformIsWindowFullscreen() bool {
-	var __ret bool
-	done := make(chan struct{})
-	job := func() {
-		__ret = PlatformMgr.IsWindowFullscreen()
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 bool
+	WaitMainThread(func() {
+		_ret1 = PlatformMgr.IsWindowFullscreen()
+	})
+	return _ret1
 }
 func SyncPlatformSetDebugMode(enable bool) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		PlatformMgr.SetDebugMode(enable)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncPlatformIsDebugMode() bool {
-	var __ret bool
-	done := make(chan struct{})
-	job := func() {
-		__ret = PlatformMgr.IsDebugMode()
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 bool
+	WaitMainThread(func() {
+		_ret1 = PlatformMgr.IsDebugMode()
+	})
+	return _ret1
 }
 func SyncPlatformGetTimeScale() float32 {
-	var __ret float32
-	done := make(chan struct{})
-	job := func() {
-		__ret = PlatformMgr.GetTimeScale()
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 float32
+	WaitMainThread(func() {
+		_ret1 = PlatformMgr.GetTimeScale()
+	})
+	return _ret1
 }
 func SyncPlatformSetTimeScale(time_scale float32) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		PlatformMgr.SetTimeScale(time_scale)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 
 // IResMgr
 func SyncResSetLoadMode(is_direct_mode bool) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		ResMgr.SetLoadMode(is_direct_mode)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncResGetLoadMode() bool {
-	var __ret bool
-	done := make(chan struct{})
-	job := func() {
-		__ret = ResMgr.GetLoadMode()
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 bool
+	WaitMainThread(func() {
+		_ret1 = ResMgr.GetLoadMode()
+	})
+	return _ret1
 }
 func SyncResGetBoundFromAlpha(p_path string) Rect2 {
-	var __ret Rect2
-	done := make(chan struct{})
-	job := func() {
-		__ret = ResMgr.GetBoundFromAlpha(p_path)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 Rect2
+	WaitMainThread(func() {
+		_ret1 = ResMgr.GetBoundFromAlpha(p_path)
+	})
+	return _ret1
 }
 func SyncResGetImageSize(p_path string) Vec2 {
-	var __ret Vec2
-	done := make(chan struct{})
-	job := func() {
-		__ret = ResMgr.GetImageSize(p_path)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 Vec2
+	WaitMainThread(func() {
+		_ret1 = ResMgr.GetImageSize(p_path)
+	})
+	return _ret1
 }
 func SyncResReadAllText(p_path string) string {
-	var __ret string
-	done := make(chan struct{})
-	job := func() {
-		__ret = ResMgr.ReadAllText(p_path)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 string
+	WaitMainThread(func() {
+		_ret1 = ResMgr.ReadAllText(p_path)
+	})
+	return _ret1
 }
 func SyncResHasFile(p_path string) bool {
-	var __ret bool
-	done := make(chan struct{})
-	job := func() {
-		__ret = ResMgr.HasFile(p_path)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 bool
+	WaitMainThread(func() {
+		_ret1 = ResMgr.HasFile(p_path)
+	})
+	return _ret1
 }
 
 // ISceneMgr
 func SyncSceneChangeSceneToFile(path string) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SceneMgr.ChangeSceneToFile(path)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncSceneReloadCurrentScene() int64 {
-	var __ret int64
-	done := make(chan struct{})
-	job := func() {
-		__ret = SceneMgr.ReloadCurrentScene()
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 int64
+	WaitMainThread(func() {
+		_ret1 = SceneMgr.ReloadCurrentScene()
+	})
+	return _ret1
 }
 func SyncSceneUnloadCurrentScene() {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SceneMgr.UnloadCurrentScene()
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 
 // ISpriteMgr
 func SyncSpriteSetDontDestroyOnLoad(obj Object) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SpriteMgr.SetDontDestroyOnLoad(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncSpriteSetProcess(obj Object, is_on bool) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SpriteMgr.SetProcess(obj, is_on)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncSpriteSetPhysicProcess(obj Object, is_on bool) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SpriteMgr.SetPhysicProcess(obj, is_on)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncSpriteSetChildPosition(obj Object, path string, pos Vec2) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SpriteMgr.SetChildPosition(obj, path, pos)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncSpriteGetChildPosition(obj Object, path string) Vec2 {
-	var __ret Vec2
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.GetChildPosition(obj, path)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 Vec2
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.GetChildPosition(obj, path)
+	})
+	return _ret1
 }
 func SyncSpriteSetChildRotation(obj Object, path string, rot float32) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SpriteMgr.SetChildRotation(obj, path, rot)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncSpriteGetChildRotation(obj Object, path string) float32 {
-	var __ret float32
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.GetChildRotation(obj, path)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 float32
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.GetChildRotation(obj, path)
+	})
+	return _ret1
 }
 func SyncSpriteSetChildScale(obj Object, path string, scale Vec2) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SpriteMgr.SetChildScale(obj, path, scale)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncSpriteGetChildScale(obj Object, path string) Vec2 {
-	var __ret Vec2
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.GetChildScale(obj, path)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 Vec2
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.GetChildScale(obj, path)
+	})
+	return _ret1
 }
 func SyncSpriteCheckCollision(obj Object, target Object, is_src_trigger bool, is_dst_trigger bool) bool {
-	var __ret bool
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.CheckCollision(obj, target, is_src_trigger, is_dst_trigger)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 bool
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.CheckCollision(obj, target, is_src_trigger, is_dst_trigger)
+	})
+	return _ret1
 }
 func SyncSpriteCheckCollisionWithPoint(obj Object, point Vec2, is_trigger bool) bool {
-	var __ret bool
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.CheckCollisionWithPoint(obj, point, is_trigger)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 bool
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.CheckCollisionWithPoint(obj, point, is_trigger)
+	})
+	return _ret1
 }
 func SyncSpriteCreateSprite(path string) Object {
-	var __ret Object
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.CreateSprite(path)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 Object
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.CreateSprite(path)
+	})
+	return _ret1
 }
 func SyncSpriteCloneSprite(obj Object) Object {
-	var __ret Object
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.CloneSprite(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 Object
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.CloneSprite(obj)
+	})
+	return _ret1
 }
 func SyncSpriteDestroySprite(obj Object) bool {
-	var __ret bool
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.DestroySprite(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 bool
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.DestroySprite(obj)
+	})
+	return _ret1
 }
 func SyncSpriteIsSpriteAlive(obj Object) bool {
-	var __ret bool
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.IsSpriteAlive(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 bool
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.IsSpriteAlive(obj)
+	})
+	return _ret1
 }
 func SyncSpriteSetPosition(obj Object, pos Vec2) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SpriteMgr.SetPosition(obj, pos)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncSpriteGetPosition(obj Object) Vec2 {
-	var __ret Vec2
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.GetPosition(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 Vec2
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.GetPosition(obj)
+	})
+	return _ret1
 }
 func SyncSpriteSetRotation(obj Object, rot float32) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SpriteMgr.SetRotation(obj, rot)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncSpriteGetRotation(obj Object) float32 {
-	var __ret float32
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.GetRotation(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 float32
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.GetRotation(obj)
+	})
+	return _ret1
 }
 func SyncSpriteSetScale(obj Object, scale Vec2) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SpriteMgr.SetScale(obj, scale)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncSpriteGetScale(obj Object) Vec2 {
-	var __ret Vec2
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.GetScale(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 Vec2
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.GetScale(obj)
+	})
+	return _ret1
 }
 func SyncSpriteSetRenderScale(obj Object, scale Vec2) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SpriteMgr.SetRenderScale(obj, scale)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncSpriteGetRenderScale(obj Object) Vec2 {
-	var __ret Vec2
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.GetRenderScale(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 Vec2
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.GetRenderScale(obj)
+	})
+	return _ret1
 }
 func SyncSpriteSetColor(obj Object, color Color) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SpriteMgr.SetColor(obj, color)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncSpriteGetColor(obj Object) Color {
-	var __ret Color
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.GetColor(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 Color
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.GetColor(obj)
+	})
+	return _ret1
 }
 func SyncSpriteSetTextureAltas(obj Object, path string, rect2 Rect2) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SpriteMgr.SetTextureAltas(obj, path, rect2)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncSpriteSetTexture(obj Object, path string) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SpriteMgr.SetTexture(obj, path)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncSpriteGetTexture(obj Object) string {
-	var __ret string
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.GetTexture(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 string
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.GetTexture(obj)
+	})
+	return _ret1
 }
 func SyncSpriteSetVisible(obj Object, visible bool) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SpriteMgr.SetVisible(obj, visible)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncSpriteGetVisible(obj Object) bool {
-	var __ret bool
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.GetVisible(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 bool
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.GetVisible(obj)
+	})
+	return _ret1
 }
 func SyncSpriteGetZIndex(obj Object) int64 {
-	var __ret int64
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.GetZIndex(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 int64
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.GetZIndex(obj)
+	})
+	return _ret1
 }
 func SyncSpriteSetZIndex(obj Object, z int64) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SpriteMgr.SetZIndex(obj, z)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncSpritePlayAnim(obj Object, p_name string, p_custom_scale float32, p_from_end bool) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SpriteMgr.PlayAnim(obj, p_name, p_custom_scale, p_from_end)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncSpritePlayBackwardsAnim(obj Object, p_name string) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SpriteMgr.PlayBackwardsAnim(obj, p_name)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncSpritePauseAnim(obj Object) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SpriteMgr.PauseAnim(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncSpriteStopAnim(obj Object) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SpriteMgr.StopAnim(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncSpriteIsPlayingAnim(obj Object) bool {
-	var __ret bool
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.IsPlayingAnim(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 bool
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.IsPlayingAnim(obj)
+	})
+	return _ret1
 }
 func SyncSpriteSetAnim(obj Object, p_name string) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SpriteMgr.SetAnim(obj, p_name)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncSpriteGetAnim(obj Object) string {
-	var __ret string
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.GetAnim(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 string
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.GetAnim(obj)
+	})
+	return _ret1
 }
 func SyncSpriteSetAnimFrame(obj Object, p_frame int64) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SpriteMgr.SetAnimFrame(obj, p_frame)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncSpriteGetAnimFrame(obj Object) int64 {
-	var __ret int64
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.GetAnimFrame(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 int64
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.GetAnimFrame(obj)
+	})
+	return _ret1
 }
 func SyncSpriteSetAnimSpeedScale(obj Object, p_speed_scale float32) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SpriteMgr.SetAnimSpeedScale(obj, p_speed_scale)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncSpriteGetAnimSpeedScale(obj Object) float32 {
-	var __ret float32
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.GetAnimSpeedScale(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 float32
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.GetAnimSpeedScale(obj)
+	})
+	return _ret1
 }
 func SyncSpriteGetAnimPlayingSpeed(obj Object) float32 {
-	var __ret float32
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.GetAnimPlayingSpeed(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 float32
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.GetAnimPlayingSpeed(obj)
+	})
+	return _ret1
 }
 func SyncSpriteSetAnimCentered(obj Object, p_center bool) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SpriteMgr.SetAnimCentered(obj, p_center)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncSpriteIsAnimCentered(obj Object) bool {
-	var __ret bool
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.IsAnimCentered(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 bool
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.IsAnimCentered(obj)
+	})
+	return _ret1
 }
 func SyncSpriteSetAnimOffset(obj Object, p_offset Vec2) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SpriteMgr.SetAnimOffset(obj, p_offset)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncSpriteGetAnimOffset(obj Object) Vec2 {
-	var __ret Vec2
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.GetAnimOffset(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 Vec2
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.GetAnimOffset(obj)
+	})
+	return _ret1
 }
 func SyncSpriteSetAnimFlipH(obj Object, p_flip bool) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SpriteMgr.SetAnimFlipH(obj, p_flip)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncSpriteIsAnimFlippedH(obj Object) bool {
-	var __ret bool
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.IsAnimFlippedH(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 bool
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.IsAnimFlippedH(obj)
+	})
+	return _ret1
 }
 func SyncSpriteSetAnimFlipV(obj Object, p_flip bool) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SpriteMgr.SetAnimFlipV(obj, p_flip)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncSpriteIsAnimFlippedV(obj Object) bool {
-	var __ret bool
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.IsAnimFlippedV(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 bool
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.IsAnimFlippedV(obj)
+	})
+	return _ret1
 }
 func SyncSpriteSetVelocity(obj Object, velocity Vec2) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SpriteMgr.SetVelocity(obj, velocity)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncSpriteGetVelocity(obj Object) Vec2 {
-	var __ret Vec2
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.GetVelocity(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 Vec2
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.GetVelocity(obj)
+	})
+	return _ret1
 }
 func SyncSpriteIsOnFloor(obj Object) bool {
-	var __ret bool
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.IsOnFloor(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 bool
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.IsOnFloor(obj)
+	})
+	return _ret1
 }
 func SyncSpriteIsOnFloorOnly(obj Object) bool {
-	var __ret bool
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.IsOnFloorOnly(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 bool
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.IsOnFloorOnly(obj)
+	})
+	return _ret1
 }
 func SyncSpriteIsOnWall(obj Object) bool {
-	var __ret bool
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.IsOnWall(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 bool
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.IsOnWall(obj)
+	})
+	return _ret1
 }
 func SyncSpriteIsOnWallOnly(obj Object) bool {
-	var __ret bool
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.IsOnWallOnly(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 bool
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.IsOnWallOnly(obj)
+	})
+	return _ret1
 }
 func SyncSpriteIsOnCeiling(obj Object) bool {
-	var __ret bool
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.IsOnCeiling(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 bool
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.IsOnCeiling(obj)
+	})
+	return _ret1
 }
 func SyncSpriteIsOnCeilingOnly(obj Object) bool {
-	var __ret bool
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.IsOnCeilingOnly(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 bool
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.IsOnCeilingOnly(obj)
+	})
+	return _ret1
 }
 func SyncSpriteGetLastMotion(obj Object) Vec2 {
-	var __ret Vec2
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.GetLastMotion(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 Vec2
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.GetLastMotion(obj)
+	})
+	return _ret1
 }
 func SyncSpriteGetPositionDelta(obj Object) Vec2 {
-	var __ret Vec2
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.GetPositionDelta(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 Vec2
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.GetPositionDelta(obj)
+	})
+	return _ret1
 }
 func SyncSpriteGetFloorNormal(obj Object) Vec2 {
-	var __ret Vec2
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.GetFloorNormal(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 Vec2
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.GetFloorNormal(obj)
+	})
+	return _ret1
 }
 func SyncSpriteGetWallNormal(obj Object) Vec2 {
-	var __ret Vec2
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.GetWallNormal(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 Vec2
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.GetWallNormal(obj)
+	})
+	return _ret1
 }
 func SyncSpriteGetRealVelocity(obj Object) Vec2 {
-	var __ret Vec2
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.GetRealVelocity(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 Vec2
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.GetRealVelocity(obj)
+	})
+	return _ret1
 }
 func SyncSpriteMoveAndSlide(obj Object) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SpriteMgr.MoveAndSlide(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncSpriteSetGravity(obj Object, gravity float32) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SpriteMgr.SetGravity(obj, gravity)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncSpriteGetGravity(obj Object) float32 {
-	var __ret float32
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.GetGravity(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 float32
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.GetGravity(obj)
+	})
+	return _ret1
 }
 func SyncSpriteSetMass(obj Object, mass float32) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SpriteMgr.SetMass(obj, mass)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncSpriteGetMass(obj Object) float32 {
-	var __ret float32
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.GetMass(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 float32
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.GetMass(obj)
+	})
+	return _ret1
 }
 func SyncSpriteAddForce(obj Object, force Vec2) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SpriteMgr.AddForce(obj, force)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncSpriteAddImpulse(obj Object, impulse Vec2) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SpriteMgr.AddImpulse(obj, impulse)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncSpriteSetCollisionLayer(obj Object, layer int64) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SpriteMgr.SetCollisionLayer(obj, layer)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncSpriteGetCollisionLayer(obj Object) int64 {
-	var __ret int64
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.GetCollisionLayer(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 int64
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.GetCollisionLayer(obj)
+	})
+	return _ret1
 }
 func SyncSpriteSetCollisionMask(obj Object, mask int64) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SpriteMgr.SetCollisionMask(obj, mask)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncSpriteGetCollisionMask(obj Object) int64 {
-	var __ret int64
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.GetCollisionMask(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 int64
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.GetCollisionMask(obj)
+	})
+	return _ret1
 }
 func SyncSpriteSetTriggerLayer(obj Object, layer int64) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SpriteMgr.SetTriggerLayer(obj, layer)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncSpriteGetTriggerLayer(obj Object) int64 {
-	var __ret int64
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.GetTriggerLayer(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 int64
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.GetTriggerLayer(obj)
+	})
+	return _ret1
 }
 func SyncSpriteSetTriggerMask(obj Object, mask int64) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SpriteMgr.SetTriggerMask(obj, mask)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncSpriteGetTriggerMask(obj Object) int64 {
-	var __ret int64
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.GetTriggerMask(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 int64
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.GetTriggerMask(obj)
+	})
+	return _ret1
 }
 func SyncSpriteSetColliderRect(obj Object, center Vec2, size Vec2) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SpriteMgr.SetColliderRect(obj, center, size)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncSpriteSetColliderCircle(obj Object, center Vec2, radius float32) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SpriteMgr.SetColliderCircle(obj, center, radius)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncSpriteSetColliderCapsule(obj Object, center Vec2, size Vec2) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SpriteMgr.SetColliderCapsule(obj, center, size)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncSpriteSetCollisionEnabled(obj Object, enabled bool) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SpriteMgr.SetCollisionEnabled(obj, enabled)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncSpriteIsCollisionEnabled(obj Object) bool {
-	var __ret bool
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.IsCollisionEnabled(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 bool
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.IsCollisionEnabled(obj)
+	})
+	return _ret1
 }
 func SyncSpriteSetTriggerRect(obj Object, center Vec2, size Vec2) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SpriteMgr.SetTriggerRect(obj, center, size)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncSpriteSetTriggerCircle(obj Object, center Vec2, radius float32) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SpriteMgr.SetTriggerCircle(obj, center, radius)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncSpriteSetTriggerCapsule(obj Object, center Vec2, size Vec2) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SpriteMgr.SetTriggerCapsule(obj, center, size)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncSpriteSetTriggerEnabled(obj Object, trigger bool) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		SpriteMgr.SetTriggerEnabled(obj, trigger)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncSpriteIsTriggerEnabled(obj Object) bool {
-	var __ret bool
-	done := make(chan struct{})
-	job := func() {
-		__ret = SpriteMgr.IsTriggerEnabled(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 bool
+	WaitMainThread(func() {
+		_ret1 = SpriteMgr.IsTriggerEnabled(obj)
+	})
+	return _ret1
 }
 
 // IUiMgr
 func SyncUiBindNode(obj Object, rel_path string) Object {
-	var __ret Object
-	done := make(chan struct{})
-	job := func() {
-		__ret = UiMgr.BindNode(obj, rel_path)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 Object
+	WaitMainThread(func() {
+		_ret1 = UiMgr.BindNode(obj, rel_path)
+	})
+	return _ret1
 }
 func SyncUiCreateNode(path string) Object {
-	var __ret Object
-	done := make(chan struct{})
-	job := func() {
-		__ret = UiMgr.CreateNode(path)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 Object
+	WaitMainThread(func() {
+		_ret1 = UiMgr.CreateNode(path)
+	})
+	return _ret1
 }
 func SyncUiCreateButton(path string, text string) Object {
-	var __ret Object
-	done := make(chan struct{})
-	job := func() {
-		__ret = UiMgr.CreateButton(path, text)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 Object
+	WaitMainThread(func() {
+		_ret1 = UiMgr.CreateButton(path, text)
+	})
+	return _ret1
 }
 func SyncUiCreateLabel(path string, text string) Object {
-	var __ret Object
-	done := make(chan struct{})
-	job := func() {
-		__ret = UiMgr.CreateLabel(path, text)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 Object
+	WaitMainThread(func() {
+		_ret1 = UiMgr.CreateLabel(path, text)
+	})
+	return _ret1
 }
 func SyncUiCreateImage(path string) Object {
-	var __ret Object
-	done := make(chan struct{})
-	job := func() {
-		__ret = UiMgr.CreateImage(path)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 Object
+	WaitMainThread(func() {
+		_ret1 = UiMgr.CreateImage(path)
+	})
+	return _ret1
 }
 func SyncUiCreateToggle(path string, value bool) Object {
-	var __ret Object
-	done := make(chan struct{})
-	job := func() {
-		__ret = UiMgr.CreateToggle(path, value)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 Object
+	WaitMainThread(func() {
+		_ret1 = UiMgr.CreateToggle(path, value)
+	})
+	return _ret1
 }
 func SyncUiCreateSlider(path string, value float32) Object {
-	var __ret Object
-	done := make(chan struct{})
-	job := func() {
-		__ret = UiMgr.CreateSlider(path, value)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 Object
+	WaitMainThread(func() {
+		_ret1 = UiMgr.CreateSlider(path, value)
+	})
+	return _ret1
 }
 func SyncUiCreateInput(path string, text string) Object {
-	var __ret Object
-	done := make(chan struct{})
-	job := func() {
-		__ret = UiMgr.CreateInput(path, text)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 Object
+	WaitMainThread(func() {
+		_ret1 = UiMgr.CreateInput(path, text)
+	})
+	return _ret1
 }
 func SyncUiDestroyNode(obj Object) bool {
-	var __ret bool
-	done := make(chan struct{})
-	job := func() {
-		__ret = UiMgr.DestroyNode(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 bool
+	WaitMainThread(func() {
+		_ret1 = UiMgr.DestroyNode(obj)
+	})
+	return _ret1
 }
 func SyncUiGetType(obj Object) int64 {
-	var __ret int64
-	done := make(chan struct{})
-	job := func() {
-		__ret = UiMgr.GetType(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 int64
+	WaitMainThread(func() {
+		_ret1 = UiMgr.GetType(obj)
+	})
+	return _ret1
 }
 func SyncUiSetText(obj Object, text string) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		UiMgr.SetText(obj, text)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncUiGetText(obj Object) string {
-	var __ret string
-	done := make(chan struct{})
-	job := func() {
-		__ret = UiMgr.GetText(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 string
+	WaitMainThread(func() {
+		_ret1 = UiMgr.GetText(obj)
+	})
+	return _ret1
 }
 func SyncUiSetTexture(obj Object, path string) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		UiMgr.SetTexture(obj, path)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncUiGetTexture(obj Object) string {
-	var __ret string
-	done := make(chan struct{})
-	job := func() {
-		__ret = UiMgr.GetTexture(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 string
+	WaitMainThread(func() {
+		_ret1 = UiMgr.GetTexture(obj)
+	})
+	return _ret1
 }
 func SyncUiSetColor(obj Object, color Color) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		UiMgr.SetColor(obj, color)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncUiGetColor(obj Object) Color {
-	var __ret Color
-	done := make(chan struct{})
-	job := func() {
-		__ret = UiMgr.GetColor(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 Color
+	WaitMainThread(func() {
+		_ret1 = UiMgr.GetColor(obj)
+	})
+	return _ret1
 }
 func SyncUiSetFontSize(obj Object, size int64) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		UiMgr.SetFontSize(obj, size)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncUiGetFontSize(obj Object) int64 {
-	var __ret int64
-	done := make(chan struct{})
-	job := func() {
-		__ret = UiMgr.GetFontSize(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 int64
+	WaitMainThread(func() {
+		_ret1 = UiMgr.GetFontSize(obj)
+	})
+	return _ret1
 }
 func SyncUiSetVisible(obj Object, visible bool) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		UiMgr.SetVisible(obj, visible)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncUiGetVisible(obj Object) bool {
-	var __ret bool
-	done := make(chan struct{})
-	job := func() {
-		__ret = UiMgr.GetVisible(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 bool
+	WaitMainThread(func() {
+		_ret1 = UiMgr.GetVisible(obj)
+	})
+	return _ret1
 }
 func SyncUiSetInteractable(obj Object, interactable bool) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		UiMgr.SetInteractable(obj, interactable)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncUiGetInteractable(obj Object) bool {
-	var __ret bool
-	done := make(chan struct{})
-	job := func() {
-		__ret = UiMgr.GetInteractable(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 bool
+	WaitMainThread(func() {
+		_ret1 = UiMgr.GetInteractable(obj)
+	})
+	return _ret1
 }
 func SyncUiSetRect(obj Object, rect Rect2) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		UiMgr.SetRect(obj, rect)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncUiGetRect(obj Object) Rect2 {
-	var __ret Rect2
-	done := make(chan struct{})
-	job := func() {
-		__ret = UiMgr.GetRect(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 Rect2
+	WaitMainThread(func() {
+		_ret1 = UiMgr.GetRect(obj)
+	})
+	return _ret1
 }
 func SyncUiGetLayoutDirection(obj Object) int64 {
-	var __ret int64
-	done := make(chan struct{})
-	job := func() {
-		__ret = UiMgr.GetLayoutDirection(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 int64
+	WaitMainThread(func() {
+		_ret1 = UiMgr.GetLayoutDirection(obj)
+	})
+	return _ret1
 }
 func SyncUiSetLayoutDirection(obj Object, value int64) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		UiMgr.SetLayoutDirection(obj, value)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncUiGetLayoutMode(obj Object) int64 {
-	var __ret int64
-	done := make(chan struct{})
-	job := func() {
-		__ret = UiMgr.GetLayoutMode(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 int64
+	WaitMainThread(func() {
+		_ret1 = UiMgr.GetLayoutMode(obj)
+	})
+	return _ret1
 }
 func SyncUiSetLayoutMode(obj Object, value int64) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		UiMgr.SetLayoutMode(obj, value)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncUiGetAnchorsPreset(obj Object) int64 {
-	var __ret int64
-	done := make(chan struct{})
-	job := func() {
-		__ret = UiMgr.GetAnchorsPreset(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 int64
+	WaitMainThread(func() {
+		_ret1 = UiMgr.GetAnchorsPreset(obj)
+	})
+	return _ret1
 }
 func SyncUiSetAnchorsPreset(obj Object, value int64) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		UiMgr.SetAnchorsPreset(obj, value)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncUiGetScale(obj Object) Vec2 {
-	var __ret Vec2
-	done := make(chan struct{})
-	job := func() {
-		__ret = UiMgr.GetScale(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 Vec2
+	WaitMainThread(func() {
+		_ret1 = UiMgr.GetScale(obj)
+	})
+	return _ret1
 }
 func SyncUiSetScale(obj Object, value Vec2) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		UiMgr.SetScale(obj, value)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncUiGetPosition(obj Object) Vec2 {
-	var __ret Vec2
-	done := make(chan struct{})
-	job := func() {
-		__ret = UiMgr.GetPosition(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 Vec2
+	WaitMainThread(func() {
+		_ret1 = UiMgr.GetPosition(obj)
+	})
+	return _ret1
 }
 func SyncUiSetPosition(obj Object, value Vec2) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		UiMgr.SetPosition(obj, value)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncUiGetSize(obj Object) Vec2 {
-	var __ret Vec2
-	done := make(chan struct{})
-	job := func() {
-		__ret = UiMgr.GetSize(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 Vec2
+	WaitMainThread(func() {
+		_ret1 = UiMgr.GetSize(obj)
+	})
+	return _ret1
 }
 func SyncUiSetSize(obj Object, value Vec2) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		UiMgr.SetSize(obj, value)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncUiGetGlobalPosition(obj Object) Vec2 {
-	var __ret Vec2
-	done := make(chan struct{})
-	job := func() {
-		__ret = UiMgr.GetGlobalPosition(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 Vec2
+	WaitMainThread(func() {
+		_ret1 = UiMgr.GetGlobalPosition(obj)
+	})
+	return _ret1
 }
 func SyncUiSetGlobalPosition(obj Object, value Vec2) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		UiMgr.SetGlobalPosition(obj, value)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncUiGetRotation(obj Object) float32 {
-	var __ret float32
-	done := make(chan struct{})
-	job := func() {
-		__ret = UiMgr.GetRotation(obj)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 float32
+	WaitMainThread(func() {
+		_ret1 = UiMgr.GetRotation(obj)
+	})
+	return _ret1
 }
 func SyncUiSetRotation(obj Object, value float32) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		UiMgr.SetRotation(obj, value)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }
 func SyncUiGetFlip(obj Object, horizontal bool) bool {
-	var __ret bool
-	done := make(chan struct{})
-	job := func() {
-		__ret = UiMgr.GetFlip(obj, horizontal)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
-	return __ret
+	var _ret1 bool
+	WaitMainThread(func() {
+		_ret1 = UiMgr.GetFlip(obj, horizontal)
+	})
+	return _ret1
 }
 func SyncUiSetFlip(obj Object, horizontal bool, is_flip bool) {
-
-	done := make(chan struct{})
-	job := func() {
+	WaitMainThread(func() {
 		UiMgr.SetFlip(obj, horizontal, is_flip)
-		done <- struct{}{}
-	}
-	updateJobQueue <- job
-	<-done
+	})
 }

@@ -46,6 +46,11 @@ func (p *Game) OnEngineUpdate(delta float32) {
 	p.updateInput()
 	p.updateCamera()
 	p.updateLogic()
+}
+func (p *Game) OnEngineRender(delta float32) {
+	if !p.isRunned {
+		return
+	}
 	p.updateProxy()
 	p.updatePhysic()
 }
@@ -59,6 +64,7 @@ func (p *Game) onStartAsync() {
 	if !p.isRunned {
 		Gopt_Game_Run(gamer, "assets")
 	}
+	engine.OnGameStarted()
 }
 
 func (p *Game) updateLogic() error {

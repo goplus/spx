@@ -27,6 +27,7 @@ import (
 	"github.com/goplus/spx/internal/engine"
 	"github.com/goplus/spx/internal/gdi"
 	"github.com/goplus/spx/internal/math32"
+	"github.com/goplus/spx/internal/time"
 	"github.com/goplus/spx/internal/tools"
 )
 
@@ -87,6 +88,7 @@ type Sprite interface {
 	CostumeName() string
 	CostumeWidth() float64
 	DeleteThisClone()
+	DeltaTime() float64
 	Destroy()
 	Die()
 	DistanceTo(obj interface{}) float64
@@ -142,6 +144,7 @@ type Sprite interface {
 	Step__1(step int)
 	Step__2(step float64, animname string)
 	Think(msg interface{}, secs ...float64)
+	TimeSinceLevelLoad() float64
 	Touching(obj interface{}) bool
 	TouchingColor(color Color) bool
 	Turn(val interface{})
@@ -943,7 +946,7 @@ func (p *SpriteImpl) goAnimateInternal(name string, ani *aniConfig, isBlocking b
 		}
 	})
 	if isBlocking {
-		waitToDo(animwg.Wait)
+		engine.WaitToDo(animwg.Wait)
 	}
 	if isNeedPlayDefault {
 		p.playDefaultAnim()
@@ -1490,6 +1493,9 @@ func checkTouchingDirection(dir float64) int {
 }
 
 func (p *SpriteImpl) checkTouchingScreen(where int) (touching int) {
+	if p.proxy == nil {
+		return 0
+	}
 	value := engine.SyncPhysicCheckTouchedCameraBoundary(p.proxy.Id, int64(where))
 	if value {
 		return where
@@ -1704,4 +1710,14 @@ func (pself *SpriteImpl) onUpdate(delta float64) {
 	if pself.sayObj != nil {
 		pself.sayObj.refresh()
 	}
+}
+
+// ------------------------ time ----------------------------------------
+
+func (pself *SpriteImpl) DeltaTime() float64 {
+	return time.DeltaTime()
+}
+
+func (pself *SpriteImpl) TimeSinceLevelLoad() float64 {
+	return time.TimeSinceLevelLoad()
 }

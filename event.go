@@ -21,6 +21,7 @@ import (
 	"sync"
 
 	"github.com/goplus/spx/internal/coroutine"
+	"github.com/goplus/spx/internal/engine"
 )
 
 // -------------------------------------------------------------------------------------
@@ -75,7 +76,7 @@ func (p *eventSink) syncCall(data interface{}, doSth func(*eventSink)) {
 		}
 		p = p.prev
 	}
-	waitToDo(wg.Wait)
+	engine.WaitToDo(wg.Wait)
 }
 
 func (p *eventSink) call(wait bool, data interface{}, doSth func(*eventSink)) {
