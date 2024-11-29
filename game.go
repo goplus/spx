@@ -1113,13 +1113,12 @@ func (p *Game) Username() string {
 }
 
 // -----------------------------------------------------------------------------
-
-func (p *Game) Wait__0() float64 {
+func (p *Game) WaitNextFrame() float64 {
 	return engine.WaitNextFrame()
 }
 
-func (p *Game) Wait__1(secs float64) float64 {
-	return engine.Wait(secs)
+func (p *Game) Wait(secs float64) {
+	engine.Wait(secs)
 }
 
 func (p *Game) Timer() float64 {
