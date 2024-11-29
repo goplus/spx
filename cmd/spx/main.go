@@ -41,6 +41,51 @@ func main() {
 	cmd := &CmdTool{}
 	cmdtool.RunCmd(cmd, "gdspx", version, proejct_fs, "template/project", "project", "installispx")
 }
+
+func (pself *CmdTool) CheckEnv() error {
+	dir, _ := filepath.Abs(cmdtool.TargetDir)
+	exist := CheckFileExist(dir, "spx", false)
+	if !exist {
+		return fmt.Errorf("can not find spx file, not a valid project dir")
+	}
+	return nil
+}
+func CheckFileExist(dir, ext string, recursive bool) bool {
+	if !strings.HasPrefix(ext, ".") {
+		ext = "." + ext
+	}
+
+	if recursive {
+		// Recursive search using filepath.Walk
+		err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if !info.IsDir() && strings.HasSuffix(info.Name(), ext) {
+				return fmt.Errorf("file found")
+			}
+			return nil
+		})
+
+		if err != nil && err.Error() == "file found" {
+			return true
+		}
+	} else {
+		// Non-recursive search, only check the top-level directory
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			return false
+		}
+
+		for _, entry := range entries {
+			if !entry.IsDir() && strings.HasSuffix(entry.Name(), ext) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
 func (pself *CmdTool) OnBeforeCheck(cmd string) error {
 	switch cmd {
 	case "installispx":
