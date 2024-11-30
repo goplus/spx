@@ -42,12 +42,23 @@ func (pself *ProxySprite) UpdateTextureAltas(path string, rect2 Rect2, renderSca
 	pself.SetRenderScale(NewVec2(renderScale, renderScale))
 }
 
-func (pself *ProxySprite) UpdatePosRot(x, y float64, rot float64) {
+func (pself *ProxySprite) UpdateTransform(x, y float64, rot float64, scale64 float64, isSync bool) {
 	pself.x = x
 	pself.y = y
-	pself.SetPosition(Vec2{X: float32(x), Y: float32(y)})
 	rad := HeadingToRad(rot)
-	pself.SetRotation(rad)
+	pos := Vec2{X: float32(x), Y: float32(y)}
+	scale := float32(scale64)
+	if !isSync {
+		pself.SetPosition(pos)
+		pself.SetRotation(rad)
+		pself.SetScaleX(scale)
+	} else {
+		WaitMainThread(func() {
+			pself.SetPosition(pos)
+			pself.SetRotation(rad)
+			pself.SetScaleX(scale)
+		})
+	}
 }
 
 func (pself *ProxySprite) OnTriggerEnter(target ISpriter) {
