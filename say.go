@@ -43,21 +43,12 @@ type sayOrThinker struct {
 }
 
 func (p *sayOrThinker) refresh() {
+	if p.panel == nil {
+		return
+	}
 	bound := p.sp.Bounds()
 	p.panel.SetText(float64(p.sp.g.getWidth()), float64(p.sp.g.getHeight()), bound.Center.X, bound.Center.Y, bound.Size.Width, bound.Size.Height, p.msg)
 }
-
-const (
-	sayCornerSize = 8
-	thinkRadius   = 5
-	screenGap     = 4
-	leadingWidth  = 15
-	gapWidth      = 40
-	trackDx       = 5
-	trackCx       = gapWidth + trackDx
-	trackCy       = 17
-	minWidth      = leadingWidth + leadingWidth + gapWidth
-)
 
 // -------------------------------------------------------------------------------------
 

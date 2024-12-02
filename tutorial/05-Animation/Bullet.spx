@@ -13,8 +13,8 @@ onCloned => {
 	setXYpos mouseX, mouseY
 	show
 	for {
-		wait 0.04
-		step 10
+		waitNextFrame
+		step 250 * deltaTime
 		if touching(Edge) {
 			destroy
 		}

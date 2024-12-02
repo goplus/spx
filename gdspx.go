@@ -17,7 +17,10 @@
 package spx
 
 import (
+	"fmt"
+	"log"
 	"math"
+	"strings"
 	"sync/atomic"
 
 	"github.com/goplus/spx/internal/engine"
@@ -96,6 +99,8 @@ func (sprite *SpriteImpl) checkInitProxy() {
 		sprite.proxy = engine.NewSpriteProxy(sprite)
 		initSpritePhysicInfo(sprite, sprite.proxy)
 		sprite.proxy.Name = sprite.name
+		sprite.proxy.SetTypeName(sprite.name)
+		sprite.proxy.SetVisible(sprite.isVisible)
 	}
 }
 
@@ -123,12 +128,7 @@ func (p *Game) updateProxy() {
 			// sync position
 			if sprite.isVisible {
 				sprite.updateProxyTransform(false)
-				if sprite.isCostumeAltas() {
-					proxy.UpdateTextureAltas(sprite.getCostumePath(), sprite.getCostumeAltasRegion().ToRect2(), sprite.getCostumeRenderScale())
-				} else {
-					proxy.UpdateTexture(sprite.getCostumePath(), sprite.getCostumeRenderScale())
-				}
-
+				checkUpdateCostume(&sprite.baseObj, false)
 				count++
 			}
 			proxy.SetVisible(sprite.isVisible)
@@ -144,6 +144,32 @@ func (p *Game) updateProxy() {
 		}
 	}
 	p.destroyItems = nil
+}
+
+func checkUpdateCostume(p *baseObj, isSync bool) {
+	if isSync {
+		engine.WaitMainThread(func() {
+			doCheckUpdateCostume(p)
+		})
+	} else {
+		doCheckUpdateCostume(p)
+	}
+}
+func doCheckUpdateCostume(p *baseObj) {
+	if !p.isCostumeDirty {
+		return
+	}
+	p.isCostumeDirty = false
+	path := p.getCostumePath()
+	renderScale := p.getCostumeRenderScale()
+	rect := p.getCostumeAltasRegion().ToRect2()
+	isAltas := p.isCostumeAltas()
+	pself := p.proxy
+	if isAltas {
+		pself.UpdateTextureAltas(path, rect, renderScale)
+	} else {
+		pself.UpdateTexture(path, renderScale)
+	}
 }
 
 func (*Game) updatePhysic() {
@@ -204,18 +230,23 @@ func initSpritePhysicInfo(sprite *SpriteImpl, proxy *engine.ProxySprite) {
 	case physicColliderNone:
 		proxy.SetTriggerEnabled(false)
 	}
-
 }
 
 func getCostumeBoundByAlpha(p *SpriteImpl, pscale float64) (math32.Vector2, math32.Vector2) {
 	cs := p.costumes[p.costumeIndex_]
 	var rect gdspx.Rect2
 	// GetBoundFromAlpha is very slow, so we should cache the result
-	if cache, ok := cachedBounds[cs.path]; ok {
-		rect = cache
+	if cs.isAltas() {
+		rect = p.getCostumeAltasRegion().ToRect2()
+		rect.Position.X = 0
+		rect.Position.Y = 0
 	} else {
-		assetPath := engine.ToAssetPath(cs.path)
-		rect = gdspx.ResMgr.GetBoundFromAlpha(assetPath)
+		if cache, ok := cachedBounds[cs.path]; ok {
+			rect = cache
+		} else {
+			assetPath := engine.ToAssetPath(cs.path)
+			rect = gdspx.ResMgr.GetBoundFromAlpha(assetPath)
+		}
 		cachedBounds[cs.path] = rect
 	}
 	scale := pscale / float64(cs.bitmapResolution)
@@ -263,4 +294,44 @@ func applyRenderOffset(p *SpriteImpl, cx, cy *float64) {
 
 	*cx = *cx + x
 	*cy = *cy + y
+}
+
+func registerAnimToEngine(spriteName string, animName string, animCfg *aniConfig, costumes []*costume, isCostumeSet bool) {
+	sb := strings.Builder{}
+	from, to := animCfg.IFrameFrom, animCfg.IFrameTo
+	if from >= len(costumes) {
+		log.Panicf("animation key [%s] from [%d] is out of costumes length [%d]", animName, from, len(costumes))
+		return
+	}
+	if isCostumeSet {
+		assetPath := engine.ToAssetPath(costumes[0].path)
+		sb.WriteString(assetPath)
+		sb.WriteString(";")
+		ary := make([]int, 0)
+		if from <= to {
+			for i := from; i <= to; i++ {
+				ary = append(ary, i)
+			}
+		} else {
+			for i := from; i >= to; i-- {
+				ary = append(ary, i)
+			}
+		}
+		for _, i := range ary {
+			costume := costumes[i]
+			sb.WriteString(fmt.Sprintf("%d,%d,%d,%d", costume.posX, costume.posY, costume.width, costume.height))
+			if i != to {
+				sb.WriteString(",")
+			}
+		}
+	} else {
+		for i := from; i <= to; i++ {
+			assetPath := engine.ToAssetPath(costumes[i].path)
+			sb.WriteString(assetPath)
+			if i != to {
+				sb.WriteString(";")
+			}
+		}
+	}
+	engine.SyncResCreateAnimation(spriteName, animName, sb.String(), int64(animCfg.FrameFps), isCostumeSet)
 }

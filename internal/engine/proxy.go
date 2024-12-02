@@ -18,11 +18,6 @@ func NewSpriteProxy(obj interface{}) *ProxySprite {
 	return proxy
 }
 
-func (pself *ProxySprite) OnCostumeChange(path string) {
-	//resPath := enginePathPrefix + "assets/" + path
-	//println("OnCostumeChange", resPath)
-}
-
 func (pself *ProxySprite) UpdateTexture(path string, renderScale float64) {
 	if path == "" {
 		return

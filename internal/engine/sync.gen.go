@@ -282,6 +282,13 @@ func SyncPlatformSetTimeScale(time_scale float32) {
 }
 
 // IResMgr
+func SyncResCreateAnimation(sprite_type_name string, anim_name string, context string, fps int64, is_altas bool) int64 {
+	var _ret1 int64
+	WaitMainThread(func() {
+		_ret1 = ResMgr.CreateAnimation(sprite_type_name, anim_name, context, fps, is_altas)
+	})
+	return _ret1
+}
 func SyncResSetLoadMode(is_direct_mode bool) {
 	WaitMainThread(func() {
 		ResMgr.SetLoadMode(is_direct_mode)
@@ -356,6 +363,11 @@ func SyncSpriteSetProcess(obj Object, is_on bool) {
 func SyncSpriteSetPhysicProcess(obj Object, is_on bool) {
 	WaitMainThread(func() {
 		SpriteMgr.SetPhysicProcess(obj, is_on)
+	})
+}
+func SyncSpriteSetTypeName(obj Object, type_name string) {
+	WaitMainThread(func() {
+		SpriteMgr.SetTypeName(obj, type_name)
 	})
 }
 func SyncSpriteSetChildPosition(obj Object, path string, pos Vec2) {
@@ -537,9 +549,9 @@ func SyncSpriteSetZIndex(obj Object, z int64) {
 		SpriteMgr.SetZIndex(obj, z)
 	})
 }
-func SyncSpritePlayAnim(obj Object, p_name string, p_custom_scale float32, p_from_end bool) {
+func SyncSpritePlayAnim(obj Object, p_name string, p_speed float32, p_revert bool) {
 	WaitMainThread(func() {
-		SpriteMgr.PlayAnim(obj, p_name, p_custom_scale, p_from_end)
+		SpriteMgr.PlayAnim(obj, p_name, p_speed, p_revert)
 	})
 }
 func SyncSpritePlayBackwardsAnim(obj Object, p_name string) {

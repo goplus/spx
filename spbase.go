@@ -149,10 +149,18 @@ func (p *costume) isAltas() bool {
 // -------------------------------------------------------------------------------------
 
 type baseObj struct {
-	costumes      []*costume
-	costumeIndex_ int
-	proxy         *engine.ProxySprite
-	HasDestroyed  bool
+	costumes       []*costume
+	costumeIndex_  int
+	proxy          *engine.ProxySprite
+	scale          float64
+	HasDestroyed   bool
+	isCostumeSet   bool
+	isCostumeDirty bool
+}
+
+func (p *baseObj) setCustumeIndex(value int) {
+	p.costumeIndex_ = value
+	p.isCostumeDirty = true
 }
 
 func (p *baseObj) getProxy() *engine.ProxySprite {
@@ -172,8 +180,7 @@ func (p *baseObj) initWith(base string, sprite *spriteConfig) {
 	if costumeIndex >= nx || costumeIndex < 0 {
 		costumeIndex = 0
 	}
-	p.costumeIndex_ = costumeIndex
-	p.onCostumeChange()
+	p.setCustumeIndex(costumeIndex)
 }
 
 func initWithCMPS(p *baseObj, base string, cmps *costumeMPSet) {
@@ -200,6 +207,7 @@ func initWithCS(p *baseObj, base string, cs *costumeSet) {
 }
 
 func initCSPart(p *baseObj, img *costumeSetImage, faceRight float64, bitmapResolution, nx int, items []costumeSetItem) {
+	p.isCostumeSet = true
 	if nx == 1 {
 		name := strconv.Itoa(len(p.costumes))
 		addCostumeWith(p, name, img, faceRight, 0, bitmapResolution)
@@ -236,8 +244,7 @@ func (p *baseObj) initBackdrops(base string, costumes []*backdropConfig, costume
 	if costumeIndex >= len(costumes) || costumeIndex < 0 {
 		costumeIndex = 0
 	}
-	p.costumeIndex_ = costumeIndex
-	p.onCostumeChange()
+	p.setCustumeIndex(costumeIndex)
 }
 
 func (p *baseObj) init(base string, costumes []*costumeConfig, costumeIndex int) {
@@ -248,19 +255,19 @@ func (p *baseObj) init(base string, costumes []*costumeConfig, costumeIndex int)
 	if costumeIndex >= len(costumes) || costumeIndex < 0 {
 		costumeIndex = 0
 	}
-	p.costumeIndex_ = costumeIndex
-	p.onCostumeChange()
+	p.setCustumeIndex(costumeIndex)
 }
 
 func (p *baseObj) initWithSize(width, height int) {
 	p.costumes = make([]*costume, 1)
 	p.costumes[0] = newCostumeWithSize(width, height)
-	p.costumeIndex_ = 0
+	p.setCustumeIndex(0)
+
 }
 
 func (p *baseObj) initFrom(src *baseObj) {
 	p.costumes = src.costumes
-	p.costumeIndex_ = src.costumeIndex_
+	p.setCustumeIndex(src.costumeIndex_)
 }
 
 func (p *baseObj) findCostume(name string) int {
@@ -296,16 +303,11 @@ func (p *baseObj) setCostumeByIndex(idx int) bool {
 	if idx >= len(p.costumes) {
 		panic("invalid costume index")
 	}
-	if p.costumeIndex_ != idx {
-		p.costumeIndex_ = idx
-		p.onCostumeChange()
-		return true
-	}
-	return false
+	isDirty := p.costumeIndex_ != idx
+	p.setCustumeIndex(idx)
+	return isDirty
 }
-func (p *baseObj) onCostumeChange() {
-	p.proxy.OnCostumeChange(p.getCostumePath())
-}
+
 func (p *baseObj) setCostumeByName(name string) bool {
 	if idx := p.findCostume(name); idx >= 0 {
 		return p.setCostumeByIndex(idx)
@@ -314,11 +316,13 @@ func (p *baseObj) setCostumeByName(name string) bool {
 }
 
 func (p *baseObj) goPrevCostume() {
-	p.costumeIndex_ = (len(p.costumes) + p.costumeIndex_ - 1) % len(p.costumes)
+	index := (len(p.costumes) + p.costumeIndex_ - 1) % len(p.costumes)
+	p.setCustumeIndex(index)
 }
 
 func (p *baseObj) goNextCostume() {
-	p.costumeIndex_ = (p.costumeIndex_ + 1) % len(p.costumes)
+	index := (p.costumeIndex_ + 1) % len(p.costumes)
+	p.setCustumeIndex(index)
 }
 
 func (p *baseObj) getCostumeIndex() int {
@@ -332,7 +336,7 @@ func (p *baseObj) getCostumePath() string {
 	return p.costumes[p.costumeIndex_].path
 }
 func (p *baseObj) getCostumeRenderScale() float64 {
-	return 1.0 / float64(p.costumes[p.costumeIndex_].bitmapResolution)
+	return 1.0 / float64(p.costumes[p.costumeIndex_].bitmapResolution) * p.scale
 }
 func (p *baseObj) getCostumeSize() (float64, float64) {
 	x, y := p.costumes[p.costumeIndex_].getSize()

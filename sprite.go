@@ -21,9 +21,7 @@ import (
 	"log"
 	"math"
 	"reflect"
-	"sync"
 
-	"github.com/goplus/spx/internal/anim"
 	"github.com/goplus/spx/internal/engine"
 	"github.com/goplus/spx/internal/gdi"
 	"github.com/goplus/spx/internal/math32"
@@ -162,7 +160,6 @@ type SpriteImpl struct {
 	name   string
 
 	x, y          float64
-	scale         float64
 	direction     float64
 	rotationStyle RotationStyle
 	rRect         *math32.RotatedRect
@@ -193,8 +190,7 @@ type SpriteImpl struct {
 	hasOnTouchEnd   bool
 
 	gamer               reflect.Value
-	lastAnim            *anim.Anim
-	isWaitingStopAnim   bool
+	curAnimState        *animState
 	defaultCostumeIndex int
 
 	triggerMask   int64
@@ -264,18 +260,15 @@ func (p *SpriteImpl) init(
 	p.triggerSize = spriteCfg.TriggerSize
 	p.triggerRadius = spriteCfg.TriggerRadius
 
+	// setup animations
 	p.defaultAnimation = spriteCfg.DefaultAnimation
 	p.animations = make(map[string]*aniConfig)
-	for key, val := range spriteCfg.FAnimations {
+	anims := spriteCfg.FAnimations
+	for key, val := range anims {
 		var ani = val
 		_, ok := p.animations[key]
 		if ok {
 			log.Panicf("animation key [%s] is exist", key)
-		}
-		oldFps := ani.Fps
-		oldFrameFps := ani.FrameFps
-		if oldFps == 0 {
-			ani.Fps = 25
 		}
 		if ani.FrameFps == 0 {
 			ani.FrameFps = 25
@@ -286,75 +279,20 @@ func (p *SpriteImpl) init(
 		if ani.StepDuration == 0 {
 			ani.StepDuration = 0.01
 		}
-		switch ani.AniType {
-		case aniTypeFrame:
-			if ani.From == nil {
-				if ani.FrameFrom != "" {
-					ani.From = ani.FrameFrom
-				} else {
-					log.Panicf("animation key [%s] missing FrameFrom ", key)
-				}
-				if ani.FrameTo != "" {
-					ani.To = ani.FrameTo
-				} else {
-					log.Panicf("animation key [%s] missing FrameTo ", key)
-				}
-			} else {
-				if str, ok := ani.From.(string); ok && str != "" {
-					ani.FrameFrom = ani.From.(string)
-					ani.FrameTo = ani.To.(string)
-				}
-				ani.From, ani.To = p.getFromAnToForAniFrames(ani.From, ani.To)
-			}
-			from, to := p.getFromAnToForAniFrames(ani.From, ani.To)
-			if oldFps == 0 && oldFrameFps != 0 {
-				ani.Fps = float64(oldFrameFps)
-				ani.FrameFps = oldFrameFps
-				ani.Duration = math.Abs(to-from) / ani.Fps
-			} else if oldFps != 0 {
-				ani.Fps = oldFps
-				ani.FrameFps = int(oldFps)
-				ani.Duration = math.Abs(to-from) / ani.Fps
-			} else {
-				ani.Fps = math.Abs(to-from) / ani.Duration
-				ani.FrameFps = int(ani.Fps)
-			}
-		case aniTypeMove:
-		case aniTypeTurn:
-		case aniTypeGlide:
-		default:
-			log.Panicf("unknown animation type [%s] is exist[%d]", key, ani.AniType)
-		}
+		from, to := p.getFromAnToForAniFrames(ani.FrameFrom, ani.FrameTo)
+		ani.IFrameFrom, ani.IFrameTo = int(from), int(to)
+		ani.Speed = 1
+		ani.Duration = math.Abs(float64(ani.IFrameFrom-ani.IFrameTo)) / float64(ani.FrameFps)
+		println(p.name, key, "ani.StepDuration ", int(ani.StepDuration*1000))
 		p.animations[key] = ani
 	}
 
-	for key, val := range spriteCfg.MAnimations {
-		_, ok := p.animations[key]
-		if ok {
-			log.Panicf("animation key [%s] is exist", key)
-		}
-		var ani = val
-		ani.AniType = aniTypeMove
-		if ani.Fps == 0 {
-			ani.Fps = 25
-		}
-		p.animations[key] = ani
+	// register animations to engine
+	for animName, ani := range p.animations {
+		registerAnimToEngine(p.name, animName, ani, p.baseObj.costumes, p.isCostumeSet)
 	}
-
-	for key, val := range spriteCfg.TAnimations {
-		_, ok := p.animations[key]
-		if ok {
-			log.Panicf("animation key [%s] is exist", key)
-		}
-		var ani = val
-		ani.AniType = aniTypeTurn
-		if ani.Fps == 0 {
-			ani.Fps = 25
-		}
-		p.animations[key] = ani
-	}
-
 }
+
 func (p *SpriteImpl) awake() {
 	p.playDefaultAnim()
 }
@@ -439,7 +377,7 @@ func applySpriteProps(dest *SpriteImpl, v specsp) {
 		panic("please change `currentCostumeIndex` => `costumeIndex` in index.json")
 	}
 	if idx, ok := v["costumeIndex"]; ok {
-		dest.costumeIndex_ = int(idx.(float64))
+		dest.setCustumeIndex(int(idx.(float64)))
 	}
 	dest.isCloned_ = false
 }
@@ -463,6 +401,7 @@ func cloneSprite(out reflect.Value, outPtr Sprite, in reflect.Value, v specsp) *
 		}
 	}()
 	dest.sprite = outPtr
+	dest.isCostumeDirty = true
 	if v != nil { // in loadSprite
 		applySpriteProps(dest, v)
 	} else { // in sprite.Clone
@@ -567,14 +506,10 @@ func (p *SpriteImpl) OnTouchStart__3(name string, onTouchStart func()) {
 type MovingInfo struct {
 	OldX, OldY float64
 	NewX, NewY float64
-	ani        *anim.Anim
 	Obj        *SpriteImpl
 }
 
 func (p *MovingInfo) StopMoving() {
-	if p.ani != nil {
-		p.ani.Stop()
-	}
 }
 
 func (p *MovingInfo) Dx() float64 {
@@ -771,185 +706,118 @@ func (p *SpriteImpl) getStateAnimName(stateName string) string {
 	return stateName
 }
 
-func lerp(a float64, b float64, progress float64) float64 {
-	return a + (b-a)*progress
+type animState struct {
+	AniType  aniTypeEnum
+	Name     string
+	Duration float64
+	From     interface{}
+	To       interface{}
+	Speed    float64
+	IsLoop   bool
+
+	OnStart      *actionConfig
+	OnPlay       *actionConfig
+	IsCanceled   bool
+	IsKeepOnStop bool
 }
+
 func (p *SpriteImpl) goAnimate(name string, ani *aniConfig) {
 	p.goAnimateInternal(name, ani, true)
 }
-func (p *SpriteImpl) goAnimateInternal(name string, ani *aniConfig, isBlocking bool) {
-	if p.lastAnim != nil {
-		p.isWaitingStopAnim = true
-		p.lastAnim.Stop()
-		p.isWaitingStopAnim = false
-	}
 
-	var animwg sync.WaitGroup
+func (p *SpriteImpl) goAnimateInternal(name string, ani *aniConfig, isBlocking bool) *animState {
+	info := &animState{
+		AniType:      ani.AniType,
+		Name:         name,
+		Duration:     ani.Duration,
+		From:         ani.From,
+		To:           ani.To,
+		Speed:        ani.Speed,
+		IsLoop:       ani.IsLoop,
+		OnStart:      ani.OnStart,
+		OnPlay:       ani.OnPlay,
+		IsKeepOnStop: ani.IsKeepOnStop,
+		IsCanceled:   false,
+	}
+	if p.curAnimState != nil {
+		p.curAnimState.IsCanceled = true
+	}
+	p.curAnimState = info
 	if isBlocking {
-		animwg.Add(1)
-	}
-
-	if ani.OnStart != nil && ani.OnStart.Play != "" {
-		p.g.Play__3(ani.OnStart.Play)
-	}
-
-	//anim frame
-	fromval, toval := p.getFromAnToForAni(ani.AniType, ani.From, ani.To)
-	frameFrom, frameTo := 0.0, 0.0
-	hasExtraChannel := ani.FrameFrom != "" && ani.FrameTo != ""
-	if hasExtraChannel {
-		frameFrom, frameTo = p.getFromAnToForAniFrames(ani.FrameFrom, ani.FrameTo)
-	}
-	fromvalf, tovalf := 0.0, 0.0
-	if hasExtraChannel {
-		fromvalf = frameFrom
-		tovalf = frameTo
+		doAnimation(p, info)
 	} else {
-		if ani.AniType != aniTypeGlide {
-			// glide animation, the type of value is vector2, not float
-			fromvalf, _ = tools.GetFloat(fromval)
-			tovalf, _ = tools.GetFloat(toval)
-		}
+		engine.Go(p.pthis, func() {
+			doAnimation(p, info)
+		})
 	}
+	return info
+}
 
-	if ani.AniType == aniTypeFrame {
-		p.goSetCostume(ani.From)
-		if ani.Fps == 0 { //compute fps
-			ani.Fps = math.Abs(tovalf-fromvalf) / ani.Duration
-		} else {
-			ani.Duration = math.Abs(tovalf-fromvalf) / ani.Fps
-		}
+func doAnimation(p *SpriteImpl, info *animState) {
+	animName := info.Name
+	for p.proxy == nil {
+		engine.WaitNextFrame()
 	}
-
-	framenum := int(ani.Duration * ani.Fps)
-	if !ani.IsLoop {
-		framenum = int(math.Round(math.Abs(tovalf - fromvalf)))
-	}
-	fps := ani.Fps
-
-	pre_x := p.x
-	pre_y := p.y
-	pre_direction := p.direction //turn p.direction
-
-	an := anim.NewAnim(name, fps, framenum, ani.IsLoop)
-	// create channels
-	defaultChannel := []*anim.AnimationKeyFrame{{Frame: 0, Value: fromval}, {Frame: framenum, Value: toval}}
-	switch ani.AniType {
-	case aniTypeFrame:
-		an.AddChannel(AnimChannelFrame, anim.AnimValTypeInt, defaultChannel)
-	case aniTypeMove:
-		an.AddChannel(AnimChannelMove, anim.AnimValTypeFloat, defaultChannel)
-	case aniTypeTurn:
-		an.AddChannel(AnimChannelTurn, anim.AnimValTypeFloat, defaultChannel)
-	case aniTypeGlide:
-		an.AddChannel(AnimChannelGlide, anim.AnimValTypeVector2, defaultChannel)
-	}
-	if hasExtraChannel && ani.AniType != aniTypeFrame {
-		iFrameFrom := int(math.Round(frameFrom))
-		iFrameTo := int(math.Round(frameTo))
-		frameCount := iFrameTo - iFrameFrom + 1
-		framePerIter := int(float64(frameCount) * ani.Fps / float64(ani.FrameFps))
-		iterCount := int(framenum / framePerIter)
-		is_need_ext := framenum != iterCount*int(ani.FrameFps)
-		arySize := iterCount * 2
-		if is_need_ext {
-			arySize += 2
+	engine.WaitMainThread(func() {
+		if info.IsCanceled {
+			return
 		}
-		keyFrames := make([]*anim.AnimationKeyFrame, arySize)
-		i := 0
-		for ; i < iterCount; i++ {
-			offset := framePerIter * i
-			keyFrames[i*2+0] = &anim.AnimationKeyFrame{Frame: offset + 0, Value: iFrameFrom}
-			keyFrames[i*2+1] = &anim.AnimationKeyFrame{Frame: offset + framePerIter - 1, Value: iFrameTo}
-		}
-		if is_need_ext {
-			offset := framePerIter * i
-			finalFrame := framenum - offset
-			lastDuration := float64(finalFrame) / float64(framePerIter)
-			finalIFrame := int(lastDuration * float64(frameCount))
-			keyFrames[i*2+0] = &anim.AnimationKeyFrame{Frame: offset + 0, Value: iFrameFrom}
-			keyFrames[i*2+1] = &anim.AnimationKeyFrame{Frame: offset + finalFrame - 1, Value: iFrameFrom + finalIFrame}
-		}
-		an.AddChannel(AnimChannelFrame, anim.AnimValTypeInt, keyFrames)
-	}
-
-	p.lastAnim = an
-	if debugInstr {
-		log.Printf("New anim [name %s id %d] from:%v to:%v framenum:%d fps:%f", an.Name, an.Id, fromval, toval, framenum, fps)
-	}
-	an.SetOnPlayingListener(func(currframe int, isReplay bool, progress float64) {
-		if debugInstr {
-			log.Printf("playing anim [name %s id %d]  currframe %d", an.Name, an.Id, currframe)
-		}
-		if isReplay && ani.IsLoop {
-			if ani.OnStart != nil && ani.OnStart.Play != "" {
-				p.g.Play__3(ani.OnStart.Play)
-			}
-		}
-		frameValue := an.SampleChannel(AnimChannelFrame)
-		if frameValue != nil {
-			val, _ := tools.GetFloat(frameValue)
-			p.setCostumeByIndex(int(val))
-		}
-		moveValue := an.SampleChannel(AnimChannelMove)
-		if moveValue != nil {
-			val, _ := tools.GetFloat(moveValue)
-			sin, cos := math.Sincos(toRadian(pre_direction))
-			p.doMoveToForAnim(pre_x+val*sin, pre_y+val*cos, an)
-		}
-		turnValue := an.SampleChannel(AnimChannelTurn)
-		if turnValue != nil {
-			val, _ := tools.GetFloat(turnValue)
-			p.setDirection(val, false)
-		}
-		glideValue := an.SampleChannel(AnimChannelGlide)
-		if glideValue != nil {
-			val, ok := glideValue.(*math32.Vector2)
-			if ok {
-				p.SetXYpos(val.X, val.Y)
-			}
-		}
-		playaction := ani.OnPlay
-		if playaction != nil {
-			if ani.AniType != aniTypeFrame && playaction.Costumes != nil {
-				costumes := playaction.Costumes
-				costumesFrom, costumesTo := p.getFromAnToForAni(aniTypeFrame, costumes.From, costumes.To)
-				costumesFromf, _ := costumesFrom.(float64)
-				costumesTof, _ := costumesTo.(float64)
-				costumeval := ((int)(costumesTof-costumesFromf) + currframe) % (int)(costumesTof)
-				p.setCostumeByIndex(costumeval)
-			}
-		}
+		p.isCostumeDirty = false
+		p.proxy.PlayAnim(animName, float32(info.Speed), info.IsLoop)
 	})
-	isNeedPlayDefault := false
-	an.SetOnStopingListener(func() {
-		if debugInstr {
-			log.Printf("stop anim [name %s id %d]  ", an.Name, an.Id)
+	if info.OnStart != nil && info.OnStart.Play != "" {
+		p.g.Play__3(info.OnStart.Play)
+	}
+	if info.AniType == aniTypeFrame {
+		for engine.SyncSpriteIsPlayingAnim(p.proxy.Id) {
+			if info.IsCanceled {
+				break
+			}
+			engine.WaitNextFrame()
 		}
-		if isBlocking {
-			animwg.Done()
+	} else {
+		duration := info.Duration
+		timer := 0.0
+		pre_x, pre_y := p.x, p.y
+		pre_direction := p.direction
+		for timer < duration {
+			percent := timer / duration
+			switch info.AniType {
+			case aniTypeMove:
+				src, _ := tools.GetFloat(info.From)
+				dst, _ := tools.GetFloat(info.To)
+				val := math32.Lerp(src, dst, percent)
+				sin, cos := math.Sincos(toRadian(pre_direction))
+				p.doMoveToForAnim(pre_x+val*sin, pre_y+val*cos)
+			case aniTypeGlide:
+				src, _ := tools.GetVec2(info.From)
+				dst, _ := tools.GetVec2(info.To)
+				val := math32.LerpVec2(src, dst, percent)
+				p.SetXYpos(val.X, val.Y)
+			case aniTypeTurn:
+				src, _ := tools.GetFloat(info.From)
+				dst, _ := tools.GetFloat(info.To)
+				val := math32.Lerp(src, dst, percent)
+				p.setDirection(val, false)
+			}
+			if info.IsCanceled {
+				break
+			}
+			engine.WaitNextFrame()
+			timer += time.DeltaTime()
 		}
-		p.lastAnim = nil
-		if !p.isWaitingStopAnim && name != p.defaultAnimation && p.isVisible && !ani.IsKeepOnStop {
+	}
+	if !info.IsCanceled {
+		isNeedPlayDefault := false
+		if animName != p.defaultAnimation && p.isVisible && !info.IsKeepOnStop {
 			dieAnimName := p.getStateAnimName(StateDie)
-			if name != dieAnimName {
+			if animName != dieAnimName {
 				isNeedPlayDefault = true
 			}
 		}
-	})
-
-	var h *tickHandler
-	h = p.g.startTick(-1, func(tick int64) {
-		runing := an.Update(1000.0 / p.g.currentTPS() * float64(tick))
-		if !runing {
-			h.Stop()
+		if isNeedPlayDefault {
+			p.playDefaultAnim()
 		}
-	})
-	if isBlocking {
-		engine.WaitToDo(animwg.Wait)
-	}
-	if isNeedPlayDefault {
-		p.playDefaultAnim()
 	}
 }
 
@@ -1033,13 +901,13 @@ func (p *SpriteImpl) DistanceTo(obj interface{}) float64 {
 }
 
 func (p *SpriteImpl) doMoveTo(x, y float64) {
-	p.doMoveToForAnim(x, y, nil)
+	p.doMoveToForAnim(x, y)
 }
 
-func (p *SpriteImpl) doMoveToForAnim(x, y float64, ani *anim.Anim) {
+func (p *SpriteImpl) doMoveToForAnim(x, y float64) {
 	x, y = p.fixWorldRange(x, y)
 	if p.hasOnMoving {
-		mi := &MovingInfo{OldX: p.x, OldY: p.y, NewX: x, NewY: y, Obj: p, ani: ani}
+		mi := &MovingInfo{OldX: p.x, OldY: p.y, NewX: x, NewY: y, Obj: p}
 		p.doWhenMoving(p, mi)
 	}
 	if p.isPenDown {
@@ -1087,7 +955,7 @@ func (p *SpriteImpl) Step__2(step float64, animname string) {
 		anicopy.To = step
 		anicopy.AniType = aniTypeMove
 		anicopy.Duration = math.Abs(step) * ani.StepDuration
-
+		anicopy.IsLoop = true
 		p.goAnimate(animname, &anicopy)
 		return
 	}
@@ -1098,19 +966,16 @@ func (p *SpriteImpl) playDefaultAnim() {
 	animName := p.defaultAnimation
 	if p.isVisible {
 		isPlayAnim := false
-		if animName != "" {
-			if ani, ok := p.animations[animName]; ok {
-				isPlayAnim = true
-				anicopy := *ani
-				anicopy.IsLoop = true
-				p.goAnimateInternal(animName, &anicopy, false)
-			}
+		if ani, ok := p.animations[animName]; ok {
+			isPlayAnim = true
+			anicopy := *ani
+			anicopy.IsLoop = true
+			p.goAnimateInternal(animName, &anicopy, false)
 		}
 		if !isPlayAnim {
 			p.goSetCostume(p.defaultCostumeIndex)
 		}
 	}
-
 }
 
 // Goto func:
@@ -1134,11 +999,11 @@ func (p *SpriteImpl) Glide__0(x, y float64, secs float64) {
 	x0, y0 := p.getXY()
 	ani := &aniConfig{
 		Duration: secs,
-		Fps:      24.0,
 		From:     math32.NewVector2(x0, y0),
 		To:       math32.NewVector2(x, y),
 		AniType:  aniTypeGlide,
 	}
+	ani.IsLoop = true
 	animName := p.getStateAnimName(StateGlide)
 	p.goAnimate(animName, ani)
 }
@@ -1245,6 +1110,8 @@ func (p *SpriteImpl) Turn(val interface{}) {
 		anicopy.From = p.direction
 		anicopy.To = p.direction + delta
 		anicopy.Duration = ani.TurnToDuration / 360.0 * math.Abs(delta)
+		anicopy.AniType = aniTypeTurn
+		anicopy.IsLoop = true
 		p.goAnimate(animName, &anicopy)
 		return
 	}
@@ -1295,6 +1162,7 @@ func (p *SpriteImpl) TurnTo(obj interface{}) {
 		anicopy.To = toangle
 		anicopy.Duration = ani.TurnToDuration / 360.0 * math.Abs(delta)
 		anicopy.AniType = aniTypeTurn
+		anicopy.IsLoop = true
 		p.goAnimate(animName, &anicopy)
 		return
 	}
@@ -1688,11 +1556,6 @@ func (p *SpriteImpl) fixWorldRange(x, y float64) (float64, float64) {
 	}
 
 	return x, y
-}
-
-// -----------------------------------------------------------------------------
-func (p *SpriteImpl) getCostumeRenderScale() float64 {
-	return p.baseObj.getCostumeRenderScale() * p.scale
 }
 
 // ------------------------ Extra events ----------------------------------------

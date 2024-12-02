@@ -11,8 +11,8 @@ onCloned => {
 	setXYpos rand(-131, 131), 237
 	show
 	for {
-		wait 0.05
-		changeYpos -2.4
+		waitNextFrame
+		changeYpos -48 * deltaTime
 		if touching(EdgeBottom) {
 			destroy
 		}
