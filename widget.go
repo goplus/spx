@@ -1,7 +1,7 @@
 package spx
 
 type Widget interface {
-	GetName() string
+	GetName() WidgetName
 	Visible() bool
 	Show()
 	Hide()
@@ -19,3 +19,5 @@ type Widget interface {
 	SetSize(size float64)
 	ChangeSize(delta float64)
 }
+
+type WidgetName = string

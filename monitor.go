@@ -37,7 +37,7 @@ import (
 // Monitor class.
 type Monitor struct {
 	game    *Game
-	name    string
+	name    WidgetName
 	size    float64
 	target  string
 	val     string
@@ -304,7 +304,7 @@ func (p *Monitor) hit(hc hitContext) (hr hitResult, ok bool) {
 
 // -------------------------------------------------------------------------------------
 // IWidget
-func (pself *Monitor) GetName() string {
+func (pself *Monitor) GetName() WidgetName {
 	return pself.name
 }
 

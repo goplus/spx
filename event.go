@@ -213,17 +213,17 @@ func (p *eventSinkMgr) doWhenIReceive(msg string, data interface{}, wait bool) {
 	})
 }
 
-func (p *eventSinkMgr) doWhenBackdropChanged(name string, wait bool) {
+func (p *eventSinkMgr) doWhenBackdropChanged(name BackdropName, wait bool) {
 	p.allWhenBackdropChanged.call(wait, name, func(ev *eventSink) {
-		ev.sink.(func(string))(name)
+		ev.sink.(func(BackdropName))(name)
 	})
 }
 
 // -------------------------------------------------------------------------------------
 type IEventSinks interface {
 	OnAnyKey(onKey func(key Key))
-	OnBackdrop__0(onBackdrop func(name string))
-	OnBackdrop__1(name string, onBackdrop func())
+	OnBackdrop__0(onBackdrop func(name BackdropName))
+	OnBackdrop__1(name BackdropName, onBackdrop func())
 	OnClick(onClick func())
 	OnKey__0(key Key, onKey func())
 	OnKey__1(keys []Key, onKey func(Key))
@@ -361,7 +361,7 @@ func (p *eventSinks) OnMsg__1(msg string, onMsg func()) {
 	}
 }
 
-func (p *eventSinks) OnBackdrop__0(onBackdrop func(name string)) {
+func (p *eventSinks) OnBackdrop__0(onBackdrop func(name BackdropName)) {
 	p.allWhenBackdropChanged = &eventSink{
 		prev:  p.allWhenBackdropChanged,
 		pthis: p.pthis,
@@ -369,18 +369,18 @@ func (p *eventSinks) OnBackdrop__0(onBackdrop func(name string)) {
 	}
 }
 
-func (p *eventSinks) OnBackdrop__1(name string, onBackdrop func()) {
+func (p *eventSinks) OnBackdrop__1(name BackdropName, onBackdrop func()) {
 	p.allWhenBackdropChanged = &eventSink{
 		prev:  p.allWhenBackdropChanged,
 		pthis: p.pthis,
-		sink: func(name string) {
+		sink: func(name BackdropName) {
 			if debugEvent {
 				log.Println("==> onBackdrop", name, nameOf(p.pthis))
 			}
 			onBackdrop()
 		},
 		cond: func(data interface{}) bool {
-			return data.(string) == name
+			return data.(BackdropName) == name
 		},
 	}
 }

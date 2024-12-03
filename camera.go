@@ -59,9 +59,9 @@ func (c *Camera) worldToScreen(point *math32.Vector2) *math32.Vector2 {
 }
 */
 
-func (c *Camera) On(obj interface{}) {
+func (c *Camera) on(obj interface{}) {
 	switch v := obj.(type) {
-	case string:
+	case SpriteName:
 		sp := c.g.findSprite(v)
 		if sp == nil {
 			log.Println("Camera.On: sprite not found -", v)
@@ -81,6 +81,22 @@ func (c *Camera) On(obj interface{}) {
 		panic("Camera.On: unexpected parameter")
 	}
 	c.on_ = obj
+}
+
+func (c *Camera) On__0(sprite Sprite) {
+	c.on(sprite)
+}
+
+func (c *Camera) On__1(sprite *SpriteImpl) {
+	c.on(sprite)
+}
+
+func (c *Camera) On__2(sprite SpriteName) {
+	c.on(sprite)
+}
+
+func (c *Camera) On__3(obj specialObj) {
+	c.on(obj)
 }
 
 func (c *Camera) updateOnObj() {
