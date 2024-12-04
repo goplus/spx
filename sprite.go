@@ -282,8 +282,7 @@ func (p *SpriteImpl) init(
 		from, to := p.getFromAnToForAniFrames(ani.FrameFrom, ani.FrameTo)
 		ani.IFrameFrom, ani.IFrameTo = int(from), int(to)
 		ani.Speed = 1
-		ani.Duration = math.Abs(float64(ani.IFrameFrom-ani.IFrameTo)) / float64(ani.FrameFps)
-		println(p.name, key, "ani.StepDuration ", int(ani.StepDuration*1000))
+		ani.Duration = (math.Abs(float64(ani.IFrameFrom-ani.IFrameTo)) + 1) / float64(ani.FrameFps)
 		p.animations[key] = ani
 	}
 
