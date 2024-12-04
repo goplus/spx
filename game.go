@@ -517,6 +517,8 @@ func (p *Game) setupBackdrop() {
 	}
 	scaleX := dstW / imgW
 	scaleY := dstH / imgH
+	p.scale = 1
+	checkUpdateCostume(&p.baseObj, true)
 	engine.SyncSpriteSetScale(p.proxy.GetId(), engine.NewVec2(scaleX, scaleY))
 }
 

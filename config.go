@@ -215,12 +215,8 @@ type actionConfig struct {
 }
 
 type aniConfig struct {
-	Duration       float64     `json:"duration"`
-	Fps            float64     `json:"fps"`
-	From           interface{} `json:"from"`
-	To             interface{} `json:"to"`
-	FrameFrom      string      `json:"frameFrom"`
-	FrameTo        string      `json:"frameTo"`
+	FrameFrom      interface{} `json:"frameFrom"`
+	FrameTo        interface{} `json:"frameTo"`
 	FrameFps       int         `json:"frameFps"`
 	StepDuration   float64     `json:"stepDuration"`
 	TurnToDuration float64     `json:"turnToDuration"`
@@ -230,7 +226,15 @@ type aniConfig struct {
 	OnPlay       *actionConfig `json:"onPlay"`  //play
 	IsLoop       bool          `json:"isLoop"`
 	IsKeepOnStop bool          `json:"isKeepOnStop"` //After finishing playback, it stays on the last frame and does not need to switch to the default animation
+	Duration     float64
 
+	// runtime
+	IFrameFrom int
+	IFrameTo   int
+
+	Speed float64
+	From  interface{}
+	To    interface{}
 	//OnEnd *actionConfig  `json:"onEnd"`   //stop
 }
 

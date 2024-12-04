@@ -18,5 +18,5 @@ onKey KeyLeft, => {
 }
 
 onKey KeyRight, => {
-	Camera.changeXYpos 0, 5
+	Camera.changeXYpos 5, 0
 }

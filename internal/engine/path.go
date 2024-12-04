@@ -34,7 +34,10 @@ func ToAssetPath(relPath string) string {
 	if replacedPath != "" {
 		return replacedPath
 	}
-	return assetsDir + relPath
+	path := assetsDir + relPath
+	finalPath := filepath.Clean(path)
+	finalPath = strings.ReplaceAll(finalPath, "\\", "/")
+	return finalPath
 }
 
 func replacePathIfInExtAssetDir(rpath string, extassetDir string, newAssetDir string) string {

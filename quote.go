@@ -41,6 +41,9 @@ type quoter struct {
 }
 
 func (p *quoter) refresh() {
+	if p.panel == nil {
+		return
+	}
 	bound := p.sprite.Bounds()
 	size := p.sprite.Bounds().Size
 	extSize := 10.0

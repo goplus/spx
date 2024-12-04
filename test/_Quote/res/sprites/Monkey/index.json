@@ -5,20 +5,44 @@
     "nx": 96
   },
   "costumeIndex": 0,
-  "mAnimations": {
+  "fAnimations": {
+    "think": {
+      "frameFps": 20,
+      "frameFrom": 10,
+      "frameTo": 42
+    },
     "step": {
-      "duration": 0.015,
-      "onPlay": {
-        "costumes": {
-          "from": 0,
-          "to": 8
-        }
-      }
-    }
-  },
- "tAnimations": {
+      "stepDuration": 0.03,
+      "frameFps": 24,
+      "frameFrom": 0,
+      "frameTo": 8
+    },
+    "slowstep": {
+      "stepDuration": 0.10,
+      "frameFps": 8,
+      "frameFrom": 0,
+      "frameTo": 8
+    },
+    "faststep": {
+      "stepDuration": 0.01,
+      "frameFps": 72,
+      "frameFrom": 0,
+      "frameTo": 8
+    },
     "turn": {
-      "duration": 2.0
+      "anitype": 2,
+      "turnToDuration": 1.0,
+      "frameFps": 72,
+      "frameFrom": 0,
+      "frameTo": 8
+    },
+    "clap": {
+      "frameFps": 35,
+      "frameFrom": 42,
+      "frameTo": 67,
+      "onStart": {
+        "play": "clap"
+      }
     }
   },
   "heading": -60,
@@ -26,6 +50,6 @@
   "rotationStyle": "normal",
   "size": 1,
   "visible": true,
-  "x": 130,
-  "y": 75
+  "x": 100,
+  "y": 21
 }

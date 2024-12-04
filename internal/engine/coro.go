@@ -11,8 +11,14 @@ var (
 
 func SetCoroutines(co *coroutine.Coroutines) {
 	gco = co
-}
 
+}
+func Go(tobj coroutine.ThreadObj, fn func()) {
+	gco.CreateAndStart(false, tobj, func(me coroutine.Thread) int {
+		fn()
+		return 0
+	})
+}
 func Wait(secs float64) float64 {
 	startTime := time.TimeSinceLevelLoad()
 	gco.Wait(secs)

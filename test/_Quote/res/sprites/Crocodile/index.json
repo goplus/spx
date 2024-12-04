@@ -13,18 +13,18 @@
   "costumeIndex": 0,
   "fAnimations": {
     "sink": {
-      "duration": 0.3,
-      "from": 0,
-      "to": 4,
+      "frameFps": 12,
+      "frameFrom": 0,
+      "frameTo": 4,
       "isKeepOnStop":true,
       "onStart":{
         "play": "chomp"
       }
     },
     "surface": {
-      "duration": 0.3,
-      "from": 4,
-      "to": 0,
+      "frameFps": 12,
+      "frameFrom": 4,
+      "frameTo": 0,
       "isKeepOnStop":true
     }
   },
