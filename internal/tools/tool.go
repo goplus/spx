@@ -3,11 +3,11 @@ package tools
 import (
 	"strconv"
 
-	"github.com/goplus/spx/internal/math32"
+	"github.com/realdream-ai/mathf"
 )
 
-func GetVec2(unk interface{}) (*math32.Vector2, bool) {
-	return unk.(*math32.Vector2), true
+func GetVec2(unk interface{}) (mathf.Vec2, bool) {
+	return *unk.(*mathf.Vec2), true
 }
 
 func GetFloat(unk interface{}) (float64, bool) {

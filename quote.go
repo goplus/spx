@@ -45,9 +45,10 @@ func (p *quoter) refresh() {
 		return
 	}
 	bound := p.sprite.Bounds()
-	size := p.sprite.Bounds().Size
+	center := bound.Center()
+	size := bound.Size
 	extSize := 10.0
-	p.panel.SetText(bound.Center.X, bound.Center.Y, size.Width/2+extSize, size.Height/2+extSize, p.message, p.description)
+	p.panel.SetText(center.X, center.Y, size.X/2+extSize, size.Y/2+extSize, p.message, p.description)
 }
 
 func (p *SpriteImpl) quote_(message, description string) {

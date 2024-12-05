@@ -32,6 +32,7 @@ import (
 	"github.com/goplus/spx/internal/coroutine"
 	"github.com/goplus/spx/internal/engine"
 	gtime "github.com/goplus/spx/internal/time"
+	"github.com/realdream-ai/mathf"
 
 	spxfs "github.com/goplus/spx/fs"
 	_ "github.com/goplus/spx/fs/asset"
@@ -519,7 +520,7 @@ func (p *Game) setupBackdrop() {
 	scaleY := dstH / imgH
 	p.scale = 1
 	checkUpdateCostume(&p.baseObj, true)
-	engine.SyncSpriteSetScale(p.proxy.GetId(), engine.NewVec2(scaleX, scaleY))
+	engine.SyncSpriteSetScale(p.proxy.GetId(), mathf.NewVec2(scaleX, scaleY))
 }
 
 func (p *Game) endLoad(g reflect.Value, proj *projConfig) (err error) {
@@ -683,7 +684,7 @@ type clicker interface {
 }
 
 func (p *Game) doWhenLeftButtonDown(ev *eventLeftButtonDown) {
-	point := engine.NewVec2(float64(ev.X), float64(ev.Y))
+	point := mathf.NewVec2(float64(ev.X), float64(ev.Y))
 	tempItems := p.getTempShapes()
 	for _, item := range tempItems {
 		if o, ok := item.(clicker); ok {

@@ -44,8 +44,8 @@ var (
 
 type Gamer interface {
 	OnEngineStart()
-	OnEngineUpdate(delta float32)
-	OnEngineRender(delta float32)
+	OnEngineUpdate(delta float64)
+	OnEngineRender(delta float64)
 	OnEngineDestroy()
 }
 
@@ -77,7 +77,7 @@ func onStart() {
 	game.OnEngineStart()
 }
 
-func onUpdate(delta float32) {
+func onUpdate(delta float64) {
 	updateTime(float64(delta))
 	cacheTriggerEvents()
 	cacheKeyEvents()
@@ -97,7 +97,7 @@ func calcfps() {
 	}
 }
 func onSetTimeScale(scale float64) {
-	SyncPlatformSetTimeScale(float32(scale))
+	SyncPlatformSetTimeScale(scale)
 }
 
 func updateTime(delta float64) {

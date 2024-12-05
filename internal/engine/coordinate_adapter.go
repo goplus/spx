@@ -1,7 +1,7 @@
 package engine
 
 import (
-	. "github.com/realdream-ai/gdspx/pkg/engine"
+	. "github.com/realdream-ai/mathf"
 )
 
 // --------------------------------------------------------------------------
@@ -18,7 +18,7 @@ func (pself *ProxySprite) SetTriggerCapsule(center Vec2, size Vec2) {
 	pself.Sprite.SetTriggerCapsule(center, size)
 }
 
-func (pself *ProxySprite) SetTriggerCircle(center Vec2, radius float32) {
+func (pself *ProxySprite) SetTriggerCircle(center Vec2, radius float64) {
 	center.Y = -center.Y
 	pself.Sprite.SetTriggerCircle(center, radius)
 }
@@ -33,7 +33,7 @@ func (pself *ProxySprite) SetColliderCapsule(center Vec2, size Vec2) {
 	pself.Sprite.SetColliderCapsule(center, size)
 }
 
-func (pself *ProxySprite) SetColliderCircle(center Vec2, radius float32) {
+func (pself *ProxySprite) SetColliderCircle(center Vec2, radius float64) {
 	center.Y = -center.Y
 	pself.Sprite.SetColliderCircle(center, radius)
 }

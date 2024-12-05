@@ -23,7 +23,7 @@ import (
 
 	spxfs "github.com/goplus/spx/fs"
 	"github.com/goplus/spx/internal/engine"
-	"github.com/goplus/spx/internal/math32"
+	"github.com/realdream-ai/mathf"
 )
 
 func resourceDir(resource interface{}) (fs spxfs.Dir, err error) {
@@ -256,7 +256,7 @@ type spriteConfig struct {
 	TAnimations         map[string]*aniConfig `json:"tAnimations"`
 	Visible             bool                  `json:"visible"`
 	IsDraggable         bool                  `json:"isDraggable"`
-	Pivot               math32.Vector2        `json:"pivot"`
+	Pivot               mathf.Vec2            `json:"pivot"`
 	DefaultAnimation    string                `json:"defaultAnimation"`
 	AnimBindings        map[string]string     `json:"animBindings"`
 	CollisionMask       *int64                `json:"collisionMask"`
@@ -264,12 +264,12 @@ type spriteConfig struct {
 	TriggerMask         *int64                `json:"triggerMask"`
 	TriggerLayer        *int64                `json:"triggerLayer"`
 	ColliderType        string                `json:"colliderType"`
-	ColliderCenter      math32.Vector2        `json:"colliderCenter"`
-	ColliderSize        math32.Vector2        `json:"colliderSize"`
+	ColliderCenter      mathf.Vec2            `json:"colliderCenter"`
+	ColliderSize        mathf.Vec2            `json:"colliderSize"`
 	ColliderRadius      float64               `json:"colliderRadius"`
 	TriggerType         string                `json:"triggerType"`
-	TriggerCenter       math32.Vector2        `json:"triggerCenter"`
-	TriggerSize         math32.Vector2        `json:"triggerSize"`
+	TriggerCenter       mathf.Vec2            `json:"triggerCenter"`
+	TriggerSize         mathf.Vec2            `json:"triggerSize"`
 	TriggerRadius       float64               `json:"triggerRadius"`
 }
 

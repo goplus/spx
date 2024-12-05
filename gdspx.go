@@ -24,24 +24,24 @@ import (
 	"sync/atomic"
 
 	"github.com/goplus/spx/internal/engine"
-	"github.com/goplus/spx/internal/math32"
 
 	gdspx "github.com/realdream-ai/gdspx/pkg/engine"
+	"github.com/realdream-ai/mathf"
 )
 
 var (
-	cachedBounds map[string]gdspx.Rect2
+	cachedBounds map[string]mathf.Rect2
 )
 
 func (p *Game) OnEngineStart() {
-	cachedBounds = make(map[string]gdspx.Rect2)
+	cachedBounds = make(map[string]mathf.Rect2)
 	go p.onStartAsync()
 }
 
 func (p *Game) OnEngineDestroy() {
 }
 
-func (p *Game) OnEngineUpdate(delta float32) {
+func (p *Game) OnEngineUpdate(delta float64) {
 	if !p.isRunned {
 		return
 	}
@@ -50,7 +50,7 @@ func (p *Game) OnEngineUpdate(delta float32) {
 	p.updateCamera()
 	p.updateLogic()
 }
-func (p *Game) OnEngineRender(delta float32) {
+func (p *Game) OnEngineRender(delta float64) {
 	if !p.isRunned {
 		return
 	}
@@ -82,7 +82,7 @@ func (p *Game) updateLogic() error {
 func (p *Game) updateCamera() {
 	isOn, x, y := p.Camera.getFollowPos()
 	if isOn {
-		gdspx.CameraMgr.SetCameraPosition(engine.NewVec2(x, -y))
+		gdspx.CameraMgr.SetCameraPosition(mathf.NewVec2(x, -y))
 	}
 }
 
@@ -162,7 +162,7 @@ func doCheckUpdateCostume(p *baseObj) {
 	p.isCostumeDirty = false
 	path := p.getCostumePath()
 	renderScale := p.getCostumeRenderScale()
-	rect := p.getCostumeAltasRegion().ToRect2()
+	rect := p.getCostumeAltasRegion()
 	isAltas := p.isCostumeAltas()
 	pself := p.proxy
 	if isAltas {
@@ -203,14 +203,14 @@ func initSpritePhysicInfo(sprite *SpriteImpl, proxy *engine.ProxySprite) {
 	switch sprite.colliderType {
 	case physicColliderCircle:
 		proxy.SetCollisionEnabled(true)
-		proxy.SetColliderCircle(sprite.colliderCenter.ToVec2(), float32(math.Max(sprite.colliderRadius, 0.01)))
+		proxy.SetColliderCircle(sprite.colliderCenter, math.Max(sprite.colliderRadius, 0.01))
 	case physicColliderRect:
 		proxy.SetCollisionEnabled(true)
-		proxy.SetColliderRect(sprite.colliderCenter.ToVec2(), sprite.colliderSize.ToVec2())
+		proxy.SetColliderRect(sprite.colliderCenter, sprite.colliderSize)
 	case physicColliderAuto:
 		center, size := getCostumeBoundByAlpha(sprite, sprite.scale)
 		proxy.SetCollisionEnabled(true)
-		proxy.SetColliderRect(center.ToVec2(), size.ToVec2())
+		proxy.SetColliderRect(center, size)
 	case physicColliderNone:
 		proxy.SetCollisionEnabled(false)
 	}
@@ -218,26 +218,26 @@ func initSpritePhysicInfo(sprite *SpriteImpl, proxy *engine.ProxySprite) {
 	switch sprite.triggerType {
 	case physicColliderCircle:
 		proxy.SetTriggerEnabled(true)
-		proxy.SetTriggerCircle(sprite.triggerCenter.ToVec2(), float32(math.Max(sprite.triggerRadius, 0.01)))
-		sprite.triggerSize = *math32.NewVector2(sprite.triggerRadius, sprite.triggerRadius)
+		proxy.SetTriggerCircle(sprite.triggerCenter, math.Max(sprite.triggerRadius, 0.01))
+		sprite.triggerSize = mathf.NewVec2(sprite.triggerRadius, sprite.triggerRadius)
 	case physicColliderRect:
 		proxy.SetTriggerEnabled(true)
-		proxy.SetTriggerRect(sprite.triggerCenter.ToVec2(), sprite.triggerSize.ToVec2())
+		proxy.SetTriggerRect(sprite.triggerCenter, sprite.triggerSize)
 	case physicColliderAuto:
 		sprite.triggerCenter, sprite.triggerSize = getCostumeBoundByAlpha(sprite, sprite.scale)
 		proxy.SetTriggerEnabled(true)
-		proxy.SetTriggerRect(sprite.triggerCenter.ToVec2(), sprite.triggerSize.ToVec2())
+		proxy.SetTriggerRect(sprite.triggerCenter, sprite.triggerSize)
 	case physicColliderNone:
 		proxy.SetTriggerEnabled(false)
 	}
 }
 
-func getCostumeBoundByAlpha(p *SpriteImpl, pscale float64) (math32.Vector2, math32.Vector2) {
+func getCostumeBoundByAlpha(p *SpriteImpl, pscale float64) (mathf.Vec2, mathf.Vec2) {
 	cs := p.costumes[p.costumeIndex_]
-	var rect gdspx.Rect2
+	var rect mathf.Rect2
 	// GetBoundFromAlpha is very slow, so we should cache the result
 	if cs.isAltas() {
-		rect = p.getCostumeAltasRegion().ToRect2()
+		rect = p.getCostumeAltasRegion()
 		rect.Position.X = 0
 		rect.Position.Y = 0
 	} else {
@@ -261,8 +261,8 @@ func getCostumeBoundByAlpha(p *SpriteImpl, pscale float64) (math32.Vector2, math
 	offsetX := float64(posX + sizeX/2 - w/2)
 	offsetY := -float64(posY + sizeY/2 - h/2)
 
-	center := *math32.NewVector2(offsetX, offsetY)
-	size := *math32.NewVector2(sizeX, sizeY)
+	center := mathf.NewVec2(offsetX, offsetY)
+	size := mathf.NewVec2(sizeX, sizeY)
 	return center, size
 }
 

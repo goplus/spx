@@ -24,10 +24,9 @@ import (
 	_ "image/jpeg" // for image decode
 	_ "image/png"  // for image decode
 
-	gdspx "github.com/realdream-ai/gdspx/pkg/engine"
+	"github.com/realdream-ai/mathf"
 
 	"github.com/goplus/spx/internal/engine"
-	"github.com/goplus/spx/internal/math32"
 )
 
 func toRadian(dir float64) float64 {
@@ -64,7 +63,7 @@ type costumeSetImage struct {
 type costume struct {
 	name          SpriteCostumeName
 	width, height int
-	center        math32.Vector2 // center point
+	center        mathf.Vec2 // center point
 
 	faceRight        float64
 	bitmapResolution int
@@ -114,7 +113,7 @@ func newCostume(base string, c *costumeConfig) *costume {
 	value := &costume{
 		name:             c.Name,
 		setIndex:         -1,
-		center:           math32.Vector2{X: c.X, Y: c.Y},
+		center:           mathf.Vec2{X: c.X, Y: c.Y},
 		faceRight:        c.FaceRight,
 		bitmapResolution: toBitmapResolution(c.BitmapResolution),
 		path:             path,
@@ -127,7 +126,7 @@ func newCostume(base string, c *costumeConfig) *costume {
 	return value
 }
 
-func getCustomeAssetSize(path string) gdspx.Vec2 {
+func getCustomeAssetSize(path string) mathf.Vec2 {
 	assetPath := engine.ToAssetPath(path)
 	return engine.SyncResGetImageSize(assetPath)
 }
@@ -346,12 +345,10 @@ func (p *baseObj) isCostumeAltas() bool {
 	return p.costumes[p.costumeIndex_].isAltas()
 }
 
-func (p *baseObj) getCostumeAltasRegion() engine.Rect {
+func (p *baseObj) getCostumeAltasRegion() mathf.Rect2 {
 	costume := p.costumes[p.costumeIndex_]
-	rect := engine.Rect{
-		Position: engine.NewVec2(float64(costume.posX), float64(costume.posY)),
-		Size:     engine.NewVec2(float64(costume.width), float64(costume.height)),
-	}
+	rect := mathf.NewRect2(float64(costume.posX), float64(costume.posY),
+		float64(costume.width), float64(costume.height))
 	return rect
 }
 

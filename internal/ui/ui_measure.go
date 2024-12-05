@@ -4,6 +4,8 @@ import (
 	"math"
 
 	. "github.com/realdream-ai/gdspx/pkg/engine"
+	"github.com/realdream-ai/mathf"
+	. "github.com/realdream-ai/mathf"
 
 	"github.com/goplus/spx/internal/engine"
 )
@@ -31,16 +33,16 @@ func (pself *UiMeasure) OnStart() {
 func (pself *UiMeasure) UpdateInfo(x, y float64, length, heading float64, name string, color Color) {
 	extraLen := 4.0 //hack for engine picture size
 	length += extraLen
-	rad := engine.HeadingToRad(heading - 90)
+	rad := DegToRad(heading - 90)
 	s, c := math.Sincos(float64(rad))
 	halfX, halfY := (c * length / 2), (s * length / 2)
 	pos := WorldToScreen(x, y)
 	labelPos := pos
-	pos.X -= float32(halfX)
-	pos.Y -= float32(halfY)
+	pos.X -= float64(halfX)
+	pos.Y -= float64(halfY)
 	engine.SyncUiSetGlobalPosition(pself.container.GetId(), pos)
 	engine.SyncUiSetColor(pself.container.GetId(), color)
-	engine.SyncUiSetSize(pself.container.GetId(), engine.NewVec2(length+extraLen, 26))
+	engine.SyncUiSetSize(pself.container.GetId(), mathf.NewVec2(length+extraLen, 26))
 	engine.SyncUiSetRotation(pself.container.GetId(), rad)
 
 	engine.SyncUiSetGlobalPosition(pself.labelContainer.GetId(), labelPos)

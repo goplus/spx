@@ -18,6 +18,7 @@ package spx
 
 import (
 	"github.com/goplus/spx/internal/engine"
+	"github.com/realdream-ai/mathf"
 )
 
 type PlayAction int
@@ -104,12 +105,12 @@ func (p *soundMgr) getVolume() float64 {
 }
 
 func (p *soundMgr) setVolume(volume float64) {
-	engine.SyncAudioSetMasterVolume(float32(volume))
+	engine.SyncAudioSetMasterVolume(volume)
 }
 
 func (p *soundMgr) changeVolume(delta float64) {
 	volume := p.getVolume() + delta
-	volume = engine.Clamp01d(volume)
+	volume = mathf.Clamp01f(volume)
 	p.setVolume(volume)
 }
 
@@ -119,12 +120,12 @@ func (p *soundMgr) getSfxVolume() float64 {
 }
 
 func (p *soundMgr) setSfxVolume(volume float64) {
-	engine.SyncAudioSetSfxVolume(float32(volume))
+	engine.SyncAudioSetSfxVolume(volume)
 }
 
 func (p *soundMgr) changeSfxVolume(delta float64) {
 	volume := p.getSfxVolume() + delta
-	volume = engine.Clamp01d(volume)
+	volume = mathf.Clamp01f(volume)
 	p.setSfxVolume(volume)
 }
 
@@ -134,12 +135,12 @@ func (p *soundMgr) getMusicVolume() float64 {
 }
 
 func (p *soundMgr) setMusicVolume(volume float64) {
-	engine.SyncAudioSetMusicVolume(float32(volume))
+	engine.SyncAudioSetMusicVolume(volume)
 }
 
 func (p *soundMgr) changeMusicVolume(delta float64) {
 	volume := p.getMusicVolume() + delta
-	volume = engine.Clamp01d(volume)
+	volume = mathf.Clamp01f(volume)
 	p.setMusicVolume(volume)
 }
 

@@ -2,6 +2,7 @@ package engine
 
 import (
 	. "github.com/realdream-ai/gdspx/pkg/engine"
+	. "github.com/realdream-ai/mathf"
 )
 
 type ProxySprite struct {
@@ -40,9 +41,9 @@ func (pself *ProxySprite) UpdateTextureAltas(path string, rect2 Rect2, renderSca
 func (pself *ProxySprite) UpdateTransform(x, y float64, rot float64, scale64 float64, isSync bool) {
 	pself.x = x
 	pself.y = y
-	rad := HeadingToRad(rot)
-	pos := Vec2{X: float32(x), Y: float32(y)}
-	scale := float32(scale64)
+	rad := DegToRad(rot)
+	pos := Vec2{X: float64(x), Y: float64(y)}
+	scale := float64(scale64)
 	if !isSync {
 		pself.SetPosition(pos)
 		pself.SetRotation(rad)

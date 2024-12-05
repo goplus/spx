@@ -2,6 +2,7 @@ package engine
 
 import (
 	. "github.com/realdream-ai/gdspx/pkg/engine"
+	. "github.com/realdream-ai/mathf"
 )
 
 // =============== factory ===================
