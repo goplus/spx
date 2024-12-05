@@ -20,7 +20,6 @@ import (
 	"log"
 
 	"github.com/goplus/spx/internal/engine"
-	"github.com/goplus/spx/internal/math32"
 )
 
 type Camera struct {
@@ -32,16 +31,6 @@ func (c *Camera) init(g *Game, winW, winH float64, worldW, worldH float64) {
 	c.g = g
 }
 
-func (c *Camera) isWorldRange(pos *math32.Vector2) bool {
-	rect := engine.SyncCameraGetViewportRect()
-	if pos.X < float64(rect.Position.X-rect.Size.X/2) || pos.X > float64(rect.Position.X+rect.Size.X) {
-		return false
-	}
-	if pos.Y < float64(rect.Position.Y-rect.Size.Y/2) || pos.Y > float64(rect.Position.Y+rect.Size.Y) {
-		return false
-	}
-	return true
-}
 func (c *Camera) GetXYpos() (float64, float64) {
 	return engine.SyncGetCameraPosition()
 }
@@ -56,10 +45,6 @@ func (c *Camera) ChangeXYpos(x float64, y float64) {
 	c.SetXYpos(posX+x, posY+y)
 }
 
-func (c *Camera) screenToWorld(point *math32.Vector2) *math32.Vector2 {
-	return point // TODO tanjp
-}
-
 func (c *Camera) getFollowPos() (bool, float64, float64) {
 	if c.on_ != nil {
 		switch v := c.on_.(type) {
@@ -69,9 +54,9 @@ func (c *Camera) getFollowPos() (bool, float64, float64) {
 	}
 	return false, 0, 0
 }
-func (c *Camera) On(obj interface{}) {
+func (c *Camera) on(obj interface{}) {
 	switch v := obj.(type) {
-	case string:
+	case SpriteName:
 		sp := c.g.findSprite(v)
 		if sp == nil {
 			log.Println("Camera.On: sprite not found -", v)
@@ -92,4 +77,20 @@ func (c *Camera) On(obj interface{}) {
 		panic("Camera.On: unexpected parameter")
 	}
 	c.on_ = obj
+}
+
+func (c *Camera) On__0(sprite Sprite) {
+	c.on(sprite)
+}
+
+func (c *Camera) On__1(sprite *SpriteImpl) {
+	c.on(sprite)
+}
+
+func (c *Camera) On__2(sprite SpriteName) {
+	c.on(sprite)
+}
+
+func (c *Camera) On__3(obj specialObj) {
+	c.on(obj)
 }

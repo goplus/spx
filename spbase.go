@@ -62,7 +62,7 @@ type costumeSetImage struct {
 // -------------------------------------------------------------------------------------
 
 type costume struct {
-	name          string
+	name          SpriteCostumeName
 	width, height int
 	center        math32.Vector2 // center point
 
@@ -231,7 +231,7 @@ func initCSPart(p *baseObj, img *costumeSetImage, faceRight float64, bitmapResol
 	}
 }
 
-func addCostumeWith(p *baseObj, name string, img *costumeSetImage, faceRight float64, i, bitmapResolution int) {
+func addCostumeWith(p *baseObj, name SpriteCostumeName, img *costumeSetImage, faceRight float64, i, bitmapResolution int) {
 	c := newCostumeWith(name, img, faceRight, i, bitmapResolution)
 	p.costumes = append(p.costumes, c)
 }
@@ -270,7 +270,7 @@ func (p *baseObj) initFrom(src *baseObj) {
 	p.setCustumeIndex(src.costumeIndex_)
 }
 
-func (p *baseObj) findCostume(name string) int {
+func (p *baseObj) findCostume(name SpriteCostumeName) int {
 	for i, c := range p.costumes {
 		if c.name == name {
 			return i
@@ -281,7 +281,7 @@ func (p *baseObj) findCostume(name string) int {
 
 func (p *baseObj) goSetCostume(val interface{}) bool {
 	switch v := val.(type) {
-	case string:
+	case SpriteCostumeName:
 		return p.setCostumeByName(v)
 	case int:
 		return p.setCostumeByIndex(v)
@@ -307,8 +307,7 @@ func (p *baseObj) setCostumeByIndex(idx int) bool {
 	p.setCustumeIndex(idx)
 	return isDirty
 }
-
-func (p *baseObj) setCostumeByName(name string) bool {
+func (p *baseObj) setCostumeByName(name SpriteCostumeName) bool {
 	if idx := p.findCostume(name); idx >= 0 {
 		return p.setCostumeByIndex(idx)
 	}
@@ -329,7 +328,7 @@ func (p *baseObj) getCostumeIndex() int {
 	return p.costumeIndex_
 }
 
-func (p *baseObj) getCostumeName() string {
+func (p *baseObj) getCostumeName() SpriteCostumeName {
 	return p.costumes[p.costumeIndex_].name
 }
 func (p *baseObj) getCostumePath() string {
