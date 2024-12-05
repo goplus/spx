@@ -32,7 +32,7 @@ import (
 // Monitor class.
 type Monitor struct {
 	game    *Game
-	name    string
+	name    WidgetName
 	size    float64
 	target  string
 	val     string
@@ -173,7 +173,7 @@ type rectKey struct {
 
 // -------------------------------------------------------------------------------------
 // IWidget
-func (pself *Monitor) GetName() string {
+func (pself *Monitor) GetName() WidgetName {
 	return pself.name
 }
 

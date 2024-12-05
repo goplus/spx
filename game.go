@@ -469,7 +469,7 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 	}
 
 	if proj.Camera != nil && proj.Camera.On != "" {
-		p.Camera.On(proj.Camera.On)
+		p.Camera.On__2(proj.Camera.On)
 	}
 	if loader, ok := g.Addr().Interface().(interface{ OnLoaded() }); ok {
 		loader.OnLoaded()
@@ -870,7 +870,7 @@ func (p *Game) touchingSpriteBy(dst *SpriteImpl, name string) *SpriteImpl {
 
 func (p *Game) objectPos(obj interface{}) (float64, float64) {
 	switch v := obj.(type) {
-	case string:
+	case SpriteName:
 		if sp := p.findSprite(v); sp != nil {
 			return sp.getXY()
 		}
@@ -1045,7 +1045,7 @@ func (p *Game) doFindSprite(src Shape) int {
 	return -1
 }
 
-func (p *Game) findSprite(name string) *SpriteImpl {
+func (p *Game) findSprite(name SpriteName) *SpriteImpl {
 	for _, item := range p.items {
 		if sp, ok := item.(*SpriteImpl); ok {
 			if !sp.isCloned_ && sp.name == name {
@@ -1066,26 +1066,68 @@ func (p *Game) BackdropIndex() int {
 	return p.getCostumeIndex()
 }
 
+type BackdropName string
+
 // StartBackdrop func:
 //
-//	StartBackdrop(backdropName) or
-//	StartBackdrop(backdropIndex) or
+//	StartBackdrop(backdrop) or
+//	StartBackdrop(index) or
 //	StartBackdrop(spx.Next)
 //	StartBackdrop(spx.Prev)
-func (p *Game) StartBackdrop(backdrop interface{}, wait ...bool) {
+func (p *Game) startBackdrop(backdrop interface{}, wait bool) {
 	if p.goSetCostume(backdrop) {
 		p.windowWidth_ = 0
 		p.doWindowSize()
-		p.doWhenBackdropChanged(p.getCostumeName(), wait != nil && wait[0])
+		p.doWhenBackdropChanged(BackdropName(p.getCostumeName()), wait)
 	}
 }
 
-func (p *Game) NextBackdrop(wait ...bool) {
-	p.StartBackdrop(Next, wait...)
+func (p *Game) StartBackdrop__0(backdrop BackdropName) {
+	p.startBackdrop(backdrop, false)
 }
 
-func (p *Game) PrevBackdrop(wait ...bool) {
-	p.StartBackdrop(Prev, wait...)
+func (p *Game) StartBackdrop__1(backdrop BackdropName, wait bool) {
+	p.startBackdrop(backdrop, wait)
+}
+
+func (p *Game) StartBackdrop__2(index int) {
+	p.startBackdrop(index, false)
+}
+
+func (p *Game) StartBackdrop__3(index int, wait bool) {
+	p.startBackdrop(index, wait)
+}
+
+func (p *Game) StartBackdrop__4(index float64) {
+	p.startBackdrop(index, false)
+}
+
+func (p *Game) StartBackdrop__5(index float64, wait bool) {
+	p.startBackdrop(index, wait)
+}
+
+func (p *Game) StartBackdrop__6(action switchAction) {
+	p.startBackdrop(action, false)
+}
+
+func (p *Game) StartBackdrop__7(action switchAction, wait bool) {
+	p.startBackdrop(action, wait)
+}
+
+func (p *Game) NextBackdrop__0() {
+	p.StartBackdrop__6(Next)
+}
+
+func (p *Game) NextBackdrop__1(wait bool) {
+	p.StartBackdrop__7(Next, wait)
+}
+
+func (p *Game) PrevBackdrop__0() {
+	p.StartBackdrop__6(Prev)
+}
+
+func (p *Game) PrevBackdrop__1(wait bool) {
+	p.StartBackdrop__7(Prev, wait)
 }
 
 // -----------------------------------------------------------------------------
@@ -1177,6 +1219,8 @@ func (p *Game) ClearSoundEffects() {
 
 type Sound *soundConfig
 
+type SoundName = string
+
 func hasAsset(path string) bool {
 	finalPath := engine.ToAssetPath(path)
 	return engine.SyncResHasFile(finalPath)
@@ -1186,7 +1230,7 @@ func (p *Game) canBindSound(name string) bool {
 	return hasAsset("sounds/" + name + "/index.json")
 }
 
-func (p *Game) loadSound(name string) (media Sound, err error) {
+func (p *Game) loadSound(name SoundName) (media Sound, err error) {
 	if media, ok := p.sounds.audios[name]; ok {
 		return media, nil
 	}
@@ -1211,9 +1255,6 @@ func (p *Game) loadSound(name string) (media Sound, err error) {
 //	Play(video) -- maybe
 //	Play(media, wait) -- sync
 //	Play(media, opts)
-//	Play(mediaName)
-//	Play(mediaName, wait) -- sync
-//	Play(mediaName, opts)
 func (p *Game) Play__0(media Sound) {
 	if media == nil {
 		panic("play media is nil")
@@ -1235,21 +1276,22 @@ func (p *Game) Play__2(media Sound, action *PlayOptions) {
 		panic(err)
 	}
 }
-func (p *Game) Play__3(mediaName string) {
-	p.Play__5(mediaName, &PlayOptions{})
+
+func (p *Game) Play__3(media SoundName) {
+	p.Play__5(media, &PlayOptions{})
 }
 
-func (p *Game) Play__4(mediaName string, wait bool) {
-	p.Play__5(mediaName, &PlayOptions{Wait: wait})
+func (p *Game) Play__4(media SoundName, wait bool) {
+	p.Play__5(media, &PlayOptions{Wait: wait})
 }
 
-func (p *Game) Play__5(mediaName string, action *PlayOptions) {
-	media, err := p.loadSound(mediaName)
+func (p *Game) Play__5(media SoundName, action *PlayOptions) {
+	m, err := p.loadSound(media)
 	if err != nil {
 		log.Println(err)
 		return
 	}
-	p.Play__2(media, action)
+	p.Play__2(m, action)
 }
 
 func (p *Game) StopAllSounds() {
@@ -1349,7 +1391,7 @@ type ShapeGetter interface {
 // Instead of being used directly, it is meant to be called by `Gopt_Game_Gopx_GetWidget` only.
 // We extract `GetWidget_` to keep `Gopt_Game_Gopx_GetWidget` simple, which simplifies work in ispx,
 // see details in https://github.com/goplus/builder/issues/765#issuecomment-2313915805.
-func GetWidget_(sg ShapeGetter, name string) Widget {
+func GetWidget_(sg ShapeGetter, name WidgetName) Widget {
 	items := sg.getAllShapes()
 	for _, item := range items {
 		widget, ok := item.(Widget)
@@ -1361,7 +1403,7 @@ func GetWidget_(sg ShapeGetter, name string) Widget {
 }
 
 // GetWidget returns the widget instance (in given type) with given name. It panics if not found.
-func Gopt_Game_Gopx_GetWidget[T any](sg ShapeGetter, name string) *T {
+func Gopt_Game_Gopx_GetWidget[T any](sg ShapeGetter, name WidgetName) *T {
 	widget := GetWidget_(sg, name)
 	if result, ok := widget.(interface{}).(*T); ok {
 		return result

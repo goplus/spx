@@ -66,7 +66,7 @@ type Sprite interface {
 	Shape
 	Main()
 
-	Animate(name string)
+	Animate(name SpriteAnimationName)
 	Ask(msg interface{})
 	BounceOffEdge()
 	Bounds() *math32.RotatedRect
@@ -83,17 +83,25 @@ type Sprite interface {
 	ClearGraphEffects()
 	CostumeHeight() float64
 	CostumeIndex() int
-	CostumeName() string
+	CostumeName() SpriteCostumeName
 	CostumeWidth() float64
 	DeleteThisClone()
 	DeltaTime() float64
 	Destroy()
 	Die()
-	DistanceTo(obj interface{}) float64
+	DistanceTo__0(sprite Sprite) float64
+	DistanceTo__1(sprite SpriteName) float64
+	DistanceTo__2(obj specialObj) float64
+	DistanceTo__3(pos Pos) float64
 	Glide__0(x, y float64, secs float64)
-	Glide__1(obj interface{}, secs float64)
+	Glide__1(sprite Sprite, secs float64)
+	Glide__2(sprite SpriteName, secs float64)
+	Glide__3(obj specialObj, secs float64)
+	Glide__4(pos Pos, secs float64)
 	GoBackLayers(n int)
-	Goto(obj interface{})
+	Goto__0(sprite Sprite)
+	Goto__1(sprite SpriteName)
+	Goto__2(obj specialObj)
 	GotoBack()
 	GotoFront()
 	Heading() float64
@@ -109,8 +117,8 @@ type Sprite interface {
 	OnMoving__1(onMoving func())
 	OnTouchStart__0(onTouchStart func(Sprite))
 	OnTouchStart__1(onTouchStart func())
-	OnTouchStart__2(name string, onTouchStart func(Sprite))
-	OnTouchStart__3(name string, onTouchStart func())
+	OnTouchStart__2(sprite SpriteName, onTouchStart func(Sprite))
+	OnTouchStart__3(sprite SpriteName, onTouchStart func())
 	OnTurning__0(onTurning func(ti *TurningInfo))
 	OnTurning__1(onTurning func())
 	Parent() *Game
@@ -119,9 +127,14 @@ type Sprite interface {
 	PrevCostume()
 	Quote__0(message string)
 	Quote__1(message string, secs float64)
-	Quote__2(message, description string, secs ...float64)
-	Say(msg interface{}, secs ...float64)
-	SetCostume(costume interface{})
+	Quote__2(message, description string)
+	Quote__3(message, description string, secs float64)
+	Say__0(msg interface{})
+	Say__1(msg interface{}, secs float64)
+	SetCostume__0(costume SpriteCostumeName)
+	SetCostume__1(index int)
+	SetCostume__2(index float64)
+	SetCostume__3(action switchAction)
 	SetDying()
 	SetEffect(kind EffectKind, val float64)
 	SetHeading(dir float64)
@@ -140,17 +153,32 @@ type Sprite interface {
 	Stamp()
 	Step__0(step float64)
 	Step__1(step int)
-	Step__2(step float64, animname string)
-	Think(msg interface{}, secs ...float64)
+	Step__2(step float64, animation SpriteAnimationName)
+	Think__0(msg interface{})
+	Think__1(msg interface{}, secs float64)
 	TimeSinceLevelLoad() float64
-	Touching(obj interface{}) bool
+	Touching__0(sprite SpriteName) bool
+	Touching__1(sprite Sprite) bool
+	Touching__2(obj specialObj) bool
 	TouchingColor(color Color) bool
-	Turn(val interface{})
-	TurnTo(obj interface{})
+	Turn__0(degree float64)
+	Turn__1(dir specialDir)
+	Turn__2(ti *TurningInfo)
+	TurnTo__0(sprite Sprite)
+	TurnTo__1(sprite SpriteName)
+	TurnTo__2(obj specialObj)
+	TurnTo__3(degree float64)
+	TurnTo__4(dir specialDir)
 	Visible() bool
 	Xpos() float64
 	Ypos() float64
 }
+
+type SpriteName = string
+
+type SpriteCostumeName = string
+
+type SpriteAnimationName = string
 
 type SpriteImpl struct {
 	baseObj
@@ -167,10 +195,10 @@ type SpriteImpl struct {
 
 	sayObj           *sayOrThinker
 	quoteObj         *quoter
-	animations       map[string]*aniConfig
+	animations       map[SpriteAnimationName]*aniConfig
 	greffUniforms    map[string]interface{} // graphic effects
 	animBindings     map[string]string
-	defaultAnimation string
+	defaultAnimation SpriteAnimationName
 
 	penColor color.RGBA
 	penShade float64
@@ -487,17 +515,17 @@ func (p *SpriteImpl) OnTouchStart__1(onTouchStart func()) {
 	})
 }
 
-func (p *SpriteImpl) OnTouchStart__2(name string, onTouchStart func(Sprite)) {
-	p.OnTouchStart__0(func(sprite Sprite) {
-		impl := spriteOf(sprite)
-		if impl != nil && impl.name == name {
-			onTouchStart(sprite)
+func (p *SpriteImpl) OnTouchStart__2(sprite SpriteName, onTouchStart func(Sprite)) {
+	p.OnTouchStart__0(func(s Sprite) {
+		impl := spriteOf(s)
+		if impl != nil && impl.name == sprite {
+			onTouchStart(s)
 		}
 	})
 }
 
-func (p *SpriteImpl) OnTouchStart__3(name string, onTouchStart func()) {
-	p.OnTouchStart__2(name, func(Sprite) {
+func (p *SpriteImpl) OnTouchStart__3(sprite SpriteName, onTouchStart func()) {
+	p.OnTouchStart__2(sprite, func(Sprite) {
 		onTouchStart()
 	})
 }
@@ -628,7 +656,7 @@ func (p *SpriteImpl) IsCloned() bool {
 
 // -----------------------------------------------------------------------------
 
-func (p *SpriteImpl) CostumeName() string {
+func (p *SpriteImpl) CostumeName() SpriteCostumeName {
 	return p.getCostumeName()
 }
 
@@ -636,12 +664,34 @@ func (p *SpriteImpl) CostumeIndex() int {
 	return p.getCostumeIndex()
 }
 
-func (p *SpriteImpl) SetCostume(costume interface{}) {
+// SetCostume func:
+//
+//	SetCostume(costume) or
+//	SetCostume(index) or
+//	SetCostume(spx.Next) or
+//	SetCostume(spx.Prev)
+func (p *SpriteImpl) setCostume(costume interface{}) {
 	if debugInstr {
 		log.Println("SetCostume", p.name, costume)
 	}
 	p.goSetCostume(costume)
 	p.defaultCostumeIndex = p.costumeIndex_
+}
+
+func (p *SpriteImpl) SetCostume__0(costume SpriteCostumeName) {
+	p.setCostume(costume)
+}
+
+func (p *SpriteImpl) SetCostume__1(index int) {
+	p.setCostume(index)
+}
+
+func (p *SpriteImpl) SetCostume__2(index float64) {
+	p.setCostume(index)
+}
+
+func (p *SpriteImpl) SetCostume__3(action switchAction) {
+	p.setCostume(action)
 }
 
 func (p *SpriteImpl) NextCostume() {
@@ -676,7 +726,7 @@ func (p *SpriteImpl) getFromAnToForAniFrames(from interface{}, to interface{}) (
 	fromval := 0.0
 	toval := 0.0
 	switch v := from.(type) {
-	case string:
+	case SpriteCostumeName:
 		fromval = float64(p.findCostume(v))
 		if fromval < 0 {
 			log.Panicf("findCostume %s failed", v)
@@ -686,7 +736,7 @@ func (p *SpriteImpl) getFromAnToForAniFrames(from interface{}, to interface{}) (
 	}
 
 	switch v := to.(type) {
-	case string:
+	case SpriteCostumeName:
 		toval = float64(p.findCostume(v))
 		if toval < 0 {
 			log.Panicf("findCostume %s failed", v)
@@ -720,11 +770,10 @@ type animState struct {
 	IsKeepOnStop bool
 }
 
-func (p *SpriteImpl) goAnimate(name string, ani *aniConfig) {
+func (p *SpriteImpl) goAnimate(name SpriteAnimationName, ani *aniConfig) {
 	p.goAnimateInternal(name, ani, true)
 }
-
-func (p *SpriteImpl) goAnimateInternal(name string, ani *aniConfig, isBlocking bool) *animState {
+func (p *SpriteImpl) goAnimateInternal(name SpriteAnimationName, ani *aniConfig, isBlocking bool) *animState {
 	info := &animState{
 		AniType:      ani.AniType,
 		Name:         name,
@@ -820,7 +869,7 @@ func doAnimation(p *SpriteImpl, info *animState) {
 	}
 }
 
-func (p *SpriteImpl) Animate(name string) {
+func (p *SpriteImpl) Animate(name SpriteAnimationName) {
 	if debugInstr {
 		log.Println("==> Animation", name)
 	}
@@ -837,23 +886,31 @@ func (p *SpriteImpl) Ask(msg interface{}) {
 	panic("todo")
 }
 
-func (p *SpriteImpl) Say(msg interface{}, secs ...float64) {
+func (p *SpriteImpl) Say__0(msg interface{}) {
+	p.Say__1(msg, 0)
+}
+
+func (p *SpriteImpl) Say__1(msg interface{}, secs float64) {
 	if debugInstr {
 		log.Println("Say", p.name, msg, secs)
 	}
 	p.sayOrThink(msg, styleSay)
-	if secs != nil {
-		p.waitStopSay(secs[0])
+	if secs > 0 {
+		p.waitStopSay(secs)
 	}
 }
 
-func (p *SpriteImpl) Think(msg interface{}, secs ...float64) {
+func (p *SpriteImpl) Think__0(msg interface{}) {
+	p.Think__1(msg, 0)
+}
+
+func (p *SpriteImpl) Think__1(msg interface{}, secs float64) {
 	if debugInstr {
 		log.Println("Think", p.name, msg, secs)
 	}
 	p.sayOrThink(msg, styleThink)
-	if secs != nil {
-		p.waitStopSay(secs[0])
+	if secs > 0 {
+		p.waitStopSay(secs)
 	}
 }
 
@@ -866,16 +923,20 @@ func (p *SpriteImpl) Quote__0(message string) {
 }
 
 func (p *SpriteImpl) Quote__1(message string, secs float64) {
-	p.Quote__2(message, "", secs)
+	p.Quote__3(message, "", secs)
 }
 
-func (p *SpriteImpl) Quote__2(message, description string, secs ...float64) {
+func (p *SpriteImpl) Quote__2(message, description string) {
+	p.Quote__3(message, description, 0)
+}
+
+func (p *SpriteImpl) Quote__3(message, description string, secs float64) {
 	if debugInstr {
 		log.Println("Quote", p.name, message, description, secs)
 	}
 	p.quote_(message, description)
-	if secs != nil {
-		p.waitStopQuote(secs[0])
+	if secs > 0 {
+		p.waitStopQuote(secs)
 	}
 }
 
@@ -888,15 +949,30 @@ func (p *SpriteImpl) getXY() (x, y float64) {
 // DistanceTo func:
 //
 //	DistanceTo(sprite)
-//	DistanceTo(spriteName)
 //	DistanceTo(spx.Mouse)
 //	DistanceTo(spx.Random)
-func (p *SpriteImpl) DistanceTo(obj interface{}) float64 {
+func (p *SpriteImpl) distanceTo(obj interface{}) float64 {
 	x, y := p.x, p.y
 	x2, y2 := p.g.objectPos(obj)
 	x -= x2
 	y -= y2
 	return math.Sqrt(x*x + y*y)
+}
+
+func (p *SpriteImpl) DistanceTo__0(sprite Sprite) float64 {
+	return p.distanceTo(sprite)
+}
+
+func (p *SpriteImpl) DistanceTo__1(sprite SpriteName) float64 {
+	return p.distanceTo(sprite)
+}
+
+func (p *SpriteImpl) DistanceTo__2(obj specialObj) float64 {
+	return p.distanceTo(obj)
+}
+
+func (p *SpriteImpl) DistanceTo__3(pos Pos) float64 {
+	return p.distanceTo(pos)
 }
 
 func (p *SpriteImpl) doMoveTo(x, y float64) {
@@ -944,18 +1020,18 @@ func (p *SpriteImpl) Step__1(step int) {
 	p.Step__0(float64(step))
 }
 
-func (p *SpriteImpl) Step__2(step float64, animname string) {
+func (p *SpriteImpl) Step__2(step float64, animation SpriteAnimationName) {
 	if debugInstr {
 		log.Println("Step", p.name, step)
 	}
-	if ani, ok := p.animations[animname]; ok {
+	if ani, ok := p.animations[animation]; ok {
 		anicopy := *ani
 		anicopy.From = 0
 		anicopy.To = step
 		anicopy.AniType = aniTypeMove
 		anicopy.Duration = math.Abs(step) * ani.StepDuration
 		anicopy.IsLoop = true
-		p.goAnimate(animname, &anicopy)
+		p.goAnimate(animation, &anicopy)
 		return
 	}
 	p.goMoveForward(step)
@@ -980,15 +1056,26 @@ func (p *SpriteImpl) playDefaultAnim() {
 // Goto func:
 //
 //	Goto(sprite)
-//	Goto(spriteName)
 //	Goto(spx.Mouse)
 //	Goto(spx.Random)
-func (p *SpriteImpl) Goto(obj interface{}) {
+func (p *SpriteImpl) goGoto(obj interface{}) {
 	if debugInstr {
 		log.Println("Goto", p.name, obj)
 	}
 	x, y := p.g.objectPos(obj)
 	p.SetXYpos(x, y)
+}
+
+func (p *SpriteImpl) Goto__0(sprite Sprite) {
+	p.goGoto(sprite)
+}
+
+func (p *SpriteImpl) Goto__1(sprite SpriteName) {
+	p.goGoto(sprite)
+}
+
+func (p *SpriteImpl) Goto__2(obj specialObj) {
+	p.goGoto(obj)
 }
 
 func (p *SpriteImpl) Glide__0(x, y float64, secs float64) {
@@ -1007,12 +1094,28 @@ func (p *SpriteImpl) Glide__0(x, y float64, secs float64) {
 	p.goAnimate(animName, ani)
 }
 
-func (p *SpriteImpl) Glide__1(obj interface{}, secs float64) {
+func (p *SpriteImpl) goGlide(obj interface{}, secs float64) {
 	if debugInstr {
 		log.Println("Glide", obj, secs)
 	}
 	x, y := p.g.objectPos(obj)
 	p.Glide__0(x, y, secs)
+}
+
+func (p *SpriteImpl) Glide__1(sprite Sprite, secs float64) {
+	p.goGlide(sprite, secs)
+}
+
+func (p *SpriteImpl) Glide__2(sprite SpriteName, secs float64) {
+	p.goGlide(sprite, secs)
+}
+
+func (p *SpriteImpl) Glide__3(obj specialObj, secs float64) {
+	p.goGlide(obj, secs)
+}
+
+func (p *SpriteImpl) Glide__4(pos Pos, secs float64) {
+	p.goGlide(pos, secs)
 }
 
 func (p *SpriteImpl) SetXYpos(x, y float64) {
@@ -1088,7 +1191,7 @@ func (p *SpriteImpl) Name() string {
 //	Turn(spx.Left)
 //	Turn(spx.Right)
 //	Turn(ti *spx.TurningInfo)
-func (p *SpriteImpl) Turn(val interface{}) {
+func (p *SpriteImpl) turn(val interface{}) {
 	var delta float64
 	switch v := val.(type) {
 	//case specialDir:
@@ -1119,17 +1222,28 @@ func (p *SpriteImpl) Turn(val interface{}) {
 	}
 }
 
+func (p *SpriteImpl) Turn__0(degree float64) {
+	p.turn(degree)
+}
+
+func (p *SpriteImpl) Turn__1(dir specialDir) {
+	p.turn(dir)
+}
+
+func (p *SpriteImpl) Turn__2(ti *TurningInfo) {
+	p.turn(ti)
+}
+
 // TurnTo func:
 //
 //	TurnTo(sprite)
-//	TurnTo(spriteName)
 //	TurnTo(spx.Mouse)
 //	TurnTo(degree)
 //	TurnTo(spx.Left)
 //	TurnTo(spx.Right)
 //	TurnTo(spx.Up)
 //	TurnTo(spx.Down)
-func (p *SpriteImpl) TurnTo(obj interface{}) {
+func (p *SpriteImpl) turnTo(obj interface{}) {
 	var angle float64
 	switch v := obj.(type) {
 	//case specialDir:
@@ -1168,6 +1282,26 @@ func (p *SpriteImpl) TurnTo(obj interface{}) {
 	if p.setDirection(angle, false) && debugInstr {
 		log.Println("TurnTo", p.name, obj)
 	}
+}
+
+func (p *SpriteImpl) TurnTo__0(sprite Sprite) {
+	p.turnTo(sprite)
+}
+
+func (p *SpriteImpl) TurnTo__1(sprite SpriteName) {
+	p.turnTo(sprite)
+}
+
+func (p *SpriteImpl) TurnTo__2(obj specialObj) {
+	p.turnTo(obj)
+}
+
+func (p *SpriteImpl) TurnTo__3(degree float64) {
+	p.turnTo(degree)
+}
+
+func (p *SpriteImpl) TurnTo__4(dir specialDir) {
+	p.turnTo(dir)
 }
 
 func (p *SpriteImpl) SetHeading(dir float64) {
@@ -1269,7 +1403,6 @@ func (p *SpriteImpl) TouchingColor(color Color) bool {
 
 // Touching func:
 //
-//	Touching(spriteName)
 //	Touching(sprite)
 //	Touching(spx.Mouse)
 //	Touching(spx.Edge)
@@ -1277,12 +1410,12 @@ func (p *SpriteImpl) TouchingColor(color Color) bool {
 //	Touching(spx.EdgeTop)
 //	Touching(spx.EdgeRight)
 //	Touching(spx.EdgeBottom)
-func (p *SpriteImpl) Touching(obj interface{}) bool {
+func (p *SpriteImpl) touching(obj interface{}) bool {
 	if !p.isVisible || p.isDying {
 		return false
 	}
 	switch v := obj.(type) {
-	case string:
+	case SpriteName:
 		if o := p.g.touchingSpriteBy(p, v); o != nil {
 			return true
 		}
@@ -1298,6 +1431,18 @@ func (p *SpriteImpl) Touching(obj interface{}) bool {
 		return touchingSprite(p, spriteOf(v))
 	}
 	panic("Touching: unexpected input")
+}
+
+func (p *SpriteImpl) Touching__0(sprite SpriteName) bool {
+	return p.touching(sprite)
+}
+
+func (p *SpriteImpl) Touching__1(sprite Sprite) bool {
+	return p.touching(sprite)
+}
+
+func (p *SpriteImpl) Touching__2(obj specialObj) bool {
+	return p.touching(obj)
 }
 
 func touchingSprite(dst, src *SpriteImpl) bool {
