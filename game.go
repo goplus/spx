@@ -686,7 +686,9 @@ type clicker interface {
 func (p *Game) doWhenLeftButtonDown(ev *eventLeftButtonDown) {
 	point := mathf.NewVec2(float64(ev.X), float64(ev.Y))
 	tempItems := p.getTempShapes()
-	for _, item := range tempItems {
+	count := len(tempItems)
+	for i := 0; i < count; i++ {
+		item := tempItems[count-i-1]
 		if o, ok := item.(clicker); ok {
 			proxy := o.getProxy()
 			if proxy != nil {
