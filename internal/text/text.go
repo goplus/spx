@@ -1,4 +1,4 @@
-package gdi
+package text
 
 import (
 	"strings"
@@ -29,7 +29,7 @@ func calculateWordLength(word string) int {
 }
 
 // splitString splits the input string into lines with a maximum placeholder width n
-func SplitString(input string, n int) string {
+func SplitLines(input string, n int) string {
 	words := strings.Fields(input)
 	var result strings.Builder
 	lineLength := 0

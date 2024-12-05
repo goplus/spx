@@ -17,13 +17,11 @@
 package spx
 
 import (
-	"image/color"
 	"log"
 	"math"
 	"reflect"
 
 	"github.com/goplus/spx/internal/engine"
-	"github.com/goplus/spx/internal/gdi"
 	"github.com/goplus/spx/internal/time"
 	"github.com/goplus/spx/internal/tools"
 	"github.com/realdream-ai/mathf"
@@ -199,7 +197,7 @@ type SpriteImpl struct {
 	animBindings     map[string]string
 	defaultAnimation SpriteAnimationName
 
-	penColor color.RGBA
+	penColor mathf.Color
 	penShade float64
 	penHue   float64
 	penWidth float64
@@ -1394,8 +1392,6 @@ func (p *SpriteImpl) ClearGraphEffects() {
 
 // -----------------------------------------------------------------------------
 
-type Color = color.RGBA
-
 func (p *SpriteImpl) TouchingColor(color Color) bool {
 	panic("todo gdspx")
 }
@@ -1544,7 +1540,7 @@ func (p *SpriteImpl) PenDown() {
 }
 
 func (p *SpriteImpl) SetPenColor(color Color) {
-	h, _, v := gdi.RGB2HSV(color.R, color.G, color.B)
+	h, _, v := color.ToHSV()
 	p.penHue = (200 * h) / 360
 	p.penShade = 50 * v
 	p.penColor = color
@@ -1595,17 +1591,18 @@ func (p *SpriteImpl) setPenShade(v float64, change bool) {
 }
 
 func (p *SpriteImpl) doUpdatePenColor() {
-	r, g, b := gdi.HSV2RGB((p.penHue*180)/100, 1, 1)
+	color := mathf.NewColorHSV((p.penHue*180)/100, 1, 1)
 	shade := p.penShade
 	if shade > 100 { // range 0..100
 		shade = 200 - shade
 	}
+	a := p.penColor.A
 	if shade < 50 {
-		r, g, b = gdi.MixRGB(0, 0, 0, r, g, b, (10+shade)/60)
+		p.penColor = mathf.LerpColor(mathf.ColorBlack(), color, (10+shade)/60)
 	} else {
-		r, g, b = gdi.MixRGB(r, g, b, 255, 255, 255, (shade-50)/60)
+		p.penColor = mathf.LerpColor(color, mathf.ColorWhite(), (shade-50)/60)
 	}
-	p.penColor = color.RGBA{R: r, G: g, B: b, A: p.penColor.A}
+	p.penColor.A = a
 }
 
 func (p *SpriteImpl) SetPenSize(size float64) {
