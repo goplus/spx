@@ -1187,19 +1187,19 @@ func (p *Game) StartBackdrop__1(backdrop BackdropName, wait bool) {
 	p.startBackdrop(backdrop, wait)
 }
 
-func (p *Game) StartBackdrop__2(index int) {
+func (p *Game) StartBackdrop__2(index float64) {
 	p.startBackdrop(index, false)
 }
 
-func (p *Game) StartBackdrop__3(index int, wait bool) {
+func (p *Game) StartBackdrop__3(index float64, wait bool) {
 	p.startBackdrop(index, wait)
 }
 
-func (p *Game) StartBackdrop__4(index float64) {
+func (p *Game) StartBackdrop__4(index int) {
 	p.startBackdrop(index, false)
 }
 
-func (p *Game) StartBackdrop__5(index float64, wait bool) {
+func (p *Game) StartBackdrop__5(index int, wait bool) {
 	p.startBackdrop(index, wait)
 }
 

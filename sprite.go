@@ -176,8 +176,8 @@ type Sprite interface {
 	Say__0(msg interface{})
 	Say__1(msg interface{}, secs float64)
 	SetCostume__0(costume SpriteCostumeName)
-	SetCostume__1(index int)
-	SetCostume__2(index float64)
+	SetCostume__1(index float64)
+	SetCostume__2(index int)
 	SetCostume__3(action switchAction)
 	SetDying()
 	SetEffect(kind EffectKind, val float64)
@@ -196,8 +196,8 @@ type Sprite interface {
 	Size() float64
 	Stamp()
 	Step__0(step float64)
-	Step__1(step int)
-	Step__2(step float64, animation SpriteAnimationName)
+	Step__1(step float64, animation SpriteAnimationName)
+	Step__2(step int)
 	Think__0(msg interface{})
 	Think__1(msg interface{}, secs float64)
 	Touching__0(sprite SpriteName) bool
@@ -209,9 +209,9 @@ type Sprite interface {
 	Turn__2(ti *TurningInfo)
 	TurnTo__0(sprite Sprite)
 	TurnTo__1(sprite SpriteName)
-	TurnTo__2(obj specialObj)
-	TurnTo__3(degree float64)
-	TurnTo__4(dir specialDir)
+	TurnTo__2(degree float64)
+	TurnTo__3(dir specialDir)
+	TurnTo__4(obj specialObj)
 	Visible() bool
 	Xpos() float64
 	Ypos() float64
@@ -745,11 +745,11 @@ func (p *SpriteImpl) SetCostume__0(costume SpriteCostumeName) {
 	p.setCostume(costume)
 }
 
-func (p *SpriteImpl) SetCostume__1(index int) {
+func (p *SpriteImpl) SetCostume__1(index float64) {
 	p.setCostume(index)
 }
 
-func (p *SpriteImpl) SetCostume__2(index float64) {
+func (p *SpriteImpl) SetCostume__2(index int) {
 	p.setCostume(index)
 }
 
@@ -1138,14 +1138,10 @@ func (p *SpriteImpl) Move__1(step int) {
 
 func (p *SpriteImpl) Step__0(step float64) {
 	animName := p.getStateAnimName(StateStep)
-	p.Step__2(step, animName)
+	p.Step__1(step, animName)
 }
 
-func (p *SpriteImpl) Step__1(step int) {
-	p.Step__0(float64(step))
-}
-
-func (p *SpriteImpl) Step__2(step float64, animation SpriteAnimationName) {
+func (p *SpriteImpl) Step__1(step float64, animation SpriteAnimationName) {
 	if debugInstr {
 		log.Println("Step", p.name, step)
 	}
@@ -1160,6 +1156,10 @@ func (p *SpriteImpl) Step__2(step float64, animation SpriteAnimationName) {
 		return
 	}
 	p.goMoveForward(step)
+}
+
+func (p *SpriteImpl) Step__2(step int) {
+	p.Step__0(float64(step))
 }
 
 func (p *SpriteImpl) playDefaultAnim() {
@@ -1413,16 +1413,16 @@ func (p *SpriteImpl) TurnTo__1(sprite SpriteName) {
 	p.turnTo(sprite)
 }
 
-func (p *SpriteImpl) TurnTo__2(obj specialObj) {
-	p.turnTo(obj)
-}
-
-func (p *SpriteImpl) TurnTo__3(degree float64) {
+func (p *SpriteImpl) TurnTo__2(degree float64) {
 	p.turnTo(degree)
 }
 
-func (p *SpriteImpl) TurnTo__4(dir specialDir) {
+func (p *SpriteImpl) TurnTo__3(dir specialDir) {
 	p.turnTo(dir)
+}
+
+func (p *SpriteImpl) TurnTo__4(obj specialObj) {
+	p.turnTo(obj)
 }
 
 func (p *SpriteImpl) SetHeading(dir float64) {
