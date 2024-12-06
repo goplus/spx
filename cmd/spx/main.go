@@ -39,11 +39,25 @@ type CmdTool struct {
 
 func main() {
 	cmd := &CmdTool{}
+	if os.Args[1] == "installispx" {
+		installIspx()
+		return
+	}
 	cmdtool.RunCmd(cmd, "gdspx", version, proejct_fs, "template/project", "project", "installispx")
+}
+
+func installIspx() {
+	filePath := getISpxPath()
+	rawdir, _ := os.Getwd()
+	os.Chdir("../ispx")
+	envVars := []string{"GOOS=js", "GOARCH=wasm"}
+	util.RunGolang(envVars, "build", "-o", filePath)
+	os.Chdir(rawdir)
 }
 
 func (pself *CmdTool) CheckEnv() error {
 	dir, _ := filepath.Abs(cmdtool.TargetDir)
+
 	exist := CheckFileExist(dir, "spx", false)
 	if !exist {
 		return fmt.Errorf("can not find spx file, not a valid project dir")
@@ -87,15 +101,6 @@ func CheckFileExist(dir, ext string, recursive bool) bool {
 	return false
 }
 func (pself *CmdTool) OnBeforeCheck(cmd string) error {
-	switch cmd {
-	case "installispx":
-		filePath := getISpxPath()
-		rawdir, _ := os.Getwd()
-		os.Chdir("../ispx")
-		envVars := []string{"GOOS=js", "GOARCH=wasm"}
-		util.RunGolang(envVars, "build", "-o", filePath)
-		os.Chdir(rawdir)
-	}
 	webDir, _ = filepath.Abs(filepath.Join(cmdtool.ProjectDir, ".builds", "web"))
 	return nil
 }

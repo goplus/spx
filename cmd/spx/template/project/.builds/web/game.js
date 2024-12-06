@@ -164,7 +164,6 @@ class GameApp {
                 await this.waitFsSyncDone(this.editorCanvas)
                 this.onProgress(0.9);
                 await this.mergeProjectWithEngineRes()
-                window.goLoadData(new Uint8Array(this.projectData));
                 this.onProgress(1.0);
                 await this.updateProjectHash(this.curProjectHash)
                 this.logVerbose("==> editor start done")
