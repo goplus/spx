@@ -121,3 +121,9 @@ func SyncGetCameraPosition() (float64, float64) {
 func SyncSetCameraPosition(x, y float64) {
 	SyncCameraSetCameraPosition(NewVec2(float64(x), -float64(y)))
 }
+
+func SyncReloadScene() {
+	WaitMainThread(func() {
+		ClearAllSprites()
+	})
+}
