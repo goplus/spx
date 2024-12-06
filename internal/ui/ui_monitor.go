@@ -2,6 +2,8 @@ package ui
 
 import (
 	. "github.com/realdream-ai/gdspx/pkg/engine"
+	"github.com/realdream-ai/mathf"
+	. "github.com/realdream-ai/mathf"
 
 	"github.com/goplus/spx/internal/engine"
 )
@@ -15,7 +17,7 @@ type UiMonitor struct {
 	labelValue     *UiNode
 	labelValueOnly *UiNode
 }
-type UpdateFunc func(float32)
+type UpdateFunc func(float64)
 
 func NewUiMonitor() *UiMonitor {
 	panel := engine.SyncCreateEngineUiNode[UiMonitor]("")
@@ -41,7 +43,7 @@ func (pself *UiMonitor) SetVisible(isOn bool) {
 }
 
 func (pself *UiMonitor) UpdateScale(x float64) {
-	engine.SyncUiSetScale(pself.GetId(), engine.NewVec2(x, x))
+	engine.SyncUiSetScale(pself.GetId(), mathf.NewVec2(x, x))
 }
 func (pself *UiMonitor) UpdatePos(x, y float64) {
 	pos := WorldToScreen(x, y)

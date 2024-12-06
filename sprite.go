@@ -24,9 +24,9 @@ import (
 
 	"github.com/goplus/spx/internal/engine"
 	"github.com/goplus/spx/internal/gdi"
-	"github.com/goplus/spx/internal/math32"
 	"github.com/goplus/spx/internal/time"
 	"github.com/goplus/spx/internal/tools"
+	"github.com/realdream-ai/mathf"
 )
 
 type specialDir = int
@@ -69,7 +69,7 @@ type Sprite interface {
 	Animate(name SpriteAnimationName)
 	Ask(msg interface{})
 	BounceOffEdge()
-	Bounds() *math32.RotatedRect
+	Bounds() *mathf.Rect2
 	ChangeEffect(kind EffectKind, delta float64)
 	ChangeHeading(dir float64)
 	ChangePenColor(delta float64)
@@ -190,8 +190,7 @@ type SpriteImpl struct {
 	x, y          float64
 	direction     float64
 	rotationStyle RotationStyle
-	rRect         *math32.RotatedRect
-	pivot         math32.Vector2
+	pivot         mathf.Vec2
 
 	sayObj           *sayOrThinker
 	quoteObj         *quoter
@@ -224,15 +223,15 @@ type SpriteImpl struct {
 	triggerMask   int64
 	triggerLayer  int64
 	triggerType   int64
-	triggerCenter math32.Vector2
-	triggerSize   math32.Vector2
+	triggerCenter mathf.Vec2
+	triggerSize   mathf.Vec2
 	triggerRadius float64
 
 	collisionMask  int64
 	collisionLayer int64
 	colliderType   int64
-	colliderCenter math32.Vector2
-	colliderSize   math32.Vector2
+	colliderCenter mathf.Vec2
+	colliderSize   mathf.Vec2
 	colliderRadius float64
 }
 
@@ -811,7 +810,7 @@ func doAnimation(p *SpriteImpl, info *animState) {
 			return
 		}
 		p.isCostumeDirty = false
-		p.proxy.PlayAnim(animName, float32(info.Speed), info.IsLoop)
+		p.proxy.PlayAnim(animName, info.Speed, info.IsLoop, false)
 	})
 	if info.OnStart != nil && info.OnStart.Play != "" {
 		p.g.Play__3(info.OnStart.Play)
@@ -834,18 +833,18 @@ func doAnimation(p *SpriteImpl, info *animState) {
 			case aniTypeMove:
 				src, _ := tools.GetFloat(info.From)
 				dst, _ := tools.GetFloat(info.To)
-				val := math32.Lerp(src, dst, percent)
+				val := mathf.Lerpf(src, dst, percent)
 				sin, cos := math.Sincos(toRadian(pre_direction))
 				p.doMoveToForAnim(pre_x+val*sin, pre_y+val*cos)
 			case aniTypeGlide:
 				src, _ := tools.GetVec2(info.From)
 				dst, _ := tools.GetVec2(info.To)
-				val := math32.LerpVec2(src, dst, percent)
+				val := src.Lerp(dst, percent)
 				p.SetXYpos(val.X, val.Y)
 			case aniTypeTurn:
 				src, _ := tools.GetFloat(info.From)
 				dst, _ := tools.GetFloat(info.To)
-				val := math32.Lerp(src, dst, percent)
+				val := mathf.Lerpf(src, dst, percent)
 				p.setDirection(val, false)
 			}
 			if info.IsCanceled {
@@ -1085,8 +1084,8 @@ func (p *SpriteImpl) Glide__0(x, y float64, secs float64) {
 	x0, y0 := p.getXY()
 	ani := &aniConfig{
 		Duration: secs,
-		From:     math32.NewVector2(x0, y0),
-		To:       math32.NewVector2(x, y),
+		From:     mathf.NewVec2(x0, y0),
+		To:       mathf.NewVec2(x, y),
 		AniType:  aniTypeGlide,
 	}
 	ani.IsLoop = true
@@ -1376,15 +1375,15 @@ func (p *SpriteImpl) requireGreffUniforms() map[string]interface{} {
 
 func (p *SpriteImpl) SetEffect(kind EffectKind, val float64) {
 	effs := p.requireGreffUniforms()
-	effs[kind.String()] = float32(val)
+	effs[kind.String()] = float64(val)
 }
 
 func (p *SpriteImpl) ChangeEffect(kind EffectKind, delta float64) {
 	effs := p.requireGreffUniforms()
 	key := kind.String()
-	newVal := float32(delta)
+	newVal := float64(delta)
 	if oldVal, ok := effs[key]; ok {
-		newVal += oldVal.(float32)
+		newVal += oldVal.(float64)
 	}
 	effs[key] = newVal
 }
@@ -1650,7 +1649,7 @@ func (p *SpriteImpl) CostumeHeight() float64 {
 	return float64(h)
 }
 
-func (p *SpriteImpl) Bounds() *math32.RotatedRect {
+func (p *SpriteImpl) Bounds() *mathf.Rect2 {
 	if !p.isVisible {
 		return nil
 	}
@@ -1670,9 +1669,9 @@ func (p *SpriteImpl) Bounds() *math32.RotatedRect {
 		wi, hi := c.getSize()
 		w, h = float64(wi)*p.scale, float64(hi)*p.scale
 	}
-	ret := math32.RotatedRect{Center: math32.NewVector2(x, y),
-		Size: math32.NewSize(float64(w), float64(h)), Angle: p.direction}
-	return &ret
+
+	rect := mathf.NewRect2(x-w*0.5, y-h*0.5, w, h)
+	return &rect
 
 }
 
@@ -1684,8 +1683,8 @@ func (p *SpriteImpl) fixWorldRange(x, y float64) (float64, float64) {
 		return x, y
 	}
 	worldW, worldH := p.g.worldSize_()
-	maxW := float64(worldW)/2.0 + float64(rect.Size.Width)
-	maxH := float64(worldH)/2.0 + float64(rect.Size.Height)
+	maxW := float64(worldW)/2.0 + float64(rect.Size.X)
+	maxH := float64(worldH)/2.0 + float64(rect.Size.Y)
 	if x < -maxW {
 		x = -maxW
 	}

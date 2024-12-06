@@ -47,7 +47,9 @@ func (p *sayOrThinker) refresh() {
 		return
 	}
 	bound := p.sp.Bounds()
-	p.panel.SetText(float64(p.sp.g.getWidth()), float64(p.sp.g.getHeight()), bound.Center.X, bound.Center.Y, bound.Size.Width, bound.Size.Height, p.msg)
+	center := bound.Center()
+	size := bound.Size
+	p.panel.SetText(float64(p.sp.g.getWidth()), float64(p.sp.g.getHeight()), center.X, center.Y, size.X, size.Y, p.msg)
 }
 
 // -------------------------------------------------------------------------------------

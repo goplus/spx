@@ -9,6 +9,7 @@ package engine
 
 import (
 	. "github.com/realdream-ai/gdspx/pkg/engine"
+	. "github.com/realdream-ai/mathf"
 )
 
 // IAudioMgr
@@ -37,14 +38,14 @@ func SyncAudioResumeMusic() {
 		AudioMgr.ResumeMusic()
 	})
 }
-func SyncAudioGetMusicTimer() float32 {
-	var _ret1 float32
+func SyncAudioGetMusicTimer() float64 {
+	var _ret1 float64
 	WaitMainThread(func() {
 		_ret1 = AudioMgr.GetMusicTimer()
 	})
 	return _ret1
 }
-func SyncAudioSetMusicTimer(time float32) {
+func SyncAudioSetMusicTimer(time float64) {
 	WaitMainThread(func() {
 		AudioMgr.SetMusicTimer(time)
 	})
@@ -56,37 +57,37 @@ func SyncAudioIsMusicPlaying() bool {
 	})
 	return _ret1
 }
-func SyncAudioSetSfxVolume(volume float32) {
+func SyncAudioSetSfxVolume(volume float64) {
 	WaitMainThread(func() {
 		AudioMgr.SetSfxVolume(volume)
 	})
 }
-func SyncAudioGetSfxVolume() float32 {
-	var _ret1 float32
+func SyncAudioGetSfxVolume() float64 {
+	var _ret1 float64
 	WaitMainThread(func() {
 		_ret1 = AudioMgr.GetSfxVolume()
 	})
 	return _ret1
 }
-func SyncAudioSetMusicVolume(volume float32) {
+func SyncAudioSetMusicVolume(volume float64) {
 	WaitMainThread(func() {
 		AudioMgr.SetMusicVolume(volume)
 	})
 }
-func SyncAudioGetMusicVolume() float32 {
-	var _ret1 float32
+func SyncAudioGetMusicVolume() float64 {
+	var _ret1 float64
 	WaitMainThread(func() {
 		_ret1 = AudioMgr.GetMusicVolume()
 	})
 	return _ret1
 }
-func SyncAudioSetMasterVolume(volume float32) {
+func SyncAudioSetMasterVolume(volume float64) {
 	WaitMainThread(func() {
 		AudioMgr.SetMasterVolume(volume)
 	})
 }
-func SyncAudioGetMasterVolume() float32 {
-	var _ret1 float32
+func SyncAudioGetMasterVolume() float64 {
+	var _ret1 float64
 	WaitMainThread(func() {
 		_ret1 = AudioMgr.GetMasterVolume()
 	})
@@ -155,8 +156,8 @@ func SyncInputGetKeyState(key int64) int64 {
 	})
 	return _ret1
 }
-func SyncInputGetAxis(neg_action string, pos_action string) float32 {
-	var _ret1 float32
+func SyncInputGetAxis(neg_action string, pos_action string) float64 {
+	var _ret1 float64
 	WaitMainThread(func() {
 		_ret1 = InputMgr.GetAxis(neg_action, pos_action)
 	})
@@ -268,14 +269,14 @@ func SyncPlatformIsDebugMode() bool {
 	})
 	return _ret1
 }
-func SyncPlatformGetTimeScale() float32 {
-	var _ret1 float32
+func SyncPlatformGetTimeScale() float64 {
+	var _ret1 float64
 	WaitMainThread(func() {
 		_ret1 = PlatformMgr.GetTimeScale()
 	})
 	return _ret1
 }
-func SyncPlatformSetTimeScale(time_scale float32) {
+func SyncPlatformSetTimeScale(time_scale float64) {
 	WaitMainThread(func() {
 		PlatformMgr.SetTimeScale(time_scale)
 	})
@@ -382,13 +383,13 @@ func SyncSpriteGetChildPosition(obj Object, path string) Vec2 {
 	})
 	return _ret1
 }
-func SyncSpriteSetChildRotation(obj Object, path string, rot float32) {
+func SyncSpriteSetChildRotation(obj Object, path string, rot float64) {
 	WaitMainThread(func() {
 		SpriteMgr.SetChildRotation(obj, path, rot)
 	})
 }
-func SyncSpriteGetChildRotation(obj Object, path string) float32 {
-	var _ret1 float32
+func SyncSpriteGetChildRotation(obj Object, path string) float64 {
+	var _ret1 float64
 	WaitMainThread(func() {
 		_ret1 = SpriteMgr.GetChildRotation(obj, path)
 	})
@@ -460,13 +461,13 @@ func SyncSpriteGetPosition(obj Object) Vec2 {
 	})
 	return _ret1
 }
-func SyncSpriteSetRotation(obj Object, rot float32) {
+func SyncSpriteSetRotation(obj Object, rot float64) {
 	WaitMainThread(func() {
 		SpriteMgr.SetRotation(obj, rot)
 	})
 }
-func SyncSpriteGetRotation(obj Object) float32 {
-	var _ret1 float32
+func SyncSpriteGetRotation(obj Object) float64 {
+	var _ret1 float64
 	WaitMainThread(func() {
 		_ret1 = SpriteMgr.GetRotation(obj)
 	})
@@ -549,9 +550,9 @@ func SyncSpriteSetZIndex(obj Object, z int64) {
 		SpriteMgr.SetZIndex(obj, z)
 	})
 }
-func SyncSpritePlayAnim(obj Object, p_name string, p_speed float32, p_revert bool) {
+func SyncSpritePlayAnim(obj Object, p_name string, p_speed float64, isLoop bool, p_revert bool) {
 	WaitMainThread(func() {
-		SpriteMgr.PlayAnim(obj, p_name, p_speed, p_revert)
+		SpriteMgr.PlayAnim(obj, p_name, p_speed, isLoop, p_revert)
 	})
 }
 func SyncSpritePlayBackwardsAnim(obj Object, p_name string) {
@@ -600,20 +601,20 @@ func SyncSpriteGetAnimFrame(obj Object) int64 {
 	})
 	return _ret1
 }
-func SyncSpriteSetAnimSpeedScale(obj Object, p_speed_scale float32) {
+func SyncSpriteSetAnimSpeedScale(obj Object, p_speed_scale float64) {
 	WaitMainThread(func() {
 		SpriteMgr.SetAnimSpeedScale(obj, p_speed_scale)
 	})
 }
-func SyncSpriteGetAnimSpeedScale(obj Object) float32 {
-	var _ret1 float32
+func SyncSpriteGetAnimSpeedScale(obj Object) float64 {
+	var _ret1 float64
 	WaitMainThread(func() {
 		_ret1 = SpriteMgr.GetAnimSpeedScale(obj)
 	})
 	return _ret1
 }
-func SyncSpriteGetAnimPlayingSpeed(obj Object) float32 {
-	var _ret1 float32
+func SyncSpriteGetAnimPlayingSpeed(obj Object) float64 {
+	var _ret1 float64
 	WaitMainThread(func() {
 		_ret1 = SpriteMgr.GetAnimPlayingSpeed(obj)
 	})
@@ -761,25 +762,25 @@ func SyncSpriteMoveAndSlide(obj Object) {
 		SpriteMgr.MoveAndSlide(obj)
 	})
 }
-func SyncSpriteSetGravity(obj Object, gravity float32) {
+func SyncSpriteSetGravity(obj Object, gravity float64) {
 	WaitMainThread(func() {
 		SpriteMgr.SetGravity(obj, gravity)
 	})
 }
-func SyncSpriteGetGravity(obj Object) float32 {
-	var _ret1 float32
+func SyncSpriteGetGravity(obj Object) float64 {
+	var _ret1 float64
 	WaitMainThread(func() {
 		_ret1 = SpriteMgr.GetGravity(obj)
 	})
 	return _ret1
 }
-func SyncSpriteSetMass(obj Object, mass float32) {
+func SyncSpriteSetMass(obj Object, mass float64) {
 	WaitMainThread(func() {
 		SpriteMgr.SetMass(obj, mass)
 	})
 }
-func SyncSpriteGetMass(obj Object) float32 {
-	var _ret1 float32
+func SyncSpriteGetMass(obj Object) float64 {
+	var _ret1 float64
 	WaitMainThread(func() {
 		_ret1 = SpriteMgr.GetMass(obj)
 	})
@@ -848,7 +849,7 @@ func SyncSpriteSetColliderRect(obj Object, center Vec2, size Vec2) {
 		SpriteMgr.SetColliderRect(obj, center, size)
 	})
 }
-func SyncSpriteSetColliderCircle(obj Object, center Vec2, radius float32) {
+func SyncSpriteSetColliderCircle(obj Object, center Vec2, radius float64) {
 	WaitMainThread(func() {
 		SpriteMgr.SetColliderCircle(obj, center, radius)
 	})
@@ -875,7 +876,7 @@ func SyncSpriteSetTriggerRect(obj Object, center Vec2, size Vec2) {
 		SpriteMgr.SetTriggerRect(obj, center, size)
 	})
 }
-func SyncSpriteSetTriggerCircle(obj Object, center Vec2, radius float32) {
+func SyncSpriteSetTriggerCircle(obj Object, center Vec2, radius float64) {
 	WaitMainThread(func() {
 		SpriteMgr.SetTriggerCircle(obj, center, radius)
 	})
@@ -941,7 +942,7 @@ func SyncUiCreateToggle(path string, value bool) Object {
 	})
 	return _ret1
 }
-func SyncUiCreateSlider(path string, value float32) Object {
+func SyncUiCreateSlider(path string, value float64) Object {
 	var _ret1 Object
 	WaitMainThread(func() {
 		_ret1 = UiMgr.CreateSlider(path, value)
@@ -1137,14 +1138,14 @@ func SyncUiSetGlobalPosition(obj Object, value Vec2) {
 		UiMgr.SetGlobalPosition(obj, value)
 	})
 }
-func SyncUiGetRotation(obj Object) float32 {
-	var _ret1 float32
+func SyncUiGetRotation(obj Object) float64 {
+	var _ret1 float64
 	WaitMainThread(func() {
 		_ret1 = UiMgr.GetRotation(obj)
 	})
 	return _ret1
 }
-func SyncUiSetRotation(obj Object, value float32) {
+func SyncUiSetRotation(obj Object, value float64) {
 	WaitMainThread(func() {
 		UiMgr.SetRotation(obj, value)
 	})
