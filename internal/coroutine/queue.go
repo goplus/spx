@@ -32,16 +32,37 @@ func (s *Queue[T]) Count() int {
 	return len(s.tasks)
 }
 
-func (s *Queue[T]) Enqueue(value T) {
+func (s *Queue[T]) PushBack(value T) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.tasks = append(s.tasks, value)
 }
 
-func (s *Queue[T]) Dequeue() T {
+func (s *Queue[T]) PushFront(value T) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.tasks = append([]T{value}, s.tasks...)
+}
+
+func (s *Queue[T]) PopFront() T {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.tasks) == 0 {
+		panic("queue is empty")
+	}
 	value := s.tasks[0]
 	s.tasks = s.tasks[1:]
+	return value
+}
+
+func (s *Queue[T]) PopBack() T {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.tasks) == 0 {
+		panic("queue is empty")
+	}
+	lastIdx := len(s.tasks) - 1
+	value := s.tasks[lastIdx]
+	s.tasks = s.tasks[:lastIdx]
 	return value
 }

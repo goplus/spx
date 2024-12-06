@@ -190,9 +190,13 @@ func (p *Coroutines) Resume(me Thread) {
 	}
 }
 
-func (p *Coroutines) addWaitJob(job *WaitJob) {
+func (p *Coroutines) addWaitJob(job *WaitJob, isFront bool) {
 	p.waitMutex.Lock()
-	p.curQueue.Enqueue(job)
+	if isFront {
+		p.curQueue.PushFront(job)
+	} else {
+		p.curQueue.PushBack(job)
+	}
 	p.waitCond.Signal()
 	p.waitMutex.Unlock()
 }
@@ -234,7 +238,7 @@ func (p *Coroutines) Wait(t float64) {
 			},
 			Time: dstTime,
 		}
-		p.addWaitJob(job)
+		p.addWaitJob(job, false)
 		<-done
 		p.Resume(me)
 	}()
@@ -257,7 +261,7 @@ func (p *Coroutines) WaitNextFrame() {
 			},
 			Frame: frame,
 		}
-		p.addWaitJob(job)
+		p.addWaitJob(job, false)
 		<-done
 		p.Resume(me)
 	}()
@@ -278,7 +282,8 @@ func (p *Coroutines) WaitMainThread(call func()) {
 				done <- 1
 			},
 		}
-		p.addWaitJob(job)
+		// main thread call's priority is higher than other wait jobs
+		p.addWaitJob(job, true)
 		<-done
 		if isResume {
 			// main thread call does NOT count as blocking
@@ -358,18 +363,18 @@ func (p *Coroutines) UpdateJobs() {
 			}
 		}
 
-		task := curQueue.Dequeue()
+		task := curQueue.PopFront()
 		switch task.Type {
 		case waitTypeFrame:
 			if task.Frame >= curFrame {
-				nextQueue.Enqueue(task)
+				nextQueue.PushBack(task)
 			} else {
 				task.Call()
 				waitFrameCount++
 			}
 		case waitTypeTime:
 			if task.Time >= curTime {
-				nextQueue.Enqueue(task)
+				nextQueue.PushBack(task)
 			} else {
 				task.Call()
 			}
