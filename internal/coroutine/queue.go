@@ -2,17 +2,21 @@ package coroutine
 
 import "sync"
 
+type node[T any] struct {
+	value T
+	prev  *node[T]
+	next  *node[T]
+}
+
 type Queue[T any] struct {
-	mu sync.Mutex
-	// TODO Use a linked list to avoid moving a whole
-	// block of memory when dequeuing
-	tasks []T
+	mu    sync.Mutex
+	head  *node[T]
+	tail  *node[T]
+	count int
 }
 
 func NewQueue[T any]() *Queue[T] {
-	return &Queue[T]{
-		tasks: make([]T, 0),
-	}
+	return &Queue[T]{}
 }
 
 // Move all tasks from the src queue to the current queue.
@@ -22,47 +26,103 @@ func (s *Queue[T]) Move(src *Queue[T]) {
 	defer s.mu.Unlock()
 	src.mu.Lock()
 	defer src.mu.Unlock()
-	s.tasks = append(s.tasks, src.tasks...)
-	src.tasks = src.tasks[:0]
+
+	if src.count == 0 {
+		return
+	}
+
+	if s.count == 0 {
+		s.head = src.head
+		s.tail = src.tail
+	} else {
+		s.tail.next = src.head
+		src.head.prev = s.tail
+		s.tail = src.tail
+	}
+	s.count += src.count
+
+	// Clear source queue
+	src.head = nil
+	src.tail = nil
+	src.count = 0
 }
 
 func (s *Queue[T]) Count() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return len(s.tasks)
+	return s.count
 }
 
 func (s *Queue[T]) PushBack(value T) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.tasks = append(s.tasks, value)
+
+	newNode := &node[T]{value: value}
+	if s.count == 0 {
+		s.head = newNode
+		s.tail = newNode
+	} else {
+		newNode.prev = s.tail
+		s.tail.next = newNode
+		s.tail = newNode
+	}
+	s.count++
 }
 
 func (s *Queue[T]) PushFront(value T) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.tasks = append([]T{value}, s.tasks...)
+
+	newNode := &node[T]{value: value}
+	if s.count == 0 {
+		s.head = newNode
+		s.tail = newNode
+	} else {
+		newNode.next = s.head
+		s.head.prev = newNode
+		s.head = newNode
+	}
+	s.count++
 }
 
 func (s *Queue[T]) PopFront() T {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if len(s.tasks) == 0 {
+
+	if s.count == 0 {
 		panic("queue is empty")
 	}
-	value := s.tasks[0]
-	s.tasks = s.tasks[1:]
+
+	value := s.head.value
+	s.head = s.head.next
+	s.count--
+
+	if s.count == 0 {
+		s.tail = nil
+	} else {
+		s.head.prev = nil
+	}
+
 	return value
 }
 
 func (s *Queue[T]) PopBack() T {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if len(s.tasks) == 0 {
+
+	if s.count == 0 {
 		panic("queue is empty")
 	}
-	lastIdx := len(s.tasks) - 1
-	value := s.tasks[lastIdx]
-	s.tasks = s.tasks[:lastIdx]
+
+	value := s.tail.value
+	s.tail = s.tail.prev
+	s.count--
+
+	if s.count == 0 {
+		s.head = nil
+	} else {
+		s.tail.next = nil
+	}
+
 	return value
 }
