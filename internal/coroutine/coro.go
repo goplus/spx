@@ -271,32 +271,18 @@ func (p *Coroutines) WaitNextFrame() {
 
 func (p *Coroutines) WaitMainThread(call func()) {
 	id := atomic.AddInt64(&p.curId, 1)
-	me := p.Current()
-	coro := func(isResume bool) {
-		done := make(chan int)
-		job := &WaitJob{
-			Id:   id,
-			Type: waitTypeMainThread,
-			Call: func() {
-				call()
-				done <- 1
-			},
-		}
-		// main thread call's priority is higher than other wait jobs
-		p.addWaitJob(job, true)
-		<-done
-		if isResume {
-			// main thread call does NOT count as blocking
-			p.Resume(me)
-		}
+	done := make(chan int)
+	job := &WaitJob{
+		Id:   id,
+		Type: waitTypeMainThread,
+		Call: func() {
+			call()
+			done <- 1
+		},
 	}
-	if p.hasInited {
-		go coro(true)
-		// main thread call does NOT count as blocking
-		p.Yield(me)
-	} else {
-		coro(false)
-	}
+	// main thread call's priority is higher than other wait jobs
+	p.addWaitJob(job, true)
+	<-done
 }
 
 func (p *Coroutines) WaitToDo(fn func()) {
