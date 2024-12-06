@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/goplus/spx/internal/ui"
+	"github.com/realdream-ai/mathf"
 )
 
 const (
@@ -38,7 +39,7 @@ type measure struct {
 
 	// computed properties
 	text         string
-	color        Color
+	color        mathf.Color
 	svgLineStyle string
 	svgRotate    string
 	svgSize      int // size*scale + 0.5 + measureLineWidth
@@ -52,7 +53,7 @@ func newMeasure(v specsp) *measure {
 	text = strings.TrimSuffix(text, ".0")
 	heading := getSpcspVal(v, "heading", 0.0).(float64)
 	svgSize := int(size*scale + 0.5 + measureLineWidth)
-	c, err := parseColor(getSpcspVal(v, "color", 0.0))
+	c, err := mathf.NewColorAny(getSpcspVal(v, "color", 0.0))
 	if err != nil {
 		panic(err)
 	}
@@ -69,7 +70,7 @@ func newMeasure(v specsp) *measure {
 		svgSize:      svgSize,
 		panel:        panel,
 	}
-	panel.UpdateInfo(meansureObj.x, meansureObj.y, size*scale, heading, text, toEngineColor(c))
+	panel.UpdateInfo(meansureObj.x, meansureObj.y, size*scale, heading, text, c)
 	return meansureObj
 }
 

@@ -25,6 +25,7 @@ import (
 
 	"github.com/goplus/spx/internal/tools"
 	"github.com/goplus/spx/internal/ui"
+	"github.com/realdream-ai/mathf"
 )
 
 // -------------------------------------------------------------------------------------
@@ -38,7 +39,7 @@ type Monitor struct {
 	val     string
 	eval    func() string
 	mode    int
-	color   Color
+	color   mathf.Color
 	x, y    float64
 	label   string
 	visible bool
@@ -72,9 +73,9 @@ func newMonitor(g reflect.Value, v specsp) (*Monitor, error) {
 		return nil, syscall.ENOENT
 	}
 	mode := int(v["mode"].(float64))
-	color, err := parseColor(getSpcspVal(v, "color"))
+	color, err := mathf.NewColorAny(getSpcspVal(v, "color"))
 	if err != nil {
-		color = Color{R: 0x28, G: 0x9c, B: 0xfc, A: 0xff}
+		color = RGBA(0x28, 0x9c, 0xfc, 0xff)
 	}
 	label := v["label"].(string)
 	x := v["x"].(float64)
@@ -100,7 +101,7 @@ func (pself *Monitor) onUpdate(delta float64) {
 	pself.panel.UpdateScale(pself.size)
 	pself.panel.UpdatePos(pself.x, pself.y)
 	pself.panel.UpdateText(pself.label, val)
-	pself.panel.UpdateColor(toEngineColor(pself.color))
+	pself.panel.UpdateColor(pself.color)
 }
 
 func getTarget(g reflect.Value, target string) (reflect.Value, int) {
@@ -149,26 +150,6 @@ func buildMonitorEval(g reflect.Value, t, val string) func() string {
 
 func (p *Monitor) setVisible(visible bool) {
 	p.visible = visible
-}
-
-const (
-	stmDefaultW   = 47
-	stmDefaultSmW = 41
-	stmCornerSize = 2
-	stmVertGapSm  = 4
-	stmHoriGapSm  = 5
-)
-
-var (
-	stmBackground    = Color{R: 0xf6, G: 0xf8, B: 0xfa, A: 0xff}
-	stmBackgroundPen = Color{R: 0xf6, G: 0xf8, B: 0xfa, A: 0xff}
-	stmValueground   = Color{R: 0x21, G: 0x9f, B: 0xfc, A: 0xff}
-	stmValueRectPen  = Color{R: 0xf6, G: 0xf8, B: 0xfa, A: 0xff}
-)
-
-type rectKey struct {
-	x, y, w, h  float64
-	clr, clrPen Color
 }
 
 // -------------------------------------------------------------------------------------

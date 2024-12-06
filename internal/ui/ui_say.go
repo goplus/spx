@@ -7,13 +7,13 @@ import (
 	. "github.com/realdream-ai/gdspx/pkg/engine"
 
 	"github.com/goplus/spx/internal/engine"
-	"github.com/goplus/spx/internal/gdi"
+	"github.com/goplus/spx/internal/text"
 )
 
 const (
-	SayMsgSpliteWidth   = 25
-	SayMsgLineHeight    = 26
-	SayMsgDefaultHeight = 77
+	sayMsgSpliteWidth   = 25
+	sayMsgLineHeight    = 26
+	sayMsgDefaultHeight = 77
 )
 
 type UiSay struct {
@@ -50,10 +50,10 @@ func (pself *UiSay) SetText(winX, winY float64, x, y float64, w, h float64, msg 
 	hasNextLine := strings.ContainsRune(msg, '\n')
 	finalMsg := msg
 	if !hasNextLine {
-		finalMsg = gdi.SplitString(msg, SayMsgSpliteWidth)
+		finalMsg = text.SplitLines(msg, sayMsgSpliteWidth)
 	}
 	lineCount := strings.Count(finalMsg, "\n")
-	uiHeight := SayMsgDefaultHeight + float64(lineCount)*SayMsgLineHeight
+	uiHeight := sayMsgDefaultHeight + float64(lineCount)*sayMsgLineHeight
 	maxYPos := winY/2 - uiHeight
 	yPos = math.Max(-winY/2, math.Min(yPos, maxYPos))
 	xPos = math.Max(-winX/2, math.Min(x, winX/2))

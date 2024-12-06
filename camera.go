@@ -27,7 +27,7 @@ type Camera struct {
 	on_ interface{}
 }
 
-func (c *Camera) init(g *Game, winW, winH float64, worldW, worldH float64) {
+func (c *Camera) init(g *Game) {
 	c.g = g
 }
 

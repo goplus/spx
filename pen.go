@@ -16,16 +16,14 @@
 
 package spx
 
-import (
-	"image/color"
-)
+import "github.com/realdream-ai/mathf"
 
 // -------------------------------------------------------------------------------------
 
 type penLine struct {
 	x1, y1 int
 	x2, y2 int
-	clr    color.RGBA
+	clr    mathf.Color
 	width  int
 }
 
