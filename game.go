@@ -534,6 +534,7 @@ func Gopt_Game_Reload(game Gamer, index interface{}) (err error) {
 	v := reflect.ValueOf(game).Elem()
 	g := instance(v)
 	g.reset()
+	engine.SyncReloadScene()
 	for i, n := 0, v.NumField(); i < n; i++ {
 		name, val := getFieldPtrOrAlloc(g, v, i)
 		if fld, ok := val.(Sprite); ok {

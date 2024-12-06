@@ -6,7 +6,7 @@ require (
 	github.com/goplus/igop v0.27.1
 	github.com/goplus/reflectx v1.2.2
 	github.com/goplus/spx v0.0.0
-	github.com/realdream-ai/gdspx v0.0.0-20241204130734-35c372f84f57
+	github.com/realdream-ai/gdspx v0.0.0-20241206074307-ff60dc288a6c
 )
 
 require (
@@ -16,13 +16,13 @@ require (
 	github.com/goplus/mod v0.13.10 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/qiniu/x v1.13.10 // indirect
-	github.com/realdream-ai/mathf v0.0.0-20241204125103-284ee6a3722d // indirect
+	github.com/realdream-ai/mathf v0.0.0-20241205091834-a85cb2402a16 // indirect
 	github.com/timandy/routine v1.1.1 // indirect
 	github.com/visualfc/funcval v0.1.4 // indirect
 	github.com/visualfc/gid v0.1.0 // indirect
 	github.com/visualfc/goembed v0.3.2 // indirect
 	github.com/visualfc/xtype v0.2.0 // indirect
-	golang.org/x/image v0.18.0 // indirect
+	golang.org/x/image v0.23.0 // indirect
 	golang.org/x/mobile v0.0.0-20220518205345-8578da9835fd // indirect
 	golang.org/x/mod v0.19.0 // indirect
 	golang.org/x/tools v0.23.0 // indirect
