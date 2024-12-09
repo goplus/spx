@@ -726,18 +726,21 @@ func (p *Game) fireEvent(ev event) {
 func (p *Game) eventLoop(me coroutine.Thread) int {
 	for {
 		var ev event
+		engine.DebugLog("eventLoop wait")
 		engine.WaitForChan(p.events, &ev)
 		p.handleEvent(ev)
 	}
 }
 func (p *Game) logicLoop(me coroutine.Thread) int {
 	for {
+		engine.DebugLog("logicLoop wait start")
 		tempItems := p.getTempShapes()
 		for _, item := range tempItems {
 			if result, ok := item.(interface{ onUpdate(float64) }); ok {
 				result.onUpdate(gtime.DeltaTime())
 			}
 		}
+		engine.DebugLog("logicLoop wait done")
 		engine.WaitNextFrame()
 	}
 }
@@ -746,6 +749,7 @@ func (p *Game) inputEventLoop(me coroutine.Thread) int {
 	lastLbtnPressed := false
 	keyEvents := make([]engine.KeyEvent, 0)
 	for {
+		engine.DebugLog("inputEventLoop wait start")
 		curLbtnPressed := engine.SyncInputGetMouseState(MOUSE_BUTTON_LEFT)
 		if curLbtnPressed != lastLbtnPressed {
 			if lastLbtnPressed {
@@ -765,6 +769,7 @@ func (p *Game) inputEventLoop(me coroutine.Thread) int {
 			}
 		}
 		keyEvents = keyEvents[:0]
+		engine.DebugLog("inputEventLoop wait done")
 		engine.WaitNextFrame()
 	}
 }
@@ -791,6 +796,7 @@ func SchedNow() int {
 }
 
 func Sched() int {
+	engine.DebugLog("Sched")
 	return 0
 }
 

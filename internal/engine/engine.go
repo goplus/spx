@@ -107,10 +107,12 @@ func updateTime(delta float64) {
 	curTime := stime.Now()
 	unscaledTimeSinceLevelLoad := curTime.Sub(startTimestamp).Seconds()
 	unscaledDeltaTime := curTime.Sub(lastTimestamp).Seconds()
+	deltaTime = unscaledDeltaTime
 	lastTimestamp = curTime
 	timeScale := PlatformMgr.GetTimeScale()
 	calcfps()
 	time.Update(float64(timeScale), unscaledTimeSinceLevelLoad, timeSinceLevelLoad, deltaTime, unscaledDeltaTime, fps)
+
 }
 
 func onDestroy() {
