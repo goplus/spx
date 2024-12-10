@@ -1708,11 +1708,19 @@ func (pself *SpriteImpl) onUpdate(delta float64) {
 }
 
 // ------------------------ time ----------------------------------------
-
+func (pself *SpriteImpl) GameFrame() int64 {
+	return time.Frame()
+}
+func (pself *SpriteImpl) RealTimeSinceStart() float64 {
+	return time.RealTimeSinceStart()
+}
 func (pself *SpriteImpl) DeltaTime() float64 {
 	return time.DeltaTime()
 }
 
 func (pself *SpriteImpl) TimeSinceLevelLoad() float64 {
 	return time.TimeSinceLevelLoad()
+}
+func (pself *SpriteImpl) DebugLog(info ...any) {
+	engine.DebugLog(info...)
 }
