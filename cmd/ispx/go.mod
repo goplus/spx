@@ -6,7 +6,7 @@ require (
 	github.com/goplus/igop v0.27.1
 	github.com/goplus/reflectx v1.2.2
 	github.com/goplus/spx v0.0.0
-	github.com/realdream-ai/gdspx v0.0.0-20241206074307-ff60dc288a6c
+	github.com/realdream-ai/gdspx v0.0.0-20241206104940-c8b4a8f07f1c
 )
 
 require (

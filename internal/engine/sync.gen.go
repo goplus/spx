@@ -283,12 +283,10 @@ func SyncPlatformSetTimeScale(time_scale float64) {
 }
 
 // IResMgr
-func SyncResCreateAnimation(sprite_type_name string, anim_name string, context string, fps int64, is_altas bool) int64 {
-	var _ret1 int64
+func SyncResCreateAnimation(sprite_type_name string, anim_name string, context string, fps int64, is_altas bool) {
 	WaitMainThread(func() {
-		_ret1 = ResMgr.CreateAnimation(sprite_type_name, anim_name, context, fps, is_altas)
+		ResMgr.CreateAnimation(sprite_type_name, anim_name, context, fps, is_altas)
 	})
-	return _ret1
 }
 func SyncResSetLoadMode(is_direct_mode bool) {
 	WaitMainThread(func() {
