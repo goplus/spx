@@ -40,7 +40,7 @@ type Monitor struct {
 	eval    func() string
 	mode    int
 	color   mathf.Color
-	x, y    float64
+	pos     mathf.Vec2
 	label   string
 	visible bool
 	panel   *ui.UiMonitor
@@ -85,7 +85,7 @@ func newMonitor(g reflect.Value, v specsp) (*Monitor, error) {
 	panel := ui.NewUiMonitor()
 	monitor := &Monitor{
 		target: target, val: val, eval: eval, name: name, size: size,
-		visible: visible, mode: mode, color: color, x: x, y: y, label: label, panel: panel,
+		visible: visible, mode: mode, color: color, pos: mathf.NewVec2(x, y), label: label, panel: panel,
 	}
 
 	return monitor, nil
@@ -99,7 +99,7 @@ func (pself *Monitor) onUpdate(delta float64) {
 	}
 	pself.panel.ShowAll(pself.mode == 1)
 	pself.panel.UpdateScale(pself.size)
-	pself.panel.UpdatePos(pself.x, pself.y)
+	pself.panel.UpdatePos(pself.pos)
 	pself.panel.UpdateText(pself.label, val)
 	pself.panel.UpdateColor(pself.color)
 }
@@ -168,29 +168,28 @@ func (pself *Monitor) Hide() {
 	pself.visible = false
 }
 func (pself *Monitor) Xpos() float64 {
-	return pself.x
+	return pself.pos.X
 }
 func (pself *Monitor) Ypos() float64 {
-	return pself.y
+	return pself.pos.Y
 }
 func (pself *Monitor) SetXpos(x float64) {
-	pself.x = x
+	pself.pos.X = x
 }
 func (pself *Monitor) SetYpos(y float64) {
-	pself.y = y
+	pself.pos.Y = y
 }
 func (pself *Monitor) SetXYpos(x float64, y float64) {
-	pself.x, pself.y = x, y
+	pself.pos = mathf.NewVec2(x, y)
 }
 func (pself *Monitor) ChangeXpos(dx float64) {
-	pself.x += dx
+	pself.pos.X += dx
 }
 func (pself *Monitor) ChangeYpos(dy float64) {
-	pself.y += dy
+	pself.pos.Y += dy
 }
 func (pself *Monitor) ChangeXYpos(dx float64, dy float64) {
-	pself.x += dx
-	pself.y += dy
+	pself.pos = pself.pos.Add(mathf.NewVec2(dx, dy))
 }
 
 func (pself *Monitor) Size() float64 {

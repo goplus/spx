@@ -128,7 +128,7 @@ func newCostume(base string, c *costumeConfig) *costume {
 
 func getCustomeAssetSize(path string) mathf.Vec2 {
 	assetPath := engine.ToAssetPath(path)
-	return engine.SyncResGetImageSize(assetPath)
+	return resMgr.GetImageSize(assetPath)
 }
 
 func toBitmapResolution(v int) int {
@@ -148,9 +148,10 @@ func (p *costume) isAltas() bool {
 // -------------------------------------------------------------------------------------
 
 type baseObj struct {
-	costumes       []*costume
-	costumeIndex_  int
-	proxy          *engine.ProxySprite
+	costumes      []*costume
+	costumeIndex_ int
+	// !!!All methods of this object (except GetId()) can only be called on the main thread
+	syncSprite     *engine.Sprite
 	scale          float64
 	HasDestroyed   bool
 	isCostumeSet   bool
@@ -162,8 +163,8 @@ func (p *baseObj) setCustumeIndex(value int) {
 	p.isCostumeDirty = true
 }
 
-func (p *baseObj) getProxy() *engine.ProxySprite {
-	return p.proxy
+func (p *baseObj) getProxy() *engine.Sprite {
+	return p.syncSprite
 }
 
 func (p *baseObj) initWith(base string, sprite *spriteConfig) {

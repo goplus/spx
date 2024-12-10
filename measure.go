@@ -33,8 +33,7 @@ const (
 
 type measure struct {
 	size    float64
-	x       float64
-	y       float64
+	pos     mathf.Vec2
 	heading float64
 
 	// computed properties
@@ -57,20 +56,20 @@ func newMeasure(v specsp) *measure {
 	if err != nil {
 		panic(err)
 	}
+	pos := mathf.NewVec2(v["x"].(float64), v["y"].(float64))
 	panel := ui.NewUiMeasure()
 	meansureObj := &measure{
 		heading:      heading,
 		size:         size,
 		text:         text,
 		color:        c,
-		x:            v["x"].(float64),
-		y:            v["y"].(float64),
+		pos:          pos,
 		svgLineStyle: fmt.Sprintf("stroke-width:%d;stroke:rgb(%d, %d, %d);", measureLineWidth, c.R, c.G, c.B),
 		svgRotate:    fmt.Sprintf("rotate(%.1f %d %d)", heading, svgSize>>1, svgSize>>1),
 		svgSize:      svgSize,
 		panel:        panel,
 	}
-	panel.UpdateInfo(meansureObj.x, meansureObj.y, size*scale, heading, text, c)
+	panel.UpdateInfo(meansureObj.pos, size*scale, heading, text, c)
 	return meansureObj
 }
 

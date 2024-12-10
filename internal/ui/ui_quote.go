@@ -1,7 +1,6 @@
 package ui
 
 import (
-	. "github.com/realdream-ai/gdspx/pkg/engine"
 	"github.com/realdream-ai/mathf"
 
 	"github.com/goplus/spx/internal/engine"
@@ -17,22 +16,23 @@ type UiQuote struct {
 }
 
 func NewUiQuote() *UiQuote {
-	panel := engine.SyncCreateEngineUiNode[UiQuote]("")
+	panel := engine.NewUiNode[UiQuote]()
 	return panel
 }
 
+// !!Warning: this method was called in main thread
 func (pself *UiQuote) OnStart() {
-	pself.container = BindUI[UiNode](pself.GetId(), "C")
-	pself.imageL = BindUI[UiNode](pself.GetId(), "C/ImageL")
-	pself.imageR = BindUI[UiNode](pself.GetId(), "C/ImageR")
-	pself.labelDes = BindUI[UiNode](pself.GetId(), "C/LabelDes")
-	pself.labelMsg = BindUI[UiNode](pself.GetId(), "C/LabelMsg")
+	pself.container = SyncBindUI[UiNode](pself.GetId(), "C")
+	pself.imageL = SyncBindUI[UiNode](pself.GetId(), "C/ImageL")
+	pself.imageR = SyncBindUI[UiNode](pself.GetId(), "C/ImageR")
+	pself.labelDes = SyncBindUI[UiNode](pself.GetId(), "C/LabelDes")
+	pself.labelMsg = SyncBindUI[UiNode](pself.GetId(), "C/LabelMsg")
 }
 
-func (pself *UiQuote) SetText(x, y float64, width, height float64, msg, description string) {
-	x, y = engine.SyncGetCameraLocalPosition(x, y)
-	engine.SyncUiSetGlobalPosition(pself.container.GetId(), WorldToScreen(x-width, y+height))
-	engine.SyncUiSetSize(pself.container.GetId(), mathf.NewVec2(width*2, height*2))
-	engine.SyncUiSetText(pself.labelMsg.GetId(), msg)
-	engine.SyncUiSetText(pself.labelDes.GetId(), description)
+func (pself *UiQuote) SetText(pos mathf.Vec2, size mathf.Vec2, msg, description string) {
+	pos = cameraMgr.GetLocalPosition(pos)
+	uiMgr.SetGlobalPosition(pself.container.GetId(), WorldToUI(pos.Sub(mathf.NewVec2(size.X, -size.Y))))
+	uiMgr.SetSize(pself.container.GetId(), size.Mulf(2))
+	uiMgr.SetText(pself.labelMsg.GetId(), msg)
+	uiMgr.SetText(pself.labelDes.GetId(), description)
 }

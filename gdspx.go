@@ -21,21 +21,44 @@ import (
 	"log"
 	"math"
 	"strings"
-	"sync/atomic"
 
 	"github.com/goplus/spx/internal/engine"
+	"github.com/goplus/spx/internal/enginewrap"
 
-	gdspx "github.com/realdream-ai/gdspx/pkg/engine"
 	"github.com/realdream-ai/mathf"
 )
 
+// copy these variable to any namespace you want
 var (
-	cachedBounds map[string]mathf.Rect2
+	audioMgr    enginewrap.AudioMgrImpl
+	cameraMgr   enginewrap.CameraMgrImpl
+	inputMgr    enginewrap.InputMgrImpl
+	physicMgr   enginewrap.PhysicMgrImpl
+	platformMgr enginewrap.PlatformMgrImpl
+	resMgr      enginewrap.ResMgrImpl
+	sceneMgr    enginewrap.SceneMgrImpl
+	spriteMgr   enginewrap.SpriteMgrImpl
+	uiMgr       enginewrap.UiMgrImpl
+)
+
+var (
+	cachedBounds_ map[string]mathf.Rect2
 )
 
 func (p *Game) OnEngineStart() {
-	cachedBounds = make(map[string]mathf.Rect2)
-	go p.onStartAsync()
+	cachedBounds_ = make(map[string]mathf.Rect2)
+	onStart := func() {
+		initInput()
+		gamer := p.gamer_
+		if me, ok := gamer.(interface{ MainEntry() }); ok {
+			me.MainEntry()
+		}
+		if !p.isRunned {
+			Gopt_Game_Run(gamer, "assets")
+		}
+		engine.OnGameStarted()
+	}
+	go onStart()
 }
 
 func (p *Game) OnEngineDestroy() {
@@ -46,116 +69,99 @@ func (p *Game) OnEngineUpdate(delta float64) {
 		return
 	}
 	// all these functions is called in main thread
-	p.updateInput()
-	p.updateCamera()
-	p.updateLogic()
+	p.syncUpdateInput()
+	p.syncUpdateCamera()
+	p.syncUpdateLogic()
 }
 func (p *Game) OnEngineRender(delta float64) {
 	if !p.isRunned {
 		return
 	}
-	p.updateProxy()
-	p.updatePhysic()
+	p.syncUpdateProxy()
+	p.syncUpdatePhysic()
 }
 
-func (p *Game) onStartAsync() {
-	initInput()
-	gamer := p.gamer_
-	if me, ok := gamer.(interface{ MainEntry() }); ok {
-		me.MainEntry()
-	}
-	if !p.isRunned {
-		Gopt_Game_Run(gamer, "assets")
-	}
-	engine.OnGameStarted()
-}
-
-func (p *Game) updateLogic() error {
+func (p *Game) syncUpdateLogic() error {
 	p.startFlag.Do(func() {
 		p.fireEvent(&eventStart{})
 	})
 
-	p.tickMgr.update()
 	return nil
 }
 
-func (p *Game) updateCamera() {
-	isOn, x, y := p.Camera.getFollowPos()
+func (p *Game) syncUpdateCamera() {
+	isOn, pos := p.Camera.getFollowPos()
 	if isOn {
-		gdspx.CameraMgr.SetCameraPosition(mathf.NewVec2(x, -y))
+		engine.SyncSetCameraPosition(pos)
 	}
 }
 
-func (p *Game) updateInput() {
-	pos := gdspx.InputMgr.GetMousePos()
-	posX, posY := engine.ScreenToWorld(float64(pos.X), float64(pos.Y))
-	atomic.StoreInt64(&p.gMouseX, int64(posX))
-	atomic.StoreInt64(&p.gMouseY, int64(posY))
+func (p *Game) syncUpdateInput() {
+	pos := engine.SyncGetMousePos()
+	wpos := engine.SyncScreenToWorld(pos)
+	p.mousePos = wpos
 }
 
-func (sprite *SpriteImpl) checkInitProxy() {
-	// bind proxy
-	if sprite.proxy == nil && !sprite.HasDestroyed {
-		sprite.proxy = engine.NewSpriteProxy(sprite)
-		initSpritePhysicInfo(sprite, sprite.proxy)
-		sprite.proxy.Name = sprite.name
-		sprite.proxy.SetTypeName(sprite.name)
-		sprite.proxy.SetVisible(sprite.isVisible)
+func (sprite *SpriteImpl) syncCheckInitProxy() {
+	// bind syncSprite
+	if sprite.syncSprite == nil && !sprite.HasDestroyed {
+		sprite.syncSprite = engine.SyncNewSprite(sprite)
+		syncInitSpritePhysicInfo(sprite, sprite.syncSprite)
+		sprite.syncSprite.Name = sprite.name
+		sprite.syncSprite.SetTypeName(sprite.name)
+		sprite.syncSprite.SetVisible(sprite.isVisible)
 	}
 }
 
 func (sprite *SpriteImpl) updateProxyTransform(isSync bool) {
-	if sprite.proxy == nil {
+	if sprite.syncSprite == nil {
 		return
 	}
 	x, y := sprite.getXY()
 	applyRenderOffset(sprite, &x, &y)
 	rot, scale := calcRenderRotation(sprite)
-	sprite.proxy.UpdateTransform(x, y, rot, scale, isSync)
+	sprite.syncSprite.UpdateTransform(x, y, rot, scale, isSync)
 }
 
-func (p *Game) updateProxy() {
+func (p *Game) syncUpdateProxy() {
 	count := 0
 	items := p.getItems()
 	for _, item := range items {
 		sprite, ok := item.(*SpriteImpl)
 		if ok {
-			sprite.checkInitProxy()
+			sprite.syncCheckInitProxy()
 			if sprite.HasDestroyed {
 				continue
 			}
-			proxy := sprite.proxy
+			syncSprite := sprite.syncSprite
 			// sync position
 			if sprite.isVisible {
-				sprite.updateProxyTransform(false)
-				checkUpdateCostume(&sprite.baseObj, false)
+				sprite.updateProxyTransform(true)
+				syncCheckUpdateCostume(&sprite.baseObj)
 				count++
 			}
-			proxy.SetVisible(sprite.isVisible)
+			syncSprite.SetVisible(sprite.isVisible)
 		}
 	}
 
-	// unbind proxy
+	// unbind syncSprite
 	for _, item := range p.destroyItems {
 		sprite, ok := item.(*SpriteImpl)
-		if ok && sprite.proxy != nil {
-			sprite.proxy.Destroy()
-			sprite.proxy = nil
+		if ok && sprite.syncSprite != nil {
+			sprite.syncSprite.Destroy()
+			sprite.syncSprite = nil
 		}
 	}
 	p.destroyItems = nil
 }
 
-func checkUpdateCostume(p *baseObj, isSync bool) {
-	if isSync {
-		engine.WaitMainThread(func() {
-			doCheckUpdateCostume(p)
-		})
-	} else {
-		doCheckUpdateCostume(p)
-	}
+func checkUpdateCostume(p *baseObj) {
+	engine.WaitMainThread(func() {
+		syncCheckUpdateCostume(p)
+	})
 }
-func doCheckUpdateCostume(p *baseObj) {
+
+func syncCheckUpdateCostume(p *baseObj) {
 	if !p.isCostumeDirty {
 		return
 	}
@@ -164,15 +170,15 @@ func doCheckUpdateCostume(p *baseObj) {
 	renderScale := p.getCostumeRenderScale()
 	rect := p.getCostumeAltasRegion()
 	isAltas := p.isCostumeAltas()
-	pself := p.proxy
+	syncSprite := p.syncSprite
 	if isAltas {
-		pself.UpdateTextureAltas(path, rect, renderScale)
+		syncSprite.UpdateTextureAltas(path, rect, renderScale)
 	} else {
-		pself.UpdateTexture(path, renderScale)
+		syncSprite.UpdateTexture(path, renderScale)
 	}
 }
 
-func (*Game) updatePhysic() {
+func (*Game) syncUpdatePhysic() {
 	triggers := make([]engine.TriggerEvent, 0)
 	triggers = engine.GetTriggerEvents(triggers)
 	for _, pair := range triggers {
@@ -192,47 +198,47 @@ func (*Game) updatePhysic() {
 	}
 }
 
-func initSpritePhysicInfo(sprite *SpriteImpl, proxy *engine.ProxySprite) {
+func syncInitSpritePhysicInfo(sprite *SpriteImpl, syncProxy *engine.Sprite) {
 	// update collision layers
-	proxy.SetTriggerLayer(sprite.triggerLayer)
-	proxy.SetTriggerMask(sprite.triggerMask)
-	proxy.SetCollisionLayer(sprite.collisionLayer)
-	proxy.SetCollisionMask(sprite.collisionMask)
+	syncProxy.SetTriggerLayer(sprite.triggerLayer)
+	syncProxy.SetTriggerMask(sprite.triggerMask)
+	syncProxy.SetCollisionLayer(sprite.collisionLayer)
+	syncProxy.SetCollisionMask(sprite.collisionMask)
 
 	// set trigger & collider
 	switch sprite.colliderType {
 	case physicColliderCircle:
-		proxy.SetCollisionEnabled(true)
-		proxy.SetColliderCircle(sprite.colliderCenter, math.Max(sprite.colliderRadius, 0.01))
+		syncProxy.SetCollisionEnabled(true)
+		syncProxy.SetColliderCircle(sprite.colliderCenter, math.Max(sprite.colliderRadius, 0.01))
 	case physicColliderRect:
-		proxy.SetCollisionEnabled(true)
-		proxy.SetColliderRect(sprite.colliderCenter, sprite.colliderSize)
+		syncProxy.SetCollisionEnabled(true)
+		syncProxy.SetColliderRect(sprite.colliderCenter, sprite.colliderSize)
 	case physicColliderAuto:
-		center, size := getCostumeBoundByAlpha(sprite, sprite.scale)
-		proxy.SetCollisionEnabled(true)
-		proxy.SetColliderRect(center, size)
+		center, size := syncGetCostumeBoundByAlpha(sprite, sprite.scale)
+		syncProxy.SetCollisionEnabled(true)
+		syncProxy.SetColliderRect(center, size)
 	case physicColliderNone:
-		proxy.SetCollisionEnabled(false)
+		syncProxy.SetCollisionEnabled(false)
 	}
 
 	switch sprite.triggerType {
 	case physicColliderCircle:
-		proxy.SetTriggerEnabled(true)
-		proxy.SetTriggerCircle(sprite.triggerCenter, math.Max(sprite.triggerRadius, 0.01))
+		syncProxy.SetTriggerEnabled(true)
+		syncProxy.SetTriggerCircle(sprite.triggerCenter, math.Max(sprite.triggerRadius, 0.01))
 		sprite.triggerSize = mathf.NewVec2(sprite.triggerRadius, sprite.triggerRadius)
 	case physicColliderRect:
-		proxy.SetTriggerEnabled(true)
-		proxy.SetTriggerRect(sprite.triggerCenter, sprite.triggerSize)
+		syncProxy.SetTriggerEnabled(true)
+		syncProxy.SetTriggerRect(sprite.triggerCenter, sprite.triggerSize)
 	case physicColliderAuto:
-		sprite.triggerCenter, sprite.triggerSize = getCostumeBoundByAlpha(sprite, sprite.scale)
-		proxy.SetTriggerEnabled(true)
-		proxy.SetTriggerRect(sprite.triggerCenter, sprite.triggerSize)
+		sprite.triggerCenter, sprite.triggerSize = syncGetCostumeBoundByAlpha(sprite, sprite.scale)
+		syncProxy.SetTriggerEnabled(true)
+		syncProxy.SetTriggerRect(sprite.triggerCenter, sprite.triggerSize)
 	case physicColliderNone:
-		proxy.SetTriggerEnabled(false)
+		syncProxy.SetTriggerEnabled(false)
 	}
 }
 
-func getCostumeBoundByAlpha(p *SpriteImpl, pscale float64) (mathf.Vec2, mathf.Vec2) {
+func syncGetCostumeBoundByAlpha(p *SpriteImpl, pscale float64) (mathf.Vec2, mathf.Vec2) {
 	cs := p.costumes[p.costumeIndex_]
 	var rect mathf.Rect2
 	// GetBoundFromAlpha is very slow, so we should cache the result
@@ -241,13 +247,13 @@ func getCostumeBoundByAlpha(p *SpriteImpl, pscale float64) (mathf.Vec2, mathf.Ve
 		rect.Position.X = 0
 		rect.Position.Y = 0
 	} else {
-		if cache, ok := cachedBounds[cs.path]; ok {
+		if cache, ok := cachedBounds_[cs.path]; ok {
 			rect = cache
 		} else {
 			assetPath := engine.ToAssetPath(cs.path)
-			rect = gdspx.ResMgr.GetBoundFromAlpha(assetPath)
+			rect = engine.SyncGetBoundFromAlpha(assetPath)
 		}
-		cachedBounds[cs.path] = rect
+		cachedBounds_[cs.path] = rect
 	}
 	scale := pscale / float64(cs.bitmapResolution)
 	// top left
@@ -333,5 +339,5 @@ func registerAnimToEngine(spriteName string, animName string, animCfg *aniConfig
 			}
 		}
 	}
-	engine.SyncResCreateAnimation(spriteName, animName, sb.String(), int64(animCfg.FrameFps), isCostumeSet)
+	resMgr.CreateAnimation(spriteName, animName, sb.String(), int64(animCfg.FrameFps), isCostumeSet)
 }

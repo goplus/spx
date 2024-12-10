@@ -25,7 +25,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"sync"
-	"sync/atomic"
 	"unsafe"
 
 	"github.com/goplus/spx/internal/audiorecord"
@@ -68,13 +67,16 @@ var (
 )
 
 func SetDebug(flags dbgFlags) {
-	debugLoad = (flags & DbgFlagLoad) != 0
+	debugLoad = true
 	debugInstr = (flags & DbgFlagInstr) != 0
 	debugEvent = (flags & DbgFlagEvent) != 0
 	debugPerf = (flags & DbgFlagPerf) != 0
 }
 
 // -------------------------------------------------------------------------------------
+
+type Shape interface {
+}
 
 type Game struct {
 	baseObj
@@ -92,7 +94,6 @@ type Game struct {
 	destroyItems []Shape                 // shapes on stage (in Zorder), not only sprites
 	tempItems    []Shape                 // temp items
 
-	tickMgr   tickMgr
 	events    chan event
 	aurec     *audiorecord.Recorder
 	startFlag sync.Once
@@ -106,7 +107,7 @@ type Game struct {
 	windowWidth_  int
 	windowHeight_ int
 
-	gMouseX, gMouseY int64
+	mousePos mathf.Vec2
 
 	sinkMgr  eventSinkMgr
 	isLoaded bool
@@ -115,7 +116,7 @@ type Game struct {
 }
 
 type Gamer interface {
-	engine.Gamer
+	engine.IGame
 	initGame(sprites []Sprite) *Game
 }
 
@@ -168,7 +169,6 @@ func (p *Game) getGame() *Game {
 }
 
 func (p *Game) initGame(sprites []Sprite) *Game {
-	p.tickMgr.init()
 	p.eventSinks.init(&p.sinkMgr, p)
 	p.sprs = make(map[string]Sprite)
 	p.typs = make(map[string]reflect.Type)
@@ -183,7 +183,7 @@ func (p *Game) initGame(sprites []Sprite) *Game {
 func Gopt_Game_Main(game Gamer, sprites ...Sprite) {
 	g := game.initGame(sprites)
 	g.gamer_ = game
-	engine.GdspxMain(game)
+	engine.Main(game)
 }
 
 // Gopt_Game_Run runs the game.
@@ -414,7 +414,7 @@ func spriteOf(sprite Sprite) *SpriteImpl {
 }
 
 func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
-	engine.SyncSetDebugMode(proj.Debug)
+	engine.SetDebugMode(proj.Debug)
 	if backdrops := proj.getBackdrops(); len(backdrops) > 0 {
 		p.baseObj.initBackdrops("", backdrops, proj.getBackdropIndex())
 		p.worldWidth_ = proj.Map.Width
@@ -441,12 +441,12 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 	if p.windowHeight_ > p.worldHeight_ {
 		p.windowHeight_ = p.worldHeight_
 	}
-	engine.SyncPlatformSetWindowSize(int64(p.windowWidth_), int64(p.windowHeight_))
+	platformMgr.SetWindowSize(int64(p.windowWidth_), int64(p.windowHeight_))
 
 	p.Camera.init(p)
 
-	// setup proxy's property
-	p.proxy = engine.SyncNewBackdropProxy(p, p.getCostumePath(), p.getCostumeRenderScale())
+	// setup syncSprite's property
+	p.syncSprite = engine.NewBackdropProxy(p, p.getCostumePath(), p.getCostumeRenderScale())
 	p.setupBackdrop()
 	inits := make([]Sprite, 0, len(proj.Zorder))
 	for _, v := range proj.Zorder {
@@ -519,8 +519,8 @@ func (p *Game) setupBackdrop() {
 	scaleX := dstW / imgW
 	scaleY := dstH / imgH
 	p.scale = 1
-	checkUpdateCostume(&p.baseObj, true)
-	engine.SyncSpriteSetScale(p.proxy.GetId(), mathf.NewVec2(scaleX, scaleY))
+	checkUpdateCostume(&p.baseObj)
+	spriteMgr.SetScale(p.syncSprite.GetId(), mathf.NewVec2(scaleX, scaleY))
 }
 
 func (p *Game) endLoad(g reflect.Value, proj *projConfig) (err error) {
@@ -534,7 +534,7 @@ func Gopt_Game_Reload(game Gamer, index interface{}) (err error) {
 	v := reflect.ValueOf(game).Elem()
 	g := instance(v)
 	g.reset()
-	engine.SyncReloadScene()
+	engine.ReloadScene()
 	for i, n := 0, v.NumField(); i < n; i++ {
 		name, val := getFieldPtrOrAlloc(g, v, i)
 		if fld, ok := val.(Sprite); ok {
@@ -651,13 +651,13 @@ func (p *Game) runLoop(cfg *Config) (err error) {
 		log.Println("==> RunLoop")
 	}
 	if !cfg.DontRunOnUnfocused {
-		engine.SyncSetRunnableOnUnfocused(true)
+		platformMgr.SetRunnableOnUnfocused(true)
 	}
 	if cfg.FullScreen {
-		engine.SyncPlatformSetWindowFullscreen(true)
+		platformMgr.SetWindowFullscreen(true)
 	}
 	p.initEventLoop()
-	engine.SyncPlatformSetWindowTitle(cfg.Title)
+	platformMgr.SetWindowTitle(cfg.Title)
 	p.isRunned = true
 	return nil
 }
@@ -666,35 +666,23 @@ func (p *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeigh
 	return p.windowSize_()
 }
 
-// startTick creates tickHandler to handle `onTick` event.
-// You can call tickHandler.Stop to stop listening `onTick` event.
-func (p *Game) startTick(duration int64, onTick func(tick int64)) *tickHandler {
-	return p.tickMgr.start(duration, onTick)
-}
-
-// currentTPS returns the current TPS (ticks per second),
-// that represents how many update function is called in a second.
-func (p *Game) currentTPS() float64 {
-	return p.tickMgr.getCurrentTPS()
-}
-
 type clicker interface {
 	threadObj
 	doWhenClick(this threadObj)
-	getProxy() *engine.ProxySprite
+	getProxy() *engine.Sprite
 }
 
 func (p *Game) doWhenLeftButtonDown(ev *eventLeftButtonDown) {
-	point := mathf.NewVec2(float64(ev.X), float64(ev.Y))
+	point := ev.Pos
 	tempItems := p.getTempShapes()
 	count := len(tempItems)
 	for i := 0; i < count; i++ {
 		item := tempItems[count-i-1]
 		if o, ok := item.(clicker); ok {
-			proxy := o.getProxy()
-			if proxy != nil {
-				isClicked := engine.SyncSpriteCheckCollisionWithPoint(proxy.GetId(), point, true)
-				if isClicked && p.inputs.canTriggerClickEvent(proxy.GetId()) {
+			syncSprite := o.getProxy()
+			if syncSprite != nil {
+				isClicked := spriteMgr.CheckCollisionWithPoint(syncSprite.GetId(), point, true)
+				if isClicked && p.inputs.canTriggerClickEvent(syncSprite.GetId()) {
 					o.doWhenClick(o)
 					return
 				}
@@ -746,12 +734,12 @@ func (p *Game) inputEventLoop(me coroutine.Thread) int {
 	lastLbtnPressed := false
 	keyEvents := make([]engine.KeyEvent, 0)
 	for {
-		curLbtnPressed := engine.SyncInputGetMouseState(MOUSE_BUTTON_LEFT)
+		curLbtnPressed := inputMgr.GetMouseState(MOUSE_BUTTON_LEFT)
 		if curLbtnPressed != lastLbtnPressed {
 			if lastLbtnPressed {
-				p.fireEvent(&eventLeftButtonUp{X: int(p.gMouseX), Y: int(p.gMouseY)})
+				p.fireEvent(&eventLeftButtonUp{Pos: p.mousePos})
 			} else {
-				p.fireEvent(&eventLeftButtonDown{X: int(p.gMouseX), Y: int(p.gMouseY)})
+				p.fireEvent(&eventLeftButtonDown{Pos: p.mousePos})
 			}
 		}
 		lastLbtnPressed = curLbtnPressed
@@ -795,31 +783,9 @@ func Sched() int {
 }
 
 // -----------------------------------------------------------------------------
-
-func (p *Game) getWidth() int {
-	if p.windowWidth_ == 0 {
-		p.doWindowSize()
-	}
-	return p.windowWidth_
-}
-
-func (p *Game) getHeight() int {
-	if p.windowHeight_ == 0 {
-		p.doWindowSize()
-	}
-	return p.windowHeight_
-}
-
-// convert pos from win space(0,0 is top left) to game space(0,0 is center)
-func (p *Game) convertWinSpace2GameSpace(x, y float64) (float64, float64) {
-	winW, winH := p.getWindowSize()
-	x += float64(winW) / 2
-	y = float64(winH)/2 - y
-	return x, y
-}
-
-func (p *Game) getWindowSize() (int, int) {
-	return p.windowSize_()
+func (p *Game) getWindowSize() mathf.Vec2 {
+	x, y := p.windowSize_()
+	return mathf.NewVec2(float64(x), float64(y))
 }
 
 func (p *Game) windowSize_() (int, int) {
@@ -1137,19 +1103,19 @@ func (p *Game) PrevBackdrop__1(wait bool) {
 // -----------------------------------------------------------------------------
 
 func (p *Game) KeyPressed(key Key) bool {
-	return engine.SyncInputGetKey(key)
+	return inputMgr.GetKey(key)
 }
 
 func (p *Game) MouseX() float64 {
-	return float64(atomic.LoadInt64(&p.gMouseX))
+	return p.mousePos.X
 }
 
 func (p *Game) MouseY() float64 {
-	return float64(atomic.LoadInt64(&p.gMouseY))
+	return p.mousePos.Y
 }
 
 func (p *Game) MousePressed() bool {
-	return engine.SyncInputMousePressed()
+	return inputMgr.MousePressed()
 }
 
 func (p *Game) getMousePos() (x, y float64) {
@@ -1227,7 +1193,7 @@ type SoundName = string
 
 func hasAsset(path string) bool {
 	finalPath := engine.ToAssetPath(path)
-	return engine.SyncResHasFile(finalPath)
+	return resMgr.HasFile(finalPath)
 }
 
 func (p *Game) canBindSound(name string) bool {
