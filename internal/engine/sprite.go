@@ -1,25 +1,21 @@
 package engine
 
 import (
-	. "github.com/realdream-ai/gdspx/pkg/engine"
+	"github.com/goplus/spx/internal/enginewrap"
+	gdx "github.com/realdream-ai/gdspx/pkg/engine"
 	. "github.com/realdream-ai/mathf"
 )
 
-type ProxySprite struct {
-	Sprite
+// !!!Warning all method belong to this class can only be called in main thread
+type Sprite struct {
+	enginewrap.Sprite
 	x, y    float64
 	Name    string
 	PicPath string
 	Target  interface{}
 }
 
-func NewSpriteProxy(obj interface{}) *ProxySprite {
-	proxy := CreateEmptySprite[ProxySprite]()
-	proxy.Target = obj
-	return proxy
-}
-
-func (pself *ProxySprite) UpdateTexture(path string, renderScale float64) {
+func (pself *Sprite) UpdateTexture(path string, renderScale float64) {
 	if path == "" {
 		return
 	}
@@ -28,7 +24,7 @@ func (pself *ProxySprite) UpdateTexture(path string, renderScale float64) {
 	pself.SetTexture(pself.PicPath)
 	pself.SetRenderScale(NewVec2(renderScale, renderScale))
 }
-func (pself *ProxySprite) UpdateTextureAltas(path string, rect2 Rect2, renderScale float64) {
+func (pself *Sprite) UpdateTextureAltas(path string, rect2 Rect2, renderScale float64) {
 	if path == "" {
 		return
 	}
@@ -38,13 +34,13 @@ func (pself *ProxySprite) UpdateTextureAltas(path string, rect2 Rect2, renderSca
 	pself.SetRenderScale(NewVec2(renderScale, renderScale))
 }
 
-func (pself *ProxySprite) UpdateTransform(x, y float64, rot float64, scale64 float64, isSync bool) {
+func (pself *Sprite) UpdateTransform(x, y float64, rot float64, scale64 float64, isSync bool) {
 	pself.x = x
 	pself.y = y
 	rad := DegToRad(rot)
 	pos := Vec2{X: float64(x), Y: float64(y)}
 	scale := float64(scale64)
-	if !isSync {
+	if isSync {
 		pself.SetPosition(pos)
 		pself.SetRotation(rad)
 		pself.SetScaleX(scale)
@@ -57,8 +53,8 @@ func (pself *ProxySprite) UpdateTransform(x, y float64, rot float64, scale64 flo
 	}
 }
 
-func (pself *ProxySprite) OnTriggerEnter(target ISpriter) {
-	sprite, ok := target.(*ProxySprite)
+func (pself *Sprite) OnTriggerEnter(target gdx.ISpriter) {
+	sprite, ok := target.(*Sprite)
 	if ok {
 		triggerEventsTemp = append(triggerEventsTemp, TriggerEvent{Src: pself, Dst: sprite})
 	}

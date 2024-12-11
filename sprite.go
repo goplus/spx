@@ -457,7 +457,7 @@ func Gopt_SpriteImpl_Clone__1(sprite Sprite, data interface{}) {
 }
 
 func (p *SpriteImpl) OnCloned__0(onCloned func(data interface{})) {
-	p.proxy = nil
+	p.syncSprite = nil
 	p.hasOnCloned = true
 	p.allWhenCloned = &eventSink{
 		prev:  p.allWhenCloned,
@@ -470,7 +470,7 @@ func (p *SpriteImpl) OnCloned__0(onCloned func(data interface{})) {
 }
 
 func (p *SpriteImpl) OnCloned__1(onCloned func()) {
-	p.proxy = nil
+	p.syncSprite = nil
 	p.OnCloned__0(func(interface{}) {
 		onCloned()
 	})
@@ -800,7 +800,7 @@ func (p *SpriteImpl) goAnimateInternal(name SpriteAnimationName, ani *aniConfig,
 
 func doAnimation(p *SpriteImpl, info *animState) {
 	animName := info.Name
-	for p.proxy == nil {
+	for p.syncSprite == nil {
 		engine.WaitNextFrame()
 	}
 	engine.WaitMainThread(func() {
@@ -808,13 +808,13 @@ func doAnimation(p *SpriteImpl, info *animState) {
 			return
 		}
 		p.isCostumeDirty = false
-		p.proxy.PlayAnim(animName, info.Speed, info.IsLoop, false)
+		p.syncSprite.PlayAnim(animName, info.Speed, info.IsLoop, false)
 	})
 	if info.OnStart != nil && info.OnStart.Play != "" {
 		p.g.Play__3(info.OnStart.Play)
 	}
 	if info.AniType == aniTypeFrame {
-		for engine.SyncSpriteIsPlayingAnim(p.proxy.Id) {
+		for spriteMgr.IsPlayingAnim(p.syncSprite.GetId()) {
 			if info.IsCanceled {
 				break
 			}
@@ -989,7 +989,7 @@ func (p *SpriteImpl) doMoveToForAnim(x, y float64) {
 	p.updateTransform()
 }
 func (p *SpriteImpl) updateTransform() {
-	p.updateProxyTransform(true)
+	p.updateProxyTransform(false)
 }
 
 func (p *SpriteImpl) goMoveForward(step float64) {
@@ -1447,6 +1447,20 @@ func touchingSprite(dst, src *SpriteImpl) bool {
 	return ret
 }
 
+func (p *SpriteImpl) touchPoint(x, y float64) bool {
+	if p.syncSprite == nil {
+		return false
+	}
+	return spriteMgr.CheckCollisionWithPoint(p.syncSprite.GetId(), mathf.NewVec2(x, y), true)
+}
+
+func (p *SpriteImpl) touchingSprite(dst *SpriteImpl) bool {
+	if p.syncSprite == nil || dst.syncSprite == nil {
+		return false
+	}
+	return spriteMgr.CheckCollision(p.syncSprite.GetId(), dst.syncSprite.GetId(), true, true)
+}
+
 const (
 	touchingScreenLeft   = 1
 	touchingScreenTop    = 2
@@ -1500,10 +1514,10 @@ func checkTouchingDirection(dir float64) int {
 }
 
 func (p *SpriteImpl) checkTouchingScreen(where int) (touching int) {
-	if p.proxy == nil {
+	if p.syncSprite == nil {
 		return 0
 	}
-	value := engine.SyncPhysicCheckTouchedCameraBoundary(p.proxy.Id, int64(where))
+	value := physicMgr.CheckTouchedCameraBoundary(p.syncSprite.GetId(), int64(where))
 	if value {
 		return where
 	}

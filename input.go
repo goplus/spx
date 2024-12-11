@@ -19,215 +19,216 @@ package spx
 import (
 	"time"
 
-	"github.com/realdream-ai/gdspx/pkg/engine"
+	gdx "github.com/realdream-ai/gdspx/pkg/engine"
+	"github.com/realdream-ai/mathf"
 )
 
 type Key = int64
 
 var (
-	Key0            Key = engine.KeyCode.Key0
-	Key1            Key = engine.KeyCode.Key1
-	Key2            Key = engine.KeyCode.Key2
-	Key3            Key = engine.KeyCode.Key3
-	Key4            Key = engine.KeyCode.Key4
-	Key5            Key = engine.KeyCode.Key5
-	Key6            Key = engine.KeyCode.Key6
-	Key7            Key = engine.KeyCode.Key7
-	Key8            Key = engine.KeyCode.Key8
-	Key9            Key = engine.KeyCode.Key9
-	KeyA            Key = engine.KeyCode.A
-	KeyB            Key = engine.KeyCode.B
-	KeyC            Key = engine.KeyCode.C
-	KeyD            Key = engine.KeyCode.D
-	KeyE            Key = engine.KeyCode.E
-	KeyF            Key = engine.KeyCode.F
-	KeyG            Key = engine.KeyCode.G
-	KeyH            Key = engine.KeyCode.H
-	KeyI            Key = engine.KeyCode.I
-	KeyJ            Key = engine.KeyCode.J
-	KeyK            Key = engine.KeyCode.K
-	KeyL            Key = engine.KeyCode.L
-	KeyM            Key = engine.KeyCode.M
-	KeyN            Key = engine.KeyCode.N
-	KeyO            Key = engine.KeyCode.O
-	KeyP            Key = engine.KeyCode.P
-	KeyQ            Key = engine.KeyCode.Q
-	KeyR            Key = engine.KeyCode.R
-	KeyS            Key = engine.KeyCode.S
-	KeyT            Key = engine.KeyCode.T
-	KeyU            Key = engine.KeyCode.U
-	KeyV            Key = engine.KeyCode.V
-	KeyW            Key = engine.KeyCode.W
-	KeyX            Key = engine.KeyCode.X
-	KeyY            Key = engine.KeyCode.Y
-	KeyZ            Key = engine.KeyCode.Z
-	KeyApostrophe   Key = engine.KeyCode.Apostrophe
-	KeyBackslash    Key = engine.KeyCode.Backslash
-	KeyBackspace    Key = engine.KeyCode.Backspace
-	KeyCapsLock     Key = engine.KeyCode.CapsLock
-	KeyComma        Key = engine.KeyCode.Comma
-	KeyDelete       Key = engine.KeyCode.Delete
-	KeyDown         Key = engine.KeyCode.Down
-	KeyEnd          Key = engine.KeyCode.End
-	KeyEnter        Key = engine.KeyCode.Enter
-	KeyEqual        Key = engine.KeyCode.Equal
-	KeyEscape       Key = engine.KeyCode.Escape
-	KeyF1           Key = engine.KeyCode.F1
-	KeyF2           Key = engine.KeyCode.F2
-	KeyF3           Key = engine.KeyCode.F3
-	KeyF4           Key = engine.KeyCode.F4
-	KeyF5           Key = engine.KeyCode.F5
-	KeyF6           Key = engine.KeyCode.F6
-	KeyF7           Key = engine.KeyCode.F7
-	KeyF8           Key = engine.KeyCode.F8
-	KeyF9           Key = engine.KeyCode.F9
-	KeyF10          Key = engine.KeyCode.F10
-	KeyF11          Key = engine.KeyCode.F11
-	KeyF12          Key = engine.KeyCode.F12
-	KeyGraveAccent  Key = engine.KeyCode.QuoteLeft
-	KeyHome         Key = engine.KeyCode.Home
-	KeyInsert       Key = engine.KeyCode.Insert
-	KeyKP0          Key = engine.KeyCode.KP0
-	KeyKP1          Key = engine.KeyCode.KP1
-	KeyKP2          Key = engine.KeyCode.KP2
-	KeyKP3          Key = engine.KeyCode.KP3
-	KeyKP4          Key = engine.KeyCode.KP4
-	KeyKP5          Key = engine.KeyCode.KP5
-	KeyKP6          Key = engine.KeyCode.KP6
-	KeyKP7          Key = engine.KeyCode.KP7
-	KeyKP8          Key = engine.KeyCode.KP8
-	KeyKP9          Key = engine.KeyCode.KP9
-	KeyKPDecimal    Key = engine.KeyCode.KPPeriod
-	KeyKPDivide     Key = engine.KeyCode.KPDivide
-	KeyKPEnter      Key = engine.KeyCode.KPEnter
-	KeyKPEqual      Key = engine.KeyCode.Equal
-	KeyKPMultiply   Key = engine.KeyCode.KPMultiply
-	KeyKPSubtract   Key = engine.KeyCode.KPSubtract
-	KeyLeft         Key = engine.KeyCode.Left
-	KeyLeftBracket  Key = engine.KeyCode.BracketLeft
-	KeyMenu         Key = engine.KeyCode.Menu
-	KeyMinus        Key = engine.KeyCode.Minus
-	KeyNumLock      Key = engine.KeyCode.NumLock
-	KeyPageDown     Key = engine.KeyCode.PageDown
-	KeyPageUp       Key = engine.KeyCode.PageUp
-	KeyPause        Key = engine.KeyCode.Pause
-	KeyPeriod       Key = engine.KeyCode.Period
-	KeyPrintScreen  Key = engine.KeyCode.Print
-	KeyRight        Key = engine.KeyCode.Right
-	KeyRightBracket Key = engine.KeyCode.BracketRight
-	KeyScrollLock   Key = engine.KeyCode.ScrollLock
-	KeySemicolon    Key = engine.KeyCode.Semicolon
-	KeySlash        Key = engine.KeyCode.Slash
-	KeySpace        Key = engine.KeyCode.Space
-	KeyTab          Key = engine.KeyCode.Tab
-	KeyUp           Key = engine.KeyCode.Up
-	KeyAlt          Key = engine.KeyCode.Alt
-	KeyControl      Key = engine.KeyCode.CmdOrCtrl
-	KeyShift        Key = engine.KeyCode.Shift
+	Key0            Key
+	Key1            Key
+	Key2            Key
+	Key3            Key
+	Key4            Key
+	Key5            Key
+	Key6            Key
+	Key7            Key
+	Key8            Key
+	Key9            Key
+	KeyA            Key
+	KeyB            Key
+	KeyC            Key
+	KeyD            Key
+	KeyE            Key
+	KeyF            Key
+	KeyG            Key
+	KeyH            Key
+	KeyI            Key
+	KeyJ            Key
+	KeyK            Key
+	KeyL            Key
+	KeyM            Key
+	KeyN            Key
+	KeyO            Key
+	KeyP            Key
+	KeyQ            Key
+	KeyR            Key
+	KeyS            Key
+	KeyT            Key
+	KeyU            Key
+	KeyV            Key
+	KeyW            Key
+	KeyX            Key
+	KeyY            Key
+	KeyZ            Key
+	KeyApostrophe   Key
+	KeyBackslash    Key
+	KeyBackspace    Key
+	KeyCapsLock     Key
+	KeyComma        Key
+	KeyDelete       Key
+	KeyDown         Key
+	KeyEnd          Key
+	KeyEnter        Key
+	KeyEqual        Key
+	KeyEscape       Key
+	KeyF1           Key
+	KeyF2           Key
+	KeyF3           Key
+	KeyF4           Key
+	KeyF5           Key
+	KeyF6           Key
+	KeyF7           Key
+	KeyF8           Key
+	KeyF9           Key
+	KeyF10          Key
+	KeyF11          Key
+	KeyF12          Key
+	KeyGraveAccent  Key
+	KeyHome         Key
+	KeyInsert       Key
+	KeyKP0          Key
+	KeyKP1          Key
+	KeyKP2          Key
+	KeyKP3          Key
+	KeyKP4          Key
+	KeyKP5          Key
+	KeyKP6          Key
+	KeyKP7          Key
+	KeyKP8          Key
+	KeyKP9          Key
+	KeyKPDecimal    Key
+	KeyKPDivide     Key
+	KeyKPEnter      Key
+	KeyKPEqual      Key
+	KeyKPMultiply   Key
+	KeyKPSubtract   Key
+	KeyLeft         Key
+	KeyLeftBracket  Key
+	KeyMenu         Key
+	KeyMinus        Key
+	KeyNumLock      Key
+	KeyPageDown     Key
+	KeyPageUp       Key
+	KeyPause        Key
+	KeyPeriod       Key
+	KeyPrintScreen  Key
+	KeyRight        Key
+	KeyRightBracket Key
+	KeyScrollLock   Key
+	KeySemicolon    Key
+	KeySlash        Key
+	KeySpace        Key
+	KeyTab          Key
+	KeyUp           Key
+	KeyAlt          Key
+	KeyControl      Key
+	KeyShift        Key
 	KeyMax          Key = -2
 	KeyAny          Key = -1
 )
 
 func initInput() {
-	Key0 = engine.KeyCode.Key0
-	Key1 = engine.KeyCode.Key1
-	Key2 = engine.KeyCode.Key2
-	Key3 = engine.KeyCode.Key3
-	Key4 = engine.KeyCode.Key4
-	Key5 = engine.KeyCode.Key5
-	Key6 = engine.KeyCode.Key6
-	Key7 = engine.KeyCode.Key7
-	Key8 = engine.KeyCode.Key8
-	Key9 = engine.KeyCode.Key9
-	KeyA = engine.KeyCode.A
-	KeyB = engine.KeyCode.B
-	KeyC = engine.KeyCode.C
-	KeyD = engine.KeyCode.D
-	KeyE = engine.KeyCode.E
-	KeyF = engine.KeyCode.F
-	KeyG = engine.KeyCode.G
-	KeyH = engine.KeyCode.H
-	KeyI = engine.KeyCode.I
-	KeyJ = engine.KeyCode.J
-	KeyK = engine.KeyCode.K
-	KeyL = engine.KeyCode.L
-	KeyM = engine.KeyCode.M
-	KeyN = engine.KeyCode.N
-	KeyO = engine.KeyCode.O
-	KeyP = engine.KeyCode.P
-	KeyQ = engine.KeyCode.Q
-	KeyR = engine.KeyCode.R
-	KeyS = engine.KeyCode.S
-	KeyT = engine.KeyCode.T
-	KeyU = engine.KeyCode.U
-	KeyV = engine.KeyCode.V
-	KeyW = engine.KeyCode.W
-	KeyX = engine.KeyCode.X
-	KeyY = engine.KeyCode.Y
-	KeyZ = engine.KeyCode.Z
-	KeyApostrophe = engine.KeyCode.Apostrophe
-	KeyBackslash = engine.KeyCode.Backslash
-	KeyBackspace = engine.KeyCode.Backspace
-	KeyCapsLock = engine.KeyCode.CapsLock
-	KeyComma = engine.KeyCode.Comma
-	KeyDelete = engine.KeyCode.Delete
-	KeyDown = engine.KeyCode.Down
-	KeyEnd = engine.KeyCode.End
-	KeyEnter = engine.KeyCode.Enter
-	KeyEqual = engine.KeyCode.Equal
-	KeyEscape = engine.KeyCode.Escape
-	KeyF1 = engine.KeyCode.F1
-	KeyF2 = engine.KeyCode.F2
-	KeyF3 = engine.KeyCode.F3
-	KeyF4 = engine.KeyCode.F4
-	KeyF5 = engine.KeyCode.F5
-	KeyF6 = engine.KeyCode.F6
-	KeyF7 = engine.KeyCode.F7
-	KeyF8 = engine.KeyCode.F8
-	KeyF9 = engine.KeyCode.F9
-	KeyF10 = engine.KeyCode.F10
-	KeyF11 = engine.KeyCode.F11
-	KeyF12 = engine.KeyCode.F12
-	KeyGraveAccent = engine.KeyCode.QuoteLeft
-	KeyHome = engine.KeyCode.Home
-	KeyInsert = engine.KeyCode.Insert
-	KeyKP0 = engine.KeyCode.KP0
-	KeyKP1 = engine.KeyCode.KP1
-	KeyKP2 = engine.KeyCode.KP2
-	KeyKP3 = engine.KeyCode.KP3
-	KeyKP4 = engine.KeyCode.KP4
-	KeyKP5 = engine.KeyCode.KP5
-	KeyKP6 = engine.KeyCode.KP6
-	KeyKP7 = engine.KeyCode.KP7
-	KeyKP8 = engine.KeyCode.KP8
-	KeyKP9 = engine.KeyCode.KP9
-	KeyKPDecimal = engine.KeyCode.KPPeriod
-	KeyKPDivide = engine.KeyCode.KPDivide
-	KeyKPEnter = engine.KeyCode.KPEnter
-	KeyKPEqual = engine.KeyCode.Equal
-	KeyKPMultiply = engine.KeyCode.KPMultiply
-	KeyKPSubtract = engine.KeyCode.KPSubtract
-	KeyLeft = engine.KeyCode.Left
-	KeyLeftBracket = engine.KeyCode.BracketLeft
-	KeyMenu = engine.KeyCode.Menu
-	KeyMinus = engine.KeyCode.Minus
-	KeyNumLock = engine.KeyCode.NumLock
-	KeyPageDown = engine.KeyCode.PageDown
-	KeyPageUp = engine.KeyCode.PageUp
-	KeyPause = engine.KeyCode.Pause
-	KeyPeriod = engine.KeyCode.Period
-	KeyPrintScreen = engine.KeyCode.Print
-	KeyRight = engine.KeyCode.Right
-	KeyRightBracket = engine.KeyCode.BracketRight
-	KeyScrollLock = engine.KeyCode.ScrollLock
-	KeySemicolon = engine.KeyCode.Semicolon
-	KeySlash = engine.KeyCode.Slash
-	KeySpace = engine.KeyCode.Space
-	KeyTab = engine.KeyCode.Tab
-	KeyUp = engine.KeyCode.Up
-	KeyAlt = engine.KeyCode.Alt
-	KeyControl = engine.KeyCode.CmdOrCtrl
-	KeyShift = engine.KeyCode.Shift
+	Key0 = gdx.KeyCode.Key0
+	Key1 = gdx.KeyCode.Key1
+	Key2 = gdx.KeyCode.Key2
+	Key3 = gdx.KeyCode.Key3
+	Key4 = gdx.KeyCode.Key4
+	Key5 = gdx.KeyCode.Key5
+	Key6 = gdx.KeyCode.Key6
+	Key7 = gdx.KeyCode.Key7
+	Key8 = gdx.KeyCode.Key8
+	Key9 = gdx.KeyCode.Key9
+	KeyA = gdx.KeyCode.A
+	KeyB = gdx.KeyCode.B
+	KeyC = gdx.KeyCode.C
+	KeyD = gdx.KeyCode.D
+	KeyE = gdx.KeyCode.E
+	KeyF = gdx.KeyCode.F
+	KeyG = gdx.KeyCode.G
+	KeyH = gdx.KeyCode.H
+	KeyI = gdx.KeyCode.I
+	KeyJ = gdx.KeyCode.J
+	KeyK = gdx.KeyCode.K
+	KeyL = gdx.KeyCode.L
+	KeyM = gdx.KeyCode.M
+	KeyN = gdx.KeyCode.N
+	KeyO = gdx.KeyCode.O
+	KeyP = gdx.KeyCode.P
+	KeyQ = gdx.KeyCode.Q
+	KeyR = gdx.KeyCode.R
+	KeyS = gdx.KeyCode.S
+	KeyT = gdx.KeyCode.T
+	KeyU = gdx.KeyCode.U
+	KeyV = gdx.KeyCode.V
+	KeyW = gdx.KeyCode.W
+	KeyX = gdx.KeyCode.X
+	KeyY = gdx.KeyCode.Y
+	KeyZ = gdx.KeyCode.Z
+	KeyApostrophe = gdx.KeyCode.Apostrophe
+	KeyBackslash = gdx.KeyCode.Backslash
+	KeyBackspace = gdx.KeyCode.Backspace
+	KeyCapsLock = gdx.KeyCode.CapsLock
+	KeyComma = gdx.KeyCode.Comma
+	KeyDelete = gdx.KeyCode.Delete
+	KeyDown = gdx.KeyCode.Down
+	KeyEnd = gdx.KeyCode.End
+	KeyEnter = gdx.KeyCode.Enter
+	KeyEqual = gdx.KeyCode.Equal
+	KeyEscape = gdx.KeyCode.Escape
+	KeyF1 = gdx.KeyCode.F1
+	KeyF2 = gdx.KeyCode.F2
+	KeyF3 = gdx.KeyCode.F3
+	KeyF4 = gdx.KeyCode.F4
+	KeyF5 = gdx.KeyCode.F5
+	KeyF6 = gdx.KeyCode.F6
+	KeyF7 = gdx.KeyCode.F7
+	KeyF8 = gdx.KeyCode.F8
+	KeyF9 = gdx.KeyCode.F9
+	KeyF10 = gdx.KeyCode.F10
+	KeyF11 = gdx.KeyCode.F11
+	KeyF12 = gdx.KeyCode.F12
+	KeyGraveAccent = gdx.KeyCode.QuoteLeft
+	KeyHome = gdx.KeyCode.Home
+	KeyInsert = gdx.KeyCode.Insert
+	KeyKP0 = gdx.KeyCode.KP0
+	KeyKP1 = gdx.KeyCode.KP1
+	KeyKP2 = gdx.KeyCode.KP2
+	KeyKP3 = gdx.KeyCode.KP3
+	KeyKP4 = gdx.KeyCode.KP4
+	KeyKP5 = gdx.KeyCode.KP5
+	KeyKP6 = gdx.KeyCode.KP6
+	KeyKP7 = gdx.KeyCode.KP7
+	KeyKP8 = gdx.KeyCode.KP8
+	KeyKP9 = gdx.KeyCode.KP9
+	KeyKPDecimal = gdx.KeyCode.KPPeriod
+	KeyKPDivide = gdx.KeyCode.KPDivide
+	KeyKPEnter = gdx.KeyCode.KPEnter
+	KeyKPEqual = gdx.KeyCode.Equal
+	KeyKPMultiply = gdx.KeyCode.KPMultiply
+	KeyKPSubtract = gdx.KeyCode.KPSubtract
+	KeyLeft = gdx.KeyCode.Left
+	KeyLeftBracket = gdx.KeyCode.BracketLeft
+	KeyMenu = gdx.KeyCode.Menu
+	KeyMinus = gdx.KeyCode.Minus
+	KeyNumLock = gdx.KeyCode.NumLock
+	KeyPageDown = gdx.KeyCode.PageDown
+	KeyPageUp = gdx.KeyCode.PageUp
+	KeyPause = gdx.KeyCode.Pause
+	KeyPeriod = gdx.KeyCode.Period
+	KeyPrintScreen = gdx.KeyCode.Print
+	KeyRight = gdx.KeyCode.Right
+	KeyRightBracket = gdx.KeyCode.BracketRight
+	KeyScrollLock = gdx.KeyCode.ScrollLock
+	KeySemicolon = gdx.KeyCode.Semicolon
+	KeySlash = gdx.KeyCode.Slash
+	KeySpace = gdx.KeyCode.Space
+	KeyTab = gdx.KeyCode.Tab
+	KeyUp = gdx.KeyCode.Up
+	KeyAlt = gdx.KeyCode.Alt
+	KeyControl = gdx.KeyCode.CmdOrCtrl
+	KeyShift = gdx.KeyCode.Shift
 	KeyMax = -2
 	KeyAny = -1
 }
@@ -254,11 +255,11 @@ type eventKeyUp struct {
 }
 
 type eventLeftButtonDown struct {
-	X, Y int
+	Pos mathf.Vec2
 }
 
 type eventLeftButtonUp struct {
-	X, Y int
+	Pos mathf.Vec2
 }
 
 type eventFirer interface {
@@ -270,7 +271,7 @@ type eventFirer interface {
 type inputManager struct {
 	tempItems []Shape
 	g         *Game
-	id2Timer  map[engine.Object]int64
+	id2Timer  map[gdx.Object]int64
 }
 
 const (
@@ -280,11 +281,11 @@ const (
 
 func (p *inputManager) init(g *Game) {
 	p.tempItems = make([]Shape, 50)
-	p.id2Timer = make(map[engine.Object]int64)
+	p.id2Timer = make(map[gdx.Object]int64)
 	p.g = g
 }
 
-func (p *inputManager) canTriggerClickEvent(id engine.Object) bool {
+func (p *inputManager) canTriggerClickEvent(id gdx.Object) bool {
 	currentTime := time.Now()
 	milliseconds := currentTime.UnixNano() / int64(time.Millisecond)
 	if lastTime, ok := p.id2Timer[id]; ok {

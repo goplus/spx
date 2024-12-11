@@ -5,14 +5,28 @@ import (
 
 	stime "time"
 
+	"github.com/goplus/spx/internal/enginewrap"
 	"github.com/goplus/spx/internal/time"
-	. "github.com/realdream-ai/gdspx/pkg/engine"
-	"github.com/realdream-ai/gdspx/pkg/gdspx"
+	gdx "github.com/realdream-ai/gdspx/pkg/engine"
+	gde "github.com/realdream-ai/gdspx/pkg/gdspx"
+)
+
+// copy these variable to any namespace you want
+var (
+	audioMgr    enginewrap.AudioMgrImpl
+	cameraMgr   enginewrap.CameraMgrImpl
+	inputMgr    enginewrap.InputMgrImpl
+	physicMgr   enginewrap.PhysicMgrImpl
+	platformMgr enginewrap.PlatformMgrImpl
+	resMgr      enginewrap.ResMgrImpl
+	sceneMgr    enginewrap.SceneMgrImpl
+	spriteMgr   enginewrap.SpriteMgrImpl
+	uiMgr       enginewrap.UiMgrImpl
 )
 
 type TriggerEvent struct {
-	Src *ProxySprite
-	Dst *ProxySprite
+	Src *Sprite
+	Dst *Sprite
 }
 type KeyEvent struct {
 	Id        int64
@@ -20,7 +34,7 @@ type KeyEvent struct {
 }
 
 var (
-	game              Gamer
+	game              IGame
 	triggerEventsTemp []TriggerEvent
 	triggerEvents     []TriggerEvent
 	triggerMutex      sync.Mutex
@@ -42,16 +56,17 @@ var (
 	debugLastFrame int64   = 0
 )
 
-type Gamer interface {
+type IGame interface {
 	OnEngineStart()
 	OnEngineUpdate(delta float64)
 	OnEngineRender(delta float64)
 	OnEngineDestroy()
 }
 
-func GdspxMain(g Gamer) {
+func Main(g IGame) {
+	enginewrap.Init(WaitMainThread)
 	game = g
-	gdspx.LinkEngine(EngineCallbackInfo{
+	gde.LinkEngine(gdx.EngineCallbackInfo{
 		OnEngineStart:   onStart,
 		OnEngineUpdate:  onUpdate,
 		OnEngineDestroy: onDestroy,
@@ -71,7 +86,10 @@ func onStart() {
 	keyEventsTemp = make([]KeyEvent, 0)
 	keyEvents = make([]KeyEvent, 0)
 
-	time.Start(onSetTimeScale)
+	time.Start(func(scale float64) {
+		platformMgr.SetTimeScale(scale)
+	})
+
 	startTimestamp = stime.Now()
 	lastTimestamp = stime.Now()
 	game.OnEngineStart()
@@ -86,33 +104,6 @@ func onUpdate(delta float64) {
 	game.OnEngineRender(delta)
 }
 
-func calcfps() {
-	curTime := time.RealTimeSinceStart()
-	timeDiff := curTime - debugLastTime
-	frameDiff := time.Frame() - debugLastFrame
-	if timeDiff > 0.25 {
-		fps = float64(frameDiff) / timeDiff
-		debugLastFrame = time.Frame()
-		debugLastTime = curTime
-	}
-}
-func onSetTimeScale(scale float64) {
-	SyncPlatformSetTimeScale(scale)
-}
-
-func updateTime(delta float64) {
-	deltaTime := delta
-	timeSinceLevelLoad += deltaTime
-
-	curTime := stime.Now()
-	unscaledTimeSinceLevelLoad := curTime.Sub(startTimestamp).Seconds()
-	unscaledDeltaTime := curTime.Sub(lastTimestamp).Seconds()
-	lastTimestamp = curTime
-	timeScale := PlatformMgr.GetTimeScale()
-	calcfps()
-	time.Update(float64(timeScale), unscaledTimeSinceLevelLoad, timeSinceLevelLoad, deltaTime, unscaledDeltaTime, fps)
-}
-
 func onDestroy() {
 	game.OnEngineDestroy()
 }
@@ -124,14 +115,35 @@ func onKeyReleased(id int64) {
 	keyEventsTemp = append(keyEventsTemp, KeyEvent{Id: id, IsPressed: false})
 }
 
+func calcfps() {
+	curTime := time.RealTimeSinceStart()
+	timeDiff := curTime - debugLastTime
+	frameDiff := time.Frame() - debugLastFrame
+	if timeDiff > 0.25 {
+		fps = float64(frameDiff) / timeDiff
+		debugLastFrame = time.Frame()
+		debugLastTime = curTime
+	}
+}
+
+func updateTime(delta float64) {
+	deltaTime := delta
+	timeSinceLevelLoad += deltaTime
+
+	curTime := stime.Now()
+	unscaledTimeSinceLevelLoad := curTime.Sub(startTimestamp).Seconds()
+	unscaledDeltaTime := curTime.Sub(lastTimestamp).Seconds()
+	lastTimestamp = curTime
+	timeScale := SyncGetTimeScale()
+	calcfps()
+	time.Update(float64(timeScale), unscaledTimeSinceLevelLoad, timeSinceLevelLoad, deltaTime, unscaledDeltaTime, fps)
+}
+
 func cacheTriggerEvents() {
 	triggerMutex.Lock()
 	triggerEvents = append(triggerEvents, triggerEventsTemp...)
 	triggerMutex.Unlock()
 	triggerEventsTemp = triggerEventsTemp[:0]
-}
-func IsWebIntepreterMode() bool {
-	return gdspx.IsWebIntepreterMode()
 }
 func GetTriggerEvents(lst []TriggerEvent) []TriggerEvent {
 	triggerMutex.Lock()
@@ -153,11 +165,4 @@ func GetKeyEvents(lst []KeyEvent) []KeyEvent {
 	keyEvents = keyEvents[:0]
 	keyMutex.Unlock()
 	return lst
-}
-
-func GetFPS() float64 {
-	return fps
-}
-func GetTPS() float64 {
-	return 30
 }

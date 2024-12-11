@@ -49,7 +49,7 @@ func (p *sayOrThinker) refresh() {
 	bound := p.sp.Bounds()
 	center := bound.Center()
 	size := bound.Size
-	p.panel.SetText(float64(p.sp.g.getWidth()), float64(p.sp.g.getHeight()), center.X, center.Y, size.X, size.Y, p.msg)
+	p.panel.SetText(p.sp.g.getWindowSize(), center, size, p.msg)
 }
 
 // -------------------------------------------------------------------------------------

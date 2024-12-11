@@ -1,7 +1,6 @@
 package ui
 
 import (
-	. "github.com/realdream-ai/gdspx/pkg/engine"
 	"github.com/realdream-ai/mathf"
 	. "github.com/realdream-ai/mathf"
 
@@ -20,42 +19,44 @@ type UiMonitor struct {
 type UpdateFunc func(float64)
 
 func NewUiMonitor() *UiMonitor {
-	panel := engine.SyncCreateEngineUiNode[UiMonitor]("")
+	panel := engine.NewUiNode[UiMonitor]()
 	return panel
 }
-func (pself *UiMonitor) OnStart() {
-	pself.bgAll = BindUI[UiNode](pself.GetId(), "BG")
-	pself.labelName = BindUI[UiNode](pself.GetId(), "BG/H/LabelName")
-	pself.labelBg = BindUI[UiNode](pself.GetId(), "BG/H/C")
-	pself.labelValue = BindUI[UiNode](pself.GetId(), "BG/H/C/H/LabelValue")
 
-	pself.valueOnly = BindUI[UiNode](pself.GetId(), "ValueOnly")
-	pself.labelValueOnly = BindUI[UiNode](pself.GetId(), "ValueOnly/LabelValue")
+// !!Warning: this method was called in main thread
+func (pself *UiMonitor) OnStart() {
+	pself.bgAll = SyncBindUI[UiNode](pself.GetId(), "BG")
+	pself.labelName = SyncBindUI[UiNode](pself.GetId(), "BG/H/LabelName")
+	pself.labelBg = SyncBindUI[UiNode](pself.GetId(), "BG/H/C")
+	pself.labelValue = SyncBindUI[UiNode](pself.GetId(), "BG/H/C/H/LabelValue")
+
+	pself.valueOnly = SyncBindUI[UiNode](pself.GetId(), "ValueOnly")
+	pself.labelValueOnly = SyncBindUI[UiNode](pself.GetId(), "ValueOnly/LabelValue")
 
 }
 func (pself *UiMonitor) ShowAll(isOn bool) {
-	engine.SyncUiSetVisible(pself.bgAll.GetId(), isOn)
-	engine.SyncUiSetVisible(pself.valueOnly.GetId(), !isOn)
+	uiMgr.SetVisible(pself.bgAll.GetId(), isOn)
+	uiMgr.SetVisible(pself.valueOnly.GetId(), !isOn)
 }
 
 func (pself *UiMonitor) SetVisible(isOn bool) {
-	engine.SyncUiSetVisible(pself.GetId(), isOn)
+	uiMgr.SetVisible(pself.GetId(), isOn)
 }
 
 func (pself *UiMonitor) UpdateScale(x float64) {
-	engine.SyncUiSetScale(pself.GetId(), mathf.NewVec2(x, x))
+	uiMgr.SetScale(pself.GetId(), mathf.NewVec2(x, x))
 }
-func (pself *UiMonitor) UpdatePos(x, y float64) {
-	pos := WorldToScreen(x, y)
-	engine.SyncUiSetGlobalPosition(pself.GetId(), pos)
+func (pself *UiMonitor) UpdatePos(wpos Vec2) {
+	pos := WorldToUI(wpos)
+	uiMgr.SetGlobalPosition(pself.GetId(), pos)
 }
 
 func (pself *UiMonitor) UpdateText(name, value string) {
-	engine.SyncUiSetText(pself.labelName.GetId(), name)
-	engine.SyncUiSetText(pself.labelValue.GetId(), value)
-	engine.SyncUiSetText(pself.labelValueOnly.GetId(), value)
+	uiMgr.SetText(pself.labelName.GetId(), name)
+	uiMgr.SetText(pself.labelValue.GetId(), value)
+	uiMgr.SetText(pself.labelValueOnly.GetId(), value)
 }
 func (pself *UiMonitor) UpdateColor(color Color) {
-	engine.SyncUiSetColor(pself.labelBg.GetId(), color)
-	engine.SyncUiSetColor(pself.valueOnly.GetId(), color)
+	uiMgr.SetColor(pself.labelBg.GetId(), color)
+	uiMgr.SetColor(pself.valueOnly.GetId(), color)
 }

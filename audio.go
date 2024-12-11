@@ -58,7 +58,7 @@ func (p *soundMgr) play(media Sound, opts *PlayOptions) (err error) {
 }
 
 func (p *soundMgr) stopAll() {
-	engine.SyncAudioStopAll()
+	audioMgr.StopAll()
 }
 
 func (p *soundMgr) playBgm(media Sound, action PlayAction) (err error) {
@@ -78,34 +78,33 @@ func (p *soundMgr) playBgm(media Sound, action PlayAction) (err error) {
 }
 
 func (p *soundMgr) playSfx(media Sound) (err error) {
-	engine.SyncAudioPlaySfx(engine.ToAssetPath(media.Path))
+	audioMgr.PlaySfx(engine.ToAssetPath(media.Path))
 	return
 }
 
 func (p *soundMgr) playMusic(media Sound) (err error) {
-	engine.SyncAudioPlayMusic(engine.ToAssetPath(media.Path))
+	audioMgr.PlayMusic(engine.ToAssetPath(media.Path))
 	return
 }
 
 func (p *soundMgr) stopMusic(media Sound) {
-	engine.SyncAudioPauseMusic()
+	audioMgr.PauseMusic()
 }
 
 func (p *soundMgr) pauseMusic(media Sound) {
-	engine.SyncAudioPauseMusic()
+	audioMgr.PauseMusic()
 }
 
 func (p *soundMgr) resumeMusic(media Sound) {
-	engine.SyncAudioResumeMusic()
+	audioMgr.ResumeMusic()
 }
 
 func (p *soundMgr) getVolume() float64 {
-	volume := engine.SyncAudioGetMasterVolume()
-	return float64(volume)
+	return audioMgr.GetMasterVolume()
 }
 
 func (p *soundMgr) setVolume(volume float64) {
-	engine.SyncAudioSetMasterVolume(volume)
+	audioMgr.SetMasterVolume(volume)
 }
 
 func (p *soundMgr) changeVolume(delta float64) {
@@ -115,12 +114,11 @@ func (p *soundMgr) changeVolume(delta float64) {
 }
 
 func (p *soundMgr) getSfxVolume() float64 {
-	volume := engine.SyncAudioGetSfxVolume()
-	return float64(volume)
+	return audioMgr.GetSfxVolume()
 }
 
 func (p *soundMgr) setSfxVolume(volume float64) {
-	engine.SyncAudioSetSfxVolume(volume)
+	audioMgr.SetSfxVolume(volume)
 }
 
 func (p *soundMgr) changeSfxVolume(delta float64) {
@@ -130,12 +128,11 @@ func (p *soundMgr) changeSfxVolume(delta float64) {
 }
 
 func (p *soundMgr) getMusicVolume() float64 {
-	volume := engine.SyncAudioGetMusicVolume()
-	return float64(volume)
+	return audioMgr.GetMusicVolume()
 }
 
 func (p *soundMgr) setMusicVolume(volume float64) {
-	engine.SyncAudioSetMusicVolume(volume)
+	audioMgr.SetMusicVolume(volume)
 }
 
 func (p *soundMgr) changeMusicVolume(delta float64) {

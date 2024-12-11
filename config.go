@@ -37,7 +37,7 @@ func resourceDir(resource interface{}) (fs spxfs.Dir, err error) {
 func loadJson(ret interface{}, fs spxfs.Dir, file string) (err error) {
 	if _, ok := fs.(spxfs.GdDir); ok {
 		filePath := engine.ToAssetPath(file)
-		value := engine.SyncReadAllText(filePath)
+		value := engine.ReadAllText(filePath)
 		json.Unmarshal([]byte(value), ret)
 		return
 	}
