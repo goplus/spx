@@ -26,6 +26,7 @@ import (
 	"github.com/goplus/spx/internal/anim"
 	"github.com/goplus/spx/internal/gdi/clrutil"
 	"github.com/goplus/spx/internal/math32"
+	"github.com/goplus/spx/internal/time"
 	"github.com/goplus/spx/internal/tools"
 )
 
@@ -215,6 +216,9 @@ type Sprite interface {
 	Visible() bool
 	Xpos() float64
 	Ypos() float64
+	TimeSinceLevelLoad() float64
+	DeltaTime() float64
+	RealTimeSinceStart() float64
 }
 
 type SpriteName = string
@@ -1866,3 +1870,13 @@ func (p *SpriteImpl) fixWorldRange(x, y float64) (float64, float64) {
 }
 
 // -----------------------------------------------------------------------------
+func (pself *SpriteImpl) DeltaTime() float64 {
+	return time.DeltaTime()
+}
+
+func (pself *SpriteImpl) TimeSinceLevelLoad() float64 {
+	return time.TimeSinceLevelLoad()
+}
+func (pself *SpriteImpl) RealTimeSinceStart() float64 {
+	return time.RealTimeSinceStart()
+}
