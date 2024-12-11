@@ -35,6 +35,7 @@ import (
 	"github.com/goplus/spx/internal/coroutine"
 	"github.com/goplus/spx/internal/gdi"
 	"github.com/goplus/spx/internal/math32"
+	gtime "github.com/goplus/spx/internal/time"
 	"github.com/hajimehoshi/ebiten/v2"
 
 	spxfs "github.com/goplus/spx/fs"
@@ -168,6 +169,10 @@ func (p *Game) getGame() *Game {
 }
 
 func (p *Game) initGame(sprites []Sprite) *Game {
+	startTimestamp = time.Now()
+	gtime.Start(func(dt float64) {})
+	gco.OnInited()
+
 	p.tickMgr.init()
 	p.eventSinks.init(&p.sinkMgr, p)
 	p.sprs = make(map[string]Sprite)
@@ -629,13 +634,31 @@ func (p *Game) Update() error {
 	if !p.isLoaded {
 		return nil
 	}
-
+	updateTime()
 	p.updateColliders()
 	p.input.update()
 	p.updateMousePos()
 	p.sounds.update()
 	p.tickMgr.update()
+	gco.UpdateJobs()
 	return nil
+}
+
+var (
+	startTimestamp     time.Time
+	lastTimestamp      time.Time
+	timeSinceLevelLoad float64
+)
+
+func updateTime() {
+	curTime := time.Now()
+	unscaledTimeSinceLevelLoad := curTime.Sub(startTimestamp).Seconds()
+	unscaledDeltaTime := curTime.Sub(lastTimestamp).Seconds()
+	deltaTime := unscaledDeltaTime
+	timeSinceLevelLoad += deltaTime
+	lastTimestamp = curTime
+	timeScale := 1
+	gtime.Update(float64(timeScale), unscaledTimeSinceLevelLoad, timeSinceLevelLoad, deltaTime, unscaledDeltaTime, 60)
 }
 
 func (p *Game) updateColliders() {
@@ -722,11 +745,7 @@ func (p *Game) fireEvent(ev event) {
 func (p *Game) eventLoop(me coroutine.Thread) int {
 	for {
 		var ev event
-		go func() {
-			ev = <-p.events
-			gco.Resume(me)
-		}()
-		gco.Yield(me)
+		waitForChan(p.events, &ev)
 		p.handleEvent(ev)
 	}
 }
@@ -746,38 +765,18 @@ var (
 type threadObj = coroutine.ThreadObj
 
 func waitToDo(fn func()) {
-	me := gco.Current()
-	go func() {
-		fn()
-		gco.Resume(me)
-	}()
-	gco.Yield(me)
+	gco.WaitToDo(fn)
 }
 
-func waitForChan(done chan bool) {
-	me := gco.Current()
-	go func() {
-		<-done
-		gco.Resume(me)
-	}()
-	gco.Yield(me)
+func waitForChan[T any](done chan T, data *T) {
+	coroutine.WaitForChan(gco, done, data)
 }
 
 func SchedNow() int {
-	if me := gco.Current(); me != nil {
-		gco.Sched(me)
-	}
 	return 0
 }
 
 func Sched() int {
-	now := time.Now()
-	if now.Sub(lastSched) >= 3e7 {
-		if me := gco.Current(); me != nil {
-			gco.Sched(me)
-		}
-		lastSched = now
-	}
 	return 0
 }
 
@@ -1265,8 +1264,12 @@ func (p *Game) Username() string {
 
 // -----------------------------------------------------------------------------
 
+func (p *Game) WaitNextFrame() {
+	gco.WaitNextFrame()
+}
+
 func (p *Game) Wait(secs float64) {
-	gco.Sleep(time.Duration(secs * 1e9))
+	gco.Wait(secs)
 }
 
 func (p *Game) Timer() float64 {

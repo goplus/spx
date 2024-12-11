@@ -1,0 +1,5 @@
+gop_autogen.go
+index.html
+wasm_exec.js
+server.go
+*.wasm

@@ -1,0 +1,3 @@
+# We build / Copy-paste them before running project
+main.wasm
+wasm_exec.js
