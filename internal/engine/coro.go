@@ -1,6 +1,8 @@
 package engine
 
 import (
+	"sync"
+
 	"github.com/goplus/spx/internal/coroutine"
 	"github.com/goplus/spx/internal/time"
 )
@@ -11,7 +13,6 @@ var (
 
 func SetCoroutines(co *coroutine.Coroutines) {
 	gco = co
-
 }
 func Go(tobj coroutine.ThreadObj, fn func()) {
 	gco.CreateAndStart(false, tobj, func(me coroutine.Thread) int {
@@ -20,24 +21,21 @@ func Go(tobj coroutine.ThreadObj, fn func()) {
 	})
 }
 func Wait(secs float64) float64 {
-	startTime := time.TimeSinceLevelLoad()
+	startTime := time.RealTimeSinceStart()
 	gco.Wait(secs)
-	return time.TimeSinceLevelLoad() - startTime
+	return time.RealTimeSinceStart() - startTime
 }
 
 func WaitNextFrame() float64 {
+	startTime := time.RealTimeSinceStart()
 	gco.WaitNextFrame()
-	return time.DeltaTime()
+	return time.RealTimeSinceStart() - startTime
 }
 
 func WaitMainThread(call func()) {
 	gco.WaitMainThread(call)
 }
 
-func WaitToDo(fn func()) {
-	gco.WaitToDo(fn)
-}
-
-func WaitForChan[T any](done chan T, data *T) {
-	coroutine.WaitForChan(gco, done, data)
+func WaitGroup(wg *sync.WaitGroup) {
+	gco.WaitGroup(wg)
 }

@@ -704,20 +704,9 @@ func (p *Game) handleEvent(event event) {
 }
 
 func (p *Game) fireEvent(ev event) {
-	select {
-	case p.events <- ev:
-	default:
-		log.Println("Event buffer is full. Skip event:", ev)
-	}
+	p.handleEvent(ev)
 }
 
-func (p *Game) eventLoop(me coroutine.Thread) int {
-	for {
-		var ev event
-		engine.WaitForChan(p.events, &ev)
-		p.handleEvent(ev)
-	}
-}
 func (p *Game) logicLoop(me coroutine.Thread) int {
 	for {
 		tempItems := p.getTempShapes()
@@ -758,14 +747,8 @@ func (p *Game) inputEventLoop(me coroutine.Thread) int {
 }
 
 func (p *Game) initEventLoop() {
-	gco.Create(nil, p.eventLoop)
 	gco.Create(nil, p.inputEventLoop)
 	gco.Create(nil, p.logicLoop)
-}
-
-func init() {
-	gco = coroutine.New()
-	engine.SetCoroutines(gco)
 }
 
 var (

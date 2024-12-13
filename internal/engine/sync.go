@@ -13,9 +13,9 @@ func SyncNewSprite(obj interface{}) *Sprite {
 }
 
 func SyncBindUI[T any](parentNode gdx.Object, path string) *T {
-
 	return gdx.BindUI[T](parentNode, path)
 }
+
 func SyncGetTimeScale() float64 {
 	return gdx.PlatformMgr.GetTimeScale()
 }

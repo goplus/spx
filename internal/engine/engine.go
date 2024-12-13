@@ -1,10 +1,13 @@
 package engine
 
 import (
+	"fmt"
 	"sync"
 
 	stime "time"
 
+	"github.com/goplus/spx/internal/debug"
+	"github.com/goplus/spx/internal/define"
 	"github.com/goplus/spx/internal/enginewrap"
 	"github.com/goplus/spx/internal/time"
 	gdx "github.com/realdream-ai/gdspx/pkg/engine"
@@ -64,6 +67,7 @@ type IGame interface {
 }
 
 func Main(g IGame) {
+	define.Init(gde.IsWebIntepreterMode())
 	enginewrap.Init(WaitMainThread)
 	game = g
 	gde.LinkEngine(gdx.EngineCallbackInfo{
@@ -73,10 +77,6 @@ func Main(g IGame) {
 		OnKeyPressed:    onKeyPressed,
 		OnKeyReleased:   onKeyReleased,
 	})
-}
-
-func OnGameStarted() {
-	gco.OnInited()
 }
 
 // callbacks
@@ -96,12 +96,23 @@ func onStart() {
 }
 
 func onUpdate(delta float64) {
+	define.IsMainThread = true
+	t0 := time.RealTimeSinceStart()
 	updateTime(float64(delta))
 	cacheTriggerEvents()
 	cacheKeyEvents()
 	game.OnEngineUpdate(delta)
+	t1 := time.RealTimeSinceStart()
 	gco.UpdateJobs()
+	t2 := time.RealTimeSinceStart()
 	game.OnEngineRender(delta)
+	t3 := time.RealTimeSinceStart()
+	gco.UpdateJobs()
+	if t3-t0 > 0.03 {
+		println(time.Frame(), fmt.Sprintf("==onUpdate Total%f, UpdateTime %f CoroTime %f  RenderTime %f ", t3-t0, t1-t0, t2-t1, t3-t2))
+	}
+	define.IsMainThread = false
+	debug.FlushLog()
 }
 
 func onDestroy() {

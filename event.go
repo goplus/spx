@@ -64,9 +64,18 @@ func (p *eventSink) asyncCall(start bool, data interface{}, doSth func(*eventSin
 
 func (p *eventSink) syncCall(data interface{}, doSth func(*eventSink)) {
 	var wg sync.WaitGroup
+	// calc the wait count
+	temp := p
+	for temp != nil {
+		if temp.cond == nil || temp.cond(data) {
+			wg.Add(1)
+		}
+		temp = temp.prev
+	}
+
+	// start create tasks
 	for p != nil {
 		if p.cond == nil || p.cond(data) {
-			wg.Add(1)
 			copy := p
 			gco.CreateAndStart(false, p.pthis, func(coroutine.Thread) int {
 				defer wg.Done()
@@ -76,7 +85,8 @@ func (p *eventSink) syncCall(data interface{}, doSth func(*eventSink)) {
 		}
 		p = p.prev
 	}
-	engine.WaitToDo(wg.Wait)
+	// wait for all tasks to start executing
+	engine.WaitGroup(&wg)
 }
 
 func (p *eventSink) call(wait bool, data interface{}, doSth func(*eventSink)) {
