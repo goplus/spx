@@ -12,7 +12,7 @@ type Queue[T any] struct {
 	mu    sync.Mutex
 	head  *node[T]
 	tail  *node[T]
-	count int
+	count int64
 }
 
 func NewQueue[T any]() *Queue[T] {
@@ -47,7 +47,17 @@ func (s *Queue[T]) Move(src *Queue[T]) {
 	src.count = 0
 }
 
-func (s *Queue[T]) Count() int {
+func (s *Queue[T]) Foreach(call func(data T)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	head := s.head
+	for head != nil {
+		call(head.value)
+		head = head.next
+	}
+}
+
+func (s *Queue[T]) Count() int64 {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.count
