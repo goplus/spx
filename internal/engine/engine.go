@@ -107,7 +107,6 @@ func onUpdate(delta float64) {
 	t2 := time.RealTimeSinceStart()
 	game.OnEngineRender(delta)
 	t3 := time.RealTimeSinceStart()
-	gco.UpdateJobs()
 	if t3-t0 > 0.03 {
 		println(time.Frame(), fmt.Sprintf("==onUpdate Total%f, UpdateTime %f CoroTime %f  RenderTime %f ", t3-t0, t1-t0, t2-t1, t3-t2))
 	}

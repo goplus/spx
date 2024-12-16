@@ -126,6 +126,7 @@ func (p *Coroutines) CreateAndStart(start bool, tobj ThreadObj, fn func(me Threa
 					panic(e)
 				}
 			}
+			id.stopped_ = true
 			id.lastDelta = time.RealTimeSinceStart() - id.startTime
 			//p.debugLog(fmt.Sprintf("taskdone %d coroDone delta %f, time %f, stack %s \n", id.id, id.lastDelta, time.RealTimeSinceStart(), id.stackSimple_))
 		}()

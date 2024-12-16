@@ -1,3 +1,9 @@
+//go:build !js
+// +build !js
+
+package coroutine
+
+/*
 package coroutine
 
 import (
@@ -65,3 +71,4 @@ func (p *Coroutines) UpdateJobs() {
 		}
 	}
 }
+*/

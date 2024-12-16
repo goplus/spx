@@ -53,7 +53,7 @@ func (p *Game) OnEngineStart() {
 	gco = coroutine.New()
 	engine.SetCoroutines(gco)
 
-	gco.CreateAndStart(true, p, func(th coroutine.Thread) int {
+	engine.CreateCoroAndWait(p, func() {
 		initInput()
 		if me, ok := gamer.(interface{ MainEntry() }); ok {
 			me.MainEntry()
@@ -61,7 +61,6 @@ func (p *Game) OnEngineStart() {
 		if !p.isRunned {
 			Gopt_Game_Run(gamer, "assets")
 		}
-		return 0
 	})
 }
 

@@ -1,6 +1,3 @@
-//go:build !js
-// +build !js
-
 package coroutine
 
 import (
@@ -60,40 +57,26 @@ func (p *Coroutines) WaitMainThread(call func()) {
 	p.Yield(me)
 }
 
+func (p *Coroutines) CreateAndWait(tobj ThreadObj, call func()) {
+	th := p.CreateAndStart(true, tobj, func(th Thread) int {
+		call()
+		return 0
+	})
+	calledTaskes := make([]*WaitJob, 1)
+	for !th.Stopped() {
+		calledTaskes = p.doJobs(calledTaskes)
+		runtime.Gosched()
+		time.Sleep(0.1)
+	}
+}
+
 func (p *Coroutines) UpdateJobs() {
 	timestamp := time.RealTimeSinceStart()
 	isTimeout := false
-	curFrame := time.Frame()
-	curTime := time.TimeSinceLevelLoad()
-	curQueue := p.curQueue
-	nextQueue := p.nextQueue
 	calledTaskes := make([]*WaitJob, 1)
 	for {
 		// handle tasks
-		for curQueue.Count() > 0 {
-			task := curQueue.PopFront()
-			if task.Thread != nil {
-				p.debugLog("handle task", task.Id, nextQueue.Count(), task.Thread.stackSimple_)
-			}
-			switch task.Type {
-			case waitTypeFrame:
-				calledTaskes = append(calledTaskes, task)
-				if task.Frame >= curFrame {
-					nextQueue.PushBack(task)
-				} else {
-					task.Call()
-				}
-			case waitTypeTime:
-				calledTaskes = append(calledTaskes, task)
-				if task.Time >= curTime {
-					nextQueue.PushBack(task)
-				} else {
-					task.Call()
-				}
-			case waitTypeMainThread:
-				task.Call()
-			}
-		}
+		calledTaskes = p.doJobs(calledTaskes)
 		// check break condition
 		isTimeout = time.RealTimeSinceStart()-timestamp > 0.1 // max wait 100 ms
 		allDone := (p.nextQueue.count >= p.thCount)
@@ -101,6 +84,7 @@ func (p *Coroutines) UpdateJobs() {
 			break
 		}
 		runtime.Gosched()
+		time.Sleep(0.1)
 	}
 	moveCount := p.nextQueue.Count()
 	p.curQueue.Move(p.nextQueue)
@@ -110,6 +94,39 @@ func (p *Coroutines) UpdateJobs() {
 			time.RealTimeSinceStart(), time.Frame(), timestamp, int(time.FPS()), delta, moveCount, p.thCount, runtime.NumGoroutine())
 		p.dumpTasks(isTimeout, msg, calledTaskes)
 	}
+}
+
+func (p *Coroutines) doJobs(calledTaskes []*WaitJob) []*WaitJob {
+	curFrame := time.Frame()
+	curTime := time.TimeSinceLevelLoad()
+	curQueue := p.curQueue
+	nextQueue := p.nextQueue
+
+	for curQueue.Count() > 0 {
+		task := curQueue.PopFront()
+		if task.Thread != nil {
+			p.debugLog("handle task", task.Id, nextQueue.Count(), task.Thread.stackSimple_)
+		}
+		switch task.Type {
+		case waitTypeFrame:
+			calledTaskes = append(calledTaskes, task)
+			if task.Frame >= curFrame {
+				nextQueue.PushBack(task)
+			} else {
+				task.Call()
+			}
+		case waitTypeTime:
+			calledTaskes = append(calledTaskes, task)
+			if task.Time >= curTime {
+				nextQueue.PushBack(task)
+			} else {
+				task.Call()
+			}
+		case waitTypeMainThread:
+			task.Call()
+		}
+	}
+	return calledTaskes
 }
 
 func (p *Coroutines) addWaitJob(job *WaitJob, isFront bool) {
