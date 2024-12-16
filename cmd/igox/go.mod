@@ -1,12 +1,12 @@
-module github.com/goplus/spx/cmd/ispx
+module github.com/goplus/spx/cmd/igox
 
 go 1.21.3
 
 require (
 	github.com/goplus/igop v0.27.1
 	github.com/goplus/reflectx v1.2.2
-	github.com/goplus/spx v0.0.0
 	github.com/realdream-ai/gdspx v0.0.0-20241206104940-c8b4a8f07f1c
+	github.com/goplus/spx v0.0.0-00010101000000-000000000000
 )
 
 require (

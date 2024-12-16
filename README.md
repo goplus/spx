@@ -13,14 +13,15 @@ How to run games powered by Go+ spx engine?
 
 * Download Go+ and build it. See https://github.com/goplus/gop#how-to-build.
 * Download spx and build it.
-	```
+	```sh
+	# please use Git Bash to run the following commands in windows platform
 	git clone https://github.com/goplus/spx.git
 	cd spx
 	git checkout dev
-	go mod tidy
-	cd cmd/spx 
-	go install .
-	cd ../../tutorial/05-Animation
+	chmod +x ./init.sh
+	./init.sh
+	# run the demo
+	cd ../../tutorial/00-Hello
 	spx run .
 	```
 * Build a game and run.

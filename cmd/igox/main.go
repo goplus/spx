@@ -17,9 +17,10 @@ import (
 	_ "github.com/goplus/igop/pkg/fmt"
 	_ "github.com/goplus/igop/pkg/math"
 	_ "github.com/goplus/reflectx/icall/icall8192"
-	_ "github.com/goplus/spx/cmd/ispx/pkg/github.com/goplus/spx"
-	"github.com/goplus/spx/cmd/ispx/zipfs"
-	spxfs "github.com/goplus/spx/fs"
+
+	_ "github.com/goplus/spx/cmd/igox/pkg/github.com/goplus/spx"
+	"github.com/goplus/spx/cmd/igox/zipfs"
+	goxfs "github.com/goplus/spx/fs"
 )
 
 var dataChannel = make(chan []byte)
@@ -69,7 +70,7 @@ func main() {
 	}
 	fs := zipfs.NewZipFsFromReader(zipReader)
 	// Configure spx to load project files from zip-based file system.
-	spxfs.RegisterSchema("", func(path string) (spxfs.Dir, error) {
+	goxfs.RegisterSchema("", func(path string) (goxfs.Dir, error) {
 		return fs.Chrooted(path), nil
 	})
 

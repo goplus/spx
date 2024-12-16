@@ -13,12 +13,11 @@ if [ ! -d "gdspx" ]; then
 fi
 
 cd gdspx || exit
-make pc
+./tools/init.sh
 if [ "$1" == "-a" ] || [ "$1" == "-w" ]; then
-    make web
+    ./tools/init_web.sh 
 fi
 cd .. || exit
 
-echo "============= init succ =============="
-echo "Now you can type 'spx run ./tutorial/00-Hello' to run the first tutorial."
+echo "init succ"
 
