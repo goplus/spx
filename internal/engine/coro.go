@@ -31,12 +31,14 @@ func WaitNextFrame() float64 {
 	gco.WaitNextFrame()
 	return time.RealTimeSinceStart() - startTime
 }
+
 func CreateAndStart(tobj coroutine.ThreadObj, fn func()) {
 	gco.CreateAndStart(true, tobj, func(me coroutine.Thread) int {
 		fn()
 		return 0
 	})
 }
+
 func CreateCoroAndWait(p coroutine.ThreadObj, call func()) {
 	gco.CreateAndWait(p, call)
 }

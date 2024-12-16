@@ -71,10 +71,23 @@ func (p *Game) OnEngineUpdate(delta float64) {
 	if !p.isRunned {
 		return
 	}
-	// all these functions is called in main thread
-	p.syncUpdateInput()
-	p.syncUpdateCamera()
-	p.syncUpdateLogic()
+	engine.CreateCoroAndWait(p, func() {
+		// update input
+		pos := inputMgr.GetMousePos()
+		wpos := engine.ScreenToWorld(pos)
+		p.mousePos = wpos
+
+		// update camera
+		isOn, pos := p.Camera.getFollowPos()
+		if isOn {
+			cameraMgr.SetPosition(pos)
+		}
+
+		// update logic
+		p.startFlag.Do(func() {
+			p.fireEvent(&eventStart{})
+		})
+	})
 }
 func (p *Game) OnEngineRender(delta float64) {
 	if !p.isRunned {
@@ -88,27 +101,6 @@ func (p *Game) OnEngineRender(delta float64) {
 	if t2-t0 > 0.02 {
 		println(time.Frame(), fmt.Sprintf("== OnEngineRender total%fms proxy %f physic %f ", t2-t0, t1-t0, t2-t1))
 	}
-}
-
-func (p *Game) syncUpdateLogic() error {
-	p.startFlag.Do(func() {
-		p.fireEvent(&eventStart{})
-	})
-
-	return nil
-}
-
-func (p *Game) syncUpdateCamera() {
-	isOn, pos := p.Camera.getFollowPos()
-	if isOn {
-		engine.SyncSetCameraPosition(pos)
-	}
-}
-
-func (p *Game) syncUpdateInput() {
-	pos := engine.SyncGetMousePos()
-	wpos := engine.SyncScreenToWorld(pos)
-	p.mousePos = wpos
 }
 
 func (sprite *SpriteImpl) syncCheckInitProxy() {
