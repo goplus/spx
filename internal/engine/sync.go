@@ -5,6 +5,15 @@ import (
 	. "github.com/realdream-ai/mathf"
 )
 
+func NewSprite(obj interface{}) *Sprite {
+	var _ret1 *Sprite
+	WaitMainThread(func() {
+		_ret1 := gdx.CreateEmptySprite[Sprite]()
+		_ret1.Target = obj
+	})
+	return _ret1
+}
+
 // !!!Warning these method can only be called in main thread
 func SyncNewSprite(obj interface{}) *Sprite {
 	syncSprite := gdx.CreateEmptySprite[Sprite]()
@@ -21,10 +30,6 @@ func SyncGetTimeScale() float64 {
 }
 func SyncGetMousePos() Vec2 {
 	return gdx.InputMgr.GetMousePos()
-}
-
-func SyncSetCameraPosition(pos Vec2) {
-	gdx.CameraMgr.SetCameraPosition(NewVec2(pos.X, -pos.Y))
 }
 
 func SyncScreenToWorld(pos Vec2) Vec2 {

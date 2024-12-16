@@ -2,6 +2,7 @@ package define
 
 var isWebIntepreterMode bool
 var IsMainThread bool
+var HasInit bool
 
 func Init(isWeb bool) {
 	isWebIntepreterMode = isWeb

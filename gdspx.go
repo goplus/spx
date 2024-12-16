@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/goplus/spx/internal/coroutine"
+	"github.com/goplus/spx/internal/define"
 	"github.com/goplus/spx/internal/engine"
 	"github.com/goplus/spx/internal/enginewrap"
 	"github.com/goplus/spx/internal/time"
@@ -61,6 +62,7 @@ func (p *Game) OnEngineStart() {
 		if !p.isRunned {
 			Gopt_Game_Run(gamer, "assets")
 		}
+		define.HasInit = true
 	})
 }
 
@@ -93,14 +95,21 @@ func (p *Game) OnEngineRender(delta float64) {
 	if !p.isRunned {
 		return
 	}
-	t0 := time.RealTimeSinceStart()
-	p.syncUpdateProxy()
-	t1 := time.RealTimeSinceStart()
-	p.syncUpdatePhysic()
-	t2 := time.RealTimeSinceStart()
-	if t2-t0 > 0.02 {
-		println(time.Frame(), fmt.Sprintf("== OnEngineRender total%fms proxy %f physic %f ", t2-t0, t1-t0, t2-t1))
-	}
+	engine.CreateCoroAndWait(p, func() {
+		done := make(chan bool, 1)
+		t0 := time.RealTimeSinceStart()
+		engine.WaitMainThread(func() {
+			p.syncUpdateProxy()
+			t1 := time.RealTimeSinceStart()
+			p.syncUpdatePhysic()
+			t2 := time.RealTimeSinceStart()
+			if t2-t0 > 0.02 {
+				println(time.Frame(), fmt.Sprintf("== OnEngineRender total%fms proxy %f physic %f ", t2-t0, t1-t0, t2-t1))
+			}
+			done <- true
+		})
+		<-done
+	})
 }
 
 func (sprite *SpriteImpl) syncCheckInitProxy() {

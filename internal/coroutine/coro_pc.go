@@ -5,6 +5,7 @@ import (
 	"runtime"
 	"sync/atomic"
 
+	"github.com/goplus/spx/internal/define"
 	"github.com/goplus/spx/internal/time"
 )
 
@@ -48,7 +49,9 @@ func (p *Coroutines) WaitMainThread(call func()) {
 		Thread: me,
 		Type:   waitTypeMainThread,
 		Call: func() {
+			p.sema.Lock()
 			call()
+			p.sema.Unlock()
 			go p.Resume(me)
 		},
 	}
@@ -66,7 +69,9 @@ func (p *Coroutines) CreateAndWait(tobj ThreadObj, call func()) {
 	for !th.Stopped() {
 		calledTaskes = p.doJobs(calledTaskes)
 		runtime.Gosched()
-		time.Sleep(0.1)
+		if !define.HasInit {
+			time.Sleep(0.1)
+		}
 	}
 }
 
@@ -84,7 +89,6 @@ func (p *Coroutines) UpdateJobs() {
 			break
 		}
 		runtime.Gosched()
-		time.Sleep(0.1)
 	}
 	moveCount := p.nextQueue.Count()
 	p.curQueue.Move(p.nextQueue)
