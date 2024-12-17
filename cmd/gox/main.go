@@ -37,19 +37,22 @@ type CmdTool struct {
 	cmdtool.BaseCmdTool
 }
 
+const PROJECT_NAME = "spx"
+const PROJECT_FILE_SUFFIX = "spx"
+
 func main() {
 	cmd := &CmdTool{}
-	if os.Args[1] == "installispx" {
-		installIspx()
+	if os.Args[1] == "setupweb" {
+		setupweb()
 		return
 	}
-	cmdtool.RunCmd(cmd, "gdspx", version, proejct_fs, "template/project", "project", "installispx")
+	cmdtool.RunCmd(cmd, "gdspx", version, proejct_fs, "template/project", "project", "setupweb")
 }
 
-func installIspx() {
-	filePath := getISpxPath()
+func setupweb() {
+	filePath := getWasmPath()
 	rawdir, _ := os.Getwd()
-	os.Chdir("../ispx")
+	os.Chdir("../igox")
 	envVars := []string{"GOOS=js", "GOARCH=wasm"}
 	util.RunGolang(envVars, "build", "-o", filePath)
 	os.Chdir(rawdir)
@@ -58,9 +61,9 @@ func installIspx() {
 func (pself *CmdTool) CheckEnv() error {
 	dir, _ := filepath.Abs(cmdtool.TargetDir)
 
-	exist := CheckFileExist(dir, "spx", false)
+	exist := CheckFileExist(dir, PROJECT_FILE_SUFFIX, false)
 	if !exist {
-		return fmt.Errorf("can not find spx file, not a valid project dir")
+		return fmt.Errorf("can not find " + PROJECT_FILE_SUFFIX + " file, not a valid project dir")
 	}
 	return nil
 }
@@ -118,7 +121,7 @@ func (pself *CmdTool) ExportWeb() error {
 	util.CopyDir(proejct_fs, "template/project/.builds/web", webDir, true)
 	packProject(cmdtool.TargetDir, path.Join(webDir, "game.zip"))
 	packEngineRes(webDir)
-	util.CopyFile(getISpxPath(), path.Join(webDir, "gdspx.wasm"))
+	util.CopyFile(getWasmPath(), path.Join(webDir, "gdspx.wasm"))
 	saveEngineHash(webDir)
 	return err
 }
@@ -153,13 +156,13 @@ func (pself *CmdTool) BuildDll() error {
 	return nil
 }
 
-func getISpxPath() string {
+func getWasmPath() string {
 	gopath := os.Getenv("GOPATH")
 	if gopath == "" {
 		gopath = build.Default.GOPATH
 	}
 	targetPath := path.Join(gopath, "bin")
-	filePath := path.Join(targetPath, "ispx2.wasm")
+	filePath := path.Join(targetPath, "i"+PROJECT_NAME+".wasm")
 	return filePath
 }
 
