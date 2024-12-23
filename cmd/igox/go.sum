@@ -29,8 +29,8 @@ github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZb
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/qiniu/x v1.13.10 h1:J4Z3XugYzAq85SlyAfqlKVrbf05glMbAOh+QncsDQpE=
 github.com/qiniu/x v1.13.10/go.mod h1:INZ2TSWSJVWO/RuELQROERcslBwVgFG7MkTfEdaQz9E=
-github.com/realdream-ai/gdspx v0.0.0-20241206104940-c8b4a8f07f1c h1:PXY/AYmMKSuoE+j5ivYZbo7z1v+bByrzHxUQ9soQgK8=
-github.com/realdream-ai/gdspx v0.0.0-20241206104940-c8b4a8f07f1c/go.mod h1:N1y5yuSjxaxzTgTI6NQrMbI/9YA3dZue74P5I346xO4=
+github.com/realdream-ai/gdspx v0.0.0-20241223024224-7dce1324d3f8 h1:uL8e8arBMeiObE6bpYga9ZnurCR/GA41QLYSvBhnBHk=
+github.com/realdream-ai/gdspx v0.0.0-20241223024224-7dce1324d3f8/go.mod h1:N1y5yuSjxaxzTgTI6NQrMbI/9YA3dZue74P5I346xO4=
 github.com/realdream-ai/mathf v0.0.0-20241205091834-a85cb2402a16 h1:V/zAuyQF0v6ng+UVwJi+qF0s+P/nEHb/lha3Uf86TQM=
 github.com/realdream-ai/mathf v0.0.0-20241205091834-a85cb2402a16/go.mod h1:zCbLmeT7a+pH1sknxgdFLiha6xA3gezTtwbTuuNRJWE=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=

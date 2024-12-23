@@ -10,6 +10,7 @@ class GameApp {
         this.tempZipPath = '/tmp/preload.zip';
         this.tempGamePath = '/home/spx_game_cache';
         this.projectInstallName = config.projectName || "Game";
+        this.logLevel = config.logLevel || 0;
         this.projectData = config.projectData;
         this.oldData = config.projectData;
         this.persistentPaths = [this.persistentPath];
@@ -40,17 +41,17 @@ class GameApp {
             'persistentPaths': this.persistentPaths,
             'unloadAfterInit': false,
             'canvas': this.gameCanvas,
+            'logLevel': this.logLevel,
             'canvasResizePolicy': 1,
             'onExit': () => {
                 this.onGameExit()
             },
         };
         this.logicPromise = Promise.resolve();
-        this.isLogVerbose = config.logVerbose;
         this.curProjectHash = ''
     }
     logVerbose(...args) {
-        if (this.isLogVerbose) {
+        if (this.logLevel == LOG_LEVEL_VERBOSE) {
             console.log(...args);
         }
     }
