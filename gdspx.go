@@ -22,8 +22,11 @@ import (
 	"math"
 	"strings"
 
+	"github.com/goplus/spx/internal/coroutine"
+	"github.com/goplus/spx/internal/define"
 	"github.com/goplus/spx/internal/engine"
 	"github.com/goplus/spx/internal/enginewrap"
+	"github.com/goplus/spx/internal/time"
 
 	"github.com/realdream-ai/mathf"
 )
@@ -47,18 +50,20 @@ var (
 
 func (p *Game) OnEngineStart() {
 	cachedBounds_ = make(map[string]mathf.Rect2)
-	onStart := func() {
+	gamer := p.gamer_
+	gco = coroutine.New()
+	engine.SetCoroutines(gco)
+
+	engine.CreateCoroAndWait(p, func() {
 		initInput()
-		gamer := p.gamer_
 		if me, ok := gamer.(interface{ MainEntry() }); ok {
 			me.MainEntry()
 		}
 		if !p.isRunned {
 			Gopt_Game_Run(gamer, "assets")
 		}
-		engine.OnGameStarted()
-	}
-	go onStart()
+		define.HasInit = true
+	})
 }
 
 func (p *Game) OnEngineDestroy() {
@@ -68,38 +73,43 @@ func (p *Game) OnEngineUpdate(delta float64) {
 	if !p.isRunned {
 		return
 	}
-	// all these functions is called in main thread
-	p.syncUpdateInput()
-	p.syncUpdateCamera()
-	p.syncUpdateLogic()
+	engine.CreateCoroAndWait(p, func() {
+		// update input
+		pos := inputMgr.GetMousePos()
+		wpos := engine.ScreenToWorld(pos)
+		p.mousePos = wpos
+
+		// update camera
+		isOn, pos := p.Camera.getFollowPos()
+		if isOn {
+			cameraMgr.SetPosition(pos)
+		}
+
+		// update logic
+		p.startFlag.Do(func() {
+			p.fireEvent(&eventStart{})
+		})
+	})
 }
 func (p *Game) OnEngineRender(delta float64) {
 	if !p.isRunned {
 		return
 	}
-	p.syncUpdateProxy()
-	p.syncUpdatePhysic()
-}
-
-func (p *Game) syncUpdateLogic() error {
-	p.startFlag.Do(func() {
-		p.fireEvent(&eventStart{})
+	engine.CreateCoroAndWait(p, func() {
+		done := make(chan bool, 1)
+		t0 := time.RealTimeSinceStart()
+		engine.WaitMainThread(func() {
+			p.syncUpdateProxy()
+			t1 := time.RealTimeSinceStart()
+			p.syncUpdatePhysic()
+			t2 := time.RealTimeSinceStart()
+			if t2-t0 > 0.02 {
+				println(time.Frame(), fmt.Sprintf("== OnEngineRender total%fms proxy %f physic %f ", t2-t0, t1-t0, t2-t1))
+			}
+			done <- true
+		})
+		<-done
 	})
-
-	return nil
-}
-
-func (p *Game) syncUpdateCamera() {
-	isOn, pos := p.Camera.getFollowPos()
-	if isOn {
-		engine.SyncSetCameraPosition(pos)
-	}
-}
-
-func (p *Game) syncUpdateInput() {
-	pos := engine.SyncGetMousePos()
-	wpos := engine.SyncScreenToWorld(pos)
-	p.mousePos = wpos
 }
 
 func (sprite *SpriteImpl) syncCheckInitProxy() {
@@ -125,7 +135,7 @@ func (sprite *SpriteImpl) updateProxyTransform(isSync bool) {
 
 func (p *Game) syncUpdateProxy() {
 	count := 0
-	items := p.getItems()
+	items := p.getTempShapes()
 	for _, item := range items {
 		sprite, ok := item.(*SpriteImpl)
 		if ok {
@@ -145,14 +155,15 @@ func (p *Game) syncUpdateProxy() {
 	}
 
 	// unbind syncSprite
-	for _, item := range p.destroyItems {
+	desItems := p.destroyItems
+	p.destroyItems = nil
+	for _, item := range desItems {
 		sprite, ok := item.(*SpriteImpl)
 		if ok && sprite.syncSprite != nil {
 			sprite.syncSprite.Destroy()
 			sprite.syncSprite = nil
 		}
 	}
-	p.destroyItems = nil
 }
 
 func checkUpdateCostume(p *baseObj) {

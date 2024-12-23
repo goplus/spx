@@ -1,6 +1,7 @@
 package time
 
 import (
+	"fmt"
 	stime "time"
 )
 
@@ -17,7 +18,11 @@ var (
 )
 
 func Sleep(ms float64) {
-	stime.Sleep(stime.Microsecond * stime.Duration((ms * 1000)))
+	stime.Sleep(stime.Duration(ms * float64(stime.Millisecond)))
+}
+
+func RealTimeSinceStartStr() string {
+	return fmt.Sprintf("%f", RealTimeSinceStart())
 }
 
 func RealTimeSinceStart() float64 {
