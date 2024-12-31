@@ -155,6 +155,7 @@ type Sprite interface {
 	Move__0(step float64)
 	Move__1(step int)
 	NextCostume()
+	Name() string
 	OnCloned__0(onCloned func(data interface{}))
 	OnCloned__1(onCloned func())
 	OnMoving__0(onMoving func(mi *MovingInfo))
@@ -163,6 +164,8 @@ type Sprite interface {
 	OnTouchStart__1(onTouchStart func())
 	OnTouchStart__2(sprite SpriteName, onTouchStart func(Sprite))
 	OnTouchStart__3(sprite SpriteName, onTouchStart func())
+	OnTouchStart__4(sprite []SpriteName, onTouchStart func(Sprite))
+	OnTouchStart__5(sprite []SpriteName, onTouchStart func())
 	OnTurning__0(onTurning func(ti *TurningInfo))
 	OnTurning__1(onTurning func())
 	Parent() *Game
@@ -519,6 +522,10 @@ func Gopt_SpriteImpl_Clone__1(sprite Sprite, data interface{}) {
 	}
 }
 
+func (p *SpriteImpl) Name() string {
+	return p.name
+}
+
 func (p *SpriteImpl) OnCloned__0(onCloned func(data interface{})) {
 	p.hasOnCloned = true
 	p.allWhenCloned = &eventSink{
@@ -584,6 +591,26 @@ func (p *SpriteImpl) OnTouchStart__2(sprite SpriteName, onTouchStart func(Sprite
 
 func (p *SpriteImpl) OnTouchStart__3(sprite SpriteName, onTouchStart func()) {
 	p.OnTouchStart__2(sprite, func(Sprite) {
+		onTouchStart()
+	})
+}
+
+func (p *SpriteImpl) OnTouchStart__4(sprites []SpriteName, onTouchStart func(Sprite)) {
+	p.OnTouchStart__0(func(s Sprite) {
+		impl := spriteOf(s)
+		if impl != nil {
+			for _, spName := range sprites {
+				if impl.name == spName {
+					onTouchStart(s)
+					return
+				}
+			}
+		}
+	})
+}
+
+func (p *SpriteImpl) OnTouchStart__5(sprites []SpriteName, onTouchStart func()) {
+	p.OnTouchStart__4(sprites, func(Sprite) {
 		onTouchStart()
 	})
 }
