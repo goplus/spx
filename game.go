@@ -705,7 +705,7 @@ func (p *Game) handleEvent(event event) {
 		p.updateMousePos()
 		p.doWhenLeftButtonDown(ev)
 	case *eventKeyDown:
-		p.sinkMgr.doWhenKeyPressed(ev.Key)
+		p.sinkMgr.doWhenKeyPressed(Key(ev.Key))
 	case *eventStart:
 		p.sinkMgr.doWhenStart()
 	}
