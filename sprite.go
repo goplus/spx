@@ -889,9 +889,9 @@ func (p *SpriteImpl) goAnimateInternal(name SpriteAnimationName, ani *aniConfig,
 	if ani.AniType == aniTypeFrame {
 		p.goSetCostume(ani.From)
 		if ani.Fps == 0 { //compute fps
-			ani.Fps = math.Abs(tovalf-fromvalf) / ani.Duration
+			ani.Fps = math.Abs(tovalf-fromvalf+1) / ani.Duration
 		} else {
-			ani.Duration = math.Abs(tovalf-fromvalf) / ani.Fps
+			ani.Duration = math.Abs(tovalf-fromvalf+1) / ani.Fps
 		}
 	}
 
@@ -904,7 +904,7 @@ func (p *SpriteImpl) goAnimateInternal(name SpriteAnimationName, ani *aniConfig,
 
 	an := anim.NewAnim(name, fps, framenum, ani.IsLoop)
 	// create channels
-	defaultChannel := []*anim.AnimationKeyFrame{{Frame: 0, Value: fromval}, {Frame: framenum, Value: toval}}
+	defaultChannel := []*anim.AnimationKeyFrame{{Frame: 0, Value: fromval}, {Frame: framenum - 1, Value: toval}}
 	switch ani.AniType {
 	case aniTypeFrame:
 		an.AddChannel(AnimChannelFrame, anim.AnimValTypeInt, defaultChannel)
@@ -920,8 +920,8 @@ func (p *SpriteImpl) goAnimateInternal(name SpriteAnimationName, ani *aniConfig,
 		iFrameTo := int(math.Round(frameTo))
 		frameCount := iFrameTo - iFrameFrom + 1
 		framePerIter := int(float64(frameCount) * ani.Fps / float64(ani.FrameFps))
-		iterCount := int(framenum / framePerIter)
-		is_need_ext := framenum != iterCount*int(ani.FrameFps)
+		iterCount := (framenum + 1) / framePerIter
+		is_need_ext := (framenum + 1) != iterCount*framePerIter
 		arySize := iterCount * 2
 		if is_need_ext {
 			arySize += 2
