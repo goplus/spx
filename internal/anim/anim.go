@@ -146,7 +146,7 @@ func (this *Anim) Update(delay float64) bool {
 	}
 	// Animating
 	from := 0
-	to := this.totalframe
+	to := this.totalframe - 1
 	// Compute ratio
 	rangeval := float64(to + 1 - from)
 	ratio := delay * float64(this.fps*this.speedRatio) / 1000.0
