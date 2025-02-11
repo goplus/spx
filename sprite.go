@@ -498,7 +498,7 @@ func cloneSprite(out reflect.Value, outPtr Sprite, in reflect.Value, v specsp) *
 		dest.OnCloned__1(func() {
 			dest.awake()
 		})
-		outPtr.Main()
+		runMain(outPtr.Main)
 	}
 	return dest
 }
