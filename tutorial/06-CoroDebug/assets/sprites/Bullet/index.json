@@ -1,0 +1,20 @@
+{
+  "costumes": [
+    {
+      "bitmapResolution": 2,
+      "name": "bullet",
+      "path": "30.png",
+      "faceRight": 90,
+      "x": 8,
+      "y": 20
+    }
+  ],
+  "costumeIndex": 0,
+  "heading": 0,
+  "isDraggable": false,
+  "rotationStyle": "normal",
+  "size": 0.65,
+  "visible": false,
+  "x": 230,
+  "y": 185
+}

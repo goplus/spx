@@ -1,0 +1,30 @@
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <script src="/wasm_exec.js"></script>
+    <script>
+        "use strict";
+
+        (async () => {
+            const go = new Go();
+            const { instance } = await WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject)
+            go.run(instance);
+
+            window.startWithZipBuffer = (buffer) => {
+                // For maybe a bug in Go WASM, we need to recreate an Uint8Array
+                // in spite of the original type of `buffer` so that
+                // the function can be called from out of iframe.
+                const view = new Uint8Array(buffer);
+                // goLoadData is injected in the Go code
+                goLoadData(view);
+            }
+
+            window.dispatchEvent(new Event('wasmReady'));
+        })()
+    </script>
+</head>
+
+<body></body>
+
+</html>
