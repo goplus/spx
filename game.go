@@ -183,7 +183,7 @@ func (p *Game) initGame(sprites []Sprite) *Game {
 func Gopt_Game_Main(game Gamer, sprites ...Sprite) {
 	g := game.initGame(sprites)
 	if me, ok := game.(interface{ MainEntry() }); ok {
-		me.MainEntry()
+		runMain(me.MainEntry)
 	}
 	if !g.isRunned {
 		Gopt_Game_Run(game, "assets")
@@ -455,7 +455,7 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 				spr.awake()
 			})
 		}
-		ini.Main()
+		runMain(ini.Main)
 	}
 
 	p.doWindowSize() // set window size
@@ -737,6 +737,7 @@ func (p *Game) initEventLoop() {
 
 func init() {
 	gco = coroutine.New()
+	lastSched = time.Now()
 }
 
 var (
@@ -770,18 +771,33 @@ func SchedNow() int {
 	return 0
 }
 
+func runMain(call func()) {
+	isSchedInMain = true
+	mainSchedTime = time.Now()
+	call()
+	isSchedInMain = false
+}
+
 func Sched() int {
 	now := time.Now()
-	if now.Sub(lastSched) >= 3e7 {
-		if me := gco.Current(); me != nil {
-			gco.Sched(me)
+	if isSchedInMain {
+		if now.Sub(mainSchedTime) >= time.Second*3 {
+			panic("Main execution timed out. Please check if there is an infinite loop in the code.")
 		}
-		lastSched = now
+	} else {
+		if now.Sub(lastSched) >= 3e7 {
+			if me := gco.Current(); me != nil {
+				gco.Sched(me)
+			}
+			lastSched = now
+		}
 	}
 	return 0
 }
 
 var lastSched time.Time
+var isSchedInMain bool
+var mainSchedTime time.Time
 
 // -----------------------------------------------------------------------------
 
