@@ -9,11 +9,8 @@ import (
 	"unsafe"
 )
 
-var (
-	// ErrCannotYieldANonrunningThread represents an "can not yield a non-running thread" error.
-	ErrCannotYieldANonrunningThread = errors.New("can not yield a non-running thread")
-	ErrAbortThread                  = errors.New("abort thread")
-)
+// ErrCannotYieldANonrunningThread represents an "can not yield a non-running thread" error.
+var ErrCannotYieldANonrunningThread = errors.New("can not yield a non-running thread")
 
 // -------------------------------------------------------------------------------------
 
