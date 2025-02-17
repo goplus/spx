@@ -1,3 +1,7 @@
+//go:build noandroid
+// +build noandroid
+
+// # TODO support android
 package audiorecord
 
 /*
@@ -31,6 +35,8 @@ void al_init(uintptr_t java_vm, uintptr_t jni_env, jobject context, void** handl
 */
 import "C"
 import (
+	"errors"
+	"log"
 	"unsafe"
 )
 
