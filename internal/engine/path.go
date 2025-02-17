@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"encoding/json"
 	"path/filepath"
 	"strings"
 )
@@ -16,28 +15,6 @@ var (
 
 type projectConfig struct {
 	ExtAsset string `json:"extasset"`
-}
-
-func SetAssetDir(dir string) {
-	// load config
-	if resMgr.HasFile(configPath) {
-		configJson := resMgr.ReadAllText(configPath)
-		var config projectConfig
-		json.Unmarshal([]byte(configJson), &config)
-		extassetDir = config.ExtAsset
-	}
-	assetsDir = enginePathPrefix + dir + "/"
-}
-
-func ToAssetPath(relPath string) string {
-	replacedPath := replacePathIfInExtAssetDir(relPath, extassetDir, engineExtAssetPath)
-	if replacedPath != "" {
-		return replacedPath
-	}
-	path := assetsDir + relPath
-	finalPath := filepath.Clean(path)
-	finalPath = strings.ReplaceAll(finalPath, "\\", "/")
-	return finalPath
 }
 
 func replacePathIfInExtAssetDir(rpath string, extassetDir string, newAssetDir string) string {
