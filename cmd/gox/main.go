@@ -9,6 +9,7 @@ import (
 	"go/build"
 	"io"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"sort"
@@ -46,7 +47,11 @@ func main() {
 		setupweb()
 		return
 	}
-	cmdtool.RunCmd(cmd, "gdspx", version, proejct_fs, "template/project", "project", "setupweb")
+	cmdtool.RunCmd(cmd, "gdspx", version, proejct_fs, "template/project", "project", "setupweb", "exportapk")
+	if os.Args[1] == "exportapk" {
+		cmd.exportApk()
+		return
+	}
 }
 
 func setupweb() {
@@ -141,19 +146,25 @@ func (pself *CmdTool) RunWeb() error {
 }
 
 func (pself *CmdTool) BuildDll() error {
+	pself.parseGop()
+	cmdtool.BuildDll()
+	return nil
+}
+
+func (*CmdTool) parseGop() {
 	projectDir, _ := filepath.Abs(cmdtool.ProjectDir)
 	spxProjPath, _ := filepath.Abs(cmdtool.ProjectDir + "/..")
 
+	os.MkdirAll(cmdtool.GoDir, 0755)
 	rawdir, _ := os.Getwd()
 	os.Chdir(spxProjPath)
+	println(spxProjPath)
 	envVars := []string{""}
 	util.RunGoplus(envVars, "go")
 	os.Rename(path.Join(spxProjPath, "gop_autogen.go"), path.Join(cmdtool.GoDir, "main.go"))
 	os.Chdir(projectDir)
 	util.RunGolang(nil, "mod", "tidy")
 	os.Chdir(rawdir)
-	cmdtool.BuildDll()
-	return nil
 }
 
 func getWasmPath() string {
@@ -377,4 +388,226 @@ func addFileToZip(path string, paths []DirInfos) []DirInfos {
 	}
 	paths = append(paths, DirInfos{path, info})
 	return paths
+}
+
+func (pself *CmdTool) exportApk() {
+	pself.BuildDll()
+	// parse gop
+	pself.parseGop()
+	// copy assets
+	projectDir, _ := filepath.Abs(cmdtool.ProjectDir)
+	copyDir(path.Join(projectDir, "../assets"), path.Join(projectDir, "assets"))
+
+	apkPath := path.Join(projectDir, ".builds/game.apk")
+	// run build script
+	err := pself.buildAndInstallAPK(projectDir, apkPath)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	// Check if APK was successfully generated
+	if _, err := pself.installApk(apkPath); err != nil {
+		fmt.Println(err)
+		return
+	}
+}
+
+func copyDir(src string, dst string) error {
+	srcInfo, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+
+	// Create the destination directory
+	err = os.MkdirAll(dst, srcInfo.Mode())
+	if err != nil {
+		return err
+	}
+
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		srcPath := filepath.Join(src, entry.Name())
+		dstPath := filepath.Join(dst, entry.Name())
+
+		if entry.IsDir() {
+			// Recursively copy subdirectory
+			err = copyDir(srcPath, dstPath)
+			if err != nil {
+				return err
+			}
+		} else {
+			// Copy file
+			err = util.CopyFile(srcPath, dstPath)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// BuildAndInstallAPK builds and installs the Godot project on an Android device.
+func (pself *CmdTool) buildAndInstallAPK(defaultProjDir, apkPath string) error {
+	// Determine the project directory
+	absProjDir := defaultProjDir
+	println(absProjDir)
+	// Check if ANDROID_NDK_ROOT is set
+	androidNDKRoot := os.Getenv("ANDROID_NDK_ROOT")
+	if androidNDKRoot == "" {
+		return fmt.Errorf("error: ANDROID_NDK_ROOT environment variable is not set")
+	}
+
+	// Detect system architecture and OS
+	hostTag, err := detectHostTag()
+	if err != nil {
+		return err
+	}
+
+	ndkToolchain := filepath.Join(androidNDKRoot, "toolchains/llvm/prebuilt", hostTag, "bin")
+	minSDK := "21"
+
+	// Change to the Go directory
+	goDir := filepath.Join(absProjDir, "go")
+	libDir := filepath.Join(absProjDir, "lib")
+
+	if err := os.Chdir(goDir); err != nil {
+		return fmt.Errorf("failed to change to Go directory: %s %v", goDir, err)
+	}
+
+	// Build for arm64-v8a
+	funcBuildGo := func(dstFile string, arch, ccName string) error {
+		envVars := []string{"CGO_ENABLED=1", "GOOS=android", "GOARCH=" + arch, "CC=" + filepath.Join(ndkToolchain, ccName)}
+		return util.RunGolang(envVars, "build", "-tags=packmode", "-buildmode=c-shared",
+			"-o", filepath.Join(libDir, dstFile),
+			"main.go",
+		)
+	}
+
+	fmt.Println("Building for arm64-v8a...")
+	if err := funcBuildGo("libgdspx-android-arm64.so", "arm64", "aarch64-linux-android"+minSDK+"-clang"); err != nil {
+		return err
+	}
+
+	// Build for armeabi-v7a
+	fmt.Println("Building for armeabi-v7a...")
+	if err := funcBuildGo("libgdspx-android-arm32.so", "arm", "armv7a-linux-androideabi"+minSDK+"-clang"); err != nil {
+		return err
+	}
+
+	fmt.Println("Build android so completed successfully!")
+
+	// Check if GODOT_BIN is set
+	cmdBin := cmdtool.CmdPath
+	if cmdBin == "" {
+		return fmt.Errorf("error: GODOT_BIN environment variable is not set")
+	}
+
+	// Determine the Godot project path
+	projectPath := filepath.Join(absProjDir, "project.godot")
+	buildDir := filepath.Dir(apkPath)
+
+	// Create builds directory if it does not exist
+	if err := os.MkdirAll(buildDir, os.ModePerm); err != nil {
+		return fmt.Errorf("failed to create builds directory: %v", err)
+	}
+
+	// Check if Godot binary exists
+	if _, err := os.Stat(cmdBin); os.IsNotExist(err) {
+		return fmt.Errorf("error: Godot binary not found: %s", cmdBin)
+	}
+
+	// Check if Godot project file exists
+	if _, err := os.Stat(projectPath); os.IsNotExist(err) {
+		return fmt.Errorf("error: Godot project file not found: %s", projectPath)
+	}
+
+	// Import Godot project resources
+	fmt.Println("Importing project resources...")
+	if err := runCommand(cmdBin, "--headless", "--path", absProjDir, "--editor", "--quit"); err != nil {
+		return err
+	}
+
+	// Export the Godot project to APK
+	fmt.Println("Exporting Godot project to APK...")
+	if err := runCommand(cmdBin, "--headless", "--path", absProjDir, "--export-debug", "Android", apkPath); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (pself *CmdTool) installApk(apkPath string) (bool, error) {
+	if _, err := os.Stat(apkPath); os.IsNotExist(err) {
+		return true, fmt.Errorf("error: APK export failed")
+	}
+
+	// Check if adb is available
+	if _, err := exec.LookPath("adb"); err != nil {
+		return true, fmt.Errorf("error: adb command not found. Please ensure Android SDK platform tools are installed and in PATH")
+	}
+
+	// Check if an Android device is connected
+	adbDevicesOutput, err := exec.Command("adb", "devices").Output()
+	if err != nil || !strings.Contains(string(adbDevicesOutput), "device") {
+		return true, fmt.Errorf("error: No Android device connected. Please connect a device and enable USB debugging")
+	}
+
+	// Install the APK
+	fmt.Println("Installing APK...")
+	if err := runCommand("adb", "install", "-r", apkPath); err != nil {
+		return true, err
+	}
+
+	fmt.Println("APK installation successful!")
+	return false, nil
+}
+
+// runCommand executes a command and prints its output
+func runCommand(name string, args ...string) error {
+	cmd := exec.Command(name, args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+// detectHostTag detects the current system's NDK prebuilt directory
+func detectHostTag() (string, error) {
+	osName, err := exec.Command("uname", "-s").Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to detect operating system: %v", err)
+	}
+	arch, err := exec.Command("uname", "-m").Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to detect architecture: %v", err)
+	}
+
+	osStr := strings.TrimSpace(string(osName))
+	archStr := strings.TrimSpace(string(arch))
+
+	switch osStr {
+	case "Linux":
+		if archStr == "x86_64" {
+			return "linux-x86_64", nil
+		} else if archStr == "aarch64" {
+			return "linux-aarch64", nil
+		}
+	case "Darwin":
+		if archStr == "x86_64" {
+			return "darwin-x86_64", nil
+		} else if archStr == "arm64" {
+			return "darwin-aarch64", nil
+		}
+	default:
+		if strings.Contains(osStr, "MINGW") || strings.Contains(osStr, "MSYS") || strings.Contains(osStr, "CYGWIN") {
+			if archStr == "x86_64" || archStr == "amd64" {
+				return "windows-x86_64", nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("unsupported operating system or architecture: %s - %s", osStr, archStr)
 }
