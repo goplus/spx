@@ -1,5 +1,5 @@
-//go:build !js
-// +build !js
+//go:build !js && !android
+// +build !js,!android
 
 package audiorecord
 

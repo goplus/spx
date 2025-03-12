@@ -20,9 +20,9 @@
 /main.go
 /main.tscn
 /project.godot
-/gop_autogen.go
+/gop_autogen.go*
+/go
 
 # user specify ignores
 # ...
 /assets/**/*.import
-
