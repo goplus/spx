@@ -1,8 +1,6 @@
-//go:build android
-// +build android
-
 package audiorecord
 
+// TODO(tanjp): implement this
 import (
 	"github.com/goplus/spx/internal/coroutine"
 )
@@ -13,24 +11,16 @@ const (
 )
 
 type Recorder struct {
-	deviceVolume float64
-	lastValue    float64
 }
 
 func Open(gco *coroutine.Coroutines) *Recorder {
-	p := &Recorder{
-		deviceVolume: 0,
-	}
-
-	return p
+	panic("audio recorder is not implemented yet.")
 }
 
 func (p *Recorder) Close() error {
-
-	p.deviceVolume = 0
-	return nil
+	panic("audio recorder is not implemented yet.")
 }
 
 func (p *Recorder) Loudness() float64 {
-	return p.deviceVolume
+	panic("audio recorder is not implemented yet.")
 }
