@@ -5,9 +5,15 @@ compatibility_minimum = 4.1
 
 [libraries]
 
-macos.debug = "res://lib/gdspx-darwin-amd64.dylib"
-macos.release = "res://lib/gdspx-darwin-amd64.dylib"
+macos.debug.x86_64 = "res://lib/gdspx-darwin-amd64.dylib"
+macos.release.x86_64 = "res://lib/gdspx-darwin-amd64.dylib"
+macos.debug.arm64 = "res://lib/gdspx-darwin-arm64.dylib"
+macos.release.arm64 = "res://lib/gdspx-darwin-arm64.dylib"
 windows.debug.x86_64 = "res://lib/gdspx-windows-amd64.dll"
 windows.release.x86_64 = "res://lib/gdspx-windows-amd64.dll"
 linux.debug.x86_64 = "res://lib/gdspx-linux-amd64.so"
 linux.release.x86_64 = "res://lib/gdspx-linux-amd64.so"
+android.debug.arm64 = "res://lib/libgdspx-android-arm64.so"
+android.release.arm64 = "res://lib/libgdspx-android-arm64.so"
+ios.debug = "res://lib/libgdspx.ios.xcframework"
+ios.release = "res://lib/libgdspx.ios.xcframework"

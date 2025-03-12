@@ -1,7 +1,7 @@
 #!/bin/bash
 
 go mod tidy
-cd cmd/spx || exit
+cd cmd/gox || exit
 go install .
 cd ../../ || exit
 

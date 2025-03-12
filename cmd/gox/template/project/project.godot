@@ -18,3 +18,7 @@ config/features=PackedStringArray("4.2")
 
 window/size/viewport_width=480
 window/size/viewport_height=360
+
+[rendering]
+
+textures/vram_compression/import_etc2_astc=true
