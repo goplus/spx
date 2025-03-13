@@ -4,6 +4,7 @@ import (
 	"embed"
 	_ "embed"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -87,8 +88,6 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 			return err
 		}
 		return nil
-	case "init":
-		return nil
 	}
 
 	// Check environment
@@ -106,6 +105,12 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to setup environment: %v\n", err)
 		return err
+	}
+
+	switch cmd.Args.CmdName {
+	case "init":
+		log.Println("Initializing project...")
+		return nil
 	}
 
 	// Execute the command
