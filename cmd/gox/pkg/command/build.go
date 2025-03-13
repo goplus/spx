@@ -24,6 +24,15 @@ func (pself *CmdTool) BuildWasm() (err error) {
 }
 
 func (pself *CmdTool) BuildDll() error {
+	files, _ := filepath.Glob(filepath.Join(pself.ProjectDir, "go", "ios*"))
+	// Restore original files
+	for _, file := range files {
+		if !strings.HasSuffix(file, ".txt") {
+			newName := file + ".txt"
+			os.Rename(file, newName)
+		}
+	}
+
 	tarArch := *pself.Args.Arch
 	archs := []string{runtime.GOARCH}
 	if tarArch != "" {
