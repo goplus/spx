@@ -19,6 +19,7 @@ type ExtraArgs struct {
 	OnlyClient      *bool
 	Tags            *string
 	NoMap           *bool
+	Install         *bool
 	DebugWebService *bool
 }
 
@@ -95,6 +96,7 @@ func (cmd *CmdTool) initializeFlags() *bool {
 	cmd.Args.OnlyClient = f.Bool("onlyc", false, "mutil player mode clients only")
 	cmd.Args.Tags = f.String("tags", "simulation", "build tags")
 	cmd.Args.NoMap = f.Bool("nomap", false, "no map mode")
+	cmd.Args.Install = f.Bool("install", false, "install mode")
 	cmd.Args.DebugWebService = f.Bool("debugweb", false, "open debug web service")
 
 	return help

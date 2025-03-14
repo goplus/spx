@@ -157,16 +157,18 @@ func (pself *CmdTool) ExportIos() error {
 	}
 
 	log.Println("IPA export completed successfully!", ipaPath)
-	log.Println("Try to install ipa to devices...")
-	// install ipa to device
-	cmd = exec.Command("ios-deploy", "--bundle", ipaPath)
+	if *pself.Args.Install {
+		log.Println("Try to install ipa to devices...")
+		// install ipa to device
+		cmd = exec.Command("ios-deploy", "--bundle", ipaPath)
 
-	// Capture standard output and error
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+		// Capture standard output and error
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
 
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("IPA install failed: %w", err)
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("IPA install failed: %w", err)
+		}
 	}
 	return nil
 }
@@ -380,15 +382,16 @@ func (pself *CmdTool) ExportApk() error {
 		return nil
 	}
 
-	// Install the APK
-	fmt.Println("Installing APK...")
-	cmd = exec.Command("adb", "install", "-r", apkPath)
-	if err := cmd.Run(); err != nil {
-		fmt.Println("APK installation failed:", err)
-		return nil
+	if *pself.Args.Install {
+		// Install the APK
+		fmt.Println("Installing APK...")
+		cmd = exec.Command("adb", "install", "-r", apkPath)
+		if err := cmd.Run(); err != nil {
+			fmt.Println("APK installation failed:", err)
+			return nil
+		}
+		fmt.Println("APK installation successful!")
 	}
-
-	fmt.Println("APK installation successful!")
 	return nil
 }
 
