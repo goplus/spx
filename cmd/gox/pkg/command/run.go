@@ -32,7 +32,7 @@ func (pself *CmdTool) RunWeb() error {
 	executeDir := filepath.Join(pself.ProjectDir, ".builds/web")
 	executeDir = strings.ReplaceAll(executeDir, "\\", "/")
 	println("web server running at http://127.0.0.1:" + fmt.Sprint(port))
-	cmd := exec.Command("python", scriptPath, "-r", executeDir, "-p", fmt.Sprint(port))
+	cmd := exec.Command("python3", scriptPath, "-r", executeDir, "-p", fmt.Sprint(port))
 	err := cmd.Start()
 	if err != nil {
 		return fmt.Errorf("error starting server: %v", err)

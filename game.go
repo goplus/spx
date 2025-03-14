@@ -449,8 +449,8 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 	if p.windowHeight_ > p.worldHeight_ {
 		p.windowHeight_ = p.worldHeight_
 	}
-	platformMgr.SetWindowSize(int64(float64(p.windowWidth_)*p.windowScale), int64(float64(p.windowHeight_)*p.windowScale))
 
+	platformMgr.SetWindowSize(int64(float64(p.windowWidth_)*p.windowScale), int64(float64(p.windowHeight_)*p.windowScale))
 	p.Camera.init(p)
 	p.Camera.SetCameraZoom(p.windowScale)
 
