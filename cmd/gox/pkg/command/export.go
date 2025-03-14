@@ -96,7 +96,17 @@ func (pself *CmdTool) Export() error {
 
 func (pself *CmdTool) ExportIos() error {
 	pself.prepareExport()
+
 	pself.BuildDll()
+	// include ios files to build
+	files, _ := filepath.Glob(filepath.Join(pself.ProjectDir, "go", "ios*"))
+	for _, file := range files {
+		if strings.HasSuffix(file, ".txt") {
+			newName := strings.TrimSuffix(file, ".txt")
+			os.Rename(file, newName)
+		}
+	}
+
 	// First build the iOS libraries
 	if err := pself.buildIosLibraries(); err != nil {
 		return fmt.Errorf("failed to build iOS libraries: %w", err)
@@ -147,6 +157,17 @@ func (pself *CmdTool) ExportIos() error {
 	}
 
 	log.Println("IPA export completed successfully!", ipaPath)
+	log.Println("Try to install ipa to devices...")
+	// install ipa to device
+	cmd = exec.Command("ios-deploy", "--bundle", ipaPath)
+
+	// Capture standard output and error
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("IPA install failed: %w", err)
+	}
 	return nil
 }
 
@@ -174,15 +195,15 @@ func (pself *CmdTool) buildIosLibraries() error {
 
 	// Create a dummy header file with the required exports
 	headerContent := `#ifndef LIBGDSPX_H
-	#define LIBGDSPX_H
-	
-	#include <stdlib.h>
-	
-	// GDExtension initialization function
-	void GDExtensionInit(void *p_interface, const void *p_library, void *r_initialization);
-	
-	#endif // LIBGDSPX_H
-	`
+#define LIBGDSPX_H
+
+#include <stdlib.h>
+
+// GDExtension initialization function
+void GDExtensionInit(void *p_interface, const void *p_library, void *r_initialization);
+
+#endif // LIBGDSPX_H
+`
 	if err := os.WriteFile(filepath.Join(headersDir, "libgdspx.h"), []byte(headerContent), 0644); err != nil {
 		return fmt.Errorf("failed to create header file: %w", err)
 	}
@@ -214,7 +235,7 @@ func (pself *CmdTool) buildIosLibraries() error {
 
 	// Build for iOS Simulator (x86_64)
 	fmt.Println("🔨 Building for iOS Simulator (x86_64)...")
-	cmd := exec.Command("go", "build", "-tags=ios", "-buildmode=c-archive", "-trimpath", "-ldflags=-w -s", "-o", filepath.Join(simulatorDir, "libgdspx-x86_64.a"), ".")
+	cmd := exec.Command("go", "build", "-tags=ios,packmode", "-buildmode=c-archive", "-trimpath", "-ldflags=-w -s", "-o", filepath.Join(simulatorDir, "libgdspx-x86_64.a"), ".")
 	cmd.Dir = goSrcDir
 	cmd.Env = append(os.Environ(),
 		"CGO_ENABLED=1",

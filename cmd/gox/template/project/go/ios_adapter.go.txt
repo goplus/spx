@@ -1,0 +1,82 @@
+//go:build darwin && (arm64 || amd64) && ios
+
+/*
+iOS Adapter - Resolves various issues when running Go on iOS
+
+Main features:
+1. Signal handling - Prevents application crashes caused by Go runtime signal handling
+2. Thread management - Configures appropriate thread policies to avoid thread exhaustion
+3. Memory management - Sets GC parameters to optimize memory usage
+4. Initialization order - Ensures necessary C code executes before Go runtime starts
+
+Usage:
+1. Copy this file and its associated ios_adapter_complete.h and ios_adapter_complete.c to your Go project
+2. Ensure iOS build tags are included during compilation
+3. Import this package during your application initialization
+
+*/
+
+package main
+
+/*
+#cgo CFLAGS: -x objective-c
+#cgo LDFLAGS: -framework Foundation -framework UIKit
+#include "ios_adapter_complete.h"
+*/
+import "C"
+
+import (
+	"os"
+	"os/signal"
+	"runtime"
+	"runtime/debug"
+	"syscall"
+)
+
+// init function, automatically executed when Go runtime starts
+func init() {
+	// Initialize iOS adapter here
+	configureGoRuntime()
+	disableGoSignals()
+	redirectStderrToNull()
+}
+
+// Configure Go runtime to optimize execution on iOS
+func configureGoRuntime() {
+	// Set maximum processors to 2 to avoid creating too many OS threads
+	runtime.GOMAXPROCS(2)
+	// Set a smaller GC target percentage to reduce memory usage
+	debug.SetGCPercent(10)
+	// Force garbage collection
+	runtime.GC()
+}
+
+// Disable all Go signal handling
+func disableGoSignals() {
+	// Block all signals to prevent application crashes
+	signal.Ignore(
+		syscall.SIGABRT,
+		syscall.SIGBUS,
+		syscall.SIGFPE,
+		syscall.SIGILL,
+		syscall.SIGPIPE,
+		syscall.SIGSEGV,
+		syscall.SIGSYS,
+		syscall.SIGTRAP,
+	)
+}
+
+// Redirect standard error output to /dev/null
+func redirectStderrToNull() {
+	// Open /dev/null file
+	devNull, err := os.OpenFile("/dev/null", os.O_WRONLY, 0)
+	if err != nil {
+		return
+	}
+	// Redirect standard error to /dev/null
+	err = syscall.Dup2(int(devNull.Fd()), int(os.Stderr.Fd()))
+	if err != nil {
+		devNull.Close()
+		return
+	}
+}
