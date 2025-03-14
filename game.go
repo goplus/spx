@@ -113,6 +113,8 @@ type Game struct {
 	isLoaded bool
 	isRunned bool
 	gamer_   Gamer
+
+	windowScale float64
 }
 
 type Gamer interface {
@@ -414,6 +416,12 @@ func spriteOf(sprite Sprite) *SpriteImpl {
 }
 
 func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
+	windowScale := 1.0
+	if proj.WindowScale >= 0.001 {
+		windowScale = proj.WindowScale
+	}
+	p.windowScale = windowScale
+
 	engine.SetDebugMode(proj.Debug)
 	if backdrops := proj.getBackdrops(); len(backdrops) > 0 {
 		p.baseObj.initBackdrops("", backdrops, proj.getBackdropIndex())
@@ -441,9 +449,10 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 	if p.windowHeight_ > p.worldHeight_ {
 		p.windowHeight_ = p.worldHeight_
 	}
-	platformMgr.SetWindowSize(int64(p.windowWidth_), int64(p.windowHeight_))
+	platformMgr.SetWindowSize(int64(float64(p.windowWidth_)*p.windowScale), int64(float64(p.windowHeight_)*p.windowScale))
 
 	p.Camera.init(p)
+	p.Camera.SetCameraZoom(p.windowScale)
 
 	// setup syncSprite's property
 	p.syncSprite = engine.NewBackdropProxy(p, p.getCostumePath(), p.getCostumeRenderScale())

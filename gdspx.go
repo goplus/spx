@@ -100,6 +100,7 @@ func (p *Game) syncUpdateInput() {
 	pos := engine.SyncGetMousePos()
 	wpos := engine.SyncScreenToWorld(pos)
 	p.mousePos = wpos
+	p.mousePos = p.mousePos.Divf(p.windowScale)
 }
 
 func (sprite *SpriteImpl) syncCheckInitProxy() {
