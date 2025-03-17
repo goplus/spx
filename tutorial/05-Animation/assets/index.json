@@ -6,6 +6,7 @@
       "path": "1.png"
     }
   ],
+  "windowScale":2,
   "zorder": [
     "Bullet",
     "SmallEnemy"

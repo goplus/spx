@@ -30,6 +30,9 @@ type Camera struct {
 func (c *Camera) init(g *Game) {
 	c.g = g
 }
+func (c *Camera) SetCameraZoom(scale float64) {
+	cameraMgr.SetCameraZoom(mathf.NewVec2(scale, scale))
+}
 
 func (c *Camera) GetXYpos() (float64, float64) {
 	pos := cameraMgr.GetPosition()

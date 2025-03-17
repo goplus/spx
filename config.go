@@ -122,6 +122,7 @@ type projConfig struct {
 	CurrentCostumeIndex *int              `json:"currentCostumeIndex"` //this property is deprecated, use BackdropIndex instead
 	SceneIndex          int               `json:"sceneIndex"`          //this property is deprecated, use BackdropIndex instead
 
+	WindowScale float64 `json:"windowScale"`
 }
 
 func (p *projConfig) getBackdrops() []*backdropConfig {
