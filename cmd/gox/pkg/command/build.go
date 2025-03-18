@@ -12,6 +12,7 @@ import (
 )
 
 func (pself *CmdTool) BuildWasm() (err error) {
+	pself.genGo()
 	rawdir, _ := os.Getwd()
 	dir := path.Join(pself.ProjectDir, ".builds/web/")
 	os.MkdirAll(dir, 0755)
@@ -58,29 +59,8 @@ func (pself *CmdTool) BuildDll() error {
 		}
 	}
 
-	projectDir, _ := filepath.Abs(pself.ProjectDir)
-	spxProjPath, _ := filepath.Abs(pself.ProjectDir + "/..")
-
 	rawdir, _ := os.Getwd()
-	os.Chdir(spxProjPath)
-	envVars := []string{""}
-	tagStr := ""
-	if *pself.Args.Tags != "" {
-		tagStr = "-tags=" + *pself.Args.Tags
-	}
-
-	// gop go don't support -tags
-	// so we should avoid using -tags to gen go file
-	if tagStr == "" {
-		util.RunGoplus(envVars, "go")
-	} else {
-		util.RunGoplus(envVars, "go", tagStr)
-	}
-	os.MkdirAll(pself.GoDir, 0755)
-	os.Rename(path.Join(spxProjPath, "gop_autogen.go"), path.Join(pself.GoDir, "main.go"))
-	os.Chdir(projectDir)
-	util.RunGolang(nil, "mod", "tidy")
-	os.Chdir(rawdir)
+	tagStr := pself.genGo()
 
 	// build dll
 	os.Chdir(pself.GoDir)
@@ -102,4 +82,28 @@ func (pself *CmdTool) BuildDll() error {
 	}
 	os.Chdir(rawdir)
 	return nil
+}
+func (pself *CmdTool) genGo() string {
+	rawdir, _ := os.Getwd()
+	projectDir, _ := filepath.Abs(pself.ProjectDir)
+	spxProjPath, _ := filepath.Abs(pself.ProjectDir + "/..")
+
+	os.Chdir(spxProjPath)
+	envVars := []string{""}
+	tagStr := ""
+	if *pself.Args.Tags != "" {
+		tagStr = "-tags=" + *pself.Args.Tags
+	}
+
+	if tagStr == "" {
+		util.RunGoplus(envVars, "go")
+	} else {
+		util.RunGoplus(envVars, "go", tagStr)
+	}
+	os.MkdirAll(pself.GoDir, 0755)
+	os.Rename(path.Join(spxProjPath, "gop_autogen.go"), path.Join(pself.GoDir, "main.go"))
+	os.Chdir(projectDir)
+	util.RunGolang(nil, "mod", "tidy")
+	os.Chdir(rawdir)
+	return tagStr
 }

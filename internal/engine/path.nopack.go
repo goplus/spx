@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"strings"
+
+	"github.com/goplus/spx/internal/engine/platform"
 )
 
 func SetAssetDir(dir string) {
@@ -18,6 +20,11 @@ func SetAssetDir(dir string) {
 		json.Unmarshal([]byte(configJson), &config)
 		extassetDir = config.ExtAsset
 	}
+	// web platform set need to remove prefix
+	if platform.GetPlatformType() == platform.PlatformTypeWeb {
+		enginePathPrefix = ""
+	}
+
 	assetsDir = enginePathPrefix + dir + "/"
 }
 func ToAssetPath(relPath string) string {
