@@ -4,7 +4,7 @@ go 1.21.3
 
 require (
 	github.com/pkg/errors v0.9.1
-	github.com/realdream-ai/gdspx v0.0.0-20250314092820-a73c322c3a45
+	github.com/realdream-ai/gdspx v0.0.0-20250319035927-b9c0862c51d7
 	github.com/realdream-ai/mathf v0.0.0-20241205091834-a85cb2402a16
 	golang.org/x/mobile v0.0.0-20220518205345-8578da9835fd
 )

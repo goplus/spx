@@ -11,6 +11,13 @@ spx - A Scratch Compatible 2D Game Engine
 
 How to run games powered by Go+ spx engine?
 
+* Install go (version == 1.21.3)
+* Install python (version >= 3.8)
+* Install make
+* Add the Go environment's bin directory to the system PATH.
+```
+    export PATH=$PATH:$GOPATH/bin
+```
 * Download Go+ and build it. See https://github.com/goplus/gop#how-to-build.
 * Download spx and build it.
 	```sh
@@ -20,8 +27,9 @@ How to run games powered by Go+ spx engine?
 	git checkout dev
 	chmod +x ./init.sh
 	./init.sh
+
 	# run the demo
-	cd ../../tutorial/00-Hello
+	cd tutorial/00-Hello
 	spx run .
 	```
 * Build a game and run.

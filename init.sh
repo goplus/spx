@@ -13,10 +13,7 @@ if [ ! -d "gdspx" ]; then
 fi
 
 cd gdspx || exit
-./tools/init.sh
-if [ "$1" == "-a" ] || [ "$1" == "-w" ]; then
-    ./tools/init_web.sh 
-fi
+make pc
 cd .. || exit
 
 echo "init succ"
