@@ -21,7 +21,7 @@ func SetAssetDir(dir string) {
 		extassetDir = config.ExtAsset
 	}
 	// web platform set need to remove prefix
-	if platform.GetPlatformType() == platform.PlatformTypeWeb {
+	if platform.IsWeb() {
 		enginePathPrefix = ""
 	}
 

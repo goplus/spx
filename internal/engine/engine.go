@@ -5,6 +5,7 @@ import (
 
 	stime "time"
 
+	"github.com/goplus/spx/internal/engine/profiler"
 	"github.com/goplus/spx/internal/enginewrap"
 	"github.com/goplus/spx/internal/time"
 	gdx "github.com/realdream-ai/gdspx/pkg/engine"
@@ -51,10 +52,6 @@ var (
 	// statistic info
 	fps float64
 )
-var (
-	debugLastTime  float64 = 0
-	debugLastFrame int64   = 0
-)
 
 type IGame interface {
 	OnEngineStart()
@@ -96,12 +93,20 @@ func onStart() {
 }
 
 func onUpdate(delta float64) {
+	profiler.BeginSample()
 	updateTime(float64(delta))
 	cacheTriggerEvents()
 	cacheKeyEvents()
-	game.OnEngineUpdate(delta)
-	gco.UpdateJobs()
-	game.OnEngineRender(delta)
+	profiler.MeasureFunctionTime("GameUpdate", func() {
+		game.OnEngineUpdate(delta)
+	})
+	profiler.MeasureFunctionTime("CoroUpdateJobs", func() {
+		gco.Update()
+	})
+	profiler.MeasureFunctionTime("GameRender", func() {
+		game.OnEngineRender(delta)
+	})
+	profiler.EndSample()
 }
 
 func onDestroy() {
@@ -111,19 +116,9 @@ func onDestroy() {
 func onKeyPressed(id int64) {
 	keyEventsTemp = append(keyEventsTemp, KeyEvent{Id: id, IsPressed: true})
 }
+
 func onKeyReleased(id int64) {
 	keyEventsTemp = append(keyEventsTemp, KeyEvent{Id: id, IsPressed: false})
-}
-
-func calcfps() {
-	curTime := time.RealTimeSinceStart()
-	timeDiff := curTime - debugLastTime
-	frameDiff := time.Frame() - debugLastFrame
-	if timeDiff > 0.25 {
-		fps = float64(frameDiff) / timeDiff
-		debugLastFrame = time.Frame()
-		debugLastTime = curTime
-	}
 }
 
 func updateTime(delta float64) {
@@ -135,7 +130,7 @@ func updateTime(delta float64) {
 	unscaledDeltaTime := curTime.Sub(lastTimestamp).Seconds()
 	lastTimestamp = curTime
 	timeScale := SyncGetTimeScale()
-	calcfps()
+	fps = profiler.Calcfps()
 	time.Update(float64(timeScale), unscaledTimeSinceLevelLoad, timeSinceLevelLoad, deltaTime, unscaledDeltaTime, fps)
 }
 

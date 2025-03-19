@@ -718,6 +718,7 @@ func (p *Game) fireEvent(ev event) {
 	default:
 		log.Println("Event buffer is full. Skip event:", ev)
 	}
+	p.handleEvent(ev)
 }
 
 func (p *Game) eventLoop(me coroutine.Thread) int {
