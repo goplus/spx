@@ -2,7 +2,7 @@
 
 go mod tidy
 cd cmd/gox || exit
-go install .
+./install.sh
 cd ../../ || exit
 
 if [ ! -d "gdspx" ]; then
