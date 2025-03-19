@@ -1170,12 +1170,20 @@ const (
 	ColorEffect EffectKind = iota
 	BrightnessEffect
 	GhostEffect
+	MosaicEffect
+	WhirlEffect
+	FishEyeEffect
+	UVEffect
 )
 
 var greffNames = []string{
 	ColorEffect:      "Color",
 	BrightnessEffect: "Brightness",
 	GhostEffect:      "Ghost",
+	MosaicEffect:     "Mosaic",
+	WhirlEffect:      "Whirl",
+	FishEyeEffect:    "FishEye",
+	UVEffect:         "UV",
 }
 
 func (kind EffectKind) String() string {

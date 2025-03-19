@@ -1373,6 +1373,23 @@ func (p *SpriteImpl) requireGreffUniforms() map[string]interface{} {
 func (p *SpriteImpl) SetEffect(kind EffectKind, val float64) {
 	effs := p.requireGreffUniforms()
 	effs[kind.String()] = float64(val)
+
+	switch kind {
+	case ColorEffect:
+		p.syncSprite.UpdateColor(val)
+	case BrightnessEffect:
+		p.syncSprite.UpdateBrightness(val)
+	case GhostEffect:
+		p.syncSprite.UpdateAlpha(val)
+	case MosaicEffect:
+		p.syncSprite.UpdateMosaic(val)
+	case WhirlEffect:
+		p.syncSprite.UpdateWhirl(val)
+	case FishEyeEffect:
+		p.syncSprite.UpdateFishEye(val)
+	case UVEffect:
+		p.syncSprite.UpdateUVEffect(val)
+	}
 }
 
 func (p *SpriteImpl) ChangeEffect(kind EffectKind, delta float64) {
@@ -1383,10 +1400,12 @@ func (p *SpriteImpl) ChangeEffect(kind EffectKind, delta float64) {
 		newVal += oldVal.(float64)
 	}
 	effs[key] = newVal
+	p.SetEffect(kind, newVal)
 }
 
 func (p *SpriteImpl) ClearGraphEffects() {
 	p.greffUniforms = nil
+	p.syncSprite.ClearGraphEffects()
 }
 
 // -----------------------------------------------------------------------------
