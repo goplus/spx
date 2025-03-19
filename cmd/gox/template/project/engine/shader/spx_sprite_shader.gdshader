@@ -88,6 +88,7 @@ void fragment() {
 	}
 	// brightness effect
 	color += brightness_amount / 100.0;
-
-	COLOR = vec4(color, 1.0 - alpha_amount / 100.0);
+	
+	COLOR.rgb = color;
+	COLOR.a *= 1.0 - alpha_amount / 100.0;
 }
