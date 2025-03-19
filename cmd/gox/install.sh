@@ -6,5 +6,6 @@ go build -o $appname
 mv $appname $(go env GOPATH)/bin/
 
 cd ../igox || exit
+go mod tidy
 GOOS=js GOARCH=wasm go build -o $(go env GOPATH)/bin/igdspx.wasm
 cd ../gox || exit

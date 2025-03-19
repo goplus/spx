@@ -1,8 +1,8 @@
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
 github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
-github.com/realdream-ai/gdspx v0.0.0-20250314092820-a73c322c3a45 h1:ZJ1k5HJJbtVVJuLZUGZzlCLvjltRxFTsKKafnTf3qZ0=
-github.com/realdream-ai/gdspx v0.0.0-20250314092820-a73c322c3a45/go.mod h1:N1y5yuSjxaxzTgTI6NQrMbI/9YA3dZue74P5I346xO4=
+github.com/realdream-ai/gdspx v0.0.0-20250319035927-b9c0862c51d7 h1:p/SCN1DNH3cHbb717Nb1o4K42HcNxjVxdHS702h11BA=
+github.com/realdream-ai/gdspx v0.0.0-20250319035927-b9c0862c51d7/go.mod h1:N1y5yuSjxaxzTgTI6NQrMbI/9YA3dZue74P5I346xO4=
 github.com/realdream-ai/mathf v0.0.0-20241205091834-a85cb2402a16 h1:V/zAuyQF0v6ng+UVwJi+qF0s+P/nEHb/lha3Uf86TQM=
 github.com/realdream-ai/mathf v0.0.0-20241205091834-a85cb2402a16/go.mod h1:zCbLmeT7a+pH1sknxgdFLiha6xA3gezTtwbTuuNRJWE=
 github.com/yuin/goldmark v1.4.0/go.mod h1:mwnBkeHKe2W/ZEtQ+71ViKU8L12m81fl3OWwC1Zlc8k=
