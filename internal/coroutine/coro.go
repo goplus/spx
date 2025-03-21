@@ -91,6 +91,16 @@ func New() *Coroutines {
 	return p
 }
 
+func (p *Coroutines) Sched(me Thread) {
+	go func() {
+		p.setWaitStatus(me, waitStatusIdle)
+		p.Resume(me)
+	}()
+	// Mark the thread as blocked and yield control
+	p.setWaitStatus(me, waitStatusBlock)
+	p.Yield(me)
+}
+
 func (p *Coroutines) OnInited() {
 	p.hasInited = true
 }

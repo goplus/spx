@@ -51,7 +51,7 @@ func (p *Game) OnEngineStart() {
 		initInput()
 		gamer := p.gamer_
 		if me, ok := gamer.(interface{ MainEntry() }); ok {
-			me.MainEntry()
+			runMain(me.MainEntry)
 		}
 		if !p.isRunned {
 			Gopt_Game_Run(gamer, "assets")
