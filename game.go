@@ -20,6 +20,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -71,6 +72,7 @@ var (
 	isSchedInMain bool
 	mainSchedTime time.Time
 	lastSchedTime time.Time
+	timerFunc     map[threadObj][]TimerFunc
 )
 
 func SetDebug(flags dbgFlags) {
@@ -78,6 +80,11 @@ func SetDebug(flags dbgFlags) {
 	debugInstr = (flags & DbgFlagInstr) != 0
 	debugEvent = (flags & DbgFlagEvent) != 0
 	debugPerf = (flags & DbgFlagPerf) != 0
+}
+
+type TimerFunc struct {
+	Time float64
+	Func func()
 }
 
 // -------------------------------------------------------------------------------------
@@ -190,6 +197,7 @@ func (p *Game) initGame(sprites []Sprite) *Game {
 
 // Gopt_Game_Main is required by Go+ compiler as the entry of a .gmx project.
 func Gopt_Game_Main(game Gamer, sprites ...Sprite) {
+	timerFunc = make(map[threadObj][]TimerFunc)
 	lastSchedTime = time.Now()
 	g := game.initGame(sprites)
 	g.gamer_ = game
@@ -744,6 +752,26 @@ func (p *Game) logicLoop(me coroutine.Thread) int {
 				result.onUpdate(gtime.DeltaTime())
 			}
 		}
+
+		if len(timerFunc) > 0 {
+			var deleteFuncs []threadObj
+			for key, timers := range timerFunc {
+				if isSprite(key) && key.(*SpriteImpl).HasDestroyed {
+					deleteFuncs = append(deleteFuncs, key)
+				} else {
+					for _, value := range timers {
+						if value.Time <= gtime.Timer() {
+							value.Func()
+							deleteFuncs = append(deleteFuncs, key)
+						}
+					}
+				}
+			}
+			for _, funcKey := range deleteFuncs {
+				delete(timerFunc, funcKey)
+			}
+		}
+
 		engine.WaitNextFrame()
 	}
 }
@@ -1197,11 +1225,11 @@ func (p *Game) Wait(secs float64) {
 }
 
 func (p *Game) Timer() float64 {
-	panic("todo")
+	return math.Trunc(gtime.Timer()*1000) / 1000
 }
 
 func (p *Game) ResetTimer() {
-	panic("todo")
+	gtime.ResetTimer()
 }
 
 // -----------------------------------------------------------------------------

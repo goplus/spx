@@ -124,7 +124,8 @@ func getValueRef(target reflect.Value, name string, from int) reflect.Value {
 }
 
 const (
-	getVarPrefix = "getVar:"
+	getVarPrefix   = "getVar:"
+	getTimerPrefix = "getProp:"
 )
 
 func buildMonitorEval(g reflect.Value, t, val string) func() string {
@@ -142,6 +143,16 @@ func buildMonitorEval(g reflect.Value, t, val string) func() string {
 			}
 		}
 		log.Println("[WARN] Monitor: var not found -", name, target)
+	case strings.HasPrefix(val, getTimerPrefix):
+		methodName := val[len(getTimerPrefix):]
+		m := g.FieldByName("Game").Addr().MethodByName(methodName)
+
+		if m.IsValid() {
+			return func() string {
+				return fmt.Sprint(m.Call(nil)[0].Interface())
+			}
+		}
+		log.Println("[WARN] Monitor: prop not found -", methodName, target)
 	default:
 		log.Println("[WARN] Monitor: unknown command -", val)
 	}

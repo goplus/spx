@@ -232,6 +232,7 @@ type IEventSinks interface {
 	OnMsg__0(onMsg func(msg string, data interface{}))
 	OnMsg__1(msg string, onMsg func())
 	OnStart(onStart func())
+	OnTimer(time float64, onTimer func())
 	Stop(kind StopKind)
 }
 
@@ -271,6 +272,15 @@ func (p *eventSinks) OnStart(onStart func()) {
 		prev:  p.allWhenStart,
 		pthis: p.pthis,
 		sink:  onStart,
+	}
+}
+
+func (p *eventSinks) OnTimer(time float64, onTimer func()) {
+	if value, ok := timerFunc[p.pthis]; ok {
+		timerFunc[p.pthis] = append(value, TimerFunc{Time: time, Func: onTimer})
+	} else {
+		var timers []TimerFunc
+		timerFunc[p.pthis] = append(timers, TimerFunc{Time: time, Func: onTimer})
 	}
 }
 

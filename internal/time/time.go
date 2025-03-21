@@ -72,4 +72,5 @@ func Update(scale float64, realDuration float64, duration float64, delta float64
 	deltaTime = delta
 	curFrame += 1
 	fps = pfps
+	gameTimer += deltaTime
 }
