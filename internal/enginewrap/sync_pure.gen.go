@@ -327,6 +327,11 @@ func (pself *spriteMgrImpl) GetColor(obj gdx.Object) Color {
 	var _ret1 Color
 	return _ret1
 }
+func (pself *spriteMgrImpl) SetMaterialShader(obj gdx.Object, path string) {}
+func (pself *spriteMgrImpl) GetMaterialShader(obj gdx.Object) string {
+	var _ret1 string
+	return _ret1
+}
 func (pself *spriteMgrImpl) SetMaterialParams(obj gdx.Object, effect string, amount float64) {}
 func (pself *spriteMgrImpl) GetMaterialParams(obj gdx.Object, effect string) float64 {
 	var _ret1 float64
