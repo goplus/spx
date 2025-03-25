@@ -17,6 +17,7 @@
 package spx
 
 import (
+	"fmt"
 	"log"
 	"math"
 	"reflect"
@@ -897,8 +898,22 @@ func (p *SpriteImpl) Animate(name SpriteAnimationName) {
 
 // -----------------------------------------------------------------------------
 
-func (p *SpriteImpl) Ask(msg interface{}) {
-	panic("todo")
+func (p *SpriteImpl) Ask(msgv interface{}) {
+	if debugInstr {
+		log.Println("Ask", p.name, msgv)
+	}
+	msg, ok := msgv.(string)
+	if !ok {
+		msg = fmt.Sprint(msgv)
+	}
+	if msg == "" {
+		println("ask: msg should not be empty")
+		return
+	}
+	p.Say__0(msg)
+	p.g.ask(true, msg, func(answer string) {
+		p.doStopSay()
+	})
 }
 
 func (p *SpriteImpl) Say__0(msg interface{}) {
