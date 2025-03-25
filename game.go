@@ -816,6 +816,26 @@ func Sched() int {
 	return 0
 }
 
+func WaitUtil(condition func() bool) {
+	if condition == nil {
+		return
+	}
+	lastTimer := time.Now()
+	for {
+		if condition() {
+			return
+		}
+		// if condition is not met, yield control
+		// if wait too long (15ms), yield control and wait for next frame
+		if time.Since(lastTimer) >= time.Millisecond*15 {
+			engine.WaitNextFrame()
+			lastTimer = time.Now()
+		} else {
+			Sched()
+		}
+	}
+}
+
 func runMain(call func()) {
 	isSchedInMain = true
 	mainSchedTime = time.Now()
