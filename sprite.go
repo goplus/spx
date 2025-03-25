@@ -214,6 +214,8 @@ type SpriteImpl struct {
 	hasOnTouching   bool
 	hasOnTouchEnd   bool
 
+	hasShader bool
+
 	gamer               reflect.Value
 	curAnimState        *animState
 	defaultCostumeIndex int
@@ -315,6 +317,7 @@ func (p *SpriteImpl) init(
 	for animName, ani := range p.animations {
 		registerAnimToEngine(p.name, animName, ani, p.baseObj.costumes, p.isCostumeSet)
 	}
+
 }
 
 func (p *SpriteImpl) awake() {
@@ -350,6 +353,8 @@ func (p *SpriteImpl) InitFrom(src *SpriteImpl) {
 	p.hasOnTouchStart = false
 	p.hasOnTouching = false
 	p.hasOnTouchEnd = false
+
+	p.hasShader = false
 
 	p.collisionMask = src.collisionMask
 	p.collisionLayer = src.collisionLayer
@@ -1373,6 +1378,11 @@ func (p *SpriteImpl) requireGreffUniforms() map[string]interface{} {
 func (p *SpriteImpl) SetEffect(kind EffectKind, val float64) {
 	effs := p.requireGreffUniforms()
 	effs[kind.String()] = float64(val)
+
+	if !p.hasShader {
+		p.syncSprite.SetMaterialShader("res://engine/shader/spx_sprite_shader.gdshader")
+		p.hasShader = true
+	}
 
 	switch kind {
 	case ColorEffect:
