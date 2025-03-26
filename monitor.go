@@ -20,9 +20,11 @@ import (
 	"fmt"
 	"log"
 	"reflect"
+	"strconv"
 	"strings"
 	"syscall"
 
+	gtime "github.com/goplus/spx/internal/time"
 	"github.com/goplus/spx/internal/tools"
 	"github.com/goplus/spx/internal/ui"
 	"github.com/realdream-ai/mathf"
@@ -124,7 +126,8 @@ func getValueRef(target reflect.Value, name string, from int) reflect.Value {
 }
 
 const (
-	getVarPrefix = "getVar:"
+	getVarPrefix   = "getVar:"
+	getTimerPrefix = "getProp:"
 )
 
 func buildMonitorEval(g reflect.Value, t, val string) func() string {
@@ -142,6 +145,10 @@ func buildMonitorEval(g reflect.Value, t, val string) func() string {
 			}
 		}
 		log.Println("[WARN] Monitor: var not found -", name, target)
+	case strings.HasPrefix(val, getTimerPrefix):
+		return func() string {
+			return strconv.FormatFloat(gtime.Timer(), 'f', 3, 64)
+		}
 	default:
 		log.Println("[WARN] Monitor: unknown command -", val)
 	}

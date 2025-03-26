@@ -717,6 +717,8 @@ func (p *Game) handleEvent(event event) {
 		p.sinkMgr.doWhenKeyPressed(ev.Key)
 	case *eventStart:
 		p.sinkMgr.doWhenStart()
+	case *eventTimer:
+		p.sinkMgr.doWhenTimer(ev.time)
 	}
 }
 
@@ -738,6 +740,8 @@ func (p *Game) eventLoop(me coroutine.Thread) int {
 }
 func (p *Game) logicLoop(me coroutine.Thread) int {
 	for {
+		gtime.Tick(gtime.DeltaTime())
+
 		tempItems := p.getTempShapes()
 		for _, item := range tempItems {
 			if result, ok := item.(interface{ onUpdate(float64) }); ok {
@@ -1197,11 +1201,16 @@ func (p *Game) Wait(secs float64) {
 }
 
 func (p *Game) Timer() float64 {
-	panic("todo")
+	return gtime.Timer()
 }
 
 func (p *Game) ResetTimer() {
-	panic("todo")
+	gtime.ResetTimer()
+}
+
+func (p *Game) OnTimerGreaterThan(secs float64, call func()) {
+	engine.Wait(secs)
+	gco.WaitMainThread(call)
 }
 
 // -----------------------------------------------------------------------------

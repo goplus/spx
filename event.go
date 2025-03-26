@@ -91,6 +91,7 @@ func (p *eventSink) call(wait bool, data interface{}, doSth func(*eventSink)) {
 
 type eventSinkMgr struct {
 	allWhenStart           *eventSink
+	allWhenTimer           *eventSink
 	allWhenKeyPressed      *eventSink
 	allWhenIReceive        *eventSink
 	allWhenBackdropChanged *eventSink
@@ -102,10 +103,12 @@ type eventSinkMgr struct {
 	allWhenMoving          *eventSink
 	allWhenTurning         *eventSink
 	calledStart            bool
+	calledTimer            bool
 }
 
 func (p *eventSinkMgr) reset() {
 	p.allWhenStart = nil
+	p.allWhenTimer = nil
 	p.allWhenKeyPressed = nil
 	p.allWhenIReceive = nil
 	p.allWhenBackdropChanged = nil
@@ -121,6 +124,7 @@ func (p *eventSinkMgr) reset() {
 
 func (p *eventSinkMgr) doDeleteClone(this interface{}) {
 	p.allWhenStart = p.allWhenStart.doDeleteClone(this)
+	p.allWhenTimer = p.allWhenTimer.doDeleteClone(this)
 	p.allWhenKeyPressed = p.allWhenKeyPressed.doDeleteClone(this)
 	p.allWhenIReceive = p.allWhenIReceive.doDeleteClone(this)
 	p.allWhenBackdropChanged = p.allWhenBackdropChanged.doDeleteClone(this)
@@ -141,6 +145,17 @@ func (p *eventSinkMgr) doWhenStart() {
 				log.Println("==> onStart", nameOf(ev.pthis))
 			}
 			ev.sink.(func())()
+		})
+	}
+}
+
+func (p *eventSinkMgr) doWhenTimer(time float64) {
+	if !p.calledTimer {
+		p.allWhenTimer.asyncCall(false, time, func(ev *eventSink) {
+			if ev.cond != nil && ev.cond(time) {
+				ev.sink.(func(float64))(time)
+				p.calledTimer = true
+			}
 		})
 	}
 }
@@ -232,6 +247,7 @@ type IEventSinks interface {
 	OnMsg__0(onMsg func(msg string, data interface{}))
 	OnMsg__1(msg string, onMsg func())
 	OnStart(onStart func())
+	OnTimer(time float64, onTimer func())
 	Stop(kind StopKind)
 }
 
@@ -271,6 +287,22 @@ func (p *eventSinks) OnStart(onStart func()) {
 		prev:  p.allWhenStart,
 		pthis: p.pthis,
 		sink:  onStart,
+	}
+}
+
+func (p *eventSinks) OnTimer(time float64, onTimer func()) {
+	p.allWhenTimer = &eventSink{
+		prev:  p.allWhenTimer,
+		pthis: p.pthis,
+		sink: func(float64) {
+			if debugEvent {
+				log.Println("==> OnTimer", time, nameOf(p.pthis))
+			}
+			onTimer()
+		},
+		cond: func(data interface{}) bool {
+			return data.(float64) >= time
+		},
 	}
 }
 

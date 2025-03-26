@@ -246,6 +246,10 @@ type event interface{}
 
 type eventStart struct{}
 
+type eventTimer struct {
+	time float64
+}
+
 type eventKeyDown struct {
 	Key Key
 }

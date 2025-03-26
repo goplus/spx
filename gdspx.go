@@ -85,6 +85,7 @@ func (p *Game) syncUpdateLogic() error {
 	p.startFlag.Do(func() {
 		p.fireEvent(&eventStart{})
 	})
+	p.fireEvent(&eventTimer{time: p.Timer()})
 
 	return nil
 }
