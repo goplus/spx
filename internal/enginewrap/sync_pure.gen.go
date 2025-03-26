@@ -19,6 +19,7 @@ import (
 var(
 audioMgr enginewrap.AudioMgrImpl
 cameraMgr enginewrap.CameraMgrImpl
+extMgr enginewrap.ExtMgrImpl
 inputMgr enginewrap.InputMgrImpl
 physicMgr enginewrap.PhysicMgrImpl
 platformMgr enginewrap.PlatformMgrImpl
@@ -33,6 +34,7 @@ uiMgr enginewrap.UiMgrImpl
 var (
 	audioMgr    AudioMgrImpl
 	cameraMgr   CameraMgrImpl
+	extMgr      ExtMgrImpl
 	inputMgr    InputMgrImpl
 	physicMgr   PhysicMgrImpl
 	platformMgr PlatformMgrImpl
@@ -51,6 +53,11 @@ type cameraMgrImpl struct {
 }
 type CameraMgrImpl struct {
 	cameraMgrImpl
+}
+type extMgrImpl struct {
+}
+type ExtMgrImpl struct {
+	extMgrImpl
 }
 type inputMgrImpl struct {
 }
@@ -134,6 +141,24 @@ func (pself *cameraMgrImpl) GetViewportRect() Rect2 {
 	var _ret1 Rect2
 	return _ret1
 }
+
+// IExtMgr
+func (pself *extMgrImpl) DestroyAllPens() {}
+func (pself *extMgrImpl) CreatePen() gdx.Object {
+	var _ret1 gdx.Object
+	return _ret1
+}
+func (pself *extMgrImpl) DestroyPen(obj gdx.Object)                                  {}
+func (pself *extMgrImpl) PenStamp(obj gdx.Object)                                    {}
+func (pself *extMgrImpl) MovePenTo(obj gdx.Object, position Vec2)                    {}
+func (pself *extMgrImpl) PenDown(obj gdx.Object, move_by_mouse bool)                 {}
+func (pself *extMgrImpl) PenUp(obj gdx.Object)                                       {}
+func (pself *extMgrImpl) SetPenColorTo(obj gdx.Object, color Color)                  {}
+func (pself *extMgrImpl) ChangePenBy(obj gdx.Object, property int64, amount float64) {}
+func (pself *extMgrImpl) SetPenTo(obj gdx.Object, property int64, value float64)     {}
+func (pself *extMgrImpl) ChangePenSizeBy(obj gdx.Object, amount float64)             {}
+func (pself *extMgrImpl) SetPenSizeTo(obj gdx.Object, size float64)                  {}
+func (pself *extMgrImpl) SetPenStampTexture(obj gdx.Object, texture_path string)     {}
 
 // IInputMgr
 func (pself *inputMgrImpl) GetMousePos() Vec2 {

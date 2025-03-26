@@ -94,7 +94,6 @@ type Game struct {
 
 	inputs       inputManager
 	sounds       soundMgr
-	turtle       turtleCanvas
 	typs         map[string]reflect.Type // map: name => sprite type, for all sprites
 	sprs         map[string]Sprite       // map: name => sprite prototype, for loaded sprites
 	items        []Shape                 // shapes on stage (in Zorder), not only sprites
@@ -165,6 +164,7 @@ func (p *Game) getSpriteProtoByName(name string, g reflect.Value) Sprite {
 
 func (p *Game) reset() {
 	p.sinkMgr.reset()
+	p.EraseAll() // clear pens
 	p.startFlag = sync.Once{}
 	p.Stop(AllOtherScripts)
 	p.items = nil
@@ -924,28 +924,8 @@ func (p *Game) objectPos(obj interface{}) (float64, float64) {
 
 // -----------------------------------------------------------------------------
 
-func (p *Game) getTurtle() turtleCanvas {
-	return p.turtle
-}
-
-func (p *Game) stampCostume(di *SpriteImpl) {
-	p.turtle.stampCostume(di)
-}
-
-func (p *Game) movePen(sp *SpriteImpl, x, y float64) {
-	worldW, worldH := p.worldSize_()
-	p.turtle.penLine(&penLine{
-		x1:    (worldW >> 1) + int(sp.x),
-		y1:    (worldH >> 1) - int(sp.y),
-		x2:    (worldW >> 1) + int(x),
-		y2:    (worldH >> 1) - int(y),
-		clr:   sp.penColor,
-		width: int(sp.penWidth),
-	})
-}
-
 func (p *Game) EraseAll() {
-	p.turtle.eraseAll()
+	extMgr.DestroyAllPens()
 }
 
 // -----------------------------------------------------------------------------

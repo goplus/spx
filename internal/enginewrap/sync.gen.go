@@ -19,6 +19,7 @@ import (
 var(
 audioMgr enginewrap.AudioMgrImpl
 cameraMgr enginewrap.CameraMgrImpl
+extMgr enginewrap.ExtMgrImpl
 inputMgr enginewrap.InputMgrImpl
 physicMgr enginewrap.PhysicMgrImpl
 platformMgr enginewrap.PlatformMgrImpl
@@ -33,6 +34,7 @@ uiMgr enginewrap.UiMgrImpl
 var (
 	audioMgr    AudioMgrImpl
 	cameraMgr   CameraMgrImpl
+	extMgr      ExtMgrImpl
 	inputMgr    InputMgrImpl
 	physicMgr   PhysicMgrImpl
 	platformMgr PlatformMgrImpl
@@ -51,6 +53,11 @@ type cameraMgrImpl struct {
 }
 type CameraMgrImpl struct {
 	cameraMgrImpl
+}
+type extMgrImpl struct {
+}
+type ExtMgrImpl struct {
+	extMgrImpl
 }
 type inputMgrImpl struct {
 }
@@ -201,6 +208,75 @@ func (pself *cameraMgrImpl) GetViewportRect() Rect2 {
 		_ret1 = gdx.CameraMgr.GetViewportRect()
 	})
 	return _ret1
+}
+
+// IExtMgr
+func (pself *extMgrImpl) DestroyAllPens() {
+	callInMainThread(func() {
+		gdx.ExtMgr.DestroyAllPens()
+	})
+}
+func (pself *extMgrImpl) CreatePen() gdx.Object {
+	var _ret1 gdx.Object
+	callInMainThread(func() {
+		_ret1 = gdx.ExtMgr.CreatePen()
+	})
+	return _ret1
+}
+func (pself *extMgrImpl) DestroyPen(obj gdx.Object) {
+	callInMainThread(func() {
+		gdx.ExtMgr.DestroyPen(obj)
+	})
+}
+func (pself *extMgrImpl) PenStamp(obj gdx.Object) {
+	callInMainThread(func() {
+		gdx.ExtMgr.PenStamp(obj)
+	})
+}
+func (pself *extMgrImpl) MovePenTo(obj gdx.Object, position Vec2) {
+	callInMainThread(func() {
+		gdx.ExtMgr.MovePenTo(obj, position)
+	})
+}
+func (pself *extMgrImpl) PenDown(obj gdx.Object, move_by_mouse bool) {
+	callInMainThread(func() {
+		gdx.ExtMgr.PenDown(obj, move_by_mouse)
+	})
+}
+func (pself *extMgrImpl) PenUp(obj gdx.Object) {
+	callInMainThread(func() {
+		gdx.ExtMgr.PenUp(obj)
+	})
+}
+func (pself *extMgrImpl) SetPenColorTo(obj gdx.Object, color Color) {
+	callInMainThread(func() {
+		gdx.ExtMgr.SetPenColorTo(obj, color)
+	})
+}
+func (pself *extMgrImpl) ChangePenBy(obj gdx.Object, property int64, amount float64) {
+	callInMainThread(func() {
+		gdx.ExtMgr.ChangePenBy(obj, property, amount)
+	})
+}
+func (pself *extMgrImpl) SetPenTo(obj gdx.Object, property int64, value float64) {
+	callInMainThread(func() {
+		gdx.ExtMgr.SetPenTo(obj, property, value)
+	})
+}
+func (pself *extMgrImpl) ChangePenSizeBy(obj gdx.Object, amount float64) {
+	callInMainThread(func() {
+		gdx.ExtMgr.ChangePenSizeBy(obj, amount)
+	})
+}
+func (pself *extMgrImpl) SetPenSizeTo(obj gdx.Object, size float64) {
+	callInMainThread(func() {
+		gdx.ExtMgr.SetPenSizeTo(obj, size)
+	})
+}
+func (pself *extMgrImpl) SetPenStampTexture(obj gdx.Object, texture_path string) {
+	callInMainThread(func() {
+		gdx.ExtMgr.SetPenStampTexture(obj, texture_path)
+	})
 }
 
 // IInputMgr
