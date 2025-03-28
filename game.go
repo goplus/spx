@@ -121,6 +121,7 @@ type Game struct {
 	gamer_   Gamer
 
 	windowScale float64
+	audioId     engine.Object
 }
 
 type Gamer interface {
@@ -163,6 +164,10 @@ func (p *Game) getSpriteProtoByName(name string, g reflect.Value) Sprite {
 }
 
 func (p *Game) reset() {
+	if p.audioId != 0 {
+		p.sounds.releaseAudio(p.audioId)
+		p.audioId = 0
+	}
 	p.sinkMgr.reset()
 	p.EraseAll() // clear pens
 	p.startFlag = sync.Once{}
@@ -493,8 +498,9 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 		loader.OnLoaded()
 	}
 
+	p.audioId = p.sounds.allocAudio()
 	if proj.Bgm != "" {
-		p.Play__5(proj.Bgm, &PlayOptions{Music: true})
+		p.Play__5(proj.Bgm, &PlayOptions{Action: PlayRewind, Loop: true, Wait: false, Music: true})
 	}
 	// game load success
 	p.isLoaded = true
@@ -1268,32 +1274,38 @@ func (p *Game) loadSound(name SoundName) (media Sound, err error) {
 	return
 }
 
+func (p *Game) play(audioId engine.Object, media Sound, opts *PlayOptions) (err error) {
+	return p.sounds.play(audioId, media, opts)
+}
+
 // Play func:
 //
 //	Play(sound)
 //	Play(video) -- maybe
 //	Play(media, wait) -- sync
 //	Play(media, opts)
-func (p *Game) Play__0(media Sound) {
-	if media == nil {
-		panic("play media is nil")
-	}
-	p.Play__2(media, &PlayOptions{})
-}
 
-func (p *Game) Play__1(media Sound, wait bool) {
-	p.Play__2(media, &PlayOptions{Wait: wait})
-}
-
-func (p *Game) Play__2(media Sound, action *PlayOptions) {
+func (p *Game) Play__0(media Sound, action *PlayOptions) {
 	if debugInstr {
 		log.Println("Play", media.Path)
 	}
 
-	err := p.sounds.play(media, action)
+	p.checkAudioId()
+	err := p.play(p.audioId, media, action)
 	if err != nil {
 		panic(err)
 	}
+}
+
+func (p *Game) Play__1(media Sound, wait bool) {
+	p.Play__0(media, &PlayOptions{Wait: wait})
+}
+
+func (p *Game) Play__2(media Sound) {
+	if media == nil {
+		panic("play media is nil")
+	}
+	p.Play__0(media, &PlayOptions{})
 }
 
 func (p *Game) Play__3(media SoundName) {
@@ -1310,23 +1322,39 @@ func (p *Game) Play__5(media SoundName, action *PlayOptions) {
 		log.Println(err)
 		return
 	}
-	p.Play__2(m, action)
+	p.Play__0(m, action)
+}
+
+func (p *Game) SetVolume(volume float64) {
+	p.checkAudioId()
+	p.sounds.setVolume(p.audioId, volume)
+}
+
+func (p *Game) ChangeVolume(delta float64) {
+	p.checkAudioId()
+	p.sounds.changeVolume(p.audioId, delta)
+}
+
+func (p *Game) GetSoundEffect(kind SoundEffectKind) float64 {
+	p.checkAudioId()
+	return p.sounds.getEffect(p.audioId, kind)
+}
+func (p *Game) SetSoundEffect(kind SoundEffectKind, value float64) {
+	p.checkAudioId()
+	p.sounds.setEffect(p.audioId, kind, value)
+}
+func (p *Game) ChangeSoundEffect(kind SoundEffectKind, delta float64) {
+	p.checkAudioId()
+	p.sounds.changeEffect(p.audioId, kind, delta)
+}
+func (p *Game) checkAudioId() {
+	if p.audioId == 0 {
+		p.audioId = p.sounds.allocAudio()
+	}
 }
 
 func (p *Game) StopAllSounds() {
 	p.sounds.stopAll()
-}
-
-func (p *Game) Volume() float64 {
-	return p.sounds.getVolume()
-}
-
-func (p *Game) SetVolume(volume float64) {
-	p.sounds.setVolume(volume)
-}
-
-func (p *Game) ChangeVolume(delta float64) {
-	p.sounds.changeVolume(delta)
 }
 
 func (p *Game) Loudness() float64 {

@@ -234,7 +234,8 @@ type SpriteImpl struct {
 	colliderSize   mathf.Vec2
 	colliderRadius float64
 
-	penObj *engine.Object
+	penObj  *engine.Object
+	audioId engine.Object
 }
 
 func (p *SpriteImpl) SetDying() { // dying: visible but can't be touched
@@ -624,6 +625,10 @@ func (p *SpriteImpl) Destroy() { // destroy sprite, whether prototype or cloned
 	}
 	p.HasDestroyed = true
 
+	if p.audioId != 0 {
+		p.g.sounds.releaseAudio(p.audioId)
+		p.audioId = 0
+	}
 }
 
 // delete only cloned sprite, no effect on prototype sprite.
@@ -820,7 +825,7 @@ func doAnimation(p *SpriteImpl, info *animState) {
 		p.syncSprite.PlayAnim(animName, info.Speed, info.IsLoop, false)
 	})
 	if info.OnStart != nil && info.OnStart.Play != "" {
-		p.g.Play__3(info.OnStart.Play)
+		p.Play__3(info.OnStart.Play)
 	}
 	if info.AniType == aniTypeFrame {
 		for spriteMgr.IsPlayingAnim(p.syncSprite.GetId()) {
@@ -1795,4 +1800,92 @@ func (pself *SpriteImpl) DeltaTime() float64 {
 
 func (pself *SpriteImpl) TimeSinceLevelLoad() float64 {
 	return time.TimeSinceLevelLoad()
+}
+
+// ------------------------ sound ----------------------------------------
+
+type SoundEffectKind int
+
+const (
+	SoundPanEffect SoundEffectKind = iota
+	SoundPitchEffect
+)
+
+// Play func:
+//
+//	Play(sound)
+//	Play(video) -- maybe
+//	Play(media, wait) -- sync
+//	Play(media, opts)
+
+func (p *SpriteImpl) Play__0(media Sound, action *PlayOptions) {
+	if debugInstr {
+		log.Println("Play", media.Path)
+	}
+
+	p.checkAudioId()
+	err := p.g.play(p.audioId, media, action)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func (p *SpriteImpl) Play__1(media Sound, wait bool) {
+	p.Play__0(media, &PlayOptions{Wait: wait})
+}
+
+func (p *SpriteImpl) Play__2(media Sound) {
+	if media == nil {
+		panic("play media is nil")
+	}
+	p.Play__0(media, &PlayOptions{})
+}
+
+func (p *SpriteImpl) Play__3(media SoundName) {
+	p.Play__5(media, &PlayOptions{})
+}
+
+func (p *SpriteImpl) Play__4(media SoundName, wait bool) {
+	p.Play__5(media, &PlayOptions{Wait: wait})
+}
+
+func (p *SpriteImpl) Play__5(media SoundName, action *PlayOptions) {
+	m, err := p.g.loadSound(media)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	p.Play__0(m, action)
+}
+
+func (p *SpriteImpl) Volume() float64 {
+	return p.g.sounds.getVolume(p.audioId)
+}
+
+func (p *SpriteImpl) SetVolume(volume float64) {
+	p.checkAudioId()
+	p.g.sounds.setVolume(p.audioId, volume)
+}
+
+func (p *SpriteImpl) ChangeVolume(delta float64) {
+	p.checkAudioId()
+	p.g.sounds.changeVolume(p.audioId, delta)
+}
+
+func (p *SpriteImpl) GetSoundEffect(kind SoundEffectKind) float64 {
+	p.checkAudioId()
+	return p.g.sounds.getEffect(p.audioId, kind)
+}
+func (p *SpriteImpl) SetSoundEffect(kind SoundEffectKind, value float64) {
+	p.checkAudioId()
+	p.g.sounds.setEffect(p.audioId, kind, value)
+}
+func (p *SpriteImpl) ChangeSoundEffect(kind SoundEffectKind, delta float64) {
+	p.checkAudioId()
+	p.g.sounds.changeEffect(p.audioId, kind, delta)
+}
+func (p *SpriteImpl) checkAudioId() {
+	if p.audioId == 0 {
+		p.audioId = p.g.sounds.allocAudio()
+	}
 }

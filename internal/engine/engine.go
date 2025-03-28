@@ -26,7 +26,6 @@ var (
 )
 
 type Object = gdx.Object
-
 type TriggerEvent struct {
 	Src *Sprite
 	Dst *Sprite

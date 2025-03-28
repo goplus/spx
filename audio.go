@@ -18,7 +18,6 @@ package spx
 
 import (
 	"github.com/goplus/spx/internal/engine"
-	"github.com/realdream-ai/mathf"
 )
 
 type PlayAction int
@@ -48,11 +47,43 @@ func (p *soundMgr) init(g *Game) {
 	p.g = g
 }
 
-func (p *soundMgr) play(media Sound, opts *PlayOptions) (err error) {
-	if opts.Music {
-		err = p.playBgm(media, opts.Action)
+func (p *soundMgr) allocAudio() engine.Object {
+	return audioMgr.CreateAudio()
+}
+
+func (p *soundMgr) releaseAudio(audioId engine.Object) {
+	if audioId == 0 {
+		return
+	}
+	audioMgr.DestroyAudio(audioId)
+}
+
+func (p *soundMgr) play(audioId engine.Object, media Sound, opts *PlayOptions) (err error) {
+	action := opts.Action
+	switch action {
+	case PlayRewind:
+		audioMgr.Play(audioId, engine.ToAssetPath(media.Path))
+	case PlayContinue:
+		audioMgr.Resume(audioId)
+	case PlayPause:
+		audioMgr.Pause(audioId)
+	case PlayResume:
+		audioMgr.Resume(audioId)
+	case PlayStop:
+		audioMgr.Stop(audioId)
+	}
+
+	if opts.Loop {
+		audioMgr.SetLoop(audioId, true)
 	} else {
-		err = p.playSfx(media)
+		if opts.Wait {
+			for {
+				if !audioMgr.IsPlaying(audioId) {
+					break
+				}
+				engine.WaitNextFrame()
+			}
+		}
 	}
 	return
 }
@@ -61,84 +92,47 @@ func (p *soundMgr) stopAll() {
 	audioMgr.StopAll()
 }
 
-func (p *soundMgr) playBgm(media Sound, action PlayAction) (err error) {
-	switch action {
-	case PlayRewind:
-		p.playMusic(media)
-	case PlayContinue:
-		p.resumeMusic(media)
-	case PlayPause:
-		p.pauseMusic(media)
-	case PlayResume:
-		p.resumeMusic(media)
-	case PlayStop:
-		p.stopMusic(media)
+func (p *soundMgr) getEffect(audioId engine.Object, kind SoundEffectKind) float64 {
+	switch kind {
+	case SoundPanEffect:
+		return audioMgr.GetPan(audioId) * 100
+	case SoundPitchEffect:
+		return audioMgr.GetPitch(audioId) * 100
+	default:
+		panic("GetSoundEffect: invalid kind")
 	}
-	return
+}
+func (p *soundMgr) setEffect(audioId engine.Object, kind SoundEffectKind, value float64) {
+	val := value / 100
+	switch kind {
+	case SoundPanEffect:
+		audioMgr.SetPan(audioId, val)
+	case SoundPitchEffect:
+		audioMgr.SetPitch(audioId, val)
+	default:
+		panic("SetSoundEffect: invalid kind")
+	}
+}
+func (p *soundMgr) changeEffect(audioId engine.Object, kind SoundEffectKind, delta float64) {
+	val := (p.getEffect(audioId, kind) + delta)
+	p.setEffect(audioId, kind, val)
 }
 
-func (p *soundMgr) playSfx(media Sound) (err error) {
-	audioMgr.PlaySfx(engine.ToAssetPath(media.Path))
-	return
+func (p *soundMgr) getVolume(audioId engine.Object) float64 {
+	return audioMgr.GetVolume(audioId) * 100
 }
 
-func (p *soundMgr) playMusic(media Sound) (err error) {
-	audioMgr.PlayMusic(engine.ToAssetPath(media.Path))
-	return
+func (p *soundMgr) setVolume(audioId engine.Object, value float64) {
+	val := value / 100
+	if val <= 0 {
+		val = 0.01
+	}
+	audioMgr.SetVolume(audioId, val)
 }
 
-func (p *soundMgr) stopMusic(media Sound) {
-	audioMgr.PauseMusic()
-}
-
-func (p *soundMgr) pauseMusic(media Sound) {
-	audioMgr.PauseMusic()
-}
-
-func (p *soundMgr) resumeMusic(media Sound) {
-	audioMgr.ResumeMusic()
-}
-
-func (p *soundMgr) getVolume() float64 {
-	return audioMgr.GetMasterVolume()
-}
-
-func (p *soundMgr) setVolume(volume float64) {
-	audioMgr.SetMasterVolume(volume)
-}
-
-func (p *soundMgr) changeVolume(delta float64) {
-	volume := p.getVolume() + delta
-	volume = mathf.Clamp01f(volume)
-	p.setVolume(volume)
-}
-
-func (p *soundMgr) getSfxVolume() float64 {
-	return audioMgr.GetSfxVolume()
-}
-
-func (p *soundMgr) setSfxVolume(volume float64) {
-	audioMgr.SetSfxVolume(volume)
-}
-
-func (p *soundMgr) changeSfxVolume(delta float64) {
-	volume := p.getSfxVolume() + delta
-	volume = mathf.Clamp01f(volume)
-	p.setSfxVolume(volume)
-}
-
-func (p *soundMgr) getMusicVolume() float64 {
-	return audioMgr.GetMusicVolume()
-}
-
-func (p *soundMgr) setMusicVolume(volume float64) {
-	audioMgr.SetMusicVolume(volume)
-}
-
-func (p *soundMgr) changeMusicVolume(delta float64) {
-	volume := p.getMusicVolume() + delta
-	volume = mathf.Clamp01f(volume)
-	p.setMusicVolume(volume)
+func (p *soundMgr) changeVolume(audioId engine.Object, delta float64) {
+	value := p.getVolume(audioId) + delta
+	p.setVolume(audioId, value)
 }
 
 // -------------------------------------------------------------------------------------
