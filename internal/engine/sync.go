@@ -1,7 +1,7 @@
 package engine
 
 import (
-	gdx "github.com/realdream-ai/gdspx/pkg/engine"
+	gdx "github.com/goplus/spx/pkg/gdspx/pkg/engine"
 	. "github.com/realdream-ai/mathf"
 )
 

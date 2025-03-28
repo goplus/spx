@@ -11,7 +11,7 @@
 package enginewrap
 
 import (
-	gdx "github.com/realdream-ai/gdspx/pkg/engine"
+	gdx "github.com/goplus/spx/pkg/gdspx/pkg/engine"
 	. "github.com/realdream-ai/mathf"
 )
 
@@ -101,78 +101,102 @@ func (pself *audioMgrImpl) StopAll() {
 		gdx.AudioMgr.StopAll()
 	})
 }
-func (pself *audioMgrImpl) PlaySfx(path string) {
+func (pself *audioMgrImpl) CreateAudio() gdx.Object {
+	var _ret1 gdx.Object
 	callInMainThread(func() {
-		gdx.AudioMgr.PlaySfx(path)
-	})
-}
-func (pself *audioMgrImpl) PlayMusic(path string) {
-	callInMainThread(func() {
-		gdx.AudioMgr.PlayMusic(path)
-	})
-}
-func (pself *audioMgrImpl) PauseMusic() {
-	callInMainThread(func() {
-		gdx.AudioMgr.PauseMusic()
-	})
-}
-func (pself *audioMgrImpl) ResumeMusic() {
-	callInMainThread(func() {
-		gdx.AudioMgr.ResumeMusic()
-	})
-}
-func (pself *audioMgrImpl) GetMusicTimer() float64 {
-	var _ret1 float64
-	callInMainThread(func() {
-		_ret1 = gdx.AudioMgr.GetMusicTimer()
+		_ret1 = gdx.AudioMgr.CreateAudio()
 	})
 	return _ret1
 }
-func (pself *audioMgrImpl) SetMusicTimer(time float64) {
+func (pself *audioMgrImpl) DestroyAudio(obj gdx.Object) {
 	callInMainThread(func() {
-		gdx.AudioMgr.SetMusicTimer(time)
+		gdx.AudioMgr.DestroyAudio(obj)
 	})
 }
-func (pself *audioMgrImpl) IsMusicPlaying() bool {
+func (pself *audioMgrImpl) SetPitch(obj gdx.Object, pitch float64) {
+	callInMainThread(func() {
+		gdx.AudioMgr.SetPitch(obj, pitch)
+	})
+}
+func (pself *audioMgrImpl) GetPitch(obj gdx.Object) float64 {
+	var _ret1 float64
+	callInMainThread(func() {
+		_ret1 = gdx.AudioMgr.GetPitch(obj)
+	})
+	return _ret1
+}
+func (pself *audioMgrImpl) SetPan(obj gdx.Object, pan float64) {
+	callInMainThread(func() {
+		gdx.AudioMgr.SetPan(obj, pan)
+	})
+}
+func (pself *audioMgrImpl) GetPan(obj gdx.Object) float64 {
+	var _ret1 float64
+	callInMainThread(func() {
+		_ret1 = gdx.AudioMgr.GetPan(obj)
+	})
+	return _ret1
+}
+func (pself *audioMgrImpl) Play(obj gdx.Object, path string) {
+	callInMainThread(func() {
+		gdx.AudioMgr.Play(obj, path)
+	})
+}
+func (pself *audioMgrImpl) Pause(obj gdx.Object) {
+	callInMainThread(func() {
+		gdx.AudioMgr.Pause(obj)
+	})
+}
+func (pself *audioMgrImpl) Resume(obj gdx.Object) {
+	callInMainThread(func() {
+		gdx.AudioMgr.Resume(obj)
+	})
+}
+func (pself *audioMgrImpl) Stop(obj gdx.Object) {
+	callInMainThread(func() {
+		gdx.AudioMgr.Stop(obj)
+	})
+}
+func (pself *audioMgrImpl) SetLoop(obj gdx.Object, loop bool) {
+	callInMainThread(func() {
+		gdx.AudioMgr.SetLoop(obj, loop)
+	})
+}
+func (pself *audioMgrImpl) GetLoop(obj gdx.Object) bool {
 	var _ret1 bool
 	callInMainThread(func() {
-		_ret1 = gdx.AudioMgr.IsMusicPlaying()
+		_ret1 = gdx.AudioMgr.GetLoop(obj)
 	})
 	return _ret1
 }
-func (pself *audioMgrImpl) SetSfxVolume(volume float64) {
-	callInMainThread(func() {
-		gdx.AudioMgr.SetSfxVolume(volume)
-	})
-}
-func (pself *audioMgrImpl) GetSfxVolume() float64 {
+func (pself *audioMgrImpl) GetTimer(obj gdx.Object) float64 {
 	var _ret1 float64
 	callInMainThread(func() {
-		_ret1 = gdx.AudioMgr.GetSfxVolume()
+		_ret1 = gdx.AudioMgr.GetTimer(obj)
 	})
 	return _ret1
 }
-func (pself *audioMgrImpl) SetMusicVolume(volume float64) {
+func (pself *audioMgrImpl) SetTimer(obj gdx.Object, time float64) {
 	callInMainThread(func() {
-		gdx.AudioMgr.SetMusicVolume(volume)
+		gdx.AudioMgr.SetTimer(obj, time)
 	})
 }
-func (pself *audioMgrImpl) GetMusicVolume() float64 {
-	var _ret1 float64
+func (pself *audioMgrImpl) IsPlaying(obj gdx.Object) bool {
+	var _ret1 bool
 	callInMainThread(func() {
-		_ret1 = gdx.AudioMgr.GetMusicVolume()
+		_ret1 = gdx.AudioMgr.IsPlaying(obj)
 	})
 	return _ret1
 }
-func (pself *audioMgrImpl) SetMasterVolume(volume float64) {
+func (pself *audioMgrImpl) SetVolume(obj gdx.Object, volume float64) {
 	callInMainThread(func() {
-		gdx.AudioMgr.SetMasterVolume(volume)
+		gdx.AudioMgr.SetVolume(obj, volume)
 	})
 }
-func (pself *audioMgrImpl) GetMasterVolume() float64 {
+func (pself *audioMgrImpl) GetVolume(obj gdx.Object) float64 {
 	var _ret1 float64
 	callInMainThread(func() {
-		_ret1 = gdx.AudioMgr.GetMasterVolume()
+		_ret1 = gdx.AudioMgr.GetVolume(obj)
 	})
 	return _ret1
 }
@@ -1103,6 +1127,20 @@ func (pself *spriteMgrImpl) IsTriggerEnabled(obj gdx.Object) bool {
 	var _ret1 bool
 	callInMainThread(func() {
 		_ret1 = gdx.SpriteMgr.IsTriggerEnabled(obj)
+	})
+	return _ret1
+}
+func (pself *spriteMgrImpl) CheckCollisionByColor(obj gdx.Object, color Color, color_threshold float64) bool {
+	var _ret1 bool
+	callInMainThread(func() {
+		_ret1 = gdx.SpriteMgr.CheckCollisionByColor(obj, color, color_threshold)
+	})
+	return _ret1
+}
+func (pself *spriteMgrImpl) CheckCollisionByAlpha(obj gdx.Object, alpha_threshold float64) bool {
+	var _ret1 bool
+	callInMainThread(func() {
+		_ret1 = gdx.SpriteMgr.CheckCollisionByAlpha(obj, alpha_threshold)
 	})
 	return _ret1
 }

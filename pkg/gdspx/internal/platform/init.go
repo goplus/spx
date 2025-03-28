@@ -1,0 +1,4 @@
+package platform
+
+func Init() {
+}

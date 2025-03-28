@@ -29,7 +29,7 @@ func init() {
 			"github.com/goplus/spx/internal/time":        "time",
 			"github.com/goplus/spx/internal/tools":       "tools",
 			"github.com/goplus/spx/internal/ui":          "ui",
-			"github.com/realdream-ai/gdspx/pkg/engine":   "engine",
+			"github.com/goplus/spx/pkg/gdspx/pkg/engine": "engine",
 			"github.com/realdream-ai/mathf":              "mathf",
 			"image/jpeg":                                 "jpeg",
 			"image/png":                                  "png",

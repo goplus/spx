@@ -1,8 +1,8 @@
 package main
 
 //go:generate qexp -outdir pkg github.com/goplus/spx
-//go:generate qexp -outdir pkg github.com/realdream-ai/gdspx/pkg/gdspx
-//go:generate qexp -outdir pkg github.com/realdream-ai/gdspx/pkg/engine
+//go:generate qexp -outdir pkg github.com/goplus/spx/pkg/gdspx/pkg/gdspx
+//go:generate qexp -outdir pkg github.com/goplus/spx/pkg/gdspx/pkg/engine
 
 import (
 	"archive/zip"
@@ -10,7 +10,7 @@ import (
 	"log"
 	"syscall/js"
 
-	_ "github.com/realdream-ai/gdspx/pkg/gdspx"
+	_ "github.com/goplus/spx/pkg/gdspx/pkg/gdspx"
 
 	"github.com/goplus/igop"
 	"github.com/goplus/igop/gopbuild"

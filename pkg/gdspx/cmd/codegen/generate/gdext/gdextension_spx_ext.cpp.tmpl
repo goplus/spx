@@ -1,0 +1,85 @@
+/**************************************************************************/
+/*  gdextension_spx_ext.cpp                                               */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
+
+#include "gdextension_spx_ext.h"
+#include "core/extension/gdextension.h"
+#include "core/extension/gdextension_compat_hashes.h"
+#include "core/variant/variant.h"
+#include "gdextension_interface.h"
+#include "scene/main/window.h"
+#include "spx_engine.h"
+{{ $view := . -}}
+
+{{ range $i, $name := $view.Mangers -}}
+#include "spx_{{$name}}_mgr.h"
+{{ end }}
+
+{{- range $i, $name := $view.Mangers }}
+#define {{$name}}Mgr SpxEngine::get_singleton()->get_{{$name}}()
+{{- end }}
+
+#define REGISTER_SPX_INTERFACE_FUNC(m_name) GDExtension::register_interface_function( #m_name, (GDExtensionInterfaceFunctionPtr)&gdextension_##m_name)
+static void gdextension_spx_global_register_callbacks(GDExtensionSpxCallbackInfoPtr callback_ptr) {
+	SpxEngine::register_callbacks(callback_ptr);
+}
+
+{{- range $i, $f := $view.Ast.CollectGDExtensionInterfaceFunctions -}}
+{{- if isManagerMethod $f }}
+static void gdextension_{{ loadProcAddressName $f.Name }}(
+	{{- range $j, $arg := $f.Arguments -}}
+		{{ $arg.CStyleString $j }}
+		{{- if ne $j (sub (len $f.Arguments) 1) -}}, {{- end -}}
+	{{- end -}}
+	{{ if ne "void" $f.ReturnType.CStyleString -}} 
+	{{- if ne 0 (len $f.Arguments) -}}, {{- end -}}	{{$f.ReturnType.CStyleString }}* ret_val
+	{{- end -}}
+) {
+	{{ if ne "void" $f.ReturnType.CStyleString -}} *ret_val = {{- end }} {{ getManagerName $f.Name}}Mgr->
+	{{- trimPrefix (trimPrefix (trimPrefix (loadProcAddressName $f.Name) "spx_") (getManagerName $f.Name)) "_" }}(
+		{{- range $j, $arg := $f.Arguments }}
+			{{- if gt $j 0 }}, {{ end }}
+			{{- $arg.ResolvedName $j }}
+		{{- end -}}
+	);
+}
+{{- end -}}
+{{ end }}
+
+
+
+void gdextension_spx_setup_interface() {
+	REGISTER_SPX_INTERFACE_FUNC(spx_global_register_callbacks);
+
+	{{ range $i, $f := $view.Ast.CollectGDExtensionInterfaceFunctions -}}
+	{{ if isManagerMethod $f -}}
+	REGISTER_SPX_INTERFACE_FUNC({{ loadProcAddressName $f.Name }});
+	{{ end -}}
+	{{ end }}
+}

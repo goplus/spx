@@ -3,7 +3,7 @@
 package gdspx
 
 import (
-	q "github.com/realdream-ai/gdspx/pkg/gdspx"
+	q "github.com/goplus/spx/pkg/gdspx/pkg/gdspx"
 
 	"reflect"
 
@@ -13,10 +13,10 @@ import (
 func init() {
 	igop.RegisterPackage(&igop.Package{
 		Name: "gdspx",
-		Path: "github.com/realdream-ai/gdspx/pkg/gdspx",
+		Path: "github.com/goplus/spx/pkg/gdspx/pkg/gdspx",
 		Deps: map[string]string{
-			"github.com/realdream-ai/gdspx/internal/engine": "engine",
-			"github.com/realdream-ai/gdspx/pkg/engine":      "engine",
+			"github.com/goplus/spx/pkg/gdspx/internal/engine": "engine",
+			"github.com/goplus/spx/pkg/gdspx/pkg/engine":      "engine",
 		},
 		Interfaces: map[string]reflect.Type{},
 		NamedTypes: map[string]reflect.Type{},

@@ -11,7 +11,7 @@
 package enginewrap
 
 import (
-	gdx "github.com/realdream-ai/gdspx/pkg/engine"
+	gdx "github.com/goplus/spx/pkg/gdspx/pkg/engine"
 	. "github.com/realdream-ai/mathf"
 )
 
@@ -96,32 +96,42 @@ type UiMgrImpl struct {
 }
 
 // IAudioMgr
-func (pself *audioMgrImpl) StopAll()              {}
-func (pself *audioMgrImpl) PlaySfx(path string)   {}
-func (pself *audioMgrImpl) PlayMusic(path string) {}
-func (pself *audioMgrImpl) PauseMusic()           {}
-func (pself *audioMgrImpl) ResumeMusic()          {}
-func (pself *audioMgrImpl) GetMusicTimer() float64 {
+func (pself *audioMgrImpl) StopAll() {}
+func (pself *audioMgrImpl) CreateAudio() gdx.Object {
+	var _ret1 gdx.Object
+	return _ret1
+}
+func (pself *audioMgrImpl) DestroyAudio(obj gdx.Object)            {}
+func (pself *audioMgrImpl) SetPitch(obj gdx.Object, pitch float64) {}
+func (pself *audioMgrImpl) GetPitch(obj gdx.Object) float64 {
 	var _ret1 float64
 	return _ret1
 }
-func (pself *audioMgrImpl) SetMusicTimer(time float64) {}
-func (pself *audioMgrImpl) IsMusicPlaying() bool {
+func (pself *audioMgrImpl) SetPan(obj gdx.Object, pan float64) {}
+func (pself *audioMgrImpl) GetPan(obj gdx.Object) float64 {
+	var _ret1 float64
+	return _ret1
+}
+func (pself *audioMgrImpl) Play(obj gdx.Object, path string)  {}
+func (pself *audioMgrImpl) Pause(obj gdx.Object)              {}
+func (pself *audioMgrImpl) Resume(obj gdx.Object)             {}
+func (pself *audioMgrImpl) Stop(obj gdx.Object)               {}
+func (pself *audioMgrImpl) SetLoop(obj gdx.Object, loop bool) {}
+func (pself *audioMgrImpl) GetLoop(obj gdx.Object) bool {
 	var _ret1 bool
 	return _ret1
 }
-func (pself *audioMgrImpl) SetSfxVolume(volume float64) {}
-func (pself *audioMgrImpl) GetSfxVolume() float64 {
+func (pself *audioMgrImpl) GetTimer(obj gdx.Object) float64 {
 	var _ret1 float64
 	return _ret1
 }
-func (pself *audioMgrImpl) SetMusicVolume(volume float64) {}
-func (pself *audioMgrImpl) GetMusicVolume() float64 {
-	var _ret1 float64
+func (pself *audioMgrImpl) SetTimer(obj gdx.Object, time float64) {}
+func (pself *audioMgrImpl) IsPlaying(obj gdx.Object) bool {
+	var _ret1 bool
 	return _ret1
 }
-func (pself *audioMgrImpl) SetMasterVolume(volume float64) {}
-func (pself *audioMgrImpl) GetMasterVolume() float64 {
+func (pself *audioMgrImpl) SetVolume(obj gdx.Object, volume float64) {}
+func (pself *audioMgrImpl) GetVolume(obj gdx.Object) float64 {
 	var _ret1 float64
 	return _ret1
 }
@@ -523,6 +533,14 @@ func (pself *spriteMgrImpl) SetTriggerCircle(obj gdx.Object, center Vec2, radius
 func (pself *spriteMgrImpl) SetTriggerCapsule(obj gdx.Object, center Vec2, size Vec2)     {}
 func (pself *spriteMgrImpl) SetTriggerEnabled(obj gdx.Object, trigger bool)               {}
 func (pself *spriteMgrImpl) IsTriggerEnabled(obj gdx.Object) bool {
+	var _ret1 bool
+	return _ret1
+}
+func (pself *spriteMgrImpl) CheckCollisionByColor(obj gdx.Object, color Color, color_threshold float64) bool {
+	var _ret1 bool
+	return _ret1
+}
+func (pself *spriteMgrImpl) CheckCollisionByAlpha(obj gdx.Object, alpha_threshold float64) bool {
 	var _ret1 bool
 	return _ret1
 }
