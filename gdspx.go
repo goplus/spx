@@ -39,6 +39,7 @@ var (
 	sceneMgr    enginewrap.SceneMgrImpl
 	spriteMgr   enginewrap.SpriteMgrImpl
 	uiMgr       enginewrap.UiMgrImpl
+	extMgr      enginewrap.ExtMgrImpl
 )
 
 var (

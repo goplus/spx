@@ -25,6 +25,8 @@ var (
 	uiMgr       enginewrap.UiMgrImpl
 )
 
+type Object = gdx.Object
+
 type TriggerEvent struct {
 	Src *Sprite
 	Dst *Sprite

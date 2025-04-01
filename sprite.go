@@ -233,6 +233,8 @@ type SpriteImpl struct {
 	colliderCenter mathf.Vec2
 	colliderSize   mathf.Vec2
 	colliderRadius float64
+
+	penObj *engine.Object
 }
 
 func (p *SpriteImpl) SetDying() { // dying: visible but can't be touched
@@ -614,12 +616,14 @@ func (p *SpriteImpl) Destroy() { // destroy sprite, whether prototype or cloned
 
 	p.Hide()
 	p.doDeleteClone()
+	p.destroyPen()
 	p.g.removeShape(p)
 	p.Stop(ThisSprite)
 	if p == gco.Current().Obj {
 		gco.Abort()
 	}
 	p.HasDestroyed = true
+
 }
 
 // delete only cloned sprite, no effect on prototype sprite.
@@ -988,7 +992,7 @@ func (p *SpriteImpl) doMoveToForAnim(x, y float64) {
 		p.doWhenMoving(p, mi)
 	}
 	if p.isPenDown {
-		p.g.movePen(p, x, y)
+		p.movePen(x, y)
 	}
 	p.x, p.y = x, y
 	p.updateTransform()
@@ -1568,44 +1572,87 @@ func (p *SpriteImpl) GotoBack() {
 }
 
 // -----------------------------------------------------------------------------
-
 func (p *SpriteImpl) Stamp() {
-	p.g.stampCostume(p)
+	p.checkOrCreatePen()
+	extMgr.SetPenStampTexture(*p.penObj, p.getCostumePath())
+	extMgr.PenStamp(*p.penObj)
 }
 
 func (p *SpriteImpl) PenUp() {
+	p.checkOrCreatePen()
 	p.isPenDown = false
+	extMgr.PenUp(*p.penObj)
 }
 
 func (p *SpriteImpl) PenDown() {
+	p.checkOrCreatePen()
 	p.isPenDown = true
+	p.movePen(p.x, p.y)
+	extMgr.PenDown(*p.penObj, false)
 }
 
 func (p *SpriteImpl) SetPenColor(color Color) {
-	h, _, v := color.ToHSV()
-	p.penHue = (200 * h) / 360
-	p.penShade = 50 * v
+	p.checkOrCreatePen()
 	p.penColor = color
+	extMgr.SetPenColorTo(*p.penObj, color)
 }
 
+// hue
 func (p *SpriteImpl) ChangePenColor(delta float64) {
+	p.checkOrCreatePen()
 	panic("todo")
 }
 
 func (p *SpriteImpl) SetPenShade(shade float64) {
+	p.checkOrCreatePen()
 	p.setPenShade(shade, false)
 }
 
 func (p *SpriteImpl) ChangePenShade(delta float64) {
+	p.checkOrCreatePen()
 	p.setPenShade(delta, true)
 }
 
 func (p *SpriteImpl) SetPenHue(hue float64) {
+	p.checkOrCreatePen()
 	p.setPenHue(hue, false)
 }
 
 func (p *SpriteImpl) ChangePenHue(delta float64) {
+	p.checkOrCreatePen()
 	p.setPenHue(delta, true)
+}
+
+func (p *SpriteImpl) SetPenSize(size float64) {
+	p.checkOrCreatePen()
+	p.setPenWidth(size)
+}
+
+func (p *SpriteImpl) ChangePenSize(delta float64) {
+	p.checkOrCreatePen()
+	p.setPenWidth(p.penWidth + delta)
+}
+
+func (p *SpriteImpl) checkOrCreatePen() {
+	if p.penObj == nil {
+		obj := extMgr.CreatePen()
+		p.penObj = &obj
+	}
+}
+
+func (p *SpriteImpl) destroyPen() {
+	if p.penObj != nil {
+		extMgr.DestroyPen(*p.penObj)
+		p.penObj = nil
+	}
+}
+
+func (p *SpriteImpl) movePen(x, y float64) {
+	if p.penObj == nil {
+		return
+	}
+	applyRenderOffset(p, &x, &y)
+	extMgr.MovePenTo(*p.penObj, mathf.NewVec2(x, -y))
 }
 
 func (p *SpriteImpl) setPenHue(v float64, change bool) {
@@ -1647,19 +1694,9 @@ func (p *SpriteImpl) doUpdatePenColor() {
 	p.penColor.A = a
 }
 
-func (p *SpriteImpl) SetPenSize(size float64) {
-	p.setPenWidth(size, true)
-}
-
-func (p *SpriteImpl) ChangePenSize(delta float64) {
-	p.setPenWidth(delta, true)
-}
-
-func (p *SpriteImpl) setPenWidth(w float64, change bool) {
-	if change {
-		w += p.penWidth
-	}
+func (p *SpriteImpl) setPenWidth(w float64) {
 	p.penWidth = w
+	extMgr.SetPenSizeTo(*p.penObj, w)
 }
 
 // -----------------------------------------------------------------------------
