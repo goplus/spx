@@ -52,23 +52,50 @@ func Iround(v float64) int {
 	return int(v - 0.5)
 }
 
-type Color = mathf.Color
+type Color struct {
+	r, g, b, a float64
+}
+
+func toMathfColor(c Color) mathf.Color {
+	return mathf.Color{R: c.r, G: c.g, B: c.b, A: c.a}
+}
+func toSpxColor(c mathf.Color) Color {
+	return Color{c.R, c.G, c.B, c.A}
+}
 
 // -----------------------------------------------------------------------------
+// r, g, b, a in range [0, 255], just like Scratch
 func RGB(r, g, b uint8) Color {
-	return mathf.NewColorRGBi(r, g, b)
+	return toSpxColor(mathf.NewColorRGBi(r, g, b))
 }
 
+// r, g, b, a in range [0, 255], just like Scratch
 func RGBA(r, g, b, a uint8) Color {
-	return mathf.NewColorRGBAi(r, g, b, a)
+	return toSpxColor(mathf.NewColorRGBAi(r, g, b, a))
 }
 
+// h, s, b in range [0, 100], just like Scratch
+func HSB(h, s, b float64) Color {
+	color := mathf.NewColorHSV(h/100, s/100, b/100)
+	color.A = 1
+	return toSpxColor(color)
+}
+
+// h, s, b, a in range [0, 100], just like Scratch
+func HSBA(h, s, b, a float64) Color {
+	color := HSB(h, s, b)
+	color.a = a / 100
+	return color
+}
+
+// r, g, b in range [0, 1], just like unity, unreal and other game engines
 func RGBf(r, g, b float64) Color {
-	return mathf.NewColorRGB(r, g, b)
+	return toSpxColor(mathf.NewColorRGB(r, g, b))
 }
 
+// r, g, b, a in range [0, 1], just like unity unreal and other game engines
 func RGBAf(r, g, b, a float64) Color {
-	return mathf.NewColorRGBA(r, g, b, a)
+	return toSpxColor(mathf.NewColorRGBA(r, g, b, a))
 }
 
 // -----------------------------------------------------------------------------

@@ -1,0 +1,28 @@
+{
+  "backdrops": [
+    {
+      "name": "backdrop1",
+      "path": "../../res/lake.jpg"
+    },
+    {
+      "name": "backdrop2",
+      "path": "../../res/bg.jpg"
+    }
+  ],
+  "map": {
+    "width":800,
+    "height":600
+  },
+  "zorder": [
+    "Red",
+    "SpControl",
+    "SpEvent",
+    "SpLook",
+    "SpMotion",
+    "SpOperator",
+    "SpPen",
+    "SpSensing",
+    "SpSound",
+    "SpVariable"
+  ]
+}

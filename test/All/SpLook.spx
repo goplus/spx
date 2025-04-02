@@ -1,0 +1,101 @@
+
+import "fmt"
+import "math"
+
+
+
+onMsg "testLook", => {
+    onTestStart(this)
+
+	setXYpos(0, 0)
+	// 1. Sprite::Say	
+	say "Say", 0.5
+
+	// 2. Sprite::Think	
+	think "Think", 0.5
+
+	// 3. Sprite::NextCostume	
+	nextCostume()
+	wait 0.1
+	nextCostume()
+	wait 0.1
+	nextCostume()
+	wait 0.1
+
+	// 4. Sprite::CostumeIndex	
+	assertFloat(float64(costumeIndex()), 3, "Sprite::CostumeIndex")
+	wait 0.2
+
+	// 5. Sprite::SetCostume	
+	setCostume 0
+	wait 0.2
+	assertFloat(float64(costumeIndex()), 0, "Sprite::CostumeIndex")
+
+	// 6. Sprite::ChangeSize	
+	changeSize 50
+	wait 0.2
+	changeSize -50
+	wait 0.2
+
+	// 7. Sprite::SetSize	
+	setSize 100
+	wait 0.2
+
+	// 8. Sprite::Size	
+	assertFloat(size(), 100, "Sprite::Size")
+	wait 0.2
+	
+	// 9. Sprite::ChangeEffect	
+	changeEffect GhostEffect, 50
+	wait 0.2
+
+	// 10. Sprite::SetEffect	
+	setEffect GhostEffect, 50
+	wait 0.2
+
+	// 11. Sprite::ClearGraphEffects	
+	clearGraphEffects()
+	wait 0.2
+
+	// 12. Sprite::Hide
+	say "Hide", 0.5	
+	hide()
+	wait 0.2
+
+	// 13. Sprite::Show	
+	show()
+	say "Show", 0.5
+
+	// TODO tanjp check
+	// 14. Sprite::GotoBack	
+	gotoBack()
+	wait 0.1
+	
+	// 15. Sprite::GotoFront 
+	gotoFront()
+	wait 0.1
+	
+	// 16. Sprite::GoBackLayers	
+	goBackLayers(1)
+	wait 0.1
+	
+	// 17. Game::StartBackdrop	
+	startBackdrop("backdrop1")
+	wait 0.1
+
+	// 18. Game::BackdropIndex	
+	assertFloat(float64(backdropIndex()), 0, "Game::BackdropIndex")
+	wait 0.1
+
+	// 19. Game::NextBackdrop	
+	nextBackdrop()
+	wait 0.1
+	assertFloat(float64(backdropIndex()), 1, "Game::BackdropIndex")
+	startBackdrop("backdrop1")
+	wait 0.1
+	assertFloat(float64(backdropIndex()), 0, "Game::BackdropIndex")
+	wait 0.1
+
+
+    onTestDone(this)
+}

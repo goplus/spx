@@ -1,0 +1,92 @@
+
+
+import "fmt"
+import "math"
+
+
+
+
+
+func drawPen(){
+	penDown()
+	for i:=0;i<4;i++ {
+		step 100
+		turn 90
+		wait 0.2
+	}
+	penUp()
+}
+func drawPenProperty(penType PenColorParam, msg string , isChange bool, yOffset float64){
+	//eraseAll
+	say msg
+	penDown()
+	setXYpos 0,yOffset
+	setPenSize 5
+	setPenColor penType, 100
+	for i:=0;i<25;i++ {
+		if isChange {
+			changePenColor penType, -4
+		} else {
+			setPenColor penType, float64(100 - i*4)
+		}
+		step 8
+		waitNextFrame
+	}
+	setPenColor penType, 100
+	penUp()
+	wait 0.2
+}
+onMsg "testPen", => {
+	onTestStart(this)	
+
+	Red.SetXYpos(-200, 0)
+	Red.SetSize(10)
+	// 1. Sprite::PenDown	
+	setXYpos(0,0)
+	drawPen()
+	// 2. Sprite::PenUp	
+	wait 0.2
+
+	// 3. Sprite::Stamp	
+	say "Stamp"
+	// stamp()
+
+	// 4. Sprite::SetPenColor	
+	say "Sprite::SetPenColor"
+	setPenColor RGB(255,0,0)
+	setXYpos(20,0)
+	drawPen()
+
+	// 5. Sprite::ChangePenSize	
+	say "Sprite::ChangePenSize"
+	changePenSize 2
+	setPenColor RGB(0,255,0)
+	setXYpos(40,0)
+	drawPen()
+
+	// 6. Sprite::SetPenSize	
+	say "Sprite::SetPenSize"
+	setXYpos(60,0)
+	setPenSize 1
+	setPenColor RGB(0,0,255)
+	drawPen()
+
+
+	// 7. Sprite::ChangePen
+	drawPenProperty PenHue , "Sprite::ChangePen PenColor", true, 20
+	drawPenProperty PenSaturation , "Sprite::ChangePen PenSaturation", true, 40
+	drawPenProperty PenBrightness , "Sprite::ChangePen PenBrightness", true, 60
+	drawPenProperty PenTransparency , "Sprite::ChangePen PenTransparency", true, 80
+
+	// 8. Sprite::SetPen
+	drawPenProperty PenHue , "Sprite::SetPen PenColor", false, 100	
+	drawPenProperty PenSaturation , "Sprite::SetPen PenSaturation", false, 120
+	drawPenProperty PenBrightness , "Sprite::SetPen PenBrightness", false, 140
+	drawPenProperty PenTransparency , "Sprite::SetPen PenTransparency", false, 160
+
+	// 9. Game::EraseAll	
+	say "Sprite::EraseAll", 0.5
+	eraseAll()
+
+    onTestDone(this)
+}

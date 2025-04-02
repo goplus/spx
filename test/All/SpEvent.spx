@@ -1,0 +1,73 @@
+
+import "fmt"
+import "math"
+
+var (
+	hasStarted bool
+)
+
+
+onKey KeyY, =>{
+	hasInputKey = true
+}
+
+onClick =>{
+	hasClicked = true
+}
+
+onBackdrop "backdrop2", =>{
+	hasChangedBackdrop = true
+}
+
+onMsg "msgA", =>{
+	hasReceivedMsgA = true
+}
+
+onMsg "msgB", =>{
+	hasReceivedMsgB = true
+}
+
+onStart => {
+	hasStarted = true
+}
+
+// Not support
+// onLoudness =>{}
+
+onMsg "testEvent", => {
+    onTestStart(this)
+
+	// 1. Sprite::onKey
+	say "Please presse key 'y' "
+	for !hasInputKey {
+		waitNextFrame
+	}
+
+	// 2. Sprite::onClick
+	say "Please click the monkey "
+	for !hasClicked {
+		waitNextFrame
+	}
+	say ""
+
+	// 3. Sprite::onStart
+	wait 0.1
+	assert(hasStarted, "Sprite::OnStart")
+
+	// 4. Sprite::onBackdrop
+	startBackdrop "backdrop2"
+	wait 0.1
+	for !hasChangedBackdrop {
+		waitNextFrame
+	}
+
+	// 5. Sprite::onMsg
+	broadcast "msgA"
+	wait 0.1
+	assert(hasReceivedMsgA, "Sprite::OnMsg send to self")
+	broadcast "msgB"
+	wait 0.1
+	assert(hasReceivedMsgB, "Sprite::OnMsg send to other sprite")
+
+    onTestDone(this)
+}

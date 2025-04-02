@@ -1,0 +1,12 @@
+
+import "fmt"
+import "math"
+
+
+
+onMsg "testOperator", => {
+	onTestStart(this)	
+
+
+    onTestDone(this)
+}

@@ -69,9 +69,7 @@ type Sprite interface {
 	Bounds() *mathf.Rect2
 	ChangeEffect(kind EffectKind, delta float64)
 	ChangeHeading(dir float64)
-	ChangePenColor(delta float64)
-	ChangePenHue(delta float64)
-	ChangePenShade(delta float64)
+	ChangePenColor(kind PenColorParam, delta float64)
 	ChangePenSize(delta float64)
 	ChangeSize(delta float64)
 	ChangeXpos(dx float64)
@@ -136,9 +134,8 @@ type Sprite interface {
 	SetDying()
 	SetEffect(kind EffectKind, val float64)
 	SetHeading(dir float64)
-	SetPenColor(color Color)
-	SetPenHue(hue float64)
-	SetPenShade(shade float64)
+	SetPenColor__0(color Color)
+	SetPenColor__1(kind PenColorParam, value float64)
 	SetPenSize(size float64)
 	SetRotationStyle(style RotationStyle)
 	SetSize(size float64)
@@ -198,9 +195,12 @@ type SpriteImpl struct {
 	defaultAnimation SpriteAnimationName
 
 	penColor mathf.Color
-	penShade float64
-	penHue   float64
 	penWidth float64
+
+	penHue          float64
+	penSaturation   float64
+	penBrightness   float64
+	penTransparency float64
 
 	isVisible bool
 	isCloned_ bool
@@ -341,8 +341,11 @@ func (p *SpriteImpl) InitFrom(src *SpriteImpl) {
 	p.greffUniforms = cloneMap(src.greffUniforms)
 
 	p.penColor = src.penColor
-	p.penShade = src.penShade
 	p.penHue = src.penHue
+	p.penSaturation = src.penSaturation
+	p.penBrightness = src.penBrightness
+	p.penTransparency = src.penTransparency
+
 	p.penWidth = src.penWidth
 
 	p.isVisible = src.isVisible
@@ -840,7 +843,8 @@ func doAnimation(p *SpriteImpl, info *animState) {
 		pre_x, pre_y := p.x, p.y
 		pre_direction := p.direction
 		for timer < duration {
-			percent := timer / duration
+			timer += time.DeltaTime()
+			percent := mathf.Clamp01f(timer / duration)
 			switch info.AniType {
 			case aniTypeMove:
 				src, _ := tools.GetFloat(info.From)
@@ -863,7 +867,6 @@ func doAnimation(p *SpriteImpl, info *animState) {
 				break
 			}
 			engine.WaitNextFrame()
-			timer += time.DeltaTime()
 		}
 	}
 	if !info.IsCanceled {
@@ -1579,11 +1582,14 @@ func (p *SpriteImpl) GotoBack() {
 }
 
 // -----------------------------------------------------------------------------
-func (p *SpriteImpl) Stamp() {
-	p.checkOrCreatePen()
-	extMgr.SetPenStampTexture(*p.penObj, p.getCostumePath())
-	extMgr.PenStamp(*p.penObj)
-}
+type PenColorParam int
+
+const (
+	PenHue PenColorParam = iota
+	PenSaturation
+	PenBrightness
+	PenTransparency
+)
 
 func (p *SpriteImpl) PenUp() {
 	p.checkOrCreatePen()
@@ -1598,52 +1604,100 @@ func (p *SpriteImpl) PenDown() {
 	extMgr.PenDown(*p.penObj, false)
 }
 
-func (p *SpriteImpl) SetPenColor(color Color) {
+func (p *SpriteImpl) Stamp() {
 	p.checkOrCreatePen()
-	p.penColor = color
-	extMgr.SetPenColorTo(*p.penObj, color)
+	extMgr.SetPenStampTexture(*p.penObj, p.getCostumePath())
+	extMgr.PenStamp(*p.penObj)
 }
 
-// hue
-func (p *SpriteImpl) ChangePenColor(delta float64) {
+func (p *SpriteImpl) SetPenColor__0(color Color) {
 	p.checkOrCreatePen()
-	panic("todo")
+	p.penColor = toMathfColor(color)
+	p.applyPenColorProperty()
 }
 
-func (p *SpriteImpl) SetPenShade(shade float64) {
-	p.checkOrCreatePen()
-	p.setPenShade(shade, false)
+func (p *SpriteImpl) SetPenColor__1(kind PenColorParam, value float64) {
+	switch kind {
+	case PenHue:
+		p.setPenHue(value)
+	case PenSaturation:
+		p.setPenSaturation(value)
+	case PenBrightness:
+		p.setPenBrightness(value)
+	case PenTransparency:
+		p.setPenTransparency(value)
+	}
 }
 
-func (p *SpriteImpl) ChangePenShade(delta float64) {
-	p.checkOrCreatePen()
-	p.setPenShade(delta, true)
+func (p *SpriteImpl) ChangePenColor(kind PenColorParam, delta float64) {
+	switch kind {
+	case PenHue:
+		p.changePenHue(delta)
+	case PenSaturation:
+		p.changePenSaturation(delta)
+	case PenBrightness:
+		p.changePenBrightness(delta)
+	case PenTransparency:
+		p.changePenTransparency(delta)
+	}
 }
 
-func (p *SpriteImpl) SetPenHue(hue float64) {
+func (p *SpriteImpl) setPenHue(value float64) {
 	p.checkOrCreatePen()
-	p.setPenHue(hue, false)
+	p.penHue = mathf.Clamp(value, 0, 100)
+	p.applyPenHsvProperty()
 }
 
-func (p *SpriteImpl) ChangePenHue(delta float64) {
+func (p *SpriteImpl) changePenHue(delta float64) {
+	p.setPenHue(p.penHue + delta)
+}
+
+func (p *SpriteImpl) setPenSaturation(value float64) {
 	p.checkOrCreatePen()
-	p.setPenHue(delta, true)
+	p.penSaturation = mathf.Clamp(value, 0, 100)
+	p.applyPenHsvProperty()
+}
+
+func (p *SpriteImpl) changePenSaturation(delta float64) {
+	p.setPenSaturation(p.penSaturation + delta)
+}
+
+func (p *SpriteImpl) setPenBrightness(value float64) {
+	p.checkOrCreatePen()
+	p.penBrightness = mathf.Clamp(value, 0, 100)
+	p.applyPenHsvProperty()
+}
+
+func (p *SpriteImpl) changePenBrightness(delta float64) {
+	p.setPenBrightness(p.penBrightness + delta)
+}
+
+func (p *SpriteImpl) setPenTransparency(value float64) {
+	p.checkOrCreatePen()
+	p.penTransparency = mathf.Clamp(value, 0, 100)
+	p.applyPenHsvProperty()
+}
+
+func (p *SpriteImpl) changePenTransparency(delta float64) {
+	p.setPenTransparency(p.penTransparency + delta)
 }
 
 func (p *SpriteImpl) SetPenSize(size float64) {
 	p.checkOrCreatePen()
-	p.setPenWidth(size)
+	p.penWidth = size
+	extMgr.SetPenSizeTo(*p.penObj, size)
 }
 
 func (p *SpriteImpl) ChangePenSize(delta float64) {
 	p.checkOrCreatePen()
-	p.setPenWidth(p.penWidth + delta)
+	p.SetPenSize(p.penWidth + delta)
 }
 
 func (p *SpriteImpl) checkOrCreatePen() {
 	if p.penObj == nil {
 		obj := extMgr.CreatePen()
 		p.penObj = &obj
+		p.penTransparency = p.penColor.A * 100
 	}
 }
 
@@ -1662,48 +1716,21 @@ func (p *SpriteImpl) movePen(x, y float64) {
 	extMgr.MovePenTo(*p.penObj, mathf.NewVec2(x, -y))
 }
 
-func (p *SpriteImpl) setPenHue(v float64, change bool) {
-	if change {
-		v += p.penHue
-	}
-	v = math.Mod(v, 200)
-	if v < 0 {
-		v += 200
-	}
-	p.penHue = v
-	p.doUpdatePenColor()
+func (p *SpriteImpl) applyPenColorProperty() {
+	p.checkOrCreatePen()
+	h, s, v := p.penColor.ToHSV()
+	p.penHue = (h / 360) * 100
+	p.penSaturation = s * 100
+	p.penBrightness = v * 100
+	p.penTransparency = p.penColor.A * 100
+	extMgr.SetPenColorTo(*p.penObj, p.penColor)
 }
 
-func (p *SpriteImpl) setPenShade(v float64, change bool) {
-	if change {
-		v += p.penShade
-	}
-	v = math.Mod(v, 200)
-	if v < 0 {
-		v += 200
-	}
-	p.penShade = v
-	p.doUpdatePenColor()
-}
-
-func (p *SpriteImpl) doUpdatePenColor() {
-	color := mathf.NewColorHSV((p.penHue*180)/100, 1, 1)
-	shade := p.penShade
-	if shade > 100 { // range 0..100
-		shade = 200 - shade
-	}
-	a := p.penColor.A
-	if shade < 50 {
-		p.penColor = mathf.LerpColor(mathf.ColorBlack(), color, (10+shade)/60)
-	} else {
-		p.penColor = mathf.LerpColor(color, mathf.ColorWhite(), (shade-50)/60)
-	}
-	p.penColor.A = a
-}
-
-func (p *SpriteImpl) setPenWidth(w float64) {
-	p.penWidth = w
-	extMgr.SetPenSizeTo(*p.penObj, w)
+func (p *SpriteImpl) applyPenHsvProperty() {
+	color := mathf.NewColorHSV((p.penHue/100)*360, p.penSaturation/100, p.penBrightness/100)
+	p.penColor = color
+	p.penColor.A = p.penTransparency / 100
+	extMgr.SetPenColorTo(*p.penObj, p.penColor)
 }
 
 // -----------------------------------------------------------------------------
