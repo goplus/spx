@@ -1,11 +1,20 @@
 #!/bin/bash
 # Read app name from appname.txt file
+
+go mod tidy
+
 appname=$(cat appname.txt)
 # install cmd
+if [ "$OS" = "Windows_NT" ]; then
+   appname="${appname}.exe"
+fi
+
 go build -o $appname
 mv $appname $(go env GOPATH)/bin/
 
-cd ../igox || exit
-go mod tidy
-GOOS=js GOARCH=wasm go build -o $(go env GOPATH)/bin/igdspx.wasm
-cd ../gox || exit
+if [ "$1" = "--web" ]; then
+    cd ../igox || exit
+    go mod tidy
+    GOOS=js GOARCH=wasm go build -o $(go env GOPATH)/bin/igdspx.wasm
+    cd ../gox || exit
+fi

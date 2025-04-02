@@ -1,0 +1,204 @@
+/**************************************************************************/
+/*  gdextension_spx_ext.h                                                 */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
+
+#ifndef GDEXTENSION_SPX_EXT_H
+#define GDEXTENSION_SPX_EXT_H
+
+#include "gdextension_interface.h"
+#ifndef NOT_GODOT_ENGINE
+#include "core/variant/variant.h"
+extern void gdextension_spx_setup_interface();
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef GDExtensionConstStringPtr GdString;
+typedef GDExtensionInt GdInt;
+typedef GDExtensionInt GdObj;
+typedef GDExtensionBool GdBool;
+typedef real_t GdFloat;
+typedef Vector4 GdVec4;
+typedef Vector3 GdVec3;
+typedef Vector2 GdVec2;
+typedef Color GdColor;
+typedef Rect2 GdRect2;
+
+
+typedef struct {
+	// 0 is return value
+	// 1-7 are arguments
+	GdVec4 Ret;
+	GdVec4 Arg0;
+	GdVec4 Arg1;
+	GdVec4 Arg2;
+	GdVec4 Arg3;
+	GdVec4 Arg4;
+	GdVec4 Arg5;
+	GdVec4 Arg6;
+	GdVec4 Arg7;
+} CallFrameArgs;
+
+typedef void *GDExtensionSpxCallbackInfoPtr;
+typedef void (*GDExtensionSpxGlobalRegisterCallbacks)(GDExtensionSpxCallbackInfoPtr callback_ptr);
+
+// string
+typedef void (*GDExtensionSpxStringNewWithLatin1Chars)(GDExtensionUninitializedStringPtr r_dest, const char *p_contents);
+typedef void (*GDExtensionSpxStringNewWithUtf8Chars)(GDExtensionUninitializedStringPtr r_dest, const char *p_contents);
+typedef void (*GDExtensionSpxStringNewWithLatin1CharsAndLen)(GDExtensionUninitializedStringPtr r_dest, const char *p_contents, GdInt p_size);
+typedef void (*GDExtensionSpxStringNewWithUtf8CharsAndLen)(GDExtensionUninitializedStringPtr r_dest, const char *p_contents, GdInt p_size);
+typedef GdInt (*GDExtensionSpxStringToLatin1Chars)(GDExtensionConstStringPtr p_self, char *r_text, GdInt p_max_write_length);
+typedef GdInt (*GDExtensionSpxStringToUtf8Chars)(GDExtensionConstStringPtr p_self, char *r_text, GdInt p_max_write_length);
+// variant
+typedef GDExtensionPtrConstructor (*GDExtensionSpxVariantGetPtrConstructor)(GDExtensionVariantType p_type, int32_t p_constructor);
+typedef GDExtensionPtrDestructor (*GDExtensionSpxVariantGetPtrDestructor)(GDExtensionVariantType p_type);
+
+// callback
+typedef void (*GDExtensionSpxCallbackOnEngineStart)();
+typedef void (*GDExtensionSpxCallbackOnEngineUpdate)(GdFloat delta);
+typedef void (*GDExtensionSpxCallbackOnEngineFixedUpdate)(GdFloat delta);
+typedef void (*GDExtensionSpxCallbackOnEngineDestroy)();
+
+typedef void (*GDExtensionSpxCallbackOnSceneSpriteInstantiated)(GdObj obj,GdString type_name);
+
+typedef void (*GDExtensionSpxCallbackOnSpriteReady)(GdObj obj);
+typedef void (*GDExtensionSpxCallbackOnSpriteUpdated)(GdFloat delta);
+typedef void (*GDExtensionSpxCallbackOnSpriteFixedUpdated)(GdFloat delta);
+typedef void (*GDExtensionSpxCallbackOnSpriteDestroyed)(GdObj obj);
+
+typedef void (*GDExtensionSpxCallbackOnSpriteFramesSetChanged)(GdObj obj);
+typedef void (*GDExtensionSpxCallbackOnSpriteAnimationChanged)(GdObj obj);
+typedef void (*GDExtensionSpxCallbackOnSpriteFrameChanged)(GdObj obj);
+typedef void (*GDExtensionSpxCallbackOnSpriteAnimationLooped)(GdObj obj);
+typedef void (*GDExtensionSpxCallbackOnSpriteAnimationFinished)(GdObj obj);
+
+typedef void (*GDExtensionSpxCallbackOnSpriteVfxFinished)(GdObj obj);
+
+typedef void (*GDExtensionSpxCallbackOnSpriteScreenExited)(GdObj obj);
+typedef void (*GDExtensionSpxCallbackOnSpriteScreenEntered)(GdObj obj);
+
+typedef void (*GDExtensionSpxCallbackOnMousePressed)(GdInt keyid);
+typedef void (*GDExtensionSpxCallbackOnMouseReleased)(GdInt keyid);
+typedef void (*GDExtensionSpxCallbackOnKeyPressed)(GdInt keyid);
+typedef void (*GDExtensionSpxCallbackOnKeyReleased)(GdInt keyid);
+typedef void (*GDExtensionSpxCallbackOnActionPressed)(GdString action_name);
+typedef void (*GDExtensionSpxCallbackOnActionJustPressed)(GdString action_name);
+typedef void (*GDExtensionSpxCallbackOnActionJustReleased)(GdString action_name);
+typedef void (*GDExtensionSpxCallbackOnAxisChanged)(GdString action_name, GdFloat value);
+
+typedef void (*GDExtensionSpxCallbackOnCollisionEnter)(GdInt self_id, GdInt other_id);
+typedef void (*GDExtensionSpxCallbackOnCollisionStay)(GdInt self_id, GdInt other_id);
+typedef void (*GDExtensionSpxCallbackOnCollisionExit)(GdInt self_id, GdInt other_id);
+typedef void (*GDExtensionSpxCallbackOnTriggerEnter)(GdInt self_id, GdInt other_id);
+typedef void (*GDExtensionSpxCallbackOnTriggerStay)(GdInt self_id, GdInt other_id);
+typedef void (*GDExtensionSpxCallbackOnTriggerExit)(GdInt self_id, GdInt other_id);
+
+typedef void (*GDExtensionSpxCallbackOnUiReady)(GdObj obj);
+typedef void (*GDExtensionSpxCallbackOnUiUpdated)(GdObj obj);
+typedef void (*GDExtensionSpxCallbackOnUiDestroyed)(GdObj obj);
+
+typedef void (*GDExtensionSpxCallbackOnUiPressed)(GdObj obj);
+typedef void (*GDExtensionSpxCallbackOnUiReleased)(GdObj obj);
+typedef void (*GDExtensionSpxCallbackOnUiHovered)(GdObj obj);
+typedef void (*GDExtensionSpxCallbackOnUiClicked)(GdObj obj);
+typedef void (*GDExtensionSpxCallbackOnUiToggle)(GdObj obj, GdBool is_on);
+typedef void (*GDExtensionSpxCallbackOnUiTextChanged)(GdObj obj, GdString text);
+
+
+typedef struct {
+	// engine
+	GDExtensionSpxCallbackOnEngineStart func_on_engine_start;
+	GDExtensionSpxCallbackOnEngineUpdate func_on_engine_update;
+	GDExtensionSpxCallbackOnEngineFixedUpdate func_on_engine_fixed_update;
+	GDExtensionSpxCallbackOnEngineDestroy func_on_engine_destroy;
+
+	// scene
+	GDExtensionSpxCallbackOnSceneSpriteInstantiated func_on_scene_sprite_instantiated;
+	// sprite
+	GDExtensionSpxCallbackOnSpriteReady func_on_sprite_ready;
+	GDExtensionSpxCallbackOnSpriteUpdated func_on_sprite_updated;
+	GDExtensionSpxCallbackOnSpriteFixedUpdated func_on_sprite_fixed_updated;
+	GDExtensionSpxCallbackOnSpriteDestroyed func_on_sprite_destroyed;
+
+	// animation
+	GDExtensionSpxCallbackOnSpriteFramesSetChanged func_on_sprite_frames_set_changed;
+	GDExtensionSpxCallbackOnSpriteAnimationChanged func_on_sprite_animation_changed;
+	GDExtensionSpxCallbackOnSpriteFrameChanged func_on_sprite_frame_changed;
+	GDExtensionSpxCallbackOnSpriteAnimationLooped func_on_sprite_animation_looped;
+	GDExtensionSpxCallbackOnSpriteAnimationFinished func_on_sprite_animation_finished;
+	// vfx
+	GDExtensionSpxCallbackOnSpriteVfxFinished func_on_sprite_vfx_finished;
+	// visibility
+	GDExtensionSpxCallbackOnSpriteScreenExited func_on_sprite_screen_exited;
+	GDExtensionSpxCallbackOnSpriteScreenEntered func_on_sprite_screen_entered;
+
+	// input
+	GDExtensionSpxCallbackOnMousePressed func_on_mouse_pressed;
+	GDExtensionSpxCallbackOnMouseReleased func_on_mouse_released;
+	GDExtensionSpxCallbackOnKeyPressed func_on_key_pressed;
+	GDExtensionSpxCallbackOnKeyReleased func_on_key_released;
+	GDExtensionSpxCallbackOnActionPressed func_on_action_pressed;
+	GDExtensionSpxCallbackOnActionJustPressed func_on_action_just_pressed;
+	GDExtensionSpxCallbackOnActionJustReleased func_on_action_just_released;
+	GDExtensionSpxCallbackOnAxisChanged func_on_axis_changed;
+
+	// physic
+	GDExtensionSpxCallbackOnCollisionEnter func_on_collision_enter;
+	GDExtensionSpxCallbackOnCollisionStay func_on_collision_stay;
+	GDExtensionSpxCallbackOnCollisionExit func_on_collision_exit;
+	GDExtensionSpxCallbackOnTriggerEnter func_on_trigger_enter;
+	GDExtensionSpxCallbackOnTriggerStay func_on_trigger_stay;
+	GDExtensionSpxCallbackOnTriggerExit func_on_trigger_exit;
+
+	// ui
+	GDExtensionSpxCallbackOnUiReady func_on_ui_ready;
+	GDExtensionSpxCallbackOnUiUpdated func_on_ui_updated;
+	GDExtensionSpxCallbackOnUiDestroyed func_on_ui_destroyed;
+
+	GDExtensionSpxCallbackOnUiPressed func_on_ui_pressed;
+	GDExtensionSpxCallbackOnUiReleased func_on_ui_released;
+	GDExtensionSpxCallbackOnUiHovered func_on_ui_hovered;
+	GDExtensionSpxCallbackOnUiClicked func_on_ui_clicked;
+	GDExtensionSpxCallbackOnUiToggle func_on_ui_toggle;
+	GDExtensionSpxCallbackOnUiTextChanged func_on_ui_text_changed;
+
+	
+} SpxCallbackInfo;
+
+
+
+###MANAGER_FUNC_DEFINE
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // GDEXTENSION_SPX_EXT_H

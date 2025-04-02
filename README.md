@@ -14,6 +14,7 @@ How to run games powered by Go+ spx engine?
 * Install go (version == 1.21.3)
 * Install python (version >= 3.8)
 * Install make
+* Install [`mingw-w64`](https://www.mingw-w64.org/) (Windows only)
 * Add the Go environment's bin directory to the system PATH.
 ```
     export PATH=$PATH:$GOPATH/bin
@@ -25,8 +26,7 @@ How to run games powered by Go+ spx engine?
 	git clone https://github.com/goplus/spx.git
 	cd spx
 	git checkout dev
-	chmod +x ./init.sh
-	./init.sh
+	make init
 
 	# run the demo
 	cd tutorial/00-Hello

@@ -8,8 +8,8 @@ import (
 	"github.com/goplus/spx/internal/engine/profiler"
 	"github.com/goplus/spx/internal/enginewrap"
 	"github.com/goplus/spx/internal/time"
-	gdx "github.com/realdream-ai/gdspx/pkg/engine"
-	gde "github.com/realdream-ai/gdspx/pkg/gdspx"
+	gdx "github.com/goplus/spx/pkg/gdspx/pkg/engine"
+	gde "github.com/goplus/spx/pkg/gdspx/pkg/gdspx"
 )
 
 // copy these variable to any namespace you want

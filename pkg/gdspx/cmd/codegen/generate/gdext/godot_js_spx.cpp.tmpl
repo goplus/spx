@@ -1,0 +1,75 @@
+/**************************************************************************/
+/*  godot_js_spx.cpp                                               */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
+
+#include "core/extension/gdextension_spx_ext.h"
+#include "core/extension/gdextension.h"
+#include "core/extension/gdextension_compat_hashes.h"
+#include "core/variant/variant.h"
+#include "core/extension/gdextension_interface.h"
+#include "scene/main/window.h"
+#include "core/extension/spx_engine.h"
+{{ $view := . -}}
+
+{{ range $i, $name := $view.Mangers -}}
+#include "core/extension/spx_{{$name}}_mgr.h"
+{{ end }}
+#include <emscripten.h>
+
+{{- range $i, $name := $view.Mangers }}
+#define {{$name}}Mgr SpxEngine::get_singleton()->get_{{$name}}()
+{{- end }}
+
+
+extern "C" {
+
+{{- range $i, $f := $view.Ast.CollectGDExtensionInterfaceFunctions -}}
+{{- if isManagerMethod $f }}
+EMSCRIPTEN_KEEPALIVE
+void gd{{ loadProcAddressName $f.Name }}(
+	{{- range $j, $arg := $f.Arguments -}}
+		{{ $arg.CStylePtrString $j }}
+		{{- if ne $j (sub (len $f.Arguments) 1) -}}, {{- end -}}
+	{{- end -}}
+	{{ if ne "void" $f.ReturnType.CStyleString -}} 
+	{{- if ne 0 (len $f.Arguments) -}}, {{- end -}}	{{$f.ReturnType.CStyleString }}* ret_val
+	{{- end -}}
+) {
+	{{ if ne "void" $f.ReturnType.CStyleString -}} *ret_val = {{- end }} {{ getManagerName $f.Name}}Mgr->
+	{{- trimPrefix (trimPrefix (trimPrefix (loadProcAddressName $f.Name) "spx_") (getManagerName $f.Name)) "_" }}(
+		{{- range $j, $arg := $f.Arguments }}
+			{{- if gt $j 0 }}, {{ end -}}
+			{{- $arg.ResolvedPtrName $j }}
+		{{- end -}}
+	);
+}
+{{- end -}}
+{{ end }}
+
+}

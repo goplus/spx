@@ -5,7 +5,7 @@ import (
 
 	"github.com/goplus/spx/internal/engine"
 	"github.com/goplus/spx/internal/enginewrap"
-	gdx "github.com/realdream-ai/gdspx/pkg/engine"
+	gdx "github.com/goplus/spx/pkg/gdspx/pkg/engine"
 )
 
 // copy these variable to any namespace you want

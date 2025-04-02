@@ -33,4 +33,4 @@ mv.sh
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
-/gdspx
+/godot
