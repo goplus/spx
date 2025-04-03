@@ -29,8 +29,7 @@ How to run games powered by Go+ spx engine?
 	make init
 
 	# run the demo
-	cd tutorial/00-Hello
-	spx run .
+	spx run -path tutorial/00-Hello
 	```
 * Build a game and run.
   * cd `game-root-dir`

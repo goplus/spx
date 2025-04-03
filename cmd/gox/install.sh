@@ -10,11 +10,19 @@ if [ "$OS" = "Windows_NT" ]; then
 fi
 
 go build -o $appname
-mv $appname $(go env GOPATH)/bin/
+if [ "$OS" = "Windows_NT" ]; then
+    IFS=';' read -r first_gopath _ <<< "$(go env GOPATH)"
+    GOPATH="$first_gopath"
+else
+    IFS=':' read -r first_gopath _ <<< "$(go env GOPATH)"
+    GOPATH="$first_gopath"
+fi
+
+mv $appname $GOPATH/bin/
 
 if [ "$1" = "--web" ]; then
     cd ../igox || exit
     go mod tidy
-    GOOS=js GOARCH=wasm go build -o $(go env GOPATH)/bin/igdspx.wasm
+    GOOS=js GOARCH=wasm go build -o $GOPATH/bin/igdspx.wasm
     cd ../gox || exit
 fi

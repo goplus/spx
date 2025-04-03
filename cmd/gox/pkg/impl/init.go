@@ -1,7 +1,6 @@
 package impl
 
 import (
-	"go/build"
 	"os"
 	"os/exec"
 	"path"
@@ -38,7 +37,7 @@ func downloadPack(dstDir, tagName, postfix string) error {
 	return err
 }
 
-func CheckAndGetAppPath(tag, version string) (string, string, error) {
+func CheckAndGetAppPath(gobinDir, tag, version string) (string, string, error) {
 	binPostfix := ""
 	if runtime.GOOS == "windows" {
 		binPostfix = "_win.exe"
@@ -48,10 +47,6 @@ func CheckAndGetAppPath(tag, version string) (string, string, error) {
 		binPostfix = "_linux"
 	}
 
-	gopath := os.Getenv("GOPATH")
-	if gopath == "" {
-		gopath = build.Default.GOPATH
-	}
 	tagName := tag + version
 	dstFileName := tagName + binPostfix
 	gdx, err := exec.LookPath(dstFileName)
@@ -61,7 +56,7 @@ func CheckAndGetAppPath(tag, version string) (string, string, error) {
 		}
 	}
 
-	dstDir := gopath + "/bin"
+	dstDir := gobinDir
 	CmdPath := path.Join(dstDir, dstFileName)
 	info, err := os.Stat(CmdPath)
 	if os.IsNotExist(err) {

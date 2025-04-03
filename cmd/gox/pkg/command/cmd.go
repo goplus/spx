@@ -4,6 +4,7 @@ import (
 	"embed"
 	_ "embed"
 	"fmt"
+	"go/build"
 	"log"
 	"os"
 	"path/filepath"
@@ -22,6 +23,7 @@ type CmdTool struct {
 	GoDir          string // Absolute path to the Go directory
 	TargetDir      string // Target directory for operations
 	WebDir         string // Web directory for web operations
+	GoBinPath      string
 
 	// Resource files
 	ProjectFS    embed.FS // Embedded project filesystem
@@ -47,6 +49,12 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 	cmd.Version = version
 	cmd.ProjectFS = fs
 	cmd.ProjectRelPath = dstRelDir
+	gopath := os.Getenv("GOPATH")
+	if gopath == "" {
+		gopath = build.Default.GOPATH
+	}
+	paths := filepath.SplitList(gopath)
+	cmd.GoBinPath, _ = filepath.Abs(filepath.Join(paths[0], "bin"))
 
 	cmd.Args = ExtraArgs{}
 	// Check if we have enough arguments
@@ -101,7 +109,7 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 	cmd.WebDir, _ = filepath.Abs(filepath.Join(cmd.ProjectDir, ".builds", "web"))
 
 	// Setup environment
-	err = cmd.SetupEnv(version, fs, fsRelDir, cmd.TargetDir, dstRelDir)
+	err = cmd.SetupEnv(version, fs, fsRelDir, dstRelDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to setup environment: %v\n", err)
 		return err

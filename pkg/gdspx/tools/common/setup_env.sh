@@ -4,11 +4,18 @@ SCRIPT_DIR="$SCRIPT_DIR/.."
 
 setup_global_variables() {
     local DEFAULT_PLATFORM=""
-    
+
     # Define Godot version
-    VERSION=2.0.1
+    VERSION=$(cat $SCRIPT_DIR/version)
     ENGINE_VERSION=4.2.2.stable
-    GOPATH=$(go env GOPATH)
+    if [ "$OS" = "Windows_NT" ]; then
+        IFS=';' read -r first_gopath _ <<< "$(go env GOPATH)"
+        GOPATH="$first_gopath"
+    else
+        IFS=':' read -r first_gopath _ <<< "$(go env GOPATH)"
+        GOPATH="$first_gopath"
+    fi
+
     PROJ_DIR=$SCRIPT_DIR/..
     ENGINE_DIR=$PROJ_DIR/godot
 
@@ -48,7 +55,59 @@ setup_global_variables() {
     if [[ "$(uname -m)" == "aarch64" || "$(uname -m)" == "arm64" ]]; then
         export ARCH="arm64"
     fi
-    
+    if [[ "$(uname -m)" == "i386" || "$(uname -m)" == "i686" ]]; then
+        export ARCH="x86_32"
+    fi
+
+    curOS=""
+    case "$(uname -s)" in
+        Linux*)     curOS="linux" ;;
+        Darwin*)    curOS="macOS" ;;
+        CYGWIN*|MINGW*|MSYS*) curOS="windows" ;;
+        *)          curOS="Unknown" ;;
+    esac
+
+    ARCH=""
+    case "$curOS" in
+        "linux"|"macOS")
+            RAW_ARCH=$(uname -m)
+            case "$RAW_ARCH" in
+                x86_64)     ARCH="x86_64" ;;
+                i386|i686)  ARCH="x86_32" ;;
+                aarch64)    ARCH="arm64" ;;
+                armv7l|arm) ARCH="arm32" ;;
+                *)
+                    if [ "$OS" = "macOS" ]; then
+                        if sysctl -n machdep.cpu.brand_string | grep -qi "Apple"; then
+                            ARCH="arm64"
+                        else
+                            ARCH="$RAW_ARCH"
+                        fi
+                    else
+                        ARCH="$RAW_ARCH"
+                    fi
+                    ;;
+            esac
+            ;;
+
+        "windows")
+            if [ "$PROCESSOR_ARCHITECTURE" = "AMD64" ] || [ "$PROCESSOR_ARCHITEW6432" = "AMD64" ]; then
+                ARCH="x86_64"
+            elif [ "$PROCESSOR_ARCHITECTURE" = "x86" ]; then
+                ARCH="x86_32"
+            elif [ "$PROCESSOR_ARCHITECTURE" = "ARM64" ]; then
+                ARCH="arm64"
+            else
+                ARCH="Unknown"
+            fi
+            ;;
+
+        *)
+            ARCH="Unknown"
+            ;;
+    esac
+
+
     # Set default platform if not already set
     if [ -z "$PLATFORM" ]; then
         export PLATFORM="$DEFAULT_PLATFORM"
@@ -57,9 +116,6 @@ setup_global_variables() {
     echo "Platform: $PLATFORM"
     echo "Architecture: $ARCH"
     echo "Destination directory: $TEMPLATE_DIR"
-
-
-
     return 0
 }
 
@@ -99,14 +155,11 @@ prepare_env() {
 
 
     scons --version
-
+    download_engine
     if [[ "$(uname)" == "Darwin" ]]; then
         echo "install macos vulkan sdk"
         $ENGINE_DIR/misc/scripts/install_vulkan_sdk_macos.sh
     fi 
-    download_engine
-
-
 }
 
 
@@ -229,8 +282,3 @@ ensure_emsdk() {
     fi
 }
 
-
-
-
-# Call the function
-prepare_env
