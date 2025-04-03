@@ -3,7 +3,6 @@ package command
 import (
 	"errors"
 	"fmt"
-	"go/build"
 	"log"
 	"os"
 	"os/exec"
@@ -67,8 +66,7 @@ func (pself *CmdTool) ExportWeb() error {
 	util.SetupFile(false, path.Join(dir, ".gitignore"), pself.GitignoreTxt)
 	os.Rename(path.Join(dir, ".gitignore.txt"), path.Join(dir, ".gitignore"))
 
-	gopath := build.Default.GOPATH
-	editorZipPath := path.Join(gopath, "bin", ENV_NAME+pself.Version+"_web.zip")
+	editorZipPath := path.Join(pself.GoBinPath, ENV_NAME+pself.Version+"_web.zip")
 	dstPath := path.Join(pself.ProjectDir, ".builds/web")
 	os.MkdirAll(dstPath, os.ModePerm)
 	if util.IsFileExist(editorZipPath) {

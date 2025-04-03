@@ -1,10 +1,14 @@
 #!/bin/bash
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# copy version file
+cp -f $SCRIPT_DIR/../../../cmd/gox/template/version $SCRIPT_DIR
 
 EDITOR_ONLY=false
 PLATFORM=""
-while getopts "p:e" opt; do
+DOWNLOAD=false
+while getopts "p:ed" opt; do
     case "$opt" in
+        d) DOWNLOAD=true ;;
         p) PLATFORM="$OPTARG" ;;
         e) EDITOR_ONLY=true ;;
         *) echo "Usage: $0 [-p platform] [-e]"; exit 1 ;;
@@ -14,7 +18,8 @@ done
 source $SCRIPT_DIR/common/setup_env.sh
 cd $PROJ_DIR
 
-build_target() {
+build_template() {
+    prepare_env
     local engine_dir=$1
     local platform=$2
     local template_dir=$3
@@ -115,12 +120,56 @@ build_target() {
         echo "Unknown platform"
     fi
 }
+download_editor() {
+    setup_global_variables
+    local platform=$PLATFORM
+    local arch=$ARCH
+    local tmp_dir=$SCRIPT_DIR/bin
+    local dst_dir=$GOPATH/bin
+    local url_prefix="https://github.com/goplus/godot/releases/download/spx$VERSION/"
+    mkdir -p "$tmp_dir"
+    mkdir -p "$dst_dir"
 
-if [ "$EDITOR_ONLY" = true ]; then
+    if [ "$platform" = "linux" ]; then
+        zip_name="editor-linux-"$arch".zip"
+        url=$url_prefix$zip_name
+        curl -L -o "$tmp_dir/$zip_name" "$url" || exit
+        unzip -o "$tmp_dir/$zip_name" -d "$tmp_dir" > /dev/null 2>&1  || exit
+        rm -rf "$tmp_dir/$zip_name"
+
+        cp -f "$tmp_dir/godot.linuxbsd.editor.$arch" "$dst_dir/gdspx$VERSION""_linux"  || exit
+        rm -rf "$tmp_dir/godot.linuxbsd.editor.$arch"
+
+    elif [ "$platform" = "windows" ]; then
+        zip_name="editor-windows-"$arch".zip"
+        url=$url_prefix$zip_name
+        curl -L -o "$tmp_dir/$zip_name" "$url" || exit
+        unzip -o "$tmp_dir/$zip_name" -d "$tmp_dir" > /dev/null 2>&1  || exit
+        rm -rf "$tmp_dir/$zip_name"
+        cp -f "$tmp_dir/godot.windows.editor.$arch.exe" "$dst_dir/gdspx$VERSION""_win.exe"  || exit
+        rm -rf "$tmp_dir/godot.windows.editor.$arch.exe"
+
+    elif [ "$platform" = "macos" ]; then
+        zip_name="editor-macos-universal.zip"
+        url=$url_prefix$zip_name
+        curl -L -o "$tmp_dir/$zip_name" "$url" || exit
+        unzip -o "$tmp_dir/$zip_name" -d "$tmp_dir" > /dev/null 2>&1  || exit
+        rm -rf "$tmp_dir/$zip_name"
+        
+        cp -f "$tmp_dir/Godot.app/Contents/MacOS/Godot" "$dst_dir/gdspx$VERSION""_darwin"  || exit
+        rm -rf "$tmp_dir/Godot.app"
+    else 
+        echo "Unsupported platform for editor download: $platform"
+        exit 1
+    fi
+}
+
+build_editor(){
+    prepare_env
     cd $ENGINE_DIR
     if [ "$PLATFORM" == "web" ]; then
-        build_target "$ENGINE_DIR" "$PLATFORM" "$TEMPLATE_DIR"
-        exit 0
+        build_template "$ENGINE_DIR" "$PLATFORM" "$TEMPLATE_DIR"
+        return 0
     fi
 
     if [ "$OS" = "Windows_NT" ]; then
@@ -138,8 +187,23 @@ if [ "$EDITOR_ONLY" = true ]; then
     else
         cp bin/godot.macos.editor.dev.$ARCH $dstBinPath"_darwin"
     fi
-    exit 0
-fi 
+}
 
-build_target "$ENGINE_DIR" "$PLATFORM" "$TEMPLATE_DIR"
+
+
+# main logic
+if [ "$DOWNLOAD" = true ]; then
+    # download editor
+    download_editor || exit
+elif [ "$EDITOR_ONLY" = true ]; then
+    # build editor
+    build_editor || exit
+else 
+    # build template
+    build_template "$ENGINE_DIR" "$PLATFORM" "$TEMPLATE_DIR" || exit
+fi 
 cd $PROJ_DIR
+
+echo "Environment initialized successfully!"
+echo "Try the following command to run the demo:"
+echo "spx run -path tutorial/00-Hello"

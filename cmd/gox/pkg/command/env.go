@@ -4,7 +4,6 @@ import (
 	"embed"
 	"errors"
 	"fmt"
-	"go/build"
 	"os"
 	"os/exec"
 	"path"
@@ -27,6 +26,10 @@ func (cmd *CmdTool) setupPaths(dstRelDir string) error {
 	if err != nil {
 		return fmt.Errorf("failed to resolve target directory: %w", err)
 	}
+
+	os.Chdir(cmd.TargetDir)
+	cmd.TargetDir = "."
+	cmd.Args.Path = &cmd.TargetDir
 
 	cmd.ProjectDir, err = filepath.Abs(path.Join(cmd.TargetDir, dstRelDir))
 	if err != nil {
@@ -60,9 +63,8 @@ func (pself *CmdTool) PrepareEnv(fsRelDir, dstDir string) {
 }
 
 // SetupEnv sets up the environment for the command
-func (pself *CmdTool) SetupEnv(version string, fs embed.FS, fsRelDir string, targetDir string, projectRelPath string) (err error) {
+func (pself *CmdTool) SetupEnv(version string, fs embed.FS, fsRelDir string, projectRelPath string) (err error) {
 	// Update the CmdTool struct fields
-	pself.TargetDir = targetDir
 	pself.ProjectFS = fs
 	pself.Version = version
 	pself.ProjectRelPath = projectRelPath
@@ -78,9 +80,9 @@ func (pself *CmdTool) SetupEnv(version string, fs embed.FS, fsRelDir string, tar
 		return errors.New("gdx requires an amd64, or an arm64 system")
 	}
 	// Update the CmdTool struct fields
-	pself.BinPostfix, pself.CmdPath, err = impl.CheckAndGetAppPath(ENV_NAME, pself.Version)
+	pself.BinPostfix, pself.CmdPath, err = impl.CheckAndGetAppPath(pself.GoBinPath, ENV_NAME, pself.Version)
 	if err != nil {
-		return fmt.Errorf(ENV_NAME+"requires engine to be installed as a binary at $GOPATH/bin/: %w", err)
+		return fmt.Errorf(ENV_NAME+"requires engine to be installed as a binary at %s: %w", pself.GoBinPath, err)
 	}
 	pself.ProjectDir, _ = filepath.Abs(path.Join(pself.TargetDir, pself.ProjectRelPath))
 	pself.GoDir, _ = filepath.Abs(pself.ProjectDir + "/go")
@@ -105,12 +107,7 @@ func (pself *CmdTool) SetupEnv(version string, fs embed.FS, fsRelDir string, tar
 
 // getWasmPath returns the path to the wasm file
 func (pself *CmdTool) getWasmPath() string {
-	gopath := os.Getenv("GOPATH")
-	if gopath == "" {
-		gopath = build.Default.GOPATH
-	}
-	targetPath := path.Join(gopath, "bin")
-	filePath := path.Join(targetPath, "igdspx.wasm")
+	filePath := path.Join(pself.GoBinPath, "igdspx.wasm")
 	return filePath
 }
 

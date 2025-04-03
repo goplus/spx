@@ -10,6 +10,11 @@ fmt:
 # Build templates
 templates:
 	./pkg/gdspx/tools/build_engine.sh -a
+
+# download engines 
+download:
+	./pkg/gdspx/tools/build_engine.sh -e -d
+
 # Build current platform's engine
 pc:
 	./pkg/gdspx/tools/build_engine.sh -e
@@ -42,7 +47,7 @@ cmdweb:
 	cd ./cmd/gox/ && ./install.sh --web && cd $(CURRENT_PATH) 
 
 init:
-	make cmd && make pc
+	make cmd && make download
 
 %:
 	@:

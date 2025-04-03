@@ -20,3 +20,6 @@ internal/ffi/_temp_output*.h
 /sb2spx
 *.DS_Store
 /logs
+/version
+/bin
+/tools/version
