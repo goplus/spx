@@ -1094,10 +1094,12 @@ func (p *SpriteImpl) Glide__0(x, y float64, secs float64) {
 		log.Println("Glide", p.name, x, y, secs)
 	}
 	x0, y0 := p.getXY()
+	from := mathf.NewVec2(x0, y0)
+	to := mathf.NewVec2(x, y)
 	ani := &aniConfig{
 		Duration: secs,
-		From:     mathf.NewVec2(x0, y0),
-		To:       mathf.NewVec2(x, y),
+		From:     &from,
+		To:       &to,
 		AniType:  aniTypeGlide,
 	}
 	ani.IsLoop = true
