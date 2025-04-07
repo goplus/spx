@@ -23,7 +23,7 @@ pcpack:
 	./pkg/gdspx/tools/build_engine.sh
 # Build web engine
 web: 
-	./pkg/gdspx/tools/build_engine.sh -p web -e
+	make cmdweb && ./pkg/gdspx/tools/build_engine.sh -p web -e
 # Build web engine template
 webpack: 
 	./pkg/gdspx/tools/build_engine.sh -p web
