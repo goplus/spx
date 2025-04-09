@@ -75,7 +75,7 @@ func newMonitor(g reflect.Value, v specsp) (*Monitor, error) {
 	mode := int(v["mode"].(float64))
 	color, err := mathf.NewColorAny(getSpcspVal(v, "color"))
 	if err != nil {
-		color = RGBA(0x28, 0x9c, 0xfc, 0xff)
+		color = toMathfColor(RGBA(0x28, 0x9c, 0xfc, 0xff))
 	}
 	label := v["label"].(string)
 	x := v["x"].(float64)
