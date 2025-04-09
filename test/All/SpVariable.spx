@@ -1,0 +1,14 @@
+
+import "fmt"
+import "math"
+
+
+
+
+onMsg "testVariable", => {
+	onTestStart(this)	
+
+
+
+    onTestDone(this)
+}

@@ -1094,6 +1094,7 @@ type BackdropName string
 func (p *Game) startBackdrop(backdrop interface{}, wait bool) {
 	if p.goSetCostume(backdrop) {
 		p.windowWidth_ = 0
+		p.setupBackdrop()
 		p.doWindowSize()
 		p.doWhenBackdropChanged(BackdropName(p.getCostumeName()), wait)
 	}

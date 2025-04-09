@@ -1,0 +1,84 @@
+
+import "fmt"
+import "math"
+
+
+
+onMsg "testSensing", => {
+	onTestStart(this)	
+
+	setXYpos(10, 10)
+	Red.SetXYpos(0, 0)
+	Red.SetSize(1)
+
+	startOffset := -100.0
+	mvSpeed := 10.0
+	// 1. Sprite::Touching	
+	tt := 0.0
+	for tt < 200 {
+		tt += deltaTime()
+		setXpos startOffset * mvSpeed
+		//if Touching "Red" {
+		//	say "touching"
+		//}
+		waitNextFrame
+	}
+
+	// 2. Sprite::TouchingColor	
+	tt = 0
+	for tt < 200 {
+		tt += deltaTime()
+		setXpos startOffset * mvSpeed
+		//if isTouchingColor "Red" {
+			say "touching color"
+		//}
+		waitNextFrame
+	}
+
+	// 3. Sprite::DistanceTo	
+	Red.SetXYpos(0, 0)
+	setXYpos(30, 40)
+	dist := distanceTo("Red")
+	assertFloat(dist, 50, "Sprite::DistanceTo")
+	// 4. Sprite::Ask	
+	ask "test ask"
+	// 5. Game::Answer
+	say answer()	
+	// 6. Game::KeyPressed	
+	say "test key pressed A"
+	for !KeyPressed(KeyA) {
+		waitNextFrame
+	}
+	say "key A pressed"
+	say "please click the red sprite"
+	// 7. Game::MousePressed	
+	for !MousePressed() {	
+		waitNextFrame
+	}
+	say "mouse clicked"
+
+	Red.SetXYpos(0, 0)
+	setXYpos(100, 200)
+	// 8. Game::MouseX	
+	mouseX := mouseX()
+	assertPosWithErr(this, mouseX, 0, 10, "Game::MouseX")
+	// 9. Game::MouseY	
+	mouseY := mouseY()
+	assertPosWithErr(this, mouseY, 0, 10, "Game::MouseY")
+	// 10. Game::Timer	
+	assert(timer() > 1,  "Game::Timer")
+	// 11. Game::ResetTimer
+	resetTimer()
+	assertFloat(timer(), 0.001, "Game::ResetTimer")	
+	// 12. Game::BackdropIndex	
+	assertFloat(float64(backdropIndex()), 0, "Game::BackdropIndex")
+	
+	// Game::Loudness	
+	// Game::Username	
+	// color [ ] is touching [ ]		
+	// set drag mode [draggable ▼]	
+	// current [year ▼]	
+	// days since 2000		
+
+    onTestDone(this)
+}

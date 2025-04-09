@@ -1,0 +1,19 @@
+{
+  "costumes": [
+      {
+        "bitmapResolution": 2,
+        "name": "red",
+        "path": "red.png",
+        "x": 8,
+        "y": 8
+      }
+    ],
+  "costumeIndex": 0,
+  "heading": 90,
+  "isDraggable": false,
+  "rotationStyle": "normal",
+  "size": 4,
+  "visible": true,
+  "x": 0,
+  "y": 0
+}

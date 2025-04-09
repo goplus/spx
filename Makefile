@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := pc
 
 CURRENT_PATH=$(shell pwd)
-.PHONY: engine init initweb fmt gen upload templates cmd cmdweb
+.PHONY: engine init initweb fmt gen upload templates cmd cmdweb test
 
 # Format code
 fmt:
@@ -45,6 +45,9 @@ cmd:
 
 cmdweb:
 	cd ./cmd/gox/ && ./install.sh --web && cd $(CURRENT_PATH) 
+
+test:
+	cd test/All && spx run . && cd $(CURRENT_PATH) 
 
 init:
 	make cmd && make download

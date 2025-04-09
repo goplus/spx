@@ -1,0 +1,95 @@
+
+import "fmt"
+import "math"
+
+
+onMsg "testMotion", => {
+    onTestStart(this)
+
+	// 1. Sprite::SetHeading
+	setHeading 90
+	assertDir(this, 90, "Sprite::SetHeading")
+
+	// 2. Sprite::SetXYpos
+	setXYpos(10, 10)
+	assertPos(this,10, 10, "Sprite::SetXYpos")
+
+	// 3. Sprite::Move
+	move 100
+	assertPos(this,110, 10, "Sprite::Move")
+	
+	// 4. Sprite::Turn
+	turn 90
+	assertDir(this, 180, "Sprite::Turn")
+	setXYpos(0, 0)
+	move 100
+	assertPos(this,0, -100, "Sprite::Turn && Move")
+
+	// 5. Sprite::Goto
+	goto "Red"
+	assertPos(this,0, 0, "Sprite::Goto")
+
+	// 6. Sprite::Glide
+	glide(100, 100, 0.5)
+	wait 0.1
+	assertPos(this,100, 100, "Sprite::Glide")
+	
+	// 7. Sprite::TurnTo
+	turnTo "Red"
+	wait 0.1
+	assertDir(this, -135, "Sprite::TurnTo")
+	
+	// reset position
+	setXYpos(0, 0)
+	wait 0.1
+	assertPos(this,0, 0, "Reset Position")
+
+	// 8. Sprite::ChangeXpos
+	changeXpos 100
+	wait 0.1
+	assertPos(this,100, 0, "Sprite::ChangeXpos")
+
+	// 9. Sprite::SetXpos
+	setXpos 100
+	wait 0.1
+	assertPos(this,100, 0, "Sprite::SetXpos")
+
+	// 10. Sprite::ChangeYpos
+	changeYpos -100
+	wait 0.1
+	assertPos(this,100, -100, "Sprite::ChangeYpos")
+
+	// 11. Sprite::SetYpos
+	setYpos 100
+	wait 0.1
+	assertPos(this,100, 100, "Sprite::SetYpos")
+	
+	
+	// 12. Sprite::Xpos
+	assertFloat(xpos(), 100, "Sprite::Xpos")
+
+	// 13. Sprite::Ypos
+	assertFloat(ypos(), 100, "Sprite::Ypos")
+
+	// 14. Sprite::Heading
+	assertDir(this, -135, "Sprite::Heading")
+	
+	// 15. Sprite::SetRotationStyle
+	wait 0.1
+	setRotationStyle LeftRight // render face to right, but the direction is still -135
+	assertDir(this, -135, "Sprite::setRotationStyle LeftRight")
+
+	// 16. Sprite::BounceOffEdge
+	wait 0.1
+	setRotationStyle Normal
+	setHeading -90
+	wait 0.1
+	setXpos -300
+	wait 0.3
+	bounceOffEdge()
+	assertDir(this, 90, "Sprite::BounceOffEdge")
+
+
+
+    onTestDone(this)
+}

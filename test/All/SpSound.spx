@@ -1,0 +1,69 @@
+
+
+import "fmt"
+import "math"
+
+
+
+
+onMsg "testSound", => {
+	onTestStart(this)	
+
+	// 1. Sprite::Play (wait=true)	
+	say "test play sound (wait=true)"
+	play "sound1", true
+	say "test play sound done (wait=true)"
+	wait 0.1
+	// 2. Sprite::Play (wait=false)
+	say "test play sound (wait=false)"	
+	wait 0.1
+	play "sound1", false
+	say "test play sound done (wait=false)"
+	wait 0.1
+	// 3. Game::StopAllSounds	
+	stopAllSounds()
+
+	// 4. Sprite::ChangeVolume	
+	say fmt.Sprintf("test change sound volume : 150 , current %v", volume())
+	changeVolume 50
+	assertFloat(volume(), 150, "Sprite::ChangeVolume")
+	play "sound1", true
+	wait 1
+	// 5. Sprite::SetVolume	
+	say "test set sound volume : 100"
+	setVolume 100
+	assertFloat(volume(), 100, "Sprite::SetVolume")
+	play "sound1", true
+	// 6. Sprite::Volume
+	assertFloat(volume(), 100, "Sprite::Volume")
+
+	// 7. Game::ChangeEffect	
+	say "test change sound effect : pitch (150)"
+	changeSoundEffect SoundPitchEffect, 50  // pitch 150
+	play "sound1", true
+	// 8. Game::SetEffect	
+	say "test set sound effect : pitch (150)"
+	setSoundEffect SoundPitchEffect, 50  // pitch 50
+	play "sound1", true
+	// 9. Game::ClearSoundEffects	
+	say "test clear sound effect : pitch (0)"
+	play "sound1", true
+
+
+	say "test sound effect : pan"
+	// 10. Game::ChangeEffect	
+	say "test change sound effect : pan (-100) left"
+	changeSoundEffect SoundPanEffect, -100  // left
+	play "sound1", true
+	// 11. Game::SetEffect	
+	say "test set sound effect : pan (100) right"
+	setSoundEffect SoundPanEffect, 100  // right
+	play "sound1", true
+	// 12. Game::ClearSoundEffects	
+	say "test clear sound effect : pan (0) normal"
+	play "sound1", true
+
+
+
+    onTestDone(this)
+}

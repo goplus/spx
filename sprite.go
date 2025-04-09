@@ -843,7 +843,8 @@ func doAnimation(p *SpriteImpl, info *animState) {
 		pre_x, pre_y := p.x, p.y
 		pre_direction := p.direction
 		for timer < duration {
-			percent := timer / duration
+			timer += time.DeltaTime()
+			percent := mathf.Clamp01f(timer / duration)
 			switch info.AniType {
 			case aniTypeMove:
 				src, _ := tools.GetFloat(info.From)
@@ -866,7 +867,6 @@ func doAnimation(p *SpriteImpl, info *animState) {
 				break
 			}
 			engine.WaitNextFrame()
-			timer += time.DeltaTime()
 		}
 	}
 	if !info.IsCanceled {
