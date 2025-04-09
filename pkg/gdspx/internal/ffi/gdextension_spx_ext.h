@@ -264,7 +264,7 @@ typedef void (*GDExtensionSpxPlatformGetPersistantDataDir)(GdString* ret_value);
 typedef void (*GDExtensionSpxPlatformSetPersistantDataDir)(GdString path);
 typedef void (*GDExtensionSpxPlatformIsInPersistantDataDir)(GdString path, GdBool* ret_value);
 // SpxRes
-typedef void (*GDExtensionSpxResCreateAnimation)(GdString sprite_type_name,GdString anim_name, GdString context, GdInt fps, GdBool is_altas);
+typedef void (*GDExtensionSpxResCreateAnimation)(GdString* sprite_type_name,GdString* anim_name, GdString* context, GdInt* fps, GdBool* is_altas);
 typedef void (*GDExtensionSpxResSetLoadMode)(GdBool is_direct_mode);
 typedef void (*GDExtensionSpxResGetLoadMode)(GdBool* ret_value);
 typedef void (*GDExtensionSpxResGetBoundFromAlpha)(GdString p_path, GdRect2* ret_value);

@@ -18,6 +18,7 @@ package ffi
 // #include <stdio.h>
 // #include <stdlib.h>
 import "C"
+import "unsafe"
 
 // C type aliases
 // enums
@@ -867,21 +868,19 @@ func CallPlatformIsInPersistantDataDir(
 	return (GdBool)(ret_val)
 }
 func CallResCreateAnimation(
-	sprite_type_name GdString,
-	anim_name GdString,
-	context GdString,
-	fps GdInt,
-	is_altas GdBool,
+	sprite_type_name *GdString,
+	anim_name *GdString,
+	context *GdString,
+	fps *GdInt,
+	is_altas *GdBool,
 ) {
-	arg0 := (C.GDExtensionSpxResCreateAnimation)(api.SpxResCreateAnimation)
-	arg1GdString = (C.GdString)(sprite_type_name)
-	arg2GdString = (C.GdString)(anim_name)
-	arg3GdString = (C.GdString)(context)
-	arg4GdInt = (C.GdInt)(fps)
-	arg5GdBool = (C.GdBool)(is_altas)
-
-	C.cgo_callfn_GDExtensionSpxResCreateAnimation(arg0, arg1GdString, arg2GdString, arg3GdString, arg4GdInt, arg5GdBool)
-
+	arg0 := (C.GDExtensionSpxResCreateAnimation)(builtinAPI.CreateAnimation)
+	arg1 := (C.GdString)(unsafe.Pointer(sprite_type_name))
+	arg2 := (C.GdString)(unsafe.Pointer(anim_name))
+	arg3 := (C.GdString)(unsafe.Pointer(context))
+	arg4 := (C.GdInt)(unsafe.Pointer(fps))
+	arg5 := (C.GdBool)(unsafe.Pointer(is_altas))
+	C.callSpxResCreateAnimation(arg0, arg1, arg2, arg3, arg4, arg5)
 }
 func CallResSetLoadMode(
 	is_direct_mode GdBool,

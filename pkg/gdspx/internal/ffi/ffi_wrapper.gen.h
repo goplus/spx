@@ -198,7 +198,7 @@ void cgo_callfn_GDExtensionSpxPlatformSetPersistantDataDir(const GDExtensionSpxP
 void cgo_callfn_GDExtensionSpxPlatformIsInPersistantDataDir(const GDExtensionSpxPlatformIsInPersistantDataDir fn, GdString path, GdBool* ret_val) {
 	fn(path,ret_val);
 }
-void cgo_callfn_GDExtensionSpxResCreateAnimation(const GDExtensionSpxResCreateAnimation fn, GdString sprite_type_name, GdString anim_name, GdString context, GdInt fps, GdBool is_altas) {
+void cgo_callfn_GDExtensionSpxResCreateAnimation(const GDExtensionSpxResCreateAnimation fn, GdString* sprite_type_name, GdString* anim_name, GdString* context, GdInt* fps, GdBool* is_altas) {
 	fn(sprite_type_name, anim_name, context, fps, is_altas);
 }
 void cgo_callfn_GDExtensionSpxResSetLoadMode(const GDExtensionSpxResSetLoadMode fn, GdBool is_direct_mode) {
