@@ -27,25 +27,25 @@ build_template() {
     echo "save to $template_dir"
     cd $engine_dir || exit
     if [ "$platform" = "linux" ]; then
-        scons platform=linuxbsd target=template_debug
-        scons platform=linuxbsd target=template_release
+        scons platform=linuxbsd target=template_debug optimize=size vulkan=no use_volk=no openxr=no deprecated=no minizip=no
+        scons platform=linuxbsd target=template_release optimize=size debug_symbols=no vulkan=no use_volk=no openxr=no deprecated=no minizip=no
         cp bin/godot.linuxbsd.template_* "$template_dir/"
         #mv "$template_dir/godot.linuxbsd.template_debug"*  "$template_dir/linux_debug.$ARCH"
         #mv "$template_dir/godot.linuxbsd.template_release"*  "$template_dir/linux_release.$ARCH"
 
     elif [ "$platform" = "windows" ]; then
-        scons platform=windows target=template_debug arch=x86_32
-        scons platform=windows target=template_release arch=x86_32
-        scons platform=windows target=template_debug arch=x86_64
-        scons platform=windows target=template_release arch=x86_64
+        scons platform=windows target=template_debug arch=x86_32 optimize=size vulkan=no use_volk=no openxr=no deprecated=no minizip=no
+        scons platform=windows target=template_release arch=x86_32 optimize=size debug_symbols=no vulkan=no use_volk=no openxr=no deprecated=no minizip=no
+        scons platform=windows target=template_debug arch=x86_64 optimize=size vulkan=no use_volk=no openxr=no deprecated=no minizip=no
+        scons platform=windows target=template_release arch=x86_64 optimize=size debug_symbols=no vulkan=no use_volk=no openxr=no deprecated=no minizip=no 
         echo "Destination binary path: $template_dir"
         cp bin/windows*.exe "$template_dir/"
 
     elif [ "$platform" = "macos" ]; then
-        scons platform=macos target=template_debug arch=arm64
-        scons platform=macos target=template_release arch=arm64
-        scons platform=macos target=template_debug arch=x86_64
-        scons platform=macos target=template_release arch=x86_64 generate_bundle=yes
+        scons platform=macos target=template_debug arch=arm64 optimize=size vulkan=no use_volk=no openxr=no deprecated=no minizip=no
+        scons platform=macos target=template_release arch=arm64 optimize=size debug_symbols=no vulkan=no use_volk=no openxr=no deprecated=no minizip=no
+        scons platform=macos target=template_debug arch=x86_64 optimize=size vulkan=no use_volk=no openxr=no deprecated=no minizip=no
+        scons platform=macos target=template_release arch=x86_64 generate_bundle=yes optimize=size debug_symbols=no vulkan=no use_volk=no openxr=no deprecated=no minizip=no
 
         echo "lipo ..."
         lipo -create bin/godot.macos.template_release.x86_64 bin/godot.macos.template_release.arm64 -output bin/godot.macos.template_release.universal
@@ -105,7 +105,7 @@ build_template() {
         fi 
 
         # build web templates
-        scons platform=web target=template_release threads=no
+        scons platform=web target=template_release threads=no optimize=size debug_symbols=no vulkan=no use_volk=no openxr=no deprecated=no minizip=no
         echo "Wait zip file to finished ..."
         sleep 2
         cp bin/godot.web.template_release.wasm32.zip bin/web_dlink_debug.zip
