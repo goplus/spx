@@ -693,6 +693,7 @@ type clicker interface {
 	threadObj
 	doWhenClick(this threadObj)
 	getProxy() *engine.Sprite
+	Visible() bool
 }
 
 func (p *Game) doWhenLeftButtonDown(ev *eventLeftButtonDown) {
@@ -703,7 +704,7 @@ func (p *Game) doWhenLeftButtonDown(ev *eventLeftButtonDown) {
 		item := tempItems[count-i-1]
 		if o, ok := item.(clicker); ok {
 			syncSprite := o.getProxy()
-			if syncSprite != nil {
+			if syncSprite != nil && o.Visible() {
 				isClicked := spriteMgr.CheckCollisionWithPoint(syncSprite.GetId(), point, true)
 				if isClicked && p.inputs.canTriggerClickEvent(syncSprite.GetId()) {
 					o.doWhenClick(o)
