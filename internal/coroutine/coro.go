@@ -2,13 +2,16 @@ package coroutine
 
 import (
 	"errors"
+	"fmt"
+	"reflect"
 	"runtime"
-	"runtime/debug"
+	sdebug "runtime/debug"
 	"sync"
 	"sync/atomic"
 	stime "time"
 	"unsafe"
 
+	"github.com/goplus/spx/internal/debug"
 	"github.com/goplus/spx/internal/engine/platform"
 	"github.com/goplus/spx/internal/time"
 )
@@ -30,8 +33,22 @@ type threadImpl struct {
 	frame    int
 	mutex    sync.Mutex // Mutex for this thread's condition variable
 	cond     *sync.Cond // Per-thread condition variable for targeted wake-up
+	id       int64
+	name     string
+	stack    string
 }
 
+func (p *threadImpl) String() string {
+	print("  ", p)
+	return fmt.Sprintf("id=%d name=%s\n", p.id, p.name)
+}
+
+func (p *threadImpl) Name() string {
+	return p.name
+}
+func (p *threadImpl) Stack() string {
+	return p.stack
+}
 func (p *threadImpl) Stopped() bool {
 	return p.stopped_
 }
@@ -51,10 +68,12 @@ type Coroutines struct {
 	curQueue  *Queue[*WaitJob]
 	nextQueue *Queue[*WaitJob]
 	curId     int64
+	curThId   int64
 
 	waiting   map[Thread]bool
 	waitMutex sync.Mutex
 	waitCond  sync.Cond
+	debug     bool
 }
 
 const (
@@ -72,6 +91,7 @@ const (
 )
 
 type WaitJob struct {
+	Th    Thread
 	Id    int64
 	Type  int
 	Call  func()
@@ -102,7 +122,9 @@ func (p *Coroutines) Sched(me Thread) {
 	p.setWaitStatus(me, waitStatusBlock)
 	p.Yield(me)
 }
-
+func (p *Coroutines) OnRestart() {
+	p.hasInited = false
+}
 func (p *Coroutines) OnInited() {
 	p.hasInited = true
 }
@@ -136,7 +158,25 @@ func (p *Coroutines) StopIf(filter func(th Thread) bool) {
 
 // CreateAndStart creates and executes the new coroutine.
 func (p *Coroutines) CreateAndStart(start bool, tobj ThreadObj, fn func(me Thread) int) Thread {
-	id := &threadImpl{Obj: tobj, frame: p.frame}
+	id := &threadImpl{Obj: tobj, frame: p.frame, id: atomic.AddInt64(&p.curThId, 1)}
+	if p.debug {
+		name := ""
+		if tobj != nil {
+			t := reflect.TypeOf(tobj)
+			if t.Kind() == reflect.Ptr && t.Elem().Name() != "" {
+				name = "*" + t.Elem().Name()
+				v := reflect.ValueOf(tobj)
+				nameMethod := v.MethodByName("Name")
+				if nameMethod.IsValid() {
+					results := nameMethod.Call(nil)
+					name = results[0].String()
+				}
+			}
+		}
+		id.name = name
+		id.stack = debug.GetStackTrace()
+	}
+
 	id.cond = sync.NewCond(&id.mutex) // Initialize the thread's condition variable
 	go func() {
 		p.sema.Lock()
@@ -260,6 +300,7 @@ func (p *Coroutines) Wait(t float64) {
 			p.Resume(me)
 		},
 		Time: dstTime,
+		Th:   me,
 	}
 
 	p.addWaitJob(job, false)
@@ -279,6 +320,7 @@ func (p *Coroutines) WaitNextFrame() {
 			p.setWaitStatus(me, waitStatusIdle)
 			p.Resume(me)
 		},
+		Th:    me,
 		Frame: frame,
 	}
 
@@ -339,8 +381,8 @@ func (p *Coroutines) Update() {
 	start := stime.Now()
 
 	// Record GC information
-	var gcStatsBefore debug.GCStats
-	debug.ReadGCStats(&gcStatsBefore)
+	var gcStatsBefore sdebug.GCStats
+	sdebug.ReadGCStats(&gcStatsBefore)
 
 	// Initialize statistics
 	stats := UpdateJobsStats{}
@@ -350,7 +392,7 @@ func (p *Coroutines) Update() {
 	curQueue := p.curQueue
 	nextQueue := p.nextQueue
 	curFrame := time.Frame()
-	curTime := time.RealTimeSinceStart()
+	curTime := time.TimeSinceLevelLoad()
 	debugStartTime := time.RealTimeSinceStart()
 	waitFrameCount := 0
 	waitMainCount := 0
@@ -449,8 +491,8 @@ func (p *Coroutines) Update() {
 	stats.WaitMainCount = waitMainCount
 
 	// Get GC statistics
-	var gcStatsAfter debug.GCStats
-	debug.ReadGCStats(&gcStatsAfter)
+	var gcStatsAfter sdebug.GCStats
+	sdebug.ReadGCStats(&gcStatsAfter)
 	stats.GCCount = int(gcStatsAfter.NumGC - gcStatsBefore.NumGC)
 	stats.GCPauses = float64(gcStatsAfter.PauseTotal-gcStatsBefore.PauseTotal) / float64(stime.Millisecond)
 

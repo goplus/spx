@@ -41,6 +41,12 @@ func logStackTrace() {
 	debugSb.WriteString(fmt.Sprintf("\n%s\n", buf[:n]))
 }
 
+func GetStackTrace() string {
+	buf := make([]byte, 4096)
+	stackSize := runtime.Stack(buf, false)
+	return fmt.Sprintf("%s\n", buf[:stackSize])
+}
+
 func PrintStackTrace() {
 	buf := make([]byte, 4096)
 	stackSize := runtime.Stack(buf, false)

@@ -570,7 +570,10 @@ func Gopt_Game_Reload(game Gamer, index interface{}) (err error) {
 	if err = loadProjConfig(&proj, g.fs, index); err != nil {
 		return
 	}
-	return g.loadIndex(v, &proj)
+	gco.OnRestart()
+	err = g.loadIndex(v, &proj)
+	gco.OnInited()
+	return
 }
 
 // -----------------------------------------------------------------------------
