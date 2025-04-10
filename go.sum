@@ -35,8 +35,8 @@ github.com/qiniu/audio v0.2.1/go.mod h1:APMJRPaS4toviejZnDzzZ8wVyr12jqZhd3xfKr/q
 github.com/qiniu/oksvg v0.2.0-no-charset h1:KKQg81v52pd5VyaxrF891igoOO50epKfFWkryYgntnE=
 github.com/qiniu/oksvg v0.2.0-no-charset/go.mod h1:YCAOS1HFo2kMxfcFCjrJMeo93KGFYaBAKl7LvrAkltQ=
 github.com/qiniu/x v1.11.5/go.mod h1:03Ni9tj+N2h2aKnAz+6N0Xfl8FwMEDRC2PAlxekASDs=
-github.com/qiniu/x v1.13.12 h1:UyAwja6dgKUOYWZMzzc02wLodwnZ7wmK/0XzRd0e78g=
-github.com/qiniu/x v1.13.12/go.mod h1:INZ2TSWSJVWO/RuELQROERcslBwVgFG7MkTfEdaQz9E=
+github.com/qiniu/x v1.13.16 h1:+6n4ZLODC1jwksGh1dfLHgwsq57D1us20ExlviyI6z8=
+github.com/qiniu/x v1.13.16/go.mod h1:AiovSOCaRijaf3fj+0CBOpR1457pn24b0Vdb1JpwhII=
 github.com/srwiley/rasterx v0.0.0-20200120212402-85cb7272f5e9/go.mod h1:mvWM0+15UqyrFKqdRjY6LuAVJR0HOVhJlEgZ5JWtSWU=
 github.com/srwiley/rasterx v0.0.0-20210519020934-456a8d69b780 h1:oDMiXaTMyBEuZMU53atpxqYsSB3U1CHkeAu2zr6wTeY=
 github.com/srwiley/rasterx v0.0.0-20210519020934-456a8d69b780/go.mod h1:mvWM0+15UqyrFKqdRjY6LuAVJR0HOVhJlEgZ5JWtSWU=
