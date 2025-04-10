@@ -528,6 +528,9 @@ void cgo_callfn_GDExtensionSpxSpriteCheckCollisionByColor(const GDExtensionSpxSp
 void cgo_callfn_GDExtensionSpxSpriteCheckCollisionByAlpha(const GDExtensionSpxSpriteCheckCollisionByAlpha fn, GdObj obj, GdFloat alpha_threshold, GdBool* ret_val) {
 	fn(obj, alpha_threshold,ret_val);
 }
+void cgo_callfn_GDExtensionSpxSpriteCheckCollisionWithSpriteByAlpha(const GDExtensionSpxSpriteCheckCollisionWithSpriteByAlpha fn, GdObj obj, GdObj obj_b, GdFloat alpha_threshold, GdBool* ret_val) {
+	fn(obj, obj_b, alpha_threshold,ret_val);
+}
 void cgo_callfn_GDExtensionSpxUiBindNode(const GDExtensionSpxUiBindNode fn, GdObj obj, GdString rel_path, GdObj* ret_val) {
 	fn(obj, rel_path,ret_val);
 }

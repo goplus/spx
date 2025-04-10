@@ -1501,7 +1501,7 @@ func (p *SpriteImpl) touchingSprite(dst *SpriteImpl) bool {
 	if p.syncSprite == nil || dst.syncSprite == nil {
 		return false
 	}
-	return spriteMgr.CheckCollision(p.syncSprite.GetId(), dst.syncSprite.GetId(), true, true)
+	return spriteMgr.CheckCollisionWithSpriteByAlpha(p.syncSprite.GetId(), dst.syncSprite.GetId(), 0.05)
 }
 
 const (

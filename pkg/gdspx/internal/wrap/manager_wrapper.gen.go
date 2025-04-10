@@ -1037,6 +1037,13 @@ func (pself *spriteMgr) CheckCollisionByAlpha(obj Object, alpha_threshold float6
 	retValue := CallSpriteCheckCollisionByAlpha(arg0, arg1)
 	return ToBool(retValue)
 }
+func (pself *spriteMgr) CheckCollisionWithSpriteByAlpha(obj Object, obj_b Object, alpha_threshold float64) bool {
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdObj(obj_b)
+	arg2 := ToGdFloat(alpha_threshold)
+	retValue := CallSpriteCheckCollisionWithSpriteByAlpha(arg0, arg1, arg2)
+	return ToBool(retValue)
+}
 func (pself *uiMgr) BindNode(obj Object, rel_path string) Object {
 	arg0 := ToGdObj(obj)
 	arg1Str := NewCString(rel_path)

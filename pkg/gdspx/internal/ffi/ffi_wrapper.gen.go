@@ -244,6 +244,7 @@ type GDExtensionSpxSpriteSetTriggerEnabled C.GDExtensionSpxSpriteSetTriggerEnabl
 type GDExtensionSpxSpriteIsTriggerEnabled C.GDExtensionSpxSpriteIsTriggerEnabled
 type GDExtensionSpxSpriteCheckCollisionByColor C.GDExtensionSpxSpriteCheckCollisionByColor
 type GDExtensionSpxSpriteCheckCollisionByAlpha C.GDExtensionSpxSpriteCheckCollisionByAlpha
+type GDExtensionSpxSpriteCheckCollisionWithSpriteByAlpha C.GDExtensionSpxSpriteCheckCollisionWithSpriteByAlpha
 type GDExtensionSpxUiBindNode C.GDExtensionSpxUiBindNode
 type GDExtensionSpxUiCreateNode C.GDExtensionSpxUiCreateNode
 type GDExtensionSpxUiCreateButton C.GDExtensionSpxUiCreateButton
@@ -2049,6 +2050,20 @@ func CallSpriteCheckCollisionByAlpha(
 	arg2GdFloat = (C.GdFloat)(alpha_threshold)
 	var ret_val C.GdBool
 	C.cgo_callfn_GDExtensionSpxSpriteCheckCollisionByAlpha(arg0, arg1GdObj, arg2GdFloat, &ret_val)
+
+	return (GdBool)(ret_val)
+}
+func CallSpriteCheckCollisionWithSpriteByAlpha(
+	obj GdObj,
+	obj_b GdObj,
+	alpha_threshold GdFloat,
+) GdBool {
+	arg0 := (C.GDExtensionSpxSpriteCheckCollisionWithSpriteByAlpha)(api.SpxSpriteCheckCollisionWithSpriteByAlpha)
+	arg1GdObj = (C.GdObj)(obj)
+	arg2GdObj = (C.GdObj)(obj_b)
+	arg3GdFloat = (C.GdFloat)(alpha_threshold)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxSpriteCheckCollisionWithSpriteByAlpha(arg0, arg1GdObj, arg2GdObj, arg3GdFloat, &ret_val)
 
 	return (GdBool)(ret_val)
 }

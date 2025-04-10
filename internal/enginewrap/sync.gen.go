@@ -1144,6 +1144,13 @@ func (pself *spriteMgrImpl) CheckCollisionByAlpha(obj gdx.Object, alpha_threshol
 	})
 	return _ret1
 }
+func (pself *spriteMgrImpl) CheckCollisionWithSpriteByAlpha(obj gdx.Object, obj_b gdx.Object, alpha_threshold float64) bool {
+	var _ret1 bool
+	callInMainThread(func() {
+		_ret1 = gdx.SpriteMgr.CheckCollisionWithSpriteByAlpha(obj, obj_b, alpha_threshold)
+	})
+	return _ret1
+}
 
 // IUiMgr
 func (pself *uiMgrImpl) BindNode(obj gdx.Object, rel_path string) gdx.Object {
