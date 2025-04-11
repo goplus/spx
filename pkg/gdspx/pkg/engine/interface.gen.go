@@ -224,6 +224,7 @@ type ISpriteMgr interface {
 	IsTriggerEnabled(obj Object) bool
 	CheckCollisionByColor(obj Object, color Color, color_threshold float64) bool
 	CheckCollisionByAlpha(obj Object, alpha_threshold float64) bool
+	CheckCollisionWithSpriteByAlpha(obj Object, obj_b Object, alpha_threshold float64) bool
 }
 
 type IUiMgr interface {

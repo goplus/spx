@@ -964,6 +964,13 @@ func (pself *spriteMgr) CheckCollisionByAlpha(obj Object, alpha_threshold float6
 	_retValue := API.SpxSpriteCheckCollisionByAlpha.Invoke(arg0, arg1)
 	return JsToGdBool(_retValue)
 }
+func (pself *spriteMgr) CheckCollisionWithSpriteByAlpha(obj Object, obj_b Object, alpha_threshold float64) bool {
+	arg0 := JsFromGdObj(obj)
+	arg1 := JsFromGdObj(obj_b)
+	arg2 := JsFromGdFloat(alpha_threshold)
+	_retValue := API.SpxSpriteCheckCollisionWithSpriteByAlpha.Invoke(arg0, arg1, arg2)
+	return JsToGdBool(_retValue)
+}
 func (pself *uiMgr) BindNode(obj Object, rel_path string) Object {
 	arg0 := JsFromGdObj(obj)
 	arg1 := JsFromGdString(rel_path)
