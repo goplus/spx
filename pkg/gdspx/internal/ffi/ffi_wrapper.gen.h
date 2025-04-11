@@ -153,6 +153,9 @@ void cgo_callfn_GDExtensionSpxPhysicCheckCollision(const GDExtensionSpxPhysicChe
 void cgo_callfn_GDExtensionSpxPhysicCheckTouchedCameraBoundary(const GDExtensionSpxPhysicCheckTouchedCameraBoundary fn, GdObj obj, GdInt board_type, GdBool* ret_val) {
 	fn(obj, board_type,ret_val);
 }
+void cgo_callfn_GDExtensionSpxPhysicSetCollisionSystemType(const GDExtensionSpxPhysicSetCollisionSystemType fn, GdBool is_collision_by_alpha) {
+	fn(is_collision_by_alpha);
+}
 void cgo_callfn_GDExtensionSpxPlatformSetWindowPosition(const GDExtensionSpxPlatformSetWindowPosition fn, GdVec2 pos) {
 	fn(pos);
 }
@@ -225,6 +228,9 @@ void cgo_callfn_GDExtensionSpxResReloadTexture(const GDExtensionSpxResReloadText
 void cgo_callfn_GDExtensionSpxSceneChangeSceneToFile(const GDExtensionSpxSceneChangeSceneToFile fn, GdString path) {
 	fn(path);
 }
+void cgo_callfn_GDExtensionSpxSceneDestroyAllSprites(const GDExtensionSpxSceneDestroyAllSprites fn) {
+	fn();
+}
 void cgo_callfn_GDExtensionSpxSceneReloadCurrentScene(const GDExtensionSpxSceneReloadCurrentScene fn, GdInt* ret_val) {
 	fn(ret_val);
 }
@@ -266,6 +272,9 @@ void cgo_callfn_GDExtensionSpxSpriteCheckCollision(const GDExtensionSpxSpriteChe
 }
 void cgo_callfn_GDExtensionSpxSpriteCheckCollisionWithPoint(const GDExtensionSpxSpriteCheckCollisionWithPoint fn, GdObj obj, GdVec2 point, GdBool is_trigger, GdBool* ret_val) {
 	fn(obj, point, is_trigger,ret_val);
+}
+void cgo_callfn_GDExtensionSpxSpriteCreateBackdrop(const GDExtensionSpxSpriteCreateBackdrop fn, GdString path, GdObj* ret_val) {
+	fn(path,ret_val);
 }
 void cgo_callfn_GDExtensionSpxSpriteCreateSprite(const GDExtensionSpxSpriteCreateSprite fn, GdString path, GdObj* ret_val) {
 	fn(path,ret_val);

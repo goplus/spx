@@ -48,6 +48,10 @@ func (pself *Sprite) CloneSprite() Object {
 	return SpriteMgr.CloneSprite(pself.Id)
 }
 
+func (pself *Sprite) CreateBackdrop(path string) Object {
+	return SpriteMgr.CreateBackdrop(path)
+}
+
 func (pself *Sprite) CreateSprite(path string) Object {
 	return SpriteMgr.CreateSprite(path)
 }

@@ -52,6 +52,11 @@ func (pself *Sprite) CloneSprite() Object {
 	return _val
 }
 
+func (pself *Sprite) CreateBackdrop(path string) Object {
+	var _val Object
+	return _val
+}
+
 func (pself *Sprite) CreateSprite(path string) Object {
 	var _val Object
 	return _val

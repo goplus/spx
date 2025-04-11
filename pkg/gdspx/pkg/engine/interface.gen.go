@@ -87,6 +87,7 @@ type IPhysicMgr interface {
 	Raycast(from Vec2, to Vec2, collision_mask int64) Object
 	CheckCollision(from Vec2, to Vec2, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) bool
 	CheckTouchedCameraBoundary(obj Object, board_type int64) bool
+	SetCollisionSystemType(is_collision_by_alpha bool)
 }
 
 type IPlatformMgr interface {
@@ -120,6 +121,7 @@ type IResMgr interface {
 
 type ISceneMgr interface {
 	ChangeSceneToFile(path string)
+	DestroyAllSprites()
 	ReloadCurrentScene() int64
 	UnloadCurrentScene()
 }
@@ -137,6 +139,7 @@ type ISpriteMgr interface {
 	GetChildScale(obj Object, path string) Vec2
 	CheckCollision(obj Object, target Object, is_src_trigger bool, is_dst_trigger bool) bool
 	CheckCollisionWithPoint(obj Object, point Vec2, is_trigger bool) bool
+	CreateBackdrop(path string) Object
 	CreateSprite(path string) Object
 	CloneSprite(obj Object) Object
 	DestroySprite(obj Object) bool
