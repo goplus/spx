@@ -164,6 +164,11 @@ func checkUpdateCostume(p *baseObj) {
 }
 
 func syncCheckUpdateCostume(p *baseObj) {
+	syncSprite := p.syncSprite
+	if p.isLayerDirty {
+		syncSprite.SetZIndex(int64(p.layer))
+		p.isLayerDirty = false
+	}
 	if !p.isCostumeDirty {
 		return
 	}
@@ -172,7 +177,6 @@ func syncCheckUpdateCostume(p *baseObj) {
 	renderScale := p.getCostumeRenderScale()
 	rect := p.getCostumeAltasRegion()
 	isAltas := p.isCostumeAltas()
-	syncSprite := p.syncSprite
 	if isAltas {
 		syncSprite.UpdateTextureAltas(path, rect, renderScale)
 	} else {

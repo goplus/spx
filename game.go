@@ -20,6 +20,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -471,10 +472,12 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 	p.syncSprite = engine.NewBackdropProxy(p, p.getCostumePath(), p.getCostumeRenderScale())
 	p.setupBackdrop()
 	inits := make([]Sprite, 0, len(proj.Zorder))
-	for _, v := range proj.Zorder {
+	for layer, v := range proj.Zorder {
 		if name, ok := v.(string); ok {
 			sp := p.getSpriteProtoByName(name, g)
-			p.addShape(spriteOf(sp))
+			spr := spriteOf(sp)
+			spr.setLayer(layer)
+			p.addShape(spr)
 			inits = append(inits, sp)
 		} else {
 			// not a prototype sprite
@@ -964,6 +967,7 @@ func (p *Game) addClonedShape(src, clone Shape) {
 	newItems[idx] = clone
 	newItems[idx+1] = src
 	p.items = newItems
+	p.updateRenderLayers()
 }
 
 func (p *Game) removeShape(child Shape) {
@@ -980,6 +984,7 @@ func (p *Game) removeShape(child Shape) {
 			return
 		}
 	}
+	p.updateRenderLayers()
 }
 
 func (p *Game) activateShape(child Shape) {
@@ -998,14 +1003,24 @@ func (p *Game) activateShape(child Shape) {
 			return
 		}
 	}
+	p.updateRenderLayers()
 }
 
-func (p *Game) goBackByLayers(spr *SpriteImpl, n int) {
+func (p *Game) gotoFront(spr *SpriteImpl) {
+	p.goBackLayers(spr, math.MinInt32)
+}
+
+func (p *Game) gotoBack(spr *SpriteImpl) {
+	p.goBackLayers(spr, math.MaxInt32)
+}
+
+func (p *Game) goBackLayers(spr *SpriteImpl, n int) {
 	idx := p.doFindSprite(spr)
 	if idx < 0 {
 		return
 	}
 	items := p.items
+	// go back
 	if n > 0 {
 		newIdx := idx
 		for newIdx > 0 {
@@ -1018,6 +1033,7 @@ func (p *Game) goBackByLayers(spr *SpriteImpl, n int) {
 				}
 			}
 		}
+		// should consider that backdrop is always at the bottom
 		if newIdx != idx {
 			// p.getItems() requires immutable items, so we need copy before modify
 			newItems := make([]Shape, len(items))
@@ -1027,7 +1043,7 @@ func (p *Game) goBackByLayers(spr *SpriteImpl, n int) {
 			newItems[newIdx] = spr
 			p.items = newItems
 		}
-	} else if n < 0 {
+	} else if n < 0 { // go front
 		newIdx := idx
 		lastIdx := len(items) - 1
 		if newIdx < lastIdx {
@@ -1053,6 +1069,16 @@ func (p *Game) goBackByLayers(spr *SpriteImpl, n int) {
 			copy(newItems[newIdx+1:], items[newIdx+1:])
 			newItems[newIdx] = spr
 			p.items = newItems
+		}
+	}
+	p.updateRenderLayers()
+}
+func (p *Game) updateRenderLayers() {
+	layer := 0
+	for _, item := range p.items {
+		if sp, ok := item.(*SpriteImpl); ok {
+			layer++
+			sp.setLayer(layer)
 		}
 	}
 }
