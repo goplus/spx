@@ -333,6 +333,10 @@ func (pself *physicMgr) CheckTouchedCameraBoundary(obj Object, board_type int64)
 	_retValue := API.SpxPhysicCheckTouchedCameraBoundary.Invoke(arg0, arg1)
 	return JsToGdBool(_retValue)
 }
+func (pself *physicMgr) SetCollisionSystemType(is_collision_by_alpha bool) {
+	arg0 := JsFromGdBool(is_collision_by_alpha)
+	API.SpxPhysicSetCollisionSystemType.Invoke(arg0)
+}
 func (pself *platformMgr) SetWindowPosition(pos Vec2) {
 	arg0 := JsFromGdVec2(pos)
 	API.SpxPlatformSetWindowPosition.Invoke(arg0)
@@ -439,6 +443,9 @@ func (pself *sceneMgr) ChangeSceneToFile(path string) {
 	arg0 := JsFromGdString(path)
 	API.SpxSceneChangeSceneToFile.Invoke(arg0)
 }
+func (pself *sceneMgr) DestroyAllSprites() {
+	API.SpxSceneDestroyAllSprites.Invoke()
+}
 func (pself *sceneMgr) ReloadCurrentScene() int64 {
 	_retValue := API.SpxSceneReloadCurrentScene.Invoke()
 	return JsToGdInt(_retValue)
@@ -515,6 +522,11 @@ func (pself *spriteMgr) CheckCollisionWithPoint(obj Object, point Vec2, is_trigg
 	arg2 := JsFromGdBool(is_trigger)
 	_retValue := API.SpxSpriteCheckCollisionWithPoint.Invoke(arg0, arg1, arg2)
 	return JsToGdBool(_retValue)
+}
+func (pself *spriteMgr) CreateBackdrop(path string) Object {
+	arg0 := JsFromGdString(path)
+	_retValue := API.SpxSpriteCreateBackdrop.Invoke(arg0)
+	return JsToGdObject(_retValue)
 }
 func (pself *spriteMgr) CreateSprite(path string) Object {
 	arg0 := JsFromGdString(path)
@@ -962,6 +974,13 @@ func (pself *spriteMgr) CheckCollisionByAlpha(obj Object, alpha_threshold float6
 	arg0 := JsFromGdObj(obj)
 	arg1 := JsFromGdFloat(alpha_threshold)
 	_retValue := API.SpxSpriteCheckCollisionByAlpha.Invoke(arg0, arg1)
+	return JsToGdBool(_retValue)
+}
+func (pself *spriteMgr) CheckCollisionWithSpriteByAlpha(obj Object, obj_b Object, alpha_threshold float64) bool {
+	arg0 := JsFromGdObj(obj)
+	arg1 := JsFromGdObj(obj_b)
+	arg2 := JsFromGdFloat(alpha_threshold)
+	_retValue := API.SpxSpriteCheckCollisionWithSpriteByAlpha.Invoke(arg0, arg1, arg2)
 	return JsToGdBool(_retValue)
 }
 func (pself *uiMgr) BindNode(obj Object, rel_path string) Object {

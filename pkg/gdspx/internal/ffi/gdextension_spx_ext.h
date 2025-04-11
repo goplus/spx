@@ -247,6 +247,7 @@ typedef void (*GDExtensionSpxInputIsActionJustReleased)(GdString action, GdBool*
 typedef void (*GDExtensionSpxPhysicRaycast)(GdVec2 from, GdVec2 to, GdInt collision_mask, GdObj* ret_value);
 typedef void (*GDExtensionSpxPhysicCheckCollision)(GdVec2 from, GdVec2 to, GdInt collision_mask, GdBool collide_with_areas, GdBool collide_with_bodies, GdBool* ret_value);
 typedef void (*GDExtensionSpxPhysicCheckTouchedCameraBoundary)(GdObj obj,GdInt board_type, GdBool* ret_value);
+typedef void (*GDExtensionSpxPhysicSetCollisionSystemType)(GdBool is_collision_by_alpha);
 // SpxPlatform
 typedef void (*GDExtensionSpxPlatformSetWindowPosition)(GdVec2 pos);
 typedef void (*GDExtensionSpxPlatformGetWindowPosition)(GdVec2* ret_value);
@@ -274,6 +275,7 @@ typedef void (*GDExtensionSpxResHasFile)(GdString p_path, GdBool* ret_value);
 typedef void (*GDExtensionSpxResReloadTexture)(GdString path);
 // SpxScene
 typedef void (*GDExtensionSpxSceneChangeSceneToFile)(GdString path);
+typedef void (*GDExtensionSpxSceneDestroyAllSprites)();
 typedef void (*GDExtensionSpxSceneReloadCurrentScene)(GdInt* ret_value);
 typedef void (*GDExtensionSpxSceneUnloadCurrentScene)();
 // SpxSprite
@@ -289,6 +291,7 @@ typedef void (*GDExtensionSpxSpriteSetChildScale)(GdObj obj, GdString path, GdVe
 typedef void (*GDExtensionSpxSpriteGetChildScale)(GdObj obj, GdString path, GdVec2* ret_value);
 typedef void (*GDExtensionSpxSpriteCheckCollision)(GdObj obj,GdObj target, GdBool is_src_trigger,GdBool is_dst_trigger, GdBool* ret_value);
 typedef void (*GDExtensionSpxSpriteCheckCollisionWithPoint)(GdObj obj,GdVec2 point, GdBool is_trigger, GdBool* ret_value);
+typedef void (*GDExtensionSpxSpriteCreateBackdrop)(GdString path, GdObj* ret_value);
 typedef void (*GDExtensionSpxSpriteCreateSprite)(GdString path, GdObj* ret_value);
 typedef void (*GDExtensionSpxSpriteCloneSprite)(GdObj obj, GdObj* ret_value);
 typedef void (*GDExtensionSpxSpriteDestroySprite)(GdObj obj, GdBool* ret_value);
@@ -376,6 +379,7 @@ typedef void (*GDExtensionSpxSpriteSetTriggerEnabled)(GdObj obj, GdBool trigger)
 typedef void (*GDExtensionSpxSpriteIsTriggerEnabled)(GdObj obj, GdBool* ret_value);
 typedef void (*GDExtensionSpxSpriteCheckCollisionByColor)(GdObj obj, GdColor color,GdFloat color_threshold, GdBool* ret_value);
 typedef void (*GDExtensionSpxSpriteCheckCollisionByAlpha)(GdObj obj, GdFloat alpha_threshold, GdBool* ret_value);
+typedef void (*GDExtensionSpxSpriteCheckCollisionWithSpriteByAlpha)(GdObj obj, GdObj obj_b, GdFloat alpha_threshold, GdBool* ret_value);
 // SpxUi
 typedef void (*GDExtensionSpxUiBindNode)(GdObj obj, GdString rel_path, GdObj* ret_value);
 typedef void (*GDExtensionSpxUiCreateNode)(GdString path, GdObj* ret_value);

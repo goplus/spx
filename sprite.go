@@ -17,6 +17,7 @@
 package spx
 
 import (
+	"fmt"
 	"log"
 	"math"
 	"reflect"
@@ -462,6 +463,7 @@ func Gopt_SpriteImpl_Clone__1(sprite Sprite, data interface{}) {
 	out, outPtr := v.Elem(), v.Interface().(Sprite)
 	dest := cloneSprite(out, outPtr, in, nil)
 	src.g.addClonedShape(src, dest)
+
 	if dest.hasOnCloned {
 		dest.doWhenCloned(dest, data)
 	}
@@ -896,8 +898,22 @@ func (p *SpriteImpl) Animate(name SpriteAnimationName) {
 
 // -----------------------------------------------------------------------------
 
-func (p *SpriteImpl) Ask(msg interface{}) {
-	panic("todo")
+func (p *SpriteImpl) Ask(msgv interface{}) {
+	if debugInstr {
+		log.Println("Ask", p.name, msgv)
+	}
+	msg, ok := msgv.(string)
+	if !ok {
+		msg = fmt.Sprint(msgv)
+	}
+	if msg == "" {
+		println("ask: msg should not be empty")
+		return
+	}
+	p.Say__0(msg)
+	p.g.ask(true, msg, func(answer string) {
+		p.doStopSay()
+	})
 }
 
 func (p *SpriteImpl) Say__0(msg interface{}) {
@@ -1501,7 +1517,7 @@ func (p *SpriteImpl) touchingSprite(dst *SpriteImpl) bool {
 	if p.syncSprite == nil || dst.syncSprite == nil {
 		return false
 	}
-	return spriteMgr.CheckCollision(p.syncSprite.GetId(), dst.syncSprite.GetId(), true, true)
+	return spriteMgr.CheckCollisionWithSpriteByAlpha(p.syncSprite.GetId(), dst.syncSprite.GetId(), 0.05)
 }
 
 const (
@@ -1570,15 +1586,15 @@ func (p *SpriteImpl) checkTouchingScreen(where int) (touching int) {
 // -----------------------------------------------------------------------------
 
 func (p *SpriteImpl) GoBackLayers(n int) {
-	p.g.goBackByLayers(p, n)
+	p.g.goBackLayers(p, n)
 }
 
 func (p *SpriteImpl) GotoFront() {
-	p.g.goBackByLayers(p, -1e8)
+	p.g.gotoFront(p)
 }
 
 func (p *SpriteImpl) GotoBack() {
-	p.g.goBackByLayers(p, 1e8)
+	p.g.gotoBack(p)
 }
 
 // -----------------------------------------------------------------------------

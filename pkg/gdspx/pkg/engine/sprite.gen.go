@@ -40,8 +40,16 @@ func (pself *Sprite) CheckCollisionWithPoint(point Vec2, is_trigger bool) bool {
 	return SpriteMgr.CheckCollisionWithPoint(pself.Id, point, is_trigger)
 }
 
+func (pself *Sprite) CheckCollisionWithSpriteByAlpha(obj_b Object, alpha_threshold float64) bool {
+	return SpriteMgr.CheckCollisionWithSpriteByAlpha(pself.Id, obj_b, alpha_threshold)
+}
+
 func (pself *Sprite) CloneSprite() Object {
 	return SpriteMgr.CloneSprite(pself.Id)
+}
+
+func (pself *Sprite) CreateBackdrop(path string) Object {
+	return SpriteMgr.CreateBackdrop(path)
 }
 
 func (pself *Sprite) CreateSprite(path string) Object {

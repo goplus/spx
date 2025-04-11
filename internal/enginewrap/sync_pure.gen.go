@@ -217,6 +217,7 @@ func (pself *physicMgrImpl) CheckTouchedCameraBoundary(obj gdx.Object, board_typ
 	var _ret1 bool
 	return _ret1
 }
+func (pself *physicMgrImpl) SetCollisionSystemType(is_collision_by_alpha bool) {}
 
 // IPlatformMgr
 func (pself *platformMgrImpl) SetWindowPosition(pos Vec2) {}
@@ -287,6 +288,7 @@ func (pself *resMgrImpl) ReloadTexture(path string) {}
 
 // ISceneMgr
 func (pself *sceneMgrImpl) ChangeSceneToFile(path string) {}
+func (pself *sceneMgrImpl) DestroyAllSprites()            {}
 func (pself *sceneMgrImpl) ReloadCurrentScene() int64 {
 	var _ret1 int64
 	return _ret1
@@ -319,6 +321,10 @@ func (pself *spriteMgrImpl) CheckCollision(obj gdx.Object, target gdx.Object, is
 }
 func (pself *spriteMgrImpl) CheckCollisionWithPoint(obj gdx.Object, point Vec2, is_trigger bool) bool {
 	var _ret1 bool
+	return _ret1
+}
+func (pself *spriteMgrImpl) CreateBackdrop(path string) gdx.Object {
+	var _ret1 gdx.Object
 	return _ret1
 }
 func (pself *spriteMgrImpl) CreateSprite(path string) gdx.Object {
@@ -541,6 +547,10 @@ func (pself *spriteMgrImpl) CheckCollisionByColor(obj gdx.Object, color Color, c
 	return _ret1
 }
 func (pself *spriteMgrImpl) CheckCollisionByAlpha(obj gdx.Object, alpha_threshold float64) bool {
+	var _ret1 bool
+	return _ret1
+}
+func (pself *spriteMgrImpl) CheckCollisionWithSpriteByAlpha(obj gdx.Object, obj_b gdx.Object, alpha_threshold float64) bool {
 	var _ret1 bool
 	return _ret1
 }

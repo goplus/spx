@@ -20,6 +20,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -32,6 +33,7 @@ import (
 	"github.com/goplus/spx/internal/coroutine"
 	"github.com/goplus/spx/internal/engine"
 	gtime "github.com/goplus/spx/internal/time"
+	"github.com/goplus/spx/internal/ui"
 	"github.com/realdream-ai/mathf"
 
 	spxfs "github.com/goplus/spx/fs"
@@ -122,6 +124,9 @@ type Game struct {
 
 	windowScale float64
 	audioId     engine.Object
+
+	askObj    *ui.UiAsk
+	anwserVal string
 }
 
 type Gamer interface {
@@ -471,10 +476,12 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 	p.syncSprite = engine.NewBackdropProxy(p, p.getCostumePath(), p.getCostumeRenderScale())
 	p.setupBackdrop()
 	inits := make([]Sprite, 0, len(proj.Zorder))
-	for _, v := range proj.Zorder {
+	for layer, v := range proj.Zorder {
 		if name, ok := v.(string); ok {
 			sp := p.getSpriteProtoByName(name, g)
-			p.addShape(spriteOf(sp))
+			spr := spriteOf(sp)
+			spr.setLayer(layer)
+			p.addShape(spr)
 			inits = append(inits, sp)
 		} else {
 			// not a prototype sprite
@@ -696,6 +703,7 @@ type clicker interface {
 	threadObj
 	doWhenClick(this threadObj)
 	getProxy() *engine.Sprite
+	Visible() bool
 }
 
 func (p *Game) doWhenLeftButtonDown(ev *eventLeftButtonDown) {
@@ -706,7 +714,7 @@ func (p *Game) doWhenLeftButtonDown(ev *eventLeftButtonDown) {
 		item := tempItems[count-i-1]
 		if o, ok := item.(clicker); ok {
 			syncSprite := o.getProxy()
-			if syncSprite != nil {
+			if syncSprite != nil && o.Visible() {
 				isClicked := spriteMgr.CheckCollisionWithPoint(syncSprite.GetId(), point, true)
 				if isClicked && p.inputs.canTriggerClickEvent(syncSprite.GetId()) {
 					o.doWhenClick(o)
@@ -963,6 +971,7 @@ func (p *Game) addClonedShape(src, clone Shape) {
 	newItems[idx] = clone
 	newItems[idx+1] = src
 	p.items = newItems
+	p.updateRenderLayers()
 }
 
 func (p *Game) removeShape(child Shape) {
@@ -979,6 +988,7 @@ func (p *Game) removeShape(child Shape) {
 			return
 		}
 	}
+	p.updateRenderLayers()
 }
 
 func (p *Game) activateShape(child Shape) {
@@ -997,14 +1007,24 @@ func (p *Game) activateShape(child Shape) {
 			return
 		}
 	}
+	p.updateRenderLayers()
 }
 
-func (p *Game) goBackByLayers(spr *SpriteImpl, n int) {
+func (p *Game) gotoFront(spr *SpriteImpl) {
+	p.goBackLayers(spr, math.MinInt32)
+}
+
+func (p *Game) gotoBack(spr *SpriteImpl) {
+	p.goBackLayers(spr, math.MaxInt32)
+}
+
+func (p *Game) goBackLayers(spr *SpriteImpl, n int) {
 	idx := p.doFindSprite(spr)
 	if idx < 0 {
 		return
 	}
 	items := p.items
+	// go back
 	if n > 0 {
 		newIdx := idx
 		for newIdx > 0 {
@@ -1017,6 +1037,7 @@ func (p *Game) goBackByLayers(spr *SpriteImpl, n int) {
 				}
 			}
 		}
+		// should consider that backdrop is always at the bottom
 		if newIdx != idx {
 			// p.getItems() requires immutable items, so we need copy before modify
 			newItems := make([]Shape, len(items))
@@ -1026,7 +1047,7 @@ func (p *Game) goBackByLayers(spr *SpriteImpl, n int) {
 			newItems[newIdx] = spr
 			p.items = newItems
 		}
-	} else if n < 0 {
+	} else if n < 0 { // go front
 		newIdx := idx
 		lastIdx := len(items) - 1
 		if newIdx < lastIdx {
@@ -1052,6 +1073,16 @@ func (p *Game) goBackByLayers(spr *SpriteImpl, n int) {
 			copy(newItems[newIdx+1:], items[newIdx+1:])
 			newItems[newIdx] = spr
 			p.items = newItems
+		}
+	}
+	p.updateRenderLayers()
+}
+func (p *Game) updateRenderLayers() {
+	layer := 0
+	for _, item := range p.items {
+		if sp, ok := item.(*SpriteImpl); ok {
+			layer++
+			sp.setLayer(layer)
 		}
 	}
 }
@@ -1196,12 +1227,39 @@ func (p *Game) ResetTimer() {
 
 // -----------------------------------------------------------------------------
 
-func (p *Game) Ask(msg interface{}) {
-	panic("todo")
+func (p *Game) Ask(msgv interface{}) {
+	msg, ok := msgv.(string)
+	if !ok {
+		msg = fmt.Sprint(msgv)
+	}
+	if msg == "" {
+		println("ask: msg should not be empty")
+		return
+	}
+	p.ask(false, msg, func(answer string) {})
 }
 
-func (p *Game) Answer() Value {
-	panic("todo")
+func (p *Game) Anwser() string {
+	return p.anwserVal
+}
+
+func (p *Game) ask(isSprite bool, question string, callback func(string)) {
+	if p.askObj == nil {
+		p.askObj = ui.NewUiAsk()
+		p.addShape(p.askObj)
+	}
+	hasAnswer := false
+	p.askObj.Show(isSprite, question, func(msg string) {
+		p.anwserVal = msg
+		callback(msg)
+		hasAnswer = true
+	})
+	for {
+		if hasAnswer {
+			break
+		}
+		engine.WaitNextFrame()
+	}
 }
 
 // -----------------------------------------------------------------------------

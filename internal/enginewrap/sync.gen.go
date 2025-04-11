@@ -383,6 +383,11 @@ func (pself *physicMgrImpl) CheckTouchedCameraBoundary(obj gdx.Object, board_typ
 	})
 	return _ret1
 }
+func (pself *physicMgrImpl) SetCollisionSystemType(is_collision_by_alpha bool) {
+	callInMainThread(func() {
+		gdx.PhysicMgr.SetCollisionSystemType(is_collision_by_alpha)
+	})
+}
 
 // IPlatformMgr
 func (pself *platformMgrImpl) SetWindowPosition(pos Vec2) {
@@ -535,6 +540,11 @@ func (pself *sceneMgrImpl) ChangeSceneToFile(path string) {
 		gdx.SceneMgr.ChangeSceneToFile(path)
 	})
 }
+func (pself *sceneMgrImpl) DestroyAllSprites() {
+	callInMainThread(func() {
+		gdx.SceneMgr.DestroyAllSprites()
+	})
+}
 func (pself *sceneMgrImpl) ReloadCurrentScene() int64 {
 	var _ret1 int64
 	callInMainThread(func() {
@@ -616,6 +626,13 @@ func (pself *spriteMgrImpl) CheckCollisionWithPoint(obj gdx.Object, point Vec2, 
 	var _ret1 bool
 	callInMainThread(func() {
 		_ret1 = gdx.SpriteMgr.CheckCollisionWithPoint(obj, point, is_trigger)
+	})
+	return _ret1
+}
+func (pself *spriteMgrImpl) CreateBackdrop(path string) gdx.Object {
+	var _ret1 gdx.Object
+	callInMainThread(func() {
+		_ret1 = gdx.SpriteMgr.CreateBackdrop(path)
 	})
 	return _ret1
 }
@@ -1141,6 +1158,13 @@ func (pself *spriteMgrImpl) CheckCollisionByAlpha(obj gdx.Object, alpha_threshol
 	var _ret1 bool
 	callInMainThread(func() {
 		_ret1 = gdx.SpriteMgr.CheckCollisionByAlpha(obj, alpha_threshold)
+	})
+	return _ret1
+}
+func (pself *spriteMgrImpl) CheckCollisionWithSpriteByAlpha(obj gdx.Object, obj_b gdx.Object, alpha_threshold float64) bool {
+	var _ret1 bool
+	callInMainThread(func() {
+		_ret1 = gdx.SpriteMgr.CheckCollisionWithSpriteByAlpha(obj, obj_b, alpha_threshold)
 	})
 	return _ret1
 }

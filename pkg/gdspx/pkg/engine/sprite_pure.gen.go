@@ -42,7 +42,17 @@ func (pself *Sprite) CheckCollisionWithPoint(point Vec2, is_trigger bool) bool {
 	return _val
 }
 
+func (pself *Sprite) CheckCollisionWithSpriteByAlpha(obj_b Object, alpha_threshold float64) bool {
+	var _val bool
+	return _val
+}
+
 func (pself *Sprite) CloneSprite() Object {
+	var _val Object
+	return _val
+}
+
+func (pself *Sprite) CreateBackdrop(path string) Object {
 	var _val Object
 	return _val
 }

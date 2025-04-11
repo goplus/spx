@@ -1,0 +1,137 @@
+[gd_scene load_steps=15 format=3 uid="uid://8f1lyhpg00ao"]
+
+[ext_resource type="Texture2D" uid="uid://ck5r8xx86frxk" path="res://engine/textures/ask/out_frame.png" id="1_0vwsm"]
+[ext_resource type="Texture2D" uid="uid://cllgpgpe6ehmg" path="res://engine/textures/ask/input_frame.png" id="2_cads7"]
+[ext_resource type="Texture2D" uid="uid://cw2x5n7b8coov" path="res://engine/textures/ask/sure.png" id="3_bxmpm"]
+[ext_resource type="Texture2D" uid="uid://dpnukak43aukc" path="res://engine/textures/ask/sure_hover.png" id="4_8m5m8"]
+
+[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_vjsl3"]
+texture = ExtResource("1_0vwsm")
+texture_margin_left = 70.0
+texture_margin_top = 30.0
+texture_margin_right = 50.0
+texture_margin_bottom = 60.0
+expand_margin_top = 18.0
+expand_margin_right = 20.0
+expand_margin_bottom = 18.0
+
+[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_03o2d"]
+texture = ExtResource("2_cads7")
+texture_margin_left = 42.0
+texture_margin_top = 32.0
+texture_margin_right = 42.0
+texture_margin_bottom = 32.0
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_ct2ti"]
+content_margin_left = 20.0
+content_margin_right = 20.0
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_w3b6m"]
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_31enk"]
+
+[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_ue1ek"]
+texture = ExtResource("3_bxmpm")
+
+[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_15fsc"]
+texture = ExtResource("4_8m5m8")
+
+[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_3ufoe"]
+texture = ExtResource("3_bxmpm")
+
+[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_15re3"]
+texture = ExtResource("3_bxmpm")
+
+[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_alfx8"]
+texture = ExtResource("3_bxmpm")
+
+[node name="UIAsk" type="Control"]
+layout_mode = 3
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 0
+size_flags_horizontal = 3
+
+[node name="MF" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_constants/margin_left = -20
+
+[node name="Frame" type="PanelContainer" parent="MF"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_styles/panel = SubResource("StyleBoxTexture_vjsl3")
+
+[node name="AskBody" type="MarginContainer" parent="MF/Frame"]
+custom_minimum_size = Vector2(99.48, 30)
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_constants/margin_left = -28
+theme_override_constants/margin_top = -32
+
+[node name="LabelAsk" type="Label" parent="MF/Frame/AskBody"]
+layout_mode = 2
+size_flags_horizontal = 0
+size_flags_vertical = 0
+size_flags_stretch_ratio = 2.06
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+theme_override_font_sizes/font_size = 22
+text = "asdf"
+
+[node name="M" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -60.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+
+[node name="InputBG" type="PanelContainer" parent="M"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_styles/panel = SubResource("StyleBoxTexture_03o2d")
+
+[node name="Input" type="LineEdit" parent="M"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.0605303, 0.0605303, 0.0605303, 1)
+theme_override_colors/font_placeholder_color = Color(0, 0, 0, 0.0705882)
+theme_override_colors/caret_color = Color(0, 0, 0, 1)
+theme_override_font_sizes/font_size = 22
+theme_override_styles/normal = SubResource("StyleBoxEmpty_ct2ti")
+theme_override_styles/focus = SubResource("StyleBoxEmpty_w3b6m")
+theme_override_styles/read_only = SubResource("StyleBoxEmpty_31enk")
+placeholder_text = "Please input the anwser"
+caret_blink = true
+
+[node name="Check" type="Button" parent="M/Input"]
+layout_mode = 1
+anchors_preset = 6
+anchor_left = 1.0
+anchor_top = 0.5
+anchor_right = 1.0
+anchor_bottom = 0.5
+offset_left = -64.145
+offset_top = -30.46
+offset_right = -5.14499
+offset_bottom = 28.54
+grow_horizontal = 0
+grow_vertical = 2
+theme_override_styles/normal = SubResource("StyleBoxTexture_ue1ek")
+theme_override_styles/hover = SubResource("StyleBoxTexture_15fsc")
+theme_override_styles/pressed = SubResource("StyleBoxTexture_3ufoe")
+theme_override_styles/disabled = SubResource("StyleBoxTexture_15re3")
+theme_override_styles/focus = SubResource("StyleBoxTexture_alfx8")

@@ -346,6 +346,10 @@ func (pself *physicMgr) CheckTouchedCameraBoundary(obj Object, board_type int64)
 	retValue := CallPhysicCheckTouchedCameraBoundary(arg0, arg1)
 	return ToBool(retValue)
 }
+func (pself *physicMgr) SetCollisionSystemType(is_collision_by_alpha bool) {
+	arg0 := ToGdBool(is_collision_by_alpha)
+	CallPhysicSetCollisionSystemType(arg0)
+}
 func (pself *platformMgr) SetWindowPosition(pos Vec2) {
 	arg0 := ToGdVec2(pos)
 	CallPlatformSetWindowPosition(arg0)
@@ -476,6 +480,9 @@ func (pself *sceneMgr) ChangeSceneToFile(path string) {
 	defer arg0Str.Destroy()
 	CallSceneChangeSceneToFile(arg0)
 }
+func (pself *sceneMgr) DestroyAllSprites() {
+	CallSceneDestroyAllSprites()
+}
 func (pself *sceneMgr) ReloadCurrentScene() int64 {
 	retValue := CallSceneReloadCurrentScene()
 	return ToInt64(retValue)
@@ -566,6 +573,13 @@ func (pself *spriteMgr) CheckCollisionWithPoint(obj Object, point Vec2, is_trigg
 	arg2 := ToGdBool(is_trigger)
 	retValue := CallSpriteCheckCollisionWithPoint(arg0, arg1, arg2)
 	return ToBool(retValue)
+}
+func (pself *spriteMgr) CreateBackdrop(path string) Object {
+	arg0Str := NewCString(path)
+	arg0 := arg0Str.ToGdString()
+	defer arg0Str.Destroy()
+	retValue := CallSpriteCreateBackdrop(arg0)
+	return ToObject(retValue)
 }
 func (pself *spriteMgr) CreateSprite(path string) Object {
 	arg0Str := NewCString(path)
@@ -1035,6 +1049,13 @@ func (pself *spriteMgr) CheckCollisionByAlpha(obj Object, alpha_threshold float6
 	arg0 := ToGdObj(obj)
 	arg1 := ToGdFloat(alpha_threshold)
 	retValue := CallSpriteCheckCollisionByAlpha(arg0, arg1)
+	return ToBool(retValue)
+}
+func (pself *spriteMgr) CheckCollisionWithSpriteByAlpha(obj Object, obj_b Object, alpha_threshold float64) bool {
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdObj(obj_b)
+	arg2 := ToGdFloat(alpha_threshold)
+	retValue := CallSpriteCheckCollisionWithSpriteByAlpha(arg0, arg1, arg2)
 	return ToBool(retValue)
 }
 func (pself *uiMgr) BindNode(obj Object, rel_path string) Object {
