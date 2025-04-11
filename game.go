@@ -33,6 +33,7 @@ import (
 	"github.com/goplus/spx/internal/coroutine"
 	"github.com/goplus/spx/internal/engine"
 	gtime "github.com/goplus/spx/internal/time"
+	"github.com/goplus/spx/internal/ui"
 	"github.com/realdream-ai/mathf"
 
 	spxfs "github.com/goplus/spx/fs"
@@ -123,6 +124,9 @@ type Game struct {
 
 	windowScale float64
 	audioId     engine.Object
+
+	askObj    *ui.UiAsk
+	anwserVal string
 }
 
 type Gamer interface {
@@ -1223,12 +1227,39 @@ func (p *Game) ResetTimer() {
 
 // -----------------------------------------------------------------------------
 
-func (p *Game) Ask(msg interface{}) {
-	panic("todo")
+func (p *Game) Ask(msgv interface{}) {
+	msg, ok := msgv.(string)
+	if !ok {
+		msg = fmt.Sprint(msgv)
+	}
+	if msg == "" {
+		println("ask: msg should not be empty")
+		return
+	}
+	p.ask(false, msg, func(answer string) {})
 }
 
-func (p *Game) Answer() Value {
-	panic("todo")
+func (p *Game) Anwser() string {
+	return p.anwserVal
+}
+
+func (p *Game) ask(isSprite bool, question string, callback func(string)) {
+	if p.askObj == nil {
+		p.askObj = ui.NewUiAsk()
+		p.addShape(p.askObj)
+	}
+	hasAnswer := false
+	p.askObj.Show(isSprite, question, func(msg string) {
+		p.anwserVal = msg
+		callback(msg)
+		hasAnswer = true
+	})
+	for {
+		if hasAnswer {
+			break
+		}
+		engine.WaitNextFrame()
+	}
 }
 
 // -----------------------------------------------------------------------------
