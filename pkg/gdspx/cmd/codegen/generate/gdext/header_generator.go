@@ -4,11 +4,12 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"github.com/iancoleman/strcase"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/iancoleman/strcase"
 )
 
 func generateSpxExtHeader(dir, outputFile string, isRawFormat bool) {
@@ -58,7 +59,7 @@ func mergeManagerHeader(dir string) string {
 				continue
 			}
 			if strings.HasPrefix(line, "};") {
-				break
+				continue
 			}
 
 			if className == "" {
@@ -66,6 +67,8 @@ func mergeManagerHeader(dir string) string {
 				match := re.FindStringSubmatch(line)
 				if len(match) > 0 {
 					className = match[1]
+				} else {
+					continue
 				}
 			}
 

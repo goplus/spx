@@ -605,7 +605,7 @@ func getManagerImpl(function *clang.TypedefFunction, clsName string) string {
 		sb.WriteString("return ")
 	}
 	sb.WriteString(mgrName + "Mgr." + funcName + "(")
-	if !strings.HasSuffix(function.Name, "CreateSprite") {
+	if !strings.HasSuffix(function.Name, "CreateSprite") && !strings.HasSuffix(function.Name, "CreateBackdrop") {
 		sb.WriteString("pself.Id, ")
 	}
 	for i, arg := range function.Arguments {

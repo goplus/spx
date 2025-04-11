@@ -65,6 +65,7 @@ type GDExtensionInterface struct {
 	SpxPhysicRaycast                         GDExtensionSpxPhysicRaycast
 	SpxPhysicCheckCollision                  GDExtensionSpxPhysicCheckCollision
 	SpxPhysicCheckTouchedCameraBoundary      GDExtensionSpxPhysicCheckTouchedCameraBoundary
+	SpxPhysicSetCollisionSystemType          GDExtensionSpxPhysicSetCollisionSystemType
 	SpxPlatformSetWindowPosition             GDExtensionSpxPlatformSetWindowPosition
 	SpxPlatformGetWindowPosition             GDExtensionSpxPlatformGetWindowPosition
 	SpxPlatformSetWindowSize                 GDExtensionSpxPlatformSetWindowSize
@@ -89,6 +90,7 @@ type GDExtensionInterface struct {
 	SpxResHasFile                            GDExtensionSpxResHasFile
 	SpxResReloadTexture                      GDExtensionSpxResReloadTexture
 	SpxSceneChangeSceneToFile                GDExtensionSpxSceneChangeSceneToFile
+	SpxSceneDestroyAllSprites                GDExtensionSpxSceneDestroyAllSprites
 	SpxSceneReloadCurrentScene               GDExtensionSpxSceneReloadCurrentScene
 	SpxSceneUnloadCurrentScene               GDExtensionSpxSceneUnloadCurrentScene
 	SpxSpriteSetDontDestroyOnLoad            GDExtensionSpxSpriteSetDontDestroyOnLoad
@@ -103,6 +105,7 @@ type GDExtensionInterface struct {
 	SpxSpriteGetChildScale                   GDExtensionSpxSpriteGetChildScale
 	SpxSpriteCheckCollision                  GDExtensionSpxSpriteCheckCollision
 	SpxSpriteCheckCollisionWithPoint         GDExtensionSpxSpriteCheckCollisionWithPoint
+	SpxSpriteCreateBackdrop                  GDExtensionSpxSpriteCreateBackdrop
 	SpxSpriteCreateSprite                    GDExtensionSpxSpriteCreateSprite
 	SpxSpriteCloneSprite                     GDExtensionSpxSpriteCloneSprite
 	SpxSpriteDestroySprite                   GDExtensionSpxSpriteDestroySprite
@@ -283,6 +286,7 @@ func (x *GDExtensionInterface) loadProcAddresses() {
 	x.SpxPhysicRaycast = (GDExtensionSpxPhysicRaycast)(dlsymGD("spx_physic_raycast"))
 	x.SpxPhysicCheckCollision = (GDExtensionSpxPhysicCheckCollision)(dlsymGD("spx_physic_check_collision"))
 	x.SpxPhysicCheckTouchedCameraBoundary = (GDExtensionSpxPhysicCheckTouchedCameraBoundary)(dlsymGD("spx_physic_check_touched_camera_boundary"))
+	x.SpxPhysicSetCollisionSystemType = (GDExtensionSpxPhysicSetCollisionSystemType)(dlsymGD("spx_physic_set_collision_system_type"))
 	x.SpxPlatformSetWindowPosition = (GDExtensionSpxPlatformSetWindowPosition)(dlsymGD("spx_platform_set_window_position"))
 	x.SpxPlatformGetWindowPosition = (GDExtensionSpxPlatformGetWindowPosition)(dlsymGD("spx_platform_get_window_position"))
 	x.SpxPlatformSetWindowSize = (GDExtensionSpxPlatformSetWindowSize)(dlsymGD("spx_platform_set_window_size"))
@@ -307,6 +311,7 @@ func (x *GDExtensionInterface) loadProcAddresses() {
 	x.SpxResHasFile = (GDExtensionSpxResHasFile)(dlsymGD("spx_res_has_file"))
 	x.SpxResReloadTexture = (GDExtensionSpxResReloadTexture)(dlsymGD("spx_res_reload_texture"))
 	x.SpxSceneChangeSceneToFile = (GDExtensionSpxSceneChangeSceneToFile)(dlsymGD("spx_scene_change_scene_to_file"))
+	x.SpxSceneDestroyAllSprites = (GDExtensionSpxSceneDestroyAllSprites)(dlsymGD("spx_scene_destroy_all_sprites"))
 	x.SpxSceneReloadCurrentScene = (GDExtensionSpxSceneReloadCurrentScene)(dlsymGD("spx_scene_reload_current_scene"))
 	x.SpxSceneUnloadCurrentScene = (GDExtensionSpxSceneUnloadCurrentScene)(dlsymGD("spx_scene_unload_current_scene"))
 	x.SpxSpriteSetDontDestroyOnLoad = (GDExtensionSpxSpriteSetDontDestroyOnLoad)(dlsymGD("spx_sprite_set_dont_destroy_on_load"))
@@ -321,6 +326,7 @@ func (x *GDExtensionInterface) loadProcAddresses() {
 	x.SpxSpriteGetChildScale = (GDExtensionSpxSpriteGetChildScale)(dlsymGD("spx_sprite_get_child_scale"))
 	x.SpxSpriteCheckCollision = (GDExtensionSpxSpriteCheckCollision)(dlsymGD("spx_sprite_check_collision"))
 	x.SpxSpriteCheckCollisionWithPoint = (GDExtensionSpxSpriteCheckCollisionWithPoint)(dlsymGD("spx_sprite_check_collision_with_point"))
+	x.SpxSpriteCreateBackdrop = (GDExtensionSpxSpriteCreateBackdrop)(dlsymGD("spx_sprite_create_backdrop"))
 	x.SpxSpriteCreateSprite = (GDExtensionSpxSpriteCreateSprite)(dlsymGD("spx_sprite_create_sprite"))
 	x.SpxSpriteCloneSprite = (GDExtensionSpxSpriteCloneSprite)(dlsymGD("spx_sprite_clone_sprite"))
 	x.SpxSpriteDestroySprite = (GDExtensionSpxSpriteDestroySprite)(dlsymGD("spx_sprite_destroy_sprite"))

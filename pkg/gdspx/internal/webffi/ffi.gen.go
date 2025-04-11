@@ -69,6 +69,7 @@ type GDExtensionInterface struct {
 	SpxPhysicRaycast                         js.Value
 	SpxPhysicCheckCollision                  js.Value
 	SpxPhysicCheckTouchedCameraBoundary      js.Value
+	SpxPhysicSetCollisionSystemType          js.Value
 	SpxPlatformSetWindowPosition             js.Value
 	SpxPlatformGetWindowPosition             js.Value
 	SpxPlatformSetWindowSize                 js.Value
@@ -93,6 +94,7 @@ type GDExtensionInterface struct {
 	SpxResHasFile                            js.Value
 	SpxResReloadTexture                      js.Value
 	SpxSceneChangeSceneToFile                js.Value
+	SpxSceneDestroyAllSprites                js.Value
 	SpxSceneReloadCurrentScene               js.Value
 	SpxSceneUnloadCurrentScene               js.Value
 	SpxSpriteSetDontDestroyOnLoad            js.Value
@@ -107,6 +109,7 @@ type GDExtensionInterface struct {
 	SpxSpriteGetChildScale                   js.Value
 	SpxSpriteCheckCollision                  js.Value
 	SpxSpriteCheckCollisionWithPoint         js.Value
+	SpxSpriteCreateBackdrop                  js.Value
 	SpxSpriteCreateSprite                    js.Value
 	SpxSpriteCloneSprite                     js.Value
 	SpxSpriteDestroySprite                   js.Value
@@ -287,6 +290,7 @@ func (x *GDExtensionInterface) loadProcAddresses() {
 	x.SpxPhysicRaycast = dlsymGD("gdspx_physic_raycast")
 	x.SpxPhysicCheckCollision = dlsymGD("gdspx_physic_check_collision")
 	x.SpxPhysicCheckTouchedCameraBoundary = dlsymGD("gdspx_physic_check_touched_camera_boundary")
+	x.SpxPhysicSetCollisionSystemType = dlsymGD("gdspx_physic_set_collision_system_type")
 	x.SpxPlatformSetWindowPosition = dlsymGD("gdspx_platform_set_window_position")
 	x.SpxPlatformGetWindowPosition = dlsymGD("gdspx_platform_get_window_position")
 	x.SpxPlatformSetWindowSize = dlsymGD("gdspx_platform_set_window_size")
@@ -311,6 +315,7 @@ func (x *GDExtensionInterface) loadProcAddresses() {
 	x.SpxResHasFile = dlsymGD("gdspx_res_has_file")
 	x.SpxResReloadTexture = dlsymGD("gdspx_res_reload_texture")
 	x.SpxSceneChangeSceneToFile = dlsymGD("gdspx_scene_change_scene_to_file")
+	x.SpxSceneDestroyAllSprites = dlsymGD("gdspx_scene_destroy_all_sprites")
 	x.SpxSceneReloadCurrentScene = dlsymGD("gdspx_scene_reload_current_scene")
 	x.SpxSceneUnloadCurrentScene = dlsymGD("gdspx_scene_unload_current_scene")
 	x.SpxSpriteSetDontDestroyOnLoad = dlsymGD("gdspx_sprite_set_dont_destroy_on_load")
@@ -325,6 +330,7 @@ func (x *GDExtensionInterface) loadProcAddresses() {
 	x.SpxSpriteGetChildScale = dlsymGD("gdspx_sprite_get_child_scale")
 	x.SpxSpriteCheckCollision = dlsymGD("gdspx_sprite_check_collision")
 	x.SpxSpriteCheckCollisionWithPoint = dlsymGD("gdspx_sprite_check_collision_with_point")
+	x.SpxSpriteCreateBackdrop = dlsymGD("gdspx_sprite_create_backdrop")
 	x.SpxSpriteCreateSprite = dlsymGD("gdspx_sprite_create_sprite")
 	x.SpxSpriteCloneSprite = dlsymGD("gdspx_sprite_clone_sprite")
 	x.SpxSpriteDestroySprite = dlsymGD("gdspx_sprite_destroy_sprite")

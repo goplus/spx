@@ -119,6 +119,7 @@ type GDExtensionSpxInputIsActionJustReleased C.GDExtensionSpxInputIsActionJustRe
 type GDExtensionSpxPhysicRaycast C.GDExtensionSpxPhysicRaycast
 type GDExtensionSpxPhysicCheckCollision C.GDExtensionSpxPhysicCheckCollision
 type GDExtensionSpxPhysicCheckTouchedCameraBoundary C.GDExtensionSpxPhysicCheckTouchedCameraBoundary
+type GDExtensionSpxPhysicSetCollisionSystemType C.GDExtensionSpxPhysicSetCollisionSystemType
 type GDExtensionSpxPlatformSetWindowPosition C.GDExtensionSpxPlatformSetWindowPosition
 type GDExtensionSpxPlatformGetWindowPosition C.GDExtensionSpxPlatformGetWindowPosition
 type GDExtensionSpxPlatformSetWindowSize C.GDExtensionSpxPlatformSetWindowSize
@@ -143,6 +144,7 @@ type GDExtensionSpxResReadAllText C.GDExtensionSpxResReadAllText
 type GDExtensionSpxResHasFile C.GDExtensionSpxResHasFile
 type GDExtensionSpxResReloadTexture C.GDExtensionSpxResReloadTexture
 type GDExtensionSpxSceneChangeSceneToFile C.GDExtensionSpxSceneChangeSceneToFile
+type GDExtensionSpxSceneDestroyAllSprites C.GDExtensionSpxSceneDestroyAllSprites
 type GDExtensionSpxSceneReloadCurrentScene C.GDExtensionSpxSceneReloadCurrentScene
 type GDExtensionSpxSceneUnloadCurrentScene C.GDExtensionSpxSceneUnloadCurrentScene
 type GDExtensionSpxSpriteSetDontDestroyOnLoad C.GDExtensionSpxSpriteSetDontDestroyOnLoad
@@ -157,6 +159,7 @@ type GDExtensionSpxSpriteSetChildScale C.GDExtensionSpxSpriteSetChildScale
 type GDExtensionSpxSpriteGetChildScale C.GDExtensionSpxSpriteGetChildScale
 type GDExtensionSpxSpriteCheckCollision C.GDExtensionSpxSpriteCheckCollision
 type GDExtensionSpxSpriteCheckCollisionWithPoint C.GDExtensionSpxSpriteCheckCollisionWithPoint
+type GDExtensionSpxSpriteCreateBackdrop C.GDExtensionSpxSpriteCreateBackdrop
 type GDExtensionSpxSpriteCreateSprite C.GDExtensionSpxSpriteCreateSprite
 type GDExtensionSpxSpriteCloneSprite C.GDExtensionSpxSpriteCloneSprite
 type GDExtensionSpxSpriteDestroySprite C.GDExtensionSpxSpriteDestroySprite
@@ -750,6 +753,15 @@ func CallPhysicCheckTouchedCameraBoundary(
 
 	return (GdBool)(ret_val)
 }
+func CallPhysicSetCollisionSystemType(
+	is_collision_by_alpha GdBool,
+) {
+	arg0 := (C.GDExtensionSpxPhysicSetCollisionSystemType)(api.SpxPhysicSetCollisionSystemType)
+	arg1GdBool = (C.GdBool)(is_collision_by_alpha)
+
+	C.cgo_callfn_GDExtensionSpxPhysicSetCollisionSystemType(arg0, arg1GdBool)
+
+}
 func CallPlatformSetWindowPosition(
 	pos GdVec2,
 ) {
@@ -957,6 +969,11 @@ func CallSceneChangeSceneToFile(
 	C.cgo_callfn_GDExtensionSpxSceneChangeSceneToFile(arg0, arg1GdString)
 
 }
+func CallSceneDestroyAllSprites() {
+	arg0 := (C.GDExtensionSpxSceneDestroyAllSprites)(api.SpxSceneDestroyAllSprites)
+
+	C.cgo_callfn_GDExtensionSpxSceneDestroyAllSprites(arg0)
+}
 func CallSceneReloadCurrentScene() GdInt {
 	arg0 := (C.GDExtensionSpxSceneReloadCurrentScene)(api.SpxSceneReloadCurrentScene)
 	var ret_val C.GdInt
@@ -1114,6 +1131,16 @@ func CallSpriteCheckCollisionWithPoint(
 	C.cgo_callfn_GDExtensionSpxSpriteCheckCollisionWithPoint(arg0, arg1GdObj, arg2GdVec2, arg3GdBool, &ret_val)
 
 	return (GdBool)(ret_val)
+}
+func CallSpriteCreateBackdrop(
+	path GdString,
+) GdObj {
+	arg0 := (C.GDExtensionSpxSpriteCreateBackdrop)(api.SpxSpriteCreateBackdrop)
+	arg1GdString = (C.GdString)(path)
+	var ret_val C.GdObj
+	C.cgo_callfn_GDExtensionSpxSpriteCreateBackdrop(arg0, arg1GdString, &ret_val)
+
+	return (GdObj)(ret_val)
 }
 func CallSpriteCreateSprite(
 	path GdString,
