@@ -1,16 +1,12 @@
 package main
 
 //go:generate qexp -outdir pkg github.com/goplus/spx
-//go:generate qexp -outdir pkg github.com/goplus/spx/pkg/gdspx/pkg/gdspx
-//go:generate qexp -outdir pkg github.com/goplus/spx/pkg/gdspx/pkg/engine
 
 import (
 	"archive/zip"
 	"bytes"
 	"log"
 	"syscall/js"
-
-	_ "github.com/goplus/spx/pkg/gdspx/pkg/gdspx"
 
 	"github.com/goplus/igop"
 	"github.com/goplus/igop/gopbuild"
