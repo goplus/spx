@@ -20,9 +20,9 @@ cd $PROJ_DIR
 
 build_template() {
     prepare_env
-    local engine_dir=$1
-    local platform=$2
-    local template_dir=$3
+    local engine_dir="$ENGINE_DIR"
+    local platform=$1
+    local template_dir="$TEMPLATE_DIR"
 
     echo "save to $template_dir"
     cd $engine_dir || exit
@@ -168,7 +168,7 @@ build_editor(){
     prepare_env
     cd $ENGINE_DIR
     if [ "$PLATFORM" == "web" ]; then
-        build_template "$ENGINE_DIR" "$PLATFORM" "$TEMPLATE_DIR"
+        build_template "$PLATFORM"
         return 0
     fi
 
@@ -200,7 +200,7 @@ elif [ "$EDITOR_ONLY" = true ]; then
     build_editor || exit
 else 
     # build template
-    build_template "$ENGINE_DIR" "$PLATFORM" "$TEMPLATE_DIR" || exit
+    build_template "$PLATFORM" || exit
 fi 
 cd $PROJ_DIR
 
