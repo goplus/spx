@@ -1,14 +1,50 @@
-
 import "fmt"
 import "math"
 
-
-
+var intTest int
+var float64Test float64
+var content string
+var boolTest bool
 
 onMsg "testVariable", => {
-	onTestStart(this)	
+	onTestStart(this)
 
+    // 1. string
+	content = "------ variable1 ------"
+	say content
+	assert(content == "------ variable1 ------", "String assignment 1 failed")
 
+    content = "------ variable2 ------"
+	assert(content == "------ variable2 ------", "String assignment 2 failed")
 
-    onTestDone(this)
+    // 2. float64
+    say "float64 test"
+    float64Test = 1.5
+    assert(math.Abs(float64Test - 1.5) < 0.000001, "Float64 assignment 1 failed")
+    
+    assert(math.Abs(float64Test - 2.5) < 0.000001, "Float64 assignment 2 failed")
+    wait float64Test
+
+    // 3. int
+    say "int test"
+    intTest = 5
+    assert(intTest == 5, "Int initial assignment failed")
+    for intTest > 0 {
+        intTest --
+        assert(intTest >= 0, "Int decrement failed")
+	}
+    assert(intTest == 0, "Int final value failed")
+
+    // 4. bool
+    say "bool test"
+
+    boolTest = true
+    say boolTest
+    assert(boolTest == true, "Bool true assignment failed")
+
+    boolTest = false
+    say boolTest
+    assert(boolTest == false, "Bool false assignment failed")
+
+	onTestDone(this)
 }

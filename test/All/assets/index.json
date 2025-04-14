@@ -23,6 +23,8 @@
     "SpPen",
     "SpSensing",
     "SpSound",
-    "SpVariable"
+    "SpVariable",
+    "SpEffect",
+    "SpUnique"
   ]
 }

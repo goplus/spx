@@ -78,4 +78,6 @@ onStart =>{
 	waitAndTest "testSensing"
 	waitAndTest "testSound"
 	waitAndTest "testVariable"
+	waitAndTest "testEffect"
+	waitAndTest "testUnique"
 }

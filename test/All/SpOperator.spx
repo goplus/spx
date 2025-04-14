@@ -1,12 +1,99 @@
-
 import "fmt"
 import "math"
 
-
+var a, b float64
+var result float64
 
 onMsg "testOperator", => {
-	onTestStart(this)	
+	onTestStart(this)
 
+	// 1. Addition operation
+	a = 5
+	b = 3
+	result = a + b
+	assert(result == 8, "Addition failed")
 
-    onTestDone(this)
+	// 2. Subtraction operation
+	result = a - b
+	assert(result == 2, "Subtraction failed")
+
+	// 3. Multiplication operation
+	result = a * b
+	assert(result == 15, "Multiplication failed")
+
+	// 4. Division operation
+	result = a / b
+	assert(math.Abs(result - 1.6666666666666667) < 0.000001, "Division failed")
+
+	// 5. Modulo operation
+	a = 10
+	b = 3
+	result = math.Mod(a, b)
+	assert(result == 1, "Modulo failed")
+
+	// 6. Comparison operations
+	a = 5
+	b = 3
+	assert(a > b, "Greater than failed")
+	assert(!(a < b), "Less than failed")
+	assert(!(a == b), "Equal to failed")
+	assert(a != b, "Not equal to failed")
+
+	// 7. Logical operations
+	var boolA, boolB bool
+	boolA = true
+	boolB = false
+	assert(!(boolA && boolB), "Logical AND failed")
+	assert(boolA || boolB, "Logical OR failed")
+	assert(!boolA == false, "Logical NOT failed")
+
+	// 8. Bitwise operations
+	var intA, intB int
+	intA = 5  // Binary: 101
+	intB = 3  // Binary: 011
+	assert((intA & intB) == 1, "Bitwise AND failed")
+	assert((intA | intB) == 7, "Bitwise OR failed")
+	assert((intA ^ intB) == 6, "Bitwise XOR failed")
+
+	// 9. Boundary tests
+	
+	// 9.1 Zero value tests
+	a = 0
+	b = 0
+	result = a + b
+	assert(result == 0, "Zero addition failed")
+	
+	result = a * b
+	assert(result == 0, "Zero multiplication failed")
+	
+	result = a / 1
+	assert(result == 0, "Zero division failed")
+	
+	// 9.2 Max value tests
+	a = math.MaxFloat64
+	b = 1
+	result = a + b
+	assert(result == math.MaxFloat64, "Max value addition failed")
+	
+	// 9.3 Min value tests
+	a = math.SmallestNonzeroFloat64
+	b = 1
+	result = a * b
+	assert(result == math.SmallestNonzeroFloat64, "Min value multiplication failed")
+	
+	// 9.4 Division by zero test
+	a = 1
+	b = 0
+	var isPanic bool
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				isPanic = true
+			}
+		}()
+		result = a / b
+	}()
+	assert(isPanic, "Division by zero should panic")
+
+	onTestDone(this)
 }
