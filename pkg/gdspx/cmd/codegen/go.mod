@@ -1,15 +1,13 @@
 module github.com/goplus/spx/pkg/gdspx/cmd/codegen
 
-go 1.23.0
-
-toolchain go1.23.4
+go 1.21.3
 
 require (
 	github.com/alecthomas/participle/v2 v2.1.4
 	github.com/davecgh/go-spew v1.1.1
 	github.com/iancoleman/strcase v0.3.0
 	github.com/stretchr/testify v1.10.0
-	golang.org/x/exp v0.0.0-20250305212735-054e65f0b394
+	golang.org/x/exp v0.0.0-20230522175609-2e198f4a06a1
 )
 
 require (
