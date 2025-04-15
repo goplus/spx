@@ -48,14 +48,18 @@ cmdweb:
 
 # Release web for builder
 releaseweb:
-	cd ./tutorial/00-Hello &&\
-	rm -rf project/.builds/*web &&\
-	spx exportweb &&\
-	cd ./project/.builds/web &&\
-	rm -rf game.zip &&\
-	zip -r ../spx_web.zip * &&\
-	echo "`pwd`/spx_web.zip has been created" &&\
-	cd $(CURRENT_PATH) 
+	mkdir -p $(CURRENT_PATH)/.tmp/web
+	(cd $(CURRENT_PATH)/.tmp/web && \
+	 mkdir -p assets && \
+	 echo "{\"map\":{\"width\":480,\"height\":360}}" > assets/index.json && \
+	 echo "" > main.spx && \
+	 rm -rf ./project/.builds/*web && \
+	 spx exportweb && \
+	 cd ./project/.builds/web && \
+	 rm -f game.zip && \
+	 zip -r $(CURRENT_PATH)/spx_web.zip * && \
+	 echo "$(CURRENT_PATH)/spx_web.zip has been created")
+	rm -rf $(CURRENT_PATH)/.tmp
 
 test:
 	cd test/All && spx run . && cd $(CURRENT_PATH) 
