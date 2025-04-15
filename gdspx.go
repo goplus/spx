@@ -121,8 +121,13 @@ func (sprite *SpriteImpl) updateProxyTransform(isSync bool) {
 	}
 	x, y := sprite.getXY()
 	applyRenderOffset(sprite, &x, &y)
-	rot, scale := calcRenderRotation(sprite)
-	sprite.syncSprite.UpdateTransform(x, y, rot, scale, isSync)
+	scaleX := sprite.scale
+	scaleY := sprite.scale
+	rot, isFlip := calcRenderRotation(sprite)
+	if isFlip {
+		scaleX = -scaleX
+	}
+	sprite.syncSprite.UpdateTransform(x, y, rot, scaleX, scaleY, isSync)
 }
 
 func (p *Game) syncUpdateProxy() {
@@ -278,19 +283,16 @@ func syncGetCostumeBoundByAlpha(p *SpriteImpl, pscale float64) (mathf.Vec2, math
 	return center, size
 }
 
-func calcRenderRotation(p *SpriteImpl) (float64, float64) {
+func calcRenderRotation(p *SpriteImpl) (float64, bool) {
 	cs := p.costumes[p.costumeIndex_]
 	degree := p.Heading() + cs.faceRight
 	degree -= 90
-	hScale := 1.0
+	isFlip := false
 	if p.rotationStyle == LeftRight {
 		degree = 0
-		isFlip := p.direction < 0
-		if isFlip {
-			hScale = -1.0
-		}
+		isFlip = p.direction < 0
 	}
-	return degree, hScale
+	return degree, isFlip
 }
 
 func applyRenderOffset(p *SpriteImpl, cx, cy *float64) {

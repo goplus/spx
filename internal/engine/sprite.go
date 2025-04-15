@@ -34,21 +34,25 @@ func (pself *Sprite) UpdateTextureAltas(path string, rect2 Rect2, renderScale fl
 	pself.SetRenderScale(NewVec2(renderScale, renderScale))
 }
 
-func (pself *Sprite) UpdateTransform(x, y float64, rot float64, scale64 float64, isSync bool) {
+func (pself *Sprite) UpdateTransform(x, y float64, rot float64, scaleX float64, scaleY float64, isSync bool) {
 	pself.x = x
 	pself.y = y
 	rad := DegToRad(rot)
 	pos := Vec2{X: float64(x), Y: float64(y)}
-	scale := float64(scale64)
+	scalex := float64(scaleX)
+	scaley := float64(scaleY)
+
 	if isSync {
 		pself.SetPosition(pos)
 		pself.SetRotation(rad)
-		pself.SetScaleX(scale)
+		pself.SetScaleX(scalex)
+		pself.SetScaleY(scaley)
 	} else {
 		WaitMainThread(func() {
 			pself.SetPosition(pos)
 			pself.SetRotation(rad)
-			pself.SetScaleX(scale)
+			pself.SetScaleX(scalex)
+			pself.SetScaleY(scaley)
 		})
 	}
 }
