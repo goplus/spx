@@ -46,6 +46,17 @@ cmd:
 cmdweb:
 	cd ./cmd/gox/ && ./install.sh --web && cd $(CURRENT_PATH) 
 
+# Release web for builder
+releaseweb:
+	cd ./tutorial/00-Hello &&\
+	rm -rf project/.builds/*web &&\
+	spx exportweb &&\
+	cd ./project/.builds/web &&\
+	rm -rf game.zip &&\
+	zip -r ../spx_web.zip * &&\
+	echo "`pwd`/spx_web.zip has been created" &&\
+	cd $(CURRENT_PATH) 
+
 test:
 	cd test/All && spx run . && cd $(CURRENT_PATH) 
 
