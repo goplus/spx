@@ -771,6 +771,13 @@ func (p *SpriteImpl) getStateAnimName(stateName string) string {
 	return stateName
 }
 
+func (p *SpriteImpl) hasAnim(animName string) bool {
+	if _, ok := p.animations[animName]; ok {
+		return true
+	}
+	return false
+}
+
 type animState struct {
 	AniType  aniTypeEnum
 	Name     string
@@ -827,6 +834,9 @@ func doAnimation(p *SpriteImpl, info *animState) {
 			return
 		}
 		p.isCostumeDirty = false
+		if !p.hasAnim(animName) {
+			return
+		}
 		p.syncSprite.PlayAnim(animName, info.Speed, info.IsLoop, false)
 	})
 	if info.OnStart != nil && info.OnStart.Play != "" {
