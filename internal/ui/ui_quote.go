@@ -30,6 +30,7 @@ func (pself *UiQuote) OnStart() {
 }
 
 func (pself *UiQuote) SetText(pos mathf.Vec2, size mathf.Vec2, msg, description string) {
+	uiMgr.SetScale(pself.GetId(), mathf.NewVec2(windowScale, windowScale))
 	pos = cameraMgr.GetLocalPosition(pos)
 	uiMgr.SetGlobalPosition(pself.container.GetId(), WorldToUI(pos.Sub(mathf.NewVec2(size.X, -size.Y))))
 	uiMgr.SetSize(pself.container.GetId(), size.Mulf(2))

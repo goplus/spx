@@ -44,6 +44,7 @@ func (pself *UiMonitor) SetVisible(isOn bool) {
 }
 
 func (pself *UiMonitor) UpdateScale(x float64) {
+	x *= windowScale
 	uiMgr.SetScale(pself.GetId(), mathf.NewVec2(x, x))
 }
 func (pself *UiMonitor) UpdatePos(wpos Vec2) {

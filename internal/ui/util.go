@@ -20,9 +20,16 @@ var (
 	spriteMgr   enginewrap.SpriteMgrImpl
 	uiMgr       enginewrap.UiMgrImpl
 )
+var (
+	windowScale float64
+)
 
 type UiNode struct {
 	gdx.UiNode
+}
+
+func SetWindowScale(scale float64) {
+	windowScale = scale
 }
 
 func SyncBindUI[T any](parentNode gdx.Object, path string) *T {
@@ -31,6 +38,7 @@ func SyncBindUI[T any](parentNode gdx.Object, path string) *T {
 
 // convert world space position to screen space
 func WorldToUI(pos Vec2) Vec2 {
+	pos = pos.Mulf(windowScale)
 	pos.Y *= -1
 	viewport := cameraMgr.GetViewportRect()
 	return pos.Add(viewport.Size.Mulf(0.5)).Sub(viewport.Position)

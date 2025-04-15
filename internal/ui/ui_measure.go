@@ -29,6 +29,7 @@ func (pself *UiMeasure) OnStart() {
 }
 
 func (pself *UiMeasure) UpdateInfo(wpos Vec2, length, heading float64, name string, color Color) {
+	uiMgr.SetScale(pself.GetId(), mathf.NewVec2(windowScale, windowScale))
 	extraLen := 4.0 //hack for engine picture size
 	length += extraLen
 
