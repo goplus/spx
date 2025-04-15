@@ -717,25 +717,38 @@ type clicker interface {
 }
 
 func (p *Game) doWhenLeftButtonDown(ev *eventLeftButtonDown) {
+	// add a global click cooldown
+	if !p.inputs.canTriggerClickEvent(inputGlobalClickTimerId) {
+		return
+	}
+
 	point := ev.Pos
 	tempItems := p.getTempShapes()
 	count := len(tempItems)
 
-	if p.inputs.canTriggerClickEvent(0) { // 0 = game
-		p.sinkMgr.doWhenClick(p)
-	}
-
+	var target clicker = nil
 	for i := 0; i < count; i++ {
 		item := tempItems[count-i-1]
 		if o, ok := item.(clicker); ok {
 			syncSprite := o.getProxy()
 			if syncSprite != nil && o.Visible() {
 				isClicked := spriteMgr.CheckCollisionWithPoint(syncSprite.GetId(), point, true)
-				if isClicked && p.inputs.canTriggerClickEvent(syncSprite.GetId()) {
-					o.doWhenClick(o)
-					return
+				if isClicked {
+					target = o
+					break
 				}
 			}
+		}
+	}
+
+	if target != nil {
+		syncSprite := target.getProxy()
+		if p.inputs.canTriggerClickEvent(syncSprite.GetId()) {
+			target.doWhenClick(target)
+		}
+	} else {
+		if p.inputs.canTriggerClickEvent(inputStageClickTimerId) {
+			p.sinkMgr.doWhenClick(p)
 		}
 	}
 }
