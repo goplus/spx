@@ -32,6 +32,7 @@ import (
 	"github.com/goplus/spx/internal/audiorecord"
 	"github.com/goplus/spx/internal/coroutine"
 	"github.com/goplus/spx/internal/engine"
+	"github.com/goplus/spx/internal/engine/platform"
 	gtime "github.com/goplus/spx/internal/time"
 	"github.com/goplus/spx/internal/ui"
 	"github.com/realdream-ai/mathf"
@@ -466,6 +467,14 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 	}
 	if p.windowHeight_ > p.worldHeight_ {
 		p.windowHeight_ = p.worldHeight_
+	}
+
+	// fullscreen when on mobile platform
+	if platform.IsMobile() {
+		platformMgr.SetWindowFullscreen(true)
+		winSize := platformMgr.GetWindowSize()
+		scale := math.Min(winSize.X/float64(p.windowWidth_), winSize.Y/float64(p.windowHeight_))
+		p.windowScale = scale
 	}
 
 	platformMgr.SetWindowSize(int64(float64(p.windowWidth_)*p.windowScale), int64(float64(p.windowHeight_)*p.windowScale))

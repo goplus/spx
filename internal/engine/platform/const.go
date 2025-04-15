@@ -28,3 +28,7 @@ func IsIos() bool {
 func IsServer() bool {
 	return GetPlatformType() == PlatformTypeServer
 }
+
+func IsMobile() bool {
+	return IsAndroid() || IsIos()
+}
