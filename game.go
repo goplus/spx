@@ -719,6 +719,11 @@ func (p *Game) doWhenLeftButtonDown(ev *eventLeftButtonDown) {
 	point := ev.Pos
 	tempItems := p.getTempShapes()
 	count := len(tempItems)
+
+	if p.inputs.canTriggerClickEvent(0) { // 0 = game
+		p.sinkMgr.doWhenClick(p)
+	}
+
 	for i := 0; i < count; i++ {
 		item := tempItems[count-i-1]
 		if o, ok := item.(clicker); ok {
