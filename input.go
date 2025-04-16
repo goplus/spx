@@ -277,6 +277,8 @@ type inputManager struct {
 const (
 	// minimum interval between two mouse click events
 	inputMouseClickIntervalMs = 50
+	inputGlobalClickTimerId   = -1 // global click cooldown
+	inputStageClickTimerId    = 0  // stage click cooldown
 )
 
 func (p *inputManager) init(g *Game) {
