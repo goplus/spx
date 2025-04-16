@@ -138,48 +138,6 @@ func (pself *audioMgr) GetPan(obj Object) float64 {
 	_retValue := API.SpxAudioGetPan.Invoke(arg0)
 	return JsToGdFloat(_retValue)
 }
-func (pself *audioMgr) Play(obj Object, path string) {
-	arg0 := JsFromGdObj(obj)
-	arg1 := JsFromGdString(path)
-	API.SpxAudioPlay.Invoke(arg0, arg1)
-}
-func (pself *audioMgr) Pause(obj Object) {
-	arg0 := JsFromGdObj(obj)
-	API.SpxAudioPause.Invoke(arg0)
-}
-func (pself *audioMgr) Resume(obj Object) {
-	arg0 := JsFromGdObj(obj)
-	API.SpxAudioResume.Invoke(arg0)
-}
-func (pself *audioMgr) Stop(obj Object) {
-	arg0 := JsFromGdObj(obj)
-	API.SpxAudioStop.Invoke(arg0)
-}
-func (pself *audioMgr) SetLoop(obj Object, loop bool) {
-	arg0 := JsFromGdObj(obj)
-	arg1 := JsFromGdBool(loop)
-	API.SpxAudioSetLoop.Invoke(arg0, arg1)
-}
-func (pself *audioMgr) GetLoop(obj Object) bool {
-	arg0 := JsFromGdObj(obj)
-	_retValue := API.SpxAudioGetLoop.Invoke(arg0)
-	return JsToGdBool(_retValue)
-}
-func (pself *audioMgr) GetTimer(obj Object) float64 {
-	arg0 := JsFromGdObj(obj)
-	_retValue := API.SpxAudioGetTimer.Invoke(arg0)
-	return JsToGdFloat(_retValue)
-}
-func (pself *audioMgr) SetTimer(obj Object, time float64) {
-	arg0 := JsFromGdObj(obj)
-	arg1 := JsFromGdFloat(time)
-	API.SpxAudioSetTimer.Invoke(arg0, arg1)
-}
-func (pself *audioMgr) IsPlaying(obj Object) bool {
-	arg0 := JsFromGdObj(obj)
-	_retValue := API.SpxAudioIsPlaying.Invoke(arg0)
-	return JsToGdBool(_retValue)
-}
 func (pself *audioMgr) SetVolume(obj Object, volume float64) {
 	arg0 := JsFromGdObj(obj)
 	arg1 := JsFromGdFloat(volume)
@@ -189,6 +147,49 @@ func (pself *audioMgr) GetVolume(obj Object) float64 {
 	arg0 := JsFromGdObj(obj)
 	_retValue := API.SpxAudioGetVolume.Invoke(arg0)
 	return JsToGdFloat(_retValue)
+}
+func (pself *audioMgr) Play(obj Object, path string) int64 {
+	arg0 := JsFromGdObj(obj)
+	arg1 := JsFromGdString(path)
+	_retValue := API.SpxAudioPlay.Invoke(arg0, arg1)
+	return JsToGdInt(_retValue)
+}
+func (pself *audioMgr) Pause(aid int64) {
+	arg0 := JsFromGdInt(aid)
+	API.SpxAudioPause.Invoke(arg0)
+}
+func (pself *audioMgr) Resume(aid int64) {
+	arg0 := JsFromGdInt(aid)
+	API.SpxAudioResume.Invoke(arg0)
+}
+func (pself *audioMgr) Stop(aid int64) {
+	arg0 := JsFromGdInt(aid)
+	API.SpxAudioStop.Invoke(arg0)
+}
+func (pself *audioMgr) SetLoop(aid int64, loop bool) {
+	arg0 := JsFromGdInt(aid)
+	arg1 := JsFromGdBool(loop)
+	API.SpxAudioSetLoop.Invoke(arg0, arg1)
+}
+func (pself *audioMgr) GetLoop(aid int64) bool {
+	arg0 := JsFromGdInt(aid)
+	_retValue := API.SpxAudioGetLoop.Invoke(arg0)
+	return JsToGdBool(_retValue)
+}
+func (pself *audioMgr) GetTimer(aid int64) float64 {
+	arg0 := JsFromGdInt(aid)
+	_retValue := API.SpxAudioGetTimer.Invoke(arg0)
+	return JsToGdFloat(_retValue)
+}
+func (pself *audioMgr) SetTimer(aid int64, time float64) {
+	arg0 := JsFromGdInt(aid)
+	arg1 := JsFromGdFloat(time)
+	API.SpxAudioSetTimer.Invoke(arg0, arg1)
+}
+func (pself *audioMgr) IsPlaying(aid int64) bool {
+	arg0 := JsFromGdInt(aid)
+	_retValue := API.SpxAudioIsPlaying.Invoke(arg0)
+	return JsToGdBool(_retValue)
 }
 func (pself *cameraMgr) GetCameraPosition() Vec2 {
 	_retValue := API.SpxCameraGetCameraPosition.Invoke()

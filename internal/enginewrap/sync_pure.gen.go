@@ -112,27 +112,30 @@ func (pself *audioMgrImpl) GetPan(obj gdx.Object) float64 {
 	var _ret1 float64
 	return _ret1
 }
-func (pself *audioMgrImpl) Play(obj gdx.Object, path string)  {}
-func (pself *audioMgrImpl) Pause(obj gdx.Object)              {}
-func (pself *audioMgrImpl) Resume(obj gdx.Object)             {}
-func (pself *audioMgrImpl) Stop(obj gdx.Object)               {}
-func (pself *audioMgrImpl) SetLoop(obj gdx.Object, loop bool) {}
-func (pself *audioMgrImpl) GetLoop(obj gdx.Object) bool {
-	var _ret1 bool
-	return _ret1
-}
-func (pself *audioMgrImpl) GetTimer(obj gdx.Object) float64 {
-	var _ret1 float64
-	return _ret1
-}
-func (pself *audioMgrImpl) SetTimer(obj gdx.Object, time float64) {}
-func (pself *audioMgrImpl) IsPlaying(obj gdx.Object) bool {
-	var _ret1 bool
-	return _ret1
-}
 func (pself *audioMgrImpl) SetVolume(obj gdx.Object, volume float64) {}
 func (pself *audioMgrImpl) GetVolume(obj gdx.Object) float64 {
 	var _ret1 float64
+	return _ret1
+}
+func (pself *audioMgrImpl) Play(obj gdx.Object, path string) int64 {
+	var _ret1 int64
+	return _ret1
+}
+func (pself *audioMgrImpl) Pause(aid int64)              {}
+func (pself *audioMgrImpl) Resume(aid int64)             {}
+func (pself *audioMgrImpl) Stop(aid int64)               {}
+func (pself *audioMgrImpl) SetLoop(aid int64, loop bool) {}
+func (pself *audioMgrImpl) GetLoop(aid int64) bool {
+	var _ret1 bool
+	return _ret1
+}
+func (pself *audioMgrImpl) GetTimer(aid int64) float64 {
+	var _ret1 float64
+	return _ret1
+}
+func (pself *audioMgrImpl) SetTimer(aid int64, time float64) {}
+func (pself *audioMgrImpl) IsPlaying(aid int64) bool {
+	var _ret1 bool
 	return _ret1
 }
 

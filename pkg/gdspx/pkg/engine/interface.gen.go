@@ -35,17 +35,17 @@ type IAudioMgr interface {
 	GetPitch(obj Object) float64
 	SetPan(obj Object, pan float64)
 	GetPan(obj Object) float64
-	Play(obj Object, path string)
-	Pause(obj Object)
-	Resume(obj Object)
-	Stop(obj Object)
-	SetLoop(obj Object, loop bool)
-	GetLoop(obj Object) bool
-	GetTimer(obj Object) float64
-	SetTimer(obj Object, time float64)
-	IsPlaying(obj Object) bool
 	SetVolume(obj Object, volume float64)
 	GetVolume(obj Object) float64
+	Play(obj Object, path string) int64
+	Pause(aid int64)
+	Resume(aid int64)
+	Stop(aid int64)
+	SetLoop(aid int64, loop bool)
+	GetLoop(aid int64) bool
+	GetTimer(aid int64) float64
+	SetTimer(aid int64, time float64)
+	IsPlaying(aid int64) bool
 }
 
 type ICameraMgr interface {

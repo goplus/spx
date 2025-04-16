@@ -79,6 +79,8 @@ type GDExtensionSpxAudioSetPitch C.GDExtensionSpxAudioSetPitch
 type GDExtensionSpxAudioGetPitch C.GDExtensionSpxAudioGetPitch
 type GDExtensionSpxAudioSetPan C.GDExtensionSpxAudioSetPan
 type GDExtensionSpxAudioGetPan C.GDExtensionSpxAudioGetPan
+type GDExtensionSpxAudioSetVolume C.GDExtensionSpxAudioSetVolume
+type GDExtensionSpxAudioGetVolume C.GDExtensionSpxAudioGetVolume
 type GDExtensionSpxAudioPlay C.GDExtensionSpxAudioPlay
 type GDExtensionSpxAudioPause C.GDExtensionSpxAudioPause
 type GDExtensionSpxAudioResume C.GDExtensionSpxAudioResume
@@ -88,8 +90,6 @@ type GDExtensionSpxAudioGetLoop C.GDExtensionSpxAudioGetLoop
 type GDExtensionSpxAudioGetTimer C.GDExtensionSpxAudioGetTimer
 type GDExtensionSpxAudioSetTimer C.GDExtensionSpxAudioSetTimer
 type GDExtensionSpxAudioIsPlaying C.GDExtensionSpxAudioIsPlaying
-type GDExtensionSpxAudioSetVolume C.GDExtensionSpxAudioSetVolume
-type GDExtensionSpxAudioGetVolume C.GDExtensionSpxAudioGetVolume
 type GDExtensionSpxCameraGetCameraPosition C.GDExtensionSpxCameraGetCameraPosition
 type GDExtensionSpxCameraSetCameraPosition C.GDExtensionSpxCameraSetCameraPosition
 type GDExtensionSpxCameraGetCameraZoom C.GDExtensionSpxCameraGetCameraZoom
@@ -354,96 +354,6 @@ func CallAudioGetPan(
 
 	return (GdFloat)(ret_val)
 }
-func CallAudioPlay(
-	obj GdObj,
-	path GdString,
-) {
-	arg0 := (C.GDExtensionSpxAudioPlay)(api.SpxAudioPlay)
-	arg1GdObj = (C.GdObj)(obj)
-	arg2GdString = (C.GdString)(path)
-
-	C.cgo_callfn_GDExtensionSpxAudioPlay(arg0, arg1GdObj, arg2GdString)
-
-}
-func CallAudioPause(
-	obj GdObj,
-) {
-	arg0 := (C.GDExtensionSpxAudioPause)(api.SpxAudioPause)
-	arg1GdObj = (C.GdObj)(obj)
-
-	C.cgo_callfn_GDExtensionSpxAudioPause(arg0, arg1GdObj)
-
-}
-func CallAudioResume(
-	obj GdObj,
-) {
-	arg0 := (C.GDExtensionSpxAudioResume)(api.SpxAudioResume)
-	arg1GdObj = (C.GdObj)(obj)
-
-	C.cgo_callfn_GDExtensionSpxAudioResume(arg0, arg1GdObj)
-
-}
-func CallAudioStop(
-	obj GdObj,
-) {
-	arg0 := (C.GDExtensionSpxAudioStop)(api.SpxAudioStop)
-	arg1GdObj = (C.GdObj)(obj)
-
-	C.cgo_callfn_GDExtensionSpxAudioStop(arg0, arg1GdObj)
-
-}
-func CallAudioSetLoop(
-	obj GdObj,
-	loop GdBool,
-) {
-	arg0 := (C.GDExtensionSpxAudioSetLoop)(api.SpxAudioSetLoop)
-	arg1GdObj = (C.GdObj)(obj)
-	arg2GdBool = (C.GdBool)(loop)
-
-	C.cgo_callfn_GDExtensionSpxAudioSetLoop(arg0, arg1GdObj, arg2GdBool)
-
-}
-func CallAudioGetLoop(
-	obj GdObj,
-) GdBool {
-	arg0 := (C.GDExtensionSpxAudioGetLoop)(api.SpxAudioGetLoop)
-	arg1GdObj = (C.GdObj)(obj)
-	var ret_val C.GdBool
-	C.cgo_callfn_GDExtensionSpxAudioGetLoop(arg0, arg1GdObj, &ret_val)
-
-	return (GdBool)(ret_val)
-}
-func CallAudioGetTimer(
-	obj GdObj,
-) GdFloat {
-	arg0 := (C.GDExtensionSpxAudioGetTimer)(api.SpxAudioGetTimer)
-	arg1GdObj = (C.GdObj)(obj)
-	var ret_val C.GdFloat
-	C.cgo_callfn_GDExtensionSpxAudioGetTimer(arg0, arg1GdObj, &ret_val)
-
-	return (GdFloat)(ret_val)
-}
-func CallAudioSetTimer(
-	obj GdObj,
-	time GdFloat,
-) {
-	arg0 := (C.GDExtensionSpxAudioSetTimer)(api.SpxAudioSetTimer)
-	arg1GdObj = (C.GdObj)(obj)
-	arg2GdFloat = (C.GdFloat)(time)
-
-	C.cgo_callfn_GDExtensionSpxAudioSetTimer(arg0, arg1GdObj, arg2GdFloat)
-
-}
-func CallAudioIsPlaying(
-	obj GdObj,
-) GdBool {
-	arg0 := (C.GDExtensionSpxAudioIsPlaying)(api.SpxAudioIsPlaying)
-	arg1GdObj = (C.GdObj)(obj)
-	var ret_val C.GdBool
-	C.cgo_callfn_GDExtensionSpxAudioIsPlaying(arg0, arg1GdObj, &ret_val)
-
-	return (GdBool)(ret_val)
-}
 func CallAudioSetVolume(
 	obj GdObj,
 	volume GdFloat,
@@ -464,6 +374,97 @@ func CallAudioGetVolume(
 	C.cgo_callfn_GDExtensionSpxAudioGetVolume(arg0, arg1GdObj, &ret_val)
 
 	return (GdFloat)(ret_val)
+}
+func CallAudioPlay(
+	obj GdObj,
+	path GdString,
+) GdInt {
+	arg0 := (C.GDExtensionSpxAudioPlay)(api.SpxAudioPlay)
+	arg1GdObj = (C.GdObj)(obj)
+	arg2GdString = (C.GdString)(path)
+	var ret_val C.GdInt
+	C.cgo_callfn_GDExtensionSpxAudioPlay(arg0, arg1GdObj, arg2GdString, &ret_val)
+
+	return (GdInt)(ret_val)
+}
+func CallAudioPause(
+	aid GdInt,
+) {
+	arg0 := (C.GDExtensionSpxAudioPause)(api.SpxAudioPause)
+	arg1GdInt = (C.GdInt)(aid)
+
+	C.cgo_callfn_GDExtensionSpxAudioPause(arg0, arg1GdInt)
+
+}
+func CallAudioResume(
+	aid GdInt,
+) {
+	arg0 := (C.GDExtensionSpxAudioResume)(api.SpxAudioResume)
+	arg1GdInt = (C.GdInt)(aid)
+
+	C.cgo_callfn_GDExtensionSpxAudioResume(arg0, arg1GdInt)
+
+}
+func CallAudioStop(
+	aid GdInt,
+) {
+	arg0 := (C.GDExtensionSpxAudioStop)(api.SpxAudioStop)
+	arg1GdInt = (C.GdInt)(aid)
+
+	C.cgo_callfn_GDExtensionSpxAudioStop(arg0, arg1GdInt)
+
+}
+func CallAudioSetLoop(
+	aid GdInt,
+	loop GdBool,
+) {
+	arg0 := (C.GDExtensionSpxAudioSetLoop)(api.SpxAudioSetLoop)
+	arg1GdInt = (C.GdInt)(aid)
+	arg2GdBool = (C.GdBool)(loop)
+
+	C.cgo_callfn_GDExtensionSpxAudioSetLoop(arg0, arg1GdInt, arg2GdBool)
+
+}
+func CallAudioGetLoop(
+	aid GdInt,
+) GdBool {
+	arg0 := (C.GDExtensionSpxAudioGetLoop)(api.SpxAudioGetLoop)
+	arg1GdInt = (C.GdInt)(aid)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxAudioGetLoop(arg0, arg1GdInt, &ret_val)
+
+	return (GdBool)(ret_val)
+}
+func CallAudioGetTimer(
+	aid GdInt,
+) GdFloat {
+	arg0 := (C.GDExtensionSpxAudioGetTimer)(api.SpxAudioGetTimer)
+	arg1GdInt = (C.GdInt)(aid)
+	var ret_val C.GdFloat
+	C.cgo_callfn_GDExtensionSpxAudioGetTimer(arg0, arg1GdInt, &ret_val)
+
+	return (GdFloat)(ret_val)
+}
+func CallAudioSetTimer(
+	aid GdInt,
+	time GdFloat,
+) {
+	arg0 := (C.GDExtensionSpxAudioSetTimer)(api.SpxAudioSetTimer)
+	arg1GdInt = (C.GdInt)(aid)
+	arg2GdFloat = (C.GdFloat)(time)
+
+	C.cgo_callfn_GDExtensionSpxAudioSetTimer(arg0, arg1GdInt, arg2GdFloat)
+
+}
+func CallAudioIsPlaying(
+	aid GdInt,
+) GdBool {
+	arg0 := (C.GDExtensionSpxAudioIsPlaying)(api.SpxAudioIsPlaying)
+	arg1GdInt = (C.GdInt)(aid)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxAudioIsPlaying(arg0, arg1GdInt, &ret_val)
+
+	return (GdBool)(ret_val)
 }
 func CallCameraGetCameraPosition() GdVec2 {
 	arg0 := (C.GDExtensionSpxCameraGetCameraPosition)(api.SpxCameraGetCameraPosition)

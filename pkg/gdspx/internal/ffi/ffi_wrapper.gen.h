@@ -33,38 +33,38 @@ void cgo_callfn_GDExtensionSpxAudioSetPan(const GDExtensionSpxAudioSetPan fn, Gd
 void cgo_callfn_GDExtensionSpxAudioGetPan(const GDExtensionSpxAudioGetPan fn, GdObj obj, GdFloat* ret_val) {
 	fn(obj,ret_val);
 }
-void cgo_callfn_GDExtensionSpxAudioPlay(const GDExtensionSpxAudioPlay fn, GdObj obj, GdString path) {
-	fn(obj, path);
-}
-void cgo_callfn_GDExtensionSpxAudioPause(const GDExtensionSpxAudioPause fn, GdObj obj) {
-	fn(obj);
-}
-void cgo_callfn_GDExtensionSpxAudioResume(const GDExtensionSpxAudioResume fn, GdObj obj) {
-	fn(obj);
-}
-void cgo_callfn_GDExtensionSpxAudioStop(const GDExtensionSpxAudioStop fn, GdObj obj) {
-	fn(obj);
-}
-void cgo_callfn_GDExtensionSpxAudioSetLoop(const GDExtensionSpxAudioSetLoop fn, GdObj obj, GdBool loop) {
-	fn(obj, loop);
-}
-void cgo_callfn_GDExtensionSpxAudioGetLoop(const GDExtensionSpxAudioGetLoop fn, GdObj obj, GdBool* ret_val) {
-	fn(obj,ret_val);
-}
-void cgo_callfn_GDExtensionSpxAudioGetTimer(const GDExtensionSpxAudioGetTimer fn, GdObj obj, GdFloat* ret_val) {
-	fn(obj,ret_val);
-}
-void cgo_callfn_GDExtensionSpxAudioSetTimer(const GDExtensionSpxAudioSetTimer fn, GdObj obj, GdFloat time) {
-	fn(obj, time);
-}
-void cgo_callfn_GDExtensionSpxAudioIsPlaying(const GDExtensionSpxAudioIsPlaying fn, GdObj obj, GdBool* ret_val) {
-	fn(obj,ret_val);
-}
 void cgo_callfn_GDExtensionSpxAudioSetVolume(const GDExtensionSpxAudioSetVolume fn, GdObj obj, GdFloat volume) {
 	fn(obj, volume);
 }
 void cgo_callfn_GDExtensionSpxAudioGetVolume(const GDExtensionSpxAudioGetVolume fn, GdObj obj, GdFloat* ret_val) {
 	fn(obj,ret_val);
+}
+void cgo_callfn_GDExtensionSpxAudioPlay(const GDExtensionSpxAudioPlay fn, GdObj obj, GdString path, GdInt* ret_val) {
+	fn(obj, path,ret_val);
+}
+void cgo_callfn_GDExtensionSpxAudioPause(const GDExtensionSpxAudioPause fn, GdInt aid) {
+	fn(aid);
+}
+void cgo_callfn_GDExtensionSpxAudioResume(const GDExtensionSpxAudioResume fn, GdInt aid) {
+	fn(aid);
+}
+void cgo_callfn_GDExtensionSpxAudioStop(const GDExtensionSpxAudioStop fn, GdInt aid) {
+	fn(aid);
+}
+void cgo_callfn_GDExtensionSpxAudioSetLoop(const GDExtensionSpxAudioSetLoop fn, GdInt aid, GdBool loop) {
+	fn(aid, loop);
+}
+void cgo_callfn_GDExtensionSpxAudioGetLoop(const GDExtensionSpxAudioGetLoop fn, GdInt aid, GdBool* ret_val) {
+	fn(aid,ret_val);
+}
+void cgo_callfn_GDExtensionSpxAudioGetTimer(const GDExtensionSpxAudioGetTimer fn, GdInt aid, GdFloat* ret_val) {
+	fn(aid,ret_val);
+}
+void cgo_callfn_GDExtensionSpxAudioSetTimer(const GDExtensionSpxAudioSetTimer fn, GdInt aid, GdFloat time) {
+	fn(aid, time);
+}
+void cgo_callfn_GDExtensionSpxAudioIsPlaying(const GDExtensionSpxAudioIsPlaying fn, GdInt aid, GdBool* ret_val) {
+	fn(aid,ret_val);
 }
 void cgo_callfn_GDExtensionSpxCameraGetCameraPosition(const GDExtensionSpxCameraGetCameraPosition fn, GdVec2* ret_val) {
 	fn(ret_val);
