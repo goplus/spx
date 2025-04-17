@@ -1,0 +1,79 @@
+import "fmt"
+import "math"
+
+
+onMsg "testEffect", => {
+	onTestStart(this)
+
+    setSize 5
+
+    // 1. string
+    say "testEffect"
+    wait 0.1
+
+    //ColorEffect
+	//BrightnessEffect
+	//GhostEffect
+	//MosaicEffect
+	//WhirlEffect
+	//FishEyeEffect
+	//UVEffect
+
+    // 1. ColorEffect
+    say "test ColorEffect"
+    for i := 0; i <= 5; i++ {
+        changeEffect ColorEffect, 20
+        wait 0.1
+    }
+    ClearGraphEffects
+
+    // 2. BrightnessEffect
+    say "test BrightnessEffect"
+    for i := 0; i <= 5; i++ {
+        changeEffect BrightnessEffect, 20
+        wait 0.1
+    }
+    ClearGraphEffects
+
+    // 3. GhostEffect
+    say "test GhostEffect"
+    for i := 0; i <= 5; i++ {
+        changeEffect GhostEffect, 20
+        wait 0.1
+    }
+    ClearGraphEffects
+
+    // 4. MosaicEffect
+    say "test MosaicEffect"
+    for i := 0; i <= 5; i++ {
+        changeEffect MosaicEffect, 20
+        wait 0.1
+    }
+    ClearGraphEffects
+
+    // 5. WhirlEffect
+    say "test WhirlEffect"
+    for i := 0; i <= 5; i++ {
+        changeEffect WhirlEffect, 10
+        wait 0.1
+    }
+    ClearGraphEffects
+   
+	// 6. FishEyeEffect
+    say "test FishEyeEffect"
+    for i := 0; i <= 5; i++ {
+        changeEffect FishEyeEffect, 10
+        wait 0.1
+    }
+    ClearGraphEffects
+
+    // 7. UVEffect
+    say "test UVEffect"
+    for i := 0; i <= 5; i++ {
+        changeEffect UVEffect, 10
+        wait 0.1
+    }
+    ClearGraphEffects
+
+	onTestDone(this)
+}

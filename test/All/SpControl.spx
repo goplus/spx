@@ -1,11 +1,40 @@
-
 import "fmt"
 import "math"
 
-
-
 onMsg "testControl", => {
     onTestStart(this)
-    // TODO 
+
+    // 1. Test repeat execution
+    var count int
+    for i := 0; i <= 5; i++ {
+        count++
+    }
+    assert(count == 6, "Repeat execution test failed")
+
+    // 2. Test infinite loop
+    var loopCount = 0
+    for {
+        loopCount++
+        if loopCount >= 10 {
+            break
+        }
+    }
+    assert(loopCount == 10, "Infinite loop test failed")
+
+    // 3. Test conditional statements
+    var testValue = 10
+    if testValue > 5 {
+        assert(true, "If condition test failed")
+    } else {
+        assert(false, "If condition test failed")
+    }
+
+    // 4. Test if-else statements
+    if testValue < 5 {
+        assert(false, "If-else condition test failed")
+    } else {
+        assert(true, "If-else condition test failed")
+    }
+
     onTestDone(this)
 }
