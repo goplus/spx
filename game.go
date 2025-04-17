@@ -127,7 +127,7 @@ type Game struct {
 	audioId     engine.Object
 
 	askObj    *ui.UiAsk
-	anwserVal string
+	answerVal string
 }
 
 type Gamer interface {
@@ -1267,8 +1267,8 @@ func (p *Game) Ask(msgv interface{}) {
 	p.ask(false, msg, func(answer string) {})
 }
 
-func (p *Game) Anwser() string {
-	return p.anwserVal
+func (p *Game) Answer() string {
+	return p.answerVal
 }
 
 func (p *Game) ask(isSprite bool, question string, callback func(string)) {
@@ -1278,7 +1278,7 @@ func (p *Game) ask(isSprite bool, question string, callback func(string)) {
 	}
 	hasAnswer := false
 	p.askObj.Show(isSprite, question, func(msg string) {
-		p.anwserVal = msg
+		p.answerVal = msg
 		callback(msg)
 		hasAnswer = true
 	})
