@@ -29,6 +29,8 @@ type GDExtensionInterface struct {
 	SpxAudioGetPitch                         js.Value
 	SpxAudioSetPan                           js.Value
 	SpxAudioGetPan                           js.Value
+	SpxAudioSetVolume                        js.Value
+	SpxAudioGetVolume                        js.Value
 	SpxAudioPlay                             js.Value
 	SpxAudioPause                            js.Value
 	SpxAudioResume                           js.Value
@@ -38,8 +40,6 @@ type GDExtensionInterface struct {
 	SpxAudioGetTimer                         js.Value
 	SpxAudioSetTimer                         js.Value
 	SpxAudioIsPlaying                        js.Value
-	SpxAudioSetVolume                        js.Value
-	SpxAudioGetVolume                        js.Value
 	SpxCameraGetCameraPosition               js.Value
 	SpxCameraSetCameraPosition               js.Value
 	SpxCameraGetCameraZoom                   js.Value
@@ -250,6 +250,8 @@ func (x *GDExtensionInterface) loadProcAddresses() {
 	x.SpxAudioGetPitch = dlsymGD("gdspx_audio_get_pitch")
 	x.SpxAudioSetPan = dlsymGD("gdspx_audio_set_pan")
 	x.SpxAudioGetPan = dlsymGD("gdspx_audio_get_pan")
+	x.SpxAudioSetVolume = dlsymGD("gdspx_audio_set_volume")
+	x.SpxAudioGetVolume = dlsymGD("gdspx_audio_get_volume")
 	x.SpxAudioPlay = dlsymGD("gdspx_audio_play")
 	x.SpxAudioPause = dlsymGD("gdspx_audio_pause")
 	x.SpxAudioResume = dlsymGD("gdspx_audio_resume")
@@ -259,8 +261,6 @@ func (x *GDExtensionInterface) loadProcAddresses() {
 	x.SpxAudioGetTimer = dlsymGD("gdspx_audio_get_timer")
 	x.SpxAudioSetTimer = dlsymGD("gdspx_audio_set_timer")
 	x.SpxAudioIsPlaying = dlsymGD("gdspx_audio_is_playing")
-	x.SpxAudioSetVolume = dlsymGD("gdspx_audio_set_volume")
-	x.SpxAudioGetVolume = dlsymGD("gdspx_audio_get_volume")
 	x.SpxCameraGetCameraPosition = dlsymGD("gdspx_camera_get_camera_position")
 	x.SpxCameraSetCameraPosition = dlsymGD("gdspx_camera_set_camera_position")
 	x.SpxCameraGetCameraZoom = dlsymGD("gdspx_camera_get_camera_zoom")

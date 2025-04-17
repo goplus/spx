@@ -137,50 +137,6 @@ func (pself *audioMgr) GetPan(obj Object) float64 {
 	retValue := CallAudioGetPan(arg0)
 	return ToFloat64(retValue)
 }
-func (pself *audioMgr) Play(obj Object, path string) {
-	arg0 := ToGdObj(obj)
-	arg1Str := NewCString(path)
-	arg1 := arg1Str.ToGdString()
-	defer arg1Str.Destroy()
-	CallAudioPlay(arg0, arg1)
-}
-func (pself *audioMgr) Pause(obj Object) {
-	arg0 := ToGdObj(obj)
-	CallAudioPause(arg0)
-}
-func (pself *audioMgr) Resume(obj Object) {
-	arg0 := ToGdObj(obj)
-	CallAudioResume(arg0)
-}
-func (pself *audioMgr) Stop(obj Object) {
-	arg0 := ToGdObj(obj)
-	CallAudioStop(arg0)
-}
-func (pself *audioMgr) SetLoop(obj Object, loop bool) {
-	arg0 := ToGdObj(obj)
-	arg1 := ToGdBool(loop)
-	CallAudioSetLoop(arg0, arg1)
-}
-func (pself *audioMgr) GetLoop(obj Object) bool {
-	arg0 := ToGdObj(obj)
-	retValue := CallAudioGetLoop(arg0)
-	return ToBool(retValue)
-}
-func (pself *audioMgr) GetTimer(obj Object) float64 {
-	arg0 := ToGdObj(obj)
-	retValue := CallAudioGetTimer(arg0)
-	return ToFloat64(retValue)
-}
-func (pself *audioMgr) SetTimer(obj Object, time float64) {
-	arg0 := ToGdObj(obj)
-	arg1 := ToGdFloat(time)
-	CallAudioSetTimer(arg0, arg1)
-}
-func (pself *audioMgr) IsPlaying(obj Object) bool {
-	arg0 := ToGdObj(obj)
-	retValue := CallAudioIsPlaying(arg0)
-	return ToBool(retValue)
-}
 func (pself *audioMgr) SetVolume(obj Object, volume float64) {
 	arg0 := ToGdObj(obj)
 	arg1 := ToGdFloat(volume)
@@ -190,6 +146,51 @@ func (pself *audioMgr) GetVolume(obj Object) float64 {
 	arg0 := ToGdObj(obj)
 	retValue := CallAudioGetVolume(arg0)
 	return ToFloat64(retValue)
+}
+func (pself *audioMgr) Play(obj Object, path string) int64 {
+	arg0 := ToGdObj(obj)
+	arg1Str := NewCString(path)
+	arg1 := arg1Str.ToGdString()
+	defer arg1Str.Destroy()
+	retValue := CallAudioPlay(arg0, arg1)
+	return ToInt64(retValue)
+}
+func (pself *audioMgr) Pause(aid int64) {
+	arg0 := ToGdInt(aid)
+	CallAudioPause(arg0)
+}
+func (pself *audioMgr) Resume(aid int64) {
+	arg0 := ToGdInt(aid)
+	CallAudioResume(arg0)
+}
+func (pself *audioMgr) Stop(aid int64) {
+	arg0 := ToGdInt(aid)
+	CallAudioStop(arg0)
+}
+func (pself *audioMgr) SetLoop(aid int64, loop bool) {
+	arg0 := ToGdInt(aid)
+	arg1 := ToGdBool(loop)
+	CallAudioSetLoop(arg0, arg1)
+}
+func (pself *audioMgr) GetLoop(aid int64) bool {
+	arg0 := ToGdInt(aid)
+	retValue := CallAudioGetLoop(arg0)
+	return ToBool(retValue)
+}
+func (pself *audioMgr) GetTimer(aid int64) float64 {
+	arg0 := ToGdInt(aid)
+	retValue := CallAudioGetTimer(arg0)
+	return ToFloat64(retValue)
+}
+func (pself *audioMgr) SetTimer(aid int64, time float64) {
+	arg0 := ToGdInt(aid)
+	arg1 := ToGdFloat(time)
+	CallAudioSetTimer(arg0, arg1)
+}
+func (pself *audioMgr) IsPlaying(aid int64) bool {
+	arg0 := ToGdInt(aid)
+	retValue := CallAudioIsPlaying(arg0)
+	return ToBool(retValue)
 }
 func (pself *cameraMgr) GetCameraPosition() Vec2 {
 	retValue := CallCameraGetCameraPosition()

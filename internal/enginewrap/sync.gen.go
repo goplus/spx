@@ -137,57 +137,6 @@ func (pself *audioMgrImpl) GetPan(obj gdx.Object) float64 {
 	})
 	return _ret1
 }
-func (pself *audioMgrImpl) Play(obj gdx.Object, path string) {
-	callInMainThread(func() {
-		gdx.AudioMgr.Play(obj, path)
-	})
-}
-func (pself *audioMgrImpl) Pause(obj gdx.Object) {
-	callInMainThread(func() {
-		gdx.AudioMgr.Pause(obj)
-	})
-}
-func (pself *audioMgrImpl) Resume(obj gdx.Object) {
-	callInMainThread(func() {
-		gdx.AudioMgr.Resume(obj)
-	})
-}
-func (pself *audioMgrImpl) Stop(obj gdx.Object) {
-	callInMainThread(func() {
-		gdx.AudioMgr.Stop(obj)
-	})
-}
-func (pself *audioMgrImpl) SetLoop(obj gdx.Object, loop bool) {
-	callInMainThread(func() {
-		gdx.AudioMgr.SetLoop(obj, loop)
-	})
-}
-func (pself *audioMgrImpl) GetLoop(obj gdx.Object) bool {
-	var _ret1 bool
-	callInMainThread(func() {
-		_ret1 = gdx.AudioMgr.GetLoop(obj)
-	})
-	return _ret1
-}
-func (pself *audioMgrImpl) GetTimer(obj gdx.Object) float64 {
-	var _ret1 float64
-	callInMainThread(func() {
-		_ret1 = gdx.AudioMgr.GetTimer(obj)
-	})
-	return _ret1
-}
-func (pself *audioMgrImpl) SetTimer(obj gdx.Object, time float64) {
-	callInMainThread(func() {
-		gdx.AudioMgr.SetTimer(obj, time)
-	})
-}
-func (pself *audioMgrImpl) IsPlaying(obj gdx.Object) bool {
-	var _ret1 bool
-	callInMainThread(func() {
-		_ret1 = gdx.AudioMgr.IsPlaying(obj)
-	})
-	return _ret1
-}
 func (pself *audioMgrImpl) SetVolume(obj gdx.Object, volume float64) {
 	callInMainThread(func() {
 		gdx.AudioMgr.SetVolume(obj, volume)
@@ -197,6 +146,59 @@ func (pself *audioMgrImpl) GetVolume(obj gdx.Object) float64 {
 	var _ret1 float64
 	callInMainThread(func() {
 		_ret1 = gdx.AudioMgr.GetVolume(obj)
+	})
+	return _ret1
+}
+func (pself *audioMgrImpl) Play(obj gdx.Object, path string) int64 {
+	var _ret1 int64
+	callInMainThread(func() {
+		_ret1 = gdx.AudioMgr.Play(obj, path)
+	})
+	return _ret1
+}
+func (pself *audioMgrImpl) Pause(aid int64) {
+	callInMainThread(func() {
+		gdx.AudioMgr.Pause(aid)
+	})
+}
+func (pself *audioMgrImpl) Resume(aid int64) {
+	callInMainThread(func() {
+		gdx.AudioMgr.Resume(aid)
+	})
+}
+func (pself *audioMgrImpl) Stop(aid int64) {
+	callInMainThread(func() {
+		gdx.AudioMgr.Stop(aid)
+	})
+}
+func (pself *audioMgrImpl) SetLoop(aid int64, loop bool) {
+	callInMainThread(func() {
+		gdx.AudioMgr.SetLoop(aid, loop)
+	})
+}
+func (pself *audioMgrImpl) GetLoop(aid int64) bool {
+	var _ret1 bool
+	callInMainThread(func() {
+		_ret1 = gdx.AudioMgr.GetLoop(aid)
+	})
+	return _ret1
+}
+func (pself *audioMgrImpl) GetTimer(aid int64) float64 {
+	var _ret1 float64
+	callInMainThread(func() {
+		_ret1 = gdx.AudioMgr.GetTimer(aid)
+	})
+	return _ret1
+}
+func (pself *audioMgrImpl) SetTimer(aid int64, time float64) {
+	callInMainThread(func() {
+		gdx.AudioMgr.SetTimer(aid, time)
+	})
+}
+func (pself *audioMgrImpl) IsPlaying(aid int64) bool {
+	var _ret1 bool
+	callInMainThread(func() {
+		_ret1 = gdx.AudioMgr.IsPlaying(aid)
 	})
 	return _ret1
 }

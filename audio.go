@@ -38,12 +38,14 @@ type PlayOptions struct {
 }
 
 type soundMgr struct {
-	g      *Game
-	audios map[string]Sound
+	g        *Game
+	audios   map[string]Sound
+	path2ids map[string][]int64
 }
 
 func (p *soundMgr) init(g *Game) {
 	p.audios = make(map[string]Sound)
+	p.path2ids = make(map[string][]int64)
 	p.g = g
 }
 
@@ -60,25 +62,38 @@ func (p *soundMgr) releaseAudio(audioId engine.Object) {
 
 func (p *soundMgr) play(audioId engine.Object, media Sound, opts *PlayOptions) (err error) {
 	action := opts.Action
+	var curId int64 = 0
 	switch action {
 	case PlayRewind:
-		audioMgr.Play(audioId, engine.ToAssetPath(media.Path))
+		curId = audioMgr.Play(audioId, engine.ToAssetPath(media.Path))
+		p.path2ids[media.Path] = append(p.path2ids[media.Path], curId)
 	case PlayContinue:
-		audioMgr.Resume(audioId)
+		for _, id := range p.path2ids[media.Path] {
+			audioMgr.Resume(id)
+		}
 	case PlayPause:
-		audioMgr.Pause(audioId)
+		for _, id := range p.path2ids[media.Path] {
+			audioMgr.Pause(id)
+		}
 	case PlayResume:
-		audioMgr.Resume(audioId)
+		for _, id := range p.path2ids[media.Path] {
+			audioMgr.Resume(id)
+		}
 	case PlayStop:
-		audioMgr.Stop(audioId)
+		for _, id := range p.path2ids[media.Path] {
+			audioMgr.Stop(id)
+		}
+		delete(p.path2ids, media.Path)
 	}
 
 	if opts.Loop {
-		audioMgr.SetLoop(audioId, true)
+		for _, id := range p.path2ids[media.Path] {
+			audioMgr.SetLoop(id, true)
+		}
 	} else {
 		if opts.Wait {
 			for {
-				if !audioMgr.IsPlaying(audioId) {
+				if !audioMgr.IsPlaying(curId) {
 					break
 				}
 				engine.WaitNextFrame()
@@ -89,6 +104,7 @@ func (p *soundMgr) play(audioId engine.Object, media Sound, opts *PlayOptions) (
 }
 
 func (p *soundMgr) stopAll() {
+	p.path2ids = make(map[string][]int64)
 	audioMgr.StopAll()
 }
 
@@ -102,6 +118,7 @@ func (p *soundMgr) getEffect(audioId engine.Object, kind SoundEffectKind) float6
 		panic("GetSoundEffect: invalid kind")
 	}
 }
+
 func (p *soundMgr) setEffect(audioId engine.Object, kind SoundEffectKind, value float64) {
 	val := value / 100
 	switch kind {
