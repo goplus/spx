@@ -34,6 +34,10 @@ func (c *Camera) SetCameraZoom(scale float64) {
 	cameraMgr.SetCameraZoom(mathf.NewVec2(scale, scale))
 }
 
+func (c *Camera) GetCameraZoom() float64 {
+	return cameraMgr.GetCameraZoom().X
+}
+
 func (c *Camera) GetXYpos() (float64, float64) {
 	pos := cameraMgr.GetPosition()
 	return pos.X, pos.Y
