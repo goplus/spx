@@ -482,6 +482,8 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 	p.Camera.SetCameraZoom(p.windowScale)
 	ui.SetWindowScale(p.windowScale)
 
+	physicMgr.SetCollisionSystemType(!proj.CollisionByShape)
+
 	// setup syncSprite's property
 	p.syncSprite = engine.NewBackdropProxy(p, p.getCostumePath(), p.getCostumeRenderScale())
 	p.setupBackdrop()

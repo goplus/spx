@@ -123,6 +123,8 @@ type projConfig struct {
 	SceneIndex          int               `json:"sceneIndex"`          //this property is deprecated, use BackdropIndex instead
 
 	WindowScale float64 `json:"windowScale"`
+
+	CollisionByShape bool `json:"collisionByShape"` // whether to use collision by shape or pixel
 }
 
 func (p *projConfig) getBackdrops() []*backdropConfig {
