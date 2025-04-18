@@ -29,9 +29,9 @@ func init() {
 
 }
 func (p *Game) showDebugPanel() {
-	if p.debugObj == nil {
-		p.debugObj = ui.NewUiDebug()
-		p.addShape(p.debugObj)
+	if p.debugPanel == nil {
+		p.debugPanel = ui.NewUiDebug()
+		p.addShape(p.debugPanel)
 	}
 	engine.SetDebugMode(p.debug)
 	msg := ""
@@ -39,5 +39,5 @@ func (p *Game) showDebugPanel() {
 		msg = fmt.Sprintf("FPS: %.f\n", time.FPS())
 		msg += fmt.Sprintf("Shape: %v\n", len(p.items))
 	}
-	p.debugObj.Show(msg)
+	p.debugPanel.Show(msg)
 }
