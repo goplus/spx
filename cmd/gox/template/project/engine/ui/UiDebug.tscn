@@ -1,0 +1,18 @@
+[gd_scene load_steps=2 format=3 uid="uid://cbjjh4p7cvxyw"]
+
+[ext_resource type="Script" path="res://engine/scripts/disable_ui.gd" id="1_jqhr0"]
+
+[node name="Debug" type="Control"]
+layout_mode = 3
+anchors_preset = 0
+
+[node name="Label" type="Label" parent="."]
+custom_minimum_size = Vector2(1, 0)
+layout_mode = 2
+offset_top = 13.0
+offset_right = 41.0
+offset_bottom = 27.0
+theme_override_colors/font_color = Color(0.147672, 0.147672, 0.147672, 1)
+theme_override_font_sizes/font_size = 10
+text_direction = 1
+script = ExtResource("1_jqhr0")

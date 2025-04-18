@@ -128,6 +128,10 @@ type Game struct {
 
 	askObj    *ui.UiAsk
 	answerVal string
+
+	// debug
+	debug    bool
+	debugObj *ui.UiDebug
 }
 
 type Gamer interface {
@@ -441,7 +445,7 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 	}
 	p.windowScale = windowScale
 
-	engine.SetDebugMode(proj.Debug)
+	p.debug = proj.Debug
 	if backdrops := proj.getBackdrops(); len(backdrops) > 0 {
 		p.baseObj.initBackdrops("", backdrops, proj.getBackdropIndex())
 		p.worldWidth_ = proj.Map.Width
@@ -792,6 +796,7 @@ func (p *Game) logicLoop(me coroutine.Thread) int {
 			}
 		}
 		engine.WaitNextFrame()
+		p.showDebugPanel()
 	}
 }
 

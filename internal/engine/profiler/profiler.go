@@ -28,7 +28,7 @@ func Calcfps() float64 {
 	curTime := time.RealTimeSinceStart()
 	timeDiff := curTime - debugLastTime
 	frameDiff := time.Frame() - debugLastFrame
-	if timeDiff > 0.25 {
+	if timeDiff > 0.5 {
 		fps = float64(frameDiff) / timeDiff
 		debugLastFrame = time.Frame()
 		debugLastTime = curTime
