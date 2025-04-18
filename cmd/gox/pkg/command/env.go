@@ -99,6 +99,25 @@ func (pself *CmdTool) SetupEnv(version string, fs embed.FS, fsRelDir string, pro
 	pself.LibPath, _ = filepath.Abs(path.Join(pself.ProjectDir, "lib", libraryName))
 
 	pself.PrepareEnv(fsRelDir, pself.ProjectDir)
+
+	// Update project name
+	targetDir, _ := filepath.Abs(pself.TargetDir)
+	projectName := filepath.Base(targetDir)
+	engineFilePath := path.Join(pself.ProjectDir, "project.godot")
+	content, err := os.ReadFile(engineFilePath)
+	if err != nil {
+		return fmt.Errorf("Failed to read project file: %v", err)
+	}
+	strContent := string(content)
+
+	oldStr := `config/name="spx"`
+	newStr := fmt.Sprintf(`config/name="%s"`, projectName)
+	replacedContent := strings.ReplaceAll(strContent, oldStr, newStr)
+	err = os.WriteFile(engineFilePath, []byte(replacedContent), 0644)
+	if err != nil {
+		return fmt.Errorf("Failed to write project file: %v", err)
+	}
+
 	if pself.ShouldReimport() {
 		pself.Reimport()
 	}
