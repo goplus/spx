@@ -29,15 +29,18 @@ func init() {
 
 }
 func (p *Game) showDebugPanel() {
+	engine.SetDebugMode(p.debug)
+	if !p.debug {
+		if p.debugPanel != nil {
+			p.debugPanel.Destroy()
+			p.debugPanel = nil
+		}
+		return
+	}
 	if p.debugPanel == nil {
 		p.debugPanel = ui.NewUiDebug()
-		p.addShape(p.debugPanel)
 	}
-	engine.SetDebugMode(p.debug)
-	msg := ""
-	if p.debug {
-		msg = fmt.Sprintf("FPS: %.f\n", time.FPS())
-		msg += fmt.Sprintf("Shape: %v\n", len(p.items))
-	}
+	msg := fmt.Sprintf("FPS: %.f\n", time.FPS())
+	msg += fmt.Sprintf("Shape: %v\n", len(p.items))
 	p.debugPanel.Show(msg)
 }
