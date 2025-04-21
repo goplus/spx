@@ -73,7 +73,6 @@ var (
 var (
 	isSchedInMain bool
 	mainSchedTime time.Time
-	lastSchedTime time.Time
 )
 
 func SetDebug(flags dbgFlags) {
@@ -207,7 +206,6 @@ func (p *Game) initGame(sprites []Sprite) *Game {
 
 // Gopt_Game_Main is required by Go+ compiler as the entry of a .gmx project.
 func Gopt_Game_Main(game Gamer, sprites ...Sprite) {
-	lastSchedTime = time.Now()
 	g := game.initGame(sprites)
 	g.gamer_ = game
 	engine.Main(game)
@@ -860,11 +858,10 @@ func Sched() int {
 			panic("Main execution timed out. Please check if there is an infinite loop in the code.")
 		}
 	} else {
-		if now.Sub(lastSchedTime) >= 3e7 {
-			if me := gco.Current(); me != nil {
-				gco.Sched(me)
+		if me := gco.Current(); me != nil {
+			if me.IsSchedTimeout() {
+				engine.WaitNextFrame()
 			}
-			lastSchedTime = now
 		}
 	}
 	return 0

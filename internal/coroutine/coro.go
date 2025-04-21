@@ -36,6 +36,9 @@ type threadImpl struct {
 	id       int64
 	name     string
 	stack    string
+
+	schedFrame     int64
+	schedTimestamp stime.Time
 }
 
 func (p *threadImpl) String() string {
@@ -55,6 +58,15 @@ func (p *threadImpl) Stopped() bool {
 
 // Thread represents a coroutine id.
 type Thread = *threadImpl
+
+func (p Thread) IsSchedTimeout() bool {
+	if p.schedFrame < time.Frame() {
+		p.schedFrame = time.Frame()
+		p.schedTimestamp = stime.Now()
+	}
+	timeout := stime.Since(p.schedTimestamp) > stime.Millisecond*30 // 30 ms ~= 30fps
+	return timeout
+}
 
 // Coroutines represents a coroutine manager.
 type Coroutines struct {
@@ -158,7 +170,7 @@ func (p *Coroutines) StopIf(filter func(th Thread) bool) {
 
 // CreateAndStart creates and executes the new coroutine.
 func (p *Coroutines) CreateAndStart(start bool, tobj ThreadObj, fn func(me Thread) int) Thread {
-	id := &threadImpl{Obj: tobj, frame: p.frame, id: atomic.AddInt64(&p.curThId, 1)}
+	id := &threadImpl{Obj: tobj, frame: p.frame, id: atomic.AddInt64(&p.curThId, 1), schedFrame: -1}
 	if p.debug {
 		name := ""
 		if tobj != nil {
