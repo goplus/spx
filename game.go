@@ -126,8 +126,12 @@ type Game struct {
 	windowScale float64
 	audioId     engine.Object
 
-	askObj    *ui.UiAsk
+	askPanel  *ui.UiAsk
 	answerVal string
+
+	// debug
+	debug      bool
+	debugPanel *ui.UiDebug
 }
 
 type Gamer interface {
@@ -179,6 +183,8 @@ func (p *Game) reset() {
 	p.startFlag = sync.Once{}
 	p.Stop(AllOtherScripts)
 	p.items = nil
+	p.debugPanel = nil
+	p.askPanel = nil
 	p.destroyItems = nil
 	p.isLoaded = false
 	p.sprs = make(map[string]Sprite)
@@ -441,7 +447,7 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 	}
 	p.windowScale = windowScale
 
-	engine.SetDebugMode(proj.Debug)
+	p.debug = proj.Debug
 	if backdrops := proj.getBackdrops(); len(backdrops) > 0 {
 		p.baseObj.initBackdrops("", backdrops, proj.getBackdropIndex())
 		p.worldWidth_ = proj.Map.Width
@@ -792,6 +798,7 @@ func (p *Game) logicLoop(me coroutine.Thread) int {
 			}
 		}
 		engine.WaitNextFrame()
+		p.showDebugPanel()
 	}
 }
 
@@ -1274,12 +1281,12 @@ func (p *Game) Answer() string {
 }
 
 func (p *Game) ask(isSprite bool, question string, callback func(string)) {
-	if p.askObj == nil {
-		p.askObj = ui.NewUiAsk()
-		p.addShape(p.askObj)
+	if p.askPanel == nil {
+		p.askPanel = ui.NewUiAsk()
+		p.addShape(p.askPanel)
 	}
 	hasAnswer := false
-	p.askObj.Show(isSprite, question, func(msg string) {
+	p.askPanel.Show(isSprite, question, func(msg string) {
 		p.answerVal = msg
 		callback(msg)
 		hasAnswer = true
