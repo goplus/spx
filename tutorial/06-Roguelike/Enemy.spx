@@ -1,0 +1,36 @@
+var (
+	health int
+	speed float64
+)
+
+onStart => {
+	// Randomly generate enemy position
+	setXYpos(random(-200, 200), random(-200, 200))
+	show()
+	health = 50
+	speed = 3.0
+}
+
+onCloned => {
+	// Enemy movement logic
+	for {
+		waitNextFrame()
+		pointTowards "Wizard"
+		step(speed * deltaTime)
+		
+		if touching("Wizard") {
+			// Attack wizard
+			broadcast "HitWizard"
+		}
+		
+		if touching("Spell") {
+			// Hit by magic
+			health -= 20
+			if health <= 0 {
+				// Increase score
+				score += 10
+				destroy()
+			}
+		}
+	}
+} 

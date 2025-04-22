@@ -1,0 +1,12 @@
+var (
+	explode Sound
+	score int
+	gameOver bool
+)
+
+onStart => {
+	// Initialize game
+	score = 0
+	gameOver = false
+}
+

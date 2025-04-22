@@ -1,0 +1,20 @@
+onStart => {
+	show()
+}
+
+onCloned => {
+	setXYpos(mouseX, mouseY)
+	show()
+	for {
+		waitNextFrame()
+		step(250 * deltaTime)
+		if touching("Edge") {
+			destroy()
+		}
+		if touching("Enemy") {
+			// Hit enemy
+			broadcast "HitEnemy"
+			destroy()
+		}
+	}
+} 

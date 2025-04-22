@@ -1,0 +1,55 @@
+var (
+	health int
+	speed float64
+)
+
+onStart => {
+	// Initialize wizard position
+	setXYpos(0, 0)
+	show()
+	health = 100
+	speed = 5.0
+}
+
+onTouchStart => {
+	if touching("Enemy") {
+		health -= 10
+		if health <= 0 {
+			destroy()
+			broadcast "GameOver"
+		}
+	}
+}
+
+onKey KeyLeft, => {
+	changeXpos(-speed)
+}
+
+onKey KeyRight, => {
+	changeXpos(speed)
+}
+
+onKey KeyUp, => {
+	changeYpos(-speed)
+}
+
+onKey KeyDown, => {
+	changeYpos(speed)
+}
+
+onCloned => {
+	setXYpos(mouseX, mouseY)
+	show()
+	for {
+		waitNextFrame()
+		step(250 * deltaTime)
+		if touching("Edge") {
+			destroy()
+		}
+		if touching("Enemy") {
+			// Hit enemy
+			broadcast "HitEnemy"
+			destroy()
+		}
+	}
+}

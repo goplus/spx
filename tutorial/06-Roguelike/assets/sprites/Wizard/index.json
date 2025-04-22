@@ -1,0 +1,61 @@
+{
+  "costumeMPSet": {
+    "bitmapResolution": 1,
+    "path": "wizard_walk.png",
+    "parts": [
+      {
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "w": 512,
+          "h": 512
+        },
+        "nx": 5
+      },
+      {
+        "rect": {
+          "x": 512,
+          "y": 0,
+          "w": 512,
+          "h": 512
+        },
+        "nx": 4
+      },
+      {
+        "rect": {
+          "x": 1024,
+          "y": 0,
+          "w": 512,
+          "h": 512
+        },
+        "nx": 3
+      },
+      {
+        "rect": {
+          "x": 1536,
+          "y": 0,
+          "w": 512,
+          "h": 512
+        },
+        "nx": 2
+      },
+      {
+        "rect": {
+          "x": 2048,
+          "y": 0,
+          "w": 512,
+          "h": 512
+        },
+        "nx": 1
+      }
+    ]
+  },
+  "currentCostumeIndex": 0,
+  "heading": 90,
+  "isDraggable": true,
+  "rotationStyle": "normal",
+  "size": 1,
+  "visible": false,
+  "x": 0,
+  "y": 0
+}
