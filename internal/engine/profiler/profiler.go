@@ -22,6 +22,7 @@ var (
 	printDetailedStats bool
 	lastUpdateDuration float64
 	totalStart         stime.Time
+	Debug              bool
 )
 
 func Calcfps() float64 {
@@ -92,10 +93,14 @@ func EndSample() {
 
 	lastUpdateDuration = total
 }
+func GetStats(name string) (TimingInfo, bool) {
+	info, ok := timingData[name]
+	return info, ok
+}
 
 // MeasureFunctionTime measures function execution time, including preparation and cleanup
 func MeasureFunctionTime(name string, fn func()) {
-	if !Enabled {
+	if !Enabled && !Debug {
 		fn()
 		return
 	}
