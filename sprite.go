@@ -1394,6 +1394,7 @@ func (p *SpriteImpl) SetSize(size float64) {
 	}
 	p.scale = size
 	p.updateTransform()
+	p.isCostumeDirty = true
 }
 
 func (p *SpriteImpl) ChangeSize(delta float64) {
