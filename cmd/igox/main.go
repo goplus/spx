@@ -25,7 +25,7 @@ import (
 	_ "github.com/goplus/igop/pkg/reflect"
 	_ "github.com/goplus/igop/pkg/strconv"
 	_ "github.com/goplus/igop/pkg/strings"
-	_ "github.com/goplus/reflectx/icall/icall8192"
+	_ "github.com/goplus/reflectx/icall/icall20480"
 
 	_ "github.com/goplus/spx/cmd/igox/pkg/github.com/goplus/spx"
 	"github.com/goplus/spx/cmd/igox/zipfs"
