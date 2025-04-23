@@ -27,6 +27,10 @@ func Wait(secs float64) float64 {
 	return time.TimeSinceLevelLoad() - startTime
 }
 
+func WaitYield() {
+	gco.WaitYield(gco.Current())
+}
+
 func WaitNextFrame() float64 {
 	gco.WaitNextFrame()
 	return time.DeltaTime()
