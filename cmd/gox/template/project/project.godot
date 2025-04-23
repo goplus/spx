@@ -19,6 +19,10 @@ config/features=PackedStringArray("4.2")
 window/size/viewport_width=480
 window/size/viewport_height=360
 
+[gui]
+
+theme/custom_font="res://engine/fonts/CnFont.ttf"
+
 [rendering]
 
 textures/vram_compression/import_etc2_astc=true

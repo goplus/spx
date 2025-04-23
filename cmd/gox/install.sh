@@ -2,7 +2,7 @@
 # Read app name from appname.txt file
 
 go mod tidy
-
+./setup_font.sh
 appname=$(cat appname.txt)
 # install cmd
 if [ "$OS" = "Windows_NT" ]; then
