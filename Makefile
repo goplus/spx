@@ -64,6 +64,19 @@ releaseweb:
 test:
 	cd test/All && spx run . && cd $(CURRENT_PATH) 
 
+path ?= tutorial/03-Clone
+runweb:
+	@echo "Killing gdspx_web_server.py if running..."
+	@PIDS=$$(pgrep -f gdspx_web_server.py); \
+	if [ -n "$$PIDS" ]; then \
+		echo "Killing process: $$PIDS"; \
+		kill -9 $$PIDS; \
+	else \
+		echo "No gdspx_web_server.py process found."; \
+	fi	
+	make cmdweb && cd $(path) && spx clear && spx runweb -serveraddr=":8106" && cd $(CURRENT_PATH) 
+
+	
 init:
 	make cmd && make download
 
