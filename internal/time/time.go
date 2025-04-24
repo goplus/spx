@@ -14,6 +14,7 @@ var (
 	setTimeScaleCallback       func(float64)
 	startTimestamp             stime.Time
 	fps                        float64
+	curFrameRealTimeSinceStart float64
 )
 
 func Sleep(ms float64) {
@@ -22,6 +23,14 @@ func Sleep(ms float64) {
 
 func RealTimeSinceStart() float64 {
 	return stime.Since(startTimestamp).Seconds()
+}
+
+func RealTimeSinceCurFrame() float64 {
+	return RealTimeSinceStart() - curFrameRealTimeSinceStart
+}
+
+func RealTimeSinceCurFrameMs() float64 {
+	return (RealTimeSinceStart() - curFrameRealTimeSinceStart) * 1000
 }
 func FPS() float64 {
 	return fps
@@ -72,4 +81,5 @@ func Update(scale float64, realDuration float64, duration float64, delta float64
 	deltaTime = delta
 	curFrame += 1
 	fps = pfps
+	curFrameRealTimeSinceStart = RealTimeSinceStart()
 }

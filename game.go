@@ -31,6 +31,7 @@ import (
 
 	"github.com/goplus/spx/internal/audiorecord"
 	"github.com/goplus/spx/internal/coroutine"
+	"github.com/goplus/spx/internal/debug"
 	"github.com/goplus/spx/internal/engine"
 	"github.com/goplus/spx/internal/engine/platform"
 	gtime "github.com/goplus/spx/internal/time"
@@ -845,6 +846,11 @@ var (
 type threadObj = coroutine.ThreadObj
 
 func SchedNow() int {
+	if isSchedInMain {
+		if time.Now().Sub(mainSchedTime) >= time.Second*3 {
+			panic("Main execution timed out. Please check if there is an infinite loop in the code.")
+		}
+	}
 	if me := gco.Current(); me != nil {
 		gco.Sched(me)
 	}
@@ -852,14 +858,14 @@ func SchedNow() int {
 }
 
 func Sched() int {
-	now := time.Now()
 	if isSchedInMain {
-		if now.Sub(mainSchedTime) >= time.Second*3 {
+		if time.Now().Sub(mainSchedTime) >= time.Second*3 {
 			panic("Main execution timed out. Please check if there is an infinite loop in the code.")
 		}
 	} else {
 		if me := gco.Current(); me != nil {
-			if me.IsSchedTimeout() {
+			if me.IsSchedTimeout(3000) {
+				log.Println("For loop execution timed out. Please check if there is an infinite loop in the code.\n", debug.GetStackTrace())
 				engine.WaitNextFrame()
 			}
 		}
@@ -867,23 +873,48 @@ func Sched() int {
 	return 0
 }
 
-func WaitUtil(condition func() bool) {
-	if condition == nil {
+func Forever(call func()) {
+	if call == nil {
 		return
 	}
-	lastTimer := time.Now()
+	for {
+		call()
+		engine.WaitNextFrame()
+	}
+}
+
+func Repeat(loopCount int, call func()) {
+	if call == nil {
+		return
+	}
+	for i := 0; i < loopCount; i++ {
+		call()
+		engine.WaitNextFrame()
+	}
+}
+
+func RepeatUntil(condition func() bool, call func()) {
+	if call == nil || condition == nil {
+		return
+	}
 	for {
 		if condition() {
 			return
 		}
-		// if condition is not met, yield control
-		// if wait too long (15ms), yield control and wait for next frame
-		if time.Since(lastTimer) >= time.Millisecond*15 {
-			engine.WaitNextFrame()
-			lastTimer = time.Now()
-		} else {
-			Sched()
+		call()
+		engine.WaitNextFrame()
+	}
+}
+
+func WaitUtil(condition func() bool) {
+	if condition == nil {
+		return
+	}
+	for {
+		if condition() {
+			return
 		}
+		engine.WaitNextFrame()
 	}
 }
 

@@ -42,8 +42,7 @@ type threadImpl struct {
 }
 
 func (p *threadImpl) String() string {
-	print("  ", p)
-	return fmt.Sprintf("id=%d name=%s\n", p.id, p.name)
+	return fmt.Sprintf("id=%d name=%s ", p.id, p.name)
 }
 
 func (p *threadImpl) Name() string {
@@ -59,12 +58,12 @@ func (p *threadImpl) Stopped() bool {
 // Thread represents a coroutine id.
 type Thread = *threadImpl
 
-func (p Thread) IsSchedTimeout() bool {
+func (p Thread) IsSchedTimeout(ms float64) bool {
 	if p.schedFrame < time.Frame() {
 		p.schedFrame = time.Frame()
 		p.schedTimestamp = stime.Now()
 	}
-	timeout := stime.Since(p.schedTimestamp) > stime.Millisecond*30 // 30 ms ~= 30fps
+	timeout := stime.Since(p.schedTimestamp) > stime.Duration(ms)*stime.Millisecond
 	return timeout
 }
 
@@ -100,6 +99,7 @@ const (
 	waitTypeFrame = iota
 	waitTypeTime
 	waitTypeMainThread
+	waitTypeYield
 )
 
 type WaitJob struct {
@@ -212,6 +212,22 @@ func (p *Coroutines) CreateAndStart(start bool, tobj ThreadObj, fn func(me Threa
 		runtime.Gosched()
 	}
 	return id
+}
+
+func (p *Coroutines) WaitYield(me Thread) {
+	job := &WaitJob{
+		Id:   atomic.AddInt64(&p.curId, 1),
+		Type: waitTypeYield,
+		Call: func() {
+			p.setWaitStatus(me, waitStatusIdle)
+			p.Resume(me)
+		},
+		Th: me,
+	}
+
+	p.addWaitJob(job, false)
+	p.setWaitStatus(me, waitStatusBlock)
+	p.Yield(me)
 }
 
 // Yield suspends a running coroutine.
@@ -477,6 +493,8 @@ func (p *Coroutines) Update() {
 			} else {
 				task.Call()
 			}
+		case waitTypeYield:
+			task.Call()
 		case waitTypeMainThread:
 			task.Call()
 			waitMainCount++
