@@ -124,7 +124,8 @@ func getValueRef(target reflect.Value, name string, from int) reflect.Value {
 }
 
 const (
-	getVarPrefix = "getVar:"
+	getVarPrefix   = "getVar:"
+	getTimerPrefix = "getProp:"
 )
 
 func buildMonitorEval(g reflect.Value, t, val string) func() string {
@@ -135,13 +136,25 @@ func buildMonitorEval(g reflect.Value, t, val string) func() string {
 	switch {
 	case strings.HasPrefix(val, getVarPrefix):
 		name := val[len(getVarPrefix):]
+		// check field
 		ref := getValueRef(target, name, from)
 		if ref.IsValid() {
 			return func() string {
 				return fmt.Sprint(ref.Interface())
 			}
 		}
-		log.Println("[WARN] Monitor: var not found -", name, target)
+		// check method
+		m := target.Addr().MethodByName(name)
+		if m.IsValid() {
+			mType := m.Type()
+			// only property method (getter) with one parameter and one return value
+			if mType.NumIn() == 0 && mType.NumOut() == 1 {
+				return func() string {
+					return fmt.Sprint(m.Call(nil)[0].Interface())
+				}
+			}
+		}
+		log.Println("[WARN] Monitor: prop or method(getter) not found -", name, target)
 	default:
 		log.Println("[WARN] Monitor: unknown command -", val)
 	}

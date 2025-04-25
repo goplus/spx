@@ -35,6 +35,7 @@ import (
 	"github.com/goplus/spx/internal/engine"
 	"github.com/goplus/spx/internal/engine/platform"
 	gtime "github.com/goplus/spx/internal/time"
+	"github.com/goplus/spx/internal/timer"
 	"github.com/goplus/spx/internal/ui"
 	"github.com/realdream-ai/mathf"
 
@@ -188,6 +189,7 @@ func (p *Game) reset() {
 	p.destroyItems = nil
 	p.isLoaded = false
 	p.sprs = make(map[string]Sprite)
+	timer.OnReload()
 }
 
 func (p *Game) getGame() *Game {
@@ -769,6 +771,8 @@ func (p *Game) handleEvent(event event) {
 		p.sinkMgr.doWhenKeyPressed(ev.Key)
 	case *eventStart:
 		p.sinkMgr.doWhenStart()
+	case *eventTimer:
+		p.sinkMgr.doWhenTimer(ev.Time)
 	}
 }
 
@@ -778,7 +782,6 @@ func (p *Game) fireEvent(ev event) {
 	default:
 		log.Println("Event buffer is full. Skip event:", ev)
 	}
-	p.handleEvent(ev)
 }
 
 func (p *Game) eventLoop(me coroutine.Thread) int {
@@ -796,6 +799,12 @@ func (p *Game) logicLoop(me coroutine.Thread) int {
 				result.onUpdate(gtime.DeltaTime())
 			}
 		}
+
+		targetTimer := timer.CheckTimerEvent()
+		if targetTimer >= 0 {
+			p.fireEvent(&eventTimer{Time: targetTimer})
+		}
+
 		engine.WaitNextFrame()
 		p.showDebugPanel()
 	}
@@ -1283,11 +1292,11 @@ func (p *Game) Wait(secs float64) {
 }
 
 func (p *Game) Timer() float64 {
-	panic("todo")
+	return timer.Timer()
 }
 
 func (p *Game) ResetTimer() {
-	panic("todo")
+	timer.ResetTimer()
 }
 
 // -----------------------------------------------------------------------------
