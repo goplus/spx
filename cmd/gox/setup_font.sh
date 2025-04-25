@@ -60,25 +60,22 @@ main() {
     has_found=false
     font_path=""
     
-    # Search for fonts in all paths
+    # Search for fonts in all paths and names
     for find_path in "${font_find_paths[@]}"; do
-        if [ "$has_found" = true ]; then
-            break
-        fi
-        
-        font_path=$(find_font_at_path "$find_path" "${font_names[@]}")
-        if [ -n "$font_path" ]; then
-            
-            cp "$font_path" "$target_font_path"
-            if [ $? -ne 0 ]; then
-                echo "Failed to copy font file!" >&2
-                exit 1
+        for font_name in "${font_names[@]}"; do
+            try_file="$find_path/$font_name"
+            if [ -f "$try_file" ]; then
+                cp "$try_file" "$target_font_path"
+                if [ $? -ne 0 ]; then
+                    echo "Failed to copy font file!" >&2
+                    exit 1
+                fi
+                chmod 644 "$target_font_path"
+                echo "Copied $try_file to $target_font_path"
+                has_found=true
+                break 2
             fi
-            
-            chmod 644 "$target_font_path"
-            has_found=true
-            break
-        fi
+        done
     done
     
     # If no font is found, display message and exit
