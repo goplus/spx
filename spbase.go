@@ -159,6 +159,10 @@ type baseObj struct {
 
 	layer        int
 	isLayerDirty bool
+
+	// effects
+	greffUniforms map[string]float64 // graphic effects
+	hasShader     bool
 }
 
 func (p *baseObj) setLayer(layer int) { // dying: visible but can't be touched
@@ -278,6 +282,7 @@ func (p *baseObj) initWithSize(width, height int) {
 
 func (p *baseObj) initFrom(src *baseObj) {
 	p.costumes = src.costumes
+	p.hasShader = false
 	p.setCustumeIndex(src.costumeIndex_)
 }
 
@@ -367,3 +372,62 @@ func (p *baseObj) getCostumeAltasRegion() mathf.Rect2 {
 }
 
 // -------------------------------------------------------------------------------------
+func (p *baseObj) requireGreffUniforms() map[string]float64 {
+	effs := p.greffUniforms
+	if effs == nil {
+		effs = make(map[string]float64)
+		p.greffUniforms = effs
+	}
+	return effs
+}
+
+func (p *baseObj) setEffect(kind EffectKind, val float64) {
+	effs := p.requireGreffUniforms()
+	effs[kind.String()] = float64(val)
+
+	if !p.hasShader {
+		p.syncSprite.SetMaterialShader("res://engine/shader/spx_sprite_shader.gdshader")
+		p.hasShader = true
+	}
+	fval := val
+	switch kind {
+	case ColorEffect:
+		val := math.Mod(val/200, 1)
+		if val < 0 {
+			val += 1
+		}
+		fval = val
+	case BrightnessEffect:
+		fval = mathf.Clamp(val/100, -1, 1)
+	case GhostEffect:
+		fval = mathf.Clamp01f(val / 100)
+	case MosaicEffect:
+		fval = math.Max(math.Floor((val+5)/10), 0)
+	case WhirlEffect:
+		fval = mathf.Clamp(val/50, -20, 20)
+	case FishEyeEffect:
+		fval = mathf.Clamp(val/100, -1, 100)
+	case PixelateEffect:
+		fval = mathf.Absf(val / 10)
+	}
+	//fmt.Printf("setEffect %s %.2f %.2f\n", kind.String(), val, fval)
+	p.syncSprite.SetMaterialParams(kind.String(), fval)
+}
+
+func (p *baseObj) changeEffect(kind EffectKind, delta float64) {
+	effs := p.requireGreffUniforms()
+	key := kind.String()
+	newVal := float64(delta)
+	if oldVal, ok := effs[key]; ok {
+		newVal += oldVal
+	}
+	effs[key] = newVal
+	p.setEffect(kind, newVal)
+}
+
+func (p *baseObj) clearGraphEffects() {
+	p.greffUniforms = nil
+	for _, eff := range greffNames {
+		p.syncSprite.SetMaterialParams(eff, 0)
+	}
+}

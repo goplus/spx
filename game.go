@@ -1333,22 +1333,22 @@ type EffectKind int
 
 const (
 	ColorEffect EffectKind = iota
+	FishEyeEffect
+	WhirlEffect
+	PixelateEffect
+	MosaicEffect
 	BrightnessEffect
 	GhostEffect
-	MosaicEffect
-	WhirlEffect
-	FishEyeEffect
-	UVEffect
 )
 
 var greffNames = []string{
-	ColorEffect:      "Color",
-	BrightnessEffect: "Brightness",
-	GhostEffect:      "Ghost",
-	MosaicEffect:     "Mosaic",
-	WhirlEffect:      "Whirl",
-	FishEyeEffect:    "FishEye",
-	UVEffect:         "UV",
+	ColorEffect:      "color_amount",
+	FishEyeEffect:    "fisheye_amount",
+	WhirlEffect:      "whirl_amount",
+	MosaicEffect:     "uv_amount",
+	PixelateEffect:   "pixleate_amount",
+	BrightnessEffect: "brightness_amount",
+	GhostEffect:      "alpha_amount",
 }
 
 func (kind EffectKind) String() string {
@@ -1356,15 +1356,15 @@ func (kind EffectKind) String() string {
 }
 
 func (p *Game) SetEffect(kind EffectKind, val float64) {
-	panic("todo")
+	p.baseObj.setEffect(kind, val)
 }
 
 func (p *Game) ChangeEffect(kind EffectKind, delta float64) {
-	panic("todo")
+	p.baseObj.changeEffect(kind, delta)
 }
 
 func (p *Game) ClearSoundEffects() {
-	panic("todo")
+	p.baseObj.clearGraphEffects()
 }
 
 // -----------------------------------------------------------------------------

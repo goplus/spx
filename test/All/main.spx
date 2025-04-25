@@ -14,6 +14,7 @@ var (
 
 	SpControl SpControl
 	Red     Red
+	cloneNum int
 )
 
 func doPanic(msg string){
