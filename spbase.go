@@ -161,7 +161,7 @@ type baseObj struct {
 	isLayerDirty bool
 
 	// effects
-	greffUniforms map[string]float64 // graphic effects
+	greffUniforms map[EffectKind]float64 // graphic effects
 	hasShader     bool
 }
 
@@ -372,10 +372,10 @@ func (p *baseObj) getCostumeAltasRegion() mathf.Rect2 {
 }
 
 // -------------------------------------------------------------------------------------
-func (p *baseObj) requireGreffUniforms() map[string]float64 {
+func (p *baseObj) requireGreffUniforms() map[EffectKind]float64 {
 	effs := p.greffUniforms
 	if effs == nil {
-		effs = make(map[string]float64)
+		effs = make(map[EffectKind]float64)
 		p.greffUniforms = effs
 	}
 	return effs
@@ -383,12 +383,46 @@ func (p *baseObj) requireGreffUniforms() map[string]float64 {
 
 func (p *baseObj) setEffect(kind EffectKind, val float64) {
 	effs := p.requireGreffUniforms()
-	effs[kind.String()] = float64(val)
+	effs[kind] = float64(val)
+	p.doSetEffect(kind)
+}
 
-	if !p.hasShader {
-		p.syncSprite.SetMaterialShader("res://engine/shader/spx_sprite_shader.gdshader")
-		p.hasShader = true
+func (p *baseObj) changeEffect(kind EffectKind, delta float64) {
+	effs := p.requireGreffUniforms()
+	newVal := float64(delta)
+	if oldVal, ok := effs[kind]; ok {
+		newVal += oldVal
 	}
+	effs[kind] = newVal
+	p.setEffect(kind, newVal)
+}
+
+func (p *baseObj) clearGraphEffects() {
+	p.greffUniforms = nil
+	effs := p.requireGreffUniforms()
+	for i := 0; i < int(enumNumOfEffect); i++ {
+		effs[EffectKind(i)] = 0
+	}
+	p.applyEffects()
+}
+
+func (p *baseObj) applyEffects() {
+	for i := 0; i < int(enumNumOfEffect); i++ {
+		p.doSetEffect(EffectKind(i))
+	}
+}
+
+func (p *baseObj) doSetEffect(kind EffectKind) {
+	if p.syncSprite == nil {
+		return
+	}
+
+	effs := p.requireGreffUniforms()
+	val, ok := effs[kind]
+	if !ok {
+		return
+	}
+
 	fval := val
 	switch kind {
 	case ColorEffect:
@@ -410,24 +444,10 @@ func (p *baseObj) setEffect(kind EffectKind, val float64) {
 	case PixelateEffect:
 		fval = mathf.Absf(val / 10)
 	}
+	if !p.hasShader {
+		p.syncSprite.SetMaterialShader("res://engine/shader/spx_sprite_shader.gdshader")
+		p.hasShader = true
+	}
 	//fmt.Printf("setEffect %s %.2f %.2f\n", kind.String(), val, fval)
 	p.syncSprite.SetMaterialParams(kind.String(), fval)
-}
-
-func (p *baseObj) changeEffect(kind EffectKind, delta float64) {
-	effs := p.requireGreffUniforms()
-	key := kind.String()
-	newVal := float64(delta)
-	if oldVal, ok := effs[key]; ok {
-		newVal += oldVal
-	}
-	effs[key] = newVal
-	p.setEffect(kind, newVal)
-}
-
-func (p *baseObj) clearGraphEffects() {
-	p.greffUniforms = nil
-	for _, eff := range greffNames {
-		p.syncSprite.SetMaterialParams(eff, 0)
-	}
 }

@@ -1339,6 +1339,8 @@ const (
 	MosaicEffect
 	BrightnessEffect
 	GhostEffect
+
+	enumNumOfEffect // max index of enum
 )
 
 var greffNames = []string{
