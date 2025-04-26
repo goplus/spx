@@ -150,7 +150,17 @@ func buildMonitorEval(g reflect.Value, t, val string) func() string {
 			// only property method (getter) with one parameter and one return value
 			if mType.NumIn() == 0 && mType.NumOut() == 1 {
 				return func() string {
-					return fmt.Sprint(m.Call(nil)[0].Interface())
+					result := m.Call(nil)[0].Interface()
+					// special case for float
+					fVal, succ := result.(float64)
+					if succ {
+						return fmt.Sprintf("%.2f", fVal)
+					}
+					f32Val, succ := result.(float32)
+					if succ {
+						return fmt.Sprintf("%.2f", f32Val)
+					}
+					return fmt.Sprint(result)
 				}
 			}
 		}
