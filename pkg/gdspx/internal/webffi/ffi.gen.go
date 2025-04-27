@@ -128,6 +128,10 @@ type GDExtensionInterface struct {
 	SpxSpriteGetMaterialShader               js.Value
 	SpxSpriteSetMaterialParams               js.Value
 	SpxSpriteGetMaterialParams               js.Value
+	SpxSpriteSetMaterialParamsVec4           js.Value
+	SpxSpriteGetMaterialParamsVec4           js.Value
+	SpxSpriteSetMaterialParamsColor          js.Value
+	SpxSpriteGetMaterialParamsColor          js.Value
 	SpxSpriteSetTextureAltas                 js.Value
 	SpxSpriteSetTexture                      js.Value
 	SpxSpriteSetTextureAltasDirect           js.Value
@@ -349,6 +353,10 @@ func (x *GDExtensionInterface) loadProcAddresses() {
 	x.SpxSpriteGetMaterialShader = dlsymGD("gdspx_sprite_get_material_shader")
 	x.SpxSpriteSetMaterialParams = dlsymGD("gdspx_sprite_set_material_params")
 	x.SpxSpriteGetMaterialParams = dlsymGD("gdspx_sprite_get_material_params")
+	x.SpxSpriteSetMaterialParamsVec4 = dlsymGD("gdspx_sprite_set_material_params_vec4")
+	x.SpxSpriteGetMaterialParamsVec4 = dlsymGD("gdspx_sprite_get_material_params_vec4")
+	x.SpxSpriteSetMaterialParamsColor = dlsymGD("gdspx_sprite_set_material_params_color")
+	x.SpxSpriteGetMaterialParamsColor = dlsymGD("gdspx_sprite_get_material_params_color")
 	x.SpxSpriteSetTextureAltas = dlsymGD("gdspx_sprite_set_texture_altas")
 	x.SpxSpriteSetTexture = dlsymGD("gdspx_sprite_set_texture")
 	x.SpxSpriteSetTextureAltasDirect = dlsymGD("gdspx_sprite_set_texture_altas_direct")

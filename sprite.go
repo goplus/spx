@@ -19,6 +19,7 @@ package spx
 import (
 	"fmt"
 	"log"
+	"maps"
 	"math"
 	"reflect"
 
@@ -337,10 +338,7 @@ func (p *SpriteImpl) InitFrom(src *SpriteImpl) {
 	p.sayObj = nil
 	p.animations = src.animations
 	// clone effect params
-	p.greffUniforms = make(map[EffectKind]float64)
-	for k, v := range src.greffUniforms {
-		p.greffUniforms[k] = v
-	}
+	p.greffUniforms = maps.Clone(src.greffUniforms)
 
 	p.penColor = src.penColor
 	p.penHue = src.penHue

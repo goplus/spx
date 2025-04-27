@@ -147,6 +147,16 @@ func (pself *Sprite) GetMaterialParams(effect string) float64 {
 	return _val
 }
 
+func (pself *Sprite) GetMaterialParamsColor(effect string) Color {
+	var _val Color
+	return _val
+}
+
+func (pself *Sprite) GetMaterialParamsVec4(effect string) Vec4 {
+	var _val Vec4
+	return _val
+}
+
 func (pself *Sprite) GetMaterialShader() string {
 	var _val string
 	return _val
@@ -355,6 +365,12 @@ func (pself *Sprite) SetMass(mass float64) {
 }
 
 func (pself *Sprite) SetMaterialParams(effect string, amount float64) {
+}
+
+func (pself *Sprite) SetMaterialParamsColor(effect string, color Color) {
+}
+
+func (pself *Sprite) SetMaterialParamsVec4(effect string, vec4 Vec4) {
 }
 
 func (pself *Sprite) SetMaterialShader(path string) {

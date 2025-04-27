@@ -112,7 +112,7 @@ func (sprite *SpriteImpl) syncCheckInitProxy() {
 		sprite.syncSprite.Name = sprite.name
 		sprite.syncSprite.SetTypeName(sprite.name)
 		sprite.syncSprite.SetVisible(sprite.isVisible)
-		sprite.applyEffects()
+		sprite.applyEffects(true)
 	}
 }
 
@@ -180,9 +180,16 @@ func syncCheckUpdateCostume(p *baseObj) {
 	isAltas := p.isCostumeAltas()
 	if isAltas {
 		syncSprite.UpdateTextureAltas(path, rect, renderScale)
+		syncOnAltasChanged(p)
 	} else {
 		syncSprite.UpdateTexture(path, renderScale)
 	}
+}
+func syncOnAltasChanged(p *baseObj) {
+	key := "atlas_uv_rect2"
+	uvRemap := p.getCostumeAltasUvRemap()
+	val := mathf.NewVec4(uvRemap.Position.X, uvRemap.Position.Y, uvRemap.Size.X, uvRemap.Size.Y)
+	p.setMaterialParamsVec4(key, val, true)
 }
 
 func (*Game) syncUpdatePhysic() {

@@ -330,6 +330,18 @@ void cgo_callfn_GDExtensionSpxSpriteSetMaterialParams(const GDExtensionSpxSprite
 void cgo_callfn_GDExtensionSpxSpriteGetMaterialParams(const GDExtensionSpxSpriteGetMaterialParams fn, GdObj obj, GdString effect, GdFloat* ret_val) {
 	fn(obj, effect,ret_val);
 }
+void cgo_callfn_GDExtensionSpxSpriteSetMaterialParamsVec4(const GDExtensionSpxSpriteSetMaterialParamsVec4 fn, GdObj obj, GdString effect, GdVec4 vec4) {
+	fn(obj, effect, vec4);
+}
+void cgo_callfn_GDExtensionSpxSpriteGetMaterialParamsVec4(const GDExtensionSpxSpriteGetMaterialParamsVec4 fn, GdObj obj, GdString effect, GdVec4* ret_val) {
+	fn(obj, effect,ret_val);
+}
+void cgo_callfn_GDExtensionSpxSpriteSetMaterialParamsColor(const GDExtensionSpxSpriteSetMaterialParamsColor fn, GdObj obj, GdString effect, GdColor color) {
+	fn(obj, effect, color);
+}
+void cgo_callfn_GDExtensionSpxSpriteGetMaterialParamsColor(const GDExtensionSpxSpriteGetMaterialParamsColor fn, GdObj obj, GdString effect, GdColor* ret_val) {
+	fn(obj, effect,ret_val);
+}
 void cgo_callfn_GDExtensionSpxSpriteSetTextureAltas(const GDExtensionSpxSpriteSetTextureAltas fn, GdObj obj, GdString path, GdRect2 rect2) {
 	fn(obj, path, rect2);
 }

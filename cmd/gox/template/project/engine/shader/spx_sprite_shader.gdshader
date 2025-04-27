@@ -8,6 +8,7 @@ uniform float uv_amount : hint_range(0.001, 100.0) = 0.0;
 uniform float pixleate_amount : hint_range(0.0, 100.0) = 0.0;
 uniform float whirl_amount : hint_range(-20, 20.0) = 0.0;
 uniform float fisheye_amount : hint_range(-1.0, 100.0) = 0.0;
+uniform vec4 atlas_uv_rect2 = vec4(0.0, 0.0, 1.0, 1.0); // offset , size
 
 vec3 rgb_to_hsl(vec3 c) {
     vec4 K = vec4(0.0, -1.0/3.0, 2.0/3.0, -1.0);
@@ -31,7 +32,6 @@ void vertex() {
 
 void fragment() {
 	vec2 uv = UV;
-
 	// pixleate effect
 	if (pixleate_amount != 0.0) {
 		float newAmount = pixleate_amount;
@@ -43,6 +43,8 @@ void fragment() {
 		vec2 target = (texture_uv - offset) * TEXTURE_PIXEL_SIZE;
 		uv = target + correction;
 	}
+	// remmap uv to [0, 1]
+	uv = (uv - atlas_uv_rect2.xy)  / atlas_uv_rect2.zw;
 
 	// whirl effect
 	if (whirl_amount != 0.0) {
@@ -79,7 +81,12 @@ void fragment() {
 	// uv effect
 	if (uv_amount != 0.0) {
 		uv *= uv_amount + 1.0;
+		uv.x = mod(uv.x, 1.0);
+		uv.y = mod(uv.y, 1.0);
 	}
+
+	// remmap uv to atlas
+	uv = atlas_uv_rect2.xy + uv * atlas_uv_rect2.zw;
 
 	vec3 color;
 	float alpha = 1.0;

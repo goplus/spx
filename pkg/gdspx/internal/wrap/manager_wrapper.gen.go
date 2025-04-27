@@ -682,6 +682,38 @@ func (pself *spriteMgr) GetMaterialParams(obj Object, effect string) float64 {
 	retValue := CallSpriteGetMaterialParams(arg0, arg1)
 	return ToFloat64(retValue)
 }
+func (pself *spriteMgr) SetMaterialParamsVec4(obj Object, effect string, vec4 Vec4) {
+	arg0 := ToGdObj(obj)
+	arg1Str := NewCString(effect)
+	arg1 := arg1Str.ToGdString()
+	defer arg1Str.Destroy()
+	arg2 := ToGdVec4(vec4)
+	CallSpriteSetMaterialParamsVec4(arg0, arg1, arg2)
+}
+func (pself *spriteMgr) GetMaterialParamsVec4(obj Object, effect string) Vec4 {
+	arg0 := ToGdObj(obj)
+	arg1Str := NewCString(effect)
+	arg1 := arg1Str.ToGdString()
+	defer arg1Str.Destroy()
+	retValue := CallSpriteGetMaterialParamsVec4(arg0, arg1)
+	return ToVec4(retValue)
+}
+func (pself *spriteMgr) SetMaterialParamsColor(obj Object, effect string, color Color) {
+	arg0 := ToGdObj(obj)
+	arg1Str := NewCString(effect)
+	arg1 := arg1Str.ToGdString()
+	defer arg1Str.Destroy()
+	arg2 := ToGdColor(color)
+	CallSpriteSetMaterialParamsColor(arg0, arg1, arg2)
+}
+func (pself *spriteMgr) GetMaterialParamsColor(obj Object, effect string) Color {
+	arg0 := ToGdObj(obj)
+	arg1Str := NewCString(effect)
+	arg1 := arg1Str.ToGdString()
+	defer arg1Str.Destroy()
+	retValue := CallSpriteGetMaterialParamsColor(arg0, arg1)
+	return ToColor(retValue)
+}
 func (pself *spriteMgr) SetTextureAltas(obj Object, path string, rect2 Rect2) {
 	arg0 := ToGdObj(obj)
 	arg1Str := NewCString(path)

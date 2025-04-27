@@ -124,6 +124,14 @@ func (pself *Sprite) GetMaterialParams(effect string) float64 {
 	return SpriteMgr.GetMaterialParams(pself.Id, effect)
 }
 
+func (pself *Sprite) GetMaterialParamsColor(effect string) Color {
+	return SpriteMgr.GetMaterialParamsColor(pself.Id, effect)
+}
+
+func (pself *Sprite) GetMaterialParamsVec4(effect string) Vec4 {
+	return SpriteMgr.GetMaterialParamsVec4(pself.Id, effect)
+}
+
 func (pself *Sprite) GetMaterialShader() string {
 	return SpriteMgr.GetMaterialShader(pself.Id)
 }
@@ -330,6 +338,14 @@ func (pself *Sprite) SetMass(mass float64) {
 
 func (pself *Sprite) SetMaterialParams(effect string, amount float64) {
 	SpriteMgr.SetMaterialParams(pself.Id, effect, amount)
+}
+
+func (pself *Sprite) SetMaterialParamsColor(effect string, color Color) {
+	SpriteMgr.SetMaterialParamsColor(pself.Id, effect, color)
+}
+
+func (pself *Sprite) SetMaterialParamsVec4(effect string, vec4 Vec4) {
+	SpriteMgr.SetMaterialParamsVec4(pself.Id, effect, vec4)
 }
 
 func (pself *Sprite) SetMaterialShader(path string) {
