@@ -262,6 +262,10 @@ type eventLeftButtonUp struct {
 	Pos mathf.Vec2
 }
 
+type eventTimer struct {
+	Time float64
+}
+
 type eventFirer interface {
 	fireEvent(ev event)
 }

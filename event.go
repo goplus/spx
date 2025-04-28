@@ -22,6 +22,8 @@ import (
 
 	"github.com/goplus/spx/internal/coroutine"
 	"github.com/goplus/spx/internal/engine"
+	"github.com/goplus/spx/internal/timer"
+	"github.com/realdream-ai/mathf"
 )
 
 // -------------------------------------------------------------------------------------
@@ -101,6 +103,7 @@ type eventSinkMgr struct {
 	allWhenClick           *eventSink
 	allWhenMoving          *eventSink
 	allWhenTurning         *eventSink
+	allWhenTimer           *eventSink
 	calledStart            bool
 }
 
@@ -116,6 +119,7 @@ func (p *eventSinkMgr) reset() {
 	p.allWhenClick = nil
 	p.allWhenMoving = nil
 	p.allWhenTurning = nil
+	p.allWhenTimer = nil
 	p.calledStart = false
 }
 
@@ -131,6 +135,7 @@ func (p *eventSinkMgr) doDeleteClone(this interface{}) {
 	p.allWhenClick = p.allWhenClick.doDeleteClone(this)
 	p.allWhenMoving = p.allWhenMoving.doDeleteClone(this)
 	p.allWhenTurning = p.allWhenTurning.doDeleteClone(this)
+	p.allWhenTimer = p.allWhenTimer.doDeleteClone(this)
 }
 
 func (p *eventSinkMgr) doWhenStart() {
@@ -143,6 +148,12 @@ func (p *eventSinkMgr) doWhenStart() {
 			ev.sink.(func())()
 		})
 	}
+}
+
+func (p *eventSinkMgr) doWhenTimer(time float64) {
+	p.allWhenTimer.asyncCall(false, time, func(ev *eventSink) {
+		ev.sink.(func(float64))(time)
+	})
 }
 
 func (p *eventSinkMgr) doWhenKeyPressed(key Key) {
@@ -232,6 +243,7 @@ type IEventSinks interface {
 	OnMsg__0(onMsg func(msg string, data interface{}))
 	OnMsg__1(msg string, onMsg func())
 	OnStart(onStart func())
+	OnTimer(time float64, onTimer func())
 	Stop(kind StopKind)
 }
 
@@ -291,6 +303,23 @@ func (p *eventSinks) OnAnyKey(onKey func(key Key)) {
 		prev:  p.allWhenKeyPressed,
 		pthis: p.pthis,
 		sink:  onKey,
+	}
+}
+
+func (p *eventSinks) OnTimer(time float64, call func()) {
+	timer.RegisterTimer(time)
+	p.allWhenTimer = &eventSink{
+		prev:  p.allWhenTimer,
+		pthis: p.pthis,
+		sink: func(float64) {
+			if debugEvent {
+				log.Println("==> onTimer", nameOf(p.pthis))
+			}
+			call()
+		},
+		cond: func(data interface{}) bool {
+			return mathf.Absf(data.(float64)-time) < 0.001
+		},
 	}
 }
 

@@ -2,6 +2,8 @@ package time
 
 import (
 	stime "time"
+
+	"github.com/goplus/spx/internal/timer"
 )
 
 var (
@@ -82,4 +84,5 @@ func Update(scale float64, realDuration float64, duration float64, delta float64
 	curFrame += 1
 	fps = pfps
 	curFrameRealTimeSinceStart = RealTimeSinceStart()
+	timer.OnUpdate(deltaTime)
 }
