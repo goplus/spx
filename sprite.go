@@ -19,6 +19,7 @@ package spx
 import (
 	"fmt"
 	"log"
+	"maps"
 	"math"
 	"reflect"
 
@@ -191,7 +192,6 @@ type SpriteImpl struct {
 	sayObj           *sayOrThinker
 	quoteObj         *quoter
 	animations       map[SpriteAnimationName]*aniConfig
-	greffUniforms    map[string]interface{} // graphic effects
 	animBindings     map[string]string
 	defaultAnimation SpriteAnimationName
 
@@ -214,8 +214,6 @@ type SpriteImpl struct {
 	hasOnTouchStart bool
 	hasOnTouching   bool
 	hasOnTouchEnd   bool
-
-	hasShader bool
 
 	gamer               reflect.Value
 	curAnimState        *animState
@@ -339,7 +337,8 @@ func (p *SpriteImpl) InitFrom(src *SpriteImpl) {
 	p.rotationStyle = src.rotationStyle
 	p.sayObj = nil
 	p.animations = src.animations
-	p.greffUniforms = cloneMap(src.greffUniforms)
+	// clone effect params
+	p.greffUniforms = maps.Clone(src.greffUniforms)
 
 	p.penColor = src.penColor
 	p.penHue = src.penHue
@@ -360,8 +359,6 @@ func (p *SpriteImpl) InitFrom(src *SpriteImpl) {
 	p.hasOnTouchStart = false
 	p.hasOnTouching = false
 	p.hasOnTouchEnd = false
-
-	p.hasShader = false
 
 	p.collisionMask = src.collisionMask
 	p.collisionLayer = src.collisionLayer
@@ -1406,57 +1403,16 @@ func (p *SpriteImpl) ChangeSize(delta float64) {
 }
 
 // -----------------------------------------------------------------------------
-
-func (p *SpriteImpl) requireGreffUniforms() map[string]interface{} {
-	effs := p.greffUniforms
-	if effs == nil {
-		effs = make(map[string]interface{})
-		p.greffUniforms = effs
-	}
-	return effs
-}
-
 func (p *SpriteImpl) SetEffect(kind EffectKind, val float64) {
-	effs := p.requireGreffUniforms()
-	effs[kind.String()] = float64(val)
-
-	if !p.hasShader {
-		p.syncSprite.SetMaterialShader("res://engine/shader/spx_sprite_shader.gdshader")
-		p.hasShader = true
-	}
-
-	switch kind {
-	case ColorEffect:
-		p.syncSprite.UpdateColor(val)
-	case BrightnessEffect:
-		p.syncSprite.UpdateBrightness(val)
-	case GhostEffect:
-		p.syncSprite.UpdateAlpha(val)
-	case MosaicEffect:
-		p.syncSprite.UpdateMosaic(val)
-	case WhirlEffect:
-		p.syncSprite.UpdateWhirl(val)
-	case FishEyeEffect:
-		p.syncSprite.UpdateFishEye(val)
-	case UVEffect:
-		p.syncSprite.UpdateUVEffect(val)
-	}
+	p.baseObj.setEffect(kind, val)
 }
 
 func (p *SpriteImpl) ChangeEffect(kind EffectKind, delta float64) {
-	effs := p.requireGreffUniforms()
-	key := kind.String()
-	newVal := float64(delta)
-	if oldVal, ok := effs[key]; ok {
-		newVal += oldVal.(float64)
-	}
-	effs[key] = newVal
-	p.SetEffect(kind, newVal)
+	p.baseObj.changeEffect(kind, delta)
 }
 
 func (p *SpriteImpl) ClearGraphEffects() {
-	p.greffUniforms = nil
-	p.syncSprite.ClearGraphEffects()
+	p.baseObj.clearGraphEffects()
 }
 
 // -----------------------------------------------------------------------------

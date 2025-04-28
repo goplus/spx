@@ -750,6 +750,30 @@ func (pself *spriteMgrImpl) GetMaterialParams(obj gdx.Object, effect string) flo
 	})
 	return _ret1
 }
+func (pself *spriteMgrImpl) SetMaterialParamsVec4(obj gdx.Object, effect string, vec4 Vec4) {
+	callInMainThread(func() {
+		gdx.SpriteMgr.SetMaterialParamsVec4(obj, effect, vec4)
+	})
+}
+func (pself *spriteMgrImpl) GetMaterialParamsVec4(obj gdx.Object, effect string) Vec4 {
+	var _ret1 Vec4
+	callInMainThread(func() {
+		_ret1 = gdx.SpriteMgr.GetMaterialParamsVec4(obj, effect)
+	})
+	return _ret1
+}
+func (pself *spriteMgrImpl) SetMaterialParamsColor(obj gdx.Object, effect string, color Color) {
+	callInMainThread(func() {
+		gdx.SpriteMgr.SetMaterialParamsColor(obj, effect, color)
+	})
+}
+func (pself *spriteMgrImpl) GetMaterialParamsColor(obj gdx.Object, effect string) Color {
+	var _ret1 Color
+	callInMainThread(func() {
+		_ret1 = gdx.SpriteMgr.GetMaterialParamsColor(obj, effect)
+	})
+	return _ret1
+}
 func (pself *spriteMgrImpl) SetTextureAltas(obj gdx.Object, path string, rect2 Rect2) {
 	callInMainThread(func() {
 		gdx.SpriteMgr.SetTextureAltas(obj, path, rect2)

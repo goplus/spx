@@ -124,6 +124,10 @@ type GDExtensionInterface struct {
 	SpxSpriteGetMaterialShader               GDExtensionSpxSpriteGetMaterialShader
 	SpxSpriteSetMaterialParams               GDExtensionSpxSpriteSetMaterialParams
 	SpxSpriteGetMaterialParams               GDExtensionSpxSpriteGetMaterialParams
+	SpxSpriteSetMaterialParamsVec4           GDExtensionSpxSpriteSetMaterialParamsVec4
+	SpxSpriteGetMaterialParamsVec4           GDExtensionSpxSpriteGetMaterialParamsVec4
+	SpxSpriteSetMaterialParamsColor          GDExtensionSpxSpriteSetMaterialParamsColor
+	SpxSpriteGetMaterialParamsColor          GDExtensionSpxSpriteGetMaterialParamsColor
 	SpxSpriteSetTextureAltas                 GDExtensionSpxSpriteSetTextureAltas
 	SpxSpriteSetTexture                      GDExtensionSpxSpriteSetTexture
 	SpxSpriteSetTextureAltasDirect           GDExtensionSpxSpriteSetTextureAltasDirect
@@ -345,6 +349,10 @@ func (x *GDExtensionInterface) loadProcAddresses() {
 	x.SpxSpriteGetMaterialShader = (GDExtensionSpxSpriteGetMaterialShader)(dlsymGD("spx_sprite_get_material_shader"))
 	x.SpxSpriteSetMaterialParams = (GDExtensionSpxSpriteSetMaterialParams)(dlsymGD("spx_sprite_set_material_params"))
 	x.SpxSpriteGetMaterialParams = (GDExtensionSpxSpriteGetMaterialParams)(dlsymGD("spx_sprite_get_material_params"))
+	x.SpxSpriteSetMaterialParamsVec4 = (GDExtensionSpxSpriteSetMaterialParamsVec4)(dlsymGD("spx_sprite_set_material_params_vec4"))
+	x.SpxSpriteGetMaterialParamsVec4 = (GDExtensionSpxSpriteGetMaterialParamsVec4)(dlsymGD("spx_sprite_get_material_params_vec4"))
+	x.SpxSpriteSetMaterialParamsColor = (GDExtensionSpxSpriteSetMaterialParamsColor)(dlsymGD("spx_sprite_set_material_params_color"))
+	x.SpxSpriteGetMaterialParamsColor = (GDExtensionSpxSpriteGetMaterialParamsColor)(dlsymGD("spx_sprite_get_material_params_color"))
 	x.SpxSpriteSetTextureAltas = (GDExtensionSpxSpriteSetTextureAltas)(dlsymGD("spx_sprite_set_texture_altas"))
 	x.SpxSpriteSetTexture = (GDExtensionSpxSpriteSetTexture)(dlsymGD("spx_sprite_set_texture"))
 	x.SpxSpriteSetTextureAltasDirect = (GDExtensionSpxSpriteSetTextureAltasDirect)(dlsymGD("spx_sprite_set_texture_altas_direct"))

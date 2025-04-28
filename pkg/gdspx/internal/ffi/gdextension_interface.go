@@ -52,6 +52,12 @@ func ToGdVec2(val mathf.Vec2) GdVec2 {
 func ToVec2(val GdVec2) mathf.Vec2 {
 	return mathf.NewVec2(float64(val.X), float64(val.Y))
 }
+func ToGdVec4(val mathf.Vec4) GdVec4 {
+	return GdVec4{C.GdFloat(val.X), C.GdFloat(val.Y), C.GdFloat(val.Z), C.GdFloat(val.W)}
+}
+func ToVec4(val GdVec4) mathf.Vec4 {
+	return mathf.NewVec4(float64(val.X), float64(val.Y), float64(val.Z), float64(val.W))
+}
 func ToGdColor(val mathf.Color) GdColor {
 	return GdColor{C.float(val.R), C.float(val.G), C.float(val.B), C.float(val.A)}
 }

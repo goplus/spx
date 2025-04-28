@@ -71,6 +71,8 @@ type costume struct {
 
 	setIndex   int // costume index
 	posX, posY int // left top
+
+	altasUVRect mathf.Vec4
 }
 
 func newCostumeWithSize(width, height int) *costume {
@@ -83,6 +85,7 @@ func newCostumeWithSize(width, height int) *costume {
 	value.posY = 0
 	value.center.X = float64(value.width) / 2
 	value.center.Y = float64(value.height) / 2
+	value.altasUVRect = mathf.NewVec4(0, 0, 1, 1)
 	return value
 }
 
@@ -103,6 +106,13 @@ func newCostumeWith(name string, img *costumeSetImage, faceRight float64, i, bit
 		value.posX = int(img.rc.X) + i*value.width
 		value.posY = int(img.rc.Y)
 	}
+
+	// calc atlas uv
+	uStart := float64(value.posX) / imageSize.X
+	vStart := float64(value.posY) / imageSize.Y
+	uSize := float64(value.width) / imageSize.X
+	vSize := float64(value.height) / imageSize.Y
+	value.altasUVRect = mathf.NewVec4(uStart, vStart, uSize, vSize)
 	value.center.X = float64(value.width) / 2
 	value.center.Y = float64(value.height) / 2
 	return value
@@ -123,6 +133,7 @@ func newCostume(base string, c *costumeConfig) *costume {
 	value.height = int(imageSize.Y)
 	value.posX = 0
 	value.posY = 0
+	value.altasUVRect = mathf.NewVec4(0, 0, 1, 1)
 	return value
 }
 
@@ -159,6 +170,10 @@ type baseObj struct {
 
 	layer        int
 	isLayerDirty bool
+
+	// effects
+	greffUniforms map[EffectKind]float64 // graphic effects
+	hasShader     bool
 }
 
 func (p *baseObj) setLayer(layer int) { // dying: visible but can't be touched
@@ -278,6 +293,7 @@ func (p *baseObj) initWithSize(width, height int) {
 
 func (p *baseObj) initFrom(src *baseObj) {
 	p.costumes = src.costumes
+	p.hasShader = false
 	p.setCustumeIndex(src.costumeIndex_)
 }
 
@@ -359,6 +375,11 @@ func (p *baseObj) isCostumeAltas() bool {
 	return p.costumes[p.costumeIndex_].isAltas()
 }
 
+func (p *baseObj) getCostumeAltasUvRemap() mathf.Rect2 {
+	costume := p.costumes[p.costumeIndex_]
+	return mathf.NewRect2(costume.altasUVRect.X, costume.altasUVRect.Y, costume.altasUVRect.Z, costume.altasUVRect.W)
+}
+
 func (p *baseObj) getCostumeAltasRegion() mathf.Rect2 {
 	costume := p.costumes[p.costumeIndex_]
 	rect := mathf.NewRect2(float64(costume.posX), float64(costume.posY),
@@ -367,3 +388,120 @@ func (p *baseObj) getCostumeAltasRegion() mathf.Rect2 {
 }
 
 // -------------------------------------------------------------------------------------
+func (p *baseObj) requireGreffUniforms() map[EffectKind]float64 {
+	effs := p.greffUniforms
+	if effs == nil {
+		effs = make(map[EffectKind]float64)
+		p.greffUniforms = effs
+	}
+	return effs
+}
+
+func (p *baseObj) setEffect(kind EffectKind, val float64) {
+	effs := p.requireGreffUniforms()
+	effs[kind] = float64(val)
+	p.doSetEffect(kind, false)
+}
+
+func (p *baseObj) changeEffect(kind EffectKind, delta float64) {
+	effs := p.requireGreffUniforms()
+	newVal := float64(delta)
+	if oldVal, ok := effs[kind]; ok {
+		newVal += oldVal
+	}
+	effs[kind] = newVal
+	p.setEffect(kind, newVal)
+}
+
+func (p *baseObj) clearGraphEffects() {
+	p.greffUniforms = nil
+	effs := p.requireGreffUniforms()
+	for i := 0; i < int(enumNumOfEffect); i++ {
+		effs[EffectKind(i)] = 0
+	}
+	p.applyEffects(false)
+}
+
+func (p *baseObj) applyEffects(isSync bool) {
+	for i := 0; i < int(enumNumOfEffect); i++ {
+		p.doSetEffect(EffectKind(i), isSync)
+	}
+}
+
+func (p *baseObj) doSetEffect(kind EffectKind, isSync bool) {
+	if p.syncSprite == nil {
+		return
+	}
+
+	effs := p.requireGreffUniforms()
+	val, ok := effs[kind]
+	if !ok {
+		return
+	}
+
+	fval := val
+	switch kind {
+	case ColorEffect:
+		val := math.Mod(val/200, 1)
+		if val < 0 {
+			val += 1
+		}
+		fval = val
+	case BrightnessEffect:
+		fval = mathf.Clamp(val/100, -1, 1)
+	case GhostEffect:
+		fval = mathf.Clamp01f(val / 100)
+	case MosaicEffect:
+		fval = math.Max(math.Floor((val+5)/10), 0)
+	case WhirlEffect:
+		fval = mathf.Clamp(val/50, -20, 20)
+	case FishEyeEffect:
+		fval = mathf.Clamp(val/100, -1, 100)
+	case PixelateEffect:
+		fval = mathf.Absf(val / 10)
+	}
+	p.setMaterialParams(kind.String(), fval, isSync)
+}
+
+func (p *baseObj) setMaterialParamsVec4(effect string, amount mathf.Vec4, isSync bool) {
+	if isSync {
+		p._setMaterialParamsVec4(effect, amount)
+	} else {
+		engine.WaitMainThread(func() {
+			p._setMaterialParamsVec4(effect, amount)
+		})
+	}
+}
+func (p *baseObj) setMaterialParams(effect string, amount float64, isSync bool) {
+	if isSync {
+		p._setMaterialParams(effect, amount)
+	} else {
+		engine.WaitMainThread(func() {
+			p._setMaterialParams(effect, amount)
+		})
+	}
+}
+
+const shaderPath = "res://engine/shader/spx_sprite_shader.gdshader"
+
+func (p *baseObj) _setMaterialParams(effect string, amount float64) {
+	if p.syncSprite == nil {
+		return
+	}
+	if !p.hasShader {
+		p.syncSprite.SetMaterialShader(shaderPath)
+		p.hasShader = true
+	}
+	p.syncSprite.SetMaterialParams(effect, amount)
+}
+
+func (p *baseObj) _setMaterialParamsVec4(effect string, val mathf.Vec4) {
+	if p.syncSprite == nil {
+		return
+	}
+	if !p.hasShader {
+		p.syncSprite.SetMaterialShader(shaderPath)
+		p.hasShader = true
+	}
+	p.syncSprite.SetMaterialParamsVec4(effect, val)
+}

@@ -1,79 +1,61 @@
 import "fmt"
 import "math"
 
+import "fmt"
+func effectTest(eff EffectKind, start, end float64, step float64, waitTime float64) {
+    for i := start; i <= end; i += step {
+        setEffect eff, i
+        say fmt.Sprintf("test %d i=%.0f", eff, i)
+        wait waitTime
+    }
+	say "done"
+	wait 0.5
+	ClearGraphEffects
+}
+func testCloneEffect() {
+	wait 0.5
+	setEffect ColorEffect, 100
+	wait 0.1
+	cloneNum++
+	clone 
+
+	wait 0.5
+	setEffect PixelateEffect, 50
+	wait 0.1
+	clone 
+	cloneNum++
+
+	wait 0.5
+}
+
+
+onCloned => {
+	// test effect clone 
+	setXpos 100*float64(cloneNum)
+	say fmt.Sprintf("cloned %d", cloneNum)
+	wait 3
+	deleteThisClone
+}
 
 onMsg "testEffect", => {
 	onTestStart(this)
 
-    setSize 5
+    setSize 1
 
     // 1. string
     say "testEffect"
     wait 0.1
 
-    //ColorEffect
-	//BrightnessEffect
-	//GhostEffect
-	//MosaicEffect
-	//WhirlEffect
-	//FishEyeEffect
-	//UVEffect
+	setXpos -100
+	testCloneEffect()
 
-    // 1. ColorEffect
-    say "test ColorEffect"
-    for i := 0; i <= 5; i++ {
-        changeEffect ColorEffect, 20
-        wait 0.1
-    }
-    ClearGraphEffects
-
-    // 2. BrightnessEffect
-    say "test BrightnessEffect"
-    for i := 0; i <= 5; i++ {
-        changeEffect BrightnessEffect, 20
-        wait 0.1
-    }
-    ClearGraphEffects
-
-    // 3. GhostEffect
-    say "test GhostEffect"
-    for i := 0; i <= 5; i++ {
-        changeEffect GhostEffect, 20
-        wait 0.1
-    }
-    ClearGraphEffects
-
-    // 4. MosaicEffect
-    say "test MosaicEffect"
-    for i := 0; i <= 5; i++ {
-        changeEffect MosaicEffect, 20
-        wait 0.1
-    }
-    ClearGraphEffects
-
-    // 5. WhirlEffect
-    say "test WhirlEffect"
-    for i := 0; i <= 5; i++ {
-        changeEffect WhirlEffect, 10
-        wait 0.1
-    }
-    ClearGraphEffects
-   
-	// 6. FishEyeEffect
-    say "test FishEyeEffect"
-    for i := 0; i <= 5; i++ {
-        changeEffect FishEyeEffect, 10
-        wait 0.1
-    }
-    ClearGraphEffects
-
-    // 7. UVEffect
-    say "test UVEffect"
-    for i := 0; i <= 5; i++ {
-        changeEffect UVEffect, 10
-        wait 0.1
-    }
-    ClearGraphEffects
+	effectTest(ColorEffect, -200, 200, 20, 0.05)
+	effectTest(FishEyeEffect, -150, 150, 5, 0.05)
+	effectTest(WhirlEffect, -300, 300, 15, 0.05)
+	effectTest(PixelateEffect, -100, 100, 4, 0.05)
+	effectTest(MosaicEffect, -10, 100, 1, 0.05)
+	effectTest(BrightnessEffect, -100, 100, 5, 0.05)
+	effectTest(GhostEffect, 0, 100, 5, 0.05)
 
 	onTestDone(this)
 }
