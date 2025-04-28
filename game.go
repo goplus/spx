@@ -249,12 +249,21 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 		verbose := f.Bool("v", false, "print verbose information")
 		fullscreen := f.Bool("f", false, "full screen")
 		help := f.Bool("h", false, "show help information")
-		projectPath := f.Bool("path", false, "gdspx project path")
-		editorMode := f.Bool("e", false, "editor mode")
+		fullscreen2 := f.Bool("fullscreen", false, "server mode")
+
+		f.String("controller", "", "controller's name")
+		f.Bool("servermode", false, "server mode")
+		f.String("serveraddr", "", "server address")
+		f.Bool("nomap", false, "server mode")
+		f.Bool("debugweb", false, "server mode")
+
+		// godot args
+		f.String("path", "", "gdspx project path")
+		f.Bool("e", false, "editor mode")
+		f.Bool("headless", false, "Headless Mode")
+		f.Bool("remote-debug", false, "remote Debug Mode")
 		flag.Parse()
-		if *projectPath || *editorMode {
-			println("======== gdspx debug mode ========")
-		}
+
 		if *help {
 			fmt.Fprintf(os.Stderr, "Usage: %v [-v -f -h]\n", os.Args[0])
 			flag.PrintDefaults()
@@ -263,13 +272,14 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 		if *verbose {
 			SetDebug(DbgFlagAll)
 		}
-		conf.FullScreen = *fullscreen
+		conf.FullScreen = conf.FullScreen || *fullscreen2 || *fullscreen
 	}
 	if conf.Title == "" {
 		dir, _ := os.Getwd()
 		appName := filepath.Base(dir)
 		conf.Title = appName + " (by Go+ Builder)"
 	}
+	proj.FullScreen = proj.FullScreen || conf.FullScreen
 
 	key := conf.ScreenshotKey
 	if key == "" {
@@ -477,7 +487,7 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 	}
 
 	// fullscreen when on mobile platform
-	if platform.IsMobile() {
+	if platform.IsMobile() || proj.FullScreen {
 		platformMgr.SetWindowFullscreen(true)
 		winSize := platformMgr.GetWindowSize()
 		scale := math.Min(winSize.X/float64(p.windowWidth_), winSize.Y/float64(p.windowHeight_))
@@ -704,9 +714,6 @@ func (p *Game) runLoop(cfg *Config) (err error) {
 	}
 	if !cfg.DontRunOnUnfocused {
 		platformMgr.SetRunnableOnUnfocused(true)
-	}
-	if cfg.FullScreen {
-		platformMgr.SetWindowFullscreen(true)
 	}
 	p.initEventLoop()
 	platformMgr.SetWindowTitle(cfg.Title)
