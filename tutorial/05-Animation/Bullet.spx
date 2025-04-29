@@ -4,7 +4,7 @@ onTouchStart => {
 
 onStart => {
 	for {
-		wait 0.3
+		wait 0.1
 		clone
 	}
 }
@@ -13,8 +13,8 @@ onCloned => {
 	setXYpos mouseX, mouseY
 	show
 	for {
-		wait 0.04
-		step 10
+		waitNextFrame
+		step 500 * deltaTime
 		if touching(Edge) {
 			destroy
 		}

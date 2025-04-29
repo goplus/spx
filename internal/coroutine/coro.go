@@ -388,6 +388,7 @@ func (p *Coroutines) UpdateJobs() {
 	if p.debug {
 		fmt.Printf("curFrame %d,useTime %fms,fps %d, taskCount %d,curTime %f , moveCount %d \n", curFrame, delta, int(time.FPS()), waitFrameCount, curTime, nextCount)
 	}
+	println("coro end", time.Frame())
 }
 
 // -------------------------------------------------------------------------------------
