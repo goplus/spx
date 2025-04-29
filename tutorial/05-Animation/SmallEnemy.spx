@@ -1,7 +1,7 @@
 var life int
 onStart => {
 	for {
-		wait 0.3
+		wait 0.1
 		clone
 	}
 }
@@ -12,7 +12,7 @@ onCloned => {
 	show
 	for {
 		waitNextFrame
-		changeYpos -48 * deltaTime
+		changeYpos -200 * deltaTime
 		if touching(EdgeBottom) {
 			destroy
 		}

@@ -13,3 +13,5 @@ require (
 )
 
 replace github.com/goplus/spx => ../../
+
+replace github.com/realdream-ai/gdspx => ../../gdspx

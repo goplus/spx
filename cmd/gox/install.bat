@@ -7,9 +7,3 @@ set /p appname=<appname.txt
 go build -o %appname%.exe
 move %appname%.exe "%GOPATH%\bin\"
 
-:: Build WebAssembly file
-cd ..\igox
-set GOOS=js
-set GOARCH=wasm
-go build -o "%GOPATH%\bin\igdspx.wasm"
-cd ..\gox

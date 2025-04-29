@@ -4,7 +4,7 @@ onTouchStart => {
 
 onStart => {
 	for {
-		wait 0.3
+		wait 0.1
 		clone
 	}
 }
@@ -14,7 +14,7 @@ onCloned => {
 	show
 	for {
 		waitNextFrame
-		step 250 * deltaTime
+		step 550 * deltaTime
 		if touching(Edge) {
 			destroy
 		}

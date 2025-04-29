@@ -17,3 +17,5 @@ replace (
 	golang.org/x/mod => golang.org/x/mod v0.5.1
 	golang.org/x/tools => golang.org/x/tools v0.1.8
 )
+
+replace github.com/realdream-ai/gdspx => ./gdspx
