@@ -21,6 +21,7 @@ type ExtraArgs struct {
 	NoMap           *bool
 	Install         *bool
 	DebugWebService *bool
+	FullScreen      *bool
 }
 
 func (e *ExtraArgs) String() []string {
@@ -45,6 +46,9 @@ func (e *ExtraArgs) String() []string {
 	}
 	if *e.DebugWebService {
 		args = append(args, "--debugweb")
+	}
+	if *e.FullScreen {
+		args = append(args, "--fullscreen")
 	}
 	return args
 }
@@ -98,7 +102,7 @@ func (cmd *CmdTool) initializeFlags() *bool {
 	cmd.Args.NoMap = f.Bool("nomap", false, "no map mode")
 	cmd.Args.Install = f.Bool("install", false, "install mode")
 	cmd.Args.DebugWebService = f.Bool("debugweb", false, "open debug web service")
-
+	cmd.Args.FullScreen = f.Bool("fullscreen", false, "full screen")
 	return help
 }
 
