@@ -117,6 +117,7 @@ type IResMgr interface {
 	ReadAllText(p_path string) string
 	HasFile(p_path string) bool
 	ReloadTexture(path string)
+	FreeStr(str string)
 }
 
 type ISceneMgr interface {

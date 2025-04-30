@@ -12,12 +12,18 @@
 */
 package wrap
 
+/*
+#include <stdlib.h>
+*/
+import "C"
+
 import (
 	"fmt"
 	. "github.com/goplus/spx/pkg/gdspx/internal/ffi"
 	. "github.com/goplus/spx/pkg/gdspx/pkg/engine"
 	. "github.com/realdream-ai/mathf"
 	"reflect"
+	"unsafe"
 )
 
 func BindMgr(mgrs []IManager) {
@@ -149,9 +155,9 @@ func (pself *audioMgr) GetVolume(obj Object) float64 {
 }
 func (pself *audioMgr) Play(obj Object, path string) int64 {
 	arg0 := ToGdObj(obj)
-	arg1Str := NewCString(path)
-	arg1 := arg1Str.ToGdString()
-	defer arg1Str.Destroy()
+	arg1Str := C.CString(path)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
 	retValue := CallAudioPlay(arg0, arg1)
 	return ToInt64(retValue)
 }
@@ -270,9 +276,9 @@ func (pself *extMgr) SetPenSizeTo(obj Object, size float64) {
 }
 func (pself *extMgr) SetPenStampTexture(obj Object, texture_path string) {
 	arg0 := ToGdObj(obj)
-	arg1Str := NewCString(texture_path)
-	arg1 := arg1Str.ToGdString()
-	defer arg1Str.Destroy()
+	arg1Str := C.CString(texture_path)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
 	CallExtSetPenStampTexture(arg0, arg1)
 }
 func (pself *inputMgr) GetMousePos() Vec2 {
@@ -295,33 +301,33 @@ func (pself *inputMgr) GetKeyState(key int64) int64 {
 	return ToInt64(retValue)
 }
 func (pself *inputMgr) GetAxis(neg_action string, pos_action string) float64 {
-	arg0Str := NewCString(neg_action)
-	arg0 := arg0Str.ToGdString()
-	defer arg0Str.Destroy()
-	arg1Str := NewCString(pos_action)
-	arg1 := arg1Str.ToGdString()
-	defer arg1Str.Destroy()
+	arg0Str := C.CString(neg_action)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	arg1Str := C.CString(pos_action)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
 	retValue := CallInputGetAxis(arg0, arg1)
 	return ToFloat64(retValue)
 }
 func (pself *inputMgr) IsActionPressed(action string) bool {
-	arg0Str := NewCString(action)
-	arg0 := arg0Str.ToGdString()
-	defer arg0Str.Destroy()
+	arg0Str := C.CString(action)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
 	retValue := CallInputIsActionPressed(arg0)
 	return ToBool(retValue)
 }
 func (pself *inputMgr) IsActionJustPressed(action string) bool {
-	arg0Str := NewCString(action)
-	arg0 := arg0Str.ToGdString()
-	defer arg0Str.Destroy()
+	arg0Str := C.CString(action)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
 	retValue := CallInputIsActionJustPressed(arg0)
 	return ToBool(retValue)
 }
 func (pself *inputMgr) IsActionJustReleased(action string) bool {
-	arg0Str := NewCString(action)
-	arg0 := arg0Str.ToGdString()
-	defer arg0Str.Destroy()
+	arg0Str := C.CString(action)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
 	retValue := CallInputIsActionJustReleased(arg0)
 	return ToBool(retValue)
 }
@@ -369,9 +375,9 @@ func (pself *platformMgr) GetWindowSize() Vec2 {
 	return ToVec2(retValue)
 }
 func (pself *platformMgr) SetWindowTitle(title string) {
-	arg0Str := NewCString(title)
-	arg0 := arg0Str.ToGdString()
-	defer arg0Str.Destroy()
+	arg0Str := C.CString(title)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
 	CallPlatformSetWindowTitle(arg0)
 }
 func (pself *platformMgr) GetWindowTitle() string {
@@ -407,28 +413,28 @@ func (pself *platformMgr) GetPersistantDataDir() string {
 	return ToString(retValue)
 }
 func (pself *platformMgr) SetPersistantDataDir(path string) {
-	arg0Str := NewCString(path)
-	arg0 := arg0Str.ToGdString()
-	defer arg0Str.Destroy()
+	arg0Str := C.CString(path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
 	CallPlatformSetPersistantDataDir(arg0)
 }
 func (pself *platformMgr) IsInPersistantDataDir(path string) bool {
-	arg0Str := NewCString(path)
-	arg0 := arg0Str.ToGdString()
-	defer arg0Str.Destroy()
+	arg0Str := C.CString(path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
 	retValue := CallPlatformIsInPersistantDataDir(arg0)
 	return ToBool(retValue)
 }
 func (pself *resMgr) CreateAnimation(sprite_type_name string, anim_name string, context string, fps int64, is_altas bool) {
-	arg0Str := NewCString(sprite_type_name)
-	arg0 := arg0Str.ToGdString()
-	defer arg0Str.Destroy()
-	arg1Str := NewCString(anim_name)
-	arg1 := arg1Str.ToGdString()
-	defer arg1Str.Destroy()
-	arg2Str := NewCString(context)
-	arg2 := arg2Str.ToGdString()
-	defer arg2Str.Destroy()
+	arg0Str := C.CString(sprite_type_name)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	arg1Str := C.CString(anim_name)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	arg2Str := C.CString(context)
+	arg2 := (GdString)(arg2Str)
+	defer C.free(unsafe.Pointer(arg2Str))
 	arg3 := ToGdInt(fps)
 	arg4 := ToGdBool(is_altas)
 	CallResCreateAnimation(arg0, arg1, arg2, arg3, arg4)
@@ -442,43 +448,49 @@ func (pself *resMgr) GetLoadMode() bool {
 	return ToBool(retValue)
 }
 func (pself *resMgr) GetBoundFromAlpha(p_path string) Rect2 {
-	arg0Str := NewCString(p_path)
-	arg0 := arg0Str.ToGdString()
-	defer arg0Str.Destroy()
+	arg0Str := C.CString(p_path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
 	retValue := CallResGetBoundFromAlpha(arg0)
 	return ToRect2(retValue)
 }
 func (pself *resMgr) GetImageSize(p_path string) Vec2 {
-	arg0Str := NewCString(p_path)
-	arg0 := arg0Str.ToGdString()
-	defer arg0Str.Destroy()
+	arg0Str := C.CString(p_path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
 	retValue := CallResGetImageSize(arg0)
 	return ToVec2(retValue)
 }
 func (pself *resMgr) ReadAllText(p_path string) string {
-	arg0Str := NewCString(p_path)
-	arg0 := arg0Str.ToGdString()
-	defer arg0Str.Destroy()
+	arg0Str := C.CString(p_path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
 	retValue := CallResReadAllText(arg0)
 	return ToString(retValue)
 }
 func (pself *resMgr) HasFile(p_path string) bool {
-	arg0Str := NewCString(p_path)
-	arg0 := arg0Str.ToGdString()
-	defer arg0Str.Destroy()
+	arg0Str := C.CString(p_path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
 	retValue := CallResHasFile(arg0)
 	return ToBool(retValue)
 }
 func (pself *resMgr) ReloadTexture(path string) {
-	arg0Str := NewCString(path)
-	arg0 := arg0Str.ToGdString()
-	defer arg0Str.Destroy()
+	arg0Str := C.CString(path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
 	CallResReloadTexture(arg0)
 }
+func (pself *resMgr) FreeStr(str string) {
+	arg0Str := C.CString(str)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	CallResFreeStr(arg0)
+}
 func (pself *sceneMgr) ChangeSceneToFile(path string) {
-	arg0Str := NewCString(path)
-	arg0 := arg0Str.ToGdString()
-	defer arg0Str.Destroy()
+	arg0Str := C.CString(path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
 	CallSceneChangeSceneToFile(arg0)
 }
 func (pself *sceneMgr) DestroyAllSprites() {
@@ -507,56 +519,56 @@ func (pself *spriteMgr) SetPhysicProcess(obj Object, is_on bool) {
 }
 func (pself *spriteMgr) SetTypeName(obj Object, type_name string) {
 	arg0 := ToGdObj(obj)
-	arg1Str := NewCString(type_name)
-	arg1 := arg1Str.ToGdString()
-	defer arg1Str.Destroy()
+	arg1Str := C.CString(type_name)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
 	CallSpriteSetTypeName(arg0, arg1)
 }
 func (pself *spriteMgr) SetChildPosition(obj Object, path string, pos Vec2) {
 	arg0 := ToGdObj(obj)
-	arg1Str := NewCString(path)
-	arg1 := arg1Str.ToGdString()
-	defer arg1Str.Destroy()
+	arg1Str := C.CString(path)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
 	arg2 := ToGdVec2(pos)
 	CallSpriteSetChildPosition(arg0, arg1, arg2)
 }
 func (pself *spriteMgr) GetChildPosition(obj Object, path string) Vec2 {
 	arg0 := ToGdObj(obj)
-	arg1Str := NewCString(path)
-	arg1 := arg1Str.ToGdString()
-	defer arg1Str.Destroy()
+	arg1Str := C.CString(path)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
 	retValue := CallSpriteGetChildPosition(arg0, arg1)
 	return ToVec2(retValue)
 }
 func (pself *spriteMgr) SetChildRotation(obj Object, path string, rot float64) {
 	arg0 := ToGdObj(obj)
-	arg1Str := NewCString(path)
-	arg1 := arg1Str.ToGdString()
-	defer arg1Str.Destroy()
+	arg1Str := C.CString(path)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
 	arg2 := ToGdFloat(rot)
 	CallSpriteSetChildRotation(arg0, arg1, arg2)
 }
 func (pself *spriteMgr) GetChildRotation(obj Object, path string) float64 {
 	arg0 := ToGdObj(obj)
-	arg1Str := NewCString(path)
-	arg1 := arg1Str.ToGdString()
-	defer arg1Str.Destroy()
+	arg1Str := C.CString(path)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
 	retValue := CallSpriteGetChildRotation(arg0, arg1)
 	return ToFloat64(retValue)
 }
 func (pself *spriteMgr) SetChildScale(obj Object, path string, scale Vec2) {
 	arg0 := ToGdObj(obj)
-	arg1Str := NewCString(path)
-	arg1 := arg1Str.ToGdString()
-	defer arg1Str.Destroy()
+	arg1Str := C.CString(path)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
 	arg2 := ToGdVec2(scale)
 	CallSpriteSetChildScale(arg0, arg1, arg2)
 }
 func (pself *spriteMgr) GetChildScale(obj Object, path string) Vec2 {
 	arg0 := ToGdObj(obj)
-	arg1Str := NewCString(path)
-	arg1 := arg1Str.ToGdString()
-	defer arg1Str.Destroy()
+	arg1Str := C.CString(path)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
 	retValue := CallSpriteGetChildScale(arg0, arg1)
 	return ToVec2(retValue)
 }
@@ -576,16 +588,16 @@ func (pself *spriteMgr) CheckCollisionWithPoint(obj Object, point Vec2, is_trigg
 	return ToBool(retValue)
 }
 func (pself *spriteMgr) CreateBackdrop(path string) Object {
-	arg0Str := NewCString(path)
-	arg0 := arg0Str.ToGdString()
-	defer arg0Str.Destroy()
+	arg0Str := C.CString(path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
 	retValue := CallSpriteCreateBackdrop(arg0)
 	return ToObject(retValue)
 }
 func (pself *spriteMgr) CreateSprite(path string) Object {
-	arg0Str := NewCString(path)
-	arg0 := arg0Str.ToGdString()
-	defer arg0Str.Destroy()
+	arg0Str := C.CString(path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
 	retValue := CallSpriteCreateSprite(arg0)
 	return ToObject(retValue)
 }
@@ -656,9 +668,9 @@ func (pself *spriteMgr) GetColor(obj Object) Color {
 }
 func (pself *spriteMgr) SetMaterialShader(obj Object, path string) {
 	arg0 := ToGdObj(obj)
-	arg1Str := NewCString(path)
-	arg1 := arg1Str.ToGdString()
-	defer arg1Str.Destroy()
+	arg1Str := C.CString(path)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
 	CallSpriteSetMaterialShader(arg0, arg1)
 }
 func (pself *spriteMgr) GetMaterialShader(obj Object) string {
@@ -668,80 +680,80 @@ func (pself *spriteMgr) GetMaterialShader(obj Object) string {
 }
 func (pself *spriteMgr) SetMaterialParams(obj Object, effect string, amount float64) {
 	arg0 := ToGdObj(obj)
-	arg1Str := NewCString(effect)
-	arg1 := arg1Str.ToGdString()
-	defer arg1Str.Destroy()
+	arg1Str := C.CString(effect)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
 	arg2 := ToGdFloat(amount)
 	CallSpriteSetMaterialParams(arg0, arg1, arg2)
 }
 func (pself *spriteMgr) GetMaterialParams(obj Object, effect string) float64 {
 	arg0 := ToGdObj(obj)
-	arg1Str := NewCString(effect)
-	arg1 := arg1Str.ToGdString()
-	defer arg1Str.Destroy()
+	arg1Str := C.CString(effect)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
 	retValue := CallSpriteGetMaterialParams(arg0, arg1)
 	return ToFloat64(retValue)
 }
 func (pself *spriteMgr) SetMaterialParamsVec4(obj Object, effect string, vec4 Vec4) {
 	arg0 := ToGdObj(obj)
-	arg1Str := NewCString(effect)
-	arg1 := arg1Str.ToGdString()
-	defer arg1Str.Destroy()
+	arg1Str := C.CString(effect)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
 	arg2 := ToGdVec4(vec4)
 	CallSpriteSetMaterialParamsVec4(arg0, arg1, arg2)
 }
 func (pself *spriteMgr) GetMaterialParamsVec4(obj Object, effect string) Vec4 {
 	arg0 := ToGdObj(obj)
-	arg1Str := NewCString(effect)
-	arg1 := arg1Str.ToGdString()
-	defer arg1Str.Destroy()
+	arg1Str := C.CString(effect)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
 	retValue := CallSpriteGetMaterialParamsVec4(arg0, arg1)
 	return ToVec4(retValue)
 }
 func (pself *spriteMgr) SetMaterialParamsColor(obj Object, effect string, color Color) {
 	arg0 := ToGdObj(obj)
-	arg1Str := NewCString(effect)
-	arg1 := arg1Str.ToGdString()
-	defer arg1Str.Destroy()
+	arg1Str := C.CString(effect)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
 	arg2 := ToGdColor(color)
 	CallSpriteSetMaterialParamsColor(arg0, arg1, arg2)
 }
 func (pself *spriteMgr) GetMaterialParamsColor(obj Object, effect string) Color {
 	arg0 := ToGdObj(obj)
-	arg1Str := NewCString(effect)
-	arg1 := arg1Str.ToGdString()
-	defer arg1Str.Destroy()
+	arg1Str := C.CString(effect)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
 	retValue := CallSpriteGetMaterialParamsColor(arg0, arg1)
 	return ToColor(retValue)
 }
 func (pself *spriteMgr) SetTextureAltas(obj Object, path string, rect2 Rect2) {
 	arg0 := ToGdObj(obj)
-	arg1Str := NewCString(path)
-	arg1 := arg1Str.ToGdString()
-	defer arg1Str.Destroy()
+	arg1Str := C.CString(path)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
 	arg2 := ToGdRect2(rect2)
 	CallSpriteSetTextureAltas(arg0, arg1, arg2)
 }
 func (pself *spriteMgr) SetTexture(obj Object, path string) {
 	arg0 := ToGdObj(obj)
-	arg1Str := NewCString(path)
-	arg1 := arg1Str.ToGdString()
-	defer arg1Str.Destroy()
+	arg1Str := C.CString(path)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
 	CallSpriteSetTexture(arg0, arg1)
 }
 func (pself *spriteMgr) SetTextureAltasDirect(obj Object, path string, rect2 Rect2) {
 	arg0 := ToGdObj(obj)
-	arg1Str := NewCString(path)
-	arg1 := arg1Str.ToGdString()
-	defer arg1Str.Destroy()
+	arg1Str := C.CString(path)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
 	arg2 := ToGdRect2(rect2)
 	CallSpriteSetTextureAltasDirect(arg0, arg1, arg2)
 }
 func (pself *spriteMgr) SetTextureDirect(obj Object, path string) {
 	arg0 := ToGdObj(obj)
-	arg1Str := NewCString(path)
-	arg1 := arg1Str.ToGdString()
-	defer arg1Str.Destroy()
+	arg1Str := C.CString(path)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
 	CallSpriteSetTextureDirect(arg0, arg1)
 }
 func (pself *spriteMgr) GetTexture(obj Object) string {
@@ -771,9 +783,9 @@ func (pself *spriteMgr) SetZIndex(obj Object, z int64) {
 }
 func (pself *spriteMgr) PlayAnim(obj Object, p_name string, p_speed float64, isLoop bool, p_revert bool) {
 	arg0 := ToGdObj(obj)
-	arg1Str := NewCString(p_name)
-	arg1 := arg1Str.ToGdString()
-	defer arg1Str.Destroy()
+	arg1Str := C.CString(p_name)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
 	arg2 := ToGdFloat(p_speed)
 	arg3 := ToGdBool(isLoop)
 	arg4 := ToGdBool(p_revert)
@@ -781,9 +793,9 @@ func (pself *spriteMgr) PlayAnim(obj Object, p_name string, p_speed float64, isL
 }
 func (pself *spriteMgr) PlayBackwardsAnim(obj Object, p_name string) {
 	arg0 := ToGdObj(obj)
-	arg1Str := NewCString(p_name)
-	arg1 := arg1Str.ToGdString()
-	defer arg1Str.Destroy()
+	arg1Str := C.CString(p_name)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
 	CallSpritePlayBackwardsAnim(arg0, arg1)
 }
 func (pself *spriteMgr) PauseAnim(obj Object) {
@@ -801,9 +813,9 @@ func (pself *spriteMgr) IsPlayingAnim(obj Object) bool {
 }
 func (pself *spriteMgr) SetAnim(obj Object, p_name string) {
 	arg0 := ToGdObj(obj)
-	arg1Str := NewCString(p_name)
-	arg1 := arg1Str.ToGdString()
-	defer arg1Str.Destroy()
+	arg1Str := C.CString(p_name)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
 	CallSpriteSetAnim(arg0, arg1)
 }
 func (pself *spriteMgr) GetAnim(obj Object) string {
@@ -1093,69 +1105,69 @@ func (pself *spriteMgr) CheckCollisionWithSpriteByAlpha(obj Object, obj_b Object
 }
 func (pself *uiMgr) BindNode(obj Object, rel_path string) Object {
 	arg0 := ToGdObj(obj)
-	arg1Str := NewCString(rel_path)
-	arg1 := arg1Str.ToGdString()
-	defer arg1Str.Destroy()
+	arg1Str := C.CString(rel_path)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
 	retValue := CallUiBindNode(arg0, arg1)
 	return ToObject(retValue)
 }
 func (pself *uiMgr) CreateNode(path string) Object {
-	arg0Str := NewCString(path)
-	arg0 := arg0Str.ToGdString()
-	defer arg0Str.Destroy()
+	arg0Str := C.CString(path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
 	retValue := CallUiCreateNode(arg0)
 	return ToObject(retValue)
 }
 func (pself *uiMgr) CreateButton(path string, text string) Object {
-	arg0Str := NewCString(path)
-	arg0 := arg0Str.ToGdString()
-	defer arg0Str.Destroy()
-	arg1Str := NewCString(text)
-	arg1 := arg1Str.ToGdString()
-	defer arg1Str.Destroy()
+	arg0Str := C.CString(path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	arg1Str := C.CString(text)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
 	retValue := CallUiCreateButton(arg0, arg1)
 	return ToObject(retValue)
 }
 func (pself *uiMgr) CreateLabel(path string, text string) Object {
-	arg0Str := NewCString(path)
-	arg0 := arg0Str.ToGdString()
-	defer arg0Str.Destroy()
-	arg1Str := NewCString(text)
-	arg1 := arg1Str.ToGdString()
-	defer arg1Str.Destroy()
+	arg0Str := C.CString(path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	arg1Str := C.CString(text)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
 	retValue := CallUiCreateLabel(arg0, arg1)
 	return ToObject(retValue)
 }
 func (pself *uiMgr) CreateImage(path string) Object {
-	arg0Str := NewCString(path)
-	arg0 := arg0Str.ToGdString()
-	defer arg0Str.Destroy()
+	arg0Str := C.CString(path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
 	retValue := CallUiCreateImage(arg0)
 	return ToObject(retValue)
 }
 func (pself *uiMgr) CreateToggle(path string, value bool) Object {
-	arg0Str := NewCString(path)
-	arg0 := arg0Str.ToGdString()
-	defer arg0Str.Destroy()
+	arg0Str := C.CString(path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
 	arg1 := ToGdBool(value)
 	retValue := CallUiCreateToggle(arg0, arg1)
 	return ToObject(retValue)
 }
 func (pself *uiMgr) CreateSlider(path string, value float64) Object {
-	arg0Str := NewCString(path)
-	arg0 := arg0Str.ToGdString()
-	defer arg0Str.Destroy()
+	arg0Str := C.CString(path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
 	arg1 := ToGdFloat(value)
 	retValue := CallUiCreateSlider(arg0, arg1)
 	return ToObject(retValue)
 }
 func (pself *uiMgr) CreateInput(path string, text string) Object {
-	arg0Str := NewCString(path)
-	arg0 := arg0Str.ToGdString()
-	defer arg0Str.Destroy()
-	arg1Str := NewCString(text)
-	arg1 := arg1Str.ToGdString()
-	defer arg1Str.Destroy()
+	arg0Str := C.CString(path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	arg1Str := C.CString(text)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
 	retValue := CallUiCreateInput(arg0, arg1)
 	return ToObject(retValue)
 }
@@ -1171,9 +1183,9 @@ func (pself *uiMgr) GetType(obj Object) int64 {
 }
 func (pself *uiMgr) SetText(obj Object, text string) {
 	arg0 := ToGdObj(obj)
-	arg1Str := NewCString(text)
-	arg1 := arg1Str.ToGdString()
-	defer arg1Str.Destroy()
+	arg1Str := C.CString(text)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
 	CallUiSetText(arg0, arg1)
 }
 func (pself *uiMgr) GetText(obj Object) string {
@@ -1183,9 +1195,9 @@ func (pself *uiMgr) GetText(obj Object) string {
 }
 func (pself *uiMgr) SetTexture(obj Object, path string) {
 	arg0 := ToGdObj(obj)
-	arg1Str := NewCString(path)
-	arg1 := arg1Str.ToGdString()
-	defer arg1Str.Destroy()
+	arg1Str := C.CString(path)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
 	CallUiSetTexture(arg0, arg1)
 }
 func (pself *uiMgr) GetTexture(obj Object) string {

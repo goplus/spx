@@ -225,6 +225,9 @@ void cgo_callfn_GDExtensionSpxResHasFile(const GDExtensionSpxResHasFile fn, GdSt
 void cgo_callfn_GDExtensionSpxResReloadTexture(const GDExtensionSpxResReloadTexture fn, GdString path) {
 	fn(path);
 }
+void cgo_callfn_GDExtensionSpxResFreeStr(const GDExtensionSpxResFreeStr fn, GdString str) {
+	fn(str);
+}
 void cgo_callfn_GDExtensionSpxSceneChangeSceneToFile(const GDExtensionSpxSceneChangeSceneToFile fn, GdString path) {
 	fn(path);
 }

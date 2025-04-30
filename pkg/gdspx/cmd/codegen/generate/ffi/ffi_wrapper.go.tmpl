@@ -51,7 +51,7 @@ func Call{{ trimPrefix $f.Name "GDExtensionSpx" }}(
 ) {{ $rt }} {
 	arg0 := (C.{{ $f.Name }})(api.{{ trimPrefix $f.Name "GDExtension" }})
 	{{ range $j, $arg := $f.Arguments -}}
-		arg{{ add $j 1 }}{{$arg.Type.Primative.Name}} = {{ cgoCastArgument $arg (print "inArg" (add $j 1)) }}
+		arg{{ add $j 1 }}{{$arg.Type.Primative.Name}} := {{ cgoCastArgument $arg (print "inArg" (add $j 1)) }}
 	{{ end -}}
 
 	{{- if $rt -}} var ret_val C.{{ $f.ReturnType.CStyleString }} {{ end }}

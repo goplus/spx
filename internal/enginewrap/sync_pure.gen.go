@@ -288,6 +288,7 @@ func (pself *resMgrImpl) HasFile(p_path string) bool {
 	return _ret1
 }
 func (pself *resMgrImpl) ReloadTexture(path string) {}
+func (pself *resMgrImpl) FreeStr(str string)        {}
 
 // ISceneMgr
 func (pself *sceneMgrImpl) ChangeSceneToFile(path string) {}

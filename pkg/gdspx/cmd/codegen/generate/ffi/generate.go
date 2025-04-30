@@ -327,12 +327,12 @@ func getManagerFuncBody(function *clang.TypedefFunction) string {
 		switch typeName {
 		case "GdString":
 			sb.WriteString(argName + "Str := ")
-			sb.WriteString("NewCString(")
+			sb.WriteString("C.CString(")
 			sb.WriteString(arg.Name)
 			sb.WriteString(")")
 			sb.WriteString("\n" + prefixTab)
-			sb.WriteString(argName + " := " + argName + "Str.ToGdString() \n")
-			sb.WriteString("\tdefer " + argName + "Str.Destroy() ")
+			sb.WriteString(argName + " := " + "(GdString)(" + argName + "Str) \n")
+			sb.WriteString("\tdefer " + "C.free(unsafe.Pointer(" + argName + "Str))")
 
 		default:
 			sb.WriteString(argName + " := ")
