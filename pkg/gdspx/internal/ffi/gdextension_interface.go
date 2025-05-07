@@ -105,9 +105,14 @@ func ToFloat32(val GdFloat) float64 {
 func ToFloat(val GdFloat) float64 {
 	return float64(val)
 }
+
 func ToString(val GdString) string {
-	cstrPtr := (*CString)(unsafe.Pointer(val))
-	return cstrPtr.ToUtf8()
+	cstrPtr := (*C.char)(unsafe.Pointer(val))
+	str := C.GoString(cstrPtr)
+	// free the memory allocated in c++
+	// Warning!: Using Go's C.free(unsafe.Pointer(cstrPtr)) to free memory allocated in C++ can cause a crash
+	CallResFreeStr(val)
+	return str
 }
 
 type GDExtensionSpxCallbackInfoPtr C.GDExtensionSpxCallbackInfoPtr
@@ -191,96 +196,6 @@ const (
 	GDExtensionInitializationLevelEditor  GDExtensionInitializationLevel = 3
 )
 
-var (
-	arg0GdObj    C.GdObj
-	arg0GdBool   C.GdBool
-	arg0GdString C.GdString
-	arg0GdInt    C.GdInt
-	arg0GdFloat  C.GdFloat
-	arg0GdVec2   C.GdVec2
-	arg0GdVec3   C.GdVec3
-	arg0GdVec4   C.GdVec4
-	arg0GdRect2  C.GdRect2
-	arg0GdColor  C.GdColor
-
-	arg1GdObj    C.GdObj
-	arg1GdBool   C.GdBool
-	arg1GdString C.GdString
-	arg1GdInt    C.GdInt
-	arg1GdFloat  C.GdFloat
-	arg1GdVec2   C.GdVec2
-	arg1GdVec3   C.GdVec3
-	arg1GdVec4   C.GdVec4
-	arg1GdRect2  C.GdRect2
-	arg1GdColor  C.GdColor
-
-	arg2GdObj    C.GdObj
-	arg2GdBool   C.GdBool
-	arg2GdString C.GdString
-	arg2GdInt    C.GdInt
-	arg2GdFloat  C.GdFloat
-	arg2GdVec2   C.GdVec2
-	arg2GdVec3   C.GdVec3
-	arg2GdVec4   C.GdVec4
-	arg2GdRect2  C.GdRect2
-	arg2GdColor  C.GdColor
-
-	arg3GdObj    C.GdObj
-	arg3GdBool   C.GdBool
-	arg3GdString C.GdString
-	arg3GdInt    C.GdInt
-	arg3GdFloat  C.GdFloat
-	arg3GdVec2   C.GdVec2
-	arg3GdVec3   C.GdVec3
-	arg3GdVec4   C.GdVec4
-	arg3GdRect2  C.GdRect2
-	arg3GdColor  C.GdColor
-
-	arg4GdObj    C.GdObj
-	arg4GdBool   C.GdBool
-	arg4GdString C.GdString
-	arg4GdInt    C.GdInt
-	arg4GdFloat  C.GdFloat
-	arg4GdVec2   C.GdVec2
-	arg4GdVec3   C.GdVec3
-	arg4GdVec4   C.GdVec4
-	arg4GdRect2  C.GdRect2
-	arg4GdColor  C.GdColor
-
-	arg5GdObj    C.GdObj
-	arg5GdBool   C.GdBool
-	arg5GdString C.GdString
-	arg5GdInt    C.GdInt
-	arg5GdFloat  C.GdFloat
-	arg5GdVec2   C.GdVec2
-	arg5GdVec3   C.GdVec3
-	arg5GdVec4   C.GdVec4
-	arg5GdRect2  C.GdRect2
-	arg5GdColor  C.GdColor
-
-	arg6GdObj    C.GdObj
-	arg6GdBool   C.GdBool
-	arg6GdString C.GdString
-	arg6GdInt    C.GdInt
-	arg6GdFloat  C.GdFloat
-	arg6GdVec2   C.GdVec2
-	arg6GdVec3   C.GdVec3
-	arg6GdVec4   C.GdVec4
-	arg6GdRect2  C.GdRect2
-	arg6GdColor  C.GdColor
-
-	arg7GdObj    C.GdObj
-	arg7GdBool   C.GdBool
-	arg7GdString C.GdString
-	arg7GdInt    C.GdInt
-	arg7GdFloat  C.GdFloat
-	arg7GdVec2   C.GdVec2
-	arg7GdVec3   C.GdVec3
-	arg7GdVec4   C.GdVec4
-	arg7GdRect2  C.GdRect2
-	arg7GdColor  C.GdColor
-)
-
 type initialization = C.GDExtensionInitialization
 type initializationLevel = C.GDExtensionInitializationLevel
 
@@ -353,8 +268,7 @@ func func_on_engine_destroy() {
 
 //export func_on_scene_sprite_instantiated
 func func_on_scene_sprite_instantiated(id C.GDExtensionInt, typeName C.GdString) {
-	ch2 := (*C.char)(unsafe.Pointer(typeName))
-	name := C.GoString(ch2)
+	name := ToString(GdString(typeName))
 	if callbacks.OnSceneSpriteInstantiated != nil {
 		callbacks.OnSceneSpriteInstantiated(int64(id), name)
 	}

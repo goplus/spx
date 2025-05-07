@@ -14,13 +14,13 @@ function test_go_call_cpp(val) {
 
 {{- range $i, $f := $view.CollectGDExtensionInterfaceFunctions -}}
 {{ $rt := goReturnType .ReturnType }}
-function gdspx_{{ snakeCase (trimPrefix $f.Name "GDExtensionSpx") }}(
+function gd{{ loadProcAddressName $f.Name }}(
 	{{- range $j, $arg := $f.Arguments -}}
 		{{ $arg.Name -}}
 		{{- if ne $j (sub (len $f.Arguments) 1) -}}, {{- end -}}
 	{{ end -}}
 ) {
-	_gdFuncPtr =  GodotEngine.rtenv['_gdspx_{{ snakeCase (trimPrefix $f.Name "GDExtensionSpx") }}']; 
+	_gdFuncPtr =  GodotEngine.rtenv['_gd{{ loadProcAddressName $f.Name }}']; 
 	{{ getJsFuncBody $f }}
 }
 {{- end -}}

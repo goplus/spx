@@ -1,7 +1,6 @@
 package ffi
 
 import (
-	"runtime"
 	"unsafe"
 )
 
@@ -72,19 +71,6 @@ func (x *GDExtensionBuiltinInterface) loadProcAddresses() {
 	x.SpxVariantGetPtrDestructor = (GDExtensionSpxVariantGetPtrDestructor)(dlsymGD("spx_variant_get_ptr_destructor"))
 }
 
-type CString [8]uint8
-
-func (c *CString) ToGdString() GdString {
-	return (GdString)(unsafe.Pointer(c))
-}
-func (c *CString) NativeConstPtr() GDExtensionConstTypePtr {
-	return (GDExtensionConstTypePtr)(unsafe.Pointer(c))
-}
-
-func (c *CString) NativePtr() GDExtensionTypePtr {
-	return (GDExtensionTypePtr)(unsafe.Pointer(c))
-}
-
 type stringMethodBindings struct {
 	constructor GDExtensionPtrConstructor
 	destructor  GDExtensionPtrDestructor
@@ -98,55 +84,6 @@ var (
 func stringInitConstructorBindings() {
 	globalStringMethodBindings.constructor = CallVariantGetPtrConstructor(GDEXTENSION_VARIANT_TYPE_STRING, 0)
 	globalStringMethodBindings.destructor = CallVariantGetPtrDestructor(GDEXTENSION_VARIANT_TYPE_STRING)
-}
-
-// constructors
-func NewCString(content string) CString {
-	return NewCStringWithUtf8Chars(content)
-}
-
-func NewCStringEmpty() CString {
-	cx := CString{}
-	ptr := (GDExtensionUninitializedTypePtr)(unsafe.Pointer(cx.NativePtr()))
-	CallBuiltinConstructor(globalStringMethodBindings.constructor, ptr)
-	runtime.KeepAlive(cx)
-	return cx
-}
-
-func NewCStringWithLatin1Chars(content string) CString {
-	cx := CString{}
-	ptr := (GDExtensionUninitializedStringPtr)(unsafe.Pointer(cx.NativePtr()))
-	CallStringNewWithLatin1Chars(ptr, content)
-	runtime.KeepAlive(cx)
-	return cx
-}
-
-func NewCStringWithUtf8Chars(content string) CString {
-	cx := CString{}
-	ptr := (GDExtensionUninitializedStringPtr)(unsafe.Pointer(cx.NativePtr()))
-	CallStringNewWithUtf8Chars(ptr, content)
-	runtime.KeepAlive(cx)
-	return cx
-}
-
-func (cx *CString) Destroy() {
-	md := (GDExtensionPtrDestructor)(globalStringMethodBindings.destructor)
-	bx := cx.NativePtr()
-	CallPtrDestructor(md, bx)
-}
-
-func (cx *CString) String() string {
-	return cx.ToUtf8()
-}
-
-func (cx *CString) ToUtf8() string {
-	size := CallStringToUtf8Chars((GDExtensionConstStringPtr)(cx.NativeConstPtr()), (*Char)(nullptr), (GdInt)(0))
-	cstrSlice := make([]C.char, int(size)+1)
-	cstr := unsafe.SliceData(cstrSlice)
-	CallStringToUtf8Chars((GDExtensionConstStringPtr)(cx.NativeConstPtr()), (*Char)(cstr), (GdInt)(size+1))
-	ret := C.GoString(cstr)[:]
-	runtime.KeepAlive(cstr)
-	return ret
 }
 
 func CallBuiltinConstructor(constructor GDExtensionPtrConstructor, base GDExtensionUninitializedTypePtr, args ...GDExtensionConstTypePtr) {

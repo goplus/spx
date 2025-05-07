@@ -273,6 +273,7 @@ typedef void (*GDExtensionSpxResGetImageSize)(GdString p_path, GdVec2* ret_value
 typedef void (*GDExtensionSpxResReadAllText)(GdString p_path, GdString* ret_value);
 typedef void (*GDExtensionSpxResHasFile)(GdString p_path, GdBool* ret_value);
 typedef void (*GDExtensionSpxResReloadTexture)(GdString path);
+typedef void (*GDExtensionSpxResFreeStr)(GdString str);
 // SpxScene
 typedef void (*GDExtensionSpxSceneChangeSceneToFile)(GdString path);
 typedef void (*GDExtensionSpxSceneDestroyAllSprites)();

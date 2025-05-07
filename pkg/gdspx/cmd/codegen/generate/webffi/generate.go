@@ -120,19 +120,20 @@ func GenerateManagerWrapperGoFile(projectPath string, ast clang.CHeaderFileAST) 
 
 func GenerateJsEngineJsFile(projectPath string, ast clang.CHeaderFileAST) error {
 	funcs := template.FuncMap{
-		"gdiVariableName":    GdiVariableName,
-		"snakeCase":          strcase.ToSnake,
-		"camelCase":          strcase.ToCamel,
-		"goReturnType":       GoReturnType,
-		"goArgumentType":     GoArgumentType,
-		"goEnumValue":        GoEnumValue,
-		"add":                Add,
-		"sub":                Sub,
-		"cgoCastArgument":    CgoCastArgument,
-		"cgoCastReturnType":  CgoCastReturnType,
-		"cgoCleanUpArgument": CgoCleanUpArgument,
-		"getJsFuncBody":      getJsFuncBody,
-		"trimPrefix":         TrimPrefix,
+		"gdiVariableName":     GdiVariableName,
+		"snakeCase":           strcase.ToSnake,
+		"camelCase":           strcase.ToCamel,
+		"goReturnType":        GoReturnType,
+		"goArgumentType":      GoArgumentType,
+		"goEnumValue":         GoEnumValue,
+		"add":                 Add,
+		"sub":                 Sub,
+		"cgoCastArgument":     CgoCastArgument,
+		"cgoCastReturnType":   CgoCastReturnType,
+		"cgoCleanUpArgument":  CgoCleanUpArgument,
+		"getJsFuncBody":       getJsFuncBody,
+		"trimPrefix":          TrimPrefix,
+		"loadProcAddressName": LoadProcAddressName,
 	}
 
 	tmpl, err := template.New("gdspx.js").

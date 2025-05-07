@@ -535,6 +535,11 @@ func (pself *resMgrImpl) ReloadTexture(path string) {
 		gdx.ResMgr.ReloadTexture(path)
 	})
 }
+func (pself *resMgrImpl) FreeStr(str string) {
+	callInMainThread(func() {
+		gdx.ResMgr.FreeStr(str)
+	})
+}
 
 // ISceneMgr
 func (pself *sceneMgrImpl) ChangeSceneToFile(path string) {
