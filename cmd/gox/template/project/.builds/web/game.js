@@ -26,6 +26,7 @@ class GameApp {
             'unloadAfterInit': false,
             'canvas': this.editorCanvas,
             'canvasResizePolicy': 0,
+            "logLevel": this.logLevel,
             'persistentPaths': this.persistentPaths,
             'onExecute': (args) => {
                 this.logVerbose("onExecute  ", args);
@@ -113,7 +114,10 @@ class GameApp {
                 this.editor.init().then(async () => {
                     this.writePersistence(this.editor, this.tempZipPath, engineData);
                     const args = ['--project-manager', '--single-window', "--install_project_name", this.projectInstallName];
-                    this.editor.start({ 'args': args, 'persistentDrops': true }).then(async () => {
+                    this.editor.start({
+                        'args': args, 'persistentDrops': true,
+                        "logLevel": this.logLevel
+                    }).then(async () => {
                         this.editorCanvas.focus();
                     })
                 });
@@ -160,7 +164,11 @@ class GameApp {
         this.onProgress(0.2);
         this.editor.init().then(() => {
             this.onProgress(0.4);
-            this.editor.start({ 'args': args, 'persistentDrops': false, 'canvas': this.editorCanvas }).then(async () => {
+            this.editor.start({
+                'args': args, 'persistentDrops': false,
+                'canvas': this.editorCanvas,
+                "logLevel": this.logLevel
+            }).then(async () => {
                 this.editorCanvas.focus();
                 await this.waitFsSyncDone(this.editorCanvas)
                 this.onProgress(0.9);
