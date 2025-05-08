@@ -23,6 +23,7 @@ pcpack:
 	./pkg/gdspx/tools/build_engine.sh
 # Build web engine
 web: 
+	cd cmd/igox &&  go generate && cd $(CURRENT_PATH) && \
 	make cmdweb && ./pkg/gdspx/tools/build_engine.sh -p web -e
 # Build web engine template
 webpack: 
@@ -64,7 +65,7 @@ releaseweb:
 test:
 	cd test/All && spx run . && cd $(CURRENT_PATH) 
 
-path ?= tutorial/03-Clone
+path ?= tutorial/01-Weather
 runweb:
 	@echo "Killing gdspx_web_server.py if running..."
 	@PIDS=$$(pgrep -f gdspx_web_server.py); \
@@ -78,7 +79,7 @@ runweb:
 
 	
 init:
-	make cmd && make download
+	make cmd && make pc
 
 %:
 	@:
