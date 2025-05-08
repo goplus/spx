@@ -7,6 +7,7 @@ setup_global_variables() {
 
     # Define Godot version
     VERSION=$(cat $SCRIPT_DIR/version)
+    ENGINE_GIT_TAG="spx"$VERSION
     ENGINE_VERSION=4.2.2.stable
     if [ "$OS" = "Windows_NT" ]; then
         IFS=';' read -r first_gopath _ <<< "$(go env GOPATH)"
@@ -116,6 +117,7 @@ setup_global_variables() {
     echo "Platform: $PLATFORM"
     echo "Architecture: $ARCH"
     echo "Destination directory: $TEMPLATE_DIR"
+    echo "Source tag: $ENGINE_GIT_TAG"
     return 0
 }
 
@@ -124,13 +126,7 @@ download_engine() {
     cd $PROJ_DIR
     if [ ! -d "godot" ]; then
         echo "Godot directory not found. Creating and initializing..."
-        mkdir godot
-        cd godot
-        git init 
-        git remote add origin https://github.com/goplus/godot.git
-        git fetch --depth 1 origin spx4.2.2
-        git checkout spx4.2.2
-        echo "Godot repository setup complete."
+        git clone --depth 1 --branch $ENGINE_GIT_TAG https://github.com/goplus/godot.git
     else
         cd godot
         echo "Godot directory already exists."

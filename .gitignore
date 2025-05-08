@@ -34,3 +34,4 @@ mv.sh
 # vendor/
 
 /godot
+/bin
