@@ -266,7 +266,7 @@ func getJsFuncBody(function *clang.TypedefFunction) string {
 
 	// call the function
 	if function.ReturnType.Name != "void" {
-		sb.WriteString("_retValue = Alloc" + function.ReturnType.Name + "();")
+		sb.WriteString("var _retValue = Alloc" + function.ReturnType.Name + "();")
 	}
 	sb.WriteString("\n")
 
@@ -275,7 +275,7 @@ func getJsFuncBody(function *clang.TypedefFunction) string {
 		sb.WriteString(prefixTab)
 		typeName := arg.Type.Primative.Name
 		argName := "_arg" + strconv.Itoa(i)
-		sb.WriteString(argName + " = ")
+		sb.WriteString("var " + argName + " = ")
 		sb.WriteString("To" + typeName)
 		sb.WriteString("(")
 		sb.WriteString(arg.Name)
@@ -311,7 +311,7 @@ func getJsFuncBody(function *clang.TypedefFunction) string {
 	}
 
 	if function.ReturnType.Name != "void" {
-		sb.WriteString(prefixTab + "_finalRetValue = ")
+		sb.WriteString(prefixTab + "var _finalRetValue = ")
 		typeName := function.ReturnType.Name
 		funcName := strcase.ToCamel(typeName)
 		funcName = "ToJs" + strings.ReplaceAll(funcName, "Gd", "")

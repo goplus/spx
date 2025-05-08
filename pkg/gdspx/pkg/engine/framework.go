@@ -120,8 +120,8 @@ func BindUI[T any](parentNode Object, path string) *T {
 	nodeValue := reflect.New(tType).Elem()
 	node := nodeValue.Addr().Interface().(IUiNode)
 	node.SetId(id)
-	node.onCreate()
 	Id2UiNodes[id] = node
+	node.onCreate()
 	node.OnStart()
 	return nodeValue.Addr().Interface().(*T)
 }
@@ -130,8 +130,8 @@ func createSprite(tType reflect.Type, id Object) reflect.Value {
 	spriteValue := reflect.New(tType).Elem()
 	sprite := spriteValue.Addr().Interface().(ISpriter)
 	sprite.SetId(id)
-	sprite.onCreate()
 	Id2Sprites[id] = sprite
+	sprite.onCreate()
 	sprite.OnStart()
 	return spriteValue
 }
