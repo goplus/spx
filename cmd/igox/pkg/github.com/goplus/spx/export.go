@@ -62,7 +62,6 @@ func init() {
 			"Widget":      reflect.TypeOf((*q.Widget)(nil)).Elem(),
 		},
 		NamedTypes: map[string]reflect.Type{
-			"BackdropName":    reflect.TypeOf((*q.BackdropName)(nil)).Elem(),
 			"Camera":          reflect.TypeOf((*q.Camera)(nil)).Elem(),
 			"Color":           reflect.TypeOf((*q.Color)(nil)).Elem(),
 			"Config":          reflect.TypeOf((*q.Config)(nil)).Elem(),
@@ -83,6 +82,7 @@ func init() {
 			"Value":           reflect.TypeOf((*q.Value)(nil)).Elem(),
 		},
 		AliasTypes: map[string]reflect.Type{
+			"BackdropName":        reflect.TypeOf((*string)(nil)).Elem(),
 			"Key":                 reflect.TypeOf((*int64)(nil)).Elem(),
 			"Pos":                 reflect.TypeOf((*int)(nil)).Elem(),
 			"SoundName":           reflect.TypeOf((*string)(nil)).Elem(),
