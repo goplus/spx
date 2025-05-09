@@ -836,9 +836,9 @@ func (p *Game) inputEventLoop(me coroutine.Thread) int {
 		keyEvents = engine.GetKeyEvents(keyEvents)
 		for _, ev := range keyEvents {
 			if ev.IsPressed {
-				p.fireEvent(&eventKeyDown{Key: ev.Id})
+				p.fireEvent(&eventKeyDown{Key: Key(ev.Id)})
 			} else {
-				p.fireEvent(&eventKeyUp{Key: ev.Id})
+				p.fireEvent(&eventKeyUp{Key: Key(ev.Id)})
 			}
 		}
 		keyEvents = keyEvents[:0]
@@ -1268,7 +1268,7 @@ func (p *Game) PrevBackdrop__1(wait bool) {
 // -----------------------------------------------------------------------------
 
 func (p *Game) KeyPressed(key Key) bool {
-	return inputMgr.GetKey(key)
+	return inputMgr.GetKey(int64(key))
 }
 
 func (p *Game) MouseX() float64 {

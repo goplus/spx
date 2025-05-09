@@ -23,214 +23,114 @@ import (
 	"github.com/realdream-ai/mathf"
 )
 
-type Key = int64
+type Key = gdx.KeyCode
 
-var (
-	Key0            Key
-	Key1            Key
-	Key2            Key
-	Key3            Key
-	Key4            Key
-	Key5            Key
-	Key6            Key
-	Key7            Key
-	Key8            Key
-	Key9            Key
-	KeyA            Key
-	KeyB            Key
-	KeyC            Key
-	KeyD            Key
-	KeyE            Key
-	KeyF            Key
-	KeyG            Key
-	KeyH            Key
-	KeyI            Key
-	KeyJ            Key
-	KeyK            Key
-	KeyL            Key
-	KeyM            Key
-	KeyN            Key
-	KeyO            Key
-	KeyP            Key
-	KeyQ            Key
-	KeyR            Key
-	KeyS            Key
-	KeyT            Key
-	KeyU            Key
-	KeyV            Key
-	KeyW            Key
-	KeyX            Key
-	KeyY            Key
-	KeyZ            Key
-	KeyApostrophe   Key
-	KeyBackslash    Key
-	KeyBackspace    Key
-	KeyCapsLock     Key
-	KeyComma        Key
-	KeyDelete       Key
-	KeyDown         Key
-	KeyEnd          Key
-	KeyEnter        Key
-	KeyEqual        Key
-	KeyEscape       Key
-	KeyF1           Key
-	KeyF2           Key
-	KeyF3           Key
-	KeyF4           Key
-	KeyF5           Key
-	KeyF6           Key
-	KeyF7           Key
-	KeyF8           Key
-	KeyF9           Key
-	KeyF10          Key
-	KeyF11          Key
-	KeyF12          Key
-	KeyGraveAccent  Key
-	KeyHome         Key
-	KeyInsert       Key
-	KeyKP0          Key
-	KeyKP1          Key
-	KeyKP2          Key
-	KeyKP3          Key
-	KeyKP4          Key
-	KeyKP5          Key
-	KeyKP6          Key
-	KeyKP7          Key
-	KeyKP8          Key
-	KeyKP9          Key
-	KeyKPDecimal    Key
-	KeyKPDivide     Key
-	KeyKPEnter      Key
-	KeyKPEqual      Key
-	KeyKPMultiply   Key
-	KeyKPSubtract   Key
-	KeyLeft         Key
-	KeyLeftBracket  Key
-	KeyMenu         Key
-	KeyMinus        Key
-	KeyNumLock      Key
-	KeyPageDown     Key
-	KeyPageUp       Key
-	KeyPause        Key
-	KeyPeriod       Key
-	KeyPrintScreen  Key
-	KeyRight        Key
-	KeyRightBracket Key
-	KeyScrollLock   Key
-	KeySemicolon    Key
-	KeySlash        Key
-	KeySpace        Key
-	KeyTab          Key
-	KeyUp           Key
-	KeyAlt          Key
-	KeyControl      Key
-	KeyShift        Key
+const (
+	Key0            Key = gdx.Key0
+	Key1            Key = gdx.Key1
+	Key2            Key = gdx.Key2
+	Key3            Key = gdx.Key3
+	Key4            Key = gdx.Key4
+	Key5            Key = gdx.Key5
+	Key6            Key = gdx.Key6
+	Key7            Key = gdx.Key7
+	Key8            Key = gdx.Key8
+	Key9            Key = gdx.Key9
+	KeyA            Key = gdx.KeyA
+	KeyB            Key = gdx.KeyB
+	KeyC            Key = gdx.KeyC
+	KeyD            Key = gdx.KeyD
+	KeyE            Key = gdx.KeyE
+	KeyF            Key = gdx.KeyF
+	KeyG            Key = gdx.KeyG
+	KeyH            Key = gdx.KeyH
+	KeyI            Key = gdx.KeyI
+	KeyJ            Key = gdx.KeyJ
+	KeyK            Key = gdx.KeyK
+	KeyL            Key = gdx.KeyL
+	KeyM            Key = gdx.KeyM
+	KeyN            Key = gdx.KeyN
+	KeyO            Key = gdx.KeyO
+	KeyP            Key = gdx.KeyP
+	KeyQ            Key = gdx.KeyQ
+	KeyR            Key = gdx.KeyR
+	KeyS            Key = gdx.KeyS
+	KeyT            Key = gdx.KeyT
+	KeyU            Key = gdx.KeyU
+	KeyV            Key = gdx.KeyV
+	KeyW            Key = gdx.KeyW
+	KeyX            Key = gdx.KeyX
+	KeyY            Key = gdx.KeyY
+	KeyZ            Key = gdx.KeyZ
+	KeyApostrophe   Key = gdx.KeyApostrophe
+	KeyBackslash    Key = gdx.KeyBackslash
+	KeyBackspace    Key = gdx.KeyBackspace
+	KeyCapsLock     Key = gdx.KeyCapsLock
+	KeyComma        Key = gdx.KeyComma
+	KeyDelete       Key = gdx.KeyDelete
+	KeyDown         Key = gdx.KeyDown
+	KeyEnd          Key = gdx.KeyEnd
+	KeyEnter        Key = gdx.KeyEnter
+	KeyEqual        Key = gdx.KeyEqual
+	KeyEscape       Key = gdx.KeyEscape
+	KeyF1           Key = gdx.KeyF1
+	KeyF2           Key = gdx.KeyF2
+	KeyF3           Key = gdx.KeyF3
+	KeyF4           Key = gdx.KeyF4
+	KeyF5           Key = gdx.KeyF5
+	KeyF6           Key = gdx.KeyF6
+	KeyF7           Key = gdx.KeyF7
+	KeyF8           Key = gdx.KeyF8
+	KeyF9           Key = gdx.KeyF9
+	KeyF10          Key = gdx.KeyF10
+	KeyF11          Key = gdx.KeyF11
+	KeyF12          Key = gdx.KeyF12
+	KeyGraveAccent  Key = gdx.KeyQuoteLeft
+	KeyHome         Key = gdx.KeyHome
+	KeyInsert       Key = gdx.KeyInsert
+	KeyKP0          Key = gdx.KeyKP0
+	KeyKP1          Key = gdx.KeyKP1
+	KeyKP2          Key = gdx.KeyKP2
+	KeyKP3          Key = gdx.KeyKP3
+	KeyKP4          Key = gdx.KeyKP4
+	KeyKP5          Key = gdx.KeyKP5
+	KeyKP6          Key = gdx.KeyKP6
+	KeyKP7          Key = gdx.KeyKP7
+	KeyKP8          Key = gdx.KeyKP8
+	KeyKP9          Key = gdx.KeyKP9
+	KeyKPDecimal    Key = gdx.KeyKPPeriod
+	KeyKPDivide     Key = gdx.KeyKPDivide
+	KeyKPEnter      Key = gdx.KeyKPEnter
+	KeyKPEqual      Key = gdx.KeyEqual
+	KeyKPMultiply   Key = gdx.KeyKPMultiply
+	KeyKPSubtract   Key = gdx.KeyKPSubtract
+	KeyLeft         Key = gdx.KeyLeft
+	KeyLeftBracket  Key = gdx.KeyBracketLeft
+	KeyMenu         Key = gdx.KeyMenu
+	KeyMinus        Key = gdx.KeyMinus
+	KeyNumLock      Key = gdx.KeyNumLock
+	KeyPageDown     Key = gdx.KeyPageDown
+	KeyPageUp       Key = gdx.KeyPageUp
+	KeyPause        Key = gdx.KeyPause
+	KeyPeriod       Key = gdx.KeyPeriod
+	KeyPrintScreen  Key = gdx.KeyPrint
+	KeyRight        Key = gdx.KeyRight
+	KeyRightBracket Key = gdx.KeyBracketRight
+	KeyScrollLock   Key = gdx.KeyScrollLock
+	KeySemicolon    Key = gdx.KeySemicolon
+	KeySlash        Key = gdx.KeySlash
+	KeySpace        Key = gdx.KeySpace
+	KeyTab          Key = gdx.KeyTab
+	KeyUp           Key = gdx.KeyUp
+	KeyAlt          Key = gdx.KeyAlt
+	KeyControl      Key = gdx.KeyCmdOrCtrl
+	KeyShift        Key = gdx.KeyShift
 	KeyMax          Key = -2
 	KeyAny          Key = -1
 )
 
 func initInput() {
-	Key0 = gdx.KeyCode.Key0
-	Key1 = gdx.KeyCode.Key1
-	Key2 = gdx.KeyCode.Key2
-	Key3 = gdx.KeyCode.Key3
-	Key4 = gdx.KeyCode.Key4
-	Key5 = gdx.KeyCode.Key5
-	Key6 = gdx.KeyCode.Key6
-	Key7 = gdx.KeyCode.Key7
-	Key8 = gdx.KeyCode.Key8
-	Key9 = gdx.KeyCode.Key9
-	KeyA = gdx.KeyCode.A
-	KeyB = gdx.KeyCode.B
-	KeyC = gdx.KeyCode.C
-	KeyD = gdx.KeyCode.D
-	KeyE = gdx.KeyCode.E
-	KeyF = gdx.KeyCode.F
-	KeyG = gdx.KeyCode.G
-	KeyH = gdx.KeyCode.H
-	KeyI = gdx.KeyCode.I
-	KeyJ = gdx.KeyCode.J
-	KeyK = gdx.KeyCode.K
-	KeyL = gdx.KeyCode.L
-	KeyM = gdx.KeyCode.M
-	KeyN = gdx.KeyCode.N
-	KeyO = gdx.KeyCode.O
-	KeyP = gdx.KeyCode.P
-	KeyQ = gdx.KeyCode.Q
-	KeyR = gdx.KeyCode.R
-	KeyS = gdx.KeyCode.S
-	KeyT = gdx.KeyCode.T
-	KeyU = gdx.KeyCode.U
-	KeyV = gdx.KeyCode.V
-	KeyW = gdx.KeyCode.W
-	KeyX = gdx.KeyCode.X
-	KeyY = gdx.KeyCode.Y
-	KeyZ = gdx.KeyCode.Z
-	KeyApostrophe = gdx.KeyCode.Apostrophe
-	KeyBackslash = gdx.KeyCode.Backslash
-	KeyBackspace = gdx.KeyCode.Backspace
-	KeyCapsLock = gdx.KeyCode.CapsLock
-	KeyComma = gdx.KeyCode.Comma
-	KeyDelete = gdx.KeyCode.Delete
-	KeyDown = gdx.KeyCode.Down
-	KeyEnd = gdx.KeyCode.End
-	KeyEnter = gdx.KeyCode.Enter
-	KeyEqual = gdx.KeyCode.Equal
-	KeyEscape = gdx.KeyCode.Escape
-	KeyF1 = gdx.KeyCode.F1
-	KeyF2 = gdx.KeyCode.F2
-	KeyF3 = gdx.KeyCode.F3
-	KeyF4 = gdx.KeyCode.F4
-	KeyF5 = gdx.KeyCode.F5
-	KeyF6 = gdx.KeyCode.F6
-	KeyF7 = gdx.KeyCode.F7
-	KeyF8 = gdx.KeyCode.F8
-	KeyF9 = gdx.KeyCode.F9
-	KeyF10 = gdx.KeyCode.F10
-	KeyF11 = gdx.KeyCode.F11
-	KeyF12 = gdx.KeyCode.F12
-	KeyGraveAccent = gdx.KeyCode.QuoteLeft
-	KeyHome = gdx.KeyCode.Home
-	KeyInsert = gdx.KeyCode.Insert
-	KeyKP0 = gdx.KeyCode.KP0
-	KeyKP1 = gdx.KeyCode.KP1
-	KeyKP2 = gdx.KeyCode.KP2
-	KeyKP3 = gdx.KeyCode.KP3
-	KeyKP4 = gdx.KeyCode.KP4
-	KeyKP5 = gdx.KeyCode.KP5
-	KeyKP6 = gdx.KeyCode.KP6
-	KeyKP7 = gdx.KeyCode.KP7
-	KeyKP8 = gdx.KeyCode.KP8
-	KeyKP9 = gdx.KeyCode.KP9
-	KeyKPDecimal = gdx.KeyCode.KPPeriod
-	KeyKPDivide = gdx.KeyCode.KPDivide
-	KeyKPEnter = gdx.KeyCode.KPEnter
-	KeyKPEqual = gdx.KeyCode.Equal
-	KeyKPMultiply = gdx.KeyCode.KPMultiply
-	KeyKPSubtract = gdx.KeyCode.KPSubtract
-	KeyLeft = gdx.KeyCode.Left
-	KeyLeftBracket = gdx.KeyCode.BracketLeft
-	KeyMenu = gdx.KeyCode.Menu
-	KeyMinus = gdx.KeyCode.Minus
-	KeyNumLock = gdx.KeyCode.NumLock
-	KeyPageDown = gdx.KeyCode.PageDown
-	KeyPageUp = gdx.KeyCode.PageUp
-	KeyPause = gdx.KeyCode.Pause
-	KeyPeriod = gdx.KeyCode.Period
-	KeyPrintScreen = gdx.KeyCode.Print
-	KeyRight = gdx.KeyCode.Right
-	KeyRightBracket = gdx.KeyCode.BracketRight
-	KeyScrollLock = gdx.KeyCode.ScrollLock
-	KeySemicolon = gdx.KeyCode.Semicolon
-	KeySlash = gdx.KeyCode.Slash
-	KeySpace = gdx.KeyCode.Space
-	KeyTab = gdx.KeyCode.Tab
-	KeyUp = gdx.KeyCode.Up
-	KeyAlt = gdx.KeyCode.Alt
-	KeyControl = gdx.KeyCode.CmdOrCtrl
-	KeyShift = gdx.KeyCode.Shift
-	KeyMax = -2
-	KeyAny = -1
+
 }
 
 const (
