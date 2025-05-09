@@ -1200,7 +1200,7 @@ func (p *Game) BackdropIndex() int {
 	return p.getCostumeIndex()
 }
 
-type BackdropName string
+type BackdropName = string
 
 // StartBackdrop func:
 //
@@ -1213,7 +1213,7 @@ func (p *Game) startBackdrop(backdrop interface{}, wait bool) {
 		p.windowWidth_ = 0
 		p.setupBackdrop()
 		p.doWindowSize()
-		p.doWhenBackdropChanged(BackdropName(p.getCostumeName()), wait)
+		p.doWhenBackdropChanged(p.getCostumeName(), wait)
 	}
 }
 

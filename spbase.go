@@ -308,8 +308,6 @@ func (p *baseObj) findCostume(name SpriteCostumeName) int {
 
 func (p *baseObj) goSetCostume(val interface{}) bool {
 	switch v := val.(type) {
-	case BackdropName:
-		return p.setCostumeByName(SpriteCostumeName(v))
 	case SpriteCostumeName:
 		return p.setCostumeByName(v)
 	case int:
