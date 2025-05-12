@@ -97,13 +97,35 @@ build_template() {
         cd $engine_dir || exit
 
         # build web editor
-        scons platform=web target=editor
+        scons platform=web target=editor \
+            debug_symbols="no" \
+            optimize=size \
+            use_volk=no \
+            deprecated=no \
+            minizip=no  \
+            openxr=false \
+            vulkan=false \
+            graphite=false \
+            disable_3d_physics=true \
+            disable_navigation=true \
+            module_msdfgen_enabled=false \
+            module_text_server_adv_enabled=false \
+            module_text_server_fb_enabled=true \
+            modules_enabled_by_default="no" \
+            module_gdscript_enabled="yes" \
+            module_text_server_fb_enabled="yes" \
+            module_freetype_enabled="yes" \
+            module_minimp3_enabled="yes" \
+            module_svg_enabled="yes" \
+            module_jpg_enabled="yes" \
+            module_ogg_enabled="yes" \
+            module_godot_physics_2d_enabled="yes" 
+
         cp bin/godot.web.editor.wasm32.zip bin/web_editor.zip
         cp bin/web_editor.zip $GOPATH/bin/gdspx$VERSION"_web.zip"
         if [ "$EDITOR_ONLY" = true ]; then
             exit 0
         fi 
-
         # build web templates
         scons platform=web target=template_release threads=no
         echo "Wait zip file to finished ..."
