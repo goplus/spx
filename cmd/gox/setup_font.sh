@@ -5,6 +5,13 @@ cd $SCRIPT_DIR
 # Target font file path
 target_font_path="./template/project/engine/fonts/CnFont.ttf"
 
+if [ -e "$target_font_path" ]; then
+    echo font path: $target_font_path
+    exit 0  
+fi
+
+
+
 # Define font files to look for
 font_names=("Songti.ttc" "Times New Roman.ttf" "Times.ttf" "SimSun.ttf" "SimSun.ttc" )
 
