@@ -79,7 +79,7 @@ runweb:
 
 	
 init:
-	make cmd && make pc
+	make cmd && make download
 
 %:
 	@:
