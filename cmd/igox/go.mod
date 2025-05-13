@@ -15,7 +15,7 @@ require (
 	github.com/goplus/mod v0.15.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/qiniu/x v1.13.17 // indirect
-	github.com/realdream-ai/mathf v0.0.0-20241205091834-a85cb2402a16 // indirect
+	github.com/realdream-ai/mathf v0.0.0-20250513071532-e55e1277a8c5 // indirect
 	github.com/timandy/routine v1.1.4 // indirect
 	github.com/visualfc/funcval v0.1.4 // indirect
 	github.com/visualfc/gid v0.2.0 // indirect
