@@ -14,18 +14,6 @@ onMsg "testUnique", => {
 
     // 1. Color conversion test
     say "test color conversion"
-    color1 = RGB(255, 0, 0)
-    color2 = RGBA(255, 0, 0, 128)
-    color3 = HSB(0, 100, 100)
-    color4 = HSBA(0, 100, 100, 128)
-    color5 = RGBf(1.0, 0.0, 0.0)
-    color6 = RGBAf(1.0, 0.0, 0.0, 0.5)
-    assert(color1 == RGB(255, 0, 0), "RGB color conversion failed")
-    assert(color2 == RGBA(255, 0, 0, 128), "RGBA color conversion failed")
-    assert(color3 == HSB(0, 100, 100), "HSB color conversion failed")
-    assert(color4 == HSBA(0, 100, 100, 128), "HSBA color conversion failed")
-    assert(color5 == RGBf(1.0, 0.0, 0.0), "RGBf color conversion failed")
-    assert(color6 == RGBAf(1.0, 0.0, 0.0, 0.5), "RGBAf color conversion failed")
     wait 0.1
 
     // 2. Camera test

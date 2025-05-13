@@ -53,14 +53,14 @@ onMsg "testPen", => {
 
 	// 4. Sprite::SetPenColor	
 	say "Sprite::SetPenColor"
-	setPenColor RGB(255,0,0)
+	setPenColor HSB(0,100,100)
 	setXYpos(20,0)
 	drawPen()
 
 	// 5. Sprite::ChangePenSize	
 	say "Sprite::ChangePenSize"
 	changePenSize 2
-	setPenColor RGB(0,255,0)
+	setPenColor HSB(33,100,100)
 	setXYpos(40,0)
 	drawPen()
 
@@ -68,7 +68,7 @@ onMsg "testPen", => {
 	say "Sprite::SetPenSize"
 	setXYpos(60,0)
 	setPenSize 1
-	setPenColor RGB(0,0,255)
+	setPenColor HSB(66,100,100)
 	drawPen()
 
 
