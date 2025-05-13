@@ -6,6 +6,7 @@ import (
 	q "github.com/goplus/spx"
 
 	"go/constant"
+	"go/token"
 	"reflect"
 
 	"github.com/goplus/igop"
@@ -83,6 +84,7 @@ func init() {
 		},
 		AliasTypes: map[string]reflect.Type{
 			"BackdropName":        reflect.TypeOf((*string)(nil)).Elem(),
+			"Direction":           reflect.TypeOf((*float64)(nil)).Elem(),
 			"Key":                 reflect.TypeOf((*q.Key)(nil)).Elem(),
 			"Pos":                 reflect.TypeOf((*int)(nil)).Elem(),
 			"SoundName":           reflect.TypeOf((*string)(nil)).Elem(),
@@ -132,7 +134,7 @@ func init() {
 			"DbgFlagInstr":         {reflect.TypeOf(q.DbgFlagInstr), constant.MakeInt64(int64(q.DbgFlagInstr))},
 			"DbgFlagLoad":          {reflect.TypeOf(q.DbgFlagLoad), constant.MakeInt64(int64(q.DbgFlagLoad))},
 			"DbgFlagPerf":          {reflect.TypeOf(q.DbgFlagPerf), constant.MakeInt64(int64(q.DbgFlagPerf))},
-			"Down":                 {reflect.TypeOf(q.Down), constant.MakeInt64(int64(q.Down))},
+			"Down":                 {reflect.TypeOf(q.Down), constant.MakeFromLiteral("1.8e+2", token.FLOAT, 0)},
 			"Edge":                 {reflect.TypeOf(q.Edge), constant.MakeInt64(int64(q.Edge))},
 			"EdgeBottom":           {reflect.TypeOf(q.EdgeBottom), constant.MakeInt64(int64(q.EdgeBottom))},
 			"EdgeLeft":             {reflect.TypeOf(q.EdgeLeft), constant.MakeInt64(int64(q.EdgeLeft))},
@@ -243,7 +245,7 @@ func init() {
 			"KeyY":                 {reflect.TypeOf(q.KeyY), constant.MakeInt64(int64(q.KeyY))},
 			"KeyZ":                 {reflect.TypeOf(q.KeyZ), constant.MakeInt64(int64(q.KeyZ))},
 			"Last":                 {reflect.TypeOf(q.Last), constant.MakeInt64(int64(q.Last))},
-			"Left":                 {reflect.TypeOf(q.Left), constant.MakeInt64(int64(q.Left))},
+			"Left":                 {reflect.TypeOf(q.Left), constant.MakeFromLiteral("-.9e+2", token.FLOAT, 0)},
 			"LeftRight":            {reflect.TypeOf(q.LeftRight), constant.MakeInt64(int64(q.LeftRight))},
 			"MOUSE_BUTTON_LEFT":    {reflect.TypeOf(q.MOUSE_BUTTON_LEFT), constant.MakeInt64(int64(q.MOUSE_BUTTON_LEFT))},
 			"MOUSE_BUTTON_MIDDLE":  {reflect.TypeOf(q.MOUSE_BUTTON_MIDDLE), constant.MakeInt64(int64(q.MOUSE_BUTTON_MIDDLE))},
@@ -266,7 +268,7 @@ func init() {
 			"PlayStop":             {reflect.TypeOf(q.PlayStop), constant.MakeInt64(int64(q.PlayStop))},
 			"Prev":                 {reflect.TypeOf(q.Prev), constant.MakeInt64(int64(q.Prev))},
 			"Random":               {reflect.TypeOf(q.Random), constant.MakeInt64(int64(q.Random))},
-			"Right":                {reflect.TypeOf(q.Right), constant.MakeInt64(int64(q.Right))},
+			"Right":                {reflect.TypeOf(q.Right), constant.MakeFromLiteral("9.e+1", token.FLOAT, 0)},
 			"SoundPanEffect":       {reflect.TypeOf(q.SoundPanEffect), constant.MakeInt64(int64(q.SoundPanEffect))},
 			"SoundPitchEffect":     {reflect.TypeOf(q.SoundPitchEffect), constant.MakeInt64(int64(q.SoundPitchEffect))},
 			"StateDie":             {reflect.TypeOf(q.StateDie), constant.MakeString(string(q.StateDie))},
@@ -275,7 +277,7 @@ func init() {
 			"StateTurn":            {reflect.TypeOf(q.StateTurn), constant.MakeString(string(q.StateTurn))},
 			"ThisScript":           {reflect.TypeOf(q.ThisScript), constant.MakeInt64(int64(q.ThisScript))},
 			"ThisSprite":           {reflect.TypeOf(q.ThisSprite), constant.MakeInt64(int64(q.ThisSprite))},
-			"Up":                   {reflect.TypeOf(q.Up), constant.MakeInt64(int64(q.Up))},
+			"Up":                   {reflect.TypeOf(q.Up), constant.MakeFromLiteral("0", token.FLOAT, 0)},
 			"WhirlEffect":          {reflect.TypeOf(q.WhirlEffect), constant.MakeInt64(int64(q.WhirlEffect))},
 		},
 		UntypedConsts: map[string]igop.UntypedConst{

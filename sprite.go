@@ -29,15 +29,15 @@ import (
 	"github.com/realdream-ai/mathf"
 )
 
-type specialDir = int
+type Direction = float64
 
 type specialObj int
 
 const (
-	Right specialDir = 90
-	Left  specialDir = -90
-	Up    specialDir = 0
-	Down  specialDir = 180
+	Right Direction = 90
+	Left  Direction = -90
+	Up    Direction = 0
+	Down  Direction = 180
 )
 
 const (
@@ -70,7 +70,7 @@ type Sprite interface {
 	BounceOffEdge()
 	Bounds() *mathf.Rect2
 	ChangeEffect(kind EffectKind, delta float64)
-	ChangeHeading(dir float64)
+	ChangeHeading(dir Direction)
 	ChangePenColor(kind PenColorParam, delta float64)
 	ChangePenSize(delta float64)
 	ChangeSize(delta float64)
@@ -101,7 +101,7 @@ type Sprite interface {
 	Goto__2(obj specialObj)
 	GotoBack()
 	GotoFront()
-	Heading() float64
+	Heading() Direction
 	Hide()
 	HideVar(name string)
 	IsCloned() bool
@@ -135,7 +135,7 @@ type Sprite interface {
 	SetCostume__3(action switchAction)
 	SetDying()
 	SetEffect(kind EffectKind, val float64)
-	SetHeading(dir float64)
+	SetHeading(dir Direction)
 	SetPenColor__0(color Color)
 	SetPenColor__1(kind PenColorParam, value float64)
 	SetPenSize(size float64)
@@ -158,14 +158,12 @@ type Sprite interface {
 	Touching__1(sprite Sprite) bool
 	Touching__2(obj specialObj) bool
 	TouchingColor(color Color) bool
-	Turn__0(degree float64)
-	Turn__1(dir specialDir)
-	Turn__2(ti *TurningInfo)
+	Turn__0(dir Direction)
+	Turn__1(ti *TurningInfo)
 	TurnTo__0(sprite Sprite)
 	TurnTo__1(sprite SpriteName)
-	TurnTo__2(degree float64)
-	TurnTo__3(dir specialDir)
-	TurnTo__4(obj specialObj)
+	TurnTo__2(dir Direction)
+	TurnTo__3(obj specialObj)
 	Visible() bool
 	Xpos() float64
 	Ypos() float64
@@ -573,8 +571,8 @@ func (p *SpriteImpl) OnMoving__1(onMoving func()) {
 }
 
 type TurningInfo struct {
-	OldDir float64
-	NewDir float64
+	OldDir Direction
+	NewDir Direction
 	Obj    *SpriteImpl
 }
 
@@ -1216,7 +1214,7 @@ func (p *SpriteImpl) SetRotationStyle(style RotationStyle) {
 	p.rotationStyle = style
 }
 
-func (p *SpriteImpl) Heading() float64 {
+func (p *SpriteImpl) Heading() Direction {
 	return p.direction
 }
 
@@ -1233,11 +1231,7 @@ func (p *SpriteImpl) Name() string {
 func (p *SpriteImpl) turn(val interface{}) {
 	var delta float64
 	switch v := val.(type) {
-	//case specialDir:
-	//	delta = float64(v)
-	case int:
-		delta = float64(v)
-	case float64:
+	case Direction:
 		delta = v
 	case *TurningInfo:
 		p.doTurnTogether(v) // don't animate
@@ -1261,15 +1255,11 @@ func (p *SpriteImpl) turn(val interface{}) {
 	}
 }
 
-func (p *SpriteImpl) Turn__0(degree float64) {
-	p.turn(degree)
-}
-
-func (p *SpriteImpl) Turn__1(dir specialDir) {
+func (p *SpriteImpl) Turn__0(dir Direction) {
 	p.turn(dir)
 }
 
-func (p *SpriteImpl) Turn__2(ti *TurningInfo) {
+func (p *SpriteImpl) Turn__1(ti *TurningInfo) {
 	p.turn(ti)
 }
 
@@ -1285,11 +1275,7 @@ func (p *SpriteImpl) Turn__2(ti *TurningInfo) {
 func (p *SpriteImpl) turnTo(obj interface{}) {
 	var angle float64
 	switch v := obj.(type) {
-	//case specialDir:
-	//	angle = float64(v)
-	case int:
-		angle = float64(v)
-	case float64:
+	case Direction:
 		angle = v
 	default:
 		x, y := p.g.objectPos(obj)
@@ -1331,22 +1317,18 @@ func (p *SpriteImpl) TurnTo__1(sprite SpriteName) {
 	p.turnTo(sprite)
 }
 
-func (p *SpriteImpl) TurnTo__2(degree float64) {
-	p.turnTo(degree)
-}
-
-func (p *SpriteImpl) TurnTo__3(dir specialDir) {
+func (p *SpriteImpl) TurnTo__2(dir Direction) {
 	p.turnTo(dir)
 }
 
-func (p *SpriteImpl) TurnTo__4(obj specialObj) {
+func (p *SpriteImpl) TurnTo__3(obj specialObj) {
 	p.turnTo(obj)
 }
-func (p *SpriteImpl) SetHeading(dir float64) {
+func (p *SpriteImpl) SetHeading(dir Direction) {
 	p.setDirection(dir, false)
 }
 
-func (p *SpriteImpl) ChangeHeading(dir float64) {
+func (p *SpriteImpl) ChangeHeading(dir Direction) {
 	p.setDirection(dir, true)
 }
 
