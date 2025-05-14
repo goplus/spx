@@ -34,7 +34,7 @@ import (
 
 var dataChannel = make(chan []byte)
 
-func loadData(this js.Value, args []js.Value) interface{} {
+func loadData(this js.Value, args []js.Value) any {
 	inputArray := args[0]
 
 	// Convert Uint8Array to Go byte slice
@@ -46,20 +46,20 @@ func loadData(this js.Value, args []js.Value) interface{} {
 	return nil
 }
 
-func goWasmInit(this js.Value, args []js.Value) interface{} {
+func goWasmInit(this js.Value, args []js.Value) any {
 	return js.ValueOf(nil)
 }
 
-func gdspxOnEngineStart(this js.Value, args []js.Value) interface{} {
+func gdspxOnEngineStart(this js.Value, args []js.Value) any {
 	return nil
 }
-func gdspxOnEngineUpdate(this js.Value, args []js.Value) interface{} {
+func gdspxOnEngineUpdate(this js.Value, args []js.Value) any {
 	return nil
 }
-func gdspxOnEngineFixedUpdate(this js.Value, args []js.Value) interface{} {
+func gdspxOnEngineFixedUpdate(this js.Value, args []js.Value) any {
 	return nil
 }
-func gdspxOnEngineDestroy(this js.Value, args []js.Value) interface{} {
+func gdspxOnEngineDestroy(this js.Value, args []js.Value) any {
 	return nil
 }
 

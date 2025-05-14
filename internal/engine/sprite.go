@@ -12,7 +12,7 @@ type Sprite struct {
 	x, y    float64
 	Name    string
 	PicPath string
-	Target  interface{}
+	Target  any
 }
 
 func (pself *Sprite) UpdateTexture(path string, renderScale float64) {

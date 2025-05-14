@@ -306,7 +306,7 @@ func (p *baseObj) findCostume(name SpriteCostumeName) int {
 	return -1
 }
 
-func (p *baseObj) goSetCostume(val interface{}) bool {
+func (p *baseObj) goSetCostume(val any) bool {
 	switch v := val.(type) {
 	case SpriteCostumeName:
 		return p.setCostumeByName(v)

@@ -54,7 +54,7 @@ func (p *sayOrThinker) refresh() {
 
 // -------------------------------------------------------------------------------------
 
-func (p *SpriteImpl) sayOrThink(msgv interface{}, style int) {
+func (p *SpriteImpl) sayOrThink(msgv any, style int) {
 	msg, ok := msgv.(string)
 	if !ok {
 		msg = fmt.Sprint(msgv)

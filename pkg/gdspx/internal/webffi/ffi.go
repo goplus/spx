@@ -28,7 +28,7 @@ func Linked() {
 }
 
 // this function will only be called in wasm mode, it will not be called in igop (interpreter) mode.
-func goWasmInit(this js.Value, args []js.Value) interface{} {
+func goWasmInit(this js.Value, args []js.Value) any {
 	println("Go wasm init succ!")
 	hasInitEngine = true
 	resiterFuncPtr2Js()

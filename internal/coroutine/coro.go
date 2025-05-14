@@ -24,8 +24,7 @@ var (
 
 // -------------------------------------------------------------------------------------
 
-type ThreadObj interface {
-}
+type ThreadObj any
 
 type threadImpl struct {
 	Obj      ThreadObj

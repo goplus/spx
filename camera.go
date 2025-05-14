@@ -24,7 +24,7 @@ import (
 
 type Camera struct {
 	g   *Game
-	on_ interface{}
+	on_ any
 }
 
 func (c *Camera) init(g *Game) {
@@ -62,7 +62,7 @@ func (c *Camera) getFollowPos() (bool, mathf.Vec2) {
 	}
 	return false, mathf.NewVec2(0, 0)
 }
-func (c *Camera) on(obj interface{}) {
+func (c *Camera) on(obj any) {
 	switch v := obj.(type) {
 	case SpriteName:
 		sp := c.g.findSprite(v)

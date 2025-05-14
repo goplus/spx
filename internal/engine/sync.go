@@ -6,7 +6,7 @@ import (
 )
 
 // !!!Warning these method can only be called in main thread
-func SyncNewSprite(obj interface{}) *Sprite {
+func SyncNewSprite(obj any) *Sprite {
 	syncSprite := gdx.CreateEmptySprite[Sprite]()
 	syncSprite.Target = obj
 	return syncSprite

@@ -73,7 +73,7 @@ func newMeasure(v specsp) *measure {
 	return meansureObj
 }
 
-func getSpcspVal(ss specsp, key string, defaultVal ...interface{}) interface{} {
+func getSpcspVal(ss specsp, key string, defaultVal ...any) any {
 	v, ok := ss[key]
 	if ok {
 		return v

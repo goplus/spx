@@ -9,10 +9,10 @@ import (
 	. "github.com/realdream-ai/mathf"
 )
 
-func jsValue2Go(value js.Value) interface{} {
+func jsValue2Go(value js.Value) any {
 	switch value.Type() {
 	case js.TypeObject:
-		obj := make(map[string]interface{})
+		obj := make(map[string]any)
 		keys := js.Global().Get("Object").Call("keys", value)
 		for i := 0; i < keys.Length(); i++ {
 			key := keys.Index(i).String()
