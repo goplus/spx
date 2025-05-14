@@ -6,11 +6,11 @@ import (
 	"github.com/realdream-ai/mathf"
 )
 
-func GetVec2(unk interface{}) (mathf.Vec2, bool) {
+func GetVec2(unk any) (mathf.Vec2, bool) {
 	return *unk.(*mathf.Vec2), true
 }
 
-func GetFloat(unk interface{}) (float64, bool) {
+func GetFloat(unk any) (float64, bool) {
 	switch i := unk.(type) {
 	case float32:
 		return float64(i), true
@@ -47,7 +47,7 @@ func GetFloat(unk interface{}) (float64, bool) {
 	}
 }
 
-func GetInt(unk interface{}) (int, bool) {
+func GetInt(unk any) (int, bool) {
 	switch i := unk.(type) {
 	case float64:
 		return int(i), true

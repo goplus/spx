@@ -31,11 +31,11 @@ import (
 type eventSink struct {
 	prev  *eventSink
 	pthis threadObj
-	cond  func(interface{}) bool
-	sink  interface{}
+	cond  func(any) bool
+	sink  any
 }
 
-func (p *eventSink) doDeleteClone(this interface{}) (ret *eventSink) {
+func (p *eventSink) doDeleteClone(this any) (ret *eventSink) {
 	ret = p
 	pp := &ret
 	for {
@@ -51,7 +51,7 @@ func (p *eventSink) doDeleteClone(this interface{}) (ret *eventSink) {
 	}
 }
 
-func (p *eventSink) asyncCall(start bool, data interface{}, doSth func(*eventSink)) {
+func (p *eventSink) asyncCall(start bool, data any, doSth func(*eventSink)) {
 	for p != nil {
 		if p.cond == nil || p.cond(data) {
 			copy := p
@@ -64,7 +64,7 @@ func (p *eventSink) asyncCall(start bool, data interface{}, doSth func(*eventSin
 	}
 }
 
-func (p *eventSink) syncCall(data interface{}, doSth func(*eventSink)) {
+func (p *eventSink) syncCall(data any, doSth func(*eventSink)) {
 	var wg sync.WaitGroup
 	for p != nil {
 		if p.cond == nil || p.cond(data) {
@@ -81,7 +81,7 @@ func (p *eventSink) syncCall(data interface{}, doSth func(*eventSink)) {
 	engine.WaitToDo(wg.Wait)
 }
 
-func (p *eventSink) call(wait bool, data interface{}, doSth func(*eventSink)) {
+func (p *eventSink) call(wait bool, data any, doSth func(*eventSink)) {
 	if wait {
 		p.syncCall(data, doSth)
 	} else {
@@ -123,7 +123,7 @@ func (p *eventSinkMgr) reset() {
 	p.calledStart = false
 }
 
-func (p *eventSinkMgr) doDeleteClone(this interface{}) {
+func (p *eventSinkMgr) doDeleteClone(this any) {
 	p.allWhenStart = p.allWhenStart.doDeleteClone(this)
 	p.allWhenKeyPressed = p.allWhenKeyPressed.doDeleteClone(this)
 	p.allWhenIReceive = p.allWhenIReceive.doDeleteClone(this)
@@ -198,12 +198,12 @@ func (p *eventSinkMgr) doWhenTouchEnd(this threadObj, obj *SpriteImpl) {
 	})
 }
 
-func (p *eventSinkMgr) doWhenCloned(this threadObj, data interface{}) {
+func (p *eventSinkMgr) doWhenCloned(this threadObj, data any) {
 	p.allWhenCloned.asyncCall(true, this, func(ev *eventSink) {
 		if debugEvent {
 			log.Println("==> onCloned", nameOf(this))
 		}
-		ev.sink.(func(interface{}))(data)
+		ev.sink.(func(any))(data)
 	})
 }
 
@@ -219,9 +219,9 @@ func (p *eventSinkMgr) doWhenTurning(this threadObj, mi *TurningInfo) {
 	})
 }
 
-func (p *eventSinkMgr) doWhenIReceive(msg string, data interface{}, wait bool) {
+func (p *eventSinkMgr) doWhenIReceive(msg string, data any, wait bool) {
 	p.allWhenIReceive.call(wait, msg, func(ev *eventSink) {
-		ev.sink.(func(string, interface{}))(msg, data)
+		ev.sink.(func(string, any))(msg, data)
 	})
 }
 
@@ -240,7 +240,7 @@ type IEventSinks interface {
 	OnKey__0(key Key, onKey func())
 	OnKey__1(keys []Key, onKey func(Key))
 	OnKey__2(keys []Key, onKey func())
-	OnMsg__0(onMsg func(msg string, data interface{}))
+	OnMsg__0(onMsg func(msg string, data any))
 	OnMsg__1(msg string, onMsg func())
 	OnStart(onStart func())
 	OnTimer(time float64, onTimer func())
@@ -252,7 +252,7 @@ type eventSinks struct {
 	pthis threadObj
 }
 
-func nameOf(this interface{}) string {
+func nameOf(this any) string {
 	if spr, ok := this.(*SpriteImpl); ok {
 		return spr.name
 	}
@@ -292,7 +292,7 @@ func (p *eventSinks) OnClick(onClick func()) {
 		prev:  p.allWhenClick,
 		pthis: pthis,
 		sink:  onClick,
-		cond: func(data interface{}) bool {
+		cond: func(data any) bool {
 			return data == pthis
 		},
 	}
@@ -317,7 +317,7 @@ func (p *eventSinks) OnTimer(time float64, call func()) {
 			}
 			call()
 		},
-		cond: func(data interface{}) bool {
+		cond: func(data any) bool {
 			return mathf.Absf(data.(float64)-time) < 0.001
 		},
 	}
@@ -333,7 +333,7 @@ func (p *eventSinks) OnKey__0(key Key, onKey func()) {
 			}
 			onKey()
 		},
-		cond: func(data interface{}) bool {
+		cond: func(data any) bool {
 			return data.(Key) == key
 		},
 	}
@@ -349,7 +349,7 @@ func (p *eventSinks) OnKey__1(keys []Key, onKey func(Key)) {
 			}
 			onKey(key)
 		},
-		cond: func(data interface{}) bool {
+		cond: func(data any) bool {
 			keyIn := data.(Key)
 			for _, key := range keys {
 				if key == keyIn {
@@ -367,7 +367,7 @@ func (p *eventSinks) OnKey__2(keys []Key, onKey func()) {
 	})
 }
 
-func (p *eventSinks) OnMsg__0(onMsg func(msg string, data interface{})) {
+func (p *eventSinks) OnMsg__0(onMsg func(msg string, data any)) {
 	p.allWhenIReceive = &eventSink{
 		prev:  p.allWhenIReceive,
 		pthis: p.pthis,
@@ -379,13 +379,13 @@ func (p *eventSinks) OnMsg__1(msg string, onMsg func()) {
 	p.allWhenIReceive = &eventSink{
 		prev:  p.allWhenIReceive,
 		pthis: p.pthis,
-		sink: func(msg string, data interface{}) {
+		sink: func(msg string, data any) {
 			if debugEvent {
 				log.Println("==> onMsg", msg, nameOf(p.pthis))
 			}
 			onMsg()
 		},
-		cond: func(data interface{}) bool {
+		cond: func(data any) bool {
 			return data.(string) == msg
 		},
 	}
@@ -409,7 +409,7 @@ func (p *eventSinks) OnBackdrop__1(name BackdropName, onBackdrop func()) {
 			}
 			onBackdrop()
 		},
-		cond: func(data interface{}) bool {
+		cond: func(data any) bool {
 			return data.(BackdropName) == name
 		},
 	}

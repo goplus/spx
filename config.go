@@ -26,7 +26,7 @@ import (
 	"github.com/realdream-ai/mathf"
 )
 
-func resourceDir(resource interface{}) (fs spxfs.Dir, err error) {
+func resourceDir(resource any) (fs spxfs.Dir, err error) {
 	fs, ok := resource.(spxfs.Dir)
 	if !ok {
 		fs, err = spxfs.Open(resource.(string))
@@ -34,7 +34,7 @@ func resourceDir(resource interface{}) (fs spxfs.Dir, err error) {
 	return
 }
 
-func loadJson(ret interface{}, fs spxfs.Dir, file string) (err error) {
+func loadJson(ret any, fs spxfs.Dir, file string) (err error) {
 	if _, ok := fs.(spxfs.GdDir); ok {
 		filePath := engine.ToAssetPath(file)
 		value := engine.ReadAllText(filePath)
@@ -49,7 +49,7 @@ func loadJson(ret interface{}, fs spxfs.Dir, file string) (err error) {
 	return json.NewDecoder(f).Decode(ret)
 }
 
-func loadProjConfig(proj *projConfig, fs spxfs.Dir, index interface{}) (err error) {
+func loadProjConfig(proj *projConfig, fs spxfs.Dir, index any) (err error) {
 	switch v := index.(type) {
 	case io.Reader:
 		err = json.NewDecoder(v).Decode(proj)
@@ -66,15 +66,15 @@ func loadProjConfig(proj *projConfig, fs spxfs.Dir, index interface{}) (err erro
 // -------------------------------------------------------------------------------------
 
 type Config struct {
-	Title              string      `json:"title,omitempty"`
-	Width              int         `json:"width,omitempty"`
-	Height             int         `json:"height,omitempty"`
-	KeyDuration        int         `json:"keyDuration,omitempty"`
-	ScreenshotKey      string      `json:"screenshotKey,omitempty"` // screenshot image capture key
-	Index              interface{} `json:"-"`                       // where is index.json, can be file (string) or io.Reader
-	DontParseFlags     bool        `json:"-"`
-	FullScreen         bool        `json:"fullScreen,omitempty"`
-	DontRunOnUnfocused bool        `json:"pauseOnUnfocused,omitempty"`
+	Title              string `json:"title,omitempty"`
+	Width              int    `json:"width,omitempty"`
+	Height             int    `json:"height,omitempty"`
+	KeyDuration        int    `json:"keyDuration,omitempty"`
+	ScreenshotKey      string `json:"screenshotKey,omitempty"` // screenshot image capture key
+	Index              any    `json:"-"`                       // where is index.json, can be file (string) or io.Reader
+	DontParseFlags     bool   `json:"-"`
+	FullScreen         bool   `json:"fullScreen,omitempty"`
+	DontRunOnUnfocused bool   `json:"pauseOnUnfocused,omitempty"`
 }
 
 type cameraConfig struct {
@@ -107,7 +107,7 @@ func toMapMode(mode string) int {
 }
 
 type projConfig struct {
-	Zorder        []interface{}     `json:"zorder"`
+	Zorder        []any             `json:"zorder"`
 	Backdrops     []*backdropConfig `json:"backdrops"`
 	BackdropIndex *int              `json:"backdropIndex"`
 	Map           mapConfig         `json:"map"`
@@ -209,8 +209,8 @@ const (
 )
 
 type costumesConfig struct {
-	From interface{} `json:"from"`
-	To   interface{} `json:"to"`
+	From any `json:"from"`
+	To   any `json:"to"`
 }
 
 type actionConfig struct {
@@ -219,11 +219,11 @@ type actionConfig struct {
 }
 
 type aniConfig struct {
-	FrameFrom      interface{} `json:"frameFrom"`
-	FrameTo        interface{} `json:"frameTo"`
-	FrameFps       int         `json:"frameFps"`
-	StepDuration   float64     `json:"stepDuration"`
-	TurnToDuration float64     `json:"turnToDuration"`
+	FrameFrom      any     `json:"frameFrom"`
+	FrameTo        any     `json:"frameTo"`
+	FrameFps       int     `json:"frameFps"`
+	StepDuration   float64 `json:"stepDuration"`
+	TurnToDuration float64 `json:"turnToDuration"`
 
 	AniType      aniTypeEnum   `json:"anitype"`
 	OnStart      *actionConfig `json:"onStart"` //start
@@ -237,8 +237,8 @@ type aniConfig struct {
 	IFrameTo   int
 
 	Speed float64
-	From  interface{}
-	To    interface{}
+	From  any
+	To    any
 	//OnEnd *actionConfig  `json:"onEnd"`   //stop
 }
 

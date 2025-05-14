@@ -86,8 +86,7 @@ func SetDebug(flags dbgFlags) {
 
 // -------------------------------------------------------------------------------------
 
-type Shape interface {
-}
+type Shape any
 
 type Game struct {
 	baseObj
@@ -216,7 +215,7 @@ func Gopt_Game_Main(game Gamer, sprites ...Sprite) {
 
 // Gopt_Game_Run runs the game.
 // resource can be a string or fs.Dir object.
-func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
+func Gopt_Game_Run(game Gamer, resource any, gameConf ...*Config) {
 	switch resfld := resource.(type) {
 	case string:
 		if resfld != "" {
@@ -342,7 +341,7 @@ func instance(gamer reflect.Value) *Game {
 	return fld.Addr().Interface().(*Game)
 }
 
-func getFieldPtrOrAlloc(g *Game, v reflect.Value, i int) (name string, val interface{}) {
+func getFieldPtrOrAlloc(g *Game, v reflect.Value, i int) (name string, val any) {
 	tFld := v.Type().Field(i)
 	vFld := v.Field(i)
 	typ := tFld.Type
@@ -365,7 +364,7 @@ func getFieldPtrOrAlloc(g *Game, v reflect.Value, i int) (name string, val inter
 	return tFld.Name, ret
 }
 
-func findFieldPtr(v reflect.Value, name string, from int) interface{} {
+func findFieldPtr(v reflect.Value, name string, from int) any {
 	t := v.Type()
 	for i, n := from, v.NumField(); i < n; i++ {
 		tFld := t.Field(i)
@@ -377,7 +376,7 @@ func findFieldPtr(v reflect.Value, name string, from int) interface{} {
 	return nil
 }
 
-func findObjPtr(v reflect.Value, name string, from int) interface{} {
+func findObjPtr(v reflect.Value, name string, from int) any {
 	t := v.Type()
 	for i, n := from, v.NumField(); i < n; i++ {
 		tFld := t.Field(i)
@@ -591,7 +590,7 @@ func (p *Game) endLoad(g reflect.Value, proj *projConfig) (err error) {
 	return p.loadIndex(g, proj)
 }
 
-func Gopt_Game_Reload(game Gamer, index interface{}) (err error) {
+func Gopt_Game_Reload(game Gamer, index any) (err error) {
 	v := reflect.ValueOf(game).Elem()
 	g := instance(v)
 	g.reset()
@@ -616,7 +615,7 @@ func Gopt_Game_Reload(game Gamer, index interface{}) (err error) {
 
 // -----------------------------------------------------------------------------
 
-type specsp = map[string]interface{}
+type specsp = map[string]any
 
 func (p *Game) addSpecialShape(g reflect.Value, v specsp, inits []Sprite) []Sprite {
 	switch typ := v["type"].(string); typ {
@@ -683,7 +682,7 @@ func (p *Game) addStageSprites(g reflect.Value, v specsp, inits []Sprite) []Spri
 			}
 			if typItemPtr.Implements(tySprite) {
 				spr := p.getSpriteProto(typItem, g)
-				items := v["items"].([]interface{})
+				items := v["items"].([]any)
 				n := len(items)
 				newSlice := reflect.MakeSlice(typSlice, n, n)
 				for i := 0; i < n; i++ {
@@ -999,7 +998,7 @@ func (p *Game) touchingSpriteBy(dst *SpriteImpl, name string) *SpriteImpl {
 	return nil
 }
 
-func (p *Game) objectPos(obj interface{}) (float64, float64) {
+func (p *Game) objectPos(obj any) (float64, float64) {
 	switch v := obj.(type) {
 	case SpriteName:
 		if sp := p.findSprite(v); sp != nil {
@@ -1208,7 +1207,7 @@ type BackdropName = string
 //	StartBackdrop(index) or
 //	StartBackdrop(spx.Next)
 //	StartBackdrop(spx.Prev)
-func (p *Game) startBackdrop(backdrop interface{}, wait bool) {
+func (p *Game) startBackdrop(backdrop any, wait bool) {
 	if p.goSetCostume(backdrop) {
 		p.windowWidth_ = 0
 		p.setupBackdrop()
@@ -1310,7 +1309,7 @@ func (p *Game) ResetTimer() {
 
 // -----------------------------------------------------------------------------
 
-func (p *Game) Ask(msgv interface{}) {
+func (p *Game) Ask(msgv any) {
 	msg, ok := msgv.(string)
 	if !ok {
 		msg = fmt.Sprint(msgv)
@@ -1517,7 +1516,7 @@ func (p *Game) Loudness() float64 {
 
 // -----------------------------------------------------------------------------
 
-func (p *Game) doBroadcast(msg string, data interface{}, wait bool) {
+func (p *Game) doBroadcast(msg string, data any, wait bool) {
 	if debugInstr {
 		log.Println("Broadcast", msg, wait)
 	}
@@ -1532,7 +1531,7 @@ func (p *Game) Broadcast__1(msg string, wait bool) {
 	p.doBroadcast(msg, nil, wait)
 }
 
-func (p *Game) Broadcast__2(msg string, data interface{}, wait bool) {
+func (p *Game) Broadcast__2(msg string, data any, wait bool) {
 	p.doBroadcast(msg, data, wait)
 }
 
@@ -1603,7 +1602,7 @@ func GetWidget_(sg ShapeGetter, name WidgetName) Widget {
 // GetWidget returns the widget instance (in given type) with given name. It panics if not found.
 func Gopt_Game_Gopx_GetWidget[T any](sg ShapeGetter, name WidgetName) *T {
 	widget := GetWidget_(sg, name)
-	if result, ok := widget.(interface{}).(*T); ok {
+	if result, ok := widget.(any).(*T); ok {
 		return result
 	} else {
 		panic("GetWidget: type mismatch")

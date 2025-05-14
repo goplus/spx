@@ -142,7 +142,7 @@ const (
 
 // -------------------------------------------------------------------------------------
 
-type event interface{}
+type event any
 
 type eventStart struct{}
 

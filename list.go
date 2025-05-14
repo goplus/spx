@@ -35,7 +35,7 @@ const (
 
 // -------------------------------------------------------------------------------------
 
-type obj = interface{}
+type obj = any
 
 func toString(v obj) string {
 	if v == nil {
@@ -44,7 +44,7 @@ func toString(v obj) string {
 	return fmt.Sprint(v)
 }
 
-func fromObj(v obj) interface{} {
+func fromObj(v obj) any {
 	if o, ok := v.(Value); ok {
 		return o.data
 	}
@@ -54,7 +54,7 @@ func fromObj(v obj) interface{} {
 // -------------------------------------------------------------------------------------
 
 type Value struct {
-	data interface{}
+	data any
 }
 
 func (p Value) Equal(v obj) bool {

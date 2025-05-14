@@ -14,14 +14,14 @@ import (
 	"syscall/js"
 )
 
-func gdspxOnEngineStart(this js.Value, args []js.Value) interface{} {
+func gdspxOnEngineStart(this js.Value, args []js.Value) any {
 	if callbacks.OnEngineStart == nil {
 		return nil
 	}
 	callbacks.OnEngineStart()
 	return nil
 }
-func gdspxOnEngineUpdate(this js.Value, args []js.Value) interface{} {
+func gdspxOnEngineUpdate(this js.Value, args []js.Value) any {
 	if callbacks.OnEngineUpdate == nil {
 		return nil
 	}
@@ -29,7 +29,7 @@ func gdspxOnEngineUpdate(this js.Value, args []js.Value) interface{} {
 	callbacks.OnEngineUpdate(arg0)
 	return nil
 }
-func gdspxOnEngineFixedUpdate(this js.Value, args []js.Value) interface{} {
+func gdspxOnEngineFixedUpdate(this js.Value, args []js.Value) any {
 	if callbacks.OnEngineFixedUpdate == nil {
 		return nil
 	}
@@ -37,14 +37,14 @@ func gdspxOnEngineFixedUpdate(this js.Value, args []js.Value) interface{} {
 	callbacks.OnEngineFixedUpdate(arg0)
 	return nil
 }
-func gdspxOnEngineDestroy(this js.Value, args []js.Value) interface{} {
+func gdspxOnEngineDestroy(this js.Value, args []js.Value) any {
 	if callbacks.OnEngineDestroy == nil {
 		return nil
 	}
 	callbacks.OnEngineDestroy()
 	return nil
 }
-func gdspxOnSceneSpriteInstantiated(this js.Value, args []js.Value) interface{} {
+func gdspxOnSceneSpriteInstantiated(this js.Value, args []js.Value) any {
 	if callbacks.OnSceneSpriteInstantiated == nil {
 		return nil
 	}
@@ -53,7 +53,7 @@ func gdspxOnSceneSpriteInstantiated(this js.Value, args []js.Value) interface{} 
 	callbacks.OnSceneSpriteInstantiated(arg0, arg1)
 	return nil
 }
-func gdspxOnSpriteReady(this js.Value, args []js.Value) interface{} {
+func gdspxOnSpriteReady(this js.Value, args []js.Value) any {
 	if callbacks.OnSpriteReady == nil {
 		return nil
 	}
@@ -61,7 +61,7 @@ func gdspxOnSpriteReady(this js.Value, args []js.Value) interface{} {
 	callbacks.OnSpriteReady(arg0)
 	return nil
 }
-func gdspxOnSpriteUpdated(this js.Value, args []js.Value) interface{} {
+func gdspxOnSpriteUpdated(this js.Value, args []js.Value) any {
 	if callbacks.OnSpriteUpdated == nil {
 		return nil
 	}
@@ -69,7 +69,7 @@ func gdspxOnSpriteUpdated(this js.Value, args []js.Value) interface{} {
 	callbacks.OnSpriteUpdated(arg0)
 	return nil
 }
-func gdspxOnSpriteFixedUpdated(this js.Value, args []js.Value) interface{} {
+func gdspxOnSpriteFixedUpdated(this js.Value, args []js.Value) any {
 	if callbacks.OnSpriteFixedUpdated == nil {
 		return nil
 	}
@@ -77,7 +77,7 @@ func gdspxOnSpriteFixedUpdated(this js.Value, args []js.Value) interface{} {
 	callbacks.OnSpriteFixedUpdated(arg0)
 	return nil
 }
-func gdspxOnSpriteDestroyed(this js.Value, args []js.Value) interface{} {
+func gdspxOnSpriteDestroyed(this js.Value, args []js.Value) any {
 	if callbacks.OnSpriteDestroyed == nil {
 		return nil
 	}
@@ -85,7 +85,7 @@ func gdspxOnSpriteDestroyed(this js.Value, args []js.Value) interface{} {
 	callbacks.OnSpriteDestroyed(arg0)
 	return nil
 }
-func gdspxOnSpriteFramesSetChanged(this js.Value, args []js.Value) interface{} {
+func gdspxOnSpriteFramesSetChanged(this js.Value, args []js.Value) any {
 	if callbacks.OnSpriteFramesSetChanged == nil {
 		return nil
 	}
@@ -93,7 +93,7 @@ func gdspxOnSpriteFramesSetChanged(this js.Value, args []js.Value) interface{} {
 	callbacks.OnSpriteFramesSetChanged(arg0)
 	return nil
 }
-func gdspxOnSpriteAnimationChanged(this js.Value, args []js.Value) interface{} {
+func gdspxOnSpriteAnimationChanged(this js.Value, args []js.Value) any {
 	if callbacks.OnSpriteAnimationChanged == nil {
 		return nil
 	}
@@ -101,7 +101,7 @@ func gdspxOnSpriteAnimationChanged(this js.Value, args []js.Value) interface{} {
 	callbacks.OnSpriteAnimationChanged(arg0)
 	return nil
 }
-func gdspxOnSpriteFrameChanged(this js.Value, args []js.Value) interface{} {
+func gdspxOnSpriteFrameChanged(this js.Value, args []js.Value) any {
 	if callbacks.OnSpriteFrameChanged == nil {
 		return nil
 	}
@@ -109,7 +109,7 @@ func gdspxOnSpriteFrameChanged(this js.Value, args []js.Value) interface{} {
 	callbacks.OnSpriteFrameChanged(arg0)
 	return nil
 }
-func gdspxOnSpriteAnimationLooped(this js.Value, args []js.Value) interface{} {
+func gdspxOnSpriteAnimationLooped(this js.Value, args []js.Value) any {
 	if callbacks.OnSpriteAnimationLooped == nil {
 		return nil
 	}
@@ -117,7 +117,7 @@ func gdspxOnSpriteAnimationLooped(this js.Value, args []js.Value) interface{} {
 	callbacks.OnSpriteAnimationLooped(arg0)
 	return nil
 }
-func gdspxOnSpriteAnimationFinished(this js.Value, args []js.Value) interface{} {
+func gdspxOnSpriteAnimationFinished(this js.Value, args []js.Value) any {
 	if callbacks.OnSpriteAnimationFinished == nil {
 		return nil
 	}
@@ -125,7 +125,7 @@ func gdspxOnSpriteAnimationFinished(this js.Value, args []js.Value) interface{} 
 	callbacks.OnSpriteAnimationFinished(arg0)
 	return nil
 }
-func gdspxOnSpriteVfxFinished(this js.Value, args []js.Value) interface{} {
+func gdspxOnSpriteVfxFinished(this js.Value, args []js.Value) any {
 	if callbacks.OnSpriteVfxFinished == nil {
 		return nil
 	}
@@ -133,7 +133,7 @@ func gdspxOnSpriteVfxFinished(this js.Value, args []js.Value) interface{} {
 	callbacks.OnSpriteVfxFinished(arg0)
 	return nil
 }
-func gdspxOnSpriteScreenExited(this js.Value, args []js.Value) interface{} {
+func gdspxOnSpriteScreenExited(this js.Value, args []js.Value) any {
 	if callbacks.OnSpriteScreenExited == nil {
 		return nil
 	}
@@ -141,7 +141,7 @@ func gdspxOnSpriteScreenExited(this js.Value, args []js.Value) interface{} {
 	callbacks.OnSpriteScreenExited(arg0)
 	return nil
 }
-func gdspxOnSpriteScreenEntered(this js.Value, args []js.Value) interface{} {
+func gdspxOnSpriteScreenEntered(this js.Value, args []js.Value) any {
 	if callbacks.OnSpriteScreenEntered == nil {
 		return nil
 	}
@@ -149,7 +149,7 @@ func gdspxOnSpriteScreenEntered(this js.Value, args []js.Value) interface{} {
 	callbacks.OnSpriteScreenEntered(arg0)
 	return nil
 }
-func gdspxOnMousePressed(this js.Value, args []js.Value) interface{} {
+func gdspxOnMousePressed(this js.Value, args []js.Value) any {
 	if callbacks.OnMousePressed == nil {
 		return nil
 	}
@@ -157,7 +157,7 @@ func gdspxOnMousePressed(this js.Value, args []js.Value) interface{} {
 	callbacks.OnMousePressed(arg0)
 	return nil
 }
-func gdspxOnMouseReleased(this js.Value, args []js.Value) interface{} {
+func gdspxOnMouseReleased(this js.Value, args []js.Value) any {
 	if callbacks.OnMouseReleased == nil {
 		return nil
 	}
@@ -165,7 +165,7 @@ func gdspxOnMouseReleased(this js.Value, args []js.Value) interface{} {
 	callbacks.OnMouseReleased(arg0)
 	return nil
 }
-func gdspxOnKeyPressed(this js.Value, args []js.Value) interface{} {
+func gdspxOnKeyPressed(this js.Value, args []js.Value) any {
 	if callbacks.OnKeyPressed == nil {
 		return nil
 	}
@@ -173,7 +173,7 @@ func gdspxOnKeyPressed(this js.Value, args []js.Value) interface{} {
 	callbacks.OnKeyPressed(arg0)
 	return nil
 }
-func gdspxOnKeyReleased(this js.Value, args []js.Value) interface{} {
+func gdspxOnKeyReleased(this js.Value, args []js.Value) any {
 	if callbacks.OnKeyReleased == nil {
 		return nil
 	}
@@ -181,7 +181,7 @@ func gdspxOnKeyReleased(this js.Value, args []js.Value) interface{} {
 	callbacks.OnKeyReleased(arg0)
 	return nil
 }
-func gdspxOnActionPressed(this js.Value, args []js.Value) interface{} {
+func gdspxOnActionPressed(this js.Value, args []js.Value) any {
 	if callbacks.OnActionPressed == nil {
 		return nil
 	}
@@ -189,7 +189,7 @@ func gdspxOnActionPressed(this js.Value, args []js.Value) interface{} {
 	callbacks.OnActionPressed(arg0)
 	return nil
 }
-func gdspxOnActionJustPressed(this js.Value, args []js.Value) interface{} {
+func gdspxOnActionJustPressed(this js.Value, args []js.Value) any {
 	if callbacks.OnActionJustPressed == nil {
 		return nil
 	}
@@ -197,7 +197,7 @@ func gdspxOnActionJustPressed(this js.Value, args []js.Value) interface{} {
 	callbacks.OnActionJustPressed(arg0)
 	return nil
 }
-func gdspxOnActionJustReleased(this js.Value, args []js.Value) interface{} {
+func gdspxOnActionJustReleased(this js.Value, args []js.Value) any {
 	if callbacks.OnActionJustReleased == nil {
 		return nil
 	}
@@ -205,7 +205,7 @@ func gdspxOnActionJustReleased(this js.Value, args []js.Value) interface{} {
 	callbacks.OnActionJustReleased(arg0)
 	return nil
 }
-func gdspxOnAxisChanged(this js.Value, args []js.Value) interface{} {
+func gdspxOnAxisChanged(this js.Value, args []js.Value) any {
 	if callbacks.OnAxisChanged == nil {
 		return nil
 	}
@@ -214,7 +214,7 @@ func gdspxOnAxisChanged(this js.Value, args []js.Value) interface{} {
 	callbacks.OnAxisChanged(arg0, arg1)
 	return nil
 }
-func gdspxOnCollisionEnter(this js.Value, args []js.Value) interface{} {
+func gdspxOnCollisionEnter(this js.Value, args []js.Value) any {
 	if callbacks.OnCollisionEnter == nil {
 		return nil
 	}
@@ -223,7 +223,7 @@ func gdspxOnCollisionEnter(this js.Value, args []js.Value) interface{} {
 	callbacks.OnCollisionEnter(arg0, arg1)
 	return nil
 }
-func gdspxOnCollisionStay(this js.Value, args []js.Value) interface{} {
+func gdspxOnCollisionStay(this js.Value, args []js.Value) any {
 	if callbacks.OnCollisionStay == nil {
 		return nil
 	}
@@ -232,7 +232,7 @@ func gdspxOnCollisionStay(this js.Value, args []js.Value) interface{} {
 	callbacks.OnCollisionStay(arg0, arg1)
 	return nil
 }
-func gdspxOnCollisionExit(this js.Value, args []js.Value) interface{} {
+func gdspxOnCollisionExit(this js.Value, args []js.Value) any {
 	if callbacks.OnCollisionExit == nil {
 		return nil
 	}
@@ -241,7 +241,7 @@ func gdspxOnCollisionExit(this js.Value, args []js.Value) interface{} {
 	callbacks.OnCollisionExit(arg0, arg1)
 	return nil
 }
-func gdspxOnTriggerEnter(this js.Value, args []js.Value) interface{} {
+func gdspxOnTriggerEnter(this js.Value, args []js.Value) any {
 	if callbacks.OnTriggerEnter == nil {
 		return nil
 	}
@@ -250,7 +250,7 @@ func gdspxOnTriggerEnter(this js.Value, args []js.Value) interface{} {
 	callbacks.OnTriggerEnter(arg0, arg1)
 	return nil
 }
-func gdspxOnTriggerStay(this js.Value, args []js.Value) interface{} {
+func gdspxOnTriggerStay(this js.Value, args []js.Value) any {
 	if callbacks.OnTriggerStay == nil {
 		return nil
 	}
@@ -259,7 +259,7 @@ func gdspxOnTriggerStay(this js.Value, args []js.Value) interface{} {
 	callbacks.OnTriggerStay(arg0, arg1)
 	return nil
 }
-func gdspxOnTriggerExit(this js.Value, args []js.Value) interface{} {
+func gdspxOnTriggerExit(this js.Value, args []js.Value) any {
 	if callbacks.OnTriggerExit == nil {
 		return nil
 	}
@@ -268,7 +268,7 @@ func gdspxOnTriggerExit(this js.Value, args []js.Value) interface{} {
 	callbacks.OnTriggerExit(arg0, arg1)
 	return nil
 }
-func gdspxOnUiReady(this js.Value, args []js.Value) interface{} {
+func gdspxOnUiReady(this js.Value, args []js.Value) any {
 	if callbacks.OnUiReady == nil {
 		return nil
 	}
@@ -276,7 +276,7 @@ func gdspxOnUiReady(this js.Value, args []js.Value) interface{} {
 	callbacks.OnUiReady(arg0)
 	return nil
 }
-func gdspxOnUiUpdated(this js.Value, args []js.Value) interface{} {
+func gdspxOnUiUpdated(this js.Value, args []js.Value) any {
 	if callbacks.OnUiUpdated == nil {
 		return nil
 	}
@@ -284,7 +284,7 @@ func gdspxOnUiUpdated(this js.Value, args []js.Value) interface{} {
 	callbacks.OnUiUpdated(arg0)
 	return nil
 }
-func gdspxOnUiDestroyed(this js.Value, args []js.Value) interface{} {
+func gdspxOnUiDestroyed(this js.Value, args []js.Value) any {
 	if callbacks.OnUiDestroyed == nil {
 		return nil
 	}
@@ -292,7 +292,7 @@ func gdspxOnUiDestroyed(this js.Value, args []js.Value) interface{} {
 	callbacks.OnUiDestroyed(arg0)
 	return nil
 }
-func gdspxOnUiPressed(this js.Value, args []js.Value) interface{} {
+func gdspxOnUiPressed(this js.Value, args []js.Value) any {
 	if callbacks.OnUiPressed == nil {
 		return nil
 	}
@@ -300,7 +300,7 @@ func gdspxOnUiPressed(this js.Value, args []js.Value) interface{} {
 	callbacks.OnUiPressed(arg0)
 	return nil
 }
-func gdspxOnUiReleased(this js.Value, args []js.Value) interface{} {
+func gdspxOnUiReleased(this js.Value, args []js.Value) any {
 	if callbacks.OnUiReleased == nil {
 		return nil
 	}
@@ -308,7 +308,7 @@ func gdspxOnUiReleased(this js.Value, args []js.Value) interface{} {
 	callbacks.OnUiReleased(arg0)
 	return nil
 }
-func gdspxOnUiHovered(this js.Value, args []js.Value) interface{} {
+func gdspxOnUiHovered(this js.Value, args []js.Value) any {
 	if callbacks.OnUiHovered == nil {
 		return nil
 	}
@@ -316,7 +316,7 @@ func gdspxOnUiHovered(this js.Value, args []js.Value) interface{} {
 	callbacks.OnUiHovered(arg0)
 	return nil
 }
-func gdspxOnUiClicked(this js.Value, args []js.Value) interface{} {
+func gdspxOnUiClicked(this js.Value, args []js.Value) any {
 	if callbacks.OnUiClicked == nil {
 		return nil
 	}
@@ -324,7 +324,7 @@ func gdspxOnUiClicked(this js.Value, args []js.Value) interface{} {
 	callbacks.OnUiClicked(arg0)
 	return nil
 }
-func gdspxOnUiToggle(this js.Value, args []js.Value) interface{} {
+func gdspxOnUiToggle(this js.Value, args []js.Value) any {
 	if callbacks.OnUiToggle == nil {
 		return nil
 	}
@@ -333,7 +333,7 @@ func gdspxOnUiToggle(this js.Value, args []js.Value) interface{} {
 	callbacks.OnUiToggle(arg0, arg1)
 	return nil
 }
-func gdspxOnUiTextChanged(this js.Value, args []js.Value) interface{} {
+func gdspxOnUiTextChanged(this js.Value, args []js.Value) any {
 	if callbacks.OnUiTextChanged == nil {
 		return nil
 	}
