@@ -85,11 +85,20 @@ func (pself *CmdTool) ExportWeb() error {
 }
 
 func (pself *CmdTool) Export() error {
+	targetDir := path.Join(pself.ProjectDir, ".builds/pc")
+	targetPath := path.Join(targetDir, PcExportName)
+	platformName := ""
+	if runtime.GOOS == "windows" {
+		targetPath += ".exe"
+		platformName = "Win"
+	} else if runtime.GOOS == "darwin" {
+		platformName = "Mac"
+	} else if runtime.GOOS == "linux" {
+		platformName = "Linux"
+	}
 
-	// 整合原 Export() 函数的功能
-	platform := "Win"
-	args := "--headless --quit --export-debug " + platform
-	return util.RunCommandInDir(pself.ProjectDir, pself.CmdPath, args)
+	os.Mkdir(targetDir, 0755)
+	return util.RunCommandInDir(pself.ProjectDir, pself.CmdPath, "--headless", "--quit", "--path", pself.ProjectDir, "--export-debug", platformName, targetPath)
 }
 
 func (pself *CmdTool) ExportIos() error {

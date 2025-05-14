@@ -14,55 +14,32 @@ while getopts "p:ed" opt; do
         *) echo "Usage: $0 [-p platform] [-e]"; exit 1 ;;
     esac
 done
-
 source $SCRIPT_DIR/common/setup_env.sh
 cd $PROJ_DIR
 
 build_template() {
     prepare_env
     local engine_dir="$ENGINE_DIR"
-    local platform=$1
+    local platform=$PLATFORM
     local template_dir="$TEMPLATE_DIR"
 
     echo "save to $template_dir"
     cd $engine_dir || exit
+
+    dstBinPath="$GOPATH/bin/gdspxrt$VERSION"  #gdspxrt 
+    echo "Destination binary path: $dstBinPath"
+    local target_build_str="template_release"
     if [ "$platform" = "linux" ]; then
-        scons platform=linuxbsd target=template_debug
-        scons platform=linuxbsd target=template_release
-        cp bin/godot.linuxbsd.template_* "$template_dir/"
-        #mv "$template_dir/godot.linuxbsd.template_debug"*  "$template_dir/linux_debug.$ARCH"
-        #mv "$template_dir/godot.linuxbsd.template_release"*  "$template_dir/linux_release.$ARCH"
+        scons platform=linuxbsd target=$target_build_str
+        cp bin/godot.linuxbsd.$target_build_str.$ARCH $dstBinPath
 
     elif [ "$platform" = "windows" ]; then
-        scons platform=windows target=template_debug arch=x86_32
-        scons platform=windows target=template_release arch=x86_32
-        scons platform=windows target=template_debug arch=x86_64
-        scons platform=windows target=template_release arch=x86_64
-        echo "Destination binary path: $template_dir"
-        cp bin/windows*.exe "$template_dir/"
+        scons platform=windows target=$target_build_str
+        cp bin/godot.windows.$target_build_str.$ARCH.exe $dstBinPath".exe"
 
     elif [ "$platform" = "macos" ]; then
-        scons platform=macos target=template_debug arch=arm64
-        scons platform=macos target=template_release arch=arm64
-        scons platform=macos target=template_debug arch=x86_64
-        scons platform=macos target=template_release arch=x86_64 generate_bundle=yes
-
-        echo "lipo ..."
-        lipo -create bin/godot.macos.template_release.x86_64 bin/godot.macos.template_release.arm64 -output bin/godot.macos.template_release.universal
-        lipo -create bin/godot.macos.template_debug.x86_64 bin/godot.macos.template_debug.arm64 -output bin/godot.macos.template_debug.universal
-        
-        echo "create app ..."
-        cd bin
-        cp -r ../misc/dist/macos_template.app .
-        mkdir -p macos_template.app/Contents/MacOS
-        cp godot.macos.template_release.universal macos_template.app/Contents/MacOS/godot_macos_release.universal
-        cp godot.macos.template_debug.universal macos_template.app/Contents/MacOS/godot_macos_debug.universal
-        chmod +x macos_template.app/Contents/MacOS/godot_macos*
-        zip -q -9 -r macos.zip macos_template.app
-        
-        cp macos.zip "$template_dir/macos.zip"
-        cd ..
-        echo "done"
+        scons platform=macos target=$target_build_str
+        cp bin/godot.macos.$target_build_str.$ARCH $dstBinPath
 
     elif [ "$platform" = "ios" ]; then
         scons platform=ios vulkan=True target=template_debug ios_simulator=yes arch=arm64 
@@ -152,6 +129,10 @@ download_editor() {
     mkdir -p "$tmp_dir"
     mkdir -p "$dst_dir"
 
+    # download engine pack
+    url=$url_prefix"gdspxrt.pck"
+    curl -L -o "$dst_dir/gdspxrt$VERSION.pck" "$url" || exit
+
     if [ "$platform" = "linux" ]; then
         zip_name="editor-linux-"$arch".zip"
         url=$url_prefix$zip_name
@@ -159,7 +140,7 @@ download_editor() {
         unzip -o "$tmp_dir/$zip_name" -d "$tmp_dir" > /dev/null 2>&1  || exit
         rm -rf "$tmp_dir/$zip_name"
 
-        cp -f "$tmp_dir/godot.linuxbsd.editor.$arch" "$dst_dir/gdspx$VERSION""_linux"  || exit
+        cp -f "$tmp_dir/godot.linuxbsd.editor.$arch" "$dst_dir/gdspx$VERSION"  || exit
         rm -rf "$tmp_dir/godot.linuxbsd.editor.$arch"
 
     elif [ "$platform" = "windows" ]; then
@@ -168,7 +149,7 @@ download_editor() {
         curl -L -o "$tmp_dir/$zip_name" "$url" || exit
         unzip -o "$tmp_dir/$zip_name" -d "$tmp_dir" > /dev/null 2>&1  || exit
         rm -rf "$tmp_dir/$zip_name"
-        cp -f "$tmp_dir/godot.windows.editor.$arch.exe" "$dst_dir/gdspx$VERSION""_win.exe"  || exit
+        cp -f "$tmp_dir/godot.windows.editor.$arch.exe" "$dst_dir/gdspx$VERSION"".exe"  || exit
         rm -rf "$tmp_dir/godot.windows.editor.$arch.exe"
 
     elif [ "$platform" = "macos" ]; then
@@ -178,7 +159,7 @@ download_editor() {
         unzip -o "$tmp_dir/$zip_name" -d "$tmp_dir" > /dev/null 2>&1  || exit
         rm -rf "$tmp_dir/$zip_name"
         
-        cp -f "$tmp_dir/Godot.app/Contents/MacOS/Godot" "$dst_dir/gdspx$VERSION""_darwin"  || exit
+        cp -f "$tmp_dir/Godot.app/Contents/MacOS/Godot" "$dst_dir/gdspx$VERSION"  || exit
         rm -rf "$tmp_dir/Godot.app"
     else 
         echo "Unsupported platform for editor download: $platform"
@@ -203,11 +184,11 @@ build_editor(){
     dstBinPath="$GOPATH/bin/gdspx$VERSION"
     echo "Destination binary path: $dstBinPath"
     if [ "$OS" = "Windows_NT" ]; then
-        cp bin/godot.windows.editor.dev.$ARCH $dstBinPath"_win.exe"
+        cp bin/godot.windows.editor.dev.$ARCH $dstBinPath".exe"
     elif [[ "$(uname)" == "Linux" ]]; then
-        cp bin/godot.linuxbsd.editor.dev.$ARCH $dstBinPath"_linux"
+        cp bin/godot.linuxbsd.editor.dev.$ARCH $dstBinPath
     else
-        cp bin/godot.macos.editor.dev.$ARCH $dstBinPath"_darwin"
+        cp bin/godot.macos.editor.dev.$ARCH $dstBinPath
     fi
 }
 
@@ -222,7 +203,7 @@ elif [ "$EDITOR_ONLY" = true ]; then
     build_editor || exit
 else 
     # build template
-    build_template "$PLATFORM" || exit
+    build_template || exit
 fi 
 cd $PROJ_DIR
 

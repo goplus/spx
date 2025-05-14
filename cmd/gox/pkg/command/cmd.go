@@ -12,6 +12,8 @@ import (
 	"github.com/goplus/spx/cmd/gox/pkg/util"
 )
 
+const PcExportName = "gdexport"
+
 // CmdTool represents the main command tool for managing project operations
 type CmdTool struct {
 	// Project information
@@ -39,6 +41,12 @@ type CmdTool struct {
 
 	// Command line arguments
 	Args ExtraArgs // Command line arguments
+
+	// runtime mode
+	RuntimeMode    bool
+	RuntimeTempDir string
+	RuntimePckPath string
+	RuntimeCmdPath string
 }
 
 // RunCmd executes the specified command with the given parameters
@@ -98,6 +106,10 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 		return nil
 	}
 
+	if cmd.Args.CmdName == "runi" {
+		cmd.RuntimeMode = true
+	}
+
 	// Check environment
 	err = cmd.CheckEnv()
 	if err != nil {
@@ -125,7 +137,7 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 
 	// Handle build commands
 	switch cmd.Args.CmdName {
-	case "editor", "run", "export", "build":
+	case "editor", "run", "export", "build", "runi":
 		cmd.BuildDll()
 	case "buildweb", "runweb", "exportweb":
 		cmd.BuildWasm()
@@ -139,6 +151,8 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 		err = util.RunCommandInDir(cmd.ProjectDir, cmd.CmdPath, args...)
 	case "run":
 		err = util.RunCommandInDir(cmd.ProjectDir, cmd.CmdPath, cmd.Args.String()...)
+	case "runi":
+		err = cmd.RunPackMode()
 	case "export":
 		err = cmd.Export()
 	case "runweb":

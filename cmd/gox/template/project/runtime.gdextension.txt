@@ -1,0 +1,15 @@
+[configuration]
+
+entry_symbol = "loadExtension"
+compatibility_minimum = 4.1
+
+[libraries]
+
+macos.debug.x86_64 = "gdspx-darwin-amd64.dylib"
+macos.release.x86_64 = "gdspx-darwin-amd64.dylib"
+macos.debug.arm64 = "gdspx-darwin-arm64.dylib"
+macos.release.arm64 = "gdspx-darwin-arm64.dylib"
+windows.debug.x86_64 = "gdspx-windows-amd64.dll"
+windows.release.x86_64 = "gdspx-windows-amd64.dll"
+linux.debug.x86_64 = "gdspx-linux-amd64.so"
+linux.release.x86_64 = "gdspx-linux-amd64.so"

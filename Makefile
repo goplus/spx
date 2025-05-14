@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := pc
 
 CURRENT_PATH=$(shell pwd)
-.PHONY: engine init initweb fmt gen upload templates cmd cmdweb test
+.PHONY: engine init initweb fmt gen upload templates cmd cmdweb test setuppack
 
 # Format code
 fmt:
@@ -62,6 +62,23 @@ releaseweb:
 	 echo "$(CURRENT_PATH)/spx_web.zip has been created")
 	rm -rf $(CURRENT_PATH)/.tmp
 
+setuppack:
+	mkdir -p $(CURRENT_PATH)/.tmp/web && \
+	cp $(CURRENT_PATH)/cmd/gox/template/project/runtime.gdextension.txt "$(GOPATH)/bin/runtime.gdextension"
+	(cd $(CURRENT_PATH)/.tmp/web && \
+	 mkdir -p assets && \
+	 echo "{\"map\":{\"width\":480,\"height\":360}}" > assets/index.json && \
+	 echo "" > main.spx && \
+	 rm -rf ./project/.builds/*web && \
+	 mkdir -p "$(GOPATH)/bin" && \
+	 spx export && \
+	 TEMP_VERSION=$$(cat "$(CURRENT_PATH)/cmd/gox/template/version") && \
+	 OUTPUT_PCK="$(GOPATH)/bin/gdspxrt$$TEMP_VERSION.pck" && \
+	 cp ./project/.builds/pc/gdexport.pck "$$OUTPUT_PCK" && \
+	 sleep 1 && \
+	 echo "$$OUTPUT_PCK has been created")
+	rm -rf $(CURRENT_PATH)/.tmp
+
 test:
 	cd test/All && spx run . && cd $(CURRENT_PATH) 
 
@@ -77,7 +94,7 @@ runweb:
 	fi	
 	make cmdweb && cd $(path) && spx clear && spx runweb -serveraddr=":8106" && cd $(CURRENT_PATH) 
 
-	
+
 init:
 	make cmd && make download
 
