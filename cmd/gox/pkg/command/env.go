@@ -16,7 +16,7 @@ import (
 	"github.com/goplus/spx/cmd/gox/pkg/util"
 )
 
-const ENV_NAME = "gdspx"
+var ENV_NAME = "gdspx"
 
 // setupPaths sets up project paths based on command line arguments
 func (cmd *CmdTool) setupPaths(dstRelDir string) error {
@@ -86,6 +86,14 @@ func (pself *CmdTool) SetupEnv(version string, fs embed.FS, fsRelDir string, pro
 	}
 	pself.ProjectDir, _ = filepath.Abs(path.Join(pself.TargetDir, pself.ProjectRelPath))
 	pself.GoDir, _ = filepath.Abs(pself.ProjectDir + "/go")
+
+	// setup runtime path
+	_, pself.RuntimeCmdPath, _ = impl.CheckAndGetAppPath(pself.GoBinPath, "gdspxrt", pself.Version)
+	pckName := pself.RuntimeCmdPath
+	pckName = pckName[:len(pckName)-len(pself.BinPostfix)]
+	pself.RuntimePckPath = pckName + ".pck"
+	pself.RuntimeTempDir, _ = filepath.Abs(path.Join(pself.TargetDir, ".temp"))
+	os.Mkdir(pself.RuntimeTempDir, 0755)
 
 	var libraryName = fmt.Sprintf(ENV_NAME+"-%v-%v", GOOS, GOARCH)
 	switch GOOS {
@@ -212,7 +220,7 @@ func (pself *CmdTool) CheckEnv() error {
 }
 
 func (pself *CmdTool) ShouldReimport() bool {
-	return !util.IsFileExist(path.Join(pself.ProjectDir, ".godot/uid_cache.bin"))
+	return !util.IsFileExist(path.Join(pself.ProjectDir, ".godot/uid_cache.bin")) && !pself.RuntimeMode
 }
 
 func (pself *CmdTool) Reimport() {

@@ -40,11 +40,11 @@ func downloadPack(dstDir, tagName, postfix string) error {
 func CheckAndGetAppPath(gobinDir, tag, version string) (string, string, error) {
 	binPostfix := ""
 	if runtime.GOOS == "windows" {
-		binPostfix = "_win.exe"
+		binPostfix = ".exe"
 	} else if runtime.GOOS == "darwin" {
-		binPostfix = "_darwin"
+		binPostfix = ""
 	} else if runtime.GOOS == "linux" {
-		binPostfix = "_linux"
+		binPostfix = ""
 	}
 
 	tagName := tag + version

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -17,6 +18,21 @@ type projConf struct {
 
 func (pself *CmdTool) Run(arg string) (err error) {
 	return util.RunCommandInDir(pself.ProjectDir, pself.CmdPath, arg)
+}
+
+func (pself *CmdTool) RunPackMode() error {
+	// copy libs
+	dllPath := path.Join(pself.RuntimeTempDir, filepath.Base(pself.LibPath))
+	util.CopyFile(pself.LibPath, dllPath)
+	// copy configs
+	extensionPath := path.Join(pself.RuntimeTempDir, "runtime.gdextension")              // copy runtime
+	util.CopyFile(path.Join(pself.ProjectDir, "runtime.gdextension.txt"), extensionPath) // copy gdextension
+	args := []string{}
+	args = append(args, "--path")
+	args = append(args, pself.RuntimeTempDir)
+	args = append(args, "--gdextpath")
+	args = append(args, extensionPath)
+	return util.RunCommandInDir(pself.RuntimeTempDir, pself.RuntimeCmdPath, args...)
 }
 
 func (pself *CmdTool) RunWeb() error {

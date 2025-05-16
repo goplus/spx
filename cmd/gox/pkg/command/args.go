@@ -61,6 +61,7 @@ func (pself *CmdTool) CheckCmd(ext ...string) bool {
 		"build", "run", "export",
 		"runweb", "buildweb", "exportweb", "stopweb",
 		"runm", "exportbot", "exportapk", "exportios",
+		"runi",
 	}
 	cmds = append(cmds, ext...)
 

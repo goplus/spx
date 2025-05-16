@@ -14,7 +14,7 @@ import (
 )
 
 {{ range $i, $f := $view.CollectGDExtensionICallbackFunctions -}}
-func gdspx{{ trimPrefix $f.Name "GDExtensionSpxCallback" }}(this js.Value, args []js.Value) interface{} {
+func gdspx{{ trimPrefix $f.Name "GDExtensionSpxCallback" }}(this js.Value, args []js.Value) any {
 	if (callbacks.{{ trimPrefix $f.Name "GDExtensionSpxCallback" }} == nil){
 		return nil
 	}

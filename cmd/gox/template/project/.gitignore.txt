@@ -26,3 +26,4 @@
 # user specify ignores
 # ...
 /assets/**/*.import
+/runtime.gdextension.txt
