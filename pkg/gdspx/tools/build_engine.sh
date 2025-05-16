@@ -32,13 +32,15 @@ COMMON_ARGS='debug_symbols=false
             module_text_server_fb_enabled=true 
             modules_enabled_by_default=false 
             module_gdscript_enabled=true 
-            module_text_server_fb_enabled=true 
             module_freetype_enabled=true 
             module_minimp3_enabled=true 
             module_svg_enabled=true 
             module_jpg_enabled=true 
             module_ogg_enabled=true 
             module_godot_physics_2d_enabled=true '
+
+EXTRA_OPT_ARGS='disable_3d=true'
+
 
 build_template() {
     prepare_env
@@ -105,7 +107,7 @@ build_template() {
             exit 0
         fi 
         # build web templates
-        scons platform=web target=template_release threads=no $COMMON_ARGS
+        scons platform=web target=template_release threads=no $COMMON_ARGS $EXTRA_OPT_ARGS
         echo "Wait zip file to finished ..."
         sleep 2
         cp bin/godot.web.template_release.wasm32.zip bin/web_dlink_debug.zip
@@ -132,7 +134,7 @@ download_editor() {
 
     # download engine pack
     url=$url_prefix"gdspxrt.pck"
-    curl -L -o "$dst_dir/gdspxrt$VERSION.pck" "$url" || exit
+    curl -L -o "$dst_dir/gdspxrt.pck" "$url" || exit
 
     if [ "$platform" = "linux" ]; then
         zip_name="editor-linux-"$arch".zip"

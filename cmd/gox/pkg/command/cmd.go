@@ -155,10 +155,16 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 		err = cmd.RunPackMode()
 	case "export":
 		err = cmd.Export()
+	case "exportwebruntime":
+		err = cmd.ExportWebRuntime()
 	case "runweb":
 		err = cmd.RunWeb()
 	case "exportweb":
 		err = cmd.ExportWeb()
+	case "runwebeditor":
+		err = cmd.RunWebEditor()
+	case "exportwebeditor":
+		err = cmd.ExportWebEditor()
 	case "exportapk":
 		err = cmd.ExportApk()
 	case "exportios":
