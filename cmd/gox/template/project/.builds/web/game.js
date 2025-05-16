@@ -8,6 +8,8 @@ class GameApp {
         this.game = null;
         this.persistentPath = '/home/web_user';
         this.tempZipPath = '/tmp/preload.zip';
+        this.packName =  'godot.editor.pck';
+        this.isRuntimeMode = config.isRuntimeMode;
         this.tempGamePath = '/home/spx_game_cache';
         this.projectInstallName = config.projectName || "Game";
         this.logLevel = config.logLevel || 0;
@@ -94,10 +96,15 @@ class GameApp {
             console.error("project already loaded!")
         }
         this.isEditor = true
+        if(this.isRuntimeMode){
+            await this.checkEngineCache()
+            resolve()
+            return 
+        }
 
         let url = this.assetURLs["engineres.zip"]
         let engineData = await (await fetch(url)).arrayBuffer();
-
+      
         try {
             this.onProgress(0.1);
             this.clearPersistence(this.tempZipPath);
@@ -191,13 +198,21 @@ class GameApp {
         }
 
         this.isEditor = false
-        const args = [
-            "--path",
-            this.getInstallPath(),
-            "--editor-pid",
-            "0",
-            "res://main.tscn",
-        ];
+        let args = []
+        if (!this.isRuntimeMode){
+            args = [
+                "--path",
+                this.getInstallPath(),
+                "--editor-pid",
+                "0",
+                "res://main.tscn",
+            ];
+        }else{
+            args = [ '--main-pack', 
+                this.tempGamePath+ "/" + this.packName,
+            ];
+        }
+           
         this.logVerbose("RunGame ", args);
         if (this.game) {
             this.logVerbose('A game is already running. Close it first');
@@ -232,6 +247,11 @@ class GameApp {
             if (!file.dir) {
                 datas.push({ "path": filePath, "data": content })
             }
+        }
+        if (this.isRuntimeMode){
+            let url = this.assetURLs["godot.editor.pck"]
+            let pckBuffer = await (await fetch(url)).arrayBuffer();
+            datas.push({ "path": this.packName, "data": pckBuffer })
         }
         curGame.unpackGameData(this.tempGamePath, datas)
     }

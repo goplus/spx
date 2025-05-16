@@ -57,8 +57,7 @@ func (pself *CmdTool) ExportBuild(platform string) error {
 	}
 	return err
 }
-
-func (pself *CmdTool) ExportWeb() error {
+func (pself *CmdTool) ExportWebEditor() error {
 	pself.Clear()
 	// copy project files
 	util.CopyDir(pself.ProjectFS, "template/project", pself.ProjectDir, true)
@@ -84,6 +83,42 @@ func (pself *CmdTool) ExportWeb() error {
 	return nil
 }
 
+func (pself *CmdTool) ExportWeb() error {
+	pself.Clear()
+	// copy project files
+	util.CopyDir(pself.ProjectFS, "template/project", pself.ProjectDir, true)
+	dir := pself.TargetDir
+	util.SetupFile(false, path.Join(dir, ".gitignore"), pself.GitignoreTxt)
+	os.Rename(path.Join(dir, ".gitignore.txt"), path.Join(dir, ".gitignore"))
+
+	editorZipPath := path.Join(pself.GoBinPath, "gdspxrt_web"+pself.Version+".zip")
+	dstPath := path.Join(pself.ProjectDir, ".builds/web")
+	os.MkdirAll(dstPath, os.ModePerm)
+	if util.IsFileExist(editorZipPath) {
+		util.Unzip(editorZipPath, dstPath)
+	} else {
+		return errors.New("editor zip file not found: " + editorZipPath)
+	}
+	os.Rename(path.Join(dstPath, "godot.editor.html"), path.Join(dstPath, "index.html"))
+
+	util.CopyDir(pself.ProjectFS, "template/project/.builds/web", pself.WebDir, true)
+	pack.PackProject(pself.TargetDir, path.Join(pself.WebDir, "game.zip"))
+
+	//pack.PackEngineRes(pself.ProjectFS, pself.WebDir)
+	util.CopyFile(pself.getWasmPath(), path.Join(pself.WebDir, "gdspx.wasm"))
+	pack.SaveEngineHash(pself.WebDir)
+	return nil
+}
+
+func (pself *CmdTool) ExportWebRuntime() error {
+	targetDir := path.Join(pself.ProjectDir, ".builds/webi")
+	targetPath := path.Join(targetDir, "godot.editor.html")
+	platformName := "Web"
+	os.Mkdir(targetDir, 0755)
+	println("ExportWebRuntime")
+	return util.RunCommandInDir(pself.ProjectDir, pself.CmdPath, "--headless", "--quit", "--path", pself.ProjectDir, "--export-debug", platformName, targetPath)
+}
+
 func (pself *CmdTool) Export() error {
 	targetDir := path.Join(pself.ProjectDir, ".builds/pc")
 	targetPath := path.Join(targetDir, PcExportName)
@@ -93,6 +128,7 @@ func (pself *CmdTool) Export() error {
 		platformName = "Win"
 	} else if runtime.GOOS == "darwin" {
 		platformName = "Mac"
+		targetPath += ".app"
 	} else if runtime.GOOS == "linux" {
 		platformName = "Linux"
 	}
