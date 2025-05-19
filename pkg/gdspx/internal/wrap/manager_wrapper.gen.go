@@ -694,6 +694,17 @@ func (pself *spriteMgr) GetMaterialParams(obj Object, effect string) float64 {
 	retValue := CallSpriteGetMaterialParams(arg0, arg1)
 	return ToFloat64(retValue)
 }
+func (pself *spriteMgr) SetMaterialParamsVec(obj Object, effect string, x float64, y float64, z float64, w float64) {
+	arg0 := ToGdObj(obj)
+	arg1Str := C.CString(effect)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	arg2 := ToGdFloat(x)
+	arg3 := ToGdFloat(y)
+	arg4 := ToGdFloat(z)
+	arg5 := ToGdFloat(w)
+	CallSpriteSetMaterialParamsVec(arg0, arg1, arg2, arg3, arg4, arg5)
+}
 func (pself *spriteMgr) SetMaterialParamsVec4(obj Object, effect string, vec4 Vec4) {
 	arg0 := ToGdObj(obj)
 	arg1Str := C.CString(effect)

@@ -159,6 +159,7 @@ type ISpriteMgr interface {
 	GetMaterialShader(obj Object) string
 	SetMaterialParams(obj Object, effect string, amount float64)
 	GetMaterialParams(obj Object, effect string) float64
+	SetMaterialParamsVec(obj Object, effect string, x float64, y float64, z float64, w float64)
 	SetMaterialParamsVec4(obj Object, effect string, vec4 Vec4)
 	GetMaterialParamsVec4(obj Object, effect string) Vec4
 	SetMaterialParamsColor(obj Object, effect string, color Color)

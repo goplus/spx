@@ -382,6 +382,8 @@ func (pself *spriteMgrImpl) GetMaterialParams(obj gdx.Object, effect string) flo
 	var _ret1 float64
 	return _ret1
 }
+func (pself *spriteMgrImpl) SetMaterialParamsVec(obj gdx.Object, effect string, x float64, y float64, z float64, w float64) {
+}
 func (pself *spriteMgrImpl) SetMaterialParamsVec4(obj gdx.Object, effect string, vec4 Vec4) {}
 func (pself *spriteMgrImpl) GetMaterialParamsVec4(obj gdx.Object, effect string) Vec4 {
 	var _ret1 Vec4

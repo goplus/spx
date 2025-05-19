@@ -370,6 +370,9 @@ func (pself *Sprite) SetMaterialParams(effect string, amount float64) {
 func (pself *Sprite) SetMaterialParamsColor(effect string, color Color) {
 }
 
+func (pself *Sprite) SetMaterialParamsVec(effect string, x float64, y float64, z float64, w float64) {
+}
+
 func (pself *Sprite) SetMaterialParamsVec4(effect string, vec4 Vec4) {
 }
 

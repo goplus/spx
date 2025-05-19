@@ -344,6 +344,10 @@ func (pself *Sprite) SetMaterialParamsColor(effect string, color Color) {
 	SpriteMgr.SetMaterialParamsColor(pself.Id, effect, color)
 }
 
+func (pself *Sprite) SetMaterialParamsVec(effect string, x float64, y float64, z float64, w float64) {
+	SpriteMgr.SetMaterialParamsVec(pself.Id, effect, x, y, z, w)
+}
+
 func (pself *Sprite) SetMaterialParamsVec4(effect string, vec4 Vec4) {
 	SpriteMgr.SetMaterialParamsVec4(pself.Id, effect, vec4)
 }

@@ -125,6 +125,7 @@ type GDExtensionInterface struct {
 	SpxSpriteGetMaterialShader               GDExtensionSpxSpriteGetMaterialShader
 	SpxSpriteSetMaterialParams               GDExtensionSpxSpriteSetMaterialParams
 	SpxSpriteGetMaterialParams               GDExtensionSpxSpriteGetMaterialParams
+	SpxSpriteSetMaterialParamsVec            GDExtensionSpxSpriteSetMaterialParamsVec
 	SpxSpriteSetMaterialParamsVec4           GDExtensionSpxSpriteSetMaterialParamsVec4
 	SpxSpriteGetMaterialParamsVec4           GDExtensionSpxSpriteGetMaterialParamsVec4
 	SpxSpriteSetMaterialParamsColor          GDExtensionSpxSpriteSetMaterialParamsColor
@@ -351,6 +352,7 @@ func (x *GDExtensionInterface) loadProcAddresses() {
 	x.SpxSpriteGetMaterialShader = (GDExtensionSpxSpriteGetMaterialShader)(dlsymGD("spx_sprite_get_material_shader"))
 	x.SpxSpriteSetMaterialParams = (GDExtensionSpxSpriteSetMaterialParams)(dlsymGD("spx_sprite_set_material_params"))
 	x.SpxSpriteGetMaterialParams = (GDExtensionSpxSpriteGetMaterialParams)(dlsymGD("spx_sprite_get_material_params"))
+	x.SpxSpriteSetMaterialParamsVec = (GDExtensionSpxSpriteSetMaterialParamsVec)(dlsymGD("spx_sprite_set_material_params_vec"))
 	x.SpxSpriteSetMaterialParamsVec4 = (GDExtensionSpxSpriteSetMaterialParamsVec4)(dlsymGD("spx_sprite_set_material_params_vec4"))
 	x.SpxSpriteGetMaterialParamsVec4 = (GDExtensionSpxSpriteGetMaterialParamsVec4)(dlsymGD("spx_sprite_get_material_params_vec4"))
 	x.SpxSpriteSetMaterialParamsColor = (GDExtensionSpxSpriteSetMaterialParamsColor)(dlsymGD("spx_sprite_set_material_params_color"))
