@@ -23,7 +23,11 @@ mv $appname $GOPATH/bin/
 if [ "$1" = "--web" ]; then
     cd ../igox || exit
     go mod tidy
-    GOOS=js GOARCH=wasm go build  -trimpath -ldflags "-s -w"  -o $GOPATH/bin/igdspx_raw.wasm
-    wasm-opt -Oz --enable-bulk-memory -o $GOPATH/bin/igdspx.wasm $GOPATH/bin/igdspx_raw.wasm
+    if [ "$2" = "--opt" ]; then
+        GOOS=js GOARCH=wasm go build  -trimpath -ldflags "-s -w"  -o $GOPATH/bin/igdspx_raw.wasm
+        wasm-opt -Oz --enable-bulk-memory -o $GOPATH/bin/igdspx.wasm $GOPATH/bin/igdspx_raw.wasm
+    else 
+        GOOS=js GOARCH=wasm go build -o $GOPATH/bin/igdspx.wasm
+    fi 
     cd ../gox || exit
 fi

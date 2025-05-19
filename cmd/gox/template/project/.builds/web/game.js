@@ -8,6 +8,8 @@ class GameApp {
         this.game = null;
         this.persistentPath = '/home/web_user';
         this.tempZipPath = '/tmp/preload.zip';
+        this.packName =  'godot.editor.pck';
+        this.isRuntimeMode = config.isRuntimeMode;
         this.tempGamePath = '/home/spx_game_cache';
         this.projectInstallName = config.projectName || "Game";
         this.logLevel = config.logLevel || 0;
@@ -94,10 +96,15 @@ class GameApp {
             console.error("project already loaded!")
         }
         this.isEditor = true
+        if(this.isRuntimeMode){
+            await this.checkEngineCache()
+            resolve()
+            return 
+        }
 
         let url = this.assetURLs["engineres.zip"]
         let engineData = await (await fetch(url)).arrayBuffer();
-
+      
         try {
             this.onProgress(0.1);
             this.clearPersistence(this.tempZipPath);
@@ -136,15 +143,20 @@ class GameApp {
     }
 
     async stopProject(resolve, reject) {
-        if (this.editor == null) {
-            resolve()
-            return
+        if (!this.isRuntimeMode) {
+            if (this.editor == null) {
+                resolve()
+                return
+            }
         }
+ 
         this.stopGameTask++
         await this.stopGame(() => {
             this.isEditor = true
             this.onProgress(1.0);
-            this.editor.requestQuit()
+            if (this.editor != null){
+                this.editor.requestQuit()
+            }
             this.logVerbose("on editor quit")
             this.editor = null
             this.exitFunc = null
@@ -191,13 +203,21 @@ class GameApp {
         }
 
         this.isEditor = false
-        const args = [
-            "--path",
-            this.getInstallPath(),
-            "--editor-pid",
-            "0",
-            "res://main.tscn",
-        ];
+        let args = []
+        if (!this.isRuntimeMode){
+            args = [
+                "--path",
+                this.getInstallPath(),
+                "--editor-pid",
+                "0",
+                "res://main.tscn",
+            ];
+        }else{
+            args = [ '--main-pack', 
+                this.tempGamePath+ "/" + this.packName,
+            ];
+        }
+           
         this.logVerbose("RunGame ", args);
         if (this.game) {
             this.logVerbose('A game is already running. Close it first');
@@ -233,6 +253,11 @@ class GameApp {
                 datas.push({ "path": filePath, "data": content })
             }
         }
+        if (this.isRuntimeMode){
+            let url = this.assetURLs["godot.editor.pck"]
+            let pckBuffer = await (await fetch(url)).arrayBuffer();
+            datas.push({ "path": this.packName, "data": pckBuffer })
+        }
         curGame.unpackGameData(this.tempGamePath, datas)
     }
 
@@ -246,6 +271,7 @@ class GameApp {
             return
         }
         this.stopGameResolve = () => {
+            this.game = null
             resolve();
             this.stopGameResolve = null
         }

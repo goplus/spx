@@ -88,7 +88,7 @@ func (pself *CmdTool) SetupEnv(version string, fs embed.FS, fsRelDir string, pro
 	pself.GoDir, _ = filepath.Abs(pself.ProjectDir + "/go")
 
 	// setup runtime path
-	_, pself.RuntimeCmdPath, _ = impl.CheckAndGetAppPath(pself.GoBinPath, "gdspxrt", pself.Version)
+	pself.RuntimeCmdPath = path.Join(pself.GoBinPath, "gdspxrt"+pself.Version+pself.BinPostfix)
 	pckName := pself.RuntimeCmdPath
 	pckName = pckName[:len(pckName)-len(pself.BinPostfix)]
 	pself.RuntimePckPath = pckName + ".pck"
