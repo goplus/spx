@@ -1,6 +1,6 @@
 module github.com/goplus/spx/cmd/gox
 
-go 1.21.3
+go 1.23.0
 
 require github.com/goplus/spx v0.0.0-00010101000000-000000000000
 

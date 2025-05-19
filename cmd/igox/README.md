@@ -11,5 +11,5 @@ If we want to upgrade deps like [spx](https://github.com/goplus/spx). First Modi
 ```sh
 go mod tidy
 go install github.com/goplus/igop/cmd/qexp@latest # `qexp` is required to do `go generate`
-go generate # `qexp` will update `pkg/github.com/goplus/spx/export.go`, see detail in `main.go` (`//go:generate qexp ...`)
+GOOS=js GOARCH=wasm go generate -v . # `qexp` will update `pkg/github.com/goplus/spx/export.go`, see detail in `main.go` (`//go:generate qexp ...`)
 ```
