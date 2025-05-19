@@ -104,8 +104,8 @@ func createUI[T any](prefabName string, is_engine bool) *T {
 	id := UiMgr.CreateNode(getUiPath(name, is_engine))
 	node := nodeValue.Addr().Interface().(IUiNode)
 	node.SetId(id)
-	node.onCreate()
 	Id2UiNodes[id] = node
+	node.onCreate()
 	node.OnStart()
 	return nodeValue.Addr().Interface().(*T)
 }
