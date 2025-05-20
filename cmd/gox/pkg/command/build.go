@@ -62,6 +62,10 @@ func (pself *CmdTool) BuildDll() error {
 	rawdir, _ := os.Getwd()
 	tagStr := pself.genGo()
 
+	// fix https://github.com/goplus/spx/issues/619
+	// fatal error: non-Go code set up signal handler without SA_ONSTACK flag
+	os.Setenv("GODEBUG", "asyncpreemptoff=1")
+
 	// build dll
 	os.Chdir(pself.GoDir)
 	envs := []string{"CGO_ENABLED=1"}
