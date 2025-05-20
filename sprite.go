@@ -169,6 +169,19 @@ type Sprite interface {
 	Visible() bool
 	Xpos() float64
 	Ypos() float64
+
+	Volume() float64
+	SetVolume(volume float64)
+	ChangeVolume(delta float64)
+	GetSoundEffect(kind SoundEffectKind) float64
+	SetSoundEffect(kind SoundEffectKind, value float64)
+	ChangeSoundEffect(kind SoundEffectKind, delta float64)
+	Play__0(media Sound, action *PlayOptions)
+	Play__1(media Sound, wait bool)
+	Play__2(media Sound)
+	Play__3(media SoundName)
+	Play__4(media SoundName, wait bool)
+	Play__5(media SoundName, action *PlayOptions)
 }
 
 type SpriteName = string
