@@ -501,5 +501,6 @@ func (p *baseObj) _setMaterialParamsVec4(effect string, val mathf.Vec4) {
 		p.syncSprite.SetMaterialShader(shaderPath)
 		p.hasShader = true
 	}
-	p.syncSprite.SetMaterialParamsVec4(effect, val)
+
+	p.syncSprite.SetMaterialParamsVec(effect, val.X, val.Y, val.Z, val.W)
 }

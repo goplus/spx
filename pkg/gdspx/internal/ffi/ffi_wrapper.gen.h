@@ -333,6 +333,9 @@ void cgo_callfn_GDExtensionSpxSpriteSetMaterialParams(const GDExtensionSpxSprite
 void cgo_callfn_GDExtensionSpxSpriteGetMaterialParams(const GDExtensionSpxSpriteGetMaterialParams fn, GdObj obj, GdString effect, GdFloat* ret_val) {
 	fn(obj, effect,ret_val);
 }
+void cgo_callfn_GDExtensionSpxSpriteSetMaterialParamsVec(const GDExtensionSpxSpriteSetMaterialParamsVec fn, GdObj obj, GdString effect, GdFloat x, GdFloat y, GdFloat z, GdFloat w) {
+	fn(obj, effect, x, y, z, w);
+}
 void cgo_callfn_GDExtensionSpxSpriteSetMaterialParamsVec4(const GDExtensionSpxSpriteSetMaterialParamsVec4 fn, GdObj obj, GdString effect, GdVec4 vec4) {
 	fn(obj, effect, vec4);
 }

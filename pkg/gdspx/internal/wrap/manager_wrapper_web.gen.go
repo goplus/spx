@@ -625,6 +625,15 @@ func (pself *spriteMgr) GetMaterialParams(obj Object, effect string) float64 {
 	_retValue := API.SpxSpriteGetMaterialParams.Invoke(arg0, arg1)
 	return JsToGdFloat(_retValue)
 }
+func (pself *spriteMgr) SetMaterialParamsVec(obj Object, effect string, x float64, y float64, z float64, w float64) {
+	arg0 := JsFromGdObj(obj)
+	arg1 := JsFromGdString(effect)
+	arg2 := JsFromGdFloat(x)
+	arg3 := JsFromGdFloat(y)
+	arg4 := JsFromGdFloat(z)
+	arg5 := JsFromGdFloat(w)
+	API.SpxSpriteSetMaterialParamsVec.Invoke(arg0, arg1, arg2, arg3, arg4, arg5)
+}
 func (pself *spriteMgr) SetMaterialParamsVec4(obj Object, effect string, vec4 Vec4) {
 	arg0 := JsFromGdObj(obj)
 	arg1 := JsFromGdString(effect)
