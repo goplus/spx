@@ -60,15 +60,8 @@ func CheckAndGetAppPath(gobinDir, tag, version string) (string, string, error) {
 	CmdPath := path.Join(dstDir, dstFileName)
 	info, err := os.Stat(CmdPath)
 	if os.IsNotExist(err) {
-		println("Downloading pack...")
-		err := downloadPack(dstDir, tagName, binPostfix)
-		if err != nil {
-			print("downloadPack error:" + err.Error())
-			return binPostfix, CmdPath, err
-		}
-		if err := os.Chmod(CmdPath, 0755); err != nil {
-			return binPostfix, CmdPath, err
-		}
+		println("Engine is not exist , please download or build engine from source ...", CmdPath)
+		os.Exit(1)
 	} else if err != nil {
 		return binPostfix, "", err
 	} else {
