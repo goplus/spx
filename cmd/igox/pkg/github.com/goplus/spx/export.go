@@ -114,7 +114,7 @@ func init() {
 			"Sched":                    reflect.ValueOf(q.Sched),
 			"SchedNow":                 reflect.ValueOf(q.SchedNow),
 			"SetDebug":                 reflect.ValueOf(q.SetDebug),
-			"WaitUtil":                 reflect.ValueOf(q.WaitUtil),
+			"WaitUntil":                reflect.ValueOf(q.WaitUntil),
 		},
 		TypedConsts: map[string]igop.TypedConst{
 			"AllOtherScripts":      {reflect.TypeOf(q.AllOtherScripts), constant.MakeInt64(int64(q.AllOtherScripts))},

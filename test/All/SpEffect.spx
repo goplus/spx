@@ -10,7 +10,7 @@ func effectTest(eff EffectKind, start, end float64, step float64, waitTime float
     }
 	say "done"
 	wait 0.5
-	ClearGraphEffects
+	ClearGraphicEffects
 }
 func testCloneEffect() {
 	wait 0.5

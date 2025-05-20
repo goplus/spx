@@ -53,8 +53,8 @@ onMsg "testLook", => {
 	setEffect GhostEffect, 50
 	wait 0.2
 
-	// 11. Sprite::ClearGraphEffects	
-	clearGraphEffects()
+	// 11. Sprite::ClearGraphicEffects	
+	clearGraphicEffects()
 	wait 0.2
 
 	// 12. Sprite::Hide

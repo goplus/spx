@@ -924,7 +924,7 @@ func RepeatUntil(condition func() bool, call func()) {
 	}
 }
 
-func WaitUtil(condition func() bool) {
+func WaitUntil(condition func() bool) {
 	if condition == nil {
 		return
 	}
@@ -1383,8 +1383,8 @@ func (p *Game) ChangeEffect(kind EffectKind, delta float64) {
 	p.baseObj.changeEffect(kind, delta)
 }
 
-func (p *Game) ClearGraphEffects() {
-	p.baseObj.clearGraphEffects()
+func (p *Game) ClearGraphicEffects() {
+	p.baseObj.clearGraphicEffects()
 }
 
 // -----------------------------------------------------------------------------
