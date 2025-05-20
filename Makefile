@@ -26,7 +26,10 @@ web:
 	make cmdweb && ./pkg/gdspx/tools/build_engine.sh -p web -e
 # Build web engine template
 webpack: 
-	./pkg/gdspx/tools/build_engine.sh -p web
+	make pc &&\
+	./pkg/gdspx/tools/build_engine.sh -p web &&\
+	make cmdweb &&\
+	make setuppack
 
 # Build android engine
 android:
@@ -66,6 +69,7 @@ releaseweb:
 	rm -rf $(CURRENT_PATH)/.tmp
 
 setuppack:
+	rm -rf $(CURRENT_PATH)/.tmp/web && \
 	mkdir -p $(CURRENT_PATH)/.tmp/web && \
 	cp $(CURRENT_PATH)/cmd/gox/template/project/runtime.gdextension.txt "$(GOPATH)/bin/runtime.gdextension"
 	(cd $(CURRENT_PATH)/.tmp/web && \
