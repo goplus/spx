@@ -39,7 +39,7 @@ onKey KeyG, => {
 }
 
 onKey KeyJ, => {
-	clearGraphEffects
+	clearGraphicEffects
 }
 
 onKey KeyE, => {

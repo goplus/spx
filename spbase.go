@@ -411,7 +411,7 @@ func (p *baseObj) changeEffect(kind EffectKind, delta float64) {
 	p.setEffect(kind, newVal)
 }
 
-func (p *baseObj) clearGraphEffects() {
+func (p *baseObj) clearGraphicEffects() {
 	p.greffUniforms = nil
 	effs := p.requireGreffUniforms()
 	for i := 0; i < int(enumNumOfEffect); i++ {

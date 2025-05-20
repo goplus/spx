@@ -77,7 +77,7 @@ type Sprite interface {
 	ChangeXpos(dx float64)
 	ChangeXYpos(dx, dy float64)
 	ChangeYpos(dy float64)
-	ClearGraphEffects()
+	ClearGraphicEffects()
 	CostumeHeight() float64
 	CostumeIndex() int
 	CostumeName() SpriteCostumeName
@@ -1393,8 +1393,8 @@ func (p *SpriteImpl) ChangeEffect(kind EffectKind, delta float64) {
 	p.baseObj.changeEffect(kind, delta)
 }
 
-func (p *SpriteImpl) ClearGraphEffects() {
-	p.baseObj.clearGraphEffects()
+func (p *SpriteImpl) ClearGraphicEffects() {
+	p.baseObj.clearGraphicEffects()
 }
 
 // -----------------------------------------------------------------------------
