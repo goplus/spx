@@ -40,7 +40,7 @@
 		document.getElementById('startNewGameBtn').addEventListener('click', startNewGame);
 		document.getElementById('startGameBtn').addEventListener('click', startGame);
 		document.getElementById('stopGameBtn').addEventListener('click', stopGame);
-
+		runnerWindow = document.getElementById('runnerFrame').contentWindow;
 		function onProgress(value) {
 			document.getElementById('progress-bar').value = value;
 			if (value >= 1) {
@@ -63,13 +63,12 @@
 		}
 
 		async function startProject(zipUrl) {
-			runnerWindow = document.getElementById('runnerFrame').contentWindow;
 			runnerWindow.addEventListener('onProgress', (event) => {
 				onProgress(event.detail.progress)
 			})
 
 			let buffer = await (await (fetch(zipUrl))).arrayBuffer();
-			runnerWindow.startGame(buffer);
+			await runnerWindow.startGame(buffer);
 		}
 	</script>
 </body>

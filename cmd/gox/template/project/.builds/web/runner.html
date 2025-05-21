@@ -76,7 +76,7 @@
 
 
 
-		window.startGame = async (buffer, assetURLs = null) => {
+		window.startGame = async (buffer, assetURLs = null, onSpxReady = null) => {
 			isShowEditor = false
 			const config = {
 				'projectName': "spx_game",
@@ -97,9 +97,21 @@
 			if (assetURLs != null) {
 				config.assetURLs = assetURLs
 			}
+
 			if (gameApp != null) {
 				await gameApp.StopProject();
 			}
+			
+			// load wasm
+			let url = config.assetURLs["gdspx.wasm"]
+			const go = new Go();
+			const { instance } = await WebAssembly.instantiateStreaming(fetch(url), go.importObject);
+			go.run(instance);
+			if (onSpxReady != null) {
+				onSpxReady()
+			}
+
+			// try install project and run game
 			gameApp = new GameApp(config);
 			await gameApp.StartProject();
 			await gameApp.RunGame();
@@ -116,7 +128,7 @@
 		}
 
 		// Inform the parent window that the runner is ready (methods on the window object are callable)
-		window.dispatchEvent(new Event('runnerReady'))
+		window.dispatchEvent(new Event('runnerReady'));
 	</script>
 </body>
 
