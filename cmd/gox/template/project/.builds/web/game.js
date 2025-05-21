@@ -475,11 +475,8 @@ class GameApp {
     async checkEngineCache() {
         let hashes = GetEngineHashes()
         this.logVerbose("curHashes ", hashes)
-        this.wasmGdspx = await this.checkEngineCacheAsset(hashes, "gdspx.wasm");
         this.wasmEngine = await this.checkEngineCacheAsset(hashes, "godot.editor.wasm");
-        this.editorConfig.wasmGdspx = this.wasmGdspx
         this.editorConfig.wasmEngine = this.wasmEngine
-        this.gameConfig.wasmGdspx = this.wasmGdspx
         this.gameConfig.wasmEngine = this.wasmEngine
     }
 
