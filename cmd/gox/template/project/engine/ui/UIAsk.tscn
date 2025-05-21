@@ -45,7 +45,7 @@ texture = ExtResource("3_bxmpm")
 [sub_resource type="StyleBoxTexture" id="StyleBoxTexture_alfx8"]
 texture = ExtResource("3_bxmpm")
 
-[node name="UIAsk" type="Control"]
+[node name="UiAsk" type="Control"]
 layout_mode = 3
 anchors_preset = 12
 anchor_top = 1.0
