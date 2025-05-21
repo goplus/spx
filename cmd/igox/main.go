@@ -164,7 +164,7 @@ func main() {
 		return fs.Chrooted(path), nil
 	})
 
-	ctx := igop.NewContext(igop.DisableImethodForReflect)
+	ctx := igop.NewContext(0)
 	ctx.Lookup = func(root, path string) (dir string, found bool) {
 		log.Fatalf("Failed to resolve package import %q. This package is not available in the current environment.", path)
 		return
