@@ -3,7 +3,7 @@ module github.com/goplus/spx/cmd/igox
 go 1.23.0
 
 require (
-	github.com/goplus/builder/tools/ai v0.0.0-20250516094239-7a06fb1eaf80
+	github.com/goplus/builder/tools/ai v0.0.0-20250522033218-53c368333ac2
 	github.com/goplus/igop v0.44.0
 	github.com/goplus/mod v0.16.1
 	github.com/goplus/reflectx v1.4.2
