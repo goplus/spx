@@ -18,7 +18,7 @@ import (
 	"github.com/goplus/igop/gopbuild"
 	"github.com/goplus/mod/modfile"
 	_ "github.com/goplus/reflectx/icall/icall8192"
-	_ "github.com/goplus/spx/cmd/igox/pkg/github.com/goplus/spx"
+	"github.com/goplus/spx"
 	"github.com/goplus/spx/cmd/igox/zipfs"
 	goxfs "github.com/goplus/spx/fs"
 )
@@ -215,6 +215,17 @@ func Gopt_Player_Gopx_OnCmd[T any](p *Player, handler func(cmd T) error) {
 		wasmtrans.WithEndpoint(aiInteractionAPIEndpoint),
 		wasmtrans.WithTokenProvider(aiInteractionAPITokenProvider),
 	))
+	var dummyGame spx.Game
+	ai.SetDefaultTaskRunner(func(task func()) {
+		var done bool
+		go func() {
+			task()
+			done = true
+		}()
+		for !done {
+			dummyGame.WaitNextFrame()
+		}
+	})
 
 	ctx.RegisterExternal("fmt.Print", func(frame *igop.Frame, a ...any) (n int, err error) {
 		msg := fmt.Sprint(a...)
