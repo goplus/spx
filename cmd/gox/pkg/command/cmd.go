@@ -106,7 +106,7 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 		return nil
 	}
 
-	if cmd.Args.CmdName == "runi" {
+	if cmd.Args.CmdName == "runi" || cmd.Args.CmdName == "runweb" {
 		cmd.RuntimeMode = true
 	}
 
@@ -116,6 +116,10 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 		fmt.Fprintf(os.Stderr, "Environment check failed: %v\n", err)
 		return err
 	}
+
+	// fix https://github.com/goplus/spx/issues/619
+	// fatal error: non-Go code set up signal handler without SA_ONSTACK flag
+	os.Setenv("GODEBUG", "asyncpreemptoff=1")
 
 	// Set up the web directory path
 	cmd.WebDir, _ = filepath.Abs(filepath.Join(cmd.ProjectDir, ".builds", "web"))
