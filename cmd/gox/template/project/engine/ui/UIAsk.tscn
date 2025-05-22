@@ -45,7 +45,7 @@ texture = ExtResource("3_bxmpm")
 [sub_resource type="StyleBoxTexture" id="StyleBoxTexture_alfx8"]
 texture = ExtResource("3_bxmpm")
 
-[node name="UIAsk" type="Control"]
+[node name="UiAsk" type="Control"]
 layout_mode = 3
 anchors_preset = 12
 anchor_top = 1.0
@@ -114,7 +114,7 @@ theme_override_font_sizes/font_size = 22
 theme_override_styles/normal = SubResource("StyleBoxEmpty_ct2ti")
 theme_override_styles/focus = SubResource("StyleBoxEmpty_w3b6m")
 theme_override_styles/read_only = SubResource("StyleBoxEmpty_31enk")
-placeholder_text = "Please input the anwser"
+placeholder_text = "请输入你的答案"
 caret_blink = true
 
 [node name="Check" type="Button" parent="M/Input"]

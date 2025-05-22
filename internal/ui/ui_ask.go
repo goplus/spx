@@ -2,7 +2,6 @@ package ui
 
 import (
 	"github.com/goplus/spx/internal/engine"
-	"github.com/realdream-ai/mathf"
 )
 
 type UiAsk struct {
@@ -35,7 +34,8 @@ func (pself *UiAsk) OnStart() {
 }
 
 func (pself *UiAsk) Show(isSprite bool, question string, onCheck func(string)) {
-	uiMgr.SetScale(pself.GetId(), mathf.NewVec2(windowScale, windowScale))
+	// UiAsk prefab can auto scale to match window scale
+	// uiMgr.SetScale(pself.GetId(), mathf.NewVec2(windowScale, windowScale))
 	pself.OnCheck = onCheck
 	uiMgr.SetVisible(pself.askBody.GetId(), !isSprite)
 	if !isSprite {
