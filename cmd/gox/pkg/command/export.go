@@ -91,16 +91,17 @@ func (pself *CmdTool) ExportWeb() error {
 	util.SetupFile(false, path.Join(dir, ".gitignore"), pself.GitignoreTxt)
 	os.Rename(path.Join(dir, ".gitignore.txt"), path.Join(dir, ".gitignore"))
 
-	editorZipPath := path.Join(pself.GoBinPath, "gdspxrt_web"+pself.Version+".zip")
+	webTemplateDir := path.Join(pself.GoBinPath, "gdspxrt"+pself.Version+"_web")
+	if !util.IsFileExist(webTemplateDir) {
+		return errors.New("web dir file not found: " + webTemplateDir)
+	}
+
 	dstPath := path.Join(pself.ProjectDir, ".builds/web")
 	os.MkdirAll(dstPath, os.ModePerm)
-	if util.IsFileExist(editorZipPath) {
-		util.Unzip(editorZipPath, dstPath)
-	} else {
-		return errors.New("editor zip file not found: " + editorZipPath)
-	}
+	util.CopyDir2(webTemplateDir, dstPath)
 	os.Rename(path.Join(dstPath, "godot.editor.html"), path.Join(dstPath, "index.html"))
 
+	// overwrite web files
 	util.CopyDir(pself.ProjectFS, "template/project/.builds/web", pself.WebDir, true)
 	pack.PackProject(pself.TargetDir, path.Join(pself.WebDir, "game.zip"))
 

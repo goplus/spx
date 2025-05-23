@@ -58,10 +58,10 @@ func (pself *CmdTool) CheckCmd(ext ...string) bool {
 	cmds := []string{
 		"help", "version", "editor",
 		"init", "clear", "clearbuild",
-		"build", "run", "export",
+		"build", "rune", "export",
 		"runweb", "buildweb", "exportweb", "stopweb",
 		"runm", "exportbot", "exportapk", "exportios",
-		"runi", "exportwebeditor", "runwebeditor", "exportwebruntime",
+		"run", "exportwebeditor", "runwebeditor", "exportwebruntime",
 	}
 	cmds = append(cmds, ext...)
 

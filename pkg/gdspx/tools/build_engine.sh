@@ -178,7 +178,7 @@ build_editor(){
         return 0
     fi
     if [ "$OS" = "Windows_NT" ]; then
-        scons target=editor vsproj=yes dev_build=yes $COMMON_ARGS
+        scons target=editor dev_build=yes $COMMON_ARGS vsproj=yes 
     else
         scons target=editor dev_build=yes $COMMON_ARGS
     fi
@@ -192,6 +192,138 @@ build_editor(){
     else
         cp bin/godot.macos.editor.dev.$ARCH $dstBinPath
     fi
+}
+
+# Define a function for the release web functionality
+exportweb() {
+    echo "Starting exportweb... $PROJ_DIR"
+    
+    # Create temporary directory
+    mkdir -p "$PROJ_DIR/.tmp/web"
+    
+    # Execute the exportweb commands
+    (cd "$PROJ_DIR/.tmp/web" 
+     mkdir -p assets 
+     echo '{"map":{"width":480,"height":360}}' > assets/index.json 
+     echo "" > main.spx 
+     rm -rf ./project/.builds/*web 
+     spx exportweb 
+     cd ./project/.builds/web 
+     rm -f game.zip 
+     zip -r "$PROJ_DIR/spx_web.zip" * 
+     echo "$PROJ_DIR/spx_web.zip has been created") || {
+        echo "Error: Failed to create web export"
+        return 1
+    }
+    
+    # Clean up
+    rm -rf "$PROJ_DIR/.tmp"
+    echo "exportweb completed successfully"
+    return 0
+}
+
+# Define a function for the exportpack functionality
+exportpack() {
+    echo "Starting exportpack..."
+    
+    # Check GOPATH
+    if [ -z "$GOPATH" ]; then
+        # If GOPATH is not set, attempt to get it
+        if command -v go > /dev/null; then
+            if [ "$OS" = "Windows_NT" ]; then
+                IFS=';' read -r GOPATH _ <<< "$(go env GOPATH)"
+            else
+                IFS=':' read -r GOPATH _ <<< "$(go env GOPATH)"
+            fi
+        fi
+        
+        if [ -z "$GOPATH" ]; then
+            echo "Error: GOPATH is not set"
+            return 1
+        fi
+    fi
+    
+    # Create temporary directory and copy files
+    rm -rf "$PROJ_DIR/.tmp/web" 
+    mkdir -p "$PROJ_DIR/.tmp/web" 
+    cp "$PROJ_DIR/cmd/gox/template/project/runtime.gdextension.txt" "$GOPATH/bin/runtime.gdextension" || {
+        echo "Error: Failed to prepare exportpack environment"
+        return 1
+    }
+    
+    # Execute the exportpack commands
+    cd "$PROJ_DIR/.tmp/web" 
+    mkdir -p assets 
+    echo '{"map":{"width":480,"height":360}}' > assets/index.json 
+    echo "" > main.spx 
+    rm -rf ./project/.builds/*web 
+    mkdir -p "$GOPATH/bin" 
+    echo "exporting pck..."
+
+    spx export 
+    TEMP_VERSION=$(cat "$PROJ_DIR/cmd/gox/template/version") 
+    OUTPUT_PCK="$GOPATH/bin/gdspxrt$TEMP_VERSION.pck" 
+    echo $OUTPUT_PCK
+    # Check if the files exist before copying
+    if [ -f "./project/.builds/pc/gdexport.pck" ]; then
+        echo "Copying gdexport.pck to $OUTPUT_PCK"
+        cp "./project/.builds/pc/gdexport.pck" "$OUTPUT_PCK"
+    fi
+    
+    # For macOS builds
+    if [ -d "./project/.builds/pc/gdexport.app/Contents/Resources" ] && \
+       [ "$(ls -A ./project/.builds/pc/gdexport.app/Contents/Resources/*.pck 2>/dev/null)" ]; then
+        echo "Copying macOS resources to $OUTPUT_PCK"
+        cp ./project/.builds/pc/gdexport.app/Contents/Resources/*.pck "$OUTPUT_PCK"
+    fi
+    
+
+    echo "exporting web runtime..."
+    spx exportwebruntime 
+    dstdir="$GOPATH/bin/gdspxrt"$TEMP_VERSION"_web"
+    rm -rf "$dstdir" 
+    cp -rf ./project/.builds/webi  "$dstdir" 
+    
+    # Clean up
+    rm -rf "$PROJ_DIR/.tmp"
+    echo "exportpack completed successfully"
+    return 0
+}
+
+# Define a function for the runweb functionality
+runweb() {
+    local target_path="$1"
+    
+    # Default path if not provided
+    if [ -z "$target_path" ]; then
+        target_path="tutorial/01-Weather"
+    fi
+    
+    echo "Starting runweb with path: $target_path"
+    
+    # Kill any running gdspx_web_server.py processes
+    echo "Killing gdspx_web_server.py if running..."
+    if command -v pgrep > /dev/null; then
+        PIDS=$(pgrep -f gdspx_web_server.py)
+        if [ -n "$PIDS" ]; then
+            echo "Killing process: $PIDS"
+            kill -9 $PIDS
+        else
+            echo "No gdspx_web_server.py process found."
+        fi
+    else
+        echo "pgrep command not found, skipping process killing"
+    fi
+    
+    # Run cmdweb and start the web server
+    (cd "$PROJ_DIR/cmd/gox/" && ./install.sh --web) 
+    (cd "$PROJ_DIR/$target_path" && spx clear && spx runweb -serveraddr=":8106") || {
+        echo "Error: Failed to run web server"
+        return 1
+    }
+    
+    echo "runweb completed successfully"
+    return 0
 }
 
 
