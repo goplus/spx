@@ -106,7 +106,7 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 		return nil
 	}
 
-	if cmd.Args.CmdName == "runi" || cmd.Args.CmdName == "runweb" {
+	if cmd.Args.CmdName == "run" || cmd.Args.CmdName == "runweb" {
 		cmd.RuntimeMode = true
 	}
 
@@ -141,7 +141,7 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 
 	// Handle build commands
 	switch cmd.Args.CmdName {
-	case "editor", "run", "export", "build", "runi":
+	case "editor", "rune", "export", "build", "run":
 		cmd.BuildDll()
 	case "buildweb", "runweb", "exportweb":
 		cmd.BuildWasm()
@@ -153,9 +153,9 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 		args := cmd.Args.String()
 		args = append(args, "-e")
 		err = util.RunCommandInDir(cmd.ProjectDir, cmd.CmdPath, args...)
-	case "run":
+	case "rune":
 		err = util.RunCommandInDir(cmd.ProjectDir, cmd.CmdPath, cmd.Args.String()...)
-	case "runi":
+	case "run":
 		err = cmd.RunPackMode()
 	case "export":
 		err = cmd.Export()

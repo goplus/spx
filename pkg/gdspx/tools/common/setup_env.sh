@@ -261,7 +261,35 @@ ensure_emsdk() {
     if [[ "$(uname -o 2>/dev/null)" == "Msys" ]] || [[ "$(uname -o 2>/dev/null)" == "Cygwin" ]]; then
         # Windows
         source ./emsdk_env.sh
-        export PATH="$EMSDK_DIR/emsdk/upstream/emscripten:$PATH"
+        # Windows path check, need to consider backslashes (\) and possible different path prefixes
+        # Get the actual path of emscripten
+        EMSCRIPTEN_PATH="$(cd "$EMSDK_DIR/emsdk/upstream/emscripten" 2>/dev/null && pwd -W 2>/dev/null || echo "$EMSDK_DIR/emsdk/upstream/emscripten")"
+        
+        # First check if this path already exists in PATH (considering path separators)
+        PATH_FOUND=0
+        IFS=':;' read -ra PATH_DIRS <<< "$PATH"
+        for p in "${PATH_DIRS[@]}"; do
+            # Convert paths to lowercase for comparison (Windows is case-insensitive)
+            p_lower=$(echo "$p" | tr '[:upper:]' '[:lower:]')
+            emscripten_lower=$(echo "$EMSCRIPTEN_PATH" | tr '[:upper:]' '[:lower:]')
+            
+            # Convert backslashes to forward slashes for easier comparison
+            p_normalized=${p_lower//\\/\/}
+            emscripten_normalized=${emscripten_lower//\\/\/}
+            
+            if [[ "$p_normalized" == "$emscripten_normalized" ]]; then
+                PATH_FOUND=1
+                break
+            fi
+        done
+        
+        if [[ $PATH_FOUND -eq 0 ]]; then
+            # Path doesn't exist, add it to PATH
+            export PATH="$EMSCRIPTEN_PATH:$PATH"
+            echo "Added emscripten to PATH: $EMSCRIPTEN_PATH"
+        else
+            echo "Emscripten path already in PATH"
+        fi
     else
         # Linux and macOS
         source ./emsdk_env.sh
