@@ -111,6 +111,8 @@ func (pself *CmdTool) SetupEnv(version string, fs embed.FS, fsRelDir string, pro
 	// Update project name
 	targetDir, _ := filepath.Abs(pself.TargetDir)
 	projectName := filepath.Base(targetDir)
+	projectName = strings.ReplaceAll(projectName, "_", "")
+	projectName = strings.ReplaceAll(projectName, " ", "")
 	engineFilePath := path.Join(pself.ProjectDir, "project.godot")
 	content, err := os.ReadFile(engineFilePath)
 	if err != nil {
@@ -240,6 +242,9 @@ func (pself *CmdTool) Clear() error {
 		return fmt.Errorf("failed to remove project directory: %w", err)
 	}
 
+	if err := os.RemoveAll(path.Join(pself.TargetDir, ".temp")); err != nil {
+		return fmt.Errorf("failed to remove project directory: %w", err)
+	}
 	// Remove the gitignore file
 	gitignorePath := path.Join(pself.ProjectDir, "../.gitignore")
 	if err := os.Remove(gitignorePath); err != nil && !os.IsNotExist(err) {
