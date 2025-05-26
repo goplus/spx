@@ -327,12 +327,11 @@ func (p *baseObj) goSetCostume(val any) bool {
 }
 
 func (p *baseObj) setCostumeByIndex(idx int) bool {
-	if idx >= len(p.costumes) {
+	if idx < 0 || idx >= len(p.costumes) {
 		panic("invalid costume index")
 	}
-	isDirty := p.costumeIndex_ != idx
 	p.setCustumeIndex(idx)
-	return isDirty
+	return true
 }
 func (p *baseObj) setCostumeByName(name SpriteCostumeName) bool {
 	if idx := p.findCostume(name); idx >= 0 {
