@@ -18,9 +18,9 @@ package spx
 
 import (
 	"math/rand"
-	"os"
 	"time"
 
+	"github.com/goplus/spx/internal/engine"
 	"github.com/realdream-ai/mathf"
 )
 
@@ -80,11 +80,11 @@ func HSBA(h, s, b, a float64) Color {
 // -----------------------------------------------------------------------------
 
 func Exit__0(code int) {
-	os.Exit(code)
+	engine.RequestExit(int64(code))
 }
 
 func Exit__1() {
-	os.Exit(0)
+	engine.RequestExit(0)
 }
 
 // -----------------------------------------------------------------------------

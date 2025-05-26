@@ -853,7 +853,7 @@ func (p *Game) initEventLoop() {
 }
 
 func init() {
-	gco = coroutine.New()
+	gco = coroutine.New(engine.OnPanic)
 	engine.SetCoroutines(gco)
 }
 

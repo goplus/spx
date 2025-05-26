@@ -41,6 +41,8 @@ type GDExtensionInterface struct {
 	SpxCameraGetCameraZoom                   GDExtensionSpxCameraGetCameraZoom
 	SpxCameraSetCameraZoom                   GDExtensionSpxCameraSetCameraZoom
 	SpxCameraGetViewportRect                 GDExtensionSpxCameraGetViewportRect
+	SpxExtRequestExit                        GDExtensionSpxExtRequestExit
+	SpxExtOnRuntimePanic                     GDExtensionSpxExtOnRuntimePanic
 	SpxExtDestroyAllPens                     GDExtensionSpxExtDestroyAllPens
 	SpxExtCreatePen                          GDExtensionSpxExtCreatePen
 	SpxExtDestroyPen                         GDExtensionSpxExtDestroyPen
@@ -268,6 +270,8 @@ func (x *GDExtensionInterface) loadProcAddresses() {
 	x.SpxCameraGetCameraZoom = (GDExtensionSpxCameraGetCameraZoom)(dlsymGD("spx_camera_get_camera_zoom"))
 	x.SpxCameraSetCameraZoom = (GDExtensionSpxCameraSetCameraZoom)(dlsymGD("spx_camera_set_camera_zoom"))
 	x.SpxCameraGetViewportRect = (GDExtensionSpxCameraGetViewportRect)(dlsymGD("spx_camera_get_viewport_rect"))
+	x.SpxExtRequestExit = (GDExtensionSpxExtRequestExit)(dlsymGD("spx_ext_request_exit"))
+	x.SpxExtOnRuntimePanic = (GDExtensionSpxExtOnRuntimePanic)(dlsymGD("spx_ext_on_runtime_panic"))
 	x.SpxExtDestroyAllPens = (GDExtensionSpxExtDestroyAllPens)(dlsymGD("spx_ext_destroy_all_pens"))
 	x.SpxExtCreatePen = (GDExtensionSpxExtCreatePen)(dlsymGD("spx_ext_create_pen"))
 	x.SpxExtDestroyPen = (GDExtensionSpxExtDestroyPen)(dlsymGD("spx_ext_destroy_pen"))

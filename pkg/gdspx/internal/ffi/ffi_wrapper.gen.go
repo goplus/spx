@@ -95,6 +95,8 @@ type GDExtensionSpxCameraSetCameraPosition C.GDExtensionSpxCameraSetCameraPositi
 type GDExtensionSpxCameraGetCameraZoom C.GDExtensionSpxCameraGetCameraZoom
 type GDExtensionSpxCameraSetCameraZoom C.GDExtensionSpxCameraSetCameraZoom
 type GDExtensionSpxCameraGetViewportRect C.GDExtensionSpxCameraGetViewportRect
+type GDExtensionSpxExtRequestExit C.GDExtensionSpxExtRequestExit
+type GDExtensionSpxExtOnRuntimePanic C.GDExtensionSpxExtOnRuntimePanic
 type GDExtensionSpxExtDestroyAllPens C.GDExtensionSpxExtDestroyAllPens
 type GDExtensionSpxExtCreatePen C.GDExtensionSpxExtCreatePen
 type GDExtensionSpxExtDestroyPen C.GDExtensionSpxExtDestroyPen
@@ -507,6 +509,24 @@ func CallCameraGetViewportRect() GdRect2 {
 	var ret_val C.GdRect2
 	C.cgo_callfn_GDExtensionSpxCameraGetViewportRect(arg0, &ret_val)
 	return (GdRect2)(ret_val)
+}
+func CallExtRequestExit(
+	exit_code GdInt,
+) {
+	arg0 := (C.GDExtensionSpxExtRequestExit)(api.SpxExtRequestExit)
+	arg1GdInt := (C.GdInt)(exit_code)
+
+	C.cgo_callfn_GDExtensionSpxExtRequestExit(arg0, arg1GdInt)
+
+}
+func CallExtOnRuntimePanic(
+	msg GdString,
+) {
+	arg0 := (C.GDExtensionSpxExtOnRuntimePanic)(api.SpxExtOnRuntimePanic)
+	arg1GdString := (C.GdString)(msg)
+
+	C.cgo_callfn_GDExtensionSpxExtOnRuntimePanic(arg0, arg1GdString)
+
 }
 func CallExtDestroyAllPens() {
 	arg0 := (C.GDExtensionSpxExtDestroyAllPens)(api.SpxExtDestroyAllPens)

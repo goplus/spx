@@ -66,7 +66,10 @@
 			runnerWindow.addEventListener('onProgress', (event) => {
 				onProgress(event.detail.progress)
 			})
-
+			runnerWindow.onGameError(function (callback) {
+				console.error("onGameError", callback)
+			})
+			
 			let buffer = await (await (fetch(zipUrl))).arrayBuffer();
 			await runnerWindow.startGame(buffer);
 		}

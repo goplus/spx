@@ -237,6 +237,16 @@ func (pself *cameraMgrImpl) GetViewportRect() Rect2 {
 }
 
 // IExtMgr
+func (pself *extMgrImpl) RequestExit(exit_code int64) {
+	callInMainThread(func() {
+		gdx.ExtMgr.RequestExit(exit_code)
+	})
+}
+func (pself *extMgrImpl) OnRuntimePanic(msg string) {
+	callInMainThread(func() {
+		gdx.ExtMgr.OnRuntimePanic(msg)
+	})
+}
 func (pself *extMgrImpl) DestroyAllPens() {
 	callInMainThread(func() {
 		gdx.ExtMgr.DestroyAllPens()

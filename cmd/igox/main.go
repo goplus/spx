@@ -141,6 +141,11 @@ func logWithPanicInfo(info *igop.PanicInfo) {
 		"column", position.Column,
 	)
 }
+func logErrorAndExit(msg string, err error) {
+	logger.Error(msg, "error", err)
+	js.Global().Call("gdspx_ext_on_runtime_panic", msg+": "+err.Error())
+	js.Global().Call("gdspx_ext_request_exit", 1)
+}
 
 func main() {
 	js.Global().Set("setAIInteractionAPIEndpoint", js.FuncOf(setAIInteractionAPIEndpoint))
@@ -245,11 +250,13 @@ func Gopt_Player_Gopx_OnCmd[T any](p *Player, handler func(cmd T) error) {
 
 	source, err := gopbuild.BuildFSDir(ctx, fs, "")
 	if err != nil {
-		log.Fatalln("Failed to build Go+ source:", err)
+		logErrorAndExit("Failed to build Go+ source:", err)
+		return
 	}
 
 	code, err := ctx.RunFile("main.go", source, nil)
 	if err != nil {
-		log.Fatalln("Failed to run Go+ source:", err, " Code:", code)
+		logErrorAndExit(fmt.Sprintf("Failed to run Go+ source: %d", code), err)
+		return
 	}
 }

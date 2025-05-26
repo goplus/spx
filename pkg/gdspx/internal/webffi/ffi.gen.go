@@ -45,6 +45,8 @@ type GDExtensionInterface struct {
 	SpxCameraGetCameraZoom                   js.Value
 	SpxCameraSetCameraZoom                   js.Value
 	SpxCameraGetViewportRect                 js.Value
+	SpxExtRequestExit                        js.Value
+	SpxExtOnRuntimePanic                     js.Value
 	SpxExtDestroyAllPens                     js.Value
 	SpxExtCreatePen                          js.Value
 	SpxExtDestroyPen                         js.Value
@@ -272,6 +274,8 @@ func (x *GDExtensionInterface) loadProcAddresses() {
 	x.SpxCameraGetCameraZoom = dlsymGD("gdspx_camera_get_camera_zoom")
 	x.SpxCameraSetCameraZoom = dlsymGD("gdspx_camera_set_camera_zoom")
 	x.SpxCameraGetViewportRect = dlsymGD("gdspx_camera_get_viewport_rect")
+	x.SpxExtRequestExit = dlsymGD("gdspx_ext_request_exit")
+	x.SpxExtOnRuntimePanic = dlsymGD("gdspx_ext_on_runtime_panic")
 	x.SpxExtDestroyAllPens = dlsymGD("gdspx_ext_destroy_all_pens")
 	x.SpxExtCreatePen = dlsymGD("gdspx_ext_create_pen")
 	x.SpxExtDestroyPen = dlsymGD("gdspx_ext_destroy_pen")

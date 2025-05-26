@@ -68,6 +68,7 @@ func (p Thread) IsSchedTimeout(ms float64) bool {
 
 // Coroutines represents a coroutine manager.
 type Coroutines struct {
+	onPanic   func(name, stack string)
 	hasInited bool
 	suspended map[Thread]bool
 	current   Thread
@@ -111,8 +112,9 @@ type WaitJob struct {
 }
 
 // New creates a coroutine manager.
-func New() *Coroutines {
+func New(onPanic func(name, stack string)) *Coroutines {
 	p := &Coroutines{
+		onPanic:   onPanic,
 		suspended: make(map[Thread]bool),
 		waiting:   make(map[Thread]bool),
 	}
@@ -121,6 +123,7 @@ func New() *Coroutines {
 	p.nextQueue = NewQueue[*WaitJob]()
 	p.hasInited = false
 	p.waitCond.L = &p.waitMutex
+	p.debug = false
 	return p
 }
 
@@ -170,21 +173,23 @@ func (p *Coroutines) StopIf(filter func(th Thread) bool) {
 // CreateAndStart creates and executes the new coroutine.
 func (p *Coroutines) CreateAndStart(start bool, tobj ThreadObj, fn func(me Thread) int) Thread {
 	id := &threadImpl{Obj: tobj, frame: p.frame, id: atomic.AddInt64(&p.curThId, 1), schedFrame: -1}
-	if p.debug {
-		name := ""
-		if tobj != nil {
-			t := reflect.TypeOf(tobj)
-			if t.Kind() == reflect.Ptr && t.Elem().Name() != "" {
-				name = "*" + t.Elem().Name()
-				v := reflect.ValueOf(tobj)
-				nameMethod := v.MethodByName("Name")
-				if nameMethod.IsValid() {
-					results := nameMethod.Call(nil)
-					name = results[0].String()
-				}
+
+	name := ""
+	if tobj != nil {
+		t := reflect.TypeOf(tobj)
+		if t.Kind() == reflect.Ptr && t.Elem().Name() != "" {
+			name = "*" + t.Elem().Name()
+			v := reflect.ValueOf(tobj)
+			nameMethod := v.MethodByName("Name")
+			if nameMethod.IsValid() {
+				results := nameMethod.Call(nil)
+				name = results[0].String()
 			}
 		}
-		id.name = name
+	}
+	id.name = name
+
+	if p.debug {
 		id.stack = debug.GetStackTrace()
 	}
 
@@ -200,6 +205,9 @@ func (p *Coroutines) CreateAndStart(start bool, tobj ThreadObj, fn func(me Threa
 			p.sema.Unlock()
 			if e := recover(); e != nil {
 				if e != ErrAbortThread {
+					if p.onPanic != nil {
+						p.onPanic(id.name, id.stack)
+					}
 					panic(e)
 				}
 			}

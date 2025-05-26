@@ -156,7 +156,9 @@ func (pself *cameraMgrImpl) GetViewportRect() Rect2 {
 }
 
 // IExtMgr
-func (pself *extMgrImpl) DestroyAllPens() {}
+func (pself *extMgrImpl) RequestExit(exit_code int64) {}
+func (pself *extMgrImpl) OnRuntimePanic(msg string)   {}
+func (pself *extMgrImpl) DestroyAllPens()             {}
 func (pself *extMgrImpl) CreatePen() gdx.Object {
 	var _ret1 gdx.Object
 	return _ret1
