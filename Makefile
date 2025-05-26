@@ -1,113 +1,136 @@
-.DEFAULT_GOAL := pc
+.DEFAULT_GOAL := help
 
 CURRENT_PATH=$(shell pwd)
-.PHONY: engine init initweb fmt gen upload templates cmd cmdweb test setuppack
+.PHONY: init fmt gen cmd wasm wasmopt test download help initdev
 
-# Format code
+# Help target - displays available commands
+help:
+	@echo "Make Commands:"
+	@echo "-------------------"
+	@echo "Utility Commands:"
+	@echo "  init        - Initialize the user environment"
+	@echo "  initdev     - Initialize the development environment"
+	@echo "  download    - Download engines"
+	@echo "  cmd         - Install spx command"
+	@echo "  wasm        - Install spx command and build wasm"
+	@echo "  wasmopt     - Install spx command and build wasm with optimization"
+	@echo "  fmt         - Format code"
+	@echo "  gen         - Generate code"
+	@echo ""
+	@echo "Build Commands:"
+	@echo "  pce         - Build current platform's engine (editor mode)"
+	@echo "  pc          - Build current platform's engine template"
+	@echo "  web         - Build web engine template"
+	@echo "  android     - Build Android engine template"
+	@echo "  ios         - Build iOS engine template"
+	@echo ""
+	@echo "Export Commands:"
+	@echo "  exportpack  - Export runtime engine pck file"
+	@echo "  exportweb   - Export web engine for xbuilder"
+	@echo ""
+	@echo "Run Commands:"
+	@echo "  run         - Run demo on PC (default: tutorial/01-Weather)"
+	@echo "  rune        - Run demo on PC editor mode (default: tutorial/01-Weather)"
+	@echo "  runweb      - Run demo on web (default: tutorial/01-Weather)"
+	@echo "  runtest     - Run tests"
+	@echo ""
+	@echo "Usage Examples:"
+	@echo "  make pc                      - Build for current platform"
+	@echo "  make run path=demos/demo1    - Run specific demo on PC (default: tutorial/01-Weather)"
+	@echo "  make runweb path=demos/demo1 - Run specific demo on web (default: tutorial/01-Weather)"
+	@echo "  make runtest                 - Run tests"
+
+init:
+	chmod +x ./pkg/gdspx/tools/*.sh && \
+	make download
+
+initdev:
+	chmod +x ./pkg/gdspx/tools/*.sh && \
+	echo "===>step1/5: cmd" && make cmd && \
+	echo "===>step2/5: wasm" && make wasm && \
+	echo "===>step3/5: pce" && make pce && \
+	echo "===>step4/5: pc" && make pc && \
+	echo "===>step5/5: web" && make web && \
+	echo "===>initdev done,use `make run` to run demo"
+
+# Format code	
 fmt:
 	go fmt ./... 
 
-# Build templates
-templates:
-	./pkg/gdspx/tools/build_engine.sh -a
-
-# download engines 
-download:
-	./pkg/gdspx/tools/build_engine.sh -e -d
-
-# Build current platform's engine
-pc:
-	./pkg/gdspx/tools/build_engine.sh -e
-# Build current platform's engine template
-pcpack: 
-	./pkg/gdspx/tools/build_engine.sh
-# Build web engine
-web: 
-	make cmdweb && ./pkg/gdspx/tools/build_engine.sh -p web -e
-# Build web engine template
-webpack: 
-	make pc &&\
-	./pkg/gdspx/tools/build_engine.sh -p web &&\
-	make cmdweb &&\
-	make setuppack
-
-# Build android engine
-android:
-	./pkg/gdspx/tools/build_engine.sh -p android
-
-# Build ios engine
-ios:
-	./pkg/gdspx/tools/build_engine.sh -p ios 
 # Generate code
 gen:
 	cd ./pkg/gdspx/cmd/codegen && go run . && cd $(CURRENT_PATH) && make fmt
 
-# Install gdspx command
+# Download engines 
+download:
+	make cmd &&\
+	./pkg/gdspx/tools/build_engine.sh -e -d
+
+# Install spx command
 cmd:
 	cd ./cmd/gox/ && ./install.sh && cd $(CURRENT_PATH) 
-
-cmdweb:
+# build wasm
+wasm:
 	cd ./cmd/gox/ && ./install.sh --web && cd $(CURRENT_PATH) 
-
-cmdwebopt:
+# build wasm with optimization
+wasmopt:
 	cd ./cmd/gox/ && ./install.sh --web --opt && cd $(CURRENT_PATH) 
 
-# Release web for builder
-releaseweb:
-	make cmdwebopt && \
-	mkdir -p $(CURRENT_PATH)/.tmp/web
-	(cd $(CURRENT_PATH)/.tmp/web && \
-	 mkdir -p assets && \
-	 echo "{\"map\":{\"width\":480,\"height\":360}}" > assets/index.json && \
-	 echo "" > main.spx && \
-	 rm -rf ./project/.builds/*web && \
-	 spx exportweb && \
-	 cd ./project/.builds/web && \
-	 rm -f game.zip && \
-	 zip -r $(CURRENT_PATH)/spx_web.zip * && \
-	 echo "$(CURRENT_PATH)/spx_web.zip has been created")
-	rm -rf $(CURRENT_PATH)/.tmp
+# Build current platform's engine (editor mode)
+pce:
+	make cmd &&\
+	./pkg/gdspx/tools/build_engine.sh -e
+# Build current platform's engine template
+pc: 
+	make cmd &&\
+	./pkg/gdspx/tools/build_engine.sh &&\
+	./pkg/gdspx/tools/make_util.sh exportpack 
 
-setuppack:
-	rm -rf $(CURRENT_PATH)/.tmp/web && \
-	mkdir -p $(CURRENT_PATH)/.tmp/web && \
-	cp $(CURRENT_PATH)/cmd/gox/template/project/runtime.gdextension.txt "$(GOPATH)/bin/runtime.gdextension"
-	(cd $(CURRENT_PATH)/.tmp/web && \
-	 mkdir -p assets && \
-	 echo "{\"map\":{\"width\":480,\"height\":360}}" > assets/index.json && \
-	 echo "" > main.spx && \
-	 rm -rf ./project/.builds/*web && \
-	 mkdir -p "$(GOPATH)/bin" && \
-	 spx export && \
-	 TEMP_VERSION=$$(cat "$(CURRENT_PATH)/cmd/gox/template/version") && \
-	 OUTPUT_PCK="$(GOPATH)/bin/gdspxrt$$TEMP_VERSION.pck" && \
-	 cp ./project/.builds/pc/gdexport.pck "$$OUTPUT_PCK" || true && \
-	 cp ./project/.builds/pc/gdexport.app/Contents/Resources/*.pck "$$OUTPUT_PCK" || true && \
-	 spx exportwebruntime && \
-	 cd ./project/.builds/webi && \
-	 zip -r $(GOPATH)/bin/gdspxrt_web$$TEMP_VERSION.zip * && \
-	 sleep 1 && \
-	 echo "$$OUTPUT_PCK has been created")
-	rm -rf $(CURRENT_PATH)/.tmp
+# Build web template
+web: 
+	./pkg/gdspx/tools/build_engine.sh -p web &&\
+	./pkg/gdspx/tools/make_util.sh extrawebtemplate 
 
-test:
+# Build android template
+android:
+	./pkg/gdspx/tools/build_engine.sh -p android
+
+# Build ios template
+ios:
+	./pkg/gdspx/tools/build_engine.sh -p ios 
+
+
+# Export runtime pck file
+exportpack:
+	./pkg/gdspx/tools/make_util.sh exportpack && cd $(CURRENT_PATH) 
+
+# Export web engine for builder
+exportweb:
+	cd ./cmd/gox/ && ./install.sh --web --opt && cd $(CURRENT_PATH) &&\
+	./pkg/gdspx/tools/make_util.sh exportweb && cd $(CURRENT_PATH) 
+
+
+# Run demos
+path ?= tutorial/01-Weather
+
+# Run demo on PC editor mode
+rune:
+	cd  $(path) && spx rune . && cd $(CURRENT_PATH) 
+
+# Run demo on PC (runtime mode)
+run:
+	cd  $(path) && spx run . && cd $(CURRENT_PATH) 
+
+# Run demo on web
+runweb:
+	./pkg/gdspx/tools/make_util.sh runweb $(path) && cd $(CURRENT_PATH) 
+
+# Run tests
+runtest:
 	cd test/All && spx run . && cd $(CURRENT_PATH) 
 
-path ?= tutorial/01-Weather
-runweb:
-	@echo "Killing gdspx_web_server.py if running..."
-	@PIDS=$$(pgrep -f gdspx_web_server.py); \
-	if [ -n "$$PIDS" ]; then \
-		echo "Killing process: $$PIDS"; \
-		kill -9 $$PIDS; \
-	else \
-		echo "No gdspx_web_server.py process found."; \
-	fi	
-	make cmdweb && cd $(path) && spx clear && spx runweb -serveraddr=":8106" && cd $(CURRENT_PATH) 
-
-
-init:
-	make cmd && make download
-
+# Default rule for unknown targets
 %:
-	@:
+	@echo "Unknown target: $@"
+	@echo "Run 'make help' for available commands"
+	@exit 1
