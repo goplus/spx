@@ -49,6 +49,7 @@ var (
 func (p *Game) OnEngineStart() {
 	cachedBounds_ = make(map[string]mathf.Rect2)
 	onStart := func() {
+		defer engine.CheckPanic()
 		initInput()
 		gamer := p.gamer_
 		if me, ok := gamer.(interface{ MainEntry() }); ok {

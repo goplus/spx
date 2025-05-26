@@ -57,6 +57,8 @@ type ICameraMgr interface {
 }
 
 type IExtMgr interface {
+	RequestExit(exit_code int64)
+	OnRuntimePanic(msg string)
 	DestroyAllPens()
 	CreatePen() Object
 	DestroyPen(obj Object)

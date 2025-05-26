@@ -47,7 +47,7 @@
 		"use strict";
 		let gameApp = null
 		let isShowEditor = false
-
+		let onGameError = null
 		function onProgress(value) {
 			const progressEvent = new CustomEvent('onProgress', {
 				detail: {
@@ -74,7 +74,15 @@
 			}
 		}
 
+		window.gdspx_on_runtime_panic = function (msg) {
+			if (onGameError != null) {
+				onGameError(msg)
+			}
+		}
 
+		window.onGameError = function (callback) {
+			onGameError = callback
+		}
 
 		window.startGame = async (buffer, assetURLs = null, onSpxReady = null) => {
 			isShowEditor = false

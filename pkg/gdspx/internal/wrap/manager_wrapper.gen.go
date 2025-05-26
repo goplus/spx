@@ -218,6 +218,16 @@ func (pself *cameraMgr) GetViewportRect() Rect2 {
 	retValue := CallCameraGetViewportRect()
 	return ToRect2(retValue)
 }
+func (pself *extMgr) RequestExit(exit_code int64) {
+	arg0 := ToGdInt(exit_code)
+	CallExtRequestExit(arg0)
+}
+func (pself *extMgr) OnRuntimePanic(msg string) {
+	arg0Str := C.CString(msg)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	CallExtOnRuntimePanic(arg0)
+}
 func (pself *extMgr) DestroyAllPens() {
 	CallExtDestroyAllPens()
 }

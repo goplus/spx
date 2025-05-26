@@ -221,6 +221,8 @@ typedef void (*GDExtensionSpxCameraGetCameraZoom)(GdVec2* ret_value);
 typedef void (*GDExtensionSpxCameraSetCameraZoom)(GdVec2 size);
 typedef void (*GDExtensionSpxCameraGetViewportRect)(GdRect2* ret_value);
 // SpxExt
+typedef void (*GDExtensionSpxExtRequestExit)(GdInt exit_code);
+typedef void (*GDExtensionSpxExtOnRuntimePanic)(GdString msg);
 typedef void (*GDExtensionSpxExtDestroyAllPens)();
 typedef void (*GDExtensionSpxExtCreatePen)(GdObj* ret_value);
 typedef void (*GDExtensionSpxExtDestroyPen)(GdObj obj);

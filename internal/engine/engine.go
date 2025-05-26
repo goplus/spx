@@ -20,6 +20,7 @@ var (
 	physicMgr   enginewrap.PhysicMgrImpl
 	platformMgr enginewrap.PlatformMgrImpl
 	resMgr      enginewrap.ResMgrImpl
+	extMgr      enginewrap.ExtMgrImpl
 	sceneMgr    enginewrap.SceneMgrImpl
 	spriteMgr   enginewrap.SpriteMgrImpl
 	uiMgr       enginewrap.UiMgrImpl
@@ -79,6 +80,7 @@ func OnGameStarted() {
 
 // callbacks
 func onStart() {
+	defer CheckPanic()
 	triggerEventsTemp = make([]TriggerEvent, 0)
 	triggerEvents = make([]TriggerEvent, 0)
 	keyEventsTemp = make([]KeyEvent, 0)
@@ -94,6 +96,7 @@ func onStart() {
 }
 
 func onUpdate(delta float64) {
+	defer CheckPanic()
 	profiler.BeginSample()
 	updateTime(float64(delta))
 	cacheTriggerEvents()
@@ -161,4 +164,25 @@ func GetKeyEvents(lst []KeyEvent) []KeyEvent {
 	keyEvents = keyEvents[:0]
 	keyMutex.Unlock()
 	return lst
+}
+
+func CheckPanic() {
+	if e := recover(); e != nil {
+		OnPanic("", "")
+		panic(e)
+	}
+}
+
+func OnPanic(name, stack string) {
+	// on coro panic, exit game
+	msg := name
+	if stack != "" {
+		msg += " stack:\n" + stack
+	}
+	extMgr.OnRuntimePanic(msg)
+	RequestExit(1)
+}
+
+func RequestExit(exitCode int64) {
+	extMgr.RequestExit(exitCode)
 }

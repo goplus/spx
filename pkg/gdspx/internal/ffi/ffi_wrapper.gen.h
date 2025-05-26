@@ -81,6 +81,12 @@ void cgo_callfn_GDExtensionSpxCameraSetCameraZoom(const GDExtensionSpxCameraSetC
 void cgo_callfn_GDExtensionSpxCameraGetViewportRect(const GDExtensionSpxCameraGetViewportRect fn, GdRect2* ret_val) {
 	fn(ret_val);
 }
+void cgo_callfn_GDExtensionSpxExtRequestExit(const GDExtensionSpxExtRequestExit fn, GdInt exit_code) {
+	fn(exit_code);
+}
+void cgo_callfn_GDExtensionSpxExtOnRuntimePanic(const GDExtensionSpxExtOnRuntimePanic fn, GdString msg) {
+	fn(msg);
+}
 void cgo_callfn_GDExtensionSpxExtDestroyAllPens(const GDExtensionSpxExtDestroyAllPens fn) {
 	fn();
 }
