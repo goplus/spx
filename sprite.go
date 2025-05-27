@@ -1560,11 +1560,37 @@ func (p *SpriteImpl) checkTouchingScreen(where int) (touching int) {
 	if p.syncSprite == nil {
 		return 0
 	}
-	value := physicMgr.CheckTouchedCameraBoundary(p.syncSprite.GetId(), int64(where))
-	if value {
-		return where
+
+	touching = 0
+	if where & touchingScreenLeft != 0 {
+		if physicMgr.CheckTouchedCameraBoundary(p.syncSprite.GetId(), int64(touchingScreenLeft)) {
+			log.Printf("Touching detected: left")
+			touching |= touchingScreenLeft
+		}
 	}
-	return 0
+	if where & touchingScreenRight != 0 {
+		if physicMgr.CheckTouchedCameraBoundary(p.syncSprite.GetId(), int64(touchingScreenRight)) {
+			log.Printf("Touching detected: right")
+			touching |= touchingScreenRight
+		}
+	}
+	if where & touchingScreenTop != 0 {
+		if physicMgr.CheckTouchedCameraBoundary(p.syncSprite.GetId(), int64(touchingScreenTop)) {
+			log.Printf("Touching detected: top")
+			touching |= touchingScreenTop
+		}
+	}
+	if where & touchingScreenBottom != 0 {
+		if physicMgr.CheckTouchedCameraBoundary(p.syncSprite.GetId(), int64(touchingScreenBottom)) {
+			log.Printf("Touching detected: bottom")
+			touching |= touchingScreenBottom
+		}
+	}
+
+	if touching != 0 {
+		log.Printf("Touching detected: %v, x: %v, y: %v\n", touching, p.Xpos(), p.Ypos())
+	}
+	return touching
 }
 
 // -----------------------------------------------------------------------------
