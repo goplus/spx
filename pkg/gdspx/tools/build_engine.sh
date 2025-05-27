@@ -122,6 +122,7 @@ build_template() {
         echo "Unknown platform"
     fi
 }
+
 download_editor() {
     setup_global_variables
     local platform=$PLATFORM
@@ -131,43 +132,84 @@ download_editor() {
     local url_prefix="https://github.com/goplus/godot/releases/download/spx$VERSION/"
     mkdir -p "$tmp_dir"
     mkdir -p "$dst_dir"
-
+    echo "download to $dst_dir"
     # download engine pack
-    url=$url_prefix"gdspxrt.pck"
-    curl -L -o "$dst_dir/gdspxrt.pck" "$url" || exit
+    local url=""
 
+    local template_dir="$TEMPLATE_DIR"
+    echo "Downloading web..."
+    curl -L -o "$dst_dir/gdspx"$VERSION"_webpack.zip" $url_prefix"web.zip" || exit
+    curl -L -o "$dst_dir/gdspx"$VERSION"_web.zip" $url_prefix"editor-web.zip" || exit
+    
+    local filename="$dst_dir/gdspx"$VERSION"_webpack.zip"
+    cp -f $filename "$template_dir/web_dlink_debug.zip"
+    cp -f $filename "$template_dir/web_dlink_release.zip"
+    cp -f $filename "$template_dir/web_debug.zip"
+    cp -f $filename "$template_dir/web_release.zip"
+    
+    platform_name=$platform
+    local binary_postfix=""
     if [ "$platform" = "linux" ]; then
-        zip_name="editor-linux-"$arch".zip"
-        url=$url_prefix$zip_name
-        curl -L -o "$tmp_dir/$zip_name" "$url" || exit
-        unzip -o "$tmp_dir/$zip_name" -d "$tmp_dir" > /dev/null 2>&1  || exit
-        rm -rf "$tmp_dir/$zip_name"
+        platform_name="linuxbsd"
+    elif [ "$platform" = "windows" ]; then
+        binary_postfix=".exe"
+    fi
 
-        cp -f "$tmp_dir/godot.linuxbsd.editor.$arch" "$dst_dir/gdspx$VERSION"  || exit
-        rm -rf "$tmp_dir/godot.linuxbsd.editor.$arch"
+    echo "Downloading editor..."
+    local zip_name="editor-$platform-"$arch".zip"
+    local binary_name="godot.$platform_name.editor.$arch$binary_postfix"
+    url=$url_prefix$zip_name
+    curl -L -o "$dst_dir/$zip_name" "$url" || exit
+
+    unzip -o "$dst_dir/$zip_name" -d "$tmp_dir" > /dev/null 2>&1  || exit
+    cp -f "$tmp_dir/$binary_name" "$dst_dir/gdspx$VERSION"$binary_postfix  || exit
+
+    rm -rf "$dst_dir/$zip_name"
+
+    # download template
+
+    echo "Downloading template..."
+    zip_name="$platform-"$arch".zip"
+    binary_name="godot.$platform_name.template_release.$arch$binary_postfix"
+
+    url=$url_prefix$zip_name
+    filename="$tmp_dir/$binary_name"
+
+    curl -L -o "$dst_dir/$zip_name" "$url" || exit
+    unzip -o "$dst_dir/$zip_name" -d "$tmp_dir" > /dev/null 2>&1  || exit
+    cp -f "$filename" "$dst_dir/gdspxrt$VERSION"$binary_postfix  || exit
+
+    # copy to build template dir
+    if [ "$platform" = "linux" ]; then
+        cp "$filename" "$template_dir/linux_debug.arm32"
+        cp "$filename" "$template_dir/linux_debug.arm64"
+        cp "$filename" "$template_dir/linux_debug.x86_32"
+        cp "$filename" "$template_dir/linux_debug.x86_64"
+        cp "$filename" "$template_dir/linux_release.arm32"
+        cp "$filename" "$template_dir/linux_release.arm64"
+        cp "$filename" "$template_dir/linux_release.x86_32"
+        cp "$filename" "$template_dir/linux_release.x86_64"
 
     elif [ "$platform" = "windows" ]; then
-        zip_name="editor-windows-"$arch".zip"
-        url=$url_prefix$zip_name
-        curl -L -o "$tmp_dir/$zip_name" "$url" || exit
-        unzip -o "$tmp_dir/$zip_name" -d "$tmp_dir" > /dev/null 2>&1  || exit
-        rm -rf "$tmp_dir/$zip_name"
-        cp -f "$tmp_dir/godot.windows.editor.$arch.exe" "$dst_dir/gdspx$VERSION"".exe"  || exit
-        rm -rf "$tmp_dir/godot.windows.editor.$arch.exe"
+        cp "$filename" "$template_dir/windows_debug_x86_32_console.exe"
+        cp "$filename" "$template_dir/windows_debug_x86_32.exe"
+        cp "$filename" "$template_dir/windows_debug_x86_64_console.exe"
+        cp "$filename" "$template_dir/windows_debug_x86_64.exe"
+        cp "$filename" "$template_dir/windows_release_x86_32_console.exe"
+        cp "$filename" "$template_dir/windows_release_x86_32.exe"
+        cp "$filename" "$template_dir/windows_release_x86_64_console.exe"
+        cp "$filename" "$template_dir/windows_release_x86_64.exe"
 
     elif [ "$platform" = "macos" ]; then
-        zip_name="editor-macos-universal.zip"
-        url=$url_prefix$zip_name
-        curl -L -o "$tmp_dir/$zip_name" "$url" || exit
-        unzip -o "$tmp_dir/$zip_name" -d "$tmp_dir" > /dev/null 2>&1  || exit
-        rm -rf "$tmp_dir/$zip_name"
-        
-        cp -f "$tmp_dir/Godot.app/Contents/MacOS/Godot" "$dst_dir/gdspx$VERSION"  || exit
-        rm -rf "$tmp_dir/Godot.app"
+        curl -L -o "$template_dir/macos.zip" $url_prefix"macos.zip" || exit
     else 
         echo "Unsupported platform for editor download: $platform"
         exit 1
     fi
+
+    rm -rf "$dst_dir/$zip_name"
+    rm -rf "$tmp_dir/$zip_name"
+    rm -rf "$tmp_dir"
 }
 
 build_editor(){

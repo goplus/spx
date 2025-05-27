@@ -2,7 +2,16 @@
 # Read app name from appname.txt file
 
 go mod tidy
-./setup_font.sh
+font_path=./template/project/engine/fonts/CnFont.ttf
+if [ ! -f "$font_path" ]; then
+    curl -L https://github.com/goplus/godot/releases/download/spx2.0.14/CnFont.ttf -o "$font_path"
+fi
+
+if [ ! -f "$font_path" ]; then
+    echo "can not find font or download it, please checkout your network " $font_path
+    exit 1
+fi
+
 appname=$(cat appname.txt)
 # install cmd
 if [ "$OS" = "Windows_NT" ]; then
