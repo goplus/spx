@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"os"
 	"syscall/js"
+	_ "unsafe"
 
 	"github.com/goplus/builder/tools/ai"
 	"github.com/goplus/builder/tools/ai/wasmtrans"
@@ -18,7 +19,6 @@ import (
 	"github.com/goplus/igop/gopbuild"
 	"github.com/goplus/mod/modfile"
 	_ "github.com/goplus/reflectx/icall/icall8192"
-	"github.com/goplus/spx"
 	"github.com/goplus/spx/cmd/igox/zipfs"
 	goxfs "github.com/goplus/spx/fs"
 )
@@ -181,7 +181,7 @@ func main() {
 		Ext:      ".spx",
 		Class:    "Game",
 		Works:    []*modfile.Class{{Ext: ".spx", Class: "SpriteImpl"}},
-		PkgPaths: []string{"github.com/goplus/spx"},
+		PkgPaths: []string{"github.com/goplus/spx", "math"},
 		Import:   []*modfile.Import{{Name: "ai", Path: "github.com/goplus/builder/tools/ai"}},
 	})
 
@@ -220,7 +220,6 @@ func Gopt_Player_Gopx_OnCmd[T any](p *Player, handler func(cmd T) error) {
 		wasmtrans.WithEndpoint(aiInteractionAPIEndpoint),
 		wasmtrans.WithTokenProvider(aiInteractionAPITokenProvider),
 	))
-	var dummyGame spx.Game
 	ai.SetDefaultTaskRunner(func(task func()) {
 		var done bool
 		go func() {
@@ -228,7 +227,7 @@ func Gopt_Player_Gopx_OnCmd[T any](p *Player, handler func(cmd T) error) {
 			done = true
 		}()
 		for !done {
-			dummyGame.WaitNextFrame()
+			spxEngineWaitNextFrame()
 		}
 	})
 
@@ -260,3 +259,6 @@ func Gopt_Player_Gopx_OnCmd[T any](p *Player, handler func(cmd T) error) {
 		return
 	}
 }
+
+//go:linkname spxEngineWaitNextFrame github.com/goplus/spx/internal/engine.WaitNextFrame
+func spxEngineWaitNextFrame() float64
