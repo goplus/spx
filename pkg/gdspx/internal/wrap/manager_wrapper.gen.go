@@ -1104,11 +1104,12 @@ func (pself *spriteMgr) IsTriggerEnabled(obj Object) bool {
 	retValue := CallSpriteIsTriggerEnabled(arg0)
 	return ToBool(retValue)
 }
-func (pself *spriteMgr) CheckCollisionByColor(obj Object, color Color, color_threshold float64) bool {
+func (pself *spriteMgr) CheckCollisionByColor(obj Object, color Color, color_threshold float64, alpha_threshold float64) bool {
 	arg0 := ToGdObj(obj)
 	arg1 := ToGdColor(color)
 	arg2 := ToGdFloat(color_threshold)
-	retValue := CallSpriteCheckCollisionByColor(arg0, arg1, arg2)
+	arg3 := ToGdFloat(alpha_threshold)
+	retValue := CallSpriteCheckCollisionByColor(arg0, arg1, arg2, arg3)
 	return ToBool(retValue)
 }
 func (pself *spriteMgr) CheckCollisionByAlpha(obj Object, alpha_threshold float64) bool {

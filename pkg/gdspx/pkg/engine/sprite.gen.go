@@ -32,8 +32,8 @@ func (pself *Sprite) CheckCollisionByAlpha(alpha_threshold float64) bool {
 	return SpriteMgr.CheckCollisionByAlpha(pself.Id, alpha_threshold)
 }
 
-func (pself *Sprite) CheckCollisionByColor(color Color, color_threshold float64) bool {
-	return SpriteMgr.CheckCollisionByColor(pself.Id, color, color_threshold)
+func (pself *Sprite) CheckCollisionByColor(color Color, color_threshold float64, alpha_threshold float64) bool {
+	return SpriteMgr.CheckCollisionByColor(pself.Id, color, color_threshold, alpha_threshold)
 }
 
 func (pself *Sprite) CheckCollisionWithPoint(point Vec2, is_trigger bool) bool {

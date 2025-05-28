@@ -1193,10 +1193,10 @@ func (pself *spriteMgrImpl) IsTriggerEnabled(obj gdx.Object) bool {
 	})
 	return _ret1
 }
-func (pself *spriteMgrImpl) CheckCollisionByColor(obj gdx.Object, color Color, color_threshold float64) bool {
+func (pself *spriteMgrImpl) CheckCollisionByColor(obj gdx.Object, color Color, color_threshold float64, alpha_threshold float64) bool {
 	var _ret1 bool
 	callInMainThread(func() {
-		_ret1 = gdx.SpriteMgr.CheckCollisionByColor(obj, color, color_threshold)
+		_ret1 = gdx.SpriteMgr.CheckCollisionByColor(obj, color, color_threshold, alpha_threshold)
 	})
 	return _ret1
 }

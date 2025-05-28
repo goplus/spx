@@ -385,7 +385,7 @@ typedef void (*GDExtensionSpxSpriteSetTriggerCircle)(GdObj obj, GdVec2 center, G
 typedef void (*GDExtensionSpxSpriteSetTriggerCapsule)(GdObj obj, GdVec2 center, GdVec2 size);
 typedef void (*GDExtensionSpxSpriteSetTriggerEnabled)(GdObj obj, GdBool trigger);
 typedef void (*GDExtensionSpxSpriteIsTriggerEnabled)(GdObj obj, GdBool* ret_value);
-typedef void (*GDExtensionSpxSpriteCheckCollisionByColor)(GdObj obj, GdColor color,GdFloat color_threshold, GdBool* ret_value);
+typedef void (*GDExtensionSpxSpriteCheckCollisionByColor)(GdObj obj, GdColor color,GdFloat color_threshold, GdFloat alpha_threshold, GdBool* ret_value);
 typedef void (*GDExtensionSpxSpriteCheckCollisionByAlpha)(GdObj obj, GdFloat alpha_threshold, GdBool* ret_value);
 typedef void (*GDExtensionSpxSpriteCheckCollisionWithSpriteByAlpha)(GdObj obj, GdObj obj_b, GdFloat alpha_threshold, GdBool* ret_value);
 // SpxUi
