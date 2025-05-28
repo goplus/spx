@@ -336,6 +336,11 @@ func (pself *physicMgr) CheckCollision(from Vec2, to Vec2, collision_mask int64,
 	_retValue := API.SpxPhysicCheckCollision.Invoke(arg0, arg1, arg2, arg3, arg4)
 	return JsToGdBool(_retValue)
 }
+func (pself *physicMgr) CheckTouchedCameraBoundaries(obj Object) int64 {
+	arg0 := JsFromGdObj(obj)
+	_retValue := API.SpxPhysicCheckTouchedCameraBoundaries.Invoke(arg0)
+	return JsToGdInt(_retValue)
+}
 func (pself *physicMgr) CheckTouchedCameraBoundary(obj Object, board_type int64) bool {
 	arg0 := JsFromGdObj(obj)
 	arg1 := JsFromGdInt(board_type)

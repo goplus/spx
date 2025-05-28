@@ -357,6 +357,11 @@ func (pself *physicMgr) CheckCollision(from Vec2, to Vec2, collision_mask int64,
 	retValue := CallPhysicCheckCollision(arg0, arg1, arg2, arg3, arg4)
 	return ToBool(retValue)
 }
+func (pself *physicMgr) CheckTouchedCameraBoundaries(obj Object) int64 {
+	arg0 := ToGdObj(obj)
+	retValue := CallPhysicCheckTouchedCameraBoundaries(arg0)
+	return ToInt64(retValue)
+}
 func (pself *physicMgr) CheckTouchedCameraBoundary(obj Object, board_type int64) bool {
 	arg0 := ToGdObj(obj)
 	arg1 := ToGdInt(board_type)

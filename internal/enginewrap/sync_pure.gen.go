@@ -218,6 +218,10 @@ func (pself *physicMgrImpl) CheckCollision(from Vec2, to Vec2, collision_mask in
 	var _ret1 bool
 	return _ret1
 }
+func (pself *physicMgrImpl) CheckTouchedCameraBoundaries(obj gdx.Object) int64 {
+	var _ret1 int64
+	return _ret1
+}
 func (pself *physicMgrImpl) CheckTouchedCameraBoundary(obj gdx.Object, board_type int64) bool {
 	var _ret1 bool
 	return _ret1

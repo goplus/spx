@@ -88,6 +88,7 @@ type IInputMgr interface {
 type IPhysicMgr interface {
 	Raycast(from Vec2, to Vec2, collision_mask int64) Object
 	CheckCollision(from Vec2, to Vec2, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) bool
+	CheckTouchedCameraBoundaries(obj Object) int64
 	CheckTouchedCameraBoundary(obj Object, board_type int64) bool
 	SetCollisionSystemType(is_collision_by_alpha bool)
 }
