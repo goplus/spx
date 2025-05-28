@@ -42,7 +42,10 @@ help:
 
 init:
 	chmod +x ./pkg/gdspx/tools/*.sh && \
-	make download
+	echo "===>step1/4: cmd" && make cmd && \
+	echo "===>step2/4: download engine" && make download && \
+	echo "===>step3/4: prepare dev env" && make exportpack && \
+	echo "===>step4/4: prepare web template" && ./pkg/gdspx/tools/make_util.sh extrawebtemplate
 
 initdev:
 	chmod +x ./pkg/gdspx/tools/*.sh && \
