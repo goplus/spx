@@ -1,0 +1,119 @@
+name: 🚀 Release Build
+
+on:
+  release:
+    types: [created, edited]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release version (e.g. v2.0.1)'
+        required: true
+        default: 'v2.0.1'
+      platforms:
+        description: 'Platforms to build (comma-separated: web,all)'
+        required: true
+        default: 'web'
+concurrency:
+  group: ci-${{github.actor}}-${{github.head_ref || github.run_number}}-${{github.ref}}-release
+  cancel-in-progress: true
+
+jobs:
+  setup:
+    name: 📋 Prepare Build Environment
+    runs-on: ubuntu-22.04
+    outputs:
+      version: ${{ steps.set-version.outputs.version }}
+      platforms: ${{ steps.set-platforms.outputs.platforms }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set Version Number
+        id: set-version
+        run: |
+          if [ "${{ github.event_name }}" == "release" ]; then
+            VERSION="${{ github.event.release.tag_name }}"
+          else
+            VERSION="${{ github.event.inputs.release_tag }}"
+          fi
+          VERSION="${VERSION#v}"  # Remove 'v' prefix (if present)
+          echo "VERSION=$VERSION"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Set Build Platforms
+        id: set-platforms
+        run: |
+          if [ "${{ github.event_name }}" == "release" ]; then
+            PLATFORMS="all"
+          else
+            PLATFORMS="${{ github.event.inputs.platforms }}"
+          fi
+          
+          if [ "$PLATFORMS" == "all" ]; then
+            PLATFORMS="web"
+          fi
+          
+          echo "PLATFORMS=$PLATFORMS"
+          echo "platforms=$PLATFORMS" >> $GITHUB_OUTPUT
+
+
+  web-build:
+    name: 🌐 Web Release
+    needs: setup
+    if: contains(needs.setup.outputs.platforms, 'web') || contains(needs.setup.outputs.platforms, 'all')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go/Go+
+        uses: goplus/setup-goplus@v1.1.1
+        with:
+          go-version: "1.23.0"
+          gop-version: "1.4.6"
+      - name: Get dependencies
+        run: sudo apt-get update && sudo apt-get install gcc libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libx11-dev xorg-dev libasound2-dev libopenal-dev binaryen
+        if: ${{ runner.os == 'Linux' }}
+
+      - name: Prepare engine
+        run: make init
+
+      - name: Run test demo
+        run: spx run -path="test/CI" -headless=true &> cilog.txt
+
+      - name: Check test result
+        run: |
+          if grep -q "===>SpxCIRunSucc" cilog.txt; then
+            echo "test success"
+            rm -f cilog.txt
+          else
+            echo "test failed: not found success mark"
+            cat cilog.txt
+            rm -f cilog.txt
+            exit 1
+          fi
+
+      - name: Build release pack
+        run: |
+          make exportweb
+          if [ ! -f "spx_web.zip" ]; then
+            echo "spx_web.zip not found"
+            exit 1
+          fi
+
+      - name: Upload Web Build Results
+        uses: actions/upload-artifact@v4
+        with: 
+          name: web-${{ needs.setup.outputs.version }}
+          path: spx_web.zip
+          retention-days: 14
+
+      - name: Publish to GitHub Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: spx_web.zip
+          tag_name: ${{ github.event.release.tag_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
