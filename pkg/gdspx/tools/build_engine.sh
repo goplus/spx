@@ -210,6 +210,8 @@ download_editor() {
     rm -rf "$dst_dir/$zip_name"
     rm -rf "$tmp_dir/$zip_name"
     rm -rf "$tmp_dir"
+    ls -l "$dst_dir"
+    ls -l "$template_dir"
 }
 
 build_editor(){

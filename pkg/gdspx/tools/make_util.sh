@@ -70,6 +70,7 @@ do_prepare_export() {
 
     TEMP_VERSION=$(cat "$CURRENT_PATH/cmd/gox/template/version") 
     OUTPUT_PCK="$GOPATH/bin/gdspxrt$TEMP_VERSION.pck" 
+    ls $GOPATH/bin
 }
 
 # Define a function for the exportpack functionality

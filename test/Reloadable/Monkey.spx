@@ -1,5 +1,5 @@
-func turnOrStep(where int) {
-	if int(heading) != where {
+func turnOrStep(where float64) {
+	if heading != where {
 		turnTo where
 	} else {
 		step 10

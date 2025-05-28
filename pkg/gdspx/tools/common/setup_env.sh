@@ -3,6 +3,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPT_DIR="$SCRIPT_DIR/.."
 
 setup_global_variables() {
+    gop version || true
+    go version || true
+
     local DEFAULT_PLATFORM=""
 
     # Define Godot version

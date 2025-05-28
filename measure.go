@@ -64,7 +64,7 @@ func newMeasure(v specsp) *measure {
 		text:         text,
 		color:        c,
 		pos:          pos,
-		svgLineStyle: fmt.Sprintf("stroke-width:%d;stroke:rgb(%d, %d, %d);", measureLineWidth, c.R, c.G, c.B),
+		svgLineStyle: fmt.Sprintf("stroke-width:%d;stroke:rgb(%f, %f, %f);", measureLineWidth, c.R, c.G, c.B),
 		svgRotate:    fmt.Sprintf("rotate(%.1f %d %d)", heading, svgSize>>1, svgSize>>1),
 		svgSize:      svgSize,
 		panel:        panel,
