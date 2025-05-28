@@ -66,6 +66,7 @@ type GDExtensionInterface struct {
 	SpxInputIsActionJustReleased             GDExtensionSpxInputIsActionJustReleased
 	SpxPhysicRaycast                         GDExtensionSpxPhysicRaycast
 	SpxPhysicCheckCollision                  GDExtensionSpxPhysicCheckCollision
+	SpxPhysicCheckTouchedCameraBoundaries    GDExtensionSpxPhysicCheckTouchedCameraBoundaries
 	SpxPhysicCheckTouchedCameraBoundary      GDExtensionSpxPhysicCheckTouchedCameraBoundary
 	SpxPhysicSetCollisionSystemType          GDExtensionSpxPhysicSetCollisionSystemType
 	SpxPlatformSetWindowPosition             GDExtensionSpxPlatformSetWindowPosition
@@ -295,6 +296,7 @@ func (x *GDExtensionInterface) loadProcAddresses() {
 	x.SpxInputIsActionJustReleased = (GDExtensionSpxInputIsActionJustReleased)(dlsymGD("spx_input_is_action_just_released"))
 	x.SpxPhysicRaycast = (GDExtensionSpxPhysicRaycast)(dlsymGD("spx_physic_raycast"))
 	x.SpxPhysicCheckCollision = (GDExtensionSpxPhysicCheckCollision)(dlsymGD("spx_physic_check_collision"))
+	x.SpxPhysicCheckTouchedCameraBoundaries = (GDExtensionSpxPhysicCheckTouchedCameraBoundaries)(dlsymGD("spx_physic_check_touched_camera_boundaries"))
 	x.SpxPhysicCheckTouchedCameraBoundary = (GDExtensionSpxPhysicCheckTouchedCameraBoundary)(dlsymGD("spx_physic_check_touched_camera_boundary"))
 	x.SpxPhysicSetCollisionSystemType = (GDExtensionSpxPhysicSetCollisionSystemType)(dlsymGD("spx_physic_set_collision_system_type"))
 	x.SpxPlatformSetWindowPosition = (GDExtensionSpxPlatformSetWindowPosition)(dlsymGD("spx_platform_set_window_position"))
