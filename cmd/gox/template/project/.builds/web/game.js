@@ -181,11 +181,11 @@ class GameApp {
                 'canvas': this.editorCanvas,
                 "logLevel": this.logLevel
             }).then(async () => {
-                this.editorCanvas.focus();
                 await this.waitFsSyncDone(this.editorCanvas)
                 this.onProgress(0.9);
                 await this.mergeProjectWithEngineRes()
                 this.onProgress(1.0);
+                this.editorCanvas.focus();
                 await this.updateProjectHash(this.curProjectHash)
                 this.logVerbose("==> editor start done")
                 resolve()
@@ -232,11 +232,11 @@ class GameApp {
             await this.unpackGameData(curGame)
 
             curGame.start({ 'args': args, 'canvas': this.gameCanvas }).then(async () => {
-                this.gameCanvas.focus();
                 await this.waitFsSyncDone(this.gameCanvas)
                 this.onProgress(0.9);
                 window.goLoadData(new Uint8Array(this.projectData));
                 this.onProgress(1.0);
+                this.gameCanvas.focus();
                 this.logVerbose("==> game start done")
                 resolve()
             });
