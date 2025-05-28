@@ -1014,11 +1014,12 @@ func (pself *spriteMgr) IsTriggerEnabled(obj Object) bool {
 	_retValue := API.SpxSpriteIsTriggerEnabled.Invoke(arg0)
 	return JsToGdBool(_retValue)
 }
-func (pself *spriteMgr) CheckCollisionByColor(obj Object, color Color, color_threshold float64) bool {
+func (pself *spriteMgr) CheckCollisionByColor(obj Object, color Color, color_threshold float64, alpha_threshold float64) bool {
 	arg0 := JsFromGdObj(obj)
 	arg1 := JsFromGdColor(color)
 	arg2 := JsFromGdFloat(color_threshold)
-	_retValue := API.SpxSpriteCheckCollisionByColor.Invoke(arg0, arg1, arg2)
+	arg3 := JsFromGdFloat(alpha_threshold)
+	_retValue := API.SpxSpriteCheckCollisionByColor.Invoke(arg0, arg1, arg2, arg3)
 	return JsToGdBool(_retValue)
 }
 func (pself *spriteMgr) CheckCollisionByAlpha(obj Object, alpha_threshold float64) bool {

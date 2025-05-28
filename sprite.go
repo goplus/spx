@@ -1435,7 +1435,7 @@ func (p *SpriteImpl) ClearGraphicEffects() {
 // -----------------------------------------------------------------------------
 
 func (p *SpriteImpl) TouchingColor(color Color) bool {
-	panic("todo gdspx")
+	return p.touchingColor(toMathfColor(color))
 }
 
 // Touching func:
@@ -1495,6 +1495,13 @@ func (p *SpriteImpl) touchPoint(x, y float64) bool {
 		return false
 	}
 	return spriteMgr.CheckCollisionWithPoint(p.syncSprite.GetId(), mathf.NewVec2(x, y), true)
+}
+
+func (p *SpriteImpl) touchingColor(color mathf.Color) bool {
+	if p.syncSprite == nil {
+		return false
+	}
+	return spriteMgr.CheckCollisionByColor(p.syncSprite.GetId(), color, 0.05, 0.1)
 }
 
 func (p *SpriteImpl) touchingSprite(dst *SpriteImpl) bool {

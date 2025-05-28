@@ -558,8 +558,8 @@ void cgo_callfn_GDExtensionSpxSpriteSetTriggerEnabled(const GDExtensionSpxSprite
 void cgo_callfn_GDExtensionSpxSpriteIsTriggerEnabled(const GDExtensionSpxSpriteIsTriggerEnabled fn, GdObj obj, GdBool* ret_val) {
 	fn(obj,ret_val);
 }
-void cgo_callfn_GDExtensionSpxSpriteCheckCollisionByColor(const GDExtensionSpxSpriteCheckCollisionByColor fn, GdObj obj, GdColor color, GdFloat color_threshold, GdBool* ret_val) {
-	fn(obj, color, color_threshold,ret_val);
+void cgo_callfn_GDExtensionSpxSpriteCheckCollisionByColor(const GDExtensionSpxSpriteCheckCollisionByColor fn, GdObj obj, GdColor color, GdFloat color_threshold, GdFloat alpha_threshold, GdBool* ret_val) {
+	fn(obj, color, color_threshold, alpha_threshold,ret_val);
 }
 void cgo_callfn_GDExtensionSpxSpriteCheckCollisionByAlpha(const GDExtensionSpxSpriteCheckCollisionByAlpha fn, GdObj obj, GdFloat alpha_threshold, GdBool* ret_val) {
 	fn(obj, alpha_threshold,ret_val);

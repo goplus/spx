@@ -2174,13 +2174,15 @@ func CallSpriteCheckCollisionByColor(
 	obj GdObj,
 	color GdColor,
 	color_threshold GdFloat,
+	alpha_threshold GdFloat,
 ) GdBool {
 	arg0 := (C.GDExtensionSpxSpriteCheckCollisionByColor)(api.SpxSpriteCheckCollisionByColor)
 	arg1GdObj := (C.GdObj)(obj)
 	arg2GdColor := (C.GdColor)(color)
 	arg3GdFloat := (C.GdFloat)(color_threshold)
+	arg4GdFloat := (C.GdFloat)(alpha_threshold)
 	var ret_val C.GdBool
-	C.cgo_callfn_GDExtensionSpxSpriteCheckCollisionByColor(arg0, arg1GdObj, arg2GdColor, arg3GdFloat, &ret_val)
+	C.cgo_callfn_GDExtensionSpxSpriteCheckCollisionByColor(arg0, arg1GdObj, arg2GdColor, arg3GdFloat, arg4GdFloat, &ret_val)
 
 	return (GdBool)(ret_val)
 }

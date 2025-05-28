@@ -32,7 +32,7 @@ func (pself *Sprite) CheckCollisionByAlpha(alpha_threshold float64) bool {
 	return _val
 }
 
-func (pself *Sprite) CheckCollisionByColor(color Color, color_threshold float64) bool {
+func (pself *Sprite) CheckCollisionByColor(color Color, color_threshold float64, alpha_threshold float64) bool {
 	var _val bool
 	return _val
 }
