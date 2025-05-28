@@ -1560,11 +1560,8 @@ func (p *SpriteImpl) checkTouchingScreen(where int) (touching int) {
 	if p.syncSprite == nil {
 		return 0
 	}
-	value := physicMgr.CheckTouchedCameraBoundary(p.syncSprite.GetId(), int64(where))
-	if value {
-		return where
-	}
-	return 0
+	touching = (int)(physicMgr.CheckTouchedCameraBoundaries(p.syncSprite.GetId()))
+	return touching & where
 }
 
 // -----------------------------------------------------------------------------

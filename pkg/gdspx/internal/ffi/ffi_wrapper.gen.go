@@ -120,6 +120,7 @@ type GDExtensionSpxInputIsActionJustPressed C.GDExtensionSpxInputIsActionJustPre
 type GDExtensionSpxInputIsActionJustReleased C.GDExtensionSpxInputIsActionJustReleased
 type GDExtensionSpxPhysicRaycast C.GDExtensionSpxPhysicRaycast
 type GDExtensionSpxPhysicCheckCollision C.GDExtensionSpxPhysicCheckCollision
+type GDExtensionSpxPhysicCheckTouchedCameraBoundaries C.GDExtensionSpxPhysicCheckTouchedCameraBoundaries
 type GDExtensionSpxPhysicCheckTouchedCameraBoundary C.GDExtensionSpxPhysicCheckTouchedCameraBoundary
 type GDExtensionSpxPhysicSetCollisionSystemType C.GDExtensionSpxPhysicSetCollisionSystemType
 type GDExtensionSpxPlatformSetWindowPosition C.GDExtensionSpxPlatformSetWindowPosition
@@ -767,6 +768,16 @@ func CallPhysicCheckCollision(
 	C.cgo_callfn_GDExtensionSpxPhysicCheckCollision(arg0, arg1GdVec2, arg2GdVec2, arg3GdInt, arg4GdBool, arg5GdBool, &ret_val)
 
 	return (GdBool)(ret_val)
+}
+func CallPhysicCheckTouchedCameraBoundaries(
+	obj GdObj,
+) GdInt {
+	arg0 := (C.GDExtensionSpxPhysicCheckTouchedCameraBoundaries)(api.SpxPhysicCheckTouchedCameraBoundaries)
+	arg1GdObj := (C.GdObj)(obj)
+	var ret_val C.GdInt
+	C.cgo_callfn_GDExtensionSpxPhysicCheckTouchedCameraBoundaries(arg0, arg1GdObj, &ret_val)
+
+	return (GdInt)(ret_val)
 }
 func CallPhysicCheckTouchedCameraBoundary(
 	obj GdObj,

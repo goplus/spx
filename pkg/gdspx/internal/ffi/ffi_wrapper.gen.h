@@ -156,6 +156,9 @@ void cgo_callfn_GDExtensionSpxPhysicRaycast(const GDExtensionSpxPhysicRaycast fn
 void cgo_callfn_GDExtensionSpxPhysicCheckCollision(const GDExtensionSpxPhysicCheckCollision fn, GdVec2 from, GdVec2 to, GdInt collision_mask, GdBool collide_with_areas, GdBool collide_with_bodies, GdBool* ret_val) {
 	fn(from, to, collision_mask, collide_with_areas, collide_with_bodies,ret_val);
 }
+void cgo_callfn_GDExtensionSpxPhysicCheckTouchedCameraBoundaries(const GDExtensionSpxPhysicCheckTouchedCameraBoundaries fn, GdObj obj, GdInt* ret_val) {
+	fn(obj,ret_val);
+}
 void cgo_callfn_GDExtensionSpxPhysicCheckTouchedCameraBoundary(const GDExtensionSpxPhysicCheckTouchedCameraBoundary fn, GdObj obj, GdInt board_type, GdBool* ret_val) {
 	fn(obj, board_type,ret_val);
 }
