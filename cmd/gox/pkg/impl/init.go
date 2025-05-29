@@ -8,7 +8,7 @@ import (
 
 	_ "embed"
 
-	"github.com/goplus/spx/cmd/gox/pkg/util"
+	"github.com/goplus/spx/v2/cmd/gox/pkg/util"
 )
 
 func downloadPack(dstDir, tagName, postfix string) error {

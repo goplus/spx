@@ -1,8 +1,8 @@
 package gdspx
 
 import (
-	inengine "github.com/goplus/spx/pkg/gdspx/internal/engine"
-	. "github.com/goplus/spx/pkg/gdspx/pkg/engine"
+	inengine "github.com/goplus/spx/v2/pkg/gdspx/internal/engine"
+	. "github.com/goplus/spx/v2/pkg/gdspx/pkg/engine"
 )
 
 func IsWebIntepreterMode() bool {

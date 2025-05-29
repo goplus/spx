@@ -1,4 +1,4 @@
-module github.com/goplus/spx/cmd/igox
+module github.com/goplus/spx/v2/cmd/igox
 
 go 1.23.0
 
@@ -7,7 +7,7 @@ require (
 	github.com/goplus/igop v0.44.0
 	github.com/goplus/mod v0.16.1
 	github.com/goplus/reflectx v1.4.2
-	github.com/goplus/spx v0.0.0
+	github.com/goplus/spx/v2 v2.0.0-00010101000000-000000000000
 )
 
 require (
@@ -29,7 +29,7 @@ require (
 )
 
 replace (
-	github.com/goplus/spx => ../../
+	github.com/goplus/spx/v2 => ../../
 	golang.org/x/image => golang.org/x/image v0.0.0-20210628002857-a66eb6448b8d
 	golang.org/x/mobile => golang.org/x/mobile v0.0.0-20210902104108-5d9a33257ab5
 )

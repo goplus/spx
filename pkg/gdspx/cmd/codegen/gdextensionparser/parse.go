@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/goplus/spx/pkg/gdspx/cmd/codegen/gdextensionparser/clang"
-	"github.com/goplus/spx/pkg/gdspx/cmd/codegen/gdextensionparser/preprocessor"
+	"github.com/goplus/spx/v2/pkg/gdspx/cmd/codegen/gdextensionparser/clang"
+	"github.com/goplus/spx/v2/pkg/gdspx/cmd/codegen/gdextensionparser/preprocessor"
 )
 
 func ReadFiles(dir, fileName string) string {

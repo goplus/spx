@@ -17,7 +17,7 @@
 package spx
 
 import (
-	"github.com/goplus/spx/internal/engine"
+	"github.com/goplus/spx/v2/internal/engine"
 )
 
 type PlayAction int

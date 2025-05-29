@@ -19,7 +19,7 @@ package asset
 import (
 	"io"
 
-	"github.com/goplus/spx/fs"
+	"github.com/goplus/spx/v2/fs"
 )
 
 // -------------------------------------------------------------------------------------

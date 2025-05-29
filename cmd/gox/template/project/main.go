@@ -2,7 +2,7 @@
 
 package main
 
-import "github.com/goplus/spx"
+import "github.com/goplus/spx/v2"
 
 const _ = true
 

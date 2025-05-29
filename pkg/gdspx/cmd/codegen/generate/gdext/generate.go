@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"text/template"
 
-	"github.com/goplus/spx/pkg/gdspx/cmd/codegen/gdextensionparser/clang"
-	. "github.com/goplus/spx/pkg/gdspx/cmd/codegen/generate/common"
+	"github.com/goplus/spx/v2/pkg/gdspx/cmd/codegen/gdextensionparser/clang"
+	. "github.com/goplus/spx/v2/pkg/gdspx/cmd/codegen/generate/common"
 
 	"github.com/iancoleman/strcase"
 )

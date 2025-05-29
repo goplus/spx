@@ -8,8 +8,8 @@ import "C"
 import (
 	"unsafe"
 
-	"github.com/goplus/spx/pkg/gdspx/internal/platform"
-	"github.com/goplus/spx/pkg/gdspx/pkg/engine"
+	"github.com/goplus/spx/v2/pkg/gdspx/internal/platform"
+	"github.com/goplus/spx/v2/pkg/gdspx/pkg/engine"
 	"github.com/realdream-ai/mathf"
 )
 

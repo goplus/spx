@@ -1,4 +1,4 @@
-module github.com/goplus/spx/pkg/gdspx/cmd/codegen
+module github.com/goplus/spx/v2/pkg/gdspx/cmd/codegen
 
 go 1.21.3
 

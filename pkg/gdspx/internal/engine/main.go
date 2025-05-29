@@ -1,8 +1,8 @@
 package engine
 
 import (
-	. "github.com/goplus/spx/pkg/gdspx/internal/wrap"
-	. "github.com/goplus/spx/pkg/gdspx/pkg/engine"
+	. "github.com/goplus/spx/v2/pkg/gdspx/internal/wrap"
+	. "github.com/goplus/spx/v2/pkg/gdspx/pkg/engine"
 )
 
 var (

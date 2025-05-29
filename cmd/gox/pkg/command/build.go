@@ -8,7 +8,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/goplus/spx/cmd/gox/pkg/util"
+	"github.com/goplus/spx/v2/cmd/gox/pkg/util"
 )
 
 func (pself *CmdTool) BuildWasm() (err error) {

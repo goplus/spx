@@ -3,7 +3,7 @@ package time
 import (
 	stime "time"
 
-	"github.com/goplus/spx/internal/timer"
+	"github.com/goplus/spx/v2/internal/timer"
 )
 
 var (

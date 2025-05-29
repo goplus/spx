@@ -21,8 +21,8 @@ import (
 	"io"
 	"syscall"
 
-	spxfs "github.com/goplus/spx/fs"
-	"github.com/goplus/spx/internal/engine"
+	spxfs "github.com/goplus/spx/v2/fs"
+	"github.com/goplus/spx/v2/internal/engine"
 	"github.com/realdream-ai/mathf"
 )
 

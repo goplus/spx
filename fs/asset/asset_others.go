@@ -24,7 +24,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/goplus/spx/fs"
+	"github.com/goplus/spx/v2/fs"
 )
 
 // Open opens a local filesystem object.

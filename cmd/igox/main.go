@@ -19,8 +19,9 @@ import (
 	"github.com/goplus/igop/gopbuild"
 	"github.com/goplus/mod/modfile"
 	_ "github.com/goplus/reflectx/icall/icall8192"
-	"github.com/goplus/spx/cmd/igox/zipfs"
-	goxfs "github.com/goplus/spx/fs"
+	_ "github.com/goplus/spx/v2"
+	"github.com/goplus/spx/v2/cmd/igox/zipfs"
+	goxfs "github.com/goplus/spx/v2/fs"
 )
 
 var aiInteractionAPIEndpoint string
@@ -181,16 +182,16 @@ func main() {
 		Ext:      ".spx",
 		Class:    "Game",
 		Works:    []*modfile.Class{{Ext: ".spx", Class: "SpriteImpl"}},
-		PkgPaths: []string{"github.com/goplus/spx", "math"},
+		PkgPaths: []string{"github.com/goplus/spx/v2", "math"},
 		Import:   []*modfile.Import{{Name: "ai", Path: "github.com/goplus/builder/tools/ai"}},
 	})
 
 	// Register patch for spx to support functions with generic type like `Gopt_Game_Gopx_GetWidget`.
 	// See details in https://github.com/goplus/builder/issues/765#issuecomment-2313915805
-	if err := gopbuild.RegisterPackagePatch(ctx, "github.com/goplus/spx", `
+	if err := gopbuild.RegisterPackagePatch(ctx, "github.com/goplus/spx/v2", `
 package spx
 
-import . "github.com/goplus/spx"
+import . "github.com/goplus/spx/v2"
 
 func Gopt_Game_Gopx_GetWidget[T any](sg ShapeGetter, name string) *T {
 	widget := GetWidget_(sg, name)
