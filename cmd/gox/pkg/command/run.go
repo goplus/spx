@@ -20,7 +20,7 @@ func (pself *CmdTool) Run(arg string) (err error) {
 	return util.RunCommandInDir(pself.ProjectDir, pself.CmdPath, arg)
 }
 
-func (pself *CmdTool) RunPackMode() error {
+func (pself *CmdTool) RunPackMode(pargs ...string) error {
 	// copy libs
 	dllPath := path.Join(pself.RuntimeTempDir, filepath.Base(pself.LibPath))
 	util.CopyFile(pself.LibPath, dllPath)
@@ -28,6 +28,13 @@ func (pself *CmdTool) RunPackMode() error {
 	extensionPath := path.Join(pself.RuntimeTempDir, "runtime.gdextension")              // copy runtime
 	util.CopyFile(path.Join(pself.ProjectDir, "runtime.gdextension.txt"), extensionPath) // copy gdextension
 	args := []string{}
+	for i := 0; i < len(pargs); i++ {
+		if pargs[i] == "--path" {
+			i++
+			continue
+		}
+		args = append(args, pargs[i])
+	}
 	args = append(args, "--path")
 	args = append(args, pself.RuntimeTempDir)
 	args = append(args, "--gdextpath")

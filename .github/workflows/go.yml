@@ -1,10 +1,6 @@
 name: Go
 
-on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+on: [push, pull_request]
 
 jobs:
 
@@ -16,18 +12,36 @@ jobs:
     - name: Set up Go/Go+
       uses: goplus/setup-goplus@v1.1.1
       with:
-        go-version: "1.19"
-        gop-version: "main"
+        go-version: "1.23.0"
+        gop-version: "1.4.6"
 
     - name: Get dependencies
       run: sudo apt-get update && sudo apt-get install gcc libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libx11-dev xorg-dev libasound2-dev libopenal-dev
       if: ${{ runner.os == 'Linux' }}
 
     - name: Build
-      run: go build -v ./...
+      run: go build -v $(go list ./... | grep -v /internal/webffi)
 
     - name: Test
-      run: go test -v ./...
+      run: go test -v $(go list ./... | grep -v /internal/webffi)
 
     - name: GenGo
       run: gop go ./...
+
+    - name: Prepare engine
+      run: make init
+
+    - name: Run test demo
+      run: spx run -path="test/CI" -headless=true &> cilog.txt
+
+    - name: Check test result
+      run: |
+        if grep -q "===>SpxCIRunSucc" cilog.txt; then
+          echo "test success"
+          rm -f cilog.txt
+        else
+          echo "test failed: not found success mark"
+          cat cilog.txt
+          rm -f cilog.txt
+          exit 1
+        fi

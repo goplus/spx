@@ -156,7 +156,7 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 	case "rune":
 		err = util.RunCommandInDir(cmd.ProjectDir, cmd.CmdPath, cmd.Args.String()...)
 	case "run":
-		err = cmd.RunPackMode()
+		err = cmd.RunPackMode(cmd.Args.String()...)
 	case "export":
 		err = cmd.Export()
 	case "exportwebruntime":
