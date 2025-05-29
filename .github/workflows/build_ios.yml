@@ -1,0 +1,21 @@
+name: iOS
+
+on:
+  workflow_call:
+
+concurrency:
+  group: ci-${{github.actor}}-${{github.head_ref || github.run_number}}-${{github.ref}}-ios
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: "macos-latest"
+    name: macos
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup go/gop & engine
+      uses: ./.github/actions/deps
+
+    - name: Test
+      uses: ./.github/actions/project-test

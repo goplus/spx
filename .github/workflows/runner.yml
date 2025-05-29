@@ -1,0 +1,47 @@
+name: 🔗 GHA
+on: [push, pull_request]
+
+concurrency:
+  group: ci-${{github.actor}}-${{github.head_ref || github.run_number}}-${{github.ref}}-runner
+  cancel-in-progress: true
+
+jobs:
+  static-checks:
+    name: 📊 static-checks
+    uses: ./.github/workflows/static_checks.yml
+
+  android-build:
+    needs: static-checks
+    name: 🤖 Android
+    uses: ./.github/workflows/build_android.yml
+
+  ios-build:
+    needs: static-checks
+    name: 🍏 iOS
+    uses: ./.github/workflows/build_ios.yml
+
+  web-build:
+    needs: static-checks
+    name: 🌐 Web
+    uses: ./.github/workflows/build_web.yml
+
+  linux-build:
+    needs: static-checks
+    name: 🐧 Linux
+    uses: ./.github/workflows/build_linux.yml
+
+  macos-build:
+    needs: static-checks
+    name: 🍎 macOS
+    uses: ./.github/workflows/build_macos.yml
+
+  windows-build:
+    needs: static-checks
+    name: 🏁 Windows
+    uses: ./.github/workflows/build_windows.yml
+
+
+  # Third stage: Run auxiliary tests using build artifacts from previous jobs.
+
+  # Can be turned off for PRs that intentionally break compat with godot-cpp,
+  # until both the upstream PR and the matching godot-cpp changes are merged.

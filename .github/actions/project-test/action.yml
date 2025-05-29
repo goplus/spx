@@ -1,40 +1,26 @@
-name: Go
-
-on: [push, pull_request]
-
-jobs:
-
-  build:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Set up Go/Go+
-      uses: goplus/setup-goplus@v1.1.1
-      with:
-        go-version: "1.23.0"
-        gop-version: "1.4.6"
-
-    - name: Get dependencies
-      run: sudo apt-get update && sudo apt-get install gcc libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libx11-dev xorg-dev libasound2-dev libopenal-dev
-      if: ${{ runner.os == 'Linux' }}
-
+name: Test Godot project
+description: Run the test Godot project.
+runs:
+  using: "composite"
+  steps:
     - name: Build
+      shell: bash
       run: go build -v $(go list ./... | grep -v /internal/webffi)
 
     - name: Test
+      shell: bash
       run: go test -v $(go list ./... | grep -v /internal/webffi)
 
     - name: GenGo
+      shell: bash
       run: gop go ./...
 
-    - name: Prepare engine
-      run: make init
-
     - name: Run test demo
+      shell: bash
       run: spx run -path="test/CI" -headless=true &> cilog.txt
 
     - name: Check test result
+      shell: bash
       run: |
         if grep -q "===>SpxCIRunSucc" cilog.txt; then
           echo "test success"

@@ -1,0 +1,23 @@
+name: Static Checks
+
+on:
+  workflow_call:
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Get dependencies
+      run: sudo apt-get update && sudo apt-get install gcc libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libx11-dev xorg-dev libasound2-dev libopenal-dev
+      if: ${{ runner.os == 'Linux' }}
+
+    - name: Setup go/gop & engine
+      uses: ./.github/actions/deps
+
+    - name: Test
+      uses: ./.github/actions/project-test
+
+
