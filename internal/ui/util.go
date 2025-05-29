@@ -3,9 +3,9 @@ package ui
 import (
 	. "github.com/realdream-ai/mathf"
 
-	"github.com/goplus/spx/internal/engine"
-	"github.com/goplus/spx/internal/enginewrap"
-	gdx "github.com/goplus/spx/pkg/gdspx/pkg/engine"
+	"github.com/goplus/spx/v2/internal/engine"
+	"github.com/goplus/spx/v2/internal/enginewrap"
+	gdx "github.com/goplus/spx/v2/pkg/gdspx/pkg/engine"
 )
 
 // copy these variable to any namespace you want

@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/goplus/spx/internal/engine/platform"
+	"github.com/goplus/spx/v2/internal/engine/platform"
 )
 
 func SetAssetDir(dir string) {

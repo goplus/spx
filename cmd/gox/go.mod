@@ -1,8 +1,8 @@
-module github.com/goplus/spx/cmd/gox
+module github.com/goplus/spx/v2/cmd/gox
 
 go 1.23.0
 
-require github.com/goplus/spx v0.0.0-00010101000000-000000000000
+require github.com/goplus/spx/v2 v2.0.0-00010101000000-000000000000
 
 require (
 	github.com/pkg/errors v0.9.1 // indirect
@@ -11,4 +11,4 @@ require (
 	golang.org/x/mobile v0.0.0-20220518205345-8578da9835fd // indirect
 )
 
-replace github.com/goplus/spx => ../../
+replace github.com/goplus/spx/v2 => ../../

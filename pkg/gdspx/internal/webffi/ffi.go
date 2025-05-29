@@ -3,7 +3,7 @@ package webffi
 import (
 	"syscall/js"
 
-	"github.com/goplus/spx/pkg/gdspx/pkg/engine"
+	"github.com/goplus/spx/v2/pkg/gdspx/pkg/engine"
 )
 
 var (

@@ -2,7 +2,7 @@ package audiorecord
 
 // TODO(tanjp): implement this
 import (
-	"github.com/goplus/spx/internal/coroutine"
+	"github.com/goplus/spx/v2/internal/coroutine"
 )
 
 const (

@@ -11,9 +11,9 @@ import (
 	stime "time"
 	"unsafe"
 
-	"github.com/goplus/spx/internal/debug"
-	"github.com/goplus/spx/internal/engine/platform"
-	"github.com/goplus/spx/internal/time"
+	"github.com/goplus/spx/v2/internal/debug"
+	"github.com/goplus/spx/v2/internal/engine/platform"
+	"github.com/goplus/spx/v2/internal/time"
 )
 
 var (
