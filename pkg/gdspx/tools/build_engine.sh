@@ -137,11 +137,28 @@ download_editor() {
     local url=""
 
     local template_dir="$TEMPLATE_DIR"
-    echo "Downloading web..."
-    curl -L -o "$dst_dir/gdspx"$VERSION"_webpack.zip" $url_prefix"web.zip" || exit
-    curl -L -o "$dst_dir/gdspx"$VERSION"_web.zip" $url_prefix"editor-web.zip" || exit
     
-    local filename="$dst_dir/gdspx"$VERSION"_webpack.zip"
+    # Check if web zip files exist and download if they don't
+    local web_pack_file="$dst_dir/gdspx"$VERSION"_webpack.zip"
+    local web_editor_file="$dst_dir/gdspx"$VERSION"_web.zip"
+    
+    echo "===>Download task 1/5 ....web template..."
+    if [ -f "$web_pack_file" ]; then
+        echo "Web template file already exists, skipping download"
+    else
+        echo "Downloading web template..."
+        curl -L -o "$web_pack_file" $url_prefix"web.zip" || exit
+    fi
+    
+    echo "===>Download task 2/5 ....web editor..."
+    if [ -f "$web_editor_file" ]; then
+        echo "Web editor file already exists, skipping download"
+    else
+        echo "Downloading web editor..."
+        curl -L -o "$web_editor_file" $url_prefix"editor-web.zip" || exit
+    fi
+    
+    local filename="$web_pack_file"
     cp -f $filename "$template_dir/web_dlink_debug.zip"
     cp -f $filename "$template_dir/web_dlink_release.zip"
     cp -f $filename "$template_dir/web_debug.zip"
@@ -155,30 +172,42 @@ download_editor() {
         binary_postfix=".exe"
     fi
 
-    echo "Downloading editor..."
     local zip_name="editor-$platform-"$arch".zip"
     local binary_name="godot.$platform_name.editor.$arch$binary_postfix"
+    local final_binary="$dst_dir/gdspx$VERSION"$binary_postfix
     url=$url_prefix$zip_name
-    curl -L -o "$dst_dir/$zip_name" "$url" || exit
-
-    unzip -o "$dst_dir/$zip_name" -d "$tmp_dir" > /dev/null 2>&1  || exit
-    cp -f "$tmp_dir/$binary_name" "$dst_dir/gdspx$VERSION"$binary_postfix  || exit
-
-    rm -rf "$dst_dir/$zip_name"
+    
+    echo "===>Download task 3/5 ....pc editor..."
+    # Check if editor binary already exists
+    if [ -f "$final_binary" ]; then
+        echo "Editor binary already exists, skipping download"
+    else
+        echo "Downloading pc editor..."
+        curl -L -o "$dst_dir/$zip_name" "$url" || exit
+        unzip -o "$dst_dir/$zip_name" -d "$tmp_dir" > /dev/null 2>&1  || exit
+        cp -f "$tmp_dir/$binary_name" "$dst_dir/gdspx$VERSION"$binary_postfix  || exit
+        rm -rf "$dst_dir/$zip_name"
+    fi
 
     # download template
-
-    echo "Downloading template..."
     zip_name="$platform-"$arch".zip"
     binary_name="godot.$platform_name.template_release.$arch$binary_postfix"
+    local template_binary="$dst_dir/gdspxrt$VERSION"$binary_postfix
 
     url=$url_prefix$zip_name
-    filename="$tmp_dir/$binary_name"
+    
+    echo "===>Download task 4/5 ....pc template..."
+    # Check if template binary already exists
+    if [ -f "$template_binary" ]; then
+        echo "Template binary already exists, skipping download"
+    else
+        echo "Downloading pc template..."
+        curl -L -o "$dst_dir/$zip_name" "$url" || exit
+        unzip -o "$dst_dir/$zip_name" -d "$tmp_dir" > /dev/null 2>&1  || exit
+        cp -f "$tmp_dir/$binary_name" "$template_binary"  || exit
+    fi
 
-    curl -L -o "$dst_dir/$zip_name" "$url" || exit
-    unzip -o "$dst_dir/$zip_name" -d "$tmp_dir" > /dev/null 2>&1  || exit
-    cp -f "$filename" "$dst_dir/gdspxrt$VERSION"$binary_postfix  || exit
-
+    local filename="$template_binary"
     # copy to build template dir
     if [ "$platform" = "linux" ]; then
         cp "$filename" "$template_dir/linux_debug.arm32"
@@ -201,16 +230,29 @@ download_editor() {
         cp "$filename" "$template_dir/windows_release_x86_64.exe"
 
     elif [ "$platform" = "macos" ]; then
-        curl -L -o "$template_dir/macos.zip" $url_prefix"macos.zip" || exit
+        echo "===>Download task 5/5 ....macOS template..."
+        local macos_zip="$template_dir/macos.zip"
+        if [ -f "$macos_zip" ]; then
+            echo "macOS template already exists, skipping download"
+        else
+            echo "Downloading macOS template..."
+            curl -L -o "$macos_zip" $url_prefix"macos.zip" || exit
+        fi
     else 
         echo "Unsupported platform for editor download: $platform"
         exit 1
     fi
+    echo "===>Download task done ...."
 
-    rm -rf "$dst_dir/$zip_name"
-    rm -rf "$tmp_dir/$zip_name"
-    rm -rf "$tmp_dir"
+    # Clean up temporary files if they exist
+    [ -f "$dst_dir/$zip_name" ] && rm -f "$dst_dir/$zip_name"
+    [ -f "$tmp_dir/$zip_name" ] && rm -f "$tmp_dir/$zip_name"
+    [ -d "$tmp_dir" ] && rm -rf "$tmp_dir"
+    
+    # List final files
+    echo "Files in $dst_dir:"
     ls -l "$dst_dir"
+    echo "Files in $template_dir:"
     ls -l "$template_dir"
 }
 
