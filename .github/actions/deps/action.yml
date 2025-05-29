@@ -1,0 +1,24 @@
+name: Setup go/gop & engine
+description: Setup go/gop & engine.
+inputs:
+  go-version:
+    description: 'Go version to setup'
+    required: false
+    default: '1.23.0'
+  gop-version:
+    description: 'Go+ version to setup'
+    required: false
+    default: '1.4.6'
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Go/Go+
+      uses: goplus/setup-goplus@v1.1.1
+      with:
+        go-version: ${{ inputs.go-version }}
+        gop-version: ${{ inputs.gop-version }}
+
+    - name: Prepare engine
+      run: make init
+      shell: bash
+
