@@ -82,7 +82,3 @@ function getJsFuncBody(function *clang.TypedefFunction) string {
 运行make gen生成绑定
 检查生成的gdextension_spx_ext.h和绑定代码
 在Go/JS中调用新接口
-7. 调试建议
-检查生成的_debug_parsed_ast.json
-查看预处理后的_temp_output.h
-使用Delve调试Go绑定代码
