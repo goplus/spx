@@ -1,9 +1,9 @@
 package engine
 
 import (
-	"github.com/goplus/spx/internal/coroutine"
-	"github.com/goplus/spx/internal/engine/profiler"
-	"github.com/goplus/spx/internal/time"
+	"github.com/goplus/spx/v2/internal/coroutine"
+	"github.com/goplus/spx/v2/internal/engine/profiler"
+	"github.com/goplus/spx/v2/internal/time"
 )
 
 var (

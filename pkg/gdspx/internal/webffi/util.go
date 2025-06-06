@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"syscall/js"
 
-	. "github.com/goplus/spx/pkg/gdspx/pkg/engine"
+	. "github.com/goplus/spx/v2/pkg/gdspx/pkg/engine"
 	. "github.com/realdream-ai/mathf"
 )
 

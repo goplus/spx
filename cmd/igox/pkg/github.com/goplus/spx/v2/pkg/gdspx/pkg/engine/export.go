@@ -3,7 +3,7 @@
 package engine
 
 import (
-	q "github.com/goplus/spx/pkg/gdspx/pkg/engine"
+	q "github.com/goplus/spx/v2/pkg/gdspx/pkg/engine"
 
 	"go/constant"
 	"reflect"
@@ -14,7 +14,7 @@ import (
 func init() {
 	igop.RegisterPackage(&igop.Package{
 		Name: "engine",
-		Path: "github.com/goplus/spx/pkg/gdspx/pkg/engine",
+		Path: "github.com/goplus/spx/v2/pkg/gdspx/pkg/engine",
 		Deps: map[string]string{
 			"fmt":                           "fmt",
 			"github.com/realdream-ai/mathf": "mathf",

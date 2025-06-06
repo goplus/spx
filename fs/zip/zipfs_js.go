@@ -24,7 +24,7 @@ import (
 	"net/http"
 	"syscall"
 
-	"github.com/goplus/spx/fs"
+	"github.com/goplus/spx/v2/fs"
 	"github.com/pkg/errors"
 )
 

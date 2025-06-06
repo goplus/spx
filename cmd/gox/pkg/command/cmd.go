@@ -9,7 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/goplus/spx/cmd/gox/pkg/util"
+	"github.com/goplus/spx/v2/cmd/gox/pkg/util"
 )
 
 const PcExportName = "gdexport"

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/goplus/spx/pkg/gdspx/cmd/codegen/gdextensionparser/clang"
+	"github.com/goplus/spx/v2/pkg/gdspx/cmd/codegen/gdextensionparser/clang"
 
 	"github.com/iancoleman/strcase"
 )

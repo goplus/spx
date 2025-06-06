@@ -3,7 +3,7 @@ package main
 import (
 	"embed"
 
-	"github.com/goplus/spx/cmd/gox/pkg/command"
+	"github.com/goplus/spx/v2/cmd/gox/pkg/command"
 )
 
 var (

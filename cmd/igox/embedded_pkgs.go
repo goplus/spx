@@ -2,9 +2,9 @@
 
 package main
 
-//go:generate qexp -outdir pkg github.com/goplus/spx
+//go:generate qexp -outdir pkg github.com/goplus/spx/v2
 //go:generate qexp -outdir pkg github.com/goplus/builder/tools/ai
-//go:generate qexp -outdir pkg github.com/goplus/spx/pkg/gdspx/pkg/engine
+//go:generate qexp -outdir pkg github.com/goplus/spx/v2/pkg/gdspx/pkg/engine
 
 // All packages available in the ispx Wasm runtime.
 //
@@ -177,9 +177,8 @@ import (
 	// _ "github.com/goplus/igop/pkg/testing/iotest"
 	// _ "github.com/goplus/igop/pkg/testing/quick"
 	// _ "github.com/goplus/igop/pkg/testing/slogtest"
-
 	// Embedded third-party packages.
-	_ "github.com/goplus/spx/cmd/igox/pkg/github.com/goplus/builder/tools/ai"
-	_ "github.com/goplus/spx/cmd/igox/pkg/github.com/goplus/spx"
-	_ "github.com/goplus/spx/cmd/igox/pkg/github.com/goplus/spx/pkg/gdspx/pkg/engine"
+	_ "github.com/goplus/spx/v2/cmd/igox/pkg/github.com/goplus/builder/tools/ai"
+	_ "github.com/goplus/spx/v2/cmd/igox/pkg/github.com/goplus/spx/v2"
+	_ "github.com/goplus/spx/v2/cmd/igox/pkg/github.com/goplus/spx/v2/pkg/gdspx/pkg/engine"
 )

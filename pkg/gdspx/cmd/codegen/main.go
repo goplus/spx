@@ -8,11 +8,11 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/goplus/spx/pkg/gdspx/cmd/codegen/gdextensionparser"
-	"github.com/goplus/spx/pkg/gdspx/cmd/codegen/gdextensionparser/clang"
-	"github.com/goplus/spx/pkg/gdspx/cmd/codegen/generate/ffi"
-	"github.com/goplus/spx/pkg/gdspx/cmd/codegen/generate/gdext"
-	"github.com/goplus/spx/pkg/gdspx/cmd/codegen/generate/webffi"
+	"github.com/goplus/spx/v2/pkg/gdspx/cmd/codegen/gdextensionparser"
+	"github.com/goplus/spx/v2/pkg/gdspx/cmd/codegen/gdextensionparser/clang"
+	"github.com/goplus/spx/v2/pkg/gdspx/cmd/codegen/generate/ffi"
+	"github.com/goplus/spx/v2/pkg/gdspx/cmd/codegen/generate/gdext"
+	"github.com/goplus/spx/v2/pkg/gdspx/cmd/codegen/generate/webffi"
 )
 
 var (

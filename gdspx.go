@@ -22,8 +22,8 @@ import (
 	"math"
 	"strings"
 
-	"github.com/goplus/spx/internal/engine"
-	"github.com/goplus/spx/internal/enginewrap"
+	"github.com/goplus/spx/v2/internal/engine"
+	"github.com/goplus/spx/v2/internal/enginewrap"
 
 	"github.com/realdream-ai/mathf"
 )

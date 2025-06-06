@@ -26,7 +26,7 @@ import (
 
 	"github.com/realdream-ai/mathf"
 
-	"github.com/goplus/spx/internal/engine"
+	"github.com/goplus/spx/v2/internal/engine"
 )
 
 func toRadian(dir float64) float64 {
