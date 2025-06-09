@@ -54,24 +54,23 @@ func (p *sayOrThinker) refresh() {
 
 // -------------------------------------------------------------------------------------
 
-func (p *SpriteImpl) sayOrThink(msgv any, style int) {
-	msg, ok := msgv.(string)
+func (p *SpriteImpl) sayOrThink(msg any, style int) {
+	msgStr, ok := msg.(string)
 	if !ok {
-		msg = fmt.Sprint(msgv)
+		msgStr = fmt.Sprint(msg)
 	}
-
-	if msg == "" {
+	if msgStr == "" {
 		p.doStopSay()
 		return
 	}
 
 	old := p.sayObj
 	if old == nil {
-		p.sayObj = &sayOrThinker{sp: p, msg: msg, style: style}
+		p.sayObj = &sayOrThinker{sp: p, msg: msgStr, style: style}
 		p.g.addShape(p.sayObj)
 		p.sayObj.panel = ui.NewUiSay()
 	} else {
-		old.msg, old.style = msg, style
+		old.msg, old.style = msgStr, style
 		p.g.activateShape(old)
 	}
 	p.sayObj.refresh()
