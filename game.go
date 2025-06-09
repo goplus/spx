@@ -1310,16 +1310,16 @@ func (p *Game) ResetTimer() {
 
 // -----------------------------------------------------------------------------
 
-func (p *Game) Ask(msgv any) {
-	msg, ok := msgv.(string)
+func (p *Game) Ask(msg any) {
+	msgStr, ok := msg.(string)
 	if !ok {
-		msg = fmt.Sprint(msgv)
+		msgStr = fmt.Sprint(msg)
 	}
-	if msg == "" {
+	if msgStr == "" {
 		println("ask: msg should not be empty")
 		return
 	}
-	p.ask(false, msg, func(answer string) {})
+	p.ask(false, msgStr, func(answer string) {})
 }
 
 func (p *Game) Answer() string {

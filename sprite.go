@@ -938,20 +938,20 @@ func (p *SpriteImpl) Animate(name SpriteAnimationName) {
 
 // -----------------------------------------------------------------------------
 
-func (p *SpriteImpl) Ask(msgv any) {
+func (p *SpriteImpl) Ask(msg any) {
 	if debugInstr {
-		log.Println("Ask", p.name, msgv)
+		log.Println("Ask", p.name, msg)
 	}
-	msg, ok := msgv.(string)
+	msgStr, ok := msg.(string)
 	if !ok {
-		msg = fmt.Sprint(msgv)
+		msgStr = fmt.Sprint(msg)
 	}
-	if msg == "" {
+	if msgStr == "" {
 		println("ask: msg should not be empty")
 		return
 	}
-	p.Say__0(msg)
-	p.g.ask(true, msg, func(answer string) {
+	p.Say__0(msgStr)
+	p.g.ask(true, msgStr, func(answer string) {
 		p.doStopSay()
 	})
 }
