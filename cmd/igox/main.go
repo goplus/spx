@@ -104,19 +104,6 @@ func goWasmInit(this js.Value, args []js.Value) any {
 	return js.ValueOf(nil)
 }
 
-func gdspxOnEngineStart(this js.Value, args []js.Value) any {
-	return nil
-}
-func gdspxOnEngineUpdate(this js.Value, args []js.Value) any {
-	return nil
-}
-func gdspxOnEngineFixedUpdate(this js.Value, args []js.Value) any {
-	return nil
-}
-func gdspxOnEngineDestroy(this js.Value, args []js.Value) any {
-	return nil
-}
-
 var logger = slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
 func logWithCallerInfo(msg string, frame *ixgo.Frame) {
@@ -148,16 +135,20 @@ func logErrorAndExit(msg string, err error) {
 	js.Global().Call("gdspx_ext_request_exit", 1)
 }
 
+//go:linkname spxEngineWaitNextFrame github.com/goplus/spx/v2/internal/engine.WaitNextFrame
+func spxEngineWaitNextFrame() float64
+
+//go:linkname spxEngineRegisterFFI github.com/goplus/spx/v2/pkg/gdspx/internal/engine.RegisterFFI
+func spxEngineRegisterFFI()
+
 func main() {
 	js.Global().Set("setAIInteractionAPIEndpoint", js.FuncOf(setAIInteractionAPIEndpoint))
 	js.Global().Set("setAIInteractionAPITokenProvider", js.FuncOf(setAIInteractionAPITokenProvider))
 	js.Global().Set("goLoadData", js.FuncOf(loadData))
 
 	js.Global().Set("goWasmInit", js.FuncOf(goWasmInit))
-	js.Global().Set("gdspx_on_engine_start", js.FuncOf(gdspxOnEngineStart))
-	js.Global().Set("gdspx_on_engine_update", js.FuncOf(gdspxOnEngineUpdate))
-	js.Global().Set("gdspx_on_engine_fixed_update", js.FuncOf(gdspxOnEngineFixedUpdate))
-	js.Global().Set("gdspx_on_engine_destroy", js.FuncOf(gdspxOnEngineDestroy))
+	spxEngineRegisterFFI()
+
 	zipData := <-dataChannel
 
 	zipReader, err := zip.NewReader(bytes.NewReader(zipData), int64(len(zipData)))
@@ -253,13 +244,9 @@ func Gopt_Player_Gopx_OnCmd[T any](p *Player, handler func(cmd T) error) {
 		logErrorAndExit("Failed to build XGo source:", err)
 		return
 	}
-
 	code, err := ctx.RunFile("main.go", source, nil)
 	if err != nil {
 		logErrorAndExit(fmt.Sprintf("Failed to run XGo source: %d", code), err)
 		return
 	}
 }
-
-//go:linkname spxEngineWaitNextFrame github.com/goplus/spx/internal/engine.WaitNextFrame
-func spxEngineWaitNextFrame() float64

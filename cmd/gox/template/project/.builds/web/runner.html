@@ -48,6 +48,9 @@
 		let gameApp = null
 		let isShowEditor = false
 		let onGameError = null
+		let _onSpxReady = null
+
+		window.spxIsForceDebugLog = false
 		function onProgress(value) {
 			const progressEvent = new CustomEvent('onProgress', {
 				detail: {
@@ -84,15 +87,34 @@
 			onGameError = callback
 		}
 
+
+		// ai interaction
+		window.setAIInteractionAPIEndpoint = function (endpoint) {
+			gameApp.callWorkerFunction("setAIInteractionAPIEndpoint", [endpoint])
+		}
+
+		window.setAIInteractionAPITokenProvider = function (tokenProviderFunction) {
+			gameApp.callWorkerFunction("setAIInteractionAPITokenProvider", tokenProviderFunction)
+		}
+
+		window.onWasmLoaded = function () {
+			if (_onSpxReady != null) {
+				_onSpxReady()
+			}
+		}
+		window.onGameStarted = function () {
+		}
+
 		window.startGame = async (buffer, assetURLs = null, onSpxReady = null) => {
 			isShowEditor = false
+			_onSpxReady = onSpxReady
 			const config = {
 				'projectName': "spx_game",
 				'onProgress': onProgress,
 				"gameCanvas": document.getElementById('game-canvas'),
 				"editorCanvas": document.getElementById('editor-canvas'),
 				"projectData": new Uint8Array(buffer),
-				"logLevel": LOG_LEVEL_NONE,
+				"logLevel": window.spxIsForceDebugLog ? LOG_LEVEL_VERBOSE : LOG_LEVEL_NONE,
 				"useAssetCache": false,
 				"isRuntimeMode": true,
 				"assetURLs": {
@@ -100,7 +122,7 @@
 					"engineres.zip": "/engineres.zip",
 					"gdspx.wasm": "/gdspx.wasm",
 					"godot.editor.wasm": "/godot.editor.wasm",
-				},
+				}
 			};
 			if (assetURLs != null) {
 				config.assetURLs = assetURLs
@@ -108,15 +130,6 @@
 
 			if (gameApp != null) {
 				await gameApp.StopProject();
-			}
-			
-			// load wasm
-			let url = config.assetURLs["gdspx.wasm"]
-			const go = new Go();
-			const { instance } = await WebAssembly.instantiateStreaming(fetch(url), go.importObject);
-			go.run(instance);
-			if (onSpxReady != null) {
-				onSpxReady()
 			}
 
 			// try install project and run game

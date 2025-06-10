@@ -21,7 +21,6 @@ COMMON_ARGS='debug_symbols=false
             optimize=size 
             use_volk=no 
             deprecated=no 
-            minizip=no  
             openxr=false 
             vulkan=false 
             graphite=false 
@@ -37,6 +36,7 @@ COMMON_ARGS='debug_symbols=false
             module_svg_enabled=true 
             module_jpg_enabled=true 
             module_ogg_enabled=true 
+            module_zip_enabled=true 
             module_godot_physics_2d_enabled=true '
 
 EXTRA_OPT_ARGS='disable_3d=true'
@@ -99,7 +99,7 @@ build_template() {
         cd $engine_dir || exit
 
         # build web editor
-        scons platform=web target=editor $COMMON_ARGS
+        scons platform=web target=editor $COMMON_ARGS proxy_to_pthread=true
            
         cp bin/godot.web.editor.wasm32.zip bin/web_editor.zip
         cp bin/web_editor.zip $GOPATH/bin/gdspx$VERSION"_web.zip"
@@ -107,7 +107,7 @@ build_template() {
             exit 0
         fi 
         # build web templates
-        scons platform=web target=template_release threads=no $COMMON_ARGS $EXTRA_OPT_ARGS
+        scons platform=web target=template_release threads=no $COMMON_ARGS $EXTRA_OPT_ARGS proxy_to_pthread=true
         echo "Wait zip file to finished ..."
         sleep 2
         cp bin/godot.web.template_release.wasm32.zip bin/web_dlink_debug.zip

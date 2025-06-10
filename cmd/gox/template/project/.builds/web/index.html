@@ -18,6 +18,46 @@
 			margin: 0;
 			color: white;
 		}
+		
+		body {
+			background-color: #333;
+			margin: 0;
+			color: white;
+		}
+		/* 添加动画容器和动画盒子的样式 */
+		.control-group {
+			margin-bottom: 20px;
+		}
+		
+		.animation-container {
+			width: 300px;
+			height: 30px;
+			background-color: #f0f0f0;
+			position: relative;
+			overflow: hidden;
+			border-radius: 15px;
+			margin-top: 10px;
+		}
+		
+		.animation-box {
+			width: 50px;
+			height: 20px;
+			background-color: #4CAF50;
+			position: absolute;
+			top: 5px;
+			left: 0;
+			border-radius: 10px;
+			animation: slide 2s infinite alternate ease-in-out;
+		}
+		
+		@keyframes slide {
+			0% {
+				left: 0;
+			}
+			100% {
+				left: calc(100% - 50px);
+			}
+		}
 	</style>
 </head>
 
@@ -32,10 +72,36 @@
 		<div id="tab-game" style="display: none;">
 		</div>
 	</div>
+	<div class="control-group">
+		<h2>Test Animation</h2>
+		<div class="animation-container">
+			<div class="animation-box"></div>
+		</div>
+	</div>
 	<iframe id="runnerFrame" src="runner.html" width="1600" height="700"></iframe>
 
 	<script src="jszip-3.10.1.min.js"></script>
 	<script>
+		window.addEventListener('load', function() {
+			animateBox();
+		});
+
+		function animateBox() {
+			const box = document.querySelector('.animation-box');
+			if (!box) return;
+			const style = window.getComputedStyle(box);
+			if (style.animationName !== 'none') return;
+			let position = 0;
+			let direction = 1;
+			setInterval(() => {
+				if (position >= 250) direction = -1;
+				if (position <= 0) direction = 1;
+				
+				position += direction * 2;
+				box.style.left = position + 'px';
+			}, 20);
+		}
+
 		let runnerWindow = {}
 		document.getElementById('startNewGameBtn').addEventListener('click', startNewGame);
 		document.getElementById('startGameBtn').addEventListener('click', startGame);
@@ -69,9 +135,11 @@
 			runnerWindow.onGameError(function (callback) {
 				console.error("onGameError", callback)
 			})
-			
+			runnerWindow.spxIsForceDebugLog = true
 			let buffer = await (await (fetch(zipUrl))).arrayBuffer();
-			await runnerWindow.startGame(buffer);
+			await runnerWindow.startGame(buffer, null, function () {
+				runnerWindow.setAIInteractionAPIEndpoint("http://127.0.0.1:8000")
+			});
 		}
 	</script>
 </body>

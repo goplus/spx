@@ -9,7 +9,7 @@
 {{ $view := . -}}
 
 function test_go_call_cpp(val) {
-	return GodotEngine.rtenv['_test_go_call_cpp'](val); 
+	return  Module._test_go_call_cpp(val); 
 }
 
 {{- range $i, $f := $view.CollectGDExtensionInterfaceFunctions -}}
@@ -20,7 +20,7 @@ function gd{{ loadProcAddressName $f.Name }}(
 		{{- if ne $j (sub (len $f.Arguments) 1) -}}, {{- end -}}
 	{{ end -}}
 ) {
-	var _gdFuncPtr =  GodotEngine.rtenv['_gd{{ loadProcAddressName $f.Name }}']; 
+	var _gdFuncPtr = Module._gd{{ loadProcAddressName $f.Name }}; 
 	{{ getJsFuncBody $f }}
 }
 {{- end -}}

@@ -1,7 +1,7 @@
 package engine
 
 import (
-	. "github.com/goplus/spx/v2/pkg/gdspx/internal/wrap"
+	"github.com/goplus/spx/v2/pkg/gdspx/internal/wrap"
 	. "github.com/goplus/spx/v2/pkg/gdspx/pkg/engine"
 )
 
@@ -17,15 +17,19 @@ func IsWebIntepreterMode() bool {
 	return isWebIntepreterMode
 }
 
+func RegisterFFI() {
+	wrap.RegisterFFI()
+}
+
 func Link(engineCallback EngineCallbackInfo) {
-	isWebIntepreterMode = LinkFFI()
-	mgrs = CreateMgrs()
+	isWebIntepreterMode = wrap.LinkFFI()
+	mgrs = wrap.CreateMgrs()
 	callback = engineCallback
 	infos := bindCallbacks()
-	RegisterCallbacks(infos)
-	BindMgr(mgrs)
+	wrap.RegisterCallbacks(infos)
+	wrap.BindMgr(mgrs)
 	InternalInitEngine()
-	OnLinked()
+	wrap.OnLinked()
 }
 
 func onEngineStart() {

@@ -433,7 +433,6 @@ func (p *Coroutines) Update() {
 	waitMainCount := 0
 	// Initialization phase ends
 	stats.InitTime = stime.Since(initStart).Seconds() * 1000
-
 	// Main loop starts
 	loopStart := stime.Now()
 	// Loop iteration counter

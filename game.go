@@ -457,7 +457,6 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 		windowScale = proj.WindowScale
 	}
 	p.windowScale = windowScale
-
 	p.debug = proj.Debug
 	if backdrops := proj.getBackdrops(); len(backdrops) > 0 {
 		p.baseObj.initBackdrops("", backdrops, proj.getBackdropIndex())

@@ -1,5 +1,3 @@
-
-
 class GameApp {
     constructor(config) {
         config = config || {};
@@ -9,6 +7,7 @@ class GameApp {
         this.persistentPath = '/home/web_user';
         this.tempZipPath = '/tmp/preload.zip';
         this.packName =  'godot.editor.pck';
+        this.projectDataName =  'project.data';
         this.isRuntimeMode = config.isRuntimeMode;
         this.tempGamePath = '/home/spx_game_cache';
         this.projectInstallName = config.projectName || "Game";
@@ -23,6 +22,9 @@ class GameApp {
         this.isEditor = true;
         this.assetURLs = config.assetURLs;
         this.useAssetCache = config.useAssetCache;
+        this.pthreads = null; // web worker mode
+        this.workerMessageId = 0; 
+
         this.editorConfig = {
             "executable": "godot.editor",
             'unloadAfterInit': false,
@@ -52,7 +54,9 @@ class GameApp {
         };
         this.logicPromise = Promise.resolve();
         this.curProjectHash = ''
+        this.bindMainCallHandler()
     }
+    
     logVerbose(...args) {
         if (this.logLevel == LOG_LEVEL_VERBOSE) {
             console.log(...args);
@@ -213,8 +217,9 @@ class GameApp {
                 "res://main.tscn",
             ];
         }else{
-            args = [ '--main-pack', 
-                this.tempGamePath+ "/" + this.packName,
+            args = [ 
+                '--main-pack', this.tempGamePath+ "/" + this.packName,
+                '--main-project-data', this.tempGamePath+ "/" + this.projectDataName,
             ];
         }
            
@@ -228,13 +233,12 @@ class GameApp {
         this.game = new Engine(this.gameConfig);
         let curGame = this.game
         curGame.init().then(async () => {
-            this.onProgress(0.7);
-            await this.unpackGameData(curGame)
-
+            this.onProgress(0.7);            
+            this.bindMainThreadCallbacks(curGame)
+            await this.unpackGameData(curGame, this.tempGamePath, this.projectData,this.packName, this.isRuntimeMode? this.assetURLs["godot.editor.pck"]:"" )
             curGame.start({ 'args': args, 'canvas': this.gameCanvas }).then(async () => {
-                await this.waitFsSyncDone(this.gameCanvas)
-                this.onProgress(0.9);
-                window.goLoadData(new Uint8Array(this.projectData));
+                this.pthreads = curGame.getPThread()
+                this.callWorkerProjectDataUpdate(this.projectData)
                 this.onProgress(1.0);
                 this.gameCanvas.focus();
                 this.logVerbose("==> game start done")
@@ -243,24 +247,17 @@ class GameApp {
         });
     }
 
-    async unpackGameData(curGame) {
-        const zip1 = new JSZip();
-        const zip1Content = await zip1.loadAsync(this.projectData);
-        let datas = []
-        for (const [filePath, file] of Object.entries(zip1Content.files)) {
-            const content = await file.async('arraybuffer');
-            if (!file.dir) {
-                datas.push({ "path": filePath, "data": content })
-            }
-        }
-        if (this.isRuntimeMode){
-            let url = this.assetURLs["godot.editor.pck"]
-            let pckBuffer = await (await fetch(url)).arrayBuffer();
-            datas.push({ "path": this.packName, "data": pckBuffer })
-        }
-        curGame.unpackGameData(this.tempGamePath, datas)
+    bindMainThreadCallbacks(curGame){
+        curGame.rtenv["_spxOnMainCall"] = window._spxOnMainCall
     }
 
+    async unpackGameData(curGame,dir, projectData, pckName, packUrl) {
+        let pckData = null;
+        if (packUrl != ""){
+            pckData = await (await fetch(packUrl)).arrayBuffer();
+        }
+        await curGame.unpackGameData(dir,this.projectDataName, projectData.buffer, pckName, pckData)
+    }
 
     async stopGame(resolve, reject) {
         this.stopGameTask--
@@ -275,6 +272,7 @@ class GameApp {
             resolve();
             this.stopGameResolve = null
         }
+        this.pthreads = null
         this.isEditor = true
         this.onProgress(1.0);
         this.game.requestQuit()
@@ -511,7 +509,6 @@ class GameApp {
         }
     }
 
-
     //------------------ res merge ------------------
     async mergeZips(zipFile1, zipFile2) {
         const zip1 = new JSZip();
@@ -552,4 +549,167 @@ class GameApp {
             this.config.onProgress(value);
         }
     }
+
+    // === PThread Worker message sending related methods ===
+    bindMainCallHandler() {
+        window._spxMainCalls = {}
+        window._spxOnMainCall = function (...params){
+            let funcName = params[0]
+            let args = params.slice(1)
+            if (window._spxMainCalls.hasOwnProperty(funcName)) {
+                let callback = window._spxMainCalls[funcName]
+                if (callback != null) {
+                    callback(...args)
+                }
+            }else{
+                let func = window[funcName]
+                if (func != null) {
+                    func(...args)
+                }else{
+                    console.error("no such function: ", funcName)
+                }
+            }
+        }
+    }
+    callWorkerProjectDataUpdate(projectData) {
+        const message = {
+            cmd: 'projectDataUpdate',
+            data: projectData,
+            timestamp: Date.now()
+        };
+        return this.postMessageToWorkers(message);
+    }
+
+    callWorkerFunction(funcName, args) {
+        // if args is not an array, convert it to an array
+        const argsArray = Array.isArray(args) ? args : [args];
+        
+        // auto process arguments, convert function to main thread callback
+        const processedArgs = this.processArguments(argsArray);
+        
+        const message = {
+            cmd: 'customCall',
+            data: {
+                funcName: funcName,
+                args: processedArgs
+            },
+            timestamp: Date.now()
+        };
+        return this.postMessageToWorkers(message);
+    }
+
+    // process arguments, auto convert function to main thread callback
+    processArguments(args) {
+        if (!args || !Array.isArray(args)) {
+            return args;
+        }
+
+        const processedArgs = [];
+        let callbackCounter = 0;
+
+        for (let arg of args) {
+            if (typeof arg === 'function') {
+                // generate unique callback name
+                const callbackName = `_onSpxCall_${Date.now()}_${callbackCounter++}`;
+                
+                // register callback function
+                this.registerWorkerCallback(callbackName, arg);
+                
+                // replace with main thread callback identifier
+                processedArgs.push("_SPX_CALLBACK_FUNC_", callbackName);
+            } else {
+                processedArgs.push(arg);
+            }
+        }
+
+        return processedArgs;
+    }
+
+    // register worker callback function
+    registerWorkerCallback(callbackName, userFunction) {
+        // create callback handler function
+        window._spxMainCalls[callbackName] = async function(requestId, ...args) {
+            let errorMsg = null;
+            let result = null;
+            
+            try {
+                if (userFunction) {
+                    result = userFunction(...args);
+                    // if return Promise, wait for it to complete
+                    if (result && typeof result.then === 'function') {
+                        result = await result;
+                    }
+                } else {
+                    errorMsg = `No function registered for ${callbackName}`;
+                }
+            } catch (error) {
+                console.error(`Error in ${callbackName}:`, error);
+                errorMsg = error.message;
+            }
+            
+            // send response to worker
+            this.postMessageToWorkers({
+                cmd: 'callResponse',
+                responseId: requestId,
+                result: result,
+                error: errorMsg
+            });
+        }.bind(this);
+    }
+
+    postMessageToWorkers(message, transferList = null, cloneForEach = false) {
+        const workers = [];
+        if (this.pthreads) {
+            workers.push(...this.pthreads.runningWorkers);
+        }
+
+        let successCount = 0;
+        let errorCount = 0;
+        
+        workers.forEach((worker, index) => {
+            try {
+                if (worker && typeof worker.postMessage === 'function') {
+                    // Adds unique identifier and target info to each message
+                    let enhancedMessage = {
+                        ...message,
+                        _gameAppMessageId: ++this.workerMessageId,
+                        _targetWorkerIndex: index,
+                        _timestamp: Date.now()
+                    };
+                    
+                    // Special handling required when cloning data or using transferList
+                    if (transferList && cloneForEach) {
+                        if (message.data && message.data.buffer) {
+                            const clonedData = new Uint8Array(message.data);
+                            enhancedMessage.data = clonedData;
+                            worker.postMessage(enhancedMessage, [clonedData.buffer]);
+                        } else {
+                            worker.postMessage(enhancedMessage);
+                        }
+                    } else {
+                        worker.postMessage(enhancedMessage);
+                    }
+                    
+                    successCount++;
+                } else {
+                    console.warn(`Worker ${index} is invalid or does not have postMessage method`);
+                    errorCount++;
+                }
+            } catch (error) {
+                console.error(`Failed to send message to worker ${index}:`, error);
+                errorCount++;
+            }
+        });
+        
+        return { successCount, errorCount, totalWorkers: workers.length };
+    }
 }
+
+function GetEngineHashes() { 
+	return {
+"gdspx.wasm":"18f40edf2359eac08b41f2a23d65fc7c905b6c197821463c5f0ee4784f1c9604",
+"godot.editor.wasm":"47897986d2212982e1c3ebfca7c8ab1a229cdcb23fe70fe8a75dfc60aea957d1",
+
+	}
+}
+	
