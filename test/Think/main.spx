@@ -21,4 +21,4 @@ var (
 	recordingWinter       Sound
 )
 
-run "hzip://open.qiniu.us/weather/res.zip", {Title: "Think (by Go+)"}
+run "hzip://open.qiniu.us/weather/res.zip", {Title: "Think (by XGo)"}

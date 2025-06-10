@@ -24,7 +24,7 @@ jobs:
         distribution: temurin
         java-version: 17
 
-    - name: Setup go/gop & engine
+    - name: Setup go/xgo & engine
       uses: ./.github/actions/deps
 
     - name: Test

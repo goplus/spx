@@ -4,4 +4,4 @@ var (
 	Monkey  Monkey
 )
 
-run "res", {Title: "Turn Together (by Go+)"}
+run "res", {Title: "Turn Together (by XGo)"}

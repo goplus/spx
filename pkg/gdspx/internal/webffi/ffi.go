@@ -17,7 +17,7 @@ func Link() bool {
 	return !hasInitEngine
 }
 func Linked() {
-	if !hasInitEngine { // adapt for igop
+	if !hasInitEngine { // adapt for ixgo
 		resiterFuncPtr2Js()
 		gdspxOnEngineStart(js.Value{}, nil)
 	}
@@ -27,7 +27,7 @@ func Linked() {
 	<-c
 }
 
-// this function will only be called in wasm mode, it will not be called in igop (interpreter) mode.
+// this function will only be called in wasm mode, it will not be called in ixgo (interpreter) mode.
 func goWasmInit(this js.Value, args []js.Value) any {
 	println("Go wasm init succ!")
 	hasInitEngine = true

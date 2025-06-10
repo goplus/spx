@@ -1,4 +1,4 @@
-// export by github.com/goplus/igop/cmd/qexp
+// export by github.com/goplus/ixgo/cmd/qexp
 
 package spx
 
@@ -9,11 +9,11 @@ import (
 	"go/token"
 	"reflect"
 
-	"github.com/goplus/igop"
+	"github.com/goplus/ixgo"
 )
 
 func init() {
-	igop.RegisterPackage(&igop.Package{
+	ixgo.RegisterPackage(&ixgo.Package{
 		Name: "spx",
 		Path: "github.com/goplus/spx/v2",
 		Deps: map[string]string{
@@ -116,7 +116,7 @@ func init() {
 			"SetDebug":                 reflect.ValueOf(q.SetDebug),
 			"WaitUntil":                reflect.ValueOf(q.WaitUntil),
 		},
-		TypedConsts: map[string]igop.TypedConst{
+		TypedConsts: map[string]ixgo.TypedConst{
 			"AllOtherScripts":      {reflect.TypeOf(q.AllOtherScripts), constant.MakeInt64(int64(q.AllOtherScripts))},
 			"AllSprites":           {reflect.TypeOf(q.AllSprites), constant.MakeInt64(int64(q.AllSprites))},
 			"AnimChannelFrame":     {reflect.TypeOf(q.AnimChannelFrame), constant.MakeString(string(q.AnimChannelFrame))},
@@ -276,7 +276,7 @@ func init() {
 			"Up":                   {reflect.TypeOf(q.Up), constant.MakeFromLiteral("0", token.FLOAT, 0)},
 			"WhirlEffect":          {reflect.TypeOf(q.WhirlEffect), constant.MakeInt64(int64(q.WhirlEffect))},
 		},
-		UntypedConsts: map[string]igop.UntypedConst{
+		UntypedConsts: map[string]ixgo.UntypedConst{
 			"All":        {"untyped int", constant.MakeInt64(int64(q.All))},
 			"GopPackage": {"untyped bool", constant.MakeBool(bool(q.GopPackage))},
 			"Gop_sched":  {"untyped string", constant.MakeString(string(q.Gop_sched))},
