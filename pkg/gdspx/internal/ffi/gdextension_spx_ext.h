@@ -35,6 +35,13 @@
 #ifndef NOT_GODOT_ENGINE
 #include "core/variant/variant.h"
 extern void gdextension_spx_setup_interface();
+
+// Define GdByteArray for Godot engine environment
+typedef struct {
+    uint8_t* data;      // data pointer
+    size_t length;      // data length
+} GdByteArray;
+
 #endif
 
 #ifdef __cplusplus
@@ -51,6 +58,7 @@ typedef Vector3 GdVec3;
 typedef Vector2 GdVec2;
 typedef Color GdColor;
 typedef Rect2 GdRect2;
+typedef GdByteArray GdByteArray;
 
 
 typedef struct {
@@ -277,6 +285,7 @@ typedef void (*GDExtensionSpxResReadAllText)(GdString p_path, GdString* ret_valu
 typedef void (*GDExtensionSpxResHasFile)(GdString p_path, GdBool* ret_value);
 typedef void (*GDExtensionSpxResReloadTexture)(GdString path);
 typedef void (*GDExtensionSpxResFreeStr)(GdString str);
+typedef void (*GDExtensionSpxResSetDefaultFont)(GdString font_path);
 // SpxScene
 typedef void (*GDExtensionSpxSceneChangeSceneToFile)(GdString path);
 typedef void (*GDExtensionSpxSceneDestroyAllSprites)();
