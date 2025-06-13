@@ -1,6 +1,8 @@
 module github.com/goplus/spx/v2/cmd/igox
 
-go 1.23.0
+go 1.24.0
+
+tool github.com/goplus/ixgo/cmd/qexp
 
 require (
 	github.com/goplus/builder/tools/ai v0.0.0-20250522033218-53c368333ac2
