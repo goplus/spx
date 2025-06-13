@@ -46,6 +46,12 @@ typedef struct {
 	Vector2 Size;
 } Rect2;
 
+// 添加字节数组类型定义
+typedef struct {
+    uint8_t* data;      // 数据指针
+    size_t length;      // 数据长度
+} GdByteArray;
+
 typedef real_t GDReal;
 
 typedef void *GDExtensionStringPtr;

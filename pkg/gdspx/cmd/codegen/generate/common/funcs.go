@@ -98,6 +98,8 @@ func GoArgumentType(t clang.PrimativeType, name string) string {
 			return "*Uint64T"
 		}
 		return "Uint64T"
+	case "GdByteArray":
+		return "GdByteArray"
 	default:
 		if t.IsPointer {
 			return fmt.Sprintf("*%s", n)
@@ -170,6 +172,8 @@ func GoReturnType(t clang.PrimativeType) string {
 		} else {
 			return ""
 		}
+	case "GdByteArray":
+		return "GdByteArray"
 	default:
 		if t.IsPointer {
 			return fmt.Sprintf("*%s", n)
@@ -433,16 +437,17 @@ func GetManagers(ast clang.CHeaderFileAST) []string {
 	}
 	sort.Strings(managers)
 	cppType2Go = map[string]string{
-		"GdInt":    "int64",
-		"GdFloat":  "float64",
-		"GdObj":    "Object",
-		"GdVec2":   "Vec2",
-		"GdVec3":   "Vec3",
-		"GdVec4":   "Vec4",
-		"GdRect2":  "Rect2",
-		"GdString": "string",
-		"GdBool":   "bool",
-		"GdColor":  "Color",
+		"GdInt":       "int64",
+		"GdFloat":     "float64",
+		"GdObj":       "Object",
+		"GdVec2":      "Vec2",
+		"GdVec3":      "Vec3",
+		"GdVec4":      "Vec4",
+		"GdRect2":     "Rect2",
+		"GdString":    "string",
+		"GdBool":      "bool",
+		"GdColor":     "Color",
+		"GdByteArray": "[]byte",
 	}
 	return managers
 }

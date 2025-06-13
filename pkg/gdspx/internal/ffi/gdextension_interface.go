@@ -35,6 +35,7 @@ type GdVec2 C.GdVec2
 type GdColor C.GdColor
 type GdRect2 C.GdRect2
 type GdObj C.GdObj
+type GdByteArray C.GdByteArray
 
 func ToGdBool(val bool) GdBool {
 	if val {
@@ -521,5 +522,43 @@ func func_on_sprite_animation_changed(id C.GDExtensionInt) {
 func func_on_sprite_frames_set_changed(id C.GDExtensionInt) {
 	if callbacks.OnSpriteFramesSetChanged != nil {
 		callbacks.OnSpriteFramesSetChanged(int64(id))
+	}
+}
+
+// GdByteArray 转换函数
+func ToGdByteArray(data []byte) GdByteArray {
+	if len(data) == 0 {
+		var emptyArray GdByteArray
+		emptyArray.data = nil
+		emptyArray.length = 0
+		return emptyArray
+	}
+
+	// 分配C内存并复制数据
+	cData := C.malloc(C.size_t(len(data)))
+	if cData != nil {
+		// 使用C.memmove来复制数据，这是安全的
+		C.memmove(cData, unsafe.Pointer(&data[0]), C.size_t(len(data)))
+	}
+
+	var result GdByteArray
+	result.data = (*C.uint8_t)(cData)
+	result.length = C.size_t(len(data))
+	return result
+}
+
+func ToByteArray(val GdByteArray) []byte {
+	if val.data == nil || val.length == 0 {
+		return nil
+	}
+
+	// 从C内存复制到Go切片
+	return C.GoBytes(unsafe.Pointer(val.data), C.int(val.length))
+}
+
+// GdByteArray内存管理函数
+func FreeGdByteArray(val GdByteArray) {
+	if val.data != nil {
+		C.free(unsafe.Pointer(val.data))
 	}
 }

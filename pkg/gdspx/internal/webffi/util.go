@@ -180,3 +180,35 @@ func JsToGdFloat32(val js.Value) float32 {
 func JsToGdInt64(val js.Value) int64 {
 	return int64(val.Int())
 }
+
+// GdByteArray JavaScript转换函数
+func JsFromGdByteArray(data []byte) js.Value {
+	// 在JavaScript中，我们使用Uint8Array来表示字节数组
+	uint8Array := js.Global().Get("Uint8Array").New(len(data))
+
+	// 将Go字节切片复制到JavaScript Uint8Array
+	for i, b := range data {
+		uint8Array.SetIndex(i, b)
+	}
+
+	return uint8Array
+}
+
+func JsToGdByteArray(val js.Value) []byte {
+	if val.IsNull() || val.IsUndefined() {
+		return nil
+	}
+
+	// 从JavaScript Uint8Array中读取数据
+	length := val.Get("length").Int()
+	if length == 0 {
+		return nil
+	}
+
+	data := make([]byte, length)
+	for i := 0; i < length; i++ {
+		data[i] = byte(val.Index(i).Int())
+	}
+
+	return data
+}

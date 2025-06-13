@@ -35,6 +35,13 @@
 #ifndef NOT_GODOT_ENGINE
 #include "core/variant/variant.h"
 extern void gdextension_spx_setup_interface();
+
+// Define GdByteArray for Godot engine environment
+typedef struct {
+    uint8_t* data;      // data pointer
+    size_t length;      // data length
+} GdByteArray;
+
 #endif
 
 #ifdef __cplusplus
@@ -51,6 +58,7 @@ typedef Vector3 GdVec3;
 typedef Vector2 GdVec2;
 typedef Color GdColor;
 typedef Rect2 GdRect2;
+typedef GdByteArray GdByteArray;
 
 
 typedef struct {
