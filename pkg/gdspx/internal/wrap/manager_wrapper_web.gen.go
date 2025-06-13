@@ -457,6 +457,10 @@ func (pself *resMgr) FreeStr(str string) {
 	arg0 := JsFromGdString(str)
 	API.SpxResFreeStr.Invoke(arg0)
 }
+func (pself *resMgr) SetDefaultFont(font_path string) {
+	arg0 := JsFromGdString(font_path)
+	API.SpxResSetDefaultFont.Invoke(arg0)
+}
 func (pself *sceneMgr) ChangeSceneToFile(path string) {
 	arg0 := JsFromGdString(path)
 	API.SpxSceneChangeSceneToFile.Invoke(arg0)

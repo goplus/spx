@@ -237,6 +237,9 @@ void cgo_callfn_GDExtensionSpxResReloadTexture(const GDExtensionSpxResReloadText
 void cgo_callfn_GDExtensionSpxResFreeStr(const GDExtensionSpxResFreeStr fn, GdString str) {
 	fn(str);
 }
+void cgo_callfn_GDExtensionSpxResSetDefaultFont(const GDExtensionSpxResSetDefaultFont fn, GdString font_path) {
+	fn(font_path);
+}
 void cgo_callfn_GDExtensionSpxSceneChangeSceneToFile(const GDExtensionSpxSceneChangeSceneToFile fn, GdString path) {
 	fn(path);
 }
