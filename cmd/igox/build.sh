@@ -2,6 +2,9 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd $SCRIPT_DIR
 
+# Pin Go toolchain version
+export GOTOOLCHAIN=go1.24.4
+
 # Install required Go dependencies
 go generate embedded_pkgs.go
 go mod tidy
