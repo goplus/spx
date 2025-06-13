@@ -3,7 +3,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd $SCRIPT_DIR
 
 # Install required Go dependencies
-GOOS=js GOARCH=wasm go generate -v
+go generate embedded_pkgs.go
 go mod tidy
 
 # Detect system type
