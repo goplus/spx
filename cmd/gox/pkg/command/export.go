@@ -116,7 +116,9 @@ func (pself *CmdTool) ExportWebRuntime() error {
 	targetPath := path.Join(targetDir, "godot.editor.html")
 	platformName := "Web"
 	os.Mkdir(targetDir, 0755)
-	println("ExportWebRuntime")
+	// delete gdextension configs
+	os.Remove(path.Join(pself.ProjectDir, "gdspx.gdextension"))
+	os.Remove(path.Join(pself.ProjectDir, ".godot/extension_list.cfg"))
 	return util.RunCommandInDir(pself.ProjectDir, pself.CmdPath, "--headless", "--quit", "--path", pself.ProjectDir, "--export-debug", platformName, targetPath)
 }
 
