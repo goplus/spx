@@ -502,6 +502,12 @@ func (pself *resMgr) FreeStr(str string) {
 	defer C.free(unsafe.Pointer(arg0Str))
 	CallResFreeStr(arg0)
 }
+func (pself *resMgr) SetDefaultFont(font_path string) {
+	arg0Str := C.CString(font_path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	CallResSetDefaultFont(arg0)
+}
 func (pself *sceneMgr) ChangeSceneToFile(path string) {
 	arg0Str := C.CString(path)
 	arg0 := (GdString)(arg0Str)
