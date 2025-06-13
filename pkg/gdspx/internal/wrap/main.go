@@ -20,6 +20,10 @@ func addManager[T IManager](mgr T) T {
 	mgrs = append(mgrs, mgr)
 	return mgr
 }
+
+func RegisterFFI() {
+}
+
 func LinkFFI() bool {
 	return ffi.Link()
 }

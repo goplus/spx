@@ -24,6 +24,10 @@ func LinkFFI() bool {
 	return webffi.Link()
 }
 
+func RegisterFFI() {
+	webffi.RegisterFuncs()
+}
+
 func OnLinked() {
 	webffi.Linked()
 }
