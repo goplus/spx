@@ -4,18 +4,18 @@ go 1.23.0
 
 require (
 	github.com/goplus/builder/tools/ai v0.0.0-20250522033218-53c368333ac2
-	github.com/goplus/igop v0.44.0
-	github.com/goplus/mod v0.16.1
+	github.com/goplus/ixgo v0.52.0
+	github.com/goplus/mod v0.17.1
 	github.com/goplus/reflectx v1.4.2
 	github.com/goplus/spx/v2 v2.0.0-00010101000000-000000000000
 )
 
 require (
 	github.com/gopherjs/gopherjs v0.0.0-20200217142428-fce0ec30dd00 // indirect
-	github.com/goplus/gogen v1.18.0 // indirect
-	github.com/goplus/gop v1.4.5 // indirect
+	github.com/goplus/gogen v1.19.0 // indirect
+	github.com/goplus/xgo v1.5.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/qiniu/x v1.14.0 // indirect
+	github.com/qiniu/x v1.15.1 // indirect
 	github.com/realdream-ai/mathf v0.0.0-20250513071532-e55e1277a8c5 // indirect
 	github.com/timandy/routine v1.1.5 // indirect
 	github.com/visualfc/funcval v0.1.4 // indirect

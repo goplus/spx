@@ -5,4 +5,4 @@ var (
 	clap      Sound
 )
 
-run "res", {Title: "Quote (by Go+)"}
+run "res", {Title: "Quote (by XGo)"}

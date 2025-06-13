@@ -15,8 +15,8 @@ import (
 
 	"github.com/goplus/builder/tools/ai"
 	"github.com/goplus/builder/tools/ai/wasmtrans"
-	"github.com/goplus/igop"
-	"github.com/goplus/igop/gopbuild"
+	"github.com/goplus/ixgo"
+	"github.com/goplus/ixgo/xgobuild"
 	"github.com/goplus/mod/modfile"
 	_ "github.com/goplus/reflectx/icall/icall8192"
 	_ "github.com/goplus/spx/v2"
@@ -119,7 +119,7 @@ func gdspxOnEngineDestroy(this js.Value, args []js.Value) any {
 
 var logger = slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
-func logWithCallerInfo(msg string, frame *igop.Frame) {
+func logWithCallerInfo(msg string, frame *ixgo.Frame) {
 	if frs := frame.CallerFrames(); len(frs) > 0 {
 		fr := frs[0]
 		logger.Info(
@@ -131,7 +131,7 @@ func logWithCallerInfo(msg string, frame *igop.Frame) {
 	}
 }
 
-func logWithPanicInfo(info *igop.PanicInfo) {
+func logWithPanicInfo(info *ixgo.PanicInfo) {
 	position := info.Position()
 	logger.Error(
 		"panic",
@@ -170,7 +170,7 @@ func main() {
 		return fs.Chrooted(path), nil
 	})
 
-	ctx := igop.NewContext(0)
+	ctx := ixgo.NewContext(0)
 	ctx.Lookup = func(root, path string) (dir string, found bool) {
 		log.Fatalf("Failed to resolve package import %q. This package is not available in the current environment.", path)
 		return
@@ -178,7 +178,7 @@ func main() {
 	ctx.SetPanic(logWithPanicInfo)
 
 	// NOTE(everyone): Keep sync with the config in spx [gop.mod](https://github.com/goplus/spx/blob/main/gop.mod)
-	gopbuild.RegisterProject(&modfile.Project{
+	xgobuild.RegisterProject(&modfile.Project{
 		Ext:      ".spx",
 		Class:    "Game",
 		Works:    []*modfile.Class{{Ext: ".spx", Class: "SpriteImpl"}},
@@ -188,7 +188,7 @@ func main() {
 
 	// Register patch for spx to support functions with generic type like `Gopt_Game_Gopx_GetWidget`.
 	// See details in https://github.com/goplus/builder/issues/765#issuecomment-2313915805
-	if err := gopbuild.RegisterPackagePatch(ctx, "github.com/goplus/spx/v2", `
+	if err := xgobuild.RegisterPackagePatch(ctx, "github.com/goplus/spx/v2", `
 package spx
 
 import . "github.com/goplus/spx/v2"
@@ -205,7 +205,7 @@ func Gopt_Game_Gopx_GetWidget[T any](sg ShapeGetter, name string) *T {
 		log.Fatalln("Failed to register package patch for github.com/goplus/spx:", err)
 	}
 
-	if err := gopbuild.RegisterPackagePatch(ctx, "github.com/goplus/builder/tools/ai", `
+	if err := xgobuild.RegisterPackagePatch(ctx, "github.com/goplus/builder/tools/ai", `
 package ai
 
 import . "github.com/goplus/builder/tools/ai"
@@ -232,31 +232,31 @@ func Gopt_Player_Gopx_OnCmd[T any](p *Player, handler func(cmd T) error) {
 		}
 	})
 
-	ctx.RegisterExternal("fmt.Print", func(frame *igop.Frame, a ...any) (n int, err error) {
+	ctx.RegisterExternal("fmt.Print", func(frame *ixgo.Frame, a ...any) (n int, err error) {
 		msg := fmt.Sprint(a...)
 		logWithCallerInfo(msg, frame)
 		return len(msg), nil
 	})
-	ctx.RegisterExternal("fmt.Printf", func(frame *igop.Frame, format string, a ...any) (n int, err error) {
+	ctx.RegisterExternal("fmt.Printf", func(frame *ixgo.Frame, format string, a ...any) (n int, err error) {
 		msg := fmt.Sprintf(format, a...)
 		logWithCallerInfo(msg, frame)
 		return len(msg), nil
 	})
-	ctx.RegisterExternal("fmt.Println", func(frame *igop.Frame, a ...any) (n int, err error) {
+	ctx.RegisterExternal("fmt.Println", func(frame *ixgo.Frame, a ...any) (n int, err error) {
 		msg := fmt.Sprintln(a...)
 		logWithCallerInfo(msg, frame)
 		return len(msg), nil
 	})
 
-	source, err := gopbuild.BuildFSDir(ctx, fs, "")
+	source, err := xgobuild.BuildFSDir(ctx, fs, "")
 	if err != nil {
-		logErrorAndExit("Failed to build Go+ source:", err)
+		logErrorAndExit("Failed to build XGo source:", err)
 		return
 	}
 
 	code, err := ctx.RunFile("main.go", source, nil)
 	if err != nil {
-		logErrorAndExit(fmt.Sprintf("Failed to run Go+ source: %d", code), err)
+		logErrorAndExit(fmt.Sprintf("Failed to run XGo source: %d", code), err)
 		return
 	}
 }

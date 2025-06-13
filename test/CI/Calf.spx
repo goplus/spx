@@ -1,6 +1,6 @@
 onStart => {
 	println "onStart"
-	say "Hello Go+"
+	say "Hello XGo"
 	wait 0.1
 	println "onStart done"
 	println "===>SpxCIRunSucc"

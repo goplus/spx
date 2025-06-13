@@ -13,7 +13,7 @@ runs:
 
     - name: GenGo
       shell: bash
-      run: gop go ./...
+      run: xgo go ./...
 
     - name: Run test demo
       shell: bash

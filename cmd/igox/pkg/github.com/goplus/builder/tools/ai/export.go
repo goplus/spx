@@ -1,4 +1,4 @@
-// export by github.com/goplus/igop/cmd/qexp
+// export by github.com/goplus/ixgo/cmd/qexp
 
 package ai
 
@@ -8,11 +8,11 @@ import (
 	"go/constant"
 	"reflect"
 
-	"github.com/goplus/igop"
+	"github.com/goplus/ixgo"
 )
 
 func init() {
-	igop.RegisterPackage(&igop.Package{
+	ixgo.RegisterPackage(&ixgo.Package{
 		Name: "ai",
 		Path: "github.com/goplus/builder/tools/ai",
 		Deps: map[string]string{
@@ -54,8 +54,8 @@ func init() {
 			"SetDefaultTaskRunner":    reflect.ValueOf(q.SetDefaultTaskRunner),
 			"SetDefaultTransport":     reflect.ValueOf(q.SetDefaultTransport),
 		},
-		TypedConsts: map[string]igop.TypedConst{},
-		UntypedConsts: map[string]igop.UntypedConst{
+		TypedConsts: map[string]ixgo.TypedConst{},
+		UntypedConsts: map[string]ixgo.UntypedConst{
 			"GopPackage": {"untyped bool", constant.MakeBool(bool(q.GopPackage))},
 		},
 	})

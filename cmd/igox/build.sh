@@ -3,7 +3,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd $SCRIPT_DIR
 
 # Install required Go dependencies
-go install github.com/goplus/igop/cmd/qexp@v0.45.0
 GOOS=js GOARCH=wasm go generate -v
 go mod tidy
 

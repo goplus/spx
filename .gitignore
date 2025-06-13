@@ -8,6 +8,7 @@ go.work
 go.json
 gop.json
 gop_autogen.go
+xgo_autogen.go
 _gsc
 _test
 haiyang/

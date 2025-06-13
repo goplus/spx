@@ -57,7 +57,7 @@ func (zf *ZipFs) Chrooted(root string) *ZipFs {
 	}
 }
 
-// Implement gop/parser/fsx.FileSystem:
+// Implement xgo/parser/fsx.FileSystem:
 //
 //	type FileSystem interface {
 //		ReadDir(dirname string) ([]fs.DirEntry, error)

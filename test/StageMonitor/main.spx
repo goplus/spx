@@ -7,4 +7,4 @@ onKey KeyDown, => {
 	downs++
 }
 
-run "res", {Title: "Measure (by Go+)"}
+run "res", {Title: "Measure (by XGo)"}

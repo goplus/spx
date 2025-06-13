@@ -36,8 +36,8 @@ func RunGoModTidy() error {
 	return RunCommandWithEnv(nil, "go", "mod", "tidy")
 }
 
-func RunGoplus(envVars []string, args ...string) error {
-	return RunCommandWithEnv(envVars, "gop", args...)
+func RunXGo(envVars []string, args ...string) error {
+	return RunCommandWithEnv(envVars, "xgo", args...)
 }
 
 func RunGolang(envVars []string, args ...string) error {
