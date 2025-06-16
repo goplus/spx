@@ -64,6 +64,7 @@ type costume struct {
 	name          SpriteCostumeName
 	width, height int
 	center        mathf.Vec2 // center point
+	imageSize     mathf.Vec2
 
 	faceRight        float64
 	bitmapResolution int
@@ -83,6 +84,7 @@ func newCostumeWithSize(width, height int) *costume {
 	}
 	value.posX = 0
 	value.posY = 0
+	value.imageSize = mathf.NewVec2(float64(width), float64(height))
 	value.center.X = float64(value.width) / 2
 	value.center.Y = float64(value.height) / 2
 	value.altasUVRect = mathf.NewVec4(0, 0, 1, 1)
@@ -96,6 +98,7 @@ func newCostumeWith(name string, img *costumeSetImage, faceRight float64, i, bit
 		faceRight: faceRight, bitmapResolution: bitmapResolution,
 	}
 	imageSize := getCustomeAssetSize(img.path)
+	value.imageSize = imageSize
 	value.width = int(imageSize.X) / img.nx
 	value.height = int(imageSize.Y)
 	value.posX = i * value.width
@@ -129,6 +132,7 @@ func newCostume(base string, c *costumeConfig) *costume {
 		path:             path,
 	}
 	imageSize := getCustomeAssetSize(path)
+	value.imageSize = imageSize
 	value.width = int(imageSize.X)
 	value.height = int(imageSize.Y)
 	value.posX = 0
