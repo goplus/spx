@@ -318,14 +318,19 @@ func applyRenderOffset(p *SpriteImpl, cx, cy *float64) {
 }
 
 func registerAnimToEngine(spriteName string, animName string, animCfg *aniConfig, costumes []*costume, isCostumeSet bool) {
+	// TODO(jiepengtan): here we should optimize the implementation, it's better to use json to map, avoid manually writing parsing code
 	sb := strings.Builder{}
 	from, to := animCfg.IFrameFrom, animCfg.IFrameTo
 	if from >= len(costumes) {
 		log.Panicf("animation key [%s] from [%d] is out of costumes length [%d]", animName, from, len(costumes))
 		return
 	}
+	splitTag := "|"
 	if isCostumeSet {
 		assetPath := engine.ToAssetPath(costumes[0].path)
+		if strings.Contains(assetPath, splitTag) {
+			panic("assetPath is invalid, should not contains " + splitTag + " " + costumes[0].path)
+		}
 		sb.WriteString(assetPath)
 		sb.WriteString(";")
 		ary := make([]int, 0)
@@ -348,7 +353,13 @@ func registerAnimToEngine(spriteName string, animName string, animCfg *aniConfig
 	} else {
 		for i := from; i <= to; i++ {
 			assetPath := engine.ToAssetPath(costumes[i].path)
+			if strings.Contains(assetPath, splitTag) {
+				panic("assetPath is invalid, should not contains " + splitTag + " " + costumes[i].path)
+			}
+			costume := costumes[i]
 			sb.WriteString(assetPath)
+			halfSize := mathf.Vec2.Mulf(costume.imageSize, 0.5)
+			sb.WriteString(splitTag + fmt.Sprintf("%f,%f", costume.center.X-halfSize.X, -costume.center.Y+halfSize.Y))
 			if i != to {
 				sb.WriteString(";")
 			}
