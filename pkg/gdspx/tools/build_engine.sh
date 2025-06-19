@@ -17,11 +17,10 @@ done
 source $SCRIPT_DIR/common/setup_env.sh
 
 cd $PROJ_DIR
-COMMON_ARGS='debug_symbols=false 
+COMMON_ARGS='debug_symbols=true 
             optimize=size 
             use_volk=no 
             deprecated=no 
-            minizip=no  
             openxr=false 
             vulkan=false 
             graphite=false 
@@ -37,6 +36,7 @@ COMMON_ARGS='debug_symbols=false
             module_svg_enabled=true 
             module_jpg_enabled=true 
             module_ogg_enabled=true 
+            module_zip_enabled=true 
             module_godot_physics_2d_enabled=true '
 
 EXTRA_OPT_ARGS='disable_3d=true'
@@ -109,10 +109,10 @@ build_template() {
         fi 
         thread_flags=".nothreads"
         # build web templates
-        scons platform=web target=template_release threads=no $COMMON_ARGS $EXTRA_OPT_ARGS
+        scons platform=web target=template_debug threads=no $COMMON_ARGS $EXTRA_OPT_ARGS
         echo "Wait zip file to finished ..."
         sleep 2
-        cp bin/godot.web.template_release.wasm32$thread_flags.zip bin/web_dlink_debug.zip
+        cp bin/godot.web.template_debug.wasm32$thread_flags.zip bin/web_dlink_debug.zip
         rm "$template_dir"/web_*.zip
         cp bin/web_dlink_debug.zip "$template_dir/web_dlink_debug.zip"
         cp bin/web_dlink_debug.zip "$template_dir/web_dlink_release.zip"
