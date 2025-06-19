@@ -1,0 +1,10 @@
+{
+  "description": "测试项目",
+  "projectname": "test1",
+  "setting": {
+    "bigPackageSizeSupport": true,
+    "skylineRenderEnable": false
+  },
+  "libVersion": "3.8.9",
+  "appid": "wx85d85c65add03c33"
+}
