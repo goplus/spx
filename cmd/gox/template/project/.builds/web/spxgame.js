@@ -1,5 +1,5 @@
 
-
+IsWxMiniGame = false;
 class GameApp {
     constructor(config) {
         config = config || {};
