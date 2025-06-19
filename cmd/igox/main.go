@@ -149,6 +149,7 @@ func logErrorAndExit(msg string, err error) {
 }
 
 func main() {
+	println("hello world go wasm")
 	js.Global().Set("setAIInteractionAPIEndpoint", js.FuncOf(setAIInteractionAPIEndpoint))
 	js.Global().Set("setAIInteractionAPITokenProvider", js.FuncOf(setAIInteractionAPITokenProvider))
 	js.Global().Set("goLoadData", js.FuncOf(loadData))

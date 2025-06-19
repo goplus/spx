@@ -163,7 +163,7 @@ func (cmd *CmdTool) executeCommand() error {
 func (cmd *CmdTool) handleBuildPhase() error {
 	// 添加调试日志
 	fmt.Printf("[DEBUG] handleBuildPhase: command=%s, tags=%v\n", cmd.Args.CmdName, cmd.Args.Tags)
-	
+
 	switch cmd.Args.CmdName {
 	case "buildtinygo":
 		fmt.Println("[DEBUG] Executing BuildTinyGoLib")
@@ -214,6 +214,8 @@ func (cmd *CmdTool) handleExecutionPhase() error {
 		return cmd.ExportApk()
 	case "exportios":
 		return cmd.ExportIos()
+	case "exportminigame":
+		return cmd.ExportMinigame()
 	default:
 		// For build-only commands, no execution needed
 		return nil

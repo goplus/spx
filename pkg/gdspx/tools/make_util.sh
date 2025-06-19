@@ -81,6 +81,7 @@ do_extra_webtemplate() {
     spx exportwebruntime 
     rm -rf "$dstdir" 
     cp -rf ./project/.builds/webi  "$dstdir" 
+    mv "$dstdir/engine.pck" "$dstdir/engine.zip"
     echo "exporting web runtime done: $dstdir"
     # Clean up
     rm -rf "$CURRENT_PATH/.tmp"
@@ -149,7 +150,7 @@ do_runweb() {
     
     # Run cmdweb and start the web server
     (cd "$PROJ_DIR/cmd/gox/" && ./install.sh --web) 
-    (cd "$CURRENT_PATH/$target_path" && spx clear && spx runweb -serveraddr=":8106") || {
+    (cd "$CURRENT_PATH/$target_path" && spx clear && spx runweb -serveraddr=":$2") || {
         echo "Error: Failed to run web server"
         return 1
     }
@@ -183,7 +184,7 @@ main() {
             do_extra_webtemplate
             ;;
         runweb)
-            do_runweb "$1"
+            do_runweb "$1" "$2"
             ;;
         *)
             echo "Unknown command: $command"

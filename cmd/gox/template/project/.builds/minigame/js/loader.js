@@ -1,0 +1,312 @@
+import GameRunner from "./runner";
+
+
+const LoaderConfig = {
+  logo: "images/logo.png",
+  background: "images/background.png",
+  iconWidth: 128,
+  iconHeight: 128,
+  backGroudColor: "#282c34",
+  loadingBarHeight: 20,
+  loadingBarColor: "#478CBF",
+  loadingBarBackgroundColor: "#444",
+};
+
+class Loader {
+  constructor(config) {
+    this.config = {
+      ...LoaderConfig,
+      ...config,
+    };
+    const info = wx.getWindowInfo();
+    const dpr = info.pixelRatio;
+    this.progress = 0;
+    this.screenContext = canvas.getContext("webgl2");
+    this.loadingCanvas = document.createElement("canvas");
+    this.loadingContext = this.loadingCanvas.getContext("2d");
+    this.loadingCanvas.width = window.innerWidth * dpr;
+    this.loadingCanvas.height = window.innerHeight * dpr;
+    canvas.width = window.innerWidth * dpr;
+    canvas.height = window.innerHeight * dpr;
+    this.loadingContext.scale(dpr, dpr);
+
+    this.backgroundImage = wx.createImage();
+    this.backgroundImage.src = this.config.background;
+
+    this.logoImage = wx.createImage();
+    this.logoImage.src = this.config.logo;
+    this.logoImage.width = this.config.iconWidth;
+    this.logoImage.height = this.config.iconHeight;
+
+    const [screenTexture, cleanWebgl] = this.initWebgl();
+    this.screenTexture = screenTexture;
+    this.cleanWebgl = cleanWebgl;
+  }
+
+  loadSubpackages() {
+    return new Promise((resolve, reject) => {
+      wx.loadSubpackage({
+        fail: (reason) => {
+          reject(reason);
+        },
+        name: "engine",
+        success: () => {
+          resolve();
+        },
+      });
+    });
+  }
+
+  drawLoadingBar() {
+    const barWidth = window.innerWidth - 48;
+    const barX = (window.innerWidth - barWidth) / 2;
+    const barY = window.innerHeight - this.config.loadingBarHeight / 2 - 100;
+    const ctx = this.loadingContext;
+
+    // Draw background of loading bar
+    ctx.fillStyle = this.config.loadingBarBackgroundColor;
+    ctx.fillRect(barX, barY, barWidth, this.config.loadingBarHeight);
+
+    // Draw the progress
+    ctx.fillStyle = this.config.loadingBarColor;
+    ctx.fillRect(
+      barX,
+      barY,
+      (this.progress ) * barWidth,
+      this.config.loadingBarHeight
+    );
+
+    // Add text percentage
+    ctx.font = "16px";
+    ctx.fillStyle = "#fff";
+    ctx.textAlign = "center";
+    ctx.fillText(
+      `${((this.progress ) * 100).toFixed(1)}%`,
+      window.innerWidth / 2,
+      barY + this.config.loadingBarHeight - 6
+    );
+  }
+
+  drawBackground() {
+    const ctx = this.loadingContext;
+    const canvasWidth = this.loadingCanvas.width;
+    const canvasHeight = this.loadingCanvas.height;
+    const imageAspectRatio =
+      this.backgroundImage.naturalWidth / this.backgroundImage.naturalWidth;
+    const canvasAspectRatio = canvasWidth / canvasHeight;
+    let drawWidth, drawHeight, offsetX, offsetY;
+    if (canvasAspectRatio > imageAspectRatio) {
+      // Canvas is wider than the image, fit by height.
+      drawHeight = canvasHeight;
+      drawWidth = drawHeight * imageAspectRatio;
+      offsetX = (canvasWidth - drawWidth) / 2;
+      offsetY = 0;
+    } else {
+      // Canvas is taller than the image, fit by width.
+      drawWidth = canvasWidth;
+      drawHeight = drawWidth / imageAspectRatio;
+      offsetX = 0;
+      offsetY = (canvasHeight - drawHeight) / 2;
+    }
+    ctx.drawImage(
+      this.backgroundImage,
+      offsetX,
+      offsetY,
+      drawWidth,
+      drawHeight
+    );
+  }
+
+  drawIcon() {
+    const ctx = this.loadingContext;
+    const centerX = window.innerWidth / 2 - this.config.iconWidth / 2;
+    const centerY = window.innerHeight / 3 - this.config.iconHeight / 3;
+    ctx.drawImage(
+      this.logoImage,
+      centerX,
+      centerY,
+      this.config.iconWidth,
+      this.config.iconHeight
+    );
+  }
+  
+  onProgress(value) {
+    console.log("====>onProgress", value)
+    this.progress = value;
+    if (this.progress > 1) this.progress = 1;
+    this.drawBackground();
+    this.drawIcon();
+    this.drawLoadingBar();
+    this.drawScreen();
+
+    // load complete
+    if (this.progress === 1) {
+      console.log("====>load complete")
+      this.clean();
+      this.cleanWebgl();
+    }
+  }
+
+
+  initWebgl() {
+    const gl = this.screenContext;
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    // Create shaders
+    const vertexShaderSource = `
+      attribute vec4 a_position;
+      attribute vec2 a_texCoord;
+      varying vec2 v_texCoord;
+      void main() {
+        gl_Position = a_position;
+        v_texCoord = a_texCoord;
+      }
+    `;
+
+    const fragmentShaderSource = `
+      precision mediump float;
+      varying vec2 v_texCoord;
+      uniform sampler2D u_texture;
+      void main() {
+        gl_FragColor = texture2D(u_texture, v_texCoord);
+      }
+    `;
+
+    function createShader(type, source) {
+      const shader = gl.createShader(type);
+      gl.shaderSource(shader, source);
+      gl.compileShader(shader);
+      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        console.error("Error compiling shader:", gl.getShaderInfoLog(shader));
+        gl.deleteShader(shader);
+        return null;
+      }
+      return shader;
+    }
+    const vertexShader = createShader(gl.VERTEX_SHADER, vertexShaderSource);
+    const fragmentShader = createShader(
+      gl.FRAGMENT_SHADER,
+      fragmentShaderSource
+    );
+    const shaderProgram = gl.createProgram();
+    gl.attachShader(shaderProgram, vertexShader);
+    gl.attachShader(shaderProgram, fragmentShader);
+    gl.linkProgram(shaderProgram);
+    if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
+      console.error(
+        "Program linking error:",
+        gl.getProgramInfoLog(shaderProgram)
+      );
+    }
+    gl.useProgram(shaderProgram);
+    // Step 4: Create vertex buffer and bind
+    const vertices = new Float32Array([
+      -1.0, 1.0, 0.0, 0.0, -1.0, -1.0, 0.0, 1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0,
+      0.0, 0.0, 1.0, -1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0,
+    ]);
+    const vertexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+    const positionLocation = gl.getAttribLocation(shaderProgram, "a_position");
+    gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 16, 0);
+    gl.enableVertexAttribArray(positionLocation);
+
+    const texCoordLocation = gl.getAttribLocation(shaderProgram, "a_texCoord");
+    gl.vertexAttribPointer(texCoordLocation, 2, gl.FLOAT, false, 16, 8);
+    gl.enableVertexAttribArray(texCoordLocation);
+
+    const texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.viewport(0, 0, this.loadingCanvas.width, this.loadingCanvas.height);
+    const clean = () => {
+      const maxAttributes = gl.getParameter(gl.MAX_VERTEX_ATTRIBS);
+      for (let i = 0; i < maxAttributes; i++) {
+        gl.disableVertexAttribArray(i);
+      }
+      if (texture) gl.deleteTexture(texture);
+      gl.bindTexture(gl.TEXTURE_2D, null);
+      if (vertexShader) gl.deleteShader(vertexShader);
+      if (fragmentShader) gl.deleteShader(fragmentShader);
+      if (shaderProgram) gl.deleteProgram(shaderProgram);
+      gl.bindBuffer(gl.ARRAY_BUFFER, null);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+      gl.bindTexture(gl.TEXTURE_2D, null);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.bindRenderbuffer(gl.RENDERBUFFER, null);
+      gl.clear(
+        gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT
+      );
+      gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+      gl.disable(gl.DEPTH_TEST);
+      gl.disable(gl.BLEND);
+      gl.disable(gl.CULL_FACE);
+    };
+    return [texture, clean];
+  }
+
+  drawScreen() {
+    const gl = this.screenContext;
+    gl.bindTexture(gl.TEXTURE_2D, this.screenTexture);
+    gl.texImage2D(
+      gl.TEXTURE_2D,
+      0,
+      gl.RGBA,
+      gl.RGBA,
+      gl.UNSIGNED_BYTE,
+      this.loadingCanvas
+    );
+    gl.clearColor(0.0, 0.0, 0.0, 1.0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+  }
+
+  clean() {
+    this.logoImage = null;
+    this.loadingContext.clearRect(
+      0,
+      0,
+      this.loadingCanvas.width,
+      this.loadingCanvas.height
+    );
+    const gl = this.screenContext;
+  }
+
+  async load() {
+
+    const loadLogo = () => {
+      return new Promise((resolve, reject) => {
+        this.logoImage.onload = () => {
+          resolve();
+        };
+        this.logoImage.onerror = (error) => {
+          reject(error);
+        };
+      });
+    };
+    const loadBackground = () => {
+      return new Promise((resolve, reject) => {
+        this.backgroundImage.onload = () => {
+          resolve();
+        };
+        this.backgroundImage.error = (error) => {
+          reject(error);
+        };
+      });
+    };
+    Promise.all([loadBackground(), loadLogo()])
+      .then(() => {
+        this.onProgress(0.1);
+        return this.loadSubpackages();
+      })
+      .then(async () => {
+        this.onProgress(0.2);
+        await new GameRunner().startGame(this.onProgress.bind(this));
+      });
+  }
+}
+
+export default Loader;

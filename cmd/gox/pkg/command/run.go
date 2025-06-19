@@ -103,13 +103,13 @@ func (pself *CmdTool) RunPureEngine(pargs ...string) error {
 	// Build the Go binary first
 	rawdir, _ := os.Getwd()
 	os.Chdir(pself.GoDir)
-	
+
 	// Build the executable
 	binaryName := "main"
 	if runtime.GOOS == "windows" {
 		binaryName += ".exe"
 	}
-	
+
 	envVars := []string{"CGO_ENABLED=0"}
 	if pself.Args.Tags != nil && *pself.Args.Tags != "" {
 		err := util.RunGolang(envVars, "build", "-tags="+*pself.Args.Tags, "-o", binaryName)
@@ -124,7 +124,7 @@ func (pself *CmdTool) RunPureEngine(pargs ...string) error {
 			return fmt.Errorf("failed to build Go binary: %w", err)
 		}
 	}
-	
+
 	// Run the binary
 	binaryPath := filepath.Join(pself.GoDir, binaryName)
 	os.Chdir(rawdir)

@@ -23,6 +23,7 @@ type ExtraArgs struct {
 	Install         *bool
 	DebugWebService *bool
 	FullScreen      *bool
+	Build           *string
 }
 
 func (e *ExtraArgs) String() []string {
@@ -63,6 +64,7 @@ func (pself *CmdTool) CheckCmd(ext ...string) bool {
 		"runweb", "buildweb", "exportweb", "stopweb",
 		"runm", "exportbot", "exportapk", "exportios",
 		"run", "exportwebeditor", "runwebeditor", "exportwebruntime",
+		"exportminigame", "runminigame",
 	}
 	cmds = append(cmds, ext...)
 
@@ -106,6 +108,7 @@ func (cmd *CmdTool) initializeFlags() *bool {
 	cmd.Args.Install = f.Bool("install", false, "install mode")
 	cmd.Args.DebugWebService = f.Bool("debugweb", false, "open debug web service")
 	cmd.Args.FullScreen = f.Bool("fullscreen", false, "full screen")
+	cmd.Args.Build = f.String("build", "normal", "build mode: normal or fast")
 	return help
 }
 
@@ -177,6 +180,7 @@ Available commands:
     - exportbot       # Export the bot package
     - exportapk       # Export Android APK
     - exportios       # Export iOS package
+    - exportminigame  # Export minigame package (supports -build=fast for faster build)
 
 Examples:
 
@@ -186,6 +190,7 @@ Examples:
     #CMDNAME build --servermode        # Build in server mode
     #CMDNAME runweb --debugweb         # Run web server with debug service
     #CMDNAME buildtinygo               # Build TinyGo static library for ESP32
+    #CMDNAME exportminigame -build=fast # Export minigame without compression (faster)
 	`
 	fmt.Println(cmdName + " Version = " + version + "\n" + strings.ReplaceAll(msg, "#CMDNAME", cmdName))
 
