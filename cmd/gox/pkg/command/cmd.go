@@ -169,6 +169,10 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 		err = cmd.RunWebEditor()
 	case "exportwebeditor":
 		err = cmd.ExportWebEditor()
+	case "exportminigame":
+		err = cmd.ExportMinigame()
+	case "runminigame":
+		err = cmd.RunMinigame()
 	case "exportapk":
 		err = cmd.ExportApk()
 	case "exportios":

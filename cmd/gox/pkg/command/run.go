@@ -50,6 +50,13 @@ func (pself *CmdTool) RunWebEditor() error {
 	return pself.runWebServer()
 }
 
+func (pself *CmdTool) RunMinigame() error {
+	if !util.IsFileExist(filepath.Join(pself.ProjectDir, ".builds", "minigame", "engineres.zip")) {
+		pself.ExportMinigame()
+	}
+	return pself.runWebServer()
+}
+
 func (pself *CmdTool) RunWeb() error {
 	if !util.IsFileExist(filepath.Join(pself.ProjectDir, ".builds", "web", "game.zip")) {
 		pself.ExportWeb()

@@ -120,6 +120,34 @@ func (pself *CmdTool) ExportWebRuntime() error {
 	return util.RunCommandInDir(pself.ProjectDir, pself.CmdPath, "--headless", "--quit", "--path", pself.ProjectDir, "--export-debug", platformName, targetPath)
 }
 
+func (pself *CmdTool) ExportMinigame() error {
+	pself.Clear()
+	// copy project files
+	util.CopyDir(pself.ProjectFS, "template/project", pself.ProjectDir, true)
+	dir := pself.TargetDir
+	util.SetupFile(false, path.Join(dir, ".gitignore"), pself.GitignoreTxt)
+	os.Rename(path.Join(dir, ".gitignore.txt"), path.Join(dir, ".gitignore"))
+
+	webTemplateDir := path.Join(pself.GoBinPath, "gdspxrt"+pself.Version+"_web")
+	if !util.IsFileExist(webTemplateDir) {
+		return errors.New("web dir file not found: " + webTemplateDir)
+	}
+
+	dstPath := path.Join(pself.ProjectDir, ".builds/web")
+	os.MkdirAll(dstPath, os.ModePerm)
+	util.CopyDir2(webTemplateDir, dstPath)
+	os.Rename(path.Join(dstPath, "godot.editor.html"), path.Join(dstPath, "index.html"))
+
+	// overwrite web files
+	util.CopyDir(pself.ProjectFS, "template/project/.builds/web", pself.WebDir, true)
+	pack.PackProject(pself.TargetDir, path.Join(pself.WebDir, "game.zip"))
+
+	//pack.PackEngineRes(pself.ProjectFS, pself.WebDir)
+	util.CopyFile(pself.getWasmPath(), path.Join(pself.WebDir, "gdspx.wasm"))
+	pack.SaveEngineHash(pself.WebDir)
+	return nil
+}
+
 func (pself *CmdTool) Export() error {
 	targetDir := path.Join(pself.ProjectDir, ".builds/pc")
 	targetPath := path.Join(targetDir, PcExportName)
