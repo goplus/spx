@@ -1,5 +1,5 @@
-import "./libs/godot";
-import { GodotSDK } from "./libs/sdk"
+import "./js/godot";
+import { GodotSDK } from "./js/sdk"
 
 const LoaderConfig = {
   logo: "images/logo.png",

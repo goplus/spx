@@ -1,6 +1,6 @@
 import "./weapp-adapter";
 import "./fetch";
-import Loader from "./js/loader";
+import Loader from "./loader";
 
 function checkUpdate() {
   const updateManager = wx.getUpdateManager();

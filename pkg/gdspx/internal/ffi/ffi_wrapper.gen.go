@@ -147,7 +147,6 @@ type GDExtensionSpxResReadAllText C.GDExtensionSpxResReadAllText
 type GDExtensionSpxResHasFile C.GDExtensionSpxResHasFile
 type GDExtensionSpxResReloadTexture C.GDExtensionSpxResReloadTexture
 type GDExtensionSpxResFreeStr C.GDExtensionSpxResFreeStr
-type GDExtensionSpxResSetDefaultFont C.GDExtensionSpxResSetDefaultFont
 type GDExtensionSpxSceneChangeSceneToFile C.GDExtensionSpxSceneChangeSceneToFile
 type GDExtensionSpxSceneDestroyAllSprites C.GDExtensionSpxSceneDestroyAllSprites
 type GDExtensionSpxSceneReloadCurrentScene C.GDExtensionSpxSceneReloadCurrentScene
@@ -1006,15 +1005,6 @@ func CallResFreeStr(
 	arg1GdString := (C.GdString)(str)
 
 	C.cgo_callfn_GDExtensionSpxResFreeStr(arg0, arg1GdString)
-
-}
-func CallResSetDefaultFont(
-	font_path GdString,
-) {
-	arg0 := (C.GDExtensionSpxResSetDefaultFont)(api.SpxResSetDefaultFont)
-	arg1GdString := (C.GdString)(font_path)
-
-	C.cgo_callfn_GDExtensionSpxResSetDefaultFont(arg0, arg1GdString)
 
 }
 func CallSceneChangeSceneToFile(

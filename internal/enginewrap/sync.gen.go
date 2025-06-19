@@ -557,11 +557,6 @@ func (pself *resMgrImpl) FreeStr(str string) {
 		gdx.ResMgr.FreeStr(str)
 	})
 }
-func (pself *resMgrImpl) SetDefaultFont(font_path string) {
-	callInMainThread(func() {
-		gdx.ResMgr.SetDefaultFont(font_path)
-	})
-}
 
 // ISceneMgr
 func (pself *sceneMgrImpl) ChangeSceneToFile(path string) {
