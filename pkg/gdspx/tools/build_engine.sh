@@ -29,7 +29,6 @@ COMMON_ARGS='debug_symbols=true
             module_msdfgen_enabled=false 
             module_text_server_adv_enabled=false 
             module_text_server_fb_enabled=true 
-            modules_enabled_by_default=false 
             module_gdscript_enabled=true 
             module_freetype_enabled=true 
             module_minimp3_enabled=true 
@@ -37,6 +36,11 @@ COMMON_ARGS='debug_symbols=true
             module_jpg_enabled=true 
             module_ogg_enabled=true 
             module_zip_enabled=true 
+            module_mobile_vr_enabled=false
+            module_openxr_enabled=false
+            module_webxr_enabled=false
+            module_text_server_adv_enabled=false
+            module_webrtc_enabled=false
             module_godot_physics_2d_enabled=true '
 
 EXTRA_OPT_ARGS='disable_3d=true'
