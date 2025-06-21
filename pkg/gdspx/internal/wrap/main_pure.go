@@ -1,9 +1,8 @@
-//go:build !js && !pure_engine
+//go:build pure_engine
 
 package wrap
 
 import (
-	"github.com/goplus/spx/v2/pkg/gdspx/internal/ffi"
 	. "github.com/goplus/spx/v2/pkg/gdspx/pkg/engine"
 )
 
@@ -20,11 +19,14 @@ func addManager[T IManager](mgr T) T {
 	mgrs = append(mgrs, mgr)
 	return mgr
 }
+
 func LinkFFI() bool {
-	return ffi.Link()
+	// Pure mode doesn't need FFI linking
+	return true
 }
+
 func OnLinked() {
-	ffi.Linked()
+	// Pure mode doesn't need linking callbacks
 }
 
 func CreateMgrs() []IManager {
@@ -32,5 +34,7 @@ func CreateMgrs() []IManager {
 }
 
 func RegisterCallbacks(callbacks CallbackInfo) {
-	ffi.BindCallback(callbacks)
+	// Pure mode doesn't need callback registration
+	// Store callbacks for potential future use
+	callbacks = callbacks
 }

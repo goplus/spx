@@ -39,20 +39,39 @@ func (pself *CmdTool) BuildTinyGoLib() error {
 	// Change to Go directory
 	os.Chdir(pself.GoDir)
 
+	// Determine target board
+	target := "esp32"
+	if *pself.Args.Target != "" {
+		target = *pself.Args.Target
+	}
+	if target == "esp32" {
+		target = "esp32-coreboard-v2"
+	}
+
 	// Prepare TinyGo build arguments
 	args := []string{
 		"build",
 		"-o", outputPath,
-		"-target=esp32-coreboard-v2",
+		"-target=" + target,
 		"-no-debug",
 		"-opt=2",
 		"-gc=leaking",
 		"-scheduler=none",
-		".", // 使用当前目录，让TinyGo处理所有Go文件
 	}
 
-	// Run TinyGo build command
-	err := util.RunTinyGo(nil, args...)
+	// Add tags if specified
+	if *pself.Args.Tags != "" {
+		args = append(args, "-tags="+*pself.Args.Tags)
+	}
+
+	// Add current directory as the last argument
+	args = append(args, ".") // 使用当前目录，让TinyGo处理所有Go文件
+
+	// Set environment variables including GODEBUG to fix gotypesalias issue
+	envVars := []string{"GODEBUG=gotypesalias=0"}
+
+	// Run TinyGo build command with environment variables
+	err := util.RunTinyGo(envVars, args...)
 	if err != nil {
 		log.Printf("TinyGo build failed: %v", err)
 		os.Chdir(rawdir)
