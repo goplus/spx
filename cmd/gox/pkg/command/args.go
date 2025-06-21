@@ -58,7 +58,7 @@ func (pself *CmdTool) CheckCmd(ext ...string) bool {
 	cmds := []string{
 		"help", "version", "editor",
 		"init", "clear", "clearbuild",
-		"build", "rune", "export",
+		"build", "buildtinygo", "rune", "export",
 		"runweb", "buildweb", "exportweb", "stopweb",
 		"runm", "exportbot", "exportapk", "exportios",
 		"run", "exportwebeditor", "runwebeditor", "exportwebruntime",
@@ -160,6 +160,7 @@ Available commands:
 
     Development:
     - build           # Build the dynamic library
+    - buildtinygo     # Build static library using TinyGo for ESP32
     - run             # Run the current project
     - export          # Export the PC package (macOS, Windows, Linux)
     - runm            # Run the project in mutil player mode
@@ -182,6 +183,7 @@ Examples:
     #CMDNAME run --path ./myproject    # Run project at specified path
     #CMDNAME build --servermode        # Build in server mode
     #CMDNAME runweb --debugweb         # Run web server with debug service
+    #CMDNAME buildtinygo               # Build TinyGo static library for ESP32
 	`
 	fmt.Println(cmdName + " Version = " + version + "\n" + strings.ReplaceAll(msg, "#CMDNAME", cmdName))
 

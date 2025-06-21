@@ -5,9 +5,9 @@ import (
 	_ "embed"
 	"fmt"
 	"go/build"
-	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/goplus/spx/v2/cmd/gox/pkg/util"
 )
@@ -70,6 +70,7 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 		cmd.ShowHelpInfo()
 		return
 	}
+
 	// Initialize flags
 	help := cmd.initializeFlags()
 
@@ -88,24 +89,11 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 	}
 
 	// Handle special commands that don't need full setup
-	switch cmd.Args.CmdName {
-	case "help", "version":
-		cmd.ShowHelpInfo()
-		return nil
-	case "clear":
-		if err := cmd.Clear(); err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to clear project: %v\n", err)
-			return err
-		}
-		return nil
-	case "stopweb":
-		if err := cmd.StopWeb(); err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to stop web server: %v\n", err)
-			return err
-		}
+	if cmd.handleSpecialCommands() {
 		return nil
 	}
 
+	// Set runtime mode
 	if cmd.Args.CmdName == "run" || cmd.Args.CmdName == "runweb" {
 		cmd.RuntimeMode = true
 	}
@@ -131,54 +119,131 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 		return err
 	}
 
-	switch cmd.Args.CmdName {
-	case "init":
-		log.Println("Initializing project...")
+	// Handle init command
+	if cmd.Args.CmdName == "init" {
 		return nil
 	}
 
-	// Execute the command
+	// Execute the command based on its type
+	return cmd.executeCommand()
+}
 
-	// Handle build commands
+// handleSpecialCommands handles commands that don't need full setup
+func (cmd *CmdTool) handleSpecialCommands() bool {
 	switch cmd.Args.CmdName {
-	case "editor", "rune", "export", "build", "run":
-		cmd.BuildDll()
-	case "buildweb", "runweb", "exportweb":
-		cmd.BuildWasm()
+	case "help", "version":
+		cmd.ShowHelpInfo()
+		return true
+	case "clear":
+		if err := cmd.Clear(); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to clear project: %v\n", err)
+		}
+		return true
+	case "stopweb":
+		if err := cmd.StopWeb(); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to stop web server: %v\n", err)
+		}
+		return true
 	}
+	return false
+}
 
-	// Execute the command
-	switch cmd.Args.CmdName {
-	case "editor":
-		args := cmd.Args.String()
-		args = append(args, "-e")
-		err = util.RunCommandInDir(cmd.ProjectDir, cmd.CmdPath, args...)
-	case "rune":
-		err = util.RunCommandInDir(cmd.ProjectDir, cmd.CmdPath, cmd.Args.String()...)
-	case "run":
-		err = cmd.RunPackMode(cmd.Args.String()...)
-	case "export":
-		err = cmd.Export()
-	case "exportwebruntime":
-		err = cmd.ExportWebRuntime()
-	case "runweb":
-		err = cmd.RunWeb()
-	case "exportweb":
-		err = cmd.ExportWeb()
-	case "runwebeditor":
-		err = cmd.RunWebEditor()
-	case "exportwebeditor":
-		err = cmd.ExportWebEditor()
-	case "exportapk":
-		err = cmd.ExportApk()
-	case "exportios":
-		err = cmd.ExportIos()
-	}
-
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Command execution failed: %v\n", err)
+// executeCommand executes the main command logic
+func (cmd *CmdTool) executeCommand() error {
+	// First, handle build phase if needed
+	if err := cmd.handleBuildPhase(); err != nil {
 		return err
 	}
 
+	// Then, handle execution phase
+	return cmd.handleExecutionPhase()
+}
+
+// handleBuildPhase handles the build phase for commands that need it
+func (cmd *CmdTool) handleBuildPhase() error {
+	// 添加调试日志
+	fmt.Printf("[DEBUG] handleBuildPhase: command=%s, tags=%v\n", cmd.Args.CmdName, cmd.Args.Tags)
+	
+	switch cmd.Args.CmdName {
+	case "buildtinygo":
+		fmt.Println("[DEBUG] Executing BuildTinyGoLib")
+		return cmd.BuildTinyGoLib()
+	case "editor", "rune", "export", "build", "run":
+		fmt.Println("[DEBUG] Checking BuildDll conditions")
+		// Skip BuildDll for pure_engine mode
+		if cmd.Args.Tags == nil || !strings.Contains(*cmd.Args.Tags, "pure_engine") {
+			fmt.Println("[DEBUG] Executing BuildDll")
+			return cmd.BuildDll()
+		} else {
+			fmt.Println("[DEBUG] Skipping BuildDll for pure_engine mode")
+		}
+	case "buildweb", "runweb", "exportweb":
+		fmt.Println("[DEBUG] Executing BuildWasm")
+		return cmd.BuildWasm()
+	default:
+		fmt.Printf("[DEBUG] No build phase needed for command: %s\n", cmd.Args.CmdName)
+	}
 	return nil
+}
+
+// handleExecutionPhase handles the execution phase for commands that need it
+func (cmd *CmdTool) handleExecutionPhase() error {
+	switch cmd.Args.CmdName {
+	case "buildtinygo":
+		// Build-only command, no execution phase needed
+		return nil
+	case "editor":
+		return cmd.executeEditor()
+	case "rune":
+		return cmd.executeRune()
+	case "run":
+		return cmd.executeRun()
+	case "export":
+		return cmd.Export()
+	case "exportwebruntime":
+		return cmd.ExportWebRuntime()
+	case "runweb":
+		return cmd.RunWeb()
+	case "exportweb":
+		return cmd.ExportWeb()
+	case "runwebeditor":
+		return cmd.RunWebEditor()
+	case "exportwebeditor":
+		return cmd.ExportWebEditor()
+	case "exportapk":
+		return cmd.ExportApk()
+	case "exportios":
+		return cmd.ExportIos()
+	default:
+		// For build-only commands, no execution needed
+		return nil
+	}
+}
+
+// executeEditor handles the editor command execution
+func (cmd *CmdTool) executeEditor() error {
+	if cmd.Args.Tags != nil && strings.Contains(*cmd.Args.Tags, "pure_engine") {
+		return fmt.Errorf("editor command is not supported in pure_engine mode")
+	}
+	args := cmd.Args.String()
+	args = append(args, "-e")
+	return util.RunCommandInDir(cmd.ProjectDir, cmd.CmdPath, args...)
+}
+
+// executeRune handles the rune command execution
+func (cmd *CmdTool) executeRune() error {
+	if cmd.Args.Tags != nil && strings.Contains(*cmd.Args.Tags, "pure_engine") {
+		return fmt.Errorf("rune command is not supported in pure_engine mode")
+	}
+	return util.RunCommandInDir(cmd.ProjectDir, cmd.CmdPath, cmd.Args.String()...)
+}
+
+// executeRun handles the run command execution
+func (cmd *CmdTool) executeRun() error {
+	if cmd.Args.Tags != nil && strings.Contains(*cmd.Args.Tags, "pure_engine") {
+		// For pure_engine mode, run the Go binary directly
+		return cmd.RunPureEngine(cmd.Args.String()...)
+	} else {
+		return cmd.RunPackMode(cmd.Args.String()...)
+	}
 }

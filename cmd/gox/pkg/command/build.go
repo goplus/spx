@@ -24,6 +24,46 @@ func (pself *CmdTool) BuildWasm() (err error) {
 	return nil
 }
 
+// BuildTinyGoLib builds static library using TinyGo for ESP32
+func (pself *CmdTool) BuildTinyGoLib() error {
+	pself.genGo()
+	rawdir, _ := os.Getwd()
+
+	// Create builds directory for tinygo output
+	dir := path.Join(pself.ProjectDir, ".builds/tinygo/")
+	os.MkdirAll(dir, 0755)
+
+	// Set output file path
+	outputPath := path.Join(dir, "golib.o")
+
+	// Change to Go directory
+	os.Chdir(pself.GoDir)
+
+	// Prepare TinyGo build arguments
+	args := []string{
+		"build",
+		"-o", outputPath,
+		"-target=esp32-coreboard-v2",
+		"-no-debug",
+		"-opt=2",
+		"-gc=leaking",
+		"-scheduler=none",
+		".", // 使用当前目录，让TinyGo处理所有Go文件
+	}
+
+	// Run TinyGo build command
+	err := util.RunTinyGo(nil, args...)
+	if err != nil {
+		log.Printf("TinyGo build failed: %v", err)
+		os.Chdir(rawdir)
+		return err
+	}
+
+	os.Chdir(rawdir)
+	log.Printf("TinyGo static library built successfully: %s", outputPath)
+	return nil
+}
+
 func (pself *CmdTool) BuildDll() error {
 	files, _ := filepath.Glob(filepath.Join(pself.ProjectDir, "go", "ios*"))
 	// Restore original files
@@ -94,12 +134,14 @@ func (pself *CmdTool) genGo() string {
 	if *pself.Args.Tags != "" {
 		tagStr = "-tags=" + *pself.Args.Tags
 	}
+	log.Printf("genGo tagStr: %s", tagStr)
 
 	if tagStr == "" {
 		util.RunXGo(envVars, "go")
 	} else {
 		util.RunXGo(envVars, "go", tagStr)
 	}
+
 	os.MkdirAll(pself.GoDir, 0755)
 	os.Rename(path.Join(spxProjPath, "xgo_autogen.go"), path.Join(pself.GoDir, "main.go"))
 	os.Chdir(projectDir)

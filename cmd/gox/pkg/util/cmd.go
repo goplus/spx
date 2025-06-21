@@ -43,3 +43,8 @@ func RunXGo(envVars []string, args ...string) error {
 func RunGolang(envVars []string, args ...string) error {
 	return RunCommandWithEnv(envVars, "go", args...)
 }
+
+// RunTinyGo runs tinygo command with given environment variables and arguments
+func RunTinyGo(envVars []string, args ...string) error {
+	return RunCommandWithEnv(envVars, "tinygo", args...)
+}
