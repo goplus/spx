@@ -17,7 +17,7 @@ done
 source $SCRIPT_DIR/common/setup_env.sh
 
 cd $PROJ_DIR
-COMMON_ARGS='debug_symbols=true 
+COMMON_ARGS='
             optimize=size 
             use_volk=no 
             deprecated=no 
@@ -113,7 +113,7 @@ build_template() {
         fi 
         thread_flags=".nothreads"
         # build web templates
-        scons platform=web target=template_debug threads=no $COMMON_ARGS $EXTRA_OPT_ARGS
+        scons platform=web target=template_debug threads=no $COMMON_ARGS $EXTRA_OPT_ARGS debug_symbols=true 
         echo "Wait zip file to finished ..."
         sleep 2
         cp bin/godot.web.template_debug.wasm32$thread_flags.zip bin/web_dlink_debug.zip

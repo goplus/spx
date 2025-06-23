@@ -75,7 +75,8 @@ cmd:
 	cd ./cmd/gox/ && ./install.sh && cd $(CURRENT_PATH) 
 # build wasm
 wasm:
-	cd ./cmd/gox/ && ./install.sh --web && cd $(CURRENT_PATH) 
+	cd ./cmd/gox/ && ./install.sh --web && cd $(CURRENT_PATH) &&\
+	cp -rf /Users/tjp/projects/robot/spx/cmd/igox/gdspx.wasm /Users/tjp/projects/robot/godot-love-wechat/export/engine/gdspx.wasm 
 # build wasm with optimization
 wasmopt:
 	cd ./cmd/gox/ && ./install.sh --web --opt && cd $(CURRENT_PATH) 
@@ -94,6 +95,7 @@ pc:
 web: 
 	./pkg/gdspx/tools/build_engine.sh -p web &&\
 	cp -rf /Users/tjp/projects/robot/spx/pkg/gdspx/godot/bin/godot.web.template_debug.wasm32.nothreads.wasm /Users/tjp/projects/robot/godot-love-wechat/export/engine/godot.editor.wasm &&\
+	cp -rf /Users/tjp/projects/robot/spx/cmd/igox/gdspx.wasm /Users/tjp/projects/robot/godot-love-wechat/export/engine/gdspx.wasm &&\
 	./pkg/gdspx/tools/make_util.sh extrawebtemplate 
 
 # Build android template
@@ -117,7 +119,7 @@ exportweb:
 
 # Run demos
 path ?= tutorial/01-Weather
-
+port ?= 8106
 # Run demo on PC editor mode
 rune:
 	cd  $(path) && spx rune . && cd $(CURRENT_PATH) 
@@ -128,7 +130,7 @@ run:
 
 # Run demo on web
 runweb:
-	./pkg/gdspx/tools/make_util.sh runweb $(path) && cd $(CURRENT_PATH) 
+	./pkg/gdspx/tools/make_util.sh runweb $(path) $(port) && cd $(CURRENT_PATH) 
 
 # Run tests
 runtest:
