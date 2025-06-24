@@ -561,12 +561,10 @@ func (pself *CmdTool) buildMinigame() error {
 
 	if buildMode == "fast" {
 		// fast build: move WASM files directly without compression
-		fmt.Printf("fast build mode: moving %s...\n", godotEditorWasm)
 		if err := pself.moveFile(godotEditorWasm, path.Join(engineDir, "engine.wasm")); err != nil {
 			return fmt.Errorf("failed to move %s: %w", godotEditorWasm, err)
 		}
 
-		fmt.Printf("fast build mode: moving %s...\n", gdspxWasm)
 		if err := pself.moveFile(gdspxWasm, path.Join(engineDir, "gdspx.wasm")); err != nil {
 			return fmt.Errorf("failed to move %s: %w", gdspxWasm, err)
 		}
