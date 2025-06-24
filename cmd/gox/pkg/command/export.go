@@ -138,7 +138,6 @@ func (pself *CmdTool) ExportMinigame() error {
 	// copy monogame files
 	util.CopyDir(pself.ProjectFS, "template/project/.builds/minigame", pself.WebDir, true)
 
-	// 直接在Go中实现原来build.sh脚本的功能
 	if err := pself.buildMinigame(); err != nil {
 		return fmt.Errorf("failed to build minigame: %w", err)
 	}
@@ -541,16 +540,16 @@ func (pself *CmdTool) buildAndroidLibraries() error {
 	return nil
 }
 
-// buildMinigame 实现原来build.sh脚本的功能
+// buildMinigame implements the functionality of the original build.sh script
 func (pself *CmdTool) buildMinigame() error {
 	workDir := pself.WebDir
 
-	// 检查brotli是否安装
+	// check if brotli is installed
 	if _, err := exec.LookPath("brotli"); err != nil {
 		return fmt.Errorf("error: brotli is not installed")
 	}
 
-	// 压缩WASM文件
+	// compress WASM files
 	godotEditorWasm := path.Join(workDir, "minigame", "engine.wasm")
 	gdspxWasm := path.Join(workDir, "minigame", "gdspx.wasm")
 
@@ -564,7 +563,7 @@ func (pself *CmdTool) buildMinigame() error {
 		return fmt.Errorf("failed to compress %s: %w", gdspxWasm, err)
 	}
 
-	// 创建目标目录
+	// create target directories
 	engineDir := path.Join(workDir, "engine")
 	jsDir := path.Join(workDir, "js")
 	minigameDir := path.Join(workDir, "minigame")
@@ -572,7 +571,7 @@ func (pself *CmdTool) buildMinigame() error {
 	os.MkdirAll(engineDir, os.ModePerm)
 	os.MkdirAll(jsDir, os.ModePerm)
 
-	// 移动文件到engine目录
+	// move files to engine directory
 	if err := pself.moveFilesByPattern(minigameDir, engineDir, "*.zip"); err != nil {
 		return fmt.Errorf("failed to move zip files: %w", err)
 	}
@@ -580,23 +579,23 @@ func (pself *CmdTool) buildMinigame() error {
 		return fmt.Errorf("failed to move br files: %w", err)
 	}
 
-	// 移动js文件到js目录
+	// move js files to js directory
 	if err := pself.moveFilesByPattern(minigameDir, jsDir, "*.js"); err != nil {
 		return fmt.Errorf("failed to move js files: %w", err)
 	}
 
-	// 合并JS文件
+	// merge JS files
 	if err := pself.mergeJSFiles(jsDir); err != nil {
 		return fmt.Errorf("failed to merge JS files: %w", err)
 	}
 
-	// 删除minigame目录
+	// remove minigame directory
 	os.RemoveAll(minigameDir)
 
-	// 可选地打开微信开发者工具
+	// optionally open WeChat Developer Tools
 	if wechatDevTools := os.Getenv("WECHAT_DEV_TOOLS"); wechatDevTools != "" {
 		cmd := exec.Command(path.Join(wechatDevTools, "cli"), "open", "--project", workDir, "-y")
-		cmd.Run() // 忽略错误，因为这是可选的
+		cmd.Run() // ignore errors as this is optional
 	} else {
 		fmt.Printf("WECHAT_DEV_TOOLS is not set, please open project manually %s\n", workDir)
 	}
@@ -604,13 +603,13 @@ func (pself *CmdTool) buildMinigame() error {
 	return nil
 }
 
-// compressBrotli 使用brotli压缩文件
+// compressBrotli compresses a file using brotli
 func (pself *CmdTool) compressBrotli(filePath string) error {
 	cmd := exec.Command("brotli", "-f", "-q", "11", filePath)
 	return cmd.Run()
 }
 
-// moveFilesByPattern 移动匹配模式的文件
+// moveFilesByPattern moves files matching a pattern
 func (pself *CmdTool) moveFilesByPattern(srcDir, dstDir, pattern string) error {
 	files, err := filepath.Glob(path.Join(srcDir, pattern))
 	if err != nil {
@@ -628,13 +627,13 @@ func (pself *CmdTool) moveFilesByPattern(srcDir, dstDir, pattern string) error {
 	return nil
 }
 
-// mergeJSFiles 合并JS文件
+// mergeJSFiles merges JavaScript files
 func (pself *CmdTool) mergeJSFiles(jsDir string) error {
-	// 文件合并顺序
+	// file merge order
 	jsFiles := []string{"header.js", "engine.js", "wasm_exec.js", "game.js"}
 	outputFile := path.Join(jsDir, "engine_new.js")
 
-	// 创建输出文件
+	// create output file
 	output, err := os.Create(outputFile)
 	if err != nil {
 		return err
@@ -644,11 +643,11 @@ func (pself *CmdTool) mergeJSFiles(jsDir string) error {
 	writer := bufio.NewWriter(output)
 	defer writer.Flush()
 
-	// 合并文件内容
+	// merge file contents
 	for _, jsFile := range jsFiles {
 		filePath := path.Join(jsDir, jsFile)
 		if _, err := os.Stat(filePath); os.IsNotExist(err) {
-			continue // 跳过不存在的文件
+			continue // skip non-existent files
 		}
 
 		file, err := os.Open(filePath)
@@ -662,10 +661,10 @@ func (pself *CmdTool) mergeJSFiles(jsDir string) error {
 			return err
 		}
 
-		// 删除原文件
+		// remove original file
 		os.Remove(filePath)
 	}
 
-	// 重命名输出文件
+	// rename output file
 	return os.Rename(outputFile, path.Join(jsDir, "engine.js"))
 }
