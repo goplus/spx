@@ -98,6 +98,7 @@
 					"gdspx.wasm": "/gdspx.wasm",
 					"engine.wasm": "/engine.wasm",
 				},
+				"onSpxReady": onSpxReady,
 			};
 			if (assetURLs != null) {
 				config.assetURLs = assetURLs
@@ -105,15 +106,6 @@
 
 			if (gameApp != null) {
 				await gameApp.StopProject();
-			}
-			
-			// load wasm
-			let url = config.assetURLs["gdspx.wasm"]
-			const go = new Go();
-			const { instance } = await WebAssembly.instantiateStreaming(fetch(url), go.importObject);
-			go.run(instance);
-			if (onSpxReady != null) {
-				onSpxReady()
 			}
 
 			// try install project and run game

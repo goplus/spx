@@ -5,7 +5,7 @@ class GameApp {
         this.config = config;
         this.editor = null;
         this.game = null;
-        this.packName =  'engine.zip';
+        this.packName = 'engine.zip';
         this.projectDataName = 'game.zip';
         this.persistentPath = 'engine';
         this.logLevel = config.logLevel || LOG_LEVEL_NONE;
@@ -55,8 +55,11 @@ class GameApp {
 
     async runGame(resolve, reject) {
         let url = this.assetURLs["engine.wasm"]
-        this.wasmEngine = await (await fetch(url)).arrayBuffer(); 
-        this.gameConfig.wasmEngine = this.wasmEngine
+        this.gameConfig.wasmEngine = url
+        if (!miniEngine) {
+            this.wasmEngine = await (await fetch(url)).arrayBuffer();
+            this.gameConfig.wasmEngine = this.wasmEngine
+        }
 
         this.runGameTask--
         // if stopGame is called before runing game, then do nothing
@@ -70,7 +73,7 @@ class GameApp {
             '--main-pack', this.persistentPath + "/" + this.packName,
             '--main-project-data', this.persistentPath + "/" + this.projectDataName,
         ];
-           
+
         this.logVerbose("RunGame ", args);
         if (this.game) {
             this.logVerbose('A game is already running. Close it first');
@@ -78,10 +81,22 @@ class GameApp {
             return;
         }
 
-
         this.onProgress(0.5);
         this.game = new Engine(this.gameConfig);
         let curGame = this.game
+
+        // register global functions
+        window.gdspx_on_engine_start = function () { }
+        window.gdspx_on_engine_update = function () { }
+        window.gdspx_on_engine_fixed_update = function () { }
+        window.goWasmInit = function () { }
+
+        if (miniEngine) {
+            GameGlobal.engine = this.game;
+            godotSdk.set_engine(this.game);
+        }else{
+            await this.loadWasm()
+        }
 
         // register global functions
         const spxfuncs = new GdspxFuncs();
@@ -97,6 +112,9 @@ class GameApp {
             await this.unpackGameData(curGame)
 
             curGame.start({ 'args': args, 'canvas': this.gameCanvas }).then(async () => {
+                if (miniEngine) {
+                    await this.loadWasm()
+                }
                 this.onProgress(0.9);
                 window.goLoadData(new Uint8Array(this.projectData));
                 this.onProgress(1.0);
@@ -107,9 +125,40 @@ class GameApp {
         });
     }
 
+    async loadWasm() {
+        // load wasm
+        let url = this.config.assetURLs["gdspx.wasm"];
+        console.log("go wasm url===>", url);
+        const go = new Go();
+        if (miniEngine) {
+            // load wasm in miniEngine
+            const wasmResult = await WebAssembly.instantiate(url, go.importObject);
+            // create compatible instance
+            const compatibleInstance = Object.create(WebAssembly.Instance.prototype);
+            compatibleInstance.exports = wasmResult.instance.exports;
+            Object.defineProperty(compatibleInstance, 'constructor', {
+                value: WebAssembly.Instance,
+                writable: false,
+                enumerable: false,
+                configurable: true
+            });
+
+            console.log("[debug] go.run start");
+            go.run(compatibleInstance);
+            console.log("[debug] go.run end");
+            return;
+        } else {
+            const { instance } = await WebAssembly.instantiateStreaming(fetch(url), go.importObject);
+            go.run(instance);
+            if (this.config.onSpxReady != null) {
+                this.config.onSpxReady()
+            }
+        }
+    }
+
     async unpackGameData(curGame) {
         let packUrl = this.assetURLs[this.packName]
-        let pckData =  await (await fetch(packUrl)).arrayBuffer();
+        let pckData = await (await fetch(packUrl)).arrayBuffer();
         await curGame.unpackGameData(this.persistentPath, this.projectDataName, this.projectData.buffer, this.packName, pckData)
     }
 
@@ -145,3 +194,6 @@ class GameApp {
         }
     }
 }
+
+// export GameApp to global
+globalThis.GameApp = GameApp;
