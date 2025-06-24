@@ -1,5 +1,4 @@
 
-IsWxMiniGame = false;
 class GameApp {
     constructor(config) {
         config = config || {};
@@ -224,9 +223,22 @@ class GameApp {
             resolve()
             return;
         }
+
+
         this.onProgress(0.5);
         this.game = new Engine(this.gameConfig);
         let curGame = this.game
+        // 批量将所有 gdspx 函数注入到全局作用域
+        const spxfuncs = new GdspxFuncs();
+        const methodNames = Object.getOwnPropertyNames(Object.getPrototypeOf(spxfuncs));
+        
+        methodNames.forEach(key => {
+            if (key.startsWith('gdspx_') && typeof spxfuncs[key] === 'function') {
+                // 绑定方法到实例，然后注册到全局作用域
+                window[key] = spxfuncs[key].bind(spxfuncs);
+            }
+        });
+
         curGame.init().then(async () => {
             this.onProgress(0.7);
             await this.unpackGameData(curGame)
