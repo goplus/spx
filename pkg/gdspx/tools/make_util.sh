@@ -81,6 +81,7 @@ do_extra_webtemplate() {
     spx exportwebruntime 
     rm -rf "$dstdir" 
     cp -rf ./project/.builds/webi  "$dstdir" 
+    mv "$dstdir/engine.pck" "$dstdir/engine.zip"
     echo "exporting web runtime done: $dstdir"
     # Clean up
     rm -rf "$CURRENT_PATH/.tmp"

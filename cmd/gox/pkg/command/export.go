@@ -113,7 +113,7 @@ func (pself *CmdTool) ExportWeb() error {
 
 func (pself *CmdTool) ExportWebRuntime() error {
 	targetDir := path.Join(pself.ProjectDir, ".builds/webi")
-	targetPath := path.Join(targetDir, "godot.editor.html")
+	targetPath := path.Join(targetDir, "engine.html")
 	platformName := "Web"
 	os.Mkdir(targetDir, 0755)
 	println("ExportWebRuntime")
