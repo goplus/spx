@@ -114,6 +114,21 @@ func CopyFile(src, dst string) error {
 	return nil
 }
 
+func WalkDir(srcDir string, pattern string, call func(path string) bool) error {
+	return filepath.WalkDir(srcDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		// 正则匹配
+		if match, err := filepath.Match(pattern, d.Name()); err == nil && match {
+			if call(path) {
+				return fmt.Errorf("stop")
+			}
+		}
+		return nil
+	})
+}
+
 func CopyDir(fsys fs.FS, srcDir, dstDir string, isOverride bool) error {
 	subfs, err := fs.Sub(fsys, srcDir)
 	if err != nil {

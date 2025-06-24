@@ -121,30 +121,34 @@ func (pself *CmdTool) ExportWebRuntime() error {
 }
 
 func (pself *CmdTool) ExportMinigame() error {
-	pself.Clear()
-	// copy project files
-	util.CopyDir(pself.ProjectFS, "template/project", pself.ProjectDir, true)
-	dir := pself.TargetDir
-	util.SetupFile(false, path.Join(dir, ".gitignore"), pself.GitignoreTxt)
-	os.Rename(path.Join(dir, ".gitignore.txt"), path.Join(dir, ".gitignore"))
+	pself.ExportWeb()
 
-	webTemplateDir := path.Join(pself.GoBinPath, "gdspxrt"+pself.Version+"_web")
-	if !util.IsFileExist(webTemplateDir) {
-		return errors.New("web dir file not found: " + webTemplateDir)
-	}
+	// move to subdir
+	os.Rename(pself.WebDir, pself.WebDir+"_bck")
+	os.MkdirAll(path.Join(pself.WebDir), os.ModePerm)
+	os.Rename(pself.WebDir+"_bck", path.Join(pself.WebDir, "minigame"))
 
-	dstPath := path.Join(pself.ProjectDir, ".builds/web")
-	os.MkdirAll(dstPath, os.ModePerm)
-	util.CopyDir2(webTemplateDir, dstPath)
-	os.Rename(path.Join(dstPath, "godot.editor.html"), path.Join(dstPath, "index.html"))
+	// copy monogame files
+	util.CopyDir(pself.ProjectFS, "template/project/.builds/minigame", pself.WebDir, true)
+	// copy engine files
+	//util.WalkDir(pself.WebDir, "*.wasm", func(pathStr string) bool {
+	//	name := filepath.Base(pathStr)
+	//	util.CopyFile(pathStr, path.Join(pself.WebDir, "engine", name))
+	//	return false
+	//})
+	//util.WalkDir(pself.WebDir, "*.zip", func(pathStr string) bool {
+	//	name := filepath.Base(pathStr)
+	//	util.CopyFile(pathStr, path.Join(pself.WebDir, "engine", name))
+	//	return false
+	//})
+	////
+	//util.WalkDir(pself.WebDir, "*.js", func(pathStr string) bool {
+	//	name := filepath.Base(pathStr)
+	//	util.CopyFile(pathStr, path.Join(pself.WebDir, "js", name))
+	//	return false
+	//})
 
-	// overwrite web files
-	util.CopyDir(pself.ProjectFS, "template/project/.builds/web", pself.WebDir, true)
-	pack.PackProject(pself.TargetDir, path.Join(pself.WebDir, "game.zip"))
-
-	//pack.PackEngineRes(pself.ProjectFS, pself.WebDir)
-	util.CopyFile(pself.getWasmPath(), path.Join(pself.WebDir, "gdspx.wasm"))
-	pack.SaveEngineHash(pself.WebDir)
+	util.RunCommandInDir(pself.WebDir, "bash", "build.sh")
 	return nil
 }
 
