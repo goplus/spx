@@ -1,5 +1,28 @@
-import "./js/godot";
-import { GodotSDK } from "./js/sdk"
+// 首先设置 crypto polyfill，必须在导入 Godot 编辑器之前
+const crypto = {
+  getRandomValues: (view) => {
+    for (let i = 0; i < view.length; i++) {
+      // Math.random() 生成一个 0 到 1 之间的浮动值，将其乘以 256，取整并限制在 0-255 之间
+      view[i] = Math.floor(Math.random() * 256);
+    }
+    return view;
+  },
+};
+
+// 立即设置到 globalThis 上，确保 Godot 编辑器导入时能找到
+globalThis.crypto = crypto;
+
+console.log("crypto", crypto)
+console.log("globalThis.crypto", globalThis.crypto)
+
+// 使用动态导入避免提升问题
+let GodotSDK;
+async function loadModules() {
+  await import("./fetch.js"); // 先加载 fetch polyfill
+  await import("./js/engine");
+  const sdkModule = await import("./js/sdk");
+  GodotSDK = sdkModule.GodotSDK;
+}
 
 const LoaderConfig = {
   logo: "images/logo.png",
@@ -12,16 +35,6 @@ const LoaderConfig = {
   loadingBarBackgroundColor: "#444",
 };
 
-const crypto = {
-  getRandomValues: (view) => {
-    for (let i = 0; i < view.length; i++) {
-      // Math.random() 生成一个 0 到 1 之间的浮动值，将其乘以 256，取整并限制在 0-255 之间
-      view[i] = Math.floor(Math.random() * 256);
-    }
-    return view;
-  },
-};
-
 class FakeBlob {
   constructor(data, options) {
     this.data = data || [];
@@ -29,12 +42,18 @@ class FakeBlob {
     this.size = this.data.reduce((total, item) => total + (item.length || 0), 0);
   }
 }
-const godotSdk = new GodotSDK()
-GameGlobal.WebAssembly = WXWebAssembly;
-GameGlobal.crypto = crypto;
-// 整个假的Blob，websocket防止出错
-GameGlobal.Blob = FakeBlob;
-GameGlobal.godotSdk = godotSdk;
+let godotSdk;
+
+// 初始化函数
+async function initializeSDK() {
+  await loadModules();
+  godotSdk = new GodotSDK();
+  GameGlobal.WebAssembly = WXWebAssembly;
+  GameGlobal.crypto = crypto;
+  // 整个假的Blob，websocket防止出错
+  GameGlobal.Blob = FakeBlob;
+  GameGlobal.godotSdk = godotSdk;
+}
 
 
 
@@ -155,6 +174,10 @@ class Loader {
       this.config.iconWidth,
       this.config.iconHeight
     );
+  }
+  onProgress(value) {
+    this.progress = value;
+    console.log("====>onProgress", value)
   }
 
   updateLoading() {
@@ -293,7 +316,11 @@ class Loader {
     const gl = this.screenContext;
   }
 
-  load() {
+
+  async load() {
+    // 首先初始化 SDK
+    await initializeSDK();
+
     const loadLogo = () => {
       return new Promise((resolve, reject) => {
         this.logoImage.onload = () => {
@@ -319,22 +346,30 @@ class Loader {
         this.progress += 1;
         return this.loadSubpackages();
       })
-      .then(() => {
+      .then(async () => {
         this.updateLoading();
-        const engine = new Engine();
-        GameGlobal.engine = engine;
-        godotSdk.set_engine(engine);
-        return engine.startGame({
-          canvas: canvas,
-          executable: "engine/godot",
-          mainPack: "engine/godot.zip",
-          args: ["--audio-driver", "ScriptProcessor"],
-        });
-      })
-      .then(() => {
-        engine.config.persistentPaths.forEach(path => {
-          godotSdk.copyLocalToFS(path);
-        })
+        await this.startGame();
+      });
+  }
+
+  async startGame() {
+    // 使用 fetch polyfill 获取文件
+    let buffer = await (await fetch("engine/game.zip")).arrayBuffer();
+    let isShowEditor = false
+    let assetURLs = null
+
+    const config = {
+      'projectName': "spx_game",
+      'onProgress': this.onProgress,
+      "gameCanvas": canvas,
+      "editorCanvas": canvas,
+      "projectData": new Uint8Array(buffer),
+      "logLevel": 0,
+      "onStart": () => {
+        console.log("====>onStart")
+        // engine.config.persistentPaths.forEach(path => {
+        //   godotSdk.copyLocalToFS(path);
+        // })
         godotSdk.syncfs(() => {
         }, (error) => {
           console.error(error)
@@ -347,8 +382,27 @@ class Loader {
         }, 5000)
         this.clean();
         this.cleanWebgl();
-      });
+      },
+      "useAssetCache": false,
+      "isRuntimeMode": true,
+      "assetURLs": {
+        "engine.zip": "engine/engine.zip",
+        "game.zip": "engine/game.zip",
+        "gdspx.wasm": "engine/gdspx.wasm.br",
+        "engine.wasm": "engine/engine.wasm.br",
+      },
+    };
+    if (assetURLs != null) {
+      config.assetURLs = assetURLs
+    }
+
+    // try install project and run game
+    let gameApp = new GameApp(config);
+    await gameApp.RunGame();
+    return
+
   }
+
 }
 
 export default Loader;

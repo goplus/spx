@@ -3,8 +3,13 @@
   "projectname": "test1",
   "setting": {
     "bigPackageSizeSupport": true,
-    "skylineRenderEnable": false
+    "skylineRenderEnable": false,
+    "useStaticServer": true
   },
   "libVersion": "3.8.9",
-  "appid": "wx85d85c65add03c33"
+  "appid": "wx85d85c65add03c33",
+  "packOptions": {
+    "ignore": [],
+    "include": []
+  }
 }

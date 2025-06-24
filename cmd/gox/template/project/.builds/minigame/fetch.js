@@ -169,13 +169,31 @@ class Response {
    * 将响应体转换为 ArrayBuffer，返回 Promise
    */
   arrayBuffer() {
+    if (this.bodyUsed) {
+      return Promise.reject(new TypeError("Body has already been consumed."));
+    }
+    this.bodyUsed = true;
+    
+    if (!this.body) {
+      return Promise.resolve(new ArrayBuffer(0));
+    }
+    
+    // 如果 _bodyContent 已经是 ArrayBuffer，直接返回
+    if (this._bodyContent instanceof ArrayBuffer) {
+      return Promise.resolve(this._bodyContent);
+    }
+    
+    // 否则从 text 转换
     return this.text().then(text => {
-      const buffer = new ArrayBuffer(text.length);
-      const view = new Uint8Array(buffer);
-      for (let i = 0; i < text.length; i++) {
-        view[i] = text.charCodeAt(i);
+      if (typeof text === 'string') {
+        const buffer = new ArrayBuffer(text.length);
+        const view = new Uint8Array(buffer);
+        for (let i = 0; i < text.length; i++) {
+          view[i] = text.charCodeAt(i);
+        }
+        return buffer;
       }
-      return buffer;
+      return text; // 可能已经是 ArrayBuffer
     });
   }
 }
@@ -183,31 +201,70 @@ class Response {
 
 function Fetch(url, options = {}) {
   return new Promise((resolve, reject) => {
-      const headers = options.headers.reduce((obj, [key, value]) => {
-        obj[key] = value;
-        return obj;
-      }, {});
-      const responseType = headers["Accept"]  === "application/octet-stream"? "arraybuffer": "text";
-      const dataType = headers["Content-Type"] === "application/json" ? "json" : ""
-      wx.request({
-          url,
-          method: options.method || 'GET',
-          data: options.body || {},
-          header: headers,
-          dataType: dataType,
-          responseType: responseType,
+      // 安全处理 headers，支持多种格式
+      let headers = {};
+      if (options.headers) {
+        if (Array.isArray(options.headers)) {
+          // 如果是数组格式 [['key', 'value'], ...]
+          headers = options.headers.reduce((obj, [key, value]) => {
+            obj[key] = value;
+            return obj;
+          }, {});
+        } else if (options.headers instanceof Headers) {
+          // 如果是 Headers 实例
+          options.headers.forEach((value, key) => {
+            headers[key] = value;
+          });
+        } else if (typeof options.headers === 'object') {
+          // 如果是普通对象
+          headers = { ...options.headers };
+        }
+      }
+
+      // 判断是本地文件还是网络文件
+      const isNetworkUrl = url.startsWith('http://') || url.startsWith('https://');
+      
+      if (isNetworkUrl) {
+        // 网络文件，使用 wx.request
+        const responseType = headers["Accept"] === "application/octet-stream" ? "arraybuffer" : "text";
+        const dataType = headers["Content-Type"] === "application/json" ? "json" : ""
+        wx.request({
+            url,
+            method: options.method || 'GET',
+            data: options.body || {},
+            header: headers,
+            dataType: dataType,
+            responseType: responseType,
+            success(res) {
+                const response = new Response(res.data, {
+                  status: res.statusCode,
+                  statusText: res.errMsg,
+                  headers: res.header,
+                });
+                resolve(response);
+            },
+            fail(err) {
+                reject(err);
+            }
+        });
+      } else {
+        // 本地文件，使用文件系统 API
+        wx.getFileSystemManager().readFile({
+          filePath: url,
           success(res) {
-              const response = new Response(res.data, {
-                status: res.statusCode,
-                statusText: res.errMsg,
-                headers: res.header,
-              });
-              resolve(response);
+            const response = new Response(res.data, {
+              status: 200,
+              statusText: 'OK',
+              headers: {},
+            });
+            resolve(response);
           },
           fail(err) {
-              reject(err);
+            console.error('读取本地文件失败:', err);
+            reject(new Error(`Failed to read local file: ${err.errMsg}`));
           }
-      });
+        });
+      }
   });
 }
 
