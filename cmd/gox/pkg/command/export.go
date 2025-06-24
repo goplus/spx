@@ -83,7 +83,7 @@ func (pself *CmdTool) ExportWebEditor() error {
 	return nil
 }
 
-func (pself *CmdTool) ExportWeb() error {
+func (pself *CmdTool) exportWeb() error {
 	pself.Clear()
 	// copy project files
 	util.CopyDir(pself.ProjectFS, "template/project", pself.ProjectDir, true)
@@ -111,6 +111,11 @@ func (pself *CmdTool) ExportWeb() error {
 	return nil
 }
 
+func (pself *CmdTool) ExportWeb() error {
+	pself.exportWeb()
+	os.RemoveAll(path.Join(pself.WebDir, "../minigame"))
+	return nil
+}
 func (pself *CmdTool) ExportWebRuntime() error {
 	targetDir := path.Join(pself.ProjectDir, ".builds/webi")
 	targetPath := path.Join(targetDir, "engine.html")
@@ -121,7 +126,7 @@ func (pself *CmdTool) ExportWebRuntime() error {
 }
 
 func (pself *CmdTool) ExportMinigame() error {
-	pself.ExportWeb()
+	pself.exportWeb()
 
 	// move to subdir
 	os.Rename(pself.WebDir, pself.WebDir+"_bck")
@@ -130,25 +135,8 @@ func (pself *CmdTool) ExportMinigame() error {
 
 	// copy monogame files
 	util.CopyDir(pself.ProjectFS, "template/project/.builds/minigame", pself.WebDir, true)
-	// copy engine files
-	//util.WalkDir(pself.WebDir, "*.wasm", func(pathStr string) bool {
-	//	name := filepath.Base(pathStr)
-	//	util.CopyFile(pathStr, path.Join(pself.WebDir, "engine", name))
-	//	return false
-	//})
-	//util.WalkDir(pself.WebDir, "*.zip", func(pathStr string) bool {
-	//	name := filepath.Base(pathStr)
-	//	util.CopyFile(pathStr, path.Join(pself.WebDir, "engine", name))
-	//	return false
-	//})
-	////
-	//util.WalkDir(pself.WebDir, "*.js", func(pathStr string) bool {
-	//	name := filepath.Base(pathStr)
-	//	util.CopyFile(pathStr, path.Join(pself.WebDir, "js", name))
-	//	return false
-	//})
-
 	util.RunCommandInDir(pself.WebDir, "bash", "build.sh")
+	os.RemoveAll(path.Join(pself.WebDir, "../minigame"))
 	return nil
 }
 
