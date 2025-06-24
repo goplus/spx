@@ -40,9 +40,9 @@
 		</div>
 	</div>
 	<script>var miniEngine = null</script>
-	<script src="godot.editor.js"></script>
-	<script src="go_wasm_exec.js"></script>
-	<script src="spxgame.js"></script>
+	<script src="engine.js"></script>
+	<script src="wasm_exec.js"></script>
+	<script src="game.js"></script>
 	<script>
 		"use strict";
 		let gameApp = null
@@ -90,16 +90,13 @@
 				'projectName': "spx_game",
 				'onProgress': onProgress,
 				"gameCanvas": document.getElementById('game-canvas'),
-				"editorCanvas": document.getElementById('editor-canvas'),
 				"projectData": new Uint8Array(buffer),
 				"logLevel": LOG_LEVEL_NONE,
-				"useAssetCache": false,
-				"isRuntimeMode": true,
 				"assetURLs": {
-					"godot.editor.pck": "/godot.editor.pck",
-					"engineres.zip": "/engineres.zip",
+					"engine.zip": "/engine.zip",
+					"game.zip": "/game.zip",
 					"gdspx.wasm": "/gdspx.wasm",
-					"godot.editor.wasm": "/godot.editor.wasm",
+					"engine.wasm": "/engine.wasm",
 				},
 			};
 			if (assetURLs != null) {

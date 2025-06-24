@@ -139,7 +139,7 @@ func computeHash(filePath string) (string, error) {
 }
 func SaveEngineHash(webDir string) {
 	// calc and save wasm hash
-	files := []string{"gdspx.wasm", "godot.editor.wasm"}
+	files := []string{"gdspx.wasm", "engine.wasm"}
 	outpuString := `
 function GetEngineHashes() { 
 	return {
@@ -159,7 +159,7 @@ function GetEngineHashes() {
 	js := strings.Replace(outpuString, "#HASHES", line, -1)
 
 	// append to game.js
-	file, err := os.OpenFile(path.Join(webDir, "spxgame.js"), os.O_APPEND|os.O_WRONLY, 0644)
+	file, err := os.OpenFile(path.Join(webDir, "game.js"), os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
 		panic(err)
 	}

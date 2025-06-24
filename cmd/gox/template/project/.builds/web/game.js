@@ -5,27 +5,17 @@ class GameApp {
         this.config = config;
         this.editor = null;
         this.game = null;
-        this.persistentPath = '/home/web_user';
-        this.tempZipPath = '/tmp/preload.zip';
-        this.packName =  'godot.editor.pck';
+        this.packName =  'engine.zip';
         this.projectDataName = 'game.zip';
-        this.isRuntimeMode = config.isRuntimeMode;
-        this.tempGamePath = '/home/spx_game_cache';
-        this.projectInstallName = config.projectName || "Game";
-        this.logLevel = config.logLevel || 0;
+        this.persistentPath = 'engine';
+        this.logLevel = config.logLevel || LOG_LEVEL_NONE;
         this.projectData = config.projectData;
         this.oldData = config.projectData;
-        this.persistentPaths = [this.persistentPath];
         this.gameCanvas = config.gameCanvas;
-        this.editorCanvas = config.editorCanvas || config.gameCanvas;
-        this.exitFunc = null;
-        this.basePath = 'godot.editor'
-        this.isEditor = true;
         this.assetURLs = config.assetURLs;
         this.useAssetCache = config.useAssetCache;
         this.gameConfig = {
-            "executable": "godot.editor",
-            'persistentPaths': this.persistentPaths,
+            "executable": "engine",
             'unloadAfterInit': false,
             'canvas': this.gameCanvas,
             'logLevel': this.logLevel,
@@ -64,7 +54,7 @@ class GameApp {
     }
 
     async runGame(resolve, reject) {
-        let url = this.assetURLs["godot.editor.wasm"]
+        let url = this.assetURLs["engine.wasm"]
         this.wasmEngine = await (await fetch(url)).arrayBuffer(); 
         this.gameConfig.wasmEngine = this.wasmEngine
 
@@ -76,10 +66,9 @@ class GameApp {
             return
         }
 
-        this.isEditor = false
         let args = [
-            '--main-pack', this.tempGamePath + "/" + this.packName,
-            '--main-project-data', this.tempGamePath + "/" + this.projectDataName,
+            '--main-pack', this.persistentPath + "/" + this.packName,
+            '--main-project-data', this.persistentPath + "/" + this.projectDataName,
         ];
            
         this.logVerbose("RunGame ", args);
@@ -121,7 +110,7 @@ class GameApp {
     async unpackGameData(curGame) {
         let packUrl = this.assetURLs[this.packName]
         let pckData =  await (await fetch(packUrl)).arrayBuffer();
-        await curGame.unpackGameData(this.tempGamePath, this.projectDataName, this.projectData.buffer, this.packName, pckData)
+        await curGame.unpackGameData(this.persistentPath, this.projectDataName, this.projectData.buffer, this.packName, pckData)
     }
 
 
@@ -138,7 +127,6 @@ class GameApp {
             resolve();
             this.stopGameResolve = null
         }
-        this.isEditor = true
         this.onProgress(1.0);
         this.game.requestQuit()
     }
