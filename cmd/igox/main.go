@@ -96,7 +96,6 @@ func loadData(this js.Value, args []js.Value) any {
 	goBytes := make([]byte, length)
 	js.CopyBytesToGo(goBytes, inputArray)
 
-	println("==>go goLoadData", length)
 	dataChannel <- goBytes
 	return nil
 }
