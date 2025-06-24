@@ -1,8 +1,10 @@
 package command
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -135,7 +137,12 @@ func (pself *CmdTool) ExportMinigame() error {
 
 	// copy monogame files
 	util.CopyDir(pself.ProjectFS, "template/project/.builds/minigame", pself.WebDir, true)
-	util.RunCommandInDir(pself.WebDir, "bash", "build.sh")
+
+	// 直接在Go中实现原来build.sh脚本的功能
+	if err := pself.buildMinigame(); err != nil {
+		return fmt.Errorf("failed to build minigame: %w", err)
+	}
+
 	os.RemoveAll(path.Join(pself.WebDir, "../minigame"))
 	return nil
 }
@@ -532,4 +539,133 @@ func (pself *CmdTool) buildAndroidLibraries() error {
 
 	fmt.Println("Build android so completed successfully!")
 	return nil
+}
+
+// buildMinigame 实现原来build.sh脚本的功能
+func (pself *CmdTool) buildMinigame() error {
+	workDir := pself.WebDir
+
+	// 检查brotli是否安装
+	if _, err := exec.LookPath("brotli"); err != nil {
+		return fmt.Errorf("error: brotli is not installed")
+	}
+
+	// 压缩WASM文件
+	godotEditorWasm := path.Join(workDir, "minigame", "engine.wasm")
+	gdspxWasm := path.Join(workDir, "minigame", "gdspx.wasm")
+
+	fmt.Printf("compress %s...\n", godotEditorWasm)
+	if err := pself.compressBrotli(godotEditorWasm); err != nil {
+		return fmt.Errorf("failed to compress %s: %w", godotEditorWasm, err)
+	}
+
+	fmt.Printf("compress %s...\n", gdspxWasm)
+	if err := pself.compressBrotli(gdspxWasm); err != nil {
+		return fmt.Errorf("failed to compress %s: %w", gdspxWasm, err)
+	}
+
+	// 创建目标目录
+	engineDir := path.Join(workDir, "engine")
+	jsDir := path.Join(workDir, "js")
+	minigameDir := path.Join(workDir, "minigame")
+
+	os.MkdirAll(engineDir, os.ModePerm)
+	os.MkdirAll(jsDir, os.ModePerm)
+
+	// 移动文件到engine目录
+	if err := pself.moveFilesByPattern(minigameDir, engineDir, "*.zip"); err != nil {
+		return fmt.Errorf("failed to move zip files: %w", err)
+	}
+	if err := pself.moveFilesByPattern(minigameDir, engineDir, "*.br"); err != nil {
+		return fmt.Errorf("failed to move br files: %w", err)
+	}
+
+	// 移动js文件到js目录
+	if err := pself.moveFilesByPattern(minigameDir, jsDir, "*.js"); err != nil {
+		return fmt.Errorf("failed to move js files: %w", err)
+	}
+
+	// 合并JS文件
+	if err := pself.mergeJSFiles(jsDir); err != nil {
+		return fmt.Errorf("failed to merge JS files: %w", err)
+	}
+
+	// 删除minigame目录
+	os.RemoveAll(minigameDir)
+
+	// 可选地打开微信开发者工具
+	if wechatDevTools := os.Getenv("WECHAT_DEV_TOOLS"); wechatDevTools != "" {
+		cmd := exec.Command(path.Join(wechatDevTools, "cli"), "open", "--project", workDir, "-y")
+		cmd.Run() // 忽略错误，因为这是可选的
+	} else {
+		fmt.Printf("WECHAT_DEV_TOOLS is not set, please open project manually %s\n", workDir)
+	}
+
+	return nil
+}
+
+// compressBrotli 使用brotli压缩文件
+func (pself *CmdTool) compressBrotli(filePath string) error {
+	cmd := exec.Command("brotli", "-f", "-q", "11", filePath)
+	return cmd.Run()
+}
+
+// moveFilesByPattern 移动匹配模式的文件
+func (pself *CmdTool) moveFilesByPattern(srcDir, dstDir, pattern string) error {
+	files, err := filepath.Glob(path.Join(srcDir, pattern))
+	if err != nil {
+		return err
+	}
+
+	for _, file := range files {
+		fileName := filepath.Base(file)
+		dstFile := path.Join(dstDir, fileName)
+		if err := os.Rename(file, dstFile); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// mergeJSFiles 合并JS文件
+func (pself *CmdTool) mergeJSFiles(jsDir string) error {
+	// 文件合并顺序
+	jsFiles := []string{"header.js", "engine.js", "wasm_exec.js", "game.js"}
+	outputFile := path.Join(jsDir, "engine_new.js")
+
+	// 创建输出文件
+	output, err := os.Create(outputFile)
+	if err != nil {
+		return err
+	}
+	defer output.Close()
+
+	writer := bufio.NewWriter(output)
+	defer writer.Flush()
+
+	// 合并文件内容
+	for _, jsFile := range jsFiles {
+		filePath := path.Join(jsDir, jsFile)
+		if _, err := os.Stat(filePath); os.IsNotExist(err) {
+			continue // 跳过不存在的文件
+		}
+
+		file, err := os.Open(filePath)
+		if err != nil {
+			return err
+		}
+
+		_, err = io.Copy(writer, file)
+		file.Close()
+		if err != nil {
+			return err
+		}
+
+		// 删除原文件
+		os.Remove(filePath)
+	}
+
+	// 重命名输出文件
+	return os.Rename(outputFile, path.Join(jsDir, "engine.js"))
 }
