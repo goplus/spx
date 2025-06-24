@@ -543,6 +543,8 @@ func (pself *CmdTool) buildAndroidLibraries() error {
 // buildMinigame implements the functionality of the original build.sh script
 func (pself *CmdTool) buildMinigame() error {
 	workDir := pself.WebDir
+
+	// safely get build mode with default fallback
 	buildMode := *pself.Args.Build
 
 	// create target directories

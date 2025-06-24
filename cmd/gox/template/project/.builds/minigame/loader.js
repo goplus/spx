@@ -388,8 +388,8 @@ class Loader {
       "assetURLs": {
         "engine.zip": "engine/engine.zip",
         "game.zip": "engine/game.zip",
-        "gdspx.wasm": "engine/gdspx.wasm.br",
-        "engine.wasm": "engine/engine.wasm.br",
+        "gdspx.wasm": "engine/gdspx.wasm",
+        "engine.wasm": "engine/engine.wasm",
       },
     };
     if (assetURLs != null) {

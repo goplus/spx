@@ -139,7 +139,7 @@ runtest:
 
 runmini:
 	make cmd &&\
-	cd  $(path) && spx exportminigame . && cd $(CURRENT_PATH) 
+	cd  $(path) && spx exportminigame -build=fast && cd $(CURRENT_PATH) 
 # Default rule for unknown targets
 %:
 	@echo "Unknown target: $@"
