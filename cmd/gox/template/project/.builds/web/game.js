@@ -55,6 +55,9 @@ class GameApp {
 
     async runGame(resolve, reject) {
         let url = this.assetURLs["engine.wasm"]
+        if (isWasmCompressed) {
+            url += ".br"
+        }
         this.gameConfig.wasmEngine = url
         if (!miniEngine) {
             this.wasmEngine = await (await fetch(url)).arrayBuffer();
@@ -128,6 +131,9 @@ class GameApp {
     async loadWasm() {
         // load wasm
         let url = this.config.assetURLs["gdspx.wasm"];
+        if (isWasmCompressed) {
+            url += ".br"
+        }
         console.log("go wasm url===>", url);
         const go = new Go();
         if (miniEngine) {

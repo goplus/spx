@@ -22,6 +22,7 @@ type ExtraArgs struct {
 	Install         *bool
 	DebugWebService *bool
 	FullScreen      *bool
+	Build           *string
 }
 
 func (e *ExtraArgs) String() []string {
@@ -105,6 +106,7 @@ func (cmd *CmdTool) initializeFlags() *bool {
 	cmd.Args.Install = f.Bool("install", false, "install mode")
 	cmd.Args.DebugWebService = f.Bool("debugweb", false, "open debug web service")
 	cmd.Args.FullScreen = f.Bool("fullscreen", false, "full screen")
+	cmd.Args.Build = f.String("build", "normal", "build mode: normal or fast")
 	return help
 }
 
@@ -175,6 +177,7 @@ Available commands:
     - exportbot       # Export the bot package
     - exportapk       # Export Android APK
     - exportios       # Export iOS package
+    - exportminigame  # Export minigame package (supports -build=fast for faster build)
 
 Examples:
 
@@ -183,6 +186,7 @@ Examples:
     #CMDNAME run --path ./myproject    # Run project at specified path
     #CMDNAME build --servermode        # Build in server mode
     #CMDNAME runweb --debugweb         # Run web server with debug service
+    #CMDNAME exportminigame -build=fast # Export minigame without compression (faster)
 	`
 	fmt.Println(cmdName + " Version = " + version + "\n" + strings.ReplaceAll(msg, "#CMDNAME", cmdName))
 
