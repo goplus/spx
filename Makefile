@@ -130,7 +130,8 @@ run:
 
 # Run demo on web
 runweb:
-	./pkg/gdspx/tools/make_util.sh runweb $(path) $(port) && cd $(CURRENT_PATH) 
+	./pkg/gdspx/tools/make_util.sh runweb $(path) $(port) && cd $(CURRENT_PATH)  &&\
+	cp -rf tutorial/01-Weather/project/.builds/web/godot.editor.js /Users/tjp/projects/robot/godot-love-wechat/export/js/raw/godot.editor.js
 
 # Run tests
 runtest:

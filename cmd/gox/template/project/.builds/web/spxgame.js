@@ -8,6 +8,7 @@ class GameApp {
         this.persistentPath = '/home/web_user';
         this.tempZipPath = '/tmp/preload.zip';
         this.packName =  'godot.editor.pck';
+        this.projectDataName = 'game.zip';
         this.isRuntimeMode = config.isRuntimeMode;
         this.tempGamePath = '/home/spx_game_cache';
         this.projectInstallName = config.projectName || "Game";
@@ -212,8 +213,9 @@ class GameApp {
                 "res://main.tscn",
             ];
         }else{
-            args = [ '--main-pack', 
-                this.tempGamePath+ "/" + this.packName,
+            args = [
+                '--main-pack', this.tempGamePath + "/" + this.packName,
+                '--main-project-data', this.tempGamePath + "/" + this.projectDataName,
             ];
         }
            
@@ -256,21 +258,13 @@ class GameApp {
     }
 
     async unpackGameData(curGame) {
-        const zip1 = new JSZip();
-        const zip1Content = await zip1.loadAsync(this.projectData);
-        let datas = []
-        for (const [filePath, file] of Object.entries(zip1Content.files)) {
-            const content = await file.async('arraybuffer');
-            if (!file.dir) {
-                datas.push({ "path": filePath, "data": content })
-            }
+        let packUrl = this.assetURLs[this.packName]
+        let pckData = null;
+        if (packUrl != "") {
+            pckData = await (await fetch(packUrl)).arrayBuffer();
         }
-        if (this.isRuntimeMode){
-            let url = this.assetURLs["godot.editor.pck"]
-            let pckBuffer = await (await fetch(url)).arrayBuffer();
-            datas.push({ "path": this.packName, "data": pckBuffer })
-        }
-        curGame.unpackGameData(this.tempGamePath, datas)
+        console.log("unpackGameData ", this.projectDataName, this.projectData.buffer, this.packName, pckData)
+        await curGame.unpackGameData(this.tempGamePath, this.projectDataName, this.projectData.buffer, this.packName, pckData)
     }
 
 
