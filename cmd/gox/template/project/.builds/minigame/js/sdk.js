@@ -10,7 +10,7 @@ class GodotSDK {
       dir = path.slice(0, idx);
     }
 
-    // 确保目录存在
+    // Ensure directory exists
     return new Promise((resolve, reject) => {
       fs.access({
         path: `${wx.env.USER_DATA_PATH}${dir}`,
@@ -25,7 +25,7 @@ class GodotSDK {
         }
       });
     }).then(() => {
-      // 打开文件
+      // Open file
       return new Promise((resolve, reject) => {
         fs.open({
           filePath: `${wx.env.USER_DATA_PATH}${path}`,
@@ -35,7 +35,7 @@ class GodotSDK {
         });
       });
     }).then((fd) => {
-      // 写入数据
+      // Write data
       return new Promise((resolve, reject) => {
         fs.write({
           fd: fd,
@@ -48,7 +48,7 @@ class GodotSDK {
         });
       });
     }).then((fd) => {
-      // 关闭文件
+      // Close file
       return new Promise((resolve, reject) => {
         fs.close({
           fd: fd,
@@ -75,7 +75,7 @@ class GodotSDK {
    copyLocalToFS(path) {
     const fs = wx.getFileSystemManager();
 
-    // 检查路径是否存在
+    // Check if path exists
     return new Promise((resolve, reject) => {
       fs.access({
         path: `${wx.env.USER_DATA_PATH}${path}`,
@@ -95,7 +95,7 @@ class GodotSDK {
         })
       })
     }).then(() => {
-      // 读取目录内容
+      // Read directory content
       return new Promise((resolve, reject) => {
         fs.readdir({
           dirPath: `${wx.env.USER_DATA_PATH}${path}`,
@@ -104,7 +104,7 @@ class GodotSDK {
         });
       });
     }).then((dirs) => {
-      // 处理每个文件或子目录
+      // Process each file or subdirectory
       return dirs.reduce((promiseChain, dir) => {
         return promiseChain.then(() => {
           const p = `${wx.env.USER_DATA_PATH}${path}/${dir}`;

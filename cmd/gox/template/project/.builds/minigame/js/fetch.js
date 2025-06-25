@@ -1,22 +1,22 @@
 class Headers {
   constructor(init = {}) {
-    // 使用一个纯净的对象来存储 header 数据
+    // Use a clean object to store header data
     this.map = Object.create(null);
 
     if (init instanceof Headers) {
-      // 如果传入的 init 是 Headers 实例，则复制其内容
+      // If the passed init is a Headers instance, copy its content
       init.forEach((value, key) => {
         this.append(key, value);
       });
     } else if (typeof init === 'object' && init !== null) {
-      // 如果传入的是一个普通对象，则将其中的键值对加入 Headers
+      // If passed init is a plain object, add its key-value pairs to Headers
       Object.keys(init).forEach(key => {
         this.append(key, init[key]);
       });
     }
   }
 
-  // 添加 header，如果已经存在则合并成逗号分隔的字符串
+  // Add header, if already exists merge into comma-separated string
   append(name, value) {
     name = name.toLowerCase();
     if (this.map[name]) {
@@ -26,27 +26,27 @@ class Headers {
     }
   }
 
-  // 设置 header，直接覆盖旧值
+  // Set header, directly overwrite old value
   set(name, value) {
     this.map[name.toLowerCase()] = String(value);
   }
 
-  // 获取 header 的值，若不存在则返回 null
+  // Get header value, return null if doesn't exist
   get(name) {
     return this.map[name.toLowerCase()] || null;
   }
 
-  // 判断 header 是否存在
+  // Check if header exists
   has(name) {
     return Object.prototype.hasOwnProperty.call(this.map, name.toLowerCase());
   }
 
-  // 删除指定的 header
+  // Delete specified header
   delete(name) {
     delete this.map[name.toLowerCase()];
   }
 
-  // 遍历所有 header
+  // Iterate through all headers
   forEach(callback) {
     for (let key in this.map) {
       callback(this.map[key], key, this);
@@ -54,8 +54,8 @@ class Headers {
   }
 }
 
-// 模拟的 ReadableStream（简化版）
-// 此处仅返回一个包含整体 body 内容的 chunk
+// Simulated ReadableStream (simplified version)
+// Here only returns a chunk containing the entire body content
 class SimulatedReadableStream {
   constructor(content) {
     this._content = content;
@@ -87,15 +87,15 @@ class SimulatedReadableStream {
   }
 }
 
-// 模拟的 Response 类
+// Simulated Response class
 class Response {
   /**
-   * @param {*} body 响应体内容，可以是字符串、对象或 ArrayBuffer 等
-   * @param {Object} options 配置项
-   *   - status: HTTP 状态码，默认为 200
-   *   - statusText: 状态描述，默认为 'OK'
-   *   - headers: 响应头对象
-   *   - url: 响应的 URL
+   * @param {*} body Response body content, can be string, object, or ArrayBuffer etc.
+   * @param {Object} options Configuration options
+   *   - status: HTTP status code, defaults to 200
+   *   - statusText: Status description, defaults to 'OK'
+   *   - headers: Response headers object
+   *   - url: Response URL
    */
   constructor(body, options = {}) {
     this._bodyContent = body;
@@ -105,10 +105,10 @@ class Response {
     this.url = options.url || '';
     this.ok = this.status >= 200 && this.status < 300;
 
-    // 标记 body 是否已被消费
+    // Mark whether body has been consumed
     this.bodyUsed = false;
 
-    // 模拟 body 属性：如果有 body 则创建一个可读取的流
+    // Simulate body property: if has body create a readable stream
     if (body != null) {
       let content;
       if (typeof body === 'string') {
@@ -116,7 +116,7 @@ class Response {
       } else if (body instanceof ArrayBuffer) {
         content = new Uint8Array(body)
       } else if (typeof body === 'object') {
-        // 对象转为 JSON 字符串
+        // Convert object to JSON string
         const _content = JSON.stringify(body);
         content = new TextEncoder().encode(_content)
       } else {
@@ -128,7 +128,7 @@ class Response {
     }
   }
 
-  // 内部方法：消费 body，确保只能读取一次
+  // Internal method: consume body, ensure can only be read once
   _consumeBody() {
     if (this.bodyUsed) {
       return Promise.reject(new TypeError("Body has already been consumed."));
@@ -138,7 +138,7 @@ class Response {
       return Promise.resolve('');
     }
     const reader = this.body.getReader();
-    // 这里假设 stream 仅返回一次整体内容
+    // Here assume stream only returns entire content once
     return reader.read().then(result => {
       reader.releaseLock();
       return result.value || '';
@@ -146,14 +146,14 @@ class Response {
   }
 
   /**
-   * 将响应体解析为文本，返回 Promise
+   * Parse response body as text, returns Promise
    */
   text() {
     return this._consumeBody();
   }
 
   /**
-   * 将响应体解析为 JSON 对象，返回 Promise
+   * Parse response body as JSON object, returns Promise
    */
   json() {
     return this.text().then(text => {
@@ -166,7 +166,7 @@ class Response {
   }
 
   /**
-   * 将响应体转换为 ArrayBuffer，返回 Promise
+   * Convert response body to ArrayBuffer, returns Promise
    */
   arrayBuffer() {
     if (this.bodyUsed) {
@@ -178,12 +178,12 @@ class Response {
       return Promise.resolve(new ArrayBuffer(0));
     }
     
-    // 如果 _bodyContent 已经是 ArrayBuffer，直接返回
+    // If _bodyContent is already ArrayBuffer, return directly
     if (this._bodyContent instanceof ArrayBuffer) {
       return Promise.resolve(this._bodyContent);
     }
     
-    // 否则从 text 转换
+    // Otherwise convert from text
     return this.text().then(text => {
       if (typeof text === 'string') {
         const buffer = new ArrayBuffer(text.length);
@@ -193,7 +193,7 @@ class Response {
         }
         return buffer;
       }
-      return text; // 可能已经是 ArrayBuffer
+      return text; // May already be ArrayBuffer
     });
   }
 }
@@ -201,31 +201,31 @@ class Response {
 
 function Fetch(url, options = {}) {
   return new Promise((resolve, reject) => {
-      // 安全处理 headers，支持多种格式
+      // Safely handle headers, support multiple formats
       let headers = {};
       if (options.headers) {
         if (Array.isArray(options.headers)) {
-          // 如果是数组格式 [['key', 'value'], ...]
+          // If array format [['key', 'value'], ...]
           headers = options.headers.reduce((obj, [key, value]) => {
             obj[key] = value;
             return obj;
           }, {});
         } else if (options.headers instanceof Headers) {
-          // 如果是 Headers 实例
+          // If Headers instance
           options.headers.forEach((value, key) => {
             headers[key] = value;
           });
         } else if (typeof options.headers === 'object') {
-          // 如果是普通对象
+          // If plain object
           headers = { ...options.headers };
         }
       }
 
-      // 判断是本地文件还是网络文件
+      // Determine if it's local file or network file
       const isNetworkUrl = url.startsWith('http://') || url.startsWith('https://');
       
       if (isNetworkUrl) {
-        // 网络文件，使用 wx.request
+        // Network file, use wx.request
         const responseType = headers["Accept"] === "application/octet-stream" ? "arraybuffer" : "text";
         const dataType = headers["Content-Type"] === "application/json" ? "json" : ""
         wx.request({
@@ -248,7 +248,7 @@ function Fetch(url, options = {}) {
             }
         });
       } else {
-        // 本地文件，使用文件系统 API
+        // Local file, use file system API
         wx.getFileSystemManager().readFile({
           filePath: url,
           success(res) {
@@ -260,7 +260,7 @@ function Fetch(url, options = {}) {
             resolve(response);
           },
           fail(err) {
-            console.error('读取本地文件失败:', err);
+            console.error('Failed to read local file:', err);
             reject(new Error(`Failed to read local file: ${err.errMsg}`));
           }
         });
@@ -268,7 +268,7 @@ function Fetch(url, options = {}) {
   });
 }
 
-// 判断全局环境并挂载 fetch
+// Check global environment and mount fetch
 GameGlobal.fetch = Fetch;
 GameGlobal.Headers = Headers;
 GameGlobal.Response = Response;

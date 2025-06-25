@@ -1,10 +1,10 @@
 import "weapp-adapter";
 import "fetch";
-// 首先设置 crypto polyfill，必须在导入 Godot 编辑器之前
+// First set crypto polyfill, must be before importing Godot editor
 const crypto = {
   getRandomValues: (view) => {
     for (let i = 0; i < view.length; i++) {
-      // Math.random() 生成一个 0 到 1 之间的浮动值，将其乘以 256，取整并限制在 0-255 之间
+      // Math.random() generates a float value between 0 and 1, multiply by 256, round and limit to 0-255
       view[i] = Math.floor(Math.random() * 256);
     }
     return view;
@@ -57,16 +57,16 @@ if (!globalThis.TextDecoder) {
     }
   };
 }
-// 立即设置到 globalThis 上，确保 Godot 编辑器导入时能找到
+// Immediately set to globalThis to ensure Godot editor can find it when importing
 globalThis.crypto = crypto;
 
 console.log("crypto", crypto)
 console.log("globalThis.crypto", globalThis.crypto)
 
-// 使用动态导入避免提升问题
+// Use dynamic import to avoid hoisting issues
 let GodotSDK;
 async function loadModules() {
-  await import("./fetch.js"); // 先加载 fetch polyfill
+  await import("./fetch.js"); // Load fetch polyfill first
   await import("./engine");
   const sdkModule = await import("./sdk");
   GodotSDK = sdkModule.GodotSDK;
@@ -92,13 +92,13 @@ class FakeBlob {
 }
 let godotSdk;
 
-// 初始化函数
+// Initialization function
 async function initializeSDK() {
   await loadModules();
   godotSdk = new GodotSDK();
   GameGlobal.WebAssembly = WXWebAssembly;
   GameGlobal.crypto = crypto;
-  // 整个假的Blob，websocket防止出错
+  // Fake Blob for websocket error prevention
   GameGlobal.Blob = FakeBlob;
   GameGlobal.godotSdk = godotSdk;
 }
@@ -240,7 +240,7 @@ class Loader {
   initWebgl() {
     const gl = this.screenContext;
     gl.bindTexture(gl.TEXTURE_2D, texture);
-    // 创建着色器
+    // Create shaders
     const vertexShaderSource = `
       attribute vec4 a_position;
       attribute vec2 a_texCoord;
@@ -287,7 +287,7 @@ class Loader {
       );
     }
     gl.useProgram(shaderProgram);
-    // Step 4: 创建顶点缓冲区并绑定
+    // Step 4: Create vertex buffer and bind
     const vertices = new Float32Array([
       -1.0, 1.0, 0.0, 0.0, -1.0, -1.0, 0.0, 1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0,
       0.0, 0.0, 1.0, -1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0,
@@ -366,7 +366,7 @@ class Loader {
 
 
   async load() {
-    // 首先初始化 SDK
+    // Initialize SDK first
     await initializeSDK();
 
     const loadLogo = () => {
@@ -401,7 +401,7 @@ class Loader {
   }
 
   async startGame() {
-    // 使用 fetch polyfill 获取文件
+    // Use fetch polyfill to get files
     let buffer = await (await fetch("engine/game.zip")).arrayBuffer();
     let isShowEditor = false
     let assetURLs = null
