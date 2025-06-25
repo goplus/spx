@@ -1,4 +1,5 @@
 onStart => {
+	play "bgm"
 	say "Where do you come from?", 2
 	broadcast "1"
 }

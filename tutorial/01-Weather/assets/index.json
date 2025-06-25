@@ -8,6 +8,7 @@
       "y": 360
     }
   ],
+  "bgm":"bgm",
   "backdropIndex": 0,
   "zorder": [
     "Jaime",
