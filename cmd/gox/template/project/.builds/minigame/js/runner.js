@@ -22,7 +22,7 @@ class GameRunner {
         }, 5000)
     }
 
-    async startGame(onStart, onProgress) {
+    async startGame(onProgress) {
         // Use fetch polyfill to get files
         let buffer = await (await fetch("engine/game.zip")).arrayBuffer();
         let assetURLs = null
@@ -35,7 +35,6 @@ class GameRunner {
             "logLevel": 0,
             "onStart": () => {
                 this.onGameStart()
-                onStart()
             },
             "useAssetCache": false,
             "isRuntimeMode": true,

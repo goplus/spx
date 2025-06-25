@@ -98,7 +98,8 @@ class GameApp {
             GameGlobal.engine = this.game;
             godotSdk.set_engine(this.game);
         }else{
-            await this.loadWasm()
+            await this.loadLogicWasm()
+            await this.runLogicWasm()
         }
 
         // register global functions
@@ -111,14 +112,19 @@ class GameApp {
         });
 
         curGame.init().then(async () => {
-            this.onProgress(0.7);
+            this.onProgress(0.6);
             await this.unpackGameData(curGame)
-
+            this.onProgress(0.7);
+            if (miniEngine) {
+                await this.loadLogicWasm()
+            }
+            this.onProgress(0.80);
             curGame.start({ 'args': args, 'canvas': this.gameCanvas }).then(async () => {
                 if (miniEngine) {
-                    await this.loadWasm()
+                    await this.runLogicWasm()
                 }
                 this.onProgress(0.9);
+                this.gameCanvas.focus();
                 window.goLoadData(new Uint8Array(this.projectData));
                 this.onProgress(1.0);
                 this.gameCanvas.focus();
@@ -128,38 +134,39 @@ class GameApp {
         });
     }
 
-    async loadWasm() {
+    async loadLogicWasm() {
         // load wasm
         let url = this.config.assetURLs["gdspx.wasm"];
         if (isWasmCompressed) {
             url += ".br"
         }
         console.log("go wasm url===>", url);
-        const go = new Go();
+        this.go = new Go();
         if (miniEngine) {
             // load wasm in miniEngine
-            const wasmResult = await WebAssembly.instantiate(url, go.importObject);
+            const wasmResult = await WebAssembly.instantiate(url, this.go.importObject);
             // create compatible instance
-            const compatibleInstance = Object.create(WebAssembly.Instance.prototype);
-            compatibleInstance.exports = wasmResult.instance.exports;
-            Object.defineProperty(compatibleInstance, 'constructor', {
+            this.logicWasmInstance = Object.create(WebAssembly.Instance.prototype);
+            this.logicWasmInstance.exports = wasmResult.instance.exports;
+            Object.defineProperty(this.logicWasmInstance, 'constructor', {
                 value: WebAssembly.Instance,
                 writable: false,
                 enumerable: false,
                 configurable: true
             });
-
-            console.log("[debug] go.run start");
-            go.run(compatibleInstance);
-            console.log("[debug] go.run end");
-            return;
         } else {
-            const { instance } = await WebAssembly.instantiateStreaming(fetch(url), go.importObject);
-            go.run(instance);
+            this.logicWasmInstance = await WebAssembly.instantiateStreaming(fetch(url), this.go.importObject);
+        }
+    }
+    async runLogicWasm() {
+        console.log("[debug] go.run start");
+        this.go.run(this.logicWasmInstance);
+        if (!miniEngine) {
             if (this.config.onSpxReady != null) {
                 this.config.onSpxReady()
             }
         }
+        console.log("[debug] go.run end");
     }
 
     async unpackGameData(curGame) {

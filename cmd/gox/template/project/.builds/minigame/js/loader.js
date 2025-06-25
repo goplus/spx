@@ -51,7 +51,6 @@ class Loader {
         },
         name: "engine",
         success: () => {
-          this.updateLoading();
           resolve();
         },
       });
@@ -73,7 +72,7 @@ class Loader {
     ctx.fillRect(
       barX,
       barY,
-      (this.progress / 3) * barWidth,
+      (this.progress ) * barWidth,
       this.config.loadingBarHeight
     );
 
@@ -82,7 +81,7 @@ class Loader {
     ctx.fillStyle = "#fff";
     ctx.textAlign = "center";
     ctx.fillText(
-      `${((this.progress / 3) * 100).toFixed(1)}%`,
+      `${((this.progress ) * 100).toFixed(1)}%`,
       window.innerWidth / 2,
       barY + this.config.loadingBarHeight - 6
     );
@@ -130,19 +129,24 @@ class Loader {
       this.config.iconHeight
     );
   }
+  
   onProgress(value) {
-    this.progress = value;
     console.log("====>onProgress", value)
-  }
-
-  updateLoading() {
-    this.progress += 1;
-    if (this.progress > 3) this.progress = 3;
+    this.progress = value;
+    if (this.progress > 1) this.progress = 1;
     this.drawBackground();
     this.drawIcon();
     this.drawLoadingBar();
     this.drawScreen();
+
+    // load complete
+    if (this.progress === 1) {
+      console.log("====>load complete")
+      this.clean();
+      this.cleanWebgl();
+    }
   }
+
 
   initWebgl() {
     const gl = this.screenContext;
@@ -295,18 +299,13 @@ class Loader {
     };
     Promise.all([loadBackground(), loadLogo()])
       .then(() => {
-        this.progress += 1;
+        this.onProgress(0.1);
         return this.loadSubpackages();
       })
       .then(async () => {
-        this.updateLoading();
-        const runner = new GameRunner();
-        await runner.startGame(this.onStart.bind(this), this.onProgress.bind(this));
+        this.onProgress(0.2);
+        await new GameRunner().startGame(this.onProgress.bind(this));
       });
-  }
-  async onStart() {
-    this.clean();
-    this.cleanWebgl();
   }
 }
 
