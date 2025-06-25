@@ -214,6 +214,5 @@ class GodotSDK {
   }
 }
 
-export {
-  GodotSDK
-};
+
+export default GodotSDK
