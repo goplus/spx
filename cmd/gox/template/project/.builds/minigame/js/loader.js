@@ -1,5 +1,6 @@
 import "weapp-adapter";
 import "fetch";
+import GameRunner from "./runner";
 // First set crypto polyfill, must be before importing Godot editor
 const crypto = {
   getRandomValues: (view) => {
@@ -364,7 +365,6 @@ class Loader {
     const gl = this.screenContext;
   }
 
-
   async load() {
     // Initialize SDK first
     await initializeSDK();
@@ -396,60 +396,29 @@ class Loader {
       })
       .then(async () => {
         this.updateLoading();
-        await this.startGame();
+        const runner = new GameRunner(this);
+          await runner.startGame(this.onStart.bind(this),this.onProgress.bind(this));
       });
   }
-
-  async startGame() {
-    // Use fetch polyfill to get files
-    let buffer = await (await fetch("engine/game.zip")).arrayBuffer();
-    let isShowEditor = false
-    let assetURLs = null
-
-    const config = {
-      'projectName': "spx_game",
-      'onProgress': this.onProgress,
-      "gameCanvas": canvas,
-      "editorCanvas": canvas,
-      "projectData": new Uint8Array(buffer),
-      "logLevel": 0,
-      "onStart": () => {
-        console.log("====>onStart")
-        // engine.config.persistentPaths.forEach(path => {
-        //   godotSdk.copyLocalToFS(path);
-        // })
-        godotSdk.syncfs(() => {
-        }, (error) => {
-          console.error(error)
-        });
-        setInterval(() => {
-          godotSdk.syncfs(() => {
-          }, (error) => {
-            console.error(error)
-          });
-        }, 5000)
-        this.clean();
-        this.cleanWebgl();
-      },
-      "useAssetCache": false,
-      "isRuntimeMode": true,
-      "assetURLs": {
-        "engine.zip": "engine/engine.zip",
-        "game.zip": "engine/game.zip",
-        "gdspx.wasm": "engine/gdspx.wasm",
-        "engine.wasm": "engine/engine.wasm",
-      },
-    };
-    if (assetURLs != null) {
-      config.assetURLs = assetURLs
-    }
-
-    // try install project and run game
-    let gameApp = new GameApp(config);
-    await gameApp.RunGame();
-    return
-
+  async onStart() {
+    console.log("====>onStart")
+    // engine.config.persistentPaths.forEach(path => {
+    //   godotSdk.copyLocalToFS(path);
+    // })
+    godotSdk.syncfs(() => {
+    }, (error) => {
+      console.error(error)
+    });
+    setInterval(() => {
+      godotSdk.syncfs(() => {
+      }, (error) => {
+        console.error(error)
+      });
+    }, 5000)
+    this.clean();
+    this.cleanWebgl();
   }
+
 
 }
 
