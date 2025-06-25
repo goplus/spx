@@ -79,19 +79,33 @@ func (pself *CmdTool) SetupEnv(version string, fs embed.FS, fsRelDir string, pro
 	if GOARCH != "amd64" && GOARCH != "arm64" {
 		return errors.New("gdx requires an amd64, or an arm64 system")
 	}
-	// Update the CmdTool struct fields
-	pself.BinPostfix, pself.CmdPath, err = impl.CheckAndGetAppPath(pself.GoBinPath, ENV_NAME, pself.Version)
-	if err != nil {
-		return fmt.Errorf(ENV_NAME+"requires engine to be installed as a binary at %s: %w", pself.GoBinPath, err)
+	
+	// Check if pure_engine tag is present
+	if pself.Args.Tags != nil && strings.Contains(*pself.Args.Tags, "pure_engine") {
+		// Skip engine detection for pure_engine mode
+		pself.BinPostfix = ""
+		if runtime.GOOS == "windows" {
+			pself.BinPostfix = ".exe"
+		}
+		pself.CmdPath = "" // Set empty path since we don't need engine
+	} else {
+		// Update the CmdTool struct fields
+		pself.BinPostfix, pself.CmdPath, err = impl.CheckAndGetAppPath(pself.GoBinPath, ENV_NAME, pself.Version)
+		if err != nil {
+			return fmt.Errorf(ENV_NAME+"requires engine to be installed as a binary at %s: %w", pself.GoBinPath, err)
+		}
 	}
+	
 	pself.ProjectDir, _ = filepath.Abs(path.Join(pself.TargetDir, pself.ProjectRelPath))
 	pself.GoDir, _ = filepath.Abs(pself.ProjectDir + "/go")
 
-	// setup runtime path
-	pself.RuntimeCmdPath = path.Join(pself.GoBinPath, "gdspxrt"+pself.Version+pself.BinPostfix)
-	pckName := pself.RuntimeCmdPath
-	pckName = pckName[:len(pckName)-len(pself.BinPostfix)]
-	pself.RuntimePckPath = pckName + ".pck"
+	// setup runtime path - skip for pure_engine mode
+	if pself.Args.Tags == nil || !strings.Contains(*pself.Args.Tags, "pure_engine") {
+		pself.RuntimeCmdPath = path.Join(pself.GoBinPath, "gdspxrt"+pself.Version+pself.BinPostfix)
+		pckName := pself.RuntimeCmdPath
+		pckName = pckName[:len(pckName)-len(pself.BinPostfix)]
+		pself.RuntimePckPath = pckName + ".pck"
+	}
 	pself.RuntimeTempDir, _ = filepath.Abs(path.Join(pself.TargetDir, ".temp"))
 	os.Mkdir(pself.RuntimeTempDir, 0755)
 
@@ -222,12 +236,26 @@ func (pself *CmdTool) CheckEnv() error {
 }
 
 func (pself *CmdTool) ShouldReimport() bool {
+	// TinyGo 构建不需要 Godot 导入过程
+	if pself.Args.CmdName == "buildtinygo" {
+		return false
+	}
 	return !util.IsFileExist(path.Join(pself.ProjectDir, ".godot/uid_cache.bin")) && !pself.RuntimeMode
 }
 
 func (pself *CmdTool) Reimport() {
-	// Call BuildDll on self instead of using the global curCmd
-	pself.BuildDll()
+	// 根据命令类型选择合适的构建方法
+	switch pself.Args.CmdName {
+	case "buildtinygo":
+		// TinyGo 构建不需要 Godot 导入过程
+		return
+	case "buildweb", "runweb", "exportweb":
+		// Web 相关命令使用 BuildWasm
+		pself.BuildWasm()
+	default:
+		// 其他命令使用 BuildDll
+		pself.BuildDll()
+	}
 	fmt.Println(" ================= Importing ... ================= ")
 	cmd := exec.Command(pself.CmdPath, "--import", "--headless")
 	cmd.Dir = pself.ProjectDir

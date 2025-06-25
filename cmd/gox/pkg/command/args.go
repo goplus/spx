@@ -18,6 +18,7 @@ type ExtraArgs struct {
 	OnlyServer      *bool
 	OnlyClient      *bool
 	Tags            *string
+	Target          *string
 	NoMap           *bool
 	Install         *bool
 	DebugWebService *bool
@@ -58,7 +59,7 @@ func (pself *CmdTool) CheckCmd(ext ...string) bool {
 	cmds := []string{
 		"help", "version", "editor",
 		"init", "clear", "clearbuild",
-		"build", "rune", "export",
+		"build", "buildtinygo", "rune", "export",
 		"runweb", "buildweb", "exportweb", "stopweb",
 		"runm", "exportbot", "exportapk", "exportios",
 		"run", "exportwebeditor", "runwebeditor", "exportwebruntime",
@@ -100,6 +101,7 @@ func (cmd *CmdTool) initializeFlags() *bool {
 	cmd.Args.OnlyServer = f.Bool("onlys", false, "mutil player mode server only")
 	cmd.Args.OnlyClient = f.Bool("onlyc", false, "mutil player mode clients only")
 	cmd.Args.Tags = f.String("tags", "simulation", "build tags")
+	cmd.Args.Target = f.String("target", "esp32", "target board (default: esp32)")
 	cmd.Args.NoMap = f.Bool("nomap", false, "no map mode")
 	cmd.Args.Install = f.Bool("install", false, "install mode")
 	cmd.Args.DebugWebService = f.Bool("debugweb", false, "open debug web service")
@@ -160,6 +162,7 @@ Available commands:
 
     Development:
     - build           # Build the dynamic library
+    - buildtinygo     # Build static library using TinyGo for ESP32
     - run             # Run the current project
     - export          # Export the PC package (macOS, Windows, Linux)
     - runm            # Run the project in mutil player mode
@@ -182,6 +185,7 @@ Examples:
     #CMDNAME run --path ./myproject    # Run project at specified path
     #CMDNAME build --servermode        # Build in server mode
     #CMDNAME runweb --debugweb         # Run web server with debug service
+    #CMDNAME buildtinygo               # Build TinyGo static library for ESP32
 	`
 	fmt.Println(cmdName + " Version = " + version + "\n" + strings.ReplaceAll(msg, "#CMDNAME", cmdName))
 
