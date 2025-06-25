@@ -94,8 +94,6 @@ pc:
 # Build web template
 web: 
 	./pkg/gdspx/tools/build_engine.sh -p web &&\
-	cp -rf /Users/tjp/projects/robot/spx/pkg/gdspx/godot/bin/godot.web.template_debug.wasm32.nothreads.wasm /Users/tjp/projects/robot/godot-love-wechat/export/engine/engine.wasm &&\
-	cp -rf /Users/tjp/projects/robot/spx/cmd/igox/gdspx.wasm /Users/tjp/projects/robot/godot-love-wechat/export/engine/gdspx.wasm &&\
 	./pkg/gdspx/tools/make_util.sh extrawebtemplate 
 
 # Build android template
