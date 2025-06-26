@@ -156,8 +156,13 @@ prepare_env() {
     scons --version
     download_engine
     if [[ "$(uname)" == "Darwin" ]]; then
-        echo "install macos vulkan sdk"
-        $ENGINE_DIR/misc/scripts/install_vulkan_sdk_macos.sh
+        # check if vulkan sdk is already installed
+        if command -v vulkaninfo &>/dev/null || [ -d "$HOME/VulkanSDK" ]; then
+            echo "vulkan sdk already installed, skip installation"
+        else
+            echo "install macos vulkan sdk"
+            $ENGINE_DIR/misc/scripts/install_vulkan_sdk_macos.sh
+        fi
     fi 
 }
 
@@ -225,7 +230,7 @@ ensure_jdk() {
 
 # Function to setup emsdk for web builds
 ensure_emsdk() {
-    local EMSDK_VERSION="3.1.39"
+    local EMSDK_VERSION="3.1.62"
     local EMSDK_DIR=""
     
     # Determine global installation directory based on platform
@@ -255,9 +260,30 @@ ensure_emsdk() {
         ./emsdk install $EMSDK_VERSION
         ./emsdk activate $EMSDK_VERSION
     else
-        # emsdk exists, just activate it
+        # emsdk exists, check if version matches
         cd "$EMSDK_DIR/emsdk" || exit
-        ./emsdk activate $EMSDK_VERSION
+        
+        # activate environment variables to make emcc available
+        source ./emsdk_env.sh &> /dev/null
+        
+        # check if emcc is available and its version
+        if command -v emcc &> /dev/null; then
+            CURRENT_VERSION=$(emcc --version | head -n 1 | awk '{print $3}')
+            echo "current emcc version: $CURRENT_VERSION, target version: $EMSDK_VERSION"
+            
+            # compare versions
+            if [ "$CURRENT_VERSION" != "$EMSDK_VERSION" ]; then
+                echo "emcc version mismatch, installing target version $EMSDK_VERSION..."
+                ./emsdk install $EMSDK_VERSION
+                ./emsdk activate $EMSDK_VERSION
+            else
+                echo "emcc version matches, no need to re-install"
+                ./emsdk activate $EMSDK_VERSION
+            fi
+        else
+            echo "emcc not found, activating emsdk..."
+            ./emsdk activate $EMSDK_VERSION
+        fi
     fi
     
     # Set up environment variables based on platform
