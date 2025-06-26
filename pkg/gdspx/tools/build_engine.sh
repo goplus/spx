@@ -17,11 +17,11 @@ done
 source $SCRIPT_DIR/common/setup_env.sh
 
 cd $PROJ_DIR
-COMMON_ARGS='debug_symbols=false 
-            optimize=size 
+COMMON_ARGS='debug_symbols=true 
+            optimize=debug 
             use_volk=no 
             deprecated=no 
-            minizip=no  
+            minizip=yes  
             openxr=false 
             vulkan=false 
             graphite=false 
@@ -108,15 +108,19 @@ build_template() {
             exit 0
         fi 
         # build web templates
-        scons platform=web target=template_release threads=no $COMMON_ARGS $EXTRA_OPT_ARGS
+        scons platform=web target=template_debug threads=no $COMMON_ARGS $EXTRA_OPT_ARGS
         echo "Wait zip file to finished ..."
         sleep 2
-        cp bin/godot.web.template_release.wasm32.zip bin/web_dlink_debug.zip
+        cp bin/godot.web.template_debug.wasm32.nothreads.zip bin/web_dlink_debug.zip
         rm "$template_dir"/web_*.zip
         cp bin/web_dlink_debug.zip "$template_dir/web_dlink_debug.zip"
         cp bin/web_dlink_debug.zip "$template_dir/web_dlink_release.zip"
+        cp bin/web_dlink_debug.zip "$template_dir/web_dlink_nothreads_debug.zip"
+        cp bin/web_dlink_debug.zip "$template_dir/web_dlink_nothreads_release.zip"
         cp bin/web_dlink_debug.zip "$template_dir/web_debug.zip"
         cp bin/web_dlink_debug.zip "$template_dir/web_release.zip"
+        cp bin/web_dlink_debug.zip "$template_dir/web_nothreads_debug.zip"
+        cp bin/web_dlink_debug.zip "$template_dir/web_nothreads_release.zip"
         # copy to tool dir
         cp bin/web_dlink_debug.zip $GOPATH/bin/gdspx$VERSION"_webpack.zip"
     else
