@@ -37,6 +37,7 @@ COMMON_ARGS='debug_symbols=false
             module_svg_enabled=true 
             module_jpg_enabled=true 
             module_ogg_enabled=true 
+            module_regex_enabled=true 
             module_godot_physics_2d_enabled=true '
 
 EXTRA_OPT_ARGS='disable_3d=true'
