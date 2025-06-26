@@ -11,7 +11,7 @@ setup_global_variables() {
     # Define Godot version
     VERSION=$(cat $SCRIPT_DIR/version)
     ENGINE_GIT_TAG="spx"$VERSION
-    ENGINE_VERSION=4.2.2.stable
+    ENGINE_VERSION=4.4.1.stable
     if [ "$OS" = "Windows_NT" ]; then
         IFS=';' read -r first_gopath _ <<< "$(go env GOPATH)"
         GOPATH="$first_gopath"
