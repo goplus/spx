@@ -155,7 +155,8 @@ class GameApp {
                 configurable: true
             });
         } else {
-            this.logicWasmInstance = await WebAssembly.instantiateStreaming(fetch(url), this.go.importObject);
+            const { instance } = await WebAssembly.instantiateStreaming(fetch(url), this.go.importObject);
+            this.logicWasmInstance = instance;
         }
     }
     async runLogicWasm() {

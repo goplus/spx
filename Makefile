@@ -75,8 +75,8 @@ cmd:
 	cd ./cmd/gox/ && ./install.sh && cd $(CURRENT_PATH) 
 # build wasm
 wasm:
-	cd ./cmd/gox/ && ./install.sh --web && cd $(CURRENT_PATH) &&\
-	cp -rf /Users/tjp/projects/robot/spx/cmd/igox/gdspx.wasm /Users/tjp/projects/robot/godot-love-wechat/export/engine/gdspx.wasm 
+	cd ./cmd/gox/ && ./install.sh --web && cd $(CURRENT_PATH) 
+
 # build wasm with optimization
 wasmopt:
 	cd ./cmd/gox/ && ./install.sh --web --opt && cd $(CURRENT_PATH) 
@@ -128,8 +128,7 @@ run:
 
 # Run demo on web
 runweb:
-	./pkg/gdspx/tools/make_util.sh runweb $(path) $(port) && cd $(CURRENT_PATH)  &&\
-	cp -rf tutorial/01-Weather/project/.builds/web/engine.js /Users/tjp/projects/robot/godot-love-wechat/export/js/raw/engine.js
+	./pkg/gdspx/tools/make_util.sh runweb $(path) $(port) && cd $(CURRENT_PATH) 
 
 # Run tests
 runtest:
@@ -140,7 +139,7 @@ runminifast:
 	cd  $(path) && spx exportminigame -build=fast && cd $(CURRENT_PATH) 
 	
 runmini:
-	make cmd &&\
+	make wasmopt &&\
 	cd  $(path) && spx exportminigame && cd $(CURRENT_PATH) 
 # Default rule for unknown targets
 %:
