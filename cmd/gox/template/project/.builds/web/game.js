@@ -232,7 +232,6 @@ class GameApp {
             await this.unpackGameData(curGame)
 
             curGame.start({ 'args': args, 'canvas': this.gameCanvas }).then(async () => {
-                await this.waitFsSyncDone(this.gameCanvas)
                 this.onProgress(0.9);
                 window.goLoadData(new Uint8Array(this.projectData));
                 this.onProgress(1.0);
