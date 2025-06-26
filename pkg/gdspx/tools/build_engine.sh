@@ -30,7 +30,7 @@ COMMON_ARGS='debug_symbols=false
             module_msdfgen_enabled=false 
             module_text_server_adv_enabled=false 
             module_text_server_fb_enabled=true 
-            modules_enabled_by_default=false 
+            modules_enabled_by_default=true 
             module_gdscript_enabled=true 
             module_freetype_enabled=true 
             module_minimp3_enabled=true 
