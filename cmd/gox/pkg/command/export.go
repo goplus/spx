@@ -109,6 +109,7 @@ func (pself *CmdTool) exportWeb() error {
 
 	//pack.PackEngineRes(pself.ProjectFS, pself.WebDir)
 	util.CopyFile(pself.getWasmPath(), path.Join(pself.WebDir, "gdspx.wasm"))
+	util.CopyFile(pself.getWasmPath()+".br", path.Join(pself.WebDir, "gdspx.wasm.br"))
 	pack.SaveEngineHash(pself.WebDir)
 	return nil
 }
@@ -145,6 +146,13 @@ func (pself *CmdTool) ExportMinigame() error {
 	}
 
 	os.RemoveAll(path.Join(pself.WebDir, "../minigame"))
+	return nil
+}
+
+func (pself *CmdTool) ExportMiniprogram() error {
+	pself.exportWeb()
+
+	util.CopyDir(pself.ProjectFS, "template/project/.builds/miniprogram", pself.WebDir, true)
 	return nil
 }
 

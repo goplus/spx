@@ -16,6 +16,7 @@ help:
 	@echo "  wasmopt     - Install spx command and build wasm with optimization"
 	@echo "  fmt         - Format code"
 	@echo "  gen         - Generate code"
+	@echo "  stop        - Stop running processes"
 	@echo ""
 	@echo "Build Commands:"
 	@echo "  pce         - Build current platform's engine (editor mode)"
@@ -39,6 +40,7 @@ help:
 	@echo "  make run path=demos/demo1    - Run specific demo on PC (default: tutorial/01-Weather)"
 	@echo "  make runweb path=demos/demo1 - Run specific demo on web (default: tutorial/01-Weather)"
 	@echo "  make runtest                 - Run tests"
+	@echo "  make stop                    - Stop all running processes"
 
 init:
 	chmod +x ./pkg/gdspx/tools/*.sh && \
@@ -128,19 +130,53 @@ run:
 
 # Run demo on web
 runweb:
-	./pkg/gdspx/tools/make_util.sh runweb $(path) $(port) && cd $(CURRENT_PATH) 
+	make stopserver &&\
+	make wasm &&\
+	cd $(path) && spx clear && spx runweb -serveraddr=":$(port)" && cd $(CURRENT_PATH)
 
 # Run tests
 runtest:
 	cd test/All && spx run . && cd $(CURRENT_PATH) 
 
-runminifast:
-	make cmd &&\
-	cd  $(path) && spx exportminigame -build=fast && cd $(CURRENT_PATH) 
+# Stop running processes
+stopserver:
+	@echo "Stopping running processes..."
+	@if [ "$$OS" = "Windows_NT" ] || [[ "$$(uname -s 2>/dev/null)" == MINGW* ]]; then \
+		echo "Windows environment detected, using taskkill"; \
+		taskkill /F /FI "IMAGENAME eq python.exe" 2>/dev/null || true; \
+		taskkill /F /FI "IMAGENAME eq pythonw.exe" 2>/dev/null || true; \
+		taskkill /F /FI "IMAGENAME eq python3.exe" 2>/dev/null || true; \
+	elif command -v pgrep > /dev/null; then \
+		echo "Unix/Linux environment detected, using pgrep and kill"; \
+		PIDS=$$(pgrep -f gdspx_web_server.py); \
+		if [ -n "$$PIDS" ]; then \
+			echo "Killing process: $$PIDS"; \
+			kill -9 $$PIDS; \
+		else \
+			echo "No gdspx_web_server.py process found."; \
+		fi \
+	else \
+		echo "Neither taskkill nor pgrep available, skipping process killing"; \
+	fi
+	@echo "Process stopping completed."
+
+runserver:
+	make stopserver && cd $(CURRENT_PATH) &&\
+	cd $(path) && python3 ./project/.godot/gdspx_web_server.py -r "../.builds/web" -p $(port)
+
+runminigamefast:
+	make cmd &&\ 
+	cd  $(path) && spx exportminiprogram -build=fast && cd $(CURRENT_PATH) 
 	
-runmini:
+runminigame:
 	make wasmopt &&\
-	cd  $(path) && spx exportminigame && cd $(CURRENT_PATH) 
+	cd  $(path) && spx exportminiprogram && cd $(CURRENT_PATH) 
+
+runminiprogram:
+	make cmd &&\
+	cd  $(path) && spx exportminiprogram && cd $(CURRENT_PATH) &&\
+	make runserver
+
 # Default rule for unknown targets
 %:
 	@echo "Unknown target: $@"

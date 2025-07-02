@@ -216,6 +216,8 @@ func (cmd *CmdTool) handleExecutionPhase() error {
 		return cmd.ExportIos()
 	case "exportminigame":
 		return cmd.ExportMinigame()
+	case "exportminiprogram":
+		return cmd.ExportMiniprogram()
 	default:
 		// For build-only commands, no execution needed
 		return nil
