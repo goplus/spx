@@ -2,6 +2,7 @@ package main
 
 import (
 	"embed"
+	"strings"
 
 	"github.com/goplus/spx/v2/cmd/gox/pkg/command"
 )
@@ -33,11 +34,11 @@ func main() {
 
 	// Initialize with provided values
 	cmd.ProjectFS = projectFS
-	cmd.Version = version
+	cmd.Version = strings.TrimSpace(version)
 	cmd.GitignoreTxt = gitignoreTxt
 	cmd.RunSh = runSh
 	cmd.MainSh = mainSh
 
 	// Initialize the Args field if not already initialized
-	cmd.RunCmd(appName, appName, version, projectFS, "template/project", "project")
+	cmd.RunCmd(appName, appName, cmd.Version, projectFS, "template/project", "project")
 }

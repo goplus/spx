@@ -131,7 +131,6 @@ class Loader {
   }
   
   onProgress(value) {
-    console.log("====>onProgress", value)
     this.progress = value;
     if (this.progress > 1) this.progress = 1;
     this.drawBackground();
@@ -141,7 +140,6 @@ class Loader {
 
     // load complete
     if (this.progress === 1) {
-      console.log("====>load complete")
       this.clean();
       this.cleanWebgl();
     }

@@ -34,6 +34,9 @@ var (
 
 	//go:embed gdspx.js.tmpl
 	jsEngineJsFileText string
+
+	//go:embed worker.wrap.gen.js.tmpl
+	workerWrapJsFileText string
 )
 
 func Generate(projectPath string, ast clang.CHeaderFileAST) {
@@ -53,7 +56,10 @@ func Generate(projectPath string, ast clang.CHeaderFileAST) {
 	if err != nil {
 		panic(err)
 	}
-
+	err = GenerateWorkerWrapJsFile(projectPath, ast)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func GenerateCallbackGoFile(projectPath string, ast clang.CHeaderFileAST) error {
@@ -73,6 +79,25 @@ func GenerateCallbackGoFile(projectPath string, ast clang.CHeaderFileAST) error 
 
 	return GenerateFile(funcs, "callbacks.gen.go", callbacksFileText, ast,
 		filepath.Join(projectPath, WebRelDir, "callbacks.gen.go"))
+}
+
+func GenerateWorkerWrapJsFile(projectPath string, ast clang.CHeaderFileAST) error {
+	funcs := template.FuncMap{
+		"gdiVariableName":    GdiVariableName,
+		"snakeCase":          strcase.ToSnake,
+		"camelCase":          strcase.ToCamel,
+		"goReturnType":       GoReturnType,
+		"goArgumentType":     GoArgumentType,
+		"goEnumValue":        GoEnumValue,
+		"add":                Add,
+		"cgoCastArgument":    CgoCastArgument,
+		"cgoCastReturnType":  CgoCastReturnType,
+		"cgoCleanUpArgument": CgoCleanUpArgument,
+		"trimPrefix":         TrimPrefix,
+	}
+
+	return GenerateFile(funcs, "worker.wrap.gen.js", workerWrapJsFileText, ast,
+		filepath.Join(projectPath, "../../../../cmd/gox/template/project/.builds/web/worker/worker.wrap.gen.js"))
 }
 
 func GenerateGDExtensionInterfaceGoFile(projectPath string, ast clang.CHeaderFileAST) error {

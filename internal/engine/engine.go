@@ -74,6 +74,9 @@ func Main(g IGame) {
 	})
 }
 
+func RegisterFuncs() {
+
+}
 func OnGameStarted() {
 	gco.OnInited()
 }

@@ -16,7 +16,7 @@ gd{{ loadProcAddressName $f.Name }}(
 		{{- if ne $j (sub (len $f.Arguments) 1) -}}, {{- end -}}
 	{{ end -}}
 ) {
-	var _gdFuncPtr =  GodotEngine.rtenv['_gd{{ loadProcAddressName $f.Name }}']; 
+	var _gdFuncPtr = Module._gd{{ loadProcAddressName $f.Name }}; 
 	{{ getJsFuncBody $f }}
 }
 {{- end -}}

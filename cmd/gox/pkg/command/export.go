@@ -59,54 +59,96 @@ func (pself *CmdTool) ExportBuild(platform string) error {
 	}
 	return err
 }
+
 func (pself *CmdTool) ExportWebEditor() error {
 	pself.Clear()
-	// copy project files
-	util.CopyDir(pself.ProjectFS, "template/project", pself.ProjectDir, true)
-	dir := pself.TargetDir
-	util.SetupFile(false, path.Join(dir, ".gitignore"), pself.GitignoreTxt)
-	os.Rename(path.Join(dir, ".gitignore.txt"), path.Join(dir, ".gitignore"))
-
-	editorZipPath := path.Join(pself.GoBinPath, ENV_NAME+pself.Version+"_web.zip")
+	zipPath := path.Join(pself.GoBinPath, ENV_NAME+pself.Version+"_web.zip")
 	dstPath := path.Join(pself.ProjectDir, ".builds/web")
 	os.MkdirAll(dstPath, os.ModePerm)
-	if util.IsFileExist(editorZipPath) {
-		util.Unzip(editorZipPath, dstPath)
+	if util.IsFileExist(zipPath) {
+		util.Unzip(zipPath, dstPath)
 	} else {
-		return errors.New("editor zip file not found: " + editorZipPath)
+		return errors.New("editor zip file not found: " + zipPath)
 	}
-	os.Rename(path.Join(dstPath, "godot.editor.html"), path.Join(dstPath, "index.html"))
 
-	util.CopyDir(pself.ProjectFS, "template/project/.builds/web", pself.WebDir, true)
-	pack.PackProject(pself.TargetDir, path.Join(pself.WebDir, "game.zip"))
-	pack.PackEngineRes(pself.ProjectFS, pself.WebDir)
-	util.CopyFile(pself.getWasmPath(), path.Join(pself.WebDir, "gdspx.wasm"))
-	pack.SaveEngineHash(pself.WebDir)
-	return nil
+	return pself._exportWeb(dstPath)
 }
 
 func (pself *CmdTool) exportWeb() error {
 	pself.Clear()
+	zipPath := path.Join(pself.GoBinPath, "gdspxrt"+pself.Version+"_web")
+	if !util.IsFileExist(zipPath) {
+		return errors.New("web dir file not found: " + zipPath)
+	}
+
+	dstPath := path.Join(pself.ProjectDir, ".builds/web")
+	os.MkdirAll(dstPath, os.ModePerm)
+	util.CopyDir2(zipPath, dstPath)
+
+	return pself._exportWeb(dstPath)
+}
+
+func (pself *CmdTool) _exportWeb(dstPath string) error {
+	println("==> _exportWeb", dstPath)
 	// copy project files
 	util.CopyDir(pself.ProjectFS, "template/project", pself.ProjectDir, true)
 	dir := pself.TargetDir
 	util.SetupFile(false, path.Join(dir, ".gitignore"), pself.GitignoreTxt)
 	os.Rename(path.Join(dir, ".gitignore.txt"), path.Join(dir, ".gitignore"))
 
-	webTemplateDir := path.Join(pself.GoBinPath, "gdspxrt"+pself.Version+"_web")
-	if !util.IsFileExist(webTemplateDir) {
-		return errors.New("web dir file not found: " + webTemplateDir)
-	}
-
-	dstPath := path.Join(pself.ProjectDir, ".builds/web")
-	os.MkdirAll(dstPath, os.ModePerm)
-	util.CopyDir2(webTemplateDir, dstPath)
 	os.Rename(path.Join(dstPath, "godot.editor.html"), path.Join(dstPath, "index.html"))
 
 	// overwrite web files
 	util.CopyDir(pself.ProjectFS, "template/project/.builds/web", pself.WebDir, true)
-	pack.PackProject(pself.TargetDir, path.Join(pself.WebDir, "game.zip"))
+	// Append ext/*.js to engine.worker.js then remove them
 
+	// merge ext/*.js to engine.worker.js
+	extDir := path.Join(pself.WebDir, "worker")
+	var filesToMerge []string
+
+	util.CopyFile(path.Join(pself.WebDir, "wasm_exec.js"), path.Join(extDir, "wasm_exec.js"))
+
+	mode := *pself.Args.Mode
+	if mode == "worker" {
+		if entries, err := os.ReadDir(extDir); err == nil {
+			for _, entry := range entries {
+				if entry.IsDir() {
+					continue
+				}
+				if strings.HasSuffix(entry.Name(), ".js") {
+					filesToMerge = append(filesToMerge, path.Join(extDir, entry.Name()))
+				}
+			}
+		}
+
+		insertCode := ""
+		for _, jsFile := range filesToMerge {
+			if util.IsFileExist(jsFile) {
+				content, err := os.ReadFile(jsFile)
+				if err != nil {
+					return err
+				}
+				insertCode += "\n\n\n" + string(content)
+				if err := os.Remove(jsFile); err != nil {
+					log.Printf("warning: failed to remove %s: %v", jsFile, err)
+				}
+			}
+		}
+
+		// insert worker code
+		engineBytes, _ := os.ReadFile(path.Join(pself.WebDir, "engine.js"))
+		engineStr := string(engineBytes)
+
+		// 1. insert handleGameAppMessage
+		keyStr := "{if(initializedJS){checkMailbox()}}"
+		engineStr = strings.ReplaceAll(engineStr, keyStr, keyStr+"else if(e.data._gameAppMessageId) {handleGameAppMessage(e.data);}")
+		// 2. insert worker code
+		keyStr = ";throw ex}}self.onmessage=handleMessage}"
+		engineStr = strings.ReplaceAll(engineStr, keyStr, keyStr+insertCode)
+		os.WriteFile(path.Join(pself.WebDir, "engine.js"), []byte(engineStr), 0644)
+	}
+
+	pack.PackProject(pself.TargetDir, path.Join(pself.WebDir, "game.zip"))
 	//pack.PackEngineRes(pself.ProjectFS, pself.WebDir)
 	util.CopyFile(pself.getWasmPath(), path.Join(pself.WebDir, "gdspx.wasm"))
 	util.CopyFile(pself.getWasmPath()+".br", path.Join(pself.WebDir, "gdspx.wasm.br"))
@@ -676,7 +718,7 @@ func (pself *CmdTool) mergeJSFiles(jsDir string, isCompressed bool) error {
 	defer writer.Flush()
 
 	// write compression flag at the beginning
-	compressionFlag := fmt.Sprintf("const isWasmCompressed = %t;\n\n", isCompressed)
+	compressionFlag := fmt.Sprintf("var FFI = null;\nconst isWasmCompressed = %t;\n\n", isCompressed)
 	if _, err := writer.WriteString(compressionFlag); err != nil {
 		return err
 	}

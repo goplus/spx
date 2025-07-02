@@ -153,19 +153,39 @@ do_prepare_export() {
 
 # Define a function for the exportpack functionality
 do_extra_webtemplate() {
+    local mode="${1:-default}"
     do_prepare_export
     dstdir="$GOPATH/bin/gdspxrt"$TEMP_VERSION"_web"
     echo "exporting web runtime..."
+    
     spx exportwebruntime 
+
     rm -rf "$dstdir" 
     cp -rf ./project/.builds/webi  "$dstdir" 
     mv "$dstdir/engine.pck" "$dstdir/engine.zip"
-    echo "exporting web runtime done: $dstdir"
 
-    compress_with_brotli "$dstdir/engine.wasm" "$dstdir/engine.wasm.br"
+    # write mode to engine.js
+    engine_mode_define="var EnginePackMode = '$mode';"
+    echo "engine_mode_define: $engine_mode_define"
+    temp_file=$(mktemp)
+    echo "$engine_mode_define" > "$temp_file"
+    cat "$dstdir/engine.js" >> "$temp_file"
+    mv "$temp_file" "$dstdir/engine.js"
+
+    echo "exporting web runtime done: $dstdir (mode: $mode)"
+
     # Clean up
     rm -rf "$CURRENT_PATH/.tmp"
     return 0
+}
+
+do_compresswasm() {
+    TEMP_VERSION=$(cat "$CURRENT_PATH/cmd/gox/template/version") 
+    dstdir="$GOPATH/bin/gdspxrt"$TEMP_VERSION"_web"
+    rm -rf "$dstdir/engine.wasm.br"
+    rm -rf "$dstdir/../gdspx.wasm.br"
+    compress_with_brotli "$dstdir/engine.wasm" "$dstdir/engine.wasm.br"
+    compress_with_brotli "$dstdir/../gdspx.wasm" "$dstdir/../gdspx.wasm.br"
 }
 
 # Define a function for the exportpack functionality
@@ -201,7 +221,9 @@ main() {
         echo "Commands:"
         echo "  exportweb - Create a web release package"
         echo "  exportpack  - Set up and package the application"
-        echo "  runweb [path] - Run a web server (default path: tutorial/01-Weather)"
+        echo "  extrawebtemplate [mode] - Export web runtime template (mode: worker|main|default)"
+        echo "  compresswasm - Compress WASM files with brotli"
+        echo "  runweb [path] [port] - Run a web server (default path: tutorial/01-Weather, default port: 8106)"
         return 1
     fi
 
@@ -215,12 +237,16 @@ main() {
         exportpack)
             do_exportpack
             ;;
+        compresswasm)
+            do_compresswasm
+            ;;
         extrawebtemplate)
-            do_extra_webtemplate
+            mode="$1"
+            do_extra_webtemplate "$mode"
             ;;
         *)
             echo "Unknown command: $command"
-            echo "Available commands: exportweb, exportpack, runweb"
+            echo "Available commands: exportweb, exportpack, extrawebtemplate, compresswasm, runweb"
             return 1
             ;;
     esac
