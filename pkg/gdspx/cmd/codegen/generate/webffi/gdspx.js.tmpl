@@ -7,14 +7,10 @@
 //   code.
 //----------------------------------------------------------------------------*/
 {{ $view := . -}}
-
-function test_go_call_cpp(val) {
-	return GodotEngine.rtenv['_test_go_call_cpp'](val); 
-}
-
+class GdspxFuncs {
 {{- range $i, $f := $view.CollectGDExtensionInterfaceFunctions -}}
 {{ $rt := goReturnType .ReturnType }}
-function gd{{ loadProcAddressName $f.Name }}(
+gd{{ loadProcAddressName $f.Name }}(
 	{{- range $j, $arg := $f.Arguments -}}
 		{{ $arg.Name -}}
 		{{- if ne $j (sub (len $f.Arguments) 1) -}}, {{- end -}}
@@ -24,3 +20,4 @@ function gd{{ loadProcAddressName $f.Name }}(
 	{{ getJsFuncBody $f }}
 }
 {{- end -}}
+}

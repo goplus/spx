@@ -139,7 +139,7 @@ func computeHash(filePath string) (string, error) {
 }
 func SaveEngineHash(webDir string) {
 	// calc and save wasm hash
-	files := []string{"gdspx.wasm", "godot.editor.wasm"}
+	files := []string{"gdspx.wasm", "engine.wasm"}
 	outpuString := `
 function GetEngineHashes() { 
 	return {

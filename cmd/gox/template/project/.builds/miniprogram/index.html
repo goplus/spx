@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport"
+		content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no">
+	<title>XGo Builder</title>
+	<style>
+		* {
+			margin: 0;
+			padding: 0;
+			box-sizing: border-box;
+		}
+
+		body,
+		html {
+			width: 100%;
+			height: 100%;
+			display: flex;
+			justify-content: center;
+			align-items: center;
+			background-color: #333;
+			overflow: hidden;
+		}
+
+		canvas {
+			display: block;
+			margin: 0;
+			outline: none;
+		}
+
+
+
+		#tabs {
+			position: absolute;
+			top: 0;
+			left: 0;
+			width: 100%;
+			height: 100%;
+		}
+	</style>
+</head>
+
+<body>
+	<div id="tabs">
+		<div id="tab-loader">
+		</div>
+		<div id="tab-editor" style="display: none;">
+			<canvas id="editor-canvas" tabindex="1"></canvas>
+		</div>
+		<div id="tab-game" style="display: none;">
+			<canvas id="game-canvas" tabindex="2"></canvas>
+		</div>
+	</div>
+
+	<script>var miniEngine = null</script>
+	<script>var isWasmCompressed = false</script>
+	<script src="engine.js"></script>
+	<script src="wasm_exec.js"></script>
+	<script src="game.js"></script>
+	<script>
+		"use strict";
+		let gameApp = null;
+		let isShowEditor = false;
+		let onGameErrorCallback = null;
+		// Detect current environment, use relative path for local development, absolute path for production
+		let urlPrefix = "";
+		if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+			urlPrefix = ""; // Use relative path for local development
+			console.log("🏠 Local environment detected, using local resources");
+		} else {
+			urlPrefix = "https://jiepengtan.github.io/miniprogram-web-game/"; // Production environment
+			console.log("🌐 Production environment detected, using remote resources");
+		}
+		
+
+		// Batch send cached logs
+		function flushLogQueue() {
+			console.log("🔄 Attempting to send cached logs, queue length:", logQueue.length);
+			if (logQueue.length > 0 && typeof wx !== 'undefined' && wx.miniProgram && wx.miniProgram.postMessage) {
+				console.log("✅ Starting to send cached logs");
+				const successCount = logQueue.filter((log) => {
+					try {
+						wx.miniProgram.postMessage({
+							data: log
+						});
+						return true;
+					} catch (error) {
+						console.error("❌ Failed to send cached log:", error);
+						return false;
+					}
+				}).length;
+				
+				console.log(`✅ Successfully sent ${successCount}/${logQueue.length} cached logs`);
+				logQueue.length = 0; // Clear queue
+			} else {
+				console.log("⚠️ WeChat environment unavailable, keeping cached logs");
+			}
+		}
+
+		function onProgress(value) {
+			console.log("onProgress", value);
+		}
+
+		window.gdspx_on_runtime_panic = function (msg) {
+			if (onGameErrorCallback != null) {
+				onGameErrorCallback(msg);
+			}
+		}
+
+		function onGameError(callback) {
+			onGameErrorCallback = callback;
+		}
+
+		async function startGame(params) {
+			console.log("📁 urlPrefix:", urlPrefix);
+			try {
+				await startProject(urlPrefix + params.dataUrl);
+			} catch (error) {
+				console.error("Stack trace:", error.stack);
+				throw error;
+			}
+		}
+
+
+		async function startProject(zipUrl) {
+			isShowEditor = false;
+			
+			// Prepare game canvas
+			const canvas = document.getElementById('game-canvas');
+			if (!canvas) {
+				throw new Error("Cannot find game canvas element 'game-canvas'");
+			}
+			canvas.width = window.innerWidth;
+			canvas.height = window.innerHeight;
+			console.log("Canvas size:", canvas.width, "x", canvas.height);
+			
+			// Show game canvas, hide others
+			document.getElementById('tab-game').style.display = 'block';
+			document.getElementById('tab-editor').style.display = 'none';
+			document.getElementById('tab-loader').style.display = 'none';
+			
+			let buffer;
+			try {
+				const response = await fetch(zipUrl);
+				buffer = await response.arrayBuffer();
+			} catch (error) {
+				throw error;
+			}
+			
+			const config = {
+				'projectName': "spx_game",
+				'onProgress': onProgress,
+				"gameCanvas": canvas,
+				"projectData": new Uint8Array(buffer),
+				"logLevel": LOG_LEVEL_NONE,
+				"assetURLs": {
+					"engine.zip": urlPrefix + "engine.zip",
+					"gdspx.wasm": urlPrefix + "gdspx.wasm",
+					"engine.wasm": urlPrefix + "engine.wasm",
+				},
+				"onSpxReady": null,
+			};
+
+			if (gameApp != null) {
+				await gameApp.StopGame();
+			}
+
+			try {
+				// Try to install project and run game
+				gameApp = new GameApp(config);
+				await gameApp.RunGame();
+			} catch (error) {
+				console.error("Stack trace:", error.stack);
+				throw error;
+			}
+		}
+
+		// Parse URL parameters
+		function getUrlParams() {
+			const urlParams = new URLSearchParams(window.location.search);
+			return {
+				userId: urlParams.get('userId') || 'default_user',
+				dataUrl: urlParams.get('dataUrl') || 'game.zip',
+				level: parseInt(urlParams.get('level')) || 1
+			};
+		}
+
+		// Send message to mini program
+		function sendMessageToMiniProgram(type, data) {
+			if (typeof wx !== 'undefined' && wx.miniProgram) {
+				wx.miniProgram.postMessage({
+					data: { type, data }
+				});
+			}
+		}
+
+		// Set error callback
+		onGameError(function (callback) {
+			console.error("onGameError", callback);
+			// Send error message to mini program
+			sendMessageToMiniProgram('gameError', { error: callback });
+		});
+
+		// Wait for all scripts to load and automatically start the game
+		function waitForScriptsAndStart() {
+			const params = getUrlParams();
+			console.log("📋 Received parameters:", params);
+			startGame(params);
+		}
+
+		// Start checking scripts after DOM is loaded
+		document.addEventListener('DOMContentLoaded', function() {
+			console.log("DOM loaded, waiting for scripts...");
+			waitForScriptsAndStart();
+		});
+	</script>
+</body>
+
+</html>

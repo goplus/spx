@@ -36,5 +36,7 @@ if [ "$1" = "--web" ]; then
     cd ../igox || exit
     ./build.sh "$2"
     cp gdspx.wasm $GOPATH/bin/gdspx.wasm
+    cp -f gdspx.wasm.br $GOPATH/bin/gdspx.wasm.br
+
     cd ../gox || exit
 fi

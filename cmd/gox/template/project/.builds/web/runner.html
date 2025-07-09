@@ -39,9 +39,10 @@
 			<canvas id="game-canvas" tabindex="2"></canvas>
 		</div>
 	</div>
-
-	<script src="godot.editor.js"></script>
-	<script src="jszip-3.10.1.min.js"></script>
+	<script>var miniEngine = null</script>
+	<script>var isWasmCompressed = false</script>
+	<script src="engine.js"></script>
+	<script src="wasm_exec.js"></script>
 	<script src="game.js"></script>
 	<script>
 		"use strict";
@@ -90,17 +91,15 @@
 				'projectName': "spx_game",
 				'onProgress': onProgress,
 				"gameCanvas": document.getElementById('game-canvas'),
-				"editorCanvas": document.getElementById('editor-canvas'),
 				"projectData": new Uint8Array(buffer),
 				"logLevel": LOG_LEVEL_NONE,
-				"useAssetCache": false,
-				"isRuntimeMode": true,
 				"assetURLs": {
-					"godot.editor.pck": "/godot.editor.pck",
-					"engineres.zip": "/engineres.zip",
+					"engine.zip": "/engine.zip",
+					"game.zip": "/game.zip",
 					"gdspx.wasm": "/gdspx.wasm",
-					"godot.editor.wasm": "/godot.editor.wasm",
+					"engine.wasm": "/engine.wasm",
 				},
+				"onSpxReady": onSpxReady,
 			};
 			if (assetURLs != null) {
 				config.assetURLs = assetURLs
@@ -109,19 +108,9 @@
 			if (gameApp != null) {
 				await gameApp.StopProject();
 			}
-			
-			// load wasm
-			let url = config.assetURLs["gdspx.wasm"]
-			const go = new Go();
-			const { instance } = await WebAssembly.instantiateStreaming(fetch(url), go.importObject);
-			go.run(instance);
-			if (onSpxReady != null) {
-				onSpxReady()
-			}
 
 			// try install project and run game
 			gameApp = new GameApp(config);
-			await gameApp.StartProject();
 			await gameApp.RunGame();
 		}
 
@@ -131,7 +120,7 @@
 				console.error("gameApp is null, should call startGame first")
 				return
 			}
-			await gameApp.StopProject()
+			await gameApp.StopGame()
 			gameApp = null
 		}
 

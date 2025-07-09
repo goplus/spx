@@ -5,6 +5,84 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJ_DIR="$SCRIPT_DIR/../../.."
 echo $PROJ_DIR
 
+# Function to compress wasm file with brotli
+compress_with_brotli() {
+    local input_file="$1"
+    local output_file="$2"
+    
+    if [ -z "$input_file" ] || [ -z "$output_file" ]; then
+        echo "Error: compress_with_brotli requires input and output file parameters"
+        return 1
+    fi
+    
+    if [ ! -f "$input_file" ]; then
+        echo "Error: Input file $input_file does not exist"
+        return 1
+    fi
+    
+    # Check if brotli is installed
+    local brotli_installed=false
+    if command -v brotli &> /dev/null; then
+        echo "brotli is already installed"
+        brotli_installed=true
+    else
+        echo "brotli not detected, trying to install..."
+        
+        # Install brotli based on the system type
+        case "$SYSTEM" in
+            Linux)
+                # Detect Linux distribution
+                if [ -f /etc/os-release ]; then
+                    . /etc/os-release
+                    if [[ "$ID" == "ubuntu" || "$ID" == "debian" ]]; then
+                        echo "Detected Ubuntu/Debian system, installing brotli with apt"
+                        sudo apt-get update && sudo apt-get install -y brotli
+                    elif [[ "$ID" == "fedora" || "$ID" == "rhel" || "$ID" == "centos" ]]; then
+                        echo "Detected Fedora/RHEL/CentOS system, installing brotli with dnf/yum"
+                        sudo dnf install -y brotli || sudo yum install -y brotli
+                    else
+                        echo "Unrecognized Linux distribution, trying to install with apt"
+                        sudo apt-get update && sudo apt-get install -y brotli
+                    fi
+                else
+                    echo "Unable to determine Linux distribution, trying to install with apt"
+                    sudo apt-get update && sudo apt-get install -y brotli
+                fi
+                ;;
+            Darwin)
+                echo "Detected macOS system, installing brotli with Homebrew"
+                brew install brotli
+                ;;
+            *)
+                echo "Unrecognized operating system: $SYSTEM, cannot automatically install brotli"
+                ;;
+        esac
+        
+        # Check again if installation was successful
+        if command -v brotli &> /dev/null; then
+            echo "brotli installation successful"
+            brotli_installed=true
+        else
+            echo "brotli installation failed, will skip compression step"
+        fi
+    fi
+    
+    if $brotli_installed; then
+        echo "Compressing $input_file with brotli..."
+        brotli -q 11 -o "$output_file" "$input_file"
+        if [ $? -eq 0 ]; then
+            echo "$output_file has been created"
+            return 0
+        else
+            echo "Error: brotli compression failed"
+            return 1
+        fi
+    else
+        echo "brotli not available, skipping compression"
+        return 1
+    fi
+}
+
 # Set CURRENT_PATH to the project root directory
 CURRENT_PATH="$PROJ_DIR"
 # Define a function for the release web functionality
@@ -81,7 +159,10 @@ do_extra_webtemplate() {
     spx exportwebruntime 
     rm -rf "$dstdir" 
     cp -rf ./project/.builds/webi  "$dstdir" 
+    mv "$dstdir/engine.pck" "$dstdir/engine.zip"
     echo "exporting web runtime done: $dstdir"
+
+    compress_with_brotli "$dstdir/engine.wasm" "$dstdir/engine.wasm.br"
     # Clean up
     rm -rf "$CURRENT_PATH/.tmp"
     return 0
@@ -112,51 +193,6 @@ do_exportpack() {
     return 0
 }
 
-# Define a function for the runweb functionality
-do_runweb() {
-    local target_path="$1"
-    
-    # Default path if not provided
-    if [ -z "$target_path" ]; then
-        target_path="tutorial/01-Weather"
-    fi
-    
-    echo "Starting runweb with path: $target_path"
-    
-    # Kill any running gdspx_web_server.py processes
-    echo "Killing gdspx_web_server.py if running..."
-    
-    # 检测操作系统类型
-    if [ "$OS" = "Windows_NT" ] || [[ "$(uname -s 2>/dev/null)" == MINGW* ]]; then
-        # Windows 环境 - 使用 taskkill 命令
-        echo "Windows environment detected, using taskkill"
-        # 直接执行 taskkill 命令
-        taskkill /F /FI "IMAGENAME eq python.exe" 2>/dev/null || true
-        taskkill /F /FI "IMAGENAME eq pythonw.exe" 2>/dev/null || true
-        taskkill /F /FI "IMAGENAME eq python3.exe" 2>/dev/null || true
-    elif command -v pgrep > /dev/null; then
-        # Unix/Linux 环境 - 使用 pgrep 和 kill
-        PIDS=$(pgrep -f gdspx_web_server.py)
-        if [ -n "$PIDS" ]; then
-            echo "Killing process: $PIDS"
-            kill -9 $PIDS
-        else
-            echo "No gdspx_web_server.py process found."
-        fi
-    else
-        echo "Neither taskkill nor pgrep available, skipping process killing"
-    fi
-    
-    # Run cmdweb and start the web server
-    (cd "$PROJ_DIR/cmd/gox/" && ./install.sh --web) 
-    (cd "$CURRENT_PATH/$target_path" && spx clear && spx runweb -serveraddr=":8106") || {
-        echo "Error: Failed to run web server"
-        return 1
-    }
-    
-    echo "runweb completed successfully"
-    return 0
-}
 
 # Main function to handle arguments
 main() {
@@ -181,9 +217,6 @@ main() {
             ;;
         extrawebtemplate)
             do_extra_webtemplate
-            ;;
-        runweb)
-            do_runweb "$1"
             ;;
         *)
             echo "Unknown command: $command"

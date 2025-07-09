@@ -121,7 +121,6 @@ type IResMgr interface {
 	HasFile(p_path string) bool
 	ReloadTexture(path string)
 	FreeStr(str string)
-	SetDefaultFont(font_path string)
 }
 
 type ISceneMgr interface {
