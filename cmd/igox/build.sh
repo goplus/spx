@@ -133,8 +133,12 @@ compress_with_brotli() {
     fi
 }
 
+echo "Generating ispx wraps..."
 # Install required Go dependencies
-go generate embedded_pkgs.go
+if ! go generate embedded_pkgs.go > /dev/null 2>&1; then
+    echo "Error during go generate, showing full output:"
+    go generate embedded_pkgs.go
+fi
 go mod tidy
 
 # Detect system type

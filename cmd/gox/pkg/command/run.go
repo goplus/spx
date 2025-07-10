@@ -42,17 +42,16 @@ func (pself *CmdTool) RunPackMode(pargs ...string) error {
 	return util.RunCommandInDir(pself.RuntimeTempDir, pself.RuntimeCmdPath, args...)
 }
 
-func (pself *CmdTool) RunWebEditor() error {
-	if !util.IsFileExist(filepath.Join(pself.ProjectDir, ".builds", "web", "engineres.zip")) {
-		pself.ExportWebEditor()
-	}
-
-	return pself.runWebServer()
-}
-
 func (pself *CmdTool) RunWeb() error {
 	if !util.IsFileExist(filepath.Join(pself.ProjectDir, ".builds", "web", "game.zip")) {
 		pself.ExportWeb()
+	}
+	return pself.runWebServer()
+}
+
+func (pself *CmdTool) RunWebWorker() error {
+	if !util.IsFileExist(filepath.Join(pself.ProjectDir, ".builds", "web", "game.zip")) {
+		pself.ExportWebWorker()
 	}
 	return pself.runWebServer()
 }

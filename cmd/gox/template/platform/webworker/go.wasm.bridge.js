@@ -459,7 +459,7 @@ if (typeof self !== 'undefined' && typeof module === 'undefined') {
  * // Initialize
  * await bridge.initialize({
  *     wasmPath: './main.wasm',
- *     runtimePath: './wasm_exec.js',
+ *     runtimePath: './go.wasm.exec.js',
  *     timeout: 5000,
  *     enableDebug: true
  * });

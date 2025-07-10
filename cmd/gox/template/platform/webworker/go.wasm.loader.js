@@ -50,10 +50,6 @@ async function handleCustomCall(data) {
 
 // process main thread callback parameters, convert _SPX_CALLBACK_FUNC_ to actual proxy function
 function processMainThreadCallbacks(args) {
-  if (!args || !Array.isArray(args)) {
-    return args;
-  }
-
   var processedArgs = [];
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "_SPX_CALLBACK_FUNC_" && i + 1 < args.length) {
@@ -200,7 +196,6 @@ async function loadGoWasmModule() {
     const goBridge = new GoWasmBridge();
 
     let assetURLs = Module["gameAssetURLs"];
-
     // Initialize Go WASM module
     await goBridge.initialize({
       wasmPath: assetURLs["gdspx.wasm"],

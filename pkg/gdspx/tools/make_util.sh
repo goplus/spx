@@ -155,10 +155,10 @@ do_prepare_export() {
 do_extra_webtemplate() {
     local mode="${1:-default}"
     do_prepare_export
-    dstdir="$GOPATH/bin/gdspxrt"$TEMP_VERSION"_web"
+    dstdir="$GOPATH/bin/gdspxrt"$TEMP_VERSION"_web"$mode
     echo "exporting web runtime..."
     
-    spx exportwebruntime 
+    spx exporttemplateweb 
 
     rm -rf "$dstdir" 
     cp -rf ./project/.builds/webi  "$dstdir" 

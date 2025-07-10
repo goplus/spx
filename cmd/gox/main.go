@@ -8,6 +8,9 @@ import (
 )
 
 var (
+	//go:embed template/platform/*
+	platformFS embed.FS
+
 	//go:embed template/project/*
 	projectFS embed.FS
 
@@ -34,6 +37,7 @@ func main() {
 
 	// Initialize with provided values
 	cmd.ProjectFS = projectFS
+	cmd.PlatformFS = platformFS
 	cmd.Version = strings.TrimSpace(version)
 	cmd.GitignoreTxt = gitignoreTxt
 	cmd.RunSh = runSh
