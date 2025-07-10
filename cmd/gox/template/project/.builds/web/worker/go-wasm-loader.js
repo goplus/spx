@@ -24,7 +24,8 @@ function handleGameAppMessage(data) {
 
 async function handleProjectDataUpdate(data) {
   Module["gameProjectData"] = data.data;
-  tryRunGoWasm()
+  Module["gameAssetURLs"] = data.gameAssetURLs;
+  initExtensionWasm()
 }
 
 async function handleCustomCall(data) {
@@ -134,6 +135,9 @@ function tryRunGoWasm() {
  * This function will be called on godot_js_spx_on_engine_start callback
  */
 async function initExtensionWasm() {
+  if (Module["gameAssetURLs"] == undefined) {
+    return;
+  }
   const workerId = Module['workerID'] || 'main';
   const threadInfo = typeof importScripts !== 'undefined' ? 'Worker' : 'MainThread';
   FFI = null
@@ -195,9 +199,11 @@ async function loadGoWasmModule() {
     // Create Go WASM Bridge instance
     const goBridge = new GoWasmBridge();
 
+    let assetURLs = Module["gameAssetURLs"];
+
     // Initialize Go WASM module
     await goBridge.initialize({
-      wasmPath: './gdspx.wasm',
+      wasmPath: assetURLs["gdspx.wasm"],
       timeout: 15000,
       enableDebug: false
     });

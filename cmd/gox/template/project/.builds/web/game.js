@@ -270,12 +270,9 @@ class GameApp {
         return this.postMessageToWorkers(message);
     }
 
-    callWorkerFunction(funcName, args) {
-        // if args is not an array, convert it to an array
-        const argsArray = Array.isArray(args) ? args : [args];
-
+    callWorkerFunction(funcName, ...args) {
         // auto process arguments, convert function to main thread callback
-        const processedArgs = this.processArguments(argsArray);
+        const processedArgs = this.processArguments(...args);
 
         const message = {
             cmd: 'customCall',
@@ -289,10 +286,7 @@ class GameApp {
     }
 
     // process arguments, auto convert function to main thread callback
-    processArguments(args) {
-        if (!args || !Array.isArray(args)) {
-            return args;
-        }
+    processArguments(...args) {
 
         const processedArgs = [];
         let callbackCounter = 0;

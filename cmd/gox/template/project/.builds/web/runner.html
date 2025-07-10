@@ -95,7 +95,7 @@
 			if(EnginePackMode == "worker"){
 				// ai interaction
 				window.setAIInteractionAPIEndpoint = function (endpoint) {
-					gameApp.callWorkerFunction("setAIInteractionAPIEndpoint", [endpoint])
+					gameApp.callWorkerFunction("setAIInteractionAPIEndpoint", endpoint)
 				}
 
 				window.setAIInteractionAPITokenProvider = function (tokenProviderFunction) {

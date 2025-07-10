@@ -43,11 +43,11 @@ func loadJson(ret any, fs spxfs.Dir, file string) (err error) {
 	}
 
 	f, err := fs.Open(file)
-	defer f.Close()
 	if err != nil {
 		println("Error: failed to open file", file, err)
 		return
 	}
+	defer f.Close()
 	return json.NewDecoder(f).Decode(ret)
 }
 
