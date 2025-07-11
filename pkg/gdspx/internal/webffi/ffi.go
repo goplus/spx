@@ -11,14 +11,18 @@ var (
 	hasInitEngine bool
 )
 
+func RegisterFuncs() {
+	resiterFuncPtr2Js()
+}
+
 func Link() bool {
 	js.Global().Set("goWasmInit", js.FuncOf(goWasmInit))
+	resiterFuncPtr2Js()
 	API.loadProcAddresses()
 	return !hasInitEngine
 }
 func Linked() {
 	if !hasInitEngine { // adapt for ixgo
-		resiterFuncPtr2Js()
 		gdspxOnEngineStart(js.Value{}, nil)
 	}
 

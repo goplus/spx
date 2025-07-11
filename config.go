@@ -41,8 +41,10 @@ func loadJson(ret any, fs spxfs.Dir, file string) (err error) {
 		json.Unmarshal([]byte(value), ret)
 		return
 	}
+
 	f, err := fs.Open(file)
 	if err != nil {
+		println("Error: failed to open file", file, err)
 		return
 	}
 	defer f.Close()

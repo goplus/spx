@@ -1,4 +1,4 @@
-//go:build !js && !pure_engine
+//go:build !js
 
 /*
 ------------------------------------------------------------------------------
@@ -19,12 +19,11 @@ import "C"
 
 import (
 	"fmt"
-	"reflect"
-	"unsafe"
-
 	. "github.com/goplus/spx/v2/pkg/gdspx/internal/ffi"
 	. "github.com/goplus/spx/v2/pkg/gdspx/pkg/engine"
 	. "github.com/realdream-ai/mathf"
+	"reflect"
+	"unsafe"
 )
 
 func BindMgr(mgrs []IManager) {
@@ -502,6 +501,12 @@ func (pself *resMgr) FreeStr(str string) {
 	arg0 := (GdString)(arg0Str)
 	defer C.free(unsafe.Pointer(arg0Str))
 	CallResFreeStr(arg0)
+}
+func (pself *resMgr) SetDefaultFont(font_path string) {
+	arg0Str := C.CString(font_path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	CallResSetDefaultFont(arg0)
 }
 func (pself *sceneMgr) ChangeSceneToFile(path string) {
 	arg0Str := C.CString(path)

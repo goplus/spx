@@ -6,11 +6,13 @@ cp -f $SCRIPT_DIR/../../../cmd/gox/template/version $SCRIPT_DIR
 EDITOR_ONLY=false
 PLATFORM=""
 DOWNLOAD=false
-while getopts "p:ed" opt; do
+MODE=""
+while getopts "p:m:ed" opt; do
     case "$opt" in
         d) DOWNLOAD=true ;;
         p) PLATFORM="$OPTARG" ;;
         e) EDITOR_ONLY=true ;;
+        m) MODE="$OPTARG" ;;
         *) echo "Usage: $0 [-p platform] [-e]"; exit 1 ;;
     esac
 done
@@ -65,6 +67,7 @@ COMMON_ARGS='
             module_jpg_enabled=true 
             module_ogg_enabled=true 
             module_regex_enabled=true 
+            module_zip_enabled=true 
             module_godot_physics_2d_enabled=true '
 
 EXTRA_OPT_ARGS='disable_3d=true'
@@ -126,34 +129,40 @@ build_template() {
         # Change to godot directory
         cd $engine_dir || exit
 
-        # build web editor
-        scons platform=web target=editor $COMMON_ARGS
+        WEB_ARGS=""
+        thread_flags=""
+        if [ "$MODE" = "minigame" ]; then
+            thread_flags=".nothreads"
+            WEB_ARGS="threads=no"
+        elif [ "$MODE" = "worker" ]; then
+            # build web templates with threads(web worker)
+            thread_flags=""
+            WEB_ARGS="threads=yes proxy_to_pthread=true"
+        elif [ "$MODE" = "miniprogram" ]; then
+            thread_flags=".nothreads"
+            WEB_ARGS="threads=no"
+        else 
+            thread_flags=""
+            WEB_ARGS="threads=yes"
+        fi
 
-           
-        cp bin/godot.web.editor.wasm32.zip bin/web_editor.zip
-        cp bin/web_editor.zip $GOPATH/bin/gdspx$VERSION"_web.zip"
-        if [ "$EDITOR_ONLY" = true ]; then
-            exit 0
-        fi 
-        thread_flags=".nothreads"
-        # build web templates
-        scons platform=web target=template_release threads=no $COMMON_ARGS $EXTRA_OPT_ARGS 
-        # optimize=debug #better js code
-        
+        echo "scons platform=web target=template_release $COMMON_ARGS $EXTRA_OPT_ARGS $WEB_ARGS"
+        scons platform=web target=template_release $COMMON_ARGS $EXTRA_OPT_ARGS $WEB_ARGS
         echo "Wait zip file to finished ..."
-        sleep 2
+        sleep 1
         cp bin/godot.web.template_release.wasm32$thread_flags.zip bin/web_dlink_debug.zip
+        cp bin/web_dlink_debug.zip $GOPATH/bin/gdspx$VERSION"_webpack.zip"
+
         rm "$template_dir"/web_*.zip
-        cp bin/web_dlink_debug.zip "$template_dir/web_dlink_debug.zip"
-        cp bin/web_dlink_debug.zip "$template_dir/web_dlink_release.zip"
         cp bin/web_dlink_debug.zip "$template_dir/web_dlink_nothreads_debug.zip"
         cp bin/web_dlink_debug.zip "$template_dir/web_dlink_nothreads_release.zip"
-        cp bin/web_dlink_debug.zip "$template_dir/web_debug.zip"
-        cp bin/web_dlink_debug.zip "$template_dir/web_release.zip"
         cp bin/web_dlink_debug.zip "$template_dir/web_nothreads_debug.zip"
         cp bin/web_dlink_debug.zip "$template_dir/web_nothreads_release.zip"
-        # copy to tool dir
-        cp bin/web_dlink_debug.zip $GOPATH/bin/gdspx$VERSION"_webpack.zip"
+        cp bin/web_dlink_debug.zip "$template_dir/web_dlink_debug.zip"
+        cp bin/web_dlink_debug.zip "$template_dir/web_dlink_release.zip"
+        cp bin/web_dlink_debug.zip "$template_dir/web_debug.zip"
+        cp bin/web_dlink_debug.zip "$template_dir/web_release.zip"
+
     else
         echo "Unknown platform"
     fi
@@ -343,112 +352,6 @@ exportweb() {
     echo "exportweb completed successfully"
     return 0
 }
-
-# Define a function for the exportpack functionality
-exportpack() {
-    echo "Starting exportpack..."
-    
-    # Check GOPATH
-    if [ -z "$GOPATH" ]; then
-        # If GOPATH is not set, attempt to get it
-        if command -v go > /dev/null; then
-            if [ "$OS" = "Windows_NT" ]; then
-                IFS=';' read -r GOPATH _ <<< "$(go env GOPATH)"
-            else
-                IFS=':' read -r GOPATH _ <<< "$(go env GOPATH)"
-            fi
-        fi
-        
-        if [ -z "$GOPATH" ]; then
-            echo "Error: GOPATH is not set"
-            return 1
-        fi
-    fi
-    
-    # Create temporary directory and copy files
-    rm -rf "$PROJ_DIR/.tmp/web" 
-    mkdir -p "$PROJ_DIR/.tmp/web" 
-    cp "$PROJ_DIR/cmd/gox/template/project/runtime.gdextension.txt" "$GOPATH/bin/runtime.gdextension" || {
-        echo "Error: Failed to prepare exportpack environment"
-        return 1
-    }
-    
-    # Execute the exportpack commands
-    cd "$PROJ_DIR/.tmp/web" 
-    mkdir -p assets 
-    echo '{"map":{"width":480,"height":360}}' > assets/index.json 
-    echo "" > main.spx 
-    rm -rf ./project/.builds/*web 
-    mkdir -p "$GOPATH/bin" 
-    echo "exporting pck..."
-
-    spx export 
-    TEMP_VERSION=$(cat "$PROJ_DIR/cmd/gox/template/version") 
-    OUTPUT_PCK="$GOPATH/bin/gdspxrt$TEMP_VERSION.pck" 
-    echo $OUTPUT_PCK
-    # Check if the files exist before copying
-    if [ -f "./project/.builds/pc/gdexport.pck" ]; then
-        echo "Copying gdexport.pck to $OUTPUT_PCK"
-        cp "./project/.builds/pc/gdexport.pck" "$OUTPUT_PCK"
-    fi
-    
-    # For macOS builds
-    if [ -d "./project/.builds/pc/gdexport.app/Contents/Resources" ] && \
-       [ "$(ls -A ./project/.builds/pc/gdexport.app/Contents/Resources/*.pck 2>/dev/null)" ]; then
-        echo "Copying macOS resources to $OUTPUT_PCK"
-        cp ./project/.builds/pc/gdexport.app/Contents/Resources/*.pck "$OUTPUT_PCK"
-    fi
-    
-
-    echo "exporting web runtime..."
-    spx exportwebruntime 
-    dstdir="$GOPATH/bin/gdspxrt"$TEMP_VERSION"_web"
-    rm -rf "$dstdir" 
-    cp -rf ./project/.builds/webi  "$dstdir" 
-    
-    # Clean up
-    rm -rf "$PROJ_DIR/.tmp"
-    echo "exportpack completed successfully"
-    return 0
-}
-
-# Define a function for the runweb functionality
-runweb() {
-    local target_path="$1"
-    
-    # Default path if not provided
-    if [ -z "$target_path" ]; then
-        target_path="tutorial/01-Weather"
-    fi
-    
-    echo "Starting runweb with path: $target_path"
-    
-    # Kill any running gdspx_web_server.py processes
-    echo "Killing gdspx_web_server.py if running..."
-    if command -v pgrep > /dev/null; then
-        PIDS=$(pgrep -f gdspx_web_server.py)
-        if [ -n "$PIDS" ]; then
-            echo "Killing process: $PIDS"
-            kill -9 $PIDS
-        else
-            echo "No gdspx_web_server.py process found."
-        fi
-    else
-        echo "pgrep command not found, skipping process killing"
-    fi
-    
-    # Run cmdweb and start the web server
-    (cd "$PROJ_DIR/cmd/gox/" && ./install.sh --web) 
-    (cd "$PROJ_DIR/$target_path" && spx clear && spx runweb -serveraddr=":8106") || {
-        echo "Error: Failed to run web server"
-        return 1
-    }
-    
-    echo "runweb completed successfully"
-    return 0
-}
-
-
 
 # main logic
 if [ "$DOWNLOAD" = true ]; then

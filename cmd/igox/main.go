@@ -149,7 +149,6 @@ func logErrorAndExit(msg string, err error) {
 }
 
 func main() {
-	println("hello world go wasm")
 	js.Global().Set("setAIInteractionAPIEndpoint", js.FuncOf(setAIInteractionAPIEndpoint))
 	js.Global().Set("setAIInteractionAPITokenProvider", js.FuncOf(setAIInteractionAPITokenProvider))
 	js.Global().Set("goLoadData", js.FuncOf(loadData))
@@ -159,6 +158,9 @@ func main() {
 	js.Global().Set("gdspx_on_engine_update", js.FuncOf(gdspxOnEngineUpdate))
 	js.Global().Set("gdspx_on_engine_fixed_update", js.FuncOf(gdspxOnEngineFixedUpdate))
 	js.Global().Set("gdspx_on_engine_destroy", js.FuncOf(gdspxOnEngineDestroy))
+
+	// register FFI for worker mode
+	spxEngineRegisterFFI()
 	zipData := <-dataChannel
 
 	zipReader, err := zip.NewReader(bytes.NewReader(zipData), int64(len(zipData)))
@@ -262,5 +264,8 @@ func Gopt_Player_Gopx_OnCmd[T any](p *Player, handler func(cmd T) error) {
 	}
 }
 
-//go:linkname spxEngineWaitNextFrame github.com/goplus/spx/internal/engine.WaitNextFrame
+//go:linkname spxEngineWaitNextFrame github.com/goplus/spx/v2/internal/engine.WaitNextFrame
 func spxEngineWaitNextFrame() float64
+
+//go:linkname spxEngineRegisterFFI github.com/goplus/spx/v2/pkg/gdspx/internal/engine.RegisterFFI
+func spxEngineRegisterFFI()

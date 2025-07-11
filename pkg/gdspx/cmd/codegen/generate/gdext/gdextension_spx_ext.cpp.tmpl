@@ -30,7 +30,7 @@
 
 #include "gdextension_spx_ext.h"
 #include "core/extension/gdextension.h"
-#include "core/extension/gdextension_compat_hashes.h"
+#include "core/extension/gdextension_special_compat_hashes.h"
 #include "core/variant/variant.h"
 #include "gdextension_interface.h"
 #include "scene/main/window.h"
