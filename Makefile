@@ -213,7 +213,7 @@ run-web-worker: runwebworker
 runwebworker:
 	make stop &&\
 	make build-wasm &&\
-	cd $(path) && spx clear && spx runweb -serveraddr=":$(port)" -mode=worker && cd $(CURRENT_PATH)
+	cd $(path) && spx clear && spx runwebworker -serveraddr=":$(port)" && cd $(CURRENT_PATH)
 
 # Run minigame
 run-minigame: runmg
@@ -231,6 +231,13 @@ runmgopt:
 run-miniprogram: runmp
 runmp:
 	make install &&\
+	cd  $(path) && spx exportminiprogram && cd $(CURRENT_PATH) &&\
+	make serve
+
+# Run miniprogram
+run-miniprogram-opt: runmpopt
+runmpopt:
+	make build-wasm-opt &&\
 	cd  $(path) && spx exportminiprogram && cd $(CURRENT_PATH) &&\
 	make serve
 

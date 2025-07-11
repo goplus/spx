@@ -39,6 +39,23 @@
 			width: 100%;
 			height: 100%;
 		}
+
+		#debug-info {
+			position: absolute;
+			top: 10px;
+			right: 10px;
+			background-color: rgba(0, 0, 0, 0.7);
+			color: #fff;
+			padding: 8px 12px;
+			border-radius: 4px;
+			font-family: monospace;
+			font-size: 12px;
+			max-width: 300px;
+			white-space: pre-wrap;
+			word-break: break-all;
+			z-index: 1000;
+			display: none;
+		}
 	</style>
 </head>
 
@@ -52,18 +69,55 @@
 		<div id="tab-game" style="display: none;">
 			<canvas id="game-canvas" tabindex="2"></canvas>
 		</div>
+		<div id="debug-info"></div>
 	</div>
 
 	<script>var miniEngine = null</script>
 	<script>var isWasmCompressed = false</script>
 	<script src="engine.js"></script>
-	<script src="wasm_exec.js"></script>
+	<script src="storage.manager.js"></script>
+	<script src="worker.message.manager.js"></script>
+	<script src="go.wasm.exec.js"></script>
 	<script src="game.js"></script>
+	<script src="wxsdk.js"></script>
 	<script>
 		"use strict";
 		let gameApp = null;
 		let isShowEditor = false;
 		let onGameErrorCallback = null;
+		let debugInfoInterval = null;
+
+		// 更新 debug info 显示
+		function updateDebugInfo() {
+			const debugElement = document.getElementById('debug-info');
+			if (gameApp && gameApp.debugInfo && debugElement) {
+				debugElement.textContent = gameApp.debugInfo;
+				debugElement.style.display = 'block';
+			} else if (debugElement) {
+				debugElement.style.display = 'none';
+			}
+		}
+
+		// 开始 debug info 更新
+		function startDebugInfoUpdate() {
+			if (debugInfoInterval) {
+				clearInterval(debugInfoInterval);
+			}
+			debugInfoInterval = setInterval(updateDebugInfo, 1000); // 每秒更新一次
+		}
+
+		// 停止 debug info 更新
+		function stopDebugInfoUpdate() {
+			if (debugInfoInterval) {
+				clearInterval(debugInfoInterval);
+				debugInfoInterval = null;
+			}
+			const debugElement = document.getElementById('debug-info');
+			if (debugElement) {
+				debugElement.style.display = 'none';
+			}
+		}
+
 		// Detect current environment, use relative path for local development, absolute path for production
 		let urlPrefix = "";
 		if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
@@ -73,7 +127,12 @@
 			urlPrefix = "https://jiepengtan.github.io/miniprogram-web-game/"; // Production environment
 			console.log("🌐 Production environment detected, using remote resources");
 		}
-		
+
+		if (typeof wx !== 'undefined' && wx.miniProgram) {
+			console.log("🔄 wx.miniProgram detected");
+		} else {
+			console.log("❌ wx.miniProgram not detected");
+		}
 
 		// Batch send cached logs
 		function flushLogQueue() {
@@ -154,7 +213,8 @@
 				'onProgress': onProgress,
 				"gameCanvas": canvas,
 				"projectData": new Uint8Array(buffer),
-				"logLevel": LOG_LEVEL_NONE,
+				"logLevel": LOG_LEVEL_VERBOSE,
+				"useAssetCache": true,
 				"assetURLs": {
 					"engine.zip": urlPrefix + "engine.zip",
 					"gdspx.wasm": urlPrefix + "gdspx.wasm",
@@ -165,13 +225,16 @@
 
 			if (gameApp != null) {
 				await gameApp.StopGame();
+				stopDebugInfoUpdate(); // 停止 debug info 更新
 			}
 
 			try {
 				// Try to install project and run game
 				gameApp = new GameApp(config);
 				await gameApp.RunGame();
+				startDebugInfoUpdate(); // 开始 debug info 更新
 			} catch (error) {
+				stopDebugInfoUpdate(); // 出错时停止 debug info 更新
 				console.error("Stack trace:", error.stack);
 				throw error;
 			}
@@ -190,6 +253,7 @@
 		// Send message to mini program
 		function sendMessageToMiniProgram(type, data) {
 			if (typeof wx !== 'undefined' && wx.miniProgram) {
+				console.log("sendMessageToMiniProgram", type, data);
 				wx.miniProgram.postMessage({
 					data: { type, data }
 				});
@@ -199,14 +263,24 @@
 		// Set error callback
 		onGameError(function (callback) {
 			console.error("onGameError", callback);
+			stopDebugInfoUpdate(); // 出错时停止 debug info 更新
 			// Send error message to mini program
 			sendMessageToMiniProgram('gameError', { error: callback });
+		});
+
+		// 页面卸载时清理定时器
+		window.addEventListener('beforeunload', function() {
+			stopDebugInfoUpdate();
 		});
 
 		// Wait for all scripts to load and automatically start the game
 		function waitForScriptsAndStart() {
 			const params = getUrlParams();
-			console.log("📋 Received parameters:", params);
+			console.log("📋 Received parameters:1111", params);
+			sendMessageToMiniProgram(
+				'web-reply',
+				 '网页已收到消息'
+			);
 			startGame(params);
 		}
 
@@ -215,6 +289,16 @@
 			console.log("DOM loaded, waiting for scripts...");
 			waitForScriptsAndStart();
 		});
+
+		
+        window.addEventListener('message', function(event) {
+            log(`web-view 📨 收到消息: ${JSON.stringify(event.data)}`);
+			    // 可选：向小程序发送回复
+			window.parent.postMessage({
+				type: 'web-reply',
+				data: '网页已收到消息'
+			}, '*');
+        });
 	</script>
 </body>
 

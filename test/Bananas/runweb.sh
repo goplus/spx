@@ -1,8 +1,8 @@
 
 mkdir  res/
 GOEXPERIMENT=noregabi GOOS=js GOARCH=wasm go build --tags canvas -o test.wasm
-cp -f "$(go env GOROOT)/misc/wasm/wasm_exec.js" ./
-cp -f "$(go env GOROOT)/misc/wasm/wasm_exec.html" ./
+cp -f "$(go env GOROOT)/misc/wasm/go.wasm.exec.js" ./
+cp -f "$(go env GOROOT)/misc/wasm/go.wasm.exec.html" ./
 cp -f -p ../res/* ./res/
 
 
@@ -33,8 +33,8 @@ func main() {
 	})))
 }'> server.go
 go run server.go
-rm -rf wasm_exec.js
-rm -rf wasm_exec.html
+rm -rf go.wasm.exec.js
+rm -rf go.wasm.exec.html
 rm -rf server.go
 rm -rf res/
 rm -rf *.wasm

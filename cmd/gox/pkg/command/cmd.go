@@ -29,6 +29,7 @@ type CmdTool struct {
 
 	// Resource files
 	ProjectFS    embed.FS // Embedded project filesystem
+	PlatformFS   embed.FS // Embedded platform filesystem
 	GitignoreTxt string   // Gitignore template content
 	RunSh        string   // Run script content
 	MainSh       string   // Main script content
@@ -156,7 +157,12 @@ func (cmd *CmdTool) executeCommand() error {
 	}
 
 	// Then, handle execution phase
-	return cmd.handleExecutionPhase()
+	err := cmd.handleExecutionPhase()
+	if err != nil {
+		println("executeCommand error: ", err.Error())
+	}
+	return err
+
 }
 
 // handleBuildPhase handles the build phase for commands that need it
@@ -198,18 +204,18 @@ func (cmd *CmdTool) handleExecutionPhase() error {
 		return cmd.executeRune()
 	case "run":
 		return cmd.executeRun()
-	case "export":
-		return cmd.Export()
-	case "exportwebruntime":
-		return cmd.ExportWebRuntime()
 	case "runweb":
 		return cmd.RunWeb()
+	case "runwebworker":
+		return cmd.RunWebWorker()
+	case "export":
+		return cmd.Export()
+	case "exporttemplateweb":
+		return cmd.ExportTemplateWeb()
 	case "exportweb":
 		return cmd.ExportWeb()
-	case "runwebeditor":
-		return cmd.RunWebEditor()
-	case "exportwebeditor":
-		return cmd.ExportWebEditor()
+	case "exportwebworker":
+		return cmd.ExportWebWorker()
 	case "exportapk":
 		return cmd.ExportApk()
 	case "exportios":
