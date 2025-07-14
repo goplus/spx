@@ -10,6 +10,7 @@ CURRENT_PATH=$(shell pwd)
 path ?= tutorial/01-Weather
 port ?= 8106
 mode ?= ""
+movie ?= false
 
 # Help target - displays available commands
 help:
@@ -55,6 +56,7 @@ help:
 	@echo "  path=<dir>       - Specify demo path (default: tutorial/06-worker)"
 	@echo "  port=<num>       - Specify port number (default: 8106)"
 	@echo "  mode=<mode>      - Specify mode (default: empty)"
+	@echo "  movie=<bool>     - Specify movie mode (default: false)"
 	@echo ""
 	@echo "Usage Examples:"
 	@echo "  make build-desktop                    - Build for current platform"
@@ -190,11 +192,11 @@ exportweb:
 # Run demo on PC editor mode
 run-editor: rune
 rune:
-	cd  $(path) && spx rune . && cd $(CURRENT_PATH) 
+	cd  $(path) && spx rune -movie=$(movie) && cd $(CURRENT_PATH) 
 
 # Run demo on PC (runtime mode)
 run:
-	cd  $(path) && spx run . && cd $(CURRENT_PATH) 
+	cd  $(path) && spx run -movie=$(movie) && cd $(CURRENT_PATH) 
 
 # Run tests
 test: runtest

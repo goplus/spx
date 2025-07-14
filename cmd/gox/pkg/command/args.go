@@ -25,6 +25,7 @@ type ExtraArgs struct {
 	FullScreen      *bool
 	Build           *string
 	Mode            *string
+	Movie           *bool
 }
 
 func (e *ExtraArgs) String() []string {
@@ -110,6 +111,7 @@ func (cmd *CmdTool) initializeFlags() *bool {
 	cmd.Args.FullScreen = f.Bool("fullscreen", false, "full screen")
 	cmd.Args.Build = f.String("build", "normal", "build mode: normal or fast")
 	cmd.Args.Mode = f.String("mode", "none", "mode: none, worker, minigame")
+	cmd.Args.Movie = f.Bool("movie", false, "record movie mode")
 	return help
 }
 

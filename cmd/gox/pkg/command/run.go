@@ -39,6 +39,7 @@ func (pself *CmdTool) RunPackMode(pargs ...string) error {
 	args = append(args, pself.RuntimeTempDir)
 	args = append(args, "--gdextpath")
 	args = append(args, extensionPath)
+
 	return util.RunCommandInDir(pself.RuntimeTempDir, pself.RuntimeCmdPath, args...)
 }
 

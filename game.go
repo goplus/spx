@@ -256,6 +256,7 @@ func Gopt_Game_Run(game Gamer, resource any, gameConf ...*Config) {
 		f.Bool("nomap", false, "server mode")
 		f.Bool("debugweb", false, "server mode")
 		f.String("gdextpath", "", "godot extension path")
+		f.String("write-movie", "", "movie mode")
 
 		// godot args
 		f.String("path", "", "gdspx project path")
