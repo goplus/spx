@@ -124,8 +124,7 @@ func getValueRef(target reflect.Value, name string, from int) reflect.Value {
 }
 
 const (
-	getVarPrefix   = "getVar:"
-	getTimerPrefix = "getProp:"
+	getVarPrefix = "getVar:"
 )
 
 func buildMonitorEval(g reflect.Value, t, val string) func() string {
@@ -136,6 +135,10 @@ func buildMonitorEval(g reflect.Value, t, val string) func() string {
 	switch {
 	case strings.HasPrefix(val, getVarPrefix):
 		name := val[len(getVarPrefix):]
+		if name == "" {
+			log.Println("Bind monitor error: name is empty")
+			return nil
+		}
 		// check field
 		ref := getValueRef(target, name, from)
 		if ref.IsValid() {
@@ -164,9 +167,9 @@ func buildMonitorEval(g reflect.Value, t, val string) func() string {
 				}
 			}
 		}
-		log.Println("[WARN] Monitor: prop or method(getter) not found -", name, target)
+		log.Println("Bind monitor error: cannot find property or method (getter):", name)
 	default:
-		log.Println("[WARN] Monitor: unknown command -", val)
+		log.Println("Bind monitor error: unknown command:", val)
 	}
 	return nil
 }
