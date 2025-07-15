@@ -99,8 +99,15 @@ class VideoRecorder {
             this.videoDuration = null;
 
             // 设置FFmpeg事件监听器
-            this.ffmpeg.on("log", ({ message }) => {
-                this.logVerbose('FFmpeg日志:', message);
+            this.ffmpeg.on("log", ({ type, message }) => {
+                // 根据日志类型进行处理
+                if (type === 'fferr' || message.includes('error') || message.includes('Error')) {
+                    // 错误日志始终显示
+                    this.logger(`FFmpeg错误: ${message}`);
+                } else {
+                    this.logVerbose(`FFmpeg日志[${type}]: ${message}`);
+                }
+                
                 // 只在转码阶段处理进度
                 // 转码阶段 - 提取当前帧数并计算百分比
                 const frameMatch = message.match(/frame=\s*(\d+)/);
@@ -264,9 +271,17 @@ class VideoRecorder {
             // 创建预览
             this.createPreview();
 
-            // 只下载WebM格式文件，不自动转换为MP4
-            this.logger('录制完成，可以下载WebM格式文件');
-            this.downloadWebM();
+            // 检查录制数据的有效性
+            const webmBlob = new Blob(this.chunks, { type: 'video/webm' });
+            const sizeMB = (webmBlob.size / 1024 / 1024).toFixed(2);
+            this.logger(`录制完成，WebM文件大小: ${sizeMB} MB，可以下载WebM格式文件`);
+            
+            // 如果文件太小，可能录制有问题
+            if (webmBlob.size < 1024) {
+                this.logger('警告: 录制文件过小，可能录制有问题');
+            }
+
+            this.downloadMp4();
 
         } catch (error) {
             this.logger('处理录制失败: ' + error.message);
@@ -291,18 +306,41 @@ class VideoRecorder {
             this.updateTranscodeProgress(0, 0);
 
             console.time('transcode');
+            
+            // 先检查输入文件是否存在
+            try {
+                const inputFile = await this.ffmpeg.readFile(inputFileName);
+                this.logger(`输入文件大小: ${(inputFile.length / 1024 / 1024).toFixed(2)} MB`);
+            } catch (error) {
+                throw new Error(`输入文件读取失败: ${error.message}`);
+            }
+
+            // 执行转码，使用更兼容的参数，并修正视频尺寸
             await this.ffmpeg.exec([
                 '-i', inputFileName,
+                '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',  // 确保宽高都是偶数
                 '-c:v', 'libx264',
-                '-preset', 'fast',
-                '-crf', '23',
+                '-preset', 'ultrafast',  // 使用更快的预设
+                '-crf', '28',            // 稍微降低质量以提高兼容性
+                '-pix_fmt', 'yuv420p',   // 确保像素格式兼容
                 '-movflags', '+faststart',
+                '-y',                    // 覆盖输出文件
                 outputFileName
             ]);
             console.timeEnd('transcode');
 
-            this.logger('读取转码后的文件...');
-            const mp4Data = await this.ffmpeg.readFile(outputFileName);
+            this.logger('检查输出文件...');
+            // 检查输出文件是否存在且有内容
+            let mp4Data;
+            try {
+                mp4Data = await this.ffmpeg.readFile(outputFileName);
+                if (!mp4Data || mp4Data.length === 0) {
+                    throw new Error('输出文件为空');
+                }
+                this.logger(`输出文件大小: ${(mp4Data.length / 1024 / 1024).toFixed(2)} MB`);
+            } catch (error) {
+                throw new Error(`输出文件读取失败: ${error.message}`);
+            }
 
             // 清理临时文件
             await this.ffmpeg.deleteFile(inputFileName);
@@ -315,7 +353,18 @@ class VideoRecorder {
             return new Blob([mp4Data.buffer], { type: 'video/mp4' });
 
         } catch (error) {
-            this.logger('转码失败: ' + error.message);
+            let errorMsg = error.message;
+            
+            // 检查是否是常见的编码错误
+            if (errorMsg.includes('height not divisible by 2') || errorMsg.includes('width not divisible by 2')) {
+                errorMsg = '视频尺寸不兼容libx264编码器（尺寸必须为偶数）';
+            } else if (errorMsg.includes('libx264')) {
+                errorMsg = 'H.264编码器错误: ' + errorMsg;
+            } else if (errorMsg.includes('output stream')) {
+                errorMsg = '输出流初始化失败: ' + errorMsg;
+            }
+            
+            this.logger('转码失败: ' + errorMsg);
             this.hideTranscodeProgress();
             updateStatus('转码失败', 'ready');
             return null;
@@ -348,7 +397,6 @@ class VideoRecorder {
     }
 
     async getBasicVideoInfo(fileName) {
-
     }
 
     // 估算录制时长的辅助方法
@@ -428,8 +476,9 @@ class VideoRecorder {
                 
                 const initSuccess = await this.initFFmpeg();
                 if (!initSuccess) {
-                    this.logger('FFmpeg初始化失败，无法转换为MP4');
-                    updateStatus('转码器初始化失败', 'ready');
+                    this.logger('FFmpeg初始化失败，无法转换为MP4，回退到WebM下载');
+                    updateStatus('转码器初始化失败，下载WebM格式', 'ready');
+                    this.downloadWebM();
                     return false;
                 }
             }
@@ -438,18 +487,21 @@ class VideoRecorder {
             updateStatus('转码中...', 'recording');
 
             const mp4Blob = await this.transcodeToMP4();
-            if (mp4Blob) {
+            if (mp4Blob && mp4Blob.size > 0) {
                 this.downloadMp4File(mp4Blob);
                 return true;
             } else {
-                this.logger('转码失败');
-                updateStatus('转码失败', 'ready');
+                this.logger('转码失败或输出文件为空，回退到WebM下载');
+                updateStatus('转码失败，下载WebM格式', 'ready');
+                this.downloadWebM();
                 return false;
             }
 
         } catch (error) {
             this.logger('MP4转换失败: ' + error.message);
-            updateStatus('转码失败', 'ready');
+            this.logger('回退到WebM下载');
+            updateStatus('转码失败，下载WebM格式', 'ready');
+            this.downloadWebM();
             return false;
         }
     }
@@ -470,11 +522,17 @@ class VideoRecorder {
             const videoURL = URL.createObjectURL(fullBlob);
 
             const previewVideo = document.getElementById('previewVideo');
-            previewVideo.src = videoURL;
-            previewVideo.style.display = 'block';
-
-            const sizeMB = (fullBlob.size / 1024 / 1024).toFixed(2);
-            this.logger(`预览创建成功，文件大小: ${sizeMB} MB`);
+            if (previewVideo) {
+                previewVideo.src = videoURL;
+                previewVideo.style.display = 'block';
+                
+                const sizeMB = (fullBlob.size / 1024 / 1024).toFixed(2);
+                this.logger(`预览创建成功，文件大小: ${sizeMB} MB`);
+            } else {
+                this.logger('预览元素未找到，跳过预览创建');
+                // 清理URL对象
+                URL.revokeObjectURL(videoURL);
+            }
 
         } catch (error) {
             this.logger('创建预览失败: ' + error.message);
