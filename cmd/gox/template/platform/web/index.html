@@ -6,6 +6,9 @@
 	<meta name="viewport"
 		content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no">
 	<title>XGo Builder</title>
+	<script src="ffmpeg/ffmpeg/package/dist/umd/ffmpeg.js"></script>
+	<script src="ffmpeg/util/package/dist/umd/index.js"></script>
+	<script src="videoRecorder.js"></script>
 	<style>
 		*:focus {
 			outline: none;
@@ -58,6 +61,112 @@
 				left: calc(100% - 50px);
 			}
 		}
+
+		/* 录制相关样式 */
+		.recording-controls {
+			margin: 20px 0;
+			padding: 15px;
+			background-color: #444;
+			border-radius: 8px;
+		}
+
+		.recording-checkbox {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			margin-bottom: 15px;
+		}
+
+		.recording-checkbox input[type="checkbox"] {
+			width: 20px;
+			height: 20px;
+			cursor: pointer;
+		}
+
+		.recording-checkbox label {
+			font-size: 16px;
+			cursor: pointer;
+		}
+
+		.status {
+			margin: 10px 0;
+			padding: 10px;
+			font-size: 16px;
+			border-radius: 5px;
+			text-align: center;
+		}
+		
+		.status.recording {
+			background: #ffebee;
+			color: #c62828;
+		}
+		
+		.status.ready {
+			background: #e8f5e8;
+			color: #2e7d32;
+		}
+		
+		.status.success {
+			background: #e3f2fd;
+			color: #1976d2;
+		}
+
+		.progress-section {
+			background: #555;
+			border: 1px solid #666;
+			border-radius: 8px;
+			padding: 20px;
+			margin: 20px 0;
+			display: none;
+		}
+		
+		.progress-bar {
+			width: 100%;
+			height: 25px;
+			background: #666;
+			border-radius: 12px;
+			overflow: hidden;
+			margin: 15px 0;
+			box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
+		}
+		
+		.progress-fill {
+			height: 100%;
+			background: linear-gradient(90deg, #4CAF50, #45a049);
+			width: 0%;
+			transition: width 0.3s ease;
+			border-radius: 12px;
+			position: relative;
+		}
+		
+		.progress-fill::after {
+			content: '';
+			position: absolute;
+			top: 0;
+			left: 0;
+			right: 0;
+			bottom: 0;
+			background: linear-gradient(90deg, rgba(255,255,255,0.2), rgba(255,255,255,0.1), rgba(255,255,255,0.2));
+			animation: shimmer 2s infinite;
+		}
+		
+		@keyframes shimmer {
+			0% { transform: translateX(-100%); }
+			100% { transform: translateX(100%); }
+		}
+
+		#transcode-message {
+			font-size: 16px;
+			font-weight: bold;
+			color: #fff;
+			margin: 0 0 10px 0;
+		}
+		
+		#transcode-time-info {
+			font-size: 14px;
+			color: #ccc;
+			margin: 10px 0 0 0;
+		}
 	</style>
 </head>
 
@@ -66,6 +175,25 @@
 	<button id="stopGameBtn">Stop</button>
 	<button id="startNewGameBtn">StartNew</button>
 	<progress id="progress-bar" value="0" max="1" style="display: none;"></progress>
+	
+	<!-- 录制控制区域 -->
+	<div class="recording-controls">
+		<div class="recording-checkbox">
+			<input type="checkbox" id="recordingCheckbox">
+			<label for="recordingCheckbox">启用视频录制（游戏开始时自动录制，结束时自动下载）</label>
+		</div>
+		<div id="recordingStatus" class="status ready" style="display: none;">录制器就绪</div>
+	</div>
+
+	<!-- 转码进度区域 -->
+	<div id="transcode-section" class="progress-section">
+		<p id="transcode-message">准备转码...</p>
+		<div class="progress-bar">
+			<div id="transcode-progress-fill" class="progress-fill"></div>
+		</div>
+		<p id="transcode-time-info">转码时间: 0s</p>
+	</div>
+
 	<div id="tabs">
 		<div id="tab-loader">
 		</div>
@@ -81,6 +209,26 @@
 	<iframe id="runnerFrame" src="runner.html" width="1600" height="700"></iframe>
 
 	<script>
+		// 全局变量
+		let videoRecorder = null;
+		let isRecording = false;
+
+		// 状态更新函数
+		function updateStatus(message, type = 'ready') {
+			const statusDiv = document.getElementById('recordingStatus');
+			if (statusDiv) {
+				statusDiv.textContent = message;
+				statusDiv.className = `status ${type}`;
+				statusDiv.style.display = 'block';
+				console.log(`录制状态: ${message}`);
+			}
+		}
+
+		// 日志函数
+		function log(message) {
+			console.log(`[录制器] ${message}`);
+		}
+
 		window.addEventListener('load', function() {
 			animateBox();
 		});
@@ -106,6 +254,7 @@
 		document.getElementById('startGameBtn').addEventListener('click', startGame);
 		document.getElementById('stopGameBtn').addEventListener('click', stopGame);
 		runnerWindow = document.getElementById('runnerFrame').contentWindow;
+
 		function onProgress(value) {
 			document.getElementById('progress-bar').value = value;
 			if (value >= 1) {
@@ -120,10 +269,37 @@
 		}
 
 		async function startGame() {
+			// 检查是否需要录制
 			await startProject('/game.zip')
+			const recordingCheckbox = document.getElementById('recordingCheckbox');
+			const shouldRecord = recordingCheckbox.checked;
+			if (shouldRecord) {
+				await videoRecorder.init();
+			}
+			if (shouldRecord && videoRecorder) {
+				const success = videoRecorder.start();
+				if (success) {
+					isRecording = true;
+					log('游戏开始，自动开始录制视频');
+				} else {
+					log('自动录制失败');
+				}
+			}
 		}
 
 		async function stopGame() {
+			// 如果正在录制，停止录制并自动下载
+			if (isRecording && videoRecorder) {
+				const success = videoRecorder.stop();
+				if (success) {
+					isRecording = false;
+					log('游戏结束，自动停止录制视频，开始转码处理...');
+					// 转码和下载现在是自动的，不需要手动调用
+				} else {
+					log('自动停止录制失败');
+				}
+			}
+
 			runnerWindow.stopGame()
 		}
 
@@ -140,6 +316,7 @@
 				runnerWindow.setAIInteractionAPIEndpoint("http://127.0.0.1:8000")
 			});
 		}
+
 	</script>
 </body>
 
