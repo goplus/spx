@@ -101,7 +101,7 @@ func (pself *CmdTool) genGo() string {
 		util.RunGoplus(envVars, "go", tagStr)
 	}
 	os.MkdirAll(pself.GoDir, 0755)
-	os.Rename(path.Join(spxProjPath, "gop_autogen.go"), path.Join(pself.GoDir, "main.go"))
+	os.Rename(path.Join(spxProjPath, "xgo_autogen.go"), path.Join(pself.GoDir, "main.go"))
 	os.Chdir(projectDir)
 	util.RunGolang(nil, "mod", "tidy")
 	os.Chdir(rawdir)

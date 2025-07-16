@@ -734,17 +734,20 @@ type clicker interface {
 	Visible() bool
 }
 
-func (p *Game) doWhenLeftButtonDown(ev *eventLeftButtonDown) {
-	// add a global click cooldown
-	if !p.inputs.canTriggerClickEvent(inputGlobalClickTimerId) {
-		return
-	}
-
+func (p *Game) doWhenLeftButtonUp(ev *eventLeftButtonUp) {
 	point := ev.Pos
+	p.inputs.checkTracking(point)
+}
+
+func (p *Game) doWhenLeftButtonDown(ev *eventLeftButtonDown) {
+	point := ev.Pos
+
+	// Detect target sprite for both swipe and click events
 	tempItems := p.getTempShapes()
 	count := len(tempItems)
 
 	var target clicker = nil
+	var targetSprite *SpriteImpl = nil
 	for i := 0; i < count; i++ {
 		item := tempItems[count-i-1]
 		if o, ok := item.(clicker); ok {
@@ -753,10 +756,22 @@ func (p *Game) doWhenLeftButtonDown(ev *eventLeftButtonDown) {
 				isClicked := spriteMgr.CheckCollisionWithPoint(syncSprite.GetId(), point, true)
 				if isClicked {
 					target = o
+					// Try to get the SpriteImpl from the clicker
+					if sprite, ok := o.(*SpriteImpl); ok {
+						targetSprite = sprite
+					}
 					break
 				}
 			}
 		}
+	}
+
+	// Start swipe tracking with detected target sprite (can be nil for stage swipes)
+	p.inputs.startTracking(point, targetSprite)
+
+	// add a global click cooldown
+	if !p.inputs.canTriggerClickEvent(inputGlobalClickTimerId) {
+		return
 	}
 
 	if target != nil {
@@ -771,11 +786,21 @@ func (p *Game) doWhenLeftButtonDown(ev *eventLeftButtonDown) {
 	}
 }
 
+func (p *Game) doWhenMouseMove(ev *eventMouseMove) {
+	// Update current mouse position
+	p.mousePos = ev.Pos
+	// If swipe tracking is active, record the movement
+	p.inputs.onMouseMove(ev.Pos)
+}
+
 func (p *Game) handleEvent(event event) {
 	switch ev := event.(type) {
-
+	case *eventLeftButtonUp:
+		p.doWhenLeftButtonUp(ev)
 	case *eventLeftButtonDown:
 		p.doWhenLeftButtonDown(ev)
+	case *eventMouseMove:
+		p.doWhenMouseMove(ev)
 	case *eventKeyDown:
 		p.sinkMgr.doWhenKeyPressed(ev.Key)
 	case *eventStart:
@@ -821,8 +846,12 @@ func (p *Game) logicLoop(me coroutine.Thread) int {
 
 func (p *Game) inputEventLoop(me coroutine.Thread) int {
 	lastLbtnPressed := false
+	lastMousePos := mathf.Vec2{}       // Track last mouse position
+	const mouseMovementThreshold = 1.0 // Minimum movement to trigger event (pixels)
 	keyEvents := make([]engine.KeyEvent, 0)
+
 	for {
+		// Check mouse button state
 		curLbtnPressed := inputMgr.GetMouseState(MOUSE_BUTTON_LEFT)
 		if curLbtnPressed != lastLbtnPressed {
 			if lastLbtnPressed {
@@ -833,6 +862,22 @@ func (p *Game) inputEventLoop(me coroutine.Thread) int {
 		}
 		lastLbtnPressed = curLbtnPressed
 
+		// Check mouse movement
+		// Note: We need to get the actual current mouse position from the engine
+		// For now, we'll use the stored mousePos which should be updated elsewhere
+		curMousePos := inputMgr.GetMousePos()
+		mathfMousePos := mathf.Vec2{X: float64(curMousePos.X), Y: float64(curMousePos.Y)}
+
+		// Check if mouse moved significantly
+		dx := mathfMousePos.X - lastMousePos.X
+		dy := mathfMousePos.Y - lastMousePos.Y
+		if math.Abs(dx) > mouseMovementThreshold || math.Abs(dy) > mouseMovementThreshold {
+			p.mousePos = mathfMousePos // Update stored position
+			p.inputs.onMouseMove(mathfMousePos)
+			lastMousePos = mathfMousePos
+		}
+
+		// Handle keyboard events
 		keyEvents = engine.GetKeyEvents(keyEvents)
 		for _, ev := range keyEvents {
 			if ev.IsPressed {
