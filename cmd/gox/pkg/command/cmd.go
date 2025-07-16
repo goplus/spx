@@ -245,15 +245,29 @@ func (cmd *CmdTool) executeRune() error {
 	if cmd.Args.Tags != nil && strings.Contains(*cmd.Args.Tags, "pure_engine") {
 		return fmt.Errorf("rune command is not supported in pure_engine mode")
 	}
-	return util.RunCommandInDir(cmd.ProjectDir, cmd.CmdPath, cmd.Args.String()...)
+	args := cmd.checkMovieArgs(cmd.ProjectDir)
+	return util.RunCommandInDir(cmd.ProjectDir, cmd.CmdPath, args...)
 }
 
 // executeRun handles the run command execution
 func (cmd *CmdTool) executeRun() error {
 	if cmd.Args.Tags != nil && strings.Contains(*cmd.Args.Tags, "pure_engine") {
 		// For pure_engine mode, run the Go binary directly
-		return cmd.RunPureEngine(cmd.Args.String()...)
+		args := cmd.Args.String()
+		return cmd.RunPureEngine(args...)
 	} else {
-		return cmd.RunPackMode(cmd.Args.String()...)
+		args := cmd.checkMovieArgs(cmd.RuntimeTempDir)
+		return cmd.RunPackMode(args...)
 	}
+}
+
+func (cmd *CmdTool) checkMovieArgs(rootDir string) []string {
+	args := cmd.Args.String()
+	if cmd.Args.Movie != nil && *cmd.Args.Movie {
+		dir, _ := filepath.Abs(filepath.Join(rootDir, "output"))
+		fpath := filepath.Join(dir, "movie.avi")
+		os.MkdirAll(dir, os.ModePerm)
+		args = append(args, "--write-movie", fpath)
+	}
+	return args
 }
