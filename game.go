@@ -872,7 +872,6 @@ func (p *Game) inputEventLoop(me coroutine.Thread) int {
 		dx := mathfMousePos.X - lastMousePos.X
 		dy := mathfMousePos.Y - lastMousePos.Y
 		if math.Abs(dx) > mouseMovementThreshold || math.Abs(dy) > mouseMovementThreshold {
-			p.mousePos = mathfMousePos // Update stored position
 			p.inputs.onMouseMove(mathfMousePos)
 			lastMousePos = mathfMousePos
 		}
