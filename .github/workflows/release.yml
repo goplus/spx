@@ -61,7 +61,7 @@ jobs:
   static-checks:
     name: 📊 static-checks
     needs: setup
-    uses: ./.github/workflows/static_check.yml
+    uses: ./.github/workflows/static_checks.yml
 
   web-build:
     name: 🌐 Web Release
