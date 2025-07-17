@@ -376,20 +376,6 @@ func (sr *inputSwipeRecognizer) checkForSwipeCompletion() bool {
 	if idealDistance < sr.minimumDistance || idealDistance > sr.maximumDistance {
 		return false
 	}
-
-	// 3. Trajectory validation (ensure the path is not too curved)
-	realDistance := 0.0
-	for i := 1; i < len(sr.points); i++ {
-		dx := sr.points[i].X - sr.points[i-1].X
-		dy := sr.points[i].Y - sr.points[i-1].Y
-		realDistance += math.Sqrt(dx*dx + dy*dy)
-	}
-
-	// If real distance is more than 10% longer than ideal distance, it's too curved
-	if realDistance > idealDistance*1.1 {
-		return false
-	}
-
 	// 4. Direction calculation
 	direction := sr.calculateDirection(sr.startPoint, sr.endPoint)
 
