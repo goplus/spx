@@ -293,9 +293,8 @@ func (pself *resMgrImpl) HasFile(p_path string) bool {
 	var _ret1 bool
 	return _ret1
 }
-func (pself *resMgrImpl) ReloadTexture(path string)       {}
-func (pself *resMgrImpl) FreeStr(str string)              {}
-func (pself *resMgrImpl) SetDefaultFont(font_path string) {}
+func (pself *resMgrImpl) ReloadTexture(path string) {}
+func (pself *resMgrImpl) FreeStr(str string)        {}
 
 // ISceneMgr
 func (pself *sceneMgrImpl) ChangeSceneToFile(path string) {}

@@ -97,7 +97,6 @@ type GDExtensionInterface struct {
 	SpxResHasFile                            js.Value
 	SpxResReloadTexture                      js.Value
 	SpxResFreeStr                            js.Value
-	SpxResSetDefaultFont                     js.Value
 	SpxSceneChangeSceneToFile                js.Value
 	SpxSceneDestroyAllSprites                js.Value
 	SpxSceneReloadCurrentScene               js.Value
@@ -328,7 +327,6 @@ func (x *GDExtensionInterface) loadProcAddresses() {
 	x.SpxResHasFile = dlsymGD("gdspx_res_has_file")
 	x.SpxResReloadTexture = dlsymGD("gdspx_res_reload_texture")
 	x.SpxResFreeStr = dlsymGD("gdspx_res_free_str")
-	x.SpxResSetDefaultFont = dlsymGD("gdspx_res_set_default_font")
 	x.SpxSceneChangeSceneToFile = dlsymGD("gdspx_scene_change_scene_to_file")
 	x.SpxSceneDestroyAllSprites = dlsymGD("gdspx_scene_destroy_all_sprites")
 	x.SpxSceneReloadCurrentScene = dlsymGD("gdspx_scene_reload_current_scene")
