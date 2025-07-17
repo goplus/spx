@@ -94,6 +94,7 @@ func (p *eventSink) call(wait bool, data any, doSth func(*eventSink)) {
 type eventSinkMgr struct {
 	allWhenStart           *eventSink
 	allWhenKeyPressed      *eventSink
+	allWhenSwipe           *eventSink
 	allWhenIReceive        *eventSink
 	allWhenBackdropChanged *eventSink
 	allWhenCloned          *eventSink
@@ -110,6 +111,7 @@ type eventSinkMgr struct {
 func (p *eventSinkMgr) reset() {
 	p.allWhenStart = nil
 	p.allWhenKeyPressed = nil
+	p.allWhenSwipe = nil
 	p.allWhenIReceive = nil
 	p.allWhenBackdropChanged = nil
 	p.allWhenCloned = nil
@@ -126,6 +128,7 @@ func (p *eventSinkMgr) reset() {
 func (p *eventSinkMgr) doDeleteClone(this any) {
 	p.allWhenStart = p.allWhenStart.doDeleteClone(this)
 	p.allWhenKeyPressed = p.allWhenKeyPressed.doDeleteClone(this)
+	p.allWhenSwipe = p.allWhenSwipe.doDeleteClone(this)
 	p.allWhenIReceive = p.allWhenIReceive.doDeleteClone(this)
 	p.allWhenBackdropChanged = p.allWhenBackdropChanged.doDeleteClone(this)
 	p.allWhenCloned = p.allWhenCloned.doDeleteClone(this)
@@ -159,6 +162,14 @@ func (p *eventSinkMgr) doWhenTimer(time float64) {
 func (p *eventSinkMgr) doWhenKeyPressed(key Key) {
 	p.allWhenKeyPressed.asyncCall(false, key, func(ev *eventSink) {
 		ev.sink.(func(Key))(key)
+	})
+}
+
+func (p *eventSinkMgr) doWhenSwipe(direction Direction, this threadObj) {
+	p.allWhenSwipe.asyncCall(false, direction, func(ev *eventSink) {
+		if ev.pthis == this {
+			ev.sink.(func(Direction))(direction)
+		}
 	})
 }
 
@@ -243,6 +254,7 @@ type IEventSinks interface {
 	OnMsg__0(onMsg func(msg string, data any))
 	OnMsg__1(msg string, onMsg func())
 	OnStart(onStart func())
+	OnSwipe__0(direction Direction, onSwipe func())
 	OnTimer(time float64, onTimer func())
 	Stop(kind StopKind)
 }
@@ -274,6 +286,11 @@ func (p *eventSinks) initFrom(src *eventSinks, this threadObj) {
 
 func (p *eventSinks) doDeleteClone() {
 	p.eventSinkMgr.doDeleteClone(p.pthis)
+}
+
+// doWhenSwipe triggers swipe events for this specific object
+func (p *eventSinks) doWhenSwipe(direction Direction, target threadObj) {
+	p.eventSinkMgr.doWhenSwipe(direction, target)
 }
 
 // -------------------------------------------------------------------------------------
@@ -335,6 +352,22 @@ func (p *eventSinks) OnKey__0(key Key, onKey func()) {
 		},
 		cond: func(data any) bool {
 			return data.(Key) == key
+		},
+	}
+}
+
+func (p *eventSinks) OnSwipe__0(direction Direction, onSwipe func()) {
+	p.allWhenSwipe = &eventSink{
+		prev:  p.allWhenSwipe,
+		pthis: p.pthis,
+		sink: func(Direction) {
+			if debugEvent {
+				log.Println("==> onSwipe", direction, nameOf(p.pthis))
+			}
+			onSwipe()
+		},
+		cond: func(data any) bool {
+			return data.(Direction) == direction
 		},
 	}
 }

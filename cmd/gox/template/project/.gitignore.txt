@@ -20,7 +20,7 @@
 /main.go
 /main.tscn
 /project.godot
-/gop_autogen.go*
+/xgo_autogen.go*
 /go
 
 # user specify ignores
