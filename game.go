@@ -228,6 +228,7 @@ func Gopt_Game_Run(game Gamer, resource any, gameConf ...*Config) {
 	if err != nil {
 		panic(err)
 	}
+	resMgr.SetDefaultFont("res://engine/fonts/CnFont.ttf")
 
 	var conf Config
 	var proj projConfig
