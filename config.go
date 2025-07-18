@@ -275,6 +275,8 @@ type spriteConfig struct {
 	TriggerCenter       mathf.Vec2            `json:"triggerCenter"`
 	TriggerSize         mathf.Vec2            `json:"triggerSize"`
 	TriggerRadius       float64               `json:"triggerRadius"`
+
+	ApplyCustumeOffset2Animation bool `json:"applyCustumeOffset2Animation"`
 }
 
 func (p *spriteConfig) getCostumeIndex() int {
