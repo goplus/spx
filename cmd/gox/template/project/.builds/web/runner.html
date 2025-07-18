@@ -84,7 +84,7 @@
 			onGameError = callback
 		}
 
-		window.startGame = async (buffer, assetURLs = null, onSpxReady = null) => {
+		window.startGame = async (buffer, assetURLs = null, onSpxReady = null, logLevel = LOG_LEVEL_NONE) => {
 			isShowEditor = false
 			const config = {
 				'projectName': "spx_game",
@@ -92,7 +92,7 @@
 				"gameCanvas": document.getElementById('game-canvas'),
 				"editorCanvas": document.getElementById('editor-canvas'),
 				"projectData": new Uint8Array(buffer),
-				"logLevel": LOG_LEVEL_NONE,
+				"logLevel": logLevel,
 				"useAssetCache": false,
 				"isRuntimeMode": true,
 				"assetURLs": {
