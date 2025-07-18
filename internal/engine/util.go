@@ -38,6 +38,9 @@ func ReadAllText(path string) string {
 func SetDebugMode(isDebug bool) {
 	platformMgr.SetDebugMode(isDebug)
 }
+func SetDefaultFont(path string) {
+	resMgr.SetDefaultFont(path)
+}
 
 // =============== setting ===================
 

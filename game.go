@@ -652,20 +652,20 @@ func (p *Game) addStageSprite(g reflect.Value, v specsp, inits []Sprite) []Sprit
 }
 
 /*
-	{
-	  "type": "sprites",
-	  "target": "bananas",
-	  "items": [
-	    {
-	      "x": -100,
-	      "y": -21
-	    },
-	    {
-	      "x": 50,
-	      "y": -21
-	    }
-	  ]
-	}
+	 {
+	   "type": "sprites",
+	   "target": "bananas",
+	   "items": [
+		 {
+		   "x": -100,
+		   "y": -21
+		 },
+		 {
+		   "x": 50,
+		   "y": -21
+		 }
+	   ]
+	 }
 */
 func (p *Game) addStageSprites(g reflect.Value, v specsp, inits []Sprite) []Sprite {
 	target := v["target"].(string)
