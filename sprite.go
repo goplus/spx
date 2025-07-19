@@ -272,6 +272,10 @@ type SpriteImpl struct {
 	collider Collider
 }
 
+var _ Sprite = (*SpriteImpl)(nil)
+
+func (p *SpriteImpl) Main() {}
+
 func (p *SpriteImpl) SetDying() { // dying: visible but can't be touched
 	p.isDying = true
 }
