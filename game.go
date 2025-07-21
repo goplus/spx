@@ -229,6 +229,7 @@ func Gopt_Game_Run(game Gamer, resource any, gameConf ...*Config) {
 		panic(err)
 	}
 	resMgr.SetDefaultFont("res://engine/fonts/CnFont.ttf")
+	engine.RegisterFileSystem(fs)
 
 	var conf Config
 	var proj projConfig
@@ -1462,6 +1463,7 @@ func (p *Game) loadSound(name SoundName) (media Sound, err error) {
 		return
 	}
 	media.Path = prefix + "/" + media.Path
+	engine.CheckAssetFile(media.Path)
 	p.sounds.audios[name] = media
 	return
 }
@@ -1481,7 +1483,6 @@ func (p *Game) Play__0(media Sound, action *PlayOptions) {
 	if debugInstr {
 		log.Println("Play", media.Path)
 	}
-
 	p.checkAudioId()
 	err := p.play(p.audioId, media, action)
 	if err != nil {
