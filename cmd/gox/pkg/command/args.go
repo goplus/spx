@@ -158,42 +158,53 @@ Usage:
 
 Available commands:
 
-    Project Management:
+    Basic Commands:
     - help            # Display help information
     - version         # Display version information
+
+    Project Management:
     - init            # Create a #CMDNAME project in the current directory
-    - editor          # Open the current project in editor mode
     - clear           # Clear the project
     - clearbuild      # Clear build artifacts
 
-    Development:
+    Development & Building:
     - build           # Build the dynamic library
     - buildtinygo     # Build static library using TinyGo for ESP32
-    - run             # Run the current project
-    - export          # Export the PC package (macOS, Windows, Linux)
-    - runm            # Run the project in mutil player mode
+    - run             # Run the current project (dynamic load res mode)
+    - editor          # Open the current project in editor mode
+    - rune            # Run with engine after import all assets
 
     Web Development:
     - buildweb        # Build for WebAssembly (WASM)
     - runweb          # Launch the web server
+    - runwebworker    # Run web worker
     - exportweb       # Export the web package
+    - exportwebworker # Export web worker package
+    - exporttemplateweb # Export template web package
     - stopweb         # Stop the web server
 
-    Mobile & Bot Development:
-    - exportbot       # Export the bot package
+    Export & Distribution:
+    - export          # Export the PC package (macOS, Windows, Linux)
     - exportapk       # Export Android APK
     - exportios       # Export iOS package
     - exportminigame  # Export minigame package (supports -build=fast for faster build)
+    - exportminiprogram # Export mini program package
+    - exportbot       # Export the bot package
+
+    Multiplayer:
+    - runm            # Run the project in multiplayer mode
 
 Examples:
 
-    #CMDNAME init                      # Create a project in current path
-    #CMDNAME init ./test/demo01        # Create a project at path ./test/demo01
-    #CMDNAME run --path ./myproject    # Run project at specified path
-    #CMDNAME build --servermode        # Build in server mode
-    #CMDNAME runweb --debugweb         # Run web server with debug service
-    #CMDNAME buildtinygo               # Build TinyGo static library for ESP32
-    #CMDNAME exportminigame -build=fast # Export minigame without compression (faster)
+    #CMDNAME init                         # Create a project in current path
+    #CMDNAME init ./test/demo01           # Create a project at path ./test/demo01
+    #CMDNAME run --path ./myproject       # Run project at specified path
+    #CMDNAME build --servermode           # Build in server mode
+    #CMDNAME runweb --debugweb            # Run web server with debug service
+    #CMDNAME buildtinygo                  # Build TinyGo static library for ESP32
+    #CMDNAME exportminigame -build=fast   # Export minigame without compression (faster)
+    #CMDNAME run -tags=pure_engine        # Run in pure engine mode
+    #CMDNAME export --fullscreen          # Export with fullscreen mode
 	`
 	fmt.Println(cmdName + " Version = " + version + "\n" + strings.ReplaceAll(msg, "#CMDNAME", cmdName))
 
