@@ -261,5 +261,5 @@ func Gopt_Player_Gopx_OnCmd[T any](p *Player, handler func(cmd T) error) {
 	}
 }
 
-//go:linkname spxEngineWaitNextFrame github.com/goplus/spx/internal/engine.WaitNextFrame
+//go:linkname spxEngineWaitNextFrame github.com/goplus/spx/v2/internal/engine.WaitNextFrame
 func spxEngineWaitNextFrame() float64
