@@ -198,8 +198,10 @@ func (p *baseObj) getProxy() *engine.Sprite {
 
 func (p *baseObj) initWith(base string, sprite *spriteConfig) {
 	if sprite.CostumeSet != nil {
+		engine.CheckAssetFile(path.Join(base, sprite.CostumeSet.Path))
 		initWithCS(p, base, sprite.CostumeSet)
 	} else if sprite.CostumeMPSet != nil {
+		engine.CheckAssetFile(path.Join(base, sprite.CostumeMPSet.Path))
 		initWithCMPS(p, base, sprite.CostumeMPSet)
 	} else {
 		panic("sprite.init should have one of costumes, costumeSet and costumeMPSet")
@@ -268,6 +270,7 @@ func addCostumeWith(p *baseObj, name SpriteCostumeName, img *costumeSetImage, fa
 func (p *baseObj) initBackdrops(base string, costumes []*backdropConfig, costumeIndex int) {
 	p.costumes = make([]*costume, len(costumes))
 	for i, c := range costumes {
+		engine.CheckAssetFile(path.Join(base, c.Path))
 		p.costumes[i] = newCostume(base, &c.costumeConfig) // has error how to fixed it
 	}
 	if costumeIndex >= len(costumes) || costumeIndex < 0 {
@@ -279,6 +282,7 @@ func (p *baseObj) initBackdrops(base string, costumes []*backdropConfig, costume
 func (p *baseObj) init(base string, costumes []*costumeConfig, costumeIndex int) {
 	p.costumes = make([]*costume, len(costumes))
 	for i, c := range costumes {
+		engine.CheckAssetFile(path.Join(base, c.Path))
 		p.costumes[i] = newCostume(base, c)
 	}
 	if costumeIndex >= len(costumes) || costumeIndex < 0 {

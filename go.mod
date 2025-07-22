@@ -3,6 +3,7 @@ module github.com/goplus/spx/v2
 go 1.23.0
 
 require (
+	github.com/h2non/filetype v1.1.3
 	github.com/pkg/errors v0.9.1
 	github.com/realdream-ai/mathf v0.0.0-20250513071532-e55e1277a8c5
 	golang.org/x/mobile v0.0.0-20220518205345-8578da9835fd
