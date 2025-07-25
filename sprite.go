@@ -863,10 +863,10 @@ func doAnimation(p *SpriteImpl, info *animState) {
 		if info.IsCanceled {
 			return
 		}
-		p.isCostumeDirty = false
 		if !p.hasAnim(animName) {
 			return
 		}
+		p.isCostumeDirty = false
 		p.syncSprite.PlayAnim(animName, info.Speed, info.IsLoop, false)
 	})
 	if info.OnStart != nil && info.OnStart.Play != "" {
