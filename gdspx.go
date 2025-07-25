@@ -252,8 +252,11 @@ func syncInitSpritePhysicInfo(sprite *SpriteImpl, syncProxy *engine.Sprite) {
 		syncProxy.SetTriggerEnabled(false)
 	}
 }
-
 func syncGetCostumeBoundByAlpha(p *SpriteImpl, pscale float64) (mathf.Vec2, mathf.Vec2) {
+	return getCostumeBoundByAlpha(p, pscale, true)
+}
+
+func getCostumeBoundByAlpha(p *SpriteImpl, pscale float64, isSync bool) (mathf.Vec2, mathf.Vec2) {
 	cs := p.costumes[p.costumeIndex_]
 	var rect mathf.Rect2
 	// GetBoundFromAlpha is very slow, so we should cache the result
@@ -266,7 +269,11 @@ func syncGetCostumeBoundByAlpha(p *SpriteImpl, pscale float64) (mathf.Vec2, math
 			rect = cache
 		} else {
 			assetPath := engine.ToAssetPath(cs.path)
-			rect = engine.SyncGetBoundFromAlpha(assetPath)
+			if isSync {
+				rect = engine.SyncGetBoundFromAlpha(assetPath)
+			} else {
+				rect = resMgr.GetBoundFromAlpha(assetPath)
+			}
 		}
 		cachedBounds_[cs.path] = rect
 	}
