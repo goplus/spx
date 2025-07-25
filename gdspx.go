@@ -288,6 +288,9 @@ func syncGetCostumeBoundByAlpha(p *SpriteImpl, pscale float64) (mathf.Vec2, math
 }
 
 func calcRenderRotation(p *SpriteImpl) (float64, float64) {
+	if p.rotationStyle == None {
+		return 0, 1.0
+	}
 	cs := p.costumes[p.costumeIndex_]
 	degree := p.Heading() + cs.faceRight
 	degree -= 90
