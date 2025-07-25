@@ -15,22 +15,26 @@ type Sprite struct {
 	Target  any
 }
 
-func (pself *Sprite) UpdateTexture(path string, renderScale float64) {
+func (pself *Sprite) UpdateTexture(path string, renderScale float64, isUpdateTexture bool) {
 	if path == "" {
 		return
 	}
 	resPath := ToAssetPath(path)
 	pself.PicPath = resPath
-	pself.SetTexture(pself.PicPath)
+	if isUpdateTexture {
+		pself.SetTexture(pself.PicPath)
+	}
 	pself.SetRenderScale(NewVec2(renderScale, renderScale))
 }
-func (pself *Sprite) UpdateTextureAltas(path string, rect2 Rect2, renderScale float64) {
+func (pself *Sprite) UpdateTextureAltas(path string, rect2 Rect2, renderScale float64, isUpdateTexture bool) {
 	if path == "" {
 		return
 	}
 	resPath := ToAssetPath(path)
 	pself.PicPath = resPath
-	pself.SetTextureAltas(pself.PicPath, rect2)
+	if isUpdateTexture {
+		pself.SetTextureAltas(pself.PicPath, rect2)
+	}
 	pself.SetRenderScale(NewVec2(renderScale, renderScale))
 }
 
