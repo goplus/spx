@@ -178,6 +178,8 @@ type baseObj struct {
 	// effects
 	greffUniforms map[EffectKind]float64 // graphic effects
 	hasShader     bool
+
+	isAnimating bool
 }
 
 func (p *baseObj) setLayer(layer int) { // dying: visible but can't be touched
@@ -190,6 +192,7 @@ func (p *baseObj) setLayer(layer int) { // dying: visible but can't be touched
 func (p *baseObj) setCustumeIndex(value int) {
 	p.costumeIndex_ = value
 	p.isCostumeDirty = true
+	p.isAnimating = false
 }
 
 func (p *baseObj) getProxy() *engine.Sprite {

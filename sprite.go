@@ -873,12 +873,14 @@ func doAnimation(p *SpriteImpl, info *animState) {
 		p.Play__3(info.OnStart.Play)
 	}
 	if info.AniType == aniTypeFrame {
+		p.isAnimating = true
 		for spriteMgr.IsPlayingAnim(p.syncSprite.GetId()) {
 			if info.IsCanceled {
 				break
 			}
 			engine.WaitNextFrame()
 		}
+		p.isAnimating = false
 	} else {
 		duration := info.Duration
 		timer := 0.0
