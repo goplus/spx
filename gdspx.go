@@ -180,10 +180,11 @@ func syncCheckUpdateCostume(p *baseObj) {
 	rect := p.getCostumeAltasRegion()
 	isAltas := p.isCostumeAltas()
 	if isAltas {
-		syncSprite.UpdateTextureAltas(path, rect, renderScale)
+		// if is animating, will not update render texture
+		syncSprite.UpdateTextureAltas(path, rect, renderScale, !p.isAnimating)
 		syncOnAltasChanged(p)
 	} else {
-		syncSprite.UpdateTexture(path, renderScale)
+		syncSprite.UpdateTexture(path, renderScale, !p.isAnimating)
 	}
 }
 func syncOnAltasChanged(p *baseObj) {

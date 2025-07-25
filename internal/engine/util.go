@@ -89,7 +89,7 @@ func NewBackdropProxy(obj any, path string, renderScale float64) *Sprite {
 		_ret1.Target = obj
 		_ret1.SetZIndex(-1)
 		_ret1.DisablePhysic()
-		_ret1.UpdateTexture(path, renderScale)
+		_ret1.UpdateTexture(path, renderScale, true)
 	})
 	return _ret1
 }
