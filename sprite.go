@@ -1774,6 +1774,12 @@ func (p *SpriteImpl) Bounds() *mathf.Rect2 {
 	applyRenderOffset(p, &x, &y)
 
 	if p.triggerType != physicColliderNone {
+		if p.triggerType == physicColliderAuto && p.syncSprite == nil {
+			// if sprite's proxy is not created, use the sync version to get the bound
+			center, size := getCostumeBoundByAlpha(p, p.scale, false)
+			p.triggerCenter = center
+			p.triggerSize = size
+		}
 		x += p.triggerCenter.X
 		y += p.triggerCenter.Y
 		w = p.triggerSize.X
