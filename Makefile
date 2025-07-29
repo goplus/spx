@@ -10,7 +10,7 @@ CURRENT_PATH=$(shell pwd)
 path ?= tutorial/01-Weather
 port ?= 8106
 mode ?= ""
-movie ?= false
+movie ?= true
 
 # Help target - displays available commands
 help:
@@ -196,7 +196,7 @@ rune:
 
 # Run demo on PC (runtime mode)
 run:
-	cd  $(path) && spx run -movie=$(movie) && cd $(CURRENT_PATH) 
+	cd  $(path) && spx run -movie=$(movie) && sleep 2  && open .temp/output/movie.avi_combined.avi && cd $(CURRENT_PATH) 
 
 # Run tests
 test: runtest
