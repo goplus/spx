@@ -24,6 +24,7 @@ class GameApp {
                 this.onGameExit()
             },
         };
+        this.movie_path = config.movie_path || ""
         this.logicPromise = Promise.resolve();
         this.curProjectHash = ''
         // web worker mode
@@ -90,6 +91,9 @@ class GameApp {
             '--main-pack', this.persistentPath + "/" + this.packName,
             '--main-project-data', this.persistentPath + "/" + this.projectDataName,
         ];
+        if (this.movie_path != "") {
+            args.push('--write-movie', this.persistentPath + "/" + this.movie_path)
+        }
 
         this.logVerbose("RunGame ", args);
         if (this.game) {
@@ -138,7 +142,6 @@ class GameApp {
     }
 
 
-
     async stopGame(resolve, reject) {
         this.stopGameTask--
         if (this.game == null) {
@@ -154,6 +157,38 @@ class GameApp {
         }
         this.onProgress(1.0);
         this.game.requestQuit()
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        if(this.movie_path){
+            console.log("downloadMovie.start")
+            await this.downloadVideo("_video.avi")
+            await this.downloadVideo("_audio.avi")
+            console.log("downloadMovie.end")
+        }
+    }
+
+    async downloadVideo(fileName) { 
+        if(this.downloadVideoIdx == null){
+            this.downloadVideoIdx = 0
+        }
+        let idx = this.downloadVideoIdx++
+        await new Promise(resolve => setTimeout(resolve, 5000))
+        let filePath = this.persistentPath + "/" + this.movie_path +fileName
+        this.logVerbose("downloadMovie ",filePath)
+        try {
+            let fileContent = Module.readAllFS(filePath)
+            const fileBlob = new Blob([fileContent], { type:"video/avi"})
+            const downloadFileName = this.movie_path + fileName
+            const downloadUrl = URL.createObjectURL(fileBlob)
+            Object.assign(document.createElement('a'), {
+                href: downloadUrl,
+                download: downloadFileName
+            }).click()
+            URL.revokeObjectURL(downloadUrl)
+            const fileSizeMB = (fileContent.length / (1024 * 1024)).toFixed(2)
+            console.log(`Downloaded ${fileName}: ${fileSizeMB} MB `)
+        } catch (error) {
+            console.error("downloadMovie::Error reading file:", error)
+        }
     }
 
     onGameExit() {
