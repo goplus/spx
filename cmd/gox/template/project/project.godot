@@ -21,7 +21,7 @@ window/size/viewport_height=360
 
 [movie_writer]
 
-obs_enable_combined_recording=false
+obs_enable_combined_recording=true
 realtime_mode=true
 
 [gui]
