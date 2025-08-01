@@ -198,8 +198,7 @@ rune:
 
 # Run demo on PC (runtime mode)
 run:
-	cd  $(path) && spx run -movie=$(movie) && sleep 1 && cd .temp/output && ffmpeg -i movie.avi_video.avi -i movie.avi_audio.avi -c copy movie.avi_combined.avi -y && open movie.avi_combined.avi && cd $(CURRENT_PATH) 
-
+	cd  $(path) && spx run -movie=$(movie) && open .temp/output/movie.avi_merged.avi && cd $(CURRENT_PATH) 
 # Run tests
 test: runtest
 runtest:
