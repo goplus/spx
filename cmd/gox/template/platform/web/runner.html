@@ -52,6 +52,7 @@
 		let isShowEditor = false
 		let onGameError = null
 		let _onSpxReady = null
+		let lastGameApp = null
 
 		window.spxIsProxyThreadMode = false
 		window.spxIsForceDebugLog = false
@@ -93,6 +94,7 @@
 
 		window.startGame = async (buffer, assetURLs = null, onSpxReady = null) => {
 			isShowEditor = false
+			lastGameApp = null
 			_onSpxReady = onSpxReady
 			if(EnginePackMode == "worker"){
 				// ai interaction
@@ -140,6 +142,17 @@
 			await gameApp.RunGame();
 		}
 
+		window.getRecordedVideo = () => {
+			let app = gameApp || lastGameApp
+			if (app == null) {
+				console.error("gameApp is null, should call startGame first")
+				return null
+			}
+			lastGameApp = null
+			return app.getRecordedVideo()
+		}
+
+
 
 		window.stopGame = async () => {
 			if (gameApp == null) {
@@ -147,6 +160,7 @@
 				return
 			}
 			await gameApp.StopGame()
+			lastGameApp = gameApp
 			gameApp = null
 		}
 
