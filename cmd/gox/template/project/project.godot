@@ -19,6 +19,11 @@ config/features=PackedStringArray("4.4")
 window/size/viewport_width=480
 window/size/viewport_height=360
 
+[movie_writer]
+
+obs_enable_combined_recording=true
+realtime_mode=true
+
 [gui]
 
 theme/custom_font="res://engine/fonts/CnFont.ttf"

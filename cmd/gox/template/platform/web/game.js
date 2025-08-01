@@ -24,6 +24,7 @@ class GameApp {
                 this.onGameExit()
             },
         };
+        this.movie_path = config.movie_path || ""
         this.logicPromise = Promise.resolve();
         this.curProjectHash = ''
         // web worker mode
@@ -90,6 +91,9 @@ class GameApp {
             '--main-pack', this.persistentPath + "/" + this.packName,
             '--main-project-data', this.persistentPath + "/" + this.projectDataName,
         ];
+        if (this.movie_path != "") {
+            args.push('--write-movie', this.persistentPath + "/" + this.movie_path)
+        }
 
         this.logVerbose("RunGame ", args);
         if (this.game) {
@@ -118,6 +122,7 @@ class GameApp {
 
         await this.onRunBeforInit()
         this.onProgress(0.5);
+        window.gameCanvas = this.gameCanvas;
 
         curGame.init().then(async () => {
             this.onProgress(0.6);
@@ -138,7 +143,6 @@ class GameApp {
     }
 
 
-
     async stopGame(resolve, reject) {
         this.stopGameTask--
         if (this.game == null) {
@@ -154,6 +158,30 @@ class GameApp {
         }
         this.onProgress(1.0);
         this.game.requestQuit()
+        if(this.movie_path){
+            // yymmddhhmmss
+            this.logVerbose("download video")
+            // get current date
+            let date = new Date();
+            let year = date.getFullYear().toString().slice(2);
+            let month = (date.getMonth() + 1).toString().padStart(2, '0');
+            let day = date.getDate().toString().padStart(2, '0');
+            let hours = date.getHours().toString().padStart(2, '0');
+            let minutes = date.getMinutes().toString().padStart(2, '0');
+            let seconds = date.getSeconds().toString().padStart(2, '0');
+            // format as yymmddhhmmss
+            let fileName = `spx_${year}${month}${day}${hours}${minutes}${seconds}.webm`;
+            this.logVerbose("download video: ", fileName)
+            this.downloadVideo(fileName)
+        } 
+    }
+
+    async downloadVideo(fileName) { 
+        Module.downloadRecordedVideo(fileName)
+    }
+
+    async getRecordedVideo() { 
+        Module.getRecordedVideo()
     }
 
     onGameExit() {

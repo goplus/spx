@@ -19,59 +19,16 @@ done
 source $SCRIPT_DIR/common/setup_env.sh
 
 cd $PROJ_DIR
-# old
-OLD_COMMON_ARGS='
-            optimize=size 
-            use_volk=no 
-            deprecated=no 
-            openxr=false 
-            vulkan=false 
-            graphite=false 
-            disable_3d_physics=true 
-            disable_navigation=true 
-            module_msdfgen_enabled=false 
-            module_text_server_adv_enabled=false 
-            module_text_server_fb_enabled=true 
-            module_gdscript_enabled=true 
-            module_freetype_enabled=true 
-            module_minimp3_enabled=true 
-            module_svg_enabled=true 
-            module_jpg_enabled=true 
-            module_ogg_enabled=true 
-            module_zip_enabled=true 
-            module_mobile_vr_enabled=false
-            module_openxr_enabled=false
-            module_webxr_enabled=false
-            module_text_server_adv_enabled=false
-            module_webrtc_enabled=false
-            module_godot_physics_2d_enabled=true '
 
 COMMON_ARGS='
             optimize=size
-            use_volk=no 
-            deprecated=no 
-            minizip=yes  
-            openxr=false 
-            vulkan=false 
-            graphite=false 
-            disable_3d_physics=true 
-            disable_navigation=true 
-            module_msdfgen_enabled=false 
-            module_text_server_adv_enabled=false 
-            module_text_server_fb_enabled=true 
-            modules_enabled_by_default=true 
-            module_gdscript_enabled=true 
-            module_freetype_enabled=true 
-            module_minimp3_enabled=true 
-            module_svg_enabled=true 
-            module_jpg_enabled=true 
-            module_ogg_enabled=true 
-            module_regex_enabled=true 
-            module_zip_enabled=true 
-            module_godot_physics_2d_enabled=true '
+            use_volk=no  '
 
 EXTRA_OPT_ARGS='disable_3d=true'
 
+EXTRA_EDITOR_OPT_ARGS='disable_3d=false'
+
+echo "Using common args: $COMMON_ARGS"
 
 build_template() {
     prepare_env
@@ -309,9 +266,9 @@ build_editor(){
         return 0
     fi
     if [ "$OS" = "Windows_NT" ]; then
-        scons target=editor dev_build=yes $COMMON_ARGS vsproj=yes 
+        scons target=editor dev_build=yes $COMMON_ARGS $EXTRA_EDITOR_OPT_ARGS vsproj=yes 
     else
-        scons target=editor dev_build=yes $COMMON_ARGS
+        scons target=editor dev_build=yes $COMMON_ARGS $EXTRA_EDITOR_OPT_ARGS
     fi
     
     dstBinPath="$GOPATH/bin/gdspx$VERSION"

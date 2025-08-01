@@ -4,13 +4,13 @@ CURRENT_PATH=$(shell pwd)
 .PHONY: init fmt gen cmd wasm wasmopt test download help initdev
 .PHONY: setup setup-dev install build-wasm build-wasm-opt format generate stop
 .PHONY: build-editor build-desktop build-web build-minigame build-miniprogram build-web-worker build-android build-ios
-.PHONY: export-pack export-web run-editor run-web test run-minigame run-minigame-opt run-miniprogram serve
+.PHONY: export-pack export-web run-editor run-web test run-minigame run-minigame-opt run-miniprogram serve mergevideo
 
 # Run demos
-path ?= tutorial/01-Weather
+path ?= tutorial/05-Animation
 port ?= 8106
 mode ?= ""
-movie ?= false
+movie ?= true
 
 # Help target - displays available commands
 help:
@@ -51,6 +51,7 @@ help:
 	@echo "  run-minigame-opt - Run minigame with optimization"
 	@echo "  run-miniprogram  - Run miniprogram"
 	@echo "  serve            - Run web server"
+	@echo "  mergevideo       - Merge video and audio files using ffmpeg"
 	@echo ""
 	@echo "Parameters:"
 	@echo "  path=<dir>       - Specify demo path (default: tutorial/06-worker)"
@@ -67,6 +68,7 @@ help:
 	@echo "  make run-web-worker path=test/Hello   - Run specific demo in web worker mode"
 	@echo "  make test                             - Run tests"
 	@echo "  make stop                             - Stop all running processes"
+	@echo "  make mergevideo path=test/Hello       - Merge video and audio files for specific demo"
 
 # ============================================================================
 # Setup Commands
@@ -196,8 +198,7 @@ rune:
 
 # Run demo on PC (runtime mode)
 run:
-	cd  $(path) && spx run -movie=$(movie) && cd $(CURRENT_PATH) 
-
+	cd  $(path) && spx run -movie=$(movie) && open .temp/output/movie.avi_merged.avi && cd $(CURRENT_PATH) 
 # Run tests
 test: runtest
 runtest:
@@ -242,6 +243,10 @@ runmpopt:
 	make build-wasm-opt &&\
 	cd  $(path) && spx exportminiprogram && cd $(CURRENT_PATH) &&\
 	make serve
+
+# Merge video and audio files
+mergevideo:
+	cd $(path)/.temp/output && ffmpeg -i movie.avi_video.avi -i movie.avi_audio.avi -c copy movie.avi_combined.avi -y && cd $(CURRENT_PATH)
 
 # Run web server
 serve: runwebserver
