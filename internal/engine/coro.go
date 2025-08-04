@@ -7,13 +7,26 @@ import (
 )
 
 var (
-	gco *coroutine.Coroutines
+	gco   *coroutine.Coroutines
+	pgame coroutine.ThreadObj // pointer to the current game object
 )
+
+func SetGame(game coroutine.ThreadObj) {
+	pgame = game
+}
+
+func GetGame() any {
+	if pgame == nil {
+		panic("game not set")
+	}
+	return pgame
+}
 
 func SetCoroutines(co *coroutine.Coroutines) {
 	gco = co
 	profiler.SetGco(co)
 }
+
 func Go(tobj coroutine.ThreadObj, fn func()) {
 	gco.CreateAndStart(false, tobj, func(me coroutine.Thread) int {
 		fn()
