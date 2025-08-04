@@ -24,6 +24,8 @@ class GameApp {
                 this.onGameExit()
             },
         };
+        this.recordingOnGameStart = config.recordingOnGameStart || false
+        this.autoDownloadRecordedVideo = config.autoDownloadRecordedVideo || false
         this.logicPromise = Promise.resolve();
         this.curProjectHash = ''
         // web worker mode
@@ -90,6 +92,9 @@ class GameApp {
             '--main-pack', this.persistentPath + "/" + this.packName,
             '--main-project-data', this.persistentPath + "/" + this.projectDataName,
         ];
+        if (this.recordingOnGameStart) {
+            args.push('--write-movie', this.persistentPath + "/" + "movie.avi")
+        }
 
         this.logVerbose("RunGame ", args);
         if (this.game) {
@@ -138,7 +143,6 @@ class GameApp {
     }
 
 
-
     async stopGame(resolve, reject) {
         this.stopGameTask--
         if (this.game == null) {
@@ -154,7 +158,28 @@ class GameApp {
         }
         this.onProgress(1.0);
         this.game.requestQuit()
+
+        if(this.recordingOnGameStart && this.autoDownloadRecordedVideo){
+            let fileName = `spx_${new Date().getTime()}.webm`;
+            this.downloadRecordedVideo(fileName)
+        } 
     }
+
+    downloadRecordedVideo(fileName) { 
+        Module.downloadRecordedVideo(fileName)
+    }
+
+    getRecordedVideo() { 
+        return Module.getRecordedVideoBlob()
+    }
+
+    startRecording() {
+        Module.tryStartRecording()
+    }
+
+    async stopRecording() {
+        return await Module.tryStopRecording()
+    } 
 
     onGameExit() {
         this.game = null
