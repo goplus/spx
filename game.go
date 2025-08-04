@@ -196,6 +196,7 @@ func (p *Game) getGame() *Game {
 }
 
 func (p *Game) initGame(sprites []Sprite) *Game {
+	engine.SetGame(p)
 	p.eventSinks.init(&p.sinkMgr, p)
 	p.sprs = make(map[string]Sprite)
 	p.typs = make(map[string]reflect.Type)

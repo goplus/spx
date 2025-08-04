@@ -9,7 +9,6 @@ import (
 
 	"github.com/goplus/spx/v2/fs"
 	"github.com/goplus/spx/v2/internal/engine/platform"
-	"github.com/goplus/spx/v2/pkg/filedetect"
 	gdx "github.com/goplus/spx/v2/pkg/gdspx/pkg/engine"
 	. "github.com/realdream-ai/mathf"
 )
@@ -29,7 +28,7 @@ var checkedAssetFiles = make(map[string]bool)
 
 func RegisterFileSystem(fs fs.Dir) {
 	if platform.IsWeb() {
-		filedetect.RegisterIoReader(func(file string, length int) ([]byte, error) {
+		RegisterIoReader(func(file string, length int) ([]byte, error) {
 			rc, err := fs.Open(file)
 			if err != nil {
 				return nil, err
@@ -58,7 +57,7 @@ func CheckAssetFile(rawPath string) {
 	if platform.IsWeb() {
 		path = path[7:] // remove "assets/"
 	}
-	info := filedetect.GetFileFormat(path)
+	info := GetFileFormat(path)
 	if !info.IsCorrect {
 		supportStr := ""
 		if !supportedFileTypes[info.Extension] {

@@ -1,4 +1,4 @@
-package filedetect
+package engine
 
 import (
 	"os"
