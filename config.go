@@ -124,8 +124,9 @@ type projConfig struct {
 
 	WindowScale float64 `json:"windowScale"`
 
-	CollisionByShape bool `json:"collisionByShape"` // whether to use collision by shape or pixel
-	FullScreen       bool `json:"fullscreen"`
+	AutoSetCollisionLayer *bool `json:"autoSetCollisionLayer"` // whether to auto set collision layer, default true
+	CollisionByShape      bool  `json:"collisionByShape"`      // whether to use collision by shape or pixel, default false
+	FullScreen            bool  `json:"fullscreen"`            // whether to use fullscreen, default false
 }
 
 func (p *projConfig) getBackdrops() []*backdropConfig {

@@ -132,11 +132,28 @@ type Game struct {
 	// debug
 	debug      bool
 	debugPanel *ui.UiDebug
+
+	sprCollisionInfos       map[string]*spriteCollisionInfo
+	isCollisionByPixel      bool
+	isAutoSetCollisionLayer bool
+}
+
+type spriteCollisionInfo struct {
+	Id    int
+	Layer int64
+	Mask  int64
 }
 
 type Gamer interface {
 	engine.IGame
 	initGame(sprites []Sprite) *Game
+}
+
+func (p *Game) getSpriteCollisionInfo(name string) *spriteCollisionInfo {
+	if info, ok := p.sprCollisionInfos[name]; ok {
+		return info
+	}
+	panic("Unknown sprite " + name)
 }
 
 func (p *Game) IsRunned() bool {
@@ -300,6 +317,29 @@ func Gopt_Game_Run(game Gamer, resource any, gameConf ...*Config) {
 	if debugLoad {
 		log.Println("==> StartLoad", resource)
 	}
+
+	g.isCollisionByPixel = !proj.CollisionByShape
+	// auto set collision layer by default
+	g.isAutoSetCollisionLayer = proj.AutoSetCollisionLayer == nil || *proj.AutoSetCollisionLayer
+
+	if debugLoad {
+		log.Println("==> isCollisionByPixel", g.isCollisionByPixel)
+		log.Println("==> isAutoSetCollisionLayer", g.isAutoSetCollisionLayer)
+	}
+
+	physicMgr.SetCollisionSystemType(g.isCollisionByPixel)
+	if g.isAutoSetCollisionLayer {
+		g.sprCollisionInfos = make(map[string]*spriteCollisionInfo)
+		idx := 0
+		if len(g.typs) > 62 {
+			panic(fmt.Sprintf("In auto set collision layer mode, sprite count should <= 62, current count = %d", len(g.typs)))
+		}
+		for name, _ := range g.typs {
+			g.sprCollisionInfos[name] = &spriteCollisionInfo{Id: idx, Layer: 1 << idx}
+			idx++
+		}
+	}
+
 	g.startLoad(fs, &conf)
 	for i, n := 0, v.NumField(); i < n; i++ {
 		name, val := getFieldPtrOrAlloc(g, v, i)
@@ -504,8 +544,6 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 	p.Camera.SetCameraZoom(p.windowScale)
 	ui.SetWindowScale(p.windowScale)
 
-	physicMgr.SetCollisionSystemType(!proj.CollisionByShape)
-
 	// setup syncSprite's property
 	p.syncSprite = engine.NewBackdropProxy(p, p.getCostumePath(), p.getCostumeRenderScale())
 	p.setupBackdrop()
@@ -537,6 +575,21 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 	}
 	if loader, ok := g.Addr().Interface().(interface{ OnLoaded() }); ok {
 		loader.OnLoaded()
+	}
+
+	if p.isAutoSetCollisionLayer {
+		for _, ini := range inits {
+			spr := spriteOf(ini)
+			info := p.getSpriteCollisionInfo(spr.name)
+			info.Mask = 0
+			for target, _ := range spr.collisionTargets {
+				targetLayer := p.getSpriteCollisionInfo(target)
+				info.Mask += targetLayer.Layer
+			}
+			if debugLoad {
+				log.Println("init sprite collision info", spr.name, info.Layer, info.Mask)
+			}
+		}
 	}
 
 	p.audioId = p.sounds.allocAudio()
