@@ -48,6 +48,7 @@
 		let gameApp = null
 		let isShowEditor = false
 		let onGameError = null
+		let onGameExit = null
 		function onProgress(value) {
 			const progressEvent = new CustomEvent('onProgress', {
 				detail: {
@@ -79,9 +80,19 @@
 				onGameError(msg)
 			}
 		}
-
 		window.onGameError = function (callback) {
 			onGameError = callback
+		}
+
+		
+		window.gdspx_on_runtime_exit = function (code) {
+			if (onGameExit != null) {
+				onGameExit(code)
+			}
+		}
+
+		window.onGameExit = function (callback) {
+			onGameExit = callback
 		}
 
 		window.startGame = async (buffer, assetURLs = null, onSpxReady = null, logLevel = LOG_LEVEL_NONE) => {
