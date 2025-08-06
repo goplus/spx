@@ -7,4 +7,4 @@ onKey KeySpace, => {
 	reload "ch-2.json"
 }
 
-run "res", {Title: "Reloadable (by Go+)", Index: "ch-1.json"}
+run "res", {Title: "Reloadable (by XGo)", Index: "ch-1.json"}

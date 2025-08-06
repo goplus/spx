@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 The GoPlus Authors (goplus.org). All rights reserved.
+ * Copyright (c) 2021 The XGo Authors (xgo.dev). All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -179,7 +179,7 @@ func (p *Game) initGame(sprites []Sprite) *Game {
 	return p
 }
 
-// Gopt_Game_Main is required by Go+ compiler as the entry of a .gmx project.
+// Gopt_Game_Main is required by XGo compiler as the entry of a .gmx project.
 func Gopt_Game_Main(game Gamer, sprites ...Sprite) {
 	g := game.initGame(sprites)
 	if me, ok := game.(interface{ MainEntry() }); ok {
@@ -232,7 +232,7 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 	if conf.Title == "" {
 		dir, _ := os.Getwd()
 		appName := filepath.Base(dir)
-		conf.Title = appName + " (by Go+ Builder)"
+		conf.Title = appName + " (by XGo Builder)"
 	}
 
 	key := conf.ScreenshotKey

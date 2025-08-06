@@ -4,21 +4,21 @@ spx - A Scratch Compatible 2D Game Engine
 [![Build Status](https://github.com/goplus/spx/actions/workflows/go.yml/badge.svg)](https://github.com/goplus/spx/actions/workflows/go.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/goplus/spx)](https://goreportcard.com/report/github.com/goplus/spx)
 [![GitHub release](https://img.shields.io/github/v/tag/goplus/spx.svg?label=release)](https://github.com/goplus/spx/releases)
-[![Language](https://img.shields.io/badge/language-Go+-blue.svg)](https://github.com/goplus/gop)
+[![Language](https://img.shields.io/badge/language-XGo-blue.svg)](https://github.com/goplus/xgo)
 [![Scratch diff](https://img.shields.io/badge/compare-Scratch-green.svg)](https://github.com/xushiwei/goplus-spx-vs-scratch/blob/main/scratch-vs-spx-v1.0.0-beta3.pdf)
 
 ## How to build
 
-How to run games powered by Go+ spx engine?
+How to run games powered by XGo spx engine?
 
-* Download Go+ and build it. See https://github.com/goplus/gop#how-to-build.
+* Download XGo and build it. See https://github.com/goplus/xgo?tab=readme-ov-file#how-to-install.
 * Download spx and build it.
   * git clone `https://github.com/goplus/spx.git`
   * cd spx
   * go install -v ./...
 * Build a game and run.
   * cd `game-root-dir`
-  * gop run .
+  * xgo run .
 
 
 ## Games powered by spx
@@ -169,7 +169,7 @@ var (
 	gid   int
 )
 
-run "res", {Title: "Clone and Destory (by Go+)"}
+run "res", {Title: "Clone and Destory (by XGo)"}
 ```
 
 All these three variables in [main.spx](tutorial/03-Clone/main.spx) are shared by all sprites. `Arrow` and `Calf` are sprites that exist in this project. `gid` means `global id`. It is used to allocate id for all cloned `Calf` sprites.
