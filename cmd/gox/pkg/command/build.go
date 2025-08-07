@@ -85,9 +85,9 @@ func (pself *CmdTool) BuildDll() error {
 }
 func (pself *CmdTool) genGo() string {
 	rawdir, _ := os.Getwd()
-	projectDir, _ := filepath.Abs(pself.ProjectDir)
 	spxProjPath, _ := filepath.Abs(pself.ProjectDir + "/..")
 
+	// Generate code in spx project root directory
 	os.Chdir(spxProjPath)
 	envVars := []string{""}
 	tagStr := ""
@@ -100,10 +100,16 @@ func (pself *CmdTool) genGo() string {
 	} else {
 		util.RunXGo(envVars, "go", tagStr)
 	}
+
+	// Re-add replace directive if in spx development environment
+	// Copy generated file to project/go/main.go
 	os.MkdirAll(pself.GoDir, 0755)
 	os.Rename(path.Join(spxProjPath, "xgo_autogen.go"), path.Join(pself.GoDir, "main.go"))
-	os.Chdir(projectDir)
+
+	// Run go mod tidy in root directory
+	os.Chdir(spxProjPath)
 	util.RunGolang(nil, "mod", "tidy")
+
 	os.Chdir(rawdir)
 	return tagStr
 }
