@@ -60,60 +60,66 @@ func (pself *CmdTool) PrepareEnv(fsRelDir, dstDir string) {
 	// Handle go.mod file adaptively
 	pself.adaptGoMod()
 
+	// create a temp go file to run go mod tidy
+	tempFile, _ := filepath.Abs(path.Join(pself.TargetDir, "xgo_autogen.go"))
+	if _, err := os.Stat(tempFile); os.IsNotExist(err) {
+		tmp := `
+package main
+import "github.com/goplus/spx/v2"
+func main() {print(&spx.Game{})}
+`
+		os.WriteFile(tempFile, []byte(tmp), 0644)
+	}
 	rawDir, _ := os.Getwd()
-	os.Chdir(pself.GoDir)
+	os.Chdir(pself.TargetDir)
 	util.RunGolang(nil, "mod", "tidy")
-
+	// delete temp go file
+	os.Remove(tempFile)
 	os.Chdir(rawDir)
 }
 
 // adaptGoMod adapts the go.mod file for different directory structures
 func (pself *CmdTool) adaptGoMod() {
-	projDir := path.Join(pself.GoDir, "../")
-	goModPath := path.Join(projDir, "go.mod")
-	// Check if go.mod exists
-	if _, err := os.Stat(goModPath); os.IsNotExist(err) {
-		return
+	// Check if go.mod exists in project root
+	rootGoModPath, _ := filepath.Abs(path.Join(pself.TargetDir, "go.mod"))
+	if _, err := os.Stat(rootGoModPath); os.IsNotExist(err) {
+		// No go.mod in root, create one
+		pself.createDefaultGoMod(pself.TargetDir, false)
 	}
-
-	// Read go.mod content
-	content, err := os.ReadFile(goModPath)
-	if err != nil {
-		return
-	}
-
-	strContent := string(content)
-
-	// Check if we're in a spx directory by looking for spx/gop.mod
-	currentDir, _ := os.Getwd()
-	spxPath := pself.findSpxRoot(currentDir)
+	// Check if we need to add replace directive for local spx development
+	absTargetDir, _ := filepath.Abs(pself.TargetDir)
+	spxPath := pself.findSpxRoot(absTargetDir)
 
 	if spxPath != "" {
-		// We found spx root, calculate relative path
-		relPath, err := filepath.Rel(projDir, spxPath)
+		// We're in spx development environment, add replace directive
+		content, err := os.ReadFile(rootGoModPath)
 		if err != nil {
-			relPath = "../../../" // fallback to original
+			return
 		}
 
-		// Update the replace directive
-		oldPattern := `replace github.com/goplus/spx/v2 => ../../../`
-		newReplace := fmt.Sprintf("replace github.com/goplus/spx/v2 => %s", relPath)
-		replacedContent := strings.ReplaceAll(strContent, oldPattern, newReplace)
+		strContent := string(content)
+		// Check if replace directive already exists
+		if !strings.Contains(strContent, "replace github.com/goplus/spx/v2") {
+			// Calculate relative path from project to spx root
+			relPath, err := filepath.Rel(absTargetDir, spxPath)
+			if err != nil {
+				return
+			}
 
-		// Write back the modified content
-		os.WriteFile(goModPath, []byte(replacedContent), 0644)
-	} else {
-		// create default go mod file if not exist
-		pself.createDefaultGoMod(pself.TargetDir, false)
-		// copy root mod to project dir
-		util.CopyFile(path.Join(pself.TargetDir, "go.mod"), path.Join(projDir, "go.mod"))
+			// Add replace directive
+			replaceDir := fmt.Sprintf("\n\nreplace github.com/goplus/spx/v2 => %s\n", relPath)
+			strContent += replaceDir
+
+			// Write back the modified content
+			os.WriteFile(rootGoModPath, []byte(strContent), 0644)
+		}
 	}
 }
 
 // createDefaultGoMod ensures gop.mod exists if not in spx directory
 func (pself *CmdTool) createDefaultGoMod(dir string, forceWrite bool) {
 	// Not in spx directory, create gop.mod in target directory
-	gopModPath := path.Join(dir, "go.mod")
+	gopModPath, _ := filepath.Abs(path.Join(dir, "go.mod"))
 	if _, err := os.Stat(gopModPath); os.IsNotExist(err) || forceWrite {
 		gopModContent := pself.GoModTemplate
 		os.WriteFile(gopModPath, []byte(gopModContent), 0644)
@@ -122,7 +128,7 @@ func (pself *CmdTool) createDefaultGoMod(dir string, forceWrite bool) {
 
 // findSpxRoot finds the spx root directory by looking for gop.mod
 func (pself *CmdTool) findSpxRoot(startDir string) string {
-	currentDir := startDir
+	currentDir := filepath.Dir(startDir)
 	for {
 		gopModPath := path.Join(currentDir, "gop.mod")
 		if _, err := os.Stat(gopModPath); err == nil {
@@ -331,6 +337,15 @@ func (pself *CmdTool) Clear() error {
 	if err := os.Remove(gitignorePath); err != nil && !os.IsNotExist(err) {
 		// Only return an error if the file exists and couldn't be removed
 		return fmt.Errorf("failed to remove gitignore file: %w", err)
+	}
+	// Remove go.mod
+	if err := os.RemoveAll(path.Join(pself.TargetDir, "go.sum")); err != nil {
+		return fmt.Errorf("failed to remove project directory: %w", err)
+	}
+
+	// Remove go.mod
+	if err := os.RemoveAll(path.Join(pself.TargetDir, "xgo_autogen.go")); err != nil {
+		return fmt.Errorf("failed to remove project directory: %w", err)
 	}
 
 	return nil
