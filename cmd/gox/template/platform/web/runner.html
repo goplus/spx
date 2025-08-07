@@ -95,11 +95,12 @@
 			isShowEditor = false
 			_onSpxReady = onSpxReady
 			if(EnginePackMode == "worker"){
-				// ai interaction
+				window.setAIDescription = function (description) {
+					gameApp.callWorkerFunction("setAIDescription", description)
+				}
 				window.setAIInteractionAPIEndpoint = function (endpoint) {
 					gameApp.callWorkerFunction("setAIInteractionAPIEndpoint", endpoint)
 				}
-
 				window.setAIInteractionAPITokenProvider = function (tokenProviderFunction) {
 					gameApp.callWorkerFunction("setAIInteractionAPITokenProvider", tokenProviderFunction)
 				}
