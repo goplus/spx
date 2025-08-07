@@ -5,7 +5,6 @@ import (
 	_ "embed"
 	"fmt"
 	"go/build"
-	"log"
 	"os"
 	"path/filepath"
 
@@ -47,6 +46,8 @@ type CmdTool struct {
 	RuntimeTempDir string
 	RuntimePckPath string
 	RuntimeCmdPath string
+
+	GoModTemplate string
 }
 
 // RunCmd executes the specified command with the given parameters
@@ -78,6 +79,11 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		return err
+	}
+
+	// Handle init command early, before setupPaths
+	if cmd.Args.CmdName == "init" {
+		return cmd.Init()
 	}
 
 	// Setup paths
@@ -129,12 +135,6 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to setup environment: %v\n", err)
 		return err
-	}
-
-	switch cmd.Args.CmdName {
-	case "init":
-		log.Println("Initializing project...")
-		return nil
 	}
 
 	// Execute the command
