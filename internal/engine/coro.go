@@ -19,6 +19,10 @@ func GetGame() any {
 	return pgame
 }
 
+func IsSpxEnv() bool {
+	return GetGame() != nil
+}
+
 func SetCoroutines(co *coroutine.Coroutines) {
 	gco = co
 	profiler.SetGco(co)
