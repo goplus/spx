@@ -24,6 +24,15 @@ import (
 	goxfs "github.com/goplus/spx/v2/fs"
 )
 
+var aiDescription string
+
+func setAIDescription(this js.Value, args []js.Value) any {
+	if len(args) > 0 {
+		aiDescription = args[0].String()
+	}
+	return nil
+}
+
 var aiInteractionAPIEndpoint string
 
 func setAIInteractionAPIEndpoint(this js.Value, args []js.Value) any {
@@ -149,6 +158,7 @@ func logErrorAndExit(msg string, err error) {
 }
 
 func main() {
+	js.Global().Set("setAIDescription", js.FuncOf(setAIDescription))
 	js.Global().Set("setAIInteractionAPIEndpoint", js.FuncOf(setAIInteractionAPIEndpoint))
 	js.Global().Set("setAIInteractionAPITokenProvider", js.FuncOf(setAIInteractionAPITokenProvider))
 	js.Global().Set("goLoadData", js.FuncOf(loadData))
@@ -224,6 +234,9 @@ func Gopt_Player_Gopx_OnCmd[T any](p *Player, handler func(cmd T) error) {
 		wasmtrans.WithEndpoint(aiInteractionAPIEndpoint),
 		wasmtrans.WithTokenProvider(aiInteractionAPITokenProvider),
 	))
+	ai.SetDefaultKnowledgeBase(map[string]any{
+		"AI-generated descriptive summary of the game world": aiDescription,
+	})
 	ai.SetDefaultTaskRunner(func(task func()) {
 		var done bool
 		go func() {
