@@ -9,7 +9,10 @@ require (
 	golang.org/x/mobile v0.0.0-20220518205345-8578da9835fd
 )
 
-require golang.org/x/image v0.23.0 // indirect
+require (
+	github.com/petermattis/goid v0.0.0-20250721140440-ea1c0173183e // indirect
+	golang.org/x/image v0.23.0 // indirect
+)
 
 replace (
 	golang.org/x/image => golang.org/x/image v0.0.0-20210628002857-a66eb6448b8d

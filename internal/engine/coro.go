@@ -19,8 +19,18 @@ func GetGame() any {
 	return pgame
 }
 
-func IsSpxEnv() bool {
-	return GetGame() != nil
+func IsInCoroutine() bool {
+	if gco == nil {
+		return false
+	}
+	return gco.IsInCoroutine()
+}
+
+func GetCoroutineOwner() any {
+	if IsInCoroutine() {
+		return gco.Current().Obj
+	}
+	return nil
 }
 
 func SetCoroutines(co *coroutine.Coroutines) {

@@ -14,6 +14,7 @@ import (
 	"github.com/goplus/spx/v2/internal/debug"
 	"github.com/goplus/spx/v2/internal/engine/platform"
 	"github.com/goplus/spx/v2/internal/time"
+	"github.com/petermattis/goid"
 )
 
 var (
@@ -85,6 +86,9 @@ type Coroutines struct {
 	waitMutex sync.Mutex
 	waitCond  sync.Cond
 	debug     bool
+	
+	// goroutineIDs tracks all goroutine IDs created by CreateAndStart
+	goroutineIDs sync.Map // map[int64]bool
 }
 
 const (
@@ -195,6 +199,10 @@ func (p *Coroutines) CreateAndStart(start bool, tobj ThreadObj, fn func(me Threa
 
 	id.cond = sync.NewCond(&id.mutex) // Initialize the thread's condition variable
 	go func() {
+		// Track this goroutine ID
+		gid := goid.Get()
+		p.goroutineIDs.Store(gid, true)
+		
 		p.sema.Lock()
 		p.setCurrent(id)
 		defer func() {
@@ -203,6 +211,10 @@ func (p *Coroutines) CreateAndStart(start bool, tobj ThreadObj, fn func(me Threa
 			p.mutex.Unlock()
 			p.setWaitStatus(id, waitStatusDelete)
 			p.sema.Unlock()
+			
+			// Remove goroutine ID from tracking
+			p.goroutineIDs.Delete(gid)
+			
 			if e := recover(); e != nil {
 				if e != ErrAbortThread {
 					if p.onPanic != nil {
@@ -554,4 +566,12 @@ func (p *Coroutines) Update() {
 	// Save statistics for external access
 	lastDebugUpdateStats = stats
 
+}
+
+// IsInCoroutine checks if the current execution environment is within
+// a coroutine created by (*Coroutines) CreateAndStart.
+func (p *Coroutines) IsInCoroutine() bool {
+	currentGID := goid.Get()
+	_, exists := p.goroutineIDs.Load(currentGID)
+	return exists
 }
