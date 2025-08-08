@@ -215,6 +215,7 @@ func (*Game) syncUpdatePhysic() {
 }
 
 func syncInitSpritePhysicInfo(sprite *SpriteImpl, syncProxy *engine.Sprite) {
+	sprite.initCollisionParams()
 	// update collision layers
 	syncProxy.SetTriggerLayer(sprite.triggerLayer)
 	syncProxy.SetTriggerMask(sprite.triggerMask)

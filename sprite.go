@@ -248,6 +248,8 @@ type SpriteImpl struct {
 
 	penObj  *engine.Object
 	audioId engine.Object
+
+	collisionTargets map[string]bool
 }
 
 func (p *SpriteImpl) SetDying() { // dying: visible but can't be touched
@@ -280,11 +282,12 @@ func (p *SpriteImpl) init(
 	p.rotationStyle = toRotationStyle(spriteCfg.RotationStyle)
 	p.isVisible = spriteCfg.Visible
 	p.pivot = spriteCfg.Pivot
-
 	p.animBindings = make(map[string]string)
 	for key, val := range spriteCfg.AnimBindings {
 		p.animBindings[key] = val
 	}
+
+	p.collisionTargets = make(map[string]bool)
 
 	// bind physic config
 	p.collisionMask = parseLayerMaskValue(spriteCfg.CollisionMask)
@@ -337,6 +340,16 @@ func (p *SpriteImpl) init(
 
 func (p *SpriteImpl) awake() {
 	p.playDefaultAnim()
+}
+
+func (p *SpriteImpl) initCollisionParams() {
+	if p.g.isAutoSetCollisionLayer {
+		info := p.g.getSpriteCollisionInfo(p.name)
+		p.collisionMask = 0
+		p.collisionLayer = 0
+		p.triggerLayer = int64(info.Layer)
+		p.triggerMask = int64(info.Mask)
+	}
 }
 
 func (p *SpriteImpl) InitFrom(src *SpriteImpl) {
@@ -517,7 +530,7 @@ func (p *SpriteImpl) fireTouchEnd(obj *SpriteImpl) {
 	}
 }
 
-func (p *SpriteImpl) OnTouchStart__0(onTouchStart func(Sprite)) {
+func (p *SpriteImpl) _onTouchStart(onTouchStart func(Sprite)) {
 	p.hasOnTouchStart = true
 	p.allWhenTouchStart = &eventSink{
 		prev:  p.allWhenTouchStart,
@@ -529,14 +542,27 @@ func (p *SpriteImpl) OnTouchStart__0(onTouchStart func(Sprite)) {
 	}
 }
 
+func (p *SpriteImpl) OnTouchStart__0(onTouchStart func(Sprite)) {
+	// collision with other sprites by default
+	for name, _ := range p.g.sprs {
+		p.collisionTargets[name] = true
+	}
+	p._onTouchStart(onTouchStart)
+}
+
 func (p *SpriteImpl) OnTouchStart__1(onTouchStart func()) {
-	p.OnTouchStart__0(func(Sprite) {
+	// collision with all other sprites by default
+	for name, _ := range p.g.sprs {
+		p.collisionTargets[name] = true
+	}
+	p._onTouchStart(func(Sprite) {
 		onTouchStart()
 	})
 }
 
 func (p *SpriteImpl) OnTouchStart__2(sprite SpriteName, onTouchStart func(Sprite)) {
-	p.OnTouchStart__0(func(s Sprite) {
+	p.collisionTargets[sprite] = true
+	p._onTouchStart(func(s Sprite) {
 		impl := spriteOf(s)
 		if impl != nil && impl.name == sprite {
 			onTouchStart(s)
@@ -545,17 +571,21 @@ func (p *SpriteImpl) OnTouchStart__2(sprite SpriteName, onTouchStart func(Sprite
 }
 
 func (p *SpriteImpl) OnTouchStart__3(sprite SpriteName, onTouchStart func()) {
+	p.collisionTargets[sprite] = true
 	p.OnTouchStart__2(sprite, func(Sprite) {
 		onTouchStart()
 	})
 }
 
 func (p *SpriteImpl) OnTouchStart__4(sprites []SpriteName, onTouchStart func(Sprite)) {
-	p.OnTouchStart__0(func(s Sprite) {
+	for _, sprite := range sprites {
+		p.collisionTargets[sprite] = true
+	}
+	p._onTouchStart(func(s Sprite) {
 		impl := spriteOf(s)
 		if impl != nil {
-			for _, spName := range sprites {
-				if impl.name == spName {
+			for _, sprite := range sprites {
+				if impl.name == sprite {
 					onTouchStart(s)
 					return
 				}
@@ -565,6 +595,9 @@ func (p *SpriteImpl) OnTouchStart__4(sprites []SpriteName, onTouchStart func(Spr
 }
 
 func (p *SpriteImpl) OnTouchStart__5(sprites []SpriteName, onTouchStart func()) {
+	for _, sprite := range sprites {
+		p.collisionTargets[sprite] = true
+	}
 	p.OnTouchStart__4(sprites, func(Sprite) {
 		onTouchStart()
 	})
