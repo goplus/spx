@@ -2,6 +2,7 @@ package main
 
 //go:generate go tool qexp -outdir pkg github.com/goplus/spx/v2
 //go:generate go tool qexp -outdir pkg github.com/goplus/spx/v2/pkg/gdspx/pkg/engine
+//go:generate go tool qexp -outdir pkg github.com/goplus/spx/v2/pkg/spx
 //go:generate go tool qexp -outdir pkg github.com/goplus/builder/tools/ai
 
 // All packages available in the ispx Wasm runtime.
