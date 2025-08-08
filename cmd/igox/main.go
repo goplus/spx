@@ -5,7 +5,6 @@ package main
 import (
 	"archive/zip"
 	"bytes"
-	"errors"
 	"fmt"
 	"log"
 	"log/slog"
@@ -13,8 +12,6 @@ import (
 	"syscall/js"
 	_ "unsafe"
 
-	"github.com/goplus/builder/tools/ai"
-	"github.com/goplus/builder/tools/ai/wasmtrans"
 	"github.com/goplus/ixgo"
 	"github.com/goplus/ixgo/xgobuild"
 	"github.com/goplus/mod/modfile"
@@ -23,68 +20,6 @@ import (
 	"github.com/goplus/spx/v2/cmd/igox/zipfs"
 	goxfs "github.com/goplus/spx/v2/fs"
 )
-
-var aiInteractionAPIEndpoint string
-
-func setAIInteractionAPIEndpoint(this js.Value, args []js.Value) any {
-	if len(args) > 0 {
-		aiInteractionAPIEndpoint = args[0].String()
-	}
-	return nil
-}
-
-var aiInteractionAPITokenProvider func() string
-
-func setAIInteractionAPITokenProvider(this js.Value, args []js.Value) any {
-	if len(args) > 0 && args[0].Type() == js.TypeFunction {
-		tokenProviderFunc := args[0]
-		aiInteractionAPITokenProvider = func() string {
-			result := tokenProviderFunc.Invoke()
-			if result.Type() != js.TypeObject || result.Get("then").IsUndefined() {
-				return result.String()
-			}
-
-			resultChan := make(chan string, 1)
-			then := js.FuncOf(func(this js.Value, args []js.Value) any {
-				var result string
-				if len(args) > 0 {
-					result = args[0].String()
-				}
-				resultChan <- result
-				return nil
-			})
-			defer then.Release()
-
-			errChan := make(chan error, 1)
-			catch := js.FuncOf(func(this js.Value, args []js.Value) any {
-				errMsg := "promise rejected"
-				if len(args) > 0 {
-					errVal := args[0]
-					if errVal.Type() == js.TypeObject && errVal.Get("message").Type() == js.TypeString {
-						errMsg = fmt.Sprintf("promise rejected: %s", errVal.Get("message"))
-					} else if errVal.Type() == js.TypeString {
-						errMsg = fmt.Sprintf("promise rejected: %s", errVal)
-					} else {
-						errMsg = fmt.Sprintf("promise rejected: %v", errVal)
-					}
-				}
-				errChan <- errors.New(errMsg)
-				return nil
-			})
-			defer catch.Release()
-
-			result.Call("then", then).Call("catch", catch)
-			select {
-			case result := <-resultChan:
-				return result
-			case err := <-errChan:
-				log.Printf("failed to get token: %v", err)
-				return ""
-			}
-		}
-	}
-	return nil
-}
 
 var dataChannel = make(chan []byte)
 
@@ -149,8 +84,11 @@ func logErrorAndExit(msg string, err error) {
 }
 
 func main() {
-	js.Global().Set("setAIInteractionAPIEndpoint", js.FuncOf(setAIInteractionAPIEndpoint))
-	js.Global().Set("setAIInteractionAPITokenProvider", js.FuncOf(setAIInteractionAPITokenProvider))
+	aiFunc := func(this js.Value, args []js.Value) any { return nil }
+	js.Global().Set("setAIDescription", js.FuncOf(aiFunc))
+	js.Global().Set("setAIInteractionAPIEndpoint", js.FuncOf(aiFunc))
+	js.Global().Set("setAIInteractionAPITokenProvider", js.FuncOf(aiFunc))
+
 	js.Global().Set("goLoadData", js.FuncOf(loadData))
 
 	js.Global().Set("goWasmInit", js.FuncOf(goWasmInit))
@@ -183,7 +121,6 @@ func main() {
 		Class:    "Game",
 		Works:    []*modfile.Class{{Ext: ".spx", Class: "SpriteImpl"}},
 		PkgPaths: []string{"github.com/goplus/spx/v2", "math"},
-		Import:   []*modfile.Import{{Name: "ai", Path: "github.com/goplus/builder/tools/ai"}},
 	})
 
 	// Register patch for spx to support functions with generic type like `Gopt_Game_Gopx_GetWidget`.
@@ -204,33 +141,6 @@ func Gopt_Game_Gopx_GetWidget[T any](sg ShapeGetter, name string) *T {
 `); err != nil {
 		log.Fatalln("Failed to register package patch for github.com/goplus/spx:", err)
 	}
-
-	if err := xgobuild.RegisterPackagePatch(ctx, "github.com/goplus/builder/tools/ai", `
-package ai
-
-import . "github.com/goplus/builder/tools/ai"
-
-func Gopt_Player_Gopx_OnCmd[T any](p *Player, handler func(cmd T) error) {
-	var cmd T
-	PlayerOnCmd_(p, cmd, handler)
-}
-`); err != nil {
-		log.Fatalln("Failed to register package patch for github.com/goplus/builder/tools/ai:", err)
-	}
-	ai.SetDefaultTransport(wasmtrans.New(
-		wasmtrans.WithEndpoint(aiInteractionAPIEndpoint),
-		wasmtrans.WithTokenProvider(aiInteractionAPITokenProvider),
-	))
-	ai.SetDefaultTaskRunner(func(task func()) {
-		var done bool
-		go func() {
-			task()
-			done = true
-		}()
-		for !done {
-			spxEngineWaitNextFrame()
-		}
-	})
 
 	ctx.RegisterExternal("fmt.Print", func(frame *ixgo.Frame, a ...any) (n int, err error) {
 		msg := fmt.Sprint(a...)
@@ -260,6 +170,3 @@ func Gopt_Player_Gopx_OnCmd[T any](p *Player, handler func(cmd T) error) {
 		return
 	}
 }
-
-//go:linkname spxEngineWaitNextFrame github.com/goplus/spx/v2/internal/engine.WaitNextFrame
-func spxEngineWaitNextFrame() float64
