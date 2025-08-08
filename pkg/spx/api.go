@@ -7,20 +7,63 @@ import (
 	"github.com/goplus/spx/v2/internal/engine"
 )
 
-// HasInit checks if the SPX engine has been initialized.
-func IsSpxEnv() bool {
-	return engine.IsSpxEnv()
+func isSpxEnv() bool {
+	return engine.GetGame() != nil
 }
 
-// Executes the given function in a native Go goroutine from the current SPX coroutine context and waits for completion.
-// While waiting, it yields control via waitNextFrame to avoid blocking the SPX main thread.
-// Use this when you need to run potentially blocking Go operations (e.g., network requests, file I/O) from within SPX.
-func RunGoFromSpx(fn func()) {
+// IsInCoroutine checks whether the current execution context is within an SPX coroutine.
+// Returns true if running inside an SPX coroutine, false if running in a regular Go goroutine
+// or the main thread.
+//
+// This function is useful for determining the appropriate execution strategy when your code
+// needs to work in both SPX coroutine and regular Go contexts.
+//
+// Example:
+//
+//	if spx.IsInCoroutine() {
+//	    // Use SPX-specific functions like Wait() or WaitNextFrame()
+//	    spx.Wait(1.0)
+//	} else {
+//	    // Use regular Go functions
+//	    time.Sleep(time.Second)
+//	}
+func IsInCoroutine() bool {
+	return engine.IsInCoroutine()
+}
+
+// ExecuteNative executes the given function in a native Go goroutine and waits for its completion.
+// While waiting, if it is in spx corotine, it yields control via WaitNextFrame to avoid blocking
+// the SPX main thread.
+//
+// This function is essential when you need to perform blocking Go operations (such as network requests,
+// file I/O, or system calls) from within an SPX coroutine without freezing the game engine.
+//
+// If called from outside an SPX coroutine context, the function executes synchronously.
+//
+// Example:
+//
+//	spx.ExecuteNative(func() {
+//	    // Perform blocking network request
+//	    resp, err := http.Get("https://api.example.com/data")
+//	    if err != nil {
+//	        log.Printf("Error: %v", err)
+//	        return
+//	    }
+//	    defer resp.Body.Close()
+//	    // Process response...
+//	})
+func ExecuteNative(fn func(owner any)) {
+	// if not in spx coro, just run it
+	if !engine.IsInCoroutine() {
+		fn(nil)
+		return
+	}
+	owner := engine.GetCoroutineOwner()
 	done := &atomic.Bool{}
-	// Run the actual logic in a go routine to avoid blocking
+	// Execute the actual logic in a go routine to avoid blocking
 	go func() {
 		defer done.Store(true)
-		fn()
+		fn(owner)
 	}()
 	// Wait for completion while yielding control to SPX
 	for !done.Load() {
@@ -31,11 +74,22 @@ func RunGoFromSpx(fn func()) {
 // Executes the given function in an SPX coroutine from the current Go goroutine context and waits for completion.
 // This function blocks until fn finishes execution.
 // Use this when you need to synchronously wait for the SPX coroutine to complete.
-func RunSpxFromGo(fn func()) {
+//
+// Parameters:
+//
+//	owner - The SPX coroutine owner. When the owner is destroyed, all coroutines created by this owner will be properly stopped.
+//	fn - The function to execute in the coroutine context.
+func Execute(owner any, fn func(owner any)) {
+	// in spx coro, just run it
+	if engine.IsInCoroutine() {
+		fn(owner)
+		return
+	}
+
 	done := make(chan struct{}, 1)
-	StartSpxCoro(func() {
+	Go(owner, func(any) {
 		defer close(done)
-		fn()
+		fn(owner)
 	})
 	<-done
 }
@@ -43,6 +97,12 @@ func RunSpxFromGo(fn func()) {
 // Starts a new spx coroutine that executes the given function concurrently.
 // This is useful for running multiple operations in parallel without blocking
 // the main execution flow.
+//
+// Parameters:
+//
+//	owner - The SPX coroutine owner. When the owner is destroyed, all coroutines created by this owner will be properly stopped.
+//	        If nil, the current coroutine's owner or the game instance will be used as the owner.
+//	fn - The function to execute in the coroutine context.
 //
 // IMPORTANT: For long-running tasks, you MUST call Wait() or WaitNextFrame()
 // periodically to yield control back to the engine. Without these calls,
@@ -56,7 +116,7 @@ func RunSpxFromGo(fn func()) {
 //
 //	done := false
 //	// ... do something
-//	spx.GoAsync(func() {
+//	spx.Go(owner, func(owner any) {
 //	    // ... do something
 //	    for !done {
 //	        // Do some work here
@@ -66,17 +126,24 @@ func RunSpxFromGo(fn func()) {
 //
 // Example of simple delayed execution:
 //
-//	spx.GoAsync(func() {
+//	spx.Go(owner, func(owner any) {
 //	    spx.Wait(2.0)
 //	    fmt.Println("Hello after 2 seconds")
 //	})
-func StartSpxCoro(fn func()) {
-	if IsSpxEnv() {
-		engine.Go(engine.GetGame(), func() {
-			fn()
+func Go(owner any, fn func(owner any)) {
+	if isSpxEnv() {
+		if owner == nil {
+			if IsInCoroutine() {
+				owner = engine.GetCoroutineOwner()
+			} else {
+				owner = engine.GetGame()
+			}
+		}
+		engine.Go(owner, func() {
+			fn(owner)
 		})
 	} else {
-		go fn()
+		go fn(owner)
 	}
 }
 
@@ -99,7 +166,7 @@ func StartSpxCoro(fn func()) {
 //
 //	actualTime := spx.Wait(1.5) // Wait for 1.5 seconds
 func Wait(secs float64) float64 {
-	if IsSpxEnv() {
+	if engine.IsInCoroutine() {
 		return engine.Wait(secs)
 	} else {
 		// Fallback to a regular wait
@@ -129,7 +196,7 @@ func Wait(secs float64) float64 {
 //	    }
 //	}
 func WaitNextFrame() float64 {
-	if IsSpxEnv() {
+	if engine.IsInCoroutine() {
 		return engine.WaitNextFrame()
 	} else {
 		// Fallback to a regular wait
