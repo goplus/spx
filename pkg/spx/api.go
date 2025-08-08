@@ -11,6 +11,33 @@ func isSpxEnv() bool {
 	return engine.GetGame() != nil
 }
 
+// IsAbortThreadError checks whether the given error is an SPX coroutine termination error.
+// This function is used to determine if an error was thrown due to SPX coroutine termination.
+//
+// Parameters:
+//
+//	err - The error to check
+//
+// Returns:
+//
+//	true if the error is an SPX coroutine termination error, false otherwise
+//
+// Example:
+//
+//	defer func() {
+//	    if r := recover(); r != nil {
+//	        if spx.IsAbortThreadError(r) {
+//	            // Handle SPX coroutine termination
+//	            return
+//	        }
+//	        // Handle other panics
+//	        panic(r)
+//	    }
+//	}()
+func IsAbortThreadError(err any) bool {
+	return engine.IsAbortThreadError(err)
+}
+
 // IsInCoroutine checks whether the current execution context is within an SPX coroutine.
 // Returns true if running inside an SPX coroutine, false if running in a regular Go goroutine
 // or the main thread.

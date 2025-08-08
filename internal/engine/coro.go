@@ -26,6 +26,10 @@ func IsInCoroutine() bool {
 	return gco.IsInCoroutine()
 }
 
+func IsAbortThreadError(err any) bool {
+	return coroutine.IsAbortThreadError(err)
+}
+
 func GetCoroutineOwner() any {
 	if IsInCoroutine() {
 		return gco.Current().Obj
