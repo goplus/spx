@@ -86,7 +86,7 @@ type Coroutines struct {
 	waitMutex sync.Mutex
 	waitCond  sync.Cond
 	debug     bool
-	
+
 	// goroutineIDs tracks all goroutine IDs created by CreateAndStart
 	goroutineIDs sync.Map // map[int64]bool
 }
@@ -202,7 +202,7 @@ func (p *Coroutines) CreateAndStart(start bool, tobj ThreadObj, fn func(me Threa
 		// Track this goroutine ID
 		gid := goid.Get()
 		p.goroutineIDs.Store(gid, true)
-		
+
 		p.sema.Lock()
 		p.setCurrent(id)
 		defer func() {
@@ -211,10 +211,10 @@ func (p *Coroutines) CreateAndStart(start bool, tobj ThreadObj, fn func(me Threa
 			p.mutex.Unlock()
 			p.setWaitStatus(id, waitStatusDelete)
 			p.sema.Unlock()
-			
+
 			// Remove goroutine ID from tracking
 			p.goroutineIDs.Delete(gid)
-			
+
 			if e := recover(); e != nil {
 				if e != ErrAbortThread {
 					if p.onPanic != nil {
@@ -574,4 +574,8 @@ func (p *Coroutines) IsInCoroutine() bool {
 	currentGID := goid.Get()
 	_, exists := p.goroutineIDs.Load(currentGID)
 	return exists
+}
+
+func IsAbortThreadError(err any) bool {
+	return err == ErrAbortThread
 }
