@@ -4,15 +4,13 @@ go 1.23.0
 
 require (
 	github.com/h2non/filetype v1.1.3
+	github.com/petermattis/goid v0.0.0-20250721140440-ea1c0173183e
 	github.com/pkg/errors v0.9.1
 	github.com/realdream-ai/mathf v0.0.0-20250513071532-e55e1277a8c5
 	golang.org/x/mobile v0.0.0-20220518205345-8578da9835fd
 )
 
-require (
-	github.com/petermattis/goid v0.0.0-20250721140440-ea1c0173183e // indirect
-	golang.org/x/image v0.23.0 // indirect
-)
+require golang.org/x/image v0.23.0 // indirect
 
 replace (
 	golang.org/x/image => golang.org/x/image v0.0.0-20210628002857-a66eb6448b8d

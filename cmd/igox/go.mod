@@ -5,7 +5,6 @@ go 1.24.0
 tool github.com/goplus/ixgo/cmd/qexp
 
 require (
-	github.com/goplus/builder/tools/ai v0.0.0-20250522033218-53c368333ac2
 	github.com/goplus/ixgo v0.52.0
 	github.com/goplus/mod v0.17.1
 	github.com/goplus/reflectx v1.4.2
@@ -17,6 +16,7 @@ require (
 	github.com/goplus/gogen v1.19.0 // indirect
 	github.com/goplus/xgo v1.5.0 // indirect
 	github.com/h2non/filetype v1.1.3 // indirect
+	github.com/petermattis/goid v0.0.0-20250721140440-ea1c0173183e // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/qiniu/x v1.15.1 // indirect
 	github.com/realdream-ai/mathf v0.0.0-20250513071532-e55e1277a8c5 // indirect
@@ -33,6 +33,7 @@ require (
 
 replace (
 	github.com/goplus/spx/v2 => ../../
+	github.com/goplus/spx/v2/pkg/spx => ../../pkg/spx
 	golang.org/x/image => golang.org/x/image v0.0.0-20210628002857-a66eb6448b8d
 	golang.org/x/mobile => golang.org/x/mobile v0.0.0-20210902104108-5d9a33257ab5
 )
