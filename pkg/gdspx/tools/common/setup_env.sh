@@ -157,12 +157,9 @@ prepare_env() {
     download_engine
     if [[ "$(uname)" == "Darwin" ]]; then
         # check if vulkan sdk is already installed
-        if command -v vulkaninfo &>/dev/null || [ -d "$HOME/VulkanSDK" ]; then
-            echo "vulkan sdk already installed, skip installation"
-        else
-            echo "install macos vulkan sdk"
-            $ENGINE_DIR/misc/scripts/install_vulkan_sdk_macos.sh
-        fi
+        echo "try to install macos vulkan sdk"
+        $ENGINE_DIR/misc/scripts/install_vulkan_sdk_macos.sh
+        vulkaninfo --summary
     fi 
 }
 
