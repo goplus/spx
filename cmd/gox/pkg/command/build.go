@@ -117,6 +117,9 @@ func (pself *CmdTool) BuildDll() error {
 			archs = []string{tarArch}
 		}
 	}
+	if runtime.GOOS == "darwin" {
+		archs = []string{"amd64", "arm64"}
+	}
 
 	rawdir, _ := os.Getwd()
 	tagStr := pself.genGo()

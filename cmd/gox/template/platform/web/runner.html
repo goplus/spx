@@ -52,9 +52,9 @@
 		let isShowEditor = false
 		let onGameError = null
 		let _onSpxReady = null
+		let lastGameApp = null
 
 		window.spxIsProxyThreadMode = false
-		window.spxIsForceDebugLog = false
 		function onProgress(value) {
 			const progressEvent = new CustomEvent('onProgress', {
 				detail: {
@@ -91,8 +91,9 @@
 			onGameError = callback
 		}
 
-		window.startGame = async (buffer, assetURLs = null, onSpxReady = null) => {
+		window.startGame = async (buffer, assetURLs = null, onSpxReady = null, cfg = null) => {
 			isShowEditor = false
+			lastGameApp = null
 			_onSpxReady = onSpxReady
 			if(EnginePackMode == "worker"){
 				window.setAIDescription = function (description) {
@@ -118,7 +119,7 @@
 				'onProgress': onProgress,
 				"gameCanvas": document.getElementById('game-canvas'),
 				"projectData": new Uint8Array(buffer),
-				"logLevel": window.spxIsForceDebugLog ? LOG_LEVEL_VERBOSE : LOG_LEVEL_NONE,
+				"logLevel": LOG_LEVEL_NONE,
 				"assetURLs": {
 					"engine.zip": "/engine.zip",
 					"game.zip": "/game.zip",
@@ -126,9 +127,14 @@
 					"engine.wasm": "/engine.wasm",
 				},
 				"onSpxReady": onSpxReady,
+				"recordingOnGameStart": false,
+				"autoDownloadRecordedVideo":false,
 			};
 			if (assetURLs != null) {
 				config.assetURLs = assetURLs
+			}
+			if (cfg != null) {
+				Object.assign(config, cfg)
 			}
 
 			if (gameApp != null) {
@@ -139,6 +145,42 @@
 			gameApp = new GameApp(config);
 			await gameApp.RunGame();
 		}
+		
+		window.startRecording = () => {
+			if (gameApp == null) {
+				console.error("gameApp is null, should call startGame first")
+				return
+			}
+			gameApp.startRecording()
+		}
+
+		window.stopRecording = async () => {
+			if (gameApp == null) {
+				console.error("gameApp is null, should call startGame first")
+				return
+			}
+			return await gameApp.stopRecording()
+		}
+
+		window.getRecordedVideo = () => {
+			let app = gameApp || lastGameApp
+			if (app == null) {
+				console.error("gameApp is null, should call startGame first")
+				return null
+			}
+			lastGameApp = null
+			return app.getRecordedVideo()
+		}
+
+		window.downloadRecordedVideo = (filename) => {
+			let app = gameApp || lastGameApp
+			if (app == null) {
+				console.error("gameApp is null, should call startGame first")
+				return null
+			}
+			lastGameApp = null
+			app.downloadRecordedVideo(filename)
+		}
 
 
 		window.stopGame = async () => {
@@ -147,6 +189,7 @@
 				return
 			}
 			await gameApp.StopGame()
+			lastGameApp = gameApp
 			gameApp = null
 		}
 

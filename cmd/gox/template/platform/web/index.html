@@ -126,7 +126,7 @@
 		async function stopGame() {
 			runnerWindow.stopGame()
 		}
-
+		const LOG_LEVEL_VERBOSE = 0
 		async function startProject(zipUrl) {
 			runnerWindow.addEventListener('onProgress', (event) => {
 				onProgress(event.detail.progress)
@@ -138,6 +138,10 @@
 			let buffer = await (await (fetch(zipUrl))).arrayBuffer();
 			await runnerWindow.startGame(buffer, null, function () {
 				runnerWindow.setAIInteractionAPIEndpoint("http://127.0.0.1:8000")
+			},{ 
+				"recordingOnGameStart": true,
+				"autoDownloadRecordedVideo":true,
+				"logLevel":LOG_LEVEL_VERBOSE,
 			});
 		}
 	</script>
