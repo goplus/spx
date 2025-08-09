@@ -9,11 +9,8 @@ import (
 	"unsafe"
 )
 
-var (
-	// ErrCannotYieldANonrunningThread represents an "can not yield a non-running thread" error.
-	ErrCannotYieldANonrunningThread = errors.New("can not yield a non-running thread")
-	ErrAbortThread                  = errors.New("abort thread")
-)
+// ErrCannotYieldANonrunningThread represents an "can not yield a non-running thread" error.
+var ErrCannotYieldANonrunningThread = errors.New("can not yield a non-running thread")
 
 // -------------------------------------------------------------------------------------
 
@@ -30,11 +27,9 @@ func (p *threadImpl) Stopped() bool {
 }
 
 // Thread represents a coroutine id.
-//
 type Thread = *threadImpl
 
 // Coroutines represents a coroutine manager.
-//
 type Coroutines struct {
 	suspended map[Thread]bool
 	current   Thread
@@ -44,7 +39,6 @@ type Coroutines struct {
 }
 
 // New creates a coroutine manager.
-//
 func New() *Coroutines {
 	p := &Coroutines{
 		suspended: make(map[Thread]bool),
@@ -54,7 +48,6 @@ func New() *Coroutines {
 }
 
 // Create creates a new coroutine.
-//
 func (p *Coroutines) Create(tobj ThreadObj, fn func(me Thread) int) Thread {
 	return p.CreateAndStart(false, tobj, fn)
 }
@@ -68,7 +61,6 @@ func (p *Coroutines) Current() Thread {
 }
 
 // CreateAndStart creates and executes the new coroutine.
-//
 func (p *Coroutines) CreateAndStart(start bool, tobj ThreadObj, fn func(me Thread) int) Thread {
 	id := &threadImpl{Obj: tobj}
 	go func() {
@@ -79,11 +71,6 @@ func (p *Coroutines) CreateAndStart(start bool, tobj ThreadObj, fn func(me Threa
 			delete(p.suspended, id)
 			p.mutex.Unlock()
 			p.sema.Unlock()
-			if e := recover(); e != nil {
-				if e != ErrAbortThread {
-					panic(e)
-				}
-			}
 		}()
 		fn(id)
 	}()
@@ -94,7 +81,7 @@ func (p *Coroutines) CreateAndStart(start bool, tobj ThreadObj, fn func(me Threa
 }
 
 func (p *Coroutines) Abort() {
-	panic(ErrAbortThread)
+	runtime.Goexit()
 }
 
 func (p *Coroutines) StopIf(filter func(th Thread) bool) {
@@ -108,7 +95,6 @@ func (p *Coroutines) StopIf(filter func(th Thread) bool) {
 }
 
 // Yield suspends a running coroutine.
-//
 func (p *Coroutines) Yield(me Thread) {
 	if p.Current() != me {
 		panic(ErrCannotYieldANonrunningThread)
@@ -124,12 +110,11 @@ func (p *Coroutines) Yield(me Thread) {
 
 	p.setCurrent(me)
 	if me.stopped_ { // check stopped
-		panic(ErrAbortThread)
+		runtime.Goexit()
 	}
 }
 
 // Resume resumes a suspended coroutine.
-//
 func (p *Coroutines) Resume(th Thread) {
 	for {
 		done := false
@@ -148,7 +133,6 @@ func (p *Coroutines) Resume(th Thread) {
 }
 
 // Sched func.
-//
 func (p *Coroutines) Sched(me Thread) {
 	go func() {
 		p.Resume(me)

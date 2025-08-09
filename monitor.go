@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 The GoPlus Authors (goplus.org). All rights reserved.
+ * Copyright (c) 2021 The XGo Authors (xgo.dev). All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -191,7 +191,9 @@ func (p *Monitor) draw(dc drawContext) {
 			w = stmDefaultW
 		}
 		drawRoundRect(dc, x, y, w, h, p.color, p.color)
-		render.Draw(dc.Image, int(x+((w-textW)/2)), int(y), color.White, 0)
+		if val != "" {
+			render.Draw(dc.Image, int(x+((w-textW)/2)), int(y), color.White, 0)
+		}
 	default:
 		font := getOrCreateFont(int(p.size * 12))
 		labelRender := gdi.NewTextRender(font, 0x80000, 0)
@@ -213,7 +215,9 @@ func (p *Monitor) draw(dc drawContext) {
 		w := labelW + textRectW + hGap*2
 		h := labelH + vGap*2
 		drawRoundRect(dc, x, y, w, h, stmBackground, stmBackgroundPen)
-		labelRender.Draw(dc.Image, int(x+hGap), int(y+vGap), color.Black, 0)
+		if p.label != "" {
+			labelRender.Draw(dc.Image, int(x+hGap), int(y+vGap), color.Black, 0)
+		}
 
 		textGap2Right := -1.0
 		textGapV := 2.0
@@ -224,8 +228,9 @@ func (p *Monitor) draw(dc drawContext) {
 		y2 := y + textGapV
 		h2 := h - textGapV*2
 		drawRoundRect(dc, x2, y2, w2, h2, stmValueground, stmValueRectPen)
-		textRender.Draw(dc.Image, int(x2+(w2-textW)/2+textPaddingOffset), int(y+vGap+(labelH-textH)/2), color.White, 0)
-
+		if val != "" {
+			textRender.Draw(dc.Image, int(x2+(w2-textW)/2+textPaddingOffset), int(y+vGap+(labelH-textH)/2), color.White, 0)
+		}
 	}
 }
 

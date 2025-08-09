@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 The GoPlus Authors (goplus.org). All rights reserved.
+ * Copyright (c) 2021 The XGo Authors (xgo.dev). All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -155,6 +155,7 @@ type Sprite interface {
 	Move__0(step float64)
 	Move__1(step int)
 	NextCostume()
+	Name() string
 	OnCloned__0(onCloned func(data interface{}))
 	OnCloned__1(onCloned func())
 	OnMoving__0(onMoving func(mi *MovingInfo))
@@ -163,6 +164,8 @@ type Sprite interface {
 	OnTouchStart__1(onTouchStart func())
 	OnTouchStart__2(sprite SpriteName, onTouchStart func(Sprite))
 	OnTouchStart__3(sprite SpriteName, onTouchStart func())
+	OnTouchStart__4(sprite []SpriteName, onTouchStart func(Sprite))
+	OnTouchStart__5(sprite []SpriteName, onTouchStart func())
 	OnTurning__0(onTurning func(ti *TurningInfo))
 	OnTurning__1(onTurning func())
 	Parent() *Game
@@ -268,6 +271,10 @@ type SpriteImpl struct {
 
 	collider Collider
 }
+
+var _ Sprite = (*SpriteImpl)(nil)
+
+func (p *SpriteImpl) Main() {}
 
 func (p *SpriteImpl) SetDying() { // dying: visible but can't be touched
 	p.isDying = true
@@ -495,7 +502,7 @@ func cloneSprite(out reflect.Value, outPtr Sprite, in reflect.Value, v specsp) *
 		dest.OnCloned__1(func() {
 			dest.awake()
 		})
-		outPtr.Main()
+		runMain(outPtr.Main)
 	}
 	return dest
 }
@@ -517,6 +524,10 @@ func Gopt_SpriteImpl_Clone__1(sprite Sprite, data interface{}) {
 	if dest.hasOnCloned {
 		dest.doWhenCloned(dest, data)
 	}
+}
+
+func (p *SpriteImpl) Name() string {
+	return p.name
 }
 
 func (p *SpriteImpl) OnCloned__0(onCloned func(data interface{})) {
@@ -584,6 +595,26 @@ func (p *SpriteImpl) OnTouchStart__2(sprite SpriteName, onTouchStart func(Sprite
 
 func (p *SpriteImpl) OnTouchStart__3(sprite SpriteName, onTouchStart func()) {
 	p.OnTouchStart__2(sprite, func(Sprite) {
+		onTouchStart()
+	})
+}
+
+func (p *SpriteImpl) OnTouchStart__4(sprites []SpriteName, onTouchStart func(Sprite)) {
+	p.OnTouchStart__0(func(s Sprite) {
+		impl := spriteOf(s)
+		if impl != nil {
+			for _, spName := range sprites {
+				if impl.name == spName {
+					onTouchStart(s)
+					return
+				}
+			}
+		}
+	})
+}
+
+func (p *SpriteImpl) OnTouchStart__5(sprites []SpriteName, onTouchStart func()) {
+	p.OnTouchStart__4(sprites, func(Sprite) {
 		onTouchStart()
 	})
 }
@@ -862,9 +893,9 @@ func (p *SpriteImpl) goAnimateInternal(name SpriteAnimationName, ani *aniConfig,
 	if ani.AniType == aniTypeFrame {
 		p.goSetCostume(ani.From)
 		if ani.Fps == 0 { //compute fps
-			ani.Fps = math.Abs(tovalf-fromvalf) / ani.Duration
+			ani.Fps = math.Abs(tovalf-fromvalf+1) / ani.Duration
 		} else {
-			ani.Duration = math.Abs(tovalf-fromvalf) / ani.Fps
+			ani.Duration = math.Abs(tovalf-fromvalf+1) / ani.Fps
 		}
 	}
 
@@ -877,7 +908,7 @@ func (p *SpriteImpl) goAnimateInternal(name SpriteAnimationName, ani *aniConfig,
 
 	an := anim.NewAnim(name, fps, framenum, ani.IsLoop)
 	// create channels
-	defaultChannel := []*anim.AnimationKeyFrame{{Frame: 0, Value: fromval}, {Frame: framenum, Value: toval}}
+	defaultChannel := []*anim.AnimationKeyFrame{{Frame: 0, Value: fromval}, {Frame: framenum - 1, Value: toval}}
 	switch ani.AniType {
 	case aniTypeFrame:
 		an.AddChannel(AnimChannelFrame, anim.AnimValTypeInt, defaultChannel)
@@ -893,8 +924,8 @@ func (p *SpriteImpl) goAnimateInternal(name SpriteAnimationName, ani *aniConfig,
 		iFrameTo := int(math.Round(frameTo))
 		frameCount := iFrameTo - iFrameFrom + 1
 		framePerIter := int(float64(frameCount) * ani.Fps / float64(ani.FrameFps))
-		iterCount := int(framenum / framePerIter)
-		is_need_ext := framenum != iterCount*int(ani.FrameFps)
+		iterCount := (framenum + 1) / framePerIter
+		is_need_ext := (framenum + 1) != iterCount*framePerIter
 		arySize := iterCount * 2
 		if is_need_ext {
 			arySize += 2

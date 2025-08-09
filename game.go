@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 The GoPlus Authors (goplus.org). All rights reserved.
+ * Copyright (c) 2021 The XGo Authors (xgo.dev). All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -179,11 +179,11 @@ func (p *Game) initGame(sprites []Sprite) *Game {
 	return p
 }
 
-// Gopt_Game_Main is required by Go+ compiler as the entry of a .gmx project.
+// Gopt_Game_Main is required by XGo compiler as the entry of a .gmx project.
 func Gopt_Game_Main(game Gamer, sprites ...Sprite) {
 	g := game.initGame(sprites)
 	if me, ok := game.(interface{ MainEntry() }); ok {
-		me.MainEntry()
+		runMain(me.MainEntry)
 	}
 	if !g.isRunned {
 		Gopt_Game_Run(game, "assets")
@@ -232,7 +232,7 @@ func Gopt_Game_Run(game Gamer, resource interface{}, gameConf ...*Config) {
 	if conf.Title == "" {
 		dir, _ := os.Getwd()
 		appName := filepath.Base(dir)
-		conf.Title = appName + " (by Go+ Builder)"
+		conf.Title = appName + " (by XGo Builder)"
 	}
 
 	key := conf.ScreenshotKey
@@ -455,7 +455,7 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 				spr.awake()
 			})
 		}
-		ini.Main()
+		runMain(ini.Main)
 	}
 
 	p.doWindowSize() // set window size
@@ -737,6 +737,7 @@ func (p *Game) initEventLoop() {
 
 func init() {
 	gco = coroutine.New()
+	lastSched = time.Now()
 }
 
 var (
@@ -770,18 +771,33 @@ func SchedNow() int {
 	return 0
 }
 
+func runMain(call func()) {
+	isSchedInMain = true
+	mainSchedTime = time.Now()
+	call()
+	isSchedInMain = false
+}
+
 func Sched() int {
 	now := time.Now()
-	if now.Sub(lastSched) >= 3e7 {
-		if me := gco.Current(); me != nil {
-			gco.Sched(me)
+	if isSchedInMain {
+		if now.Sub(mainSchedTime) >= time.Second*3 {
+			panic("Main execution timed out. Please check if there is an infinite loop in the code.")
 		}
-		lastSched = now
+	} else {
+		if now.Sub(lastSched) >= 3e7 {
+			if me := gco.Current(); me != nil {
+				gco.Sched(me)
+			}
+			lastSched = now
+		}
 	}
 	return 0
 }
 
 var lastSched time.Time
+var isSchedInMain bool
+var mainSchedTime time.Time
 
 // -----------------------------------------------------------------------------
 

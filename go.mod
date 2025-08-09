@@ -8,7 +8,7 @@ require (
 	github.com/hajimehoshi/ebiten/v2 v2.7.9
 	github.com/pkg/errors v0.9.1
 	github.com/qiniu/audio v0.2.1
-	github.com/qiniu/x v1.13.10
+	github.com/qiniu/x v1.15.1
 	github.com/srwiley/oksvg v0.0.0-20210519022825-9fc0c575d5fe
 	github.com/srwiley/rasterx v0.0.0-20210519020934-456a8d69b780
 	golang.org/x/image v0.18.0
