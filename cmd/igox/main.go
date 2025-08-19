@@ -116,6 +116,9 @@ func gdspxOnEngineFixedUpdate(this js.Value, args []js.Value) any {
 func gdspxOnEngineDestroy(this js.Value, args []js.Value) any {
 	return nil
 }
+func gdspxOnEnginePause(this js.Value, args []js.Value) any {
+	return nil
+}
 
 var logger = slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
@@ -158,6 +161,7 @@ func main() {
 	js.Global().Set("gdspx_on_engine_update", js.FuncOf(gdspxOnEngineUpdate))
 	js.Global().Set("gdspx_on_engine_fixed_update", js.FuncOf(gdspxOnEngineFixedUpdate))
 	js.Global().Set("gdspx_on_engine_destroy", js.FuncOf(gdspxOnEngineDestroy))
+	js.Global().Set("gdspx_on_engine_pause", js.FuncOf(gdspxOnEnginePause))
 	zipData := <-dataChannel
 
 	zipReader, err := zip.NewReader(bytes.NewReader(zipData), int64(len(zipData)))

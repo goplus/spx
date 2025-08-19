@@ -36,6 +36,7 @@ type GDExtensionSpxCallbackOnEngineStart C.GDExtensionSpxCallbackOnEngineStart
 type GDExtensionSpxCallbackOnEngineUpdate C.GDExtensionSpxCallbackOnEngineUpdate
 type GDExtensionSpxCallbackOnEngineFixedUpdate C.GDExtensionSpxCallbackOnEngineFixedUpdate
 type GDExtensionSpxCallbackOnEngineDestroy C.GDExtensionSpxCallbackOnEngineDestroy
+type GDExtensionSpxCallbackOnEnginePause C.GDExtensionSpxCallbackOnEnginePause
 type GDExtensionSpxCallbackOnSceneSpriteInstantiated C.GDExtensionSpxCallbackOnSceneSpriteInstantiated
 type GDExtensionSpxCallbackOnSpriteReady C.GDExtensionSpxCallbackOnSpriteReady
 type GDExtensionSpxCallbackOnSpriteUpdated C.GDExtensionSpxCallbackOnSpriteUpdated
@@ -97,6 +98,9 @@ type GDExtensionSpxCameraSetCameraZoom C.GDExtensionSpxCameraSetCameraZoom
 type GDExtensionSpxCameraGetViewportRect C.GDExtensionSpxCameraGetViewportRect
 type GDExtensionSpxExtRequestExit C.GDExtensionSpxExtRequestExit
 type GDExtensionSpxExtOnRuntimePanic C.GDExtensionSpxExtOnRuntimePanic
+type GDExtensionSpxExtPause C.GDExtensionSpxExtPause
+type GDExtensionSpxExtResume C.GDExtensionSpxExtResume
+type GDExtensionSpxExtIsPaused C.GDExtensionSpxExtIsPaused
 type GDExtensionSpxExtDestroyAllPens C.GDExtensionSpxExtDestroyAllPens
 type GDExtensionSpxExtCreatePen C.GDExtensionSpxExtCreatePen
 type GDExtensionSpxExtDestroyPen C.GDExtensionSpxExtDestroyPen
@@ -529,6 +533,22 @@ func CallExtOnRuntimePanic(
 
 	C.cgo_callfn_GDExtensionSpxExtOnRuntimePanic(arg0, arg1GdString)
 
+}
+func CallExtPause() {
+	arg0 := (C.GDExtensionSpxExtPause)(api.SpxExtPause)
+
+	C.cgo_callfn_GDExtensionSpxExtPause(arg0)
+}
+func CallExtResume() {
+	arg0 := (C.GDExtensionSpxExtResume)(api.SpxExtResume)
+
+	C.cgo_callfn_GDExtensionSpxExtResume(arg0)
+}
+func CallExtIsPaused() GdBool {
+	arg0 := (C.GDExtensionSpxExtIsPaused)(api.SpxExtIsPaused)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxExtIsPaused(arg0, &ret_val)
+	return (GdBool)(ret_val)
 }
 func CallExtDestroyAllPens() {
 	arg0 := (C.GDExtensionSpxExtDestroyAllPens)(api.SpxExtDestroyAllPens)

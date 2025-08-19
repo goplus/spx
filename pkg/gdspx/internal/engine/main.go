@@ -86,3 +86,12 @@ func onEngineDestroy() {
 		mgr.OnDestroy()
 	}
 }
+func onEnginePause(isPaused bool) {
+	if callback.OnEnginePause != nil {
+		callback.OnEnginePause(isPaused)
+	}
+
+	for _, mgr := range mgrs {
+		mgr.OnPause(isPaused)
+	}
+}

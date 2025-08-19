@@ -164,6 +164,20 @@ class GameApp {
         }, null)
     }
 
+    pause() {
+        let funPtr = this.game.rtenv["_gdspx_ext_pause"]
+        if(funPtr != null){
+            funPtr()
+        }
+    }
+
+    resume() {
+        let funPtr = this.game.rtenv["_gdspx_ext_resume"]
+        if(funPtr != null){
+            funPtr()
+        }
+    }
+
     runEditor(resolve, reject) {
         let args = [
             "--path",
@@ -553,3 +567,4 @@ class GameApp {
         }
     }
 }
+

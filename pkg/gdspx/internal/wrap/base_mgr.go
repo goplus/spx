@@ -15,6 +15,8 @@ func (pself *baseMgr) OnFixedUpdate(delta float64) {
 }
 func (pself *baseMgr) OnDestroy() {
 }
+func (pself *baseMgr) OnPause(isPaused bool) {
+}
 
 func (mgr *baseMgr) logf(format string, v ...any) (n int, err error) {
 	return fmt.Printf(format, v...)

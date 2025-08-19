@@ -228,6 +228,16 @@ func (pself *extMgr) OnRuntimePanic(msg string) {
 	defer C.free(unsafe.Pointer(arg0Str))
 	CallExtOnRuntimePanic(arg0)
 }
+func (pself *extMgr) Pause() {
+	CallExtPause()
+}
+func (pself *extMgr) Resume() {
+	CallExtResume()
+}
+func (pself *extMgr) IsPaused() bool {
+	retValue := CallExtIsPaused()
+	return ToBool(retValue)
+}
 func (pself *extMgr) DestroyAllPens() {
 	CallExtDestroyAllPens()
 }

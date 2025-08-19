@@ -10,6 +10,7 @@ func bindCallbacks() CallbackInfo {
 	infos.OnEngineUpdate = onEngineUpdate
 	infos.OnEngineFixedUpdate = onEngineFixedUpdate
 	infos.OnEngineDestroy = onEngineDestroy
+	infos.OnEnginePause = onEnginePause
 
 	infos.OnSceneSpriteInstantiated = onSceneSpriteInstantiated
 

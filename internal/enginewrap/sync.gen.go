@@ -247,6 +247,23 @@ func (pself *extMgrImpl) OnRuntimePanic(msg string) {
 		gdx.ExtMgr.OnRuntimePanic(msg)
 	})
 }
+func (pself *extMgrImpl) Pause() {
+	callInMainThread(func() {
+		gdx.ExtMgr.Pause()
+	})
+}
+func (pself *extMgrImpl) Resume() {
+	callInMainThread(func() {
+		gdx.ExtMgr.Resume()
+	})
+}
+func (pself *extMgrImpl) IsPaused() bool {
+	var _ret1 bool
+	callInMainThread(func() {
+		_ret1 = gdx.ExtMgr.IsPaused()
+	})
+	return _ret1
+}
 func (pself *extMgrImpl) DestroyAllPens() {
 	callInMainThread(func() {
 		gdx.ExtMgr.DestroyAllPens()

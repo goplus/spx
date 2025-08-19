@@ -219,6 +219,16 @@ func (pself *extMgr) OnRuntimePanic(msg string) {
 	arg0 := JsFromGdString(msg)
 	API.SpxExtOnRuntimePanic.Invoke(arg0)
 }
+func (pself *extMgr) Pause() {
+	API.SpxExtPause.Invoke()
+}
+func (pself *extMgr) Resume() {
+	API.SpxExtResume.Invoke()
+}
+func (pself *extMgr) IsPaused() bool {
+	_retValue := API.SpxExtIsPaused.Invoke()
+	return JsToGdBool(_retValue)
+}
 func (pself *extMgr) DestroyAllPens() {
 	API.SpxExtDestroyAllPens.Invoke()
 }

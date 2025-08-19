@@ -12,6 +12,7 @@ type ILifeCycle interface {
 }
 type IManager interface {
 	ILifeCycle
+	OnPause(isPaused bool)
 }
 
 type ISpriter interface {
@@ -82,6 +83,7 @@ type EngineCallbackInfo struct {
 	OnEngineUpdate      func(float64)
 	OnEngineFixedUpdate func(float64)
 	OnEngineDestroy     func()
+	OnEnginePause       func(bool)
 
 	OnKeyPressed  func(int64)
 	OnKeyReleased func(int64)

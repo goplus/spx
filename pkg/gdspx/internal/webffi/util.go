@@ -166,7 +166,14 @@ func JsToGdRect2(rect js.Value) Rect2 {
 }
 
 func JsToGdBool(val js.Value) bool {
-	return val.Bool()
+	switch val.Type() {
+	case js.TypeNumber:
+		return val.Int() != 0
+	case js.TypeBoolean:
+		return val.Bool()
+	default:
+		panic("unknow type")
+	}
 }
 
 func JsToGdFloat(val js.Value) float64 {

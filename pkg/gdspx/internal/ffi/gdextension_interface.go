@@ -266,6 +266,13 @@ func func_on_engine_destroy() {
 	}
 }
 
+//export func_on_engine_pause
+func func_on_engine_pause(is_pause bool) {
+	if callbacks.OnEnginePause != nil {
+		callbacks.OnEnginePause(is_pause)
+	}
+}
+
 //export func_on_scene_sprite_instantiated
 func func_on_scene_sprite_instantiated(id C.GDExtensionInt, typeName C.GdString) {
 	name := ToString(GdString(typeName))

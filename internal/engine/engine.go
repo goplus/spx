@@ -60,6 +60,7 @@ type IGame interface {
 	OnEngineUpdate(delta float64)
 	OnEngineRender(delta float64)
 	OnEngineDestroy()
+	OnEnginePause(isPaused bool)
 }
 
 func Main(g IGame) {
@@ -69,6 +70,7 @@ func Main(g IGame) {
 		OnEngineStart:   onStart,
 		OnEngineUpdate:  onUpdate,
 		OnEngineDestroy: onDestroy,
+		OnEnginePause:   onPaused,
 		OnKeyPressed:    onKeyPressed,
 		OnKeyReleased:   onKeyReleased,
 	})
@@ -115,6 +117,10 @@ func onUpdate(delta float64) {
 
 func onDestroy() {
 	game.OnEngineDestroy()
+}
+
+func onPaused(isPaused bool) {
+	game.OnEnginePause(isPaused)
 }
 
 func onKeyPressed(id int64) {

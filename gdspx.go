@@ -83,6 +83,12 @@ func (p *Game) OnEngineRender(delta float64) {
 	p.syncUpdatePhysic()
 }
 
+func (p *Game) OnEnginePause(isPaused bool) {
+	if !p.isRunned {
+		return
+	}
+}
+
 func (p *Game) syncUpdateLogic() error {
 	p.startFlag.Do(func() {
 		p.fireEvent(&eventStart{})

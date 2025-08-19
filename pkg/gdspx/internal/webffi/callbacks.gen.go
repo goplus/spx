@@ -44,6 +44,14 @@ func gdspxOnEngineDestroy(this js.Value, args []js.Value) any {
 	callbacks.OnEngineDestroy()
 	return nil
 }
+func gdspxOnEnginePause(this js.Value, args []js.Value) any {
+	if callbacks.OnEnginePause == nil {
+		return nil
+	}
+	arg0 := JsToGdBool(args[0])
+	callbacks.OnEnginePause(arg0)
+	return nil
+}
 func gdspxOnSceneSpriteInstantiated(this js.Value, args []js.Value) any {
 	if callbacks.OnSceneSpriteInstantiated == nil {
 		return nil
@@ -347,6 +355,7 @@ func resiterFuncPtr2Js() {
 	js.Global().Set("gdspx_on_engine_update", js.FuncOf(gdspxOnEngineUpdate))
 	js.Global().Set("gdspx_on_engine_fixed_update", js.FuncOf(gdspxOnEngineFixedUpdate))
 	js.Global().Set("gdspx_on_engine_destroy", js.FuncOf(gdspxOnEngineDestroy))
+	js.Global().Set("gdspx_on_engine_pause", js.FuncOf(gdspxOnEnginePause))
 	js.Global().Set("gdspx_on_scene_sprite_instantiated", js.FuncOf(gdspxOnSceneSpriteInstantiated))
 	js.Global().Set("gdspx_on_sprite_ready", js.FuncOf(gdspxOnSpriteReady))
 	js.Global().Set("gdspx_on_sprite_updated", js.FuncOf(gdspxOnSpriteUpdated))
