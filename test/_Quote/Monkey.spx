@@ -1,5 +1,5 @@
 onStart => {
-	play "clap", {Action: PlayContinue, Loop: true}
+	play "clap", true
 }
 
 onClick => {
@@ -15,13 +15,13 @@ onKey KeyQ, => {
 	quote "m", "monkey", 1
 }
 onKey KeyW, => {
-	play "clap"
+	playAndWait "clap"
 }
 
 onKey KeyA, => {
-	play "clap", {Action: PlayPause}
+	pausePlaying "clap"
 }
 
 onKey KeyB, => {
-	play "clap", {Action: PlayResume}
+	resumePlaying "clap"
 }

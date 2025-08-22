@@ -591,7 +591,7 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 
 	p.audioId = p.sounds.allocAudio()
 	if proj.Bgm != "" {
-		p.Play__0(proj.Bgm, &PlayOptions{Action: PlayRewind, Loop: true, Wait: false, Music: true})
+		p.Play__0(proj.Bgm, true)
 	}
 	// game load success
 	p.isLoaded = true
@@ -1492,40 +1492,70 @@ func (p *Game) loadSound(name SoundName) (media sound, err error) {
 	return
 }
 
-func (p *Game) play(audioId engine.Object, media sound, opts *PlayOptions) (err error) {
-	return p.sounds.play(audioId, media, opts)
-}
-
-// Play func:
-//
-//	Play(sound)
-//	Play(video) -- maybe
-//	Play(media, wait) -- sync
-//	Play(media, opts)
-
-func (p *Game) Play__0(media SoundName, action *PlayOptions) {
-	m, err := p.loadSound(media)
+func (p *Game) playSound(audioId engine.Object, name SoundName, isLoop bool) {
+	m, err := p.loadSound(name)
 	if err != nil {
-		log.Println(err)
 		return
 	}
-
-	if debugInstr {
-		log.Println("Play", m.Path)
-	}
-	p.checkAudioId()
-	err = p.play(p.audioId, m, action)
+	p.sounds.play(audioId, m, isLoop, false)
+}
+func (p *Game) playSoundAndWait(audioId engine.Object, name SoundName) {
+	m, err := p.loadSound(name)
 	if err != nil {
-		panic(err)
+		return
 	}
+	p.sounds.play(audioId, m, false, true)
+}
+func (p *Game) pauseSound(audioId engine.Object, name SoundName) {
+	m, err := p.loadSound(name)
+	if err != nil {
+		return
+	}
+	p.sounds.pause(audioId, m)
+}
+func (p *Game) resumeSound(audioId engine.Object, name SoundName) {
+	m, err := p.loadSound(name)
+	if err != nil {
+		return
+	}
+	p.sounds.resume(audioId, m)
+}
+func (p *Game) stopSound(audioId engine.Object, name SoundName) {
+	m, err := p.loadSound(name)
+	if err != nil {
+		return
+	}
+	p.sounds.stop(audioId, m)
+}
+func (p *Game) Volume() float64 {
+	p.checkAudioId()
+	return p.sounds.getVolume(p.audioId)
+}
+func (p *Game) Play__0(name SoundName, loop bool) {
+	p.checkAudioId()
+	p.playSound(p.audioId, name, loop)
 }
 
-func (p *Game) Play__1(media SoundName, wait bool) {
-	p.Play__0(media, &PlayOptions{Wait: wait})
+func (p *Game) Play__1(name SoundName) {
+	p.Play__0(name, false)
 }
 
-func (p *Game) Play__2(media SoundName) {
-	p.Play__0(media, &PlayOptions{})
+func (p *Game) PlayAndWait(name SoundName) {
+	p.checkAudioId()
+	p.playSoundAndWait(p.audioId, name)
+}
+
+func (p *Game) PausePlaying(name SoundName) {
+	p.checkAudioId()
+	p.pauseSound(p.audioId, name)
+}
+func (p *Game) ResumePlaying(name SoundName) {
+	p.checkAudioId()
+	p.resumeSound(p.audioId, name)
+}
+func (p *Game) StopPlaying(name SoundName) {
+	p.checkAudioId()
+	p.stopSound(p.audioId, name)
 }
 
 func (p *Game) SetVolume(volume float64) {

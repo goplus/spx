@@ -166,9 +166,12 @@ type Sprite interface {
 	GetSoundEffect(kind SoundEffectKind) float64
 	SetSoundEffect(kind SoundEffectKind, value float64)
 	ChangeSoundEffect(kind SoundEffectKind, delta float64)
-	Play__0(media SoundName, action *PlayOptions)
-	Play__1(media SoundName, wait bool)
-	Play__2(media SoundName)
+	Play__0(name SoundName, loop bool)
+	Play__1(name SoundName)
+	PlayAndWait(name SoundName)
+	PausePlaying(name SoundName)
+	ResumePlaying(name SoundName)
+	StopPlaying(name SoundName)
 }
 
 type SpriteName = string
@@ -870,7 +873,7 @@ func doAnimation(p *SpriteImpl, info *animState) {
 		p.syncSprite.PlayAnim(animName, info.Speed, info.IsLoop, false)
 	})
 	if info.OnStart != nil && info.OnStart.Play != "" {
-		p.Play__2(info.OnStart.Play)
+		p.Play__1(info.OnStart.Play)
 	}
 	if info.AniType == aniTypeFrame {
 		p.isAnimating = true
@@ -1844,40 +1847,35 @@ const (
 	SoundPitchEffect
 )
 
-// Play func:
-//
-//	Play(sound)
-//	Play(video) -- maybe
-//	Play(media, wait) -- sync
-//	Play(media, opts)
-
-func (p *SpriteImpl) Play__0(media SoundName, action *PlayOptions) {
-	m, err := p.g.loadSound(media)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-
-	if debugInstr {
-		log.Println("Play", m.Path)
-	}
-
+func (p *SpriteImpl) Play__0(name SoundName, loop bool) {
 	p.checkAudioId()
-	err = p.g.play(p.audioId, m, action)
-	if err != nil {
-		panic(err)
-	}
+	p.g.playSound(p.audioId, name, loop)
 }
 
-func (p *SpriteImpl) Play__1(media SoundName, wait bool) {
-	p.Play__0(media, &PlayOptions{Wait: wait})
+func (p *SpriteImpl) Play__1(name SoundName) {
+	p.Play__0(name, false)
 }
 
-func (p *SpriteImpl) Play__2(media SoundName) {
-	p.Play__0(media, &PlayOptions{})
+func (p *SpriteImpl) PlayAndWait(name SoundName) {
+	p.checkAudioId()
+	p.g.playSoundAndWait(p.audioId, name)
+}
+
+func (p *SpriteImpl) PausePlaying(name SoundName) {
+	p.checkAudioId()
+	p.g.pauseSound(p.audioId, name)
+}
+func (p *SpriteImpl) ResumePlaying(name SoundName) {
+	p.checkAudioId()
+	p.g.resumeSound(p.audioId, name)
+}
+func (p *SpriteImpl) StopPlaying(name SoundName) {
+	p.checkAudioId()
+	p.g.stopSound(p.audioId, name)
 }
 
 func (p *SpriteImpl) Volume() float64 {
+	p.checkAudioId()
 	return p.g.sounds.getVolume(p.audioId)
 }
 

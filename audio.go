@@ -30,13 +30,6 @@ const (
 	PlayStop
 )
 
-type PlayOptions struct {
-	Action PlayAction
-	Wait   bool
-	Loop   bool
-	Music  bool
-}
-
 type soundMgr struct {
 	g        *Game
 	audios   map[string]sound
@@ -59,39 +52,33 @@ func (p *soundMgr) releaseAudio(audioId engine.Object) {
 	}
 	audioMgr.DestroyAudio(audioId)
 }
-
-func (p *soundMgr) play(audioId engine.Object, media sound, opts *PlayOptions) (err error) {
-	action := opts.Action
-	var curId int64 = 0
-	switch action {
-	case PlayRewind:
-		curId = audioMgr.Play(audioId, engine.ToAssetPath(media.Path))
-		p.path2ids[media.Path] = append(p.path2ids[media.Path], curId)
-	case PlayContinue:
-		for _, id := range p.path2ids[media.Path] {
-			audioMgr.Resume(id)
-		}
-	case PlayPause:
-		for _, id := range p.path2ids[media.Path] {
-			audioMgr.Pause(id)
-		}
-	case PlayResume:
-		for _, id := range p.path2ids[media.Path] {
-			audioMgr.Resume(id)
-		}
-	case PlayStop:
-		for _, id := range p.path2ids[media.Path] {
-			audioMgr.Stop(id)
-		}
-		delete(p.path2ids, media.Path)
+func (p *soundMgr) pause(audioId engine.Object, media sound) {
+	for _, id := range p.path2ids[media.Path] {
+		audioMgr.Pause(id)
 	}
+}
+func (p *soundMgr) resume(audioId engine.Object, media sound) {
+	for _, id := range p.path2ids[media.Path] {
+		audioMgr.Resume(id)
+	}
+}
+func (p *soundMgr) stop(audioId engine.Object, media sound) {
+	for _, id := range p.path2ids[media.Path] {
+		audioMgr.Stop(id)
+	}
+	delete(p.path2ids, media.Path)
+}
 
-	if opts.Loop {
+func (p *soundMgr) play(audioId engine.Object, media sound, isLoop, isWait bool) {
+	var curId int64 = 0
+	curId = audioMgr.Play(audioId, engine.ToAssetPath(media.Path))
+	p.path2ids[media.Path] = append(p.path2ids[media.Path], curId)
+	if isLoop {
 		for _, id := range p.path2ids[media.Path] {
 			audioMgr.SetLoop(id, true)
 		}
 	} else {
-		if opts.Wait {
+		if isWait {
 			for {
 				if !audioMgr.IsPlaying(curId) {
 					break
@@ -100,7 +87,6 @@ func (p *soundMgr) play(audioId engine.Object, media sound, opts *PlayOptions) (
 			}
 		}
 	}
-	return
 }
 
 func (p *soundMgr) stopAll() {

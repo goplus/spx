@@ -1,45 +1,45 @@
 onMsg "1", => {
-	play "recordingComeFrom"
+	playAndWait "recordingComeFrom"
 	say "I come from England.", 2
 	broadcast "2"
 }
 
 onMsg "3", => {
-	play "recordingMild"
+	playAndWait "recordingMild"
 	say "It's mild, but it's not always pleasant.", 4
 	setCostume Next
-	play "recordingEast"
+	playAndWait "recordingEast"
 	say "The weather's often cold in the North and windy in the East.", 5.5
-	play "recordingSouth"
+	playAndWait "recordingSouth"
 	say "It's often wet in the West and sometimes warm in the South.", 5
 	broadcast "4"
 }
 
 onMsg "5", => {
 	setCostume Next
-	play "recordingSummer"
+	playAndWait "recordingSummer"
 	say "I like spring and summer.", 2
-	play "recordingShort"
+	playAndWait "recordingShort"
 	say "The days are long and the nights are short.", 3
-	play "recordingLate"
+	playAndWait "recordingLate"
 	say "The sun rises early and sets late. ", 3
 	setCostume Next
-	play "recordingWinter"
+	playAndWait "recordingWinter"
 	say "I don't like autumn and winter.", 3
-	play "recordingLong"
+	playAndWait "recordingLong"
 	say "The days are short and the nights are long.", 4
-	play "recordingEarly"
+	playAndWait "recordingEarly"
 	say "The sun rises late and sets early.", 4
 	setCostume Next
-	play "recordingInteresting"
+	playAndWait "recordingInteresting"
 	say "Our climate is not very good, but it's certainly interesting.", 5
-	play "recordingConversation"
+	playAndWait "recordingConversation"
 	say "It's our favourite subject of conversation.", 4
 	broadcast "6"
 }
 
 onMsg "7", => {
-	play "recordingBye"
+	playAndWait "recordingBye"
 	say "Bye!", 2
 	setCostume Next
 }

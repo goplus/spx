@@ -10,7 +10,7 @@ onStart => {
 		if touching("Shark") {
 			waitNextFrame
 			score++
-			play "chomp", true
+			playAndWait "chomp"
 			step -100
 		}
 	}
