@@ -94,15 +94,10 @@ type Sprite interface {
 	Glide__4(pos Pos, secs float64)
 	SetLayer__0(layer layerAction)
 	SetLayer__1(dir dirAction, delta int)
-	Goto__0(sprite Sprite)
-	Goto__1(sprite SpriteName)
-	Goto__2(obj specialObj)
 	Heading() Direction
 	Hide()
 	HideVar(name string)
 	IsCloned() bool
-	Move__0(step float64)
-	Move__1(step int)
 	Name() string
 	OnCloned__0(onCloned func(data any))
 	OnCloned__1(onCloned func())
@@ -141,8 +136,17 @@ type Sprite interface {
 	Size() float64
 	Stamp()
 	Step__0(step float64)
-	Step__1(step float64, animation SpriteAnimationName)
-	Step__2(step int)
+	Step__1(step float64, speed float64)
+	Step__2(step float64, speed float64, animation SpriteAnimationName)
+	StepTo__0(sprite Sprite)
+	StepTo__1(sprite SpriteName)
+	StepTo__2(obj specialObj)
+	StepTo__3(sprite Sprite, speed float64)
+	StepTo__4(sprite SpriteName, speed float64)
+	StepTo__5(obj specialObj, speed float64)
+	StepTo__6(sprite Sprite, speed float64, animation SpriteAnimationName)
+	StepTo__7(sprite SpriteName, speed float64, animation SpriteAnimationName)
+	StepTo__8(obj specialObj, speed float64, animation SpriteAnimationName)
 	Think__0(msg any)
 	Think__1(msg any, secs float64)
 	TimeSinceLevelLoad() float64
@@ -1088,10 +1092,19 @@ func (p *SpriteImpl) Move__1(step int) {
 
 func (p *SpriteImpl) Step__0(step float64) {
 	animName := p.getStateAnimName(StateStep)
-	p.Step__1(step, animName)
+	p.doStep(step, 1, animName)
 }
 
-func (p *SpriteImpl) Step__1(step float64, animation SpriteAnimationName) {
+func (p *SpriteImpl) Step__1(step float64, speed float64) {
+	animName := p.getStateAnimName(StateStep)
+	p.doStep(step, speed, animName)
+}
+
+func (p *SpriteImpl) Step__2(step float64, speed float64, animation SpriteAnimationName) {
+	p.doStep(step, speed, animation)
+}
+
+func (p *SpriteImpl) doStep(step float64, speed float64, animation SpriteAnimationName) {
 	if debugInstr {
 		log.Println("Step", p.name, step)
 	}
@@ -1107,11 +1120,6 @@ func (p *SpriteImpl) Step__1(step float64, animation SpriteAnimationName) {
 	}
 	p.goMoveForward(step)
 }
-
-func (p *SpriteImpl) Step__2(step int) {
-	p.Step__0(float64(step))
-}
-
 func (p *SpriteImpl) playDefaultAnim() {
 	animName := p.defaultAnimation
 	if p.isVisible {
@@ -1133,24 +1141,52 @@ func (p *SpriteImpl) playDefaultAnim() {
 //	Goto(sprite)
 //	Goto(spx.Mouse)
 //	Goto(spx.Random)
-func (p *SpriteImpl) goGoto(obj any) {
+func (p *SpriteImpl) StepTo__0(sprite Sprite) {
+	p.doStepTo(sprite, 1, "")
+}
+
+func (p *SpriteImpl) StepTo__1(sprite SpriteName) {
+	p.doStepTo(sprite, 1, "")
+}
+
+func (p *SpriteImpl) StepTo__2(obj specialObj) {
+	p.doStepTo(obj, 1, "")
+}
+
+func (p *SpriteImpl) StepTo__3(sprite Sprite, speed float64) {
+	p.doStepTo(sprite, speed, "")
+}
+
+func (p *SpriteImpl) StepTo__4(sprite SpriteName, speed float64) {
+	p.doStepTo(sprite, speed, "")
+}
+
+func (p *SpriteImpl) StepTo__5(obj specialObj, speed float64) {
+	p.doStepTo(obj, speed, "")
+}
+
+func (p *SpriteImpl) StepTo__6(sprite Sprite, speed float64, animation SpriteAnimationName) {
+	p.doStepTo(sprite, speed, animation)
+}
+
+func (p *SpriteImpl) StepTo__7(sprite SpriteName, speed float64, animation SpriteAnimationName) {
+	p.doStepTo(sprite, speed, animation)
+}
+
+func (p *SpriteImpl) StepTo__8(obj specialObj, speed float64, animation SpriteAnimationName) {
+	p.doStepTo(obj, speed, animation)
+}
+
+func (p *SpriteImpl) doStepTo(obj any, speed float64, animation SpriteAnimationName) {
 	if debugInstr {
 		log.Println("Goto", p.name, obj)
 	}
+	if animation == "" {
+		animation = p.getStateAnimName(StateStep)
+	}
+	speed = math.Max(speed, 0.001)
 	x, y := p.g.objectPos(obj)
 	p.SetXYpos(x, y)
-}
-
-func (p *SpriteImpl) Goto__0(sprite Sprite) {
-	p.goGoto(sprite)
-}
-
-func (p *SpriteImpl) Goto__1(sprite SpriteName) {
-	p.goGoto(sprite)
-}
-
-func (p *SpriteImpl) Goto__2(obj specialObj) {
-	p.goGoto(obj)
 }
 
 func (p *SpriteImpl) Glide__0(x, y float64, secs float64) {

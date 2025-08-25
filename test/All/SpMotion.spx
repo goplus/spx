@@ -26,7 +26,7 @@ onMsg "testMotion", => {
 	assertPos(this,0, -100, "Sprite::Turn && Move")
 
 	// 5. Sprite::Goto
-	goto "Red"
+	stepTo "Red"
 	assertPos(this,0, 0, "Sprite::Goto")
 
 	// 6. Sprite::Glide
