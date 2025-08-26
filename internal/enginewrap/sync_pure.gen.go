@@ -180,6 +180,10 @@ func (pself *extMgrImpl) SetPenTo(obj gdx.Object, property int64, value float64)
 func (pself *extMgrImpl) ChangePenSizeBy(obj gdx.Object, amount float64)             {}
 func (pself *extMgrImpl) SetPenSizeTo(obj gdx.Object, size float64)                  {}
 func (pself *extMgrImpl) SetPenStampTexture(obj gdx.Object, texture_path string)     {}
+func (pself *extMgrImpl) CreateSpring()                                              {}
+func (pself *extMgrImpl) DestroySpring()                                             {}
+func (pself *extMgrImpl) ClearSpring()                                               {}
+func (pself *extMgrImpl) NewSpringParticle(position Vec2, fixed bool)                {}
 
 // IInputMgr
 func (pself *inputMgrImpl) GetMousePos() Vec2 {

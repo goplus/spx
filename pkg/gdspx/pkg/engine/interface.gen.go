@@ -75,6 +75,10 @@ type IExtMgr interface {
 	ChangePenSizeBy(obj Object, amount float64)
 	SetPenSizeTo(obj Object, size float64)
 	SetPenStampTexture(obj Object, texture_path string)
+	CreateSpring()
+	DestroySpring()
+	ClearSpring()
+	NewSpringParticle(position Vec2, fixed bool)
 }
 
 type IInputMgr interface {

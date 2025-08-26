@@ -135,6 +135,18 @@ void cgo_callfn_GDExtensionSpxExtSetPenSizeTo(const GDExtensionSpxExtSetPenSizeT
 void cgo_callfn_GDExtensionSpxExtSetPenStampTexture(const GDExtensionSpxExtSetPenStampTexture fn, GdObj obj, GdString texture_path) {
 	fn(obj, texture_path);
 }
+void cgo_callfn_GDExtensionSpxExtCreateSpring(const GDExtensionSpxExtCreateSpring fn) {
+	fn();
+}
+void cgo_callfn_GDExtensionSpxExtDestroySpring(const GDExtensionSpxExtDestroySpring fn) {
+	fn();
+}
+void cgo_callfn_GDExtensionSpxExtClearSpring(const GDExtensionSpxExtClearSpring fn) {
+	fn();
+}
+void cgo_callfn_GDExtensionSpxExtNewSpringParticle(const GDExtensionSpxExtNewSpringParticle fn, GdVec2 position, GdBool fixed) {
+	fn(position, fixed);
+}
 void cgo_callfn_GDExtensionSpxInputGetMousePos(const GDExtensionSpxInputGetMousePos fn, GdVec2* ret_val) {
 	fn(ret_val);
 }

@@ -331,6 +331,26 @@ func (pself *extMgrImpl) SetPenStampTexture(obj gdx.Object, texture_path string)
 		gdx.ExtMgr.SetPenStampTexture(obj, texture_path)
 	})
 }
+func (pself *extMgrImpl) CreateSpring() {
+	callInMainThread(func() {
+		gdx.ExtMgr.CreateSpring()
+	})
+}
+func (pself *extMgrImpl) DestroySpring() {
+	callInMainThread(func() {
+		gdx.ExtMgr.DestroySpring()
+	})
+}
+func (pself *extMgrImpl) ClearSpring() {
+	callInMainThread(func() {
+		gdx.ExtMgr.ClearSpring()
+	})
+}
+func (pself *extMgrImpl) NewSpringParticle(position Vec2, fixed bool) {
+	callInMainThread(func() {
+		gdx.ExtMgr.NewSpringParticle(position, fixed)
+	})
+}
 
 // IInputMgr
 func (pself *inputMgrImpl) GetMousePos() Vec2 {

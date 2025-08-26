@@ -59,6 +59,10 @@ type GDExtensionInterface struct {
 	SpxExtChangePenSizeBy                    GDExtensionSpxExtChangePenSizeBy
 	SpxExtSetPenSizeTo                       GDExtensionSpxExtSetPenSizeTo
 	SpxExtSetPenStampTexture                 GDExtensionSpxExtSetPenStampTexture
+	SpxExtCreateSpring                       GDExtensionSpxExtCreateSpring
+	SpxExtDestroySpring                      GDExtensionSpxExtDestroySpring
+	SpxExtClearSpring                        GDExtensionSpxExtClearSpring
+	SpxExtNewSpringParticle                  GDExtensionSpxExtNewSpringParticle
 	SpxInputGetMousePos                      GDExtensionSpxInputGetMousePos
 	SpxInputGetKey                           GDExtensionSpxInputGetKey
 	SpxInputGetMouseState                    GDExtensionSpxInputGetMouseState
@@ -293,6 +297,10 @@ func (x *GDExtensionInterface) loadProcAddresses() {
 	x.SpxExtChangePenSizeBy = (GDExtensionSpxExtChangePenSizeBy)(dlsymGD("spx_ext_change_pen_size_by"))
 	x.SpxExtSetPenSizeTo = (GDExtensionSpxExtSetPenSizeTo)(dlsymGD("spx_ext_set_pen_size_to"))
 	x.SpxExtSetPenStampTexture = (GDExtensionSpxExtSetPenStampTexture)(dlsymGD("spx_ext_set_pen_stamp_texture"))
+	x.SpxExtCreateSpring = (GDExtensionSpxExtCreateSpring)(dlsymGD("spx_ext_create_spring"))
+	x.SpxExtDestroySpring = (GDExtensionSpxExtDestroySpring)(dlsymGD("spx_ext_destroy_spring"))
+	x.SpxExtClearSpring = (GDExtensionSpxExtClearSpring)(dlsymGD("spx_ext_clear_spring"))
+	x.SpxExtNewSpringParticle = (GDExtensionSpxExtNewSpringParticle)(dlsymGD("spx_ext_new_spring_particle"))
 	x.SpxInputGetMousePos = (GDExtensionSpxInputGetMousePos)(dlsymGD("spx_input_get_mouse_pos"))
 	x.SpxInputGetKey = (GDExtensionSpxInputGetKey)(dlsymGD("spx_input_get_key"))
 	x.SpxInputGetMouseState = (GDExtensionSpxInputGetMouseState)(dlsymGD("spx_input_get_mouse_state"))

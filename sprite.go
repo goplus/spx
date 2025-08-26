@@ -124,6 +124,8 @@ type Sprite interface {
 	Parent() *Game
 	PenDown()
 	PenUp()
+	CreateSpring()
+	DestroySpring()
 	PrevCostume()
 	Quote__0(message string)
 	Quote__1(message string, secs float64)
@@ -1770,6 +1772,13 @@ func (p *SpriteImpl) applyPenHsvProperty() {
 	p.penColor = color
 	p.penColor.A = p.penTransparency / 100
 	extMgr.SetPenColorTo(*p.penObj, p.penColor)
+}
+
+func (p *SpriteImpl) CreateSpring() {
+	extMgr.CreateSpring()
+}
+func (p *SpriteImpl) DestroySpring() {
+	extMgr.DestroySpring()
 }
 
 // -----------------------------------------------------------------------------

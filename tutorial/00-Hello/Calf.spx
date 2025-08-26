@@ -1,3 +1,5 @@
 onStart => {
 	say "Hello XGo"
+	hide
+	createSpring()
 }

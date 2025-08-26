@@ -301,6 +301,20 @@ func (pself *extMgr) SetPenStampTexture(obj Object, texture_path string) {
 	defer C.free(unsafe.Pointer(arg1Str))
 	CallExtSetPenStampTexture(arg0, arg1)
 }
+func (pself *extMgr) CreateSpring() {
+	CallExtCreateSpring()
+}
+func (pself *extMgr) DestroySpring() {
+	CallExtDestroySpring()
+}
+func (pself *extMgr) ClearSpring() {
+	CallExtClearSpring()
+}
+func (pself *extMgr) NewSpringParticle(position Vec2, fixed bool) {
+	arg0 := ToGdVec2(position)
+	arg1 := ToGdBool(fixed)
+	CallExtNewSpringParticle(arg0, arg1)
+}
 func (pself *inputMgr) GetMousePos() Vec2 {
 	retValue := CallInputGetMousePos()
 	return ToVec2(retValue)

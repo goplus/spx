@@ -63,6 +63,10 @@ type GDExtensionInterface struct {
 	SpxExtChangePenSizeBy                    js.Value
 	SpxExtSetPenSizeTo                       js.Value
 	SpxExtSetPenStampTexture                 js.Value
+	SpxExtCreateSpring                       js.Value
+	SpxExtDestroySpring                      js.Value
+	SpxExtClearSpring                        js.Value
+	SpxExtNewSpringParticle                  js.Value
 	SpxInputGetMousePos                      js.Value
 	SpxInputGetKey                           js.Value
 	SpxInputGetMouseState                    js.Value
@@ -297,6 +301,10 @@ func (x *GDExtensionInterface) loadProcAddresses() {
 	x.SpxExtChangePenSizeBy = dlsymGD("gdspx_ext_change_pen_size_by")
 	x.SpxExtSetPenSizeTo = dlsymGD("gdspx_ext_set_pen_size_to")
 	x.SpxExtSetPenStampTexture = dlsymGD("gdspx_ext_set_pen_stamp_texture")
+	x.SpxExtCreateSpring = dlsymGD("gdspx_ext_create_spring")
+	x.SpxExtDestroySpring = dlsymGD("gdspx_ext_destroy_spring")
+	x.SpxExtClearSpring = dlsymGD("gdspx_ext_clear_spring")
+	x.SpxExtNewSpringParticle = dlsymGD("gdspx_ext_new_spring_particle")
 	x.SpxInputGetMousePos = dlsymGD("gdspx_input_get_mouse_pos")
 	x.SpxInputGetKey = dlsymGD("gdspx_input_get_key")
 	x.SpxInputGetMouseState = dlsymGD("gdspx_input_get_mouse_state")

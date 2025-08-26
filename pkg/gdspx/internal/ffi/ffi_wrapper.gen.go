@@ -114,6 +114,10 @@ type GDExtensionSpxExtSetPenTo C.GDExtensionSpxExtSetPenTo
 type GDExtensionSpxExtChangePenSizeBy C.GDExtensionSpxExtChangePenSizeBy
 type GDExtensionSpxExtSetPenSizeTo C.GDExtensionSpxExtSetPenSizeTo
 type GDExtensionSpxExtSetPenStampTexture C.GDExtensionSpxExtSetPenStampTexture
+type GDExtensionSpxExtCreateSpring C.GDExtensionSpxExtCreateSpring
+type GDExtensionSpxExtDestroySpring C.GDExtensionSpxExtDestroySpring
+type GDExtensionSpxExtClearSpring C.GDExtensionSpxExtClearSpring
+type GDExtensionSpxExtNewSpringParticle C.GDExtensionSpxExtNewSpringParticle
 type GDExtensionSpxInputGetMousePos C.GDExtensionSpxInputGetMousePos
 type GDExtensionSpxInputGetKey C.GDExtensionSpxInputGetKey
 type GDExtensionSpxInputGetMouseState C.GDExtensionSpxInputGetMouseState
@@ -678,6 +682,32 @@ func CallExtSetPenStampTexture(
 	arg2GdString := (C.GdString)(texture_path)
 
 	C.cgo_callfn_GDExtensionSpxExtSetPenStampTexture(arg0, arg1GdObj, arg2GdString)
+
+}
+func CallExtCreateSpring() {
+	arg0 := (C.GDExtensionSpxExtCreateSpring)(api.SpxExtCreateSpring)
+
+	C.cgo_callfn_GDExtensionSpxExtCreateSpring(arg0)
+}
+func CallExtDestroySpring() {
+	arg0 := (C.GDExtensionSpxExtDestroySpring)(api.SpxExtDestroySpring)
+
+	C.cgo_callfn_GDExtensionSpxExtDestroySpring(arg0)
+}
+func CallExtClearSpring() {
+	arg0 := (C.GDExtensionSpxExtClearSpring)(api.SpxExtClearSpring)
+
+	C.cgo_callfn_GDExtensionSpxExtClearSpring(arg0)
+}
+func CallExtNewSpringParticle(
+	position GdVec2,
+	fixed GdBool,
+) {
+	arg0 := (C.GDExtensionSpxExtNewSpringParticle)(api.SpxExtNewSpringParticle)
+	arg1GdVec2 := (C.GdVec2)(position)
+	arg2GdBool := (C.GdBool)(fixed)
+
+	C.cgo_callfn_GDExtensionSpxExtNewSpringParticle(arg0, arg1GdVec2, arg2GdBool)
 
 }
 func CallInputGetMousePos() GdVec2 {

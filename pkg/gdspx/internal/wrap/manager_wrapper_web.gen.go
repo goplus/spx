@@ -290,6 +290,20 @@ func (pself *extMgr) SetPenStampTexture(obj Object, texture_path string) {
 	arg1 := JsFromGdString(texture_path)
 	API.SpxExtSetPenStampTexture.Invoke(arg0, arg1)
 }
+func (pself *extMgr) CreateSpring() {
+	API.SpxExtCreateSpring.Invoke()
+}
+func (pself *extMgr) DestroySpring() {
+	API.SpxExtDestroySpring.Invoke()
+}
+func (pself *extMgr) ClearSpring() {
+	API.SpxExtClearSpring.Invoke()
+}
+func (pself *extMgr) NewSpringParticle(position Vec2, fixed bool) {
+	arg0 := JsFromGdVec2(position)
+	arg1 := JsFromGdBool(fixed)
+	API.SpxExtNewSpringParticle.Invoke(arg0, arg1)
+}
 func (pself *inputMgr) GetMousePos() Vec2 {
 	_retValue := API.SpxInputGetMousePos.Invoke()
 	return JsToGdVec2(_retValue)
