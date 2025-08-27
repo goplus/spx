@@ -49,6 +49,7 @@ list-demos: ## List all demos with index
 # Setup Commands
 # ============================================
 setup: ## Initialize the user environment
+	chmod +x ./pkg/gdspx/tools/*.sh
 	@echo "===> Step 1/4: Install spx"
 	$(MAKE) install
 	@echo "===> Step 2/4: Download engine"
@@ -60,6 +61,7 @@ setup: ## Initialize the user environment
 	@echo "===> setup done"
 
 setup-dev: ## Initialize development environment (full)
+	chmod +x ./pkg/gdspx/tools/*.sh
 	@echo "===> Step 1/6: Install spx"
 	$(MAKE) install
 	@echo "===> Step 2/6: Download engine"
