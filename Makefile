@@ -49,32 +49,32 @@ list-demos: ## List all demos with index
 # Setup Commands
 # ============================================
 setup: ## Initialize the user environment
-	chmod +x ./pkg/gdspx/tools/*.sh
-	@echo "===> Step 1/4: Install spx"
-	$(MAKE) install
-	@echo "===> Step 2/4: Download engine"
-	$(MAKE) download
-	@echo "===> Step 3/4: Export runtime package"
-	$(MAKE) export-pack
-	@echo "===> Step 4/4: Prepare web template"
-	./pkg/gdspx/tools/make_util.sh extrawebtemplate
-	@echo "===> setup done"
+	chmod +x ./pkg/gdspx/tools/*.sh && \
+	echo "===> Step 1/4: Install spx" && \
+	$(MAKE) install && \
+	echo "===> Step 2/4: Download engine" && \
+	$(MAKE) download && \
+	echo "===> Step 3/4: Export runtime package" && \
+	$(MAKE) export-pack && \
+	echo "===> Step 4/4: Prepare web template" && \
+	./pkg/gdspx/tools/make_util.sh extrawebtemplate && \
+	echo "===> setup done"
 
 setup-dev: ## Initialize development environment (full)
-	chmod +x ./pkg/gdspx/tools/*.sh
-	@echo "===> Step 1/6: Install spx"
-	$(MAKE) install
-	@echo "===> Step 2/6: Download engine"
-	$(MAKE) download
-	@echo "===> Step 3/6: Build wasm"
-	$(MAKE) build-wasm
-	@echo "===> Step 4/6: Build editor engine"
-	$(MAKE) build-editor
-	@echo "===> Step 5/6: Build desktop engine"
-	$(MAKE) build-desktop
-	@echo "===> Step 6/6: Build web engine"
-	$(MAKE) build-web
-	@echo "===> setup-dev done, use 'make run DEMO_INDEX=N' to run demo"
+	chmod +x ./pkg/gdspx/tools/*.sh && \
+	echo "===> Step 1/6: Install spx" && \
+	$(MAKE) install && \
+	echo "===> Step 2/6: Download engine" && \
+	$(MAKE) download && \
+	echo "===> Step 3/6: Build wasm" && \
+	$(MAKE) build-wasm && \
+	echo "===> Step 4/6: Build editor engine" && \
+	$(MAKE) build-editor && \
+	echo "===> Step 5/6: Build desktop engine" && \
+	$(MAKE) build-desktop && \
+	echo "===> Step 6/6: Build web engine" && \
+	$(MAKE) build-web && \
+	echo "===> setup-dev done, use 'make run DEMO_INDEX=N' to run demo"
 
 
 # ============================================
