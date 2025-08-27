@@ -164,11 +164,11 @@ generate: ## Generate code
 	cd ./pkg/gdspx/cmd/codegen && go run . && cd $(CURRENT_PATH) && $(MAKE) format
 
 export-pack: ## Export runtime pck file
-	./pkg/gdspx/tools/make_util.sh exportpack
+	./pkg/gdspx/tools/make_util.sh exportpack && cd $(CURRENT_PATH)
 
 export-web: ## Export web engine
 	$(INSTALL_CMD) --web --opt && \
-	./pkg/gdspx/tools/make_util.sh exportweb
+	./pkg/gdspx/tools/make_util.sh exportweb && cd $(CURRENT_PATH)
 
 stop: ## Stop running processes
 	@echo "Stopping running processes..."
