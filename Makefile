@@ -176,9 +176,8 @@ ios:
 # ============================================================================
 
 # Export runtime pck file
-export-pack: exportpack
-exportpack:
-	./pkg/gdspx/tools/make_util.sh exportpack && cd $(CURRENT_PATH) 
+export-pack: 
+	./pkg/gdspx/tools/make_util.sh exportpack
 
 # Export web engine for builder
 export-web: exportweb
