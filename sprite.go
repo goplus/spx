@@ -1117,7 +1117,7 @@ func (p *SpriteImpl) doStep(step float64, speed float64, animation SpriteAnimati
 }
 func (p *SpriteImpl) playDefaultAnim() {
 	animName := ""
-	if p.curTweenState == nil {
+	if p.curAnimState == nil {
 		animName = p.defaultAnimation
 	} else {
 		switch p.curAnimState.AniType {
