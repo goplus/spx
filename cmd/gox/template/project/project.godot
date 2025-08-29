@@ -19,6 +19,8 @@ config/features=PackedStringArray("4.4")
 window/size/viewport_width=480
 window/size/viewport_height=360
 
+window/stretch/mode="canvas_items"
+
 [movie_writer]
 
 obs_enable_combined_recording=true
