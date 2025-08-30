@@ -431,6 +431,11 @@ func (pself *physicMgrImpl) SetCollisionSystemType(is_collision_by_alpha bool) {
 }
 
 // IPlatformMgr
+func (pself *platformMgrImpl) SetStretchMode(enable bool) {
+	callInMainThread(func() {
+		gdx.PlatformMgr.SetStretchMode(enable)
+	})
+}
 func (pself *platformMgrImpl) SetWindowPosition(pos Vec2) {
 	callInMainThread(func() {
 		gdx.PlatformMgr.SetWindowPosition(pos)

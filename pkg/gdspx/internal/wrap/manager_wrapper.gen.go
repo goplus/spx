@@ -385,6 +385,10 @@ func (pself *physicMgr) SetCollisionSystemType(is_collision_by_alpha bool) {
 	arg0 := ToGdBool(is_collision_by_alpha)
 	CallPhysicSetCollisionSystemType(arg0)
 }
+func (pself *platformMgr) SetStretchMode(enable bool) {
+	arg0 := ToGdBool(enable)
+	CallPlatformSetStretchMode(arg0)
+}
 func (pself *platformMgr) SetWindowPosition(pos Vec2) {
 	arg0 := ToGdVec2(pos)
 	CallPlatformSetWindowPosition(arg0)

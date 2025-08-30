@@ -77,6 +77,7 @@ type GDExtensionInterface struct {
 	SpxPhysicCheckTouchedCameraBoundaries    js.Value
 	SpxPhysicCheckTouchedCameraBoundary      js.Value
 	SpxPhysicSetCollisionSystemType          js.Value
+	SpxPlatformSetStretchMode                js.Value
 	SpxPlatformSetWindowPosition             js.Value
 	SpxPlatformGetWindowPosition             js.Value
 	SpxPlatformSetWindowSize                 js.Value
@@ -313,6 +314,7 @@ func (x *GDExtensionInterface) loadProcAddresses() {
 	x.SpxPhysicCheckTouchedCameraBoundaries = dlsymGD("gdspx_physic_check_touched_camera_boundaries")
 	x.SpxPhysicCheckTouchedCameraBoundary = dlsymGD("gdspx_physic_check_touched_camera_boundary")
 	x.SpxPhysicSetCollisionSystemType = dlsymGD("gdspx_physic_set_collision_system_type")
+	x.SpxPlatformSetStretchMode = dlsymGD("gdspx_platform_set_stretch_mode")
 	x.SpxPlatformSetWindowPosition = dlsymGD("gdspx_platform_set_window_position")
 	x.SpxPlatformGetWindowPosition = dlsymGD("gdspx_platform_get_window_position")
 	x.SpxPlatformSetWindowSize = dlsymGD("gdspx_platform_set_window_size")

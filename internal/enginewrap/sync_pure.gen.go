@@ -236,6 +236,7 @@ func (pself *physicMgrImpl) CheckTouchedCameraBoundary(obj gdx.Object, board_typ
 func (pself *physicMgrImpl) SetCollisionSystemType(is_collision_by_alpha bool) {}
 
 // IPlatformMgr
+func (pself *platformMgrImpl) SetStretchMode(enable bool) {}
 func (pself *platformMgrImpl) SetWindowPosition(pos Vec2) {}
 func (pself *platformMgrImpl) GetWindowPosition() Vec2 {
 	var _ret1 Vec2

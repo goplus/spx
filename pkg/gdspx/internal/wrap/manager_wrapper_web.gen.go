@@ -364,6 +364,10 @@ func (pself *physicMgr) SetCollisionSystemType(is_collision_by_alpha bool) {
 	arg0 := JsFromGdBool(is_collision_by_alpha)
 	API.SpxPhysicSetCollisionSystemType.Invoke(arg0)
 }
+func (pself *platformMgr) SetStretchMode(enable bool) {
+	arg0 := JsFromGdBool(enable)
+	API.SpxPlatformSetStretchMode.Invoke(arg0)
+}
 func (pself *platformMgr) SetWindowPosition(pos Vec2) {
 	arg0 := JsFromGdVec2(pos)
 	API.SpxPlatformSetWindowPosition.Invoke(arg0)

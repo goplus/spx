@@ -177,6 +177,9 @@ void cgo_callfn_GDExtensionSpxPhysicCheckTouchedCameraBoundary(const GDExtension
 void cgo_callfn_GDExtensionSpxPhysicSetCollisionSystemType(const GDExtensionSpxPhysicSetCollisionSystemType fn, GdBool is_collision_by_alpha) {
 	fn(is_collision_by_alpha);
 }
+void cgo_callfn_GDExtensionSpxPlatformSetStretchMode(const GDExtensionSpxPlatformSetStretchMode fn, GdBool enable) {
+	fn(enable);
+}
 void cgo_callfn_GDExtensionSpxPlatformSetWindowPosition(const GDExtensionSpxPlatformSetWindowPosition fn, GdVec2 pos) {
 	fn(pos);
 }

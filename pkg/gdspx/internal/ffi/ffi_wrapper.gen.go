@@ -128,6 +128,7 @@ type GDExtensionSpxPhysicCheckCollision C.GDExtensionSpxPhysicCheckCollision
 type GDExtensionSpxPhysicCheckTouchedCameraBoundaries C.GDExtensionSpxPhysicCheckTouchedCameraBoundaries
 type GDExtensionSpxPhysicCheckTouchedCameraBoundary C.GDExtensionSpxPhysicCheckTouchedCameraBoundary
 type GDExtensionSpxPhysicSetCollisionSystemType C.GDExtensionSpxPhysicSetCollisionSystemType
+type GDExtensionSpxPlatformSetStretchMode C.GDExtensionSpxPlatformSetStretchMode
 type GDExtensionSpxPlatformSetWindowPosition C.GDExtensionSpxPlatformSetWindowPosition
 type GDExtensionSpxPlatformGetWindowPosition C.GDExtensionSpxPlatformGetWindowPosition
 type GDExtensionSpxPlatformSetWindowSize C.GDExtensionSpxPlatformSetWindowSize
@@ -826,6 +827,15 @@ func CallPhysicSetCollisionSystemType(
 	arg1GdBool := (C.GdBool)(is_collision_by_alpha)
 
 	C.cgo_callfn_GDExtensionSpxPhysicSetCollisionSystemType(arg0, arg1GdBool)
+
+}
+func CallPlatformSetStretchMode(
+	enable GdBool,
+) {
+	arg0 := (C.GDExtensionSpxPlatformSetStretchMode)(api.SpxPlatformSetStretchMode)
+	arg1GdBool := (C.GdBool)(enable)
+
+	C.cgo_callfn_GDExtensionSpxPlatformSetStretchMode(arg0, arg1GdBool)
 
 }
 func CallPlatformSetWindowPosition(

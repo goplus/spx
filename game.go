@@ -123,8 +123,9 @@ type Game struct {
 	isRunned bool
 	gamer_   Gamer
 
-	windowScale float64
-	audioId     engine.Object
+	isStretchMode bool
+	windowScale   float64
+	audioId       engine.Object
 
 	askPanel  *ui.UiAsk
 	answerVal string
@@ -316,6 +317,9 @@ func Gopt_Game_Run(game Gamer, resource any, gameConf ...*Config) {
 	if debugLoad {
 		log.Println("==> StartLoad", resource)
 	}
+
+	// setup stretch mode
+	g.isStretchMode = proj.StretchMode == nil || *proj.StretchMode
 
 	g.isCollisionByPixel = !proj.CollisionByShape
 	// auto set collision layer by default
@@ -533,6 +537,7 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 	p.Camera.SetCameraZoom(p.windowScale)
 	ui.SetWindowScale(p.windowScale)
 
+	platformMgr.SetStretchMode(p.isStretchMode)
 	// setup syncSprite's property
 	p.syncSprite = engine.NewBackdropProxy(p, p.getCostumePath(), p.getCostumeRenderScale())
 	p.setupBackdrop()

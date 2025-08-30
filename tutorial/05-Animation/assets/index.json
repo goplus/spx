@@ -6,6 +6,7 @@
       "path": "1.png"
     }
   ],
+  "stretchMode": false,
   "windowScale":2,
   "zorder": [
     "Bullet",

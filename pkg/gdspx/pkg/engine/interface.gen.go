@@ -98,6 +98,7 @@ type IPhysicMgr interface {
 }
 
 type IPlatformMgr interface {
+	SetStretchMode(enable bool)
 	SetWindowPosition(pos Vec2)
 	GetWindowPosition() Vec2
 	SetWindowSize(width int64, height int64)
