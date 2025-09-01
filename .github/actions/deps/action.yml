@@ -19,6 +19,6 @@ runs:
         xgo-version: ${{ inputs.xgo-version }}
 
     - name: Prepare engine
-      run: make init
+      run: make setup
       shell: bash
 

@@ -1,284 +1,182 @@
+# ============================================
+# Config
+# ============================================
 .DEFAULT_GOAL := help
 
-CURRENT_PATH=$(shell pwd)
-.PHONY: init fmt gen cmd wasm wasmopt test download help initdev
-.PHONY: setup setup-dev install build-wasm build-wasm-opt format generate stop
-.PHONY: build-editor build-desktop build-web build-minigame build-miniprogram build-web-worker build-android build-ios
-.PHONY: export-pack export-web run-editor run-web test run-minigame run-minigame-opt run-miniprogram serve
+CURRENT_PATH := $(shell pwd)
 
-# Run demos
-path ?= tutorial/01-Weather
-port ?= 8106
-mode ?= ""
-movie ?= false
+# Automatically collect demos from directories
+DEMOS := $(wildcard tutorial/*)
+DEMO_INDEX ?= 3
 
-# Help target - displays available commands
-help:
+PORT    ?= 8106
+MOVIE   ?= false
+
+# Command to install spx
+INSTALL_CMD = cd ./cmd/gox && ./install.sh && cd $(CURRENT_PATH)
+
+
+# ============================================
+# Help
+# ============================================
+help: ## Show available commands
+	echo "Detected demos: $(DEMOS)"
 	@echo "Make Commands:"
-	@echo "============================="
-	@echo "Setup Commands:"
-	@echo "  setup            - Initialize the user environment"
-	@echo "  setup-dev        - Initialize the development environment"
-	@echo "  download         - Download engines"
-	@echo "  install          - Install spx command"
-	@echo "  build-wasm       - Install spx command and build wasm"
-	@echo "  build-wasm-opt   - Install spx command and build wasm with optimization"
-	@echo "  format           - Format code"
-	@echo "  generate         - Generate code"
-	@echo "  stop             - Stop running processes"
+	@echo "================================"
+	@grep -E '^[a-zA-Z0-9._-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
+		awk 'BEGIN {FS = ":.*?## "}; {printf "  make %-25s %s\n", $$1, $$2}'
 	@echo ""
-	@echo "Build Commands:"
-	@echo "  build-editor     - Build current platform's engine (editor mode)"
-	@echo "  build-desktop    - Build current platform's engine template"
-	@echo "  build-web        - Build web engine template"
-	@echo "  build-minigame   - Build web minigame template"
-	@echo "  build-miniprogram - Build web miniprogram template"
-	@echo "  build-web-worker - Build web worker template"
-	@echo "  build-android    - Build Android engine template"
-	@echo "  build-ios        - Build iOS engine template"
-	@echo ""
-	@echo "Export Commands:"
-	@echo "  export-pack      - Export runtime engine pck file"
-	@echo "  export-web       - Export web engine for builder"
-	@echo ""
-	@echo "Run Commands:"
-	@echo "  run              - Run demo on PC runtime mode (default: tutorial/06-worker)"
-	@echo "  run-editor       - Run demo on PC editor mode (default: tutorial/06-worker)"
-	@echo "  run-web          - Run demo on web (default: tutorial/06-worker)"
-	@echo "  run-web-worker   - Run demo on web worker mode (default: tutorial/06-worker)"
-	@echo "  test             - Run tests"
-	@echo "  run-minigame     - Run minigame"
-	@echo "  run-minigame-opt - Run minigame with optimization"
-	@echo "  run-miniprogram  - Run miniprogram"
-	@echo "  serve            - Run web server"
-	@echo ""
-	@echo "Parameters:"
-	@echo "  path=<dir>       - Specify demo path (default: tutorial/06-worker)"
-	@echo "  port=<num>       - Specify port number (default: 8106)"
-	@echo "  mode=<mode>      - Specify mode (default: empty)"
-	@echo "  movie=<bool>     - Specify movie mode (default: false)"
-	@echo ""
-	@echo "Usage Examples:"
-	@echo "  make build-desktop                    - Build for current platform"
-	@echo "  make build-minigame                   - Build web minigame template"
-	@echo "  make build-miniprogram                - Build web miniprogram template"
-	@echo "  make run path=test/Hello              - Run specific demo on PC"
-	@echo "  make run-web path=test/Hello port=8080 - Run specific demo on web with custom port"
-	@echo "  make run-web-worker path=test/Hello   - Run specific demo in web worker mode"
-	@echo "  make test                             - Run tests"
-	@echo "  make stop                             - Stop all running processes"
+	@echo "Demo targets via index:"
+	@i=1; \
+	for demo in $(DEMOS); do \
+		echo "  make run DEMO_INDEX=$$i          # Run $$demo"; \
+		echo "  make run-web DEMO_INDEX=$$i      # Run web $$demo"; \
+		echo "  make run-editor DEMO_INDEX=$$i   # Run editor $$demo"; \
+		i=$$((i+1)); \
+	done
 
-# ============================================================================
+# ============================================
+# Demo Commands
+# ============================================
+list-demos: ## List all demos with index
+	@i=1; \
+	for demo in $(DEMOS); do \
+		echo "$$i: $$demo"; \
+		i=$$((i+1)); \
+	done
+
+# ============================================
 # Setup Commands
-# ============================================================================
-
-setup: init
-init:
+# ============================================
+setup: ## Initialize the user environment
 	chmod +x ./pkg/gdspx/tools/*.sh && \
-	echo "===>step1/4: cmd" && make install && \
-	echo "===>step2/4: download engine" && make download && \
-	echo "===>step3/4: prepare dev env" && make export-pack && \
-	echo "===>step4/4: prepare web template" && ./pkg/gdspx/tools/make_util.sh extrawebtemplate && \
-	echo "===>init done"
+	echo "===> Step 1/4: Install spx" && \
+	$(MAKE) install && \
+	echo "===> Step 2/4: Download engine" && \
+	$(MAKE) download && \
+	echo "===> Step 3/4: Export runtime package" && \
+	$(MAKE) export-pack && \
+	echo "===> Step 4/4: Prepare web template" && \
+	./pkg/gdspx/tools/make_util.sh extrawebtemplate && \
+	echo "===> setup done"
 
-setup-dev: initdev
-initdev:
+setup-dev: ## Initialize development environment (full)
 	chmod +x ./pkg/gdspx/tools/*.sh && \
-	echo "===>step1/6: cmd" && make install && \
-	echo "===>step2/6: download engine" && make download && \
-	echo "===>step3/6: wasm" && make build-wasm && \
-	echo "===>step4/6: pce" && make build-editor && \
-	echo "===>step5/6: pc" && make build-desktop && \
-	echo "===>step6/6: web" && make build-web && \
-	echo "===>initdev done,use `make run` to run demo"
+	echo "===> Step 1/6: Install spx" && \
+	$(MAKE) install && \
+	echo "===> Step 2/6: Download engine" && \
+	$(MAKE) download && \
+	echo "===> Step 3/6: Build wasm" && \
+	$(MAKE) build-wasm && \
+	echo "===> Step 4/6: Build editor engine" && \
+	$(MAKE) build-editor && \
+	echo "===> Step 5/6: Build desktop engine" && \
+	$(MAKE) build-desktop && \
+	echo "===> Step 6/6: Build web engine" && \
+	$(MAKE) build-web && \
+	echo "===> setup-dev done, use 'make run DEMO_INDEX=N' to run demo"
 
-# Download engines 
-download:
-	make install &&\
-	./pkg/gdspx/tools/build_engine.sh -e -d 
 
-# Install spx command
-install: cmd
-cmd:
-	cd ./cmd/gox/ && ./install.sh && cd $(CURRENT_PATH) 
+# ============================================
+# Install & Download
+# ============================================
+install: ## Install spx command
+	$(INSTALL_CMD)
 
-# Build wasm
-build-wasm: wasm
-wasm:
-	cd ./cmd/gox/ && ./install.sh --web && cd $(CURRENT_PATH) 
+download: ## Download engines
+	$(MAKE) install && ./pkg/gdspx/tools/build_engine.sh -e -d 
 
-# Build wasm with optimization
-build-wasm-opt: wasmopt
-wasmopt:
-	cd ./cmd/gox/ && ./install.sh --web --opt && cd $(CURRENT_PATH) 
-	./pkg/gdspx/tools/make_util.sh compresswasm
 
-# Format code	
-format: fmt
-fmt:
-	go fmt ./... 
-
-# Generate code
-generate: gen
-gen:
-	cd ./pkg/gdspx/cmd/codegen && go run . && cd $(CURRENT_PATH) && make format
-
-# ============================================================================
+# ============================================
 # Build Commands
-# ============================================================================
+# ============================================
+build-editor: ## Build editor mode engine
+	$(MAKE) install && ./pkg/gdspx/tools/build_engine.sh -e
 
-# Build current platform's engine (editor mode)
-build-editor: pce
-pce:
-	make install &&\
-	./pkg/gdspx/tools/build_engine.sh -e
-
-# Build current platform's engine template
-build-desktop: pc
-pc: 
-	make install &&\
-	./pkg/gdspx/tools/build_engine.sh &&\
+build-desktop: ## Build desktop engine
+	$(MAKE) install && ./pkg/gdspx/tools/build_engine.sh && \
 	./pkg/gdspx/tools/make_util.sh exportpack 
 
-# Build web template
-build-web: web
-web: 
-	./pkg/gdspx/tools/build_engine.sh -p web &&\
+build-web: ## Build web engine template
+	./pkg/gdspx/tools/build_engine.sh -p web && \
 	./pkg/gdspx/tools/make_util.sh extrawebtemplate normal
 
-build-web-worker: webworker
-webworker: 
-	./pkg/gdspx/tools/build_engine.sh -p web -m worker &&\
+build-web-worker: ## Build web worker engine template
+	./pkg/gdspx/tools/build_engine.sh -p web -m worker && \
 	./pkg/gdspx/tools/make_util.sh extrawebtemplate worker
 
-build-minigame: minigame
-minigame: 
-	./pkg/gdspx/tools/build_engine.sh -p web -m minigame &&\
+build-minigame: ## Build minigame template
+	./pkg/gdspx/tools/build_engine.sh -p web -m minigame && \
 	./pkg/gdspx/tools/make_util.sh extrawebtemplate minigame
 
-build-miniprogram: miniprogram
-miniprogram: 
-	./pkg/gdspx/tools/build_engine.sh -p web -m miniprogram &&\
+build-miniprogram: ## Build miniprogram template
+	./pkg/gdspx/tools/build_engine.sh -p web -m miniprogram && \
 	./pkg/gdspx/tools/make_util.sh extrawebtemplate miniprogram
 
-# Build android template
-build-android: android
-android:
-	./pkg/gdspx/tools/build_engine.sh -p android
+build-wasm: ## Build wasm
+	cd ./cmd/gox/ && ./install.sh --web && cd $(CURRENT_PATH)
 
-# Build ios template
-build-ios: ios
-ios:
-	./pkg/gdspx/tools/build_engine.sh -p ios 
+build-wasm-opt: ## Build wasm with optimization
+	cd ./cmd/gox/ && ./install.sh --web --opt && cd $(CURRENT_PATH)
+	./pkg/gdspx/tools/make_util.sh compresswasm
 
-# ============================================================================
-# Export Commands
-# ============================================================================
 
-# Export runtime pck file
-export-pack: exportpack
-exportpack:
-	./pkg/gdspx/tools/make_util.sh exportpack && cd $(CURRENT_PATH) 
+# ============================================
+# Run Commands (by index)
+# ============================================
+define GET_DEMO
+$(word $(DEMO_INDEX),$(DEMOS))
+endef
 
-# Export web engine for builder
-export-web: exportweb
-exportweb:
-	cd ./cmd/gox/ && ./install.sh --web --opt && cd $(CURRENT_PATH) &&\
-	./pkg/gdspx/tools/make_util.sh exportweb && cd $(CURRENT_PATH) 
+run: ## Run demo on PC: make run DEMO_INDEX=N
+ifndef DEMO_INDEX
+	$(error DEMO_INDEX is not set! Usage: make run DEMO_INDEX=N)
+endif
+	@DEMO=$(GET_DEMO); \
+	echo "Running demo #$(DEMO_INDEX): $$DEMO"; \
+	cd $$DEMO && spx run -movie=$(MOVIE)
 
-# ============================================================================
-# Run Commands
-# ============================================================================
+run-editor: ## Run demo in editor mode: make run-editor DEMO_INDEX=N
+ifndef DEMO_INDEX
+	$(error DEMO_INDEX is not set! Usage: make run-editor DEMO_INDEX=N)
+endif
+	@DEMO=$(GET_DEMO); \
+	echo "Running editor demo #$(DEMO_INDEX): $$DEMO"; \
+	cd $$DEMO && spx rune -movie=$(MOVIE)
 
-# Run demo on PC editor mode
-run-editor: rune
-rune:
-	cd  $(path) && spx rune -movie=$(movie) && cd $(CURRENT_PATH) 
+run-web: ## Run demo on web: make run-web DEMO_INDEX=N
+ifndef DEMO_INDEX
+	$(error DEMO_INDEX is not set! Usage: make run-web DEMO_INDEX=N)
+endif
+	@DEMO=$(GET_DEMO); \
+	echo "Running web demo #$(DEMO_INDEX): $$DEMO"; \
+	$(MAKE) stop && $(MAKE) build-wasm && \
+	cd $$DEMO && spx clear && spx runweb -serveraddr=":$(PORT)"
 
-# Run demo on PC (runtime mode)
-run:
-	cd  $(path) && spx run -movie=$(movie) && cd $(CURRENT_PATH) 
 
-# Run demo on PC (runtime mode)
-clear:
-	cd  $(path) && spx clear && cd $(CURRENT_PATH) 
+# ============================================
+# Utility Commands
+# ============================================
+format: ## Format Go code
+	go fmt ./...
 
-# Run tests
-test: runtest
-runtest:
-	cd test/All && spx run . && cd $(CURRENT_PATH) 
-	
-# Run demo on web
-run-web: runweb
-runweb:
-	make stop &&\
-	make build-wasm &&\
-	cd $(path) && spx clear && spx runweb -serveraddr=":$(port)" && cd $(CURRENT_PATH)
+generate: ## Generate code
+	cd ./pkg/gdspx/cmd/codegen && go run . && cd $(CURRENT_PATH) && $(MAKE) format
 
-# Run demo on web worker
-run-web-worker: runwebworker
-runwebworker:
-	make stop &&\
-	make build-wasm &&\
-	cd $(path) && spx clear && spx runwebworker -serveraddr=":$(port)" && cd $(CURRENT_PATH)
+export-pack: ## Export runtime pck file
+	./pkg/gdspx/tools/make_util.sh exportpack && cd $(CURRENT_PATH)
 
-# Run minigame
-run-minigame: runmg
-runmg:
-	make install &&\
-	cd  $(path) && spx exportminigame -build=fast && cd $(CURRENT_PATH) 
-	
-# Run minigame with optimization
-run-minigame-opt: runmgopt
-runmgopt:
-	make build-wasm-opt &&\
-	cd  $(path) && spx exportminigame && cd $(CURRENT_PATH) 
+export-web: ## Export web engine
+	cd ./cmd/gox && ./install.sh --web --opt && cd $(CURRENT_PATH) && \
+	./pkg/gdspx/tools/make_util.sh exportweb && cd $(CURRENT_PATH)
 
-# Run miniprogram
-run-miniprogram: runmp
-runmp:
-	make install &&\
-	cd  $(path) && spx exportminiprogram && cd $(CURRENT_PATH) &&\
-	make serve
-
-# Run miniprogram
-run-miniprogram-opt: runmpopt
-runmpopt:
-	make build-wasm-opt &&\
-	cd  $(path) && spx exportminiprogram && cd $(CURRENT_PATH) &&\
-	make serve
-
-# Run web server
-serve: runwebserver
-runwebserver:
-	make stop && cd $(CURRENT_PATH) &&\
-	cd $(path) && python3 ./project/.godot/gdspx_web_server.py -r "../.builds/web" -p $(port)
-
-# Stop running processes
-stop: stopwebserver
-stopwebserver:
+stop: ## Stop running processes
 	@echo "Stopping running processes..."
-	@if [ "$$OS" = "Windows_NT" ] || [[ "$$(uname -s 2>/dev/null)" == MINGW* ]]; then \
-		echo "Windows environment detected, !!WARN: using taskkill to kill all python processes"; \
-		taskkill /F /FI "IMAGENAME eq python.exe" 2>/dev/null || true; \
-		taskkill /F /FI "IMAGENAME eq pythonw.exe" 2>/dev/null || true; \
-		taskkill /F /FI "IMAGENAME eq python3.exe" 2>/dev/null || true; \
-	elif command -v pgrep > /dev/null; then \
-		echo "Unix/Linux environment detected, using pgrep and kill"; \
-		PIDS=$$(pgrep -f gdspx_web_server.py); \
-		if [ -n "$$PIDS" ]; then \
-			echo "Killing process: $$PIDS"; \
-			kill -9 $$PIDS; \
-		else \
-			echo "No gdspx_web_server.py process found."; \
-		fi \
+	@if [ "$$OS" = "Windows_NT" ]; then \
+		taskkill /F /FI "IMAGENAME eq python.exe" 2>/NUL || true; \
+		taskkill /F /FI "IMAGENAME eq python3.exe" 2>/NUL || true; \
 	else \
-		echo "Neither taskkill nor pgrep available, skipping process killing"; \
+		PIDS=$$(pgrep -f gdspx_web_server.py || true); \
+		if [ -n "$$PIDS" ]; then kill -9 $$PIDS; fi \
 	fi
-	@echo "Process stopping completed."
-
-# Default rule for unknown targets
-%:
-	@echo "Unknown target: $@"
-	@echo "Run 'make help' for available commands"
-	@exit 1
+	@echo "Processes stopped."

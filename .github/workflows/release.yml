@@ -80,7 +80,7 @@ jobs:
 
       - name: Build release pack
         run: |
-          make exportweb
+          make export-web
           if [ ! -f "spx_web.zip" ]; then
             echo "spx_web.zip not found"
             exit 1

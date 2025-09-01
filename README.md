@@ -27,7 +27,7 @@ How to run games powered by XGo spx engine?
 	git clone https://github.com/goplus/spx.git
 	cd spx
 	git checkout dev
-	make init
+	make setup
 
 	# run the demo
 	spx run -path tutorial/00-Hello
