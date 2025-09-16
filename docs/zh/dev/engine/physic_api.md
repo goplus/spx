@@ -97,7 +97,7 @@ func (p *SpriteImpl) AddImpulse(impulseX, impulseY float64)
 // 碰撞器（2个）
 // Rect(width, height float64) 
 // Circle(radius float64) 
-// Capsure(radius, height float64) 
+// Capsule(radius, height float64) 
 // Polygon(params []float64) 
 func (p *SpriteImpl) SetColliderParams(type ColliderType, params []float64) 
 func (p *SpriteImpl) SetColliderPivot(offsetX, offsetY float64) 
