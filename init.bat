@@ -20,7 +20,7 @@ if %errorlevel%==0 (
 
 REM Step 1: Check MSYS2
 echo.
-echo 🔍 Step 1/6: Checking MSYS2 environment...
+echo 🔍 Step 1/8: Checking MSYS2 environment...
 if exist "C:\msys64\usr\bin\bash.exe" (
     echo ✅ MSYS2 is installed
     set MSYS2_PATH=C:\msys64
@@ -39,25 +39,25 @@ if exist "C:\msys64\usr\bin\bash.exe" (
 
 REM Step 2: Setup MSYS2 environment
 echo.
-echo 🔧 Step 2/6: Configuring MSYS2 environment...
+echo 🔧 Step 2/8: Configuring MSYS2 environment...
 set PATH=%MSYS2_PATH%\mingw64\bin;%MSYS2_PATH%\usr\bin;%PATH%
 
 REM Step 3: Update MSYS2
 echo.
-echo 🔄 Step 3/6: Updating MSYS2 system...
+echo 🔄 Step 3/8: Updating MSYS2 system...
 echo Updating MSYS2, this may take a few minutes...
 %MSYS2_PATH%\usr\bin\bash.exe -l -c "pacman -Syu --noconfirm"
 
 REM Step 4: Install development tools
 echo.
-echo 📦 Step 4/6: Installing development tools...
+echo 📦 Step 4/8: Installing development tools...
 echo Installing toolchain and dependencies...
 %MSYS2_PATH%\usr\bin\bash.exe -l -c "pacman -S --needed --noconfirm base-devel mingw-w64-x86_64-toolchain"
 %MSYS2_PATH%\usr\bin\bash.exe -l -c "pacman -S --noconfirm make zip unzip bash"
 
-REM Step 5: Install Go
+REM Step 5: Install Go v1.23.0
 echo.
-echo 🔍 Step 5/6: Installing Go v1.23.0...
+echo 🔍 Step 5/8: Installing Go v1.23.0...
 %MSYS2_PATH%\usr\bin\bash.exe -l -c "pacman -S --noconfirm mingw-w64-x86_64-go"
 
 REM Verify Go installation
@@ -68,46 +68,102 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-REM Step 6: Install xgo and initialize SPX
+REM Step 6: Install xgo v1.5.0 (matching GitHub action setup-xgo approach)
 echo.
-echo 🔧 Step 6/6: Installing xgo and initializing SPX environment...
+echo 🔧 Step 6/8: Installing xgo v1.5.0...
 
-REM Create installation script
-echo echo "📦 Cloning xgo repository..." > %TEMP%\install_spx.sh
-echo if [ ! -d "xgo" ]; then >> %TEMP%\install_spx.sh
-echo     git clone https://github.com/goplus/xgo.git >> %TEMP%\install_spx.sh
-echo fi >> %TEMP%\install_spx.sh
-echo. >> %TEMP%\install_spx.sh
-echo echo "🔧 Building and installing xgo..." >> %TEMP%\install_spx.sh
-echo cd xgo >> %TEMP%\install_spx.sh
-echo ./all.bash >> %TEMP%\install_spx.sh
-echo cd .. >> %TEMP%\install_spx.sh
-echo. >> %TEMP%\install_spx.sh
-echo echo "🔧 Initializing SPX environment..." >> %TEMP%\install_spx.sh
-echo make setup >> %TEMP%\install_spx.sh
-echo. >> %TEMP%\install_spx.sh
-echo echo "🧪 Verifying installation..." >> %TEMP%\install_spx.sh
-echo if command -v spx ^>^/dev^/null 2^>^&1; then >> %TEMP%\install_spx.sh
-echo     spx version >> %TEMP%\install_spx.sh
-echo     echo "" >> %TEMP%\install_spx.sh
-echo     echo "🎉 SPX Game Engine installation successful!" >> %TEMP%\install_spx.sh
-echo     echo "" >> %TEMP%\install_spx.sh
-echo     echo "📚 Next steps:" >> %TEMP%\install_spx.sh
-echo     echo "   1. Run example game: cd tutorial/00-Hello && spx run" >> %TEMP%\install_spx.sh
-echo     echo "   2. View all examples: make list-demos" >> %TEMP%\install_spx.sh
-echo     echo "   3. Read documentation: docs/zh/README.md" >> %TEMP%\install_spx.sh
-echo     echo "" >> %TEMP%\install_spx.sh
-echo     echo "⚠️  Important: Always run SPX commands in MSYS2 MinGW64 terminal" >> %TEMP%\install_spx.sh
-echo else >> %TEMP%\install_spx.sh
-echo     echo "❌ SPX installation may not be complete, please check error messages" >> %TEMP%\install_spx.sh
-echo     exit 1 >> %TEMP%\install_spx.sh
-echo fi >> %TEMP%\install_spx.sh
+REM Create xgo installation script
+echo echo "📦 Installing xgo v1.5.0..." > %TEMP%\install_xgo.sh
+echo GO_VERSION=$(go version ^| awk '{print $3}' ^| sed 's/go//') >> %TEMP%\install_xgo.sh
+echo echo "Detected Go version: $GO_VERSION" >> %TEMP%\install_xgo.sh
+echo. >> %TEMP%\install_xgo.sh
+echo echo "🔧 Cloning and building xgo v1.5.0..." >> %TEMP%\install_xgo.sh
+echo if [ ! -d "xgo" ]; then >> %TEMP%\install_xgo.sh
+echo     git clone --depth 1 --branch v1.5.0 https://github.com/goplus/xgo.git >> %TEMP%\install_xgo.sh
+echo fi >> %TEMP%\install_xgo.sh
+echo cd xgo >> %TEMP%\install_xgo.sh
+echo ./all.bash >> %TEMP%\install_xgo.sh
+echo cd .. >> %TEMP%\install_xgo.sh
+echo echo "✅ xgo v1.5.0 installed successfully" >> %TEMP%\install_xgo.sh
 
-REM Execute installation script
-%MSYS2_PATH%\usr\bin\bash.exe -l %TEMP%\install_spx.sh
+REM Execute xgo installation
+%MSYS2_PATH%\usr\bin\bash.exe -l %TEMP%\install_xgo.sh
+if %errorlevel% neq 0 (
+    echo ❌ xgo installation failed
+    del %TEMP%\install_xgo.sh
+    pause
+    exit /b 1
+)
 
-REM Clean up temporary files
-del %TEMP%\install_spx.sh
+REM Clean up xgo installation script
+del %TEMP%\install_xgo.sh
+
+REM Step 7: Setup SPX environment (matching GitHub action deps step)
+echo.
+echo 🔧 Step 7/8: Setting up SPX environment...
+%MSYS2_PATH%\usr\bin\bash.exe -l -c "make setup"
+if %errorlevel% neq 0 (
+    echo ❌ SPX setup failed
+    pause
+    exit /b 1
+)
+
+REM Step 8: Run tests (matching GitHub action project-test steps)
+echo.
+echo 🧪 Step 8/8: Running tests and verification...
+
+REM Create test script
+echo echo "🔨 Building project..." > %TEMP%\test_spx.sh
+echo go build -v $(go list ./... ^| grep -v /internal/webffi) >> %TEMP%\test_spx.sh
+echo if [ $? -ne 0 ]; then >> %TEMP%\test_spx.sh
+echo     echo "❌ Build failed" >> %TEMP%\test_spx.sh
+echo     exit 1 >> %TEMP%\test_spx.sh
+echo fi >> %TEMP%\test_spx.sh
+echo. >> %TEMP%\test_spx.sh
+echo echo "🧪 Running tests..." >> %TEMP%\test_spx.sh
+echo go test -v $(go list ./... ^| grep -v /internal/webffi) >> %TEMP%\test_spx.sh
+echo if [ $? -ne 0 ]; then >> %TEMP%\test_spx.sh
+echo     echo "❌ Tests failed" >> %TEMP%\test_spx.sh
+echo     exit 1 >> %TEMP%\test_spx.sh
+echo fi >> %TEMP%\test_spx.sh
+echo. >> %TEMP%\test_spx.sh
+echo echo "🔧 Running xgo compilation..." >> %TEMP%\test_spx.sh
+echo xgo go ./... >> %TEMP%\test_spx.sh
+echo if [ $? -ne 0 ]; then >> %TEMP%\test_spx.sh
+echo     echo "❌ xgo compilation failed" >> %TEMP%\test_spx.sh
+echo     exit 1 >> %TEMP%\test_spx.sh
+echo fi >> %TEMP%\test_spx.sh
+echo. >> %TEMP%\test_spx.sh
+echo echo "🎮 Running test demo..." >> %TEMP%\test_spx.sh
+echo spx run -path="test/CI" -headless=true ^>cilog.txt 2^>^&1 ^& >> %TEMP%\test_spx.sh
+echo sleep 10 >> %TEMP%\test_spx.sh
+echo. >> %TEMP%\test_spx.sh
+echo echo "✅ Checking test results..." >> %TEMP%\test_spx.sh
+echo if grep -q "===>SpxCIRunSucc" cilog.txt; then >> %TEMP%\test_spx.sh
+echo     echo "✅ Test demo completed successfully" >> %TEMP%\test_spx.sh
+echo     rm -f cilog.txt >> %TEMP%\test_spx.sh
+echo else >> %TEMP%\test_spx.sh
+echo     echo "❌ Test demo failed: success mark not found" >> %TEMP%\test_spx.sh
+echo     echo "Log contents:" >> %TEMP%\test_spx.sh
+echo     cat cilog.txt >> %TEMP%\test_spx.sh
+echo     rm -f cilog.txt >> %TEMP%\test_spx.sh
+echo     exit 1 >> %TEMP%\test_spx.sh
+echo fi >> %TEMP%\test_spx.sh
+echo. >> %TEMP%\test_spx.sh
+echo echo "🎉 SPX Game Engine installation and testing completed successfully!" >> %TEMP%\test_spx.sh
+echo echo "" >> %TEMP%\test_spx.sh
+echo echo "📚 Next steps:" >> %TEMP%\test_spx.sh
+echo echo "   1. Run example game: cd tutorial/00-Hello && spx run" >> %TEMP%\test_spx.sh
+echo echo "   2. View all examples: make list-demos" >> %TEMP%\test_spx.sh
+echo echo "   3. Read documentation: docs/zh/README.md" >> %TEMP%\test_spx.sh
+echo echo "" >> %TEMP%\test_spx.sh
+echo echo "⚠️  Important: Always run SPX commands in MSYS2 MinGW64 terminal" >> %TEMP%\test_spx.sh
+
+REM Execute test script
+%MSYS2_PATH%\usr\bin\bash.exe -l %TEMP%\test_spx.sh
+
+REM Clean up test script
+del %TEMP%\test_spx.sh
 
 echo.
 echo =========================================================
