@@ -18,7 +18,7 @@ import (
 	"github.com/goplus/ixgo"
 	"github.com/goplus/ixgo/xgobuild"
 	"github.com/goplus/mod/modfile"
-	_ "github.com/goplus/reflectx/icall/icall20480"
+	_ "github.com/goplus/reflectx/icall/icall40960"
 	_ "github.com/goplus/spx/v2"
 	"github.com/goplus/spx/v2/cmd/igox/zipfs"
 	goxfs "github.com/goplus/spx/v2/fs"
