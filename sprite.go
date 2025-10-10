@@ -34,10 +34,10 @@ type Direction = float64
 type specialObj int
 
 const (
-	Right Direction = 90
-	Left  Direction = -90
 	Up    Direction = 0
+	Right Direction = 90
 	Down  Direction = 180
+	Left  Direction = -90
 )
 
 const (
@@ -201,6 +201,12 @@ type Sprite interface {
 	ColliderShape(isTrigger bool) (ColliderShapeType, []float64)
 	SetColliderPivot(isTrigger bool, offsetX, offsetY float64)
 	ColliderPivot(isTrigger bool) (offsetX, offsetY float64)
+
+	//
+	FollowPath__0(path []float64, animName []string, speedFactor float64, ignorePhysics bool)
+	FollowPath__1(path []float64)
+	FollowPath__2(path []float64, dirAnimNames []string)
+	FollowPath__3(path []float64, dirAnimNames []string, speedFactor float64)
 }
 
 type SpriteName = string
@@ -1439,7 +1445,7 @@ func (p *SpriteImpl) doTurn(val Direction, speed float64, animation SpriteAnimat
 	}
 }
 
-func (p *SpriteImpl) doTurnTo(obj any, speed float64, animation SpriteAnimationName) {
+func (p *SpriteImpl) getTurnToAngle(obj any) float64 {
 	var angle float64
 	switch v := obj.(type) {
 	case Direction:
@@ -1450,7 +1456,11 @@ func (p *SpriteImpl) doTurnTo(obj any, speed float64, animation SpriteAnimationN
 		dy := y - p.y
 		angle = 90 - math.Atan2(dy, dx)*180/math.Pi
 	}
+	return angle
+}
 
+func (p *SpriteImpl) doTurnTo(obj any, speed float64, animation SpriteAnimationName) {
+	angle := p.getTurnToAngle(obj)
 	if animation == "" {
 		animation = p.getStateAnimName(StateTurn)
 	}
@@ -2342,4 +2352,80 @@ func (p *SpriteImpl) SetColliderPivot(isTrigger bool, offsetX, offsetY float64) 
 
 func (p *SpriteImpl) ColliderPivot(isTrigger bool) (offsetX, offsetY float64) {
 	return p.getPhysicPivot(isTrigger)
+}
+
+func calcDirection(from, to mathf.Vec2) Direction {
+	deltaX := to.X - from.X
+	deltaY := to.Y - from.Y
+	if math.Abs(deltaX) > math.Abs(deltaY) {
+		if deltaX >= 0 {
+			return Right
+		} else {
+			return Left
+		}
+	} else {
+		if deltaY >= 0 {
+			return Up
+		} else {
+			return Down
+		}
+	}
+}
+
+func (p *SpriteImpl) FollowPath__0(path []float64, dirAnimNames []string, speedFactor float64, ignorePhysics bool) {
+	if speedFactor <= 0 {
+		speedFactor = 1
+		log.Printf("speed is invalid, set to 1 when %s following path", p.name)
+	}
+	if path == nil || len(path) < 2 {
+		log.Printf("path is invalid, when %s following path", p.name)
+		return
+	}
+
+	oldMode := p.PhysicsMode()
+	if ignorePhysics {
+		p.SetPhysicsMode(NoPhysics)
+		defer p.SetPhysicsMode(oldMode)
+	}
+
+	oldPos := mathf.NewVec2(p.x, p.y)
+	for pathIndex := 0; pathIndex < len(path)-1; pathIndex += 2 {
+		x := path[pathIndex]
+		y := path[pathIndex+1]
+		targetPos := mathf.NewVec2(x, y)
+
+		anim := p.getStateAnimName(StateStep)
+		if dirAnimNames != nil && len(dirAnimNames) == 4 {
+			direction := calcDirection(oldPos, targetPos)
+			idx := (int(direction)/90 + 4) % 4
+			anim = dirAnimNames[idx]
+			p.TurnTo__2(direction)
+		} else {
+			angle := p.getTurnToAngle(targetPos)
+			p.setDirection(angle, false)
+		}
+		if !p.hasAnim(anim) {
+			log.Printf("can not find match animation '%s' when %s following path", anim, p.name)
+		}
+
+		oldPos = targetPos
+
+		curPos := mathf.NewVec2(p.x, p.y)
+		if targetPos.DistanceTo(curPos) <= 0.001 {
+			p.SetXYpos(targetPos.X, targetPos.Y)
+			continue
+		}
+
+		p.StepTo__a(targetPos.X, targetPos.Y, speedFactor, anim)
+	}
+}
+
+func (p *SpriteImpl) FollowPath__1(path []float64) {
+	p.FollowPath__0(path, nil, 1, true)
+}
+func (p *SpriteImpl) FollowPath__2(path []float64, dirAnimNames []string) {
+	p.FollowPath__0(path, dirAnimNames, 1, true)
+}
+func (p *SpriteImpl) FollowPath__3(path []float64, dirAnimNames []string, speedFactor float64) {
+	p.FollowPath__0(path, dirAnimNames, speedFactor, true)
 }

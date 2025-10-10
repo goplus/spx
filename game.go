@@ -1201,6 +1201,8 @@ func (p *Game) touchingSpriteBy(dst *SpriteImpl, name string) *SpriteImpl {
 
 func (p *Game) objectPos(obj any) (float64, float64) {
 	switch v := obj.(type) {
+	case mathf.Vec2:
+		return v.X, v.Y
 	case SpriteName:
 		if sp := p.findSprite(v); sp != nil {
 			return sp.getXY()
