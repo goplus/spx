@@ -80,6 +80,18 @@ type Config struct {
 	DontParseFlags     bool   `json:"-"`
 	FullScreen         bool   `json:"fullScreen,omitempty"`
 	DontRunOnUnfocused bool   `json:"pauseOnUnfocused,omitempty"`
+
+	WindowSync *windowSyncConfig `json:"windowSync,omitempty"` // window sync configuration
+}
+
+// windowSyncConfig window synchronization configuration
+type windowSyncConfig struct {
+	Enabled       bool   `json:"enabled"`       // enable window sync
+	ServerHost    string `json:"serverHost"`    // WebSocket server host (default: localhost)
+	ServerPort    int    `json:"serverPort"`    // WebSocket server port
+	AutoReconnect bool   `json:"autoReconnect"` // auto reconnect on disconnect
+	MaxRetries    int    `json:"maxRetries"`    // max retry count (default: 20)
+	RetryInterval int    `json:"retryInterval"` // retry interval in milliseconds (default: 50)
 }
 
 type cameraConfig struct {

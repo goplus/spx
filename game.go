@@ -153,6 +153,9 @@ type Game struct {
 	audioMaxDistance float64
 
 	tilemapMgr gameTilemapMgr
+
+	// window synchronization
+	windowController *windowController
 }
 
 const maxCollisionLayerIdx = 32 // engine limit support 32 layers
@@ -209,6 +212,10 @@ func (p *Game) reset() {
 	if p.audioId != 0 {
 		p.sounds.releaseAudio(p.audioId)
 		p.audioId = 0
+	}
+	if p.windowController != nil {
+		p.windowController.stop()
+		p.windowController = nil
 	}
 	p.sinkMgr.reset()
 	p.EraseAll() // clear pens
@@ -385,6 +392,14 @@ func Gopt_Game_Run(game Gamer, resource any, gameConf ...*Config) {
 
 	if err := g.endLoad(v, &proj); err != nil {
 		panic(err)
+	}
+
+	// Initialize window synchronization if configured
+	if conf.WindowSync != nil && conf.WindowSync.Enabled {
+		g.windowController = newWindowController(g, conf.WindowSync)
+		if err := g.windowController.start(); err != nil {
+			log.Printf("⚠️ Window sync failed to start: %v", err)
+		}
 	}
 
 	if err := g.runLoop(&conf); err != nil {
