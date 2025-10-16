@@ -26,6 +26,8 @@ type ExtraArgs struct {
 	Build           *string
 	Mode            *string
 	Movie           *bool
+	GoEnv           *string // Portable Go environment directory
+	IxgoGen         *bool   // Use xgobuild library for code generation (new method)
 }
 
 func (e *ExtraArgs) String() []string {
@@ -112,6 +114,8 @@ func (cmd *CmdTool) initializeFlags() *bool {
 	cmd.Args.Build = f.String("build", "normal", "build mode: normal or fast")
 	cmd.Args.Mode = f.String("mode", "none", "mode: none, worker, minigame")
 	cmd.Args.Movie = f.Bool("movie", false, "record movie mode")
+	cmd.Args.GoEnv = f.String("goenv", "", "portable Go environment directory (e.g., ./cmd/portable-go)")
+	cmd.Args.IxgoGen = f.Bool("ixgogen", false, "use xgobuild library for code generation (default: use xgo CLI)")
 	return help
 }
 
@@ -199,6 +203,7 @@ Examples:
     #CMDNAME init                         # Create a project in current path
     #CMDNAME init ./test/demo01           # Create a project at path ./test/demo01
     #CMDNAME run --path ./myproject       # Run project at specified path
+    #CMDNAME run --ixgogen --goenv=./cmd/portable-go  # Run with xgobuild and portable Go
     #CMDNAME build --servermode           # Build in server mode
     #CMDNAME runweb --debugweb            # Run web server with debug service
     #CMDNAME buildtinygo                  # Build TinyGo static library for ESP32

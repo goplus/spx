@@ -1,7 +1,20 @@
 #!/bin/bash
 # Read app name from appname.txt file
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd $SCRIPT_DIR
+
+# Pin Go toolchain version
+export GOTOOLCHAIN=go1.24.4
 
 go mod tidy
+
+if ! go generate pkg/gengo/embedded_pkgs.go > /dev/null 2>&1; then
+    echo "Error during go generate, showing full output:"
+    go generate pkg/gengo/embedded_pkgs.go
+fi
+
+go mod tidy
+
 target_font_dir=./template/project/engine/fonts/
 mkdir -p $target_font_dir
 font_path=$target_font_dir/CnFont.ttf
@@ -20,7 +33,7 @@ if [ "$OS" = "Windows_NT" ]; then
    appname="${appname}.exe"
 fi
 
-go build -o $appname
+go build -ldflags="-checklinkname=0" -o $appname 
 if [ "$OS" = "Windows_NT" ]; then
     IFS=';' read -r first_gopath _ <<< "$(go env GOPATH)"
     GOPATH="$first_gopath"
@@ -40,3 +53,4 @@ if [ "$1" = "--web" ]; then
 
     cd ../gox || exit
 fi
+

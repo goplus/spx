@@ -50,6 +50,16 @@ type CmdTool struct {
 	RuntimeCmdPath string
 
 	GoModTemplate string
+
+	// Code generation mode
+	// true: use xgobuild library (new method)
+	// false: use xgo CLI (old method, default)
+	UseXgobuildForCodegen bool
+
+	// Portable Go environment
+	GoEnvDir string // Portable Go environment directory
+	GoRoot   string // Calculated GOROOT path
+	GoPath   string // Calculated GOPATH path
 }
 
 // RunCmd executes the specified command with the given parameters
@@ -104,6 +114,19 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 	// Set runtime mode
 	if cmd.Args.CmdName == "run" || cmd.Args.CmdName == "runweb" {
 		cmd.RuntimeMode = true
+	}
+
+	// Set code generation mode based on --ixgogen parameter
+	if cmd.Args.IxgoGen != nil && *cmd.Args.IxgoGen {
+		cmd.UseXgobuildForCodegen = true
+	}
+
+	// Setup portable Go environment if specified
+	if cmd.Args.GoEnv != nil && *cmd.Args.GoEnv != "" {
+		if err := cmd.setupPortableGoEnv(); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to setup portable Go environment: %v\n", err)
+			return fmt.Errorf("failed to setup portable Go environment: %w", err)
+		}
 	}
 
 	// Check environment
