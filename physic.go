@@ -85,9 +85,9 @@ func (p *rayCastResult) ToArray() engine.Array {
 	}
 	ary[1] = p.SpriteId
 	ary[2] = engine.ConvertToInt64(p.PosX)
-	ary[3] = engine.ConvertToInt64(p.PosY)
+	ary[3] = -engine.ConvertToInt64(p.PosY) // here need flipY to convert spx coord to godot coord
 	ary[4] = engine.ConvertToInt64(p.NormalX)
-	ary[5] = engine.ConvertToInt64(p.NormalY)
+	ary[5] = -engine.ConvertToInt64(p.NormalY)
 	return ary
 }
 func tryRaycastResult(ary engine.Array) (*rayCastResult, error) {
@@ -103,9 +103,9 @@ func tryRaycastResult(ary engine.Array) (*rayCastResult, error) {
 	p.Hited = dataAry[0] != 0
 	p.SpriteId = dataAry[1]
 	p.PosX = engine.ConvertToFloat64(dataAry[2])
-	p.PosY = engine.ConvertToFloat64(dataAry[3])
+	p.PosY = -engine.ConvertToFloat64(dataAry[3]) // here need flipY to convert to godot coord to spx coord
 	p.NormalX = engine.ConvertToFloat64(dataAry[4])
-	p.NormalY = engine.ConvertToFloat64(dataAry[5])
+	p.NormalY = -engine.ConvertToFloat64(dataAry[5])
 	return p, nil
 }
 func raycast(from, to mathf.Vec2, ignoreSprites []int64, mask int64) *rayCastResult {

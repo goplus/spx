@@ -21,31 +21,28 @@ func SyncNewSprite(obj any, pos Vec2) *Sprite {
 }
 
 func SyncBindUI[T any](parentNode gdx.Object, path string) *T {
-
 	return gdx.BindUI[T](parentNode, path)
 }
 func SyncGetTimeScale() float64 {
 	return gdx.PlatformMgr.GetTimeScale()
 }
 func SyncGetMousePos() Vec2 {
-	return gdx.InputMgr.GetGlobalMousePos()
+	return inputMgr.SyncGetGlobalMousePos()
 }
 
 func SyncSetCameraPosition(pos Vec2) {
-	gdx.CameraMgr.SetCameraPosition(NewVec2(pos.X, -pos.Y))
+	cameraMgr.SyncSetCameraPosition(pos)
 }
 
 func SyncScreenToWorld(pos Vec2) Vec2 {
 	zoom := gdx.CameraMgr.GetCameraZoom().X
-	camPos := gdx.CameraMgr.GetCameraPosition()
-	camPos.Y *= -1
+	camPos := cameraMgr.SyncGetCameraPosition()
 	return pos.Divf(zoom / windowScale).Add(camPos.Mulf(windowScale))
 }
 
 func SyncWorldToScreen(pos Vec2) Vec2 {
 	zoom := gdx.CameraMgr.GetCameraZoom().X
-	camPos := gdx.CameraMgr.GetCameraPosition()
-	camPos.Y *= -1
+	camPos := cameraMgr.SyncGetCameraPosition()
 	return pos.Sub(camPos.Mulf(windowScale)).Mulf(zoom / windowScale)
 }
 
