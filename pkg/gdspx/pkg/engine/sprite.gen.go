@@ -172,10 +172,6 @@ func (pself *Sprite) GetRealVelocity() Vec2 {
 	return SpriteMgr.GetRealVelocity(pself.Id)
 }
 
-func (pself *Sprite) GetRenderScale() Vec2 {
-	return SpriteMgr.GetRenderScale(pself.Id)
-}
-
 func (pself *Sprite) GetRotation() float64 {
 	return SpriteMgr.GetRotation(pself.Id)
 }
@@ -216,16 +212,12 @@ func (pself *Sprite) IsAnimCentered() bool {
 	return SpriteMgr.IsAnimCentered(pself.Id)
 }
 
-func (pself *Sprite) IsAnimFlippedH() bool {
-	return SpriteMgr.IsAnimFlippedH(pself.Id)
-}
-
-func (pself *Sprite) IsAnimFlippedV() bool {
-	return SpriteMgr.IsAnimFlippedV(pself.Id)
-}
-
 func (pself *Sprite) IsCollisionEnabled() bool {
 	return SpriteMgr.IsCollisionEnabled(pself.Id)
+}
+
+func (pself *Sprite) IsFlipH() bool {
+	return SpriteMgr.IsFlipH(pself.Id)
 }
 
 func (pself *Sprite) IsOnCeiling() bool {
@@ -292,14 +284,6 @@ func (pself *Sprite) SetAnimCentered(p_center bool) {
 	SpriteMgr.SetAnimCentered(pself.Id, p_center)
 }
 
-func (pself *Sprite) SetAnimFlipH(p_flip bool) {
-	SpriteMgr.SetAnimFlipH(pself.Id, p_flip)
-}
-
-func (pself *Sprite) SetAnimFlipV(p_flip bool) {
-	SpriteMgr.SetAnimFlipV(pself.Id, p_flip)
-}
-
 func (pself *Sprite) SetAnimFrame(p_frame int64) {
 	SpriteMgr.SetAnimFrame(pself.Id, p_frame)
 }
@@ -360,6 +344,10 @@ func (pself *Sprite) SetDrag(drag float64) {
 	SpriteMgr.SetDrag(pself.Id, drag)
 }
 
+func (pself *Sprite) SetFlipH(flip bool) {
+	SpriteMgr.SetFlipH(pself.Id, flip)
+}
+
 func (pself *Sprite) SetFriction(friction float64) {
 	SpriteMgr.SetFriction(pself.Id, friction)
 }
@@ -414,10 +402,6 @@ func (pself *Sprite) SetPosition(pos Vec2) {
 
 func (pself *Sprite) SetProcess(is_on bool) {
 	SpriteMgr.SetProcess(pself.Id, is_on)
-}
-
-func (pself *Sprite) SetRenderScale(scale Vec2) {
-	SpriteMgr.SetRenderScale(pself.Id, scale)
 }
 
 func (pself *Sprite) SetRotation(rot float64) {

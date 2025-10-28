@@ -222,8 +222,8 @@ type GDExtensionSpxSpriteSetRotation C.GDExtensionSpxSpriteSetRotation
 type GDExtensionSpxSpriteGetRotation C.GDExtensionSpxSpriteGetRotation
 type GDExtensionSpxSpriteSetScale C.GDExtensionSpxSpriteSetScale
 type GDExtensionSpxSpriteGetScale C.GDExtensionSpxSpriteGetScale
-type GDExtensionSpxSpriteSetRenderScale C.GDExtensionSpxSpriteSetRenderScale
-type GDExtensionSpxSpriteGetRenderScale C.GDExtensionSpxSpriteGetRenderScale
+type GDExtensionSpxSpriteSetFlipH C.GDExtensionSpxSpriteSetFlipH
+type GDExtensionSpxSpriteIsFlipH C.GDExtensionSpxSpriteIsFlipH
 type GDExtensionSpxSpriteSetColor C.GDExtensionSpxSpriteSetColor
 type GDExtensionSpxSpriteGetColor C.GDExtensionSpxSpriteGetColor
 type GDExtensionSpxSpriteSetMaterialShader C.GDExtensionSpxSpriteSetMaterialShader
@@ -260,10 +260,6 @@ type GDExtensionSpxSpriteSetAnimCentered C.GDExtensionSpxSpriteSetAnimCentered
 type GDExtensionSpxSpriteIsAnimCentered C.GDExtensionSpxSpriteIsAnimCentered
 type GDExtensionSpxSpriteSetAnimOffset C.GDExtensionSpxSpriteSetAnimOffset
 type GDExtensionSpxSpriteGetAnimOffset C.GDExtensionSpxSpriteGetAnimOffset
-type GDExtensionSpxSpriteSetAnimFlipH C.GDExtensionSpxSpriteSetAnimFlipH
-type GDExtensionSpxSpriteIsAnimFlippedH C.GDExtensionSpxSpriteIsAnimFlippedH
-type GDExtensionSpxSpriteSetAnimFlipV C.GDExtensionSpxSpriteSetAnimFlipV
-type GDExtensionSpxSpriteIsAnimFlippedV C.GDExtensionSpxSpriteIsAnimFlippedV
 type GDExtensionSpxSpriteGetCurrentAnimName C.GDExtensionSpxSpriteGetCurrentAnimName
 type GDExtensionSpxSpriteSetVelocity C.GDExtensionSpxSpriteSetVelocity
 type GDExtensionSpxSpriteGetVelocity C.GDExtensionSpxSpriteGetVelocity
@@ -1759,26 +1755,26 @@ func CallSpriteGetScale(
 
 	return (GdVec2)(ret_val)
 }
-func CallSpriteSetRenderScale(
+func CallSpriteSetFlipH(
 	obj GdObj,
-	scale GdVec2,
+	flip GdBool,
 ) {
-	arg0 := (C.GDExtensionSpxSpriteSetRenderScale)(api.SpxSpriteSetRenderScale)
+	arg0 := (C.GDExtensionSpxSpriteSetFlipH)(api.SpxSpriteSetFlipH)
 	arg1GdObj := (C.GdObj)(obj)
-	arg2GdVec2 := (C.GdVec2)(scale)
+	arg2GdBool := (C.GdBool)(flip)
 
-	C.cgo_callfn_GDExtensionSpxSpriteSetRenderScale(arg0, arg1GdObj, arg2GdVec2)
+	C.cgo_callfn_GDExtensionSpxSpriteSetFlipH(arg0, arg1GdObj, arg2GdBool)
 
 }
-func CallSpriteGetRenderScale(
+func CallSpriteIsFlipH(
 	obj GdObj,
-) GdVec2 {
-	arg0 := (C.GDExtensionSpxSpriteGetRenderScale)(api.SpxSpriteGetRenderScale)
+) GdBool {
+	arg0 := (C.GDExtensionSpxSpriteIsFlipH)(api.SpxSpriteIsFlipH)
 	arg1GdObj := (C.GdObj)(obj)
-	var ret_val C.GdVec2
-	C.cgo_callfn_GDExtensionSpxSpriteGetRenderScale(arg0, arg1GdObj, &ret_val)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxSpriteIsFlipH(arg0, arg1GdObj, &ret_val)
 
-	return (GdVec2)(ret_val)
+	return (GdBool)(ret_val)
 }
 func CallSpriteSetColor(
 	obj GdObj,
@@ -2186,48 +2182,6 @@ func CallSpriteGetAnimOffset(
 	C.cgo_callfn_GDExtensionSpxSpriteGetAnimOffset(arg0, arg1GdObj, &ret_val)
 
 	return (GdVec2)(ret_val)
-}
-func CallSpriteSetAnimFlipH(
-	obj GdObj,
-	p_flip GdBool,
-) {
-	arg0 := (C.GDExtensionSpxSpriteSetAnimFlipH)(api.SpxSpriteSetAnimFlipH)
-	arg1GdObj := (C.GdObj)(obj)
-	arg2GdBool := (C.GdBool)(p_flip)
-
-	C.cgo_callfn_GDExtensionSpxSpriteSetAnimFlipH(arg0, arg1GdObj, arg2GdBool)
-
-}
-func CallSpriteIsAnimFlippedH(
-	obj GdObj,
-) GdBool {
-	arg0 := (C.GDExtensionSpxSpriteIsAnimFlippedH)(api.SpxSpriteIsAnimFlippedH)
-	arg1GdObj := (C.GdObj)(obj)
-	var ret_val C.GdBool
-	C.cgo_callfn_GDExtensionSpxSpriteIsAnimFlippedH(arg0, arg1GdObj, &ret_val)
-
-	return (GdBool)(ret_val)
-}
-func CallSpriteSetAnimFlipV(
-	obj GdObj,
-	p_flip GdBool,
-) {
-	arg0 := (C.GDExtensionSpxSpriteSetAnimFlipV)(api.SpxSpriteSetAnimFlipV)
-	arg1GdObj := (C.GdObj)(obj)
-	arg2GdBool := (C.GdBool)(p_flip)
-
-	C.cgo_callfn_GDExtensionSpxSpriteSetAnimFlipV(arg0, arg1GdObj, arg2GdBool)
-
-}
-func CallSpriteIsAnimFlippedV(
-	obj GdObj,
-) GdBool {
-	arg0 := (C.GDExtensionSpxSpriteIsAnimFlippedV)(api.SpxSpriteIsAnimFlippedV)
-	arg1GdObj := (C.GdObj)(obj)
-	var ret_val C.GdBool
-	C.cgo_callfn_GDExtensionSpxSpriteIsAnimFlippedV(arg0, arg1GdObj, &ret_val)
-
-	return (GdBool)(ret_val)
 }
 func CallSpriteGetCurrentAnimName(
 	obj GdObj,

@@ -160,8 +160,8 @@ type GDExtensionInterface struct {
 	SpxSpriteGetRotation                     js.Value
 	SpxSpriteSetScale                        js.Value
 	SpxSpriteGetScale                        js.Value
-	SpxSpriteSetRenderScale                  js.Value
-	SpxSpriteGetRenderScale                  js.Value
+	SpxSpriteSetFlipH                        js.Value
+	SpxSpriteIsFlipH                         js.Value
 	SpxSpriteSetColor                        js.Value
 	SpxSpriteGetColor                        js.Value
 	SpxSpriteSetMaterialShader               js.Value
@@ -198,10 +198,6 @@ type GDExtensionInterface struct {
 	SpxSpriteIsAnimCentered                  js.Value
 	SpxSpriteSetAnimOffset                   js.Value
 	SpxSpriteGetAnimOffset                   js.Value
-	SpxSpriteSetAnimFlipH                    js.Value
-	SpxSpriteIsAnimFlippedH                  js.Value
-	SpxSpriteSetAnimFlipV                    js.Value
-	SpxSpriteIsAnimFlippedV                  js.Value
 	SpxSpriteGetCurrentAnimName              js.Value
 	SpxSpriteSetVelocity                     js.Value
 	SpxSpriteGetVelocity                     js.Value
@@ -454,8 +450,8 @@ func (x *GDExtensionInterface) loadProcAddresses() {
 	x.SpxSpriteGetRotation = dlsymGD("gdspx_sprite_get_rotation")
 	x.SpxSpriteSetScale = dlsymGD("gdspx_sprite_set_scale")
 	x.SpxSpriteGetScale = dlsymGD("gdspx_sprite_get_scale")
-	x.SpxSpriteSetRenderScale = dlsymGD("gdspx_sprite_set_render_scale")
-	x.SpxSpriteGetRenderScale = dlsymGD("gdspx_sprite_get_render_scale")
+	x.SpxSpriteSetFlipH = dlsymGD("gdspx_sprite_set_flip_h")
+	x.SpxSpriteIsFlipH = dlsymGD("gdspx_sprite_is_flip_h")
 	x.SpxSpriteSetColor = dlsymGD("gdspx_sprite_set_color")
 	x.SpxSpriteGetColor = dlsymGD("gdspx_sprite_get_color")
 	x.SpxSpriteSetMaterialShader = dlsymGD("gdspx_sprite_set_material_shader")
@@ -492,10 +488,6 @@ func (x *GDExtensionInterface) loadProcAddresses() {
 	x.SpxSpriteIsAnimCentered = dlsymGD("gdspx_sprite_is_anim_centered")
 	x.SpxSpriteSetAnimOffset = dlsymGD("gdspx_sprite_set_anim_offset")
 	x.SpxSpriteGetAnimOffset = dlsymGD("gdspx_sprite_get_anim_offset")
-	x.SpxSpriteSetAnimFlipH = dlsymGD("gdspx_sprite_set_anim_flip_h")
-	x.SpxSpriteIsAnimFlippedH = dlsymGD("gdspx_sprite_is_anim_flipped_h")
-	x.SpxSpriteSetAnimFlipV = dlsymGD("gdspx_sprite_set_anim_flip_v")
-	x.SpxSpriteIsAnimFlippedV = dlsymGD("gdspx_sprite_is_anim_flipped_v")
 	x.SpxSpriteGetCurrentAnimName = dlsymGD("gdspx_sprite_get_current_anim_name")
 	x.SpxSpriteSetVelocity = dlsymGD("gdspx_sprite_set_velocity")
 	x.SpxSpriteGetVelocity = dlsymGD("gdspx_sprite_get_velocity")

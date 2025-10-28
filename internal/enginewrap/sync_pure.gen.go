@@ -478,9 +478,9 @@ func (pself *spriteMgrImpl) GetScale(obj gdx.Object) Vec2 {
 	var _ret1 Vec2
 	return _ret1
 }
-func (pself *spriteMgrImpl) SetRenderScale(obj gdx.Object, scale Vec2) {}
-func (pself *spriteMgrImpl) GetRenderScale(obj gdx.Object) Vec2 {
-	var _ret1 Vec2
+func (pself *spriteMgrImpl) SetFlipH(obj gdx.Object, flip bool) {}
+func (pself *spriteMgrImpl) IsFlipH(obj gdx.Object) bool {
+	var _ret1 bool
 	return _ret1
 }
 func (pself *spriteMgrImpl) SetColor(obj gdx.Object, color Color) {}
@@ -564,16 +564,6 @@ func (pself *spriteMgrImpl) IsAnimCentered(obj gdx.Object) bool {
 func (pself *spriteMgrImpl) SetAnimOffset(obj gdx.Object, p_offset Vec2) {}
 func (pself *spriteMgrImpl) GetAnimOffset(obj gdx.Object) Vec2 {
 	var _ret1 Vec2
-	return _ret1
-}
-func (pself *spriteMgrImpl) SetAnimFlipH(obj gdx.Object, p_flip bool) {}
-func (pself *spriteMgrImpl) IsAnimFlippedH(obj gdx.Object) bool {
-	var _ret1 bool
-	return _ret1
-}
-func (pself *spriteMgrImpl) SetAnimFlipV(obj gdx.Object, p_flip bool) {}
-func (pself *spriteMgrImpl) IsAnimFlippedV(obj gdx.Object) bool {
-	var _ret1 bool
 	return _ret1
 }
 func (pself *spriteMgrImpl) GetCurrentAnimName(obj gdx.Object) string {

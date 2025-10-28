@@ -156,8 +156,8 @@ type GDExtensionInterface struct {
 	SpxSpriteGetRotation                     GDExtensionSpxSpriteGetRotation
 	SpxSpriteSetScale                        GDExtensionSpxSpriteSetScale
 	SpxSpriteGetScale                        GDExtensionSpxSpriteGetScale
-	SpxSpriteSetRenderScale                  GDExtensionSpxSpriteSetRenderScale
-	SpxSpriteGetRenderScale                  GDExtensionSpxSpriteGetRenderScale
+	SpxSpriteSetFlipH                        GDExtensionSpxSpriteSetFlipH
+	SpxSpriteIsFlipH                         GDExtensionSpxSpriteIsFlipH
 	SpxSpriteSetColor                        GDExtensionSpxSpriteSetColor
 	SpxSpriteGetColor                        GDExtensionSpxSpriteGetColor
 	SpxSpriteSetMaterialShader               GDExtensionSpxSpriteSetMaterialShader
@@ -194,10 +194,6 @@ type GDExtensionInterface struct {
 	SpxSpriteIsAnimCentered                  GDExtensionSpxSpriteIsAnimCentered
 	SpxSpriteSetAnimOffset                   GDExtensionSpxSpriteSetAnimOffset
 	SpxSpriteGetAnimOffset                   GDExtensionSpxSpriteGetAnimOffset
-	SpxSpriteSetAnimFlipH                    GDExtensionSpxSpriteSetAnimFlipH
-	SpxSpriteIsAnimFlippedH                  GDExtensionSpxSpriteIsAnimFlippedH
-	SpxSpriteSetAnimFlipV                    GDExtensionSpxSpriteSetAnimFlipV
-	SpxSpriteIsAnimFlippedV                  GDExtensionSpxSpriteIsAnimFlippedV
 	SpxSpriteGetCurrentAnimName              GDExtensionSpxSpriteGetCurrentAnimName
 	SpxSpriteSetVelocity                     GDExtensionSpxSpriteSetVelocity
 	SpxSpriteGetVelocity                     GDExtensionSpxSpriteGetVelocity
@@ -450,8 +446,8 @@ func (x *GDExtensionInterface) loadProcAddresses() {
 	x.SpxSpriteGetRotation = (GDExtensionSpxSpriteGetRotation)(dlsymGD("spx_sprite_get_rotation"))
 	x.SpxSpriteSetScale = (GDExtensionSpxSpriteSetScale)(dlsymGD("spx_sprite_set_scale"))
 	x.SpxSpriteGetScale = (GDExtensionSpxSpriteGetScale)(dlsymGD("spx_sprite_get_scale"))
-	x.SpxSpriteSetRenderScale = (GDExtensionSpxSpriteSetRenderScale)(dlsymGD("spx_sprite_set_render_scale"))
-	x.SpxSpriteGetRenderScale = (GDExtensionSpxSpriteGetRenderScale)(dlsymGD("spx_sprite_get_render_scale"))
+	x.SpxSpriteSetFlipH = (GDExtensionSpxSpriteSetFlipH)(dlsymGD("spx_sprite_set_flip_h"))
+	x.SpxSpriteIsFlipH = (GDExtensionSpxSpriteIsFlipH)(dlsymGD("spx_sprite_is_flip_h"))
 	x.SpxSpriteSetColor = (GDExtensionSpxSpriteSetColor)(dlsymGD("spx_sprite_set_color"))
 	x.SpxSpriteGetColor = (GDExtensionSpxSpriteGetColor)(dlsymGD("spx_sprite_get_color"))
 	x.SpxSpriteSetMaterialShader = (GDExtensionSpxSpriteSetMaterialShader)(dlsymGD("spx_sprite_set_material_shader"))
@@ -488,10 +484,6 @@ func (x *GDExtensionInterface) loadProcAddresses() {
 	x.SpxSpriteIsAnimCentered = (GDExtensionSpxSpriteIsAnimCentered)(dlsymGD("spx_sprite_is_anim_centered"))
 	x.SpxSpriteSetAnimOffset = (GDExtensionSpxSpriteSetAnimOffset)(dlsymGD("spx_sprite_set_anim_offset"))
 	x.SpxSpriteGetAnimOffset = (GDExtensionSpxSpriteGetAnimOffset)(dlsymGD("spx_sprite_get_anim_offset"))
-	x.SpxSpriteSetAnimFlipH = (GDExtensionSpxSpriteSetAnimFlipH)(dlsymGD("spx_sprite_set_anim_flip_h"))
-	x.SpxSpriteIsAnimFlippedH = (GDExtensionSpxSpriteIsAnimFlippedH)(dlsymGD("spx_sprite_is_anim_flipped_h"))
-	x.SpxSpriteSetAnimFlipV = (GDExtensionSpxSpriteSetAnimFlipV)(dlsymGD("spx_sprite_set_anim_flip_v"))
-	x.SpxSpriteIsAnimFlippedV = (GDExtensionSpxSpriteIsAnimFlippedV)(dlsymGD("spx_sprite_is_anim_flipped_v"))
 	x.SpxSpriteGetCurrentAnimName = (GDExtensionSpxSpriteGetCurrentAnimName)(dlsymGD("spx_sprite_get_current_anim_name"))
 	x.SpxSpriteSetVelocity = (GDExtensionSpxSpriteSetVelocity)(dlsymGD("spx_sprite_set_velocity"))
 	x.SpxSpriteGetVelocity = (GDExtensionSpxSpriteGetVelocity)(dlsymGD("spx_sprite_get_velocity"))

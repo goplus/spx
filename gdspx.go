@@ -162,8 +162,10 @@ func (sprite *SpriteImpl) updateProxyTransform(isSync bool) {
 	x, y := sprite.getXY()
 	applyRenderOffset(sprite, &x, &y)
 	offsetX, offsetY := getRenderOffset(sprite)
-	rot, scale := calcRenderRotation(sprite)
-	sprite.syncSprite.UpdateTransform(x, y, rot, scale, offsetX, offsetY, isSync)
+	rot, flipH := calcRenderRotation(sprite)
+	// Use renderScale which includes bitmapResolution: sprite.scale / bitmapResolution
+	renderScale := sprite.getCostumeRenderScale()
+	sprite.syncSprite.UpdateTransform(x, y, rot, renderScale, flipH, offsetX, offsetY, isSync)
 }
 
 func (sprite *SpriteImpl) syncGetEnginePosition(isSync bool) (float64, float64) {
@@ -316,22 +318,19 @@ func getCostumeBoundByAlpha(p *SpriteImpl, pscale float64, isSync bool) (mathf.V
 	return center, size
 }
 
-func calcRenderRotation(p *SpriteImpl) (float64, float64) {
+func calcRenderRotation(p *SpriteImpl) (float64, bool) {
 	if p.rotationStyle == None {
-		return 0, 1.0
+		return 0, false
 	}
 	cs := p.costumes[p.costumeIndex_]
 	degree := p.Heading() + cs.faceRight
 	degree -= 90
-	hScale := 1.0
+	flipH := false
 	if p.rotationStyle == LeftRight {
 		degree = 0
-		isFlip := p.direction < 0
-		if isFlip {
-			hScale = -1.0
-		}
+		flipH = (p.direction < 0)
 	}
-	return degree, hScale
+	return degree, flipH
 }
 func getRenderOffset(p *SpriteImpl) (float64, float64) {
 	cs := p.costumes[p.costumeIndex_]

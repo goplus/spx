@@ -24,7 +24,7 @@ func (pself *Sprite) UpdateTexture(path string, renderScale float64, isUpdateTex
 	if isUpdateTexture {
 		pself.SetTexture(pself.PicPath)
 	}
-	pself.SetRenderScale(NewVec2(renderScale, renderScale))
+	pself.SetScale(NewVec2(renderScale, renderScale))
 }
 func (pself *Sprite) UpdateTextureAltas(path string, rect2 Rect2, renderScale float64, isUpdateTexture bool) {
 	if path == "" {
@@ -35,26 +35,34 @@ func (pself *Sprite) UpdateTextureAltas(path string, rect2 Rect2, renderScale fl
 	if isUpdateTexture {
 		pself.SetTextureAltas(pself.PicPath, rect2)
 	}
-	pself.SetRenderScale(NewVec2(renderScale, renderScale))
+	pself.SetScale(NewVec2(renderScale, renderScale))
 }
 
-func (pself *Sprite) UpdateTransform(x, y float64, rot float64, scale64 float64, offsetX, offsetY float64, isSync bool) {
+func (pself *Sprite) UpdateTransform(x, y float64, rot float64, scale64 float64, flipH bool, offsetX, offsetY float64, isSync bool) {
 	pself.x = x
 	pself.y = y
 	rad := DegToRad(rot)
 	pos := Vec2{X: float64(x), Y: float64(y)}
 	posOffset := Vec2{X: float64(offsetX), Y: float64(offsetY)}
+
+	// scale is positive number, represents the actual scale size
 	scale := float64(scale64)
+	if scale < 0 {
+		scale = -scale
+	}
+
 	if isSync {
 		pself.SetPosition(pos)
 		pself.SetRotation(rad)
-		pself.SetScale(NewVec2(scale, 1))
+		pself.SetScale(NewVec2(scale, scale))
+		pself.SetFlipH(flipH)
 		pself.SetPivot(posOffset)
 	} else {
 		WaitMainThread(func() {
 			pself.SetPosition(pos)
 			pself.SetRotation(rad)
-			pself.SetScale(NewVec2(scale, 1))
+			pself.SetScale(NewVec2(scale, scale))
+			pself.SetFlipH(flipH)
 			pself.SetPivot(posOffset)
 		})
 	}

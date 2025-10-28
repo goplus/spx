@@ -892,15 +892,15 @@ func (pself *spriteMgr) GetScale(obj Object) Vec2 {
 	retValue := CallSpriteGetScale(arg0)
 	return ToVec2(retValue)
 }
-func (pself *spriteMgr) SetRenderScale(obj Object, scale Vec2) {
+func (pself *spriteMgr) SetFlipH(obj Object, flip bool) {
 	arg0 := ToGdObj(obj)
-	arg1 := ToGdVec2(scale)
-	CallSpriteSetRenderScale(arg0, arg1)
+	arg1 := ToGdBool(flip)
+	CallSpriteSetFlipH(arg0, arg1)
 }
-func (pself *spriteMgr) GetRenderScale(obj Object) Vec2 {
+func (pself *spriteMgr) IsFlipH(obj Object) bool {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteGetRenderScale(arg0)
-	return ToVec2(retValue)
+	retValue := CallSpriteIsFlipH(arg0)
+	return ToBool(retValue)
 }
 func (pself *spriteMgr) SetColor(obj Object, color Color) {
 	arg0 := ToGdObj(obj)
@@ -1124,26 +1124,6 @@ func (pself *spriteMgr) GetAnimOffset(obj Object) Vec2 {
 	arg0 := ToGdObj(obj)
 	retValue := CallSpriteGetAnimOffset(arg0)
 	return ToVec2(retValue)
-}
-func (pself *spriteMgr) SetAnimFlipH(obj Object, p_flip bool) {
-	arg0 := ToGdObj(obj)
-	arg1 := ToGdBool(p_flip)
-	CallSpriteSetAnimFlipH(arg0, arg1)
-}
-func (pself *spriteMgr) IsAnimFlippedH(obj Object) bool {
-	arg0 := ToGdObj(obj)
-	retValue := CallSpriteIsAnimFlippedH(arg0)
-	return ToBool(retValue)
-}
-func (pself *spriteMgr) SetAnimFlipV(obj Object, p_flip bool) {
-	arg0 := ToGdObj(obj)
-	arg1 := ToGdBool(p_flip)
-	CallSpriteSetAnimFlipV(arg0, arg1)
-}
-func (pself *spriteMgr) IsAnimFlippedV(obj Object) bool {
-	arg0 := ToGdObj(obj)
-	retValue := CallSpriteIsAnimFlippedV(arg0)
-	return ToBool(retValue)
 }
 func (pself *spriteMgr) GetCurrentAnimName(obj Object) string {
 	arg0 := ToGdObj(obj)

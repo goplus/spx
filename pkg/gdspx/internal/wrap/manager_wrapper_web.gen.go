@@ -817,15 +817,15 @@ func (pself *spriteMgr) GetScale(obj Object) Vec2 {
 	_retValue := API.SpxSpriteGetScale.Invoke(arg0)
 	return JsToGdVec2(_retValue)
 }
-func (pself *spriteMgr) SetRenderScale(obj Object, scale Vec2) {
+func (pself *spriteMgr) SetFlipH(obj Object, flip bool) {
 	arg0 := JsFromGdObj(obj)
-	arg1 := JsFromGdVec2(scale)
-	API.SpxSpriteSetRenderScale.Invoke(arg0, arg1)
+	arg1 := JsFromGdBool(flip)
+	API.SpxSpriteSetFlipH.Invoke(arg0, arg1)
 }
-func (pself *spriteMgr) GetRenderScale(obj Object) Vec2 {
+func (pself *spriteMgr) IsFlipH(obj Object) bool {
 	arg0 := JsFromGdObj(obj)
-	_retValue := API.SpxSpriteGetRenderScale.Invoke(arg0)
-	return JsToGdVec2(_retValue)
+	_retValue := API.SpxSpriteIsFlipH.Invoke(arg0)
+	return JsToGdBool(_retValue)
 }
 func (pself *spriteMgr) SetColor(obj Object, color Color) {
 	arg0 := JsFromGdObj(obj)
@@ -1019,26 +1019,6 @@ func (pself *spriteMgr) GetAnimOffset(obj Object) Vec2 {
 	arg0 := JsFromGdObj(obj)
 	_retValue := API.SpxSpriteGetAnimOffset.Invoke(arg0)
 	return JsToGdVec2(_retValue)
-}
-func (pself *spriteMgr) SetAnimFlipH(obj Object, p_flip bool) {
-	arg0 := JsFromGdObj(obj)
-	arg1 := JsFromGdBool(p_flip)
-	API.SpxSpriteSetAnimFlipH.Invoke(arg0, arg1)
-}
-func (pself *spriteMgr) IsAnimFlippedH(obj Object) bool {
-	arg0 := JsFromGdObj(obj)
-	_retValue := API.SpxSpriteIsAnimFlippedH.Invoke(arg0)
-	return JsToGdBool(_retValue)
-}
-func (pself *spriteMgr) SetAnimFlipV(obj Object, p_flip bool) {
-	arg0 := JsFromGdObj(obj)
-	arg1 := JsFromGdBool(p_flip)
-	API.SpxSpriteSetAnimFlipV.Invoke(arg0, arg1)
-}
-func (pself *spriteMgr) IsAnimFlippedV(obj Object) bool {
-	arg0 := JsFromGdObj(obj)
-	_retValue := API.SpxSpriteIsAnimFlippedV.Invoke(arg0)
-	return JsToGdBool(_retValue)
 }
 func (pself *spriteMgr) GetCurrentAnimName(obj Object) string {
 	arg0 := JsFromGdObj(obj)

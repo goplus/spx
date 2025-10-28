@@ -1122,8 +1122,10 @@ func (p *SpriteImpl) updateTransform() {
 }
 
 func (p *SpriteImpl) updateScale() {
-	p.triggerInfo.applyShape(p.syncSprite, true, p.scale)
-	p.collisionInfo.applyShape(p.syncSprite, false, p.scale)
+	// Only compensate for bitmapResolution, sprite.scale is already applied in CharacterBody2D.scale
+	br := float64(p.costumes[p.costumeIndex_].bitmapResolution)
+	p.triggerInfo.applyShape(p.syncSprite, true, br)
+	p.collisionInfo.applyShape(p.syncSprite, false, br)
 }
 
 func (p *SpriteImpl) goMoveForward(step float64) {
@@ -2158,6 +2160,9 @@ func (cfg *physicConfig) syncToProxy(syncProxy *engine.Sprite, isTrigger bool, s
 // syncShape synchronizes shape to engine proxy
 func (cfg *physicConfig) syncShape(syncProxy *engine.Sprite, isTrigger bool, sprite *SpriteImpl, extraPixelSize float64) {
 	scale := sprite.scale
+	// Only compensate for bitmapResolution, sprite.scale is already applied in CharacterBody2D.scale
+	br := float64(sprite.costumes[sprite.costumeIndex_].bitmapResolution)
+
 	if cfg.Type != physicsColliderNone && cfg.Type != physicsColliderAuto {
 		center := mathf.NewVec2(0, 0)
 		applyRenderOffset(sprite, &center.X, &center.Y)
@@ -2172,7 +2177,7 @@ func (cfg *physicConfig) syncShape(syncProxy *engine.Sprite, isTrigger bool, spr
 		cfg.Pivot = pivot
 		cfg.Params = []float64{autoSize.X, autoSize.Y}
 	}
-	cfg.applyShape(syncProxy, isTrigger, scale)
+	cfg.applyShape(syncProxy, isTrigger, br)
 }
 
 func (cfg *physicConfig) applyShape(syncProxy *engine.Sprite, isTrigger bool, scale float64) {

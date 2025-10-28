@@ -426,10 +426,10 @@ void cgo_callfn_GDExtensionSpxSpriteSetScale(const GDExtensionSpxSpriteSetScale 
 void cgo_callfn_GDExtensionSpxSpriteGetScale(const GDExtensionSpxSpriteGetScale fn, GdObj obj, GdVec2* ret_val) {
 	fn(obj,ret_val);
 }
-void cgo_callfn_GDExtensionSpxSpriteSetRenderScale(const GDExtensionSpxSpriteSetRenderScale fn, GdObj obj, GdVec2 scale) {
-	fn(obj, scale);
+void cgo_callfn_GDExtensionSpxSpriteSetFlipH(const GDExtensionSpxSpriteSetFlipH fn, GdObj obj, GdBool flip) {
+	fn(obj, flip);
 }
-void cgo_callfn_GDExtensionSpxSpriteGetRenderScale(const GDExtensionSpxSpriteGetRenderScale fn, GdObj obj, GdVec2* ret_val) {
+void cgo_callfn_GDExtensionSpxSpriteIsFlipH(const GDExtensionSpxSpriteIsFlipH fn, GdObj obj, GdBool* ret_val) {
 	fn(obj,ret_val);
 }
 void cgo_callfn_GDExtensionSpxSpriteSetColor(const GDExtensionSpxSpriteSetColor fn, GdObj obj, GdColor color) {
@@ -538,18 +538,6 @@ void cgo_callfn_GDExtensionSpxSpriteSetAnimOffset(const GDExtensionSpxSpriteSetA
 	fn(obj, p_offset);
 }
 void cgo_callfn_GDExtensionSpxSpriteGetAnimOffset(const GDExtensionSpxSpriteGetAnimOffset fn, GdObj obj, GdVec2* ret_val) {
-	fn(obj,ret_val);
-}
-void cgo_callfn_GDExtensionSpxSpriteSetAnimFlipH(const GDExtensionSpxSpriteSetAnimFlipH fn, GdObj obj, GdBool p_flip) {
-	fn(obj, p_flip);
-}
-void cgo_callfn_GDExtensionSpxSpriteIsAnimFlippedH(const GDExtensionSpxSpriteIsAnimFlippedH fn, GdObj obj, GdBool* ret_val) {
-	fn(obj,ret_val);
-}
-void cgo_callfn_GDExtensionSpxSpriteSetAnimFlipV(const GDExtensionSpxSpriteSetAnimFlipV fn, GdObj obj, GdBool p_flip) {
-	fn(obj, p_flip);
-}
-void cgo_callfn_GDExtensionSpxSpriteIsAnimFlippedV(const GDExtensionSpxSpriteIsAnimFlippedV fn, GdObj obj, GdBool* ret_val) {
 	fn(obj,ret_val);
 }
 void cgo_callfn_GDExtensionSpxSpriteGetCurrentAnimName(const GDExtensionSpxSpriteGetCurrentAnimName fn, GdObj obj, GdString* ret_val) {

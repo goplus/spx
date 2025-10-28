@@ -207,11 +207,6 @@ func (pself *Sprite) GetRealVelocity() Vec2 {
 	return _val
 }
 
-func (pself *Sprite) GetRenderScale() Vec2 {
-	var _val Vec2
-	return _val
-}
-
 func (pself *Sprite) GetRotation() float64 {
 	var _val float64
 	return _val
@@ -262,17 +257,12 @@ func (pself *Sprite) IsAnimCentered() bool {
 	return _val
 }
 
-func (pself *Sprite) IsAnimFlippedH() bool {
-	var _val bool
-	return _val
-}
-
-func (pself *Sprite) IsAnimFlippedV() bool {
-	var _val bool
-	return _val
-}
-
 func (pself *Sprite) IsCollisionEnabled() bool {
+	var _val bool
+	return _val
+}
+
+func (pself *Sprite) IsFlipH() bool {
 	var _val bool
 	return _val
 }
@@ -345,12 +335,6 @@ func (pself *Sprite) SetAnim(p_name string) {
 func (pself *Sprite) SetAnimCentered(p_center bool) {
 }
 
-func (pself *Sprite) SetAnimFlipH(p_flip bool) {
-}
-
-func (pself *Sprite) SetAnimFlipV(p_flip bool) {
-}
-
 func (pself *Sprite) SetAnimFrame(p_frame int64) {
 }
 
@@ -396,6 +380,9 @@ func (pself *Sprite) SetDontDestroyOnLoad() {
 func (pself *Sprite) SetDrag(drag float64) {
 }
 
+func (pself *Sprite) SetFlipH(flip bool) {
+}
+
 func (pself *Sprite) SetFriction(friction float64) {
 }
 
@@ -436,9 +423,6 @@ func (pself *Sprite) SetPosition(pos Vec2) {
 }
 
 func (pself *Sprite) SetProcess(is_on bool) {
-}
-
-func (pself *Sprite) SetRenderScale(scale Vec2) {
 }
 
 func (pself *Sprite) SetRotation(rot float64) {

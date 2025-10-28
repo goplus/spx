@@ -203,8 +203,8 @@ type ISpriteMgr interface {
 	GetRotation(obj Object) float64
 	SetScale(obj Object, scale Vec2)
 	GetScale(obj Object) Vec2
-	SetRenderScale(obj Object, scale Vec2)
-	GetRenderScale(obj Object) Vec2
+	SetFlipH(obj Object, flip bool)
+	IsFlipH(obj Object) bool
 	SetColor(obj Object, color Color)
 	GetColor(obj Object) Color
 	SetMaterialShader(obj Object, path string)
@@ -241,10 +241,6 @@ type ISpriteMgr interface {
 	IsAnimCentered(obj Object) bool
 	SetAnimOffset(obj Object, p_offset Vec2)
 	GetAnimOffset(obj Object) Vec2
-	SetAnimFlipH(obj Object, p_flip bool)
-	IsAnimFlippedH(obj Object) bool
-	SetAnimFlipV(obj Object, p_flip bool)
-	IsAnimFlippedV(obj Object) bool
 	GetCurrentAnimName(obj Object) string
 	SetVelocity(obj Object, velocity Vec2)
 	GetVelocity(obj Object) Vec2
