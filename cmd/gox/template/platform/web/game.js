@@ -49,6 +49,8 @@ class GameApp {
             logVerbose: this.logVerbose.bind(this)
         });
 
+        this.spxRunner = null;
+
         this.logVerbose("EnginePackMode: ", EnginePackMode)
     }
     logVerbose(...args) {
@@ -69,48 +71,20 @@ class GameApp {
         return this.logicPromise
     }
 
-    async RunGame() {
-        return this.startTask(() => { this.runGameTask++ }, this.runGame)
+    async preInit() {
+        if (this.preInitialized || this.preInitPromise) {
+            return this.preInitPromise;
+        }
+
+        this.preInitPromise = this._doPreInit();
+        return this.preInitPromise;
     }
 
-    async StopGame() {
-        return this.startTask(() => { this.stopGameTask++ }, this.stopGame)
-    }
-
-    async runGame(resolve, reject) {
-        await profiler.profile('onRunPrepareEngineWasm', () => this.onRunPrepareEngineWasm());
-
-        this.runGameTask--;
-        if (this.stopGameTask > 0) {
-            this.logVerbose("stopGame is called before runing game");
-            resolve();
-            return;
-        }
-
-        let args = [
-            '--main-pack', this.persistentPath + "/" + this.packName,
-            '--main-project-data', this.persistentPath + "/" + this.projectDataName,
-        ];
-        if (this.recordingOnGameStart) {
-            args.push('--write-movie', this.persistentPath + "/" + "movie.avi");
-        }
-
-        this.logVerbose("RunGame ", args);
-        if (this.game) {
-            this.logVerbose('A game is already running. Close it first');
-            resolve();
-            return;
-        }
-
-        this.onProgress(0.5);
+    async _doPreInit() {
+        await this.onRunPrepareEngineWasm();
+        
         this.game = new Engine(this.gameConfig);
-        let curGame = this.game;
-
-        // register global functions
-        window.gdspx_on_engine_start = function () { }
-        window.gdspx_on_engine_update = function () { }
-        window.gdspx_on_engine_fixed_update = function () { }
-        window.goWasmInit = function () { }
+        
         const spxfuncs = new GdspxFuncs();
         const methodNames = Object.getOwnPropertyNames(Object.getPrototypeOf(spxfuncs));
         methodNames.forEach(key => {
@@ -119,34 +93,77 @@ class GameApp {
             }
         });
 
-        await profiler.profile('onRunBeforeInit', () => this.onRunBeforeInit());
-        this.onProgress(0.5);
-
-        await profiler.profile('curGame.init',  () => curGame.init());
-
-        this.onProgress(0.6);
-
-        await profiler.profile('unpackGameData', () => this.unpackGameData(curGame));
-
-        this.onProgress(0.7);
-
-        await profiler.profile('onRunAfterInit', () => this.onRunAfterInit(curGame));
-
-        this.onProgress(0.8);
-
-        await profiler.profile('curGame.start', () => curGame.start({ 'args': args, 'canvas': this.gameCanvas }));
-
-        this.onProgress(0.9);
-        this.gameCanvas.focus();
-
-        await profiler.profile('onRunAfterStart', () => this.onRunAfterStart(curGame));
-
-        this.onProgress(1.0);
-        this.gameCanvas.focus();
-        this.logVerbose("==> game start done");
-        resolve();
+        await this.onRunBeforInit();
+        await this.game.init();
+        await this.onRunAfterInit(this.game);
+        
+        this.preInitialized = true;
     }
 
+    async RunGame() {
+        return this.startTask(() => { this.runGameTask++ }, this.runGame)
+    }
+
+    async BuildGame() {
+        return this.startTask(null, this.buildGame)
+    }
+
+    async StopGame() {
+        return this.startTask(() => { this.stopGameTask++ }, this.stopGame)
+    }
+
+    async buildGame(resolve, reject) {
+        if (!this.spxRunner) {
+            reject(new Error('SpxRunner not initialized'))
+            return
+        }
+
+        try {
+            await this.spxRunner.build(new Uint8Array(this.projectData))
+            resolve()
+        } catch (err) {
+            reject(err)
+        }
+    }
+
+    async runGame(resolve, reject) {
+        await this.preInit();
+
+        this.runGameTask--
+        // if stopGame is called before runing game, then do nothing
+        if (this.stopGameTask > 0) {
+            this.logVerbose("stopGame is called before runing game")
+            resolve()
+            return
+        }
+
+        let args = [
+            '--main-pack', this.persistentPath + "/" + this.packName,
+            '--main-project-data', this.persistentPath + "/" + this.projectDataName,
+        ];
+        if (this.recordingOnGameStart) {
+            args.push('--write-movie', this.persistentPath + "/" + "movie.avi")
+        }
+
+        this.logVerbose("RunGame ", args);
+        if (this.game) {
+            this.logVerbose('A game is already running. Close it first');
+            resolve()
+            return;
+        }
+
+        this.onProgress(0.8);
+        await this.unpackGameData(this.game);
+        
+        this.onProgress(0.9);
+        this.game.start({ 'args': args, 'canvas': this.gameCanvas }).then(async () => {
+            this.gameCanvas.focus();
+            await this.onRunAfterStart(this.game);
+            this.onProgress(1.0);
+            this.gameCanvas.focus();
+            resolve();
+        });
+    }
 
 
     async stopGame(resolve, reject) {
@@ -253,15 +270,15 @@ class GameApp {
         }
     }
 
-    async onRunBeforeInit() {
+    async onRunBeforInit() {
         if (this.minigameMode) {
             GameGlobal.engine = this.game;
             godotSdk.set_engine(this.game);
             self.initExtensionWasm = function () { }
         } else {
             if (!this.workerMode) {
-                await profiler.profile('loadLogicWasm', () => this.loadLogicWasm());
-                await profiler.profile('runLogicWasm', () => this.runLogicWasm());
+                await this.loadLogicWasm()
+                await this.runLogicWasm()
                 self.initExtensionWasm = function () { }
             }
         }
@@ -289,7 +306,7 @@ class GameApp {
             // register global functions
             Module = game.rtenv;
             FFI = self;
-            window.goLoadData(new Uint8Array(this.projectData));
+            await this.spxRunner.run()
         }
     }
 
@@ -326,6 +343,9 @@ class GameApp {
     async runLogicWasm() {
         this.go.run(this.logicWasmInstance);
         if (!this.minigameMode) {
+            if (typeof window.NewSpxRunner === 'function') {
+                this.spxRunner = window.NewSpxRunner();
+            }
             if (this.config.onSpxReady != null) {
                 this.config.onSpxReady()
             }
