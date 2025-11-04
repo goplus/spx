@@ -289,6 +289,10 @@ class GameApp {
             // register global functions
             Module = game.rtenv;
             FFI = self;
+            window.goSetConfig({
+                useProfiler: this.useProfiler,
+                logLevel: this.logLevel
+            });
             window.goLoadData(new Uint8Array(this.projectData));
         }
     }

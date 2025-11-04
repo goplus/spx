@@ -24,6 +24,7 @@ var (
 	totalStart         stime.Time
 	Debug              bool
 	Enabled            bool
+	enabledStack       []bool
 )
 
 func Calcfps() float64 {
@@ -50,14 +51,17 @@ func SetGco(co *coroutine.Coroutines) {
 	gco = co
 }
 
-func EnableTemporarily() func() {
-	prev := Enabled
-	Enabled = true
-	fmt.Println("Profiler(GO) temporarily enabled, previous state:", prev)
-	return func() {
-		Enabled = prev
-		fmt.Println("Profiler(GO) restored to previous state:", Enabled)
+func EnableTemporarily(enabled bool) {
+	enabledStack = append(enabledStack, Enabled)
+	Enabled = enabled
+}
+
+func Restore() {
+	if len(enabledStack) == 0 {
+		return
 	}
+	Enabled = enabledStack[len(enabledStack)-1]
+	enabledStack = enabledStack[:len(enabledStack)-1]
 }
 
 func BeginSample(sampleName ...string) {

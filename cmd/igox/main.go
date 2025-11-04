@@ -27,6 +27,13 @@ import (
 
 var aiDescription string
 
+type WebGameConfig struct {
+	UseProfiler bool
+	LogLevel    int
+}
+
+var webGameConfig WebGameConfig
+
 func setAIDescription(this js.Value, args []js.Value) any {
 	if len(args) > 0 {
 		aiDescription = args[0].String()
@@ -93,6 +100,27 @@ func setAIInteractionAPITokenProvider(this js.Value, args []js.Value) any {
 			}
 		}
 	}
+	return nil
+}
+
+func setConfig(this js.Value, args []js.Value) any {
+	if len(args) < 1 {
+		log.Println("setConfig: missing config argument")
+		return nil
+	}
+	cfg := args[0]
+	if cfg.Type() != js.TypeObject {
+		log.Println("setConfig: config must be an object")
+		return nil
+	}
+
+	if !cfg.Get("useProfiler").IsUndefined() {
+		webGameConfig.UseProfiler = cfg.Get("useProfiler").Bool()
+	}
+	if !cfg.Get("logLevel").IsUndefined() {
+		webGameConfig.LogLevel = cfg.Get("logLevel").Int()
+	}
+	profiler.EnableTemporarily(webGameConfig.UseProfiler)
 	return nil
 }
 
@@ -168,11 +196,11 @@ func logErrorAndExit(err error) {
 
 func main() {
 	debug := false
-	restore := profiler.EnableTemporarily()
 
 	js.Global().Set("setAIDescription", js.FuncOf(setAIDescription))
 	js.Global().Set("setAIInteractionAPIEndpoint", js.FuncOf(setAIInteractionAPIEndpoint))
 	js.Global().Set("setAIInteractionAPITokenProvider", js.FuncOf(setAIInteractionAPITokenProvider))
+	js.Global().Set("goSetConfig", js.FuncOf(setConfig))
 	js.Global().Set("goLoadData", js.FuncOf(loadData))
 
 	js.Global().Set("goWasmInit", js.FuncOf(goWasmInit))
@@ -302,7 +330,7 @@ func Gopt_Player_Gopx_OnCmd[T any](p *Player, handler func(cmd T) error) {
 	}
 	profiler.EndSample("Create NewInterp")
 
-	restore()
+	profiler.Restore()
 	code, err := ctx.RunInterp(interp, "main.go", nil)
 	if err != nil {
 		logErrorAndExit(fmt.Errorf("Failed to run XGo source (code %d): %w", code, err))
