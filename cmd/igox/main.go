@@ -181,6 +181,47 @@ func NewSpxRunner(this js.Value, args []js.Value) any {
 		return len(msg), nil
 	})
 
+	// NOTE(everyone): Keep sync with the config in spx [gop.mod](https://github.com/goplus/spx/blob/main/gop.mod)
+	xgobuild.RegisterProject(&modfile.Project{
+		Ext:      ".spx",
+		Class:    "Game",
+		Works:    []*modfile.Class{{Ext: ".spx", Class: "SpriteImpl", Embedded: true}},
+		PkgPaths: []string{"github.com/goplus/spx/v2", "math"},
+		Import:   []*modfile.Import{{Name: "ai", Path: "github.com/goplus/builder/tools/ai"}},
+	})
+
+	// Register patch for spx to support functions with generic type like `Gopt_Game_Gopx_GetWidget`.
+	// See details in https://github.com/goplus/builder/issues/765#issuecomment-2313915805
+	if err := ctx.RegisterPatch("github.com/goplus/spx/v2", `
+package spx
+
+import . "github.com/goplus/spx/v2"
+
+func Gopt_Game_Gopx_GetWidget[T any](sg ShapeGetter, name string) *T {
+	widget := GetWidget_(sg, name)
+	if result, ok := widget.(any).(*T); ok {
+		return result
+	} else {
+		panic("GetWidget: type mismatch")
+	}
+}
+`); err != nil {
+		return fmt.Errorf("Failed to register package patch for github.com/goplus/spx: %w", err)
+	}
+
+	if err := ctx.RegisterPatch("github.com/goplus/builder/tools/ai", `
+package ai
+
+import . "github.com/goplus/builder/tools/ai"
+
+func Gopt_Player_Gopx_OnCmd[T any](p *Player, handler func(cmd T) error) {
+	var cmd T
+	PlayerOnCmd_(p, cmd, handler)
+}
+`); err != nil {
+		return fmt.Errorf("Failed to register package patch for github.com/goplus/builder/tools/ai: %w", err)
+	}
+
 	runner := &SpxRunner{
 		ctx:   ctx,
 		debug: debug,
@@ -345,47 +386,6 @@ func (r *SpxRunner) Build(this js.Value, args []js.Value) any {
 	// Use SpxRunner's shared context
 	ctx := r.ctx
 
-	// NOTE(everyone): Keep sync with the config in spx [gop.mod](https://github.com/goplus/spx/blob/main/gop.mod)
-	xgobuild.RegisterProject(&modfile.Project{
-		Ext:      ".spx",
-		Class:    "Game",
-		Works:    []*modfile.Class{{Ext: ".spx", Class: "SpriteImpl", Embedded: true}},
-		PkgPaths: []string{"github.com/goplus/spx/v2", "math"},
-		Import:   []*modfile.Import{{Name: "ai", Path: "github.com/goplus/builder/tools/ai"}},
-	})
-
-	// Register patch for spx to support functions with generic type like `Gopt_Game_Gopx_GetWidget`.
-	// See details in https://github.com/goplus/builder/issues/765#issuecomment-2313915805
-	if err := xgobuild.RegisterPackagePatch(ctx, "github.com/goplus/spx/v2", `
-package spx
-
-import . "github.com/goplus/spx/v2"
-
-func Gopt_Game_Gopx_GetWidget[T any](sg ShapeGetter, name string) *T {
-	widget := GetWidget_(sg, name)
-	if result, ok := widget.(any).(*T); ok {
-		return result
-	} else {
-		panic("GetWidget: type mismatch")
-	}
-}
-`); err != nil {
-		return fmt.Errorf("Failed to register package patch for github.com/goplus/spx: %w", err)
-	}
-
-	if err := xgobuild.RegisterPackagePatch(ctx, "github.com/goplus/builder/tools/ai", `
-package ai
-
-import . "github.com/goplus/builder/tools/ai"
-
-func Gopt_Player_Gopx_OnCmd[T any](p *Player, handler func(cmd T) error) {
-	var cmd T
-	PlayerOnCmd_(p, cmd, handler)
-}
-`); err != nil {
-		return fmt.Errorf("Failed to register package patch for github.com/goplus/builder/tools/ai: %w", err)
-	}
-
 	ai.SetDefaultTransport(wasmtrans.New(
 		wasmtrans.WithEndpoint(aiInteractionAPIEndpoint),
 		wasmtrans.WithTokenProvider(aiInteractionAPITokenProvider),
@@ -446,7 +446,7 @@ func (r *SpxRunner) Run(this js.Value, args []js.Value) any {
 	fmt.Printf("Run with files hash: %s\n", filesHash)
 
 	// Look for cached interp
-	if r.entry.hash != filesHash {
+	if r.entry == nil || r.entry.hash != filesHash {
 		// Cache miss, need to build first
 		fmt.Printf("Cache miss, building for hash: %s\n", filesHash)
 		if buildErr := r.Build(this, args); buildErr != nil {
