@@ -135,36 +135,36 @@ func gdspxOnEnginePause(this js.Value, args []js.Value) any {
 
 var logger = slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
-// SpxRunner 包装了 SPX 代码的构建和运行功能
+// SpxRunner encapsulates the build and run functionality for SPX code.
 type SpxRunner struct {
 	ctx   *ixgo.Context
 	entry *interpCacheEntry
 	debug bool
 }
 
-// interpCacheEntry 存储构建结果
+// interpCacheEntry stores the build result.
 type interpCacheEntry struct {
 	hash   string
 	interp *ixgo.Interp
 	fs     *zipfs.ZipFs
 }
 
-// NewSpxRunner 创建一个新的 SpxRunner 实例 (WASM 接口)
+// NewSpxRunner creates a new SpxRunner instance (WASM interface).
 func NewSpxRunner(this js.Value, args []js.Value) any {
 	debug := false
 	if len(args) > 0 {
 		debug = args[0].Bool()
 	}
 
-	// 初始化 ixgo context
-	ctx := ixgo.NewContext(0)
+	// Initialize ixgo context
+	ctx := ixgo.NewContext(ixgo.SupportMultipleInterp)
 	ctx.Lookup = func(root, path string) (dir string, found bool) {
 		logErrorAndExit(fmt.Errorf("Failed to resolve package import %q", path))
 		return
 	}
 	ctx.SetPanic(logWithPanicInfo)
 
-	// 注册外部函数
+	// Register external functions
 	ctx.RegisterExternal("fmt.Print", func(frame *ixgo.Frame, a ...any) (n int, err error) {
 		msg := fmt.Sprint(a...)
 		logWithCallerInfo(msg, frame)
@@ -192,7 +192,7 @@ func NewSpxRunner(this js.Value, args []js.Value) any {
 	})
 }
 
-// JSUint8ArrayToBytes 将 JS Uint8Array 转换为 Go []byte
+// JSUint8ArrayToBytes converts JS Uint8Array to Go []byte.
 func JSUint8ArrayToBytes(value js.Value) []byte {
 	if value.IsUndefined() || value.IsNull() {
 		return nil
@@ -206,13 +206,13 @@ func JSUint8ArrayToBytes(value js.Value) []byte {
 	return data
 }
 
-// computeFilesHash 计算 files 对象的 hash
+// computeFilesHash computes the hash of the files object.
 func computeFilesHash(files js.Value) (string, error) {
 	if files.Type() != js.TypeObject {
 		return "", errors.New("files must be an object")
 	}
 
-	// 获取所有文件路径并排序（保证 hash 稳定）
+	// Get all file paths and sort them (ensure stable hash)
 	keys := js.Global().Get("Object").Call("keys", files)
 	var paths []string
 	for i := range keys.Length() {
@@ -220,7 +220,7 @@ func computeFilesHash(files js.Value) (string, error) {
 	}
 	sort.Strings(paths)
 
-	// 计算 hash
+	// Compute hash
 	h := sha256.New()
 	for _, path := range paths {
 		fileObj := files.Get(path)
@@ -228,26 +228,26 @@ func computeFilesHash(files js.Value) (string, error) {
 			continue
 		}
 
-		// 获取文件内容
+		// Get file content
 		content := JSUint8ArrayToBytes(fileObj.Get("content"))
 		modTime := int64(fileObj.Get("modTime").Int())
 
-		// 写入路径
+		// Write path
 		h.Write([]byte(path))
-		h.Write([]byte{0}) // 分隔符
+		h.Write([]byte{0}) // separator
 
-		// 写入内容
+		// Write content
 		h.Write(content)
-		h.Write([]byte{0}) // 分隔符
+		h.Write([]byte{0}) // separator
 
-		// 写入修改时间（可选，增强 hash 唯一性）
+		// Write modification time (optional, enhances hash uniqueness)
 		h.Write([]byte(fmt.Sprintf("%d", modTime)))
-		h.Write([]byte{0}) // 分隔符
+		h.Write([]byte{0}) // separator
 	}
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-// filesMapToZipData 将 JS files 对象转换为 zip 数据
+// filesMapToZipData converts JS files object to zip data.
 func filesMapToZipData(files js.Value) ([]byte, error) {
 	if files.Type() != js.TypeObject {
 		return nil, errors.New("files must be an object")
@@ -256,7 +256,7 @@ func filesMapToZipData(files js.Value) ([]byte, error) {
 	buf := new(bytes.Buffer)
 	zw := zip.NewWriter(buf)
 
-	// 获取所有文件路径
+	// Get all file paths
 	keys := js.Global().Get("Object").Call("keys", files)
 	for i := range keys.Length() {
 		path := keys.Index(i).String()
@@ -266,11 +266,11 @@ func filesMapToZipData(files js.Value) ([]byte, error) {
 			continue
 		}
 
-		// 获取文件内容（Uint8Array）
+		// Get file content (Uint8Array)
 		content := JSUint8ArrayToBytes(fileObj.Get("content"))
 		modTime := time.UnixMilli(int64(fileObj.Get("modTime").Int()))
 
-		// 写入 zip 文件
+		// Write to zip file
 		header := &zip.FileHeader{
 			Name:     path,
 			Method:   zip.Deflate,
@@ -294,19 +294,19 @@ func filesMapToZipData(files js.Value) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// Build 构建 SPX 代码，创建可执行的 interp (WASM 接口)
+// Build builds SPX code and creates an executable interp (WASM interface).
 func (r *SpxRunner) Build(this js.Value, args []js.Value) any {
 	if len(args) == 0 {
 		return errors.New("Build: missing files argument")
 	}
 
-	// 获取 files 对象（Map<string, string>）
+	// Get files object
 	files := args[0]
 	if files.Type() != js.TypeObject {
 		return errors.New("Build: files argument must be an object")
 	}
 
-	// 计算 files hash
+	// Compute files hash
 	filesHash, err := computeFilesHash(files)
 	if err != nil {
 		return fmt.Errorf("Build: failed to compute files hash: %w", err)
@@ -314,7 +314,7 @@ func (r *SpxRunner) Build(this js.Value, args []js.Value) any {
 
 	fmt.Printf("Files hash: %s\n", filesHash)
 
-	// 检查缓存
+	// Check cache
 	if r.entry != nil {
 		if r.entry.hash == filesHash {
 			fmt.Printf("Using cached build for hash: %s\n", filesHash)
@@ -325,13 +325,13 @@ func (r *SpxRunner) Build(this js.Value, args []js.Value) any {
 		}
 	}
 
-	// 将 files 转换为 zip 数据
+	// Convert files to zip data
 	zipData, err := filesMapToZipData(files)
 	if err != nil {
 		return fmt.Errorf("Build: %w", err)
 	}
 
-	// 初始化 zip 文件系统
+	// Initialize zip file system
 	zipReader, err := zip.NewReader(bytes.NewReader(zipData), int64(len(zipData)))
 	if err != nil {
 		return fmt.Errorf("Failed to read zip data: %w", err)
@@ -342,7 +342,7 @@ func (r *SpxRunner) Build(this js.Value, args []js.Value) any {
 		return fs.Chrooted(path), nil
 	})
 
-	// 使用 SpxRunner 的共享 context
+	// Use SpxRunner's shared context
 	ctx := r.ctx
 
 	// NOTE(everyone): Keep sync with the config in spx [gop.mod](https://github.com/goplus/spx/blob/main/gop.mod)
@@ -413,7 +413,7 @@ func Gopt_Player_Gopx_OnCmd[T any](p *Player, handler func(cmd T) error) {
 		fmt.Printf("Icall Capacity: %d, Allocate: %d, Available: %d\n", capacity, allocate, available)
 	}
 
-	// 缓存构建结果
+	// Cache build result
 	r.entry = &interpCacheEntry{
 		hash:   filesHash,
 		interp: interp,
@@ -425,19 +425,19 @@ func Gopt_Player_Gopx_OnCmd[T any](p *Player, handler func(cmd T) error) {
 	return nil
 }
 
-// Run 运行构建完的 interp (WASM 接口)
+// Run executes the built interp (WASM interface).
 func (r *SpxRunner) Run(this js.Value, args []js.Value) any {
 	if len(args) == 0 {
 		return errors.New("Run: missing files argument")
 	}
 
-	// 获取 files 对象
+	// Get files object
 	files := args[0]
 	if files.Type() != js.TypeObject {
 		return errors.New("Run: files argument must be an object")
 	}
 
-	// 计算 files hash
+	// Compute files hash
 	filesHash, err := computeFilesHash(files)
 	if err != nil {
 		return fmt.Errorf("Run: failed to compute files hash: %w", err)
@@ -445,9 +445,9 @@ func (r *SpxRunner) Run(this js.Value, args []js.Value) any {
 
 	fmt.Printf("Run with files hash: %s\n", filesHash)
 
-	// 查找缓存的 interp
+	// Look for cached interp
 	if r.entry.hash != filesHash {
-		// 缓存未命中，需要先构建
+		// Cache miss, need to build first
 		fmt.Printf("Cache miss, building for hash: %s\n", filesHash)
 		if buildErr := r.Build(this, args); buildErr != nil {
 			return buildErr
@@ -456,7 +456,7 @@ func (r *SpxRunner) Run(this js.Value, args []js.Value) any {
 		fmt.Printf("Cache hit, using cached interp for hash: %s\n", filesHash)
 	}
 
-	// 运行 interp
+	// Run interp
 	interp := r.entry.interp
 	code, runErr := r.ctx.RunInterp(interp, "main.go", nil)
 	if runErr != nil {
@@ -497,7 +497,7 @@ func logErrorAndExit(err error) {
 	os.Exit(1)
 }
 
-// JSFuncOfWithError 包装 js.Func，如果返回 error 则转换为 JS Error 对象
+// JSFuncOfWithError wraps js.Func and converts error returns to JS Error objects.
 func JSFuncOfWithError(fn func(this js.Value, args []js.Value) any) js.Func {
 	return js.FuncOf(func(this js.Value, args []js.Value) any {
 		result := fn(this, args)
@@ -509,15 +509,15 @@ func JSFuncOfWithError(fn func(this js.Value, args []js.Value) any) js.Func {
 }
 
 func main() {
-	// 注册 AI 相关函数
+	// Register AI-related functions
 	js.Global().Set("setAIDescription", js.FuncOf(setAIDescription))
 	js.Global().Set("setAIInteractionAPIEndpoint", js.FuncOf(setAIInteractionAPIEndpoint))
 	js.Global().Set("setAIInteractionAPITokenProvider", js.FuncOf(setAIInteractionAPITokenProvider))
 
-	// 注册旧的数据加载函数（保持向后兼容）
+	// Register legacy data loading function (for backward compatibility)
 	js.Global().Set("goLoadData", js.FuncOf(loadData))
 
-	// 注册引擎回调函数
+	// Register engine callback functions
 	js.Global().Set("goWasmInit", js.FuncOf(goWasmInit))
 	js.Global().Set("gdspx_on_engine_start", js.FuncOf(gdspxOnEngineStart))
 	js.Global().Set("gdspx_on_engine_update", js.FuncOf(gdspxOnEngineUpdate))
@@ -525,13 +525,13 @@ func main() {
 	js.Global().Set("gdspx_on_engine_destroy", js.FuncOf(gdspxOnEngineDestroy))
 	js.Global().Set("gdspx_on_engine_pause", js.FuncOf(gdspxOnEnginePause))
 
-	// 注册 SpxRunner WASM 接口
+	// Register SpxRunner WASM interface
 	js.Global().Set("NewSpxRunner", JSFuncOfWithError(NewSpxRunner))
 
 	// register FFI for worker mode
 	spxEngineRegisterFFI()
 
-	// 保持 WASM 运行
+	// Keep WASM running
 	select {}
 }
 
