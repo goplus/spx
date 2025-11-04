@@ -149,7 +149,11 @@ type interpCacheEntry struct {
 	fs     *zipfs.ZipFs
 }
 
-// NewSpxRunner creates a new SpxRunner instance (WASM interface).
+// SpxRunner encapsulates the build and run functionality for SPX code with hash-based caching.
+// It maintains a single cached build result and automatically rebuilds when file content changes.
+//
+// Caching: Build() computes SHA256 hash of input files and caches the interpreter.
+// Only one build is cached; new builds invalidate previous cache.
 func NewSpxRunner(this js.Value, args []js.Value) any {
 	debug := false
 	if len(args) > 0 {
@@ -255,8 +259,9 @@ func computeFilesHash(files js.Value) (string, error) {
 
 	// Get all file paths and sort them (ensure stable hash)
 	keys := js.Global().Get("Object").Call("keys", files)
-	var paths []string
-	for i := range keys.Length() {
+	keysLen := keys.Length()
+	paths := make([]string, 0, keysLen)
+	for i := 0; i < keysLen; i++ {
 		paths = append(paths, keys.Index(i).String())
 	}
 	sort.Strings(paths)
@@ -273,17 +278,36 @@ func computeFilesHash(files js.Value) (string, error) {
 		content := JSUint8ArrayToBytes(fileObj.Get("content"))
 		modTime := int64(fileObj.Get("modTime").Int())
 
-		// Write path
-		h.Write([]byte(path))
-		h.Write([]byte{0}) // separator
+		// Write path with length prefix
+		pathBytes := []byte(path)
+		h.Write([]byte{
+			byte(len(pathBytes) >> 24),
+			byte(len(pathBytes) >> 16),
+			byte(len(pathBytes) >> 8),
+			byte(len(pathBytes)),
+		})
+		h.Write(pathBytes)
 
-		// Write content
+		// Write content with length prefix
+		h.Write([]byte{
+			byte(len(content) >> 24),
+			byte(len(content) >> 16),
+			byte(len(content) >> 8),
+			byte(len(content)),
+		})
 		h.Write(content)
-		h.Write([]byte{0}) // separator
 
-		// Write modification time (optional, enhances hash uniqueness)
-		h.Write([]byte(fmt.Sprintf("%d", modTime)))
-		h.Write([]byte{0}) // separator
+		// Write modification time (8 bytes for int64)
+		h.Write([]byte{
+			byte(modTime >> 56),
+			byte(modTime >> 48),
+			byte(modTime >> 40),
+			byte(modTime >> 32),
+			byte(modTime >> 24),
+			byte(modTime >> 16),
+			byte(modTime >> 8),
+			byte(modTime),
+		})
 	}
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
@@ -335,7 +359,8 @@ func filesMapToZipData(files js.Value) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// Build builds SPX code and creates an executable interp (WASM interface).
+// Build builds the SPX code from the provided files object.
+// It computes the hash of the files and caches the build result.
 func (r *SpxRunner) Build(this js.Value, args []js.Value) any {
 	if len(args) == 0 {
 		return errors.New("Build: missing files argument")
@@ -354,7 +379,11 @@ func (r *SpxRunner) Build(this js.Value, args []js.Value) any {
 	}
 
 	fmt.Printf("Files hash: %s\n", filesHash)
+	return r.build(files, filesHash)
+}
 
+// build performs the actual build process given the files and their hash.
+func (r *SpxRunner) build(files js.Value, filesHash string) any {
 	// Check cache
 	if r.entry != nil {
 		if r.entry.hash == filesHash {
@@ -362,7 +391,7 @@ func (r *SpxRunner) Build(this js.Value, args []js.Value) any {
 			return nil
 		} else {
 			fmt.Printf("Cache miss, rebuilding for hash: %s\n", filesHash)
-			r.entry.interp.UnsafeRelease()
+			r.Release()
 		}
 	}
 
@@ -425,7 +454,20 @@ func (r *SpxRunner) Build(this js.Value, args []js.Value) any {
 	return nil
 }
 
-// Run executes the built interp (WASM interface).
+// Run executes the cached interpreter, automatically building if necessary.
+//
+// Parameters:
+//
+//	args[0]: JS object with same structure as Build()
+//
+// Behavior:
+//  1. Computes hash of input files
+//  2. If cache miss or no cached build: Automatically calls Build()
+//  3. Executes the interpreter
+//
+// Returns: nil on success, error on build or execution failure.
+//
+// Note: This method is idempotent - won't rebuild unnecessarily.
 func (r *SpxRunner) Run(this js.Value, args []js.Value) any {
 	if len(args) == 0 {
 		return errors.New("Run: missing files argument")
@@ -449,7 +491,7 @@ func (r *SpxRunner) Run(this js.Value, args []js.Value) any {
 	if r.entry == nil || r.entry.hash != filesHash {
 		// Cache miss, need to build first
 		fmt.Printf("Cache miss, building for hash: %s\n", filesHash)
-		if buildErr := r.Build(this, args); buildErr != nil {
+		if buildErr := r.build(files, filesHash); buildErr != nil {
 			return buildErr
 		}
 	} else {
@@ -464,6 +506,15 @@ func (r *SpxRunner) Run(this js.Value, args []js.Value) any {
 	}
 
 	return nil
+}
+
+// Release releases resources held by the SpxRunner.
+func (r *SpxRunner) Release() {
+	if r.entry != nil && r.entry.interp != nil {
+		r.entry.interp.UnsafeRelease()
+		r.entry.fs.Close()
+		r.entry = nil
+	}
 }
 
 func logWithCallerInfo(msg string, frame *ixgo.Frame) {
