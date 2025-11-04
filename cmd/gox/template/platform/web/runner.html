@@ -348,7 +348,7 @@
 			gameApp.stepNextFrame();
 		}
 
-		// 立即通知父窗口基本方法可用（用于兼容性）
+		// Inform the parent window that the runner is ready (methods on the window object are callable)
 		window.dispatchEvent(new Event('runnerReady'));
 	</script>
 </body>

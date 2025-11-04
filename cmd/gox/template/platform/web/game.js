@@ -19,7 +19,7 @@ class GameApp {
             'unloadAfterInit': false,
             'canvas': this.gameCanvas,
             'logLevel': this.logLevel,
-            'canvasResizePolicy': 1,
+            'canvasResizePolicy': 2,
             'onExit': () => {
                 this.onGameExit()
             },
@@ -137,7 +137,7 @@ class GameApp {
             '--main-project-data', this.persistentPath + "/" + this.projectDataName,
         ];
         if (this.recordingOnGameStart) {
-            args.push('--write-movie', this.persistentPath + "/" + "movie.avi")
+            args.push('--write-movie', this.persistentPath + "/" + "movie.avi");
         }
 
         this.logVerbose("RunGame ", args);
