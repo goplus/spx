@@ -10,7 +10,6 @@ class GameApp {
         this.projectDataName = 'game.zip';
         this.persistentPath = 'engine';
         this.logLevel = config.logLevel;
-        this.useProfiler = config.useProfiler || false;
         this.projectData = config.projectData;
         this.oldData = config.projectData;
         this.gameCanvas = config.gameCanvas;
@@ -20,7 +19,7 @@ class GameApp {
             'unloadAfterInit': false,
             'canvas': this.gameCanvas,
             'logLevel': this.logLevel,
-            'canvasResizePolicy': 2,
+            'canvasResizePolicy': 1,
             'onExit': () => {
                 this.onGameExit()
             },
@@ -36,7 +35,7 @@ class GameApp {
         this.normalMode = !this.workerMode && !this.minigameMode && !this.miniprogramMode
 
         this.useAssetCache = config.useAssetCache || this.miniprogramMode;
-        profiler.enabled = this.useProfiler;
+
         // init worker message manager
         this.workerMessageManager = new globalThis.WorkerMessageManager();
 
@@ -48,8 +47,6 @@ class GameApp {
             assetURLs: this.assetURLs,
             logVerbose: this.logVerbose.bind(this)
         });
-
-        this.spxRunner = null;
 
         this.logVerbose("EnginePackMode: ", EnginePackMode)
     }
@@ -113,13 +110,8 @@ class GameApp {
     }
 
     async buildGame(resolve, reject) {
-        if (!this.spxRunner) {
-            reject(new Error('SpxRunner not initialized'))
-            return
-        }
-
         try {
-            await this.spxRunner.build(new Uint8Array(this.projectData))
+            await window.ixgo_build(new Uint8Array(this.projectData), this.curProjectHash)
             resolve()
         } catch (err) {
             reject(err)
@@ -127,13 +119,16 @@ class GameApp {
     }
 
     async runGame(resolve, reject) {
+        let start = performance.now();
+        console.log('[RunGame] Starting...');
         await this.preInit();
+        console.log('[RunGame] Pre-initialization done.', performance.now() - start + 'ms');
 
         this.runGameTask--
-        // if stopGame is called before runing game, then do nothing
         if (this.stopGameTask > 0) {
             this.logVerbose("stopGame is called before runing game")
             resolve()
+            console.log('[RunGame] Aborted due to prior StopGame call.');
             return
         }
 
@@ -146,46 +141,44 @@ class GameApp {
         }
 
         this.logVerbose("RunGame ", args);
-        if (this.game) {
-            this.logVerbose('A game is already running. Close it first');
-            resolve()
-            return;
-        }
+
+        this.onProgress(0.6);
+        await this.unpackGameData(this.game);
+        console.log('[RunGame] Unpack game data done.', performance.now() - start + 'ms');    
 
         this.onProgress(0.8);
-        await this.unpackGameData(this.game);
-        
+        await this.game.start({ 'args': args, 'canvas': this.gameCanvas });
         this.onProgress(0.9);
-        this.game.start({ 'args': args, 'canvas': this.gameCanvas }).then(async () => {
-            this.gameCanvas.focus();
-            await this.onRunAfterStart(this.game);
-            this.onProgress(1.0);
-            this.gameCanvas.focus();
-            resolve();
-        });
+        console.log('[RunGame] Game start invoked.', performance.now() - start + 'ms');
+        this.gameCanvas.focus();
+
+        await this.onRunAfterStart(this.game);
+
+        this.onProgress(1.0);
+        this.gameCanvas.focus();
+        this.logVerbose("==> game start done");
+        resolve();
+        console.log('[RunGame] Game started successfully.', performance.now() - start + 'ms');
     }
 
 
     async stopGame(resolve, reject) {
         this.stopGameTask--
         if (this.game == null) {
-            // no game is running, do nothing
             resolve()
             this.logVerbose("no game is running")
             return
         }
-        this.stopGameResolve = () => {
-            this.game = null
-            resolve();
-            this.stopGameResolve = null
-        }
-        this.onProgress(1.0);
-        this.game.requestQuit()
 
         if(this.recordingOnGameStart && this.autoDownloadRecordedVideo){
             let fileName = `spx_${new Date().getTime()}.webm`;
             this.downloadRecordedVideo(fileName)
-        } 
+        }
+
+        // engine exit
+
+        this.onProgress(1.0);
+        resolve();
     }
 
     downloadRecordedVideo(fileName) { 
@@ -205,7 +198,6 @@ class GameApp {
     } 
 
     onGameExit() {
-        this.game = null
         this.logVerbose("on game quit")
         if (this.stopGameResolve) {
             this.stopGameResolve()
@@ -306,7 +298,7 @@ class GameApp {
             // register global functions
             Module = game.rtenv;
             FFI = self;
-            await this.spxRunner.run()
+            window.ixgo_run(new Uint8Array(this.projectData), this.curProjectHash)
         }
     }
 
@@ -343,9 +335,6 @@ class GameApp {
     async runLogicWasm() {
         this.go.run(this.logicWasmInstance);
         if (!this.minigameMode) {
-            if (typeof window.NewSpxRunner === 'function') {
-                this.spxRunner = window.NewSpxRunner();
-            }
             if (this.config.onSpxReady != null) {
                 this.config.onSpxReady()
             }

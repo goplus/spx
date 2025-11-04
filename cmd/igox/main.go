@@ -5,16 +5,12 @@ package main
 import (
 	"archive/zip"
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
 	"log/slog"
 	"os"
-	"sort"
 	"syscall/js"
-	"time"
 	_ "unsafe"
 
 	"github.com/goplus/builder/tools/ai"
@@ -135,6 +131,8 @@ func gdspxOnEnginePause(this js.Value, args []js.Value) any {
 
 var logger = slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
+var defaultRunner *SpxRunner = NewSpxRunner()
+
 // SpxRunner encapsulates the build and run functionality for SPX code.
 type SpxRunner struct {
 	ctx   *ixgo.Context
@@ -154,12 +152,7 @@ type interpCacheEntry struct {
 //
 // Caching: Build() computes SHA256 hash of input files and caches the interpreter.
 // Only one build is cached; new builds invalidate previous cache.
-func NewSpxRunner(this js.Value, args []js.Value) any {
-	debug := false
-	if len(args) > 0 {
-		debug = args[0].Bool()
-	}
-
+func NewSpxRunner() *SpxRunner {
 	// Initialize ixgo context
 	ctx := ixgo.NewContext(ixgo.SupportMultipleInterp)
 	ctx.Lookup = func(root, path string) (dir string, found bool) {
@@ -210,7 +203,7 @@ func Gopt_Game_Gopx_GetWidget[T any](sg ShapeGetter, name string) *T {
 	}
 }
 `); err != nil {
-		return fmt.Errorf("Failed to register package patch for github.com/goplus/spx: %w", err)
+		return nil
 	}
 
 	if err := ctx.RegisterPatch("github.com/goplus/builder/tools/ai", `
@@ -223,169 +216,49 @@ func Gopt_Player_Gopx_OnCmd[T any](p *Player, handler func(cmd T) error) {
 	PlayerOnCmd_(p, cmd, handler)
 }
 `); err != nil {
-		return fmt.Errorf("Failed to register package patch for github.com/goplus/builder/tools/ai: %w", err)
+		return nil
 	}
 
-	runner := &SpxRunner{
+	return &SpxRunner{
 		ctx:   ctx,
-		debug: debug,
+		debug: false,
 	}
-
-	return js.ValueOf(map[string]any{
-		"build": JSFuncOfWithError(runner.Build),
-		"run":   JSFuncOfWithError(runner.Run),
-	})
-}
-
-// JSUint8ArrayToBytes converts JS Uint8Array to Go []byte.
-func JSUint8ArrayToBytes(value js.Value) []byte {
-	if value.IsUndefined() || value.IsNull() {
-		return nil
-	}
-	length := value.Get("length").Int()
-	if length == 0 {
-		return nil
-	}
-	data := make([]byte, length)
-	js.CopyBytesToGo(data, value)
-	return data
-}
-
-// computeFilesHash computes the hash of the files object.
-func computeFilesHash(files js.Value) (string, error) {
-	if files.Type() != js.TypeObject {
-		return "", errors.New("files must be an object")
-	}
-
-	// Get all file paths and sort them (ensure stable hash)
-	keys := js.Global().Get("Object").Call("keys", files)
-	keysLen := keys.Length()
-	paths := make([]string, 0, keysLen)
-	for i := 0; i < keysLen; i++ {
-		paths = append(paths, keys.Index(i).String())
-	}
-	sort.Strings(paths)
-
-	// Compute hash
-	h := sha256.New()
-	for _, path := range paths {
-		fileObj := files.Get(path)
-		if !fileObj.InstanceOf(js.Global().Get("Object")) {
-			continue
-		}
-
-		// Get file content
-		content := JSUint8ArrayToBytes(fileObj.Get("content"))
-		modTime := int64(fileObj.Get("modTime").Int())
-
-		// Write path with length prefix
-		pathBytes := []byte(path)
-		h.Write([]byte{
-			byte(len(pathBytes) >> 24),
-			byte(len(pathBytes) >> 16),
-			byte(len(pathBytes) >> 8),
-			byte(len(pathBytes)),
-		})
-		h.Write(pathBytes)
-
-		// Write content with length prefix
-		h.Write([]byte{
-			byte(len(content) >> 24),
-			byte(len(content) >> 16),
-			byte(len(content) >> 8),
-			byte(len(content)),
-		})
-		h.Write(content)
-
-		// Write modification time (8 bytes for int64)
-		h.Write([]byte{
-			byte(modTime >> 56),
-			byte(modTime >> 48),
-			byte(modTime >> 40),
-			byte(modTime >> 32),
-			byte(modTime >> 24),
-			byte(modTime >> 16),
-			byte(modTime >> 8),
-			byte(modTime),
-		})
-	}
-	return hex.EncodeToString(h.Sum(nil)), nil
-}
-
-// filesMapToZipData converts JS files object to zip data.
-func filesMapToZipData(files js.Value) ([]byte, error) {
-	if files.Type() != js.TypeObject {
-		return nil, errors.New("files must be an object")
-	}
-
-	buf := new(bytes.Buffer)
-	zw := zip.NewWriter(buf)
-
-	// Get all file paths
-	keys := js.Global().Get("Object").Call("keys", files)
-	for i := range keys.Length() {
-		path := keys.Index(i).String()
-		fileObj := files.Get(path)
-
-		if !fileObj.InstanceOf(js.Global().Get("Object")) {
-			continue
-		}
-
-		// Get file content (Uint8Array)
-		content := JSUint8ArrayToBytes(fileObj.Get("content"))
-		modTime := time.UnixMilli(int64(fileObj.Get("modTime").Int()))
-
-		// Write to zip file
-		header := &zip.FileHeader{
-			Name:     path,
-			Method:   zip.Deflate,
-			Modified: modTime,
-		}
-
-		fw, err := zw.CreateHeader(header)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create zip entry %s: %w", path, err)
-		}
-
-		if _, err := fw.Write(content); err != nil {
-			return nil, fmt.Errorf("failed to write zip entry %s: %w", path, err)
-		}
-	}
-
-	if err := zw.Close(); err != nil {
-		return nil, fmt.Errorf("failed to close zip writer: %w", err)
-	}
-
-	return buf.Bytes(), nil
 }
 
 // Build builds the SPX code from the provided files object.
-// It computes the hash of the files and caches the build result.
+// It uses the provided hash to cache the build result.
+//
+// Parameters:
+//
+//	args[0]: Uint8Array - zip data of the project files
+//	args[1]: string - hash of the files (pre-computed by caller)
+//
+// Returns: nil on success, error on build failure.
 func (r *SpxRunner) Build(this js.Value, args []js.Value) any {
 	if len(args) == 0 {
 		return errors.New("Build: missing files argument")
 	}
 
 	// Get files object
-	files := args[0]
-	if files.Type() != js.TypeObject {
-		return errors.New("Build: files argument must be an object")
-	}
+	inputArray := args[0]
 
-	// Compute files hash
-	filesHash, err := computeFilesHash(files)
-	if err != nil {
-		return fmt.Errorf("Build: failed to compute files hash: %w", err)
-	}
+	// Convert Uint8Array to Go byte slice
+	length := inputArray.Get("length").Int()
+	zipData := make([]byte, length)
+	js.CopyBytesToGo(zipData, inputArray)
+
+	// Get pre-computed hash from args[1]
+	filesHash := args[1].String()
 
 	fmt.Printf("Files hash: %s\n", filesHash)
-	return r.build(files, filesHash)
+	return r.build(zipData, filesHash)
 }
 
 // build performs the actual build process given the files and their hash.
-func (r *SpxRunner) build(files js.Value, filesHash string) any {
+func (r *SpxRunner) build(zipData []byte, filesHash string) any {
 	// Check cache
 	if r.entry != nil {
+		println("Checking cache...", r.entry.hash, filesHash)
 		if r.entry.hash == filesHash {
 			fmt.Printf("Using cached build for hash: %s\n", filesHash)
 			return nil
@@ -393,12 +266,6 @@ func (r *SpxRunner) build(files js.Value, filesHash string) any {
 			fmt.Printf("Cache miss, rebuilding for hash: %s\n", filesHash)
 			r.Release()
 		}
-	}
-
-	// Convert files to zip data
-	zipData, err := filesMapToZipData(files)
-	if err != nil {
-		return fmt.Errorf("Build: %w", err)
 	}
 
 	// Initialize zip file system
@@ -469,21 +336,20 @@ func (r *SpxRunner) build(files js.Value, filesHash string) any {
 //
 // Note: This method is idempotent - won't rebuild unnecessarily.
 func (r *SpxRunner) Run(this js.Value, args []js.Value) any {
-	if len(args) == 0 {
+	if len(args) != 2 {
 		return errors.New("Run: missing files argument")
 	}
 
 	// Get files object
-	files := args[0]
-	if files.Type() != js.TypeObject {
-		return errors.New("Run: files argument must be an object")
-	}
+	inputArray := args[0]
 
-	// Compute files hash
-	filesHash, err := computeFilesHash(files)
-	if err != nil {
-		return fmt.Errorf("Run: failed to compute files hash: %w", err)
-	}
+	// Convert Uint8Array to Go byte slice
+	length := inputArray.Get("length").Int()
+	zipData := make([]byte, length)
+	js.CopyBytesToGo(zipData, inputArray)
+
+	// Get pre-computed hash from args[1]
+	filesHash := args[1].String()
 
 	fmt.Printf("Run with files hash: %s\n", filesHash)
 
@@ -491,19 +357,21 @@ func (r *SpxRunner) Run(this js.Value, args []js.Value) any {
 	if r.entry == nil || r.entry.hash != filesHash {
 		// Cache miss, need to build first
 		fmt.Printf("Cache miss, building for hash: %s\n", filesHash)
-		if buildErr := r.build(files, filesHash); buildErr != nil {
+		if buildErr := r.build(zipData, filesHash); buildErr != nil {
 			return buildErr
 		}
 	} else {
 		fmt.Printf("Cache hit, using cached interp for hash: %s\n", filesHash)
 	}
 
-	// Run interp
-	interp := r.entry.interp
-	code, runErr := r.ctx.RunInterp(interp, "main.go", nil)
-	if runErr != nil {
-		return fmt.Errorf("Failed to run XGo source (code %d): %w", code, runErr)
-	}
+	// Run interp in background goroutine (non-blocking)
+	go func() {
+		interp := r.entry.interp
+		code, runErr := r.ctx.RunInterp(interp, "main.go", nil)
+		if runErr != nil {
+			logErrorAndExit(fmt.Errorf("Failed to run XGo source (code %d): %w", code, runErr))
+		}
+	}()
 
 	return nil
 }
@@ -577,7 +445,8 @@ func main() {
 	js.Global().Set("gdspx_on_engine_pause", js.FuncOf(gdspxOnEnginePause))
 
 	// Register SpxRunner WASM interface
-	js.Global().Set("NewSpxRunner", JSFuncOfWithError(NewSpxRunner))
+	js.Global().Set("ixgo_build", JSFuncOfWithError(defaultRunner.Build))
+	js.Global().Set("ixgo_run", JSFuncOfWithError(defaultRunner.Run))
 
 	// register FFI for worker mode
 	spxEngineRegisterFFI()

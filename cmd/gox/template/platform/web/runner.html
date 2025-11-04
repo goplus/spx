@@ -60,8 +60,8 @@
 		window.spxIsProxyThreadMode = false
 		let onGameExit = null
 		
-		async function preInitGame() {
-			console.log('[PreInit] Starting pre-initialization...');
+		window.preInitGame = async function(assetURLs) {
+			console.log('[PreInit] Starting pre-initialization...', preInitialized);
 			const startTime = performance.now();
 			
 			if (preInitialized) {
@@ -74,35 +74,38 @@
 				return preInitPromise;
 			}
 
-			preInitPromise = _doPreInit();
-			await preInitPromise;
-			preInitialized = true;
+			preInitPromise = _doPreInit(assetURLs);
+			try {
+				await preInitPromise;
+				preInitialized = true;
+			} catch (error) {
+				console.log('[PreInit] Pre-initialization failed, will retry on demand:', error);
+				preInitPromise = null;
+				throw error;
+			}
 			
 			const totalTime = performance.now() - startTime;
 			console.log('[PreInit] ✅ Pre-initialization completed in', totalTime + 'ms');
 		}
 		
-		async function _doPreInit() {
-			const defaultConfig = {
+		async function _doPreInit(assetURLs) {
+			console.log('[PreInit] Starting pre-initialization...');
+			const config = {
 				'projectName': "spx_game",
 				'onProgress': onProgress,
 				"gameCanvas": document.getElementById('game-canvas'),
 				"logLevel": LOG_LEVEL_NONE,
+				"useProfiler": false,
 				"useAssetCache": false,
 				"isRuntimeMode": true,
-				"assetURLs": {
-					"engine.zip": "/engine.zip",
-					"game.zip": "/game.zip",
-					"gdspx.wasm": "/gdspx.wasm",
-					"engine.wasm": "/engine.wasm",
-				},
+				"assetURLs": assetURLs || defaultAssetURLs,
 				"recordingOnGameStart": false,
-				"autoDownloadRecordedVideo": false,
+				"autoDownloadRecordedVideo":false,
 			};
 
 			console.log('[PreInit] Creating GameApp instance...');
 			const gameAppStartTime = performance.now();
-			gameApp = new GameApp(defaultConfig);
+			gameApp = new GameApp(config);
 			console.log('[PreInit] GameApp created in', performance.now() - gameAppStartTime + 'ms');
 			
 			// 如果 GameApp 有 preInit 方法，则调用它
@@ -115,6 +118,7 @@
 				console.log('[PreInit] gameApp.preInit() not available, skipping...');
 			}
 		}
+
 		function onProgress(value) {
 			const progressEvent = new CustomEvent('onProgress', {
 				detail: {
@@ -160,12 +164,13 @@
 			onGameExit = callback
 		}
 		
-		window.startGame = async (buffer, assetURLs = null, onSpxReady = null, cfg = null) => {
+		window.startGame = async (buffer, gameHash, assetURLs = null, onSpxReady = null, cfg = null) => {
 			console.log('[StartGame] Starting game with pre-initialization...');
 			const startTime = performance.now();
 			
 			// 确保预初始化完成
-			await preInitGame();
+			await preInitGame(assetURLs);
+			console.log('[StartGame] Starting game with preInitGame done...');
 			
 			isShowEditor = false
 			lastGameApp = null
@@ -190,16 +195,18 @@
 				}
 			}
 
+			console.log('[StartGame] Stopping previous game if any...');
 			// 停止之前的游戏
-			if (gameApp != null) {
-				await gameApp.StopProject();
-			}
+			// if (gameApp != null) {
+			// 	await gameApp.StopGame();
+			// }
 
 			// 更新 gameApp 配置而不重新创建
 			console.log('[StartGame] Updating GameApp config...');
 			const updateConfigTime = performance.now();
 			
 			gameApp.projectData = new Uint8Array(buffer);
+			gameApp.curProjectHash = gameHash;
 			gameApp.onSpxReady = onSpxReady;
 			
 			if (assetURLs != null) {
@@ -218,7 +225,7 @@
 			console.log('[StartGame] RunGame duration:', performance.now() - runGameTime + 'ms');
 		}
 		
-		window.buildGame = async (buffer, assetURLs = null, cfg = null) => {
+		window.buildGame = async (buffer, gameHash, assetURLs = null) => {
 			console.log('[BuildGame] Starting game build...');
 			const startTime = performance.now();
 			
@@ -232,6 +239,7 @@
 			const updateConfigTime = performance.now();
 			
 			gameApp.projectData = new Uint8Array(buffer);
+			gameApp.curProjectHash = gameHash;
 			
 			if (assetURLs != null) {
 				Object.assign(gameApp.config.assetURLs, assetURLs);
@@ -313,7 +321,7 @@
 			}
 			await gameApp.StopGame()
 			lastGameApp = gameApp
-			gameApp = null
+			// gameApp = null
 		}
 
 		window.pauseGame = () => {
@@ -339,20 +347,6 @@
 			}
 			gameApp.stepNextFrame();
 		}
-		
-		// 页面加载完成后开始预初始化
-		window.addEventListener('DOMContentLoaded', async () => {
-			console.log('[Runner] DOM loaded, starting pre-initialization...');
-			try {
-				await preInitGame();
-				console.log('[Runner] Pre-initialization completed, runner is ready');
-			} catch (error) {
-				console.error('[Runner] Pre-initialization failed:', error);
-			} finally {
-				// 无论预初始化是否成功，都通知父窗口 runner 已准备就绪
-				window.dispatchEvent(new Event('runnerReady'));
-			}
-		});
 
 		// 立即通知父窗口基本方法可用（用于兼容性）
 		window.dispatchEvent(new Event('runnerReady'));
