@@ -473,6 +473,9 @@ func JSFuncOfWithError(fn func(this js.Value, args []js.Value) any) js.Func {
 }
 
 func main() {
+	// register FFI for worker mode
+	spxEngineRegisterFFI()
+
 	// Register AI-related functions
 	js.Global().Set("setAIDescription", js.FuncOf(setAIDescription))
 	js.Global().Set("setAIInteractionAPIEndpoint", js.FuncOf(setAIInteractionAPIEndpoint))
@@ -493,9 +496,6 @@ func main() {
 	js.Global().Set("ixgo_build", JSFuncOfWithError(defaultRunner.Build))
 	js.Global().Set("ixgo_run", JSFuncOfWithError(defaultRunner.Run))
 	js.Global().Set("ixgo_cancel", JSFuncOfWithError(defaultRunner.Cancel))
-
-	// register FFI for worker mode
-	spxEngineRegisterFFI()
 
 	// Keep WASM running
 	select {}
