@@ -395,6 +395,9 @@ func (r *SpxRunner) Run(this js.Value, args []js.Value) any {
 	return nil
 }
 
+// Cancel stops the currently running execution, if any.
+//
+// Returns: nil on success, error if no execution is running.
 func (r *SpxRunner) Cancel(this js.Value, args []js.Value) any {
 	if r.entry.cancelFunc == nil {
 		return errors.New("Cancel: no execution is running")
@@ -460,8 +463,6 @@ func JSFuncOfWithError(fn func(this js.Value, args []js.Value) any) js.Func {
 }
 
 func main() {
-	// register FFI for worker mode
-	spxEngineRegisterFFI()
 
 	// Register AI-related functions
 	js.Global().Set("setAIDescription", js.FuncOf(setAIDescription))
@@ -475,6 +476,9 @@ func main() {
 	js.Global().Set("gdspx_on_engine_fixed_update", js.FuncOf(gdspxOnEngineFixedUpdate))
 	js.Global().Set("gdspx_on_engine_destroy", js.FuncOf(gdspxOnEngineDestroy))
 	js.Global().Set("gdspx_on_engine_pause", js.FuncOf(gdspxOnEnginePause))
+
+	// register FFI for worker mode
+	spxEngineRegisterFFI()
 
 	// Register SpxRunner WASM interface
 	js.Global().Set("ixgo_build", JSFuncOfWithError(defaultRunner.Build))
