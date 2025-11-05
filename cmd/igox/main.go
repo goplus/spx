@@ -96,20 +96,6 @@ func setAIInteractionAPITokenProvider(this js.Value, args []js.Value) any {
 	return nil
 }
 
-var dataChannel = make(chan []byte)
-
-func loadData(this js.Value, args []js.Value) any {
-	inputArray := args[0]
-
-	// Convert Uint8Array to Go byte slice
-	length := inputArray.Get("length").Int()
-	goBytes := make([]byte, length)
-	js.CopyBytesToGo(goBytes, inputArray)
-
-	dataChannel <- goBytes
-	return nil
-}
-
 func goWasmInit(this js.Value, args []js.Value) any {
 	return js.ValueOf(nil)
 }
@@ -158,7 +144,9 @@ func NewSpxRunner() *SpxRunner {
 	// Initialize ixgo context
 	ctx := ixgo.NewContext(ixgo.SupportMultipleInterp)
 	ctx.Lookup = func(root, path string) (dir string, found bool) {
-		logErrorAndExit(fmt.Errorf("Failed to resolve package import %q", path))
+		err := fmt.Errorf("Failed to resolve package import %q", path)
+		js.Global().Call("gdspx_ext_on_runtime_panic", err.Error())
+		js.Global().Call("gdspx_ext_request_exit", 1)
 		return
 	}
 	ctx.SetPanic(logWithPanicInfo)
@@ -391,8 +379,14 @@ func (r *SpxRunner) Run(this js.Value, args []js.Value) any {
 		}
 
 		if runErr != nil {
-			logErrorAndExit(fmt.Errorf("Failed to run XGo source (code %d): %w", code, runErr))
+			fmt.Printf("Failed to run XGo source (code %d): %v\n", code, runErr)
+			js.Global().Call("gdspx_ext_on_runtime_panic", runErr.Error())
+			js.Global().Call("gdspx_ext_request_exit", 1)
+			return
 		}
+
+		// Execution completed successfully
+		js.Global().Call("gdspx_ext_on_runtime_exit", 0)
 
 		// Clear cancel func after successful completion
 		r.entry.cancelFunc = nil
@@ -454,13 +448,6 @@ func logWithPanicInfo(info *ixgo.PanicInfo) {
 	)
 }
 
-func logErrorAndExit(err error) {
-	fmt.Println(err)
-	js.Global().Call("gdspx_ext_on_runtime_panic", err.Error())
-	js.Global().Call("gdspx_ext_request_exit", 1)
-	os.Exit(1)
-}
-
 // JSFuncOfWithError wraps js.Func and converts error returns to JS Error objects.
 func JSFuncOfWithError(fn func(this js.Value, args []js.Value) any) js.Func {
 	return js.FuncOf(func(this js.Value, args []js.Value) any {
@@ -480,9 +467,6 @@ func main() {
 	js.Global().Set("setAIDescription", js.FuncOf(setAIDescription))
 	js.Global().Set("setAIInteractionAPIEndpoint", js.FuncOf(setAIInteractionAPIEndpoint))
 	js.Global().Set("setAIInteractionAPITokenProvider", js.FuncOf(setAIInteractionAPITokenProvider))
-
-	// Register legacy data loading function (for backward compatibility)
-	js.Global().Set("goLoadData", js.FuncOf(loadData))
 
 	// Register engine callback functions
 	js.Global().Set("goWasmInit", js.FuncOf(goWasmInit))
