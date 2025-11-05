@@ -5,6 +5,7 @@ package main
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -142,9 +143,10 @@ type SpxRunner struct {
 
 // interpCacheEntry stores the build result.
 type interpCacheEntry struct {
-	hash   string
-	interp *ixgo.Interp
-	fs     *zipfs.ZipFs
+	hash       string
+	cancelFunc context.CancelFunc
+	interp     *ixgo.Interp
+	fs         *zipfs.ZipFs
 }
 
 // SpxRunner encapsulates the build and run functionality for SPX code with hash-based caching.
@@ -364,20 +366,63 @@ func (r *SpxRunner) Run(this js.Value, args []js.Value) any {
 		fmt.Printf("Cache hit, using cached interp for hash: %s\n", filesHash)
 	}
 
+	// Cancel previous execution if exists
+	if r.entry.cancelFunc != nil {
+		fmt.Println("Cancelling previous execution...")
+		r.entry.cancelFunc()
+	}
+
 	// Run interp in background goroutine (non-blocking)
 	go func() {
+		// Create cancellable context
+		runCtx, cancel := context.WithCancel(context.Background())
+		r.entry.cancelFunc = cancel
+
+		// Set context for ixgo
+		r.ctx.RunContext = runCtx
+
 		interp := r.entry.interp
 		code, runErr := r.ctx.RunInterp(interp, "main.go", nil)
+		// Check if cancelled
+		if runErr == context.Canceled {
+			fmt.Println("Execution cancelled")
+			js.Global().Call("gdspx_ext_on_runtime_exit", 0)
+			return
+		}
+
 		if runErr != nil {
 			logErrorAndExit(fmt.Errorf("Failed to run XGo source (code %d): %w", code, runErr))
 		}
+
+		// Clear cancel func after successful completion
+		r.entry.cancelFunc = nil
 	}()
+
+	return nil
+}
+
+func (r *SpxRunner) Cancel(this js.Value, args []js.Value) any {
+	if r.entry.cancelFunc == nil {
+		return errors.New("Cancel: no execution is running")
+	}
+
+	fmt.Println("Cancelling game execution...")
+	r.entry.cancelFunc()
+	r.entry.cancelFunc = nil
 
 	return nil
 }
 
 // Release releases resources held by the SpxRunner.
 func (r *SpxRunner) Release() {
+	// Cancel running execution first
+	if r.entry.cancelFunc != nil {
+		r.entry.cancelFunc()
+		r.entry.cancelFunc = nil
+	}
+
+	// Clear context
+	r.ctx.RunContext = nil
 	if r.entry != nil && r.entry.interp != nil {
 		r.entry.interp.UnsafeRelease()
 		r.entry.fs.Close()
@@ -447,6 +492,7 @@ func main() {
 	// Register SpxRunner WASM interface
 	js.Global().Set("ixgo_build", JSFuncOfWithError(defaultRunner.Build))
 	js.Global().Set("ixgo_run", JSFuncOfWithError(defaultRunner.Run))
+	js.Global().Set("ixgo_cancel", JSFuncOfWithError(defaultRunner.Cancel))
 
 	// register FFI for worker mode
 	spxEngineRegisterFFI()
