@@ -10,6 +10,7 @@ class GameApp {
         this.projectDataName = 'game.zip';
         this.persistentPath = 'engine';
         this.logLevel = config.logLevel;
+        this.useProfiler = config.useProfiler || false;
         this.projectData = config.projectData;
         this.oldData = config.projectData;
         this.gameCanvas = config.gameCanvas;
@@ -19,7 +20,7 @@ class GameApp {
             'unloadAfterInit': false,
             'canvas': this.gameCanvas,
             'logLevel': this.logLevel,
-            'canvasResizePolicy': 1,
+            'canvasResizePolicy': 2,
             'onExit': () => {
                 this.onGameExit()
             },
@@ -35,7 +36,7 @@ class GameApp {
         this.normalMode = !this.workerMode && !this.minigameMode && !this.miniprogramMode
 
         this.useAssetCache = config.useAssetCache || this.miniprogramMode;
-
+        profiler.enabled = this.useProfiler;
         // init worker message manager
         this.workerMessageManager = new globalThis.WorkerMessageManager();
 
@@ -76,16 +77,14 @@ class GameApp {
         return this.startTask(() => { this.stopGameTask++ }, this.stopGame)
     }
 
-
     async runGame(resolve, reject) {
-        await this.onRunPrepareEngineWasm()
+        await profiler.profile('onRunPrepareEngineWasm', () => this.onRunPrepareEngineWasm());
 
-        this.runGameTask--
-        // if stopGame is called before runing game, then do nothing
+        this.runGameTask--;
         if (this.stopGameTask > 0) {
-            this.logVerbose("stopGame is called before runing game")
-            resolve()
-            return
+            this.logVerbose("stopGame is called before runing game");
+            resolve();
+            return;
         }
 
         let args = [
@@ -93,19 +92,19 @@ class GameApp {
             '--main-project-data', this.persistentPath + "/" + this.projectDataName,
         ];
         if (this.recordingOnGameStart) {
-            args.push('--write-movie', this.persistentPath + "/" + "movie.avi")
+            args.push('--write-movie', this.persistentPath + "/" + "movie.avi");
         }
 
         this.logVerbose("RunGame ", args);
         if (this.game) {
             this.logVerbose('A game is already running. Close it first');
-            resolve()
+            resolve();
             return;
         }
 
         this.onProgress(0.5);
         this.game = new Engine(this.gameConfig);
-        let curGame = this.game
+        let curGame = this.game;
 
         // register global functions
         window.gdspx_on_engine_start = function () { }
@@ -120,27 +119,34 @@ class GameApp {
             }
         });
 
-
-        await this.onRunBeforInit()
+        await profiler.profile('onRunBeforeInit', () => this.onRunBeforeInit());
         this.onProgress(0.5);
 
-        curGame.init().then(async () => {
-            this.onProgress(0.6);
-            await this.unpackGameData(curGame)
-            this.onProgress(0.7);
-            await this.onRunAfterInit(curGame)
-            this.onProgress(0.80);
-            curGame.start({ 'args': args, 'canvas': this.gameCanvas }).then(async () => {
-                this.onProgress(0.9);
-                this.gameCanvas.focus();
-                await this.onRunAfterStart(curGame)
-                this.onProgress(1.0);
-                this.gameCanvas.focus();
-                this.logVerbose("==> game start done")
-                resolve()
-            });
-        });
+        await profiler.profile('curGame.init',  () => curGame.init());
+
+        this.onProgress(0.6);
+
+        await profiler.profile('unpackGameData', () => this.unpackGameData(curGame));
+
+        this.onProgress(0.7);
+
+        await profiler.profile('onRunAfterInit', () => this.onRunAfterInit(curGame));
+
+        this.onProgress(0.8);
+
+        await profiler.profile('curGame.start', () => curGame.start({ 'args': args, 'canvas': this.gameCanvas }));
+
+        this.onProgress(0.9);
+        this.gameCanvas.focus();
+
+        await profiler.profile('onRunAfterStart', () => this.onRunAfterStart(curGame));
+
+        this.onProgress(1.0);
+        this.gameCanvas.focus();
+        this.logVerbose("==> game start done");
+        resolve();
     }
+
 
 
     async stopGame(resolve, reject) {
@@ -247,15 +253,15 @@ class GameApp {
         }
     }
 
-    async onRunBeforInit() {
+    async onRunBeforeInit() {
         if (this.minigameMode) {
             GameGlobal.engine = this.game;
             godotSdk.set_engine(this.game);
             self.initExtensionWasm = function () { }
         } else {
             if (!this.workerMode) {
-                await this.loadLogicWasm()
-                await this.runLogicWasm()
+                await profiler.profile('loadLogicWasm', () => this.loadLogicWasm());
+                await profiler.profile('runLogicWasm', () => this.runLogicWasm());
                 self.initExtensionWasm = function () { }
             }
         }

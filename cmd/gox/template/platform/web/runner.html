@@ -131,6 +131,7 @@
 				"gameCanvas": document.getElementById('game-canvas'),
 				"projectData": new Uint8Array(buffer),
 				"logLevel": LOG_LEVEL_NONE,
+				"useProfiler": false,
 				"useAssetCache": false,
 				"isRuntimeMode": true,
 				"assetURLs": {
@@ -156,7 +157,7 @@
 
 			// try install project and run game
 			gameApp = new GameApp(config);
-			await gameApp.RunGame();
+			await profiler.profile('RunGame', () => gameApp.RunGame());
 		}
 		
 		// Starts recording the game canvas content as video
