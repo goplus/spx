@@ -19,7 +19,7 @@ class GameApp {
             'unloadAfterInit': false,
             'canvas': this.gameCanvas,
             'logLevel': this.logLevel,
-            'canvasResizePolicy': 2,
+            'canvasResizePolicy': 1,
             'onExit': () => {
                 this.onGameExit()
             },
@@ -68,67 +68,23 @@ class GameApp {
         return this.logicPromise
     }
 
-    async preInit() {
-        if (this.preInitialized || this.preInitPromise) {
-            return this.preInitPromise;
-        }
-
-        this.preInitPromise = this._doPreInit();
-        return this.preInitPromise;
-    }
-
-    async _doPreInit() {
-        await this.onRunPrepareEngineWasm();
-        
-        this.game = new Engine(this.gameConfig);
-        
-        const spxfuncs = new GdspxFuncs();
-        const methodNames = Object.getOwnPropertyNames(Object.getPrototypeOf(spxfuncs));
-        methodNames.forEach(key => {
-            if (key.startsWith('gdspx_') && typeof spxfuncs[key] === 'function') {
-                globalThis[key] = spxfuncs[key].bind(spxfuncs);
-            }
-        });
-
-        await this.onRunBeforInit();
-        await this.game.init();
-        await this.onRunAfterInit(this.game);
-        
-        this.preInitialized = true;
-    }
-
     async RunGame() {
         return this.startTask(() => { this.runGameTask++ }, this.runGame)
-    }
-
-    async BuildGame() {
-        return this.startTask(null, this.buildGame)
     }
 
     async StopGame() {
         return this.startTask(() => { this.stopGameTask++ }, this.stopGame)
     }
 
-    async buildGame(resolve, reject) {
-        try {
-            await window.ixgo_build(new Uint8Array(this.projectData), this.curProjectHash)
-            resolve()
-        } catch (err) {
-            reject(err)
-        }
-    }
 
     async runGame(resolve, reject) {
-        let start = performance.now();
-        console.log('[RunGame] Starting...');
-        await this.preInit();
-        console.log('[RunGame] Pre-initialization done.', performance.now() - start + 'ms');
+        await this.onRunPrepareEngineWasm()
 
         this.runGameTask--
+        // if stopGame is called before runing game, then do nothing
         if (this.stopGameTask > 0) {
             this.logVerbose("stopGame is called before runing game")
             resolve()
-            console.log('[RunGame] Aborted due to prior StopGame call.');
             return
         }
 
@@ -137,48 +93,76 @@ class GameApp {
             '--main-project-data', this.persistentPath + "/" + this.projectDataName,
         ];
         if (this.recordingOnGameStart) {
-            args.push('--write-movie', this.persistentPath + "/" + "movie.avi");
+            args.push('--write-movie', this.persistentPath + "/" + "movie.avi")
         }
 
         this.logVerbose("RunGame ", args);
+        if (this.game) {
+            this.logVerbose('A game is already running. Close it first');
+            resolve()
+            return;
+        }
 
-        this.onProgress(0.6);
-        await this.unpackGameData(this.game);
-        console.log('[RunGame] Unpack game data done.', performance.now() - start + 'ms');    
+        this.onProgress(0.5);
+        this.game = new Engine(this.gameConfig);
+        let curGame = this.game
 
-        this.onProgress(0.8);
-        await this.game.start({ 'args': args, 'canvas': this.gameCanvas });
-        this.onProgress(0.9);
-        console.log('[RunGame] Game start invoked.', performance.now() - start + 'ms');
-        this.gameCanvas.focus();
+        // register global functions
+        window.gdspx_on_engine_start = function () { }
+        window.gdspx_on_engine_update = function () { }
+        window.gdspx_on_engine_fixed_update = function () { }
+        window.goWasmInit = function () { }
+        const spxfuncs = new GdspxFuncs();
+        const methodNames = Object.getOwnPropertyNames(Object.getPrototypeOf(spxfuncs));
+        methodNames.forEach(key => {
+            if (key.startsWith('gdspx_') && typeof spxfuncs[key] === 'function') {
+                globalThis[key] = spxfuncs[key].bind(spxfuncs);
+            }
+        });
 
-        await this.onRunAfterStart(this.game);
 
-        this.onProgress(1.0);
-        this.gameCanvas.focus();
-        this.logVerbose("==> game start done");
-        resolve();
-        console.log('[RunGame] Game started successfully.', performance.now() - start + 'ms');
+        await this.onRunBeforInit()
+        this.onProgress(0.5);
+
+        curGame.init().then(async () => {
+            this.onProgress(0.6);
+            await this.unpackGameData(curGame)
+            this.onProgress(0.7);
+            await this.onRunAfterInit(curGame)
+            this.onProgress(0.80);
+            curGame.start({ 'args': args, 'canvas': this.gameCanvas }).then(async () => {
+                this.onProgress(0.9);
+                this.gameCanvas.focus();
+                await this.onRunAfterStart(curGame)
+                this.onProgress(1.0);
+                this.gameCanvas.focus();
+                this.logVerbose("==> game start done")
+                resolve()
+            });
+        });
     }
 
 
     async stopGame(resolve, reject) {
         this.stopGameTask--
         if (this.game == null) {
+            // no game is running, do nothing
             resolve()
             this.logVerbose("no game is running")
             return
         }
+        this.stopGameResolve = () => {
+            this.game = null
+            resolve();
+            this.stopGameResolve = null
+        }
+        this.onProgress(1.0);
+        this.game.requestQuit()
 
         if(this.recordingOnGameStart && this.autoDownloadRecordedVideo){
             let fileName = `spx_${new Date().getTime()}.webm`;
             this.downloadRecordedVideo(fileName)
-        }
-
-        // engine exit
-
-        this.onProgress(1.0);
-        resolve();
+        } 
     }
 
     downloadRecordedVideo(fileName) { 
@@ -198,6 +182,7 @@ class GameApp {
     } 
 
     onGameExit() {
+        this.game = null
         this.logVerbose("on game quit")
         if (this.stopGameResolve) {
             this.stopGameResolve()
@@ -298,7 +283,7 @@ class GameApp {
             // register global functions
             Module = game.rtenv;
             FFI = self;
-            window.ixgo_run(new Uint8Array(this.projectData), this.curProjectHash)
+            window.goLoadData(new Uint8Array(this.projectData));
         }
     }
 
