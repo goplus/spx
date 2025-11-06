@@ -289,7 +289,7 @@ class GameApp {
             // register global functions
             Module = game.rtenv;
             FFI = self;
-            window.goLoadData(new Uint8Array(this.projectData));
+            window.ixgo_run(new Uint8Array(this.projectData), this.curProjectHash);
         }
     }
 
