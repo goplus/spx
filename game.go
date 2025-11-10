@@ -155,7 +155,7 @@ type Game struct {
 
 	tilemapMgr gameTilemapMgr
 
-	// exit control (using atomic operations for thread-safe access)
+	// exit control
 	exitRequested atomic.Bool
 	exitCode      atomic.Int32
 }
