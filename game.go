@@ -27,6 +27,7 @@ import (
 	"reflect"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -154,9 +155,9 @@ type Game struct {
 
 	tilemapMgr gameTilemapMgr
 
-	// exit control
-	exitRequested bool
-	exitCode      int
+	// exit control (using atomic operations for thread-safe access)
+	exitRequested atomic.Bool
+	exitCode      atomic.Int32
 }
 
 const maxCollisionLayerIdx = 32 // engine limit support 32 layers
@@ -959,8 +960,8 @@ func (p *Game) fireEvent(ev event) {
 
 func (p *Game) eventLoop(me coroutine.Thread) int {
 	for {
-		if p.exitRequested {
-			return p.exitCode
+		if p.exitRequested.Load() {
+			return int(p.exitCode.Load())
 		}
 		var ev event
 		engine.WaitForChan(p.events, &ev)
@@ -971,8 +972,8 @@ func (p *Game) logicLoop(me coroutine.Thread) int {
 	tempAudios := []string{}
 	tempAnimations := []string{}
 	for {
-		if p.exitRequested {
-			return p.exitCode
+		if p.exitRequested.Load() {
+			return int(p.exitCode.Load())
 		}
 
 		p.camera.onUpdate(gtime.DeltaTime())
@@ -1033,8 +1034,8 @@ func (p *Game) inputEventLoop(me coroutine.Thread) int {
 	keyEvents := make([]engine.KeyEvent, 0)
 
 	for {
-		if p.exitRequested {
-			return p.exitCode
+		if p.exitRequested.Load() {
+			return int(p.exitCode.Load())
 		}
 
 		// Check mouse button state
@@ -2044,8 +2045,8 @@ func (p *Game) SetWindowSize(width int64, height int64) {
 // This will break all game loops and terminate the SPX game execution.
 // The actual engine.RequestExit() will be called by ixgo interpreter after detecting the exit.
 func (p *Game) Exit__0(code int) {
-	p.exitRequested = true
-	p.exitCode = code
+	p.exitRequested.Store(true)
+	p.exitCode.Store(int32(code))
 
 	// Send an exit event to wake up eventLoop if it's blocked on WaitForChan
 	// This ensures the eventLoop can check exitRequested flag immediately
