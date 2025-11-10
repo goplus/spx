@@ -2051,7 +2051,7 @@ func (p *Game) Exit__0(code int) {
 	// Send an exit event to wake up eventLoop if it's blocked on WaitForChan
 	// This ensures the eventLoop can check exitRequested flag immediately
 	select {
-	case p.events <- &eventExit{Code: code}:
+	case p.events <- &eventExit{}:
 	default:
 		// Channel is full or closed, that's ok - eventLoop will exit anyway
 	}
