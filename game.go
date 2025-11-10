@@ -153,6 +153,10 @@ type Game struct {
 	audioMaxDistance float64
 
 	tilemapMgr gameTilemapMgr
+
+	// exit control
+	exitRequested bool
+	exitCode      int
 }
 
 const maxCollisionLayerIdx = 32 // engine limit support 32 layers
@@ -935,6 +939,13 @@ func (p *Game) handleEvent(event event) {
 		p.sinkMgr.doWhenStart()
 	case *eventTimer:
 		p.sinkMgr.doWhenTimer(ev.Time)
+	case *eventExit:
+		// Exit event is a no-op, just used to wake up eventLoop from WaitForChan.
+		// The loop will check exitRequested flag on the next iteration and exit.
+		// We don't handle exit here because:
+		// 1. handleEvent can't break the eventLoop (it's just an event handler)
+		// 2. All three loops (event/logic/input) need to exit, not just eventLoop
+		// 3. The exitRequested flag provides unified exit control for all loops
 	}
 }
 
@@ -948,6 +959,9 @@ func (p *Game) fireEvent(ev event) {
 
 func (p *Game) eventLoop(me coroutine.Thread) int {
 	for {
+		if p.exitRequested {
+			return p.exitCode
+		}
 		var ev event
 		engine.WaitForChan(p.events, &ev)
 		p.handleEvent(ev)
@@ -957,6 +971,10 @@ func (p *Game) logicLoop(me coroutine.Thread) int {
 	tempAudios := []string{}
 	tempAnimations := []string{}
 	for {
+		if p.exitRequested {
+			return p.exitCode
+		}
+
 		p.camera.onUpdate(gtime.DeltaTime())
 
 		tempItems := p.getTempShapes()
@@ -1015,6 +1033,10 @@ func (p *Game) inputEventLoop(me coroutine.Thread) int {
 	keyEvents := make([]engine.KeyEvent, 0)
 
 	for {
+		if p.exitRequested {
+			return p.exitCode
+		}
+
 		// Check mouse button state
 		curLbtnPressed := inputMgr.GetMouseState(MOUSE_BUTTON_LEFT)
 		if curLbtnPressed != lastLbtnPressed {
@@ -2014,6 +2036,35 @@ func (p *Game) FindPath__2(x_from, y_from, x_to, y_to float64, with_debug, with_
 
 func (p *Game) SetWindowSize(width int64, height int64) {
 	platformMgr.SetWindowSize(width, height, false)
+}
+
+// -----------------------------------------------------------------------------
+
+// Exit exits the game with the given exit code.
+// This will break all game loops and terminate the SPX game execution.
+// The actual engine.RequestExit() will be called by ixgo interpreter after detecting the exit.
+func (p *Game) Exit__0(code int) {
+	p.exitRequested = true
+	p.exitCode = code
+
+	// Send an exit event to wake up eventLoop if it's blocked on WaitForChan
+	// This ensures the eventLoop can check exitRequested flag immediately
+	select {
+	case p.events <- &eventExit{Code: code}:
+	default:
+		// Channel is full or closed, that's ok - eventLoop will exit anyway
+	}
+
+	// Note: We don't call engine.RequestExit() here because:
+	// 1. This only stops the engine.wasm (rendering), not ixgo.wasm (interpreter)
+	// 2. The ixgo interpreter will detect the exit when runInterp() returns
+	// 3. The ixgo interpreter will call engine.RequestExit() with the exit code
+}
+
+// Exit exits the game with exit code 0 (success).
+// This will break all game loops and terminate the SPX game execution.
+func (p *Game) Exit__1() {
+	p.Exit__0(0)
 }
 
 // -----------------------------------------------------------------------------
