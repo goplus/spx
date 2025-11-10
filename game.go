@@ -156,8 +156,8 @@ type Game struct {
 	tilemapMgr gameTilemapMgr
 
 	// exit control
-	exitRequested atomic.Bool
-	exitCode      atomic.Int32
+	exited   atomic.Bool
+	exitCode atomic.Int32
 }
 
 const maxCollisionLayerIdx = 32 // engine limit support 32 layers
@@ -960,7 +960,7 @@ func (p *Game) fireEvent(ev event) {
 
 func (p *Game) eventLoop(me coroutine.Thread) int {
 	for {
-		if p.exitRequested.Load() {
+		if p.exited.Load() {
 			return int(p.exitCode.Load())
 		}
 		var ev event
@@ -972,7 +972,7 @@ func (p *Game) logicLoop(me coroutine.Thread) int {
 	tempAudios := []string{}
 	tempAnimations := []string{}
 	for {
-		if p.exitRequested.Load() {
+		if p.exited.Load() {
 			return int(p.exitCode.Load())
 		}
 
@@ -1034,7 +1034,7 @@ func (p *Game) inputEventLoop(me coroutine.Thread) int {
 	keyEvents := make([]engine.KeyEvent, 0)
 
 	for {
-		if p.exitRequested.Load() {
+		if p.exited.Load() {
 			return int(p.exitCode.Load())
 		}
 
@@ -2041,11 +2041,11 @@ func (p *Game) SetWindowSize(width int64, height int64) {
 
 // -----------------------------------------------------------------------------
 
-// Exit exits the game with the given exit code.
+// Abort aborts the game execution with the given exit code.
 // This will break all game loops and terminate the SPX game execution.
 // The actual engine.RequestExit() will be called by ixgo interpreter after detecting the exit.
-func (p *Game) Exit__0(code int) {
-	p.exitRequested.Store(true)
+func (p *Game) Abort__0(code int) {
+	p.exited.Store(true)
 	p.exitCode.Store(int32(code))
 
 	// Send an exit event to wake up eventLoop if it's blocked on WaitForChan
@@ -2062,10 +2062,10 @@ func (p *Game) Exit__0(code int) {
 	// 3. The ixgo interpreter will call engine.RequestExit() with the exit code
 }
 
-// Exit exits the game with exit code 0 (success).
+// Abort aborts the game execution with exit code 0 (success).
 // This will break all game loops and terminate the SPX game execution.
-func (p *Game) Exit__1() {
-	p.Exit__0(0)
+func (p *Game) Abort__1() {
+	p.Abort__0(0)
 }
 
 // -----------------------------------------------------------------------------
