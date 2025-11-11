@@ -172,8 +172,6 @@ type eventMouseMove struct {
 	Pos mathf.Vec2
 }
 
-type eventExit struct{}
-
 type eventFirer interface {
 	fireEvent(ev event)
 }

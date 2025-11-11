@@ -27,7 +27,6 @@ import (
 	"reflect"
 	"sort"
 	"sync"
-	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -154,10 +153,6 @@ type Game struct {
 	audioMaxDistance float64
 
 	tilemapMgr gameTilemapMgr
-
-	// exit control
-	exited   atomic.Bool
-	exitCode atomic.Int32
 }
 
 const maxCollisionLayerIdx = 32 // engine limit support 32 layers
@@ -941,13 +936,6 @@ func (p *Game) handleEvent(event event) {
 		p.sinkMgr.doWhenStart()
 	case *eventTimer:
 		p.sinkMgr.doWhenTimer(ev.Time)
-	case *eventExit:
-		// Exit event is a no-op, just used to wake up eventLoop from WaitForChan.
-		// The loop will check exitRequested flag on the next iteration and exit.
-		// We don't handle exit here because:
-		// 1. handleEvent can't break the eventLoop (it's just an event handler)
-		// 2. All three loops (event/logic/input) need to exit, not just eventLoop
-		// 3. The exitRequested flag provides unified exit control for all loops
 	}
 }
 
@@ -961,9 +949,6 @@ func (p *Game) fireEvent(ev event) {
 
 func (p *Game) eventLoop(me coroutine.Thread) int {
 	for {
-		if p.exited.Load() {
-			return int(p.exitCode.Load())
-		}
 		var ev event
 		engine.WaitForChan(p.events, &ev)
 		p.handleEvent(ev)
@@ -973,10 +958,6 @@ func (p *Game) logicLoop(me coroutine.Thread) int {
 	tempAudios := []string{}
 	tempAnimations := []string{}
 	for {
-		if p.exited.Load() {
-			return int(p.exitCode.Load())
-		}
-
 		p.camera.onUpdate(gtime.DeltaTime())
 
 		tempItems := p.getTempShapes()
@@ -1035,10 +1016,6 @@ func (p *Game) inputEventLoop(me coroutine.Thread) int {
 	keyEvents := make([]engine.KeyEvent, 0)
 
 	for {
-		if p.exited.Load() {
-			return int(p.exitCode.Load())
-		}
-
 		// Check mouse button state
 		curLbtnPressed := inputMgr.GetMouseState(MOUSE_BUTTON_LEFT)
 		if curLbtnPressed != lastLbtnPressed {
