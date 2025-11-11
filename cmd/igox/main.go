@@ -122,10 +122,11 @@ var defaultRunner *SpxRunner = NewSpxRunner()
 
 // SpxRunner encapsulates the build and run functionality for SPX code.
 type SpxRunner struct {
-	ctx   *ixgo.Context
-	entry *interpCacheEntry
-	debug bool
-	game  spx.Gamer
+	ctx      *ixgo.Context
+	buildCtx *xgobuild.Context
+	entry    *interpCacheEntry
+	debug    bool
+	game     spx.Gamer
 }
 
 // interpCacheEntry stores the build result.
@@ -168,15 +169,6 @@ func NewSpxRunner() *SpxRunner {
 		return len(msg), nil
 	})
 
-	// NOTE(everyone): Keep sync with the config in spx [gop.mod](https://github.com/goplus/spx/blob/main/gop.mod)
-	xgobuild.RegisterProject(&modfile.Project{
-		Ext:      ".spx",
-		Class:    "Game",
-		Works:    []*modfile.Class{{Ext: ".spx", Class: "SpriteImpl", Embedded: true}},
-		PkgPaths: []string{"github.com/goplus/spx/v2", "math"},
-		Import:   []*modfile.Import{{Name: "ai", Path: "github.com/goplus/builder/tools/ai"}},
-	})
-
 	// Register patch for spx to support functions with generic type like `Gopt_Game_Gopx_GetWidget`.
 	// See details in https://github.com/goplus/builder/issues/765#issuecomment-2313915805
 	if err := ctx.RegisterPatch("github.com/goplus/spx/v2", `
@@ -209,9 +201,39 @@ func Gopt_Player_Gopx_OnCmd[T any](p *Player, handler func(cmd T) error) {
 		return nil
 	}
 
+	// NOTE(everyone): Keep sync with the config in spx [gop.mod](https://github.com/goplus/spx/blob/main/gop.mod)
+	xgobuild.RegisterProject(&modfile.Project{
+		Ext:      ".spx",
+		Class:    "Game",
+		Works:    []*modfile.Class{{Ext: ".spx", Class: "SpriteImpl", Embedded: true}},
+		PkgPaths: []string{"github.com/goplus/spx/v2", "math"},
+		Import:   []*modfile.Import{{Name: "ai", Path: "github.com/goplus/builder/tools/ai"}},
+	})
+
+	// ctx.Importer = ixgo.NewImporter(ctx)
+
+	buildCtx := xgobuild.NewContext(ctx)
+
+	buildCtx.Import("reflect")
+	buildCtx.Import("fmt")
+	buildCtx.Import("os")
+	buildCtx.Import("math")
+	buildCtx.Import("strconv")
+	buildCtx.Import("strings")
+
+	buildCtx.Import("github.com/qiniu/x/osx")
+	buildCtx.Import("github.com/qiniu/x/stringutil")
+	buildCtx.Import("github.com/qiniu/x/stringslice")
+	buildCtx.Import("github.com/qiniu/x/xgo")
+	buildCtx.Import("github.com/qiniu/x/xgo/ng")
+
+	buildCtx.Import("github.com/goplus/spx/v2")
+	buildCtx.Import("github.com/goplus/builder/tools/ai")
+
 	return &SpxRunner{
-		ctx:   ctx,
-		debug: false,
+		ctx:      ctx,
+		buildCtx: buildCtx,
+		debug:    false,
 	}
 }
 
@@ -303,9 +325,13 @@ func (r *SpxRunner) build(data js.Value, filesHash string) any {
 // buildInterp builds an interpreter from the given file system.
 // This function is extracted for easier unit testing with mock fs.
 func (r *SpxRunner) buildInterp(ctx *ixgo.Context, fs *zipfs.ZipFs) (*ixgo.Interp, error) {
-	source, err := xgobuild.BuildFSDir(ctx, fs, "")
+	pkg, err := r.buildCtx.ParseFSDir(fs, "")
 	if err != nil {
-		return nil, fmt.Errorf("Failed to build XGo source: %w", err)
+		return nil, err
+	}
+	source, err := pkg.ToSource()
+	if err != nil {
+		return nil, err
 	}
 
 	return r.buildSource(ctx, source)
