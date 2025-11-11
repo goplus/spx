@@ -29,6 +29,10 @@ func OnLinked() {
 	// Pure mode doesn't need linking callbacks
 }
 
+func UnlinkEngine() {
+	// Pure mode doesn't need unlinking
+}
+
 func CreateMgrs() []IManager {
 	return createMgrs()
 }

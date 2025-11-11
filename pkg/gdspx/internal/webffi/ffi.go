@@ -9,6 +9,7 @@ import (
 var (
 	callbacks     engine.CallbackInfo
 	hasInitEngine bool
+	exitChan      chan struct{} // channel to unblock when exit is requested
 )
 
 func RegisterFuncs() {
@@ -21,14 +22,23 @@ func Link() bool {
 	API.loadProcAddresses()
 	return !hasInitEngine
 }
+
 func Linked() {
 	if !hasInitEngine { // adapt for ixgo
 		gdspxOnEngineStart(js.Value{}, nil)
 	}
 
-	// wasm need Block forever
-	c := make(chan struct{})
-	<-c
+	// Direct WASM compilation mode: need to block to keep the process alive
+	exitChan = make(chan struct{})
+	<-exitChan // block until RequestExit is called
+}
+
+// Unlink signals the exit channel to unblock Linked()
+func Unlink() {
+	if exitChan != nil {
+		close(exitChan)
+		exitChan = nil
+	}
 }
 
 // this function will only be called in wasm mode, it will not be called in ixgo (interpreter) mode.

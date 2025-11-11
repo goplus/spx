@@ -254,5 +254,10 @@ func OnPanic(name, stack string) {
 }
 
 func RequestExit(exitCode int64) {
-	extMgr.RequestExit(exitCode)
+	if gde.IsWebIntepreterMode() {
+		fmt.Printf("Web interpreter mode exit with code: %d\n", exitCode)
+		gde.UnlinkEngine()
+	} else {
+		extMgr.RequestExit(exitCode)
+	}
 }

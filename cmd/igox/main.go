@@ -5,13 +5,13 @@ package main
 import (
 	"archive/zip"
 	"bytes"
-	"context"
 	"errors"
 	"fmt"
 	"log"
 	"log/slog"
 	"os"
 	"syscall/js"
+	"time"
 	_ "unsafe"
 
 	"github.com/goplus/builder/tools/ai"
@@ -20,7 +20,7 @@ import (
 	"github.com/goplus/ixgo/xgobuild"
 	"github.com/goplus/mod/modfile"
 	_ "github.com/goplus/reflectx/icall/icall2048"
-	_ "github.com/goplus/spx/v2"
+	"github.com/goplus/spx/v2"
 	"github.com/goplus/spx/v2/cmd/igox/zipfs"
 	goxfs "github.com/goplus/spx/v2/fs"
 )
@@ -125,14 +125,14 @@ type SpxRunner struct {
 	ctx   *ixgo.Context
 	entry *interpCacheEntry
 	debug bool
+	game  spx.Gamer
 }
 
 // interpCacheEntry stores the build result.
 type interpCacheEntry struct {
-	hash       string
-	cancelFunc context.CancelFunc
-	interp     *ixgo.Interp
-	fs         *zipfs.ZipFs
+	hash   string
+	interp *ixgo.Interp
+	fs     *zipfs.ZipFs
 }
 
 // SpxRunner encapsulates the build and run functionality for SPX code with hash-based caching.
@@ -232,20 +232,15 @@ func (r *SpxRunner) Build(this js.Value, args []js.Value) any {
 	// Get files object
 	inputArray := args[0]
 
-	// Convert Uint8Array to Go byte slice
-	length := inputArray.Get("length").Int()
-	zipData := make([]byte, length)
-	js.CopyBytesToGo(zipData, inputArray)
-
 	// Get pre-computed hash from args[1]
 	filesHash := args[1].String()
 
 	fmt.Printf("Files hash: %s\n", filesHash)
-	return r.build(zipData, filesHash)
+	return r.build(inputArray, filesHash)
 }
 
 // build performs the actual build process given the files and their hash.
-func (r *SpxRunner) build(zipData []byte, filesHash string) any {
+func (r *SpxRunner) build(data js.Value, filesHash string) any {
 	// Check cache
 	if r.entry != nil {
 		println("Checking cache...", r.entry.hash, filesHash)
@@ -257,6 +252,11 @@ func (r *SpxRunner) build(zipData []byte, filesHash string) any {
 			r.Release()
 		}
 	}
+
+	// Convert Uint8Array to Go byte slice only when needed
+	length := data.Get("length").Int()
+	zipData := make([]byte, length)
+	js.CopyBytesToGo(zipData, data)
 
 	// Initialize zip file system
 	zipReader, err := zip.NewReader(bytes.NewReader(zipData), int64(len(zipData)))
@@ -271,7 +271,10 @@ func (r *SpxRunner) build(zipData []byte, filesHash string) any {
 
 	// Use SpxRunner's shared context
 	ctx := r.ctx
-
+	ctx.RegisterExternal("github.com/goplus/spx/v2.Gopt_Game_Main", func(game spx.Gamer, sprites ...spx.Sprite) {
+		r.game = game
+		spx.Gopt_Game_Main(game, sprites...)
+	})
 	ai.SetDefaultTransport(wasmtrans.New(
 		wasmtrans.WithEndpoint(aiInteractionAPIEndpoint),
 		wasmtrans.WithTokenProvider(aiInteractionAPITokenProvider),
@@ -280,23 +283,9 @@ func (r *SpxRunner) build(zipData []byte, filesHash string) any {
 		"AI-generated descriptive summary of the game world": aiDescription,
 	})
 
-	source, err := xgobuild.BuildFSDir(ctx, fs, "")
+	interp, err := r.buildInterp(ctx, fs)
 	if err != nil {
-		return fmt.Errorf("Failed to build XGo source: %w", err)
-	}
-
-	pkg, err := ctx.LoadFile("main.go", source)
-	if err != nil {
-		return fmt.Errorf("Failed to load XGo source: %w", err)
-	}
-
-	interp, err := ctx.NewInterp(pkg)
-	if err != nil {
-		return fmt.Errorf("Failed to create interp: %w", err)
-	}
-	if r.debug {
-		capacity, allocate, available := ixgo.IcallStat()
-		fmt.Printf("Icall Capacity: %d, Allocate: %d, Available: %d\n", capacity, allocate, available)
+		return err
 	}
 
 	// Cache build result
@@ -309,6 +298,42 @@ func (r *SpxRunner) build(zipData []byte, filesHash string) any {
 	fmt.Printf("Build completed and cached with hash: %s\n", filesHash)
 
 	return nil
+}
+
+// buildInterp builds an interpreter from the given file system.
+// This function is extracted for easier unit testing with mock fs.
+func (r *SpxRunner) buildInterp(ctx *ixgo.Context, fs *zipfs.ZipFs) (*ixgo.Interp, error) {
+	source, err := xgobuild.BuildFSDir(ctx, fs, "")
+	if err != nil {
+		return nil, fmt.Errorf("Failed to build XGo source: %w", err)
+	}
+
+	return r.buildSource(ctx, source)
+}
+
+// buildSource builds an interpreter from the given source code.
+// This function is extracted for easier unit testing with mock source.
+func (r *SpxRunner) buildSource(ctx *ixgo.Context, source []byte) (*ixgo.Interp, error) {
+	start := time.Now()
+	pkg, err := ctx.LoadFile("main.go", source)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to load XGo source: %w", err)
+	}
+
+	fmt.Printf("Load time: %v\n", time.Since(start))
+
+	interp, err := ctx.NewInterp(pkg)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to create interp: %w", err)
+	}
+
+	fmt.Printf("Interp creation time: %v\n", time.Since(start))
+
+	if r.debug {
+		capacity, allocate, available := ixgo.IcallStat()
+		fmt.Printf("Icall Capacity: %d, Allocate: %d, Available: %d\n", capacity, allocate, available)
+	}
+	return interp, nil
 }
 
 // Run executes the cached interpreter, automatically building if necessary.
@@ -333,11 +358,6 @@ func (r *SpxRunner) Run(this js.Value, args []js.Value) any {
 	// Get files object
 	inputArray := args[0]
 
-	// Convert Uint8Array to Go byte slice
-	length := inputArray.Get("length").Int()
-	zipData := make([]byte, length)
-	js.CopyBytesToGo(zipData, inputArray)
-
 	// Get pre-computed hash from args[1]
 	filesHash := args[1].String()
 
@@ -347,42 +367,25 @@ func (r *SpxRunner) Run(this js.Value, args []js.Value) any {
 	if r.entry == nil || r.entry.hash != filesHash {
 		// Cache miss, need to build first
 		fmt.Printf("Cache miss, building for hash: %s\n", filesHash)
-		if buildErr := r.build(zipData, filesHash); buildErr != nil {
+		if buildErr := r.build(inputArray, filesHash); buildErr != nil {
 			return buildErr
 		}
 	} else {
 		fmt.Printf("Cache hit, using cached interp for hash: %s\n", filesHash)
 	}
 
-	// Cancel previous execution if exists
-	if r.entry.cancelFunc != nil {
-		fmt.Println("Cancelling previous execution...")
-		r.entry.cancelFunc()
-	}
-
 	// Run interp in background goroutine (non-blocking)
 	go func() {
-		// Create cancellable context
-		runCtx, cancel := context.WithCancel(context.Background())
-		r.entry.cancelFunc = cancel
-
-		// Set context for ixgo
-		r.ctx.RunContext = runCtx
-
 		interp := r.entry.interp
 		code, runErr := r.ctx.RunInterp(interp, "main.go", nil)
-
-		if runErr != nil && runErr != context.Canceled {
-			fmt.Printf("Failed to run XGo source (code %d): %v\n", code, runErr)
+		fmt.Printf("Run completed with code: %d %v\n", code, runErr)
+		if runErr != nil {
 			js.Global().Call("gdspx_ext_on_runtime_panic", runErr.Error())
 			js.Global().Call("gdspx_ext_request_exit", 1)
 			return
 		}
 
 		js.Global().Call("gdspx_ext_request_exit", 0)
-		// Clear cancel func after successful completion
-		r.entry.cancelFunc = nil
-		fmt.Printf("run done")
 	}()
 
 	return nil
@@ -393,25 +396,21 @@ func (r *SpxRunner) Run(this js.Value, args []js.Value) any {
 // Returns: nil on success, error if no execution is running.
 func (r *SpxRunner) Cancel(this js.Value, args []js.Value) any {
 	fmt.Printf("Cancel requested\n")
-	if r.entry == nil || r.entry.cancelFunc == nil {
+	if r.entry == nil {
 		return errors.New("Cancel: no execution is running")
 	}
 
-	fmt.Printf("Cancelling game execution...\n")
-	r.entry.cancelFunc()
-	r.entry.cancelFunc = nil
+	go func() {
+		r.entry.interp.Abort()
+		r.game.Abort()
+		fmt.Printf("Game aborted\n")
+	}()
 
 	return nil
 }
 
 // Release releases resources held by the SpxRunner.
 func (r *SpxRunner) Release() {
-	// Cancel running execution first
-	if r.entry.cancelFunc != nil {
-		r.entry.cancelFunc()
-		r.entry.cancelFunc = nil
-	}
-
 	// Clear context
 	r.ctx.RunContext = nil
 	if r.entry != nil && r.entry.interp != nil {

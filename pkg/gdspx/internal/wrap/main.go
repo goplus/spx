@@ -31,6 +31,10 @@ func OnLinked() {
 	ffi.Linked()
 }
 
+func UnlinkEngine() {
+	ffi.Unlink()
+}
+
 func CreateMgrs() []IManager {
 	return createMgrs()
 }

@@ -170,6 +170,7 @@ type spriteCollisionInfo struct {
 
 type Gamer interface {
 	engine.IGame
+	Abort()
 	initGame(sprites []Sprite) *Game
 }
 
@@ -2044,28 +2045,8 @@ func (p *Game) SetWindowSize(width int64, height int64) {
 // Abort aborts the game execution with the given exit code.
 // This will break all game loops and terminate the SPX game execution.
 // The actual engine.RequestExit() will be called by ixgo interpreter after detecting the exit.
-func (p *Game) Abort__0(code int) {
-	p.exited.Store(true)
-	p.exitCode.Store(int32(code))
-
-	// Send an exit event to wake up eventLoop if it's blocked on WaitForChan
-	// This ensures the eventLoop can check exitRequested flag immediately
-	select {
-	case p.events <- &eventExit{}:
-	default:
-		// Channel is full or closed, that's ok - eventLoop will exit anyway
-	}
-
-	// Note: We don't call engine.RequestExit() here because:
-	// 1. This only stops the engine.wasm (rendering), not ixgo.wasm (interpreter)
-	// 2. The ixgo interpreter will detect the exit when runInterp() returns
-	// 3. The ixgo interpreter will call engine.RequestExit() with the exit code
-}
-
-// Abort aborts the game execution with exit code 0 (success).
-// This will break all game loops and terminate the SPX game execution.
-func (p *Game) Abort__1() {
-	p.Abort__0(0)
+func (p *Game) Abort() {
+	engine.RequestExit(0)
 }
 
 // -----------------------------------------------------------------------------

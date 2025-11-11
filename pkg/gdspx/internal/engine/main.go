@@ -32,6 +32,10 @@ func Link(engineCallback EngineCallbackInfo) {
 	wrap.OnLinked()
 }
 
+func UnlinkEngine() {
+	wrap.UnlinkEngine()
+}
+
 func onEngineStart() {
 	for _, mgr := range mgrs {
 		mgr.OnStart()
