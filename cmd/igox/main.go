@@ -218,7 +218,6 @@ func Gopt_Player_Gopx_OnCmd[T any](p *Player, handler func(cmd T) error) {
 // Parameters:
 //
 //	args[0]: Uint8Array - zip data of the project files
-//	args[1]: string - hash of the files (pre-computed by caller)
 //
 // Returns: nil on success, error on build failure.
 func (r *SpxRunner) Build(this js.Value, args []js.Value) any {
@@ -247,14 +246,6 @@ func (r *SpxRunner) Build(this js.Value, args []js.Value) any {
 
 	// Use SpxRunner's shared context
 	ctx := r.ctx
-
-	ai.SetDefaultTransport(wasmtrans.New(
-		wasmtrans.WithEndpoint(aiInteractionAPIEndpoint),
-		wasmtrans.WithTokenProvider(aiInteractionAPITokenProvider),
-	))
-	ai.SetDefaultKnowledgeBase(map[string]any{
-		"AI-generated descriptive summary of the game world": aiDescription,
-	})
 
 	source, err := xgobuild.BuildFSDir(ctx, fs, "")
 	if err != nil {
@@ -296,6 +287,14 @@ func (r *SpxRunner) Run(this js.Value, args []js.Value) any {
 	if r.entry == nil || r.entry.interp == nil {
 		return errors.New("Run: Build() must be called first")
 	}
+
+	ai.SetDefaultTransport(wasmtrans.New(
+		wasmtrans.WithEndpoint(aiInteractionAPIEndpoint),
+		wasmtrans.WithTokenProvider(aiInteractionAPITokenProvider),
+	))
+	ai.SetDefaultKnowledgeBase(map[string]any{
+		"AI-generated descriptive summary of the game world": aiDescription,
+	})
 	// Run interp in background goroutine (non-blocking)
 	go func() {
 		interp := r.entry.interp
