@@ -318,24 +318,6 @@ func (r *SpxRunner) build(inputArray js.Value, filesHash string) any {
 //
 // Note: This method is idempotent - won't rebuild unnecessarily.
 func (r *SpxRunner) Run(this js.Value, args []js.Value) any {
-	if len(args) != 2 {
-		return errors.New("Run: missing files argument")
-	}
-
-	// Get files object
-	inputArray := args[0]
-
-	// Get pre-computed hash from args[1]
-	filesHash := args[1].String()
-
-	// Look for cached interp
-	if r.entry == nil || r.entry.hash != filesHash {
-		// Cache miss, need to build first
-		if buildErr := r.build(inputArray, filesHash); buildErr != nil {
-			return buildErr
-		}
-	}
-
 	// Run interp in background goroutine (non-blocking)
 	go func() {
 		interp := r.entry.interp
