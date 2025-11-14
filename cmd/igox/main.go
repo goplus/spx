@@ -305,14 +305,8 @@ func (r *SpxRunner) build(inputArray js.Value, filesHash string) any {
 
 // Run executes the cached interpreter, automatically building if necessary.
 //
-// Parameters:
-//
-//	args[0]: JS object with same structure as Build()
-//
 // Behavior:
-//  1. Computes hash of input files
-//  2. If cache miss or no cached build: Automatically calls Build()
-//  3. Executes the interpreter
+//  1. Executes the interpreter
 //
 // Returns: nil on success, error on build or execution failure.
 //
