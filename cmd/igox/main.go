@@ -225,6 +225,10 @@ func (r *SpxRunner) Build(this js.Value, args []js.Value) any {
 		return errors.New("Build: missing files argument")
 	}
 
+	if r.entry != nil && r.entry.interp != nil {
+		r.Release()
+	}
+
 	// Get files object
 	inputArray := args[0]
 
