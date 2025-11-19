@@ -9,8 +9,8 @@ github.com/goplus/builder/tools/ai v0.0.0-20251014030930-ac405dbe65e9 h1:p15bf31
 github.com/goplus/builder/tools/ai v0.0.0-20251014030930-ac405dbe65e9/go.mod h1:jhQQ+yC3iLd6/GGnRleF+536nnjoLm5qvFwrNJvSezo=
 github.com/goplus/gogen v1.19.5 h1:YWPwpRA1PusPhptv9jKg/XiN+AQGiAD9r6I86mJ3lR4=
 github.com/goplus/gogen v1.19.5/go.mod h1:owX2e1EyU5WD+Nm6oH2m/GXjLdlBYcwkLO4wN8HHXZI=
-github.com/goplus/ixgo v0.57.0 h1:qpz1ofixBKdPIdYPzcI9lpKoUcKzj16WpjVA3hJuLoI=
-github.com/goplus/ixgo v0.57.0/go.mod h1:gA6EKc46iWR6kX4bCYiKnEV8QtpxxvGcDRyT+5vO/ic=
+github.com/goplus/ixgo v0.59.1-0.20251119042043-c643e44b5f5c h1:Nr6eBp1eJAtFA3NfssLZbV8bmjIc+TZK3pXKiUfI2Lc=
+github.com/goplus/ixgo v0.59.1-0.20251119042043-c643e44b5f5c/go.mod h1:oreqPAcYBb/sEx6oCl7/kiCawfHQm08e6OAwYVi5aMM=
 github.com/goplus/mod v0.17.1 h1:ITovxDcc5zbURV/Wrp3/SBsYLgC1KrxY6pq1zMM2V94=
 github.com/goplus/mod v0.17.1/go.mod h1:iXEszBKqi38BAyQApBPyQeurLHmQN34YMgC2ZNdap50=
 github.com/goplus/reflectx v1.5.0 h1:d6THLWzrQJCIAnNzyXJDA7J1sxj8ELzKH+Wj17X/dtE=

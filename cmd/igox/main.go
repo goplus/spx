@@ -121,9 +121,10 @@ var defaultRunner *SpxRunner = NewSpxRunner()
 
 // SpxRunner encapsulates the build and run functionality for SPX code.
 type SpxRunner struct {
-	ctx   *ixgo.Context
-	entry *interpCacheEntry
-	debug bool
+	ctx      *ixgo.Context
+	buildCtx *xgobuild.Context
+	entry    *interpCacheEntry
+	debug    bool
 }
 
 // interpCacheEntry stores the build result.
@@ -206,10 +207,15 @@ func Gopt_Player_Gopx_OnCmd[T any](p *Player, handler func(cmd T) error) {
 		return nil
 	}
 
-	return &SpxRunner{
+	xgoCtx := xgobuild.NewContext(ctx)
+	xgoCtx.Importer = ctx.Importer
+	runer := &SpxRunner{
 		ctx:   ctx,
 		debug: false,
 	}
+
+	runer.prebuildSSA()
+	return runer
 }
 
 // Build builds the SPX code from the provided files object.
@@ -318,13 +324,17 @@ func (r *SpxRunner) Run(this js.Value, args []js.Value) any {
 
 // Release releases resources held by the SpxRunner.
 func (r *SpxRunner) Release() {
-	// Clear context
-	r.ctx.RunContext = nil
 	if r.entry != nil && r.entry.interp != nil {
 		r.entry.interp.UnsafeRelease()
 		r.entry.fs.Close()
 		r.entry = nil
 	}
+
+	r.prebuildSSA()
+}
+
+func (r *SpxRunner) prebuildSSA() {
+	r.ctx.PrebuildSSA("github.com/goplus/spx/v2", "github.com/goplus/builder/tools/ai")
 }
 
 func logWithCallerInfo(msg string, frame *ixgo.Frame) {

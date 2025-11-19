@@ -6,7 +6,7 @@ tool github.com/goplus/ixgo/cmd/qexp
 
 require (
 	github.com/goplus/builder/tools/ai v0.0.0-20251014030930-ac405dbe65e9
-	github.com/goplus/ixgo v0.57.0
+	github.com/goplus/ixgo v0.59.1-0.20251119042043-c643e44b5f5c
 	github.com/goplus/mod v0.17.1
 	github.com/goplus/reflectx v1.5.0
 	github.com/goplus/spx/v2 v2.0.0-pre.20
