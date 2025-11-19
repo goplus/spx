@@ -3,8 +3,6 @@
 package main
 
 import (
-	"archive/zip"
-	"bytes"
 	"errors"
 	"fmt"
 	"log"
@@ -20,7 +18,7 @@ import (
 	"github.com/goplus/mod/modfile"
 	_ "github.com/goplus/reflectx/icall/icall2048"
 	_ "github.com/goplus/spx/v2"
-	"github.com/goplus/spx/v2/cmd/igox/zipfs"
+	"github.com/goplus/spx/v2/cmd/igox/memfs"
 	goxfs "github.com/goplus/spx/v2/fs"
 )
 
@@ -129,7 +127,7 @@ type SpxRunner struct {
 // interpCacheEntry stores the build result.
 type interpCacheEntry struct {
 	interp *ixgo.Interp
-	fs     *zipfs.ZipFs
+	fs     *memfs.MemFs
 }
 
 // SpxRunner encapsulates the build and run functionality for SPX code with hash-based caching.
@@ -229,38 +227,28 @@ func (r *SpxRunner) Build(this js.Value, args []js.Value) any {
 		r.Release()
 	}
 
-	// Get files object
-	inputArray := args[0]
-
-	// Convert Uint8Array to Go byte slice
-	length := inputArray.Get("length").Int()
-	zipData := make([]byte, length)
-	js.CopyBytesToGo(zipData, inputArray)
-
-	// Initialize zip file system
-	zipReader, err := zip.NewReader(bytes.NewReader(zipData), int64(len(zipData)))
-	if err != nil {
-		return fmt.Errorf("Failed to read zip data: %w", err)
+	input := args[0]
+	if input.Type() != js.TypeObject || !input.Get("length").IsUndefined() {
+		return errors.New("Build: only support object map[path]Uint8Array")
 	}
-	fs := zipfs.NewZipFsFromReader(zipReader)
-	// Configure spx to load project files from zip-based file system.
+
+	filesMap, err := ConvertJSFilesToMap(input)
+	if err != nil {
+		return fmt.Errorf("Build: failed to get files: %w", err)
+	}
+	fs := memfs.NewMemFs(filesMap)
 	goxfs.RegisterSchema("", func(path string) (goxfs.Dir, error) {
-		return fs.Chrooted(path), nil
+		return fs.Chroot(path)
 	})
-
-	// Use SpxRunner's shared context
 	ctx := r.ctx
-
 	source, err := xgobuild.BuildFSDir(ctx, fs, "")
 	if err != nil {
 		return fmt.Errorf("Failed to build XGo source: %w", err)
 	}
-
 	pkg, err := ctx.LoadFile("main.go", source)
 	if err != nil {
 		return fmt.Errorf("Failed to load XGo source: %w", err)
 	}
-
 	interp, err := ctx.NewInterp(pkg)
 	if err != nil {
 		return fmt.Errorf("Failed to create interp: %w", err)
@@ -269,13 +257,10 @@ func (r *SpxRunner) Build(this js.Value, args []js.Value) any {
 		capacity, allocate, available := ixgo.IcallStat()
 		fmt.Printf("Icall Capacity: %d, Allocate: %d, Available: %d\n", capacity, allocate, available)
 	}
-
-	// Cache build result
 	r.entry = &interpCacheEntry{
 		interp: interp,
 		fs:     fs,
 	}
-
 	return nil
 }
 
@@ -325,6 +310,29 @@ func (r *SpxRunner) Release() {
 		r.entry.fs.Close()
 		r.entry = nil
 	}
+}
+
+func ConvertJSFilesToMap(input js.Value) (map[string][]byte, error) {
+	keys := js.Global().Get("Object").Call("keys", input)
+	n := keys.Length()
+	filesMap := make(map[string][]byte, n)
+	for i := 0; i < n; i++ {
+		name := keys.Index(i).String()
+		val := input.Get(name)
+		var u8 js.Value
+		if val.InstanceOf(js.Global().Get("Uint8Array")) {
+			u8 = val
+		} else if val.InstanceOf(js.Global().Get("ArrayBuffer")) {
+			u8 = js.Global().Get("Uint8Array").New(val)
+		} else {
+			return nil, fmt.Errorf("Build: unsupported file value type for %s", name)
+		}
+		length := u8.Get("length").Int()
+		data := make([]byte, length)
+		js.CopyBytesToGo(data, u8)
+		filesMap[name] = data
+	}
+	return filesMap, nil
 }
 
 func logWithCallerInfo(msg string, frame *ixgo.Frame) {
