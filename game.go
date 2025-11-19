@@ -521,7 +521,7 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 		windowScale = proj.WindowScale
 	}
 	p.windowScale = windowScale
-	p.stretchMode = proj.StretchMode
+	p.stretchMode = proj.StretchMode == nil || *proj.StretchMode
 	p.debug = proj.Debug
 
 	// when use tilemap , disable backdrop

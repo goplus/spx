@@ -127,7 +127,7 @@ type projConfig struct {
 	CurrentCostumeIndex *int              `json:"currentCostumeIndex"` //this property is deprecated, use BackdropIndex instead
 	SceneIndex          int               `json:"sceneIndex"`          //this property is deprecated, use BackdropIndex instead
 
-	StretchMode bool    `json:"stretchMode"` // whether to use stretch mode, default false
+	StretchMode *bool   `json:"stretchMode"` // whether to use stretch mode, default true
 	WindowScale float64 `json:"windowScale"`
 
 	AutoSetCollisionLayer *bool `json:"autoSetCollisionLayer"` // whether to auto set collision layer, default true
