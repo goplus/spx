@@ -168,7 +168,7 @@ func logErrorAndExit(err error) {
 
 func main() {
 	debug := false
-	restore := profiler.EnableTemporarily()
+	//restore := profiler.EnableTemporarily()
 
 	js.Global().Set("setAIDescription", js.FuncOf(setAIDescription))
 	js.Global().Set("setAIInteractionAPIEndpoint", js.FuncOf(setAIInteractionAPIEndpoint))
@@ -299,7 +299,7 @@ func Gopt_Player_Gopx_OnCmd[T any](p *Player, handler func(cmd T) error) {
 	}
 	profiler.EndSample("Create NewInterp")
 
-	restore()
+	//restore()
 	code, err := ctx.RunInterp(interp, "main.go", nil)
 	if err != nil {
 		logErrorAndExit(fmt.Errorf("Failed to run XGo source (code %d): %w", code, err))

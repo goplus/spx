@@ -5,5 +5,5 @@ package profiler
 
 func init() {
 	Enabled = false
-	println("Profiler Disabled (macro_off)")
+	//println("Profiler Disabled (macro_off)")
 }

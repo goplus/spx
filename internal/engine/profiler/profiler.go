@@ -53,10 +53,8 @@ func SetGco(co *coroutine.Coroutines) {
 func EnableTemporarily() func() {
 	prev := Enabled
 	Enabled = true
-	fmt.Println("Profiler temporarily enabled, previous state:", prev)
 	return func() {
 		Enabled = prev
-		fmt.Println("Profiler restored to previous state:", Enabled)
 	}
 }
 
