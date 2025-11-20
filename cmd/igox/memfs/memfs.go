@@ -8,14 +8,12 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 )
 
 // MemFs is an in-memory file system that stores files as a map of paths to byte slices.
 // It is safe for concurrent use. Chrooted instances share the underlying file map.
 type MemFs struct {
-	mu    sync.RWMutex
 	files map[string][]byte
 	root  string
 }
@@ -165,9 +163,7 @@ func (m *MemFs) ReadDir(dirname string) ([]fs.DirEntry, error) {
 // ReadFile returns the file content for filename
 func (m *MemFs) ReadFile(filename string) ([]byte, error) {
 	filename = path.Clean(path.Join(m.root, filename))
-	m.mu.RLock()
 	data, ok := m.files[filename]
-	m.mu.RUnlock()
 	if !ok {
 		return nil, fs.ErrNotExist
 	}
@@ -203,9 +199,7 @@ func (rsc *readSeekCloser) Close() error {
 // Open opens a file for reading
 func (m *MemFs) Open(file string) (io.ReadCloser, error) {
 	file = path.Clean(path.Join(m.root, file))
-	m.mu.RLock()
 	data, ok := m.files[file]
-	m.mu.RUnlock()
 	if !ok {
 		return nil, fs.ErrNotExist
 	}
@@ -222,15 +216,11 @@ func (m *MemFs) Close() error {
 // AddFile adds or updates a file in the file system
 func (m *MemFs) AddFile(filename string, data []byte) {
 	filename = path.Clean(filename)
-	m.mu.Lock()
 	m.files[filename] = data
-	m.mu.Unlock()
 }
 
 // RemoveFile removes a file from the file system
 func (m *MemFs) RemoveFile(filename string) {
 	filename = path.Clean(filename)
-	m.mu.Lock()
 	delete(m.files, filename)
-	m.mu.Unlock()
 }
