@@ -234,8 +234,7 @@ class GameApp {
                 nonAssetFiles[path] = new Uint8Array(file.content);
             }
         });
-        const zippedData = fflate.zipSync(nonAssetFiles, { level: 0 });
-        window.ixgo_build(zippedData);
+        window.ixgo_build(nonAssetFiles);
     }
 
     async startGame() {
