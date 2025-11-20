@@ -2,7 +2,6 @@ package memfs
 
 import (
 	"bytes"
-	"errors"
 	"io"
 	"io/fs"
 	"path"
@@ -10,6 +9,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 )
 
 type MemFs struct {
@@ -18,29 +18,54 @@ type MemFs struct {
 	root  string
 }
 
+// memDirEntry 实现 fs.DirEntry 接口
 type memDirEntry struct {
 	name  string
 	isDir bool
+	size  int64
 }
 
-func (mde *memDirEntry) Name() string {
-	return mde.name
+func (e *memDirEntry) Name() string {
+	return e.name
 }
 
-func (mde *memDirEntry) IsDir() bool {
-	return mde.isDir
+func (e *memDirEntry) IsDir() bool {
+	return e.isDir
 }
 
-func (mde *memDirEntry) Type() fs.FileMode {
-	if mde.isDir {
+func (e *memDirEntry) Type() fs.FileMode {
+	if e.isDir {
 		return fs.ModeDir
 	}
 	return 0
 }
 
-func (mde *memDirEntry) Info() (fs.FileInfo, error) {
-	return nil, errors.New("not implemented")
+func (e *memDirEntry) Info() (fs.FileInfo, error) {
+	return &memFileInfo{
+		name:  e.name,
+		size:  e.size,
+		isDir: e.isDir,
+	}, nil
 }
+
+// memFileInfo 实现 fs.FileInfo 接口
+type memFileInfo struct {
+	name  string
+	size  int64
+	isDir bool
+}
+
+func (fi *memFileInfo) Name() string { return fi.name }
+func (fi *memFileInfo) Size() int64  { return fi.size }
+func (fi *memFileInfo) Mode() fs.FileMode {
+	if fi.isDir {
+		return fs.ModeDir | 0755
+	}
+	return 0644
+}
+func (fi *memFileInfo) ModTime() time.Time { return time.Time{} }
+func (fi *memFileInfo) IsDir() bool        { return fi.isDir }
+func (fi *memFileInfo) Sys() interface{}   { return nil }
 
 // NewMemFs creates a new in-memory file system
 func NewMemFs(files map[string][]byte) *MemFs {
@@ -51,11 +76,9 @@ func NewMemFs(files map[string][]byte) *MemFs {
 
 // Chroot creates a new MemFs with a different root
 func (m *MemFs) Chroot(root string) (*MemFs, error) {
-	clean := path.Clean(root)
-	clean = strings.TrimPrefix(clean, "/")
 	return &MemFs{
 		files: m.files,
-		root:  clean,
+		root:  root,
 	}, nil
 }
 
@@ -66,43 +89,71 @@ func (m *MemFs) ReadDir(dirname string) ([]fs.DirEntry, error) {
 		dirname += "/"
 	}
 	if dirname == "/" {
-		dirname = ""
+		dirname = "./"
 	}
 
-	entries := make(map[string]bool) // value indicates if it's a directory
-	m.mu.RLock()
-	for name := range m.files {
-		if !strings.HasPrefix(name, dirname) {
+	// 用于去重
+	seen := make(map[string]*memDirEntry)
+
+	for name, content := range m.files {
+		// 跳过不在目标目录下的文件
+		if !strings.HasPrefix(name, dirname) && dirname != "./" {
 			continue
 		}
-		rel := strings.TrimPrefix(name, dirname)
-		parts := strings.SplitN(rel, "/", 2)
-		if len(parts) > 0 && parts[0] != "" {
-			// If there are multiple parts, this is a subdirectory
-			isDir := len(parts) > 1
-			if existing, ok := entries[parts[0]]; ok {
-				// If already exists and either is a directory, mark as directory
-				entries[parts[0]] = existing || isDir
-			} else {
-				entries[parts[0]] = isDir
+
+		// 如果是根目录，特殊处理
+		var relativePath string
+		if dirname == "./" {
+			relativePath = name
+		} else {
+			relativePath = strings.TrimPrefix(name, dirname)
+		}
+
+		// 如果相对路径为空，跳过（说明就是目录本身）
+		if relativePath == "" {
+			continue
+		}
+
+		// 检查是否是直接子项
+		parts := strings.SplitN(relativePath, "/", 2)
+		if len(parts) == 0 {
+			continue
+		}
+
+		entryName := parts[0]
+
+		// 判断是文件还是目录
+		isDir := len(parts) > 1 && parts[1] != ""
+
+		if existing, exists := seen[entryName]; exists {
+			// 如果已存在，且当前判断为目录，则更新为目录
+			if isDir && !existing.isDir {
+				existing.isDir = true
+			}
+		} else {
+			var size int64
+			if !isDir {
+				size = int64(len(content))
+			}
+
+			seen[entryName] = &memDirEntry{
+				name:  entryName,
+				isDir: isDir,
+				size:  size,
 			}
 		}
 	}
-	m.mu.RUnlock()
 
-	if len(entries) == 0 {
+	if len(seen) == 0 {
 		return nil, fs.ErrNotExist
 	}
 
-	var dirEntries []fs.DirEntry
-	for name, isDir := range entries {
-		dirEntries = append(dirEntries, &memDirEntry{
-			name:  name,
-			isDir: isDir,
-		})
+	// 转换为切片并排序
+	dirEntries := make([]fs.DirEntry, 0, len(seen))
+	for _, entry := range seen {
+		dirEntries = append(dirEntries, entry)
 	}
 
-	// Sort entries
 	sort.Slice(dirEntries, func(i, j int) bool {
 		return dirEntries[i].Name() < dirEntries[j].Name()
 	})
