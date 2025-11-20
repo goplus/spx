@@ -18,7 +18,7 @@ type MemFs struct {
 	root  string
 }
 
-// memDirEntry 实现 fs.DirEntry 接口
+// memDirEntry implements the fs.DirEntry interface
 type memDirEntry struct {
 	name  string
 	isDir bool
@@ -48,7 +48,7 @@ func (e *memDirEntry) Info() (fs.FileInfo, error) {
 	}, nil
 }
 
-// memFileInfo 实现 fs.FileInfo 接口
+// memFileInfo implements the fs.FileInfo interface
 type memFileInfo struct {
 	name  string
 	size  int64
@@ -92,16 +92,16 @@ func (m *MemFs) ReadDir(dirname string) ([]fs.DirEntry, error) {
 		dirname = "./"
 	}
 
-	// 用于去重
+	// used for deduplication
 	seen := make(map[string]*memDirEntry)
 
 	for name, content := range m.files {
-		// 跳过不在目标目录下的文件
+		// skip files that are not under the target directory
 		if !strings.HasPrefix(name, dirname) && dirname != "./" {
 			continue
 		}
 
-		// 如果是根目录，特殊处理
+		// special handling for the root directory
 		var relativePath string
 		if dirname == "./" {
 			relativePath = name
@@ -109,12 +109,12 @@ func (m *MemFs) ReadDir(dirname string) ([]fs.DirEntry, error) {
 			relativePath = strings.TrimPrefix(name, dirname)
 		}
 
-		// 如果相对路径为空，跳过（说明就是目录本身）
+		// if the relative path is empty, skip (it's the directory itself)
 		if relativePath == "" {
 			continue
 		}
 
-		// 检查是否是直接子项
+		// check whether it's a direct child
 		parts := strings.SplitN(relativePath, "/", 2)
 		if len(parts) == 0 {
 			continue
@@ -122,11 +122,11 @@ func (m *MemFs) ReadDir(dirname string) ([]fs.DirEntry, error) {
 
 		entryName := parts[0]
 
-		// 判断是文件还是目录
+		// determine whether it's a file or a directory
 		isDir := len(parts) > 1 && parts[1] != ""
 
 		if existing, exists := seen[entryName]; exists {
-			// 如果已存在，且当前判断为目录，则更新为目录
+			// if already exists and currently determined to be a directory, update to directory
 			if isDir && !existing.isDir {
 				existing.isDir = true
 			}
@@ -147,8 +147,7 @@ func (m *MemFs) ReadDir(dirname string) ([]fs.DirEntry, error) {
 	if len(seen) == 0 {
 		return nil, fs.ErrNotExist
 	}
-
-	// 转换为切片并排序
+	// convert map entries to a slice and sort
 	dirEntries := make([]fs.DirEntry, 0, len(seen))
 	for _, entry := range seen {
 		dirEntries = append(dirEntries, entry)
