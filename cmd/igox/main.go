@@ -312,18 +312,24 @@ func (r *SpxRunner) Release() {
 	}
 }
 
+// ConvertJSFilesToMap converts a JavaScript object containing file data into a Go map.
+// The input object should map file paths (strings) to file contents (Uint8Array or ArrayBuffer).
+//
+// Returns an error if any value is not a Uint8Array or ArrayBuffer.
 func ConvertJSFilesToMap(input js.Value) (map[string][]byte, error) {
 	keys := js.Global().Get("Object").Call("keys", input)
 	n := keys.Length()
 	filesMap := make(map[string][]byte, n)
+	uint8ArrayType := js.Global().Get("Uint8Array")
+	arrayBufferType := js.Global().Get("ArrayBuffer")
 	for i := 0; i < n; i++ {
 		name := keys.Index(i).String()
 		val := input.Get(name)
 		var u8 js.Value
-		if val.InstanceOf(js.Global().Get("Uint8Array")) {
+		if val.InstanceOf(uint8ArrayType) {
 			u8 = val
-		} else if val.InstanceOf(js.Global().Get("ArrayBuffer")) {
-			u8 = js.Global().Get("Uint8Array").New(val)
+		} else if val.InstanceOf(arrayBufferType) {
+			u8 = uint8ArrayType.New(val)
 		} else {
 			return nil, fmt.Errorf("Build: unsupported file value type for %s", name)
 		}

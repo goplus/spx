@@ -12,6 +12,8 @@ import (
 	"time"
 )
 
+// MemFs is an in-memory file system that stores files as a map of paths to byte slices.
+// It is safe for concurrent use. Chrooted instances share the underlying file map.
 type MemFs struct {
 	mu    sync.RWMutex
 	files map[string][]byte
