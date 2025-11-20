@@ -224,6 +224,7 @@
 			runnerWindow.onGameExit(function (code) {
 				console.error("onGameExit", code)
 			})
+
 			runnerWindow.spxIsForceDebugLog = true
 
 			let zipped = await (await (fetch(zipUrl))).arrayBuffer()

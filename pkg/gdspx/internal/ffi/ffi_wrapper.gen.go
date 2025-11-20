@@ -682,10 +682,14 @@ func CallExtRequestExit(
 	C.cgo_callfn_GDExtensionSpxExtRequestExit(arg0, arg1GdInt)
 
 }
-func CallExtRequestReset() {
+func CallExtRequestReset(
+	exit_code GdInt,
+) {
 	arg0 := (C.GDExtensionSpxExtRequestReset)(api.SpxExtRequestReset)
+	arg1GdInt := (C.GdInt)(exit_code)
 
-	C.cgo_callfn_GDExtensionSpxExtRequestReset(arg0)
+	C.cgo_callfn_GDExtensionSpxExtRequestReset(arg0, arg1GdInt)
+
 }
 func CallExtRequestRestart() {
 	arg0 := (C.GDExtensionSpxExtRequestRestart)(api.SpxExtRequestRestart)

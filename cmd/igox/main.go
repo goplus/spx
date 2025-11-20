@@ -141,7 +141,7 @@ func NewSpxRunner() *SpxRunner {
 	ctx.Lookup = func(root, path string) (dir string, found bool) {
 		err := fmt.Errorf("Failed to resolve package import %q", path)
 		js.Global().Call("gdspx_ext_on_runtime_panic", err.Error())
-		js.Global().Call("gdspx_ext_request_exit", 1)
+		js.Global().Call("gdspx_ext_request_reset", 1)
 		return
 	}
 	ctx.SetPanic(logWithPanicInfo)
@@ -292,7 +292,7 @@ func (r *SpxRunner) Run(this js.Value, args []js.Value) any {
 		if runErr != nil {
 			fmt.Printf("Failed to run XGo source (code %d): %v\n", code, runErr)
 			js.Global().Call("gdspx_ext_on_runtime_panic", runErr.Error())
-			js.Global().Call("gdspx_ext_request_exit", 1)
+			js.Global().Call("gdspx_ext_request_reset", 1)
 			return
 		}
 

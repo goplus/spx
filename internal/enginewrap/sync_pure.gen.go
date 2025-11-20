@@ -199,12 +199,12 @@ func (pself *debugMgrImpl) DebugDrawRect(pos Vec2, size Vec2, color Color)      
 func (pself *debugMgrImpl) DebugDrawLine(from Vec2, to Vec2, color Color)         {}
 
 // IExtMgr
-func (pself *extMgrImpl) RequestExit(exit_code int64) {}
-func (pself *extMgrImpl) RequestReset()               {}
-func (pself *extMgrImpl) RequestRestart()             {}
-func (pself *extMgrImpl) OnRuntimePanic(msg string)   {}
-func (pself *extMgrImpl) Pause()                      {}
-func (pself *extMgrImpl) Resume()                     {}
+func (pself *extMgrImpl) RequestExit(exit_code int64)  {}
+func (pself *extMgrImpl) RequestReset(exit_code int64) {}
+func (pself *extMgrImpl) RequestRestart()              {}
+func (pself *extMgrImpl) OnRuntimePanic(msg string)    {}
+func (pself *extMgrImpl) Pause()                       {}
+func (pself *extMgrImpl) Resume()                      {}
 func (pself *extMgrImpl) IsPaused() bool {
 	var _ret1 bool
 	return _ret1

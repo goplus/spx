@@ -181,8 +181,8 @@ class GameApp {
      * @returns Promise<void>
      */
     async initGame(files) {
-        this.updateEngineFiles(files);
-        this.buildGame(files);
+        await profiler.profile('updateEngineFiles', () => this.updateEngineFiles(files));
+        await profiler.profile('buildGame', () => this.buildGame(files));
     }
 
     /**
@@ -340,19 +340,12 @@ class GameApp {
             this.config.onProgress(value);
         }
     }
-    // async unpackData(game) {
-    //     await this.unpackEngineData(game)
-    //     await this.unpackGameData(game)
-    // }
 
     async unpackEngineData(game) {
         let packUrl = this.assetURLs[this.packName]
         let pckData = await (await fetch(packUrl)).arrayBuffer()
         await game.unpackEngineData(this.persistentPath, this.packName, pckData)
     }
-    // async unpackGameData(game) {
-    //     await game.unpackGameData(this.persistentPath, this.projectDataName, this.projectData)
-    // }
 
     callWorkerFunction(funcName, ...args) {
         this.workerMessageManager.callWorkerFunction(funcName, ...args)

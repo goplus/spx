@@ -251,7 +251,7 @@ typedef void (*GDExtensionSpxDebugDebugDrawRect)(GdVec2 pos, GdVec2 size, GdColo
 typedef void (*GDExtensionSpxDebugDebugDrawLine)(GdVec2 from, GdVec2 to, GdColor color);
 // SpxExt
 typedef void (*GDExtensionSpxExtRequestExit)(GdInt exit_code);
-typedef void (*GDExtensionSpxExtRequestReset)();
+typedef void (*GDExtensionSpxExtRequestReset)(GdInt exit_code);
 typedef void (*GDExtensionSpxExtRequestRestart)();
 typedef void (*GDExtensionSpxExtOnRuntimePanic)(GdString msg);
 typedef void (*GDExtensionSpxExtPause)();

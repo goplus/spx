@@ -311,9 +311,9 @@ func (pself *extMgrImpl) RequestExit(exit_code int64) {
 		gdx.ExtMgr.RequestExit(exit_code)
 	})
 }
-func (pself *extMgrImpl) RequestReset() {
+func (pself *extMgrImpl) RequestReset(exit_code int64) {
 	callInMainThread(func() {
-		gdx.ExtMgr.RequestReset()
+		gdx.ExtMgr.RequestReset(exit_code)
 	})
 }
 func (pself *extMgrImpl) RequestRestart() {

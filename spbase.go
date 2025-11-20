@@ -68,8 +68,8 @@ const (
 type costumeSetImage struct {
 	path   string
 	rc     costumeSetRect
-	width  int
-	height int
+	width  float64
+	height float64
 	nx     int
 }
 
@@ -162,11 +162,11 @@ func newCostume(base string, c *costumeConfig) *costume {
 	return value
 }
 
-func resolveImageSize(cfgWidth, cfgHeight int, path string) mathf.Vec2 {
+func resolveImageSize(cfgWidth, cfgHeight float64, path string) mathf.Vec2 {
 	if cfgWidth > 0 && cfgHeight > 0 {
 		return mathf.Vec2{
-			X: float64(cfgWidth),
-			Y: float64(cfgHeight),
+			X: cfgWidth,
+			Y: cfgHeight,
 		}
 	}
 	return getImageSizeCached(path)

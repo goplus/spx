@@ -105,8 +105,8 @@ void cgo_callfn_GDExtensionSpxDebugDebugDrawLine(const GDExtensionSpxDebugDebugD
 void cgo_callfn_GDExtensionSpxExtRequestExit(const GDExtensionSpxExtRequestExit fn, GdInt exit_code) {
 	fn(exit_code);
 }
-void cgo_callfn_GDExtensionSpxExtRequestReset(const GDExtensionSpxExtRequestReset fn) {
-	fn();
+void cgo_callfn_GDExtensionSpxExtRequestReset(const GDExtensionSpxExtRequestReset fn, GdInt exit_code) {
+	fn(exit_code);
 }
 void cgo_callfn_GDExtensionSpxExtRequestRestart(const GDExtensionSpxExtRequestRestart fn) {
 	fn();

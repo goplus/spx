@@ -52,7 +52,9 @@
 		let gameApp = null
 		let isShowEditor = false
 		let onGameError = null
-		let lastGameApp = null
+
+		let lastAssetURLs = null
+		let lastConfig = null
 
 		window.spxIsProxyThreadMode = false
 		let onGameExit = null
@@ -83,6 +85,25 @@
 			}
 		}
 
+		async function restartEngineAfterCrash(reason) {
+			console.warn("Engine crashed, restarting...", reason);
+			if (gameApp) {
+				try {
+					await gameApp.ResetGame();
+				} catch (e) {
+					console.error("Error during ResetGame:", e);
+				}
+				gameApp = null;
+			}
+			try {
+				await window.initEngine(lastAssetURLs, lastConfig);
+				console.log("Engine reinitialized.");
+			} catch (e) {
+				console.error("Engine re-init failed:", e);
+				return;
+			}
+		}
+
 		window.gdspx_on_runtime_panic = function (msg) {
 			if (onGameError != null) {
 				onGameError(msg)
@@ -95,18 +116,28 @@
 
 		window.gdspx_on_runtime_exit = function (code) {
 			if (onGameExit != null) {
+				gameApp = null
 				onGameExit(code)
 			}
+			restartEngineAfterCrash("exit code " + code);
 		}
 
 		window.onGameExit = function (callback) {
 			onGameExit = callback
 		}
+		window.addEventListener("godot-wasm-crash", e => {
+			console.error("Caught Godot crash:", e.detail);
+			restartEngineAfterCrash(e.detail);
+		})
 
 		window.initEngine = async (assetURLs = null, config = {}) => {
 			isShowEditor = false
-			lastGameApp = null
 			
+			if (gameApp != null) {
+				await gameApp.ResetGame();
+				return;
+			}
+
 			if(EnginePackMode == "worker"){
 				window.setAIDescription = function (description) {
 					gameApp.callWorkerFunction("setAIDescription", description)
@@ -143,12 +174,9 @@
 				finalConfig.assetURLs = assetURLs
 			}
 
+			lastAssetURLs = assetURLs
+			lastConfig = config
 			Object.assign(finalConfig, config);
-
-			if (gameApp != null) {
-				await gameApp.ResetGame();
-			}
-
 			gameApp = new GameApp(finalConfig);
 			await gameApp.InitEngine();
 		}
@@ -183,13 +211,11 @@
 
 		// Returns the recorded video as a Blob.
 		window.getRecordedVideo = () => {
-			let app = gameApp || lastGameApp
-			if (app == null) {
+			if (gameApp == null) {
 				console.error("gameApp is null, should call startGame first")
 				return null
 			}
-			lastGameApp = null
-			return app.getRecordedVideo()
+			return gameApp.getRecordedVideo()
 		}
 
 		// Captures the current game screen and returns its binary data as a Blob.
@@ -211,13 +237,11 @@
 		}
 
 		window.downloadRecordedVideo = (filename) => {
-			let app = gameApp || lastGameApp
-			if (app == null) {
+			if (gameApp == null) {
 				console.error("gameApp is null, should call startGame first")
 				return null
 			}
-			lastGameApp = null
-			app.downloadRecordedVideo(filename)
+			gameApp.downloadRecordedVideo(filename)
 		}
 
 		window.stopGame = async () => {

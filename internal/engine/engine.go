@@ -248,7 +248,7 @@ func GetKeyEvents(lst []KeyEvent) []KeyEvent {
 func CheckPanic() {
 	if e := recover(); e != nil {
 		OnPanic("", "")
-		panic(e)
+		//panic(e)
 	}
 }
 
@@ -263,5 +263,5 @@ func OnPanic(name, stack string) {
 }
 
 func RequestExit(exitCode int64) {
-	extMgr.RequestExit(exitCode)
+	extMgr.RequestReset(exitCode)
 }

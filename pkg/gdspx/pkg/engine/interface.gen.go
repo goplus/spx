@@ -72,7 +72,7 @@ type IDebugMgr interface {
 
 type IExtMgr interface {
 	RequestExit(exit_code int64)
-	RequestReset()
+	RequestReset(exit_code int64)
 	RequestRestart()
 	OnRuntimePanic(msg string)
 	Pause()
