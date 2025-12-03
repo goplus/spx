@@ -219,24 +219,10 @@ func (p *Coroutines) StopIf(filter func(th Thread) bool) {
 
 // CreateAndStart creates and executes the new coroutine.
 func (p *Coroutines) CreateAndStart(start bool, tobj ThreadObj, fn func(me Thread) int) Thread {
-	return p.createAndStart(context.Background(), start, tobj, fn)
-}
 
-// CreateWithContext creates a coroutine with a custom parent context.
-// The coroutine's context will be canceled when the parent context is canceled
-// or when the coroutine is aborted. If ctx is nil, context.Background() is used.
-func (p *Coroutines) CreateWithContext(ctx context.Context, tobj ThreadObj, fn func(me Thread) int) Thread {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	return p.createAndStart(ctx, false, tobj, fn)
-}
-
-// createAndStart is the internal implementation that creates and optionally starts a new coroutine with context support.
-func (p *Coroutines) createAndStart(ctx context.Context, start bool, tobj ThreadObj, fn func(me Thread) int) Thread {
 	id := &threadImpl{Obj: tobj, frame: p.frame, id: atomic.AddInt64(&p.curThId, 1), schedFrame: -1}
 
-	id.ctx, id.cancelFunc = context.WithCancel(ctx)
+	id.ctx, id.cancelFunc = context.WithCancel(context.Background())
 
 	name := ""
 	if tobj != nil {

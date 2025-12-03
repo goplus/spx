@@ -58,8 +58,8 @@ func Go(tobj coroutine.ThreadObj, fn func()) {
 	})
 }
 
-func GoWithContext(ctx context.Context, tobj coroutine.ThreadObj, fn func(ctx context.Context)) {
-	gco.CreateWithContext(ctx, tobj, func(me coroutine.Thread) int {
+func GoWithContext(tobj coroutine.ThreadObj, fn func(ctx context.Context)) {
+	gco.CreateAndStart(false, tobj, func(me coroutine.Thread) int {
 		fn(me.Context())
 		return 0
 	})
