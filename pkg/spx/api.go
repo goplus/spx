@@ -204,7 +204,7 @@ func Go(owner any, fn func(ctx context.Context, owner any)) {
 				owner = engine.GetGame()
 			}
 		}
-		engine.GoWithContext(owner, func(ctx context.Context) {
+		engine.Go(owner, func(ctx context.Context) {
 			fn(ctx, owner)
 		})
 	} else {

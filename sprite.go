@@ -17,6 +17,7 @@
 package spx
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"maps"
@@ -570,7 +571,7 @@ func doClone(sprite Sprite, data any, isAsync bool, onCloned func(sprite *Sprite
 	}
 	if dest.hasOnCloned {
 		if isAsync {
-			engine.Go(dest.pthis, func() {
+			engine.Go(dest.pthis, func(ctx context.Context) {
 				dest.doWhenAwake(dest)
 				dest.doWhenCloned(dest, data)
 			})
