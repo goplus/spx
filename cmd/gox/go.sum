@@ -5,8 +5,8 @@ github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSs
 github.com/gopherjs/gopherjs v0.0.0-20180708170036-38b413be4187/go.mod h1:wJfORRmW1u3UXTncJ5qlYoELFm8eSnnEO6hX4iZ3EWY=
 github.com/gopherjs/gopherjs v0.0.0-20200217142428-fce0ec30dd00 h1:l5lAOZEym3oK3SQ2HBHWsJUfbNBiTXJDeW2QDxw9AQ0=
 github.com/gopherjs/gopherjs v0.0.0-20200217142428-fce0ec30dd00/go.mod h1:wJfORRmW1u3UXTncJ5qlYoELFm8eSnnEO6hX4iZ3EWY=
-github.com/goplus/builder/tools/ai v0.0.0-20251014030930-ac405dbe65e9 h1:p15bf31P+sKyQbSeFboFAbhxPpqnG8rxhpySQuBcS+4=
-github.com/goplus/builder/tools/ai v0.0.0-20251014030930-ac405dbe65e9/go.mod h1:jhQQ+yC3iLd6/GGnRleF+536nnjoLm5qvFwrNJvSezo=
+github.com/goplus/builder/tools/ai v0.0.0-20251203075520-2e4daf8f2400 h1:2iiN0Kd524IXoW3BUx2deecTI9OuJgVIXX5kTbh60D4=
+github.com/goplus/builder/tools/ai v0.0.0-20251203075520-2e4daf8f2400/go.mod h1:htprGuGL9FUaAqJUopA4u+1X6oXFaMT6hI63AaB8jy0=
 github.com/goplus/gogen v1.19.1 h1:L7jz60azeowj8zUq48tozETriTPBLqHb0nDj6PheANc=
 github.com/goplus/gogen v1.19.1/go.mod h1:owX2e1EyU5WD+Nm6oH2m/GXjLdlBYcwkLO4wN8HHXZI=
 github.com/goplus/ixgo v0.55.0 h1:+aX6KyahUumC1vUA15E9/Njd0ed+XoA6Ua2RenW9ajQ=
