@@ -5,10 +5,10 @@ go 1.24.0
 tool github.com/goplus/ixgo/cmd/qexp
 
 require (
-	github.com/goplus/builder/tools/ai v0.0.0-20251203075520-2e4daf8f2400
+	github.com/goplus/builder/tools/ai v0.0.0-20251204015230-0d6fa7e16d3b
 	github.com/goplus/ixgo v0.55.0
 	github.com/goplus/mod v0.17.1
-	github.com/goplus/spx/v2 v2.0.0-pre.35.0.20251203073311-d2c171d366a8
+	github.com/goplus/spx/v2 v2.0.0-pre.36
 	github.com/goplus/xgo v1.5.1
 )
 
