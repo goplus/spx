@@ -15,6 +15,7 @@ func init() {
 		Name: "spx",
 		Path: "github.com/goplus/spx/v2/pkg/spx",
 		Deps: map[string]string{
+			"context": "context",
 			"github.com/goplus/spx/v2/internal/engine": "engine",
 			"sync/atomic": "atomic",
 			"time":        "time",

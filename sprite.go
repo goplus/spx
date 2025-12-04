@@ -2073,10 +2073,11 @@ const (
 type ColliderShapeType = int64
 
 const (
-	RectCollider    ColliderShapeType = ColliderShapeType(physicsColliderRect)
-	CircleCollider  ColliderShapeType = ColliderShapeType(physicsColliderCircle)
-	CapsuleCollider ColliderShapeType = ColliderShapeType(physicsColliderCapsule)
-	PolygonCollider ColliderShapeType = ColliderShapeType(physicsColliderPolygon)
+	RectCollider      ColliderShapeType = ColliderShapeType(physicsColliderRect)
+	CircleCollider    ColliderShapeType = ColliderShapeType(physicsColliderCircle)
+	CapsuleCollider   ColliderShapeType = ColliderShapeType(physicsColliderCapsule)
+	PolygonCollider   ColliderShapeType = ColliderShapeType(physicsColliderPolygon)
+	TriggerExtraPixel float64           = 2.0
 )
 
 // physicConfig common structure for physics configuration
@@ -2086,7 +2087,7 @@ type physicConfig struct {
 	Type        ColliderShapeType // collider/trigger type
 	Pivot       mathf.Vec2        // pivot position
 	Params      []float64         // shape parameters
-	PivotOffset mathf.Vec2
+	PivotOffset mathf.Vec2        // pivot offset for render offset adjustment
 }
 
 func (cfg *physicConfig) String() string {
@@ -2140,13 +2141,6 @@ func (cfg *physicConfig) validateShape() bool {
 	return true
 }
 
-// setShape sets shape parameters
-func (cfg *physicConfig) setShape(ctype ColliderShapeType, params []float64) {
-	cfg.Type = ctype
-	cfg.Params = make([]float64, len(params))
-	copy(cfg.Params, params)
-}
-
 // getDimensions calculates width and height based on type and shape parameters
 func (cfg *physicConfig) getDimensions() (float64, float64) {
 	switch cfg.Type {
@@ -2174,20 +2168,20 @@ func (cfg *physicConfig) getDimensions() (float64, float64) {
 }
 
 // syncToProxy synchronizes physics configuration to engine proxy
-func (cfg *physicConfig) syncToProxy(syncProxy *engine.Sprite, isTrigger bool, sprite *SpriteImpl, extraPixelSize float64) {
+func (cfg *physicConfig) syncToProxy(syncProxy *engine.Sprite, isTrigger bool, sprite *SpriteImpl) {
 	if isTrigger {
 		syncProxy.SetTriggerLayer(cfg.Layer)
 		syncProxy.SetTriggerMask(cfg.Mask)
-		cfg.syncShape(syncProxy, true, sprite, extraPixelSize)
+		cfg.syncShape(syncProxy, true, sprite)
 	} else {
 		syncProxy.SetCollisionLayer(cfg.Layer)
 		syncProxy.SetCollisionMask(cfg.Mask)
-		cfg.syncShape(syncProxy, false, sprite, 0)
+		cfg.syncShape(syncProxy, false, sprite)
 	}
 }
 
 // syncShape synchronizes shape to engine proxy
-func (cfg *physicConfig) syncShape(syncProxy *engine.Sprite, isTrigger bool, sprite *SpriteImpl, extraPixelSize float64) {
+func (cfg *physicConfig) syncShape(syncProxy *engine.Sprite, isTrigger bool, sprite *SpriteImpl) {
 	scale := sprite.scale
 	if cfg.Type != physicsColliderNone && cfg.Type != physicsColliderAuto {
 		center := mathf.NewVec2(0, 0)
@@ -2195,10 +2189,10 @@ func (cfg *physicConfig) syncShape(syncProxy *engine.Sprite, isTrigger bool, spr
 		cfg.PivotOffset = center.Divf(scale)
 	}
 	if cfg.Type == physicsColliderAuto {
-		pivot, autoSize := syncGetCostumeBoundByAlpha(sprite, scale)
+		pivot, autoSize := syncGetCostumeBoundByAlpha(sprite, 1.0)
 		if isTrigger {
-			autoSize.X += extraPixelSize
-			autoSize.Y += extraPixelSize
+			autoSize.X += TriggerExtraPixel
+			autoSize.Y += TriggerExtraPixel
 		}
 		cfg.Pivot = pivot
 		cfg.Params = []float64{autoSize.X, autoSize.Y}

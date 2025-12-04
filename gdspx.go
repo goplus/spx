@@ -269,11 +269,8 @@ func (*Game) syncUpdatePhysic() {
 
 func syncInitSpritePhysicInfo(sprite *SpriteImpl, syncProxy *engine.Sprite) {
 	sprite.initCollisionParams()
-
-	// sync collision and trigger configurations using unified method
-	const extraPixelSize = 2
-	sprite.collisionInfo.syncToProxy(syncProxy, false, sprite, 0)
-	sprite.triggerInfo.syncToProxy(syncProxy, true, sprite, extraPixelSize)
+	sprite.collisionInfo.syncToProxy(syncProxy, false, sprite)
+	sprite.triggerInfo.syncToProxy(syncProxy, true, sprite)
 	syncProxy.SetGravityScale(sprite.gravity)
 	syncProxy.SetPhysicsMode(sprite.physicsMode)
 }
@@ -310,7 +307,7 @@ func getCostumeBoundByAlpha(p *SpriteImpl, pscale float64, isSync bool) (mathf.V
 	sizeY := float64(rect.Size.Y) * scale
 
 	w, h := p.getCostumeSize()
-	w, h = w*p.scale, h*p.scale
+	w, h = w*pscale, h*pscale
 	offsetX := float64(posX + sizeX/2 - w/2)
 	offsetY := -float64(posY + sizeY/2 - h/2)
 
