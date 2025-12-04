@@ -63,9 +63,6 @@ class GameApp {
             logVerbose: this.logVerbose.bind(this)
         });
 
-        this.initGameTask = 0;
-        this.buildGameTask = 0;
-        this.runGameTask = 0;
         this.stopGameTask = 0;  
         this.logVerbose("EnginePackMode: ", EnginePackMode)
 
@@ -81,15 +78,20 @@ class GameApp {
         }
     }
 
-    startTask(prepareFunc, taskFunc, ...args) {
-        if (prepareFunc) prepareFunc()
-        this.logicPromise = this.logicPromise.then(() => taskFunc.call(this, ...args))
+    startTask(taskFunc) {
+        const originalPromise = this.logicPromise;
+        const newPromise = this.logicPromise.then(() => taskFunc());
+        this.logicPromise = newPromise;
+        newPromise.catch((err) => {
+            // If an error occurs, reset logicPromise to originalPromise to avoid blocking subsequent tasks.
+            if (this.logicPromise === newPromise) this.logicPromise = originalPromise;
+        })
         return this.logicPromise
     }
 
 
     async InitEngine() {
-        return this.startTask(() => { this.initGameTask++ }, this.initEngine)
+        return this.startTask(() => this.initEngine())
     }
 
     /**
@@ -98,21 +100,21 @@ class GameApp {
      * @returns Promise<void>
      */
     async InitGame(files) {
-        return this.startTask(() => { this.buildGameTask++ }, this.initGame, files)
+        return this.startTask(() => this.initGame(files))
     }
 
     async StartGame() {
-        return this.startTask(() => { this.runGameTask++ }, this.startGame)
+        return this.startTask(() => this.startGame())
     }
 
     async ResetGame() {
-        return this.startTask(() => { this.stopGameTask++ }, this.resetGame)
+        this.stopGameTask++;
+        return this.startTask(() => this.resetGame())
     }
 
     async initEngine() {
         await profiler.profile('onRunPrepareEngineWasm', () => this.onRunPrepareEngineWasm());
 
-        this.initGameTask--;
         if (this.stopGameTask > 0) {
             this.logVerbose("stopGame is called before runing game");
             return;
@@ -217,7 +219,6 @@ class GameApp {
      * @param {Files} files
      */
     buildGame(files) {
-        this.buildGameTask--;
         if (this.stopGameTask > 0) {
             this.logVerbose("stopGame is called before runing game");
             return;
@@ -231,14 +232,14 @@ class GameApp {
             }
         });
         if (!this.workerMode) {
-            window.ixgo_build(nonAssetFiles);
+            const res = window.ixgo_build(nonAssetFiles);
+            if (res instanceof Error) throw res;
         }else{
             this.nonAssetFiles = nonAssetFiles;
         }
     }
 
     async startGame() {
-        this.runGameTask--;
         if (this.stopGameTask > 0) {
             this.logVerbose("stopGame is called before runing game");
             return;
@@ -394,7 +395,8 @@ class GameApp {
             // register global functions
             Module = game.rtenv;
             FFI = self;
-            window.ixgo_run();
+            const res = window.ixgo_run();
+            if (res instanceof Error) throw res;
         }
     }
 
