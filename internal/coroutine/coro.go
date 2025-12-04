@@ -213,18 +213,17 @@ func (p *Coroutines) StopIf(filter func(th Thread) bool) {
 	for th := range p.suspended {
 		if filter(th) {
 			th.stopped_ = true
+			th.Cancel()
 		}
 	}
 }
 
 // CreateAndStart creates and executes the new coroutine.
 func (p *Coroutines) CreateAndStart(start bool, tobj ThreadObj, fn func(me Thread) int) Thread {
-
 	id := &threadImpl{Obj: tobj, frame: p.frame, id: atomic.AddInt64(&p.curThId, 1), schedFrame: -1}
-
 	id.ctx, id.cancelFunc = context.WithCancel(context.Background())
-
 	name := ""
+
 	if tobj != nil {
 		t := reflect.TypeOf(tobj)
 		if t.Kind() == reflect.Ptr && t.Elem().Name() != "" {
@@ -237,6 +236,7 @@ func (p *Coroutines) CreateAndStart(start bool, tobj ThreadObj, fn func(me Threa
 			}
 		}
 	}
+
 	id.name = name
 
 	if p.debug {
