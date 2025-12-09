@@ -135,6 +135,7 @@ func (p *List) String() string {
 	return strings.Join(items, sep)
 }
 
+// Contains returns true if the list contains the element v.
 func (p *List) Contains(v obj) bool {
 	val := fromObj(v)
 	for _, item := range p.data {
@@ -145,10 +146,12 @@ func (p *List) Contains(v obj) bool {
 	return false
 }
 
+// Append adds the element v to the end of the list.
 func (p *List) Append(v obj) {
 	p.data = append(p.data, fromObj(v))
 }
 
+// Set sets the element at the specified index i to v.
 func (p *List) Set(i Pos, v obj) {
 	n := len(p.data)
 	if i < 0 {
@@ -163,6 +166,7 @@ func (p *List) Set(i Pos, v obj) {
 	}
 }
 
+// Insert inserts the element v at the specified index i.
 func (p *List) Insert(i Pos, v obj) {
 	n := len(p.data)
 	if i < 0 {
@@ -179,6 +183,7 @@ func (p *List) Insert(i Pos, v obj) {
 	}
 }
 
+// Delete removes the element at the specified index.
 func (p *List) Delete(i Pos) {
 	n := len(p.data)
 	if i < 0 {
@@ -193,6 +198,7 @@ func (p *List) Delete(i Pos) {
 	}
 }
 
+// At returns the Value at the specified index.
 func (p *List) At(i Pos) Value {
 	n := len(p.data)
 	if i < 0 {
