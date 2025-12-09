@@ -204,6 +204,8 @@ func (p *List) At(i Pos) Value {
 	return Value{p.data[i]}
 }
 
+// IndexOf returns the zero-based position of the first occurrence of v in the list.
+// Returns Invalid (-1) if v is not found.
 func (p *List) IndexOf(v obj) Pos {
 	val := fromObj(v)
 	for i, item := range p.data {
@@ -214,6 +216,7 @@ func (p *List) IndexOf(v obj) Pos {
 	return Invalid
 }
 
+// Clear removes all elements from the list.
 func (p *List) Clear() {
 	p.data = p.data[:0]
 }
