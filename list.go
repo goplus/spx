@@ -203,3 +203,17 @@ func (p *List) At(i Pos) Value {
 	}
 	return Value{p.data[i]}
 }
+
+func (p *List) IndexOf(v obj) Pos {
+	val := fromObj(v)
+	for i, item := range p.data {
+		if item == val {
+			return Pos(i)
+		}
+	}
+	return Invalid
+}
+
+func (p *List) Clear() {
+	p.data = p.data[:0]
+}
