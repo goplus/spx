@@ -67,7 +67,7 @@ func (pself *CmdTool) CheckCmd(ext ...string) bool {
 		"build", "buildtinygo", "rune", "export",
 		"runweb", "buildweb", "exportweb", "stopweb", "runwebworker",
 		"runm", "exportbot", "exportapk", "exportios",
-		"run", "exporttemplateweb", "exportminigame", "exportminiprogram", "exportwebworker",
+		"run", "runi", "exporttemplateweb", "exportminigame", "exportminiprogram", "exportwebworker",
 	}
 	cmds = append(cmds, ext...)
 
@@ -211,6 +211,7 @@ Examples:
     #CMDNAME init                         # Create a project in current path
     #CMDNAME init ./test/demo01           # Create a project at path ./test/demo01
     #CMDNAME run --path ./myproject       # Run project at specified path
+    #CMDNAME runi --path ./myproject      # Run in interpreted mode (requires pre-installed dll)
     #CMDNAME run --ixgogen --goenv=./cmd/portable-go  # Run with xgobuild and portable Go
     #CMDNAME build --servermode           # Build in server mode
     #CMDNAME runweb --debugweb            # Run web server with debug service

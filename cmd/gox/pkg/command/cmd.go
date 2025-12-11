@@ -7,6 +7,7 @@ import (
 	"go/build"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/goplus/spx/v2/cmd/gox/pkg/util"
@@ -110,6 +111,11 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 	// Handle special commands that don't need full setup
 	if cmd.handleSpecialCommands() {
 		return nil
+	}
+
+	// Handle runi command - interpreted mode with minimal setup
+	if cmd.Args.CmdName == "runi" {
+		return cmd.handleRuniCommand()
 	}
 
 	// Set runtime mode
@@ -296,4 +302,28 @@ func (cmd *CmdTool) checkMovieArgs(rootDir string) []string {
 		args = append(args, "--write-movie", fpath)
 	}
 	return args
+}
+
+// handleRuniCommand handles the runi command with minimal setup.
+// It skips CheckEnv, SetupEnv, and BuildDll since the dll is pre-installed.
+func (cmd *CmdTool) handleRuniCommand() error {
+	// Setup minimal required paths
+	cmd.RuntimeMode = true
+	cmd.RuntimeTempDir, _ = filepath.Abs(filepath.Join(cmd.TargetDir, ".temp"))
+	os.MkdirAll(cmd.RuntimeTempDir, 0755)
+
+	// Get binary postfix based on OS
+	cmd.BinPostfix = ""
+	GOOS := runtime.GOOS
+	if os.Getenv("GOOS") != "" {
+		GOOS = os.Getenv("GOOS")
+	}
+	if GOOS == "windows" {
+		cmd.BinPostfix = ".exe"
+	}
+	cmd.RuntimeCmdPath = filepath.Join(cmd.GoBinPath, "gdspxrt"+cmd.Version+cmd.BinPostfix)
+
+	// Execute the interpreted run
+	args := cmd.checkMovieArgs(cmd.RuntimeTempDir)
+	return cmd.RunInterpreted(args...)
 }

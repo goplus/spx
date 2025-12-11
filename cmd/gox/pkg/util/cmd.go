@@ -1,12 +1,9 @@
 package util
 
 import (
-	_ "embed"
-	"fmt"
 	"log"
 	"os"
 	"os/exec"
-	"strings"
 )
 
 // Helper function to run a command
@@ -19,12 +16,6 @@ func RunCommandWithEnv(envVars []string, name string, args ...string) error {
 
 func RunCommand(envVars []string, dir string, name string, args ...string) error {
 	cmd := exec.Command(name, args...)
-
-	// 打印命令行
-	fmt.Printf("Running command: %s %s\n", name, strings.Join(args, " "))
-	if dir != "" {
-		fmt.Printf("In directory: %s\n", dir)
-	}
 
 	if envVars != nil {
 		cmd.Env = append(os.Environ(), envVars...)
