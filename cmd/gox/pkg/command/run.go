@@ -20,6 +20,24 @@ func (pself *CmdTool) Run(arg string) (err error) {
 	return util.RunCommandInDir(pself.ProjectDir, pself.CmdPath, arg)
 }
 
+// buildRuntimeArgs builds the arguments for running gdspxrt.
+// It filters out --path and adds the runtime-specific arguments.
+func (pself *CmdTool) buildRuntimeArgs(inputArgs []string, tempDir, extPath string, extraArgs ...string) []string {
+	args := []string{}
+	for i := 0; i < len(inputArgs); i++ {
+		if inputArgs[i] == "--path" {
+			i++ // Skip the path value
+			continue
+		}
+		args = append(args, inputArgs[i])
+	}
+	args = append(args, "--path", tempDir)
+	args = append(args, "--gdextpath", extPath)
+	args = append(args, extraArgs...)
+	args = append(args, "--no-header") // disable engine's header output
+	return args
+}
+
 func (pself *CmdTool) RunPackMode(pargs ...string) error {
 	// copy libs
 	dllPath := path.Join(pself.RuntimeTempDir, filepath.Base(pself.LibPath))
@@ -27,19 +45,8 @@ func (pself *CmdTool) RunPackMode(pargs ...string) error {
 	// copy configs
 	extensionPath := path.Join(pself.RuntimeTempDir, "runtime.gdextension")              // copy runtime
 	util.CopyFile(path.Join(pself.ProjectDir, "runtime.gdextension.txt"), extensionPath) // copy gdextension
-	args := []string{}
-	for i := 0; i < len(pargs); i++ {
-		if pargs[i] == "--path" {
-			i++
-			continue
-		}
-		args = append(args, pargs[i])
-	}
-	args = append(args, "--path")
-	args = append(args, pself.RuntimeTempDir)
-	args = append(args, "--gdextpath")
-	args = append(args, extensionPath)
 
+	args := pself.buildRuntimeArgs(pargs, pself.RuntimeTempDir, extensionPath)
 	return util.RunCommandInDir(pself.RuntimeTempDir, pself.RuntimeCmdPath, args...)
 }
 
@@ -163,18 +170,8 @@ func (pself *CmdTool) RunInterpreted(pargs ...string) error {
 		return fmt.Errorf("shared library %s not found at %s. Please run 'make install' first", libName, pself.GoBinPath)
 	}
 
-	// Build command arguments
-	args := []string{}
-	for i := 0; i < len(pargs); i++ {
-		if pargs[i] == "--path" {
-			i++ // Skip the path value
-			continue
-		}
-		args = append(args, pargs[i])
-	}
-	args = append(args, "--path", pself.RuntimeTempDir)
-	args = append(args, "--gdextpath", extensionPath)
-	args = append(args, "--no-header")
+	// Build command arguments using common function
+	args := pself.buildRuntimeArgs(pargs, pself.RuntimeTempDir, extensionPath)
 	// Run the gdspxrt runtime
 	return util.RunCommandInDir(pself.RuntimeTempDir, pself.RuntimeCmdPath, args...)
 }

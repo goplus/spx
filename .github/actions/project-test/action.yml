@@ -31,3 +31,21 @@ runs:
           rm -f cilog.txt
           exit 1
         fi
+
+    - name: Run test demo in interpreted mode
+      shell: bash
+      run: |
+        spx runi -path="test/CI" -headless=true 2>&1 | tee cilog_interpreted_mode.txt 
+
+    - name: Check test result in interpreted mode
+      shell: bash
+      run: |
+        if grep -q "===>SpxCIRunSucc" cilog_interpreted_mode.txt; then
+          echo "test success"
+          rm -f cilog_interpreted_mode.txt
+        else
+          echo "test failed: not found success mark"
+          cat cilog_interpreted_mode.txt
+          rm -f cilog_interpreted_mode.txt
+          exit 1
+        fi
