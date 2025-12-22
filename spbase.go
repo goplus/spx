@@ -66,10 +66,11 @@ const (
 // -------------------------------------------------------------------------------------
 
 type costumeSetImage struct {
-	path  string
-	rc    costumeSetRect
-	width int
-	nx    int
+	path   string
+	rc     costumeSetRect
+	width  float64
+	height float64
+	nx     int
 }
 
 // -------------------------------------------------------------------------------------
@@ -107,11 +108,13 @@ func newCostumeWithSize(width, height int) *costume {
 
 func newCostumeWith(name string, img *costumeSetImage, faceRight float64, i, bitmapResolution int) *costume {
 	value := &costume{
-		path: img.path,
-		name: name, setIndex: i,
-		faceRight: faceRight, bitmapResolution: bitmapResolution,
+		path:             img.path,
+		name:             name,
+		setIndex:         i,
+		faceRight:        faceRight,
+		bitmapResolution: bitmapResolution,
 	}
-	imageSize := getCustomeAssetSize(img.path)
+	imageSize := resolveImageSize(img.width, img.height, img.path)
 	value.imageSize = imageSize
 	value.width = int(imageSize.X) / img.nx
 	value.height = int(imageSize.Y)
@@ -136,23 +139,46 @@ func newCostumeWith(name string, img *costumeSetImage, faceRight float64, i, bit
 }
 
 func newCostume(base string, c *costumeConfig) *costume {
-	path := path.Join(base, c.Path)
+	fullPath := path.Join(base, c.Path)
+
 	value := &costume{
 		name:             c.Name,
 		setIndex:         -1,
 		center:           mathf.Vec2{X: c.X, Y: c.Y},
 		faceRight:        c.FaceRight,
 		bitmapResolution: toBitmapResolution(c.BitmapResolution),
-		path:             path,
+		path:             fullPath,
+		posX:             0,
+		posY:             0,
+		altasUVRect:      mathf.NewVec4(0, 0, 1, 1),
 	}
-	imageSize := getCustomeAssetSize(path)
+
+	imageSize := resolveImageSize(c.ImageWidth, c.ImageHeight, fullPath)
+
 	value.imageSize = imageSize
 	value.width = int(imageSize.X)
 	value.height = int(imageSize.Y)
-	value.posX = 0
-	value.posY = 0
-	value.altasUVRect = mathf.NewVec4(0, 0, 1, 1)
+
 	return value
+}
+
+func resolveImageSize(cfgWidth, cfgHeight float64, path string) mathf.Vec2 {
+	if cfgWidth > 0 && cfgHeight > 0 {
+		return mathf.Vec2{
+			X: cfgWidth,
+			Y: cfgHeight,
+		}
+	}
+	return getImageSizeCached(path)
+}
+
+func getImageSizeCached(path string) mathf.Vec2 {
+	if v, ok := imageSizeCache.Load(path); ok {
+		return v.(mathf.Vec2)
+	}
+	size := getCustomeAssetSize(path)
+	imageSizeCache.Store(path, size)
+	return size
 }
 
 func getCustomeAssetSize(path string) mathf.Vec2 {
@@ -218,10 +244,8 @@ func (p *baseObj) getProxy() *engine.Sprite {
 
 func (p *baseObj) initWith(base string, sprite *spriteConfig) {
 	if sprite.CostumeSet != nil {
-		engine.CheckAssetFile(path.Join(base, sprite.CostumeSet.Path))
 		initWithCS(p, base, sprite.CostumeSet)
 	} else if sprite.CostumeMPSet != nil {
-		engine.CheckAssetFile(path.Join(base, sprite.CostumeMPSet.Path))
 		initWithCMPS(p, base, sprite.CostumeMPSet)
 	} else {
 		panic("sprite.init should have one of costumes, costumeSet and costumeMPSet")
@@ -249,9 +273,9 @@ func initWithCS(p *baseObj, base string, cs *costumeSet) {
 	imgPath := path.Join(base, cs.Path)
 	var img *costumeSetImage
 	if cs.Rect == nil {
-		img = &costumeSetImage{path: imgPath, nx: nx}
+		img = &costumeSetImage{path: imgPath, width: cs.ImageWidth, height: cs.ImageHeight, nx: nx}
 	} else {
-		img = &costumeSetImage{path: imgPath, rc: *cs.Rect, nx: nx}
+		img = &costumeSetImage{path: imgPath, width: cs.ImageWidth, height: cs.ImageHeight, rc: *cs.Rect, nx: nx}
 	}
 	p.costumes = make([]*costume, 0, nx)
 	initCSPart(p, img, cs.FaceRight, toBitmapResolution(cs.BitmapResolution), nx, cs.Items)
@@ -290,7 +314,6 @@ func addCostumeWith(p *baseObj, name SpriteCostumeName, img *costumeSetImage, fa
 func (p *baseObj) initBackdrops(base string, costumes []*backdropConfig, costumeIndex int) {
 	p.costumes = make([]*costume, len(costumes))
 	for i, c := range costumes {
-		engine.CheckAssetFile(path.Join(base, c.Path))
 		p.costumes[i] = newCostume(base, &c.costumeConfig) // has error how to fixed it
 	}
 	if costumeIndex >= len(costumes) || costumeIndex < 0 {
@@ -302,7 +325,6 @@ func (p *baseObj) initBackdrops(base string, costumes []*backdropConfig, costume
 func (p *baseObj) init(base string, costumes []*costumeConfig, costumeIndex int) {
 	p.costumes = make([]*costume, len(costumes))
 	for i, c := range costumes {
-		engine.CheckAssetFile(path.Join(base, c.Path))
 		p.costumes[i] = newCostume(base, c)
 	}
 	if costumeIndex >= len(costumes) || costumeIndex < 0 {
@@ -389,7 +411,13 @@ func (p *baseObj) getCostumePath() string {
 	return p.costumes[p.costumeIndex_].path
 }
 func (p *baseObj) getCostumeRenderScale() float64 {
-	return 1.0 / float64(p.costumes[p.costumeIndex_].bitmapResolution) * p.scale
+	return 1.0 / float64(p.getCurrentBitmapResolution()) * p.scale
+}
+func (p *baseObj) getAnimRenderScale(bitmapResolution int) float64 {
+	return 1.0 / float64(bitmapResolution) * p.scale
+}
+func (p *baseObj) getCurrentBitmapResolution() int {
+	return p.costumes[p.costumeIndex_].bitmapResolution
 }
 func (p *baseObj) getCostumeSize() (float64, float64) {
 	x, y := p.costumes[p.costumeIndex_].getSize()

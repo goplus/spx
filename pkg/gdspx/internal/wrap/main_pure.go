@@ -29,6 +29,10 @@ func OnLinked() {
 	// Pure mode doesn't need linking callbacks
 }
 
+func UnlinkFFI() {
+
+}
+
 func CreateMgrs() []IManager {
 	return createMgrs()
 }

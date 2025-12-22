@@ -105,6 +105,12 @@ void cgo_callfn_GDExtensionSpxDebugDebugDrawLine(const GDExtensionSpxDebugDebugD
 void cgo_callfn_GDExtensionSpxExtRequestExit(const GDExtensionSpxExtRequestExit fn, GdInt exit_code) {
 	fn(exit_code);
 }
+void cgo_callfn_GDExtensionSpxExtRequestReset(const GDExtensionSpxExtRequestReset fn, GdInt exit_code) {
+	fn(exit_code);
+}
+void cgo_callfn_GDExtensionSpxExtRequestRestart(const GDExtensionSpxExtRequestRestart fn) {
+	fn();
+}
 void cgo_callfn_GDExtensionSpxExtOnRuntimePanic(const GDExtensionSpxExtOnRuntimePanic fn, GdString msg) {
 	fn(msg);
 }
@@ -294,8 +300,8 @@ void cgo_callfn_GDExtensionSpxPlatformSetPersistantDataDir(const GDExtensionSpxP
 void cgo_callfn_GDExtensionSpxPlatformIsInPersistantDataDir(const GDExtensionSpxPlatformIsInPersistantDataDir fn, GdString path, GdBool* ret_val) {
 	fn(path,ret_val);
 }
-void cgo_callfn_GDExtensionSpxResCreateAnimation(const GDExtensionSpxResCreateAnimation fn, GdString sprite_type_name, GdString anim_name, GdString context, GdInt fps, GdBool is_altas) {
-	fn(sprite_type_name, anim_name, context, fps, is_altas);
+void cgo_callfn_GDExtensionSpxResCreateAnimation(const GDExtensionSpxResCreateAnimation fn, GdString p_sprite_type, GdString p_anim_name, GdString p_json_ctx, GdInt fps, GdBool is_atlas) {
+	fn(p_sprite_type, p_anim_name, p_json_ctx, fps, is_atlas);
 }
 void cgo_callfn_GDExtensionSpxResSetLoadMode(const GDExtensionSpxResSetLoadMode fn, GdBool is_direct_mode) {
 	fn(is_direct_mode);

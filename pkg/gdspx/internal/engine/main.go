@@ -32,6 +32,11 @@ func Link(engineCallback EngineCallbackInfo) {
 	wrap.OnLinked()
 }
 
+func Unlink() {
+	mgrs = nil
+	wrap.UnlinkFFI()
+}
+
 func onEngineStart() {
 	for _, mgr := range mgrs {
 		mgr.OnStart()
@@ -88,6 +93,11 @@ func onEngineDestroy() {
 	}
 	for _, mgr := range mgrs {
 		mgr.OnDestroy()
+	}
+}
+func onEngineReset() {
+	if callback.OnEngineReset != nil {
+		callback.OnEngineReset()
 	}
 }
 func onEnginePause(isPaused bool) {

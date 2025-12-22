@@ -17,11 +17,13 @@
 package spx
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"maps"
 	"math"
 	"reflect"
+	"sync"
 
 	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v2/internal/engine"
@@ -235,11 +237,12 @@ type SpriteImpl struct {
 	rotationStyle RotationStyle
 	pivot         mathf.Vec2
 
-	sayObj           *sayOrThinker
-	quoteObj         *quoter
-	animations       map[SpriteAnimationName]*aniConfig
-	animBindings     map[string]string
-	defaultAnimation SpriteAnimationName
+	sayObj            *sayOrThinker
+	quoteObj          *quoter
+	animations        map[SpriteAnimationName]*aniConfig
+	animBindings      map[string]string
+	defaultAnimation  SpriteAnimationName
+	animationWrappers map[SpriteAnimationName]*animationWrapper // lazy load
 
 	penColor mathf.Color
 	penWidth float64
@@ -281,6 +284,27 @@ type SpriteImpl struct {
 	gravity     float64
 }
 
+type animationWrapper struct {
+	spr      *SpriteImpl
+	ani      *aniConfig
+	loaded   bool
+	loadOnce sync.Once
+}
+
+func (aw *animationWrapper) ensureRegistered(pName string) {
+	aw.loadOnce.Do(func() {
+		createAnimation(aw.spr.name, pName, aw.ani, aw.spr.costumes, aw.spr.isCostumeSet)
+		aw.loaded = true
+	})
+
+	aw.spr.adaptAnimBitmapResolution(aw.ani)
+}
+
+func (p *SpriteImpl) adaptAnimBitmapResolution(ani *aniConfig) {
+	renderScale := p.getAnimRenderScale(ani.AdaptAnimBitmapResolution)
+	p.syncSprite.SetRenderScale(mathf.NewVec2(renderScale, renderScale))
+}
+
 func (p *SpriteImpl) setDying() { // dying: visible but can't be touched
 	p.isDying = true
 }
@@ -308,9 +332,7 @@ func (p *SpriteImpl) init(
 	p.isVisible = spriteCfg.Visible
 	p.pivot = spriteCfg.Pivot
 	p.animBindings = make(map[string]string)
-	for key, val := range spriteCfg.AnimBindings {
-		p.animBindings[key] = val
-	}
+	maps.Copy(p.animBindings, spriteCfg.AnimBindings)
 
 	p.collisionTargets = make(map[string]bool)
 
@@ -376,9 +398,10 @@ func (p *SpriteImpl) init(
 		p.animations[key] = ani
 	}
 
-	// register animations to engine
+	// lazy register animations to engine
+	p.animationWrappers = make(map[SpriteAnimationName]*animationWrapper)
 	for animName, ani := range p.animations {
-		registerAnimToEngine(p.name, animName, ani, p.baseObj.costumes, p.isCostumeSet)
+		p.animationWrappers[animName] = &animationWrapper{spr: p, ani: ani}
 	}
 
 	p.pendingAudios = make([]string, 0)
@@ -418,6 +441,10 @@ func (p *SpriteImpl) InitFrom(src *SpriteImpl) {
 	p.rotationStyle = src.rotationStyle
 	p.sayObj = nil
 	p.animations = src.animations
+	p.animationWrappers = make(map[SpriteAnimationName]*animationWrapper)
+	for animName, ani := range p.animations {
+		p.animationWrappers[animName] = &animationWrapper{spr: p, ani: ani}
+	}
 	// clone effect params
 	p.greffUniforms = maps.Clone(src.greffUniforms)
 
@@ -530,6 +557,9 @@ func Gopt_SpriteImpl_Clone__1(sprite Sprite, data any) {
 }
 
 func doClone(sprite Sprite, data any, isAsync bool, onCloned func(sprite *SpriteImpl)) {
+	if sprite == nil {
+		log.Panicln("doClone, sprite is nil")
+	}
 	src := spriteOf(sprite)
 	if debugInstr {
 		log.Println("Clone", src.name)
@@ -544,7 +574,7 @@ func doClone(sprite Sprite, data any, isAsync bool, onCloned func(sprite *Sprite
 	}
 	if dest.hasOnCloned {
 		if isAsync {
-			engine.Go(dest.pthis, func() {
+			engine.Go(dest.pthis, func(ctx context.Context) {
 				dest.doWhenAwake(dest)
 				dest.doWhenCloned(dest, data)
 			})
@@ -556,14 +586,13 @@ func doClone(sprite Sprite, data any, isAsync bool, onCloned func(sprite *Sprite
 }
 func (p *SpriteImpl) OnCloned__0(onCloned func(data any)) {
 	p.hasOnCloned = true
-	p.allWhenCloned = &eventSink{
-		prev:  p.allWhenCloned,
+	p.allWhenCloned = append(p.allWhenCloned, eventSink{
 		pthis: p,
 		sink:  onCloned,
 		cond: func(data any) bool {
 			return data == p
 		},
-	}
+	})
 }
 
 func (p *SpriteImpl) OnCloned__1(onCloned func()) {
@@ -592,14 +621,13 @@ func (p *SpriteImpl) fireTouchEnd(obj *SpriteImpl) {
 
 func (p *SpriteImpl) _onTouchStart(onTouchStart func(Sprite)) {
 	p.hasOnTouchStart = true
-	p.allWhenTouchStart = &eventSink{
-		prev:  p.allWhenTouchStart,
+	p.allWhenTouchStart = append(p.allWhenTouchStart, eventSink{
 		pthis: p,
 		sink:  onTouchStart,
 		cond: func(data any) bool {
 			return data == p
 		},
-	}
+	})
 }
 
 func (p *SpriteImpl) onTouchStart__0(onTouchStart func(Sprite)) {
@@ -668,8 +696,8 @@ func (p *SpriteImpl) Die() {
 	p.setDying()
 
 	p.Stop(OtherScriptsInSprite)
-	if ani, ok := p.animations[aniName]; ok {
-		p.doAnimation(aniName, ani, false, 1, true, true)
+	if p.hasAnim(aniName) {
+		p.AnimateAndWait(aniName)
 	}
 	p.Destroy()
 }
@@ -678,6 +706,8 @@ func (p *SpriteImpl) Destroy() { // destroy sprite, whether prototype or cloned
 	if debugInstr {
 		log.Println("Destroy", p.name)
 	}
+
+	p.syncSprite.UnRegisterOnAnimationFinished()
 
 	p.Hide()
 	p.doDeleteClone()
@@ -851,6 +881,7 @@ func (p *SpriteImpl) doAnimation(animName SpriteAnimationName, ani *aniConfig, l
 	}
 
 	syncCheckUpdateCostume(&p.baseObj)
+	p.animationWrappers[animName].ensureRegistered(animName)
 
 	spriteMgr.PlayAnim(p.syncSprite.GetId(), animName, speed, loop, false)
 	if isBlocking {
@@ -1220,6 +1251,7 @@ func (p *SpriteImpl) playDefaultAnim() {
 	}
 
 	if _, ok := p.animations[animName]; ok {
+		p.animationWrappers[animName].ensureRegistered(animName)
 		spriteMgr.PlayAnim(p.syncSprite.GetId(), animName, speed, true, false)
 	} else {
 		p.goSetCostume(p.defaultCostumeIndex)
@@ -1618,18 +1650,21 @@ func (p *SpriteImpl) touchPoint(x, y float64) bool {
 	return spriteMgr.CheckCollisionWithPoint(p.syncSprite.GetId(), mathf.NewVec2(x, y), true)
 }
 
+const alphaThreshold = 0.05
+
 func (p *SpriteImpl) touchingColor(color mathf.Color) bool {
 	if p.syncSprite == nil {
 		return false
 	}
-	return spriteMgr.CheckCollisionByColor(p.syncSprite.GetId(), color, 0.05, 0.1)
+	return spriteMgr.CheckCollisionByColor(p.syncSprite.GetId(), color, alphaThreshold, 0.1)
 }
 
 func (p *SpriteImpl) touchingSprite(dst *SpriteImpl) bool {
 	if p.syncSprite == nil || dst.syncSprite == nil {
 		return false
 	}
-	return spriteMgr.CheckCollisionWithSpriteByAlpha(p.syncSprite.GetId(), dst.syncSprite.GetId(), 0.05)
+	ret := spriteMgr.CheckCollisionWithSpriteByAlpha(p.syncSprite.GetId(), dst.syncSprite.GetId(), alphaThreshold)
+	return ret
 }
 
 const (
@@ -2042,10 +2077,11 @@ const (
 type ColliderShapeType = int64
 
 const (
-	RectCollider    ColliderShapeType = ColliderShapeType(physicsColliderRect)
-	CircleCollider  ColliderShapeType = ColliderShapeType(physicsColliderCircle)
-	CapsuleCollider ColliderShapeType = ColliderShapeType(physicsColliderCapsule)
-	PolygonCollider ColliderShapeType = ColliderShapeType(physicsColliderPolygon)
+	RectCollider      ColliderShapeType = ColliderShapeType(physicsColliderRect)
+	CircleCollider    ColliderShapeType = ColliderShapeType(physicsColliderCircle)
+	CapsuleCollider   ColliderShapeType = ColliderShapeType(physicsColliderCapsule)
+	PolygonCollider   ColliderShapeType = ColliderShapeType(physicsColliderPolygon)
+	TriggerExtraPixel float64           = 2.0
 )
 
 // physicConfig common structure for physics configuration
@@ -2055,7 +2091,7 @@ type physicConfig struct {
 	Type        ColliderShapeType // collider/trigger type
 	Pivot       mathf.Vec2        // pivot position
 	Params      []float64         // shape parameters
-	PivotOffset mathf.Vec2
+	PivotOffset mathf.Vec2        // pivot offset for render offset adjustment
 }
 
 func (cfg *physicConfig) String() string {
@@ -2109,13 +2145,6 @@ func (cfg *physicConfig) validateShape() bool {
 	return true
 }
 
-// setShape sets shape parameters
-func (cfg *physicConfig) setShape(ctype ColliderShapeType, params []float64) {
-	cfg.Type = ctype
-	cfg.Params = make([]float64, len(params))
-	copy(cfg.Params, params)
-}
-
 // getDimensions calculates width and height based on type and shape parameters
 func (cfg *physicConfig) getDimensions() (float64, float64) {
 	switch cfg.Type {
@@ -2143,20 +2172,20 @@ func (cfg *physicConfig) getDimensions() (float64, float64) {
 }
 
 // syncToProxy synchronizes physics configuration to engine proxy
-func (cfg *physicConfig) syncToProxy(syncProxy *engine.Sprite, isTrigger bool, sprite *SpriteImpl, extraPixelSize float64) {
+func (cfg *physicConfig) syncToProxy(syncProxy *engine.Sprite, isTrigger bool, sprite *SpriteImpl) {
 	if isTrigger {
 		syncProxy.SetTriggerLayer(cfg.Layer)
 		syncProxy.SetTriggerMask(cfg.Mask)
-		cfg.syncShape(syncProxy, true, sprite, extraPixelSize)
+		cfg.syncShape(syncProxy, true, sprite)
 	} else {
 		syncProxy.SetCollisionLayer(cfg.Layer)
 		syncProxy.SetCollisionMask(cfg.Mask)
-		cfg.syncShape(syncProxy, false, sprite, 0)
+		cfg.syncShape(syncProxy, false, sprite)
 	}
 }
 
 // syncShape synchronizes shape to engine proxy
-func (cfg *physicConfig) syncShape(syncProxy *engine.Sprite, isTrigger bool, sprite *SpriteImpl, extraPixelSize float64) {
+func (cfg *physicConfig) syncShape(syncProxy *engine.Sprite, isTrigger bool, sprite *SpriteImpl) {
 	scale := sprite.scale
 	if cfg.Type != physicsColliderNone && cfg.Type != physicsColliderAuto {
 		center := mathf.NewVec2(0, 0)
@@ -2164,10 +2193,10 @@ func (cfg *physicConfig) syncShape(syncProxy *engine.Sprite, isTrigger bool, spr
 		cfg.PivotOffset = center.Divf(scale)
 	}
 	if cfg.Type == physicsColliderAuto {
-		pivot, autoSize := syncGetCostumeBoundByAlpha(sprite, scale)
+		pivot, autoSize := syncGetCostumeBoundByAlpha(sprite, 1.0)
 		if isTrigger {
-			autoSize.X += extraPixelSize
-			autoSize.Y += extraPixelSize
+			autoSize.X += TriggerExtraPixel
+			autoSize.Y += TriggerExtraPixel
 		}
 		cfg.Pivot = pivot
 		cfg.Params = []float64{autoSize.X, autoSize.Y}

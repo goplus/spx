@@ -24,6 +24,7 @@ var (
 	totalStart         stime.Time
 	Debug              bool
 	Enabled            bool
+	enabledStack       []bool
 )
 
 func Calcfps() float64 {
@@ -50,12 +51,17 @@ func SetGco(co *coroutine.Coroutines) {
 	gco = co
 }
 
-func EnableTemporarily() func() {
-	prev := Enabled
-	Enabled = true
-	return func() {
-		Enabled = prev
+func EnableTemporarily(enabled bool) {
+	enabledStack = append(enabledStack, Enabled)
+	Enabled = enabled
+}
+
+func Restore() {
+	if len(enabledStack) == 0 {
+		return
 	}
+	Enabled = enabledStack[len(enabledStack)-1]
+	enabledStack = enabledStack[:len(enabledStack)-1]
 }
 
 func BeginSample(sampleName ...string) {
@@ -80,8 +86,15 @@ func EndSample(sampleName ...string) {
 	// Calculate the total time
 	total := stime.Since(totalStart).Seconds() * 1000
 
+	name := "Unnamed"
+	interval := 20.0
+	if len(sampleName) > 0 {
+		name = sampleName[0]
+		interval = 0.0
+	}
+
 	// print a brief message
-	if total > 20 {
+	if total > interval {
 		fmt.Printf("Total time: %.3fms (GameUpdate: %.3fms, CoroUpdateJobs: %.3fms, GameRender: %.3fms)\n",
 			total, timingData["GameUpdate"].ActualCall, timingData["CoroUpdateJobs"].ActualCall, timingData["GameRender"].ActualCall)
 	}
@@ -108,10 +121,6 @@ func EndSample(sampleName ...string) {
 
 	lastUpdateDuration = total
 
-	name := "Unnamed"
-	if len(sampleName) > 0 {
-		name = sampleName[0]
-	}
 	fmt.Printf("========== End profiling sample: %s ==========\n", name)
 }
 

@@ -12,3 +12,7 @@ func IsWebIntepreterMode() bool {
 func LinkEngine(callback engine.EngineCallbackInfo) {
 	inengine.Link(engine.EngineCallbackInfo(callback))
 }
+
+func UnlinkEngine() {
+	inengine.Unlink()
+}

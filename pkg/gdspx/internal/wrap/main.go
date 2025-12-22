@@ -30,7 +30,9 @@ func LinkFFI() bool {
 func OnLinked() {
 	ffi.Linked()
 }
-
+func UnlinkFFI() {
+	ffi.Unlink()
+}
 func CreateMgrs() []IManager {
 	return createMgrs()
 }

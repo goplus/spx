@@ -31,6 +31,9 @@ func RegisterFFI() {
 func OnLinked() {
 	webffi.Linked()
 }
+func UnlinkFFI() {
+	webffi.Unlink()
+}
 
 func CreateMgrs() []IManager {
 	return createMgrs()

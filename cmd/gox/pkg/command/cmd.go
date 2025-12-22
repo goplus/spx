@@ -196,7 +196,7 @@ func (cmd *CmdTool) executeCommand() error {
 // handleBuildPhase handles the build phase for commands that need it
 func (cmd *CmdTool) handleBuildPhase() error {
 	// 添加调试日志
-	fmt.Printf("[DEBUG] handleBuildPhase: command=%s, tags=%v\n", cmd.Args.CmdName, cmd.Args.Tags)
+	fmt.Printf("[DEBUG] handleBuildPhase: command=%s %s\n", cmd.Args.CmdName, cmd.SafeTagArgs())
 
 	switch cmd.Args.CmdName {
 	case "buildtinygo":

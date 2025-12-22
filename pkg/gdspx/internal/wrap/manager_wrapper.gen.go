@@ -292,6 +292,13 @@ func (pself *extMgr) RequestExit(exit_code int64) {
 	arg0 := ToGdInt(exit_code)
 	CallExtRequestExit(arg0)
 }
+func (pself *extMgr) RequestReset(exit_code int64) {
+	arg0 := ToGdInt(exit_code)
+	CallExtRequestReset(arg0)
+}
+func (pself *extMgr) RequestRestart() {
+	CallExtRequestRestart()
+}
 func (pself *extMgr) OnRuntimePanic(msg string) {
 	arg0Str := C.CString(msg)
 	arg0 := (GdString)(arg0Str)
@@ -612,18 +619,18 @@ func (pself *platformMgr) IsInPersistantDataDir(path string) bool {
 	retValue := CallPlatformIsInPersistantDataDir(arg0)
 	return ToBool(retValue)
 }
-func (pself *resMgr) CreateAnimation(sprite_type_name string, anim_name string, context string, fps int64, is_altas bool) {
-	arg0Str := C.CString(sprite_type_name)
+func (pself *resMgr) CreateAnimation(p_sprite_type string, p_anim_name string, p_json_ctx string, fps int64, is_atlas bool) {
+	arg0Str := C.CString(p_sprite_type)
 	arg0 := (GdString)(arg0Str)
 	defer C.free(unsafe.Pointer(arg0Str))
-	arg1Str := C.CString(anim_name)
+	arg1Str := C.CString(p_anim_name)
 	arg1 := (GdString)(arg1Str)
 	defer C.free(unsafe.Pointer(arg1Str))
-	arg2Str := C.CString(context)
+	arg2Str := C.CString(p_json_ctx)
 	arg2 := (GdString)(arg2Str)
 	defer C.free(unsafe.Pointer(arg2Str))
 	arg3 := ToGdInt(fps)
-	arg4 := ToGdBool(is_altas)
+	arg4 := ToGdBool(is_atlas)
 	CallResCreateAnimation(arg0, arg1, arg2, arg3, arg4)
 }
 func (pself *resMgr) SetLoadMode(is_direct_mode bool) {

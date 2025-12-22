@@ -14,8 +14,27 @@ concurrency:
 
 jobs:
   web-build:
-    name: 🌐 Web Release
+    name: 🌐 Web Release (${{ matrix.mode }})
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - mode: normal
+            zip_file: spx_web.zip
+            artifact_name: web-release
+            display_name: Web Release
+          - mode: worker
+            zip_file: spx_web_worker.zip
+            artifact_name: web-worker-release
+            display_name: Web Worker Release
+          - mode: minigame
+            zip_file: spx_web_minigame.zip
+            artifact_name: web-minigame-release
+            display_name: Web Minigame Release
+          - mode: miniprogram
+            zip_file: spx_web_miniprogram.zip
+            artifact_name: web-miniprogram-release
+            display_name: Web Miniprogram Release
     steps:
       - uses: actions/checkout@v5
 
@@ -28,24 +47,29 @@ jobs:
 
       - name: Build release pack
         run: |
-          make export-web
-          if [ ! -f "spx_web.zip" ]; then
-            echo "spx_web.zip not found"
+          if [ "${{ matrix.mode }}" != "normal" ]; then
+            make setup-web MODE=${{ matrix.mode }}
+            make export-web MODE=${{ matrix.mode }}
+          else
+            make export-web
+          fi
+          if [ ! -f "${{ matrix.zip_file }}" ]; then
+            echo "${{ matrix.zip_file }} not found"
             exit 1
           fi
 
       - name: Upload Web Build Results
         uses: actions/upload-artifact@v4
         with:
-          name: web-release
-          path: spx_web.zip
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.zip_file }}
           retention-days: 14
 
       - name: Publish to GitHub Release
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
-          files: spx_web.zip
+          files: ${{ matrix.zip_file }}
           tag_name: ${{ github.event.release.tag_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

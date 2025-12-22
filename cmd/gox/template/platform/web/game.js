@@ -1,5 +1,21 @@
 var Module = null
 
+/**
+ * @typedef {Object} FileMeta
+ * @property {number} lastModified Last modified time in milliseconds since Unix epoch.
+ */
+
+/**
+ * @typedef {Object} FileWithMeta
+ * @property {number} lastModified Last modified time in milliseconds since Unix epoch.
+ * @property {ArrayBuffer} content File content as ArrayBuffer.
+ */
+
+/**
+ * @typedef {{ [path: string]: FileWithMeta }} Files - File entries only; directories should be omitted.
+ * @typedef {{ [path: string]: FileMeta }} FilesMeta
+ */
+
 class GameApp {
     constructor(config) {
         config = config || {};
@@ -10,8 +26,7 @@ class GameApp {
         this.projectDataName = 'game.zip';
         this.persistentPath = 'engine';
         this.logLevel = config.logLevel;
-        this.projectData = config.projectData;
-        this.oldData = config.projectData;
+        this.useProfiler = this.logLevel == LOG_LEVEL_VERBOSE;
         this.gameCanvas = config.gameCanvas;
         this.assetURLs = config.assetURLs;
         this.gameConfig = {
@@ -20,14 +35,13 @@ class GameApp {
             'canvas': this.gameCanvas,
             'logLevel': this.logLevel,
             'canvasResizePolicy': 2,
-            'onExit': () => {
-                this.onGameExit()
+            'onExit': (code) => {
+                this.onGodotExit(code)
             },
         };
         this.recordingOnGameStart = config.recordingOnGameStart || false
         this.autoDownloadRecordedVideo = config.autoDownloadRecordedVideo || false
         this.logicPromise = Promise.resolve();
-        this.curProjectHash = ''
         // web worker mode
         this.workerMode = EnginePackMode == "worker"
         this.minigameMode = EnginePackMode == "minigame"
@@ -35,6 +49,7 @@ class GameApp {
         this.normalMode = !this.workerMode && !this.minigameMode && !this.miniprogramMode
 
         this.useAssetCache = config.useAssetCache || this.miniprogramMode;
+        profiler.enabled = this.useProfiler;
 
         // init worker message manager
         this.workerMessageManager = new globalThis.WorkerMessageManager();
@@ -48,44 +63,61 @@ class GameApp {
             logVerbose: this.logVerbose.bind(this)
         });
 
+        this.stopGameTask = 0;  
         this.logVerbose("EnginePackMode: ", EnginePackMode)
+
+        /**
+         * Project files meta
+         * @type FilesMeta
+         */
+        this.projectFilesMeta = {};
     }
     logVerbose(...args) {
         if (this.logLevel == LOG_LEVEL_VERBOSE) {
             console.log(...args);
         }
     }
-    startTask(prepareFunc, taskFunc, ...args) {
-        if (prepareFunc != null) {
-            prepareFunc()
-        }
-        this.logicPromise = this.logicPromise.then(async () => {
-            let promise = new Promise(async (resolve, reject) => {
-                await taskFunc.call(this, resolve, reject, ...args);
-            })
-            await promise
+
+    startTask(taskFunc) {
+        const originalPromise = this.logicPromise;
+        const newPromise = this.logicPromise.then(() => taskFunc());
+        this.logicPromise = newPromise;
+        newPromise.catch((err) => {
+            // If an error occurs, reset logicPromise to originalPromise to avoid blocking subsequent tasks.
+            if (this.logicPromise === newPromise) this.logicPromise = originalPromise;
         })
         return this.logicPromise
     }
 
-    async RunGame() {
-        return this.startTask(() => { this.runGameTask++ }, this.runGame)
+
+    async InitEngine() {
+        return this.startTask(() => this.initEngine())
     }
 
-    async StopGame() {
-        return this.startTask(() => { this.stopGameTask++ }, this.stopGame)
+    /**
+     * Initialize game with given game files. It is expected to be called after `InitEngine`, while before `StartGame`.
+     * @param {Files} files 
+     * @returns Promise<void>
+     */
+    async InitGame(files) {
+        return this.startTask(() => this.initGame(files))
     }
 
+    async StartGame() {
+        return this.startTask(() => this.startGame())
+    }
 
-    async runGame(resolve, reject) {
-        await this.onRunPrepareEngineWasm()
+    async ResetGame() {
+        this.stopGameTask++;
+        return this.startTask(() => this.resetGame())
+    }
 
-        this.runGameTask--
-        // if stopGame is called before runing game, then do nothing
+    async initEngine() {
+        await profiler.profile('onRunPrepareEngineWasm', () => this.onRunPrepareEngineWasm());
+
         if (this.stopGameTask > 0) {
-            this.logVerbose("stopGame is called before runing game")
-            resolve()
-            return
+            this.logVerbose("stopGame is called before runing game");
+            return;
         }
 
         let args = [
@@ -93,19 +125,19 @@ class GameApp {
             '--main-project-data', this.persistentPath + "/" + this.projectDataName,
         ];
         if (this.recordingOnGameStart) {
-            args.push('--write-movie', this.persistentPath + "/" + "movie.avi")
+            args.push('--write-movie', this.persistentPath + "/" + "movie.avi");
         }
 
         this.logVerbose("RunGame ", args);
         if (this.game) {
             this.logVerbose('A game is already running. Close it first');
-            resolve()
+            resolve();
             return;
         }
 
         this.onProgress(0.5);
         this.game = new Engine(this.gameConfig);
-        let curGame = this.game
+        let curGame = this.game;
 
         // register global functions
         window.gdspx_on_engine_start = function () { }
@@ -120,49 +152,106 @@ class GameApp {
             }
         });
 
-
-        await this.onRunBeforInit()
+        await profiler.profile('onRunBeforeInit', () => this.onRunBeforeInit());
         this.onProgress(0.5);
 
-        curGame.init().then(async () => {
-            this.onProgress(0.6);
-            await this.unpackGameData(curGame)
-            this.onProgress(0.7);
-            await this.onRunAfterInit(curGame)
-            this.onProgress(0.80);
-            curGame.start({ 'args': args, 'canvas': this.gameCanvas }).then(async () => {
-                this.onProgress(0.9);
-                this.gameCanvas.focus();
-                await this.onRunAfterStart(curGame)
-                this.onProgress(1.0);
-                this.gameCanvas.focus();
-                this.logVerbose("==> game start done")
-                resolve()
-            });
-        });
+        await profiler.profile('curGame.init',  () => curGame.init());
+
+        this.onProgress(0.6);
+
+        await profiler.profile('unpackData', () => this.unpackEngineData(curGame));
+
+        this.onProgress(0.7);
+
+        await profiler.profile('onRunAfterInit', () => this.onRunAfterInit(curGame));
+
+        this.onProgress(0.8);
+
+        await profiler.profile('curGame.start', () => curGame.start({ 'args': args, 'canvas': this.gameCanvas }));
+
+        this.onProgress(1.0);
+        this.logVerbose("==> engine start done");
     }
 
+    /**
+     * @private Initialize game with given game files
+     * @param {Files} files 
+     * @returns Promise<void>
+     */
+    async initGame(files) {
+        await profiler.profile('updateEngineFiles', () => this.updateEngineFiles(files));
+        await profiler.profile('buildGame', () => this.buildGame(files));
+    }
 
-    async stopGame(resolve, reject) {
-        this.stopGameTask--
-        if (this.game == null) {
-            // no game is running, do nothing
-            resolve()
-            this.logVerbose("no game is running")
-            return
-        }
-        this.stopGameResolve = () => {
-            this.game = null
-            resolve();
-            this.stopGameResolve = null
-        }
-        this.onProgress(1.0);
-        this.game.requestQuit()
+    /**
+     * (Incrementally) Update engine files with given game files.
+     * @param {Files} files
+     */
+    updateEngineFiles(files) {
+        /** @type Array<{ name: string, data: Uint8Array }> */
+        const updatedFiles = [];
+        const savedFilesMeta = this.projectFilesMeta;
+        /** @type FilesMeta */
+        const filesMeta = {};
+        Object.entries(files).forEach(([path, { lastModified, content }]) => {
+            filesMeta[path] = { lastModified };
+            const savedFileMeta = savedFilesMeta[path];
+            if (savedFileMeta != null && savedFileMeta.lastModified === lastModified) {
+                return; // file not changed, skip
+            }
+            updatedFiles.push({ name: path, data: new Uint8Array(content) });
+        });
+        this.game.updateAssetsData(this.persistentPath, updatedFiles)
+        this.projectFilesMeta = filesMeta;
 
-        if(this.recordingOnGameStart && this.autoDownloadRecordedVideo){
-            let fileName = `spx_${new Date().getTime()}.webm`;
-            this.downloadRecordedVideo(fileName)
-        } 
+        /** @type Array<string> */
+        const removedFilePaths = [];
+        Object.entries(savedFilesMeta).forEach(([path, _]) => {
+            if (filesMeta[path] == null) {
+                removedFilePaths.push(path);
+            }
+        });
+        this.game.deleteAssetsData(this.persistentPath, removedFilePaths);
+    }
+
+    /**
+     * Do spx build with given game files
+     * @param {Files} files
+     */
+    buildGame(files) {
+        if (this.stopGameTask > 0) {
+            this.logVerbose("stopGame is called before runing game");
+            return;
+        }
+        /** @type {{ [path: string]: Uint8Array }} */
+        const nonAssetFiles = {};
+        Object.entries(files).forEach(([path, file]) => {
+            // `.spx` and `.json` files are treated as non-asset files
+            if (path.endsWith(".spx") || path.endsWith('.json')) {
+                nonAssetFiles[path] = new Uint8Array(file.content);
+            }
+        });
+        if (!this.workerMode) {
+            const res = window.ixgo_build(nonAssetFiles);
+            if (res instanceof Error) throw res;
+        }else{
+            this.nonAssetFiles = nonAssetFiles;
+        }
+    }
+
+    async startGame() {
+        if (this.stopGameTask > 0) {
+            this.logVerbose("stopGame is called before runing game");
+            return;
+        }
+
+        let curGame = this.game;
+        profiler.mark('RunGame Start');
+        await profiler.profile('restart', () => this.restart());
+        await profiler.profile('onRunAfterStart', () => this.onRunAfterStart(curGame));
+        this.gameCanvas.focus();
+        profiler.mark('RunGame Done');
+        profiler.measure('RunGame Start', 'RunGame Done');
     }
 
     downloadRecordedVideo(fileName) { 
@@ -181,13 +270,35 @@ class GameApp {
         return await Module.tryStopRecording()
     } 
 
-    onGameExit() {
+    onGodotExit(code) {
         this.game = null
-        this.logVerbose("on game quit")
-        if (this.stopGameResolve) {
-            this.stopGameResolve()
+        if (this.config.handleGodotExit != null) {
+            this.config.handleGodotExit(code);
+        }
+ 
+    }
+    async resetGame() {
+        this.stopGameTask--
+        if (this.game == null) {
+            this.logVerbose("No Game Is Running")
+            return
+        }
+
+        this.game.requestReset()
+
+        if(this.recordingOnGameStart && this.autoDownloadRecordedVideo){
+            let fileName = `spx_${new Date().getTime()}.webm`;
+            this.downloadRecordedVideo(fileName)
+        } 
+    }
+
+    restart() {
+        let funPtr = this.game.rtenv["_gdspx_ext_request_restart"]
+        if(funPtr != null){
+            funPtr()
         }
     }
+
     pause() {
         let funPtr = this.game.rtenv["_gdspx_ext_pause"]
         if(funPtr != null){
@@ -214,10 +325,11 @@ class GameApp {
             this.config.onProgress(value);
         }
     }
-    async unpackGameData(game) {
+
+    async unpackEngineData(game) {
         let packUrl = this.assetURLs[this.packName]
-        let pckData = await (await fetch(packUrl)).arrayBuffer();
-        await game.unpackGameData(this.persistentPath, this.projectDataName, this.projectData.buffer, this.packName, pckData)
+        let pckData = await (await fetch(packUrl)).arrayBuffer()
+        await game.unpackEngineData(this.persistentPath, this.packName, pckData)
     }
 
     callWorkerFunction(funcName, ...args) {
@@ -247,15 +359,15 @@ class GameApp {
         }
     }
 
-    async onRunBeforInit() {
+    async onRunBeforeInit() {
         if (this.minigameMode) {
             GameGlobal.engine = this.game;
             godotSdk.set_engine(this.game);
             self.initExtensionWasm = function () { }
         } else {
             if (!this.workerMode) {
-                await this.loadLogicWasm()
-                await this.runLogicWasm()
+                await profiler.profile('loadLogicWasm', () => this.loadLogicWasm());
+                await profiler.profile('runLogicWasm', () => this.runLogicWasm());
                 self.initExtensionWasm = function () { }
             }
         }
@@ -278,12 +390,13 @@ class GameApp {
         if (this.workerMode) {
             let pthreads = game.getPThread()
             this.workerMessageManager.setPThreads(pthreads)
-            this.workerMessageManager.callWorkerProjectDataUpdate(this.projectData, this.assetURLs)
+            this.workerMessageManager.callWorkerProjectDataUpdate(this.nonAssetFiles, this.assetURLs)
         } else {
             // register global functions
             Module = game.rtenv;
             FFI = self;
-            window.goLoadData(new Uint8Array(this.projectData));
+            const res = window.ixgo_run();
+            if (res instanceof Error) throw res;
         }
     }
 
@@ -317,15 +430,25 @@ class GameApp {
             }
         }
     }
-    async runLogicWasm() {
-        this.go.run(this.logicWasmInstance);
-        if (!this.minigameMode) {
-            if (this.config.onSpxReady != null) {
-                this.config.onSpxReady()
-            }
+
+    notifyExit(code) {
+        if (typeof window.onGoWasmExit === "function") {
+            window.onGoWasmExit(code);
+        }
+
+        window.dispatchEvent(new CustomEvent("logicWasmExit", { detail: { code } }));
+
+        if (window.parent !== window) {
+            window.parent.postMessage({ type: "EngineCrash", code }, "*");
         }
     }
 
+    async runLogicWasm() {
+        this.go.exit = (code) => {
+            this.notifyExit(code);
+        };
+        this.go.run(this.logicWasmInstance);
+    }
 }
 
 // export GameApp to global

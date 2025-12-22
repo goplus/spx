@@ -53,6 +53,8 @@ type GDExtensionInterface struct {
 	SpxDebugDebugDrawRect                    js.Value
 	SpxDebugDebugDrawLine                    js.Value
 	SpxExtRequestExit                        js.Value
+	SpxExtRequestReset                       js.Value
+	SpxExtRequestRestart                     js.Value
 	SpxExtOnRuntimePanic                     js.Value
 	SpxExtPause                              js.Value
 	SpxExtResume                             js.Value
@@ -347,6 +349,8 @@ func (x *GDExtensionInterface) loadProcAddresses() {
 	x.SpxDebugDebugDrawRect = dlsymGD("gdspx_debug_debug_draw_rect")
 	x.SpxDebugDebugDrawLine = dlsymGD("gdspx_debug_debug_draw_line")
 	x.SpxExtRequestExit = dlsymGD("gdspx_ext_request_exit")
+	x.SpxExtRequestReset = dlsymGD("gdspx_ext_request_reset")
+	x.SpxExtRequestRestart = dlsymGD("gdspx_ext_request_restart")
 	x.SpxExtOnRuntimePanic = dlsymGD("gdspx_ext_on_runtime_panic")
 	x.SpxExtPause = dlsymGD("gdspx_ext_pause")
 	x.SpxExtResume = dlsymGD("gdspx_ext_resume")

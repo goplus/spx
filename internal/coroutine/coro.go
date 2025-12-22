@@ -1,6 +1,7 @@
 package coroutine
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"reflect"
@@ -39,6 +40,26 @@ type threadImpl struct {
 
 	schedFrame     int64
 	schedTimestamp stime.Time
+
+	ctx        context.Context
+	cancelFunc context.CancelFunc
+}
+
+// Context returns the context associated with this thread.
+// If no context was set, returns context.Background().
+func (p *threadImpl) Context() context.Context {
+	if p.ctx == nil {
+		return context.Background()
+	}
+	return p.ctx
+}
+
+// Cancel cancels the thread's context, signaling graceful termination.
+// Safe to call multiple times or on threads without contexts.
+func (p *threadImpl) Cancel() {
+	if p.cancelFunc != nil {
+		p.cancelFunc()
+	}
 }
 
 func (p *threadImpl) String() string {
@@ -89,6 +110,8 @@ type Coroutines struct {
 
 	// goroutineIDs tracks all goroutine IDs created by CreateAndStart
 	goroutineIDs sync.Map // map[int64]bool
+
+	allThreads map[Thread]struct{}
 }
 
 const (
@@ -118,9 +141,10 @@ type WaitJob struct {
 // New creates a coroutine manager.
 func New(onPanic func(name, stack string)) *Coroutines {
 	p := &Coroutines{
-		onPanic:   onPanic,
-		suspended: make(map[Thread]bool),
-		waiting:   make(map[Thread]bool),
+		onPanic:    onPanic,
+		suspended:  make(map[Thread]bool),
+		waiting:    make(map[Thread]bool),
+		allThreads: make(map[Thread]struct{}),
 	}
 	p.cond.L = &p.mutex
 	p.curQueue = NewQueue[*WaitJob]()
@@ -164,12 +188,32 @@ func (p *Coroutines) Abort() {
 	panic(ErrAbortThread)
 }
 
+func (p *Coroutines) AbortAll() {
+	p.mutex.Lock()
+	threads := make([]Thread, 0, len(p.allThreads))
+	for th := range p.allThreads {
+		threads = append(threads, th)
+	}
+	p.mutex.Unlock()
+
+	for _, th := range threads {
+		th.mutex.Lock()
+		if !th.stopped_ {
+			th.stopped_ = true
+			th.Cancel()
+			th.cond.Signal()
+		}
+		th.mutex.Unlock()
+	}
+}
+
 func (p *Coroutines) StopIf(filter func(th Thread) bool) {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 	for th := range p.suspended {
 		if filter(th) {
 			th.stopped_ = true
+			th.Cancel()
 		}
 	}
 }
@@ -177,8 +221,9 @@ func (p *Coroutines) StopIf(filter func(th Thread) bool) {
 // CreateAndStart creates and executes the new coroutine.
 func (p *Coroutines) CreateAndStart(start bool, tobj ThreadObj, fn func(me Thread) int) Thread {
 	id := &threadImpl{Obj: tobj, frame: p.frame, id: atomic.AddInt64(&p.curThId, 1), schedFrame: -1}
-
+	id.ctx, id.cancelFunc = context.WithCancel(context.Background())
 	name := ""
+
 	if tobj != nil {
 		t := reflect.TypeOf(tobj)
 		if t.Kind() == reflect.Ptr && t.Elem().Name() != "" {
@@ -191,11 +236,16 @@ func (p *Coroutines) CreateAndStart(start bool, tobj ThreadObj, fn func(me Threa
 			}
 		}
 	}
+
 	id.name = name
 
 	if p.debug {
 		id.stack = debug.GetStackTrace()
 	}
+
+	p.mutex.Lock()
+	p.allThreads[id] = struct{}{}
+	p.mutex.Unlock()
 
 	id.cond = sync.NewCond(&id.mutex) // Initialize the thread's condition variable
 	go func() {
@@ -208,8 +258,10 @@ func (p *Coroutines) CreateAndStart(start bool, tobj ThreadObj, fn func(me Threa
 		defer func() {
 			p.mutex.Lock()
 			delete(p.suspended, id)
+			delete(p.allThreads, id)
 			p.mutex.Unlock()
 			p.setWaitStatus(id, waitStatusDelete)
+			id.Cancel()
 			p.sema.Unlock()
 
 			// Remove goroutine ID from tracking
@@ -219,8 +271,9 @@ func (p *Coroutines) CreateAndStart(start bool, tobj ThreadObj, fn func(me Threa
 				if e != ErrAbortThread {
 					if p.onPanic != nil {
 						p.onPanic(id.name, id.stack)
+					} else {
+						panic(e)
 					}
-					panic(e)
 				}
 			}
 		}()

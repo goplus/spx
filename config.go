@@ -185,6 +185,8 @@ type costumeSetItem struct {
 
 type costumeSet struct {
 	Path             string           `json:"path"`
+	ImageWidth       float64          `json:"imageWidth"`
+	ImageHeight      float64          `json:"imageHeight"`
 	FaceRight        float64          `json:"faceRight"` // turn face to right
 	BitmapResolution int              `json:"bitmapResolution"`
 	Nx               int              `json:"nx"`
@@ -210,6 +212,8 @@ type costumeConfig struct {
 	Path             string  `json:"path"`
 	X                float64 `json:"x"`
 	Y                float64 `json:"y"`
+	ImageWidth       float64 `json:"imageWidth"`
+	ImageHeight      float64 `json:"imageHeight"`
 	FaceRight        float64 `json:"faceRight"` // turn face to right
 	BitmapResolution int     `json:"bitmapResolution"`
 }
@@ -257,10 +261,32 @@ type aniConfig struct {
 	IFrameFrom int
 	IFrameTo   int
 
+	AdaptAnimBitmapResolution int
+
 	Speed float64
 	From  any
 	To    any
 	//OnEnd *actionConfig  `json:"onEnd"`   //stop
+}
+
+type frameNormal struct {
+	Path   string     `json:"path"`
+	Offset [2]float64 `json:"offset"`
+	Bitmap int64      `json:"bitmap"`
+}
+
+type frameAtlas struct {
+	X      int64      `json:"x"`
+	Y      int64      `json:"y"`
+	W      int64      `json:"w"`
+	H      int64      `json:"h"`
+	Offset [2]float64 `json:"offset"`
+}
+
+type animPayload struct {
+	BasePath  string `json:"base_path,omitempty"`
+	Frames    []any  `json:"frames"`
+	MaxBitmap int64  `json:"max_bitmap"`
 }
 
 // -------------------------------------------------------------------------------------

@@ -17,9 +17,8 @@
 package spx
 
 import (
+	"encoding/json"
 	"fmt"
-	"log"
-	"strings"
 
 	"github.com/goplus/spx/v2/internal/engine"
 	"github.com/goplus/spx/v2/internal/enginewrap"
@@ -67,6 +66,11 @@ func (p *Game) OnEngineStart() {
 }
 
 func (p *Game) OnEngineDestroy() {
+}
+
+func (p *Game) OnEngineReset() {
+	p.reset()
+	p.isRunned = false
 }
 
 func (p *Game) OnEngineUpdate(delta float64) {
@@ -142,7 +146,7 @@ func (sprite *SpriteImpl) syncOnAnimationFinished() {
 	engine.Lock()
 	defer engine.Unlock()
 	state := sprite.curAnimState
-	if state != nil && state.Name != "" {
+	if state != nil && state.Name != "" && sprite.syncSprite != nil {
 		curAnimName := sprite.syncSprite.GetCurrentAnimName()
 		sprite.donedAnimations = append(sprite.donedAnimations, curAnimName)
 	}
@@ -197,14 +201,7 @@ func (p *Game) syncUpdateProxy() {
 	}
 
 	// unbind syncSprite
-	for _, item := range p.destroyItems {
-		sprite, ok := item.(*SpriteImpl)
-		if ok && sprite.syncSprite != nil {
-			sprite.syncSprite.Destroy()
-			sprite.syncSprite = nil
-		}
-	}
-	p.destroyItems = nil
+	p.spriteMgr.flushDestroy()
 }
 
 func checkUpdateCostume(p *baseObj) {
@@ -266,11 +263,8 @@ func (*Game) syncUpdatePhysic() {
 
 func syncInitSpritePhysicInfo(sprite *SpriteImpl, syncProxy *engine.Sprite) {
 	sprite.initCollisionParams()
-
-	// sync collision and trigger configurations using unified method
-	const extraPixelSize = 2
-	sprite.collisionInfo.syncToProxy(syncProxy, false, sprite, 0)
-	sprite.triggerInfo.syncToProxy(syncProxy, true, sprite, extraPixelSize)
+	sprite.collisionInfo.syncToProxy(syncProxy, false, sprite)
+	sprite.triggerInfo.syncToProxy(syncProxy, true, sprite)
 	syncProxy.SetGravityScale(sprite.gravity)
 	syncProxy.SetPhysicsMode(sprite.physicsMode)
 }
@@ -307,7 +301,7 @@ func getCostumeBoundByAlpha(p *SpriteImpl, pscale float64, isSync bool) (mathf.V
 	sizeY := float64(rect.Size.Y) * scale
 
 	w, h := p.getCostumeSize()
-	w, h = w*p.scale, h*p.scale
+	w, h = w*pscale, h*pscale
 	offsetX := float64(posX + sizeX/2 - w/2)
 	offsetY := -float64(posY + sizeY/2 - h/2)
 
@@ -359,53 +353,91 @@ func revertRenderOffset(p *SpriteImpl, cx, cy *float64) {
 	*cy = *cy - y
 }
 
-func registerAnimToEngine(spriteName string, animName string, animCfg *aniConfig, costumes []*costume, isCostumeSet bool) {
-	// TODO(jiepengtan): here we should optimize the implementation, it's better to use json to map, avoid manually writing parsing code
-	sb := strings.Builder{}
-	from, to := animCfg.IFrameFrom, animCfg.IFrameTo
-	if from >= len(costumes) {
-		log.Panicf("animation key [%s] from [%d] is out of costumes length [%d]", animName, from, len(costumes))
-		return
+func createAnimation(
+	spriteName string,
+	animName string,
+	cfg *aniConfig,
+	costumes []*costume,
+	isAtlas bool,
+) {
+	payload := buildAnimPayload(cfg, costumes, isAtlas)
+	cfg.AdaptAnimBitmapResolution = int(payload.MaxBitmap)
+
+	bin, err := json.Marshal(payload)
+	if err != nil {
+		panic(err)
 	}
-	splitTag := "|"
-	if isCostumeSet {
-		assetPath := engine.ToAssetPath(costumes[0].path)
-		if strings.Contains(assetPath, splitTag) {
-			panic("assetPath is invalid, should not contains " + splitTag + " " + costumes[0].path)
-		}
-		sb.WriteString(assetPath)
-		sb.WriteString(";")
-		ary := make([]int, 0)
-		if from <= to {
-			for i := from; i <= to; i++ {
-				ary = append(ary, i)
-			}
-		} else {
-			for i := from; i >= to; i-- {
-				ary = append(ary, i)
-			}
-		}
-		for _, i := range ary {
-			costume := costumes[i]
-			sb.WriteString(fmt.Sprintf("%d,%d,%d,%d", costume.posX, costume.posY, costume.width, costume.height))
-			if i != to {
-				sb.WriteString(",")
-			}
-		}
-	} else {
-		for i := from; i <= to; i++ {
-			assetPath := engine.ToAssetPath(costumes[i].path)
-			if strings.Contains(assetPath, splitTag) {
-				panic("assetPath is invalid, should not contains " + splitTag + " " + costumes[i].path)
-			}
-			sb.WriteString(assetPath)
-			costume := costumes[i]
-			halfSize := mathf.Vec2.Mulf(costume.imageSize, 0.5)
-			sb.WriteString(splitTag + fmt.Sprintf("%f,%f", costume.center.X-halfSize.X, -costume.center.Y+halfSize.Y))
-			if i != to {
-				sb.WriteString(";")
-			}
-		}
+
+	if cfg.IFrameFrom < 0 || cfg.IFrameFrom >= len(costumes) || cfg.IFrameTo < 0 || cfg.IFrameTo >= len(costumes) {
+		panic(fmt.Sprintf("animation frame index out of bounds: from %d, to %d, costumes len %d", cfg.IFrameFrom, cfg.IFrameTo, len(costumes)))
 	}
-	resMgr.CreateAnimation(spriteName, animName, sb.String(), int64(animCfg.FrameFps), isCostumeSet)
+
+	resMgr.CreateAnimation(
+		spriteName,
+		animName,
+		string(bin),
+		int64(cfg.FrameFps),
+		isAtlas,
+	)
+}
+
+func buildAnimPayload(cfg *aniConfig, costumes []*costume, isAtlas bool) animPayload {
+	if isAtlas {
+		return buildAtlasPayload(cfg, costumes)
+	}
+	return buildNormalPayload(cfg, costumes)
+}
+
+func buildNormalPayload(cfg *aniConfig, costumes []*costume) animPayload {
+	maxBitmap := 0
+
+	frameCount := cfg.IFrameTo - cfg.IFrameFrom + 1
+	frames := make([]any, 0, frameCount)
+
+	for i := cfg.IFrameFrom; i <= cfg.IFrameTo; i++ {
+		c := costumes[i]
+		b := toBitmapResolution(c.bitmapResolution)
+
+		if b > maxBitmap {
+			maxBitmap = b
+		}
+
+		path := engine.ToAssetPath(c.path)
+		half := mathf.Vec2.Mulf(c.imageSize, 0.5)
+
+		frames = append(frames, frameNormal{
+			Path: path,
+			Offset: [2]float64{
+				c.center.X - half.X,
+				-(c.center.Y - half.Y),
+			},
+			Bitmap: int64(b),
+		})
+	}
+
+	return animPayload{Frames: frames, MaxBitmap: int64(maxBitmap)}
+}
+
+func buildAtlasPayload(cfg *aniConfig, costumes []*costume) animPayload {
+	base := engine.ToAssetPath(costumes[0].path)
+
+	step := 1
+	if cfg.IFrameTo < cfg.IFrameFrom {
+		step = -1
+	}
+
+	frameCount := (cfg.IFrameTo-cfg.IFrameFrom)*step + 1
+	frames := make([]any, 0, frameCount)
+	for i := cfg.IFrameFrom; i != cfg.IFrameTo+step; i += step {
+		c := costumes[i]
+		frames = append(frames, frameAtlas{
+			X:      int64(c.posX),
+			Y:      int64(c.posY),
+			W:      int64(c.width),
+			H:      int64(c.height),
+			Offset: [2]float64{0, 0},
+		})
+	}
+
+	return animPayload{BasePath: base, Frames: frames, MaxBitmap: 1}
 }

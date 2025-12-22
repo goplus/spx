@@ -47,7 +47,7 @@ func (p *Game) showDebugPanel() {
 		p.debugPanel = ui.NewUiDebug()
 	}
 	msg := fmt.Sprintf("FPS: %.f\n", time.FPS())
-	msg += fmt.Sprintf("Shape: %v\n", len(p.items))
+	msg += fmt.Sprintf("Shape: %v\n", p.spriteMgr.count())
 	msg += fmt.Sprintf("GameUpdate: %v\n", updateInfo.ActualCall)
 	msg += fmt.Sprintf("GameRender: %v\n", renderInfo.ActualCall)
 	msg += fmt.Sprintf("CoroUpdateJobs: %v\n", coroInfo.ActualCall)

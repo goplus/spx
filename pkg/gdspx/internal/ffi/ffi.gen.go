@@ -49,6 +49,8 @@ type GDExtensionInterface struct {
 	SpxDebugDebugDrawRect                    GDExtensionSpxDebugDebugDrawRect
 	SpxDebugDebugDrawLine                    GDExtensionSpxDebugDebugDrawLine
 	SpxExtRequestExit                        GDExtensionSpxExtRequestExit
+	SpxExtRequestReset                       GDExtensionSpxExtRequestReset
+	SpxExtRequestRestart                     GDExtensionSpxExtRequestRestart
 	SpxExtOnRuntimePanic                     GDExtensionSpxExtOnRuntimePanic
 	SpxExtPause                              GDExtensionSpxExtPause
 	SpxExtResume                             GDExtensionSpxExtResume
@@ -343,6 +345,8 @@ func (x *GDExtensionInterface) loadProcAddresses() {
 	x.SpxDebugDebugDrawRect = (GDExtensionSpxDebugDebugDrawRect)(dlsymGD("spx_debug_debug_draw_rect"))
 	x.SpxDebugDebugDrawLine = (GDExtensionSpxDebugDebugDrawLine)(dlsymGD("spx_debug_debug_draw_line"))
 	x.SpxExtRequestExit = (GDExtensionSpxExtRequestExit)(dlsymGD("spx_ext_request_exit"))
+	x.SpxExtRequestReset = (GDExtensionSpxExtRequestReset)(dlsymGD("spx_ext_request_reset"))
+	x.SpxExtRequestRestart = (GDExtensionSpxExtRequestRestart)(dlsymGD("spx_ext_request_restart"))
 	x.SpxExtOnRuntimePanic = (GDExtensionSpxExtOnRuntimePanic)(dlsymGD("spx_ext_on_runtime_panic"))
 	x.SpxExtPause = (GDExtensionSpxExtPause)(dlsymGD("spx_ext_pause"))
 	x.SpxExtResume = (GDExtensionSpxExtResume)(dlsymGD("spx_ext_resume"))

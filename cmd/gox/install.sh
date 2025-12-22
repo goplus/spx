@@ -53,8 +53,10 @@ if [ ! -f "$appname" ]; then
 fi
 
 mv $appname $GOPATH/bin/
-go env -w GOFLAGS="-buildvcs=false"
+
+# build wasm
 if [ "$1" = "--web" ]; then
+    go env -w GOFLAGS="-buildvcs=false"
     cd ../igox || exit
     ./build.sh "$2"
     cp gdspx.wasm $GOPATH/bin/gdspx.wasm

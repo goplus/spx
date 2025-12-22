@@ -50,6 +50,9 @@ const (
 	Gop_sched  = "Sched,SchedNow"
 )
 
+// -------------------------------------------------------------------------------------
+// Debug flags
+
 type dbgFlags int
 
 const (
@@ -60,10 +63,25 @@ const (
 	DbgFlagAll = DbgFlagLoad | DbgFlagInstr | DbgFlagEvent | DbgFlagPerf
 )
 
+// -------------------------------------------------------------------------------------
+// Mouse button constants
+
 const (
 	MOUSE_BUTTON_LEFT   int64 = 1
 	MOUSE_BUTTON_RIGHT  int64 = 2
 	MOUSE_BUTTON_MIDDLE int64 = 3
+)
+
+// -------------------------------------------------------------------------------------
+// Configuration constants
+
+const (
+	eventBufferSize        = 16   // size of event channel buffer
+	schedTimeoutMs         = 3000 // timeout in milliseconds for scheduler
+	mainExecTimeoutSec     = 3    // timeout in seconds for main execution
+	mouseMovementThreshold = 1.0  // minimum movement to trigger mouse event (pixels)
+	defaultPathCellSize    = 16   // default path finding cell size
+	defaultAudioMaxDist    = 2000 // default maximum audio distance
 )
 
 var (
@@ -99,13 +117,12 @@ type Game struct {
 
 	fs spxfs.Dir
 
-	inputs       inputManager
-	sounds       soundMgr
-	typs         map[string]reflect.Type // map: name => sprite type, for all sprites
-	sprs         map[string]Sprite       // map: name => sprite prototype, for loaded sprites
-	items        []Shape                 // shapes on stage (in Zorder), not only sprites
-	destroyItems []Shape                 // shapes on stage (in Zorder), not only sprites
-	tempItems    []Shape                 // temp items
+	inputs inputManager
+	sounds soundMgr
+	typs   map[string]reflect.Type // map: name => sprite type, for all sprites
+	sprs   map[string]Sprite       // map: name => sprite prototype, for loaded sprites
+
+	spriteMgr *spriteManager
 
 	events    chan event
 	aurec     *audiorecord.Recorder
@@ -156,6 +173,7 @@ type Game struct {
 }
 
 const maxCollisionLayerIdx = 32 // engine limit support 32 layers
+var imageSizeCache sync.Map
 
 type spriteCollisionInfo struct {
 	Id    int
@@ -211,21 +229,19 @@ func (p *Game) reset() {
 		p.audioId = 0
 	}
 	p.sinkMgr.reset()
+	p.spriteMgr.reset()
 	p.EraseAll() // clear pens
 	p.startFlag = sync.Once{}
-	p.Stop(AllOtherScripts)
-	p.items = nil
 	p.debugPanel = nil
 	p.askPanel = nil
-	p.destroyItems = nil
 	p.isLoaded = false
+
 	p.oncePathFinder = sync.Once{}
 	p.sprs = make(map[string]Sprite)
 	timer.OnReload()
-}
-
-func (p *Game) getGame() *Game {
-	return p
+	close(p.events)
+	imageSizeCache = sync.Map{}
+	p.Stop(AllOtherScripts)
 }
 
 func (p *Game) initGame(sprites []Sprite) *Game {
@@ -233,11 +249,18 @@ func (p *Game) initGame(sprites []Sprite) *Game {
 	p.eventSinks.init(&p.sinkMgr, p)
 	p.sprs = make(map[string]Sprite)
 	p.typs = make(map[string]reflect.Type)
+	p.initSpriteMgr()
 	for _, spr := range sprites {
 		tySpr := reflect.TypeOf(spr).Elem()
 		p.typs[tySpr.Name()] = tySpr
 	}
 	return p
+}
+
+func (p *Game) initSpriteMgr() {
+	if p.spriteMgr == nil {
+		p.spriteMgr = newSpriteManager()
+	}
 }
 
 // Gopt_Game_Main is required by XGo compiler as the entry of a .gmx project.
@@ -317,8 +340,8 @@ func Gopt_Game_Run(game Gamer, resource any, gameConf ...*Config) {
 		appName := filepath.Base(dir)
 		conf.Title = appName + " (by XGo Builder)"
 	}
-	proj.FullScreen = proj.FullScreen || conf.FullScreen
 
+	proj.FullScreen = proj.FullScreen || conf.FullScreen
 	enabledPhysics = proj.Physics
 	physicMgr.SetGlobalGravity(parseDefaultFloatValue(proj.GlobalGravity, 1))
 	physicMgr.SetGlobalAirDrag(parseDefaultFloatValue(proj.GlobalAirDrag, 1))
@@ -345,12 +368,12 @@ func Gopt_Game_Run(game Gamer, resource any, gameConf ...*Config) {
 	// auto set collision layer by default
 	g.isAutoSetCollisionLayer = proj.AutoSetCollisionLayer == nil || *proj.AutoSetCollisionLayer
 
-	g.pathCellSizeX = parseDefaultNumber(proj.PathCellSizeX, 16)
-	g.pathCellSizeY = parseDefaultNumber(proj.PathCellSizeY, 16)
+	g.pathCellSizeX = parseDefaultNumber(proj.PathCellSizeX, defaultPathCellSize)
+	g.pathCellSizeY = parseDefaultNumber(proj.PathCellSizeY, defaultPathCellSize)
 
 	engine.SetLayerSortMode(proj.LayerSortMode)
 	g.audioAttenuation = parseDefaultFloatValue(proj.AudioAttenuation, 0) // 0 indicates no attenuation will occur, to compatibility with previous behavior.
-	g.audioMaxDistance = parseDefaultFloatValue(proj.AudioMaxDistance, 2000)
+	g.audioMaxDistance = parseDefaultFloatValue(proj.AudioMaxDistance, defaultAudioMaxDist)
 	if debugLoad {
 		log.Println("==> isCollisionByPixel", g.isCollisionByPixel)
 		log.Println("==> isAutoSetCollisionLayer", g.isAutoSetCollisionLayer)
@@ -360,7 +383,7 @@ func Gopt_Game_Run(game Gamer, resource any, gameConf ...*Config) {
 	if g.isAutoSetCollisionLayer {
 		g.sprCollisionInfos = make(map[string]*spriteCollisionInfo)
 		idx := 0
-		for name, _ := range g.typs {
+		for name := range g.typs {
 			modIdx := int(math.Mod(float64(idx), maxCollisionLayerIdx))
 			info := &spriteCollisionInfo{Id: idx, Layer: 1 << modIdx}
 			g.sprCollisionInfos[name] = info
@@ -407,7 +430,7 @@ func getFieldPtrOrAlloc(g *Game, v reflect.Value, i int) (name string, val any) 
 	word := unsafe.Pointer(vFld.Addr().Pointer())
 	ret := reflect.NewAt(typ, word).Interface()
 
-	if vFld.Kind() == reflect.Ptr && typ.Implements(tySprite) {
+	if vFld.Kind() == reflect.Pointer && typ.Implements(tySprite) {
 		obj := reflect.New(typ.Elem())
 		reflect.ValueOf(ret).Elem().Set(obj)
 		ret = obj.Interface()
@@ -424,7 +447,7 @@ func getFieldPtrOrAlloc(g *Game, v reflect.Value, i int) (name string, val any) 
 }
 
 func findFieldPtr(v reflect.Value, name string, from int) any {
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Pointer {
 		v = v.Elem()
 	}
 	t := v.Type()
@@ -439,7 +462,7 @@ func findFieldPtr(v reflect.Value, name string, from int) any {
 }
 
 func findObjPtr(v reflect.Value, name string, from int) any {
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Pointer {
 		v = v.Elem()
 	}
 	t := v.Type()
@@ -448,7 +471,7 @@ func findObjPtr(v reflect.Value, name string, from int) any {
 		if tFld.Name == name {
 			typ := tFld.Type
 			vFld := v.Field(i)
-			if vFld.Kind() == reflect.Ptr {
+			if vFld.Kind() == reflect.Pointer {
 				word := unsafe.Pointer(vFld.Pointer())
 				return reflect.NewAt(typ.Elem(), word).Interface()
 			}
@@ -466,14 +489,14 @@ func findObjPtr(v reflect.Value, name string, from int) any {
 func (p *Game) startLoad(fs spxfs.Dir, cfg *Config) {
 	p.sounds.init(p)
 	p.inputs.init(p)
-	p.events = make(chan event, 16)
+	p.events = make(chan event, eventBufferSize)
 	p.fs = fs
 	p.windowWidth_ = cfg.Width
 	p.windowHeight_ = cfg.Height
 }
 
 func (p *Game) canBindSprite(name string) bool {
-	return hasAsset("sprites/"+name+"/index.json") && p.typs[name] != nil
+	return p.typs[name] != nil
 }
 
 func (p *Game) loadSprite(sprite Sprite, name string, gamer reflect.Value) error {
@@ -501,7 +524,7 @@ func (p *Game) loadSprite(sprite Sprite, name string, gamer reflect.Value) error
 
 func spriteOf(sprite Sprite) *SpriteImpl {
 	vSpr := reflect.ValueOf(sprite)
-	if vSpr.Kind() != reflect.Ptr {
+	if vSpr.Kind() != reflect.Pointer {
 		return nil
 	}
 	vSpr = vSpr.Elem()
@@ -726,7 +749,7 @@ func Gopt_Game_Reload(game Gamer, index any) (err error) {
 	v := reflect.ValueOf(game).Elem()
 	g := instance(v)
 	g.reset()
-	engine.ReloadScene()
+	engine.ClearAllSprites()
 	for i, n := 0, v.NumField(); i < n; i++ {
 		name, val := getFieldPtrOrAlloc(g, v, i)
 		if fld, ok := val.(Sprite); ok {
@@ -754,10 +777,10 @@ func (p *Game) addSpecialShape(g reflect.Value, v specsp, inits []Sprite) []Spri
 	case "stageMonitor", "monitor":
 		if sm, err := newMonitor(g, v); err == nil {
 			sm.game = p
-			p.addShape(sm)
+			p.spriteMgr.addShape(sm)
 		}
 	case "measure":
-		p.addShape(newMeasure(v))
+		p.spriteMgr.addShape(newMeasure(v))
 	case "sprites":
 		return p.addStageSprites(g, v, inits)
 	case "sprite":
@@ -774,7 +797,7 @@ func (p *Game) addStageSprite(g reflect.Value, v specsp, inits []Sprite) []Sprit
 		if sp, ok := val.(Sprite); ok {
 			dest := spriteOf(sp)
 			applySpriteProps(dest, v)
-			p.addShape(dest)
+			p.spriteMgr.addShape(dest)
 			inits = append(inits, sp)
 			return inits
 		}
@@ -806,7 +829,7 @@ func (p *Game) addStageSprites(g reflect.Value, v specsp, inits []Sprite) []Spri
 			var typItemPtr reflect.Type
 			typSlice := fldSlice.Type()
 			typItem := typSlice.Elem()
-			isPtr := typItem.Kind() == reflect.Ptr
+			isPtr := typItem.Kind() == reflect.Pointer
 			if isPtr {
 				typItem, typItemPtr = typItem.Elem(), typItem
 			} else {
@@ -824,7 +847,7 @@ func (p *Game) addStageSprites(g reflect.Value, v specsp, inits []Sprite) []Spri
 						newItem = newItem.Elem()
 					}
 					dest, sp := applySprite(newItem, spr, items[i].(specsp))
-					p.addShape(dest)
+					p.spriteMgr.addShape(dest)
 					inits = append(inits, sp)
 				}
 				fldSlice.Set(newSlice)
@@ -920,21 +943,22 @@ func (p *Game) doWhenMouseMove(ev *eventMouseMove) {
 	p.inputs.onMouseMove(ev.Pos)
 }
 
-func (p *Game) handleEvent(event event) {
-	switch ev := event.(type) {
+// handleEvent dispatches events to their respective handlers
+func (p *Game) handleEvent(ev event) {
+	switch e := ev.(type) {
 	case *eventLeftButtonUp:
-		p.doWhenLeftButtonUp(ev)
+		p.doWhenLeftButtonUp(e)
 	case *eventLeftButtonDown:
-		p.doWhenLeftButtonDown(ev)
+		p.doWhenLeftButtonDown(e)
 	case *eventMouseMove:
-		p.doWhenMouseMove(ev)
+		p.doWhenMouseMove(e)
 	case *eventKeyDown:
-		p.sinkMgr.doWhenKeyPressed(ev.Key)
+		p.sinkMgr.doWhenKeyPressed(e.Key)
 	case *eventStart:
 		p.sinkMgr.doWhenAwake(nil)
 		p.sinkMgr.doWhenStart()
 	case *eventTimer:
-		p.sinkMgr.doWhenTimer(ev.Time)
+		p.sinkMgr.doWhenTimer(e.Time)
 	}
 }
 
@@ -953,54 +977,55 @@ func (p *Game) eventLoop(me coroutine.Thread) int {
 		p.handleEvent(ev)
 	}
 }
+
+// processPendingAudios plays any pending audio for sprites
+func (p *Game) processPendingAudios(items []Shape, tempAudios []string) []string {
+	for _, item := range items {
+		if sprite, ok := item.(*SpriteImpl); ok {
+			engine.Lock()
+			tempAudios = append(tempAudios, sprite.pendingAudios...)
+			sprite.pendingAudios = sprite.pendingAudios[:0]
+			engine.Unlock()
+
+			for _, audio := range tempAudios {
+				sprite.playAudio(audio, false)
+			}
+			tempAudios = tempAudios[:0]
+		}
+	}
+	return tempAudios
+}
+
+// processAnimationEvents handles completed animation events for sprites
+func (p *Game) processAnimationEvents(items []Shape, tempAnimations []string) []string {
+	for _, item := range items {
+		if sprite, ok := item.(*SpriteImpl); ok {
+			engine.Lock()
+			tempAnimations = append(tempAnimations, sprite.donedAnimations...)
+			sprite.donedAnimations = sprite.donedAnimations[:0]
+			engine.Unlock()
+
+			for _, animName := range tempAnimations {
+				sprite.onAnimationDone(animName)
+			}
+			tempAnimations = tempAnimations[:0]
+		}
+	}
+	return tempAnimations
+}
+
 func (p *Game) logicLoop(me coroutine.Thread) int {
 	tempAudios := []string{}
 	tempAnimations := []string{}
 	for {
 		p.camera.onUpdate(gtime.DeltaTime())
-
 		tempItems := p.getTempShapes()
-		for _, item := range tempItems {
-			if result, ok := item.(interface{ onUpdate(float64) }); ok {
-				result.onUpdate(gtime.DeltaTime())
-			}
-		}
+		p.spriteMgr.flushActivate()
 
-		// play audios
-		for _, item := range tempItems {
-			if sprite, ok := item.(*SpriteImpl); ok {
-				engine.Lock()
-				for _, audio := range sprite.pendingAudios {
-					tempAudios = append(tempAudios, audio)
-				}
-				sprite.pendingAudios = sprite.pendingAudios[:0]
-				engine.Unlock()
+		tempAudios = p.processPendingAudios(tempItems, tempAudios)
+		tempAnimations = p.processAnimationEvents(tempItems, tempAnimations)
 
-				for _, audio := range tempAudios {
-					sprite.playAudio(audio, false)
-				}
-				tempAudios = tempAudios[:0]
-			}
-		}
-		// check anim done events
-		for _, item := range tempItems {
-			if sprite, ok := item.(*SpriteImpl); ok {
-				engine.Lock()
-				for _, animName := range sprite.donedAnimations {
-					tempAnimations = append(tempAnimations, animName)
-				}
-				sprite.donedAnimations = sprite.donedAnimations[:0]
-				engine.Unlock()
-
-				for _, animName := range tempAnimations {
-					sprite.onAnimationDone(animName)
-				}
-				tempAnimations = tempAnimations[:0]
-			}
-		}
-
-		targetTimer := timer.CheckTimerEvent()
-		if targetTimer >= 0 {
+		if targetTimer := timer.CheckTimerEvent(); targetTimer >= 0 {
 			p.fireEvent(&eventTimer{Time: targetTimer})
 		}
 		engine.WaitNextFrame()
@@ -1010,8 +1035,7 @@ func (p *Game) logicLoop(me coroutine.Thread) int {
 
 func (p *Game) inputEventLoop(me coroutine.Thread) int {
 	lastLbtnPressed := false
-	lastMousePos := mathf.Vec2{}       // Track last mouse position
-	const mouseMovementThreshold = 1.0 // Minimum movement to trigger event (pixels)
+	lastMousePos := mathf.Vec2{} // Track last mouse position
 	keyEvents := make([]engine.KeyEvent, 0)
 
 	for {
@@ -1073,7 +1097,7 @@ type threadObj = coroutine.ThreadObj
 
 func SchedNow() int {
 	if isSchedInMain {
-		if time.Now().Sub(mainSchedTime) >= time.Second*3 {
+		if time.Since(mainSchedTime) >= time.Second*mainExecTimeoutSec {
 			panic("Main execution timed out. Please check if there is an infinite loop in the code.")
 		}
 	}
@@ -1085,12 +1109,12 @@ func SchedNow() int {
 
 func Sched() int {
 	if isSchedInMain {
-		if time.Now().Sub(mainSchedTime) >= time.Second*3 {
+		if time.Since(mainSchedTime) >= time.Second*mainExecTimeoutSec {
 			panic("Main execution timed out. Please check if there is an infinite loop in the code.")
 		}
 	} else {
 		if me := gco.Current(); me != nil {
-			if me.IsSchedTimeout(3000) {
+			if me.IsSchedTimeout(schedTimeoutMs) {
 				log.Println("For loop execution timed out. Please check if there is an infinite loop in the code.\n", debug.GetStackTrace())
 				engine.WaitNextFrame()
 			}
@@ -1194,7 +1218,7 @@ func (p *Game) touchingSpriteBy(dst *SpriteImpl, name string) *SpriteImpl {
 		return nil
 	}
 
-	for _, item := range p.items {
+	for _, item := range p.spriteMgr.items {
 		if sp, ok := item.(*SpriteImpl); ok && sp != dst {
 			if sp.name == name && (sp.isVisible && !sp.isDying) {
 				if sp.touchingSprite(dst) {
@@ -1210,7 +1234,7 @@ func (p *Game) touchingSpriteBy(dst *SpriteImpl, name string) *SpriteImpl {
 func (p *Game) objectPos(obj any) (float64, float64) {
 	switch v := obj.(type) {
 	case SpriteName:
-		if sp := p.findSprite(v); sp != nil {
+		if sp := p.spriteMgr.findSprite(v); sp != nil {
 			return sp.getXY()
 		}
 		panic("objectPos: sprite not found - " + v)
@@ -1239,66 +1263,27 @@ func (p *Game) EraseAll() {
 // -----------------------------------------------------------------------------
 
 func (p *Game) getItems() []Shape {
-	return p.items
+	return p.spriteMgr.all()
 }
 
 func (p *Game) addShape(child Shape) {
-	p.items = append(p.items, child)
+	p.spriteMgr.addShape(child)
 }
 
 func (p *Game) addClonedShape(src, clone Shape) {
-	items := p.items
-	idx := p.doFindSprite(src)
-	if idx < 0 {
-		log.Println("addClonedShape: clone a deleted sprite")
-		gco.Abort()
-	}
-
-	// p.getItems() requires immutable items, so we need copy before modify
-	n := len(items)
-	newItems := make([]Shape, n+1)
-	copy(newItems[:idx], items)
-	copy(newItems[idx+2:], items[idx+1:])
-	newItems[idx] = clone
-	newItems[idx+1] = src
-	p.items = newItems
-	p.updateRenderLayers()
+	p.spriteMgr.addClonedShape(src, clone)
 }
 
 func (p *Game) removeShape(child Shape) {
-	items := p.items
-	for i, item := range items {
-		if item == child {
-			// getItems() requires immutable items, so we need copy before modify
-			newItems := make([]Shape, len(items)-1)
-			copy(newItems, items[:i])
-			copy(newItems[i:], items[i+1:])
-			p.HasDestroyed = true
-			p.destroyItems = append(p.destroyItems, item)
-			p.items = newItems
-			return
-		}
-	}
-	p.updateRenderLayers()
+	p.spriteMgr.removeShape(child)
 }
 
 func (p *Game) activateShape(child Shape) {
-	items := p.items
-	for i, item := range items {
-		if item == child {
-			if i == 0 {
-				return
-			}
-			// getItems() requires immutable items, so we need copy before modify
-			newItems := make([]Shape, len(items))
-			copy(newItems, items[:i])
-			copy(newItems[i:], items[i+1:])
-			newItems[len(items)-1] = child
-			p.items = newItems
-			return
-		}
-	}
-	p.updateRenderLayers()
+	p.spriteMgr.activateShape(child)
+}
+
+func (p *Game) findSprite(name SpriteName) *SpriteImpl {
+	return p.spriteMgr.findSprite(name)
 }
 
 func (p *Game) gotoFront(spr *SpriteImpl) {
@@ -1310,101 +1295,7 @@ func (p *Game) gotoBack(spr *SpriteImpl) {
 }
 
 func (p *Game) goBackLayers(spr *SpriteImpl, n int) {
-	if engine.HasLayerSortMethod() {
-		log.Println("Cannot manually set sprite layer when a layer sort mode is active.")
-		return
-	}
-
-	idx := p.doFindSprite(spr)
-	if idx < 0 {
-		return
-	}
-	items := p.items
-	// go back
-	if n > 0 {
-		newIdx := idx
-		for newIdx > 0 {
-			newIdx--
-			item := items[newIdx]
-			if _, ok := item.(*SpriteImpl); ok {
-				n--
-				if n == 0 {
-					break
-				}
-			}
-		}
-		// should consider that backdrop is always at the bottom
-		if newIdx != idx {
-			// p.getItems() requires immutable items, so we need copy before modify
-			newItems := make([]Shape, len(items))
-			copy(newItems, items[:newIdx])
-			copy(newItems[newIdx+1:], items[newIdx:idx])
-			copy(newItems[idx+1:], items[idx+1:])
-			newItems[newIdx] = spr
-			p.items = newItems
-		}
-	} else if n < 0 { // go front
-		newIdx := idx
-		lastIdx := len(items) - 1
-		if newIdx < lastIdx {
-			for {
-				newIdx++
-				if newIdx >= lastIdx {
-					break
-				}
-				item := items[newIdx]
-				if _, ok := item.(*SpriteImpl); ok {
-					n++
-					if n == 0 {
-						break
-					}
-				}
-			}
-		}
-		if newIdx != idx {
-			// p.getItems() requires immutable items, so we need copy before modify
-			newItems := make([]Shape, len(items))
-			copy(newItems, items[:idx])
-			copy(newItems[idx:newIdx], items[idx+1:])
-			copy(newItems[newIdx+1:], items[newIdx+1:])
-			newItems[newIdx] = spr
-			p.items = newItems
-		}
-	}
-	p.updateRenderLayers()
-}
-func (p *Game) updateRenderLayers() {
-	// Manual layer updates are disabled when a layer sort mode is active
-	if engine.HasLayerSortMethod() {
-		return
-	}
-	layer := 0
-	for _, item := range p.items {
-		if sp, ok := item.(*SpriteImpl); ok {
-			layer++
-			sp.setLayer(layer)
-		}
-	}
-}
-
-func (p *Game) doFindSprite(src Shape) int {
-	for idx, item := range p.items {
-		if item == src {
-			return idx
-		}
-	}
-	return -1
-}
-
-func (p *Game) findSprite(name SpriteName) *SpriteImpl {
-	for _, item := range p.items {
-		if sp, ok := item.(*SpriteImpl); ok {
-			if !sp.isCloned_ && sp.name == name {
-				return sp
-			}
-		}
-	}
-	return nil
+	p.spriteMgr.goBackLayers(spr, n)
 }
 
 // -----------------------------------------------------------------------------
@@ -1590,11 +1481,6 @@ type sound *soundConfig
 
 type SoundName = string
 
-func hasAsset(path string) bool {
-	finalPath := engine.ToAssetPath(path)
-	return resMgr.HasFile(finalPath)
-}
-
 func (p *Game) loadSound(name SoundName) (media sound, err error) {
 	if media, ok := p.sounds.audios[name]; ok {
 		return media, nil
@@ -1610,7 +1496,6 @@ func (p *Game) loadSound(name SoundName) (media sound, err error) {
 		return
 	}
 	media.Path = prefix + "/" + media.Path
-	engine.CheckAssetFile(media.Path)
 	p.sounds.audios[name] = media
 	return
 }
@@ -1656,15 +1541,16 @@ func (p *Game) Volume() float64 {
 }
 func (p *Game) Play__0(name SoundName, loop bool) {
 	p.checkAudioId()
-	p.playSound(p.syncSprite, p.audioId, name, loop, 0, 2000)
+	p.playSound(p.syncSprite, p.audioId, name, loop, 0, defaultAudioMaxDist)
 }
 
 func (p *Game) Play__1(name SoundName) {
 	p.Play__0(name, false)
 }
+
 func (p *Game) PlayAndWait(name SoundName) {
 	p.checkAudioId()
-	p.playSoundAndWait(p.syncSprite, p.audioId, name, 0, 2000)
+	p.playSoundAndWait(p.syncSprite, p.audioId, name, 0, defaultAudioMaxDist)
 }
 
 func (p *Game) PausePlaying(name SoundName) {
@@ -1754,7 +1640,7 @@ func (p *Game) BroadcastAndWait__1(msg string, data any) {
 // -----------------------------------------------------------------------------
 
 func (p *Game) setStageMonitor(target string, val string, visible bool) {
-	for _, item := range p.items {
+	for _, item := range p.spriteMgr.items {
 		if sp, ok := item.(*Monitor); ok && sp.val == val && sp.target == target {
 			sp.setVisible(visible)
 			return
@@ -1771,26 +1657,11 @@ func (p *Game) ShowVar(name string) {
 }
 
 func (p *Game) getAllShapes() []Shape {
-	return p.items
+	return p.spriteMgr.all()
 }
 
 func (p *Game) getTempShapes() []Shape {
-	p.tempItems = getTempShapes(p.tempItems, p.items)
-	return p.tempItems
-}
-
-func getTempShapes(dst []Shape, src []Shape) []Shape {
-	if dst == nil {
-		dst = make([]Shape, 50)
-	}
-	dst = dst[:0]
-	if cap(dst) < len(src) {
-		dst = make([]Shape, len(src))
-	} else {
-		dst = dst[:len(src)]
-	}
-	copy(dst, src)
-	return dst
+	return p.spriteMgr.getTempShapes()
 }
 
 // -----------------------------------------------------------------------------

@@ -311,6 +311,16 @@ func (pself *extMgrImpl) RequestExit(exit_code int64) {
 		gdx.ExtMgr.RequestExit(exit_code)
 	})
 }
+func (pself *extMgrImpl) RequestReset(exit_code int64) {
+	callInMainThread(func() {
+		gdx.ExtMgr.RequestReset(exit_code)
+	})
+}
+func (pself *extMgrImpl) RequestRestart() {
+	callInMainThread(func() {
+		gdx.ExtMgr.RequestRestart()
+	})
+}
 func (pself *extMgrImpl) OnRuntimePanic(msg string) {
 	callInMainThread(func() {
 		gdx.ExtMgr.OnRuntimePanic(msg)
@@ -696,9 +706,9 @@ func (pself *platformMgrImpl) IsInPersistantDataDir(path string) bool {
 }
 
 // IResMgr
-func (pself *resMgrImpl) CreateAnimation(sprite_type_name string, anim_name string, context string, fps int64, is_altas bool) {
+func (pself *resMgrImpl) CreateAnimation(p_sprite_type string, p_anim_name string, p_json_ctx string, fps int64, is_atlas bool) {
 	callInMainThread(func() {
-		gdx.ResMgr.CreateAnimation(sprite_type_name, anim_name, context, fps, is_altas)
+		gdx.ResMgr.CreateAnimation(p_sprite_type, p_anim_name, p_json_ctx, fps, is_atlas)
 	})
 }
 func (pself *resMgrImpl) SetLoadMode(is_direct_mode bool) {

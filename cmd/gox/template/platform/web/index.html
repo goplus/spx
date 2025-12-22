@@ -59,9 +59,11 @@
 			}
 		}
 	</style>
+	<script src="fflate.js"></script>
 </head>
 
 <body>
+	<!-- <button id="initGameBtn">Init</button> -->
 	<button id="startGameBtn">Start</button>
 	<button id="stopGameBtn">Stop</button>
 	<button id="startNewGameBtn">StartNew</button>
@@ -72,6 +74,7 @@
 	<button id="resumeGameBtn">Resume</button>
 	<button id="stepNextFrameBtn">NextFrame</button>
 	<button id="toggleSizeBtn">ToggleSize</button>
+
 	<progress id="progress-bar" value="0" max="1" style="display: none;"></progress>
 	<div id="tabs">
 		<div id="tab-loader">
@@ -90,6 +93,7 @@
 	<script>
 		window.addEventListener('load', function() {
 			animateBox();
+			initEngine()
 		});
 
 		function animateBox() {
@@ -109,6 +113,7 @@
 		}
 
 		let runnerWindow = {}
+		// document.getElementById('initGameBtn').addEventListener('click', initGame);
 		document.getElementById('startNewGameBtn').addEventListener('click', startNewGame);
 		document.getElementById('startGameBtn').addEventListener('click', startGame);
 		document.getElementById('stopGameBtn').addEventListener('click', stopGame);
@@ -119,6 +124,7 @@
 		document.getElementById('resumeGameBtn').addEventListener('click', resumeGame);
 		document.getElementById('stepNextFrameBtn').addEventListener('click', stepNextFrame);
 		document.getElementById('toggleSizeBtn').addEventListener('click', toggleSizeFrame);
+
 		const iframe = document.getElementById('runnerFrame');
 		let enlarged = false;
 
@@ -130,6 +136,10 @@
 				document.getElementById('tab-loader').style.display = 'none';
 			}
 			document.getElementById('progress-bar').style.display = value >= 1 ? 'none' : 'block';
+		}
+
+		async function initEngine() {
+			await runnerWindow.initEngine(null, { logLevel: LOG_LEVEL_VERBOSE })
 		}
 
 		async function startNewGame() {
@@ -204,7 +214,14 @@
 			}
 		}
 		const LOG_LEVEL_VERBOSE = 0
+		let stopGameFlag = true
+
 		async function startProject(zipUrl) {
+			if(stopGameFlag === false){
+				console.error("game is running.")
+				return
+			}
+
 			runnerWindow.addEventListener('onProgress', (event) => {
 				onProgress(event.detail.progress)
 			})
@@ -212,15 +229,26 @@
 				console.error("onGameError", msg)
 			})
 			runnerWindow.onGameExit(function (code) {
+				stopGameFlag = true
 				console.error("onGameExit", code)
 			})
+			runnerWindow.onEngineCrash(function (code) {
+				stopGameFlag = true
+				console.error("onEngineCrash", code)
+			})
+
 			runnerWindow.spxIsForceDebugLog = true
-			let buffer = await (await (fetch(zipUrl))).arrayBuffer();
-			await runnerWindow.startGame(buffer, null, function () {
-				runnerWindow.setAIInteractionAPIEndpoint("http://127.0.0.1:8000")
-			},{ 
-				"logLevel":LOG_LEVEL_VERBOSE,
-			});
+
+			let zipped = await (await (fetch(zipUrl))).arrayBuffer()
+			let unzipped = fflate.unzipSync(new Uint8Array(zipped))
+			let files = {}
+			Object.entries(unzipped).forEach(([path, data]) => {
+				if (path.endsWith('/')) return // skip directories
+				files[path] = { lastModified: Date.now(), content: data.buffer }
+			})
+			await runnerWindow.initGame(files)
+			await runnerWindow.startGame()
+			stopGameFlag = false
 		}
 	</script>
 </body>

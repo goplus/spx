@@ -20,6 +20,8 @@ func Link() bool {
 }
 func Linked() {
 }
+func Unlink() {
+}
 func BindCallback(info engine.CallbackInfo) {
 	callbacks = info
 }

@@ -51,12 +51,12 @@
 		"use strict";
 		let gameApp = null
 		let isShowEditor = false
-		let onGameError = null
-		let _onSpxReady = null
-		let lastGameApp = null
+
+		let lastAssetURLs = null
+		let lastConfig = null
 
 		window.spxIsProxyThreadMode = false
-		let onGameExit = null
+
 		function onProgress(value) {
 			const progressEvent = new CustomEvent('onProgress', {
 				detail: {
@@ -83,29 +83,78 @@
 			}
 		}
 
+		async function handleGodotExit(code) {
+            await restartEngineAfterCrash("godot exit", code);
+        }
+
+		let restartAttempts = 0;
+		let onGameError = null
+		let onGameExit = null
+		let onEngineCrash = null;
+		const MAX_RESTART_ATTEMPTS = 3;
+		async function restartEngineAfterCrash(reason, code) {
+			if (restartAttempts >= MAX_RESTART_ATTEMPTS) {
+				console.error("Max restart attempts reached.  Please reload manually.");
+				if (onEngineCrash != null) {
+					onEngineCrash(`Crash detected, Exit code: ${code}`)
+				}
+				return;
+			}
+			restartAttempts++;
+
+			console.warn(`Crash detected. Reason: ${reason}, Exit code: ${code}`);
+			gameApp = null;
+			try {
+				await window.initEngine(lastAssetURLs, lastConfig);
+				restartAttempts = 0; 
+				console.log("Engine reinitialized.");
+			} catch (e) {
+				console.error("Engine re-init failed:", e);
+			}
+		}
+
+		window.onGameError = function (callback) {
+			onGameError = callback
+		}
+		window.onGameExit = function (callback) {
+			onGameExit = callback
+		}
+		window.onEngineCrash = function (callback) {
+			onEngineCrash = callback
+		}
+
 		window.gdspx_on_runtime_panic = function (msg) {
 			if (onGameError != null) {
 				onGameError(msg)
 			}
 		}
-		window.onGameError = function (callback) {
-			onGameError = callback
+
+		window.gdspx_on_runtime_exit = async (code) => {
+			await restartEngineAfterCrash("runtime exit", code);
 		}
 
-		window.gdspx_on_runtime_exit = function (code) {
+		window.onGoWasmExit = async (code) => {
+			await restartEngineAfterCrash("go wasm exit", code);
+		}
+
+		window.gdspx_on_runtime_reset = async (code) => {
 			if (onGameExit != null) {
 				onGameExit(code)
 			}
 		}
 
-		window.onGameExit = function (callback) {
-			onGameExit = callback
-		}
-		
-		window.startGame = async (buffer, assetURLs = null, onSpxReady = null, cfg = null) => {
+		window.addEventListener("godot-wasm-crash", async e => {
+			await restartEngineAfterCrash("godot crash", e.detail);
+		})
+
+		window.initEngine = async (assetURLs = null, config = {}) => {
 			isShowEditor = false
-			lastGameApp = null
-			_onSpxReady = onSpxReady
+			
+			if (gameApp != null) {
+				await gameApp.ResetGame();
+				return;
+			}
+
 			if(EnginePackMode == "worker"){
 				window.setAIDescription = function (description) {
 					gameApp.callWorkerFunction("setAIDescription", description)
@@ -117,19 +166,15 @@
 					gameApp.callWorkerFunction("setAIInteractionAPITokenProvider", tokenProviderFunction)
 				}
 
-				window.onWasmLoaded = function () {
-					if (_onSpxReady != null) {
-						_onSpxReady()
-					}
-				}
-				window.onGameStarted = function () {
-				}
+				window.onWasmLoaded = function () {}
+				window.onGameStarted = function () {}
 			}
-			const config = {
+			
+			const finalConfig = {
 				'projectName': "spx_game",
 				'onProgress': onProgress,
+				'handleGodotExit': handleGodotExit,
 				"gameCanvas": document.getElementById('game-canvas'),
-				"projectData": new Uint8Array(buffer),
 				"logLevel": LOG_LEVEL_NONE,
 				"useAssetCache": false,
 				"isRuntimeMode": true,
@@ -139,26 +184,31 @@
 					"gdspx.wasm": "/gdspx.wasm",
 					"engine.wasm": "/engine.wasm",
 				},
-				"onSpxReady": onSpxReady,
 				"recordingOnGameStart": false,
-				"autoDownloadRecordedVideo":false,
+				"autoDownloadRecordedVideo": false,
 			};
+			
 			if (assetURLs != null) {
-				config.assetURLs = assetURLs
-			}
-			if (cfg != null) {
-				Object.assign(config, cfg)
+				finalConfig.assetURLs = assetURLs
 			}
 
-			if (gameApp != null) {
-				await gameApp.StopProject();
-			}
+			lastAssetURLs = assetURLs
+			lastConfig = config
+			Object.assign(finalConfig, config);
+			gameApp = new GameApp(finalConfig);
+			await gameApp.InitEngine();
+		}
 
-			// try install project and run game
-			gameApp = new GameApp(config);
-			await gameApp.RunGame();
+		window.initGame = async (files) => {
+			if (gameApp == null) throw new Error("gameApp is null, should call initEngine first")
+			await gameApp.InitGame(files)
 		}
 		
+		window.startGame = async () => {
+			if (gameApp == null) throw new Error("gameApp is null, should call initEngine first")
+			await gameApp.StartGame();
+		}
+
 		// Starts recording the game canvas content as video
 		window.startRecording = () => {
 			if (gameApp == null) {
@@ -167,6 +217,7 @@
 			}
 			gameApp.startRecording()
 		}
+		
 		// Stops the current recording session and returns the result as a Blob.
 		window.stopRecording = async () => {
 			if (gameApp == null) {
@@ -178,13 +229,11 @@
 
 		// Returns the recorded video as a Blob.
 		window.getRecordedVideo = () => {
-			let app = gameApp || lastGameApp
-			if (app == null) {
+			if (gameApp == null) {
 				console.error("gameApp is null, should call startGame first")
 				return null
 			}
-			lastGameApp = null
-			return app.getRecordedVideo()
+			return gameApp.getRecordedVideo()
 		}
 
 		// Captures the current game screen and returns its binary data as a Blob.
@@ -206,24 +255,19 @@
 		}
 
 		window.downloadRecordedVideo = (filename) => {
-			let app = gameApp || lastGameApp
-			if (app == null) {
+			if (gameApp == null) {
 				console.error("gameApp is null, should call startGame first")
 				return null
 			}
-			lastGameApp = null
-			app.downloadRecordedVideo(filename)
+			gameApp.downloadRecordedVideo(filename)
 		}
-
 
 		window.stopGame = async () => {
 			if (gameApp == null) {
 				console.error("gameApp is null, should call startGame first")
 				return
 			}
-			await gameApp.StopGame()
-			lastGameApp = gameApp
-			gameApp = null
+			await gameApp.ResetGame();
 		}
 
 		window.pauseGame = () => {

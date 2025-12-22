@@ -1,30 +1,33 @@
-[gd_scene load_steps=8 format=3 uid="uid://bsaqlmdsvus4d"]
+[gd_scene load_steps=9 format=3 uid="uid://bsaqlmdsvus4d"]
 
-[ext_resource type="Texture2D" uid="uid://cm2lync0vu3ot" path="res://engine/textures/monitor/frame_name.png" id="1_urp8p"]
-[ext_resource type="Texture2D" uid="uid://ccrnx7ptuijh0" path="res://engine/textures/monitor/frame_value.png" id="2_r5bje"]
+[ext_resource type="Texture2D" uid="uid://dtaph1d474hyg" path="res://engine/textures/monitor/frame_name.png" id="1_y7j7f"]
+[ext_resource type="Texture2D" uid="uid://d1544egog82vl" path="res://engine/textures/monitor/frame_value.png" id="2_rbnwe"]
 
 [sub_resource type="StyleBoxTexture" id="StyleBoxTexture_5mp4r"]
-texture = ExtResource("1_urp8p")
+texture = ExtResource("1_y7j7f")
 texture_margin_left = 26.0
 texture_margin_top = 2.0
 texture_margin_right = 26.0
-texture_margin_bottom = 2.0
 
 [sub_resource type="StyleBoxTexture" id="StyleBoxTexture_c560o"]
-texture = ExtResource("2_r5bje")
+texture = ExtResource("2_rbnwe")
 texture_margin_left = 16.0
 texture_margin_top = 3.0
 texture_margin_right = 16.0
 texture_margin_bottom = 3.0
-expand_margin_right = 20.0
+expand_margin_top = 2.0
+expand_margin_right = 26.0
 modulate_color = Color(0.996078, 1, 1, 1)
 
 [sub_resource type="Theme" id="Theme_gvmbf"]
 
 [sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_sbh8w"]
 
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_c6mp2"]
+load_path = "res://.godot/imported/frame_value.png-2feb44c5f368df083422a7a9d1d0a102.ctex"
+
 [sub_resource type="StyleBoxTexture" id="StyleBoxTexture_h4u5r"]
-texture = ExtResource("2_r5bje")
+texture = SubResource("CompressedTexture2D_c6mp2")
 texture_margin_left = 16.0
 texture_margin_top = 3.0
 texture_margin_right = 16.0
@@ -36,8 +39,8 @@ anchors_preset = 0
 
 [node name="BG" type="PanelContainer" parent="."]
 layout_mode = 1
-offset_right = 147.0
-offset_bottom = 46.0
+offset_right = 100.0
+offset_bottom = 44.0
 scale = Vector2(0.45, 0.45)
 theme_override_styles/panel = SubResource("StyleBoxTexture_5mp4r")
 
@@ -47,7 +50,6 @@ layout_mode = 2
 [node name="LabelName" type="Label" parent="BG/H"]
 custom_minimum_size = Vector2(1, 0)
 layout_mode = 2
-theme_override_colors/font_color = Color(0, 0, 0, 1)
 theme_override_font_sizes/font_size = 26
 text = "a"
 vertical_alignment = 1
@@ -58,14 +60,13 @@ custom_minimum_size = Vector2(1, 0)
 layout_mode = 2
 theme_override_colors/font_color = Color(0, 0, 0, 1)
 theme_override_font_sizes/font_size = 26
-text = " "
+text = "  "
 vertical_alignment = 1
 text_direction = 1
 
 [node name="C" type="PanelContainer" parent="BG/H"]
 layout_direction = 3
 layout_mode = 2
-size_flags_stretch_ratio = 0.0
 theme_override_styles/panel = SubResource("StyleBoxTexture_c560o")
 
 [node name="H" type="HBoxContainer" parent="BG/H/C"]
@@ -73,8 +74,10 @@ layout_mode = 2
 
 [node name="LabelValue" type="Label" parent="BG/H/C/H"]
 custom_minimum_size = Vector2(1, 0)
+layout_direction = 2
 layout_mode = 2
 theme = SubResource("Theme_gvmbf")
+theme_override_colors/font_color = Color(0.129412, 0.623529, 0.988235, 1)
 theme_override_font_sizes/font_size = 26
 theme_override_styles/normal = SubResource("StyleBoxEmpty_sbh8w")
 text = "a"
@@ -108,6 +111,5 @@ layout_mode = 2
 custom_minimum_size = Vector2(1, 0)
 layout_mode = 2
 theme_override_font_sizes/font_size = 26
-text = "a"
 horizontal_alignment = 1
 vertical_alignment = 1

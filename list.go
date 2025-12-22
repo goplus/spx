@@ -18,9 +18,9 @@ package spx
 
 import (
 	"fmt"
-	"log"
 	"math/rand"
 	"reflect"
+	"strconv"
 	"strings"
 )
 
@@ -51,6 +51,40 @@ func fromObj(v obj) any {
 	return v
 }
 
+func toFloat64Any(v any) (float64, bool) {
+	switch x := v.(type) {
+	case float64:
+		return x, true
+	case float32:
+		return float64(x), true
+	case int:
+		return float64(x), true
+	case int8:
+		return float64(x), true
+	case int16:
+		return float64(x), true
+	case int32:
+		return float64(x), true
+	case int64:
+		return float64(x), true
+	case uint:
+		return float64(x), true
+	case uint8:
+		return float64(x), true
+	case uint16:
+		return float64(x), true
+	case uint32:
+		return float64(x), true
+	case uint64:
+		return float64(x), true
+	case string:
+		if f, err := strconv.ParseFloat(x, 64); err == nil {
+			return f, true
+		}
+	}
+	return 0, false
+}
+
 // -------------------------------------------------------------------------------------
 
 type Value struct {
@@ -72,21 +106,17 @@ func (p Value) Int() int {
 	case nil:
 		return 0
 	default:
-		log.Panicln("todo: spx.Value.Int()", reflect.TypeOf(v))
+		doPanic("todo: spx.Value.Int()", reflect.TypeOf(v))
 		return 0
 	}
 }
 
 func (p Value) Float() float64 {
-	switch v := p.data.(type) {
-	case float64:
-		return v
-	case nil:
-		return 0
-	default:
-		log.Panicln("todo: spx.Value.Float()", reflect.TypeOf(v))
-		return 0
+	f, ok := toFloat64Any(p.data)
+	if !ok {
+		doPanic("spx.Value.Float() conversion failed for type:", reflect.TypeOf(p.data))
 	}
+	return f
 }
 
 // -------------------------------------------------------------------------------------
@@ -135,6 +165,7 @@ func (p *List) String() string {
 	return strings.Join(items, sep)
 }
 
+// Contains returns true if the list contains the element v.
 func (p *List) Contains(v obj) bool {
 	val := fromObj(v)
 	for _, item := range p.data {
@@ -145,16 +176,18 @@ func (p *List) Contains(v obj) bool {
 	return false
 }
 
+// Append adds the element v to the end of the list.
 func (p *List) Append(v obj) {
 	p.data = append(p.data, fromObj(v))
 }
 
+// Set sets the element at the specified index i to v.
 func (p *List) Set(i Pos, v obj) {
 	n := len(p.data)
 	if i < 0 {
 		i = Pos(getListPos(i, n))
 		if i < 0 {
-			log.Panicln("Set failed: invalid index -", i)
+			doPanic("Set failed: invalid index -", i)
 			return
 		}
 	}
@@ -163,6 +196,7 @@ func (p *List) Set(i Pos, v obj) {
 	}
 }
 
+// Insert inserts the element v at the specified index i.
 func (p *List) Insert(i Pos, v obj) {
 	n := len(p.data)
 	if i < 0 {
@@ -179,6 +213,7 @@ func (p *List) Insert(i Pos, v obj) {
 	}
 }
 
+// Delete removes the element at the specified index.
 func (p *List) Delete(i Pos) {
 	n := len(p.data)
 	if i < 0 {
@@ -193,6 +228,7 @@ func (p *List) Delete(i Pos) {
 	}
 }
 
+// At returns the Value at the specified index.
 func (p *List) At(i Pos) Value {
 	n := len(p.data)
 	if i < 0 {
@@ -202,4 +238,21 @@ func (p *List) At(i Pos) Value {
 		return Value{}
 	}
 	return Value{p.data[i]}
+}
+
+// IndexOf returns the zero-based position of the first occurrence of v in the list.
+// Returns Invalid (-1) if v is not found.
+func (p *List) IndexOf(v obj) Pos {
+	val := fromObj(v)
+	for i, item := range p.data {
+		if item == val {
+			return Pos(i)
+		}
+	}
+	return Invalid
+}
+
+// Clear removes all elements from the list.
+func (p *List) Clear() {
+	p.data = p.data[:0]
 }

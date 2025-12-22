@@ -17,6 +17,7 @@ func init() {
 		Name: "spx",
 		Path: "github.com/goplus/spx/v2",
 		Deps: map[string]string{
+			"context":                           "context",
 			"encoding/json":                     "json",
 			"errors":                            "errors",
 			"flag":                              "flag",
@@ -280,6 +281,7 @@ func init() {
 			"StaticPhysics":        {reflect.TypeOf(q.StaticPhysics), constant.MakeInt64(int64(q.StaticPhysics))},
 			"ThisScript":           {reflect.TypeOf(q.ThisScript), constant.MakeInt64(int64(q.ThisScript))},
 			"ThisSprite":           {reflect.TypeOf(q.ThisSprite), constant.MakeInt64(int64(q.ThisSprite))},
+			"TriggerExtraPixel":    {reflect.TypeOf(q.TriggerExtraPixel), constant.MakeFromLiteral("2.e+0", token.FLOAT, 0)},
 			"Up":                   {reflect.TypeOf(q.Up), constant.MakeFromLiteral("0", token.FLOAT, 0)},
 			"WhirlEffect":          {reflect.TypeOf(q.WhirlEffect), constant.MakeInt64(int64(q.WhirlEffect))},
 		},

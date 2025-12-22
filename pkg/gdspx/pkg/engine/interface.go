@@ -83,6 +83,7 @@ type EngineCallbackInfo struct {
 	OnEngineUpdate      func(float64)
 	OnEngineFixedUpdate func(float64)
 	OnEngineDestroy     func()
+	OnEngineReset       func()
 	OnEnginePause       func(bool)
 
 	OnKeyPressed  func(int64)

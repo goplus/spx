@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"syscall/js"
 	"unsafe"
 
@@ -462,7 +463,9 @@ func JsFromGdFloat(val float64) js.Value {
 }
 
 func JsToGdString(object js.Value) string {
-	return object.String()
+	s := object.String()
+	// Strip null terminators from C/FFI layer to ensure proper string comparison
+	return strings.TrimRight(s, "\x00")
 }
 
 func JsToGdVec2(vec js.Value) Vec2 {

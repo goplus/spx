@@ -12,6 +12,21 @@ import (
 	"github.com/iancoleman/strcase"
 )
 
+// Pre-compiled regular expressions for better performance
+var (
+	// For normalizeParams function
+	reSpaceComma = regexp.MustCompile(`\s+,`)
+	reSpaceParen = regexp.MustCompile(`\s+\)`)
+	reCommaSpace = regexp.MustCompile(`,\s*`)
+
+	// For mergeManagerHeader function
+	reClassDefinition = regexp.MustCompile(`class\s+(\w+)\s*:\s*(?:public\s+)?(?:SpxBaseMgr|SpxObjectMgr<\w+>)\s*{`)
+
+	// For generateManagerHeader function
+	reMethodVoid   = regexp.MustCompile(`\s*void\s+(\w+)\((.*)\);`)
+	reMethodReturn = regexp.MustCompile(`\s*(\w+)\s+(\w+)\((.*)\);`)
+)
+
 func generateSpxExtHeader(dir, outputFile string, isRawFormat bool) {
 	mergedStr := mergeManagerHeader(dir)
 	mergedHeaderFuncStr := generateManagerHeader(mergedStr, isRawFormat)
@@ -37,7 +52,7 @@ func mergeManagerHeader(dir string) string {
 	builder.WriteString("#include \"gdextension_spx_mgr_pre_define.h\"\n")
 
 	for _, file := range files {
-		if strings.Contains(file, "spx_base_mgr.h") {
+		if strings.Contains(file, "spx_base_mgr.h") || strings.Contains(file, "spx_object_mgr.h") {
 			continue
 		}
 
@@ -61,10 +76,13 @@ func mergeManagerHeader(dir string) string {
 			if strings.HasPrefix(line, "};") {
 				continue
 			}
+			// Skip inline function definitions (lines with both { and })
+			if strings.Contains(line, "{") && strings.Contains(line, "}") {
+				continue
+			}
 
 			if className == "" {
-				re := regexp.MustCompile(`class\s+(\w+)\s*:\s*SpxBaseMgr\s*{`)
-				match := re.FindStringSubmatch(line)
+				match := reClassDefinition.FindStringSubmatch(line)
 				if len(match) > 0 {
 					className = match[1]
 				} else {
@@ -98,11 +116,23 @@ func mergeManagerHeader(dir string) string {
 	return builder.String()
 }
 
+// normalizeParams ensures proper spacing in parameter lists
+func normalizeParams(params string) string {
+	if params == "" {
+		return params
+	}
+	// Remove trailing spaces before commas and closing paren
+	params = reSpaceComma.ReplaceAllString(params, ",")
+	params = reSpaceParen.ReplaceAllString(params, ")")
+	// Ensure single space after commas
+	params = reCommaSpace.ReplaceAllString(params, ", ")
+	// Trim any leading/trailing whitespace
+	return strings.TrimSpace(params)
+}
+
 func generateManagerHeader(input string, rawFormat bool) string {
 	scanner := bufio.NewScanner(strings.NewReader(input))
 	var currentClassName string
-	methodRegex := regexp.MustCompile(`\s*void\s+(\w+)\((.*)\);`)
-	returnRegex := regexp.MustCompile(`\s*(\w+)\s+(\w+)\((.*)\);`)
 
 	var builder strings.Builder
 
@@ -115,16 +145,16 @@ func generateManagerHeader(input string, rawFormat bool) string {
 			builder.WriteString("// " + currentClassName + "\n")
 			continue
 		}
-		if methodRegex.MatchString(line) {
-			matches := methodRegex.FindStringSubmatch(line)
+		if reMethodVoid.MatchString(line) {
+			matches := reMethodVoid.FindStringSubmatch(line)
 			methodName := strcase.ToCamel(matches[1])
-			params := matches[2]
+			params := normalizeParams(matches[2])
 			builder.WriteString(fmt.Sprintf("typedef void (*GDExtension%s%s)(%s);\n", currentClassName, methodName, params))
-		} else if returnRegex.MatchString(line) {
-			matches := returnRegex.FindStringSubmatch(line)
+		} else if reMethodReturn.MatchString(line) {
+			matches := reMethodReturn.FindStringSubmatch(line)
 			returnType := matches[1]
 			methodName := strcase.ToCamel(matches[2])
-			params := matches[3]
+			params := normalizeParams(matches[3])
 			if rawFormat {
 				builder.WriteString(fmt.Sprintf("typedef %s (*GDExtension%s%s)(%s);\n", returnType, currentClassName, methodName, params))
 			} else {
@@ -137,7 +167,7 @@ func generateManagerHeader(input string, rawFormat bool) string {
 	}
 
 	if err := scanner.Err(); err != nil {
-		fmt.Println("读取字符串时出错:", err)
+		fmt.Println("Error reading string:", err)
 	}
 
 	return builder.String()

@@ -25,10 +25,10 @@ func Linked() {
 	if !hasInitEngine { // adapt for ixgo
 		gdspxOnEngineStart(js.Value{}, nil)
 	}
+}
 
-	// wasm need Block forever
-	c := make(chan struct{})
-	<-c
+func Unlink() {
+	hasInitEngine = false
 }
 
 // this function will only be called in wasm mode, it will not be called in ixgo (interpreter) mode.

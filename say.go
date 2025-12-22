@@ -43,9 +43,10 @@ type sayOrThinker struct {
 }
 
 func (p *sayOrThinker) refresh() {
-	if p.panel == nil {
+	if p.panel == nil || !p.sp.Visible() {
 		return
 	}
+
 	bound := p.sp.bounds()
 	center := bound.Center()
 	size := bound.Size

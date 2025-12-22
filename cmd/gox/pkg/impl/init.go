@@ -12,7 +12,7 @@ import (
 )
 
 func downloadPack(dstDir, tagName, postfix string) error {
-	urlHeader := "https://github.com/JiepengTan/godot/releases/download/"
+	urlHeader := "https://github.com/goplus/godot/releases/download/"
 	fileName := tagName + postfix
 	url := urlHeader + tagName + "/" + fileName
 	// download pc
@@ -63,8 +63,6 @@ func CheckAndGetAppPath(gobinDir, tag, version string, customGoEnv bool) (string
 		if customGoEnv {
 			return binPostfix, cmdPath, nil
 		}
-		println("Engine is not exist , please download or build engine from source ...", cmdPath)
-		os.Exit(1)
 	} else if err != nil {
 		return binPostfix, "", err
 	} else {

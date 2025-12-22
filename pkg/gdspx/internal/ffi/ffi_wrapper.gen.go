@@ -47,6 +47,7 @@ type GDExtensionSpxCallbackOnEngineStart C.GDExtensionSpxCallbackOnEngineStart
 type GDExtensionSpxCallbackOnEngineUpdate C.GDExtensionSpxCallbackOnEngineUpdate
 type GDExtensionSpxCallbackOnEngineFixedUpdate C.GDExtensionSpxCallbackOnEngineFixedUpdate
 type GDExtensionSpxCallbackOnEngineDestroy C.GDExtensionSpxCallbackOnEngineDestroy
+type GDExtensionSpxCallbackOnEngineReset C.GDExtensionSpxCallbackOnEngineReset
 type GDExtensionSpxCallbackOnEnginePause C.GDExtensionSpxCallbackOnEnginePause
 type GDExtensionSpxCallbackOnSceneSpriteInstantiated C.GDExtensionSpxCallbackOnSceneSpriteInstantiated
 type GDExtensionSpxCallbackOnSpriteReady C.GDExtensionSpxCallbackOnSpriteReady
@@ -115,6 +116,8 @@ type GDExtensionSpxDebugDebugDrawCircle C.GDExtensionSpxDebugDebugDrawCircle
 type GDExtensionSpxDebugDebugDrawRect C.GDExtensionSpxDebugDebugDrawRect
 type GDExtensionSpxDebugDebugDrawLine C.GDExtensionSpxDebugDebugDrawLine
 type GDExtensionSpxExtRequestExit C.GDExtensionSpxExtRequestExit
+type GDExtensionSpxExtRequestReset C.GDExtensionSpxExtRequestReset
+type GDExtensionSpxExtRequestRestart C.GDExtensionSpxExtRequestRestart
 type GDExtensionSpxExtOnRuntimePanic C.GDExtensionSpxExtOnRuntimePanic
 type GDExtensionSpxExtPause C.GDExtensionSpxExtPause
 type GDExtensionSpxExtResume C.GDExtensionSpxExtResume
@@ -678,6 +681,20 @@ func CallExtRequestExit(
 
 	C.cgo_callfn_GDExtensionSpxExtRequestExit(arg0, arg1GdInt)
 
+}
+func CallExtRequestReset(
+	exit_code GdInt,
+) {
+	arg0 := (C.GDExtensionSpxExtRequestReset)(api.SpxExtRequestReset)
+	arg1GdInt := (C.GdInt)(exit_code)
+
+	C.cgo_callfn_GDExtensionSpxExtRequestReset(arg0, arg1GdInt)
+
+}
+func CallExtRequestRestart() {
+	arg0 := (C.GDExtensionSpxExtRequestRestart)(api.SpxExtRequestRestart)
+
+	C.cgo_callfn_GDExtensionSpxExtRequestRestart(arg0)
 }
 func CallExtOnRuntimePanic(
 	msg GdString,
@@ -1280,18 +1297,18 @@ func CallPlatformIsInPersistantDataDir(
 	return (GdBool)(ret_val)
 }
 func CallResCreateAnimation(
-	sprite_type_name GdString,
-	anim_name GdString,
-	context GdString,
+	p_sprite_type GdString,
+	p_anim_name GdString,
+	p_json_ctx GdString,
 	fps GdInt,
-	is_altas GdBool,
+	is_atlas GdBool,
 ) {
 	arg0 := (C.GDExtensionSpxResCreateAnimation)(api.SpxResCreateAnimation)
-	arg1GdString := (C.GdString)(sprite_type_name)
-	arg2GdString := (C.GdString)(anim_name)
-	arg3GdString := (C.GdString)(context)
+	arg1GdString := (C.GdString)(p_sprite_type)
+	arg2GdString := (C.GdString)(p_anim_name)
+	arg3GdString := (C.GdString)(p_json_ctx)
 	arg4GdInt := (C.GdInt)(fps)
-	arg5GdBool := (C.GdBool)(is_altas)
+	arg5GdBool := (C.GdBool)(is_atlas)
 
 	C.cgo_callfn_GDExtensionSpxResCreateAnimation(arg0, arg1GdString, arg2GdString, arg3GdString, arg4GdInt, arg5GdBool)
 

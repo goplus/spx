@@ -101,7 +101,6 @@ func (pself *Monitor) onUpdate(delta float64) {
 	pself.panel.UpdateScale(pself.size)
 	pself.panel.UpdatePos(pself.pos)
 	pself.panel.UpdateText(pself.label, val)
-	pself.panel.UpdateColor(pself.color)
 }
 
 func getTarget(g reflect.Value, target string) (reflect.Value, int) {

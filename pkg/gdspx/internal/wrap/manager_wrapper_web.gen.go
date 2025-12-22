@@ -283,6 +283,13 @@ func (pself *extMgr) RequestExit(exit_code int64) {
 	arg0 := JsFromGdInt(exit_code)
 	API.SpxExtRequestExit.Invoke(arg0)
 }
+func (pself *extMgr) RequestReset(exit_code int64) {
+	arg0 := JsFromGdInt(exit_code)
+	API.SpxExtRequestReset.Invoke(arg0)
+}
+func (pself *extMgr) RequestRestart() {
+	API.SpxExtRequestRestart.Invoke()
+}
 func (pself *extMgr) OnRuntimePanic(msg string) {
 	arg0 := JsFromGdString(msg)
 	API.SpxExtOnRuntimePanic.Invoke(arg0)
@@ -583,12 +590,12 @@ func (pself *platformMgr) IsInPersistantDataDir(path string) bool {
 	_retValue := API.SpxPlatformIsInPersistantDataDir.Invoke(arg0)
 	return JsToGdBool(_retValue)
 }
-func (pself *resMgr) CreateAnimation(sprite_type_name string, anim_name string, context string, fps int64, is_altas bool) {
-	arg0 := JsFromGdString(sprite_type_name)
-	arg1 := JsFromGdString(anim_name)
-	arg2 := JsFromGdString(context)
+func (pself *resMgr) CreateAnimation(p_sprite_type string, p_anim_name string, p_json_ctx string, fps int64, is_atlas bool) {
+	arg0 := JsFromGdString(p_sprite_type)
+	arg1 := JsFromGdString(p_anim_name)
+	arg2 := JsFromGdString(p_json_ctx)
 	arg3 := JsFromGdInt(fps)
-	arg4 := JsFromGdBool(is_altas)
+	arg4 := JsFromGdBool(is_atlas)
 	API.SpxResCreateAnimation.Invoke(arg0, arg1, arg2, arg3, arg4)
 }
 func (pself *resMgr) SetLoadMode(is_direct_mode bool) {

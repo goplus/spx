@@ -6,6 +6,7 @@ import (
 
 	stime "time"
 
+	"github.com/goplus/spx/v2/internal/engine/platform"
 	"github.com/goplus/spx/v2/internal/engine/profiler"
 	"github.com/goplus/spx/v2/internal/enginewrap"
 	"github.com/goplus/spx/v2/internal/time"
@@ -121,6 +122,7 @@ type IGame interface {
 	OnEngineUpdate(delta float64)
 	OnEngineRender(delta float64)
 	OnEngineDestroy()
+	OnEngineReset()
 	OnEnginePause(isPaused bool)
 }
 
@@ -131,6 +133,7 @@ func Main(g IGame) {
 		OnEngineStart:   onStart,
 		OnEngineUpdate:  onUpdate,
 		OnEngineDestroy: onDestroy,
+		OnEngineReset:   onReset,
 		OnEnginePause:   onPaused,
 		OnKeyPressed:    onKeyPressed,
 		OnKeyReleased:   onKeyReleased,
@@ -187,6 +190,13 @@ func onPaused(isPaused bool) {
 	game.OnEnginePause(isPaused)
 }
 
+func onReset() {
+	engine.ClearAllSprites()
+	game.OnEngineReset()
+	gco.AbortAll()
+	gde.UnlinkEngine()
+}
+
 func onKeyPressed(id int64) {
 	keyEventsTemp = append(keyEventsTemp, KeyEvent{Id: id, IsPressed: true})
 }
@@ -236,23 +246,72 @@ func GetKeyEvents(lst []KeyEvent) []KeyEvent {
 	return lst
 }
 
-func CheckPanic() {
+// DeferPanic is a generic panic handler that should be called with defer.
+// It recovers from panics and handles them appropriately.
+// Parameters:
+//   - name: optional identifier for the panic source (pass "" if not needed)
+//   - stack: optional stack trace (pass "" to auto-generate)
+//   - exitOnPanic: if true, calls RequestExit(1) after handling the panic
+func DeferPanic(name, stack string, exitOnPanic bool) {
 	if e := recover(); e != nil {
-		OnPanic("", "")
-		panic(e)
+		handlePanic(name, stack, e, exitOnPanic)
 	}
 }
 
+// CheckPanic is a simplified defer panic handler for engine callbacks.
+// It auto-generates stack trace and exits on panic.
+// Usage: defer CheckPanic()
+func CheckPanic() {
+	if e := recover(); e != nil {
+		handlePanic("", "", e, true)
+	}
+}
+
+// OnPanic handles a panic with the given name and stack trace.
+// This is typically called from coroutine panic handlers.
 func OnPanic(name, stack string) {
-	// on coro panic, exit game
+	handlePanic(name, stack, nil, true)
+}
+
+// handlePanic is the internal panic handler implementation.
+func handlePanic(name, stack string, err any, exitOnPanic bool) {
+	// Build panic message
 	msg := name
 	if stack != "" {
 		msg += " stack:\n" + stack
 	}
+	if err != nil && msg == "" {
+		msg = fmt.Sprintf("panic: %v", err)
+	}
+
+	// Report runtime panic to external manager
 	extMgr.OnRuntimePanic(msg)
-	RequestExit(1)
+
+	// Exit if requested
+	if exitOnPanic {
+		RequestExit(1)
+	}
+}
+
+// Panic triggers a panic with the given message and handles it through the engine's panic system.
+// This function should be used instead of log.Panicln or panic() for consistent error handling.
+// It reports the error to the external manager and then panics.
+func Panic(args ...any) {
+	msg := fmt.Sprint(args...)
+	OnPanic(msg, "")
+}
+
+// Panicf triggers a panic with a formatted message.
+func Panicf(format string, args ...any) {
+	msg := fmt.Sprintf(format, args...)
+	OnPanic(msg, "")
 }
 
 func RequestExit(exitCode int64) {
+	if platform.IsWeb() {
+		// On web platform, just request reset
+		extMgr.RequestReset(exitCode)
+		return
+	}
 	extMgr.RequestExit(exitCode)
 }

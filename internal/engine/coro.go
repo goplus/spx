@@ -1,6 +1,8 @@
 package engine
 
 import (
+	"context"
+
 	"github.com/goplus/spx/v2/internal/coroutine"
 	"github.com/goplus/spx/v2/internal/engine/profiler"
 	"github.com/goplus/spx/v2/internal/time"
@@ -37,14 +39,21 @@ func GetCoroutineOwner() any {
 	return nil
 }
 
+func GetCurrentThreadContext() context.Context {
+	if IsInCoroutine() {
+		return gco.Current().Context()
+	}
+	return context.Background()
+}
+
 func SetCoroutines(co *coroutine.Coroutines) {
 	gco = co
 	profiler.SetGco(co)
 }
 
-func Go(tobj coroutine.ThreadObj, fn func()) {
+func Go(tobj coroutine.ThreadObj, fn func(ctx context.Context)) {
 	gco.CreateAndStart(false, tobj, func(me coroutine.Thread) int {
-		fn()
+		fn(me.Context())
 		return 0
 	})
 }

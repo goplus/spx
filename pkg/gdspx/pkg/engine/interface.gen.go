@@ -72,6 +72,8 @@ type IDebugMgr interface {
 
 type IExtMgr interface {
 	RequestExit(exit_code int64)
+	RequestReset(exit_code int64)
+	RequestRestart()
 	OnRuntimePanic(msg string)
 	Pause()
 	Resume()
@@ -153,7 +155,7 @@ type IPlatformMgr interface {
 }
 
 type IResMgr interface {
-	CreateAnimation(sprite_type_name string, anim_name string, context string, fps int64, is_altas bool)
+	CreateAnimation(p_sprite_type string, p_anim_name string, p_json_ctx string, fps int64, is_atlas bool)
 	SetLoadMode(is_direct_mode bool)
 	GetLoadMode() bool
 	GetBoundFromAlpha(p_path string) Rect2
