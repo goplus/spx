@@ -7,6 +7,9 @@ import (
 	"strings"
 )
 
+// default ai pack tags
+var DefaultAiPackVersion = "v0.0.0-20251014030930-ac405dbe65e9"
+
 type ExtraArgs struct {
 	CmdName         string
 	Path            *string
@@ -28,6 +31,7 @@ type ExtraArgs struct {
 	Movie           *bool
 	GoEnv           *string // Portable Go environment directory
 	IxgoGen         *bool   // Use xgobuild library for code generation (new method)
+	AiPack          *string // AI pack version (e.g., v0.0.0-20251014030930-ac405dbe65e9)
 }
 
 func (e *ExtraArgs) String() []string {
@@ -124,6 +128,7 @@ func (cmd *CmdTool) initializeFlags() *bool {
 	cmd.Args.Movie = f.Bool("movie", false, "record movie mode")
 	cmd.Args.GoEnv = f.String("goenv", "", "portable Go environment directory (e.g., ./cmd/portable-go)")
 	cmd.Args.IxgoGen = f.Bool("ixgogen", false, "use xgobuild library for code generation (default: use xgo CLI)")
+	cmd.Args.AiPack = f.String("aipack", "", "AI pack version (e.g., v0.0.0-20251014030930-ac405dbe65e9)")
 	return help
 }
 
@@ -150,6 +155,9 @@ func (cmd *CmdTool) parseCommandLineArgs(help *bool, ext ...string) error {
 		return fmt.Errorf("unknown command: %s", cmd.Args.CmdName)
 	}
 
+	if cmd.Args.AiPack != nil && *cmd.Args.AiPack == "default" {
+		cmd.Args.AiPack = &DefaultAiPackVersion
+	}
 	return nil
 }
 

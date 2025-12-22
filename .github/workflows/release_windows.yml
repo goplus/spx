@@ -95,7 +95,7 @@ jobs:
 
           # Run test/CI demo to collect other dependencies
           cd test/CI
-          "$GOPATH_UNIX"/bin/spx.exe run --goenv=../../goenv --path=. --headless &
+          "$GOPATH_UNIX"/bin/spx.exe run --goenv=../../goenv --aipack="default" --path=. --headless &
           SPX_PID=$!
 
           # Wait a few seconds for initialization
