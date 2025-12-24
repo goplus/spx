@@ -5,6 +5,33 @@ cd $SCRIPT_DIR
 # Pin Go toolchain version
 export GOTOOLCHAIN=go1.24.4
 
+# Detect system type
+SYSTEM="$(uname -s)"
+
+# Set GOPATH
+if [ "$OS" = "Windows_NT" ]; then
+    IFS=';' read -r first_gopath _ <<< "$(go env GOPATH)"
+    GOPATH="$first_gopath"
+else
+    IFS=':' read -r first_gopath _ <<< "$(go env GOPATH)"
+    GOPATH="$first_gopath"
+fi
+
+# Parse arguments
+BUILD_PC_ONLY=false
+OPT_WASM=false
+
+for arg in "$@"; do
+    case "$arg" in
+        --pc)
+            BUILD_PC_ONLY=true
+            ;;
+        --opt)
+            OPT_WASM=true
+            ;;
+    esac
+done
+
 # Function to install and check binaryen
 install_binaryen() {
     # Check if wasm-opt is installed
@@ -133,6 +160,72 @@ compress_with_brotli() {
     fi
 }
 
+# Function to build PC platform shared library
+build_ispx_pc() {
+    echo "Building ispx for PC..."
+    
+    # Get architecture
+    GOARCH=$(go env GOARCH)
+
+    if [ "$OS" = "Windows_NT" ]; then
+        # Windows: build DLL with proper naming
+        GOOS_NAME="windows"
+        EXT=".dll"
+        LDFLAGS="-checklinkname=0 -extldflags=-Wl,--allow-multiple-definition"
+    elif [ "$(uname)" = "Darwin" ]; then
+        # macOS: build dylib with proper naming
+        GOOS_NAME="darwin"
+        EXT=".dylib"
+        LDFLAGS="-checklinkname=0"
+    else
+        # Linux: build so with proper naming
+        GOOS_NAME="linux"
+        EXT=".so"
+        LDFLAGS="-checklinkname=0 -extldflags=-Wl,--allow-multiple-definition"
+    fi
+
+    LIB_NAME="gdspx-${GOOS_NAME}-${GOARCH}${EXT}"
+    go build -ldflags="$LDFLAGS" -buildmode=c-shared -o "$LIB_NAME" .
+
+    if [ -f "$LIB_NAME" ]; then
+        cp -f "$LIB_NAME" "$GOPATH/bin/"
+        echo "Installed $LIB_NAME to $GOPATH/bin/"
+    else
+        echo "Error: $LIB_NAME build failed"
+        exit 1
+    fi
+    cp -f $LIB_NAME $GOPATH/bin/$LIB_NAME
+}
+
+# Function to build wasm
+build_wasm() {
+    if [ "$OPT_WASM" = true ]; then
+        # Try to install/check binaryen
+        if install_binaryen; then
+            echo "Building wasm with optimization..."
+            GOOS=js GOARCH=wasm go build -tags canvas -trimpath -ldflags "-s -w -checklinkname=0" -o gdspx_raw.wasm
+            wasm-opt -Oz --enable-bulk-memory -o gdspx.wasm gdspx_raw.wasm
+            
+            # Compress with brotli
+            compress_with_brotli "gdspx.wasm" "gdspx.wasm.br"
+            cp -f gdspx.wasm.br $GOPATH/bin/gdspx.wasm.br
+            
+            # Clean up temporary file
+            rm -f gdspx_raw.wasm
+        else
+            echo "binaryen not available, skipping optimization step, using basic compilation..."
+            GOOS=js GOARCH=wasm go build -tags canvas -ldflags -checklinkname=0 -o gdspx.wasm
+        fi
+    else
+        echo "Building wasm with basic version..."
+        GOOS=js GOARCH=wasm go build -tags canvas -ldflags -checklinkname=0 -o gdspx.wasm
+    fi
+    
+    echo "gdspx.wasm has been created"
+    cp gdspx.wasm $GOPATH/bin/gdspx.wasm
+}
+
+# Main build logic
 echo "Generating ispx wraps..."
 # Install required Go dependencies
 if ! go generate main.go > /dev/null 2>&1; then
@@ -141,29 +234,11 @@ if ! go generate main.go > /dev/null 2>&1; then
 fi
 go mod tidy
 
-# Detect system type
-SYSTEM="$(uname -s)"
-
-# Choose build method based on --opt parameter and binaryen installation status
-if [ "$1" = "--opt" ]; then
-    # Try to install/check binaryen
-    if install_binaryen; then
-        echo "Building with optimization..."
-        GOOS=js GOARCH=wasm go build -tags canvas -trimpath -ldflags "-s -w -checklinkname=0" -o gdspx_raw.wasm
-        wasm-opt -Oz --enable-bulk-memory -o gdspx.wasm gdspx_raw.wasm
-        
-        # Compress with brotli
-        compress_with_brotli "gdspx.wasm" "gdspx.wasm.br"
-        
-        # Clean up temporary file
-        rm -f gdspx_raw.wasm
-    else
-        echo "binaryen not available, skipping optimization step, using basic compilation..."
-        GOOS=js GOARCH=wasm go build -tags canvas -ldflags -checklinkname=0 -o gdspx.wasm
-    fi
+if [ "$BUILD_PC_ONLY" = true ]; then
+    # Only build PC
+    build_ispx_pc
 else
-    echo "Building with basic version..."
-    GOOS=js GOARCH=wasm go build -tags canvas -ldflags -checklinkname=0 -o gdspx.wasm
-fi 
-
-echo "gdspx.wasm has been created"
+    # Build wasm + PC
+    build_wasm
+    build_ispx_pc
+fi
