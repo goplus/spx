@@ -2,12 +2,17 @@ package clang
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/alecthomas/participle/v2"
 	. "github.com/alecthomas/participle/v2/lexer"
 	"golang.org/x/exp/slices"
 )
+
+// KnownManagerNamesProvider is a callback function to get the list of known manager names.
+// This callback is set by the common package during initialization to avoid circular imports.
+var KnownManagerNamesProvider func() []string
 
 var (
 	legacyGDExtentionInterfaceFunctionNames []string = []string{
@@ -69,18 +74,59 @@ func (a CHeaderFileAST) CollectGDExtensionManagerFunctions(managerName string) [
 
 	fns := make([]TypedefFunction, 0, len(allFns))
 
+	// Get the list of known manager names
+	var knownManagers []string
+	if KnownManagerNamesProvider != nil {
+		knownManagers = KnownManagerNamesProvider()
+	}
+
 	for _, fn := range allFns {
 		if strings.HasPrefix(fn.Name, "GDExtensionSpx") &&
 			!strings.HasPrefix(fn.Name, "GDExtensionSpxCallback") &&
 			!slices.Contains(legacyGDExtentionInterfaceFunctionNames, fn.Name) {
-			funcName := fn.Name[len("GDExtensionSpx"):]
-			if strings.HasPrefix(strings.ToLower(funcName), managerName) {
+			// Exact match: use getManagerNameForFunc to determine which manager the function belongs to
+			actualManager := getManagerNameForFunc(fn.Name, knownManagers)
+			if actualManager == managerName {
 				fns = append(fns, fn)
 			}
 		}
 	}
 
 	return fns
+}
+
+// getManagerNameForFunc extracts the manager name from the function name.
+func getManagerNameForFunc(funcName string, knownManagers []string) string {
+	prefix := "GDExtensionSpx"
+	str := funcName[len(prefix):]
+	lowerStr := strings.ToLower(str)
+
+	// Prefer matching against known manager names (sorted by length descending, prioritizing longer names)
+	if len(knownManagers) > 0 {
+		// Create a copy sorted by length in descending order
+		sortedNames := make([]string, len(knownManagers))
+		copy(sortedNames, knownManagers)
+		sort.Slice(sortedNames, func(i, j int) bool {
+			return len(sortedNames[i]) > len(sortedNames[j])
+		})
+
+		for _, mgr := range sortedNames {
+			if strings.HasPrefix(lowerStr, mgr) {
+				return mgr
+			}
+		}
+	}
+
+	// Fall back to the original logic (stop at uppercase letter)
+	chs := []rune{}
+	chs = append(chs, rune(str[0]), rune(str[1]))
+	for _, ch := range str[2:] {
+		if ch >= 'A' && ch <= 'Z' {
+			break
+		}
+		chs = append(chs, ch)
+	}
+	return strings.ToLower(string(chs))
 }
 
 func (a CHeaderFileAST) CollectGDExtensionInterfaceFunctions() []TypedefFunction {

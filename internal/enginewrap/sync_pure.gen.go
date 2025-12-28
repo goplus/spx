@@ -30,26 +30,28 @@ resMgr enginewrap.ResMgrImpl
 sceneMgr enginewrap.SceneMgrImpl
 spriteMgr enginewrap.SpriteMgrImpl
 tilemapMgr enginewrap.TilemapMgrImpl
+tilemapparserMgr enginewrap.TilemapparserMgrImpl
 uiMgr enginewrap.UiMgrImpl
 
 )
 */
 
 var (
-	audioMgr      AudioMgrImpl
-	cameraMgr     CameraMgrImpl
-	debugMgr      DebugMgrImpl
-	extMgr        ExtMgrImpl
-	inputMgr      InputMgrImpl
-	navigationMgr NavigationMgrImpl
-	penMgr        PenMgrImpl
-	physicMgr     PhysicMgrImpl
-	platformMgr   PlatformMgrImpl
-	resMgr        ResMgrImpl
-	sceneMgr      SceneMgrImpl
-	spriteMgr     SpriteMgrImpl
-	tilemapMgr    TilemapMgrImpl
-	uiMgr         UiMgrImpl
+	audioMgr         AudioMgrImpl
+	cameraMgr        CameraMgrImpl
+	debugMgr         DebugMgrImpl
+	extMgr           ExtMgrImpl
+	inputMgr         InputMgrImpl
+	navigationMgr    NavigationMgrImpl
+	penMgr           PenMgrImpl
+	physicMgr        PhysicMgrImpl
+	platformMgr      PlatformMgrImpl
+	resMgr           ResMgrImpl
+	sceneMgr         SceneMgrImpl
+	spriteMgr        SpriteMgrImpl
+	tilemapMgr       TilemapMgrImpl
+	tilemapparserMgr TilemapparserMgrImpl
+	uiMgr            UiMgrImpl
 )
 
 type audioMgrImpl struct {
@@ -116,6 +118,11 @@ type tilemapMgrImpl struct {
 }
 type TilemapMgrImpl struct {
 	tilemapMgrImpl
+}
+type tilemapparserMgrImpl struct {
+}
+type TilemapparserMgrImpl struct {
+	tilemapparserMgrImpl
 }
 type uiMgrImpl struct {
 }
@@ -751,6 +758,19 @@ func (pself *tilemapMgrImpl) GetTileWithLayer(pos Vec2, layer_index int64) strin
 }
 func (pself *tilemapMgrImpl) CloseDrawTiles()        {}
 func (pself *tilemapMgrImpl) ExitTilemapEditorMode() {}
+
+// ITilemapparserMgr
+func (pself *tilemapparserMgrImpl) LoadTilemap(json_path string) {}
+func (pself *tilemapparserMgrImpl) UnloadTilemap(name string)    {}
+func (pself *tilemapparserMgrImpl) DestroyAllTilemaps()          {}
+func (pself *tilemapparserMgrImpl) HasTilemap(name string) bool {
+	var _ret1 bool
+	return _ret1
+}
+func (pself *tilemapparserMgrImpl) GetTilemapLayerCount(name string) int64 {
+	var _ret1 int64
+	return _ret1
+}
 
 // IUiMgr
 func (pself *uiMgrImpl) BindNode(obj gdx.Object, rel_path string) gdx.Object {

@@ -15,20 +15,21 @@ import (
 )
 
 var (
-	AudioMgr      IAudioMgr
-	CameraMgr     ICameraMgr
-	DebugMgr      IDebugMgr
-	ExtMgr        IExtMgr
-	InputMgr      IInputMgr
-	NavigationMgr INavigationMgr
-	PenMgr        IPenMgr
-	PhysicMgr     IPhysicMgr
-	PlatformMgr   IPlatformMgr
-	ResMgr        IResMgr
-	SceneMgr      ISceneMgr
-	SpriteMgr     ISpriteMgr
-	TilemapMgr    ITilemapMgr
-	UiMgr         IUiMgr
+	AudioMgr         IAudioMgr
+	CameraMgr        ICameraMgr
+	DebugMgr         IDebugMgr
+	ExtMgr           IExtMgr
+	InputMgr         IInputMgr
+	NavigationMgr    INavigationMgr
+	PenMgr           IPenMgr
+	PhysicMgr        IPhysicMgr
+	PlatformMgr      IPlatformMgr
+	ResMgr           IResMgr
+	SceneMgr         ISceneMgr
+	SpriteMgr        ISpriteMgr
+	TilemapMgr       ITilemapMgr
+	TilemapparserMgr ITilemapparserMgr
+	UiMgr            IUiMgr
 )
 
 type IAudioMgr interface {
@@ -320,6 +321,14 @@ type ITilemapMgr interface {
 	GetTileWithLayer(pos Vec2, layer_index int64) string
 	CloseDrawTiles()
 	ExitTilemapEditorMode()
+}
+
+type ITilemapparserMgr interface {
+	LoadTilemap(json_path string)
+	UnloadTilemap(name string)
+	DestroyAllTilemaps()
+	HasTilemap(name string) bool
+	GetTilemapLayerCount(name string) int64
 }
 
 type IUiMgr interface {

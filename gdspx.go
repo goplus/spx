@@ -28,20 +28,21 @@ import (
 
 // copy these variable to any namespace you want
 var (
-	audioMgr      enginewrap.AudioMgrImpl
-	cameraMgr     enginewrap.CameraMgrImpl
-	inputMgr      enginewrap.InputMgrImpl
-	physicMgr     enginewrap.PhysicMgrImpl
-	platformMgr   enginewrap.PlatformMgrImpl
-	resMgr        enginewrap.ResMgrImpl
-	sceneMgr      enginewrap.SceneMgrImpl
-	spriteMgr     enginewrap.SpriteMgrImpl
-	uiMgr         enginewrap.UiMgrImpl
-	extMgr        enginewrap.ExtMgrImpl
-	penMgr        enginewrap.PenMgrImpl
-	debugMgr      enginewrap.DebugMgrImpl
-	navigationMgr enginewrap.NavigationMgrImpl
-	tilemapMgr    enginewrap.TilemapMgrImpl
+	audioMgr         enginewrap.AudioMgrImpl
+	cameraMgr        enginewrap.CameraMgrImpl
+	inputMgr         enginewrap.InputMgrImpl
+	physicMgr        enginewrap.PhysicMgrImpl
+	platformMgr      enginewrap.PlatformMgrImpl
+	resMgr           enginewrap.ResMgrImpl
+	sceneMgr         enginewrap.SceneMgrImpl
+	spriteMgr        enginewrap.SpriteMgrImpl
+	uiMgr            enginewrap.UiMgrImpl
+	extMgr           enginewrap.ExtMgrImpl
+	penMgr           enginewrap.PenMgrImpl
+	debugMgr         enginewrap.DebugMgrImpl
+	navigationMgr    enginewrap.NavigationMgrImpl
+	tilemapMgr       enginewrap.TilemapMgrImpl
+	tilemapparserMgr enginewrap.TilemapparserMgrImpl
 )
 
 var (

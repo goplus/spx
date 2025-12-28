@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/goplus/spx/v2/pkg/gdspx/cmd/codegen/generate/common"
 	"github.com/iancoleman/strcase"
 )
 
@@ -136,12 +137,20 @@ func generateManagerHeader(input string, rawFormat bool) string {
 
 	var builder strings.Builder
 
+	// Clear the previous list of manager names
+	common.ClearKnownManagerNames()
+
 	for scanner.Scan() {
 		line := scanner.Text()
 		if strings.Contains(line, "class") {
 			parts := strings.Fields(line)
 			currentClassName = parts[1]
 			currentClassName = currentClassName[:len(currentClassName)-3]
+			// Register manager name (remove "Spx" prefix)
+			if strings.HasPrefix(currentClassName, "Spx") {
+				managerName := currentClassName[3:] // Remove "Spx" prefix
+				common.RegisterManagerName(managerName)
+			}
 			builder.WriteString("// " + currentClassName + "\n")
 			continue
 		}

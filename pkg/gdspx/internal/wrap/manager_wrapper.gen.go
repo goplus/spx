@@ -68,6 +68,9 @@ func BindMgr(mgrs []IManager) {
 		case ITilemapMgr:
 			TilemapMgr = v
 
+		case ITilemapparserMgr:
+			TilemapparserMgr = v
+
 		case IUiMgr:
 			UiMgr = v
 
@@ -116,6 +119,9 @@ type spriteMgr struct {
 type tilemapMgr struct {
 	baseMgr
 }
+type tilemapparserMgr struct {
+	baseMgr
+}
 type uiMgr struct {
 	baseMgr
 }
@@ -134,6 +140,7 @@ func createMgrs() []IManager {
 	addManager(&sceneMgr{})
 	addManager(&spriteMgr{})
 	addManager(&tilemapMgr{})
+	addManager(&tilemapparserMgr{})
 	addManager(&uiMgr{})
 	return mgrs
 }
@@ -1518,6 +1525,35 @@ func (pself *tilemapMgr) CloseDrawTiles() {
 }
 func (pself *tilemapMgr) ExitTilemapEditorMode() {
 	CallTilemapExitTilemapEditorMode()
+}
+func (pself *tilemapparserMgr) LoadTilemap(json_path string) {
+	arg0Str := C.CString(json_path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	CallTilemapparserLoadTilemap(arg0)
+}
+func (pself *tilemapparserMgr) UnloadTilemap(name string) {
+	arg0Str := C.CString(name)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	CallTilemapparserUnloadTilemap(arg0)
+}
+func (pself *tilemapparserMgr) DestroyAllTilemaps() {
+	CallTilemapparserDestroyAllTilemaps()
+}
+func (pself *tilemapparserMgr) HasTilemap(name string) bool {
+	arg0Str := C.CString(name)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	retValue := CallTilemapparserHasTilemap(arg0)
+	return ToBool(retValue)
+}
+func (pself *tilemapparserMgr) GetTilemapLayerCount(name string) int64 {
+	arg0Str := C.CString(name)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	retValue := CallTilemapparserGetTilemapLayerCount(arg0)
+	return ToInt64(retValue)
 }
 func (pself *uiMgr) BindNode(obj Object, rel_path string) Object {
 	arg0 := ToGdObj(obj)

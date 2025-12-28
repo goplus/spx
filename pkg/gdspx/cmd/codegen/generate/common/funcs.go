@@ -21,6 +21,13 @@ var (
 	RelDir = "../../internal/ffi"
 )
 
+func init() {
+	// Set callback function so the clang package can get the list of known manager names
+	clang.KnownManagerNamesProvider = func() []string {
+		return KnownManagerNames
+	}
+}
+
 func Add(a int, b int) int {
 	return a + b
 }
@@ -406,8 +413,9 @@ func TrimPrefix(typeName, prefix string) string {
 }
 
 var (
-	managerSet = map[string]bool{}
-	cppType2Go = map[string]string{}
+	managerSet        = map[string]bool{}
+	cppType2Go        = map[string]string{}
+	KnownManagerNames = []string{} // List of correct manager names obtained from header parsing
 )
 
 type ManagerData struct {
@@ -415,9 +423,45 @@ type ManagerData struct {
 	Mangers []string
 }
 
+// RegisterManagerName registers a known manager name (obtained from header parsing).
+func RegisterManagerName(name string) {
+	name = strings.ToLower(name)
+	// Avoid duplicate entries
+	for _, n := range KnownManagerNames {
+		if n == name {
+			return
+		}
+	}
+	KnownManagerNames = append(KnownManagerNames, name)
+}
+
+// ClearKnownManagerNames clears the list of known manager names.
+func ClearKnownManagerNames() {
+	KnownManagerNames = []string{}
+}
+
 func GetManagerName(str string) string {
 	prefix := "GDExtensionSpx"
 	str = str[len(prefix):]
+	lowerStr := strings.ToLower(str)
+
+	// Prefer matching against known manager names (sorted by length descending, prioritizing longer names)
+	if len(KnownManagerNames) > 0 {
+		// Create a copy sorted by length in descending order
+		sortedNames := make([]string, len(KnownManagerNames))
+		copy(sortedNames, KnownManagerNames)
+		sort.Slice(sortedNames, func(i, j int) bool {
+			return len(sortedNames[i]) > len(sortedNames[j])
+		})
+
+		for _, mgr := range sortedNames {
+			if strings.HasPrefix(lowerStr, mgr) {
+				return mgr
+			}
+		}
+	}
+
+	// Fall back to the original logic (stop at uppercase letter)
 	chs := []rune{}
 	chs = append(chs, rune(str[0]), rune(str[1]))
 	for _, ch := range str[2:] {

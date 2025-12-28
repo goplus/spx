@@ -72,6 +72,7 @@ func init() {
 		NamedTypes: map[string]reflect.Type{
 			"Color":           reflect.TypeOf((*q.Color)(nil)).Elem(),
 			"Config":          reflect.TypeOf((*q.Config)(nil)).Elem(),
+			"DecoratorJSON":   reflect.TypeOf((*q.DecoratorJSON)(nil)).Elem(),
 			"EffectKind":      reflect.TypeOf((*q.EffectKind)(nil)).Elem(),
 			"Game":            reflect.TypeOf((*q.Game)(nil)).Elem(),
 			"List":            reflect.TypeOf((*q.List)(nil)).Elem(),

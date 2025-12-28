@@ -18,7 +18,9 @@ package spx
 
 import (
 	"fmt"
+	"path"
 	"sort"
+	"strings"
 
 	spxfs "github.com/goplus/spx/v2/fs"
 	"github.com/goplus/spx/v2/internal/engine"
@@ -27,27 +29,129 @@ import (
 	"github.com/goplus/spbase/mathf"
 )
 
-type gameTilemapMgr struct {
-	g     *Game
-	datas *tm.TscnMapData
+// DecoratorJSON represents the structure of decorator.json file (new format)
+type DecoratorJSON struct {
+	Version    int                `json:"version"`
+	Decorators []tm.DecoratorNode `json:"decorators"`
 }
 
-func (p *gameTilemapMgr) init(g *Game, fs spxfs.Dir, path string) {
+type gameTilemapMgr struct {
+	g              *Game
+	fs             spxfs.Dir       // filesystem for loading tilemap files
+	datas          *tm.TscnMapData // old format data
+	decoratorDatas *DecoratorJSON  // new format decorator data
+	useNewLoader   bool            // true if using C++ TileMapParser (new format)
+	tilemapDir     string          // current tilemap directory (e.g., "tilemaps/map1")
+	currentMap     string          // current loaded map name (e.g., "map1")
+}
+
+func (p *gameTilemapMgr) init(g *Game, fs spxfs.Dir, tilemapPath string) {
 	p.g = g
-	if path == "" {
+	p.fs = fs
+	if tilemapPath == "" {
 		return
 	}
-	var data tm.TscnMapData
-	err := loadJson(&data, fs, path)
+
+	// Load the default tilemap specified in config
+	p.loadMap(tilemapPath)
+}
+
+// loadDecoratorJSON loads decorator data from a separate decorator.json file
+func (p *gameTilemapMgr) loadDecoratorJSON(fs spxfs.Dir, decoratorPath string) {
+	var data DecoratorJSON
+	err := loadJson(&data, fs, decoratorPath)
 	if err != nil {
-		panic(fmt.Sprintf("Failed to load tilemap JSON file %s: %v", path, err))
+		fmt.Printf("[TILEMAP] No decorator.json found at %s (this is OK if no decorators)\n", decoratorPath)
+		return
 	}
-	p.datas = &data
-	tm.ConvertData(&data)
+	p.decoratorDatas = &data
 }
 
 func (p *gameTilemapMgr) hasData() bool {
-	return p.datas != nil
+	return p.datas != nil || p.useNewLoader
+}
+
+// isNewFormat checks if the tilemap path is in the new format (directory path)
+// New format: path does NOT contain ".json" (e.g., "tilemaps/map1")
+// Old format: path contains ".json" (e.g., "tilemaps/map1.json")
+func (p *gameTilemapMgr) isNewFormat(tilemapPath string) bool {
+	return !strings.Contains(tilemapPath, ".json")
+}
+
+// loadMap loads a tilemap from the specified path
+// mapDir can be either:
+//   - A directory path (new format): "tilemaps/map1" -> uses C++ TileMapParser
+//   - A file path (old format): "tilemaps/map1.json" -> uses Go loader
+func (p *gameTilemapMgr) loadMap(mapDir string) {
+	if mapDir == "" {
+		return
+	}
+
+	// Determine format based on path
+	p.useNewLoader = p.isNewFormat(mapDir)
+
+	if p.useNewLoader {
+		// New format: directory path
+		p.tilemapDir = mapDir
+		p.currentMap = path.Base(mapDir)
+
+		// Build paths to tilemap.json and decorator.json
+		tilemapPath := path.Join(mapDir, "tilemap.json")
+		decoratorPath := path.Join(mapDir, "decorator.json")
+
+		// Load tilemap using C++ TileMapParser
+		enginePath := engine.ToAssetPath(tilemapPath)
+		tilemapparserMgr.LoadTilemap(enginePath)
+		p.useNewLoader = true
+
+		// Load decorator.json
+		p.loadDecoratorJSON(p.fs, decoratorPath)
+	} else {
+		// Old format: file path (contains .json)
+		p.tilemapDir = path.Dir(mapDir)
+		p.currentMap = strings.TrimSuffix(path.Base(mapDir), ".json")
+
+		// Load using Go loader
+		var data tm.TscnMapData
+		err := loadJson(&data, p.fs, mapDir)
+		if err != nil {
+			panic(fmt.Sprintf("Failed to load tilemap JSON file %s: %v", mapDir, err))
+		}
+		p.datas = &data
+		tm.ConvertData(&data)
+	}
+}
+
+// unloadMap unloads the current tilemap and cleans up resources
+func (p *gameTilemapMgr) unloadMap() {
+	if p.currentMap == "" {
+		return
+	}
+
+	if p.useNewLoader {
+		// Unload from C++ TileMapParser
+		tilemapparserMgr.DestroyAllTilemaps()
+	}
+
+	// Clean up decorator sprites
+	p.cleanupDecorators()
+
+	// Reset state
+	p.datas = nil
+	p.decoratorDatas = nil
+	p.currentMap = ""
+	p.tilemapDir = ""
+	p.useNewLoader = false
+}
+
+// getCurrentMap returns the name of the currently loaded tilemap
+func (p *gameTilemapMgr) getCurrentMap() string {
+	return p.currentMap
+}
+
+// cleanupDecorators removes all static sprites (decorators) created by tilemaps
+func (p *gameTilemapMgr) cleanupDecorators() {
+	sceneMgr.ClearPureSprites()
 }
 
 func (p *gameTilemapMgr) loadTilemaps(datas *tm.TscnMapData) {
@@ -55,17 +159,30 @@ func (p *gameTilemapMgr) loadTilemaps(datas *tm.TscnMapData) {
 }
 
 func (p *gameTilemapMgr) loadDecorators(datas *tm.TscnMapData) {
+	p.loadDecoratorNodes(datas.Decorators, "tilemaps")
+}
+
+func (p *gameTilemapMgr) loadDecoratorNodes(decorators []tm.DecoratorNode, tilemapDir string) {
 	const headingOffset = -90.0
-	for _, item := range datas.Decorators {
+	for _, item := range decorators {
 		position := item.Position.ToVec2()
 		pivot := item.Pivot.ToVec2()
-		assetPath := engine.ToAssetPath("tilemaps/" + item.Path)
+		relativePath := path.Join(tilemapDir, item.Path)
+		assetPath := engine.ToAssetPath(relativePath)
 		texSize := resMgr.GetImageSize(assetPath)
 		colliderPivot := item.ColliderPivot.ToVec2().Add(pivot)
 		pivot = pivot.Sub(texSize.Divf(2))
-		p.g.createStaticSprite("tilemaps/"+item.Path, position, item.Ratation+headingOffset,
+		p.g.createStaticSprite(relativePath, position, item.Ratation+headingOffset,
 			item.Scale.ToVec2(), int64(item.ZIndex), pivot, item.ColliderType, colliderPivot, item.ColliderParams)
 	}
+}
+
+// loadDecoratorsFromJSON loads decorators from the separate decorator.json file (new format)
+func (p *gameTilemapMgr) loadDecoratorsFromJSON() {
+	if p.decoratorDatas == nil || len(p.decoratorDatas.Decorators) == 0 {
+		return
+	}
+	p.loadDecoratorNodes(p.decoratorDatas.Decorators, p.tilemapDir)
 }
 
 func (p *gameTilemapMgr) loadSprites(datas *tm.TscnMapData) {
@@ -87,6 +204,13 @@ func (p *gameTilemapMgr) loadSprites(datas *tm.TscnMapData) {
 }
 
 func (p *gameTilemapMgr) parseTilemap() {
+	// Handle new format: load decorators from separate JSON file
+	if p.useNewLoader {
+		p.loadDecoratorsFromJSON()
+		return
+	}
+
+	// Old format: load from combined TscnMapData
 	if p.datas == nil {
 		return
 	}

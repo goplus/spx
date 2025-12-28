@@ -102,3 +102,30 @@ func (p *Game) createStaticSprite(texturePath string, pos mathf.Vec2, rot float6
 	colliderTypeInt := parseColliderShapeType(colliderType, 0)
 	sceneMgr.CreateStaticSprite(engine.ToAssetPath(texturePath), pos, rot, scale, zindex, pivot, colliderTypeInt, colliderPivot, colliderParams)
 }
+
+// ============================================================================
+// Dynamic Tilemap Loading API
+// ============================================================================
+
+// LoadTilemap dynamically loads a tilemap from the specified path
+// mapDir can be either:
+//   - A directory path (new format): "tilemaps/map1" -> uses C++ TileMapParser
+//   - A file path (old format): "tilemaps/map1.json" -> uses Go loader
+//
+// This will unload any currently loaded tilemap before loading the new one.
+func (p *Game) LoadTilemap(mapDir string) {
+	p.tilemapMgr.unloadMap()
+	p.tilemapMgr.loadMap(mapDir)
+	p.tilemapMgr.parseTilemap()
+}
+
+// UnloadTilemap unloads the currently loaded tilemap and cleans up resources
+func (p *Game) UnloadTilemap() {
+	p.tilemapMgr.unloadMap()
+}
+
+// TilemapName returns the name of the currently loaded tilemap
+// Returns empty string if no tilemap is loaded
+func (p *Game) TilemapName() string {
+	return p.tilemapMgr.getCurrentMap()
+}
