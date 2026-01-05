@@ -61,13 +61,6 @@ func (p Value) Equal(v obj) bool {
 	return p.data == fromObj(v)
 }
 
-func (p *Value) Set(v obj) {
-	if p == nil {
-		return
-	}
-	p.data = fromObj(v)
-}
-
 func (p Value) String() string {
 	return toString(p.data)
 }
@@ -94,6 +87,13 @@ func (p Value) Float() float64 {
 		log.Panicln("todo: spx.Value.Float()", reflect.TypeOf(v))
 		return 0
 	}
+}
+
+func (p *Value) Set(v obj) {
+	if p == nil {
+		return
+	}
+	p.data = fromObj(v)
 }
 
 // -------------------------------------------------------------------------------------
