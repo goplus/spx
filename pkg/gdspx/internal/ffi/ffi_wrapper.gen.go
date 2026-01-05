@@ -153,6 +153,7 @@ type GDExtensionSpxPhysicRaycast C.GDExtensionSpxPhysicRaycast
 type GDExtensionSpxPhysicCheckCollision C.GDExtensionSpxPhysicCheckCollision
 type GDExtensionSpxPhysicCheckTouchedCameraBoundaries C.GDExtensionSpxPhysicCheckTouchedCameraBoundaries
 type GDExtensionSpxPhysicCheckTouchedCameraBoundary C.GDExtensionSpxPhysicCheckTouchedCameraBoundary
+type GDExtensionSpxPhysicCheckNearestTouchedCameraBoundary C.GDExtensionSpxPhysicCheckNearestTouchedCameraBoundary
 type GDExtensionSpxPhysicSetCollisionSystemType C.GDExtensionSpxPhysicSetCollisionSystemType
 type GDExtensionSpxPhysicSetGlobalGravity C.GDExtensionSpxPhysicSetGlobalGravity
 type GDExtensionSpxPhysicGetGlobalGravity C.GDExtensionSpxPhysicGetGlobalGravity
@@ -1045,6 +1046,16 @@ func CallPhysicCheckTouchedCameraBoundary(
 	C.cgo_callfn_GDExtensionSpxPhysicCheckTouchedCameraBoundary(arg0, arg1GdObj, arg2GdInt, &ret_val)
 
 	return (GdBool)(ret_val)
+}
+func CallPhysicCheckNearestTouchedCameraBoundary(
+	obj GdObj,
+) GdInt {
+	arg0 := (C.GDExtensionSpxPhysicCheckNearestTouchedCameraBoundary)(api.SpxPhysicCheckNearestTouchedCameraBoundary)
+	arg1GdObj := (C.GdObj)(obj)
+	var ret_val C.GdInt
+	C.cgo_callfn_GDExtensionSpxPhysicCheckNearestTouchedCameraBoundary(arg0, arg1GdObj, &ret_val)
+
+	return (GdInt)(ret_val)
 }
 func CallPhysicSetCollisionSystemType(
 	is_collision_by_alpha GdBool,

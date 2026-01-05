@@ -291,6 +291,10 @@ func (pself *physicMgrImpl) CheckTouchedCameraBoundary(obj gdx.Object, board_typ
 	var _ret1 bool
 	return _ret1
 }
+func (pself *physicMgrImpl) CheckNearestTouchedCameraBoundary(obj gdx.Object) int64 {
+	var _ret1 int64
+	return _ret1
+}
 func (pself *physicMgrImpl) SetCollisionSystemType(is_collision_by_alpha bool) {}
 func (pself *physicMgrImpl) SetGlobalGravity(gravity float64)                  {}
 func (pself *physicMgrImpl) GetGlobalGravity() float64 {

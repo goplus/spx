@@ -121,6 +121,7 @@ type IPhysicMgr interface {
 	CheckCollision(from Vec2, to Vec2, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) bool
 	CheckTouchedCameraBoundaries(obj Object) int64
 	CheckTouchedCameraBoundary(obj Object, board_type int64) bool
+	CheckNearestTouchedCameraBoundary(obj Object) int64
 	SetCollisionSystemType(is_collision_by_alpha bool)
 	SetGlobalGravity(gravity float64)
 	GetGlobalGravity() float64
