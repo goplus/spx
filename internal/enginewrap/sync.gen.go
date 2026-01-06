@@ -534,6 +534,13 @@ func (pself *physicMgrImpl) CheckTouchedCameraBoundary(obj gdx.Object, board_typ
 	})
 	return _ret1
 }
+func (pself *physicMgrImpl) CheckNearestTouchedCameraBoundary(obj gdx.Object) int64 {
+	var _ret1 int64
+	callInMainThread(func() {
+		_ret1 = gdx.PhysicMgr.CheckNearestTouchedCameraBoundary(obj)
+	})
+	return _ret1
+}
 func (pself *physicMgrImpl) SetCollisionSystemType(is_collision_by_alpha bool) {
 	callInMainThread(func() {
 		gdx.PhysicMgr.SetCollisionSystemType(is_collision_by_alpha)

@@ -216,6 +216,9 @@ void cgo_callfn_GDExtensionSpxPhysicCheckTouchedCameraBoundaries(const GDExtensi
 void cgo_callfn_GDExtensionSpxPhysicCheckTouchedCameraBoundary(const GDExtensionSpxPhysicCheckTouchedCameraBoundary fn, GdObj obj, GdInt board_type, GdBool* ret_val) {
 	fn(obj, board_type,ret_val);
 }
+void cgo_callfn_GDExtensionSpxPhysicCheckNearestTouchedCameraBoundary(const GDExtensionSpxPhysicCheckNearestTouchedCameraBoundary fn, GdObj obj, GdInt* ret_val) {
+	fn(obj,ret_val);
+}
 void cgo_callfn_GDExtensionSpxPhysicSetCollisionSystemType(const GDExtensionSpxPhysicSetCollisionSystemType fn, GdBool is_collision_by_alpha) {
 	fn(is_collision_by_alpha);
 }

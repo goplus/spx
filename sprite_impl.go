@@ -803,19 +803,32 @@ func (p *SpriteImpl) BounceOffEdge() {
 	if debugInstr {
 		spxlog.Debug("BounceOffEdge: %s", p.name)
 	}
-	dir := p.Heading()
-	where := checkTouchingDirection(dir)
-	touching := p.checkTouchingScreen(where)
-	if touching == 0 {
+
+	nearestEdge := p.checkNearestTouchedBoundary()
+
+	if nearestEdge == 0 {
 		return
 	}
-	if (touching & (touchingScreenLeft | touchingScreenRight)) != 0 {
-		dir = -dir
-	} else {
-		dir = 180 - dir
+
+	// prevents sprites from getting stuck at boundaries
+	const minBounceComponent = 0.2
+	radians := toRadian(90 - p.direction)
+	dx := math.Cos(radians)
+	dy := -math.Sin(radians)
+
+	switch nearestEdge {
+	case touchingScreenLeft:
+		dx = math.Max(minBounceComponent, math.Abs(dx))
+	case touchingScreenTop:
+		dy = math.Max(minBounceComponent, math.Abs(dy))
+	case touchingScreenRight:
+		dx = -math.Max(minBounceComponent, math.Abs(dx))
+	case touchingScreenBottom:
+		dy = -math.Max(minBounceComponent, math.Abs(dy))
 	}
 
-	p.direction = normalizeDirection(dir)
+	newDirection := math.Atan2(dy, dx)*180/math.Pi + 90
+	p.direction = normalizeDirection(newDirection)
 }
 
 // ============================================================================

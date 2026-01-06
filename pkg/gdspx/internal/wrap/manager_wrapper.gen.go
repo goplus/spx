@@ -485,6 +485,11 @@ func (pself *physicMgr) CheckTouchedCameraBoundary(obj Object, board_type int64)
 	retValue := CallPhysicCheckTouchedCameraBoundary(arg0, arg1)
 	return ToBool(retValue)
 }
+func (pself *physicMgr) CheckNearestTouchedCameraBoundary(obj Object) int64 {
+	arg0 := ToGdObj(obj)
+	retValue := CallPhysicCheckNearestTouchedCameraBoundary(arg0)
+	return ToInt64(retValue)
+}
 func (pself *physicMgr) SetCollisionSystemType(is_collision_by_alpha bool) {
 	arg0 := ToGdBool(is_collision_by_alpha)
 	CallPhysicSetCollisionSystemType(arg0)
