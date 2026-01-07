@@ -6,7 +6,8 @@ import (
 
 const (
 	// Batch sync constants
-	SyncFieldsPerSprite = 9 // id, x, y, rotation, scaleX, scaleY, offsetX, offsetY, visibility
+	SyncFieldsPerSprite     = 9  // id, x, y, rotation, scaleX, scaleY, offsetX, offsetY, visibility
+	DefaultDeleteBufferSize = 16 // initial capacity for sprite deletion buffer
 )
 
 // SpriteSyncData represents the data to sync for a single sprite
@@ -32,7 +33,7 @@ type SpriteSyncBuffer struct {
 func NewSpriteSyncBuffer(capacity int) *SpriteSyncBuffer {
 	return &SpriteSyncBuffer{
 		data:      make([]SpriteSyncData, 0, capacity),
-		deleteIDs: make([]int64, 0, 16),
+		deleteIDs: make([]int64, 0, DefaultDeleteBufferSize),
 	}
 }
 

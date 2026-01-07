@@ -51,8 +51,6 @@ var (
 
 func (p *Game) OnEngineStart() {
 	cachedBounds_ = make(map[string]mathf.Rect2)
-	// Initialize batch sync buffer (preallocate for ~100 sprites, will grow if needed)
-	p.syncBuffer = engine.NewSpriteSyncBuffer(100)
 	onStart := func() {
 		defer engine.CheckPanic()
 		initInput()
@@ -223,7 +221,7 @@ func (p *Game) syncUpdateProxy() {
 					int64(syncSprite.Id),
 					x, y,
 					rot,
-					scale, 1.0, // scaleX, scaleY
+					scale, scale, // scaleX, scaleY
 					offsetX, offsetY,
 					sprite.isVisible,
 				)
