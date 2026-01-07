@@ -15,21 +15,20 @@ import (
 )
 
 var (
-	AudioMgr         IAudioMgr
-	CameraMgr        ICameraMgr
-	DebugMgr         IDebugMgr
-	ExtMgr           IExtMgr
-	InputMgr         IInputMgr
-	NavigationMgr    INavigationMgr
-	PenMgr           IPenMgr
-	PhysicMgr        IPhysicMgr
-	PlatformMgr      IPlatformMgr
-	ResMgr           IResMgr
-	SceneMgr         ISceneMgr
-	SpriteMgr        ISpriteMgr
-	TilemapMgr       ITilemapMgr
-	TilemapparserMgr ITilemapparserMgr
-	UiMgr            IUiMgr
+	AudioMgr      IAudioMgr
+	CameraMgr     ICameraMgr
+	DebugMgr      IDebugMgr
+	ExtMgr        IExtMgr
+	InputMgr      IInputMgr
+	NavigationMgr INavigationMgr
+	PenMgr        IPenMgr
+	PhysicMgr     IPhysicMgr
+	PlatformMgr   IPlatformMgr
+	ResMgr        IResMgr
+	SceneMgr      ISceneMgr
+	SpriteMgr     ISpriteMgr
+	TilemapMgr    ITilemapMgr
+	UiMgr         IUiMgr
 )
 
 type IAudioMgr interface {
@@ -300,7 +299,8 @@ type ISpriteMgr interface {
 	IsTriggerEnabled(obj Object) bool
 	CheckCollisionByColor(obj Object, color Color, color_threshold float64, alpha_threshold float64) bool
 	CheckCollisionByAlpha(obj Object, alpha_threshold float64) bool
-	CheckCollisionWithSprite(obj Object, obj_b Object, alpha_threshold float64, use_pixel_perfect bool) bool
+	CheckCollisionWithSpriteByAlpha(obj Object, obj_b Object, alpha_threshold float64, use_pixel_perfect bool) bool
+	BatchUpdateTransforms(buffer Array)
 }
 
 type ITilemapMgr interface {
@@ -321,14 +321,6 @@ type ITilemapMgr interface {
 	GetTileWithLayer(pos Vec2, layer_index int64) string
 	CloseDrawTiles()
 	ExitTilemapEditorMode()
-}
-
-type ITilemapparserMgr interface {
-	LoadTilemap(json_path string)
-	UnloadTilemap(name string)
-	DestroyAllTilemaps()
-	HasTilemap(name string) bool
-	GetTilemapLayerCount(name string) int64
 }
 
 type IUiMgr interface {

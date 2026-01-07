@@ -51,6 +51,8 @@ var (
 
 func (p *Game) OnEngineStart() {
 	cachedBounds_ = make(map[string]mathf.Rect2)
+	// Initialize batch sync buffer (preallocate for ~100 sprites, will grow if needed)
+	p.syncBuffer = engine.NewSpriteSyncBuffer(100)
 	onStart := func() {
 		defer engine.CheckPanic()
 		initInput()
@@ -142,7 +144,8 @@ func (sprite *SpriteImpl) syncCheckInitProxy() {
 		sprite.applyGraphicEffects(true)
 		sprite.syncSprite.RegisterOnAnimationLooped(sprite.syncOnAnimationLooped)
 		sprite.syncSprite.RegisterOnAnimationFinished(sprite.syncOnAnimationFinished)
-		sprite.updateProxyTransform(true)
+		// Mark as dirty to ensure initial sync
+		sprite.isDirty = true
 	}
 }
 
@@ -189,6 +192,10 @@ func (sprite *SpriteImpl) syncGetEnginePosition(isSync bool) (float64, float64) 
 func (p *Game) syncUpdateProxy() {
 	count := 0
 	items := p.getItems()
+
+	// Clear buffer for reuse (avoids allocation every frame)
+	p.syncBuffer.Clear()
+
 	for _, item := range items {
 		sprite, ok := item.(*SpriteImpl)
 		if ok {
@@ -197,17 +204,44 @@ func (p *Game) syncUpdateProxy() {
 			}
 
 			syncSprite := sprite.syncSprite
-			// sync position
+
 			if sprite.isVisible {
 				syncCheckUpdateCostume(&sprite.baseObj)
 				count++
 			}
-			syncSprite.SetVisible(sprite.isVisible)
+
+			// Only sync if sprite is dirty (transform or visibility changed)
+			if sprite.isDirty {
+				// Collect transform data into buffer for batch sync
+				x, y := sprite.getXY()
+				applyRenderOffset(sprite, &x, &y)
+				offsetX, offsetY := getRenderOffset(sprite)
+				rot, scale := calcRenderRotation(sprite)
+
+				// Add to reusable buffer
+				p.syncBuffer.Add(
+					int64(syncSprite.Id),
+					x, y,
+					rot,
+					scale, 1.0, // scaleX, scaleY
+					offsetX, offsetY,
+					sprite.isVisible,
+				)
+
+				// Clear dirty flag after syncing
+				sprite.isDirty = false
+			}
 		}
 	}
 
-	// unbind syncSprite
-	p.spriteMgr.flushDestroy()
+	// Collect sprite deletions into the same buffer
+	p.spriteMgr.flushDestroy(p.syncBuffer)
+
+	// Serialize and send batch updates (updates + deletes in one call)
+	if p.syncBuffer.UpdateCount() > 0 || p.syncBuffer.DeleteCount() > 0 {
+		buffer := p.syncBuffer.Serialize()
+		engine.SyncBatchUpdateSprites(buffer)
+	}
 }
 
 func checkUpdateCostume(p *baseObj) {

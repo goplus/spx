@@ -30,28 +30,26 @@ resMgr enginewrap.ResMgrImpl
 sceneMgr enginewrap.SceneMgrImpl
 spriteMgr enginewrap.SpriteMgrImpl
 tilemapMgr enginewrap.TilemapMgrImpl
-tilemapparserMgr enginewrap.TilemapparserMgrImpl
 uiMgr enginewrap.UiMgrImpl
 
 )
 */
 
 var (
-	audioMgr         AudioMgrImpl
-	cameraMgr        CameraMgrImpl
-	debugMgr         DebugMgrImpl
-	extMgr           ExtMgrImpl
-	inputMgr         InputMgrImpl
-	navigationMgr    NavigationMgrImpl
-	penMgr           PenMgrImpl
-	physicMgr        PhysicMgrImpl
-	platformMgr      PlatformMgrImpl
-	resMgr           ResMgrImpl
-	sceneMgr         SceneMgrImpl
-	spriteMgr        SpriteMgrImpl
-	tilemapMgr       TilemapMgrImpl
-	tilemapparserMgr TilemapparserMgrImpl
-	uiMgr            UiMgrImpl
+	audioMgr      AudioMgrImpl
+	cameraMgr     CameraMgrImpl
+	debugMgr      DebugMgrImpl
+	extMgr        ExtMgrImpl
+	inputMgr      InputMgrImpl
+	navigationMgr NavigationMgrImpl
+	penMgr        PenMgrImpl
+	physicMgr     PhysicMgrImpl
+	platformMgr   PlatformMgrImpl
+	resMgr        ResMgrImpl
+	sceneMgr      SceneMgrImpl
+	spriteMgr     SpriteMgrImpl
+	tilemapMgr    TilemapMgrImpl
+	uiMgr         UiMgrImpl
 )
 
 type audioMgrImpl struct {
@@ -118,11 +116,6 @@ type tilemapMgrImpl struct {
 }
 type TilemapMgrImpl struct {
 	tilemapMgrImpl
-}
-type tilemapparserMgrImpl struct {
-}
-type TilemapparserMgrImpl struct {
-	tilemapparserMgrImpl
 }
 type uiMgrImpl struct {
 }
@@ -1545,12 +1538,17 @@ func (pself *spriteMgrImpl) CheckCollisionByAlpha(obj gdx.Object, alpha_threshol
 	})
 	return _ret1
 }
-func (pself *spriteMgrImpl) CheckCollisionWithSprite(obj gdx.Object, obj_b gdx.Object, alpha_threshold float64, use_pixel_perfect bool) bool {
+func (pself *spriteMgrImpl) CheckCollisionWithSpriteByAlpha(obj gdx.Object, obj_b gdx.Object, alpha_threshold float64, use_pixel_perfect bool) bool {
 	var _ret1 bool
 	callInMainThread(func() {
-		_ret1 = gdx.SpriteMgr.CheckCollisionWithSprite(obj, obj_b, alpha_threshold, use_pixel_perfect)
+		_ret1 = gdx.SpriteMgr.CheckCollisionWithSpriteByAlpha(obj, obj_b, alpha_threshold, use_pixel_perfect)
 	})
 	return _ret1
+}
+func (pself *spriteMgrImpl) BatchUpdateTransforms(buffer gdx.Array) {
+	callInMainThread(func() {
+		gdx.SpriteMgr.BatchUpdateTransforms(buffer)
+	})
 }
 
 // ITilemapMgr
@@ -1644,37 +1642,6 @@ func (pself *tilemapMgrImpl) ExitTilemapEditorMode() {
 	callInMainThread(func() {
 		gdx.TilemapMgr.ExitTilemapEditorMode()
 	})
-}
-
-// ITilemapparserMgr
-func (pself *tilemapparserMgrImpl) LoadTilemap(json_path string) {
-	callInMainThread(func() {
-		gdx.TilemapparserMgr.LoadTilemap(json_path)
-	})
-}
-func (pself *tilemapparserMgrImpl) UnloadTilemap(name string) {
-	callInMainThread(func() {
-		gdx.TilemapparserMgr.UnloadTilemap(name)
-	})
-}
-func (pself *tilemapparserMgrImpl) DestroyAllTilemaps() {
-	callInMainThread(func() {
-		gdx.TilemapparserMgr.DestroyAllTilemaps()
-	})
-}
-func (pself *tilemapparserMgrImpl) HasTilemap(name string) bool {
-	var _ret1 bool
-	callInMainThread(func() {
-		_ret1 = gdx.TilemapparserMgr.HasTilemap(name)
-	})
-	return _ret1
-}
-func (pself *tilemapparserMgrImpl) GetTilemapLayerCount(name string) int64 {
-	var _ret1 int64
-	callInMainThread(func() {
-		_ret1 = gdx.TilemapparserMgr.GetTilemapLayerCount(name)
-	})
-	return _ret1
 }
 
 // IUiMgr

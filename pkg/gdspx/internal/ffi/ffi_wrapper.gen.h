@@ -714,8 +714,11 @@ void cgo_callfn_GDExtensionSpxSpriteCheckCollisionByColor(const GDExtensionSpxSp
 void cgo_callfn_GDExtensionSpxSpriteCheckCollisionByAlpha(const GDExtensionSpxSpriteCheckCollisionByAlpha fn, GdObj obj, GdFloat alpha_threshold, GdBool* ret_val) {
 	fn(obj, alpha_threshold,ret_val);
 }
-void cgo_callfn_GDExtensionSpxSpriteCheckCollisionWithSprite(const GDExtensionSpxSpriteCheckCollisionWithSprite fn, GdObj obj, GdObj obj_b, GdFloat alpha_threshold, GdBool use_pixel_perfect, GdBool* ret_val) {
+void cgo_callfn_GDExtensionSpxSpriteCheckCollisionWithSpriteByAlpha(const GDExtensionSpxSpriteCheckCollisionWithSpriteByAlpha fn, GdObj obj, GdObj obj_b, GdFloat alpha_threshold, GdBool use_pixel_perfect, GdBool* ret_val) {
 	fn(obj, obj_b, alpha_threshold, use_pixel_perfect,ret_val);
+}
+void cgo_callfn_GDExtensionSpxSpriteBatchUpdateTransforms(const GDExtensionSpxSpriteBatchUpdateTransforms fn, GdArray buffer) {
+	fn(buffer);
 }
 void cgo_callfn_GDExtensionSpxTilemapOpenDrawTilesWithSize(const GDExtensionSpxTilemapOpenDrawTilesWithSize fn, GdInt tile_size) {
 	fn(tile_size);
@@ -767,21 +770,6 @@ void cgo_callfn_GDExtensionSpxTilemapCloseDrawTiles(const GDExtensionSpxTilemapC
 }
 void cgo_callfn_GDExtensionSpxTilemapExitTilemapEditorMode(const GDExtensionSpxTilemapExitTilemapEditorMode fn) {
 	fn();
-}
-void cgo_callfn_GDExtensionSpxTilemapparserLoadTilemap(const GDExtensionSpxTilemapparserLoadTilemap fn, GdString json_path) {
-	fn(json_path);
-}
-void cgo_callfn_GDExtensionSpxTilemapparserUnloadTilemap(const GDExtensionSpxTilemapparserUnloadTilemap fn, GdString name) {
-	fn(name);
-}
-void cgo_callfn_GDExtensionSpxTilemapparserDestroyAllTilemaps(const GDExtensionSpxTilemapparserDestroyAllTilemaps fn) {
-	fn();
-}
-void cgo_callfn_GDExtensionSpxTilemapparserHasTilemap(const GDExtensionSpxTilemapparserHasTilemap fn, GdString name, GdBool* ret_val) {
-	fn(name,ret_val);
-}
-void cgo_callfn_GDExtensionSpxTilemapparserGetTilemapLayerCount(const GDExtensionSpxTilemapparserGetTilemapLayerCount fn, GdString name, GdInt* ret_val) {
-	fn(name,ret_val);
 }
 void cgo_callfn_GDExtensionSpxUiBindNode(const GDExtensionSpxUiBindNode fn, GdObj obj, GdString rel_path, GdObj* ret_val) {
 	fn(obj, rel_path,ret_val);

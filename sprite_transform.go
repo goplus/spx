@@ -83,7 +83,7 @@ func (p *SpriteImpl) doMoveToForAnim(x, y float64) {
 }
 
 func (p *SpriteImpl) updateTransform() {
-	p.updateProxyTransform(false)
+	p.isDirty = true
 }
 
 func (p *SpriteImpl) updateScale() {

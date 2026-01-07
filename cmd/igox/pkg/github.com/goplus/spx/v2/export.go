@@ -80,6 +80,8 @@ func init() {
 			"PenColorParam":   reflect.TypeOf((*q.PenColorParam)(nil)).Elem(),
 			"RotationStyle":   reflect.TypeOf((*q.RotationStyle)(nil)).Elem(),
 			"SoundEffectKind": reflect.TypeOf((*q.SoundEffectKind)(nil)).Elem(),
+			"SpatialHash":     reflect.TypeOf((*q.SpatialHash)(nil)).Elem(),
+			"SpriteAABB":      reflect.TypeOf((*q.SpriteAABB)(nil)).Elem(),
 			"SpriteImpl":      reflect.TypeOf((*q.SpriteImpl)(nil)).Elem(),
 			"StopKind":        reflect.TypeOf((*q.StopKind)(nil)).Elem(),
 			"Value":           reflect.TypeOf((*q.Value)(nil)).Elem(),

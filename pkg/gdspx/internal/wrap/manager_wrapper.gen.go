@@ -68,9 +68,6 @@ func BindMgr(mgrs []IManager) {
 		case ITilemapMgr:
 			TilemapMgr = v
 
-		case ITilemapparserMgr:
-			TilemapparserMgr = v
-
 		case IUiMgr:
 			UiMgr = v
 
@@ -119,9 +116,6 @@ type spriteMgr struct {
 type tilemapMgr struct {
 	baseMgr
 }
-type tilemapparserMgr struct {
-	baseMgr
-}
 type uiMgr struct {
 	baseMgr
 }
@@ -140,7 +134,6 @@ func createMgrs() []IManager {
 	addManager(&sceneMgr{})
 	addManager(&spriteMgr{})
 	addManager(&tilemapMgr{})
-	addManager(&tilemapparserMgr{})
 	addManager(&uiMgr{})
 	return mgrs
 }
@@ -1428,13 +1421,17 @@ func (pself *spriteMgr) CheckCollisionByAlpha(obj Object, alpha_threshold float6
 	retValue := CallSpriteCheckCollisionByAlpha(arg0, arg1)
 	return ToBool(retValue)
 }
-func (pself *spriteMgr) CheckCollisionWithSprite(obj Object, obj_b Object, alpha_threshold float64, use_pixel_perfect bool) bool {
+func (pself *spriteMgr) CheckCollisionWithSpriteByAlpha(obj Object, obj_b Object, alpha_threshold float64, use_pixel_perfect bool) bool {
 	arg0 := ToGdObj(obj)
 	arg1 := ToGdObj(obj_b)
 	arg2 := ToGdFloat(alpha_threshold)
 	arg3 := ToGdBool(use_pixel_perfect)
-	retValue := CallSpriteCheckCollisionWithSprite(arg0, arg1, arg2, arg3)
+	retValue := CallSpriteCheckCollisionWithSpriteByAlpha(arg0, arg1, arg2, arg3)
 	return ToBool(retValue)
+}
+func (pself *spriteMgr) BatchUpdateTransforms(buffer Array) {
+	arg0 := ToGdArray(buffer)
+	CallSpriteBatchUpdateTransforms(arg0)
 }
 func (pself *tilemapMgr) OpenDrawTilesWithSize(tile_size int64) {
 	arg0 := ToGdInt(tile_size)
@@ -1526,35 +1523,6 @@ func (pself *tilemapMgr) CloseDrawTiles() {
 }
 func (pself *tilemapMgr) ExitTilemapEditorMode() {
 	CallTilemapExitTilemapEditorMode()
-}
-func (pself *tilemapparserMgr) LoadTilemap(json_path string) {
-	arg0Str := C.CString(json_path)
-	arg0 := (GdString)(arg0Str)
-	defer C.free(unsafe.Pointer(arg0Str))
-	CallTilemapparserLoadTilemap(arg0)
-}
-func (pself *tilemapparserMgr) UnloadTilemap(name string) {
-	arg0Str := C.CString(name)
-	arg0 := (GdString)(arg0Str)
-	defer C.free(unsafe.Pointer(arg0Str))
-	CallTilemapparserUnloadTilemap(arg0)
-}
-func (pself *tilemapparserMgr) DestroyAllTilemaps() {
-	CallTilemapparserDestroyAllTilemaps()
-}
-func (pself *tilemapparserMgr) HasTilemap(name string) bool {
-	arg0Str := C.CString(name)
-	arg0 := (GdString)(arg0Str)
-	defer C.free(unsafe.Pointer(arg0Str))
-	retValue := CallTilemapparserHasTilemap(arg0)
-	return ToBool(retValue)
-}
-func (pself *tilemapparserMgr) GetTilemapLayerCount(name string) int64 {
-	arg0Str := C.CString(name)
-	arg0 := (GdString)(arg0Str)
-	defer C.free(unsafe.Pointer(arg0Str))
-	retValue := CallTilemapparserGetTilemapLayerCount(arg0)
-	return ToInt64(retValue)
 }
 func (pself *uiMgr) BindNode(obj Object, rel_path string) Object {
 	arg0 := ToGdObj(obj)
