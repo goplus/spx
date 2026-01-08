@@ -256,7 +256,7 @@ type GDExtensionInterface struct {
 	SpxSpriteIsTriggerEnabled                  js.Value
 	SpxSpriteCheckCollisionByColor             js.Value
 	SpxSpriteCheckCollisionByAlpha             js.Value
-	SpxSpriteCheckCollisionWithSpriteByAlpha   js.Value
+	SpxSpriteCheckCollisionWithSprite          js.Value
 	SpxSpriteBatchUpdateTransforms             js.Value
 	SpxTilemapOpenDrawTilesWithSize            js.Value
 	SpxTilemapOpenDrawTiles                    js.Value
@@ -275,6 +275,11 @@ type GDExtensionInterface struct {
 	SpxTilemapGetTileWithLayer                 js.Value
 	SpxTilemapCloseDrawTiles                   js.Value
 	SpxTilemapExitTilemapEditorMode            js.Value
+	SpxTilemapparserLoadTilemap                js.Value
+	SpxTilemapparserUnloadTilemap              js.Value
+	SpxTilemapparserDestroyAllTilemaps         js.Value
+	SpxTilemapparserHasTilemap                 js.Value
+	SpxTilemapparserGetTilemapLayerCount       js.Value
 	SpxUiBindNode                              js.Value
 	SpxUiCreateNode                            js.Value
 	SpxUiCreateButton                          js.Value
@@ -554,7 +559,7 @@ func (x *GDExtensionInterface) loadProcAddresses() {
 	x.SpxSpriteIsTriggerEnabled = dlsymGD("gdspx_sprite_is_trigger_enabled")
 	x.SpxSpriteCheckCollisionByColor = dlsymGD("gdspx_sprite_check_collision_by_color")
 	x.SpxSpriteCheckCollisionByAlpha = dlsymGD("gdspx_sprite_check_collision_by_alpha")
-	x.SpxSpriteCheckCollisionWithSpriteByAlpha = dlsymGD("gdspx_sprite_check_collision_with_sprite_by_alpha")
+	x.SpxSpriteCheckCollisionWithSprite = dlsymGD("gdspx_sprite_check_collision_with_sprite")
 	x.SpxSpriteBatchUpdateTransforms = dlsymGD("gdspx_sprite_batch_update_transforms")
 	x.SpxTilemapOpenDrawTilesWithSize = dlsymGD("gdspx_tilemap_open_draw_tiles_with_size")
 	x.SpxTilemapOpenDrawTiles = dlsymGD("gdspx_tilemap_open_draw_tiles")
@@ -573,6 +578,11 @@ func (x *GDExtensionInterface) loadProcAddresses() {
 	x.SpxTilemapGetTileWithLayer = dlsymGD("gdspx_tilemap_get_tile_with_layer")
 	x.SpxTilemapCloseDrawTiles = dlsymGD("gdspx_tilemap_close_draw_tiles")
 	x.SpxTilemapExitTilemapEditorMode = dlsymGD("gdspx_tilemap_exit_tilemap_editor_mode")
+	x.SpxTilemapparserLoadTilemap = dlsymGD("gdspx_tilemapparser_load_tilemap")
+	x.SpxTilemapparserUnloadTilemap = dlsymGD("gdspx_tilemapparser_unload_tilemap")
+	x.SpxTilemapparserDestroyAllTilemaps = dlsymGD("gdspx_tilemapparser_destroy_all_tilemaps")
+	x.SpxTilemapparserHasTilemap = dlsymGD("gdspx_tilemapparser_has_tilemap")
+	x.SpxTilemapparserGetTilemapLayerCount = dlsymGD("gdspx_tilemapparser_get_tilemap_layer_count")
 	x.SpxUiBindNode = dlsymGD("gdspx_ui_bind_node")
 	x.SpxUiCreateNode = dlsymGD("gdspx_ui_create_node")
 	x.SpxUiCreateButton = dlsymGD("gdspx_ui_create_button")

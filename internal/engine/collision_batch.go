@@ -84,7 +84,7 @@ func BatchCheckCollisions(buffer []float32, alphaThreshold float64, usePixelPerf
 	for i := 0; i < count; i++ {
 		spriteA := gdx.Object(buffer[idx])
 		spriteB := gdx.Object(buffer[idx+1])
-		boolResults[i] = gdx.SpriteMgr.CheckCollisionWithSpriteByAlpha(spriteA, spriteB, alphaThreshold, usePixelPerfect)
+		boolResults[i] = gdx.SpriteMgr.CheckCollisionWithSprite(spriteA, spriteB, alphaThreshold, usePixelPerfect)
 		idx += 2
 	}
 

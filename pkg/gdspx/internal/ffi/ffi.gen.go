@@ -252,7 +252,7 @@ type GDExtensionInterface struct {
 	SpxSpriteIsTriggerEnabled                  GDExtensionSpxSpriteIsTriggerEnabled
 	SpxSpriteCheckCollisionByColor             GDExtensionSpxSpriteCheckCollisionByColor
 	SpxSpriteCheckCollisionByAlpha             GDExtensionSpxSpriteCheckCollisionByAlpha
-	SpxSpriteCheckCollisionWithSpriteByAlpha   GDExtensionSpxSpriteCheckCollisionWithSpriteByAlpha
+	SpxSpriteCheckCollisionWithSprite          GDExtensionSpxSpriteCheckCollisionWithSprite
 	SpxSpriteBatchUpdateTransforms             GDExtensionSpxSpriteBatchUpdateTransforms
 	SpxTilemapOpenDrawTilesWithSize            GDExtensionSpxTilemapOpenDrawTilesWithSize
 	SpxTilemapOpenDrawTiles                    GDExtensionSpxTilemapOpenDrawTiles
@@ -271,6 +271,11 @@ type GDExtensionInterface struct {
 	SpxTilemapGetTileWithLayer                 GDExtensionSpxTilemapGetTileWithLayer
 	SpxTilemapCloseDrawTiles                   GDExtensionSpxTilemapCloseDrawTiles
 	SpxTilemapExitTilemapEditorMode            GDExtensionSpxTilemapExitTilemapEditorMode
+	SpxTilemapparserLoadTilemap                GDExtensionSpxTilemapparserLoadTilemap
+	SpxTilemapparserUnloadTilemap              GDExtensionSpxTilemapparserUnloadTilemap
+	SpxTilemapparserDestroyAllTilemaps         GDExtensionSpxTilemapparserDestroyAllTilemaps
+	SpxTilemapparserHasTilemap                 GDExtensionSpxTilemapparserHasTilemap
+	SpxTilemapparserGetTilemapLayerCount       GDExtensionSpxTilemapparserGetTilemapLayerCount
 	SpxUiBindNode                              GDExtensionSpxUiBindNode
 	SpxUiCreateNode                            GDExtensionSpxUiCreateNode
 	SpxUiCreateButton                          GDExtensionSpxUiCreateButton
@@ -550,7 +555,7 @@ func (x *GDExtensionInterface) loadProcAddresses() {
 	x.SpxSpriteIsTriggerEnabled = (GDExtensionSpxSpriteIsTriggerEnabled)(dlsymGD("spx_sprite_is_trigger_enabled"))
 	x.SpxSpriteCheckCollisionByColor = (GDExtensionSpxSpriteCheckCollisionByColor)(dlsymGD("spx_sprite_check_collision_by_color"))
 	x.SpxSpriteCheckCollisionByAlpha = (GDExtensionSpxSpriteCheckCollisionByAlpha)(dlsymGD("spx_sprite_check_collision_by_alpha"))
-	x.SpxSpriteCheckCollisionWithSpriteByAlpha = (GDExtensionSpxSpriteCheckCollisionWithSpriteByAlpha)(dlsymGD("spx_sprite_check_collision_with_sprite_by_alpha"))
+	x.SpxSpriteCheckCollisionWithSprite = (GDExtensionSpxSpriteCheckCollisionWithSprite)(dlsymGD("spx_sprite_check_collision_with_sprite"))
 	x.SpxSpriteBatchUpdateTransforms = (GDExtensionSpxSpriteBatchUpdateTransforms)(dlsymGD("spx_sprite_batch_update_transforms"))
 	x.SpxTilemapOpenDrawTilesWithSize = (GDExtensionSpxTilemapOpenDrawTilesWithSize)(dlsymGD("spx_tilemap_open_draw_tiles_with_size"))
 	x.SpxTilemapOpenDrawTiles = (GDExtensionSpxTilemapOpenDrawTiles)(dlsymGD("spx_tilemap_open_draw_tiles"))
@@ -569,6 +574,11 @@ func (x *GDExtensionInterface) loadProcAddresses() {
 	x.SpxTilemapGetTileWithLayer = (GDExtensionSpxTilemapGetTileWithLayer)(dlsymGD("spx_tilemap_get_tile_with_layer"))
 	x.SpxTilemapCloseDrawTiles = (GDExtensionSpxTilemapCloseDrawTiles)(dlsymGD("spx_tilemap_close_draw_tiles"))
 	x.SpxTilemapExitTilemapEditorMode = (GDExtensionSpxTilemapExitTilemapEditorMode)(dlsymGD("spx_tilemap_exit_tilemap_editor_mode"))
+	x.SpxTilemapparserLoadTilemap = (GDExtensionSpxTilemapparserLoadTilemap)(dlsymGD("spx_tilemapparser_load_tilemap"))
+	x.SpxTilemapparserUnloadTilemap = (GDExtensionSpxTilemapparserUnloadTilemap)(dlsymGD("spx_tilemapparser_unload_tilemap"))
+	x.SpxTilemapparserDestroyAllTilemaps = (GDExtensionSpxTilemapparserDestroyAllTilemaps)(dlsymGD("spx_tilemapparser_destroy_all_tilemaps"))
+	x.SpxTilemapparserHasTilemap = (GDExtensionSpxTilemapparserHasTilemap)(dlsymGD("spx_tilemapparser_has_tilemap"))
+	x.SpxTilemapparserGetTilemapLayerCount = (GDExtensionSpxTilemapparserGetTilemapLayerCount)(dlsymGD("spx_tilemapparser_get_tilemap_layer_count"))
 	x.SpxUiBindNode = (GDExtensionSpxUiBindNode)(dlsymGD("spx_ui_bind_node"))
 	x.SpxUiCreateNode = (GDExtensionSpxUiCreateNode)(dlsymGD("spx_ui_create_node"))
 	x.SpxUiCreateButton = (GDExtensionSpxUiCreateButton)(dlsymGD("spx_ui_create_button"))
