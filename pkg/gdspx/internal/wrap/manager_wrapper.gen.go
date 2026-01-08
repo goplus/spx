@@ -1428,11 +1428,12 @@ func (pself *spriteMgr) CheckCollisionByAlpha(obj Object, alpha_threshold float6
 	retValue := CallSpriteCheckCollisionByAlpha(arg0, arg1)
 	return ToBool(retValue)
 }
-func (pself *spriteMgr) CheckCollisionWithSpriteByAlpha(obj Object, obj_b Object, alpha_threshold float64) bool {
+func (pself *spriteMgr) CheckCollisionWithSprite(obj Object, obj_b Object, alpha_threshold float64, use_pixel_perfect bool) bool {
 	arg0 := ToGdObj(obj)
 	arg1 := ToGdObj(obj_b)
 	arg2 := ToGdFloat(alpha_threshold)
-	retValue := CallSpriteCheckCollisionWithSpriteByAlpha(arg0, arg1, arg2)
+	arg3 := ToGdBool(use_pixel_perfect)
+	retValue := CallSpriteCheckCollisionWithSprite(arg0, arg1, arg2, arg3)
 	return ToBool(retValue)
 }
 func (pself *tilemapMgr) OpenDrawTilesWithSize(tile_size int64) {

@@ -42,7 +42,7 @@ func (pself *Sprite) CheckCollisionWithPoint(point Vec2, is_trigger bool) bool {
 	return _val
 }
 
-func (pself *Sprite) CheckCollisionWithSpriteByAlpha(obj_b Object, alpha_threshold float64) bool {
+func (pself *Sprite) CheckCollisionWithSprite(obj_b Object, alpha_threshold float64, use_pixel_perfect bool) bool {
 	var _val bool
 	return _val
 }

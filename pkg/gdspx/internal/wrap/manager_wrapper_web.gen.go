@@ -1323,11 +1323,12 @@ func (pself *spriteMgr) CheckCollisionByAlpha(obj Object, alpha_threshold float6
 	_retValue := API.SpxSpriteCheckCollisionByAlpha.Invoke(arg0, arg1)
 	return JsToGdBool(_retValue)
 }
-func (pself *spriteMgr) CheckCollisionWithSpriteByAlpha(obj Object, obj_b Object, alpha_threshold float64) bool {
+func (pself *spriteMgr) CheckCollisionWithSprite(obj Object, obj_b Object, alpha_threshold float64, use_pixel_perfect bool) bool {
 	arg0 := JsFromGdObj(obj)
 	arg1 := JsFromGdObj(obj_b)
 	arg2 := JsFromGdFloat(alpha_threshold)
-	_retValue := API.SpxSpriteCheckCollisionWithSpriteByAlpha.Invoke(arg0, arg1, arg2)
+	arg3 := JsFromGdBool(use_pixel_perfect)
+	_retValue := API.SpxSpriteCheckCollisionWithSprite.Invoke(arg0, arg1, arg2, arg3)
 	return JsToGdBool(_retValue)
 }
 func (pself *tilemapMgr) OpenDrawTilesWithSize(tile_size int64) {
