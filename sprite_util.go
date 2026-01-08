@@ -119,8 +119,7 @@ func (p *SpriteImpl) touchingSprite(dst *SpriteImpl) bool {
 	if p.syncSprite == nil || dst.syncSprite == nil {
 		return false
 	}
-	ret := spriteMgr.CheckCollisionWithSpriteByAlpha(p.syncSprite.GetId(), dst.syncSprite.GetId(), alphaThreshold)
-	return ret
+	return spriteMgr.CheckCollisionWithSprite(p.syncSprite.GetId(), dst.syncSprite.GetId(), alphaThreshold, !enabledPhysics)
 }
 
 // checkTouchingScreen checks which edges of the screen the sprite is touching

@@ -319,7 +319,7 @@ type GDExtensionSpxSpriteSetTriggerEnabled C.GDExtensionSpxSpriteSetTriggerEnabl
 type GDExtensionSpxSpriteIsTriggerEnabled C.GDExtensionSpxSpriteIsTriggerEnabled
 type GDExtensionSpxSpriteCheckCollisionByColor C.GDExtensionSpxSpriteCheckCollisionByColor
 type GDExtensionSpxSpriteCheckCollisionByAlpha C.GDExtensionSpxSpriteCheckCollisionByAlpha
-type GDExtensionSpxSpriteCheckCollisionWithSpriteByAlpha C.GDExtensionSpxSpriteCheckCollisionWithSpriteByAlpha
+type GDExtensionSpxSpriteCheckCollisionWithSprite C.GDExtensionSpxSpriteCheckCollisionWithSprite
 type GDExtensionSpxTilemapOpenDrawTilesWithSize C.GDExtensionSpxTilemapOpenDrawTilesWithSize
 type GDExtensionSpxTilemapOpenDrawTiles C.GDExtensionSpxTilemapOpenDrawTiles
 type GDExtensionSpxTilemapSetLayerIndex C.GDExtensionSpxTilemapSetLayerIndex
@@ -2813,17 +2813,19 @@ func CallSpriteCheckCollisionByAlpha(
 
 	return (GdBool)(ret_val)
 }
-func CallSpriteCheckCollisionWithSpriteByAlpha(
+func CallSpriteCheckCollisionWithSprite(
 	obj GdObj,
 	obj_b GdObj,
 	alpha_threshold GdFloat,
+	use_pixel_perfect GdBool,
 ) GdBool {
-	arg0 := (C.GDExtensionSpxSpriteCheckCollisionWithSpriteByAlpha)(api.SpxSpriteCheckCollisionWithSpriteByAlpha)
+	arg0 := (C.GDExtensionSpxSpriteCheckCollisionWithSprite)(api.SpxSpriteCheckCollisionWithSprite)
 	arg1GdObj := (C.GdObj)(obj)
 	arg2GdObj := (C.GdObj)(obj_b)
 	arg3GdFloat := (C.GdFloat)(alpha_threshold)
+	arg4GdBool := (C.GdBool)(use_pixel_perfect)
 	var ret_val C.GdBool
-	C.cgo_callfn_GDExtensionSpxSpriteCheckCollisionWithSpriteByAlpha(arg0, arg1GdObj, arg2GdObj, arg3GdFloat, &ret_val)
+	C.cgo_callfn_GDExtensionSpxSpriteCheckCollisionWithSprite(arg0, arg1GdObj, arg2GdObj, arg3GdFloat, arg4GdBool, &ret_val)
 
 	return (GdBool)(ret_val)
 }

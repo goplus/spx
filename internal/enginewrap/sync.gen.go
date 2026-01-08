@@ -1545,10 +1545,10 @@ func (pself *spriteMgrImpl) CheckCollisionByAlpha(obj gdx.Object, alpha_threshol
 	})
 	return _ret1
 }
-func (pself *spriteMgrImpl) CheckCollisionWithSpriteByAlpha(obj gdx.Object, obj_b gdx.Object, alpha_threshold float64) bool {
+func (pself *spriteMgrImpl) CheckCollisionWithSprite(obj gdx.Object, obj_b gdx.Object, alpha_threshold float64, use_pixel_perfect bool) bool {
 	var _ret1 bool
 	callInMainThread(func() {
-		_ret1 = gdx.SpriteMgr.CheckCollisionWithSpriteByAlpha(obj, obj_b, alpha_threshold)
+		_ret1 = gdx.SpriteMgr.CheckCollisionWithSprite(obj, obj_b, alpha_threshold, use_pixel_perfect)
 	})
 	return _ret1
 }

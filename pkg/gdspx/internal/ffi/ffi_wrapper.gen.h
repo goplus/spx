@@ -714,8 +714,8 @@ void cgo_callfn_GDExtensionSpxSpriteCheckCollisionByColor(const GDExtensionSpxSp
 void cgo_callfn_GDExtensionSpxSpriteCheckCollisionByAlpha(const GDExtensionSpxSpriteCheckCollisionByAlpha fn, GdObj obj, GdFloat alpha_threshold, GdBool* ret_val) {
 	fn(obj, alpha_threshold,ret_val);
 }
-void cgo_callfn_GDExtensionSpxSpriteCheckCollisionWithSpriteByAlpha(const GDExtensionSpxSpriteCheckCollisionWithSpriteByAlpha fn, GdObj obj, GdObj obj_b, GdFloat alpha_threshold, GdBool* ret_val) {
-	fn(obj, obj_b, alpha_threshold,ret_val);
+void cgo_callfn_GDExtensionSpxSpriteCheckCollisionWithSprite(const GDExtensionSpxSpriteCheckCollisionWithSprite fn, GdObj obj, GdObj obj_b, GdFloat alpha_threshold, GdBool use_pixel_perfect, GdBool* ret_val) {
+	fn(obj, obj_b, alpha_threshold, use_pixel_perfect,ret_val);
 }
 void cgo_callfn_GDExtensionSpxTilemapOpenDrawTilesWithSize(const GDExtensionSpxTilemapOpenDrawTilesWithSize fn, GdInt tile_size) {
 	fn(tile_size);
