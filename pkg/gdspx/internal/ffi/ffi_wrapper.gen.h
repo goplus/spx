@@ -768,6 +768,21 @@ void cgo_callfn_GDExtensionSpxTilemapCloseDrawTiles(const GDExtensionSpxTilemapC
 void cgo_callfn_GDExtensionSpxTilemapExitTilemapEditorMode(const GDExtensionSpxTilemapExitTilemapEditorMode fn) {
 	fn();
 }
+void cgo_callfn_GDExtensionSpxTilemapparserLoadTilemap(const GDExtensionSpxTilemapparserLoadTilemap fn, GdString json_path) {
+	fn(json_path);
+}
+void cgo_callfn_GDExtensionSpxTilemapparserUnloadTilemap(const GDExtensionSpxTilemapparserUnloadTilemap fn, GdString name) {
+	fn(name);
+}
+void cgo_callfn_GDExtensionSpxTilemapparserDestroyAllTilemaps(const GDExtensionSpxTilemapparserDestroyAllTilemaps fn) {
+	fn();
+}
+void cgo_callfn_GDExtensionSpxTilemapparserHasTilemap(const GDExtensionSpxTilemapparserHasTilemap fn, GdString name, GdBool* ret_val) {
+	fn(name,ret_val);
+}
+void cgo_callfn_GDExtensionSpxTilemapparserGetTilemapLayerCount(const GDExtensionSpxTilemapparserGetTilemapLayerCount fn, GdString name, GdInt* ret_val) {
+	fn(name,ret_val);
+}
 void cgo_callfn_GDExtensionSpxUiBindNode(const GDExtensionSpxUiBindNode fn, GdObj obj, GdString rel_path, GdObj* ret_val) {
 	fn(obj, rel_path,ret_val);
 }

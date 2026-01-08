@@ -274,6 +274,11 @@ type GDExtensionInterface struct {
 	SpxTilemapGetTileWithLayer                 js.Value
 	SpxTilemapCloseDrawTiles                   js.Value
 	SpxTilemapExitTilemapEditorMode            js.Value
+	SpxTilemapparserLoadTilemap                js.Value
+	SpxTilemapparserUnloadTilemap              js.Value
+	SpxTilemapparserDestroyAllTilemaps         js.Value
+	SpxTilemapparserHasTilemap                 js.Value
+	SpxTilemapparserGetTilemapLayerCount       js.Value
 	SpxUiBindNode                              js.Value
 	SpxUiCreateNode                            js.Value
 	SpxUiCreateButton                          js.Value
@@ -571,6 +576,11 @@ func (x *GDExtensionInterface) loadProcAddresses() {
 	x.SpxTilemapGetTileWithLayer = dlsymGD("gdspx_tilemap_get_tile_with_layer")
 	x.SpxTilemapCloseDrawTiles = dlsymGD("gdspx_tilemap_close_draw_tiles")
 	x.SpxTilemapExitTilemapEditorMode = dlsymGD("gdspx_tilemap_exit_tilemap_editor_mode")
+	x.SpxTilemapparserLoadTilemap = dlsymGD("gdspx_tilemapparser_load_tilemap")
+	x.SpxTilemapparserUnloadTilemap = dlsymGD("gdspx_tilemapparser_unload_tilemap")
+	x.SpxTilemapparserDestroyAllTilemaps = dlsymGD("gdspx_tilemapparser_destroy_all_tilemaps")
+	x.SpxTilemapparserHasTilemap = dlsymGD("gdspx_tilemapparser_has_tilemap")
+	x.SpxTilemapparserGetTilemapLayerCount = dlsymGD("gdspx_tilemapparser_get_tilemap_layer_count")
 	x.SpxUiBindNode = dlsymGD("gdspx_ui_bind_node")
 	x.SpxUiCreateNode = dlsymGD("gdspx_ui_create_node")
 	x.SpxUiCreateButton = dlsymGD("gdspx_ui_create_button")

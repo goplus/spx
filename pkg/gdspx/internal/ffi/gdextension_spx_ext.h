@@ -481,6 +481,12 @@ typedef void (*GDExtensionSpxTilemapGetTile)(GdVec2 pos, GdString *ret_value);
 typedef void (*GDExtensionSpxTilemapGetTileWithLayer)(GdVec2 pos, GdInt layer_index, GdString *ret_value);
 typedef void (*GDExtensionSpxTilemapCloseDrawTiles)();
 typedef void (*GDExtensionSpxTilemapExitTilemapEditorMode)();
+// SpxTilemapparser
+typedef void (*GDExtensionSpxTilemapparserLoadTilemap)(GdString json_path);
+typedef void (*GDExtensionSpxTilemapparserUnloadTilemap)(GdString name);
+typedef void (*GDExtensionSpxTilemapparserDestroyAllTilemaps)();
+typedef void (*GDExtensionSpxTilemapparserHasTilemap)(GdString name, GdBool *ret_value);
+typedef void (*GDExtensionSpxTilemapparserGetTilemapLayerCount)(GdString name, GdInt *ret_value);
 // SpxUi
 typedef void (*GDExtensionSpxUiBindNode)(GdObj obj, GdString rel_path, GdObj *ret_value);
 typedef void (*GDExtensionSpxUiCreateNode)(GdString path, GdObj *ret_value);

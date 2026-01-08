@@ -270,6 +270,11 @@ type GDExtensionInterface struct {
 	SpxTilemapGetTileWithLayer                 GDExtensionSpxTilemapGetTileWithLayer
 	SpxTilemapCloseDrawTiles                   GDExtensionSpxTilemapCloseDrawTiles
 	SpxTilemapExitTilemapEditorMode            GDExtensionSpxTilemapExitTilemapEditorMode
+	SpxTilemapparserLoadTilemap                GDExtensionSpxTilemapparserLoadTilemap
+	SpxTilemapparserUnloadTilemap              GDExtensionSpxTilemapparserUnloadTilemap
+	SpxTilemapparserDestroyAllTilemaps         GDExtensionSpxTilemapparserDestroyAllTilemaps
+	SpxTilemapparserHasTilemap                 GDExtensionSpxTilemapparserHasTilemap
+	SpxTilemapparserGetTilemapLayerCount       GDExtensionSpxTilemapparserGetTilemapLayerCount
 	SpxUiBindNode                              GDExtensionSpxUiBindNode
 	SpxUiCreateNode                            GDExtensionSpxUiCreateNode
 	SpxUiCreateButton                          GDExtensionSpxUiCreateButton
@@ -567,6 +572,11 @@ func (x *GDExtensionInterface) loadProcAddresses() {
 	x.SpxTilemapGetTileWithLayer = (GDExtensionSpxTilemapGetTileWithLayer)(dlsymGD("spx_tilemap_get_tile_with_layer"))
 	x.SpxTilemapCloseDrawTiles = (GDExtensionSpxTilemapCloseDrawTiles)(dlsymGD("spx_tilemap_close_draw_tiles"))
 	x.SpxTilemapExitTilemapEditorMode = (GDExtensionSpxTilemapExitTilemapEditorMode)(dlsymGD("spx_tilemap_exit_tilemap_editor_mode"))
+	x.SpxTilemapparserLoadTilemap = (GDExtensionSpxTilemapparserLoadTilemap)(dlsymGD("spx_tilemapparser_load_tilemap"))
+	x.SpxTilemapparserUnloadTilemap = (GDExtensionSpxTilemapparserUnloadTilemap)(dlsymGD("spx_tilemapparser_unload_tilemap"))
+	x.SpxTilemapparserDestroyAllTilemaps = (GDExtensionSpxTilemapparserDestroyAllTilemaps)(dlsymGD("spx_tilemapparser_destroy_all_tilemaps"))
+	x.SpxTilemapparserHasTilemap = (GDExtensionSpxTilemapparserHasTilemap)(dlsymGD("spx_tilemapparser_has_tilemap"))
+	x.SpxTilemapparserGetTilemapLayerCount = (GDExtensionSpxTilemapparserGetTilemapLayerCount)(dlsymGD("spx_tilemapparser_get_tilemap_layer_count"))
 	x.SpxUiBindNode = (GDExtensionSpxUiBindNode)(dlsymGD("spx_ui_bind_node"))
 	x.SpxUiCreateNode = (GDExtensionSpxUiCreateNode)(dlsymGD("spx_ui_create_node"))
 	x.SpxUiCreateButton = (GDExtensionSpxUiCreateButton)(dlsymGD("spx_ui_create_button"))
