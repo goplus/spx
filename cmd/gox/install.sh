@@ -54,17 +54,66 @@ fi
 
 mv $appname $GOPATH/bin/
 
-# build and install gdspx
+# build and install gdspx (PC platform shared library)
 echo "Building gdspx..."
 cd ../igox || exit
 
-if [ "$1" = "--web" ]; then
-    # Build wasm + PC (with optional --opt for wasm optimization)
-    go env -w GOFLAGS="-buildvcs=false"
-    ./build.sh $2
+go mod tidy
+
+# Get architecture
+GOARCH=$(go env GOARCH)
+
+if [ "$OS" = "Windows_NT" ]; then
+    # Windows: build DLL with proper naming
+    GOOS_NAME="windows"
+    EXT=".dll"
+    LIB_NAME="gdspx-${GOOS_NAME}-${GOARCH}${EXT}"
+    go build -ldflags="-checklinkname=0 -extldflags=-Wl,--allow-multiple-definition" -buildmode=c-shared -o "$LIB_NAME" .
+    if [ -f "$LIB_NAME" ]; then
+        cp -f "$LIB_NAME" "$GOPATH/bin/"
+        echo "Installed $LIB_NAME to $GOPATH/bin/"
+    else
+        echo "Error: $LIB_NAME build failed"
+        exit 1
+    fi
+elif [ "$(uname)" = "Darwin" ]; then
+    # macOS: build dylib with proper naming
+    GOOS_NAME="darwin"
+    EXT=".dylib"
+    LIB_NAME="gdspx-${GOOS_NAME}-${GOARCH}${EXT}"
+    go build -ldflags="-checklinkname=0" -buildmode=c-shared -o "$LIB_NAME" .
+    if [ -f "$LIB_NAME" ]; then
+        cp -f "$LIB_NAME" "$GOPATH/bin/"
+        echo "Installed $LIB_NAME to $GOPATH/bin/"
+    else
+        echo "Error: $LIB_NAME build failed"
+        exit 1
+    fi
 else
-    # Build PC only
-    ./build.sh --pc
+    # Linux: build so with proper naming
+    GOOS_NAME="linux"
+    EXT=".so"
+    LIB_NAME="gdspx-${GOOS_NAME}-${GOARCH}${EXT}"
+    go build -ldflags="-checklinkname=0 -extldflags=-Wl,--allow-multiple-definition" -buildmode=c-shared -o "$LIB_NAME" .
+    if [ -f "$LIB_NAME" ]; then
+        cp -f "$LIB_NAME" "$GOPATH/bin/"
+        echo "Installed $LIB_NAME to $GOPATH/bin/"
+    else
+        echo "Error: $LIB_NAME build failed"
+        exit 1
+    fi
 fi
 
+
 cd ../gox || exit
+
+# build wasm (Web platform)
+if [ "$1" = "--web" ]; then
+    go env -w GOFLAGS="-buildvcs=false"
+    cd ../igox || exit
+    ./build.sh "$2"
+    cp gdspx.wasm $GOPATH/bin/gdspx.wasm
+    cp -f gdspx.wasm.br $GOPATH/bin/gdspx.wasm.br
+
+    cd ../gox || exit
+fi
