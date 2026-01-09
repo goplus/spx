@@ -3,6 +3,7 @@ package gengo
 //go:generate go tool qexp -outdir pkg github.com/goplus/spx/v2
 //go:generate go tool qexp -outdir pkg github.com/goplus/spx/v2/pkg/gdspx/pkg/engine
 //go:generate go tool qexp -outdir pkg github.com/goplus/spx/v2/pkg/spx
+//go:generate go tool qexp -outdir pkg github.com/goplus/builder/tools/ai
 
 // All packages available in the ispx Wasm runtime.
 // This file is only used for go:generate directive and is excluded from build.
@@ -174,6 +175,7 @@ import (
 	// _ "github.com/goplus/ixgo/pkg/testing/slogtest"
 
 	// Embedded third-party packages.
+	_ "github.com/goplus/spx/v2/cmd/gox/pkg/gengo/pkg/github.com/goplus/builder/tools/ai"
 	_ "github.com/goplus/spx/v2/cmd/gox/pkg/gengo/pkg/github.com/goplus/spx/v2"
 	_ "github.com/goplus/spx/v2/cmd/gox/pkg/gengo/pkg/github.com/goplus/spx/v2/pkg/gdspx/pkg/engine"
 )

@@ -424,7 +424,6 @@ func parseCommandLineFlags(conf *Config) {
 	f.Bool("e", false, "editor mode")
 	f.Bool("headless", false, "Headless Mode")
 	f.Bool("remote-debug", false, "remote Debug Mode")
-	f.Bool("no-header", false, "disable engine's header output")
 	flag.Parse()
 
 	if *help {
