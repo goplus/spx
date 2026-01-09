@@ -185,7 +185,7 @@ func (cmd *CmdTool) executeCommand() error {
 	// Then, handle execution phase
 	err := cmd.handleExecutionPhase()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error executing command: %v\n", err)
+		println("executeCommand error: ", err.Error())
 	}
 	return err
 
@@ -193,7 +193,8 @@ func (cmd *CmdTool) executeCommand() error {
 
 // handleBuildPhase handles the build phase for commands that need it
 func (cmd *CmdTool) handleBuildPhase() error {
-	fmt.Printf("[DEBUG] handleBuildPhase: command=%s %s\n", cmd.Args.CmdName, cmd.SafeTagArgs())
+	// 添加调试日志
+	fmt.Printf("[DEBUG] handleBuildPhase: command=%s, tags=%v\n", cmd.Args.CmdName, cmd.Args.Tags)
 
 	switch cmd.Args.CmdName {
 	case "buildtinygo":
