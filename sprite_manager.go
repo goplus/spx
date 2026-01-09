@@ -163,14 +163,16 @@ func (sm *spriteManager) flushActivate() {
 }
 
 // flushDestroy performs cleanup for shapes that have been scheduled for destruction.
-func (sm *spriteManager) flushDestroy() {
+// It collects sprite IDs into the provided buffer for batch deletion.
+func (sm *spriteManager) flushDestroy(buffer *engine.SpriteSyncBuffer) {
 	if len(sm.destroyItems) == 0 {
 		return
 	}
 
+	// Collect sprite IDs for batch deletion into the shared buffer
 	for _, item := range sm.destroyItems {
 		if sprite, ok := item.(*SpriteImpl); ok && sprite.syncSprite != nil {
-			sprite.syncSprite.Destroy()
+			buffer.AddDelete(int64(sprite.syncSprite.Id))
 			sprite.syncSprite = nil
 		}
 	}

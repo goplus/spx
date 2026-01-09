@@ -253,6 +253,7 @@ type GDExtensionInterface struct {
 	SpxSpriteCheckCollisionByColor             GDExtensionSpxSpriteCheckCollisionByColor
 	SpxSpriteCheckCollisionByAlpha             GDExtensionSpxSpriteCheckCollisionByAlpha
 	SpxSpriteCheckCollisionWithSprite          GDExtensionSpxSpriteCheckCollisionWithSprite
+	SpxSpriteBatchUpdateTransforms             GDExtensionSpxSpriteBatchUpdateTransforms
 	SpxTilemapOpenDrawTilesWithSize            GDExtensionSpxTilemapOpenDrawTilesWithSize
 	SpxTilemapOpenDrawTiles                    GDExtensionSpxTilemapOpenDrawTiles
 	SpxTilemapSetLayerIndex                    GDExtensionSpxTilemapSetLayerIndex
@@ -555,6 +556,7 @@ func (x *GDExtensionInterface) loadProcAddresses() {
 	x.SpxSpriteCheckCollisionByColor = (GDExtensionSpxSpriteCheckCollisionByColor)(dlsymGD("spx_sprite_check_collision_by_color"))
 	x.SpxSpriteCheckCollisionByAlpha = (GDExtensionSpxSpriteCheckCollisionByAlpha)(dlsymGD("spx_sprite_check_collision_by_alpha"))
 	x.SpxSpriteCheckCollisionWithSprite = (GDExtensionSpxSpriteCheckCollisionWithSprite)(dlsymGD("spx_sprite_check_collision_with_sprite"))
+	x.SpxSpriteBatchUpdateTransforms = (GDExtensionSpxSpriteBatchUpdateTransforms)(dlsymGD("spx_sprite_batch_update_transforms"))
 	x.SpxTilemapOpenDrawTilesWithSize = (GDExtensionSpxTilemapOpenDrawTilesWithSize)(dlsymGD("spx_tilemap_open_draw_tiles_with_size"))
 	x.SpxTilemapOpenDrawTiles = (GDExtensionSpxTilemapOpenDrawTiles)(dlsymGD("spx_tilemap_open_draw_tiles"))
 	x.SpxTilemapSetLayerIndex = (GDExtensionSpxTilemapSetLayerIndex)(dlsymGD("spx_tilemap_set_layer_index"))

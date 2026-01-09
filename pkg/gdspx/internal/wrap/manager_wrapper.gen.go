@@ -1436,6 +1436,10 @@ func (pself *spriteMgr) CheckCollisionWithSprite(obj Object, obj_b Object, alpha
 	retValue := CallSpriteCheckCollisionWithSprite(arg0, arg1, arg2, arg3)
 	return ToBool(retValue)
 }
+func (pself *spriteMgr) BatchUpdateTransforms(buffer Array) {
+	arg0 := ToGdArray(buffer)
+	CallSpriteBatchUpdateTransforms(arg0)
+}
 func (pself *tilemapMgr) OpenDrawTilesWithSize(tile_size int64) {
 	arg0 := ToGdInt(tile_size)
 	CallTilemapOpenDrawTilesWithSize(arg0)
