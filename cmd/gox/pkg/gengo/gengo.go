@@ -32,6 +32,7 @@ func GenGoFromFS(fsys parser.FileSystem, outputPath string) error {
 		Class:    "Game",
 		Works:    []*modfile.Class{{Ext: ".spx", Class: "SpriteImpl", Embedded: true}},
 		PkgPaths: []string{"github.com/goplus/spx/v2", "math"},
+		Import:   []*modfile.Import{{Name: "ai", Path: "github.com/goplus/builder/tools/ai"}},
 	})
 
 	// Register patch for spx to support functions with generic type like `Gopt_Game_Gopx_GetWidget`.
@@ -77,6 +78,20 @@ func Gopt_Game_Gopx_GetWidget[T any](sg ShapeGetter, name string) *T {
 }
 `); err != nil {
 		return fmt.Errorf("failed to register package patch for github.com/goplus/spx: %w", err)
+	}
+
+	// Patch for ai package - supports generic OnCmd function
+	if err := xgobuild.RegisterPackagePatch(ctx, "github.com/goplus/builder/tools/ai", `
+package ai
+
+import . "github.com/goplus/builder/tools/ai"
+
+func Gopt_Player_Gopx_OnCmd[T any](p *Player, handler func(cmd T) error) {
+	var cmd T
+	PlayerOnCmd_(p, cmd, handler)
+}
+`); err != nil {
+		return fmt.Errorf("failed to register package patch for github.com/goplus/builder/tools/ai: %w", err)
 	}
 
 	return nil

@@ -4,9 +4,11 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"slices"
 	"strings"
 )
+
+// default ai pack tags
+var DefaultAiPackVersion = "v0.0.0-20251014030930-ac405dbe65e9"
 
 type ExtraArgs struct {
 	CmdName         string
@@ -29,7 +31,7 @@ type ExtraArgs struct {
 	Movie           *bool
 	GoEnv           *string // Portable Go environment directory
 	IxgoGen         *bool   // Use xgobuild library for code generation (new method)
-	Verbose         *bool   // Verbose mode - print verbose information
+	AiPack          *string // AI pack version (e.g., v0.0.0-20251014030930-ac405dbe65e9)
 }
 
 func (e *ExtraArgs) String() []string {
@@ -58,9 +60,6 @@ func (e *ExtraArgs) String() []string {
 	if *e.FullScreen {
 		args = append(args, "--fullscreen")
 	}
-	if *e.Verbose {
-		args = append(args, "-v")
-	}
 	return args
 }
 
@@ -72,12 +71,17 @@ func (pself *CmdTool) CheckCmd(ext ...string) bool {
 		"build", "buildtinygo", "rune", "export",
 		"runweb", "buildweb", "exportweb", "stopweb", "runwebworker",
 		"runm", "exportbot", "exportapk", "exportios",
-		"run", "runi", "exporttemplateweb", "exportminigame", "exportminiprogram", "exportwebworker",
+		"run", "exporttemplateweb", "exportminigame", "exportminiprogram", "exportwebworker",
 	}
 	cmds = append(cmds, ext...)
 
 	cmdName := pself.Args.CmdName
-	return slices.Contains(cmds, cmdName)
+	for _, b := range cmds {
+		if b == cmdName {
+			return true
+		}
+	}
+	return false
 }
 func (pself *CmdTool) CheckCmdWithError(ext ...string) (err error) {
 	if len(os.Args) <= 1 {
@@ -85,18 +89,10 @@ func (pself *CmdTool) CheckCmdWithError(ext ...string) (err error) {
 		return
 	}
 	if !pself.CheckCmd(ext...) {
-		fmt.Fprintf(os.Stderr, "Error: invalid cmd, please refer to help\n")
+		println("invalid cmd, please refer to help")
 		pself.ShowHelpInfo()
 	}
 	return
-}
-
-func (cmd *CmdTool) SafeTagArgs() string {
-	tags := cmd.Args.Tags
-	if tags == nil || *tags == "" {
-		return ""
-	}
-	return "-tags=" + *tags
 }
 
 // initializeFlags initializes command line flags
@@ -113,7 +109,7 @@ func (cmd *CmdTool) initializeFlags() *bool {
 	cmd.Args.Arch = f.String("arch", "", "cpu arch")
 	cmd.Args.OnlyServer = f.Bool("onlys", false, "mutil player mode server only")
 	cmd.Args.OnlyClient = f.Bool("onlyc", false, "mutil player mode clients only")
-	cmd.Args.Tags = f.String("tags", "", "build tags")
+	cmd.Args.Tags = f.String("tags", "simulation", "build tags")
 	cmd.Args.Target = f.String("target", "esp32", "target board (default: esp32)")
 	cmd.Args.NoMap = f.Bool("nomap", false, "no map mode")
 	cmd.Args.Install = f.Bool("install", false, "install mode")
@@ -124,7 +120,7 @@ func (cmd *CmdTool) initializeFlags() *bool {
 	cmd.Args.Movie = f.Bool("movie", false, "record movie mode")
 	cmd.Args.GoEnv = f.String("goenv", "", "portable Go environment directory (e.g., ./cmd/portable-go)")
 	cmd.Args.IxgoGen = f.Bool("ixgogen", false, "use xgobuild library for code generation (default: use xgo CLI)")
-	cmd.Args.Verbose = f.Bool("v", false, "print verbose information")
+	cmd.Args.AiPack = f.String("aipack", "", "AI pack version (e.g., v0.0.0-20251014030930-ac405dbe65e9)")
 	return help
 }
 
@@ -151,6 +147,9 @@ func (cmd *CmdTool) parseCommandLineArgs(help *bool, ext ...string) error {
 		return fmt.Errorf("unknown command: %s", cmd.Args.CmdName)
 	}
 
+	if cmd.Args.AiPack != nil && *cmd.Args.AiPack == "default" {
+		cmd.Args.AiPack = &DefaultAiPackVersion
+	}
 	return nil
 }
 
@@ -212,7 +211,6 @@ Examples:
     #CMDNAME init                         # Create a project in current path
     #CMDNAME init ./test/demo01           # Create a project at path ./test/demo01
     #CMDNAME run --path ./myproject       # Run project at specified path
-    #CMDNAME runi --path ./myproject      # Run in interpreted mode (requires pre-installed dll)
     #CMDNAME run --ixgogen --goenv=./cmd/portable-go  # Run with xgobuild and portable Go
     #CMDNAME build --servermode           # Build in server mode
     #CMDNAME runweb --debugweb            # Run web server with debug service

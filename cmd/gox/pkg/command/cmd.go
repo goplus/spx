@@ -7,7 +7,6 @@ import (
 	"go/build"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 
 	"github.com/goplus/spx/v2/cmd/gox/pkg/util"
@@ -50,7 +49,9 @@ type CmdTool struct {
 	RuntimePckPath string
 	RuntimeCmdPath string
 
-	GoModTemplate string
+	GoModTemplate    string
+	InitAiGoTemplate string // AI pack init.go template
+	GopModTemplate   string // AI pack gop.mod template
 
 	// Code generation mode
 	// true: use xgobuild library (new method)
@@ -111,11 +112,6 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 	// Handle special commands that don't need full setup
 	if cmd.handleSpecialCommands() {
 		return nil
-	}
-
-	// Handle runi command - interpreted mode with minimal setup
-	if cmd.Args.CmdName == "runi" {
-		return cmd.handleRuniCommand()
 	}
 
 	// Set runtime mode
@@ -191,7 +187,7 @@ func (cmd *CmdTool) executeCommand() error {
 	// Then, handle execution phase
 	err := cmd.handleExecutionPhase()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error executing command: %v\n", err)
+		println("executeCommand error: ", err.Error())
 	}
 	return err
 
@@ -199,7 +195,8 @@ func (cmd *CmdTool) executeCommand() error {
 
 // handleBuildPhase handles the build phase for commands that need it
 func (cmd *CmdTool) handleBuildPhase() error {
-	fmt.Printf("[DEBUG] handleBuildPhase: command=%s %s\n", cmd.Args.CmdName, cmd.SafeTagArgs())
+	// 添加调试日志
+	fmt.Printf("[DEBUG] handleBuildPhase: command=%s, tags=%v\n", cmd.Args.CmdName, cmd.Args.Tags)
 
 	switch cmd.Args.CmdName {
 	case "buildtinygo":
@@ -282,7 +279,11 @@ func (cmd *CmdTool) executeRune() error {
 
 // executeRun handles the run command execution
 func (cmd *CmdTool) executeRun() error {
-	if cmd.Args.Tags != nil && strings.Contains(*cmd.Args.Tags, "pure_engine") {
+	if cmd.Args.AiPack != nil && *cmd.Args.AiPack != "" {
+		// For AI pack mode, run with AI mode
+		args := cmd.Args.String()
+		return cmd.RunWithAiMode(args...)
+	} else if cmd.Args.Tags != nil && strings.Contains(*cmd.Args.Tags, "pure_engine") {
 		// For pure_engine mode, run the Go binary directly
 		args := cmd.Args.String()
 		return cmd.RunPureEngine(args...)
@@ -301,28 +302,4 @@ func (cmd *CmdTool) checkMovieArgs(rootDir string) []string {
 		args = append(args, "--write-movie", fpath)
 	}
 	return args
-}
-
-// handleRuniCommand handles the runi command with minimal setup.
-// It skips CheckEnv, SetupEnv, and BuildDll since the dll is pre-installed.
-func (cmd *CmdTool) handleRuniCommand() error {
-	// Setup minimal required paths
-	cmd.RuntimeMode = true
-	cmd.RuntimeTempDir, _ = filepath.Abs(filepath.Join(cmd.TargetDir, ".temp"))
-	os.MkdirAll(cmd.RuntimeTempDir, 0755)
-
-	// Get binary postfix based on OS
-	cmd.BinPostfix = ""
-	GOOS := runtime.GOOS
-	if os.Getenv("GOOS") != "" {
-		GOOS = os.Getenv("GOOS")
-	}
-	if GOOS == "windows" {
-		cmd.BinPostfix = ".exe"
-	}
-	cmd.RuntimeCmdPath = filepath.Join(cmd.GoBinPath, "gdspxrt"+cmd.Version+cmd.BinPostfix)
-
-	// Execute the interpreted run
-	args := cmd.checkMovieArgs(cmd.RuntimeTempDir)
-	return cmd.RunInterpreted(args...)
 }

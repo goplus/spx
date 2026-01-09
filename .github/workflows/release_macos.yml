@@ -66,7 +66,7 @@ jobs:
 
           # Run test/CI demo to collect other dependencies
           cd test/CI
-          $HOME/go/bin/spx run --goenv=../../goenv --path=. --headless || true
+          $HOME/go/bin/spx run --goenv=../../goenv --aipack="default" --path=. --headless || true
           cd ../..
 
           echo "Module cache collection completed"

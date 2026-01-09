@@ -23,6 +23,12 @@ var (
 	//go:embed template/go.mod.template
 	gomodtemplate string
 
+	//go:embed template/aipack/initai.go.template
+	initAiGoTemplate string
+
+	//go:embed template/aipack/gop.mod.template
+	gopModTemplate string
+
 	//go:embed appname.txt
 	appName string
 
@@ -46,11 +52,9 @@ func main() {
 	cmd.RunSh = runSh
 	cmd.MainSh = mainSh
 	cmd.GoModTemplate = gomodtemplate
+	cmd.InitAiGoTemplate = initAiGoTemplate
+	cmd.GopModTemplate = gopModTemplate
 
 	// Initialize the Args field if not already initialized
-	err := cmd.RunCmd(appName, appName, cmd.Version, projectFS, "template/project", "project")
-	if err != nil {
-		println("failed to run cmd:", err)
-		return
-	}
+	cmd.RunCmd(appName, appName, cmd.Version, projectFS, "template/project", "project")
 }

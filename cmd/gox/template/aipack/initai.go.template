@@ -1,0 +1,46 @@
+package main
+
+import (
+	"fmt"
+	"os"
+
+	"github.com/goplus/builder/tools/ai"
+	"github.com/goplus/builder/tools/ai/httptrans"
+)
+
+func setupAITransport() {
+	// Get configuration from environment variables
+	endpoint := os.Getenv("SPX_AI_ENDPOINT")
+	if endpoint == "" {
+		endpoint = "http://localhost:8080/api/ai/interaction"
+		fmt.Printf("⚠️  Using default endpoint: %s\n", endpoint)
+		fmt.Println("   Set SPX_AI_ENDPOINT environment variable to customize")
+	}
+
+	token := os.Getenv("SPX_AI_TOKEN")
+	if token == "" {
+		fmt.Println("⚠️  No SPX_AI_TOKEN environment variable set")
+		fmt.Println("   Set SPX_AI_TOKEN environment variable for authentication")
+	}
+
+
+	// Create HTTP transport
+	transport := httptrans.New(
+		httptrans.WithEndpoint(endpoint),
+		httptrans.WithTokenProvider(func() string {
+			return token
+		}),
+	)
+
+	// Set as default transport
+	ai.SetDefaultTransport(transport)
+
+	description := os.Getenv("SPX_AI_DESCRIPTION")
+	ai.SetDefaultKnowledgeBase(map[string]any{
+		"AI-generated descriptive summary of the game world": description,
+	})
+}
+
+func init() {
+	setupAITransport()
+}
