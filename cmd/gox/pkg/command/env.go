@@ -67,8 +67,21 @@ func main() {print(&spx.Game{})}
 `
 	os.WriteFile(tempFile, []byte(tmp), 0644)
 
+	var tempAiInitFile string
+	if pself.Args.AiPack != nil && *pself.Args.AiPack != "" {
+		tempAiInitFile, _ = filepath.Abs(path.Join(pself.TargetDir, "initai.go"))
+		if err := os.WriteFile(tempAiInitFile, []byte(pself.InitAiGoTemplate), 0644); err != nil {
+			fmt.Printf("Warning: failed to create temporary initai.go: %v\n", err)
+		}
+	}
+
 	// Step 2: Handle go.mod file adaptively
 	pself.adaptGoMod()
+
+	// Step 3: Add gop.mod for AI pack if specified
+	if pself.Args.AiPack != nil && *pself.Args.AiPack != "" {
+		pself.addGopMod()
+	}
 
 	// Step 4: Change to target directory and ensure dependencies are downloaded
 	rawDir, _ := os.Getwd()
@@ -79,6 +92,9 @@ func main() {print(&spx.Game{})}
 
 	// Step 6: Delete temporary files
 	os.Remove(tempFile)
+	if tempAiInitFile != "" {
+		os.Remove(tempAiInitFile)
+	}
 
 	os.Chdir(rawDir)
 }
@@ -90,6 +106,11 @@ func (pself *CmdTool) adaptGoMod() {
 	if _, err := os.Stat(rootGoModPath); os.IsNotExist(err) {
 		// No go.mod in root, create one
 		pself.createDefaultGoMod(pself.TargetDir, false)
+	}
+
+	// Add AI pack dependency if specified
+	if pself.Args.AiPack != nil && *pself.Args.AiPack != "" {
+		pself.addAiPackDependency(rootGoModPath, *pself.Args.AiPack)
 	}
 
 	// Check if we need to add replace directive for local spx development
@@ -463,4 +484,67 @@ func (pself *CmdTool) Clear() error {
 	}
 
 	return nil
+}
+
+// addAiPackDependency adds the AI pack dependency to go.mod
+func (pself *CmdTool) addAiPackDependency(goModPath, version string) {
+	content, err := os.ReadFile(goModPath)
+	if err != nil {
+		fmt.Printf("Warning: failed to read go.mod: %v\n", err)
+		return
+	}
+
+	strContent := string(content)
+	aiRequire := "require github.com/goplus/builder/tools/ai"
+
+	// Remove //gop:class marker
+	strContent = strings.ReplaceAll(strContent, "//gop:class", "")
+
+	// Check if AI pack dependency already exists
+	if strings.Contains(strContent, aiRequire) {
+		fmt.Println("AI pack dependency already exists in go.mod")
+		// Note: We don't return here. The explicit 'go get' in PrepareEnv will ensure
+		// the dependency is properly downloaded even if the require line exists but
+		// the module hasn't been downloaded yet.
+		return
+	}
+
+	// Add AI pack dependency after the spx dependency
+	spxRequire := "require github.com/goplus/spx/v2"
+	if idx := strings.Index(strContent, spxRequire); idx != -1 {
+		// Find the end of the spx require line
+		endIdx := strings.Index(strContent[idx:], "\n")
+		if endIdx != -1 {
+			insertPos := idx + endIdx + 1
+			aiDependency := fmt.Sprintf("require github.com/goplus/builder/tools/ai %s\n", version)
+			strContent = strContent[:insertPos] + aiDependency + strContent[insertPos:]
+		}
+	}
+
+	// Write back the modified content
+	if err := os.WriteFile(goModPath, []byte(strContent), 0644); err != nil {
+		fmt.Printf("Warning: failed to write go.mod: %v\n", err)
+		return
+	}
+}
+
+// addGopMod adds gop.mod file for AI pack support
+func (pself *CmdTool) addGopMod() {
+	gopModPath, _ := filepath.Abs(path.Join(pself.TargetDir, "gop.mod"))
+
+	// Check if gop.mod already exists
+	if _, err := os.Stat(gopModPath); err == nil {
+		content, err := os.ReadFile(gopModPath)
+		if err == nil && strings.Contains(string(content), "github.com/goplus/builder/tools/ai") {
+			fmt.Println("gop.mod already contains AI import, skipping")
+			return
+		}
+	}
+
+	// Write the gop.mod template
+	if err := os.WriteFile(gopModPath, []byte(pself.GopModTemplate), 0644); err != nil {
+		fmt.Printf("Warning: failed to write gop.mod: %v\n", err)
+	} else {
+		fmt.Printf("✅ Added gop.mod with AI import: %s\n", gopModPath)
+	}
 }

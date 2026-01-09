@@ -135,9 +135,9 @@ compress_with_brotli() {
 
 echo "Generating ispx wraps..."
 # Install required Go dependencies
-if ! go generate embedpkg/embedpkg.go > /dev/null 2>&1; then
+if ! go generate embedded_pkgs.go > /dev/null 2>&1; then
     echo "Error during go generate, showing full output:"
-    go generate embedpkg/embedpkg.go
+    go generate embedded_pkgs.go
 fi
 go mod tidy
 

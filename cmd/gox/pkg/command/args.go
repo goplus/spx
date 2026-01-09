@@ -4,9 +4,11 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"slices"
 	"strings"
 )
+
+// default ai pack tags
+var DefaultAiPackVersion = "v0.0.0-20251014030930-ac405dbe65e9"
 
 type ExtraArgs struct {
 	CmdName         string
@@ -29,7 +31,7 @@ type ExtraArgs struct {
 	Movie           *bool
 	GoEnv           *string // Portable Go environment directory
 	IxgoGen         *bool   // Use xgobuild library for code generation (new method)
-	Verbose         *bool   // Verbose mode - print verbose information
+	AiPack          *string // AI pack version (e.g., v0.0.0-20251014030930-ac405dbe65e9)
 }
 
 func (e *ExtraArgs) String() []string {
@@ -58,9 +60,6 @@ func (e *ExtraArgs) String() []string {
 	if *e.FullScreen {
 		args = append(args, "--fullscreen")
 	}
-	if *e.Verbose {
-		args = append(args, "-v")
-	}
 	return args
 }
 
@@ -77,7 +76,12 @@ func (pself *CmdTool) CheckCmd(ext ...string) bool {
 	cmds = append(cmds, ext...)
 
 	cmdName := pself.Args.CmdName
-	return slices.Contains(cmds, cmdName)
+	for _, b := range cmds {
+		if b == cmdName {
+			return true
+		}
+	}
+	return false
 }
 func (pself *CmdTool) CheckCmdWithError(ext ...string) (err error) {
 	if len(os.Args) <= 1 {
@@ -85,7 +89,7 @@ func (pself *CmdTool) CheckCmdWithError(ext ...string) (err error) {
 		return
 	}
 	if !pself.CheckCmd(ext...) {
-		fmt.Fprintf(os.Stderr, "Error: invalid cmd, please refer to help\n")
+		println("invalid cmd, please refer to help")
 		pself.ShowHelpInfo()
 	}
 	return
@@ -116,7 +120,7 @@ func (cmd *CmdTool) initializeFlags() *bool {
 	cmd.Args.Movie = f.Bool("movie", false, "record movie mode")
 	cmd.Args.GoEnv = f.String("goenv", "", "portable Go environment directory (e.g., ./cmd/portable-go)")
 	cmd.Args.IxgoGen = f.Bool("ixgogen", false, "use xgobuild library for code generation (default: use xgo CLI)")
-	cmd.Args.Verbose = f.Bool("v", false, "print verbose information")
+	cmd.Args.AiPack = f.String("aipack", "", "AI pack version (e.g., v0.0.0-20251014030930-ac405dbe65e9)")
 	return help
 }
 
@@ -143,6 +147,9 @@ func (cmd *CmdTool) parseCommandLineArgs(help *bool, ext ...string) error {
 		return fmt.Errorf("unknown command: %s", cmd.Args.CmdName)
 	}
 
+	if cmd.Args.AiPack != nil && *cmd.Args.AiPack == "default" {
+		cmd.Args.AiPack = &DefaultAiPackVersion
+	}
 	return nil
 }
 
