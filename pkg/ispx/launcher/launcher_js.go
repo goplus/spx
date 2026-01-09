@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"syscall/js"
 
-	"github.com/goplus/spx/v2/cmd/igox/memfs"
-	"github.com/goplus/spx/v2/cmd/igox/plugin"
+	"github.com/goplus/spx/v2/pkg/ispx/memfs"
+	"github.com/goplus/spx/v2/pkg/ispx/plugin"
 	goxfs "github.com/goplus/spx/v2/fs"
 
 	"github.com/goplus/ixgo"

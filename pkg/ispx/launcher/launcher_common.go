@@ -7,16 +7,13 @@ import (
 	"os"
 	_ "unsafe"
 
-	"github.com/goplus/spx/v2/cmd/igox/plugin"
+	"github.com/goplus/spx/v2/pkg/ispx/plugin"
 
 	"github.com/goplus/ixgo"
 	"github.com/goplus/ixgo/xgobuild"
 	"github.com/goplus/mod/modfile"
 	_ "github.com/goplus/reflectx/icall/icall2048"
 	_ "github.com/goplus/spx/v2"
-	_ "github.com/goplus/spx/v2/cmd/igox/embedpkg"
-	_ "github.com/goplus/spx/v2/cmd/igox/pkg/github.com/goplus/spx/v2"
-	_ "github.com/goplus/spx/v2/cmd/igox/pkg/github.com/goplus/spx/v2/pkg/gdspx/pkg/engine"
 )
 
 var logger = slog.New(slog.NewJSONHandler(os.Stdout, nil))

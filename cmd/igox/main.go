@@ -7,7 +7,10 @@ package main
 // All packages available in the ispx Wasm runtime.
 import (
 	// Embedded third-party packages.
-	"github.com/goplus/spx/v2/cmd/igox/launcher"
+	_ "github.com/goplus/spx/v2/cmd/igox/embedpkg"
+	_ "github.com/goplus/spx/v2/cmd/igox/pkg/github.com/goplus/spx/v2"
+	_ "github.com/goplus/spx/v2/cmd/igox/pkg/github.com/goplus/spx/v2/pkg/gdspx/pkg/engine"
+	"github.com/goplus/spx/v2/pkg/ispx/launcher"
 )
 
 func main() {

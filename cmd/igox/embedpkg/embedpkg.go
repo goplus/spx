@@ -1,6 +1,8 @@
 package embedpkg
 
 // All packages available in the ispx Wasm runtime.
+// This package is kept in cmd/igox for backward compatibility,
+// but launcher has been moved to pkg/ispx/launcher
 import (
 	// Embedded stdlib packages.
 	_ "github.com/goplus/ixgo/pkg/archive/tar"
@@ -72,6 +74,7 @@ import (
 	_ "github.com/goplus/ixgo/pkg/math/bits"
 	_ "github.com/goplus/ixgo/pkg/math/cmplx"
 	_ "github.com/goplus/ixgo/pkg/math/rand"
+
 	_ "github.com/goplus/ixgo/pkg/math/rand/v2"
 	_ "github.com/goplus/ixgo/pkg/mime"
 	_ "github.com/goplus/ixgo/pkg/net/http"
