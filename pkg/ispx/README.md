@@ -7,10 +7,10 @@
 ```
 pkg/ispx/
 ├── go.mod              # Independent module with ixgo dependency
-├── launcher/           # SPX launcher implementation
-│   ├── launcher_common.go    # Common launcher functionality
-│   ├── launcher_js.go        # WASM/JavaScript platform support
-│   └── launcher_nojs.go      # Native platform support
+├── runtime/            # SPX runtime implementation
+│   ├── runtime_common.go     # Common runtime functionality
+│   ├── runtime_js.go         # WASM/JavaScript platform support
+│   └── runtime_nojs.go       # Native platform support
 ├── plugin/             # Plugin system for extending functionality
 │   └── plugin.go
 └── memfs/              # In-memory file system implementation
@@ -37,20 +37,20 @@ pkg/ispx/
 ### Native Platform
 
 ```go
-import "github.com/goplus/spx/v2/pkg/ispx/launcher"
+import "github.com/goplus/spx/v2/pkg/ispx/runtime"
 
 func main() {
-    launcher.Run() // Run SPX project from current directory
+    runtime.Run() // Run SPX project from current directory
 }
 ```
 
 ### WASM Platform
 
 ```go
-import "github.com/goplus/spx/v2/pkg/ispx/launcher"
+import "github.com/goplus/spx/v2/pkg/ispx/runtime"
 
 func main() {
-    launcher.Run() // Registers WASM interfaces and blocks
+    runtime.Run() // Registers WASM interfaces and blocks
 }
 ```
 
@@ -58,7 +58,7 @@ func main() {
 
 ```go
 import (
-    "github.com/goplus/spx/v2/pkg/ispx/launcher"
+    "github.com/goplus/spx/v2/pkg/ispx/runtime"
     "github.com/goplus/spx/v2/pkg/ispx/plugin"
 )
 
@@ -69,42 +69,18 @@ func (p *MyPlugin) RegisterPatch(ctx *ixgo.Context) error { return nil }
 func (p *MyPlugin) Init() {}
 
 func main() {
-    launcher.Run(launcher.Plugin{
+    runtime.Run(runtime.Plugin{
         Name:   "myplugin",
         Plugin: &MyPlugin{},
     })
 }
 ```
 
-## Development
-
-### Building
-
-```bash
-cd pkg/ispx
-go build ./...
-```
-
-### Testing
-
-```bash
-cd pkg/ispx
-go test ./...
-```
-
-### Updating Dependencies
-
-```bash
-cd pkg/ispx
-go get -u
-go mod tidy
-```
-
 ## Architecture
 
-### Launcher
+### Runtime
 
-The launcher is responsible for:
+The runtime is responsible for:
 - Initializing the ixgo context
 - Registering SPX project configuration
 - Building SPX source files into executable code
@@ -113,7 +89,7 @@ The launcher is responsible for:
 
 ### Plugin System
 
-Plugins can extend the launcher with:
+Plugins can extend the runtime with:
 - JavaScript bindings (for WASM platform)
 - Code patches for runtime behavior modification
 - Initialization hooks

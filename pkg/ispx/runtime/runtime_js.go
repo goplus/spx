@@ -1,15 +1,15 @@
 //go:build js && wasm
 
-package launcher
+package runtime
 
 import (
 	"errors"
 	"fmt"
 	"syscall/js"
 
+	goxfs "github.com/goplus/spx/v2/fs"
 	"github.com/goplus/spx/v2/pkg/ispx/memfs"
 	"github.com/goplus/spx/v2/pkg/ispx/plugin"
-	goxfs "github.com/goplus/spx/v2/fs"
 
 	"github.com/goplus/ixgo"
 	_ "github.com/goplus/ixgo/pkg/syscall/js"

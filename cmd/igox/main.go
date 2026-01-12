@@ -10,9 +10,9 @@ import (
 	_ "github.com/goplus/spx/v2/cmd/igox/embedpkg"
 	_ "github.com/goplus/spx/v2/cmd/igox/pkg/github.com/goplus/spx/v2"
 	_ "github.com/goplus/spx/v2/cmd/igox/pkg/github.com/goplus/spx/v2/pkg/gdspx/pkg/engine"
-	"github.com/goplus/spx/v2/pkg/ispx/launcher"
+	"github.com/goplus/spx/v2/pkg/ispx/runtime"
 )
 
 func main() {
-	launcher.Run()
+	runtime.Run()
 }

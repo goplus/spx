@@ -1,15 +1,15 @@
 //go:build !js
 
-package launcher
+package runtime
 
 import (
 	"fmt"
 	"os"
 	"path/filepath"
 
+	goxfs "github.com/goplus/spx/v2/fs"
 	"github.com/goplus/spx/v2/pkg/ispx/memfs"
 	"github.com/goplus/spx/v2/pkg/ispx/plugin"
-	goxfs "github.com/goplus/spx/v2/fs"
 
 	"github.com/goplus/ixgo"
 	"github.com/goplus/ixgo/xgobuild"
