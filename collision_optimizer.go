@@ -16,10 +16,6 @@
 
 package spx
 
-import (
-	"github.com/goplus/spbase/mathf"
-)
-
 // ======================== Collision Optimization System ========================
 // This file implements spatial partitioning and AABB (Axis-Aligned Bounding Box)
 // based broad-phase collision detection to reduce expensive pixel-perfect checks.
@@ -147,6 +143,49 @@ func (sh *SpatialHash) query(aabb *SpriteAABB) []*SpriteAABB {
 	return results
 }
 
+// buildSpatialHashForNames builds a spatial hash with sprites matching the given name filter
+func (p *Game) buildSpatialHashForNames(dst *SpriteImpl, nameFilter func(string) bool) *SpatialHash {
+	spatialHash := newSpatialHash(defaultSpatialHashCellSize)
+
+	for _, item := range p.spriteMgr.items {
+		if sp, ok := item.(*SpriteImpl); ok && sp != dst {
+			if nameFilter(sp.name) && sp.isVisible && !sp.isDying && sp.syncSprite != nil {
+				aabb := newSpriteAABB(sp)
+				if aabb != nil {
+					spatialHash.insert(aabb)
+				}
+			}
+		}
+	}
+
+	return spatialHash
+}
+
+// findCollisionsInSpatialHash performs AABB and pixel-perfect collision detection
+func findCollisionsInSpatialHash(dstAABB *SpriteAABB, spatialHash *SpatialHash, findFirst bool) []*SpriteImpl {
+	var results []*SpriteImpl
+
+	// Query spatial hash for potential collisions
+	potentialCollisions := spatialHash.query(dstAABB)
+
+	// AABB intersection and pixel-perfect collision tests
+	for _, candidateAABB := range potentialCollisions {
+		if !dstAABB.intersects(candidateAABB) {
+			continue
+		}
+
+		// Pixel-perfect collision detection (narrow-phase)
+		if candidateAABB.sprite.touchingSprite(dstAABB.sprite) {
+			results = append(results, candidateAABB.sprite)
+			if findFirst {
+				return results
+			}
+		}
+	}
+
+	return results
+}
+
 // findTouchingSpriteOptimized uses spatial partitioning for efficient collision detection
 func (p *Game) findTouchingSpriteOptimized(dst *SpriteImpl, name string) *SpriteImpl {
 	if dst == nil || dst.syncSprite == nil {
@@ -159,43 +198,15 @@ func (p *Game) findTouchingSpriteOptimized(dst *SpriteImpl, name string) *Sprite
 		return nil
 	}
 
-	// Build spatial hash for candidate sprites using default cell size
-	spatialHash := newSpatialHash(defaultSpatialHashCellSize)
+	// Build spatial hash with name filter
+	spatialHash := p.buildSpatialHashForNames(dst, func(spriteName string) bool {
+		return spriteName == name
+	})
 
-	var candidates []*SpriteImpl
-
-	// First pass: Build spatial hash and collect candidates by name
-	for _, item := range p.spriteMgr.items {
-		if sp, ok := item.(*SpriteImpl); ok && sp != dst {
-			if sp.name == name && sp.isVisible && !sp.isDying && sp.syncSprite != nil {
-				candidates = append(candidates, sp)
-				aabb := newSpriteAABB(sp)
-				if aabb != nil {
-					spatialHash.insert(aabb)
-				}
-			}
-		}
-	}
-
-	// Quick exit if no candidates
-	if len(candidates) == 0 {
-		return nil
-	}
-
-	// Second pass: Use spatial hash to find potential collisions
-	potentialCollisions := spatialHash.query(dstAABB)
-
-	// Third pass: AABB intersection test (broad-phase)
-	for _, candidateAABB := range potentialCollisions {
-		if !dstAABB.intersects(candidateAABB) {
-			continue
-		}
-
-		// Fourth pass: Pixel-perfect collision detection (narrow-phase)
-		// Only call expensive C++ collision check if AABB test passed
-		if candidateAABB.sprite.touchingSprite(dst) {
-			return candidateAABB.sprite
-		}
+	// Find first collision
+	results := findCollisionsInSpatialHash(dstAABB, spatialHash, true)
+	if len(results) > 0 {
+		return results[0]
 	}
 
 	return nil
@@ -219,51 +230,11 @@ func (p *Game) touchingSpritesByOptimized(dst *SpriteImpl, names []string) []*Sp
 		nameSet[name] = true
 	}
 
-	// Build spatial hash using default cell size
-	spatialHash := newSpatialHash(defaultSpatialHashCellSize)
+	// Build spatial hash with name filter
+	spatialHash := p.buildSpatialHashForNames(dst, func(spriteName string) bool {
+		return nameSet[spriteName]
+	})
 
-	var candidates []*SpriteAABB
-
-	// First pass: Build spatial hash
-	for _, item := range p.spriteMgr.items {
-		if sp, ok := item.(*SpriteImpl); ok && sp != dst {
-			if nameSet[sp.name] && sp.isVisible && !sp.isDying && sp.syncSprite != nil {
-				aabb := newSpriteAABB(sp)
-				if aabb != nil {
-					spatialHash.insert(aabb)
-					candidates = append(candidates, aabb)
-				}
-			}
-		}
-	}
-
-	// Query spatial hash for potential collisions
-	potentialCollisions := spatialHash.query(dstAABB)
-
-	var results []*SpriteImpl
-
-	// AABB intersection and pixel-perfect collision tests
-	for _, candidateAABB := range potentialCollisions {
-		if !dstAABB.intersects(candidateAABB) {
-			continue
-		}
-
-		if candidateAABB.sprite.touchingSprite(dst) {
-			results = append(results, candidateAABB.sprite)
-		}
-	}
-
-	return results
-}
-
-// rectIntersects checks if two rectangles intersect (simple AABB test)
-func rectIntersects(r1, r2 *mathf.Rect2) bool {
-	if r1 == nil || r2 == nil {
-		return false
-	}
-
-	return r1.Position.X <= r2.Position.X+r2.Size.X &&
-		r1.Position.X+r1.Size.X >= r2.Position.X &&
-		r1.Position.Y <= r2.Position.Y+r2.Size.Y &&
-		r1.Position.Y+r1.Size.Y >= r2.Position.Y
+	// Find all collisions
+	return findCollisionsInSpatialHash(dstAABB, spatialHash, false)
 }
