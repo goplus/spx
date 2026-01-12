@@ -16,11 +16,32 @@ import (
 	"github.com/goplus/ixgo/xgobuild"
 )
 
-func Run(plugins ...Plugin) {
-	for _, info := range plugins {
+// wasmPlatform implements Platform for WASM
+type wasmPlatform struct{}
+
+func init() {
+	defaultPlatform = &wasmPlatform{}
+}
+
+func (p *wasmPlatform) HandleLookupError(err error) {
+	js.Global().Call("gdspx_ext_on_runtime_panic", err.Error())
+	js.Global().Call("gdspx_ext_request_reset", 1)
+}
+
+// Launch starts the WASM runtime
+func Launch(cfg *Config) {
+	if cfg == nil {
+		cfg = DefaultConfig()
+	}
+
+	for _, info := range cfg.Plugins {
 		plugin.GetPluginManager().RegisterPlugin(info.Name, info.Plugin)
 	}
 	plugin.GetPluginManager().RegisterJS()
+
+	// Create runner with config
+	runner := newSpxRunnerWithConfig(cfg)
+
 	// Register engine callback functions
 	js.Global().Set("goWasmInit", js.FuncOf(goWasmInit))
 	js.Global().Set("gdspx_on_engine_start", js.FuncOf(gdspxOnEngineStart))
@@ -33,10 +54,10 @@ func Run(plugins ...Plugin) {
 	spxEngineRegisterFFI()
 
 	// Register SpxRunner WASM interface
-	js.Global().Set("ixgo_build", jsFuncOfWithError(defaultRunner.build))
-	js.Global().Set("ixgo_run", jsFuncOfWithError(defaultRunner.run))
+	js.Global().Set("ixgo_build", jsFuncOfWithError(runner.build))
+	js.Global().Set("ixgo_run", jsFuncOfWithError(runner.run))
 
-	// Keep WASM running select {} will block the main goroutine forever
+	// Keep WASM running
 	exitChan := make(chan struct{})
 	<-exitChan
 }
@@ -48,33 +69,29 @@ func goWasmInit(this js.Value, args []js.Value) any {
 func gdspxOnEngineStart(this js.Value, args []js.Value) any {
 	return nil
 }
+
 func gdspxOnEngineUpdate(this js.Value, args []js.Value) any {
 	return nil
 }
+
 func gdspxOnEngineFixedUpdate(this js.Value, args []js.Value) any {
 	return nil
 }
+
 func gdspxOnEngineDestroy(this js.Value, args []js.Value) any {
 	return nil
 }
+
 func gdspxOnEnginePause(this js.Value, args []js.Value) any {
 	return nil
 }
 
-// handleLookupError handles package lookup errors for JS platform.
+// handleLookupError handles package lookup errors for WASM platform
 func handleLookupError(err error) {
-	js.Global().Call("gdspx_ext_on_runtime_panic", err.Error())
-	js.Global().Call("gdspx_ext_request_reset", 1)
+	defaultPlatform.HandleLookupError(err)
 }
 
-// Build builds the SPX code from the provided files object.
-// It uses the provided hash to cache the build result.
-//
-// Parameters:
-//
-//	args[0]: Uint8Array - zip data of the project files
-//
-// Returns: nil on success, error on build failure.
+// build builds the SPX code from the provided files object
 func (r *SpxRunner) build(this js.Value, args []js.Value) any {
 	if len(args) == 0 {
 		return errors.New("Build: missing files argument")
@@ -93,27 +110,33 @@ func (r *SpxRunner) build(this js.Value, args []js.Value) any {
 	if err != nil {
 		return fmt.Errorf("Build: failed to get files: %w", err)
 	}
+
 	fs := memfs.NewMemFs(filesMap)
 	goxfs.RegisterSchema("", func(path string) (goxfs.Dir, error) {
 		return fs.Chroot(path)
 	})
+
 	ctx := r.ctx
 	source, err := xgobuild.BuildFSDir(ctx, fs, "")
 	if err != nil {
 		return fmt.Errorf("Failed to build XGo source: %w", err)
 	}
+
 	pkg, err := ctx.LoadFile("main.go", source)
 	if err != nil {
 		return fmt.Errorf("Failed to load XGo source: %w", err)
 	}
+
 	interp, err := ctx.NewInterp(pkg)
 	if err != nil {
 		return fmt.Errorf("Failed to create interp: %w", err)
 	}
+
 	if r.debug {
 		capacity, allocate, available := ixgo.IcallStat()
 		fmt.Printf("Icall Capacity: %d, Allocate: %d, Available: %d\n", capacity, allocate, available)
 	}
+
 	r.entry = &interpCacheEntry{
 		interp: interp,
 		closer: func() error { return fs.Close() },
@@ -121,14 +144,7 @@ func (r *SpxRunner) build(this js.Value, args []js.Value) any {
 	return nil
 }
 
-// Run executes the cached interpreter, automatically building if necessary.
-//
-// Behavior:
-//  1. Executes the interpreter
-//
-// Returns: nil on success, error on build or execution failure.
-//
-// Note: This method is idempotent - won't rebuild unnecessarily.
+// run executes the cached interpreter
 func (r *SpxRunner) run(this js.Value, args []js.Value) any {
 	return r.RunInterp(func(msg string) {
 		fmt.Println(msg)
@@ -137,20 +153,19 @@ func (r *SpxRunner) run(this js.Value, args []js.Value) any {
 	})
 }
 
-// convertJSFilesToMap converts a JavaScript object containing file data into a Go map.
-// The input object should map file paths (strings) to file contents (Uint8Array or ArrayBuffer).
-//
-// Returns an error if any value is not a Uint8Array or ArrayBuffer.
+// convertJSFilesToMap converts JavaScript files object to Go map
 func convertJSFilesToMap(input js.Value) (map[string][]byte, error) {
 	keys := js.Global().Get("Object").Call("keys", input)
 	n := keys.Length()
 	filesMap := make(map[string][]byte, n)
 	uint8ArrayType := js.Global().Get("Uint8Array")
 	arrayBufferType := js.Global().Get("ArrayBuffer")
+
 	for i := range n {
 		name := keys.Index(i).String()
 		val := input.Get(name)
 		var u8 js.Value
+
 		if val.InstanceOf(uint8ArrayType) {
 			u8 = val
 		} else if val.InstanceOf(arrayBufferType) {
@@ -158,6 +173,7 @@ func convertJSFilesToMap(input js.Value) (map[string][]byte, error) {
 		} else {
 			return nil, fmt.Errorf("Build: unsupported file value type for %s", name)
 		}
+
 		length := u8.Get("length").Int()
 		data := make([]byte, length)
 		js.CopyBytesToGo(data, u8)
@@ -166,7 +182,7 @@ func convertJSFilesToMap(input js.Value) (map[string][]byte, error) {
 	return filesMap, nil
 }
 
-// jsFuncOfWithError wraps js.Func and converts error returns to JS Error objects.
+// jsFuncOfWithError wraps js.Func and converts error returns to JS Error objects
 func jsFuncOfWithError(fn func(this js.Value, args []js.Value) any) js.Func {
 	return js.FuncOf(func(this js.Value, args []js.Value) any {
 		result := fn(this, args)

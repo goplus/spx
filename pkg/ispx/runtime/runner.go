@@ -3,8 +3,6 @@ package runtime
 import (
 	"errors"
 	"fmt"
-	"log/slog"
-	"os"
 	_ "unsafe"
 
 	"github.com/goplus/spx/v2/pkg/ispx/plugin"
@@ -15,10 +13,6 @@ import (
 	_ "github.com/goplus/reflectx/icall/icall2048"
 	_ "github.com/goplus/spx/v2"
 )
-
-var logger = slog.New(slog.NewJSONHandler(os.Stdout, nil))
-
-var defaultRunner *SpxRunner = NewSpxRunner()
 
 // interpCacheEntry stores the build result.
 type interpCacheEntry struct {
@@ -33,8 +27,25 @@ type SpxRunner struct {
 	debug bool
 }
 
-// NewSpxRunner creates a new SpxRunner instance.
-func NewSpxRunner() *SpxRunner {
+// newSpxRunnerWithConfig creates a new SpxRunner with custom configuration
+func newSpxRunnerWithConfig(cfg *Config) *SpxRunner {
+	if cfg == nil {
+		cfg = DefaultConfig()
+	}
+
+	// Use defaults for nil fields
+	if cfg.Logger == nil {
+		cfg.Logger = defaultLogger
+	}
+	if cfg.Platform == nil {
+		cfg.Platform = defaultPlatform
+	}
+
+	return newSpxRunnerInternal(cfg)
+}
+
+// newSpxRunnerInternal creates a new SpxRunner with the given configuration.
+func newSpxRunnerInternal(cfg *Config) *SpxRunner {
 	// Initialize ixgo context
 	ctx := ixgo.NewContext(ixgo.SupportMultipleInterp)
 	ctx.Lookup = func(root, path string) (dir string, found bool) {
@@ -42,9 +53,9 @@ func NewSpxRunner() *SpxRunner {
 		handleLookupError(err)
 		return
 	}
-	ctx.SetPanic(logWithPanicInfo)
+	ctx.SetPanic(logPanicInfo)
 
-	RegisterExtFuns(ctx)
+	registerExtFuns(ctx)
 
 	// NOTE(everyone): Keep sync with the config in spx [gop.mod](https://github.com/goplus/spx/blob/main/gop.mod)
 	xgobuild.RegisterProject(&modfile.Project{
@@ -77,27 +88,34 @@ func Gopt_Game_Gopx_GetWidget[T any](sg ShapeGetter, name string) *T {
 		return nil
 	}
 
+	// Register custom plugins from config
+	for _, p := range cfg.Plugins {
+		if err := p.Plugin.RegisterPatch(ctx); err != nil {
+			return nil
+		}
+	}
+
 	return &SpxRunner{
 		ctx:   ctx,
-		debug: false,
+		debug: cfg.Debug,
 	}
 }
 
-// RegisterExtFuns registers external functions for fmt package.
-func RegisterExtFuns(ctx *ixgo.Context) {
+// registerExtFuns registers external functions for fmt package.
+func registerExtFuns(ctx *ixgo.Context) {
 	ctx.RegisterExternal("fmt.Print", func(frame *ixgo.Frame, a ...any) (n int, err error) {
 		msg := fmt.Sprint(a...)
-		logWithCallerInfo(msg, frame)
+		logWithCaller(msg, frame)
 		return len(msg), nil
 	})
 	ctx.RegisterExternal("fmt.Printf", func(frame *ixgo.Frame, format string, a ...any) (n int, err error) {
 		msg := fmt.Sprintf(format, a...)
-		logWithCallerInfo(msg, frame)
+		logWithCaller(msg, frame)
 		return len(msg), nil
 	})
 	ctx.RegisterExternal("fmt.Println", func(frame *ixgo.Frame, a ...any) (n int, err error) {
 		msg := fmt.Sprintln(a...)
-		logWithCallerInfo(msg, frame)
+		logWithCaller(msg, frame)
 		return len(msg), nil
 	})
 }
@@ -151,30 +169,6 @@ func (r *SpxRunner) Release() {
 		}
 		r.entry = nil
 	}
-}
-
-func logWithCallerInfo(msg string, frame *ixgo.Frame) {
-	if frs := frame.CallerFrames(); len(frs) > 0 {
-		fr := frs[0]
-		logger.Info(
-			msg,
-			"function", fr.Function,
-			"file", fr.File,
-			"line", fr.Line,
-		)
-	}
-}
-
-func logWithPanicInfo(info *ixgo.PanicInfo) {
-	position := info.Position()
-	logger.Error(
-		"panic",
-		"error", info.Error,
-		"function", info.String(),
-		"file", position.Filename,
-		"line", position.Line,
-		"column", position.Column,
-	)
 }
 
 type Plugin struct {

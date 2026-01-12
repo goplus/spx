@@ -15,37 +15,59 @@ import (
 	"github.com/goplus/ixgo/xgobuild"
 )
 
-func Run(plugins ...Plugin) {
-	for _, info := range plugins {
+// nativePlatform implements Platform for native (non-WASM) platforms
+type nativePlatform struct{}
+
+func init() {
+	defaultPlatform = &nativePlatform{}
+}
+
+func (p *nativePlatform) HandleLookupError(err error) {
+	fmt.Println("[ispxpc] Error:", err.Error())
+}
+
+// Launch starts the native runtime
+func Launch(cfg *Config) {
+	if cfg == nil {
+		cfg = DefaultConfig()
+	}
+
+	for _, info := range cfg.Plugins {
 		plugin.GetPluginManager().RegisterPlugin(info.Name, info.Plugin)
 	}
 
 	// register FFI for worker mode
 	spxEngineRegisterFFI()
+
+	// Create runner with config
+	runner := newSpxRunnerWithConfig(cfg)
+
 	projDir, err := filepath.Abs("..")
 	if err != nil {
-		logger.Error("failed to get absolute path", "error", err)
+		defaultLogger.Error("failed to get absolute path", "error", err)
 		return
 	}
-	if err := defaultRunner.build(projDir); err != nil {
-		logger.Error("failed to build project", "error", err)
+
+	if err := runner.build(projDir); err != nil {
+		defaultLogger.Error("failed to build project", "error", err)
 		return
 	}
-	if result := defaultRunner.run(); result != nil {
+
+	if result := runner.run(); result != nil {
 		if err, ok := result.(error); ok {
-			logger.Error("failed to run project", "error", err)
+			defaultLogger.Error("failed to run project", "error", err)
 			return
 		}
 	}
 	// Unlike the web wasm mode, there is no need to block the main process here
 }
 
-// handleLookupError handles package lookup errors for PC platform.
+// handleLookupError handles package lookup errors for native platform
 func handleLookupError(err error) {
-	fmt.Println("[ispxpc] Error:", err.Error())
+	defaultPlatform.HandleLookupError(err)
 }
 
-// build builds SPX project from a directory path.
+// build builds SPX project from a directory path
 func (r *SpxRunner) build(projectPath string) error {
 	if r.entry != nil && r.entry.interp != nil {
 		r.Release()
@@ -90,26 +112,24 @@ func (r *SpxRunner) build(projectPath string) error {
 	return nil
 }
 
-// RunInterp executes the cached interpreter.
+// run executes the cached interpreter
 func (r *SpxRunner) run() any {
 	return r.RunInterp(func(msg string) {
 		fmt.Println("[ispxpc] Error:", msg)
 	})
 }
 
-// readDirToMap reads all files from a directory into a map.
+// readDirToMap reads all files from a directory into a map
 func readDirToMap(dirPath string) (map[string][]byte, error) {
 	filesMap := make(map[string][]byte)
-
 	err := readDirRecursive(dirPath, "", filesMap)
 	if err != nil {
 		return nil, err
 	}
-
 	return filesMap, nil
 }
 
-// readDirRecursive recursively reads files from a directory.
+// readDirRecursive recursively reads files from a directory
 func readDirRecursive(basePath, relativePath string, filesMap map[string][]byte) error {
 	currentPath := basePath
 	if relativePath != "" {
