@@ -1552,6 +1552,11 @@ func (pself *spriteMgrImpl) CheckCollisionWithSprite(obj gdx.Object, obj_b gdx.O
 	})
 	return _ret1
 }
+func (pself *spriteMgrImpl) BatchUpdateTransforms(buffer gdx.Array) {
+	callInMainThread(func() {
+		gdx.SpriteMgr.BatchUpdateTransforms(buffer)
+	})
+}
 
 // ITilemapMgr
 func (pself *tilemapMgrImpl) OpenDrawTilesWithSize(tile_size int64) {

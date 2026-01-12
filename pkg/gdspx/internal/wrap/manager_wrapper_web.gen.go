@@ -1331,6 +1331,10 @@ func (pself *spriteMgr) CheckCollisionWithSprite(obj Object, obj_b Object, alpha
 	_retValue := API.SpxSpriteCheckCollisionWithSprite.Invoke(arg0, arg1, arg2, arg3)
 	return JsToGdBool(_retValue)
 }
+func (pself *spriteMgr) BatchUpdateTransforms(buffer Array) {
+	arg0 := JsFromGdArray(buffer)
+	API.SpxSpriteBatchUpdateTransforms.Invoke(arg0)
+}
 func (pself *tilemapMgr) OpenDrawTilesWithSize(tile_size int64) {
 	arg0 := JsFromGdInt(tile_size)
 	API.SpxTilemapOpenDrawTilesWithSize.Invoke(arg0)

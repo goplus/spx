@@ -370,6 +370,7 @@ func getManagerFuncBody(function *clang.TypedefFunction) string {
 	}
 	return sb.String()
 }
+
 func getManagerInterface(function *clang.TypedefFunction) string {
 	prefix := "GDExtensionSpx"
 	sb := strings.Builder{}
@@ -395,6 +396,7 @@ func getManagerInterface(function *clang.TypedefFunction) string {
 	}
 	return sb.String()
 }
+
 func GetGdxFuncParamTypeString(typeName string) string {
 	name := GetFuncParamTypeString(typeName)
 	if name == "Object" {
@@ -405,6 +407,7 @@ func GetGdxFuncParamTypeString(typeName string) string {
 	}
 	return name
 }
+
 func genSyncPureApiWrapFunction(function *clang.TypedefFunction) string {
 	/*
 		func syncUiGetFlip(obj Object, horizontal bool) bool {
@@ -456,6 +459,7 @@ func genSyncPureApiWrapFunction(function *clang.TypedefFunction) string {
 	sb.WriteString("}")
 	return sb.String()
 }
+
 func genSyncApiWrapFunction(function *clang.TypedefFunction) string {
 	/*
 		func syncUiGetFlip(obj Object, horizontal bool) bool {
@@ -536,11 +540,14 @@ func genSyncManagerWrapFunction(function *clang.TypedefFunction) string {
 
 type ByName []clang.TypedefFunction
 
-func (arr ByName) Len() int      { return len(arr) }
+func (arr ByName) Len() int { return len(arr) }
+
 func (arr ByName) Swap(i, j int) { arr[i], arr[j] = arr[j], arr[i] }
+
 func (arr ByName) Less(i, j int) bool {
 	return arr[i].Name < arr[j].Name
 }
+
 func getManagerImplPure(function *clang.TypedefFunction, clsName string) string {
 	prefix := "GDExtensionSpx"
 	sb := strings.Builder{}
