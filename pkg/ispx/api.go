@@ -1,5 +1,9 @@
 package ispx
 
+//go:generate go tool qexp -outdir pkg github.com/goplus/spx/v2
+//go:generate go tool qexp -outdir pkg github.com/goplus/spx/v2/pkg/gdspx/pkg/engine
+//go:generate go tool qexp -outdir pkg github.com/goplus/spx/v2/pkg/spx
+
 import (
 	_ "github.com/goplus/spx/v2/pkg/ispx/embedpkg"
 	_ "github.com/goplus/spx/v2/pkg/ispx/pkg/github.com/goplus/spx/v2"

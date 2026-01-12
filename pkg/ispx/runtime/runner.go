@@ -33,11 +33,15 @@ func newSpxRunnerWithConfig(cfg *Config) *SpxRunner {
 		cfg = DefaultConfig()
 	}
 
-	// Use defaults for nil fields
-	if cfg.Logger == nil {
+	// Use defaults for nil fields and update package-level defaults
+	if cfg.Logger != nil {
+		defaultLogger = cfg.Logger
+	} else {
 		cfg.Logger = defaultLogger
 	}
-	if cfg.Platform == nil {
+	if cfg.Platform != nil {
+		defaultPlatform = cfg.Platform
+	} else {
 		cfg.Platform = defaultPlatform
 	}
 

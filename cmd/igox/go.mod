@@ -2,8 +2,6 @@ module github.com/goplus/spx/v2/cmd/igox
 
 go 1.24.0
 
-tool github.com/goplus/ixgo/cmd/qexp
-
 require github.com/goplus/spx/v2/pkg/ispx v0.0.0
 
 require (

@@ -227,11 +227,15 @@ build_wasm() {
 
 # Main build logic
 echo "Generating ispx wraps..."
-# Install required Go dependencies
-if ! go generate main.go > /dev/null 2>&1; then
+# Install required Go dependencies (generate in pkg/ispx)
+cd ../../pkg/ispx || exit
+if ! go generate ./api.go > /dev/null 2>&1; then
     echo "Error during go generate, showing full output:"
-    go generate main.go
+    go generate ./api.go
 fi
+go mod tidy
+cd -
+
 go mod tidy
 
 if [ "$BUILD_PC_ONLY" = true ]; then
