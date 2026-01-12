@@ -108,9 +108,14 @@ func GetFPS() float64 {
 	return fps
 }
 
-func DegToRad(p_y float64) float64 {
-	return p_y * (gdx.Math_PI / 180.0)
+func DegToRad(degree float64) float64 {
+	return degree * (gdx.Math_PI / 180.0)
 }
+
+func RadToDeg(radians float64) float64 {
+	return radians * 180.0 / gdx.Math_PI
+}
+
 func Sincos(rad float64) Vec2 {
 	return NewVec2(math.Sincos(rad))
 }

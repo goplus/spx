@@ -827,7 +827,7 @@ func (p *SpriteImpl) BounceOffEdge() {
 		dy = -math.Max(minBounceComponent, math.Abs(dy))
 	}
 
-	newDirection := math.Atan2(dy, dx)*180/math.Pi + 90
+	newDirection := engine.RadToDeg(math.Atan2(dy, dx)) + 90
 	p.direction = normalizeDirection(newDirection)
 }
 
