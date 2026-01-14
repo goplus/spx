@@ -83,13 +83,13 @@ func (p *Game) OnEngineUpdate(delta float64) {
 	p.syncUpdateCamera()
 	p.syncUpdateLogic()
 	p.syncEnginePositions()
+	p.syncUpdateProxy()
 }
 
 func (p *Game) OnEngineRender(delta float64) {
 	if !p.isRunned {
 		return
 	}
-	p.syncUpdateProxy()
 	p.syncUpdatePhysic()
 }
 
@@ -189,7 +189,7 @@ func (sprite *SpriteImpl) syncGetEnginePosition(isSync bool) (float64, float64) 
 
 func (p *Game) syncUpdateProxy() {
 	count := 0
-	items := p.getItems()
+	items := p.getTempShapes()
 
 	// Clear buffer for reuse (avoids allocation every frame)
 	p.syncBuffer.Clear()
