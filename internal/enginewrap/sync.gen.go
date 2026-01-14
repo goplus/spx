@@ -1557,6 +1557,13 @@ func (pself *spriteMgrImpl) BatchUpdateTransforms(buffer gdx.Array) {
 		gdx.SpriteMgr.BatchUpdateTransforms(buffer)
 	})
 }
+func (pself *spriteMgrImpl) BatchUpdatePositions(objs gdx.Array) gdx.Array {
+	var _ret1 gdx.Array
+	callInMainThread(func() {
+		_ret1 = gdx.SpriteMgr.BatchUpdatePositions(objs)
+	})
+	return _ret1
+}
 
 // ITilemapMgr
 func (pself *tilemapMgrImpl) OpenDrawTilesWithSize(tile_size int64) {

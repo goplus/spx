@@ -22,6 +22,11 @@ func (pself *Sprite) AddForce(force Vec2) {
 func (pself *Sprite) AddImpulse(impulse Vec2) {
 }
 
+func (pself *Sprite) BatchUpdatePositions(objs Array) Array {
+	var _val Array
+	return _val
+}
+
 func (pself *Sprite) BatchUpdateTransforms(buffer Array) {
 }
 

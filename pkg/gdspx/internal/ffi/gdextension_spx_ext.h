@@ -464,6 +464,7 @@ typedef void (*GDExtensionSpxSpriteCheckCollisionByColor)(GdObj obj, GdColor col
 typedef void (*GDExtensionSpxSpriteCheckCollisionByAlpha)(GdObj obj, GdFloat alpha_threshold, GdBool *ret_value);
 typedef void (*GDExtensionSpxSpriteCheckCollisionWithSprite)(GdObj obj, GdObj obj_b, GdFloat alpha_threshold, GdBool use_pixel_perfect, GdBool *ret_value);
 typedef void (*GDExtensionSpxSpriteBatchUpdateTransforms)(GdArray buffer);
+typedef void (*GDExtensionSpxSpriteBatchUpdatePositions)(GdArray objs, GdArray *ret_value);
 // SpxTilemap
 typedef void (*GDExtensionSpxTilemapOpenDrawTilesWithSize)(GdInt tile_size);
 typedef void (*GDExtensionSpxTilemapOpenDrawTiles)();

@@ -321,6 +321,7 @@ type GDExtensionSpxSpriteCheckCollisionByColor C.GDExtensionSpxSpriteCheckCollis
 type GDExtensionSpxSpriteCheckCollisionByAlpha C.GDExtensionSpxSpriteCheckCollisionByAlpha
 type GDExtensionSpxSpriteCheckCollisionWithSprite C.GDExtensionSpxSpriteCheckCollisionWithSprite
 type GDExtensionSpxSpriteBatchUpdateTransforms C.GDExtensionSpxSpriteBatchUpdateTransforms
+type GDExtensionSpxSpriteBatchUpdatePositions C.GDExtensionSpxSpriteBatchUpdatePositions
 type GDExtensionSpxTilemapOpenDrawTilesWithSize C.GDExtensionSpxTilemapOpenDrawTilesWithSize
 type GDExtensionSpxTilemapOpenDrawTiles C.GDExtensionSpxTilemapOpenDrawTiles
 type GDExtensionSpxTilemapSetLayerIndex C.GDExtensionSpxTilemapSetLayerIndex
@@ -2838,6 +2839,16 @@ func CallSpriteBatchUpdateTransforms(
 
 	C.cgo_callfn_GDExtensionSpxSpriteBatchUpdateTransforms(arg0, arg1GdArray)
 
+}
+func CallSpriteBatchUpdatePositions(
+	objs GdArray,
+) GdArray {
+	arg0 := (C.GDExtensionSpxSpriteBatchUpdatePositions)(api.SpxSpriteBatchUpdatePositions)
+	arg1GdArray := (C.GdArray)(objs)
+	var ret_val C.GdArray
+	C.cgo_callfn_GDExtensionSpxSpriteBatchUpdatePositions(arg0, arg1GdArray, &ret_val)
+
+	return GdArray(ret_val)
 }
 func CallTilemapOpenDrawTilesWithSize(
 	tile_size GdInt,

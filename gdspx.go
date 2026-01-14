@@ -109,14 +109,30 @@ func (p *Game) syncUpdateLogic() error {
 
 func (p *Game) syncEnginePositions() error {
 	items := p.getTempShapes()
+	// Collect sprite IDs that need position sync
+	var spriteIDs []int64
+	var sprites []*SpriteImpl
+
 	for _, item := range items {
 		sprite, ok := item.(*SpriteImpl)
-		if ok && sprite.syncSprite != nil {
-			if sprite.physicsMode != NoPhysics {
-				sprite.x, sprite.y = sprite.syncGetEnginePosition(true)
-			}
+		if ok && sprite.syncSprite != nil && sprite.physicsMode != NoPhysics {
+			spriteIDs = append(spriteIDs, int64(sprite.syncSprite.Id))
+			sprites = append(sprites, sprite)
 		}
 	}
+
+	// Batch get positions in one FFI call
+	positions := engine.SyncBatchGetPositions(spriteIDs)
+
+	// Update sprite positions
+	for i, sprite := range sprites {
+		x := float64(positions[i*2])
+		y := float64(positions[i*2+1])
+		revertRenderOffset(sprite, &x, &y)
+		sprite.x = x
+		sprite.y = y
+	}
+
 	return nil
 }
 

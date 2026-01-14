@@ -302,6 +302,7 @@ type ISpriteMgr interface {
 	CheckCollisionByAlpha(obj Object, alpha_threshold float64) bool
 	CheckCollisionWithSprite(obj Object, obj_b Object, alpha_threshold float64, use_pixel_perfect bool) bool
 	BatchUpdateTransforms(buffer Array)
+	BatchUpdatePositions(objs Array) Array
 }
 
 type ITilemapMgr interface {
