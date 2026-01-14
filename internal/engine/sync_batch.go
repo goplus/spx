@@ -148,11 +148,7 @@ func SyncBatchGetPositions(spriteIDs []int64) []float32 {
 		return nil
 	}
 
-	result := make([]float32, len(spriteIDs)*2)
-	for i, id := range spriteIDs {
-		pos := gdx.SpriteMgr.GetPosition(gdx.Object(id))
-		result[i*2] = float32(pos.X)
-		result[i*2+1] = float32(pos.Y)
-	}
-	return result
+	positions := gdx.SpriteMgr.BatchUpdatePositions(spriteIDs)
+	f32Pos, _ := positions.([]float32)
+	return f32Pos
 }

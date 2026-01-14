@@ -720,6 +720,9 @@ void cgo_callfn_GDExtensionSpxSpriteCheckCollisionWithSprite(const GDExtensionSp
 void cgo_callfn_GDExtensionSpxSpriteBatchUpdateTransforms(const GDExtensionSpxSpriteBatchUpdateTransforms fn, GdArray buffer) {
 	fn(buffer);
 }
+void cgo_callfn_GDExtensionSpxSpriteBatchUpdatePositions(const GDExtensionSpxSpriteBatchUpdatePositions fn, GdArray objs, GdArray* ret_val) {
+	fn(objs,ret_val);
+}
 void cgo_callfn_GDExtensionSpxTilemapOpenDrawTilesWithSize(const GDExtensionSpxTilemapOpenDrawTilesWithSize fn, GdInt tile_size) {
 	fn(tile_size);
 }
