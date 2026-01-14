@@ -22,6 +22,7 @@ import (
 
 	"github.com/goplus/spx/v2/internal/engine"
 	"github.com/goplus/spx/v2/internal/enginewrap"
+	spxlog "github.com/goplus/spx/v2/internal/log"
 
 	"github.com/goplus/spbase/mathf"
 )
@@ -114,8 +115,7 @@ func (p *Game) syncEnginePositions() error {
 	var sprites []*SpriteImpl
 
 	for _, item := range items {
-		sprite, ok := item.(*SpriteImpl)
-		if ok && sprite.syncSprite != nil && sprite.physicsMode != NoPhysics {
+		if sprite, ok := item.(*SpriteImpl); ok && sprite.syncSprite != nil && sprite.physicsMode != NoPhysics {
 			spriteIDs = append(spriteIDs, int64(sprite.syncSprite.Id))
 			sprites = append(sprites, sprite)
 		}
@@ -182,46 +182,19 @@ func (sprite *SpriteImpl) syncOnAnimationLooped() {
 	}
 }
 
-func (sprite *SpriteImpl) updateProxyTransform(isSync bool) {
-	if sprite.syncSprite == nil {
-		return
-	}
-	x, y := sprite.getXY()
-	applyRenderOffset(sprite, &x, &y)
-	offsetX, offsetY := getRenderOffset(sprite)
-	rot, scale := calcRenderRotation(sprite)
-	sprite.syncSprite.UpdateTransform(x, y, rot, scale, offsetX, offsetY, isSync)
-}
-
-func (sprite *SpriteImpl) syncGetEnginePosition(isSync bool) (float64, float64) {
-	if sprite.syncSprite == nil {
-		return sprite.x, sprite.y
-	}
-	pos := sprite.syncSprite.GetPosition()
-	x, y := pos.X, pos.Y
-	revertRenderOffset(sprite, &x, &y)
-	return x, y
-}
-
 func (p *Game) syncUpdateProxy() {
-	count := 0
 	items := p.getTempShapes()
-
 	// Clear buffer for reuse (avoids allocation every frame)
 	p.syncBuffer.Clear()
 
 	for _, item := range items {
-		sprite, ok := item.(*SpriteImpl)
-		if ok {
+		if sprite, ok := item.(*SpriteImpl); ok {
 			if sprite.HasDestroyed {
 				continue
 			}
 
-			syncSprite := sprite.syncSprite
-
 			if sprite.isVisible {
 				syncCheckUpdateCostume(&sprite.baseObj)
-				count++
 			}
 
 			// Only sync if sprite is dirty (transform or visibility changed)
@@ -234,10 +207,10 @@ func (p *Game) syncUpdateProxy() {
 
 				// Add to reusable buffer
 				p.syncBuffer.Add(
-					int64(syncSprite.Id),
+					int64(sprite.syncSprite.Id),
 					x, y,
 					rot,
-					scale, scale, // scaleX, scaleY
+					scale, 1.0, // scaleX, scaleY
 					offsetX, offsetY,
 					sprite.isVisible,
 				)
@@ -311,7 +284,7 @@ func (*Game) syncUpdatePhysic() {
 			}
 
 		} else {
-			fmt.Printf("Physics error: unexpected trigger pair - invalid sprite types\n")
+			spxlog.Info("Physics error: unexpected trigger pair - invalid sprite types\n")
 		}
 	}
 }
