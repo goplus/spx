@@ -209,7 +209,7 @@ func (p *Game) syncUpdateProxy() {
 				p.syncBuffer.Add(
 					int64(sprite.syncSprite.Id),
 					x, y,
-					rot,
+					engine.DegToRad(rot),
 					scale, 1.0, // scaleX, scaleY
 					offsetX, offsetY,
 					sprite.isVisible,
