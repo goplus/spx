@@ -2,7 +2,7 @@ package tilemap
 
 import (
 	"path"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/goplus/spbase/mathf"
@@ -156,8 +156,8 @@ func LoadTilemaps(datas *TscnMapData, funcSetTile func(texturePath string, point
 		tileData := layer.TileData
 		tileSizeX, tileSizeY := datas.TileMap.TileSize.Width, datas.TileMap.TileSize.Height
 		tiles := parseTileData(tileData)
-		sort.Slice(tiles, func(i, j int) bool {
-			return tiles[i].SourceID < tiles[j].SourceID
+		slices.SortFunc(tiles, func(a, b tileInstance) int {
+			return int(a.SourceID - b.SourceID)
 		})
 		lastId := int32(-1)
 		path := ""
