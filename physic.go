@@ -76,7 +76,7 @@ func tryRaycastResult(ary engine.Array) (*rayCastResult, error) {
 }
 
 func raycast(from, to mathf.Vec2, ignoreSprites []int64, mask int64) *rayCastResult {
-	ary := physicMgr.RaycastWithDetails(from, to, ignoreSprites, -1, true, true)
+	ary := physicsMgr.RaycastWithDetails(from, to, ignoreSprites, -1, true, true)
 	result, err := tryRaycastResult(ary)
 	if err != nil {
 		spxlog.Warn("Raycast error: %v", err)

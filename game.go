@@ -450,9 +450,9 @@ func setupGameConfig(g *Game, conf *Config, proj *projConfig) {
 
 	proj.FullScreen = proj.FullScreen || conf.FullScreen
 	enabledPhysics = proj.Physics
-	physicMgr.SetGlobalGravity(parseDefaultFloatValue(proj.GlobalGravity, 1))
-	physicMgr.SetGlobalAirDrag(parseDefaultFloatValue(proj.GlobalAirDrag, 1))
-	physicMgr.SetGlobalFriction(parseDefaultFloatValue(proj.GlobalFriction, 1))
+	physicsMgr.SetGlobalGravity(parseDefaultFloatValue(proj.GlobalGravity, 1))
+	physicsMgr.SetGlobalAirDrag(parseDefaultFloatValue(proj.GlobalAirDrag, 1))
+	physicsMgr.SetGlobalFriction(parseDefaultFloatValue(proj.GlobalFriction, 1))
 
 	g.windowHeight_ = conf.Height
 	g.windowWidth_ = conf.Width
@@ -484,7 +484,7 @@ func setupGameSystems(g *Game, proj *projConfig) {
 	g.audioAttenuation = parseDefaultFloatValue(proj.AudioAttenuation, 0)
 	g.audioMaxDistance = parseDefaultFloatValue(proj.AudioMaxDistance, defaultAudioMaxDist)
 
-	physicMgr.SetCollisionSystemType(g.isCollisionByPixel)
+	physicsMgr.SetCollisionSystemType(g.isCollisionByPixel)
 	if g.isAutoSetCollisionLayer {
 		g.sprCollisionInfos = make(map[string]*spriteCollisionInfo)
 		idx := 0

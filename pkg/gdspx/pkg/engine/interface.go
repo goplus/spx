@@ -108,7 +108,7 @@ type CallbackInfo struct {
 	OnActionJustReleased func(string)
 	OnAxisChanged        func(string, float64)
 
-	// physic
+	// physics
 	OnCollisionEnter func(int64, int64)
 	OnCollisionStay  func(int64, int64)
 	OnCollisionExit  func(int64, int64)

@@ -191,7 +191,7 @@ typedef struct {
 	GDExtensionSpxCallbackOnActionJustReleased func_on_action_just_released;
 	GDExtensionSpxCallbackOnAxisChanged func_on_axis_changed;
 
-	// physic
+	// physics
 	GDExtensionSpxCallbackOnCollisionEnter func_on_collision_enter;
 	GDExtensionSpxCallbackOnCollisionStay func_on_collision_stay;
 	GDExtensionSpxCallbackOnCollisionExit func_on_collision_exit;
@@ -287,22 +287,22 @@ typedef void (*GDExtensionSpxPenSetPenTo)(GdObj obj, GdInt property, GdFloat val
 typedef void (*GDExtensionSpxPenChangePenSizeBy)(GdObj obj, GdFloat amount);
 typedef void (*GDExtensionSpxPenSetPenSizeTo)(GdObj obj, GdFloat size);
 typedef void (*GDExtensionSpxPenSetPenStampTexture)(GdObj obj, GdString texture_path);
-// SpxPhysic
-typedef void (*GDExtensionSpxPhysicRaycast)(GdVec2 from, GdVec2 to, GdInt collision_mask, GdObj *ret_value);
-typedef void (*GDExtensionSpxPhysicCheckCollision)(GdVec2 from, GdVec2 to, GdInt collision_mask, GdBool collide_with_areas, GdBool collide_with_bodies, GdBool *ret_value);
-typedef void (*GDExtensionSpxPhysicCheckTouchedCameraBoundaries)(GdObj obj, GdInt *ret_value);
-typedef void (*GDExtensionSpxPhysicCheckTouchedCameraBoundary)(GdObj obj, GdInt board_type, GdBool *ret_value);
-typedef void (*GDExtensionSpxPhysicCheckNearestTouchedCameraBoundary)(GdObj obj, GdInt *ret_value);
-typedef void (*GDExtensionSpxPhysicSetCollisionSystemType)(GdBool is_collision_by_alpha);
-typedef void (*GDExtensionSpxPhysicSetGlobalGravity)(GdFloat gravity);
-typedef void (*GDExtensionSpxPhysicGetGlobalGravity)(GdFloat *ret_value);
-typedef void (*GDExtensionSpxPhysicSetGlobalFriction)(GdFloat friction);
-typedef void (*GDExtensionSpxPhysicGetGlobalFriction)(GdFloat *ret_value);
-typedef void (*GDExtensionSpxPhysicSetGlobalAirDrag)(GdFloat air_drag);
-typedef void (*GDExtensionSpxPhysicGetGlobalAirDrag)(GdFloat *ret_value);
-typedef void (*GDExtensionSpxPhysicCheckCollisionRect)(GdVec2 pos, GdVec2 size, GdInt collision_mask, GdArray *ret_value);
-typedef void (*GDExtensionSpxPhysicCheckCollisionCircle)(GdVec2 pos, GdFloat radius, GdInt collision_mask, GdArray *ret_value);
-typedef void (*GDExtensionSpxPhysicRaycastWithDetails)(GdVec2 from, GdVec2 to, GdArray ignore_sprites, GdInt collision_mask, GdBool collide_with_areas, GdBool collide_with_bodies, GdArray *ret_value);
+// SpxPhysics
+typedef void (*GDExtensionSpxPhysicsRaycast)(GdVec2 from, GdVec2 to, GdInt collision_mask, GdObj *ret_value);
+typedef void (*GDExtensionSpxPhysicsCheckCollision)(GdVec2 from, GdVec2 to, GdInt collision_mask, GdBool collide_with_areas, GdBool collide_with_bodies, GdBool *ret_value);
+typedef void (*GDExtensionSpxPhysicsCheckTouchedCameraBoundaries)(GdObj obj, GdInt *ret_value);
+typedef void (*GDExtensionSpxPhysicsCheckTouchedCameraBoundary)(GdObj obj, GdInt board_type, GdBool *ret_value);
+typedef void (*GDExtensionSpxPhysicsCheckNearestTouchedCameraBoundary)(GdObj obj, GdInt *ret_value);
+typedef void (*GDExtensionSpxPhysicsSetCollisionSystemType)(GdBool is_collision_by_alpha);
+typedef void (*GDExtensionSpxPhysicsSetGlobalGravity)(GdFloat gravity);
+typedef void (*GDExtensionSpxPhysicsGetGlobalGravity)(GdFloat *ret_value);
+typedef void (*GDExtensionSpxPhysicsSetGlobalFriction)(GdFloat friction);
+typedef void (*GDExtensionSpxPhysicsGetGlobalFriction)(GdFloat *ret_value);
+typedef void (*GDExtensionSpxPhysicsSetGlobalAirDrag)(GdFloat air_drag);
+typedef void (*GDExtensionSpxPhysicsGetGlobalAirDrag)(GdFloat *ret_value);
+typedef void (*GDExtensionSpxPhysicsCheckCollisionRect)(GdVec2 pos, GdVec2 size, GdInt collision_mask, GdArray *ret_value);
+typedef void (*GDExtensionSpxPhysicsCheckCollisionCircle)(GdVec2 pos, GdFloat radius, GdInt collision_mask, GdArray *ret_value);
+typedef void (*GDExtensionSpxPhysicsRaycastWithDetails)(GdVec2 from, GdVec2 to, GdArray ignore_sprites, GdInt collision_mask, GdBool collide_with_areas, GdBool collide_with_bodies, GdArray *ret_value);
 // SpxPlatform
 typedef void (*GDExtensionSpxPlatformSetStretchMode)(GdBool enable);
 typedef void (*GDExtensionSpxPlatformSetStretchAspect)(GdBool is_keep);

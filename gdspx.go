@@ -32,7 +32,7 @@ var (
 	audioMgr         enginewrap.AudioMgrImpl
 	cameraMgr        enginewrap.CameraMgrImpl
 	inputMgr         enginewrap.InputMgrImpl
-	physicMgr        enginewrap.PhysicMgrImpl
+	physicsMgr       enginewrap.PhysicsMgrImpl
 	platformMgr      enginewrap.PlatformMgrImpl
 	resMgr           enginewrap.ResMgrImpl
 	sceneMgr         enginewrap.SceneMgrImpl

@@ -46,12 +46,12 @@ func (p *Game) checkCollision(ary any) []Sprite {
 }
 
 func (p *Game) IntersectRect(posX, posY, width, height float64) []Sprite {
-	ary := physicMgr.CheckCollisionRect(mathf.NewVec2(posX, posY), mathf.NewVec2(width, height), -1)
+	ary := physicsMgr.CheckCollisionRect(mathf.NewVec2(posX, posY), mathf.NewVec2(width, height), -1)
 	return p.checkCollision(ary)
 }
 
 func (p *Game) IntersectCircle(posX, posY, radius float64) []Sprite {
-	ary := physicMgr.CheckCollisionCircle(mathf.NewVec2(posX, posY), radius, -1)
+	ary := physicsMgr.CheckCollisionCircle(mathf.NewVec2(posX, posY), radius, -1)
 	return p.checkCollision(ary)
 }
 

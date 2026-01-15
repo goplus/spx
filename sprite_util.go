@@ -127,7 +127,7 @@ func (p *SpriteImpl) checkTouchingScreen(where int) (touching int) {
 	if p.syncSprite == nil {
 		return 0
 	}
-	touching = (int)(physicMgr.CheckTouchedCameraBoundaries(p.syncSprite.GetId()))
+	touching = (int)(physicsMgr.CheckTouchedCameraBoundaries(p.syncSprite.GetId()))
 	return touching & where
 }
 
@@ -136,7 +136,7 @@ func (p *SpriteImpl) checkNearestTouchedBoundary() int {
 	if p.syncSprite == nil {
 		return 0
 	}
-	return (int)(physicMgr.CheckNearestTouchedCameraBoundary(p.syncSprite.GetId()))
+	return (int)(physicsMgr.CheckNearestTouchedCameraBoundary(p.syncSprite.GetId()))
 }
 
 // checkTouchingDirection determines which screen edges to check based on direction

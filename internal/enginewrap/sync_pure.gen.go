@@ -24,7 +24,7 @@ extMgr enginewrap.ExtMgrImpl
 inputMgr enginewrap.InputMgrImpl
 navigationMgr enginewrap.NavigationMgrImpl
 penMgr enginewrap.PenMgrImpl
-physicMgr enginewrap.PhysicMgrImpl
+physicsMgr enginewrap.PhysicsMgrImpl
 platformMgr enginewrap.PlatformMgrImpl
 resMgr enginewrap.ResMgrImpl
 sceneMgr enginewrap.SceneMgrImpl
@@ -44,7 +44,7 @@ var (
 	inputMgr         InputMgrImpl
 	navigationMgr    NavigationMgrImpl
 	penMgr           PenMgrImpl
-	physicMgr        PhysicMgrImpl
+	physicsMgr       PhysicsMgrImpl
 	platformMgr      PlatformMgrImpl
 	resMgr           ResMgrImpl
 	sceneMgr         SceneMgrImpl
@@ -89,10 +89,10 @@ type penMgrImpl struct {
 type PenMgrImpl struct {
 	penMgrImpl
 }
-type physicMgrImpl struct {
+type physicsMgrImpl struct {
 }
-type PhysicMgrImpl struct {
-	physicMgrImpl
+type PhysicsMgrImpl struct {
+	physicsMgrImpl
 }
 type platformMgrImpl struct {
 }
@@ -281,52 +281,52 @@ func (pself *penMgrImpl) ChangePenSizeBy(obj gdx.Object, amount float64)        
 func (pself *penMgrImpl) SetPenSizeTo(obj gdx.Object, size float64)                  {}
 func (pself *penMgrImpl) SetPenStampTexture(obj gdx.Object, texture_path string)     {}
 
-// IPhysicMgr
-func (pself *physicMgrImpl) Raycast(from Vec2, to Vec2, collision_mask int64) gdx.Object {
+// IPhysicsMgr
+func (pself *physicsMgrImpl) Raycast(from Vec2, to Vec2, collision_mask int64) gdx.Object {
 	var _ret1 gdx.Object
 	return _ret1
 }
-func (pself *physicMgrImpl) CheckCollision(from Vec2, to Vec2, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) bool {
+func (pself *physicsMgrImpl) CheckCollision(from Vec2, to Vec2, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) bool {
 	var _ret1 bool
 	return _ret1
 }
-func (pself *physicMgrImpl) CheckTouchedCameraBoundaries(obj gdx.Object) int64 {
+func (pself *physicsMgrImpl) CheckTouchedCameraBoundaries(obj gdx.Object) int64 {
 	var _ret1 int64
 	return _ret1
 }
-func (pself *physicMgrImpl) CheckTouchedCameraBoundary(obj gdx.Object, board_type int64) bool {
+func (pself *physicsMgrImpl) CheckTouchedCameraBoundary(obj gdx.Object, board_type int64) bool {
 	var _ret1 bool
 	return _ret1
 }
-func (pself *physicMgrImpl) CheckNearestTouchedCameraBoundary(obj gdx.Object) int64 {
+func (pself *physicsMgrImpl) CheckNearestTouchedCameraBoundary(obj gdx.Object) int64 {
 	var _ret1 int64
 	return _ret1
 }
-func (pself *physicMgrImpl) SetCollisionSystemType(is_collision_by_alpha bool) {}
-func (pself *physicMgrImpl) SetGlobalGravity(gravity float64)                  {}
-func (pself *physicMgrImpl) GetGlobalGravity() float64 {
+func (pself *physicsMgrImpl) SetCollisionSystemType(is_collision_by_alpha bool) {}
+func (pself *physicsMgrImpl) SetGlobalGravity(gravity float64)                  {}
+func (pself *physicsMgrImpl) GetGlobalGravity() float64 {
 	var _ret1 float64
 	return _ret1
 }
-func (pself *physicMgrImpl) SetGlobalFriction(friction float64) {}
-func (pself *physicMgrImpl) GetGlobalFriction() float64 {
+func (pself *physicsMgrImpl) SetGlobalFriction(friction float64) {}
+func (pself *physicsMgrImpl) GetGlobalFriction() float64 {
 	var _ret1 float64
 	return _ret1
 }
-func (pself *physicMgrImpl) SetGlobalAirDrag(air_drag float64) {}
-func (pself *physicMgrImpl) GetGlobalAirDrag() float64 {
+func (pself *physicsMgrImpl) SetGlobalAirDrag(air_drag float64) {}
+func (pself *physicsMgrImpl) GetGlobalAirDrag() float64 {
 	var _ret1 float64
 	return _ret1
 }
-func (pself *physicMgrImpl) CheckCollisionRect(pos Vec2, size Vec2, collision_mask int64) gdx.Array {
+func (pself *physicsMgrImpl) CheckCollisionRect(pos Vec2, size Vec2, collision_mask int64) gdx.Array {
 	var _ret1 gdx.Array
 	return _ret1
 }
-func (pself *physicMgrImpl) CheckCollisionCircle(pos Vec2, radius float64, collision_mask int64) gdx.Array {
+func (pself *physicsMgrImpl) CheckCollisionCircle(pos Vec2, radius float64, collision_mask int64) gdx.Array {
 	var _ret1 gdx.Array
 	return _ret1
 }
-func (pself *physicMgrImpl) RaycastWithDetails(from Vec2, to Vec2, ignore_sprites gdx.Array, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) gdx.Array {
+func (pself *physicsMgrImpl) RaycastWithDetails(from Vec2, to Vec2, ignore_sprites gdx.Array, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) gdx.Array {
 	var _ret1 gdx.Array
 	return _ret1
 }
