@@ -453,11 +453,7 @@ build_editor(){
     fi
     
     echo scons target=editor dev_build=yes $COMMON_ARGS
-    if [ "$OS" = "Windows_NT" ]; then
-        scons target=editor dev_build=yes $COMMON_ARGS vsproj=yes 
-    else
-        scons target=editor dev_build=yes $COMMON_ARGS
-    fi
+    scons target=editor dev_build=yes $COMMON_ARGS
     
     dstBinPath="$GOPATH/bin/gdspx$VERSION"
     echo "Destination binary path: $dstBinPath"

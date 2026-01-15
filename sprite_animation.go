@@ -116,6 +116,30 @@ func (p *SpriteImpl) hasAnim(animName string) bool {
 	return false
 }
 
+// getDefaultTweenConfig returns default animation config for Spine mode
+// when the animation exists in Spine but has no frame animation config
+func (p *SpriteImpl) getDefaultTweenConfig() *aniConfig {
+	stepDuration := 0.01
+	turnToDuration := 1.0
+
+	// Use values from Spine config if available
+	if p.spineConfig != nil {
+		if p.spineConfig.StepDuration > 0 {
+			stepDuration = p.spineConfig.StepDuration
+		}
+		if p.spineConfig.TurnToDuration > 0 {
+			turnToDuration = p.spineConfig.TurnToDuration
+		}
+	}
+
+	return &aniConfig{
+		FrameFps:       25,
+		StepDuration:   stepDuration,
+		TurnToDuration: turnToDuration,
+		Speed:          1,
+	}
+}
+
 // -----------------------------------------------------------------------------
 // Animation State Management
 // -----------------------------------------------------------------------------
@@ -200,7 +224,8 @@ func (p *SpriteImpl) doTween(name SpriteAnimationName, ani *aniConfig) {
 	p.stopAnimState(p.curTweenState)
 	p.curTweenState = info
 	animName := info.Name
-	if p.hasAnim(animName) {
+	// Use hasAnimation to support both Spine and frame animations
+	if p.hasAnimation(animName) {
 		p.doAnimation(animName, ani, ani.IsLoop, ani.Speed, false, false)
 		p.playAnimAudio(ani, info)
 	}
@@ -345,7 +370,8 @@ func (p *SpriteImpl) AnimateAndWait(name SpriteAnimationName) {
 }
 
 func (p *SpriteImpl) StopAnimation(name SpriteAnimationName) {
-	if name == "" || !p.hasAnim(name) {
+	// Use hasAnimation to support both Spine and frame animations
+	if name == "" || !p.hasAnimation(name) {
 		return
 	}
 	if p.curAnimState == nil || p.curAnimState.Name != name {

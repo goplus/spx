@@ -123,26 +123,31 @@ func (p *SpriteImpl) doStepToPos(x, y, speed float64, animation SpriteAnimationN
 	if animation == "" {
 		animation = p.getStateAnimName(StateStep)
 	}
-	// if no animation, goto target immediately
-	if !p.hasAnim(animation) {
+	// if no animation, goto target immediately (unified check for Spine + frame animations)
+	if !p.hasAnimation(animation) {
 		p.SetXYpos(x, y)
-	} else {
-		speed = math.Max(speed, 0.001)
-		from := mathf.NewVec2(p.x, p.y)
-		to := mathf.NewVec2(x, y)
-		distance := from.DistanceTo(to)
-		if ani, ok := p.animations[animation]; ok {
-			anicopy := *ani
-			anicopy.From = &from
-			anicopy.To = &to
-			anicopy.AniType = aniTypeMove
-			anicopy.Duration = math.Abs(distance) * ani.StepDuration / speed
-			anicopy.IsLoop = true
-			anicopy.Speed = speed
-			p.doTween(animation, &anicopy)
-			return
-		}
+		return
 	}
+
+	speed = math.Max(speed, 0.001)
+	from := mathf.NewVec2(p.x, p.y)
+	to := mathf.NewVec2(x, y)
+	distance := from.DistanceTo(to)
+
+	// Get animation config, use default for Spine mode if not found
+	ani := p.animations[animation]
+	if ani == nil {
+		ani = p.getDefaultTweenConfig()
+	}
+
+	anicopy := *ani
+	anicopy.From = &from
+	anicopy.To = &to
+	anicopy.AniType = aniTypeMove
+	anicopy.Duration = math.Abs(distance) * ani.StepDuration / speed
+	anicopy.IsLoop = true
+	anicopy.Speed = speed
+	p.doTween(animation, &anicopy)
 }
 
 func (p *SpriteImpl) doStepTo(obj any, speed float64, animation SpriteAnimationName) {
@@ -366,21 +371,30 @@ func (p *SpriteImpl) doTurn(val Direction, speed float64, animation SpriteAnimat
 	if animation == "" {
 		animation = p.getStateAnimName(StateTurn)
 	}
-	if ani, ok := p.animations[animation]; ok {
-		anicopy := *ani
-		anicopy.From = p.direction
-		anicopy.To = p.direction + delta
-		anicopy.Duration = ani.TurnToDuration / 360.0 * math.Abs(delta) / speed
-		anicopy.AniType = aniTypeTurn
-		anicopy.IsLoop = true
-		anicopy.Speed = speed
-		p.doTween(animation, &anicopy)
+
+	// Unified check for Spine + frame animations
+	if !p.hasAnimation(animation) {
+		p.setDirection(delta, true)
+		if debugInstr {
+			spxlog.Debug("Turn: sprite=%s, val=%v", p.name, val)
+		}
 		return
 	}
-	p.setDirection(delta, true)
-	if debugInstr {
-		spxlog.Debug("Turn: sprite=%s, val=%v", p.name, val)
+
+	// Get animation config, use default for Spine mode if not found
+	ani := p.animations[animation]
+	if ani == nil {
+		ani = p.getDefaultTweenConfig()
 	}
+
+	anicopy := *ani
+	anicopy.From = p.direction
+	anicopy.To = p.direction + delta
+	anicopy.Duration = ani.TurnToDuration / 360.0 * math.Abs(delta) / speed
+	anicopy.AniType = aniTypeTurn
+	anicopy.IsLoop = true
+	anicopy.Speed = speed
+	p.doTween(animation, &anicopy)
 }
 
 func (p *SpriteImpl) doTurnTo(obj any, speed float64, animation SpriteAnimationName) {
@@ -398,29 +412,38 @@ func (p *SpriteImpl) doTurnTo(obj any, speed float64, animation SpriteAnimationN
 	if animation == "" {
 		animation = p.getStateAnimName(StateTurn)
 	}
-	if ani, ok := p.animations[animation]; ok {
-		fromangle := math.Mod(p.direction+360.0, 360.0)
-		toangle := math.Mod(angle+360.0, 360.0)
-		if toangle-fromangle > 180.0 {
-			fromangle = fromangle + 360.0
+
+	// Unified check for Spine + frame animations
+	if !p.hasAnimation(animation) {
+		if p.setDirection(angle, false) && debugInstr {
+			spxlog.Debug("TurnTo: sprite=%s, obj=%v", p.name, obj)
 		}
-		if fromangle-toangle > 180.0 {
-			toangle = toangle + 360.0
-		}
-		delta := math.Abs(fromangle - toangle)
-		anicopy := *ani
-		anicopy.From = fromangle
-		anicopy.To = toangle
-		anicopy.Duration = ani.TurnToDuration / 360.0 * math.Abs(delta) / speed
-		anicopy.AniType = aniTypeTurn
-		anicopy.IsLoop = true
-		anicopy.Speed = speed
-		p.doTween(animation, &anicopy)
 		return
 	}
-	if p.setDirection(angle, false) && debugInstr {
-		spxlog.Debug("TurnTo: sprite=%s, obj=%v", p.name, obj)
+
+	// Get animation config, use default for Spine mode if not found
+	ani := p.animations[animation]
+	if ani == nil {
+		ani = p.getDefaultTweenConfig()
 	}
+
+	fromangle := math.Mod(p.direction+360.0, 360.0)
+	toangle := math.Mod(angle+360.0, 360.0)
+	if toangle-fromangle > 180.0 {
+		fromangle = fromangle + 360.0
+	}
+	if fromangle-toangle > 180.0 {
+		toangle = toangle + 360.0
+	}
+	delta := math.Abs(fromangle - toangle)
+	anicopy := *ani
+	anicopy.From = fromangle
+	anicopy.To = toangle
+	anicopy.Duration = ani.TurnToDuration / 360.0 * math.Abs(delta) / speed
+	anicopy.AniType = aniTypeTurn
+	anicopy.IsLoop = true
+	anicopy.Speed = speed
+	p.doTween(animation, &anicopy)
 }
 
 func (p *SpriteImpl) SetHeading(dir Direction) {

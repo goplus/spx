@@ -275,10 +275,12 @@ type animPayload struct {
 
 // Spine animation configuration
 type spineAnimConfig struct {
-	Atlas      string            `json:"atlas"`      // atlas file path, e.g. "spine/spineboy.atlas"
-	Skeleton   string            `json:"skeleton"`   // skeleton file path, e.g. "spine/spineboy-pro.skel"
-	DefaultMix float64           `json:"defaultMix"` // animation mix time, default 0.1
-	AnimMap    map[string]string `json:"animMap"`    // SPX animation name -> Spine animation name mapping
+	Atlas          string            `json:"atlas"`          // atlas file path, e.g. "spine/spineboy.atlas"
+	Skeleton       string            `json:"skeleton"`       // skeleton file path, e.g. "spine/spineboy-pro.skel"
+	DefaultMix     float64           `json:"defaultMix"`     // animation mix time, default 0.1
+	AnimMap        map[string]string `json:"animMap"`        // SPX animation name -> Spine animation name mapping
+	StepDuration   float64           `json:"stepDuration"`   // step animation duration factor, default 0.01
+	TurnToDuration float64           `json:"turnToDuration"` // turn animation duration for 360 degrees, default 1.0
 }
 
 // -------------------------------------------------------------------------------------

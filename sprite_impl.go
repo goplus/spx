@@ -625,7 +625,8 @@ func (p *SpriteImpl) Die() {
 	p.setDying()
 
 	p.Stop(OtherScriptsInSprite)
-	if p.hasAnim(aniName) {
+	// Use hasAnimation to support both Spine and frame animations
+	if p.hasAnimation(aniName) {
 		p.AnimateAndWait(aniName)
 	}
 	p.Destroy()
