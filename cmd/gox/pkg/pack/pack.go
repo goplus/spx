@@ -9,7 +9,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -77,8 +77,13 @@ func PackProject(baseFolder string, dstZipPath string) {
 
 func PackZip(zipWriter *zip.Writer, baseFolder string, paths []DirInfos) {
 	baseFolder = strings.ReplaceAll(baseFolder, "\\", "/")
-	sort.Slice(paths, func(i, j int) bool {
-		return paths[i].path < paths[j].path
+	slices.SortFunc(paths, func(a, b DirInfos) int {
+		if a.path < b.path {
+			return -1
+		} else if a.path > b.path {
+			return 1
+		}
+		return 0
 	})
 	for _, dirInfo := range paths {
 		path := dirInfo.path

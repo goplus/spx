@@ -17,7 +17,7 @@
 package spx
 
 import (
-	"sort"
+	"slices"
 
 	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v2/internal/engine"
@@ -29,8 +29,8 @@ import (
 
 func (p *Game) checkCollision(ary any) []Sprite {
 	spriteIdAry := ary.([]engine.Object)
-	sprites := make([]Sprite, 1)
-	sort.Slice(spriteIdAry, func(i, j int) bool { return spriteIdAry[i] < spriteIdAry[j] })
+	sprites := make([]Sprite, 0, len(spriteIdAry))
+	slices.Sort(spriteIdAry)
 	for _, item := range spriteIdAry {
 		sprite := engine.GetSprite(item)
 		if sprite != nil {
