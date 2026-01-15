@@ -315,7 +315,7 @@ type spriteConfig struct {
 	TriggerShapeType   string     `json:"triggerShapeType"`
 	TriggerPivot       mathf.Vec2 `json:"triggerPivot"`
 
-	// physic
+	// physics
 	PhysicsMode string   `json:"physicsMode"`
 	Mass        *float64 `json:"mass"`
 	Friction    *float64 `json:"friction"`

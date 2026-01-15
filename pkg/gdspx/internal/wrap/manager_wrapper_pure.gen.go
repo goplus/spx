@@ -33,8 +33,8 @@ func BindMgr(mgrs []IManager) {
 		case IInputMgr:
 			InputMgr = v
 
-		case IPhysicMgr:
-			PhysicMgr = v
+		case IPhysicsMgr:
+			PhysicsMgr = v
 
 		case IPlatformMgr:
 			PlatformMgr = v
@@ -69,7 +69,7 @@ type extMgr struct {
 type inputMgr struct {
 	baseMgr
 }
-type physicMgr struct {
+type physicsMgr struct {
 	baseMgr
 }
 type platformMgr struct {
@@ -93,7 +93,7 @@ func createMgrs() []IManager {
 	addManager(&cameraMgr{})
 	addManager(&extMgr{})
 	addManager(&inputMgr{})
-	addManager(&physicMgr{})
+	addManager(&physicsMgr{})
 	addManager(&platformMgr{})
 	addManager(&resMgr{})
 	addManager(&sceneMgr{})
@@ -251,19 +251,19 @@ func (pself *inputMgr) IsActionJustReleased(action string) bool {
 }
 
 // Physics Manager
-func (pself *physicMgr) Raycast(from Vec2, to Vec2, collision_mask int64) Object {
+func (pself *physicsMgr) Raycast(from Vec2, to Vec2, collision_mask int64) Object {
 	return Object(0)
 }
-func (pself *physicMgr) CheckCollision(from Vec2, to Vec2, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) bool {
+func (pself *physicsMgr) CheckCollision(from Vec2, to Vec2, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) bool {
 	return false
 }
-func (pself *physicMgr) CheckTouchedCameraBoundaries(obj Object) int64 {
+func (pself *physicsMgr) CheckTouchedCameraBoundaries(obj Object) int64 {
 	return 0
 }
-func (pself *physicMgr) CheckTouchedCameraBoundary(obj Object, board_type int64) bool {
+func (pself *physicsMgr) CheckTouchedCameraBoundary(obj Object, board_type int64) bool {
 	return false
 }
-func (pself *physicMgr) SetCollisionSystemType(is_collision_by_alpha bool) {
+func (pself *physicsMgr) SetCollisionSystemType(is_collision_by_alpha bool) {
 	// Pure implementation - no operation
 }
 

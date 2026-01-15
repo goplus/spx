@@ -222,7 +222,7 @@ func toPhysicsMode(mode string) PhysicsMode {
 	case "no":
 		return NoPhysics
 	}
-	println("config error: unknown physic mode ", mode)
+	println("config error: unknown physics mode ", mode)
 	return NoPhysics
 }
 
