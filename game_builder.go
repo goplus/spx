@@ -98,15 +98,6 @@ func (b *gameBuilder) parseFlags() *gameBuilder {
 	return b
 }
 
-// setupConfig sets up game configuration and global settings
-func (b *gameBuilder) setupConfig() *gameBuilder {
-	if b.err != nil {
-		return b
-	}
-	setupGameConfig(&b.conf, &b.proj)
-	return b
-}
-
 // initializeGame initializes the game instance
 func (b *gameBuilder) initializeGame() *gameBuilder {
 	if b.err != nil {
@@ -114,6 +105,15 @@ func (b *gameBuilder) initializeGame() *gameBuilder {
 	}
 	b.gamerValue = reflect.ValueOf(b.gamer).Elem()
 	b.game = instance(b.gamerValue)
+	return b
+}
+
+// setupConfig sets up game configuration and global settings
+func (b *gameBuilder) setupConfig() *gameBuilder {
+	if b.err != nil {
+		return b
+	}
+	setupGameConfig(b.game, &b.conf, &b.proj)
 	return b
 }
 
@@ -157,8 +157,8 @@ func (b *gameBuilder) run() error {
 func (b *gameBuilder) build() (*Game, error) {
 	b.loadResources().
 		parseFlags().
-		setupConfig().
 		initializeGame().
+		setupConfig().
 		setupSystems().
 		loadSprites().
 		finalizeLoad()

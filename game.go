@@ -434,7 +434,7 @@ func parseCommandLineFlags(conf *Config) {
 }
 
 // setupGameConfig configures game settings
-func setupGameConfig(conf *Config, proj *projConfig) {
+func setupGameConfig(g *Game, conf *Config, proj *projConfig) {
 	if conf.Title == "" {
 		dir, _ := os.Getwd()
 		appName := filepath.Base(dir)
@@ -446,6 +446,9 @@ func setupGameConfig(conf *Config, proj *projConfig) {
 	physicMgr.SetGlobalGravity(parseDefaultFloatValue(proj.GlobalGravity, 1))
 	physicMgr.SetGlobalAirDrag(parseDefaultFloatValue(proj.GlobalAirDrag, 1))
 	physicMgr.SetGlobalFriction(parseDefaultFloatValue(proj.GlobalFriction, 1))
+
+	g.windowHeight_ = conf.Height
+	g.windowWidth_ = conf.Width
 
 	key := conf.ScreenshotKey
 	if key == "" {
@@ -493,7 +496,7 @@ func loadGameSprites(g *Game, v reflect.Value, fs spxfs.Dir, proj *projConfig) {
 		spxlog.Debug("==> StartLoad")
 	}
 
-	g.startLoad(fs, &Config{Width: g.windowWidth_, Height: g.windowHeight_})
+	g.startLoad(fs)
 	for i, n := 0, v.NumField(); i < n; i++ {
 		name, val := getFieldPtrOrAlloc(g, v, i)
 		if fld, ok := val.(Sprite); ok {
@@ -578,13 +581,11 @@ func findObjPtr(v reflect.Value, name string, from int) any {
 	return nil
 }
 
-func (p *Game) startLoad(fs spxfs.Dir, cfg *Config) {
+func (p *Game) startLoad(fs spxfs.Dir) {
 	p.sounds.init(p)
 	p.inputs.init(p)
 	p.events = make(chan event, eventBufferSize)
 	p.fs = fs
-	p.windowWidth_ = cfg.Width
-	p.windowHeight_ = cfg.Height
 }
 
 func (p *Game) canBindSprite(name string) bool {
