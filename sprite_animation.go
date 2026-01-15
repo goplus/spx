@@ -167,10 +167,16 @@ func (p *SpriteImpl) doAnimation(animName SpriteAnimationName, ani *aniConfig, l
 		p.playAnimAudio(ani, info)
 	}
 
-	syncCheckUpdateCostume(&p.baseObj)
-	p.animationWrappers[animName].ensureRegistered(animName)
+	// Get the actual animation name to play
+	actualAnimName := p.getSpineAnimName(animName)
 
-	spriteMgr.PlayAnim(p.syncSprite.GetId(), animName, speed, loop, false)
+	// Spine mode doesn't need to register frame animation resources
+	if !p.isSpineMode() {
+		syncCheckUpdateCostume(&p.baseObj)
+		p.animationWrappers[animName].ensureRegistered(animName)
+	}
+
+	spriteMgr.PlayAnim(p.syncSprite.GetId(), actualAnimName, speed, loop, false)
 	if isBlocking {
 		p.isAnimating = true
 		for spriteMgr.IsPlayingAnim(p.syncSprite.GetId()) {
@@ -275,12 +281,21 @@ func (p *SpriteImpl) playDefaultAnim() {
 		animName = p.defaultAnimation
 	}
 
-	if _, ok := p.animations[animName]; ok {
-		p.animationWrappers[animName].ensureRegistered(animName)
-		spriteMgr.PlayAnim(p.syncSprite.GetId(), animName, speed, true, false)
-	} else {
+	// Check if animation exists
+	if !p.hasAnimation(animName) {
 		p.goSetCostume(p.defaultCostumeIndex)
+		return
 	}
+
+	// Get the actual animation name to play
+	actualAnimName := p.getSpineAnimName(animName)
+
+	// Spine mode doesn't need to register frame animation resources
+	if !p.isSpineMode() {
+		p.animationWrappers[animName].ensureRegistered(animName)
+	}
+
+	spriteMgr.PlayAnim(p.syncSprite.GetId(), actualAnimName, speed, true, false)
 }
 
 // -----------------------------------------------------------------------------
@@ -295,22 +310,38 @@ func (p *SpriteImpl) Animate__1(name SpriteAnimationName, loop bool) {
 	if debugInstr {
 		spxlog.Debug("==> Animation %s", name)
 	}
-	if ani, ok := p.animations[name]; ok {
-		p.doAnimation(name, ani, loop, 1, false, true)
-	} else {
-		spxlog.Debug("Animation not found: %s", name)
+
+	// Unified check if animation exists (supports both Spine and frame animations)
+	if !p.hasAnimation(name) {
+		spxlog.Debug("Animation not found:", name)
+		return
 	}
+
+	// Get animation config (may be nil for pure Spine animations)
+	ani := p.animations[name]
+	if ani == nil {
+		ani = &aniConfig{}
+	}
+	p.doAnimation(name, ani, loop, 1, false, true)
 }
 
 func (p *SpriteImpl) AnimateAndWait(name SpriteAnimationName) {
 	if debugInstr {
 		spxlog.Debug("==> AnimateAndWait %s", name)
 	}
-	if ani, ok := p.animations[name]; ok {
-		p.doAnimation(name, ani, false, 1, true, true)
-	} else {
-		spxlog.Debug("Animation not found: %s", name)
+
+	// Unified check if animation exists (supports both Spine and frame animations)
+	if !p.hasAnimation(name) {
+		spxlog.Debug("Animation not found:", name)
+		return
 	}
+
+	// Get animation config (may be nil for pure Spine animations)
+	ani := p.animations[name]
+	if ani == nil {
+		ani = &aniConfig{}
+	}
+	p.doAnimation(name, ani, false, 1, true, true)
 }
 
 func (p *SpriteImpl) StopAnimation(name SpriteAnimationName) {

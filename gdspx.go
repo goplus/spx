@@ -151,13 +151,25 @@ func (sprite *SpriteImpl) syncCheckInitProxy() {
 	// bind syncSprite
 	if sprite.syncSprite == nil && !sprite.HasDestroyed {
 		sprite.syncSprite = engine.SyncNewSprite(sprite, mathf.NewVec2(sprite.x, sprite.y))
-		syncInitSpritePhysicInfo(sprite, sprite.syncSprite)
 		sprite.syncSprite.Name = sprite.name
 		sprite.syncSprite.SetTypeName(sprite.name)
 		sprite.syncSprite.SetVisible(sprite.isVisible)
 		sprite.applyGraphicEffects(true)
 		sprite.syncSprite.RegisterOnAnimationLooped(sprite.syncOnAnimationLooped)
 		sprite.syncSprite.RegisterOnAnimationFinished(sprite.syncOnAnimationFinished)
+
+		// Spine mode: set skeleton first, then set renderScale (C++ will calculate correct collision box)
+		if sprite.isSpineMode() {
+			atlasPath := engine.ToAssetPath(sprite.spineConfig.Atlas)
+			skeletonPath := engine.ToAssetPath(sprite.spineConfig.Skeleton)
+			sprite.syncSprite.SetSpineSkeleton(atlasPath, skeletonPath, sprite.spineConfig.DefaultMix)
+			// In Spine mode, need to set renderScale, which triggers C++ side to update collision box
+			renderScale := sprite.getCostumeRenderScale()
+			sprite.syncSprite.SetRenderScale(mathf.NewVec2(renderScale, renderScale))
+		}
+
+		// Initialize physics config (C++ has already set collision box in Spine mode)
+		syncInitSpritePhysicInfo(sprite, sprite.syncSprite)
 		// Mark as dirty to ensure initial sync
 		sprite.isDirty = true
 	}

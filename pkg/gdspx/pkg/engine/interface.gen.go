@@ -22,10 +22,11 @@ var (
 	InputMgr         IInputMgr
 	NavigationMgr    INavigationMgr
 	PenMgr           IPenMgr
-	PhysicsMgr       IPhysicsMgr
+	PhysicMgr        IPhysicMgr
 	PlatformMgr      IPlatformMgr
 	ResMgr           IResMgr
 	SceneMgr         ISceneMgr
+	SpineMgr         ISpineMgr
 	SpriteMgr        ISpriteMgr
 	TilemapMgr       ITilemapMgr
 	TilemapparserMgr ITilemapparserMgr
@@ -117,7 +118,7 @@ type IPenMgr interface {
 	SetPenStampTexture(obj Object, texture_path string)
 }
 
-type IPhysicsMgr interface {
+type IPhysicMgr interface {
 	Raycast(from Vec2, to Vec2, collision_mask int64) Object
 	CheckCollision(from Vec2, to Vec2, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) bool
 	CheckTouchedCameraBoundaries(obj Object) int64
@@ -179,6 +180,10 @@ type ISceneMgr interface {
 	DestroyPureSprite(id Object)
 	CreateRenderSprite(texture_path string, pos Vec2, degree float64, scale Vec2, zindex int64, pivot Vec2) Object
 	CreateStaticSprite(texture_path string, pos Vec2, degree float64, scale Vec2, zindex int64, pivot Vec2, collider_type int64, collider_pivot Vec2, collider_params Array) Object
+}
+
+type ISpineMgr interface {
+	ClearAllCaches()
 }
 
 type ISpriteMgr interface {
@@ -250,6 +255,8 @@ type ISpriteMgr interface {
 	SetAnimFlipV(obj Object, p_flip bool)
 	IsAnimFlippedV(obj Object) bool
 	GetCurrentAnimName(obj Object) string
+	SetSpineSkeleton(obj Object, atlas_path string, skeleton_path string, default_mix float64)
+	ClearSpineSkeleton(obj Object)
 	SetVelocity(obj Object, velocity Vec2)
 	GetVelocity(obj Object) Vec2
 	IsOnFloor(obj Object) bool

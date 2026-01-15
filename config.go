@@ -273,6 +273,14 @@ type animPayload struct {
 	MaxBitmap int64  `json:"max_bitmap"`
 }
 
+// Spine animation configuration
+type spineAnimConfig struct {
+	Atlas      string            `json:"atlas"`      // atlas file path, e.g. "spine/spineboy.atlas"
+	Skeleton   string            `json:"skeleton"`   // skeleton file path, e.g. "spine/spineboy-pro.skel"
+	DefaultMix float64           `json:"defaultMix"` // animation mix time, default 0.1
+	AnimMap    map[string]string `json:"animMap"`    // SPX animation name -> Spine animation name mapping
+}
+
 // -------------------------------------------------------------------------------------
 
 type spriteConfig struct {
@@ -288,6 +296,7 @@ type spriteConfig struct {
 	FAnimations      map[string]*aniConfig `json:"fAnimations"`
 	MAnimations      map[string]*aniConfig `json:"mAnimations"`
 	TAnimations      map[string]*aniConfig `json:"tAnimations"`
+	SpineAnim        *spineAnimConfig      `json:"spineAnim"` // Spine animation configuration (optional)
 	Visible          bool                  `json:"visible"`
 	IsDraggable      bool                  `json:"isDraggable"`
 	Pivot            mathf.Vec2            `json:"pivot"`

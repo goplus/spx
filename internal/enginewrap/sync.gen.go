@@ -24,10 +24,11 @@ extMgr enginewrap.ExtMgrImpl
 inputMgr enginewrap.InputMgrImpl
 navigationMgr enginewrap.NavigationMgrImpl
 penMgr enginewrap.PenMgrImpl
-physicsMgr enginewrap.PhysicsMgrImpl
+physicMgr enginewrap.PhysicMgrImpl
 platformMgr enginewrap.PlatformMgrImpl
 resMgr enginewrap.ResMgrImpl
 sceneMgr enginewrap.SceneMgrImpl
+spineMgr enginewrap.SpineMgrImpl
 spriteMgr enginewrap.SpriteMgrImpl
 tilemapMgr enginewrap.TilemapMgrImpl
 tilemapparserMgr enginewrap.TilemapparserMgrImpl
@@ -44,10 +45,11 @@ var (
 	inputMgr         InputMgrImpl
 	navigationMgr    NavigationMgrImpl
 	penMgr           PenMgrImpl
-	physicsMgr       PhysicsMgrImpl
+	physicMgr        PhysicMgrImpl
 	platformMgr      PlatformMgrImpl
 	resMgr           ResMgrImpl
 	sceneMgr         SceneMgrImpl
+	spineMgr         SpineMgrImpl
 	spriteMgr        SpriteMgrImpl
 	tilemapMgr       TilemapMgrImpl
 	tilemapparserMgr TilemapparserMgrImpl
@@ -89,10 +91,10 @@ type penMgrImpl struct {
 type PenMgrImpl struct {
 	penMgrImpl
 }
-type physicsMgrImpl struct {
+type physicMgrImpl struct {
 }
-type PhysicsMgrImpl struct {
-	physicsMgrImpl
+type PhysicMgrImpl struct {
+	physicMgrImpl
 }
 type platformMgrImpl struct {
 }
@@ -108,6 +110,11 @@ type sceneMgrImpl struct {
 }
 type SceneMgrImpl struct {
 	sceneMgrImpl
+}
+type spineMgrImpl struct {
+}
+type SpineMgrImpl struct {
+	spineMgrImpl
 }
 type spriteMgrImpl struct {
 }
@@ -512,101 +519,101 @@ func (pself *penMgrImpl) SetPenStampTexture(obj gdx.Object, texture_path string)
 	})
 }
 
-// IPhysicsMgr
-func (pself *physicsMgrImpl) Raycast(from Vec2, to Vec2, collision_mask int64) gdx.Object {
+// IPhysicMgr
+func (pself *physicMgrImpl) Raycast(from Vec2, to Vec2, collision_mask int64) gdx.Object {
 	var _ret1 gdx.Object
 	callInMainThread(func() {
-		_ret1 = gdx.PhysicsMgr.Raycast(from, to, collision_mask)
+		_ret1 = gdx.PhysicMgr.Raycast(from, to, collision_mask)
 	})
 	return _ret1
 }
-func (pself *physicsMgrImpl) CheckCollision(from Vec2, to Vec2, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) bool {
+func (pself *physicMgrImpl) CheckCollision(from Vec2, to Vec2, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) bool {
 	var _ret1 bool
 	callInMainThread(func() {
-		_ret1 = gdx.PhysicsMgr.CheckCollision(from, to, collision_mask, collide_with_areas, collide_with_bodies)
+		_ret1 = gdx.PhysicMgr.CheckCollision(from, to, collision_mask, collide_with_areas, collide_with_bodies)
 	})
 	return _ret1
 }
-func (pself *physicsMgrImpl) CheckTouchedCameraBoundaries(obj gdx.Object) int64 {
+func (pself *physicMgrImpl) CheckTouchedCameraBoundaries(obj gdx.Object) int64 {
 	var _ret1 int64
 	callInMainThread(func() {
-		_ret1 = gdx.PhysicsMgr.CheckTouchedCameraBoundaries(obj)
+		_ret1 = gdx.PhysicMgr.CheckTouchedCameraBoundaries(obj)
 	})
 	return _ret1
 }
-func (pself *physicsMgrImpl) CheckTouchedCameraBoundary(obj gdx.Object, board_type int64) bool {
+func (pself *physicMgrImpl) CheckTouchedCameraBoundary(obj gdx.Object, board_type int64) bool {
 	var _ret1 bool
 	callInMainThread(func() {
-		_ret1 = gdx.PhysicsMgr.CheckTouchedCameraBoundary(obj, board_type)
+		_ret1 = gdx.PhysicMgr.CheckTouchedCameraBoundary(obj, board_type)
 	})
 	return _ret1
 }
-func (pself *physicsMgrImpl) CheckNearestTouchedCameraBoundary(obj gdx.Object) int64 {
+func (pself *physicMgrImpl) CheckNearestTouchedCameraBoundary(obj gdx.Object) int64 {
 	var _ret1 int64
 	callInMainThread(func() {
-		_ret1 = gdx.PhysicsMgr.CheckNearestTouchedCameraBoundary(obj)
+		_ret1 = gdx.PhysicMgr.CheckNearestTouchedCameraBoundary(obj)
 	})
 	return _ret1
 }
-func (pself *physicsMgrImpl) SetCollisionSystemType(is_collision_by_alpha bool) {
+func (pself *physicMgrImpl) SetCollisionSystemType(is_collision_by_alpha bool) {
 	callInMainThread(func() {
-		gdx.PhysicsMgr.SetCollisionSystemType(is_collision_by_alpha)
+		gdx.PhysicMgr.SetCollisionSystemType(is_collision_by_alpha)
 	})
 }
-func (pself *physicsMgrImpl) SetGlobalGravity(gravity float64) {
+func (pself *physicMgrImpl) SetGlobalGravity(gravity float64) {
 	callInMainThread(func() {
-		gdx.PhysicsMgr.SetGlobalGravity(gravity)
+		gdx.PhysicMgr.SetGlobalGravity(gravity)
 	})
 }
-func (pself *physicsMgrImpl) GetGlobalGravity() float64 {
+func (pself *physicMgrImpl) GetGlobalGravity() float64 {
 	var _ret1 float64
 	callInMainThread(func() {
-		_ret1 = gdx.PhysicsMgr.GetGlobalGravity()
+		_ret1 = gdx.PhysicMgr.GetGlobalGravity()
 	})
 	return _ret1
 }
-func (pself *physicsMgrImpl) SetGlobalFriction(friction float64) {
+func (pself *physicMgrImpl) SetGlobalFriction(friction float64) {
 	callInMainThread(func() {
-		gdx.PhysicsMgr.SetGlobalFriction(friction)
+		gdx.PhysicMgr.SetGlobalFriction(friction)
 	})
 }
-func (pself *physicsMgrImpl) GetGlobalFriction() float64 {
+func (pself *physicMgrImpl) GetGlobalFriction() float64 {
 	var _ret1 float64
 	callInMainThread(func() {
-		_ret1 = gdx.PhysicsMgr.GetGlobalFriction()
+		_ret1 = gdx.PhysicMgr.GetGlobalFriction()
 	})
 	return _ret1
 }
-func (pself *physicsMgrImpl) SetGlobalAirDrag(air_drag float64) {
+func (pself *physicMgrImpl) SetGlobalAirDrag(air_drag float64) {
 	callInMainThread(func() {
-		gdx.PhysicsMgr.SetGlobalAirDrag(air_drag)
+		gdx.PhysicMgr.SetGlobalAirDrag(air_drag)
 	})
 }
-func (pself *physicsMgrImpl) GetGlobalAirDrag() float64 {
+func (pself *physicMgrImpl) GetGlobalAirDrag() float64 {
 	var _ret1 float64
 	callInMainThread(func() {
-		_ret1 = gdx.PhysicsMgr.GetGlobalAirDrag()
+		_ret1 = gdx.PhysicMgr.GetGlobalAirDrag()
 	})
 	return _ret1
 }
-func (pself *physicsMgrImpl) CheckCollisionRect(pos Vec2, size Vec2, collision_mask int64) gdx.Array {
+func (pself *physicMgrImpl) CheckCollisionRect(pos Vec2, size Vec2, collision_mask int64) gdx.Array {
 	var _ret1 gdx.Array
 	callInMainThread(func() {
-		_ret1 = gdx.PhysicsMgr.CheckCollisionRect(pos, size, collision_mask)
+		_ret1 = gdx.PhysicMgr.CheckCollisionRect(pos, size, collision_mask)
 	})
 	return _ret1
 }
-func (pself *physicsMgrImpl) CheckCollisionCircle(pos Vec2, radius float64, collision_mask int64) gdx.Array {
+func (pself *physicMgrImpl) CheckCollisionCircle(pos Vec2, radius float64, collision_mask int64) gdx.Array {
 	var _ret1 gdx.Array
 	callInMainThread(func() {
-		_ret1 = gdx.PhysicsMgr.CheckCollisionCircle(pos, radius, collision_mask)
+		_ret1 = gdx.PhysicMgr.CheckCollisionCircle(pos, radius, collision_mask)
 	})
 	return _ret1
 }
-func (pself *physicsMgrImpl) RaycastWithDetails(from Vec2, to Vec2, ignore_sprites gdx.Array, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) gdx.Array {
+func (pself *physicMgrImpl) RaycastWithDetails(from Vec2, to Vec2, ignore_sprites gdx.Array, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) gdx.Array {
 	var _ret1 gdx.Array
 	callInMainThread(func() {
-		_ret1 = gdx.PhysicsMgr.RaycastWithDetails(from, to, ignore_sprites, collision_mask, collide_with_areas, collide_with_bodies)
+		_ret1 = gdx.PhysicMgr.RaycastWithDetails(from, to, ignore_sprites, collision_mask, collide_with_areas, collide_with_bodies)
 	})
 	return _ret1
 }
@@ -832,6 +839,13 @@ func (pself *sceneMgrImpl) CreateStaticSprite(texture_path string, pos Vec2, deg
 		_ret1 = gdx.SceneMgr.CreateStaticSprite(texture_path, pos, degree, scale, zindex, pivot, collider_type, collider_pivot, collider_params)
 	})
 	return _ret1
+}
+
+// ISpineMgr
+func (pself *spineMgrImpl) ClearAllCaches() {
+	callInMainThread(func() {
+		gdx.SpineMgr.ClearAllCaches()
+	})
 }
 
 // ISpriteMgr
@@ -1240,6 +1254,16 @@ func (pself *spriteMgrImpl) GetCurrentAnimName(obj gdx.Object) string {
 		_ret1 = gdx.SpriteMgr.GetCurrentAnimName(obj)
 	})
 	return _ret1
+}
+func (pself *spriteMgrImpl) SetSpineSkeleton(obj gdx.Object, atlas_path string, skeleton_path string, default_mix float64) {
+	callInMainThread(func() {
+		gdx.SpriteMgr.SetSpineSkeleton(obj, atlas_path, skeleton_path, default_mix)
+	})
+}
+func (pself *spriteMgrImpl) ClearSpineSkeleton(obj gdx.Object) {
+	callInMainThread(func() {
+		gdx.SpriteMgr.ClearSpineSkeleton(obj)
+	})
 }
 func (pself *spriteMgrImpl) SetVelocity(obj gdx.Object, velocity Vec2) {
 	callInMainThread(func() {

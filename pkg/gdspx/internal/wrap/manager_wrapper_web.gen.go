@@ -45,8 +45,8 @@ func BindMgr(mgrs []IManager) {
 		case IPenMgr:
 			PenMgr = v
 
-		case IPhysicsMgr:
-			PhysicsMgr = v
+		case IPhysicMgr:
+			PhysicMgr = v
 
 		case IPlatformMgr:
 			PlatformMgr = v
@@ -56,6 +56,9 @@ func BindMgr(mgrs []IManager) {
 
 		case ISceneMgr:
 			SceneMgr = v
+
+		case ISpineMgr:
+			SpineMgr = v
 
 		case ISpriteMgr:
 			SpriteMgr = v
@@ -96,7 +99,7 @@ type navigationMgr struct {
 type penMgr struct {
 	baseMgr
 }
-type physicsMgr struct {
+type physicMgr struct {
 	baseMgr
 }
 type platformMgr struct {
@@ -106,6 +109,9 @@ type resMgr struct {
 	baseMgr
 }
 type sceneMgr struct {
+	baseMgr
+}
+type spineMgr struct {
 	baseMgr
 }
 type spriteMgr struct {
@@ -129,10 +135,11 @@ func createMgrs() []IManager {
 	addManager(&inputMgr{})
 	addManager(&navigationMgr{})
 	addManager(&penMgr{})
-	addManager(&physicsMgr{})
+	addManager(&physicMgr{})
 	addManager(&platformMgr{})
 	addManager(&resMgr{})
 	addManager(&sceneMgr{})
+	addManager(&spineMgr{})
 	addManager(&spriteMgr{})
 	addManager(&tilemapMgr{})
 	addManager(&tilemapparserMgr{})
@@ -442,88 +449,88 @@ func (pself *penMgr) SetPenStampTexture(obj Object, texture_path string) {
 	arg1 := JsFromGdString(texture_path)
 	API.SpxPenSetPenStampTexture.Invoke(arg0, arg1)
 }
-func (pself *physicsMgr) Raycast(from Vec2, to Vec2, collision_mask int64) Object {
+func (pself *physicMgr) Raycast(from Vec2, to Vec2, collision_mask int64) Object {
 	arg0 := JsFromGdVec2(from)
 	arg1 := JsFromGdVec2(to)
 	arg2 := JsFromGdInt(collision_mask)
-	_retValue := API.SpxPhysicsRaycast.Invoke(arg0, arg1, arg2)
+	_retValue := API.SpxPhysicRaycast.Invoke(arg0, arg1, arg2)
 	return JsToGdObject(_retValue)
 }
-func (pself *physicsMgr) CheckCollision(from Vec2, to Vec2, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) bool {
+func (pself *physicMgr) CheckCollision(from Vec2, to Vec2, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) bool {
 	arg0 := JsFromGdVec2(from)
 	arg1 := JsFromGdVec2(to)
 	arg2 := JsFromGdInt(collision_mask)
 	arg3 := JsFromGdBool(collide_with_areas)
 	arg4 := JsFromGdBool(collide_with_bodies)
-	_retValue := API.SpxPhysicsCheckCollision.Invoke(arg0, arg1, arg2, arg3, arg4)
+	_retValue := API.SpxPhysicCheckCollision.Invoke(arg0, arg1, arg2, arg3, arg4)
 	return JsToGdBool(_retValue)
 }
-func (pself *physicsMgr) CheckTouchedCameraBoundaries(obj Object) int64 {
+func (pself *physicMgr) CheckTouchedCameraBoundaries(obj Object) int64 {
 	arg0 := JsFromGdObj(obj)
-	_retValue := API.SpxPhysicsCheckTouchedCameraBoundaries.Invoke(arg0)
+	_retValue := API.SpxPhysicCheckTouchedCameraBoundaries.Invoke(arg0)
 	return JsToGdInt(_retValue)
 }
-func (pself *physicsMgr) CheckTouchedCameraBoundary(obj Object, board_type int64) bool {
+func (pself *physicMgr) CheckTouchedCameraBoundary(obj Object, board_type int64) bool {
 	arg0 := JsFromGdObj(obj)
 	arg1 := JsFromGdInt(board_type)
-	_retValue := API.SpxPhysicsCheckTouchedCameraBoundary.Invoke(arg0, arg1)
+	_retValue := API.SpxPhysicCheckTouchedCameraBoundary.Invoke(arg0, arg1)
 	return JsToGdBool(_retValue)
 }
-func (pself *physicsMgr) CheckNearestTouchedCameraBoundary(obj Object) int64 {
+func (pself *physicMgr) CheckNearestTouchedCameraBoundary(obj Object) int64 {
 	arg0 := JsFromGdObj(obj)
-	_retValue := API.SpxPhysicsCheckNearestTouchedCameraBoundary.Invoke(arg0)
+	_retValue := API.SpxPhysicCheckNearestTouchedCameraBoundary.Invoke(arg0)
 	return JsToGdInt(_retValue)
 }
-func (pself *physicsMgr) SetCollisionSystemType(is_collision_by_alpha bool) {
+func (pself *physicMgr) SetCollisionSystemType(is_collision_by_alpha bool) {
 	arg0 := JsFromGdBool(is_collision_by_alpha)
-	API.SpxPhysicsSetCollisionSystemType.Invoke(arg0)
+	API.SpxPhysicSetCollisionSystemType.Invoke(arg0)
 }
-func (pself *physicsMgr) SetGlobalGravity(gravity float64) {
+func (pself *physicMgr) SetGlobalGravity(gravity float64) {
 	arg0 := JsFromGdFloat(gravity)
-	API.SpxPhysicsSetGlobalGravity.Invoke(arg0)
+	API.SpxPhysicSetGlobalGravity.Invoke(arg0)
 }
-func (pself *physicsMgr) GetGlobalGravity() float64 {
-	_retValue := API.SpxPhysicsGetGlobalGravity.Invoke()
+func (pself *physicMgr) GetGlobalGravity() float64 {
+	_retValue := API.SpxPhysicGetGlobalGravity.Invoke()
 	return JsToGdFloat(_retValue)
 }
-func (pself *physicsMgr) SetGlobalFriction(friction float64) {
+func (pself *physicMgr) SetGlobalFriction(friction float64) {
 	arg0 := JsFromGdFloat(friction)
-	API.SpxPhysicsSetGlobalFriction.Invoke(arg0)
+	API.SpxPhysicSetGlobalFriction.Invoke(arg0)
 }
-func (pself *physicsMgr) GetGlobalFriction() float64 {
-	_retValue := API.SpxPhysicsGetGlobalFriction.Invoke()
+func (pself *physicMgr) GetGlobalFriction() float64 {
+	_retValue := API.SpxPhysicGetGlobalFriction.Invoke()
 	return JsToGdFloat(_retValue)
 }
-func (pself *physicsMgr) SetGlobalAirDrag(air_drag float64) {
+func (pself *physicMgr) SetGlobalAirDrag(air_drag float64) {
 	arg0 := JsFromGdFloat(air_drag)
-	API.SpxPhysicsSetGlobalAirDrag.Invoke(arg0)
+	API.SpxPhysicSetGlobalAirDrag.Invoke(arg0)
 }
-func (pself *physicsMgr) GetGlobalAirDrag() float64 {
-	_retValue := API.SpxPhysicsGetGlobalAirDrag.Invoke()
+func (pself *physicMgr) GetGlobalAirDrag() float64 {
+	_retValue := API.SpxPhysicGetGlobalAirDrag.Invoke()
 	return JsToGdFloat(_retValue)
 }
-func (pself *physicsMgr) CheckCollisionRect(pos Vec2, size Vec2, collision_mask int64) Array {
+func (pself *physicMgr) CheckCollisionRect(pos Vec2, size Vec2, collision_mask int64) Array {
 	arg0 := JsFromGdVec2(pos)
 	arg1 := JsFromGdVec2(size)
 	arg2 := JsFromGdInt(collision_mask)
-	_retValue := API.SpxPhysicsCheckCollisionRect.Invoke(arg0, arg1, arg2)
+	_retValue := API.SpxPhysicCheckCollisionRect.Invoke(arg0, arg1, arg2)
 	return JsToGdArray(_retValue)
 }
-func (pself *physicsMgr) CheckCollisionCircle(pos Vec2, radius float64, collision_mask int64) Array {
+func (pself *physicMgr) CheckCollisionCircle(pos Vec2, radius float64, collision_mask int64) Array {
 	arg0 := JsFromGdVec2(pos)
 	arg1 := JsFromGdFloat(radius)
 	arg2 := JsFromGdInt(collision_mask)
-	_retValue := API.SpxPhysicsCheckCollisionCircle.Invoke(arg0, arg1, arg2)
+	_retValue := API.SpxPhysicCheckCollisionCircle.Invoke(arg0, arg1, arg2)
 	return JsToGdArray(_retValue)
 }
-func (pself *physicsMgr) RaycastWithDetails(from Vec2, to Vec2, ignore_sprites Array, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) Array {
+func (pself *physicMgr) RaycastWithDetails(from Vec2, to Vec2, ignore_sprites Array, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) Array {
 	arg0 := JsFromGdVec2(from)
 	arg1 := JsFromGdVec2(to)
 	arg2 := JsFromGdArray(ignore_sprites)
 	arg3 := JsFromGdInt(collision_mask)
 	arg4 := JsFromGdBool(collide_with_areas)
 	arg5 := JsFromGdBool(collide_with_bodies)
-	_retValue := API.SpxPhysicsRaycastWithDetails.Invoke(arg0, arg1, arg2, arg3, arg4, arg5)
+	_retValue := API.SpxPhysicRaycastWithDetails.Invoke(arg0, arg1, arg2, arg3, arg4, arg5)
 	return JsToGdArray(_retValue)
 }
 func (pself *platformMgr) SetStretchMode(enable bool) {
@@ -699,6 +706,9 @@ func (pself *sceneMgr) CreateStaticSprite(texture_path string, pos Vec2, degree 
 	arg8 := JsFromGdArray(collider_params)
 	_retValue := API.SpxSceneCreateStaticSprite.Invoke(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8)
 	return JsToGdObject(_retValue)
+}
+func (pself *spineMgr) ClearAllCaches() {
+	API.SpxSpineClearAllCaches.Invoke()
 }
 func (pself *spriteMgr) SetDontDestroyOnLoad(obj Object) {
 	arg0 := JsFromGdObj(obj)
@@ -1063,6 +1073,17 @@ func (pself *spriteMgr) GetCurrentAnimName(obj Object) string {
 	arg0 := JsFromGdObj(obj)
 	_retValue := API.SpxSpriteGetCurrentAnimName.Invoke(arg0)
 	return JsToGdString(_retValue)
+}
+func (pself *spriteMgr) SetSpineSkeleton(obj Object, atlas_path string, skeleton_path string, default_mix float64) {
+	arg0 := JsFromGdObj(obj)
+	arg1 := JsFromGdString(atlas_path)
+	arg2 := JsFromGdString(skeleton_path)
+	arg3 := JsFromGdFloat(default_mix)
+	API.SpxSpriteSetSpineSkeleton.Invoke(arg0, arg1, arg2, arg3)
+}
+func (pself *spriteMgr) ClearSpineSkeleton(obj Object) {
+	arg0 := JsFromGdObj(obj)
+	API.SpxSpriteClearSpineSkeleton.Invoke(arg0)
 }
 func (pself *spriteMgr) SetVelocity(obj Object, velocity Vec2) {
 	arg0 := JsFromGdObj(obj)
