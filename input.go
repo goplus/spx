@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/goplus/spbase/mathf"
+	"github.com/goplus/spx/v2/internal/engine"
 	spxlog "github.com/goplus/spx/v2/internal/log"
 	gdx "github.com/goplus/spx/v2/pkg/gdspx/pkg/engine"
 )
@@ -468,7 +469,7 @@ func (sr *inputSwipeRecognizer) calculateDirection(startPoint, endPoint mathf.Ve
 	// When finger moves down: delta.Y > 0, should return SwipeDown
 	// When finger moves up: delta.Y < 0, should return SwipeUp
 
-	angle := math.Atan2(delta.Y, delta.X) * 180 / math.Pi
+	angle := engine.RadToDeg(math.Atan2(delta.Y, delta.X))
 
 	// Normalize angle to 0-360 degrees
 	if angle < 0 {

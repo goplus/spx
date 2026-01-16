@@ -72,6 +72,7 @@ type SpriteImpl struct {
 	isCloned_ bool
 	isPenDown bool
 	isDying   bool
+	isDirty   bool // marks if transform or visibility has changed
 
 	// Event flags
 	hasOnCloned     bool
@@ -605,14 +606,20 @@ func (p *SpriteImpl) Hide() {
 	}
 
 	p.doStopSay()
-	p.isVisible = false
+	if p.isVisible {
+		p.isVisible = false
+		p.isDirty = true
+	}
 }
 
 func (p *SpriteImpl) Show() {
 	if debugInstr {
 		spxlog.Debug("Show: %s", p.name)
 	}
-	p.isVisible = true
+	if !p.isVisible {
+		p.isVisible = true
+		p.isDirty = true
+	}
 }
 
 func (p *SpriteImpl) Visible() bool {
@@ -827,7 +834,7 @@ func (p *SpriteImpl) BounceOffEdge() {
 		dy = -math.Max(minBounceComponent, math.Abs(dy))
 	}
 
-	newDirection := math.Atan2(dy, dx)*180/math.Pi + 90
+	newDirection := engine.RadToDeg(math.Atan2(dy, dx)) + 90
 	p.direction = normalizeDirection(newDirection)
 }
 

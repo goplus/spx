@@ -22,6 +22,7 @@ import (
 
 	"github.com/goplus/spx/v2/internal/engine"
 	"github.com/goplus/spx/v2/internal/enginewrap"
+	spxlog "github.com/goplus/spx/v2/internal/log"
 
 	"github.com/goplus/spbase/mathf"
 )
@@ -31,7 +32,7 @@ var (
 	audioMgr         enginewrap.AudioMgrImpl
 	cameraMgr        enginewrap.CameraMgrImpl
 	inputMgr         enginewrap.InputMgrImpl
-	physicMgr        enginewrap.PhysicMgrImpl
+	physicsMgr       enginewrap.PhysicsMgrImpl
 	platformMgr      enginewrap.PlatformMgrImpl
 	resMgr           enginewrap.ResMgrImpl
 	sceneMgr         enginewrap.SceneMgrImpl
@@ -83,13 +84,13 @@ func (p *Game) OnEngineUpdate(delta float64) {
 	p.syncUpdateCamera()
 	p.syncUpdateLogic()
 	p.syncEnginePositions()
+	p.syncUpdateProxy()
 }
 
 func (p *Game) OnEngineRender(delta float64) {
 	if !p.isRunned {
 		return
 	}
-	p.syncUpdateProxy()
 	p.syncUpdatePhysic()
 }
 
@@ -109,14 +110,29 @@ func (p *Game) syncUpdateLogic() error {
 
 func (p *Game) syncEnginePositions() error {
 	items := p.getTempShapes()
+	// Collect sprite IDs that need position sync
+	var spriteIDs []int64
+	var sprites []*SpriteImpl
+
 	for _, item := range items {
-		sprite, ok := item.(*SpriteImpl)
-		if ok && sprite.syncSprite != nil {
-			if sprite.physicsMode != NoPhysics {
-				sprite.x, sprite.y = sprite.syncGetEnginePosition(true)
-			}
+		if sprite, ok := item.(*SpriteImpl); ok && sprite.syncSprite != nil && sprite.physicsMode != NoPhysics {
+			spriteIDs = append(spriteIDs, int64(sprite.syncSprite.Id))
+			sprites = append(sprites, sprite)
 		}
 	}
+
+	// Batch get positions in one FFI call
+	positions := engine.SyncBatchGetPositions(spriteIDs)
+
+	// Update sprite positions
+	for i, sprite := range sprites {
+		x := float64(positions[i*2])
+		y := float64(positions[i*2+1])
+		revertRenderOffset(sprite, &x, &y)
+		sprite.x = x
+		sprite.y = y
+	}
+
 	return nil
 }
 
@@ -142,7 +158,8 @@ func (sprite *SpriteImpl) syncCheckInitProxy() {
 		sprite.applyGraphicEffects(true)
 		sprite.syncSprite.RegisterOnAnimationLooped(sprite.syncOnAnimationLooped)
 		sprite.syncSprite.RegisterOnAnimationFinished(sprite.syncOnAnimationFinished)
-		sprite.updateProxyTransform(true)
+		// Mark as dirty to ensure initial sync
+		sprite.isDirty = true
 	}
 }
 
@@ -165,49 +182,53 @@ func (sprite *SpriteImpl) syncOnAnimationLooped() {
 	}
 }
 
-func (sprite *SpriteImpl) updateProxyTransform(isSync bool) {
-	if sprite.syncSprite == nil {
-		return
-	}
-	x, y := sprite.getXY()
-	applyRenderOffset(sprite, &x, &y)
-	offsetX, offsetY := getRenderOffset(sprite)
-	rot, scale := calcRenderRotation(sprite)
-	sprite.syncSprite.UpdateTransform(x, y, rot, scale, offsetX, offsetY, isSync)
-}
-
-func (sprite *SpriteImpl) syncGetEnginePosition(isSync bool) (float64, float64) {
-	if sprite.syncSprite == nil {
-		return sprite.x, sprite.y
-	}
-	pos := sprite.syncSprite.GetPosition()
-	x, y := pos.X, pos.Y
-	revertRenderOffset(sprite, &x, &y)
-	return x, y
-}
-
 func (p *Game) syncUpdateProxy() {
-	count := 0
-	items := p.getItems()
+	items := p.getTempShapes()
+	// Clear buffer for reuse (avoids allocation every frame)
+	p.syncBuffer.Clear()
+
 	for _, item := range items {
-		sprite, ok := item.(*SpriteImpl)
-		if ok {
+		if sprite, ok := item.(*SpriteImpl); ok {
 			if sprite.HasDestroyed {
 				continue
 			}
 
-			syncSprite := sprite.syncSprite
-			// sync position
 			if sprite.isVisible {
 				syncCheckUpdateCostume(&sprite.baseObj)
-				count++
 			}
-			syncSprite.SetVisible(sprite.isVisible)
+
+			// Only sync if sprite is dirty (transform or visibility changed)
+			if sprite.isDirty {
+				// Collect transform data into buffer for batch sync
+				x, y := sprite.getXY()
+				applyRenderOffset(sprite, &x, &y)
+				offsetX, offsetY := getRenderOffset(sprite)
+				rot, scale := calcRenderRotation(sprite)
+
+				// Add to reusable buffer
+				p.syncBuffer.Add(
+					int64(sprite.syncSprite.Id),
+					x, y,
+					engine.DegToRad(rot),
+					scale, 1.0, // scaleX, scaleY
+					offsetX, offsetY,
+					sprite.isVisible,
+				)
+
+				// Clear dirty flag after syncing
+				sprite.isDirty = false
+			}
 		}
 	}
 
-	// unbind syncSprite
-	p.spriteMgr.flushDestroy()
+	// Collect sprite deletions into the same buffer
+	p.spriteMgr.flushDestroy(p.syncBuffer)
+
+	// Serialize and send batch updates (updates + deletes in one call)
+	if p.syncBuffer.UpdateCount() > 0 || p.syncBuffer.DeleteCount() > 0 {
+		buffer := p.syncBuffer.Serialize()
+		engine.SyncBatchUpdateSprites(buffer)
+	}
 }
 
 func checkUpdateCostume(p *baseObj) {
@@ -263,7 +284,7 @@ func (*Game) syncUpdatePhysic() {
 			}
 
 		} else {
-			fmt.Printf("Physics error: unexpected trigger pair - invalid sprite types\n")
+			spxlog.Info("Physics error: unexpected trigger pair - invalid sprite types\n")
 		}
 	}
 }

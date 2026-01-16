@@ -149,21 +149,21 @@ type GDExtensionSpxPenSetPenTo C.GDExtensionSpxPenSetPenTo
 type GDExtensionSpxPenChangePenSizeBy C.GDExtensionSpxPenChangePenSizeBy
 type GDExtensionSpxPenSetPenSizeTo C.GDExtensionSpxPenSetPenSizeTo
 type GDExtensionSpxPenSetPenStampTexture C.GDExtensionSpxPenSetPenStampTexture
-type GDExtensionSpxPhysicRaycast C.GDExtensionSpxPhysicRaycast
-type GDExtensionSpxPhysicCheckCollision C.GDExtensionSpxPhysicCheckCollision
-type GDExtensionSpxPhysicCheckTouchedCameraBoundaries C.GDExtensionSpxPhysicCheckTouchedCameraBoundaries
-type GDExtensionSpxPhysicCheckTouchedCameraBoundary C.GDExtensionSpxPhysicCheckTouchedCameraBoundary
-type GDExtensionSpxPhysicCheckNearestTouchedCameraBoundary C.GDExtensionSpxPhysicCheckNearestTouchedCameraBoundary
-type GDExtensionSpxPhysicSetCollisionSystemType C.GDExtensionSpxPhysicSetCollisionSystemType
-type GDExtensionSpxPhysicSetGlobalGravity C.GDExtensionSpxPhysicSetGlobalGravity
-type GDExtensionSpxPhysicGetGlobalGravity C.GDExtensionSpxPhysicGetGlobalGravity
-type GDExtensionSpxPhysicSetGlobalFriction C.GDExtensionSpxPhysicSetGlobalFriction
-type GDExtensionSpxPhysicGetGlobalFriction C.GDExtensionSpxPhysicGetGlobalFriction
-type GDExtensionSpxPhysicSetGlobalAirDrag C.GDExtensionSpxPhysicSetGlobalAirDrag
-type GDExtensionSpxPhysicGetGlobalAirDrag C.GDExtensionSpxPhysicGetGlobalAirDrag
-type GDExtensionSpxPhysicCheckCollisionRect C.GDExtensionSpxPhysicCheckCollisionRect
-type GDExtensionSpxPhysicCheckCollisionCircle C.GDExtensionSpxPhysicCheckCollisionCircle
-type GDExtensionSpxPhysicRaycastWithDetails C.GDExtensionSpxPhysicRaycastWithDetails
+type GDExtensionSpxPhysicsRaycast C.GDExtensionSpxPhysicsRaycast
+type GDExtensionSpxPhysicsCheckCollision C.GDExtensionSpxPhysicsCheckCollision
+type GDExtensionSpxPhysicsCheckTouchedCameraBoundaries C.GDExtensionSpxPhysicsCheckTouchedCameraBoundaries
+type GDExtensionSpxPhysicsCheckTouchedCameraBoundary C.GDExtensionSpxPhysicsCheckTouchedCameraBoundary
+type GDExtensionSpxPhysicsCheckNearestTouchedCameraBoundary C.GDExtensionSpxPhysicsCheckNearestTouchedCameraBoundary
+type GDExtensionSpxPhysicsSetCollisionSystemType C.GDExtensionSpxPhysicsSetCollisionSystemType
+type GDExtensionSpxPhysicsSetGlobalGravity C.GDExtensionSpxPhysicsSetGlobalGravity
+type GDExtensionSpxPhysicsGetGlobalGravity C.GDExtensionSpxPhysicsGetGlobalGravity
+type GDExtensionSpxPhysicsSetGlobalFriction C.GDExtensionSpxPhysicsSetGlobalFriction
+type GDExtensionSpxPhysicsGetGlobalFriction C.GDExtensionSpxPhysicsGetGlobalFriction
+type GDExtensionSpxPhysicsSetGlobalAirDrag C.GDExtensionSpxPhysicsSetGlobalAirDrag
+type GDExtensionSpxPhysicsGetGlobalAirDrag C.GDExtensionSpxPhysicsGetGlobalAirDrag
+type GDExtensionSpxPhysicsCheckCollisionRect C.GDExtensionSpxPhysicsCheckCollisionRect
+type GDExtensionSpxPhysicsCheckCollisionCircle C.GDExtensionSpxPhysicsCheckCollisionCircle
+type GDExtensionSpxPhysicsRaycastWithDetails C.GDExtensionSpxPhysicsRaycastWithDetails
 type GDExtensionSpxPlatformSetStretchMode C.GDExtensionSpxPlatformSetStretchMode
 type GDExtensionSpxPlatformSetStretchAspect C.GDExtensionSpxPlatformSetStretchAspect
 type GDExtensionSpxPlatformSetStretchContentScale C.GDExtensionSpxPlatformSetStretchContentScale
@@ -320,6 +320,8 @@ type GDExtensionSpxSpriteIsTriggerEnabled C.GDExtensionSpxSpriteIsTriggerEnabled
 type GDExtensionSpxSpriteCheckCollisionByColor C.GDExtensionSpxSpriteCheckCollisionByColor
 type GDExtensionSpxSpriteCheckCollisionByAlpha C.GDExtensionSpxSpriteCheckCollisionByAlpha
 type GDExtensionSpxSpriteCheckCollisionWithSprite C.GDExtensionSpxSpriteCheckCollisionWithSprite
+type GDExtensionSpxSpriteBatchUpdateTransforms C.GDExtensionSpxSpriteBatchUpdateTransforms
+type GDExtensionSpxSpriteBatchUpdatePositions C.GDExtensionSpxSpriteBatchUpdatePositions
 type GDExtensionSpxTilemapOpenDrawTilesWithSize C.GDExtensionSpxTilemapOpenDrawTilesWithSize
 type GDExtensionSpxTilemapOpenDrawTiles C.GDExtensionSpxTilemapOpenDrawTiles
 type GDExtensionSpxTilemapSetLayerIndex C.GDExtensionSpxTilemapSetLayerIndex
@@ -998,153 +1000,153 @@ func CallPenSetPenStampTexture(
 	C.cgo_callfn_GDExtensionSpxPenSetPenStampTexture(arg0, arg1GdObj, arg2GdString)
 
 }
-func CallPhysicRaycast(
+func CallPhysicsRaycast(
 	from GdVec2,
 	to GdVec2,
 	collision_mask GdInt,
 ) GdObj {
-	arg0 := (C.GDExtensionSpxPhysicRaycast)(api.SpxPhysicRaycast)
+	arg0 := (C.GDExtensionSpxPhysicsRaycast)(api.SpxPhysicsRaycast)
 	arg1GdVec2 := (C.GdVec2)(from)
 	arg2GdVec2 := (C.GdVec2)(to)
 	arg3GdInt := (C.GdInt)(collision_mask)
 	var ret_val C.GdObj
-	C.cgo_callfn_GDExtensionSpxPhysicRaycast(arg0, arg1GdVec2, arg2GdVec2, arg3GdInt, &ret_val)
+	C.cgo_callfn_GDExtensionSpxPhysicsRaycast(arg0, arg1GdVec2, arg2GdVec2, arg3GdInt, &ret_val)
 
 	return (GdObj)(ret_val)
 }
-func CallPhysicCheckCollision(
+func CallPhysicsCheckCollision(
 	from GdVec2,
 	to GdVec2,
 	collision_mask GdInt,
 	collide_with_areas GdBool,
 	collide_with_bodies GdBool,
 ) GdBool {
-	arg0 := (C.GDExtensionSpxPhysicCheckCollision)(api.SpxPhysicCheckCollision)
+	arg0 := (C.GDExtensionSpxPhysicsCheckCollision)(api.SpxPhysicsCheckCollision)
 	arg1GdVec2 := (C.GdVec2)(from)
 	arg2GdVec2 := (C.GdVec2)(to)
 	arg3GdInt := (C.GdInt)(collision_mask)
 	arg4GdBool := (C.GdBool)(collide_with_areas)
 	arg5GdBool := (C.GdBool)(collide_with_bodies)
 	var ret_val C.GdBool
-	C.cgo_callfn_GDExtensionSpxPhysicCheckCollision(arg0, arg1GdVec2, arg2GdVec2, arg3GdInt, arg4GdBool, arg5GdBool, &ret_val)
+	C.cgo_callfn_GDExtensionSpxPhysicsCheckCollision(arg0, arg1GdVec2, arg2GdVec2, arg3GdInt, arg4GdBool, arg5GdBool, &ret_val)
 
 	return (GdBool)(ret_val)
 }
-func CallPhysicCheckTouchedCameraBoundaries(
+func CallPhysicsCheckTouchedCameraBoundaries(
 	obj GdObj,
 ) GdInt {
-	arg0 := (C.GDExtensionSpxPhysicCheckTouchedCameraBoundaries)(api.SpxPhysicCheckTouchedCameraBoundaries)
+	arg0 := (C.GDExtensionSpxPhysicsCheckTouchedCameraBoundaries)(api.SpxPhysicsCheckTouchedCameraBoundaries)
 	arg1GdObj := (C.GdObj)(obj)
 	var ret_val C.GdInt
-	C.cgo_callfn_GDExtensionSpxPhysicCheckTouchedCameraBoundaries(arg0, arg1GdObj, &ret_val)
+	C.cgo_callfn_GDExtensionSpxPhysicsCheckTouchedCameraBoundaries(arg0, arg1GdObj, &ret_val)
 
 	return (GdInt)(ret_val)
 }
-func CallPhysicCheckTouchedCameraBoundary(
+func CallPhysicsCheckTouchedCameraBoundary(
 	obj GdObj,
 	board_type GdInt,
 ) GdBool {
-	arg0 := (C.GDExtensionSpxPhysicCheckTouchedCameraBoundary)(api.SpxPhysicCheckTouchedCameraBoundary)
+	arg0 := (C.GDExtensionSpxPhysicsCheckTouchedCameraBoundary)(api.SpxPhysicsCheckTouchedCameraBoundary)
 	arg1GdObj := (C.GdObj)(obj)
 	arg2GdInt := (C.GdInt)(board_type)
 	var ret_val C.GdBool
-	C.cgo_callfn_GDExtensionSpxPhysicCheckTouchedCameraBoundary(arg0, arg1GdObj, arg2GdInt, &ret_val)
+	C.cgo_callfn_GDExtensionSpxPhysicsCheckTouchedCameraBoundary(arg0, arg1GdObj, arg2GdInt, &ret_val)
 
 	return (GdBool)(ret_val)
 }
-func CallPhysicCheckNearestTouchedCameraBoundary(
+func CallPhysicsCheckNearestTouchedCameraBoundary(
 	obj GdObj,
 ) GdInt {
-	arg0 := (C.GDExtensionSpxPhysicCheckNearestTouchedCameraBoundary)(api.SpxPhysicCheckNearestTouchedCameraBoundary)
+	arg0 := (C.GDExtensionSpxPhysicsCheckNearestTouchedCameraBoundary)(api.SpxPhysicsCheckNearestTouchedCameraBoundary)
 	arg1GdObj := (C.GdObj)(obj)
 	var ret_val C.GdInt
-	C.cgo_callfn_GDExtensionSpxPhysicCheckNearestTouchedCameraBoundary(arg0, arg1GdObj, &ret_val)
+	C.cgo_callfn_GDExtensionSpxPhysicsCheckNearestTouchedCameraBoundary(arg0, arg1GdObj, &ret_val)
 
 	return (GdInt)(ret_val)
 }
-func CallPhysicSetCollisionSystemType(
+func CallPhysicsSetCollisionSystemType(
 	is_collision_by_alpha GdBool,
 ) {
-	arg0 := (C.GDExtensionSpxPhysicSetCollisionSystemType)(api.SpxPhysicSetCollisionSystemType)
+	arg0 := (C.GDExtensionSpxPhysicsSetCollisionSystemType)(api.SpxPhysicsSetCollisionSystemType)
 	arg1GdBool := (C.GdBool)(is_collision_by_alpha)
 
-	C.cgo_callfn_GDExtensionSpxPhysicSetCollisionSystemType(arg0, arg1GdBool)
+	C.cgo_callfn_GDExtensionSpxPhysicsSetCollisionSystemType(arg0, arg1GdBool)
 
 }
-func CallPhysicSetGlobalGravity(
+func CallPhysicsSetGlobalGravity(
 	gravity GdFloat,
 ) {
-	arg0 := (C.GDExtensionSpxPhysicSetGlobalGravity)(api.SpxPhysicSetGlobalGravity)
+	arg0 := (C.GDExtensionSpxPhysicsSetGlobalGravity)(api.SpxPhysicsSetGlobalGravity)
 	arg1GdFloat := (C.GdFloat)(gravity)
 
-	C.cgo_callfn_GDExtensionSpxPhysicSetGlobalGravity(arg0, arg1GdFloat)
+	C.cgo_callfn_GDExtensionSpxPhysicsSetGlobalGravity(arg0, arg1GdFloat)
 
 }
-func CallPhysicGetGlobalGravity() GdFloat {
-	arg0 := (C.GDExtensionSpxPhysicGetGlobalGravity)(api.SpxPhysicGetGlobalGravity)
+func CallPhysicsGetGlobalGravity() GdFloat {
+	arg0 := (C.GDExtensionSpxPhysicsGetGlobalGravity)(api.SpxPhysicsGetGlobalGravity)
 	var ret_val C.GdFloat
-	C.cgo_callfn_GDExtensionSpxPhysicGetGlobalGravity(arg0, &ret_val)
+	C.cgo_callfn_GDExtensionSpxPhysicsGetGlobalGravity(arg0, &ret_val)
 	return (GdFloat)(ret_val)
 }
-func CallPhysicSetGlobalFriction(
+func CallPhysicsSetGlobalFriction(
 	friction GdFloat,
 ) {
-	arg0 := (C.GDExtensionSpxPhysicSetGlobalFriction)(api.SpxPhysicSetGlobalFriction)
+	arg0 := (C.GDExtensionSpxPhysicsSetGlobalFriction)(api.SpxPhysicsSetGlobalFriction)
 	arg1GdFloat := (C.GdFloat)(friction)
 
-	C.cgo_callfn_GDExtensionSpxPhysicSetGlobalFriction(arg0, arg1GdFloat)
+	C.cgo_callfn_GDExtensionSpxPhysicsSetGlobalFriction(arg0, arg1GdFloat)
 
 }
-func CallPhysicGetGlobalFriction() GdFloat {
-	arg0 := (C.GDExtensionSpxPhysicGetGlobalFriction)(api.SpxPhysicGetGlobalFriction)
+func CallPhysicsGetGlobalFriction() GdFloat {
+	arg0 := (C.GDExtensionSpxPhysicsGetGlobalFriction)(api.SpxPhysicsGetGlobalFriction)
 	var ret_val C.GdFloat
-	C.cgo_callfn_GDExtensionSpxPhysicGetGlobalFriction(arg0, &ret_val)
+	C.cgo_callfn_GDExtensionSpxPhysicsGetGlobalFriction(arg0, &ret_val)
 	return (GdFloat)(ret_val)
 }
-func CallPhysicSetGlobalAirDrag(
+func CallPhysicsSetGlobalAirDrag(
 	air_drag GdFloat,
 ) {
-	arg0 := (C.GDExtensionSpxPhysicSetGlobalAirDrag)(api.SpxPhysicSetGlobalAirDrag)
+	arg0 := (C.GDExtensionSpxPhysicsSetGlobalAirDrag)(api.SpxPhysicsSetGlobalAirDrag)
 	arg1GdFloat := (C.GdFloat)(air_drag)
 
-	C.cgo_callfn_GDExtensionSpxPhysicSetGlobalAirDrag(arg0, arg1GdFloat)
+	C.cgo_callfn_GDExtensionSpxPhysicsSetGlobalAirDrag(arg0, arg1GdFloat)
 
 }
-func CallPhysicGetGlobalAirDrag() GdFloat {
-	arg0 := (C.GDExtensionSpxPhysicGetGlobalAirDrag)(api.SpxPhysicGetGlobalAirDrag)
+func CallPhysicsGetGlobalAirDrag() GdFloat {
+	arg0 := (C.GDExtensionSpxPhysicsGetGlobalAirDrag)(api.SpxPhysicsGetGlobalAirDrag)
 	var ret_val C.GdFloat
-	C.cgo_callfn_GDExtensionSpxPhysicGetGlobalAirDrag(arg0, &ret_val)
+	C.cgo_callfn_GDExtensionSpxPhysicsGetGlobalAirDrag(arg0, &ret_val)
 	return (GdFloat)(ret_val)
 }
-func CallPhysicCheckCollisionRect(
+func CallPhysicsCheckCollisionRect(
 	pos GdVec2,
 	size GdVec2,
 	collision_mask GdInt,
 ) GdArray {
-	arg0 := (C.GDExtensionSpxPhysicCheckCollisionRect)(api.SpxPhysicCheckCollisionRect)
+	arg0 := (C.GDExtensionSpxPhysicsCheckCollisionRect)(api.SpxPhysicsCheckCollisionRect)
 	arg1GdVec2 := (C.GdVec2)(pos)
 	arg2GdVec2 := (C.GdVec2)(size)
 	arg3GdInt := (C.GdInt)(collision_mask)
 	var ret_val C.GdArray
-	C.cgo_callfn_GDExtensionSpxPhysicCheckCollisionRect(arg0, arg1GdVec2, arg2GdVec2, arg3GdInt, &ret_val)
+	C.cgo_callfn_GDExtensionSpxPhysicsCheckCollisionRect(arg0, arg1GdVec2, arg2GdVec2, arg3GdInt, &ret_val)
 
 	return GdArray(ret_val)
 }
-func CallPhysicCheckCollisionCircle(
+func CallPhysicsCheckCollisionCircle(
 	pos GdVec2,
 	radius GdFloat,
 	collision_mask GdInt,
 ) GdArray {
-	arg0 := (C.GDExtensionSpxPhysicCheckCollisionCircle)(api.SpxPhysicCheckCollisionCircle)
+	arg0 := (C.GDExtensionSpxPhysicsCheckCollisionCircle)(api.SpxPhysicsCheckCollisionCircle)
 	arg1GdVec2 := (C.GdVec2)(pos)
 	arg2GdFloat := (C.GdFloat)(radius)
 	arg3GdInt := (C.GdInt)(collision_mask)
 	var ret_val C.GdArray
-	C.cgo_callfn_GDExtensionSpxPhysicCheckCollisionCircle(arg0, arg1GdVec2, arg2GdFloat, arg3GdInt, &ret_val)
+	C.cgo_callfn_GDExtensionSpxPhysicsCheckCollisionCircle(arg0, arg1GdVec2, arg2GdFloat, arg3GdInt, &ret_val)
 
 	return GdArray(ret_val)
 }
-func CallPhysicRaycastWithDetails(
+func CallPhysicsRaycastWithDetails(
 	from GdVec2,
 	to GdVec2,
 	ignore_sprites GdArray,
@@ -1152,7 +1154,7 @@ func CallPhysicRaycastWithDetails(
 	collide_with_areas GdBool,
 	collide_with_bodies GdBool,
 ) GdArray {
-	arg0 := (C.GDExtensionSpxPhysicRaycastWithDetails)(api.SpxPhysicRaycastWithDetails)
+	arg0 := (C.GDExtensionSpxPhysicsRaycastWithDetails)(api.SpxPhysicsRaycastWithDetails)
 	arg1GdVec2 := (C.GdVec2)(from)
 	arg2GdVec2 := (C.GdVec2)(to)
 	arg3GdArray := (C.GdArray)(ignore_sprites)
@@ -1160,7 +1162,7 @@ func CallPhysicRaycastWithDetails(
 	arg5GdBool := (C.GdBool)(collide_with_areas)
 	arg6GdBool := (C.GdBool)(collide_with_bodies)
 	var ret_val C.GdArray
-	C.cgo_callfn_GDExtensionSpxPhysicRaycastWithDetails(arg0, arg1GdVec2, arg2GdVec2, arg3GdArray, arg4GdInt, arg5GdBool, arg6GdBool, &ret_val)
+	C.cgo_callfn_GDExtensionSpxPhysicsRaycastWithDetails(arg0, arg1GdVec2, arg2GdVec2, arg3GdArray, arg4GdInt, arg5GdBool, arg6GdBool, &ret_val)
 
 	return GdArray(ret_val)
 }
@@ -2828,6 +2830,25 @@ func CallSpriteCheckCollisionWithSprite(
 	C.cgo_callfn_GDExtensionSpxSpriteCheckCollisionWithSprite(arg0, arg1GdObj, arg2GdObj, arg3GdFloat, arg4GdBool, &ret_val)
 
 	return (GdBool)(ret_val)
+}
+func CallSpriteBatchUpdateTransforms(
+	buffer GdArray,
+) {
+	arg0 := (C.GDExtensionSpxSpriteBatchUpdateTransforms)(api.SpxSpriteBatchUpdateTransforms)
+	arg1GdArray := (C.GdArray)(buffer)
+
+	C.cgo_callfn_GDExtensionSpxSpriteBatchUpdateTransforms(arg0, arg1GdArray)
+
+}
+func CallSpriteBatchUpdatePositions(
+	objs GdArray,
+) GdArray {
+	arg0 := (C.GDExtensionSpxSpriteBatchUpdatePositions)(api.SpxSpriteBatchUpdatePositions)
+	arg1GdArray := (C.GdArray)(objs)
+	var ret_val C.GdArray
+	C.cgo_callfn_GDExtensionSpxSpriteBatchUpdatePositions(arg0, arg1GdArray, &ret_val)
+
+	return GdArray(ret_val)
 }
 func CallTilemapOpenDrawTilesWithSize(
 	tile_size GdInt,

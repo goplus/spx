@@ -45,8 +45,8 @@ func BindMgr(mgrs []IManager) {
 		case IPenMgr:
 			PenMgr = v
 
-		case IPhysicMgr:
-			PhysicMgr = v
+		case IPhysicsMgr:
+			PhysicsMgr = v
 
 		case IPlatformMgr:
 			PlatformMgr = v
@@ -96,7 +96,7 @@ type navigationMgr struct {
 type penMgr struct {
 	baseMgr
 }
-type physicMgr struct {
+type physicsMgr struct {
 	baseMgr
 }
 type platformMgr struct {
@@ -129,7 +129,7 @@ func createMgrs() []IManager {
 	addManager(&inputMgr{})
 	addManager(&navigationMgr{})
 	addManager(&penMgr{})
-	addManager(&physicMgr{})
+	addManager(&physicsMgr{})
 	addManager(&platformMgr{})
 	addManager(&resMgr{})
 	addManager(&sceneMgr{})
@@ -442,88 +442,88 @@ func (pself *penMgr) SetPenStampTexture(obj Object, texture_path string) {
 	arg1 := JsFromGdString(texture_path)
 	API.SpxPenSetPenStampTexture.Invoke(arg0, arg1)
 }
-func (pself *physicMgr) Raycast(from Vec2, to Vec2, collision_mask int64) Object {
+func (pself *physicsMgr) Raycast(from Vec2, to Vec2, collision_mask int64) Object {
 	arg0 := JsFromGdVec2(from)
 	arg1 := JsFromGdVec2(to)
 	arg2 := JsFromGdInt(collision_mask)
-	_retValue := API.SpxPhysicRaycast.Invoke(arg0, arg1, arg2)
+	_retValue := API.SpxPhysicsRaycast.Invoke(arg0, arg1, arg2)
 	return JsToGdObject(_retValue)
 }
-func (pself *physicMgr) CheckCollision(from Vec2, to Vec2, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) bool {
+func (pself *physicsMgr) CheckCollision(from Vec2, to Vec2, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) bool {
 	arg0 := JsFromGdVec2(from)
 	arg1 := JsFromGdVec2(to)
 	arg2 := JsFromGdInt(collision_mask)
 	arg3 := JsFromGdBool(collide_with_areas)
 	arg4 := JsFromGdBool(collide_with_bodies)
-	_retValue := API.SpxPhysicCheckCollision.Invoke(arg0, arg1, arg2, arg3, arg4)
+	_retValue := API.SpxPhysicsCheckCollision.Invoke(arg0, arg1, arg2, arg3, arg4)
 	return JsToGdBool(_retValue)
 }
-func (pself *physicMgr) CheckTouchedCameraBoundaries(obj Object) int64 {
+func (pself *physicsMgr) CheckTouchedCameraBoundaries(obj Object) int64 {
 	arg0 := JsFromGdObj(obj)
-	_retValue := API.SpxPhysicCheckTouchedCameraBoundaries.Invoke(arg0)
+	_retValue := API.SpxPhysicsCheckTouchedCameraBoundaries.Invoke(arg0)
 	return JsToGdInt(_retValue)
 }
-func (pself *physicMgr) CheckTouchedCameraBoundary(obj Object, board_type int64) bool {
+func (pself *physicsMgr) CheckTouchedCameraBoundary(obj Object, board_type int64) bool {
 	arg0 := JsFromGdObj(obj)
 	arg1 := JsFromGdInt(board_type)
-	_retValue := API.SpxPhysicCheckTouchedCameraBoundary.Invoke(arg0, arg1)
+	_retValue := API.SpxPhysicsCheckTouchedCameraBoundary.Invoke(arg0, arg1)
 	return JsToGdBool(_retValue)
 }
-func (pself *physicMgr) CheckNearestTouchedCameraBoundary(obj Object) int64 {
+func (pself *physicsMgr) CheckNearestTouchedCameraBoundary(obj Object) int64 {
 	arg0 := JsFromGdObj(obj)
-	_retValue := API.SpxPhysicCheckNearestTouchedCameraBoundary.Invoke(arg0)
+	_retValue := API.SpxPhysicsCheckNearestTouchedCameraBoundary.Invoke(arg0)
 	return JsToGdInt(_retValue)
 }
-func (pself *physicMgr) SetCollisionSystemType(is_collision_by_alpha bool) {
+func (pself *physicsMgr) SetCollisionSystemType(is_collision_by_alpha bool) {
 	arg0 := JsFromGdBool(is_collision_by_alpha)
-	API.SpxPhysicSetCollisionSystemType.Invoke(arg0)
+	API.SpxPhysicsSetCollisionSystemType.Invoke(arg0)
 }
-func (pself *physicMgr) SetGlobalGravity(gravity float64) {
+func (pself *physicsMgr) SetGlobalGravity(gravity float64) {
 	arg0 := JsFromGdFloat(gravity)
-	API.SpxPhysicSetGlobalGravity.Invoke(arg0)
+	API.SpxPhysicsSetGlobalGravity.Invoke(arg0)
 }
-func (pself *physicMgr) GetGlobalGravity() float64 {
-	_retValue := API.SpxPhysicGetGlobalGravity.Invoke()
+func (pself *physicsMgr) GetGlobalGravity() float64 {
+	_retValue := API.SpxPhysicsGetGlobalGravity.Invoke()
 	return JsToGdFloat(_retValue)
 }
-func (pself *physicMgr) SetGlobalFriction(friction float64) {
+func (pself *physicsMgr) SetGlobalFriction(friction float64) {
 	arg0 := JsFromGdFloat(friction)
-	API.SpxPhysicSetGlobalFriction.Invoke(arg0)
+	API.SpxPhysicsSetGlobalFriction.Invoke(arg0)
 }
-func (pself *physicMgr) GetGlobalFriction() float64 {
-	_retValue := API.SpxPhysicGetGlobalFriction.Invoke()
+func (pself *physicsMgr) GetGlobalFriction() float64 {
+	_retValue := API.SpxPhysicsGetGlobalFriction.Invoke()
 	return JsToGdFloat(_retValue)
 }
-func (pself *physicMgr) SetGlobalAirDrag(air_drag float64) {
+func (pself *physicsMgr) SetGlobalAirDrag(air_drag float64) {
 	arg0 := JsFromGdFloat(air_drag)
-	API.SpxPhysicSetGlobalAirDrag.Invoke(arg0)
+	API.SpxPhysicsSetGlobalAirDrag.Invoke(arg0)
 }
-func (pself *physicMgr) GetGlobalAirDrag() float64 {
-	_retValue := API.SpxPhysicGetGlobalAirDrag.Invoke()
+func (pself *physicsMgr) GetGlobalAirDrag() float64 {
+	_retValue := API.SpxPhysicsGetGlobalAirDrag.Invoke()
 	return JsToGdFloat(_retValue)
 }
-func (pself *physicMgr) CheckCollisionRect(pos Vec2, size Vec2, collision_mask int64) Array {
+func (pself *physicsMgr) CheckCollisionRect(pos Vec2, size Vec2, collision_mask int64) Array {
 	arg0 := JsFromGdVec2(pos)
 	arg1 := JsFromGdVec2(size)
 	arg2 := JsFromGdInt(collision_mask)
-	_retValue := API.SpxPhysicCheckCollisionRect.Invoke(arg0, arg1, arg2)
+	_retValue := API.SpxPhysicsCheckCollisionRect.Invoke(arg0, arg1, arg2)
 	return JsToGdArray(_retValue)
 }
-func (pself *physicMgr) CheckCollisionCircle(pos Vec2, radius float64, collision_mask int64) Array {
+func (pself *physicsMgr) CheckCollisionCircle(pos Vec2, radius float64, collision_mask int64) Array {
 	arg0 := JsFromGdVec2(pos)
 	arg1 := JsFromGdFloat(radius)
 	arg2 := JsFromGdInt(collision_mask)
-	_retValue := API.SpxPhysicCheckCollisionCircle.Invoke(arg0, arg1, arg2)
+	_retValue := API.SpxPhysicsCheckCollisionCircle.Invoke(arg0, arg1, arg2)
 	return JsToGdArray(_retValue)
 }
-func (pself *physicMgr) RaycastWithDetails(from Vec2, to Vec2, ignore_sprites Array, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) Array {
+func (pself *physicsMgr) RaycastWithDetails(from Vec2, to Vec2, ignore_sprites Array, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) Array {
 	arg0 := JsFromGdVec2(from)
 	arg1 := JsFromGdVec2(to)
 	arg2 := JsFromGdArray(ignore_sprites)
 	arg3 := JsFromGdInt(collision_mask)
 	arg4 := JsFromGdBool(collide_with_areas)
 	arg5 := JsFromGdBool(collide_with_bodies)
-	_retValue := API.SpxPhysicRaycastWithDetails.Invoke(arg0, arg1, arg2, arg3, arg4, arg5)
+	_retValue := API.SpxPhysicsRaycastWithDetails.Invoke(arg0, arg1, arg2, arg3, arg4, arg5)
 	return JsToGdArray(_retValue)
 }
 func (pself *platformMgr) SetStretchMode(enable bool) {
@@ -1330,6 +1330,15 @@ func (pself *spriteMgr) CheckCollisionWithSprite(obj Object, obj_b Object, alpha
 	arg3 := JsFromGdBool(use_pixel_perfect)
 	_retValue := API.SpxSpriteCheckCollisionWithSprite.Invoke(arg0, arg1, arg2, arg3)
 	return JsToGdBool(_retValue)
+}
+func (pself *spriteMgr) BatchUpdateTransforms(buffer Array) {
+	arg0 := JsFromGdArray(buffer)
+	API.SpxSpriteBatchUpdateTransforms.Invoke(arg0)
+}
+func (pself *spriteMgr) BatchUpdatePositions(objs Array) Array {
+	arg0 := JsFromGdArray(objs)
+	_retValue := API.SpxSpriteBatchUpdatePositions.Invoke(arg0)
+	return JsToGdArray(_retValue)
 }
 func (pself *tilemapMgr) OpenDrawTilesWithSize(tile_size int64) {
 	arg0 := JsFromGdInt(tile_size)

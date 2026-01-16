@@ -74,12 +74,13 @@ const (
 // Configuration constants
 
 const (
-	eventBufferSize        = 16   // size of event channel buffer
-	schedTimeoutMs         = 3000 // timeout in milliseconds for scheduler
-	mainExecTimeoutSec     = 3    // timeout in seconds for main execution
-	mouseMovementThreshold = 1.0  // minimum movement to trigger mouse event (pixels)
-	defaultPathCellSize    = 16   // default path finding cell size
-	defaultAudioMaxDist    = 2000 // default maximum audio distance
+	eventBufferSize             = 16   // size of event channel buffer
+	schedTimeoutMs              = 3000 // timeout in milliseconds for scheduler
+	mainExecTimeoutSec          = 3    // timeout in seconds for main execution
+	mouseMovementThreshold      = 1.0  // minimum movement to trigger mouse event (pixels)
+	defaultPathCellSize         = 16   // default path finding cell size
+	defaultAudioMaxDist         = 2000 // default maximum audio distance
+	initialSpriteSyncBufferSize = 100  // initial buffer size for sprite synchronization
 )
 
 var (
@@ -162,6 +163,9 @@ type Game struct {
 	audioMaxDistance float64
 
 	tilemapMgr gameTilemapMgr
+
+	// Batch synchronization buffer (reused every frame)
+	syncBuffer *engine.SpriteSyncBuffer
 }
 
 const maxCollisionLayerIdx = 32 // engine limit support 32 layers
@@ -243,6 +247,8 @@ func (p *Game) initGame(sprites []Sprite) *Game {
 	p.sprs = make(map[string]Sprite)
 	p.typs = make(map[string]reflect.Type)
 	p.initSpriteMgr()
+	// Initialize batch sync buffer (preallocate for ~100 sprites, will grow if needed)
+	p.syncBuffer = engine.NewSpriteSyncBuffer(initialSpriteSyncBufferSize)
 	for _, spr := range sprites {
 		tySpr := reflect.TypeOf(spr).Elem()
 		p.typs[tySpr.Name()] = tySpr
@@ -443,9 +449,12 @@ func setupGameConfig(g *Game, conf *Config, proj *projConfig) {
 
 	proj.FullScreen = proj.FullScreen || conf.FullScreen
 	enabledPhysics = proj.Physics
-	physicMgr.SetGlobalGravity(parseDefaultFloatValue(proj.GlobalGravity, 1))
-	physicMgr.SetGlobalAirDrag(parseDefaultFloatValue(proj.GlobalAirDrag, 1))
-	physicMgr.SetGlobalFriction(parseDefaultFloatValue(proj.GlobalFriction, 1))
+	physicsMgr.SetGlobalGravity(parseDefaultFloatValue(proj.GlobalGravity, 1))
+	physicsMgr.SetGlobalAirDrag(parseDefaultFloatValue(proj.GlobalAirDrag, 1))
+	physicsMgr.SetGlobalFriction(parseDefaultFloatValue(proj.GlobalFriction, 1))
+
+	g.windowHeight_ = conf.Height
+	g.windowWidth_ = conf.Width
 
 	g.windowHeight_ = conf.Height
 	g.windowWidth_ = conf.Width
@@ -477,7 +486,7 @@ func setupGameSystems(g *Game, proj *projConfig) {
 	g.audioAttenuation = parseDefaultFloatValue(proj.AudioAttenuation, 0)
 	g.audioMaxDistance = parseDefaultFloatValue(proj.AudioMaxDistance, defaultAudioMaxDist)
 
-	physicMgr.SetCollisionSystemType(g.isCollisionByPixel)
+	physicsMgr.SetCollisionSystemType(g.isCollisionByPixel)
 	if g.isAutoSetCollisionLayer {
 		g.sprCollisionInfos = make(map[string]*spriteCollisionInfo)
 		idx := 0

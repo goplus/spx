@@ -75,17 +75,9 @@ func (p *Game) touchingSpriteBy(dst *SpriteImpl, name string) *SpriteImpl {
 		return nil
 	}
 
-	for _, item := range p.spriteMgr.items {
-		if sp, ok := item.(*SpriteImpl); ok && sp != dst {
-			if sp.name == name && (sp.isVisible && !sp.isDying) {
-				if sp.touchingSprite(dst) {
-					return sp
-				}
-
-			}
-		}
-	}
-	return nil
+	// Use optimized spatial partitioning version
+	// This reduces expensive pixel-perfect collision checks
+	return p.findTouchingSpriteOptimized(dst, name)
 }
 
 // -------------------------------------------------------------------------------------

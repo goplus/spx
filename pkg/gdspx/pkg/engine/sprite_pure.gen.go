@@ -22,6 +22,14 @@ func (pself *Sprite) AddForce(force Vec2) {
 func (pself *Sprite) AddImpulse(impulse Vec2) {
 }
 
+func (pself *Sprite) BatchUpdatePositions(objs Array) Array {
+	var _val Array
+	return _val
+}
+
+func (pself *Sprite) BatchUpdateTransforms(buffer Array) {
+}
+
 func (pself *Sprite) CheckCollision(target Object, is_src_trigger bool, is_dst_trigger bool) bool {
 	var _val bool
 	return _val

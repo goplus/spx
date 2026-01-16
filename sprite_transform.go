@@ -20,6 +20,7 @@ import (
 	"math"
 
 	"github.com/goplus/spbase/mathf"
+	"github.com/goplus/spx/v2/internal/engine"
 	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
@@ -82,7 +83,7 @@ func (p *SpriteImpl) doMoveToForAnim(x, y float64) {
 }
 
 func (p *SpriteImpl) updateTransform() {
-	p.updateProxyTransform(false)
+	p.isDirty = true
 }
 
 func (p *SpriteImpl) updateScale() {
@@ -391,7 +392,7 @@ func (p *SpriteImpl) doTurnTo(obj any, speed float64, animation SpriteAnimationN
 		x, y := p.g.objectPos(obj)
 		dx := x - p.x
 		dy := y - p.y
-		angle = 90 - math.Atan2(dy, dx)*180/math.Pi
+		angle = 90 - engine.RadToDeg(math.Atan2(dy, dx))
 	}
 
 	if animation == "" {

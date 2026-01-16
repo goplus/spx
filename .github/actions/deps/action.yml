@@ -9,6 +9,10 @@ inputs:
     description: 'XGo version to setup'
     required: false
     default: '1.5.0'
+  cache-version:
+    description: 'Cache version for manual invalidation'
+    required: false
+    default: 'v1'
 runs:
   using: "composite"
   steps:
@@ -34,9 +38,9 @@ runs:
           ~/.local/share/godot/export_templates
           ~/Library/Application Support/Godot/export_templates
           ~/AppData/Roaming/Godot/export_templates
-        key: spx-godot-${{ runner.os }}-${{ hashFiles('cmd/gox/template/version', 'cmd/gox/**/*.go', 'cmd/gox/go.mod', 'cmd/gox/go.sum') }}
+        key: spx-godot-${{ inputs.cache-version }}-${{ runner.os }}-${{ hashFiles('cmd/gox/template/version', 'cmd/gox/**/*.go', 'cmd/gox/go.mod', 'cmd/gox/go.sum') }}
         restore-keys: |
-          spx-godot-${{ runner.os }}-
+          spx-godot-${{ inputs.cache-version }}-${{ runner.os }}-
 
     - name: Setup engine (cache miss)
       if: steps.cache-godot.outputs.cache-hit != 'true'

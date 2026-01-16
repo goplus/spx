@@ -17,7 +17,7 @@
 package spx
 
 import (
-	"sort"
+	"slices"
 
 	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v2/internal/engine"
@@ -29,8 +29,8 @@ import (
 
 func (p *Game) checkCollision(ary any) []Sprite {
 	spriteIdAry := ary.([]engine.Object)
-	sprites := make([]Sprite, 1)
-	sort.Slice(spriteIdAry, func(i, j int) bool { return spriteIdAry[i] < spriteIdAry[j] })
+	sprites := make([]Sprite, 0, len(spriteIdAry))
+	slices.Sort(spriteIdAry)
 	for _, item := range spriteIdAry {
 		sprite := engine.GetSprite(item)
 		if sprite != nil {
@@ -46,12 +46,12 @@ func (p *Game) checkCollision(ary any) []Sprite {
 }
 
 func (p *Game) IntersectRect(posX, posY, width, height float64) []Sprite {
-	ary := physicMgr.CheckCollisionRect(mathf.NewVec2(posX, posY), mathf.NewVec2(width, height), -1)
+	ary := physicsMgr.CheckCollisionRect(mathf.NewVec2(posX, posY), mathf.NewVec2(width, height), -1)
 	return p.checkCollision(ary)
 }
 
 func (p *Game) IntersectCircle(posX, posY, radius float64) []Sprite {
-	ary := physicMgr.CheckCollisionCircle(mathf.NewVec2(posX, posY), radius, -1)
+	ary := physicsMgr.CheckCollisionCircle(mathf.NewVec2(posX, posY), radius, -1)
 	return p.checkCollision(ary)
 }
 

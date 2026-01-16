@@ -31,7 +31,7 @@ func bindCallbacks() CallbackInfo {
 	infos.OnActionJustReleased = onActionJustReleased
 	infos.OnAxisChanged = onAxisChanged
 
-	// physic
+	// physics
 	infos.OnCollisionEnter = onCollisionEnter
 	infos.OnCollisionStay = onCollisionStay
 	infos.OnCollisionExit = onCollisionExit
@@ -109,7 +109,7 @@ func onAxisChanged(name string, value float64) {
 	spxlog.Debug("OnAxisChanged %s %f", name, value)
 }
 
-// physic
+// physics
 func onCollisionEnter(id int64, oid int64) {
 	spxlog.Debug("OnCollisionEnter %d %d", id, oid)
 }

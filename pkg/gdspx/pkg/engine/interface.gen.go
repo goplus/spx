@@ -22,7 +22,7 @@ var (
 	InputMgr         IInputMgr
 	NavigationMgr    INavigationMgr
 	PenMgr           IPenMgr
-	PhysicMgr        IPhysicMgr
+	PhysicsMgr       IPhysicsMgr
 	PlatformMgr      IPlatformMgr
 	ResMgr           IResMgr
 	SceneMgr         ISceneMgr
@@ -117,7 +117,7 @@ type IPenMgr interface {
 	SetPenStampTexture(obj Object, texture_path string)
 }
 
-type IPhysicMgr interface {
+type IPhysicsMgr interface {
 	Raycast(from Vec2, to Vec2, collision_mask int64) Object
 	CheckCollision(from Vec2, to Vec2, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) bool
 	CheckTouchedCameraBoundaries(obj Object) int64
@@ -301,6 +301,8 @@ type ISpriteMgr interface {
 	CheckCollisionByColor(obj Object, color Color, color_threshold float64, alpha_threshold float64) bool
 	CheckCollisionByAlpha(obj Object, alpha_threshold float64) bool
 	CheckCollisionWithSprite(obj Object, obj_b Object, alpha_threshold float64, use_pixel_perfect bool) bool
+	BatchUpdateTransforms(buffer Array)
+	BatchUpdatePositions(objs Array) Array
 }
 
 type ITilemapMgr interface {
