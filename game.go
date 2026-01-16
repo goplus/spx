@@ -456,6 +456,9 @@ func setupGameConfig(g *Game, conf *Config, proj *projConfig) {
 	g.windowHeight_ = conf.Height
 	g.windowWidth_ = conf.Width
 
+	g.windowHeight_ = conf.Height
+	g.windowWidth_ = conf.Width
+
 	key := conf.ScreenshotKey
 	if key == "" {
 		key = os.Getenv("SPX_SCREENSHOT_KEY")
