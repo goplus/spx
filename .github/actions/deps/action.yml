@@ -35,8 +35,6 @@ runs:
           ~/Library/Application Support/Godot/export_templates
           ~/AppData/Roaming/Godot/export_templates
         key: spx-godot-${{ runner.os }}-${{ hashFiles('cmd/gox/template/version', 'cmd/gox/**/*.go', 'cmd/gox/go.mod', 'cmd/gox/go.sum') }}
-        restore-keys: |
-          spx-godot-${{ runner.os }}-
 
     - name: Setup engine (cache miss)
       if: steps.cache-godot.outputs.cache-hit != 'true'

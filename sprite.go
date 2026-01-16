@@ -96,7 +96,10 @@ const (
 // Internal Constants
 // ============================================================================
 
-const alphaThreshold = 0.05
+const (
+	colorThreshold = 0.1
+	alphaThreshold = 0.05
+)
 
 const (
 	touchingScreenLeft   = 1

@@ -111,7 +111,7 @@ func (p *SpriteImpl) touchingColor(color mathf.Color) bool {
 	if p.syncSprite == nil {
 		return false
 	}
-	return spriteMgr.CheckCollisionByColor(p.syncSprite.GetId(), color, alphaThreshold, 0.1)
+	return spriteMgr.CheckCollisionByColor(p.syncSprite.GetId(), color, colorThreshold, alphaThreshold)
 }
 
 // touchingSprite checks if sprite is touching another sprite
