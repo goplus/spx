@@ -43,7 +43,13 @@ type SpriteImpl struct {
 	sprite Sprite
 	name   string
 
+	// TODO(refactor): The following fields duplicate data in components.
+	// These should be removed in the future, with all access going through components.
+	// Currently kept for backward compatibility and initialization flow.
+	// See: https://github.com/goplus/spx/issues/xxx for migration plan
+
 	// Position and orientation
+	// TODO(refactor): Duplicated in transformComponent - migrate to use components.Transform()
 	x, y          float64
 	direction     float64
 	rotationStyle RotationStyle
@@ -54,12 +60,14 @@ type SpriteImpl struct {
 	quoteObj *quoter
 
 	// Animation configuration
+	// TODO(refactor): Duplicated in animationComponent - migrate to use components.Animation()
 	animations        map[SpriteAnimationName]*aniConfig
 	animBindings      map[string]string
 	defaultAnimation  SpriteAnimationName
 	animationWrappers map[SpriteAnimationName]*animationWrapper // lazy load
 
 	// Pen properties
+	// TODO(refactor): Duplicated in penComponent - migrate to use components.Pen()
 	penColor        mathf.Color
 	penWidth        float64
 	penHue          float64
@@ -70,6 +78,7 @@ type SpriteImpl struct {
 	// State flags
 	isVisible bool
 	isCloned_ bool
+	// TODO(refactor): isPenDown is duplicated in penComponent - migrate to use components.Pen()
 	isPenDown bool
 	isDying   bool
 	isDirty   bool // marks if transform or visibility has changed
@@ -87,10 +96,12 @@ type SpriteImpl struct {
 	defaultCostumeIndex int
 
 	// Physics configuration
+	// TODO(refactor): Duplicated in physicsComponent - migrate to use components.Physics()
 	triggerInfo   physicConfig
 	collisionInfo physicConfig
 
 	// Engine objects
+	// TODO(refactor): penObj is duplicated in penComponent
 	penObj   *engine.Object
 	soundObj engine.Object
 
@@ -100,11 +111,15 @@ type SpriteImpl struct {
 	donedAnimations  []string
 
 	// Physics properties
+	// TODO(refactor): Duplicated in physicsComponent - migrate to use components.Physics()
 	physicsMode PhysicsMode
 	mass        float64
 	friction    float64
 	airDrag     float64
 	gravity     float64
+
+	// Component system
+	components spriteComponents
 }
 
 // ============================================================================
@@ -139,6 +154,7 @@ func (p *SpriteImpl) init(
 	p.initPhysicsProperties(spriteCfg)
 	p.initAnimations(spriteCfg)
 	p.initEngineObjects()
+	p.initComponents()
 }
 
 // initBaseObjects initializes the base object and event sinks
@@ -269,6 +285,11 @@ func (p *SpriteImpl) initEngineObjects() {
 	})
 }
 
+// initComponents initializes all sprite components
+func (p *SpriteImpl) initComponents() {
+	p.components.initComponents(p)
+}
+
 func (p *SpriteImpl) awake() {
 	p.playDefaultAnim()
 }
@@ -292,30 +313,23 @@ func (p *SpriteImpl) InitFrom(src *SpriteImpl) {
 	p.eventSinks.initFrom(&src.eventSinks, p)
 
 	p.g, p.name = src.g, src.name
-	p.x, p.y = src.x, src.y
-	p.scale = src.scale
-	p.direction = src.direction
-	p.rotationStyle = src.rotationStyle
+
+	// NOTE: Transform-related fields (x, y, direction, rotationStyle, scale, pivot)
+	// are now handled by components.cloneFrom(), not here
+
 	p.sayObj = nil
-	p.animations = src.animations
-	p.animationWrappers = make(map[SpriteAnimationName]*animationWrapper)
-	for animName, ani := range p.animations {
-		p.animationWrappers[animName] = &animationWrapper{spr: p, ani: ani}
-	}
+
+	// NOTE: Animation-related fields (animations, animationWrappers, defaultAnimation)
+	// are now handled by components.cloneFrom(), not here
+
 	// clone effect params
 	p.greffUniforms = maps.Clone(src.greffUniforms)
 
-	p.penColor = src.penColor
-	p.penHue = src.penHue
-	p.penSaturation = src.penSaturation
-	p.penBrightness = src.penBrightness
-	p.penTransparency = src.penTransparency
-
-	p.penWidth = src.penWidth
+	// NOTE: Pen-related fields (penColor, penHue, penWidth, isPenDown, etc.)
+	// are now handled by components.cloneFrom(), not here
 
 	p.isVisible = src.isVisible
 	p.isCloned_ = true
-	p.isPenDown = src.isPenDown
 	p.isDying = false
 
 	p.hasOnCloned = false
@@ -323,8 +337,8 @@ func (p *SpriteImpl) InitFrom(src *SpriteImpl) {
 	p.hasOnTouching = false
 	p.hasOnTouchEnd = false
 
-	p.collisionInfo.copyFrom(&src.collisionInfo)
-	p.triggerInfo.copyFrom(&src.triggerInfo)
+	// NOTE: Physics-related fields (collisionInfo, triggerInfo, physicsMode, etc.)
+	// are now handled by components.cloneFrom(), not here
 
 	p.pendingAudios = make([]string, 0)
 }
@@ -384,6 +398,11 @@ func cloneSprite(out reflect.Value, outPtr Sprite, in reflect.Value, v specsp) *
 	}()
 	dest.sprite = outPtr
 	dest.isCostumeDirty = true
+
+	// Clone components from source sprite
+	src := spriteOf(in.Addr().Interface().(Sprite))
+	dest.components.cloneFrom(&src.components, dest)
+
 	if v != nil { // in loadSprite
 		applySpriteProps(dest, v)
 	} else { // in sprite.Clone
@@ -564,6 +583,7 @@ func (p *SpriteImpl) Destroy() { // destroy sprite, whether prototype or cloned
 	p.Hide()
 	p.doDeleteClone()
 	p.destroyPen()
+	p.components.destroyComponents()
 	p.g.removeShape(p)
 	p.Stop(ThisSprite)
 	if p == gco.Current().Obj {
@@ -639,7 +659,7 @@ func (p *SpriteImpl) setCostume(costume any) {
 	}
 	p.goSetCostume(costume)
 	p.defaultCostumeIndex = p.costumeIndex_
-	p.updateTransform()
+	p.isDirty = true
 }
 
 func (p *SpriteImpl) SetCostume__0(costume SpriteCostumeName) {

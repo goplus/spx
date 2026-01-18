@@ -437,3 +437,13 @@ func (p *SpriteImpl) TriggerMask() int64 {
 func (p *SpriteImpl) TriggerEnabled() bool {
 	return p.syncSprite.IsTriggerEnabled()
 }
+
+// -----------------------------------------------------------------------------
+// Scale Update
+// -----------------------------------------------------------------------------
+
+// updateScale updates collision and trigger shapes when scale changes
+func (p *SpriteImpl) updateScale() {
+	p.triggerInfo.applyShape(p.syncSprite, true, p.scale)
+	p.collisionInfo.applyShape(p.syncSprite, false, p.scale)
+}

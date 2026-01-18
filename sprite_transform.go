@@ -17,10 +17,6 @@
 package spx
 
 import (
-	"math"
-
-	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v2/internal/engine"
 	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
@@ -33,7 +29,7 @@ import (
 // -----------------------------------------------------------------------------
 
 func (p *SpriteImpl) getXY() (x, y float64) {
-	return p.x, p.y
+	return p.components.Transform().GetXY()
 }
 
 // DistanceTo func:
@@ -41,66 +37,31 @@ func (p *SpriteImpl) getXY() (x, y float64) {
 //	DistanceTo(sprite)
 //	DistanceTo(spx.Mouse)
 //	DistanceTo(spx.Random)
-func (p *SpriteImpl) distanceTo(obj any) float64 {
-	x, y := p.x, p.y
-	x2, y2 := p.g.objectPos(obj)
-	x -= x2
-	y -= y2
-	return math.Sqrt(x*x + y*y)
-}
-
 func (p *SpriteImpl) DistanceTo__0(sprite Sprite) float64 {
-	return p.distanceTo(sprite)
+	return p.components.Transform().DistanceTo(sprite)
 }
 
 func (p *SpriteImpl) DistanceTo__1(sprite SpriteName) float64 {
-	return p.distanceTo(sprite)
+	return p.components.Transform().DistanceTo(sprite)
 }
 
 func (p *SpriteImpl) DistanceTo__2(obj specialObj) float64 {
-	return p.distanceTo(obj)
+	return p.components.Transform().DistanceTo(obj)
 }
 
 func (p *SpriteImpl) DistanceTo__3(pos Pos) float64 {
-	return p.distanceTo(pos)
+	return p.components.Transform().DistanceTo(pos)
 }
 
 // -----------------------------------------------------------------------------
 // Core Movement Functions
 // -----------------------------------------------------------------------------
 
-func (p *SpriteImpl) doMoveTo(x, y float64) {
-	p.doMoveToForAnim(x, y)
-}
-
-func (p *SpriteImpl) doMoveToForAnim(x, y float64) {
-	x, y = p.fixWorldRange(x, y)
-	if p.isPenDown {
-		p.movePen(x, y)
-	}
-	p.x, p.y = x, y
-	p.updateTransform()
-}
-
-func (p *SpriteImpl) updateTransform() {
-	p.isDirty = true
-}
-
-func (p *SpriteImpl) updateScale() {
-	p.triggerInfo.applyShape(p.syncSprite, true, p.scale)
-	p.collisionInfo.applyShape(p.syncSprite, false, p.scale)
-}
-
-func (p *SpriteImpl) goMoveForward(step float64) {
-	sin, cos := math.Sincos(toRadian(p.direction))
-	p.doMoveTo(p.x+step*sin, p.y+step*cos)
-}
-
 func (p *SpriteImpl) Move__0(step float64) {
 	if debugInstr {
 		spxlog.Debug("Move: sprite=%s, step=%v", p.name, step)
 	}
-	p.goMoveForward(step)
+	p.components.Transform().MoveForward(step)
 }
 
 func (p *SpriteImpl) Move__1(step int) {
@@ -108,41 +69,15 @@ func (p *SpriteImpl) Move__1(step int) {
 }
 
 func (p *SpriteImpl) Step__0(step float64) {
-	p.doStep(step, 1, "")
+	p.components.Transform().Step(step, 1, "")
 }
 
 func (p *SpriteImpl) Step__1(step float64, speed float64) {
-	p.doStep(step, speed, "")
+	p.components.Transform().Step(step, speed, "")
 }
 
 func (p *SpriteImpl) Step__2(step float64, speed float64, animation SpriteAnimationName) {
-	p.doStep(step, speed, animation)
-}
-
-func (p *SpriteImpl) doStepToPos(x, y, speed float64, animation SpriteAnimationName) {
-	if animation == "" {
-		animation = p.getStateAnimName(StateStep)
-	}
-	// if no animation, goto target immediately
-	if !p.hasAnim(animation) {
-		p.SetXYpos(x, y)
-	} else {
-		speed = math.Max(speed, 0.001)
-		from := mathf.NewVec2(p.x, p.y)
-		to := mathf.NewVec2(x, y)
-		distance := from.DistanceTo(to)
-		if ani, ok := p.animations[animation]; ok {
-			anicopy := *ani
-			anicopy.From = &from
-			anicopy.To = &to
-			anicopy.AniType = aniTypeMove
-			anicopy.Duration = math.Abs(distance) * ani.StepDuration / speed
-			anicopy.IsLoop = true
-			anicopy.Speed = speed
-			p.doTween(animation, &anicopy)
-			return
-		}
-	}
+	p.components.Transform().Step(step, speed, animation)
 }
 
 func (p *SpriteImpl) doStepTo(obj any, speed float64, animation SpriteAnimationName) {
@@ -150,14 +85,7 @@ func (p *SpriteImpl) doStepTo(obj any, speed float64, animation SpriteAnimationN
 		spxlog.Debug("Goto: sprite=%s, obj=%v", p.name, obj)
 	}
 	x, y := p.g.objectPos(obj)
-	p.doStepToPos(x, y, speed, animation)
-}
-
-func (p *SpriteImpl) doStep(step float64, speed float64, animation SpriteAnimationName) {
-	dirSin, dirCos := math.Sincos(toRadian(p.direction))
-	diff := mathf.NewVec2(step*dirSin, step*dirCos)
-	to := mathf.NewVec2(p.x, p.y).Add(diff)
-	p.doStepToPos(to.X, to.Y, speed, animation)
+	p.components.Transform().StepToPos(x, y, speed, animation)
 }
 
 func (p *SpriteImpl) StepTo__0(sprite Sprite) {
@@ -169,7 +97,7 @@ func (p *SpriteImpl) StepTo__1(sprite SpriteName) {
 }
 
 func (p *SpriteImpl) StepTo__2(x, y float64) {
-	p.doStepToPos(x, y, 1, "")
+	p.components.Transform().StepToPos(x, y, 1, "")
 }
 
 func (p *SpriteImpl) StepTo__3(obj specialObj) {
@@ -185,7 +113,7 @@ func (p *SpriteImpl) StepTo__5(sprite SpriteName, speed float64) {
 }
 
 func (p *SpriteImpl) StepTo__6(x, y, speed float64) {
-	p.doStepToPos(x, y, speed, "")
+	p.components.Transform().StepToPos(x, y, speed, "")
 }
 
 func (p *SpriteImpl) StepTo__7(obj specialObj, speed float64) {
@@ -201,7 +129,7 @@ func (p *SpriteImpl) StepTo__9(sprite SpriteName, speed float64, animation Sprit
 }
 
 func (p *SpriteImpl) StepTo__a(x, y, speed float64, animation SpriteAnimationName) {
-	p.doStepToPos(x, y, speed, animation)
+	p.components.Transform().StepToPos(x, y, speed, animation)
 }
 
 func (p *SpriteImpl) StepTo__b(obj specialObj, speed float64, animation SpriteAnimationName) {
@@ -213,29 +141,11 @@ func (p *SpriteImpl) doGlideTo(obj any, secs float64) {
 		spxlog.Debug("Glide: obj=%v, secs=%v", obj, secs)
 	}
 	x, y := p.g.objectPos(obj)
-	p.doGlide(x, y, secs)
-}
-
-func (p *SpriteImpl) doGlide(x, y float64, secs float64) {
-	if debugInstr {
-		spxlog.Debug("Glide: sprite=%s, x=%v, y=%v, secs=%v", p.name, x, y, secs)
-	}
-	x0, y0 := p.getXY()
-	from := mathf.NewVec2(x0, y0)
-	to := mathf.NewVec2(x, y)
-	anicopy := aniConfig{
-		Duration: secs,
-		From:     &from,
-		To:       &to,
-		AniType:  aniTypeGlide,
-	}
-	anicopy.IsLoop = true
-	animName := p.getStateAnimName(StateGlide)
-	p.doTween(animName, &anicopy)
+	p.components.Transform().Glide(x, y, secs)
 }
 
 func (p *SpriteImpl) Glide__0(x, y float64, secs float64) {
-	p.doGlide(x, y, secs)
+	p.components.Transform().Glide(x, y, secs)
 }
 
 func (p *SpriteImpl) Glide__1(sprite Sprite, secs float64) {
@@ -255,35 +165,35 @@ func (p *SpriteImpl) Glide__4(pos Pos, secs float64) {
 }
 
 func (p *SpriteImpl) SetXYpos(x, y float64) {
-	p.doMoveTo(x, y)
+	p.components.Transform().SetXYpos(x, y)
 }
 
 func (p *SpriteImpl) ChangeXYpos(dx, dy float64) {
-	p.doMoveTo(p.x+dx, p.y+dy)
+	p.components.Transform().ChangeXYpos(dx, dy)
 }
 
 func (p *SpriteImpl) Xpos() float64 {
-	return p.x
+	return p.components.Transform().Xpos()
 }
 
 func (p *SpriteImpl) SetXpos(x float64) {
-	p.doMoveTo(x, p.y)
+	p.components.Transform().SetXpos(x)
 }
 
 func (p *SpriteImpl) ChangeXpos(dx float64) {
-	p.doMoveTo(p.x+dx, p.y)
+	p.components.Transform().ChangeXpos(dx)
 }
 
 func (p *SpriteImpl) Ypos() float64 {
-	return p.y
+	return p.components.Transform().Ypos()
 }
 
 func (p *SpriteImpl) SetYpos(y float64) {
-	p.doMoveTo(p.x, y)
+	p.components.Transform().SetYpos(y)
 }
 
 func (p *SpriteImpl) ChangeYpos(dy float64) {
-	p.doMoveTo(p.x, p.y+dy)
+	p.components.Transform().ChangeYpos(dy)
 }
 
 // -----------------------------------------------------------------------------
@@ -291,157 +201,79 @@ func (p *SpriteImpl) ChangeYpos(dy float64) {
 // -----------------------------------------------------------------------------
 
 func (p *SpriteImpl) SetRotationStyle(style RotationStyle) {
-	if debugInstr {
-		spxlog.Debug("SetRotationStyle: sprite=%s, style=%v", p.name, style)
-	}
-	p.rotationStyle = style
+	p.components.Transform().SetRotationStyle(style)
 }
 
 func (p *SpriteImpl) Heading() Direction {
-	return p.direction
+	return p.components.Transform().Heading()
 }
 
 func (p *SpriteImpl) Turn__0(dir Direction) {
-	p.doTurn(dir, 1, "")
+	p.components.Transform().Turn(dir, 1, "")
 }
 
 func (p *SpriteImpl) Turn__1(dir Direction, speed float64) {
-	p.doTurn(dir, speed, "")
+	p.components.Transform().Turn(dir, speed, "")
 }
 
 func (p *SpriteImpl) Turn__2(dir Direction, speed float64, animation SpriteAnimationName) {
-	p.doTurn(dir, speed, animation)
+	p.components.Transform().Turn(dir, speed, animation)
 }
 
 func (p *SpriteImpl) TurnTo__0(target Sprite) {
-	p.doTurnTo(target, 1, "")
+	p.components.Transform().TurnTo(target, 1, "")
 }
 
 func (p *SpriteImpl) TurnTo__1(target SpriteName) {
-	p.doTurnTo(target, 1, "")
+	p.components.Transform().TurnTo(target, 1, "")
 }
 
 func (p *SpriteImpl) TurnTo__2(dir Direction) {
-	p.doTurnTo(dir, 1, "")
+	p.components.Transform().TurnTo(dir, 1, "")
 }
 
 func (p *SpriteImpl) TurnTo__3(target specialObj) {
-	p.doTurnTo(target, 1, "")
+	p.components.Transform().TurnTo(target, 1, "")
 }
 
 func (p *SpriteImpl) TurnTo__4(target Sprite, speed float64) {
-	p.doTurnTo(target, speed, "")
+	p.components.Transform().TurnTo(target, speed, "")
 }
 
 func (p *SpriteImpl) TurnTo__5(target SpriteName, speed float64) {
-	p.doTurnTo(target, speed, "")
+	p.components.Transform().TurnTo(target, speed, "")
 }
 
 func (p *SpriteImpl) TurnTo__6(dir Direction, speed float64) {
-	p.doTurnTo(dir, speed, "")
+	p.components.Transform().TurnTo(dir, speed, "")
 }
 
 func (p *SpriteImpl) TurnTo__7(target specialObj, speed float64) {
-	p.doTurnTo(target, speed, "")
+	p.components.Transform().TurnTo(target, speed, "")
 }
 
 func (p *SpriteImpl) TurnTo__8(target Sprite, speed float64, animation SpriteAnimationName) {
-	p.doTurnTo(target, speed, animation)
+	p.components.Transform().TurnTo(target, speed, animation)
 }
 
 func (p *SpriteImpl) TurnTo__9(target SpriteName, speed float64, animation SpriteAnimationName) {
-	p.doTurnTo(target, speed, animation)
+	p.components.Transform().TurnTo(target, speed, animation)
 }
 
 func (p *SpriteImpl) TurnTo__a(dir Direction, speed float64, animation SpriteAnimationName) {
-	p.doTurnTo(dir, speed, animation)
+	p.components.Transform().TurnTo(dir, speed, animation)
 }
 
 func (p *SpriteImpl) TurnTo__b(target specialObj, speed float64, animation SpriteAnimationName) {
-	p.doTurnTo(target, speed, animation)
-}
-
-func (p *SpriteImpl) doTurn(val Direction, speed float64, animation SpriteAnimationName) {
-	delta := val
-	if animation == "" {
-		animation = p.getStateAnimName(StateTurn)
-	}
-	if ani, ok := p.animations[animation]; ok {
-		anicopy := *ani
-		anicopy.From = p.direction
-		anicopy.To = p.direction + delta
-		anicopy.Duration = ani.TurnToDuration / 360.0 * math.Abs(delta) / speed
-		anicopy.AniType = aniTypeTurn
-		anicopy.IsLoop = true
-		anicopy.Speed = speed
-		p.doTween(animation, &anicopy)
-		return
-	}
-	p.setDirection(delta, true)
-	if debugInstr {
-		spxlog.Debug("Turn: sprite=%s, val=%v", p.name, val)
-	}
-}
-
-func (p *SpriteImpl) doTurnTo(obj any, speed float64, animation SpriteAnimationName) {
-	var angle float64
-	switch v := obj.(type) {
-	case Direction:
-		angle = v
-	default:
-		x, y := p.g.objectPos(obj)
-		dx := x - p.x
-		dy := y - p.y
-		angle = 90 - engine.RadToDeg(math.Atan2(dy, dx))
-	}
-
-	if animation == "" {
-		animation = p.getStateAnimName(StateTurn)
-	}
-	if ani, ok := p.animations[animation]; ok {
-		fromangle := math.Mod(p.direction+360.0, 360.0)
-		toangle := math.Mod(angle+360.0, 360.0)
-		if toangle-fromangle > 180.0 {
-			fromangle = fromangle + 360.0
-		}
-		if fromangle-toangle > 180.0 {
-			toangle = toangle + 360.0
-		}
-		delta := math.Abs(fromangle - toangle)
-		anicopy := *ani
-		anicopy.From = fromangle
-		anicopy.To = toangle
-		anicopy.Duration = ani.TurnToDuration / 360.0 * math.Abs(delta) / speed
-		anicopy.AniType = aniTypeTurn
-		anicopy.IsLoop = true
-		anicopy.Speed = speed
-		p.doTween(animation, &anicopy)
-		return
-	}
-	if p.setDirection(angle, false) && debugInstr {
-		spxlog.Debug("TurnTo: sprite=%s, obj=%v", p.name, obj)
-	}
+	p.components.Transform().TurnTo(target, speed, animation)
 }
 
 func (p *SpriteImpl) SetHeading(dir Direction) {
-	p.setDirection(dir, false)
+	p.components.Transform().SetHeading(dir)
 }
 
 func (p *SpriteImpl) ChangeHeading(dir Direction) {
-	p.setDirection(dir, true)
-}
-
-func (p *SpriteImpl) setDirection(dir float64, change bool) bool {
-	if change {
-		dir += p.direction
-	}
-	dir = normalizeDirection(dir)
-	if p.direction == dir {
-		return false
-	}
-	p.direction = dir
-	p.updateTransform()
-	return true
+	p.components.Transform().ChangeHeading(dir)
 }
 
 // -----------------------------------------------------------------------------
@@ -449,52 +281,13 @@ func (p *SpriteImpl) setDirection(dir float64, change bool) bool {
 // -----------------------------------------------------------------------------
 
 func (p *SpriteImpl) Size() float64 {
-	v := p.scale
-	return v
+	return p.components.Transform().Size()
 }
 
 func (p *SpriteImpl) SetSize(size float64) {
-	if debugInstr {
-		spxlog.Debug("SetSize: sprite=%s, size=%v", p.name, size)
-	}
-	p.scale = size
-	p.updateTransform()
-	p.isCostumeDirty = true
-	p.updateScale()
+	p.components.Transform().SetSize(size)
 }
 
 func (p *SpriteImpl) ChangeSize(delta float64) {
-	if debugInstr {
-		spxlog.Debug("ChangeSize: sprite=%s, delta=%v", p.name, delta)
-	}
-	p.SetSize(p.scale + delta)
-}
-
-// -----------------------------------------------------------------------------
-// Utility Functions
-// -----------------------------------------------------------------------------
-
-// fixWorldRange clamps sprite position within world boundaries
-func (p *SpriteImpl) fixWorldRange(x, y float64) (float64, float64) {
-	rect := p.bounds()
-	if rect == nil {
-		return x, y
-	}
-	worldW, worldH := p.g.worldSize_()
-	maxW := float64(worldW)/2.0 + float64(rect.Size.X)
-	maxH := float64(worldH)/2.0 + float64(rect.Size.Y)
-	if x < -maxW {
-		x = -maxW
-	}
-	if x > maxW {
-		x = maxW
-	}
-	if y < -maxH {
-		y = -maxH
-	}
-	if y > maxH {
-		y = maxH
-	}
-
-	return x, y
+	p.components.Transform().ChangeSize(delta)
 }
