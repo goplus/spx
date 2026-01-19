@@ -57,15 +57,16 @@ func (pc *penComponent) initialize(sprite *SpriteImpl) {
 
 // cloneFrom creates a new pen component by cloning from source
 func (pc *penComponent) cloneFrom(src component, newSprite *SpriteImpl) component {
+	srcPen := src.(*penComponent)
 	return &penComponent{
 		componentBase:   componentBase{sprite: newSprite},
-		penColor:        newSprite.penColor,
-		penWidth:        newSprite.penWidth,
-		penHue:          newSprite.penHue,
-		penSaturation:   newSprite.penSaturation,
-		penBrightness:   newSprite.penBrightness,
-		penTransparency: newSprite.penTransparency,
-		isPenDown:       newSprite.isPenDown,
+		penColor:        srcPen.penColor,
+		penWidth:        srcPen.penWidth,
+		penHue:          srcPen.penHue,
+		penSaturation:   srcPen.penSaturation,
+		penBrightness:   srcPen.penBrightness,
+		penTransparency: srcPen.penTransparency,
+		isPenDown:       srcPen.isPenDown,
 		penObj:          nil, // Don't share pen object, will be created if needed
 	}
 }

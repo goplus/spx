@@ -62,11 +62,12 @@ func (ac *animationComponent) initialize(sprite *SpriteImpl) {
 
 // cloneFrom creates a new animation component by cloning from source
 func (ac *animationComponent) cloneFrom(src component, newSprite *SpriteImpl) component {
+	srcAnim := src.(*animationComponent)
 	newAnim := &animationComponent{
 		componentBase:     componentBase{sprite: newSprite},
-		animations:        newSprite.animations,
-		animBindings:      newSprite.animBindings,
-		defaultAnimation:  newSprite.defaultAnimation,
+		animations:        srcAnim.animations,
+		animBindings:      srcAnim.animBindings,
+		defaultAnimation:  srcAnim.defaultAnimation,
 		animationWrappers: make(map[SpriteAnimationName]*animationWrapper),
 		curAnimState:      nil,
 		curTweenState:     nil,

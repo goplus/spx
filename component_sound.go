@@ -44,6 +44,7 @@ func (sc *soundComponent) initialize(sprite *SpriteImpl) {
 
 // cloneFrom creates a new sound component by cloning from source
 func (sc *soundComponent) cloneFrom(src component, newSprite *SpriteImpl) component {
+	// srcSound := src.(*soundComponent) // Not used since we don't clone sound state
 	return &soundComponent{
 		componentBase: componentBase{sprite: newSprite},
 		soundObj:      0, // Don't share sound object, will be allocated if needed

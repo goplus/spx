@@ -63,14 +63,15 @@ func (tc *transformComponent) initialize(sprite *SpriteImpl) {
 
 // cloneFrom creates a new transform component by cloning from source
 func (tc *transformComponent) cloneFrom(src component, newSprite *SpriteImpl) component {
+	srcTransform := src.(*transformComponent)
 	return &transformComponent{
 		componentBase: componentBase{sprite: newSprite},
-		x:             newSprite.x,
-		y:             newSprite.y,
-		direction:     newSprite.direction,
-		rotationStyle: newSprite.rotationStyle,
-		scale:         newSprite.scale,
-		pivot:         newSprite.pivot,
+		x:             srcTransform.x,
+		y:             srcTransform.y,
+		direction:     srcTransform.direction,
+		rotationStyle: srcTransform.rotationStyle,
+		scale:         srcTransform.scale,
+		pivot:         srcTransform.pivot,
 		isDirty:       false, // Reset dirty flag for new sprite
 	}
 }
