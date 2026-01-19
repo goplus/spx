@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/goplus/spbase/mathf"
+	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
 // ============================================================================
@@ -46,31 +47,8 @@ type physicsComponent struct {
 func (pc *physicsComponent) initialize(sprite *SpriteImpl, spriteCfg *spriteConfig) {
 	pc.componentBase.initialize(sprite, spriteCfg)
 	// Always initialize from config
-	// Collision config
-	pc.collisionInfo.Mask = parseLayerMaskValue(spriteCfg.CollisionMask)
-	pc.collisionInfo.Layer = parseLayerMaskValue(spriteCfg.CollisionLayer)
-	var defaultCollisionType int64 = physicsColliderNone
-	if enabledPhysics {
-		defaultCollisionType = physicsColliderAuto
-	}
-	pc.collisionInfo.Type = parseColliderShapeType(spriteCfg.CollisionShapeType, defaultCollisionType)
-	pc.collisionInfo.Pivot = spriteCfg.CollisionPivot
-	pc.collisionInfo.Params = spriteCfg.CollisionShapeParams
-	if !pc.collisionInfo.validateShape() {
-		pc.collisionInfo.Type = physicsColliderNone
-		pc.collisionInfo.Params = nil
-	}
-
-	// Trigger config
-	pc.triggerInfo.Mask = parseLayerMaskValue(spriteCfg.TriggerMask)
-	pc.triggerInfo.Layer = parseLayerMaskValue(spriteCfg.TriggerLayer)
-	pc.triggerInfo.Type = parseColliderShapeType(spriteCfg.TriggerShapeType, physicsColliderAuto)
-	pc.triggerInfo.Pivot = spriteCfg.TriggerPivot
-	pc.triggerInfo.Params = spriteCfg.TriggerShapeParams
-	if !pc.triggerInfo.validateShape() {
-		pc.triggerInfo.Type = physicsColliderAuto
-		pc.triggerInfo.Params = nil
-	}
+	pc.initCollisionConfig(sprite, spriteCfg)
+	pc.initTriggerConfig(sprite, spriteCfg)
 
 	// Physics properties
 	pc.physicsMode = toPhysicsMode(spriteCfg.PhysicsMode)
@@ -78,6 +56,45 @@ func (pc *physicsComponent) initialize(sprite *SpriteImpl, spriteCfg *spriteConf
 	pc.gravity = parseDefaultFloatValue(spriteCfg.Gravity, 1)
 	pc.friction = parseDefaultFloatValue(spriteCfg.Friction, 1)
 	pc.mass = parseDefaultFloatValue(spriteCfg.Mass, 1)
+}
+
+// initCollisionConfig initializes collision configuration
+func (pc *physicsComponent) initCollisionConfig(sprite *SpriteImpl, spriteCfg *spriteConfig) {
+	pc.collisionInfo.Mask = parseLayerMaskValue(spriteCfg.CollisionMask)
+	pc.collisionInfo.Layer = parseLayerMaskValue(spriteCfg.CollisionLayer)
+
+	// collider is disable by default
+	var defaultCollisionType int64 = physicsColliderNone
+	if enabledPhysics {
+		defaultCollisionType = physicsColliderAuto
+	}
+
+	pc.collisionInfo.Type = parseColliderShapeType(spriteCfg.CollisionShapeType, defaultCollisionType)
+	pc.collisionInfo.Pivot = spriteCfg.CollisionPivot
+	pc.collisionInfo.Params = spriteCfg.CollisionShapeParams
+
+	// Validate colliderShapeType and colliderShape length matching
+	if !pc.collisionInfo.validateShape() {
+		spxlog.Warn("Invalid collider configuration for sprite %s, using default values", sprite.name)
+		pc.collisionInfo.Type = physicsColliderNone
+		pc.collisionInfo.Params = nil
+	}
+}
+
+// initTriggerConfig initializes trigger configuration
+func (pc *physicsComponent) initTriggerConfig(sprite *SpriteImpl, spriteCfg *spriteConfig) {
+	pc.triggerInfo.Mask = parseLayerMaskValue(spriteCfg.TriggerMask)
+	pc.triggerInfo.Layer = parseLayerMaskValue(spriteCfg.TriggerLayer)
+	pc.triggerInfo.Type = parseColliderShapeType(spriteCfg.TriggerShapeType, physicsColliderAuto)
+	pc.triggerInfo.Pivot = spriteCfg.TriggerPivot
+	pc.triggerInfo.Params = spriteCfg.TriggerShapeParams
+
+	// Validate triggerType and triggerShape length matching
+	if !pc.triggerInfo.validateShape() {
+		spxlog.Warn("Invalid trigger configuration for sprite %s, using default values", sprite.name)
+		pc.triggerInfo.Type = physicsColliderAuto
+		pc.triggerInfo.Params = nil
+	}
 }
 
 // cloneFrom creates a new physics component by cloning from source
