@@ -226,7 +226,8 @@ func (ac *animationComponent) doTween(name SpriteAnimationName, ani *aniConfig) 
 			src, _ := tools.GetVec2(ani.From)
 			dst, _ := tools.GetVec2(ani.To)
 			diff := dst.Sub(src)
-			if enabledPhysics && ac.sprite.physicsMode != NoPhysics && ac.sprite.physicsMode != StaticPhysics {
+			physicsMode := ac.sprite.PhysicsMode()
+			if enabledPhysics && physicsMode != NoPhysics && physicsMode != StaticPhysics {
 				speed := diff.Length() / duration
 				dir := diff.Normalize()
 				vel := dir.Mulf(speed)
@@ -252,7 +253,8 @@ func (ac *animationComponent) doTween(name SpriteAnimationName, ani *aniConfig) 
 	}
 	switch ani.AniType {
 	case aniTypeMove:
-		if enabledPhysics && ac.sprite.physicsMode != NoPhysics && ac.sprite.physicsMode != StaticPhysics {
+		physicsMode := ac.sprite.PhysicsMode()
+		if enabledPhysics && physicsMode != NoPhysics && physicsMode != StaticPhysics {
 			ac.sprite.SetVelocity(0, 0)
 		}
 	}
@@ -374,6 +376,11 @@ func (ac *animationComponent) hasAnim(animName string) bool {
 		return true
 	}
 	return false
+}
+
+func (ac *animationComponent) getAnimation(animName SpriteAnimationName) (*aniConfig, bool) {
+	ani, ok := ac.animations[animName]
+	return ani, ok
 }
 
 func (ac *animationComponent) getStateAnimName(stateName string) string {

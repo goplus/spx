@@ -126,7 +126,7 @@ func (c *cameraImpl) getFollowPos() (bool, mathf.Vec2) {
 	if c.on_ != nil {
 		switch v := c.on_.(type) {
 		case *SpriteImpl:
-			return true, mathf.NewVec2(v.x, v.y)
+			return true, mathf.NewVec2(v.getXY())
 		case specialObj:
 			if c.on_ == Mouse {
 				return true, c.g.mousePos

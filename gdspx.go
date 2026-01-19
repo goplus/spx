@@ -115,7 +115,7 @@ func (p *Game) syncEnginePositions() error {
 	var sprites []*SpriteImpl
 
 	for _, item := range items {
-		if sprite, ok := item.(*SpriteImpl); ok && sprite.syncSprite != nil && sprite.physicsMode != NoPhysics {
+		if sprite, ok := item.(*SpriteImpl); ok && sprite.syncSprite != nil && sprite.PhysicsMode() != NoPhysics {
 			spriteIDs = append(spriteIDs, int64(sprite.syncSprite.Id))
 			sprites = append(sprites, sprite)
 		}
@@ -129,8 +129,7 @@ func (p *Game) syncEnginePositions() error {
 		x := float64(positions[i*2])
 		y := float64(positions[i*2+1])
 		revertRenderOffset(sprite, &x, &y)
-		sprite.x = x
-		sprite.y = y
+		sprite.SetXYpos(x, y)
 	}
 
 	return nil
@@ -150,7 +149,7 @@ func (p *Game) syncUpdateInput() {
 func (sprite *SpriteImpl) syncCheckInitProxy() {
 	// bind syncSprite
 	if sprite.syncSprite == nil && !sprite.HasDestroyed {
-		sprite.syncSprite = engine.SyncNewSprite(sprite, mathf.NewVec2(sprite.x, sprite.y))
+		sprite.syncSprite = engine.SyncNewSprite(sprite, mathf.NewVec2(sprite.getXY()))
 		syncInitSpritePhysicInfo(sprite, sprite.syncSprite)
 		sprite.syncSprite.Name = sprite.name
 		sprite.syncSprite.SetTypeName(sprite.name)
@@ -290,11 +289,7 @@ func (*Game) syncUpdatePhysic() {
 }
 
 func syncInitSpritePhysicInfo(sprite *SpriteImpl, syncProxy *engine.Sprite) {
-	sprite.initCollisionParams()
-	sprite.collisionInfo.syncToProxy(syncProxy, false, sprite)
-	sprite.triggerInfo.syncToProxy(syncProxy, true, sprite)
-	syncProxy.SetGravityScale(sprite.gravity)
-	syncProxy.SetPhysicsMode(sprite.physicsMode)
+	sprite.components.Physics().syncInitPhysicInfo(syncProxy)
 }
 
 func createAnimation(

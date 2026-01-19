@@ -80,6 +80,10 @@ func (p *SpriteImpl) hasAnim(animName string) bool {
 	return p.components.Animation().hasAnim(animName)
 }
 
+func (p *SpriteImpl) getAnimation(animName SpriteAnimationName) (*aniConfig, bool) {
+	return p.components.Animation().getAnimation(animName)
+}
+
 // -----------------------------------------------------------------------------
 // Animation State Management
 // -----------------------------------------------------------------------------

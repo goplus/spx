@@ -173,13 +173,14 @@ func (p *SpriteImpl) TriggerEnabled() bool {
 }
 
 // -----------------------------------------------------------------------------
-// Scale Update
+// Physics Shape Scale Update
 // -----------------------------------------------------------------------------
 
-// updateScale updates collision and trigger shapes when scale changes
-func (p *SpriteImpl) updateScale() {
-	p.triggerInfo.applyShape(p.syncSprite, true, p.scale)
-	p.collisionInfo.applyShape(p.syncSprite, false, p.scale)
+// updatePhysicsShapesScale updates collision and trigger shapes when sprite scale changes
+func (p *SpriteImpl) updatePhysicsShapesScale() {
+	physics := p.components.Physics()
+	physics.getTriggerInfo().applyShape(p.syncSprite, true, p.scale)
+	physics.getCollisionInfo().applyShape(p.syncSprite, false, p.scale)
 }
 
 // -----------------------------------------------------------------------------

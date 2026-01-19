@@ -17,6 +17,7 @@
 package spx
 
 import (
+	"github.com/goplus/spbase/mathf"
 	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
@@ -281,7 +282,7 @@ func (p *SpriteImpl) ChangeHeading(dir Direction) {
 // -----------------------------------------------------------------------------
 
 func (p *SpriteImpl) Size() float64 {
-	return p.components.Transform().Size()
+	return p.scale
 }
 
 func (p *SpriteImpl) SetSize(size float64) {
@@ -290,4 +291,12 @@ func (p *SpriteImpl) SetSize(size float64) {
 
 func (p *SpriteImpl) ChangeSize(delta float64) {
 	p.components.Transform().ChangeSize(delta)
+}
+
+// -----------------------------------------------------------------------------
+// Pivot Control
+// -----------------------------------------------------------------------------
+
+func (p *SpriteImpl) getPivot() mathf.Vec2 {
+	return p.components.Transform().getPivot()
 }

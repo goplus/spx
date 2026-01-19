@@ -39,9 +39,6 @@ type transformComponent struct {
 	direction     float64
 	rotationStyle RotationStyle
 
-	// Scale
-	scale float64
-
 	// Pivot point
 	pivot mathf.Vec2
 
@@ -57,7 +54,6 @@ func (tc *transformComponent) initialize(sprite *SpriteImpl, spriteCfg *spriteCo
 	tc.y = spriteCfg.Y
 	tc.direction = spriteCfg.Heading
 	tc.rotationStyle = toRotationStyle(spriteCfg.RotationStyle)
-	tc.scale = spriteCfg.Size
 	tc.pivot = spriteCfg.Pivot
 	tc.isDirty = false
 }
@@ -71,7 +67,6 @@ func (tc *transformComponent) cloneFrom(src component, newSprite *SpriteImpl) co
 		y:             srcTransform.y,
 		direction:     srcTransform.direction,
 		rotationStyle: srcTransform.rotationStyle,
-		scale:         srcTransform.scale,
 		pivot:         srcTransform.pivot,
 		isDirty:       false, // Reset dirty flag for new sprite
 	}
@@ -204,7 +199,7 @@ func (tc *transformComponent) StepToPos(x, y, speed float64, animation SpriteAni
 		from := mathf.NewVec2(tc.x, tc.y)
 		to := mathf.NewVec2(x, y)
 		distance := from.DistanceTo(to)
-		if ani, ok := tc.sprite.animations[animation]; ok {
+		if ani, ok := tc.sprite.getAnimation(animation); ok {
 			anicopy := *ani
 			anicopy.From = &from
 			anicopy.To = &to
@@ -271,7 +266,7 @@ func (tc *transformComponent) Turn(val Direction, speed float64, animation Sprit
 	if animation == "" {
 		animation = tc.sprite.getStateAnimName(StateTurn)
 	}
-	if ani, ok := tc.sprite.animations[animation]; ok {
+	if ani, ok := tc.sprite.getAnimation(animation); ok {
 		anicopy := *ani
 		anicopy.From = tc.direction
 		anicopy.To = tc.direction + delta
@@ -303,7 +298,7 @@ func (tc *transformComponent) TurnTo(obj any, speed float64, animation SpriteAni
 	if animation == "" {
 		animation = tc.sprite.getStateAnimName(StateTurn)
 	}
-	if ani, ok := tc.sprite.animations[animation]; ok {
+	if ani, ok := tc.sprite.getAnimation(animation); ok {
 		fromangle := math.Mod(tc.direction+360.0, 360.0)
 		toangle := math.Mod(angle+360.0, 360.0)
 		if toangle-fromangle > 180.0 {
@@ -364,25 +359,30 @@ func (tc *transformComponent) BounceOffEdge() {
 // Scale Methods
 // ============================================================================
 
-func (tc *transformComponent) Size() float64 {
-	return tc.scale
-}
-
 func (tc *transformComponent) SetSize(size float64) {
 	if debugInstr {
 		spxlog.Debug("SetSize: sprite=%s, size=%v", tc.sprite.name, size)
 	}
-	tc.scale = size
-	tc.updateTransform()
+
+	tc.sprite.scale = size
 	tc.sprite.isCostumeDirty = true
-	tc.sprite.updateScale()
+	tc.updateTransform()
+	tc.sprite.updatePhysicsShapesScale()
 }
 
 func (tc *transformComponent) ChangeSize(delta float64) {
 	if debugInstr {
 		spxlog.Debug("ChangeSize: sprite=%s, delta=%v", tc.sprite.name, delta)
 	}
-	tc.SetSize(tc.scale + delta)
+	tc.SetSize(tc.sprite.scale + delta)
+}
+
+// ============================================================================
+// Pivot Methods
+// ============================================================================
+
+func (tc *transformComponent) getPivot() mathf.Vec2 {
+	return tc.pivot
 }
 
 // ============================================================================

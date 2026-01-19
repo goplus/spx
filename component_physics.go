@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/goplus/spbase/mathf"
+	"github.com/goplus/spx/v2/internal/engine"
 	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
@@ -270,6 +271,46 @@ func (pc *physicsComponent) GetTriggerMask() int64 {
 
 func (pc *physicsComponent) IsTriggerEnabled() bool {
 	return pc.sprite.syncSprite.IsTriggerEnabled()
+}
+
+// ============================================================================
+// Sync Methods
+// ============================================================================
+
+// initCollisionParams initializes collision parameters based on game settings
+func (pc *physicsComponent) initCollisionParams() {
+	if pc.sprite.g.isAutoSetCollisionLayer {
+		info := pc.sprite.g.getSpriteCollisionInfo(pc.sprite.name)
+		pc.collisionInfo.Layer = 0
+		pc.collisionInfo.Mask = 0
+		pc.triggerInfo.Layer = int64(info.Layer)
+		pc.triggerInfo.Mask = int64(info.Mask)
+		if enabledPhysics {
+			pc.collisionInfo.Layer = int64(info.Layer)
+			pc.collisionInfo.Mask = int64(info.Mask)
+		}
+	}
+}
+
+// syncInitPhysicInfo synchronizes physics information to the engine sprite proxy
+func (pc *physicsComponent) syncInitPhysicInfo(syncProxy *engine.Sprite) {
+	pc.initCollisionParams()
+	pc.collisionInfo.syncToProxy(syncProxy, false, pc.sprite)
+	pc.triggerInfo.syncToProxy(syncProxy, true, pc.sprite)
+	syncProxy.SetGravityScale(pc.gravity)
+	syncProxy.SetPhysicsMode(pc.physicsMode)
+}
+
+// ============================================================================
+// Accessor Methods
+// ============================================================================
+
+func (pc *physicsComponent) getTriggerInfo() *physicConfig {
+	return &pc.triggerInfo
+}
+
+func (pc *physicsComponent) getCollisionInfo() *physicConfig {
+	return &pc.collisionInfo
 }
 
 // ============================================================================
