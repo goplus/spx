@@ -22,6 +22,7 @@ import (
 	"log"
 	"maps"
 	"math"
+	"path"
 	"reflect"
 	"slices"
 
@@ -58,6 +59,7 @@ type SpriteImpl struct {
 	animBindings      map[string]string
 	defaultAnimation  SpriteAnimationName
 	animationWrappers map[SpriteAnimationName]*animationWrapper // lazy load
+	spineConfig       *spineAnimConfig                          // Spine animation config (nil means non-Spine mode)
 
 	// Pen properties
 	penColor        mathf.Color
@@ -128,6 +130,42 @@ func (p *SpriteImpl) getAllShapes() []Shape {
 }
 
 // ============================================================================
+// Spine Animation Helper Methods
+// ============================================================================
+
+// isSpineMode checks if sprite is in Spine animation mode
+func (p *SpriteImpl) isSpineMode() bool {
+	return p.spineConfig != nil
+}
+
+// getSpineAnimName gets the Spine animation name
+// Returns mapped value if exists in animMap, otherwise returns original animation name
+func (p *SpriteImpl) getSpineAnimName(animName string) string {
+	if p.spineConfig == nil {
+		return animName
+	}
+	if spineAnimName, ok := p.spineConfig.AnimMap[animName]; ok {
+		return spineAnimName
+	}
+	return animName // fallback to original name
+}
+
+// hasAnimation checks if animation exists (unified support for both Spine and frame animation modes)
+func (p *SpriteImpl) hasAnimation(name string) bool {
+	// Spine mode: check animMap
+	if p.isSpineMode() {
+		if _, ok := p.spineConfig.AnimMap[name]; ok {
+			return true
+		}
+	}
+	// Frame animation mode (or fAnimations in Spine mode)
+	if _, ok := p.animations[name]; ok {
+		return true
+	}
+	return false
+}
+
+// ============================================================================
 // Initialization Methods
 // ============================================================================
 
@@ -137,7 +175,7 @@ func (p *SpriteImpl) init(
 	p.initBasicProperties(g, name, sprite, gamer, spriteCfg)
 	p.initPhysicsConfig(spriteCfg)
 	p.initPhysicsProperties(spriteCfg)
-	p.initAnimations(spriteCfg)
+	p.initAnimations(base, spriteCfg)
 	p.initEngineObjects()
 }
 
@@ -222,7 +260,7 @@ func (p *SpriteImpl) initPhysicsProperties(spriteCfg *spriteConfig) {
 }
 
 // initAnimations initializes sprite animations and animation wrappers
-func (p *SpriteImpl) initAnimations(spriteCfg *spriteConfig) {
+func (p *SpriteImpl) initAnimations(base string, spriteCfg *spriteConfig) {
 	p.defaultAnimation = spriteCfg.DefaultAnimation
 	p.animations = make(map[string]*aniConfig)
 	anims := spriteCfg.FAnimations
@@ -252,6 +290,10 @@ func (p *SpriteImpl) initAnimations(spriteCfg *spriteConfig) {
 		ani.Duration = (math.Abs(float64(ani.IFrameFrom-ani.IFrameTo)) + 1) / float64(ani.FrameFps)
 		p.animations[key] = ani
 	}
+	// Initialize Spine mode
+	if spriteCfg.SpineAnim != nil {
+		p.initSpineConfig(base, spriteCfg.SpineAnim)
+	}
 
 	// Lazy register animations to engine
 	p.animationWrappers = make(map[SpriteAnimationName]*animationWrapper)
@@ -262,6 +304,7 @@ func (p *SpriteImpl) initAnimations(spriteCfg *spriteConfig) {
 
 // initEngineObjects initializes engine-related objects
 func (p *SpriteImpl) initEngineObjects() {
+
 	p.pendingAudios = make([]string, 0)
 	p.syncSprite = nil
 	engine.WaitMainThread(func() {
@@ -271,6 +314,29 @@ func (p *SpriteImpl) initEngineObjects() {
 
 func (p *SpriteImpl) awake() {
 	p.playDefaultAnim()
+}
+
+func (p *SpriteImpl) initSpineConfig(baseDir string, cfg *spineAnimConfig) {
+	if cfg.Atlas == "" || cfg.Skeleton == "" {
+		log.Printf("Warning: Spine config incomplete for sprite %s", p.name)
+		return
+	}
+
+	// Create runtime config (handle paths and default values)
+	p.spineConfig = &spineAnimConfig{
+		Atlas:      path.Join(baseDir, cfg.Atlas),
+		Skeleton:   path.Join(baseDir, cfg.Skeleton),
+		DefaultMix: cfg.DefaultMix,
+		AnimMap:    cfg.AnimMap,
+	}
+
+	// Set default values
+	if p.spineConfig.DefaultMix <= 0 {
+		p.spineConfig.DefaultMix = 0.1
+	}
+	if p.spineConfig.AnimMap == nil {
+		p.spineConfig.AnimMap = make(map[string]string)
+	}
 }
 
 func (p *SpriteImpl) initCollisionParams() {
@@ -302,6 +368,8 @@ func (p *SpriteImpl) InitFrom(src *SpriteImpl) {
 	for animName, ani := range p.animations {
 		p.animationWrappers[animName] = &animationWrapper{spr: p, ani: ani}
 	}
+	// Copy Spine config (sharing reference is fine, config won't be modified)
+	p.spineConfig = src.spineConfig
 	// clone effect params
 	p.greffUniforms = maps.Clone(src.greffUniforms)
 

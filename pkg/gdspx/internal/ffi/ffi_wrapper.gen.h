@@ -204,49 +204,49 @@ void cgo_callfn_GDExtensionSpxPenSetPenSizeTo(const GDExtensionSpxPenSetPenSizeT
 void cgo_callfn_GDExtensionSpxPenSetPenStampTexture(const GDExtensionSpxPenSetPenStampTexture fn, GdObj obj, GdString texture_path) {
 	fn(obj, texture_path);
 }
-void cgo_callfn_GDExtensionSpxPhysicsRaycast(const GDExtensionSpxPhysicsRaycast fn, GdVec2 from, GdVec2 to, GdInt collision_mask, GdObj* ret_val) {
+void cgo_callfn_GDExtensionSpxPhysicRaycast(const GDExtensionSpxPhysicRaycast fn, GdVec2 from, GdVec2 to, GdInt collision_mask, GdObj* ret_val) {
 	fn(from, to, collision_mask,ret_val);
 }
-void cgo_callfn_GDExtensionSpxPhysicsCheckCollision(const GDExtensionSpxPhysicsCheckCollision fn, GdVec2 from, GdVec2 to, GdInt collision_mask, GdBool collide_with_areas, GdBool collide_with_bodies, GdBool* ret_val) {
+void cgo_callfn_GDExtensionSpxPhysicCheckCollision(const GDExtensionSpxPhysicCheckCollision fn, GdVec2 from, GdVec2 to, GdInt collision_mask, GdBool collide_with_areas, GdBool collide_with_bodies, GdBool* ret_val) {
 	fn(from, to, collision_mask, collide_with_areas, collide_with_bodies,ret_val);
 }
-void cgo_callfn_GDExtensionSpxPhysicsCheckTouchedCameraBoundaries(const GDExtensionSpxPhysicsCheckTouchedCameraBoundaries fn, GdObj obj, GdInt* ret_val) {
+void cgo_callfn_GDExtensionSpxPhysicCheckTouchedCameraBoundaries(const GDExtensionSpxPhysicCheckTouchedCameraBoundaries fn, GdObj obj, GdInt* ret_val) {
 	fn(obj,ret_val);
 }
-void cgo_callfn_GDExtensionSpxPhysicsCheckTouchedCameraBoundary(const GDExtensionSpxPhysicsCheckTouchedCameraBoundary fn, GdObj obj, GdInt board_type, GdBool* ret_val) {
+void cgo_callfn_GDExtensionSpxPhysicCheckTouchedCameraBoundary(const GDExtensionSpxPhysicCheckTouchedCameraBoundary fn, GdObj obj, GdInt board_type, GdBool* ret_val) {
 	fn(obj, board_type,ret_val);
 }
-void cgo_callfn_GDExtensionSpxPhysicsCheckNearestTouchedCameraBoundary(const GDExtensionSpxPhysicsCheckNearestTouchedCameraBoundary fn, GdObj obj, GdInt* ret_val) {
+void cgo_callfn_GDExtensionSpxPhysicCheckNearestTouchedCameraBoundary(const GDExtensionSpxPhysicCheckNearestTouchedCameraBoundary fn, GdObj obj, GdInt* ret_val) {
 	fn(obj,ret_val);
 }
-void cgo_callfn_GDExtensionSpxPhysicsSetCollisionSystemType(const GDExtensionSpxPhysicsSetCollisionSystemType fn, GdBool is_collision_by_alpha) {
+void cgo_callfn_GDExtensionSpxPhysicSetCollisionSystemType(const GDExtensionSpxPhysicSetCollisionSystemType fn, GdBool is_collision_by_alpha) {
 	fn(is_collision_by_alpha);
 }
-void cgo_callfn_GDExtensionSpxPhysicsSetGlobalGravity(const GDExtensionSpxPhysicsSetGlobalGravity fn, GdFloat gravity) {
+void cgo_callfn_GDExtensionSpxPhysicSetGlobalGravity(const GDExtensionSpxPhysicSetGlobalGravity fn, GdFloat gravity) {
 	fn(gravity);
 }
-void cgo_callfn_GDExtensionSpxPhysicsGetGlobalGravity(const GDExtensionSpxPhysicsGetGlobalGravity fn, GdFloat* ret_val) {
+void cgo_callfn_GDExtensionSpxPhysicGetGlobalGravity(const GDExtensionSpxPhysicGetGlobalGravity fn, GdFloat* ret_val) {
 	fn(ret_val);
 }
-void cgo_callfn_GDExtensionSpxPhysicsSetGlobalFriction(const GDExtensionSpxPhysicsSetGlobalFriction fn, GdFloat friction) {
+void cgo_callfn_GDExtensionSpxPhysicSetGlobalFriction(const GDExtensionSpxPhysicSetGlobalFriction fn, GdFloat friction) {
 	fn(friction);
 }
-void cgo_callfn_GDExtensionSpxPhysicsGetGlobalFriction(const GDExtensionSpxPhysicsGetGlobalFriction fn, GdFloat* ret_val) {
+void cgo_callfn_GDExtensionSpxPhysicGetGlobalFriction(const GDExtensionSpxPhysicGetGlobalFriction fn, GdFloat* ret_val) {
 	fn(ret_val);
 }
-void cgo_callfn_GDExtensionSpxPhysicsSetGlobalAirDrag(const GDExtensionSpxPhysicsSetGlobalAirDrag fn, GdFloat air_drag) {
+void cgo_callfn_GDExtensionSpxPhysicSetGlobalAirDrag(const GDExtensionSpxPhysicSetGlobalAirDrag fn, GdFloat air_drag) {
 	fn(air_drag);
 }
-void cgo_callfn_GDExtensionSpxPhysicsGetGlobalAirDrag(const GDExtensionSpxPhysicsGetGlobalAirDrag fn, GdFloat* ret_val) {
+void cgo_callfn_GDExtensionSpxPhysicGetGlobalAirDrag(const GDExtensionSpxPhysicGetGlobalAirDrag fn, GdFloat* ret_val) {
 	fn(ret_val);
 }
-void cgo_callfn_GDExtensionSpxPhysicsCheckCollisionRect(const GDExtensionSpxPhysicsCheckCollisionRect fn, GdVec2 pos, GdVec2 size, GdInt collision_mask, GdArray* ret_val) {
+void cgo_callfn_GDExtensionSpxPhysicCheckCollisionRect(const GDExtensionSpxPhysicCheckCollisionRect fn, GdVec2 pos, GdVec2 size, GdInt collision_mask, GdArray* ret_val) {
 	fn(pos, size, collision_mask,ret_val);
 }
-void cgo_callfn_GDExtensionSpxPhysicsCheckCollisionCircle(const GDExtensionSpxPhysicsCheckCollisionCircle fn, GdVec2 pos, GdFloat radius, GdInt collision_mask, GdArray* ret_val) {
+void cgo_callfn_GDExtensionSpxPhysicCheckCollisionCircle(const GDExtensionSpxPhysicCheckCollisionCircle fn, GdVec2 pos, GdFloat radius, GdInt collision_mask, GdArray* ret_val) {
 	fn(pos, radius, collision_mask,ret_val);
 }
-void cgo_callfn_GDExtensionSpxPhysicsRaycastWithDetails(const GDExtensionSpxPhysicsRaycastWithDetails fn, GdVec2 from, GdVec2 to, GdArray ignore_sprites, GdInt collision_mask, GdBool collide_with_areas, GdBool collide_with_bodies, GdArray* ret_val) {
+void cgo_callfn_GDExtensionSpxPhysicRaycastWithDetails(const GDExtensionSpxPhysicRaycastWithDetails fn, GdVec2 from, GdVec2 to, GdArray ignore_sprites, GdInt collision_mask, GdBool collide_with_areas, GdBool collide_with_bodies, GdArray* ret_val) {
 	fn(from, to, ignore_sprites, collision_mask, collide_with_areas, collide_with_bodies,ret_val);
 }
 void cgo_callfn_GDExtensionSpxPlatformSetStretchMode(const GDExtensionSpxPlatformSetStretchMode fn, GdBool enable) {
@@ -359,6 +359,9 @@ void cgo_callfn_GDExtensionSpxSceneCreateRenderSprite(const GDExtensionSpxSceneC
 }
 void cgo_callfn_GDExtensionSpxSceneCreateStaticSprite(const GDExtensionSpxSceneCreateStaticSprite fn, GdString texture_path, GdVec2 pos, GdFloat degree, GdVec2 scale, GdInt zindex, GdVec2 pivot, GdInt collider_type, GdVec2 collider_pivot, GdArray collider_params, GdObj* ret_val) {
 	fn(texture_path, pos, degree, scale, zindex, pivot, collider_type, collider_pivot, collider_params,ret_val);
+}
+void cgo_callfn_GDExtensionSpxSpineClearAllCaches(const GDExtensionSpxSpineClearAllCaches fn) {
+	fn();
 }
 void cgo_callfn_GDExtensionSpxSpriteSetDontDestroyOnLoad(const GDExtensionSpxSpriteSetDontDestroyOnLoad fn, GdObj obj) {
 	fn(obj);
@@ -563,6 +566,12 @@ void cgo_callfn_GDExtensionSpxSpriteIsAnimFlippedV(const GDExtensionSpxSpriteIsA
 }
 void cgo_callfn_GDExtensionSpxSpriteGetCurrentAnimName(const GDExtensionSpxSpriteGetCurrentAnimName fn, GdObj obj, GdString* ret_val) {
 	fn(obj,ret_val);
+}
+void cgo_callfn_GDExtensionSpxSpriteSetSpineSkeleton(const GDExtensionSpxSpriteSetSpineSkeleton fn, GdObj obj, GdString atlas_path, GdString skeleton_path, GdFloat default_mix) {
+	fn(obj, atlas_path, skeleton_path, default_mix);
+}
+void cgo_callfn_GDExtensionSpxSpriteClearSpineSkeleton(const GDExtensionSpxSpriteClearSpineSkeleton fn, GdObj obj) {
+	fn(obj);
 }
 void cgo_callfn_GDExtensionSpxSpriteSetVelocity(const GDExtensionSpxSpriteSetVelocity fn, GdObj obj, GdVec2 velocity) {
 	fn(obj, velocity);

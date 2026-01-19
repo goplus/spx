@@ -55,6 +55,9 @@ func (pself *Sprite) CheckCollisionWithSprite(obj_b Object, alpha_threshold floa
 	return _val
 }
 
+func (pself *Sprite) ClearSpineSkeleton() {
+}
+
 func (pself *Sprite) CloneSprite() Object {
 	var _val Object
 	return _val
@@ -453,6 +456,9 @@ func (pself *Sprite) SetRotation(rot float64) {
 }
 
 func (pself *Sprite) SetScale(scale Vec2) {
+}
+
+func (pself *Sprite) SetSpineSkeleton(atlas_path string, skeleton_path string, default_mix float64) {
 }
 
 func (pself *Sprite) SetTexture(path string) {

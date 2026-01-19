@@ -50,8 +50,8 @@ func BindMgr(mgrs []IManager) {
 		case IPenMgr:
 			PenMgr = v
 
-		case IPhysicsMgr:
-			PhysicsMgr = v
+		case IPhysicMgr:
+			PhysicMgr = v
 
 		case IPlatformMgr:
 			PlatformMgr = v
@@ -61,6 +61,9 @@ func BindMgr(mgrs []IManager) {
 
 		case ISceneMgr:
 			SceneMgr = v
+
+		case ISpineMgr:
+			SpineMgr = v
 
 		case ISpriteMgr:
 			SpriteMgr = v
@@ -101,7 +104,7 @@ type navigationMgr struct {
 type penMgr struct {
 	baseMgr
 }
-type physicsMgr struct {
+type physicMgr struct {
 	baseMgr
 }
 type platformMgr struct {
@@ -111,6 +114,9 @@ type resMgr struct {
 	baseMgr
 }
 type sceneMgr struct {
+	baseMgr
+}
+type spineMgr struct {
 	baseMgr
 }
 type spriteMgr struct {
@@ -134,10 +140,11 @@ func createMgrs() []IManager {
 	addManager(&inputMgr{})
 	addManager(&navigationMgr{})
 	addManager(&penMgr{})
-	addManager(&physicsMgr{})
+	addManager(&physicMgr{})
 	addManager(&platformMgr{})
 	addManager(&resMgr{})
 	addManager(&sceneMgr{})
+	addManager(&spineMgr{})
 	addManager(&spriteMgr{})
 	addManager(&tilemapMgr{})
 	addManager(&tilemapparserMgr{})
@@ -465,88 +472,88 @@ func (pself *penMgr) SetPenStampTexture(obj Object, texture_path string) {
 	defer C.free(unsafe.Pointer(arg1Str))
 	CallPenSetPenStampTexture(arg0, arg1)
 }
-func (pself *physicsMgr) Raycast(from Vec2, to Vec2, collision_mask int64) Object {
+func (pself *physicMgr) Raycast(from Vec2, to Vec2, collision_mask int64) Object {
 	arg0 := ToGdVec2(from)
 	arg1 := ToGdVec2(to)
 	arg2 := ToGdInt(collision_mask)
-	retValue := CallPhysicsRaycast(arg0, arg1, arg2)
+	retValue := CallPhysicRaycast(arg0, arg1, arg2)
 	return ToObject(retValue)
 }
-func (pself *physicsMgr) CheckCollision(from Vec2, to Vec2, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) bool {
+func (pself *physicMgr) CheckCollision(from Vec2, to Vec2, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) bool {
 	arg0 := ToGdVec2(from)
 	arg1 := ToGdVec2(to)
 	arg2 := ToGdInt(collision_mask)
 	arg3 := ToGdBool(collide_with_areas)
 	arg4 := ToGdBool(collide_with_bodies)
-	retValue := CallPhysicsCheckCollision(arg0, arg1, arg2, arg3, arg4)
+	retValue := CallPhysicCheckCollision(arg0, arg1, arg2, arg3, arg4)
 	return ToBool(retValue)
 }
-func (pself *physicsMgr) CheckTouchedCameraBoundaries(obj Object) int64 {
+func (pself *physicMgr) CheckTouchedCameraBoundaries(obj Object) int64 {
 	arg0 := ToGdObj(obj)
-	retValue := CallPhysicsCheckTouchedCameraBoundaries(arg0)
+	retValue := CallPhysicCheckTouchedCameraBoundaries(arg0)
 	return ToInt64(retValue)
 }
-func (pself *physicsMgr) CheckTouchedCameraBoundary(obj Object, board_type int64) bool {
+func (pself *physicMgr) CheckTouchedCameraBoundary(obj Object, board_type int64) bool {
 	arg0 := ToGdObj(obj)
 	arg1 := ToGdInt(board_type)
-	retValue := CallPhysicsCheckTouchedCameraBoundary(arg0, arg1)
+	retValue := CallPhysicCheckTouchedCameraBoundary(arg0, arg1)
 	return ToBool(retValue)
 }
-func (pself *physicsMgr) CheckNearestTouchedCameraBoundary(obj Object) int64 {
+func (pself *physicMgr) CheckNearestTouchedCameraBoundary(obj Object) int64 {
 	arg0 := ToGdObj(obj)
-	retValue := CallPhysicsCheckNearestTouchedCameraBoundary(arg0)
+	retValue := CallPhysicCheckNearestTouchedCameraBoundary(arg0)
 	return ToInt64(retValue)
 }
-func (pself *physicsMgr) SetCollisionSystemType(is_collision_by_alpha bool) {
+func (pself *physicMgr) SetCollisionSystemType(is_collision_by_alpha bool) {
 	arg0 := ToGdBool(is_collision_by_alpha)
-	CallPhysicsSetCollisionSystemType(arg0)
+	CallPhysicSetCollisionSystemType(arg0)
 }
-func (pself *physicsMgr) SetGlobalGravity(gravity float64) {
+func (pself *physicMgr) SetGlobalGravity(gravity float64) {
 	arg0 := ToGdFloat(gravity)
-	CallPhysicsSetGlobalGravity(arg0)
+	CallPhysicSetGlobalGravity(arg0)
 }
-func (pself *physicsMgr) GetGlobalGravity() float64 {
-	retValue := CallPhysicsGetGlobalGravity()
+func (pself *physicMgr) GetGlobalGravity() float64 {
+	retValue := CallPhysicGetGlobalGravity()
 	return ToFloat64(retValue)
 }
-func (pself *physicsMgr) SetGlobalFriction(friction float64) {
+func (pself *physicMgr) SetGlobalFriction(friction float64) {
 	arg0 := ToGdFloat(friction)
-	CallPhysicsSetGlobalFriction(arg0)
+	CallPhysicSetGlobalFriction(arg0)
 }
-func (pself *physicsMgr) GetGlobalFriction() float64 {
-	retValue := CallPhysicsGetGlobalFriction()
+func (pself *physicMgr) GetGlobalFriction() float64 {
+	retValue := CallPhysicGetGlobalFriction()
 	return ToFloat64(retValue)
 }
-func (pself *physicsMgr) SetGlobalAirDrag(air_drag float64) {
+func (pself *physicMgr) SetGlobalAirDrag(air_drag float64) {
 	arg0 := ToGdFloat(air_drag)
-	CallPhysicsSetGlobalAirDrag(arg0)
+	CallPhysicSetGlobalAirDrag(arg0)
 }
-func (pself *physicsMgr) GetGlobalAirDrag() float64 {
-	retValue := CallPhysicsGetGlobalAirDrag()
+func (pself *physicMgr) GetGlobalAirDrag() float64 {
+	retValue := CallPhysicGetGlobalAirDrag()
 	return ToFloat64(retValue)
 }
-func (pself *physicsMgr) CheckCollisionRect(pos Vec2, size Vec2, collision_mask int64) Array {
+func (pself *physicMgr) CheckCollisionRect(pos Vec2, size Vec2, collision_mask int64) Array {
 	arg0 := ToGdVec2(pos)
 	arg1 := ToGdVec2(size)
 	arg2 := ToGdInt(collision_mask)
-	retValue := CallPhysicsCheckCollisionRect(arg0, arg1, arg2)
+	retValue := CallPhysicCheckCollisionRect(arg0, arg1, arg2)
 	return ToArray(retValue)
 }
-func (pself *physicsMgr) CheckCollisionCircle(pos Vec2, radius float64, collision_mask int64) Array {
+func (pself *physicMgr) CheckCollisionCircle(pos Vec2, radius float64, collision_mask int64) Array {
 	arg0 := ToGdVec2(pos)
 	arg1 := ToGdFloat(radius)
 	arg2 := ToGdInt(collision_mask)
-	retValue := CallPhysicsCheckCollisionCircle(arg0, arg1, arg2)
+	retValue := CallPhysicCheckCollisionCircle(arg0, arg1, arg2)
 	return ToArray(retValue)
 }
-func (pself *physicsMgr) RaycastWithDetails(from Vec2, to Vec2, ignore_sprites Array, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) Array {
+func (pself *physicMgr) RaycastWithDetails(from Vec2, to Vec2, ignore_sprites Array, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) Array {
 	arg0 := ToGdVec2(from)
 	arg1 := ToGdVec2(to)
 	arg2 := ToGdArray(ignore_sprites)
 	arg3 := ToGdInt(collision_mask)
 	arg4 := ToGdBool(collide_with_areas)
 	arg5 := ToGdBool(collide_with_bodies)
-	retValue := CallPhysicsRaycastWithDetails(arg0, arg1, arg2, arg3, arg4, arg5)
+	retValue := CallPhysicRaycastWithDetails(arg0, arg1, arg2, arg3, arg4, arg5)
 	return ToArray(retValue)
 }
 func (pself *platformMgr) SetStretchMode(enable bool) {
@@ -756,6 +763,9 @@ func (pself *sceneMgr) CreateStaticSprite(texture_path string, pos Vec2, degree 
 	arg8 := ToGdArray(collider_params)
 	retValue := CallSceneCreateStaticSprite(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8)
 	return ToObject(retValue)
+}
+func (pself *spineMgr) ClearAllCaches() {
+	CallSpineClearAllCaches()
 }
 func (pself *spriteMgr) SetDontDestroyOnLoad(obj Object) {
 	arg0 := ToGdObj(obj)
@@ -1168,6 +1178,21 @@ func (pself *spriteMgr) GetCurrentAnimName(obj Object) string {
 	arg0 := ToGdObj(obj)
 	retValue := CallSpriteGetCurrentAnimName(arg0)
 	return ToString(retValue)
+}
+func (pself *spriteMgr) SetSpineSkeleton(obj Object, atlas_path string, skeleton_path string, default_mix float64) {
+	arg0 := ToGdObj(obj)
+	arg1Str := C.CString(atlas_path)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	arg2Str := C.CString(skeleton_path)
+	arg2 := (GdString)(arg2Str)
+	defer C.free(unsafe.Pointer(arg2Str))
+	arg3 := ToGdFloat(default_mix)
+	CallSpriteSetSpineSkeleton(arg0, arg1, arg2, arg3)
+}
+func (pself *spriteMgr) ClearSpineSkeleton(obj Object) {
+	arg0 := ToGdObj(obj)
+	CallSpriteClearSpineSkeleton(arg0)
 }
 func (pself *spriteMgr) SetVelocity(obj Object, velocity Vec2) {
 	arg0 := ToGdObj(obj)
