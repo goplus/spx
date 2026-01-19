@@ -54,6 +54,21 @@ func (pc *physicsComponent) initialize(sprite *SpriteImpl) {
 	pc.gravity = sprite.gravity
 }
 
+// cloneFrom creates a new physics component by cloning from source
+func (pc *physicsComponent) cloneFrom(src component, newSprite *SpriteImpl) component {
+	newPhys := &physicsComponent{
+		componentBase: componentBase{sprite: newSprite},
+		physicsMode:   newSprite.physicsMode,
+		mass:          newSprite.mass,
+		friction:      newSprite.friction,
+		airDrag:       newSprite.airDrag,
+		gravity:       newSprite.gravity,
+	}
+	newPhys.collisionInfo.copyFrom(&newSprite.collisionInfo)
+	newPhys.triggerInfo.copyFrom(&newSprite.triggerInfo)
+	return newPhys
+}
+
 // OnDestroy cleanup when component is destroyed
 func (pc *physicsComponent) onDestroy() {
 	// Nothing to cleanup
@@ -247,19 +262,4 @@ func (pc *physicsComponent) applyPhysicShape(isTrigger bool) {
 			// TODO: Implement polygon shape setting when available
 		}
 	}
-}
-
-// cloneFrom creates a new physics component by cloning from source
-func (pc *physicsComponent) cloneFrom(src component, newSprite *SpriteImpl) component {
-	newPhys := &physicsComponent{
-		componentBase: componentBase{sprite: newSprite},
-		physicsMode:   newSprite.physicsMode,
-		mass:          newSprite.mass,
-		friction:      newSprite.friction,
-		airDrag:       newSprite.airDrag,
-		gravity:       newSprite.gravity,
-	}
-	newPhys.collisionInfo.copyFrom(&newSprite.collisionInfo)
-	newPhys.triggerInfo.copyFrom(&newSprite.triggerInfo)
-	return newPhys
 }

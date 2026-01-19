@@ -42,6 +42,15 @@ func (sc *soundComponent) initialize(sprite *SpriteImpl) {
 	sc.pendingAudios = make([]string, 0)
 }
 
+// cloneFrom creates a new sound component by cloning from source
+func (sc *soundComponent) cloneFrom(src component, newSprite *SpriteImpl) component {
+	return &soundComponent{
+		componentBase: componentBase{sprite: newSprite},
+		soundObj:      0, // Don't share sound object, will be allocated if needed
+		pendingAudios: make([]string, 0),
+	}
+}
+
 // OnDestroy cleanup when component is destroyed
 func (sc *soundComponent) onDestroy() {
 	if sc.soundObj != 0 {
@@ -131,11 +140,4 @@ func (sc *soundComponent) checkSoundObj() {
 	if sc.soundObj == 0 {
 		sc.soundObj = sc.sprite.g.sounds.allocSound()
 	}
-}
-
-// cloneFrom creates a new sound component by cloning from source
-func (sc *soundComponent) cloneFrom(src component, newSprite *SpriteImpl) component {
-	newSound := &soundComponent{}
-	newSound.initialize(newSprite)
-	return newSound
 }

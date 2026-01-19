@@ -123,7 +123,7 @@ func (tc *transformComponent) ChangeXYpos(dx, dy float64) {
 func (tc *transformComponent) doMoveTo(x, y float64) {
 	x, y = tc.fixWorldRange(x, y)
 	if tc.sprite.isPenDown {
-		tc.sprite.movePen(x, y)
+		tc.sprite.components.Pen().movePen(x, y)
 	}
 	tc.x, tc.y = x, y
 	tc.updateTransform()

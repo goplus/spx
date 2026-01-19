@@ -60,6 +60,28 @@ func (ac *animationComponent) initialize(sprite *SpriteImpl) {
 	ac.donedAnimations = make([]string, 0)
 }
 
+// cloneFrom creates a new animation component by cloning from source
+func (ac *animationComponent) cloneFrom(src component, newSprite *SpriteImpl) component {
+	newAnim := &animationComponent{
+		componentBase:     componentBase{sprite: newSprite},
+		animations:        newSprite.animations,
+		animBindings:      newSprite.animBindings,
+		defaultAnimation:  newSprite.defaultAnimation,
+		animationWrappers: make(map[SpriteAnimationName]*animationWrapper),
+		curAnimState:      nil,
+		curTweenState:     nil,
+		donedAnimations:   make([]string, 0),
+	}
+	// Recreate animation wrappers for the new sprite
+	for name, ani := range newAnim.animations {
+		newAnim.animationWrappers[name] = &animationWrapper{
+			spr: newSprite,
+			ani: ani,
+		}
+	}
+	return newAnim
+}
+
 // onDestroy cleanup when component is destroyed
 func (ac *animationComponent) onDestroy() {
 	ac.stopAnimState(ac.curAnimState)
@@ -315,26 +337,4 @@ func (ac *animationComponent) hasAnim(animName string) bool {
 		return true
 	}
 	return false
-}
-
-// cloneFrom creates a new animation component by cloning from source
-func (ac *animationComponent) cloneFrom(src component, newSprite *SpriteImpl) component {
-	newAnim := &animationComponent{
-		componentBase:     componentBase{sprite: newSprite},
-		animations:        newSprite.animations,
-		animBindings:      newSprite.animBindings,
-		defaultAnimation:  newSprite.defaultAnimation,
-		animationWrappers: make(map[SpriteAnimationName]*animationWrapper),
-		curAnimState:      nil,
-		curTweenState:     nil,
-		donedAnimations:   make([]string, 0),
-	}
-	// Recreate animation wrappers for the new sprite
-	for name, ani := range newAnim.animations {
-		newAnim.animationWrappers[name] = &animationWrapper{
-			spr: newSprite,
-			ani: ani,
-		}
-	}
-	return newAnim
 }

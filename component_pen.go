@@ -55,6 +55,21 @@ func (pc *penComponent) initialize(sprite *SpriteImpl) {
 	pc.penObj = sprite.penObj
 }
 
+// cloneFrom creates a new pen component by cloning from source
+func (pc *penComponent) cloneFrom(src component, newSprite *SpriteImpl) component {
+	return &penComponent{
+		componentBase:   componentBase{sprite: newSprite},
+		penColor:        newSprite.penColor,
+		penWidth:        newSprite.penWidth,
+		penHue:          newSprite.penHue,
+		penSaturation:   newSprite.penSaturation,
+		penBrightness:   newSprite.penBrightness,
+		penTransparency: newSprite.penTransparency,
+		isPenDown:       newSprite.isPenDown,
+		penObj:          nil, // Don't share pen object, will be created if needed
+	}
+}
+
 // OnDestroy cleanup when component is destroyed
 func (pc *penComponent) onDestroy() {
 	pc.destroyPen()
@@ -224,19 +239,4 @@ func (pc *penComponent) applyPenHsvProperty() {
 // IsPenDown returns whether the pen is down
 func (pc *penComponent) IsPenDown() bool {
 	return pc.isPenDown
-}
-
-// cloneFrom creates a new pen component by cloning from source
-func (pc *penComponent) cloneFrom(src component, newSprite *SpriteImpl) component {
-	return &penComponent{
-		componentBase:   componentBase{sprite: newSprite},
-		penColor:        newSprite.penColor,
-		penWidth:        newSprite.penWidth,
-		penHue:          newSprite.penHue,
-		penSaturation:   newSprite.penSaturation,
-		penBrightness:   newSprite.penBrightness,
-		penTransparency: newSprite.penTransparency,
-		isPenDown:       newSprite.isPenDown,
-		penObj:          nil, // Don't share pen object, will be created if needed
-	}
 }

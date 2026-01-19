@@ -582,7 +582,6 @@ func (p *SpriteImpl) Destroy() { // destroy sprite, whether prototype or cloned
 
 	p.Hide()
 	p.doDeleteClone()
-	p.destroyPen()
 	p.components.destroyComponents()
 	p.g.removeShape(p)
 	p.Stop(ThisSprite)
