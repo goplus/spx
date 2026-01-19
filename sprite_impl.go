@@ -78,8 +78,6 @@ type SpriteImpl struct {
 	// State flags
 	isVisible bool
 	isCloned_ bool
-	// TODO(refactor): isPenDown is duplicated in penComponent - migrate to use components.Pen()
-	isPenDown bool
 	isDying   bool
 	isDirty   bool // marks if transform or visibility has changed
 
@@ -152,9 +150,8 @@ func (p *SpriteImpl) init(
 	p.initBasicProperties(g, name, sprite, gamer, spriteCfg)
 	p.initPhysicsConfig(spriteCfg)
 	p.initPhysicsProperties(spriteCfg)
-	p.initAnimations(spriteCfg)
+	p.initComponents(spriteCfg) // Components will copy from sprite fields and init from config
 	p.initEngineObjects()
-	p.initComponents()
 }
 
 // initBaseObjects initializes the base object and event sinks
@@ -286,8 +283,8 @@ func (p *SpriteImpl) initEngineObjects() {
 }
 
 // initComponents initializes all sprite components
-func (p *SpriteImpl) initComponents() {
-	p.components.initComponents(p)
+func (p *SpriteImpl) initComponents(spriteCfg *spriteConfig) {
+	p.components.initComponents(p, spriteCfg)
 }
 
 func (p *SpriteImpl) awake() {

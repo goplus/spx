@@ -18,6 +18,7 @@ package spx
 
 import (
 	"log"
+	"math"
 
 	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v2/internal/engine"
@@ -48,16 +49,51 @@ type animationComponent struct {
 	donedAnimations []string
 }
 
-// initialize initializes the animation component
-func (ac *animationComponent) initialize(sprite *SpriteImpl) {
-	ac.componentBase.initialize(sprite)
-	ac.animations = sprite.animations
-	ac.animBindings = sprite.animBindings
-	ac.defaultAnimation = sprite.defaultAnimation
-	ac.animationWrappers = sprite.animationWrappers
-	ac.curAnimState = sprite.curAnimState
-	ac.curTweenState = sprite.curTweenState
+// initialize initializes the animation component from config
+func (ac *animationComponent) initialize(sprite *SpriteImpl, spriteCfg *spriteConfig) {
+	ac.componentBase.initialize(sprite, spriteCfg)
+	// Always initialize from config
+	ac.initFromConfig(spriteCfg)
 	ac.donedAnimations = make([]string, 0)
+}
+
+// initFromConfig initializes animations from sprite configuration
+func (ac *animationComponent) initFromConfig(spriteCfg *spriteConfig) {
+	ac.defaultAnimation = spriteCfg.DefaultAnimation
+	ac.animations = make(map[string]*aniConfig)
+	anims := spriteCfg.FAnimations
+
+	for key, val := range anims {
+		var ani = val
+		_, ok := ac.animations[key]
+		if ok {
+			log.Panicf("animation key [%s] is exist", key)
+		}
+
+		// Set default values
+		if ani.FrameFps == 0 {
+			ani.FrameFps = 25
+		}
+		if ani.TurnToDuration == 0 {
+			ani.TurnToDuration = 1
+		}
+		if ani.StepDuration == 0 {
+			ani.StepDuration = 0.01
+		}
+
+		// Calculate frame ranges and duration
+		from, to := ac.getFromAnToForAniFrames(ani.FrameFrom, ani.FrameTo)
+		ani.IFrameFrom, ani.IFrameTo = int(from), int(to)
+		ani.Speed = 1
+		ani.Duration = (math.Abs(float64(ani.IFrameFrom-ani.IFrameTo)) + 1) / float64(ani.FrameFps)
+		ac.animations[key] = ani
+	}
+
+	// Lazy register animations to engine
+	ac.animationWrappers = make(map[SpriteAnimationName]*animationWrapper)
+	for animName, ani := range ac.animations {
+		ac.animationWrappers[animName] = &animationWrapper{spr: ac.sprite, ani: ani}
+	}
 }
 
 // cloneFrom creates a new animation component by cloning from source
@@ -338,4 +374,11 @@ func (ac *animationComponent) hasAnim(animName string) bool {
 		return true
 	}
 	return false
+}
+
+func (ac *animationComponent) getStateAnimName(stateName string) string {
+	if bindingName, ok := ac.animBindings[stateName]; ok {
+		return bindingName
+	}
+	return stateName
 }

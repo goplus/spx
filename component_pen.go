@@ -38,21 +38,22 @@ type penComponent struct {
 	penTransparency float64
 
 	// State
-	isPenDown bool
-	penObj    *engine.Object
+	penDown bool
+	penObj  *engine.Object
 }
 
-// Initialize initializes the pen component
-func (pc *penComponent) initialize(sprite *SpriteImpl) {
-	pc.componentBase.initialize(sprite)
-	pc.penColor = sprite.penColor
-	pc.penWidth = sprite.penWidth
-	pc.penHue = sprite.penHue
-	pc.penSaturation = sprite.penSaturation
-	pc.penBrightness = sprite.penBrightness
-	pc.penTransparency = sprite.penTransparency
-	pc.isPenDown = sprite.isPenDown
-	pc.penObj = sprite.penObj
+// Initialize initializes the pen component from config
+func (pc *penComponent) initialize(sprite *SpriteImpl, spriteCfg *spriteConfig) {
+	pc.componentBase.initialize(sprite, spriteCfg)
+	// Always initialize with default pen values
+	pc.penColor = mathf.NewColor(66, 133, 244, 255)
+	pc.penWidth = 1
+	pc.penHue = 0.6
+	pc.penSaturation = 1
+	pc.penBrightness = 1
+	pc.penTransparency = 0
+	pc.penDown = false
+	pc.penObj = nil
 }
 
 // cloneFrom creates a new pen component by cloning from source
@@ -66,7 +67,7 @@ func (pc *penComponent) cloneFrom(src component, newSprite *SpriteImpl) componen
 		penSaturation:   srcPen.penSaturation,
 		penBrightness:   srcPen.penBrightness,
 		penTransparency: srcPen.penTransparency,
-		isPenDown:       srcPen.isPenDown,
+		penDown:         srcPen.penDown,
 		penObj:          nil, // Don't share pen object, will be created if needed
 	}
 }
@@ -82,13 +83,13 @@ func (pc *penComponent) onDestroy() {
 
 func (pc *penComponent) PenUp() {
 	pc.checkOrCreatePen()
-	pc.isPenDown = false
+	pc.penDown = false
 	penMgr.PenUp(*pc.penObj)
 }
 
 func (pc *penComponent) PenDown() {
 	pc.checkOrCreatePen()
-	pc.isPenDown = true
+	pc.penDown = true
 	pc.movePen(pc.sprite.x, pc.sprite.y)
 	penMgr.PenDown(*pc.penObj, false)
 }
@@ -237,7 +238,7 @@ func (pc *penComponent) applyPenHsvProperty() {
 	penMgr.SetPenColorTo(*pc.penObj, pc.penColor)
 }
 
-// IsPenDown returns whether the pen is down
-func (pc *penComponent) IsPenDown() bool {
-	return pc.isPenDown
+// isPenDown returns whether the pen is down (internal method)
+func (pc *penComponent) isPenDown() bool {
+	return pc.penDown
 }

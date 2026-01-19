@@ -42,16 +42,42 @@ type physicsComponent struct {
 	gravity     float64
 }
 
-// Initialize initializes the physics component
-func (pc *physicsComponent) initialize(sprite *SpriteImpl) {
-	pc.componentBase.initialize(sprite)
-	pc.triggerInfo.copyFrom(&sprite.triggerInfo)
-	pc.collisionInfo.copyFrom(&sprite.collisionInfo)
-	pc.physicsMode = sprite.physicsMode
-	pc.mass = sprite.mass
-	pc.friction = sprite.friction
-	pc.airDrag = sprite.airDrag
-	pc.gravity = sprite.gravity
+// Initialize initializes the physics component from config
+func (pc *physicsComponent) initialize(sprite *SpriteImpl, spriteCfg *spriteConfig) {
+	pc.componentBase.initialize(sprite, spriteCfg)
+	// Always initialize from config
+	// Collision config
+	pc.collisionInfo.Mask = parseLayerMaskValue(spriteCfg.CollisionMask)
+	pc.collisionInfo.Layer = parseLayerMaskValue(spriteCfg.CollisionLayer)
+	var defaultCollisionType int64 = physicsColliderNone
+	if enabledPhysics {
+		defaultCollisionType = physicsColliderAuto
+	}
+	pc.collisionInfo.Type = parseColliderShapeType(spriteCfg.CollisionShapeType, defaultCollisionType)
+	pc.collisionInfo.Pivot = spriteCfg.CollisionPivot
+	pc.collisionInfo.Params = spriteCfg.CollisionShapeParams
+	if !pc.collisionInfo.validateShape() {
+		pc.collisionInfo.Type = physicsColliderNone
+		pc.collisionInfo.Params = nil
+	}
+
+	// Trigger config
+	pc.triggerInfo.Mask = parseLayerMaskValue(spriteCfg.TriggerMask)
+	pc.triggerInfo.Layer = parseLayerMaskValue(spriteCfg.TriggerLayer)
+	pc.triggerInfo.Type = parseColliderShapeType(spriteCfg.TriggerShapeType, physicsColliderAuto)
+	pc.triggerInfo.Pivot = spriteCfg.TriggerPivot
+	pc.triggerInfo.Params = spriteCfg.TriggerShapeParams
+	if !pc.triggerInfo.validateShape() {
+		pc.triggerInfo.Type = physicsColliderAuto
+		pc.triggerInfo.Params = nil
+	}
+
+	// Physics properties
+	pc.physicsMode = toPhysicsMode(spriteCfg.PhysicsMode)
+	pc.airDrag = parseDefaultFloatValue(spriteCfg.AirDrag, 1)
+	pc.gravity = parseDefaultFloatValue(spriteCfg.Gravity, 1)
+	pc.friction = parseDefaultFloatValue(spriteCfg.Friction, 1)
+	pc.mass = parseDefaultFloatValue(spriteCfg.Mass, 1)
 }
 
 // cloneFrom creates a new physics component by cloning from source

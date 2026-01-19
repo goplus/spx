@@ -25,7 +25,8 @@ package spx
 // component is the base interface for all sprite components
 type component interface {
 	// initialize is called when the component is first created
-	initialize(sprite *SpriteImpl)
+	// spriteCfg can be nil when cloning
+	initialize(sprite *SpriteImpl, spriteCfg *spriteConfig)
 
 	// cloneFrom creates a new component instance by cloning from source
 	cloneFrom(src component, newSprite *SpriteImpl) component
@@ -37,10 +38,12 @@ type component interface {
 // componentBase provides default implementations for component interface
 type componentBase struct {
 	sprite *SpriteImpl
+	config *spriteConfig
 }
 
-func (c *componentBase) initialize(sprite *SpriteImpl) {
+func (c *componentBase) initialize(sprite *SpriteImpl, spriteCfg *spriteConfig) {
 	c.sprite = sprite
+	c.config = spriteCfg
 }
 
 func (c *componentBase) onDestroy() {
@@ -61,21 +64,21 @@ type spriteComponents struct {
 }
 
 // initComponents initializes all sprite components
-func (sc *spriteComponents) initComponents(sprite *SpriteImpl) {
+func (sc *spriteComponents) initComponents(sprite *SpriteImpl, spriteCfg *spriteConfig) {
 	sc.transform = &transformComponent{}
-	sc.transform.initialize(sprite)
+	sc.transform.initialize(sprite, spriteCfg)
 
 	sc.animation = &animationComponent{}
-	sc.animation.initialize(sprite)
+	sc.animation.initialize(sprite, spriteCfg)
 
 	sc.physics = &physicsComponent{}
-	sc.physics.initialize(sprite)
+	sc.physics.initialize(sprite, spriteCfg)
 
 	sc.pen = &penComponent{}
-	sc.pen.initialize(sprite)
+	sc.pen.initialize(sprite, spriteCfg)
 
 	sc.sound = &soundComponent{}
-	sc.sound.initialize(sprite)
+	sc.sound.initialize(sprite, spriteCfg)
 }
 
 // cloneFrom creates new component instances by cloning from source components

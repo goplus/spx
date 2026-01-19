@@ -49,15 +49,16 @@ type transformComponent struct {
 	isDirty bool
 }
 
-// initialize initializes the transform component
-func (tc *transformComponent) initialize(sprite *SpriteImpl) {
-	tc.componentBase.initialize(sprite)
-	tc.x = sprite.x
-	tc.y = sprite.y
-	tc.direction = sprite.direction
-	tc.rotationStyle = sprite.rotationStyle
-	tc.scale = sprite.scale
-	tc.pivot = sprite.pivot
+// initialize initializes the transform component from config
+func (tc *transformComponent) initialize(sprite *SpriteImpl, spriteCfg *spriteConfig) {
+	tc.componentBase.initialize(sprite, spriteCfg)
+	// Always initialize from config
+	tc.x = spriteCfg.X
+	tc.y = spriteCfg.Y
+	tc.direction = spriteCfg.Heading
+	tc.rotationStyle = toRotationStyle(spriteCfg.RotationStyle)
+	tc.scale = spriteCfg.Size
+	tc.pivot = spriteCfg.Pivot
 	tc.isDirty = false
 }
 
@@ -123,8 +124,8 @@ func (tc *transformComponent) ChangeXYpos(dx, dy float64) {
 
 func (tc *transformComponent) doMoveTo(x, y float64) {
 	x, y = tc.fixWorldRange(x, y)
-	if tc.sprite.isPenDown {
-		tc.sprite.components.Pen().movePen(x, y)
+	if tc.sprite.isPenDown() {
+		tc.sprite.movePen(x, y)
 	}
 	tc.x, tc.y = x, y
 	tc.updateTransform()

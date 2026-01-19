@@ -77,3 +77,15 @@ func (p *SpriteImpl) SetPenSize(size float64) {
 func (p *SpriteImpl) ChangePenSize(delta float64) {
 	p.components.Pen().ChangePenSize(delta)
 }
+
+// -----------------------------------------------------------------------------
+// Internal Pen Management (used by other components)
+// -----------------------------------------------------------------------------
+
+func (p *SpriteImpl) movePen(x, y float64) {
+	p.components.Pen().movePen(x, y)
+}
+
+func (p *SpriteImpl) isPenDown() bool {
+	return p.components.Pen().isPenDown()
+}
