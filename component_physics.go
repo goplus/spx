@@ -116,16 +116,17 @@ func (pc *physicsComponent) cloneFrom(src component, newSprite *SpriteImpl) comp
 
 // cloneFrom creates a new physics component by cloning from source
 func (pc *physicsComponent) cloneFrom(src component, newSprite *SpriteImpl) component {
+	srcPhysics := src.(*physicsComponent)
 	newPhys := &physicsComponent{
 		componentBase: componentBase{sprite: newSprite},
-		physicsMode:   newSprite.physicsMode,
-		mass:          newSprite.mass,
-		friction:      newSprite.friction,
-		airDrag:       newSprite.airDrag,
-		gravity:       newSprite.gravity,
+		physicsMode:   srcPhysics.physicsMode,
+		mass:          srcPhysics.mass,
+		friction:      srcPhysics.friction,
+		airDrag:       srcPhysics.airDrag,
+		gravity:       srcPhysics.gravity,
 	}
-	newPhys.collisionInfo.copyFrom(&newSprite.collisionInfo)
-	newPhys.triggerInfo.copyFrom(&newSprite.triggerInfo)
+	newPhys.collisionInfo.copyFrom(&srcPhysics.collisionInfo)
+	newPhys.triggerInfo.copyFrom(&srcPhysics.triggerInfo)
 	return newPhys
 }
 
