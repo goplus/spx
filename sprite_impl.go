@@ -46,7 +46,7 @@ type SpriteImpl struct {
 	// TODO(refactor): The following fields duplicate data in components.
 	// These should be removed in the future, with all access going through components.
 	// Currently kept for backward compatibility and initialization flow.
-	// See: https://github.com/goplus/spx/issues/xxx for migration plan
+	// See: https://github.com/goplus/spx/issues/1157 for migration plan
 
 	// Position and orientation
 	// TODO(refactor): Duplicated in transformComponent - migrate to use components.Transform()
