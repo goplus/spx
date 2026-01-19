@@ -90,7 +90,7 @@ func (pc *penComponent) PenUp() {
 func (pc *penComponent) PenDown() {
 	pc.checkOrCreatePen()
 	pc.penDown = true
-	pc.movePen(pc.sprite.x, pc.sprite.y)
+	pc.movePen(pc.sprite.getXY())
 	penMgr.PenDown(*pc.penObj, false)
 }
 
