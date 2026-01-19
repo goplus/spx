@@ -64,7 +64,7 @@ func (p *SpriteImpl) bounds() *mathf.Rect2 {
 	x, y, w, h := 0.0, 0.0, 0.0, 0.0
 	c := p.costumes[p.costumeIndex_]
 	// calc center
-	x, y = p.x, p.y
+	x, y = p.getXY()
 	applyRenderOffset(p, &x, &y)
 
 	if p.triggerInfo.Type != physicsColliderNone {
