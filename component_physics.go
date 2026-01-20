@@ -44,7 +44,7 @@ type physicsComponent struct {
 	gravity     float64
 }
 
-// Initialize initializes the physics component from config
+// initialize initializes the physics component from config
 func (pc *physicsComponent) initialize(sprite *SpriteImpl, spriteCfg *spriteConfig) {
 	pc.componentBase.initialize(sprite, spriteCfg)
 	// Always initialize from config

@@ -42,7 +42,7 @@ type penComponent struct {
 	penObj  *engine.Object
 }
 
-// Initialize initializes the pen component from config
+// initialize initializes the pen component from config
 func (pc *penComponent) initialize(sprite *SpriteImpl, spriteCfg *spriteConfig) {
 	pc.componentBase.initialize(sprite, spriteCfg)
 	// Always initialize with default pen values

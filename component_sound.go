@@ -35,7 +35,7 @@ type soundComponent struct {
 	pendingAudios []string
 }
 
-// Initialize initializes the sound component from config
+// initialize initializes the sound component from config
 func (sc *soundComponent) initialize(sprite *SpriteImpl, spriteCfg *spriteConfig) {
 	sc.componentBase.initialize(sprite, spriteCfg)
 	// Always initialize with default sound values
