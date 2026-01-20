@@ -7,7 +7,10 @@ import (
 )
 
 func GetVec2(unk any) (mathf.Vec2, bool) {
-	return *unk.(*mathf.Vec2), true
+	if vec, ok := unk.(*mathf.Vec2); ok {
+		return *vec, true
+	}
+	return mathf.Vec2{}, false
 }
 
 func GetFloat(unk any) (float64, bool) {
