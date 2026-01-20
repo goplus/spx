@@ -136,7 +136,7 @@ func buildMonitorEval(g reflect.Value, t, val string) func() string {
 	case strings.HasPrefix(val, getVarPrefix):
 		name := val[len(getVarPrefix):]
 		if name == "" {
-			spxlog.Debug("Bind monitor error: name is empty")
+			spxlog.Error("Bind monitor error: name is empty")
 			return nil
 		}
 		// check field
@@ -167,9 +167,9 @@ func buildMonitorEval(g reflect.Value, t, val string) func() string {
 				}
 			}
 		}
-		spxlog.Debug("Bind monitor error: cannot find property or method (getter): %s", name)
+		spxlog.Error("Bind monitor error: cannot find property or method (getter): %s", name)
 	default:
-		spxlog.Debug("Bind monitor error: unknown command: %s", val)
+		spxlog.Error("Bind monitor error: unknown command: %s", val)
 	}
 	return nil
 }

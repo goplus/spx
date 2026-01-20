@@ -40,8 +40,12 @@ type quoter struct {
 	panel       *ui.UiQuote
 }
 
+func (p *quoter) onUpdate(delta float64) {
+	p.refresh()
+}
+
 func (p *quoter) refresh() {
-	if p.panel == nil {
+	if p.panel == nil || !p.sprite.Visible() {
 		return
 	}
 	bound := p.sprite.bounds()
@@ -51,17 +55,19 @@ func (p *quoter) refresh() {
 	p.panel.SetText(center, size.Divf(2).Addf(extSize), p.message, p.description)
 }
 
-func (p *SpriteImpl) quote_(message, description string) {
-	old := p.quoteObj
+func (p *SpriteImpl) quote(message, description string) {
+	bubble := p.components.Bubble()
+	old := bubble.getQuoteObj()
 	if old == nil {
-		p.quoteObj = &quoter{sprite: p, message: message, description: description}
-		p.g.addShape(p.quoteObj)
-		p.quoteObj.panel = ui.NewUiQuote()
+		newQuote := &quoter{sprite: p, message: message, description: description}
+		bubble.setQuoteObj(newQuote)
+		p.g.addShape(newQuote)
+		newQuote.panel = ui.NewUiQuote()
 	} else {
 		old.message, old.description = message, description
 		p.g.activateShape(old)
 	}
-	p.quoteObj.refresh()
+	bubble.getQuoteObj().refresh()
 }
 
 func (p *SpriteImpl) waitStopQuote(secs float64) {
@@ -70,10 +76,12 @@ func (p *SpriteImpl) waitStopQuote(secs float64) {
 }
 
 func (p *SpriteImpl) doStopQuote() {
-	if p.quoteObj != nil {
-		p.quoteObj.panel.Destroy()
-		p.quoteObj.panel = nil
-		p.g.removeShape(p.quoteObj)
-		p.quoteObj = nil
+	bubble := p.components.bubble
+	if bubble != nil && bubble.hasQuote() {
+		quoteObj := bubble.getQuoteObj()
+		quoteObj.panel.Destroy()
+		quoteObj.panel = nil
+		p.g.removeShape(quoteObj)
+		bubble.setQuoteObj(nil)
 	}
 }
