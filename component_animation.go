@@ -211,8 +211,37 @@ func (ac *animationComponent) doTween(name SpriteAnimationName, ani *aniConfig) 
 		ac.playAnimAudio(ani, info)
 	}
 	duration := ani.Duration
+
+	// Validate duration to prevent division by zero
+	if duration <= 0 {
+		spxlog.Warn("Invalid animation duration: %v", duration)
+		return
+	}
+
 	timer := 0.0
 	prePercent := 0.0
+
+	// Pre-calculate vectors and differences before the loop to avoid redundant calculations
+	var moveDiff mathf.Vec2
+	var moveSpeed float64
+	var moveDir mathf.Vec2
+	var turnDiff float64
+
+	switch ani.AniType {
+	case aniTypeMove, aniTypeGlide:
+		src, _ := tools.GetVec2(ani.From)
+		dst, _ := tools.GetVec2(ani.To)
+		moveDiff = dst.Sub(src)
+		if ani.AniType == aniTypeMove {
+			moveSpeed = moveDiff.Length() / duration
+			moveDir = moveDiff.Normalize()
+		}
+	case aniTypeTurn:
+		src, _ := tools.GetFloat(ani.From)
+		dst, _ := tools.GetFloat(ani.To)
+		turnDiff = dst - src
+	}
+
 	for timer < duration {
 		if info.IsCanceled {
 			return
@@ -223,30 +252,19 @@ func (ac *animationComponent) doTween(name SpriteAnimationName, ani *aniConfig) 
 		prePercent = percent
 		switch ani.AniType {
 		case aniTypeMove:
-			src, _ := tools.GetVec2(ani.From)
-			dst, _ := tools.GetVec2(ani.To)
-			diff := dst.Sub(src)
 			physicsMode := ac.sprite.PhysicsMode()
 			if enabledPhysics && physicsMode != NoPhysics && physicsMode != StaticPhysics {
-				speed := diff.Length() / duration
-				dir := diff.Normalize()
-				vel := dir.Mulf(speed)
+				vel := moveDir.Mulf(moveSpeed)
 				ac.sprite.SetVelocity(vel.X, vel.Y)
 			} else {
-				val := diff.Mulf(deltaPercent)
+				val := moveDiff.Mulf(deltaPercent)
 				ac.sprite.ChangeXYpos(val.X, val.Y)
 			}
 		case aniTypeGlide:
-			src, _ := tools.GetVec2(ani.From)
-			dst, _ := tools.GetVec2(ani.To)
-			diff := dst.Sub(src)
-			val := diff.Mulf(deltaPercent)
+			val := moveDiff.Mulf(deltaPercent)
 			ac.sprite.ChangeXYpos(val.X, val.Y)
 		case aniTypeTurn:
-			src, _ := tools.GetFloat(ani.From)
-			dst, _ := tools.GetFloat(ani.To)
-			diff := dst - src
-			val := diff * deltaPercent
+			val := turnDiff * deltaPercent
 			ac.sprite.ChangeHeading(val)
 		}
 		engine.WaitNextFrame()
