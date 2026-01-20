@@ -41,18 +41,13 @@ type SpriteImpl struct {
 	sprite Sprite
 	name   string
 
-	// TODO(refactor): The following fields duplicate data in components.
-	// These should be removed in the future, with all access going through components.
-	// Currently kept for backward compatibility and initialization flow.
-	// See: https://github.com/goplus/spx/issues/1157 for migration plan
-
 	// Visual components
 	sayObj   *sayOrThinker
 	quoteObj *quoter
 
 	// State flags
 	isVisible bool
-	isCloned_ bool
+	isCloned  bool
 	isDying   bool
 	isDirty   bool // marks if transform or visibility has changed
 
@@ -82,7 +77,7 @@ func (p *SpriteImpl) Name() string {
 }
 
 func (p *SpriteImpl) IsCloned() bool {
-	return p.isCloned_
+	return p.isCloned
 }
 
 func (p *SpriteImpl) setDying() { // dying: visible but can't be touched
@@ -151,7 +146,7 @@ func (p *SpriteImpl) InitFrom(src *SpriteImpl) {
 	p.greffUniforms = maps.Clone(src.greffUniforms)
 
 	p.isVisible = src.isVisible
-	p.isCloned_ = true
+	p.isCloned = true
 	p.isDying = false
 
 	p.hasOnCloned = false
@@ -259,7 +254,7 @@ func applySpriteProps(dest *SpriteImpl, v specsp) {
 	if idx, ok := v["costumeIndex"]; ok {
 		dest.setCustumeIndex(int(idx.(float64)))
 	}
-	dest.isCloned_ = false
+	dest.isCloned = false
 }
 
 func applySprite(out reflect.Value, sprite Sprite, v specsp) (*SpriteImpl, Sprite) {
@@ -376,7 +371,7 @@ func (p *SpriteImpl) Destroy() { // destroy sprite, whether prototype or cloned
 // DeleteThisClone deletes only cloned sprite, no effect on prototype sprite.
 // Add this interface to match Scratch.
 func (p *SpriteImpl) DeleteThisClone() {
-	if !p.isCloned_ {
+	if !p.isCloned {
 		return
 	}
 
@@ -638,18 +633,6 @@ func (p *SpriteImpl) SetLayer__1(dir dirAction, delta int) {
 	case Backward:
 		p.g.goBackLayers(p, delta)
 	}
-}
-
-// ============================================================================
-// Monitor and Variable Display Methods
-// ============================================================================
-
-func (p *SpriteImpl) HideVar(name string) {
-	p.g.setStageMonitor(p.name, getVarPrefix+name, false)
-}
-
-func (p *SpriteImpl) ShowVar(name string) {
-	p.g.setStageMonitor(p.name, getVarPrefix+name, true)
 }
 
 // ============================================================================

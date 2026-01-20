@@ -140,6 +140,18 @@ func (p *SpriteImpl) checkNearestTouchedBoundary() int {
 	return (int)(physicsMgr.CheckNearestTouchedCameraBoundary(p.syncSprite.GetId()))
 }
 
+// ============================================================================
+// Monitor and Variable Display Methods
+// ============================================================================
+
+func (p *SpriteImpl) HideVar(name string) {
+	p.g.setStageMonitor(p.name, getVarPrefix+name, false)
+}
+
+func (p *SpriteImpl) ShowVar(name string) {
+	p.g.setStageMonitor(p.name, getVarPrefix+name, true)
+}
+
 // -----------------------------------------------------------------------------
 // Render Offset and Transformation Utilities
 // -----------------------------------------------------------------------------
