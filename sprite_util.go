@@ -176,7 +176,7 @@ func revertRenderOffset(p *SpriteImpl, cx, cy *float64) {
 
 // calcRenderRotation calculates the render rotation and horizontal scale
 func calcRenderRotation(p *SpriteImpl) (float64, float64) {
-	transform := p.components.Transform()
+	transform := p.transform()
 	if transform.rotationStyle == None {
 		return 0, 1.0
 	}
@@ -284,4 +284,15 @@ func parseColliderShapeType(typeName string, defaultValue int64) int64 {
 		return physicsColliderPolygon
 	}
 	return defaultValue
+}
+
+// toRotationStyle converts a string representation to a RotationStyle constant
+func toRotationStyle(style string) RotationStyle {
+	switch style {
+	case "left-right":
+		return LeftRight
+	case "none":
+		return None
+	}
+	return Normal
 }

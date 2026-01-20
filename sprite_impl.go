@@ -64,14 +64,10 @@ type SpriteImpl struct {
 
 	// Internal state
 	gamer               reflect.Value
-	curAnimState        *animState
-	curTweenState       *animState
 	defaultCostumeIndex int
 
 	// Runtime data
 	collisionTargets map[string]bool
-	pendingAudios    []string
-	donedAnimations  []string
 
 	// Component system
 	components spriteComponents
@@ -131,7 +127,6 @@ func (p *SpriteImpl) initBasicProperties(g *Game, name string, sprite Sprite, ga
 
 // initEngineObjects initializes engine-related objects
 func (p *SpriteImpl) initEngineObjects() {
-	p.pendingAudios = make([]string, 0)
 	p.syncSprite = nil
 	engine.WaitMainThread(func() {
 		p.syncCheckInitProxy()
@@ -163,8 +158,6 @@ func (p *SpriteImpl) InitFrom(src *SpriteImpl) {
 	p.hasOnTouchStart = false
 	p.hasOnTouching = false
 	p.hasOnTouchEnd = false
-
-	p.pendingAudios = make([]string, 0)
 }
 
 // ============================================================================
@@ -236,8 +229,6 @@ func cloneSprite(out reflect.Value, outPtr Sprite, in reflect.Value, v specsp) *
 		runMain(outPtr.Main)
 	}
 	dest.syncSprite = nil
-	dest.curAnimState = nil
-	dest.curTweenState = nil
 	engine.WaitMainThread(func() {
 		dest.syncCheckInitProxy()
 		syncCheckUpdateCostume(&dest.baseObj)
@@ -246,7 +237,7 @@ func cloneSprite(out reflect.Value, outPtr Sprite, in reflect.Value, v specsp) *
 }
 
 func applySpriteProps(dest *SpriteImpl, v specsp) {
-	transform := dest.components.Transform()
+	transform := dest.transform()
 	if x, ok := v["x"]; ok {
 		transform.x = x.(float64)
 	}
@@ -304,18 +295,6 @@ func (p *SpriteImpl) fireTouchStart(obj *SpriteImpl) {
 	}
 }
 
-func (p *SpriteImpl) fireTouching(obj *SpriteImpl) {
-	if p.hasOnTouching {
-		p.doWhenTouching(p, obj)
-	}
-}
-
-func (p *SpriteImpl) fireTouchEnd(obj *SpriteImpl) {
-	if p.hasOnTouchEnd {
-		p.doWhenTouchEnd(p, obj)
-	}
-}
-
 func (p *SpriteImpl) _onTouchStart(onTouchStart func(Sprite)) {
 	p.hasOnTouchStart = true
 	p.allWhenTouchStart = append(p.allWhenTouchStart, eventSink{
@@ -324,19 +303,6 @@ func (p *SpriteImpl) _onTouchStart(onTouchStart func(Sprite)) {
 		cond: func(data any) bool {
 			return data == p
 		},
-	})
-}
-
-func (p *SpriteImpl) onTouchStart__0(onTouchStart func(Sprite)) {
-	for name := range p.g.sprs {
-		p.collisionTargets[name] = true
-	}
-	p._onTouchStart(onTouchStart)
-}
-
-func (p *SpriteImpl) onTouchStart__1(onTouchStart func()) {
-	p.onTouchStart__0(func(Sprite) {
-		onTouchStart()
 	})
 }
 

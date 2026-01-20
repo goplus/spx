@@ -165,19 +165,19 @@ func (sprite *SpriteImpl) syncCheckInitProxy() {
 func (sprite *SpriteImpl) syncOnAnimationFinished() {
 	engine.Lock()
 	defer engine.Unlock()
-	state := sprite.curAnimState
+	state := sprite.animation().getCurAnimState()
 	if state != nil && state.Name != "" && sprite.syncSprite != nil {
 		curAnimName := sprite.syncSprite.GetCurrentAnimName()
-		sprite.donedAnimations = append(sprite.donedAnimations, curAnimName)
+		sprite.animation().addDonedAnimation(curAnimName)
 	}
 }
 
 func (sprite *SpriteImpl) syncOnAnimationLooped() {
 	engine.Lock()
 	defer engine.Unlock()
-	state := sprite.curTweenState
+	state := sprite.animation().getCurTweenState()
 	if state != nil && state.AudioName != "" {
-		sprite.pendingAudios = append(sprite.pendingAudios, state.AudioName)
+		sprite.sound().addPendingAudio(state.AudioName)
 	}
 }
 
@@ -289,7 +289,7 @@ func (*Game) syncUpdatePhysic() {
 }
 
 func syncInitSpritePhysicInfo(sprite *SpriteImpl, syncProxy *engine.Sprite) {
-	sprite.components.Physics().syncInitPhysicInfo(syncProxy)
+	sprite.physics().syncInitPhysicInfo(syncProxy)
 }
 
 func createAnimation(

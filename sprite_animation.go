@@ -64,14 +64,6 @@ func (p *SpriteImpl) adaptAnimBitmapResolution(ani *aniConfig) {
 	p.animation().adaptAnimBitmapResolution(ani)
 }
 
-func (p *SpriteImpl) getFromAnToForAni(anitype aniTypeEnum, from any, to any) (any, any) {
-	return p.animation().getFromAnToForAni(anitype, from, to)
-}
-
-func (p *SpriteImpl) getFromAnToForAniFrames(from any, to any) (float64, float64) {
-	return p.animation().getFromAnToForAniFrames(from, to)
-}
-
 func (p *SpriteImpl) getStateAnimName(stateName string) string {
 	return p.animation().getStateAnimName(stateName)
 }

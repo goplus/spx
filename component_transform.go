@@ -119,9 +119,7 @@ func (tc *transformComponent) ChangeXYpos(dx, dy float64) {
 
 func (tc *transformComponent) doMoveTo(x, y float64) {
 	x, y = tc.fixWorldRange(x, y)
-	if tc.sprite.isPenDown() {
-		tc.sprite.movePen(x, y)
-	}
+	tc.sprite.pen().movePen(x, y)
 	tc.x, tc.y = x, y
 	tc.updateTransform()
 }
@@ -179,7 +177,7 @@ func (tc *transformComponent) Glide(x, y float64, secs float64) {
 		IsLoop:   true,
 	}
 	animName := tc.sprite.getStateAnimName(StateGlide)
-	tc.sprite.components.Animation().doTween(animName, &aniCopy)
+	tc.sprite.animation().doTween(animName, &aniCopy)
 }
 
 func (tc *transformComponent) GlideTo(obj any, secs float64) {
@@ -315,7 +313,7 @@ func (tc *transformComponent) TurnTo(obj any, speed float64, animation SpriteAni
 		aniCopy.AniType = aniTypeTurn
 		aniCopy.IsLoop = true
 		aniCopy.Speed = speed
-		tc.sprite.components.Animation().doTween(animation, &aniCopy)
+		tc.sprite.animation().doTween(animation, &aniCopy)
 		return
 	}
 	if tc.setDirection(angle, false) && debugInstr {

@@ -302,18 +302,3 @@ type Sprite interface {
 	TriggerMask() int64
 	TriggerEnabled() bool
 }
-
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-// toRotationStyle converts a string representation to a RotationStyle constant
-func toRotationStyle(style string) RotationStyle {
-	switch style {
-	case "left-right":
-		return LeftRight
-	case "none":
-		return None
-	}
-	return Normal
-}
