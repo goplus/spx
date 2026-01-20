@@ -16,13 +16,10 @@
 
 package spx
 
-import (
-	"github.com/goplus/spbase/mathf"
-)
-
 // ======================== Pen Component ========================
 // This file contains pen-related functionality for sprites,
 // including pen drawing, color control, and size management.
+// All methods proxy to the pen component implementation.
 
 // -----------------------------------------------------------------------------
 // Pen Color Parameter Types
@@ -42,22 +39,15 @@ const (
 // -----------------------------------------------------------------------------
 
 func (p *SpriteImpl) PenUp() {
-	p.checkOrCreatePen()
-	p.isPenDown = false
-	penMgr.PenUp(*p.penObj)
+	p.components.Pen().PenUp()
 }
 
 func (p *SpriteImpl) PenDown() {
-	p.checkOrCreatePen()
-	p.isPenDown = true
-	p.movePen(p.x, p.y)
-	penMgr.PenDown(*p.penObj, false)
+	p.components.Pen().PenDown()
 }
 
 func (p *SpriteImpl) Stamp() {
-	p.checkOrCreatePen()
-	penMgr.SetPenStampTexture(*p.penObj, p.getCostumePath())
-	penMgr.PenStamp(*p.penObj)
+	p.components.Pen().Stamp()
 }
 
 // -----------------------------------------------------------------------------
@@ -65,79 +55,15 @@ func (p *SpriteImpl) Stamp() {
 // -----------------------------------------------------------------------------
 
 func (p *SpriteImpl) SetPenColor__0(color Color) {
-	p.checkOrCreatePen()
-	p.penColor = toMathfColor(color)
-	p.applyPenColorProperty()
+	p.components.Pen().SetPenColor(color)
 }
 
 func (p *SpriteImpl) SetPenColor__1(kind PenColorParam, value float64) {
-	switch kind {
-	case PenHue:
-		p.setPenHue(value)
-	case PenSaturation:
-		p.setPenSaturation(value)
-	case PenBrightness:
-		p.setPenBrightness(value)
-	case PenTransparency:
-		p.setPenTransparency(value)
-	}
+	p.components.Pen().SetPenColorParam(kind, value)
 }
 
 func (p *SpriteImpl) ChangePenColor(kind PenColorParam, delta float64) {
-	switch kind {
-	case PenHue:
-		p.changePenHue(delta)
-	case PenSaturation:
-		p.changePenSaturation(delta)
-	case PenBrightness:
-		p.changePenBrightness(delta)
-	case PenTransparency:
-		p.changePenTransparency(delta)
-	}
-}
-
-// -----------------------------------------------------------------------------
-// Pen HSV Color Components
-// -----------------------------------------------------------------------------
-
-func (p *SpriteImpl) setPenHue(value float64) {
-	p.checkOrCreatePen()
-	p.penHue = mathf.Clamp(value, 0, 100)
-	p.applyPenHsvProperty()
-}
-
-func (p *SpriteImpl) changePenHue(delta float64) {
-	p.setPenHue(p.penHue + delta)
-}
-
-func (p *SpriteImpl) setPenSaturation(value float64) {
-	p.checkOrCreatePen()
-	p.penSaturation = mathf.Clamp(value, 0, 100)
-	p.applyPenHsvProperty()
-}
-
-func (p *SpriteImpl) changePenSaturation(delta float64) {
-	p.setPenSaturation(p.penSaturation + delta)
-}
-
-func (p *SpriteImpl) setPenBrightness(value float64) {
-	p.checkOrCreatePen()
-	p.penBrightness = mathf.Clamp(value, 0, 100)
-	p.applyPenHsvProperty()
-}
-
-func (p *SpriteImpl) changePenBrightness(delta float64) {
-	p.setPenBrightness(p.penBrightness + delta)
-}
-
-func (p *SpriteImpl) setPenTransparency(value float64) {
-	p.checkOrCreatePen()
-	p.penTransparency = mathf.Clamp(value, 0, 100)
-	p.applyPenHsvProperty()
-}
-
-func (p *SpriteImpl) changePenTransparency(delta float64) {
-	p.setPenTransparency(p.penTransparency + delta)
+	p.components.Pen().ChangePenColor(kind, delta)
 }
 
 // -----------------------------------------------------------------------------
@@ -145,55 +71,21 @@ func (p *SpriteImpl) changePenTransparency(delta float64) {
 // -----------------------------------------------------------------------------
 
 func (p *SpriteImpl) SetPenSize(size float64) {
-	p.checkOrCreatePen()
-	p.penWidth = size
-	penMgr.SetPenSizeTo(*p.penObj, size)
+	p.components.Pen().SetPenSize(size)
 }
 
 func (p *SpriteImpl) ChangePenSize(delta float64) {
-	p.checkOrCreatePen()
-	p.SetPenSize(p.penWidth + delta)
+	p.components.Pen().ChangePenSize(delta)
 }
 
 // -----------------------------------------------------------------------------
-// Internal Pen Management
+// Internal Pen Management (used by other components)
 // -----------------------------------------------------------------------------
-
-func (p *SpriteImpl) checkOrCreatePen() {
-	if p.penObj == nil {
-		obj := penMgr.CreatePen()
-		p.penObj = &obj
-		p.penTransparency = p.penColor.A * 100
-	}
-}
-
-func (p *SpriteImpl) destroyPen() {
-	if p.penObj != nil {
-		penMgr.DestroyPen(*p.penObj)
-		p.penObj = nil
-	}
-}
 
 func (p *SpriteImpl) movePen(x, y float64) {
-	if p.penObj == nil {
-		return
-	}
-	penMgr.MovePenTo(*p.penObj, mathf.NewVec2(x, -y))
+	p.components.Pen().movePen(x, y)
 }
 
-func (p *SpriteImpl) applyPenColorProperty() {
-	p.checkOrCreatePen()
-	h, s, v := p.penColor.ToHSV()
-	p.penHue = (h / 360) * 100
-	p.penSaturation = s * 100
-	p.penBrightness = v * 100
-	p.penTransparency = p.penColor.A * 100
-	penMgr.SetPenColorTo(*p.penObj, p.penColor)
-}
-
-func (p *SpriteImpl) applyPenHsvProperty() {
-	color := mathf.NewColorHSV((p.penHue/100)*360, p.penSaturation/100, p.penBrightness/100)
-	p.penColor = color
-	p.penColor.A = p.penTransparency / 100
-	penMgr.SetPenColorTo(*p.penObj, p.penColor)
+func (p *SpriteImpl) isPenDown() bool {
+	return p.components.Pen().isPenDown()
 }

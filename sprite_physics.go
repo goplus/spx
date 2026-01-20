@@ -27,6 +27,7 @@ import (
 // ======================== Physics Component ========================
 // This file contains physics-related functionality for sprites,
 // including physics modes, colliders, velocity, gravity, and impulse.
+// All methods proxy to the physics component implementation.
 
 // -----------------------------------------------------------------------------
 // Physics Mode and Types
@@ -52,7 +53,138 @@ const (
 )
 
 // -----------------------------------------------------------------------------
-// Physics Configuration
+// Physics Mode Control
+// -----------------------------------------------------------------------------
+
+func (p *SpriteImpl) SetPhysicsMode(mode PhysicsMode) {
+	p.components.Physics().SetPhysicsMode(mode)
+}
+
+func (p *SpriteImpl) PhysicsMode() PhysicsMode {
+	return p.components.Physics().GetPhysicsMode()
+}
+
+// -----------------------------------------------------------------------------
+// Velocity and Movement
+// -----------------------------------------------------------------------------
+
+func (p *SpriteImpl) Velocity() (velocityX, velocityY float64) {
+	return p.components.Physics().GetVelocity()
+}
+
+func (p *SpriteImpl) SetVelocity(velocityX, velocityY float64) {
+	p.components.Physics().SetVelocity(velocityX, velocityY)
+}
+
+func (p *SpriteImpl) AddImpulse(impulseX, impulseY float64) {
+	p.components.Physics().AddImpulse(impulseX, impulseY)
+}
+
+func (p *SpriteImpl) IsOnFloor() bool {
+	return p.components.Physics().IsOnFloor()
+}
+
+// -----------------------------------------------------------------------------
+// Gravity Control
+// -----------------------------------------------------------------------------
+
+func (p *SpriteImpl) Gravity() float64 {
+	return p.components.Physics().GetGravity()
+}
+
+func (p *SpriteImpl) SetGravity(gravity float64) {
+	p.components.Physics().SetGravity(gravity)
+}
+
+// -----------------------------------------------------------------------------
+// Collider Shape Control
+// -----------------------------------------------------------------------------
+
+func (p *SpriteImpl) SetColliderShape(isTrigger bool, ctype ColliderShapeType, params []float64) error {
+	return p.components.Physics().SetColliderShape(isTrigger, ctype, params)
+}
+
+func (p *SpriteImpl) ColliderShape(isTrigger bool) (ColliderShapeType, []float64) {
+	return p.components.Physics().GetColliderShape(isTrigger)
+}
+
+func (p *SpriteImpl) SetColliderPivot(isTrigger bool, offsetX, offsetY float64) {
+	p.components.Physics().SetColliderPivot(isTrigger, offsetX, offsetY)
+}
+
+func (p *SpriteImpl) ColliderPivot(isTrigger bool) (offsetX, offsetY float64) {
+	return p.components.Physics().GetColliderPivot(isTrigger)
+}
+
+// -----------------------------------------------------------------------------
+// Collision Layer and Mask Control
+// -----------------------------------------------------------------------------
+
+func (p *SpriteImpl) SetCollisionLayer(layer int64) {
+	p.components.Physics().SetCollisionLayer(layer)
+}
+
+func (p *SpriteImpl) SetCollisionMask(mask int64) {
+	p.components.Physics().SetCollisionMask(mask)
+}
+
+func (p *SpriteImpl) SetCollisionEnabled(enabled bool) {
+	p.components.Physics().SetCollisionEnabled(enabled)
+}
+
+func (p *SpriteImpl) CollisionLayer() int64 {
+	return p.components.Physics().GetCollisionLayer()
+}
+
+func (p *SpriteImpl) CollisionMask() int64 {
+	return p.components.Physics().GetCollisionMask()
+}
+
+func (p *SpriteImpl) CollisionEnabled() bool {
+	return p.components.Physics().IsCollisionEnabled()
+}
+
+// -----------------------------------------------------------------------------
+// Trigger Layer and Mask Control
+// -----------------------------------------------------------------------------
+
+func (p *SpriteImpl) SetTriggerEnabled(trigger bool) {
+	p.components.Physics().SetTriggerEnabled(trigger)
+}
+
+func (p *SpriteImpl) SetTriggerLayer(layer int64) {
+	p.components.Physics().SetTriggerLayer(layer)
+}
+
+func (p *SpriteImpl) SetTriggerMask(mask int64) {
+	p.components.Physics().SetTriggerMask(mask)
+}
+
+func (p *SpriteImpl) TriggerLayer() int64 {
+	return p.components.Physics().GetTriggerLayer()
+}
+
+func (p *SpriteImpl) TriggerMask() int64 {
+	return p.components.Physics().GetTriggerMask()
+}
+
+func (p *SpriteImpl) TriggerEnabled() bool {
+	return p.components.Physics().IsTriggerEnabled()
+}
+
+// -----------------------------------------------------------------------------
+// Physics Shape Scale Update
+// -----------------------------------------------------------------------------
+
+// updatePhysicsShapesScale updates collision and trigger shapes when sprite scale changes
+func (p *SpriteImpl) updatePhysicsShapesScale() {
+	physics := p.components.Physics()
+	physics.getTriggerInfo().applyShape(p.syncSprite, true, p.scale)
+	physics.getCollisionInfo().applyShape(p.syncSprite, false, p.scale)
+}
+
+// -----------------------------------------------------------------------------
+// Shared Physics Configuration Types and Utilities
 // -----------------------------------------------------------------------------
 
 // physicConfig common structure for physics configuration
@@ -204,10 +336,7 @@ func (cfg *physicConfig) applyShape(syncProxy *engine.Sprite, isTrigger bool, sc
 	}
 }
 
-// -----------------------------------------------------------------------------
-// Utility Functions
-// -----------------------------------------------------------------------------
-
+// toPhysicsMode converts string to PhysicsMode
 func toPhysicsMode(mode string) PhysicsMode {
 	if mode == "" {
 		return NoPhysics
@@ -224,216 +353,4 @@ func toPhysicsMode(mode string) PhysicsMode {
 	}
 	println("config error: unknown physics mode ", mode)
 	return NoPhysics
-}
-
-// -----------------------------------------------------------------------------
-// Physics Mode Control
-// -----------------------------------------------------------------------------
-
-func (p *SpriteImpl) SetPhysicsMode(mode PhysicsMode) {
-	p.physicsMode = mode
-	spriteMgr.SetPhysicsMode(p.getSpriteId(), int64(mode))
-}
-
-func (p *SpriteImpl) PhysicsMode() PhysicsMode {
-	return p.physicsMode
-}
-
-// -----------------------------------------------------------------------------
-// Velocity and Movement
-// -----------------------------------------------------------------------------
-
-func (p *SpriteImpl) Velocity() (velocityX, velocityY float64) {
-	vel := spriteMgr.GetVelocity(p.getSpriteId())
-	return vel.X, vel.Y
-}
-
-func (p *SpriteImpl) SetVelocity(velocityX, velocityY float64) {
-	spriteMgr.SetVelocity(p.getSpriteId(), mathf.NewVec2(velocityX, velocityY))
-}
-
-func (p *SpriteImpl) AddImpulse(impulseX, impulseY float64) {
-	spriteMgr.AddImpulse(p.getSpriteId(), mathf.NewVec2(impulseX, impulseY))
-}
-
-func (p *SpriteImpl) IsOnFloor() bool {
-	return spriteMgr.IsOnFloor(p.getSpriteId())
-}
-
-// -----------------------------------------------------------------------------
-// Gravity Control
-// -----------------------------------------------------------------------------
-
-func (p *SpriteImpl) Gravity() float64 {
-	return spriteMgr.GetGravity(p.getSpriteId())
-}
-
-func (p *SpriteImpl) SetGravity(gravity float64) {
-	spriteMgr.SetGravity(p.getSpriteId(), gravity)
-}
-
-// -----------------------------------------------------------------------------
-// Unified Physics Implementation (Private Methods)
-// -----------------------------------------------------------------------------
-
-// getPhysicConfig returns the appropriate physicConfig based on trigger flag
-func (p *SpriteImpl) getPhysicConfig(isTrigger bool) *physicConfig {
-	if isTrigger {
-		return &p.triggerInfo
-	}
-	return &p.collisionInfo
-}
-
-// setPhysicShape sets physics shape with validation and synchronization
-func (p *SpriteImpl) setPhysicShape(isTrigger bool, ctype ColliderShapeType, params []float64) error {
-	config := p.getPhysicConfig(isTrigger)
-
-	// Store original values for rollback if validation fails
-	originalType := config.Type
-	originalParams := make([]float64, len(config.Params))
-	copy(originalParams, config.Params)
-
-	// Temporarily set new values for validation
-	config.Type = ctype
-	config.Params = make([]float64, len(params))
-	copy(config.Params, params)
-
-	// Validate parameters before applying
-	if !config.validateShape() {
-		// Rollback to original values if validation fails
-		config.Type = originalType
-		config.Params = originalParams
-		return fmt.Errorf("invalid shape parameters for type %d", ctype)
-	}
-
-	// Apply shape-specific settings
-	p.applyPhysicShape(isTrigger)
-	return nil
-}
-
-// getPhysicShape returns the current shape type and parameters
-func (p *SpriteImpl) getPhysicShape(isTrigger bool) (ColliderShapeType, []float64) {
-	config := p.getPhysicConfig(isTrigger)
-	params := make([]float64, len(config.Params))
-	copy(params, config.Params)
-	return config.Type, params
-}
-
-// setPhysicPivot sets the pivot point for physics config
-func (p *SpriteImpl) setPhysicPivot(isTrigger bool, offsetX, offsetY float64) {
-	config := p.getPhysicConfig(isTrigger)
-	config.Pivot = mathf.NewVec2(offsetX, offsetY)
-
-	// Re-apply current shape with new pivot if needed
-	if p.syncSprite != nil {
-		p.applyPhysicShape(isTrigger)
-	}
-}
-
-// getPhysicPivot returns the current pivot offset
-func (p *SpriteImpl) getPhysicPivot(isTrigger bool) (offsetX, offsetY float64) {
-	config := p.getPhysicConfig(isTrigger)
-	return config.Pivot.X, config.Pivot.Y
-}
-
-// applyPhysicShape applies the shape settings to the engine
-func (p *SpriteImpl) applyPhysicShape(isTrigger bool) {
-	config := p.getPhysicConfig(isTrigger)
-	ctype := config.Type
-	params := config.Params
-
-	if p.syncSprite != nil {
-		switch ctype {
-		case RectCollider:
-			if len(params) >= 2 {
-				p.syncSprite.SetColliderShapeRect(isTrigger, config.Pivot, mathf.NewVec2(params[0], params[1]))
-			}
-		case CircleCollider:
-			if len(params) >= 1 {
-				p.syncSprite.SetColliderShapeCircle(isTrigger, config.Pivot, params[0])
-			}
-		case CapsuleCollider:
-			if len(params) >= 2 {
-				p.syncSprite.SetColliderShapeCapsule(isTrigger, config.Pivot, mathf.NewVec2(params[0]*2, params[1]))
-			}
-		case PolygonCollider:
-			// TODO: Implement polygon shape setting when available
-		}
-	}
-}
-
-// -----------------------------------------------------------------------------
-// Collider Shape Control
-// -----------------------------------------------------------------------------
-
-func (p *SpriteImpl) SetColliderShape(isTrigger bool, ctype ColliderShapeType, params []float64) error {
-	return p.setPhysicShape(isTrigger, ctype, params)
-}
-
-func (p *SpriteImpl) ColliderShape(isTrigger bool) (ColliderShapeType, []float64) {
-	return p.getPhysicShape(isTrigger)
-}
-
-func (p *SpriteImpl) SetColliderPivot(isTrigger bool, offsetX, offsetY float64) {
-	p.setPhysicPivot(isTrigger, offsetX, offsetY)
-}
-
-func (p *SpriteImpl) ColliderPivot(isTrigger bool) (offsetX, offsetY float64) {
-	return p.getPhysicPivot(isTrigger)
-}
-
-// -----------------------------------------------------------------------------
-// Collision Layer and Mask Control
-// -----------------------------------------------------------------------------
-
-func (p *SpriteImpl) SetCollisionLayer(layer int64) {
-	p.syncSprite.SetCollisionLayer(layer)
-}
-
-func (p *SpriteImpl) SetCollisionMask(mask int64) {
-	p.syncSprite.SetCollisionMask(mask)
-}
-
-func (p *SpriteImpl) SetCollisionEnabled(enabled bool) {
-	p.syncSprite.SetCollisionEnabled(enabled)
-}
-
-func (p *SpriteImpl) CollisionLayer() int64 {
-	return p.syncSprite.GetCollisionLayer()
-}
-
-func (p *SpriteImpl) CollisionMask() int64 {
-	return p.syncSprite.GetCollisionMask()
-}
-
-func (p *SpriteImpl) CollisionEnabled() bool {
-	return p.syncSprite.IsCollisionEnabled()
-}
-
-// -----------------------------------------------------------------------------
-// Trigger Layer and Mask Control
-// -----------------------------------------------------------------------------
-
-func (p *SpriteImpl) SetTriggerEnabled(trigger bool) {
-	p.syncSprite.SetTriggerEnabled(trigger)
-}
-
-func (p *SpriteImpl) SetTriggerLayer(layer int64) {
-	p.syncSprite.SetTriggerLayer(layer)
-}
-
-func (p *SpriteImpl) SetTriggerMask(mask int64) {
-	p.syncSprite.SetTriggerMask(mask)
-}
-
-func (p *SpriteImpl) TriggerLayer() int64 {
-	return p.syncSprite.GetTriggerLayer()
-}
-
-func (p *SpriteImpl) TriggerMask() int64 {
-	return p.syncSprite.GetTriggerMask()
-}
-
-func (p *SpriteImpl) TriggerEnabled() bool {
-	return p.syncSprite.IsTriggerEnabled()
 }

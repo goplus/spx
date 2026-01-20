@@ -21,11 +21,9 @@ import (
 	"fmt"
 	"log"
 	"maps"
-	"math"
 	"reflect"
 	"slices"
 
-	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v2/internal/engine"
 	spxlog "github.com/goplus/spx/v2/internal/log"
 	"github.com/goplus/spx/v2/internal/time"
@@ -43,34 +41,18 @@ type SpriteImpl struct {
 	sprite Sprite
 	name   string
 
-	// Position and orientation
-	x, y          float64
-	direction     float64
-	rotationStyle RotationStyle
-	pivot         mathf.Vec2
+	// TODO(refactor): The following fields duplicate data in components.
+	// These should be removed in the future, with all access going through components.
+	// Currently kept for backward compatibility and initialization flow.
+	// See: https://github.com/goplus/spx/issues/1157 for migration plan
 
 	// Visual components
 	sayObj   *sayOrThinker
 	quoteObj *quoter
 
-	// Animation configuration
-	animations        map[SpriteAnimationName]*aniConfig
-	animBindings      map[string]string
-	defaultAnimation  SpriteAnimationName
-	animationWrappers map[SpriteAnimationName]*animationWrapper // lazy load
-
-	// Pen properties
-	penColor        mathf.Color
-	penWidth        float64
-	penHue          float64
-	penSaturation   float64
-	penBrightness   float64
-	penTransparency float64
-
 	// State flags
 	isVisible bool
 	isCloned_ bool
-	isPenDown bool
 	isDying   bool
 	isDirty   bool // marks if transform or visibility has changed
 
@@ -86,25 +68,13 @@ type SpriteImpl struct {
 	curTweenState       *animState
 	defaultCostumeIndex int
 
-	// Physics configuration
-	triggerInfo   physicConfig
-	collisionInfo physicConfig
-
-	// Engine objects
-	penObj   *engine.Object
-	soundObj engine.Object
-
 	// Runtime data
 	collisionTargets map[string]bool
 	pendingAudios    []string
 	donedAnimations  []string
 
-	// Physics properties
-	physicsMode PhysicsMode
-	mass        float64
-	friction    float64
-	airDrag     float64
-	gravity     float64
+	// Component system
+	components spriteComponents
 }
 
 // ============================================================================
@@ -135,9 +105,7 @@ func (p *SpriteImpl) init(
 	base string, g *Game, name string, spriteCfg *spriteConfig, gamer reflect.Value, sprite Sprite) {
 	p.initBaseObjects(base, spriteCfg, g)
 	p.initBasicProperties(g, name, sprite, gamer, spriteCfg)
-	p.initPhysicsConfig(spriteCfg)
-	p.initPhysicsProperties(spriteCfg)
-	p.initAnimations(spriteCfg)
+	p.initComponents(spriteCfg) // Components will copy from sprite fields and init from config
 	p.initEngineObjects()
 }
 
@@ -156,108 +124,9 @@ func (p *SpriteImpl) initBaseObjects(base string, spriteCfg *spriteConfig, g *Ga
 func (p *SpriteImpl) initBasicProperties(g *Game, name string, sprite Sprite, gamer reflect.Value, spriteCfg *spriteConfig) {
 	p.gamer = gamer
 	p.g, p.name, p.sprite = g, name, sprite
-	p.x, p.y = spriteCfg.X, spriteCfg.Y
-	p.scale = spriteCfg.Size
-	p.direction = spriteCfg.Heading
-	p.rotationStyle = toRotationStyle(spriteCfg.RotationStyle)
-	p.isVisible = spriteCfg.Visible
-	p.pivot = spriteCfg.Pivot
-	p.animBindings = make(map[string]string)
-	maps.Copy(p.animBindings, spriteCfg.AnimBindings)
 	p.collisionTargets = make(map[string]bool)
-}
-
-// initPhysicsConfig initializes collision and trigger configurations
-func (p *SpriteImpl) initPhysicsConfig(spriteCfg *spriteConfig) {
-	p.initCollisionConfig(spriteCfg)
-	p.initTriggerConfig(spriteCfg)
-}
-
-// initCollisionConfig initializes collision configuration
-func (p *SpriteImpl) initCollisionConfig(spriteCfg *spriteConfig) {
-	p.collisionInfo.Mask = parseLayerMaskValue(spriteCfg.CollisionMask)
-	p.collisionInfo.Layer = parseLayerMaskValue(spriteCfg.CollisionLayer)
-
-	// collider is disable by default
-	var defaultCollisionType int64 = physicsColliderNone
-	if enabledPhysics {
-		defaultCollisionType = physicsColliderAuto
-	}
-
-	p.collisionInfo.Type = parseColliderShapeType(spriteCfg.CollisionShapeType, defaultCollisionType)
-	p.collisionInfo.Pivot = spriteCfg.CollisionPivot
-	p.collisionInfo.Params = spriteCfg.CollisionShapeParams
-
-	// Validate colliderShapeType and colliderShape length matching
-	if !p.collisionInfo.validateShape() {
-		spxlog.Warn("Invalid collider configuration for sprite %s, using default values", p.name)
-		p.collisionInfo.Type = physicsColliderNone
-		p.collisionInfo.Params = nil
-	}
-}
-
-// initTriggerConfig initializes trigger configuration
-func (p *SpriteImpl) initTriggerConfig(spriteCfg *spriteConfig) {
-	p.triggerInfo.Mask = parseLayerMaskValue(spriteCfg.TriggerMask)
-	p.triggerInfo.Layer = parseLayerMaskValue(spriteCfg.TriggerLayer)
-	p.triggerInfo.Type = parseColliderShapeType(spriteCfg.TriggerShapeType, physicsColliderAuto)
-	p.triggerInfo.Pivot = spriteCfg.TriggerPivot
-	p.triggerInfo.Params = spriteCfg.TriggerShapeParams
-
-	// Validate triggerType and triggerShape length matching
-	if !p.triggerInfo.validateShape() {
-		spxlog.Warn("Invalid trigger configuration for sprite %s, using default values", p.name)
-		p.triggerInfo.Type = physicsColliderAuto
-		p.triggerInfo.Params = nil
-	}
-}
-
-// initPhysicsProperties initializes physics properties like mass, friction, gravity
-func (p *SpriteImpl) initPhysicsProperties(spriteCfg *spriteConfig) {
-	p.physicsMode = toPhysicsMode(spriteCfg.PhysicsMode)
-	p.airDrag = parseDefaultFloatValue(spriteCfg.AirDrag, 1)
-	p.gravity = parseDefaultFloatValue(spriteCfg.Gravity, 1)
-	p.friction = parseDefaultFloatValue(spriteCfg.Friction, 1)
-	p.mass = parseDefaultFloatValue(spriteCfg.Mass, 1)
-}
-
-// initAnimations initializes sprite animations and animation wrappers
-func (p *SpriteImpl) initAnimations(spriteCfg *spriteConfig) {
-	p.defaultAnimation = spriteCfg.DefaultAnimation
-	p.animations = make(map[string]*aniConfig)
-	anims := spriteCfg.FAnimations
-
-	for key, val := range anims {
-		var ani = val
-		_, ok := p.animations[key]
-		if ok {
-			log.Panicf("animation key [%s] is exist", key)
-		}
-
-		// Set default values
-		if ani.FrameFps == 0 {
-			ani.FrameFps = 25
-		}
-		if ani.TurnToDuration == 0 {
-			ani.TurnToDuration = 1
-		}
-		if ani.StepDuration == 0 {
-			ani.StepDuration = 0.01
-		}
-
-		// Calculate frame ranges and duration
-		from, to := p.getFromAnToForAniFrames(ani.FrameFrom, ani.FrameTo)
-		ani.IFrameFrom, ani.IFrameTo = int(from), int(to)
-		ani.Speed = 1
-		ani.Duration = (math.Abs(float64(ani.IFrameFrom-ani.IFrameTo)) + 1) / float64(ani.FrameFps)
-		p.animations[key] = ani
-	}
-
-	// Lazy register animations to engine
-	p.animationWrappers = make(map[SpriteAnimationName]*animationWrapper)
-	for animName, ani := range p.animations {
-		p.animationWrappers[animName] = &animationWrapper{spr: p, ani: ani}
-	}
+	p.scale = spriteCfg.Size
+	p.isVisible = spriteCfg.Visible
 }
 
 // initEngineObjects initializes engine-related objects
@@ -269,62 +138,31 @@ func (p *SpriteImpl) initEngineObjects() {
 	})
 }
 
-func (p *SpriteImpl) awake() {
-	p.playDefaultAnim()
+// initComponents initializes all sprite components
+func (p *SpriteImpl) initComponents(spriteCfg *spriteConfig) {
+	p.components.initComponents(p, spriteCfg)
 }
 
-func (p *SpriteImpl) initCollisionParams() {
-	if p.g.isAutoSetCollisionLayer {
-		info := p.g.getSpriteCollisionInfo(p.name)
-		p.collisionInfo.Layer = 0
-		p.collisionInfo.Mask = 0
-		p.triggerInfo.Layer = int64(info.Layer)
-		p.triggerInfo.Mask = int64(info.Mask)
-		if enabledPhysics {
-			p.collisionInfo.Layer = int64(info.Layer)
-			p.collisionInfo.Mask = int64(info.Mask)
-		}
-	}
+func (p *SpriteImpl) awake() {
+	p.playDefaultAnim()
 }
 
 func (p *SpriteImpl) InitFrom(src *SpriteImpl) {
 	p.baseObj.initFrom(&src.baseObj)
 	p.eventSinks.initFrom(&src.eventSinks, p)
 
-	p.g, p.name = src.g, src.name
-	p.x, p.y = src.x, src.y
-	p.scale = src.scale
-	p.direction = src.direction
-	p.rotationStyle = src.rotationStyle
+	p.g, p.name, p.scale = src.g, src.name, src.scale
 	p.sayObj = nil
-	p.animations = src.animations
-	p.animationWrappers = make(map[SpriteAnimationName]*animationWrapper)
-	for animName, ani := range p.animations {
-		p.animationWrappers[animName] = &animationWrapper{spr: p, ani: ani}
-	}
-	// clone effect params
 	p.greffUniforms = maps.Clone(src.greffUniforms)
-
-	p.penColor = src.penColor
-	p.penHue = src.penHue
-	p.penSaturation = src.penSaturation
-	p.penBrightness = src.penBrightness
-	p.penTransparency = src.penTransparency
-
-	p.penWidth = src.penWidth
 
 	p.isVisible = src.isVisible
 	p.isCloned_ = true
-	p.isPenDown = src.isPenDown
 	p.isDying = false
 
 	p.hasOnCloned = false
 	p.hasOnTouchStart = false
 	p.hasOnTouching = false
 	p.hasOnTouchEnd = false
-
-	p.collisionInfo.copyFrom(&src.collisionInfo)
-	p.triggerInfo.copyFrom(&src.triggerInfo)
 
 	p.pendingAudios = make([]string, 0)
 }
@@ -384,6 +222,11 @@ func cloneSprite(out reflect.Value, outPtr Sprite, in reflect.Value, v specsp) *
 	}()
 	dest.sprite = outPtr
 	dest.isCostumeDirty = true
+
+	// Clone components from source sprite
+	src := spriteOf(in.Addr().Interface().(Sprite))
+	dest.components.cloneFrom(&src.components, dest)
+
 	if v != nil { // in loadSprite
 		applySpriteProps(dest, v)
 	} else { // in sprite.Clone
@@ -402,33 +245,25 @@ func cloneSprite(out reflect.Value, outPtr Sprite, in reflect.Value, v specsp) *
 	return dest
 }
 
-func cloneMap(v map[string]any) map[string]any {
-	if v == nil {
-		return nil
-	}
-	ret := make(map[string]any, len(v))
-	for k, v := range v {
-		ret[k] = v
-	}
-	return ret
-}
-
-func applyFloat64(out *float64, in any) {
-	if in != nil {
-		*out = in.(float64)
-	}
-}
-
 func applySpriteProps(dest *SpriteImpl, v specsp) {
-	applyFloat64(&dest.x, v["x"])
-	applyFloat64(&dest.y, v["y"])
-	applyFloat64(&dest.scale, v["size"])
-	applyFloat64(&dest.direction, v["heading"])
+	transform := dest.components.Transform()
+	if x, ok := v["x"]; ok {
+		transform.x = x.(float64)
+	}
+	if y, ok := v["y"]; ok {
+		transform.y = y.(float64)
+	}
+	if heading, ok := v["heading"]; ok {
+		transform.direction = heading.(float64)
+	}
+	if style, ok := v["rotationStyle"]; ok {
+		transform.rotationStyle = toRotationStyle(style.(string))
+	}
 	if visible, ok := v["visible"]; ok {
 		dest.isVisible = visible.(bool)
 	}
-	if style, ok := v["rotationStyle"]; ok {
-		dest.rotationStyle = toRotationStyle(style.(string))
+	if size, ok := v["size"]; ok {
+		dest.scale = size.(float64)
 	}
 	if idx, ok := v["costumeIndex"]; ok {
 		dest.setCustumeIndex(int(idx.(float64)))
@@ -563,18 +398,13 @@ func (p *SpriteImpl) Destroy() { // destroy sprite, whether prototype or cloned
 
 	p.Hide()
 	p.doDeleteClone()
-	p.destroyPen()
+	p.components.destroyComponents()
 	p.g.removeShape(p)
 	p.Stop(ThisSprite)
 	if p == gco.Current().Obj {
 		gco.Abort()
 	}
 	p.HasDestroyed = true
-
-	if p.soundObj != 0 {
-		p.g.sounds.releaseSound(p.soundObj)
-		p.soundObj = 0
-	}
 }
 
 // DeleteThisClone deletes only cloned sprite, no effect on prototype sprite.
@@ -639,7 +469,7 @@ func (p *SpriteImpl) setCostume(costume any) {
 	}
 	p.goSetCostume(costume)
 	p.defaultCostumeIndex = p.costumeIndex_
-	p.updateTransform()
+	p.isDirty = true
 }
 
 func (p *SpriteImpl) SetCostume__0(costume SpriteCostumeName) {
@@ -798,35 +628,7 @@ func (p *SpriteImpl) Touching__2(obj specialObj) bool {
 }
 
 func (p *SpriteImpl) BounceOffEdge() {
-	if debugInstr {
-		spxlog.Debug("BounceOffEdge: %s", p.name)
-	}
-
-	nearestEdge := p.checkNearestTouchedBoundary()
-
-	if nearestEdge == 0 {
-		return
-	}
-
-	// prevents sprites from getting stuck at boundaries
-	const minBounceComponent = 0.2
-	radians := toRadian(90 - p.direction)
-	dx := math.Cos(radians)
-	dy := -math.Sin(radians)
-
-	switch nearestEdge {
-	case touchingScreenLeft:
-		dx = math.Max(minBounceComponent, math.Abs(dx))
-	case touchingScreenTop:
-		dy = math.Max(minBounceComponent, math.Abs(dy))
-	case touchingScreenRight:
-		dx = -math.Max(minBounceComponent, math.Abs(dx))
-	case touchingScreenBottom:
-		dy = -math.Max(minBounceComponent, math.Abs(dy))
-	}
-
-	newDirection := engine.RadToDeg(math.Atan2(dy, dx)) + 90
-	p.direction = normalizeDirection(newDirection)
+	p.components.Transform().BounceOffEdge()
 }
 
 // ============================================================================

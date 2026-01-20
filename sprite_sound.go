@@ -19,6 +19,7 @@ package spx
 // ======================== Sound Component ========================
 // This file contains sound-related functionality for sprites,
 // including sound playback, volume control, and sound effects.
+// All methods proxy to the sound component implementation.
 
 // -----------------------------------------------------------------------------
 // Sound Effect Types
@@ -36,14 +37,11 @@ const (
 // -----------------------------------------------------------------------------
 
 func (p *SpriteImpl) playAudio(name SoundName, loop bool) soundId {
-	p.checkSoundObj()
-	return p.g.playSound(p.syncSprite, p.soundObj, name, loop, p.g.audioAttenuation, p.g.audioMaxDistance)
+	return p.components.Sound().playAudio(name, loop)
 }
 
 func (p *SpriteImpl) checkSoundObj() {
-	if p.soundObj == 0 {
-		p.soundObj = p.g.sounds.allocSound()
-	}
+	p.components.Sound().checkSoundObj()
 }
 
 // -----------------------------------------------------------------------------
@@ -51,8 +49,7 @@ func (p *SpriteImpl) checkSoundObj() {
 // -----------------------------------------------------------------------------
 
 func (p *SpriteImpl) Play__0(name SoundName, loop bool) {
-	p.checkSoundObj()
-	p.g.playSound(p.syncSprite, p.soundObj, name, loop, p.g.audioAttenuation, p.g.audioMaxDistance)
+	p.components.Sound().Play(name, loop)
 }
 
 func (p *SpriteImpl) Play__1(name SoundName) {
@@ -60,24 +57,19 @@ func (p *SpriteImpl) Play__1(name SoundName) {
 }
 
 func (p *SpriteImpl) PlayAndWait(name SoundName) {
-	p.checkSoundObj()
-	p.g.playSoundAndWait(p.syncSprite, p.soundObj, name, p.g.audioAttenuation, p.g.audioMaxDistance)
-}
-
-func (p *SpriteImpl) doSoundAction(name SoundName, action func(name SoundName)) {
-	action(name)
+	p.components.Sound().PlayAndWait(name)
 }
 
 func (p *SpriteImpl) PausePlaying(name SoundName) {
-	p.doSoundAction(name, p.g.pauseSound)
+	p.components.Sound().PausePlaying(name)
 }
 
 func (p *SpriteImpl) ResumePlaying(name SoundName) {
-	p.doSoundAction(name, p.g.resumeSound)
+	p.components.Sound().ResumePlaying(name)
 }
 
 func (p *SpriteImpl) StopPlaying(name SoundName) {
-	p.doSoundAction(name, p.g.stopSound)
+	p.components.Sound().StopPlaying(name)
 }
 
 // -----------------------------------------------------------------------------
@@ -85,18 +77,15 @@ func (p *SpriteImpl) StopPlaying(name SoundName) {
 // -----------------------------------------------------------------------------
 
 func (p *SpriteImpl) Volume() float64 {
-	p.checkSoundObj()
-	return p.g.sounds.getVolume(p.soundObj)
+	return p.components.Sound().GetVolume()
 }
 
 func (p *SpriteImpl) SetVolume(volume float64) {
-	p.checkSoundObj()
-	p.g.sounds.setVolume(p.soundObj, volume)
+	p.components.Sound().SetVolume(volume)
 }
 
 func (p *SpriteImpl) ChangeVolume(delta float64) {
-	p.checkSoundObj()
-	p.g.sounds.changeVolume(p.soundObj, delta)
+	p.components.Sound().ChangeVolume(delta)
 }
 
 // -----------------------------------------------------------------------------
@@ -104,16 +93,13 @@ func (p *SpriteImpl) ChangeVolume(delta float64) {
 // -----------------------------------------------------------------------------
 
 func (p *SpriteImpl) GetSoundEffect(kind SoundEffectKind) float64 {
-	p.checkSoundObj()
-	return p.g.sounds.getEffect(p.soundObj, kind)
+	return p.components.Sound().GetSoundEffect(kind)
 }
 
 func (p *SpriteImpl) SetSoundEffect(kind SoundEffectKind, value float64) {
-	p.checkSoundObj()
-	p.g.sounds.setEffect(p.soundObj, kind, value)
+	p.components.Sound().SetSoundEffect(kind, value)
 }
 
 func (p *SpriteImpl) ChangeSoundEffect(kind SoundEffectKind, delta float64) {
-	p.checkSoundObj()
-	p.g.sounds.changeEffect(p.soundObj, kind, delta)
+	p.components.Sound().ChangeSoundEffect(kind, delta)
 }

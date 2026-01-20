@@ -64,21 +64,22 @@ func (p *SpriteImpl) bounds() *mathf.Rect2 {
 	x, y, w, h := 0.0, 0.0, 0.0, 0.0
 	c := p.costumes[p.costumeIndex_]
 	// calc center
-	x, y = p.x, p.y
+	x, y = p.getXY()
 	applyRenderOffset(p, &x, &y)
 
-	if p.triggerInfo.Type != physicsColliderNone {
-		if p.triggerInfo.Type == physicsColliderAuto && p.syncSprite == nil {
+	triggerInfo := p.components.Physics().getTriggerInfo()
+	if triggerInfo.Type != physicsColliderNone {
+		if triggerInfo.Type == physicsColliderAuto && p.syncSprite == nil {
 			// if sprite's proxy is not created, use the sync version to get the bound
 			center, size := getCostumeBoundByAlpha(p, p.scale, false)
 			// Update sprite state atomically to prevent race conditions
-			p.triggerInfo.Pivot = center
-			p.triggerInfo.Params = []float64{size.X, size.Y}
+			triggerInfo.Pivot = center
+			triggerInfo.Params = []float64{size.X, size.Y}
 		}
-		x += p.triggerInfo.Pivot.X
-		y += p.triggerInfo.Pivot.Y
+		x += triggerInfo.Pivot.X
+		y += triggerInfo.Pivot.Y
 		// Calculate dimensions from triggerShape based on type
-		w, h = p.triggerInfo.getDimensions()
+		w, h = triggerInfo.getDimensions()
 	} else {
 		// calc scale
 		wi, hi := c.getSize()
@@ -139,32 +140,6 @@ func (p *SpriteImpl) checkNearestTouchedBoundary() int {
 	return (int)(physicsMgr.CheckNearestTouchedCameraBoundary(p.syncSprite.GetId()))
 }
 
-// checkTouchingDirection determines which screen edges to check based on direction
-func checkTouchingDirection(dir float64) int {
-	if dir > 0 {
-		if dir < 90 {
-			return touchingScreenRight | touchingScreenTop
-		}
-		if dir > 90 {
-			if dir == 180 {
-				return touchingScreenBottom
-			}
-			return touchingScreenRight | touchingScreenBottom
-		}
-		return touchingScreenRight
-	}
-	if dir < 0 {
-		if dir > -90 {
-			return touchingScreenLeft | touchingScreenTop
-		}
-		if dir < -90 {
-			return touchingScreenLeft | touchingScreenBottom
-		}
-		return touchingScreenLeft
-	}
-	return touchingScreenTop
-}
-
 // -----------------------------------------------------------------------------
 // Render Offset and Transformation Utilities
 // -----------------------------------------------------------------------------
@@ -172,8 +147,9 @@ func checkTouchingDirection(dir float64) int {
 // getRenderOffset calculates the render offset for the sprite
 func getRenderOffset(p *SpriteImpl) (float64, float64) {
 	cs := p.costumes[p.costumeIndex_]
-	x, y := -((cs.center.X)/float64(cs.bitmapResolution)+p.pivot.X)*p.scale,
-		((cs.center.Y)/float64(cs.bitmapResolution)-p.pivot.Y)*p.scale
+	pivot := p.getPivot()
+	x, y := -((cs.center.X)/float64(cs.bitmapResolution)+pivot.X)*p.scale,
+		((cs.center.Y)/float64(cs.bitmapResolution)-pivot.Y)*p.scale
 
 	// spx's start point is top left, gdspx's start point is center
 	// so we should remove the offset to make the pivot point is the same
@@ -200,16 +176,17 @@ func revertRenderOffset(p *SpriteImpl, cx, cy *float64) {
 
 // calcRenderRotation calculates the render rotation and horizontal scale
 func calcRenderRotation(p *SpriteImpl) (float64, float64) {
-	if p.rotationStyle == None {
+	transform := p.components.Transform()
+	if transform.rotationStyle == None {
 		return 0, 1.0
 	}
 	cs := p.costumes[p.costumeIndex_]
 	degree := p.Heading() + cs.faceRight
 	degree -= 90
 	hScale := 1.0
-	if p.rotationStyle == LeftRight {
+	if transform.rotationStyle == LeftRight {
 		degree = 0
-		isFlip := p.direction < 0
+		isFlip := transform.direction < 0
 		if isFlip {
 			hScale = -1.0
 		}
