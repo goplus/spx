@@ -67,7 +67,7 @@ func (p *SpriteImpl) bounds() *mathf.Rect2 {
 	x, y = p.getXY()
 	applyRenderOffset(p, &x, &y)
 
-	triggerInfo := p.components.Physics().getTriggerInfo()
+	triggerInfo := p.physics().getTriggerInfo()
 	if triggerInfo.Type != physicsColliderNone {
 		if triggerInfo.Type == physicsColliderAuto && p.syncSprite == nil {
 			// if sprite's proxy is not created, use the sync version to get the bound

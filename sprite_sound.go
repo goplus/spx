@@ -37,11 +37,11 @@ const (
 // -----------------------------------------------------------------------------
 
 func (p *SpriteImpl) playAudio(name SoundName, loop bool) soundId {
-	return p.components.Sound().playAudio(name, loop)
+	return p.sound().playAudio(name, loop)
 }
 
 func (p *SpriteImpl) checkSoundObj() {
-	p.components.Sound().checkSoundObj()
+	p.sound().checkSoundObj()
 }
 
 // -----------------------------------------------------------------------------
@@ -49,7 +49,7 @@ func (p *SpriteImpl) checkSoundObj() {
 // -----------------------------------------------------------------------------
 
 func (p *SpriteImpl) Play__0(name SoundName, loop bool) {
-	p.components.Sound().Play(name, loop)
+	p.sound().Play(name, loop)
 }
 
 func (p *SpriteImpl) Play__1(name SoundName) {
@@ -57,19 +57,19 @@ func (p *SpriteImpl) Play__1(name SoundName) {
 }
 
 func (p *SpriteImpl) PlayAndWait(name SoundName) {
-	p.components.Sound().PlayAndWait(name)
+	p.sound().PlayAndWait(name)
 }
 
 func (p *SpriteImpl) PausePlaying(name SoundName) {
-	p.components.Sound().PausePlaying(name)
+	p.sound().PausePlaying(name)
 }
 
 func (p *SpriteImpl) ResumePlaying(name SoundName) {
-	p.components.Sound().ResumePlaying(name)
+	p.sound().ResumePlaying(name)
 }
 
 func (p *SpriteImpl) StopPlaying(name SoundName) {
-	p.components.Sound().StopPlaying(name)
+	p.sound().StopPlaying(name)
 }
 
 // -----------------------------------------------------------------------------
@@ -77,15 +77,15 @@ func (p *SpriteImpl) StopPlaying(name SoundName) {
 // -----------------------------------------------------------------------------
 
 func (p *SpriteImpl) Volume() float64 {
-	return p.components.Sound().GetVolume()
+	return p.sound().GetVolume()
 }
 
 func (p *SpriteImpl) SetVolume(volume float64) {
-	p.components.Sound().SetVolume(volume)
+	p.sound().SetVolume(volume)
 }
 
 func (p *SpriteImpl) ChangeVolume(delta float64) {
-	p.components.Sound().ChangeVolume(delta)
+	p.sound().ChangeVolume(delta)
 }
 
 // -----------------------------------------------------------------------------
@@ -93,13 +93,13 @@ func (p *SpriteImpl) ChangeVolume(delta float64) {
 // -----------------------------------------------------------------------------
 
 func (p *SpriteImpl) GetSoundEffect(kind SoundEffectKind) float64 {
-	return p.components.Sound().GetSoundEffect(kind)
+	return p.sound().GetSoundEffect(kind)
 }
 
 func (p *SpriteImpl) SetSoundEffect(kind SoundEffectKind, value float64) {
-	p.components.Sound().SetSoundEffect(kind, value)
+	p.sound().SetSoundEffect(kind, value)
 }
 
 func (p *SpriteImpl) ChangeSoundEffect(kind SoundEffectKind, delta float64) {
-	p.components.Sound().ChangeSoundEffect(kind, delta)
+	p.sound().ChangeSoundEffect(kind, delta)
 }
