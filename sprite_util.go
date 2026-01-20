@@ -140,32 +140,6 @@ func (p *SpriteImpl) checkNearestTouchedBoundary() int {
 	return (int)(physicsMgr.CheckNearestTouchedCameraBoundary(p.syncSprite.GetId()))
 }
 
-// checkTouchingDirection determines which screen edges to check based on direction
-func checkTouchingDirection(dir float64) int {
-	if dir > 0 {
-		if dir < 90 {
-			return touchingScreenRight | touchingScreenTop
-		}
-		if dir > 90 {
-			if dir == 180 {
-				return touchingScreenBottom
-			}
-			return touchingScreenRight | touchingScreenBottom
-		}
-		return touchingScreenRight
-	}
-	if dir < 0 {
-		if dir > -90 {
-			return touchingScreenLeft | touchingScreenTop
-		}
-		if dir < -90 {
-			return touchingScreenLeft | touchingScreenBottom
-		}
-		return touchingScreenLeft
-	}
-	return touchingScreenTop
-}
-
 // -----------------------------------------------------------------------------
 // Render Offset and Transformation Utilities
 // -----------------------------------------------------------------------------

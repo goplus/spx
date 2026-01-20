@@ -60,10 +60,6 @@ func (p *SpriteImpl) PlayAndWait(name SoundName) {
 	p.components.Sound().PlayAndWait(name)
 }
 
-func (p *SpriteImpl) doSoundAction(name SoundName, action func(name SoundName)) {
-	p.components.Sound().doSoundAction(name, action)
-}
-
 func (p *SpriteImpl) PausePlaying(name SoundName) {
 	p.components.Sound().PausePlaying(name)
 }
