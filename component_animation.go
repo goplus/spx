@@ -32,20 +32,25 @@ import (
 // ============================================================================
 // This component encapsulates all animation-related functionality
 
-type animationComponent struct {
-	componentBase
-
-	// Animation configuration
+// sharedAnimationData contains read-only animation data shared across cloned sprites (Flyweight Pattern)
+type sharedAnimationData struct {
 	animations        map[SpriteAnimationName]*aniConfig
 	animBindings      map[string]string
 	defaultAnimation  SpriteAnimationName
-	animationWrappers map[SpriteAnimationName]*animationWrapper
+	animationWrappers map[SpriteAnimationName]*animationWrapper // Shared: register once for all clones
+}
 
-	// Animation state
+type animationComponent struct {
+	componentBase
+
+	// Shared animation configuration (read-only, shared across clones)
+	shared *sharedAnimationData
+
+	// Animation state (per-instance)
 	curAnimState  *animState
 	curTweenState *animState
 
-	// Animation tracking
+	// Animation tracking (per-instance)
 	donedAnimations []string
 }
 
@@ -59,13 +64,17 @@ func (ac *animationComponent) initialize(sprite *SpriteImpl, spriteCfg *spriteCo
 
 // initFromConfig initializes animations from sprite configuration
 func (ac *animationComponent) initFromConfig(spriteCfg *spriteConfig) {
-	ac.defaultAnimation = spriteCfg.DefaultAnimation
-	ac.animations = make(map[string]*aniConfig)
-	anims := spriteCfg.FAnimations
+	// Create shared animation data
+	ac.shared = &sharedAnimationData{
+		defaultAnimation: spriteCfg.DefaultAnimation,
+		animations:       make(map[string]*aniConfig),
+		animBindings:     make(map[string]string),
+	}
 
+	anims := spriteCfg.FAnimations
 	for key, val := range anims {
 		var ani = val
-		_, ok := ac.animations[key]
+		_, ok := ac.shared.animations[key]
 		if ok {
 			log.Panicf("animation key [%s] is exist", key)
 		}
@@ -86,13 +95,13 @@ func (ac *animationComponent) initFromConfig(spriteCfg *spriteConfig) {
 		ani.IFrameFrom, ani.IFrameTo = int(from), int(to)
 		ani.Speed = 1
 		ani.Duration = (math.Abs(float64(ani.IFrameFrom-ani.IFrameTo)) + 1) / float64(ani.FrameFps)
-		ac.animations[key] = ani
+		ac.shared.animations[key] = ani
 	}
 
-	// Lazy register animations to engine
-	ac.animationWrappers = make(map[SpriteAnimationName]*animationWrapper)
-	for animName, ani := range ac.animations {
-		ac.animationWrappers[animName] = &animationWrapper{spr: ac.sprite, ani: ani}
+	// Create shared animation wrappers (register once for all clones)
+	ac.shared.animationWrappers = make(map[SpriteAnimationName]*animationWrapper)
+	for animName, ani := range ac.shared.animations {
+		ac.shared.animationWrappers[animName] = &animationWrapper{spr: ac.sprite, ani: ani}
 	}
 }
 
@@ -100,22 +109,13 @@ func (ac *animationComponent) initFromConfig(spriteCfg *spriteConfig) {
 func (ac *animationComponent) cloneFrom(src component, newSprite *SpriteImpl) component {
 	srcAnim := src.(*animationComponent)
 	newAnim := &animationComponent{
-		componentBase:     componentBase{sprite: newSprite},
-		animations:        srcAnim.animations,
-		animBindings:      srcAnim.animBindings,
-		defaultAnimation:  srcAnim.defaultAnimation,
-		animationWrappers: make(map[SpriteAnimationName]*animationWrapper),
-		curAnimState:      nil,
-		curTweenState:     nil,
-		donedAnimations:   make([]string, 0),
+		componentBase:   componentBase{sprite: newSprite},
+		shared:          srcAnim.shared, // Share all animation data including wrappers (Flyweight Pattern)
+		curAnimState:    nil,
+		curTweenState:   nil,
+		donedAnimations: make([]string, 0),
 	}
-	// Recreate animation wrappers for the new sprite
-	for name, ani := range newAnim.animations {
-		newAnim.animationWrappers[name] = &animationWrapper{
-			spr: newSprite,
-			ani: ani,
-		}
-	}
+	// Wrappers are shared via sync.Once - register only happens once for all clones
 	return newAnim
 }
 
@@ -133,7 +133,7 @@ func (ac *animationComponent) Animate(name SpriteAnimationName, loop bool) {
 	if debugInstr {
 		spxlog.Debug("==> Animation %s", name)
 	}
-	if ani, ok := ac.animations[name]; ok {
+	if ani, ok := ac.shared.animations[name]; ok {
 		ac.doAnimation(name, ani, loop, 1, false, true)
 	} else {
 		spxlog.Debug("Animation not found: %s", name)
@@ -144,7 +144,7 @@ func (ac *animationComponent) AnimateAndWait(name SpriteAnimationName) {
 	if debugInstr {
 		spxlog.Debug("==> AnimateAndWait %s", name)
 	}
-	if ani, ok := ac.animations[name]; ok {
+	if ani, ok := ac.shared.animations[name]; ok {
 		ac.doAnimation(name, ani, false, 1, true, true)
 	} else {
 		spxlog.Debug("Animation not found: %s", name)
@@ -180,7 +180,7 @@ func (ac *animationComponent) doAnimation(animName SpriteAnimationName, ani *ani
 	}
 
 	syncCheckUpdateCostume(&ac.sprite.baseObj)
-	ac.animationWrappers[animName].ensureRegistered(animName)
+	ac.shared.animationWrappers[animName].ensureRegistered(animName)
 
 	spriteMgr.PlayAnim(ac.sprite.syncSprite.GetId(), animName, speed, loop, false)
 	if isBlocking {
@@ -324,11 +324,9 @@ func (ac *animationComponent) cleanupTween(info *animState, name SpriteAnimation
 			ac.sprite.SetVelocity(0, 0)
 		}
 	}
-
 	ac.stopAnimState(info)
 	ac.curTweenState = nil
-
-	if name != ac.defaultAnimation && !ani.IsKeepOnStop {
+	if name != ac.shared.defaultAnimation && !ani.IsKeepOnStop {
 		ac.playDefaultAnim()
 	}
 }
@@ -340,7 +338,7 @@ func (ac *animationComponent) playDefaultAnim() {
 	}
 	speed := 1.0
 	if ac.curTweenState == nil {
-		animName = ac.defaultAnimation
+		animName = ac.shared.defaultAnimation
 	} else {
 		switch ac.curTweenState.AniType {
 		case aniTypeMove:
@@ -354,11 +352,11 @@ func (ac *animationComponent) playDefaultAnim() {
 	}
 
 	if animName == "" {
-		animName = ac.defaultAnimation
+		animName = ac.shared.defaultAnimation
 	}
 
-	if _, ok := ac.animations[animName]; ok {
-		ac.animationWrappers[animName].ensureRegistered(animName)
+	if _, ok := ac.shared.animations[animName]; ok {
+		ac.shared.animationWrappers[animName].ensureRegistered(animName)
 		spriteMgr.PlayAnim(ac.sprite.syncSprite.GetId(), animName, speed, true, false)
 	} else {
 		ac.sprite.goSetCostume(ac.sprite.defaultCostumeIndex)
@@ -440,19 +438,19 @@ func (ac *animationComponent) getFromAnToForAniFrames(from any, to any) (float64
 }
 
 func (ac *animationComponent) hasAnim(animName string) bool {
-	if _, ok := ac.animations[animName]; ok {
+	if _, ok := ac.shared.animations[animName]; ok {
 		return true
 	}
 	return false
 }
 
 func (ac *animationComponent) getAnimation(animName SpriteAnimationName) (*aniConfig, bool) {
-	ani, ok := ac.animations[animName]
+	ani, ok := ac.shared.animations[animName]
 	return ani, ok
 }
 
 func (ac *animationComponent) getStateAnimName(stateName string) string {
-	if bindingName, ok := ac.animBindings[stateName]; ok {
+	if bindingName, ok := ac.shared.animBindings[stateName]; ok {
 		return bindingName
 	}
 	return stateName
