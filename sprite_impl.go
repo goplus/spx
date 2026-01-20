@@ -61,9 +61,6 @@ type SpriteImpl struct {
 	gamer               reflect.Value
 	defaultCostumeIndex int
 
-	// Runtime data
-	collisionTargets map[string]bool
-
 	// Component system
 	components spriteComponents
 }
@@ -115,7 +112,6 @@ func (p *SpriteImpl) initBaseObjects(base string, spriteCfg *spriteConfig, g *Ga
 func (p *SpriteImpl) initBasicProperties(g *Game, name string, sprite Sprite, gamer reflect.Value, spriteCfg *spriteConfig) {
 	p.gamer = gamer
 	p.g, p.name, p.sprite = g, name, sprite
-	p.collisionTargets = make(map[string]bool)
 	p.scale = spriteCfg.Size
 	p.isVisible = spriteCfg.Visible
 }
@@ -302,7 +298,7 @@ func (p *SpriteImpl) _onTouchStart(onTouchStart func(Sprite)) {
 }
 
 func (p *SpriteImpl) OnTouchStart__0(sprite SpriteName, onTouchStart func(Sprite)) {
-	p.collisionTargets[sprite] = true
+	p.physics().addCollisionTarget(sprite)
 	p._onTouchStart(func(s Sprite) {
 		impl := spriteOf(s)
 		if impl != nil && impl.name == sprite {
@@ -319,7 +315,7 @@ func (p *SpriteImpl) OnTouchStart__1(sprite SpriteName, onTouchStart func()) {
 
 func (p *SpriteImpl) OnTouchStart__2(sprites []SpriteName, onTouchStart func(Sprite)) {
 	for _, sprite := range sprites {
-		p.collisionTargets[sprite] = true
+		p.physics().addCollisionTarget(sprite)
 	}
 	p._onTouchStart(func(s Sprite) {
 		impl := spriteOf(s)

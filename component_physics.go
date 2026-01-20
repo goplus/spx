@@ -42,6 +42,9 @@ type physicsComponent struct {
 	friction    float64
 	airDrag     float64
 	gravity     float64
+
+	// Collision tracking
+	collisionTargets map[string]bool
 }
 
 // initialize initializes the physics component from config
@@ -57,6 +60,9 @@ func (pc *physicsComponent) initialize(sprite *SpriteImpl, spriteCfg *spriteConf
 	pc.gravity = parseDefaultFloatValue(spriteCfg.Gravity, 1)
 	pc.friction = parseDefaultFloatValue(spriteCfg.Friction, 1)
 	pc.mass = parseDefaultFloatValue(spriteCfg.Mass, 1)
+
+	// Initialize collision targets map
+	pc.collisionTargets = make(map[string]bool)
 }
 
 // initCollisionConfig initializes collision configuration
@@ -102,12 +108,13 @@ func (pc *physicsComponent) initTriggerConfig(sprite *SpriteImpl, spriteCfg *spr
 func (pc *physicsComponent) cloneFrom(src component, newSprite *SpriteImpl) component {
 	srcPhysics := src.(*physicsComponent)
 	newPhys := &physicsComponent{
-		componentBase: componentBase{sprite: newSprite},
-		physicsMode:   srcPhysics.physicsMode,
-		mass:          srcPhysics.mass,
-		friction:      srcPhysics.friction,
-		airDrag:       srcPhysics.airDrag,
-		gravity:       srcPhysics.gravity,
+		componentBase:    componentBase{sprite: newSprite},
+		physicsMode:      srcPhysics.physicsMode,
+		mass:             srcPhysics.mass,
+		friction:         srcPhysics.friction,
+		airDrag:          srcPhysics.airDrag,
+		gravity:          srcPhysics.gravity,
+		collisionTargets: make(map[string]bool),
 	}
 	newPhys.collisionInfo.copyFrom(&srcPhysics.collisionInfo)
 	newPhys.triggerInfo.copyFrom(&srcPhysics.triggerInfo)
@@ -299,6 +306,18 @@ func (pc *physicsComponent) syncInitPhysicInfo(syncProxy *engine.Sprite) {
 	pc.triggerInfo.syncToProxy(syncProxy, true, pc.sprite)
 	syncProxy.SetGravityScale(pc.gravity)
 	syncProxy.SetPhysicsMode(pc.physicsMode)
+}
+
+// ============================================================================
+// Collision Targets Management
+// ============================================================================
+
+func (pc *physicsComponent) getCollisionTargets() map[string]bool {
+	return pc.collisionTargets
+}
+
+func (pc *physicsComponent) addCollisionTarget(target string) {
+	pc.collisionTargets[target] = true
 }
 
 // ============================================================================

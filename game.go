@@ -17,8 +17,6 @@
 package spx
 
 import (
-	"flag"
-	"fmt"
 	"log"
 	"math"
 	"os"
@@ -267,7 +265,7 @@ func (p *Game) initSpriteMgr() {
 
 // SetDebug sets debug flags for the game
 func SetDebug(flags dbgFlags) {
-	debugLoad = true
+	spxlog.SetLevel(spxlog.LevelDebug)
 	debugInstr = (flags & DbgFlagInstr) != 0
 	debugEvent = (flags & DbgFlagEvent) != 0
 	debugPerf = (flags & DbgFlagPerf) != 0
@@ -399,48 +397,8 @@ func WaitUntil(condition func() bool) {
 }
 
 // -------------------------------------------------------------------------------------
-
-// parseCommandLineFlags handles command line arguments
-func parseCommandLineFlags(conf *Config) {
-	if conf.DontParseFlags {
-		return
-	}
-
-	f := flag.CommandLine
-	verbose := f.Bool("v", false, "print verbose information")
-	fullscreen := f.Bool("f", false, "full screen")
-	help := f.Bool("h", false, "show help information")
-	fullscreen2 := f.Bool("fullscreen", false, "server mode")
-
-	f.String("controller", "", "controller's name")
-	f.Bool("servermode", false, "server mode")
-	f.String("serveraddr", "", "server address")
-	f.Bool("nomap", false, "server mode")
-	f.Bool("debugweb", false, "server mode")
-	f.String("gdextpath", "", "godot extension path")
-	f.String("write-movie", "", "movie mode")
-
-	f.String("path", "", "gdspx project path")
-	f.Bool("e", false, "editor mode")
-	f.Bool("headless", false, "Headless Mode")
-	f.Bool("remote-debug", false, "remote Debug Mode")
-	f.Bool("no-header", false, "disable engine's header output")
-	flag.Parse()
-
-	if *help {
-		fmt.Fprintf(os.Stderr, "Usage: %v [-v -f -h]\n", os.Args[0])
-		flag.PrintDefaults()
-		os.Exit(0)
-	}
-
-	if *verbose {
-		spxlog.SetLevel(spxlog.LevelDebug)
-		SetDebug(DbgFlagAll)
-	}
-	conf.FullScreen = conf.FullScreen || *fullscreen2 || *fullscreen
-}
-
 // setupGameConfig configures game settings
+
 func setupGameConfig(g *Game, conf *Config, proj *projConfig) {
 	if conf.Title == "" {
 		dir, _ := os.Getwd()
@@ -470,10 +428,8 @@ func setupGameConfig(g *Game, conf *Config, proj *projConfig) {
 
 // setupGameSystems initializes game subsystems
 func setupGameSystems(g *Game, proj *projConfig) {
-	if debugLoad {
-		spxlog.Debug("==> isCollisionByPixel: %v", !proj.CollisionByShape && !proj.Physics)
-		spxlog.Debug("==> isAutoSetCollisionLayer: %v", proj.AutoSetCollisionLayer == nil || *proj.AutoSetCollisionLayer)
-	}
+	spxlog.Debug("==> isCollisionByPixel: %v", !proj.CollisionByShape && !proj.Physics)
+	spxlog.Debug("==> isAutoSetCollisionLayer: %v", proj.AutoSetCollisionLayer == nil || *proj.AutoSetCollisionLayer)
 
 	g.isCollisionByPixel = !proj.CollisionByShape && !proj.Physics
 	g.isAutoSetCollisionLayer = proj.AutoSetCollisionLayer == nil || *proj.AutoSetCollisionLayer
@@ -499,9 +455,7 @@ func setupGameSystems(g *Game, proj *projConfig) {
 
 // loadGameSprites loads all sprites
 func loadGameSprites(g *Game, v reflect.Value, fs spxfs.Dir, proj *projConfig) {
-	if debugLoad {
-		spxlog.Debug("==> StartLoad")
-	}
+	spxlog.Debug("==> StartLoad")
 
 	g.startLoad(fs)
 	for i, n := 0, v.NumField(); i < n; i++ {
@@ -600,23 +554,19 @@ func (p *Game) canBindSprite(name string) bool {
 }
 
 func (p *Game) loadSprite(sprite Sprite, name string, gamer reflect.Value) error {
-	if debugLoad {
-		spxlog.Debug("==> LoadSprite: %s", name)
-	}
+	spxlog.Debug("==> LoadSprite: %s", name)
 	var baseDir = "sprites/" + name + "/"
 	var conf spriteConfig
 	err := loadJson(&conf, p.fs, baseDir+"index.json")
 	if err != nil {
 		return err
 	}
-	//
 	// init sprite (field 0)
 	vSpr := reflect.ValueOf(sprite).Elem()
 	vSpr.Set(reflect.Zero(vSpr.Type()))
 	base := vSpr.Field(0).Addr().Interface().(*SpriteImpl)
 	base.init(baseDir, p, name, &conf, gamer, sprite)
 	p.sprs[name] = sprite
-	//
 	// init gamer pointer (field 1)
 	*(*uintptr)(unsafe.Pointer(vSpr.Field(1).Addr().Pointer())) = gamer.Addr().Pointer()
 	return nil
@@ -675,16 +625,12 @@ func (p *Game) setupWorldAndWindow(proj *projConfig) {
 		p.baseObj.initWithSize(p.worldWidth_, p.worldHeight_)
 	}
 
-	if debugLoad {
-		spxlog.Debug("==> SetWorldSize: %d, %d", p.worldWidth_, p.worldHeight_)
-	}
+	spxlog.Debug("==> SetWorldSize: %d, %d", p.worldWidth_, p.worldHeight_)
 	p.mapMode = toMapMode(proj.Map.Mode)
 	p.doWindowSize()
 
 	engine.SetDebugMode(p.debug)
-	if debugLoad {
-		spxlog.Debug("==> SetWindowSize: %d, %d", p.windowWidth_, p.windowHeight_)
-	}
+	spxlog.Debug("==> SetWindowSize: %d, %d", p.windowWidth_, p.windowHeight_)
 	if p.windowWidth_ > p.worldWidth_ {
 		p.windowWidth_ = p.worldWidth_
 	}
@@ -800,7 +746,7 @@ func (p *Game) setupCollisionLayers(inits []Sprite) {
 	// Gather collision masks
 	for _, data := range spriteData {
 		data.info.Mask = 0
-		for target := range data.sprite.collisionTargets {
+		for target := range data.sprite.physics().getCollisionTargets() {
 			targetInfo := p.getSpriteCollisionInfo(target)
 			maskMap[data.modIdx] |= targetInfo.Layer
 		}
@@ -809,9 +755,7 @@ func (p *Game) setupCollisionLayers(inits []Sprite) {
 	// Apply collision masks
 	for _, data := range spriteData {
 		data.info.Mask = maskMap[data.modIdx]
-		if debugLoad {
-			spxlog.Debug("init sprite collision info: name=%s, layer=%d, mask=%d", data.sprite.name, data.info.Layer, data.info.Mask)
-		}
+		spxlog.Debug("init sprite collision info: name=%s, layer=%d, mask=%d", data.sprite.name, data.info.Layer, data.info.Mask)
 	}
 
 	// Recalculate physics info
@@ -832,9 +776,7 @@ func (p *Game) loadAudioAndTilemap(proj *projConfig) {
 }
 
 func (p *Game) endLoad(g reflect.Value, proj *projConfig) (err error) {
-	if debugLoad {
-		spxlog.Debug("==> EndLoad")
-	}
+	spxlog.Debug("==> EndLoad")
 	return p.loadIndex(g, proj)
 }
 
@@ -939,9 +881,7 @@ var (
 // Game Loop and Scheduler
 
 func (p *Game) runLoop(cfg *Config) (err error) {
-	if debugLoad {
-		spxlog.Debug("==> RunLoop")
-	}
+	spxlog.Debug("==> RunLoop")
 	if !cfg.DontRunOnUnfocused {
 		platformMgr.SetRunnableOnUnfocused(true)
 	}
