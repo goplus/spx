@@ -406,37 +406,37 @@ func (ac *animationComponent) adaptAnimBitmapResolution(ani *aniConfig) {
 	ac.sprite.syncSprite.SetRenderScale(mathf.NewVec2(renderScale, renderScale))
 }
 
-func (ac *animationComponent) getFromAnToForAni(anitype aniTypeEnum, from any, to any) (any, any) {
-	if anitype == aniTypeFrame {
+func (ac *animationComponent) getFromAnToForAni(aniType aniTypeEnum, from any, to any) (any, any) {
+	if aniType == aniTypeFrame {
 		return ac.getFromAnToForAniFrames(from, to)
 	}
 	return from, to
 }
 
 func (ac *animationComponent) getFromAnToForAniFrames(from any, to any) (float64, float64) {
-	fromval := 0.0
-	toval := 0.0
+	fromVal := 0.0
+	toVal := 0.0
 	switch v := from.(type) {
 	case SpriteCostumeName:
-		fromval = float64(ac.sprite.findCostume(v))
-		if fromval < 0 {
+		fromVal = float64(ac.sprite.findCostume(v))
+		if fromVal < 0 {
 			log.Panicf("findCostume %s failed", v)
 		}
 	default:
-		fromval, _ = tools.GetFloat(from)
+		fromVal, _ = tools.GetFloat(from)
 	}
 
 	switch v := to.(type) {
 	case SpriteCostumeName:
-		toval = float64(ac.sprite.findCostume(v))
-		if toval < 0 {
+		toVal = float64(ac.sprite.findCostume(v))
+		if toVal < 0 {
 			log.Panicf("findCostume %s failed", v)
 		}
 	default:
-		toval, _ = tools.GetFloat(to)
+		toVal, _ = tools.GetFloat(to)
 	}
 
-	return fromval, toval
+	return fromVal, toVal
 }
 
 func (ac *animationComponent) hasAnim(animName string) bool {
