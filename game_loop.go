@@ -138,8 +138,7 @@ func (p *Game) processPendingAudios(items []Shape, tempAudios []string) []string
 	for _, item := range items {
 		if sprite, ok := item.(*SpriteImpl); ok {
 			engine.Lock()
-			tempAudios = append(tempAudios, sprite.pendingAudios...)
-			sprite.pendingAudios = sprite.pendingAudios[:0]
+			tempAudios = sprite.sound().takePendingAudios(tempAudios)
 			engine.Unlock()
 
 			for _, audio := range tempAudios {
@@ -156,8 +155,7 @@ func (p *Game) processAnimationEvents(items []Shape, tempAnimations []string) []
 	for _, item := range items {
 		if sprite, ok := item.(*SpriteImpl); ok {
 			engine.Lock()
-			tempAnimations = append(tempAnimations, sprite.donedAnimations...)
-			sprite.donedAnimations = sprite.donedAnimations[:0]
+			tempAnimations = sprite.animation().takeDonedAnimations(tempAnimations)
 			engine.Unlock()
 
 			for _, animName := range tempAnimations {

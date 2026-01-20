@@ -139,3 +139,13 @@ func (sc *soundComponent) checkSoundObj() {
 		sc.soundObj = sc.sprite.g.sounds.allocSound()
 	}
 }
+
+func (sc *soundComponent) addPendingAudio(audioName string) {
+	sc.pendingAudios = append(sc.pendingAudios, audioName)
+}
+
+func (sc *soundComponent) takePendingAudios(buffer []string) []string {
+	buffer = append(buffer, sc.pendingAudios...)
+	sc.pendingAudios = sc.pendingAudios[:0]
+	return buffer
+}

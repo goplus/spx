@@ -404,13 +404,6 @@ func (ac *animationComponent) adaptAnimBitmapResolution(ani *aniConfig) {
 	ac.sprite.syncSprite.SetRenderScale(mathf.NewVec2(renderScale, renderScale))
 }
 
-func (ac *animationComponent) getFromAnToForAni(aniType aniTypeEnum, from any, to any) (any, any) {
-	if aniType == aniTypeFrame {
-		return ac.getFromAnToForAniFrames(from, to)
-	}
-	return from, to
-}
-
 func (ac *animationComponent) getFromAnToForAniFrames(from any, to any) (float64, float64) {
 	fromVal := 0.0
 	toVal := 0.0
@@ -454,4 +447,22 @@ func (ac *animationComponent) getStateAnimName(stateName string) string {
 		return bindingName
 	}
 	return stateName
+}
+
+func (ac *animationComponent) addDonedAnimation(animName string) {
+	ac.donedAnimations = append(ac.donedAnimations, animName)
+}
+
+func (ac *animationComponent) takeDonedAnimations(buffer []string) []string {
+	buffer = append(buffer, ac.donedAnimations...)
+	ac.donedAnimations = ac.donedAnimations[:0]
+	return buffer
+}
+
+func (ac *animationComponent) getCurAnimState() *animState {
+	return ac.curAnimState
+}
+
+func (ac *animationComponent) getCurTweenState() *animState {
+	return ac.curTweenState
 }

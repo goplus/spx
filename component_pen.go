@@ -215,7 +215,7 @@ func (pc *penComponent) destroyPen() {
 }
 
 func (pc *penComponent) movePen(x, y float64) {
-	if pc.penObj == nil {
+	if pc.penObj == nil || !pc.penDown {
 		return
 	}
 	penMgr.MovePenTo(*pc.penObj, mathf.NewVec2(x, -y))
