@@ -171,7 +171,7 @@ func (tc *transformComponent) Glide(x, y float64, secs float64) {
 	x0, y0 := tc.GetXY()
 	from := mathf.NewVec2(x0, y0)
 	to := mathf.NewVec2(x, y)
-	anicopy := aniConfig{
+	aniCopy := aniConfig{
 		Duration: secs,
 		From:     &from,
 		To:       &to,
@@ -179,7 +179,7 @@ func (tc *transformComponent) Glide(x, y float64, secs float64) {
 		IsLoop:   true,
 	}
 	animName := tc.sprite.getStateAnimName(StateGlide)
-	tc.sprite.components.Animation().doTween(animName, &anicopy)
+	tc.sprite.components.Animation().doTween(animName, &aniCopy)
 }
 
 func (tc *transformComponent) GlideTo(obj any, secs float64) {
@@ -200,14 +200,14 @@ func (tc *transformComponent) StepToPos(x, y, speed float64, animation SpriteAni
 		to := mathf.NewVec2(x, y)
 		distance := from.DistanceTo(to)
 		if ani, ok := tc.sprite.getAnimation(animation); ok {
-			anicopy := *ani
-			anicopy.From = &from
-			anicopy.To = &to
-			anicopy.AniType = aniTypeMove
-			anicopy.Duration = math.Abs(distance) * ani.StepDuration / speed
-			anicopy.IsLoop = true
-			anicopy.Speed = speed
-			tc.sprite.doTween(animation, &anicopy)
+			aniCopy := *ani
+			aniCopy.From = &from
+			aniCopy.To = &to
+			aniCopy.AniType = aniTypeMove
+			aniCopy.Duration = math.Abs(distance) * ani.StepDuration / speed
+			aniCopy.IsLoop = true
+			aniCopy.Speed = speed
+			tc.sprite.doTween(animation, &aniCopy)
 			return
 		}
 	}
@@ -267,14 +267,14 @@ func (tc *transformComponent) Turn(val Direction, speed float64, animation Sprit
 		animation = tc.sprite.getStateAnimName(StateTurn)
 	}
 	if ani, ok := tc.sprite.getAnimation(animation); ok {
-		anicopy := *ani
-		anicopy.From = tc.direction
-		anicopy.To = tc.direction + delta
-		anicopy.Duration = ani.TurnToDuration / 360.0 * math.Abs(delta) / speed
-		anicopy.AniType = aniTypeTurn
-		anicopy.IsLoop = true
-		anicopy.Speed = speed
-		tc.sprite.doTween(animation, &anicopy)
+		aniCopy := *ani
+		aniCopy.From = tc.direction
+		aniCopy.To = tc.direction + delta
+		aniCopy.Duration = ani.TurnToDuration / 360.0 * math.Abs(delta) / math.Max(speed, 0.001)
+		aniCopy.AniType = aniTypeTurn
+		aniCopy.IsLoop = true
+		aniCopy.Speed = speed
+		tc.sprite.doTween(animation, &aniCopy)
 		return
 	}
 	tc.setDirection(delta, true)
@@ -299,23 +299,23 @@ func (tc *transformComponent) TurnTo(obj any, speed float64, animation SpriteAni
 		animation = tc.sprite.getStateAnimName(StateTurn)
 	}
 	if ani, ok := tc.sprite.getAnimation(animation); ok {
-		fromangle := math.Mod(tc.direction+360.0, 360.0)
-		toangle := math.Mod(angle+360.0, 360.0)
-		if toangle-fromangle > 180.0 {
-			fromangle = fromangle + 360.0
+		fromAngle := math.Mod(tc.direction+360.0, 360.0)
+		toAngle := math.Mod(angle+360.0, 360.0)
+		if toAngle-fromAngle > 180.0 {
+			fromAngle = fromAngle + 360.0
 		}
-		if fromangle-toangle > 180.0 {
-			toangle = toangle + 360.0
+		if fromAngle-toAngle > 180.0 {
+			toAngle = toAngle + 360.0
 		}
-		delta := math.Abs(fromangle - toangle)
-		anicopy := *ani
-		anicopy.From = fromangle
-		anicopy.To = toangle
-		anicopy.Duration = ani.TurnToDuration / 360.0 * math.Abs(delta) / speed
-		anicopy.AniType = aniTypeTurn
-		anicopy.IsLoop = true
-		anicopy.Speed = speed
-		tc.sprite.components.Animation().doTween(animation, &anicopy)
+		delta := math.Abs(fromAngle - toAngle)
+		aniCopy := *ani
+		aniCopy.From = fromAngle
+		aniCopy.To = toAngle
+		aniCopy.Duration = ani.TurnToDuration / 360.0 * math.Abs(delta) / math.Max(speed, 0.001)
+		aniCopy.AniType = aniTypeTurn
+		aniCopy.IsLoop = true
+		aniCopy.Speed = speed
+		tc.sprite.components.Animation().doTween(animation, &aniCopy)
 		return
 	}
 	if tc.setDirection(angle, false) && debugInstr {
