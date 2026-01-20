@@ -76,19 +76,15 @@ func (sc *soundComponent) PlayAndWait(name SoundName) {
 }
 
 func (sc *soundComponent) PausePlaying(name SoundName) {
-	sc.doSoundAction(name, sc.sprite.g.pauseSound)
+	sc.sprite.g.pauseSound(name)
 }
 
 func (sc *soundComponent) ResumePlaying(name SoundName) {
-	sc.doSoundAction(name, sc.sprite.g.resumeSound)
+	sc.sprite.g.resumeSound(name)
 }
 
 func (sc *soundComponent) StopPlaying(name SoundName) {
-	sc.doSoundAction(name, sc.sprite.g.stopSound)
-}
-
-func (sc *soundComponent) doSoundAction(name SoundName, action func(name SoundName)) {
-	action(name)
+	sc.sprite.g.stopSound(name)
 }
 
 // ============================================================================
