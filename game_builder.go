@@ -17,6 +17,9 @@
 package spx
 
 import (
+	"flag"
+	"fmt"
+	"os"
 	"reflect"
 
 	spxfs "github.com/goplus/spx/v2/fs"
@@ -172,4 +175,43 @@ func (b *gameBuilder) buildAndRun() error {
 		return err
 	}
 	return b.run()
+}
+
+// parseCommandLineFlags handles command line arguments
+func parseCommandLineFlags(conf *Config) {
+	if conf.DontParseFlags {
+		return
+	}
+
+	f := flag.CommandLine
+	verbose := f.Bool("v", false, "print verbose information")
+	fullscreen := f.Bool("f", false, "full screen")
+	help := f.Bool("h", false, "show help information")
+	fullscreen2 := f.Bool("fullscreen", false, "server mode")
+
+	f.String("controller", "", "controller's name")
+	f.Bool("servermode", false, "server mode")
+	f.String("serveraddr", "", "server address")
+	f.Bool("nomap", false, "server mode")
+	f.Bool("debugweb", false, "server mode")
+	f.String("gdextpath", "", "godot extension path")
+	f.String("write-movie", "", "movie mode")
+
+	f.String("path", "", "gdspx project path")
+	f.Bool("e", false, "editor mode")
+	f.Bool("headless", false, "Headless Mode")
+	f.Bool("remote-debug", false, "remote Debug Mode")
+	f.Bool("no-header", false, "disable engine's header output")
+	flag.Parse()
+
+	if *help {
+		fmt.Fprintf(os.Stderr, "Usage: %v [-v -f -h]\n", os.Args[0])
+		flag.PrintDefaults()
+		os.Exit(0)
+	}
+
+	if *verbose {
+		SetDebug(DbgFlagAll)
+	}
+	conf.FullScreen = conf.FullScreen || *fullscreen2 || *fullscreen
 }

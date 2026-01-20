@@ -39,9 +39,7 @@ func (p *Game) loadSound(name SoundName) (media sound, err error) {
 		return media, nil
 	}
 
-	if debugLoad {
-		spxlog.Debug("==> LoadSound: %s", name)
-	}
+	spxlog.Debug("==> LoadSound: %s", name)
 	prefix := "sounds/" + name
 	media = new(soundConfig)
 	if err = loadJson(media, p.fs, prefix+"/index.json"); err != nil {
