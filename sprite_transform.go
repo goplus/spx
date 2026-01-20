@@ -30,7 +30,7 @@ import (
 // -----------------------------------------------------------------------------
 
 func (p *SpriteImpl) getXY() (x, y float64) {
-	return p.components.Transform().GetXY()
+	return p.transform().GetXY()
 }
 
 // DistanceTo func:
@@ -39,19 +39,19 @@ func (p *SpriteImpl) getXY() (x, y float64) {
 //	DistanceTo(spx.Mouse)
 //	DistanceTo(spx.Random)
 func (p *SpriteImpl) DistanceTo__0(sprite Sprite) float64 {
-	return p.components.Transform().DistanceTo(sprite)
+	return p.transform().DistanceTo(sprite)
 }
 
 func (p *SpriteImpl) DistanceTo__1(sprite SpriteName) float64 {
-	return p.components.Transform().DistanceTo(sprite)
+	return p.transform().DistanceTo(sprite)
 }
 
 func (p *SpriteImpl) DistanceTo__2(obj specialObj) float64 {
-	return p.components.Transform().DistanceTo(obj)
+	return p.transform().DistanceTo(obj)
 }
 
 func (p *SpriteImpl) DistanceTo__3(pos Pos) float64 {
-	return p.components.Transform().DistanceTo(pos)
+	return p.transform().DistanceTo(pos)
 }
 
 // -----------------------------------------------------------------------------
@@ -62,7 +62,7 @@ func (p *SpriteImpl) Move__0(step float64) {
 	if debugInstr {
 		spxlog.Debug("Move: sprite=%s, step=%v", p.name, step)
 	}
-	p.components.Transform().MoveForward(step)
+	p.transform().MoveForward(step)
 }
 
 func (p *SpriteImpl) Move__1(step int) {
@@ -70,15 +70,15 @@ func (p *SpriteImpl) Move__1(step int) {
 }
 
 func (p *SpriteImpl) Step__0(step float64) {
-	p.components.Transform().Step(step, 1, "")
+	p.transform().Step(step, 1, "")
 }
 
 func (p *SpriteImpl) Step__1(step float64, speed float64) {
-	p.components.Transform().Step(step, speed, "")
+	p.transform().Step(step, speed, "")
 }
 
 func (p *SpriteImpl) Step__2(step float64, speed float64, animation SpriteAnimationName) {
-	p.components.Transform().Step(step, speed, animation)
+	p.transform().Step(step, speed, animation)
 }
 
 func (p *SpriteImpl) doStepTo(obj any, speed float64, animation SpriteAnimationName) {
@@ -86,7 +86,7 @@ func (p *SpriteImpl) doStepTo(obj any, speed float64, animation SpriteAnimationN
 		spxlog.Debug("Goto: sprite=%s, obj=%v", p.name, obj)
 	}
 	x, y := p.g.objectPos(obj)
-	p.components.Transform().StepToPos(x, y, speed, animation)
+	p.transform().StepToPos(x, y, speed, animation)
 }
 
 func (p *SpriteImpl) StepTo__0(sprite Sprite) {
@@ -98,7 +98,7 @@ func (p *SpriteImpl) StepTo__1(sprite SpriteName) {
 }
 
 func (p *SpriteImpl) StepTo__2(x, y float64) {
-	p.components.Transform().StepToPos(x, y, 1, "")
+	p.transform().StepToPos(x, y, 1, "")
 }
 
 func (p *SpriteImpl) StepTo__3(obj specialObj) {
@@ -114,7 +114,7 @@ func (p *SpriteImpl) StepTo__5(sprite SpriteName, speed float64) {
 }
 
 func (p *SpriteImpl) StepTo__6(x, y, speed float64) {
-	p.components.Transform().StepToPos(x, y, speed, "")
+	p.transform().StepToPos(x, y, speed, "")
 }
 
 func (p *SpriteImpl) StepTo__7(obj specialObj, speed float64) {
@@ -130,7 +130,7 @@ func (p *SpriteImpl) StepTo__9(sprite SpriteName, speed float64, animation Sprit
 }
 
 func (p *SpriteImpl) StepTo__a(x, y, speed float64, animation SpriteAnimationName) {
-	p.components.Transform().StepToPos(x, y, speed, animation)
+	p.transform().StepToPos(x, y, speed, animation)
 }
 
 func (p *SpriteImpl) StepTo__b(obj specialObj, speed float64, animation SpriteAnimationName) {
@@ -142,11 +142,11 @@ func (p *SpriteImpl) doGlideTo(obj any, secs float64) {
 		spxlog.Debug("Glide: obj=%v, secs=%v", obj, secs)
 	}
 	x, y := p.g.objectPos(obj)
-	p.components.Transform().Glide(x, y, secs)
+	p.transform().Glide(x, y, secs)
 }
 
 func (p *SpriteImpl) Glide__0(x, y float64, secs float64) {
-	p.components.Transform().Glide(x, y, secs)
+	p.transform().Glide(x, y, secs)
 }
 
 func (p *SpriteImpl) Glide__1(sprite Sprite, secs float64) {
@@ -166,35 +166,35 @@ func (p *SpriteImpl) Glide__4(pos Pos, secs float64) {
 }
 
 func (p *SpriteImpl) SetXYpos(x, y float64) {
-	p.components.Transform().SetXYpos(x, y)
+	p.transform().SetXYpos(x, y)
 }
 
 func (p *SpriteImpl) ChangeXYpos(dx, dy float64) {
-	p.components.Transform().ChangeXYpos(dx, dy)
+	p.transform().ChangeXYpos(dx, dy)
 }
 
 func (p *SpriteImpl) Xpos() float64 {
-	return p.components.Transform().Xpos()
+	return p.transform().Xpos()
 }
 
 func (p *SpriteImpl) SetXpos(x float64) {
-	p.components.Transform().SetXpos(x)
+	p.transform().SetXpos(x)
 }
 
 func (p *SpriteImpl) ChangeXpos(dx float64) {
-	p.components.Transform().ChangeXpos(dx)
+	p.transform().ChangeXpos(dx)
 }
 
 func (p *SpriteImpl) Ypos() float64 {
-	return p.components.Transform().Ypos()
+	return p.transform().Ypos()
 }
 
 func (p *SpriteImpl) SetYpos(y float64) {
-	p.components.Transform().SetYpos(y)
+	p.transform().SetYpos(y)
 }
 
 func (p *SpriteImpl) ChangeYpos(dy float64) {
-	p.components.Transform().ChangeYpos(dy)
+	p.transform().ChangeYpos(dy)
 }
 
 // -----------------------------------------------------------------------------
@@ -202,79 +202,83 @@ func (p *SpriteImpl) ChangeYpos(dy float64) {
 // -----------------------------------------------------------------------------
 
 func (p *SpriteImpl) SetRotationStyle(style RotationStyle) {
-	p.components.Transform().SetRotationStyle(style)
+	p.transform().SetRotationStyle(style)
 }
 
 func (p *SpriteImpl) Heading() Direction {
-	return p.components.Transform().Heading()
+	return p.transform().Heading()
 }
 
 func (p *SpriteImpl) Turn__0(dir Direction) {
-	p.components.Transform().Turn(dir, 1, "")
+	p.transform().Turn(dir, 1, "")
 }
 
 func (p *SpriteImpl) Turn__1(dir Direction, speed float64) {
-	p.components.Transform().Turn(dir, speed, "")
+	p.transform().Turn(dir, speed, "")
 }
 
 func (p *SpriteImpl) Turn__2(dir Direction, speed float64, animation SpriteAnimationName) {
-	p.components.Transform().Turn(dir, speed, animation)
+	p.transform().Turn(dir, speed, animation)
 }
 
 func (p *SpriteImpl) TurnTo__0(target Sprite) {
-	p.components.Transform().TurnTo(target, 1, "")
+	p.transform().TurnTo(target, 1, "")
 }
 
 func (p *SpriteImpl) TurnTo__1(target SpriteName) {
-	p.components.Transform().TurnTo(target, 1, "")
+	p.transform().TurnTo(target, 1, "")
 }
 
 func (p *SpriteImpl) TurnTo__2(dir Direction) {
-	p.components.Transform().TurnTo(dir, 1, "")
+	p.transform().TurnTo(dir, 1, "")
 }
 
 func (p *SpriteImpl) TurnTo__3(target specialObj) {
-	p.components.Transform().TurnTo(target, 1, "")
+	p.transform().TurnTo(target, 1, "")
 }
 
 func (p *SpriteImpl) TurnTo__4(target Sprite, speed float64) {
-	p.components.Transform().TurnTo(target, speed, "")
+	p.transform().TurnTo(target, speed, "")
 }
 
 func (p *SpriteImpl) TurnTo__5(target SpriteName, speed float64) {
-	p.components.Transform().TurnTo(target, speed, "")
+	p.transform().TurnTo(target, speed, "")
 }
 
 func (p *SpriteImpl) TurnTo__6(dir Direction, speed float64) {
-	p.components.Transform().TurnTo(dir, speed, "")
+	p.transform().TurnTo(dir, speed, "")
 }
 
 func (p *SpriteImpl) TurnTo__7(target specialObj, speed float64) {
-	p.components.Transform().TurnTo(target, speed, "")
+	p.transform().TurnTo(target, speed, "")
 }
 
 func (p *SpriteImpl) TurnTo__8(target Sprite, speed float64, animation SpriteAnimationName) {
-	p.components.Transform().TurnTo(target, speed, animation)
+	p.transform().TurnTo(target, speed, animation)
 }
 
 func (p *SpriteImpl) TurnTo__9(target SpriteName, speed float64, animation SpriteAnimationName) {
-	p.components.Transform().TurnTo(target, speed, animation)
+	p.transform().TurnTo(target, speed, animation)
 }
 
 func (p *SpriteImpl) TurnTo__a(dir Direction, speed float64, animation SpriteAnimationName) {
-	p.components.Transform().TurnTo(dir, speed, animation)
+	p.transform().TurnTo(dir, speed, animation)
 }
 
 func (p *SpriteImpl) TurnTo__b(target specialObj, speed float64, animation SpriteAnimationName) {
-	p.components.Transform().TurnTo(target, speed, animation)
+	p.transform().TurnTo(target, speed, animation)
 }
 
 func (p *SpriteImpl) SetHeading(dir Direction) {
-	p.components.Transform().SetHeading(dir)
+	p.transform().SetHeading(dir)
 }
 
 func (p *SpriteImpl) ChangeHeading(dir Direction) {
-	p.components.Transform().ChangeHeading(dir)
+	p.transform().ChangeHeading(dir)
+}
+
+func (p *SpriteImpl) BounceOffEdge() {
+	p.transform().BounceOffEdge()
 }
 
 // -----------------------------------------------------------------------------
@@ -286,11 +290,11 @@ func (p *SpriteImpl) Size() float64 {
 }
 
 func (p *SpriteImpl) SetSize(size float64) {
-	p.components.Transform().SetSize(size)
+	p.transform().SetSize(size)
 }
 
 func (p *SpriteImpl) ChangeSize(delta float64) {
-	p.components.Transform().ChangeSize(delta)
+	p.transform().ChangeSize(delta)
 }
 
 // -----------------------------------------------------------------------------
@@ -298,5 +302,5 @@ func (p *SpriteImpl) ChangeSize(delta float64) {
 // -----------------------------------------------------------------------------
 
 func (p *SpriteImpl) getPivot() mathf.Vec2 {
-	return p.components.Transform().getPivot()
+	return p.transform().getPivot()
 }

@@ -57,11 +57,11 @@ const (
 // -----------------------------------------------------------------------------
 
 func (p *SpriteImpl) SetPhysicsMode(mode PhysicsMode) {
-	p.components.Physics().SetPhysicsMode(mode)
+	p.physics().SetPhysicsMode(mode)
 }
 
 func (p *SpriteImpl) PhysicsMode() PhysicsMode {
-	return p.components.Physics().GetPhysicsMode()
+	return p.physics().GetPhysicsMode()
 }
 
 // -----------------------------------------------------------------------------
@@ -69,19 +69,19 @@ func (p *SpriteImpl) PhysicsMode() PhysicsMode {
 // -----------------------------------------------------------------------------
 
 func (p *SpriteImpl) Velocity() (velocityX, velocityY float64) {
-	return p.components.Physics().GetVelocity()
+	return p.physics().GetVelocity()
 }
 
 func (p *SpriteImpl) SetVelocity(velocityX, velocityY float64) {
-	p.components.Physics().SetVelocity(velocityX, velocityY)
+	p.physics().SetVelocity(velocityX, velocityY)
 }
 
 func (p *SpriteImpl) AddImpulse(impulseX, impulseY float64) {
-	p.components.Physics().AddImpulse(impulseX, impulseY)
+	p.physics().AddImpulse(impulseX, impulseY)
 }
 
 func (p *SpriteImpl) IsOnFloor() bool {
-	return p.components.Physics().IsOnFloor()
+	return p.physics().IsOnFloor()
 }
 
 // -----------------------------------------------------------------------------
@@ -89,11 +89,11 @@ func (p *SpriteImpl) IsOnFloor() bool {
 // -----------------------------------------------------------------------------
 
 func (p *SpriteImpl) Gravity() float64 {
-	return p.components.Physics().GetGravity()
+	return p.physics().GetGravity()
 }
 
 func (p *SpriteImpl) SetGravity(gravity float64) {
-	p.components.Physics().SetGravity(gravity)
+	p.physics().SetGravity(gravity)
 }
 
 // -----------------------------------------------------------------------------
@@ -101,19 +101,19 @@ func (p *SpriteImpl) SetGravity(gravity float64) {
 // -----------------------------------------------------------------------------
 
 func (p *SpriteImpl) SetColliderShape(isTrigger bool, ctype ColliderShapeType, params []float64) error {
-	return p.components.Physics().SetColliderShape(isTrigger, ctype, params)
+	return p.physics().SetColliderShape(isTrigger, ctype, params)
 }
 
 func (p *SpriteImpl) ColliderShape(isTrigger bool) (ColliderShapeType, []float64) {
-	return p.components.Physics().GetColliderShape(isTrigger)
+	return p.physics().GetColliderShape(isTrigger)
 }
 
 func (p *SpriteImpl) SetColliderPivot(isTrigger bool, offsetX, offsetY float64) {
-	p.components.Physics().SetColliderPivot(isTrigger, offsetX, offsetY)
+	p.physics().SetColliderPivot(isTrigger, offsetX, offsetY)
 }
 
 func (p *SpriteImpl) ColliderPivot(isTrigger bool) (offsetX, offsetY float64) {
-	return p.components.Physics().GetColliderPivot(isTrigger)
+	return p.physics().GetColliderPivot(isTrigger)
 }
 
 // -----------------------------------------------------------------------------
@@ -121,27 +121,27 @@ func (p *SpriteImpl) ColliderPivot(isTrigger bool) (offsetX, offsetY float64) {
 // -----------------------------------------------------------------------------
 
 func (p *SpriteImpl) SetCollisionLayer(layer int64) {
-	p.components.Physics().SetCollisionLayer(layer)
+	p.physics().SetCollisionLayer(layer)
 }
 
 func (p *SpriteImpl) SetCollisionMask(mask int64) {
-	p.components.Physics().SetCollisionMask(mask)
+	p.physics().SetCollisionMask(mask)
 }
 
 func (p *SpriteImpl) SetCollisionEnabled(enabled bool) {
-	p.components.Physics().SetCollisionEnabled(enabled)
+	p.physics().SetCollisionEnabled(enabled)
 }
 
 func (p *SpriteImpl) CollisionLayer() int64 {
-	return p.components.Physics().GetCollisionLayer()
+	return p.physics().GetCollisionLayer()
 }
 
 func (p *SpriteImpl) CollisionMask() int64 {
-	return p.components.Physics().GetCollisionMask()
+	return p.physics().GetCollisionMask()
 }
 
 func (p *SpriteImpl) CollisionEnabled() bool {
-	return p.components.Physics().IsCollisionEnabled()
+	return p.physics().IsCollisionEnabled()
 }
 
 // -----------------------------------------------------------------------------
@@ -149,27 +149,27 @@ func (p *SpriteImpl) CollisionEnabled() bool {
 // -----------------------------------------------------------------------------
 
 func (p *SpriteImpl) SetTriggerEnabled(trigger bool) {
-	p.components.Physics().SetTriggerEnabled(trigger)
+	p.physics().SetTriggerEnabled(trigger)
 }
 
 func (p *SpriteImpl) SetTriggerLayer(layer int64) {
-	p.components.Physics().SetTriggerLayer(layer)
+	p.physics().SetTriggerLayer(layer)
 }
 
 func (p *SpriteImpl) SetTriggerMask(mask int64) {
-	p.components.Physics().SetTriggerMask(mask)
+	p.physics().SetTriggerMask(mask)
 }
 
 func (p *SpriteImpl) TriggerLayer() int64 {
-	return p.components.Physics().GetTriggerLayer()
+	return p.physics().GetTriggerLayer()
 }
 
 func (p *SpriteImpl) TriggerMask() int64 {
-	return p.components.Physics().GetTriggerMask()
+	return p.physics().GetTriggerMask()
 }
 
 func (p *SpriteImpl) TriggerEnabled() bool {
-	return p.components.Physics().IsTriggerEnabled()
+	return p.physics().IsTriggerEnabled()
 }
 
 // -----------------------------------------------------------------------------
@@ -178,7 +178,7 @@ func (p *SpriteImpl) TriggerEnabled() bool {
 
 // updatePhysicsShapesScale updates collision and trigger shapes when sprite scale changes
 func (p *SpriteImpl) updatePhysicsShapesScale() {
-	physics := p.components.Physics()
+	physics := p.physics()
 	physics.getTriggerInfo().applyShape(p.syncSprite, true, p.scale)
 	physics.getCollisionInfo().applyShape(p.syncSprite, false, p.scale)
 }

@@ -61,27 +61,27 @@ type animState struct {
 // -----------------------------------------------------------------------------
 
 func (p *SpriteImpl) adaptAnimBitmapResolution(ani *aniConfig) {
-	p.components.Animation().adaptAnimBitmapResolution(ani)
+	p.animation().adaptAnimBitmapResolution(ani)
 }
 
 func (p *SpriteImpl) getFromAnToForAni(anitype aniTypeEnum, from any, to any) (any, any) {
-	return p.components.Animation().getFromAnToForAni(anitype, from, to)
+	return p.animation().getFromAnToForAni(anitype, from, to)
 }
 
 func (p *SpriteImpl) getFromAnToForAniFrames(from any, to any) (float64, float64) {
-	return p.components.Animation().getFromAnToForAniFrames(from, to)
+	return p.animation().getFromAnToForAniFrames(from, to)
 }
 
 func (p *SpriteImpl) getStateAnimName(stateName string) string {
-	return p.components.Animation().getStateAnimName(stateName)
+	return p.animation().getStateAnimName(stateName)
 }
 
 func (p *SpriteImpl) hasAnim(animName string) bool {
-	return p.components.Animation().hasAnim(animName)
+	return p.animation().hasAnim(animName)
 }
 
 func (p *SpriteImpl) getAnimation(animName SpriteAnimationName) (*aniConfig, bool) {
-	return p.components.Animation().getAnimation(animName)
+	return p.animation().getAnimation(animName)
 }
 
 // -----------------------------------------------------------------------------
@@ -89,19 +89,19 @@ func (p *SpriteImpl) getAnimation(animName SpriteAnimationName) (*aniConfig, boo
 // -----------------------------------------------------------------------------
 
 func (p *SpriteImpl) onAnimationDone(animName string) {
-	p.components.Animation().onAnimationDone(animName)
+	p.animation().onAnimationDone(animName)
 }
 
 func (p *SpriteImpl) stopAnimState(state *animState) {
-	p.components.Animation().stopAnimState(state)
+	p.animation().stopAnimState(state)
 }
 
 func (p *SpriteImpl) stopAnimAudio(state *animState) {
-	p.components.Animation().stopAnimAudio(state)
+	p.animation().stopAnimAudio(state)
 }
 
 func (p *SpriteImpl) playAnimAudio(ani *aniConfig, info *animState) {
-	p.components.Animation().playAnimAudio(ani, info)
+	p.animation().playAnimAudio(ani, info)
 }
 
 // -----------------------------------------------------------------------------
@@ -109,15 +109,15 @@ func (p *SpriteImpl) playAnimAudio(ani *aniConfig, info *animState) {
 // -----------------------------------------------------------------------------
 
 func (p *SpriteImpl) doAnimation(animName SpriteAnimationName, ani *aniConfig, loop bool, speed float64, isBlocking bool, playAudio bool) {
-	p.components.Animation().doAnimation(animName, ani, loop, speed, isBlocking, playAudio)
+	p.animation().doAnimation(animName, ani, loop, speed, isBlocking, playAudio)
 }
 
 func (p *SpriteImpl) doTween(name SpriteAnimationName, ani *aniConfig) {
-	p.components.Animation().doTween(name, ani)
+	p.animation().doTween(name, ani)
 }
 
 func (p *SpriteImpl) playDefaultAnim() {
-	p.components.Animation().playDefaultAnim()
+	p.animation().playDefaultAnim()
 }
 
 // -----------------------------------------------------------------------------
@@ -132,16 +132,16 @@ func (p *SpriteImpl) Animate__1(name SpriteAnimationName, loop bool) {
 	if debugInstr {
 		spxlog.Debug("==> Animation %s", name)
 	}
-	p.components.Animation().Animate(name, loop)
+	p.animation().Animate(name, loop)
 }
 
 func (p *SpriteImpl) AnimateAndWait(name SpriteAnimationName) {
 	if debugInstr {
 		spxlog.Debug("==> AnimateAndWait %s", name)
 	}
-	p.components.Animation().AnimateAndWait(name)
+	p.animation().AnimateAndWait(name)
 }
 
 func (p *SpriteImpl) StopAnimation(name SpriteAnimationName) {
-	p.components.Animation().StopAnimation(name)
+	p.animation().StopAnimation(name)
 }

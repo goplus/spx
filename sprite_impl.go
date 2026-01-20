@@ -627,8 +627,28 @@ func (p *SpriteImpl) Touching__2(obj specialObj) bool {
 	return p.touching(obj)
 }
 
-func (p *SpriteImpl) BounceOffEdge() {
-	p.components.Transform().BounceOffEdge()
+// -----------------------------------------------------------------------------
+// Component Accessor Helpers
+// -----------------------------------------------------------------------------
+
+func (p *SpriteImpl) transform() *transformComponent {
+	return p.components.Transform()
+}
+
+func (p *SpriteImpl) animation() *animationComponent {
+	return p.components.Animation()
+}
+
+func (p *SpriteImpl) physics() *physicsComponent {
+	return p.components.Physics()
+}
+
+func (p *SpriteImpl) pen() *penComponent {
+	return p.components.Pen()
+}
+
+func (p *SpriteImpl) sound() *soundComponent {
+	return p.components.Sound()
 }
 
 // ============================================================================
