@@ -196,7 +196,31 @@ func (ac *animationComponent) doAnimation(animName SpriteAnimationName, ani *ani
 	}
 }
 
+// tweenParams holds pre-calculated parameters for tween animations
+type tweenParams struct {
+	moveDiff  mathf.Vec2
+	moveSpeed float64
+	moveDir   mathf.Vec2
+	turnDiff  float64
+}
+
 func (ac *animationComponent) doTween(name SpriteAnimationName, ani *aniConfig) {
+	info := ac.initTweenState(name, ani)
+	if info == nil {
+		return
+	}
+
+	params, ok := ac.prepareTweenParams(ani)
+	if !ok {
+		return
+	}
+
+	ac.executeTweenLoop(info, ani, params)
+	ac.cleanupTween(info, name, ani)
+}
+
+// initTweenState initializes the tween animation state
+func (ac *animationComponent) initTweenState(name SpriteAnimationName, ani *aniConfig) *animState {
 	info := &animState{
 		AniType:    ani.AniType,
 		Name:       name,
@@ -205,42 +229,57 @@ func (ac *animationComponent) doTween(name SpriteAnimationName, ani *aniConfig) 
 	}
 	ac.stopAnimState(ac.curTweenState)
 	ac.curTweenState = info
-	animName := info.Name
-	if ac.hasAnim(animName) {
-		ac.doAnimation(animName, ani, ani.IsLoop, ani.Speed, false, false)
+
+	if ac.hasAnim(name) {
+		ac.doAnimation(name, ani, ani.IsLoop, ani.Speed, false, false)
 		ac.playAnimAudio(ani, info)
 	}
-	duration := ani.Duration
 
 	// Validate duration to prevent division by zero
-	if duration <= 0 {
-		spxlog.Warn("Invalid animation duration: %v", duration)
-		return
+	if ani.Duration <= 0 {
+		spxlog.Warn("Invalid animation duration: %v", ani.Duration)
+		return nil
 	}
 
-	timer := 0.0
-	prePercent := 0.0
+	return info
+}
 
-	// Pre-calculate vectors and differences before the loop to avoid redundant calculations
-	var moveDiff mathf.Vec2
-	var moveSpeed float64
-	var moveDir mathf.Vec2
-	var turnDiff float64
+// prepareTweenParams pre-calculates animation parameters based on animation type
+func (ac *animationComponent) prepareTweenParams(ani *aniConfig) (*tweenParams, bool) {
+	params := &tweenParams{}
+	duration := ani.Duration
 
 	switch ani.AniType {
 	case aniTypeMove, aniTypeGlide:
-		src, _ := tools.GetVec2(ani.From)
-		dst, _ := tools.GetVec2(ani.To)
-		moveDiff = dst.Sub(src)
+		src, srcOk := tools.GetVec2(ani.From)
+		dst, dstOk := tools.GetVec2(ani.To)
+		if !srcOk || !dstOk {
+			spxlog.Warn("Invalid 'From' or 'To' for move/glide animation: not a *mathf.Vec2")
+			return nil, false
+		}
+		params.moveDiff = dst.Sub(src)
 		if ani.AniType == aniTypeMove {
-			moveSpeed = moveDiff.Length() / duration
-			moveDir = moveDiff.Normalize()
+			params.moveSpeed = params.moveDiff.Length() / duration
+			params.moveDir = params.moveDiff.Normalize()
 		}
 	case aniTypeTurn:
-		src, _ := tools.GetFloat(ani.From)
-		dst, _ := tools.GetFloat(ani.To)
-		turnDiff = dst - src
+		src, srcOk := tools.GetFloat(ani.From)
+		dst, dstOk := tools.GetFloat(ani.To)
+		if !srcOk || !dstOk {
+			spxlog.Warn("Invalid 'From' or 'To' for turn animation: not a float")
+			return nil, false
+		}
+		params.turnDiff = dst - src
 	}
+
+	return params, true
+}
+
+// executeTweenLoop runs the main animation loop
+func (ac *animationComponent) executeTweenLoop(info *animState, ani *aniConfig, params *tweenParams) {
+	timer := 0.0
+	prePercent := 0.0
+	duration := ani.Duration
 
 	for timer < duration {
 		if info.IsCanceled {
@@ -250,35 +289,46 @@ func (ac *animationComponent) doTween(name SpriteAnimationName, ani *aniConfig) 
 		percent := mathf.Clamp01f(timer / duration)
 		deltaPercent := percent - prePercent
 		prePercent = percent
-		switch ani.AniType {
-		case aniTypeMove:
-			physicsMode := ac.sprite.PhysicsMode()
-			if enabledPhysics && physicsMode != NoPhysics && physicsMode != StaticPhysics {
-				vel := moveDir.Mulf(moveSpeed)
-				ac.sprite.SetVelocity(vel.X, vel.Y)
-			} else {
-				val := moveDiff.Mulf(deltaPercent)
-				ac.sprite.ChangeXYpos(val.X, val.Y)
-			}
-		case aniTypeGlide:
-			val := moveDiff.Mulf(deltaPercent)
-			ac.sprite.ChangeXYpos(val.X, val.Y)
-		case aniTypeTurn:
-			val := turnDiff * deltaPercent
-			ac.sprite.ChangeHeading(val)
-		}
+
+		ac.applyTweenStep(ani.AniType, deltaPercent, params)
 		engine.WaitNextFrame()
 	}
-	switch ani.AniType {
+}
+
+// applyTweenStep applies a single animation step
+func (ac *animationComponent) applyTweenStep(aniType aniTypeEnum, deltaPercent float64, params *tweenParams) {
+	switch aniType {
 	case aniTypeMove:
+		physicsMode := ac.sprite.PhysicsMode()
+		if enabledPhysics && physicsMode != NoPhysics && physicsMode != StaticPhysics {
+			vel := params.moveDir.Mulf(params.moveSpeed)
+			ac.sprite.SetVelocity(vel.X, vel.Y)
+		} else {
+			val := params.moveDiff.Mulf(deltaPercent)
+			ac.sprite.ChangeXYpos(val.X, val.Y)
+		}
+	case aniTypeGlide:
+		val := params.moveDiff.Mulf(deltaPercent)
+		ac.sprite.ChangeXYpos(val.X, val.Y)
+	case aniTypeTurn:
+		val := params.turnDiff * deltaPercent
+		ac.sprite.ChangeHeading(val)
+	}
+}
+
+// cleanupTween performs cleanup after tween animation completes
+func (ac *animationComponent) cleanupTween(info *animState, name SpriteAnimationName, ani *aniConfig) {
+	if ani.AniType == aniTypeMove {
 		physicsMode := ac.sprite.PhysicsMode()
 		if enabledPhysics && physicsMode != NoPhysics && physicsMode != StaticPhysics {
 			ac.sprite.SetVelocity(0, 0)
 		}
 	}
+
 	ac.stopAnimState(info)
 	ac.curTweenState = nil
-	if animName != ac.defaultAnimation && !ani.IsKeepOnStop {
+
+	if name != ac.defaultAnimation && !ani.IsKeepOnStop {
 		ac.playDefaultAnim()
 	}
 }
