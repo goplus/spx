@@ -164,6 +164,9 @@ type Game struct {
 
 	// Batch synchronization buffer (reused every frame)
 	syncBuffer *engine.SpriteSyncBuffer
+
+	// Reusable spatial hash for collision detection optimization
+	spatialHash *SpatialHash
 }
 
 const maxCollisionLayerIdx = 32 // engine limit support 32 layers
