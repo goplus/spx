@@ -55,20 +55,6 @@ func (bc *bubbleComponent) onDestroy() {
 }
 
 // ============================================================================
-// Refresh Methods
-// ============================================================================
-
-// refresh updates bubble positions (called every frame for visible sprites)
-func (bc *bubbleComponent) refresh() {
-	if bc.quoteObj != nil {
-		bc.quoteObj.refresh()
-	}
-	if bc.sayObj != nil {
-		bc.sayObj.refresh()
-	}
-}
-
-// ============================================================================
 // Say/Think Methods
 // ============================================================================
 

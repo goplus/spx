@@ -21,6 +21,7 @@ import (
 
 	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v2/internal/engine"
+	"github.com/goplus/spx/v2/internal/time"
 )
 
 // ======================== Sprite Utility Functions ========================
@@ -88,6 +89,33 @@ func (p *SpriteImpl) bounds() *mathf.Rect2 {
 
 	rect := mathf.NewRect2(x-w*0.5, y-h*0.5, w, h)
 	return &rect
+}
+
+// Touching checks if sprite is touching:
+//   - another sprite (by name or Sprite object)
+//   - spx.Mouse
+//   - spx.Edge, spx.EdgeLeft, spx.EdgeTop, spx.EdgeRight, spx.EdgeBottom
+func (p *SpriteImpl) touching(obj any) bool {
+	if !p.isVisible || p.isDying {
+		return false
+	}
+	switch v := obj.(type) {
+	case SpriteName:
+		if o := p.g.touchingSpriteBy(p, v); o != nil {
+			return true
+		}
+		return false
+	case specialObj:
+		if v > 0 {
+			return p.checkTouchingScreen(int(v)) != 0
+		} else if v == Mouse {
+			x, y := p.g.getMousePos()
+			return p.g.touchingPoint(p, x, y)
+		}
+	case Sprite:
+		return touchingSprite(p, spriteOf(v))
+	}
+	panic("Touching: unexpected input")
 }
 
 // touchingSprite checks if src sprite is touching dst sprite
@@ -307,4 +335,16 @@ func toRotationStyle(style string) RotationStyle {
 		return None
 	}
 	return Normal
+}
+
+// ============================================================================
+// Time Methods
+// ============================================================================
+
+func (pself *SpriteImpl) DeltaTime() float64 {
+	return time.DeltaTime()
+}
+
+func (pself *SpriteImpl) TimeSinceLevelLoad() float64 {
+	return time.TimeSinceLevelLoad()
 }
