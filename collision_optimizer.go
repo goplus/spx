@@ -81,10 +81,14 @@ func newSpatialHash(cellSize float64) *SpatialHash {
 }
 
 // clear empties the spatial hash by clearing all existing entries
-// This reuses the underlying map memory instead of reallocating
+// This reuses both the top-level and inner map memory instead of reallocating
+// Note: Maps may grow but never shrink, which is acceptable for typical game scenarios
+// where sprites move within a bounded area
 func (sh *SpatialHash) clear() {
-	for x := range sh.grid {
-		delete(sh.grid, x)
+	for _, yGrid := range sh.grid {
+		for y := range yGrid {
+			delete(yGrid, y)
+		}
 	}
 }
 
