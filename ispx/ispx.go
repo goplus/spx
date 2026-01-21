@@ -2,6 +2,7 @@ package ispx
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/goplus/ixgo"
 	"github.com/goplus/ixgo/xgobuild"
@@ -23,10 +24,12 @@ func init() {
 }
 
 var (
+	mu          sync.Mutex
 	ixgoCtx     *ixgo.Context
-	ixgoInterp  *ixgo.Interp
 	ixgoFS      *memfs.MemFs
+	ixgoInterp  *ixgo.Interp
 	ixgoRunning bool
+	ixgoRunID   int64
 )
 
 // Init initializes the interpreter with the given ctx, which must not be
@@ -36,6 +39,9 @@ var (
 //
 // If ctx.Lookup is nil, a default lookup function will be set.
 func Init(ctx *ixgo.Context) error {
+	mu.Lock()
+	defer mu.Unlock()
+
 	if ixgoCtx != nil {
 		panic("ispx: already initialized")
 	}
@@ -72,14 +78,18 @@ func Gopt_Game_Gopx_GetWidget[T any](sg ShapeGetter, name string) *T {
 
 // Build builds the spx code from the provided files into the interpreter.
 func Build(files map[string][]byte) error {
+	mu.Lock()
+	defer mu.Unlock()
+
 	if ixgoCtx == nil {
 		panic("ispx: not initialized")
 	}
+	if ixgoRunning {
+		panic("ispx: cannot build while running")
+	}
 
 	// Release previous resources if any.
-	if ixgoInterp != nil {
-		UnsafeRelease()
-	}
+	unsafeRelease()
 
 	fs := memfs.NewMemFs(files)
 	spxfs.RegisterSchema("", func(path string) (spxfs.Dir, error) {
@@ -101,30 +111,51 @@ func Build(files map[string][]byte) error {
 		return fmt.Errorf("failed to create interp: %w", err)
 	}
 
-	ixgoInterp = interp
 	ixgoFS = fs
+	ixgoInterp = interp
 	return nil
 }
 
 // Run runs the interpreter. It blocks until the interpreter exits. After it
 // returns, the interpreter must be rebuilt before running again.
 func Run() (exitCode int, err error) {
+	mu.Lock()
 	if ixgoInterp == nil {
+		mu.Unlock()
 		panic("ispx: not built")
 	}
 	if ixgoRunning {
+		mu.Unlock()
 		panic("ispx: already running")
 	}
-
 	ixgoRunning = true
-	defer func() { ixgoRunning = false }()
+	ixgoRunID++
+	runID := ixgoRunID
+	ctx, interp := ixgoCtx, ixgoInterp
+	mu.Unlock()
 
-	return ixgoCtx.RunInterp(ixgoInterp, "main.go", nil)
+	defer func() {
+		mu.Lock()
+		if ixgoRunID == runID {
+			ixgoRunning = false
+		}
+		mu.Unlock()
+	}()
+
+	return ctx.RunInterp(interp, "main.go", nil)
 }
 
 // UnsafeRelease releases the interpreter's resources. It is unsafe to call
 // while the interpreter is running.
 func UnsafeRelease() {
+	mu.Lock()
+	defer mu.Unlock()
+	unsafeRelease()
+}
+
+// unsafeRelease releases the interpreter's resources. It must be called with mu held.
+func unsafeRelease() {
+	ixgoRunning = false
 	if ixgoInterp != nil {
 		ixgoInterp.UnsafeRelease()
 		ixgoInterp = nil
