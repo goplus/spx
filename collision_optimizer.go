@@ -80,9 +80,12 @@ func newSpatialHash(cellSize float64) *SpatialHash {
 	}
 }
 
-// clear empties the spatial hash
+// clear empties the spatial hash by clearing all existing entries
+// This reuses the underlying map memory instead of reallocating
 func (sh *SpatialHash) clear() {
-	sh.grid = make(map[int64]map[int64][]*SpriteAABB)
+	for x := range sh.grid {
+		delete(sh.grid, x)
+	}
 }
 
 // getCellCoords converts world coordinates to cell coordinates
@@ -144,21 +147,28 @@ func (sh *SpatialHash) query(aabb *SpriteAABB) []*SpriteAABB {
 }
 
 // buildSpatialHashForNames builds a spatial hash with sprites matching the given name filter
+// Uses a reusable spatial hash to avoid repeated allocations
 func (p *Game) buildSpatialHashForNames(dst *SpriteImpl, nameFilter func(string) bool) *SpatialHash {
-	spatialHash := newSpatialHash(defaultSpatialHashCellSize)
+	// Lazy initialization of the reusable spatial hash
+	if p.spatialHash == nil {
+		p.spatialHash = newSpatialHash(defaultSpatialHashCellSize)
+	}
+
+	// Clear and reuse the existing spatial hash
+	p.spatialHash.clear()
 
 	for _, item := range p.spriteMgr.items {
 		if sp, ok := item.(*SpriteImpl); ok && sp != dst {
 			if nameFilter(sp.name) && sp.isVisible && !sp.isDying && sp.syncSprite != nil {
 				aabb := newSpriteAABB(sp)
 				if aabb != nil {
-					spatialHash.insert(aabb)
+					p.spatialHash.insert(aabb)
 				}
 			}
 		}
 	}
 
-	return spatialHash
+	return p.spatialHash
 }
 
 // findCollisionsInSpatialHash performs AABB and pixel-perfect collision detection
