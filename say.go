@@ -36,21 +36,25 @@ const (
 )
 
 type sayOrThinker struct {
-	sp    *SpriteImpl
-	msg   string
-	style int // styleSay, styleThink
-	panel *ui.UiSay
+	sprite *SpriteImpl
+	msg    string
+	style  int // styleSay, styleThink
+	panel  *ui.UiSay
+}
+
+func (p *sayOrThinker) onUpdate(delta float64) {
+	p.refresh()
 }
 
 func (p *sayOrThinker) refresh() {
-	if p.panel == nil || !p.sp.Visible() {
+	if p.panel == nil || !p.sprite.Visible() {
 		return
 	}
 
-	bound := p.sp.bounds()
+	bound := p.sprite.bounds()
 	center := bound.Center()
 	size := bound.Size
-	p.panel.SetText(p.sp.g.getWindowSize(), center, size, p.msg)
+	p.panel.SetText(p.sprite.g.getWindowSize(), center, size, p.msg)
 }
 
 // -------------------------------------------------------------------------------------
@@ -65,16 +69,18 @@ func (p *SpriteImpl) sayOrThink(msg any, style int) {
 		return
 	}
 
-	old := p.sayObj
+	bubble := p.components.Bubble()
+	old := bubble.getSayObj()
 	if old == nil {
-		p.sayObj = &sayOrThinker{sp: p, msg: msgStr, style: style}
-		p.g.addShape(p.sayObj)
-		p.sayObj.panel = ui.NewUiSay()
+		newSay := &sayOrThinker{sprite: p, msg: msgStr, style: style}
+		bubble.setSayObj(newSay)
+		p.g.addShape(newSay)
+		newSay.panel = ui.NewUiSay()
 	} else {
 		old.msg, old.style = msgStr, style
 		p.g.activateShape(old)
 	}
-	p.sayObj.refresh()
+	bubble.getSayObj().refresh()
 }
 
 func (p *SpriteImpl) waitStopSay(secs float64) {
@@ -83,11 +89,13 @@ func (p *SpriteImpl) waitStopSay(secs float64) {
 }
 
 func (p *SpriteImpl) doStopSay() {
-	if p.sayObj != nil {
-		p.sayObj.panel.Destroy()
-		p.sayObj.panel = nil
-		p.g.removeShape(p.sayObj)
-		p.sayObj = nil
+	bubble := p.components.bubble
+	if bubble != nil && bubble.hasSay() {
+		sayObj := bubble.getSayObj()
+		sayObj.panel.Destroy()
+		sayObj.panel = nil
+		p.g.removeShape(sayObj)
+		bubble.setSayObj(nil)
 	}
 }
 

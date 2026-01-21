@@ -61,6 +61,7 @@ type spriteComponents struct {
 	physics   *physicsComponent
 	pen       *penComponent
 	sound     *soundComponent
+	bubble    *bubbleComponent // Optional: only allocated when Say/Think/Quote is used
 }
 
 // initComponents initializes all sprite components
@@ -91,6 +92,8 @@ func (sc *spriteComponents) cloneFrom(src *spriteComponents, newSprite *SpriteIm
 	sc.physics = src.physics.cloneFrom(src.physics, newSprite).(*physicsComponent)
 	sc.pen = src.pen.cloneFrom(src.pen, newSprite).(*penComponent)
 	sc.sound = src.sound.cloneFrom(src.sound, newSprite).(*soundComponent)
+	// Bubble component is optional and NOT cloned - each sprite starts fresh
+	sc.bubble = nil
 }
 
 // destroyComponents destroys all sprite components
@@ -109,6 +112,9 @@ func (sc *spriteComponents) destroyComponents() {
 	}
 	if sc.sound != nil {
 		sc.sound.onDestroy()
+	}
+	if sc.bubble != nil {
+		sc.bubble.onDestroy()
 	}
 }
 
@@ -135,4 +141,13 @@ func (sc *spriteComponents) Pen() *penComponent {
 // Sound returns the sound component
 func (sc *spriteComponents) Sound() *soundComponent {
 	return sc.sound
+}
+
+// Bubble returns the bubble component (lazy initialization)
+func (sc *spriteComponents) Bubble() *bubbleComponent {
+	if sc.bubble == nil {
+		sc.bubble = &bubbleComponent{}
+		sc.bubble.initialize(sc.transform.sprite, nil)
+	}
+	return sc.bubble
 }

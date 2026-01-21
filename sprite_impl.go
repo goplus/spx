@@ -41,10 +41,6 @@ type SpriteImpl struct {
 	sprite Sprite
 	name   string
 
-	// Visual components
-	sayObj   *sayOrThinker
-	quoteObj *quoter
-
 	// State flags
 	isVisible bool
 	isCloned  bool
@@ -138,7 +134,6 @@ func (p *SpriteImpl) InitFrom(src *SpriteImpl) {
 	p.eventSinks.initFrom(&src.eventSinks, p)
 
 	p.g, p.name, p.scale = src.g, src.name, src.scale
-	p.sayObj = nil
 	p.greffUniforms = maps.Clone(src.greffUniforms)
 
 	p.isVisible = src.isVisible
@@ -515,7 +510,7 @@ func (p *SpriteImpl) Quote__3(message, description string, secs float64) {
 	if debugInstr {
 		spxlog.Debug("Quote: sprite=%s, message=%s, description=%s, secs=%v", p.name, message, description, secs)
 	}
-	p.quote_(message, description)
+	p.quote(message, description)
 	if secs > 0 {
 		p.waitStopQuote(secs)
 	}
@@ -628,19 +623,6 @@ func (p *SpriteImpl) SetLayer__1(dir dirAction, delta int) {
 		p.g.goBackLayers(p, -delta)
 	case Backward:
 		p.g.goBackLayers(p, delta)
-	}
-}
-
-// ============================================================================
-// Update Methods
-// ============================================================================
-
-func (pself *SpriteImpl) onUpdate(delta float64) {
-	if pself.quoteObj != nil {
-		pself.quoteObj.refresh()
-	}
-	if pself.sayObj != nil {
-		pself.sayObj.refresh()
 	}
 }
 
