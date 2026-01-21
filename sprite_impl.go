@@ -18,7 +18,6 @@ package spx
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"maps"
 	"reflect"
@@ -26,7 +25,6 @@ import (
 
 	"github.com/goplus/spx/v2/internal/engine"
 	spxlog "github.com/goplus/spx/v2/internal/log"
-	"github.com/goplus/spx/v2/internal/time"
 )
 
 // ============================================================================
@@ -281,7 +279,7 @@ func (p *SpriteImpl) fireTouchStart(obj *SpriteImpl) {
 	}
 }
 
-func (p *SpriteImpl) _onTouchStart(onTouchStart func(Sprite)) {
+func (p *SpriteImpl) addTouchStartHandler(onTouchStart func(Sprite)) {
 	p.hasOnTouchStart = true
 	p.allWhenTouchStart = append(p.allWhenTouchStart, eventSink{
 		pthis: p,
@@ -294,7 +292,7 @@ func (p *SpriteImpl) _onTouchStart(onTouchStart func(Sprite)) {
 
 func (p *SpriteImpl) OnTouchStart__0(sprite SpriteName, onTouchStart func(Sprite)) {
 	p.physics().addCollisionTarget(sprite)
-	p._onTouchStart(func(s Sprite) {
+	p.addTouchStartHandler(func(s Sprite) {
 		impl := spriteOf(s)
 		if impl != nil && impl.name == sprite {
 			onTouchStart(s)
@@ -312,7 +310,7 @@ func (p *SpriteImpl) OnTouchStart__2(sprites []SpriteName, onTouchStart func(Spr
 	for _, sprite := range sprites {
 		p.physics().addCollisionTarget(sprite)
 	}
-	p._onTouchStart(func(s Sprite) {
+	p.addTouchStartHandler(func(s Sprite) {
 		impl := spriteOf(s)
 		if impl != nil && slices.Contains(sprites, impl.name) {
 			onTouchStart(s)
@@ -345,9 +343,6 @@ func (p *SpriteImpl) Destroy() { // destroy sprite, whether prototype or cloned
 	if debugInstr {
 		spxlog.Debug("Destroy: %s", p.name)
 	}
-
-	p.syncSprite.UnRegisterOnAnimationFinished()
-
 	p.Hide()
 	p.doDeleteClone()
 	p.components.destroyComponents()
@@ -370,201 +365,11 @@ func (p *SpriteImpl) DeleteThisClone() {
 }
 
 // ============================================================================
-// Visibility Methods
-// ============================================================================
-
-func (p *SpriteImpl) Hide() {
-	if debugInstr {
-		spxlog.Debug("Hide: %s", p.name)
-	}
-
-	p.doStopSay()
-	if p.isVisible {
-		p.isVisible = false
-		p.isDirty = true
-	}
-}
-
-func (p *SpriteImpl) Show() {
-	if debugInstr {
-		spxlog.Debug("Show: %s", p.name)
-	}
-	if !p.isVisible {
-		p.isVisible = true
-		p.isDirty = true
-	}
-}
-
-func (p *SpriteImpl) Visible() bool {
-	return p.isVisible
-}
-
-// ============================================================================
-// Costume Methods
-// ============================================================================
-
-func (p *SpriteImpl) CostumeName() SpriteCostumeName {
-	return p.getCostumeName()
-}
-
-func (p *SpriteImpl) CostumeIndex() int {
-	return p.getCostumeIndex()
-}
-
-// SetCostume sets the costume by:
-//   - costume name
-//   - index (float64 or int)
-//   - spx.Next or spx.Prev
-func (p *SpriteImpl) setCostume(costume any) {
-	if debugInstr {
-		spxlog.Debug("SetCostume: sprite=%s, costume=%v", p.name, costume)
-	}
-	p.goSetCostume(costume)
-	p.defaultCostumeIndex = p.costumeIndex_
-	p.isDirty = true
-}
-
-func (p *SpriteImpl) SetCostume__0(costume SpriteCostumeName) {
-	p.setCostume(costume)
-}
-
-func (p *SpriteImpl) SetCostume__1(index float64) {
-	p.setCostume(index)
-}
-
-func (p *SpriteImpl) SetCostume__2(index int) {
-	p.setCostume(index)
-}
-
-func (p *SpriteImpl) SetCostume__3(action switchAction) {
-	p.setCostume(action)
-}
-
-// ============================================================================
-// Communication Methods
-// ============================================================================
-
-func (p *SpriteImpl) Ask(msg any) {
-	if debugInstr {
-		spxlog.Debug("Ask: sprite=%s, msg=%v", p.name, msg)
-	}
-	msgStr, ok := msg.(string)
-	if !ok {
-		msgStr = fmt.Sprint(msg)
-	}
-	if msgStr == "" {
-		spxlog.Warn("ask: msg should not be empty")
-		return
-	}
-	p.Say__0(msgStr)
-	p.g.ask(true, msgStr, func(answer string) {
-		p.doStopSay()
-	})
-}
-
-func (p *SpriteImpl) Say__0(msg any) {
-	p.Say__1(msg, 0)
-}
-
-func (p *SpriteImpl) Say__1(msg any, secs float64) {
-	if debugInstr {
-		spxlog.Debug("Say: sprite=%s, msg=%v, secs=%v", p.name, msg, secs)
-	}
-	p.sayOrThink(msg, styleSay)
-	if secs > 0 {
-		p.waitStopSay(secs)
-	}
-}
-
-func (p *SpriteImpl) Think__0(msg any) {
-	p.Think__1(msg, 0)
-}
-
-func (p *SpriteImpl) Think__1(msg any, secs float64) {
-	if debugInstr {
-		spxlog.Debug("Think: sprite=%s, msg=%v, secs=%v", p.name, msg, secs)
-	}
-	p.sayOrThink(msg, styleThink)
-	if secs > 0 {
-		p.waitStopSay(secs)
-	}
-}
-
-func (p *SpriteImpl) Quote__0(message string) {
-	if message == "" {
-		p.doStopQuote()
-		return
-	}
-	p.Quote__2(message, "")
-}
-
-func (p *SpriteImpl) Quote__1(message string, secs float64) {
-	p.Quote__3(message, "", secs)
-}
-
-func (p *SpriteImpl) Quote__2(message, description string) {
-	p.Quote__3(message, description, 0)
-}
-
-func (p *SpriteImpl) Quote__3(message, description string, secs float64) {
-	if debugInstr {
-		spxlog.Debug("Quote: sprite=%s, message=%s, description=%s, secs=%v", p.name, message, description, secs)
-	}
-	p.quote(message, description)
-	if secs > 0 {
-		p.waitStopQuote(secs)
-	}
-}
-
-// ============================================================================
-// Graphic Effects Methods
-// ============================================================================
-
-func (p *SpriteImpl) SetGraphicEffect(kind EffectKind, val float64) {
-	p.baseObj.setGraphicEffect(kind, val)
-}
-
-func (p *SpriteImpl) ChangeGraphicEffect(kind EffectKind, delta float64) {
-	p.baseObj.changeGraphicEffect(kind, delta)
-}
-
-func (p *SpriteImpl) ClearGraphicEffects() {
-	p.baseObj.clearGraphicEffects()
-}
-
-// ============================================================================
 // Touching and Collision Detection Methods
 // ============================================================================
 
 func (p *SpriteImpl) TouchingColor(color Color) bool {
 	return p.touchingColor(toMathfColor(color))
-}
-
-// Touching checks if sprite is touching:
-//   - another sprite (by name or Sprite object)
-//   - spx.Mouse
-//   - spx.Edge, spx.EdgeLeft, spx.EdgeTop, spx.EdgeRight, spx.EdgeBottom
-func (p *SpriteImpl) touching(obj any) bool {
-	if !p.isVisible || p.isDying {
-		return false
-	}
-	switch v := obj.(type) {
-	case SpriteName:
-		if o := p.g.touchingSpriteBy(p, v); o != nil {
-			return true
-		}
-		return false
-	case specialObj:
-		if v > 0 {
-			return p.checkTouchingScreen(int(v)) != 0
-		} else if v == Mouse {
-			x, y := p.g.getMousePos()
-			return p.g.touchingPoint(p, x, y)
-		}
-	case Sprite:
-		return touchingSprite(p, spriteOf(v))
-	}
-	panic("Touching: unexpected input")
 }
 
 func (p *SpriteImpl) Touching__0(sprite SpriteName) bool {
@@ -601,39 +406,4 @@ func (p *SpriteImpl) pen() *penComponent {
 
 func (p *SpriteImpl) sound() *soundComponent {
 	return p.components.Sound()
-}
-
-// ============================================================================
-// Layer Methods
-// ============================================================================
-
-func (p *SpriteImpl) SetLayer__0(layer layerAction) {
-	switch layer {
-	case Front:
-		p.g.gotoFront(p)
-	case Back:
-		p.g.gotoBack(p)
-	}
-
-}
-
-func (p *SpriteImpl) SetLayer__1(dir dirAction, delta int) {
-	switch dir {
-	case Forward:
-		p.g.goBackLayers(p, -delta)
-	case Backward:
-		p.g.goBackLayers(p, delta)
-	}
-}
-
-// ============================================================================
-// Time Methods
-// ============================================================================
-
-func (pself *SpriteImpl) DeltaTime() float64 {
-	return time.DeltaTime()
-}
-
-func (pself *SpriteImpl) TimeSinceLevelLoad() float64 {
-	return time.TimeSinceLevelLoad()
 }

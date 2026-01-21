@@ -155,8 +155,8 @@ func (sprite *SpriteImpl) syncCheckInitProxy() {
 		sprite.syncSprite.SetTypeName(sprite.name)
 		sprite.syncSprite.SetVisible(sprite.isVisible)
 		sprite.applyGraphicEffects(true)
-		sprite.syncSprite.RegisterOnAnimationLooped(sprite.syncOnAnimationLooped)
-		sprite.syncSprite.RegisterOnAnimationFinished(sprite.syncOnAnimationFinished)
+		sprite.animation().registerOnAnimationLooped(sprite.syncOnAnimationLooped)
+		sprite.animation().registerOnAnimationFinished(sprite.syncOnAnimationFinished)
 		// Mark as dirty to ensure initial sync
 		sprite.isDirty = true
 	}

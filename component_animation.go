@@ -123,6 +123,8 @@ func (ac *animationComponent) cloneFrom(src component, newSprite *SpriteImpl) co
 func (ac *animationComponent) onDestroy() {
 	ac.stopAnimState(ac.curAnimState)
 	ac.stopAnimState(ac.curTweenState)
+	ac.unRegisterOnAnimationLooped()
+	ac.unRegisterOnAnimationFinished()
 }
 
 // ============================================================================
@@ -465,4 +467,24 @@ func (ac *animationComponent) getCurAnimState() *animState {
 
 func (ac *animationComponent) getCurTweenState() *animState {
 	return ac.curTweenState
+}
+
+// ============================================================================
+// Animation Event Methods
+// ============================================================================
+
+func (ac *animationComponent) registerOnAnimationLooped(f func()) {
+	ac.sprite.syncSprite.RegisterOnAnimationLooped(f)
+}
+
+func (ac *animationComponent) unRegisterOnAnimationLooped() {
+	ac.sprite.syncSprite.UnRegisterOnAnimationLooped()
+}
+
+func (ac *animationComponent) registerOnAnimationFinished(f func()) {
+	ac.sprite.syncSprite.RegisterOnAnimationFinished(f)
+}
+
+func (ac *animationComponent) unRegisterOnAnimationFinished() {
+	ac.sprite.syncSprite.UnRegisterOnAnimationFinished()
 }
