@@ -26,7 +26,6 @@ func init() {
 var (
 	mu          sync.Mutex
 	ixgoCtx     *ixgo.Context
-	ixgoFS      *memfs.MemFs
 	ixgoInterp  *ixgo.Interp
 	ixgoRunning bool
 	ixgoRunID   int64
@@ -91,12 +90,12 @@ func Build(files map[string][]byte) error {
 	// Release previous resources if any.
 	unsafeRelease()
 
-	fs := memfs.NewMemFs(files)
+	fsys := memfs.New(files)
 	spxfs.RegisterSchema("", func(path string) (spxfs.Dir, error) {
-		return fs.Chroot(path)
+		return newSPXDir(fsys, path), nil
 	})
 
-	source, err := xgobuild.BuildFSDir(ixgoCtx, fs, "")
+	source, err := xgobuild.BuildFSDir(ixgoCtx, newXGoParserFS(fsys), ".")
 	if err != nil {
 		return fmt.Errorf("failed to build XGo source: %w", err)
 	}
@@ -111,7 +110,6 @@ func Build(files map[string][]byte) error {
 		return fmt.Errorf("failed to create interp: %w", err)
 	}
 
-	ixgoFS = fs
 	ixgoInterp = interp
 	return nil
 }
@@ -159,9 +157,5 @@ func unsafeRelease() {
 	if ixgoInterp != nil {
 		ixgoInterp.UnsafeRelease()
 		ixgoInterp = nil
-	}
-	if ixgoFS != nil {
-		ixgoFS.Close()
-		ixgoFS = nil
 	}
 }

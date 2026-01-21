@@ -1,226 +1,255 @@
 package memfs
 
 import (
-	"bytes"
 	"io"
 	"io/fs"
+	"maps"
 	"path"
-	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 )
 
-// MemFs is an in-memory file system that stores files as a map of paths to byte slices.
-// It is safe for concurrent use. Chrooted instances share the underlying file map.
-type MemFs struct {
+const (
+	fileMode = fs.FileMode(0o444)
+	dirMode  = fs.FileMode(0o444) | fs.ModeDir
+)
+
+// FS implements [fs.ReadDirFS] using a map of files.
+type FS struct {
 	files map[string][]byte
-	root  string
 }
 
-// memDirEntry implements the fs.DirEntry interface
-type memDirEntry struct {
-	name  string
-	isDir bool
-	size  int64
+// New creates a new [FS].
+func New(files map[string][]byte) *FS {
+	return &FS{files: files}
 }
 
-func (e *memDirEntry) Name() string {
-	return e.name
-}
-
-func (e *memDirEntry) IsDir() bool {
-	return e.isDir
-}
-
-func (e *memDirEntry) Type() fs.FileMode {
-	if e.isDir {
-		return fs.ModeDir
+// Open implements [fs.ReadDirFS].
+func (fsys *FS) Open(name string) (fs.File, error) {
+	if !fs.ValidPath(name) {
+		return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrInvalid}
 	}
-	return 0
+
+	// Check if it's a file.
+	if content, ok := fsys.files[name]; ok {
+		return &file{
+			name:    name,
+			content: content,
+		}, nil
+	}
+
+	// Check if it's a directory.
+	if fsys.hasDir(name) {
+		return &dir{
+			fsys: fsys,
+			name: name,
+		}, nil
+	}
+
+	return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrNotExist}
 }
 
-func (e *memDirEntry) Info() (fs.FileInfo, error) {
-	return &memFileInfo{
-		name:  e.name,
-		size:  e.size,
-		isDir: e.isDir,
+// ReadDir implements [fs.ReadDirFS].
+func (fsys *FS) ReadDir(name string) ([]fs.DirEntry, error) {
+	if !fs.ValidPath(name) {
+		return nil, &fs.PathError{Op: "readdir", Path: name, Err: fs.ErrInvalid}
+	}
+
+	prefix := ""
+	if name != "." {
+		prefix = name + "/"
+	}
+
+	// Map entry names to whether they are directories (true = dir, false = file).
+	// If an entry appears both as a file and a directory prefix, it's a directory.
+	entries := make(map[string]bool)
+	for p := range fsys.files {
+		after, ok := strings.CutPrefix(p, prefix)
+		if !ok {
+			continue
+		}
+		entryName, _, isDir := strings.Cut(after, "/")
+		if entryName == "" {
+			continue
+		}
+		if isDir || !entries[entryName] {
+			entries[entryName] = isDir
+		}
+	}
+
+	// Check if the directory exists. The root directory always exists.
+	if name != "." && len(entries) == 0 {
+		return nil, &fs.PathError{Op: "readdir", Path: name, Err: fs.ErrNotExist}
+	}
+
+	des := make([]fs.DirEntry, 0, len(entries))
+	for _, entryName := range slices.Sorted(maps.Keys(entries)) {
+		isDir := entries[entryName]
+		de := &dirEntry{name: entryName}
+		if isDir {
+			de.mode = dirMode
+		} else {
+			de.mode = fileMode
+			de.size = int64(len(fsys.files[prefix+entryName]))
+		}
+		des = append(des, de)
+	}
+	return des, nil
+}
+
+// Stat implements [fs.StatFS].
+func (fsys *FS) Stat(name string) (fs.FileInfo, error) {
+	if !fs.ValidPath(name) {
+		return nil, &fs.PathError{Op: "stat", Path: name, Err: fs.ErrInvalid}
+	}
+
+	// Check if it's a file.
+	if content, ok := fsys.files[name]; ok {
+		return &fileInfo{
+			name: path.Base(name),
+			size: int64(len(content)),
+			mode: fileMode,
+		}, nil
+	}
+
+	// Check if it's a directory.
+	if fsys.hasDir(name) {
+		return &fileInfo{
+			name: path.Base(name),
+			mode: dirMode,
+		}, nil
+	}
+
+	return nil, &fs.PathError{Op: "stat", Path: name, Err: fs.ErrNotExist}
+}
+
+// hasDir reports whether name exists as a directory.
+func (fsys *FS) hasDir(name string) bool {
+	if name == "." {
+		return true
+	}
+	prefix := name + "/"
+	for p := range fsys.files {
+		if strings.HasPrefix(p, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// file implements [fs.File].
+type file struct {
+	name    string
+	content []byte
+	offset  int64
+}
+
+// Stat implements [fs.File].
+func (f *file) Stat() (fs.FileInfo, error) {
+	return &fileInfo{
+		name: path.Base(f.name),
+		size: int64(len(f.content)),
+		mode: fileMode,
 	}, nil
 }
 
-// memFileInfo implements the fs.FileInfo interface
-type memFileInfo struct {
-	name  string
-	size  int64
-	isDir bool
-}
-
-func (fi *memFileInfo) Name() string { return fi.name }
-func (fi *memFileInfo) Size() int64  { return fi.size }
-func (fi *memFileInfo) Mode() fs.FileMode {
-	if fi.isDir {
-		return fs.ModeDir | 0755
+// Read implements [fs.File].
+func (f *file) Read(b []byte) (int, error) {
+	if f.offset >= int64(len(f.content)) {
+		return 0, io.EOF
 	}
-	return 0644
-}
-func (fi *memFileInfo) ModTime() time.Time { return time.Time{} }
-func (fi *memFileInfo) IsDir() bool        { return fi.isDir }
-func (fi *memFileInfo) Sys() any           { return nil }
 
-// NewMemFs creates a new in-memory file system
-func NewMemFs(files map[string][]byte) *MemFs {
-	return &MemFs{
-		files: files,
-	}
+	n := copy(b, f.content[f.offset:])
+	f.offset += int64(n)
+	return n, nil
 }
 
-// Chroot creates a new MemFs with a different root
-func (m *MemFs) Chroot(root string) (*MemFs, error) {
-	return &MemFs{
-		files: m.files,
-		root:  root,
+// Close implements [fs.File].
+func (f *file) Close() error {
+	return nil
+}
+
+// dir implements [fs.ReadDirFile].
+type dir struct {
+	fsys    *FS
+	name    string
+	entries []fs.DirEntry
+	offset  int
+}
+
+// Stat implements [fs.File].
+func (d *dir) Stat() (fs.FileInfo, error) {
+	return &fileInfo{
+		name: path.Base(d.name),
+		mode: dirMode,
 	}, nil
 }
 
-// ReadDir lists directory entries under dirname
-func (m *MemFs) ReadDir(dirname string) ([]fs.DirEntry, error) {
-	dirname = path.Clean(path.Join(m.root, dirname))
-	if !strings.HasSuffix(dirname, "/") {
-		dirname += "/"
-	}
-	if dirname == "/" {
-		dirname = "./"
-	}
-
-	// used for deduplication
-	seen := make(map[string]*memDirEntry)
-
-	for name, content := range m.files {
-		// skip files that are not under the target directory
-		if !strings.HasPrefix(name, dirname) && dirname != "./" {
-			continue
-		}
-
-		// special handling for the root directory
-		var relativePath string
-		if dirname == "./" {
-			relativePath = name
-		} else {
-			relativePath = strings.TrimPrefix(name, dirname)
-		}
-
-		// if the relative path is empty, skip (it's the directory itself)
-		if relativePath == "" {
-			continue
-		}
-
-		// check whether it's a direct child
-		parts := strings.SplitN(relativePath, "/", 2)
-		if len(parts) == 0 {
-			continue
-		}
-
-		entryName := parts[0]
-
-		// determine whether it's a file or a directory
-		isDir := len(parts) > 1 && parts[1] != ""
-
-		if existing, exists := seen[entryName]; exists {
-			// if already exists and currently determined to be a directory, update to directory
-			if isDir && !existing.isDir {
-				existing.isDir = true
-			}
-		} else {
-			var size int64
-			if !isDir {
-				size = int64(len(content))
-			}
-
-			seen[entryName] = &memDirEntry{
-				name:  entryName,
-				isDir: isDir,
-				size:  size,
-			}
-		}
-	}
-
-	if len(seen) == 0 {
-		return nil, fs.ErrNotExist
-	}
-	// convert map entries to a slice and sort
-	dirEntries := make([]fs.DirEntry, 0, len(seen))
-	for _, entry := range seen {
-		dirEntries = append(dirEntries, entry)
-	}
-
-	sort.Slice(dirEntries, func(i, j int) bool {
-		return dirEntries[i].Name() < dirEntries[j].Name()
-	})
-
-	return dirEntries, nil
+// Read implements [fs.File].
+func (d *dir) Read([]byte) (int, error) {
+	return 0, &fs.PathError{Op: "read", Path: d.name, Err: fs.ErrInvalid}
 }
 
-// ReadFile returns the file content for filename
-func (m *MemFs) ReadFile(filename string) ([]byte, error) {
-	filename = path.Clean(path.Join(m.root, filename))
-	data, ok := m.files[filename]
-	if !ok {
-		return nil, fs.ErrNotExist
-	}
-	// Return a copy to prevent external modification
-	result := make([]byte, len(data))
-	copy(result, data)
-	return result, nil
-}
-
-// Join joins path elements
-func (m *MemFs) Join(elem ...string) string {
-	return path.Join(elem...)
-}
-
-// Base returns the last element of path
-func (m *MemFs) Base(filename string) string {
-	return filepath.Base(filename)
-}
-
-// Abs returns an absolute representation of path
-func (m *MemFs) Abs(p string) (string, error) {
-	return filepath.Abs(p)
-}
-
-type readSeekCloser struct {
-	*bytes.Reader
-}
-
-func (rsc *readSeekCloser) Close() error {
+// Close implements [fs.File].
+func (d *dir) Close() error {
 	return nil
 }
 
-// Open opens a file for reading
-func (m *MemFs) Open(file string) (io.ReadCloser, error) {
-	file = path.Clean(path.Join(m.root, file))
-	data, ok := m.files[file]
-	if !ok {
-		return nil, fs.ErrNotExist
+// ReadDir implements [fs.ReadDirFile].
+func (d *dir) ReadDir(n int) ([]fs.DirEntry, error) {
+	if d.entries == nil {
+		entries, err := d.fsys.ReadDir(d.name)
+		if err != nil {
+			return nil, err
+		}
+		d.entries = entries
 	}
 
-	// Return a new reader with Seek support
-	return &readSeekCloser{bytes.NewReader(data)}, nil
+	if n <= 0 {
+		entries := d.entries[d.offset:]
+		d.offset = len(d.entries)
+		return entries, nil
+	}
+
+	if d.offset >= len(d.entries) {
+		return nil, io.EOF
+	}
+
+	end := min(d.offset+n, len(d.entries))
+	entries := d.entries[d.offset:end]
+	d.offset = end
+	return entries, nil
 }
 
-// Close closes the file system (no-op for MemFs)
-func (m *MemFs) Close() error {
-	return nil
+// fileInfo implements [fs.FileInfo].
+type fileInfo struct {
+	name string
+	size int64
+	mode fs.FileMode
 }
 
-// AddFile adds or updates a file in the file system
-func (m *MemFs) AddFile(filename string, data []byte) {
-	filename = path.Clean(filename)
-	m.files[filename] = data
+func (fi *fileInfo) Name() string       { return fi.name }
+func (fi *fileInfo) Size() int64        { return fi.size }
+func (fi *fileInfo) Mode() fs.FileMode  { return fi.mode }
+func (fi *fileInfo) ModTime() time.Time { return time.Unix(0, 0) }
+func (fi *fileInfo) IsDir() bool        { return fi.mode.IsDir() }
+func (fi *fileInfo) Sys() any           { return nil }
+
+// dirEntry implements [fs.DirEntry].
+type dirEntry struct {
+	name string
+	size int64
+	mode fs.FileMode
 }
 
-// RemoveFile removes a file from the file system
-func (m *MemFs) RemoveFile(filename string) {
-	filename = path.Clean(filename)
-	delete(m.files, filename)
+func (de *dirEntry) Name() string      { return de.name }
+func (de *dirEntry) IsDir() bool       { return de.mode.IsDir() }
+func (de *dirEntry) Type() fs.FileMode { return de.mode.Type() }
+func (de *dirEntry) Info() (fs.FileInfo, error) {
+	return &fileInfo{
+		name: de.name,
+		size: de.size,
+		mode: de.mode,
+	}, nil
 }

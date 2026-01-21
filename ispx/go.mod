@@ -9,13 +9,13 @@ require (
 	github.com/goplus/mod v0.17.1
 	github.com/goplus/reflectx v1.5.0
 	github.com/goplus/spx/v2 v2.0.0-pre.42
+	github.com/goplus/xgo v1.5.2
 )
 
 require (
 	github.com/gopherjs/gopherjs v0.0.0-20200217142428-fce0ec30dd00 // indirect
 	github.com/goplus/gogen v1.19.5 // indirect
 	github.com/goplus/spbase v0.1.0 // indirect
-	github.com/goplus/xgo v1.5.2 // indirect
 	github.com/h2non/filetype v1.1.3 // indirect
 	github.com/petermattis/goid v0.0.0-20250721140440-ea1c0173183e // indirect
 	github.com/pkg/errors v0.9.1 // indirect
