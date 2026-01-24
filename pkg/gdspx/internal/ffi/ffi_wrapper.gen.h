@@ -717,6 +717,12 @@ void cgo_callfn_GDExtensionSpxSpriteCheckCollisionByAlpha(const GDExtensionSpxSp
 void cgo_callfn_GDExtensionSpxSpriteCheckCollisionWithSprite(const GDExtensionSpxSpriteCheckCollisionWithSprite fn, GdObj obj, GdObj obj_b, GdFloat alpha_threshold, GdBool use_pixel_perfect, GdBool* ret_val) {
 	fn(obj, obj_b, alpha_threshold, use_pixel_perfect,ret_val);
 }
+void cgo_callfn_GDExtensionSpxSpriteSetPixelCollisionSamplingStep(const GDExtensionSpxSpriteSetPixelCollisionSamplingStep fn, GdInt step) {
+	fn(step);
+}
+void cgo_callfn_GDExtensionSpxSpriteGetPixelCollisionSamplingStep(const GDExtensionSpxSpriteGetPixelCollisionSamplingStep fn, GdInt* ret_val) {
+	fn(ret_val);
+}
 void cgo_callfn_GDExtensionSpxSpriteBatchUpdateTransforms(const GDExtensionSpxSpriteBatchUpdateTransforms fn, GdArray buffer) {
 	fn(buffer);
 }

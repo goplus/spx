@@ -168,6 +168,10 @@ func (pself *Sprite) GetPivot() Vec2 {
 	return SpriteMgr.GetPivot(pself.Id)
 }
 
+func (pself *Sprite) GetPixelCollisionSamplingStep() int64 {
+	return SpriteMgr.GetPixelCollisionSamplingStep()
+}
+
 func (pself *Sprite) GetPosition() Vec2 {
 	return SpriteMgr.GetPosition(pself.Id)
 }
@@ -414,6 +418,10 @@ func (pself *Sprite) SetPhysicsMode(mode int64) {
 
 func (pself *Sprite) SetPivot(pivot Vec2) {
 	SpriteMgr.SetPivot(pself.Id, pivot)
+}
+
+func (pself *Sprite) SetPixelCollisionSamplingStep(step int64) {
+	SpriteMgr.SetPixelCollisionSamplingStep(step)
 }
 
 func (pself *Sprite) SetPosition(pos Vec2) {

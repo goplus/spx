@@ -728,6 +728,11 @@ func (pself *spriteMgrImpl) CheckCollisionWithSprite(obj gdx.Object, obj_b gdx.O
 	var _ret1 bool
 	return _ret1
 }
+func (pself *spriteMgrImpl) SetPixelCollisionSamplingStep(step int64) {}
+func (pself *spriteMgrImpl) GetPixelCollisionSamplingStep() int64 {
+	var _ret1 int64
+	return _ret1
+}
 func (pself *spriteMgrImpl) BatchUpdateTransforms(buffer gdx.Array) {}
 func (pself *spriteMgrImpl) BatchUpdatePositions(objs gdx.Array) gdx.Array {
 	var _ret1 gdx.Array
