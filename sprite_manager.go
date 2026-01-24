@@ -155,9 +155,26 @@ func (sm *spriteManager) flushActivate() {
 		return
 	}
 
+	delta := gtime.DeltaTime()
 	for _, item := range sm.tempItems {
-		if updater, ok := item.(interface{ onUpdate(float64) }); ok {
-			updater.onUpdate(gtime.DeltaTime())
+		// Fast path: skip SpriteImpl (most common, no onUpdate needed)
+		if _, ok := item.(*SpriteImpl); ok {
+			continue
+		}
+
+		// Handle types that have onUpdate
+		switch v := item.(type) {
+		case *quoter:
+			v.onUpdate(delta)
+		case *sayOrThinker:
+			v.onUpdate(delta)
+		case *Monitor:
+			v.onUpdate(delta)
+		default:
+			// Fallback: try interface assertion for future types
+			if updater, ok := item.(interface{ onUpdate(float64) }); ok {
+				updater.onUpdate(delta)
+			}
 		}
 	}
 }
