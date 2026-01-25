@@ -30,11 +30,6 @@ func init() {
 
 // -------------------------------------------------------------------------------------
 
-const (
-	styleSay   = 1
-	styleThink = 2
-)
-
 type sayOrThinker struct {
 	sprite *SpriteImpl
 	msg    string
@@ -54,7 +49,7 @@ func (p *sayOrThinker) refresh() {
 	bound := p.sprite.bounds()
 	center := bound.Center()
 	size := bound.Size
-	p.panel.SetText(p.sprite.g.getWindowSize(), center, size, p.msg)
+	p.panel.SetText(p.sprite.g.getWindowSize(), center, size, p.msg, p.style)
 }
 
 // -------------------------------------------------------------------------------------

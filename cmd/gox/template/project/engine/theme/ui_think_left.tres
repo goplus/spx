@@ -1,0 +1,10 @@
+[gd_resource type="Theme" load_steps=3 format=3 uid="uid://dwkpqcpxkug0i"]
+
+[ext_resource type="Texture2D" uid="uid://clvi73111hm2d" path="res://engine/textures/say/think_left@4x.png" id="1_jgjmn"]
+
+[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_g0s54"]
+texture = ExtResource("1_jgjmn")
+
+[resource]
+Label/colors/font_color = Color(0.0196078, 0.027451, 0.0235294, 1)
+PanelContainer/styles/panel = SubResource("StyleBoxTexture_g0s54")
