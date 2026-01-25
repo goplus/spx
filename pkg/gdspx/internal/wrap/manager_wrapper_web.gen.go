@@ -1331,6 +1331,14 @@ func (pself *spriteMgr) CheckCollisionWithSprite(obj Object, obj_b Object, alpha
 	_retValue := API.SpxSpriteCheckCollisionWithSprite.Invoke(arg0, arg1, arg2, arg3)
 	return JsToGdBool(_retValue)
 }
+func (pself *spriteMgr) SetPixelCollisionSamplingStep(step int64) {
+	arg0 := JsFromGdInt(step)
+	API.SpxSpriteSetPixelCollisionSamplingStep.Invoke(arg0)
+}
+func (pself *spriteMgr) GetPixelCollisionSamplingStep() int64 {
+	_retValue := API.SpxSpriteGetPixelCollisionSamplingStep.Invoke()
+	return JsToGdInt(_retValue)
+}
 func (pself *spriteMgr) BatchUpdateTransforms(buffer Array) {
 	arg0 := JsFromGdArray(buffer)
 	API.SpxSpriteBatchUpdateTransforms.Invoke(arg0)

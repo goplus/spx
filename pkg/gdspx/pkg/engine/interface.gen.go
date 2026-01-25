@@ -301,6 +301,8 @@ type ISpriteMgr interface {
 	CheckCollisionByColor(obj Object, color Color, color_threshold float64, alpha_threshold float64) bool
 	CheckCollisionByAlpha(obj Object, alpha_threshold float64) bool
 	CheckCollisionWithSprite(obj Object, obj_b Object, alpha_threshold float64, use_pixel_perfect bool) bool
+	SetPixelCollisionSamplingStep(step int64)
+	GetPixelCollisionSamplingStep() int64
 	BatchUpdateTransforms(buffer Array)
 	BatchUpdatePositions(objs Array) Array
 }

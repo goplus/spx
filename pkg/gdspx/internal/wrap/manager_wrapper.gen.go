@@ -1436,6 +1436,14 @@ func (pself *spriteMgr) CheckCollisionWithSprite(obj Object, obj_b Object, alpha
 	retValue := CallSpriteCheckCollisionWithSprite(arg0, arg1, arg2, arg3)
 	return ToBool(retValue)
 }
+func (pself *spriteMgr) SetPixelCollisionSamplingStep(step int64) {
+	arg0 := ToGdInt(step)
+	CallSpriteSetPixelCollisionSamplingStep(arg0)
+}
+func (pself *spriteMgr) GetPixelCollisionSamplingStep() int64 {
+	retValue := CallSpriteGetPixelCollisionSamplingStep()
+	return ToInt64(retValue)
+}
 func (pself *spriteMgr) BatchUpdateTransforms(buffer Array) {
 	arg0 := ToGdArray(buffer)
 	CallSpriteBatchUpdateTransforms(arg0)

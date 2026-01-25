@@ -320,6 +320,8 @@ type GDExtensionSpxSpriteIsTriggerEnabled C.GDExtensionSpxSpriteIsTriggerEnabled
 type GDExtensionSpxSpriteCheckCollisionByColor C.GDExtensionSpxSpriteCheckCollisionByColor
 type GDExtensionSpxSpriteCheckCollisionByAlpha C.GDExtensionSpxSpriteCheckCollisionByAlpha
 type GDExtensionSpxSpriteCheckCollisionWithSprite C.GDExtensionSpxSpriteCheckCollisionWithSprite
+type GDExtensionSpxSpriteSetPixelCollisionSamplingStep C.GDExtensionSpxSpriteSetPixelCollisionSamplingStep
+type GDExtensionSpxSpriteGetPixelCollisionSamplingStep C.GDExtensionSpxSpriteGetPixelCollisionSamplingStep
 type GDExtensionSpxSpriteBatchUpdateTransforms C.GDExtensionSpxSpriteBatchUpdateTransforms
 type GDExtensionSpxSpriteBatchUpdatePositions C.GDExtensionSpxSpriteBatchUpdatePositions
 type GDExtensionSpxTilemapOpenDrawTilesWithSize C.GDExtensionSpxTilemapOpenDrawTilesWithSize
@@ -2830,6 +2832,21 @@ func CallSpriteCheckCollisionWithSprite(
 	C.cgo_callfn_GDExtensionSpxSpriteCheckCollisionWithSprite(arg0, arg1GdObj, arg2GdObj, arg3GdFloat, arg4GdBool, &ret_val)
 
 	return (GdBool)(ret_val)
+}
+func CallSpriteSetPixelCollisionSamplingStep(
+	step GdInt,
+) {
+	arg0 := (C.GDExtensionSpxSpriteSetPixelCollisionSamplingStep)(api.SpxSpriteSetPixelCollisionSamplingStep)
+	arg1GdInt := (C.GdInt)(step)
+
+	C.cgo_callfn_GDExtensionSpxSpriteSetPixelCollisionSamplingStep(arg0, arg1GdInt)
+
+}
+func CallSpriteGetPixelCollisionSamplingStep() GdInt {
+	arg0 := (C.GDExtensionSpxSpriteGetPixelCollisionSamplingStep)(api.SpxSpriteGetPixelCollisionSamplingStep)
+	var ret_val C.GdInt
+	C.cgo_callfn_GDExtensionSpxSpriteGetPixelCollisionSamplingStep(arg0, &ret_val)
+	return (GdInt)(ret_val)
 }
 func CallSpriteBatchUpdateTransforms(
 	buffer GdArray,

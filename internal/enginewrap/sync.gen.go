@@ -1552,6 +1552,18 @@ func (pself *spriteMgrImpl) CheckCollisionWithSprite(obj gdx.Object, obj_b gdx.O
 	})
 	return _ret1
 }
+func (pself *spriteMgrImpl) SetPixelCollisionSamplingStep(step int64) {
+	callInMainThread(func() {
+		gdx.SpriteMgr.SetPixelCollisionSamplingStep(step)
+	})
+}
+func (pself *spriteMgrImpl) GetPixelCollisionSamplingStep() int64 {
+	var _ret1 int64
+	callInMainThread(func() {
+		_ret1 = gdx.SpriteMgr.GetPixelCollisionSamplingStep()
+	})
+	return _ret1
+}
 func (pself *spriteMgrImpl) BatchUpdateTransforms(buffer gdx.Array) {
 	callInMainThread(func() {
 		gdx.SpriteMgr.BatchUpdateTransforms(buffer)

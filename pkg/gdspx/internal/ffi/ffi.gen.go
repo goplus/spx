@@ -253,6 +253,8 @@ type GDExtensionInterface struct {
 	SpxSpriteCheckCollisionByColor              GDExtensionSpxSpriteCheckCollisionByColor
 	SpxSpriteCheckCollisionByAlpha              GDExtensionSpxSpriteCheckCollisionByAlpha
 	SpxSpriteCheckCollisionWithSprite           GDExtensionSpxSpriteCheckCollisionWithSprite
+	SpxSpriteSetPixelCollisionSamplingStep      GDExtensionSpxSpriteSetPixelCollisionSamplingStep
+	SpxSpriteGetPixelCollisionSamplingStep      GDExtensionSpxSpriteGetPixelCollisionSamplingStep
 	SpxSpriteBatchUpdateTransforms              GDExtensionSpxSpriteBatchUpdateTransforms
 	SpxSpriteBatchUpdatePositions               GDExtensionSpxSpriteBatchUpdatePositions
 	SpxTilemapOpenDrawTilesWithSize             GDExtensionSpxTilemapOpenDrawTilesWithSize
@@ -557,6 +559,8 @@ func (x *GDExtensionInterface) loadProcAddresses() {
 	x.SpxSpriteCheckCollisionByColor = (GDExtensionSpxSpriteCheckCollisionByColor)(dlsymGD("spx_sprite_check_collision_by_color"))
 	x.SpxSpriteCheckCollisionByAlpha = (GDExtensionSpxSpriteCheckCollisionByAlpha)(dlsymGD("spx_sprite_check_collision_by_alpha"))
 	x.SpxSpriteCheckCollisionWithSprite = (GDExtensionSpxSpriteCheckCollisionWithSprite)(dlsymGD("spx_sprite_check_collision_with_sprite"))
+	x.SpxSpriteSetPixelCollisionSamplingStep = (GDExtensionSpxSpriteSetPixelCollisionSamplingStep)(dlsymGD("spx_sprite_set_pixel_collision_sampling_step"))
+	x.SpxSpriteGetPixelCollisionSamplingStep = (GDExtensionSpxSpriteGetPixelCollisionSamplingStep)(dlsymGD("spx_sprite_get_pixel_collision_sampling_step"))
 	x.SpxSpriteBatchUpdateTransforms = (GDExtensionSpxSpriteBatchUpdateTransforms)(dlsymGD("spx_sprite_batch_update_transforms"))
 	x.SpxSpriteBatchUpdatePositions = (GDExtensionSpxSpriteBatchUpdatePositions)(dlsymGD("spx_sprite_batch_update_positions"))
 	x.SpxTilemapOpenDrawTilesWithSize = (GDExtensionSpxTilemapOpenDrawTilesWithSize)(dlsymGD("spx_tilemap_open_draw_tiles_with_size"))

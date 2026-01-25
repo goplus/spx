@@ -200,6 +200,11 @@ func (pself *Sprite) GetPivot() Vec2 {
 	return _val
 }
 
+func (pself *Sprite) GetPixelCollisionSamplingStep() int64 {
+	var _val int64
+	return _val
+}
+
 func (pself *Sprite) GetPosition() Vec2 {
 	var _val Vec2
 	return _val
@@ -438,6 +443,9 @@ func (pself *Sprite) SetPhysicsMode(mode int64) {
 }
 
 func (pself *Sprite) SetPivot(pivot Vec2) {
+}
+
+func (pself *Sprite) SetPixelCollisionSamplingStep(step int64) {
 }
 
 func (pself *Sprite) SetPosition(pos Vec2) {
