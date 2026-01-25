@@ -19,6 +19,8 @@ package spx
 import (
 	"fmt"
 
+	"github.com/goplus/spx/v2/internal/ui"
+
 	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
@@ -52,7 +54,7 @@ func (p *SpriteImpl) Say__1(msg any, secs float64) {
 	if debugInstr {
 		spxlog.Debug("Say: sprite=%s, msg=%v, secs=%v", p.name, msg, secs)
 	}
-	p.sayOrThink(msg, styleSay)
+	p.sayOrThink(msg, ui.StyleSay)
 	if secs > 0 {
 		p.waitStopSay(secs)
 	}
@@ -66,7 +68,7 @@ func (p *SpriteImpl) Think__1(msg any, secs float64) {
 	if debugInstr {
 		spxlog.Debug("Think: sprite=%s, msg=%v, secs=%v", p.name, msg, secs)
 	}
-	p.sayOrThink(msg, styleThink)
+	p.sayOrThink(msg, ui.StyleThink)
 	if secs > 0 {
 		p.waitStopSay(secs)
 	}

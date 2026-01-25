@@ -12,7 +12,7 @@ inputs:
   cache-version:
     description: 'Cache version for manual invalidation'
     required: false
-    default: 'v1'
+    default: 'v2'
 runs:
   using: "composite"
   steps:

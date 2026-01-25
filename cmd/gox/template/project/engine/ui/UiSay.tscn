@@ -1,7 +1,9 @@
-[gd_scene load_steps=3 format=3 uid="uid://m2qwf11g1ud3"]
+[gd_scene load_steps=5 format=3 uid="uid://m2qwf11g1ud3"]
 
-[ext_resource type="Theme" uid="uid://bugg7h7qx37im" path="res://engine/theme/ui_say.tres" id="1_wmn3a"]
-[ext_resource type="Texture2D" uid="uid://dl6cww0t5blw7" path="res://engine/textures/say/dot_say.png" id="2_kmrtr"]
+[ext_resource type="Theme" uid="uid://bugg7h7qx37im" path="res://engine/theme/ui_say_right.tres" id="1_wmn3a"]
+[ext_resource type="Theme" uid="uid://hs1wkf3oeee1" path="res://engine/theme/ui_say_left.tres" id="2_xtsac"]
+[ext_resource type="Theme" uid="uid://dxdrou7yif75k" path="res://engine/theme/ui_think_right.tres" id="3_eyeg4"]
+[ext_resource type="Theme" uid="uid://dwkpqcpxkug0i" path="res://engine/theme/ui_think_left.tres" id="4_ng6xm"]
 
 [node name="Say" type="Control"]
 layout_mode = 3
@@ -12,8 +14,8 @@ layout_mode = 1
 anchors_preset = 2
 anchor_top = 1.0
 anchor_bottom = 1.0
-offset_top = -69.0
-offset_right = 41.0
+offset_top = -59.0
+offset_right = 57.0
 grow_vertical = 0
 
 [node name="BG" type="PanelContainer" parent="VL"]
@@ -25,18 +27,6 @@ custom_minimum_size = Vector2(1, 0)
 layout_mode = 2
 text_direction = 1
 
-[node name="H" type="HBoxContainer" parent="VL"]
-layout_direction = 2
-layout_mode = 2
-
-[node name="ImageDot" type="TextureRect" parent="VL/H"]
-custom_minimum_size = Vector2(30, 30)
-layout_mode = 2
-texture = ExtResource("2_kmrtr")
-expand_mode = 2
-stretch_mode = 4
-flip_h = true
-
 [node name="VR" type="VBoxContainer" parent="."]
 layout_mode = 1
 anchors_preset = 3
@@ -44,27 +34,69 @@ anchor_left = 1.0
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -38.0
-offset_top = -69.0
+offset_left = -57.0
+offset_top = -57.0
 grow_horizontal = 0
 grow_vertical = 0
 
 [node name="BG" type="PanelContainer" parent="VR"]
 layout_mode = 2
-theme = ExtResource("1_wmn3a")
+theme = ExtResource("2_xtsac")
 
 [node name="Label" type="Label" parent="VR/BG"]
 custom_minimum_size = Vector2(1, 0)
 layout_mode = 2
 text_direction = 1
 
-[node name="H" type="HBoxContainer" parent="VR"]
-layout_direction = 3
-layout_mode = 2
+[node name="VLThink" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_top = -107.0
+offset_right = 66.0
+grow_vertical = 0
 
-[node name="ImageDot" type="TextureRect" parent="VR/H"]
-custom_minimum_size = Vector2(30, 30)
+[node name="BG" type="PanelContainer" parent="VLThink"]
 layout_mode = 2
-texture = ExtResource("2_kmrtr")
-expand_mode = 2
-stretch_mode = 4
+theme = ExtResource("3_eyeg4")
+
+[node name="MC" type="MarginContainer" parent="VLThink/BG"]
+layout_mode = 2
+theme_override_constants/margin_left = 30
+theme_override_constants/margin_top = 30
+theme_override_constants/margin_right = 30
+theme_override_constants/margin_bottom = 60
+
+[node name="Label" type="Label" parent="VLThink/BG/MC"]
+custom_minimum_size = Vector2(1, 0)
+layout_mode = 2
+text_direction = 1
+
+[node name="VRThink" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -66.0
+offset_top = -94.0
+grow_horizontal = 0
+grow_vertical = 0
+
+[node name="BG" type="PanelContainer" parent="VRThink"]
+layout_mode = 2
+theme = ExtResource("4_ng6xm")
+
+[node name="MC" type="MarginContainer" parent="VRThink/BG"]
+layout_mode = 2
+theme_override_constants/margin_left = 30
+theme_override_constants/margin_top = 30
+theme_override_constants/margin_right = 30
+theme_override_constants/margin_bottom = 60
+
+[node name="Label" type="Label" parent="VRThink/BG/MC"]
+custom_minimum_size = Vector2(1, 0)
+layout_mode = 2
+text_direction = 1
