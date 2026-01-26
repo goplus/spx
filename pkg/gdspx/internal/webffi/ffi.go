@@ -10,6 +10,7 @@ import (
 var (
 	callbacks     engine.CallbackInfo
 	hasInitEngine bool
+	exitChan      chan struct{}
 )
 
 func RegisterFuncs() {
@@ -26,9 +27,16 @@ func Linked() {
 	if !hasInitEngine { // adapt for ixgo
 		gdspxOnEngineStart(js.Value{}, nil)
 	}
+
+	exitChan = make(chan struct{})
+	<-exitChan
 }
 
 func Unlink() {
+	if exitChan != nil {
+		close(exitChan)
+		exitChan = nil
+	}
 	hasInitEngine = false
 }
 
