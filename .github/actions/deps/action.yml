@@ -8,7 +8,7 @@ inputs:
   xgo-version:
     description: 'XGo version to setup'
     required: false
-    default: '1.5.0'
+    default: '1.6.1'
   cache-version:
     description: 'Cache version for manual invalidation'
     required: false
@@ -16,11 +16,80 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Set up Go/XGo
-      uses: goplus/setup-xgo@v1
+    - name: Set up Go
+      uses: actions/setup-go@v5
       with:
         go-version: ${{ inputs.go-version }}
-        xgo-version: ${{ inputs.xgo-version }}
+
+    - name: Install XGo
+      run: |
+        echo "Installing XGo ${{ inputs.xgo-version }}..."
+        
+        # Determine platform and architecture
+        OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+        ARCH=$(uname -m)
+        
+        # Fix OS name for Windows (uname returns MINGW64_NT-* or similar)
+        case "$OS" in
+          mingw*|msys*|cygwin*) OS="windows" ;;
+        esac
+        
+        # Map architecture names
+        case "$ARCH" in
+          x86_64) ARCH="amd64" ;;
+          aarch64) ARCH="arm64" ;;
+          arm64) ARCH="arm64" ;;
+          i686|i386) ARCH="386" ;;
+        esac
+        
+        # Determine file extension
+        if [ "$OS" = "windows" ]; then
+          EXT="zip"
+        else
+          EXT="tar.gz"
+        fi
+        
+        # Construct download URL (format: xgo1.6.1.darwin-amd64.tar.gz)
+        VERSION_NO_V=$(echo "${{ inputs.xgo-version }}" | sed 's/^v//')
+        ARCHIVE="xgo${VERSION_NO_V}.${OS}-${ARCH}.${EXT}"
+        DOWNLOAD_URL="https://github.com/goplus/xgo/releases/download/v${{ inputs.xgo-version }}/${ARCHIVE}"
+        echo "Downloading xgo from: $DOWNLOAD_URL"
+        
+        # Get GOPATH (Go is already set up by previous step)
+        GOPATH=$(go env GOPATH)
+        mkdir -p ${GOPATH}/bin
+        
+        # Download and extract to a temporary directory
+        TEMP_DIR=$(mktemp -d)
+        cd "$TEMP_DIR"
+        curl -L -o "${ARCHIVE}" "$DOWNLOAD_URL"
+        
+        if [ "$EXT" = "zip" ]; then
+          unzip -q "${ARCHIVE}"
+        else
+          tar -xzf "${ARCHIVE}"
+        fi
+        
+        # Copy binary
+        if [ "$EXT" = "zip" ]; then
+          cp "bin/xgo.exe" ${GOPATH}/bin/
+        else
+          cp "bin/xgo" ${GOPATH}/bin/xgo
+          chmod +x ${GOPATH}/bin/xgo
+        fi
+        
+        # Remove the archive file (no longer needed)
+        rm -f "${ARCHIVE}"
+        
+        # Use current temp directory as XGOROOT (contains source code)
+        # Move it to a permanent location
+        cd /tmp
+        mv "$TEMP_DIR" /tmp/xgo
+        echo "XGOROOT=/tmp/xgo" >> $GITHUB_ENV
+        
+        # Verify installation
+        xgo version
+      shell: bash
 
     - name: Get GOPATH
       id: gopath

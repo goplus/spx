@@ -57,14 +57,14 @@ func NewSpxRunner() *SpxRunner {
 		PkgPaths: []string{"github.com/goplus/spx/v2", "math"},
 	})
 
-	// Register patch for spx to support functions with generic type like `Gopt_Game_Gopx_GetWidget`.
+	// Register patch for spx to support functions with generic type like `XGot_Game_XGox_GetWidget`.
 	// See details in https://github.com/goplus/builder/issues/765#issuecomment-2313915805
 	if err := ctx.RegisterPatch("github.com/goplus/spx/v2", `
 package spx
 
 import . "github.com/goplus/spx/v2"
 
-func Gopt_Game_Gopx_GetWidget[T any](sg ShapeGetter, name string) *T {
+func XGot_Game_XGox_GetWidget[T any](sg ShapeGetter, name string) *T {
 	widget := GetWidget_(sg, name)
 	if result, ok := widget.(any).(*T); ok {
 		return result
