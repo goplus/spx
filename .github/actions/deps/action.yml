@@ -24,10 +24,15 @@ runs:
     - name: Install XGo
       run: |
         echo "Installing XGo ${{ inputs.xgo-version }}..."
-        # Install xgo using go install, which will preserve module cache
-        go install github.com/goplus/xgo/cmd/xgo@v${{ inputs.xgo-version }}
-        # Download the module to ensure it's in the cache
-        go mod download github.com/goplus/xgo@v${{ inputs.xgo-version }}
+        # Clone and build xgo to ensure XGOROOT is available
+        git clone --depth 1 --branch v${{ inputs.xgo-version }} https://github.com/goplus/xgo /tmp/xgo
+        cd /tmp/xgo
+        go run cmd/make.go -build
+        # Copy to GOPATH/bin
+        GOPATH=$(go env GOPATH)
+        cp bin/xgo ${GOPATH}/bin/
+        # Set XGOROOT for subsequent steps
+        echo "XGOROOT=/tmp/xgo" >> $GITHUB_ENV
         # Verify installation
         xgo version
       shell: bash
