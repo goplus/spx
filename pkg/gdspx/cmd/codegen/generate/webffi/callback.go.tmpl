@@ -30,7 +30,7 @@ func gdspx{{ trimPrefix $f.Name "GDExtensionSpxCallback" }}(this js.Value, args 
 }
 {{ end -}}
 
-func resiterFuncPtr2Js() {
+func registerFuncPtr2Js() {
 {{ range $i, $f := $view.CollectGDExtensionICallbackFunctions -}}
 	js.Global().Set("gdspx_{{snakeCase (trimPrefix $f.Name "GDExtensionSpxCallback" )}}", js.FuncOf(gdspx{{ trimPrefix $f.Name "GDExtensionSpxCallback" }}))
 {{ end -}}

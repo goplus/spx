@@ -357,7 +357,7 @@ func gdspxOnUiTextChanged(this js.Value, args []js.Value) any {
 	callbacks.OnUiTextChanged(arg0, arg1)
 	return nil
 }
-func resiterFuncPtr2Js() {
+func registerFuncPtr2Js() {
 	js.Global().Set("gdspx_on_engine_start", js.FuncOf(gdspxOnEngineStart))
 	js.Global().Set("gdspx_on_engine_update", js.FuncOf(gdspxOnEngineUpdate))
 	js.Global().Set("gdspx_on_engine_fixed_update", js.FuncOf(gdspxOnEngineFixedUpdate))

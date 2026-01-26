@@ -14,12 +14,12 @@ var (
 )
 
 func RegisterFuncs() {
-	resiterFuncPtr2Js()
+	registerFuncPtr2Js()
 }
 
 func Link() bool {
 	js.Global().Set("goWasmInit", js.FuncOf(goWasmInit))
-	resiterFuncPtr2Js()
+	registerFuncPtr2Js()
 	API.loadProcAddresses()
 	return !hasInitEngine
 }
@@ -44,7 +44,7 @@ func Unlink() {
 func goWasmInit(this js.Value, args []js.Value) any {
 	spxlog.Info("Go wasm init success!")
 	hasInitEngine = true
-	resiterFuncPtr2Js()
+	registerFuncPtr2Js()
 	return js.ValueOf(nil)
 }
 
