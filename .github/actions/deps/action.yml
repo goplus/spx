@@ -24,7 +24,11 @@ runs:
     - name: Install XGo
       run: |
         echo "Installing XGo ${{ inputs.xgo-version }}..."
+        # Install xgo using go install, which will preserve module cache
         go install github.com/goplus/xgo/cmd/xgo@v${{ inputs.xgo-version }}
+        # Download the module to ensure it's in the cache
+        go mod download github.com/goplus/xgo@v${{ inputs.xgo-version }}
+        # Verify installation
         xgo version
       shell: bash
 
