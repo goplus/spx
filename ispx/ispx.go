@@ -53,7 +53,7 @@ func Init(ctx *ixgo.Context) error {
 		ctx.Lookup = defaultIXGoContextLookup
 	}
 
-	// Register patch for spx to support functions with generic type like [spx.Gopt_Game_Gopx_GetWidget].
+	// Register patch for spx to support functions with generic type like [spx.XGot_Game_XGox_GetWidget].
 	//
 	// See https://github.com/goplus/builder/issues/765#issuecomment-2313915805.
 	if err := ctx.RegisterPatch("github.com/goplus/spx/v2", `
@@ -61,7 +61,7 @@ package spx
 
 import . "github.com/goplus/spx/v2"
 
-func Gopt_Game_Gopx_GetWidget[T any](sg ShapeGetter, name string) *T {
+func XGot_Game_XGox_GetWidget[T any](sg ShapeGetter, name string) *T {
 	widget, ok := GetWidget_(sg, name).(any).(*T)
 	if !ok {
 		panic("GetWidget: type mismatch")
