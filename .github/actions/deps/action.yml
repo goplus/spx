@@ -24,11 +24,13 @@ runs:
     - name: Install XGo
       run: |
         echo "Installing XGo ${{ inputs.xgo-version }}..."
+        # Disable Go workspace mode for the entire installation process
+        export GOWORK=off
         # Clone and build xgo to ensure XGOROOT is available
         git clone --depth 1 --branch v${{ inputs.xgo-version }} https://github.com/goplus/xgo /tmp/xgo
         cd /tmp/xgo
-        # Disable Go workspace mode to avoid conflicts
-        GOWORK=off go run cmd/make.go -build
+        # Build xgo
+        go run cmd/make.go -build
         # Copy to GOPATH/bin
         GOPATH=$(go env GOPATH)
         cp bin/xgo ${GOPATH}/bin/
