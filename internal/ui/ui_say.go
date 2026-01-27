@@ -20,6 +20,7 @@ const (
 const (
 	baseScreenWidth  = 480.0
 	baseScreenHeight = 360.0
+	thinkScale       = 0.8
 )
 
 // Style constants for say/think bubbles
@@ -72,12 +73,10 @@ func (s *UiSay) OnStart() {
 
 // SetText sets the text content and position for the say/think bubble
 func (s *UiSay) SetText(winSize mathf.Vec2, pos mathf.Vec2, size mathf.Vec2, msg string, style int) {
-	scale := s.calculateScale(winSize)
 	position := s.calculatePosition(winSize, pos, size, msg)
-
 	isLeft := position.X <= 0
 	isThink := style == StyleThink
-
+	scale := s.calculateScale(winSize, isThink)
 	nodes := s.selectNodes(isLeft, isThink)
 	formattedMsg := s.formatMessage(msg)
 
@@ -86,7 +85,11 @@ func (s *UiSay) SetText(winSize mathf.Vec2, pos mathf.Vec2, size mathf.Vec2, msg
 }
 
 // calculateScale computes the uniform scale based on window size
-func (s *UiSay) calculateScale(winSize mathf.Vec2) mathf.Vec2 {
+func (s *UiSay) calculateScale(winSize mathf.Vec2, isThink bool) mathf.Vec2 {
+	specialScale := 1.0
+	if isThink {
+		specialScale = thinkScale
+	}
 	baseSize := mathf.NewVec2(baseScreenWidth, baseScreenHeight)
 	scaleVec := winSize.Div(baseSize)
 
@@ -96,7 +99,7 @@ func (s *UiSay) calculateScale(winSize mathf.Vec2) mathf.Vec2 {
 	zoom := cameraMgr.GetCameraZoom()
 	windowScaleVec := mathf.NewVec2(windowScale, windowScale)
 
-	return zoom.Div(windowScaleVec).Mulf(uniformScale)
+	return zoom.Div(windowScaleVec).Mulf(uniformScale * specialScale)
 }
 
 // calculatePosition computes the UI position based on sprite position and size

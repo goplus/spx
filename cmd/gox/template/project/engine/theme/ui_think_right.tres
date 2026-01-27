@@ -1,9 +1,9 @@
 [gd_resource type="Theme" load_steps=3 format=3 uid="uid://dxdrou7yif75k"]
 
-[ext_resource type="Texture2D" uid="uid://8oc1o5quqass" path="res://engine/textures/say/think_right@4x.png" id="1_u41lo"]
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_lrybn"]
 
 [sub_resource type="StyleBoxTexture" id="StyleBoxTexture_g0s54"]
-texture = ExtResource("1_u41lo")
+texture = SubResource("CompressedTexture2D_lrybn")
 
 [resource]
 Label/colors/font_color = Color(0.0196078, 0.027451, 0.0235294, 1)
