@@ -2,14 +2,15 @@
 
 [ext_resource type="Theme" uid="uid://bugg7h7qx37im" path="res://engine/theme/ui_say_right.tres" id="1_wmn3a"]
 [ext_resource type="Theme" uid="uid://hs1wkf3oeee1" path="res://engine/theme/ui_say_left.tres" id="2_xtsac"]
-[ext_resource type="Theme" uid="uid://dxdrou7yif75k" path="res://engine/theme/ui_think_right.tres" id="3_eyeg4"]
-[ext_resource type="Theme" uid="uid://dwkpqcpxkug0i" path="res://engine/theme/ui_think_left.tres" id="4_ng6xm"]
+[ext_resource type="Theme" uid="uid://dwkpqcpxkug0i" path="res://engine/theme/ui_think.tres" id="4_ng6xm"]
+[ext_resource type="Texture2D" uid="uid://b1i713cetvi0h" path="res://engine/textures/say/bubble@3x.png" id="5_ng6xm"]
 
 [node name="Say" type="Control"]
 layout_mode = 3
 anchors_preset = 0
 
 [node name="VL" type="VBoxContainer" parent="."]
+visible = false
 layout_mode = 1
 anchors_preset = 2
 anchor_top = 1.0
@@ -28,6 +29,7 @@ layout_mode = 2
 text_direction = 1
 
 [node name="VR" type="VBoxContainer" parent="."]
+visible = false
 layout_mode = 1
 anchors_preset = 3
 anchor_left = 1.0
@@ -53,25 +55,33 @@ layout_mode = 1
 anchors_preset = 2
 anchor_top = 1.0
 anchor_bottom = 1.0
-offset_top = -107.0
-offset_right = 66.0
+offset_top = -102.0
+offset_right = 67.0
 grow_vertical = 0
 
 [node name="BG" type="PanelContainer" parent="VLThink"]
 layout_mode = 2
-theme = ExtResource("3_eyeg4")
+theme = ExtResource("4_ng6xm")
 
 [node name="MC" type="MarginContainer" parent="VLThink/BG"]
 layout_mode = 2
-theme_override_constants/margin_left = 30
-theme_override_constants/margin_top = 30
-theme_override_constants/margin_right = 30
-theme_override_constants/margin_bottom = 60
+theme_override_constants/margin_left = 32
+theme_override_constants/margin_top = 32
+theme_override_constants/margin_right = 32
+theme_override_constants/margin_bottom = 32
 
 [node name="Label" type="Label" parent="VLThink/BG/MC"]
 custom_minimum_size = Vector2(1, 0)
 layout_mode = 2
 text_direction = 1
+
+[node name="HC" type="HBoxContainer" parent="VLThink"]
+layout_mode = 2
+
+[node name="TextureRect" type="TextureRect" parent="VLThink/HC"]
+layout_mode = 2
+texture = ExtResource("5_ng6xm")
+flip_h = true
 
 [node name="VRThink" type="VBoxContainer" parent="."]
 layout_mode = 1
@@ -80,8 +90,8 @@ anchor_left = 1.0
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -66.0
-offset_top = -94.0
+offset_left = -67.0
+offset_top = -134.0
 grow_horizontal = 0
 grow_vertical = 0
 
@@ -91,12 +101,20 @@ theme = ExtResource("4_ng6xm")
 
 [node name="MC" type="MarginContainer" parent="VRThink/BG"]
 layout_mode = 2
-theme_override_constants/margin_left = 30
-theme_override_constants/margin_top = 30
-theme_override_constants/margin_right = 30
-theme_override_constants/margin_bottom = 60
+theme_override_constants/margin_left = 32
+theme_override_constants/margin_top = 32
+theme_override_constants/margin_right = 32
+theme_override_constants/margin_bottom = 32
 
 [node name="Label" type="Label" parent="VRThink/BG/MC"]
 custom_minimum_size = Vector2(1, 0)
 layout_mode = 2
 text_direction = 1
+
+[node name="HC" type="HBoxContainer" parent="VRThink"]
+layout_mode = 2
+alignment = 2
+
+[node name="TextureRect" type="TextureRect" parent="VRThink/HC"]
+layout_mode = 2
+texture = ExtResource("5_ng6xm")

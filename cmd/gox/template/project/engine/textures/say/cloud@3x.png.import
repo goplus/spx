@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://8oc1o5quqass"
-path="res://.godot/imported/think_right@4x.png-494261e943744d01893ccba14a3c5f85.ctex"
+uid="uid://73oqtrt4e82o"
+path="res://.godot/imported/cloud@3x.png-ed520504e1bf323be1e40f371c36c966.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://engine/textures/say/think_right@4x.png"
-dest_files=["res://.godot/imported/think_right@4x.png-494261e943744d01893ccba14a3c5f85.ctex"]
+source_file="res://engine/textures/say/cloud@3x.png"
+dest_files=["res://.godot/imported/cloud@3x.png-ed520504e1bf323be1e40f371c36c966.ctex"]
 
 [params]
 
