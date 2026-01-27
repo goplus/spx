@@ -8,7 +8,7 @@ inputs:
   xgo-version:
     description: 'XGo version to setup'
     required: false
-    default: '1.5.0'
+    default: '1.6.1'
   cache-version:
     description: 'Cache version for manual invalidation'
     required: false
