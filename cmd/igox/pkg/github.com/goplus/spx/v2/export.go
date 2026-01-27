@@ -114,6 +114,8 @@ func init() {
 			"HSBA":                     reflect.ValueOf(q.HSBA),
 			"Iround":                   reflect.ValueOf(q.Iround),
 			"KeyFromString":            reflect.ValueOf(q.KeyFromString),
+			"NewList":                  reflect.ValueOf(q.NewList),
+			"NewValue":                 reflect.ValueOf(q.NewValue),
 			"Rand__0":                  reflect.ValueOf(q.Rand__0),
 			"Rand__1":                  reflect.ValueOf(q.Rand__1),
 			"Repeat":                   reflect.ValueOf(q.Repeat),
