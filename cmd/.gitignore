@@ -9,3 +9,8 @@
 /test/**/*.import
 /temp
 *.br
+
+# Godot editor files
+.godot/
+.mono/
+mono_crash.*.json
