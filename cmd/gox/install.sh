@@ -56,7 +56,7 @@ mv $appname $GOPATH/bin/
 
 # build and install gdspx
 echo "Building gdspx..."
-cd ../igox || exit
+cd ../../ispx || exit
 
 if [ "$1" = "--web" ]; then
     # Build wasm + PC (with optional --opt for wasm optimization)
@@ -67,4 +67,4 @@ else
     ./build.sh --pc
 fi
 
-cd ../gox || exit
+cd ../cmd/gox || exit
