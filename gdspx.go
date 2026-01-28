@@ -60,7 +60,7 @@ func (p *Game) OnEngineStart() {
 			runMain(me.MainEntry)
 		}
 		if !p.isRunned {
-			Gopt_Game_Run(gamer, "assets")
+			XGot_Game_Run(gamer, "assets")
 		}
 		engine.OnGameStarted()
 	}
