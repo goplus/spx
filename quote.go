@@ -21,18 +21,6 @@ import (
 	"github.com/goplus/spx/v2/internal/ui"
 )
 
-const (
-	quotePadding     = 5.0
-	quoteLineWidth   = 8.0
-	quoteHeadLen     = 16.0
-	quoteTextPadding = 3.0
-	quoteBorderRadis = 10.0
-)
-
-func init() {
-	const dpi = 72
-}
-
 type quoter struct {
 	sprite      *SpriteImpl
 	message     string

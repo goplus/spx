@@ -23,11 +23,6 @@ import (
 	"github.com/goplus/spx/v2/internal/ui"
 )
 
-func init() {
-	const dpi = 72
-
-}
-
 // -------------------------------------------------------------------------------------
 
 type sayOrThinker struct {
