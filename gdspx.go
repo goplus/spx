@@ -182,8 +182,6 @@ func (sprite *SpriteImpl) syncOnAnimationLooped() {
 func (p *Game) syncUpdateProxy() {
 	p.camera.onUpdate()
 	p.spriteMgr.flushActivate()
-	p.camera.setDirtyFlag(false)
-
 	p.syncBuffer.Clear()
 	items := p.getTempShapes()
 
@@ -193,6 +191,7 @@ func (p *Game) syncUpdateProxy() {
 
 	p.spriteMgr.flushDestroy(p.syncBuffer)
 	p.flushSyncBuffer()
+	p.camera.setDirtyFlag(false)
 }
 
 // processSpriteUpdate processes a single sprite and adds it to the sync buffer if needed
