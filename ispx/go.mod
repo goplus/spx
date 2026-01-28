@@ -8,7 +8,7 @@ require (
 	github.com/goplus/ixgo v0.61.0
 	github.com/goplus/mod v0.19.0
 	github.com/goplus/reflectx v1.5.0
-	github.com/goplus/spx/v2 v2.0.0-pre.43
+	github.com/goplus/spx/v2 v2.0.0-pre.44
 	github.com/goplus/xgo v1.6.1
 )
 
