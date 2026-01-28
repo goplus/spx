@@ -38,7 +38,9 @@ type sayOrThinker struct {
 }
 
 func (p *sayOrThinker) onUpdate(delta float64) {
-	p.refresh()
+	if p.sprite.isDirty {
+		p.refresh()
+	}
 }
 
 func (p *sayOrThinker) refresh() {
