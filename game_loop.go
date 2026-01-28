@@ -173,7 +173,6 @@ func (p *Game) logicLoop(me coroutine.Thread) int {
 	for {
 		p.camera.onUpdate(gtime.DeltaTime())
 		tempItems := p.getTempShapes()
-		p.spriteMgr.flushActivate()
 
 		tempAudios = p.processPendingAudios(tempItems, tempAudios)
 		tempAnimations = p.processAnimationEvents(tempItems, tempAnimations)

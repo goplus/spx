@@ -183,47 +183,63 @@ func (sprite *SpriteImpl) syncOnAnimationLooped() {
 
 func (p *Game) syncUpdateProxy() {
 	items := p.getTempShapes()
-	// Clear buffer for reuse (avoids allocation every frame)
+	p.spriteMgr.flushActivate()
 	p.syncBuffer.Clear()
 
+	// Process each sprite and collect updates
 	for _, item := range items {
-		if sprite, ok := item.(*SpriteImpl); ok {
-			if sprite.HasDestroyed {
-				continue
-			}
-
-			if sprite.isVisible {
-				syncCheckUpdateCostume(&sprite.baseObj)
-			}
-
-			// Only sync if sprite is dirty (transform or visibility changed)
-			if sprite.isDirty {
-				// Collect transform data into buffer for batch sync
-				x, y := sprite.getXY()
-				applyRenderOffset(sprite, &x, &y)
-				offsetX, offsetY := getRenderOffset(sprite)
-				rot, scale := calcRenderRotation(sprite)
-
-				// Add to reusable buffer
-				p.syncBuffer.Add(
-					int64(sprite.syncSprite.Id),
-					x, y,
-					engine.DegToRad(rot),
-					scale, 1.0, // scaleX, scaleY
-					offsetX, offsetY,
-					sprite.isVisible,
-				)
-
-				// Clear dirty flag after syncing
-				sprite.isDirty = false
-			}
-		}
+		p.processSpriteUpdate(item)
 	}
 
-	// Collect sprite deletions into the same buffer
+	// Collect sprite deletions
 	p.spriteMgr.flushDestroy(p.syncBuffer)
 
-	// Serialize and send batch updates (updates + deletes in one call)
+	// Send batch updates if needed
+	p.flushSyncBuffer()
+}
+
+// processSpriteUpdate processes a single sprite and adds it to the sync buffer if needed
+func (p *Game) processSpriteUpdate(item any) {
+	sprite, ok := item.(*SpriteImpl)
+	if !ok || sprite.HasDestroyed {
+		return
+	}
+
+	// Update costume if sprite is visible
+	if sprite.isVisible {
+		syncCheckUpdateCostume(&sprite.baseObj)
+	}
+
+	// Sync transform if sprite is dirty
+	if sprite.isDirty {
+		p.syncSpriteTransform(sprite)
+		sprite.isDirty = false
+	}
+}
+
+// syncSpriteTransform collects sprite transform data and adds it to the sync buffer
+func (p *Game) syncSpriteTransform(sprite *SpriteImpl) {
+	// Calculate position with render offset
+	x, y := sprite.getXY()
+	applyRenderOffset(sprite, &x, &y)
+
+	// Get render properties
+	offsetX, offsetY := getRenderOffset(sprite)
+	rot, scale := calcRenderRotation(sprite)
+
+	// Add to batch buffer
+	p.syncBuffer.Add(
+		int64(sprite.syncSprite.Id),
+		x, y,
+		engine.DegToRad(rot),
+		scale, 1.0, // scaleX, scaleY
+		offsetX, offsetY,
+		sprite.isVisible,
+	)
+}
+
+// flushSyncBuffer sends batched updates to the engine if there are any changes
+func (p *Game) flushSyncBuffer() {
 	if p.syncBuffer.UpdateCount() > 0 || p.syncBuffer.DeleteCount() > 0 {
 		buffer := p.syncBuffer.Serialize()
 		engine.SyncBatchUpdateSprites(buffer)
