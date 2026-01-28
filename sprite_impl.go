@@ -148,11 +148,11 @@ func (p *SpriteImpl) InitFrom(src *SpriteImpl) {
 // Clone Methods
 // ============================================================================
 
-func Gopt_SpriteImpl_Clone__0(sprite Sprite) {
-	Gopt_SpriteImpl_Clone__1(sprite, nil)
+func XGot_SpriteImpl_Clone__0(sprite Sprite) {
+	XGot_SpriteImpl_Clone__1(sprite, nil)
 }
 
-func Gopt_SpriteImpl_Clone__1(sprite Sprite, data any) {
+func XGot_SpriteImpl_Clone__1(sprite Sprite, data any) {
 	doClone(sprite, data, false, nil)
 }
 
