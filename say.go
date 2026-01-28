@@ -33,7 +33,7 @@ type sayOrThinker struct {
 }
 
 func (p *sayOrThinker) onUpdate(delta float64) {
-	if p.sprite.isDirty {
+	if p.sprite.isDirty || p.sprite.g.camera.isDirty {
 		p.refresh()
 	}
 }
