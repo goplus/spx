@@ -81,7 +81,6 @@ func (p *Game) OnEngineUpdate(delta float64) {
 	}
 	// all these functions is called in main thread
 	p.syncUpdateInput()
-	p.syncUpdateCamera()
 	p.syncUpdateLogic()
 	p.syncEnginePositions()
 	p.syncUpdateProxy()
@@ -133,13 +132,6 @@ func (p *Game) syncEnginePositions() error {
 	}
 
 	return nil
-}
-
-func (p *Game) syncUpdateCamera() {
-	isOn, pos := p.camera.getFollowPos()
-	if isOn {
-		engine.SyncSetCameraPosition(pos)
-	}
 }
 
 func (p *Game) syncUpdateInput() {
