@@ -147,7 +147,6 @@ func (p *Game) syncUpdateInput() {
 }
 
 func (sprite *SpriteImpl) syncCheckInitProxy() {
-	// bind syncSprite
 	if sprite.syncSprite == nil && !sprite.HasDestroyed {
 		sprite.syncSprite = engine.SyncNewSprite(sprite, mathf.NewVec2(sprite.getXY()))
 		syncInitSpritePhysicInfo(sprite, sprite.syncSprite)
@@ -157,7 +156,6 @@ func (sprite *SpriteImpl) syncCheckInitProxy() {
 		sprite.applyGraphicEffects(true)
 		sprite.animation().registerOnAnimationLooped(sprite.syncOnAnimationLooped)
 		sprite.animation().registerOnAnimationFinished(sprite.syncOnAnimationFinished)
-		// Mark as dirty to ensure initial sync
 		sprite.isDirty = true
 	}
 }
@@ -182,35 +180,32 @@ func (sprite *SpriteImpl) syncOnAnimationLooped() {
 }
 
 func (p *Game) syncUpdateProxy() {
-	items := p.getTempShapes()
+	p.camera.onUpdate()
 	p.spriteMgr.flushActivate()
-	p.syncBuffer.Clear()
+	p.camera.setDirtyFlag(false)
 
-	// Process each sprite and collect updates
+	p.syncBuffer.Clear()
+	items := p.getTempShapes()
+
 	for _, item := range items {
 		p.processSpriteUpdate(item)
 	}
 
-	// Collect sprite deletions
 	p.spriteMgr.flushDestroy(p.syncBuffer)
-
-	// Send batch updates if needed
 	p.flushSyncBuffer()
 }
 
 // processSpriteUpdate processes a single sprite and adds it to the sync buffer if needed
 func (p *Game) processSpriteUpdate(item any) {
 	sprite, ok := item.(*SpriteImpl)
-	if !ok || sprite.HasDestroyed {
+	if !ok || sprite.HasDestroyed || sprite.syncSprite == nil {
 		return
 	}
 
-	// Update costume if sprite is visible
 	if sprite.isVisible {
 		syncCheckUpdateCostume(&sprite.baseObj)
 	}
 
-	// Sync transform if sprite is dirty
 	if sprite.isDirty {
 		p.syncSpriteTransform(sprite)
 		sprite.isDirty = false
@@ -219,15 +214,12 @@ func (p *Game) processSpriteUpdate(item any) {
 
 // syncSpriteTransform collects sprite transform data and adds it to the sync buffer
 func (p *Game) syncSpriteTransform(sprite *SpriteImpl) {
-	// Calculate position with render offset
 	x, y := sprite.getXY()
 	applyRenderOffset(sprite, &x, &y)
 
-	// Get render properties
 	offsetX, offsetY := getRenderOffset(sprite)
 	rot, scale := calcRenderRotation(sprite)
 
-	// Add to batch buffer
 	p.syncBuffer.Add(
 		int64(sprite.syncSprite.Id),
 		x, y,
@@ -269,7 +261,6 @@ func syncCheckUpdateCostume(p *baseObj) {
 	rect := p.getCostumeAtlasRegion()
 	isAtlas := p.isCostumeAtlas()
 	if isAtlas {
-		// if is animating, will not update render texture
 		syncSprite.UpdateTextureAtlas(path, rect, renderScale, !p.isAnimating)
 		syncOnAtlasChanged(p)
 	} else {

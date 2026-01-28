@@ -29,7 +29,9 @@ type quoter struct {
 }
 
 func (p *quoter) onUpdate(delta float64) {
-	p.refresh()
+	if p.sprite.isDirty || p.sprite.g.camera.isDirty {
+		p.refresh()
+	}
 }
 
 func (p *quoter) refresh() {

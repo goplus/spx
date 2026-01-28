@@ -43,8 +43,9 @@ type Camera interface {
 }
 
 type cameraImpl struct {
-	g   *Game
-	on_ any
+	g            *Game
+	followTarget any
+	isDirty      bool
 }
 
 func (c *cameraImpl) init(g *Game) {
@@ -53,12 +54,12 @@ func (c *cameraImpl) init(g *Game) {
 }
 
 // Restrict camera position to prevent camera from seeing areas outside the world
-func (c *cameraImpl) onUpdate(delta float64) {
-	if c.on_ == nil {
+func (c *cameraImpl) onUpdate() {
+	if c.followTarget == nil {
 		return
 	}
-	val, pos := c.getFollowPos()
-	if val {
+	shouldUpdate, pos := c.getFollowPos()
+	if shouldUpdate {
 		c.SetXYpos(pos.X, pos.Y)
 	}
 }
@@ -66,7 +67,7 @@ func (c *cameraImpl) onUpdate(delta float64) {
 func (c *cameraImpl) setLimits() {
 	p := c.g
 	if p.worldWidth_ <= 0 || p.worldHeight_ <= 0 {
-		return // Skip constraint if world size is not set
+		return
 	}
 
 	// Calculate actual world boundaries (based on minWorld coordinates and world size)
@@ -92,6 +93,7 @@ func (c *cameraImpl) ViewportRect() (float64, float64, float64, float64) {
 }
 
 func (c *cameraImpl) SetZoom(scale float64) {
+	c.setDirtyFlag(true)
 	scale *= c.g.windowScale
 	cameraMgr.SetCameraZoom(mathf.NewVec2(scale, scale))
 }
@@ -113,22 +115,27 @@ func (c *cameraImpl) Ypos() float64 {
 }
 
 func (c *cameraImpl) SetXYpos(x float64, y float64) {
+	c.setDirtyFlag(true)
 	cameraMgr.SetPosition(mathf.NewVec2(x, y))
 }
 
 func (c *cameraImpl) ChangeXYpos(x float64, y float64) {
-	c.on_ = nil
+	c.followTarget = nil
 	posX, posY := c.Xpos(), c.Ypos()
 	c.SetXYpos(posX+x, posY+y)
 }
 
+func (c *cameraImpl) setDirtyFlag(isDirty bool) {
+	c.isDirty = isDirty
+}
+
 func (c *cameraImpl) getFollowPos() (bool, mathf.Vec2) {
-	if c.on_ != nil {
-		switch v := c.on_.(type) {
+	if c.followTarget != nil {
+		switch v := c.followTarget.(type) {
 		case *SpriteImpl:
-			return true, mathf.NewVec2(v.getXY())
+			return v.isDirty, mathf.NewVec2(v.getXY())
 		case specialObj:
-			if c.on_ == Mouse {
+			if c.followTarget == Mouse {
 				return true, c.g.mousePos
 			}
 		}
@@ -136,7 +143,7 @@ func (c *cameraImpl) getFollowPos() (bool, mathf.Vec2) {
 	return false, mathf.NewVec2(0, 0)
 }
 
-func (c *cameraImpl) on(obj any) {
+func (c *cameraImpl) follow(obj any) {
 	switch v := obj.(type) {
 	case SpriteName:
 		sp := c.g.findSprite(v)
@@ -145,16 +152,12 @@ func (c *cameraImpl) on(obj any) {
 			return
 		}
 		obj = sp
-		if c.g.debug {
-			spxlog.Debug("Camera.Follow: sprite found - %s", sp.name)
-		}
+		spxlog.Debug("Camera.Follow: sprite found - %s", sp.name)
 	case *SpriteImpl:
 	case nil:
 	case Sprite:
 		obj = spriteOf(v)
-		if c.g.debug {
-			spxlog.Debug("Camera.Follow: obj - %s", obj.(*SpriteImpl).name)
-		}
+		spxlog.Debug("Camera.Follow: obj - %s", obj.(*SpriteImpl).name)
 	case specialObj:
 		if v != Mouse {
 			spxlog.Warn("Camera.Follow: not support - %v", v)
@@ -163,14 +166,14 @@ func (c *cameraImpl) on(obj any) {
 	default:
 		panic("Camera.Follow: unexpected parameter")
 	}
-	c.on_ = obj
+	c.followTarget = obj
 	c.setLimits()
 }
 
 func (c *cameraImpl) Follow__0(sprite Sprite) {
-	c.on(sprite)
+	c.follow(sprite)
 }
 
 func (c *cameraImpl) Follow__1(sprite SpriteName) {
-	c.on(sprite)
+	c.follow(sprite)
 }

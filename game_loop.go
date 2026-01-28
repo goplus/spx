@@ -23,7 +23,6 @@ import (
 	"github.com/goplus/spx/v2/internal/coroutine"
 	"github.com/goplus/spx/v2/internal/engine"
 	spxlog "github.com/goplus/spx/v2/internal/log"
-	gtime "github.com/goplus/spx/v2/internal/time"
 	"github.com/goplus/spx/v2/internal/timer"
 )
 
@@ -171,7 +170,6 @@ func (p *Game) logicLoop(me coroutine.Thread) int {
 	tempAudios := []string{}
 	tempAnimations := []string{}
 	for {
-		p.camera.onUpdate(gtime.DeltaTime())
 		tempItems := p.getTempShapes()
 
 		tempAudios = p.processPendingAudios(tempItems, tempAudios)
