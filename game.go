@@ -273,23 +273,23 @@ func SetDebug(flags dbgFlags) {
 	debugPerf = (flags & DbgFlagPerf) != 0
 }
 
-// Gopt_Game_Main is required by XGo compiler as the entry of a .gmx project.
-func Gopt_Game_Main(game Gamer, sprites ...Sprite) {
+// XGot_Game_Main is required by XGo compiler as the entry of a .gmx project.
+func XGot_Game_Main(game Gamer, sprites ...Sprite) {
 	g := game.initGame(sprites)
 	g.gamer_ = game
 	engine.Main(game)
 }
 
-// Gopt_Game_Run runs the game using the builder pattern
-func Gopt_Game_Run(game Gamer, resource any, gameConf ...*Config) {
+// XGot_Game_Run runs the game using the builder pattern
+func XGot_Game_Run(game Gamer, resource any, gameConf ...*Config) {
 	builder := newGameBuilder(game, resource, gameConf...)
 	if err := builder.buildAndRun(); err != nil {
 		engine.Panic(err)
 	}
 }
 
-// Gopt_Game_Reload reloads the game with new configuration
-func Gopt_Game_Reload(game Gamer, index any) (err error) {
+// XGot_Game_Reload reloads the game with new configuration
+func XGot_Game_Reload(game Gamer, index any) (err error) {
 	v := reflect.ValueOf(game).Elem()
 	g := instance(v)
 	g.reset()
