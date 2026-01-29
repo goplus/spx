@@ -143,6 +143,9 @@ type projConfig struct {
 
 	TilemapPath   string `json:"tilemapPath"`
 	LayerSortMode string `json:"layerSortMode"` // layer sort method, default "" , options: "vertical"
+
+	// Pixel collision precision: "high" (1), "medium" (2), "low" (4), default "low"
+	PixelCollisionPrecision *string `json:"pixelCollisionPrecision"`
 }
 
 func (p *projConfig) getBackdrops() []*backdropConfig {

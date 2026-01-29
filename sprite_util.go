@@ -282,61 +282,6 @@ func getCostumeBoundByAlpha(p *SpriteImpl, pscale float64, isSync bool) (mathf.V
 	return center, size
 }
 
-// -----------------------------------------------------------------------------
-// Configuration Parsing Utilities
-// -----------------------------------------------------------------------------
-
-// parseDefaultValue parses int64 value with default
-func parseDefaultValue(pval *int64, defaultValue int64) int64 {
-	if pval == nil {
-		return defaultValue
-	}
-	return *pval
-}
-
-// parseDefaultFloatValue parses float64 value with default
-func parseDefaultFloatValue(pval *float64, defaultValue float64) float64 {
-	if pval == nil {
-		return defaultValue
-	}
-	return *pval
-}
-
-// parseLayerMaskValue parses layer mask value
-func parseLayerMaskValue(pval *int64) int64 {
-	return parseDefaultValue(pval, 1)
-}
-
-// parseColliderShapeType parses collider shape type from string
-func parseColliderShapeType(typeName string, defaultValue int64) int64 {
-	switch typeName {
-	case "none":
-		return physicsColliderNone
-	case "auto":
-		return physicsColliderAuto
-	case "circle":
-		return physicsColliderCircle
-	case "rect":
-		return physicsColliderRect
-	case "capsule":
-		return physicsColliderCapsule
-	case "polygon":
-		return physicsColliderPolygon
-	}
-	return defaultValue
-}
-
-// toRotationStyle converts a string representation to a RotationStyle constant
-func toRotationStyle(style string) RotationStyle {
-	switch style {
-	case "left-right":
-		return LeftRight
-	case "none":
-		return None
-	}
-	return Normal
-}
-
 // ============================================================================
 // Time Methods
 // ============================================================================
