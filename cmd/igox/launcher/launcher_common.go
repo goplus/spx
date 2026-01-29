@@ -64,13 +64,12 @@ package spx
 
 import . "github.com/goplus/spx/v2"
 
-func XGot_Game_XGox_GetWidget[T any](sg ShapeGetter, name string) *T {
-	widget := GetWidget_(sg, name)
-	if result, ok := widget.(any).(*T); ok {
-		return result
-	} else {
-		panic("GetWidget: type mismatch")
+func XGot_Game_XGox_GetWidget[T any](sg ShapeGetter, name WidgetName) *T {
+	widget, ok := GetWidget_(sg, name).(any).(*T)
+	if !ok {
+		panic("GetWidget: type mismatch - " + name)
 	}
+	return widget
 }
 `); err != nil {
 		return nil
