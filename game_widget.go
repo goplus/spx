@@ -47,12 +47,11 @@ func GetWidget_(sg ShapeGetter, name WidgetName) Widget {
 
 // GetWidget returns the widget instance (in given type) with given name. It panics if not found.
 func XGot_Game_XGox_GetWidget[T any](sg ShapeGetter, name WidgetName) *T {
-	widget := GetWidget_(sg, name)
-	result, ok := widget.(any).(*T)
+	widget, ok := GetWidget_(sg, name).(any).(*T)
 	if !ok {
 		panic("GetWidget: type mismatch - " + name)
 	}
-	return result
+	return widget
 }
 
 // -----------------------------------------------------------------------------
