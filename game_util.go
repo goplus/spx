@@ -21,6 +21,7 @@ import (
 
 	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v2/internal/engine"
+	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
 // -------------------------------------------------------------------------------------
@@ -233,11 +234,76 @@ func f32Tof64(slice []float32) []float64 {
 	return out
 }
 
-func parseDefaultNumber[T any](pval *T, defaultValue T) T {
+// -----------------------------------------------------------------------------
+// Configuration Parsing Utilities
+// -----------------------------------------------------------------------------
+
+// parseDefaultValue parses a pointer value with a default fallback.
+func parseDefaultValue[T any](pval *T, defaultValue T) T {
 	if pval == nil {
 		return defaultValue
 	}
 	return *pval
+}
+
+// parseLayerMaskValue parses layer mask value
+func parseLayerMaskValue(pval *int64) int64 {
+	return parseDefaultValue(pval, 1)
+}
+
+// parseColliderShapeType parses collider shape type from string
+func parseColliderShapeType(typeName string, defaultValue int64) int64 {
+	switch typeName {
+	case "none":
+		return physicsColliderNone
+	case "auto":
+		return physicsColliderAuto
+	case "circle":
+		return physicsColliderCircle
+	case "rect":
+		return physicsColliderRect
+	case "capsule":
+		return physicsColliderCapsule
+	case "polygon":
+		return physicsColliderPolygon
+	case "":
+		return defaultValue
+	default:
+		spxlog.Warn("Invalid colliderShapeType value '%s', using default", typeName)
+		return defaultValue
+	}
+}
+
+// parsePixelCollisionPrecision parses the precision string and returns the corresponding enum value
+func parsePixelCollisionPrecision(precision *string) pixelCollisionPrecision {
+	if precision == nil {
+		return pixelCollisionPrecisionLow // default
+	}
+
+	switch *precision {
+	case "high":
+		return pixelCollisionPrecisionHigh
+	case "medium":
+		return pixelCollisionPrecisionMedium
+	case "low":
+		return pixelCollisionPrecisionLow
+	default:
+		spxlog.Warn("Invalid pixelCollisionPrecision value '%s', using default 'low'", *precision)
+		return pixelCollisionPrecisionLow
+	}
+}
+
+// toRotationStyle converts a string representation to a RotationStyle constant
+func toRotationStyle(style string) RotationStyle {
+	switch style {
+	case "left-right":
+		return LeftRight
+	case "none":
+		return None
+	default:
+		spxlog.Warn("Unrecognized rotationStyle value '%s', using default 'Normal'.", style)
+		return Normal
+	}
 }
 
 // -------------------------------------------------------------------------------------

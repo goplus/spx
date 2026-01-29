@@ -56,10 +56,10 @@ func (pc *physicsComponent) initialize(sprite *SpriteImpl, spriteCfg *spriteConf
 
 	// Physics properties
 	pc.physicsMode = toPhysicsMode(spriteCfg.PhysicsMode)
-	pc.airDrag = parseDefaultFloatValue(spriteCfg.AirDrag, 1)
-	pc.gravity = parseDefaultFloatValue(spriteCfg.Gravity, 1)
-	pc.friction = parseDefaultFloatValue(spriteCfg.Friction, 1)
-	pc.mass = parseDefaultFloatValue(spriteCfg.Mass, 1)
+	pc.airDrag = parseDefaultValue(spriteCfg.AirDrag, 1)
+	pc.gravity = parseDefaultValue(spriteCfg.Gravity, 1)
+	pc.friction = parseDefaultValue(spriteCfg.Friction, 1)
+	pc.mass = parseDefaultValue(spriteCfg.Mass, 1)
 
 	// Initialize collision targets map
 	pc.collisionTargets = make(map[string]bool)

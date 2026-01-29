@@ -84,12 +84,12 @@ const (
 // -------------------------------------------------------------------------------------
 // Pixel collision sampling step constants
 
-type pixelCollisionSamplingStep int64
+type pixelCollisionPrecision int64
 
 const (
-	pixelCollisionSamplingStep_High   pixelCollisionSamplingStep = 1 << iota // High precision (slowest, most accurate)
-	pixelCollisionSamplingStep_Medium                                        // Medium precision (balanced)
-	pixelCollisionSamplingStep_Low                                           // Low precision (fastest, less accurate)
+	pixelCollisionPrecisionHigh   pixelCollisionPrecision = 1 // High precision (slowest, most accurate)
+	pixelCollisionPrecisionMedium pixelCollisionPrecision = 2 // Medium precision (balanced)
+	pixelCollisionPrecisionLow    pixelCollisionPrecision = 4 // Low precision (fastest, less accurate)
 )
 
 var (
@@ -412,7 +412,6 @@ func WaitUntil(condition func() bool) {
 
 // -------------------------------------------------------------------------------------
 // setupGameConfig configures game settings
-
 func setupGameConfig(g *Game, conf *Config, proj *projConfig) {
 	if conf.Title == "" {
 		dir, _ := os.Getwd()
@@ -420,13 +419,15 @@ func setupGameConfig(g *Game, conf *Config, proj *projConfig) {
 		conf.Title = appName + " (by XGo Builder)"
 	}
 
-	spriteMgr.SetPixelCollisionSamplingStep(int64(pixelCollisionSamplingStep_Low))
+	// Set pixel collision sampling step based on configuration
+	precision := parsePixelCollisionPrecision(proj.PixelCollisionPrecision)
+	spriteMgr.SetPixelCollisionSamplingStep(int64(precision))
 
 	proj.FullScreen = proj.FullScreen || conf.FullScreen
 	enabledPhysics = proj.Physics
-	physicsMgr.SetGlobalGravity(parseDefaultFloatValue(proj.GlobalGravity, 1))
-	physicsMgr.SetGlobalAirDrag(parseDefaultFloatValue(proj.GlobalAirDrag, 1))
-	physicsMgr.SetGlobalFriction(parseDefaultFloatValue(proj.GlobalFriction, 1))
+	physicsMgr.SetGlobalGravity(parseDefaultValue(proj.GlobalGravity, 1))
+	physicsMgr.SetGlobalAirDrag(parseDefaultValue(proj.GlobalAirDrag, 1))
+	physicsMgr.SetGlobalFriction(parseDefaultValue(proj.GlobalFriction, 1))
 
 	g.windowHeight_ = conf.Height
 	g.windowWidth_ = conf.Width
@@ -449,12 +450,12 @@ func setupGameSystems(g *Game, proj *projConfig) {
 
 	g.isCollisionByPixel = !proj.CollisionByShape && !proj.Physics
 	g.isAutoSetCollisionLayer = proj.AutoSetCollisionLayer == nil || *proj.AutoSetCollisionLayer
-	g.pathCellSizeX = parseDefaultNumber(proj.PathCellSizeX, defaultPathCellSize)
-	g.pathCellSizeY = parseDefaultNumber(proj.PathCellSizeY, defaultPathCellSize)
+	g.pathCellSizeX = parseDefaultValue(proj.PathCellSizeX, defaultPathCellSize)
+	g.pathCellSizeY = parseDefaultValue(proj.PathCellSizeY, defaultPathCellSize)
 
 	engine.SetLayerSortMode(proj.LayerSortMode)
-	g.audioAttenuation = parseDefaultFloatValue(proj.AudioAttenuation, 0)
-	g.audioMaxDistance = parseDefaultFloatValue(proj.AudioMaxDistance, defaultAudioMaxDist)
+	g.audioAttenuation = parseDefaultValue(proj.AudioAttenuation, 0)
+	g.audioMaxDistance = parseDefaultValue(proj.AudioMaxDistance, defaultAudioMaxDist)
 
 	physicsMgr.SetCollisionSystemType(g.isCollisionByPixel)
 	if g.isAutoSetCollisionLayer {
