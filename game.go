@@ -81,6 +81,17 @@ const (
 	initialSpriteSyncBufferSize = 100  // initial buffer size for sprite synchronization
 )
 
+// -------------------------------------------------------------------------------------
+// Pixel collision sampling step constants
+
+type pixelCollisionSamplingStep int64
+
+const (
+	pixelCollisionSamplingStep_High   pixelCollisionSamplingStep = 1 << iota // High precision (slowest, most accurate)
+	pixelCollisionSamplingStep_Medium                                        // Medium precision (balanced)
+	pixelCollisionSamplingStep_Low                                           // Low precision (fastest, less accurate)
+)
+
 var (
 	debugInstr bool
 	debugLoad  bool
@@ -408,6 +419,8 @@ func setupGameConfig(g *Game, conf *Config, proj *projConfig) {
 		appName := filepath.Base(dir)
 		conf.Title = appName + " (by XGo Builder)"
 	}
+
+	spriteMgr.SetPixelCollisionSamplingStep(int64(pixelCollisionSamplingStep_Low))
 
 	proj.FullScreen = proj.FullScreen || conf.FullScreen
 	enabledPhysics = proj.Physics
