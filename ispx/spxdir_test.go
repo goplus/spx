@@ -6,9 +6,9 @@ import (
 	"testing/fstest"
 )
 
-func TestNewSPXDir(t *testing.T) {
+func TestNewSpxDir(t *testing.T) {
 	fsys := fstest.MapFS{}
-	dir := newSPXDir(fsys, "")
+	dir := newSpxDir(fsys, "")
 	if dir == nil {
 		t.Fatal("expected non-nil dir")
 	}
@@ -21,7 +21,7 @@ func TestSpxDirOpen(t *testing.T) {
 	}
 
 	t.Run("WithoutPrefix", func(t *testing.T) {
-		dir := newSPXDir(fsys, "")
+		dir := newSpxDir(fsys, "")
 		rc, err := dir.Open("file.txt")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -38,7 +38,7 @@ func TestSpxDirOpen(t *testing.T) {
 	})
 
 	t.Run("WithPrefix", func(t *testing.T) {
-		dir := newSPXDir(fsys, "subdir")
+		dir := newSpxDir(fsys, "subdir")
 		rc, err := dir.Open("file.txt")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -55,7 +55,7 @@ func TestSpxDirOpen(t *testing.T) {
 	})
 
 	t.Run("FileNotFound", func(t *testing.T) {
-		dir := newSPXDir(fsys, "")
+		dir := newSpxDir(fsys, "")
 		_, err := dir.Open("nonexistent.txt")
 		if err == nil {
 			t.Fatal("expected error for nonexistent file")
@@ -65,7 +65,7 @@ func TestSpxDirOpen(t *testing.T) {
 
 func TestSpxDirClose(t *testing.T) {
 	fsys := fstest.MapFS{}
-	dir := newSPXDir(fsys, "")
+	dir := newSpxDir(fsys, "")
 	spxDir := dir.(*spxDir)
 	if err := spxDir.Close(); err != nil {
 		t.Errorf("unexpected error: %v", err)

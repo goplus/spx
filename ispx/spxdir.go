@@ -14,8 +14,8 @@ type spxDir struct {
 	prefix string
 }
 
-// newSPXDir creates a new spx directory.
-func newSPXDir(fsys fs.FS, prefix string) spxfs.Dir {
+// newSpxDir creates a new spx directory.
+func newSpxDir(fsys fs.FS, prefix string) spxfs.Dir {
 	return &spxDir{fsys: fsys, prefix: prefix}
 }
 

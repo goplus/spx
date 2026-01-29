@@ -2,6 +2,7 @@ package ispx
 
 import (
 	"fmt"
+	"io/fs"
 	"sync"
 
 	"github.com/goplus/ixgo"
@@ -77,6 +78,11 @@ func XGot_Game_XGox_GetWidget[T any](sg ShapeGetter, name WidgetName) *T {
 
 // Build builds the spx code from the provided files into the interpreter.
 func Build(files map[string][]byte) error {
+	return BuildFS(memfs.New(files))
+}
+
+// BuildFS builds the spx code from the provided file system into the interpreter.
+func BuildFS(fsys fs.FS) error {
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -90,9 +96,8 @@ func Build(files map[string][]byte) error {
 	// Release previous resources if any.
 	unsafeRelease()
 
-	fsys := memfs.New(files)
 	spxfs.RegisterSchema("", func(path string) (spxfs.Dir, error) {
-		return newSPXDir(fsys, path), nil
+		return newSpxDir(fsys, path), nil
 	})
 
 	source, err := xgobuild.BuildFSDir(ixgoCtx, newXGoParserFS(fsys), ".")
