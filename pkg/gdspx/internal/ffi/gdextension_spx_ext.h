@@ -243,6 +243,7 @@ typedef void (*GDExtensionSpxCameraGetCameraZoom)(GdVec2 *ret_value);
 typedef void (*GDExtensionSpxCameraSetCameraZoom)(GdVec2 size);
 typedef void (*GDExtensionSpxCameraGetViewportRect)(GdRect2 *ret_value);
 typedef void (*GDExtensionSpxCameraGetGlobalCameraRect)(GdRect2 *ret_value);
+typedef void (*GDExtensionSpxCameraGetStageLimitsRect)(GdRect2 *ret_value);
 typedef void (*GDExtensionSpxCameraSetCameraLimit)(GdInt side, GdInt limit);
 typedef void (*GDExtensionSpxCameraSetCameraSmoothing)(GdBool enabled);
 // SpxDebug
@@ -293,6 +294,9 @@ typedef void (*GDExtensionSpxPhysicsCheckCollision)(GdVec2 from, GdVec2 to, GdIn
 typedef void (*GDExtensionSpxPhysicsCheckTouchedCameraBoundaries)(GdObj obj, GdInt *ret_value);
 typedef void (*GDExtensionSpxPhysicsCheckTouchedCameraBoundary)(GdObj obj, GdInt board_type, GdBool *ret_value);
 typedef void (*GDExtensionSpxPhysicsCheckNearestTouchedCameraBoundary)(GdObj obj, GdInt *ret_value);
+typedef void (*GDExtensionSpxPhysicsCheckTouchedStageBoundaries)(GdObj obj, GdInt *ret_value);
+typedef void (*GDExtensionSpxPhysicsCheckTouchedStageBoundary)(GdObj obj, GdInt board_type, GdBool *ret_value);
+typedef void (*GDExtensionSpxPhysicsCheckNearestTouchedStageBoundary)(GdObj obj, GdInt *ret_value);
 typedef void (*GDExtensionSpxPhysicsSetCollisionSystemType)(GdBool is_collision_by_alpha);
 typedef void (*GDExtensionSpxPhysicsSetGlobalGravity)(GdFloat gravity);
 typedef void (*GDExtensionSpxPhysicsGetGlobalGravity)(GdFloat *ret_value);

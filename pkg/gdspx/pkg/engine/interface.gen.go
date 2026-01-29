@@ -61,6 +61,7 @@ type ICameraMgr interface {
 	SetCameraZoom(size Vec2)
 	GetViewportRect() Rect2
 	GetGlobalCameraRect() Rect2
+	GetStageLimitsRect() Rect2
 	SetCameraLimit(side int64, limit int64)
 	SetCameraSmoothing(enabled bool)
 }
@@ -123,6 +124,9 @@ type IPhysicsMgr interface {
 	CheckTouchedCameraBoundaries(obj Object) int64
 	CheckTouchedCameraBoundary(obj Object, board_type int64) bool
 	CheckNearestTouchedCameraBoundary(obj Object) int64
+	CheckTouchedStageBoundaries(obj Object) int64
+	CheckTouchedStageBoundary(obj Object, board_type int64) bool
+	CheckNearestTouchedStageBoundary(obj Object) int64
 	SetCollisionSystemType(is_collision_by_alpha bool)
 	SetGlobalGravity(gravity float64)
 	GetGlobalGravity() float64

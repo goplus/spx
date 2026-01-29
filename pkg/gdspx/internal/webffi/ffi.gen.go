@@ -47,6 +47,7 @@ type GDExtensionInterface struct {
 	SpxCameraSetCameraZoom                      js.Value
 	SpxCameraGetViewportRect                    js.Value
 	SpxCameraGetGlobalCameraRect                js.Value
+	SpxCameraGetStageLimitsRect                 js.Value
 	SpxCameraSetCameraLimit                     js.Value
 	SpxCameraSetCameraSmoothing                 js.Value
 	SpxDebugDebugDrawCircle                     js.Value
@@ -91,6 +92,9 @@ type GDExtensionInterface struct {
 	SpxPhysicsCheckTouchedCameraBoundaries      js.Value
 	SpxPhysicsCheckTouchedCameraBoundary        js.Value
 	SpxPhysicsCheckNearestTouchedCameraBoundary js.Value
+	SpxPhysicsCheckTouchedStageBoundaries       js.Value
+	SpxPhysicsCheckTouchedStageBoundary         js.Value
+	SpxPhysicsCheckNearestTouchedStageBoundary  js.Value
 	SpxPhysicsSetCollisionSystemType            js.Value
 	SpxPhysicsSetGlobalGravity                  js.Value
 	SpxPhysicsGetGlobalGravity                  js.Value
@@ -353,6 +357,7 @@ func (x *GDExtensionInterface) loadProcAddresses() {
 	x.SpxCameraSetCameraZoom = dlsymGD("gdspx_camera_set_camera_zoom")
 	x.SpxCameraGetViewportRect = dlsymGD("gdspx_camera_get_viewport_rect")
 	x.SpxCameraGetGlobalCameraRect = dlsymGD("gdspx_camera_get_global_camera_rect")
+	x.SpxCameraGetStageLimitsRect = dlsymGD("gdspx_camera_get_stage_limits_rect")
 	x.SpxCameraSetCameraLimit = dlsymGD("gdspx_camera_set_camera_limit")
 	x.SpxCameraSetCameraSmoothing = dlsymGD("gdspx_camera_set_camera_smoothing")
 	x.SpxDebugDebugDrawCircle = dlsymGD("gdspx_debug_debug_draw_circle")
@@ -397,6 +402,9 @@ func (x *GDExtensionInterface) loadProcAddresses() {
 	x.SpxPhysicsCheckTouchedCameraBoundaries = dlsymGD("gdspx_physics_check_touched_camera_boundaries")
 	x.SpxPhysicsCheckTouchedCameraBoundary = dlsymGD("gdspx_physics_check_touched_camera_boundary")
 	x.SpxPhysicsCheckNearestTouchedCameraBoundary = dlsymGD("gdspx_physics_check_nearest_touched_camera_boundary")
+	x.SpxPhysicsCheckTouchedStageBoundaries = dlsymGD("gdspx_physics_check_touched_stage_boundaries")
+	x.SpxPhysicsCheckTouchedStageBoundary = dlsymGD("gdspx_physics_check_touched_stage_boundary")
+	x.SpxPhysicsCheckNearestTouchedStageBoundary = dlsymGD("gdspx_physics_check_nearest_touched_stage_boundary")
 	x.SpxPhysicsSetCollisionSystemType = dlsymGD("gdspx_physics_set_collision_system_type")
 	x.SpxPhysicsSetGlobalGravity = dlsymGD("gdspx_physics_set_global_gravity")
 	x.SpxPhysicsGetGlobalGravity = dlsymGD("gdspx_physics_get_global_gravity")

@@ -284,6 +284,13 @@ func (pself *cameraMgrImpl) GetGlobalCameraRect() Rect2 {
 	})
 	return _ret1
 }
+func (pself *cameraMgrImpl) GetStageLimitsRect() Rect2 {
+	var _ret1 Rect2
+	callInMainThread(func() {
+		_ret1 = gdx.CameraMgr.GetStageLimitsRect()
+	})
+	return _ret1
+}
 func (pself *cameraMgrImpl) SetCameraLimit(side int64, limit int64) {
 	callInMainThread(func() {
 		gdx.CameraMgr.SetCameraLimit(side, limit)
@@ -545,6 +552,27 @@ func (pself *physicsMgrImpl) CheckNearestTouchedCameraBoundary(obj gdx.Object) i
 	var _ret1 int64
 	callInMainThread(func() {
 		_ret1 = gdx.PhysicsMgr.CheckNearestTouchedCameraBoundary(obj)
+	})
+	return _ret1
+}
+func (pself *physicsMgrImpl) CheckTouchedStageBoundaries(obj gdx.Object) int64 {
+	var _ret1 int64
+	callInMainThread(func() {
+		_ret1 = gdx.PhysicsMgr.CheckTouchedStageBoundaries(obj)
+	})
+	return _ret1
+}
+func (pself *physicsMgrImpl) CheckTouchedStageBoundary(obj gdx.Object, board_type int64) bool {
+	var _ret1 bool
+	callInMainThread(func() {
+		_ret1 = gdx.PhysicsMgr.CheckTouchedStageBoundary(obj, board_type)
+	})
+	return _ret1
+}
+func (pself *physicsMgrImpl) CheckNearestTouchedStageBoundary(obj gdx.Object) int64 {
+	var _ret1 int64
+	callInMainThread(func() {
+		_ret1 = gdx.PhysicsMgr.CheckNearestTouchedStageBoundary(obj)
 	})
 	return _ret1
 }

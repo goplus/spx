@@ -197,6 +197,10 @@ func (pself *cameraMgrImpl) GetGlobalCameraRect() Rect2 {
 	var _ret1 Rect2
 	return _ret1
 }
+func (pself *cameraMgrImpl) GetStageLimitsRect() Rect2 {
+	var _ret1 Rect2
+	return _ret1
+}
 func (pself *cameraMgrImpl) SetCameraLimit(side int64, limit int64) {}
 func (pself *cameraMgrImpl) SetCameraSmoothing(enabled bool)        {}
 
@@ -299,6 +303,18 @@ func (pself *physicsMgrImpl) CheckTouchedCameraBoundary(obj gdx.Object, board_ty
 	return _ret1
 }
 func (pself *physicsMgrImpl) CheckNearestTouchedCameraBoundary(obj gdx.Object) int64 {
+	var _ret1 int64
+	return _ret1
+}
+func (pself *physicsMgrImpl) CheckTouchedStageBoundaries(obj gdx.Object) int64 {
+	var _ret1 int64
+	return _ret1
+}
+func (pself *physicsMgrImpl) CheckTouchedStageBoundary(obj gdx.Object, board_type int64) bool {
+	var _ret1 bool
+	return _ret1
+}
+func (pself *physicsMgrImpl) CheckNearestTouchedStageBoundary(obj gdx.Object) int64 {
 	var _ret1 int64
 	return _ret1
 }

@@ -259,6 +259,10 @@ func (pself *cameraMgr) GetGlobalCameraRect() Rect2 {
 	_retValue := API.SpxCameraGetGlobalCameraRect.Invoke()
 	return JsToGdRect2(_retValue)
 }
+func (pself *cameraMgr) GetStageLimitsRect() Rect2 {
+	_retValue := API.SpxCameraGetStageLimitsRect.Invoke()
+	return JsToGdRect2(_retValue)
+}
 func (pself *cameraMgr) SetCameraLimit(side int64, limit int64) {
 	arg0 := JsFromGdInt(side)
 	arg1 := JsFromGdInt(limit)
@@ -472,6 +476,22 @@ func (pself *physicsMgr) CheckTouchedCameraBoundary(obj Object, board_type int64
 func (pself *physicsMgr) CheckNearestTouchedCameraBoundary(obj Object) int64 {
 	arg0 := JsFromGdObj(obj)
 	_retValue := API.SpxPhysicsCheckNearestTouchedCameraBoundary.Invoke(arg0)
+	return JsToGdInt(_retValue)
+}
+func (pself *physicsMgr) CheckTouchedStageBoundaries(obj Object) int64 {
+	arg0 := JsFromGdObj(obj)
+	_retValue := API.SpxPhysicsCheckTouchedStageBoundaries.Invoke(arg0)
+	return JsToGdInt(_retValue)
+}
+func (pself *physicsMgr) CheckTouchedStageBoundary(obj Object, board_type int64) bool {
+	arg0 := JsFromGdObj(obj)
+	arg1 := JsFromGdInt(board_type)
+	_retValue := API.SpxPhysicsCheckTouchedStageBoundary.Invoke(arg0, arg1)
+	return JsToGdBool(_retValue)
+}
+func (pself *physicsMgr) CheckNearestTouchedStageBoundary(obj Object) int64 {
+	arg0 := JsFromGdObj(obj)
+	_retValue := API.SpxPhysicsCheckNearestTouchedStageBoundary.Invoke(arg0)
 	return JsToGdInt(_retValue)
 }
 func (pself *physicsMgr) SetCollisionSystemType(is_collision_by_alpha bool) {

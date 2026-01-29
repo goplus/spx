@@ -51,6 +51,7 @@ type cameraImpl struct {
 func (c *cameraImpl) init(g *Game) {
 	c.g = g
 	c.SetZoom(1)
+	c.setLimits()
 }
 
 // Restrict camera position to prevent camera from seeing areas outside the world
