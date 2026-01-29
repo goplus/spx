@@ -87,6 +87,9 @@ void cgo_callfn_GDExtensionSpxCameraGetViewportRect(const GDExtensionSpxCameraGe
 void cgo_callfn_GDExtensionSpxCameraGetGlobalCameraRect(const GDExtensionSpxCameraGetGlobalCameraRect fn, GdRect2* ret_val) {
 	fn(ret_val);
 }
+void cgo_callfn_GDExtensionSpxCameraGetStageLimitsRect(const GDExtensionSpxCameraGetStageLimitsRect fn, GdRect2* ret_val) {
+	fn(ret_val);
+}
 void cgo_callfn_GDExtensionSpxCameraSetCameraLimit(const GDExtensionSpxCameraSetCameraLimit fn, GdInt side, GdInt limit) {
 	fn(side, limit);
 }
@@ -217,6 +220,15 @@ void cgo_callfn_GDExtensionSpxPhysicsCheckTouchedCameraBoundary(const GDExtensio
 	fn(obj, board_type,ret_val);
 }
 void cgo_callfn_GDExtensionSpxPhysicsCheckNearestTouchedCameraBoundary(const GDExtensionSpxPhysicsCheckNearestTouchedCameraBoundary fn, GdObj obj, GdInt* ret_val) {
+	fn(obj,ret_val);
+}
+void cgo_callfn_GDExtensionSpxPhysicsCheckTouchedStageBoundaries(const GDExtensionSpxPhysicsCheckTouchedStageBoundaries fn, GdObj obj, GdInt* ret_val) {
+	fn(obj,ret_val);
+}
+void cgo_callfn_GDExtensionSpxPhysicsCheckTouchedStageBoundary(const GDExtensionSpxPhysicsCheckTouchedStageBoundary fn, GdObj obj, GdInt board_type, GdBool* ret_val) {
+	fn(obj, board_type,ret_val);
+}
+void cgo_callfn_GDExtensionSpxPhysicsCheckNearestTouchedStageBoundary(const GDExtensionSpxPhysicsCheckNearestTouchedStageBoundary fn, GdObj obj, GdInt* ret_val) {
 	fn(obj,ret_val);
 }
 void cgo_callfn_GDExtensionSpxPhysicsSetCollisionSystemType(const GDExtensionSpxPhysicsSetCollisionSystemType fn, GdBool is_collision_by_alpha) {

@@ -268,6 +268,10 @@ func (pself *cameraMgr) GetGlobalCameraRect() Rect2 {
 	retValue := CallCameraGetGlobalCameraRect()
 	return ToRect2(retValue)
 }
+func (pself *cameraMgr) GetStageLimitsRect() Rect2 {
+	retValue := CallCameraGetStageLimitsRect()
+	return ToRect2(retValue)
+}
 func (pself *cameraMgr) SetCameraLimit(side int64, limit int64) {
 	arg0 := ToGdInt(side)
 	arg1 := ToGdInt(limit)
@@ -495,6 +499,22 @@ func (pself *physicsMgr) CheckTouchedCameraBoundary(obj Object, board_type int64
 func (pself *physicsMgr) CheckNearestTouchedCameraBoundary(obj Object) int64 {
 	arg0 := ToGdObj(obj)
 	retValue := CallPhysicsCheckNearestTouchedCameraBoundary(arg0)
+	return ToInt64(retValue)
+}
+func (pself *physicsMgr) CheckTouchedStageBoundaries(obj Object) int64 {
+	arg0 := ToGdObj(obj)
+	retValue := CallPhysicsCheckTouchedStageBoundaries(arg0)
+	return ToInt64(retValue)
+}
+func (pself *physicsMgr) CheckTouchedStageBoundary(obj Object, board_type int64) bool {
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdInt(board_type)
+	retValue := CallPhysicsCheckTouchedStageBoundary(arg0, arg1)
+	return ToBool(retValue)
+}
+func (pself *physicsMgr) CheckNearestTouchedStageBoundary(obj Object) int64 {
+	arg0 := ToGdObj(obj)
+	retValue := CallPhysicsCheckNearestTouchedStageBoundary(arg0)
 	return ToInt64(retValue)
 }
 func (pself *physicsMgr) SetCollisionSystemType(is_collision_by_alpha bool) {

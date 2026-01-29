@@ -110,6 +110,7 @@ type GDExtensionSpxCameraGetCameraZoom C.GDExtensionSpxCameraGetCameraZoom
 type GDExtensionSpxCameraSetCameraZoom C.GDExtensionSpxCameraSetCameraZoom
 type GDExtensionSpxCameraGetViewportRect C.GDExtensionSpxCameraGetViewportRect
 type GDExtensionSpxCameraGetGlobalCameraRect C.GDExtensionSpxCameraGetGlobalCameraRect
+type GDExtensionSpxCameraGetStageLimitsRect C.GDExtensionSpxCameraGetStageLimitsRect
 type GDExtensionSpxCameraSetCameraLimit C.GDExtensionSpxCameraSetCameraLimit
 type GDExtensionSpxCameraSetCameraSmoothing C.GDExtensionSpxCameraSetCameraSmoothing
 type GDExtensionSpxDebugDebugDrawCircle C.GDExtensionSpxDebugDebugDrawCircle
@@ -154,6 +155,9 @@ type GDExtensionSpxPhysicsCheckCollision C.GDExtensionSpxPhysicsCheckCollision
 type GDExtensionSpxPhysicsCheckTouchedCameraBoundaries C.GDExtensionSpxPhysicsCheckTouchedCameraBoundaries
 type GDExtensionSpxPhysicsCheckTouchedCameraBoundary C.GDExtensionSpxPhysicsCheckTouchedCameraBoundary
 type GDExtensionSpxPhysicsCheckNearestTouchedCameraBoundary C.GDExtensionSpxPhysicsCheckNearestTouchedCameraBoundary
+type GDExtensionSpxPhysicsCheckTouchedStageBoundaries C.GDExtensionSpxPhysicsCheckTouchedStageBoundaries
+type GDExtensionSpxPhysicsCheckTouchedStageBoundary C.GDExtensionSpxPhysicsCheckTouchedStageBoundary
+type GDExtensionSpxPhysicsCheckNearestTouchedStageBoundary C.GDExtensionSpxPhysicsCheckNearestTouchedStageBoundary
 type GDExtensionSpxPhysicsSetCollisionSystemType C.GDExtensionSpxPhysicsSetCollisionSystemType
 type GDExtensionSpxPhysicsSetGlobalGravity C.GDExtensionSpxPhysicsSetGlobalGravity
 type GDExtensionSpxPhysicsGetGlobalGravity C.GDExtensionSpxPhysicsGetGlobalGravity
@@ -624,6 +628,12 @@ func CallCameraGetGlobalCameraRect() GdRect2 {
 	C.cgo_callfn_GDExtensionSpxCameraGetGlobalCameraRect(arg0, &ret_val)
 	return (GdRect2)(ret_val)
 }
+func CallCameraGetStageLimitsRect() GdRect2 {
+	arg0 := (C.GDExtensionSpxCameraGetStageLimitsRect)(api.SpxCameraGetStageLimitsRect)
+	var ret_val C.GdRect2
+	C.cgo_callfn_GDExtensionSpxCameraGetStageLimitsRect(arg0, &ret_val)
+	return (GdRect2)(ret_val)
+}
 func CallCameraSetCameraLimit(
 	side GdInt,
 	limit GdInt,
@@ -1063,6 +1073,38 @@ func CallPhysicsCheckNearestTouchedCameraBoundary(
 	arg1GdObj := (C.GdObj)(obj)
 	var ret_val C.GdInt
 	C.cgo_callfn_GDExtensionSpxPhysicsCheckNearestTouchedCameraBoundary(arg0, arg1GdObj, &ret_val)
+
+	return (GdInt)(ret_val)
+}
+func CallPhysicsCheckTouchedStageBoundaries(
+	obj GdObj,
+) GdInt {
+	arg0 := (C.GDExtensionSpxPhysicsCheckTouchedStageBoundaries)(api.SpxPhysicsCheckTouchedStageBoundaries)
+	arg1GdObj := (C.GdObj)(obj)
+	var ret_val C.GdInt
+	C.cgo_callfn_GDExtensionSpxPhysicsCheckTouchedStageBoundaries(arg0, arg1GdObj, &ret_val)
+
+	return (GdInt)(ret_val)
+}
+func CallPhysicsCheckTouchedStageBoundary(
+	obj GdObj,
+	board_type GdInt,
+) GdBool {
+	arg0 := (C.GDExtensionSpxPhysicsCheckTouchedStageBoundary)(api.SpxPhysicsCheckTouchedStageBoundary)
+	arg1GdObj := (C.GdObj)(obj)
+	arg2GdInt := (C.GdInt)(board_type)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxPhysicsCheckTouchedStageBoundary(arg0, arg1GdObj, arg2GdInt, &ret_val)
+
+	return (GdBool)(ret_val)
+}
+func CallPhysicsCheckNearestTouchedStageBoundary(
+	obj GdObj,
+) GdInt {
+	arg0 := (C.GDExtensionSpxPhysicsCheckNearestTouchedStageBoundary)(api.SpxPhysicsCheckNearestTouchedStageBoundary)
+	arg1GdObj := (C.GdObj)(obj)
+	var ret_val C.GdInt
+	C.cgo_callfn_GDExtensionSpxPhysicsCheckNearestTouchedStageBoundary(arg0, arg1GdObj, &ret_val)
 
 	return (GdInt)(ret_val)
 }

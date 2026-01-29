@@ -43,6 +43,7 @@ type GDExtensionInterface struct {
 	SpxCameraSetCameraZoom                      GDExtensionSpxCameraSetCameraZoom
 	SpxCameraGetViewportRect                    GDExtensionSpxCameraGetViewportRect
 	SpxCameraGetGlobalCameraRect                GDExtensionSpxCameraGetGlobalCameraRect
+	SpxCameraGetStageLimitsRect                 GDExtensionSpxCameraGetStageLimitsRect
 	SpxCameraSetCameraLimit                     GDExtensionSpxCameraSetCameraLimit
 	SpxCameraSetCameraSmoothing                 GDExtensionSpxCameraSetCameraSmoothing
 	SpxDebugDebugDrawCircle                     GDExtensionSpxDebugDebugDrawCircle
@@ -87,6 +88,9 @@ type GDExtensionInterface struct {
 	SpxPhysicsCheckTouchedCameraBoundaries      GDExtensionSpxPhysicsCheckTouchedCameraBoundaries
 	SpxPhysicsCheckTouchedCameraBoundary        GDExtensionSpxPhysicsCheckTouchedCameraBoundary
 	SpxPhysicsCheckNearestTouchedCameraBoundary GDExtensionSpxPhysicsCheckNearestTouchedCameraBoundary
+	SpxPhysicsCheckTouchedStageBoundaries       GDExtensionSpxPhysicsCheckTouchedStageBoundaries
+	SpxPhysicsCheckTouchedStageBoundary         GDExtensionSpxPhysicsCheckTouchedStageBoundary
+	SpxPhysicsCheckNearestTouchedStageBoundary  GDExtensionSpxPhysicsCheckNearestTouchedStageBoundary
 	SpxPhysicsSetCollisionSystemType            GDExtensionSpxPhysicsSetCollisionSystemType
 	SpxPhysicsSetGlobalGravity                  GDExtensionSpxPhysicsSetGlobalGravity
 	SpxPhysicsGetGlobalGravity                  GDExtensionSpxPhysicsGetGlobalGravity
@@ -349,6 +353,7 @@ func (x *GDExtensionInterface) loadProcAddresses() {
 	x.SpxCameraSetCameraZoom = (GDExtensionSpxCameraSetCameraZoom)(dlsymGD("spx_camera_set_camera_zoom"))
 	x.SpxCameraGetViewportRect = (GDExtensionSpxCameraGetViewportRect)(dlsymGD("spx_camera_get_viewport_rect"))
 	x.SpxCameraGetGlobalCameraRect = (GDExtensionSpxCameraGetGlobalCameraRect)(dlsymGD("spx_camera_get_global_camera_rect"))
+	x.SpxCameraGetStageLimitsRect = (GDExtensionSpxCameraGetStageLimitsRect)(dlsymGD("spx_camera_get_stage_limits_rect"))
 	x.SpxCameraSetCameraLimit = (GDExtensionSpxCameraSetCameraLimit)(dlsymGD("spx_camera_set_camera_limit"))
 	x.SpxCameraSetCameraSmoothing = (GDExtensionSpxCameraSetCameraSmoothing)(dlsymGD("spx_camera_set_camera_smoothing"))
 	x.SpxDebugDebugDrawCircle = (GDExtensionSpxDebugDebugDrawCircle)(dlsymGD("spx_debug_debug_draw_circle"))
@@ -393,6 +398,9 @@ func (x *GDExtensionInterface) loadProcAddresses() {
 	x.SpxPhysicsCheckTouchedCameraBoundaries = (GDExtensionSpxPhysicsCheckTouchedCameraBoundaries)(dlsymGD("spx_physics_check_touched_camera_boundaries"))
 	x.SpxPhysicsCheckTouchedCameraBoundary = (GDExtensionSpxPhysicsCheckTouchedCameraBoundary)(dlsymGD("spx_physics_check_touched_camera_boundary"))
 	x.SpxPhysicsCheckNearestTouchedCameraBoundary = (GDExtensionSpxPhysicsCheckNearestTouchedCameraBoundary)(dlsymGD("spx_physics_check_nearest_touched_camera_boundary"))
+	x.SpxPhysicsCheckTouchedStageBoundaries = (GDExtensionSpxPhysicsCheckTouchedStageBoundaries)(dlsymGD("spx_physics_check_touched_stage_boundaries"))
+	x.SpxPhysicsCheckTouchedStageBoundary = (GDExtensionSpxPhysicsCheckTouchedStageBoundary)(dlsymGD("spx_physics_check_touched_stage_boundary"))
+	x.SpxPhysicsCheckNearestTouchedStageBoundary = (GDExtensionSpxPhysicsCheckNearestTouchedStageBoundary)(dlsymGD("spx_physics_check_nearest_touched_stage_boundary"))
 	x.SpxPhysicsSetCollisionSystemType = (GDExtensionSpxPhysicsSetCollisionSystemType)(dlsymGD("spx_physics_set_collision_system_type"))
 	x.SpxPhysicsSetGlobalGravity = (GDExtensionSpxPhysicsSetGlobalGravity)(dlsymGD("spx_physics_set_global_gravity"))
 	x.SpxPhysicsGetGlobalGravity = (GDExtensionSpxPhysicsGetGlobalGravity)(dlsymGD("spx_physics_get_global_gravity"))
