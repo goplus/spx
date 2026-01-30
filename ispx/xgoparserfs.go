@@ -8,24 +8,24 @@ import (
 	xgoparser "github.com/goplus/xgo/parser"
 )
 
-// xgoParserFS wraps a [fs.ReadDirFS] to implement [xgoparser.FileSystem].
+// xgoParserFS wraps a [fs.FS] to implement [xgoparser.FileSystem].
 type xgoParserFS struct {
-	rdfs fs.ReadDirFS
+	fsys fs.FS
 }
 
 // newXGoParserFS creates a new XGo parser file system.
-func newXGoParserFS(rdfs fs.ReadDirFS) xgoparser.FileSystem {
-	return &xgoParserFS{rdfs: rdfs}
+func newXGoParserFS(fsys fs.FS) xgoparser.FileSystem {
+	return &xgoParserFS{fsys: fsys}
 }
 
 // ReadDir implements [xgoparser.FileSystem].
 func (pfs *xgoParserFS) ReadDir(dirname string) ([]fs.DirEntry, error) {
-	return fs.ReadDir(pfs.rdfs, dirname)
+	return fs.ReadDir(pfs.fsys, dirname)
 }
 
 // ReadFile implements [xgoparser.FileSystem].
 func (pfs *xgoParserFS) ReadFile(filename string) ([]byte, error) {
-	return fs.ReadFile(pfs.rdfs, filename)
+	return fs.ReadFile(pfs.fsys, filename)
 }
 
 // Join implements [xgoparser.FileSystem].

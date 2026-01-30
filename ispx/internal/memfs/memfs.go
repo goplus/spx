@@ -15,7 +15,7 @@ const (
 	dirMode  = fs.FileMode(0o444) | fs.ModeDir
 )
 
-// FS implements [fs.ReadDirFS] using a map of files.
+// FS implements [fs.FS] using a map of files.
 type FS struct {
 	files map[string][]byte
 }
@@ -25,7 +25,7 @@ func New(files map[string][]byte) *FS {
 	return &FS{files: files}
 }
 
-// Open implements [fs.ReadDirFS].
+// Open implements [fs.FS].
 func (fsys *FS) Open(name string) (fs.File, error) {
 	if !fs.ValidPath(name) {
 		return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrInvalid}
