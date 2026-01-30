@@ -17,12 +17,118 @@
 package spx
 
 import (
+	"math"
 	"slices"
 
 	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v2/internal/engine"
 	spxlog "github.com/goplus/spx/v2/internal/log"
 )
+
+// -----------------------------------------------------------------------------
+// Sprite Collision Info
+
+const maxCollisionLayerIdx = 32 // engine limit support 32 layers
+
+type spriteCollisionInfo struct {
+	Id    int
+	Layer int64
+	Mask  int64
+}
+
+// spriteCollisionData caches sprite collision information
+type spriteCollisionData struct {
+	sprite *SpriteImpl
+	info   *spriteCollisionInfo
+	modIdx int
+}
+
+func (p *Game) getSpriteCollisionInfo(name string) *spriteCollisionInfo {
+	if info, ok := p.sprCollisionInfos[name]; ok {
+		return info
+	}
+	engine.Panic("Unknown sprite " + name)
+	return &spriteCollisionInfo{}
+}
+
+func getCollisionLayerIndex(info *spriteCollisionInfo) int {
+	return int(math.Mod(float64(info.Id), maxCollisionLayerIdx))
+}
+
+func (p *Game) buildSpriteCollisionData(inits []Sprite) []*spriteCollisionData {
+	spriteData := make([]*spriteCollisionData, 0, len(inits))
+	for _, ini := range inits {
+		spr := spriteOf(ini)
+		info := p.getSpriteCollisionInfo(spr.name)
+		spriteData = append(spriteData, &spriteCollisionData{
+			sprite: spr,
+			info:   info,
+			modIdx: getCollisionLayerIndex(info),
+		})
+	}
+	return spriteData
+}
+
+func (p *Game) setupCollisionLayers(inits []Sprite) {
+	if !p.isAutoSetCollisionLayer {
+		return
+	}
+
+	spriteData := p.buildSpriteCollisionData(inits)
+	maskMap := make([]int64, maxCollisionLayerIdx)
+
+	// Gather collision masks
+	for _, data := range spriteData {
+		data.info.Mask = 0
+		for target := range data.sprite.physics().getCollisionTargets() {
+			targetInfo := p.getSpriteCollisionInfo(target)
+			maskMap[data.modIdx] |= targetInfo.Layer
+		}
+	}
+
+	// Apply collision masks
+	for _, data := range spriteData {
+		data.info.Mask = maskMap[data.modIdx]
+		spxlog.Debug("init sprite collision info: name=%s, layer=%d, mask=%d", data.sprite.name, data.info.Layer, data.info.Mask)
+	}
+
+	// Recalculate physics info
+	engine.WaitMainThread(func() {
+		for _, data := range spriteData {
+			syncInitSpritePhysicInfo(data.sprite, data.sprite.syncSprite)
+		}
+	})
+}
+
+// -----------------------------------------------------------------------------
+// Physics Configuration
+
+func (p *Game) setupPhysicsConfig(proj *projConfig) {
+	p.isCollisionByPixel = !proj.CollisionByShape && !proj.Physics
+	p.isAutoSetCollisionLayer = proj.AutoSetCollisionLayer == nil || *proj.AutoSetCollisionLayer
+	spxlog.Debug("==> isCollisionByPixel: %v", p.isCollisionByPixel)
+	spxlog.Debug("==> isAutoSetCollisionLayer: %v", p.isAutoSetCollisionLayer)
+
+	// Set pixel collision sampling step based on configuration
+	precision := parsePixelCollisionPrecision(proj.PixelCollisionPrecision)
+	spriteMgr.SetPixelCollisionSamplingStep(int64(precision))
+
+	// Set global physics parameters
+	physicsMgr.SetGlobalGravity(parseDefaultValue(proj.GlobalGravity, 1))
+	physicsMgr.SetGlobalAirDrag(parseDefaultValue(proj.GlobalAirDrag, 1))
+	physicsMgr.SetGlobalFriction(parseDefaultValue(proj.GlobalFriction, 1))
+	physicsMgr.SetCollisionSystemType(p.isCollisionByPixel)
+	if p.isAutoSetCollisionLayer {
+		p.sprCollisionInfos = make(map[string]*spriteCollisionInfo)
+		idx := 0
+		for name := range p.typs {
+			modIdx := int(math.Mod(float64(idx), maxCollisionLayerIdx))
+			info := &spriteCollisionInfo{Id: idx, Layer: 1 << modIdx}
+			p.sprCollisionInfos[name] = info
+			idx++
+		}
+	}
+}
 
 // -----------------------------------------------------------------------------
 // Physics Detection and Collision
