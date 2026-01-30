@@ -617,9 +617,9 @@ func (p *Game) setupWorldAndWindow(proj *projConfig) {
 		p.baseObj.initBackdrops("", backdrops, proj.getBackdropIndex())
 		p.worldWidth_ = proj.Map.Width
 		p.worldHeight_ = proj.Map.Height
+		p.doWorldSize()
 		p.minWorldX_ = -p.worldWidth_ / 2
 		p.minWorldY_ = -p.worldHeight_ / 2
-		p.doWorldSize()
 	} else {
 		p.worldWidth_ = proj.Map.Width
 		p.worldHeight_ = proj.Map.Height
