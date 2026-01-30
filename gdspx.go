@@ -55,7 +55,7 @@ func (p *Game) OnEngineStart() {
 	onStart := func() {
 		defer engine.CheckPanic()
 		initInput()
-		gamer := p.gamer_
+		gamer := p.gamer
 		if me, ok := gamer.(interface{ MainEntry() }); ok {
 			runMain(me.MainEntry)
 		}

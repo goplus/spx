@@ -94,8 +94,8 @@ func (p *Game) SetBackdropAndWait__3(action switchAction) {
 
 func (p *Game) setupBackdrop() {
 	imgW, imgH := p.getCostumeSize()
-	dstW := float64(p.worldWidth_)
-	dstH := float64(p.worldHeight_)
+	dstW := float64(p.worldWidth)
+	dstH := float64(p.worldHeight)
 	imgRadio := (imgW / imgH)
 	worldRadio := (dstW / dstH)
 	// scale image's height to fit world's height

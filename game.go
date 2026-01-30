@@ -134,22 +134,22 @@ type Game struct {
 	startFlag sync.Once
 
 	// map world
-	worldWidth_  int
-	worldHeight_ int
-	minWorldX_   int
-	minWorldY_   int
-	mapMode      int
+	worldWidth  int
+	worldHeight int
+	minWorldX   int
+	minWorldY   int
+	mapMode     int
 
 	// window
-	windowWidth_  int
-	windowHeight_ int
+	windowWidth  int
+	windowHeight int
 
 	mousePos mathf.Vec2
 
 	sinkMgr  eventSinkMgr
 	isLoaded bool
 	isRunned bool
-	gamer_   Gamer
+	gamer    Gamer
 
 	windowScale float64
 	stretchMode bool
@@ -290,7 +290,7 @@ func SetDebug(flags dbgFlags) {
 // XGot_Game_Main is required by XGo compiler as the entry of a .gmx project.
 func XGot_Game_Main(game Gamer, sprites ...Sprite) {
 	g := game.initGame(sprites)
-	g.gamer_ = game
+	g.gamer = game
 	engine.Main(game)
 }
 
@@ -431,8 +431,8 @@ func setupGameConfig(g *Game, conf *Config, proj *projConfig) {
 	physicsMgr.SetGlobalAirDrag(parseDefaultValue(proj.GlobalAirDrag, 1))
 	physicsMgr.SetGlobalFriction(parseDefaultValue(proj.GlobalFriction, 1))
 
-	g.windowHeight_ = conf.Height
-	g.windowWidth_ = conf.Width
+	g.windowHeight = conf.Height
+	g.windowWidth = conf.Width
 
 	key := conf.ScreenshotKey
 	if key == "" {
@@ -627,26 +627,26 @@ func (p *Game) setupWorldAndWindow(proj *projConfig) {
 		setDefaultIfZero(&proj.Map.Height, baseScreenHeight)
 	}
 
-	p.worldWidth_ = proj.Map.Width
-	p.worldHeight_ = proj.Map.Height
+	p.worldWidth = proj.Map.Width
+	p.worldHeight = proj.Map.Height
 
 	if len(backdrops) > 0 {
 		p.baseObj.initBackdrops("", backdrops, proj.getBackdropIndex())
 		p.doWorldSize()
 	} else {
-		p.baseObj.initWithSize(p.worldWidth_, p.worldHeight_)
+		p.baseObj.initWithSize(p.worldWidth, p.worldHeight)
 	}
-	spxlog.Debug("==> SetWorldSize: %d, %d", p.worldWidth_, p.worldHeight_)
+	spxlog.Debug("==> SetWorldSize: %d, %d", p.worldWidth, p.worldHeight)
 
-	p.minWorldX_ = -p.worldWidth_ / 2
-	p.minWorldY_ = -p.worldHeight_ / 2
+	p.minWorldX = -p.worldWidth / 2
+	p.minWorldY = -p.worldHeight / 2
 
 	p.mapMode = toMapMode(proj.Map.Mode)
 	p.doWindowSize()
-	spxlog.Debug("==> SetWindowSize: %d, %d", p.windowWidth_, p.windowHeight_)
+	spxlog.Debug("==> SetWindowSize: %d, %d", p.windowWidth, p.windowHeight)
 
-	p.windowWidth_ = int(math.Min(float64(p.windowWidth_), float64(p.worldWidth_)))
-	p.windowHeight_ = int(math.Min(float64(p.windowHeight_), float64(p.worldHeight_)))
+	p.windowWidth = int(math.Min(float64(p.windowWidth), float64(p.worldWidth)))
+	p.windowHeight = int(math.Min(float64(p.windowHeight), float64(p.worldHeight)))
 }
 
 // setupPlatformAndCamera configures platform settings and camera
@@ -656,14 +656,14 @@ func (p *Game) setupPlatformAndCamera(proj *projConfig) {
 			platformMgr.SetWindowFullscreen(true)
 		}
 		winSize := platformMgr.GetWindowSize()
-		scale := math.Min(winSize.X/float64(p.windowWidth_), winSize.Y/float64(p.windowHeight_))
+		scale := math.Min(winSize.X/float64(p.windowWidth), winSize.Y/float64(p.windowHeight))
 		p.windowScale = scale
 	}
 
 	if platform.IsWeb() {
 		platformMgr.SetWindowSize(int64(platformMgr.GetWindowSize().X), int64(platformMgr.GetWindowSize().Y), true)
 	} else {
-		platformMgr.SetWindowSize(int64(float64(p.windowWidth_)*p.windowScale), int64(float64(p.windowHeight_)*p.windowScale), true)
+		platformMgr.SetWindowSize(int64(float64(p.windowWidth)*p.windowScale), int64(float64(p.windowHeight)*p.windowScale), true)
 	}
 	platformMgr.SetStretchMode(p.stretchMode)
 
@@ -671,7 +671,7 @@ func (p *Game) setupPlatformAndCamera(proj *projConfig) {
 	p.Camera = p.camera
 	p.camera.init(p)
 
-	isWindowMapSizeEqual := p.worldHeight_ == p.windowHeight_ && p.worldWidth_ == p.windowWidth_
+	isWindowMapSizeEqual := p.worldHeight == p.windowHeight && p.worldWidth == p.windowWidth
 	engine.SetWindowScale(p.windowScale)
 	ui.SetWindowScale(p.windowScale)
 	ui.SetBaseScreenSize(baseScreenWidth, baseScreenHeight)
