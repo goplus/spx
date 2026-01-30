@@ -23,6 +23,16 @@ import (
 // -----------------------------------------------------------------------------
 // Path Finding System
 
+const (
+	defaultPathCellSize = 16 // default path finding cell size
+)
+
+// setupPathFinderConfig initializes path finder configuration from project settings
+func (p *Game) setupPathFinderConfig(proj *projConfig) {
+	p.pathCellSizeX = parseDefaultValue(proj.PathCellSizeX, defaultPathCellSize)
+	p.pathCellSizeY = parseDefaultValue(proj.PathCellSizeY, defaultPathCellSize)
+}
+
 func (p *Game) SetupPathFinder__0() {
 	p.setupPathFinder(true, false)
 }

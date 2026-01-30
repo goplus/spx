@@ -22,17 +22,28 @@ import (
 	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
-// ============================================================================
+// -----------------------------------------------------------------------------
+// Audio Configuration
+
+const (
+	defaultAudioMaxDist = 2000 // default maximum audio distance
+)
+
+// setupAudioConfig initializes audio configuration from project settings
+func (p *Game) setupAudioConfig(proj *projConfig) {
+	p.audioAttenuation = parseDefaultValue(proj.AudioAttenuation, 0)
+	p.audioMaxDistance = parseDefaultValue(proj.AudioMaxDistance, defaultAudioMaxDist)
+}
+
+// -----------------------------------------------------------------------------
 // Sound Types
-// ============================================================================
 
 type sound *soundConfig
 
 type SoundName = string
 
-// ============================================================================
+// -----------------------------------------------------------------------------
 // Sound Loading
-// ============================================================================
 
 func (p *Game) loadSound(name SoundName) (media sound, err error) {
 	if media, ok := p.sounds.sounds[name]; ok {
@@ -51,9 +62,8 @@ func (p *Game) loadSound(name SoundName) (media sound, err error) {
 	return
 }
 
-// ============================================================================
+// -----------------------------------------------------------------------------
 // Sound Playback
-// ============================================================================
 
 func (p *Game) playSound(sprite *engine.Sprite, audioId engine.Object, name SoundName, isLoop bool, attenuation, maxDistance float64) soundId {
 	m, err := p.loadSound(name)
@@ -95,9 +105,8 @@ func (p *Game) stopSoundInstance(instanceId soundId) {
 	p.sounds.stopInstance(instanceId)
 }
 
-// ============================================================================
+// -----------------------------------------------------------------------------
 // Sound Control Methods
-// ============================================================================
 
 func (p *Game) Volume() float64 {
 	p.checkSoundObj()
@@ -179,9 +188,8 @@ func (p *Game) Loudness() float64 {
 	return p.aurec.Loudness() * 100
 }
 
-// ============================================================================
+// -----------------------------------------------------------------------------
 // Sound Resource Management
-// ============================================================================
 
 // releaseGameAudio releases the game's audio resources
 func (p *Game) releaseGameAudio() {

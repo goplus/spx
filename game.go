@@ -46,6 +46,21 @@ const (
 	Gop_sched  = "Sched,SchedNow"
 )
 
+var (
+	debugInstr bool
+	debugEvent bool
+	debugPerf  bool
+
+	isSchedInMain  bool
+	mainSchedTime  time.Time
+	enabledPhysics bool
+
+	gco      *coroutine.Coroutines
+	tySprite = reflect.TypeOf((*Sprite)(nil)).Elem()
+
+	imageSizeCache sync.Map
+)
+
 // -------------------------------------------------------------------------------------
 // Debug flags
 
@@ -76,8 +91,6 @@ const (
 	schedTimeoutMs              = 3000 // timeout in milliseconds for scheduler
 	mainExecTimeoutSec          = 3    // timeout in seconds for main execution
 	mouseMovementThreshold      = 1.0  // minimum movement to trigger mouse event (pixels)
-	defaultPathCellSize         = 16   // default path finding cell size
-	defaultAudioMaxDist         = 2000 // default maximum audio distance
 	initialSpriteSyncBufferSize = 100  // initial buffer size for sprite synchronization
 	baseScreenWidth             = 480  // base screen width for default map and UI scaling
 	baseScreenHeight            = 360  // base screen height for default map and UI scaling
@@ -94,53 +107,34 @@ const (
 	pixelCollisionPrecisionLow    pixelCollisionPrecision = 4 // Low precision (fastest, less accurate)
 )
 
-var (
-	debugInstr bool
-	debugLoad  bool
-	debugEvent bool
-	debugPerf  bool
-)
-
-var (
-	isSchedInMain bool
-	mainSchedTime time.Time
-
-	enabledPhysics bool
-)
-
 // -------------------------------------------------------------------------------------
 // Core Types
 
 type Shape any
+type threadObj = coroutine.ThreadObj
 
 // Game represents the main game instance with all core systems
 type Game struct {
 	baseObj
 	eventSinks
+	fs spxfs.Dir
+
 	Camera Camera
 	camera *cameraImpl
 
-	fs spxfs.Dir
-
-	inputs inputManager
-	sounds soundMgr
-	typs   map[string]reflect.Type // map: name => sprite type, for all sprites
-	sprs   map[string]Sprite       // map: name => sprite prototype, for loaded sprites
-
-	spriteMgr *spriteManager
+	typs map[string]reflect.Type // map: name => sprite type, for all sprites
+	sprs map[string]Sprite       // map: name => sprite prototype, for loaded sprites
 
 	events    chan event
 	aurec     *audiorecord.Recorder
 	startFlag sync.Once
 
-	// map world
 	worldWidth  int
 	worldHeight int
 	minWorldX   int
 	minWorldY   int
 	mapMode     int
 
-	// window
 	windowWidth  int
 	windowHeight int
 
@@ -153,7 +147,6 @@ type Game struct {
 
 	windowScale float64
 	stretchMode bool
-	soundObj    engine.Object
 
 	askPanel  *ui.UiAsk
 	answerVal string
@@ -162,7 +155,6 @@ type Game struct {
 	pathCellSizeX  int
 	pathCellSizeY  int
 
-	// debug
 	debug      bool
 	debugPanel *ui.UiDebug
 
@@ -172,36 +164,22 @@ type Game struct {
 
 	audioAttenuation float64
 	audioMaxDistance float64
+	soundObj         engine.Object
 
+	inputs     inputManager
+	sounds     soundMgr
+	spriteMgr  *spriteManager
 	tilemapMgr gameTilemapMgr
 
 	// Batch synchronization buffer (reused every frame)
 	syncBuffer *engine.SpriteSyncBuffer
-
 	// Reusable spatial hash for collision detection optimization
 	spatialHash *SpatialHash
-}
-
-const maxCollisionLayerIdx = 32 // engine limit support 32 layers
-var imageSizeCache sync.Map
-
-type spriteCollisionInfo struct {
-	Id    int
-	Layer int64
-	Mask  int64
 }
 
 type Gamer interface {
 	engine.IGame
 	initGame(sprites []Sprite) *Game
-}
-
-func (p *Game) getSpriteCollisionInfo(name string) *spriteCollisionInfo {
-	if info, ok := p.sprCollisionInfos[name]; ok {
-		return info
-	}
-	engine.Panic("Unknown sprite " + name)
-	return &spriteCollisionInfo{}
 }
 
 func (p *Game) newSpriteAndLoad(name string, tySpr reflect.Type, g reflect.Value) Sprite {
@@ -421,15 +399,8 @@ func setupGameConfig(g *Game, conf *Config, proj *projConfig) {
 		conf.Title = appName + " (by XGo Builder)"
 	}
 
-	// Set pixel collision sampling step based on configuration
-	precision := parsePixelCollisionPrecision(proj.PixelCollisionPrecision)
-	spriteMgr.SetPixelCollisionSamplingStep(int64(precision))
-
 	proj.FullScreen = proj.FullScreen || conf.FullScreen
 	enabledPhysics = proj.Physics
-	physicsMgr.SetGlobalGravity(parseDefaultValue(proj.GlobalGravity, 1))
-	physicsMgr.SetGlobalAirDrag(parseDefaultValue(proj.GlobalAirDrag, 1))
-	physicsMgr.SetGlobalFriction(parseDefaultValue(proj.GlobalFriction, 1))
 
 	g.windowHeight = conf.Height
 	g.windowWidth = conf.Width
@@ -447,29 +418,10 @@ func setupGameConfig(g *Game, conf *Config, proj *projConfig) {
 
 // setupGameSystems initializes game subsystems
 func setupGameSystems(g *Game, proj *projConfig) {
-	spxlog.Debug("==> isCollisionByPixel: %v", !proj.CollisionByShape && !proj.Physics)
-	spxlog.Debug("==> isAutoSetCollisionLayer: %v", proj.AutoSetCollisionLayer == nil || *proj.AutoSetCollisionLayer)
-
-	g.isCollisionByPixel = !proj.CollisionByShape && !proj.Physics
-	g.isAutoSetCollisionLayer = proj.AutoSetCollisionLayer == nil || *proj.AutoSetCollisionLayer
-	g.pathCellSizeX = parseDefaultValue(proj.PathCellSizeX, defaultPathCellSize)
-	g.pathCellSizeY = parseDefaultValue(proj.PathCellSizeY, defaultPathCellSize)
-
 	engine.SetLayerSortMode(proj.LayerSortMode)
-	g.audioAttenuation = parseDefaultValue(proj.AudioAttenuation, 0)
-	g.audioMaxDistance = parseDefaultValue(proj.AudioMaxDistance, defaultAudioMaxDist)
-
-	physicsMgr.SetCollisionSystemType(g.isCollisionByPixel)
-	if g.isAutoSetCollisionLayer {
-		g.sprCollisionInfos = make(map[string]*spriteCollisionInfo)
-		idx := 0
-		for name := range g.typs {
-			modIdx := int(math.Mod(float64(idx), maxCollisionLayerIdx))
-			info := &spriteCollisionInfo{Id: idx, Layer: 1 << modIdx}
-			g.sprCollisionInfos[name] = info
-			idx++
-		}
-	}
+	g.setupPathFinderConfig(proj)
+	g.setupAudioConfig(proj)
+	g.setupPhysicsConfig(proj)
 }
 
 // loadGameSprites loads all sprites
@@ -718,65 +670,6 @@ func (p *Game) runSpriteCallbacks(inits []Sprite, proj *projConfig, g reflect.Va
 	}
 }
 
-// getCollisionLayerIndex returns the collision layer index for a sprite
-func getCollisionLayerIndex(info *spriteCollisionInfo) int {
-	return int(math.Mod(float64(info.Id), maxCollisionLayerIdx))
-}
-
-// spriteCollisionData caches sprite collision information
-type spriteCollisionData struct {
-	sprite *SpriteImpl
-	info   *spriteCollisionInfo
-	modIdx int
-}
-
-// buildSpriteCollisionData builds a cache of sprite collision data to avoid repeated lookups
-func (p *Game) buildSpriteCollisionData(inits []Sprite) []*spriteCollisionData {
-	spriteData := make([]*spriteCollisionData, 0, len(inits))
-	for _, ini := range inits {
-		spr := spriteOf(ini)
-		info := p.getSpriteCollisionInfo(spr.name)
-		spriteData = append(spriteData, &spriteCollisionData{
-			sprite: spr,
-			info:   info,
-			modIdx: getCollisionLayerIndex(info),
-		})
-	}
-	return spriteData
-}
-
-// setupCollisionLayers configures collision detection layers
-func (p *Game) setupCollisionLayers(inits []Sprite) {
-	if !p.isAutoSetCollisionLayer {
-		return
-	}
-
-	spriteData := p.buildSpriteCollisionData(inits)
-	maskMap := make([]int64, maxCollisionLayerIdx)
-
-	// Gather collision masks
-	for _, data := range spriteData {
-		data.info.Mask = 0
-		for target := range data.sprite.physics().getCollisionTargets() {
-			targetInfo := p.getSpriteCollisionInfo(target)
-			maskMap[data.modIdx] |= targetInfo.Layer
-		}
-	}
-
-	// Apply collision masks
-	for _, data := range spriteData {
-		data.info.Mask = maskMap[data.modIdx]
-		spxlog.Debug("init sprite collision info: name=%s, layer=%d, mask=%d", data.sprite.name, data.info.Layer, data.info.Mask)
-	}
-
-	// Recalculate physics info
-	engine.WaitMainThread(func() {
-		for _, data := range spriteData {
-			syncInitSpritePhysicInfo(data.sprite, data.sprite.syncSprite)
-		}
-	})
-}
-
 // loadAudioAndTilemap loads tilemap and background music
 func (p *Game) loadAudioAndTilemap(proj *projConfig) {
 	p.tilemapMgr.parseTilemap()
@@ -884,13 +777,19 @@ func (p *Game) addStageSprites(g reflect.Value, v specsp, inits []Sprite) []Spri
 	return inits
 }
 
-var (
-	tySprite = reflect.TypeOf((*Sprite)(nil)).Elem()
-)
+// -------------------------------------------------------------------------------------
+// Initialization
+
+// init initializes the coroutine system
+func init() {
+	gco = coroutine.New(engine.OnPanic)
+	engine.SetCoroutines(gco)
+}
 
 // -------------------------------------------------------------------------------------
-// Game Loop and Scheduler
+// Game Loop
 
+// runLoop starts the game loop
 func (p *Game) runLoop(cfg *Config) (err error) {
 	spxlog.Debug("==> RunLoop")
 	if !cfg.DontRunOnUnfocused {
@@ -902,25 +801,10 @@ func (p *Game) runLoop(cfg *Config) (err error) {
 	return nil
 }
 
-func init() {
-	gco = coroutine.New(engine.OnPanic)
-	engine.SetCoroutines(gco)
-}
-
-var (
-	gco *coroutine.Coroutines
-)
-
-type threadObj = coroutine.ThreadObj
-
+// runMain wraps the main execution with scheduler tracking
 func runMain(call func()) {
 	isSchedInMain = true
 	mainSchedTime = time.Now()
 	call()
 	isSchedInMain = false
 }
-
-// -----------------------------------------------------------------------------
-// -----------------------------------------------------------------------------
-// -----------------------------------------------------------------------------
-// -----------------------------------------------------------------------------
