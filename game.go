@@ -609,9 +609,11 @@ func (p *Game) setupDisplayConfig(proj *projConfig) {
 	if proj.WindowScale >= 0.001 {
 		windowScale = proj.WindowScale
 	}
+
 	p.windowScale = windowScale
 	p.stretchMode = proj.StretchMode == nil || *proj.StretchMode
 	p.debug = proj.Debug
+	engine.SetDebugMode(p.debug)
 }
 
 // setupWorldAndWindow configures world and window sizes
@@ -619,41 +621,30 @@ func (p *Game) setupWorldAndWindow(proj *projConfig) {
 	backdrops := proj.getBackdrops()
 	if p.tilemapMgr.hasData() {
 		backdrops = make([]*backdropConfig, 0)
-		if proj.Map.Width == 0 {
-			proj.Map.Width = 480
-		}
-		if proj.Map.Height == 0 {
-			proj.Map.Height = 360
-		}
+		setDefaultIfZero(&proj.Map.Width, 480)
+		setDefaultIfZero(&proj.Map.Height, 360)
 	}
+
+	p.worldWidth_ = proj.Map.Width
+	p.worldHeight_ = proj.Map.Height
 
 	if len(backdrops) > 0 {
 		p.baseObj.initBackdrops("", backdrops, proj.getBackdropIndex())
-		p.worldWidth_ = proj.Map.Width
-		p.worldHeight_ = proj.Map.Height
 		p.doWorldSize()
-		p.minWorldX_ = -p.worldWidth_ / 2
-		p.minWorldY_ = -p.worldHeight_ / 2
 	} else {
-		p.worldWidth_ = proj.Map.Width
-		p.worldHeight_ = proj.Map.Height
-		p.minWorldX_ = -p.worldWidth_ / 2
-		p.minWorldY_ = -p.worldHeight_ / 2
 		p.baseObj.initWithSize(p.worldWidth_, p.worldHeight_)
 	}
-
 	spxlog.Debug("==> SetWorldSize: %d, %d", p.worldWidth_, p.worldHeight_)
+
+	p.minWorldX_ = -p.worldWidth_ / 2
+	p.minWorldY_ = -p.worldHeight_ / 2
+
 	p.mapMode = toMapMode(proj.Map.Mode)
 	p.doWindowSize()
-
-	engine.SetDebugMode(p.debug)
 	spxlog.Debug("==> SetWindowSize: %d, %d", p.windowWidth_, p.windowHeight_)
-	if p.windowWidth_ > p.worldWidth_ {
-		p.windowWidth_ = p.worldWidth_
-	}
-	if p.windowHeight_ > p.worldHeight_ {
-		p.windowHeight_ = p.worldHeight_
-	}
+
+	p.windowWidth_ = int(math.Min(float64(p.windowWidth_), float64(p.worldWidth_)))
+	p.windowHeight_ = int(math.Min(float64(p.windowHeight_), float64(p.worldHeight_)))
 }
 
 // setupPlatformAndCamera configures platform settings and camera
@@ -926,4 +917,7 @@ func runMain(call func()) {
 	isSchedInMain = false
 }
 
+// -----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------

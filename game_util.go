@@ -293,6 +293,14 @@ func parsePixelCollisionPrecision(precision *string) pixelCollisionPrecision {
 	}
 }
 
+// setDefaultIfZero sets the value to defaultValue if it's currently zero.
+func setDefaultIfZero[T comparable](pval *T, defaultValue T) {
+	var zero T
+	if *pval == zero {
+		*pval = defaultValue
+	}
+}
+
 // toRotationStyle converts a string representation to a RotationStyle constant
 func toRotationStyle(style string) RotationStyle {
 	switch style {
