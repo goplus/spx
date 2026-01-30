@@ -80,15 +80,9 @@ func (ac *animationComponent) initFromConfig(spriteCfg *spriteConfig) {
 		}
 
 		// Set default values
-		if ani.FrameFps == 0 {
-			ani.FrameFps = 25
-		}
-		if ani.TurnToDuration == 0 {
-			ani.TurnToDuration = 1
-		}
-		if ani.StepDuration == 0 {
-			ani.StepDuration = 0.01
-		}
+		setDefaultIfZero(&ani.FrameFps, 25)
+		setDefaultIfZero(&ani.TurnToDuration, 1.0)
+		setDefaultIfZero(&ani.StepDuration, 0.01)
 
 		// Calculate frame ranges and duration
 		from, to := ac.getFromAnToForAniFrames(ani.FrameFrom, ani.FrameTo)
@@ -138,7 +132,7 @@ func (ac *animationComponent) Animate(name SpriteAnimationName, loop bool) {
 	if ani, ok := ac.shared.animations[name]; ok {
 		ac.doAnimation(name, ani, loop, 1, false, true)
 	} else {
-		spxlog.Debug("Animation not found: %s", name)
+		spxlog.Warn("Animation not found: %s", name)
 	}
 }
 
@@ -149,7 +143,7 @@ func (ac *animationComponent) AnimateAndWait(name SpriteAnimationName) {
 	if ani, ok := ac.shared.animations[name]; ok {
 		ac.doAnimation(name, ani, false, 1, true, true)
 	} else {
-		spxlog.Debug("Animation not found: %s", name)
+		spxlog.Warn("Animation not found: %s", name)
 	}
 }
 
