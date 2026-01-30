@@ -270,10 +270,10 @@ func (p *gameTilemapMgr) calcWorldSize() {
 		worldWidth := maxWorldX - minWorldX
 		worldHeight := maxWorldY - minWorldY
 
-		p.g.minWorldX_ = minWorldX
-		p.g.minWorldY_ = minWorldY
-		p.g.worldWidth_ = worldWidth
-		p.g.worldHeight_ = worldHeight
+		p.g.minWorldX = minWorldX
+		p.g.minWorldY = minWorldY
+		p.g.worldWidth = worldWidth
+		p.g.worldHeight = worldHeight
 
 	} else {
 		fmt.Println("[TILEMAP DEBUG] No tiles found in any layer")

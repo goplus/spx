@@ -33,7 +33,7 @@ func (p *Game) SetupPathFinder__1(x_grid_size, y_grid_size, x_cell_size, y_cell_
 
 func (p *Game) setupPathFinder(with_jump, with_debug bool) {
 	cellSize := mathf.NewVec2(float64(p.pathCellSizeX), float64(p.pathCellSizeY))
-	gridSize := mathf.NewVec2(float64(p.worldWidth_), float64(p.worldHeight_)).Div(cellSize)
+	gridSize := mathf.NewVec2(float64(p.worldWidth), float64(p.worldHeight)).Div(cellSize)
 	navigationMgr.SetupPathFinderWithSize(gridSize, cellSize, with_jump, with_debug)
 }
 
