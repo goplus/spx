@@ -14,13 +14,7 @@ const (
 	sayMsgSpliteWidth   = 25
 	sayMsgLineHeight    = 26
 	sayMsgDefaultHeight = 77
-)
-
-// Constants for base screen dimensions
-const (
-	baseScreenWidth  = 480.0
-	baseScreenHeight = 360.0
-	thinkScale       = 0.8
+	thinkScale          = 0.8
 )
 
 // Style constants for say/think bubbles
@@ -90,7 +84,7 @@ func (s *UiSay) calculateScale(winSize mathf.Vec2, isThink bool) mathf.Vec2 {
 	if isThink {
 		specialScale = thinkScale
 	}
-	baseSize := mathf.NewVec2(baseScreenWidth, baseScreenHeight)
+	baseSize := mathf.NewVec2(float64(baseScreenWidth), float64(baseScreenHeight))
 	scaleVec := winSize.Div(baseSize)
 
 	// Choose the smaller scale to maintain aspect ratio

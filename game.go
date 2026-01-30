@@ -79,6 +79,8 @@ const (
 	defaultPathCellSize         = 16   // default path finding cell size
 	defaultAudioMaxDist         = 2000 // default maximum audio distance
 	initialSpriteSyncBufferSize = 100  // initial buffer size for sprite synchronization
+	baseScreenWidth             = 480  // base screen width for default map and UI scaling
+	baseScreenHeight            = 360  // base screen height for default map and UI scaling
 )
 
 // -------------------------------------------------------------------------------------
@@ -621,8 +623,8 @@ func (p *Game) setupWorldAndWindow(proj *projConfig) {
 	backdrops := proj.getBackdrops()
 	if p.tilemapMgr.hasData() {
 		backdrops = make([]*backdropConfig, 0)
-		setDefaultIfZero(&proj.Map.Width, 480)
-		setDefaultIfZero(&proj.Map.Height, 360)
+		setDefaultIfZero(&proj.Map.Width, baseScreenWidth)
+		setDefaultIfZero(&proj.Map.Height, baseScreenHeight)
 	}
 
 	p.worldWidth_ = proj.Map.Width
@@ -672,6 +674,7 @@ func (p *Game) setupPlatformAndCamera(proj *projConfig) {
 	isWindowMapSizeEqual := p.worldHeight_ == p.windowHeight_ && p.worldWidth_ == p.windowWidth_
 	engine.SetWindowScale(p.windowScale)
 	ui.SetWindowScale(p.windowScale)
+	ui.SetBaseScreenSize(baseScreenWidth, baseScreenHeight)
 	ui.ClampUIPositionInScreen(isWindowMapSizeEqual)
 
 	p.syncSprite = engine.NewBackdropProxy(p, p.getCostumePath(), p.getCostumeRenderScale())

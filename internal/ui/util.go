@@ -22,6 +22,8 @@ var (
 )
 var (
 	windowScale             float64
+	baseScreenWidth         int
+	baseScreenHeight        int
 	clampUIPositionInScreen bool
 )
 
@@ -32,9 +34,16 @@ type UiNode struct {
 func SetWindowScale(scale float64) {
 	windowScale = scale
 }
+
+func SetBaseScreenSize(width, height int) {
+	baseScreenWidth = width
+	baseScreenHeight = height
+}
+
 func ClampUIPositionInScreen(isClamp bool) {
 	clampUIPositionInScreen = isClamp
 }
+
 func SyncBindUI[T any](parentNode gdx.Object, path string) *T {
 	return engine.SyncBindUI[T](parentNode, path)
 }
