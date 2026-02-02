@@ -308,6 +308,8 @@ func toRotationStyle(style string) RotationStyle {
 		return LeftRight
 	case "none":
 		return None
+	case "normal":
+		return Normal
 	default:
 		spxlog.Warn("Unrecognized rotationStyle value '%s', using default 'Normal'.", style)
 		return Normal
