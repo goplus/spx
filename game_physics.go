@@ -17,7 +17,6 @@
 package spx
 
 import (
-	"math"
 	"slices"
 
 	"github.com/goplus/spbase/mathf"
@@ -52,7 +51,7 @@ func (p *Game) getSpriteCollisionInfo(name string) *spriteCollisionInfo {
 }
 
 func getCollisionLayerIndex(info *spriteCollisionInfo) int {
-	return int(math.Mod(float64(info.Id), maxCollisionLayerIdx))
+	return info.Id % maxCollisionLayerIdx
 }
 
 func (p *Game) buildSpriteCollisionData(inits []Sprite) []*spriteCollisionData {
@@ -122,7 +121,7 @@ func (p *Game) setupPhysicsConfig(proj *projConfig) {
 		p.sprCollisionInfos = make(map[string]*spriteCollisionInfo)
 		idx := 0
 		for name := range p.typs {
-			modIdx := int(math.Mod(float64(idx), maxCollisionLayerIdx))
+			modIdx := idx % maxCollisionLayerIdx
 			info := &spriteCollisionInfo{Id: idx, Layer: 1 << modIdx}
 			p.sprCollisionInfos[name] = info
 			idx++
