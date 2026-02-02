@@ -695,7 +695,10 @@ func (p *Game) addSpecialShape(g reflect.Value, v specsp, inits []Sprite) []Spri
 		if sm, err := newMonitor(g, v); err == nil {
 			sm.game = p
 			p.spriteMgr.addShape(sm)
+		} else {
+			spxlog.Error("addSpecialShape type: %s", typ)
 		}
+
 	case "measure":
 		p.spriteMgr.addShape(newMeasure(v))
 	case "sprites":
