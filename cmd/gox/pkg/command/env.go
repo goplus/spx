@@ -284,36 +284,6 @@ func (pself *CmdTool) SetupPC() error {
 	return nil
 }
 
-// SetupWeb sets up the web environment by building the WebAssembly module
-func (pself *CmdTool) SetupWeb() error {
-	// Get the path for the WebAssembly file
-	filePath := pself.getWasmPath()
-
-	// Get current working directory
-	rawdir, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("failed to get current directory: %w", err)
-	}
-
-	// Change to the igox directory
-	if err := os.Chdir("../igox"); err != nil {
-		return fmt.Errorf("failed to change to igox directory: %w", err)
-	}
-
-	// Build the WebAssembly module
-	envVars := []string{"GOOS=js", "GOARCH=wasm"}
-	if err := util.RunGolang(envVars, "build", "-o", filePath); err != nil {
-		return fmt.Errorf("failed to build WebAssembly module: %w", err)
-	}
-
-	// Return to the original directory
-	if err := os.Chdir(rawdir); err != nil {
-		return fmt.Errorf("failed to return to original directory: %w", err)
-	}
-
-	return nil
-}
-
 // CheckEnv verifies that the target directory is a valid project directory
 func (pself *CmdTool) CheckEnv() error {
 	dir, err := filepath.Abs(pself.TargetDir)

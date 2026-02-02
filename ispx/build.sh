@@ -40,7 +40,7 @@ install_binaryen() {
         return 0
     else
         echo "wasm-opt not detected, trying to install binaryen..."
-        
+
         # Install binaryen based on the system type
         case "$SYSTEM" in
             Linux)
@@ -70,7 +70,7 @@ install_binaryen() {
                 echo "Unrecognized operating system: $SYSTEM, cannot automatically install binaryen"
                 ;;
         esac
-        
+
         # Check again if installation was successful
         if command -v wasm-opt &> /dev/null; then
             echo "binaryen installation successful"
@@ -86,17 +86,17 @@ install_binaryen() {
 compress_with_brotli() {
     local input_file="$1"
     local output_file="$2"
-    
+
     if [ -z "$input_file" ] || [ -z "$output_file" ]; then
         echo "Error: compress_with_brotli requires input and output file parameters"
         return 1
     fi
-    
+
     if [ ! -f "$input_file" ]; then
         echo "Error: Input file $input_file does not exist"
         return 1
     fi
-    
+
     # Check if brotli is installed
     local brotli_installed=false
     if command -v brotli &> /dev/null; then
@@ -104,7 +104,7 @@ compress_with_brotli() {
         brotli_installed=true
     else
         echo "brotli not detected, trying to install..."
-        
+
         # Install brotli based on the system type
         case "$SYSTEM" in
             Linux)
@@ -134,7 +134,7 @@ compress_with_brotli() {
                 echo "Unrecognized operating system: $SYSTEM, cannot automatically install brotli"
                 ;;
         esac
-        
+
         # Check again if installation was successful
         if command -v brotli &> /dev/null; then
             echo "brotli installation successful"
@@ -143,7 +143,7 @@ compress_with_brotli() {
             echo "brotli installation failed, will skip compression step"
         fi
     fi
-    
+
     if $brotli_installed; then
         echo "Compressing $input_file with brotli..."
         brotli -q 11 -o "$output_file" "$input_file"
@@ -163,7 +163,7 @@ compress_with_brotli() {
 # Function to build PC platform shared library
 build_ispx_pc() {
     echo "Building ispx for PC..."
-    
+
     # Get architecture
     GOARCH=$(go env GOARCH)
 
@@ -185,7 +185,7 @@ build_ispx_pc() {
     fi
 
     LIB_NAME="gdspx-${GOOS_NAME}-${GOARCH}${EXT}"
-    go build -ldflags="$LDFLAGS" -buildmode=c-shared -o "$LIB_NAME" .
+    go build -ldflags="$LDFLAGS" -buildmode=c-shared -o "$LIB_NAME" ./cmd/ispxpc
 
     if [ -f "$LIB_NAME" ]; then
         cp -f "$LIB_NAME" "$GOPATH/bin/"
@@ -194,7 +194,6 @@ build_ispx_pc() {
         echo "Error: $LIB_NAME build failed"
         exit 1
     fi
-    cp -f $LIB_NAME $GOPATH/bin/$LIB_NAME
 }
 
 # Function to build wasm
@@ -203,35 +202,30 @@ build_wasm() {
         # Try to install/check binaryen
         if install_binaryen; then
             echo "Building wasm with optimization..."
-            GOOS=js GOARCH=wasm go build -tags canvas -trimpath -ldflags "-s -w -checklinkname=0" -o gdspx_raw.wasm
+            GOOS=js GOARCH=wasm go build -trimpath -ldflags "-s -w -checklinkname=0" -o gdspx_raw.wasm ./cmd/ispx
             wasm-opt -Oz --enable-bulk-memory -o gdspx.wasm gdspx_raw.wasm
-            
+
             # Compress with brotli
             compress_with_brotli "gdspx.wasm" "gdspx.wasm.br"
             cp -f gdspx.wasm.br $GOPATH/bin/gdspx.wasm.br
-            
+
             # Clean up temporary file
             rm -f gdspx_raw.wasm
         else
             echo "binaryen not available, skipping optimization step, using basic compilation..."
-            GOOS=js GOARCH=wasm go build -tags canvas -ldflags -checklinkname=0 -o gdspx.wasm
+            GOOS=js GOARCH=wasm go build -ldflags -checklinkname=0 -o gdspx.wasm ./cmd/ispx
         fi
     else
         echo "Building wasm with basic version..."
-        GOOS=js GOARCH=wasm go build -tags canvas -ldflags -checklinkname=0 -o gdspx.wasm
+        GOOS=js GOARCH=wasm go build -ldflags -checklinkname=0 -o gdspx.wasm ./cmd/ispx
     fi
-    
+
     echo "gdspx.wasm has been created"
     cp gdspx.wasm $GOPATH/bin/gdspx.wasm
 }
 
 # Main build logic
-echo "Generating ispx wraps..."
-# Install required Go dependencies
-if ! go generate main.go > /dev/null 2>&1; then
-    echo "Error during go generate, showing full output:"
-    go generate main.go
-fi
+echo "Building ispx..."
 go mod tidy
 
 if [ "$BUILD_PC_ONLY" = true ]; then
