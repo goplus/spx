@@ -118,8 +118,8 @@ function tryRunGoWasm() {
   if (self.goBridge && self.goBridge.isReady) {
     try {
       // If Go WASM is ready, can call related functions to process data
-      self.goBridge.callGoFunctionSafe('ixgo_build', Module["gameProjectData"]);
-      self.goBridge.callGoFunctionSafe('ixgo_run');
+      self.goBridge.callGoFunctionSafe('ispx_build', Module["gameProjectData"]);
+      self.goBridge.callGoFunctionSafe('ispx_start');
       callMainThread('onGameStarted');
     } catch (error) {
       console.error(`[Worker ${workerId}] Error calling Go function to process project data:`, error);

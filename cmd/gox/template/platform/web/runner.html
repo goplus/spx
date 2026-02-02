@@ -156,14 +156,14 @@
 			}
 
 			if(EnginePackMode == "worker"){
-				window.setAIDescription = function (description) {
-					gameApp.callWorkerFunction("setAIDescription", description)
+				window.xbuilder_set_ai_description = function (description) {
+					gameApp.callWorkerFunction("xbuilder_set_ai_description", description)
 				}
-				window.setAIInteractionAPIEndpoint = function (endpoint) {
-					gameApp.callWorkerFunction("setAIInteractionAPIEndpoint", endpoint)
+				window.xbuilder_set_ai_interaction_api_endpoint = function (endpoint) {
+					gameApp.callWorkerFunction("xbuilder_set_ai_interaction_api_endpoint", endpoint)
 				}
-				window.setAIInteractionAPITokenProvider = function (tokenProviderFunction) {
-					gameApp.callWorkerFunction("setAIInteractionAPITokenProvider", tokenProviderFunction)
+				window.xbuilder_set_ai_interaction_api_token_provider = function (tokenProviderFunction) {
+					gameApp.callWorkerFunction("xbuilder_set_ai_interaction_api_token_provider", tokenProviderFunction)
 				}
 
 				window.onWasmLoaded = function () {}

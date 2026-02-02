@@ -232,7 +232,7 @@ class GameApp {
             }
         });
         if (!this.workerMode) {
-            const res = window.ixgo_build(nonAssetFiles);
+            const res = window.ispx_build(nonAssetFiles);
             if (res instanceof Error) throw res;
         }else{
             this.nonAssetFiles = nonAssetFiles;
@@ -284,7 +284,7 @@ class GameApp {
             return
         }
 
-        this.game.requestReset()
+        window.ispx_stop()
 
         if(this.recordingOnGameStart && this.autoDownloadRecordedVideo){
             let fileName = `spx_${new Date().getTime()}.webm`;
@@ -395,7 +395,7 @@ class GameApp {
             // register global functions
             Module = game.rtenv;
             FFI = self;
-            const res = window.ixgo_run();
+            const res = window.ispx_start();
             if (res instanceof Error) throw res;
         }
     }
