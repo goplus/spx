@@ -8,7 +8,6 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -20,7 +19,7 @@ import (
 func (pself *CmdTool) prepareExport() error {
 	// copy assets
 	projectDir, _ := filepath.Abs(pself.ProjectDir)
-	util.CopyDir2(path.Join(projectDir, "../assets"), path.Join(pself.ProjectDir, "assets"))
+	util.CopyDir2(filepath.Join(projectDir, "..", "assets"), filepath.Join(pself.ProjectDir, "assets"))
 	return nil
 }
 
@@ -36,13 +35,13 @@ func (pself *CmdTool) ExportBuild(platform string) error {
 }
 
 func (pself *CmdTool) ExportTemplateWeb() error {
-	targetDir := path.Join(pself.ProjectDir, ".builds/webi")
-	targetPath := path.Join(targetDir, "engine.html")
+	targetDir := filepath.Join(pself.ProjectDir, ".builds", "webi")
+	targetPath := filepath.Join(targetDir, "engine.html")
 	platformName := "Web"
 	os.Mkdir(targetDir, 0755)
 	// delete gdextension configs
-	os.Remove(path.Join(pself.ProjectDir, "gdspx.gdextension"))
-	os.Remove(path.Join(pself.ProjectDir, ".godot/extension_list.cfg"))
+	os.Remove(filepath.Join(pself.ProjectDir, "gdspx.gdextension"))
+	os.Remove(filepath.Join(pself.ProjectDir, ".godot", "extension_list.cfg"))
 	return util.RunCommandInDir(pself.ProjectDir, pself.CmdPath, "--headless", "--quit", "--path", pself.ProjectDir, "--export-debug", platformName, targetPath)
 }
 
@@ -64,8 +63,8 @@ func (pself *CmdTool) ExportMinigame() error {
 	pself.exportWebCommon(webMinigameMode)
 	// move to subdir
 	os.Rename(pself.WebDir, pself.WebDir+"_bck")
-	os.MkdirAll(path.Join(pself.WebDir), os.ModePerm)
-	os.Rename(pself.WebDir+"_bck", path.Join(pself.WebDir, "rawWeb"))
+	os.MkdirAll(filepath.Join(pself.WebDir), os.ModePerm)
+	os.Rename(pself.WebDir+"_bck", filepath.Join(pself.WebDir, "rawWeb"))
 
 	// copy minigame files
 	util.CopyDir(pself.PlatformFS, "template/platform/web"+webMinigameMode, pself.WebDir, true)
@@ -76,24 +75,24 @@ func (pself *CmdTool) ExportMinigame() error {
 	buildMode := *pself.Args.Build
 
 	// create target directories
-	engineDir := path.Join(workDir, "engine")
-	jsDir := path.Join(workDir, "js")
-	rawWebDir := path.Join(workDir, "rawWeb")
+	engineDir := filepath.Join(workDir, "engine")
+	jsDir := filepath.Join(workDir, "js")
+	rawWebDir := filepath.Join(workDir, "rawWeb")
 
 	os.MkdirAll(engineDir, os.ModePerm)
 	os.MkdirAll(jsDir, os.ModePerm)
 
 	// handle WASM files based on build mode
-	godotEditorWasm := path.Join(rawWebDir, "engine.wasm")
-	gdspxWasm := path.Join(rawWebDir, "gdspx.wasm")
+	godotEditorWasm := filepath.Join(rawWebDir, "engine.wasm")
+	gdspxWasm := filepath.Join(rawWebDir, "gdspx.wasm")
 
 	if buildMode == "fast" {
 		// fast build: move WASM files directly without compression
-		if err := pself.moveFile(godotEditorWasm, path.Join(engineDir, "engine.wasm")); err != nil {
+		if err := pself.moveFile(godotEditorWasm, filepath.Join(engineDir, "engine.wasm")); err != nil {
 			return fmt.Errorf("failed to move %s: %w", godotEditorWasm, err)
 		}
 
-		if err := pself.moveFile(gdspxWasm, path.Join(engineDir, "gdspx.wasm")); err != nil {
+		if err := pself.moveFile(gdspxWasm, filepath.Join(engineDir, "gdspx.wasm")); err != nil {
 			return fmt.Errorf("failed to move %s: %w", gdspxWasm, err)
 		}
 	} else {
@@ -140,7 +139,7 @@ func (pself *CmdTool) ExportMinigame() error {
 	// optionally open WeChat Developer Tools
 	if wechatDevTools := os.Getenv("WECHAT_DEV_TOOLS"); wechatDevTools != "" {
 		println("open wechat dev tools", workDir)
-		cmd := exec.Command(path.Join(wechatDevTools, "cli"), "open", "--project", workDir, "-y")
+		cmd := exec.Command(filepath.Join(wechatDevTools, "cli"), "open", "--project", workDir, "-y")
 		cmd.Run() // ignore errors as this is optional
 	} else {
 		fmt.Printf("WECHAT_DEV_TOOLS is not set, please open project manually %s\n", workDir)
@@ -158,20 +157,20 @@ func (pself *CmdTool) ExportMiniprogram() error {
 
 func (pself *CmdTool) ExportWebWorker() error {
 	pself.exportWebCommon(webWorkerMode)
-	extDir := path.Join(pself.WebDir, "__"+webWorkerMode)
+	extDir := filepath.Join(pself.WebDir, "__"+webWorkerMode)
 	// copy miniprogram files
 	util.CopyDir(pself.PlatformFS, "template/platform/web"+webWorkerMode, extDir, true)
 
 	var filesToMerge []string
 	// merge ext/*.js to engine.worker.js
-	os.Rename(path.Join(pself.WebDir, "go.wasm.exec.js"), path.Join(extDir, "go.wasm.exec.js"))
+	os.Rename(filepath.Join(pself.WebDir, "go.wasm.exec.js"), filepath.Join(extDir, "go.wasm.exec.js"))
 	if entries, err := os.ReadDir(extDir); err == nil {
 		for _, entry := range entries {
 			if entry.IsDir() {
 				continue
 			}
 			if strings.HasSuffix(entry.Name(), ".js") {
-				filesToMerge = append(filesToMerge, path.Join(extDir, entry.Name()))
+				filesToMerge = append(filesToMerge, filepath.Join(extDir, entry.Name()))
 			}
 		}
 	}
@@ -188,7 +187,7 @@ func (pself *CmdTool) ExportWebWorker() error {
 	}
 
 	// insert worker code
-	engineBytes, _ := os.ReadFile(path.Join(pself.WebDir, "engine.js"))
+	engineBytes, _ := os.ReadFile(filepath.Join(pself.WebDir, "engine.js"))
 	engineStr := string(engineBytes)
 
 	// 1. insert handleGameAppMessage, dirty code to fix minigame
@@ -206,7 +205,7 @@ func (pself *CmdTool) ExportWebWorker() error {
 	}
 
 	engineStr = strings.ReplaceAll(engineStr, keyStr, keyStr+insertCode)
-	os.WriteFile(path.Join(pself.WebDir, "engine.js"), []byte(engineStr), 0644)
+	os.WriteFile(filepath.Join(pself.WebDir, "engine.js"), []byte(engineStr), 0644)
 
 	os.RemoveAll(extDir)
 	return nil
@@ -214,12 +213,12 @@ func (pself *CmdTool) ExportWebWorker() error {
 
 func (pself *CmdTool) exportWebCommon(mode string) error {
 	pself.Clear()
-	templateDir := path.Join(pself.GoBinPath, "gdspxrt"+pself.Version+"_web"+mode)
+	templateDir := filepath.Join(pself.GoBinPath, "gdspxrt"+pself.Version+"_web"+mode)
 	if !util.IsFileExist(templateDir) {
 		return errors.New("web dir file not found: " + templateDir)
 	}
 
-	dstPath := path.Join(pself.ProjectDir, ".builds/web")
+	dstPath := filepath.Join(pself.ProjectDir, ".builds", "web")
 	os.MkdirAll(dstPath, os.ModePerm)
 	util.CopyDir2(templateDir, dstPath)
 
@@ -227,26 +226,37 @@ func (pself *CmdTool) exportWebCommon(mode string) error {
 	// copy project files
 	util.CopyDir(pself.ProjectFS, "template/project", pself.ProjectDir, true)
 	dir := pself.TargetDir
-	util.SetupFile(false, path.Join(dir, ".gitignore"), pself.GitignoreTxt)
-	os.Rename(path.Join(dir, ".gitignore.txt"), path.Join(dir, ".gitignore"))
+	util.SetupFile(false, filepath.Join(dir, ".gitignore"), pself.GitignoreTxt)
+	os.Rename(filepath.Join(dir, ".gitignore.txt"), filepath.Join(dir, ".gitignore"))
 
-	os.Rename(path.Join(dstPath, "godot.editor.html"), path.Join(dstPath, "index.html"))
+	os.Rename(filepath.Join(dstPath, "godot.editor.html"), filepath.Join(dstPath, "index.html"))
 
 	// overwrite web files
 	util.CopyDir(pself.PlatformFS, "template/platform/web", pself.WebDir, true)
+
+	// copy wasm_exec.js from GOROOT
+	output, err := exec.Command("go", "env", "GOROOT").Output()
+	if err != nil {
+		return fmt.Errorf("failed to get GOROOT: %w", err)
+	}
+	goroot := strings.TrimSpace(string(output))
+	wasmExecPath := filepath.Join(goroot, "lib", "wasm", "wasm_exec.js")
+	if err := util.CopyFile(wasmExecPath, filepath.Join(pself.WebDir, "go.wasm.exec.js")); err != nil {
+		return fmt.Errorf("failed to copy wasm_exec.js: %w", err)
+	}
 	// Append ext/*.js to engine.worker.js then remove them
 
-	pack.PackProject(pself.TargetDir, path.Join(pself.WebDir, "game.zip"))
+	pack.PackProject(pself.TargetDir, filepath.Join(pself.WebDir, "game.zip"))
 	//pack.PackEngineRes(pself.ProjectFS, pself.WebDir)
-	util.CopyFile(pself.getWasmPath(), path.Join(pself.WebDir, "gdspx.wasm"))
-	util.CopyFile(pself.getWasmPath()+".br", path.Join(pself.WebDir, "gdspx.wasm.br"))
+	util.CopyFile(pself.getWasmPath(), filepath.Join(pself.WebDir, "gdspx.wasm"))
+	util.CopyFile(pself.getWasmPath()+".br", filepath.Join(pself.WebDir, "gdspx.wasm.br"))
 	pack.SaveEngineHash(pself.WebDir)
 	return nil
 }
 
 func (pself *CmdTool) Export() error {
-	targetDir := path.Join(pself.ProjectDir, ".builds/pc")
-	targetPath := path.Join(targetDir, PcExportName)
+	targetDir := filepath.Join(pself.ProjectDir, ".builds", "pc")
+	targetPath := filepath.Join(targetDir, PcExportName)
 	platformName := ""
 	if runtime.GOOS == "windows" {
 		targetPath += ".exe"
@@ -313,11 +323,11 @@ func (pself *CmdTool) ExportIos() error {
 	if err == nil {
 		var templateDir string
 		if runtime.GOOS == "darwin" {
-			templateDir = filepath.Join(homeDir, "Library/Application Support/Godot/export_templates")
+			templateDir = filepath.Join(homeDir, "Library", "Application Support", "Godot", "export_templates")
 		} else if runtime.GOOS == "linux" {
-			templateDir = filepath.Join(homeDir, ".local/share/godot/export_templates")
+			templateDir = filepath.Join(homeDir, ".local", "share", "godot", "export_templates")
 		} else if runtime.GOOS == "windows" {
-			templateDir = filepath.Join(os.Getenv("APPDATA"), "Godot/export_templates")
+			templateDir = filepath.Join(os.Getenv("APPDATA"), "Godot", "export_templates")
 		}
 
 		if templateDir != "" {
@@ -704,14 +714,14 @@ func (pself *CmdTool) moveFile(srcFile, dstFile string) error {
 
 // moveFilesByPattern moves files matching a pattern
 func (pself *CmdTool) moveFilesByPattern(srcDir, dstDir, pattern string) error {
-	files, err := filepath.Glob(path.Join(srcDir, pattern))
+	files, err := filepath.Glob(filepath.Join(srcDir, pattern))
 	if err != nil {
 		return err
 	}
 
 	for _, file := range files {
 		fileName := filepath.Base(file)
-		dstFile := path.Join(dstDir, fileName)
+		dstFile := filepath.Join(dstDir, fileName)
 		if err := os.Rename(file, dstFile); err != nil {
 			return err
 		}
@@ -724,7 +734,7 @@ func (pself *CmdTool) moveFilesByPattern(srcDir, dstDir, pattern string) error {
 func (pself *CmdTool) mergeJSFiles(jsDir string, isCompressed bool) error {
 	// file merge order
 	jsFiles := []string{"header.js", "engine.js", "go.wasm.exec.js", "storage.manager.js", "worker.message.manager.js", "game.js"}
-	outputFile := path.Join(jsDir, "engine_new.js")
+	outputFile := filepath.Join(jsDir, "engine_new.js")
 
 	// create output file
 	output, err := os.Create(outputFile)
@@ -744,7 +754,7 @@ func (pself *CmdTool) mergeJSFiles(jsDir string, isCompressed bool) error {
 
 	// merge file contents
 	for _, jsFile := range jsFiles {
-		filePath := path.Join(jsDir, jsFile)
+		filePath := filepath.Join(jsDir, jsFile)
 		if _, err := os.Stat(filePath); os.IsNotExist(err) {
 			continue // skip non-existent files
 		}
@@ -765,5 +775,5 @@ func (pself *CmdTool) mergeJSFiles(jsDir string, isCompressed bool) error {
 	}
 
 	// rename output file
-	return os.Rename(outputFile, path.Join(jsDir, "engine.js"))
+	return os.Rename(outputFile, filepath.Join(jsDir, "engine.js"))
 }
