@@ -5,6 +5,7 @@ import (
 	. "github.com/goplus/spbase/mathf"
 
 	"github.com/goplus/spx/v2/internal/engine"
+	gdx "github.com/goplus/spx/v2/pkg/gdspx/pkg/engine"
 )
 
 type UiMonitor struct {
@@ -35,29 +36,33 @@ func (pself *UiMonitor) OnStart() {
 
 }
 func (pself *UiMonitor) ShowAll(isOn bool) {
-	uiMgr.SetVisible(pself.bgAll.GetId(), isOn)
-	uiMgr.SetVisible(pself.valueOnly.GetId(), !isOn)
+	gdx.UiMgr.SetVisible(pself.bgAll.GetId(), isOn)
+	gdx.UiMgr.SetVisible(pself.valueOnly.GetId(), !isOn)
 }
 
 func (pself *UiMonitor) SetVisible(isOn bool) {
-	uiMgr.SetVisible(pself.GetId(), isOn)
+	gdx.UiMgr.SetVisible(pself.GetId(), isOn)
 }
 
 func (pself *UiMonitor) UpdateScale(x float64) {
 	x *= windowScale
-	uiMgr.SetScale(pself.GetId(), mathf.NewVec2(x, x))
+	gdx.UiMgr.SetScale(pself.GetId(), mathf.NewVec2(x, x))
 }
 func (pself *UiMonitor) UpdatePos(wpos Vec2) {
-	pos := WorldToUI(wpos)
-	uiMgr.SetGlobalPosition(pself.GetId(), pos)
+	pos := wpos.Mulf(windowScale)
+	pos.Y *= -1
+	viewport := gdx.CameraMgr.GetViewportRect()
+	uiPos := pos.Add(viewport.Size.Mulf(0.5)).Sub(viewport.Position)
+
+	gdx.UiMgr.SetGlobalPosition(pself.GetId(), uiPos)
 }
 
 func (pself *UiMonitor) UpdateText(name, value string) {
-	uiMgr.SetText(pself.labelName.GetId(), name)
-	uiMgr.SetText(pself.labelValue.GetId(), value)
-	uiMgr.SetText(pself.labelValueOnly.GetId(), value)
+	gdx.UiMgr.SetText(pself.labelName.GetId(), name)
+	gdx.UiMgr.SetText(pself.labelValue.GetId(), value)
+	gdx.UiMgr.SetText(pself.labelValueOnly.GetId(), value)
 }
 func (pself *UiMonitor) UpdateColor(color Color) {
-	uiMgr.SetColor(pself.labelBg.GetId(), color)
-	uiMgr.SetColor(pself.valueOnly.GetId(), color)
+	gdx.UiMgr.SetColor(pself.labelBg.GetId(), color)
+	gdx.UiMgr.SetColor(pself.valueOnly.GetId(), color)
 }
