@@ -45,6 +45,7 @@ type Monitor struct {
 	label   string
 	visible bool
 	panel   *ui.UiMonitor
+	isDirty bool
 }
 
 /*
@@ -87,21 +88,28 @@ func newMonitor(g reflect.Value, v specsp) (*Monitor, error) {
 	monitor := &Monitor{
 		target: target, val: val, eval: eval, name: name, size: size,
 		visible: visible, mode: mode, color: color, pos: mathf.NewVec2(x, y), label: label, panel: panel,
+		isDirty: true, // Initial dirty state to ensure first render
 	}
 
 	return monitor, nil
 }
 
 func (pself *Monitor) onUpdate(delta float64) {
+	if !pself.isDirty {
+		return
+	}
+
 	val := pself.eval()
 	pself.panel.SetVisible(pself.visible)
 	if !pself.visible {
+		pself.setDirtyFlag(false)
 		return
 	}
 	pself.panel.ShowAll(pself.mode == 1)
 	pself.panel.UpdateScale(pself.size)
 	pself.panel.UpdatePos(pself.pos)
 	pself.panel.UpdateText(pself.label, val)
+	pself.setDirtyFlag(false)
 }
 
 func getTarget(g reflect.Value, target string) (reflect.Value, int) {
@@ -175,7 +183,25 @@ func buildMonitorEval(g reflect.Value, t, val string) func() string {
 }
 
 func (p *Monitor) setVisible(visible bool) {
+	if visible == p.visible {
+		return
+	}
+
 	p.visible = visible
+	p.setDirtyFlag(true)
+}
+
+func (pself *Monitor) setXYpos(x float64, y float64) {
+	pself.pos = mathf.NewVec2(x, y)
+	pself.setDirtyFlag(true)
+}
+
+func (pself *Monitor) updateSize() {
+	pself.setDirtyFlag(true)
+}
+
+func (p *Monitor) setDirtyFlag(isDirty bool) {
+	p.isDirty = isDirty
 }
 
 // -------------------------------------------------------------------------------------
@@ -189,11 +215,11 @@ func (pself *Monitor) Visible() bool {
 }
 
 func (pself *Monitor) Show() {
-	pself.visible = true
+	pself.setVisible(true)
 }
 
 func (pself *Monitor) Hide() {
-	pself.visible = false
+	pself.setVisible(false)
 }
 
 func (pself *Monitor) Xpos() float64 {
@@ -205,27 +231,27 @@ func (pself *Monitor) Ypos() float64 {
 }
 
 func (pself *Monitor) SetXpos(x float64) {
-	pself.pos.X = x
+	pself.setXYpos(x, pself.pos.Y)
 }
 
 func (pself *Monitor) SetYpos(y float64) {
-	pself.pos.Y = y
+	pself.setXYpos(pself.pos.X, y)
 }
 
 func (pself *Monitor) SetXYpos(x float64, y float64) {
-	pself.pos = mathf.NewVec2(x, y)
+	pself.setXYpos(x, y)
 }
 
 func (pself *Monitor) ChangeXpos(dx float64) {
-	pself.pos.X += dx
+	pself.setXYpos(pself.pos.X+dx, pself.pos.Y)
 }
 
 func (pself *Monitor) ChangeYpos(dy float64) {
-	pself.pos.Y += dy
+	pself.setXYpos(pself.pos.X, pself.pos.Y+dy)
 }
 
 func (pself *Monitor) ChangeXYpos(dx float64, dy float64) {
-	pself.pos = pself.pos.Add(mathf.NewVec2(dx, dy))
+	pself.setXYpos(pself.pos.X+dx, pself.pos.Y+dy)
 }
 
 func (pself *Monitor) Size() float64 {
@@ -240,8 +266,4 @@ func (pself *Monitor) SetSize(size float64) {
 func (pself *Monitor) ChangeSize(delta float64) {
 	pself.size += delta
 	pself.updateSize()
-}
-
-func (pself *Monitor) updateSize() {
-
 }
