@@ -7,6 +7,7 @@ import (
 	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v2/internal/engine"
 	"github.com/goplus/spx/v2/internal/text"
+	gdx "github.com/goplus/spx/v2/pkg/gdspx/pkg/engine"
 )
 
 // Constants for say message layout
@@ -90,7 +91,7 @@ func (s *UiSay) calculateScale(winSize mathf.Vec2, isThink bool) mathf.Vec2 {
 	// Choose the smaller scale to maintain aspect ratio
 	uniformScale := math.Min(scaleVec.X, scaleVec.Y)
 
-	zoom := cameraMgr.GetCameraZoom()
+	zoom := gdx.CameraMgr.GetCameraZoom()
 	windowScaleVec := mathf.NewVec2(windowScale, windowScale)
 
 	return zoom.Div(windowScaleVec).Mulf(uniformScale * specialScale)
@@ -98,16 +99,16 @@ func (s *UiSay) calculateScale(winSize mathf.Vec2, isThink bool) mathf.Vec2 {
 
 // calculatePosition computes the UI position based on sprite position and size
 func (s *UiSay) calculatePosition(winSize mathf.Vec2, pos mathf.Vec2, size mathf.Vec2, msg string) mathf.Vec2 {
-	zoom := cameraMgr.GetCameraZoom()
-	camPos := cameraMgr.GetLocalPosition(pos)
-	camPos = camPos.Mul(zoom.Divf(windowScale))
+	zoom := gdx.CameraMgr.GetCameraZoom()
+	camPos := gdx.CameraMgr.GetCameraPosition()
+	camPos.Y = -camPos.Y
+	localPos := pos.Sub(camPos)
+	localPos = localPos.Mul(zoom.Divf(windowScale))
 
-	position := mathf.NewVec2(camPos.X, camPos.Y+size.Y/2)
-
+	position := mathf.NewVec2(localPos.X, localPos.Y+size.Y/2)
 	if clampUIPositionInScreen {
 		position = s.clampPosition(position, winSize, msg)
 	}
-
 	return position
 }
 
@@ -147,15 +148,16 @@ func (s *UiSay) formatMessage(msg string) string {
 
 // updateVisibility sets the visibility of all UI nodes based on style and direction
 func (s *UiSay) updateVisibility(isLeft bool, isThink bool) {
-	uiMgr.SetVisible(s.left.vbox.GetId(), !isThink && isLeft)
-	uiMgr.SetVisible(s.right.vbox.GetId(), !isThink && !isLeft)
-	uiMgr.SetVisible(s.leftThink.vbox.GetId(), isThink && isLeft)
-	uiMgr.SetVisible(s.rightThink.vbox.GetId(), isThink && !isLeft)
+	// Direct gdx calls to avoid callInMainThread deadlock when called from main thread (onUpdate)
+	gdx.UiMgr.SetVisible(s.left.vbox.GetId(), !isThink && isLeft)
+	gdx.UiMgr.SetVisible(s.right.vbox.GetId(), !isThink && !isLeft)
+	gdx.UiMgr.SetVisible(s.leftThink.vbox.GetId(), isThink && isLeft)
+	gdx.UiMgr.SetVisible(s.rightThink.vbox.GetId(), isThink && !isLeft)
 }
 
 // updateUI updates the scale, position, and text of the UI element
 func (s *UiSay) updateUI(position mathf.Vec2, scale mathf.Vec2, label engine.Object, text string) {
-	uiMgr.SetScale(s.GetId(), scale)
-	uiMgr.SetPosition(s.GetId(), WorldToUI(position))
-	uiMgr.SetText(label, text)
+	gdx.UiMgr.SetScale(s.GetId(), scale)
+	gdx.UiMgr.SetPosition(s.GetId(), WorldToUI(position, true))
+	gdx.UiMgr.SetText(label, text)
 }
