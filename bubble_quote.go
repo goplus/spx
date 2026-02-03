@@ -16,42 +16,43 @@
 
 package spx
 
-import (
-	"github.com/goplus/spx/v2/internal/engine"
-	"github.com/goplus/spx/v2/internal/ui"
-)
+import "github.com/goplus/spx/v2/internal/ui"
 
-type quoter struct {
-	sprite      *SpriteImpl
+type quoterBubble struct {
+	bubbleBase  // Embedded common bubble functionality
 	message     string
 	description string
 	panel       *ui.UiQuote
-	isDirty     bool
 }
 
-func (p *quoter) onUpdate(delta float64) {
-	if p.isDirty || p.sprite.isDirty || p.sprite.g.camera.isDirty {
-		p.refresh()
-		p.isDirty = false
+func (pself *quoterBubble) onUpdate(delta float64) {
+	if pself.checkNeedsUpdate() {
+		pself.refresh()
+		pself.markClean()
 	}
 }
 
-func (p *quoter) refresh() {
-	if p.panel == nil || !p.sprite.Visible() {
+func (pself *quoterBubble) refresh() {
+	if pself.panel == nil {
 		return
 	}
-	bound := p.sprite.bounds()
-	center := bound.Center()
-	size := bound.Size
+
+	center, size := pself.getBounds()
 	extSize := 10.0
-	p.panel.SetText(center, size.Divf(2).Addf(extSize), p.message, p.description)
+	pself.panel.SetText(center, size.Divf(2).Addf(extSize), pself.message, pself.description)
 }
+
+// -------------------------------------------------------------------------------------
 
 func (p *SpriteImpl) quote(message, description string) {
 	bubble := p.components.Bubble()
 	old := bubble.getQuoteObj()
 	if old == nil {
-		newQuote := &quoter{sprite: p, message: message, description: description}
+		newQuote := &quoterBubble{
+			bubbleBase:  bubbleBase{sprite: p, camera: p.g.camera, isDirty: true},
+			message:     message,
+			description: description,
+		}
 		bubble.setQuoteObj(newQuote)
 		p.g.addShape(newQuote)
 		newQuote.panel = ui.NewUiQuote()
@@ -59,21 +60,16 @@ func (p *SpriteImpl) quote(message, description string) {
 		old.message, old.description = message, description
 		p.g.activateShape(old)
 	}
-	bubble.getQuoteObj().isDirty = true
+	bubble.getQuoteObj().markDirty()
 }
 
 func (p *SpriteImpl) waitStopQuote(secs float64) {
-	engine.Wait(secs)
-	p.doStopQuote()
+	waitAndStop(secs, p.doStopQuote)
 }
 
 func (p *SpriteImpl) doStopQuote() {
 	bubble := p.components.bubble
-	if bubble != nil && bubble.hasQuote() {
-		quoteObj := bubble.getQuoteObj()
-		quoteObj.panel.Destroy()
-		quoteObj.panel = nil
-		p.g.removeShape(quoteObj)
-		bubble.setQuoteObj(nil)
+	if bubble != nil {
+		bubble.stopQuote()
 	}
 }

@@ -162,11 +162,13 @@ func (sm *spriteManager) flushActivate() {
 			continue
 		}
 
-		// Handle types that have onUpdate
+		// Explicit type switch for performance (faster than interface assertion)
+		// Note: While bubbleBase unifies say/quote logic internally,
+		// we still use explicit cases here for optimal performance
 		switch v := item.(type) {
-		case *quoter:
+		case *quoterBubble:
 			v.onUpdate(delta)
-		case *sayOrThinker:
+		case *textBubble:
 			v.onUpdate(delta)
 		case *Monitor:
 			v.onUpdate(delta)

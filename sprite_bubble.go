@@ -42,7 +42,7 @@ func (p *SpriteImpl) Ask(msg any) {
 	}
 	p.Say__0(msgStr)
 	p.g.ask(true, msgStr, func(answer string) {
-		p.doStopSay()
+		p.doStopText()
 	})
 }
 
@@ -56,7 +56,7 @@ func (p *SpriteImpl) Say__1(msg any, secs float64) {
 	}
 	p.sayOrThink(msg, ui.StyleSay)
 	if secs > 0 {
-		p.waitStopSay(secs)
+		p.waitStopText(secs)
 	}
 }
 
@@ -70,7 +70,7 @@ func (p *SpriteImpl) Think__1(msg any, secs float64) {
 	}
 	p.sayOrThink(msg, ui.StyleThink)
 	if secs > 0 {
-		p.waitStopSay(secs)
+		p.waitStopText(secs)
 	}
 }
 

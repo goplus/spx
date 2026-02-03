@@ -182,13 +182,13 @@ func buildMonitorEval(g reflect.Value, t, val string) func() string {
 	return nil
 }
 
-func (p *Monitor) setVisible(visible bool) {
-	if visible == p.visible {
+func (pself *Monitor) setVisible(visible bool) {
+	if visible == pself.visible {
 		return
 	}
 
-	p.visible = visible
-	p.setDirtyFlag(true)
+	pself.visible = visible
+	pself.setDirtyFlag(true)
 }
 
 func (pself *Monitor) setXYpos(x float64, y float64) {
@@ -200,8 +200,8 @@ func (pself *Monitor) updateSize() {
 	pself.setDirtyFlag(true)
 }
 
-func (p *Monitor) setDirtyFlag(isDirty bool) {
-	p.isDirty = isDirty
+func (pself *Monitor) setDirtyFlag(isDirty bool) {
+	pself.isDirty = isDirty
 }
 
 // -------------------------------------------------------------------------------------
