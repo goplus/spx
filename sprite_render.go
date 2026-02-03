@@ -24,26 +24,26 @@ import (
 // Visibility Methods
 // ============================================================================
 
-func (p *SpriteImpl) Hide() {
+func (p *SpriteImpl) setVisible(visible bool) {
 	if debugInstr {
-		spxlog.Debug("Hide: %s", p.name)
+		spxlog.Debug("%s visible is %t", p.name, visible)
 	}
 
-	p.doStopSay()
-	if p.isVisible {
-		p.isVisible = false
-		p.isDirty = true
+	if visible == p.isVisible {
+		return
 	}
+
+	p.isVisible = visible
+	p.isDirty = true
+}
+
+func (p *SpriteImpl) Hide() {
+	p.doStopSay()
+	p.setVisible(false)
 }
 
 func (p *SpriteImpl) Show() {
-	if debugInstr {
-		spxlog.Debug("Show: %s", p.name)
-	}
-	if !p.isVisible {
-		p.isVisible = true
-		p.isDirty = true
-	}
+	p.setVisible(true)
 }
 
 func (p *SpriteImpl) Visible() bool {
