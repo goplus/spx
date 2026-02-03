@@ -19,6 +19,7 @@ package spx
 import (
 	"github.com/goplus/spbase/mathf"
 	spxlog "github.com/goplus/spx/v2/internal/log"
+	gdx "github.com/goplus/spx/v2/pkg/gdspx/pkg/engine"
 )
 
 type side int
@@ -61,7 +62,7 @@ func (c *cameraImpl) onUpdate() {
 	}
 	shouldUpdate, pos := c.getFollowPos()
 	if shouldUpdate {
-		c.SetXYpos(pos.X, pos.Y)
+		c.setXYposDirect(pos.X, pos.Y)
 	}
 }
 
@@ -118,6 +119,11 @@ func (c *cameraImpl) Ypos() float64 {
 func (c *cameraImpl) SetXYpos(x float64, y float64) {
 	c.setDirtyFlag(true)
 	cameraMgr.SetPosition(mathf.NewVec2(x, y))
+}
+
+func (c *cameraImpl) setXYposDirect(x float64, y float64) {
+	c.setDirtyFlag(true)
+	gdx.CameraMgr.SetCameraPosition(mathf.NewVec2(x, -y))
 }
 
 func (c *cameraImpl) ChangeXYpos(x float64, y float64) {

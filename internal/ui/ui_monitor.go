@@ -49,7 +49,6 @@ func (pself *UiMonitor) UpdateScale(x float64) {
 	gdx.UiMgr.SetScale(pself.GetId(), mathf.NewVec2(x, x))
 }
 func (pself *UiMonitor) UpdatePos(wpos Vec2) {
-	// Use WorldToUI with useDirect=true to avoid cameraMgr deadlock when called from main thread
 	gdx.UiMgr.SetGlobalPosition(pself.GetId(), WorldToUI(wpos, true))
 }
 
