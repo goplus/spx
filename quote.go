@@ -26,11 +26,13 @@ type quoter struct {
 	message     string
 	description string
 	panel       *ui.UiQuote
+	isDirty     bool
 }
 
 func (p *quoter) onUpdate(delta float64) {
-	if p.sprite.isDirty || p.sprite.g.camera.isDirty {
+	if p.isDirty || p.sprite.isDirty || p.sprite.g.camera.isDirty {
 		p.refresh()
+		p.isDirty = false
 	}
 }
 
@@ -57,7 +59,7 @@ func (p *SpriteImpl) quote(message, description string) {
 		old.message, old.description = message, description
 		p.g.activateShape(old)
 	}
-	bubble.getQuoteObj().refresh()
+	bubble.getQuoteObj().isDirty = true
 }
 
 func (p *SpriteImpl) waitStopQuote(secs float64) {

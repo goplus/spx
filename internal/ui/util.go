@@ -48,10 +48,20 @@ func SyncBindUI[T any](parentNode gdx.Object, path string) *T {
 	return engine.SyncBindUI[T](parentNode, path)
 }
 
-// convert world space position to screen space
-func WorldToUI(pos Vec2) Vec2 {
+// WorldToUI converts world space position to screen space
+// If useDirect is true, uses direct gdx calls (safe for main thread, e.g., onUpdate methods)
+// If useDirect is false, uses cameraMgr (may deadlock if called from main thread)
+func WorldToUI(pos Vec2, useDirect bool) Vec2 {
 	pos = pos.Mulf(windowScale)
-	pos.Y *= -1
-	viewport := cameraMgr.GetViewportRect()
+	pos = NewVec2(pos.X, -pos.Y)
+
+	var camMgr gdx.ICameraMgr
+	if useDirect {
+		camMgr = gdx.CameraMgr
+	} else {
+		camMgr = &cameraMgr
+	}
+
+	viewport := camMgr.GetViewportRect()
 	return pos.Add(viewport.Size.Mulf(0.5)).Sub(viewport.Position)
 }

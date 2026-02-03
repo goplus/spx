@@ -26,15 +26,17 @@ import (
 // -------------------------------------------------------------------------------------
 
 type sayOrThinker struct {
-	sprite *SpriteImpl
-	msg    string
-	style  int // styleSay, styleThink
-	panel  *ui.UiSay
+	sprite  *SpriteImpl
+	msg     string
+	style   int // styleSay, styleThink
+	panel   *ui.UiSay
+	isDirty bool
 }
 
 func (p *sayOrThinker) onUpdate(delta float64) {
-	if p.sprite.isDirty || p.sprite.g.camera.isDirty {
+	if p.isDirty || p.sprite.isDirty || p.sprite.g.camera.isDirty {
 		p.refresh()
+		p.isDirty = false
 	}
 }
 
@@ -72,7 +74,7 @@ func (p *SpriteImpl) sayOrThink(msg any, style int) {
 		old.msg, old.style = msgStr, style
 		p.g.activateShape(old)
 	}
-	bubble.getSayObj().refresh()
+	bubble.getSayObj().isDirty = true
 }
 
 func (p *SpriteImpl) waitStopSay(secs float64) {
