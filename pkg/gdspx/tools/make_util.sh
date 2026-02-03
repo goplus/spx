@@ -146,15 +146,10 @@ do_exportweb() {
 do_prepare_export() {
     # Check GOPATH
     if [ -z "$GOPATH" ]; then
-        # If GOPATH is not set, attempt to get it
         if command -v go > /dev/null; then
-            if [ "$OS" = "Windows_NT" ]; then
-                IFS=';' read -r GOPATH _ <<< "$(go env GOPATH)"
-            else
-                IFS=':' read -r GOPATH _ <<< "$(go env GOPATH)"
-            fi
+            GOPATH="$(go env GOPATH)"
         fi
-        
+
         if [ -z "$GOPATH" ]; then
             echo "Error: GOPATH is not set"
             return 1
@@ -214,9 +209,9 @@ do_compresswasm() {
     TEMP_VERSION=$(cat "$CURRENT_PATH/cmd/gox/template/version") 
     dstdir="$GOPATH/bin/gdspxrt"$TEMP_VERSION"_web"
     rm -rf "$dstdir/engine.wasm.br"
-    rm -rf "$dstdir/../gdspx.wasm.br"
+    rm -rf "$dstdir/../ispx.wasm.br"
     compress_with_brotli "$dstdir/engine.wasm" "$dstdir/engine.wasm.br"
-    compress_with_brotli "$dstdir/../gdspx.wasm" "$dstdir/../gdspx.wasm.br"
+    compress_with_brotli "$dstdir/../ispx.wasm" "$dstdir/../ispx.wasm.br"
 }
 
 # Define a function for the exportpack functionality

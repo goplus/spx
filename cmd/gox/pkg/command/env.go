@@ -243,7 +243,7 @@ func (pself *CmdTool) SetupEnv(version string, fs embed.FS, fsRelDir string, pro
 
 // getWasmPath returns the path to the wasm file
 func (pself *CmdTool) getWasmPath() string {
-	filePath := path.Join(pself.GoBinPath, "gdspx.wasm")
+	filePath := path.Join(pself.GoBinPath, "ispx.wasm")
 	return filePath
 }
 

@@ -144,7 +144,7 @@ await go.run(compatibleInstance);
 // loader.js 中的关键部分
 async function loadGoWASM() {
   // load wasm
-  let url = config.assetURLs["gdspx.wasm"];
+  let url = config.assetURLs["ispx.wasm"];
   const go = new Go();
   
   // 在微信小程序环境中加载 WASM

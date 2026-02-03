@@ -349,7 +349,7 @@ class GameApp {
         } else {
             if (this.useAssetCache) {
                 const engineCacheResult = await this.storageManager.checkEngineCache(GetEngineHashes());
-                this.gameConfig.wasmGdspx = engineCacheResult.wasmGdspx;
+                this.gameConfig.wasmIspx = engineCacheResult.wasmIspx;
                 this.gameConfig.wasmEngine = engineCacheResult.wasmEngine;
             } else {
                 if (!this.gameConfig.wasmEngine) {
@@ -403,7 +403,7 @@ class GameApp {
     //------------------ logic wasm ------------------
     async loadLogicWasm() {
         // load wasm
-        let url = this.config.assetURLs["gdspx.wasm"];
+        let url = this.config.assetURLs["ispx.wasm"];
         if (isWasmCompressed) {
             url += ".br"
         }
@@ -422,7 +422,7 @@ class GameApp {
             });
         } else {
             if (this.useAssetCache) {
-                const { instance } = await WebAssembly.instantiate(this.gameConfig.wasmGdspx, this.go.importObject);
+                const { instance } = await WebAssembly.instantiate(this.gameConfig.wasmIspx, this.go.importObject);
                 this.logicWasmInstance = instance;
             } else {
                 const { instance } = await WebAssembly.instantiateStreaming(fetch(url), this.go.importObject);

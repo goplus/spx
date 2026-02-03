@@ -12,13 +12,7 @@ setup_global_variables() {
     VERSION=$(cat $SCRIPT_DIR/version)
     ENGINE_GIT_TAG="spx"$VERSION
     ENGINE_VERSION=4.4.1.stable
-    if [ "$OS" = "Windows_NT" ]; then
-        IFS=';' read -r first_gopath _ <<< "$(go env GOPATH)"
-        GOPATH="$first_gopath"
-    else
-        IFS=':' read -r first_gopath _ <<< "$(go env GOPATH)"
-        GOPATH="$first_gopath"
-    fi
+    GOPATH="$(go env GOPATH)"
 
     PROJ_DIR=$SCRIPT_DIR/..
     ENGINE_DIR=$PROJ_DIR/godot

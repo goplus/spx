@@ -38,13 +38,7 @@ if [ "$OS" = "Windows_NT" ]; then
 else
    go build -ldflags="-checklinkname=0" -o $appname
 fi 
-if [ "$OS" = "Windows_NT" ]; then
-    IFS=';' read -r first_gopath _ <<< "$(go env GOPATH)"
-    GOPATH="$first_gopath"
-else
-    IFS=':' read -r first_gopath _ <<< "$(go env GOPATH)"
-    GOPATH="$first_gopath"
-fi
+GOPATH="$(go env GOPATH)"
 
 
 if [ ! -f "$appname" ]; then
