@@ -99,12 +99,12 @@ func (pself *Monitor) onUpdate(delta float64) {
 		return
 	}
 
-	val := pself.eval()
 	pself.panel.SetVisible(pself.visible)
 	if !pself.visible {
 		pself.setDirtyFlag(false)
 		return
 	}
+	val := pself.eval() // only evaluate when visible
 	pself.panel.ShowAll(pself.mode == 1)
 	pself.panel.UpdateScale(pself.size)
 	pself.panel.UpdatePos(pself.pos)
