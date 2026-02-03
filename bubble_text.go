@@ -19,36 +19,30 @@ package spx
 import (
 	"fmt"
 
-	"github.com/goplus/spx/v2/internal/engine"
 	"github.com/goplus/spx/v2/internal/ui"
 )
 
-// -------------------------------------------------------------------------------------
-
-type sayOrThinker struct {
-	sprite  *SpriteImpl
-	msg     string
-	style   int // styleSay, styleThink
-	panel   *ui.UiSay
-	isDirty bool
+type textBubble struct {
+	bubbleBase // Embedded common bubble functionality
+	msg        string
+	style      int // styleSay, styleThink
+	panel      *ui.UiSay
 }
 
-func (p *sayOrThinker) onUpdate(delta float64) {
-	if p.isDirty || p.sprite.isDirty || p.sprite.g.camera.isDirty {
-		p.refresh()
-		p.isDirty = false
+func (pself *textBubble) onUpdate(delta float64) {
+	if pself.checkNeedsUpdate() {
+		pself.refresh()
+		pself.markClean()
 	}
 }
 
-func (p *sayOrThinker) refresh() {
-	if p.panel == nil || !p.sprite.Visible() {
+func (pself *textBubble) refresh() {
+	if pself.panel == nil {
 		return
 	}
 
-	bound := p.sprite.bounds()
-	center := bound.Center()
-	size := bound.Size
-	p.panel.SetText(p.sprite.g.getWindowSize(), center, size, p.msg, p.style)
+	center, size := pself.getBounds()
+	pself.panel.SetText(pself.sprite.g.getWindowSize(), center, size, pself.msg, pself.style)
 }
 
 // -------------------------------------------------------------------------------------
@@ -59,38 +53,35 @@ func (p *SpriteImpl) sayOrThink(msg any, style int) {
 		msgStr = fmt.Sprint(msg)
 	}
 	if msgStr == "" {
-		p.doStopSay()
+		p.doStopText()
 		return
 	}
 
 	bubble := p.components.Bubble()
-	old := bubble.getSayObj()
+	old := bubble.getTextObj()
 	if old == nil {
-		newSay := &sayOrThinker{sprite: p, msg: msgStr, style: style}
-		bubble.setSayObj(newSay)
+		newSay := &textBubble{
+			bubbleBase: bubbleBase{sprite: p, camera: p.g.camera, isDirty: true},
+			msg:        msgStr,
+			style:      style,
+		}
+		bubble.setTextObj(newSay)
 		p.g.addShape(newSay)
 		newSay.panel = ui.NewUiSay()
 	} else {
 		old.msg, old.style = msgStr, style
 		p.g.activateShape(old)
 	}
-	bubble.getSayObj().isDirty = true
+	bubble.getTextObj().markDirty()
 }
 
-func (p *SpriteImpl) waitStopSay(secs float64) {
-	engine.Wait(secs)
-	p.doStopSay()
+func (p *SpriteImpl) waitStopText(secs float64) {
+	waitAndStop(secs, p.doStopText)
 }
 
-func (p *SpriteImpl) doStopSay() {
+func (p *SpriteImpl) doStopText() {
 	bubble := p.components.bubble
-	if bubble != nil && bubble.hasSay() {
-		sayObj := bubble.getSayObj()
-		sayObj.panel.Destroy()
-		sayObj.panel = nil
-		p.g.removeShape(sayObj)
-		bubble.setSayObj(nil)
+	if bubble != nil {
+		bubble.stopText()
 	}
 }
-
-// -------------------------------------------------------------------------------------

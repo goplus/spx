@@ -38,7 +38,7 @@ func (p *SpriteImpl) setVisible(visible bool) {
 }
 
 func (p *SpriteImpl) Hide() {
-	p.doStopSay()
+	p.doStopText()
 	p.setVisible(false)
 }
 
