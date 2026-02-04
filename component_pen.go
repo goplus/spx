@@ -232,8 +232,7 @@ func (pc *penComponent) applyPenColorProperty() {
 }
 
 func (pc *penComponent) applyPenHsvProperty() {
-	color := mathf.NewColorHSV(percentToHue(pc.penHue), percentToNormalized(pc.penSaturation), percentToNormalized(pc.penBrightness))
-	pc.penColor = color
+	pc.penColor = mathf.NewColorHSV(percentToHue(pc.penHue), percentToNormalized(pc.penSaturation), percentToNormalized(pc.penBrightness))
 	pc.penColor.A = percentToNormalized(pc.penTransparency)
 	pc.updatePenColor()
 }
