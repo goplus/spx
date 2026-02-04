@@ -84,25 +84,9 @@ func (p *SpriteImpl) onAnimationDone(animName string) {
 	p.animation().onAnimationDone(animName)
 }
 
-func (p *SpriteImpl) stopAnimState(state *animState) {
-	p.animation().stopAnimState(state)
-}
-
-func (p *SpriteImpl) stopAnimAudio(state *animState) {
-	p.animation().stopAnimAudio(state)
-}
-
-func (p *SpriteImpl) playAnimAudio(ani *aniConfig, info *animState) {
-	p.animation().playAnimAudio(ani, info)
-}
-
 // -----------------------------------------------------------------------------
 // Core Animation Functions
 // -----------------------------------------------------------------------------
-
-func (p *SpriteImpl) doAnimation(animName SpriteAnimationName, ani *aniConfig, loop bool, speed float64, isBlocking bool, playAudio bool) {
-	p.animation().doAnimation(animName, ani, loop, speed, isBlocking, playAudio)
-}
 
 func (p *SpriteImpl) doTween(name SpriteAnimationName, ani *aniConfig) {
 	p.animation().doTween(name, ani)
