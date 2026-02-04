@@ -173,7 +173,7 @@ import (
 	// _ "github.com/goplus/ixgo/pkg/testing/slogtest"
 
 	// Third-party packages.
-	_ "github.com/goplus/spx/ispx/internal/pkg/github.com/goplus/spx/v2"
-	_ "github.com/goplus/spx/ispx/internal/pkg/github.com/goplus/spx/v2/pkg/gdspx/pkg/engine"
-	_ "github.com/goplus/spx/ispx/internal/pkg/github.com/goplus/spx/v2/pkg/spx"
+	_ "github.com/goplus/spx/v2/pkg/ispx/internal/pkg/github.com/goplus/spx/v2"
+	_ "github.com/goplus/spx/v2/pkg/ispx/internal/pkg/github.com/goplus/spx/v2/pkg/gdspx/pkg/engine"
+	_ "github.com/goplus/spx/v2/pkg/ispx/internal/pkg/github.com/goplus/spx/v2/pkg/spx"
 )

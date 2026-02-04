@@ -48,17 +48,14 @@ fi
 
 mv $appname $GOPATH/bin/
 
-# build and install gdspx
-echo "Building gdspx..."
-cd ../../ispx || exit
+# build and install ispx
+echo "Building ispx..."
 
 if [ "$1" = "--web" ]; then
-    # Build wasm + PC (with optional --opt for wasm optimization)
     go env -w GOFLAGS="-buildvcs=false"
-    ./build.sh $2
-else
-    # Build PC only
-    ./build.sh --pc
+    ( cd ../ispx && ./build.sh )
+    cp ../ispx/ispx.wasm "$GOPATH/bin/"
 fi
 
-cd ../cmd/gox || exit
+( cd ../ispxnative && ./build.sh )
+cp ../ispxnative/gdspx-* "$GOPATH/bin/"

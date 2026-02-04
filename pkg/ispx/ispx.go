@@ -4,15 +4,15 @@ import (
 	"fmt"
 	"io/fs"
 	"sync"
-	_ "unsafe"
 
 	"github.com/goplus/ixgo"
 	"github.com/goplus/ixgo/xgobuild"
 	"github.com/goplus/mod/modfile"
 	_ "github.com/goplus/reflectx/icall/icall2048"
-	"github.com/goplus/spx/ispx/internal/memfs"
 	_ "github.com/goplus/spx/v2"
 	spxfs "github.com/goplus/spx/v2/fs"
+	"github.com/goplus/spx/v2/internal/engine"
+	"github.com/goplus/spx/v2/pkg/ispx/internal/memfs"
 )
 
 func init() {
@@ -159,7 +159,7 @@ func Shutdown() error {
 		done := runDone
 		mu.Unlock()
 
-		engineRequestExit(0)
+		engine.RequestExit(0)
 		<-done
 
 		mu.Lock()
@@ -168,8 +168,3 @@ func Shutdown() error {
 	mu.Unlock()
 	return nil
 }
-
-// engineRequestExit requests the game to exit with the given exit code.
-//
-//go:linkname engineRequestExit github.com/goplus/spx/v2/internal/engine.RequestExit
-func engineRequestExit(exitCode int64)
