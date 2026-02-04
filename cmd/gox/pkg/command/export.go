@@ -231,7 +231,14 @@ func (pself *CmdTool) exportWebCommon(mode string) error {
 
 	os.Rename(filepath.Join(dstPath, "godot.editor.html"), filepath.Join(dstPath, "index.html"))
 
-	// overwrite web files
+	// Copy ispx web runtime files from $GOPATH/bin/ispx/
+	ispxWebDir, err := pself.getIspxWebDir()
+	if err != nil {
+		return err
+	}
+	util.CopyDir2(ispxWebDir, pself.WebDir)
+
+	// Copy gox-specific web files (index.html, fflate.js, engine.worker.js)
 	util.CopyDir(pself.PlatformFS, "template/platform/web", pself.WebDir, true)
 
 	// copy wasm_exec.js from GOROOT
