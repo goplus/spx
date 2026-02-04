@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/fs"
 	"sync"
+	_ "unsafe"
 
 	"github.com/goplus/ixgo"
 	"github.com/goplus/ixgo/xgobuild"
@@ -25,11 +26,10 @@ func init() {
 }
 
 var (
-	mu          sync.Mutex
-	ixgoCtx     *ixgo.Context
-	ixgoInterp  *ixgo.Interp
-	ixgoRunning bool
-	ixgoRunID   int64
+	mu         sync.Mutex
+	ixgoCtx    *ixgo.Context
+	ixgoInterp *ixgo.Interp
+	runDone    chan struct{}
 )
 
 // Init initializes the interpreter with the given ctx, which must not be
@@ -83,18 +83,23 @@ func Build(files map[string][]byte) error {
 
 // BuildFS builds the spx code from the provided file system into the interpreter.
 func BuildFS(fsys fs.FS) error {
+	// Stop the game if running.
+	if err := Shutdown(); err != nil {
+		return err
+	}
+
 	mu.Lock()
 	defer mu.Unlock()
 
 	if ixgoCtx == nil {
 		panic("ispx: not initialized")
 	}
-	if ixgoRunning {
-		panic("ispx: cannot build while running")
-	}
 
-	// Release previous resources if any.
-	unsafeRelease()
+	// Release previous interpreter resources if any.
+	if ixgoInterp != nil {
+		ixgoInterp.UnsafeRelease()
+		ixgoInterp = nil
+	}
 
 	spxfs.RegisterSchema("", func(path string) (spxfs.Dir, error) {
 		return newSpxDir(fsys, path), nil
@@ -127,40 +132,44 @@ func Run() (exitCode int, err error) {
 		mu.Unlock()
 		panic("ispx: not built")
 	}
-	if ixgoRunning {
+	if runDone != nil {
 		mu.Unlock()
 		panic("ispx: already running")
 	}
-	ixgoRunning = true
-	ixgoRunID++
-	runID := ixgoRunID
 	ctx, interp := ixgoCtx, ixgoInterp
+	runDone = make(chan struct{})
 	mu.Unlock()
 
 	defer func() {
 		mu.Lock()
-		if ixgoRunID == runID {
-			ixgoRunning = false
-		}
+		close(runDone)
+		runDone = nil
 		mu.Unlock()
 	}()
 
 	return ctx.RunInterp(interp, "main.go", nil)
 }
 
-// UnsafeRelease releases the interpreter's resources. It is unsafe to call
-// while the interpreter is running.
-func UnsafeRelease() {
+// Shutdown requests the game to stop and waits for it to exit.
+func Shutdown() error {
 	mu.Lock()
-	defer mu.Unlock()
-	unsafeRelease()
+
+	// If running, wait for it to stop.
+	for runDone != nil {
+		done := runDone
+		mu.Unlock()
+
+		engineRequestExit(0)
+		<-done
+
+		mu.Lock()
+	}
+
+	mu.Unlock()
+	return nil
 }
 
-// unsafeRelease releases the interpreter's resources. It must be called with mu held.
-func unsafeRelease() {
-	ixgoRunning = false
-	if ixgoInterp != nil {
-		ixgoInterp.UnsafeRelease()
-		ixgoInterp = nil
-	}
-}
+// engineRequestExit requests the game to exit with the given exit code.
+//
+//go:linkname engineRequestExit github.com/goplus/spx/v2/internal/engine.RequestExit
+func engineRequestExit(exitCode int64)

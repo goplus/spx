@@ -21,6 +21,7 @@ func init() {
 	gdspxEngineRegisterFFI()
 	js.Global().Set("ispx_build", jsFuncOfWithError(ispxBuild))
 	js.Global().Set("ispx_start", jsFuncOfWithError(ispxStart))
+	js.Global().Set("ispx_stop", jsFuncOfWithError(ispxStop))
 
 	// Deprecated: Use ispx_build and ispx_start instead.
 	//
@@ -78,6 +79,24 @@ func ispxStart(this js.Value, args []js.Value) any {
 		exitCode, err := Run()
 		if err != nil {
 			reportRuntimeError(fmt.Errorf("interpreter exited with code %d: %w", exitCode, err))
+			return
+		}
+	}()
+	return nil
+}
+
+// ispxStop stops the interpreter asynchronously. It calls [Shutdown] in a
+// goroutine to avoid blocking the JavaScript main thread.
+func ispxStop(this js.Value, args []js.Value) any {
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				reportRuntimeError(fmt.Errorf("shutdown exited with panic: %v", r))
+			}
+		}()
+
+		if err := Shutdown(); err != nil {
+			reportRuntimeError(fmt.Errorf("failed to shutdown: %w", err))
 			return
 		}
 	}()
