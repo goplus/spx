@@ -203,7 +203,7 @@ func (pc *penComponent) checkOrCreatePen() {
 	if pc.penObj == nil {
 		obj := penMgr.CreatePen()
 		pc.penObj = &obj
-		pc.penTransparency = pc.penColor.A * 100
+		pc.penTransparency = normalizedToPercent(pc.penColor.A)
 	}
 }
 
@@ -224,21 +224,39 @@ func (pc *penComponent) movePen(x, y float64) {
 func (pc *penComponent) applyPenColorProperty() {
 	pc.checkOrCreatePen()
 	h, s, v := pc.penColor.ToHSV()
-	pc.penHue = (h / 360) * 100
-	pc.penSaturation = s * 100
-	pc.penBrightness = v * 100
-	pc.penTransparency = pc.penColor.A * 100
-	penMgr.SetPenColorTo(*pc.penObj, pc.penColor)
+	pc.penHue = hueToPercent(h)
+	pc.penSaturation = normalizedToPercent(s)
+	pc.penBrightness = normalizedToPercent(v)
+	pc.penTransparency = normalizedToPercent(pc.penColor.A)
+	pc.updatePenColor()
 }
 
 func (pc *penComponent) applyPenHsvProperty() {
-	color := mathf.NewColorHSV((pc.penHue/100)*360, pc.penSaturation/100, pc.penBrightness/100)
-	pc.penColor = color
-	pc.penColor.A = pc.penTransparency / 100
+	pc.penColor = mathf.NewColorHSV(percentToHue(pc.penHue), percentToNormalized(pc.penSaturation), percentToNormalized(pc.penBrightness))
+	pc.penColor.A = percentToNormalized(pc.penTransparency)
+	pc.updatePenColor()
+}
+
+func hueToPercent(hue float64) float64 {
+	return (hue / 360) * 100
+}
+
+func percentToHue(percent float64) float64 {
+	return (percent / 100) * 360
+}
+
+func normalizedToPercent(normalized float64) float64 {
+	return normalized * 100
+}
+
+func percentToNormalized(percent float64) float64 {
+	return percent / 100
+}
+
+func (pc *penComponent) updatePenColor() {
 	penMgr.SetPenColorTo(*pc.penObj, pc.penColor)
 }
 
-// isPenDown returns whether the pen is down (internal method)
 func (pc *penComponent) isPenDown() bool {
 	return pc.penDown
 }
