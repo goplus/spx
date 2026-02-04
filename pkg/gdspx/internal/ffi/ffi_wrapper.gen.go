@@ -314,11 +314,13 @@ type GDExtensionSpxSpriteGetTriggerMask C.GDExtensionSpxSpriteGetTriggerMask
 type GDExtensionSpxSpriteSetColliderRect C.GDExtensionSpxSpriteSetColliderRect
 type GDExtensionSpxSpriteSetColliderCircle C.GDExtensionSpxSpriteSetColliderCircle
 type GDExtensionSpxSpriteSetColliderCapsule C.GDExtensionSpxSpriteSetColliderCapsule
+type GDExtensionSpxSpriteSetColliderPolygon C.GDExtensionSpxSpriteSetColliderPolygon
 type GDExtensionSpxSpriteSetCollisionEnabled C.GDExtensionSpxSpriteSetCollisionEnabled
 type GDExtensionSpxSpriteIsCollisionEnabled C.GDExtensionSpxSpriteIsCollisionEnabled
 type GDExtensionSpxSpriteSetTriggerRect C.GDExtensionSpxSpriteSetTriggerRect
 type GDExtensionSpxSpriteSetTriggerCircle C.GDExtensionSpxSpriteSetTriggerCircle
 type GDExtensionSpxSpriteSetTriggerCapsule C.GDExtensionSpxSpriteSetTriggerCapsule
+type GDExtensionSpxSpriteSetTriggerPolygon C.GDExtensionSpxSpriteSetTriggerPolygon
 type GDExtensionSpxSpriteSetTriggerEnabled C.GDExtensionSpxSpriteSetTriggerEnabled
 type GDExtensionSpxSpriteIsTriggerEnabled C.GDExtensionSpxSpriteIsTriggerEnabled
 type GDExtensionSpxSpriteCheckCollisionByColor C.GDExtensionSpxSpriteCheckCollisionByColor
@@ -2750,6 +2752,19 @@ func CallSpriteSetColliderCapsule(
 	C.cgo_callfn_GDExtensionSpxSpriteSetColliderCapsule(arg0, arg1GdObj, arg2GdVec2, arg3GdVec2)
 
 }
+func CallSpriteSetColliderPolygon(
+	obj GdObj,
+	center GdVec2,
+	points GdArray,
+) {
+	arg0 := (C.GDExtensionSpxSpriteSetColliderPolygon)(api.SpxSpriteSetColliderPolygon)
+	arg1GdObj := (C.GdObj)(obj)
+	arg2GdVec2 := (C.GdVec2)(center)
+	arg3GdArray := (C.GdArray)(points)
+
+	C.cgo_callfn_GDExtensionSpxSpriteSetColliderPolygon(arg0, arg1GdObj, arg2GdVec2, arg3GdArray)
+
+}
 func CallSpriteSetCollisionEnabled(
 	obj GdObj,
 	enabled GdBool,
@@ -2808,6 +2823,19 @@ func CallSpriteSetTriggerCapsule(
 	arg3GdVec2 := (C.GdVec2)(size)
 
 	C.cgo_callfn_GDExtensionSpxSpriteSetTriggerCapsule(arg0, arg1GdObj, arg2GdVec2, arg3GdVec2)
+
+}
+func CallSpriteSetTriggerPolygon(
+	obj GdObj,
+	center GdVec2,
+	points GdArray,
+) {
+	arg0 := (C.GDExtensionSpxSpriteSetTriggerPolygon)(api.SpxSpriteSetTriggerPolygon)
+	arg1GdObj := (C.GdObj)(obj)
+	arg2GdVec2 := (C.GdVec2)(center)
+	arg3GdArray := (C.GdArray)(points)
+
+	C.cgo_callfn_GDExtensionSpxSpriteSetTriggerPolygon(arg0, arg1GdObj, arg2GdVec2, arg3GdArray)
 
 }
 func CallSpriteSetTriggerEnabled(

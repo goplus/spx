@@ -716,18 +716,20 @@ func (pself *spriteMgrImpl) GetTriggerMask(obj gdx.Object) int64 {
 	var _ret1 int64
 	return _ret1
 }
-func (pself *spriteMgrImpl) SetColliderRect(obj gdx.Object, center Vec2, size Vec2)        {}
-func (pself *spriteMgrImpl) SetColliderCircle(obj gdx.Object, center Vec2, radius float64) {}
-func (pself *spriteMgrImpl) SetColliderCapsule(obj gdx.Object, center Vec2, size Vec2)     {}
-func (pself *spriteMgrImpl) SetCollisionEnabled(obj gdx.Object, enabled bool)              {}
+func (pself *spriteMgrImpl) SetColliderRect(obj gdx.Object, center Vec2, size Vec2)           {}
+func (pself *spriteMgrImpl) SetColliderCircle(obj gdx.Object, center Vec2, radius float64)    {}
+func (pself *spriteMgrImpl) SetColliderCapsule(obj gdx.Object, center Vec2, size Vec2)        {}
+func (pself *spriteMgrImpl) SetColliderPolygon(obj gdx.Object, center Vec2, points gdx.Array) {}
+func (pself *spriteMgrImpl) SetCollisionEnabled(obj gdx.Object, enabled bool)                 {}
 func (pself *spriteMgrImpl) IsCollisionEnabled(obj gdx.Object) bool {
 	var _ret1 bool
 	return _ret1
 }
-func (pself *spriteMgrImpl) SetTriggerRect(obj gdx.Object, center Vec2, size Vec2)        {}
-func (pself *spriteMgrImpl) SetTriggerCircle(obj gdx.Object, center Vec2, radius float64) {}
-func (pself *spriteMgrImpl) SetTriggerCapsule(obj gdx.Object, center Vec2, size Vec2)     {}
-func (pself *spriteMgrImpl) SetTriggerEnabled(obj gdx.Object, trigger bool)               {}
+func (pself *spriteMgrImpl) SetTriggerRect(obj gdx.Object, center Vec2, size Vec2)           {}
+func (pself *spriteMgrImpl) SetTriggerCircle(obj gdx.Object, center Vec2, radius float64)    {}
+func (pself *spriteMgrImpl) SetTriggerCapsule(obj gdx.Object, center Vec2, size Vec2)        {}
+func (pself *spriteMgrImpl) SetTriggerPolygon(obj gdx.Object, center Vec2, points gdx.Array) {}
+func (pself *spriteMgrImpl) SetTriggerEnabled(obj gdx.Object, trigger bool)                  {}
 func (pself *spriteMgrImpl) IsTriggerEnabled(obj gdx.Object) bool {
 	var _ret1 bool
 	return _ret1

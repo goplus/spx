@@ -247,11 +247,13 @@ type GDExtensionInterface struct {
 	SpxSpriteSetColliderRect                    GDExtensionSpxSpriteSetColliderRect
 	SpxSpriteSetColliderCircle                  GDExtensionSpxSpriteSetColliderCircle
 	SpxSpriteSetColliderCapsule                 GDExtensionSpxSpriteSetColliderCapsule
+	SpxSpriteSetColliderPolygon                 GDExtensionSpxSpriteSetColliderPolygon
 	SpxSpriteSetCollisionEnabled                GDExtensionSpxSpriteSetCollisionEnabled
 	SpxSpriteIsCollisionEnabled                 GDExtensionSpxSpriteIsCollisionEnabled
 	SpxSpriteSetTriggerRect                     GDExtensionSpxSpriteSetTriggerRect
 	SpxSpriteSetTriggerCircle                   GDExtensionSpxSpriteSetTriggerCircle
 	SpxSpriteSetTriggerCapsule                  GDExtensionSpxSpriteSetTriggerCapsule
+	SpxSpriteSetTriggerPolygon                  GDExtensionSpxSpriteSetTriggerPolygon
 	SpxSpriteSetTriggerEnabled                  GDExtensionSpxSpriteSetTriggerEnabled
 	SpxSpriteIsTriggerEnabled                   GDExtensionSpxSpriteIsTriggerEnabled
 	SpxSpriteCheckCollisionByColor              GDExtensionSpxSpriteCheckCollisionByColor
@@ -557,11 +559,13 @@ func (x *GDExtensionInterface) loadProcAddresses() {
 	x.SpxSpriteSetColliderRect = (GDExtensionSpxSpriteSetColliderRect)(dlsymGD("spx_sprite_set_collider_rect"))
 	x.SpxSpriteSetColliderCircle = (GDExtensionSpxSpriteSetColliderCircle)(dlsymGD("spx_sprite_set_collider_circle"))
 	x.SpxSpriteSetColliderCapsule = (GDExtensionSpxSpriteSetColliderCapsule)(dlsymGD("spx_sprite_set_collider_capsule"))
+	x.SpxSpriteSetColliderPolygon = (GDExtensionSpxSpriteSetColliderPolygon)(dlsymGD("spx_sprite_set_collider_polygon"))
 	x.SpxSpriteSetCollisionEnabled = (GDExtensionSpxSpriteSetCollisionEnabled)(dlsymGD("spx_sprite_set_collision_enabled"))
 	x.SpxSpriteIsCollisionEnabled = (GDExtensionSpxSpriteIsCollisionEnabled)(dlsymGD("spx_sprite_is_collision_enabled"))
 	x.SpxSpriteSetTriggerRect = (GDExtensionSpxSpriteSetTriggerRect)(dlsymGD("spx_sprite_set_trigger_rect"))
 	x.SpxSpriteSetTriggerCircle = (GDExtensionSpxSpriteSetTriggerCircle)(dlsymGD("spx_sprite_set_trigger_circle"))
 	x.SpxSpriteSetTriggerCapsule = (GDExtensionSpxSpriteSetTriggerCapsule)(dlsymGD("spx_sprite_set_trigger_capsule"))
+	x.SpxSpriteSetTriggerPolygon = (GDExtensionSpxSpriteSetTriggerPolygon)(dlsymGD("spx_sprite_set_trigger_polygon"))
 	x.SpxSpriteSetTriggerEnabled = (GDExtensionSpxSpriteSetTriggerEnabled)(dlsymGD("spx_sprite_set_trigger_enabled"))
 	x.SpxSpriteIsTriggerEnabled = (GDExtensionSpxSpriteIsTriggerEnabled)(dlsymGD("spx_sprite_is_trigger_enabled"))
 	x.SpxSpriteCheckCollisionByColor = (GDExtensionSpxSpriteCheckCollisionByColor)(dlsymGD("spx_sprite_check_collision_by_color"))

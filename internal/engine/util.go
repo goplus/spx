@@ -63,16 +63,12 @@ func HasFile(path string) bool {
 	return resMgr.HasFile(path)
 }
 
-// =============== setting ===================
-
 func SetDebugMode(isDebug bool) {
 	platformMgr.SetDebugMode(isDebug)
 }
 func SetDefaultFont(path string) {
 	resMgr.SetDefaultFont(path)
 }
-
-// =============== setting ===================
 
 func ScreenToWorld(pos Vec2) Vec2 {
 	var _ret1 Vec2

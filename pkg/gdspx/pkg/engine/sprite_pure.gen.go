@@ -388,6 +388,9 @@ func (pself *Sprite) SetColliderCapsule(center Vec2, size Vec2) {
 func (pself *Sprite) SetColliderCircle(center Vec2, radius float64) {
 }
 
+func (pself *Sprite) SetColliderPolygon(center Vec2, points Array) {
+}
+
 func (pself *Sprite) SetColliderRect(center Vec2, size Vec2) {
 }
 
@@ -488,6 +491,9 @@ func (pself *Sprite) SetTriggerLayer(layer int64) {
 }
 
 func (pself *Sprite) SetTriggerMask(mask int64) {
+}
+
+func (pself *Sprite) SetTriggerPolygon(center Vec2, points Array) {
 }
 
 func (pself *Sprite) SetTriggerRect(center Vec2, size Vec2) {

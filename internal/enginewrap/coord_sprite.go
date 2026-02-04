@@ -40,6 +40,16 @@ func (pself *Sprite) SetColliderShapeCapsule(isTrigger bool, center Vec2, size V
 	}
 }
 
+func (pself *Sprite) SetColliderShapePolygon(isTrigger bool, center Vec2, points []float64) {
+	center.Y = -center.Y
+	points32 := F64Tof32(points)
+	if isTrigger {
+		pself.Sprite.SetTriggerPolygon(center, points32)
+	} else {
+		pself.Sprite.SetColliderPolygon(center, points32)
+	}
+}
+
 func (pself *Sprite) SetColliderEnabled(isTrigger bool, enabled bool) {
 	if isTrigger {
 		pself.Sprite.SetTriggerEnabled(enabled)

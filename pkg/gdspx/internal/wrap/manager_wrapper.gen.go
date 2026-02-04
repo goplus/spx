@@ -1396,6 +1396,12 @@ func (pself *spriteMgr) SetColliderCapsule(obj Object, center Vec2, size Vec2) {
 	arg2 := ToGdVec2(size)
 	CallSpriteSetColliderCapsule(arg0, arg1, arg2)
 }
+func (pself *spriteMgr) SetColliderPolygon(obj Object, center Vec2, points Array) {
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdVec2(center)
+	arg2 := ToGdArray(points)
+	CallSpriteSetColliderPolygon(arg0, arg1, arg2)
+}
 func (pself *spriteMgr) SetCollisionEnabled(obj Object, enabled bool) {
 	arg0 := ToGdObj(obj)
 	arg1 := ToGdBool(enabled)
@@ -1423,6 +1429,12 @@ func (pself *spriteMgr) SetTriggerCapsule(obj Object, center Vec2, size Vec2) {
 	arg1 := ToGdVec2(center)
 	arg2 := ToGdVec2(size)
 	CallSpriteSetTriggerCapsule(arg0, arg1, arg2)
+}
+func (pself *spriteMgr) SetTriggerPolygon(obj Object, center Vec2, points Array) {
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdVec2(center)
+	arg2 := ToGdArray(points)
+	CallSpriteSetTriggerPolygon(arg0, arg1, arg2)
 }
 func (pself *spriteMgr) SetTriggerEnabled(obj Object, trigger bool) {
 	arg0 := ToGdObj(obj)
