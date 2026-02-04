@@ -22,12 +22,6 @@ func init() {
 	js.Global().Set("ispx_build", jsFuncOfWithError(ispxBuild))
 	js.Global().Set("ispx_start", jsFuncOfWithError(ispxStart))
 	js.Global().Set("ispx_stop", jsFuncOfWithError(ispxStop))
-
-	// Deprecated: Use ispx_build and ispx_start instead.
-	//
-	// FIXME: Remove these aliases in future releases.
-	js.Global().Set("ixgo_build", jsFuncOfWithError(ispxBuild))
-	js.Global().Set("ixgo_run", jsFuncOfWithError(ispxStart))
 }
 
 // defaultIXGoContextLookup is the default [ixgo.Context.Lookup] when none is
