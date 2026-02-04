@@ -363,7 +363,10 @@ func (pc *physicsComponent) applyPhysicShape(isTrigger bool) {
 				pc.sprite.syncSprite.SetColliderShapeCapsule(isTrigger, config.Pivot, mathf.NewVec2(params[0]*2, params[1]))
 			}
 		case PolygonCollider:
-			// TODO: Implement polygon shape setting when available
+			if len(params) >= 6 {
+				// Polygon requires at least 3 points (6 floats: x1,y1,x2,y2,x3,y3)
+				pc.sprite.syncSprite.SetColliderShapePolygon(isTrigger, config.Pivot, params)
+			}
 		}
 	}
 }

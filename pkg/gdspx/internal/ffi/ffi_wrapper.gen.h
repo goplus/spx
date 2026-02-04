@@ -699,6 +699,9 @@ void cgo_callfn_GDExtensionSpxSpriteSetColliderCircle(const GDExtensionSpxSprite
 void cgo_callfn_GDExtensionSpxSpriteSetColliderCapsule(const GDExtensionSpxSpriteSetColliderCapsule fn, GdObj obj, GdVec2 center, GdVec2 size) {
 	fn(obj, center, size);
 }
+void cgo_callfn_GDExtensionSpxSpriteSetColliderPolygon(const GDExtensionSpxSpriteSetColliderPolygon fn, GdObj obj, GdVec2 center, GdArray points) {
+	fn(obj, center, points);
+}
 void cgo_callfn_GDExtensionSpxSpriteSetCollisionEnabled(const GDExtensionSpxSpriteSetCollisionEnabled fn, GdObj obj, GdBool enabled) {
 	fn(obj, enabled);
 }
@@ -713,6 +716,9 @@ void cgo_callfn_GDExtensionSpxSpriteSetTriggerCircle(const GDExtensionSpxSpriteS
 }
 void cgo_callfn_GDExtensionSpxSpriteSetTriggerCapsule(const GDExtensionSpxSpriteSetTriggerCapsule fn, GdObj obj, GdVec2 center, GdVec2 size) {
 	fn(obj, center, size);
+}
+void cgo_callfn_GDExtensionSpxSpriteSetTriggerPolygon(const GDExtensionSpxSpriteSetTriggerPolygon fn, GdObj obj, GdVec2 center, GdArray points) {
+	fn(obj, center, points);
 }
 void cgo_callfn_GDExtensionSpxSpriteSetTriggerEnabled(const GDExtensionSpxSpriteSetTriggerEnabled fn, GdObj obj, GdBool trigger) {
 	fn(obj, trigger);

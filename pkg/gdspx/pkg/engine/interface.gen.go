@@ -295,11 +295,13 @@ type ISpriteMgr interface {
 	SetColliderRect(obj Object, center Vec2, size Vec2)
 	SetColliderCircle(obj Object, center Vec2, radius float64)
 	SetColliderCapsule(obj Object, center Vec2, size Vec2)
+	SetColliderPolygon(obj Object, center Vec2, points Array)
 	SetCollisionEnabled(obj Object, enabled bool)
 	IsCollisionEnabled(obj Object) bool
 	SetTriggerRect(obj Object, center Vec2, size Vec2)
 	SetTriggerCircle(obj Object, center Vec2, radius float64)
 	SetTriggerCapsule(obj Object, center Vec2, size Vec2)
+	SetTriggerPolygon(obj Object, center Vec2, points Array)
 	SetTriggerEnabled(obj Object, trigger bool)
 	IsTriggerEnabled(obj Object) bool
 	CheckCollisionByColor(obj Object, color Color, color_threshold float64, alpha_threshold float64) bool

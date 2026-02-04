@@ -1520,6 +1520,11 @@ func (pself *spriteMgrImpl) SetColliderCapsule(obj gdx.Object, center Vec2, size
 		gdx.SpriteMgr.SetColliderCapsule(obj, center, size)
 	})
 }
+func (pself *spriteMgrImpl) SetColliderPolygon(obj gdx.Object, center Vec2, points gdx.Array) {
+	callInMainThread(func() {
+		gdx.SpriteMgr.SetColliderPolygon(obj, center, points)
+	})
+}
 func (pself *spriteMgrImpl) SetCollisionEnabled(obj gdx.Object, enabled bool) {
 	callInMainThread(func() {
 		gdx.SpriteMgr.SetCollisionEnabled(obj, enabled)
@@ -1545,6 +1550,11 @@ func (pself *spriteMgrImpl) SetTriggerCircle(obj gdx.Object, center Vec2, radius
 func (pself *spriteMgrImpl) SetTriggerCapsule(obj gdx.Object, center Vec2, size Vec2) {
 	callInMainThread(func() {
 		gdx.SpriteMgr.SetTriggerCapsule(obj, center, size)
+	})
+}
+func (pself *spriteMgrImpl) SetTriggerPolygon(obj gdx.Object, center Vec2, points gdx.Array) {
+	callInMainThread(func() {
+		gdx.SpriteMgr.SetTriggerPolygon(obj, center, points)
 	})
 }
 func (pself *spriteMgrImpl) SetTriggerEnabled(obj gdx.Object, trigger bool) {

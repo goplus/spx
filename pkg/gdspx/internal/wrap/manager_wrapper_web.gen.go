@@ -1291,6 +1291,12 @@ func (pself *spriteMgr) SetColliderCapsule(obj Object, center Vec2, size Vec2) {
 	arg2 := JsFromGdVec2(size)
 	API.SpxSpriteSetColliderCapsule.Invoke(arg0, arg1, arg2)
 }
+func (pself *spriteMgr) SetColliderPolygon(obj Object, center Vec2, points Array) {
+	arg0 := JsFromGdObj(obj)
+	arg1 := JsFromGdVec2(center)
+	arg2 := JsFromGdArray(points)
+	API.SpxSpriteSetColliderPolygon.Invoke(arg0, arg1, arg2)
+}
 func (pself *spriteMgr) SetCollisionEnabled(obj Object, enabled bool) {
 	arg0 := JsFromGdObj(obj)
 	arg1 := JsFromGdBool(enabled)
@@ -1318,6 +1324,12 @@ func (pself *spriteMgr) SetTriggerCapsule(obj Object, center Vec2, size Vec2) {
 	arg1 := JsFromGdVec2(center)
 	arg2 := JsFromGdVec2(size)
 	API.SpxSpriteSetTriggerCapsule.Invoke(arg0, arg1, arg2)
+}
+func (pself *spriteMgr) SetTriggerPolygon(obj Object, center Vec2, points Array) {
+	arg0 := JsFromGdObj(obj)
+	arg1 := JsFromGdVec2(center)
+	arg2 := JsFromGdArray(points)
+	API.SpxSpriteSetTriggerPolygon.Invoke(arg0, arg1, arg2)
 }
 func (pself *spriteMgr) SetTriggerEnabled(obj Object, trigger bool) {
 	arg0 := JsFromGdObj(obj)

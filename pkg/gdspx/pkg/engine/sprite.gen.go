@@ -344,6 +344,10 @@ func (pself *Sprite) SetColliderCircle(center Vec2, radius float64) {
 	SpriteMgr.SetColliderCircle(pself.Id, center, radius)
 }
 
+func (pself *Sprite) SetColliderPolygon(center Vec2, points Array) {
+	SpriteMgr.SetColliderPolygon(pself.Id, center, points)
+}
+
 func (pself *Sprite) SetColliderRect(center Vec2, size Vec2) {
 	SpriteMgr.SetColliderRect(pself.Id, center, size)
 }
@@ -478,6 +482,10 @@ func (pself *Sprite) SetTriggerLayer(layer int64) {
 
 func (pself *Sprite) SetTriggerMask(mask int64) {
 	SpriteMgr.SetTriggerMask(pself.Id, mask)
+}
+
+func (pself *Sprite) SetTriggerPolygon(center Vec2, points Array) {
+	SpriteMgr.SetTriggerPolygon(pself.Id, center, points)
 }
 
 func (pself *Sprite) SetTriggerRect(center Vec2, size Vec2) {

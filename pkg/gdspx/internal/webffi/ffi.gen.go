@@ -251,11 +251,13 @@ type GDExtensionInterface struct {
 	SpxSpriteSetColliderRect                    js.Value
 	SpxSpriteSetColliderCircle                  js.Value
 	SpxSpriteSetColliderCapsule                 js.Value
+	SpxSpriteSetColliderPolygon                 js.Value
 	SpxSpriteSetCollisionEnabled                js.Value
 	SpxSpriteIsCollisionEnabled                 js.Value
 	SpxSpriteSetTriggerRect                     js.Value
 	SpxSpriteSetTriggerCircle                   js.Value
 	SpxSpriteSetTriggerCapsule                  js.Value
+	SpxSpriteSetTriggerPolygon                  js.Value
 	SpxSpriteSetTriggerEnabled                  js.Value
 	SpxSpriteIsTriggerEnabled                   js.Value
 	SpxSpriteCheckCollisionByColor              js.Value
@@ -561,11 +563,13 @@ func (x *GDExtensionInterface) loadProcAddresses() {
 	x.SpxSpriteSetColliderRect = dlsymGD("gdspx_sprite_set_collider_rect")
 	x.SpxSpriteSetColliderCircle = dlsymGD("gdspx_sprite_set_collider_circle")
 	x.SpxSpriteSetColliderCapsule = dlsymGD("gdspx_sprite_set_collider_capsule")
+	x.SpxSpriteSetColliderPolygon = dlsymGD("gdspx_sprite_set_collider_polygon")
 	x.SpxSpriteSetCollisionEnabled = dlsymGD("gdspx_sprite_set_collision_enabled")
 	x.SpxSpriteIsCollisionEnabled = dlsymGD("gdspx_sprite_is_collision_enabled")
 	x.SpxSpriteSetTriggerRect = dlsymGD("gdspx_sprite_set_trigger_rect")
 	x.SpxSpriteSetTriggerCircle = dlsymGD("gdspx_sprite_set_trigger_circle")
 	x.SpxSpriteSetTriggerCapsule = dlsymGD("gdspx_sprite_set_trigger_capsule")
+	x.SpxSpriteSetTriggerPolygon = dlsymGD("gdspx_sprite_set_trigger_polygon")
 	x.SpxSpriteSetTriggerEnabled = dlsymGD("gdspx_sprite_set_trigger_enabled")
 	x.SpxSpriteIsTriggerEnabled = dlsymGD("gdspx_sprite_is_trigger_enabled")
 	x.SpxSpriteCheckCollisionByColor = dlsymGD("gdspx_sprite_check_collision_by_color")
