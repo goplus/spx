@@ -59,6 +59,7 @@ func (p *Game) ask(isSprite bool, question string, callback func(string)) {
 		if hasAnswer {
 			break
 		}
+		p.askPanel.Update()
 		engine.WaitNextFrame()
 	}
 }
