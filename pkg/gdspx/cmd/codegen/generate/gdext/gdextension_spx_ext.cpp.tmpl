@@ -58,7 +58,7 @@ static void gdextension_{{ loadProcAddressName $f.Name }}(
 	{{- if ne 0 (len $f.Arguments) -}}, {{ end -}}{{$f.ReturnType.CStyleString }} *ret_val
 	{{- end -}}
 ) {
-	{{ if ne "void" $f.ReturnType.CStyleString -}} *ret_val = {{- end }} {{ getManagerName $f.Name}}Mgr->
+	{{ if ne "void" $f.ReturnType.CStyleString -}} *ret_val = {{ end }}{{ getManagerName $f.Name}}Mgr->
 	{{- trimPrefix (trimPrefix (trimPrefix (loadProcAddressName $f.Name) "spx_") (getManagerName $f.Name)) "_" }}(
 		{{- range $j, $arg := $f.Arguments }}
 			{{- if gt $j 0 }}, {{ end }}
