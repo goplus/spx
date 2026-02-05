@@ -120,6 +120,8 @@ type GDExtensionInterface struct {
 	SpxPlatformIsDebugMode                      js.Value
 	SpxPlatformGetTimeScale                     js.Value
 	SpxPlatformSetTimeScale                     js.Value
+	SpxPlatformGetMaxFps                        js.Value
+	SpxPlatformSetMaxFps                        js.Value
 	SpxPlatformGetPersistantDataDir             js.Value
 	SpxPlatformSetPersistantDataDir             js.Value
 	SpxPlatformIsInPersistantDataDir            js.Value
@@ -432,6 +434,8 @@ func (x *GDExtensionInterface) loadProcAddresses() {
 	x.SpxPlatformIsDebugMode = dlsymGD("gdspx_platform_is_debug_mode")
 	x.SpxPlatformGetTimeScale = dlsymGD("gdspx_platform_get_time_scale")
 	x.SpxPlatformSetTimeScale = dlsymGD("gdspx_platform_set_time_scale")
+	x.SpxPlatformGetMaxFps = dlsymGD("gdspx_platform_get_max_fps")
+	x.SpxPlatformSetMaxFps = dlsymGD("gdspx_platform_set_max_fps")
 	x.SpxPlatformGetPersistantDataDir = dlsymGD("gdspx_platform_get_persistant_data_dir")
 	x.SpxPlatformSetPersistantDataDir = dlsymGD("gdspx_platform_set_persistant_data_dir")
 	x.SpxPlatformIsInPersistantDataDir = dlsymGD("gdspx_platform_is_in_persistant_data_dir")

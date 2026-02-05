@@ -381,6 +381,11 @@ func (pself *platformMgrImpl) GetTimeScale() float64 {
 	return _ret1
 }
 func (pself *platformMgrImpl) SetTimeScale(time_scale float64) {}
+func (pself *platformMgrImpl) GetMaxFps() int64 {
+	var _ret1 int64
+	return _ret1
+}
+func (pself *platformMgrImpl) SetMaxFps(fps int64) {}
 func (pself *platformMgrImpl) GetPersistantDataDir() string {
 	var _ret1 string
 	return _ret1

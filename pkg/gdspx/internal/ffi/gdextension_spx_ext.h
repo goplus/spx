@@ -323,6 +323,8 @@ typedef void (*GDExtensionSpxPlatformSetDebugMode)(GdBool enable);
 typedef void (*GDExtensionSpxPlatformIsDebugMode)(GdBool *ret_value);
 typedef void (*GDExtensionSpxPlatformGetTimeScale)(GdFloat *ret_value);
 typedef void (*GDExtensionSpxPlatformSetTimeScale)(GdFloat time_scale);
+typedef void (*GDExtensionSpxPlatformGetMaxFps)(GdInt *ret_value);
+typedef void (*GDExtensionSpxPlatformSetMaxFps)(GdInt fps);
 typedef void (*GDExtensionSpxPlatformGetPersistantDataDir)(GdString *ret_value);
 typedef void (*GDExtensionSpxPlatformSetPersistantDataDir)(GdString path);
 typedef void (*GDExtensionSpxPlatformIsInPersistantDataDir)(GdString path, GdBool *ret_value);
