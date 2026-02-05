@@ -74,7 +74,7 @@ setup-dev: ## Initialize development environment (full)
 	make build-web && \
 	echo "===> setup-dev done, use 'make run DEMO_INDEX=N' to run demo"
 
-setup-web-full:
+setup-web-full: ## Download and install web engine from godot releases(full)
 	echo "===> Setup engine runtime" && \
 	make setup && \
 	echo "===> Download engine editor" && \
