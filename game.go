@@ -617,6 +617,8 @@ func (p *Game) setupPlatformAndCamera(proj *projConfig) {
 	} else {
 		platformMgr.SetWindowSize(int64(float64(p.windowWidth)*p.windowScale), int64(float64(p.windowHeight)*p.windowScale), true)
 	}
+
+	platformMgr.SetMaxFps(int64(proj.MaxFPS))
 	platformMgr.SetStretchMode(p.stretchMode)
 
 	p.camera = &cameraImpl{}

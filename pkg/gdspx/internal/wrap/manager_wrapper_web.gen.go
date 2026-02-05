@@ -609,6 +609,14 @@ func (pself *platformMgr) SetTimeScale(time_scale float64) {
 	arg0 := JsFromGdFloat(time_scale)
 	API.SpxPlatformSetTimeScale.Invoke(arg0)
 }
+func (pself *platformMgr) GetMaxFps() int64 {
+	_retValue := API.SpxPlatformGetMaxFps.Invoke()
+	return JsToGdInt(_retValue)
+}
+func (pself *platformMgr) SetMaxFps(fps int64) {
+	arg0 := JsFromGdInt(fps)
+	API.SpxPlatformSetMaxFps.Invoke(arg0)
+}
 func (pself *platformMgr) GetPersistantDataDir() string {
 	_retValue := API.SpxPlatformGetPersistantDataDir.Invoke()
 	return JsToGdString(_retValue)

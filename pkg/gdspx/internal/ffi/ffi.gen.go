@@ -116,6 +116,8 @@ type GDExtensionInterface struct {
 	SpxPlatformIsDebugMode                      GDExtensionSpxPlatformIsDebugMode
 	SpxPlatformGetTimeScale                     GDExtensionSpxPlatformGetTimeScale
 	SpxPlatformSetTimeScale                     GDExtensionSpxPlatformSetTimeScale
+	SpxPlatformGetMaxFps                        GDExtensionSpxPlatformGetMaxFps
+	SpxPlatformSetMaxFps                        GDExtensionSpxPlatformSetMaxFps
 	SpxPlatformGetPersistantDataDir             GDExtensionSpxPlatformGetPersistantDataDir
 	SpxPlatformSetPersistantDataDir             GDExtensionSpxPlatformSetPersistantDataDir
 	SpxPlatformIsInPersistantDataDir            GDExtensionSpxPlatformIsInPersistantDataDir
@@ -428,6 +430,8 @@ func (x *GDExtensionInterface) loadProcAddresses() {
 	x.SpxPlatformIsDebugMode = (GDExtensionSpxPlatformIsDebugMode)(dlsymGD("spx_platform_is_debug_mode"))
 	x.SpxPlatformGetTimeScale = (GDExtensionSpxPlatformGetTimeScale)(dlsymGD("spx_platform_get_time_scale"))
 	x.SpxPlatformSetTimeScale = (GDExtensionSpxPlatformSetTimeScale)(dlsymGD("spx_platform_set_time_scale"))
+	x.SpxPlatformGetMaxFps = (GDExtensionSpxPlatformGetMaxFps)(dlsymGD("spx_platform_get_max_fps"))
+	x.SpxPlatformSetMaxFps = (GDExtensionSpxPlatformSetMaxFps)(dlsymGD("spx_platform_set_max_fps"))
 	x.SpxPlatformGetPersistantDataDir = (GDExtensionSpxPlatformGetPersistantDataDir)(dlsymGD("spx_platform_get_persistant_data_dir"))
 	x.SpxPlatformSetPersistantDataDir = (GDExtensionSpxPlatformSetPersistantDataDir)(dlsymGD("spx_platform_set_persistant_data_dir"))
 	x.SpxPlatformIsInPersistantDataDir = (GDExtensionSpxPlatformIsInPersistantDataDir)(dlsymGD("spx_platform_is_in_persistant_data_dir"))

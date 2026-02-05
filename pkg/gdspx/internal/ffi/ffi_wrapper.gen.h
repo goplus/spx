@@ -306,6 +306,12 @@ void cgo_callfn_GDExtensionSpxPlatformGetTimeScale(const GDExtensionSpxPlatformG
 void cgo_callfn_GDExtensionSpxPlatformSetTimeScale(const GDExtensionSpxPlatformSetTimeScale fn, GdFloat time_scale) {
 	fn(time_scale);
 }
+void cgo_callfn_GDExtensionSpxPlatformGetMaxFps(const GDExtensionSpxPlatformGetMaxFps fn, GdInt* ret_val) {
+	fn(ret_val);
+}
+void cgo_callfn_GDExtensionSpxPlatformSetMaxFps(const GDExtensionSpxPlatformSetMaxFps fn, GdInt fps) {
+	fn(fps);
+}
 void cgo_callfn_GDExtensionSpxPlatformGetPersistantDataDir(const GDExtensionSpxPlatformGetPersistantDataDir fn, GdString* ret_val) {
 	fn(ret_val);
 }

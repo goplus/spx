@@ -124,6 +124,7 @@ type projConfig struct {
 
 	StretchMode *bool   `json:"stretchMode"` // whether to use stretch mode, default true
 	WindowScale float64 `json:"windowScale"`
+	MaxFPS      int     `json:"maxFPS"` // maximum frames per second, default 0 means no limit
 
 	AutoSetCollisionLayer *bool `json:"autoSetCollisionLayer"` // whether to auto set collision layer, default true
 	CollisionByShape      bool  `json:"collisionByShape"`      // whether to use collision by shape or pixel, default false

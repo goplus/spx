@@ -634,6 +634,14 @@ func (pself *platformMgr) SetTimeScale(time_scale float64) {
 	arg0 := ToGdFloat(time_scale)
 	CallPlatformSetTimeScale(arg0)
 }
+func (pself *platformMgr) GetMaxFps() int64 {
+	retValue := CallPlatformGetMaxFps()
+	return ToInt64(retValue)
+}
+func (pself *platformMgr) SetMaxFps(fps int64) {
+	arg0 := ToGdInt(fps)
+	CallPlatformSetMaxFps(arg0)
+}
 func (pself *platformMgr) GetPersistantDataDir() string {
 	retValue := CallPlatformGetPersistantDataDir()
 	return ToString(retValue)

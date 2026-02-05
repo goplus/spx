@@ -183,6 +183,8 @@ type GDExtensionSpxPlatformSetDebugMode C.GDExtensionSpxPlatformSetDebugMode
 type GDExtensionSpxPlatformIsDebugMode C.GDExtensionSpxPlatformIsDebugMode
 type GDExtensionSpxPlatformGetTimeScale C.GDExtensionSpxPlatformGetTimeScale
 type GDExtensionSpxPlatformSetTimeScale C.GDExtensionSpxPlatformSetTimeScale
+type GDExtensionSpxPlatformGetMaxFps C.GDExtensionSpxPlatformGetMaxFps
+type GDExtensionSpxPlatformSetMaxFps C.GDExtensionSpxPlatformSetMaxFps
 type GDExtensionSpxPlatformGetPersistantDataDir C.GDExtensionSpxPlatformGetPersistantDataDir
 type GDExtensionSpxPlatformSetPersistantDataDir C.GDExtensionSpxPlatformSetPersistantDataDir
 type GDExtensionSpxPlatformIsInPersistantDataDir C.GDExtensionSpxPlatformIsInPersistantDataDir
@@ -1333,6 +1335,21 @@ func CallPlatformSetTimeScale(
 	arg1GdFloat := (C.GdFloat)(time_scale)
 
 	C.cgo_callfn_GDExtensionSpxPlatformSetTimeScale(arg0, arg1GdFloat)
+
+}
+func CallPlatformGetMaxFps() GdInt {
+	arg0 := (C.GDExtensionSpxPlatformGetMaxFps)(api.SpxPlatformGetMaxFps)
+	var ret_val C.GdInt
+	C.cgo_callfn_GDExtensionSpxPlatformGetMaxFps(arg0, &ret_val)
+	return (GdInt)(ret_val)
+}
+func CallPlatformSetMaxFps(
+	fps GdInt,
+) {
+	arg0 := (C.GDExtensionSpxPlatformSetMaxFps)(api.SpxPlatformSetMaxFps)
+	arg1GdInt := (C.GdInt)(fps)
+
+	C.cgo_callfn_GDExtensionSpxPlatformSetMaxFps(arg0, arg1GdInt)
 
 }
 func CallPlatformGetPersistantDataDir() GdString {

@@ -727,6 +727,18 @@ func (pself *platformMgrImpl) SetTimeScale(time_scale float64) {
 		gdx.PlatformMgr.SetTimeScale(time_scale)
 	})
 }
+func (pself *platformMgrImpl) GetMaxFps() int64 {
+	var _ret1 int64
+	callInMainThread(func() {
+		_ret1 = gdx.PlatformMgr.GetMaxFps()
+	})
+	return _ret1
+}
+func (pself *platformMgrImpl) SetMaxFps(fps int64) {
+	callInMainThread(func() {
+		gdx.PlatformMgr.SetMaxFps(fps)
+	})
+}
 func (pself *platformMgrImpl) GetPersistantDataDir() string {
 	var _ret1 string
 	callInMainThread(func() {
