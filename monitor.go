@@ -30,21 +30,27 @@ import (
 
 // -------------------------------------------------------------------------------------
 
+const (
+	getVarPrefix           = "getVar:"
+	monitorUpdateIntervalS = 0.2 // Monitor update interval in seconds
+)
+
 // Monitor class.
 type Monitor struct {
-	game    *Game
-	name    WidgetName
-	size    float64
-	target  string
-	val     string
-	eval    func() string
-	mode    int
-	color   mathf.Color
-	pos     mathf.Vec2
-	label   string
-	visible bool
-	panel   *ui.UiMonitor
-	isDirty bool
+	game        *Game
+	name        WidgetName
+	size        float64
+	target      string
+	val         string
+	eval        func() string
+	mode        int
+	color       mathf.Color
+	pos         mathf.Vec2
+	label       string
+	visible     bool
+	panel       *ui.UiMonitor
+	isDirty     bool
+	updateTimer float64
 }
 
 /*
@@ -94,8 +100,14 @@ func newMonitor(g reflect.Value, v specsp) (*Monitor, error) {
 }
 
 func (pself *Monitor) onUpdate(delta float64) {
-	if !pself.isDirty {
+	pself.updateTimer += delta
+	needsUpdate := pself.isDirty || pself.updateTimer >= monitorUpdateIntervalS
+	if !needsUpdate {
 		return
+	}
+
+	if pself.updateTimer >= monitorUpdateIntervalS {
+		pself.updateTimer = 0
 	}
 
 	pself.panel.SetVisible(pself.visible)
@@ -173,10 +185,6 @@ func makeMethodEvalFunc(m reflect.Value) func() string {
 		}
 	}
 }
-
-const (
-	getVarPrefix = "getVar:"
-)
 
 func buildMonitorEval(g reflect.Value, t, val string) func() string {
 	target, from := getTarget(g, t)
