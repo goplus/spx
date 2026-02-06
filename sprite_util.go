@@ -67,8 +67,8 @@ func (p *SpriteImpl) bounds() *mathf.Rect2 {
 	x, y := p.getXY()
 	applyRenderOffset(p, &x, &y)
 
-	// Calculate dimensions and adjust position based on physics trigger or costume
-	w, h := p.getBoundsDimensions(&x, &y)
+	// Calculate dimensions and adjust position for physics trigger offset
+	w, h := p.adjustPositionAndGetDimensions(&x, &y)
 
 	return &mathf.Rect2{
 		Position: mathf.Vec2{X: x - w*0.5, Y: y - h*0.5},
@@ -76,8 +76,8 @@ func (p *SpriteImpl) bounds() *mathf.Rect2 {
 	}
 }
 
-// getBoundsDimensions calculates sprite dimensions and adjusts position for physics triggers
-func (p *SpriteImpl) getBoundsDimensions(x, y *float64) (width, height float64) {
+// adjustPositionAndGetDimensions calculates dimensions and adjusts position for physics trigger offset
+func (p *SpriteImpl) adjustPositionAndGetDimensions(x, y *float64) (width, height float64) {
 	triggerInfo := p.physics().getTriggerInfo()
 
 	if triggerInfo.Type == physicsColliderNone {
