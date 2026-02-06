@@ -2,11 +2,32 @@
 import FakeBlob from "./adpter";
 import GodotSDK from "./sdk";
 import "./engine";
+import "./fflate";
+
+function buildFilesFromZip(data) {
+    if (globalThis.fflate == null || typeof globalThis.fflate.unzipSync !== "function") {
+        throw new Error("fflate.unzipSync is unavailable");
+    }
+
+    const files = {};
+    const now = Date.now();
+    const unzipped = globalThis.fflate.unzipSync(new Uint8Array(data));
+    Object.entries(unzipped).forEach(([path, entry]) => {
+        if (path.endsWith('/')) return;
+        const content = (entry.byteOffset === 0 && entry.byteLength === entry.buffer.byteLength)
+            ? entry.buffer
+            : entry.slice().buffer;
+        files[path] = { lastModified: now, content };
+    });
+    return files;
+}
 
 class GameRunner {
     constructor() {
         this.godotSdk = new GodotSDK();
         GameGlobal.godotSdk = this.godotSdk;
+        this.gameApp = null;
+        this.syncfsInterval = null;
     }
     async onGameStart() {
         console.log("====>onStart")
@@ -14,7 +35,10 @@ class GameRunner {
         }, (error) => {
             console.error(error)
         });
-        setInterval(() => {
+        if (this.syncfsInterval != null) {
+            clearInterval(this.syncfsInterval);
+        }
+        this.syncfsInterval = setInterval(() => {
             this.godotSdk.syncfs(() => {
             }, (error) => {
                 console.error(error)
@@ -23,20 +47,18 @@ class GameRunner {
     }
 
     async startGame(onProgress) {
-        // Use fetch polyfill to get files
-        let buffer = await (await fetch("engine/game.zip")).arrayBuffer();
+        const response = await fetch("engine/game.zip");
+        if (!response.ok) {
+            throw new Error(`Failed to fetch engine/game.zip: HTTP ${response.status}`);
+        }
+        const zipped = await response.arrayBuffer();
+        const files = buildFilesFromZip(zipped);
         let assetURLs = null
         const config = {
             'projectName': "spx_game",
             'onProgress': onProgress,
             "gameCanvas": canvas,
-            "editorCanvas": canvas,
-            "projectData": new Uint8Array(buffer),
             "logLevel": 0,
-            "onStart": () => {
-                this.onGameStart()
-            },
-            "useAssetCache": false,
             "isRuntimeMode": true,
             "assetURLs": {
                 "engine.zip": "engine/engine.zip",
@@ -49,8 +71,15 @@ class GameRunner {
             config.assetURLs = assetURLs
         }
 
-        let gameApp = new GameApp(config);
-        await gameApp.RunGame();
+        if (this.gameApp != null) {
+            await this.gameApp.ResetGame();
+        }
+
+        this.gameApp = new GameApp(config);
+        await this.gameApp.InitEngine();
+        await this.gameApp.InitGame(files);
+        await this.gameApp.StartGame();
+        await this.onGameStart();
     }
 }
 

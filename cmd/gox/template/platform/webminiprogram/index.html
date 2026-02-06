@@ -39,23 +39,6 @@
 			width: 100%;
 			height: 100%;
 		}
-
-		#debug-info {
-			position: absolute;
-			top: 10px;
-			right: 10px;
-			background-color: rgba(0, 0, 0, 0.7);
-			color: #fff;
-			padding: 8px 12px;
-			border-radius: 4px;
-			font-family: monospace;
-			font-size: 12px;
-			max-width: 300px;
-			white-space: pre-wrap;
-			word-break: break-all;
-			z-index: 1000;
-			display: none;
-		}
 	</style>
 </head>
 
@@ -69,13 +52,12 @@
 		<div id="tab-game" style="display: none;">
 			<canvas id="game-canvas" tabindex="2"></canvas>
 		</div>
-		<div id="debug-info"></div>
 	</div>
 
 	<script>var miniEngine = null</script>
 	<script>var isWasmCompressed = false</script>
+	<script src="fflate.js"></script>
 	<script src="engine.js"></script>
-	<script src="storage.manager.js"></script>
 	<script src="worker.message.manager.js"></script>
 	<script src="go.wasm.exec.js"></script>
 	<script src="game.js"></script>
@@ -85,38 +67,6 @@
 		let gameApp = null;
 		let isShowEditor = false;
 		let onGameErrorCallback = null;
-		let debugInfoInterval = null;
-
-		// 更新 debug info 显示
-		function updateDebugInfo() {
-			const debugElement = document.getElementById('debug-info');
-			if (gameApp && gameApp.debugInfo && debugElement) {
-				debugElement.textContent = gameApp.debugInfo;
-				debugElement.style.display = 'block';
-			} else if (debugElement) {
-				debugElement.style.display = 'none';
-			}
-		}
-
-		// 开始 debug info 更新
-		function startDebugInfoUpdate() {
-			if (debugInfoInterval) {
-				clearInterval(debugInfoInterval);
-			}
-			debugInfoInterval = setInterval(updateDebugInfo, 1000); // 每秒更新一次
-		}
-
-		// 停止 debug info 更新
-		function stopDebugInfoUpdate() {
-			if (debugInfoInterval) {
-				clearInterval(debugInfoInterval);
-				debugInfoInterval = null;
-			}
-			const debugElement = document.getElementById('debug-info');
-			if (debugElement) {
-				debugElement.style.display = 'none';
-			}
-		}
 
 		// Detect current environment, use relative path for local development, absolute path for production
 		let urlPrefix = "";
@@ -134,30 +84,6 @@
 			console.log("❌ wx.miniProgram not detected");
 		}
 
-		// Batch send cached logs
-		function flushLogQueue() {
-			console.log("🔄 Attempting to send cached logs, queue length:", logQueue.length);
-			if (logQueue.length > 0 && typeof wx !== 'undefined' && wx.miniProgram && wx.miniProgram.postMessage) {
-				console.log("✅ Starting to send cached logs");
-				const successCount = logQueue.filter((log) => {
-					try {
-						wx.miniProgram.postMessage({
-							data: log
-						});
-						return true;
-					} catch (error) {
-						console.error("❌ Failed to send cached log:", error);
-						return false;
-					}
-				}).length;
-				
-				console.log(`✅ Successfully sent ${successCount}/${logQueue.length} cached logs`);
-				logQueue.length = 0; // Clear queue
-			} else {
-				console.log("⚠️ WeChat environment unavailable, keeping cached logs");
-			}
-		}
-
 		function onProgress(value) {
 			console.log("onProgress", value);
 		}
@@ -170,6 +96,24 @@
 
 		function onGameError(callback) {
 			onGameErrorCallback = callback;
+		}
+
+		function buildFilesFromZip(data) {
+			if (globalThis.fflate == null || typeof globalThis.fflate.unzipSync !== "function") {
+				throw new Error("fflate.unzipSync is unavailable");
+			}
+
+			const files = {};
+			const now = Date.now();
+			const unzipped = globalThis.fflate.unzipSync(new Uint8Array(data));
+			Object.entries(unzipped).forEach(([path, entry]) => {
+				if (path.endsWith('/')) return;
+				const content = (entry.byteOffset === 0 && entry.byteLength === entry.buffer.byteLength)
+					? entry.buffer
+					: entry.slice().buffer;
+				files[path] = { lastModified: now, content };
+			});
+			return files;
 		}
 
 		async function startGame(params) {
@@ -200,41 +144,35 @@
 			document.getElementById('tab-editor').style.display = 'none';
 			document.getElementById('tab-loader').style.display = 'none';
 			
-			let buffer;
-			try {
-				const response = await fetch(zipUrl);
-				buffer = await response.arrayBuffer();
-			} catch (error) {
-				throw error;
+			const response = await fetch(zipUrl);
+			if (!response.ok) {
+				throw new Error(`Failed to fetch ${zipUrl}: HTTP ${response.status}`);
 			}
+			const buffer = await response.arrayBuffer();
+			const files = buildFilesFromZip(buffer);
 			
 			const config = {
 				'projectName': "spx_game",
 				'onProgress': onProgress,
 				"gameCanvas": canvas,
-				"projectData": new Uint8Array(buffer),
 				"logLevel": LOG_LEVEL_VERBOSE,
-				"useAssetCache": true,
 				"assetURLs": {
 					"engine.zip": urlPrefix + "engine.zip",
 					"ispx.wasm": urlPrefix + "ispx.wasm",
 					"engine.wasm": urlPrefix + "engine.wasm",
 				},
-				"onSpxReady": null,
 			};
 
 			if (gameApp != null) {
-				await gameApp.StopGame();
-				stopDebugInfoUpdate(); // 停止 debug info 更新
+				await gameApp.ResetGame();
 			}
 
 			try {
-				// Try to install project and run game
 				gameApp = new GameApp(config);
-				await gameApp.RunGame();
-				startDebugInfoUpdate(); // 开始 debug info 更新
+				await gameApp.InitEngine();
+				await gameApp.InitGame(files);
+				await gameApp.StartGame();
 			} catch (error) {
-				stopDebugInfoUpdate(); // 出错时停止 debug info 更新
 				console.error("Stack trace:", error.stack);
 				throw error;
 			}
@@ -263,14 +201,8 @@
 		// Set error callback
 		onGameError(function (callback) {
 			console.error("onGameError", callback);
-			stopDebugInfoUpdate(); // 出错时停止 debug info 更新
 			// Send error message to mini program
 			sendMessageToMiniProgram('gameError', { error: callback });
-		});
-
-		// 页面卸载时清理定时器
-		window.addEventListener('beforeunload', function() {
-			stopDebugInfoUpdate();
 		});
 
 		// Wait for all scripts to load and automatically start the game
@@ -290,15 +222,15 @@
 			waitForScriptsAndStart();
 		});
 
-		
-        window.addEventListener('message', function(event) {
-            log(`web-view 📨 收到消息: ${JSON.stringify(event.data)}`);
-			    // 可选：向小程序发送回复
+
+		window.addEventListener('message', function(event) {
+			console.log(`web-view 📨 收到消息: ${JSON.stringify(event.data)}`);
+			// 可选：向小程序发送回复
 			window.parent.postMessage({
 				type: 'web-reply',
 				data: '网页已收到消息'
 			}, '*');
-        });
+		});
 	</script>
 </body>
 
