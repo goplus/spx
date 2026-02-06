@@ -52,14 +52,18 @@ func (pself *CmdTool) RunPackMode(pargs ...string) error {
 
 func (pself *CmdTool) RunWeb() error {
 	if !util.IsFileExist(filepath.Join(pself.ProjectDir, ".builds", "web", "game.zip")) {
-		pself.ExportWeb()
+		if err := pself.ExportWeb(); err != nil {
+			return err
+		}
 	}
 	return pself.runWebServer()
 }
 
 func (pself *CmdTool) RunWebWorker() error {
 	if !util.IsFileExist(filepath.Join(pself.ProjectDir, ".builds", "web", "game.zip")) {
-		pself.ExportWebWorker()
+		if err := pself.ExportWebWorker(); err != nil {
+			return err
+		}
 	}
 	return pself.runWebServer()
 }
@@ -99,7 +103,7 @@ func (pself *CmdTool) StopWeb() (err error) {
 		cmd.Run()
 		os.Remove(tempFileName)
 	} else {
-		cmd := exec.Command("pkill", "-f", "gdx_web_server.py")
+		cmd := exec.Command("pkill", "-f", "gdspx_web_server.py")
 		cmd.Run()
 	}
 	return
@@ -143,12 +147,13 @@ func (pself *CmdTool) RunWithAiMode(pargs ...string) error {
 
 // RunInterpreted runs the project in interpreted mode.
 func (pself *CmdTool) RunInterpreted(pargs ...string) error {
-	// Get gdextension path from GOPATH/bin
-	extensionPath := path.Join(pself.GoBinPath, "runtime.gdextension")
-
-	// Verify runtime.gdextension exists
-	if _, err := os.Stat(extensionPath); os.IsNotExist(err) {
-		return fmt.Errorf("runtime.gdextension not found at %s. Please run 'spx install' first", extensionPath)
+	extensionSrc := filepath.Join(pself.ShareDir, "runtime.gdextension")
+	extensionDst := filepath.Join(pself.RuntimeTempDir, "runtime.gdextension")
+	if _, err := os.Stat(extensionSrc); os.IsNotExist(err) {
+		return fmt.Errorf("runtime.gdextension not found at %s. Run 'make build' to build core assets", extensionSrc)
+	}
+	if err := util.CopyFile(extensionSrc, extensionDst); err != nil {
+		return fmt.Errorf("failed to copy runtime.gdextension: %w", err)
 	}
 
 	// Verify the shared library exists
@@ -164,13 +169,17 @@ func (pself *CmdTool) RunInterpreted(pargs ...string) error {
 		libExt = ".so"
 	}
 	libName := fmt.Sprintf("gdspx-%s-%s%s", GOOS, GOARCH, libExt)
-	libPath := path.Join(pself.GoBinPath, libName)
-	if _, err := os.Stat(libPath); os.IsNotExist(err) {
-		return fmt.Errorf("shared library %s not found at %s. Please run 'make install' first", libName, pself.GoBinPath)
+	libSrc := filepath.Join(pself.LibDir, libName)
+	if _, err := os.Stat(libSrc); os.IsNotExist(err) {
+		return fmt.Errorf("shared library %s not found at %s. Run 'make build-native' to build native runtime", libName, pself.LibDir)
+	}
+	libDst := filepath.Join(pself.RuntimeTempDir, libName)
+	if err := util.CopyFile(libSrc, libDst); err != nil {
+		return fmt.Errorf("failed to copy shared library: %w", err)
 	}
 
 	// Build command arguments using common function
-	args := pself.buildRuntimeArgs(pargs, pself.RuntimeTempDir, extensionPath)
+	args := pself.buildRuntimeArgs(pargs, pself.RuntimeTempDir, extensionDst)
 	// Run the gdspxrt runtime
 	return util.RunCommandInDir(pself.RuntimeTempDir, pself.RuntimeCmdPath, args...)
 }

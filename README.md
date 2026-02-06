@@ -16,22 +16,22 @@ How to run games powered by XGo spx engine?
 * Install scons (version == 4.7.0) (for engine development, optional)
 * Install make
 * Install [`mingw-w64`](https://www.mingw-w64.org/) (Windows only)
-* Add the Go environment's bin directory to the system PATH.
+* Add the project-local SPX binary directory to the system PATH.
 ```
-    export PATH=$PATH:$GOPATH/bin
+    export PATH=$PATH:$(pwd)/dist/bin
 ```
 * Download XGo and build it. See https://github.com/goplus/xgo#how-to-build.
 * Download spx and build it.
-	```sh
-	# please use Git Bash to run the following commands in windows platform
-	git clone https://github.com/goplus/spx.git
-	cd spx
-	git checkout dev
-	make setup
+  ```sh
+  # please use Git Bash to run the following commands in windows platform
+  git clone https://github.com/goplus/spx.git
+  cd spx
+  git checkout dev
+  make setup
 
-	# run the demo
-	spx run -path tutorial/00-Hello
-	```
+  # run the demo
+  ./dist/bin/spx run -path tutorial/00-Hello
+  ```
 * Build a game and run.
   * cd `game-root-dir`
   * xgo run .

@@ -1,273 +1,159 @@
 #!/bin/bash
+set -e
 
-# Get the directory of the script
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJ_DIR="$SCRIPT_DIR/../../.."
-echo $PROJ_DIR
+DIST_DIR="$PROJ_DIR/dist"
+DIST_ENGINES_DIR="${DIST_ENGINES_DIR:-$DIST_DIR/share/engines}"
+DIST_TEMPLATES_DIR="${DIST_TEMPLATES_DIR:-$DIST_DIR/share/templates}"
 
-# Function to compress wasm file with brotli
-compress_with_brotli() {
-    local input_file="$1"
-    local output_file="$2"
-    
-    if [ -z "$input_file" ] || [ -z "$output_file" ]; then
-        echo "Error: compress_with_brotli requires input and output file parameters"
-        return 1
+mkdir -p "$DIST_TEMPLATES_DIR"
+
+ensure_spx_bin() {
+    if [ -z "$SPX_BIN" ]; then
+        echo "Error: SPX_BIN is not set"
+        echo "Run this script via 'make setup-web' or set SPX_BIN manually"
+        exit 1
     fi
-    
-    if [ ! -f "$input_file" ]; then
-        echo "Error: Input file $input_file does not exist"
-        return 1
-    fi
-    
-    # Check if brotli is installed
-    local brotli_installed=false
-    if command -v brotli &> /dev/null; then
-        echo "brotli is already installed"
-        brotli_installed=true
-    else
-        echo "brotli not detected, trying to install..."
-        
-        # Install brotli based on the system type
-        case "$SYSTEM" in
-            Linux)
-                # Detect Linux distribution
-                if [ -f /etc/os-release ]; then
-                    . /etc/os-release
-                    if [[ "$ID" == "ubuntu" || "$ID" == "debian" ]]; then
-                        echo "Detected Ubuntu/Debian system, installing brotli with apt"
-                        sudo apt-get update && sudo apt-get install -y brotli
-                    elif [[ "$ID" == "fedora" || "$ID" == "rhel" || "$ID" == "centos" ]]; then
-                        echo "Detected Fedora/RHEL/CentOS system, installing brotli with dnf/yum"
-                        sudo dnf install -y brotli || sudo yum install -y brotli
-                    else
-                        echo "Unrecognized Linux distribution, trying to install with apt"
-                        sudo apt-get update && sudo apt-get install -y brotli
-                    fi
-                else
-                    echo "Unable to determine Linux distribution, trying to install with apt"
-                    sudo apt-get update && sudo apt-get install -y brotli
-                fi
-                ;;
-            Darwin)
-                echo "Detected macOS system, installing brotli with Homebrew"
-                brew install brotli
-                ;;
-            *)
-                echo "Unrecognized operating system: $SYSTEM, cannot automatically install brotli"
-                ;;
-        esac
-        
-        # Check again if installation was successful
-        if command -v brotli &> /dev/null; then
-            echo "brotli installation successful"
-            brotli_installed=true
-        else
-            echo "brotli installation failed, will skip compression step"
-        fi
-    fi
-    
-    if $brotli_installed; then
-        echo "Compressing $input_file with brotli..."
-        brotli -q 11 -o "$output_file" "$input_file"
-        if [ $? -eq 0 ]; then
-            echo "$output_file has been created"
-            return 0
-        else
-            echo "Error: brotli compression failed"
-            return 1
-        fi
-    else
-        echo "brotli not available, skipping compression"
-        return 1
+    if [ ! -x "$SPX_BIN" ]; then
+        echo "Error: SPX_BIN is not executable: $SPX_BIN"
+        exit 1
     fi
 }
 
-# Set CURRENT_PATH to the project root directory
-CURRENT_PATH="$PROJ_DIR"
-# Define a function for the release web functionality
-do_exportweb() {
-    local mode="${1:-normal}"
-    echo "Starting exportweb (mode: $mode)..."
+# Create a temporary project for export commands
+prepare_export_env() {
+    rm -rf "$PROJ_DIR/.tmp/web"
+    mkdir -p "$PROJ_DIR/.tmp/web/assets"
+    echo '{"map":{"width":480,"height":360}}' > "$PROJ_DIR/.tmp/web/assets/index.json"
+    echo "" > "$PROJ_DIR/.tmp/web/main.spx"
+    rm -rf "$PROJ_DIR/.tmp/web/project/.builds"/*web
 
-    # Validate mode
+    PCK_VERSION=$(cat "$PROJ_DIR/cmd/gox/template/pck_version")
+}
+
+do_exportweb() {
+    ensure_spx_bin
+    local mode="${1:-normal}"
+
     if [ "$mode" != "normal" ] && [ "$mode" != "worker" ] && [ "$mode" != "minigame" ] && [ "$mode" != "miniprogram" ]; then
         echo "Error: Invalid mode '$mode'. Supported modes: normal, worker, minigame, miniprogram"
         return 1
     fi
 
-    # Determine the spx command based on mode
     local spx_cmd="exportweb"
-    local output_zip="spx_web.zip"
+    local output_zip="spx-web.zip"
     case "$mode" in
         normal)
             spx_cmd="exportweb"
-            output_zip="spx_web.zip"
+            output_zip="spx-web.zip"
             ;;
         worker)
             spx_cmd="exportwebworker"
-            output_zip="spx_web_worker.zip"
+            output_zip="spx-web-worker.zip"
             ;;
         minigame)
             spx_cmd="exportminigame"
-            output_zip="spx_web_minigame.zip"
+            output_zip="spx-web-minigame.zip"
             ;;
         miniprogram)
             spx_cmd="exportminiprogram"
-            output_zip="spx_web_miniprogram.zip"
+            output_zip="spx-web-miniprogram.zip"
             ;;
     esac
 
-    # Create temporary directory
-    mkdir -p "$CURRENT_PATH/.tmp/web"
+    prepare_export_env
 
-    # Execute the exportweb commands
-    (cd "$CURRENT_PATH/.tmp/web"
-     mkdir -p assets
-     echo '{"map":{"width":480,"height":360}}' > assets/index.json
-     echo "" > main.spx
-     rm -rf ./project/.builds/*web
-     spx $spx_cmd
+    (cd "$PROJ_DIR/.tmp/web"
+     "$SPX_BIN" $spx_cmd
      cd ./project/.builds/web
      rm -f game.zip
-     zip -r "$CURRENT_PATH/$output_zip" *
-     echo "$CURRENT_PATH/$output_zip has been created") || {
+     zip -r "$PROJ_DIR/$output_zip" *
+     echo "$PROJ_DIR/$output_zip has been created") || {
         echo "Error: Failed to create web export (mode: $mode)"
         return 1
     }
 
-    # Clean up
-    rm -rf "$CURRENT_PATH/.tmp"
+    rm -rf "$PROJ_DIR/.tmp"
     echo "exportweb (mode: $mode) completed successfully"
     return 0
 }
 
-
-do_prepare_export() {
-    # Check GOPATH
-    if [ -z "$GOPATH" ]; then
-        if command -v go > /dev/null; then
-            GOPATH="$(go env GOPATH)"
-        fi
-
-        if [ -z "$GOPATH" ]; then
-            echo "Error: GOPATH is not set"
-            return 1
-        fi
-    fi
-    
-    # Create temporary directory and copy files
-    rm -rf "$CURRENT_PATH/.tmp/web" 
-    mkdir -p "$CURRENT_PATH/.tmp/web" 
-    cp "$CURRENT_PATH/cmd/gox/template/project/runtime.gdextension.txt" "$GOPATH/bin/runtime.gdextension" || {
-        echo "Error: Failed to prepare exportpack environment"
-        return 1
-    }
-    
-    # Execute the exportpack commands
-    cd "$CURRENT_PATH/.tmp/web" 
-    mkdir -p assets 
-    echo '{"map":{"width":480,"height":360}}' > assets/index.json 
-    echo "" > main.spx 
-    rm -rf ./project/.builds/*web 
-    mkdir -p "$GOPATH/bin" 
-
-    TEMP_VERSION=$(cat "$CURRENT_PATH/cmd/gox/template/version") 
-    OUTPUT_PCK="$GOPATH/bin/gdspxrt$TEMP_VERSION.pck" 
-    ls $GOPATH/bin
-}
-
-# Define a function for the exportpack functionality
 do_extra_webtemplate() {
+    ensure_spx_bin
     local mode="${1:-normal}"
-    do_prepare_export
-    dstdir="$GOPATH/bin/gdspxrt"$TEMP_VERSION"_web"$mode
-    echo "exporting web runtime..." $mode
-    
-    spx exporttemplateweb 
 
-    rm -rf "$dstdir" 
-    cp -rf ./project/.builds/webi  "$dstdir" 
+    prepare_export_env
+
+    mkdir -p "$DIST_TEMPLATES_DIR/$mode"
+    local dstdir="$DIST_TEMPLATES_DIR/$mode"
+
+    echo "exporting web runtime... $mode"
+    (cd "$PROJ_DIR/.tmp/web" && "$SPX_BIN" exporttemplateweb)
+
+    rm -rf "$dstdir"
+    cp -rf "$PROJ_DIR/.tmp/web/project/.builds/webi" "$dstdir"
     mv "$dstdir/engine.pck" "$dstdir/engine.zip"
 
-    # write mode to engine.js
     engine_mode_define="var EnginePackMode = '$mode';"
-    echo "engine_mode_define: $engine_mode_define"
     temp_file=$(mktemp)
     echo "$engine_mode_define" > "$temp_file"
     cat "$dstdir/engine.js" >> "$temp_file"
     mv "$temp_file" "$dstdir/engine.js"
 
     echo "exporting web runtime done: $dstdir (mode: $mode)"
-
-    # Clean up
-    rm -rf "$CURRENT_PATH/.tmp"
+    rm -rf "$PROJ_DIR/.tmp"
     return 0
 }
 
-do_compresswasm() {
-    TEMP_VERSION=$(cat "$CURRENT_PATH/cmd/gox/template/version") 
-    dstdir="$GOPATH/bin/gdspxrt"$TEMP_VERSION"_web"
-    rm -rf "$dstdir/engine.wasm.br"
-    rm -rf "$dstdir/../ispx.wasm.br"
-    compress_with_brotli "$dstdir/engine.wasm" "$dstdir/engine.wasm.br"
-    compress_with_brotli "$dstdir/../ispx.wasm" "$dstdir/../ispx.wasm.br"
-}
-
-# Define a function for the exportpack functionality
 do_exportpack() {
-    do_prepare_export
+    ensure_spx_bin
+    prepare_export_env
+
     echo "Starting exportpack..."
-    
     echo "exporting pck..."
-    spx export 
-    
-    # Check if the files exist before copying
-    if [ -f "./project/.builds/pc/gdexport.pck" ]; then
-        echo "Copying gdexport.pck to $OUTPUT_PCK"
-        cp "./project/.builds/pc/gdexport.pck" "$OUTPUT_PCK"
+    (cd "$PROJ_DIR/.tmp/web" && "$SPX_BIN" export)
+
+    mkdir -p "$DIST_ENGINES_DIR"
+    OUTPUT_PCK="$DIST_ENGINES_DIR/gdspxrt$PCK_VERSION.pck"
+    RUNTIME_GDEXT="$DIST_DIR/share/runtime.gdextension"
+
+    if [ -f "$PROJ_DIR/.tmp/web/project/.builds/pc/gdexport.pck" ]; then
+        cp "$PROJ_DIR/.tmp/web/project/.builds/pc/gdexport.pck" "$OUTPUT_PCK"
     fi
-    
-    # For macOS builds
-    if [ -d "./project/.builds/pc/gdexport.app/Contents/Resources" ] && \
-       [ "$(ls -A ./project/.builds/pc/gdexport.app/Contents/Resources/*.pck 2>/dev/null)" ]; then
-        echo "Copying macOS resources to $OUTPUT_PCK"
-        cp ./project/.builds/pc/gdexport.app/Contents/Resources/*.pck "$OUTPUT_PCK"
+
+    if [ -d "$PROJ_DIR/.tmp/web/project/.builds/pc/gdexport.app/Contents/Resources" ] && \
+       [ "$(ls -A "$PROJ_DIR/.tmp/web/project/.builds/pc/gdexport.app/Contents/Resources"/*.pck 2>/dev/null)" ]; then
+        cp "$PROJ_DIR/.tmp/web/project/.builds/pc/gdexport.app/Contents/Resources"/*.pck "$OUTPUT_PCK"
     fi
-    # Clean up
-    rm -rf "$CURRENT_PATH/.tmp"
-    TEMP_VERSION=$(cat "$CURRENT_PATH/cmd/gox/template/version")
-    OUTPUT_PCK="$GOPATH/bin/gdspxrt$TEMP_VERSION.pck"
-    
-    # Check if files exist before creating zip
+
     if [ ! -f "$OUTPUT_PCK" ]; then
         echo "Error: $OUTPUT_PCK does not exist"
         return 1
     fi
-    if [ ! -f "$GOPATH/bin/runtime.gdextension" ]; then
-        echo "Error: $GOPATH/bin/runtime.gdextension does not exist"
+    if [ ! -f "$RUNTIME_GDEXT" ]; then
+        echo "Error: $RUNTIME_GDEXT does not exist"
         return 1
     fi
-    TEMP_PCK="$GOPATH/bin/gdspxrt.pck"
-    DST_ZIP="$GOPATH/bin/gdspxrt.pck.$TEMP_VERSION.zip"
+
+    TEMP_PCK="$DIST_ENGINES_DIR/gdspxrt.pck"
+    DST_ZIP="$DIST_ENGINES_DIR/gdspxrt.pck.$PCK_VERSION.zip"
+
     cp "$OUTPUT_PCK" "$TEMP_PCK"
-    rm -rf "$DST_ZIP"
-    zip -j "$DST_ZIP" "$TEMP_PCK" "$GOPATH/bin/runtime.gdextension"
-    rm -rf "$TEMP_PCK"
+    rm -f "$DST_ZIP"
+    zip -j "$DST_ZIP" "$TEMP_PCK" "$RUNTIME_GDEXT"
+    rm -f "$TEMP_PCK"
+    rm -rf "$PROJ_DIR/.tmp"
     return 0
 }
 
-
-# Main function to handle arguments
 main() {
     if [ $# -eq 0 ]; then
         echo "Usage: $0 [command] [options]"
         echo "Commands:"
         echo "  exportweb [mode] - Create a web release package (mode: normal|worker|minigame|miniprogram, default: normal)"
-        echo "  exportpack  - Set up and package the application"
+        echo "  exportpack - Set up and package the application"
         echo "  extrawebtemplate [mode] - Export web runtime template (mode: worker|minigame|miniprogram|normal)"
-        echo "  compresswasm - Compress WASM files with brotli"
-        echo "  runweb [path] [port] - Run a web server (default path: tutorial/01-Weather, default port: 8106)"
         return 1
     fi
 
@@ -282,20 +168,16 @@ main() {
         exportpack)
             do_exportpack
             ;;
-        compresswasm)
-            do_compresswasm
-            ;;
         extrawebtemplate)
             mode="$1"
             do_extra_webtemplate "$mode"
             ;;
         *)
             echo "Unknown command: $command"
-            echo "Available commands: exportweb [mode], exportpack, extrawebtemplate, compresswasm, runweb"
+            echo "Available commands: exportweb [mode], exportpack, extrawebtemplate"
             return 1
             ;;
     esac
 }
 
-# Execute main function with all arguments
 main "$@"

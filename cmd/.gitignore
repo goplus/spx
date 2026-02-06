@@ -8,7 +8,6 @@
 /test/project.godot
 /test/**/*.import
 /temp
-*.br
 
 # Godot editor files
 .godot/

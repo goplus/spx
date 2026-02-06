@@ -83,13 +83,13 @@ jobs:
     - name: Download Android engine templates
       run: |
         echo "Downloading Android engine templates..."
-        make download-engine PLATFORM=android
+        ./pkg/gdspx/tools/build_engine.sh -p android -g
         echo "Listing downloaded templates:"
         ls -la ~/.local/share/godot/export_templates/
 
     - name: Run test demo
       shell: bash
-      run: cd tutorial/00-Hello && spx exportapk 2>&1 | tee build_apk.txt || true
+      run: cd tutorial/00-Hello && ${SPX_BIN:-spx} exportapk 2>&1 | tee build_apk.txt || true
 
     - name: Check build result
       shell: bash

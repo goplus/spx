@@ -41,6 +41,8 @@ jobs:
 
       - name: Setup go/xgo & engine
         uses: ./.github/actions/deps
+        with:
+          spx-arch: ${{ matrix.arch == '386' && 'x86_32' || 'x86_64' }}
 
       - name: Download and extract Go toolchain
         shell: msys2 {0}
@@ -52,38 +54,22 @@ jobs:
           rm go1.25.7.windows-${{ matrix.arch }}.zip
           cd ../..
 
-      - name: Get GOPATH and short SHA
-        id: env-vars
-        shell: pwsh
-        run: |
-          $gopath = go env GOPATH
-          echo "gopath=$gopath" >> $env:GITHUB_OUTPUT
-
-          # Get short SHA (first 7 characters)
-          $shortSha = "${{ github.sha }}".Substring(0, 7)
-          echo "short_sha=$shortSha" >> $env:GITHUB_OUTPUT
-
       - name: Collect Go module cache
         shell: msys2 {0}
         run: |
           # Set up mod cache directory (no build cache needed)
           mkdir -p goenv/.cache/mod
 
-          # Get GOPATH in Unix format
-          GOPATH_UNIX=$(cygpath "${{ steps.env-vars.outputs.gopath }}")
-
-          # IMPORTANT: Copy binaries BEFORE running spx to collect dependencies
-          # Without these, spx run will fail and won't download dependencies
+          # Prepare goenv workspace directories
           mkdir -p goenv/go/bin
-          cp "$GOPATH_UNIX"/bin/gdspxrt* goenv/go/bin/ || true
-          cp "$GOPATH_UNIX"/bin/runtime.gdextension goenv/go/bin/ || true
-          cp "$GOPATH_UNIX"/bin/spx.exe goenv/go/bin/
+          mkdir -p goenv/go/share
+          mkdir -p goenv/go/lib
 
           # Set environment to use our mod cache location
           export GOMODCACHE=$(pwd)/goenv/.cache/mod
 
           # Add current spx source to mod cache so users can use offline
-          SPX_VERSION="v2.0.0-${{ steps.env-vars.outputs.short_sha }}"
+          SPX_VERSION="v${{ inputs.version }}"
           DEST="$GOMODCACHE/github.com/goplus/spx/v2@$SPX_VERSION"
 
           echo "Installing spx source to mod cache: $SPX_VERSION"
@@ -95,7 +81,7 @@ jobs:
 
           # Run test/CI demo to collect other dependencies
           cd test/CI
-          "$GOPATH_UNIX"/bin/spx.exe run --goenv=../../goenv --path=. --headless &
+          ../../dist/bin/spx.exe run --goenv=../../goenv --path=. --headless &
           SPX_PID=$!
 
           # Wait a few seconds for initialization
@@ -120,8 +106,17 @@ jobs:
         run: |
           # After replace-version rebuilds spx with the new version,
           # update the binary in goenv to match
-          GOPATH_UNIX=$(cygpath "${{ steps.env-vars.outputs.gopath }}")
-          cp "$GOPATH_UNIX"/bin/spx.exe goenv/go/bin/spx.exe
+          cp dist/bin/spx.exe goenv/go/bin/spx.exe
+          cp dist/bin/spxrun.exe goenv/go/bin/spxrun.exe
+
+      - name: Copy dist to goenv structure
+        shell: msys2 {0}
+        run: |
+          mkdir -p goenv/go/share
+          mkdir -p goenv/go/lib
+
+          cp -r dist/share/* goenv/go/share/
+          cp -r dist/lib/* goenv/go/lib/
 
       - name: Package goenv
         shell: msys2 {0}

@@ -12,19 +12,21 @@ setup_global_variables() {
     VERSION=$(cat $SCRIPT_DIR/version)
     ENGINE_GIT_TAG="spx"$VERSION
     ENGINE_VERSION=4.4.1.stable
-    GOPATH="$(go env GOPATH)"
 
     PROJ_DIR=$SCRIPT_DIR/..
     ENGINE_DIR=$PROJ_DIR/godot
+    DIST_ENGINES_DIR="${DIST_ENGINES_DIR:-$PROJ_DIR/dist/share/engines}"
+    DIST_TEMPLATES_DIR="${DIST_TEMPLATES_DIR:-$PROJ_DIR/dist/share/templates}"
 
     cd $PROJ_DIR
-    echo "version=$VERSION GOPATH=$GOPATH"
+    echo "version=$VERSION"
 
     echo "PROJ_DIR=$PROJ_DIR"
     echo "ENGINE_DIR=$ENGINE_DIR"
     echo "ENGINE_VERSION=$ENGINE_VERSION"
-    echo "GOPATH=$GOPATH"
     echo "VERSION=$VERSION"
+    echo "DIST_ENGINES_DIR=$DIST_ENGINES_DIR"
+    echo "DIST_TEMPLATES_DIR=$DIST_TEMPLATES_DIR"
     
     echo "Detecting platform..."
     echo "$(uname)"
@@ -45,18 +47,11 @@ setup_global_variables() {
         exit 1
     fi
     
-    # Create destination directory
+    # Create destination directories
     mkdir -p "$TEMPLATE_DIR"
+    mkdir -p "$DIST_ENGINES_DIR"
+    mkdir -p "$DIST_TEMPLATES_DIR"
     
-    # Detect architecture
-    export ARCH="x86_64"
-    if [[ "$(uname -m)" == "aarch64" || "$(uname -m)" == "arm64" ]]; then
-        export ARCH="arm64"
-    fi
-    if [[ "$(uname -m)" == "i386" || "$(uname -m)" == "i686" ]]; then
-        export ARCH="x86_32"
-    fi
-
     curOS=""
     case "$(uname -s)" in
         Linux*)     curOS="linux" ;;
@@ -65,45 +60,41 @@ setup_global_variables() {
         *)          curOS="Unknown" ;;
     esac
 
-    ARCH=""
-    case "$curOS" in
-        "linux"|"macOS")
-            RAW_ARCH=$(uname -m)
-            case "$RAW_ARCH" in
-                x86_64)     ARCH="x86_64" ;;
-                i386|i686)  ARCH="x86_32" ;;
-                aarch64)    ARCH="arm64" ;;
-                armv7l|arm) ARCH="arm32" ;;
-                *)
-                    if [ "$OS" = "macOS" ]; then
-                        if sysctl -n machdep.cpu.brand_string | grep -qi "Apple"; then
-                            ARCH="arm64"
-                        else
-                            ARCH="$RAW_ARCH"
-                        fi
-                    else
-                        ARCH="$RAW_ARCH"
-                    fi
-                    ;;
-            esac
-            ;;
+    # Respect SPX_ARCH from environment when provided by caller.
+    if [ -z "${SPX_ARCH:-}" ]; then
+        case "$curOS" in
+            "linux"|"macOS")
+                RAW_ARCH=$(uname -m)
+                case "$RAW_ARCH" in
+                    x86_64)     ARCH="x86_64" ;;
+                    i386|i686)  ARCH="x86_32" ;;
+                    aarch64|arm64) ARCH="arm64" ;;
+                    armv7l|arm) ARCH="arm32" ;;
+                    *)          ARCH="$RAW_ARCH" ;;
+                esac
+                ;;
 
-        "windows")
-            if [ "$PROCESSOR_ARCHITECTURE" = "AMD64" ] || [ "$PROCESSOR_ARCHITEW6432" = "AMD64" ]; then
-                ARCH="x86_64"
-            elif [ "$PROCESSOR_ARCHITECTURE" = "x86" ]; then
-                ARCH="x86_32"
-            elif [ "$PROCESSOR_ARCHITECTURE" = "ARM64" ]; then
-                ARCH="arm64"
-            else
+            "windows")
+                if [ "$PROCESSOR_ARCHITECTURE" = "AMD64" ] || [ "$PROCESSOR_ARCHITEW6432" = "AMD64" ]; then
+                    ARCH="x86_64"
+                elif [ "$PROCESSOR_ARCHITECTURE" = "x86" ]; then
+                    ARCH="x86_32"
+                elif [ "$PROCESSOR_ARCHITECTURE" = "ARM64" ]; then
+                    ARCH="arm64"
+                else
+                    ARCH="Unknown"
+                fi
+                ;;
+
+            *)
                 ARCH="Unknown"
-            fi
-            ;;
-
-        *)
-            ARCH="Unknown"
-            ;;
-    esac
+                ;;
+        esac
+    else
+        ARCH="$SPX_ARCH"
+        echo "Using SPX_ARCH from environment: $ARCH"
+    fi
+    export ARCH
 
 
     # Set default platform if not already set
@@ -113,7 +104,7 @@ setup_global_variables() {
     
     echo "Platform: $PLATFORM"
     echo "Architecture: $ARCH"
-    echo "Destination directory: $TEMPLATE_DIR"
+    echo "Template directory: $TEMPLATE_DIR"
     echo "Source tag: $ENGINE_GIT_TAG"
     return 0
 }
@@ -325,4 +316,3 @@ ensure_emsdk() {
         exit 1
     fi
 }
-

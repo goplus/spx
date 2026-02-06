@@ -18,11 +18,7 @@
 package runner
 
 import (
-	"archive/zip"
 	"fmt"
-	"go/build"
-	"io"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -31,17 +27,6 @@ import (
 )
 
 const (
-	// PckVersion is the pck file version
-	PckVersion = "2.0.30"
-
-	// RuntimeURLBase is the base URL for downloading runtime executable
-	// Format: https://github.com/goplus/godot/releases/download/spx{VERSION}/{platform}-{arch}.zip
-	RuntimeURLBase = "https://github.com/goplus/godot/releases/download/"
-
-	// PckURLBase is the base URL for downloading pck file
-	// Format: https://github.com/goplus/spx/releases/download/v2.0.0-pre.30/gdspxrt.pck.{PCK_VERSION}.zip
-	PckURLBase = "https://github.com/goplus/spx/releases/download/v2.0.0-pre.30/"
-
 	// RuntimeTag is the tag name for runtime files
 	RuntimeTag = "gdspxrt"
 
@@ -83,9 +68,10 @@ type Runner struct {
 	GoDir      string // Generated Go code directory
 	LibDir     string // Library output directory
 	TempDir    string // Temporary runtime directory
+	ShareDir   string // Share directory relative to spxrun executable
+	EnginesDir string // Engine directory under share
 
 	// Runtime paths
-	GoBinPath      string // $GOPATH/bin directory
 	RuntimeCmdPath string // Path to gdspxrt executable
 	RuntimePckPath string // Path to gdspxrt.pck
 	LibPath        string // Path to compiled dynamic library
@@ -105,13 +91,11 @@ func New(projectPath string, version ...string) (*Runner, error) {
 		return nil, fmt.Errorf("failed to resolve project path: %w", err)
 	}
 
-	// Determine GOPATH/bin
-	gopath := os.Getenv("GOPATH")
-	if gopath == "" {
-		gopath = build.Default.GOPATH
+	shareDir, err := getShareDir()
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve share directory: %w", err)
 	}
-	paths := filepath.SplitList(gopath)
-	goBinPath := filepath.Join(paths[0], "bin")
+	enginesDir := filepath.Join(shareDir, "engines")
 
 	// Determine runner version (default to "latest")
 	runnerVersion := "latest"
@@ -124,7 +108,8 @@ func New(projectPath string, version ...string) (*Runner, error) {
 		GoDir:         filepath.Join(absPath, "project", "go"),
 		LibDir:        filepath.Join(absPath, "project", "lib"),
 		TempDir:       filepath.Join(absPath, ".temp"),
-		GoBinPath:     goBinPath,
+		ShareDir:      shareDir,
+		EnginesDir:    enginesDir,
 		GOOS:          runtime.GOOS,
 		GOARCH:        runtime.GOARCH,
 		RunnerVersion: runnerVersion,
@@ -136,9 +121,13 @@ func New(projectPath string, version ...string) (*Runner, error) {
 		binPostfix = ".exe"
 	}
 
-	tagName := RuntimeTag + Version()
-	r.RuntimeCmdPath = filepath.Join(goBinPath, tagName+binPostfix)
-	r.RuntimePckPath = filepath.Join(goBinPath, tagName+".pck")
+	runtimeVersion := PckVersion()
+	if runtimeVersion == "" {
+		runtimeVersion = Version()
+	}
+	tagName := RuntimeTag + runtimeVersion
+	r.RuntimeCmdPath = filepath.Join(enginesDir, tagName+binPostfix)
+	r.RuntimePckPath = filepath.Join(enginesDir, tagName+".pck")
 
 	// Setup library path
 	libName := fmt.Sprintf("gdspx-%s-%s", r.GOOS, r.GOARCH)
@@ -189,18 +178,16 @@ func (r *Runner) ensureRuntime() error {
 
 	// Check if runtime executable exists
 	if _, err := os.Stat(r.RuntimeCmdPath); os.IsNotExist(err) {
-		fmt.Println("Downloading runtime executable...")
-		if err := r.downloadRuntime(); err != nil {
-			return err
-		}
+		return fmt.Errorf("runtime executable not found at %s. Run 'make setup-engines' to download engines", r.RuntimeCmdPath)
+	} else if err != nil {
+		return fmt.Errorf("failed to stat runtime executable: %w", err)
 	}
 
 	// Check if pck file exists
 	if _, err := os.Stat(r.RuntimePckPath); os.IsNotExist(err) {
-		fmt.Println("Downloading runtime pck...")
-		if err := r.downloadRuntimePck(); err != nil {
-			return err
-		}
+		return fmt.Errorf("runtime pck not found at %s. Run 'make setup-engines' to download engines", r.RuntimePckPath)
+	} else if err != nil {
+		return fmt.Errorf("failed to stat runtime pck: %w", err)
 	}
 
 	// Make runtime executable
@@ -209,88 +196,6 @@ func (r *Runner) ensureRuntime() error {
 	}
 
 	fmt.Printf("Runtime ready: %s\n", r.RuntimeCmdPath)
-	return nil
-}
-
-// downloadRuntime downloads the Godot runtime executable from zip
-// URL format: https://github.com/goplus/godot/releases/download/spx{VERSION}/{platform}-{arch}.zip
-func (r *Runner) downloadRuntime() error {
-	// Determine platform name for URL and binary name
-	// URL uses: macos, linux, windows
-	// Binary uses: macos, linuxbsd, windows
-	var urlPlatform, binaryPlatform, binaryPostfix string
-	switch r.GOOS {
-	case "windows":
-		urlPlatform = "windows"
-		binaryPlatform = "windows"
-		binaryPostfix = ".exe"
-	case "darwin":
-		urlPlatform = "macos"
-		binaryPlatform = "macos"
-		binaryPostfix = ""
-	case "linux":
-		urlPlatform = "linux"
-		binaryPlatform = "linuxbsd"
-		binaryPostfix = ""
-	default:
-		return fmt.Errorf("unsupported OS: %s", r.GOOS)
-	}
-
-	// Map Go arch names to release arch names
-	// Go uses: amd64, arm64
-	// Releases use: x86_64, arm64
-	urlArch := r.GOARCH
-	if urlArch == "amd64" {
-		urlArch = "x86_64"
-	}
-
-	// Binary name inside zip
-	binaryName := fmt.Sprintf("godot.%s.template_release.%s%s", binaryPlatform, urlArch, binaryPostfix)
-
-	// URL: https://github.com/goplus/godot/releases/download/spx{VERSION}/{platform}-{arch}.zip
-	zipName := fmt.Sprintf("%s-%s.zip", urlPlatform, urlArch)
-	url := RuntimeURLBase + "spx" + Version() + "/" + zipName
-
-	// Download and extract
-	tmpZip := filepath.Join(r.GoBinPath, zipName)
-	fmt.Printf("Downloading runtime from: %s\n", url)
-
-	if err := downloadFile(url, tmpZip); err != nil {
-		return fmt.Errorf("failed to download runtime: %w", err)
-	}
-	defer os.Remove(tmpZip)
-
-	// Extract binary from zip
-	if err := extractFileFromZip(tmpZip, binaryName, r.RuntimeCmdPath); err != nil {
-		return fmt.Errorf("failed to extract runtime: %w", err)
-	}
-
-	fmt.Printf("Runtime executable installed: %s\n", r.RuntimeCmdPath)
-	return nil
-}
-
-// downloadRuntimePck downloads the Godot runtime pck file from spx releases
-// URL format: https://github.com/goplus/spx/releases/download/v2.0.0-pre.30/gdspxrt.pck.{PCK_VERSION}.zip
-func (r *Runner) downloadRuntimePck() error {
-	// URL: https://github.com/goplus/spx/releases/download/v2.0.0-pre.30/gdspxrt.pck.{PCK_VERSION}.zip
-	zipName := fmt.Sprintf("gdspxrt.pck.%s.zip", PckVersion)
-	url := PckURLBase + zipName
-
-	// Download to temp file
-	tmpZip := filepath.Join(r.GoBinPath, zipName)
-	fmt.Printf("Downloading pck from: %s\n", url)
-
-	if err := downloadFile(url, tmpZip); err != nil {
-		return fmt.Errorf("failed to download pck: %w", err)
-	}
-	defer os.Remove(tmpZip)
-
-	// Extract gdspxrt.pck from zip and rename to gdspxrt{VERSION}.pck
-	if err := extractFileFromZip(tmpZip, "gdspxrt.pck", r.RuntimePckPath); err != nil {
-		return fmt.Errorf("failed to extract pck: %w", err)
-	}
-
-	fmt.Printf("Runtime pck installed: %s\n", r.RuntimePckPath)
 	return nil
 }
 
@@ -590,81 +495,6 @@ func (r *Runner) getLibPathForArch(arch string) string {
 	return filepath.Join(r.LibDir, libName)
 }
 
-// progressWriter wraps an io.Writer to track and display download progress
-type progressWriter struct {
-	total      int64
-	downloaded int64
-	lastPct    int
-}
-
-func (pw *progressWriter) Write(p []byte) (int, error) {
-	n := len(p)
-	pw.downloaded += int64(n)
-
-	if pw.total > 0 {
-		pct := int(pw.downloaded * 100 / pw.total)
-		if pct != pw.lastPct {
-			pw.lastPct = pct
-			fmt.Printf("\rDownloading: %d%% (%s / %s)", pct, formatBytes(pw.downloaded), formatBytes(pw.total))
-		}
-	} else {
-		fmt.Printf("\rDownloading: %s", formatBytes(pw.downloaded))
-	}
-	return n, nil
-}
-
-// formatBytes formats bytes into human-readable string
-func formatBytes(bytes int64) string {
-	const (
-		KB = 1024
-		MB = 1024 * KB
-	)
-	switch {
-	case bytes >= MB:
-		return fmt.Sprintf("%.1f MB", float64(bytes)/float64(MB))
-	case bytes >= KB:
-		return fmt.Sprintf("%.1f KB", float64(bytes)/float64(KB))
-	default:
-		return fmt.Sprintf("%d B", bytes)
-	}
-}
-
-// downloadFile downloads a file from URL to destination with progress display
-func downloadFile(url, dest string) error {
-	fmt.Printf("Downloading: %s\n", url)
-
-	resp, err := http.Get(url)
-	if err != nil {
-		return fmt.Errorf("download failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("download failed with status: %s", resp.Status)
-	}
-
-	out, err := os.Create(dest)
-	if err != nil {
-		return fmt.Errorf("failed to create file: %w", err)
-	}
-	defer out.Close()
-
-	// Create progress writer
-	pw := &progressWriter{
-		total: resp.ContentLength,
-	}
-
-	// Copy with progress tracking
-	_, err = io.Copy(out, io.TeeReader(resp.Body, pw))
-	fmt.Println() // New line after progress
-
-	if err != nil {
-		return fmt.Errorf("failed to write file: %w", err)
-	}
-
-	return nil
-}
-
 // copyFile copies a file from src to dst
 func copyFile(src, dst string) error {
 	input, err := os.ReadFile(src)
@@ -674,42 +504,17 @@ func copyFile(src, dst string) error {
 	return os.WriteFile(dst, input, 0755)
 }
 
-// extractFileFromZip extracts a specific file from a zip archive using pure Go
-func extractFileFromZip(zipPath, fileName, destPath string) error {
-	r, err := zip.OpenReader(zipPath)
+// getShareDir returns the share directory path relative to the spxrun executable.
+func getShareDir() (string, error) {
+	exe, err := os.Executable()
 	if err != nil {
-		return fmt.Errorf("failed to open zip archive %s: %w", zipPath, err)
+		return "", err
 	}
-	defer r.Close()
-
-	var targetFile *zip.File
-	for _, f := range r.File {
-		if filepath.Base(f.Name) == fileName {
-			targetFile = f
-			break
-		}
-	}
-
-	if targetFile == nil {
-		return fmt.Errorf("file %s not found in zip archive %s", fileName, zipPath)
-	}
-
-	rc, err := targetFile.Open()
+	exe, err = filepath.EvalSymlinks(exe)
 	if err != nil {
-		return fmt.Errorf("failed to open file %s in zip: %w", fileName, err)
+		return "", err
 	}
-	defer rc.Close()
-
-	destFile, err := os.Create(destPath)
-	if err != nil {
-		return fmt.Errorf("failed to create destination file %s: %w", destPath, err)
-	}
-	defer destFile.Close()
-
-	_, err = io.Copy(destFile, rc)
-	if err != nil {
-		return fmt.Errorf("failed to write to destination file %s: %w", destPath, err)
-	}
-
-	return nil
+	binDir := filepath.Dir(exe)
+	shareDir := filepath.Join(binDir, "..", "share")
+	return filepath.Abs(shareDir)
 }

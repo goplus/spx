@@ -24,7 +24,6 @@ type ExtraArgs struct {
 	Install         *bool
 	DebugWebService *bool
 	FullScreen      *bool
-	Build           *string
 	Mode            *string
 	Movie           *bool
 	GoEnv           *string // Portable Go environment directory
@@ -119,7 +118,6 @@ func (cmd *CmdTool) initializeFlags() *bool {
 	cmd.Args.Install = f.Bool("install", false, "install mode")
 	cmd.Args.DebugWebService = f.Bool("debugweb", false, "open debug web service")
 	cmd.Args.FullScreen = f.Bool("fullscreen", false, "full screen")
-	cmd.Args.Build = f.String("build", "normal", "build mode: normal or fast")
 	cmd.Args.Mode = f.String("mode", "none", "mode: none, worker, minigame")
 	cmd.Args.Movie = f.Bool("movie", false, "record movie mode")
 	cmd.Args.GoEnv = f.String("goenv", "", "portable Go environment directory (e.g., ./cmd/portable-go)")
@@ -200,7 +198,7 @@ Available commands:
     - export          # Export the PC package (macOS, Windows, Linux)
     - exportapk       # Export Android APK
     - exportios       # Export iOS package
-    - exportminigame  # Export minigame package (supports -build=fast for faster build)
+    - exportminigame  # Export minigame package
     - exportminiprogram # Export mini program package
     - exportbot       # Export the bot package
 
@@ -217,7 +215,7 @@ Examples:
     #CMDNAME build --servermode           # Build in server mode
     #CMDNAME runweb --debugweb            # Run web server with debug service
     #CMDNAME buildtinygo                  # Build TinyGo static library for ESP32
-    #CMDNAME exportminigame -build=fast   # Export minigame without compression (faster)
+    #CMDNAME exportminigame               # Export minigame package
     #CMDNAME run -tags=pure_engine        # Run in pure engine mode
     #CMDNAME export --fullscreen          # Export with fullscreen mode
 	`

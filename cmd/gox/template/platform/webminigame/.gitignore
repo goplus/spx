@@ -1,3 +1,2 @@
-./engine/godot.wasm.br
 *.wasm*
 .DS_Store

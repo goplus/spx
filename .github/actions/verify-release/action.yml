@@ -47,6 +47,11 @@ runs:
         cd "$CURRENT_DIR"
         echo "✓ Package extracted"
 
+        echo ""
+        echo "Verifying goenv structure..."
+        bash scripts/verify-goenv.sh rlcheck "${{ inputs.platform }}"
+        echo "✓ goenv structure verified"
+
         # Verify extracted structure
         echo ""
         echo "📂 Extracted structure:"
@@ -88,10 +93,16 @@ runs:
         echo "Command: $SPX_BIN run --ixgogen --goenv=$CURRENT_DIR/rlcheck --path=$CURRENT_DIR/rlcheck/test/CI"
         echo ""
 
-        cd rlcheck
-        # Skip the check since the real version hasn't been released yet.
-        # "$CURRENT_DIR/$SPX_BIN" run --ixgogen --goenv="$CURRENT_DIR/rlcheck" --path="$CURRENT_DIR/rlcheck/test/CI" 
-        cd "$CURRENT_DIR"
+        "$CURRENT_DIR/$SPX_BIN" run --ixgogen --goenv="$CURRENT_DIR/rlcheck" --path="$CURRENT_DIR/rlcheck/test/CI" -headless=true 2>&1 | tee "$CURRENT_DIR/rlcheck_test.log"
+
+        if grep -q "===>SpxCIRunSucc" "$CURRENT_DIR/rlcheck_test.log"; then
+          echo "✓ Runtime verification marker found"
+        else
+          echo "❌ Error: runtime verification marker not found"
+          cat "$CURRENT_DIR/rlcheck_test.log"
+          exit 1
+        fi
+        rm -f "$CURRENT_DIR/rlcheck_test.log"
 
         echo ""
         echo "=========================================="

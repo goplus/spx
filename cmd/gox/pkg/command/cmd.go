@@ -4,7 +4,6 @@ import (
 	"embed"
 	_ "embed"
 	"fmt"
-	"go/build"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -21,12 +20,15 @@ type CmdTool struct {
 	FileSuffix     string // File suffix of the project file
 	AppName        string // Name of the application
 	Version        string // Version of the application
+	PckVersion     string // Version of runtime pack assets
 	ProjectRelPath string // Relative path to the project
 	ProjectDir     string // Absolute path to the project directory
 	GoDir          string // Absolute path to the Go directory
 	TargetDir      string // Target directory for operations
 	WebDir         string // Web directory for web operations
-	GoBinPath      string
+	ShareDir       string // Share directory path relative to spx executable
+	LibDir         string // Lib directory path relative to spx executable
+	GoBinPath      string // Go bin directory used only with --goenv
 
 	// Resource files
 	ProjectFS    embed.FS // Embedded project filesystem
@@ -64,6 +66,13 @@ type CmdTool struct {
 	CustomGoEnv bool   // Custom Go environment
 }
 
+func (cmd *CmdTool) runtimeVersion() string {
+	if strings.TrimSpace(cmd.PckVersion) != "" {
+		return strings.TrimSpace(cmd.PckVersion)
+	}
+	return cmd.Version
+}
+
 // RunCmd executes the specified command with the given parameters
 func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS, fsRelDir string, dstRelDir string, ext ...string) (err error) {
 	// Store the parameters in the CmdTool struct
@@ -72,12 +81,18 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 	cmd.Version = version
 	cmd.ProjectFS = fs
 	cmd.ProjectRelPath = dstRelDir
-	gopath := os.Getenv("GOPATH")
-	if gopath == "" {
-		gopath = build.Default.GOPATH
+
+	shareDir, err := getShareDir()
+	if err != nil {
+		return fmt.Errorf("failed to get share directory: %w", err)
 	}
-	paths := filepath.SplitList(gopath)
-	cmd.GoBinPath, _ = filepath.Abs(filepath.Join(paths[0], "bin"))
+	cmd.ShareDir = shareDir
+
+	libDir, err := getLibDir()
+	if err != nil {
+		return fmt.Errorf("failed to get lib directory: %w", err)
+	}
+	cmd.LibDir = libDir
 
 	cmd.Args = ExtraArgs{}
 	// Check if we have enough arguments
@@ -320,7 +335,7 @@ func (cmd *CmdTool) handleRuniCommand() error {
 	if GOOS == "windows" {
 		cmd.BinPostfix = ".exe"
 	}
-	cmd.RuntimeCmdPath = filepath.Join(cmd.GoBinPath, "gdspxrt"+cmd.Version+cmd.BinPostfix)
+	cmd.RuntimeCmdPath = filepath.Join(cmd.ShareDir, "engines", "gdspxrt"+cmd.runtimeVersion()+cmd.BinPostfix)
 
 	// Execute the interpreted run
 	args := cmd.checkMovieArgs(cmd.RuntimeTempDir)

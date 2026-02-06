@@ -13,6 +13,10 @@ inputs:
     description: 'Cache version for manual invalidation'
     required: false
     default: 'v2'
+  spx-arch:
+    description: 'Target runtime architecture for engine assets (x86_32|x86_64|arm64|arm32|auto)'
+    required: false
+    default: 'auto'
 runs:
   using: "composite"
   steps:
@@ -22,34 +26,53 @@ runs:
         go-version: ${{ inputs.go-version }}
         xgo-version: ${{ inputs.xgo-version }}
 
-    - name: Get GOPATH
-      id: gopath
-      run: echo "GOPATH=$(go env GOPATH)" >> $GITHUB_OUTPUT
-      shell: bash
-
-    - name: Cache Godot engine files
-      id: cache-godot
+    - name: Cache spx assets
+      id: cache-spx
       uses: actions/cache@v4
       with:
         path: |
-          ${{ steps.gopath.outputs.GOPATH }}/bin/gdspx*
-          ${{ steps.gopath.outputs.GOPATH }}/bin/gdspxrt*
-          ${{ steps.gopath.outputs.GOPATH }}/bin/runtime.gdextension
+          dist
           ~/.local/share/godot/export_templates
           ~/Library/Application Support/Godot/export_templates
           ~/AppData/Roaming/Godot/export_templates
-        key: spx-godot-${{ inputs.cache-version }}-${{ runner.os }}-${{ hashFiles('cmd/gox/template/version', 'cmd/gox/**/*.go', 'cmd/gox/go.mod', 'cmd/gox/go.sum') }}
+        key: spx-assets-${{ inputs.cache-version }}-${{ runner.os }}-${{ inputs.spx-arch }}-${{ hashFiles('cmd/gox/template/version', 'cmd/gox/template/pck_version', 'cmd/gox/template/pck_release_tag', 'cmd/gox/**/*.go', 'cmd/gox/go.mod', 'cmd/gox/go.sum', 'cmd/ispx/build.sh', 'cmd/ispx/**/*.go', 'cmd/ispx/web/**', 'cmd/ispxnative/build.sh', 'cmd/ispxnative/**/*.go', 'pkg/gdspx/tools/**/*.sh', 'scripts/build.sh', 'scripts/setup-engines.sh', 'scripts/setup-web-template.sh') }}
         restore-keys: |
-          spx-godot-${{ inputs.cache-version }}-${{ runner.os }}-
+          spx-assets-${{ inputs.cache-version }}-${{ runner.os }}-${{ inputs.spx-arch }}-
 
     - name: Setup engine (cache miss)
-      if: steps.cache-godot.outputs.cache-hit != 'true'
+      if: steps.cache-spx.outputs.cache-hit != 'true'
       run: |
-        make setup-web-full
+        if [ "${{ inputs.spx-arch }}" != "auto" ]; then
+          export SPX_ARCH="${{ inputs.spx-arch }}"
+          echo "Using SPX_ARCH=$SPX_ARCH"
+        fi
+        if [ "${{ runner.os }}" = "Windows" ]; then
+          bash ./scripts/build.sh --all
+          bash ./scripts/setup-engines.sh
+          bash ./scripts/setup-web-template.sh normal
+        else
+          make setup
+          make setup-web MODE=normal
+        fi
       shell: bash
       
-    - name: Setup web engine (cache hit)
-      if: steps.cache-godot.outputs.cache-hit == 'true'
+    - name: Build spx (cache hit)
+      if: steps.cache-spx.outputs.cache-hit == 'true'
       run: |
-        make setup-web MODE=normal
+        if [ "${{ runner.os }}" = "Windows" ]; then
+          bash ./scripts/build.sh
+        else
+          make build
+        fi
+      shell: bash
+
+    - name: Export dist bin to PATH
+      run: |
+        DIST_BIN="$(pwd)/dist/bin"
+        if [ "${{ runner.os }}" = "Windows" ]; then
+          echo "SPX_BIN=$DIST_BIN/spx.exe" >> $GITHUB_ENV
+        else
+          echo "SPX_BIN=$DIST_BIN/spx" >> $GITHUB_ENV
+        fi
+        echo "PATH=$DIST_BIN:$PATH" >> $GITHUB_ENV
       shell: bash

@@ -3,13 +3,31 @@ description: Run the test Godot project.
 runs:
   using: "composite"
   steps:
+    - name: Setup cgo toolchain
+      if: runner.os == 'Windows'
+      shell: bash
+      run: |
+        GCC_BIN="$(command -v gcc || true)"
+        if [ -z "$GCC_BIN" ]; then
+          echo "Error: gcc not found in PATH"
+          exit 1
+        fi
+
+        if command -v cygpath >/dev/null 2>&1; then
+          GCC_BIN="$(cygpath -w "$GCC_BIN")"
+        fi
+
+        echo "CC=$GCC_BIN" >> "$GITHUB_ENV"
+        echo "CGO_ENABLED=1" >> "$GITHUB_ENV"
+        echo "Using CC=$GCC_BIN"
+
     - name: GenGo
       shell: bash
-      run: xgo go ./...
+      run: CGO_ENABLED=1 xgo go ./...
 
     - name: Run test demo
       shell: bash
-      run: spx run -path="test/CI" -headless=true 2>&1 | tee cilog.txt
+      run: ${SPX_BIN:-spx} run -path="test/CI" -headless=true 2>&1 | tee cilog.txt
 
     - name: Check test result
       shell: bash
@@ -27,7 +45,7 @@ runs:
     - name: Run test demo in interpreted mode
       shell: bash
       run: |
-        spx runi -path="test/CI" -headless=true 2>&1 | tee cilog_interpreted_mode.txt
+        ${SPX_BIN:-spx} runi -path="test/CI" -headless=true 2>&1 | tee cilog_interpreted_mode.txt
 
     - name: Check test result in interpreted mode
       shell: bash

@@ -22,7 +22,7 @@
 1. 替换微信API
  - 移除 canvas 的获取: this.canvas = /** @type {!HTMLCanvasElement} */ (first);
 2. wasm 加载机制
- - wasm 加载方式默认改为 .br
+ - wasm 加载方式需要适配
 3. 文件系统：
  - 增加接口 copyFSToAdapter 用于拷贝数据到文件系统
  - 移除 module['initFS'](paths)
@@ -36,4 +36,3 @@
 1. [微信小游戏](https://developers.weixin.qq.com/minigame/dev/guide/index.html)
 2. [godot](https://godotengine.org/)
 3. [godot-wechat](https://github.com/yuchenyang1994/godot-love-wechat)
-

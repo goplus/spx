@@ -38,4 +38,5 @@ mv.sh
 /bin
 /**/.temp
 /.tmp
+/dist
 CLAUDE.md

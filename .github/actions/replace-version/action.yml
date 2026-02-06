@@ -41,5 +41,5 @@ runs:
         echo "----------------------------------------"
         echo ""
         echo "✅ Successfully updated $FILE with version $VERSION"
-        echo "reinstall spx"
-        make install
+        echo "rebuild spx"
+        make build

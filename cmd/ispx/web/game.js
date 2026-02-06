@@ -328,9 +328,6 @@ class GameApp {
     //------------------ onRun ------------------
     async onRunPrepareEngineWasm() {
         let url = this.assetURLs["engine.wasm"]
-        if (isWasmCompressed) {
-            url += ".br"
-        }
 
         if (this.minigameMode) {
             this.gameConfig.wasmEngine = url
@@ -386,9 +383,6 @@ class GameApp {
     async loadLogicWasm() {
         // load wasm
         let url = this.config.assetURLs["ispx.wasm"];
-        if (isWasmCompressed) {
-            url += ".br"
-        }
         this.go = new Go();
         if (this.minigameMode) {
             // load wasm in miniEngine

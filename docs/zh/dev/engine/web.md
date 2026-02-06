@@ -18,7 +18,7 @@
 
 #### 3. 小游戏模式(minigame)
 1. 必须单线程，因为微信小游戏限制 (godot4.2.2 版本不支持，需要升级到godot4.3或更加后面的版本)
-2. 包体大小需要进行限制，最大30M,所以 wasm 需要进行brotli压缩
+2. 包体大小需要进行限制，最大30M
 3. 音频需要特殊处理, godot 当前版本音频解决方案依赖于 AudioWorklet，微信小游戏不支持，需要进行替换
 4. go wasm 解析需要进行适配，(需要对go官方wasm_exec.js进行修改适配)
 5. 文件系统需要进行适配
@@ -38,7 +38,6 @@
 - `webworker` 是独立Worker模式
 - `webminigame` 是小游戏模式
 - `webminiprogram` 是小程序模式
-
 
 
 

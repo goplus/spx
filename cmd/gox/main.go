@@ -17,6 +17,9 @@ var (
 	//go:embed template/version
 	version string
 
+	//go:embed template/pck_version
+	pckVersion string
+
 	//go:embed template/.gitignore.txt
 	gitignoreTxt string
 
@@ -42,6 +45,7 @@ func main() {
 	cmd.ProjectFS = projectFS
 	cmd.PlatformFS = platformFS
 	cmd.Version = strings.TrimSpace(version)
+	cmd.PckVersion = strings.TrimSpace(pckVersion)
 	cmd.GitignoreTxt = gitignoreTxt
 	cmd.RunSh = runSh
 	cmd.MainSh = mainSh

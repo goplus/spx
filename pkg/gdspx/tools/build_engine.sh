@@ -1,9 +1,16 @@
 #!/bin/bash
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# copy version file
-cp -f $SCRIPT_DIR/../../../cmd/gox/template/version $SCRIPT_DIR
-# PCK version， only changed when spx's engine resource is updated
-PCK_VERSION=2.0.30
+# copy version files
+cp -f "$SCRIPT_DIR/../../../cmd/gox/template/version" "$SCRIPT_DIR"
+cp -f "$SCRIPT_DIR/../../../cmd/gox/template/pck_version" "$SCRIPT_DIR"
+cp -f "$SCRIPT_DIR/../../../cmd/gox/template/pck_release_tag" "$SCRIPT_DIR"
+# PCK version, only changed when spx's engine resource is updated
+PCK_VERSION=$(cat "$SCRIPT_DIR/pck_version")
+PCK_RELEASE_TAG=$(cat "$SCRIPT_DIR/pck_release_tag")
+if [ -z "$PCK_RELEASE_TAG" ]; then
+    echo "Error: pck_release_tag is empty"
+    exit 1
+fi
 EDITOR_ONLY=false
 PLATFORM=""
 DOWNLOAD=false
@@ -54,11 +61,13 @@ build_template() {
     local engine_dir="$ENGINE_DIR"
     local platform=$PLATFORM
     local template_dir="$TEMPLATE_DIR"
+    local dist_engines_dir="$DIST_ENGINES_DIR"
+    local dist_templates_dir="$DIST_TEMPLATES_DIR"
 
     echo "save to $template_dir"
     cd $engine_dir || exit
 
-    dstBinPath="$GOPATH/bin/gdspxrt$VERSION"  #gdspxrt 
+    dstBinPath="$dist_engines_dir/gdspxrt$PCK_VERSION"  # gdspxrt
     echo "Destination binary path: $dstBinPath"
     local target_build_str="template_release"
     if [ "$platform" = "linux" ]; then
@@ -127,17 +136,28 @@ build_template() {
         echo "Wait zip file to finished ..."
         sleep 1
         cp bin/godot.web.template_release.wasm32$thread_flags.zip bin/web_dlink_debug.zip
-        cp bin/web_dlink_debug.zip $GOPATH/bin/gdspx$VERSION"_webpack.zip"
+        local web_mode="${MODE:-normal}"
+        local dist_web_dir="$dist_templates_dir/$web_mode"
+        local dist_zip=""
+        mkdir -p "$dist_web_dir"
+        if [ "$web_mode" = "normal" ]; then
+            dist_zip="$dist_web_dir/gdspx${VERSION}_webpack.zip"
+        else
+            dist_zip="$dist_web_dir/gdspx${VERSION}_web${web_mode}.zip"
+        fi
+        cp bin/web_dlink_debug.zip "$dist_zip"
 
-        rm "$template_dir"/web_*.zip
-        cp bin/web_dlink_debug.zip "$template_dir/web_dlink_nothreads_debug.zip"
-        cp bin/web_dlink_debug.zip "$template_dir/web_dlink_nothreads_release.zip"
-        cp bin/web_dlink_debug.zip "$template_dir/web_nothreads_debug.zip"
-        cp bin/web_dlink_debug.zip "$template_dir/web_nothreads_release.zip"
-        cp bin/web_dlink_debug.zip "$template_dir/web_dlink_debug.zip"
-        cp bin/web_dlink_debug.zip "$template_dir/web_dlink_release.zip"
-        cp bin/web_dlink_debug.zip "$template_dir/web_debug.zip"
-        cp bin/web_dlink_debug.zip "$template_dir/web_release.zip"
+        if [ "${INSTALL_TEMPLATES:-false}" = "true" ]; then
+            rm "$template_dir"/web_*.zip
+            cp bin/web_dlink_debug.zip "$template_dir/web_dlink_nothreads_debug.zip"
+            cp bin/web_dlink_debug.zip "$template_dir/web_dlink_nothreads_release.zip"
+            cp bin/web_dlink_debug.zip "$template_dir/web_nothreads_debug.zip"
+            cp bin/web_dlink_debug.zip "$template_dir/web_nothreads_release.zip"
+            cp bin/web_dlink_debug.zip "$template_dir/web_dlink_debug.zip"
+            cp bin/web_dlink_debug.zip "$template_dir/web_dlink_release.zip"
+            cp bin/web_dlink_debug.zip "$template_dir/web_debug.zip"
+            cp bin/web_dlink_debug.zip "$template_dir/web_release.zip"
+        fi
 
     else
         echo "Unknown platform"
@@ -148,14 +168,22 @@ download_editor() {
     setup_global_variables
     local saved_platform=$PLATFORM
     local saved_mode=$MODE
-    echo "===> Downloading pc via download_engine..."
+
+    echo "===> Downloading editor binary..."
+    MODE=editor
     download_engine || exit
+
+    echo "===> Downloading template binary..."
+    MODE=""
+    download_engine || exit
+
+    MODE=$saved_mode
 
     # Download and extract gdspxrt.pck zip file
     echo "===> Downloading gdspxrt.pck..."
-    local pck_url="https://github.com/goplus/spx/releases/download/v2.0.0-pre.30/gdspxrt.pck.${PCK_VERSION}.zip"
+    local pck_url="https://github.com/goplus/spx/releases/download/${PCK_RELEASE_TAG}/gdspxrt.pck.${PCK_VERSION}.zip"
     local tmp_dir=$SCRIPT_DIR/bin
-    local dst_dir=$GOPATH/bin
+    local dst_dir=$DIST_ENGINES_DIR
     local pck_zip="$tmp_dir/gdspxrt.pck.${PCK_VERSION}.zip"
     
     mkdir -p "$tmp_dir"
@@ -167,9 +195,9 @@ download_editor() {
         local pck_tmp_dir=$(mktemp -d)
         unzip -o "$pck_zip" -d "$pck_tmp_dir" > /dev/null 2>&1 || exit
         
-        # Copy extracted files to GOPATH/bin
+        # Copy extracted files to dist engines dir
         if [ -d "$pck_tmp_dir" ]; then
-            # Copy all files from extracted directory to GOPATH/bin
+            # Copy all files from extracted directory to dist engines dir
             for file in "$pck_tmp_dir"/*; do
                 if [ -f "$file" ]; then
                     cp -f "$file" "$dst_dir/"
@@ -179,7 +207,7 @@ download_editor() {
             echo "gdspxrt.pck files copied to $dst_dir"
         fi
         
-        mv $dst_dir/gdspxrt.pck $dst_dir/gdspxrt$VERSION.pck
+        mv $dst_dir/gdspxrt.pck $dst_dir/gdspxrt$PCK_VERSION.pck
         # Clean up
         rm -rf "$pck_tmp_dir"
         rm -f "$pck_zip"
@@ -190,8 +218,8 @@ download_editor() {
     fi
 
     # List final files
-    echo "Files in $GOPATH/bin:"
-    ls -l "$GOPATH/bin"
+    echo "Files in $DIST_ENGINES_DIR:"
+    ls -l "$DIST_ENGINES_DIR"
 }
 
 download_engine() {
@@ -199,15 +227,17 @@ download_engine() {
     local platform=$PLATFORM
     local arch=$ARCH
     local template_dir="$TEMPLATE_DIR"
+    local dist_templates_dir="$DIST_TEMPLATES_DIR"
     local url_prefix="https://github.com/goplus/godot/releases/download/spx$VERSION/"
     local tmp_dir=$SCRIPT_DIR/bin
-    local dst_dir=$GOPATH/bin
+    local dst_dir=$DIST_ENGINES_DIR
 
     mkdir -p "$tmp_dir"
     mkdir -p "$dst_dir"
     mkdir -p "$template_dir"
     echo "Downloading engine templates for platform: $platform"
     echo "Template directory: $template_dir"
+    echo "Dist templates directory: $dist_templates_dir"
     echo "URL prefix: $url_prefix"
 
     if [ "$platform" = "android" ]; then
@@ -308,10 +338,13 @@ download_engine() {
 
         # Download template if not exists
         # For normal mode, use webpack.zip to match download_editor naming convention
+        local dist_web_dir="$dist_templates_dir/$web_mode"
+        local template_file=""
+        mkdir -p "$dist_web_dir"
         if [ "$web_mode" = "normal" ]; then
-            local template_file="$dst_dir/gdspx${VERSION}_webpack.zip"
+            template_file="$dist_web_dir/gdspx${VERSION}_webpack.zip"
         else
-            local template_file="$dst_dir/gdspx${VERSION}_web${web_mode}.zip"
+            template_file="$dist_web_dir/gdspx${VERSION}_web${web_mode}.zip"
         fi
         if [ -f "$template_file" ]; then
             echo "Web $web_mode template already exists, skipping download"
@@ -330,14 +363,16 @@ download_engine() {
         # Setup template directory structure with mode-specific templates
         echo "===> Setting up template directory structure..." "$template_file" "$template_dir"
 
-        cp -f "$template_file" "$template_dir/web_dlink_nothreads_debug.zip"
-        cp -f "$template_file" "$template_dir/web_dlink_nothreads_release.zip"
-        cp -f "$template_file" "$template_dir/web_nothreads_debug.zip"
-        cp -f "$template_file" "$template_dir/web_nothreads_release.zip"
-        cp -f "$template_file" "$template_dir/web_dlink_debug.zip"
-        cp -f "$template_file" "$template_dir/web_dlink_release.zip"
-        cp -f "$template_file" "$template_dir/web_debug.zip"
-        cp -f "$template_file" "$template_dir/web_release.zip"
+        if [ "${INSTALL_TEMPLATES:-false}" = "true" ]; then
+            cp -f "$template_file" "$template_dir/web_dlink_nothreads_debug.zip"
+            cp -f "$template_file" "$template_dir/web_dlink_nothreads_release.zip"
+            cp -f "$template_file" "$template_dir/web_nothreads_debug.zip"
+            cp -f "$template_file" "$template_dir/web_nothreads_release.zip"
+            cp -f "$template_file" "$template_dir/web_dlink_debug.zip"
+            cp -f "$template_file" "$template_dir/web_dlink_release.zip"
+            cp -f "$template_file" "$template_dir/web_debug.zip"
+            cp -f "$template_file" "$template_dir/web_release.zip"
+        fi
 
         echo "===> Web $web_mode setup complete"
         echo "  - Template downloaded: $template_file"
@@ -380,7 +415,7 @@ download_engine() {
             # Download PC template only (MODE not set or other value)
             local zip_name="$platform-"$arch".zip"
             local binary_name="godot.$platform_name.template_release.$arch$binary_postfix"
-            local template_binary="$dst_dir/gdspxrt$VERSION"$binary_postfix
+            local template_binary="$dst_dir/gdspxrt$PCK_VERSION"$binary_postfix
             local url=$url_prefix$zip_name
             
             echo "===> Downloading PC template..."
@@ -459,7 +494,7 @@ build_editor(){
         scons target=editor dev_build=yes $COMMON_ARGS
     fi
     
-    dstBinPath="$GOPATH/bin/gdspx$VERSION"
+    dstBinPath="$DIST_ENGINES_DIR/gdspx$VERSION"
     echo "Destination binary path: $dstBinPath"
     if [ "$OS" = "Windows_NT" ]; then
         cp bin/godot.windows.editor.dev.$ARCH $dstBinPath".exe"
@@ -486,8 +521,8 @@ exportweb() {
      spx exportweb 
      cd ./project/.builds/web 
      rm -f game.zip 
-     zip -r "$PROJ_DIR/spx_web.zip" * 
-     echo "$PROJ_DIR/spx_web.zip has been created") || {
+     zip -r "$PROJ_DIR/spx-web.zip" *
+     echo "$PROJ_DIR/spx-web.zip has been created") || {
         echo "Error: Failed to create web export"
         return 1
     }

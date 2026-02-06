@@ -26,6 +26,7 @@ import (
 //
 //go:generate cp ../../../gop.mod gop.mod
 //go:generate cp ../../gox/template/version version
+//go:generate cp ../../gox/template/pck_version pck_version
 //go:generate cp ../../gox/template/go.mod.template go.mod.template
 
 // GopModTemplate is the embedded content of gop.mod from the SPX repository root.
@@ -45,7 +46,17 @@ var GoModTemplate string
 //go:embed version
 var versionFile string
 
+// pckVersionFile is the embedded PCK version from cmd/gox/template/pck_version
+//
+//go:embed pck_version
+var pckVersionFile string
+
 // Version returns the SPX runtime version (trimmed)
 func Version() string {
 	return strings.TrimSpace(versionFile)
+}
+
+// PckVersion returns the PCK version (trimmed)
+func PckVersion() string {
+	return strings.TrimSpace(pckVersionFile)
 }

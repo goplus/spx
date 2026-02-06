@@ -12,9 +12,11 @@ DEMO_INDEX ?= 3
 PORT    ?= 8106
 MOVIE   ?= false
 
-# Command to install spx
-INSTALL_CMD = cd ./cmd/gox && ./install.sh && cd $(CURRENT_PATH)
-
+ifeq ($(OS),Windows_NT)
+SPX_BIN := ./dist/bin/spx.exe
+else
+SPX_BIN := ./dist/bin/spx
+endif
 
 # ============================================
 # Help
@@ -47,121 +49,43 @@ list-demos: ## List all demos with index
 	done
 
 # ============================================
-# Setup Commands
-# ============================================
-setup: ## Initialize the user environment
-	chmod +x ./pkg/gdspx/tools/*.sh && \
-	echo "===> Step 1/2: Install spx" && \
-	make install && \
-	echo "===> Step 2/2: Download engine" && \
-	make download && \
-	echo "===> setup done"
-
-
-setup-dev: ## Initialize development environment (full)
-	chmod +x ./pkg/gdspx/tools/*.sh && \
-	echo "===> Step 1/6: Install spx" && \
-	make install && \
-	echo "===> Step 2/6: Download engine" && \
-	make download && \
-	echo "===> Step 3/6: Build wasm" && \
-	make build-wasm && \
-	echo "===> Step 4/6: Build editor engine" && \
-	make build-editor && \
-	echo "===> Step 5/6: Build desktop engine" && \
-	make build-desktop && \
-	echo "===> Step 6/6: Build web engine" && \
-	make build-web && \
-	echo "===> setup-dev done, use 'make run DEMO_INDEX=N' to run demo"
-
-setup-web-full: ## Download and install web engine from godot releases(full)
-	echo "===> Setup engine runtime" && \
-	make setup && \
-	echo "===> Download engine editor" && \
-	make download-engine MODE=editor && \
-	make setup-web MODE=normal 
-
-setup-web: ## Download and install web engine from godot releases. Usage: make setup-web MODE=normal (MODE: normal|worker|minigame|miniprogram)
-ifndef MODE
-	$(error MODE is not set! Usage: make setup-web MODE=normal or MODE=worker or MODE=minigame or MODE=miniprogram)
-endif
-	@if [ "$(MODE)" != "normal" ] && [ "$(MODE)" != "worker" ] && [ "$(MODE)" != "minigame" ] && [ "$(MODE)" != "miniprogram" ]; then \
-		echo "Error: Invalid MODE '$(MODE)'. Supported modes: normal, worker, minigame, miniprogram"; \
-		exit 1; \
-	fi
-	echo "===> Setting up web ${MODE} engine..." && \
-	make build-wasm && \
-	./pkg/gdspx/tools/build_engine.sh -g -p web -m ${MODE} && \
-	./pkg/gdspx/tools/make_util.sh extrawebtemplate ${MODE} && \
-	echo "===> Web ${MODE} engine setup complete"
-
-
-# ============================================
-# Install & Download
-# ============================================
-install: ## Install spx command
-	$(INSTALL_CMD)
-
-download: ## Download engines
-	echo "" && ./pkg/gdspx/tools/build_engine.sh -e -d
-
-download-engine: ## Download engine templates for specific platform. Usage: make download-engine PLATFORM=android|ios|web [MODE=normal|worker|minigame|miniprogram]
-
-	@echo "Downloading engine templates for platform: $(PLATFORM)"
-	@if [ "$(PLATFORM)" = "web" ]; then \
-		if [ -n "$(MODE)" ]; then \
-			MODE_ENV="$(MODE)" ./pkg/gdspx/tools/build_engine.sh -p "$(PLATFORM)" -g -m "$(MODE)"; \
-		else \
-			./pkg/gdspx/tools/build_engine.sh -p "$(PLATFORM)" -g; \
-		fi \
-	else \
-		if [ -n "$(MODE)" ]; then \
-			MODE_ENV="$(MODE)" ./pkg/gdspx/tools/build_engine.sh -p "$(PLATFORM)" -g -m "$(MODE)"; \
-		else \
-			./pkg/gdspx/tools/build_engine.sh -p "$(PLATFORM)" -g; \
-		fi \
-	fi 
-
-
-# ============================================
 # Build Commands
 # ============================================
-build-editor: ## Build editor mode engine
-	make install && ./pkg/gdspx/tools/build_engine.sh -e
+.PHONY: build build-web build-native build-all clean
 
-build-desktop: ## Build desktop engine
-	make install && ./pkg/gdspx/tools/build_engine.sh && \
-	./pkg/gdspx/tools/make_util.sh exportpack 
+build: ## Build spx and spxrun
+	./scripts/build.sh
 
-build-web: ## Build web engine template
-	./pkg/gdspx/tools/build_engine.sh -p web && \
-	./pkg/gdspx/tools/make_util.sh extrawebtemplate normal
+build-web: ## Build spx and web runtime assets
+	./scripts/build.sh --web
 
-build-web-worker: ## Build web worker engine template
-	make install && \
-	./pkg/gdspx/tools/build_engine.sh -p web -m worker && \
-	./pkg/gdspx/tools/make_util.sh extrawebtemplate worker
+build-native: ## Build spx and native runtime libraries
+	./scripts/build.sh --native
 
-build-web-minigame: ## Build minigame template
-	./pkg/gdspx/tools/build_engine.sh -p web -m minigame && \
-	./pkg/gdspx/tools/make_util.sh extrawebtemplate minigame
+build-all: ## Build all components
+	./scripts/build.sh --all
 
-build-web-miniprogram: ## Build miniprogram template
-	./pkg/gdspx/tools/build_engine.sh -p web -m miniprogram && \
-	./pkg/gdspx/tools/make_util.sh extrawebtemplate miniprogram
+clean: ## Remove dist artifacts
+	rm -rf dist/
 
-build-wasm: ## Build wasm
-	cd ./cmd/gox/ && ./install.sh --web && cd $(CURRENT_PATH)
+# ============================================
+# Setup Commands
+# ============================================
+.PHONY: setup setup-engines setup-web
 
-build-wasm-opt: ## Build wasm with optimization
-	cd ./cmd/gox/ && ./install.sh --web --opt && cd $(CURRENT_PATH)
-	./pkg/gdspx/tools/make_util.sh compresswasm
+setup: ## Build all and download engines
+	$(MAKE) build-all
+	$(MAKE) setup-engines
+	@echo "Setup completed. Use 'make setup-web MODE=normal' to setup web templates."
 
-build-android: ## Build android engine
-	make install &&./pkg/gdspx/tools/build_engine.sh -p android
+setup-engines: ## Download engines to dist/share/engines
+	./scripts/setup-engines.sh
 
-build-ios: ## Build ios engine
-	make install &&./pkg/gdspx/tools/build_engine.sh -p ios 
+setup-web: ## Generate web templates (MODE=normal|worker|minigame|miniprogram)
+ifndef MODE
+	$(error MODE is not set! Usage: make setup-web MODE=normal)
+endif
+	./scripts/setup-web-template.sh $(MODE)
 
 # ============================================
 # Run Commands (by index)
@@ -176,7 +100,7 @@ ifndef DEMO_INDEX
 endif
 	@DEMO=$(GET_DEMO); \
 	echo "Opening editor for demo #$(DEMO_INDEX): $$DEMO"; \
-	cd $$DEMO && spx editor -movie=$(MOVIE)
+	cd $$DEMO && $(SPX_BIN) editor -movie=$(MOVIE)
 
 run: ## Run demo on PC: make run DEMO_INDEX=N
 ifndef DEMO_INDEX
@@ -184,7 +108,7 @@ ifndef DEMO_INDEX
 endif
 	@DEMO=$(GET_DEMO); \
 	echo "Running demo #$(DEMO_INDEX): $$DEMO"; \
-	cd $$DEMO && spx run -movie=$(MOVIE)
+	cd $$DEMO && $(SPX_BIN) run -movie=$(MOVIE)
 
 run-editor: ## Run demo in editor mode: make run-editor DEMO_INDEX=N
 ifndef DEMO_INDEX
@@ -192,7 +116,7 @@ ifndef DEMO_INDEX
 endif
 	@DEMO=$(GET_DEMO); \
 	echo "Running editor demo #$(DEMO_INDEX): $$DEMO"; \
-	cd $$DEMO && spx rune -movie=$(MOVIE)
+	cd $$DEMO && $(SPX_BIN) rune -movie=$(MOVIE)
 
 run-web: ## Run demo on web: make run-web DEMO_INDEX=N
 ifndef DEMO_INDEX
@@ -200,17 +124,18 @@ ifndef DEMO_INDEX
 endif
 	@DEMO=$(GET_DEMO); \
 	echo "Running web demo #$(DEMO_INDEX): $$DEMO"; \
-	make stop && make build-wasm && \
-	cd $$DEMO && spx clear && spx runweb -serveraddr=":$(PORT)"
+	$(MAKE) stop && $(MAKE) build-web && \
+	cd $$DEMO && $(SPX_BIN) clear && $(SPX_BIN) runweb -serveraddr=":$(PORT)"
 
-run-web-worker: ## Run demo on web: make run-web-worker DEMO_INDEX=N
+run-web-worker: ## Run demo on web worker: make run-web-worker DEMO_INDEX=N
 ifndef DEMO_INDEX
 	$(error DEMO_INDEX is not set! Usage: make run-web-worker DEMO_INDEX=N)
 endif
 	@DEMO=$(GET_DEMO); \
 	echo "Running web worker mode: demo #$(DEMO_INDEX): $$DEMO"; \
-	make stop && make build-wasm && \
-	cd $$DEMO && spx clear && spx runwebworker -serveraddr=":$(PORT)"
+	$(MAKE) stop && $(MAKE) build-web && \
+	cd $$DEMO && $(SPX_BIN) clear && $(SPX_BIN) runwebworker -serveraddr=":$(PORT)"
+
 # ============================================
 # Utility Commands
 # ============================================
@@ -220,23 +145,19 @@ format: ## Format Go code
 generate: ## Generate code
 	cd ./pkg/gdspx/cmd/codegen && go run . && cd $(CURRENT_PATH) && \
 	go generate ./cmd/spxrun/runner && \
-	make format
+	$(MAKE) format
 
 export-pack: ## Export runtime pck file
-	./pkg/gdspx/tools/make_util.sh exportpack && cd $(CURRENT_PATH)
+	SPX_BIN=$(SPX_BIN) ./pkg/gdspx/tools/make_util.sh exportpack
 
-export-web: ## Export web engine. Usage: make export-web MODE=normal (MODE: normal|worker|minigame|miniprogram)
+export-web: ## Export web engine. Usage: make export-web MODE=normal
+	$(MAKE) build-web
 	@if [ -z "$(MODE)" ]; then \
 		EXPORT_MODE=normal; \
 	else \
 		EXPORT_MODE=$(MODE); \
 	fi; \
-	if [ "$$EXPORT_MODE" != "normal" ] && [ "$$EXPORT_MODE" != "worker" ] && [ "$$EXPORT_MODE" != "minigame" ] && [ "$$EXPORT_MODE" != "miniprogram" ]; then \
-		echo "Error: Invalid MODE '$$EXPORT_MODE'. Supported modes: normal, worker, minigame, miniprogram"; \
-		exit 1; \
-	fi; \
-	cd ./cmd/gox && ./install.sh --web --opt && cd $(CURRENT_PATH) && \
-	./pkg/gdspx/tools/make_util.sh exportweb $$EXPORT_MODE && cd $(CURRENT_PATH)
+	SPX_BIN=$(SPX_BIN) ./pkg/gdspx/tools/make_util.sh exportweb $$EXPORT_MODE
 
 stop: ## Stop running processes
 	@echo "Stopping running processes..."

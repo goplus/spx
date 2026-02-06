@@ -183,9 +183,9 @@ func (pself *CmdTool) SetupEnv(version string, fs embed.FS, fsRelDir string, pro
 		pself.CmdPath = "" // Set empty path since we don't need engine
 	} else {
 		// Update the CmdTool struct fields
-		pself.BinPostfix, pself.CmdPath, err = impl.CheckAndGetAppPath(pself.GoBinPath, ENV_NAME, pself.Version, pself.CustomGoEnv)
+		pself.BinPostfix, pself.CmdPath, err = impl.CheckAndGetAppPath(pself.getEngineDir(), ENV_NAME, pself.Version)
 		if err != nil {
-			return fmt.Errorf(ENV_NAME+"requires engine to be installed as a binary at %s: %w", pself.GoBinPath, err)
+			return fmt.Errorf(ENV_NAME+" requires engine to be installed at %s: %w", pself.getEngineDir(), err)
 		}
 	}
 
@@ -194,9 +194,8 @@ func (pself *CmdTool) SetupEnv(version string, fs embed.FS, fsRelDir string, pro
 
 	// setup runtime path - skip for pure_engine mode
 	if pself.Args.Tags == nil || !strings.Contains(*pself.Args.Tags, "pure_engine") {
-		pself.RuntimeCmdPath = path.Join(pself.GoBinPath, "gdspxrt"+pself.Version+pself.BinPostfix)
-		pckName := pself.RuntimeCmdPath
-		pckName = pckName[:len(pckName)-len(pself.BinPostfix)]
+		pself.RuntimeCmdPath = filepath.Join(pself.getEngineDir(), "gdspxrt"+pself.runtimeVersion()+pself.BinPostfix)
+		pckName := strings.TrimSuffix(pself.RuntimeCmdPath, pself.BinPostfix)
 		pself.RuntimePckPath = pckName + ".pck"
 	}
 	pself.RuntimeTempDir, _ = filepath.Abs(path.Join(pself.TargetDir, ".temp"))
@@ -241,20 +240,33 @@ func (pself *CmdTool) SetupEnv(version string, fs embed.FS, fsRelDir string, pro
 	return
 }
 
+// getIspxDir returns the path to the ispx directory.
+func (pself *CmdTool) getIspxDir() string {
+	return filepath.Join(pself.ShareDir, "ispx")
+}
+
 // getWasmPath returns the path to the wasm file.
 func (pself *CmdTool) getWasmPath() string {
-	filePath := path.Join(pself.GoBinPath, "ispx.wasm")
-	return filePath
+	return filepath.Join(pself.getIspxDir(), "ispx.wasm")
 }
 
 // getIspxWebDir returns the path to the ispx web runtime directory.
 func (pself *CmdTool) getIspxWebDir() (string, error) {
-	ispxWebDir := path.Join(pself.GoBinPath, "ispx")
+	ispxWebDir := pself.getIspxDir()
 	if _, err := os.Stat(ispxWebDir); os.IsNotExist(err) {
-		return "", fmt.Errorf("ispx web runtime not found at %s; "+
-			"run 'cd cmd/gox && ./install.sh --web' to install", ispxWebDir)
+		return "", fmt.Errorf("ispx web runtime not found at %s. Run 'make build-web' to build web assets", ispxWebDir)
 	}
 	return ispxWebDir, nil
+}
+
+// getEngineDir returns the path to the engines directory.
+func (pself *CmdTool) getEngineDir() string {
+	return filepath.Join(pself.ShareDir, "engines")
+}
+
+// getTemplateDir returns the path to the web templates directory.
+func (pself *CmdTool) getTemplateDir(mode string) string {
+	return filepath.Join(pself.ShareDir, "templates", mode)
 }
 
 // SetupPC sets up the PC environment by running the initialization script
@@ -363,7 +375,7 @@ func (cmd *CmdTool) setupPortableGoEnv() error {
 		return fmt.Errorf("failed to resolve Go bin path: %w", err)
 	}
 
-	// Verify GOPATH/bin directory exists
+	// Verify go/bin directory exists
 	if _, err := os.Stat(cmd.GoBinPath); os.IsNotExist(err) {
 		return fmt.Errorf("Go bin directory not found: %s", cmd.GoBinPath)
 	}
@@ -389,19 +401,21 @@ func (cmd *CmdTool) setupPortableGoEnv() error {
 	os.Setenv("GOCACHE", goCacheDir)
 	os.Setenv("GOMODCACHE", goModCacheDir)
 
-	// Update PATH: Add both GOPATH/bin (for gdspx, gdspxrt, etc.) and GOROOT/bin (for go compiler)
+	// Update PATH: Add go/bin and GOROOT/bin for Go tools
 	currentPath := os.Getenv("PATH")
 	newPath := cmd.GoBinPath + string(os.PathListSeparator) + goRootBinPath + string(os.PathListSeparator) + currentPath
 	os.Setenv("PATH", newPath)
 
 	// Log the configuration
 	fmt.Printf("Using portable Go environment:\n")
-	fmt.Printf("  GOROOT: %s\n", cmd.GoRoot)
-	fmt.Printf("  GOPATH: %s\n", cmd.GoPath)
-	fmt.Printf("  GoBinPath: %s (for gdspx, gdspxrt, etc.)\n", cmd.GoBinPath)
-	fmt.Printf("  Go binary: %s\n", filepath.Join(goRootBinPath, "go"))
+	fmt.Printf("  GOROOT: %s (Go compiler)\n", cmd.GoRoot)
+	fmt.Printf("  GOPATH: %s (Go workspace)\n", cmd.GoPath)
+	fmt.Printf("  PATH prepended: %s\n", goRootBinPath)
 	fmt.Printf("  GOCACHE: %s\n", goCacheDir)
 	fmt.Printf("  GOMODCACHE: %s\n", goModCacheDir)
+	fmt.Printf("\nNote: Resource files are loaded from:\n")
+	fmt.Printf("  ShareDir: %s\n", cmd.ShareDir)
+	fmt.Printf("  LibDir: %s\n", cmd.LibDir)
 
 	// Verify Go works
 	goExe := "go"

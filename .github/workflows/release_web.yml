@@ -20,19 +20,19 @@ jobs:
       matrix:
         include:
           - mode: normal
-            zip_file: spx_web.zip
+            zip_file: spx-web.zip
             artifact_name: web-release
             display_name: Web Release
           - mode: worker
-            zip_file: spx_web_worker.zip
+            zip_file: spx-web-worker.zip
             artifact_name: web-worker-release
             display_name: Web Worker Release
           - mode: minigame
-            zip_file: spx_web_minigame.zip
+            zip_file: spx-web-minigame.zip
             artifact_name: web-minigame-release
             display_name: Web Minigame Release
           - mode: miniprogram
-            zip_file: spx_web_miniprogram.zip
+            zip_file: spx-web-miniprogram.zip
             artifact_name: web-miniprogram-release
             display_name: Web Miniprogram Release
     steps:
@@ -47,12 +47,8 @@ jobs:
 
       - name: Build release pack
         run: |
-          if [ "${{ matrix.mode }}" != "normal" ]; then
-            make setup-web MODE=${{ matrix.mode }}
-            make export-web MODE=${{ matrix.mode }}
-          else
-            make export-web
-          fi
+          make setup-web MODE=${{ matrix.mode }}
+          make export-web MODE=${{ matrix.mode }}
           if [ ! -f "${{ matrix.zip_file }}" ]; then
             echo "${{ matrix.zip_file }} not found"
             exit 1

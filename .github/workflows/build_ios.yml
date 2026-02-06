@@ -60,7 +60,7 @@ jobs:
     - name: Download iOS engine templates
       run: |
         echo "Downloading iOS engine templates..."
-        make download-engine PLATFORM=ios
+        ./pkg/gdspx/tools/build_engine.sh -p ios -g
         echo "Listing downloaded templates:"
         ls -la ~/Library/Application\ Support/Godot/export_templates/
 
@@ -79,7 +79,7 @@ jobs:
 
     - name: Export Xcode project
       shell: bash
-      run: make install && cd tutorial/00-Hello && spx exportios 2>&1 | tee build_ios.txt || true
+      run: make build && cd tutorial/00-Hello && ${SPX_BIN:-spx} exportios 2>&1 | tee build_ios.txt || true
 
     - name: Copy MoltenVK framework to Xcode project
       shell: bash

@@ -1,68 +1,7 @@
 #!/bin/bash
-# Read app name from appname.txt file
+set -e
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd $SCRIPT_DIR
+PROJECT_ROOT="$SCRIPT_DIR/../.."
 
-# Pin Go toolchain version
-export GOTOOLCHAIN=go1.25.7
-
-go mod tidy
-if ! go generate pkg/gengo/embedded_pkgs.go > /dev/null 2>&1; then
-    echo "Error during go generate, showing full output:"
-    go generate pkg/gengo/embedded_pkgs.go
-fi
-
-go mod tidy
-
-target_font_dir=./template/project/engine/fonts/
-mkdir -p $target_font_dir
-font_path=$target_font_dir/CnFont.ttf
-if [ ! -f "$font_path" ]; then
-    curl -L https://github.com/goplus/godot/releases/download/spx2.0.14/CnFont.ttf -o "$font_path"
-fi
-
-if [ ! -f "$font_path" ]; then
-    echo "can not find font or download it, please checkout your network " $font_path
-    exit 1
-fi
-
-appname=$(cat appname.txt)
-# install cmd
-if [ "$OS" = "Windows_NT" ]; then
-   appname="${appname}.exe"
-fi
-
-if [ "$OS" = "Windows_NT" ]; then
-   # Fix for Windows MinGW linker duplicate symbol errors with Go 1.24
-   go build -ldflags="-checklinkname=0 -extldflags=-Wl,--allow-multiple-definition" -o $appname
-else
-   go build -ldflags="-checklinkname=0" -o $appname
-fi 
-GOPATH="$(go env GOPATH)"
-
-
-if [ ! -f "$appname" ]; then
-    echo "Error: $appname not found"
-    exit 1
-fi
-
-mv $appname $GOPATH/bin/
-
-# build and install ispx
-echo "Building ispx..."
-
-if [ "$1" = "--web" ]; then
-    go env -w GOFLAGS="-buildvcs=false"
-    ( cd ../ispx && ./build.sh )
-    cp ../ispx/ispx.wasm "$GOPATH/bin/"
-
-    # Install ispx web runtime
-    echo "Installing ispx web runtime..."
-    rm -rf "$GOPATH/bin/ispx"
-    mkdir -p "$GOPATH/bin/ispx"
-    cp ../ispx/web/* "$GOPATH/bin/ispx/"
-    echo "ispx web runtime installed to $GOPATH/bin/ispx/"
-fi
-
-( cd ../ispxnative && ./build.sh )
-cp ../ispxnative/gdspx-* "$GOPATH/bin/"
+"$PROJECT_ROOT/scripts/build.sh" "$@"
