@@ -241,10 +241,20 @@ func (pself *CmdTool) SetupEnv(version string, fs embed.FS, fsRelDir string, pro
 	return
 }
 
-// getWasmPath returns the path to the wasm file
+// getWasmPath returns the path to the wasm file.
 func (pself *CmdTool) getWasmPath() string {
 	filePath := path.Join(pself.GoBinPath, "ispx.wasm")
 	return filePath
+}
+
+// getIspxWebDir returns the path to the ispx web runtime directory.
+func (pself *CmdTool) getIspxWebDir() (string, error) {
+	ispxWebDir := path.Join(pself.GoBinPath, "ispx")
+	if _, err := os.Stat(ispxWebDir); os.IsNotExist(err) {
+		return "", fmt.Errorf("ispx web runtime not found at %s; "+
+			"run 'cd cmd/gox && ./install.sh --web' to install", ispxWebDir)
+	}
+	return ispxWebDir, nil
 }
 
 // SetupPC sets up the PC environment by running the initialization script

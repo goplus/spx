@@ -55,6 +55,12 @@ if [ "$1" = "--web" ]; then
     go env -w GOFLAGS="-buildvcs=false"
     ( cd ../ispx && ./build.sh )
     cp ../ispx/ispx.wasm "$GOPATH/bin/"
+
+    # Install ispx web runtime
+    echo "Installing ispx web runtime..."
+    mkdir -p "$GOPATH/bin/ispx"
+    cp ../ispx/web/* "$GOPATH/bin/ispx/"
+    echo "ispx web runtime installed to $GOPATH/bin/ispx/"
 fi
 
 ( cd ../ispxnative && ./build.sh )
