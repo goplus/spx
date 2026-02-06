@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 	"unsafe"
@@ -481,6 +482,23 @@ func findFieldPtr(v reflect.Value, name string, from int) any {
 	for i, n := from, v.NumField(); i < n; i++ {
 		tFld := t.Field(i)
 		if tFld.Name == name {
+			word := unsafe.Pointer(v.Field(i).Addr().Pointer())
+			return reflect.NewAt(tFld.Type, word).Interface()
+		}
+	}
+	return nil
+}
+
+// findFieldRefCaseInsensitive finds a field reference by name with case-insensitive matching
+func findFieldRefCaseInsensitive(v reflect.Value, name string, from int) any {
+	if v.Kind() == reflect.Pointer {
+		v = v.Elem()
+	}
+	t := v.Type()
+	nameLower := strings.ToLower(name)
+	for i, n := from, v.NumField(); i < n; i++ {
+		tFld := t.Field(i)
+		if strings.ToLower(tFld.Name) == nameLower {
 			word := unsafe.Pointer(v.Field(i).Addr().Pointer())
 			return reflect.NewAt(tFld.Type, word).Interface()
 		}
