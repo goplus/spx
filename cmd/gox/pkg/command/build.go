@@ -196,7 +196,7 @@ func (pself *CmdTool) BuildWasm() error {
 	if err := os.MkdirAll(webBuildDir, 0755); err != nil {
 		return fmt.Errorf("failed to create web build directory: %w", err)
 	}
-	filePath := path.Join(webBuildDir, "gdspx.wasm")
+	filePath := path.Join(webBuildDir, "ispx.wasm")
 
 	// 2. Execute build inside GoDir
 	return pself.withGoDir(func() error {

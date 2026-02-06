@@ -199,7 +199,7 @@ async function loadGoWasmModule() {
     let assetURLs = Module["gameAssetURLs"];
     // Initialize Go WASM module
     await goBridge.initialize({
-      wasmPath: assetURLs["gdspx.wasm"],
+      wasmPath: assetURLs["ispx.wasm"],
       timeout: 15000,
       enableDebug: false
     });

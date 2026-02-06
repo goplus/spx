@@ -84,7 +84,7 @@ func (pself *CmdTool) ExportMinigame() error {
 
 	// handle WASM files based on build mode
 	godotEditorWasm := filepath.Join(rawWebDir, "engine.wasm")
-	gdspxWasm := filepath.Join(rawWebDir, "gdspx.wasm")
+	ispxWasm := filepath.Join(rawWebDir, "ispx.wasm")
 
 	if buildMode == "fast" {
 		// fast build: move WASM files directly without compression
@@ -92,8 +92,8 @@ func (pself *CmdTool) ExportMinigame() error {
 			return fmt.Errorf("failed to move %s: %w", godotEditorWasm, err)
 		}
 
-		if err := pself.moveFile(gdspxWasm, filepath.Join(engineDir, "gdspx.wasm")); err != nil {
-			return fmt.Errorf("failed to move %s: %w", gdspxWasm, err)
+		if err := pself.moveFile(ispxWasm, filepath.Join(engineDir, "ispx.wasm")); err != nil {
+			return fmt.Errorf("failed to move %s: %w", ispxWasm, err)
 		}
 	} else {
 		// normal build: compress WASM files
@@ -107,9 +107,9 @@ func (pself *CmdTool) ExportMinigame() error {
 			return fmt.Errorf("failed to compress %s: %w", godotEditorWasm, err)
 		}
 
-		fmt.Printf("compress %s...\n", gdspxWasm)
-		if err := pself.compressBrotli(gdspxWasm); err != nil {
-			return fmt.Errorf("failed to compress %s: %w", gdspxWasm, err)
+		fmt.Printf("compress %s...\n", ispxWasm)
+		if err := pself.compressBrotli(ispxWasm); err != nil {
+			return fmt.Errorf("failed to compress %s: %w", ispxWasm, err)
 		}
 
 		// move compressed files to engine directory
@@ -248,8 +248,8 @@ func (pself *CmdTool) exportWebCommon(mode string) error {
 
 	pack.PackProject(pself.TargetDir, filepath.Join(pself.WebDir, "game.zip"))
 	//pack.PackEngineRes(pself.ProjectFS, pself.WebDir)
-	util.CopyFile(pself.getWasmPath(), filepath.Join(pself.WebDir, "gdspx.wasm"))
-	util.CopyFile(pself.getWasmPath()+".br", filepath.Join(pself.WebDir, "gdspx.wasm.br"))
+	util.CopyFile(pself.getWasmPath(), filepath.Join(pself.WebDir, "ispx.wasm"))
+	util.CopyFile(pself.getWasmPath()+".br", filepath.Join(pself.WebDir, "ispx.wasm.br"))
 	pack.SaveEngineHash(pself.WebDir)
 	return nil
 }

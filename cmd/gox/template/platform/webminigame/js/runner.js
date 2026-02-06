@@ -41,7 +41,7 @@ class GameRunner {
             "assetURLs": {
                 "engine.zip": "engine/engine.zip",
                 "game.zip": "engine/game.zip",
-                "gdspx.wasm": "engine/gdspx.wasm",
+                "ispx.wasm": "engine/ispx.wasm",
                 "engine.wasm": "engine/engine.wasm",
             },
         };

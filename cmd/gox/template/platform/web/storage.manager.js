@@ -185,10 +185,10 @@ class StorageManager {
     
     async checkEngineCache(hashes) {
         this.logVerbose("curHashes ", hashes)
-        const wasmGdspx = await this.checkCacheAsset(hashes, "gdspx.wasm");
+        const wasmIspx = await this.checkCacheAsset(hashes, "ispx.wasm");
         const wasmEngine = await this.checkCacheAsset(hashes, "engine.wasm");
-        console.log("checkEngineCache ", wasmGdspx, wasmEngine)
-        return { wasmGdspx, wasmEngine };
+        console.log("checkEngineCache ", wasmIspx, wasmEngine)
+        return { wasmIspx, wasmEngine };
     }
 
     async checkCacheAsset(hashes, assetName) {
