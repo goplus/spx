@@ -18,7 +18,6 @@ package spx
 
 import (
 	"fmt"
-
 	"reflect"
 	"strings"
 	"syscall"
@@ -125,10 +124,56 @@ func getTarget(g reflect.Value, target string) (reflect.Value, int) {
 }
 
 func getValueRef(target reflect.Value, name string, from int) reflect.Value {
+	// Try exact match first (from specified index)
 	if valPtr := findFieldPtr(target, name, from); valPtr != nil {
 		return reflect.ValueOf(valPtr).Elem()
 	}
+	// Try case-insensitive match (from specified index)
+	if valPtr := findFieldRefCaseInsensitive(target, name, from); valPtr != nil {
+		return reflect.ValueOf(valPtr).Elem()
+	}
 	return reflect.Value{}
+}
+
+// findMethod finds a method by name with fallback to case-insensitive matching
+func findMethod(v reflect.Value, name string) reflect.Value {
+	// Try exact match first
+	m := v.MethodByName(name)
+	if m.IsValid() {
+		return m
+	}
+	// Try case-insensitive match
+	return findMethodCaseInsensitive(v, name)
+}
+
+// findMethodCaseInsensitive finds a method by name with case-insensitive matching
+func findMethodCaseInsensitive(v reflect.Value, name string) reflect.Value {
+	t := v.Type()
+	nameLower := strings.ToLower(name)
+	for i := 0; i < t.NumMethod(); i++ {
+		method := t.Method(i)
+		if strings.ToLower(method.Name) == nameLower {
+			return v.Method(i)
+		}
+	}
+	return reflect.Value{}
+}
+
+// makeMethodEvalFunc creates an eval function for a getter method
+func makeMethodEvalFunc(m reflect.Value) func() string {
+	return func() string {
+		result := m.Call(nil)[0].Interface()
+		// special case for float
+		fVal, succ := result.(float64)
+		if succ {
+			return fmt.Sprintf("%.2f", fVal)
+		}
+		f32Val, succ := result.(float32)
+		if succ {
+			return fmt.Sprintf("%.2f", f32Val)
+		}
+		return fmt.Sprint(result)
+	}
 }
 
 const (
@@ -154,25 +199,13 @@ func buildMonitorEval(g reflect.Value, t, val string) func() string {
 				return fmt.Sprint(ref.Interface())
 			}
 		}
-		// check method
-		m := target.Addr().MethodByName(name)
+		// check method (with case-insensitive fallback)
+		m := findMethod(target.Addr(), name)
 		if m.IsValid() {
 			mType := m.Type()
-			// only property method (getter) with one parameter and one return value
+			// only property method (getter) with no input parameters and one return value
 			if mType.NumIn() == 0 && mType.NumOut() == 1 {
-				return func() string {
-					result := m.Call(nil)[0].Interface()
-					// special case for float
-					fVal, succ := result.(float64)
-					if succ {
-						return fmt.Sprintf("%.2f", fVal)
-					}
-					f32Val, succ := result.(float32)
-					if succ {
-						return fmt.Sprintf("%.2f", f32Val)
-					}
-					return fmt.Sprint(result)
-				}
+				return makeMethodEvalFunc(m)
 			}
 		}
 		spxlog.Error("Bind monitor error: cannot find property or method (getter): %s", name)
