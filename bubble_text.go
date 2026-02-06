@@ -40,7 +40,6 @@ func (pself *textBubble) refresh() {
 	if pself.panel == nil {
 		return
 	}
-
 	center, size := pself.getBounds()
 	pself.panel.SetText(pself.sprite.g.getWindowSize(), center, size, pself.msg, pself.style)
 }
