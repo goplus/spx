@@ -249,27 +249,26 @@ func (cfg *physicConfig) validateShape() bool {
 }
 
 // getDimensions calculates width and height based on type and shape parameters
-// scale parameter is applied to the dimensions
-func (cfg *physicConfig) getDimensions(scale float64) (float64, float64) {
+func (cfg *physicConfig) getDimensions() (float64, float64) {
 	switch cfg.Type {
 	case physicsColliderRect:
 		if len(cfg.Params) >= 2 {
-			return math.Max(cfg.Params[0]*scale, 0), math.Max(cfg.Params[1]*scale, 0)
+			return math.Max(cfg.Params[0], 0), math.Max(cfg.Params[1], 0)
 		}
 	case physicsColliderCircle:
 		if len(cfg.Params) >= 1 {
-			radius := math.Max(cfg.Params[0]*scale, 0)
+			radius := math.Max(cfg.Params[0], 0)
 			return radius * 2, radius * 2
 		}
 	case physicsColliderCapsule:
 		if len(cfg.Params) >= 2 {
-			radius := math.Max(cfg.Params[0]*scale, 0)
-			height := math.Max(cfg.Params[1]*scale, 0)
+			radius := math.Max(cfg.Params[0], 0)
+			height := math.Max(cfg.Params[1], 0)
 			return radius * 2, height
 		}
 	default:
 		if len(cfg.Params) >= 2 {
-			return math.Max(cfg.Params[0]*scale, 0), math.Max(cfg.Params[1]*scale, 0)
+			return math.Max(cfg.Params[0], 0), math.Max(cfg.Params[1], 0)
 		}
 	}
 	return 0, 0
@@ -297,7 +296,7 @@ func (cfg *physicConfig) syncShape(syncProxy *engine.Sprite, isTrigger bool, spr
 		cfg.PivotOffset = center.Divf(scale)
 	}
 	if cfg.Type == physicsColliderAuto {
-		pivot, autoSize := syncGetCostumeBoundByAlpha(sprite, 1.0)
+		pivot, autoSize := syncGetCostumeBoundByAlpha(sprite)
 		if isTrigger {
 			autoSize.X += TriggerExtraPixel
 			autoSize.Y += TriggerExtraPixel

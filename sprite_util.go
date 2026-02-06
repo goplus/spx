@@ -62,34 +62,44 @@ func (p *SpriteImpl) bounds() *mathf.Rect2 {
 	if !p.isVisible {
 		return nil
 	}
-	x, y, w, h := 0.0, 0.0, 0.0, 0.0
-	c := p.costumes[p.costumeIndex_]
-	// calc center
-	x, y = p.getXY()
+
+	// Calculate base position with render offset
+	x, y := p.getXY()
 	applyRenderOffset(p, &x, &y)
 
+	// Calculate dimensions and adjust position based on physics trigger or costume
+	w, h := p.getBoundsDimensions(&x, &y)
+
+	return &mathf.Rect2{
+		Position: mathf.Vec2{X: x - w*0.5, Y: y - h*0.5},
+		Size:     mathf.Vec2{X: w, Y: h},
+	}
+}
+
+// getBoundsDimensions calculates sprite dimensions and adjusts position for physics triggers
+func (p *SpriteImpl) getBoundsDimensions(x, y *float64) (width, height float64) {
 	triggerInfo := p.physics().getTriggerInfo()
-	if triggerInfo.Type != physicsColliderNone {
-		if triggerInfo.Type == physicsColliderAuto && p.syncSprite == nil {
-			// if sprite's proxy is not created, use the sync version to get the bound
-			// Use scale=1.0 to get unscaled values, scale will be applied later in getDimensions
-			center, size := getCostumeBoundByAlpha(p, 1.0, false)
-			// Update sprite state atomically to prevent race conditions
-			triggerInfo.Pivot = center
-			triggerInfo.Params = []float64{size.X, size.Y}
-		}
-		x += triggerInfo.Pivot.X * p.scale
-		y += triggerInfo.Pivot.Y * p.scale
-		// Calculate dimensions from triggerShape based on type with scale applied
-		w, h = triggerInfo.getDimensions(p.scale)
-	} else {
-		// calc scale
-		wi, hi := c.getSize()
-		w, h = float64(wi)*p.scale, float64(hi)*p.scale
+
+	if triggerInfo.Type == physicsColliderNone {
+		// Use costume dimensions
+		wi, hi := p.costumes[p.costumeIndex_].getSize()
+		return float64(wi) * p.scale, float64(hi) * p.scale
 	}
 
-	rect := mathf.NewRect2(x-w*0.5, y-h*0.5, w, h)
-	return &rect
+	// Update auto collider parameters if needed
+	if triggerInfo.Type == physicsColliderAuto && p.syncSprite == nil {
+		center, size := getCostumeBoundByAlpha(p, false)
+		triggerInfo.Pivot = center
+		triggerInfo.Params = []float64{size.X, size.Y}
+	}
+
+	// Apply trigger pivot offset
+	*x += triggerInfo.Pivot.X * p.scale
+	*y += triggerInfo.Pivot.Y * p.scale
+
+	// Get dimensions and apply scale
+	w, h := triggerInfo.getDimensions()
+	return w * p.scale, h * p.scale
 }
 
 // Touching checks if sprite is touching:
@@ -240,12 +250,12 @@ func calcRenderRotation(p *SpriteImpl) (float64, float64) {
 // -----------------------------------------------------------------------------
 
 // syncGetCostumeBoundByAlpha gets costume boundary by alpha (sync version)
-func syncGetCostumeBoundByAlpha(p *SpriteImpl, pscale float64) (mathf.Vec2, mathf.Vec2) {
-	return getCostumeBoundByAlpha(p, pscale, true)
+func syncGetCostumeBoundByAlpha(p *SpriteImpl) (mathf.Vec2, mathf.Vec2) {
+	return getCostumeBoundByAlpha(p, true)
 }
 
 // getCostumeBoundByAlpha gets costume boundary by alpha channel detection
-func getCostumeBoundByAlpha(p *SpriteImpl, pscale float64, isSync bool) (mathf.Vec2, mathf.Vec2) {
+func getCostumeBoundByAlpha(p *SpriteImpl, isSync bool) (mathf.Vec2, mathf.Vec2) {
 	cs := p.costumes[p.costumeIndex_]
 	var rect mathf.Rect2
 	// GetBoundFromAlpha is very slow, so we should cache the result
@@ -266,7 +276,7 @@ func getCostumeBoundByAlpha(p *SpriteImpl, pscale float64, isSync bool) (mathf.V
 		}
 		cachedBounds_[cs.path] = rect
 	}
-	scale := pscale / float64(cs.bitmapResolution)
+	scale := 1 / float64(cs.bitmapResolution)
 	// top left
 	posX := float64(rect.Position.X) * scale
 	posY := float64(rect.Position.Y) * scale
@@ -274,7 +284,6 @@ func getCostumeBoundByAlpha(p *SpriteImpl, pscale float64, isSync bool) (mathf.V
 	sizeY := float64(rect.Size.Y) * scale
 
 	w, h := p.getCostumeSize()
-	w, h = w*pscale, h*pscale
 	offsetX := float64(posX + sizeX/2 - w/2)
 	offsetY := -float64(posY + sizeY/2 - h/2)
 
