@@ -163,16 +163,14 @@ func findMethodCaseInsensitive(v reflect.Value, name string) reflect.Value {
 func makeMethodEvalFunc(m reflect.Value) func() string {
 	return func() string {
 		result := m.Call(nil)[0].Interface()
-		// special case for float
-		fVal, succ := result.(float64)
-		if succ {
-			return fmt.Sprintf("%.2f", fVal)
+		switch v := result.(type) {
+		case float64:
+			return fmt.Sprintf("%.2f", v)
+		case float32:
+			return fmt.Sprintf("%.2f", v)
+		default:
+			return fmt.Sprint(result)
 		}
-		f32Val, succ := result.(float32)
-		if succ {
-			return fmt.Sprintf("%.2f", f32Val)
-		}
-		return fmt.Sprint(result)
 	}
 }
 
