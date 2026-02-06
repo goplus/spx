@@ -72,15 +72,16 @@ func (p *SpriteImpl) bounds() *mathf.Rect2 {
 	if triggerInfo.Type != physicsColliderNone {
 		if triggerInfo.Type == physicsColliderAuto && p.syncSprite == nil {
 			// if sprite's proxy is not created, use the sync version to get the bound
-			center, size := getCostumeBoundByAlpha(p, p.scale, false)
+			// Use scale=1.0 to get unscaled values, scale will be applied later in getDimensions
+			center, size := getCostumeBoundByAlpha(p, 1.0, false)
 			// Update sprite state atomically to prevent race conditions
 			triggerInfo.Pivot = center
 			triggerInfo.Params = []float64{size.X, size.Y}
 		}
-		x += triggerInfo.Pivot.X
-		y += triggerInfo.Pivot.Y
-		// Calculate dimensions from triggerShape based on type
-		w, h = triggerInfo.getDimensions()
+		x += triggerInfo.Pivot.X * p.scale
+		y += triggerInfo.Pivot.Y * p.scale
+		// Calculate dimensions from triggerShape based on type with scale applied
+		w, h = triggerInfo.getDimensions(p.scale)
 	} else {
 		// calc scale
 		wi, hi := c.getSize()
