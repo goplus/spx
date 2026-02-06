@@ -2,7 +2,7 @@
 
 package main
 
-import "github.com/goplus/spx/ispx"
+import "github.com/goplus/spx/v2/pkg/ispx"
 
 func main() {
 	if err := ispx.Init(nil); err != nil {

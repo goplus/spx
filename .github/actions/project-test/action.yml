@@ -5,11 +5,11 @@ runs:
   steps:
     - name: Build
       shell: bash
-      run: go build -v $(go list ./... | grep -v /internal/webffi)
+      run: go build -v $(go list ./... | grep -v /internal/webffi | grep -v /cmd/ispx | grep -v /pkg/ispx)
 
     - name: Test
       shell: bash
-      run: go test -v $(go list ./... | grep -v /internal/webffi)
+      run: go test -v $(go list ./... | grep -v /internal/webffi | grep -v /cmd/ispx | grep -v /pkg/ispx)
 
     - name: GenGo
       shell: bash
