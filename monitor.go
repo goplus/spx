@@ -140,50 +140,7 @@ func getValueRef(target reflect.Value, name string, from int) reflect.Value {
 	if valPtr := findFieldPtr(target, name, from); valPtr != nil {
 		return reflect.ValueOf(valPtr).Elem()
 	}
-	// Try case-insensitive match (from specified index)
-	if valPtr := findFieldRefCaseInsensitive(target, name, from); valPtr != nil {
-		return reflect.ValueOf(valPtr).Elem()
-	}
 	return reflect.Value{}
-}
-
-// findMethod finds a method by name with fallback to case-insensitive matching
-func findMethod(v reflect.Value, name string) reflect.Value {
-	// Try exact match first
-	m := v.MethodByName(name)
-	if m.IsValid() {
-		return m
-	}
-	// Try case-insensitive match
-	return findMethodCaseInsensitive(v, name)
-}
-
-// findMethodCaseInsensitive finds a method by name with case-insensitive matching
-func findMethodCaseInsensitive(v reflect.Value, name string) reflect.Value {
-	t := v.Type()
-	nameLower := strings.ToLower(name)
-	for i := 0; i < t.NumMethod(); i++ {
-		method := t.Method(i)
-		if strings.ToLower(method.Name) == nameLower {
-			return v.Method(i)
-		}
-	}
-	return reflect.Value{}
-}
-
-// makeMethodEvalFunc creates an eval function for a getter method
-func makeMethodEvalFunc(m reflect.Value) func() string {
-	return func() string {
-		result := m.Call(nil)[0].Interface()
-		switch v := result.(type) {
-		case float64:
-			return fmt.Sprintf("%.2f", v)
-		case float32:
-			return fmt.Sprintf("%.2f", v)
-		default:
-			return fmt.Sprint(result)
-		}
-	}
 }
 
 // aliasNameOf mimics gogen's aliasNameOf logic:
