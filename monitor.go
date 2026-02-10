@@ -188,6 +188,7 @@ func resolveMember(target reflect.Value, name string, from int) func() string {
 	// Try original name first
 	m := targetForMethod.MethodByName(name)
 	if m.IsValid() && methodHasAutoProperty(m) {
+		// is use original name method accessor return pointer
 		return makeAutoPropertyAccessor(m, false)
 	}
 
