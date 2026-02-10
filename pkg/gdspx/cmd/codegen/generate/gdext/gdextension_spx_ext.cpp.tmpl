@@ -71,14 +71,11 @@ static void gdextension_{{ loadProcAddressName $f.Name }}(
 {{- end -}}
 {{ end }}
 
-
-
 void gdextension_spx_setup_interface() {
 	REGISTER_SPX_INTERFACE_FUNC(spx_global_register_callbacks);
-
-	{{ range $i, $f := $view.Ast.CollectGDExtensionInterfaceFunctions -}}
-	{{ if isManagerMethod $f -}}
+	{{- range $i, $f := $view.Ast.CollectGDExtensionInterfaceFunctions }}
+	{{- if isManagerMethod $f }}
 	REGISTER_SPX_INTERFACE_FUNC({{ loadProcAddressName $f.Name }});
-	{{ end -}}
-	{{ end }}
+	{{- end }}
+	{{- end }}
 }
