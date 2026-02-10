@@ -152,7 +152,7 @@ func aliasNameOf(name string, isMethod bool) string {
 			return string(rune(c)+('A'-'a')) + name[1:]
 		}
 	}
-	return name
+	return ""
 }
 
 // methodHasAutoProperty checks if a method value is a valid auto-property (getter):
@@ -186,14 +186,22 @@ func resolveMember(target reflect.Value, name string, from int) func() string {
 	aliasName := aliasNameOf(name, true)
 
 	// Try original name first
-	if m := targetForMethod.MethodByName(name); methodHasAutoProperty(m) {
-		return makeAutoPropertyAccessor(m)
+	m := targetForMethod.MethodByName(name)
+	if m.IsValid() && methodHasAutoProperty(m) {
+		fmt.Println("autoproperty false", name)
+		return makeAutoPropertyAccessor(m, false)
 	}
 
-	// Try alias name if different from original
-	if aliasName != name {
-		if m := targetForMethod.MethodByName(aliasName); methodHasAutoProperty(m) {
-			return makeAutoPropertyAccessor(m)
+	// Only try alias if original name didn't find any method
+	if !m.IsValid() && aliasName != name {
+		mAlias := targetForMethod.MethodByName(aliasName)
+		// Only execute methodHasAutoProperty and makeAutoPropertyAccessor
+		// when name method not found but aliasName method found
+		if mAlias.IsValid() {
+			if methodHasAutoProperty(mAlias) {
+				fmt.Println("autoproperty true", aliasName)
+				return makeAutoPropertyAccessor(mAlias, true)
+			}
 		}
 	}
 
@@ -228,17 +236,22 @@ func buildMonitorEval(g reflect.Value, t, val string) func() string {
 }
 
 // makeAutoPropertyAccessor creates a runtime accessor for an auto-property method
-func makeAutoPropertyAccessor(m reflect.Value) func() string {
+func makeAutoPropertyAccessor(m reflect.Value, autoProperty bool) func() string {
 	return func() string {
-		result := m.Call(nil)[0].Interface()
-		// special case for float
-		if fVal, ok := result.(float64); ok {
-			return fmt.Sprintf("%.2f", fVal)
+		if autoProperty {
+			result := m.Call(nil)[0].Interface()
+			// special case for float
+			if fVal, ok := result.(float64); ok {
+				return fmt.Sprintf("%.2f", fVal)
+			}
+			if f32Val, ok := result.(float32); ok {
+				return fmt.Sprintf("%.2f", f32Val)
+			}
+			return fmt.Sprint(result)
 		}
-		if f32Val, ok := result.(float32); ok {
-			return fmt.Sprintf("%.2f", f32Val)
-		}
-		return fmt.Sprint(result)
+
+		// Return method pointer when autoProperty is false
+		return fmt.Sprintf("%p", m.Interface())
 	}
 }
 
