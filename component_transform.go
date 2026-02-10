@@ -117,6 +117,10 @@ func (tc *transformComponent) ChangeXYpos(dx, dy float64) {
 	tc.doMoveTo(tc.x+dx, tc.y+dy)
 }
 
+func (tc *transformComponent) setXYposDirect(x, y float64) {
+	tc.x, tc.y = x, y
+}
+
 func (tc *transformComponent) doMoveTo(x, y float64) {
 	x, y = tc.fixWorldRange(x, y)
 	tc.sprite.pen().movePen(x, y)

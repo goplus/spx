@@ -82,8 +82,8 @@ func (p *Game) OnEngineUpdate(delta float64) {
 	// all these functions is called in main thread
 	p.syncUpdateInput()
 	p.syncUpdateLogic()
-	p.syncEnginePositions()
 	p.syncUpdateProxy()
+	p.syncEnginePositions()
 }
 
 func (p *Game) OnEngineRender(delta float64) {
@@ -128,7 +128,7 @@ func (p *Game) syncEnginePositions() error {
 		x := float64(positions[i*2])
 		y := float64(positions[i*2+1])
 		revertRenderOffset(sprite, &x, &y)
-		sprite.SetXYpos(x, y)
+		sprite.transform().setXYposDirect(x, y)
 	}
 
 	return nil
@@ -140,11 +140,10 @@ func (p *Game) syncUpdateInput() {
 
 func (sprite *SpriteImpl) syncCheckInitProxy() {
 	if sprite.syncSprite == nil && !sprite.HasDestroyed {
-		sprite.syncSprite = engine.SyncNewSprite(sprite, mathf.NewVec2(sprite.getXY()))
+		sprite.syncSprite = engine.SyncNewSprite(sprite, mathf.NewVec2(sprite.getXYWithRenderOffset()))
 		syncInitSpritePhysicInfo(sprite, sprite.syncSprite)
 		sprite.syncSprite.Name = sprite.name
 		sprite.syncSprite.SetTypeName(sprite.name)
-		sprite.syncSprite.SetVisible(sprite.isVisible)
 		sprite.applyGraphicEffects(true)
 		sprite.animation().registerOnAnimationLooped(sprite.syncOnAnimationLooped)
 		sprite.animation().registerOnAnimationFinished(sprite.syncOnAnimationFinished)
@@ -205,9 +204,7 @@ func (p *Game) processSpriteUpdate(item any) {
 
 // syncSpriteTransform collects sprite transform data and adds it to the sync buffer
 func (p *Game) syncSpriteTransform(sprite *SpriteImpl) {
-	x, y := sprite.getXY()
-	applyRenderOffset(sprite, &x, &y)
-
+	x, y := sprite.getXYWithRenderOffset()
 	offsetX, offsetY := getRenderOffset(sprite)
 	rot, scale := calcRenderRotation(sprite)
 

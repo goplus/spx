@@ -64,8 +64,7 @@ func (p *SpriteImpl) bounds() *mathf.Rect2 {
 	}
 
 	// Calculate base position with render offset
-	x, y := p.getXY()
-	applyRenderOffset(p, &x, &y)
+	x, y := p.getXYWithRenderOffset()
 
 	// Calculate dimensions and adjust position for physics trigger offset
 	w, h := p.adjustPositionAndGetDimensions(&x, &y)
@@ -209,6 +208,13 @@ func getRenderOffset(p *SpriteImpl) (float64, float64) {
 	y = y - float64(h)/2*p.scale
 
 	return x, y
+}
+
+// getXYWithRenderOffset returns the sprite's XY position with render offset applied
+func (p *SpriteImpl) getXYWithRenderOffset() (x, y float64) {
+	x, y = p.getXY()
+	ox, oy := getRenderOffset(p)
+	return x + ox, y + oy
 }
 
 // applyRenderOffset applies render offset to coordinates
