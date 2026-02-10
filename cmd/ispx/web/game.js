@@ -48,20 +48,10 @@ class GameApp {
         this.miniprogramMode = EnginePackMode == "miniprogram"
         this.normalMode = !this.workerMode && !this.minigameMode && !this.miniprogramMode
 
-        this.useAssetCache = config.useAssetCache || this.miniprogramMode;
         profiler.enabled = this.useProfiler;
 
         // init worker message manager
         this.workerMessageManager = new globalThis.WorkerMessageManager();
-
-        // init storage manager
-        this.storageManager = new StorageManager({
-            webPersistentPath: '/home/web_user',
-            projectInstallName: config.projectName || "Game",
-            useAssetCache: true,
-            assetURLs: this.assetURLs,
-            logVerbose: this.logVerbose.bind(this)
-        });
 
         this.stopGameTask = 0;  
         this.logVerbose("EnginePackMode: ", EnginePackMode)
@@ -347,14 +337,8 @@ class GameApp {
         if (this.minigameMode) {
             this.gameConfig.wasmEngine = url
         } else {
-            if (this.useAssetCache) {
-                const engineCacheResult = await this.storageManager.checkEngineCache(GetEngineHashes());
-                this.gameConfig.wasmIspx = engineCacheResult.wasmIspx;
-                this.gameConfig.wasmEngine = engineCacheResult.wasmEngine;
-            } else {
-                if (!this.gameConfig.wasmEngine) {
-                    this.gameConfig.wasmEngine = await (await fetch(url)).arrayBuffer();
-                }
+            if (!this.gameConfig.wasmEngine) {
+                this.gameConfig.wasmEngine = await (await fetch(url)).arrayBuffer();
             }
         }
     }
@@ -421,13 +405,8 @@ class GameApp {
                 configurable: true
             });
         } else {
-            if (this.useAssetCache) {
-                const { instance } = await WebAssembly.instantiate(this.gameConfig.wasmIspx, this.go.importObject);
-                this.logicWasmInstance = instance;
-            } else {
-                const { instance } = await WebAssembly.instantiateStreaming(fetch(url), this.go.importObject);
-                this.logicWasmInstance = instance;
-            }
+            const { instance } = await WebAssembly.instantiateStreaming(fetch(url), this.go.importObject);
+            this.logicWasmInstance = instance;
         }
     }
 

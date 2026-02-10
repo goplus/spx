@@ -166,5 +166,5 @@ class WorkerMessageManager {
     }
 }
 
-// export StorageManager to global
+// export WorkerMessageManager to global
 globalThis.WorkerMessageManager = WorkerMessageManager; 
