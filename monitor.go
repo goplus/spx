@@ -188,7 +188,6 @@ func resolveMember(target reflect.Value, name string, from int) func() string {
 	// Try original name first
 	m := targetForMethod.MethodByName(name)
 	if m.IsValid() && methodHasAutoProperty(m) {
-		fmt.Println("autoproperty false", name)
 		return makeAutoPropertyAccessor(m, false)
 	}
 
@@ -199,7 +198,6 @@ func resolveMember(target reflect.Value, name string, from int) func() string {
 		// when name method not found but aliasName method found
 		if mAlias.IsValid() {
 			if methodHasAutoProperty(mAlias) {
-				fmt.Println("autoproperty true", aliasName)
 				return makeAutoPropertyAccessor(mAlias, true)
 			}
 		}
