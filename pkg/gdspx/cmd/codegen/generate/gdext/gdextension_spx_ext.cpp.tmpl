@@ -29,11 +29,13 @@
 /**************************************************************************/
 
 #include "gdextension_spx_ext.h"
+
 #include "core/extension/gdextension.h"
 #include "core/extension/gdextension_special_compat_hashes.h"
 #include "core/variant/variant.h"
-#include "gdextension_interface.h"
 #include "scene/main/window.h"
+
+#include "gdextension_interface.h"
 #include "spx_engine.h"
 #include "spx_mgr_access.h"
 {{ $view := . -}}
@@ -69,14 +71,11 @@ static void gdextension_{{ loadProcAddressName $f.Name }}(
 {{- end -}}
 {{ end }}
 
-
-
 void gdextension_spx_setup_interface() {
 	REGISTER_SPX_INTERFACE_FUNC(spx_global_register_callbacks);
-
-	{{ range $i, $f := $view.Ast.CollectGDExtensionInterfaceFunctions -}}
-	{{ if isManagerMethod $f -}}
+	{{- range $i, $f := $view.Ast.CollectGDExtensionInterfaceFunctions }}
+	{{- if isManagerMethod $f }}
 	REGISTER_SPX_INTERFACE_FUNC({{ loadProcAddressName $f.Name }});
-	{{ end -}}
-	{{ end }}
+	{{- end }}
+	{{- end }}
 }
