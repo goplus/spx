@@ -257,6 +257,7 @@ func (pself *CmdTool) exportWebCommon(mode string) error {
 	//pack.PackEngineRes(pself.ProjectFS, pself.WebDir)
 	util.CopyFile(pself.getWasmPath(), filepath.Join(pself.WebDir, "ispx.wasm"))
 	util.CopyFile(pself.getWasmPath()+".br", filepath.Join(pself.WebDir, "ispx.wasm.br"))
+	pack.SaveEngineHash(pself.WebDir)
 	return nil
 }
 
@@ -739,7 +740,7 @@ func (pself *CmdTool) moveFilesByPattern(srcDir, dstDir, pattern string) error {
 // mergeJSFiles merges JavaScript files
 func (pself *CmdTool) mergeJSFiles(jsDir string, isCompressed bool) error {
 	// file merge order
-	jsFiles := []string{"header.js", "engine.js", "go.wasm.exec.js", "worker.message.manager.js", "game.js"}
+	jsFiles := []string{"header.js", "engine.js", "go.wasm.exec.js", "storage.manager.js", "worker.message.manager.js", "game.js"}
 	outputFile := filepath.Join(jsDir, "engine_new.js")
 
 	// create output file

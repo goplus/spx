@@ -43,6 +43,7 @@
 	<script>var miniEngine = null</script>
 	<script>var isWasmCompressed = false</script>
 	<script src="go.wasm.exec.js"></script>
+	<script src="storage.manager.js"></script>
 	<script src="worker.message.manager.js"></script>
 	<script src="engine.js"></script>
 	<script src="game.js"></script>
@@ -175,6 +176,7 @@
 				'handleGodotExit': handleGodotExit,
 				"gameCanvas": document.getElementById('game-canvas'),
 				"logLevel": LOG_LEVEL_NONE,
+				"useAssetCache": false,
 				"isRuntimeMode": true,
 				"assetURLs": {
 					"engine.zip": "/engine.zip",

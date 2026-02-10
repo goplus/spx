@@ -58,7 +58,6 @@ if [ "$1" = "--web" ]; then
 
     # Install ispx web runtime
     echo "Installing ispx web runtime..."
-    rm -rf "$GOPATH/bin/ispx"
     mkdir -p "$GOPATH/bin/ispx"
     cp ../ispx/web/* "$GOPATH/bin/ispx/"
     echo "ispx web runtime installed to $GOPATH/bin/ispx/"
