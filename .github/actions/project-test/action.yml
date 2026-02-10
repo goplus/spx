@@ -3,21 +3,13 @@ description: Run the test Godot project.
 runs:
   using: "composite"
   steps:
-    - name: Build
-      shell: bash
-      run: go build -v $(go list ./... | grep -v /internal/webffi | grep -v /cmd/ispx | grep -v /pkg/ispx)
-
-    - name: Test
-      shell: bash
-      run: go test -v $(go list ./... | grep -v /internal/webffi | grep -v /cmd/ispx | grep -v /pkg/ispx)
-
     - name: GenGo
       shell: bash
       run: xgo go ./...
 
     - name: Run test demo
       shell: bash
-      run: spx run -path="test/CI" -headless=true 2>&1 | tee cilog.txt 
+      run: spx run -path="test/CI" -headless=true 2>&1 | tee cilog.txt
 
     - name: Check test result
       shell: bash
@@ -35,7 +27,7 @@ runs:
     - name: Run test demo in interpreted mode
       shell: bash
       run: |
-        spx runi -path="test/CI" -headless=true 2>&1 | tee cilog_interpreted_mode.txt 
+        spx runi -path="test/CI" -headless=true 2>&1 | tee cilog_interpreted_mode.txt
 
     - name: Check test result in interpreted mode
       shell: bash

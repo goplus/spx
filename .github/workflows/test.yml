@@ -1,0 +1,63 @@
+name: Test
+
+on:
+  workflow_call:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: 1.24.x
+
+      - name: Download Go modules
+        run: go mod download
+
+      - name: Run go generate for pkg/ispx
+        run: go generate ./pkg/ispx/...
+
+      - name: Ensure working tree is clean
+        run: git diff --exit-code
+
+      - name: Test Go code
+        run: go test -v -ldflags=-checklinkname=0 $(go list ./... | grep -v /internal/webffi)
+
+  test-go-build:
+    needs: test
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: 1.24.x
+
+      - name: Download Go modules
+        run: go mod download
+
+      - name: Build Go packages
+        shell: bash
+        run: go build -v $(go list ./... | grep -v /internal/webffi | grep -v /cmd/ispx)
+
+      - name: Build cmd/ispx
+        if: runner.os == 'Linux'
+        working-directory: cmd/ispx
+        run: ./build.sh
+
+      - name: Build cmd/ispxnative
+        shell: bash
+        working-directory: cmd/ispxnative
+        run: ./build.sh

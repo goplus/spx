@@ -6,37 +6,37 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  static-checks:
-    name: 📊 static-checks
-    uses: ./.github/workflows/static_checks.yml
+  test:
+    name: 🧪 Test
+    uses: ./.github/workflows/test.yml
 
   android-build:
-    needs: static-checks
+    needs: test
     name: 🤖 Android
     uses: ./.github/workflows/build_android.yml
 
   ios-build:
-    needs: static-checks
+    needs: test
     name: 🍏 iOS
     uses: ./.github/workflows/build_ios.yml
 
   web-build:
-    needs: static-checks
+    needs: test
     name: 🌐 Web
     uses: ./.github/workflows/build_web.yml
 
   linux-build:
-    needs: static-checks
+    needs: test
     name: 🐧 Linux
     uses: ./.github/workflows/build_linux.yml
 
   macos-build:
-    needs: static-checks
+    needs: test
     name: 🍎 macOS
     uses: ./.github/workflows/build_macos.yml
 
   windows-build:
-    needs: static-checks
+    needs: test
     name: 🏁 Windows
     uses: ./.github/workflows/build_windows.yml
 
