@@ -312,7 +312,7 @@ type ISpriteMgr interface {
 	SetPixelCollisionSamplingStep(step int64)
 	GetPixelCollisionSamplingStep() int64
 	BatchUpdateTransforms(buffer Array)
-	BatchUpdatePositions(objs Array) Array
+	BatchRetrievePositions(objs Array) Array
 }
 
 type ITilemapMgr interface {

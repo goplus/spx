@@ -757,7 +757,7 @@ func (pself *spriteMgrImpl) GetPixelCollisionSamplingStep() int64 {
 	return _ret1
 }
 func (pself *spriteMgrImpl) BatchUpdateTransforms(buffer gdx.Array) {}
-func (pself *spriteMgrImpl) BatchUpdatePositions(objs gdx.Array) gdx.Array {
+func (pself *spriteMgrImpl) BatchRetrievePositions(objs gdx.Array) gdx.Array {
 	var _ret1 gdx.Array
 	return _ret1
 }

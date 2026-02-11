@@ -268,7 +268,7 @@ type GDExtensionInterface struct {
 	SpxSpriteSetPixelCollisionSamplingStep      js.Value
 	SpxSpriteGetPixelCollisionSamplingStep      js.Value
 	SpxSpriteBatchUpdateTransforms              js.Value
-	SpxSpriteBatchUpdatePositions               js.Value
+	SpxSpriteBatchRetrievePositions             js.Value
 	SpxTilemapOpenDrawTilesWithSize             js.Value
 	SpxTilemapOpenDrawTiles                     js.Value
 	SpxTilemapSetLayerIndex                     js.Value
@@ -582,7 +582,7 @@ func (x *GDExtensionInterface) loadProcAddresses() {
 	x.SpxSpriteSetPixelCollisionSamplingStep = dlsymGD("gdspx_sprite_set_pixel_collision_sampling_step")
 	x.SpxSpriteGetPixelCollisionSamplingStep = dlsymGD("gdspx_sprite_get_pixel_collision_sampling_step")
 	x.SpxSpriteBatchUpdateTransforms = dlsymGD("gdspx_sprite_batch_update_transforms")
-	x.SpxSpriteBatchUpdatePositions = dlsymGD("gdspx_sprite_batch_update_positions")
+	x.SpxSpriteBatchRetrievePositions = dlsymGD("gdspx_sprite_batch_retrieve_positions")
 	x.SpxTilemapOpenDrawTilesWithSize = dlsymGD("gdspx_tilemap_open_draw_tiles_with_size")
 	x.SpxTilemapOpenDrawTiles = dlsymGD("gdspx_tilemap_open_draw_tiles")
 	x.SpxTilemapSetLayerIndex = dlsymGD("gdspx_tilemap_set_layer_index")

@@ -1383,9 +1383,9 @@ func (pself *spriteMgr) BatchUpdateTransforms(buffer Array) {
 	arg0 := JsFromGdArray(buffer)
 	API.SpxSpriteBatchUpdateTransforms.Invoke(arg0)
 }
-func (pself *spriteMgr) BatchUpdatePositions(objs Array) Array {
+func (pself *spriteMgr) BatchRetrievePositions(objs Array) Array {
 	arg0 := JsFromGdArray(objs)
-	_retValue := API.SpxSpriteBatchUpdatePositions.Invoke(arg0)
+	_retValue := API.SpxSpriteBatchRetrievePositions.Invoke(arg0)
 	return JsToGdArray(_retValue)
 }
 func (pself *tilemapMgr) OpenDrawTilesWithSize(tile_size int64) {

@@ -24,8 +24,8 @@ func (pself *Sprite) AddImpulse(impulse Vec2) {
 	SpriteMgr.AddImpulse(pself.Id, impulse)
 }
 
-func (pself *Sprite) BatchUpdatePositions(objs Array) Array {
-	return SpriteMgr.BatchUpdatePositions(objs)
+func (pself *Sprite) BatchRetrievePositions(objs Array) Array {
+	return SpriteMgr.BatchRetrievePositions(objs)
 }
 
 func (pself *Sprite) BatchUpdateTransforms(buffer Array) {
