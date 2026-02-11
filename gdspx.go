@@ -204,15 +204,15 @@ func (p *Game) processSpriteUpdate(item any) {
 
 // syncSpriteTransform collects sprite transform data and adds it to the sync buffer
 func (p *Game) syncSpriteTransform(sprite *SpriteImpl) {
-	x, y := sprite.getXYWithRenderOffset()
+	x, y := sprite.getXY()
 	offsetX, offsetY := getRenderOffset(sprite)
-	rot, scale := calcRenderRotation(sprite)
+	rot, scaleX, scaleY := getRenderRotationAndScale(sprite)
 
 	p.syncBuffer.Add(
 		int64(sprite.syncSprite.Id),
-		x, y,
+		x+offsetX, y+offsetY,
 		engine.DegToRad(rot),
-		scale, 1.0, // scaleX, scaleY
+		scaleX, scaleY,
 		offsetX, offsetY,
 		sprite.isVisible,
 	)
