@@ -142,6 +142,7 @@ func (sprite *SpriteImpl) syncCheckInitProxy() {
 	if sprite.syncSprite == nil && !sprite.HasDestroyed {
 		sprite.syncSprite = engine.SyncNewSprite(sprite, mathf.NewVec2(sprite.getXYWithRenderOffset()))
 		syncInitSpritePhysicInfo(sprite, sprite.syncSprite)
+		sprite.syncSprite.SetVisible(sprite.isVisible)
 		sprite.syncSprite.Name = sprite.name
 		sprite.syncSprite.SetTypeName(sprite.name)
 		sprite.applyGraphicEffects(true)
