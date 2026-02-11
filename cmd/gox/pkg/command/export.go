@@ -675,32 +675,47 @@ func (pself *CmdTool) buildAndroidLibraries() error {
 	ndkToolchain := filepath.Join(androidNdkRoot, "toolchains", "llvm", "prebuilt", hostTag, "bin")
 	minSdk := "21"
 
-	// Build for arm64-v8a
-	fmt.Println("Building for arm64-v8a...", goDir)
-	cmd := exec.Command("go", "build", "-tags=android,packmode", "-buildmode=c-shared", "-o", filepath.Join(libDir, "libgdspx-android-arm64.so"), ".")
-	cmd.Dir = goDir
-	cmd.Env = append(os.Environ(),
-		"CGO_ENABLED=1",
-		"GOOS=android",
-		"GOARCH=arm64",
-		"CC="+filepath.Join(ndkToolchain, "aarch64-linux-android"+minSdk+"-clang"),
-	)
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to build for arm64-v8a: %w", err)
+	// Define build configurations for different Android architectures
+	type androidBuildConfig struct {
+		name       string
+		goArch     string
+		outputFile string
+		ccPrefix   string
 	}
 
-	// Build for armeabi-v7a
-	fmt.Println("Building for armeabi-v7a...")
-	cmd = exec.Command("go", "build", "-tags=android,packmode", "-buildmode=c-shared", "-o", filepath.Join(libDir, "libgdspx-android-arm32.so"), ".")
-	cmd.Dir = goDir
-	cmd.Env = append(os.Environ(),
-		"CGO_ENABLED=1",
-		"GOOS=android",
-		"GOARCH=arm",
-		"CC="+filepath.Join(ndkToolchain, "armv7a-linux-androideabi"+minSdk+"-clang"),
-	)
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to build for armeabi-v7a: %w", err)
+	builds := []androidBuildConfig{
+		{
+			name:       "arm64-v8a",
+			goArch:     "arm64",
+			outputFile: "libgdspx-android-arm64.so",
+			ccPrefix:   "aarch64-linux-android",
+		},
+		{
+			name:       "armeabi-v7a",
+			goArch:     "arm",
+			outputFile: "libgdspx-android-arm32.so",
+			ccPrefix:   "armv7a-linux-androideabi",
+		},
+	}
+
+	// Build for each architecture
+	for _, build := range builds {
+		fmt.Printf("Building for %s... %s\n", build.name, goDir)
+
+		cmd := exec.Command("go", "build", "-tags=android,packmode", "-buildmode=c-shared", "-o", filepath.Join(libDir, build.outputFile), ".")
+		cmd.Dir = goDir
+		cmd.Env = append(os.Environ(),
+			"CGO_ENABLED=1",
+			"GOOS=android",
+			"GOARCH="+build.goArch,
+			"CC="+filepath.Join(ndkToolchain, build.ccPrefix+minSdk+"-clang"),
+		)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("failed to build for %s: %w", build.name, err)
+		}
 	}
 
 	fmt.Println("Build android so completed successfully!")

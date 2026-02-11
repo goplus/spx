@@ -43,10 +43,42 @@ jobs:
     - name: Set Android NDK environment variable
       run: echo "ANDROID_NDK_ROOT=${{ steps.setup-ndk.outputs.ndk-path }}" >> $GITHUB_ENV
 
-    - name: Verify NDK installation
+    - name: Verify and fix NDK installation
       run: |
         echo "ANDROID_NDK_ROOT: $ANDROID_NDK_ROOT"
-        ls -la "$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt"
+        echo "Checking for clang binary:"
+        CLANG_PATH="$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
+        
+        if [ ! -f "$CLANG_PATH" ]; then
+          echo "⚠️  clang binary not found, downloading and installing NDK r23c manually..."
+          
+          # Create temporary directory
+          TMP_DIR=$(mktemp -d)
+          cd "$TMP_DIR"
+          
+          # Download NDK
+          wget -q https://dl.google.com/android/repository/android-ndk-r23c-linux.zip
+          
+          # Extract to a temp location
+          unzip -q android-ndk-r23c-linux.zip
+          
+          # Move to the expected location
+          rm -rf "$ANDROID_NDK_ROOT"
+          mv android-ndk-r23c "$ANDROID_NDK_ROOT"
+          
+          # Cleanup
+          cd -
+          rm -rf "$TMP_DIR"
+          
+          echo "✅ NDK r23c installed successfully"
+        else
+          echo "✅ clang binary found at $CLANG_PATH"
+        fi
+        
+        # Verify installation
+        echo "Verifying NDK installation:"
+        ls -la "$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" || echo "❌ clang still not found"
+        ls -la "$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang" || echo "❌ wrapper not found"
 
     - name: Download Android engine templates
       run: |
