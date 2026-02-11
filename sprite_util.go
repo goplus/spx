@@ -231,24 +231,25 @@ func revertRenderOffset(p *SpriteImpl, cx, cy *float64) {
 	*cy = *cy - y
 }
 
-// calcRenderRotation calculates the render rotation and horizontal scale
-func calcRenderRotation(p *SpriteImpl) (float64, float64) {
+// getRenderRotationAndScale calculates the render rotation and scale values (scaleX and scaleY)
+func getRenderRotationAndScale(p *SpriteImpl) (rotation, scaleX, scaleY float64) {
 	transform := p.transform()
 	if transform.rotationStyle == None {
-		return 0, 1.0
+		return 0, 1.0, 1.0
 	}
 	cs := p.costumes[p.costumeIndex_]
 	degree := p.Heading() + cs.faceRight
 	degree -= 90
-	hScale := 1.0
+	scaleX = 1.0
+	scaleY = 1.0
 	if transform.rotationStyle == LeftRight {
 		degree = 0
 		isFlip := transform.direction < 0
 		if isFlip {
-			hScale = -1.0
+			scaleX = -1.0
 		}
 	}
-	return degree, hScale
+	return degree, scaleX, scaleY
 }
 
 // -----------------------------------------------------------------------------
