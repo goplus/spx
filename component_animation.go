@@ -18,6 +18,7 @@ package spx
 
 import (
 	"log"
+	"maps"
 	"math"
 
 	"github.com/goplus/spbase/mathf"
@@ -37,7 +38,7 @@ type sharedAnimationData struct {
 	animations        map[SpriteAnimationName]*aniConfig
 	animBindings      map[string]string
 	defaultAnimation  SpriteAnimationName
-	animationWrappers map[SpriteAnimationName]*animationWrapper // Shared: register once for all clones
+	animationWrappers map[SpriteAnimationName]*animationWrapper
 }
 
 type animationComponent struct {
@@ -66,9 +67,10 @@ func (ac *animationComponent) initialize(sprite *SpriteImpl, spriteCfg *spriteCo
 func (ac *animationComponent) initFromConfig(spriteCfg *spriteConfig) {
 	// Create shared animation data
 	ac.shared = &sharedAnimationData{
-		defaultAnimation: spriteCfg.DefaultAnimation,
-		animations:       make(map[string]*aniConfig),
-		animBindings:     make(map[string]string),
+		defaultAnimation:  spriteCfg.DefaultAnimation,
+		animations:        make(map[string]*aniConfig),
+		animBindings:      make(map[string]string),
+		animationWrappers: make(map[SpriteAnimationName]*animationWrapper),
 	}
 
 	anims := spriteCfg.FAnimations
@@ -92,8 +94,8 @@ func (ac *animationComponent) initFromConfig(spriteCfg *spriteConfig) {
 		ac.shared.animations[key] = ani
 	}
 
-	// Create shared animation wrappers (register once for all clones)
-	ac.shared.animationWrappers = make(map[SpriteAnimationName]*animationWrapper)
+	maps.Copy(ac.shared.animBindings, spriteCfg.AnimBindings)
+
 	for animName, ani := range ac.shared.animations {
 		ac.shared.animationWrappers[animName] = &animationWrapper{spr: ac.sprite, ani: ani}
 	}
