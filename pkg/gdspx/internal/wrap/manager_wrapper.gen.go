@@ -1488,9 +1488,9 @@ func (pself *spriteMgr) BatchUpdateTransforms(buffer Array) {
 	arg0 := ToGdArray(buffer)
 	CallSpriteBatchUpdateTransforms(arg0)
 }
-func (pself *spriteMgr) BatchUpdatePositions(objs Array) Array {
+func (pself *spriteMgr) BatchRetrievePositions(objs Array) Array {
 	arg0 := ToGdArray(objs)
-	retValue := CallSpriteBatchUpdatePositions(arg0)
+	retValue := CallSpriteBatchRetrievePositions(arg0)
 	return ToArray(retValue)
 }
 func (pself *tilemapMgr) OpenDrawTilesWithSize(tile_size int64) {

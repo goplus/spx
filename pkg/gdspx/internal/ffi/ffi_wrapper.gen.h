@@ -750,7 +750,7 @@ void cgo_callfn_GDExtensionSpxSpriteGetPixelCollisionSamplingStep(const GDExtens
 void cgo_callfn_GDExtensionSpxSpriteBatchUpdateTransforms(const GDExtensionSpxSpriteBatchUpdateTransforms fn, GdArray buffer) {
 	fn(buffer);
 }
-void cgo_callfn_GDExtensionSpxSpriteBatchUpdatePositions(const GDExtensionSpxSpriteBatchUpdatePositions fn, GdArray objs, GdArray* ret_val) {
+void cgo_callfn_GDExtensionSpxSpriteBatchRetrievePositions(const GDExtensionSpxSpriteBatchRetrievePositions fn, GdArray objs, GdArray* ret_val) {
 	fn(objs,ret_val);
 }
 void cgo_callfn_GDExtensionSpxTilemapOpenDrawTilesWithSize(const GDExtensionSpxTilemapOpenDrawTilesWithSize fn, GdInt tile_size) {
