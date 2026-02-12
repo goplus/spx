@@ -28,16 +28,16 @@ type bubbleComponent struct {
 	quoteObj *quoterBubble // Quote bubble object
 }
 
-// initialize initializes the bubble component
-func (bc *bubbleComponent) initialize(sprite *SpriteImpl, spriteCfg *spriteConfig) {
-	bc.componentBase.initialize(sprite, spriteCfg)
+// initialize initializes the bubble component.
+func (b *bubbleComponent) initialize(sprite *SpriteImpl, spriteCfg *spriteConfig) {
+	b.componentBase.initialize(sprite, spriteCfg)
 	// Bubbles are created on-demand (lazy initialization)
-	bc.textObj = nil
-	bc.quoteObj = nil
+	b.textObj = nil
+	b.quoteObj = nil
 }
 
-// cloneFrom creates a new bubble component by cloning from source
-func (bc *bubbleComponent) cloneFrom(src component, newSprite *SpriteImpl) component {
+// cloneFrom creates a new bubble component by cloning from source.
+func (b *bubbleComponent) cloneFrom(src component, newSprite *SpriteImpl) component {
 	// Bubbles are NOT cloned - each sprite starts with clean bubbles
 	newBubble := &bubbleComponent{
 		componentBase: componentBase{sprite: newSprite},
@@ -47,36 +47,36 @@ func (bc *bubbleComponent) cloneFrom(src component, newSprite *SpriteImpl) compo
 	return newBubble
 }
 
-// onDestroy cleanup when component is destroyed
-func (bc *bubbleComponent) onDestroy() {
+// onDestroy cleanup when component is destroyed.
+func (b *bubbleComponent) onDestroy() {
 	// Bubbles will be cleaned up by sprite manager
-	bc.textObj = nil
-	bc.quoteObj = nil
+	b.textObj = nil
+	b.quoteObj = nil
 }
 
 // ============================================================================
 // Say/Think Methods
 // ============================================================================
 
-func (bc *bubbleComponent) getTextObj() *textBubble {
-	return bc.textObj
+func (b *bubbleComponent) getTextObj() *textBubble {
+	return b.textObj
 }
 
-func (bc *bubbleComponent) setTextObj(obj *textBubble) {
-	bc.textObj = obj
+func (b *bubbleComponent) setTextObj(obj *textBubble) {
+	b.textObj = obj
 }
 
-func (bc *bubbleComponent) hasText() bool {
-	return bc.textObj != nil
+func (b *bubbleComponent) hasText() bool {
+	return b.textObj != nil
 }
 
-func (bc *bubbleComponent) stopText() {
-	if bc.hasText() {
-		textObj := bc.getTextObj()
+func (b *bubbleComponent) stopText() {
+	if b.hasText() {
+		textObj := b.getTextObj()
 		textObj.panel.Destroy()
 		textObj.panel = nil
-		bc.sprite.g.removeShape(textObj)
-		bc.setTextObj(nil)
+		b.sprite.g.removeShape(textObj)
+		b.setTextObj(nil)
 	}
 }
 
@@ -84,24 +84,24 @@ func (bc *bubbleComponent) stopText() {
 // Quote Methods
 // ============================================================================
 
-func (bc *bubbleComponent) getQuoteObj() *quoterBubble {
-	return bc.quoteObj
+func (b *bubbleComponent) getQuoteObj() *quoterBubble {
+	return b.quoteObj
 }
 
-func (bc *bubbleComponent) setQuoteObj(obj *quoterBubble) {
-	bc.quoteObj = obj
+func (b *bubbleComponent) setQuoteObj(obj *quoterBubble) {
+	b.quoteObj = obj
 }
 
-func (bc *bubbleComponent) hasQuote() bool {
-	return bc.quoteObj != nil
+func (b *bubbleComponent) hasQuote() bool {
+	return b.quoteObj != nil
 }
 
-func (bc *bubbleComponent) stopQuote() {
-	if bc.hasQuote() {
-		quoteObj := bc.getQuoteObj()
+func (b *bubbleComponent) stopQuote() {
+	if b.hasQuote() {
+		quoteObj := b.getQuoteObj()
 		quoteObj.panel.Destroy()
 		quoteObj.panel = nil
-		bc.sprite.g.removeShape(quoteObj)
-		bc.setQuoteObj(nil)
+		b.sprite.g.removeShape(quoteObj)
+		b.setQuoteObj(nil)
 	}
 }

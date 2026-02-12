@@ -43,21 +43,21 @@ type penComponent struct {
 }
 
 // initialize initializes the pen component from config
-func (pc *penComponent) initialize(sprite *SpriteImpl, spriteCfg *spriteConfig) {
-	pc.componentBase.initialize(sprite, spriteCfg)
+func (p *penComponent) initialize(sprite *SpriteImpl, spriteCfg *spriteConfig) {
+	p.componentBase.initialize(sprite, spriteCfg)
 	// Always initialize with default pen values
-	pc.penColor = mathf.NewColor(66, 133, 244, 255)
-	pc.penWidth = 1
-	pc.penHue = 0.6
-	pc.penSaturation = 1
-	pc.penBrightness = 1
-	pc.penTransparency = 0
-	pc.penDown = false
-	pc.penObj = nil
+	p.penColor = mathf.NewColor(66, 133, 244, 255)
+	p.penWidth = 1
+	p.penHue = 0.6
+	p.penSaturation = 1
+	p.penBrightness = 1
+	p.penTransparency = 0
+	p.penDown = false
+	p.penObj = nil
 }
 
 // cloneFrom creates a new pen component by cloning from source
-func (pc *penComponent) cloneFrom(src component, newSprite *SpriteImpl) component {
+func (p *penComponent) cloneFrom(src component, newSprite *SpriteImpl) component {
 	srcPen := src.(*penComponent)
 	return &penComponent{
 		componentBase:   componentBase{sprite: newSprite},
@@ -73,66 +73,81 @@ func (pc *penComponent) cloneFrom(src component, newSprite *SpriteImpl) componen
 }
 
 // OnDestroy cleanup when component is destroyed
-func (pc *penComponent) onDestroy() {
-	pc.destroyPen()
+func (p *penComponent) onDestroy() {
+	p.destroyPen()
 }
 
 // ============================================================================
 // Pen Control
 // ============================================================================
 
-func (pc *penComponent) PenUp() {
-	pc.checkOrCreatePen()
-	pc.penDown = false
-	penMgr.PenUp(*pc.penObj)
+func (p *penComponent) PenUp() {
+	p.checkOrCreatePen()
+	p.penDown = false
+	penMgr.PenUp(*p.penObj)
 }
 
-func (pc *penComponent) PenDown() {
-	pc.checkOrCreatePen()
-	pc.penDown = true
-	pc.movePen(pc.sprite.getXY())
-	penMgr.PenDown(*pc.penObj, false)
+func (p *penComponent) PenDown() {
+	p.checkOrCreatePen()
+	p.penDown = true
+	p.movePen(p.sprite.getXY())
+	penMgr.PenDown(*p.penObj, false)
 }
 
-func (pc *penComponent) Stamp() {
-	pc.checkOrCreatePen()
-	penMgr.SetPenStampTexture(*pc.penObj, pc.sprite.getCostumePath())
-	penMgr.PenStamp(*pc.penObj)
+func (p *penComponent) Stamp() {
+	p.checkOrCreatePen()
+	penMgr.SetPenStampTexture(*p.penObj, p.sprite.getCostumePath())
+	penMgr.PenStamp(*p.penObj)
+}
+
+// ============================================================================
+// Pen Size Control
+// ============================================================================
+
+func (p *penComponent) SetPenSize(size float64) {
+	p.checkOrCreatePen()
+	p.penWidth = size
+	penMgr.SetPenSizeTo(*p.penObj, size)
+}
+
+func (p *penComponent) ChangePenSize(delta float64) {
+	p.checkOrCreatePen()
+	p.SetPenSize(p.penWidth + delta)
 }
 
 // ============================================================================
 // Pen Color Control
 // ============================================================================
 
-func (pc *penComponent) SetPenColor(color Color) {
-	pc.checkOrCreatePen()
-	pc.penColor = toMathfColor(color)
-	pc.applyPenColorProperty()
+func (p *penComponent) SetPenColor(color Color) {
+	p.checkOrCreatePen()
+	p.penColor = toMathfColor(color)
+	p.applyPenColorProperty()
 }
 
-func (pc *penComponent) SetPenColorParam(kind PenColorParam, value float64) {
+func (p *penComponent) SetPenColorParam(kind PenColorParam, value float64) {
 	switch kind {
 	case PenHue:
-		pc.setPenHue(value)
+		p.setPenHue(value)
 	case PenSaturation:
-		pc.setPenSaturation(value)
+		p.setPenSaturation(value)
 	case PenBrightness:
-		pc.setPenBrightness(value)
+		p.setPenBrightness(value)
 	case PenTransparency:
-		pc.setPenTransparency(value)
+		p.setPenTransparency(value)
 	}
 }
 
-func (pc *penComponent) ChangePenColor(kind PenColorParam, delta float64) {
+func (p *penComponent) ChangePenColor(kind PenColorParam, delta float64) {
 	switch kind {
 	case PenHue:
-		pc.changePenHue(delta)
+		p.changePenHue(delta)
 	case PenSaturation:
-		pc.changePenSaturation(delta)
+		p.changePenSaturation(delta)
 	case PenBrightness:
-		pc.changePenBrightness(delta)
+		p.changePenBrightness(delta)
 	case PenTransparency:
-		pc.changePenTransparency(delta)
+		p.changePenTransparency(delta)
 	}
 }
 
@@ -140,101 +155,86 @@ func (pc *penComponent) ChangePenColor(kind PenColorParam, delta float64) {
 // Pen HSV Color Components
 // ============================================================================
 
-func (pc *penComponent) setPenHue(value float64) {
-	pc.checkOrCreatePen()
-	pc.penHue = mathf.Clamp(value, 0, 100)
-	pc.applyPenHsvProperty()
+func (p *penComponent) setPenHue(value float64) {
+	p.checkOrCreatePen()
+	p.penHue = mathf.Clamp(value, 0, 100)
+	p.applyPenHsvProperty()
 }
 
-func (pc *penComponent) changePenHue(delta float64) {
-	pc.setPenHue(pc.penHue + delta)
+func (p *penComponent) changePenHue(delta float64) {
+	p.setPenHue(p.penHue + delta)
 }
 
-func (pc *penComponent) setPenSaturation(value float64) {
-	pc.checkOrCreatePen()
-	pc.penSaturation = mathf.Clamp(value, 0, 100)
-	pc.applyPenHsvProperty()
+func (p *penComponent) setPenSaturation(value float64) {
+	p.checkOrCreatePen()
+	p.penSaturation = mathf.Clamp(value, 0, 100)
+	p.applyPenHsvProperty()
 }
 
-func (pc *penComponent) changePenSaturation(delta float64) {
-	pc.setPenSaturation(pc.penSaturation + delta)
+func (p *penComponent) changePenSaturation(delta float64) {
+	p.setPenSaturation(p.penSaturation + delta)
 }
 
-func (pc *penComponent) setPenBrightness(value float64) {
-	pc.checkOrCreatePen()
-	pc.penBrightness = mathf.Clamp(value, 0, 100)
-	pc.applyPenHsvProperty()
+func (p *penComponent) setPenBrightness(value float64) {
+	p.checkOrCreatePen()
+	p.penBrightness = mathf.Clamp(value, 0, 100)
+	p.applyPenHsvProperty()
 }
 
-func (pc *penComponent) changePenBrightness(delta float64) {
-	pc.setPenBrightness(pc.penBrightness + delta)
+func (p *penComponent) changePenBrightness(delta float64) {
+	p.setPenBrightness(p.penBrightness + delta)
 }
 
-func (pc *penComponent) setPenTransparency(value float64) {
-	pc.checkOrCreatePen()
-	pc.penTransparency = mathf.Clamp(value, 0, 100)
-	pc.applyPenHsvProperty()
+func (p *penComponent) setPenTransparency(value float64) {
+	p.checkOrCreatePen()
+	p.penTransparency = mathf.Clamp(value, 0, 100)
+	p.applyPenHsvProperty()
 }
 
-func (pc *penComponent) changePenTransparency(delta float64) {
-	pc.setPenTransparency(pc.penTransparency + delta)
-}
-
-// ============================================================================
-// Pen Size Control
-// ============================================================================
-
-func (pc *penComponent) SetPenSize(size float64) {
-	pc.checkOrCreatePen()
-	pc.penWidth = size
-	penMgr.SetPenSizeTo(*pc.penObj, size)
-}
-
-func (pc *penComponent) ChangePenSize(delta float64) {
-	pc.checkOrCreatePen()
-	pc.SetPenSize(pc.penWidth + delta)
+func (p *penComponent) changePenTransparency(delta float64) {
+	p.setPenTransparency(p.penTransparency + delta)
 }
 
 // ============================================================================
 // Internal Pen Management
 // ============================================================================
 
-func (pc *penComponent) checkOrCreatePen() {
-	if pc.penObj == nil {
+func (p *penComponent) checkOrCreatePen() {
+	if p.penObj == nil {
 		obj := penMgr.CreatePen()
-		pc.penObj = &obj
-		pc.penTransparency = normalizedToPercent(pc.penColor.A)
+		p.penObj = &obj
+		p.penTransparency = normalizedToPercent(p.penColor.A)
 	}
 }
 
-func (pc *penComponent) destroyPen() {
-	if pc.penObj != nil {
-		penMgr.DestroyPen(*pc.penObj)
-		pc.penObj = nil
+func (p *penComponent) destroyPen() {
+	if p.penObj != nil {
+		penMgr.DestroyPen(*p.penObj)
+		p.penObj = nil
 	}
 }
 
-func (pc *penComponent) movePen(x, y float64) {
-	if pc.penObj == nil || !pc.penDown {
+func (p *penComponent) movePen(x, y float64) {
+	if p.penObj == nil || !p.penDown {
 		return
 	}
-	penMgr.MovePenTo(*pc.penObj, mathf.NewVec2(x, -y))
+	penMgr.MovePenTo(*p.penObj, mathf.NewVec2(x, -y))
 }
 
-func (pc *penComponent) applyPenColorProperty() {
-	pc.checkOrCreatePen()
-	h, s, v := pc.penColor.ToHSV()
-	pc.penHue = hueToPercent(h)
-	pc.penSaturation = normalizedToPercent(s)
-	pc.penBrightness = normalizedToPercent(v)
-	pc.penTransparency = normalizedToPercent(pc.penColor.A)
-	pc.updatePenColor()
+func (p *penComponent) applyPenColorProperty() {
+	p.checkOrCreatePen()
+	h, s, v := p.penColor.ToHSV()
+	p.penHue = hueToPercent(h)
+	p.penSaturation = normalizedToPercent(s)
+	p.penBrightness = normalizedToPercent(v)
+	p.penTransparency = normalizedToPercent(p.penColor.A)
+	p.updatePenColor()
 }
 
-func (pc *penComponent) applyPenHsvProperty() {
-	pc.penColor = mathf.NewColorHSV(percentToHue(pc.penHue), percentToNormalized(pc.penSaturation), percentToNormalized(pc.penBrightness))
-	pc.penColor.A = percentToNormalized(pc.penTransparency)
-	pc.updatePenColor()
+func (p *penComponent) applyPenHsvProperty() {
+	p.penColor = mathf.NewColorHSV(percentToHue(p.penHue), percentToNormalized(p.penSaturation), percentToNormalized(p.penBrightness))
+	p.penColor.A = percentToNormalized(p.penTransparency)
+	p.updatePenColor()
 }
 
 func hueToPercent(hue float64) float64 {
@@ -253,10 +253,10 @@ func percentToNormalized(percent float64) float64 {
 	return percent / 100
 }
 
-func (pc *penComponent) updatePenColor() {
-	penMgr.SetPenColorTo(*pc.penObj, pc.penColor)
+func (p *penComponent) updatePenColor() {
+	penMgr.SetPenColorTo(*p.penObj, p.penColor)
 }
 
-func (pc *penComponent) isPenDown() bool {
-	return pc.penDown
+func (p *penComponent) isPenDown() bool {
+	return p.penDown
 }
