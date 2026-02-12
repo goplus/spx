@@ -205,7 +205,6 @@ func (t *transformComponent) StepToPos(x, y, speed float64, animation SpriteAnim
 		return
 	}
 
-	speed = math.Max(speed, minSpeed)
 	from := mathf.NewVec2(t.x, t.y)
 	to := mathf.NewVec2(x, y)
 	distance := from.DistanceTo(to)
@@ -215,14 +214,8 @@ func (t *transformComponent) StepToPos(x, y, speed float64, animation SpriteAnim
 		return
 	}
 
-	aniCopy := *ani
-	aniCopy.From = &from
-	aniCopy.To = &to
-	aniCopy.AniType = aniTypeMove
-	aniCopy.Duration = math.Abs(distance) * ani.StepDuration / speed
-	aniCopy.IsLoop = true
-	aniCopy.Speed = speed
-	t.sprite.doTween(animation, &aniCopy)
+	duration := math.Abs(distance) * ani.StepDuration / math.Max(speed, minSpeed)
+	t.doAnimatedTween(animation, ani, &from, &to, aniTypeMove, duration, speed)
 }
 
 // StepTo moves the sprite to the specified object's position using a stepping animation.
@@ -241,13 +234,13 @@ func (t *transformComponent) Heading() Direction {
 }
 
 // SetHeading sets the sprite's direction to the specified value.
-func (t *transformComponent) SetHeading(dir Direction) {
-	t.applyDirection(dir)
+func (t *transformComponent) SetHeading(dir Direction) bool {
+	return t.applyDirection(dir)
 }
 
 // ChangeHeading changes the sprite's direction by the specified delta.
-func (t *transformComponent) ChangeHeading(delta Direction) {
-	t.applyDirection(t.direction + delta)
+func (t *transformComponent) ChangeHeading(delta Direction) bool {
+	return t.applyDirection(t.direction + delta)
 }
 
 // SetRotationStyle sets the rotation style for the sprite.
@@ -260,64 +253,29 @@ func (t *transformComponent) SetRotationStyle(style RotationStyle) {
 
 // Turn rotates the sprite by the specified angle using an animation.
 func (t *transformComponent) Turn(delta Direction, speed float64, animation SpriteAnimationName) {
-	if animation == "" {
-		animation = t.sprite.getStateAnimName(StateTurn)
-	}
-
-	ani, ok := t.sprite.getAnimation(animation)
-	if !ok {
-		t.ChangeHeading(delta)
-		if debugInstr {
+	from := t.direction
+	to := t.direction + delta
+	t.doTurnAnimation(from, to, speed, animation, func() {
+		if t.ChangeHeading(delta) && debugInstr {
 			spxlog.Debug("Turn: sprite=%s, delta=%v", t.sprite.name, delta)
 		}
-		return
-	}
-
-	speed = math.Max(speed, minSpeed)
-	absDelta := math.Abs(delta)
-
-	aniCopy := *ani
-	aniCopy.From = t.direction
-	aniCopy.To = t.direction + delta
-	aniCopy.Duration = ani.TurnToDuration / fullCircleDegrees * absDelta / speed
-	aniCopy.AniType = aniTypeTurn
-	aniCopy.IsLoop = true
-	aniCopy.Speed = speed
-	t.sprite.doTween(animation, &aniCopy)
+	})
 }
 
 // TurnTo turns the sprite to face the specified object or direction using an animation.
 func (t *transformComponent) TurnTo(obj any, speed float64, animation SpriteAnimationName) {
 	targetAngle := t.calculateTargetAngle(obj)
+	fromAngle, toAngle := t.normalizeAngleRange(t.direction, targetAngle)
 
-	if animation == "" {
-		animation = t.sprite.getStateAnimName(StateTurn)
-	}
-
-	ani, ok := t.sprite.getAnimation(animation)
-	if !ok {
+	t.doTurnAnimation(fromAngle, toAngle, speed, animation, func() {
 		if t.applyDirection(targetAngle) && debugInstr {
 			spxlog.Debug("TurnTo: sprite=%s, obj=%v", t.sprite.name, obj)
 		}
-		return
-	}
-
-	speed = math.Max(speed, minSpeed)
-	fromAngle, toAngle := t.normalizeAngleRange(t.direction, targetAngle)
-	absDelta := math.Abs(fromAngle - toAngle)
-
-	aniCopy := *ani
-	aniCopy.From = fromAngle
-	aniCopy.To = toAngle
-	aniCopy.Duration = ani.TurnToDuration / fullCircleDegrees * absDelta / speed
-	aniCopy.AniType = aniTypeTurn
-	aniCopy.IsLoop = true
-	aniCopy.Speed = speed
-	t.sprite.animation().doTween(animation, &aniCopy)
+	})
 }
 
-// BounceOffEdge bounces the sprite off the edge of the screen by reversing
-// its direction appropriately.
+// BounceOffEdge bounces the sprite off the edge of the stage by reflecting
+// its direction vector based on the edge that was touched.
 func (t *transformComponent) BounceOffEdge() {
 	if debugInstr {
 		spxlog.Debug("BounceOffEdge: %s", t.sprite.name)
@@ -472,6 +430,52 @@ func (t *transformComponent) calculateBounceDirection(edge int, dx, dy float64) 
 		dy = -math.Max(minBounceComponent, math.Abs(dy))
 	}
 	return dx, dy
+}
+
+// doTurnAnimation handles turn animation with fallback to direct heading change.
+// This helper eliminates code duplication between Turn and TurnTo methods.
+func (t *transformComponent) doTurnAnimation(
+	from, to float64,
+	speed float64,
+	animation SpriteAnimationName,
+	fallback func(),
+) {
+	if animation == "" {
+		animation = t.sprite.getStateAnimName(StateTurn)
+	}
+
+	ani, ok := t.sprite.getAnimation(animation)
+	if !ok {
+		fallback()
+		return
+	}
+
+	absDelta := math.Abs(from - to)
+	duration := ani.TurnToDuration / fullCircleDegrees * absDelta / math.Max(speed, minSpeed)
+	t.doAnimatedTween(animation, ani, from, to, aniTypeTurn, duration, speed)
+}
+
+// doAnimatedTween creates and executes a tween animation with the specified parameters.
+// This helper eliminates code duplication in animation methods.
+func (t *transformComponent) doAnimatedTween(
+	name SpriteAnimationName,
+	base *aniConfig,
+	from, to any,
+	aniType aniTypeEnum,
+	duration float64,
+	speed float64,
+) {
+	speed = math.Max(speed, minSpeed)
+
+	aniCopy := *base
+	aniCopy.From = from
+	aniCopy.To = to
+	aniCopy.AniType = aniType
+	aniCopy.Duration = duration
+	aniCopy.IsLoop = true
+	aniCopy.Speed = speed
+
+	t.sprite.doTween(name, &aniCopy)
 }
 
 // getPivot returns the current pivot point.
