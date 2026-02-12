@@ -48,27 +48,27 @@ type physicsComponent struct {
 }
 
 // initialize initializes the physics component from config
-func (pc *physicsComponent) initialize(sprite *SpriteImpl, spriteCfg *spriteConfig) {
-	pc.componentBase.initialize(sprite, spriteCfg)
+func (p *physicsComponent) initialize(sprite *SpriteImpl, spriteCfg *spriteConfig) {
+	p.componentBase.initialize(sprite, spriteCfg)
 	// Always initialize from config
-	pc.initCollisionConfig(sprite, spriteCfg)
-	pc.initTriggerConfig(sprite, spriteCfg)
+	p.initCollisionConfig(sprite, spriteCfg)
+	p.initTriggerConfig(sprite, spriteCfg)
 
 	// Physics properties
-	pc.physicsMode = toPhysicsMode(spriteCfg.PhysicsMode)
-	pc.airDrag = parseDefaultValue(spriteCfg.AirDrag, 1)
-	pc.gravity = parseDefaultValue(spriteCfg.Gravity, 1)
-	pc.friction = parseDefaultValue(spriteCfg.Friction, 1)
-	pc.mass = parseDefaultValue(spriteCfg.Mass, 1)
+	p.physicsMode = toPhysicsMode(spriteCfg.PhysicsMode)
+	p.airDrag = parseDefaultValue(spriteCfg.AirDrag, 1)
+	p.gravity = parseDefaultValue(spriteCfg.Gravity, 1)
+	p.friction = parseDefaultValue(spriteCfg.Friction, 1)
+	p.mass = parseDefaultValue(spriteCfg.Mass, 1)
 
 	// Initialize collision targets map
-	pc.collisionTargets = make(map[string]bool)
+	p.collisionTargets = make(map[string]bool)
 }
 
 // initCollisionConfig initializes collision configuration
-func (pc *physicsComponent) initCollisionConfig(sprite *SpriteImpl, spriteCfg *spriteConfig) {
-	pc.collisionInfo.Mask = parseLayerMaskValue(spriteCfg.CollisionMask)
-	pc.collisionInfo.Layer = parseLayerMaskValue(spriteCfg.CollisionLayer)
+func (p *physicsComponent) initCollisionConfig(sprite *SpriteImpl, spriteCfg *spriteConfig) {
+	p.collisionInfo.Mask = parseLayerMaskValue(spriteCfg.CollisionMask)
+	p.collisionInfo.Layer = parseLayerMaskValue(spriteCfg.CollisionLayer)
 
 	// collider is disable by default
 	var defaultCollisionType int64 = physicsColliderNone
@@ -76,36 +76,36 @@ func (pc *physicsComponent) initCollisionConfig(sprite *SpriteImpl, spriteCfg *s
 		defaultCollisionType = physicsColliderAuto
 	}
 
-	pc.collisionInfo.Type = parseColliderShapeType(spriteCfg.CollisionShapeType, defaultCollisionType)
-	pc.collisionInfo.Pivot = spriteCfg.CollisionPivot
-	pc.collisionInfo.Params = spriteCfg.CollisionShapeParams
+	p.collisionInfo.Type = parseColliderShapeType(spriteCfg.CollisionShapeType, defaultCollisionType)
+	p.collisionInfo.Pivot = spriteCfg.CollisionPivot
+	p.collisionInfo.Params = spriteCfg.CollisionShapeParams
 
 	// Validate colliderShapeType and colliderShape length matching
-	if !pc.collisionInfo.validateShape() {
+	if !p.collisionInfo.validateShape() {
 		spxlog.Warn("Invalid collider configuration for sprite %s, using default values", sprite.name)
-		pc.collisionInfo.Type = physicsColliderNone
-		pc.collisionInfo.Params = nil
+		p.collisionInfo.Type = physicsColliderNone
+		p.collisionInfo.Params = nil
 	}
 }
 
 // initTriggerConfig initializes trigger configuration
-func (pc *physicsComponent) initTriggerConfig(sprite *SpriteImpl, spriteCfg *spriteConfig) {
-	pc.triggerInfo.Mask = parseLayerMaskValue(spriteCfg.TriggerMask)
-	pc.triggerInfo.Layer = parseLayerMaskValue(spriteCfg.TriggerLayer)
-	pc.triggerInfo.Type = parseColliderShapeType(spriteCfg.TriggerShapeType, physicsColliderAuto)
-	pc.triggerInfo.Pivot = spriteCfg.TriggerPivot
-	pc.triggerInfo.Params = spriteCfg.TriggerShapeParams
+func (p *physicsComponent) initTriggerConfig(sprite *SpriteImpl, spriteCfg *spriteConfig) {
+	p.triggerInfo.Mask = parseLayerMaskValue(spriteCfg.TriggerMask)
+	p.triggerInfo.Layer = parseLayerMaskValue(spriteCfg.TriggerLayer)
+	p.triggerInfo.Type = parseColliderShapeType(spriteCfg.TriggerShapeType, physicsColliderAuto)
+	p.triggerInfo.Pivot = spriteCfg.TriggerPivot
+	p.triggerInfo.Params = spriteCfg.TriggerShapeParams
 
 	// Validate triggerType and triggerShape length matching
-	if !pc.triggerInfo.validateShape() {
+	if !p.triggerInfo.validateShape() {
 		spxlog.Warn("Invalid trigger configuration for sprite %s, using default values", sprite.name)
-		pc.triggerInfo.Type = physicsColliderAuto
-		pc.triggerInfo.Params = nil
+		p.triggerInfo.Type = physicsColliderAuto
+		p.triggerInfo.Params = nil
 	}
 }
 
 // cloneFrom creates a new physics component by cloning from source
-func (pc *physicsComponent) cloneFrom(src component, newSprite *SpriteImpl) component {
+func (p *physicsComponent) cloneFrom(src component, newSprite *SpriteImpl) component {
 	srcPhysics := src.(*physicsComponent)
 	newPhys := &physicsComponent{
 		componentBase:    componentBase{sprite: newSprite},
@@ -122,7 +122,7 @@ func (pc *physicsComponent) cloneFrom(src component, newSprite *SpriteImpl) comp
 }
 
 // OnDestroy cleanup when component is destroyed
-func (pc *physicsComponent) onDestroy() {
+func (p *physicsComponent) onDestroy() {
 	// Nothing to cleanup
 }
 
@@ -130,54 +130,63 @@ func (pc *physicsComponent) onDestroy() {
 // Physics Mode Control
 // ============================================================================
 
-func (pc *physicsComponent) SetPhysicsMode(mode PhysicsMode) {
-	pc.physicsMode = mode
-	spriteMgr.SetPhysicsMode(pc.sprite.getSpriteId(), int64(mode))
+// SetPhysicsMode sets the physics mode for the sprite.
+func (p *physicsComponent) SetPhysicsMode(mode PhysicsMode) {
+	p.physicsMode = mode
+	spriteMgr.SetPhysicsMode(p.sprite.getSpriteId(), int64(mode))
 }
 
-func (pc *physicsComponent) GetPhysicsMode() PhysicsMode {
-	return pc.physicsMode
+// GetPhysicsMode returns the current physics mode.
+func (p *physicsComponent) GetPhysicsMode() PhysicsMode {
+	return p.physicsMode
 }
 
 // ============================================================================
 // Velocity and Movement
 // ============================================================================
 
-func (pc *physicsComponent) GetVelocity() (velocityX, velocityY float64) {
-	vel := spriteMgr.GetVelocity(pc.sprite.getSpriteId())
+// GetVelocity returns the current velocity in X and Y directions.
+func (p *physicsComponent) GetVelocity() (velocityX, velocityY float64) {
+	vel := spriteMgr.GetVelocity(p.sprite.getSpriteId())
 	return vel.X, vel.Y
 }
 
-func (pc *physicsComponent) SetVelocity(velocityX, velocityY float64) {
-	spriteMgr.SetVelocity(pc.sprite.getSpriteId(), mathf.NewVec2(velocityX, velocityY))
+// SetVelocity sets the velocity in X and Y directions.
+func (p *physicsComponent) SetVelocity(velocityX, velocityY float64) {
+	spriteMgr.SetVelocity(p.sprite.getSpriteId(), mathf.NewVec2(velocityX, velocityY))
 }
 
-func (pc *physicsComponent) AddImpulse(impulseX, impulseY float64) {
-	spriteMgr.AddImpulse(pc.sprite.getSpriteId(), mathf.NewVec2(impulseX, impulseY))
+// AddImpulse applies an impulse force to the sprite.
+func (p *physicsComponent) AddImpulse(impulseX, impulseY float64) {
+	spriteMgr.AddImpulse(p.sprite.getSpriteId(), mathf.NewVec2(impulseX, impulseY))
 }
 
-func (pc *physicsComponent) IsOnFloor() bool {
-	return spriteMgr.IsOnFloor(pc.sprite.getSpriteId())
+// IsOnFloor checks if the sprite is on the floor.
+func (p *physicsComponent) IsOnFloor() bool {
+	return spriteMgr.IsOnFloor(p.sprite.getSpriteId())
 }
 
 // ============================================================================
 // Gravity Control
 // ============================================================================
 
-func (pc *physicsComponent) GetGravity() float64 {
-	return spriteMgr.GetGravity(pc.sprite.getSpriteId())
+// GetGravity returns the current gravity scale.
+func (p *physicsComponent) GetGravity() float64 {
+	return spriteMgr.GetGravity(p.sprite.getSpriteId())
 }
 
-func (pc *physicsComponent) SetGravity(gravity float64) {
-	spriteMgr.SetGravity(pc.sprite.getSpriteId(), gravity)
+// SetGravity sets the gravity scale for the sprite.
+func (p *physicsComponent) SetGravity(gravity float64) {
+	spriteMgr.SetGravity(p.sprite.getSpriteId(), gravity)
 }
 
 // ============================================================================
 // Collider Shape Control
 // ============================================================================
 
-func (pc *physicsComponent) SetColliderShape(isTrigger bool, ctype ColliderShapeType, params []float64) error {
-	config := pc.getPhysicConfig(isTrigger)
+// SetColliderShape sets the collider shape type and parameters.
+func (p *physicsComponent) SetColliderShape(isTrigger bool, ctype ColliderShapeType, params []float64) error {
+	config := p.getPhysicConfig(isTrigger)
 
 	// Store original values for rollback if validation fails
 	originalType := config.Type
@@ -198,29 +207,29 @@ func (pc *physicsComponent) SetColliderShape(isTrigger bool, ctype ColliderShape
 	}
 
 	// Apply shape-specific settings
-	pc.applyPhysicShape(isTrigger)
+	p.applyPhysicShape(isTrigger)
 	return nil
 }
 
-func (pc *physicsComponent) GetColliderShape(isTrigger bool) (ColliderShapeType, []float64) {
-	config := pc.getPhysicConfig(isTrigger)
+func (p *physicsComponent) GetColliderShape(isTrigger bool) (ColliderShapeType, []float64) {
+	config := p.getPhysicConfig(isTrigger)
 	params := make([]float64, len(config.Params))
 	copy(params, config.Params)
 	return config.Type, params
 }
 
-func (pc *physicsComponent) SetColliderPivot(isTrigger bool, offsetX, offsetY float64) {
-	config := pc.getPhysicConfig(isTrigger)
+func (p *physicsComponent) SetColliderPivot(isTrigger bool, offsetX, offsetY float64) {
+	config := p.getPhysicConfig(isTrigger)
 	config.Pivot = mathf.NewVec2(offsetX, offsetY)
 
 	// Re-apply current shape with new pivot if needed
-	if pc.sprite.syncSprite != nil {
-		pc.applyPhysicShape(isTrigger)
+	if p.sprite.syncSprite != nil {
+		p.applyPhysicShape(isTrigger)
 	}
 }
 
-func (pc *physicsComponent) GetColliderPivot(isTrigger bool) (offsetX, offsetY float64) {
-	config := pc.getPhysicConfig(isTrigger)
+func (p *physicsComponent) GetColliderPivot(isTrigger bool) (offsetX, offsetY float64) {
+	config := p.getPhysicConfig(isTrigger)
 	return config.Pivot.X, config.Pivot.Y
 }
 
@@ -228,56 +237,56 @@ func (pc *physicsComponent) GetColliderPivot(isTrigger bool) (offsetX, offsetY f
 // Collision Layer and Mask Control
 // ============================================================================
 
-func (pc *physicsComponent) SetCollisionLayer(layer int64) {
-	pc.sprite.syncSprite.SetCollisionLayer(layer)
+func (p *physicsComponent) SetCollisionLayer(layer int64) {
+	p.sprite.syncSprite.SetCollisionLayer(layer)
 }
 
-func (pc *physicsComponent) SetCollisionMask(mask int64) {
-	pc.sprite.syncSprite.SetCollisionMask(mask)
+func (p *physicsComponent) SetCollisionMask(mask int64) {
+	p.sprite.syncSprite.SetCollisionMask(mask)
 }
 
-func (pc *physicsComponent) SetCollisionEnabled(enabled bool) {
-	pc.sprite.syncSprite.SetCollisionEnabled(enabled)
+func (p *physicsComponent) SetCollisionEnabled(enabled bool) {
+	p.sprite.syncSprite.SetCollisionEnabled(enabled)
 }
 
-func (pc *physicsComponent) GetCollisionLayer() int64 {
-	return pc.sprite.syncSprite.GetCollisionLayer()
+func (p *physicsComponent) GetCollisionLayer() int64 {
+	return p.sprite.syncSprite.GetCollisionLayer()
 }
 
-func (pc *physicsComponent) GetCollisionMask() int64 {
-	return pc.sprite.syncSprite.GetCollisionMask()
+func (p *physicsComponent) GetCollisionMask() int64 {
+	return p.sprite.syncSprite.GetCollisionMask()
 }
 
-func (pc *physicsComponent) IsCollisionEnabled() bool {
-	return pc.sprite.syncSprite.IsCollisionEnabled()
+func (p *physicsComponent) IsCollisionEnabled() bool {
+	return p.sprite.syncSprite.IsCollisionEnabled()
 }
 
 // ============================================================================
 // Trigger Layer and Mask Control
 // ============================================================================
 
-func (pc *physicsComponent) SetTriggerEnabled(trigger bool) {
-	pc.sprite.syncSprite.SetTriggerEnabled(trigger)
+func (p *physicsComponent) SetTriggerEnabled(trigger bool) {
+	p.sprite.syncSprite.SetTriggerEnabled(trigger)
 }
 
-func (pc *physicsComponent) SetTriggerLayer(layer int64) {
-	pc.sprite.syncSprite.SetTriggerLayer(layer)
+func (p *physicsComponent) SetTriggerLayer(layer int64) {
+	p.sprite.syncSprite.SetTriggerLayer(layer)
 }
 
-func (pc *physicsComponent) SetTriggerMask(mask int64) {
-	pc.sprite.syncSprite.SetTriggerMask(mask)
+func (p *physicsComponent) SetTriggerMask(mask int64) {
+	p.sprite.syncSprite.SetTriggerMask(mask)
 }
 
-func (pc *physicsComponent) GetTriggerLayer() int64 {
-	return pc.sprite.syncSprite.GetTriggerLayer()
+func (p *physicsComponent) GetTriggerLayer() int64 {
+	return p.sprite.syncSprite.GetTriggerLayer()
 }
 
-func (pc *physicsComponent) GetTriggerMask() int64 {
-	return pc.sprite.syncSprite.GetTriggerMask()
+func (p *physicsComponent) GetTriggerMask() int64 {
+	return p.sprite.syncSprite.GetTriggerMask()
 }
 
-func (pc *physicsComponent) IsTriggerEnabled() bool {
-	return pc.sprite.syncSprite.IsTriggerEnabled()
+func (p *physicsComponent) IsTriggerEnabled() bool {
+	return p.sprite.syncSprite.IsTriggerEnabled()
 }
 
 // ============================================================================
@@ -285,87 +294,87 @@ func (pc *physicsComponent) IsTriggerEnabled() bool {
 // ============================================================================
 
 // initCollisionParams initializes collision parameters based on game settings
-func (pc *physicsComponent) initCollisionParams() {
-	if pc.sprite.g.isAutoSetCollisionLayer {
-		info := pc.sprite.g.getSpriteCollisionInfo(pc.sprite.name)
-		pc.collisionInfo.Layer = 0
-		pc.collisionInfo.Mask = 0
-		pc.triggerInfo.Layer = int64(info.Layer)
-		pc.triggerInfo.Mask = int64(info.Mask)
+func (p *physicsComponent) initCollisionParams() {
+	if p.sprite.g.isAutoSetCollisionLayer {
+		info := p.sprite.g.getSpriteCollisionInfo(p.sprite.name)
+		p.collisionInfo.Layer = 0
+		p.collisionInfo.Mask = 0
+		p.triggerInfo.Layer = int64(info.Layer)
+		p.triggerInfo.Mask = int64(info.Mask)
 		if enabledPhysics {
-			pc.collisionInfo.Layer = int64(info.Layer)
-			pc.collisionInfo.Mask = int64(info.Mask)
+			p.collisionInfo.Layer = int64(info.Layer)
+			p.collisionInfo.Mask = int64(info.Mask)
 		}
 	}
 }
 
 // syncInitPhysicInfo synchronizes physics information to the engine sprite proxy
-func (pc *physicsComponent) syncInitPhysicInfo(syncProxy *engine.Sprite) {
-	pc.initCollisionParams()
-	pc.collisionInfo.syncToProxy(syncProxy, false, pc.sprite)
-	pc.triggerInfo.syncToProxy(syncProxy, true, pc.sprite)
-	syncProxy.SetGravityScale(pc.gravity)
-	syncProxy.SetPhysicsMode(pc.physicsMode)
+func (p *physicsComponent) syncInitPhysicInfo(syncProxy *engine.Sprite) {
+	p.initCollisionParams()
+	p.collisionInfo.syncToProxy(syncProxy, false, p.sprite)
+	p.triggerInfo.syncToProxy(syncProxy, true, p.sprite)
+	syncProxy.SetGravityScale(p.gravity)
+	syncProxy.SetPhysicsMode(p.physicsMode)
 }
 
 // ============================================================================
 // Collision Targets Management
 // ============================================================================
 
-func (pc *physicsComponent) getCollisionTargets() map[string]bool {
-	return pc.collisionTargets
+func (p *physicsComponent) getCollisionTargets() map[string]bool {
+	return p.collisionTargets
 }
 
-func (pc *physicsComponent) addCollisionTarget(target string) {
-	pc.collisionTargets[target] = true
+func (p *physicsComponent) addCollisionTarget(target string) {
+	p.collisionTargets[target] = true
 }
 
 // ============================================================================
 // Accessor Methods
 // ============================================================================
 
-func (pc *physicsComponent) getTriggerInfo() *physicConfig {
-	return &pc.triggerInfo
+func (p *physicsComponent) getTriggerInfo() *physicConfig {
+	return &p.triggerInfo
 }
 
-func (pc *physicsComponent) getCollisionInfo() *physicConfig {
-	return &pc.collisionInfo
+func (p *physicsComponent) getCollisionInfo() *physicConfig {
+	return &p.collisionInfo
 }
 
 // ============================================================================
 // Private Helper Methods
 // ============================================================================
 
-func (pc *physicsComponent) getPhysicConfig(isTrigger bool) *physicConfig {
+func (p *physicsComponent) getPhysicConfig(isTrigger bool) *physicConfig {
 	if isTrigger {
-		return &pc.triggerInfo
+		return &p.triggerInfo
 	}
-	return &pc.collisionInfo
+	return &p.collisionInfo
 }
 
-func (pc *physicsComponent) applyPhysicShape(isTrigger bool) {
-	config := pc.getPhysicConfig(isTrigger)
+func (p *physicsComponent) applyPhysicShape(isTrigger bool) {
+	config := p.getPhysicConfig(isTrigger)
 	ctype := config.Type
 	params := config.Params
 
-	if pc.sprite.syncSprite != nil {
+	if p.sprite.syncSprite != nil {
 		switch ctype {
 		case RectCollider:
 			if len(params) >= 2 {
-				pc.sprite.syncSprite.SetColliderShapeRect(isTrigger, config.Pivot, mathf.NewVec2(params[0], params[1]))
+				p.sprite.syncSprite.SetColliderShapeRect(isTrigger, config.Pivot, mathf.NewVec2(params[0], params[1]))
 			}
 		case CircleCollider:
 			if len(params) >= 1 {
-				pc.sprite.syncSprite.SetColliderShapeCircle(isTrigger, config.Pivot, params[0])
+				p.sprite.syncSprite.SetColliderShapeCircle(isTrigger, config.Pivot, params[0])
 			}
 		case CapsuleCollider:
 			if len(params) >= 2 {
-				pc.sprite.syncSprite.SetColliderShapeCapsule(isTrigger, config.Pivot, mathf.NewVec2(params[0]*2, params[1]))
+				p.sprite.syncSprite.SetColliderShapeCapsule(isTrigger, config.Pivot, mathf.NewVec2(params[0]*2, params[1]))
 			}
 		case PolygonCollider:
 			if len(params) >= 6 {
 				// Polygon requires at least 3 points (6 floats: x1,y1,x2,y2,x3,y3)
-				pc.sprite.syncSprite.SetColliderShapePolygon(isTrigger, config.Pivot, params)
+				p.sprite.syncSprite.SetColliderShapePolygon(isTrigger, config.Pivot, params)
 			}
 		}
 	}

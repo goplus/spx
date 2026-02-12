@@ -28,7 +28,7 @@ const defaultSpatialHashCellSize = 100.0
 
 // ======================== Data Structures ========================
 
-// SpriteAABB represents an axis-aligned bounding box for a sprite
+// SpriteAABB represents an axis-aligned bounding box for a sprite.
 type SpriteAABB struct {
 	sprite *SpriteImpl
 	minX   float64
@@ -37,7 +37,7 @@ type SpriteAABB struct {
 	maxY   float64
 }
 
-// newSpriteAABB creates an AABB from a sprite's bounds
+// newSpriteAABB creates an AABB from a sprite's bounds.
 func newSpriteAABB(sprite *SpriteImpl) *SpriteAABB {
 	bounds := sprite.bounds()
 	if bounds == nil {
@@ -53,7 +53,7 @@ func newSpriteAABB(sprite *SpriteImpl) *SpriteAABB {
 	}
 }
 
-// intersects checks if two AABBs overlap (broad-phase collision detection)
+// intersects checks if two AABBs overlap (broad-phase collision detection).
 func (a *SpriteAABB) intersects(b *SpriteAABB) bool {
 	if a == nil || b == nil {
 		return false
@@ -66,13 +66,13 @@ func (a *SpriteAABB) intersects(b *SpriteAABB) bool {
 		a.maxY >= b.minY
 }
 
-// SpatialHash implements a simple spatial hash grid for broad-phase collision detection
+// SpatialHash implements a simple spatial hash grid for broad-phase collision detection.
 type SpatialHash struct {
 	cellSize float64
 	grid     map[int64]map[int64][]*SpriteAABB
 }
 
-// newSpatialHash creates a new spatial hash grid
+// newSpatialHash creates a new spatial hash grid.
 func newSpatialHash(cellSize float64) *SpatialHash {
 	return &SpatialHash{
 		cellSize: cellSize,
@@ -80,53 +80,53 @@ func newSpatialHash(cellSize float64) *SpatialHash {
 	}
 }
 
-// clear empties the spatial hash by clearing all existing entries
-// This reuses both the top-level and inner map memory instead of reallocating
-// Note: Maps may grow but never shrink, which is acceptable for typical game scenarios
-// where sprites move within a bounded area
-func (sh *SpatialHash) clear() {
-	for _, yGrid := range sh.grid {
+// clear empties the spatial hash by clearing all existing entries.
+// This reuses both the top-level and inner map memory instead of reallocating.
+// Note: Maps may grow but never shrink, which is acceptable for typical game scenarios.
+// where sprites move within a bounded area.
+func (s *SpatialHash) clear() {
+	for _, yGrid := range s.grid {
 		for y := range yGrid {
 			delete(yGrid, y)
 		}
 	}
 }
 
-// getCellCoords converts world coordinates to cell coordinates
-func (sh *SpatialHash) getCellCoords(x, y float64) (int64, int64) {
-	return int64(x / sh.cellSize), int64(y / sh.cellSize)
+// getCellCoords converts world coordinates to cell coordinates.
+func (s *SpatialHash) getCellCoords(x, y float64) (int64, int64) {
+	return int64(x / s.cellSize), int64(y / s.cellSize)
 }
 
 // insert adds a sprite AABB to the spatial hash
-func (sh *SpatialHash) insert(aabb *SpriteAABB) {
+func (s *SpatialHash) insert(aabb *SpriteAABB) {
 	if aabb == nil {
 		return
 	}
 
 	// Get all cells that this AABB overlaps
-	minCellX, minCellY := sh.getCellCoords(aabb.minX, aabb.minY)
-	maxCellX, maxCellY := sh.getCellCoords(aabb.maxX, aabb.maxY)
+	minCellX, minCellY := s.getCellCoords(aabb.minX, aabb.minY)
+	maxCellX, maxCellY := s.getCellCoords(aabb.maxX, aabb.maxY)
 
 	// Insert into all overlapping cells
 	for x := minCellX; x <= maxCellX; x++ {
-		if sh.grid[x] == nil {
-			sh.grid[x] = make(map[int64][]*SpriteAABB)
+		if s.grid[x] == nil {
+			s.grid[x] = make(map[int64][]*SpriteAABB)
 		}
 		for y := minCellY; y <= maxCellY; y++ {
-			sh.grid[x][y] = append(sh.grid[x][y], aabb)
+			s.grid[x][y] = append(s.grid[x][y], aabb)
 		}
 	}
 }
 
-// query returns all AABBs that might collide with the given AABB
-func (sh *SpatialHash) query(aabb *SpriteAABB) []*SpriteAABB {
+// query returns all AABBs that might collide with the given AABB.
+func (s *SpatialHash) query(aabb *SpriteAABB) []*SpriteAABB {
 	if aabb == nil {
 		return nil
 	}
 
 	// Get all cells that this AABB overlaps
-	minCellX, minCellY := sh.getCellCoords(aabb.minX, aabb.minY)
-	maxCellX, maxCellY := sh.getCellCoords(aabb.maxX, aabb.maxY)
+	minCellX, minCellY := s.getCellCoords(aabb.minX, aabb.minY)
+	maxCellX, maxCellY := s.getCellCoords(aabb.maxX, aabb.maxY)
 
 	// Use a map to avoid duplicates
 	seen := make(map[*SpriteAABB]bool)
@@ -134,11 +134,11 @@ func (sh *SpatialHash) query(aabb *SpriteAABB) []*SpriteAABB {
 
 	// Gather all sprites from overlapping cells
 	for x := minCellX; x <= maxCellX; x++ {
-		if sh.grid[x] == nil {
+		if s.grid[x] == nil {
 			continue
 		}
 		for y := minCellY; y <= maxCellY; y++ {
-			for _, candidate := range sh.grid[x][y] {
+			for _, candidate := range s.grid[x][y] {
 				if !seen[candidate] && candidate != aabb {
 					seen[candidate] = true
 					results = append(results, candidate)
@@ -150,8 +150,8 @@ func (sh *SpatialHash) query(aabb *SpriteAABB) []*SpriteAABB {
 	return results
 }
 
-// buildSpatialHashForNames builds a spatial hash with sprites matching the given name filter
-// Uses a reusable spatial hash to avoid repeated allocations
+// buildSpatialHashForNames builds a spatial hash with sprites matching the given name filter.
+// Uses a reusable spatial hash to avoid repeated allocations.
 func (p *Game) buildSpatialHashForNames(dst *SpriteImpl, nameFilter func(string) bool) *SpatialHash {
 	// Lazy initialization of the reusable spatial hash
 	if p.spatialHash == nil {
@@ -175,7 +175,7 @@ func (p *Game) buildSpatialHashForNames(dst *SpriteImpl, nameFilter func(string)
 	return p.spatialHash
 }
 
-// findCollisionsInSpatialHash performs AABB and pixel-perfect collision detection
+// findCollisionsInSpatialHash performs AABB and pixel-perfect collision detection.
 func findCollisionsInSpatialHash(dstAABB *SpriteAABB, spatialHash *SpatialHash, findFirst bool) []*SpriteImpl {
 	var results []*SpriteImpl
 
@@ -200,7 +200,7 @@ func findCollisionsInSpatialHash(dstAABB *SpriteAABB, spatialHash *SpatialHash, 
 	return results
 }
 
-// findTouchingSpriteOptimized uses spatial partitioning for efficient collision detection
+// findTouchingSpriteOptimized uses spatial partitioning for efficient collision detection.
 func (p *Game) findTouchingSpriteOptimized(dst *SpriteImpl, name string) *SpriteImpl {
 	if dst == nil || dst.syncSprite == nil {
 		return nil
@@ -226,7 +226,7 @@ func (p *Game) findTouchingSpriteOptimized(dst *SpriteImpl, name string) *Sprite
 	return nil
 }
 
-// touchingSpritesByOptimized returns all sprites touching the target sprite (optimized version)
+// touchingSpritesByOptimized returns all sprites touching the target sprite (optimized version).
 func (p *Game) touchingSpritesByOptimized(dst *SpriteImpl, names []string) []*SpriteImpl {
 	if dst == nil || dst.syncSprite == nil {
 		return nil
