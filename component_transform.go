@@ -97,7 +97,7 @@ func (t *transformComponent) onDestroy() {
 }
 
 // ============================================================================
-// Position Methods (Exported)
+// Position Methods
 // ============================================================================
 
 // XY returns the current position coordinates.
@@ -146,7 +146,7 @@ func (t *transformComponent) ChangeYpos(dy float64) {
 }
 
 // ============================================================================
-// Movement Methods (Exported)
+// Movement Methods
 // ============================================================================
 
 // MoveForward moves the sprite forward by the specified step size
@@ -225,7 +225,7 @@ func (t *transformComponent) StepTo(obj any, speed float64, animation SpriteAnim
 }
 
 // ============================================================================
-// Rotation Methods (Exported)
+// Rotation Methods
 // ============================================================================
 
 // Heading returns the current direction the sprite is facing.
@@ -297,7 +297,7 @@ func (t *transformComponent) BounceOffEdge() {
 }
 
 // ============================================================================
-// Scale Methods (Exported)
+// Scale Methods
 // ============================================================================
 
 // SetSize sets the sprite's scale to the specified size.
@@ -321,7 +321,7 @@ func (t *transformComponent) ChangeSize(delta float64) {
 }
 
 // ============================================================================
-// Distance Calculation (Exported)
+// Distance Calculation
 // ============================================================================
 
 // DistanceTo calculates the Euclidean distance from this sprite to the specified object.
@@ -334,7 +334,7 @@ func (t *transformComponent) DistanceTo(obj any) float64 {
 }
 
 // ============================================================================
-// Internal Methods (Unexported)
+// Internal Methods
 // ============================================================================
 
 // setXY directly sets position without triggering side effects.

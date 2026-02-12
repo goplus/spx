@@ -31,9 +31,9 @@ import (
 // ============================================================================
 // Animation Component
 // ============================================================================
-// This component encapsulates all animation-related functionality
+// This component encapsulates all animation-related functionality.
 
-// sharedAnimationData contains read-only animation data shared across cloned sprites (Flyweight Pattern)
+// sharedAnimationData contains read-only animation data shared across cloned sprites (Flyweight Pattern).
 type sharedAnimationData struct {
 	animations        map[SpriteAnimationName]*aniConfig
 	animBindings      map[string]string
@@ -55,18 +55,18 @@ type animationComponent struct {
 	donedAnimations []string
 }
 
-// initialize initializes the animation component from config
-func (ac *animationComponent) initialize(sprite *SpriteImpl, spriteCfg *spriteConfig) {
-	ac.componentBase.initialize(sprite, spriteCfg)
+// initialize initializes the animation component from configuration.
+func (a *animationComponent) initialize(sprite *SpriteImpl, spriteCfg *spriteConfig) {
+	a.componentBase.initialize(sprite, spriteCfg)
 	// Always initialize from config
-	ac.initFromConfig(spriteCfg)
-	ac.donedAnimations = make([]string, 0)
+	a.initFromConfig(spriteCfg)
+	a.donedAnimations = make([]string, 0)
 }
 
-// initFromConfig initializes animations from sprite configuration
-func (ac *animationComponent) initFromConfig(spriteCfg *spriteConfig) {
+// initFromConfig initializes animations from sprite configuration.
+func (a *animationComponent) initFromConfig(spriteCfg *spriteConfig) {
 	// Create shared animation data
-	ac.shared = &sharedAnimationData{
+	a.shared = &sharedAnimationData{
 		defaultAnimation:  spriteCfg.DefaultAnimation,
 		animations:        make(map[string]*aniConfig),
 		animBindings:      make(map[string]string),
@@ -76,7 +76,7 @@ func (ac *animationComponent) initFromConfig(spriteCfg *spriteConfig) {
 	anims := spriteCfg.FAnimations
 	for key, val := range anims {
 		var ani = val
-		_, ok := ac.shared.animations[key]
+		_, ok := a.shared.animations[key]
 		if ok {
 			log.Panicf("animation key [%s] is exist", key)
 		}
@@ -87,22 +87,21 @@ func (ac *animationComponent) initFromConfig(spriteCfg *spriteConfig) {
 		setDefaultIfZero(&ani.StepDuration, 0.01)
 
 		// Calculate frame ranges and duration
-		from, to := ac.getFromAnToForAniFrames(ani.FrameFrom, ani.FrameTo)
-		ani.IFrameFrom, ani.IFrameTo = int(from), int(to)
+		ani.IFrameFrom, ani.IFrameTo = a.frameRange(ani.FrameFrom, ani.FrameTo)
 		ani.Speed = 1
 		ani.Duration = (math.Abs(float64(ani.IFrameFrom-ani.IFrameTo)) + 1) / float64(ani.FrameFps)
-		ac.shared.animations[key] = ani
+		a.shared.animations[key] = ani
 	}
 
-	maps.Copy(ac.shared.animBindings, spriteCfg.AnimBindings)
+	maps.Copy(a.shared.animBindings, spriteCfg.AnimBindings)
 
-	for animName, ani := range ac.shared.animations {
-		ac.shared.animationWrappers[animName] = &animationWrapper{spr: ac.sprite, ani: ani}
+	for animName, ani := range a.shared.animations {
+		a.shared.animationWrappers[animName] = &animationWrapper{spr: a.sprite, ani: ani}
 	}
 }
 
-// cloneFrom creates a new animation component by cloning from source
-func (ac *animationComponent) cloneFrom(src component, newSprite *SpriteImpl) component {
+// cloneFrom creates a new animation component by cloning from source.
+func (a *animationComponent) cloneFrom(src component, newSprite *SpriteImpl) component {
 	srcAnim := src.(*animationComponent)
 	newAnim := &animationComponent{
 		componentBase:   componentBase{sprite: newSprite},
@@ -115,82 +114,85 @@ func (ac *animationComponent) cloneFrom(src component, newSprite *SpriteImpl) co
 	return newAnim
 }
 
-// onDestroy cleanup when component is destroyed
-func (ac *animationComponent) onDestroy() {
-	ac.stopAnimState(ac.curAnimState)
-	ac.stopAnimState(ac.curTweenState)
-	ac.unRegisterOnAnimationLooped()
-	ac.unRegisterOnAnimationFinished()
+// onDestroy cleanup when component is destroyed.
+func (a *animationComponent) onDestroy() {
+	a.stopAnimState(a.curAnimState)
+	a.stopAnimState(a.curTweenState)
+	a.unRegisterOnAnimationLooped()
+	a.unRegisterOnAnimationFinished()
 }
 
 // ============================================================================
 // Animation Playback Methods
 // ============================================================================
 
-func (ac *animationComponent) Animate(name SpriteAnimationName, loop bool) {
-	if debugInstr {
-		spxlog.Debug("==> Animation %s", name)
-	}
-	if ani, ok := ac.shared.animations[name]; ok {
-		ac.doAnimation(name, ani, loop, 1, false, true)
-	} else {
-		spxlog.Warn("Animation not found: %s", name)
-	}
+func (a *animationComponent) Animate(name SpriteAnimationName, loop bool) {
+	a.playAnimation(name, loop, false, "==> Animation %s")
 }
 
-func (ac *animationComponent) AnimateAndWait(name SpriteAnimationName) {
-	if debugInstr {
-		spxlog.Debug("==> AnimateAndWait %s", name)
-	}
-	if ani, ok := ac.shared.animations[name]; ok {
-		ac.doAnimation(name, ani, false, 1, true, true)
-	} else {
-		spxlog.Warn("Animation not found: %s", name)
-	}
+func (a *animationComponent) AnimateAndWait(name SpriteAnimationName) {
+	a.playAnimation(name, false, true, "==> AnimateAndWait %s")
 }
 
-func (ac *animationComponent) StopAnimation(name SpriteAnimationName) {
-	if name == "" || !ac.hasAnim(name) {
+func (a *animationComponent) StopAnimation(name SpriteAnimationName) {
+	if name == "" || !a.hasAnim(name) {
 		return
 	}
-	if ac.curAnimState == nil || ac.curAnimState.Name != name {
+
+	if a.curAnimState == nil || a.curAnimState.Name != name {
 		return
 	}
-	ac.sprite.syncSprite.PauseAnim()
-	ac.playDefaultAnim()
+
+	a.sprite.syncSprite.PauseAnim()
+	a.playDefaultAnim()
 }
 
 // ============================================================================
 // Core Animation Implementation
 // ============================================================================
 
-func (ac *animationComponent) doAnimation(animName SpriteAnimationName, ani *aniConfig, loop bool, speed float64, isBlocking bool, playAudio bool) {
-	ac.stopAnimState(ac.curAnimState)
-	ac.curAnimState = &animState{
+func (a *animationComponent) playAnimation(name SpriteAnimationName, loop, blocking bool, debugMsg string) {
+	if debugInstr {
+		spxlog.Debug(debugMsg, name)
+	}
+
+	ani, ok := a.shared.animations[name]
+	if !ok {
+		spxlog.Warn("Animation not found: %s", name)
+		return
+	}
+
+	a.doAnimation(name, ani, loop, 1, blocking, true)
+}
+
+func (a *animationComponent) doAnimation(animName SpriteAnimationName, ani *aniConfig, loop bool, speed float64, isBlocking bool, playAudio bool) {
+	a.stopAnimState(a.curAnimState)
+	a.curAnimState = &animState{
 		AniType:    aniTypeFrame,
 		IsCanceled: false,
 		Name:       animName,
 		Speed:      speed,
 	}
-	info := ac.curAnimState
+
+	info := a.curAnimState
 	if playAudio {
-		ac.playAnimAudio(ani, info)
+		a.playAnimAudio(ani, info)
 	}
 
-	syncCheckUpdateCostume(&ac.sprite.baseObj)
-	ac.shared.animationWrappers[animName].ensureRegistered(animName)
+	syncCheckUpdateCostume(&a.sprite.baseObj)
+	a.shared.animationWrappers[animName].ensureRegistered(animName)
 
-	spriteMgr.PlayAnim(ac.sprite.syncSprite.GetId(), animName, speed, loop, false)
+	spriteMgr.PlayAnim(a.sprite.syncSprite.GetId(), animName, speed, loop, false)
 	if isBlocking {
-		ac.sprite.isAnimating = true
-		for spriteMgr.IsPlayingAnim(ac.sprite.syncSprite.GetId()) {
+		a.sprite.isAnimating = true
+		for spriteMgr.IsPlayingAnim(a.sprite.syncSprite.GetId()) {
 			if info.IsCanceled {
 				break
 			}
 			engine.WaitNextFrame()
 		}
-		ac.sprite.isAnimating = false
-		ac.stopAnimState(info)
+		a.sprite.isAnimating = false
+		a.stopAnimState(info)
 	}
 }
 
@@ -202,38 +204,36 @@ type tweenParams struct {
 	turnDiff  float64
 }
 
-func (ac *animationComponent) doTween(name SpriteAnimationName, ani *aniConfig) {
-	info := ac.initTweenState(name, ani)
+func (a *animationComponent) doTween(name SpriteAnimationName, ani *aniConfig) {
+	info := a.initTweenState(name, ani)
 	if info == nil {
 		return
 	}
 
-	params, ok := ac.prepareTweenParams(ani)
+	params, ok := a.prepareTweenParams(ani)
 	if !ok {
 		return
 	}
 
-	ac.executeTweenLoop(info, ani, params)
-	ac.cleanupTween(info, name, ani)
+	a.executeTweenLoop(info, ani, params)
+	a.cleanupTween(info, name, ani)
 }
 
-// initTweenState initializes the tween animation state
-func (ac *animationComponent) initTweenState(name SpriteAnimationName, ani *aniConfig) *animState {
+func (a *animationComponent) initTweenState(name SpriteAnimationName, ani *aniConfig) *animState {
 	info := &animState{
 		AniType:    ani.AniType,
 		Name:       name,
 		Speed:      ani.Speed,
 		IsCanceled: false,
 	}
-	ac.stopAnimState(ac.curTweenState)
-	ac.curTweenState = info
+	a.stopAnimState(a.curTweenState)
+	a.curTweenState = info
 
-	if ac.hasAnim(name) {
-		ac.doAnimation(name, ani, ani.IsLoop, ani.Speed, false, false)
-		ac.playAnimAudio(ani, info)
+	if a.hasAnim(name) {
+		a.doAnimation(name, ani, ani.IsLoop, ani.Speed, false, false)
+		a.playAnimAudio(ani, info)
 	}
 
-	// Validate duration to prevent division by zero
 	if ani.Duration <= 0 {
 		spxlog.Warn("Invalid animation duration: %v", ani.Duration)
 		return nil
@@ -243,7 +243,7 @@ func (ac *animationComponent) initTweenState(name SpriteAnimationName, ani *aniC
 }
 
 // prepareTweenParams pre-calculates animation parameters based on animation type
-func (ac *animationComponent) prepareTweenParams(ani *aniConfig) (*tweenParams, bool) {
+func (a *animationComponent) prepareTweenParams(ani *aniConfig) (*tweenParams, bool) {
 	params := &tweenParams{}
 	duration := ani.Duration
 
@@ -255,6 +255,7 @@ func (ac *animationComponent) prepareTweenParams(ani *aniConfig) (*tweenParams, 
 			spxlog.Warn("Invalid 'From' or 'To' for move/glide animation: not a *mathf.Vec2")
 			return nil, false
 		}
+
 		params.moveDiff = dst.Sub(src)
 		if ani.AniType == aniTypeMove {
 			params.moveSpeed = params.moveDiff.Length() / duration
@@ -267,14 +268,14 @@ func (ac *animationComponent) prepareTweenParams(ani *aniConfig) (*tweenParams, 
 			spxlog.Warn("Invalid 'From' or 'To' for turn animation: not a float")
 			return nil, false
 		}
+
 		params.turnDiff = dst - src
 	}
 
 	return params, true
 }
 
-// executeTweenLoop runs the main animation loop
-func (ac *animationComponent) executeTweenLoop(info *animState, ani *aniConfig, params *tweenParams) {
+func (a *animationComponent) executeTweenLoop(info *animState, ani *aniConfig, params *tweenParams) {
 	timer := 0.0
 	prePercent := 0.0
 	duration := ani.Duration
@@ -283,81 +284,82 @@ func (ac *animationComponent) executeTweenLoop(info *animState, ani *aniConfig, 
 		if info.IsCanceled {
 			return
 		}
+
 		timer += time.DeltaTime()
 		percent := mathf.Clamp01f(timer / duration)
 		deltaPercent := percent - prePercent
 		prePercent = percent
 
-		ac.applyTweenStep(ani.AniType, deltaPercent, params)
+		a.applyTweenStep(ani.AniType, deltaPercent, params)
 		engine.WaitNextFrame()
 	}
 }
 
-// applyTweenStep applies a single animation step
-func (ac *animationComponent) applyTweenStep(aniType aniTypeEnum, deltaPercent float64, params *tweenParams) {
+func (a *animationComponent) applyTweenStep(aniType aniTypeEnum, deltaPercent float64, params *tweenParams) {
 	switch aniType {
 	case aniTypeMove:
-		physicsMode := ac.sprite.PhysicsMode()
+		physicsMode := a.sprite.PhysicsMode()
 		if enabledPhysics && physicsMode != NoPhysics && physicsMode != StaticPhysics {
 			vel := params.moveDir.Mulf(params.moveSpeed)
-			ac.sprite.SetVelocity(vel.X, vel.Y)
+			a.sprite.SetVelocity(vel.X, vel.Y)
 		} else {
 			val := params.moveDiff.Mulf(deltaPercent)
-			ac.sprite.ChangeXYpos(val.X, val.Y)
+			a.sprite.ChangeXYpos(val.X, val.Y)
 		}
 	case aniTypeGlide:
 		val := params.moveDiff.Mulf(deltaPercent)
-		ac.sprite.ChangeXYpos(val.X, val.Y)
+		a.sprite.ChangeXYpos(val.X, val.Y)
 	case aniTypeTurn:
 		val := params.turnDiff * deltaPercent
-		ac.sprite.ChangeHeading(val)
+		a.sprite.ChangeHeading(val)
 	}
 }
 
-// cleanupTween performs cleanup after tween animation completes
-func (ac *animationComponent) cleanupTween(info *animState, name SpriteAnimationName, ani *aniConfig) {
+func (a *animationComponent) cleanupTween(info *animState, name SpriteAnimationName, ani *aniConfig) {
 	if ani.AniType == aniTypeMove {
-		physicsMode := ac.sprite.PhysicsMode()
+		physicsMode := a.sprite.PhysicsMode()
 		if enabledPhysics && physicsMode != NoPhysics && physicsMode != StaticPhysics {
-			ac.sprite.SetVelocity(0, 0)
+			a.sprite.SetVelocity(0, 0)
 		}
 	}
-	ac.stopAnimState(info)
-	ac.curTweenState = nil
-	if name != ac.shared.defaultAnimation && !ani.IsKeepOnStop {
-		ac.playDefaultAnim()
+
+	a.stopAnimState(info)
+	a.curTweenState = nil
+	if name != a.shared.defaultAnimation && !ani.IsKeepOnStop {
+		a.playDefaultAnim()
 	}
 }
 
-func (ac *animationComponent) playDefaultAnim() {
+func (a *animationComponent) playDefaultAnim() {
 	animName := ""
-	if !ac.sprite.isVisible || ac.sprite.isDying {
+	if !a.sprite.isVisible || a.sprite.isDying {
 		return
 	}
+
 	speed := 1.0
-	if ac.curTweenState == nil {
-		animName = ac.shared.defaultAnimation
+	if a.curTweenState == nil {
+		animName = a.shared.defaultAnimation
 	} else {
-		switch ac.curTweenState.AniType {
+		switch a.curTweenState.AniType {
 		case aniTypeMove:
-			animName = ac.sprite.getStateAnimName(StateStep)
+			animName = a.sprite.getStateAnimName(StateStep)
 		case aniTypeTurn:
-			animName = ac.sprite.getStateAnimName(StateTurn)
+			animName = a.sprite.getStateAnimName(StateTurn)
 		case aniTypeGlide:
-			animName = ac.sprite.getStateAnimName(StateGlide)
+			animName = a.sprite.getStateAnimName(StateGlide)
 		}
-		speed = ac.curTweenState.Speed
+		speed = a.curTweenState.Speed
 	}
 
 	if animName == "" {
-		animName = ac.shared.defaultAnimation
+		animName = a.shared.defaultAnimation
 	}
 
-	if _, ok := ac.shared.animations[animName]; ok {
-		ac.shared.animationWrappers[animName].ensureRegistered(animName)
-		spriteMgr.PlayAnim(ac.sprite.syncSprite.GetId(), animName, speed, true, false)
+	if _, ok := a.shared.animations[animName]; ok {
+		a.shared.animationWrappers[animName].ensureRegistered(animName)
+		spriteMgr.PlayAnim(a.sprite.syncSprite.GetId(), animName, speed, true, false)
 	} else {
-		ac.sprite.goSetCostume(ac.sprite.defaultCostumeIndex)
+		a.sprite.goSetCostume(a.sprite.defaultCostumeIndex)
 	}
 }
 
@@ -365,31 +367,24 @@ func (ac *animationComponent) playDefaultAnim() {
 // Animation State Management
 // ============================================================================
 
-func (ac *animationComponent) onAnimationDone(animName string) {
-	if ac.curAnimState != nil && ac.curAnimState.Name == animName {
-		ac.playDefaultAnim()
+func (a *animationComponent) onAnimationDone(animName string) {
+	if a.curAnimState != nil && a.curAnimState.Name == animName {
+		a.playDefaultAnim()
 	}
 }
 
-func (ac *animationComponent) stopAnimState(state *animState) {
+func (a *animationComponent) stopAnimState(state *animState) {
 	if state == nil {
 		return
 	}
+
 	state.IsCanceled = true
 }
 
-func (ac *animationComponent) stopAnimAudio(state *animState) {
-	if state != nil {
-		if state.AudioName != "" {
-			ac.sprite.g.stopSoundInstance(state.AudioId)
-		}
-	}
-}
-
-func (ac *animationComponent) playAnimAudio(ani *aniConfig, info *animState) {
+func (a *animationComponent) playAnimAudio(ani *aniConfig, info *animState) {
 	if ani.OnStart != nil && ani.OnStart.Play != "" {
 		info.AudioName = ani.OnStart.Play
-		info.AudioId = ac.sprite.playAudio(info.AudioName, false)
+		info.AudioId = a.sprite.playAudio(info.AudioName, false)
 	}
 }
 
@@ -397,90 +392,84 @@ func (ac *animationComponent) playAnimAudio(ani *aniConfig, info *animState) {
 // Animation Utility Methods
 // ============================================================================
 
-func (ac *animationComponent) adaptAnimBitmapResolution(ani *aniConfig) {
-	renderScale := ac.sprite.getAnimRenderScale(ani.AdaptAnimBitmapResolution)
-	ac.sprite.syncSprite.SetRenderScale(mathf.NewVec2(renderScale, renderScale))
+func (a *animationComponent) adaptAnimBitmapResolution(ani *aniConfig) {
+	renderScale := a.sprite.getAnimRenderScale(ani.AdaptAnimBitmapResolution)
+	a.sprite.syncSprite.SetRenderScale(mathf.NewVec2(renderScale, renderScale))
 }
 
-func (ac *animationComponent) getFromAnToForAniFrames(from any, to any) (float64, float64) {
-	fromVal := 0.0
-	toVal := 0.0
-	switch v := from.(type) {
+func (a *animationComponent) costumeIndex(nameOrIndex any) int {
+	switch v := nameOrIndex.(type) {
 	case SpriteCostumeName:
-		fromVal = float64(ac.sprite.findCostume(v))
-		if fromVal < 0 {
+		idx := a.sprite.findCostume(v)
+		if idx < 0 {
 			log.Panicf("findCostume %s failed", v)
 		}
+		return idx
 	default:
-		fromVal, _ = tools.GetFloat(from)
+		val, _ := tools.GetFloat(nameOrIndex)
+		return int(val)
 	}
-
-	switch v := to.(type) {
-	case SpriteCostumeName:
-		toVal = float64(ac.sprite.findCostume(v))
-		if toVal < 0 {
-			log.Panicf("findCostume %s failed", v)
-		}
-	default:
-		toVal, _ = tools.GetFloat(to)
-	}
-
-	return fromVal, toVal
 }
 
-func (ac *animationComponent) hasAnim(animName string) bool {
-	if _, ok := ac.shared.animations[animName]; ok {
+func (a *animationComponent) frameRange(from, to any) (int, int) {
+	return a.costumeIndex(from), a.costumeIndex(to)
+}
+
+func (a *animationComponent) hasAnim(animName string) bool {
+	if _, ok := a.shared.animations[animName]; ok {
 		return true
 	}
+
 	return false
 }
 
-func (ac *animationComponent) getAnimation(animName SpriteAnimationName) (*aniConfig, bool) {
-	ani, ok := ac.shared.animations[animName]
+func (a *animationComponent) getAnimation(animName SpriteAnimationName) (*aniConfig, bool) {
+	ani, ok := a.shared.animations[animName]
 	return ani, ok
 }
 
-func (ac *animationComponent) getStateAnimName(stateName string) string {
-	if bindingName, ok := ac.shared.animBindings[stateName]; ok {
+func (a *animationComponent) getStateAnimName(stateName string) string {
+	if bindingName, ok := a.shared.animBindings[stateName]; ok {
 		return bindingName
 	}
+
 	return stateName
 }
 
-func (ac *animationComponent) addDonedAnimation(animName string) {
-	ac.donedAnimations = append(ac.donedAnimations, animName)
+func (a *animationComponent) addDonedAnimation(animName string) {
+	a.donedAnimations = append(a.donedAnimations, animName)
 }
 
-func (ac *animationComponent) takeDonedAnimations(buffer []string) []string {
-	buffer = append(buffer, ac.donedAnimations...)
-	ac.donedAnimations = ac.donedAnimations[:0]
+func (a *animationComponent) takeDonedAnimations(buffer []string) []string {
+	buffer = append(buffer, a.donedAnimations...)
+	a.donedAnimations = a.donedAnimations[:0]
 	return buffer
 }
 
-func (ac *animationComponent) getCurAnimState() *animState {
-	return ac.curAnimState
+func (a *animationComponent) getCurAnimState() *animState {
+	return a.curAnimState
 }
 
-func (ac *animationComponent) getCurTweenState() *animState {
-	return ac.curTweenState
+func (a *animationComponent) getCurTweenState() *animState {
+	return a.curTweenState
 }
 
 // ============================================================================
 // Animation Event Methods
 // ============================================================================
 
-func (ac *animationComponent) registerOnAnimationLooped(f func()) {
-	ac.sprite.syncSprite.RegisterOnAnimationLooped(f)
+func (a *animationComponent) registerOnAnimationLooped(f func()) {
+	a.sprite.syncSprite.RegisterOnAnimationLooped(f)
 }
 
-func (ac *animationComponent) unRegisterOnAnimationLooped() {
-	ac.sprite.syncSprite.UnRegisterOnAnimationLooped()
+func (a *animationComponent) unRegisterOnAnimationLooped() {
+	a.sprite.syncSprite.UnRegisterOnAnimationLooped()
 }
 
-func (ac *animationComponent) registerOnAnimationFinished(f func()) {
-	ac.sprite.syncSprite.RegisterOnAnimationFinished(f)
+func (a *animationComponent) registerOnAnimationFinished(f func()) {
+	a.sprite.syncSprite.RegisterOnAnimationFinished(f)
 }
 
-func (ac *animationComponent) unRegisterOnAnimationFinished() {
-	ac.sprite.syncSprite.UnRegisterOnAnimationFinished()
+func (a *animationComponent) unRegisterOnAnimationFinished() {
+	a.sprite.syncSprite.UnRegisterOnAnimationFinished()
 }
