@@ -179,6 +179,17 @@ func Iround(v float64) int {
 	return int(v - 0.5)
 }
 
+// clampFloat64 constrains a value to be within the specified range.
+func clampFloat64(val, min, max float64) float64 {
+	if val < min {
+		return min
+	}
+	if val > max {
+		return max
+	}
+	return val
+}
+
 // -------------------------------------------------------------------------------------
 // Color Utilities
 
