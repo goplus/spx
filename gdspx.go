@@ -128,7 +128,7 @@ func (p *Game) syncEnginePositions() error {
 		x := float64(positions[i*2])
 		y := float64(positions[i*2+1])
 		revertRenderOffset(sprite, &x, &y)
-		sprite.transform().setXYposDirect(x, y)
+		sprite.transform().setXY(x, y)
 	}
 
 	return nil

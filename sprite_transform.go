@@ -30,7 +30,7 @@ import (
 // -----------------------------------------------------------------------------
 
 func (p *SpriteImpl) getXY() (x, y float64) {
-	return p.transform().GetXY()
+	return p.transform().XY()
 }
 
 // DistanceTo func:

@@ -24,42 +24,61 @@ import (
 	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
+const (
+	// minSpeed is the minimum allowed speed value to prevent division by zero.
+	minSpeed = 0.001
+
+	// minBounceComponent prevents sprites from getting stuck at boundaries.
+	minBounceComponent = 0.2
+
+	// fullCircleDegrees represents a complete rotation in degrees.
+	fullCircleDegrees = 360.0
+
+	// halfCircleDegrees represents half a rotation in degrees.
+	halfCircleDegrees = 180.0
+)
+
 // ============================================================================
 // Transform Component
 // ============================================================================
-// This component encapsulates all position, rotation, and scale functionality
 
+// transformComponent encapsulates all position, rotation, and scale functionality
+// for sprites in the game world.
 type transformComponent struct {
 	componentBase
 
-	// Position
+	// Position coordinates in world space
 	x, y float64
 
-	// Rotation
+	// Rotation properties
 	direction     float64
 	rotationStyle RotationStyle
 
-	// Pivot point
+	// Transform origin
 	pivot mathf.Vec2
 
-	// Dirty flag for transform updates
+	// State
 	isDirty bool
 }
 
-// initialize initializes the transform component from config
-func (tc *transformComponent) initialize(sprite *SpriteImpl, spriteCfg *spriteConfig) {
-	tc.componentBase.initialize(sprite, spriteCfg)
-	// Always initialize from config
-	tc.x = spriteCfg.X
-	tc.y = spriteCfg.Y
-	tc.direction = spriteCfg.Heading
-	tc.rotationStyle = toRotationStyle(spriteCfg.RotationStyle)
-	tc.pivot = spriteCfg.Pivot
-	tc.isDirty = false
+// ============================================================================
+// Lifecycle Methods
+// ============================================================================
+
+// initialize initializes the transform component from configuration.
+func (t *transformComponent) initialize(sprite *SpriteImpl, spriteCfg *spriteConfig) {
+	t.componentBase.initialize(sprite, spriteCfg)
+
+	t.x = spriteCfg.X
+	t.y = spriteCfg.Y
+	t.direction = spriteCfg.Heading
+	t.rotationStyle = toRotationStyle(spriteCfg.RotationStyle)
+	t.pivot = spriteCfg.Pivot
+	t.isDirty = false
 }
 
-// cloneFrom creates a new transform component by cloning from source
-func (tc *transformComponent) cloneFrom(src component, newSprite *SpriteImpl) component {
+// cloneFrom creates a new transform component by cloning from source.
+func (t *transformComponent) cloneFrom(src component, newSprite *SpriteImpl) component {
 	srcTransform := src.(*transformComponent)
 	return &transformComponent{
 		componentBase: componentBase{sprite: newSprite},
@@ -68,111 +87,85 @@ func (tc *transformComponent) cloneFrom(src component, newSprite *SpriteImpl) co
 		direction:     srcTransform.direction,
 		rotationStyle: srcTransform.rotationStyle,
 		pivot:         srcTransform.pivot,
-		isDirty:       false, // Reset dirty flag for new sprite
+		isDirty:       false,
 	}
 }
 
-// onDestroy cleanup when component is destroyed
-func (tc *transformComponent) onDestroy() {
-	// Nothing to cleanup
+// onDestroy performs cleanup when the component is destroyed.
+func (t *transformComponent) onDestroy() {
+	// No resources to cleanup
 }
 
 // ============================================================================
-// Position Methods
+// Position Methods (Exported)
 // ============================================================================
 
-func (tc *transformComponent) GetXY() (x, y float64) {
-	return tc.x, tc.y
+// XY returns the current position coordinates.
+func (t *transformComponent) XY() (x, y float64) {
+	return t.x, t.y
 }
 
-func (tc *transformComponent) Xpos() float64 {
-	return tc.x
+// Xpos returns the current x-coordinate.
+func (t *transformComponent) Xpos() float64 {
+	return t.x
 }
 
-func (tc *transformComponent) Ypos() float64 {
-	return tc.y
+// Ypos returns the current y-coordinate.
+func (t *transformComponent) Ypos() float64 {
+	return t.y
 }
 
-func (tc *transformComponent) SetXpos(x float64) {
-	tc.doMoveTo(x, tc.y)
+// SetXYpos sets both position coordinates to the specified values.
+func (t *transformComponent) SetXYpos(x, y float64) {
+	t.moveTo(x, y)
 }
 
-func (tc *transformComponent) SetYpos(y float64) {
-	tc.doMoveTo(tc.x, y)
+// SetXpos sets the x-coordinate to the specified value.
+func (t *transformComponent) SetXpos(x float64) {
+	t.moveTo(x, t.y)
 }
 
-func (tc *transformComponent) SetXYpos(x, y float64) {
-	tc.doMoveTo(x, y)
+// SetYpos sets the y-coordinate to the specified value.
+func (t *transformComponent) SetYpos(y float64) {
+	t.moveTo(t.x, y)
 }
 
-func (tc *transformComponent) ChangeXpos(dx float64) {
-	tc.doMoveTo(tc.x+dx, tc.y)
+// ChangeXYpos changes both position coordinates by the specified deltas.
+func (t *transformComponent) ChangeXYpos(dx, dy float64) {
+	t.moveTo(t.x+dx, t.y+dy)
 }
 
-func (tc *transformComponent) ChangeYpos(dy float64) {
-	tc.doMoveTo(tc.x, tc.y+dy)
+// ChangeXpos changes the x-coordinate by the specified delta.
+func (t *transformComponent) ChangeXpos(dx float64) {
+	t.moveTo(t.x+dx, t.y)
 }
 
-func (tc *transformComponent) ChangeXYpos(dx, dy float64) {
-	tc.doMoveTo(tc.x+dx, tc.y+dy)
-}
-
-func (tc *transformComponent) setXYposDirect(x, y float64) {
-	tc.x, tc.y = x, y
-}
-
-func (tc *transformComponent) doMoveTo(x, y float64) {
-	x, y = tc.fixWorldRange(x, y)
-	tc.sprite.pen().movePen(x, y)
-	tc.x, tc.y = x, y
-	tc.updateTransform()
-}
-
-func (tc *transformComponent) updateTransform() {
-	tc.isDirty = true
-	tc.sprite.isDirty = true
-}
-
-// fixWorldRange clamps sprite position within world boundaries
-func (tc *transformComponent) fixWorldRange(x, y float64) (float64, float64) {
-	rect := tc.sprite.bounds()
-	if rect == nil {
-		return x, y
-	}
-	worldW, worldH := tc.sprite.g.worldSize_()
-	maxW := float64(worldW)/2.0 + float64(rect.Size.X)
-	maxH := float64(worldH)/2.0 + float64(rect.Size.Y)
-	if x < -maxW {
-		x = -maxW
-	}
-	if x > maxW {
-		x = maxW
-	}
-	if y < -maxH {
-		y = -maxH
-	}
-	if y > maxH {
-		y = maxH
-	}
-	return x, y
+// ChangeYpos changes the y-coordinate by the specified delta.
+func (t *transformComponent) ChangeYpos(dy float64) {
+	t.moveTo(t.x, t.y+dy)
 }
 
 // ============================================================================
-// Movement Methods
+// Movement Methods (Exported)
 // ============================================================================
 
-func (tc *transformComponent) MoveForward(step float64) {
-	sin, cos := math.Sincos(toRadian(tc.direction))
-	tc.doMoveTo(tc.x+step*sin, tc.y+step*cos)
+// MoveForward moves the sprite forward by the specified step size
+// in the direction it's currently facing.
+func (t *transformComponent) MoveForward(step float64) {
+	sin, cos := math.Sincos(toRadian(t.direction))
+	t.moveTo(t.x+step*sin, t.y+step*cos)
 }
 
-func (tc *transformComponent) Glide(x, y float64, secs float64) {
+// Glide smoothly moves the sprite to the specified position over the given duration.
+func (t *transformComponent) Glide(x, y float64, secs float64) {
 	if debugInstr {
-		spxlog.Debug("Glide: sprite=%s, x=%v, y=%v, secs=%v", tc.sprite.name, x, y, secs)
+		spxlog.Debug("Glide: sprite=%s, x=%v, y=%v, secs=%v", t.sprite.name, x, y, secs)
 	}
-	x0, y0 := tc.GetXY()
+
+	x0, y0 := t.XY()
 	from := mathf.NewVec2(x0, y0)
 	to := mathf.NewVec2(x, y)
+
 	aniCopy := aniConfig{
 		Duration: secs,
 		From:     &from,
@@ -180,169 +173,295 @@ func (tc *transformComponent) Glide(x, y float64, secs float64) {
 		AniType:  aniTypeGlide,
 		IsLoop:   true,
 	}
-	animName := tc.sprite.getStateAnimName(StateGlide)
-	tc.sprite.animation().doTween(animName, &aniCopy)
+
+	animName := t.sprite.getStateAnimName(StateGlide)
+	t.sprite.animation().doTween(animName, &aniCopy)
 }
 
-func (tc *transformComponent) GlideTo(obj any, secs float64) {
-	x, y := tc.sprite.g.objectPos(obj)
-	tc.Glide(x, y, secs)
+// GlideTo smoothly moves the sprite to the specified object's position
+// over the given duration.
+func (t *transformComponent) GlideTo(obj any, secs float64) {
+	x, y := t.sprite.g.objectPos(obj)
+	t.Glide(x, y, secs)
 }
 
-func (tc *transformComponent) StepToPos(x, y, speed float64, animation SpriteAnimationName) {
-	if animation == "" {
-		animation = tc.sprite.getStateAnimName(StateStep)
-	}
-	// if no animation, goto target immediately
-	if !tc.sprite.hasAnim(animation) {
-		tc.SetXYpos(x, y)
-	} else {
-		speed = math.Max(speed, 0.001)
-		from := mathf.NewVec2(tc.x, tc.y)
-		to := mathf.NewVec2(x, y)
-		distance := from.DistanceTo(to)
-		if ani, ok := tc.sprite.getAnimation(animation); ok {
-			aniCopy := *ani
-			aniCopy.From = &from
-			aniCopy.To = &to
-			aniCopy.AniType = aniTypeMove
-			aniCopy.Duration = math.Abs(distance) * ani.StepDuration / speed
-			aniCopy.IsLoop = true
-			aniCopy.Speed = speed
-			tc.sprite.doTween(animation, &aniCopy)
-			return
-		}
-	}
-}
-
-func (tc *transformComponent) StepTo(obj any, speed float64, animation SpriteAnimationName) {
-	x, y := tc.sprite.g.objectPos(obj)
-	tc.StepToPos(x, y, speed, animation)
-}
-
-func (tc *transformComponent) Step(step float64, speed float64, animation SpriteAnimationName) {
-	dirSin, dirCos := math.Sincos(toRadian(tc.direction))
+// Step moves the sprite forward by the specified step size using a stepping animation.
+func (t *transformComponent) Step(step, speed float64, animation SpriteAnimationName) {
+	dirSin, dirCos := math.Sincos(toRadian(t.direction))
 	diff := mathf.NewVec2(step*dirSin, step*dirCos)
-	to := mathf.NewVec2(tc.x, tc.y).Add(diff)
-	tc.StepToPos(to.X, to.Y, speed, animation)
+	to := mathf.NewVec2(t.x, t.y).Add(diff)
+	t.StepToPos(to.X, to.Y, speed, animation)
+}
+
+// StepToPos moves the sprite to the specified position using a stepping animation.
+func (t *transformComponent) StepToPos(x, y, speed float64, animation SpriteAnimationName) {
+	if animation == "" {
+		animation = t.sprite.getStateAnimName(StateStep)
+	}
+
+	// If no animation exists, move to target immediately
+	if !t.sprite.hasAnim(animation) {
+		t.SetXYpos(x, y)
+		return
+	}
+
+	speed = math.Max(speed, minSpeed)
+	from := mathf.NewVec2(t.x, t.y)
+	to := mathf.NewVec2(x, y)
+	distance := from.DistanceTo(to)
+
+	ani, ok := t.sprite.getAnimation(animation)
+	if !ok {
+		return
+	}
+
+	aniCopy := *ani
+	aniCopy.From = &from
+	aniCopy.To = &to
+	aniCopy.AniType = aniTypeMove
+	aniCopy.Duration = math.Abs(distance) * ani.StepDuration / speed
+	aniCopy.IsLoop = true
+	aniCopy.Speed = speed
+	t.sprite.doTween(animation, &aniCopy)
+}
+
+// StepTo moves the sprite to the specified object's position using a stepping animation.
+func (t *transformComponent) StepTo(obj any, speed float64, animation SpriteAnimationName) {
+	x, y := t.sprite.g.objectPos(obj)
+	t.StepToPos(x, y, speed, animation)
 }
 
 // ============================================================================
-// Rotation Methods
+// Rotation Methods (Exported)
 // ============================================================================
 
-func (tc *transformComponent) Heading() Direction {
-	return tc.direction
+// Heading returns the current direction the sprite is facing.
+func (t *transformComponent) Heading() Direction {
+	return t.direction
 }
 
-func (tc *transformComponent) SetHeading(dir Direction) {
-	tc.setDirection(dir, false)
+// SetHeading sets the sprite's direction to the specified value.
+func (t *transformComponent) SetHeading(dir Direction) {
+	t.applyDirection(dir)
 }
 
-func (tc *transformComponent) ChangeHeading(dir Direction) {
-	tc.setDirection(dir, true)
+// ChangeHeading changes the sprite's direction by the specified delta.
+func (t *transformComponent) ChangeHeading(delta Direction) {
+	t.applyDirection(t.direction + delta)
 }
 
-func (tc *transformComponent) SetRotationStyle(style RotationStyle) {
+// SetRotationStyle sets the rotation style for the sprite.
+func (t *transformComponent) SetRotationStyle(style RotationStyle) {
 	if debugInstr {
-		spxlog.Debug("SetRotationStyle: sprite=%s, style=%v", tc.sprite.name, style)
+		spxlog.Debug("SetRotationStyle: sprite=%s, style=%v", t.sprite.name, style)
 	}
-	tc.rotationStyle = style
+	t.rotationStyle = style
 }
 
-func (tc *transformComponent) setDirection(dir float64, change bool) bool {
-	if change {
-		dir += tc.direction
-	}
-	dir = normalizeDirection(dir)
-	if tc.direction == dir {
-		return false
-	}
-	tc.direction = dir
-	tc.updateTransform()
-	return true
-}
-
-func (tc *transformComponent) Turn(val Direction, speed float64, animation SpriteAnimationName) {
-	delta := val
+// Turn rotates the sprite by the specified angle using an animation.
+func (t *transformComponent) Turn(delta Direction, speed float64, animation SpriteAnimationName) {
 	if animation == "" {
-		animation = tc.sprite.getStateAnimName(StateTurn)
+		animation = t.sprite.getStateAnimName(StateTurn)
 	}
-	if ani, ok := tc.sprite.getAnimation(animation); ok {
-		aniCopy := *ani
-		aniCopy.From = tc.direction
-		aniCopy.To = tc.direction + delta
-		aniCopy.Duration = ani.TurnToDuration / 360.0 * math.Abs(delta) / math.Max(speed, 0.001)
-		aniCopy.AniType = aniTypeTurn
-		aniCopy.IsLoop = true
-		aniCopy.Speed = speed
-		tc.sprite.doTween(animation, &aniCopy)
+
+	ani, ok := t.sprite.getAnimation(animation)
+	if !ok {
+		t.ChangeHeading(delta)
+		if debugInstr {
+			spxlog.Debug("Turn: sprite=%s, delta=%v", t.sprite.name, delta)
+		}
 		return
 	}
-	tc.setDirection(delta, true)
-	if debugInstr {
-		spxlog.Debug("Turn: sprite=%s, val=%v", tc.sprite.name, val)
-	}
+
+	speed = math.Max(speed, minSpeed)
+	absDelta := math.Abs(delta)
+
+	aniCopy := *ani
+	aniCopy.From = t.direction
+	aniCopy.To = t.direction + delta
+	aniCopy.Duration = ani.TurnToDuration / fullCircleDegrees * absDelta / speed
+	aniCopy.AniType = aniTypeTurn
+	aniCopy.IsLoop = true
+	aniCopy.Speed = speed
+	t.sprite.doTween(animation, &aniCopy)
 }
 
-func (tc *transformComponent) TurnTo(obj any, speed float64, animation SpriteAnimationName) {
-	var angle float64
-	switch v := obj.(type) {
-	case Direction:
-		angle = v
-	default:
-		x, y := tc.sprite.g.objectPos(obj)
-		dx := x - tc.x
-		dy := y - tc.y
-		angle = 90 - engine.RadToDeg(math.Atan2(dy, dx))
-	}
+// TurnTo turns the sprite to face the specified object or direction using an animation.
+func (t *transformComponent) TurnTo(obj any, speed float64, animation SpriteAnimationName) {
+	targetAngle := t.calculateTargetAngle(obj)
 
 	if animation == "" {
-		animation = tc.sprite.getStateAnimName(StateTurn)
+		animation = t.sprite.getStateAnimName(StateTurn)
 	}
-	if ani, ok := tc.sprite.getAnimation(animation); ok {
-		fromAngle := math.Mod(tc.direction+360.0, 360.0)
-		toAngle := math.Mod(angle+360.0, 360.0)
-		if toAngle-fromAngle > 180.0 {
-			fromAngle = fromAngle + 360.0
+
+	ani, ok := t.sprite.getAnimation(animation)
+	if !ok {
+		if t.applyDirection(targetAngle) && debugInstr {
+			spxlog.Debug("TurnTo: sprite=%s, obj=%v", t.sprite.name, obj)
 		}
-		if fromAngle-toAngle > 180.0 {
-			toAngle = toAngle + 360.0
-		}
-		delta := math.Abs(fromAngle - toAngle)
-		aniCopy := *ani
-		aniCopy.From = fromAngle
-		aniCopy.To = toAngle
-		aniCopy.Duration = ani.TurnToDuration / 360.0 * math.Abs(delta) / math.Max(speed, 0.001)
-		aniCopy.AniType = aniTypeTurn
-		aniCopy.IsLoop = true
-		aniCopy.Speed = speed
-		tc.sprite.animation().doTween(animation, &aniCopy)
 		return
 	}
-	if tc.setDirection(angle, false) && debugInstr {
-		spxlog.Debug("TurnTo: sprite=%s, obj=%v", tc.sprite.name, obj)
-	}
+
+	speed = math.Max(speed, minSpeed)
+	fromAngle, toAngle := t.normalizeAngleRange(t.direction, targetAngle)
+	absDelta := math.Abs(fromAngle - toAngle)
+
+	aniCopy := *ani
+	aniCopy.From = fromAngle
+	aniCopy.To = toAngle
+	aniCopy.Duration = ani.TurnToDuration / fullCircleDegrees * absDelta / speed
+	aniCopy.AniType = aniTypeTurn
+	aniCopy.IsLoop = true
+	aniCopy.Speed = speed
+	t.sprite.animation().doTween(animation, &aniCopy)
 }
 
-func (tc *transformComponent) BounceOffEdge() {
+// BounceOffEdge bounces the sprite off the edge of the screen by reversing
+// its direction appropriately.
+func (t *transformComponent) BounceOffEdge() {
 	if debugInstr {
-		spxlog.Debug("BounceOffEdge: %s", tc.sprite.name)
+		spxlog.Debug("BounceOffEdge: %s", t.sprite.name)
 	}
 
-	nearestEdge := tc.sprite.checkNearestTouchedBoundary()
-
+	nearestEdge := t.sprite.checkNearestTouchedBoundary()
 	if nearestEdge == 0 {
 		return
 	}
 
-	// prevents sprites from getting stuck at boundaries
-	const minBounceComponent = 0.2
-	radians := toRadian(90 - tc.direction)
+	radians := toRadian(90 - t.direction)
 	dx := math.Cos(radians)
 	dy := -math.Sin(radians)
 
-	switch nearestEdge {
+	dx, dy = t.calculateBounceDirection(nearestEdge, dx, dy)
+
+	newDirection := engine.RadToDeg(math.Atan2(dy, dx)) + 90
+	t.direction = normalizeDirection(newDirection)
+}
+
+// ============================================================================
+// Scale Methods (Exported)
+// ============================================================================
+
+// SetSize sets the sprite's scale to the specified size.
+func (t *transformComponent) SetSize(size float64) {
+	if debugInstr {
+		spxlog.Debug("SetSize: sprite=%s, size=%v", t.sprite.name, size)
+	}
+
+	t.sprite.scale = size
+	t.sprite.isCostumeDirty = true
+	t.markDirty()
+	t.sprite.updatePhysicsShapesScale()
+}
+
+// ChangeSize changes the sprite's scale by the specified delta.
+func (t *transformComponent) ChangeSize(delta float64) {
+	if debugInstr {
+		spxlog.Debug("ChangeSize: sprite=%s, delta=%v", t.sprite.name, delta)
+	}
+	t.SetSize(t.sprite.scale + delta)
+}
+
+// ============================================================================
+// Distance Calculation (Exported)
+// ============================================================================
+
+// DistanceTo calculates the Euclidean distance from this sprite to the specified object.
+func (t *transformComponent) DistanceTo(obj any) float64 {
+	x, y := t.x, t.y
+	x2, y2 := t.sprite.g.objectPos(obj)
+	dx := x - x2
+	dy := y - y2
+	return math.Sqrt(dx*dx + dy*dy)
+}
+
+// ============================================================================
+// Internal Methods (Unexported)
+// ============================================================================
+
+// setXY directly sets position without triggering side effects.
+// This is used for internal operations that need to bypass normal movement logic.
+func (t *transformComponent) setXY(x, y float64) {
+	t.x, t.y = x, y
+}
+
+// moveTo moves the sprite to the specified position, handling pen movement
+// and transform updates.
+func (t *transformComponent) moveTo(x, y float64) {
+	x, y = t.fixWorldRange(x, y)
+	t.sprite.pen().movePen(x, y)
+	t.x, t.y = x, y
+	t.markDirty()
+}
+
+// markDirty marks the transform as dirty, triggering an update.
+func (t *transformComponent) markDirty() {
+	t.isDirty = true
+	t.sprite.isDirty = true
+}
+
+// fixWorldRange clamps sprite position within world boundaries.
+func (t *transformComponent) fixWorldRange(x, y float64) (float64, float64) {
+	rect := t.sprite.bounds()
+	if rect == nil {
+		return x, y
+	}
+
+	worldW, worldH := t.sprite.g.worldSize_()
+	maxW := float64(worldW)/2.0 + float64(rect.Size.X)
+	maxH := float64(worldH)/2.0 + float64(rect.Size.Y)
+
+	x = clampFloat64(x, -maxW, maxW)
+	y = clampFloat64(y, -maxH, maxH)
+
+	return x, y
+}
+
+// applyDirection sets the sprite's direction to the normalized value.
+// Returns true if the direction was actually changed.
+func (t *transformComponent) applyDirection(dir float64) bool {
+	dir = normalizeDirection(dir)
+	if t.direction == dir {
+		return false
+	}
+
+	t.direction = dir
+	t.markDirty()
+	return true
+}
+
+// calculateTargetAngle calculates the angle to turn toward the specified object.
+func (t *transformComponent) calculateTargetAngle(obj any) float64 {
+	switch v := obj.(type) {
+	case Direction:
+		return v
+	default:
+		x, y := t.sprite.g.objectPos(obj)
+		dx := x - t.x
+		dy := y - t.y
+		return 90 - engine.RadToDeg(math.Atan2(dy, dx))
+	}
+}
+
+// normalizeAngleRange normalizes two angles to minimize the rotation distance.
+// This ensures the sprite takes the shortest path when rotating.
+func (t *transformComponent) normalizeAngleRange(from, to float64) (float64, float64) {
+	fromNorm := math.Mod(from+fullCircleDegrees, fullCircleDegrees)
+	toNorm := math.Mod(to+fullCircleDegrees, fullCircleDegrees)
+
+	if toNorm-fromNorm > halfCircleDegrees {
+		fromNorm += fullCircleDegrees
+	} else if fromNorm-toNorm > halfCircleDegrees {
+		toNorm += fullCircleDegrees
+	}
+
+	return fromNorm, toNorm
+}
+
+// calculateBounceDirection calculates the new direction vector after bouncing
+// off the specified edge.
+func (t *transformComponent) calculateBounceDirection(edge int, dx, dy float64) (float64, float64) {
+	switch edge {
 	case touchingScreenLeft:
 		dx = math.Max(minBounceComponent, math.Abs(dx))
 	case touchingScreenTop:
@@ -352,49 +471,10 @@ func (tc *transformComponent) BounceOffEdge() {
 	case touchingScreenBottom:
 		dy = -math.Max(minBounceComponent, math.Abs(dy))
 	}
-
-	newDirection := engine.RadToDeg(math.Atan2(dy, dx)) + 90
-	tc.direction = normalizeDirection(newDirection)
+	return dx, dy
 }
 
-// ============================================================================
-// Scale Methods
-// ============================================================================
-
-func (tc *transformComponent) SetSize(size float64) {
-	if debugInstr {
-		spxlog.Debug("SetSize: sprite=%s, size=%v", tc.sprite.name, size)
-	}
-
-	tc.sprite.scale = size
-	tc.sprite.isCostumeDirty = true
-	tc.updateTransform()
-	tc.sprite.updatePhysicsShapesScale()
-}
-
-func (tc *transformComponent) ChangeSize(delta float64) {
-	if debugInstr {
-		spxlog.Debug("ChangeSize: sprite=%s, delta=%v", tc.sprite.name, delta)
-	}
-	tc.SetSize(tc.sprite.scale + delta)
-}
-
-// ============================================================================
-// Pivot Methods
-// ============================================================================
-
-func (tc *transformComponent) getPivot() mathf.Vec2 {
-	return tc.pivot
-}
-
-// ============================================================================
-// Distance Calculation
-// ============================================================================
-
-func (tc *transformComponent) DistanceTo(obj any) float64 {
-	x, y := tc.x, tc.y
-	x2, y2 := tc.sprite.g.objectPos(obj)
-	x -= x2
-	y -= y2
-	return math.Sqrt(x*x + y*y)
+// getPivot returns the current pivot point.
+func (t *transformComponent) getPivot() mathf.Vec2 {
+	return t.pivot
 }
