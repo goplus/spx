@@ -56,6 +56,7 @@ func newMeasure(v specsp) *measure {
 	if err != nil {
 		panic(err)
 	}
+
 	pos := mathf.NewVec2(v["x"].(float64), v["y"].(float64))
 	panel := ui.NewUiMeasure()
 	meansureObj := &measure{
@@ -69,6 +70,7 @@ func newMeasure(v specsp) *measure {
 		svgSize:      svgSize,
 		panel:        panel,
 	}
+
 	panel.UpdateInfo(meansureObj.pos, size*scale, heading, text, c)
 	return meansureObj
 }
@@ -78,8 +80,10 @@ func getSpcspVal(ss specsp, key string, defaultVal ...any) any {
 	if ok {
 		return v
 	}
+
 	if len(defaultVal) > 0 {
 		return defaultVal[0]
 	}
+
 	return v
 }

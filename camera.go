@@ -55,7 +55,7 @@ func (c *cameraImpl) init(g *Game) {
 	c.setLimits()
 }
 
-// Restrict camera position to prevent camera from seeing areas outside the world
+// onUpdate updates the camera position to follow its target.
 func (c *cameraImpl) onUpdate() {
 	if c.followTarget == nil {
 		return

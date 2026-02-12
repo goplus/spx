@@ -33,18 +33,6 @@ const (
 )
 
 // -----------------------------------------------------------------------------
-// Internal Audio Management
-// -----------------------------------------------------------------------------
-
-func (p *SpriteImpl) playAudio(name SoundName, loop bool) soundId {
-	return p.sound().playAudio(name, loop)
-}
-
-func (p *SpriteImpl) checkSoundObj() {
-	p.sound().checkSoundObj()
-}
-
-// -----------------------------------------------------------------------------
 // Sound Playback Control
 // -----------------------------------------------------------------------------
 
@@ -102,4 +90,12 @@ func (p *SpriteImpl) SetSoundEffect(kind SoundEffectKind, value float64) {
 
 func (p *SpriteImpl) ChangeSoundEffect(kind SoundEffectKind, delta float64) {
 	p.sound().ChangeSoundEffect(kind, delta)
+}
+
+// -----------------------------------------------------------------------------
+// Internal Audio Management
+// -----------------------------------------------------------------------------
+
+func (p *SpriteImpl) playAudio(name SoundName, loop bool) soundId {
+	return p.sound().playAudio(name, loop)
 }

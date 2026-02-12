@@ -25,15 +25,109 @@ import (
 	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
-// -------------------------------------------------------------------------------------
-// Window and World Size Utilities
+// =============================================================================
+// Public API - Color Type
+// =============================================================================
+
+// Color represents an RGBA color.
+type Color struct {
+	r, g, b, a float64
+}
+
+// =============================================================================
+// Public API - Window Management
+// =============================================================================
+
+// SetWindowSize sets the window size to the specified width and height.
+func (p *Game) SetWindowSize(width int64, height int64) {
+	platformMgr.SetWindowSize(width, height, false)
+}
+
+// =============================================================================
+// Public API - Drawing
+// =============================================================================
+
+// EraseAll erases all pen drawings.
+func (p *Game) EraseAll() {
+	penMgr.DestroyAllPens()
+}
+
+// =============================================================================
+// Public API - Random Number Generation
+// =============================================================================
+
+// Rand__0 returns a random integer between from and to (inclusive).
+func Rand__0(from, to int) float64 {
+	if to < from {
+		to = from
+	}
+	return float64(from + rand.Intn(to-from+1))
+}
+
+// Rand__1 returns a random float64 between from and to.
+func Rand__1(from, to float64) float64 {
+	if to < from {
+		to = from
+	}
+	return rand.Float64()*(to-from) + from
+}
+
+// =============================================================================
+// Public API - Math Utilities
+// =============================================================================
+
+// Iround returns an integer value, while math.Round returns a float value.
+func Iround(v float64) int {
+	if v >= 0 {
+		return int(v + 0.5)
+	}
+	return int(v - 0.5)
+}
+
+// =============================================================================
+// Public API - Color Creation
+// =============================================================================
+
+// HSB creates a color from HSB values.
+// h, s, b in range [0, 100], just like Scratch
+func HSB(h, s, b float64) Color {
+	color := mathf.NewColorHSV(h*3.6, s/100, b/100)
+	color.A = 1
+	return toSpxColor(color)
+}
+
+// HSBA creates a color from HSBA values.
+// h, s, b, a in range [0, 100], just like Scratch
+func HSBA(h, s, b, a float64) Color {
+	color := HSB(h, s, b)
+	color.a = a / 100
+	return color
+}
+
+// =============================================================================
+// Public API - Program Exit
+// =============================================================================
+
+// Exit__0 exits the program with the specified exit code.
+func Exit__0(code int) {
+	engine.RequestExit(int64(code))
+}
+
+// Exit__1 exits the program with exit code 0.
+func Exit__1() {
+	engine.RequestExit(0)
+}
+
+// =============================================================================
+// Private - Window and World Size Utilities
+// =============================================================================
 
 func (p *Game) getWindowSize() mathf.Vec2 {
-	x, y := p.windowSize_()
+	x, y := p.windowSize()
 	return mathf.NewVec2(float64(x), float64(y))
 }
 
-func (p *Game) windowSize_() (int, int) {
+func (p *Game) windowSize() (int, int) {
 	if p.windowWidth == 0 {
 		p.doWindowSize()
 	}
@@ -42,12 +136,12 @@ func (p *Game) windowSize_() (int, int) {
 
 func (p *Game) doWindowSize() {
 	if p.windowWidth == 0 {
-		c := p.costumes[p.costumeIndex_]
+		c := p.costumes[p.costumeIndex]
 		p.windowWidth, p.windowHeight = c.getSize()
 	}
 }
 
-func (p *Game) worldSize_() (int, int) {
+func (p *Game) worldSize() (int, int) {
 	if p.worldWidth == 0 {
 		p.doWorldSize()
 	}
@@ -56,17 +150,14 @@ func (p *Game) worldSize_() (int, int) {
 
 func (p *Game) doWorldSize() {
 	if p.worldWidth == 0 {
-		c := p.costumes[p.costumeIndex_]
+		c := p.costumes[p.costumeIndex]
 		p.worldWidth, p.worldHeight = c.getSize()
 	}
 }
 
-func (p *Game) SetWindowSize(width int64, height int64) {
-	platformMgr.SetWindowSize(width, height, false)
-}
-
-// -------------------------------------------------------------------------------------
-// Touch and Collision Utilities
+// =============================================================================
+// Private - Touch and Collision Utilities
+// =============================================================================
 
 func (p *Game) touchingPoint(dst *SpriteImpl, x, y float64) bool {
 	return dst.touchPoint(x, y)
@@ -82,8 +173,9 @@ func (p *Game) touchingSpriteBy(dst *SpriteImpl, name string) *SpriteImpl {
 	return p.findTouchingSpriteOptimized(dst, name)
 }
 
-// -------------------------------------------------------------------------------------
-// Object Position Utilities
+// =============================================================================
+// Private - Object Position Utilities
+// =============================================================================
 
 func (p *Game) objectPos(obj any) (float64, float64) {
 	switch v := obj.(type) {
@@ -98,7 +190,7 @@ func (p *Game) objectPos(obj any) (float64, float64) {
 		}
 	case Pos:
 		if v == Random {
-			worldW, worldH := p.worldSize_()
+			worldW, worldH := p.worldSize()
 			mx, my := rand.Intn(worldW), rand.Intn(worldH)
 			return float64(mx - (worldW >> 1)), float64((worldH >> 1) - my)
 		}
@@ -109,15 +201,9 @@ func (p *Game) objectPos(obj any) (float64, float64) {
 	return 0, 0
 }
 
-// -------------------------------------------------------------------------------------
-// Pen Utilities
-
-func (p *Game) EraseAll() {
-	penMgr.DestroyAllPens()
-}
-
-// -------------------------------------------------------------------------------------
-// Shape Management Utilities
+// =============================================================================
+// Private - Shape Management Utilities
+// =============================================================================
 
 func (p *Game) getItems() []Shape {
 	return p.spriteMgr.all()
@@ -151,33 +237,9 @@ func (p *Game) getTempShapes() []Shape {
 	return p.spriteMgr.getTempShapes()
 }
 
-// -------------------------------------------------------------------------------------
-// Random Number Utilities
-
-func Rand__0(from, to int) float64 {
-	if to < from {
-		to = from
-	}
-	return float64(from + rand.Intn(to-from+1))
-}
-
-func Rand__1(from, to float64) float64 {
-	if to < from {
-		to = from
-	}
-	return rand.Float64()*(to-from) + from
-}
-
-// -------------------------------------------------------------------------------------
-// Math Utilities
-
-// Iround returns an integer value, while math.Round returns a float value.
-func Iround(v float64) int {
-	if v >= 0 {
-		return int(v + 0.5)
-	}
-	return int(v - 0.5)
-}
+// =============================================================================
+// Private - Math Utilities
+// =============================================================================
 
 // clampFloat64 constrains a value to be within the specified range.
 func clampFloat64(val, min, max float64) float64 {
@@ -190,12 +252,9 @@ func clampFloat64(val, min, max float64) float64 {
 	return val
 }
 
-// -------------------------------------------------------------------------------------
-// Color Utilities
-
-type Color struct {
-	r, g, b, a float64
-}
+// =============================================================================
+// Private - Color Utilities
+// =============================================================================
 
 func toMathfColor(c Color) mathf.Color {
 	return mathf.Color{R: c.r, G: c.g, B: c.b, A: c.a}
@@ -205,24 +264,9 @@ func toSpxColor(c mathf.Color) Color {
 	return Color{c.R, c.G, c.B, c.A}
 }
 
-// HSB creates a color from HSB values.
-// h, s, b in range [0, 100], just like Scratch
-func HSB(h, s, b float64) Color {
-	color := mathf.NewColorHSV(h*3.6, s/100, b/100)
-	color.A = 1
-	return toSpxColor(color)
-}
-
-// HSBA creates a color from HSBA values.
-// h, s, b, a in range [0, 100], just like Scratch
-func HSBA(h, s, b, a float64) Color {
-	color := HSB(h, s, b)
-	color.a = a / 100
-	return color
-}
-
-// -------------------------------------------------------------------------------------
-// Type Conversion Utilities
+// =============================================================================
+// Private - Type Conversion Utilities
+// =============================================================================
 
 func f64Tof32(slice []float64) []float32 {
 	return enginewrap.F64Tof32(slice)
@@ -232,9 +276,9 @@ func f32Tof64(slice []float32) []float64 {
 	return enginewrap.F32Tof64(slice)
 }
 
-// -----------------------------------------------------------------------------
-// Configuration Parsing Utilities
-// -----------------------------------------------------------------------------
+// =============================================================================
+// Private - Configuration Parsing Utilities
+// =============================================================================
 
 // parseDefaultValue parses a pointer value with a default fallback.
 func parseDefaultValue[T any](pval *T, defaultValue T) T {
@@ -244,12 +288,12 @@ func parseDefaultValue[T any](pval *T, defaultValue T) T {
 	return *pval
 }
 
-// parseLayerMaskValue parses layer mask value
+// parseLayerMaskValue parses layer mask value.
 func parseLayerMaskValue(pval *int64) int64 {
 	return parseDefaultValue(pval, 1)
 }
 
-// parseColliderShapeType parses collider shape type from string
+// parseColliderShapeType parses collider shape type from string.
 func parseColliderShapeType(typeName string, defaultValue int64) int64 {
 	switch typeName {
 	case "none":
@@ -272,7 +316,7 @@ func parseColliderShapeType(typeName string, defaultValue int64) int64 {
 	}
 }
 
-// parsePixelCollisionPrecision parses the precision string and returns the corresponding enum value
+// parsePixelCollisionPrecision parses the precision string and returns the corresponding enum value.
 func parsePixelCollisionPrecision(precision *string) pixelCollisionPrecision {
 	if precision == nil {
 		return pixelCollisionPrecisionLow // default
@@ -314,19 +358,9 @@ func toRotationStyle(style string) RotationStyle {
 	}
 }
 
-// -------------------------------------------------------------------------------------
-// Exit Functions
-
-func Exit__0(code int) {
-	engine.RequestExit(int64(code))
-}
-
-func Exit__1() {
-	engine.RequestExit(0)
-}
-
-// -------------------------------------------------------------------------------------
-// Panic Functions
+// =============================================================================
+// Private - Panic Functions
+// =============================================================================
 
 func doPanic(args ...any) {
 	engine.Panic(args...)

@@ -26,208 +26,10 @@ import (
 	"github.com/goplus/spx/v2/internal/timer"
 )
 
-// -------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+// Public interfaces and types
+// -----------------------------------------------------------------------------
 
-type eventSink struct {
-	pthis threadObj
-	cond  func(any) bool
-	sink  any
-}
-
-func doDeleteClone(sinks []eventSink, this any) []eventSink {
-	n := 0
-	for _, sink := range sinks {
-		if sink.pthis != this {
-			sinks[n] = sink
-			n++
-		}
-	}
-	clear(sinks[n:])
-	return sinks[:n]
-}
-
-func asyncCall(sinks []eventSink, start bool, data any, doSth func(*eventSink)) {
-	for _, ev := range sinks {
-		if ev.cond == nil || ev.cond(data) {
-			gco.CreateAndStart(start, ev.pthis, func(coroutine.Thread) int {
-				doSth(&ev)
-				return 0
-			})
-		}
-	}
-}
-
-func syncCall(sinks []eventSink, data any, doSth func(*eventSink)) {
-	var wg sync.WaitGroup
-	for _, ev := range sinks {
-		if ev.cond == nil || ev.cond(data) {
-			wg.Add(1)
-			gco.CreateAndStart(false, ev.pthis, func(coroutine.Thread) int {
-				defer wg.Done()
-				doSth(&ev)
-				return 0
-			})
-		}
-	}
-	engine.WaitToDo(wg.Wait)
-}
-
-func call(sinks []eventSink, wait bool, data any, doSth func(*eventSink)) {
-	if wait {
-		syncCall(sinks, data, doSth)
-	} else {
-		asyncCall(sinks, false, data, doSth)
-	}
-}
-
-// -------------------------------------------------------------------------------------
-
-type eventSinkMgr struct {
-	allWhenStart           []eventSink
-	allWhenAwake           []eventSink
-	allWhenKeyPressed      []eventSink
-	allWhenSwipe           []eventSink
-	allWhenIReceive        []eventSink
-	allWhenBackdropChanged []eventSink
-	allWhenCloned          []eventSink
-	allWhenTouchStart      []eventSink
-	allWhenTouching        []eventSink
-	allWhenTouchEnd        []eventSink
-	allWhenClick           []eventSink
-	allWhenTimer           []eventSink
-	calledStart            bool
-}
-
-func (p *eventSinkMgr) reset() {
-	p.allWhenStart = nil
-	p.allWhenAwake = nil
-	p.allWhenKeyPressed = nil
-	p.allWhenSwipe = nil
-	p.allWhenIReceive = nil
-	p.allWhenBackdropChanged = nil
-	p.allWhenCloned = nil
-	p.allWhenTouchStart = nil
-	p.allWhenTouching = nil
-	p.allWhenTouchEnd = nil
-	p.allWhenClick = nil
-	p.allWhenTimer = nil
-	p.calledStart = false
-}
-
-func (p *eventSinkMgr) doDeleteClone(this any) {
-	p.allWhenAwake = doDeleteClone(p.allWhenAwake, this)
-	p.allWhenStart = doDeleteClone(p.allWhenStart, this)
-	p.allWhenKeyPressed = doDeleteClone(p.allWhenKeyPressed, this)
-	p.allWhenSwipe = doDeleteClone(p.allWhenSwipe, this)
-	p.allWhenIReceive = doDeleteClone(p.allWhenIReceive, this)
-	p.allWhenBackdropChanged = doDeleteClone(p.allWhenBackdropChanged, this)
-	p.allWhenCloned = doDeleteClone(p.allWhenCloned, this)
-	p.allWhenTouchStart = doDeleteClone(p.allWhenTouchStart, this)
-	p.allWhenTouching = doDeleteClone(p.allWhenTouching, this)
-	p.allWhenTouchEnd = doDeleteClone(p.allWhenTouchEnd, this)
-	p.allWhenClick = doDeleteClone(p.allWhenClick, this)
-	p.allWhenTimer = doDeleteClone(p.allWhenTimer, this)
-}
-
-func (p *eventSinkMgr) doWhenStart() {
-	if !p.calledStart {
-		p.calledStart = true
-		asyncCall(p.allWhenStart, false, nil, func(ev *eventSink) {
-			if debugEvent {
-				spxlog.Debug("==> onStart: %s", nameOf(ev.pthis))
-			}
-			ev.sink.(func())()
-		})
-	}
-}
-
-func (p *eventSinkMgr) doWhenAwake(this threadObj) {
-	syncCall(p.allWhenAwake, this, func(ev *eventSink) {
-		if debugEvent {
-			spxlog.Debug("==> onAwake: %s", nameOf(ev.pthis))
-		}
-		ev.sink.(func())()
-	})
-}
-
-func (p *eventSinkMgr) doWhenTimer(time float64) {
-	asyncCall(p.allWhenTimer, false, time, func(ev *eventSink) {
-		ev.sink.(func(float64))(time)
-	})
-}
-
-func (p *eventSinkMgr) doWhenKeyPressed(key Key) {
-	asyncCall(p.allWhenKeyPressed, false, key, func(ev *eventSink) {
-		ev.sink.(func(Key))(key)
-	})
-}
-
-func (p *eventSinkMgr) doWhenSwipe(direction Direction, this threadObj) {
-	asyncCall(p.allWhenSwipe, false, direction, func(ev *eventSink) {
-		if ev.pthis == this {
-			ev.sink.(func(Direction))(direction)
-		}
-	})
-}
-
-func (p *eventSinkMgr) doWhenClick(this threadObj) {
-	asyncCall(p.allWhenClick, false, this, func(ev *eventSink) {
-		if debugEvent {
-			spxlog.Debug("==> onClick: %s", nameOf(this))
-		}
-		ev.sink.(func())()
-	})
-}
-
-func (p *eventSinkMgr) doWhenTouchStart(this threadObj, obj *SpriteImpl) {
-	asyncCall(p.allWhenTouchStart, false, this, func(ev *eventSink) {
-		if debugEvent {
-			spxlog.Debug("===> onTouchStart: %s, %s", nameOf(this), obj.name)
-		}
-		ev.sink.(func(Sprite))(obj.sprite)
-	})
-}
-
-func (p *eventSinkMgr) doWhenTouching(this threadObj, obj *SpriteImpl) {
-	asyncCall(p.allWhenTouching, false, this, func(ev *eventSink) {
-		if debugEvent {
-			spxlog.Debug("==> onTouching: %s, %s", nameOf(this), obj.name)
-		}
-		ev.sink.(func(Sprite))(obj.sprite)
-	})
-}
-
-func (p *eventSinkMgr) doWhenTouchEnd(this threadObj, obj *SpriteImpl) {
-	asyncCall(p.allWhenTouchEnd, false, this, func(ev *eventSink) {
-		if debugEvent {
-			spxlog.Debug("===> onTouchEnd: %s, %s", nameOf(this), obj.name)
-		}
-		ev.sink.(func(Sprite))(obj.sprite)
-	})
-}
-
-func (p *eventSinkMgr) doWhenCloned(this threadObj, data any) {
-	asyncCall(p.allWhenCloned, true, this, func(ev *eventSink) {
-		if debugEvent {
-			spxlog.Debug("==> onCloned: %s", nameOf(this))
-		}
-		ev.sink.(func(any))(data)
-	})
-}
-
-func (p *eventSinkMgr) doWhenIReceive(msg string, data any, wait bool) {
-	call(p.allWhenIReceive, wait, msg, func(ev *eventSink) {
-		ev.sink.(func(string, any))(msg, data)
-	})
-}
-
-func (p *eventSinkMgr) doWhenBackdropChanged(name BackdropName, wait bool) {
-	call(p.allWhenBackdropChanged, wait, name, func(ev *eventSink) {
-		ev.sink.(func(BackdropName))(name)
-	})
-}
-
-// -------------------------------------------------------------------------------------
 type IEventSinks interface {
 	OnAnyKey(onKey func(key Key))
 	OnBackdrop__0(onBackdrop func(name BackdropName))
@@ -244,58 +46,25 @@ type IEventSinks interface {
 	Stop(kind StopKind)
 }
 
-type eventSinks struct {
-	*eventSinkMgr
-	pthis threadObj
-}
+type StopKind int
 
-func nameOf(this any) string {
-	if spr, ok := this.(*SpriteImpl); ok {
-		return spr.name
-	}
-	if _, ok := this.(*Game); ok {
-		return "Game"
-	}
-	engine.Panic("eventSinks: unexpected this object")
-	return ""
-}
+const (
+	AllStop              StopKind = All  // -3: stop all scripts of stage/sprites and abort this script
+	AllOtherScripts      StopKind = -100 // stop all other scripts
+	AllSprites           StopKind = -101 // stop all scripts of sprites
+	ThisSprite           StopKind = -102 // stop all scripts of this sprite
+	ThisScript           StopKind = -103 // abort this script
+	OtherScriptsInSprite StopKind = -104 // stop other scripts of this sprite
+)
 
-func (p *eventSinks) init(mgr *eventSinkMgr, this threadObj) {
-	p.eventSinkMgr = mgr
-	p.pthis = this
-}
-
-func (p *eventSinks) initFrom(src *eventSinks, this threadObj) {
-	p.eventSinkMgr = src.eventSinkMgr
-	p.pthis = this
-}
-
-func (p *eventSinks) doDeleteClone() {
-	p.eventSinkMgr.doDeleteClone(p.pthis)
-}
-
-// doWhenSwipe triggers swipe events for this specific object
-func (p *eventSinks) doWhenSwipe(direction Direction, target threadObj) {
-	p.eventSinkMgr.doWhenSwipe(direction, target)
-}
-
-// -------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+// Public event handler registration methods
+// -----------------------------------------------------------------------------
 
 func (p *eventSinks) OnStart(onStart func()) {
 	p.allWhenStart = append(p.allWhenStart, eventSink{
 		pthis: p.pthis,
 		sink:  onStart,
-	})
-}
-
-func (p *eventSinks) onAwake(onAwake func()) {
-	pthis := p.pthis
-	p.allWhenAwake = append(p.allWhenAwake, eventSink{
-		pthis: p.pthis,
-		sink:  onAwake,
-		cond: func(data any) bool {
-			return data == nil || data == pthis
-		},
 	})
 }
 
@@ -434,19 +203,6 @@ func (p *eventSinks) OnBackdrop__1(name BackdropName, onBackdrop func()) {
 	})
 }
 
-// -------------------------------------------------------------------------------------
-
-type StopKind int
-
-const (
-	AllStop              StopKind = All  // -3: stop all scripts of stage/sprites and abort this script
-	AllOtherScripts      StopKind = -100 // stop all other scripts
-	AllSprites           StopKind = -101 // stop all scripts of sprites
-	ThisSprite           StopKind = -102 // stop all scripts of this sprite
-	ThisScript           StopKind = -103 // abort this script
-	OtherScriptsInSprite StopKind = -104 // stop other scripts of this sprite
-)
-
 func (p *eventSinks) Stop(kind StopKind) {
 	var filter func(th coroutine.Thread) bool
 	switch kind {
@@ -479,6 +235,260 @@ func (p *eventSinks) Stop(kind StopKind) {
 	gco.StopIf(filter)
 }
 
+// -----------------------------------------------------------------------------
+// Private types and implementation
+// -----------------------------------------------------------------------------
+
+type eventSink struct {
+	pthis threadObj
+	cond  func(any) bool
+	sink  any
+}
+
+type eventSinks struct {
+	*eventSinkMgr
+	pthis threadObj
+}
+
+type eventSinkMgr struct {
+	allWhenStart           []eventSink
+	allWhenAwake           []eventSink
+	allWhenKeyPressed      []eventSink
+	allWhenSwipe           []eventSink
+	allWhenIReceive        []eventSink
+	allWhenBackdropChanged []eventSink
+	allWhenCloned          []eventSink
+	allWhenTouchStart      []eventSink
+	allWhenTouching        []eventSink
+	allWhenTouchEnd        []eventSink
+	allWhenClick           []eventSink
+	allWhenTimer           []eventSink
+	calledStart            bool
+}
+
+// -----------------------------------------------------------------------------
+// Private event handler methods
+// -----------------------------------------------------------------------------
+
+func (p *eventSinks) init(mgr *eventSinkMgr, this threadObj) {
+	p.eventSinkMgr = mgr
+	p.pthis = this
+}
+
+func (p *eventSinks) initFrom(src *eventSinks, this threadObj) {
+	p.eventSinkMgr = src.eventSinkMgr
+	p.pthis = this
+}
+
+func (p *eventSinks) doDeleteClone() {
+	p.eventSinkMgr.doDeleteClone(p.pthis)
+}
+
+func (p *eventSinks) doWhenSwipe(direction Direction, target threadObj) {
+	p.eventSinkMgr.doWhenSwipe(direction, target)
+}
+
+func (p *eventSinks) onAwake(onAwake func()) {
+	pthis := p.pthis
+	p.allWhenAwake = append(p.allWhenAwake, eventSink{
+		pthis: p.pthis,
+		sink:  onAwake,
+		cond: func(data any) bool {
+			return data == nil || data == pthis
+		},
+	})
+}
+
+func (p *eventSinkMgr) reset() {
+	p.allWhenStart = nil
+	p.allWhenAwake = nil
+	p.allWhenKeyPressed = nil
+	p.allWhenSwipe = nil
+	p.allWhenIReceive = nil
+	p.allWhenBackdropChanged = nil
+	p.allWhenCloned = nil
+	p.allWhenTouchStart = nil
+	p.allWhenTouching = nil
+	p.allWhenTouchEnd = nil
+	p.allWhenClick = nil
+	p.allWhenTimer = nil
+	p.calledStart = false
+}
+
+func (p *eventSinkMgr) doDeleteClone(this any) {
+	p.allWhenAwake = doDeleteClone(p.allWhenAwake, this)
+	p.allWhenStart = doDeleteClone(p.allWhenStart, this)
+	p.allWhenKeyPressed = doDeleteClone(p.allWhenKeyPressed, this)
+	p.allWhenSwipe = doDeleteClone(p.allWhenSwipe, this)
+	p.allWhenIReceive = doDeleteClone(p.allWhenIReceive, this)
+	p.allWhenBackdropChanged = doDeleteClone(p.allWhenBackdropChanged, this)
+	p.allWhenCloned = doDeleteClone(p.allWhenCloned, this)
+	p.allWhenTouchStart = doDeleteClone(p.allWhenTouchStart, this)
+	p.allWhenTouching = doDeleteClone(p.allWhenTouching, this)
+	p.allWhenTouchEnd = doDeleteClone(p.allWhenTouchEnd, this)
+	p.allWhenClick = doDeleteClone(p.allWhenClick, this)
+	p.allWhenTimer = doDeleteClone(p.allWhenTimer, this)
+}
+
+func (p *eventSinkMgr) doWhenStart() {
+	if !p.calledStart {
+		p.calledStart = true
+		asyncCall(p.allWhenStart, false, nil, func(ev *eventSink) {
+			if debugEvent {
+				spxlog.Debug("==> onStart: %s", nameOf(ev.pthis))
+			}
+			ev.sink.(func())()
+		})
+	}
+}
+
+func (p *eventSinkMgr) doWhenAwake(this threadObj) {
+	syncCall(p.allWhenAwake, this, func(ev *eventSink) {
+		if debugEvent {
+			spxlog.Debug("==> onAwake: %s", nameOf(ev.pthis))
+		}
+		ev.sink.(func())()
+	})
+}
+
+func (p *eventSinkMgr) doWhenTimer(time float64) {
+	asyncCall(p.allWhenTimer, false, time, func(ev *eventSink) {
+		ev.sink.(func(float64))(time)
+	})
+}
+
+func (p *eventSinkMgr) doWhenKeyPressed(key Key) {
+	asyncCall(p.allWhenKeyPressed, false, key, func(ev *eventSink) {
+		ev.sink.(func(Key))(key)
+	})
+}
+
+func (p *eventSinkMgr) doWhenSwipe(direction Direction, this threadObj) {
+	asyncCall(p.allWhenSwipe, false, direction, func(ev *eventSink) {
+		if ev.pthis == this {
+			ev.sink.(func(Direction))(direction)
+		}
+	})
+}
+
+func (p *eventSinkMgr) doWhenClick(this threadObj) {
+	asyncCall(p.allWhenClick, false, this, func(ev *eventSink) {
+		if debugEvent {
+			spxlog.Debug("==> onClick: %s", nameOf(this))
+		}
+		ev.sink.(func())()
+	})
+}
+
+func (p *eventSinkMgr) doWhenTouchStart(this threadObj, obj *SpriteImpl) {
+	asyncCall(p.allWhenTouchStart, false, this, func(ev *eventSink) {
+		if debugEvent {
+			spxlog.Debug("===> onTouchStart: %s, %s", nameOf(this), obj.name)
+		}
+		ev.sink.(func(Sprite))(obj.sprite)
+	})
+}
+
+func (p *eventSinkMgr) doWhenTouching(this threadObj, obj *SpriteImpl) {
+	asyncCall(p.allWhenTouching, false, this, func(ev *eventSink) {
+		if debugEvent {
+			spxlog.Debug("==> onTouching: %s, %s", nameOf(this), obj.name)
+		}
+		ev.sink.(func(Sprite))(obj.sprite)
+	})
+}
+
+func (p *eventSinkMgr) doWhenTouchEnd(this threadObj, obj *SpriteImpl) {
+	asyncCall(p.allWhenTouchEnd, false, this, func(ev *eventSink) {
+		if debugEvent {
+			spxlog.Debug("===> onTouchEnd: %s, %s", nameOf(this), obj.name)
+		}
+		ev.sink.(func(Sprite))(obj.sprite)
+	})
+}
+
+func (p *eventSinkMgr) doWhenCloned(this threadObj, data any) {
+	asyncCall(p.allWhenCloned, true, this, func(ev *eventSink) {
+		if debugEvent {
+			spxlog.Debug("==> onCloned: %s", nameOf(this))
+		}
+		ev.sink.(func(any))(data)
+	})
+}
+
+func (p *eventSinkMgr) doWhenIReceive(msg string, data any, wait bool) {
+	call(p.allWhenIReceive, wait, msg, func(ev *eventSink) {
+		ev.sink.(func(string, any))(msg, data)
+	})
+}
+
+func (p *eventSinkMgr) doWhenBackdropChanged(name BackdropName, wait bool) {
+	call(p.allWhenBackdropChanged, wait, name, func(ev *eventSink) {
+		ev.sink.(func(BackdropName))(name)
+	})
+}
+
+// -----------------------------------------------------------------------------
+// Private utility functions
+// -----------------------------------------------------------------------------
+
+func nameOf(this any) string {
+	if spr, ok := this.(*SpriteImpl); ok {
+		return spr.name
+	}
+	if _, ok := this.(*Game); ok {
+		return "Game"
+	}
+	engine.Panic("eventSinks: unexpected this object")
+	return ""
+}
+
+func doDeleteClone(sinks []eventSink, this any) []eventSink {
+	n := 0
+	for _, sink := range sinks {
+		if sink.pthis != this {
+			sinks[n] = sink
+			n++
+		}
+	}
+	clear(sinks[n:])
+	return sinks[:n]
+}
+
+func asyncCall(sinks []eventSink, start bool, data any, doSth func(*eventSink)) {
+	for _, ev := range sinks {
+		if ev.cond == nil || ev.cond(data) {
+			gco.CreateAndStart(start, ev.pthis, func(coroutine.Thread) int {
+				doSth(&ev)
+				return 0
+			})
+		}
+	}
+}
+
+func syncCall(sinks []eventSink, data any, doSth func(*eventSink)) {
+	var wg sync.WaitGroup
+	for _, ev := range sinks {
+		if ev.cond == nil || ev.cond(data) {
+			wg.Add(1)
+			gco.CreateAndStart(false, ev.pthis, func(coroutine.Thread) int {
+				defer wg.Done()
+				doSth(&ev)
+				return 0
+			})
+		}
+	}
+	engine.WaitToDo(wg.Wait)
+}
+
+func call(sinks []eventSink, wait bool, data any, doSth func(*eventSink)) {
+	if wait {
+		syncCall(sinks, data, doSth)
+	} else {
+		asyncCall(sinks, false, data, doSth)
+	}
+}
+
 func isGame(obj threadObj) bool {
 	_, ok := obj.(*Game)
 	return ok
@@ -488,5 +498,3 @@ func isSprite(obj threadObj) bool {
 	_, ok := obj.(*SpriteImpl)
 	return ok
 }
-
-// -------------------------------------------------------------------------------------

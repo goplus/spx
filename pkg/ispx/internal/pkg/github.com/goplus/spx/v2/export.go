@@ -40,8 +40,6 @@ func init() {
 			"github.com/goplus/spx/v2/internal/tools":           "tools",
 			"github.com/goplus/spx/v2/internal/ui":              "ui",
 			"github.com/goplus/spx/v2/pkg/gdspx/pkg/engine":     "engine",
-			"image/jpeg":    "jpeg",
-			"image/png":     "png",
 			"io":            "io",
 			"log":           "log",
 			"maps":          "maps",

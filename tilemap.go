@@ -29,7 +29,7 @@ import (
 	"github.com/goplus/spbase/mathf"
 )
 
-// DecoratorJSON represents the structure of decorator.json file (new format)
+// DecoratorJSON represents the structure of decorator.json file (new format).
 type DecoratorJSON struct {
 	Version    int                `json:"version"`
 	Decorators []tm.DecoratorNode `json:"decorators"`
@@ -56,7 +56,7 @@ func (p *gameTilemapMgr) init(g *Game, fs spxfs.Dir, tilemapPath string) {
 	p.loadMap(tilemapPath)
 }
 
-// loadDecoratorJSON loads decorator data from a separate decorator.json file
+// loadDecoratorJSON loads decorator data from a separate decorator.json file.
 func (p *gameTilemapMgr) loadDecoratorJSON(fs spxfs.Dir, decoratorPath string) {
 	var data DecoratorJSON
 	err := loadJson(&data, fs, decoratorPath)
@@ -71,14 +71,14 @@ func (p *gameTilemapMgr) hasData() bool {
 	return p.datas != nil || p.useNewLoader
 }
 
-// isNewFormat checks if the tilemap path is in the new format (directory path)
+// isNewFormat checks if the tilemap path is in the new format (directory path).
 // New format: path does NOT contain ".json" (e.g., "tilemaps/map1")
 // Old format: path contains ".json" (e.g., "tilemaps/map1.json")
 func (p *gameTilemapMgr) isNewFormat(tilemapPath string) bool {
 	return !strings.Contains(tilemapPath, ".json")
 }
 
-// loadMap loads a tilemap from the specified path
+// loadMap loads a tilemap from the specified path.
 // mapDir can be either:
 //   - A directory path (new format): "tilemaps/map1" -> uses C++ TileMapParser
 //   - A file path (old format): "tilemaps/map1.json" -> uses Go loader
@@ -144,7 +144,7 @@ func (p *gameTilemapMgr) unloadMap() {
 	p.useNewLoader = false
 }
 
-// getCurrentMap returns the name of the currently loaded tilemap
+// getCurrentMap returns the name of the currently loaded tilemap.
 func (p *gameTilemapMgr) getCurrentMap() string {
 	return p.currentMap
 }
@@ -177,7 +177,7 @@ func (p *gameTilemapMgr) loadDecoratorNodes(decorators []tm.DecoratorNode, tilem
 	}
 }
 
-// loadDecoratorsFromJSON loads decorators from the separate decorator.json file (new format)
+// loadDecoratorsFromJSON loads decorators from the separate decorator.json file (new format).
 func (p *gameTilemapMgr) loadDecoratorsFromJSON() {
 	if p.decoratorDatas == nil || len(p.decoratorDatas.Decorators) == 0 {
 		return
@@ -222,7 +222,7 @@ func (p *gameTilemapMgr) parseTilemap() {
 	p.calcWorldSize()
 }
 
-// calcWorldSize calculates and updates world size based on actual tile distribution in tilemap
+// calcWorldSize calculates and updates world size based on actual tile distribution in tilemap.
 func (p *gameTilemapMgr) calcWorldSize() {
 	if p.datas == nil || len(p.datas.TileMap.Layers) == 0 {
 		fmt.Println("[TILEMAP DEBUG] No tilemap data or layers, skipping world size update")
@@ -280,7 +280,7 @@ func (p *gameTilemapMgr) calcWorldSize() {
 	}
 }
 
-// parseTileDataForBounds parses tile data for boundary calculation (copied logic from internal/tilemap package)
+// parseTileDataForBounds parses tile data for boundary calculation (copied logic from internal/tilemap package).
 func (p *gameTilemapMgr) parseTileDataForBounds(tileData []int32) []mathf.Vec2i {
 	tileCount := len(tileData) / 5
 	tiles := make([]mathf.Vec2i, 0, tileCount)

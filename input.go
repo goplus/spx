@@ -337,7 +337,7 @@ func (p *inputManager) canTriggerClickEvent(id gdx.Object) bool {
 // -----------------------------------------------------------------------------
 // inputSwipeRecognizer methods
 
-// inputSwipeRecognizer handles swipe gesture detection
+// inputSwipeRecognizer handles swipe gesture detection.
 type inputSwipeRecognizer struct {
 	// Configuration parameters
 	timeToSwipe            float64 // Maximum swipe time in seconds
@@ -363,7 +363,7 @@ type inputSwipeRecognizer struct {
 	onSwipeCallback func(direction Direction, velocity float64, distance float64, startPos, endPos mathf.Vec2, targetSprite *SpriteImpl)
 }
 
-// initinputSwipeRecognizer initializes the swipe recognizer with default settings
+// initinputSwipeRecognizer initializes the swipe recognizer with default settings.
 func (sr *inputSwipeRecognizer) init() {
 	sr.timeToSwipe = 0.5 // 500ms default
 	sr.enableTimeLimit = true
@@ -373,7 +373,7 @@ func (sr *inputSwipeRecognizer) init() {
 	sr.points = make([]mathf.Vec2, 0, 50) // pre-allocate for better performance
 }
 
-// setSwipeConfig configures the swipe recognizer parameters
+// setSwipeConfig configures the swipe recognizer parameters.
 func (p *inputSwipeRecognizer) setSwipeConfig(timeToSwipe, minDistance, maxDistance float64) {
 	p.timeToSwipe = timeToSwipe
 	p.minimumDistance = minDistance
@@ -400,7 +400,7 @@ func (sr *inputSwipeRecognizer) stopTracking() {
 	sr.targetSprite = nil // Clear target sprite reference
 }
 
-// onMouseMove handles mouse movement during tracking
+// onMouseMove handles mouse movement during tracking.
 func (sr *inputSwipeRecognizer) onMouseMove(pos mathf.Vec2) {
 	if !sr.isTracking {
 		return
@@ -428,7 +428,7 @@ func (sr *inputSwipeRecognizer) onMouseMove(pos mathf.Vec2) {
 	}
 }
 
-// checkForSwipeCompletion checks if current gesture qualifies as a swipe
+// checkForSwipeCompletion checks if current gesture qualifies as a swipe.
 func (sr *inputSwipeRecognizer) checkForSwipeCompletion() bool {
 	if len(sr.points) < 2 {
 		return false

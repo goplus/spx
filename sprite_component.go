@@ -64,7 +64,7 @@ type spriteComponents struct {
 	bubble    *bubbleComponent // Optional: only allocated when Say/Think/Quote is used
 }
 
-// initComponents initializes all sprite components
+// initComponents initializes all sprite components.
 func (sc *spriteComponents) initComponents(sprite *SpriteImpl, spriteCfg *spriteConfig) {
 	sc.transform = &transformComponent{}
 	sc.transform.initialize(sprite, spriteCfg)

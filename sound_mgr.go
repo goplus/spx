@@ -144,5 +144,3 @@ func (p *soundMgr) changeVolume(soundObj engine.Object, delta float64) {
 	value := p.getVolume(soundObj) + delta
 	p.setVolume(soundObj, value)
 }
-
-// -------------------------------------------------------------------------------------

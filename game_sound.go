@@ -23,90 +23,16 @@ import (
 )
 
 // -----------------------------------------------------------------------------
-// Audio Configuration
-
-const (
-	defaultAudioMaxDist = 2000 // default maximum audio distance
-)
-
-// setupAudioConfig initializes audio configuration from project settings
-func (p *Game) setupAudioConfig(proj *projConfig) {
-	p.audioAttenuation = parseDefaultValue(proj.AudioAttenuation, 0)
-	p.audioMaxDistance = parseDefaultValue(proj.AudioMaxDistance, defaultAudioMaxDist)
-}
-
+// Public types
 // -----------------------------------------------------------------------------
-// Sound Types
 
 type sound *soundConfig
 
 type SoundName = string
 
 // -----------------------------------------------------------------------------
-// Sound Loading
-
-func (p *Game) loadSound(name SoundName) (media sound, err error) {
-	if media, ok := p.sounds.sounds[name]; ok {
-		return media, nil
-	}
-
-	spxlog.Debug("==> LoadSound: %s", name)
-	prefix := "sounds/" + name
-	media = new(soundConfig)
-	if err = loadJson(media, p.fs, prefix+"/index.json"); err != nil {
-		spxlog.Error("loadSound failed: %v", err)
-		return
-	}
-	media.Path = prefix + "/" + media.Path
-	p.sounds.sounds[name] = media
-	return
-}
-
+// Public sound control methods
 // -----------------------------------------------------------------------------
-// Sound Playback
-
-func (p *Game) playSound(sprite *engine.Sprite, audioId engine.Object, name SoundName, isLoop bool, attenuation, maxDistance float64) soundId {
-	m, err := p.loadSound(name)
-	if err != nil {
-		return invalidSoundId
-	}
-	return p.sounds.play(audioId, m, isLoop, false, sprite.Id, attenuation, maxDistance)
-}
-
-func (p *Game) playSoundAndWait(sprite *engine.Sprite, audioId engine.Object, name SoundName, attenuation, maxDistance float64) {
-	m, err := p.loadSound(name)
-	if err != nil {
-		return
-	}
-	p.sounds.play(audioId, m, false, true, sprite.Id, attenuation, maxDistance)
-}
-
-func (p *Game) withSound(name SoundName, action func(m sound)) {
-	m, err := p.loadSound(name)
-	if err != nil {
-		return
-	}
-	action(m)
-}
-
-func (p *Game) pauseSound(name SoundName) {
-	p.withSound(name, p.sounds.pause)
-}
-
-func (p *Game) resumeSound(name SoundName) {
-	p.withSound(name, p.sounds.resume)
-}
-
-func (p *Game) stopSound(name SoundName) {
-	p.withSound(name, p.sounds.stop)
-}
-
-func (p *Game) stopSoundInstance(instanceId soundId) {
-	p.sounds.stopInstance(instanceId)
-}
-
-// -----------------------------------------------------------------------------
-// Sound Control Methods
 
 func (p *Game) Volume() float64 {
 	p.checkSoundObj()
@@ -167,12 +93,6 @@ func (p *Game) ChangeSoundEffect(kind SoundEffectKind, delta float64) {
 	p.sounds.changeEffect(p.soundObj, kind, delta)
 }
 
-func (p *Game) checkSoundObj() {
-	if p.soundObj == 0 {
-		p.soundObj = p.sounds.allocSound()
-	}
-}
-
 func (p *Game) ClearSoundEffects() {
 	panic("todo")
 }
@@ -189,9 +109,81 @@ func (p *Game) Loudness() float64 {
 }
 
 // -----------------------------------------------------------------------------
-// Sound Resource Management
+// Private audio configuration
+// -----------------------------------------------------------------------------
 
-// releaseGameAudio releases the game's audio resources
+const (
+	defaultAudioMaxDist = 2000 // default maximum audio distance
+)
+
+func (p *Game) setupAudioConfig(proj *projConfig) {
+	p.audioAttenuation = parseDefaultValue(proj.AudioAttenuation, 0)
+	p.audioMaxDistance = parseDefaultValue(proj.AudioMaxDistance, defaultAudioMaxDist)
+}
+
+// -----------------------------------------------------------------------------
+// Private sound loading and playback
+// -----------------------------------------------------------------------------
+
+func (p *Game) loadSound(name SoundName) (media sound, err error) {
+	if media, ok := p.sounds.sounds[name]; ok {
+		return media, nil
+	}
+
+	spxlog.Debug("==> LoadSound: %s", name)
+	prefix := "sounds/" + name
+	media = new(soundConfig)
+	if err = loadJson(media, p.fs, prefix+"/index.json"); err != nil {
+		spxlog.Error("loadSound failed: %v", err)
+		return
+	}
+	media.Path = prefix + "/" + media.Path
+	p.sounds.sounds[name] = media
+	return
+}
+
+func (p *Game) playSound(sprite *engine.Sprite, audioId engine.Object, name SoundName, isLoop bool, attenuation, maxDistance float64) soundId {
+	m, err := p.loadSound(name)
+	if err != nil {
+		return invalidSoundId
+	}
+	return p.sounds.play(audioId, m, isLoop, false, sprite.Id, attenuation, maxDistance)
+}
+
+func (p *Game) playSoundAndWait(sprite *engine.Sprite, audioId engine.Object, name SoundName, attenuation, maxDistance float64) {
+	m, err := p.loadSound(name)
+	if err != nil {
+		return
+	}
+	p.sounds.play(audioId, m, false, true, sprite.Id, attenuation, maxDistance)
+}
+
+func (p *Game) withSound(name SoundName, action func(m sound)) {
+	m, err := p.loadSound(name)
+	if err != nil {
+		return
+	}
+	action(m)
+}
+
+func (p *Game) pauseSound(name SoundName) {
+	p.withSound(name, p.sounds.pause)
+}
+
+func (p *Game) resumeSound(name SoundName) {
+	p.withSound(name, p.sounds.resume)
+}
+
+func (p *Game) stopSound(name SoundName) {
+	p.withSound(name, p.sounds.stop)
+}
+
+func (p *Game) checkSoundObj() {
+	if p.soundObj == 0 {
+		p.soundObj = p.sounds.allocSound()
+	}
+}
+
 func (p *Game) releaseGameAudio() {
 	p.sounds.stopAll()
 	if p.soundObj != 0 {

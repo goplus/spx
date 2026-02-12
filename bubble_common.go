@@ -25,14 +25,14 @@ import (
 // Common Bubble System - Shared functionality for Say/Think/Quote bubbles
 // -------------------------------------------------------------------------------------
 
-// bubbleBase provides common functionality for all bubble types
+// bubbleBase provides common functionality for all bubble types.
 type bubbleBase struct {
 	sprite  *SpriteImpl
 	camera  *cameraImpl
 	isDirty bool
 }
 
-// checkNeedsUpdate checks if the bubble needs to be refreshed
+// checkNeedsUpdate checks if the bubble needs to be refreshed.
 func (b *bubbleBase) checkNeedsUpdate() bool {
 	if !b.sprite.Visible() {
 		return false
@@ -40,7 +40,7 @@ func (b *bubbleBase) checkNeedsUpdate() bool {
 	return b.isDirty || b.sprite.isDirty || b.camera.isDirty
 }
 
-// getBounds returns the sprite's bounds information
+// getBounds returns the sprite's bounds information.
 func (b *bubbleBase) getBounds() (center, size mathf.Vec2) {
 	bound := b.sprite.bounds()
 	center = bound.Center()
@@ -48,17 +48,17 @@ func (b *bubbleBase) getBounds() (center, size mathf.Vec2) {
 	return
 }
 
-// markClean marks the bubble as no longer needing a refresh
+// markClean marks the bubble as no longer needing a refresh.
 func (b *bubbleBase) markClean() {
 	b.isDirty = false
 }
 
-// markDirty marks the bubble as needing a refresh
+// markDirty marks the bubble as needing a refresh.
 func (b *bubbleBase) markDirty() {
 	b.isDirty = true
 }
 
-// waitAndStop is a helper function for waiting and then stopping a bubble
+// waitAndStop is a helper function for waiting and then stopping a bubble.
 func waitAndStop(secs float64, stopFunc func()) {
 	engine.Wait(secs)
 	stopFunc()

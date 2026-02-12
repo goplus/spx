@@ -44,8 +44,6 @@ func (pself *textBubble) refresh() {
 	pself.panel.SetText(pself.sprite.g.getWindowSize(), center, size, pself.msg, pself.style)
 }
 
-// -------------------------------------------------------------------------------------
-
 func (p *SpriteImpl) sayOrThink(msg any, style int) {
 	msgStr, ok := msg.(string)
 	if !ok {

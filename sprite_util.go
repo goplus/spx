@@ -57,7 +57,7 @@ func spriteOf(sprite Sprite) *SpriteImpl {
 // Boundary and Collision Detection Utilities
 // -----------------------------------------------------------------------------
 
-// bounds returns the bounding rectangle of the sprite
+// bounds returns the bounding rectangle of the sprite.
 func (p *SpriteImpl) bounds() *mathf.Rect2 {
 	if !p.isVisible {
 		return nil
@@ -75,13 +75,13 @@ func (p *SpriteImpl) bounds() *mathf.Rect2 {
 	}
 }
 
-// adjustPositionAndGetDimensions calculates dimensions and adjusts position for physics trigger offset
+// adjustPositionAndGetDimensions calculates dimensions and adjusts position for physics trigger offset.
 func (p *SpriteImpl) adjustPositionAndGetDimensions(x, y *float64) (width, height float64) {
 	triggerInfo := p.physics().getTriggerInfo()
 
 	if triggerInfo.Type == physicsColliderNone {
 		// Use costume dimensions
-		wi, hi := p.costumes[p.costumeIndex_].getSize()
+		wi, hi := p.costumes[p.costumeIndex].getSize()
 		return float64(wi) * p.scale, float64(hi) * p.scale
 	}
 
@@ -128,7 +128,7 @@ func (p *SpriteImpl) touching(obj any) bool {
 	panic("Touching: unexpected input")
 }
 
-// touchingSprite checks if src sprite is touching dst sprite
+// touchingSprite checks if src sprite is touching dst sprite.
 func touchingSprite(dst, src *SpriteImpl) bool {
 	if !src.isVisible || src.isDying {
 		return false
@@ -137,7 +137,7 @@ func touchingSprite(dst, src *SpriteImpl) bool {
 	return ret
 }
 
-// touchPoint checks if a point touches the sprite
+// touchPoint checks if a point touches the sprite.
 func (p *SpriteImpl) touchPoint(x, y float64) bool {
 	if p.syncSprite == nil {
 		return false
@@ -145,7 +145,7 @@ func (p *SpriteImpl) touchPoint(x, y float64) bool {
 	return spriteMgr.CheckCollisionWithPoint(p.syncSprite.GetId(), mathf.NewVec2(x, y), true)
 }
 
-// touchingColor checks if sprite is touching a specific color
+// touchingColor checks if sprite is touching a specific color.
 func (p *SpriteImpl) touchingColor(color mathf.Color) bool {
 	if p.syncSprite == nil {
 		return false
@@ -153,7 +153,7 @@ func (p *SpriteImpl) touchingColor(color mathf.Color) bool {
 	return spriteMgr.CheckCollisionByColor(p.syncSprite.GetId(), color, colorThreshold, alphaThreshold)
 }
 
-// touchingSprite checks if sprite is touching another sprite
+// touchingSprite checks if sprite is touching another sprite.
 func (p *SpriteImpl) touchingSprite(dst *SpriteImpl) bool {
 	if p.syncSprite == nil || dst.syncSprite == nil {
 		return false
@@ -161,7 +161,7 @@ func (p *SpriteImpl) touchingSprite(dst *SpriteImpl) bool {
 	return spriteMgr.CheckCollisionWithSprite(p.syncSprite.GetId(), dst.syncSprite.GetId(), alphaThreshold, !enabledPhysics)
 }
 
-// checkTouchingScreen checks which edges of the screen the sprite is touching
+// checkTouchingScreen checks which edges of the screen the sprite is touching.
 func (p *SpriteImpl) checkTouchingScreen(where int) (touching int) {
 	if p.syncSprite == nil {
 		return 0
@@ -194,9 +194,9 @@ func (p *SpriteImpl) ShowVar(name string) {
 // Render Offset and Transformation Utilities
 // -----------------------------------------------------------------------------
 
-// getRenderOffset calculates the render offset for the sprite
+// getRenderOffset calculates the render offset for the sprite.
 func getRenderOffset(p *SpriteImpl) (float64, float64) {
-	cs := p.costumes[p.costumeIndex_]
+	cs := p.costumes[p.costumeIndex]
 	pivot := p.getPivot()
 	x, y := -((cs.center.X)/float64(cs.bitmapResolution)+pivot.X)*p.scale,
 		((cs.center.Y)/float64(cs.bitmapResolution)-pivot.Y)*p.scale
@@ -210,7 +210,7 @@ func getRenderOffset(p *SpriteImpl) (float64, float64) {
 	return x, y
 }
 
-// getXYWithRenderOffset returns the sprite's XY position with render offset applied
+// getXYWithRenderOffset returns the sprite's XY position with render offset applied.
 func (p *SpriteImpl) getXYWithRenderOffset() (x, y float64) {
 	x, y = p.getXY()
 	ox, oy := getRenderOffset(p)
@@ -231,39 +231,39 @@ func revertRenderOffset(p *SpriteImpl, cx, cy *float64) {
 	*cy = *cy - y
 }
 
-// getRenderRotationAndScale calculates the render rotation and scale values (scaleX and scaleY)
+// getRenderRotationAndScale calculates the render rotation and scale values (scaleX and scaleY).
 func getRenderRotationAndScale(p *SpriteImpl) (rotation, scaleX, scaleY float64) {
 	transform := p.transform()
 	if transform.rotationStyle == None {
 		return 0, 1.0, 1.0
 	}
-	cs := p.costumes[p.costumeIndex_]
-	degree := p.Heading() + cs.faceRight
-	degree -= 90
+	cs := p.costumes[p.costumeIndex]
+	rotation = p.Heading() + cs.faceRight
+	rotation -= 90
 	scaleX = 1.0
 	scaleY = 1.0
 	if transform.rotationStyle == LeftRight {
-		degree = 0
+		rotation = 0
 		isFlip := transform.direction < 0
 		if isFlip {
 			scaleX = -1.0
 		}
 	}
-	return degree, scaleX, scaleY
+	return rotation, scaleX, scaleY
 }
 
 // -----------------------------------------------------------------------------
 // Costume Boundary Calculation
 // -----------------------------------------------------------------------------
 
-// syncGetCostumeBoundByAlpha gets costume boundary by alpha (sync version)
+// syncGetCostumeBoundByAlpha gets costume boundary by alpha (sync version).
 func syncGetCostumeBoundByAlpha(p *SpriteImpl) (mathf.Vec2, mathf.Vec2) {
 	return getCostumeBoundByAlpha(p, true)
 }
 
-// getCostumeBoundByAlpha gets costume boundary by alpha channel detection
+// getCostumeBoundByAlpha gets costume boundary by alpha channel detection.
 func getCostumeBoundByAlpha(p *SpriteImpl, isSync bool) (mathf.Vec2, mathf.Vec2) {
-	cs := p.costumes[p.costumeIndex_]
+	cs := p.costumes[p.costumeIndex]
 	var rect mathf.Rect2
 	// GetBoundFromAlpha is very slow, so we should cache the result
 	if cs.isAtlas() {

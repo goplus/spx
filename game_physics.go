@@ -25,50 +25,6 @@ import (
 	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
-// -----------------------------------------------------------------------------
-// Physics Collider Type Constants
-
-const (
-	physicsColliderNone    = 0x00
-	physicsColliderAuto    = 0x01
-	physicsColliderCircle  = 0x02
-	physicsColliderRect    = 0x03
-	physicsColliderCapsule = 0x04
-	physicsColliderPolygon = 0x05
-)
-
-const maxCollisionLayerIdx = 32 // Engine limit: max 32 collision layers
-
-// -----------------------------------------------------------------------------
-// Raycast Result Type
-
-// rayCastResult represents the result of a raycast query
-type rayCastResult struct {
-	Hited    bool
-	SpriteId int64
-	PosX     float64
-	PosY     float64
-	NormalX  float64
-	NormalY  float64
-}
-
-// -----------------------------------------------------------------------------
-// Sprite Collision Info
-
-// spriteCollisionInfo contains collision information for a sprite
-type spriteCollisionInfo struct {
-	Index int
-	Layer int64
-	Mask  int64
-}
-
-// spriteCollisionData caches sprite collision information
-type spriteCollisionData struct {
-	sprite *SpriteImpl
-	info   *spriteCollisionInfo
-	modIdx int
-}
-
 // =============================================================================
 // Public API - Physics Detection and Collision
 // =============================================================================
@@ -163,10 +119,49 @@ func (p *Game) DebugDrawLines(points []float64, color Color) {
 }
 
 // =============================================================================
+// Private - Constants and Types
+// =============================================================================
+
+const (
+	physicsColliderNone    = 0x00
+	physicsColliderAuto    = 0x01
+	physicsColliderCircle  = 0x02
+	physicsColliderRect    = 0x03
+	physicsColliderCapsule = 0x04
+	physicsColliderPolygon = 0x05
+)
+
+const maxCollisionLayerIdx = 32 // Engine limit: max 32 collision layers
+
+// rayCastResult represents the result of a raycast query.
+type rayCastResult struct {
+	Hited    bool
+	SpriteId int64
+	PosX     float64
+	PosY     float64
+	NormalX  float64
+	NormalY  float64
+}
+
+// spriteCollisionInfo contains collision information for a sprite.
+type spriteCollisionInfo struct {
+	Index int
+	Layer int64
+	Mask  int64
+}
+
+// spriteCollisionData caches sprite collision information.
+type spriteCollisionData struct {
+	sprite *SpriteImpl
+	info   *spriteCollisionInfo
+	modIdx int
+}
+
+// =============================================================================
 // Private - Physics Configuration
 // =============================================================================
 
-// setupPhysicsConfig initializes physics system configuration
+// setupPhysicsConfig initializes physics system configuration.
 func (p *Game) setupPhysicsConfig(proj *projConfig) {
 	p.isCollisionByPixel = !proj.CollisionByShape && !proj.Physics
 	p.isAutoSetCollisionLayer = proj.AutoSetCollisionLayer == nil || *proj.AutoSetCollisionLayer
@@ -194,7 +189,7 @@ func (p *Game) setupPhysicsConfig(proj *projConfig) {
 	}
 }
 
-// setupCollisionLayers configures collision layers for sprites
+// setupCollisionLayers configures collision layers for sprites.
 func (p *Game) setupCollisionLayers(inits []Sprite) {
 	if !p.isAutoSetCollisionLayer {
 		return
@@ -230,7 +225,7 @@ func (p *Game) setupCollisionLayers(inits []Sprite) {
 // Private - Helper Functions
 // =============================================================================
 
-// getSpriteCollisionInfo retrieves collision info for a sprite by name
+// getSpriteCollisionInfo retrieves collision info for a sprite by name.
 func (p *Game) getSpriteCollisionInfo(name string) *spriteCollisionInfo {
 	if info, ok := p.sprCollisionInfos[name]; ok {
 		return info
@@ -239,12 +234,12 @@ func (p *Game) getSpriteCollisionInfo(name string) *spriteCollisionInfo {
 	return &spriteCollisionInfo{}
 }
 
-// getCollisionLayerIndex calculates the collision layer index
+// getCollisionLayerIndex calculates the collision layer index.
 func getCollisionLayerIndex(info *spriteCollisionInfo) int {
 	return info.Index % maxCollisionLayerIdx
 }
 
-// buildSpriteCollisionData builds collision data for sprites
+// buildSpriteCollisionData builds collision data for sprites.
 func (p *Game) buildSpriteCollisionData(inits []Sprite) []*spriteCollisionData {
 	spriteData := make([]*spriteCollisionData, 0, len(inits))
 	for _, ini := range inits {
@@ -259,7 +254,7 @@ func (p *Game) buildSpriteCollisionData(inits []Sprite) []*spriteCollisionData {
 	return spriteData
 }
 
-// checkCollision checks collision and returns a list of sprites
+// checkCollision checks collision and returns a list of sprites.
 func (p *Game) checkCollision(ary any) []Sprite {
 	spriteIdAry := ary.([]engine.Object)
 	sprites := make([]Sprite, 0, len(spriteIdAry))
@@ -278,7 +273,7 @@ func (p *Game) checkCollision(ary any) []Sprite {
 	return sprites
 }
 
-// tryRaycastResult attempts to parse raycast result from array
+// tryRaycastResult attempts to parse raycast result from array.
 func tryRaycastResult(ary engine.Array) (*rayCastResult, error) {
 	dataAry, succ := ary.([]int64)
 	if !succ {
@@ -297,7 +292,7 @@ func tryRaycastResult(ary engine.Array) (*rayCastResult, error) {
 	return p, nil
 }
 
-// raycast performs a raycast query
+// raycast performs a raycast query.
 func raycast(from, to mathf.Vec2, ignoreSprites []int64, mask int64) *rayCastResult {
 	ary := physicsMgr.RaycastWithDetails(from, to, ignoreSprites, mask, true, true)
 	result, err := tryRaycastResult(ary)
