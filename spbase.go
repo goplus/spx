@@ -21,11 +21,7 @@ import (
 	"path"
 	"strconv"
 
-	_ "image/jpeg" // for image decode
-	_ "image/png"  // for image decode
-
 	"github.com/goplus/spbase/mathf"
-
 	"github.com/goplus/spx/v2/internal/engine"
 )
 
@@ -204,8 +200,8 @@ func (p *costume) isAtlas() bool {
 // -------------------------------------------------------------------------------------
 
 type baseObj struct {
-	costumes      []*costume
-	costumeIndex_ int
+	costumes     []*costume
+	costumeIndex int
 	// !!!All methods of this object (except GetId()) can only be called on the main thread
 	syncSprite     *engine.Sprite
 	scale          float64
@@ -235,7 +231,7 @@ func (p *baseObj) setLayer(layer int) { // dying: visible but can't be touched
 }
 
 func (p *baseObj) setCustumeIndex(value int) {
-	p.costumeIndex_ = value
+	p.costumeIndex = value
 	p.isCostumeDirty = true
 	p.isAnimating = false
 }
@@ -346,7 +342,7 @@ func (p *baseObj) initWithSize(width, height int) {
 func (p *baseObj) initFrom(src *baseObj) {
 	p.costumes = src.costumes
 	p.hasShader = false
-	p.setCustumeIndex(src.costumeIndex_)
+	p.setCustumeIndex(src.costumeIndex)
 }
 
 func (p *baseObj) findCostume(name SpriteCostumeName) int {
@@ -394,25 +390,25 @@ func (p *baseObj) setCostumeByName(name SpriteCostumeName) bool {
 }
 
 func (p *baseObj) goPrevCostume() {
-	index := (len(p.costumes) + p.costumeIndex_ - 1) % len(p.costumes)
+	index := (len(p.costumes) + p.costumeIndex - 1) % len(p.costumes)
 	p.setCustumeIndex(index)
 }
 
 func (p *baseObj) goNextCostume() {
-	index := (p.costumeIndex_ + 1) % len(p.costumes)
+	index := (p.costumeIndex + 1) % len(p.costumes)
 	p.setCustumeIndex(index)
 }
 
 func (p *baseObj) getCostumeIndex() int {
-	return p.costumeIndex_
+	return p.costumeIndex
 }
 
 func (p *baseObj) getCostumeName() SpriteCostumeName {
-	return p.costumes[p.costumeIndex_].name
+	return p.costumes[p.costumeIndex].name
 }
 
 func (p *baseObj) getCostumePath() string {
-	return p.costumes[p.costumeIndex_].path
+	return p.costumes[p.costumeIndex].path
 }
 
 func (p *baseObj) getCostumeRenderScale() float64 {
@@ -424,25 +420,25 @@ func (p *baseObj) getAnimRenderScale(bitmapResolution int) float64 {
 }
 
 func (p *baseObj) getCurrentBitmapResolution() int {
-	return p.costumes[p.costumeIndex_].bitmapResolution
+	return p.costumes[p.costumeIndex].bitmapResolution
 }
 
 func (p *baseObj) getCostumeSize() (float64, float64) {
-	x, y := p.costumes[p.costumeIndex_].getSize()
+	x, y := p.costumes[p.costumeIndex].getSize()
 	return float64(x), float64(y)
 }
 
 func (p *baseObj) isCostumeAtlas() bool {
-	return p.costumes[p.costumeIndex_].isAtlas()
+	return p.costumes[p.costumeIndex].isAtlas()
 }
 
 func (p *baseObj) getCostumeAtlasUvRemap() mathf.Rect2 {
-	costume := p.costumes[p.costumeIndex_]
+	costume := p.costumes[p.costumeIndex]
 	return mathf.NewRect2(costume.atlasUVRect.X, costume.atlasUVRect.Y, costume.atlasUVRect.Z, costume.atlasUVRect.W)
 }
 
 func (p *baseObj) getCostumeAtlasRegion() mathf.Rect2 {
-	costume := p.costumes[p.costumeIndex_]
+	costume := p.costumes[p.costumeIndex]
 	rect := mathf.NewRect2(float64(costume.posX), float64(costume.posY),
 		float64(costume.width), float64(costume.height))
 	return rect

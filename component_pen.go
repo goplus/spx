@@ -42,7 +42,7 @@ type penComponent struct {
 	penObj  *engine.Object
 }
 
-// initialize initializes the pen component from config
+// initialize initializes the pen component from config.
 func (p *penComponent) initialize(sprite *SpriteImpl, spriteCfg *spriteConfig) {
 	p.componentBase.initialize(sprite, spriteCfg)
 	// Always initialize with default pen values
@@ -56,7 +56,7 @@ func (p *penComponent) initialize(sprite *SpriteImpl, spriteCfg *spriteConfig) {
 	p.penObj = nil
 }
 
-// cloneFrom creates a new pen component by cloning from source
+// cloneFrom creates a new pen component by cloning from source.
 func (p *penComponent) cloneFrom(src component, newSprite *SpriteImpl) component {
 	srcPen := src.(*penComponent)
 	return &penComponent{

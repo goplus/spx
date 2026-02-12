@@ -47,7 +47,7 @@ type physicsComponent struct {
 	collisionTargets map[string]bool
 }
 
-// initialize initializes the physics component from config
+// initialize initializes the physics component from config.
 func (p *physicsComponent) initialize(sprite *SpriteImpl, spriteCfg *spriteConfig) {
 	p.componentBase.initialize(sprite, spriteCfg)
 	// Always initialize from config
@@ -65,7 +65,7 @@ func (p *physicsComponent) initialize(sprite *SpriteImpl, spriteCfg *spriteConfi
 	p.collisionTargets = make(map[string]bool)
 }
 
-// initCollisionConfig initializes collision configuration
+// initCollisionConfig initializes collision configuration.
 func (p *physicsComponent) initCollisionConfig(sprite *SpriteImpl, spriteCfg *spriteConfig) {
 	p.collisionInfo.Mask = parseLayerMaskValue(spriteCfg.CollisionMask)
 	p.collisionInfo.Layer = parseLayerMaskValue(spriteCfg.CollisionLayer)
@@ -88,7 +88,7 @@ func (p *physicsComponent) initCollisionConfig(sprite *SpriteImpl, spriteCfg *sp
 	}
 }
 
-// initTriggerConfig initializes trigger configuration
+// initTriggerConfig initializes trigger configuration.
 func (p *physicsComponent) initTriggerConfig(sprite *SpriteImpl, spriteCfg *spriteConfig) {
 	p.triggerInfo.Mask = parseLayerMaskValue(spriteCfg.TriggerMask)
 	p.triggerInfo.Layer = parseLayerMaskValue(spriteCfg.TriggerLayer)
@@ -104,7 +104,7 @@ func (p *physicsComponent) initTriggerConfig(sprite *SpriteImpl, spriteCfg *spri
 	}
 }
 
-// cloneFrom creates a new physics component by cloning from source
+// cloneFrom creates a new physics component by cloning from source.
 func (p *physicsComponent) cloneFrom(src component, newSprite *SpriteImpl) component {
 	srcPhysics := src.(*physicsComponent)
 	newPhys := &physicsComponent{
@@ -293,7 +293,7 @@ func (p *physicsComponent) IsTriggerEnabled() bool {
 // Sync Methods
 // ============================================================================
 
-// initCollisionParams initializes collision parameters based on game settings
+// initCollisionParams initializes collision parameters based on game settings.
 func (p *physicsComponent) initCollisionParams() {
 	if p.sprite.g.isAutoSetCollisionLayer {
 		info := p.sprite.g.getSpriteCollisionInfo(p.sprite.name)

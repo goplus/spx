@@ -95,7 +95,7 @@ func (p *Game) doWhenMouseMove(ev *eventMouseMove) {
 	p.inputs.onMouseMove(ev.Pos)
 }
 
-// handleEvent dispatches events to their respective handlers
+// handleEvent dispatches events to their respective handlers.
 func (p *Game) handleEvent(ev event) {
 	switch e := ev.(type) {
 	case *eventLeftButtonUp:
@@ -132,7 +132,7 @@ func (p *Game) eventLoop(me coroutine.Thread) int {
 	}
 }
 
-// processPendingAudios plays any pending audio for sprites
+// processPendingAudios plays any pending audio for sprites.
 func (p *Game) processPendingAudios(items []Shape, tempAudios []string) []string {
 	for _, item := range items {
 		if sprite, ok := item.(*SpriteImpl); ok {
@@ -149,7 +149,7 @@ func (p *Game) processPendingAudios(items []Shape, tempAudios []string) []string
 	return tempAudios
 }
 
-// processAnimationEvents handles completed animation events for sprites
+// processAnimationEvents handles completed animation events for sprites.
 func (p *Game) processAnimationEvents(items []Shape, tempAnimations []string) []string {
 	for _, item := range items {
 		if sprite, ok := item.(*SpriteImpl); ok {

@@ -176,7 +176,7 @@ func (p *SpriteImpl) TriggerEnabled() bool {
 // Physics Shape Scale Update
 // -----------------------------------------------------------------------------
 
-// updatePhysicsShapesScale updates collision and trigger shapes when sprite scale changes
+// updatePhysicsShapesScale updates collision and trigger shapes when sprite scale changes.
 func (p *SpriteImpl) updatePhysicsShapesScale() {
 	physics := p.physics()
 	physics.getTriggerInfo().applyShape(p.syncSprite, true, p.scale)
@@ -187,7 +187,7 @@ func (p *SpriteImpl) updatePhysicsShapesScale() {
 // Shared Physics Configuration Types and Utilities
 // -----------------------------------------------------------------------------
 
-// physicConfig common structure for physics configuration
+// physicConfig common structure for physics configuration.
 type physicConfig struct {
 	Mask        int64             // collision/trigger mask
 	Layer       int64             // collision/trigger layer
@@ -211,7 +211,7 @@ func (cfg *physicConfig) copyFrom(src *physicConfig) {
 	copy(cfg.Params, src.Params)
 }
 
-// validateShape validates if shape parameters match the type
+// validateShape validates if shape parameters match the type.
 func (cfg *physicConfig) validateShape() bool {
 	if cfg.Type == physicsColliderNone || cfg.Type == physicsColliderAuto {
 		return true
@@ -248,7 +248,7 @@ func (cfg *physicConfig) validateShape() bool {
 	return true
 }
 
-// getDimensions calculates width and height based on type and shape parameters
+// getDimensions calculates width and height based on type and shape parameters.
 func (cfg *physicConfig) getDimensions() (float64, float64) {
 	switch cfg.Type {
 	case physicsColliderRect:
@@ -274,7 +274,7 @@ func (cfg *physicConfig) getDimensions() (float64, float64) {
 	return 0, 0
 }
 
-// syncToProxy synchronizes physics configuration to engine proxy
+// syncToProxy synchronizes physics configuration to engine proxy.
 func (cfg *physicConfig) syncToProxy(syncProxy *engine.Sprite, isTrigger bool, sprite *SpriteImpl) {
 	if isTrigger {
 		syncProxy.SetTriggerLayer(cfg.Layer)
@@ -287,7 +287,7 @@ func (cfg *physicConfig) syncToProxy(syncProxy *engine.Sprite, isTrigger bool, s
 	}
 }
 
-// syncShape synchronizes shape to engine proxy
+// syncShape synchronizes shape to engine proxy.
 func (cfg *physicConfig) syncShape(syncProxy *engine.Sprite, isTrigger bool, sprite *SpriteImpl) {
 	scale := sprite.scale
 	if cfg.Type != physicsColliderNone && cfg.Type != physicsColliderAuto {
@@ -336,7 +336,7 @@ func (cfg *physicConfig) applyShape(syncProxy *engine.Sprite, isTrigger bool, sc
 	}
 }
 
-// toPhysicsMode converts string to PhysicsMode
+// toPhysicsMode converts string to PhysicsMode.
 func toPhysicsMode(mode string) PhysicsMode {
 	if mode == "" {
 		return NoPhysics

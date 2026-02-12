@@ -91,18 +91,18 @@ func (p *SpriteImpl) init(
 	p.initEngineObjects()
 }
 
-// initBaseObjects initializes the base object and event sinks
+// initBaseObjects initializes the base object and event sinks.
 func (p *SpriteImpl) initBaseObjects(base string, spriteCfg *spriteConfig, g *Game) {
 	if spriteCfg.Costumes != nil {
 		p.baseObj.init(base, spriteCfg.Costumes, spriteCfg.getCostumeIndex())
 	} else {
 		p.baseObj.initWith(base, spriteCfg)
 	}
-	p.defaultCostumeIndex = p.baseObj.costumeIndex_
+	p.defaultCostumeIndex = p.baseObj.costumeIndex
 	p.eventSinks.init(&g.sinkMgr, p)
 }
 
-// initBasicProperties initializes basic sprite properties like position, direction, visibility
+// initBasicProperties initializes basic sprite properties like position, direction, visibility.
 func (p *SpriteImpl) initBasicProperties(g *Game, name string, sprite Sprite, gamer reflect.Value, spriteCfg *spriteConfig) {
 	p.gamer = gamer
 	p.g, p.name, p.sprite = g, name, sprite
@@ -110,7 +110,7 @@ func (p *SpriteImpl) initBasicProperties(g *Game, name string, sprite Sprite, ga
 	p.isVisible = spriteCfg.Visible
 }
 
-// initEngineObjects initializes engine-related objects
+// initEngineObjects initializes engine-related objects.
 func (p *SpriteImpl) initEngineObjects() {
 	p.syncSprite = nil
 	engine.WaitMainThread(func() {
@@ -118,7 +118,7 @@ func (p *SpriteImpl) initEngineObjects() {
 	})
 }
 
-// initComponents initializes all sprite components
+// initComponents initializes all sprite components.
 func (p *SpriteImpl) initComponents(spriteCfg *spriteConfig) {
 	p.components.initComponents(p, spriteCfg)
 }

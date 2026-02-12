@@ -26,7 +26,7 @@ import (
 	"github.com/goplus/spx/v2/internal/engine"
 )
 
-// gameBuilder provides a fluent interface for initializing and running a game
+// gameBuilder provides a fluent interface for initializing and running a game.
 type gameBuilder struct {
 	gamer    Gamer
 	resource any
@@ -41,7 +41,7 @@ type gameBuilder struct {
 	err        error // stores first error encountered during build process
 }
 
-// newGameBuilder creates a new game builder
+// newGameBuilder creates a new game builder.
 func newGameBuilder(game Gamer, resource any, gameConf ...*Config) *gameBuilder {
 	return &gameBuilder{
 		gamer:    game,
@@ -50,7 +50,7 @@ func newGameBuilder(game Gamer, resource any, gameConf ...*Config) *gameBuilder 
 	}
 }
 
-// loadResources loads filesystem and configuration
+// loadResources loads filesystem and configuration.
 func (b *gameBuilder) loadResources() *gameBuilder {
 	if b.err != nil {
 		return b
@@ -92,7 +92,7 @@ func (b *gameBuilder) loadResources() *gameBuilder {
 	return b
 }
 
-// parseFlags parses command line flags and updates configuration
+// parseFlags parses command line flags and updates configuration.
 func (b *gameBuilder) parseFlags() *gameBuilder {
 	if b.err != nil {
 		return b
@@ -101,7 +101,7 @@ func (b *gameBuilder) parseFlags() *gameBuilder {
 	return b
 }
 
-// initializeGame initializes the game instance
+// initializeGame initializes the game instance.
 func (b *gameBuilder) initializeGame() *gameBuilder {
 	if b.err != nil {
 		return b
@@ -111,7 +111,7 @@ func (b *gameBuilder) initializeGame() *gameBuilder {
 	return b
 }
 
-// setupConfig sets up game configuration and global settings
+// setupConfig sets up game configuration and global settings.
 func (b *gameBuilder) setupConfig() *gameBuilder {
 	if b.err != nil {
 		return b
@@ -120,7 +120,7 @@ func (b *gameBuilder) setupConfig() *gameBuilder {
 	return b
 }
 
-// setupSystems initializes game subsystems (collision, physics, audio, etc.)
+// setupSystems initializes game subsystems (collision, physics, audio, etc.).
 func (b *gameBuilder) setupSystems() *gameBuilder {
 	if b.err != nil {
 		return b
@@ -129,7 +129,7 @@ func (b *gameBuilder) setupSystems() *gameBuilder {
 	return b
 }
 
-// loadSprites loads all game sprites
+// loadSprites loads all game sprites.
 func (b *gameBuilder) loadSprites() *gameBuilder {
 	if b.err != nil {
 		return b
@@ -138,7 +138,7 @@ func (b *gameBuilder) loadSprites() *gameBuilder {
 	return b
 }
 
-// finalizeLoad completes the loading process
+// finalizeLoad completes the loading process.
 func (b *gameBuilder) finalizeLoad() *gameBuilder {
 	if b.err != nil {
 		return b
@@ -151,12 +151,12 @@ func (b *gameBuilder) finalizeLoad() *gameBuilder {
 	return b
 }
 
-// run starts the game loop
+// run starts the game loop.
 func (b *gameBuilder) run() error {
 	return b.game.runLoop(&b.conf)
 }
 
-// build executes the complete build pipeline and returns the game instance
+// build executes the complete build pipeline and returns the game instance.
 func (b *gameBuilder) build() (*Game, error) {
 	b.loadResources().
 		parseFlags().
@@ -169,7 +169,7 @@ func (b *gameBuilder) build() (*Game, error) {
 	return b.game, b.err
 }
 
-// buildAndRun executes the complete build pipeline and starts the game
+// buildAndRun executes the complete build pipeline and starts the game.
 func (b *gameBuilder) buildAndRun() error {
 	if _, err := b.build(); err != nil {
 		return err
@@ -177,7 +177,7 @@ func (b *gameBuilder) buildAndRun() error {
 	return b.run()
 }
 
-// parseCommandLineFlags handles command line arguments
+// parseCommandLineFlags handles command line arguments.
 func parseCommandLineFlags(conf *Config) {
 	if conf.DontParseFlags {
 		return

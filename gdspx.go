@@ -241,20 +241,24 @@ func syncCheckUpdateCostume(p *baseObj) {
 		}
 		p.isLayerDirty = false
 	}
+
 	if !p.isCostumeDirty {
 		return
 	}
+
 	p.isCostumeDirty = false
 	path := p.getCostumePath()
 	renderScale := p.getCostumeRenderScale()
-	rect := p.getCostumeAtlasRegion()
+
 	isAtlas := p.isCostumeAtlas()
 	if isAtlas {
+		rect := p.getCostumeAtlasRegion()
 		syncSprite.UpdateTextureAtlas(path, rect, renderScale, !p.isAnimating)
 		syncOnAtlasChanged(p)
-	} else {
-		syncSprite.UpdateTexture(path, renderScale, !p.isAnimating)
+		return
 	}
+
+	syncSprite.UpdateTexture(path, renderScale, !p.isAnimating)
 }
 
 func syncOnAtlasChanged(p *baseObj) {

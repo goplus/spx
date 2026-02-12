@@ -85,7 +85,3 @@ func (p *SpriteImpl) ChangePenSize(delta float64) {
 func (p *SpriteImpl) movePen(x, y float64) {
 	p.pen().movePen(x, y)
 }
-
-func (p *SpriteImpl) isPenDown() bool {
-	return p.pen().isPenDown()
-}

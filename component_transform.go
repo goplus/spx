@@ -156,7 +156,7 @@ func (t *transformComponent) MoveForward(step float64) {
 	t.moveTo(t.x+step*sin, t.y+step*cos)
 }
 
-// Glide smoothly moves the sprite to the specified position over the given duration.
+// Glide moves the sprite smoothly to the specified position over the given duration.
 func (t *transformComponent) Glide(x, y float64, secs float64) {
 	if debugInstr {
 		spxlog.Debug("Glide: sprite=%s, x=%v, y=%v, secs=%v", t.sprite.name, x, y, secs)
@@ -178,7 +178,7 @@ func (t *transformComponent) Glide(x, y float64, secs float64) {
 	t.sprite.animation().doTween(animName, &aniCopy)
 }
 
-// GlideTo smoothly moves the sprite to the specified object's position
+// GlideTo moves the sprite smoothly to the specified object's position
 // over the given duration.
 func (t *transformComponent) GlideTo(obj any, secs float64) {
 	x, y := t.sprite.g.objectPos(obj)
@@ -337,7 +337,7 @@ func (t *transformComponent) DistanceTo(obj any) float64 {
 // Internal Methods
 // ============================================================================
 
-// setXY directly sets position without triggering side effects.
+// setXY sets position directly without triggering side effects.
 // This is used for internal operations that need to bypass normal movement logic.
 func (t *transformComponent) setXY(x, y float64) {
 	t.x, t.y = x, y
@@ -347,7 +347,7 @@ func (t *transformComponent) setXY(x, y float64) {
 // and transform updates.
 func (t *transformComponent) moveTo(x, y float64) {
 	x, y = t.fixWorldRange(x, y)
-	t.sprite.pen().movePen(x, y)
+	t.sprite.movePen(x, y)
 	t.x, t.y = x, y
 	t.markDirty()
 }
@@ -365,7 +365,7 @@ func (t *transformComponent) fixWorldRange(x, y float64) (float64, float64) {
 		return x, y
 	}
 
-	worldW, worldH := t.sprite.g.worldSize_()
+	worldW, worldH := t.sprite.g.worldSize()
 	maxW := float64(worldW)/2.0 + float64(rect.Size.X)
 	maxH := float64(worldH)/2.0 + float64(rect.Size.Y)
 

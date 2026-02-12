@@ -58,7 +58,7 @@ func (sm *spriteManager) reset() {
 // ========== lifecycle operations ==========
 //
 
-// add immediately adds a shape to the active list.
+// add adds a shape immediately to the active list.
 func (sm *spriteManager) add(s Shape) {
 	sm.items = append(sm.items, s)
 }

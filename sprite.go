@@ -20,16 +20,16 @@ package spx
 // Type Definitions
 // ============================================================================
 
-// Direction represents the heading direction in degrees
+// Direction represents the heading direction in degrees.
 type Direction = float64
 
-// RotationStyle defines how a sprite rotates
+// RotationStyle defines how a sprite rotates.
 type RotationStyle int
 
-// specialObj represents special target objects for sprite operations
+// specialObj represents special target objects for sprite operations.
 type specialObj int
 
-// Type aliases for sprite-related identifiers
+// Type aliases for sprite-related identifiers.
 type (
 	SpriteName          = string
 	SpriteCostumeName   = string

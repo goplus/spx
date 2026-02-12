@@ -392,7 +392,7 @@ func WaitUntil(condition func() bool) {
 }
 
 // -------------------------------------------------------------------------------------
-// setupGameConfig configures game settings
+// setupGameConfig configures game settings.
 func setupGameConfig(g *Game, conf *Config, proj *projConfig) {
 	if conf.Title == "" {
 		dir, _ := os.Getwd()
@@ -417,7 +417,7 @@ func setupGameConfig(g *Game, conf *Config, proj *projConfig) {
 	}
 }
 
-// setupGameSystems initializes game subsystems
+// setupGameSystems initializes game subsystems.
 func setupGameSystems(g *Game, proj *projConfig) {
 	engine.SetLayerSortMode(proj.LayerSortMode)
 	g.setupPathFinderConfig(proj)
@@ -425,7 +425,7 @@ func setupGameSystems(g *Game, proj *projConfig) {
 	g.setupPhysicsConfig(proj)
 }
 
-// loadGameSprites loads all sprites
+// loadGameSprites loads all sprites.
 func loadGameSprites(g *Game, v reflect.Value, fs spxfs.Dir, proj *projConfig) {
 	spxlog.Debug("==> StartLoad")
 
@@ -489,7 +489,7 @@ func findFieldPtr(v reflect.Value, name string, from int) any {
 	return nil
 }
 
-// findFieldRefCaseInsensitive finds a field reference by name with case-insensitive matching
+// findFieldRefCaseInsensitive finds a field reference by name with case-insensitive matching.
 func findFieldRefCaseInsensitive(v reflect.Value, name string, from int) any {
 	if v.Kind() == reflect.Pointer {
 		v = v.Elem()
@@ -575,7 +575,7 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 	return
 }
 
-// setupDisplayConfig initializes display configuration
+// setupDisplayConfig initializes display configuration.
 func (p *Game) setupDisplayConfig(proj *projConfig) {
 	windowScale := 1.0
 	if proj.WindowScale >= 0.001 {
@@ -588,7 +588,7 @@ func (p *Game) setupDisplayConfig(proj *projConfig) {
 	engine.SetDebugMode(p.debug)
 }
 
-// setupWorldAndWindow configures world and window sizes
+// setupWorldAndWindow configures world and window sizes.
 func (p *Game) setupWorldAndWindow(proj *projConfig) {
 	backdrops := proj.getBackdrops()
 	if p.tilemapMgr.hasData() {
@@ -619,7 +619,7 @@ func (p *Game) setupWorldAndWindow(proj *projConfig) {
 	p.windowHeight = int(math.Min(float64(p.windowHeight), float64(p.worldHeight)))
 }
 
-// setupPlatformAndCamera configures platform settings and camera
+// setupPlatformAndCamera configures platform settings and camera.
 func (p *Game) setupPlatformAndCamera(proj *projConfig) {
 	if platform.IsMobile() || proj.FullScreen || platform.IsWeb() {
 		if proj.FullScreen || platform.IsMobile() {
@@ -653,7 +653,7 @@ func (p *Game) setupPlatformAndCamera(proj *projConfig) {
 	p.setupBackdrop()
 }
 
-// loadAndInitSprites loads all sprites from project configuration
+// loadAndInitSprites loads all sprites from project configuration.
 func (p *Game) loadAndInitSprites(g reflect.Value, proj *projConfig) []Sprite {
 	inits := make([]Sprite, 0, len(proj.Zorder))
 	for layer, v := range proj.Zorder {
@@ -670,7 +670,7 @@ func (p *Game) loadAndInitSprites(g reflect.Value, proj *projConfig) []Sprite {
 	return inits
 }
 
-// runSpriteCallbacks executes sprite initialization callbacks
+// runSpriteCallbacks executes sprite initialization callbacks.
 func (p *Game) runSpriteCallbacks(inits []Sprite, proj *projConfig, g reflect.Value) {
 	for _, ini := range inits {
 		spr := spriteOf(ini)
@@ -690,7 +690,7 @@ func (p *Game) runSpriteCallbacks(inits []Sprite, proj *projConfig, g reflect.Va
 	}
 }
 
-// loadAudioAndTilemap loads tilemap and background music
+// loadAudioAndTilemap loads tilemap and background music.
 func (p *Game) loadAudioAndTilemap(proj *projConfig) {
 	p.tilemapMgr.parseTilemap()
 	p.soundObj = p.sounds.allocSound()
@@ -812,7 +812,7 @@ func init() {
 // -------------------------------------------------------------------------------------
 // Game Loop
 
-// runLoop starts the game loop
+// runLoop starts the game loop.
 func (p *Game) runLoop(cfg *Config) (err error) {
 	spxlog.Debug("==> RunLoop")
 	if !cfg.DontRunOnUnfocused {
