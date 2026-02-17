@@ -6,7 +6,7 @@ tool github.com/goplus/ixgo/cmd/qexp
 
 require (
 	github.com/goplus/ixgo v0.61.0
-	github.com/goplus/mod v0.19.0
+	github.com/goplus/mod v0.19.2
 	github.com/goplus/reflectx v1.5.0
 	github.com/goplus/spbase v0.1.0
 	github.com/goplus/xgo v1.6.3-0.20260130002755-682f8779765e
@@ -19,7 +19,7 @@ require (
 require (
 	github.com/gopherjs/gopherjs v0.0.0-20200217142428-fce0ec30dd00 // indirect
 	github.com/goplus/gogen v1.20.8 // indirect
-	github.com/qiniu/x v1.16.0 // indirect
+	github.com/qiniu/x v1.16.1 // indirect
 	github.com/timandy/routine v1.1.5 // indirect
 	github.com/visualfc/funcval v0.1.4 // indirect
 	github.com/visualfc/gid v0.3.0 // indirect
