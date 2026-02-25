@@ -53,17 +53,17 @@ typedef Color GdColor;
 typedef Rect2 GdRect2;
 
 typedef struct {
-    int32_t size;
-    int32_t type;
-    void* data;
+	int32_t size;
+	int32_t type;
+	void *data;
 } GdArrayInfo;
 
-typedef GdArrayInfo* GdArray;
+typedef GdArrayInfo *GdArray;
 
-typedef enum  {
-    GD_ARRAY_TYPE_UNKNOWN = 0,
-    GD_ARRAY_TYPE_INT64 = 1,
-    GD_ARRAY_TYPE_FLOAT = 2,
+typedef enum {
+	GD_ARRAY_TYPE_UNKNOWN = 0,
+	GD_ARRAY_TYPE_INT64 = 1,
+	GD_ARRAY_TYPE_FLOAT = 2,
 	GD_ARRAY_TYPE_BOOL = 3,
 	GD_ARRAY_TYPE_STRING = 4,
 	GD_ARRAY_TYPE_BYTE = 5,
@@ -106,7 +106,7 @@ typedef void (*GDExtensionSpxCallbackOnEngineDestroy)();
 typedef void (*GDExtensionSpxCallbackOnEngineReset)();
 typedef void (*GDExtensionSpxCallbackOnEnginePause)(GdBool is_paused);
 
-typedef void (*GDExtensionSpxCallbackOnSceneSpriteInstantiated)(GdObj obj,GdString type_name);
+typedef void (*GDExtensionSpxCallbackOnSceneSpriteInstantiated)(GdObj obj, GdString type_name);
 
 typedef void (*GDExtensionSpxCallbackOnSpriteReady)(GdObj obj);
 typedef void (*GDExtensionSpxCallbackOnSpriteUpdated)(GdFloat delta);
