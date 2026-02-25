@@ -6,7 +6,7 @@ tool github.com/goplus/ixgo/cmd/qexp
 
 require (
 	github.com/goplus/ixgo v0.61.0
-	github.com/goplus/mod v0.19.0
+	github.com/goplus/mod v0.19.2
 	github.com/goplus/spx/v2 v2.0.0-pre.36
 	github.com/goplus/xgo v1.6.3-0.20260130002755-682f8779765e
 )
@@ -19,7 +19,7 @@ require (
 	github.com/h2non/filetype v1.1.3 // indirect
 	github.com/petermattis/goid v0.0.0-20250721140440-ea1c0173183e // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/qiniu/x v1.16.0 // indirect
+	github.com/qiniu/x v1.16.1 // indirect
 	github.com/timandy/routine v1.1.5 // indirect
 	github.com/visualfc/funcval v0.1.4 // indirect
 	github.com/visualfc/gid v0.3.0 // indirect
