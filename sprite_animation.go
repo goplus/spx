@@ -36,12 +36,13 @@ type animationWrapper struct {
 	ani          *aniConfig
 	costumes     []*costume
 	isCostumeSet bool
+	runtime      *runtimeManagers
 	loadOnce     sync.Once
 }
 
 func (aw *animationWrapper) ensureRegistered(animName string) {
 	aw.loadOnce.Do(func() {
-		createAnimation(aw.spriteName, animName, aw.ani, aw.costumes, aw.isCostumeSet)
+		createAnimation(aw.runtime, aw.spriteName, animName, aw.ani, aw.costumes, aw.isCostumeSet)
 	})
 }
 

@@ -21,29 +21,9 @@ import (
 	"fmt"
 
 	"github.com/goplus/spx/v2/internal/engine"
-	"github.com/goplus/spx/v2/internal/enginewrap"
 	spxlog "github.com/goplus/spx/v2/internal/log"
 
 	"github.com/goplus/spbase/mathf"
-)
-
-// copy these variable to any namespace you want
-var (
-	audioMgr         enginewrap.AudioMgrImpl
-	cameraMgr        enginewrap.CameraMgrImpl
-	inputMgr         enginewrap.InputMgrImpl
-	physicsMgr       enginewrap.PhysicsMgrImpl
-	platformMgr      enginewrap.PlatformMgrImpl
-	resMgr           enginewrap.ResMgrImpl
-	sceneMgr         enginewrap.SceneMgrImpl
-	spriteMgr        enginewrap.SpriteMgrImpl
-	uiMgr            enginewrap.UiMgrImpl
-	extMgr           enginewrap.ExtMgrImpl
-	penMgr           enginewrap.PenMgrImpl
-	debugMgr         enginewrap.DebugMgrImpl
-	navigationMgr    enginewrap.NavigationMgrImpl
-	tilemapMgr       enginewrap.TilemapMgrImpl
-	tilemapparserMgr enginewrap.TilemapparserMgrImpl
 )
 
 var (
@@ -293,6 +273,7 @@ func syncInitSpritePhysicInfo(sprite *SpriteImpl, syncProxy *engine.Sprite) {
 }
 
 func createAnimation(
+	runtime *runtimeManagers,
 	spriteName string,
 	animName string,
 	cfg *aniConfig,
@@ -311,7 +292,7 @@ func createAnimation(
 		panic(fmt.Sprintf("animation frame index out of bounds: from %d, to %d, costumes len %d", cfg.IFrameFrom, cfg.IFrameTo, len(costumes)))
 	}
 
-	resMgr.CreateAnimation(
+	runtime.resMgr.CreateAnimation(
 		spriteName,
 		animName,
 		string(bin),

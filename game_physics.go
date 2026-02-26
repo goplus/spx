@@ -31,13 +31,13 @@ import (
 
 // IntersectRect detects sprites intersecting with a rectangular area
 func (p *Game) IntersectRect(posX, posY, width, height float64) []Sprite {
-	ary := physicsMgr.CheckCollisionRect(mathf.NewVec2(posX, posY), mathf.NewVec2(width, height), -1)
+	ary := p.rt().physicsMgr.CheckCollisionRect(mathf.NewVec2(posX, posY), mathf.NewVec2(width, height), -1)
 	return p.checkCollision(ary)
 }
 
 // IntersectCircle detects sprites intersecting with a circular area
 func (p *Game) IntersectCircle(posX, posY, radius float64) []Sprite {
-	ary := physicsMgr.CheckCollisionCircle(mathf.NewVec2(posX, posY), radius, -1)
+	ary := p.rt().physicsMgr.CheckCollisionCircle(mathf.NewVec2(posX, posY), radius, -1)
 	return p.checkCollision(ary)
 }
 
@@ -59,7 +59,7 @@ func (p *Game) Raycast__0(fromX, fromY, toX, toY float64, ignoreSprites []Sprite
 			ignoreSpritesIds = append(ignoreSpritesIds, impl.getSpriteId())
 		}
 	}
-	result := raycast(from, to, ignoreSpritesIds, -1)
+	result := p.raycast(from, to, ignoreSpritesIds, -1)
 	if result == nil {
 		return false, nil, 0, 0
 	}
@@ -92,17 +92,17 @@ func (p *Game) Raycast__2(fromX, fromY, toX, toY float64) (hit bool, sprite Spri
 
 // DebugDrawRect draws a debug rectangle
 func (p *Game) DebugDrawRect(posX, posY, width, height float64, color Color) {
-	debugMgr.DebugDrawRect(mathf.NewVec2(posX, posY), mathf.NewVec2(width, height), toMathfColor(color))
+	p.rt().debugMgr.DebugDrawRect(mathf.NewVec2(posX, posY), mathf.NewVec2(width, height), toMathfColor(color))
 }
 
 // DebugDrawCircle draws a debug circle
 func (p *Game) DebugDrawCircle(posX, posY, radius float64, color Color) {
-	debugMgr.DebugDrawCircle(mathf.NewVec2(posX, posY), radius, toMathfColor(color))
+	p.rt().debugMgr.DebugDrawCircle(mathf.NewVec2(posX, posY), radius, toMathfColor(color))
 }
 
 // DebugDrawLine draws a debug line
 func (p *Game) DebugDrawLine(fromX, fromY, toX, toY float64, color Color) {
-	debugMgr.DebugDrawLine(mathf.NewVec2(fromX, fromY), mathf.NewVec2(toX, toY), toMathfColor(color))
+	p.rt().debugMgr.DebugDrawLine(mathf.NewVec2(fromX, fromY), mathf.NewVec2(toX, toY), toMathfColor(color))
 }
 
 // DebugDrawLines draws multiple debug lines
@@ -114,7 +114,7 @@ func (p *Game) DebugDrawLines(points []float64, color Color) {
 	for i := 0; i < len(points)-2; i += 2 {
 		from := mathf.NewVec2(points[i], points[i+1])
 		to := mathf.NewVec2(points[i+2], points[i+3])
-		debugMgr.DebugDrawLine(from, to, toMathfColor(color))
+		p.rt().debugMgr.DebugDrawLine(from, to, toMathfColor(color))
 	}
 }
 
@@ -170,13 +170,13 @@ func (p *Game) setupPhysicsConfig(proj *projConfig) {
 
 	// Set pixel collision sampling step based on configuration
 	precision := parsePixelCollisionPrecision(proj.PixelCollisionPrecision)
-	spriteMgr.SetPixelCollisionSamplingStep(int64(precision))
+	p.rt().spriteMgr.SetPixelCollisionSamplingStep(int64(precision))
 
 	// Set global physics parameters
-	physicsMgr.SetGlobalGravity(parseDefaultValue(proj.GlobalGravity, 1))
-	physicsMgr.SetGlobalAirDrag(parseDefaultValue(proj.GlobalAirDrag, 1))
-	physicsMgr.SetGlobalFriction(parseDefaultValue(proj.GlobalFriction, 1))
-	physicsMgr.SetCollisionSystemType(p.isCollisionByPixel)
+	p.rt().physicsMgr.SetGlobalGravity(parseDefaultValue(proj.GlobalGravity, 1))
+	p.rt().physicsMgr.SetGlobalAirDrag(parseDefaultValue(proj.GlobalAirDrag, 1))
+	p.rt().physicsMgr.SetGlobalFriction(parseDefaultValue(proj.GlobalFriction, 1))
+	p.rt().physicsMgr.SetCollisionSystemType(p.isCollisionByPixel)
 	if p.isAutoSetCollisionLayer {
 		p.sprCollisionInfos = make(map[string]*spriteCollisionInfo)
 		idx := 0
@@ -293,8 +293,8 @@ func tryRaycastResult(ary engine.Array) (*rayCastResult, error) {
 }
 
 // raycast performs a raycast query.
-func raycast(from, to mathf.Vec2, ignoreSprites []int64, mask int64) *rayCastResult {
-	ary := physicsMgr.RaycastWithDetails(from, to, ignoreSprites, mask, true, true)
+func (p *Game) raycast(from, to mathf.Vec2, ignoreSprites []int64, mask int64) *rayCastResult {
+	ary := p.rt().physicsMgr.RaycastWithDetails(from, to, ignoreSprites, mask, true, true)
 	result, err := tryRaycastResult(ary)
 	if err != nil {
 		spxlog.Warn("Raycast warn: %v", err)
