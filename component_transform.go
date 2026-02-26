@@ -158,7 +158,7 @@ func (t *transformComponent) MoveForward(step float64) {
 
 // Glide moves the sprite smoothly to the specified position over the given duration.
 func (t *transformComponent) Glide(x, y float64, secs float64) {
-	if debugInstr {
+	if isDebugInstrEnabled() {
 		spxlog.Debug("Glide: sprite=%s, x=%v, y=%v, secs=%v", t.sprite.name, x, y, secs)
 	}
 
@@ -245,7 +245,7 @@ func (t *transformComponent) ChangeHeading(delta Direction) bool {
 
 // SetRotationStyle sets the rotation style for the sprite.
 func (t *transformComponent) SetRotationStyle(style RotationStyle) {
-	if debugInstr {
+	if isDebugInstrEnabled() {
 		spxlog.Debug("SetRotationStyle: sprite=%s, style=%v", t.sprite.name, style)
 	}
 	t.rotationStyle = style
@@ -256,7 +256,7 @@ func (t *transformComponent) Turn(delta Direction, speed float64, animation Spri
 	from := t.direction
 	to := t.direction + delta
 	t.doTurnAnimation(from, to, speed, animation, func() {
-		if t.ChangeHeading(delta) && debugInstr {
+		if t.ChangeHeading(delta) && isDebugInstrEnabled() {
 			spxlog.Debug("Turn: sprite=%s, delta=%v", t.sprite.name, delta)
 		}
 	})
@@ -268,7 +268,7 @@ func (t *transformComponent) TurnTo(obj any, speed float64, animation SpriteAnim
 	fromAngle, toAngle := t.normalizeAngleRange(t.direction, targetAngle)
 
 	t.doTurnAnimation(fromAngle, toAngle, speed, animation, func() {
-		if t.applyDirection(targetAngle) && debugInstr {
+		if t.applyDirection(targetAngle) && isDebugInstrEnabled() {
 			spxlog.Debug("TurnTo: sprite=%s, obj=%v", t.sprite.name, obj)
 		}
 	})
@@ -277,7 +277,7 @@ func (t *transformComponent) TurnTo(obj any, speed float64, animation SpriteAnim
 // BounceOffEdge bounces the sprite off the edge of the stage by reflecting
 // its direction vector based on the edge that was touched.
 func (t *transformComponent) BounceOffEdge() {
-	if debugInstr {
+	if isDebugInstrEnabled() {
 		spxlog.Debug("BounceOffEdge: %s", t.sprite.name)
 	}
 
@@ -302,7 +302,7 @@ func (t *transformComponent) BounceOffEdge() {
 
 // SetSize sets the sprite's scale to the specified size.
 func (t *transformComponent) SetSize(size float64) {
-	if debugInstr {
+	if isDebugInstrEnabled() {
 		spxlog.Debug("SetSize: sprite=%s, size=%v", t.sprite.name, size)
 	}
 
@@ -314,7 +314,7 @@ func (t *transformComponent) SetSize(size float64) {
 
 // ChangeSize changes the sprite's scale by the specified delta.
 func (t *transformComponent) ChangeSize(delta float64) {
-	if debugInstr {
+	if isDebugInstrEnabled() {
 		spxlog.Debug("ChangeSize: sprite=%s, delta=%v", t.sprite.name, delta)
 	}
 	t.SetSize(t.sprite.scale + delta)

@@ -169,11 +169,12 @@ func resolveImageSize(cfgWidth, cfgHeight float64, path string) mathf.Vec2 {
 }
 
 func getImageSizeCached(path string) mathf.Vec2 {
-	if v, ok := imageSizeCache.Load(path); ok {
+	cache := imageSizeCacheRef()
+	if v, ok := cache.Load(path); ok {
 		return v.(mathf.Vec2)
 	}
 	size := getCustomeAssetSize(path)
-	imageSizeCache.Store(path, size)
+	cache.Store(path, size)
 	return size
 }
 
