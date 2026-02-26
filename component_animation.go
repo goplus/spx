@@ -158,7 +158,7 @@ func (a *animationComponent) StopAnimation(name SpriteAnimationName) {
 // ============================================================================
 
 func (a *animationComponent) playAnimation(name SpriteAnimationName, loop, blocking bool, debugMsg string) {
-	if debugInstr {
+	if isDebugInstrEnabled() {
 		spxlog.Debug(debugMsg, name)
 	}
 
@@ -305,7 +305,7 @@ func (a *animationComponent) applyTweenStep(aniType aniTypeEnum, deltaPercent fl
 	switch aniType {
 	case aniTypeMove:
 		physicsMode := a.sprite.PhysicsMode()
-		if enabledPhysics && physicsMode != NoPhysics && physicsMode != StaticPhysics {
+		if isPhysicsEnabled() && physicsMode != NoPhysics && physicsMode != StaticPhysics {
 			vel := params.moveDir.Mulf(params.moveSpeed)
 			a.sprite.SetVelocity(vel.X, vel.Y)
 		} else {
@@ -324,7 +324,7 @@ func (a *animationComponent) applyTweenStep(aniType aniTypeEnum, deltaPercent fl
 func (a *animationComponent) cleanupTween(info *animState, name SpriteAnimationName, ani *aniConfig) {
 	if ani.AniType == aniTypeMove {
 		physicsMode := a.sprite.PhysicsMode()
-		if enabledPhysics && physicsMode != NoPhysics && physicsMode != StaticPhysics {
+		if isPhysicsEnabled() && physicsMode != NoPhysics && physicsMode != StaticPhysics {
 			a.sprite.SetVelocity(0, 0)
 		}
 	}

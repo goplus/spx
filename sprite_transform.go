@@ -59,7 +59,7 @@ func (p *SpriteImpl) DistanceTo__3(pos Pos) float64 {
 // -----------------------------------------------------------------------------
 
 func (p *SpriteImpl) Move__0(step float64) {
-	if debugInstr {
+	if isDebugInstrEnabled() {
 		spxlog.Debug("Move: sprite=%s, step=%v", p.name, step)
 	}
 	p.transform().MoveForward(step)
@@ -82,7 +82,7 @@ func (p *SpriteImpl) Step__2(step float64, speed float64, animation SpriteAnimat
 }
 
 func (p *SpriteImpl) doStepTo(obj any, speed float64, animation SpriteAnimationName) {
-	if debugInstr {
+	if isDebugInstrEnabled() {
 		spxlog.Debug("Goto: sprite=%s, obj=%v", p.name, obj)
 	}
 	x, y := p.g.objectPos(obj)
@@ -138,7 +138,7 @@ func (p *SpriteImpl) StepTo__b(obj specialObj, speed float64, animation SpriteAn
 }
 
 func (p *SpriteImpl) doGlideTo(obj any, secs float64) {
-	if debugInstr {
+	if isDebugInstrEnabled() {
 		spxlog.Debug("Glide: obj=%v, secs=%v", obj, secs)
 	}
 	x, y := p.g.objectPos(obj)

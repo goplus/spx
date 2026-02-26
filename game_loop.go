@@ -118,7 +118,7 @@ func (p *Game) fireEvent(ev event) {
 	select {
 	case p.events <- ev:
 	default:
-		if debugInstr {
+		if isDebugInstrEnabled() {
 			spxlog.Warn("Event buffer is full. Skip event: %v", ev)
 		}
 	}

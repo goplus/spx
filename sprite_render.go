@@ -25,7 +25,7 @@ import (
 // ============================================================================
 
 func (p *SpriteImpl) setVisible(visible bool) {
-	if debugInstr {
+	if isDebugInstrEnabled() {
 		spxlog.Debug("%s visible is %t", p.name, visible)
 	}
 
@@ -67,7 +67,7 @@ func (p *SpriteImpl) CostumeIndex() int {
 //   - index (float64 or int)
 //   - spx.Next or spx.Prev
 func (p *SpriteImpl) setCostume(costume any) {
-	if debugInstr {
+	if isDebugInstrEnabled() {
 		spxlog.Debug("SetCostume: sprite=%s, costume=%v", p.name, costume)
 	}
 	p.goSetCostume(costume)

@@ -1,0 +1,130 @@
+package spx
+
+import (
+	"sync"
+	"time"
+
+	"github.com/goplus/spx/v2/internal/engine"
+)
+
+var (
+	defaultDebugInstr bool
+	defaultDebugEvent bool
+	defaultDebugPerf  bool
+
+	defaultPhysicsEnabled bool
+
+	fallbackSchedInMain bool
+	fallbackMainSchedAt time.Time
+
+	fallbackImageSizeCache sync.Map
+)
+
+func activeGame() *Game {
+	game, _ := engine.GetGame().(*Game)
+	return game
+}
+
+func (p *Game) initRuntimeState() {
+	p.debugInstr = defaultDebugInstr
+	p.debugEvent = defaultDebugEvent
+	p.debugPerf = defaultDebugPerf
+	p.enabledPhysics = defaultPhysicsEnabled
+}
+
+func setDefaultDebugFlags(instr, event, perf bool) {
+	defaultDebugInstr = instr
+	defaultDebugEvent = event
+	defaultDebugPerf = perf
+}
+
+func (p *Game) setDebugFlags(instr, event, perf bool) {
+	p.debugInstr = instr
+	p.debugEvent = event
+	p.debugPerf = perf
+}
+
+func isDebugInstrEnabled() bool {
+	if g := activeGame(); g != nil {
+		return g.debugInstr
+	}
+	return defaultDebugInstr
+}
+
+func isDebugEventEnabled() bool {
+	if g := activeGame(); g != nil {
+		return g.debugEvent
+	}
+	return defaultDebugEvent
+}
+
+func isDebugPerfEnabled() bool {
+	if g := activeGame(); g != nil {
+		return g.debugPerf
+	}
+	return defaultDebugPerf
+}
+
+func setPhysicsEnabled(enabled bool) {
+	defaultPhysicsEnabled = enabled
+	if g := activeGame(); g != nil {
+		g.enabledPhysics = enabled
+	}
+}
+
+func (p *Game) setPhysicsEnabled(enabled bool) {
+	p.enabledPhysics = enabled
+	defaultPhysicsEnabled = enabled
+}
+
+func isPhysicsEnabled() bool {
+	if g := activeGame(); g != nil {
+		return g.enabledPhysics
+	}
+	return defaultPhysicsEnabled
+}
+
+func resetImageSizeCache(g *Game) {
+	if g != nil {
+		g.imageSizeCache = sync.Map{}
+		return
+	}
+	fallbackImageSizeCache = sync.Map{}
+}
+
+func imageSizeCacheRef() *sync.Map {
+	if g := activeGame(); g != nil {
+		return &g.imageSizeCache
+	}
+	return &fallbackImageSizeCache
+}
+
+func setSchedInMain(inMain bool) {
+	if g := activeGame(); g != nil {
+		g.isSchedInMain = inMain
+		return
+	}
+	fallbackSchedInMain = inMain
+}
+
+func isSchedInMainState() bool {
+	if g := activeGame(); g != nil {
+		return g.isSchedInMain
+	}
+	return fallbackSchedInMain
+}
+
+func setMainSchedTime(t time.Time) {
+	if g := activeGame(); g != nil {
+		g.mainSchedTime = t
+		return
+	}
+	fallbackMainSchedAt = t
+}
+
+func mainSchedTime() time.Time {
+	if g := activeGame(); g != nil {
+		return g.mainSchedTime
+	}
+	return fallbackMainSchedAt
+}

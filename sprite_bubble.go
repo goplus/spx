@@ -29,7 +29,7 @@ import (
 // ============================================================================
 
 func (p *SpriteImpl) Ask(msg any) {
-	if debugInstr {
+	if isDebugInstrEnabled() {
 		spxlog.Debug("Ask: sprite=%s, msg=%v", p.name, msg)
 	}
 	msgStr, ok := msg.(string)
@@ -51,7 +51,7 @@ func (p *SpriteImpl) Say__0(msg any) {
 }
 
 func (p *SpriteImpl) Say__1(msg any, secs float64) {
-	if debugInstr {
+	if isDebugInstrEnabled() {
 		spxlog.Debug("Say: sprite=%s, msg=%v, secs=%v", p.name, msg, secs)
 	}
 	p.sayOrThink(msg, ui.StyleSay)
@@ -65,7 +65,7 @@ func (p *SpriteImpl) Think__0(msg any) {
 }
 
 func (p *SpriteImpl) Think__1(msg any, secs float64) {
-	if debugInstr {
+	if isDebugInstrEnabled() {
 		spxlog.Debug("Think: sprite=%s, msg=%v, secs=%v", p.name, msg, secs)
 	}
 	p.sayOrThink(msg, ui.StyleThink)
@@ -91,7 +91,7 @@ func (p *SpriteImpl) Quote__2(message, description string) {
 }
 
 func (p *SpriteImpl) Quote__3(message, description string, secs float64) {
-	if debugInstr {
+	if isDebugInstrEnabled() {
 		spxlog.Debug("Quote: sprite=%s, message=%s, description=%s, secs=%v", p.name, message, description, secs)
 	}
 	p.quote(message, description)

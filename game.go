@@ -48,18 +48,8 @@ const (
 )
 
 var (
-	debugInstr bool
-	debugEvent bool
-	debugPerf  bool
-
-	isSchedInMain  bool
-	mainSchedTime  time.Time
-	enabledPhysics bool
-
 	gco      *coroutine.Coroutines
 	tySprite = reflect.TypeOf((*Sprite)(nil)).Elem()
-
-	imageSizeCache sync.Map
 )
 
 // -------------------------------------------------------------------------------------
@@ -159,6 +149,15 @@ type Game struct {
 	debug      bool
 	debugPanel *ui.UiDebug
 
+	debugInstr bool
+	debugEvent bool
+	debugPerf  bool
+
+	enabledPhysics bool
+	isSchedInMain  bool
+	mainSchedTime  time.Time
+	imageSizeCache sync.Map
+
 	sprCollisionInfos       map[string]*spriteCollisionInfo
 	isCollisionByPixel      bool
 	isAutoSetCollisionLayer bool
@@ -228,7 +227,7 @@ func (p *Game) reset() {
 
 	p.startFlag = sync.Once{}
 	p.oncePathFinder = sync.Once{}
-	imageSizeCache = sync.Map{}
+	resetImageSizeCache(p)
 	p.sprs = make(map[string]Sprite)
 
 	timer.OnReload()
@@ -238,6 +237,7 @@ func (p *Game) reset() {
 
 func (p *Game) initGame(sprites []Sprite) *Game {
 	engine.SetGame(p)
+	p.initRuntimeState()
 	p.eventSinks.init(&p.sinkMgr, p)
 	p.runtime = runtimeManagers{}
 	p.sprs = make(map[string]Sprite)
@@ -264,9 +264,13 @@ func (p *Game) initSpriteMgr() {
 // SetDebug sets debug flags for the game
 func SetDebug(flags dbgFlags) {
 	spxlog.SetLevel(spxlog.LevelDebug)
-	debugInstr = (flags & DbgFlagInstr) != 0
-	debugEvent = (flags & DbgFlagEvent) != 0
-	debugPerf = (flags & DbgFlagPerf) != 0
+	instr := (flags & DbgFlagInstr) != 0
+	event := (flags & DbgFlagEvent) != 0
+	perf := (flags & DbgFlagPerf) != 0
+	setDefaultDebugFlags(instr, event, perf)
+	if g := activeGame(); g != nil {
+		g.setDebugFlags(instr, event, perf)
+	}
 }
 
 // XGot_Game_Main is required by XGo compiler as the entry of a .gmx project.
@@ -317,8 +321,8 @@ func XGot_Game_Reload(game Gamer, index any) (err error) {
 
 // SchedNow performs immediate scheduling without timeout check
 func SchedNow() int {
-	if isSchedInMain {
-		if time.Since(mainSchedTime) >= time.Second*mainExecTimeoutSec {
+	if isSchedInMainState() {
+		if time.Since(mainSchedTime()) >= time.Second*mainExecTimeoutSec {
 			engine.Panic("Main execution timed out. Please check if there is an infinite loop in the code.")
 		}
 	}
@@ -330,8 +334,8 @@ func SchedNow() int {
 
 // Sched performs scheduling with timeout check
 func Sched() int {
-	if isSchedInMain {
-		if time.Since(mainSchedTime) >= time.Second*mainExecTimeoutSec {
+	if isSchedInMainState() {
+		if time.Since(mainSchedTime()) >= time.Second*mainExecTimeoutSec {
 			engine.Panic("Main execution timed out. Please check if there is an infinite loop in the code.")
 		}
 	} else {
@@ -404,7 +408,7 @@ func setupGameConfig(g *Game, conf *Config, proj *projConfig) {
 	}
 
 	proj.FullScreen = proj.FullScreen || conf.FullScreen
-	enabledPhysics = proj.Physics
+	g.setPhysicsEnabled(proj.Physics)
 
 	g.windowHeight = conf.Height
 	g.windowWidth = conf.Width
@@ -830,8 +834,8 @@ func (p *Game) runLoop(cfg *Config) (err error) {
 
 // runMain wraps the main execution with scheduler tracking
 func runMain(call func()) {
-	isSchedInMain = true
-	mainSchedTime = time.Now()
+	setSchedInMain(true)
+	setMainSchedTime(time.Now())
+	defer setSchedInMain(false)
 	call()
-	isSchedInMain = false
 }

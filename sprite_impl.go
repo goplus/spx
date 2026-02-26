@@ -161,7 +161,7 @@ func doClone(sprite Sprite, data any, isAsync bool, onCloned func(sprite *Sprite
 		log.Panicln("doClone, sprite is nil")
 	}
 	src := spriteOf(sprite)
-	if debugInstr {
+	if isDebugInstrEnabled() {
 		spxlog.Debug("Clone: %s", src.name)
 	}
 	in := reflect.ValueOf(sprite).Elem()
@@ -340,7 +340,7 @@ func (p *SpriteImpl) Die() {
 }
 
 func (p *SpriteImpl) Destroy() { // destroy sprite, whether prototype or cloned
-	if debugInstr {
+	if isDebugInstrEnabled() {
 		spxlog.Debug("Destroy: %s", p.name)
 	}
 	p.Hide()

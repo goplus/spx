@@ -91,7 +91,7 @@ func (p *eventSinks) OnTimer(time float64, call func()) {
 	p.allWhenTimer = append(p.allWhenTimer, eventSink{
 		pthis: p.pthis,
 		sink: func(float64) {
-			if debugEvent {
+			if isDebugEventEnabled() {
 				spxlog.Debug("==> onTimer: %s", nameOf(p.pthis))
 			}
 			call()
@@ -106,7 +106,7 @@ func (p *eventSinks) OnKey__0(key Key, onKey func()) {
 	p.allWhenKeyPressed = append(p.allWhenKeyPressed, eventSink{
 		pthis: p.pthis,
 		sink: func(Key) {
-			if debugEvent {
+			if isDebugEventEnabled() {
 				spxlog.Debug("==> onKey: %v, %s", key, nameOf(p.pthis))
 			}
 			onKey()
@@ -121,7 +121,7 @@ func (p *eventSinks) OnSwipe__0(direction Direction, onSwipe func()) {
 	p.allWhenSwipe = append(p.allWhenSwipe, eventSink{
 		pthis: p.pthis,
 		sink: func(Direction) {
-			if debugEvent {
+			if isDebugEventEnabled() {
 				spxlog.Debug("==> onSwipe: %v, %s", direction, nameOf(p.pthis))
 			}
 			onSwipe()
@@ -136,7 +136,7 @@ func (p *eventSinks) OnKey__1(keys []Key, onKey func(Key)) {
 	p.allWhenKeyPressed = append(p.allWhenKeyPressed, eventSink{
 		pthis: p.pthis,
 		sink: func(key Key) {
-			if debugEvent {
+			if isDebugEventEnabled() {
 				spxlog.Debug("==> onKey: %v, %s", keys, nameOf(p.pthis))
 			}
 			onKey(key)
@@ -170,7 +170,7 @@ func (p *eventSinks) OnMsg__1(msg string, onMsg func()) {
 	p.allWhenIReceive = append(p.allWhenIReceive, eventSink{
 		pthis: p.pthis,
 		sink: func(msg string, data any) {
-			if debugEvent {
+			if isDebugEventEnabled() {
 				spxlog.Debug("==> onMsg: %s, %s", msg, nameOf(p.pthis))
 			}
 			onMsg()
@@ -192,7 +192,7 @@ func (p *eventSinks) OnBackdrop__1(name BackdropName, onBackdrop func()) {
 	p.allWhenBackdropChanged = append(p.allWhenBackdropChanged, eventSink{
 		pthis: p.pthis,
 		sink: func(name BackdropName) {
-			if debugEvent {
+			if isDebugEventEnabled() {
 				spxlog.Debug("==> onBackdrop: %s, %s", name, nameOf(p.pthis))
 			}
 			onBackdrop()
@@ -334,7 +334,7 @@ func (p *eventSinkMgr) doWhenStart() {
 	if !p.calledStart {
 		p.calledStart = true
 		asyncCall(p.allWhenStart, false, nil, func(ev *eventSink) {
-			if debugEvent {
+			if isDebugEventEnabled() {
 				spxlog.Debug("==> onStart: %s", nameOf(ev.pthis))
 			}
 			ev.sink.(func())()
@@ -344,7 +344,7 @@ func (p *eventSinkMgr) doWhenStart() {
 
 func (p *eventSinkMgr) doWhenAwake(this threadObj) {
 	syncCall(p.allWhenAwake, this, func(ev *eventSink) {
-		if debugEvent {
+		if isDebugEventEnabled() {
 			spxlog.Debug("==> onAwake: %s", nameOf(ev.pthis))
 		}
 		ev.sink.(func())()
@@ -373,7 +373,7 @@ func (p *eventSinkMgr) doWhenSwipe(direction Direction, this threadObj) {
 
 func (p *eventSinkMgr) doWhenClick(this threadObj) {
 	asyncCall(p.allWhenClick, false, this, func(ev *eventSink) {
-		if debugEvent {
+		if isDebugEventEnabled() {
 			spxlog.Debug("==> onClick: %s", nameOf(this))
 		}
 		ev.sink.(func())()
@@ -382,7 +382,7 @@ func (p *eventSinkMgr) doWhenClick(this threadObj) {
 
 func (p *eventSinkMgr) doWhenTouchStart(this threadObj, obj *SpriteImpl) {
 	asyncCall(p.allWhenTouchStart, false, this, func(ev *eventSink) {
-		if debugEvent {
+		if isDebugEventEnabled() {
 			spxlog.Debug("===> onTouchStart: %s, %s", nameOf(this), obj.name)
 		}
 		ev.sink.(func(Sprite))(obj.sprite)
@@ -391,7 +391,7 @@ func (p *eventSinkMgr) doWhenTouchStart(this threadObj, obj *SpriteImpl) {
 
 func (p *eventSinkMgr) doWhenTouching(this threadObj, obj *SpriteImpl) {
 	asyncCall(p.allWhenTouching, false, this, func(ev *eventSink) {
-		if debugEvent {
+		if isDebugEventEnabled() {
 			spxlog.Debug("==> onTouching: %s, %s", nameOf(this), obj.name)
 		}
 		ev.sink.(func(Sprite))(obj.sprite)
@@ -400,7 +400,7 @@ func (p *eventSinkMgr) doWhenTouching(this threadObj, obj *SpriteImpl) {
 
 func (p *eventSinkMgr) doWhenTouchEnd(this threadObj, obj *SpriteImpl) {
 	asyncCall(p.allWhenTouchEnd, false, this, func(ev *eventSink) {
-		if debugEvent {
+		if isDebugEventEnabled() {
 			spxlog.Debug("===> onTouchEnd: %s, %s", nameOf(this), obj.name)
 		}
 		ev.sink.(func(Sprite))(obj.sprite)
@@ -409,7 +409,7 @@ func (p *eventSinkMgr) doWhenTouchEnd(this threadObj, obj *SpriteImpl) {
 
 func (p *eventSinkMgr) doWhenCloned(this threadObj, data any) {
 	asyncCall(p.allWhenCloned, true, this, func(ev *eventSink) {
-		if debugEvent {
+		if isDebugEventEnabled() {
 			spxlog.Debug("==> onCloned: %s", nameOf(this))
 		}
 		ev.sink.(func(any))(data)

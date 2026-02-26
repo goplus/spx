@@ -298,7 +298,7 @@ func (p *inputManager) checkSwipe(point mathf.Vec2) {
 				targetName = "stage"
 			}
 
-			if debugEvent {
+			if isDebugEventEnabled() {
 				spxlog.Debug("Swipe detected: direction=%v, velocity=%.2f, distance=%.2f, target=%s",
 					swiper.detectedDirection, swiper.swipeVelocity, swiper.swipeDistance, targetName)
 			}

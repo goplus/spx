@@ -113,7 +113,7 @@ func (p *Game) ClearGraphicEffects() {
 // ============================================================================
 
 func (p *Game) doBroadcast(msg string, data any, wait bool) {
-	if debugInstr {
+	if isDebugInstrEnabled() {
 		spxlog.Debug("Broadcast: msg=%s, wait=%v", msg, wait)
 	}
 	p.sinkMgr.doWhenIReceive(msg, data, wait)
