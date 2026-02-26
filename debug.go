@@ -18,10 +18,11 @@ package spx
 
 import (
 	"fmt"
+	stdtime "time"
 
 	"github.com/goplus/spx/v2/internal/engine"
 	"github.com/goplus/spx/v2/internal/engine/profiler"
-	"github.com/goplus/spx/v2/internal/time"
+	itime "github.com/goplus/spx/v2/internal/time"
 	"github.com/goplus/spx/v2/internal/ui"
 )
 
@@ -39,10 +40,11 @@ func (p *Game) showDebugPanel() {
 	coroInfo, _ := profiler.GetStats("CoroUpdateJobs")
 	renderInfo, _ := profiler.GetStats("GameRender")
 	lastInfo := gco.GetLastUpdateStats()
+	eventQ := p.eventQueueSnapshot()
 	if p.debugPanel == nil {
 		p.debugPanel = ui.NewUiDebug()
 	}
-	msg := fmt.Sprintf("FPS: %.f\n", time.FPS())
+	msg := fmt.Sprintf("FPS: %.f\n", itime.FPS())
 	msg += fmt.Sprintf("Shape: %v\n", p.spriteMgr.count())
 	msg += fmt.Sprintf("GameUpdate: %v\n", updateInfo.ActualCall)
 	msg += fmt.Sprintf("GameRender: %v\n", renderInfo.ActualCall)
@@ -56,5 +58,11 @@ func (p *Game) showDebugPanel() {
 	msg += fmt.Sprintf("coro: NextCount: %v\n", lastInfo.NextCount)
 	msg += fmt.Sprintf("coro: GCCount: %v\n", lastInfo.GCCount)
 	msg += fmt.Sprintf("coro: LoopIterations: %v\n", lastInfo.LoopIterations)
+	msg += fmt.Sprintf("eventQ: policy=%s\n", eventQ.Policy)
+	msg += fmt.Sprintf("eventQ: len/cap/max=%d/%d/%d\n", eventQ.QueueLen, eventQ.QueueCap, eventQ.MaxQueueLenSeen)
+	msg += fmt.Sprintf("eventQ: enqueued=%d dropped=%d\n", eventQ.EnqueuedTotal, eventQ.DroppedTotal)
+	if !eventQ.LastDropAt.IsZero() {
+		msg += fmt.Sprintf("eventQ: lastDrop=%s\n", eventQ.LastDropAt.Format(stdtime.RFC3339Nano))
+	}
 	p.debugPanel.Show(msg)
 }

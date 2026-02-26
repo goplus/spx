@@ -79,7 +79,8 @@ type Config struct {
 	Height             int    `json:"height,omitempty"`
 	KeyDuration        int    `json:"keyDuration,omitempty"`
 	ScreenshotKey      string `json:"screenshotKey,omitempty"` // screenshot image capture key
-	Index              any    `json:"-"`                       // where is index.json, can be file (string) or io.Reader
+	EventQueuePolicy   string `json:"eventQueuePolicy,omitempty"`
+	Index              any    `json:"-"` // where is index.json, can be file (string) or io.Reader
 	DontParseFlags     bool   `json:"-"`
 	FullScreen         bool   `json:"fullScreen,omitempty"`
 	DontRunOnUnfocused bool   `json:"pauseOnUnfocused,omitempty"`

@@ -115,12 +115,11 @@ func (p *Game) handleEvent(ev event) {
 }
 
 func (p *Game) fireEvent(ev event) {
-	select {
-	case p.events <- ev:
-	default:
-		if isDebugInstrEnabled() {
-			spxlog.Warn("Event buffer is full. Skip event: %v", ev)
-		}
+	if p.queueEventWithPolicy(ev) {
+		return
+	}
+	if isDebugInstrEnabled() {
+		spxlog.Warn("Event buffer is full (policy=%s). Drop event: %v", p.eventQueuePolicy, ev)
 	}
 }
 

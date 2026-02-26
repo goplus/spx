@@ -153,10 +153,12 @@ type Game struct {
 	debugEvent bool
 	debugPerf  bool
 
-	enabledPhysics bool
-	isSchedInMain  bool
-	mainSchedTime  time.Time
-	imageSizeCache sync.Map
+	enabledPhysics   bool
+	isSchedInMain    bool
+	mainSchedTime    time.Time
+	imageSizeCache   sync.Map
+	eventQueuePolicy eventQueuePolicy
+	eventQueueStats  eventQueueStats
 
 	sprCollisionInfos       map[string]*spriteCollisionInfo
 	isCollisionByPixel      bool
@@ -228,6 +230,7 @@ func (p *Game) reset() {
 	p.startFlag = sync.Once{}
 	p.oncePathFinder = sync.Once{}
 	resetImageSizeCache(p)
+	p.resetEventQueueStats()
 	p.sprs = make(map[string]Sprite)
 
 	timer.OnReload()
@@ -297,6 +300,7 @@ func XGot_Game_Reload(game Gamer, index any) (err error) {
 
 	// Recreate events channel after reset closed it
 	g.events = make(chan event, eventBufferSize)
+	g.resetEventQueueStats()
 
 	for i, n := 0, v.NumField(); i < n; i++ {
 		name, val := getFieldPtrOrAlloc(g, v, i)
@@ -409,6 +413,7 @@ func setupGameConfig(g *Game, conf *Config, proj *projConfig) {
 
 	proj.FullScreen = proj.FullScreen || conf.FullScreen
 	g.setPhysicsEnabled(proj.Physics)
+	g.setEventQueuePolicy(parseEventQueuePolicy(conf.EventQueuePolicy))
 
 	g.windowHeight = conf.Height
 	g.windowWidth = conf.Width
@@ -542,6 +547,7 @@ func (p *Game) startLoad(fs spxfs.Dir) {
 	p.sounds.init(p)
 	p.inputs.init(p)
 	p.events = make(chan event, eventBufferSize)
+	p.resetEventQueueStats()
 	p.fs = fs
 }
 
