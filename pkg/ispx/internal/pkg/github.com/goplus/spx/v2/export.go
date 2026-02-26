@@ -54,6 +54,7 @@ func init() {
 			"strconv":       "strconv",
 			"strings":       "strings",
 			"sync":          "sync",
+			"sync/atomic":   "atomic",
 			"syscall":       "syscall",
 			"time":          "time",
 			"unsafe":        "unsafe",
