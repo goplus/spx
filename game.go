@@ -167,6 +167,8 @@ type Game struct {
 	audioMaxDistance float64
 	soundObj         engine.Object
 
+	runtime runtimeManagers
+
 	inputs     inputManager
 	sounds     soundMgr
 	spriteMgr  *spriteManager
@@ -237,6 +239,7 @@ func (p *Game) reset() {
 func (p *Game) initGame(sprites []Sprite) *Game {
 	engine.SetGame(p)
 	p.eventSinks.init(&p.sinkMgr, p)
+	p.runtime = runtimeManagers{}
 	p.sprs = make(map[string]Sprite)
 	p.typs = make(map[string]reflect.Type)
 	p.initSpriteMgr()
@@ -623,21 +626,22 @@ func (p *Game) setupWorldAndWindow(proj *projConfig) {
 func (p *Game) setupPlatformAndCamera(proj *projConfig) {
 	if platform.IsMobile() || proj.FullScreen || platform.IsWeb() {
 		if proj.FullScreen || platform.IsMobile() {
-			platformMgr.SetWindowFullscreen(true)
+			p.rt().platformMgr.SetWindowFullscreen(true)
 		}
-		winSize := platformMgr.GetWindowSize()
+		winSize := p.rt().platformMgr.GetWindowSize()
 		scale := math.Min(winSize.X/float64(p.windowWidth), winSize.Y/float64(p.windowHeight))
 		p.windowScale = scale
 	}
 
 	if platform.IsWeb() {
-		platformMgr.SetWindowSize(int64(platformMgr.GetWindowSize().X), int64(platformMgr.GetWindowSize().Y), true)
+		size := p.rt().platformMgr.GetWindowSize()
+		p.rt().platformMgr.SetWindowSize(int64(size.X), int64(size.Y), true)
 	} else {
-		platformMgr.SetWindowSize(int64(float64(p.windowWidth)*p.windowScale), int64(float64(p.windowHeight)*p.windowScale), true)
+		p.rt().platformMgr.SetWindowSize(int64(float64(p.windowWidth)*p.windowScale), int64(float64(p.windowHeight)*p.windowScale), true)
 	}
 
-	platformMgr.SetMaxFps(int64(proj.MaxFPS))
-	platformMgr.SetStretchMode(p.stretchMode)
+	p.rt().platformMgr.SetMaxFps(int64(proj.MaxFPS))
+	p.rt().platformMgr.SetStretchMode(p.stretchMode)
 
 	p.camera = &cameraImpl{}
 	p.Camera = p.camera
@@ -816,10 +820,10 @@ func init() {
 func (p *Game) runLoop(cfg *Config) (err error) {
 	spxlog.Debug("==> RunLoop")
 	if !cfg.DontRunOnUnfocused {
-		platformMgr.SetRunnableOnUnfocused(true)
+		p.rt().platformMgr.SetRunnableOnUnfocused(true)
 	}
 	p.initEventLoop()
-	platformMgr.SetWindowTitle(cfg.Title)
+	p.rt().platformMgr.SetWindowTitle(cfg.Title)
 	p.isRunned = true
 	return nil
 }

@@ -40,7 +40,7 @@ type Color struct {
 
 // SetWindowSize sets the window size to the specified width and height.
 func (p *Game) SetWindowSize(width int64, height int64) {
-	platformMgr.SetWindowSize(width, height, false)
+	p.rt().platformMgr.SetWindowSize(width, height, false)
 }
 
 // =============================================================================
@@ -49,7 +49,7 @@ func (p *Game) SetWindowSize(width int64, height int64) {
 
 // EraseAll erases all pen drawings.
 func (p *Game) EraseAll() {
-	penMgr.DestroyAllPens()
+	p.rt().penMgr.DestroyAllPens()
 }
 
 // =============================================================================

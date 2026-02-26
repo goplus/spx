@@ -179,7 +179,11 @@ func getImageSizeCached(path string) mathf.Vec2 {
 
 func getCustomeAssetSize(path string) mathf.Vec2 {
 	assetPath := engine.ToAssetPath(path)
-	return resMgr.GetImageSize(assetPath)
+	if game, ok := engine.GetGame().(*Game); ok && game != nil {
+		return game.rt().resMgr.GetImageSize(assetPath)
+	}
+	var runtime runtimeManagers
+	return runtime.resMgr.GetImageSize(assetPath)
 }
 
 func toBitmapResolution(v int) int {

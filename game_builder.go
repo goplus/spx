@@ -72,7 +72,7 @@ func (b *gameBuilder) loadResources() *gameBuilder {
 	}
 	b.fs = fs
 
-	resMgr.SetDefaultFont("res://engine/fonts/CnFont.ttf")
+	b.game.rt().resMgr.SetDefaultFont("res://engine/fonts/CnFont.ttf")
 	engine.RegisterFileSystem(fs)
 
 	if b.gameConf != nil {
@@ -158,9 +158,9 @@ func (b *gameBuilder) run() error {
 
 // build executes the complete build pipeline and returns the game instance.
 func (b *gameBuilder) build() (*Game, error) {
-	b.loadResources().
+	b.initializeGame().
+		loadResources().
 		parseFlags().
-		initializeGame().
 		setupConfig().
 		setupSystems().
 		loadSprites().

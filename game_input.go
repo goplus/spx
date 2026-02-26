@@ -26,7 +26,7 @@ import (
 // ============================================================================
 
 func (p *Game) KeyPressed(key Key) bool {
-	return inputMgr.GetKey(int64(key))
+	return p.rt().inputMgr.GetKey(int64(key))
 }
 
 // ============================================================================
@@ -42,7 +42,7 @@ func (p *Game) MouseY() float64 {
 }
 
 func (p *Game) MousePressed() bool {
-	return inputMgr.MousePressed()
+	return p.rt().inputMgr.MousePressed()
 }
 
 func (p *Game) getMousePos() (x, y float64) {

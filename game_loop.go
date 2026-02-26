@@ -55,7 +55,7 @@ func (p *Game) doWhenLeftButtonDown(ev *eventLeftButtonDown) {
 		if o, ok := item.(clicker); ok {
 			syncSprite := o.getProxy()
 			if syncSprite != nil && o.Visible() {
-				isClicked := spriteMgr.CheckCollisionWithPoint(syncSprite.GetId(), point, true)
+				isClicked := p.rt().spriteMgr.CheckCollisionWithPoint(syncSprite.GetId(), point, true)
 				if isClicked {
 					target = o
 					// Try to get the SpriteImpl from the clicker
@@ -190,7 +190,7 @@ func (p *Game) inputEventLoop(me coroutine.Thread) int {
 
 	for {
 		// Check mouse button state
-		curLbtnPressed := inputMgr.GetMouseState(MOUSE_BUTTON_LEFT)
+		curLbtnPressed := p.rt().inputMgr.GetMouseState(MOUSE_BUTTON_LEFT)
 		if curLbtnPressed != lastLbtnPressed {
 			if lastLbtnPressed {
 				p.fireEvent(&eventLeftButtonUp{Pos: p.mousePos})
@@ -203,7 +203,7 @@ func (p *Game) inputEventLoop(me coroutine.Thread) int {
 		// Check mouse movement
 		// Note: We need to get the actual current mouse position from the engine
 		// For now, we'll use the stored mousePos which should be updated elsewhere
-		curMousePos := inputMgr.GetGlobalMousePos()
+		curMousePos := p.rt().inputMgr.GetGlobalMousePos()
 		mathfMousePos := mathf.Vec2{X: float64(curMousePos.X), Y: float64(curMousePos.Y)}
 
 		// Check if mouse moved significantly
