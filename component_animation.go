@@ -96,7 +96,12 @@ func (a *animationComponent) initFromConfig(spriteCfg *spriteConfig) {
 	maps.Copy(a.shared.animBindings, spriteCfg.AnimBindings)
 
 	for animName, ani := range a.shared.animations {
-		a.shared.animationWrappers[animName] = &animationWrapper{spr: a.sprite, ani: ani}
+		a.shared.animationWrappers[animName] = &animationWrapper{
+			spriteName:   a.sprite.name,
+			ani:          ani,
+			costumes:     a.sprite.costumes,
+			isCostumeSet: a.sprite.isCostumeSet,
+		}
 	}
 }
 
@@ -180,7 +185,7 @@ func (a *animationComponent) doAnimation(animName SpriteAnimationName, ani *aniC
 	}
 
 	syncCheckUpdateCostume(&a.sprite.baseObj)
-	a.shared.animationWrappers[animName].ensureRegistered(animName)
+	a.prepareAnimationPlayback(animName, ani)
 
 	spriteMgr.PlayAnim(a.sprite.syncSprite.GetId(), animName, speed, loop, false)
 	if isBlocking {
@@ -356,7 +361,7 @@ func (a *animationComponent) playDefaultAnim() {
 	}
 
 	if _, ok := a.shared.animations[animName]; ok {
-		a.shared.animationWrappers[animName].ensureRegistered(animName)
+		a.prepareAnimationPlayback(animName, a.shared.animations[animName])
 		spriteMgr.PlayAnim(a.sprite.syncSprite.GetId(), animName, speed, true, false)
 	} else {
 		a.sprite.goSetCostume(a.sprite.defaultCostumeIndex)
@@ -395,6 +400,11 @@ func (a *animationComponent) playAnimAudio(ani *aniConfig, info *animState) {
 func (a *animationComponent) adaptAnimBitmapResolution(ani *aniConfig) {
 	renderScale := a.sprite.getAnimRenderScale(ani.AdaptAnimBitmapResolution)
 	a.sprite.syncSprite.SetRenderScale(mathf.NewVec2(renderScale, renderScale))
+}
+
+func (a *animationComponent) prepareAnimationPlayback(animName SpriteAnimationName, ani *aniConfig) {
+	a.shared.animationWrappers[animName].ensureRegistered(animName)
+	a.adaptAnimBitmapResolution(ani)
 }
 
 func (a *animationComponent) costumeIndex(nameOrIndex any) int {
