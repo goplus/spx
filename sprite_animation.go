@@ -32,19 +32,17 @@ import (
 // -----------------------------------------------------------------------------
 
 type animationWrapper struct {
-	spr      *SpriteImpl
-	ani      *aniConfig
-	loaded   bool
-	loadOnce sync.Once
+	spriteName   string
+	ani          *aniConfig
+	costumes     []*costume
+	isCostumeSet bool
+	loadOnce     sync.Once
 }
 
-func (aw *animationWrapper) ensureRegistered(pName string) {
+func (aw *animationWrapper) ensureRegistered(animName string) {
 	aw.loadOnce.Do(func() {
-		createAnimation(aw.spr.name, pName, aw.ani, aw.spr.costumes, aw.spr.isCostumeSet)
-		aw.loaded = true
+		createAnimation(aw.spriteName, animName, aw.ani, aw.costumes, aw.isCostumeSet)
 	})
-
-	aw.spr.adaptAnimBitmapResolution(aw.ani)
 }
 
 type animState struct {
@@ -59,10 +57,6 @@ type animState struct {
 // -----------------------------------------------------------------------------
 // Animation Utility Functions (Delegated or Shared)
 // -----------------------------------------------------------------------------
-
-func (p *SpriteImpl) adaptAnimBitmapResolution(ani *aniConfig) {
-	p.animation().adaptAnimBitmapResolution(ani)
-}
 
 func (p *SpriteImpl) getStateAnimName(stateName string) string {
 	return p.animation().getStateAnimName(stateName)
