@@ -58,10 +58,6 @@ type animState struct {
 // Animation Utility Functions (Delegated or Shared)
 // -----------------------------------------------------------------------------
 
-func (p *SpriteImpl) adaptAnimBitmapResolution(ani *aniConfig) {
-	p.animation().adaptAnimBitmapResolution(ani)
-}
-
 func (p *SpriteImpl) getStateAnimName(stateName string) string {
 	return p.animation().getStateAnimName(stateName)
 }
