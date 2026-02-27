@@ -139,7 +139,7 @@ jobs:
           cd ..
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: spx-windows-${{ matrix.arch_name }}
           path: spx-windows-${{ matrix.arch_name }}.zip

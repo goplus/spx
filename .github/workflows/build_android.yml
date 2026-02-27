@@ -117,7 +117,7 @@ jobs:
         find "$APK_DIR" -name "*.apk" -type f -exec ls -lh {} \;
 
     - name: Upload APK artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       if: always()
       with:
         name: android-apk
@@ -125,7 +125,7 @@ jobs:
         if-no-files-found: warn
 
     - name: Upload build log
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       if: always()
       with:
         name: android-build-log

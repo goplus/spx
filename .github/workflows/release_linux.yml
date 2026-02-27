@@ -104,7 +104,7 @@ jobs:
           cd ..
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: spx-linux-${{ matrix.arch_name }}
           path: spx-linux-${{ matrix.arch_name }}.zip
