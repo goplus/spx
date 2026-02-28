@@ -167,7 +167,6 @@ func (p *Game) touchingSpriteBy(dst *SpriteImpl, name string) *SpriteImpl {
 	if dst == nil {
 		return nil
 	}
-
 	// Use optimized spatial partitioning version
 	// This reduces expensive pixel-perfect collision checks
 	return p.findTouchingSpriteOptimized(dst, name)
@@ -204,10 +203,6 @@ func (p *Game) objectPos(obj any) (float64, float64) {
 // =============================================================================
 // Private - Shape Management Utilities
 // =============================================================================
-
-func (p *Game) getItems() []Shape {
-	return p.spriteMgr.all()
-}
 
 func (p *Game) addShape(child Shape) {
 	p.spriteMgr.addShape(child)
@@ -319,9 +314,8 @@ func parseColliderShapeType(typeName string, defaultValue int64) int64 {
 // parsePixelCollisionPrecision parses the precision string and returns the corresponding enum value.
 func parsePixelCollisionPrecision(precision *string) pixelCollisionPrecision {
 	if precision == nil {
-		return pixelCollisionPrecisionLow // default
+		return pixelCollisionPrecisionLow
 	}
-
 	switch *precision {
 	case "high":
 		return pixelCollisionPrecisionHigh

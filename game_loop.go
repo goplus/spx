@@ -174,7 +174,7 @@ func (p *Game) logicLoop(me coroutine.Thread) int {
 		tempAudios = p.processPendingAudios(tempItems, tempAudios)
 		tempAnimations = p.processAnimationEvents(tempItems, tempAnimations)
 
-		if targetTimer := timer.CheckTimerEvent(); targetTimer >= 0 {
+		if targetTimer, ok := timer.NextTimer(); ok {
 			p.fireEvent(&eventTimer{Time: targetTimer})
 		}
 		engine.WaitNextFrame()
