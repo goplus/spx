@@ -14,6 +14,7 @@ import (
 
 	"github.com/goplus/spx/v2/internal/debug"
 	"github.com/goplus/spx/v2/internal/engine/platform"
+	"github.com/goplus/spx/v2/internal/log"
 	"github.com/goplus/spx/v2/internal/time"
 	"github.com/petermattis/goid"
 )
@@ -35,14 +36,15 @@ var (
 type ThreadObj any
 
 type threadImpl struct {
-	Obj     ThreadObj
-	stopped bool
-	frame   int
-	mutex   sync.Mutex // Mutex for this thread's condition variable
-	cond    *sync.Cond // Per-thread condition variable for targeted wake-up
-	id      int64
-	name    string
-	stack   string
+	Obj       ThreadObj
+	stopped   atomic.Bool
+	suspended atomic.Bool // Per-thread suspension state to avoid lock-order inversion
+	frame     int
+	mutex     sync.Mutex // Mutex for this thread's condition variable
+	cond      *sync.Cond // Per-thread condition variable for targeted wake-up
+	id        int64
+	name      string
+	stack     string
 
 	schedFrame     int64
 	schedTimestamp stime.Time
@@ -143,7 +145,7 @@ func (p *threadImpl) Stack() string {
 }
 
 func (p *threadImpl) Stopped() bool {
-	return p.stopped
+	return p.stopped.Load()
 }
 
 func (p Thread) IsSchedTimeout(ms float64) bool {
@@ -227,8 +229,8 @@ func (p *Coroutines) AbortAll() {
 
 	for _, th := range threads {
 		th.mutex.Lock()
-		if !th.stopped {
-			th.stopped = true
+		if !th.stopped.Load() {
+			th.stopped.Store(true)
 			th.Cancel()
 			th.cond.Signal()
 		}
@@ -259,13 +261,25 @@ func (p *Coroutines) AbortAllAndWait(timeout stime.Duration) bool {
 }
 
 func (p *Coroutines) StopIf(filter func(th Thread) bool) {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-	for th := range p.suspended {
-		if filter(th) {
-			th.stopped = true
-			th.Cancel()
+	threads := func() []Thread {
+		p.mutex.Lock()
+		defer p.mutex.Unlock()
+		list := make([]Thread, 0, len(p.suspended))
+		for th := range p.suspended {
+			if filter(th) {
+				list = append(list, th)
+			}
 		}
+		return list
+	}()
+
+	// Stop each thread with proper signaling
+	for _, th := range threads {
+		th.mutex.Lock()
+		th.stopped.Store(true)
+		th.Cancel()
+		th.cond.Signal()
+		th.mutex.Unlock()
 	}
 }
 
@@ -285,6 +299,9 @@ func (p *Coroutines) Yield(me Thread) {
 		panic(ErrCannotYieldANonrunningThread)
 	}
 	p.sema.Unlock()
+	// Set atomic suspended flag first
+	me.suspended.Store(true)
+	// Then update the map for backward compatibility
 	p.mutex.Lock()
 	p.suspended[me] = true
 	p.mutex.Unlock()
@@ -292,7 +309,8 @@ func (p *Coroutines) Yield(me Thread) {
 	me.mutex.Lock()
 	// Abort/cancel can happen before or during wait; in that case
 	// break out and let the caller observe ErrAbortThread.
-	for p.isSuspended(me) && !p.isThreadCanceled(me) {
+	// Use atomic suspended field to avoid lock-order inversion with AbortAll
+	for me.suspended.Load() && !p.isThreadCanceled(me) {
 		me.cond.Wait()
 	}
 	me.mutex.Unlock()
@@ -300,7 +318,7 @@ func (p *Coroutines) Yield(me Thread) {
 	p.notifyWaiters()
 	p.sema.Lock()
 	p.setCurrent(me)
-	if me.stopped {
+	if me.stopped.Load() {
 		panic(ErrAbortThread)
 	}
 }
@@ -316,6 +334,8 @@ func (p *Coroutines) Resume(me Thread) {
 		p.mutex.Unlock()
 
 		if done {
+			// Clear atomic suspended flag before signaling
+			me.suspended.Store(false)
 			me.mutex.Lock()
 			me.cond.Signal()
 			me.mutex.Unlock()
@@ -420,50 +440,47 @@ func (p *Coroutines) Update() {
 	var gcStatsBefore sdebug.GCStats
 	sdebug.ReadGCStats(&gcStatsBefore)
 
-	stats := p.initializeUpdate()
-	p.runMainLoop(&stats)
-	p.finalizeUpdate(&stats, start, &gcStatsBefore)
-	lastDebugUpdateStats = stats
+	jobsStats, loopState := p.initializeUpdate()
+	p.runMainLoop(&jobsStats, &loopState)
+	p.finalizeUpdate(&jobsStats, start, &gcStatsBefore)
+	lastDebugUpdateStats = jobsStats
 }
 
-func (p *Coroutines) initializeUpdate() UpdateJobsStats {
+func (p *Coroutines) initializeUpdate() (UpdateJobsStats, updateLoopState) {
 	initStart := stime.Now()
-	stats := UpdateJobsStats{}
-	stats.InitTime = elapsedMillis(initStart)
-	return stats
-}
-
-func (p *Coroutines) runMainLoop(stats *UpdateJobsStats) {
-	loopStart := stime.Now()
-	state := updateLoopState{
+	jobsStats := UpdateJobsStats{}
+	loopState := updateLoopState{
 		curQueue:       p.curQueue,
 		nextQueue:      p.nextQueue,
 		curFrame:       time.Frame(),
 		curTime:        time.TimeSinceLevelLoad(),
 		debugStartTime: time.RealTimeSinceStart(),
 	}
+	jobsStats.InitTime = elapsedMillis(initStart)
+	return jobsStats, loopState
+}
 
+func (p *Coroutines) runMainLoop(jobsStats *UpdateJobsStats, loopState *updateLoopState) {
+	loopStart := stime.Now()
 	loopIterCount := 0
 	for {
 		loopIterCount++
-		if done, shouldContinue := p.waitForWork(&state, stats); done {
+		if done, shouldContinue := p.waitForWork(loopState, jobsStats); done {
 			break
 		} else if shouldContinue {
 			continue
 		}
-		p.processSingleTask(&state, stats)
-		if time.RealTimeSinceStart()-state.debugStartTime > 1 {
-			println("Warning: engine update > 1 seconds, please check your code ! waitMainCount=", state.waitMainCount)
+		p.processSingleTask(loopState, jobsStats)
+		if time.RealTimeSinceStart()-loopState.debugStartTime > 1 {
+			log.Warn("engine update exceeded 1 second - please review your code (waitMainCount=%d)", loopState.waitMainCount)
 			break
 		}
 	}
-
-	stats.LoopTime = elapsedMillis(loopStart)
-	stats.LoopIterations = loopIterCount
-	stats.WaitFrameCount = state.waitFrameCount
-	stats.WaitMainCount = state.waitMainCount
-
-	p.moveQueues(&state, stats)
+	jobsStats.LoopTime = elapsedMillis(loopStart)
+	jobsStats.LoopIterations = loopIterCount
+	jobsStats.WaitFrameCount = loopState.waitFrameCount
+	jobsStats.WaitMainCount = loopState.waitMainCount
+	p.moveQueues(loopState, jobsStats)
 }
 
 func (p *Coroutines) processSingleTask(state *updateLoopState, stats *UpdateJobsStats) {
@@ -555,7 +572,7 @@ func (p *Coroutines) newThread(obj ThreadObj) Thread {
 	th := &threadImpl{
 		Obj:        obj,
 		frame:      p.frame,
-		id:         p.nextWaitJobID(),
+		id:         atomic.AddInt64(&p.nextThreadID, 1),
 		schedFrame: -1,
 		name:       resolveThreadName(obj),
 	}
@@ -644,17 +661,11 @@ func (p *Coroutines) enqueueAndYield(me Thread, job *WaitJob, isFront bool) {
 	p.blockAndYield(me)
 }
 
-func (p *Coroutines) isSuspended(me Thread) bool {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-	return p.suspended[me]
-}
-
 func (p *Coroutines) isThreadCanceled(th Thread) bool {
 	if th == nil {
 		return false
 	}
-	if th.stopped {
+	if th.stopped.Load() {
 		return true
 	}
 	select {
