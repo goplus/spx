@@ -49,6 +49,7 @@ func newSpriteManager() *spriteManager {
 // reset clears all internal state while keeping allocated memory.
 // It is safe to call between scenes or rounds.
 func (sm *spriteManager) reset() {
+	engine.ClearAllSprites()
 	sm.items = sm.items[:0]
 	sm.tempItems = sm.tempItems[:0]
 	sm.destroyItems = sm.destroyItems[:0]

@@ -217,7 +217,6 @@ func (p *Game) getSpriteProtoByName(name string, g reflect.Value) Sprite {
 }
 
 func (p *Game) reset() {
-	engine.ClearAllSprites()
 	p.releaseGameAudio()
 	p.EraseAll()
 
@@ -230,13 +229,16 @@ func (p *Game) reset() {
 
 	p.startFlag = sync.Once{}
 	p.oncePathFinder = sync.Once{}
-	resetImageSizeCache(p)
-	p.resetEventQueueStats()
 	p.sprs = make(map[string]Sprite)
 
-	timer.OnReload()
+	resetImageSizeCache(p)
+	p.resetEventQueueStats()
 	close(p.events)
+
+	timer.OnReload()
 	p.Stop(AllOtherScripts)
+
+	p.isRunned = false
 }
 
 func (p *Game) initGame(sprites []Sprite) *Game {

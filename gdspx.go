@@ -52,7 +52,6 @@ func (p *Game) OnEngineDestroy() {
 
 func (p *Game) OnEngineReset() {
 	p.reset()
-	p.isRunned = false
 }
 
 func (p *Game) OnEngineUpdate(delta float64) {
