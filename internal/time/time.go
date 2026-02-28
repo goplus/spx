@@ -60,7 +60,6 @@ func UnscaledDeltaTime() float64 {
 	return unscaledDeltaTime
 }
 
-// no time scale
 func UnscaledTimeSinceLevelLoad() float64 {
 	return unscaledTimeSinceLevelLoad
 }

@@ -217,6 +217,8 @@ func (p *Game) getSpriteProtoByName(name string, g reflect.Value) Sprite {
 }
 
 func (p *Game) reset() {
+	p.isRunned = false
+
 	p.releaseGameAudio()
 	p.EraseAll()
 
@@ -237,8 +239,6 @@ func (p *Game) reset() {
 
 	timer.OnReload()
 	p.Stop(AllOtherScripts)
-
-	p.isRunned = false
 }
 
 func (p *Game) initGame(sprites []Sprite) *Game {
@@ -637,24 +637,29 @@ func (p *Game) setupWorldAndWindow(proj *projConfig) {
 
 // setupPlatformAndCamera configures platform settings and camera.
 func (p *Game) setupPlatformAndCamera(proj *projConfig) {
+	platformMgr := p.rt().platformMgr
+
 	if platform.IsMobile() || proj.FullScreen || platform.IsWeb() {
 		if proj.FullScreen || platform.IsMobile() {
-			p.rt().platformMgr.SetWindowFullscreen(true)
+			platformMgr.SetWindowFullscreen(true)
 		}
-		winSize := p.rt().platformMgr.GetWindowSize()
-		scale := math.Min(winSize.X/float64(p.windowWidth), winSize.Y/float64(p.windowHeight))
-		p.windowScale = scale
+		winSize := platformMgr.GetWindowSize()
+		scaleX := winSize.X / float64(p.windowWidth)
+		scaleY := winSize.Y / float64(p.windowHeight)
+		p.windowScale = math.Min(scaleX, scaleY)
 	}
 
+	winWidth := int64(float64(p.windowWidth) * p.windowScale)
+	winHeight := int64(float64(p.windowHeight) * p.windowScale)
 	if platform.IsWeb() {
-		size := p.rt().platformMgr.GetWindowSize()
-		p.rt().platformMgr.SetWindowSize(int64(size.X), int64(size.Y), true)
-	} else {
-		p.rt().platformMgr.SetWindowSize(int64(float64(p.windowWidth)*p.windowScale), int64(float64(p.windowHeight)*p.windowScale), true)
+		size := platformMgr.GetWindowSize()
+		winWidth = int64(size.X)
+		winHeight = int64(size.Y)
 	}
 
-	p.rt().platformMgr.SetMaxFps(int64(proj.MaxFPS))
-	p.rt().platformMgr.SetStretchMode(p.stretchMode)
+	platformMgr.SetWindowSize(winWidth, winHeight, true)
+	platformMgr.SetMaxFps(int64(proj.MaxFPS))
+	platformMgr.SetStretchMode(p.stretchMode)
 
 	p.camera = &cameraImpl{}
 	p.Camera = p.camera
