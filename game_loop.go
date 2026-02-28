@@ -228,7 +228,7 @@ func (p *Game) inputEventLoop(me coroutine.Thread) int {
 }
 
 func (p *Game) initEventLoop() {
-	gco.Create(nil, p.eventLoop)
-	gco.Create(nil, p.inputEventLoop)
-	gco.Create(nil, p.logicLoop)
+	gco.Create("eventLoop", p.eventLoop)
+	gco.Create("inputEventLoop", p.inputEventLoop)
+	gco.Create("logicLoop", p.logicLoop)
 }

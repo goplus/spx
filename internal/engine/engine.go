@@ -9,6 +9,7 @@ import (
 	"github.com/goplus/spx/v2/internal/engine/platform"
 	"github.com/goplus/spx/v2/internal/engine/profiler"
 	"github.com/goplus/spx/v2/internal/enginewrap"
+	spxlog "github.com/goplus/spx/v2/internal/log"
 	"github.com/goplus/spx/v2/internal/time"
 	"github.com/goplus/spx/v2/pkg/gdspx/pkg/engine"
 	gdx "github.com/goplus/spx/v2/pkg/gdspx/pkg/engine"
@@ -191,9 +192,7 @@ func onPaused(isPaused bool) {
 }
 
 func onReset() {
-	engine.ClearAllSprites()
 	game.OnEngineReset()
-	gco.AbortAll()
 	gde.UnlinkEngine()
 }
 
@@ -314,10 +313,18 @@ func Panicf(format string, args ...any) {
 	OnPanic(msg, "")
 }
 
+// abortCoroutinesAndReset aborts all running coroutines and resets the engine.
+// This is primarily used on web platforms where we cannot truly exit the process.
+func abortCoroutinesAndReset(exitCode int64) {
+	completed := gco.AbortAllAndWait(2 * stime.Second)
+	spxlog.Debug("AbortAllAndWait completed: %v. Requesting engine reset.", completed)
+	extMgr.RequestReset(exitCode)
+}
+
 func RequestExit(exitCode int64) {
 	if platform.IsWeb() {
-		// On web platform, just request reset
-		extMgr.RequestReset(exitCode)
+		// On web platform, abort coroutines and request reset
+		abortCoroutinesAndReset(exitCode)
 		return
 	}
 	extMgr.RequestExit(exitCode)
