@@ -217,6 +217,7 @@ func (p *Game) getSpriteProtoByName(name string, g reflect.Value) Sprite {
 }
 
 func (p *Game) reset() {
+	engine.ClearAllSprites()
 	p.releaseGameAudio()
 	p.EraseAll()
 
