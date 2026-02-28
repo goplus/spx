@@ -241,7 +241,7 @@ func applySpriteProps(dest *SpriteImpl, v specsp) {
 		dest.scale = size.(float64)
 	}
 	if idx, ok := v["costumeIndex"]; ok {
-		dest.setCustumeIndex(int(idx.(float64)))
+		dest.setCostumeIndex(int(idx.(float64)))
 	}
 	dest.isCloned = false
 }
