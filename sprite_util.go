@@ -271,7 +271,7 @@ func getCostumeBoundByAlpha(p *SpriteImpl, isSync bool) (mathf.Vec2, mathf.Vec2)
 		rect.Position.X = 0
 		rect.Position.Y = 0
 	} else {
-		if cache, ok := cachedBounds_[cs.path]; ok {
+		if cache, ok := cachedBounds[cs.path]; ok {
 			rect = cache
 		} else {
 			assetPath := engine.ToAssetPath(cs.path)
@@ -281,7 +281,7 @@ func getCostumeBoundByAlpha(p *SpriteImpl, isSync bool) (mathf.Vec2, mathf.Vec2)
 				rect = p.rt().resMgr.GetBoundFromAlpha(assetPath)
 			}
 		}
-		cachedBounds_[cs.path] = rect
+		cachedBounds[cs.path] = rect
 	}
 	scale := 1 / float64(cs.bitmapResolution)
 	// top left
