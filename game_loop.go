@@ -72,7 +72,7 @@ func (p *Game) doWhenLeftButtonDown(ev *eventLeftButtonDown) {
 	p.inputs.startTracking(point, targetSprite)
 
 	// add a global click cooldown
-	if !p.inputs.canTriggerClickEvent(inputGlobalClickTimerId) {
+	if !p.inputs.canTriggerClickEvent(clickTimerGlobal) {
 		return
 	}
 
@@ -82,7 +82,7 @@ func (p *Game) doWhenLeftButtonDown(ev *eventLeftButtonDown) {
 			target.doWhenClick(target)
 		}
 	} else {
-		if p.inputs.canTriggerClickEvent(inputStageClickTimerId) {
+		if p.inputs.canTriggerClickEvent(clickTimerStage) {
 			p.sinkMgr.doWhenClick(p)
 		}
 	}
