@@ -72,7 +72,7 @@ func (b *gameBuilder) loadResources() *gameBuilder {
 	}
 	b.fs = fs
 
-	b.game.rt().resMgr.SetDefaultFont("res://engine/fonts/CnFont.ttf")
+	b.game.engine().resMgr.SetDefaultFont("res://engine/fonts/CnFont.ttf")
 	engine.RegisterFileSystem(fs)
 
 	if b.gameConf != nil {
