@@ -600,7 +600,13 @@ func (p *Game) setupDisplayConfig(proj *projConfig) {
 
 	p.windowScale = windowScale
 	p.stretchMode = proj.StretchMode == nil || *proj.StretchMode
+
 	p.debug = proj.Debug
+	if p.debug {
+		spxlog.SetLevel(spxlog.LevelDebug)
+	} else {
+		spxlog.SetLevel(spxlog.LevelInfo)
+	}
 	engine.SetDebugMode(p.debug)
 }
 

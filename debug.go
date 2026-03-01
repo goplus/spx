@@ -36,14 +36,16 @@ func (p *Game) showDebugPanel() {
 		}
 		return
 	}
+	if p.debugPanel == nil {
+		p.debugPanel = ui.NewUiDebug()
+	}
+
 	updateInfo, _ := profiler.GetStats("GameUpdate")
 	coroInfo, _ := profiler.GetStats("CoroUpdateJobs")
 	renderInfo, _ := profiler.GetStats("GameRender")
 	lastInfo := gco.GetLastUpdateStats()
 	eventQ := p.eventQueueSnapshot()
-	if p.debugPanel == nil {
-		p.debugPanel = ui.NewUiDebug()
-	}
+
 	msg := fmt.Sprintf("FPS: %.f\n", itime.FPS())
 	msg += fmt.Sprintf("Shape: %v\n", p.spriteMgr.count())
 	msg += fmt.Sprintf("GameUpdate: %v\n", updateInfo.ActualCall)
