@@ -2,9 +2,9 @@ package spx
 
 import "github.com/goplus/spx/v2/internal/enginewrap"
 
-// runtimeManagers groups all engine-facing manager wrappers for a Game instance.
+// engineManagers groups all engine-facing manager wrappers for a Game instance.
 // This keeps runtime dependencies scoped to the game instead of package-level globals.
-type runtimeManagers struct {
+type engineManagers struct {
 	audioMgr         enginewrap.AudioMgrImpl
 	cameraMgr        enginewrap.CameraMgrImpl
 	inputMgr         enginewrap.InputMgrImpl
@@ -22,14 +22,14 @@ type runtimeManagers struct {
 	tilemapparserMgr enginewrap.TilemapparserMgrImpl
 }
 
-func (p *Game) rt() *runtimeManagers {
-	return &p.runtime
+func (p *Game) engine() *engineManagers {
+	return &p.engineMgr
 }
 
-func (p *SpriteImpl) rt() *runtimeManagers {
-	return p.g.rt()
+func (p *SpriteImpl) engine() *engineManagers {
+	return p.g.engine()
 }
 
-func (c *componentBase) rt() *runtimeManagers {
-	return c.sprite.rt()
+func (c *componentBase) engine() *engineManagers {
+	return c.sprite.engine()
 }

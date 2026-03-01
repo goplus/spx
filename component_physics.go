@@ -133,7 +133,7 @@ func (p *physicsComponent) onDestroy() {
 // SetPhysicsMode sets the physics mode for the sprite.
 func (p *physicsComponent) SetPhysicsMode(mode PhysicsMode) {
 	p.physicsMode = mode
-	p.rt().spriteMgr.SetPhysicsMode(p.sprite.getSpriteId(), int64(mode))
+	p.engine().spriteMgr.SetPhysicsMode(p.sprite.getSpriteId(), int64(mode))
 }
 
 // GetPhysicsMode returns the current physics mode.
@@ -147,23 +147,23 @@ func (p *physicsComponent) GetPhysicsMode() PhysicsMode {
 
 // GetVelocity returns the current velocity in X and Y directions.
 func (p *physicsComponent) GetVelocity() (velocityX, velocityY float64) {
-	vel := p.rt().spriteMgr.GetVelocity(p.sprite.getSpriteId())
+	vel := p.engine().spriteMgr.GetVelocity(p.sprite.getSpriteId())
 	return vel.X, vel.Y
 }
 
 // SetVelocity sets the velocity in X and Y directions.
 func (p *physicsComponent) SetVelocity(velocityX, velocityY float64) {
-	p.rt().spriteMgr.SetVelocity(p.sprite.getSpriteId(), mathf.NewVec2(velocityX, velocityY))
+	p.engine().spriteMgr.SetVelocity(p.sprite.getSpriteId(), mathf.NewVec2(velocityX, velocityY))
 }
 
 // AddImpulse applies an impulse force to the sprite.
 func (p *physicsComponent) AddImpulse(impulseX, impulseY float64) {
-	p.rt().spriteMgr.AddImpulse(p.sprite.getSpriteId(), mathf.NewVec2(impulseX, impulseY))
+	p.engine().spriteMgr.AddImpulse(p.sprite.getSpriteId(), mathf.NewVec2(impulseX, impulseY))
 }
 
 // IsOnFloor checks if the sprite is on the floor.
 func (p *physicsComponent) IsOnFloor() bool {
-	return p.rt().spriteMgr.IsOnFloor(p.sprite.getSpriteId())
+	return p.engine().spriteMgr.IsOnFloor(p.sprite.getSpriteId())
 }
 
 // ============================================================================
@@ -172,12 +172,12 @@ func (p *physicsComponent) IsOnFloor() bool {
 
 // GetGravity returns the current gravity scale.
 func (p *physicsComponent) GetGravity() float64 {
-	return p.rt().spriteMgr.GetGravity(p.sprite.getSpriteId())
+	return p.engine().spriteMgr.GetGravity(p.sprite.getSpriteId())
 }
 
 // SetGravity sets the gravity scale for the sprite.
 func (p *physicsComponent) SetGravity(gravity float64) {
-	p.rt().spriteMgr.SetGravity(p.sprite.getSpriteId(), gravity)
+	p.engine().spriteMgr.SetGravity(p.sprite.getSpriteId(), gravity)
 }
 
 // ============================================================================

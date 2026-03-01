@@ -321,7 +321,7 @@ func syncOnAtlasChanged(p *baseObj) {
 
 // createAnimation creates an animation from configuration and costume data.
 func createAnimation(
-	runtime *runtimeManagers,
+	engineMgr *engineManagers,
 	spriteName string,
 	animName string,
 	cfg *aniConfig,
@@ -345,7 +345,7 @@ func createAnimation(
 		panic(fmt.Sprintf("createAnimation: failed to marshal animation payload: %v", err))
 	}
 	// Create animation in resource manager
-	runtime.resMgr.CreateAnimation(
+	engineMgr.resMgr.CreateAnimation(
 		spriteName,
 		animName,
 		string(bin),

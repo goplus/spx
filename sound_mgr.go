@@ -30,8 +30,8 @@ type soundMgr struct {
 	path2ids map[string][]int64
 }
 
-func (p *soundMgr) rt() *runtimeManagers {
-	return p.g.rt()
+func (p *soundMgr) engine() *engineManagers {
+	return p.g.engine()
 }
 
 func (p *soundMgr) init(g *Game) {
@@ -41,37 +41,33 @@ func (p *soundMgr) init(g *Game) {
 }
 
 func (p *soundMgr) allocSound() engine.Object {
-	return p.rt().audioMgr.CreateAudio()
+	return p.engine().audioMgr.CreateAudio()
 }
 
 func (p *soundMgr) releaseSound(soundObj engine.Object) {
 	if soundObj == 0 {
 		return
 	}
-	p.rt().audioMgr.DestroyAudio(soundObj)
+	p.engine().audioMgr.DestroyAudio(soundObj)
 }
 
 func (p *soundMgr) pause(media sound) {
 	for _, id := range p.path2ids[media.Path] {
-		p.rt().audioMgr.Pause(id)
+		p.engine().audioMgr.Pause(id)
 	}
 }
 
 func (p *soundMgr) resume(media sound) {
 	for _, id := range p.path2ids[media.Path] {
-		p.rt().audioMgr.Resume(id)
+		p.engine().audioMgr.Resume(id)
 	}
 }
 
 func (p *soundMgr) stop(media sound) {
 	for _, id := range p.path2ids[media.Path] {
-		p.rt().audioMgr.Stop(id)
+		p.engine().audioMgr.Stop(id)
 	}
 	delete(p.path2ids, media.Path)
-}
-
-func (p *soundMgr) stopInstance(soundId soundId) {
-	p.rt().audioMgr.Stop(soundId)
 }
 
 func (p *soundMgr) play(soundObj engine.Object, media sound, isLoop, isWait bool, owner engine.Object, attenuation, maxDistance float64) soundId {
@@ -80,16 +76,16 @@ func (p *soundMgr) play(soundObj engine.Object, media sound, isLoop, isWait bool
 	if attenuation == 0 {
 		owner = 0
 	}
-	curId = p.rt().audioMgr.PlayWithAttenuation(soundObj, engine.ToAssetPath(media.Path), owner, attenuation, maxDistance)
+	curId = p.engine().audioMgr.PlayWithAttenuation(soundObj, engine.ToAssetPath(media.Path), owner, attenuation, maxDistance)
 	p.path2ids[media.Path] = append(p.path2ids[media.Path], curId)
 	if isLoop {
 		for _, id := range p.path2ids[media.Path] {
-			p.rt().audioMgr.SetLoop(id, true)
+			p.engine().audioMgr.SetLoop(id, true)
 		}
 	} else {
 		if isWait {
 			for {
-				if !p.rt().audioMgr.IsPlaying(curId) {
+				if !p.engine().audioMgr.IsPlaying(curId) {
 					break
 				}
 				engine.WaitNextFrame()
@@ -101,15 +97,15 @@ func (p *soundMgr) play(soundObj engine.Object, media sound, isLoop, isWait bool
 
 func (p *soundMgr) stopAll() {
 	p.path2ids = make(map[string][]int64)
-	p.rt().audioMgr.StopAll()
+	p.engine().audioMgr.StopAll()
 }
 
 func (p *soundMgr) getEffect(soundObj engine.Object, kind SoundEffectKind) float64 {
 	switch kind {
 	case SoundPanEffect:
-		return p.rt().audioMgr.GetPan(soundObj) * 100
+		return p.engine().audioMgr.GetPan(soundObj) * 100
 	case SoundPitchEffect:
-		return p.rt().audioMgr.GetPitch(soundObj) * 100
+		return p.engine().audioMgr.GetPitch(soundObj) * 100
 	default:
 		panic("GetSoundEffect: invalid kind")
 	}
@@ -119,9 +115,9 @@ func (p *soundMgr) setEffect(soundObj engine.Object, kind SoundEffectKind, value
 	val := value / 100
 	switch kind {
 	case SoundPanEffect:
-		p.rt().audioMgr.SetPan(soundObj, val)
+		p.engine().audioMgr.SetPan(soundObj, val)
 	case SoundPitchEffect:
-		p.rt().audioMgr.SetPitch(soundObj, val)
+		p.engine().audioMgr.SetPitch(soundObj, val)
 	default:
 		panic("SetSoundEffect: invalid kind")
 	}
@@ -133,7 +129,7 @@ func (p *soundMgr) changeEffect(soundObj engine.Object, kind SoundEffectKind, de
 }
 
 func (p *soundMgr) getVolume(soundObj engine.Object) float64 {
-	return p.rt().audioMgr.GetVolume(soundObj) * 100
+	return p.engine().audioMgr.GetVolume(soundObj) * 100
 }
 
 func (p *soundMgr) setVolume(soundObj engine.Object, value float64) {
@@ -141,7 +137,7 @@ func (p *soundMgr) setVolume(soundObj engine.Object, value float64) {
 	if val <= 0 {
 		val = 0.01
 	}
-	p.rt().audioMgr.SetVolume(soundObj, val)
+	p.engine().audioMgr.SetVolume(soundObj, val)
 }
 
 func (p *soundMgr) changeVolume(soundObj engine.Object, delta float64) {
