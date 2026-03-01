@@ -26,8 +26,10 @@ import (
 	gdx "github.com/goplus/spx/v2/pkg/gdspx/pkg/engine"
 )
 
+// Key represents a keyboard key code.
 type Key = gdx.KeyCode
 
+// Keyboard key constants
 const (
 	Key0            Key = gdx.Key0
 	Key1            Key = gdx.Key1
@@ -132,6 +134,7 @@ const (
 	KeyAny          Key = -1
 )
 
+// keyStringMap maps string representations to Key codes for parsing.
 var keyStringMap = map[string]Key{
 	"0": Key0, "1": Key1, "2": Key2, "3": Key3, "4": Key4,
 	"5": Key5, "6": Key6, "7": Key7, "8": Key8, "9": Key9,
@@ -194,28 +197,18 @@ var keyStringMap = map[string]Key{
 	"Any":   KeyAny,
 }
 
-func initInput() {
-
-}
-
-// KeyFromString converts a string to its corresponding KeyCode.
+// KeyFromString converts a string to its corresponding Key code.
 // It supports key names like "A", "Space", "Enter", "Left", etc.
 // Returns KeyMax if the key name is not recognized.
 func KeyFromString(key string) Key {
 	if keyCode, ok := keyStringMap[key]; ok {
 		return keyCode
 	}
-	return KeyMax // Return KeyMax for unrecognized keys
+	return KeyMax
 }
 
-const (
-	mouseStateNone     = 0x00
-	mouseStatePressing = 0x01
-	mouseFlagStates    = 0x7f
-	mouseFlagTouching  = 0x80
-)
-
 // -------------------------------------------------------------------------------------
+// Event types
 
 type event any
 
@@ -245,12 +238,19 @@ type eventMouseMove struct {
 	Pos mathf.Vec2
 }
 
-type eventFirer interface {
-	fireEvent(ev event)
-}
-
 // -------------------------------------------------------------------------------------
+// Input Manager
 
+const (
+	// Minimum interval between two mouse click events (in milliseconds)
+	mouseClickIntervalMs = 50
+	// Special timer IDs for click event management
+	clickTimerGlobal = -1 // Global click cooldown
+	clickTimerStage  = 0  // Stage click cooldown
+)
+
+// inputManager handles all input-related operations including mouse, keyboard,
+// and gesture recognition.
 type inputManager struct {
 	tempItems []Shape
 	g         *Game
@@ -259,18 +259,10 @@ type inputManager struct {
 	swipeRecognizer inputSwipeRecognizer
 }
 
-const (
-	// minimum interval between two mouse click events
-	inputMouseClickIntervalMs = 50
-	inputGlobalClickTimerId   = -1 // global click cooldown
-	inputStageClickTimerId    = 0  // stage click cooldown
-)
-
 func (p *inputManager) init(g *Game) {
 	p.tempItems = make([]Shape, 50)
 	p.id2Timer = make(map[gdx.Object]int64)
 	p.g = g
-
 	p.swipeRecognizer.init()
 }
 
@@ -279,41 +271,42 @@ func (p *inputManager) startTracking(startPos mathf.Vec2, targetSprite *SpriteIm
 }
 
 func (p *inputManager) checkTracking(point mathf.Vec2) {
-	// check swipe gesture
 	p.checkSwipe(point)
 }
 
 func (p *inputManager) checkSwipe(point mathf.Vec2) {
-	// check swipe gesture
-	swiper := p.swipeRecognizer
-	// Check for swipe completion
-	if swiper.isTracking {
-		swiper.isTracking = false
-		swiper.endPoint = point
-		if swiper.checkForSwipeCompletion() {
-			var targetName string
-			if swiper.targetSprite != nil {
-				targetName = swiper.targetSprite.name
-			} else {
-				targetName = "stage"
-			}
-
-			if isDebugEventEnabled() {
-				spxlog.Debug("Swipe detected: direction=%v, velocity=%.2f, distance=%.2f, target=%s",
-					swiper.detectedDirection, swiper.swipeVelocity, swiper.swipeDistance, targetName)
-			}
-
-			// Trigger sprite or stage swipe events through sinkMgr
-			if swiper.targetSprite != nil {
-				// Trigger swipe event on the specific sprite only
-				swiper.targetSprite.doWhenSwipe(swiper.detectedDirection, swiper.targetSprite)
-			} else {
-				// Trigger swipe event on the stage (game) only
-				p.g.sinkMgr.doWhenSwipe(swiper.detectedDirection, p.g)
-			}
-		}
-		p.swipeRecognizer.stopTracking()
+	swiper := &p.swipeRecognizer
+	if !swiper.isTracking {
+		return
 	}
+
+	swiper.isTracking = false
+	swiper.endPoint = point
+
+	if !swiper.checkForSwipeCompletion() {
+		swiper.stopTracking()
+		return
+	}
+
+	// Determine target name for logging
+	targetName := "stage"
+	if swiper.targetSprite != nil {
+		targetName = swiper.targetSprite.name
+	}
+
+	if isDebugEventEnabled() {
+		spxlog.Debug("Swipe detected: direction=%v, velocity=%.2f, distance=%.2f, target=%s",
+			swiper.detectedDirection, swiper.swipeVelocity, swiper.swipeDistance, targetName)
+	}
+
+	// Trigger swipe event on sprite or stage
+	if swiper.targetSprite != nil {
+		swiper.targetSprite.doWhenSwipe(swiper.detectedDirection, swiper.targetSprite)
+	} else {
+		p.g.sinkMgr.doWhenSwipe(swiper.detectedDirection, p.g)
+	}
+
+	swiper.stopTracking()
 }
 
 func (p *inputManager) onMouseMove(pos mathf.Vec2) {
@@ -323,21 +316,22 @@ func (p *inputManager) onMouseMove(pos mathf.Vec2) {
 }
 
 func (p *inputManager) canTriggerClickEvent(id gdx.Object) bool {
-	currentTime := time.Now()
-	milliseconds := currentTime.UnixNano() / int64(time.Millisecond)
-	if lastTime, ok := p.id2Timer[id]; ok {
-		if milliseconds-lastTime < inputMouseClickIntervalMs {
+	currentTimeMs := time.Now().UnixNano() / int64(time.Millisecond)
+
+	if lastTimeMs, ok := p.id2Timer[id]; ok {
+		if currentTimeMs-lastTimeMs < mouseClickIntervalMs {
 			return false
 		}
 	}
-	p.id2Timer[id] = milliseconds
+
+	p.id2Timer[id] = currentTimeMs
 	return true
 }
 
-// -----------------------------------------------------------------------------
-// inputSwipeRecognizer methods
+// -------------------------------------------------------------------------------------
+// Swipe Gesture Recognizer
 
-// inputSwipeRecognizer handles swipe gesture detection.
+// inputSwipeRecognizer handles swipe gesture detection and recognition.
 type inputSwipeRecognizer struct {
 	// Configuration parameters
 	timeToSwipe            float64 // Maximum swipe time in seconds
@@ -359,34 +353,34 @@ type inputSwipeRecognizer struct {
 	swipeVelocity     float64
 	swipeDistance     float64
 
-	// Callback for swipe detection
+	// Callback for swipe detection (optional)
 	onSwipeCallback func(direction Direction, velocity float64, distance float64, startPos, endPos mathf.Vec2, targetSprite *SpriteImpl)
 }
 
-// initinputSwipeRecognizer initializes the swipe recognizer with default settings.
+// init initializes the swipe recognizer with default settings.
 func (sr *inputSwipeRecognizer) init() {
 	sr.timeToSwipe = 0.5 // 500ms default
 	sr.enableTimeLimit = true
-	sr.minimumDistance = 50.0             // 50 pixels minimum
-	sr.maximumDistance = 500.0            // 500 pixels maximum
-	sr.triggerWhenCriteriaMet = false     // trigger on mouse up only
-	sr.points = make([]mathf.Vec2, 0, 50) // pre-allocate for better performance
+	sr.minimumDistance = 50.0         // 50 pixels minimum
+	sr.maximumDistance = 500.0        // 500 pixels maximum
+	sr.triggerWhenCriteriaMet = false // Trigger on mouse up only
+	sr.points = make([]mathf.Vec2, 0, 50)
 }
 
 // setSwipeConfig configures the swipe recognizer parameters.
-func (p *inputSwipeRecognizer) setSwipeConfig(timeToSwipe, minDistance, maxDistance float64) {
-	p.timeToSwipe = timeToSwipe
-	p.minimumDistance = minDistance
-	p.maximumDistance = maxDistance
+func (sr *inputSwipeRecognizer) setSwipeConfig(timeToSwipe, minDistance, maxDistance float64) {
+	sr.timeToSwipe = timeToSwipe
+	sr.minimumDistance = minDistance
+	sr.maximumDistance = maxDistance
 }
 
-// startTracking begins swipe tracking
+// startTracking begins swipe tracking at the given start position.
 func (sr *inputSwipeRecognizer) startTracking(startPos mathf.Vec2, targetSprite *SpriteImpl) {
 	sr.isTracking = true
 	sr.startTime = time.Now()
 	sr.startPoint = startPos
 	sr.endPoint = startPos
-	sr.points = sr.points[:0] // clear previous points
+	sr.points = sr.points[:0] // Clear previous points
 	sr.points = append(sr.points, startPos)
 	sr.targetSprite = targetSprite
 	sr.detectedDirection = -1
@@ -394,10 +388,10 @@ func (sr *inputSwipeRecognizer) startTracking(startPos mathf.Vec2, targetSprite 
 	sr.swipeDistance = 0
 }
 
-// stopTracking ends swipe tracking
+// stopTracking ends swipe tracking and clears target sprite reference.
 func (sr *inputSwipeRecognizer) stopTracking() {
 	sr.isTracking = false
-	sr.targetSprite = nil // Clear target sprite reference
+	sr.targetSprite = nil
 }
 
 // onMouseMove handles mouse movement during tracking.
@@ -405,20 +399,16 @@ func (sr *inputSwipeRecognizer) onMouseMove(pos mathf.Vec2) {
 	if !sr.isTracking {
 		return
 	}
-
 	// Check if time limit exceeded
 	if sr.enableTimeLimit && sr.timeToSwipe > 0 {
-		elapsed := time.Since(sr.startTime).Seconds()
-		if elapsed > sr.timeToSwipe {
+		if time.Since(sr.startTime).Seconds() > sr.timeToSwipe {
 			sr.stopTracking()
 			return
 		}
 	}
-
 	// Record trajectory point
 	sr.points = append(sr.points, pos)
 	sr.endPoint = pos
-
 	// Optional: real-time detection
 	if sr.triggerWhenCriteriaMet {
 		if sr.checkForSwipeCompletion() {
@@ -428,72 +418,70 @@ func (sr *inputSwipeRecognizer) onMouseMove(pos mathf.Vec2) {
 	}
 }
 
-// checkForSwipeCompletion checks if current gesture qualifies as a swipe.
+// checkForSwipeCompletion checks if the current gesture qualifies as a swipe.
 func (sr *inputSwipeRecognizer) checkForSwipeCompletion() bool {
 	if len(sr.points) < 2 {
 		return false
 	}
 
-	// 1. Time validation
+	// Calculate elapsed time once for efficiency
+	elapsed := time.Since(sr.startTime).Seconds()
+
+	// Time validation
 	if sr.enableTimeLimit && sr.timeToSwipe > 0 {
-		elapsed := time.Since(sr.startTime).Seconds()
 		if elapsed > sr.timeToSwipe {
 			return false
 		}
 	}
 
-	// 2. Distance calculation
+	// Distance calculation
 	dx := sr.endPoint.X - sr.startPoint.X
 	dy := sr.endPoint.Y - sr.startPoint.Y
-	idealDistance := math.Sqrt(dx*dx + dy*dy)
-	if idealDistance < sr.minimumDistance || idealDistance > sr.maximumDistance {
+	distance := math.Sqrt(dx*dx + dy*dy)
+
+	if distance < sr.minimumDistance || distance > sr.maximumDistance {
 		return false
 	}
-	// 4. Direction calculation
+
+	// Direction calculation
 	direction := sr.calculateDirection(sr.startPoint, sr.endPoint)
 
-	// 5. Calculate velocity and distance
-	elapsed := time.Since(sr.startTime).Seconds()
-	sr.swipeVelocity = idealDistance / elapsed
-	sr.swipeDistance = idealDistance
+	// Store results (elapsed should always be > 0 since time has passed)
+	sr.swipeVelocity = distance / elapsed
+	sr.swipeDistance = distance
 	sr.detectedDirection = direction
 
 	return true
 }
 
-// calculateDirection determines swipe direction based on start and end points
+// calculateDirection determines swipe direction based on start and end points.
+// The direction is mapped to 4 basic directions (Up, Down, Left, Right).
 func (sr *inputSwipeRecognizer) calculateDirection(startPoint, endPoint mathf.Vec2) Direction {
 	delta := endPoint.Sub(startPoint)
-
-	// In screen coordinates: Y increases downward, X increases rightward
-	// When finger moves down: delta.Y > 0, should return SwipeDown
-	// When finger moves up: delta.Y < 0, should return SwipeUp
-
+	// Calculate angle in degrees (0-360)
 	angle := engine.RadToDeg(math.Atan2(delta.Y, delta.X))
-
-	// Normalize angle to 0-360 degrees
 	if angle < 0 {
 		angle += 360
 	}
-
-	// Map angles to 4 basic directions (each direction covers 90°)
+	// Map angles to 4 basic directions (each covers 90°)
 	switch {
 	case angle >= 315 || angle < 45:
-		return Right // 315° - 45° - finger moves right
+		return Right // Finger moves right
 	case angle >= 45 && angle < 135:
-		return Up // 45° - 135° - finger moves down
+		return Up // Finger moves down
 	case angle >= 135 && angle < 225:
-		return Left // 135° - 225° - finger moves left
+		return Left // Finger moves left
 	case angle >= 225 && angle < 315:
-		return Down // 225° - 315° - finger moves up
+		return Down // Finger moves up
 	default:
 		return -1
 	}
 }
 
-// onSwipeDetected triggers the swipe callback
+// onSwipeDetected triggers the swipe callback if one is registered.
 func (sr *inputSwipeRecognizer) onSwipeDetected() {
 	if sr.onSwipeCallback != nil {
-		sr.onSwipeCallback(sr.detectedDirection, sr.swipeVelocity, sr.swipeDistance, sr.startPoint, sr.endPoint, sr.targetSprite)
+		sr.onSwipeCallback(sr.detectedDirection, sr.swipeVelocity, sr.swipeDistance,
+			sr.startPoint, sr.endPoint, sr.targetSprite)
 	}
 }
