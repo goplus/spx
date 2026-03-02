@@ -105,7 +105,7 @@ func (p *gameTilemapMgr) loadMap(mapDir string) {
 
 		// Load tilemap using C++ TileMapParser
 		enginePath := engine.ToAssetPath(tilemapPath)
-		p.engine().tilemapparserMgr.LoadTilemap(enginePath)
+		p.engine().TilemapparserMgr.LoadTilemap(enginePath)
 		p.useNewLoader = true
 
 		// Load decorator.json
@@ -134,7 +134,7 @@ func (p *gameTilemapMgr) unloadMap() {
 
 	if p.useNewLoader {
 		// Unload from C++ TileMapParser
-		p.engine().tilemapparserMgr.DestroyAllTilemaps()
+		p.engine().TilemapparserMgr.DestroyAllTilemaps()
 	}
 
 	// Clean up decorator sprites
@@ -155,7 +155,7 @@ func (p *gameTilemapMgr) getCurrentMap() string {
 
 // cleanupDecorators removes all static sprites (decorators) created by tilemaps
 func (p *gameTilemapMgr) cleanupDecorators() {
-	p.engine().sceneMgr.ClearPureSprites()
+	p.engine().SceneMgr.ClearPureSprites()
 }
 
 func (p *gameTilemapMgr) loadTilemaps(datas *tm.TscnMapData) {
@@ -173,7 +173,7 @@ func (p *gameTilemapMgr) loadDecoratorNodes(decorators []tm.DecoratorNode, tilem
 		pivot := item.Pivot.ToVec2()
 		relativePath := path.Join(tilemapDir, item.Path)
 		assetPath := engine.ToAssetPath(relativePath)
-		texSize := p.engine().resMgr.GetImageSize(assetPath)
+		texSize := p.engine().ResMgr.GetImageSize(assetPath)
 		colliderPivot := item.ColliderPivot.ToVec2().Add(pivot)
 		pivot = pivot.Sub(texSize.Divf(2))
 		p.g.createStaticSprite(relativePath, position, item.Ratation+headingOffset,

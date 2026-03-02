@@ -21,7 +21,7 @@ func (pself *UiDebug) OnStart() {
 }
 
 func (pself *UiDebug) Show(msg string) {
-	uiMgr.SetScale(pself.GetId(), mathf.NewVec2(windowScale, windowScale))
-	uiMgr.SetVisible(pself.input.GetId(), msg != "")
-	uiMgr.SetText(pself.input.GetId(), msg)
+	mgr.UiMgr.SetScale(pself.GetId(), mathf.NewVec2(windowScale, windowScale))
+	mgr.UiMgr.SetVisible(pself.input.GetId(), msg != "")
+	mgr.UiMgr.SetText(pself.input.GetId(), msg)
 }

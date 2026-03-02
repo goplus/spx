@@ -28,19 +28,19 @@ import (
 // PlaceTiles__0 places multiple tiles at specified positions using default layer.
 func (p *Game) PlaceTiles__0(positions []float64, texturePath string) {
 	path := engine.ToAssetPath(texturePath)
-	p.engine().tilemapMgr.PlaceTiles(f64Tof32(positions), path)
+	p.engine().TilemapMgr.PlaceTiles(f64Tof32(positions), path)
 }
 
 // PlaceTiles__1 places multiple tiles at specified positions on a specific layer.
 func (p *Game) PlaceTiles__1(positions []float64, texturePath string, layerIndex int64) {
 	path := engine.ToAssetPath(texturePath)
-	p.engine().tilemapMgr.PlaceTilesWithLayer(f64Tof32(positions), path, layerIndex)
+	p.engine().TilemapMgr.PlaceTilesWithLayer(f64Tof32(positions), path, layerIndex)
 }
 
 // PlaceTile places a single tile at the specified position.
 func (p *Game) PlaceTile(x, y float64, texturePath string) {
 	path := engine.ToAssetPath(texturePath)
-	p.engine().tilemapMgr.PlaceTile(mathf.NewVec2(x, y), path)
+	p.engine().TilemapMgr.PlaceTile(mathf.NewVec2(x, y), path)
 }
 
 // ============================================================================
@@ -49,12 +49,12 @@ func (p *Game) PlaceTile(x, y float64, texturePath string) {
 
 // EraseTile__0 erases a tile at the specified position using default layer.
 func (p *Game) EraseTile__0(x, y float64) {
-	p.engine().tilemapMgr.EraseTile(mathf.NewVec2(x, y))
+	p.engine().TilemapMgr.EraseTile(mathf.NewVec2(x, y))
 }
 
 // EraseTile__1 erases a tile at the specified position on a specific layer.
 func (p *Game) EraseTile__1(x, y float64, layerIndex int64) {
-	p.engine().tilemapMgr.EraseTileWithLayer(mathf.NewVec2(x, y), layerIndex)
+	p.engine().TilemapMgr.EraseTileWithLayer(mathf.NewVec2(x, y), layerIndex)
 }
 
 // ============================================================================
@@ -63,12 +63,12 @@ func (p *Game) EraseTile__1(x, y float64, layerIndex int64) {
 
 // GetTile__0 gets the tile texture path at the specified position using default layer.
 func (p *Game) GetTile__0(x, y float64) string {
-	return p.engine().tilemapMgr.GetTile(mathf.NewVec2(x, y))
+	return p.engine().TilemapMgr.GetTile(mathf.NewVec2(x, y))
 }
 
 // GetTile__1 gets the tile texture path at the specified position on a specific layer.
 func (p *Game) GetTile__1(x, y float64, layerIndex int64) string {
-	return p.engine().tilemapMgr.GetTileWithLayer(mathf.NewVec2(x, y), layerIndex)
+	return p.engine().TilemapMgr.GetTileWithLayer(mathf.NewVec2(x, y), layerIndex)
 }
 
 // ============================================================================
@@ -103,11 +103,11 @@ func (p *Game) TilemapName() string {
 // ============================================================================
 
 func (p *Game) setTileMapLayerIndex(index int64) {
-	p.engine().tilemapMgr.SetLayerIndex(index)
+	p.engine().TilemapMgr.SetLayerIndex(index)
 }
 
 func (p *Game) setTileMapOffset(index int64, x, y float64) {
-	p.engine().tilemapMgr.SetLayerOffset(index, mathf.NewVec2(x, y))
+	p.engine().TilemapMgr.SetLayerOffset(index, mathf.NewVec2(x, y))
 }
 
 // ============================================================================
@@ -116,12 +116,12 @@ func (p *Game) setTileMapOffset(index int64, x, y float64) {
 
 func (p *Game) setTileInfo__0(texturePath string, isCollision bool) {
 	path := engine.ToAssetPath(texturePath)
-	p.engine().tilemapMgr.SetTile(path, isCollision)
+	p.engine().TilemapMgr.SetTile(path, isCollision)
 }
 
 func (p *Game) setTileInfo__1(texturePath string, collisionPoints []float64) {
 	path := engine.ToAssetPath(texturePath)
-	p.engine().tilemapMgr.SetTileWithCollisionInfo(path, f64Tof32(collisionPoints))
+	p.engine().TilemapMgr.SetTileWithCollisionInfo(path, f64Tof32(collisionPoints))
 }
 
 // ============================================================================
@@ -129,10 +129,10 @@ func (p *Game) setTileInfo__1(texturePath string, collisionPoints []float64) {
 // ============================================================================
 
 func (p *Game) createDecorators(texturePath string, pos mathf.Vec2, rot float64, scale mathf.Vec2, zindex int64, pivot mathf.Vec2) {
-	p.engine().sceneMgr.CreateStaticSprite(engine.ToAssetPath(texturePath), pos, rot, scale, zindex, pivot, 0, mathf.NewVec2(0, 0), nil)
+	p.engine().SceneMgr.CreateStaticSprite(engine.ToAssetPath(texturePath), pos, rot, scale, zindex, pivot, 0, mathf.NewVec2(0, 0), nil)
 }
 
 func (p *Game) createStaticSprite(texturePath string, pos mathf.Vec2, rot float64, scale mathf.Vec2, zindex int64, pivot mathf.Vec2, colliderType string, colliderPivot mathf.Vec2, colliderParams []float64) {
 	colliderTypeInt := parseColliderShapeType(colliderType, 0)
-	p.engine().sceneMgr.CreateStaticSprite(engine.ToAssetPath(texturePath), pos, rot, scale, zindex, pivot, colliderTypeInt, colliderPivot, colliderParams)
+	p.engine().SceneMgr.CreateStaticSprite(engine.ToAssetPath(texturePath), pos, rot, scale, zindex, pivot, colliderTypeInt, colliderPivot, colliderParams)
 }

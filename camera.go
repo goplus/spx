@@ -86,43 +86,43 @@ func (c *cameraImpl) setLimits() {
 
 	// Apply camera limits
 	for side, value := range world {
-		c.engine().cameraMgr.SetCameraLimit(int64(side), int64(value))
+		c.engine().CameraMgr.SetCameraLimit(int64(side), int64(value))
 	}
 
 	// Enalbe smoothing
-	c.engine().cameraMgr.SetCameraSmoothing(true)
+	c.engine().CameraMgr.SetCameraSmoothing(true)
 }
 
 func (c *cameraImpl) ViewportRect() (float64, float64, float64, float64) {
-	rect := c.engine().cameraMgr.GetGlobalCameraRect()
+	rect := c.engine().CameraMgr.GetGlobalCameraRect()
 	return rect.Position.X, rect.Position.Y, rect.Size.X, rect.Size.Y
 }
 
 func (c *cameraImpl) SetZoom(scale float64) {
 	c.setDirtyFlag(true)
 	scale *= c.g.windowScale
-	c.engine().cameraMgr.SetCameraZoom(mathf.NewVec2(scale, scale))
+	c.engine().CameraMgr.SetCameraZoom(mathf.NewVec2(scale, scale))
 }
 
 func (c *cameraImpl) Zoom() float64 {
-	scale := c.engine().cameraMgr.GetCameraZoom().X
+	scale := c.engine().CameraMgr.GetCameraZoom().X
 	scale /= c.g.windowScale
 	return scale
 }
 
 func (c *cameraImpl) Xpos() float64 {
-	pos := c.engine().cameraMgr.GetPosition()
+	pos := c.engine().CameraMgr.GetPosition()
 	return pos.X
 }
 
 func (c *cameraImpl) Ypos() float64 {
-	pos := c.engine().cameraMgr.GetPosition()
+	pos := c.engine().CameraMgr.GetPosition()
 	return pos.Y
 }
 
 func (c *cameraImpl) SetXYpos(x float64, y float64) {
 	c.setDirtyFlag(true)
-	c.engine().cameraMgr.SetPosition(mathf.NewVec2(x, y))
+	c.engine().CameraMgr.SetPosition(mathf.NewVec2(x, y))
 }
 
 func (c *cameraImpl) setXYposDirect(x float64, y float64) {

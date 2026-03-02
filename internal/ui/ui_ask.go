@@ -44,7 +44,7 @@ func (pself *UiAsk) handleCheck() {
 
 // OnUpdate checks for Enter key press every frame
 func (pself *UiAsk) Update() {
-	enterPressed := inputMgr.GetKey(int64(gdx.KeyEnter)) || inputMgr.GetKey(int64(gdx.KeyKPEnter))
+	enterPressed := mgr.InputMgr.GetKey(int64(gdx.KeyEnter)) || mgr.InputMgr.GetKey(int64(gdx.KeyKPEnter))
 	// Trigger only on key press (not held down)
 	if enterPressed && !pself.lastEnterState {
 		pself.handleCheck()
@@ -55,13 +55,13 @@ func (pself *UiAsk) Update() {
 
 func (pself *UiAsk) Show(isSprite bool, question string, onCheck func(string)) {
 	// UiAsk prefab can auto scale to match window scale
-	// uiMgr.SetScale(pself.GetId(), mathf.NewVec2(windowScale, windowScale))
+	// mgr.UiMgr.SetScale(pself.GetId(), mathf.NewVec2(windowScale, windowScale))
 	pself.OnCheck = onCheck
-	uiMgr.SetVisible(pself.askBody.GetId(), !isSprite)
+	mgr.UiMgr.SetVisible(pself.askBody.GetId(), !isSprite)
 	if !isSprite {
-		uiMgr.SetText(pself.askLabel.GetId(), question)
+		mgr.UiMgr.SetText(pself.askLabel.GetId(), question)
 	}
-	uiMgr.SetText(pself.input.GetId(), "")
-	uiMgr.SetVisible(pself.GetId(), true)
+	mgr.UiMgr.SetText(pself.input.GetId(), "")
+	mgr.UiMgr.SetVisible(pself.GetId(), true)
 	pself.lastEnterState = false
 }

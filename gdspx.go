@@ -22,8 +22,29 @@ import (
 
 	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v2/internal/engine"
+	"github.com/goplus/spx/v2/internal/enginewrap"
 	spxlog "github.com/goplus/spx/v2/internal/log"
 )
+
+// -------------------------------------------------------------------------------------
+// Engine managers
+// -------------------------------------------------------------------------------------
+
+// engineManagers is an alias for the internal EngineManagers type.
+// It groups all engine-facing manager wrappers for a Game instance.
+type engineManagers = enginewrap.EngineManagers
+
+func (p *Game) engine() *engineManagers {
+	return &p.engineMgr
+}
+
+func (p *SpriteImpl) engine() *engineManagers {
+	return p.g.engine()
+}
+
+func (c *componentBase) engine() *engineManagers {
+	return c.sprite.engine()
+}
 
 // -------------------------------------------------------------------------------------
 // Global variables
@@ -344,7 +365,7 @@ func createAnimation(
 		panic(fmt.Sprintf("createAnimation: failed to marshal animation payload: %v", err))
 	}
 	// Create animation in resource manager
-	engineMgr.resMgr.CreateAnimation(
+	engineMgr.ResMgr.CreateAnimation(
 		spriteName,
 		animName,
 		string(bin),

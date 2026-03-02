@@ -243,12 +243,13 @@ func (p *Game) reset() {
 
 func (p *Game) initGame(sprites []Sprite) *Game {
 	engine.SetGame(p)
+	p.initSpriteMgr()
 	p.initRuntimeState()
 	p.eventSinks.init(&p.sinkMgr, p)
 	p.engineMgr = engineManagers{}
+	ui.Init(&p.engineMgr)
 	p.sprs = make(map[string]Sprite)
 	p.typs = make(map[string]reflect.Type)
-	p.initSpriteMgr()
 	// Initialize batch sync buffer (preallocate for ~100 sprites, will grow if needed)
 	p.syncBuffer = engine.NewSpriteSyncBuffer(initialSpriteSyncBufferSize)
 	for _, spr := range sprites {
@@ -643,7 +644,7 @@ func (p *Game) setupWorldAndWindow(proj *projConfig) {
 
 // setupPlatformAndCamera configures platform settings and camera.
 func (p *Game) setupPlatformAndCamera(proj *projConfig) {
-	platformMgr := p.engine().platformMgr
+	platformMgr := p.engine().PlatformMgr
 
 	if platform.IsMobile() || proj.FullScreen || platform.IsWeb() {
 		if proj.FullScreen || platform.IsMobile() {
@@ -844,10 +845,10 @@ func init() {
 func (p *Game) runLoop(cfg *Config) (err error) {
 	spxlog.Debug("==> RunLoop")
 	if !cfg.DontRunOnUnfocused {
-		p.engine().platformMgr.SetRunnableOnUnfocused(true)
+		p.engine().PlatformMgr.SetRunnableOnUnfocused(true)
 	}
 	p.initEventLoop()
-	p.engine().platformMgr.SetWindowTitle(cfg.Title)
+	p.engine().PlatformMgr.SetWindowTitle(cfg.Title)
 	p.isRunned = true
 	return nil
 }
