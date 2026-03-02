@@ -23,326 +23,262 @@ func (pself *Sprite) AddImpulse(impulse Vec2) {
 }
 
 func (pself *Sprite) BatchRetrievePositions(objs Array) Array {
-	var _val Array
-	return _val
+	return nil
 }
 
 func (pself *Sprite) BatchUpdateTransforms(buffer Array) {
 }
 
 func (pself *Sprite) CheckCollision(target Object, is_src_trigger bool, is_dst_trigger bool) bool {
-	var _val bool
-	return _val
+	return false
 }
 
 func (pself *Sprite) CheckCollisionByAlpha(alpha_threshold float64) bool {
-	var _val bool
-	return _val
+	return false
 }
 
 func (pself *Sprite) CheckCollisionByColor(color Color, color_threshold float64, alpha_threshold float64) bool {
-	var _val bool
-	return _val
+	return false
 }
 
 func (pself *Sprite) CheckCollisionWithPoint(point Vec2, is_trigger bool) bool {
-	var _val bool
-	return _val
+	return false
 }
 
 func (pself *Sprite) CheckCollisionWithSprite(obj_b Object, alpha_threshold float64, use_pixel_perfect bool) bool {
-	var _val bool
-	return _val
+	return false
 }
 
 func (pself *Sprite) CloneSprite() Object {
-	var _val Object
-	return _val
+	return 0
 }
 
 func (pself *Sprite) CreateBackdrop(path string) Object {
-	var _val Object
-	return _val
+	return 0
 }
 
 func (pself *Sprite) CreateSprite(path string, pos Vec2) Object {
-	var _val Object
-	return _val
+	return 0
 }
 
 func (pself *Sprite) DestroySprite() bool {
-	var _val bool
-	return _val
+	return false
 }
 
 func (pself *Sprite) GetAnim() string {
-	var _val string
-	return _val
+	return ""
 }
 
 func (pself *Sprite) GetAnimFrame() int64 {
-	var _val int64
-	return _val
+	return 0
 }
 
 func (pself *Sprite) GetAnimOffset() Vec2 {
-	var _val Vec2
-	return _val
+	return Vec2{}
 }
 
 func (pself *Sprite) GetAnimPlayingSpeed() float64 {
-	var _val float64
-	return _val
+	return 0
 }
 
 func (pself *Sprite) GetAnimSpeedScale() float64 {
-	var _val float64
-	return _val
+	return 0
 }
 
 func (pself *Sprite) GetChildPosition(path string) Vec2 {
-	var _val Vec2
-	return _val
+	return Vec2{}
 }
 
 func (pself *Sprite) GetChildRotation(path string) float64 {
-	var _val float64
-	return _val
+	return 0
 }
 
 func (pself *Sprite) GetChildScale(path string) Vec2 {
-	var _val Vec2
-	return _val
+	return Vec2{}
 }
 
 func (pself *Sprite) GetCollisionLayer() int64 {
-	var _val int64
-	return _val
+	return 0
 }
 
 func (pself *Sprite) GetCollisionMask() int64 {
-	var _val int64
-	return _val
+	return 0
 }
 
 func (pself *Sprite) GetColor() Color {
-	var _val Color
-	return _val
+	return Color{}
 }
 
 func (pself *Sprite) GetCurrentAnimName() string {
-	var _val string
-	return _val
+	return ""
 }
 
 func (pself *Sprite) GetDrag() float64 {
-	var _val float64
-	return _val
+	return 0
 }
 
 func (pself *Sprite) GetFloorNormal() Vec2 {
-	var _val Vec2
-	return _val
+	return Vec2{}
 }
 
 func (pself *Sprite) GetFriction() float64 {
-	var _val float64
-	return _val
+	return 0
 }
 
 func (pself *Sprite) GetGravity() float64 {
-	var _val float64
-	return _val
+	return 0
 }
 
 func (pself *Sprite) GetGravityScale() float64 {
-	var _val float64
-	return _val
+	return 0
 }
 
 func (pself *Sprite) GetLastMotion() Vec2 {
-	var _val Vec2
-	return _val
+	return Vec2{}
 }
 
 func (pself *Sprite) GetMass() float64 {
-	var _val float64
-	return _val
+	return 0
 }
 
 func (pself *Sprite) GetMaterialParams(effect string) float64 {
-	var _val float64
-	return _val
+	return 0
 }
 
 func (pself *Sprite) GetMaterialParamsColor(effect string) Color {
-	var _val Color
-	return _val
+	return Color{}
 }
 
 func (pself *Sprite) GetMaterialParamsVec4(effect string) Vec4 {
-	var _val Vec4
-	return _val
+	return Vec4{}
 }
 
 func (pself *Sprite) GetMaterialShader() string {
-	var _val string
-	return _val
+	return ""
 }
 
 func (pself *Sprite) GetPhysicsMode() int64 {
-	var _val int64
-	return _val
+	return 0
 }
 
 func (pself *Sprite) GetPivot() Vec2 {
-	var _val Vec2
-	return _val
+	return Vec2{}
 }
 
 func (pself *Sprite) GetPixelCollisionSamplingStep() int64 {
-	var _val int64
-	return _val
+	return 0
 }
 
 func (pself *Sprite) GetPosition() Vec2 {
-	var _val Vec2
-	return _val
+	return Vec2{}
 }
 
 func (pself *Sprite) GetPositionDelta() Vec2 {
-	var _val Vec2
-	return _val
+	return Vec2{}
 }
 
 func (pself *Sprite) GetRealVelocity() Vec2 {
-	var _val Vec2
-	return _val
+	return Vec2{}
 }
 
 func (pself *Sprite) GetRenderScale() Vec2 {
-	var _val Vec2
-	return _val
+	return Vec2{}
 }
 
 func (pself *Sprite) GetRotation() float64 {
-	var _val float64
-	return _val
+	return 0
 }
 
 func (pself *Sprite) GetScale() Vec2 {
-	var _val Vec2
-	return _val
+	return Vec2{}
 }
 
 func (pself *Sprite) GetTexture() string {
-	var _val string
-	return _val
+	return ""
 }
 
 func (pself *Sprite) GetTriggerLayer() int64 {
-	var _val int64
-	return _val
+	return 0
 }
 
 func (pself *Sprite) GetTriggerMask() int64 {
-	var _val int64
-	return _val
+	return 0
 }
 
 func (pself *Sprite) GetVelocity() Vec2 {
-	var _val Vec2
-	return _val
+	return Vec2{}
 }
 
 func (pself *Sprite) GetVisible() bool {
-	var _val bool
-	return _val
+	return false
 }
 
 func (pself *Sprite) GetWallNormal() Vec2 {
-	var _val Vec2
-	return _val
+	return Vec2{}
 }
 
 func (pself *Sprite) GetZIndex() int64 {
-	var _val int64
-	return _val
+	return 0
 }
 
 func (pself *Sprite) IsAnimCentered() bool {
-	var _val bool
-	return _val
+	return false
 }
 
 func (pself *Sprite) IsAnimFlippedH() bool {
-	var _val bool
-	return _val
+	return false
 }
 
 func (pself *Sprite) IsAnimFlippedV() bool {
-	var _val bool
-	return _val
+	return false
 }
 
 func (pself *Sprite) IsCollisionEnabled() bool {
-	var _val bool
-	return _val
+	return false
 }
 
 func (pself *Sprite) IsDebugCollisionVisible() bool {
-	var _val bool
-	return _val
+	return false
 }
 
 func (pself *Sprite) IsOnCeiling() bool {
-	var _val bool
-	return _val
+	return false
 }
 
 func (pself *Sprite) IsOnCeilingOnly() bool {
-	var _val bool
-	return _val
+	return false
 }
 
 func (pself *Sprite) IsOnFloor() bool {
-	var _val bool
-	return _val
+	return false
 }
 
 func (pself *Sprite) IsOnFloorOnly() bool {
-	var _val bool
-	return _val
+	return false
 }
 
 func (pself *Sprite) IsOnWall() bool {
-	var _val bool
-	return _val
+	return false
 }
 
 func (pself *Sprite) IsOnWallOnly() bool {
-	var _val bool
-	return _val
+	return false
 }
 
 func (pself *Sprite) IsPlayingAnim() bool {
-	var _val bool
-	return _val
+	return false
 }
 
 func (pself *Sprite) IsSpriteAlive() bool {
-	var _val bool
-	return _val
+	return false
 }
 
 func (pself *Sprite) IsTriggerEnabled() bool {
-	var _val bool
-	return _val
+	return false
 }
 
 func (pself *Sprite) IsUseGravity() bool {
-	var _val bool
-	return _val
+	return false
 }
 
 func (pself *Sprite) MoveAndSlide() {

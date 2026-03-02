@@ -20,6 +20,10 @@ func addManager[T IManager](mgr T) T {
 	return mgr
 }
 
+func RegisterFFI() {
+	// Pure mode doesn't need FFI registration
+}
+
 func LinkFFI() bool {
 	// Pure mode doesn't need FFI linking
 	return true
