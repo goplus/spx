@@ -27,11 +27,11 @@ type ShapeGetter interface {
 	getAllShapes() []Shape
 }
 
-// GetWidget_ returns the widget instance with given name. It panics if not found.
+// GetWidget returns the widget instance with given name. It panics if not found.
 // Instead of being used directly, it is meant to be called by `XGot_Game_XGox_GetWidget` only.
-// We extract `GetWidget_` to keep `XGot_Game_XGox_GetWidget` simple, which simplifies work in ispx,
+// We extract `GetWidget` to keep `XGot_Game_XGox_GetWidget` simple, which simplifies work in ispx,
 // see details in https://github.com/goplus/builder/issues/765#issuecomment-2313915805.
-func GetWidget_(sg ShapeGetter, name WidgetName) Widget {
+func GetWidget(sg ShapeGetter, name WidgetName) Widget {
 	items := sg.getAllShapes()
 	for _, item := range items {
 		widget, ok := item.(Widget)
@@ -47,7 +47,7 @@ func GetWidget_(sg ShapeGetter, name WidgetName) Widget {
 
 // GetWidget returns the widget instance (in given type) with given name. It panics if not found.
 func XGot_Game_XGox_GetWidget[T any](sg ShapeGetter, name WidgetName) *T {
-	widget, ok := GetWidget_(sg, name).(any).(*T)
+	widget, ok := GetWidget(sg, name).(any).(*T)
 	if !ok {
 		panic("GetWidget: type mismatch - " + name)
 	}

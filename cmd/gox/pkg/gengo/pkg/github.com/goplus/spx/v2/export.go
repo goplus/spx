@@ -103,7 +103,7 @@ func init() {
 			"Exit__0":                  reflect.ValueOf(q.Exit__0),
 			"Exit__1":                  reflect.ValueOf(q.Exit__1),
 			"Forever":                  reflect.ValueOf(q.Forever),
-			"GetWidget_":               reflect.ValueOf(q.GetWidget_),
+			"GetWidget":                reflect.ValueOf(q.GetWidget),
 			"HSB":                      reflect.ValueOf(q.HSB),
 			"HSBA":                     reflect.ValueOf(q.HSBA),
 			"Iround":                   reflect.ValueOf(q.Iround),
