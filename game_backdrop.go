@@ -130,5 +130,5 @@ func (p *Game) setupBackdrop() {
 	scaleY := dstH / imgH
 	p.scale = 1
 	checkUpdateCostume(&p.baseObj)
-	p.engine().spriteMgr.SetScale(p.syncSprite.GetId(), mathf.NewVec2(scaleX, scaleY))
+	p.engine().SpriteMgr.SetScale(p.syncSprite.GetId(), mathf.NewVec2(scaleX, scaleY))
 }

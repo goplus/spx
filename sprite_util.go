@@ -142,7 +142,7 @@ func (p *SpriteImpl) touchPoint(x, y float64) bool {
 	if p.syncSprite == nil {
 		return false
 	}
-	return p.engine().spriteMgr.CheckCollisionWithPoint(p.syncSprite.GetId(), mathf.NewVec2(x, y), true)
+	return p.engine().SpriteMgr.CheckCollisionWithPoint(p.syncSprite.GetId(), mathf.NewVec2(x, y), true)
 }
 
 // touchingColor checks if sprite is touching a specific color.
@@ -150,7 +150,7 @@ func (p *SpriteImpl) touchingColor(color mathf.Color) bool {
 	if p.syncSprite == nil {
 		return false
 	}
-	return p.engine().spriteMgr.CheckCollisionByColor(p.syncSprite.GetId(), color, colorThreshold, alphaThreshold)
+	return p.engine().SpriteMgr.CheckCollisionByColor(p.syncSprite.GetId(), color, colorThreshold, alphaThreshold)
 }
 
 // touchingSprite checks if sprite is touching another sprite.
@@ -158,7 +158,7 @@ func (p *SpriteImpl) touchingSprite(dst *SpriteImpl) bool {
 	if p.syncSprite == nil || dst.syncSprite == nil {
 		return false
 	}
-	return p.engine().spriteMgr.CheckCollisionWithSprite(p.syncSprite.GetId(), dst.syncSprite.GetId(), alphaThreshold, !isPhysicsEnabled())
+	return p.engine().SpriteMgr.CheckCollisionWithSprite(p.syncSprite.GetId(), dst.syncSprite.GetId(), alphaThreshold, !isPhysicsEnabled())
 }
 
 // checkTouchingScreen checks which edges of the screen the sprite is touching.
@@ -166,7 +166,7 @@ func (p *SpriteImpl) checkTouchingScreen(where int) (touching int) {
 	if p.syncSprite == nil {
 		return 0
 	}
-	touching = int(p.engine().physicsMgr.CheckTouchedStageBoundaries(p.syncSprite.GetId()))
+	touching = int(p.engine().PhysicsMgr.CheckTouchedStageBoundaries(p.syncSprite.GetId()))
 	return touching & where
 }
 
@@ -175,7 +175,7 @@ func (p *SpriteImpl) checkNearestTouchedBoundary() int {
 	if p.syncSprite == nil {
 		return 0
 	}
-	return int(p.engine().physicsMgr.CheckNearestTouchedStageBoundary(p.syncSprite.GetId()))
+	return int(p.engine().PhysicsMgr.CheckNearestTouchedStageBoundary(p.syncSprite.GetId()))
 }
 
 // ============================================================================
@@ -278,7 +278,7 @@ func getCostumeBoundByAlpha(p *SpriteImpl, isSync bool) (mathf.Vec2, mathf.Vec2)
 			if isSync {
 				rect = engine.SyncGetBoundFromAlpha(assetPath)
 			} else {
-				rect = p.engine().resMgr.GetBoundFromAlpha(assetPath)
+				rect = p.engine().ResMgr.GetBoundFromAlpha(assetPath)
 			}
 		}
 		cachedBounds[cs.path] = rect

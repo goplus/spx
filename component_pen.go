@@ -84,20 +84,20 @@ func (p *penComponent) onDestroy() {
 func (p *penComponent) PenUp() {
 	p.checkOrCreatePen()
 	p.penDown = false
-	p.engine().penMgr.PenUp(*p.penObj)
+	p.engine().PenMgr.PenUp(*p.penObj)
 }
 
 func (p *penComponent) PenDown() {
 	p.checkOrCreatePen()
 	p.penDown = true
 	p.movePen(p.sprite.getXY())
-	p.engine().penMgr.PenDown(*p.penObj, false)
+	p.engine().PenMgr.PenDown(*p.penObj, false)
 }
 
 func (p *penComponent) Stamp() {
 	p.checkOrCreatePen()
-	p.engine().penMgr.SetPenStampTexture(*p.penObj, p.sprite.getCostumePath())
-	p.engine().penMgr.PenStamp(*p.penObj)
+	p.engine().PenMgr.SetPenStampTexture(*p.penObj, p.sprite.getCostumePath())
+	p.engine().PenMgr.PenStamp(*p.penObj)
 }
 
 // ============================================================================
@@ -107,7 +107,7 @@ func (p *penComponent) Stamp() {
 func (p *penComponent) SetPenSize(size float64) {
 	p.checkOrCreatePen()
 	p.penWidth = size
-	p.engine().penMgr.SetPenSizeTo(*p.penObj, size)
+	p.engine().PenMgr.SetPenSizeTo(*p.penObj, size)
 }
 
 func (p *penComponent) ChangePenSize(delta float64) {
@@ -201,7 +201,7 @@ func (p *penComponent) changePenTransparency(delta float64) {
 
 func (p *penComponent) checkOrCreatePen() {
 	if p.penObj == nil {
-		obj := p.engine().penMgr.CreatePen()
+		obj := p.engine().PenMgr.CreatePen()
 		p.penObj = &obj
 		p.penTransparency = normalizedToPercent(p.penColor.A)
 	}
@@ -209,7 +209,7 @@ func (p *penComponent) checkOrCreatePen() {
 
 func (p *penComponent) destroyPen() {
 	if p.penObj != nil {
-		p.engine().penMgr.DestroyPen(*p.penObj)
+		p.engine().PenMgr.DestroyPen(*p.penObj)
 		p.penObj = nil
 	}
 }
@@ -218,7 +218,7 @@ func (p *penComponent) movePen(x, y float64) {
 	if p.penObj == nil || !p.penDown {
 		return
 	}
-	p.engine().penMgr.MovePenTo(*p.penObj, mathf.NewVec2(x, -y))
+	p.engine().PenMgr.MovePenTo(*p.penObj, mathf.NewVec2(x, -y))
 }
 
 func (p *penComponent) applyPenColorProperty() {
@@ -254,7 +254,7 @@ func percentToNormalized(percent float64) float64 {
 }
 
 func (p *penComponent) updatePenColor() {
-	p.engine().penMgr.SetPenColorTo(*p.penObj, p.penColor)
+	p.engine().PenMgr.SetPenColorTo(*p.penObj, p.penColor)
 }
 
 func (p *penComponent) isPenDown() bool {

@@ -8,19 +8,9 @@ import (
 	gdx "github.com/goplus/spx/v2/pkg/gdspx/pkg/engine"
 )
 
-// copy these variable to any namespace you want
 var (
-	audioMgr    enginewrap.AudioMgrImpl
-	cameraMgr   enginewrap.CameraMgrImpl
-	inputMgr    enginewrap.InputMgrImpl
-	physicsMgr  enginewrap.PhysicsMgrImpl
-	platformMgr enginewrap.PlatformMgrImpl
-	resMgr      enginewrap.ResMgrImpl
-	sceneMgr    enginewrap.SceneMgrImpl
-	spriteMgr   enginewrap.SpriteMgrImpl
-	uiMgr       enginewrap.UiMgrImpl
-)
-var (
+	mgr *enginewrap.EngineManagers
+
 	windowScale             float64
 	baseScreenWidth         int
 	baseScreenHeight        int
@@ -29,6 +19,10 @@ var (
 
 type UiNode struct {
 	gdx.UiNode
+}
+
+func Init(managers *enginewrap.EngineManagers) {
+	mgr = managers
 }
 
 func SetWindowScale(scale float64) {
@@ -59,7 +53,7 @@ func WorldToUI(pos Vec2, useDirect bool) Vec2 {
 	if useDirect {
 		camMgr = gdx.CameraMgr
 	} else {
-		camMgr = &cameraMgr
+		camMgr = &mgr.CameraMgr
 	}
 
 	viewport := camMgr.GetViewportRect()

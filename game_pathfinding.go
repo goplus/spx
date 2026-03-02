@@ -38,19 +38,19 @@ func (p *Game) SetupPathFinder__0() {
 }
 
 func (p *Game) SetupPathFinder__1(x_grid_size, y_grid_size, x_cell_size, y_cell_size float64, with_jump, with_debug bool) {
-	p.engine().navigationMgr.SetupPathFinderWithSize(mathf.NewVec2(x_grid_size, y_grid_size), mathf.NewVec2(x_cell_size, y_cell_size), with_jump, with_debug)
+	p.engine().NavigationMgr.SetupPathFinderWithSize(mathf.NewVec2(x_grid_size, y_grid_size), mathf.NewVec2(x_cell_size, y_cell_size), with_jump, with_debug)
 }
 
 func (p *Game) setupPathFinder(with_jump, with_debug bool) {
 	cellSize := mathf.NewVec2(float64(p.pathCellSizeX), float64(p.pathCellSizeY))
 	gridSize := mathf.NewVec2(float64(p.worldWidth), float64(p.worldHeight)).Div(cellSize)
-	p.engine().navigationMgr.SetupPathFinderWithSize(gridSize, cellSize, with_jump, with_debug)
+	p.engine().NavigationMgr.SetupPathFinderWithSize(gridSize, cellSize, with_jump, with_debug)
 }
 
 func (p *Game) setObstacle(sprite Sprite, enabled bool) {
 	impl := spriteOf(sprite)
 	if impl != nil {
-		p.engine().navigationMgr.SetObstacle(impl.getSpriteId(), enabled)
+		p.engine().NavigationMgr.SetObstacle(impl.getSpriteId(), enabled)
 	}
 }
 
@@ -67,7 +67,7 @@ func (p *Game) FindPath__2(x_from, y_from, x_to, y_to float64, with_debug, with_
 		p.setupPathFinder(with_jump, with_debug)
 	})
 
-	arr := p.engine().navigationMgr.FindPath(mathf.NewVec2(x_from, y_from), mathf.NewVec2(x_to, y_to), with_jump)
+	arr := p.engine().NavigationMgr.FindPath(mathf.NewVec2(x_from, y_from), mathf.NewVec2(x_to, y_to), with_jump)
 	result := arr.([]float32)
 	return f32Tof64(result)
 }
