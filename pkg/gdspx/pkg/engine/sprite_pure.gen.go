@@ -290,6 +290,11 @@ func (pself *Sprite) IsCollisionEnabled() bool {
 	return _val
 }
 
+func (pself *Sprite) IsDebugCollisionVisible() bool {
+	var _val bool
+	return _val
+}
+
 func (pself *Sprite) IsOnCeiling() bool {
 	var _val bool
 	return _val
@@ -404,6 +409,9 @@ func (pself *Sprite) SetCollisionMask(mask int64) {
 }
 
 func (pself *Sprite) SetColor(color Color) {
+}
+
+func (pself *Sprite) SetDebugCollisionVisible(visible bool) {
 }
 
 func (pself *Sprite) SetDontDestroyOnLoad() {

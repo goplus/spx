@@ -240,6 +240,10 @@ func (pself *Sprite) IsCollisionEnabled() bool {
 	return SpriteMgr.IsCollisionEnabled(pself.Id)
 }
 
+func (pself *Sprite) IsDebugCollisionVisible() bool {
+	return SpriteMgr.IsDebugCollisionVisible(pself.Id)
+}
+
 func (pself *Sprite) IsOnCeiling() bool {
 	return SpriteMgr.IsOnCeiling(pself.Id)
 }
@@ -366,6 +370,10 @@ func (pself *Sprite) SetCollisionMask(mask int64) {
 
 func (pself *Sprite) SetColor(color Color) {
 	SpriteMgr.SetColor(pself.Id, color)
+}
+
+func (pself *Sprite) SetDebugCollisionVisible(visible bool) {
+	SpriteMgr.SetDebugCollisionVisible(pself.Id, visible)
 }
 
 func (pself *Sprite) SetDontDestroyOnLoad() {

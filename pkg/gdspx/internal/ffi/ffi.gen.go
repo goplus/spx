@@ -154,6 +154,8 @@ type GDExtensionInterface struct {
 	SpxSpriteGetChildScale                      GDExtensionSpxSpriteGetChildScale
 	SpxSpriteCheckCollision                     GDExtensionSpxSpriteCheckCollision
 	SpxSpriteCheckCollisionWithPoint            GDExtensionSpxSpriteCheckCollisionWithPoint
+	SpxSpriteSetDebugCollisionVisible           GDExtensionSpxSpriteSetDebugCollisionVisible
+	SpxSpriteIsDebugCollisionVisible            GDExtensionSpxSpriteIsDebugCollisionVisible
 	SpxSpriteCreateBackdrop                     GDExtensionSpxSpriteCreateBackdrop
 	SpxSpriteCreateSprite                       GDExtensionSpxSpriteCreateSprite
 	SpxSpriteCloneSprite                        GDExtensionSpxSpriteCloneSprite
@@ -468,6 +470,8 @@ func (x *GDExtensionInterface) loadProcAddresses() {
 	x.SpxSpriteGetChildScale = (GDExtensionSpxSpriteGetChildScale)(dlsymGD("spx_sprite_get_child_scale"))
 	x.SpxSpriteCheckCollision = (GDExtensionSpxSpriteCheckCollision)(dlsymGD("spx_sprite_check_collision"))
 	x.SpxSpriteCheckCollisionWithPoint = (GDExtensionSpxSpriteCheckCollisionWithPoint)(dlsymGD("spx_sprite_check_collision_with_point"))
+	x.SpxSpriteSetDebugCollisionVisible = (GDExtensionSpxSpriteSetDebugCollisionVisible)(dlsymGD("spx_sprite_set_debug_collision_visible"))
+	x.SpxSpriteIsDebugCollisionVisible = (GDExtensionSpxSpriteIsDebugCollisionVisible)(dlsymGD("spx_sprite_is_debug_collision_visible"))
 	x.SpxSpriteCreateBackdrop = (GDExtensionSpxSpriteCreateBackdrop)(dlsymGD("spx_sprite_create_backdrop"))
 	x.SpxSpriteCreateSprite = (GDExtensionSpxSpriteCreateSprite)(dlsymGD("spx_sprite_create_sprite"))
 	x.SpxSpriteCloneSprite = (GDExtensionSpxSpriteCloneSprite)(dlsymGD("spx_sprite_clone_sprite"))

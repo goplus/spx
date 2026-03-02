@@ -221,6 +221,8 @@ type GDExtensionSpxSpriteSetChildScale C.GDExtensionSpxSpriteSetChildScale
 type GDExtensionSpxSpriteGetChildScale C.GDExtensionSpxSpriteGetChildScale
 type GDExtensionSpxSpriteCheckCollision C.GDExtensionSpxSpriteCheckCollision
 type GDExtensionSpxSpriteCheckCollisionWithPoint C.GDExtensionSpxSpriteCheckCollisionWithPoint
+type GDExtensionSpxSpriteSetDebugCollisionVisible C.GDExtensionSpxSpriteSetDebugCollisionVisible
+type GDExtensionSpxSpriteIsDebugCollisionVisible C.GDExtensionSpxSpriteIsDebugCollisionVisible
 type GDExtensionSpxSpriteCreateBackdrop C.GDExtensionSpxSpriteCreateBackdrop
 type GDExtensionSpxSpriteCreateSprite C.GDExtensionSpxSpriteCreateSprite
 type GDExtensionSpxSpriteCloneSprite C.GDExtensionSpxSpriteCloneSprite
@@ -1739,6 +1741,27 @@ func CallSpriteCheckCollisionWithPoint(
 	arg3GdBool := (C.GdBool)(is_trigger)
 	var ret_val C.GdBool
 	C.cgo_callfn_GDExtensionSpxSpriteCheckCollisionWithPoint(arg0, arg1GdObj, arg2GdVec2, arg3GdBool, &ret_val)
+
+	return (GdBool)(ret_val)
+}
+func CallSpriteSetDebugCollisionVisible(
+	obj GdObj,
+	visible GdBool,
+) {
+	arg0 := (C.GDExtensionSpxSpriteSetDebugCollisionVisible)(api.SpxSpriteSetDebugCollisionVisible)
+	arg1GdObj := (C.GdObj)(obj)
+	arg2GdBool := (C.GdBool)(visible)
+
+	C.cgo_callfn_GDExtensionSpxSpriteSetDebugCollisionVisible(arg0, arg1GdObj, arg2GdBool)
+
+}
+func CallSpriteIsDebugCollisionVisible(
+	obj GdObj,
+) GdBool {
+	arg0 := (C.GDExtensionSpxSpriteIsDebugCollisionVisible)(api.SpxSpriteIsDebugCollisionVisible)
+	arg1GdObj := (C.GdObj)(obj)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxSpriteIsDebugCollisionVisible(arg0, arg1GdObj, &ret_val)
 
 	return (GdBool)(ret_val)
 }

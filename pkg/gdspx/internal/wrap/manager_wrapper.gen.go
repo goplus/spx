@@ -879,6 +879,16 @@ func (pself *spriteMgr) CheckCollisionWithPoint(obj Object, point Vec2, is_trigg
 	retValue := CallSpriteCheckCollisionWithPoint(arg0, arg1, arg2)
 	return ToBool(retValue)
 }
+func (pself *spriteMgr) SetDebugCollisionVisible(obj Object, visible bool) {
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdBool(visible)
+	CallSpriteSetDebugCollisionVisible(arg0, arg1)
+}
+func (pself *spriteMgr) IsDebugCollisionVisible(obj Object) bool {
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteIsDebugCollisionVisible(arg0)
+	return ToBool(retValue)
+}
 func (pself *spriteMgr) CreateBackdrop(path string) Object {
 	arg0Str := C.CString(path)
 	arg0 := (GdString)(arg0Str)

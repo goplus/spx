@@ -477,6 +477,11 @@ func (pself *spriteMgrImpl) CheckCollisionWithPoint(obj gdx.Object, point Vec2, 
 	var _ret1 bool
 	return _ret1
 }
+func (pself *spriteMgrImpl) SetDebugCollisionVisible(obj gdx.Object, visible bool) {}
+func (pself *spriteMgrImpl) IsDebugCollisionVisible(obj gdx.Object) bool {
+	var _ret1 bool
+	return _ret1
+}
 func (pself *spriteMgrImpl) CreateBackdrop(path string) gdx.Object {
 	var _ret1 gdx.Object
 	return _ret1
