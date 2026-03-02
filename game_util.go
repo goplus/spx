@@ -17,6 +17,7 @@
 package spx
 
 import (
+	"math"
 	"math/rand"
 
 	"github.com/goplus/spbase/mathf"
@@ -230,6 +231,18 @@ func (p *Game) getAllShapes() []Shape {
 
 func (p *Game) getTempShapes() []Shape {
 	return p.spriteMgr.getTempShapes()
+}
+
+func (p *Game) gotoFront(spr *SpriteImpl) {
+	p.goBackLayers(spr, math.MinInt32)
+}
+
+func (p *Game) gotoBack(spr *SpriteImpl) {
+	p.goBackLayers(spr, math.MaxInt32)
+}
+
+func (p *Game) goBackLayers(spr *SpriteImpl, n int) {
+	p.spriteMgr.goBackLayers(spr, n)
 }
 
 // =============================================================================

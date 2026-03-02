@@ -16,10 +16,6 @@
 
 package spx
 
-import (
-	"math"
-)
-
 // -----------------------------------------------------------------------------
 // Widget Management
 
@@ -52,19 +48,4 @@ func XGot_Game_XGox_GetWidget[T any](sg ShapeGetter, name WidgetName) *T {
 		panic("GetWidget: type mismatch - " + name)
 	}
 	return widget
-}
-
-// -----------------------------------------------------------------------------
-// Layer Management
-
-func (p *Game) gotoFront(spr *SpriteImpl) {
-	p.goBackLayers(spr, math.MinInt32)
-}
-
-func (p *Game) gotoBack(spr *SpriteImpl) {
-	p.goBackLayers(spr, math.MaxInt32)
-}
-
-func (p *Game) goBackLayers(spr *SpriteImpl, n int) {
-	p.spriteMgr.goBackLayers(spr, n)
 }
