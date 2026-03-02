@@ -420,6 +420,12 @@ void cgo_callfn_GDExtensionSpxSpriteCheckCollision(const GDExtensionSpxSpriteChe
 void cgo_callfn_GDExtensionSpxSpriteCheckCollisionWithPoint(const GDExtensionSpxSpriteCheckCollisionWithPoint fn, GdObj obj, GdVec2 point, GdBool is_trigger, GdBool* ret_val) {
 	fn(obj, point, is_trigger,ret_val);
 }
+void cgo_callfn_GDExtensionSpxSpriteSetDebugCollisionVisible(const GDExtensionSpxSpriteSetDebugCollisionVisible fn, GdObj obj, GdBool visible) {
+	fn(obj, visible);
+}
+void cgo_callfn_GDExtensionSpxSpriteIsDebugCollisionVisible(const GDExtensionSpxSpriteIsDebugCollisionVisible fn, GdObj obj, GdBool* ret_val) {
+	fn(obj,ret_val);
+}
 void cgo_callfn_GDExtensionSpxSpriteCreateBackdrop(const GDExtensionSpxSpriteCreateBackdrop fn, GdString path, GdObj* ret_val) {
 	fn(path,ret_val);
 }

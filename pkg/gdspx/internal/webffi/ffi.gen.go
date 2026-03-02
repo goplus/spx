@@ -158,6 +158,8 @@ type GDExtensionInterface struct {
 	SpxSpriteGetChildScale                      js.Value
 	SpxSpriteCheckCollision                     js.Value
 	SpxSpriteCheckCollisionWithPoint            js.Value
+	SpxSpriteSetDebugCollisionVisible           js.Value
+	SpxSpriteIsDebugCollisionVisible            js.Value
 	SpxSpriteCreateBackdrop                     js.Value
 	SpxSpriteCreateSprite                       js.Value
 	SpxSpriteCloneSprite                        js.Value
@@ -472,6 +474,8 @@ func (x *GDExtensionInterface) loadProcAddresses() {
 	x.SpxSpriteGetChildScale = dlsymGD("gdspx_sprite_get_child_scale")
 	x.SpxSpriteCheckCollision = dlsymGD("gdspx_sprite_check_collision")
 	x.SpxSpriteCheckCollisionWithPoint = dlsymGD("gdspx_sprite_check_collision_with_point")
+	x.SpxSpriteSetDebugCollisionVisible = dlsymGD("gdspx_sprite_set_debug_collision_visible")
+	x.SpxSpriteIsDebugCollisionVisible = dlsymGD("gdspx_sprite_is_debug_collision_visible")
 	x.SpxSpriteCreateBackdrop = dlsymGD("gdspx_sprite_create_backdrop")
 	x.SpxSpriteCreateSprite = dlsymGD("gdspx_sprite_create_sprite")
 	x.SpxSpriteCloneSprite = dlsymGD("gdspx_sprite_clone_sprite")

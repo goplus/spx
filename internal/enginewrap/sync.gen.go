@@ -957,6 +957,18 @@ func (pself *spriteMgrImpl) CheckCollisionWithPoint(obj gdx.Object, point Vec2, 
 	})
 	return _ret1
 }
+func (pself *spriteMgrImpl) SetDebugCollisionVisible(obj gdx.Object, visible bool) {
+	callInMainThread(func() {
+		gdx.SpriteMgr.SetDebugCollisionVisible(obj, visible)
+	})
+}
+func (pself *spriteMgrImpl) IsDebugCollisionVisible(obj gdx.Object) bool {
+	var _ret1 bool
+	callInMainThread(func() {
+		_ret1 = gdx.SpriteMgr.IsDebugCollisionVisible(obj)
+	})
+	return _ret1
+}
 func (pself *spriteMgrImpl) CreateBackdrop(path string) gdx.Object {
 	var _ret1 gdx.Object
 	callInMainThread(func() {
