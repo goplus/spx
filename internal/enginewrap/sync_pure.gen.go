@@ -133,73 +133,59 @@ type UiMgrImpl struct {
 // IAudioMgr
 func (pself *audioMgrImpl) StopAll() {}
 func (pself *audioMgrImpl) CreateAudio() gdx.Object {
-	var _ret1 gdx.Object
-	return _ret1
+	return 0
 }
 func (pself *audioMgrImpl) DestroyAudio(obj gdx.Object)            {}
 func (pself *audioMgrImpl) SetPitch(obj gdx.Object, pitch float64) {}
 func (pself *audioMgrImpl) GetPitch(obj gdx.Object) float64 {
-	var _ret1 float64
-	return _ret1
+	return 0
 }
 func (pself *audioMgrImpl) SetPan(obj gdx.Object, pan float64) {}
 func (pself *audioMgrImpl) GetPan(obj gdx.Object) float64 {
-	var _ret1 float64
-	return _ret1
+	return 0
 }
 func (pself *audioMgrImpl) SetVolume(obj gdx.Object, volume float64) {}
 func (pself *audioMgrImpl) GetVolume(obj gdx.Object) float64 {
-	var _ret1 float64
-	return _ret1
+	return 0
 }
 func (pself *audioMgrImpl) PlayWithAttenuation(obj gdx.Object, path string, owner_id gdx.Object, attenuation float64, max_distance float64) int64 {
-	var _ret1 int64
-	return _ret1
+	return 0
 }
 func (pself *audioMgrImpl) Play(obj gdx.Object, path string) int64 {
-	var _ret1 int64
-	return _ret1
+	return 0
 }
 func (pself *audioMgrImpl) Pause(aid int64)              {}
 func (pself *audioMgrImpl) Resume(aid int64)             {}
 func (pself *audioMgrImpl) Stop(aid int64)               {}
 func (pself *audioMgrImpl) SetLoop(aid int64, loop bool) {}
 func (pself *audioMgrImpl) GetLoop(aid int64) bool {
-	var _ret1 bool
-	return _ret1
+	return false
 }
 func (pself *audioMgrImpl) GetTimer(aid int64) float64 {
-	var _ret1 float64
-	return _ret1
+	return 0
 }
 func (pself *audioMgrImpl) SetTimer(aid int64, time float64) {}
 func (pself *audioMgrImpl) IsPlaying(aid int64) bool {
-	var _ret1 bool
-	return _ret1
+	return false
 }
 
 // ICameraMgr
 func (pself *cameraMgrImpl) GetCameraPosition() Vec2 {
-	var _ret1 Vec2
-	return _ret1
+	return Vec2{}
 }
 func (pself *cameraMgrImpl) SetCameraPosition(position Vec2) {}
 func (pself *cameraMgrImpl) GetCameraZoom() Vec2 {
-	var _ret1 Vec2
-	return _ret1
+	return Vec2{}
 }
 func (pself *cameraMgrImpl) SetCameraZoom(size Vec2) {}
 func (pself *cameraMgrImpl) GetViewportRect() Rect2 {
-	var _ret1 Rect2
-	return _ret1
+	return Rect2{}
 }
 func (pself *cameraMgrImpl) GetGlobalCameraRect() Rect2 {
-	var _ret1 Rect2
-	return _ret1
+	return Rect2{}
 }
 func (pself *cameraMgrImpl) GetStageLimitsRect() Rect2 {
-	var _ret1 Rect2
-	return _ret1
+	return Rect2{}
 }
 func (pself *cameraMgrImpl) SetCameraLimit(side int64, limit int64) {}
 func (pself *cameraMgrImpl) SetCameraSmoothing(enabled bool)        {}
@@ -217,44 +203,35 @@ func (pself *extMgrImpl) OnRuntimePanic(msg string)    {}
 func (pself *extMgrImpl) Pause()                       {}
 func (pself *extMgrImpl) Resume()                      {}
 func (pself *extMgrImpl) IsPaused() bool {
-	var _ret1 bool
-	return _ret1
+	return false
 }
 func (pself *extMgrImpl) NextFrame()                    {}
 func (pself *extMgrImpl) SetLayerSorterMode(mode int64) {}
 
 // IInputMgr
 func (pself *inputMgrImpl) GetGlobalMousePos() Vec2 {
-	var _ret1 Vec2
-	return _ret1
+	return Vec2{}
 }
 func (pself *inputMgrImpl) GetKey(key int64) bool {
-	var _ret1 bool
-	return _ret1
+	return false
 }
 func (pself *inputMgrImpl) GetMouseState(mouse_id int64) bool {
-	var _ret1 bool
-	return _ret1
+	return false
 }
 func (pself *inputMgrImpl) GetKeyState(key int64) int64 {
-	var _ret1 int64
-	return _ret1
+	return 0
 }
 func (pself *inputMgrImpl) GetAxis(neg_action string, pos_action string) float64 {
-	var _ret1 float64
-	return _ret1
+	return 0
 }
 func (pself *inputMgrImpl) IsActionPressed(action string) bool {
-	var _ret1 bool
-	return _ret1
+	return false
 }
 func (pself *inputMgrImpl) IsActionJustPressed(action string) bool {
-	var _ret1 bool
-	return _ret1
+	return false
 }
 func (pself *inputMgrImpl) IsActionJustReleased(action string) bool {
-	var _ret1 bool
-	return _ret1
+	return false
 }
 
 // INavigationMgr
@@ -263,15 +240,13 @@ func (pself *navigationMgrImpl) SetupPathFinderWithSize(grid_size Vec2, cell_siz
 func (pself *navigationMgrImpl) SetupPathFinder(with_jump bool)           {}
 func (pself *navigationMgrImpl) SetObstacle(obj gdx.Object, enabled bool) {}
 func (pself *navigationMgrImpl) FindPath(p_from Vec2, p_to Vec2, with_jump bool) gdx.Array {
-	var _ret1 gdx.Array
-	return _ret1
+	return nil
 }
 
 // IPenMgr
 func (pself *penMgrImpl) DestroyAllPens() {}
 func (pself *penMgrImpl) CreatePen() gdx.Object {
-	var _ret1 gdx.Object
-	return _ret1
+	return 0
 }
 func (pself *penMgrImpl) DestroyPen(obj gdx.Object)                                  {}
 func (pself *penMgrImpl) PenStamp(obj gdx.Object)                                    {}
@@ -287,64 +262,50 @@ func (pself *penMgrImpl) SetPenStampTexture(obj gdx.Object, texture_path string)
 
 // IPhysicsMgr
 func (pself *physicsMgrImpl) Raycast(from Vec2, to Vec2, collision_mask int64) gdx.Object {
-	var _ret1 gdx.Object
-	return _ret1
+	return 0
 }
 func (pself *physicsMgrImpl) CheckCollision(from Vec2, to Vec2, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) bool {
-	var _ret1 bool
-	return _ret1
+	return false
 }
 func (pself *physicsMgrImpl) CheckTouchedCameraBoundaries(obj gdx.Object) int64 {
-	var _ret1 int64
-	return _ret1
+	return 0
 }
 func (pself *physicsMgrImpl) CheckTouchedCameraBoundary(obj gdx.Object, board_type int64) bool {
-	var _ret1 bool
-	return _ret1
+	return false
 }
 func (pself *physicsMgrImpl) CheckNearestTouchedCameraBoundary(obj gdx.Object) int64 {
-	var _ret1 int64
-	return _ret1
+	return 0
 }
 func (pself *physicsMgrImpl) CheckTouchedStageBoundaries(obj gdx.Object) int64 {
-	var _ret1 int64
-	return _ret1
+	return 0
 }
 func (pself *physicsMgrImpl) CheckTouchedStageBoundary(obj gdx.Object, board_type int64) bool {
-	var _ret1 bool
-	return _ret1
+	return false
 }
 func (pself *physicsMgrImpl) CheckNearestTouchedStageBoundary(obj gdx.Object) int64 {
-	var _ret1 int64
-	return _ret1
+	return 0
 }
 func (pself *physicsMgrImpl) SetCollisionSystemType(is_collision_by_alpha bool) {}
 func (pself *physicsMgrImpl) SetGlobalGravity(gravity float64)                  {}
 func (pself *physicsMgrImpl) GetGlobalGravity() float64 {
-	var _ret1 float64
-	return _ret1
+	return 0
 }
 func (pself *physicsMgrImpl) SetGlobalFriction(friction float64) {}
 func (pself *physicsMgrImpl) GetGlobalFriction() float64 {
-	var _ret1 float64
-	return _ret1
+	return 0
 }
 func (pself *physicsMgrImpl) SetGlobalAirDrag(air_drag float64) {}
 func (pself *physicsMgrImpl) GetGlobalAirDrag() float64 {
-	var _ret1 float64
-	return _ret1
+	return 0
 }
 func (pself *physicsMgrImpl) CheckCollisionRect(pos Vec2, size Vec2, collision_mask int64) gdx.Array {
-	var _ret1 gdx.Array
-	return _ret1
+	return nil
 }
 func (pself *physicsMgrImpl) CheckCollisionCircle(pos Vec2, radius float64, collision_mask int64) gdx.Array {
-	var _ret1 gdx.Array
-	return _ret1
+	return nil
 }
 func (pself *physicsMgrImpl) RaycastWithDetails(from Vec2, to Vec2, ignore_sprites gdx.Array, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) gdx.Array {
-	var _ret1 gdx.Array
-	return _ret1
+	return nil
 }
 
 // IPlatformMgr
@@ -353,47 +314,38 @@ func (pself *platformMgrImpl) SetStretchAspect(is_keep bool)                    
 func (pself *platformMgrImpl) SetStretchContentScale(width int64, height int64) {}
 func (pself *platformMgrImpl) SetWindowPosition(pos Vec2)                       {}
 func (pself *platformMgrImpl) GetWindowPosition() Vec2 {
-	var _ret1 Vec2
-	return _ret1
+	return Vec2{}
 }
 func (pself *platformMgrImpl) SetWindowSize(width int64, height int64, with_content_scale bool) {}
 func (pself *platformMgrImpl) GetWindowSize() Vec2 {
-	var _ret1 Vec2
-	return _ret1
+	return Vec2{}
 }
 func (pself *platformMgrImpl) SetWindowTitle(title string) {}
 func (pself *platformMgrImpl) GetWindowTitle() string {
-	var _ret1 string
-	return _ret1
+	return ""
 }
 func (pself *platformMgrImpl) SetWindowFullscreen(enable bool) {}
 func (pself *platformMgrImpl) IsWindowFullscreen() bool {
-	var _ret1 bool
-	return _ret1
+	return false
 }
 func (pself *platformMgrImpl) SetDebugMode(enable bool) {}
 func (pself *platformMgrImpl) IsDebugMode() bool {
-	var _ret1 bool
-	return _ret1
+	return false
 }
 func (pself *platformMgrImpl) GetTimeScale() float64 {
-	var _ret1 float64
-	return _ret1
+	return 0
 }
 func (pself *platformMgrImpl) SetTimeScale(time_scale float64) {}
 func (pself *platformMgrImpl) GetMaxFps() int64 {
-	var _ret1 int64
-	return _ret1
+	return 0
 }
 func (pself *platformMgrImpl) SetMaxFps(fps int64) {}
 func (pself *platformMgrImpl) GetPersistantDataDir() string {
-	var _ret1 string
-	return _ret1
+	return ""
 }
 func (pself *platformMgrImpl) SetPersistantDataDir(path string) {}
 func (pself *platformMgrImpl) IsInPersistantDataDir(path string) bool {
-	var _ret1 bool
-	return _ret1
+	return false
 }
 
 // IResMgr
@@ -401,24 +353,19 @@ func (pself *resMgrImpl) CreateAnimation(p_sprite_type string, p_anim_name strin
 }
 func (pself *resMgrImpl) SetLoadMode(is_direct_mode bool) {}
 func (pself *resMgrImpl) GetLoadMode() bool {
-	var _ret1 bool
-	return _ret1
+	return false
 }
 func (pself *resMgrImpl) GetBoundFromAlpha(p_path string) Rect2 {
-	var _ret1 Rect2
-	return _ret1
+	return Rect2{}
 }
 func (pself *resMgrImpl) GetImageSize(p_path string) Vec2 {
-	var _ret1 Vec2
-	return _ret1
+	return Vec2{}
 }
 func (pself *resMgrImpl) ReadAllText(p_path string) string {
-	var _ret1 string
-	return _ret1
+	return ""
 }
 func (pself *resMgrImpl) HasFile(p_path string) bool {
-	var _ret1 bool
-	return _ret1
+	return false
 }
 func (pself *resMgrImpl) ReloadTexture(path string)       {}
 func (pself *resMgrImpl) FreeStr(str string)              {}
@@ -428,20 +375,17 @@ func (pself *resMgrImpl) SetDefaultFont(font_path string) {}
 func (pself *sceneMgrImpl) ChangeSceneToFile(path string) {}
 func (pself *sceneMgrImpl) DestroyAllSprites()            {}
 func (pself *sceneMgrImpl) ReloadCurrentScene() int64 {
-	var _ret1 int64
-	return _ret1
+	return 0
 }
 func (pself *sceneMgrImpl) UnloadCurrentScene()                                          {}
 func (pself *sceneMgrImpl) ClearPureSprites()                                            {}
 func (pself *sceneMgrImpl) CreatePureSprite(texture_path string, pos Vec2, zindex int64) {}
 func (pself *sceneMgrImpl) DestroyPureSprite(id gdx.Object)                              {}
 func (pself *sceneMgrImpl) CreateRenderSprite(texture_path string, pos Vec2, degree float64, scale Vec2, zindex int64, pivot Vec2) gdx.Object {
-	var _ret1 gdx.Object
-	return _ret1
+	return 0
 }
 func (pself *sceneMgrImpl) CreateStaticSprite(texture_path string, pos Vec2, degree float64, scale Vec2, zindex int64, pivot Vec2, collider_type int64, collider_pivot Vec2, collider_params gdx.Array) gdx.Object {
-	var _ret1 gdx.Object
-	return _ret1
+	return 0
 }
 
 // ISpriteMgr
@@ -451,120 +395,96 @@ func (pself *spriteMgrImpl) SetPhysicProcess(obj gdx.Object, is_on bool)  {}
 func (pself *spriteMgrImpl) SetTypeName(obj gdx.Object, type_name string) {}
 func (pself *spriteMgrImpl) SetPivot(obj gdx.Object, pivot Vec2)          {}
 func (pself *spriteMgrImpl) GetPivot(obj gdx.Object) Vec2 {
-	var _ret1 Vec2
-	return _ret1
+	return Vec2{}
 }
 func (pself *spriteMgrImpl) SetChildPosition(obj gdx.Object, path string, pos Vec2) {}
 func (pself *spriteMgrImpl) GetChildPosition(obj gdx.Object, path string) Vec2 {
-	var _ret1 Vec2
-	return _ret1
+	return Vec2{}
 }
 func (pself *spriteMgrImpl) SetChildRotation(obj gdx.Object, path string, rot float64) {}
 func (pself *spriteMgrImpl) GetChildRotation(obj gdx.Object, path string) float64 {
-	var _ret1 float64
-	return _ret1
+	return 0
 }
 func (pself *spriteMgrImpl) SetChildScale(obj gdx.Object, path string, scale Vec2) {}
 func (pself *spriteMgrImpl) GetChildScale(obj gdx.Object, path string) Vec2 {
-	var _ret1 Vec2
-	return _ret1
+	return Vec2{}
 }
 func (pself *spriteMgrImpl) CheckCollision(obj gdx.Object, target gdx.Object, is_src_trigger bool, is_dst_trigger bool) bool {
-	var _ret1 bool
-	return _ret1
+	return false
 }
 func (pself *spriteMgrImpl) CheckCollisionWithPoint(obj gdx.Object, point Vec2, is_trigger bool) bool {
-	var _ret1 bool
-	return _ret1
+	return false
 }
 func (pself *spriteMgrImpl) SetDebugCollisionVisible(obj gdx.Object, visible bool) {}
 func (pself *spriteMgrImpl) IsDebugCollisionVisible(obj gdx.Object) bool {
-	var _ret1 bool
-	return _ret1
+	return false
 }
 func (pself *spriteMgrImpl) CreateBackdrop(path string) gdx.Object {
-	var _ret1 gdx.Object
-	return _ret1
+	return 0
 }
 func (pself *spriteMgrImpl) CreateSprite(path string, pos Vec2) gdx.Object {
-	var _ret1 gdx.Object
-	return _ret1
+	return 0
 }
 func (pself *spriteMgrImpl) CloneSprite(obj gdx.Object) gdx.Object {
-	var _ret1 gdx.Object
-	return _ret1
+	return 0
 }
 func (pself *spriteMgrImpl) DestroySprite(obj gdx.Object) bool {
-	var _ret1 bool
-	return _ret1
+	return false
 }
 func (pself *spriteMgrImpl) IsSpriteAlive(obj gdx.Object) bool {
-	var _ret1 bool
-	return _ret1
+	return false
 }
 func (pself *spriteMgrImpl) SetPosition(obj gdx.Object, pos Vec2) {}
 func (pself *spriteMgrImpl) GetPosition(obj gdx.Object) Vec2 {
-	var _ret1 Vec2
-	return _ret1
+	return Vec2{}
 }
 func (pself *spriteMgrImpl) SetRotation(obj gdx.Object, rot float64) {}
 func (pself *spriteMgrImpl) GetRotation(obj gdx.Object) float64 {
-	var _ret1 float64
-	return _ret1
+	return 0
 }
 func (pself *spriteMgrImpl) SetScale(obj gdx.Object, scale Vec2) {}
 func (pself *spriteMgrImpl) GetScale(obj gdx.Object) Vec2 {
-	var _ret1 Vec2
-	return _ret1
+	return Vec2{}
 }
 func (pself *spriteMgrImpl) SetRenderScale(obj gdx.Object, scale Vec2) {}
 func (pself *spriteMgrImpl) GetRenderScale(obj gdx.Object) Vec2 {
-	var _ret1 Vec2
-	return _ret1
+	return Vec2{}
 }
 func (pself *spriteMgrImpl) SetColor(obj gdx.Object, color Color) {}
 func (pself *spriteMgrImpl) GetColor(obj gdx.Object) Color {
-	var _ret1 Color
-	return _ret1
+	return Color{}
 }
 func (pself *spriteMgrImpl) SetMaterialShader(obj gdx.Object, path string) {}
 func (pself *spriteMgrImpl) GetMaterialShader(obj gdx.Object) string {
-	var _ret1 string
-	return _ret1
+	return ""
 }
 func (pself *spriteMgrImpl) SetMaterialParams(obj gdx.Object, effect string, amount float64) {}
 func (pself *spriteMgrImpl) GetMaterialParams(obj gdx.Object, effect string) float64 {
-	var _ret1 float64
-	return _ret1
+	return 0
 }
 func (pself *spriteMgrImpl) SetMaterialParamsVec(obj gdx.Object, effect string, x float64, y float64, z float64, w float64) {
 }
 func (pself *spriteMgrImpl) SetMaterialParamsVec4(obj gdx.Object, effect string, vec4 Vec4) {}
 func (pself *spriteMgrImpl) GetMaterialParamsVec4(obj gdx.Object, effect string) Vec4 {
-	var _ret1 Vec4
-	return _ret1
+	return Vec4{}
 }
 func (pself *spriteMgrImpl) SetMaterialParamsColor(obj gdx.Object, effect string, color Color) {}
 func (pself *spriteMgrImpl) GetMaterialParamsColor(obj gdx.Object, effect string) Color {
-	var _ret1 Color
-	return _ret1
+	return Color{}
 }
 func (pself *spriteMgrImpl) SetTextureAtlas(obj gdx.Object, path string, rect2 Rect2)       {}
 func (pself *spriteMgrImpl) SetTexture(obj gdx.Object, path string)                         {}
 func (pself *spriteMgrImpl) SetTextureAtlasDirect(obj gdx.Object, path string, rect2 Rect2) {}
 func (pself *spriteMgrImpl) SetTextureDirect(obj gdx.Object, path string)                   {}
 func (pself *spriteMgrImpl) GetTexture(obj gdx.Object) string {
-	var _ret1 string
-	return _ret1
+	return ""
 }
 func (pself *spriteMgrImpl) SetVisible(obj gdx.Object, visible bool) {}
 func (pself *spriteMgrImpl) GetVisible(obj gdx.Object) bool {
-	var _ret1 bool
-	return _ret1
+	return false
 }
 func (pself *spriteMgrImpl) GetZIndex(obj gdx.Object) int64 {
-	var _ret1 int64
-	return _ret1
+	return 0
 }
 func (pself *spriteMgrImpl) SetZIndex(obj gdx.Object, z int64) {}
 func (pself *spriteMgrImpl) PlayAnim(obj gdx.Object, p_name string, p_speed float64, isLoop bool, p_revert bool) {
@@ -573,158 +493,125 @@ func (pself *spriteMgrImpl) PlayBackwardsAnim(obj gdx.Object, p_name string) {}
 func (pself *spriteMgrImpl) PauseAnim(obj gdx.Object)                        {}
 func (pself *spriteMgrImpl) StopAnim(obj gdx.Object)                         {}
 func (pself *spriteMgrImpl) IsPlayingAnim(obj gdx.Object) bool {
-	var _ret1 bool
-	return _ret1
+	return false
 }
 func (pself *spriteMgrImpl) SetAnim(obj gdx.Object, p_name string) {}
 func (pself *spriteMgrImpl) GetAnim(obj gdx.Object) string {
-	var _ret1 string
-	return _ret1
+	return ""
 }
 func (pself *spriteMgrImpl) SetAnimFrame(obj gdx.Object, p_frame int64) {}
 func (pself *spriteMgrImpl) GetAnimFrame(obj gdx.Object) int64 {
-	var _ret1 int64
-	return _ret1
+	return 0
 }
 func (pself *spriteMgrImpl) SetAnimSpeedScale(obj gdx.Object, p_speed_scale float64) {}
 func (pself *spriteMgrImpl) GetAnimSpeedScale(obj gdx.Object) float64 {
-	var _ret1 float64
-	return _ret1
+	return 0
 }
 func (pself *spriteMgrImpl) GetAnimPlayingSpeed(obj gdx.Object) float64 {
-	var _ret1 float64
-	return _ret1
+	return 0
 }
 func (pself *spriteMgrImpl) SetAnimCentered(obj gdx.Object, p_center bool) {}
 func (pself *spriteMgrImpl) IsAnimCentered(obj gdx.Object) bool {
-	var _ret1 bool
-	return _ret1
+	return false
 }
 func (pself *spriteMgrImpl) SetAnimOffset(obj gdx.Object, p_offset Vec2) {}
 func (pself *spriteMgrImpl) GetAnimOffset(obj gdx.Object) Vec2 {
-	var _ret1 Vec2
-	return _ret1
+	return Vec2{}
 }
 func (pself *spriteMgrImpl) SetAnimFlipH(obj gdx.Object, p_flip bool) {}
 func (pself *spriteMgrImpl) IsAnimFlippedH(obj gdx.Object) bool {
-	var _ret1 bool
-	return _ret1
+	return false
 }
 func (pself *spriteMgrImpl) SetAnimFlipV(obj gdx.Object, p_flip bool) {}
 func (pself *spriteMgrImpl) IsAnimFlippedV(obj gdx.Object) bool {
-	var _ret1 bool
-	return _ret1
+	return false
 }
 func (pself *spriteMgrImpl) GetCurrentAnimName(obj gdx.Object) string {
-	var _ret1 string
-	return _ret1
+	return ""
 }
 func (pself *spriteMgrImpl) SetVelocity(obj gdx.Object, velocity Vec2) {}
 func (pself *spriteMgrImpl) GetVelocity(obj gdx.Object) Vec2 {
-	var _ret1 Vec2
-	return _ret1
+	return Vec2{}
 }
 func (pself *spriteMgrImpl) IsOnFloor(obj gdx.Object) bool {
-	var _ret1 bool
-	return _ret1
+	return false
 }
 func (pself *spriteMgrImpl) IsOnFloorOnly(obj gdx.Object) bool {
-	var _ret1 bool
-	return _ret1
+	return false
 }
 func (pself *spriteMgrImpl) IsOnWall(obj gdx.Object) bool {
-	var _ret1 bool
-	return _ret1
+	return false
 }
 func (pself *spriteMgrImpl) IsOnWallOnly(obj gdx.Object) bool {
-	var _ret1 bool
-	return _ret1
+	return false
 }
 func (pself *spriteMgrImpl) IsOnCeiling(obj gdx.Object) bool {
-	var _ret1 bool
-	return _ret1
+	return false
 }
 func (pself *spriteMgrImpl) IsOnCeilingOnly(obj gdx.Object) bool {
-	var _ret1 bool
-	return _ret1
+	return false
 }
 func (pself *spriteMgrImpl) GetLastMotion(obj gdx.Object) Vec2 {
-	var _ret1 Vec2
-	return _ret1
+	return Vec2{}
 }
 func (pself *spriteMgrImpl) GetPositionDelta(obj gdx.Object) Vec2 {
-	var _ret1 Vec2
-	return _ret1
+	return Vec2{}
 }
 func (pself *spriteMgrImpl) GetFloorNormal(obj gdx.Object) Vec2 {
-	var _ret1 Vec2
-	return _ret1
+	return Vec2{}
 }
 func (pself *spriteMgrImpl) GetWallNormal(obj gdx.Object) Vec2 {
-	var _ret1 Vec2
-	return _ret1
+	return Vec2{}
 }
 func (pself *spriteMgrImpl) GetRealVelocity(obj gdx.Object) Vec2 {
-	var _ret1 Vec2
-	return _ret1
+	return Vec2{}
 }
 func (pself *spriteMgrImpl) MoveAndSlide(obj gdx.Object)                {}
 func (pself *spriteMgrImpl) SetGravity(obj gdx.Object, gravity float64) {}
 func (pself *spriteMgrImpl) GetGravity(obj gdx.Object) float64 {
-	var _ret1 float64
-	return _ret1
+	return 0
 }
 func (pself *spriteMgrImpl) SetMass(obj gdx.Object, mass float64) {}
 func (pself *spriteMgrImpl) GetMass(obj gdx.Object) float64 {
-	var _ret1 float64
-	return _ret1
+	return 0
 }
 func (pself *spriteMgrImpl) AddForce(obj gdx.Object, force Vec2)       {}
 func (pself *spriteMgrImpl) AddImpulse(obj gdx.Object, impulse Vec2)   {}
 func (pself *spriteMgrImpl) SetPhysicsMode(obj gdx.Object, mode int64) {}
 func (pself *spriteMgrImpl) GetPhysicsMode(obj gdx.Object) int64 {
-	var _ret1 int64
-	return _ret1
+	return 0
 }
 func (pself *spriteMgrImpl) SetUseGravity(obj gdx.Object, enabled bool) {}
 func (pself *spriteMgrImpl) IsUseGravity(obj gdx.Object) bool {
-	var _ret1 bool
-	return _ret1
+	return false
 }
 func (pself *spriteMgrImpl) SetGravityScale(obj gdx.Object, scale float64) {}
 func (pself *spriteMgrImpl) GetGravityScale(obj gdx.Object) float64 {
-	var _ret1 float64
-	return _ret1
+	return 0
 }
 func (pself *spriteMgrImpl) SetDrag(obj gdx.Object, drag float64) {}
 func (pself *spriteMgrImpl) GetDrag(obj gdx.Object) float64 {
-	var _ret1 float64
-	return _ret1
+	return 0
 }
 func (pself *spriteMgrImpl) SetFriction(obj gdx.Object, friction float64) {}
 func (pself *spriteMgrImpl) GetFriction(obj gdx.Object) float64 {
-	var _ret1 float64
-	return _ret1
+	return 0
 }
 func (pself *spriteMgrImpl) SetCollisionLayer(obj gdx.Object, layer int64) {}
 func (pself *spriteMgrImpl) GetCollisionLayer(obj gdx.Object) int64 {
-	var _ret1 int64
-	return _ret1
+	return 0
 }
 func (pself *spriteMgrImpl) SetCollisionMask(obj gdx.Object, mask int64) {}
 func (pself *spriteMgrImpl) GetCollisionMask(obj gdx.Object) int64 {
-	var _ret1 int64
-	return _ret1
+	return 0
 }
 func (pself *spriteMgrImpl) SetTriggerLayer(obj gdx.Object, layer int64) {}
 func (pself *spriteMgrImpl) GetTriggerLayer(obj gdx.Object) int64 {
-	var _ret1 int64
-	return _ret1
+	return 0
 }
 func (pself *spriteMgrImpl) SetTriggerMask(obj gdx.Object, mask int64) {}
 func (pself *spriteMgrImpl) GetTriggerMask(obj gdx.Object) int64 {
-	var _ret1 int64
-	return _ret1
+	return 0
 }
 func (pself *spriteMgrImpl) SetColliderRect(obj gdx.Object, center Vec2, size Vec2)           {}
 func (pself *spriteMgrImpl) SetColliderCircle(obj gdx.Object, center Vec2, radius float64)    {}
@@ -732,8 +619,7 @@ func (pself *spriteMgrImpl) SetColliderCapsule(obj gdx.Object, center Vec2, size
 func (pself *spriteMgrImpl) SetColliderPolygon(obj gdx.Object, center Vec2, points gdx.Array) {}
 func (pself *spriteMgrImpl) SetCollisionEnabled(obj gdx.Object, enabled bool)                 {}
 func (pself *spriteMgrImpl) IsCollisionEnabled(obj gdx.Object) bool {
-	var _ret1 bool
-	return _ret1
+	return false
 }
 func (pself *spriteMgrImpl) SetTriggerRect(obj gdx.Object, center Vec2, size Vec2)           {}
 func (pself *spriteMgrImpl) SetTriggerCircle(obj gdx.Object, center Vec2, radius float64)    {}
@@ -741,30 +627,24 @@ func (pself *spriteMgrImpl) SetTriggerCapsule(obj gdx.Object, center Vec2, size 
 func (pself *spriteMgrImpl) SetTriggerPolygon(obj gdx.Object, center Vec2, points gdx.Array) {}
 func (pself *spriteMgrImpl) SetTriggerEnabled(obj gdx.Object, trigger bool)                  {}
 func (pself *spriteMgrImpl) IsTriggerEnabled(obj gdx.Object) bool {
-	var _ret1 bool
-	return _ret1
+	return false
 }
 func (pself *spriteMgrImpl) CheckCollisionByColor(obj gdx.Object, color Color, color_threshold float64, alpha_threshold float64) bool {
-	var _ret1 bool
-	return _ret1
+	return false
 }
 func (pself *spriteMgrImpl) CheckCollisionByAlpha(obj gdx.Object, alpha_threshold float64) bool {
-	var _ret1 bool
-	return _ret1
+	return false
 }
 func (pself *spriteMgrImpl) CheckCollisionWithSprite(obj gdx.Object, obj_b gdx.Object, alpha_threshold float64, use_pixel_perfect bool) bool {
-	var _ret1 bool
-	return _ret1
+	return false
 }
 func (pself *spriteMgrImpl) SetPixelCollisionSamplingStep(step int64) {}
 func (pself *spriteMgrImpl) GetPixelCollisionSamplingStep() int64 {
-	var _ret1 int64
-	return _ret1
+	return 0
 }
 func (pself *spriteMgrImpl) BatchUpdateTransforms(buffer gdx.Array) {}
 func (pself *spriteMgrImpl) BatchRetrievePositions(objs gdx.Array) gdx.Array {
-	var _ret1 gdx.Array
-	return _ret1
+	return nil
 }
 
 // ITilemapMgr
@@ -776,8 +656,7 @@ func (pself *tilemapMgrImpl) SetTileWithCollisionInfo(texture_path string, colli
 }
 func (pself *tilemapMgrImpl) SetLayerOffset(index int64, offset Vec2) {}
 func (pself *tilemapMgrImpl) GetLayerOffset(index int64) Vec2 {
-	var _ret1 Vec2
-	return _ret1
+	return Vec2{}
 }
 func (pself *tilemapMgrImpl) PlaceTiles(positions gdx.Array, texture_path string) {}
 func (pself *tilemapMgrImpl) PlaceTilesWithLayer(positions gdx.Array, texture_path string, layer_index int64) {
@@ -787,12 +666,10 @@ func (pself *tilemapMgrImpl) PlaceTileWithLayer(pos Vec2, texture_path string, l
 func (pself *tilemapMgrImpl) EraseTile(pos Vec2)                                                  {}
 func (pself *tilemapMgrImpl) EraseTileWithLayer(pos Vec2, layer_index int64)                      {}
 func (pself *tilemapMgrImpl) GetTile(pos Vec2) string {
-	var _ret1 string
-	return _ret1
+	return ""
 }
 func (pself *tilemapMgrImpl) GetTileWithLayer(pos Vec2, layer_index int64) string {
-	var _ret1 string
-	return _ret1
+	return ""
 }
 func (pself *tilemapMgrImpl) CloseDrawTiles()        {}
 func (pself *tilemapMgrImpl) ExitTilemapEditorMode() {}
@@ -802,132 +679,104 @@ func (pself *tilemapparserMgrImpl) LoadTilemap(json_path string) {}
 func (pself *tilemapparserMgrImpl) UnloadTilemap(name string)    {}
 func (pself *tilemapparserMgrImpl) DestroyAllTilemaps()          {}
 func (pself *tilemapparserMgrImpl) HasTilemap(name string) bool {
-	var _ret1 bool
-	return _ret1
+	return false
 }
 func (pself *tilemapparserMgrImpl) GetTilemapLayerCount(name string) int64 {
-	var _ret1 int64
-	return _ret1
+	return 0
 }
 
 // IUiMgr
 func (pself *uiMgrImpl) BindNode(obj gdx.Object, rel_path string) gdx.Object {
-	var _ret1 gdx.Object
-	return _ret1
+	return 0
 }
 func (pself *uiMgrImpl) CreateNode(path string) gdx.Object {
-	var _ret1 gdx.Object
-	return _ret1
+	return 0
 }
 func (pself *uiMgrImpl) CreateButton(path string, text string) gdx.Object {
-	var _ret1 gdx.Object
-	return _ret1
+	return 0
 }
 func (pself *uiMgrImpl) CreateLabel(path string, text string) gdx.Object {
-	var _ret1 gdx.Object
-	return _ret1
+	return 0
 }
 func (pself *uiMgrImpl) CreateImage(path string) gdx.Object {
-	var _ret1 gdx.Object
-	return _ret1
+	return 0
 }
 func (pself *uiMgrImpl) CreateToggle(path string, value bool) gdx.Object {
-	var _ret1 gdx.Object
-	return _ret1
+	return 0
 }
 func (pself *uiMgrImpl) CreateSlider(path string, value float64) gdx.Object {
-	var _ret1 gdx.Object
-	return _ret1
+	return 0
 }
 func (pself *uiMgrImpl) CreateInput(path string, text string) gdx.Object {
-	var _ret1 gdx.Object
-	return _ret1
+	return 0
 }
 func (pself *uiMgrImpl) DestroyNode(obj gdx.Object) bool {
-	var _ret1 bool
-	return _ret1
+	return false
 }
 func (pself *uiMgrImpl) GetType(obj gdx.Object) int64 {
-	var _ret1 int64
-	return _ret1
+	return 0
 }
 func (pself *uiMgrImpl) SetText(obj gdx.Object, text string) {}
 func (pself *uiMgrImpl) GetText(obj gdx.Object) string {
-	var _ret1 string
-	return _ret1
+	return ""
 }
 func (pself *uiMgrImpl) SetTexture(obj gdx.Object, path string) {}
 func (pself *uiMgrImpl) GetTexture(obj gdx.Object) string {
-	var _ret1 string
-	return _ret1
+	return ""
 }
 func (pself *uiMgrImpl) SetColor(obj gdx.Object, color Color) {}
 func (pself *uiMgrImpl) GetColor(obj gdx.Object) Color {
-	var _ret1 Color
-	return _ret1
+	return Color{}
 }
 func (pself *uiMgrImpl) SetFontSize(obj gdx.Object, size int64) {}
 func (pself *uiMgrImpl) GetFontSize(obj gdx.Object) int64 {
-	var _ret1 int64
-	return _ret1
+	return 0
 }
 func (pself *uiMgrImpl) SetVisible(obj gdx.Object, visible bool) {}
 func (pself *uiMgrImpl) GetVisible(obj gdx.Object) bool {
-	var _ret1 bool
-	return _ret1
+	return false
 }
 func (pself *uiMgrImpl) SetInteractable(obj gdx.Object, interactable bool) {}
 func (pself *uiMgrImpl) GetInteractable(obj gdx.Object) bool {
-	var _ret1 bool
-	return _ret1
+	return false
 }
 func (pself *uiMgrImpl) SetRect(obj gdx.Object, rect Rect2) {}
 func (pself *uiMgrImpl) GetRect(obj gdx.Object) Rect2 {
-	var _ret1 Rect2
-	return _ret1
+	return Rect2{}
 }
 func (pself *uiMgrImpl) GetLayoutDirection(obj gdx.Object) int64 {
-	var _ret1 int64
-	return _ret1
+	return 0
 }
 func (pself *uiMgrImpl) SetLayoutDirection(obj gdx.Object, value int64) {}
 func (pself *uiMgrImpl) GetLayoutMode(obj gdx.Object) int64 {
-	var _ret1 int64
-	return _ret1
+	return 0
 }
 func (pself *uiMgrImpl) SetLayoutMode(obj gdx.Object, value int64) {}
 func (pself *uiMgrImpl) GetAnchorsPreset(obj gdx.Object) int64 {
-	var _ret1 int64
-	return _ret1
+	return 0
 }
 func (pself *uiMgrImpl) SetAnchorsPreset(obj gdx.Object, value int64) {}
 func (pself *uiMgrImpl) GetScale(obj gdx.Object) Vec2 {
-	var _ret1 Vec2
-	return _ret1
+	return Vec2{}
 }
 func (pself *uiMgrImpl) SetScale(obj gdx.Object, value Vec2) {}
 func (pself *uiMgrImpl) GetPosition(obj gdx.Object) Vec2 {
-	var _ret1 Vec2
-	return _ret1
+	return Vec2{}
 }
 func (pself *uiMgrImpl) SetPosition(obj gdx.Object, value Vec2) {}
 func (pself *uiMgrImpl) GetSize(obj gdx.Object) Vec2 {
-	var _ret1 Vec2
-	return _ret1
+	return Vec2{}
 }
 func (pself *uiMgrImpl) SetSize(obj gdx.Object, value Vec2) {}
 func (pself *uiMgrImpl) GetGlobalPosition(obj gdx.Object) Vec2 {
-	var _ret1 Vec2
-	return _ret1
+	return Vec2{}
 }
 func (pself *uiMgrImpl) SetGlobalPosition(obj gdx.Object, value Vec2) {}
 func (pself *uiMgrImpl) GetRotation(obj gdx.Object) float64 {
-	var _ret1 float64
-	return _ret1
+	return 0
 }
 func (pself *uiMgrImpl) SetRotation(obj gdx.Object, value float64) {}
 func (pself *uiMgrImpl) GetFlip(obj gdx.Object, horizontal bool) bool {
-	var _ret1 bool
-	return _ret1
+	return false
 }
 func (pself *uiMgrImpl) SetFlip(obj gdx.Object, horizontal bool, is_flip bool) {}

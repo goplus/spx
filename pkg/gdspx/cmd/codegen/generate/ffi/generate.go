@@ -408,22 +408,26 @@ func GetGdxFuncParamTypeString(typeName string) string {
 	return name
 }
 
-func genSyncPureApiWrapFunction(function *clang.TypedefFunction) string {
-	/*
-		func syncUiGetFlip(obj Object, horizontal bool) bool {
-			var _ret1 bool
-			WaitMainThread(func() {
-				_ret1 = UiMgr.GetFlip(obj, horizontal)
-			})
-			return _ret1
-		}
-	*/
+func goZeroValue(typeName string) string {
+	switch typeName {
+	case "bool":
+		return "false"
+	case "int64", "float64", "Object", "gdx.Object":
+		return "0"
+	case "string":
+		return `""`
+	case "Array", "gdx.Array":
+		return "nil"
+	default:
+		return typeName + "{}"
+	}
+}
 
+func genSyncPureApiWrapFunction(function *clang.TypedefFunction) string {
 	prefix := "GDExtensionSpx"
 	sb := strings.Builder{}
 	mgrName := strcase.ToCamel(GetManagerName(function.Name))
 	pureFuncName := function.Name[len(prefix)+len(mgrName):]
-	//funcName := function.Name[len(prefix):]
 	mgrTypeName := strcase.ToLowerCamel(GetManagerName(function.Name)) + "Mgr"
 
 	sb.WriteString(fmt.Sprintf("func (pself *%s) ", mgrTypeName+"Impl"))
@@ -450,11 +454,7 @@ func genSyncPureApiWrapFunction(function *clang.TypedefFunction) string {
 	// body
 	if function.ReturnType.Name != "void" {
 		typeName := GetGdxFuncParamTypeString(function.ReturnType.Name)
-		sb.WriteString("\n" + prefixStr + "var _ret1 " + typeName + "\n")
-	}
-
-	if function.ReturnType.Name != "void" {
-		sb.WriteString(prefixStr + "return _ret1 \n")
+		sb.WriteString("\n" + prefixStr + "return " + goZeroValue(typeName) + "\n")
 	}
 	sb.WriteString("}")
 	return sb.String()
@@ -577,8 +577,7 @@ func getManagerImplPure(function *clang.TypedefFunction, clsName string) string 
 	sb.WriteString("{\n")
 	if anyRet {
 		typeName := GetFuncParamTypeString(function.ReturnType.Name)
-		sb.WriteString("\tvar _val " + typeName + " \n")
-		sb.WriteString("\treturn _val;\n")
+		sb.WriteString("\treturn " + goZeroValue(typeName) + "\n")
 	}
 	sb.WriteString("}\n")
 	return sb.String()
