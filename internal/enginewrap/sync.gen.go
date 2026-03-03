@@ -1631,6 +1631,11 @@ func (pself *spriteMgrImpl) BatchUpdateTransforms(buffer gdx.Array) {
 		gdx.SpriteMgr.BatchUpdateTransforms(buffer)
 	})
 }
+func (pself *spriteMgrImpl) BatchUpdateVisuals(buffer gdx.Array) {
+	callInMainThread(func() {
+		gdx.SpriteMgr.BatchUpdateVisuals(buffer)
+	})
+}
 func (pself *spriteMgrImpl) BatchRetrievePositions(objs gdx.Array) gdx.Array {
 	var _ret1 gdx.Array
 	callInMainThread(func() {

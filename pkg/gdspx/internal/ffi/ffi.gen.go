@@ -266,6 +266,7 @@ type GDExtensionInterface struct {
 	SpxSpriteSetPixelCollisionSamplingStep      GDExtensionSpxSpriteSetPixelCollisionSamplingStep
 	SpxSpriteGetPixelCollisionSamplingStep      GDExtensionSpxSpriteGetPixelCollisionSamplingStep
 	SpxSpriteBatchUpdateTransforms              GDExtensionSpxSpriteBatchUpdateTransforms
+	SpxSpriteBatchUpdateVisuals                 GDExtensionSpxSpriteBatchUpdateVisuals
 	SpxSpriteBatchRetrievePositions             GDExtensionSpxSpriteBatchRetrievePositions
 	SpxTilemapOpenDrawTilesWithSize             GDExtensionSpxTilemapOpenDrawTilesWithSize
 	SpxTilemapOpenDrawTiles                     GDExtensionSpxTilemapOpenDrawTiles
@@ -582,6 +583,7 @@ func (x *GDExtensionInterface) loadProcAddresses() {
 	x.SpxSpriteSetPixelCollisionSamplingStep = (GDExtensionSpxSpriteSetPixelCollisionSamplingStep)(dlsymGD("spx_sprite_set_pixel_collision_sampling_step"))
 	x.SpxSpriteGetPixelCollisionSamplingStep = (GDExtensionSpxSpriteGetPixelCollisionSamplingStep)(dlsymGD("spx_sprite_get_pixel_collision_sampling_step"))
 	x.SpxSpriteBatchUpdateTransforms = (GDExtensionSpxSpriteBatchUpdateTransforms)(dlsymGD("spx_sprite_batch_update_transforms"))
+	x.SpxSpriteBatchUpdateVisuals = (GDExtensionSpxSpriteBatchUpdateVisuals)(dlsymGD("spx_sprite_batch_update_visuals"))
 	x.SpxSpriteBatchRetrievePositions = (GDExtensionSpxSpriteBatchRetrievePositions)(dlsymGD("spx_sprite_batch_retrieve_positions"))
 	x.SpxTilemapOpenDrawTilesWithSize = (GDExtensionSpxTilemapOpenDrawTilesWithSize)(dlsymGD("spx_tilemap_open_draw_tiles_with_size"))
 	x.SpxTilemapOpenDrawTiles = (GDExtensionSpxTilemapOpenDrawTiles)(dlsymGD("spx_tilemap_open_draw_tiles"))

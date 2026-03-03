@@ -756,6 +756,9 @@ void cgo_callfn_GDExtensionSpxSpriteGetPixelCollisionSamplingStep(const GDExtens
 void cgo_callfn_GDExtensionSpxSpriteBatchUpdateTransforms(const GDExtensionSpxSpriteBatchUpdateTransforms fn, GdArray buffer) {
 	fn(buffer);
 }
+void cgo_callfn_GDExtensionSpxSpriteBatchUpdateVisuals(const GDExtensionSpxSpriteBatchUpdateVisuals fn, GdArray buffer) {
+	fn(buffer);
+}
 void cgo_callfn_GDExtensionSpxSpriteBatchRetrievePositions(const GDExtensionSpxSpriteBatchRetrievePositions fn, GdArray objs, GdArray* ret_val) {
 	fn(objs,ret_val);
 }

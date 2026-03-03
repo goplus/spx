@@ -152,3 +152,115 @@ func SyncBatchGetPositions(spriteIDs []int64) []float32 {
 	f32Pos, _ := positions.([]float32)
 	return f32Pos
 }
+
+// -------------------------------------------------------------------------------------
+// Visual Sync Buffer - Batches SetRenderScale, SetZIndex, and UV remap updates
+// -------------------------------------------------------------------------------------
+
+const (
+	// VisualFieldsPerSprite is the number of float32 fields per sprite in the visual buffer
+	// [spriteId, renderScaleX, renderScaleY, zIndex, flags, uvX, uvY, uvW, uvH]
+	VisualFieldsPerSprite = 9
+
+	// Visual flags
+	VisualFlagHasZIndex  = 1 // bit 0: apply SetZIndex
+	VisualFlagHasUvRemap = 2 // bit 1: apply SetMaterialParamsVec4 for UV remap
+)
+
+// VisualSyncData represents the visual data to sync for a single sprite
+type VisualSyncData struct {
+	SpriteID    int64
+	RenderScale float32
+	ZIndex      int32
+	Flags       int32
+	UvRemap     [4]float32 // x, y, w, h (UV remap for atlas textures)
+}
+
+// VisualSyncBuffer collects visual sync data for batch processing
+type VisualSyncBuffer struct {
+	data []VisualSyncData
+}
+
+// NewVisualSyncBuffer creates a new visual sync buffer
+func NewVisualSyncBuffer(capacity int) *VisualSyncBuffer {
+	return &VisualSyncBuffer{
+		data: make([]VisualSyncData, 0, capacity),
+	}
+}
+
+// AddRenderScale adds a render scale update to the buffer
+func (b *VisualSyncBuffer) AddRenderScale(id int64, renderScale float64) {
+	b.data = append(b.data, VisualSyncData{
+		SpriteID:    id,
+		RenderScale: float32(renderScale),
+	})
+}
+
+// AddFull adds a full visual update (render scale + optional zIndex + optional UV remap)
+func (b *VisualSyncBuffer) AddFull(id int64, renderScale float64, zIndex int, hasZIndex bool, uvRemap [4]float64, hasUvRemap bool) {
+	entry := VisualSyncData{
+		SpriteID:    id,
+		RenderScale: float32(renderScale),
+		ZIndex:      int32(zIndex),
+	}
+	if hasZIndex {
+		entry.Flags |= VisualFlagHasZIndex
+	}
+	if hasUvRemap {
+		entry.Flags |= VisualFlagHasUvRemap
+		entry.UvRemap = [4]float32{
+			float32(uvRemap[0]), float32(uvRemap[1]),
+			float32(uvRemap[2]), float32(uvRemap[3]),
+		}
+	}
+	b.data = append(b.data, entry)
+}
+
+// Clear resets the buffer for reuse
+func (b *VisualSyncBuffer) Clear() {
+	b.data = b.data[:0]
+}
+
+// Count returns the number of visual updates in the buffer
+func (b *VisualSyncBuffer) Count() int {
+	return len(b.data)
+}
+
+// Serialize converts the buffer to a flat float32 array for FFI
+// Format: [count, entry0..., entry1..., ...]
+// Each entry: [spriteId, renderScaleX, renderScaleY, zIndex, flags, uvX, uvY, uvW, uvH]
+func (b *VisualSyncBuffer) Serialize() []float32 {
+	count := len(b.data)
+	if count == 0 {
+		return nil
+	}
+
+	totalSize := 1 + count*VisualFieldsPerSprite
+	result := make([]float32, totalSize)
+
+	result[0] = float32(count)
+	idx := 1
+
+	for _, entry := range b.data {
+		result[idx] = float32(entry.SpriteID)
+		result[idx+1] = entry.RenderScale
+		result[idx+2] = entry.RenderScale // scaleX == scaleY for render scale
+		result[idx+3] = float32(entry.ZIndex)
+		result[idx+4] = float32(entry.Flags)
+		result[idx+5] = entry.UvRemap[0]
+		result[idx+6] = entry.UvRemap[1]
+		result[idx+7] = entry.UvRemap[2]
+		result[idx+8] = entry.UvRemap[3]
+		idx += VisualFieldsPerSprite
+	}
+
+	return result
+}
+
+// SyncBatchUpdateVisuals sends batch visual updates to Godot via a single FFI call
+func SyncBatchUpdateVisuals(buffer []float32) {
+	if len(buffer) == 0 {
+		return
+	}
+	gdx.SpriteMgr.BatchUpdateVisuals(buffer)
+}

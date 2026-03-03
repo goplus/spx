@@ -1393,6 +1393,10 @@ func (pself *spriteMgr) BatchUpdateTransforms(buffer Array) {
 	arg0 := JsFromGdArray(buffer)
 	API.SpxSpriteBatchUpdateTransforms.Invoke(arg0)
 }
+func (pself *spriteMgr) BatchUpdateVisuals(buffer Array) {
+	arg0 := JsFromGdArray(buffer)
+	API.SpxSpriteBatchUpdateVisuals.Invoke(arg0)
+}
 func (pself *spriteMgr) BatchRetrievePositions(objs Array) Array {
 	arg0 := JsFromGdArray(objs)
 	_retValue := API.SpxSpriteBatchRetrievePositions.Invoke(arg0)
