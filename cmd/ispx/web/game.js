@@ -130,9 +130,6 @@ class GameApp {
         let curGame = this.game;
 
         // register global functions
-        window.gdspx_on_engine_start = function () { }
-        window.gdspx_on_engine_update = function () { }
-        window.gdspx_on_engine_fixed_update = function () { }
         window.goWasmInit = function () { }
         const spxfuncs = new GdspxFuncs();
         const methodNames = Object.getOwnPropertyNames(Object.getPrototypeOf(spxfuncs));

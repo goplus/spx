@@ -59,7 +59,7 @@ type GDExtensionBuiltinInterface struct {
 	SpxVariantGetPtrDestructor        GDExtensionSpxVariantGetPtrDestructor
 }
 
-func (x *GDExtensionBuiltinInterface) loadProcAddresses() {
+func (x *GDExtensionBuiltinInterface) resolveAPIFunctions() {
 	x.SpxGlobalRegisterCallbacks = (GDExtensionSpxGlobalRegisterCallbacks)(dlsymGD("spx_global_register_callbacks"))
 	x.SpxStringNewWithLatin1Chars = (GDExtensionSpxStringNewWithLatin1Chars)(dlsymGD("spx_string_new_with_latin1_chars"))
 	x.SpxStringNewWithUtf8Chars = (GDExtensionSpxStringNewWithUtf8Chars)(dlsymGD("spx_string_new_with_utf8_chars"))

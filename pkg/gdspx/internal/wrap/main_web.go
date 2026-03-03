@@ -25,7 +25,7 @@ func LinkFFI() bool {
 }
 
 func RegisterFFI() {
-	webffi.RegisterFuncs()
+	webffi.RegisterCallbackDispatcher()
 }
 
 func OnLinked() {

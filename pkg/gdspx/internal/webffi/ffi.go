@@ -13,19 +13,19 @@ var (
 	exitChan      chan struct{}
 )
 
-func RegisterFuncs() {
-	registerFuncPtr2Js()
+func RegisterCallbackDispatcher() {
+	registerCallbackDispatcher()
 }
 
 func Link() bool {
 	js.Global().Set("goWasmInit", js.FuncOf(goWasmInit))
-	registerFuncPtr2Js()
-	API.loadProcAddresses()
+	registerCallbackDispatcher()
+	API.resolveAPIFunctions()
 	return !hasInitEngine
 }
 func Linked() {
 	if !hasInitEngine { // adapt for ixgo
-		gdspxOnEngineStart(js.Value{}, nil)
+		gdspxDispatch(js.Value{}, []js.Value{jsEventOnEngineStart})
 	}
 
 	exitChan = make(chan struct{})
@@ -40,22 +40,22 @@ func Unlink() {
 	hasInitEngine = false
 }
 
-// this function will only be called in wasm mode, it will not be called in ixgo (interpreter) mode.
-func goWasmInit(this js.Value, args []js.Value) any {
-	spxlog.Info("Go wasm init success!")
-	hasInitEngine = true
-	registerFuncPtr2Js()
-	return js.ValueOf(nil)
-}
-
 func BindCallback(info engine.CallbackInfo) {
 	callbacks = info
 }
 
-func dlsymGD(funcName string) js.Value {
+func resolveJSFunc(funcName string) js.Value {
 	val := js.Global().Get(funcName)
 	if val.IsUndefined() || val.IsNull() {
-		panic("Js Function not found: " + funcName)
+		panic("JS function not found: " + funcName)
 	}
 	return val
+}
+
+// goWasmInit is only called in worker mode.
+func goWasmInit(this js.Value, args []js.Value) any {
+	spxlog.Info("Go wasm init success!")
+	hasInitEngine = true
+	registerCallbackDispatcher()
+	return js.ValueOf(nil)
 }

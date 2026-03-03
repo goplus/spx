@@ -13,25 +13,41 @@ import (
 	"syscall/js"
 )
 
+// Pre-cached JS string values for zero-allocation event dispatch.
+// js.Value.Equal uses JavaScript's === operator which is a fast reference
+// comparison for interned strings, avoiding Go heap allocation.
+var (
 {{ range $i, $f := $view.CollectGDExtensionICallbackFunctions -}}
-func gdspx{{ trimPrefix $f.Name "GDExtensionSpxCallback" }}(this js.Value, args []js.Value) any {
-	if (callbacks.{{ trimPrefix $f.Name "GDExtensionSpxCallback" }} == nil){
+	jsEvent{{ trimPrefix $f.Name "GDExtensionSpxCallback" }} = js.ValueOf("{{ trimPrefix $f.Name "GDExtensionSpxCallback" }}")
+{{ end -}}
+)
+
+// gdspxDispatch is the single dispatch entry point for all callbacks from JS.
+// The first argument (args[0]) is the event name string, followed by event-specific arguments.
+// Uses js.Value.Equal for zero-allocation comparison (no Go string created).
+func gdspxDispatch(this js.Value, args []js.Value) any {
+	if len(args) == 0 {
 		return nil
 	}
-	{{ range $j, $arg := $f.Arguments -}}
-		arg{{ $j }} := JsTo{{$arg.Type.Primative.Name}}(args[{{$j}}])
-	{{ end -}}
-	callbacks.{{ trimPrefix $f.Name "GDExtensionSpxCallback" }}(
-		{{- range $j, $arg := $f.Arguments -}}
-			arg{{ $j }},
-		{{- end -}}
-	)
+	eventVal := args[0]
+{{ range $i, $f := $view.CollectGDExtensionICallbackFunctions -}}
+	{{ if $i }}} else {{ end }}if eventVal.Equal(jsEvent{{ trimPrefix $f.Name "GDExtensionSpxCallback" }}) {
+		if callbacks.{{ trimPrefix $f.Name "GDExtensionSpxCallback" }} == nil {
+			return nil
+		}
+		{{ range $j, $arg := $f.Arguments -}}
+		arg{{ $j }} := JsTo{{$arg.Type.Primative.Name}}(args[{{add $j 1}}])
+		{{ end -}}
+		callbacks.{{ trimPrefix $f.Name "GDExtensionSpxCallback" }}(
+			{{- range $j, $arg := $f.Arguments -}}
+				arg{{ $j }},
+			{{- end -}}
+		)
+{{ end -}}
+	}
 	return nil
 }
-{{ end -}}
 
-func registerFuncPtr2Js() {
-{{ range $i, $f := $view.CollectGDExtensionICallbackFunctions -}}
-	js.Global().Set("gdspx_{{snakeCase (trimPrefix $f.Name "GDExtensionSpxCallback" )}}", js.FuncOf(gdspx{{ trimPrefix $f.Name "GDExtensionSpxCallback" }}))
-{{ end -}}
+func registerCallbackDispatcher() {
+	js.Global().Set("gdspx_dispatch", js.FuncOf(gdspxDispatch))
 }
