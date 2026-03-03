@@ -630,7 +630,7 @@ func normalizeEffectValue(kind EffectKind, val float64) float64 {
 	case WhirlEffect:
 		return mathf.Clamp(val/50, -20, 20)
 	case FishEyeEffect:
-		return mathf.Clamp(val/100, -1, 100)
+		return mathf.Clamp(val/100, -1, 1)
 	case PixelateEffect:
 		return mathf.Absf(val / 10)
 	default:

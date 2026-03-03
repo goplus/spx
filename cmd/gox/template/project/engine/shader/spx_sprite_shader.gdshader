@@ -7,7 +7,7 @@ uniform float brightness_amount : hint_range(0.0, 1.0) = 0.0;
 uniform float uv_amount : hint_range(0.001, 100.0) = 0.0;
 uniform float pixleate_amount : hint_range(0.0, 100.0) = 0.0;
 uniform float whirl_amount : hint_range(-20, 20.0) = 0.0;
-uniform float fisheye_amount : hint_range(-1.0, 100.0) = 0.0;
+uniform float fisheye_amount : hint_range(-1.0, 1.0) = 0.0;
 uniform vec4 atlas_uv_rect2 = vec4(0.0, 0.0, 1.0, 1.0); // offset , size
 uniform vec4 repeat_scale = vec4(1.0, 1.0, 0.0, 0.0);
 
@@ -73,10 +73,12 @@ void fragment() {
 
 		vec2 vec = (uv - kCenter) / kCenter;
 		float vecLength = length(vec);
-		float r = pow(min(vecLength, 1.0), newAmount) * max(1.0, vecLength);
-		vec2 unit = vec / vecLength;
+		if (vecLength > 0.0) {
+			float r = pow(min(vecLength, 1.0), newAmount) * max(1.0, vecLength);
+			vec2 unit = vec / vecLength;
 
-		uv = kCenter + r * unit * kCenter;
+			uv = kCenter + r * unit * kCenter;
+		}
 	}
 	
 	// uv effect
