@@ -333,6 +333,7 @@ type GDExtensionSpxSpriteCheckCollisionWithSprite C.GDExtensionSpxSpriteCheckCol
 type GDExtensionSpxSpriteSetPixelCollisionSamplingStep C.GDExtensionSpxSpriteSetPixelCollisionSamplingStep
 type GDExtensionSpxSpriteGetPixelCollisionSamplingStep C.GDExtensionSpxSpriteGetPixelCollisionSamplingStep
 type GDExtensionSpxSpriteBatchUpdateTransforms C.GDExtensionSpxSpriteBatchUpdateTransforms
+type GDExtensionSpxSpriteBatchUpdateVisuals C.GDExtensionSpxSpriteBatchUpdateVisuals
 type GDExtensionSpxSpriteBatchRetrievePositions C.GDExtensionSpxSpriteBatchRetrievePositions
 type GDExtensionSpxTilemapOpenDrawTilesWithSize C.GDExtensionSpxTilemapOpenDrawTilesWithSize
 type GDExtensionSpxTilemapOpenDrawTiles C.GDExtensionSpxTilemapOpenDrawTiles
@@ -2965,6 +2966,15 @@ func CallSpriteBatchUpdateTransforms(
 	arg1GdArray := (C.GdArray)(buffer)
 
 	C.cgo_callfn_GDExtensionSpxSpriteBatchUpdateTransforms(arg0, arg1GdArray)
+
+}
+func CallSpriteBatchUpdateVisuals(
+	buffer GdArray,
+) {
+	arg0 := (C.GDExtensionSpxSpriteBatchUpdateVisuals)(api.SpxSpriteBatchUpdateVisuals)
+	arg1GdArray := (C.GdArray)(buffer)
+
+	C.cgo_callfn_GDExtensionSpxSpriteBatchUpdateVisuals(arg0, arg1GdArray)
 
 }
 func CallSpriteBatchRetrievePositions(

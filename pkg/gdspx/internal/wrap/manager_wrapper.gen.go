@@ -1498,6 +1498,10 @@ func (pself *spriteMgr) BatchUpdateTransforms(buffer Array) {
 	arg0 := ToGdArray(buffer)
 	CallSpriteBatchUpdateTransforms(arg0)
 }
+func (pself *spriteMgr) BatchUpdateVisuals(buffer Array) {
+	arg0 := ToGdArray(buffer)
+	CallSpriteBatchUpdateVisuals(arg0)
+}
 func (pself *spriteMgr) BatchRetrievePositions(objs Array) Array {
 	arg0 := ToGdArray(objs)
 	retValue := CallSpriteBatchRetrievePositions(arg0)

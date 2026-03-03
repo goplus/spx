@@ -29,6 +29,9 @@ func (pself *Sprite) BatchRetrievePositions(objs Array) Array {
 func (pself *Sprite) BatchUpdateTransforms(buffer Array) {
 }
 
+func (pself *Sprite) BatchUpdateVisuals(buffer Array) {
+}
+
 func (pself *Sprite) CheckCollision(target Object, is_src_trigger bool, is_dst_trigger bool) bool {
 	return false
 }

@@ -314,6 +314,7 @@ type ISpriteMgr interface {
 	SetPixelCollisionSamplingStep(step int64)
 	GetPixelCollisionSamplingStep() int64
 	BatchUpdateTransforms(buffer Array)
+	BatchUpdateVisuals(buffer Array)
 	BatchRetrievePositions(objs Array) Array
 }
 
