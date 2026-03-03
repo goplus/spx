@@ -4,7 +4,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd $SCRIPT_DIR
 
 # Pin Go toolchain version
-export GOTOOLCHAIN=go1.24.4
+export GOTOOLCHAIN=go1.25.7
 
 go mod tidy
 if ! go generate pkg/gengo/embedded_pkgs.go > /dev/null 2>&1; then

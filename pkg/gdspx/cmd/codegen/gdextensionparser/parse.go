@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -61,7 +60,10 @@ func expandIncludeFiles(projectPath, header, outputName string) (string, error) 
 	dirPath := filepath.Join(projectPath, "../../internal/ffi/")
 	allStrs := ReadFiles(dirPath, header)
 	tempPath := filepath.Join(dirPath, outputName)
-	ioutil.WriteFile(tempPath, []byte(allStrs), 0644)
+	err = os.WriteFile(tempPath, []byte(allStrs), 0644)
+	if err != nil {
+		return "", err
+	}
 	return allStrs, nil
 }
 

@@ -21,6 +21,7 @@ package zip
 
 import (
 	"archive/zip"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -28,7 +29,6 @@ import (
 	"syscall"
 
 	"github.com/goplus/spx/v2/fs"
-	"github.com/pkg/errors"
 )
 
 // -------------------------------------------------------------------------------------
@@ -52,7 +52,7 @@ func (zipf *FS) Open(name string) (io.ReadCloser, error) {
 			return f.Open()
 		}
 	}
-	return nil, errors.Wrapf(syscall.ENOENT, "`%s` not found in zipfile", name)
+	return nil, fmt.Errorf("`%s` not found in zipfile: %w", name, syscall.ENOENT)
 }
 
 // Close closes the filesystem object.
