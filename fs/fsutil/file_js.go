@@ -19,7 +19,6 @@ package fsutil
 import (
 	"bytes"
 	"io"
-	"io/ioutil"
 	"net/http"
 )
 
@@ -36,7 +35,7 @@ func OpenFile(path string) (io.ReadSeekCloser, error) {
 	if err != nil {
 		return nil, err
 	}
-	body, err := ioutil.ReadAll(res.Body)
+	body, err := io.ReadAll(res.Body)
 	res.Body.Close()
 	if err != nil {
 		return nil, err

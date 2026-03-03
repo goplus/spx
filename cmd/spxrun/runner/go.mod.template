@@ -1,7 +1,7 @@
 
 module github.com/goplus/spxdemo
 
-go 1.23.0
+go 1.25.0
 
 require github.com/goplus/spx/v2 v2.0.0-pre.28 //xgo:class
 

@@ -33,9 +33,9 @@ jobs:
         run: |
           mkdir -p goenv/gotoolchain
           cd goenv/gotoolchain
-          curl -L -O https://go.dev/dl/go1.24.0.darwin-${{ matrix.arch }}.tar.gz
-          tar -xzf go1.24.0.darwin-${{ matrix.arch }}.tar.gz
-          rm go1.24.0.darwin-${{ matrix.arch }}.tar.gz
+          curl -L -O https://go.dev/dl/go1.25.7.darwin-${{ matrix.arch }}.tar.gz
+          tar -xzf go1.25.7.darwin-${{ matrix.arch }}.tar.gz
+          rm go1.25.7.darwin-${{ matrix.arch }}.tar.gz
           cd ../..
 
       - name: Collect Go module cache

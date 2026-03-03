@@ -1,6 +1,6 @@
 module github.com/goplus/spx/v2/pkg/gdspx/cmd/codegen
 
-go 1.21.3
+go 1.25.0
 
 require (
 	github.com/alecthomas/participle/v2 v2.1.4

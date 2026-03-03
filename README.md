@@ -11,7 +11,7 @@ spx - A Scratch Compatible 2D Game Engine
 
 How to run games powered by XGo spx engine?
 
-* Install go (version == 1.21.3)
+* Install go (version >= 1.25.0)
 * Install python (version >= 3.8)
 * Install scons (version == 4.7.0) (for engine development, optional)
 * Install make
