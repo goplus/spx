@@ -71,7 +71,7 @@ func Init(ctx *ixgo.Context, packagesToImport []string) error {
 	}
 
 	if ctx == nil {
-		ctx = ixgo.NewContext(ixgo.SupportMultipleInterp)
+		ctx = ixgo.NewContext(ixgo.SupportMultipleInterp | xgobuild.StaticLoad)
 	}
 	if ctx.Lookup == nil {
 		ctx.Lookup = defaultIXGoContextLookup
