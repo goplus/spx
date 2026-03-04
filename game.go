@@ -119,6 +119,7 @@ type Game struct {
 	events    chan event
 	aurec     *audiorecord.Recorder
 	startFlag sync.Once
+	runOnce   sync.Once
 
 	worldWidth  int
 	worldHeight int
@@ -230,6 +231,7 @@ func (p *Game) reset() {
 	p.isLoaded = false
 
 	p.startFlag = sync.Once{}
+	p.runOnce = sync.Once{}
 	p.oncePathFinder = sync.Once{}
 	p.sprs = make(map[string]Sprite)
 
