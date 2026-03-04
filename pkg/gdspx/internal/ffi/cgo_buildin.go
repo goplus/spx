@@ -60,15 +60,15 @@ type GDExtensionBuiltinInterface struct {
 }
 
 func (x *GDExtensionBuiltinInterface) resolveAPIFunctions() {
-	x.SpxGlobalRegisterCallbacks = (GDExtensionSpxGlobalRegisterCallbacks)(dlsymGD("spx_global_register_callbacks"))
-	x.SpxStringNewWithLatin1Chars = (GDExtensionSpxStringNewWithLatin1Chars)(dlsymGD("spx_string_new_with_latin1_chars"))
-	x.SpxStringNewWithUtf8Chars = (GDExtensionSpxStringNewWithUtf8Chars)(dlsymGD("spx_string_new_with_utf8_chars"))
-	x.SpxStringNewWithLatin1CharsAndLen = (GDExtensionSpxStringNewWithLatin1CharsAndLen)(dlsymGD("spx_string_new_with_latin1_chars_and_len"))
-	x.SpxStringNewWithUtf8CharsAndLen = (GDExtensionSpxStringNewWithUtf8CharsAndLen)(dlsymGD("spx_string_new_with_utf8_chars_and_len"))
-	x.SpxStringToLatin1Chars = (GDExtensionSpxStringToLatin1Chars)(dlsymGD("spx_string_to_latin1_chars"))
-	x.SpxStringToUtf8Chars = (GDExtensionSpxStringToUtf8Chars)(dlsymGD("spx_string_to_utf8_chars"))
-	x.SpxVariantGetPtrConstructor = (GDExtensionSpxVariantGetPtrConstructor)(dlsymGD("spx_variant_get_ptr_constructor"))
-	x.SpxVariantGetPtrDestructor = (GDExtensionSpxVariantGetPtrDestructor)(dlsymGD("spx_variant_get_ptr_destructor"))
+	x.SpxGlobalRegisterCallbacks = (GDExtensionSpxGlobalRegisterCallbacks)(resolveCFunc("spx_global_register_callbacks"))
+	x.SpxStringNewWithLatin1Chars = (GDExtensionSpxStringNewWithLatin1Chars)(resolveCFunc("spx_string_new_with_latin1_chars"))
+	x.SpxStringNewWithUtf8Chars = (GDExtensionSpxStringNewWithUtf8Chars)(resolveCFunc("spx_string_new_with_utf8_chars"))
+	x.SpxStringNewWithLatin1CharsAndLen = (GDExtensionSpxStringNewWithLatin1CharsAndLen)(resolveCFunc("spx_string_new_with_latin1_chars_and_len"))
+	x.SpxStringNewWithUtf8CharsAndLen = (GDExtensionSpxStringNewWithUtf8CharsAndLen)(resolveCFunc("spx_string_new_with_utf8_chars_and_len"))
+	x.SpxStringToLatin1Chars = (GDExtensionSpxStringToLatin1Chars)(resolveCFunc("spx_string_to_latin1_chars"))
+	x.SpxStringToUtf8Chars = (GDExtensionSpxStringToUtf8Chars)(resolveCFunc("spx_string_to_utf8_chars"))
+	x.SpxVariantGetPtrConstructor = (GDExtensionSpxVariantGetPtrConstructor)(resolveCFunc("spx_variant_get_ptr_constructor"))
+	x.SpxVariantGetPtrDestructor = (GDExtensionSpxVariantGetPtrDestructor)(resolveCFunc("spx_variant_get_ptr_destructor"))
 }
 
 type stringMethodBindings struct {

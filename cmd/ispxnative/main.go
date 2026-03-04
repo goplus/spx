@@ -12,8 +12,6 @@ import (
 )
 
 func main() {
-	spxEngineRegisterFFI()
-
 	// The project directory is one level up from the current working directory
 	// because this shared library runs from either:
 	//   - .temp/ directory (spx run mode)
@@ -37,8 +35,3 @@ func main() {
 		panic(fmt.Sprintf("interpreter exited with code %d: %v", exitCode, err))
 	}
 }
-
-// spxEngineRegisterFFI registers engine callbacks for FFI use.
-//
-//go:linkname spxEngineRegisterFFI github.com/goplus/spx/v2/pkg/gdspx/internal/engine.RegisterFFI
-func spxEngineRegisterFFI()

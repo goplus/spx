@@ -9,8 +9,8 @@ func IsWebIntepreterMode() bool {
 	return inengine.IsWebIntepreterMode()
 }
 
-func LinkEngine(callback engine.EngineCallbackInfo) {
-	inengine.Link(engine.EngineCallbackInfo(callback))
+func LinkEngine(coreCallbackInfo engine.CoreCallbackInfo) {
+	inengine.Link(coreCallbackInfo)
 }
 
 func UnlinkEngine() {

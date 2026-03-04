@@ -48,7 +48,7 @@ const (
 	// GDExtensionTemplate is the template for runtime.gdextension file
 	GDExtensionTemplate = `[configuration]
 
-entry_symbol = "loadExtension"
+entry_symbol = "gdspx_init"
 compatibility_minimum = 4.1
 
 [libraries]

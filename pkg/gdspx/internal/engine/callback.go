@@ -59,6 +59,83 @@ func bindCallbacks() CallbackInfo {
 
 	return infos
 }
+
+func onEngineStart() {
+	for _, mgr := range mgrs {
+		mgr.OnStart()
+	}
+	if coreCallbacks.OnEngineStart != nil {
+		coreCallbacks.OnEngineStart()
+	}
+}
+
+func onEngineUpdate(delta float64) {
+	for _, mgr := range mgrs {
+		mgr.OnUpdate(delta)
+	}
+	TimeSinceGameStart += delta
+	sprites = sprites[:0]
+	for _, sprite := range Id2Sprites {
+		sprites = append(sprites, sprite)
+	}
+	for _, sprite := range sprites {
+		sprite.OnUpdate(delta)
+	}
+	if coreCallbacks.OnEngineUpdate != nil {
+		coreCallbacks.OnEngineUpdate(delta)
+	}
+	InternalUpdateEngine(delta)
+}
+
+func onEngineFixedUpdate(delta float64) {
+	for _, mgr := range mgrs {
+		mgr.OnFixedUpdate(delta)
+	}
+	TimeSinceGameStart += delta
+	sprites = sprites[:0]
+	for _, sprite := range Id2Sprites {
+		sprites = append(sprites, sprite)
+	}
+	for _, sprite := range sprites {
+		sprite.OnFixedUpdate(delta)
+	}
+	if coreCallbacks.OnEngineFixedUpdate != nil {
+		coreCallbacks.OnEngineFixedUpdate(delta)
+	}
+}
+
+func onEngineDestroy() {
+	if coreCallbacks.OnEngineDestroy != nil {
+		coreCallbacks.OnEngineDestroy()
+	}
+	sprites = sprites[:0]
+	for _, sprite := range Id2Sprites {
+		sprites = append(sprites, sprite)
+	}
+	for _, sprite := range sprites {
+		sprite.OnDestroy()
+	}
+	for _, mgr := range mgrs {
+		mgr.OnDestroy()
+	}
+}
+
+func onEngineReset() {
+	if coreCallbacks.OnEngineReset != nil {
+		coreCallbacks.OnEngineReset()
+	}
+}
+
+func onEnginePause(isPaused bool) {
+	if coreCallbacks.OnEnginePause != nil {
+		coreCallbacks.OnEnginePause(isPaused)
+	}
+
+	for _, mgr := range mgrs {
+		mgr.OnPause(isPaused)
+	}
+}
+
 func onSceneSpriteInstantiated(id int64, type_name string) {
 	BindSceneInstantiatedSprite(Object(id), type_name)
 }
@@ -87,13 +164,13 @@ func onMouseReleased(id int64) {
 	spxlog.Debug("OnMouseReleased %d", id)
 }
 func onKeyPressed(id int64) {
-	if callback.OnKeyPressed != nil {
-		callback.OnKeyPressed(id)
+	if coreCallbacks.OnKeyPressed != nil {
+		coreCallbacks.OnKeyPressed(id)
 	}
 }
 func onKeyReleased(id int64) {
-	if callback.OnKeyReleased != nil {
-		callback.OnKeyReleased(id)
+	if coreCallbacks.OnKeyReleased != nil {
+		coreCallbacks.OnKeyReleased(id)
 	}
 }
 func onActionPressed(name string) {

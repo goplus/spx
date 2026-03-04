@@ -13,12 +13,8 @@ var (
 	exitChan      chan struct{}
 )
 
-func RegisterCallbackDispatcher() {
-	registerCallbackDispatcher()
-}
-
 func Link() bool {
-	js.Global().Set("goWasmInit", js.FuncOf(goWasmInit))
+	js.Global().Set("go_wasm_init", js.FuncOf(goWasmInit))
 	registerCallbackDispatcher()
 	API.resolveAPIFunctions()
 	return !hasInitEngine
