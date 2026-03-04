@@ -62,19 +62,21 @@ var (
 // OnEngineStart is called when the engine starts.
 // It initializes the game and starts the main game loop.
 func (p *Game) OnEngineStart() {
-	cachedBounds = make(map[string]mathf.Rect2)
-	onStart := func() {
-		defer engine.CheckPanic()
-		gamer := p.gamer
-		if me, ok := gamer.(interface{ MainEntry() }); ok {
-			runMain(me.MainEntry)
+	p.runOnce.Do(func() {
+		cachedBounds = make(map[string]mathf.Rect2)
+		onStart := func() {
+			defer engine.CheckPanic()
+			gamer := p.gamer
+			if me, ok := gamer.(interface{ MainEntry() }); ok {
+				runMain(me.MainEntry)
+			}
+			if !p.isRunned {
+				XGot_Game_Run(gamer, "assets")
+			}
+			engine.OnGameStarted()
 		}
-		if !p.isRunned {
-			XGot_Game_Run(gamer, "assets")
-		}
-		engine.OnGameStarted()
-	}
-	go onStart()
+		go onStart()
+	})
 }
 
 // OnEngineDestroy is called when the engine is destroyed.
