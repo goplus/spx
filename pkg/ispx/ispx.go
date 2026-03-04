@@ -98,7 +98,9 @@ func XGot_Game_XGox_GetWidget[T any](sg ShapeGetter, name WidgetName) *T {
 
 	ixgoCtx = ctx
 
-	allPackages := append(defaultPackagesToImport, packagesToImport...)
+	allPackages := make([]string, 0, len(defaultPackagesToImport)+len(packagesToImport))
+	allPackages = append(allPackages, defaultPackagesToImport...)
+	allPackages = append(allPackages, packagesToImport...)
 	for _, pkg := range allPackages {
 		ixgoCtx.Loader.Import(pkg)
 	}
