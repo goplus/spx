@@ -140,50 +140,71 @@ func getValueRef(target reflect.Value, name string, from int) reflect.Value {
 	if valPtr := findFieldPtr(target, name, from); valPtr != nil {
 		return reflect.ValueOf(valPtr).Elem()
 	}
-	// Try case-insensitive match (from specified index)
-	if valPtr := findFieldRefCaseInsensitive(target, name, from); valPtr != nil {
-		return reflect.ValueOf(valPtr).Elem()
-	}
 	return reflect.Value{}
 }
 
-// findMethod finds a method by name with fallback to case-insensitive matching
-func findMethod(v reflect.Value, name string) reflect.Value {
-	// Try exact match first
-	m := v.MethodByName(name)
-	if m.IsValid() {
-		return m
-	}
-	// Try case-insensitive match
-	return findMethodCaseInsensitive(v, name)
-}
-
-// findMethodCaseInsensitive finds a method by name with case-insensitive matching
-func findMethodCaseInsensitive(v reflect.Value, name string) reflect.Value {
-	t := v.Type()
-	nameLower := strings.ToLower(name)
-	for i := 0; i < t.NumMethod(); i++ {
-		method := t.Method(i)
-		if strings.ToLower(method.Name) == nameLower {
-			return v.Method(i)
+// aliasNameOf mimics gogen's aliasNameOf logic:
+// For methods, lowercase names are mapped to uppercase (e.g., "add" -> "Add")
+// For fields, no aliasing is performed (must use exact exported name)
+func aliasNameOf(name string, isMethod bool) string {
+	if isMethod && name != "" {
+		if c := name[0]; c >= 'a' && c <= 'z' {
+			return string(rune(c)+('A'-'a')) + name[1:]
 		}
 	}
-	return reflect.Value{}
+	return ""
 }
 
-// makeMethodEvalFunc creates an eval function for a getter method
-func makeMethodEvalFunc(m reflect.Value) func() string {
-	return func() string {
-		result := m.Call(nil)[0].Interface()
-		switch v := result.(type) {
-		case float64:
-			return fmt.Sprintf("%.2f", v)
-		case float32:
-			return fmt.Sprintf("%.2f", v)
-		default:
-			return fmt.Sprint(result)
+// methodHasAutoProperty checks if a method value is a valid auto-property (getter):
+// Must have 0 parameters (excluding receiver) and 1 return value
+func methodHasAutoProperty(m reflect.Value) bool {
+	if !m.IsValid() {
+		return false
+	}
+	mType := m.Type()
+	return mType.NumIn() == 0 && mType.NumOut() == 1 // NumIn excludes receiver for bound methods
+}
+
+// resolveMember resolves a member (field or method) by name following gogen.Member semantics.
+// Returns an accessor function if found, nil otherwise.
+func resolveMember(target reflect.Value, name string, from int) func() string {
+	// Try as field first (fields don't support lowercase aliases in gogen)
+	ref := getValueRef(target, name, from)
+	if ref.IsValid() {
+		return func() string {
+			return fmt.Sprint(ref.Interface())
 		}
 	}
+
+	// Try as method with alias support (lowercase -> uppercase)
+	// For method lookup, use pointer type
+	targetForMethod := target
+	if target.Kind() != reflect.Ptr && target.CanAddr() {
+		targetForMethod = target.Addr()
+	}
+
+	aliasName := aliasNameOf(name, true)
+
+	// Try original name first
+	m := targetForMethod.MethodByName(name)
+	if m.IsValid() && methodHasAutoProperty(m) {
+		// is use original name method accessor return pointer
+		return makeAutoPropertyAccessor(m, false)
+	}
+
+	// Only try alias if original name didn't find any method
+	if !m.IsValid() && aliasName != name {
+		mAlias := targetForMethod.MethodByName(aliasName)
+		// Only execute methodHasAutoProperty and makeAutoPropertyAccessor
+		// when name method not found but aliasName method found
+		if mAlias.IsValid() {
+			if methodHasAutoProperty(mAlias) {
+				return makeAutoPropertyAccessor(mAlias, true)
+			}
+		}
+	}
+
+	return nil
 }
 
 func buildMonitorEval(g reflect.Value, t, val string) func() string {
@@ -198,27 +219,39 @@ func buildMonitorEval(g reflect.Value, t, val string) func() string {
 			spxlog.Error("Bind monitor error: name is empty")
 			return nil
 		}
-		// check field
-		ref := getValueRef(target, name, from)
-		if ref.IsValid() {
-			return func() string {
-				return fmt.Sprint(ref.Interface())
-			}
-		}
-		// check method (with case-insensitive fallback)
-		m := findMethod(target.Addr(), name)
-		if m.IsValid() {
-			mType := m.Type()
-			// only property method (getter) with no input parameters and one return value
-			if mType.NumIn() == 0 && mType.NumOut() == 1 {
-				return makeMethodEvalFunc(m)
-			}
+
+		if eval := resolveMember(target, name, from); eval != nil {
+			return eval
 		}
 		spxlog.Error("Bind monitor error: cannot find property or method (getter): %s", name)
 	default:
-		spxlog.Error("Bind monitor error: unknown command: %s", val)
+		name := val
+		if eval := resolveMember(target, name, from); eval != nil {
+			return eval
+		}
+		spxlog.Error("Bind monitor error: cannot find property or method (getter): %s", name)
 	}
 	return nil
+}
+
+// makeAutoPropertyAccessor creates a runtime accessor for an auto-property method
+func makeAutoPropertyAccessor(m reflect.Value, autoProperty bool) func() string {
+	return func() string {
+		if autoProperty {
+			result := m.Call(nil)[0].Interface()
+			// special case for float
+			if fVal, ok := result.(float64); ok {
+				return fmt.Sprintf("%.2f", fVal)
+			}
+			if f32Val, ok := result.(float32); ok {
+				return fmt.Sprintf("%.2f", f32Val)
+			}
+			return fmt.Sprint(result)
+		}
+
+		// Return method pointer when autoProperty is false
+		return fmt.Sprintf("%p", m.Interface())
+	}
 }
 
 func (pself *Monitor) setVisible(visible bool) {
@@ -228,19 +261,6 @@ func (pself *Monitor) setVisible(visible bool) {
 
 	pself.visible = visible
 	pself.setDirtyFlag(true)
-}
-
-func (pself *Monitor) setXYpos(x float64, y float64) {
-	pself.pos = mathf.NewVec2(x, y)
-	pself.setDirtyFlag(true)
-}
-
-func (pself *Monitor) updateSize() {
-	pself.setDirtyFlag(true)
-}
-
-func (pself *Monitor) setDirtyFlag(isDirty bool) {
-	pself.isDirty = isDirty
 }
 
 // -------------------------------------------------------------------------------------
@@ -293,6 +313,11 @@ func (pself *Monitor) ChangeXYpos(dx float64, dy float64) {
 	pself.setXYpos(pself.pos.X+dx, pself.pos.Y+dy)
 }
 
+func (pself *Monitor) setXYpos(x float64, y float64) {
+	pself.pos = mathf.NewVec2(x, y)
+	pself.setDirtyFlag(true)
+}
+
 func (pself *Monitor) Size() float64 {
 	return pself.size
 }
@@ -305,4 +330,12 @@ func (pself *Monitor) SetSize(size float64) {
 func (pself *Monitor) ChangeSize(delta float64) {
 	pself.size += delta
 	pself.updateSize()
+}
+
+func (pself *Monitor) updateSize() {
+	pself.setDirtyFlag(true)
+}
+
+func (pself *Monitor) setDirtyFlag(isDirty bool) {
+	pself.isDirty = isDirty
 }
