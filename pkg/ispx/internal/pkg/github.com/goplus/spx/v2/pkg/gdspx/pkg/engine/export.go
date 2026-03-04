@@ -90,7 +90,6 @@ func init() {
 			"DegToRad":                    reflect.ValueOf(q.DegToRad),
 			"DelayCall":                   reflect.ValueOf(q.DelayCall),
 			"GetSprite":                   reflect.ValueOf(q.GetSprite),
-			"InternalInitEngine":          reflect.ValueOf(q.InternalInitEngine),
 			"InternalUpdateEngine":        reflect.ValueOf(q.InternalUpdateEngine),
 			"NewEvent0":                   reflect.ValueOf(q.NewEvent0),
 			"PrintStack":                  reflect.ValueOf(q.PrintStack),
