@@ -37,10 +37,6 @@ func getUiPath(name string, is_engine bool) string {
 	return "res://assets/ui/" + assetName + ".tscn"
 }
 
-func InternalInitEngine() {
-	initKeyCode()
-}
-
 func InternalUpdateEngine(delta float64) {
 	updateTimers(delta)
 	updateTweens(delta)

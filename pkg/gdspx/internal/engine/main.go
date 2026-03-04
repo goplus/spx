@@ -28,7 +28,6 @@ func Link(engineCallback EngineCallbackInfo) {
 	infos := bindCallbacks()
 	wrap.RegisterCallbacks(infos)
 	wrap.BindMgr(mgrs)
-	InternalInitEngine()
 	wrap.OnLinked()
 }
 
