@@ -8,47 +8,132 @@
 //----------------------------------------------------------------------------*/
 function BindFFI(goBridge) {
     var ffi = {}
-ffi.gdspx_on_engine_start = goBridge.getGoFunction("gdspx_on_engine_start")
-ffi.gdspx_on_engine_update = goBridge.getGoFunction("gdspx_on_engine_update")
-ffi.gdspx_on_engine_fixed_update = goBridge.getGoFunction("gdspx_on_engine_fixed_update")
-ffi.gdspx_on_engine_destroy = goBridge.getGoFunction("gdspx_on_engine_destroy")
-ffi.gdspx_on_engine_reset = goBridge.getGoFunction("gdspx_on_engine_reset")
-ffi.gdspx_on_engine_pause = goBridge.getGoFunction("gdspx_on_engine_pause")
-ffi.gdspx_on_scene_sprite_instantiated = goBridge.getGoFunction("gdspx_on_scene_sprite_instantiated")
-ffi.gdspx_on_sprite_ready = goBridge.getGoFunction("gdspx_on_sprite_ready")
-ffi.gdspx_on_sprite_updated = goBridge.getGoFunction("gdspx_on_sprite_updated")
-ffi.gdspx_on_sprite_fixed_updated = goBridge.getGoFunction("gdspx_on_sprite_fixed_updated")
-ffi.gdspx_on_sprite_destroyed = goBridge.getGoFunction("gdspx_on_sprite_destroyed")
-ffi.gdspx_on_sprite_frames_set_changed = goBridge.getGoFunction("gdspx_on_sprite_frames_set_changed")
-ffi.gdspx_on_sprite_animation_changed = goBridge.getGoFunction("gdspx_on_sprite_animation_changed")
-ffi.gdspx_on_sprite_frame_changed = goBridge.getGoFunction("gdspx_on_sprite_frame_changed")
-ffi.gdspx_on_sprite_animation_looped = goBridge.getGoFunction("gdspx_on_sprite_animation_looped")
-ffi.gdspx_on_sprite_animation_finished = goBridge.getGoFunction("gdspx_on_sprite_animation_finished")
-ffi.gdspx_on_sprite_vfx_finished = goBridge.getGoFunction("gdspx_on_sprite_vfx_finished")
-ffi.gdspx_on_sprite_screen_exited = goBridge.getGoFunction("gdspx_on_sprite_screen_exited")
-ffi.gdspx_on_sprite_screen_entered = goBridge.getGoFunction("gdspx_on_sprite_screen_entered")
-ffi.gdspx_on_mouse_pressed = goBridge.getGoFunction("gdspx_on_mouse_pressed")
-ffi.gdspx_on_mouse_released = goBridge.getGoFunction("gdspx_on_mouse_released")
-ffi.gdspx_on_key_pressed = goBridge.getGoFunction("gdspx_on_key_pressed")
-ffi.gdspx_on_key_released = goBridge.getGoFunction("gdspx_on_key_released")
-ffi.gdspx_on_action_pressed = goBridge.getGoFunction("gdspx_on_action_pressed")
-ffi.gdspx_on_action_just_pressed = goBridge.getGoFunction("gdspx_on_action_just_pressed")
-ffi.gdspx_on_action_just_released = goBridge.getGoFunction("gdspx_on_action_just_released")
-ffi.gdspx_on_axis_changed = goBridge.getGoFunction("gdspx_on_axis_changed")
-ffi.gdspx_on_collision_enter = goBridge.getGoFunction("gdspx_on_collision_enter")
-ffi.gdspx_on_collision_stay = goBridge.getGoFunction("gdspx_on_collision_stay")
-ffi.gdspx_on_collision_exit = goBridge.getGoFunction("gdspx_on_collision_exit")
-ffi.gdspx_on_trigger_enter = goBridge.getGoFunction("gdspx_on_trigger_enter")
-ffi.gdspx_on_trigger_stay = goBridge.getGoFunction("gdspx_on_trigger_stay")
-ffi.gdspx_on_trigger_exit = goBridge.getGoFunction("gdspx_on_trigger_exit")
-ffi.gdspx_on_ui_ready = goBridge.getGoFunction("gdspx_on_ui_ready")
-ffi.gdspx_on_ui_updated = goBridge.getGoFunction("gdspx_on_ui_updated")
-ffi.gdspx_on_ui_destroyed = goBridge.getGoFunction("gdspx_on_ui_destroyed")
-ffi.gdspx_on_ui_pressed = goBridge.getGoFunction("gdspx_on_ui_pressed")
-ffi.gdspx_on_ui_released = goBridge.getGoFunction("gdspx_on_ui_released")
-ffi.gdspx_on_ui_hovered = goBridge.getGoFunction("gdspx_on_ui_hovered")
-ffi.gdspx_on_ui_clicked = goBridge.getGoFunction("gdspx_on_ui_clicked")
-ffi.gdspx_on_ui_toggle = goBridge.getGoFunction("gdspx_on_ui_toggle")
-ffi.gdspx_on_ui_text_changed = goBridge.getGoFunction("gdspx_on_ui_text_changed")
+    ffi.gdspx_dispatch = goBridge.getGoFunction("gdspx_dispatch")
+ffi.gdspx_on_engine_start = function() {
+        ffi.gdspx_dispatch("OnEngineStart", ...arguments)
+    }
+ffi.gdspx_on_engine_update = function() {
+        ffi.gdspx_dispatch("OnEngineUpdate", ...arguments)
+    }
+ffi.gdspx_on_engine_fixed_update = function() {
+        ffi.gdspx_dispatch("OnEngineFixedUpdate", ...arguments)
+    }
+ffi.gdspx_on_engine_destroy = function() {
+        ffi.gdspx_dispatch("OnEngineDestroy", ...arguments)
+    }
+ffi.gdspx_on_engine_reset = function() {
+        ffi.gdspx_dispatch("OnEngineReset", ...arguments)
+    }
+ffi.gdspx_on_engine_pause = function() {
+        ffi.gdspx_dispatch("OnEnginePause", ...arguments)
+    }
+ffi.gdspx_on_scene_sprite_instantiated = function() {
+        ffi.gdspx_dispatch("OnSceneSpriteInstantiated", ...arguments)
+    }
+ffi.gdspx_on_sprite_ready = function() {
+        ffi.gdspx_dispatch("OnSpriteReady", ...arguments)
+    }
+ffi.gdspx_on_sprite_updated = function() {
+        ffi.gdspx_dispatch("OnSpriteUpdated", ...arguments)
+    }
+ffi.gdspx_on_sprite_fixed_updated = function() {
+        ffi.gdspx_dispatch("OnSpriteFixedUpdated", ...arguments)
+    }
+ffi.gdspx_on_sprite_destroyed = function() {
+        ffi.gdspx_dispatch("OnSpriteDestroyed", ...arguments)
+    }
+ffi.gdspx_on_sprite_frames_set_changed = function() {
+        ffi.gdspx_dispatch("OnSpriteFramesSetChanged", ...arguments)
+    }
+ffi.gdspx_on_sprite_animation_changed = function() {
+        ffi.gdspx_dispatch("OnSpriteAnimationChanged", ...arguments)
+    }
+ffi.gdspx_on_sprite_frame_changed = function() {
+        ffi.gdspx_dispatch("OnSpriteFrameChanged", ...arguments)
+    }
+ffi.gdspx_on_sprite_animation_looped = function() {
+        ffi.gdspx_dispatch("OnSpriteAnimationLooped", ...arguments)
+    }
+ffi.gdspx_on_sprite_animation_finished = function() {
+        ffi.gdspx_dispatch("OnSpriteAnimationFinished", ...arguments)
+    }
+ffi.gdspx_on_sprite_vfx_finished = function() {
+        ffi.gdspx_dispatch("OnSpriteVfxFinished", ...arguments)
+    }
+ffi.gdspx_on_sprite_screen_exited = function() {
+        ffi.gdspx_dispatch("OnSpriteScreenExited", ...arguments)
+    }
+ffi.gdspx_on_sprite_screen_entered = function() {
+        ffi.gdspx_dispatch("OnSpriteScreenEntered", ...arguments)
+    }
+ffi.gdspx_on_mouse_pressed = function() {
+        ffi.gdspx_dispatch("OnMousePressed", ...arguments)
+    }
+ffi.gdspx_on_mouse_released = function() {
+        ffi.gdspx_dispatch("OnMouseReleased", ...arguments)
+    }
+ffi.gdspx_on_key_pressed = function() {
+        ffi.gdspx_dispatch("OnKeyPressed", ...arguments)
+    }
+ffi.gdspx_on_key_released = function() {
+        ffi.gdspx_dispatch("OnKeyReleased", ...arguments)
+    }
+ffi.gdspx_on_action_pressed = function() {
+        ffi.gdspx_dispatch("OnActionPressed", ...arguments)
+    }
+ffi.gdspx_on_action_just_pressed = function() {
+        ffi.gdspx_dispatch("OnActionJustPressed", ...arguments)
+    }
+ffi.gdspx_on_action_just_released = function() {
+        ffi.gdspx_dispatch("OnActionJustReleased", ...arguments)
+    }
+ffi.gdspx_on_axis_changed = function() {
+        ffi.gdspx_dispatch("OnAxisChanged", ...arguments)
+    }
+ffi.gdspx_on_collision_enter = function() {
+        ffi.gdspx_dispatch("OnCollisionEnter", ...arguments)
+    }
+ffi.gdspx_on_collision_stay = function() {
+        ffi.gdspx_dispatch("OnCollisionStay", ...arguments)
+    }
+ffi.gdspx_on_collision_exit = function() {
+        ffi.gdspx_dispatch("OnCollisionExit", ...arguments)
+    }
+ffi.gdspx_on_trigger_enter = function() {
+        ffi.gdspx_dispatch("OnTriggerEnter", ...arguments)
+    }
+ffi.gdspx_on_trigger_stay = function() {
+        ffi.gdspx_dispatch("OnTriggerStay", ...arguments)
+    }
+ffi.gdspx_on_trigger_exit = function() {
+        ffi.gdspx_dispatch("OnTriggerExit", ...arguments)
+    }
+ffi.gdspx_on_ui_ready = function() {
+        ffi.gdspx_dispatch("OnUiReady", ...arguments)
+    }
+ffi.gdspx_on_ui_updated = function() {
+        ffi.gdspx_dispatch("OnUiUpdated", ...arguments)
+    }
+ffi.gdspx_on_ui_destroyed = function() {
+        ffi.gdspx_dispatch("OnUiDestroyed", ...arguments)
+    }
+ffi.gdspx_on_ui_pressed = function() {
+        ffi.gdspx_dispatch("OnUiPressed", ...arguments)
+    }
+ffi.gdspx_on_ui_released = function() {
+        ffi.gdspx_dispatch("OnUiReleased", ...arguments)
+    }
+ffi.gdspx_on_ui_hovered = function() {
+        ffi.gdspx_dispatch("OnUiHovered", ...arguments)
+    }
+ffi.gdspx_on_ui_clicked = function() {
+        ffi.gdspx_dispatch("OnUiClicked", ...arguments)
+    }
+ffi.gdspx_on_ui_toggle = function() {
+        ffi.gdspx_dispatch("OnUiToggle", ...arguments)
+    }
+ffi.gdspx_on_ui_text_changed = function() {
+        ffi.gdspx_dispatch("OnUiTextChanged", ...arguments)
+    }
 return ffi
 }

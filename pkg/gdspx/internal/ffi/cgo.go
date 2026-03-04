@@ -32,8 +32,8 @@ func loadExtension(lookupFunc uintptr, classes, configuration unsafe.Pointer) ui
 		return getProcAddress(lookupFunc, s)
 	}
 
-	builtinAPI.loadProcAddresses()
-	api.loadProcAddresses()
+	builtinAPI.resolveAPIFunctions()
+	api.resolveAPIFunctions()
 	init := (*initialization)(configuration)
 	*init = initialization{}
 	init.minimum_initialization_level = initializationLevel(GDExtensionInitializationLevelScene)

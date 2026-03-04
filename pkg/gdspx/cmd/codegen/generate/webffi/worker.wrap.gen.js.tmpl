@@ -10,8 +10,11 @@
 
 function BindFFI(goBridge) {
     var ffi = {}
+    ffi.gdspx_dispatch = goBridge.getGoFunction("gdspx_dispatch")
 {{ range $i, $f := $view.CollectGDExtensionICallbackFunctions -}}
-    ffi.gdspx_{{snakeCase (trimPrefix $f.Name "GDExtensionSpxCallback" )}} = goBridge.getGoFunction("gdspx_{{snakeCase (trimPrefix $f.Name "GDExtensionSpxCallback" )}}")
+    ffi.gdspx_{{snakeCase (trimPrefix $f.Name "GDExtensionSpxCallback" )}} = function() {
+        ffi.gdspx_dispatch("{{ trimPrefix $f.Name "GDExtensionSpxCallback" }}", ...arguments)
+    }
 {{ end -}}
     return ffi
 }

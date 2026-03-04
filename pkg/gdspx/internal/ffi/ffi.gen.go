@@ -334,7 +334,7 @@ type GDExtensionInterface struct {
 	SpxUiSetFlip                                GDExtensionSpxUiSetFlip
 }
 
-func (x *GDExtensionInterface) loadProcAddresses() {
+func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxAudioStopAll = (GDExtensionSpxAudioStopAll)(dlsymGD("spx_audio_stop_all"))
 	x.SpxAudioCreateAudio = (GDExtensionSpxAudioCreateAudio)(dlsymGD("spx_audio_create_audio"))
 	x.SpxAudioDestroyAudio = (GDExtensionSpxAudioDestroyAudio)(dlsymGD("spx_audio_destroy_audio"))

@@ -25,9 +25,9 @@ type GDExtensionInterface struct {
 	{{ end -}}
 }
 
-func (x *GDExtensionInterface) loadProcAddresses() {
+func (x *GDExtensionInterface) resolveAPIFunctions() {
 	{{ range $i, $f := $view.CollectGDExtensionInterfaceFunctions -}}
 	{{ if eq $f.Name "GDExtensionInterfaceGetProcAddress" -}}{{ continue }}{{ end -}}
-	x.{{ trimPrefix $f.Name "GDExtension" }} = dlsymGD("gd{{ loadProcAddressName $f.Name }}")
+	x.{{ trimPrefix $f.Name "GDExtension" }} = resolveJSFunc("gd{{ loadProcAddressName $f.Name }}")
 	{{ end -}}
 }
