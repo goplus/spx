@@ -32,6 +32,27 @@ var (
 	runDone    chan struct{}
 )
 
+// defaultPackagesToImport is the list of packages that are always imported by ispx.
+var defaultPackagesToImport = []string{
+	"fmt",
+	"io",
+	"io/fs",
+	"math",
+	"os",
+	"reflect",
+	"strconv",
+	"strings",
+	"sync",
+	"sync/atomic",
+	"time",
+	"github.com/goplus/spx/v2",
+	"github.com/qiniu/x/osx",
+	"github.com/qiniu/x/stringslice",
+	"github.com/qiniu/x/stringutil",
+	"github.com/qiniu/x/xgo",
+	"github.com/qiniu/x/xgo/ng",
+}
+
 // Init initializes the interpreter with the given ctx, which must not be
 // modified after used. It can only be called once.
 //
@@ -47,10 +68,14 @@ func Init(ctx *ixgo.Context) error {
 	}
 
 	if ctx == nil {
-		ctx = ixgo.NewContext(ixgo.SupportMultipleInterp)
+		ctx = ixgo.NewContext(ixgo.SupportMultipleInterp | xgobuild.StaticLoad)
 	}
 	if ctx.Lookup == nil {
 		ctx.Lookup = defaultIXGoContextLookup
+	}
+
+	for _, pkg := range defaultPackagesToImport {
+		ctx.Loader.Import(pkg)
 	}
 
 	// Register patch for spx to support functions with generic type like [spx.XGot_Game_XGox_GetWidget].
