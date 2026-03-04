@@ -25,7 +25,7 @@ func main() {
 		panic("failed to get project directory: " + err.Error())
 	}
 
-	if err := ispx.Init(nil); err != nil {
+	if err := ispx.Init(nil, nil); err != nil {
 		panic("failed to initialize: " + err.Error())
 	}
 
