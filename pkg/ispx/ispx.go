@@ -59,10 +59,7 @@ var defaultPackagesToImport = []string{
 // If ctx is nil, a default [ixgo.Context] will be created.
 //
 // If ctx.Lookup is nil, a default lookup function will be set.
-//
-// packagesToImport specifies additional packages to import on top of the
-// default set. See [defaultPackagesToImport] for the default list.
-func Init(ctx *ixgo.Context, packagesToImport []string) error {
+func Init(ctx *ixgo.Context) error {
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -98,10 +95,7 @@ func XGot_Game_XGox_GetWidget[T any](sg ShapeGetter, name WidgetName) *T {
 
 	ixgoCtx = ctx
 
-	allPackages := make([]string, 0, len(defaultPackagesToImport)+len(packagesToImport))
-	allPackages = append(allPackages, defaultPackagesToImport...)
-	allPackages = append(allPackages, packagesToImport...)
-	for _, pkg := range allPackages {
+	for _, pkg := range defaultPackagesToImport {
 		ixgoCtx.Loader.Import(pkg)
 	}
 
