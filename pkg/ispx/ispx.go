@@ -74,6 +74,10 @@ func Init(ctx *ixgo.Context) error {
 		ctx.Lookup = defaultIXGoContextLookup
 	}
 
+	for _, pkg := range defaultPackagesToImport {
+		ctx.Loader.Import(pkg)
+	}
+
 	// Register patch for spx to support functions with generic type like [spx.XGot_Game_XGox_GetWidget].
 	//
 	// See https://github.com/goplus/builder/issues/765#issuecomment-2313915805.
@@ -94,11 +98,6 @@ func XGot_Game_XGox_GetWidget[T any](sg ShapeGetter, name WidgetName) *T {
 	}
 
 	ixgoCtx = ctx
-
-	for _, pkg := range defaultPackagesToImport {
-		ixgoCtx.Loader.Import(pkg)
-	}
-
 	return nil
 }
 
