@@ -18,6 +18,6 @@ func UnlinkFFI() {
 
 }
 
-func RegisterCallbacks(callbacks engine.CallbackInfo) {
-	callbacks = callbacks
+func RegisterCallbacks(_ engine.CallbackInfo) {
+
 }
