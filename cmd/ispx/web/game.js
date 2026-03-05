@@ -130,7 +130,8 @@ class GameApp {
         let curGame = this.game;
 
         // register global functions
-        window.goWasmInit = function () { }
+        window.go_wasm_init = function () { }
+        window.gdspx_dispatch = function () { }
         const spxfuncs = new GdspxFuncs();
         const methodNames = Object.getOwnPropertyNames(Object.getPrototypeOf(spxfuncs));
         methodNames.forEach(key => {

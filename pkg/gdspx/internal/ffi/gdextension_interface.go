@@ -139,27 +139,35 @@ func ToGdBool(val bool) GdBool {
 		return GdBool(0)
 	}
 }
+
 func ToBool(val GdBool) bool {
 	return val != 0
 }
+
 func ToGdVec2(val mathf.Vec2) GdVec2 {
 	return GdVec2{C.GdFloat(val.X), C.GdFloat(val.Y)}
 }
+
 func ToVec2(val GdVec2) mathf.Vec2 {
 	return mathf.NewVec2(float64(val.X), float64(val.Y))
 }
+
 func ToGdVec4(val mathf.Vec4) GdVec4 {
 	return GdVec4{C.GdFloat(val.X), C.GdFloat(val.Y), C.GdFloat(val.Z), C.GdFloat(val.W)}
 }
+
 func ToVec4(val GdVec4) mathf.Vec4 {
 	return mathf.NewVec4(float64(val.X), float64(val.Y), float64(val.Z), float64(val.W))
 }
+
 func ToGdColor(val mathf.Color) GdColor {
 	return GdColor{C.float(val.R), C.float(val.G), C.float(val.B), C.float(val.A)}
 }
+
 func ToColor(val GdColor) mathf.Color {
 	return mathf.NewColor(float64(val.R), float64(val.G), float64(val.B), float64(val.A))
 }
+
 func ToGdRect2(val mathf.Rect2) GdRect2 {
 	position := ToGdVec2(val.Position)
 	size := ToGdVec2(val.Size)
@@ -168,36 +176,46 @@ func ToGdRect2(val mathf.Rect2) GdRect2 {
 	ret.Size = C.GdVec2(size)
 	return ret
 }
+
 func ToRect2(val GdRect2) mathf.Rect2 {
 	ret := mathf.Rect2{}
 	ret.Position = ToVec2(GdVec2(val.Position))
 	ret.Size = ToVec2(GdVec2(val.Size))
 	return ret
 }
+
 func ToGdObj(val engine.Object) GdObj {
 	return GdObj(val)
 }
+
 func ToObject(val GdObj) engine.Object {
 	return engine.Object(val)
 }
+
 func ToGdInt(val int64) GdInt {
 	return GdInt(val)
 }
+
 func ToInt(val GdInt) int64 {
 	return int64(val)
 }
+
 func ToInt64(val GdInt) int64 {
 	return int64(val)
 }
+
 func ToGdFloat(val float64) GdFloat {
 	return GdFloat(val)
 }
+
 func ToFloat64(val GdFloat) float64 {
 	return float64(val)
 }
+
 func ToFloat32(val GdFloat) float64 {
 	return float64(val)
 }
+
 func ToFloat(val GdFloat) float64 {
 	return float64(val)
 }
@@ -307,7 +325,7 @@ func getProcAddress(handle uintptr, name string) unsafe.Pointer {
 }
 
 func registerEngineCallback() {
-	spx_global_register_callbacks := dlsymGD("spx_global_register_callbacks")
+	spx_global_register_callbacks := resolveCFunc("spx_global_register_callbacks")
 	C.spx_global_register_callbacks(
 		C.pointer(uintptr(spx_global_register_callbacks)),
 	)

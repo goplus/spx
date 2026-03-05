@@ -78,7 +78,7 @@ type IUiNode interface {
 	OnUiTextChanged(txt string)
 	V_OnUiTextChanged(txt string)
 }
-type EngineCallbackInfo struct {
+type CoreCallbackInfo struct {
 	OnEngineStart       func()
 	OnEngineUpdate      func(float64)
 	OnEngineFixedUpdate func(float64)
@@ -91,7 +91,7 @@ type EngineCallbackInfo struct {
 }
 
 type CallbackInfo struct {
-	EngineCallbackInfo
+	CoreCallbackInfo
 	// scene
 	OnSceneSpriteInstantiated func(int64, string)
 	// life cycle

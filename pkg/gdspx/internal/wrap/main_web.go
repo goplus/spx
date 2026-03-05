@@ -4,41 +4,21 @@ package wrap
 
 import (
 	"github.com/goplus/spx/v2/pkg/gdspx/internal/webffi"
-	. "github.com/goplus/spx/v2/pkg/gdspx/pkg/engine"
+	"github.com/goplus/spx/v2/pkg/gdspx/pkg/engine"
 )
 
-type EngineStartFunc func()
-type EngineUpdateFunc func(delta float64)
-type EngineDestroyFunc func()
-
-var (
-	mgrs      []IManager
-	callbacks CallbackInfo
-)
-
-func addManager[T IManager](mgr T) T {
-	mgrs = append(mgrs, mgr)
-	return mgr
-}
 func LinkFFI() bool {
 	return webffi.Link()
-}
-
-func RegisterFFI() {
-	webffi.RegisterCallbackDispatcher()
 }
 
 func OnLinked() {
 	webffi.Linked()
 }
+
 func UnlinkFFI() {
 	webffi.Unlink()
 }
 
-func CreateMgrs() []IManager {
-	return createMgrs()
-}
-
-func RegisterCallbacks(callbacks CallbackInfo) {
+func RegisterCallbacks(callbacks engine.CallbackInfo) {
 	webffi.BindCallback(callbacks)
 }

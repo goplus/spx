@@ -7,9 +7,8 @@ import (
 
 var (
 	mgrs                []IManager
-	callback            EngineCallbackInfo
+	coreCallbacks       CoreCallbackInfo
 	sprites             = make([]ISpriter, 0)
-	timer               = float64(0)
 	isWebIntepreterMode bool
 )
 
@@ -17,14 +16,10 @@ func IsWebIntepreterMode() bool {
 	return isWebIntepreterMode
 }
 
-func RegisterFFI() {
-	wrap.RegisterFFI()
-}
-
-func Link(engineCallback EngineCallbackInfo) {
+func Link(coreCallbackInfo CoreCallbackInfo) {
 	isWebIntepreterMode = wrap.LinkFFI()
 	mgrs = wrap.CreateMgrs()
-	callback = engineCallback
+	coreCallbacks = coreCallbackInfo
 	infos := bindCallbacks()
 	wrap.RegisterCallbacks(infos)
 	wrap.BindMgr(mgrs)
@@ -34,77 +29,4 @@ func Link(engineCallback EngineCallbackInfo) {
 func Unlink() {
 	mgrs = nil
 	wrap.UnlinkFFI()
-}
-
-func onEngineStart() {
-	for _, mgr := range mgrs {
-		mgr.OnStart()
-	}
-	if callback.OnEngineStart != nil {
-		callback.OnEngineStart()
-	}
-}
-
-func onEngineUpdate(delta float64) {
-	for _, mgr := range mgrs {
-		mgr.OnUpdate(delta)
-	}
-	TimeSinceGameStart += delta
-	sprites = sprites[:0]
-	for _, sprite := range Id2Sprites {
-		sprites = append(sprites, sprite)
-	}
-	for _, sprite := range sprites {
-		sprite.OnUpdate(delta)
-	}
-	if callback.OnEngineUpdate != nil {
-		callback.OnEngineUpdate(delta)
-	}
-	InternalUpdateEngine(delta)
-}
-
-func onEngineFixedUpdate(delta float64) {
-	for _, mgr := range mgrs {
-		mgr.OnFixedUpdate(delta)
-	}
-	TimeSinceGameStart += delta
-	sprites = sprites[:0]
-	for _, sprite := range Id2Sprites {
-		sprites = append(sprites, sprite)
-	}
-	for _, sprite := range sprites {
-		sprite.OnFixedUpdate(delta)
-	}
-	if callback.OnEngineFixedUpdate != nil {
-		callback.OnEngineFixedUpdate(delta)
-	}
-}
-func onEngineDestroy() {
-	if callback.OnEngineDestroy != nil {
-		callback.OnEngineDestroy()
-	}
-	sprites = sprites[:0]
-	for _, sprite := range Id2Sprites {
-		sprites = append(sprites, sprite)
-	}
-	for _, sprite := range sprites {
-		sprite.OnDestroy()
-	}
-	for _, mgr := range mgrs {
-		mgr.OnDestroy()
-	}
-}
-func onEngineReset() {
-	if callback.OnEngineReset != nil {
-		callback.OnEngineReset()
-	}
-}
-func onEnginePause(isPaused bool) {
-	if callback.OnEnginePause != nil {
-		callback.OnEnginePause(isPaused)
-	}
-
-	for _, mgr := range mgrs {
-		mgr.OnPause(isPaused)
-	}
 }

@@ -18,7 +18,6 @@ var (
 )
 
 func init() {
-	gdspxEngineRegisterFFI()
 	js.Global().Set("ispx_build", jsFuncOfWithError(ispxBuild))
 	js.Global().Set("ispx_start", jsFuncOfWithError(ispxStart))
 	js.Global().Set("ispx_stop", jsFuncOfWithError(ispxStop))
@@ -30,13 +29,6 @@ func defaultIXGoContextLookup(root, path string) (dir string, found bool) {
 	reportRuntimeError(fmt.Errorf("failed to resolve package import %q", path))
 	return
 }
-
-// gdspxEngineRegisterFFI registers engine callback functions (gdspx_on_*) to
-// the JavaScript global scope, enabling the Godot engine to invoke Go code for
-// handling engine lifecycle, input, collision, and UI events.
-//
-//go:linkname gdspxEngineRegisterFFI github.com/goplus/spx/v2/pkg/gdspx/internal/engine.RegisterFFI
-func gdspxEngineRegisterFFI()
 
 // ispxBuild is the JavaScript interface for [Build].
 func ispxBuild(this js.Value, args []js.Value) any {

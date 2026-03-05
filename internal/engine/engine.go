@@ -18,16 +18,9 @@ import (
 
 // copy these variable to any namespace you want
 var (
-	audioMgr    enginewrap.AudioMgrImpl
-	cameraMgr   enginewrap.CameraMgrImpl
-	inputMgr    enginewrap.InputMgrImpl
-	physicsMgr  enginewrap.PhysicsMgrImpl
 	platformMgr enginewrap.PlatformMgrImpl
 	resMgr      enginewrap.ResMgrImpl
 	extMgr      enginewrap.ExtMgrImpl
-	sceneMgr    enginewrap.SceneMgrImpl
-	spriteMgr   enginewrap.SpriteMgrImpl
-	uiMgr       enginewrap.UiMgrImpl
 )
 
 type Object = gdx.Object
@@ -130,7 +123,7 @@ type IGame interface {
 func Main(g IGame) {
 	enginewrap.Init(WaitMainThread)
 	game = g
-	gde.LinkEngine(gdx.EngineCallbackInfo{
+	gde.LinkEngine(gdx.CoreCallbackInfo{
 		OnEngineStart:   onStart,
 		OnEngineUpdate:  onUpdate,
 		OnEngineDestroy: onDestroy,
@@ -141,9 +134,6 @@ func Main(g IGame) {
 	})
 }
 
-func RegisterFuncs() {
-
-}
 func OnGameStarted() {
 	gco.OnInited()
 }
