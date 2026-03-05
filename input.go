@@ -23,113 +23,112 @@ import (
 	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v2/internal/engine"
 	spxlog "github.com/goplus/spx/v2/internal/log"
-	gdx "github.com/goplus/spx/v2/pkg/gdspx/pkg/engine"
 )
 
 // Key represents a keyboard key code.
-type Key = gdx.KeyCode
+type Key = engine.KeyCode
 
 // Keyboard key constants
 const (
-	Key0            Key = gdx.Key0
-	Key1            Key = gdx.Key1
-	Key2            Key = gdx.Key2
-	Key3            Key = gdx.Key3
-	Key4            Key = gdx.Key4
-	Key5            Key = gdx.Key5
-	Key6            Key = gdx.Key6
-	Key7            Key = gdx.Key7
-	Key8            Key = gdx.Key8
-	Key9            Key = gdx.Key9
-	KeyA            Key = gdx.KeyA
-	KeyB            Key = gdx.KeyB
-	KeyC            Key = gdx.KeyC
-	KeyD            Key = gdx.KeyD
-	KeyE            Key = gdx.KeyE
-	KeyF            Key = gdx.KeyF
-	KeyG            Key = gdx.KeyG
-	KeyH            Key = gdx.KeyH
-	KeyI            Key = gdx.KeyI
-	KeyJ            Key = gdx.KeyJ
-	KeyK            Key = gdx.KeyK
-	KeyL            Key = gdx.KeyL
-	KeyM            Key = gdx.KeyM
-	KeyN            Key = gdx.KeyN
-	KeyO            Key = gdx.KeyO
-	KeyP            Key = gdx.KeyP
-	KeyQ            Key = gdx.KeyQ
-	KeyR            Key = gdx.KeyR
-	KeyS            Key = gdx.KeyS
-	KeyT            Key = gdx.KeyT
-	KeyU            Key = gdx.KeyU
-	KeyV            Key = gdx.KeyV
-	KeyW            Key = gdx.KeyW
-	KeyX            Key = gdx.KeyX
-	KeyY            Key = gdx.KeyY
-	KeyZ            Key = gdx.KeyZ
-	KeyApostrophe   Key = gdx.KeyApostrophe
-	KeyBackslash    Key = gdx.KeyBackslash
-	KeyBackspace    Key = gdx.KeyBackspace
-	KeyCapsLock     Key = gdx.KeyCapsLock
-	KeyComma        Key = gdx.KeyComma
-	KeyDelete       Key = gdx.KeyDelete
-	KeyDown         Key = gdx.KeyDown
-	KeyEnd          Key = gdx.KeyEnd
-	KeyEnter        Key = gdx.KeyEnter
-	KeyEqual        Key = gdx.KeyEqual
-	KeyEscape       Key = gdx.KeyEscape
-	KeyF1           Key = gdx.KeyF1
-	KeyF2           Key = gdx.KeyF2
-	KeyF3           Key = gdx.KeyF3
-	KeyF4           Key = gdx.KeyF4
-	KeyF5           Key = gdx.KeyF5
-	KeyF6           Key = gdx.KeyF6
-	KeyF7           Key = gdx.KeyF7
-	KeyF8           Key = gdx.KeyF8
-	KeyF9           Key = gdx.KeyF9
-	KeyF10          Key = gdx.KeyF10
-	KeyF11          Key = gdx.KeyF11
-	KeyF12          Key = gdx.KeyF12
-	KeyGraveAccent  Key = gdx.KeyQuoteLeft
-	KeyHome         Key = gdx.KeyHome
-	KeyInsert       Key = gdx.KeyInsert
-	KeyKP0          Key = gdx.KeyKP0
-	KeyKP1          Key = gdx.KeyKP1
-	KeyKP2          Key = gdx.KeyKP2
-	KeyKP3          Key = gdx.KeyKP3
-	KeyKP4          Key = gdx.KeyKP4
-	KeyKP5          Key = gdx.KeyKP5
-	KeyKP6          Key = gdx.KeyKP6
-	KeyKP7          Key = gdx.KeyKP7
-	KeyKP8          Key = gdx.KeyKP8
-	KeyKP9          Key = gdx.KeyKP9
-	KeyKPDecimal    Key = gdx.KeyKPPeriod
-	KeyKPDivide     Key = gdx.KeyKPDivide
-	KeyKPEnter      Key = gdx.KeyKPEnter
-	KeyKPEqual      Key = gdx.KeyEqual
-	KeyKPMultiply   Key = gdx.KeyKPMultiply
-	KeyKPSubtract   Key = gdx.KeyKPSubtract
-	KeyLeft         Key = gdx.KeyLeft
-	KeyLeftBracket  Key = gdx.KeyBracketLeft
-	KeyMenu         Key = gdx.KeyMenu
-	KeyMinus        Key = gdx.KeyMinus
-	KeyNumLock      Key = gdx.KeyNumLock
-	KeyPageDown     Key = gdx.KeyPageDown
-	KeyPageUp       Key = gdx.KeyPageUp
-	KeyPause        Key = gdx.KeyPause
-	KeyPeriod       Key = gdx.KeyPeriod
-	KeyPrintScreen  Key = gdx.KeyPrint
-	KeyRight        Key = gdx.KeyRight
-	KeyRightBracket Key = gdx.KeyBracketRight
-	KeyScrollLock   Key = gdx.KeyScrollLock
-	KeySemicolon    Key = gdx.KeySemicolon
-	KeySlash        Key = gdx.KeySlash
-	KeySpace        Key = gdx.KeySpace
-	KeyTab          Key = gdx.KeyTab
-	KeyUp           Key = gdx.KeyUp
-	KeyAlt          Key = gdx.KeyAlt
-	KeyControl      Key = gdx.KeyCmdOrCtrl
-	KeyShift        Key = gdx.KeyShift
+	Key0            Key = engine.Key0
+	Key1            Key = engine.Key1
+	Key2            Key = engine.Key2
+	Key3            Key = engine.Key3
+	Key4            Key = engine.Key4
+	Key5            Key = engine.Key5
+	Key6            Key = engine.Key6
+	Key7            Key = engine.Key7
+	Key8            Key = engine.Key8
+	Key9            Key = engine.Key9
+	KeyA            Key = engine.KeyA
+	KeyB            Key = engine.KeyB
+	KeyC            Key = engine.KeyC
+	KeyD            Key = engine.KeyD
+	KeyE            Key = engine.KeyE
+	KeyF            Key = engine.KeyF
+	KeyG            Key = engine.KeyG
+	KeyH            Key = engine.KeyH
+	KeyI            Key = engine.KeyI
+	KeyJ            Key = engine.KeyJ
+	KeyK            Key = engine.KeyK
+	KeyL            Key = engine.KeyL
+	KeyM            Key = engine.KeyM
+	KeyN            Key = engine.KeyN
+	KeyO            Key = engine.KeyO
+	KeyP            Key = engine.KeyP
+	KeyQ            Key = engine.KeyQ
+	KeyR            Key = engine.KeyR
+	KeyS            Key = engine.KeyS
+	KeyT            Key = engine.KeyT
+	KeyU            Key = engine.KeyU
+	KeyV            Key = engine.KeyV
+	KeyW            Key = engine.KeyW
+	KeyX            Key = engine.KeyX
+	KeyY            Key = engine.KeyY
+	KeyZ            Key = engine.KeyZ
+	KeyApostrophe   Key = engine.KeyApostrophe
+	KeyBackslash    Key = engine.KeyBackslash
+	KeyBackspace    Key = engine.KeyBackspace
+	KeyCapsLock     Key = engine.KeyCapsLock
+	KeyComma        Key = engine.KeyComma
+	KeyDelete       Key = engine.KeyDelete
+	KeyDown         Key = engine.KeyDown
+	KeyEnd          Key = engine.KeyEnd
+	KeyEnter        Key = engine.KeyEnter
+	KeyEqual        Key = engine.KeyEqual
+	KeyEscape       Key = engine.KeyEscape
+	KeyF1           Key = engine.KeyF1
+	KeyF2           Key = engine.KeyF2
+	KeyF3           Key = engine.KeyF3
+	KeyF4           Key = engine.KeyF4
+	KeyF5           Key = engine.KeyF5
+	KeyF6           Key = engine.KeyF6
+	KeyF7           Key = engine.KeyF7
+	KeyF8           Key = engine.KeyF8
+	KeyF9           Key = engine.KeyF9
+	KeyF10          Key = engine.KeyF10
+	KeyF11          Key = engine.KeyF11
+	KeyF12          Key = engine.KeyF12
+	KeyGraveAccent  Key = engine.KeyGraveAccent
+	KeyHome         Key = engine.KeyHome
+	KeyInsert       Key = engine.KeyInsert
+	KeyKP0          Key = engine.KeyKP0
+	KeyKP1          Key = engine.KeyKP1
+	KeyKP2          Key = engine.KeyKP2
+	KeyKP3          Key = engine.KeyKP3
+	KeyKP4          Key = engine.KeyKP4
+	KeyKP5          Key = engine.KeyKP5
+	KeyKP6          Key = engine.KeyKP6
+	KeyKP7          Key = engine.KeyKP7
+	KeyKP8          Key = engine.KeyKP8
+	KeyKP9          Key = engine.KeyKP9
+	KeyKPDecimal    Key = engine.KeyKPDecimal
+	KeyKPDivide     Key = engine.KeyKPDivide
+	KeyKPEnter      Key = engine.KeyKPEnter
+	KeyKPEqual      Key = engine.KeyEqual
+	KeyKPMultiply   Key = engine.KeyKPMultiply
+	KeyKPSubtract   Key = engine.KeyKPSubtract
+	KeyLeft         Key = engine.KeyLeft
+	KeyLeftBracket  Key = engine.KeyLeftBracket
+	KeyMenu         Key = engine.KeyMenu
+	KeyMinus        Key = engine.KeyMinus
+	KeyNumLock      Key = engine.KeyNumLock
+	KeyPageDown     Key = engine.KeyPageDown
+	KeyPageUp       Key = engine.KeyPageUp
+	KeyPause        Key = engine.KeyPause
+	KeyPeriod       Key = engine.KeyPeriod
+	KeyPrintScreen  Key = engine.KeyPrintScreen
+	KeyRight        Key = engine.KeyRight
+	KeyRightBracket Key = engine.KeyRightBracket
+	KeyScrollLock   Key = engine.KeyScrollLock
+	KeySemicolon    Key = engine.KeySemicolon
+	KeySlash        Key = engine.KeySlash
+	KeySpace        Key = engine.KeySpace
+	KeyTab          Key = engine.KeyTab
+	KeyUp           Key = engine.KeyUp
+	KeyAlt          Key = engine.KeyAlt
+	KeyControl      Key = engine.KeyControl
+	KeyShift        Key = engine.KeyShift
 	KeyMax          Key = -2
 	KeyAny          Key = -1
 )
@@ -254,14 +253,14 @@ const (
 type inputManager struct {
 	tempItems []Shape
 	g         *Game
-	id2Timer  map[gdx.Object]int64
+	id2Timer  map[engine.Object]int64
 
 	swipeRecognizer inputSwipeRecognizer
 }
 
 func (p *inputManager) init(g *Game) {
 	p.tempItems = make([]Shape, 50)
-	p.id2Timer = make(map[gdx.Object]int64)
+	p.id2Timer = make(map[engine.Object]int64)
 	p.g = g
 	p.swipeRecognizer.init()
 }
@@ -315,7 +314,7 @@ func (p *inputManager) onMouseMove(pos mathf.Vec2) {
 	}
 }
 
-func (p *inputManager) canTriggerClickEvent(id gdx.Object) bool {
+func (p *inputManager) canTriggerClickEvent(id engine.Object) bool {
 	currentTimeMs := time.Now().UnixNano() / int64(time.Millisecond)
 
 	if lastTimeMs, ok := p.id2Timer[id]; ok {

@@ -202,7 +202,7 @@ func updateTime(delta float64) {
 	unscaledTimeSinceLevelLoad := curTime.Sub(startTimestamp).Seconds()
 	unscaledDeltaTime := curTime.Sub(lastTimestamp).Seconds()
 	lastTimestamp = curTime
-	timeScale := SyncGetTimeScale()
+	timeScale := MainThreadGetTimeScale()
 	fps = profiler.Calcfps()
 	time.Update(float64(timeScale), unscaledTimeSinceLevelLoad, timeSinceLevelLoad, deltaTime, unscaledDeltaTime, fps)
 }

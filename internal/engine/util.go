@@ -73,14 +73,14 @@ func SetDefaultFont(path string) {
 func ScreenToWorld(pos Vec2) Vec2 {
 	var _ret1 Vec2
 	WaitMainThread(func() {
-		_ret1 = SyncScreenToWorld(pos)
+		_ret1 = MainThreadScreenToWorld(pos)
 	})
 	return _ret1
 }
 func WorldToScreen(pos Vec2) Vec2 {
 	var _ret1 Vec2
 	WaitMainThread(func() {
-		_ret1 = SyncWorldToScreen(pos)
+		_ret1 = MainThreadWorldToScreen(pos)
 	})
 	return _ret1
 }
@@ -105,11 +105,11 @@ func GetFPS() float64 {
 }
 
 func DegToRad(degree float64) float64 {
-	return degree * (math.Pi / 180.0)
+	return gdx.DegToRad(degree)
 }
 
 func RadToDeg(radians float64) float64 {
-	return radians * 180.0 / math.Pi
+	return gdx.RadToDeg(radians)
 }
 
 func Sincos(rad float64) Vec2 {

@@ -2,7 +2,6 @@ package ui
 
 import (
 	"github.com/goplus/spx/v2/internal/engine"
-	gdx "github.com/goplus/spx/v2/pkg/gdspx/pkg/engine"
 )
 
 type UiAsk struct {
@@ -22,11 +21,11 @@ func NewUiAsk() *UiAsk {
 
 // !!Warning: this method was called in main thread
 func (pself *UiAsk) OnStart() {
-	pself.askBody = SyncBindUI[UiNode](pself.GetId(), "MF/Frame/AskBody")
-	pself.askLabel = SyncBindUI[UiNode](pself.GetId(), "MF/Frame/AskBody/LabelAsk")
+	pself.askBody = engine.MainThreadBindUI[UiNode](pself.GetId(), "MF/Frame/AskBody")
+	pself.askLabel = engine.MainThreadBindUI[UiNode](pself.GetId(), "MF/Frame/AskBody/LabelAsk")
 
-	pself.input = SyncBindUI[UiNode](pself.GetId(), "M/Input")
-	pself.checkBtn = SyncBindUI[UiNode](pself.GetId(), "M/Input/Check")
+	pself.input = engine.MainThreadBindUI[UiNode](pself.GetId(), "M/Input")
+	pself.checkBtn = engine.MainThreadBindUI[UiNode](pself.GetId(), "M/Input/Check")
 
 	// Handle check button click
 	pself.checkBtn.OnUiClickEvent.Subscribe(func() {
@@ -44,7 +43,7 @@ func (pself *UiAsk) handleCheck() {
 
 // OnUpdate checks for Enter key press every frame
 func (pself *UiAsk) Update() {
-	enterPressed := mgr.InputMgr.GetKey(int64(gdx.KeyEnter)) || mgr.InputMgr.GetKey(int64(gdx.KeyKPEnter))
+	enterPressed := mgr.InputMgr.GetKey(int64(engine.KeyEnter)) || mgr.InputMgr.GetKey(int64(engine.KeyKPEnter))
 	// Trigger only on key press (not held down)
 	if enterPressed && !pself.lastEnterState {
 		pself.handleCheck()

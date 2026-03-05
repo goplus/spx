@@ -7,7 +7,6 @@ import (
 	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v2/internal/engine"
 	"github.com/goplus/spx/v2/internal/text"
-	gdx "github.com/goplus/spx/v2/pkg/gdspx/pkg/engine"
 )
 
 // Constants for say message layout
@@ -49,20 +48,20 @@ func NewUiSay() *UiSay {
 // Warning: this method is called in main thread
 func (s *UiSay) OnStart() {
 	s.left = sayNodes{
-		vbox:  SyncBindUI[UiNode](s.GetId(), "VL"),
-		label: SyncBindUI[UiNode](s.GetId(), "VL/BG/Label"),
+		vbox:  engine.MainThreadBindUI[UiNode](s.GetId(), "VL"),
+		label: engine.MainThreadBindUI[UiNode](s.GetId(), "VL/BG/Label"),
 	}
 	s.right = sayNodes{
-		vbox:  SyncBindUI[UiNode](s.GetId(), "VR"),
-		label: SyncBindUI[UiNode](s.GetId(), "VR/BG/Label"),
+		vbox:  engine.MainThreadBindUI[UiNode](s.GetId(), "VR"),
+		label: engine.MainThreadBindUI[UiNode](s.GetId(), "VR/BG/Label"),
 	}
 	s.leftThink = sayNodes{
-		vbox:  SyncBindUI[UiNode](s.GetId(), "VLThink"),
-		label: SyncBindUI[UiNode](s.GetId(), "VLThink/BG/MC/Label"),
+		vbox:  engine.MainThreadBindUI[UiNode](s.GetId(), "VLThink"),
+		label: engine.MainThreadBindUI[UiNode](s.GetId(), "VLThink/BG/MC/Label"),
 	}
 	s.rightThink = sayNodes{
-		vbox:  SyncBindUI[UiNode](s.GetId(), "VRThink"),
-		label: SyncBindUI[UiNode](s.GetId(), "VRThink/BG/MC/Label"),
+		vbox:  engine.MainThreadBindUI[UiNode](s.GetId(), "VRThink"),
+		label: engine.MainThreadBindUI[UiNode](s.GetId(), "VRThink/BG/MC/Label"),
 	}
 }
 
@@ -91,7 +90,7 @@ func (s *UiSay) calculateScale(winSize mathf.Vec2, isThink bool) mathf.Vec2 {
 	// Choose the smaller scale to maintain aspect ratio
 	uniformScale := math.Min(scaleVec.X, scaleVec.Y)
 
-	zoom := gdx.CameraMgr.GetCameraZoom()
+	zoom := engine.MainThreadGetCameraZoom()
 	windowScaleVec := mathf.NewVec2(windowScale, windowScale)
 
 	return zoom.Div(windowScaleVec).Mulf(uniformScale * specialScale)
@@ -99,9 +98,8 @@ func (s *UiSay) calculateScale(winSize mathf.Vec2, isThink bool) mathf.Vec2 {
 
 // calculatePosition computes the UI position based on sprite position and size
 func (s *UiSay) calculatePosition(winSize mathf.Vec2, pos mathf.Vec2, size mathf.Vec2, msg string) mathf.Vec2 {
-	zoom := gdx.CameraMgr.GetCameraZoom()
-	camPos := gdx.CameraMgr.GetCameraPosition()
-	camPos.Y = -camPos.Y
+	zoom := engine.MainThreadGetCameraZoom()
+	camPos := engine.MainThreadGetCameraPosition()
 	localPos := pos.Sub(camPos)
 	localPos = localPos.Mul(zoom.Divf(windowScale))
 
@@ -149,15 +147,15 @@ func (s *UiSay) formatMessage(msg string) string {
 // updateVisibility sets the visibility of all UI nodes based on style and direction
 func (s *UiSay) updateVisibility(isLeft bool, isThink bool) {
 	// Direct gdx calls to avoid callInMainThread deadlock when called from main thread (onUpdate)
-	gdx.UiMgr.SetVisible(s.left.vbox.GetId(), !isThink && isLeft)
-	gdx.UiMgr.SetVisible(s.right.vbox.GetId(), !isThink && !isLeft)
-	gdx.UiMgr.SetVisible(s.leftThink.vbox.GetId(), isThink && isLeft)
-	gdx.UiMgr.SetVisible(s.rightThink.vbox.GetId(), isThink && !isLeft)
+	engine.MainThreadUiSetVisible(s.left.vbox.GetId(), !isThink && isLeft)
+	engine.MainThreadUiSetVisible(s.right.vbox.GetId(), !isThink && !isLeft)
+	engine.MainThreadUiSetVisible(s.leftThink.vbox.GetId(), isThink && isLeft)
+	engine.MainThreadUiSetVisible(s.rightThink.vbox.GetId(), isThink && !isLeft)
 }
 
 // updateUI updates the scale, position, and text of the UI element
 func (s *UiSay) updateUI(position mathf.Vec2, scale mathf.Vec2, label engine.Object, text string) {
-	gdx.UiMgr.SetScale(s.GetId(), scale)
-	gdx.UiMgr.SetPosition(s.GetId(), WorldToUI(position, true))
-	gdx.UiMgr.SetText(label, text)
+	engine.MainThreadUiSetScale(s.GetId(), scale)
+	engine.MainThreadUiSetPosition(s.GetId(), WorldToUI(position, true))
+	engine.MainThreadUiSetText(label, text)
 }

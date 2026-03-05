@@ -17,7 +17,7 @@ func NewUiDebug() *UiDebug {
 
 // !!Warning: this method was called in main thread
 func (pself *UiDebug) OnStart() {
-	pself.input = SyncBindUI[UiNode](pself.GetId(), "Label")
+	pself.input = engine.MainThreadBindUI[UiNode](pself.GetId(), "Label")
 }
 
 func (pself *UiDebug) Show(msg string) {
