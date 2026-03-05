@@ -1,4 +1,4 @@
-//go:build js
+//go:build js && wasm
 
 package webffi
 
@@ -15,39 +15,20 @@ import (
 	. "github.com/goplus/spx/v2/pkg/gdspx/pkg/engine"
 )
 
-var isLittleEndian bool
-var byteOrder binary.ByteOrder
-
-func init() {
-	buf := [2]byte{}
-	*(*uint16)(unsafe.Pointer(&buf[0])) = uint16(0xABCD)
-
-	switch buf {
-	case [2]byte{0xCD, 0xAB}:
-		isLittleEndian = true
-		byteOrder = binary.LittleEndian
-	case [2]byte{0xAB, 0xCD}:
-		isLittleEndian = false
-		byteOrder = binary.BigEndian
-	default:
-		panic("Could not determine native endianness.")
-	}
-}
-
 const (
-	GD_ARRAY_TYPE_UNKNOWN = 0
-	GD_ARRAY_TYPE_INT64   = 1
-	GD_ARRAY_TYPE_FLOAT   = 2
-	GD_ARRAY_TYPE_BOOL    = 3
-	GD_ARRAY_TYPE_STRING  = 4
-	GD_ARRAY_TYPE_BYTE    = 5
-	GD_ARRAY_TYPE_GDOBJ   = 6
+	GdArrayTypeUnknown = 0
+	GdArrayTypeInt64   = 1
+	GdArrayTypeFloat   = 2
+	GdArrayTypeBool    = 3
+	GdArrayTypeString  = 4
+	GdArrayTypeByte    = 5
+	GdArrayTypeGdObj   = 6
 )
 
 type GdArrayInfo struct {
 	Size int32
 	Type int32
-	Data interface{}
+	Data any
 }
 
 func serializeGdArray(info *GdArrayInfo) ([]byte, error) {
@@ -63,13 +44,8 @@ func serializeGdArray(info *GdArrayInfo) ([]byte, error) {
 	totalSize := 8 + len(dataBytes)
 	result := make([]byte, totalSize)
 
-	if isLittleEndian {
-		*(*uint32)(unsafe.Pointer(&result[0])) = uint32(info.Size)
-		*(*uint32)(unsafe.Pointer(&result[4])) = uint32(info.Type)
-	} else {
-		binary.LittleEndian.PutUint32(result[0:4], uint32(info.Size))
-		binary.LittleEndian.PutUint32(result[4:8], uint32(info.Type))
-	}
+	*(*uint32)(unsafe.Pointer(&result[0])) = uint32(info.Size)
+	*(*uint32)(unsafe.Pointer(&result[4])) = uint32(info.Type)
 
 	copy(result[8:], dataBytes)
 
@@ -81,14 +57,8 @@ func deserializeGdArray(data []byte) (*GdArrayInfo, error) {
 		return nil, fmt.Errorf("data length is not enough")
 	}
 
-	var size, arrayType int32
-	if isLittleEndian {
-		size = int32(*(*uint32)(unsafe.Pointer(&data[0])))
-		arrayType = int32(*(*uint32)(unsafe.Pointer(&data[4])))
-	} else {
-		size = int32(binary.LittleEndian.Uint32(data[0:4]))
-		arrayType = int32(binary.LittleEndian.Uint32(data[4:8]))
-	}
+	size := int32(*(*uint32)(unsafe.Pointer(&data[0])))
+	arrayType := int32(*(*uint32)(unsafe.Pointer(&data[4])))
 
 	arrayData, err := deserializeDataByType(arrayType, data[8:], size)
 	if err != nil {
@@ -101,6 +71,7 @@ func deserializeGdArray(data []byte) (*GdArrayInfo, error) {
 		Data: arrayData,
 	}, nil
 }
+
 func f64Tof32(slice []float64) []float32 {
 	if slice == nil {
 		return []float32{}
@@ -111,19 +82,19 @@ func f64Tof32(slice []float64) []float32 {
 	}
 	return out
 }
-func serializeDataByType(arrayType int32, data interface{}) ([]byte, error) {
+
+func serializeDataByType(arrayType int32, data any) ([]byte, error) {
 	if data == nil {
 		return []byte{}, nil
 	}
 
-	// Check for empty arrays
 	switch arrayType {
-	case GD_ARRAY_TYPE_INT64, GD_ARRAY_TYPE_GDOBJ:
+	case GdArrayTypeInt64, GdArrayTypeGdObj:
 		if arr := data.([]int64); len(arr) == 0 {
 			return []byte{}, nil
 		}
 		return serializeInt64Array(data.([]int64))
-	case GD_ARRAY_TYPE_FLOAT:
+	case GdArrayTypeFloat:
 		val, ok := data.([]float32)
 		if !ok {
 			slice, ok := data.([]float64)
@@ -136,17 +107,17 @@ func serializeDataByType(arrayType int32, data interface{}) ([]byte, error) {
 			return []byte{}, nil
 		}
 		return serializeFloatArray(val)
-	case GD_ARRAY_TYPE_BOOL:
+	case GdArrayTypeBool:
 		if arr := data.([]bool); len(arr) == 0 {
 			return []byte{}, nil
 		}
 		return serializeBoolArray(data.([]bool))
-	case GD_ARRAY_TYPE_BYTE:
+	case GdArrayTypeByte:
 		if arr := data.([]byte); len(arr) == 0 {
 			return []byte{}, nil
 		}
 		return data.([]byte), nil
-	case GD_ARRAY_TYPE_STRING:
+	case GdArrayTypeString:
 		if arr := data.([]string); len(arr) == 0 {
 			return []byte{}, nil
 		}
@@ -156,18 +127,18 @@ func serializeDataByType(arrayType int32, data interface{}) ([]byte, error) {
 	}
 }
 
-func deserializeDataByType(arrayType int32, data []byte, size int32) (interface{}, error) {
+func deserializeDataByType(arrayType int32, data []byte, size int32) (any, error) {
 	if len(data) == 0 || size == 0 {
 		switch arrayType {
-		case GD_ARRAY_TYPE_INT64, GD_ARRAY_TYPE_GDOBJ:
+		case GdArrayTypeInt64, GdArrayTypeGdObj:
 			return []int64{}, nil
-		case GD_ARRAY_TYPE_FLOAT:
+		case GdArrayTypeFloat:
 			return []float32{}, nil
-		case GD_ARRAY_TYPE_BOOL:
+		case GdArrayTypeBool:
 			return []bool{}, nil
-		case GD_ARRAY_TYPE_BYTE:
+		case GdArrayTypeByte:
 			return []byte{}, nil
-		case GD_ARRAY_TYPE_STRING:
+		case GdArrayTypeString:
 			return []string{}, nil
 		default:
 			return nil, fmt.Errorf("array type is not supported: %d", arrayType)
@@ -175,15 +146,15 @@ func deserializeDataByType(arrayType int32, data []byte, size int32) (interface{
 	}
 
 	switch arrayType {
-	case GD_ARRAY_TYPE_INT64, GD_ARRAY_TYPE_GDOBJ:
+	case GdArrayTypeInt64, GdArrayTypeGdObj:
 		return deserializeInt64Array(data, size)
-	case GD_ARRAY_TYPE_FLOAT:
+	case GdArrayTypeFloat:
 		return deserializeFloatArray(data, size)
-	case GD_ARRAY_TYPE_BOOL:
+	case GdArrayTypeBool:
 		return deserializeBoolArray(data, size)
-	case GD_ARRAY_TYPE_BYTE:
+	case GdArrayTypeByte:
 		return data, nil
-	case GD_ARRAY_TYPE_STRING:
+	case GdArrayTypeString:
 		return deserializeStringArray(data)
 	default:
 		return nil, fmt.Errorf("array type is not supported: %d", arrayType)
@@ -191,69 +162,45 @@ func deserializeDataByType(arrayType int32, data []byte, size int32) (interface{
 }
 
 func serializeInt64Array(data []int64) ([]byte, error) {
-	if isLittleEndian {
-		// Zero-copy conversion: directly convert []int64 to []byte
-		return (*[1 << 30]byte)(unsafe.Pointer(&data[0]))[: len(data)*8 : len(data)*8], nil
-	} else {
-		// Big endian machines need byte order conversion
-		result := make([]byte, len(data)*8)
-		for i, val := range data {
-			binary.LittleEndian.PutUint64(result[i*8:(i+1)*8], uint64(val))
-		}
-		return result, nil
+	if len(data) == 0 {
+		return []byte{}, nil
 	}
+	return unsafe.Slice((*byte)(unsafe.Pointer(unsafe.SliceData(data))), len(data)*8), nil
 }
 
 func deserializeInt64Array(data []byte, size int32) ([]int64, error) {
-	if len(data) < int(size*8) {
+	if size < 0 {
+		return nil, fmt.Errorf("array size is invalid")
+	}
+	requiredBytes := int64(size) * 8
+	if int64(len(data)) < requiredBytes {
 		return nil, fmt.Errorf("array data length is not enough")
 	}
-
-	if isLittleEndian {
-		// Zero-copy conversion: directly convert []byte to []int64
-		return (*[1 << 27]int64)(unsafe.Pointer(&data[0]))[:size:size], nil
-	} else {
-		// Big endian machines need byte order conversion
-		result := make([]int64, size)
-		for i := int32(0); i < size; i++ {
-			result[i] = int64(binary.LittleEndian.Uint64(data[i*8 : (i+1)*8]))
-		}
-		return result, nil
+	if size == 0 {
+		return []int64{}, nil
 	}
+	return unsafe.Slice((*int64)(unsafe.Pointer(unsafe.SliceData(data))), int(size)), nil
 }
 
 func serializeFloatArray(data []float32) ([]byte, error) {
-	if isLittleEndian {
-		// Zero-copy conversion: directly convert []float32 to []byte
-		return (*[1 << 30]byte)(unsafe.Pointer(&data[0]))[: len(data)*4 : len(data)*4], nil
-	} else {
-		// Big endian machines need byte order conversion
-		result := make([]byte, len(data)*4)
-		for i, val := range data {
-			bits := *(*uint32)(unsafe.Pointer(&val))
-			binary.LittleEndian.PutUint32(result[i*4:(i+1)*4], bits)
-		}
-		return result, nil
+	if len(data) == 0 {
+		return []byte{}, nil
 	}
+	return unsafe.Slice((*byte)(unsafe.Pointer(unsafe.SliceData(data))), len(data)*4), nil
 }
 
 func deserializeFloatArray(data []byte, size int32) ([]float32, error) {
-	if len(data) < int(size*4) {
+	if size < 0 {
+		return nil, fmt.Errorf("array size is invalid")
+	}
+	requiredBytes := int64(size) * 4
+	if int64(len(data)) < requiredBytes {
 		return nil, fmt.Errorf("array data length is not enough")
 	}
-
-	if isLittleEndian {
-		// Zero-copy conversion: directly convert []byte to []float32
-		return (*[1 << 28]float32)(unsafe.Pointer(&data[0]))[:size:size], nil
-	} else {
-		// Big endian machines need byte order conversion
-		result := make([]float32, size)
-		for i := int32(0); i < size; i++ {
-			bits := binary.LittleEndian.Uint32(data[i*4 : (i+1)*4])
-			result[i] = *(*float32)(unsafe.Pointer(&bits))
-		}
-		return result, nil
+	if size == 0 {
+		return []float32{}, nil
 	}
+	return unsafe.Slice((*float32)(unsafe.Pointer(unsafe.SliceData(data))), int(size)), nil
 }
 
 func serializeBoolArray(data []bool) ([]byte, error) {
@@ -274,7 +221,7 @@ func deserializeBoolArray(data []byte, size int32) ([]bool, error) {
 	}
 
 	result := make([]bool, size)
-	for i := int32(0); i < size; i++ {
+	for i := 0; i < int(size); i++ {
 		result[i] = data[i] != 0
 	}
 	return result, nil
@@ -286,11 +233,7 @@ func serializeStringArray(data []string) ([]byte, error) {
 		strBytes := []byte(str)
 		lengthBytes := make([]byte, 4)
 
-		if isLittleEndian {
-			*(*uint32)(unsafe.Pointer(&lengthBytes[0])) = uint32(len(strBytes))
-		} else {
-			binary.LittleEndian.PutUint32(lengthBytes, uint32(len(strBytes)))
-		}
+		*(*uint32)(unsafe.Pointer(&lengthBytes[0])) = uint32(len(strBytes))
 
 		result = append(result, lengthBytes...)
 		result = append(result, strBytes...)
@@ -307,12 +250,7 @@ func deserializeStringArray(data []byte) ([]string, error) {
 			break
 		}
 
-		var strLen int
-		if isLittleEndian {
-			strLen = int(*(*uint32)(unsafe.Pointer(&data[offset])))
-		} else {
-			strLen = int(binary.LittleEndian.Uint32(data[offset : offset+4]))
-		}
+		strLen := int(binary.LittleEndian.Uint32(data[offset:]))
 		offset += 4
 
 		if offset+strLen > len(data) {
@@ -330,24 +268,24 @@ func deserializeStringArray(data []byte) ([]string, error) {
 func arrayToGdArrayInfo(arrayPtr Array) *GdArrayInfo {
 	switch data := arrayPtr.(type) {
 	case []int64:
-		return &GdArrayInfo{Size: int32(len(data)), Type: GD_ARRAY_TYPE_INT64, Data: data}
+		return &GdArrayInfo{Size: int32(len(data)), Type: GdArrayTypeInt64, Data: data}
 	case []float32:
-		return &GdArrayInfo{Size: int32(len(data)), Type: GD_ARRAY_TYPE_FLOAT, Data: data}
+		return &GdArrayInfo{Size: int32(len(data)), Type: GdArrayTypeFloat, Data: data}
 	case []float64:
 		val := f64Tof32(data)
-		return &GdArrayInfo{Size: int32(len(data)), Type: GD_ARRAY_TYPE_FLOAT, Data: val}
+		return &GdArrayInfo{Size: int32(len(data)), Type: GdArrayTypeFloat, Data: val}
 	case []bool:
-		return &GdArrayInfo{Size: int32(len(data)), Type: GD_ARRAY_TYPE_BOOL, Data: data}
+		return &GdArrayInfo{Size: int32(len(data)), Type: GdArrayTypeBool, Data: data}
 	case []string:
-		return &GdArrayInfo{Size: int32(len(data)), Type: GD_ARRAY_TYPE_STRING, Data: data}
+		return &GdArrayInfo{Size: int32(len(data)), Type: GdArrayTypeString, Data: data}
 	case []byte:
-		return &GdArrayInfo{Size: int32(len(data)), Type: GD_ARRAY_TYPE_BYTE, Data: data}
+		return &GdArrayInfo{Size: int32(len(data)), Type: GdArrayTypeByte, Data: data}
 	case []uint64:
 		int64Data := make([]int64, len(data))
 		for i, v := range data {
 			int64Data[i] = int64(v)
 		}
-		return &GdArrayInfo{Size: int32(len(data)), Type: GD_ARRAY_TYPE_GDOBJ, Data: int64Data}
+		return &GdArrayInfo{Size: int32(len(data)), Type: GdArrayTypeGdObj, Data: int64Data}
 	default:
 		return nil
 	}
@@ -373,6 +311,7 @@ func jsValue2Go(value js.Value) any {
 		return nil
 	}
 }
+
 func PrintJs(rect js.Value) {
 	rectMap := jsValue2Go(rect)
 	jsonData, err := json.Marshal(rectMap)
@@ -537,7 +476,6 @@ func JsToGdInt64(val js.Value) int64 {
 func JsFromGdArray(arrayPtr Array) js.Value {
 	if arrayPtr == nil {
 		panic("JsFromGdArray doesn't support nil array")
-		return js.ValueOf(nil)
 	}
 
 	info := arrayToGdArrayInfo(arrayPtr)
@@ -552,9 +490,9 @@ func JsFromGdArray(arrayPtr Array) js.Value {
 
 	jsBytes := js.Global().Get("Uint8Array").New(len(serializedBytes))
 	js.CopyBytesToJS(jsBytes, serializedBytes)
-
 	return jsBytes
 }
+
 func JsToGdArray(val js.Value) Array {
 	if val.IsNull() || val.IsUndefined() {
 		return nil
@@ -576,6 +514,5 @@ func JsToGdArray(val js.Value) Array {
 	if err != nil {
 		return nil
 	}
-
 	return info.Data
 }
