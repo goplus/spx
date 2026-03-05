@@ -5,7 +5,6 @@ import (
 	. "github.com/goplus/spbase/mathf"
 
 	"github.com/goplus/spx/v2/internal/engine"
-	gdx "github.com/goplus/spx/v2/pkg/gdspx/pkg/engine"
 )
 
 type UiMonitor struct {
@@ -26,38 +25,38 @@ func NewUiMonitor() *UiMonitor {
 
 // !!Warning: this method was called in main thread
 func (pself *UiMonitor) OnStart() {
-	pself.bgAll = SyncBindUI[UiNode](pself.GetId(), "BG")
-	pself.labelName = SyncBindUI[UiNode](pself.GetId(), "BG/H/LabelName")
-	pself.labelBg = SyncBindUI[UiNode](pself.GetId(), "BG/H/C")
-	pself.labelValue = SyncBindUI[UiNode](pself.GetId(), "BG/H/C/H/LabelValue")
+	pself.bgAll = engine.MainThreadBindUI[UiNode](pself.GetId(), "BG")
+	pself.labelName = engine.MainThreadBindUI[UiNode](pself.GetId(), "BG/H/LabelName")
+	pself.labelBg = engine.MainThreadBindUI[UiNode](pself.GetId(), "BG/H/C")
+	pself.labelValue = engine.MainThreadBindUI[UiNode](pself.GetId(), "BG/H/C/H/LabelValue")
 
-	pself.valueOnly = SyncBindUI[UiNode](pself.GetId(), "ValueOnly")
-	pself.labelValueOnly = SyncBindUI[UiNode](pself.GetId(), "ValueOnly/LabelValue")
+	pself.valueOnly = engine.MainThreadBindUI[UiNode](pself.GetId(), "ValueOnly")
+	pself.labelValueOnly = engine.MainThreadBindUI[UiNode](pself.GetId(), "ValueOnly/LabelValue")
 
 }
 func (pself *UiMonitor) ShowAll(isOn bool) {
-	gdx.UiMgr.SetVisible(pself.bgAll.GetId(), isOn)
-	gdx.UiMgr.SetVisible(pself.valueOnly.GetId(), !isOn)
+	engine.MainThreadUiSetVisible(pself.bgAll.GetId(), isOn)
+	engine.MainThreadUiSetVisible(pself.valueOnly.GetId(), !isOn)
 }
 
 func (pself *UiMonitor) SetVisible(isOn bool) {
-	gdx.UiMgr.SetVisible(pself.GetId(), isOn)
+	engine.MainThreadUiSetVisible(pself.GetId(), isOn)
 }
 
 func (pself *UiMonitor) UpdateScale(x float64) {
 	x *= windowScale
-	gdx.UiMgr.SetScale(pself.GetId(), mathf.NewVec2(x, x))
+	engine.MainThreadUiSetScale(pself.GetId(), mathf.NewVec2(x, x))
 }
 func (pself *UiMonitor) UpdatePos(wpos Vec2) {
-	gdx.UiMgr.SetGlobalPosition(pself.GetId(), WorldToUI(wpos, true))
+	engine.MainThreadUiSetGlobalPosition(pself.GetId(), WorldToUI(wpos, true))
 }
 
 func (pself *UiMonitor) UpdateText(name, value string) {
-	gdx.UiMgr.SetText(pself.labelName.GetId(), name)
-	gdx.UiMgr.SetText(pself.labelValue.GetId(), value)
-	gdx.UiMgr.SetText(pself.labelValueOnly.GetId(), value)
+	engine.MainThreadUiSetText(pself.labelName.GetId(), name)
+	engine.MainThreadUiSetText(pself.labelValue.GetId(), value)
+	engine.MainThreadUiSetText(pself.labelValueOnly.GetId(), value)
 }
 func (pself *UiMonitor) UpdateColor(color Color) {
-	gdx.UiMgr.SetColor(pself.labelBg.GetId(), color)
-	gdx.UiMgr.SetColor(pself.valueOnly.GetId(), color)
+	engine.MainThreadUiSetColor(pself.labelBg.GetId(), color)
+	engine.MainThreadUiSetColor(pself.valueOnly.GetId(), color)
 }

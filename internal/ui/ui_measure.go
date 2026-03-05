@@ -22,10 +22,10 @@ func NewUiMeasure() *UiMeasure {
 
 // !!Warning: this method was called in main thread
 func (pself *UiMeasure) OnStart() {
-	pself.container = SyncBindUI[UiNode](pself.GetId(), "C")
-	pself.imageLine = SyncBindUI[UiNode](pself.GetId(), "C/Line")
-	pself.labelContainer = SyncBindUI[UiNode](pself.GetId(), "LC")
-	pself.labelValue = SyncBindUI[UiNode](pself.GetId(), "LC/Label")
+	pself.container = engine.MainThreadBindUI[UiNode](pself.GetId(), "C")
+	pself.imageLine = engine.MainThreadBindUI[UiNode](pself.GetId(), "C/Line")
+	pself.labelContainer = engine.MainThreadBindUI[UiNode](pself.GetId(), "LC")
+	pself.labelValue = engine.MainThreadBindUI[UiNode](pself.GetId(), "LC/Label")
 }
 
 func (pself *UiMeasure) UpdateInfo(wpos Vec2, length, heading float64, name string, color Color) {

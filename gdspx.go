@@ -156,7 +156,7 @@ func (p *Game) syncEnginePositions() error {
 
 // syncUpdateInput updates input state from the engine.
 func (p *Game) syncUpdateInput() {
-	p.mousePos = engine.SyncGetMousePos()
+	p.mousePos = engine.MainThreadGetMousePos()
 }
 
 // syncUpdateProxy updates all sprite proxies and synchronizes them with the engine.
@@ -253,7 +253,7 @@ func isSpriteTouchable(sprite *SpriteImpl) bool {
 // syncCheckInitProxy initializes the sprite's engine proxy if it hasn't been created yet.
 func (sprite *SpriteImpl) syncCheckInitProxy() {
 	if sprite.syncSprite == nil && !sprite.HasDestroyed {
-		sprite.syncSprite = engine.SyncNewSprite(sprite, mathf.NewVec2(sprite.getXYWithRenderOffset()))
+		sprite.syncSprite = engine.MainThreadNewSprite(sprite, mathf.NewVec2(sprite.getXYWithRenderOffset()))
 		syncInitSpritePhysicInfo(sprite, sprite.syncSprite)
 		sprite.syncSprite.SetVisible(sprite.isVisible)
 		sprite.syncSprite.Name = sprite.name
