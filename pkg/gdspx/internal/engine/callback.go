@@ -91,7 +91,6 @@ func onEngineFixedUpdate(delta float64) {
 	for _, mgr := range mgrs {
 		mgr.OnFixedUpdate(delta)
 	}
-	TimeSinceGameStart += delta
 	sprites = sprites[:0]
 	for _, sprite := range Id2Sprites {
 		sprites = append(sprites, sprite)
