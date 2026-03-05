@@ -23,7 +23,7 @@ var (
 )
 var (
 
-	//go:embed callback.go.tmpl
+	//go:embed callbacks.go.tmpl
 	callbacksFileText string
 
 	//go:embed ffi.go.tmpl
