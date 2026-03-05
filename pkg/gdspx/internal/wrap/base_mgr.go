@@ -5,8 +5,7 @@ import (
 )
 
 var (
-	mgrs      []IManager
-	callbacks CallbackInfo
+	mgrs []IManager
 )
 
 func addManager[T IManager](mgr T) T {
