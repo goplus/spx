@@ -258,7 +258,7 @@ func applySprite(out reflect.Value, sprite Sprite, v specsp) (*SpriteImpl, Sprit
 
 func (p *SpriteImpl) OnCloned__0(onCloned func(data any)) {
 	p.hasOnCloned = true
-	p.allWhenCloned = append(p.allWhenCloned, eventSink{
+	p.eventSinkMgr.addWhenCloned(eventSink{
 		pthis: p,
 		sink:  onCloned,
 		cond: func(data any) bool {
@@ -281,7 +281,7 @@ func (p *SpriteImpl) fireTouchStart(obj *SpriteImpl) {
 
 func (p *SpriteImpl) addTouchStartHandler(onTouchStart func(Sprite)) {
 	p.hasOnTouchStart = true
-	p.allWhenTouchStart = append(p.allWhenTouchStart, eventSink{
+	p.eventSinkMgr.addWhenTouchStart(eventSink{
 		pthis: p,
 		sink:  onTouchStart,
 		cond: func(data any) bool {
