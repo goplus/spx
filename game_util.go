@@ -22,7 +22,6 @@ import (
 
 	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v2/internal/engine"
-	"github.com/goplus/spx/v2/internal/enginewrap"
 	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
@@ -277,11 +276,11 @@ func toSpxColor(c mathf.Color) Color {
 // =============================================================================
 
 func f64Tof32(slice []float64) []float32 {
-	return enginewrap.F64Tof32(slice)
+	return engine.F64Tof32(slice)
 }
 
 func f32Tof64(slice []float32) []float64 {
-	return enginewrap.F32Tof64(slice)
+	return engine.F32Tof64(slice)
 }
 
 // =============================================================================
