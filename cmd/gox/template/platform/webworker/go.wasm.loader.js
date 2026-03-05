@@ -120,7 +120,7 @@ function tryRunGoWasm() {
       // If Go WASM is ready, can call related functions to process data
       self.goBridge.callGoFunctionSafe('ispx_build', Module["gameProjectData"]);
       self.goBridge.callGoFunctionSafe('ispx_start');
-      callMainThread('onGameStarted');
+      callMainThread('on_game_started');
     } catch (error) {
       console.error(`[Worker ${workerId}] Error calling Go function to process project data:`, error);
     }
@@ -206,9 +206,9 @@ async function loadGoWasmModule() {
 
     // Try to call Go initialization function (optional)
     try {
-      const initResult = await goBridge.callGoFunctionSafe('goWasmInit');
+      const initResult = await goBridge.callGoFunctionSafe('go_wasm_init');
       Module['FFI'] = BindFFI(goBridge);
-      callMainThread('onWasmLoaded');
+      callMainThread('on_wasm_loaded');
     } catch (goInitError) {
       console.warn(`[Godot Worker ${Module['workerID']}] Go initialization function call failed, but continuing execution:`, goInitError);
     }
