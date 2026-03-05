@@ -67,7 +67,6 @@ func init() {
 			"Id2Sprites":         reflect.ValueOf(&q.Id2Sprites),
 			"Id2UiNodes":         reflect.ValueOf(&q.Id2UiNodes),
 			"InputMgr":           reflect.ValueOf(&q.InputMgr),
-			"Math_PI":            reflect.ValueOf(&q.Math_PI),
 			"NavigationMgr":      reflect.ValueOf(&q.NavigationMgr),
 			"PenMgr":             reflect.ValueOf(&q.PenMgr),
 			"PhysicsMgr":         reflect.ValueOf(&q.PhysicsMgr),
