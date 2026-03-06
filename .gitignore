@@ -39,3 +39,4 @@ mv.sh
 /**/.temp
 /.tmp
 CLAUDE.md
+internal/gdengine/binding/native/_temp_output.h

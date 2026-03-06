@@ -38,7 +38,7 @@ func gdspxDispatch(this js.Value, args []js.Value) any {
 			return nil
 		}
 		{{ range $j, $arg := $f.Arguments -}}
-		arg{{ $j }} := JsTo{{$arg.Type.Primative.Name}}(args[{{add $j 1}}])
+		arg{{ $j }} := JsTo{{mustPrimitiveTypeName $arg $f.Name}}(args[{{add $j 1}}])
 		{{ end -}}
 		callbacks.{{ trimPrefix $f.Name "GDExtensionSpxCallback" }}(
 			{{- range $j, $arg := $f.Arguments -}}

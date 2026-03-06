@@ -17,7 +17,7 @@ import (
 	"reflect"
 
 	. "github.com/goplus/spbase/mathf"
-	. "github.com/goplus/spx/v2/internal/webffi"
+	. "github.com/goplus/spx/v2/internal/gdengine/binding/web"
 	. "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
 )
 

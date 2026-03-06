@@ -74,7 +74,6 @@ import (
 	"unsafe"
 
 	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v2/internal/platform"
 	"github.com/goplus/spx/v2/pkg/spx/pkg/engine"
 )
 
@@ -340,7 +339,6 @@ func GDExtensionInterfaceObjectMethodBindPtrcall(
 
 //export initialize
 func initialize(_ unsafe.Pointer, level initializationLevel) {
-	platform.Init()
 	if level == 2 {
 		main()
 	}

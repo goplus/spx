@@ -1,8 +1,8 @@
 package gdengine
 
 import (
+	"github.com/goplus/spx/v2/internal/gdengine/binding/facade"
 	engineimpl "github.com/goplus/spx/v2/internal/gdengine/impl"
-	"github.com/goplus/spx/v2/internal/wrap"
 	. "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
 )
 
@@ -18,16 +18,16 @@ func IsWebIntepreterMode() bool {
 }
 
 func Link(coreCallbackInfo CoreCallbackInfo) {
-	isWebIntepreterMode = wrap.LinkFFI()
+	isWebIntepreterMode = facade.LinkFFI()
 	mgrs = engineimpl.CreateMgrs()
 	coreCallbacks = coreCallbackInfo
 	infos := bindCallbacks()
-	wrap.RegisterCallbacks(infos)
+	facade.RegisterCallbacks(infos)
 	engineimpl.BindMgr(mgrs)
-	wrap.OnLinked()
+	facade.OnLinked()
 }
 
 func Unlink() {
 	mgrs = nil
-	wrap.UnlinkFFI()
+	facade.UnlinkFFI()
 }

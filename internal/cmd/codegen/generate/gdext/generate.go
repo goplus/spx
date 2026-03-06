@@ -55,7 +55,7 @@ func GenerateHeader(projectPath, godotPath string) {
 		println("dir not exist", dir)
 		return
 	}
-	outputFile := filepath.Join(projectPath, RelDir, "gdextension_spx_ext.h")
+	outputFile := filepath.Join(projectPath, NativeRelDir, "gdextension_spx_ext.h")
 	generateSpxExtHeader(dir, outputFile, true)
 }
 func Generate(projectPath, godotPath string, ast clang.CHeaderFileAST) {
@@ -69,12 +69,12 @@ func Generate(projectPath, godotPath string, ast clang.CHeaderFileAST) {
 	if err != nil {
 		panic(err)
 	}
-	outputFile := filepath.Join(projectPath, RelDir, "gdextension_spx_ext.cpp")
+	outputFile := filepath.Join(projectPath, NativeRelDir, "gdextension_spx_ext.cpp")
 	fileCopy(outputFile, filepath.Join(dir, "gdextension_spx_ext.cpp"))
 	os.Remove(outputFile)
 
 	// use the new format header
-	outputFile = filepath.Join(projectPath, RelDir, "gdextension_spx_ext.h")
+	outputFile = filepath.Join(projectPath, NativeRelDir, "gdextension_spx_ext.h")
 	generateSpxExtHeader(dir, outputFile, false)
 	fileCopy(outputFile, filepath.Join(dir, "gdextension_spx_ext.h"))
 
@@ -82,7 +82,7 @@ func Generate(projectPath, godotPath string, ast clang.CHeaderFileAST) {
 	if err != nil {
 		panic(err)
 	}
-	outputFile = filepath.Join(projectPath, RelDir, "godot_js_spx.cpp")
+	outputFile = filepath.Join(projectPath, NativeRelDir, "godot_js_spx.cpp")
 	fileCopy(outputFile, filepath.Join(godotPath, "platform", "web", "godot_js_spx.cpp"))
 	os.Remove(outputFile)
 }
@@ -119,7 +119,7 @@ func generateGdCppFile(projectPath string, templateStr string, ast clang.CHeader
 		return err
 	}
 
-	headerFileName := filepath.Join(projectPath, RelDir, outputFileName)
+	headerFileName := filepath.Join(projectPath, NativeRelDir, outputFileName)
 	f, err := os.Create(headerFileName)
 	f.Write(b.Bytes())
 	f.Close()
