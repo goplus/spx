@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"strings"
 
 	spxfs "github.com/goplus/spx/v2/fs"
 	"github.com/goplus/spx/v2/internal/engine"
@@ -56,13 +57,8 @@ func (b *gameBuilder) loadResources() *gameBuilder {
 		return b
 	}
 
-	switch resfld := b.resource.(type) {
-	case string:
-		if resfld != "" {
-			engine.SetAssetDir(resfld)
-		} else {
-			engine.SetAssetDir("assets")
-		}
+	if assetDir, ok := assetDirFromResource(b.resource); ok {
+		engine.SetAssetDir(assetDir)
 	}
 
 	fs, err := resourceDir(b.resource)
@@ -73,23 +69,41 @@ func (b *gameBuilder) loadResources() *gameBuilder {
 	b.fs = fs
 
 	b.game.engine().ResMgr.SetDefaultFont("res://engine/fonts/CnFont.ttf")
-	engine.RegisterFileSystem(fs)
 
-	if b.gameConf != nil {
-		b.conf = *b.gameConf[0]
-		err = loadProjConfig(&b.proj, fs, b.conf.Index)
-	} else {
-		err = loadProjConfig(&b.proj, fs, nil)
-		if b.proj.Run != nil {
-			b.conf = *b.proj.Run
-		}
-	}
-	if err != nil {
+	if err := b.loadProjectConfig(fs); err != nil {
 		b.err = err
-		return b
 	}
 
 	return b
+}
+
+func (b *gameBuilder) loadProjectConfig(fs spxfs.Dir) error {
+	hasGameConf := len(b.gameConf) > 0 && b.gameConf[0] != nil
+	var index any
+	if hasGameConf {
+		b.conf = *b.gameConf[0]
+		index = b.conf.Index
+	}
+
+	if err := loadProjConfig(&b.proj, fs, index); err != nil {
+		return err
+	}
+
+	if !hasGameConf && b.proj.Run != nil {
+		b.conf = *b.proj.Run
+	}
+	return nil
+}
+
+func assetDirFromResource(resource any) (string, bool) {
+	switch v := resource.(type) {
+	case string:
+		return v, true
+	case spxfs.GdDir:
+		return strings.TrimSuffix(v.GetPath(), "/"), true
+	default:
+		return "", false
+	}
 }
 
 // parseFlags parses command line flags and updates configuration.

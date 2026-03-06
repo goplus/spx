@@ -1,39 +1,12 @@
 package engine
 
 import (
-	"io"
 	"math"
 
 	. "github.com/goplus/spbase/mathf"
 
-	"github.com/goplus/spx/v2/fs"
-	"github.com/goplus/spx/v2/internal/engine/platform"
 	gdx "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
 )
-
-func RegisterFileSystem(fs fs.Dir) {
-	if platform.IsWeb() {
-		RegisterIoReader(func(file string, length int) ([]byte, error) {
-			rc, err := fs.Open(file)
-			if err != nil {
-				return nil, err
-			}
-			buf := make([]byte, length)
-			defer rc.Close()
-
-			n, err := io.ReadFull(rc, buf)
-			if err != nil {
-				if err == io.ErrUnexpectedEOF {
-					return buf[:n], nil
-				}
-				return buf[:n], err
-			}
-			return buf[:n], nil
-		})
-	}
-}
-
-// =============== factory ===================
 
 func NewUiNode[T any]() *T {
 	var _ret1 *T
