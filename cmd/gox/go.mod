@@ -15,7 +15,6 @@ require (
 	github.com/goplus/gogen v1.21.2 // indirect
 	github.com/goplus/reflectx v1.6.2 // indirect
 	github.com/goplus/spbase v0.1.0 // indirect
-	github.com/h2non/filetype v1.1.3 // indirect
 	github.com/petermattis/goid v0.0.0-20250721140440-ea1c0173183e // indirect
 	github.com/qiniu/x v1.16.3 // indirect
 	github.com/timandy/routine v1.1.5 // indirect
