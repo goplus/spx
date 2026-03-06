@@ -6,12 +6,9 @@
 //   This file is NOT auto-generated. It must be manually maintained.
 //   Manager types embed enginewrap.*MgrImpl (from sync_pure.gen.go)
 //   which are auto-generated and provide all interface method stubs.
-//
-//   TODO: Add a codegen template to auto-generate this file,
-//   similar to manager_wrapper.go.tmpl for the non-pure version.
 //----------------------------------------------------------------------------
 */
-package wrap
+package impl
 
 import (
 	"fmt"
