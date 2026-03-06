@@ -25,12 +25,12 @@ type GdArrayType C.GdArrayType
 
 const (
 	GD_ARRAY_TYPE_UNKNOWN GdArrayType = 0
-	GD_ARRAY_TYPE_INT64               = 1
-	GD_ARRAY_TYPE_FLOAT               = 2
-	GD_ARRAY_TYPE_BOOL                = 3
-	GD_ARRAY_TYPE_STRING              = 4
-	GD_ARRAY_TYPE_BYTE                = 5
-	GD_ARRAY_TYPE_GDOBJ               = 6
+	GD_ARRAY_TYPE_INT64   GdArrayType = 1
+	GD_ARRAY_TYPE_FLOAT   GdArrayType = 2
+	GD_ARRAY_TYPE_BOOL    GdArrayType = 3
+	GD_ARRAY_TYPE_STRING  GdArrayType = 4
+	GD_ARRAY_TYPE_BYTE    GdArrayType = 5
+	GD_ARRAY_TYPE_GDOBJ   GdArrayType = 6
 )
 
 // C function aliases
