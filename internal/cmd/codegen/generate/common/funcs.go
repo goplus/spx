@@ -12,13 +12,13 @@ import (
 	"text/template"
 	"unicode"
 
-	"github.com/goplus/spx/v2/internal/spx/cmd/codegen/gdextensionparser/clang"
+	"github.com/goplus/spx/v2/internal/cmd/codegen/gdextensionparser/clang"
 
 	"github.com/iancoleman/strcase"
 )
 
 var (
-	RelDir = "../../../../internal/spx/ffi"
+	RelDir = "../../ffi"
 )
 
 func init() {
@@ -477,6 +477,40 @@ func GetManagerName(str string) string {
 func IsManagerMethod(function *clang.TypedefFunction) bool {
 	return managerSet[GetManagerName(function.Name)]
 }
+
+func EffectiveArguments(function *clang.TypedefFunction) []clang.Argument {
+	args := function.Arguments
+	if function.ReturnType.Name == "void" && len(args) > 0 && args[len(args)-1].Name == "ret_value" {
+		return args[:len(args)-1]
+	}
+	return args
+}
+
+func EffectiveRawReturnType(function *clang.TypedefFunction) string {
+	if function.ReturnType.Name != "void" {
+		return function.ReturnType.Name
+	}
+	if len(function.Arguments) > 0 {
+		last := function.Arguments[len(function.Arguments)-1]
+		if last.Name == "ret_value" {
+			return last.Type.Primative.Name
+		}
+	}
+	return ""
+}
+
+func EffectiveGoReturnType(function *clang.TypedefFunction) string {
+	rawType := EffectiveRawReturnType(function)
+	if rawType == "" {
+		return ""
+	}
+	return GetFuncParamTypeString(rawType)
+}
+
+func HasEffectiveReturn(function *clang.TypedefFunction) bool {
+	return EffectiveRawReturnType(function) != ""
+}
+
 func GetFuncParamTypeString(typeName string) string {
 	return cppType2Go[typeName]
 }

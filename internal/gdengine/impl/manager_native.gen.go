@@ -20,7 +20,7 @@ import "C"
 import (
 	"fmt"
 	. "github.com/goplus/spbase/mathf"
-	. "github.com/goplus/spx/v2/internal/spx/ffi"
+	. "github.com/goplus/spx/v2/internal/ffi"
 	. "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
 	"reflect"
 	"unsafe"

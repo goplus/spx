@@ -1,24 +1,24 @@
-//go:build !js && !pure_engine
+//go:build js
 
 package wrap
 
 import (
-	"github.com/goplus/spx/v2/internal/spx/ffi"
+	"github.com/goplus/spx/v2/internal/webffi"
 	"github.com/goplus/spx/v2/pkg/spx/pkg/engine"
 )
 
 func LinkFFI() bool {
-	return ffi.Link()
+	return webffi.Link()
 }
 
 func OnLinked() {
-	ffi.Linked()
+	webffi.Linked()
 }
 
 func UnlinkFFI() {
-	ffi.Unlink()
+	webffi.Unlink()
 }
 
 func RegisterCallbacks(callbacks engine.CallbackInfo) {
-	ffi.BindCallback(callbacks)
+	webffi.BindCallback(callbacks)
 }

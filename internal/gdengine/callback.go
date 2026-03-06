@@ -1,4 +1,4 @@
-package engine
+package gdengine
 
 import (
 	spxlog "github.com/goplus/spx/v2/internal/log"

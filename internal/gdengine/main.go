@@ -1,8 +1,8 @@
-package engine
+package gdengine
 
 import (
-	engineimpl "github.com/goplus/spx/v2/internal/spx/engine/impl"
-	"github.com/goplus/spx/v2/internal/spx/wrap"
+	engineimpl "github.com/goplus/spx/v2/internal/gdengine/impl"
+	"github.com/goplus/spx/v2/internal/wrap"
 	. "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
 )
 

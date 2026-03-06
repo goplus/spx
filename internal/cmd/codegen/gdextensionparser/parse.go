@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/goplus/spx/v2/internal/spx/cmd/codegen/gdextensionparser/clang"
-	"github.com/goplus/spx/v2/internal/spx/cmd/codegen/gdextensionparser/preprocessor"
+	"github.com/goplus/spx/v2/internal/cmd/codegen/gdextensionparser/clang"
+	"github.com/goplus/spx/v2/internal/cmd/codegen/gdextensionparser/preprocessor"
 )
 
 func ReadFiles(dir, fileName string) string {
@@ -57,11 +57,34 @@ func readLines(path string) ([]string, error) {
 	return lines, scanner.Err()
 }
 
+func findProjectRoot(start string) (string, error) {
+	dir, err := filepath.Abs(start)
+	if err != nil {
+		return "", err
+	}
+	for {
+		header := filepath.Join(dir, "internal", "ffi", "gdextension_spx_codegen_header.h")
+		if _, err := os.Stat(header); err == nil {
+			return dir, nil
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+	return "", fmt.Errorf("unable to find project root from %s", start)
+}
+
 func expandIncludeFiles(projectPath, header, outputName string) (string, error) {
-	dirPath := filepath.Join(projectPath, "../../../../internal/spx/ffi/")
+	rootPath, err := findProjectRoot(projectPath)
+	if err != nil {
+		return "", err
+	}
+	dirPath := filepath.Join(rootPath, "internal", "ffi")
 	allStrs := ReadFiles(dirPath, header)
 	tempPath := filepath.Join(dirPath, outputName)
-	err := os.WriteFile(tempPath, []byte(allStrs), 0644)
+	err = os.WriteFile(tempPath, []byte(allStrs), 0644)
 	if err != nil {
 		return "", err
 	}

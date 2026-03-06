@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"text/template"
 
-	"github.com/goplus/spx/v2/internal/spx/cmd/codegen/gdextensionparser/clang"
-	. "github.com/goplus/spx/v2/internal/spx/cmd/codegen/generate/common"
+	"github.com/goplus/spx/v2/internal/cmd/codegen/gdextensionparser/clang"
+	. "github.com/goplus/spx/v2/internal/cmd/codegen/generate/common"
 
 	"github.com/iancoleman/strcase"
 )
@@ -48,8 +48,8 @@ func fileCopy(src, dst string) error {
 
 	return dstFile.Sync()
 }
-func GenerateHeader(projectPath string) {
-	dir := filepath.Join(projectPath, "../../godot/modules/spx")
+func GenerateHeader(projectPath, godotPath string) {
+	dir := filepath.Join(godotPath, "modules", "spx")
 	_, err := os.Stat(dir)
 	if os.IsNotExist(err) {
 		println("dir not exist", dir)
@@ -58,8 +58,8 @@ func GenerateHeader(projectPath string) {
 	outputFile := filepath.Join(projectPath, RelDir, "gdextension_spx_ext.h")
 	generateSpxExtHeader(dir, outputFile, true)
 }
-func Generate(projectPath string, ast clang.CHeaderFileAST) {
-	dir := filepath.Join(projectPath, "../../godot/modules/spx")
+func Generate(projectPath, godotPath string, ast clang.CHeaderFileAST) {
+	dir := filepath.Join(godotPath, "modules", "spx")
 	_, err := os.Stat(dir)
 	if os.IsNotExist(err) {
 		println("dir not exist", dir)
@@ -83,7 +83,7 @@ func Generate(projectPath string, ast clang.CHeaderFileAST) {
 		panic(err)
 	}
 	outputFile = filepath.Join(projectPath, RelDir, "godot_js_spx.cpp")
-	fileCopy(outputFile, filepath.Join(filepath.Join(projectPath, "../../godot/platform/web"), "godot_js_spx.cpp"))
+	fileCopy(outputFile, filepath.Join(godotPath, "platform", "web", "godot_js_spx.cpp"))
 	os.Remove(outputFile)
 }
 

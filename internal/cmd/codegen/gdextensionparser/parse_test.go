@@ -9,8 +9,8 @@ import (
 )
 
 func TestGenerateGDExtensionInterfaceAST(t *testing.T) {
-	projectPath := os.Getenv("VSCODE_WORKSPACE_FOLDER")
-	require.NotEmpty(t, projectPath)
+	projectPath, err := os.Getwd()
+	require.NoError(t, err)
 	f, err := GenerateGDExtensionInterfaceAST(projectPath, "")
 	require.NoError(t, err)
 	spew.Dump(f)

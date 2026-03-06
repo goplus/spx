@@ -74,7 +74,7 @@ import (
 	"unsafe"
 
 	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v2/internal/spx/platform"
+	"github.com/goplus/spx/v2/internal/platform"
 	"github.com/goplus/spx/v2/pkg/spx/pkg/engine"
 )
 

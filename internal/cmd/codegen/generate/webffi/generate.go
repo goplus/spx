@@ -12,14 +12,14 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/goplus/spx/v2/internal/spx/cmd/codegen/gdextensionparser/clang"
-	. "github.com/goplus/spx/v2/internal/spx/cmd/codegen/generate/common"
+	"github.com/goplus/spx/v2/internal/cmd/codegen/gdextensionparser/clang"
+	. "github.com/goplus/spx/v2/internal/cmd/codegen/generate/common"
 
 	"github.com/iancoleman/strcase"
 )
 
 var (
-	WebRelDir = "../../../../internal/spx/webffi"
+	WebRelDir = "../../webffi"
 )
 var (
 
@@ -39,7 +39,7 @@ var (
 	workerWrapJsFileText string
 )
 
-func Generate(projectPath string, ast clang.CHeaderFileAST) {
+func Generate(projectPath, godotPath string, ast clang.CHeaderFileAST) {
 	err := GenerateCallbackGoFile(projectPath, ast)
 	if err != nil {
 		panic(err)
@@ -52,7 +52,7 @@ func Generate(projectPath string, ast clang.CHeaderFileAST) {
 	if err != nil {
 		panic(err)
 	}
-	err = GenerateJsEngineJsFile(projectPath, ast)
+	err = GenerateJsEngineJsFile(projectPath, godotPath, ast)
 	if err != nil {
 		panic(err)
 	}
@@ -99,7 +99,7 @@ func GenerateWorkerWrapJsFile(projectPath string, ast clang.CHeaderFileAST) erro
 	}
 
 	return GenerateFile(funcs, "worker.wrap.gen.js", workerWrapJsFileText, ast,
-		filepath.Join(projectPath, "../../../../cmd/gox/template/platform/webworker/worker.wrap.gen.js"))
+		filepath.Join(projectPath, "../../../cmd/gox/template/platform/webworker/worker.wrap.gen.js"))
 }
 
 func GenerateGDExtensionInterfaceGoFile(projectPath string, ast clang.CHeaderFileAST) error {
@@ -142,10 +142,10 @@ func GenerateManagerWrapperGoFile(projectPath string, ast clang.CHeaderFileAST) 
 	}
 
 	return GenerateFile(funcs, "manager_web.gen.go", wrapManagerGoFileText, ManagerData{Ast: ast, Mangers: GetManagers(ast)},
-		filepath.Join(projectPath, WebRelDir, "../engine/impl/manager_web.gen.go"))
+		filepath.Join(projectPath, WebRelDir, "../gdengine/impl/manager_web.gen.go"))
 }
 
-func GenerateJsEngineJsFile(projectPath string, ast clang.CHeaderFileAST) error {
+func GenerateJsEngineJsFile(projectPath, godotPath string, ast clang.CHeaderFileAST) error {
 	funcs := template.FuncMap{
 		"gdiVariableName":     GdiVariableName,
 		"snakeCase":           strcase.ToSnake,
@@ -155,6 +155,7 @@ func GenerateJsEngineJsFile(projectPath string, ast clang.CHeaderFileAST) error 
 		"goEnumValue":         GoEnumValue,
 		"add":                 Add,
 		"sub":                 Sub,
+		"effectiveArgs":       EffectiveArguments,
 		"cgoCastArgument":     CgoCastArgument,
 		"cgoCastReturnType":   CgoCastReturnType,
 		"cgoCleanUpArgument":  CgoCleanUpArgument,
@@ -176,7 +177,7 @@ func GenerateJsEngineJsFile(projectPath string, ast clang.CHeaderFileAST) error 
 		return err
 	}
 
-	headerFileName := filepath.Join(filepath.Join(projectPath, "../../godot/platform/web/js/engine"), "gdspx.js")
+	headerFileName := filepath.Join(godotPath, "platform", "web", "js", "engine", "gdspx.js")
 	os.MkdirAll(filepath.Dir(headerFileName), os.ModePerm)
 	f, err := os.Create(headerFileName)
 	f.Write(b.Bytes())
@@ -189,25 +190,25 @@ func getManagerFuncName(function *clang.TypedefFunction) string {
 	sb := strings.Builder{}
 	mgrName := GetManagerName(function.Name)
 	funcName := function.Name[len(prefix)+len(mgrName):]
+	args := EffectiveArguments(function)
 	sb.WriteString("(")
 	sb.WriteString("pself *" + mgrName)
 	sb.WriteString("Mgr) ")
 	sb.WriteString(funcName)
 	sb.WriteString("(")
-	count := len(function.Arguments)
-	for i, arg := range function.Arguments {
+	for i, arg := range args {
 		sb.WriteString(arg.Name)
 		sb.WriteString(" ")
 		typeName := GetFuncParamTypeString(arg.Type.Primative.Name)
 		sb.WriteString(typeName)
-		if i != count-1 {
+		if i != len(args)-1 {
 			sb.WriteString(", ")
 		}
 	}
 	sb.WriteString(")")
 
-	if function.ReturnType.Name != "void" {
-		typeName := GetFuncParamTypeString(function.ReturnType.Name)
+	if HasEffectiveReturn(function) {
+		typeName := EffectiveGoReturnType(function)
 		sb.WriteString(" " + typeName + " ")
 	}
 	return sb.String()
@@ -217,8 +218,9 @@ func getManagerFuncBody(function *clang.TypedefFunction) string {
 	sb := strings.Builder{}
 	prefixTab := "\t"
 	params := []string{}
+	args := EffectiveArguments(function)
 	// convert arguments
-	for i, arg := range function.Arguments {
+	for i, arg := range args {
 		sb.WriteString(prefixTab)
 		typeName := arg.Type.Primative.Name
 		argName := "arg" + strconv.Itoa(i)
@@ -234,7 +236,7 @@ func getManagerFuncBody(function *clang.TypedefFunction) string {
 
 	// call the function
 	sb.WriteString(prefixTab)
-	if function.ReturnType.Name != "void" {
+	if HasEffectiveReturn(function) {
 		sb.WriteString("_retValue := ")
 	}
 
@@ -249,10 +251,10 @@ func getManagerFuncBody(function *clang.TypedefFunction) string {
 	}
 	sb.WriteString(")")
 
-	if function.ReturnType.Name != "void" {
+	if HasEffectiveReturn(function) {
 		sb.WriteString("\n" + prefixTab)
 		sb.WriteString("return ")
-		typeName := function.ReturnType.Name
+		typeName := EffectiveRawReturnType(function)
 		name := strcase.ToCamel(typeName)
 		if name == "GdObj" {
 			name = "GdObject"
@@ -266,22 +268,22 @@ func getManagerInterface(function *clang.TypedefFunction) string {
 	sb := strings.Builder{}
 	mgrName := GetManagerName(function.Name)
 	funcName := function.Name[len(prefix)+len(mgrName):]
+	args := EffectiveArguments(function)
 	sb.WriteString(funcName)
 	sb.WriteString("(")
-	count := len(function.Arguments)
-	for i, arg := range function.Arguments {
+	for i, arg := range args {
 		sb.WriteString(arg.Name)
 		sb.WriteString(" ")
 		typeName := GetFuncParamTypeString(arg.Type.Primative.Name)
 		sb.WriteString(typeName)
-		if i != count-1 {
+		if i != len(args)-1 {
 			sb.WriteString(", ")
 		}
 	}
 	sb.WriteString(")")
 
-	if function.ReturnType.Name != "void" {
-		typeName := GetFuncParamTypeString(function.ReturnType.Name)
+	if HasEffectiveReturn(function) {
+		typeName := EffectiveGoReturnType(function)
 		sb.WriteString(" " + typeName + " ")
 	}
 	return sb.String()
@@ -290,15 +292,17 @@ func getJsFuncBody(function *clang.TypedefFunction) string {
 	sb := strings.Builder{}
 	prefixTab := "\t"
 	params := []string{}
+	args := EffectiveArguments(function)
+	rawRetType := EffectiveRawReturnType(function)
 
 	// call the function
-	if function.ReturnType.Name != "void" {
-		sb.WriteString("var _retValue = Alloc" + function.ReturnType.Name + "();")
+	if rawRetType != "" {
+		sb.WriteString("var _retValue = Alloc" + rawRetType + "();")
 	}
 	sb.WriteString("\n")
 
 	// convert arguments
-	for i, arg := range function.Arguments {
+	for i, arg := range args {
 		sb.WriteString(prefixTab)
 		typeName := arg.Type.Primative.Name
 		argName := "_arg" + strconv.Itoa(i)
@@ -320,7 +324,7 @@ func getJsFuncBody(function *clang.TypedefFunction) string {
 			sb.WriteString(", ")
 		}
 	}
-	if function.ReturnType.Name != "void" {
+	if rawRetType != "" {
 		if len(params) > 0 {
 			sb.WriteString(", ")
 		}
@@ -330,16 +334,16 @@ func getJsFuncBody(function *clang.TypedefFunction) string {
 
 	sb.WriteString("\n")
 	// convert arguments
-	for i, arg := range function.Arguments {
+	for i, arg := range args {
 		sb.WriteString(prefixTab)
 		typeName := arg.Type.Primative.Name
 		argName := "_arg" + strconv.Itoa(i)
 		sb.WriteString("Free" + typeName + "(" + argName + "); \n")
 	}
 
-	if function.ReturnType.Name != "void" {
+	if rawRetType != "" {
 		sb.WriteString(prefixTab + "var _finalRetValue = ")
-		typeName := function.ReturnType.Name
+		typeName := rawRetType
 		funcName := strcase.ToCamel(typeName)
 		funcName = "ToJs" + strings.ReplaceAll(funcName, "Gd", "")
 		sb.WriteString(funcName + "(_retValue);\n")

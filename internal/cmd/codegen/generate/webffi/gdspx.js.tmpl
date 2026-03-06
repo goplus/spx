@@ -11,9 +11,10 @@ class GdspxFuncs {
 {{- range $i, $f := $view.CollectGDExtensionInterfaceFunctions -}}
 {{ $rt := goReturnType .ReturnType }}
 gd{{ loadProcAddressName $f.Name }}(
-	{{- range $j, $arg := $f.Arguments -}}
+	{{- $args := effectiveArgs $f -}}
+	{{- range $j, $arg := $args -}}
 		{{ $arg.Name -}}
-		{{- if ne $j (sub (len $f.Arguments) 1) -}}, {{- end -}}
+		{{- if ne $j (sub (len $args) 1) -}}, {{- end -}}
 	{{ end -}}
 ) {
 	var _gdFuncPtr = Module._gd{{ loadProcAddressName $f.Name }}; 

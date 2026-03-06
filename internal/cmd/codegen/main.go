@@ -3,16 +3,17 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 
-	"github.com/goplus/spx/v2/internal/spx/cmd/codegen/gdextensionparser"
-	"github.com/goplus/spx/v2/internal/spx/cmd/codegen/gdextensionparser/clang"
-	"github.com/goplus/spx/v2/internal/spx/cmd/codegen/generate/ffi"
-	"github.com/goplus/spx/v2/internal/spx/cmd/codegen/generate/gdext"
-	"github.com/goplus/spx/v2/internal/spx/cmd/codegen/generate/webffi"
+	"github.com/goplus/spx/v2/internal/cmd/codegen/gdextensionparser"
+	"github.com/goplus/spx/v2/internal/cmd/codegen/gdextensionparser/clang"
+	"github.com/goplus/spx/v2/internal/cmd/codegen/generate/ffi"
+	"github.com/goplus/spx/v2/internal/cmd/codegen/generate/gdext"
+	"github.com/goplus/spx/v2/internal/cmd/codegen/generate/webffi"
 )
 
 var (
@@ -43,7 +44,14 @@ func init() {
 	genClangAPI = true
 	genExtensionAPI = false
 	packagePath = absPath
-	godotPath = "godot"
+	godotPath = filepath.Clean(filepath.Join(absPath, "../../../godot"))
+	if envPath := os.Getenv("GODOT_SRC"); envPath != "" {
+		if absEnvPath, err := filepath.Abs(envPath); err == nil {
+			godotPath = absEnvPath
+		} else {
+			godotPath = envPath
+		}
+	}
 	parsedASTPath = "_debug_parsed_ast.json"
 	buildConfig = defaultBuildConfig
 }
@@ -55,13 +63,14 @@ func generateCode() error {
 	)
 	if verbose {
 		println(fmt.Sprintf(`build configuration "%s" selected`, buildConfig))
+		println(fmt.Sprintf(`godot source "%s" selected`, godotPath))
 	}
 	// generte c++ ext header file
 	if genClangAPI {
 		if verbose {
 			println("Generating gdextension godot ext functions...")
 		}
-		gdext.GenerateHeader(packagePath)
+		gdext.GenerateHeader(packagePath, godotPath)
 	}
 
 	// generate go wrap code
@@ -76,8 +85,8 @@ func generateCode() error {
 			println("Generating gdextension C wrapper functions...")
 		}
 		ffi.Generate(packagePath, ast)
-		webffi.Generate(packagePath, ast)
-		gdext.Generate(packagePath, ast)
+		webffi.Generate(packagePath, godotPath, ast)
+		gdext.Generate(packagePath, godotPath, ast)
 	}
 
 	if verbose {

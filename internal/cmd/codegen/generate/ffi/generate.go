@@ -15,8 +15,8 @@ import (
 	"text/template"
 	"unicode"
 
-	"github.com/goplus/spx/v2/internal/spx/cmd/codegen/gdextensionparser/clang"
-	. "github.com/goplus/spx/v2/internal/spx/cmd/codegen/generate/common"
+	"github.com/goplus/spx/v2/internal/cmd/codegen/gdextensionparser/clang"
+	. "github.com/goplus/spx/v2/internal/cmd/codegen/generate/common"
 
 	"github.com/iancoleman/strcase"
 )
@@ -181,7 +181,7 @@ func GenerateManagerWrapperGoFile(projectPath string, ast clang.CHeaderFileAST) 
 	}
 
 	return GenerateFile(funcs, "manager_native.gen.go", wrapManagerGoFileText, ManagerData{Ast: ast, Mangers: GetManagers(ast)},
-		filepath.Join(projectPath, RelDir, "../engine/impl/manager_native.gen.go"))
+		filepath.Join(projectPath, RelDir, "../gdengine/impl/manager_native.gen.go"))
 
 }
 
@@ -205,7 +205,7 @@ func GenerateManagerInterfaceGoFile(projectPath string, ast clang.CHeaderFileAST
 	}
 
 	return GenerateFile(funcs, "interface.gen.go", interfaceGoFileText, ManagerData{Ast: ast, Mangers: GetManagers(ast)},
-		filepath.Join(projectPath, RelDir, "../../../pkg/spx/pkg/engine/interface.gen.go"))
+		filepath.Join(projectPath, RelDir, "../../pkg/spx/pkg/engine/interface.gen.go"))
 }
 
 func GenerateSyncApiGoFile(projectPath string, ast clang.CHeaderFileAST) error {
@@ -228,7 +228,7 @@ func GenerateSyncApiGoFile(projectPath string, ast clang.CHeaderFileAST) error {
 	}
 
 	return GenerateFile(funcs, "sync.gen.go", syncApiText, ManagerData{Ast: ast, Mangers: GetManagers(ast)},
-		filepath.Join(projectPath, RelDir, "../../../internal/enginewrap/sync.gen.go"))
+		filepath.Join(projectPath, RelDir, "../enginewrap/sync.gen.go"))
 }
 
 func GenerateSyncPureGoFile(projectPath string, ast clang.CHeaderFileAST) error {
@@ -251,7 +251,7 @@ func GenerateSyncPureGoFile(projectPath string, ast clang.CHeaderFileAST) error 
 	}
 
 	return GenerateFile(funcs, "sync_pure.gen.go", syncPureApiText, ManagerData{Ast: ast, Mangers: GetManagers(ast)},
-		filepath.Join(projectPath, RelDir, "../../../internal/enginewrap/sync_pure.gen.go"))
+		filepath.Join(projectPath, RelDir, "../enginewrap/sync_pure.gen.go"))
 }
 
 type ImplData struct {
@@ -271,7 +271,7 @@ func GenerateManagerImplGoFile(projectPath string, ast clang.CHeaderFileAST, cls
 	data := ImplData{Ast: ast, Methods: methods, ClsName: clsName}
 
 	return GenerateFile(funcs, genFile, implGoFileText, data,
-		filepath.Join(projectPath, RelDir, "../../../pkg/spx/pkg/engine/"+genFile))
+		filepath.Join(projectPath, RelDir, "../../pkg/spx/pkg/engine/"+genFile))
 }
 func GenerateManagerImplPureGoFile(projectPath string, ast clang.CHeaderFileAST, clsName string) error {
 	funcs := template.FuncMap{
@@ -283,7 +283,7 @@ func GenerateManagerImplPureGoFile(projectPath string, ast clang.CHeaderFileAST,
 
 	genFile := strings.ToLower(clsName) + "_pure.gen.go"
 	return GenerateFile(funcs, genFile, implPureGoFileText, data,
-		filepath.Join(projectPath, RelDir, "../../../pkg/spx/pkg/engine/"+genFile))
+		filepath.Join(projectPath, RelDir, "../../pkg/spx/pkg/engine/"+genFile))
 }
 
 func getManagerFuncName(function *clang.TypedefFunction) string {
@@ -291,25 +291,25 @@ func getManagerFuncName(function *clang.TypedefFunction) string {
 	sb := strings.Builder{}
 	mgrName := GetManagerName(function.Name)
 	funcName := function.Name[len(prefix)+len(mgrName):]
+	args := EffectiveArguments(function)
 	sb.WriteString("(")
 	sb.WriteString("pself *" + mgrName)
 	sb.WriteString("Mgr) ")
 	sb.WriteString(funcName)
 	sb.WriteString("(")
-	count := len(function.Arguments)
-	for i, arg := range function.Arguments {
+	for i, arg := range args {
 		sb.WriteString(arg.Name)
 		sb.WriteString(" ")
 		typeName := GetFuncParamTypeString(arg.Type.Primative.Name)
 		sb.WriteString(typeName)
-		if i != count-1 {
+		if i != len(args)-1 {
 			sb.WriteString(", ")
 		}
 	}
 	sb.WriteString(")")
 
-	if function.ReturnType.Name != "void" {
-		typeName := GetFuncParamTypeString(function.ReturnType.Name)
+	if HasEffectiveReturn(function) {
+		typeName := EffectiveGoReturnType(function)
 		sb.WriteString(" " + typeName + " ")
 	}
 	return sb.String()
@@ -319,8 +319,10 @@ func getManagerFuncBody(function *clang.TypedefFunction) string {
 	sb := strings.Builder{}
 	prefixTab := "\t"
 	params := []string{}
+	args := EffectiveArguments(function)
+	hasSyntheticReturn := function.ReturnType.Name == "void" && HasEffectiveReturn(function)
 	// convert arguments
-	for i, arg := range function.Arguments {
+	for i, arg := range args {
 		sb.WriteString(prefixTab)
 		typeName := arg.Type.Primative.Name
 		argName := "arg" + strconv.Itoa(i)
@@ -346,12 +348,17 @@ func getManagerFuncBody(function *clang.TypedefFunction) string {
 	}
 
 	// call the function
+	funcName := "Call" + TrimPrefix(function.Name, "GDExtensionSpx")
+	if hasSyntheticReturn {
+		rawType := EffectiveRawReturnType(function)
+		sb.WriteString(prefixTab)
+		sb.WriteString("var retValue " + rawType + "\n")
+	}
+
 	sb.WriteString(prefixTab)
 	if function.ReturnType.Name != "void" {
 		sb.WriteString("retValue := ")
 	}
-
-	funcName := "Call" + TrimPrefix(function.Name, "GDExtensionSpx")
 	sb.WriteString(funcName)
 	sb.WriteString("(")
 	for i, param := range params {
@@ -360,12 +367,18 @@ func getManagerFuncBody(function *clang.TypedefFunction) string {
 			sb.WriteString(", ")
 		}
 	}
+	if hasSyntheticReturn {
+		if len(params) > 0 {
+			sb.WriteString(", ")
+		}
+		sb.WriteString("&retValue")
+	}
 	sb.WriteString(")")
 
-	if function.ReturnType.Name != "void" {
+	if HasEffectiveReturn(function) {
 		sb.WriteString("\n" + prefixTab)
 		sb.WriteString("return ")
-		typeName := GetFuncParamTypeString(function.ReturnType.Name)
+		typeName := EffectiveGoReturnType(function)
 		sb.WriteString("To" + strcase.ToCamel(typeName) + "(retValue)")
 	}
 	return sb.String()
@@ -376,22 +389,22 @@ func getManagerInterface(function *clang.TypedefFunction) string {
 	sb := strings.Builder{}
 	mgrName := GetManagerName(function.Name)
 	funcName := function.Name[len(prefix)+len(mgrName):]
+	args := EffectiveArguments(function)
 	sb.WriteString(funcName)
 	sb.WriteString("(")
-	count := len(function.Arguments)
-	for i, arg := range function.Arguments {
+	for i, arg := range args {
 		sb.WriteString(arg.Name)
 		sb.WriteString(" ")
 		typeName := GetFuncParamTypeString(arg.Type.Primative.Name)
 		sb.WriteString(typeName)
-		if i != count-1 {
+		if i != len(args)-1 {
 			sb.WriteString(", ")
 		}
 	}
 	sb.WriteString(")")
 
-	if function.ReturnType.Name != "void" {
-		typeName := GetFuncParamTypeString(function.ReturnType.Name)
+	if HasEffectiveReturn(function) {
+		typeName := EffectiveGoReturnType(function)
 		sb.WriteString(" " + typeName + " ")
 	}
 	return sb.String()
@@ -429,32 +442,31 @@ func genSyncPureApiWrapFunction(function *clang.TypedefFunction) string {
 	mgrName := strcase.ToCamel(GetManagerName(function.Name))
 	pureFuncName := function.Name[len(prefix)+len(mgrName):]
 	mgrTypeName := strcase.ToLowerCamel(GetManagerName(function.Name)) + "Mgr"
+	args := EffectiveArguments(function)
+	retType := EffectiveGoReturnType(function)
 
 	sb.WriteString(fmt.Sprintf("func (pself *%s) ", mgrTypeName+"Impl"))
 	sb.WriteString(pureFuncName)
 	sb.WriteString("(")
-	count := len(function.Arguments)
-	for i, arg := range function.Arguments {
+	for i, arg := range args {
 		sb.WriteString(arg.Name)
 		sb.WriteString(" ")
 		typeName := GetGdxFuncParamTypeString(arg.Type.Primative.Name)
 		sb.WriteString(typeName)
-		if i != count-1 {
+		if i != len(args)-1 {
 			sb.WriteString(", ")
 		}
 	}
 	sb.WriteString(")")
 
-	if function.ReturnType.Name != "void" {
-		typeName := GetGdxFuncParamTypeString(function.ReturnType.Name)
-		sb.WriteString(" " + typeName)
+	if retType != "" {
+		sb.WriteString(" " + GetGdxFuncParamTypeString(EffectiveRawReturnType(function)))
 	}
 	sb.WriteString(" {")
 	prefixStr := "\t"
 	// body
-	if function.ReturnType.Name != "void" {
-		typeName := GetGdxFuncParamTypeString(function.ReturnType.Name)
-		sb.WriteString("\n" + prefixStr + "return " + goZeroValue(typeName) + "\n")
+	if retType != "" {
+		sb.WriteString("\n" + prefixStr + "return " + goZeroValue(GetGdxFuncParamTypeString(EffectiveRawReturnType(function))) + "\n")
 	}
 	sb.WriteString("}")
 	return sb.String()
@@ -478,46 +490,45 @@ func genSyncApiWrapFunction(function *clang.TypedefFunction) string {
 	//funcName := function.Name[len(prefix):]
 	gdxMgrName := "gdx." + mgrName + "Mgr"
 	mgrTypeName := strcase.ToLowerCamel(GetManagerName(function.Name)) + "Mgr"
+	args := EffectiveArguments(function)
+	retType := EffectiveGoReturnType(function)
 
 	sb.WriteString(fmt.Sprintf("func (pself *%s) ", mgrTypeName+"Impl"))
 	sb.WriteString(pureFuncName)
 	sb.WriteString("(")
-	count := len(function.Arguments)
-	for i, arg := range function.Arguments {
+	for i, arg := range args {
 		sb.WriteString(arg.Name)
 		sb.WriteString(" ")
 		typeName := GetGdxFuncParamTypeString(arg.Type.Primative.Name)
 		sb.WriteString(typeName)
-		if i != count-1 {
+		if i != len(args)-1 {
 			sb.WriteString(", ")
 		}
 	}
 	sb.WriteString(")")
 
-	if function.ReturnType.Name != "void" {
-		typeName := GetGdxFuncParamTypeString(function.ReturnType.Name)
-		sb.WriteString(" " + typeName)
+	if retType != "" {
+		sb.WriteString(" " + GetGdxFuncParamTypeString(EffectiveRawReturnType(function)))
 	}
 	sb.WriteString(" {")
 	prefixStr := "\t"
 	// body
-	if function.ReturnType.Name != "void" {
-		typeName := GetGdxFuncParamTypeString(function.ReturnType.Name)
-		sb.WriteString("\n" + prefixStr + "var _ret1 " + typeName + "")
+	if retType != "" {
+		sb.WriteString("\n" + prefixStr + "var _ret1 " + GetGdxFuncParamTypeString(EffectiveRawReturnType(function)) + "")
 	}
 
 	sb.WriteString(`	
 	callInMainThread(func() {
 `)
-	if function.ReturnType.Name != "void" {
+	if retType != "" {
 		sb.WriteString(prefixStr + "\t_ret1 = ")
 	} else {
 		sb.WriteString(prefixStr + "\t")
 	}
 	sb.WriteString(gdxMgrName + "." + pureFuncName + "(")
-	for i, arg := range function.Arguments {
+	for i, arg := range args {
 		sb.WriteString(arg.Name)
-		if i != count-1 {
+		if i != len(args)-1 {
 			sb.WriteString(", ")
 		}
 	}
@@ -527,7 +538,7 @@ func genSyncApiWrapFunction(function *clang.TypedefFunction) string {
 	})
 `)
 
-	if function.ReturnType.Name != "void" {
+	if retType != "" {
 		sb.WriteString(prefixStr + "return _ret1 \n")
 	}
 	sb.WriteString("}")
@@ -554,30 +565,30 @@ func getManagerImplPure(function *clang.TypedefFunction, clsName string) string 
 	lowcaseMgr := GetManagerName(function.Name)
 	mgrName := string(unicode.ToUpper(rune(lowcaseMgr[0]))) + lowcaseMgr[1:]
 	funcName := function.Name[len(prefix)+len(mgrName):]
+	args := EffectiveArguments(function)
+	retType := EffectiveGoReturnType(function)
 	sb.WriteString("func (pself *" + clsName + ") " + funcName + "(")
-	count := len(function.Arguments)
-	for i, arg := range function.Arguments {
+	wroteArg := false
+	for i, arg := range args {
 		if i == 0 && arg.Name == "obj" {
 			continue
+		}
+		if wroteArg {
+			sb.WriteString(", ")
 		}
 		sb.WriteString(arg.Name)
 		sb.WriteString(" ")
 		typeName := GetFuncParamTypeString(arg.Type.Primative.Name)
 		sb.WriteString(typeName)
-		if i != count-1 {
-			sb.WriteString(", ")
-		}
+		wroteArg = true
 	}
 	sb.WriteString(") ")
-	anyRet := function.ReturnType.Name != "void"
-	if anyRet {
-		typeName := GetFuncParamTypeString(function.ReturnType.Name)
-		sb.WriteString(typeName + " ")
+	if retType != "" {
+		sb.WriteString(retType + " ")
 	}
 	sb.WriteString("{\n")
-	if anyRet {
-		typeName := GetFuncParamTypeString(function.ReturnType.Name)
-		sb.WriteString("\treturn " + goZeroValue(typeName) + "\n")
+	if retType != "" {
+		sb.WriteString("\treturn " + goZeroValue(retType) + "\n")
 	}
 	sb.WriteString("}\n")
 	return sb.String()
@@ -588,51 +599,52 @@ func getManagerImpl(function *clang.TypedefFunction, clsName string) string {
 	lowcaseMgr := GetManagerName(function.Name)
 	mgrName := string(unicode.ToUpper(rune(lowcaseMgr[0]))) + lowcaseMgr[1:]
 	funcName := function.Name[len(prefix)+len(mgrName):]
+	args := EffectiveArguments(function)
+	retType := EffectiveGoReturnType(function)
 
 	// Check if the first argument is "obj" to determine if this is an instance method
-	hasObjArg := len(function.Arguments) > 0 && function.Arguments[0].Name == "obj"
+	hasObjArg := len(args) > 0 && args[0].Name == "obj"
 
 	sb.WriteString("func (pself *" + clsName + ") " + funcName + "(")
-	count := len(function.Arguments)
-	for i, arg := range function.Arguments {
+	wroteArg := false
+	for i, arg := range args {
 		if i == 0 && arg.Name == "obj" {
 			continue
+		}
+		if wroteArg {
+			sb.WriteString(", ")
 		}
 		sb.WriteString(arg.Name)
 		sb.WriteString(" ")
 		typeName := GetFuncParamTypeString(arg.Type.Primative.Name)
 		sb.WriteString(typeName)
-		if i != count-1 {
-			sb.WriteString(", ")
-		}
+		wroteArg = true
 	}
 	sb.WriteString(") ")
-	anyRet := function.ReturnType.Name != "void"
-	if anyRet {
-		typeName := GetFuncParamTypeString(function.ReturnType.Name)
-		sb.WriteString(typeName + " ")
+	if retType != "" {
+		sb.WriteString(retType + " ")
 	}
 	sb.WriteString("{\n")
 	sb.WriteString("\t")
-	if anyRet {
+	if retType != "" {
 		sb.WriteString("return ")
 	}
 	sb.WriteString(mgrName + "Mgr." + funcName + "(")
 	// Only add pself.Id if the first argument is "obj" (instance method)
+	wroteCallArg := false
 	if hasObjArg {
 		sb.WriteString("pself.Id")
-		if count > 1 {
-			sb.WriteString(", ")
-		}
+		wroteCallArg = true
 	}
-	for i, arg := range function.Arguments {
+	for i, arg := range args {
 		if i == 0 && arg.Name == "obj" {
 			continue
 		}
-		sb.WriteString(arg.Name)
-		if i != count-1 {
+		if wroteCallArg {
 			sb.WriteString(", ")
 		}
+		sb.WriteString(arg.Name)
+		wroteCallArg = true
 	}
 	sb.WriteString(")\n")
 	sb.WriteString("}\n")

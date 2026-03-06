@@ -9,7 +9,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/goplus/spx/v2/internal/spx/cmd/codegen/generate/common"
+	"github.com/goplus/spx/v2/internal/cmd/codegen/generate/common"
 	"github.com/iancoleman/strcase"
 )
 

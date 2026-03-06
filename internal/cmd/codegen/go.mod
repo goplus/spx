@@ -1,4 +1,4 @@
-module github.com/goplus/spx/v2/internal/spx/cmd/codegen
+module github.com/goplus/spx/v2/internal/cmd/codegen
 
 go 1.25.0
 
