@@ -41,6 +41,10 @@ func bindCallbacks() CallbackInfo {
 	infos.OnTriggerExit = onTriggerExit
 
 	// ui
+	// OnUiReady/OnUiUpdated are intentionally left unbound here.
+	// Go-side UI construction already triggers OnStart, and the callback payload
+	// does not include delta for a meaningful OnUpdate dispatch.
+	infos.OnUiDestroyed = onUiDestroyed
 	infos.OnUiPressed = onUiPressed
 	infos.OnUiReleased = onUiReleased
 	infos.OnUiHovered = onUiHovered
@@ -73,9 +77,9 @@ func onEngineUpdate(delta float64) {
 	for _, mgr := range mgrs {
 		mgr.OnUpdate(delta)
 	}
-	TimeSinceGameStart += delta
+	AdvanceTimeSinceGameStart(delta)
 	sprites = sprites[:0]
-	for _, sprite := range Id2Sprites {
+	for _, sprite := range Sprites() {
 		sprites = append(sprites, sprite)
 	}
 	for _, sprite := range sprites {
@@ -92,7 +96,7 @@ func onEngineFixedUpdate(delta float64) {
 		mgr.OnFixedUpdate(delta)
 	}
 	sprites = sprites[:0]
-	for _, sprite := range Id2Sprites {
+	for _, sprite := range Sprites() {
 		sprites = append(sprites, sprite)
 	}
 	for _, sprite := range sprites {
@@ -108,7 +112,7 @@ func onEngineDestroy() {
 		coreCallbacks.OnEngineDestroy()
 	}
 	sprites = sprites[:0]
-	for _, sprite := range Id2Sprites {
+	for _, sprite := range Sprites() {
 		sprites = append(sprites, sprite)
 	}
 	for _, sprite := range sprites {
@@ -141,7 +145,7 @@ func onSceneSpriteInstantiated(id int64, type_name string) {
 
 // sprite
 func onSpriteReady(id int64) {
-	if sprite, ok := Id2Sprites[Object(id)]; ok {
+	if sprite := GetSprite(Object(id)); sprite != nil {
 		sprite.OnStart()
 	}
 }
@@ -152,7 +156,7 @@ func onSpriteFixedUpdated(delta float64) {
 	spxlog.Debug("OnSpriteFixedUpdated %f", delta)
 }
 func onSpriteDestroyed(id int64) {
-	delete(Id2Sprites, Object(id))
+	DeleteSprite(Object(id))
 }
 
 // input
@@ -197,8 +201,8 @@ func onCollisionExit(id int64, oid int64) {
 }
 
 func onTriggerEnter(id int64, oid int64) {
-	if sprite, ok := Id2Sprites[Object(id)]; ok {
-		if other, ok2 := Id2Sprites[Object(oid)]; ok2 {
+	if sprite := GetSprite(Object(id)); sprite != nil {
+		if other := GetSprite(Object(oid)); other != nil {
 			sprite.V_OnTriggerEnter(other)
 			sprite.OnTriggerEnter(other)
 		}
@@ -207,8 +211,8 @@ func onTriggerEnter(id int64, oid int64) {
 func onTriggerStay(id int64, oid int64) {
 }
 func onTriggerExit(id int64, oid int64) {
-	if sprite, ok := Id2Sprites[Object(id)]; ok {
-		if other, ok2 := Id2Sprites[Object(oid)]; ok2 {
+	if sprite := GetSprite(Object(id)); sprite != nil {
+		if other := GetSprite(Object(oid)); other != nil {
 			sprite.V_OnTriggerExit(other)
 			sprite.OnTriggerExit(other)
 		}
@@ -217,92 +221,96 @@ func onTriggerExit(id int64, oid int64) {
 
 // ui
 func onUiPressed(id int64) {
-	if node, ok := Id2UiNodes[Object(id)]; ok {
+	if node := GetUINode(Object(id)); node != nil {
 		node.V_OnUiPressed()
 		node.OnUiPressed()
 	}
 }
 func onUiReleased(id int64) {
-	if node, ok := Id2UiNodes[Object(id)]; ok {
+	if node := GetUINode(Object(id)); node != nil {
 		node.V_OnUiReleased()
 		node.OnUiReleased()
 	}
 }
 func onUiHovered(id int64) {
-	if node, ok := Id2UiNodes[Object(id)]; ok {
+	if node := GetUINode(Object(id)); node != nil {
 		node.V_OnUiHovered()
 		node.OnUiHovered()
 	}
 }
 func onUiClicked(id int64) {
-	if node, ok := Id2UiNodes[Object(id)]; ok {
+	if node := GetUINode(Object(id)); node != nil {
 		node.V_OnUiClick()
 		node.OnUiClick()
 	}
 }
 func onUiToggle(id int64, isOn bool) {
-	if node, ok := Id2UiNodes[Object(id)]; ok {
+	if node := GetUINode(Object(id)); node != nil {
 		node.V_OnUiToggle(isOn)
 		node.OnUiToggle(isOn)
 	}
 }
 func onUiTextChanged(id int64, text string) {
-	if node, ok := Id2UiNodes[Object(id)]; ok {
+	if node := GetUINode(Object(id)); node != nil {
 		node.V_OnUiTextChanged(text)
 		node.OnUiTextChanged(text)
 	}
 }
 
+func onUiDestroyed(id int64) {
+	DeleteUINode(Object(id))
+}
+
 func onSpriteScreenEntered(id int64) {
-	if sprite, ok := Id2Sprites[Object(id)]; ok {
+	if sprite := GetSprite(Object(id)); sprite != nil {
 		sprite.V_OnScreenEntered()
 		sprite.OnScreenEntered()
 	}
 }
 
 func onSpriteScreenExited(id int64) {
-	if sprite, ok := Id2Sprites[Object(id)]; ok {
+	if sprite := GetSprite(Object(id)); sprite != nil {
 		sprite.V_OnScreenExited()
 		sprite.OnScreenExited()
 	}
 }
 func onSpriteVfxFinished(id int64) {
-	if sprite, ok := Id2Sprites[Object(id)]; ok {
+	if sprite := GetSprite(Object(id)); sprite != nil {
 		sprite.V_OnVfxFinished()
 		sprite.OnVfxFinished()
 	}
 }
 
 func onSpriteAnimationFinished(id int64) {
-	if sprite, ok := Id2Sprites[Object(id)]; ok {
+	if sprite := GetSprite(Object(id)); sprite != nil {
 		sprite.V_OnAnimationFinished()
 		sprite.OnAnimationFinished()
 	}
 }
 
 func onSpriteAnimationLooped(id int64) {
-	if sprite, ok := Id2Sprites[Object(id)]; ok {
+	if sprite := GetSprite(Object(id)); sprite != nil {
 		sprite.V_OnAnimationLooped()
 		sprite.OnAnimationLooped()
 	}
 }
 
 func onSpriteFrameChanged(id int64) {
-	if sprite, ok := Id2Sprites[Object(id)]; ok {
+	if sprite := GetSprite(Object(id)); sprite != nil {
 		sprite.V_OnFrameChanged()
 		sprite.OnFrameChanged()
 	}
 }
 
 func onSpriteAnimationChanged(id int64) {
-	if sprite, ok := Id2Sprites[Object(id)]; ok {
+	if sprite := GetSprite(Object(id)); sprite != nil {
 		sprite.V_OnAnimationChanged()
 		sprite.OnAnimationChanged()
 	}
 }
 
 func onSpriteFramesSetChanged(id int64) {
-	if sprite, ok := Id2Sprites[Object(id)]; ok {
+	if sprite := GetSprite(Object(id)); sprite != nil {
 		sprite.V_OnFramesSetChanged()
 		sprite.OnFramesSetChanged()
 	}

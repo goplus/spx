@@ -20,8 +20,8 @@ import (
 	"math"
 
 	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v2/internal/engine"
 	spxlog "github.com/goplus/spx/v2/internal/log"
+	engine "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
 )
 
 const (

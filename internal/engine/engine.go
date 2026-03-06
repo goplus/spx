@@ -9,11 +9,11 @@ import (
 	"github.com/goplus/spx/v2/internal/engine/platform"
 	"github.com/goplus/spx/v2/internal/engine/profiler"
 	"github.com/goplus/spx/v2/internal/enginewrap"
+	gde "github.com/goplus/spx/v2/internal/gdengine"
 	spxlog "github.com/goplus/spx/v2/internal/log"
 	"github.com/goplus/spx/v2/internal/time"
 
 	gdx "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
-	gde "github.com/goplus/spx/v2/pkg/spx/pkg/gdspx"
 )
 
 // copy these variable to any namespace you want
@@ -123,7 +123,7 @@ type IGame interface {
 func Main(g IGame) {
 	enginewrap.Init(WaitMainThread)
 	game = g
-	gde.LinkEngine(gdx.CoreCallbackInfo{
+	gde.Link(gdx.CoreCallbackInfo{
 		OnEngineStart:   onStart,
 		OnEngineUpdate:  onUpdate,
 		OnEngineDestroy: onDestroy,
@@ -183,7 +183,7 @@ func onPaused(isPaused bool) {
 
 func onReset() {
 	game.OnEngineReset()
-	gde.UnlinkEngine()
+	gde.Unlink()
 }
 
 func onKeyPressed(id int64) {
