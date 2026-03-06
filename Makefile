@@ -50,7 +50,7 @@ list-demos: ## List all demos with index
 # Setup Commands
 # ============================================
 setup: ## Initialize the user environment
-	chmod +x ./pkg/spx/tools/*.sh && \
+	chmod +x ./internal/spx/tools/*.sh && \
 	echo "===> Step 1/2: Install spx" && \
 	make install && \
 	echo "===> Step 2/2: Download engine" && \
@@ -59,7 +59,7 @@ setup: ## Initialize the user environment
 
 
 setup-dev: ## Initialize development environment (full)
-	chmod +x ./pkg/spx/tools/*.sh && \
+	chmod +x ./internal/spx/tools/*.sh && \
 	echo "===> Step 1/6: Install spx" && \
 	make install && \
 	echo "===> Step 2/6: Download engine" && \
@@ -91,8 +91,8 @@ endif
 	fi
 	echo "===> Setting up web ${MODE} engine..." && \
 	make build-wasm && \
-	./pkg/spx/tools/build_engine.sh -g -p web -m ${MODE} && \
-	./pkg/spx/tools/make_util.sh extrawebtemplate ${MODE} && \
+	./internal/spx/tools/build_engine.sh -g -p web -m ${MODE} && \
+	./internal/spx/tools/make_util.sh extrawebtemplate ${MODE} && \
 	echo "===> Web ${MODE} engine setup complete"
 
 
@@ -103,15 +103,15 @@ install: ## Install spx command
 	$(INSTALL_CMD)
 
 download: ## Download engines
-	echo "" && ./pkg/spx/tools/build_engine.sh -e -d
+	echo "" && ./internal/spx/tools/build_engine.sh -e -d
 
 download-engine: ## Download engine templates for specific platform. Usage: make download-engine PLATFORM=android|ios|web [MODE=normal|worker|minigame|miniprogram]
 
 	@echo "Downloading engine templates for platform: $(PLATFORM)"
 	@if [ -n "$(MODE)" ]; then \
-		MODE_ENV="$(MODE)" ./pkg/spx/tools/build_engine.sh -p "$(PLATFORM)" -g -m "$(MODE)"; \
+		MODE_ENV="$(MODE)" ./internal/spx/tools/build_engine.sh -p "$(PLATFORM)" -g -m "$(MODE)"; \
 	else \
-		./pkg/spx/tools/build_engine.sh -p "$(PLATFORM)" -g; \
+		./internal/spx/tools/build_engine.sh -p "$(PLATFORM)" -g; \
 	fi
 
 
@@ -119,41 +119,41 @@ download-engine: ## Download engine templates for specific platform. Usage: make
 # Build Commands
 # ============================================
 build-editor: ## Build editor mode engine
-	make install && ./pkg/spx/tools/build_engine.sh -e
+	make install && ./internal/spx/tools/build_engine.sh -e
 
 build-desktop: ## Build desktop engine
-	make install && ./pkg/spx/tools/build_engine.sh && \
-	./pkg/spx/tools/make_util.sh exportpack 
+	make install && ./internal/spx/tools/build_engine.sh && \
+	./internal/spx/tools/make_util.sh exportpack 
 
 build-web: ## Build web engine template
-	./pkg/spx/tools/build_engine.sh -p web && \
-	./pkg/spx/tools/make_util.sh extrawebtemplate normal
+	./internal/spx/tools/build_engine.sh -p web && \
+	./internal/spx/tools/make_util.sh extrawebtemplate normal
 
 build-web-worker: ## Build web worker engine template
 	make install && \
-	./pkg/spx/tools/build_engine.sh -p web -m worker && \
-	./pkg/spx/tools/make_util.sh extrawebtemplate worker
+	./internal/spx/tools/build_engine.sh -p web -m worker && \
+	./internal/spx/tools/make_util.sh extrawebtemplate worker
 
 build-web-minigame: ## Build minigame template
-	./pkg/spx/tools/build_engine.sh -p web -m minigame && \
-	./pkg/spx/tools/make_util.sh extrawebtemplate minigame
+	./internal/spx/tools/build_engine.sh -p web -m minigame && \
+	./internal/spx/tools/make_util.sh extrawebtemplate minigame
 
 build-web-miniprogram: ## Build miniprogram template
-	./pkg/spx/tools/build_engine.sh -p web -m miniprogram && \
-	./pkg/spx/tools/make_util.sh extrawebtemplate miniprogram
+	./internal/spx/tools/build_engine.sh -p web -m miniprogram && \
+	./internal/spx/tools/make_util.sh extrawebtemplate miniprogram
 
 build-wasm: ## Build wasm
 	cd ./cmd/gox/ && ./install.sh --web && cd $(CURRENT_PATH)
 
 build-wasm-opt: ## Build wasm with optimization
 	cd ./cmd/gox/ && ./install.sh --web --opt && cd $(CURRENT_PATH)
-	./pkg/spx/tools/make_util.sh compresswasm
+	./internal/spx/tools/make_util.sh compresswasm
 
 build-android: ## Build android engine
-	make install &&./pkg/spx/tools/build_engine.sh -p android
+	make install &&./internal/spx/tools/build_engine.sh -p android
 
 build-ios: ## Build ios engine
-	make install &&./pkg/spx/tools/build_engine.sh -p ios 
+	make install &&./internal/spx/tools/build_engine.sh -p ios 
 
 # ============================================
 # Run Commands (by index)
@@ -210,12 +210,12 @@ format: ## Format Go code
 	go fmt ./...
 
 generate: ## Generate code
-	cd ./pkg/spx/cmd/codegen && go run . && cd $(CURRENT_PATH) && \
+	cd ./internal/spx/cmd/codegen && go run . && cd $(CURRENT_PATH) && \
 	go generate ./cmd/spxrun/runner && \
 	make format
 
 export-pack: ## Export runtime pck file
-	./pkg/spx/tools/make_util.sh exportpack && cd $(CURRENT_PATH)
+	./internal/spx/tools/make_util.sh exportpack && cd $(CURRENT_PATH)
 
 export-web: ## Export web engine. Usage: make export-web MODE=normal (MODE: normal|worker|minigame|miniprogram)
 	@if [ -z "$(MODE)" ]; then \
@@ -228,7 +228,7 @@ export-web: ## Export web engine. Usage: make export-web MODE=normal (MODE: norm
 		exit 1; \
 	fi; \
 	cd ./cmd/gox && ./install.sh --web --opt && cd $(CURRENT_PATH) && \
-	./pkg/spx/tools/make_util.sh exportweb $$EXPORT_MODE && cd $(CURRENT_PATH)
+	./internal/spx/tools/make_util.sh exportweb $$EXPORT_MODE && cd $(CURRENT_PATH)
 
 stop: ## Stop running processes
 	@echo "Stopping running processes..."
