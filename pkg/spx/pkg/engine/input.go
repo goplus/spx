@@ -198,7 +198,3 @@ const (
 	KeyYen          KeyCode = 165
 	KeySection      KeyCode = 167
 )
-
-func initKeyCode() {
-
-}
