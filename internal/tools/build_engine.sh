@@ -1,7 +1,7 @@
 #!/bin/bash
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # copy version file
-cp -f $SCRIPT_DIR/../../../cmd/gox/template/version $SCRIPT_DIR
+cp -f "$SCRIPT_DIR/../../cmd/gox/template/version" "$SCRIPT_DIR"
 # PCK version， only changed when spx's engine resource is updated
 PCK_VERSION=2.0.30
 EDITOR_ONLY=false

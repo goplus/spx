@@ -2,7 +2,7 @@
 
 # Get the directory of the script
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJ_DIR="$SCRIPT_DIR/../../.."
+PROJ_DIR="$SCRIPT_DIR/../.."
 echo $PROJ_DIR
 
 # Function to compress wasm file with brotli

@@ -1,6 +1,20 @@
 #!/bin/bash
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SCRIPT_DIR="$SCRIPT_DIR/.."
+TOOLS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_DIR="$(cd "$TOOLS_DIR/../.." && pwd)"
+
+resolve_godot_src() {
+    local default_path="$PROJ_DIR/godot"
+    local raw_path="${GODOT_SRC:-$default_path}"
+    if command -v realpath >/dev/null 2>&1; then
+        realpath "$raw_path" 2>/dev/null || echo "$raw_path"
+    else
+        case "$raw_path" in
+            /*) echo "$raw_path" ;;
+            *) echo "$PROJ_DIR/${raw_path#./}" ;;
+        esac
+    fi
+}
 
 setup_global_variables() {
     xgo version || true
@@ -9,19 +23,20 @@ setup_global_variables() {
     local DEFAULT_PLATFORM=""
 
     # Define Godot version
-    VERSION=$(cat $SCRIPT_DIR/version)
+    VERSION=$(cat "$TOOLS_DIR/version")
     ENGINE_GIT_TAG="spx"$VERSION
     ENGINE_VERSION=4.4.1.stable
     GOPATH="$(go env GOPATH)"
 
-    PROJ_DIR=$SCRIPT_DIR/..
-    ENGINE_DIR=$PROJ_DIR/godot
+    PROJ_DIR=$REPO_DIR
+    ENGINE_DIR=$(resolve_godot_src)
 
     cd $PROJ_DIR
     echo "version=$VERSION GOPATH=$GOPATH"
 
     echo "PROJ_DIR=$PROJ_DIR"
     echo "ENGINE_DIR=$ENGINE_DIR"
+    echo "GODOT_SRC=${GODOT_SRC:-$ENGINE_DIR}"
     echo "ENGINE_VERSION=$ENGINE_VERSION"
     echo "GOPATH=$GOPATH"
     echo "VERSION=$VERSION"
@@ -120,13 +135,12 @@ setup_global_variables() {
 
 
 download_engine_source() {
-    cd $PROJ_DIR
-    if [ ! -d "godot" ]; then
-        echo "Godot directory not found. Creating and initializing..."
-        git clone --depth 1 --branch $ENGINE_GIT_TAG https://github.com/goplus/godot.git
+    if [ ! -d "$ENGINE_DIR" ]; then
+        echo "Godot directory not found. Cloning to $ENGINE_DIR ..."
+        mkdir -p "$(dirname "$ENGINE_DIR")"
+        git clone --depth 1 --branch "$ENGINE_GIT_TAG" https://github.com/goplus/godot.git "$ENGINE_DIR"
     else
-        cd godot
-        echo "Godot directory already exists."
+        echo "Godot directory already exists: $ENGINE_DIR"
     fi
 
 }
@@ -325,4 +339,3 @@ ensure_emsdk() {
         exit 1
     fi
 }
-

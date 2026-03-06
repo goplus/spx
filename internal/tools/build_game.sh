@@ -1,6 +1,6 @@
 #!/bin/bash
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd $SCRIPT_DIR/..
+cd "$SCRIPT_DIR/../.."
 
 # Default project directory
 DEFAULT_PROJ_DIR=./tutorial/01_aircraft/
@@ -61,6 +61,62 @@ fi
 NDK_TOOLCHAIN="$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/$HOST_TAG/bin"
 MIN_SDK=21
 
+resolve_godot_binary() {
+    if [ -n "$GODOT_BIN" ] && [ -f "$GODOT_BIN" ]; then
+        echo "$GODOT_BIN"
+        return 0
+    fi
+
+    local repo_dir
+    repo_dir="$(pwd)"
+    local godot_src="${GODOT_SRC:-$repo_dir/godot}"
+    if command -v realpath >/dev/null 2>&1; then
+        godot_src="$(realpath "$godot_src" 2>/dev/null || echo "$godot_src")"
+    fi
+
+    local version=""
+    if [ -f "$repo_dir/cmd/gox/template/version" ]; then
+        version="$(cat "$repo_dir/cmd/gox/template/version")"
+    fi
+
+    local gopath_bin=""
+    if command -v go >/dev/null 2>&1; then
+        gopath_bin="$(go env GOPATH 2>/dev/null)/bin"
+    fi
+
+    local candidates=()
+
+    case "$OS_NAME" in
+        Darwin)
+            if [ "$ARCH" = "arm64" ]; then
+                candidates+=("$godot_src/bin/godot.macos.editor.dev.arm64")
+            fi
+            candidates+=(
+                "$godot_src/bin/godot.macos.editor.dev.x86_64"
+                "$godot_src/bin/godot.macos.editor.dev"
+            )
+            [ -n "$version" ] && candidates+=("$gopath_bin/gdspx$version")
+            ;;
+        Linux)
+            candidates+=("$godot_src/bin/godot.linuxbsd.editor.dev.${ARCH/x86_64/x86_64}")
+            [ -n "$version" ] && candidates+=("$gopath_bin/gdspx$version")
+            ;;
+        *)
+            candidates+=("$godot_src/bin/godot.windows.editor.dev.x86_64.exe")
+            [ -n "$version" ] && candidates+=("$gopath_bin/gdspx$version.exe")
+            ;;
+    esac
+
+    for candidate in "${candidates[@]}"; do
+        if [ -f "$candidate" ]; then
+            echo "$candidate"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
 echo "Building for arm64-v8a..."
 CGO_ENABLED=1 \
 GOOS=android \
@@ -77,17 +133,17 @@ go build -buildmode=c-shared -o $LIB_DIR/libgdspx-android-arm32.so main.go
 
 echo "Build android so completed successfully!"
 
-# Check if GODOT_BIN environment variable is set
-if [ -z "$GODOT_BIN" ]; then
-    echo "Error: GODOT_BIN environment variable is not set"
-    echo "Please set it to your Godot binary path, e.g.:"
-    echo "export GODOT_BIN=/path/to/godot"
+# Paths
+GODOT_BINARY="$(resolve_godot_binary)"
+if [ -z "$GODOT_BINARY" ] || [ ! -f "$GODOT_BINARY" ]; then
+    echo "Error: Unable to locate a Godot editor binary"
+    echo "Supported resolution order:"
+    echo "1. GODOT_BIN=/abs/path/to/godot-binary"
+    echo "2. GODOT_SRC=/abs/path/to/godot (expects built editor under bin/)"
+    echo "3. GOPATH/bin/gdspx<version> after running make build-editor"
     exit 1
 fi
 
-
-# Paths
-GODOT_BINARY="$GODOT_BIN"
 PROJECT_PATH="$PROJ_DIR/project.godot"
 APK_PATH="$PROJ_DIR/builds/test.apk"
 BUILD_DIR=$(dirname "$APK_PATH")

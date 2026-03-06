@@ -3,7 +3,10 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJ_DIR=$SCRIPT_DIR/..
 cd $PROJ_DIR
-GODOT_PATH="$PROJ_DIR/godot"
+GODOT_PATH="${GODOT_SRC:-$PROJ_DIR/godot}"
+if command -v realpath >/dev/null 2>&1; then
+  GODOT_PATH="$(realpath "$GODOT_PATH" 2>/dev/null || echo "$GODOT_PATH")"
+fi
 
 # Check if podman is available
 podman=`command -v podman`
