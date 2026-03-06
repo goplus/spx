@@ -1,6 +1,6 @@
 package engine
 
-import gdx "github.com/goplus/spx/v2/pkg/gdspx/pkg/engine"
+import gdx "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
 
 type KeyCode = gdx.KeyCode
 

@@ -2,7 +2,7 @@ package engine
 
 import (
 	. "github.com/goplus/spbase/mathf"
-	gdx "github.com/goplus/spx/v2/pkg/gdspx/pkg/engine"
+	gdx "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
 )
 
 var (

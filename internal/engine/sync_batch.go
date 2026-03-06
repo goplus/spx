@@ -1,7 +1,7 @@
 package engine
 
 import (
-	gdx "github.com/goplus/spx/v2/pkg/gdspx/pkg/engine"
+	gdx "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
 )
 
 const (
