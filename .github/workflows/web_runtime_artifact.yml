@@ -1,0 +1,99 @@
+name: 🧪 Web Runtime Artifact
+
+on:
+  push:
+    branches:
+      - dev
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Branch name or full commit SHA to build
+        required: true
+        type: string
+
+concurrency:
+  group: web-runtime-artifact-${{ github.event_name == 'workflow_dispatch' && inputs.target || github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Validate manual target
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          TARGET: ${{ inputs.target }}
+        run: |
+          if [[ "${TARGET}" =~ ^[0-9a-f]{40}$ ]]; then
+            exit 0
+          fi
+
+          if [[ "${TARGET}" == refs/* ]]; then
+            echo "workflow_dispatch target must be a branch name or full commit SHA" >&2
+            exit 1
+          fi
+
+          if ! git check-ref-format --branch "${TARGET}" >/dev/null 2>&1; then
+            echo "invalid workflow_dispatch target: ${TARGET}" >&2
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.target || github.sha }}
+
+      - name: Get dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install \
+            gcc \
+            libgl1-mesa-dev \
+            libegl1-mesa-dev \
+            libgles2-mesa-dev \
+            libx11-dev \
+            xorg-dev \
+            libasound2-dev \
+            libopenal-dev \
+            binaryen \
+            unzip
+
+      - name: Setup go/xgo & engine
+        uses: ./.github/actions/deps
+
+      - name: Compute pseudo version
+        id: version
+        run: |
+          VERSION="$(go run ./.github/scripts/pseudo_version.go HEAD)"
+          echo "VERSION=${VERSION}"
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+
+      - name: Build web bundle
+        run: make export-web
+
+      - name: Prepare runtime artifact
+        run: |
+          rm -rf web-runtime-artifact
+          mkdir -p web-runtime-artifact
+          unzip -oq spx_web.zip -d web-runtime-artifact
+
+      - name: Upload runtime directory artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: spx-web-runtime-${{ steps.version.outputs.version }}
+          path: web-runtime-artifact/
+          retention-days: 90
+          compression-level: 0
+
+      - name: Upload `spx_web.zip` artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: spx-web-zip-${{ steps.version.outputs.version }}
+          path: spx_web.zip
+          retention-days: 90
+          compression-level: 0
