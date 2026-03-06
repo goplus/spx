@@ -18,7 +18,10 @@ import (
 )
 
 var (
-	RelDir = "../../ffi"
+	NativeRelDir       = "../../gdengine/binding/native"
+	GdengineImplRelDir = "../../gdengine/impl"
+	EnginewrapRelDir   = "../../enginewrap"
+	EnginePkgRelDir    = "../../../pkg/spx/pkg/engine"
 )
 
 func init() {
@@ -493,7 +496,10 @@ func EffectiveRawReturnType(function *clang.TypedefFunction) string {
 	if len(function.Arguments) > 0 {
 		last := function.Arguments[len(function.Arguments)-1]
 		if last.Name == "ret_value" {
-			return last.Type.Primative.Name
+			if last.Type.Primative != nil {
+				return last.Type.Primative.Name
+			}
+			panic(fmt.Sprintf("unsupported synthetic ret_value type in %s: %s", function.Name, last.Type.CStyleString()))
 		}
 	}
 	return ""
@@ -504,7 +510,7 @@ func EffectiveGoReturnType(function *clang.TypedefFunction) string {
 	if rawType == "" {
 		return ""
 	}
-	return GetFuncParamTypeString(rawType)
+	return MustGoTypeForCType(rawType, function.Name)
 }
 
 func HasEffectiveReturn(function *clang.TypedefFunction) bool {
@@ -513,6 +519,21 @@ func HasEffectiveReturn(function *clang.TypedefFunction) bool {
 
 func GetFuncParamTypeString(typeName string) string {
 	return cppType2Go[typeName]
+}
+
+func MustGoTypeForCType(typeName string, functionName string) string {
+	goType := GetFuncParamTypeString(typeName)
+	if goType != "" {
+		return goType
+	}
+	panic(fmt.Sprintf("no Go mapping for C type %q in function %s", typeName, functionName))
+}
+
+func MustPrimitiveTypeName(arg clang.Argument, functionName string) string {
+	if arg.Type.Primative != nil {
+		return arg.Type.Primative.Name
+	}
+	panic(fmt.Sprintf("unsupported function-pointer argument %q in %s: %s", arg.Name, functionName, arg.Type.CStyleString()))
 }
 
 func GetManagers(ast clang.CHeaderFileAST) []string {

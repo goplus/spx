@@ -12,13 +12,19 @@ import (
 	"github.com/goplus/spx/v2/internal/cmd/codegen/gdextensionparser/preprocessor"
 )
 
-func ReadFiles(dir, fileName string) string {
+func ReadFiles(dir, fileName string) (string, error) {
 	var allLines []string
-	lines, _ := readLines(filepath.Join(dir, fileName))
+	lines, err := readLines(filepath.Join(dir, fileName))
+	if err != nil {
+		return "", err
+	}
 	for _, line := range lines {
 		if strings.HasPrefix(line, "#include \"") {
 			includePath := strings.ReplaceAll(strings.ReplaceAll(line, "#include \"", ""), "\"", "")
-			includeLines, _ := readLines(filepath.Join(dir, includePath))
+			includeLines, err := readLines(filepath.Join(dir, includePath))
+			if err != nil {
+				return "", err
+			}
 			for _, inLine := range includeLines {
 				if !strings.HasPrefix(inLine, "#include \"") {
 					allLines = append(allLines, inLine)
@@ -39,7 +45,7 @@ func ReadFiles(dir, fileName string) string {
 	}
 	finalStr := sb.String()
 	finalStr = strings.ReplaceAll(finalStr, "\r", "")
-	return finalStr
+	return finalStr, nil
 }
 
 func readLines(path string) ([]string, error) {
@@ -63,7 +69,7 @@ func findProjectRoot(start string) (string, error) {
 		return "", err
 	}
 	for {
-		header := filepath.Join(dir, "internal", "ffi", "gdextension_spx_codegen_header.h")
+		header := filepath.Join(dir, "internal", "gdengine", "binding", "native", "gdextension_spx_codegen_header.h")
 		if _, err := os.Stat(header); err == nil {
 			return dir, nil
 		}
@@ -81,8 +87,11 @@ func expandIncludeFiles(projectPath, header, outputName string) (string, error) 
 	if err != nil {
 		return "", err
 	}
-	dirPath := filepath.Join(rootPath, "internal", "ffi")
-	allStrs := ReadFiles(dirPath, header)
+	dirPath := filepath.Join(rootPath, "internal", "gdengine", "binding", "native")
+	allStrs, err := ReadFiles(dirPath, header)
+	if err != nil {
+		return "", err
+	}
 	tempPath := filepath.Join(dirPath, outputName)
 	err = os.WriteFile(tempPath, []byte(allStrs), 0644)
 	if err != nil {
@@ -92,7 +101,10 @@ func expandIncludeFiles(projectPath, header, outputName string) (string, error) 
 }
 
 func GenerateGDExtensionInterfaceAST(projectPath, astOutputFilename string) (clang.CHeaderFileAST, error) {
-	str, _ := expandIncludeFiles(projectPath, "gdextension_spx_codegen_header.h", "_temp_output.h")
+	str, err := expandIncludeFiles(projectPath, "gdextension_spx_codegen_header.h", "_temp_output.h")
+	if err != nil {
+		return clang.CHeaderFileAST{}, err
+	}
 	return generateGDExtensionInterfaceAST(str, projectPath, astOutputFilename)
 }
 

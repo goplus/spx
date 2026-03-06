@@ -19,7 +19,7 @@ import (
 )
 
 var (
-	WebRelDir = "../../webffi"
+	WebRelDir = "../../gdengine/binding/web"
 )
 var (
 
@@ -64,18 +64,19 @@ func Generate(projectPath, godotPath string, ast clang.CHeaderFileAST) {
 
 func GenerateCallbackGoFile(projectPath string, ast clang.CHeaderFileAST) error {
 	funcs := template.FuncMap{
-		"gdiVariableName":    GdiVariableName,
-		"snakeCase":          strcase.ToSnake,
-		"camelCase":          strcase.ToCamel,
-		"upper":              strings.ToUpper,
-		"goReturnType":       GoReturnType,
-		"goArgumentType":     GoArgumentType,
-		"goEnumValue":        GoEnumValue,
-		"add":                Add,
-		"cgoCastArgument":    CgoCastArgument,
-		"cgoCastReturnType":  CgoCastReturnType,
-		"cgoCleanUpArgument": CgoCleanUpArgument,
-		"trimPrefix":         TrimPrefix,
+		"gdiVariableName":       GdiVariableName,
+		"snakeCase":             strcase.ToSnake,
+		"camelCase":             strcase.ToCamel,
+		"upper":                 strings.ToUpper,
+		"goReturnType":          GoReturnType,
+		"goArgumentType":        GoArgumentType,
+		"goEnumValue":           GoEnumValue,
+		"add":                   Add,
+		"cgoCastArgument":       CgoCastArgument,
+		"cgoCastReturnType":     CgoCastReturnType,
+		"cgoCleanUpArgument":    CgoCleanUpArgument,
+		"trimPrefix":            TrimPrefix,
+		"mustPrimitiveTypeName": MustPrimitiveTypeName,
 	}
 
 	return GenerateFile(funcs, "callbacks.gen.go", callbacksFileText, ast,
@@ -142,7 +143,7 @@ func GenerateManagerWrapperGoFile(projectPath string, ast clang.CHeaderFileAST) 
 	}
 
 	return GenerateFile(funcs, "manager_web.gen.go", wrapManagerGoFileText, ManagerData{Ast: ast, Mangers: GetManagers(ast)},
-		filepath.Join(projectPath, WebRelDir, "../gdengine/impl/manager_web.gen.go"))
+		filepath.Join(projectPath, GdengineImplRelDir, "manager_web.gen.go"))
 }
 
 func GenerateJsEngineJsFile(projectPath, godotPath string, ast clang.CHeaderFileAST) error {
@@ -178,10 +179,17 @@ func GenerateJsEngineJsFile(projectPath, godotPath string, ast clang.CHeaderFile
 	}
 
 	headerFileName := filepath.Join(godotPath, "platform", "web", "js", "engine", "gdspx.js")
-	os.MkdirAll(filepath.Dir(headerFileName), os.ModePerm)
+	err = os.MkdirAll(filepath.Dir(headerFileName), os.ModePerm)
+	if err != nil {
+		return err
+	}
 	f, err := os.Create(headerFileName)
-	f.Write(b.Bytes())
-	f.Close()
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	_, err = f.Write(b.Bytes())
 	return err
 }
 
@@ -199,7 +207,7 @@ func getManagerFuncName(function *clang.TypedefFunction) string {
 	for i, arg := range args {
 		sb.WriteString(arg.Name)
 		sb.WriteString(" ")
-		typeName := GetFuncParamTypeString(arg.Type.Primative.Name)
+		typeName := MustGoTypeForCType(MustPrimitiveTypeName(arg, function.Name), function.Name)
 		sb.WriteString(typeName)
 		if i != len(args)-1 {
 			sb.WriteString(", ")
@@ -222,7 +230,7 @@ func getManagerFuncBody(function *clang.TypedefFunction) string {
 	// convert arguments
 	for i, arg := range args {
 		sb.WriteString(prefixTab)
-		typeName := arg.Type.Primative.Name
+		typeName := MustPrimitiveTypeName(arg, function.Name)
 		argName := "arg" + strconv.Itoa(i)
 		sb.WriteString(argName + " := ")
 		sb.WriteString("JsFrom" + typeName)
@@ -274,7 +282,7 @@ func getManagerInterface(function *clang.TypedefFunction) string {
 	for i, arg := range args {
 		sb.WriteString(arg.Name)
 		sb.WriteString(" ")
-		typeName := GetFuncParamTypeString(arg.Type.Primative.Name)
+		typeName := MustGoTypeForCType(MustPrimitiveTypeName(arg, function.Name), function.Name)
 		sb.WriteString(typeName)
 		if i != len(args)-1 {
 			sb.WriteString(", ")
@@ -304,7 +312,7 @@ func getJsFuncBody(function *clang.TypedefFunction) string {
 	// convert arguments
 	for i, arg := range args {
 		sb.WriteString(prefixTab)
-		typeName := arg.Type.Primative.Name
+		typeName := MustPrimitiveTypeName(arg, function.Name)
 		argName := "_arg" + strconv.Itoa(i)
 		sb.WriteString("var " + argName + " = ")
 		sb.WriteString("To" + typeName)
@@ -336,7 +344,7 @@ func getJsFuncBody(function *clang.TypedefFunction) string {
 	// convert arguments
 	for i, arg := range args {
 		sb.WriteString(prefixTab)
-		typeName := arg.Type.Primative.Name
+		typeName := MustPrimitiveTypeName(arg, function.Name)
 		argName := "_arg" + strconv.Itoa(i)
 		sb.WriteString("Free" + typeName + "(" + argName + "); \n")
 	}

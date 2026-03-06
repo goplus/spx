@@ -1,4 +1,0 @@
-package platform
-
-func Init() {
-}

@@ -107,7 +107,7 @@ func GenerateGDExtensionWrapperHeaderFile(projectPath string, ast clang.CHeaderF
 		return err
 	}
 
-	filename := filepath.Join(projectPath, RelDir, "ffi_wrapper.gen.h")
+	filename := filepath.Join(projectPath, NativeRelDir, "ffi_wrapper.gen.h")
 	f, err := os.Create(filename)
 	if err != nil {
 		return err
@@ -123,21 +123,22 @@ func GenerateGDExtensionWrapperHeaderFile(projectPath string, ast clang.CHeaderF
 
 func GenerateGDExtensionWrapperGoFile(projectPath string, ast clang.CHeaderFileAST) error {
 	funcs := template.FuncMap{
-		"gdiVariableName":    GdiVariableName,
-		"snakeCase":          strcase.ToSnake,
-		"camelCase":          strcase.ToCamel,
-		"goReturnType":       GoReturnType,
-		"goArgumentType":     GoArgumentType,
-		"goEnumValue":        GoEnumValue,
-		"add":                Add,
-		"cgoCastArgument":    CgoCastArgument,
-		"cgoCastReturnType":  CgoCastReturnType,
-		"cgoCleanUpArgument": CgoCleanUpArgument,
-		"trimPrefix":         TrimPrefix,
+		"gdiVariableName":       GdiVariableName,
+		"snakeCase":             strcase.ToSnake,
+		"camelCase":             strcase.ToCamel,
+		"goReturnType":          GoReturnType,
+		"goArgumentType":        GoArgumentType,
+		"goEnumValue":           GoEnumValue,
+		"add":                   Add,
+		"cgoCastArgument":       CgoCastArgument,
+		"cgoCastReturnType":     CgoCastReturnType,
+		"cgoCleanUpArgument":    CgoCleanUpArgument,
+		"trimPrefix":            TrimPrefix,
+		"mustPrimitiveTypeName": MustPrimitiveTypeName,
 	}
 
 	return GenerateFile(funcs, "ffi_wrapper.gen.go", ffiWrapperGoFileText, ast,
-		filepath.Join(projectPath, RelDir, "ffi_wrapper.gen.go"))
+		filepath.Join(projectPath, NativeRelDir, "ffi_wrapper.gen.go"))
 
 }
 
@@ -158,7 +159,7 @@ func GenerateGDExtensionInterfaceGoFile(projectPath string, ast clang.CHeaderFil
 	}
 
 	return GenerateFile(funcs, "ffi.gen.go", ffiFileText, ast,
-		filepath.Join(projectPath, RelDir, "ffi.gen.go"))
+		filepath.Join(projectPath, NativeRelDir, "ffi.gen.go"))
 }
 
 func GenerateManagerWrapperGoFile(projectPath string, ast clang.CHeaderFileAST) error {
@@ -181,7 +182,7 @@ func GenerateManagerWrapperGoFile(projectPath string, ast clang.CHeaderFileAST) 
 	}
 
 	return GenerateFile(funcs, "manager_native.gen.go", wrapManagerGoFileText, ManagerData{Ast: ast, Mangers: GetManagers(ast)},
-		filepath.Join(projectPath, RelDir, "../gdengine/impl/manager_native.gen.go"))
+		filepath.Join(projectPath, GdengineImplRelDir, "manager_native.gen.go"))
 
 }
 
@@ -205,7 +206,7 @@ func GenerateManagerInterfaceGoFile(projectPath string, ast clang.CHeaderFileAST
 	}
 
 	return GenerateFile(funcs, "interface.gen.go", interfaceGoFileText, ManagerData{Ast: ast, Mangers: GetManagers(ast)},
-		filepath.Join(projectPath, RelDir, "../../pkg/spx/pkg/engine/interface.gen.go"))
+		filepath.Join(projectPath, EnginePkgRelDir, "interface.gen.go"))
 }
 
 func GenerateSyncApiGoFile(projectPath string, ast clang.CHeaderFileAST) error {
@@ -228,7 +229,7 @@ func GenerateSyncApiGoFile(projectPath string, ast clang.CHeaderFileAST) error {
 	}
 
 	return GenerateFile(funcs, "sync.gen.go", syncApiText, ManagerData{Ast: ast, Mangers: GetManagers(ast)},
-		filepath.Join(projectPath, RelDir, "../enginewrap/sync.gen.go"))
+		filepath.Join(projectPath, EnginewrapRelDir, "sync.gen.go"))
 }
 
 func GenerateSyncPureGoFile(projectPath string, ast clang.CHeaderFileAST) error {
@@ -251,7 +252,7 @@ func GenerateSyncPureGoFile(projectPath string, ast clang.CHeaderFileAST) error 
 	}
 
 	return GenerateFile(funcs, "sync_pure.gen.go", syncPureApiText, ManagerData{Ast: ast, Mangers: GetManagers(ast)},
-		filepath.Join(projectPath, RelDir, "../enginewrap/sync_pure.gen.go"))
+		filepath.Join(projectPath, EnginewrapRelDir, "sync_pure.gen.go"))
 }
 
 type ImplData struct {
@@ -271,7 +272,7 @@ func GenerateManagerImplGoFile(projectPath string, ast clang.CHeaderFileAST, cls
 	data := ImplData{Ast: ast, Methods: methods, ClsName: clsName}
 
 	return GenerateFile(funcs, genFile, implGoFileText, data,
-		filepath.Join(projectPath, RelDir, "../../pkg/spx/pkg/engine/"+genFile))
+		filepath.Join(projectPath, EnginePkgRelDir, genFile))
 }
 func GenerateManagerImplPureGoFile(projectPath string, ast clang.CHeaderFileAST, clsName string) error {
 	funcs := template.FuncMap{
@@ -283,7 +284,7 @@ func GenerateManagerImplPureGoFile(projectPath string, ast clang.CHeaderFileAST,
 
 	genFile := strings.ToLower(clsName) + "_pure.gen.go"
 	return GenerateFile(funcs, genFile, implPureGoFileText, data,
-		filepath.Join(projectPath, RelDir, "../../pkg/spx/pkg/engine/"+genFile))
+		filepath.Join(projectPath, EnginePkgRelDir, genFile))
 }
 
 func getManagerFuncName(function *clang.TypedefFunction) string {
@@ -300,7 +301,7 @@ func getManagerFuncName(function *clang.TypedefFunction) string {
 	for i, arg := range args {
 		sb.WriteString(arg.Name)
 		sb.WriteString(" ")
-		typeName := GetFuncParamTypeString(arg.Type.Primative.Name)
+		typeName := MustGoTypeForCType(MustPrimitiveTypeName(arg, function.Name), function.Name)
 		sb.WriteString(typeName)
 		if i != len(args)-1 {
 			sb.WriteString(", ")
@@ -324,7 +325,7 @@ func getManagerFuncBody(function *clang.TypedefFunction) string {
 	// convert arguments
 	for i, arg := range args {
 		sb.WriteString(prefixTab)
-		typeName := arg.Type.Primative.Name
+		typeName := MustPrimitiveTypeName(arg, function.Name)
 		argName := "arg" + strconv.Itoa(i)
 		switch typeName {
 		case "GdString":
@@ -395,7 +396,7 @@ func getManagerInterface(function *clang.TypedefFunction) string {
 	for i, arg := range args {
 		sb.WriteString(arg.Name)
 		sb.WriteString(" ")
-		typeName := GetFuncParamTypeString(arg.Type.Primative.Name)
+		typeName := MustGoTypeForCType(MustPrimitiveTypeName(arg, function.Name), function.Name)
 		sb.WriteString(typeName)
 		if i != len(args)-1 {
 			sb.WriteString(", ")
@@ -410,8 +411,8 @@ func getManagerInterface(function *clang.TypedefFunction) string {
 	return sb.String()
 }
 
-func GetGdxFuncParamTypeString(typeName string) string {
-	name := GetFuncParamTypeString(typeName)
+func MustGdxFuncParamTypeString(typeName string, functionName string) string {
+	name := MustGoTypeForCType(typeName, functionName)
 	if name == "Object" {
 		return "gdx." + name
 	}
@@ -451,7 +452,7 @@ func genSyncPureApiWrapFunction(function *clang.TypedefFunction) string {
 	for i, arg := range args {
 		sb.WriteString(arg.Name)
 		sb.WriteString(" ")
-		typeName := GetGdxFuncParamTypeString(arg.Type.Primative.Name)
+		typeName := MustGdxFuncParamTypeString(MustPrimitiveTypeName(arg, function.Name), function.Name)
 		sb.WriteString(typeName)
 		if i != len(args)-1 {
 			sb.WriteString(", ")
@@ -460,13 +461,13 @@ func genSyncPureApiWrapFunction(function *clang.TypedefFunction) string {
 	sb.WriteString(")")
 
 	if retType != "" {
-		sb.WriteString(" " + GetGdxFuncParamTypeString(EffectiveRawReturnType(function)))
+		sb.WriteString(" " + MustGdxFuncParamTypeString(EffectiveRawReturnType(function), function.Name))
 	}
 	sb.WriteString(" {")
 	prefixStr := "\t"
 	// body
 	if retType != "" {
-		sb.WriteString("\n" + prefixStr + "return " + goZeroValue(GetGdxFuncParamTypeString(EffectiveRawReturnType(function))) + "\n")
+		sb.WriteString("\n" + prefixStr + "return " + goZeroValue(MustGdxFuncParamTypeString(EffectiveRawReturnType(function), function.Name)) + "\n")
 	}
 	sb.WriteString("}")
 	return sb.String()
@@ -499,7 +500,7 @@ func genSyncApiWrapFunction(function *clang.TypedefFunction) string {
 	for i, arg := range args {
 		sb.WriteString(arg.Name)
 		sb.WriteString(" ")
-		typeName := GetGdxFuncParamTypeString(arg.Type.Primative.Name)
+		typeName := MustGdxFuncParamTypeString(MustPrimitiveTypeName(arg, function.Name), function.Name)
 		sb.WriteString(typeName)
 		if i != len(args)-1 {
 			sb.WriteString(", ")
@@ -508,13 +509,13 @@ func genSyncApiWrapFunction(function *clang.TypedefFunction) string {
 	sb.WriteString(")")
 
 	if retType != "" {
-		sb.WriteString(" " + GetGdxFuncParamTypeString(EffectiveRawReturnType(function)))
+		sb.WriteString(" " + MustGdxFuncParamTypeString(EffectiveRawReturnType(function), function.Name))
 	}
 	sb.WriteString(" {")
 	prefixStr := "\t"
 	// body
 	if retType != "" {
-		sb.WriteString("\n" + prefixStr + "var _ret1 " + GetGdxFuncParamTypeString(EffectiveRawReturnType(function)) + "")
+		sb.WriteString("\n" + prefixStr + "var _ret1 " + MustGdxFuncParamTypeString(EffectiveRawReturnType(function), function.Name) + "")
 	}
 
 	sb.WriteString(`	
@@ -578,7 +579,7 @@ func getManagerImplPure(function *clang.TypedefFunction, clsName string) string 
 		}
 		sb.WriteString(arg.Name)
 		sb.WriteString(" ")
-		typeName := GetFuncParamTypeString(arg.Type.Primative.Name)
+		typeName := MustGoTypeForCType(MustPrimitiveTypeName(arg, function.Name), function.Name)
 		sb.WriteString(typeName)
 		wroteArg = true
 	}
@@ -616,7 +617,7 @@ func getManagerImpl(function *clang.TypedefFunction, clsName string) string {
 		}
 		sb.WriteString(arg.Name)
 		sb.WriteString(" ")
-		typeName := GetFuncParamTypeString(arg.Type.Primative.Name)
+		typeName := MustGoTypeForCType(MustPrimitiveTypeName(arg, function.Name), function.Name)
 		sb.WriteString(typeName)
 		wroteArg = true
 	}

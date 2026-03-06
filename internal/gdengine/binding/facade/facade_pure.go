@@ -1,6 +1,6 @@
 //go:build pure_engine
 
-package wrap
+package facade
 
 import (
 	"github.com/goplus/spx/v2/pkg/spx/pkg/engine"
