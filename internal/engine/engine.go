@@ -11,9 +11,9 @@ import (
 	"github.com/goplus/spx/v2/internal/enginewrap"
 	spxlog "github.com/goplus/spx/v2/internal/log"
 	"github.com/goplus/spx/v2/internal/time"
-	"github.com/goplus/spx/v2/pkg/gdspx/pkg/engine"
-	gdx "github.com/goplus/spx/v2/pkg/gdspx/pkg/engine"
-	gde "github.com/goplus/spx/v2/pkg/gdspx/pkg/gdspx"
+	"github.com/goplus/spx/v2/pkg/spx/pkg/engine"
+	gdx "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
+	gde "github.com/goplus/spx/v2/pkg/spx/pkg/gdspx"
 )
 
 // copy these variable to any namespace you want
