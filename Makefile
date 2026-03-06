@@ -108,19 +108,11 @@ download: ## Download engines
 download-engine: ## Download engine templates for specific platform. Usage: make download-engine PLATFORM=android|ios|web [MODE=normal|worker|minigame|miniprogram]
 
 	@echo "Downloading engine templates for platform: $(PLATFORM)"
-	@if [ "$(PLATFORM)" = "web" ]; then \
-		if [ -n "$(MODE)" ]; then \
-			MODE_ENV="$(MODE)" ./pkg/spx/tools/build_engine.sh -p "$(PLATFORM)" -g -m "$(MODE)"; \
-		else \
-			./pkg/spx/tools/build_engine.sh -p "$(PLATFORM)" -g; \
-		fi \
+	@if [ -n "$(MODE)" ]; then \
+		MODE_ENV="$(MODE)" ./pkg/spx/tools/build_engine.sh -p "$(PLATFORM)" -g -m "$(MODE)"; \
 	else \
-		if [ -n "$(MODE)" ]; then \
-			MODE_ENV="$(MODE)" ./pkg/spx/tools/build_engine.sh -p "$(PLATFORM)" -g -m "$(MODE)"; \
-		else \
-			./pkg/spx/tools/build_engine.sh -p "$(PLATFORM)" -g; \
-		fi \
-	fi 
+		./pkg/spx/tools/build_engine.sh -p "$(PLATFORM)" -g; \
+	fi
 
 
 # ============================================
