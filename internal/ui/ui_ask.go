@@ -2,6 +2,7 @@ package ui
 
 import (
 	"github.com/goplus/spx/v2/internal/engine"
+	gdx "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
 )
 
 type UiAsk struct {
@@ -43,7 +44,7 @@ func (pself *UiAsk) handleCheck() {
 
 // OnUpdate checks for Enter key press every frame
 func (pself *UiAsk) Update() {
-	enterPressed := mgr.InputMgr.GetKey(int64(engine.KeyEnter)) || mgr.InputMgr.GetKey(int64(engine.KeyKPEnter))
+	enterPressed := mgr.InputMgr.GetKey(int64(gdx.KeyEnter)) || mgr.InputMgr.GetKey(int64(gdx.KeyKPEnter))
 	// Trigger only on key press (not held down)
 	if enterPressed && !pself.lastEnterState {
 		pself.handleCheck()

@@ -38,7 +38,7 @@ func RegisterFileSystem(fs fs.Dir) {
 func NewUiNode[T any]() *T {
 	var _ret1 *T
 	WaitMainThread(func() {
-		_ret1 = gdx.CreateEngineUI[T]("")
+		_ret1 = CreateEngineUIForType[T]("")
 	})
 	return _ret1
 }
@@ -46,7 +46,7 @@ func NewUiNode[T any]() *T {
 func NewBackdropProxy(obj any, path string, renderScale float64) *Sprite {
 	var _ret1 *Sprite
 	WaitMainThread(func() {
-		_ret1 = gdx.CreateBackdrop[Sprite]()
+		_ret1 = CreateBackdropForType[Sprite]()
 		_ret1.Target = obj
 		_ret1.SetZIndex(-1)
 		_ret1.DisablePhysic()
@@ -87,12 +87,12 @@ func WorldToScreen(pos Vec2) Vec2 {
 
 func ClearAllSprites() {
 	WaitMainThread(func() {
-		gdx.ClearAllSprites()
+		clearAllSprites()
 	})
 }
 
 func GetSprite(id gdx.Object) *Sprite {
-	target := gdx.GetSprite(id)
+	target := lookupSprite(id)
 	sprite, ok := target.(*Sprite)
 	if ok {
 		return sprite
