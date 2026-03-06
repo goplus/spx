@@ -8,7 +8,7 @@ import (
 
 	"github.com/goplus/spx/v2/fs"
 	"github.com/goplus/spx/v2/internal/engine/platform"
-	gdx "github.com/goplus/spx/v2/pkg/gdspx/pkg/engine"
+	gdx "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
 )
 
 func RegisterFileSystem(fs fs.Dir) {

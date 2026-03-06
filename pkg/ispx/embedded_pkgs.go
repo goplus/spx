@@ -1,7 +1,7 @@
 package ispx
 
 //go:generate go tool qexp -outdir internal/pkg github.com/goplus/spx/v2
-//go:generate go tool qexp -outdir internal/pkg github.com/goplus/spx/v2/pkg/gdspx/pkg/engine
+//go:generate go tool qexp -outdir internal/pkg github.com/goplus/spx/v2/pkg/spx/pkg/engine
 //go:generate go tool qexp -outdir internal/pkg github.com/goplus/spx/v2/pkg/spx
 
 // Embedded packages available across all ispx runtime platforms.
@@ -174,6 +174,6 @@ import (
 
 	// Third-party packages.
 	_ "github.com/goplus/spx/v2/pkg/ispx/internal/pkg/github.com/goplus/spx/v2"
-	_ "github.com/goplus/spx/v2/pkg/ispx/internal/pkg/github.com/goplus/spx/v2/pkg/gdspx/pkg/engine"
 	_ "github.com/goplus/spx/v2/pkg/ispx/internal/pkg/github.com/goplus/spx/v2/pkg/spx"
+	_ "github.com/goplus/spx/v2/pkg/ispx/internal/pkg/github.com/goplus/spx/v2/pkg/spx/pkg/engine"
 )
