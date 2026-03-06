@@ -1,7 +1,7 @@
 package gdspx
 
 import (
-	inengine "github.com/goplus/spx/v2/internal/spx/engine"
+	inengine "github.com/goplus/spx/v2/internal/gdengine"
 	engine "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
 )
 

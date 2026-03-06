@@ -1,0 +1,354 @@
+// Package gdextensionwrapper generates C code to wrap all of the gdextension
+// methods to call functions on the gdextension_api_structs to work
+// around the Cgo C function pointer limitation.
+package webffi
+
+import (
+	"bytes"
+	_ "embed"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"text/template"
+
+	"github.com/goplus/spx/v2/internal/cmd/codegen/gdextensionparser/clang"
+	. "github.com/goplus/spx/v2/internal/cmd/codegen/generate/common"
+
+	"github.com/iancoleman/strcase"
+)
+
+var (
+	WebRelDir = "../../webffi"
+)
+var (
+
+	//go:embed callbacks.go.tmpl
+	callbacksFileText string
+
+	//go:embed ffi.go.tmpl
+	ffiFileText string
+
+	//go:embed manager_wrapper.go.tmpl
+	wrapManagerGoFileText string
+
+	//go:embed gdspx.js.tmpl
+	jsEngineJsFileText string
+
+	//go:embed worker.wrap.gen.js.tmpl
+	workerWrapJsFileText string
+)
+
+func Generate(projectPath, godotPath string, ast clang.CHeaderFileAST) {
+	err := GenerateCallbackGoFile(projectPath, ast)
+	if err != nil {
+		panic(err)
+	}
+	err = GenerateGDExtensionInterfaceGoFile(projectPath, ast)
+	if err != nil {
+		panic(err)
+	}
+	err = GenerateManagerWrapperGoFile(projectPath, ast)
+	if err != nil {
+		panic(err)
+	}
+	err = GenerateJsEngineJsFile(projectPath, godotPath, ast)
+	if err != nil {
+		panic(err)
+	}
+	err = GenerateWorkerWrapJsFile(projectPath, ast)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func GenerateCallbackGoFile(projectPath string, ast clang.CHeaderFileAST) error {
+	funcs := template.FuncMap{
+		"gdiVariableName":    GdiVariableName,
+		"snakeCase":          strcase.ToSnake,
+		"camelCase":          strcase.ToCamel,
+		"upper":              strings.ToUpper,
+		"goReturnType":       GoReturnType,
+		"goArgumentType":     GoArgumentType,
+		"goEnumValue":        GoEnumValue,
+		"add":                Add,
+		"cgoCastArgument":    CgoCastArgument,
+		"cgoCastReturnType":  CgoCastReturnType,
+		"cgoCleanUpArgument": CgoCleanUpArgument,
+		"trimPrefix":         TrimPrefix,
+	}
+
+	return GenerateFile(funcs, "callbacks.gen.go", callbacksFileText, ast,
+		filepath.Join(projectPath, WebRelDir, "callbacks.gen.go"))
+}
+
+func GenerateWorkerWrapJsFile(projectPath string, ast clang.CHeaderFileAST) error {
+	funcs := template.FuncMap{
+		"gdiVariableName":    GdiVariableName,
+		"snakeCase":          strcase.ToSnake,
+		"camelCase":          strcase.ToCamel,
+		"upper":              strings.ToUpper,
+		"goReturnType":       GoReturnType,
+		"goArgumentType":     GoArgumentType,
+		"goEnumValue":        GoEnumValue,
+		"add":                Add,
+		"cgoCastArgument":    CgoCastArgument,
+		"cgoCastReturnType":  CgoCastReturnType,
+		"cgoCleanUpArgument": CgoCleanUpArgument,
+		"trimPrefix":         TrimPrefix,
+	}
+
+	return GenerateFile(funcs, "worker.wrap.gen.js", workerWrapJsFileText, ast,
+		filepath.Join(projectPath, "../../../cmd/gox/template/platform/webworker/worker.wrap.gen.js"))
+}
+
+func GenerateGDExtensionInterfaceGoFile(projectPath string, ast clang.CHeaderFileAST) error {
+	funcs := template.FuncMap{
+		"gdiVariableName":     GdiVariableName,
+		"snakeCase":           strcase.ToSnake,
+		"camelCase":           strcase.ToCamel,
+		"goReturnType":        GoReturnType,
+		"goArgumentType":      GoArgumentType,
+		"goEnumValue":         GoEnumValue,
+		"add":                 Add,
+		"cgoCastArgument":     CgoCastArgument,
+		"cgoCastReturnType":   CgoCastReturnType,
+		"cgoCleanUpArgument":  CgoCleanUpArgument,
+		"trimPrefix":          TrimPrefix,
+		"loadProcAddressName": LoadProcAddressName,
+	}
+
+	return GenerateFile(funcs, "ffi.gen.go", ffiFileText, ast,
+		filepath.Join(projectPath, WebRelDir, "ffi.gen.go"))
+}
+
+func GenerateManagerWrapperGoFile(projectPath string, ast clang.CHeaderFileAST) error {
+	funcs := template.FuncMap{
+		"gdiVariableName":     GdiVariableName,
+		"snakeCase":           strcase.ToSnake,
+		"camelCase":           strcase.ToCamel,
+		"goReturnType":        GoReturnType,
+		"goArgumentType":      GoArgumentType,
+		"goEnumValue":         GoEnumValue,
+		"add":                 Add,
+		"cgoCastArgument":     CgoCastArgument,
+		"cgoCastReturnType":   CgoCastReturnType,
+		"cgoCleanUpArgument":  CgoCleanUpArgument,
+		"trimPrefix":          TrimPrefix,
+		"isManagerMethod":     IsManagerMethod,
+		"getManagerFuncName":  getManagerFuncName,
+		"getManagerFuncBody":  getManagerFuncBody,
+		"getManagerInterface": getManagerInterface,
+	}
+
+	return GenerateFile(funcs, "manager_web.gen.go", wrapManagerGoFileText, ManagerData{Ast: ast, Mangers: GetManagers(ast)},
+		filepath.Join(projectPath, WebRelDir, "../gdengine/impl/manager_web.gen.go"))
+}
+
+func GenerateJsEngineJsFile(projectPath, godotPath string, ast clang.CHeaderFileAST) error {
+	funcs := template.FuncMap{
+		"gdiVariableName":     GdiVariableName,
+		"snakeCase":           strcase.ToSnake,
+		"camelCase":           strcase.ToCamel,
+		"goReturnType":        GoReturnType,
+		"goArgumentType":      GoArgumentType,
+		"goEnumValue":         GoEnumValue,
+		"add":                 Add,
+		"sub":                 Sub,
+		"effectiveArgs":       EffectiveArguments,
+		"cgoCastArgument":     CgoCastArgument,
+		"cgoCastReturnType":   CgoCastReturnType,
+		"cgoCleanUpArgument":  CgoCleanUpArgument,
+		"getJsFuncBody":       getJsFuncBody,
+		"trimPrefix":          TrimPrefix,
+		"loadProcAddressName": LoadProcAddressName,
+	}
+
+	tmpl, err := template.New("gdspx.js").
+		Funcs(funcs).
+		Parse(jsEngineJsFileText)
+	if err != nil {
+		return err
+	}
+
+	var b bytes.Buffer
+	err = tmpl.Execute(&b, ast)
+	if err != nil {
+		return err
+	}
+
+	headerFileName := filepath.Join(godotPath, "platform", "web", "js", "engine", "gdspx.js")
+	os.MkdirAll(filepath.Dir(headerFileName), os.ModePerm)
+	f, err := os.Create(headerFileName)
+	f.Write(b.Bytes())
+	f.Close()
+	return err
+}
+
+func getManagerFuncName(function *clang.TypedefFunction) string {
+	prefix := "GDExtensionSpx"
+	sb := strings.Builder{}
+	mgrName := GetManagerName(function.Name)
+	funcName := function.Name[len(prefix)+len(mgrName):]
+	args := EffectiveArguments(function)
+	sb.WriteString("(")
+	sb.WriteString("pself *" + mgrName)
+	sb.WriteString("Mgr) ")
+	sb.WriteString(funcName)
+	sb.WriteString("(")
+	for i, arg := range args {
+		sb.WriteString(arg.Name)
+		sb.WriteString(" ")
+		typeName := GetFuncParamTypeString(arg.Type.Primative.Name)
+		sb.WriteString(typeName)
+		if i != len(args)-1 {
+			sb.WriteString(", ")
+		}
+	}
+	sb.WriteString(")")
+
+	if HasEffectiveReturn(function) {
+		typeName := EffectiveGoReturnType(function)
+		sb.WriteString(" " + typeName + " ")
+	}
+	return sb.String()
+}
+
+func getManagerFuncBody(function *clang.TypedefFunction) string {
+	sb := strings.Builder{}
+	prefixTab := "\t"
+	params := []string{}
+	args := EffectiveArguments(function)
+	// convert arguments
+	for i, arg := range args {
+		sb.WriteString(prefixTab)
+		typeName := arg.Type.Primative.Name
+		argName := "arg" + strconv.Itoa(i)
+		sb.WriteString(argName + " := ")
+		sb.WriteString("JsFrom" + typeName)
+		sb.WriteString("(")
+		sb.WriteString(arg.Name)
+		sb.WriteString(")")
+
+		sb.WriteString("\n")
+		params = append(params, argName)
+	}
+
+	// call the function
+	sb.WriteString(prefixTab)
+	if HasEffectiveReturn(function) {
+		sb.WriteString("_retValue := ")
+	}
+
+	funcName := "API.Spx" + (TrimPrefix(function.Name, "GDExtensionSpx"))
+	sb.WriteString(funcName)
+	sb.WriteString(".Invoke(")
+	for i, param := range params {
+		sb.WriteString(param)
+		if i != len(params)-1 {
+			sb.WriteString(", ")
+		}
+	}
+	sb.WriteString(")")
+
+	if HasEffectiveReturn(function) {
+		sb.WriteString("\n" + prefixTab)
+		sb.WriteString("return ")
+		typeName := EffectiveRawReturnType(function)
+		name := strcase.ToCamel(typeName)
+		if name == "GdObj" {
+			name = "GdObject"
+		}
+		sb.WriteString("JsTo" + name + "(_retValue)")
+	}
+	return sb.String()
+}
+func getManagerInterface(function *clang.TypedefFunction) string {
+	prefix := "GDExtensionSpx"
+	sb := strings.Builder{}
+	mgrName := GetManagerName(function.Name)
+	funcName := function.Name[len(prefix)+len(mgrName):]
+	args := EffectiveArguments(function)
+	sb.WriteString(funcName)
+	sb.WriteString("(")
+	for i, arg := range args {
+		sb.WriteString(arg.Name)
+		sb.WriteString(" ")
+		typeName := GetFuncParamTypeString(arg.Type.Primative.Name)
+		sb.WriteString(typeName)
+		if i != len(args)-1 {
+			sb.WriteString(", ")
+		}
+	}
+	sb.WriteString(")")
+
+	if HasEffectiveReturn(function) {
+		typeName := EffectiveGoReturnType(function)
+		sb.WriteString(" " + typeName + " ")
+	}
+	return sb.String()
+}
+func getJsFuncBody(function *clang.TypedefFunction) string {
+	sb := strings.Builder{}
+	prefixTab := "\t"
+	params := []string{}
+	args := EffectiveArguments(function)
+	rawRetType := EffectiveRawReturnType(function)
+
+	// call the function
+	if rawRetType != "" {
+		sb.WriteString("var _retValue = Alloc" + rawRetType + "();")
+	}
+	sb.WriteString("\n")
+
+	// convert arguments
+	for i, arg := range args {
+		sb.WriteString(prefixTab)
+		typeName := arg.Type.Primative.Name
+		argName := "_arg" + strconv.Itoa(i)
+		sb.WriteString("var " + argName + " = ")
+		sb.WriteString("To" + typeName)
+		sb.WriteString("(")
+		sb.WriteString(arg.Name)
+		sb.WriteString(");")
+
+		sb.WriteString("\n")
+		params = append(params, argName)
+	}
+	sb.WriteString(prefixTab)
+	sb.WriteString("_gdFuncPtr")
+	sb.WriteString("(")
+	for i, param := range params {
+		sb.WriteString(param)
+		if i != len(params)-1 {
+			sb.WriteString(", ")
+		}
+	}
+	if rawRetType != "" {
+		if len(params) > 0 {
+			sb.WriteString(", ")
+		}
+		sb.WriteString("_retValue")
+	}
+	sb.WriteString(");")
+
+	sb.WriteString("\n")
+	// convert arguments
+	for i, arg := range args {
+		sb.WriteString(prefixTab)
+		typeName := arg.Type.Primative.Name
+		argName := "_arg" + strconv.Itoa(i)
+		sb.WriteString("Free" + typeName + "(" + argName + "); \n")
+	}
+
+	if rawRetType != "" {
+		sb.WriteString(prefixTab + "var _finalRetValue = ")
+		typeName := rawRetType
+		funcName := strcase.ToCamel(typeName)
+		funcName = "ToJs" + strings.ReplaceAll(funcName, "Gd", "")
+		sb.WriteString(funcName + "(_retValue);\n")
+		sb.WriteString(prefixTab + "Free" + typeName + "(_retValue); \n")
+		sb.WriteString(prefixTab + "return _finalRetValue")
+	}
+	return sb.String()
+}
