@@ -98,7 +98,7 @@ resolve_godot_binary() {
             [ -n "$version" ] && candidates+=("$gopath_bin/gdspx$version")
             ;;
         Linux)
-            candidates+=("$godot_src/bin/godot.linuxbsd.editor.dev.${ARCH/x86_64/x86_64}")
+            candidates+=("$godot_src/bin/godot.linuxbsd.editor.dev.$ARCH")
             [ -n "$version" ] && candidates+=("$gopath_bin/gdspx$version")
             ;;
         *)

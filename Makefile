@@ -50,7 +50,7 @@ list-demos: ## List all demos with index
 # ============================================
 # Setup Commands
 # ============================================
-setup: ## Initialize the user environment
+setup: ## Initialize the user environment. Optional: GODOT_SRC=/abs/path/to/godot
 	chmod +x ./internal/tools/*.sh && \
 	echo "===> Step 1/2: Install spx" && \
 	make install && \
@@ -59,7 +59,7 @@ setup: ## Initialize the user environment
 	echo "===> setup done"
 
 
-setup-dev: ## Initialize development environment (full)
+setup-dev: ## Initialize development environment (full). Optional: GODOT_SRC=/abs/path/to/godot
 	chmod +x ./internal/tools/*.sh && \
 	echo "===> Step 1/6: Install spx" && \
 	make install && \
@@ -82,7 +82,7 @@ setup-web-full: ## Download and install web engine from godot releases(full). Op
 	make download-engine MODE=editor && \
 	make setup-web MODE=normal 
 
-setup-web: ## Download and install web engine from godot releases. Usage: make setup-web MODE=normal [GODOT_SRC=/abs/path/to/godot]
+setup-web: ## Download and install web engine from godot releases. Usage: make setup-web MODE=normal [GODOT_SRC=/abs/path/to/godot] (MODE: normal|worker|minigame|miniprogram)
 ifndef MODE
 	$(error MODE is not set! Usage: make setup-web MODE=normal or MODE=worker or MODE=minigame or MODE=miniprogram)
 endif
@@ -210,7 +210,7 @@ endif
 format: ## Format Go code
 	go fmt ./...
 
-generate: ## Generate code. Optional: make generate GODOT_SRC=/abs/path/to/godot
+generate: ## Generate code. Optional: GODOT_SRC=/abs/path/to/godot
 	cd ./internal/cmd/codegen && GODOT_SRC="$(GODOT_SRC)" go run . && cd $(CURRENT_PATH) && \
 	go generate ./cmd/spxrun/runner && \
 	make format

@@ -4,14 +4,14 @@ TOOLS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 REPO_DIR="$(cd "$TOOLS_DIR/../.." && pwd)"
 
 resolve_godot_src() {
-    local default_path="$PROJ_DIR/godot"
+    local default_path="$REPO_DIR/godot"
     local raw_path="${GODOT_SRC:-$default_path}"
     if command -v realpath >/dev/null 2>&1; then
         realpath "$raw_path" 2>/dev/null || echo "$raw_path"
     else
         case "$raw_path" in
             /*) echo "$raw_path" ;;
-            *) echo "$PROJ_DIR/${raw_path#./}" ;;
+            *) echo "$REPO_DIR/${raw_path#./}" ;;
         esac
     fi
 }
