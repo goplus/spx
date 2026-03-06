@@ -180,8 +180,8 @@ func GenerateManagerWrapperGoFile(projectPath string, ast clang.CHeaderFileAST) 
 		"getManagerInterface": getManagerInterface,
 	}
 
-	return GenerateFile(funcs, "manager_wrapper.gen.go", wrapManagerGoFileText, ManagerData{Ast: ast, Mangers: GetManagers(ast)},
-		filepath.Join(projectPath, RelDir, "../wrap/manager_wrapper.gen.go"))
+	return GenerateFile(funcs, "manager_native.gen.go", wrapManagerGoFileText, ManagerData{Ast: ast, Mangers: GetManagers(ast)},
+		filepath.Join(projectPath, RelDir, "../engine/impl/manager_native.gen.go"))
 
 }
 
