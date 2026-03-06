@@ -16,13 +16,13 @@ func SetWindowScale(scale float64) {
 type UiNode = gdx.UiNode
 
 func MainThreadNewSprite(obj any, pos Vec2) *Sprite {
-	syncSprite := gdx.CreateEmptySprite[Sprite](pos)
+	syncSprite := CreateEmptySpriteForType[Sprite](pos)
 	syncSprite.Target = obj
 	return syncSprite
 }
 
 func MainThreadBindUI[T any](parentNode gdx.Object, path string) *T {
-	return gdx.BindUI[T](parentNode, path)
+	return BindUIForType[T](parentNode, path)
 }
 
 func MainThreadGetTimeScale() float64 {

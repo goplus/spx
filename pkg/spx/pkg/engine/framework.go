@@ -4,93 +4,120 @@ import (
 	"reflect"
 
 	"github.com/goplus/spbase/mathf"
-	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
 var (
-	Id2Sprites         = make(map[Object]ISpriter)
-	Id2UiNodes         = make(map[Object]IUiNode)
+	// Deprecated: prefer accessor functions such as GetSprite or Sprites.
+	Id2Sprites = make(map[Object]ISpriter)
+	// Deprecated: prefer accessor functions such as GetUINode or UiNodes.
+	Id2UiNodes = make(map[Object]IUiNode)
+	// Deprecated: prefer AdvanceTimeSinceGameStart and TimeSinceGameStarted.
 	TimeSinceGameStart = float64(0)
-	name2SpriteType    = make(map[string]reflect.Type)
 )
 
-func isNodeExist(id Object) bool {
-	if _, ok := Id2UiNodes[id]; ok {
-		return true
-	}
-	if _, ok := Id2Sprites[id]; ok {
-		return true
-	}
-	return false
+func typeOf[T any]() reflect.Type {
+	return reflect.TypeOf((*T)(nil)).Elem()
 }
 
-func getPrefabPath(name string) string {
-	assetName := name
-	return "res://assets/prefabs/" + assetName + ".tscn"
+type RuntimeBridge interface {
+	InternalUpdateEngine(delta float64)
+	ClearAllSprites()
+	RegisterSpriteType(t reflect.Type)
+	GetSprite(id Object) ISpriter
+	BindSceneInstantiatedSprite(id Object, typeName string)
+	CreateSprite(t reflect.Type, pos mathf.Vec2) reflect.Value
+	CreateEmptySprite(t reflect.Type, pos mathf.Vec2) reflect.Value
+	CreateBackdrop(t reflect.Type) reflect.Value
+	CreateUI(t reflect.Type, prefabName string, isEngine bool) reflect.Value
+	BindUI(t reflect.Type, parentNode Object, path string) reflect.Value
+	DelayCall(delay float64, callback func())
+	DelaySpriteCall(delay float64, sprite ISpriter, callback func())
+	TweenPos(node ISpriter, pos mathf.Vec2, duration float64, callback func())
+	TweenPos2(node ISpriter, pos mathf.Vec2, duration float64, pos2 mathf.Vec2, duration2 float64, callback func())
+	Sprites() map[Object]ISpriter
+	UiNodes() map[Object]IUiNode
+	GetUINode(id Object) IUiNode
+	DeleteSprite(id Object)
+	DeleteUINode(id Object)
+	AdvanceTimeSinceGameStart(delta float64) float64
+	TimeSinceGameStarted() float64
 }
 
-func getUiPath(name string, is_engine bool) string {
-	assetName := name
-	if is_engine {
-		return "res://engine/ui/" + assetName + ".tscn"
+var runtimeBridge RuntimeBridge
+
+func SetRuntimeBridge(bridge RuntimeBridge) {
+	runtimeBridge = bridge
+}
+
+func requireRuntimeBridge() RuntimeBridge {
+	if runtimeBridge == nil {
+		panic("engine runtime bridge is not initialized")
 	}
-	return "res://assets/ui/" + assetName + ".tscn"
+	return runtimeBridge
 }
 
 func InternalUpdateEngine(delta float64) {
-	updateTimers(delta)
-	updateTweens(delta)
+	requireRuntimeBridge().InternalUpdateEngine(delta)
 }
 
 func ClearAllSprites() {
-	for _, sprite := range Id2Sprites {
-		sprite.Destroy()
-	}
-	Id2Sprites = make(map[Object]ISpriter)
-	for _, node := range Id2UiNodes {
-		node.Destroy()
-	}
-	Id2UiNodes = make(map[Object]IUiNode)
+	requireRuntimeBridge().ClearAllSprites()
 }
 
+// Recommended runtime accessors.
 func RegisterSpriteType[T any]() {
-	tType := reflect.TypeOf((*T)(nil)).Elem()
-	name := tType.Name()
-	name2SpriteType[name] = tType
+	requireRuntimeBridge().RegisterSpriteType(typeOf[T]())
 }
 
 func GetSprite(id Object) ISpriter {
-	if sprite, ok := Id2Sprites[id]; ok {
-		return sprite
-	}
-	return nil
+	return requireRuntimeBridge().GetSprite(id)
+}
+
+func GetUINode(id Object) IUiNode {
+	return requireRuntimeBridge().GetUINode(id)
+}
+
+func Sprites() map[Object]ISpriter {
+	return requireRuntimeBridge().Sprites()
+}
+
+func UiNodes() map[Object]IUiNode {
+	return requireRuntimeBridge().UiNodes()
+}
+
+func DeleteSprite(id Object) {
+	requireRuntimeBridge().DeleteSprite(id)
+}
+
+func DeleteUINode(id Object) {
+	requireRuntimeBridge().DeleteUINode(id)
+}
+
+func AdvanceTimeSinceGameStart(delta float64) float64 {
+	return requireRuntimeBridge().AdvanceTimeSinceGameStart(delta)
+}
+
+func TimeSinceGameStarted() float64 {
+	return requireRuntimeBridge().TimeSinceGameStarted()
 }
 
 func BindSceneInstantiatedSprite(id Object, type_name string) {
-	if t, ok := name2SpriteType[type_name]; ok {
-		createSprite(t, id)
-	} else {
-		spxlog.Error("BindSceneInstantiatedSprite: type not found %s", type_name)
-	}
+	requireRuntimeBridge().BindSceneInstantiatedSprite(id, type_name)
 }
+
+// Public construction helpers.
 func CreateSprite[T any](pos mathf.Vec2) *T {
-	tType := reflect.TypeOf((*T)(nil)).Elem()
-	name := tType.Name()
-	id := SpriteMgr.CreateSprite(getPrefabPath(name), pos)
-	spriteValue := createSprite(tType, id)
+	spriteValue := requireRuntimeBridge().CreateSprite(typeOf[T](), pos)
 	return spriteValue.Addr().Interface().(*T)
 }
+
 func CreateEmptySprite[T any](pos mathf.Vec2) *T {
-	tType := reflect.TypeOf((*T)(nil)).Elem()
-	id := SpriteMgr.CreateSprite("", pos)
-	spriteValue := createSprite(tType, id)
+	spriteValue := requireRuntimeBridge().CreateEmptySprite(typeOf[T](), pos)
 	return spriteValue.Addr().Interface().(*T)
 }
 
 func CreateBackdrop[T any]() *T {
-	tType := reflect.TypeOf((*T)(nil)).Elem()
-	id := SpriteMgr.CreateBackdrop("")
-	spriteValue := createSprite(tType, id)
+	spriteValue := requireRuntimeBridge().CreateBackdrop(typeOf[T]())
 	return spriteValue.Addr().Interface().(*T)
 }
 
@@ -100,44 +127,35 @@ func CreateUI[T any](prefabName string) *T {
 func CreateEngineUI[T any](prefabName string) *T {
 	return createUI[T](prefabName, true)
 }
-func createUI[T any](prefabName string, is_engine bool) *T {
-	tType := reflect.TypeOf((*T)(nil)).Elem()
-	name := tType.Name()
-	if prefabName != "" {
-		name = prefabName
-	}
-	nodeValue := reflect.New(tType).Elem()
-	id := UiMgr.CreateNode(getUiPath(name, is_engine))
-	node := nodeValue.Addr().Interface().(IUiNode)
-	node.SetId(id)
-	Id2UiNodes[id] = node
-	node.onCreate()
-	node.OnStart()
+
+func createUI[T any](prefabName string, isEngine bool) *T {
+	nodeValue := requireRuntimeBridge().CreateUI(typeOf[T](), prefabName, isEngine)
 	return nodeValue.Addr().Interface().(*T)
 }
 
 func BindUI[T any](parentNode Object, path string) *T {
-	id := UiMgr.BindNode(parentNode, path)
-	if id == 0 {
-		spxlog.Error("BindUI failed: parentNode=%d path=%s", parentNode, path)
+	nodeValue := requireRuntimeBridge().BindUI(typeOf[T](), parentNode, path)
+	if !nodeValue.IsValid() {
 		return nil
 	}
-	tType := reflect.TypeOf((*T)(nil)).Elem()
-	nodeValue := reflect.New(tType).Elem()
-	node := nodeValue.Addr().Interface().(IUiNode)
-	node.SetId(id)
-	Id2UiNodes[id] = node
-	node.onCreate()
-	node.OnStart()
 	return nodeValue.Addr().Interface().(*T)
 }
 
-func createSprite(tType reflect.Type, id Object) reflect.Value {
-	spriteValue := reflect.New(tType).Elem()
-	sprite := spriteValue.Addr().Interface().(ISpriter)
+// Lifecycle helpers used by the internal runtime implementation.
+func InitSpriteInstance(id Object, sprite ISpriter, register func(Object, ISpriter)) {
 	sprite.SetId(id)
-	Id2Sprites[id] = sprite
+	if register != nil {
+		register(id, sprite)
+	}
 	sprite.onCreate()
 	sprite.OnStart()
-	return spriteValue
+}
+
+func InitUINodeInstance(id Object, node IUiNode, register func(Object, IUiNode)) {
+	node.SetId(id)
+	if register != nil {
+		register(id, node)
+	}
+	node.onCreate()
+	node.OnStart()
 }
