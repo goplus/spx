@@ -217,10 +217,6 @@ type eventKeyDown struct {
 	Key Key
 }
 
-type eventKeyUp struct {
-	Key Key
-}
-
 type eventLeftButtonDown struct {
 	Pos mathf.Vec2
 }
@@ -231,10 +227,6 @@ type eventLeftButtonUp struct {
 
 type eventTimer struct {
 	Time float64
-}
-
-type eventMouseMove struct {
-	Pos mathf.Vec2
 }
 
 // -------------------------------------------------------------------------------------

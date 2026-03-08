@@ -88,13 +88,6 @@ func (p *Game) doWhenLeftButtonDown(ev *eventLeftButtonDown) {
 	}
 }
 
-func (p *Game) doWhenMouseMove(ev *eventMouseMove) {
-	// Update current mouse position
-	p.mousePos = ev.Pos
-	// If swipe tracking is active, record the movement
-	p.inputs.onMouseMove(ev.Pos)
-}
-
 // handleEvent dispatches events to their respective handlers.
 func (p *Game) handleEvent(ev event) {
 	switch e := ev.(type) {
@@ -102,9 +95,8 @@ func (p *Game) handleEvent(ev event) {
 		p.doWhenLeftButtonUp(e)
 	case *eventLeftButtonDown:
 		p.doWhenLeftButtonDown(e)
-	case *eventMouseMove:
-		p.doWhenMouseMove(e)
 	case *eventKeyDown:
+		// Note: key-up callbacks are not part of the current event sink API.
 		p.sinkMgr.doWhenKeyPressed(e.Key)
 	case *eventStart:
 		p.sinkMgr.doWhenAwake(nil)
@@ -188,27 +180,27 @@ func (p *Game) inputEventLoop(me coroutine.Thread) int {
 	keyEvents := make([]engine.KeyEvent, 0)
 
 	for {
+		// Always sample current mouse position first so button events use exact coordinates.
+		curMousePos := p.engine().InputMgr.GetGlobalMousePos()
+		mathfMousePos := mathf.Vec2{X: float64(curMousePos.X), Y: float64(curMousePos.Y)}
+
 		// Check mouse button state
 		curLbtnPressed := p.engine().InputMgr.GetMouseState(MOUSE_BUTTON_LEFT)
 		if curLbtnPressed != lastLbtnPressed {
 			if lastLbtnPressed {
-				p.fireEvent(&eventLeftButtonUp{Pos: p.mousePos})
+				p.fireEvent(&eventLeftButtonUp{Pos: mathfMousePos})
 			} else {
-				p.fireEvent(&eventLeftButtonDown{Pos: p.mousePos})
+				p.fireEvent(&eventLeftButtonDown{Pos: mathfMousePos})
 			}
 		}
 		lastLbtnPressed = curLbtnPressed
-
-		// Check mouse movement
-		// Note: We need to get the actual current mouse position from the engine
-		// For now, we'll use the stored mousePos which should be updated elsewhere
-		curMousePos := p.engine().InputMgr.GetGlobalMousePos()
-		mathfMousePos := mathf.Vec2{X: float64(curMousePos.X), Y: float64(curMousePos.Y)}
 
 		// Check if mouse moved significantly
 		dx := mathfMousePos.X - lastMousePos.X
 		dy := mathfMousePos.Y - lastMousePos.Y
 		if math.Abs(dx) > mouseMovementThreshold || math.Abs(dy) > mouseMovementThreshold {
+			// Keep mouse move handling on the input loop path to avoid per-frame event allocation.
+			p.mousePos = mathfMousePos
 			p.inputs.onMouseMove(mathfMousePos)
 			lastMousePos = mathfMousePos
 		}
@@ -218,9 +210,9 @@ func (p *Game) inputEventLoop(me coroutine.Thread) int {
 		for _, ev := range keyEvents {
 			if ev.IsPressed {
 				p.fireEvent(&eventKeyDown{Key: Key(ev.Id)})
-			} else {
-				p.fireEvent(&eventKeyUp{Key: Key(ev.Id)})
 			}
+			// Key release events are currently handled via polling (KeyPressed),
+			// not via event callbacks. Keep this explicit to avoid silent assumptions.
 		}
 		keyEvents = keyEvents[:0]
 		engine.WaitNextFrame()

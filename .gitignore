@@ -1,5 +1,6 @@
 .vscode
 .gop
+.gocache
 .DS_Store
 sprite.txt
 game.txt
