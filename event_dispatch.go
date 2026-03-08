@@ -17,156 +17,131 @@
 package spx
 
 import (
-	"sync"
-
+	coreevent "github.com/goplus/spx/v2/internal/core/event"
 	"github.com/goplus/spx/v2/internal/coroutine"
 	"github.com/goplus/spx/v2/internal/engine"
 	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
 func (p *eventSinkMgr) doWhenStart() {
-	sinks := p.snapshotWhenStartOnce()
+	sinks := p.SnapshotStartOnce()
 	if len(sinks) == 0 {
 		return
 	}
-	asyncCall(sinks, false, nil, func(ev *eventSink) {
-		if isDebugEventEnabled() {
-			spxlog.Debug("==> onStart: %s", nameOf(ev.pthis))
-		}
-		ev.sink.(func())()
+	coreevent.DispatchAsync(sinks, false, nil, eventDispatchHooks(), func(ev *eventSink) {
+		coreevent.If0(isDebugEventEnabled, func() {
+			spxlog.Debug("==> onStart: %s", nameOf(ev.Owner))
+		})()
+		ev.Handler.(func())()
 	})
 }
 
 func (p *eventSinkMgr) doWhenAwake(this threadObj) {
-	sinks := p.snapshotWhenAwake()
-	syncCall(sinks, this, func(ev *eventSink) {
-		if isDebugEventEnabled() {
-			spxlog.Debug("==> onAwake: %s", nameOf(ev.pthis))
-		}
-		ev.sink.(func())()
+	sinks := p.SnapshotAwake()
+	coreevent.DispatchSync(sinks, this, eventDispatchHooks(), func(ev *eventSink) {
+		coreevent.If0(isDebugEventEnabled, func() {
+			spxlog.Debug("==> onAwake: %s", nameOf(ev.Owner))
+		})()
+		ev.Handler.(func())()
 	})
 }
 
 func (p *eventSinkMgr) doWhenTimer(time float64) {
-	sinks := p.snapshotWhenTimer()
-	asyncCall(sinks, false, time, func(ev *eventSink) {
-		ev.sink.(func(float64))(time)
+	sinks := p.SnapshotTimer()
+	coreevent.DispatchAsync(sinks, false, time, eventDispatchHooks(), func(ev *eventSink) {
+		ev.Handler.(func(float64))(time)
 	})
 }
 
 func (p *eventSinkMgr) doWhenKeyPressed(key Key) {
-	sinks := p.snapshotWhenKeyPressed()
-	asyncCall(sinks, false, key, func(ev *eventSink) {
-		ev.sink.(func(Key))(key)
+	sinks := p.SnapshotKeyPressed()
+	coreevent.DispatchAsync(sinks, false, key, eventDispatchHooks(), func(ev *eventSink) {
+		ev.Handler.(func(Key))(key)
 	})
 }
 
 func (p *eventSinkMgr) doWhenSwipe(direction Direction, this threadObj) {
-	sinks := p.snapshotWhenSwipe()
-	asyncCall(sinks, false, direction, func(ev *eventSink) {
-		if ev.pthis == this {
-			ev.sink.(func(Direction))(direction)
+	sinks := p.SnapshotSwipe()
+	coreevent.DispatchAsync(sinks, false, direction, eventDispatchHooks(), func(ev *eventSink) {
+		if ev.Owner == this {
+			ev.Handler.(func(Direction))(direction)
 		}
 	})
 }
 
 func (p *eventSinkMgr) doWhenClick(this threadObj) {
-	sinks := p.snapshotWhenClick()
-	asyncCall(sinks, false, this, func(ev *eventSink) {
-		if isDebugEventEnabled() {
+	sinks := p.SnapshotClick()
+	coreevent.DispatchAsync(sinks, false, this, eventDispatchHooks(), func(ev *eventSink) {
+		coreevent.If0(isDebugEventEnabled, func() {
 			spxlog.Debug("==> onClick: %s", nameOf(this))
-		}
-		ev.sink.(func())()
+		})()
+		ev.Handler.(func())()
 	})
 }
 
 func (p *eventSinkMgr) doWhenTouchStart(this threadObj, obj *SpriteImpl) {
-	sinks := p.snapshotWhenTouchStart()
-	asyncCall(sinks, false, this, func(ev *eventSink) {
-		if isDebugEventEnabled() {
+	sinks := p.SnapshotTouchStart()
+	coreevent.DispatchAsync(sinks, false, this, eventDispatchHooks(), func(ev *eventSink) {
+		coreevent.If0(isDebugEventEnabled, func() {
 			spxlog.Debug("===> onTouchStart: %s, %s", nameOf(this), obj.name)
-		}
-		ev.sink.(func(Sprite))(obj.sprite)
+		})()
+		ev.Handler.(func(Sprite))(obj.sprite)
 	})
 }
 
 func (p *eventSinkMgr) doWhenTouching(this threadObj, obj *SpriteImpl) {
-	sinks := p.snapshotWhenTouching()
-	asyncCall(sinks, false, this, func(ev *eventSink) {
-		if isDebugEventEnabled() {
+	sinks := p.SnapshotTouching()
+	coreevent.DispatchAsync(sinks, false, this, eventDispatchHooks(), func(ev *eventSink) {
+		coreevent.If0(isDebugEventEnabled, func() {
 			spxlog.Debug("==> onTouching: %s, %s", nameOf(this), obj.name)
-		}
-		ev.sink.(func(Sprite))(obj.sprite)
+		})()
+		ev.Handler.(func(Sprite))(obj.sprite)
 	})
 }
 
 func (p *eventSinkMgr) doWhenTouchEnd(this threadObj, obj *SpriteImpl) {
-	sinks := p.snapshotWhenTouchEnd()
-	asyncCall(sinks, false, this, func(ev *eventSink) {
-		if isDebugEventEnabled() {
+	sinks := p.SnapshotTouchEnd()
+	coreevent.DispatchAsync(sinks, false, this, eventDispatchHooks(), func(ev *eventSink) {
+		coreevent.If0(isDebugEventEnabled, func() {
 			spxlog.Debug("===> onTouchEnd: %s, %s", nameOf(this), obj.name)
-		}
-		ev.sink.(func(Sprite))(obj.sprite)
+		})()
+		ev.Handler.(func(Sprite))(obj.sprite)
 	})
 }
 
 func (p *eventSinkMgr) doWhenCloned(this threadObj, data any) {
-	sinks := p.snapshotWhenCloned()
-	asyncCall(sinks, true, this, func(ev *eventSink) {
-		if isDebugEventEnabled() {
+	sinks := p.SnapshotCloned()
+	coreevent.DispatchAsync(sinks, true, this, eventDispatchHooks(), func(ev *eventSink) {
+		coreevent.If0(isDebugEventEnabled, func() {
 			spxlog.Debug("==> onCloned: %s", nameOf(this))
-		}
-		ev.sink.(func(any))(data)
+		})()
+		ev.Handler.(func(any))(data)
 	})
 }
 
 func (p *eventSinkMgr) doWhenIReceive(msg string, data any, wait bool) {
-	sinks := p.snapshotWhenIReceive()
-	call(sinks, wait, msg, func(ev *eventSink) {
-		ev.sink.(func(string, any))(msg, data)
+	sinks := p.SnapshotIReceive()
+	coreevent.Dispatch(sinks, wait, msg, eventDispatchHooks(), func(ev *eventSink) {
+		ev.Handler.(func(string, any))(msg, data)
 	})
 }
 
 func (p *eventSinkMgr) doWhenBackdropChanged(name BackdropName, wait bool) {
-	sinks := p.snapshotWhenBackdropChanged()
-	call(sinks, wait, name, func(ev *eventSink) {
-		ev.sink.(func(BackdropName))(name)
+	sinks := p.SnapshotBackdropChanged()
+	coreevent.Dispatch(sinks, wait, name, eventDispatchHooks(), func(ev *eventSink) {
+		ev.Handler.(func(BackdropName))(name)
 	})
 }
 
-func asyncCall(sinks []eventSink, start bool, data any, doSth func(*eventSink)) {
-	for _, ev := range sinks {
-		ev := ev
-		if ev.cond == nil || ev.cond(data) {
-			gco.CreateAndStart(start, ev.pthis, func(coroutine.Thread) int {
-				doSth(&ev)
+func eventDispatchHooks() coreevent.DispatchHooks {
+	return coreevent.DispatchHooks{
+		Spawn: func(start bool, owner any, call func()) {
+			gco.CreateAndStart(start, owner, func(coroutine.Thread) int {
+				call()
 				return 0
 			})
-		}
-	}
-}
-
-func syncCall(sinks []eventSink, data any, doSth func(*eventSink)) {
-	var wg sync.WaitGroup
-	for _, ev := range sinks {
-		ev := ev
-		if ev.cond == nil || ev.cond(data) {
-			wg.Add(1)
-			gco.CreateAndStart(false, ev.pthis, func(coroutine.Thread) int {
-				defer wg.Done()
-				doSth(&ev)
-				return 0
-			})
-		}
-	}
-	engine.WaitToDo(wg.Wait)
-}
-
-func call(sinks []eventSink, wait bool, data any, doSth func(*eventSink)) {
-	if wait {
-		syncCall(sinks, data, doSth)
-	} else {
-		asyncCall(sinks, false, data, doSth)
+		},
+		Wait: engine.WaitToDo,
 	}
 }
 

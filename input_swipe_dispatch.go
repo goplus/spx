@@ -18,59 +18,38 @@ package spx
 
 import (
 	"github.com/goplus/spbase/mathf"
-	inputstate "github.com/goplus/spx/v2/internal/input"
+	coreevent "github.com/goplus/spx/v2/internal/core/event"
+	coreruntime "github.com/goplus/spx/v2/internal/core/runtime"
 	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
 func (p *inputManager) beginSwipeTracking(startPos mathf.Vec2, targetSprite *SpriteImpl) {
-	p.swipeTarget = targetSprite
-	p.swipeRecognizer.StartTracking(startPos)
+	p.swipe.Begin(startPos, targetSprite)
 }
 
 func (p *inputManager) finishSwipeTracking(point mathf.Vec2) {
-	swiper := &p.swipeRecognizer
-	if !swiper.IsTracking() {
-		return
-	}
-	targetSprite := p.swipeTarget
-	p.swipeTarget = nil
-	result, ok := swiper.Finish(point)
-	if !ok {
-		return
-	}
-	p.dispatchSwipeResult(result, targetSprite)
+	p.swipe.Finish(point, p.swipeHooks())
 }
 
 func (p *inputManager) onMouseMove(pos mathf.Vec2) {
-	if !p.swipeRecognizer.IsTracking() {
-		return
-	}
-	result, ok := p.swipeRecognizer.OnMouseMove(pos)
-	if !ok {
-		if !p.swipeRecognizer.IsTracking() {
-			p.swipeTarget = nil
-		}
-		return
-	}
-	targetSprite := p.swipeTarget
-	p.swipeTarget = nil
-	p.dispatchSwipeResult(result, targetSprite)
+	p.swipe.OnMouseMove(pos, p.swipeHooks())
 }
 
-func (p *inputManager) dispatchSwipeResult(result inputstate.SwipeResult, targetSprite *SpriteImpl) {
-	targetName := "stage"
-	if targetSprite != nil {
-		targetName = targetSprite.name
+func (p *inputManager) swipeHooks() coreruntime.SwipeHooks[*SpriteImpl] {
+	return coreruntime.SwipeHooks[*SpriteImpl]{
+		Debug: coreevent.If1(isDebugEventEnabled, func(ev coreruntime.SwipeEvent[*SpriteImpl]) {
+			targetName := "stage"
+			if ev.Target != nil {
+				targetName = ev.Target.name
+			}
+			spxlog.Debug("Swipe detected: direction=%v, velocity=%.2f, distance=%.2f, target=%s",
+				Direction(ev.Direction), ev.Velocity, ev.Distance, targetName)
+		}),
+		DispatchTarget: func(direction float64, targetSprite *SpriteImpl) {
+			targetSprite.doWhenSwipe(Direction(direction), targetSprite)
+		},
+		DispatchStage: func(direction float64) {
+			p.g.sinkMgr.doWhenSwipe(Direction(direction), p.g)
+		},
 	}
-
-	if isDebugEventEnabled() {
-		spxlog.Debug("Swipe detected: direction=%v, velocity=%.2f, distance=%.2f, target=%s",
-			Direction(result.Direction), result.Velocity, result.Distance, targetName)
-	}
-
-	if targetSprite != nil {
-		targetSprite.doWhenSwipe(Direction(result.Direction), targetSprite)
-		return
-	}
-	p.g.sinkMgr.doWhenSwipe(Direction(result.Direction), p.g)
 }

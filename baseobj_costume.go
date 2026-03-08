@@ -34,7 +34,7 @@ func (p *baseObj) initWith(base string, sprite *spriteConfig) {
 		panic("initWith: sprite configuration must have either CostumeSet or CostumeMPSet defined")
 	}
 
-	costumeIndex := sprite.getCostumeIndex()
+	costumeIndex := sprite.GetCostumeIndex()
 	if costumeIndex >= len(p.costumes) || costumeIndex < 0 {
 		costumeIndex = 0
 	}
@@ -78,7 +78,7 @@ func initWithCS(p *baseObj, base string, cs *costumeSet) {
 
 // initCSPart initializes a costume set part.
 func initCSPart(p *baseObj, img *costumeSetImage, faceRight float64, bitmapResolution, nx int, items []costumeSetItem) {
-	p.isCostumeSet = true
+	p.IsCostumeSet = true
 	if nx == 1 {
 		name := strconv.Itoa(len(p.costumes))
 		addCostumeWith(p, name, img, faceRight, 0, bitmapResolution)
@@ -114,7 +114,7 @@ func addCostumeWith(p *baseObj, name SpriteCostumeName, img *costumeSetImage, fa
 func (p *baseObj) initBackdrops(base string, configs []*backdropConfig, costumeIndex int) {
 	p.costumes = make([]*costume, len(configs))
 	for i, cfg := range configs {
-		p.costumes[i] = newCostume(base, &cfg.costumeConfig)
+		p.costumes[i] = newCostume(base, &cfg.CostumeConfig)
 	}
 	if costumeIndex >= len(configs) || costumeIndex < 0 {
 		costumeIndex = 0
@@ -131,7 +131,7 @@ func (p *baseObj) init(base string, configs []*costumeConfig, costumeIndex int) 
 	if costumeIndex >= len(configs) || costumeIndex < 0 {
 		costumeIndex = 0
 	}
-	p.isLayerDirty = true
+	p.IsLayerDirty = true
 	p.setCostumeIndex(costumeIndex)
 }
 
@@ -145,7 +145,7 @@ func (p *baseObj) initWithSize(width, height int) {
 // initFrom initializes from another base object (cloning).
 func (p *baseObj) initFrom(src *baseObj) {
 	p.costumes = src.costumes
-	p.hasShader = false
+	p.HasShader = false
 	p.setCostumeIndex(src.costumeIndex)
 }
 
@@ -226,12 +226,12 @@ func (p *baseObj) getCostumePath() string {
 
 // getCostumeRenderScale returns the render scale for the current costume.
 func (p *baseObj) getCostumeRenderScale() float64 {
-	return p.scale / float64(p.getCurrentBitmapResolution())
+	return p.Scale / float64(p.getCurrentBitmapResolution())
 }
 
 // getAnimRenderScale returns the render scale for animation with given bitmap resolution.
 func (p *baseObj) getAnimRenderScale(bitmapResolution int) float64 {
-	return p.scale / float64(bitmapResolution)
+	return p.Scale / float64(bitmapResolution)
 }
 
 // getCurrentBitmapResolution returns the bitmap resolution of the current costume.

@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/goplus/spbase/mathf"
+	coreruntime "github.com/goplus/spx/v2/internal/core/runtime"
 	inputstate "github.com/goplus/spx/v2/internal/input"
 	engine "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
 )
@@ -34,16 +35,15 @@ type inputManager struct {
 	g        *Game
 	mousePos mathf.Vec2
 
-	clickGate       inputstate.ClickGate
-	swipeRecognizer inputstate.SwipeRecognizer
-	swipeTarget     *SpriteImpl
+	clickGate inputstate.ClickGate
+	swipe     coreruntime.SwipeState[*SpriteImpl]
 }
 
 func (p *inputManager) init(g *Game) {
 	p.mousePos = mathf.Vec2{}
 	p.g = g
 	p.clickGate.Init(mouseClickInterval)
-	p.swipeRecognizer.Init()
+	p.swipe.Init()
 }
 
 func (p *inputManager) currentMousePos() mathf.Vec2 {

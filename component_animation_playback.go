@@ -38,7 +38,7 @@ func (a *animationComponent) StopAnimation(name SpriteAnimationName) {
 		return
 	}
 
-	a.sprite.syncSprite.PauseAnim()
+	a.sprite.SyncSprite.PauseAnim()
 	a.playDefaultAnim()
 }
 
@@ -72,23 +72,23 @@ func (a *animationComponent) doAnimation(animName SpriteAnimationName, ani *aniC
 	syncCheckUpdateCostume(&a.sprite.baseObj)
 	a.prepareAnimationPlayback(animName, ani)
 
-	a.engine().SpriteMgr.PlayAnim(a.sprite.syncSprite.GetId(), animName, speed, loop, false)
+	a.engine().SpriteMgr.PlayAnim(a.sprite.SyncSprite.GetId(), animName, speed, loop, false)
 	if isBlocking {
-		a.sprite.isAnimating = true
-		for a.engine().SpriteMgr.IsPlayingAnim(a.sprite.syncSprite.GetId()) {
+		a.sprite.IsAnimating = true
+		for a.engine().SpriteMgr.IsPlayingAnim(a.sprite.SyncSprite.GetId()) {
 			if info.IsCanceled {
 				break
 			}
 			engine.WaitNextFrame()
 		}
-		a.sprite.isAnimating = false
+		a.sprite.IsAnimating = false
 		a.stopAnimState(info)
 	}
 }
 
 func (a *animationComponent) playDefaultAnim() {
 	animName := ""
-	if !a.sprite.isVisible || a.sprite.isDying {
+	if !a.sprite.IsVisible || a.sprite.IsDying {
 		return
 	}
 
@@ -113,9 +113,9 @@ func (a *animationComponent) playDefaultAnim() {
 
 	if _, ok := a.shared.animations[animName]; ok {
 		a.prepareAnimationPlayback(animName, a.shared.animations[animName])
-		a.engine().SpriteMgr.PlayAnim(a.sprite.syncSprite.GetId(), animName, speed, true, false)
+		a.engine().SpriteMgr.PlayAnim(a.sprite.SyncSprite.GetId(), animName, speed, true, false)
 	} else {
-		a.sprite.goSetCostume(a.sprite.defaultCostumeIndex)
+		a.sprite.goSetCostume(a.sprite.DefaultCostumeIndex)
 	}
 }
 
@@ -128,7 +128,7 @@ func (a *animationComponent) playAnimAudio(ani *aniConfig, info *animState) {
 
 func (a *animationComponent) adaptAnimBitmapResolution(ani *aniConfig) {
 	renderScale := a.sprite.getAnimRenderScale(ani.AdaptAnimBitmapResolution)
-	a.sprite.syncSprite.SetRenderScale(mathf.NewVec2(renderScale, renderScale))
+	a.sprite.SyncSprite.SetRenderScale(mathf.NewVec2(renderScale, renderScale))
 }
 
 func (a *animationComponent) prepareAnimationPlayback(animName SpriteAnimationName, ani *aniConfig) {

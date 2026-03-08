@@ -21,9 +21,9 @@ import (
 	"fmt"
 	"os"
 	"reflect"
-	"strings"
 
 	spxfs "github.com/goplus/spx/v2/fs"
+	coreproject "github.com/goplus/spx/v2/internal/core/project"
 	"github.com/goplus/spx/v2/internal/engine"
 )
 
@@ -57,53 +57,25 @@ func (b *gameBuilder) loadResources() *gameBuilder {
 		return b
 	}
 
-	if assetDir, ok := assetDirFromResource(b.resource); ok {
-		engine.SetAssetDir(assetDir)
+	var gameConf *Config
+	if len(b.gameConf) > 0 {
+		gameConf = b.gameConf[0]
 	}
-
-	fs, err := resourceDir(b.resource)
+	opened, err := coreproject.OpenBuilderResources(b.resource, gameConf)
 	if err != nil {
 		b.err = err
 		return b
 	}
-	b.fs = fs
+	if opened.AssetDir != "" {
+		engine.SetAssetDir(opened.AssetDir)
+	}
+	b.fs = opened.FS
+	b.conf = opened.Config
+	b.proj = opened.Project
 
 	b.game.engine().ResMgr.SetDefaultFont("res://engine/fonts/CnFont.ttf")
 
-	if err := b.loadProjectConfig(fs); err != nil {
-		b.err = err
-	}
-
 	return b
-}
-
-func (b *gameBuilder) loadProjectConfig(fs spxfs.Dir) error {
-	hasGameConf := len(b.gameConf) > 0 && b.gameConf[0] != nil
-	var index any
-	if hasGameConf {
-		b.conf = *b.gameConf[0]
-		index = b.conf.Index
-	}
-
-	if err := loadProjConfig(&b.proj, fs, index); err != nil {
-		return err
-	}
-
-	if !hasGameConf && b.proj.Run != nil {
-		b.conf = *b.proj.Run
-	}
-	return nil
-}
-
-func assetDirFromResource(resource any) (string, bool) {
-	switch v := resource.(type) {
-	case string:
-		return v, true
-	case spxfs.GdDir:
-		return strings.TrimSuffix(v.GetPath(), "/"), true
-	default:
-		return "", false
-	}
 }
 
 // parseFlags parses command line flags and updates configuration.
@@ -193,39 +165,19 @@ func (b *gameBuilder) buildAndRun() error {
 
 // parseCommandLineFlags handles command line arguments.
 func parseCommandLineFlags(conf *Config) {
-	if conf.DontParseFlags {
-		return
+	f := flag.CommandLine
+	effects, err := coreproject.ParseCommandLineFlags(f, os.Args[1:], conf)
+	if err != nil {
+		engine.Panic(err)
 	}
 
-	f := flag.CommandLine
-	verbose := f.Bool("v", false, "print verbose information")
-	fullscreen := f.Bool("f", false, "full screen")
-	help := f.Bool("h", false, "show help information")
-	fullscreen2 := f.Bool("fullscreen", false, "server mode")
-
-	f.String("controller", "", "controller's name")
-	f.Bool("servermode", false, "server mode")
-	f.String("serveraddr", "", "server address")
-	f.Bool("nomap", false, "server mode")
-	f.Bool("debugweb", false, "server mode")
-	f.String("gdextpath", "", "godot extension path")
-	f.String("write-movie", "", "movie mode")
-
-	f.String("path", "", "gdspx project path")
-	f.Bool("e", false, "editor mode")
-	f.Bool("headless", false, "Headless Mode")
-	f.Bool("remote-debug", false, "remote Debug Mode")
-	f.Bool("no-header", false, "disable engine's header output")
-	flag.Parse()
-
-	if *help {
+	if effects.ShowHelp {
 		fmt.Fprintf(os.Stderr, "Usage: %v [-v -f -h]\n", os.Args[0])
-		flag.PrintDefaults()
+		f.PrintDefaults()
 		os.Exit(0)
 	}
 
-	if *verbose {
+	if effects.Verbose {
 		SetDebug(DbgFlagAll)
 	}
-	conf.FullScreen = conf.FullScreen || *fullscreen2 || *fullscreen
 }

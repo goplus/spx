@@ -104,8 +104,8 @@ func (t *transformComponent) SetSize(size float64) {
 		spxlog.Debug("SetSize: sprite=%s, size=%v", t.sprite.name, size)
 	}
 
-	t.sprite.scale = size
-	t.sprite.isCostumeDirty = true
+	t.sprite.Scale = size
+	t.sprite.IsCostumeDirty = true
 	t.markDirty()
 	t.sprite.updatePhysicsShapesScale()
 }
@@ -115,5 +115,5 @@ func (t *transformComponent) ChangeSize(delta float64) {
 	if isDebugInstrEnabled() {
 		spxlog.Debug("ChangeSize: sprite=%s, delta=%v", t.sprite.name, delta)
 	}
-	t.SetSize(t.sprite.scale + delta)
+	t.SetSize(t.sprite.Scale + delta)
 }

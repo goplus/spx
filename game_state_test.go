@@ -1,7 +1,6 @@
 package spx
 
 import (
-	"sync"
 	"testing"
 	"time"
 
@@ -10,11 +9,8 @@ import (
 
 func resetStateForTest() {
 	engine.SetGame(nil)
+	runtimeStateMgr.Reset()
 	setDefaultDebugFlags(false, false, false)
-	defaultPhysicsEnabled = false
-	fallbackSchedInMain = false
-	fallbackMainSchedAt = time.Time{}
-	fallbackImageSizeCache = sync.Map{}
 }
 
 func TestDebugFlagsApplyToActiveGame(t *testing.T) {
@@ -27,8 +23,8 @@ func TestDebugFlagsApplyToActiveGame(t *testing.T) {
 
 	SetDebug(DbgFlagInstr | DbgFlagEvent)
 
-	if !g.debugInstr || !g.debugEvent || g.debugPerf {
-		t.Fatalf("unexpected game debug flags: instr=%v event=%v perf=%v", g.debugInstr, g.debugEvent, g.debugPerf)
+	if !g.DebugInstr || !g.DebugEvent || g.DebugPerf {
+		t.Fatalf("unexpected game debug flags: instr=%v event=%v perf=%v", g.DebugInstr, g.DebugEvent, g.DebugPerf)
 	}
 	if !isDebugInstrEnabled() || !isDebugEventEnabled() || isDebugPerfEnabled() {
 		t.Fatal("helper getters did not reflect active game debug flags")
@@ -48,7 +44,7 @@ func TestPhysicsFlagDefaultsAndActiveGame(t *testing.T) {
 	engine.SetGame(g)
 	g.initRuntimeState()
 
-	if !isPhysicsEnabled() || !g.enabledPhysics {
+	if !isPhysicsEnabled() || !g.EnabledPhysics {
 		t.Fatal("expected active game to inherit default physics flag")
 	}
 
@@ -93,7 +89,7 @@ func TestSchedStatePrefersActiveGame(t *testing.T) {
 	setSchedInMain(true)
 	setMainSchedTime(time.Unix(200, 0))
 
-	if !g.isSchedInMain || !g.mainSchedTime.Equal(time.Unix(200, 0)) {
+	if !g.IsSchedInMain || !g.MainSchedTime.Equal(time.Unix(200, 0)) {
 		t.Fatal("active game scheduler state not applied")
 	}
 }

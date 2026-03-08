@@ -20,6 +20,8 @@ import (
 	"reflect"
 	"time"
 
+	coreproject "github.com/goplus/spx/v2/internal/core/project"
+	coreruntime "github.com/goplus/spx/v2/internal/core/runtime"
 	"github.com/goplus/spx/v2/internal/coroutine"
 	"github.com/goplus/spx/v2/internal/debug"
 	"github.com/goplus/spx/v2/internal/engine"
@@ -63,16 +65,20 @@ func XGot_Game_Reload(game Gamer, index any) (err error) {
 	g.events = make(chan event, eventBufferSize)
 	g.resetEventQueueStats()
 
-	for i, n := 0, v.NumField(); i < n; i++ {
-		name, val := getFieldPtrOrAlloc(g, v, i)
-		if fld, ok := val.(Sprite); ok {
-			if err := g.loadSprite(fld, name, v); err != nil {
-				engine.Panic(err)
-			}
+	err = coreproject.WalkFields(v, func(fieldIndex int) (string, any) {
+		return getFieldPtrOrAlloc(g, v, fieldIndex)
+	}, func(name string, val any) error {
+		fld, ok := val.(Sprite)
+		if !ok {
+			return nil
 		}
+		return g.loadSprite(fld, name, v)
+	})
+	if err != nil {
+		engine.Panic(err)
 	}
 	var proj projConfig
-	if err = loadProjConfig(&proj, g.fs, index); err != nil {
+	if err = coreproject.LoadConfig(&proj, g.fs, index); err != nil {
 		return
 	}
 	gco.OnRestart()
@@ -84,79 +90,82 @@ func XGot_Game_Reload(game Gamer, index any) (err error) {
 
 // SchedNow performs immediate scheduling without timeout check
 func SchedNow() int {
-	if isSchedInMainState() {
-		if time.Since(mainSchedTime()) >= time.Second*mainExecTimeoutSec {
-			engine.Panic("Main execution timed out. Please check if there is an infinite loop in the code.")
-		}
-	}
-	if me := gco.Current(); me != nil {
-		gco.Sched(me)
+	err := coreruntime.SchedNow(
+		coreruntime.ScheduleState{
+			IsSchedInMain:   isSchedInMainState(),
+			MainSchedTime:   mainSchedTime(),
+			Now:             time.Now(),
+			MainExecTimeout: time.Second * mainExecTimeoutSec,
+		},
+		coreruntime.SchedulerHooks{
+			SchedCurrent: func() {
+				if me := gco.Current(); me != nil {
+					gco.Sched(me)
+				}
+			},
+		},
+	)
+	if err != nil {
+		engine.Panic(err.Error())
 	}
 	return 0
 }
 
 // Sched performs scheduling with timeout check
 func Sched() int {
-	if isSchedInMainState() {
-		if time.Since(mainSchedTime()) >= time.Second*mainExecTimeoutSec {
-			engine.Panic("Main execution timed out. Please check if there is an infinite loop in the code.")
-		}
-	} else if me := gco.Current(); me != nil {
-		if me.IsSchedTimeout(schedTimeoutMs) {
-			spxlog.Warn("For loop execution timed out. Please check if there is an infinite loop in the code.\n%s", debug.GetStackTrace())
-			engine.WaitNextFrame()
-		}
+	err := coreruntime.Sched(
+		coreruntime.ScheduleState{
+			IsSchedInMain:   isSchedInMainState(),
+			MainSchedTime:   mainSchedTime(),
+			Now:             time.Now(),
+			MainExecTimeout: time.Second * mainExecTimeoutSec,
+		},
+		schedTimeoutMs,
+		coreruntime.SchedulerHooks{
+			IsSchedTimeout: func(ms float64) bool {
+				if me := gco.Current(); me != nil {
+					return me.IsSchedTimeout(ms)
+				}
+				return false
+			},
+			OnSchedTimeout: func() {
+				spxlog.Warn("%s\n%s", coreruntime.LoopExecutionTimedOutMsg, debug.GetStackTrace())
+				engine.WaitNextFrame()
+			},
+		},
+	)
+	if err != nil {
+		engine.Panic(err.Error())
 	}
 	return 0
 }
 
 // Forever executes a function indefinitely
 func Forever(call func()) {
-	if call == nil {
-		return
-	}
-	for {
-		call()
+	coreruntime.Forever(call, func() {
 		engine.WaitNextFrame()
-	}
+	})
 }
 
 // Repeat executes a function for a specified number of times
 func Repeat(loopCount int, call func()) {
-	if call == nil {
-		return
-	}
-	for range loopCount {
-		call()
+	coreruntime.Repeat(loopCount, call, func() {
 		engine.WaitNextFrame()
-	}
+	})
 }
 
 // RepeatUntil executes a function until a condition is met
 func RepeatUntil(condition func() bool, call func()) {
-	if call == nil || condition == nil {
-		return
-	}
-	for {
-		if condition() {
-			return
-		}
-		call()
+	coreruntime.RepeatUntil(condition, call, func() {
 		engine.WaitNextFrame()
-	}
+	})
 }
 
 // WaitUntil waits until a condition is met
 func WaitUntil(condition func() bool) {
-	if condition == nil {
-		return
-	}
-	for {
-		if condition() {
-			return
-		}
+	coreruntime.WaitUntil(condition, func() {
 		engine.WaitNextFrame()
-	}
+	})
 }
 
 func init() {
@@ -172,14 +181,11 @@ func (p *Game) runLoop(cfg *Config) (err error) {
 	}
 	p.initEventLoop()
 	p.engine().PlatformMgr.SetWindowTitle(cfg.Title)
-	p.isRunned = true
+	p.IsRunned = true
 	return nil
 }
 
 // runMain wraps the main execution with scheduler tracking
 func runMain(call func()) {
-	setSchedInMain(true)
-	setMainSchedTime(time.Now())
-	defer setSchedInMain(false)
-	call()
+	coreruntime.RunMain(call, time.Now(), setSchedInMain, setMainSchedTime)
 }

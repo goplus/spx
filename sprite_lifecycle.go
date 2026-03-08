@@ -48,7 +48,7 @@ func (p *SpriteImpl) Destroy() {
 // DeleteThisClone deletes only cloned sprite, no effect on prototype sprite.
 // Add this interface to match Scratch.
 func (p *SpriteImpl) DeleteThisClone() {
-	if !p.isCloned {
+	if !p.Cloned {
 		return
 	}
 	p.Destroy()

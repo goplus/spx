@@ -22,7 +22,7 @@ import (
 
 	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v2/internal/base/collisionutil"
-	"github.com/goplus/spx/v2/internal/base/valueutil"
+	coreproject "github.com/goplus/spx/v2/internal/core/project"
 	"github.com/goplus/spx/v2/internal/engine"
 	spxlog "github.com/goplus/spx/v2/internal/log"
 )
@@ -163,21 +163,20 @@ type spriteCollisionData struct {
 // Private - Physics Configuration
 // =============================================================================
 
-// setupPhysicsConfig initializes physics system configuration.
-func (p *Game) setupPhysicsConfig(proj *projConfig) {
-	p.isCollisionByPixel = !proj.CollisionByShape && !proj.Physics
-	p.isAutoSetCollisionLayer = proj.AutoSetCollisionLayer == nil || *proj.AutoSetCollisionLayer
+// applyPhysicsSettings initializes physics system configuration.
+func (p *Game) applyPhysicsSettings(settings coreproject.SystemSettings) {
+	p.isCollisionByPixel = settings.CollisionByPixel
+	p.isAutoSetCollisionLayer = settings.AutoSetCollisionLayer
 	spxlog.Debug("==> isCollisionByPixel: %v", p.isCollisionByPixel)
 	spxlog.Debug("==> isAutoSetCollisionLayer: %v", p.isAutoSetCollisionLayer)
 
 	// Set pixel collision sampling step based on configuration
-	precision := collisionutil.ParsePixelCollisionPrecision(proj.PixelCollisionPrecision)
-	p.engine().SpriteMgr.SetPixelCollisionSamplingStep(precision)
+	p.engine().SpriteMgr.SetPixelCollisionSamplingStep(settings.PixelCollisionPrecision)
 
 	// Set global physics parameters
-	p.engine().PhysicsMgr.SetGlobalGravity(valueutil.OrDefault(proj.GlobalGravity, 1))
-	p.engine().PhysicsMgr.SetGlobalAirDrag(valueutil.OrDefault(proj.GlobalAirDrag, 1))
-	p.engine().PhysicsMgr.SetGlobalFriction(valueutil.OrDefault(proj.GlobalFriction, 1))
+	p.engine().PhysicsMgr.SetGlobalGravity(settings.GlobalGravity)
+	p.engine().PhysicsMgr.SetGlobalAirDrag(settings.GlobalAirDrag)
+	p.engine().PhysicsMgr.SetGlobalFriction(settings.GlobalFriction)
 	p.engine().PhysicsMgr.SetCollisionSystemType(p.isCollisionByPixel)
 	if p.isAutoSetCollisionLayer {
 		p.sprCollisionInfos = make(map[string]*spriteCollisionInfo)
@@ -218,7 +217,7 @@ func (p *Game) setupCollisionLayers(inits []Sprite) {
 	// Recalculate physics info
 	engine.WaitMainThread(func() {
 		for _, data := range spriteData {
-			syncInitSpritePhysicInfo(data.sprite, data.sprite.syncSprite)
+			syncInitSpritePhysicInfo(data.sprite, data.sprite.SyncSprite)
 		}
 	})
 }

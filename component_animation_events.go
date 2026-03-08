@@ -17,17 +17,17 @@
 package spx
 
 func (a *animationComponent) registerOnAnimationLooped(f func()) {
-	a.sprite.syncSprite.RegisterOnAnimationLooped(f)
+	a.sprite.SyncSprite.RegisterOnAnimationLooped(f)
 }
 
 func (a *animationComponent) unRegisterOnAnimationLooped() {
-	a.sprite.syncSprite.UnRegisterOnAnimationLooped()
+	a.sprite.SyncSprite.UnRegisterOnAnimationLooped()
 }
 
 func (a *animationComponent) registerOnAnimationFinished(f func()) {
-	a.sprite.syncSprite.RegisterOnAnimationFinished(f)
+	a.sprite.SyncSprite.RegisterOnAnimationFinished(f)
 }
 
 func (a *animationComponent) unRegisterOnAnimationFinished() {
-	a.sprite.syncSprite.UnRegisterOnAnimationFinished()
+	a.sprite.SyncSprite.UnRegisterOnAnimationFinished()
 }

@@ -34,29 +34,29 @@ func (p *Game) getWindowSize() mathf.Vec2 {
 }
 
 func (p *Game) windowSize() (int, int) {
-	if p.windowWidth == 0 {
+	if p.WindowWidth == 0 {
 		p.doWindowSize()
 	}
-	return p.windowWidth, p.windowHeight
+	return p.WindowWidth, p.WindowHeight
 }
 
 func (p *Game) doWindowSize() {
-	if p.windowWidth == 0 {
+	if p.WindowWidth == 0 {
 		c := p.costumes[p.costumeIndex]
-		p.windowWidth, p.windowHeight = c.getSize()
+		p.WindowWidth, p.WindowHeight = c.getSize()
 	}
 }
 
 func (p *Game) worldSize() (int, int) {
-	if p.worldWidth == 0 {
+	if p.WorldWidth == 0 {
 		p.doWorldSize()
 	}
-	return p.worldWidth, p.worldHeight
+	return p.WorldWidth, p.WorldHeight
 }
 
 func (p *Game) doWorldSize() {
-	if p.worldWidth == 0 {
+	if p.WorldWidth == 0 {
 		c := p.costumes[p.costumeIndex]
-		p.worldWidth, p.worldHeight = c.getSize()
+		p.WorldWidth, p.WorldHeight = c.getSize()
 	}
 }

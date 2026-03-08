@@ -18,7 +18,7 @@ package spx
 
 import (
 	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v2/internal/base/valueutil"
+	coreproject "github.com/goplus/spx/v2/internal/core/project"
 	"github.com/goplus/spx/v2/internal/engine"
 )
 
@@ -26,13 +26,12 @@ import (
 // Path Finding System
 
 const (
-	defaultPathCellSize = 16 // default path finding cell size
+	defaultPathCellSize = coreproject.DefaultPathCellSize // default path finding cell size
 )
 
-// setupPathFinderConfig initializes path finder configuration from project settings.
-func (p *Game) setupPathFinderConfig(proj *projConfig) {
-	p.pathCellSizeX = valueutil.OrDefault(proj.PathCellSizeX, defaultPathCellSize)
-	p.pathCellSizeY = valueutil.OrDefault(proj.PathCellSizeY, defaultPathCellSize)
+func (p *Game) applyPathFinderSettings(settings coreproject.SystemSettings) {
+	p.PathCellSizeX = settings.PathCellSizeX
+	p.PathCellSizeY = settings.PathCellSizeY
 }
 
 func (p *Game) SetupPathFinder__0() {
@@ -44,8 +43,8 @@ func (p *Game) SetupPathFinder__1(x_grid_size, y_grid_size, x_cell_size, y_cell_
 }
 
 func (p *Game) setupPathFinder(with_jump, with_debug bool) {
-	cellSize := mathf.NewVec2(float64(p.pathCellSizeX), float64(p.pathCellSizeY))
-	gridSize := mathf.NewVec2(float64(p.worldWidth), float64(p.worldHeight)).Div(cellSize)
+	cellSize := mathf.NewVec2(float64(p.PathCellSizeX), float64(p.PathCellSizeY))
+	gridSize := mathf.NewVec2(float64(p.WorldWidth), float64(p.WorldHeight)).Div(cellSize)
 	p.engine().NavigationMgr.SetupPathFinderWithSize(gridSize, cellSize, with_jump, with_debug)
 }
 
@@ -65,7 +64,7 @@ func (p *Game) FindPath__1(x_from, y_from, x_to, y_to float64, with_debug bool) 
 }
 
 func (p *Game) FindPath__2(x_from, y_from, x_to, y_to float64, with_debug, with_jump bool) []float64 {
-	p.oncePathFinder.Do(func() {
+	p.OncePathFinder.Do(func() {
 		p.setupPathFinder(with_jump, with_debug)
 	})
 

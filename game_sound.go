@@ -18,7 +18,7 @@ package spx
 
 import (
 	"github.com/goplus/spx/v2/internal/audiorecord"
-	"github.com/goplus/spx/v2/internal/base/valueutil"
+	coreproject "github.com/goplus/spx/v2/internal/core/project"
 	"github.com/goplus/spx/v2/internal/engine"
 	spxlog "github.com/goplus/spx/v2/internal/log"
 )
@@ -43,7 +43,7 @@ func (p *Game) Volume() float64 {
 
 func (p *Game) Play__0(name SoundName, loop bool) {
 	p.withGameSound(func(soundObj engine.Object) {
-		p.playSound(p.syncSprite, soundObj, name, loop, 0, defaultAudioMaxDist)
+		p.playSound(p.SyncSprite, soundObj, name, loop, 0, defaultAudioMaxDist)
 	})
 }
 
@@ -53,7 +53,7 @@ func (p *Game) Play__1(name SoundName) {
 
 func (p *Game) PlayAndWait(name SoundName) {
 	p.withGameSound(func(soundObj engine.Object) {
-		p.playSoundAndWait(p.syncSprite, soundObj, name, 0, defaultAudioMaxDist)
+		p.playSoundAndWait(p.SyncSprite, soundObj, name, 0, defaultAudioMaxDist)
 	})
 }
 
@@ -119,12 +119,12 @@ func (p *Game) Loudness() float64 {
 // -----------------------------------------------------------------------------
 
 const (
-	defaultAudioMaxDist = 2000 // default maximum audio distance
+	defaultAudioMaxDist = coreproject.DefaultAudioMaxDistance // default maximum audio distance
 )
 
-func (p *Game) setupAudioConfig(proj *projConfig) {
-	p.audioAttenuation = valueutil.OrDefault(proj.AudioAttenuation, 0)
-	p.audioMaxDistance = valueutil.OrDefault(proj.AudioMaxDistance, defaultAudioMaxDist)
+func (p *Game) applyAudioSettings(settings coreproject.SystemSettings) {
+	p.AudioAttenuation = settings.AudioAttenuation
+	p.AudioMaxDistance = settings.AudioMaxDistance
 }
 
 // -----------------------------------------------------------------------------
@@ -137,13 +137,12 @@ func (p *Game) loadSound(name SoundName) (media sound, err error) {
 	}
 
 	spxlog.Debug("==> LoadSound: %s", name)
-	prefix := "sounds/" + name
-	media = new(soundConfig)
-	if err = loadJson(media, p.fs, prefix+"/index.json"); err != nil {
+	loaded, err := coreproject.LoadSoundConfig(p.fs, name)
+	if err != nil {
 		spxlog.Error("loadSound failed: %v", err)
 		return
 	}
-	media.Path = prefix + "/" + media.Path
+	media = &loaded.Config
 	p.soundMgr.sounds[name] = media
 	return
 }
@@ -185,25 +184,25 @@ func (p *Game) stopSound(name SoundName) {
 }
 
 func (p *Game) checkSoundObj() {
-	if p.soundObj == 0 {
-		p.soundObj = p.soundMgr.allocSound()
+	if p.SoundObj == 0 {
+		p.SoundObj = p.soundMgr.allocSound()
 	}
 }
 
 func (p *Game) withGameSound(action func(soundObj engine.Object)) {
 	p.checkSoundObj()
-	action(p.soundObj)
+	action(p.SoundObj)
 }
 
 func (p *Game) withGameSoundFloat(action func(soundObj engine.Object) float64) float64 {
 	p.checkSoundObj()
-	return action(p.soundObj)
+	return action(p.SoundObj)
 }
 
 func (p *Game) releaseGameAudio() {
 	p.soundMgr.stopAll()
-	if p.soundObj != 0 {
-		p.soundMgr.releaseSound(p.soundObj)
-		p.soundObj = 0
+	if p.SoundObj != 0 {
+		p.soundMgr.releaseSound(p.SoundObj)
+		p.SoundObj = 0
 	}
 }

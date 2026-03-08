@@ -72,7 +72,7 @@ func (p *baseObj) applyGraphicEffects(isSync bool) {
 
 // doSetGraphicEffect applies a single graphic effect.
 func (p *baseObj) doSetGraphicEffect(kind EffectKind, isSync bool) {
-	if p.syncSprite == nil {
+	if p.SyncSprite == nil {
 		return
 	}
 
@@ -136,24 +136,24 @@ func (p *baseObj) setMaterialParamsVec4(effect string, amount mathf.Vec4, isSync
 
 // applyMaterialParams is the internal implementation for setting scalar material params.
 func (p *baseObj) applyMaterialParams(effect string, amount float64) {
-	if p.syncSprite == nil {
+	if p.SyncSprite == nil {
 		return
 	}
-	if !p.hasShader {
-		p.syncSprite.SetMaterialShader(shaderPath)
-		p.hasShader = true
+	if !p.HasShader {
+		p.SyncSprite.SetMaterialShader(shaderPath)
+		p.HasShader = true
 	}
-	p.syncSprite.SetMaterialParams(effect, amount)
+	p.SyncSprite.SetMaterialParams(effect, amount)
 }
 
 // applyMaterialParamsVec4 is the internal implementation for setting vector material params.
 func (p *baseObj) applyMaterialParamsVec4(effect string, val mathf.Vec4) {
-	if p.syncSprite == nil {
+	if p.SyncSprite == nil {
 		return
 	}
-	if !p.hasShader {
-		p.syncSprite.SetMaterialShader(shaderPath)
-		p.hasShader = true
+	if !p.HasShader {
+		p.SyncSprite.SetMaterialShader(shaderPath)
+		p.HasShader = true
 	}
-	p.syncSprite.SetMaterialParamsVec(effect, val.X, val.Y, val.Z, val.W)
+	p.SyncSprite.SetMaterialParamsVec(effect, val.X, val.Y, val.Z, val.W)
 }

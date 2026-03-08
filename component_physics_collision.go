@@ -17,51 +17,51 @@
 package spx
 
 func (p *physicsComponent) SetCollisionLayer(layer int64) {
-	p.sprite.syncSprite.SetCollisionLayer(layer)
+	p.sprite.SyncSprite.SetCollisionLayer(layer)
 }
 
 func (p *physicsComponent) SetCollisionMask(mask int64) {
-	p.sprite.syncSprite.SetCollisionMask(mask)
+	p.sprite.SyncSprite.SetCollisionMask(mask)
 }
 
 func (p *physicsComponent) SetCollisionEnabled(enabled bool) {
-	p.sprite.syncSprite.SetCollisionEnabled(enabled)
+	p.sprite.SyncSprite.SetCollisionEnabled(enabled)
 }
 
 func (p *physicsComponent) GetCollisionLayer() int64 {
-	return p.sprite.syncSprite.GetCollisionLayer()
+	return p.sprite.SyncSprite.GetCollisionLayer()
 }
 
 func (p *physicsComponent) GetCollisionMask() int64 {
-	return p.sprite.syncSprite.GetCollisionMask()
+	return p.sprite.SyncSprite.GetCollisionMask()
 }
 
 func (p *physicsComponent) IsCollisionEnabled() bool {
-	return p.sprite.syncSprite.IsCollisionEnabled()
+	return p.sprite.SyncSprite.IsCollisionEnabled()
 }
 
 func (p *physicsComponent) SetTriggerEnabled(trigger bool) {
-	p.sprite.syncSprite.SetTriggerEnabled(trigger)
+	p.sprite.SyncSprite.SetTriggerEnabled(trigger)
 }
 
 func (p *physicsComponent) SetTriggerLayer(layer int64) {
-	p.sprite.syncSprite.SetTriggerLayer(layer)
+	p.sprite.SyncSprite.SetTriggerLayer(layer)
 }
 
 func (p *physicsComponent) SetTriggerMask(mask int64) {
-	p.sprite.syncSprite.SetTriggerMask(mask)
+	p.sprite.SyncSprite.SetTriggerMask(mask)
 }
 
 func (p *physicsComponent) GetTriggerLayer() int64 {
-	return p.sprite.syncSprite.GetTriggerLayer()
+	return p.sprite.SyncSprite.GetTriggerLayer()
 }
 
 func (p *physicsComponent) GetTriggerMask() int64 {
-	return p.sprite.syncSprite.GetTriggerMask()
+	return p.sprite.SyncSprite.GetTriggerMask()
 }
 
 func (p *physicsComponent) IsTriggerEnabled() bool {
-	return p.sprite.syncSprite.IsTriggerEnabled()
+	return p.sprite.SyncSprite.IsTriggerEnabled()
 }
 
 func (p *physicsComponent) getCollisionTargets() map[string]bool {

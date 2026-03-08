@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/goplus/spbase/mathf"
+	coreproject "github.com/goplus/spx/v2/internal/core/project"
 	"github.com/goplus/spx/v2/internal/ui"
 )
 
@@ -45,14 +46,14 @@ type measure struct {
 	panel        *ui.UiMeasure
 }
 
-func newMeasure(v specsp) *measure {
+func newMeasure(v coreproject.StageShape) *measure {
 	size := v["size"].(float64)
-	scale := getSpcspVal(v, "scale", 1.0).(float64)
+	scale := coreproject.ShapeValue(v, "scale", 1.0).(float64)
 	text := strconv.FormatFloat(size, 'f', 1, 64)
 	text = strings.TrimSuffix(text, ".0")
-	heading := getSpcspVal(v, "heading", 0.0).(float64)
+	heading := coreproject.ShapeValue(v, "heading", 0.0).(float64)
 	svgSize := int(size*scale + 0.5 + measureLineWidth)
-	c, err := mathf.NewColorAny(getSpcspVal(v, "color", 0.0))
+	c, err := mathf.NewColorAny(coreproject.ShapeValue(v, "color", 0.0))
 	if err != nil {
 		panic(err)
 	}
@@ -73,17 +74,4 @@ func newMeasure(v specsp) *measure {
 
 	panel.UpdateInfo(meansureObj.pos, size*scale, heading, text, c)
 	return meansureObj
-}
-
-func getSpcspVal(ss specsp, key string, defaultVal ...any) any {
-	v, ok := ss[key]
-	if ok {
-		return v
-	}
-
-	if len(defaultVal) > 0 {
-		return defaultVal[0]
-	}
-
-	return v
 }

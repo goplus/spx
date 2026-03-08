@@ -18,8 +18,8 @@ package spx
 
 import (
 	"reflect"
-	"strings"
-	"unsafe"
+
+	coreproject "github.com/goplus/spx/v2/internal/core/project"
 )
 
 func instance(gamer reflect.Value) *Game {
@@ -31,81 +31,26 @@ func instance(gamer reflect.Value) *Game {
 }
 
 func getFieldPtrOrAlloc(g *Game, v reflect.Value, i int) (name string, val any) {
-	tFld := v.Type().Field(i)
-	vFld := v.Field(i)
-	typ := tFld.Type
-	word := unsafe.Pointer(vFld.Addr().Pointer())
-	ret := reflect.NewAt(typ, word).Interface()
-
-	if vFld.Kind() == reflect.Pointer && typ.Implements(tySprite) {
-		obj := reflect.New(typ.Elem())
-		reflect.ValueOf(ret).Elem().Set(obj)
-		ret = obj.Interface()
-	}
-
-	if vFld.Kind() == reflect.Interface && typ.Implements(tySprite) {
-		if typ2, ok := g.typs[tFld.Name]; ok {
-			obj := reflect.New(typ2)
-			reflect.ValueOf(ret).Elem().Set(obj)
-			ret = obj.Interface()
-		}
-	}
-	return tFld.Name, ret
+	return coreproject.FieldPtrOrAlloc(v, i, coreproject.FieldAllocConfig{
+		IsPointerSpriteType: func(typ reflect.Type) bool {
+			return typ.Implements(tySprite)
+		},
+		ResolveInterfaceSpriteType: func(fieldName string) (reflect.Type, bool) {
+			typ, ok := g.typs[fieldName]
+			return typ, ok
+		},
+	})
 }
 
 func findFieldPtr(v reflect.Value, name string, from int) any {
-	if v.Kind() == reflect.Pointer {
-		v = v.Elem()
-	}
-	t := v.Type()
-	for i, n := from, v.NumField(); i < n; i++ {
-		tFld := t.Field(i)
-		if tFld.Name == name {
-			word := unsafe.Pointer(v.Field(i).Addr().Pointer())
-			return reflect.NewAt(tFld.Type, word).Interface()
-		}
-	}
-	return nil
+	return coreproject.FindFieldPtr(v, name, from)
 }
 
 // findFieldRefCaseInsensitive finds a field reference by name with case-insensitive matching.
 func findFieldRefCaseInsensitive(v reflect.Value, name string, from int) any {
-	if v.Kind() == reflect.Pointer {
-		v = v.Elem()
-	}
-	t := v.Type()
-	nameLower := strings.ToLower(name)
-	for i, n := from, v.NumField(); i < n; i++ {
-		tFld := t.Field(i)
-		if strings.ToLower(tFld.Name) == nameLower {
-			word := unsafe.Pointer(v.Field(i).Addr().Pointer())
-			return reflect.NewAt(tFld.Type, word).Interface()
-		}
-	}
-	return nil
+	return coreproject.FindFieldRefCaseInsensitive(v, name, from)
 }
 
 func findObjPtr(v reflect.Value, name string, from int) any {
-	if v.Kind() == reflect.Pointer {
-		v = v.Elem()
-	}
-	t := v.Type()
-	for i, n := from, v.NumField(); i < n; i++ {
-		tFld := t.Field(i)
-		if tFld.Name == name {
-			typ := tFld.Type
-			vFld := v.Field(i)
-			if vFld.Kind() == reflect.Pointer {
-				word := unsafe.Pointer(vFld.Pointer())
-				return reflect.NewAt(typ.Elem(), word).Interface()
-			}
-			if vFld.Kind() == reflect.Interface {
-				word := unsafe.Pointer(vFld.Addr().Pointer())
-				return reflect.NewAt(tFld.Type, word).Elem().Interface()
-			}
-			word := unsafe.Pointer(vFld.Addr().Pointer())
-			return reflect.NewAt(typ, word).Interface()
-		}
-	}
-	return nil
+	return coreproject.FindObjectPtr(v, name, from)
 }

@@ -23,6 +23,7 @@ import (
 	"syscall"
 
 	"github.com/goplus/spbase/mathf"
+	coreproject "github.com/goplus/spx/v2/internal/core/project"
 	spxlog "github.com/goplus/spx/v2/internal/log"
 	"github.com/goplus/spx/v2/internal/tools"
 	"github.com/goplus/spx/v2/internal/ui"
@@ -67,7 +68,7 @@ type Monitor struct {
 "isDiscrete": true,
 "visible": true
 */
-func newMonitor(g reflect.Value, v specsp) (*Monitor, error) {
+func newMonitor(g reflect.Value, v coreproject.StageShape) (*Monitor, error) {
 	target := v["target"].(string)
 	val := v["val"].(string)
 	name := v["name"].(string)
@@ -80,7 +81,7 @@ func newMonitor(g reflect.Value, v specsp) (*Monitor, error) {
 		return nil, syscall.ENOENT
 	}
 	mode := int(v["mode"].(float64))
-	color, err := mathf.NewColorAny(getSpcspVal(v, "color"))
+	color, err := mathf.NewColorAny(coreproject.ShapeValue(v, "color"))
 	if err != nil {
 		color = mathf.NewColorRGBAi(0x28, 0x9c, 0xfc, 0xff)
 	}

@@ -18,34 +18,28 @@ package spx
 
 import (
 	"os"
-	"path/filepath"
 	"reflect"
 
 	spxfs "github.com/goplus/spx/v2/fs"
+	coreproject "github.com/goplus/spx/v2/internal/core/project"
 	"github.com/goplus/spx/v2/internal/engine"
 	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
 // setupGameConfig configures game settings.
 func setupGameConfig(g *Game, conf *Config, proj *projConfig) {
-	if conf.Title == "" {
-		dir, _ := os.Getwd()
-		conf.Title = filepath.Base(dir) + " (by XGo Builder)"
-	}
+	cwd, _ := os.Getwd()
+	runtimeCfg := coreproject.ResolveRuntimeConfig(conf, proj, cwd, os.Getenv("SPX_SCREENSHOT_KEY"))
 
-	proj.FullScreen = proj.FullScreen || conf.FullScreen
-	g.setPhysicsEnabled(proj.Physics)
-	g.setEventQueuePolicy(parseEventQueuePolicy(conf.EventQueuePolicy))
+	conf.Title = runtimeCfg.Title
+	proj.FullScreen = runtimeCfg.FullScreen
+	g.setPhysicsEnabled(runtimeCfg.PhysicsEnabled)
+	g.setEventQueuePolicy(parseEventQueuePolicy(runtimeCfg.EventQueuePolicy))
+	g.WindowHeight = runtimeCfg.WindowHeight
+	g.WindowWidth = runtimeCfg.WindowWidth
 
-	g.windowHeight = conf.Height
-	g.windowWidth = conf.Width
-
-	key := conf.ScreenshotKey
-	if key == "" {
-		key = os.Getenv("SPX_SCREENSHOT_KEY")
-	}
-	if key != "" {
-		if err := os.Setenv("SPX_SCREENSHOT_KEY", key); err != nil {
+	if runtimeCfg.ScreenshotKey != "" {
+		if err := os.Setenv("SPX_SCREENSHOT_KEY", runtimeCfg.ScreenshotKey); err != nil {
 			engine.Panic(err)
 		}
 	}
@@ -53,10 +47,11 @@ func setupGameConfig(g *Game, conf *Config, proj *projConfig) {
 
 // setupGameSystems initializes game subsystems.
 func setupGameSystems(g *Game, proj *projConfig) {
-	engine.SetLayerSortMode(proj.LayerSortMode)
-	g.setupPathFinderConfig(proj)
-	g.setupAudioConfig(proj)
-	g.setupPhysicsConfig(proj)
+	settings := coreproject.ResolveSystemSettings(proj)
+	engine.SetLayerSortMode(settings.LayerSortMode)
+	g.applyPathFinderSettings(settings)
+	g.applyAudioSettings(settings)
+	g.applyPhysicsSettings(settings)
 }
 
 // loadGameSprites loads all sprites.
@@ -64,13 +59,17 @@ func loadGameSprites(g *Game, v reflect.Value, fs spxfs.Dir, proj *projConfig) {
 	spxlog.Debug("==> StartLoad")
 
 	g.startLoad(fs)
-	for i, n := 0, v.NumField(); i < n; i++ {
-		name, val := getFieldPtrOrAlloc(g, v, i)
-		if fld, ok := val.(Sprite); ok && g.canBindSprite(name) {
-			if err := g.loadSprite(fld, name, v); err != nil {
-				engine.Panic(err)
-			}
+	err := coreproject.WalkFields(v, func(fieldIndex int) (string, any) {
+		return getFieldPtrOrAlloc(g, v, fieldIndex)
+	}, func(name string, val any) error {
+		fld, ok := val.(Sprite)
+		if !ok || !g.canBindSprite(name) {
+			return nil
 		}
+		return g.loadSprite(fld, name, v)
+	})
+	if err != nil {
+		engine.Panic(err)
 	}
 	g.tilemapMgr.init(g, fs, proj.TilemapPath)
 }

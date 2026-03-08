@@ -16,40 +16,30 @@
 
 package spx
 
-import "slices"
+import (
+	"slices"
+
+	coreevent "github.com/goplus/spx/v2/internal/core/event"
+)
 
 func (p *SpriteImpl) OnCloned__0(onCloned func(data any)) {
-	p.hasOnCloned = true
-	p.eventSinkMgr.addWhenCloned(eventSink{
-		pthis: p,
-		sink:  onCloned,
-		cond: func(data any) bool {
-			return data == p
-		},
-	})
+	p.HasOnCloned = true
+	p.eventSinkMgr.AddCloned(coreevent.NewSink(p, onCloned, coreevent.MatchOwner(p)))
 }
 
 func (p *SpriteImpl) OnCloned__1(onCloned func()) {
-	p.OnCloned__0(func(any) {
-		onCloned()
-	})
+	p.OnCloned__0(coreevent.Ignore1[any](onCloned))
 }
 
 func (p *SpriteImpl) fireTouchStart(obj *SpriteImpl) {
-	if p.hasOnTouchStart {
+	if p.HasOnTouchStart {
 		p.doWhenTouchStart(p, obj)
 	}
 }
 
 func (p *SpriteImpl) addTouchStartHandler(onTouchStart func(Sprite)) {
-	p.hasOnTouchStart = true
-	p.eventSinkMgr.addWhenTouchStart(eventSink{
-		pthis: p,
-		sink:  onTouchStart,
-		cond: func(data any) bool {
-			return data == p
-		},
-	})
+	p.HasOnTouchStart = true
+	p.eventSinkMgr.AddTouchStart(coreevent.NewSink(p, onTouchStart, coreevent.MatchOwner(p)))
 }
 
 func (p *SpriteImpl) OnTouchStart__0(sprite SpriteName, onTouchStart func(Sprite)) {
@@ -63,9 +53,7 @@ func (p *SpriteImpl) OnTouchStart__0(sprite SpriteName, onTouchStart func(Sprite
 }
 
 func (p *SpriteImpl) OnTouchStart__1(sprite SpriteName, onTouchStart func()) {
-	p.OnTouchStart__0(sprite, func(Sprite) {
-		onTouchStart()
-	})
+	p.OnTouchStart__0(sprite, coreevent.Ignore1[Sprite](onTouchStart))
 }
 
 func (p *SpriteImpl) OnTouchStart__2(sprites []SpriteName, onTouchStart func(Sprite)) {
@@ -81,7 +69,5 @@ func (p *SpriteImpl) OnTouchStart__2(sprites []SpriteName, onTouchStart func(Spr
 }
 
 func (p *SpriteImpl) OnTouchStart__3(sprites []SpriteName, onTouchStart func()) {
-	p.OnTouchStart__2(sprites, func(Sprite) {
-		onTouchStart()
-	})
+	p.OnTouchStart__2(sprites, coreevent.Ignore1[Sprite](onTouchStart))
 }

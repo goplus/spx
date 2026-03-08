@@ -30,26 +30,26 @@ func checkUpdateCostume(p *baseObj) {
 
 // syncCheckUpdateCostume updates sprite costume and layer if they are dirty.
 func syncCheckUpdateCostume(p *baseObj) {
-	syncSprite := p.syncSprite
-	if p.isLayerDirty {
+	syncSprite := p.SyncSprite
+	if p.IsLayerDirty {
 		if !engine.HasLayerSortMethod() {
-			syncSprite.SetZIndex(int64(p.layer))
+			syncSprite.SetZIndex(int64(p.Layer))
 		}
-		p.isLayerDirty = false
+		p.IsLayerDirty = false
 	}
-	if !p.isCostumeDirty {
+	if !p.IsCostumeDirty {
 		return
 	}
-	p.isCostumeDirty = false
+	p.IsCostumeDirty = false
 	path := p.getCostumePath()
 	renderScale := p.getCostumeRenderScale()
 	if p.isCostumeAtlas() {
 		rect := p.getCostumeAtlasRegion()
-		syncSprite.UpdateTextureAtlas(path, rect, renderScale, !p.isAnimating)
+		syncSprite.UpdateTextureAtlas(path, rect, renderScale, !p.IsAnimating)
 		syncOnAtlasChanged(p)
 		return
 	}
-	syncSprite.UpdateTexture(path, renderScale, !p.isAnimating)
+	syncSprite.UpdateTexture(path, renderScale, !p.IsAnimating)
 }
 
 func syncOnAtlasChanged(p *baseObj) {

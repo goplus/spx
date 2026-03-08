@@ -17,8 +17,8 @@
 package spx
 
 import (
+	coreruntime "github.com/goplus/spx/v2/internal/core/runtime"
 	"github.com/goplus/spx/v2/internal/coroutine"
-	"github.com/goplus/spx/v2/internal/engine"
 	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
@@ -45,20 +45,14 @@ func (p *Game) fireEvent(ev event) {
 		return
 	}
 	if isDebugInstrEnabled() {
-		spxlog.Warn("Event buffer is full (policy=%s). Drop event: %v", p.eventQueuePolicy, ev)
+		spxlog.Warn("Event buffer is full (policy=%s). Drop event: %v", p.EventQueuePolicy, ev)
 	}
 }
 
 func (p *Game) eventLoop(me coroutine.Thread) int {
-	for {
-		var ev event
-		engine.WaitForChan(p.events, &ev)
-		p.handleEvent(ev)
-	}
+	return coreruntime.RunEventLoop(me, p.events, p.handleEvent)
 }
 
 func (p *Game) initEventLoop() {
-	gco.Create("eventLoop", p.eventLoop)
-	gco.Create("inputEventLoop", p.inputEventLoop)
-	gco.Create("logicLoop", p.logicLoop)
+	coreruntime.InitLoops(gco.Create, p.eventLoop, p.inputEventLoop, p.logicLoop)
 }

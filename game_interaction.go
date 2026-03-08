@@ -41,17 +41,17 @@ func (p *Game) Ask(msg any) {
 }
 
 func (p *Game) Answer() string {
-	return p.answerVal
+	return p.AnswerVal
 }
 
 func (p *Game) ask(isSprite bool, question string, callback func(string)) {
-	if p.askPanel == nil {
-		p.askPanel = ui.NewUiAsk()
-		p.addShape(p.askPanel)
+	if p.AskPanel == nil {
+		p.AskPanel = ui.NewUiAsk()
+		p.addShape(p.AskPanel)
 	}
 	hasAnswer := false
-	p.askPanel.Show(isSprite, question, func(msg string) {
-		p.answerVal = msg
+	p.AskPanel.Show(isSprite, question, func(msg string) {
+		p.AnswerVal = msg
 		callback(msg)
 		hasAnswer = true
 	})
@@ -59,7 +59,7 @@ func (p *Game) ask(isSprite bool, question string, callback func(string)) {
 		if hasAnswer {
 			break
 		}
-		p.askPanel.Update()
+		p.AskPanel.Update()
 		engine.WaitNextFrame()
 	}
 }
