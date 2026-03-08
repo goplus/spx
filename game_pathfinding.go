@@ -18,6 +18,8 @@ package spx
 
 import (
 	"github.com/goplus/spbase/mathf"
+	"github.com/goplus/spx/v2/internal/base/valueutil"
+	"github.com/goplus/spx/v2/internal/engine"
 )
 
 // -----------------------------------------------------------------------------
@@ -29,8 +31,8 @@ const (
 
 // setupPathFinderConfig initializes path finder configuration from project settings.
 func (p *Game) setupPathFinderConfig(proj *projConfig) {
-	p.pathCellSizeX = parseDefaultValue(proj.PathCellSizeX, defaultPathCellSize)
-	p.pathCellSizeY = parseDefaultValue(proj.PathCellSizeY, defaultPathCellSize)
+	p.pathCellSizeX = valueutil.OrDefault(proj.PathCellSizeX, defaultPathCellSize)
+	p.pathCellSizeY = valueutil.OrDefault(proj.PathCellSizeY, defaultPathCellSize)
 }
 
 func (p *Game) SetupPathFinder__0() {
@@ -69,5 +71,5 @@ func (p *Game) FindPath__2(x_from, y_from, x_to, y_to float64, with_debug, with_
 
 	arr := p.engine().NavigationMgr.FindPath(mathf.NewVec2(x_from, y_from), mathf.NewVec2(x_to, y_to), with_jump)
 	result := arr.([]float32)
-	return f32Tof64(result)
+	return engine.F32Tof64(result)
 }

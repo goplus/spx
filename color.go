@@ -1,0 +1,48 @@
+/*
+ * Copyright (c) 2021 The XGo Authors (xgo.dev). All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package spx
+
+import "github.com/goplus/spbase/mathf"
+
+// Color represents an RGBA color.
+type Color struct {
+	r, g, b, a float64
+}
+
+// HSB creates a color from HSB values.
+// h, s, b in range [0, 100], just like Scratch
+func HSB(h, s, b float64) Color {
+	color := mathf.NewColorHSV(h*3.6, s/100, b/100)
+	color.A = 1
+	return toSpxColor(color)
+}
+
+// HSBA creates a color from HSBA values.
+// h, s, b, a in range [0, 100], just like Scratch
+func HSBA(h, s, b, a float64) Color {
+	color := HSB(h, s, b)
+	color.a = a / 100
+	return color
+}
+
+func toMathfColor(c Color) mathf.Color {
+	return mathf.Color{R: c.r, G: c.g, B: c.b, A: c.a}
+}
+
+func toSpxColor(c mathf.Color) Color {
+	return Color{c.R, c.G, c.B, c.A}
+}

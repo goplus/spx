@@ -16,6 +16,8 @@
 
 package spx
 
+import "github.com/goplus/spx/v2/internal/engine"
+
 // ======================== Sound Component ========================
 // This file contains sound-related functionality for sprites,
 // including sound playback, volume control, and sound effects.
@@ -98,4 +100,15 @@ func (p *SpriteImpl) ChangeSoundEffect(kind SoundEffectKind, delta float64) {
 
 func (p *SpriteImpl) playAudio(name SoundName, loop bool) soundId {
 	return p.sound().playAudio(name, loop)
+}
+
+func (p *SpriteImpl) flushPendingAudios(buffer []string) []string {
+	engine.Lock()
+	buffer = p.sound().takePendingAudios(buffer)
+	engine.Unlock()
+
+	for _, audio := range buffer {
+		p.playAudio(audio, false)
+	}
+	return buffer[:0]
 }

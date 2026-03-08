@@ -18,6 +18,7 @@ package spx
 
 import (
 	"github.com/goplus/spbase/mathf"
+	"github.com/goplus/spx/v2/internal/base/collisionutil"
 	"github.com/goplus/spx/v2/internal/engine"
 )
 
@@ -28,13 +29,13 @@ import (
 // PlaceTiles__0 places multiple tiles at specified positions using default layer.
 func (p *Game) PlaceTiles__0(positions []float64, texturePath string) {
 	path := engine.ToAssetPath(texturePath)
-	p.engine().TilemapMgr.PlaceTiles(f64Tof32(positions), path)
+	p.engine().TilemapMgr.PlaceTiles(engine.F64Tof32(positions), path)
 }
 
 // PlaceTiles__1 places multiple tiles at specified positions on a specific layer.
 func (p *Game) PlaceTiles__1(positions []float64, texturePath string, layerIndex int64) {
 	path := engine.ToAssetPath(texturePath)
-	p.engine().TilemapMgr.PlaceTilesWithLayer(f64Tof32(positions), path, layerIndex)
+	p.engine().TilemapMgr.PlaceTilesWithLayer(engine.F64Tof32(positions), path, layerIndex)
 }
 
 // PlaceTile places a single tile at the specified position.
@@ -121,7 +122,7 @@ func (p *Game) setTileInfo__0(texturePath string, isCollision bool) {
 
 func (p *Game) setTileInfo__1(texturePath string, collisionPoints []float64) {
 	path := engine.ToAssetPath(texturePath)
-	p.engine().TilemapMgr.SetTileWithCollisionInfo(path, f64Tof32(collisionPoints))
+	p.engine().TilemapMgr.SetTileWithCollisionInfo(path, engine.F64Tof32(collisionPoints))
 }
 
 // ============================================================================
@@ -133,6 +134,6 @@ func (p *Game) createDecorators(texturePath string, pos mathf.Vec2, rot float64,
 }
 
 func (p *Game) createStaticSprite(texturePath string, pos mathf.Vec2, rot float64, scale mathf.Vec2, zindex int64, pivot mathf.Vec2, colliderType string, colliderPivot mathf.Vec2, colliderParams []float64) {
-	colliderTypeInt := parseColliderShapeType(colliderType, 0)
+	colliderTypeInt := collisionutil.ParseColliderShapeType(colliderType, 0)
 	p.engine().SceneMgr.CreateStaticSprite(engine.ToAssetPath(texturePath), pos, rot, scale, zindex, pivot, colliderTypeInt, colliderPivot, colliderParams)
 }

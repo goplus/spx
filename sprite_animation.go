@@ -19,6 +19,7 @@ package spx
 import (
 	"sync"
 
+	"github.com/goplus/spx/v2/internal/engine"
 	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
@@ -77,6 +78,17 @@ func (p *SpriteImpl) getAnimation(animName SpriteAnimationName) (*aniConfig, boo
 
 func (p *SpriteImpl) onAnimationDone(animName string) {
 	p.animation().onAnimationDone(animName)
+}
+
+func (p *SpriteImpl) flushCompletedAnimations(buffer []string) []string {
+	engine.Lock()
+	buffer = p.animation().takeDonedAnimations(buffer)
+	engine.Unlock()
+
+	for _, animName := range buffer {
+		p.onAnimationDone(animName)
+	}
+	return buffer[:0]
 }
 
 // -----------------------------------------------------------------------------
