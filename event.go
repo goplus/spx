@@ -232,7 +232,9 @@ func (p *eventSinks) Stop(kind StopKind) {
 	case ThisScript:
 		gco.Abort()
 	}
-	gco.StopIf(filter)
+	if filter != nil {
+		gco.StopIf(filter)
+	}
 }
 
 // -----------------------------------------------------------------------------
@@ -266,6 +268,9 @@ type eventSinkMgr struct {
 	allWhenClick           []eventSink
 	allWhenTimer           []eventSink
 	calledStart            bool
+
+	// cache of pointers returned by sinkBuckets()
+	sinkBucketsCache []*[]eventSink
 }
 
 // -----------------------------------------------------------------------------
@@ -305,18 +310,9 @@ func (p *eventSinkMgr) reset() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	p.allWhenStart = nil
-	p.allWhenAwake = nil
-	p.allWhenKeyPressed = nil
-	p.allWhenSwipe = nil
-	p.allWhenIReceive = nil
-	p.allWhenBackdropChanged = nil
-	p.allWhenCloned = nil
-	p.allWhenTouchStart = nil
-	p.allWhenTouching = nil
-	p.allWhenTouchEnd = nil
-	p.allWhenClick = nil
-	p.allWhenTimer = nil
+	for _, bucket := range p.sinkBuckets() {
+		*bucket = nil
+	}
 	p.calledStart = false
 }
 
@@ -324,18 +320,9 @@ func (p *eventSinkMgr) doDeleteClone(this any) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	p.allWhenAwake = doDeleteClone(p.allWhenAwake, this)
-	p.allWhenStart = doDeleteClone(p.allWhenStart, this)
-	p.allWhenKeyPressed = doDeleteClone(p.allWhenKeyPressed, this)
-	p.allWhenSwipe = doDeleteClone(p.allWhenSwipe, this)
-	p.allWhenIReceive = doDeleteClone(p.allWhenIReceive, this)
-	p.allWhenBackdropChanged = doDeleteClone(p.allWhenBackdropChanged, this)
-	p.allWhenCloned = doDeleteClone(p.allWhenCloned, this)
-	p.allWhenTouchStart = doDeleteClone(p.allWhenTouchStart, this)
-	p.allWhenTouching = doDeleteClone(p.allWhenTouching, this)
-	p.allWhenTouchEnd = doDeleteClone(p.allWhenTouchEnd, this)
-	p.allWhenClick = doDeleteClone(p.allWhenClick, this)
-	p.allWhenTimer = doDeleteClone(p.allWhenTimer, this)
+	for _, bucket := range p.sinkBuckets() {
+		*bucket = doDeleteClone(*bucket, this)
+	}
 }
 
 func (p *eventSinkMgr) doWhenStart() {
@@ -484,64 +471,82 @@ func copyEventSinks(sinks []eventSink) []eventSink {
 	return out
 }
 
-func (p *eventSinkMgr) addWhenStart(sink eventSink) {
+// sinkBuckets returns pointers to all allWhen* slice fields.
+// IMPORTANT: Every allWhen* field in eventSinkMgr must be listed here.
+// Missing a field will cause reset() and doDeleteClone() to silently skip it.
+func (p *eventSinkMgr) sinkBuckets() []*[]eventSink {
+	if p.sinkBucketsCache != nil {
+		return p.sinkBucketsCache
+	}
+
+	p.sinkBucketsCache = []*[]eventSink{
+		&p.allWhenStart,
+		&p.allWhenAwake,
+		&p.allWhenKeyPressed,
+		&p.allWhenSwipe,
+		&p.allWhenIReceive,
+		&p.allWhenBackdropChanged,
+		&p.allWhenCloned,
+		&p.allWhenTouchStart,
+		&p.allWhenTouching,
+		&p.allWhenTouchEnd,
+		&p.allWhenClick,
+		&p.allWhenTimer,
+	}
+	return p.sinkBucketsCache
+}
+
+func (p *eventSinkMgr) addSink(bucket *[]eventSink, sink eventSink) {
 	p.mu.Lock()
-	p.allWhenStart = append(p.allWhenStart, sink)
+	*bucket = append(*bucket, sink)
 	p.mu.Unlock()
+}
+
+func (p *eventSinkMgr) snapshotSinks(sinks []eventSink) []eventSink {
+	p.mu.RLock()
+	out := copyEventSinks(sinks)
+	p.mu.RUnlock()
+	return out
+}
+
+func (p *eventSinkMgr) addWhenStart(sink eventSink) {
+	p.addSink(&p.allWhenStart, sink)
 }
 
 func (p *eventSinkMgr) addWhenAwake(sink eventSink) {
-	p.mu.Lock()
-	p.allWhenAwake = append(p.allWhenAwake, sink)
-	p.mu.Unlock()
+	p.addSink(&p.allWhenAwake, sink)
 }
 
 func (p *eventSinkMgr) addWhenKeyPressed(sink eventSink) {
-	p.mu.Lock()
-	p.allWhenKeyPressed = append(p.allWhenKeyPressed, sink)
-	p.mu.Unlock()
+	p.addSink(&p.allWhenKeyPressed, sink)
 }
 
 func (p *eventSinkMgr) addWhenSwipe(sink eventSink) {
-	p.mu.Lock()
-	p.allWhenSwipe = append(p.allWhenSwipe, sink)
-	p.mu.Unlock()
+	p.addSink(&p.allWhenSwipe, sink)
 }
 
 func (p *eventSinkMgr) addWhenIReceive(sink eventSink) {
-	p.mu.Lock()
-	p.allWhenIReceive = append(p.allWhenIReceive, sink)
-	p.mu.Unlock()
+	p.addSink(&p.allWhenIReceive, sink)
 }
 
 func (p *eventSinkMgr) addWhenBackdropChanged(sink eventSink) {
-	p.mu.Lock()
-	p.allWhenBackdropChanged = append(p.allWhenBackdropChanged, sink)
-	p.mu.Unlock()
+	p.addSink(&p.allWhenBackdropChanged, sink)
 }
 
 func (p *eventSinkMgr) addWhenCloned(sink eventSink) {
-	p.mu.Lock()
-	p.allWhenCloned = append(p.allWhenCloned, sink)
-	p.mu.Unlock()
+	p.addSink(&p.allWhenCloned, sink)
 }
 
 func (p *eventSinkMgr) addWhenTouchStart(sink eventSink) {
-	p.mu.Lock()
-	p.allWhenTouchStart = append(p.allWhenTouchStart, sink)
-	p.mu.Unlock()
+	p.addSink(&p.allWhenTouchStart, sink)
 }
 
 func (p *eventSinkMgr) addWhenClick(sink eventSink) {
-	p.mu.Lock()
-	p.allWhenClick = append(p.allWhenClick, sink)
-	p.mu.Unlock()
+	p.addSink(&p.allWhenClick, sink)
 }
 
 func (p *eventSinkMgr) addWhenTimer(sink eventSink) {
-	p.mu.Lock()
-	p.allWhenTimer = append(p.allWhenTimer, sink)
-	p.mu.Unlock()
+	p.addSink(&p.allWhenTimer, sink)
 }
 
 func (p *eventSinkMgr) snapshotWhenStartOnce() []eventSink {
@@ -555,80 +560,47 @@ func (p *eventSinkMgr) snapshotWhenStartOnce() []eventSink {
 }
 
 func (p *eventSinkMgr) snapshotWhenAwake() []eventSink {
-	p.mu.RLock()
-	sinks := copyEventSinks(p.allWhenAwake)
-	p.mu.RUnlock()
-	return sinks
+	return p.snapshotSinks(p.allWhenAwake)
 }
 
 func (p *eventSinkMgr) snapshotWhenKeyPressed() []eventSink {
-	p.mu.RLock()
-	sinks := copyEventSinks(p.allWhenKeyPressed)
-	p.mu.RUnlock()
-	return sinks
+	return p.snapshotSinks(p.allWhenKeyPressed)
 }
 
 func (p *eventSinkMgr) snapshotWhenSwipe() []eventSink {
-	p.mu.RLock()
-	sinks := copyEventSinks(p.allWhenSwipe)
-	p.mu.RUnlock()
-	return sinks
+	return p.snapshotSinks(p.allWhenSwipe)
 }
 
 func (p *eventSinkMgr) snapshotWhenIReceive() []eventSink {
-	p.mu.RLock()
-	sinks := copyEventSinks(p.allWhenIReceive)
-	p.mu.RUnlock()
-	return sinks
+	return p.snapshotSinks(p.allWhenIReceive)
 }
 
 func (p *eventSinkMgr) snapshotWhenBackdropChanged() []eventSink {
-	p.mu.RLock()
-	sinks := copyEventSinks(p.allWhenBackdropChanged)
-	p.mu.RUnlock()
-	return sinks
+	return p.snapshotSinks(p.allWhenBackdropChanged)
 }
 
 func (p *eventSinkMgr) snapshotWhenCloned() []eventSink {
-	p.mu.RLock()
-	sinks := copyEventSinks(p.allWhenCloned)
-	p.mu.RUnlock()
-	return sinks
+	return p.snapshotSinks(p.allWhenCloned)
 }
 
 func (p *eventSinkMgr) snapshotWhenTouchStart() []eventSink {
-	p.mu.RLock()
-	sinks := copyEventSinks(p.allWhenTouchStart)
-	p.mu.RUnlock()
-	return sinks
+	return p.snapshotSinks(p.allWhenTouchStart)
 }
 
 func (p *eventSinkMgr) snapshotWhenTouching() []eventSink {
-	p.mu.RLock()
-	sinks := copyEventSinks(p.allWhenTouching)
-	p.mu.RUnlock()
-	return sinks
+	return p.snapshotSinks(p.allWhenTouching)
 }
 
 func (p *eventSinkMgr) snapshotWhenTouchEnd() []eventSink {
-	p.mu.RLock()
-	sinks := copyEventSinks(p.allWhenTouchEnd)
-	p.mu.RUnlock()
-	return sinks
+	return p.snapshotSinks(p.allWhenTouchEnd)
 }
 
 func (p *eventSinkMgr) snapshotWhenClick() []eventSink {
-	p.mu.RLock()
-	sinks := copyEventSinks(p.allWhenClick)
-	p.mu.RUnlock()
-	return sinks
+	return p.snapshotSinks(p.allWhenClick)
 }
 
 func (p *eventSinkMgr) snapshotWhenTimer() []eventSink {
-	p.mu.RLock()
-	sinks := copyEventSinks(p.allWhenTimer)
-	p.mu.RUnlock()
-	return sinks
+	return p.snapshotSinks(p.allWhenTimer)
 }
 
 func asyncCall(sinks []eventSink, start bool, data any, doSth func(*eventSink)) {
