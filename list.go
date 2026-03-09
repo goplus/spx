@@ -22,6 +22,8 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+
+	"github.com/goplus/spx/v2/internal/engine"
 )
 
 type Pos = int
@@ -171,7 +173,7 @@ func (p Value) String() string {
 func (p Value) Int() int {
 	i, ok := toIntAny(p.data)
 	if !ok {
-		doPanic("spx.Value.Int() conversion failed for type:", reflect.TypeOf(p.data))
+		engine.Panic("spx.Value.Int() conversion failed for type:", reflect.TypeOf(p.data))
 	}
 	return i
 }
@@ -179,7 +181,7 @@ func (p Value) Int() int {
 func (p Value) Float() float64 {
 	f, ok := toFloat64Any(p.data)
 	if !ok {
-		doPanic("spx.Value.Float() conversion failed for type:", reflect.TypeOf(p.data))
+		engine.Panic("spx.Value.Float() conversion failed for type:", reflect.TypeOf(p.data))
 	}
 	return f
 }
@@ -264,7 +266,7 @@ func (p *List) Set(i Pos, v obj) {
 	if i < 0 {
 		i = Pos(getListPos(i, n))
 		if i < 0 {
-			doPanic("Set failed: invalid index -", i)
+			engine.Panic("Set failed: invalid index -", i)
 			return
 		}
 	}

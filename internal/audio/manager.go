@@ -1,0 +1,131 @@
+package audio
+
+import "github.com/goplus/spx/v2/internal/engine"
+
+type Backend interface {
+	CreateAudio() engine.Object
+	DestroyAudio(obj engine.Object)
+	SetPitch(obj engine.Object, pitch float64)
+	GetPitch(obj engine.Object) float64
+	SetPan(obj engine.Object, pan float64)
+	GetPan(obj engine.Object) float64
+	SetVolume(obj engine.Object, volume float64)
+	GetVolume(obj engine.Object) float64
+	PlayWithAttenuation(obj engine.Object, path string, ownerID engine.Object, attenuation, maxDistance float64) int64
+	Pause(aid int64)
+	Resume(aid int64)
+	Stop(aid int64)
+	SetLoop(aid int64, loop bool)
+	IsPlaying(aid int64) bool
+	StopAll()
+}
+
+type Manager struct {
+	backend  Backend
+	path2ids map[string][]int64
+}
+
+func (m *Manager) Init(backend Backend) {
+	m.backend = backend
+	m.path2ids = make(map[string][]int64)
+}
+
+func (m *Manager) AllocSound() engine.Object {
+	return m.backend.CreateAudio()
+}
+
+func (m *Manager) ReleaseSound(soundObj engine.Object) {
+	if soundObj == 0 {
+		return
+	}
+	m.backend.DestroyAudio(soundObj)
+}
+
+func (m *Manager) Pause(path string) {
+	for _, id := range m.path2ids[path] {
+		m.backend.Pause(id)
+	}
+}
+
+func (m *Manager) Resume(path string) {
+	for _, id := range m.path2ids[path] {
+		m.backend.Resume(id)
+	}
+}
+
+func (m *Manager) Stop(path string) {
+	for _, id := range m.path2ids[path] {
+		m.backend.Stop(id)
+	}
+	delete(m.path2ids, path)
+}
+
+func (m *Manager) Play(
+	soundObj engine.Object,
+	path string,
+	isLoop, isWait bool,
+	owner engine.Object,
+	attenuation, maxDistance float64,
+) int64 {
+	if attenuation == 0 {
+		owner = 0
+	}
+
+	curID := m.backend.PlayWithAttenuation(soundObj, engine.ToAssetPath(path), owner, attenuation, maxDistance)
+	m.path2ids[path] = append(m.path2ids[path], curID)
+	if isLoop {
+		for _, id := range m.path2ids[path] {
+			m.backend.SetLoop(id, true)
+		}
+	} else if isWait {
+		for m.backend.IsPlaying(curID) {
+			engine.WaitNextFrame()
+		}
+	}
+	return curID
+}
+
+func (m *Manager) StopAll() {
+	m.path2ids = make(map[string][]int64)
+	m.backend.StopAll()
+}
+
+func (m *Manager) GetPan(soundObj engine.Object) float64 {
+	return m.backend.GetPan(soundObj) * 100
+}
+
+func (m *Manager) SetPan(soundObj engine.Object, value float64) {
+	m.backend.SetPan(soundObj, value/100)
+}
+
+func (m *Manager) ChangePan(soundObj engine.Object, delta float64) {
+	m.SetPan(soundObj, m.GetPan(soundObj)+delta)
+}
+
+func (m *Manager) GetPitch(soundObj engine.Object) float64 {
+	return m.backend.GetPitch(soundObj) * 100
+}
+
+func (m *Manager) SetPitch(soundObj engine.Object, value float64) {
+	m.backend.SetPitch(soundObj, value/100)
+}
+
+func (m *Manager) ChangePitch(soundObj engine.Object, delta float64) {
+	m.SetPitch(soundObj, m.GetPitch(soundObj)+delta)
+}
+
+func (m *Manager) GetVolume(soundObj engine.Object) float64 {
+	return m.backend.GetVolume(soundObj) * 100
+}
+
+func (m *Manager) SetVolume(soundObj engine.Object, value float64) {
+	val := value / 100
+	if val <= 0 {
+		val = 0.01
+	}
+	m.backend.SetVolume(soundObj, val)
+}
+
+func (m *Manager) ChangeVolume(soundObj engine.Object, delta float64) {
+	m.SetVolume(soundObj, m.GetVolume(soundObj)+delta)
+}

@@ -19,6 +19,7 @@ package spx
 import (
 	"sync"
 
+	intani "github.com/goplus/spx/v2/internal/animation"
 	"github.com/goplus/spx/v2/internal/engine"
 	spxlog "github.com/goplus/spx/v2/internal/log"
 )
@@ -43,8 +44,44 @@ type animationWrapper struct {
 
 func (aw *animationWrapper) ensureRegistered(animName string) {
 	aw.loadOnce.Do(func() {
-		createAnimation(aw.engineMgr, aw.spriteName, animName, aw.ani, aw.costumes, aw.isCostumeSet)
+		payloadJSON, maxBitmap, err := intani.BuildPayloadJSON(
+			intani.Config{
+				FrameFrom: aw.ani.IFrameFrom,
+				FrameTo:   aw.ani.IFrameTo,
+			},
+			buildAnimationSources(aw.costumes),
+			aw.isCostumeSet,
+		)
+		if err != nil {
+			panic(err)
+		}
+
+		aw.ani.AdaptAnimBitmapResolution = maxBitmap
+		aw.engineMgr.ResMgr.CreateAnimation(
+			aw.spriteName,
+			animName,
+			payloadJSON,
+			int64(aw.ani.FrameFps),
+			aw.isCostumeSet,
+		)
 	})
+}
+
+func buildAnimationSources(costumes []*costume) []intani.FrameSource {
+	frames := make([]intani.FrameSource, 0, len(costumes))
+	for _, c := range costumes {
+		frames = append(frames, intani.FrameSource{
+			Path:             c.path,
+			BitmapResolution: c.bitmapResolution,
+			Center:           c.center,
+			ImageSize:        c.imageSize,
+			PosX:             c.posX,
+			PosY:             c.posY,
+			Width:            c.width,
+			Height:           c.height,
+		})
+	}
+	return frames
 }
 
 type animState struct {

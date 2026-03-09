@@ -29,6 +29,15 @@ type RotationStyle int
 // specialObj represents special target objects for sprite operations.
 type specialObj int
 
+// switchAction represents the direction for switching costumes/backdrops.
+type switchAction int
+
+// layerAction represents the direction for layer changes.
+type layerAction int
+
+// dirAction represents forward or backward direction.
+type dirAction int
+
 // Type aliases for sprite-related identifiers.
 type (
 	SpriteName          = string
@@ -58,6 +67,21 @@ const (
 	EdgeTop    specialObj = touchingScreenTop
 	EdgeRight  specialObj = touchingScreenRight
 	EdgeBottom specialObj = touchingScreenBottom
+)
+
+const (
+	Prev switchAction = -1
+	Next switchAction = 1
+)
+
+const (
+	Front layerAction = -1
+	Back  layerAction = 1
+)
+
+const (
+	Forward  dirAction = -1
+	Backward dirAction = 1
 )
 
 // ============================================================================

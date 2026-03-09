@@ -17,7 +17,6 @@
 package spx
 
 import (
-	"fmt"
 	"reflect"
 	"strings"
 	"syscall"
@@ -128,84 +127,12 @@ func getTarget(g reflect.Value, target string) (reflect.Value, int) {
 	if target == "" {
 		return g, 1 // spx.Game
 	}
-	if val := findFieldPtr(g, target, 0); val != nil {
+	if val := coreproject.FindFieldPtr(g, target, 0); val != nil {
 		if _, ok := val.(Shape); ok {
 			return reflect.ValueOf(val).Elem(), 2 // (spx.Sprite, *Game)
 		}
 	}
 	return reflect.Value{}, -1
-}
-
-func getValueRef(target reflect.Value, name string, from int) reflect.Value {
-	// Try exact match first (from specified index)
-	if valPtr := findFieldPtr(target, name, from); valPtr != nil {
-		return reflect.ValueOf(valPtr).Elem()
-	}
-	return reflect.Value{}
-}
-
-// aliasNameOf mimics gogen's aliasNameOf logic:
-// For methods, lowercase names are mapped to uppercase (e.g., "add" -> "Add")
-// For fields, no aliasing is performed (must use exact exported name)
-func aliasNameOf(name string, isMethod bool) string {
-	if isMethod && name != "" {
-		if c := name[0]; c >= 'a' && c <= 'z' {
-			return string(rune(c)+('A'-'a')) + name[1:]
-		}
-	}
-	return ""
-}
-
-// methodHasAutoProperty checks if a method value is a valid auto-property (getter):
-// Must have 0 parameters (excluding receiver) and 1 return value
-func methodHasAutoProperty(m reflect.Value) bool {
-	if !m.IsValid() {
-		return false
-	}
-	mType := m.Type()
-	return mType.NumIn() == 0 && mType.NumOut() == 1 // NumIn excludes receiver for bound methods
-}
-
-// resolveMember resolves a member (field or method) by name following gogen.Member semantics.
-// Returns an accessor function if found, nil otherwise.
-func resolveMember(target reflect.Value, name string, from int) func() string {
-	// Try as field first (fields don't support lowercase aliases in gogen)
-	ref := getValueRef(target, name, from)
-	if ref.IsValid() {
-		return func() string {
-			return fmt.Sprint(ref.Interface())
-		}
-	}
-
-	// Try as method with alias support (lowercase -> uppercase)
-	// For method lookup, use pointer type
-	targetForMethod := target
-	if target.Kind() != reflect.Ptr && target.CanAddr() {
-		targetForMethod = target.Addr()
-	}
-
-	aliasName := aliasNameOf(name, true)
-
-	// Try original name first
-	m := targetForMethod.MethodByName(name)
-	if m.IsValid() && methodHasAutoProperty(m) {
-		// is use original name method accessor return pointer
-		return makeAutoPropertyAccessor(m, false)
-	}
-
-	// Only try alias if original name didn't find any method
-	if !m.IsValid() && aliasName != name {
-		mAlias := targetForMethod.MethodByName(aliasName)
-		// Only execute methodHasAutoProperty and makeAutoPropertyAccessor
-		// when name method not found but aliasName method found
-		if mAlias.IsValid() {
-			if methodHasAutoProperty(mAlias) {
-				return makeAutoPropertyAccessor(mAlias, true)
-			}
-		}
-	}
-
-	return nil
 }
 
 func buildMonitorEval(g reflect.Value, t, val string) func() string {
@@ -221,38 +148,18 @@ func buildMonitorEval(g reflect.Value, t, val string) func() string {
 			return nil
 		}
 
-		if eval := resolveMember(target, name, from); eval != nil {
+		if eval := coreproject.ResolveMemberStringEval(target, name, from); eval != nil {
 			return eval
 		}
 		spxlog.Error("Bind monitor error: cannot find property or method (getter): %s", name)
 	default:
 		name := val
-		if eval := resolveMember(target, name, from); eval != nil {
+		if eval := coreproject.ResolveMemberStringEval(target, name, from); eval != nil {
 			return eval
 		}
 		spxlog.Error("Bind monitor error: cannot find property or method (getter): %s", name)
 	}
 	return nil
-}
-
-// makeAutoPropertyAccessor creates a runtime accessor for an auto-property method
-func makeAutoPropertyAccessor(m reflect.Value, autoProperty bool) func() string {
-	return func() string {
-		if autoProperty {
-			result := m.Call(nil)[0].Interface()
-			// special case for float
-			if fVal, ok := result.(float64); ok {
-				return fmt.Sprintf("%.2f", fVal)
-			}
-			if f32Val, ok := result.(float32); ok {
-				return fmt.Sprintf("%.2f", f32Val)
-			}
-			return fmt.Sprint(result)
-		}
-
-		// Return method pointer when autoProperty is false
-		return fmt.Sprintf("%p", m.Interface())
-	}
 }
 
 func (pself *Monitor) setVisible(visible bool) {

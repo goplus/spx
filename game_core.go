@@ -20,8 +20,11 @@ import (
 	"log"
 	"reflect"
 	"sync"
+	"time"
 
+	"github.com/goplus/spx/v2/internal/audio"
 	"github.com/goplus/spx/v2/internal/audiorecord"
+	"github.com/goplus/spx/v2/internal/base/collisionutil"
 	corestate "github.com/goplus/spx/v2/internal/core/state"
 	"github.com/goplus/spx/v2/internal/coroutine"
 	"github.com/goplus/spx/v2/internal/engine"
@@ -42,6 +45,8 @@ var (
 	gco      *coroutine.Coroutines
 	tySprite = reflect.TypeOf((*Sprite)(nil)).Elem()
 )
+
+var runtimeStateMgr corestate.RuntimeManager
 
 type dbgFlags int
 
@@ -89,8 +94,9 @@ type Game struct {
 	Camera Camera
 	camera *cameraImpl
 
-	typs map[string]reflect.Type
-	sprs map[string]Sprite
+	typs   map[string]reflect.Type
+	sprs   map[string]Sprite
+	sounds map[string]sound
 
 	events chan event
 	aurec  *audiorecord.Recorder
@@ -105,17 +111,101 @@ type Game struct {
 	engineMgr engineManagers
 
 	inputMgr   inputManager
-	soundMgr   soundMgr
+	soundMgr   audio.Manager
 	spriteMgr  spriteManager
 	tilemapMgr gameTilemapMgr
 
 	syncBuffer  *engine.SpriteSyncBuffer
-	spatialHash *SpatialHash
+	spatialHash *collisionutil.SpatialHash[*SpriteImpl]
 }
 
 type Gamer interface {
 	engine.IGame
 	initGame(sprites []Sprite) *Game
+}
+
+func activeGame() *Game {
+	game, _ := engine.GetGame().(*Game)
+	return game
+}
+
+func (p *Game) initRuntimeState() {
+	runtimeStateMgr.Init(&p.GameDebugState, &p.GameRuntimeState)
+	p.initEventQueueState()
+}
+
+func setDefaultDebugFlags(instr, event, perf bool) {
+	runtimeStateMgr.SetDefaultDebugFlags(instr, event, perf)
+}
+
+func (p *Game) setDebugFlags(instr, event, perf bool) {
+	runtimeStateMgr.ApplyDebugFlags(&p.GameDebugState, instr, event, perf)
+}
+
+func isDebugInstrEnabled() bool {
+	return runtimeStateMgr.DebugInstrEnabled(activeGameDebugState())
+}
+
+func isDebugEventEnabled() bool {
+	return runtimeStateMgr.DebugEventEnabled(activeGameDebugState())
+}
+
+func isDebugPerfEnabled() bool {
+	return runtimeStateMgr.DebugPerfEnabled(activeGameDebugState())
+}
+
+func setPhysicsEnabled(enabled bool) {
+	runtimeStateMgr.SetPhysicsEnabled(activeGameRuntimeState(), enabled)
+}
+
+func (p *Game) setPhysicsEnabled(enabled bool) {
+	runtimeStateMgr.SetPhysicsEnabled(&p.GameRuntimeState, enabled)
+}
+
+func isPhysicsEnabled() bool {
+	return runtimeStateMgr.PhysicsEnabled(activeGameRuntimeState())
+}
+
+func resetImageSizeCache(g *Game) {
+	runtimeStateMgr.ResetImageSizeCache(gameRuntimeState(g))
+}
+
+func imageSizeCacheRef() *sync.Map {
+	return runtimeStateMgr.ImageSizeCacheRef(activeGameRuntimeState())
+}
+
+func setSchedInMain(inMain bool) {
+	runtimeStateMgr.SetSchedInMain(activeGameRuntimeState(), inMain)
+}
+
+func isSchedInMainState() bool {
+	return runtimeStateMgr.IsSchedInMain(activeGameRuntimeState())
+}
+
+func setMainSchedTime(t time.Time) {
+	runtimeStateMgr.SetMainSchedTime(activeGameRuntimeState(), t)
+}
+
+func mainSchedTime() time.Time {
+	return runtimeStateMgr.MainSchedTime(activeGameRuntimeState())
+}
+
+func activeGameDebugState() *corestate.GameDebugState {
+	if g := activeGame(); g != nil {
+		return &g.GameDebugState
+	}
+	return nil
+}
+
+func activeGameRuntimeState() *corestate.GameRuntimeState {
+	return gameRuntimeState(activeGame())
+}
+
+func gameRuntimeState(g *Game) *corestate.GameRuntimeState {
+	if g == nil {
+		return nil
+	}
+	return &g.GameRuntimeState
 }
 
 func (p *Game) newSpriteAndLoad(name string, tySpr reflect.Type, g reflect.Value) Sprite {
@@ -181,6 +271,7 @@ func (p *Game) initGame(sprites []Sprite) *Game {
 	p.engineMgr = engineManagers{}
 	ui.Init(&p.engineMgr)
 	p.sprs = make(map[string]Sprite)
+	p.sounds = make(map[string]sound)
 	p.typs = make(map[string]reflect.Type)
 	p.syncBuffer = engine.NewSpriteSyncBuffer(initialSpriteSyncBufferSize)
 	for _, spr := range sprites {
