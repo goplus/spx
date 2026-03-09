@@ -87,6 +87,53 @@ func LoadConfig(ret any, fs spxfs.Dir, index any) error {
 	}
 }
 
+func normalizeConfigPath(configDir, relPath string) string {
+	if relPath == "" {
+		return ""
+	}
+	if strings.HasPrefix(relPath, "/") {
+		return relPath
+	}
+	if schema, _ := spxfs.SplitSchema(relPath); schema != "" {
+		return relPath
+	}
+	return path.Clean(path.Join(configDir, relPath))
+}
+
+func normalizeProjectConfigPaths(conf *ProjectConfig) {
+	if conf == nil {
+		return
+	}
+
+	for _, backdrop := range conf.Backdrops {
+		if backdrop == nil {
+			continue
+		}
+		backdrop.Path = normalizeConfigPath("", backdrop.Path)
+	}
+	conf.Bgm = normalizeConfigPath("", conf.Bgm)
+	conf.TilemapPath = normalizeConfigPath("", conf.TilemapPath)
+}
+
+func normalizeSpriteConfigPaths(conf *SpriteConfig, configDir string) {
+	if conf == nil {
+		return
+	}
+
+	for _, costume := range conf.Costumes {
+		if costume == nil {
+			continue
+		}
+		costume.Path = normalizeConfigPath(configDir, costume.Path)
+	}
+	if conf.CostumeSet != nil {
+		conf.CostumeSet.Path = normalizeConfigPath(configDir, conf.CostumeSet.Path)
+	}
+	if conf.CostumeMPSet != nil {
+		conf.CostumeMPSet.Path = normalizeConfigPath(configDir, conf.CostumeMPSet.Path)
+	}
+}
+
 type LoadedSpriteConfig struct {
 	BaseDir string
 	Config  SpriteConfig
@@ -98,6 +145,7 @@ func LoadSpriteConfig(fs spxfs.Dir, name string) (LoadedSpriteConfig, error) {
 	if err := LoadJSON(&conf, fs, baseDir+"index.json"); err != nil {
 		return LoadedSpriteConfig{}, err
 	}
+	normalizeSpriteConfigPaths(&conf, strings.TrimSuffix(baseDir, "/"))
 	return LoadedSpriteConfig{
 		BaseDir: baseDir,
 		Config:  conf,
@@ -115,7 +163,7 @@ func LoadSoundConfig(fs spxfs.Dir, name string) (LoadedSoundConfig, error) {
 	if err := LoadJSON(&conf, fs, path.Join(baseDir, "index.json")); err != nil {
 		return LoadedSoundConfig{}, err
 	}
-	conf.Path = path.Join(baseDir, conf.Path)
+	conf.Path = normalizeConfigPath(baseDir, conf.Path)
 	return LoadedSoundConfig{
 		BaseDir: baseDir,
 		Config:  conf,

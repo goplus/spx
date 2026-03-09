@@ -17,8 +17,6 @@
 package spx
 
 import (
-	"path"
-
 	"github.com/goplus/spbase/mathf"
 	assetutil "github.com/goplus/spx/v2/internal/assets"
 	"github.com/goplus/spx/v2/internal/engine"
@@ -99,7 +97,7 @@ func newCostumeWith(name string, img *costumeSetImage, faceRight float64, frameI
 
 // newCostume creates a costume from a costume configuration.
 func newCostume(base string, config *costumeConfig) *costume {
-	fullPath := path.Join(base, config.Path)
+	fullPath := config.Path
 	frame := assetutil.NewStandaloneFrame(
 		config.ImageWidth,
 		config.ImageHeight,

@@ -53,6 +53,11 @@ func TestBuildFilesystemAssetPath(t *testing.T) {
 			want: "../assets/image.png",
 		},
 		{
+			name: "allow shared external resource",
+			path: "../../res/image.png",
+			want: "../../res/image.png",
+		},
+		{
 			name: "reject parent traversal",
 			path: "../../../../etc/passwd",
 			want: "",

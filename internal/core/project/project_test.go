@@ -338,7 +338,7 @@ func TestLoadSpriteAndSoundConfig(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(dir, "sprites", "Hero"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "sprites", "Hero", "index.json"), []byte(`{"size":80}`), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "sprites", "Hero", "index.json"), []byte(`{"size":80,"costumeSet":{"path":"../../../../res/hero.png"}}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.MkdirAll(filepath.Join(dir, "sounds", "Jump"), 0o755); err != nil {
@@ -360,6 +360,9 @@ func TestLoadSpriteAndSoundConfig(t *testing.T) {
 	if sprite.Config.Size != 80 {
 		t.Fatalf("sprite.Config.Size = %v, want 80", sprite.Config.Size)
 	}
+	if sprite.Config.CostumeSet == nil || sprite.Config.CostumeSet.Path != "../../res/hero.png" {
+		t.Fatalf("sprite.Config.CostumeSet.Path = %q, want ../../res/hero.png", sprite.Config.CostumeSet.Path)
+	}
 
 	sound, err := LoadSoundConfig(loadFS, "Jump")
 	if err != nil {
@@ -370,6 +373,33 @@ func TestLoadSpriteAndSoundConfig(t *testing.T) {
 	}
 	if sound.Config.Path != "sounds/Jump/jump.wav" {
 		t.Fatalf("sound.Config.Path = %q, want sounds/Jump/jump.wav", sound.Config.Path)
+	}
+}
+
+func TestLoadBuilderProjectNormalizesProjectPaths(t *testing.T) {
+	dir := t.TempDir()
+	indexJSON := `{
+		"backdrops":[{"name":"lake","path":"../../res/lake.jpg"}],
+		"bgm":"../../res/theme.mp3",
+		"tilemapPath":"../maps/level1.json"
+	}`
+	if err := os.WriteFile(filepath.Join(dir, "index.json"), []byte(indexJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	loaded, err := LoadBuilderProject(localDir{base: dir}, nil)
+	if err != nil {
+		t.Fatalf("LoadBuilderProject error: %v", err)
+	}
+
+	if got := loaded.Project.Backdrops[0].Path; got != "../../res/lake.jpg" {
+		t.Fatalf("loaded.Project.Backdrops[0].Path = %q, want ../../res/lake.jpg", got)
+	}
+	if got := loaded.Project.Bgm; got != "../../res/theme.mp3" {
+		t.Fatalf("loaded.Project.Bgm = %q, want ../../res/theme.mp3", got)
+	}
+	if got := loaded.Project.TilemapPath; got != "../maps/level1.json" {
+		t.Fatalf("loaded.Project.TilemapPath = %q, want ../maps/level1.json", got)
 	}
 }
 

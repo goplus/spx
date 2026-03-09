@@ -18,7 +18,6 @@ package spx
 
 import (
 	"math"
-	"path"
 	"strconv"
 
 	"github.com/goplus/spbase/mathf"
@@ -84,7 +83,7 @@ func (p *baseObj) initWith(base string, sprite *spriteConfig) {
 func initWithCMPS(p *baseObj, base string, cmps *costumeMPSet) {
 	faceRight := cmps.FaceRight
 	bitmapResolution := assetutil.ToBitmapResolution(cmps.BitmapResolution)
-	imgPath := path.Join(base, cmps.Path)
+	imgPath := cmps.Path
 
 	for _, cs := range cmps.Parts {
 		img := &costumeSetImage{
@@ -99,7 +98,7 @@ func initWithCMPS(p *baseObj, base string, cmps *costumeMPSet) {
 // initWithCS initializes with a costume set.
 func initWithCS(p *baseObj, base string, cs *costumeSet) {
 	nx := cs.Nx
-	imgPath := path.Join(base, cs.Path)
+	imgPath := cs.Path
 
 	img := &costumeSetImage{
 		path:   imgPath,

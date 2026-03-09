@@ -10,5 +10,5 @@ func SetAssetDir(dir string) {
 }
 
 func ToAssetPath(relPath string) string {
-	return buildPackmodeAssetPath(relPath)
+	return normalizeSlashes(assetPaths.root + relPath)
 }
