@@ -17,43 +17,32 @@
 package spx
 
 import (
+	coreruntime "github.com/goplus/spx/v2/internal/core/runtime"
 	"github.com/goplus/spx/v2/internal/coroutine"
-	"github.com/goplus/spx/v2/internal/engine"
 	"github.com/goplus/spx/v2/internal/timer"
 )
 
-// processPendingAudios plays any pending audio for sprites.
-func (p *Game) processPendingAudios(items []Shape, tempAudios []string) []string {
-	for _, item := range items {
-		if sprite, ok := item.(*SpriteImpl); ok {
-			tempAudios = sprite.flushPendingAudios(tempAudios)
-		}
-	}
-	return tempAudios
-}
-
-// processAnimationEvents handles completed animation events for sprites.
-func (p *Game) processAnimationEvents(items []Shape, tempAnimations []string) []string {
-	for _, item := range items {
-		if sprite, ok := item.(*SpriteImpl); ok {
-			tempAnimations = sprite.flushCompletedAnimations(tempAnimations)
-		}
-	}
-	return tempAnimations
-}
-
 func (p *Game) logicLoop(me coroutine.Thread) int {
-	tempAudios := []string{}
-	tempAnimations := []string{}
-	for {
-		tempItems := p.getTempShapes()
-		tempAudios = p.processPendingAudios(tempItems, tempAudios)
-		tempAnimations = p.processAnimationEvents(tempItems, tempAnimations)
-
-		if targetTimer, ok := timer.NextTimer(); ok {
+	return coreruntime.RunLogicLoop(me, coreruntime.LogicLoopConfig[Shape]{
+		Items: p.getTempShapes,
+		FlushPendingAudio: func(item Shape, tempAudios []string) []string {
+			sprite, ok := item.(*SpriteImpl)
+			if !ok {
+				return tempAudios
+			}
+			return sprite.flushPendingAudios(tempAudios)
+		},
+		FlushCompletedAnimations: func(item Shape, tempAnimations []string) []string {
+			sprite, ok := item.(*SpriteImpl)
+			if !ok {
+				return tempAnimations
+			}
+			return sprite.flushCompletedAnimations(tempAnimations)
+		},
+		NextTimer: timer.NextTimer,
+		FireTimer: func(targetTimer float64) {
 			p.fireEvent(&eventTimer{Time: targetTimer})
-		}
-		engine.WaitNextFrame()
-		p.showDebugPanel()
-	}
+		},
+		ShowDebugPanel: p.showDebugPanel,
+	})
 }

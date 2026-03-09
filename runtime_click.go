@@ -18,6 +18,7 @@ package spx
 
 import (
 	"github.com/goplus/spbase/mathf"
+	coreruntime "github.com/goplus/spx/v2/internal/core/runtime"
 	"github.com/goplus/spx/v2/internal/engine"
 )
 
@@ -33,41 +34,24 @@ type clicker interface {
 	Visible() bool
 }
 
-func (p *Game) findClickTarget(point mathf.Vec2) (clicker, *SpriteImpl) {
-	tempItems := p.getTempShapes()
-	count := len(tempItems)
-	for i := range count {
-		item := tempItems[count-i-1]
+func (p *Game) findClickTarget(point mathf.Vec2) (coreruntime.ClickSelection[clicker, *SpriteImpl], bool) {
+	return coreruntime.FindClickTarget(p.getTempShapes(), func(item Shape) (coreruntime.ClickSelection[clicker, *SpriteImpl], bool) {
 		o, ok := item.(clicker)
 		if !ok {
-			continue
+			return coreruntime.ClickSelection[clicker, *SpriteImpl]{}, false
 		}
 		syncSprite := o.getProxy()
 		if syncSprite == nil || !o.Visible() {
-			continue
+			return coreruntime.ClickSelection[clicker, *SpriteImpl]{}, false
 		}
 		if !p.engine().SpriteMgr.CheckCollisionWithPoint(syncSprite.GetId(), point, true) {
-			continue
+			return coreruntime.ClickSelection[clicker, *SpriteImpl]{}, false
 		}
 		if sprite, ok := o.(*SpriteImpl); ok {
-			return o, sprite
+			return coreruntime.ClickSelection[clicker, *SpriteImpl]{Target: o, SwipeTarget: sprite}, true
 		}
-		return o, nil
-	}
-	return nil, nil
-}
-
-func (p *Game) dispatchClickTarget(target clicker) {
-	if target != nil {
-		syncSprite := target.getProxy()
-		if syncSprite != nil && p.inputMgr.canTriggerClickEvent(syncSprite.GetId()) {
-			target.doWhenClick(target)
-		}
-		return
-	}
-	if p.inputMgr.canTriggerClickEvent(clickTimerStage) {
-		p.sinkMgr.doWhenClick(p)
-	}
+		return coreruntime.ClickSelection[clicker, *SpriteImpl]{Target: o}, true
+	})
 }
 
 func (p *Game) doWhenLeftButtonUp(ev *eventLeftButtonUp) {
@@ -75,11 +59,26 @@ func (p *Game) doWhenLeftButtonUp(ev *eventLeftButtonUp) {
 }
 
 func (p *Game) doWhenLeftButtonDown(ev *eventLeftButtonDown) {
-	point := ev.Pos
-	target, targetSprite := p.findClickTarget(point)
-	p.inputMgr.beginSwipeTracking(point, targetSprite)
-	if !p.inputMgr.canTriggerClickEvent(clickTimerGlobal) {
-		return
-	}
-	p.dispatchClickTarget(target)
+	coreruntime.HandleLeftButtonDown(ev.Pos, coreruntime.ClickDownHooks[clicker, *SpriteImpl, int64]{
+		FindTarget: p.findClickTarget,
+		BeginSwipe: p.inputMgr.beginSwipeTracking,
+		CanTrigger: func(id int64) bool {
+			return p.inputMgr.canTriggerClickEvent(id)
+		},
+		GlobalID: clickTimerGlobal,
+		StageID:  clickTimerStage,
+		TargetID: func(target clicker) (int64, bool) {
+			syncSprite := target.getProxy()
+			if syncSprite == nil {
+				return 0, false
+			}
+			return syncSprite.GetId(), true
+		},
+		DispatchTarget: func(target clicker) {
+			target.doWhenClick(target)
+		},
+		DispatchStage: func() {
+			p.sinkMgr.doWhenClick(p)
+		},
+	})
 }

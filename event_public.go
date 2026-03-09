@@ -17,7 +17,7 @@
 package spx
 
 import (
-	"github.com/goplus/spbase/mathf"
+	coreevent "github.com/goplus/spx/v2/internal/core/event"
 	"github.com/goplus/spx/v2/internal/coroutine"
 	spxlog "github.com/goplus/spx/v2/internal/log"
 	"github.com/goplus/spx/v2/internal/timer"
@@ -39,189 +39,117 @@ type IEventSinks interface {
 	Stop(kind StopKind)
 }
 
-type StopKind int
+type StopKind = coreevent.StopKind
 
 const (
-	AllStop              StopKind = All  // -3: stop all scripts of stage/sprites and abort this script
-	AllOtherScripts      StopKind = -100 // stop all other scripts
-	AllSprites           StopKind = -101 // stop all scripts of sprites
-	ThisSprite           StopKind = -102 // stop all scripts of this sprite
-	ThisScript           StopKind = -103 // abort this script
-	OtherScriptsInSprite StopKind = -104 // stop other scripts of this sprite
+	AllStop              StopKind = coreevent.AllStop              // -3: stop all scripts of stage/sprites and abort this script
+	AllOtherScripts      StopKind = coreevent.AllOtherScripts      // stop all other scripts
+	AllSprites           StopKind = coreevent.AllSprites           // stop all scripts of sprites
+	ThisSprite           StopKind = coreevent.ThisSprite           // stop all scripts of this sprite
+	ThisScript           StopKind = coreevent.ThisScript           // abort this script
+	OtherScriptsInSprite StopKind = coreevent.OtherScriptsInSprite // stop other scripts of this sprite
 )
 
 func (p *eventSinks) OnStart(onStart func()) {
-	p.eventSinkMgr.addWhenStart(eventSink{
-		pthis: p.pthis,
-		sink:  onStart,
-	})
+	p.eventSinkMgr.AddStart(coreevent.NewSink(p.pthis, onStart))
 }
 
 func (p *eventSinks) OnClick(onClick func()) {
 	pthis := p.pthis
-	p.eventSinkMgr.addWhenClick(eventSink{
-		pthis: pthis,
-		sink:  onClick,
-		cond: func(data any) bool {
-			return data == pthis
-		},
-	})
+	p.eventSinkMgr.AddClick(coreevent.NewSink(pthis, onClick, coreevent.MatchOwner(pthis)))
 }
 
 func (p *eventSinks) OnAnyKey(onKey func(key Key)) {
-	p.eventSinkMgr.addWhenKeyPressed(eventSink{
-		pthis: p.pthis,
-		sink:  onKey,
-	})
+	p.eventSinkMgr.AddKeyPressed(coreevent.NewSink(p.pthis, onKey))
 }
 
 func (p *eventSinks) OnTimer(time float64, call func()) {
 	timer.RegisterTimer(time)
-	p.eventSinkMgr.addWhenTimer(eventSink{
-		pthis: p.pthis,
-		sink: func(float64) {
-			if isDebugEventEnabled() {
-				spxlog.Debug("==> onTimer: %s", nameOf(p.pthis))
-			}
-			call()
-		},
-		cond: func(data any) bool {
-			return mathf.Absf(data.(float64)-time) < 0.001
-		},
-	})
+	p.eventSinkMgr.AddTimer(coreevent.NewSink(
+		p.pthis,
+		coreevent.TapVoid1(call, coreevent.If1(isDebugEventEnabled, func(float64) {
+			spxlog.Debug("==> onTimer: %s", nameOf(p.pthis))
+		})),
+		coreevent.MatchApproxFloat(time, 0.001),
+	))
 }
 
 func (p *eventSinks) OnKey__0(key Key, onKey func()) {
-	p.eventSinkMgr.addWhenKeyPressed(eventSink{
-		pthis: p.pthis,
-		sink: func(Key) {
-			if isDebugEventEnabled() {
-				spxlog.Debug("==> onKey: %v, %s", key, nameOf(p.pthis))
-			}
-			onKey()
-		},
-		cond: func(data any) bool {
-			return data.(Key) == key
-		},
-	})
+	p.eventSinkMgr.AddKeyPressed(coreevent.NewSink(
+		p.pthis,
+		coreevent.TapVoid1(onKey, coreevent.If1(isDebugEventEnabled, func(Key) {
+			spxlog.Debug("==> onKey: %v, %s", key, nameOf(p.pthis))
+		})),
+		coreevent.MatchValue(key),
+	))
 }
 
 func (p *eventSinks) OnSwipe__0(direction Direction, onSwipe func()) {
-	p.eventSinkMgr.addWhenSwipe(eventSink{
-		pthis: p.pthis,
-		sink: func(Direction) {
-			if isDebugEventEnabled() {
-				spxlog.Debug("==> onSwipe: %v, %s", direction, nameOf(p.pthis))
-			}
-			onSwipe()
-		},
-		cond: func(data any) bool {
-			return data.(Direction) == direction
-		},
-	})
+	p.eventSinkMgr.AddSwipe(coreevent.NewSink(
+		p.pthis,
+		coreevent.TapVoid1(onSwipe, coreevent.If1(isDebugEventEnabled, func(Direction) {
+			spxlog.Debug("==> onSwipe: %v, %s", direction, nameOf(p.pthis))
+		})),
+		coreevent.MatchValue(direction),
+	))
 }
 
 func (p *eventSinks) OnKey__1(keys []Key, onKey func(Key)) {
-	p.eventSinkMgr.addWhenKeyPressed(eventSink{
-		pthis: p.pthis,
-		sink: func(key Key) {
-			if isDebugEventEnabled() {
-				spxlog.Debug("==> onKey: %v, %s", keys, nameOf(p.pthis))
-			}
-			onKey(key)
-		},
-		cond: func(data any) bool {
-			keyIn := data.(Key)
-			for _, key := range keys {
-				if key == keyIn {
-					return true
-				}
-			}
-			return false
-		},
-	})
+	p.eventSinkMgr.AddKeyPressed(coreevent.NewSink(
+		p.pthis,
+		coreevent.Tap1(onKey, coreevent.If1(isDebugEventEnabled, func(key Key) {
+			spxlog.Debug("==> onKey: %v, %s", keys, nameOf(p.pthis))
+		})),
+		coreevent.MatchAnyOf(keys),
+	))
 }
 
 func (p *eventSinks) OnKey__2(keys []Key, onKey func()) {
-	p.OnKey__1(keys, func(Key) {
-		onKey()
-	})
+	p.OnKey__1(keys, coreevent.Ignore1[Key](onKey))
 }
 
 func (p *eventSinks) OnMsg__0(onMsg func(msg string, data any)) {
-	p.eventSinkMgr.addWhenIReceive(eventSink{
-		pthis: p.pthis,
-		sink:  onMsg,
-	})
+	p.eventSinkMgr.AddIReceive(coreevent.NewSink(p.pthis, onMsg))
 }
 
 func (p *eventSinks) OnMsg__1(msg string, onMsg func()) {
-	p.eventSinkMgr.addWhenIReceive(eventSink{
-		pthis: p.pthis,
-		sink: func(msg string, data any) {
-			if isDebugEventEnabled() {
-				spxlog.Debug("==> onMsg: %s, %s", msg, nameOf(p.pthis))
-			}
-			onMsg()
-		},
-		cond: func(data any) bool {
-			return data.(string) == msg
-		},
-	})
+	p.eventSinkMgr.AddIReceive(coreevent.NewSink(
+		p.pthis,
+		coreevent.TapVoid2(onMsg, coreevent.If2(isDebugEventEnabled, func(msg string, data any) {
+			spxlog.Debug("==> onMsg: %s, %s", msg, nameOf(p.pthis))
+		})),
+		coreevent.MatchValue(msg),
+	))
 }
 
 func (p *eventSinks) OnBackdrop__0(onBackdrop func(name BackdropName)) {
-	p.eventSinkMgr.addWhenBackdropChanged(eventSink{
-		pthis: p.pthis,
-		sink:  onBackdrop,
-	})
+	p.eventSinkMgr.AddBackdropChanged(coreevent.NewSink(p.pthis, onBackdrop))
 }
 
 func (p *eventSinks) OnBackdrop__1(name BackdropName, onBackdrop func()) {
-	p.eventSinkMgr.addWhenBackdropChanged(eventSink{
-		pthis: p.pthis,
-		sink: func(name BackdropName) {
-			if isDebugEventEnabled() {
-				spxlog.Debug("==> onBackdrop: %s, %s", name, nameOf(p.pthis))
-			}
-			onBackdrop()
-		},
-		cond: func(data any) bool {
-			return data.(BackdropName) == name
-		},
-	})
+	p.eventSinkMgr.AddBackdropChanged(coreevent.NewSink(
+		p.pthis,
+		coreevent.TapVoid1(onBackdrop, coreevent.If1(isDebugEventEnabled, func(name BackdropName) {
+			spxlog.Debug("==> onBackdrop: %s, %s", name, nameOf(p.pthis))
+		})),
+		coreevent.MatchValue(name),
+	))
 }
 
 func (p *eventSinks) Stop(kind StopKind) {
-	var filter func(th coroutine.Thread) bool
-	switch kind {
-	case AllSprites:
-		filter = func(th coroutine.Thread) bool {
-			return isSprite(th.Obj)
-		}
-	case ThisSprite:
-		this := p.pthis
-		filter = func(th coroutine.Thread) bool {
-			return th.Obj == this
-		}
-	case OtherScriptsInSprite:
-		this := p.pthis
-		filter = func(th coroutine.Thread) bool {
-			return th.Obj == this && th != gco.Current()
-		}
-	case AllOtherScripts:
-		filter = func(th coroutine.Thread) bool {
-			return (isSprite(th.Obj) || isGame(th.Obj)) && th != gco.Current()
-		}
-	case AllStop:
-		gco.StopIf(func(th coroutine.Thread) bool {
-			return isSprite(th.Obj) || isGame(th.Obj)
-		})
-		fallthrough
-	case ThisScript:
-		gco.Abort()
-	}
+	current := gco.Current()
+	filter, abort := coreevent.ResolveStop(
+		kind,
+		p.pthis,
+		func(obj any) bool { return isSprite(obj) },
+		func(obj any) bool { return isGame(obj) },
+	)
 	if filter != nil {
-		gco.StopIf(filter)
+		gco.StopIf(func(th coroutine.Thread) bool {
+			return filter(th.Obj, th == current)
+		})
+	}
+	if abort {
+		gco.Abort()
 	}
 }

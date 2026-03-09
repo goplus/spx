@@ -19,8 +19,8 @@ package spx
 // updatePhysicsShapesScale updates collision and trigger shapes when sprite scale changes.
 func (p *SpriteImpl) updatePhysicsShapesScale() {
 	physics := p.physics()
-	physics.getTriggerInfo().applyShape(p.syncSprite, true, p.scale)
-	physics.getCollisionInfo().applyShape(p.syncSprite, false, p.scale)
+	physics.getTriggerInfo().applyShape(p.SyncSprite, true, p.Scale)
+	physics.getCollisionInfo().applyShape(p.SyncSprite, false, p.Scale)
 }
 
 func (p *SpriteImpl) SetPhysicsMode(mode PhysicsMode) {

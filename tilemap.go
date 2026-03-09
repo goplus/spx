@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	spxfs "github.com/goplus/spx/v2/fs"
+	coreproject "github.com/goplus/spx/v2/internal/core/project"
 	"github.com/goplus/spx/v2/internal/engine"
 	tm "github.com/goplus/spx/v2/internal/tilemap"
 
@@ -63,7 +64,7 @@ func (p *gameTilemapMgr) init(g *Game, fs spxfs.Dir, tilemapPath string) {
 // loadDecoratorJSON loads decorator data from a separate decorator.json file.
 func (p *gameTilemapMgr) loadDecoratorJSON(fs spxfs.Dir, decoratorPath string) {
 	var data DecoratorJSON
-	err := loadJson(&data, fs, decoratorPath)
+	err := coreproject.LoadJSON(&data, fs, decoratorPath)
 	if err != nil {
 		fmt.Printf("[TILEMAP] No decorator.json found at %s (this is OK if no decorators)\n", decoratorPath)
 		return
@@ -117,7 +118,7 @@ func (p *gameTilemapMgr) loadMap(mapDir string) {
 
 		// Load using Go loader
 		var data tm.TscnMapData
-		err := loadJson(&data, p.fs, mapDir)
+		err := coreproject.LoadJSON(&data, p.fs, mapDir)
 		if err != nil {
 			panic(fmt.Sprintf("Failed to load tilemap JSON file %s: %v", mapDir, err))
 		}
@@ -274,10 +275,10 @@ func (p *gameTilemapMgr) calcWorldSize() {
 		worldWidth := maxWorldX - minWorldX
 		worldHeight := maxWorldY - minWorldY
 
-		p.g.minWorldX = minWorldX
-		p.g.minWorldY = minWorldY
-		p.g.worldWidth = worldWidth
-		p.g.worldHeight = worldHeight
+		p.g.MinWorldX = minWorldX
+		p.g.MinWorldY = minWorldY
+		p.g.WorldWidth = worldWidth
+		p.g.WorldHeight = worldHeight
 
 	} else {
 		fmt.Println("[TILEMAP DEBUG] No tiles found in any layer")

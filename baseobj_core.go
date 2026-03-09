@@ -16,53 +16,43 @@
 
 package spx
 
-import "github.com/goplus/spx/v2/internal/engine"
+import (
+	corestate "github.com/goplus/spx/v2/internal/core/state"
+	"github.com/goplus/spx/v2/internal/engine"
+)
 
 // baseObj provides common functionality for sprites and backdrops.
 type baseObj struct {
+	corestate.BaseObjRuntimeState
+
 	costumes     []*costume
 	costumeIndex int
 
-	// Rendering state
-	syncSprite     *engine.Sprite // !!!All methods (except GetId()) can only be called on main thread
-	scale          float64
-	HasDestroyed   bool
-	isCostumeSet   bool
-	isCostumeDirty bool
-
-	// Layer management
-	layer        int
-	isLayerDirty bool
-
 	// Effects
 	greffUniforms map[EffectKind]float64 // graphic effects uniforms
-	hasShader     bool
-
-	// Animation state
-	isAnimating bool
 }
 
 // getSpriteId returns the unique identifier for this sprite.
 func (p *baseObj) getSpriteId() engine.Object {
-	return p.syncSprite.GetId()
+	return p.SyncSprite.GetId()
 }
 
 // getProxy returns the underlying engine sprite.
 func (p *baseObj) getProxy() *engine.Sprite {
-	return p.syncSprite
+	return p.SyncSprite
 }
 
 // setLayer sets the layer/z-order of the object.
 func (p *baseObj) setLayer(layer int) {
-	if p.layer != layer {
-		p.layer = layer
-		p.isLayerDirty = true
+	if p.Layer != layer {
+		p.Layer = layer
+		p.IsLayerDirty = true
 	}
 }
 
 // setCostumeIndex sets the current costume by index.
 func (p *baseObj) setCostumeIndex(value int) {
 	p.costumeIndex = value
-	p.isCostumeDirty = true
-	p.isAnimating = false
+	p.IsCostumeDirty = true
+	p.IsAnimating = false
 }

@@ -38,7 +38,7 @@ func (sm *spriteManager) count() int {
 func (sm *spriteManager) findSprite(name SpriteName) *SpriteImpl {
 	for _, item := range sm.items {
 		if sp, ok := item.(*SpriteImpl); ok {
-			if !sp.isCloned && sp.name == name {
+			if !sp.Cloned && sp.name == name {
 				return sp
 			}
 		}

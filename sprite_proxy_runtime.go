@@ -23,18 +23,18 @@ import (
 
 // syncCheckInitProxy initializes the sprite's engine proxy if it hasn't been created yet.
 func (sprite *SpriteImpl) syncCheckInitProxy() {
-	if sprite.syncSprite != nil || sprite.HasDestroyed {
+	if sprite.SyncSprite != nil || sprite.HasDestroyed {
 		return
 	}
-	sprite.syncSprite = engine.MainThreadNewSprite(sprite, mathf.NewVec2(sprite.getXYWithRenderOffset()))
-	syncInitSpritePhysicInfo(sprite, sprite.syncSprite)
-	sprite.syncSprite.SetVisible(sprite.isVisible)
-	sprite.syncSprite.Name = sprite.name
-	sprite.syncSprite.SetTypeName(sprite.name)
+	sprite.SyncSprite = engine.MainThreadNewSprite(sprite, mathf.NewVec2(sprite.getXYWithRenderOffset()))
+	syncInitSpritePhysicInfo(sprite, sprite.SyncSprite)
+	sprite.SyncSprite.SetVisible(sprite.IsVisible)
+	sprite.SyncSprite.Name = sprite.name
+	sprite.SyncSprite.SetTypeName(sprite.name)
 	sprite.applyGraphicEffects(true)
 	sprite.animation().registerOnAnimationLooped(sprite.syncOnAnimationLooped)
 	sprite.animation().registerOnAnimationFinished(sprite.syncOnAnimationFinished)
-	sprite.isDirty = true
+	sprite.IsDirty = true
 }
 
 // syncOnAnimationFinished is called when an animation finishes.
@@ -42,8 +42,8 @@ func (sprite *SpriteImpl) syncOnAnimationFinished() {
 	engine.Lock()
 	defer engine.Unlock()
 	state := sprite.animation().getCurAnimState()
-	if state != nil && state.Name != "" && sprite.syncSprite != nil {
-		sprite.animation().addDonedAnimation(sprite.syncSprite.GetCurrentAnimName())
+	if state != nil && state.Name != "" && sprite.SyncSprite != nil {
+		sprite.animation().addDonedAnimation(sprite.SyncSprite.GetCurrentAnimName())
 	}
 }
 

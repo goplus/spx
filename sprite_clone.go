@@ -21,6 +21,7 @@ import (
 	"log"
 	"reflect"
 
+	coreproject "github.com/goplus/spx/v2/internal/core/project"
 	"github.com/goplus/spx/v2/internal/engine"
 	spxlog "github.com/goplus/spx/v2/internal/log"
 )
@@ -49,7 +50,7 @@ func doClone(sprite Sprite, data any, isAsync bool, onCloned func(sprite *Sprite
 	if onCloned != nil {
 		onCloned(dest)
 	}
-	if dest.hasOnCloned {
+	if dest.HasOnCloned {
 		if isAsync {
 			engine.Go(dest.pthis, func(ctx context.Context) {
 				dest.doWhenAwake(dest)
@@ -62,7 +63,7 @@ func doClone(sprite Sprite, data any, isAsync bool, onCloned func(sprite *Sprite
 	}
 }
 
-func cloneSprite(out reflect.Value, outPtr Sprite, in reflect.Value, v specsp) *SpriteImpl {
+func cloneSprite(out reflect.Value, outPtr Sprite, in reflect.Value, v coreproject.StageShape) *SpriteImpl {
 	dest := spriteOf(outPtr)
 	func() {
 		out.Set(in)
@@ -74,7 +75,7 @@ func cloneSprite(out reflect.Value, outPtr Sprite, in reflect.Value, v specsp) *
 		}
 	}()
 	dest.sprite = outPtr
-	dest.isCostumeDirty = true
+	dest.IsCostumeDirty = true
 
 	src := spriteOf(in.Addr().Interface().(Sprite))
 	dest.components.cloneFrom(&src.components, dest)
@@ -87,7 +88,7 @@ func cloneSprite(out reflect.Value, outPtr Sprite, in reflect.Value, v specsp) *
 		})
 		runMain(outPtr.Main)
 	}
-	dest.syncSprite = nil
+	dest.SyncSprite = nil
 	engine.WaitMainThread(func() {
 		dest.syncCheckInitProxy()
 		syncCheckUpdateCostume(&dest.baseObj)
@@ -95,7 +96,7 @@ func cloneSprite(out reflect.Value, outPtr Sprite, in reflect.Value, v specsp) *
 	return dest
 }
 
-func applySpriteProps(dest *SpriteImpl, v specsp) {
+func applySpriteProps(dest *SpriteImpl, v coreproject.StageShape) {
 	transform := dest.transform()
 	if x, ok := v["x"]; ok {
 		transform.x = x.(float64)
@@ -110,18 +111,18 @@ func applySpriteProps(dest *SpriteImpl, v specsp) {
 		transform.rotationStyle = toRotationStyle(style.(string))
 	}
 	if visible, ok := v["visible"]; ok {
-		dest.isVisible = visible.(bool)
+		dest.IsVisible = visible.(bool)
 	}
 	if size, ok := v["size"]; ok {
-		dest.scale = size.(float64)
+		dest.Scale = size.(float64)
 	}
 	if idx, ok := v["costumeIndex"]; ok {
 		dest.setCostumeIndex(int(idx.(float64)))
 	}
-	dest.isCloned = false
+	dest.Cloned = false
 }
 
-func applySprite(out reflect.Value, sprite Sprite, v specsp) (*SpriteImpl, Sprite) {
+func applySprite(out reflect.Value, sprite Sprite, v coreproject.StageShape) (*SpriteImpl, Sprite) {
 	in := reflect.ValueOf(sprite).Elem()
 	outPtr := out.Addr().Interface().(Sprite)
 	return cloneSprite(out, outPtr, in, v), outPtr

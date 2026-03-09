@@ -87,7 +87,7 @@ func (a *animationComponent) initFromConfig(spriteCfg *spriteConfig) {
 			spriteName:   a.sprite.name,
 			ani:          ani,
 			costumes:     a.sprite.costumes,
-			isCostumeSet: a.sprite.isCostumeSet,
+			isCostumeSet: a.sprite.IsCostumeSet,
 			engineMgr:    a.engine(),
 		}
 	}

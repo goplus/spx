@@ -18,6 +18,7 @@ package spx
 
 import (
 	"github.com/goplus/spbase/mathf"
+	coreproject "github.com/goplus/spx/v2/internal/core/project"
 )
 
 // ============================================================================
@@ -94,41 +95,17 @@ func (p *Game) SetBackdropAndWait__3(action switchAction) {
 
 func (p *Game) setupBackdrop() {
 	imgW, imgH := p.getCostumeSize()
-	dstW := float64(p.worldWidth)
-	dstH := float64(p.worldHeight)
-	imgRadio := (imgW / imgH)
-	worldRadio := (dstW / dstH)
-	// scale image's height to fit world's height
-	isScaleHeight := imgRadio > worldRadio
-
-	switch p.mapMode {
-	case mapModeRepeat:
-		repeatX := dstW / imgW
-		repeatY := dstH / imgH
-		p.setMaterialParamsVec4("repeat_scale", mathf.Vec4{
-			X: repeatX,
-			Y: repeatY,
-			Z: 0,
-			W: 0,
-		}, false)
-	case mapModeFillCut:
-		if isScaleHeight {
-			dstH = dstW / imgRadio
-		} else {
-			dstW = dstH * imgRadio
-		}
-	case mapModeFillRatio:
-		if isScaleHeight {
-			dstW = dstH * imgRadio
-		} else {
-			dstH = dstW / imgRadio
-		}
-	default:
+	layout := coreproject.ResolveBackdropLayout(
+		imgW,
+		imgH,
+		float64(p.WorldWidth),
+		float64(p.WorldHeight),
+		p.MapMode,
+	)
+	if layout.RepeatScale != nil {
+		p.setMaterialParamsVec4("repeat_scale", *layout.RepeatScale, false)
 	}
-
-	scaleX := dstW / imgW
-	scaleY := dstH / imgH
-	p.scale = 1
+	p.Scale = 1
 	checkUpdateCostume(&p.baseObj)
-	p.engine().SpriteMgr.SetScale(p.syncSprite.GetId(), mathf.NewVec2(scaleX, scaleY))
+	p.engine().SpriteMgr.SetScale(p.SyncSprite.GetId(), mathf.NewVec2(layout.ScaleX, layout.ScaleY))
 }

@@ -53,7 +53,7 @@ func (p *physicsComponent) GetColliderShape(isTrigger bool) (ColliderShapeType, 
 func (p *physicsComponent) SetColliderPivot(isTrigger bool, offsetX, offsetY float64) {
 	config := p.getPhysicConfig(isTrigger)
 	config.Pivot = mathf.NewVec2(offsetX, offsetY)
-	if p.sprite.syncSprite != nil {
+	if p.sprite.SyncSprite != nil {
 		p.applyPhysicShape(isTrigger)
 	}
 }
@@ -83,26 +83,26 @@ func (p *physicsComponent) applyPhysicShape(isTrigger bool) {
 	ctype := config.Type
 	params := config.Params
 
-	if p.sprite.syncSprite == nil {
+	if p.sprite.SyncSprite == nil {
 		return
 	}
 
 	switch ctype {
 	case RectCollider:
 		if len(params) >= 2 {
-			p.sprite.syncSprite.SetColliderShapeRect(isTrigger, config.Pivot, mathf.NewVec2(params[0], params[1]))
+			p.sprite.SyncSprite.SetColliderShapeRect(isTrigger, config.Pivot, mathf.NewVec2(params[0], params[1]))
 		}
 	case CircleCollider:
 		if len(params) >= 1 {
-			p.sprite.syncSprite.SetColliderShapeCircle(isTrigger, config.Pivot, params[0])
+			p.sprite.SyncSprite.SetColliderShapeCircle(isTrigger, config.Pivot, params[0])
 		}
 	case CapsuleCollider:
 		if len(params) >= 2 {
-			p.sprite.syncSprite.SetColliderShapeCapsule(isTrigger, config.Pivot, mathf.NewVec2(params[0]*2, params[1]))
+			p.sprite.SyncSprite.SetColliderShapeCapsule(isTrigger, config.Pivot, mathf.NewVec2(params[0]*2, params[1]))
 		}
 	case PolygonCollider:
 		if len(params) >= 6 {
-			p.sprite.syncSprite.SetColliderShapePolygon(isTrigger, config.Pivot, params)
+			p.sprite.SyncSprite.SetColliderShapePolygon(isTrigger, config.Pivot, params)
 		}
 	}
 }

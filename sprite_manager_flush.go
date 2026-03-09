@@ -63,9 +63,9 @@ func (sm *spriteManager) flushDestroy(buffer *engine.SpriteSyncBuffer) {
 	}
 
 	for _, item := range sm.destroyItems {
-		if sprite, ok := item.(*SpriteImpl); ok && sprite.syncSprite != nil {
-			buffer.AddDelete(int64(sprite.syncSprite.Id))
-			sprite.syncSprite = nil
+		if sprite, ok := item.(*SpriteImpl); ok && sprite.SyncSprite != nil {
+			buffer.AddDelete(int64(sprite.SyncSprite.Id))
+			sprite.SyncSprite = nil
 		}
 	}
 

@@ -16,11 +16,14 @@
 
 package spx
 
-import "github.com/goplus/spx/v2/internal/engine"
+import (
+	coreruntime "github.com/goplus/spx/v2/internal/core/runtime"
+	"github.com/goplus/spx/v2/internal/engine"
+)
 
 // syncUpdateLogic updates game logic and fires start events.
 func (p *Game) syncUpdateLogic() error {
-	p.startFlag.Do(func() {
+	coreruntime.SyncOnce(&p.StartFlag, func() {
 		p.fireEvent(&eventStart{})
 	})
 	return nil
@@ -29,18 +32,26 @@ func (p *Game) syncUpdateLogic() error {
 // syncEnginePositions synchronizes sprite positions from the physics engine.
 // This is done in batch for performance optimization.
 func (p *Game) syncEnginePositions() error {
-	items := p.getTempShapes()
-	spriteIDs, sprites := p.collectPhysicsSyncTargets(items)
-	positions := engine.SyncBatchGetPositions(spriteIDs)
-	for i, sprite := range sprites {
-		sprite.syncPhysicsPosition(float64(positions[i*2]), float64(positions[i*2+1]))
-	}
+	coreruntime.SyncBatchPositions(
+		p.getTempShapes(),
+		func(item Shape) bool {
+			sprite, ok := item.(*SpriteImpl)
+			return ok && sprite.shouldSyncPhysicsPosition()
+		},
+		func(item Shape) int64 {
+			return int64(item.(*SpriteImpl).SyncSprite.Id)
+		},
+		engine.SyncBatchGetPositions,
+		func(item Shape, x, y float64) {
+			item.(*SpriteImpl).syncPhysicsPosition(x, y)
+		},
+	)
 	return nil
 }
 
 // syncUpdateInput updates input state from the engine.
 func (p *Game) syncUpdateInput() {
-	p.inputMgr.setMousePos(engine.MainThreadGetMousePos())
+	coreruntime.SyncMousePos(engine.MainThreadGetMousePos(), p.inputMgr.setMousePos)
 }
 
 // syncUpdateProxy updates all sprite proxies and synchronizes them with the engine.
@@ -54,23 +65,12 @@ func (p *Game) syncUpdateProxy() {
 	p.camera.setDirtyFlag(false)
 }
 
-func (p *Game) collectPhysicsSyncTargets(items []Shape) ([]int64, []*SpriteImpl) {
-	spriteIDs := make([]int64, 0, len(items))
-	sprites := make([]*SpriteImpl, 0, len(items))
-	for _, item := range items {
-		sprite, ok := item.(*SpriteImpl)
-		if !ok || !sprite.shouldSyncPhysicsPosition() {
-			continue
-		}
-		spriteIDs = append(spriteIDs, int64(sprite.syncSprite.Id))
-		sprites = append(sprites, sprite)
-	}
-	return spriteIDs, sprites
-}
-
 // flushSyncBuffer sends batched updates to the engine if there are any changes.
 func (p *Game) flushSyncBuffer() {
-	if p.syncBuffer.UpdateCount() > 0 || p.syncBuffer.DeleteCount() > 0 {
-		engine.SyncBatchUpdateSprites(p.syncBuffer.Serialize())
-	}
+	coreruntime.FlushSerializedBuffer(
+		p.syncBuffer.UpdateCount(),
+		p.syncBuffer.DeleteCount(),
+		p.syncBuffer.Serialize,
+		engine.SyncBatchUpdateSprites,
+	)
 }

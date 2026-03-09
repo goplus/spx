@@ -20,9 +20,9 @@ import (
 	"log"
 	"reflect"
 	"sync"
-	"time"
 
 	"github.com/goplus/spx/v2/internal/audiorecord"
+	corestate "github.com/goplus/spx/v2/internal/core/state"
 	"github.com/goplus/spx/v2/internal/coroutine"
 	"github.com/goplus/spx/v2/internal/engine"
 	"github.com/goplus/spx/v2/internal/timer"
@@ -78,62 +78,29 @@ type Game struct {
 	eventSinks
 	fs spxfs.Dir
 
+	corestate.GameLifecycleState
+	corestate.GameDisplayState
+	corestate.GameDialogState
+	corestate.GameDebugState
+	corestate.GameRuntimeState
+	corestate.GamePathfindingState
+	corestate.GameAudioState
+
 	Camera Camera
 	camera *cameraImpl
 
 	typs map[string]reflect.Type
 	sprs map[string]Sprite
 
-	events    chan event
-	aurec     *audiorecord.Recorder
-	startFlag sync.Once
-	runOnce   sync.Once
+	events chan event
+	aurec  *audiorecord.Recorder
 
-	worldWidth  int
-	worldHeight int
-	minWorldX   int
-	minWorldY   int
-	mapMode     int
-
-	windowWidth  int
-	windowHeight int
-
-	sinkMgr  eventSinkMgr
-	isLoaded bool
-	isRunned bool
-	gamer    Gamer
-
-	windowScale float64
-	stretchMode bool
-
-	askPanel  *ui.UiAsk
-	answerVal string
-
-	oncePathFinder sync.Once
-	pathCellSizeX  int
-	pathCellSizeY  int
-
-	debug      bool
-	debugPanel *ui.UiDebug
-
-	debugInstr bool
-	debugEvent bool
-	debugPerf  bool
-
-	enabledPhysics   bool
-	isSchedInMain    bool
-	mainSchedTime    time.Time
-	imageSizeCache   sync.Map
-	eventQueuePolicy eventQueuePolicy
-	eventQueueStats  eventQueueStats
+	sinkMgr eventSinkMgr
+	gamer   Gamer
 
 	sprCollisionInfos       map[string]*spriteCollisionInfo
 	isCollisionByPixel      bool
 	isAutoSetCollisionLayer bool
-
-	audioAttenuation float64
-	audioMaxDistance float64
-	soundObj         engine.Object
 
 	engineMgr engineManagers
 
@@ -181,21 +148,21 @@ func (p *Game) getSpriteProtoByName(name string, g reflect.Value) Sprite {
 }
 
 func (p *Game) reset() {
-	p.isRunned = false
+	p.IsRunned = false
 
 	p.releaseGameAudio()
 	p.EraseAll()
 
-	p.sinkMgr.reset()
+	p.sinkMgr.Reset()
 	p.spriteMgr.reset()
 
-	p.debugPanel = nil
-	p.askPanel = nil
-	p.isLoaded = false
+	p.DebugPanel = nil
+	p.AskPanel = nil
+	p.IsLoaded = false
 
-	p.startFlag = sync.Once{}
-	p.runOnce = sync.Once{}
-	p.oncePathFinder = sync.Once{}
+	p.StartFlag = sync.Once{}
+	p.RunOnce = sync.Once{}
+	p.OncePathFinder = sync.Once{}
 	p.sprs = make(map[string]Sprite)
 
 	resetImageSizeCache(p)

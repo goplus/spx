@@ -46,7 +46,7 @@ var (
 // OnEngineStart is called when the engine starts.
 // It initializes the game and starts the main game loop.
 func (p *Game) OnEngineStart() {
-	p.runOnce.Do(func() {
+	p.RunOnce.Do(func() {
 		cachedBounds = make(map[string]mathf.Rect2)
 		onStart := func() {
 			defer engine.CheckPanic()
@@ -54,7 +54,7 @@ func (p *Game) OnEngineStart() {
 			if me, ok := gamer.(interface{ MainEntry() }); ok {
 				runMain(me.MainEntry)
 			}
-			if !p.isRunned {
+			if !p.IsRunned {
 				XGot_Game_Run(gamer, "assets")
 			}
 			engine.OnGameStarted()
@@ -75,7 +75,7 @@ func (p *Game) OnEngineReset() {
 // OnEngineUpdate is called every frame to update game logic.
 // All updates are performed on the main thread.
 func (p *Game) OnEngineUpdate(delta float64) {
-	if !p.isRunned {
+	if !p.IsRunned {
 		return
 	}
 	p.syncUpdateInput()
@@ -86,7 +86,7 @@ func (p *Game) OnEngineUpdate(delta float64) {
 
 // OnEngineRender is called every frame to render the game.
 func (p *Game) OnEngineRender(delta float64) {
-	if !p.isRunned {
+	if !p.IsRunned {
 		return
 	}
 	p.syncUpdatePhysic()
@@ -94,7 +94,7 @@ func (p *Game) OnEngineRender(delta float64) {
 
 // OnEnginePause is called when the engine is paused or resumed.
 func (p *Game) OnEnginePause(isPaused bool) {
-	if !p.isRunned {
+	if !p.IsRunned {
 		return
 	}
 }

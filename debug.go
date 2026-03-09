@@ -27,17 +27,17 @@ import (
 )
 
 func (p *Game) showDebugPanel() {
-	engine.SetDebugMode(p.debug)
-	profiler.Debug = p.debug
-	if !p.debug {
-		if p.debugPanel != nil {
-			p.debugPanel.Destroy()
-			p.debugPanel = nil
+	engine.SetDebugMode(p.Debug)
+	profiler.Debug = p.Debug
+	if !p.Debug {
+		if p.DebugPanel != nil {
+			p.DebugPanel.Destroy()
+			p.DebugPanel = nil
 		}
 		return
 	}
-	if p.debugPanel == nil {
-		p.debugPanel = ui.NewUiDebug()
+	if p.DebugPanel == nil {
+		p.DebugPanel = ui.NewUiDebug()
 	}
 
 	updateInfo, _ := profiler.GetStats("GameUpdate")
@@ -66,5 +66,5 @@ func (p *Game) showDebugPanel() {
 	if !eventQ.LastDropAt.IsZero() {
 		msg += fmt.Sprintf("eventQ: lastDrop=%s\n", eventQ.LastDropAt.Format(stdtime.RFC3339Nano))
 	}
-	p.debugPanel.Show(msg)
+	p.DebugPanel.Show(msg)
 }

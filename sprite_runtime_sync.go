@@ -19,7 +19,7 @@ package spx
 import "github.com/goplus/spx/v2/internal/engine"
 
 func (sprite *SpriteImpl) shouldSyncPhysicsPosition() bool {
-	return sprite.syncSprite != nil && sprite.PhysicsMode() != NoPhysics
+	return sprite.SyncSprite != nil && sprite.PhysicsMode() != NoPhysics
 }
 
 func (sprite *SpriteImpl) syncPhysicsPosition(x, y float64) {
@@ -28,17 +28,17 @@ func (sprite *SpriteImpl) syncPhysicsPosition(x, y float64) {
 }
 
 func (sprite *SpriteImpl) syncProxyState(buffer *engine.SpriteSyncBuffer) {
-	if sprite.HasDestroyed || sprite.syncSprite == nil {
+	if sprite.HasDestroyed || sprite.SyncSprite == nil {
 		return
 	}
-	if sprite.isVisible {
+	if sprite.IsVisible {
 		syncCheckUpdateCostume(&sprite.baseObj)
 	}
-	if !sprite.isDirty {
+	if !sprite.IsDirty {
 		return
 	}
 	sprite.appendSyncTransform(buffer)
-	sprite.isDirty = false
+	sprite.IsDirty = false
 }
 
 func (sprite *SpriteImpl) appendSyncTransform(buffer *engine.SpriteSyncBuffer) {
@@ -46,11 +46,11 @@ func (sprite *SpriteImpl) appendSyncTransform(buffer *engine.SpriteSyncBuffer) {
 	offsetX, offsetY := getRenderOffset(sprite)
 	rot, scaleX, scaleY := getRenderRotationAndScale(sprite)
 	buffer.Add(
-		int64(sprite.syncSprite.Id),
+		int64(sprite.SyncSprite.Id),
 		x+offsetX, y+offsetY,
 		engine.DegToRad(rot),
 		scaleX, scaleY,
 		offsetX, offsetY,
-		sprite.isVisible,
+		sprite.IsVisible,
 	)
 }

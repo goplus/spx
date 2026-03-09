@@ -20,21 +20,11 @@ import (
 	"sync"
 	"time"
 
+	corestate "github.com/goplus/spx/v2/internal/core/state"
 	"github.com/goplus/spx/v2/internal/engine"
 )
 
-var (
-	defaultDebugInstr bool
-	defaultDebugEvent bool
-	defaultDebugPerf  bool
-
-	defaultPhysicsEnabled bool
-
-	fallbackSchedInMain bool
-	fallbackMainSchedAt time.Time
-
-	fallbackImageSizeCache sync.Map
-)
+var runtimeStateMgr corestate.RuntimeManager
 
 func activeGame() *Game {
 	game, _ := engine.GetGame().(*Game)
@@ -42,106 +32,80 @@ func activeGame() *Game {
 }
 
 func (p *Game) initRuntimeState() {
-	p.debugInstr = defaultDebugInstr
-	p.debugEvent = defaultDebugEvent
-	p.debugPerf = defaultDebugPerf
-	p.enabledPhysics = defaultPhysicsEnabled
+	runtimeStateMgr.Init(&p.GameDebugState, &p.GameRuntimeState)
 	p.initEventQueueState()
 }
 
 func setDefaultDebugFlags(instr, event, perf bool) {
-	defaultDebugInstr = instr
-	defaultDebugEvent = event
-	defaultDebugPerf = perf
+	runtimeStateMgr.SetDefaultDebugFlags(instr, event, perf)
 }
 
 func (p *Game) setDebugFlags(instr, event, perf bool) {
-	p.debugInstr = instr
-	p.debugEvent = event
-	p.debugPerf = perf
+	runtimeStateMgr.ApplyDebugFlags(&p.GameDebugState, instr, event, perf)
 }
 
 func isDebugInstrEnabled() bool {
-	if g := activeGame(); g != nil {
-		return g.debugInstr
-	}
-	return defaultDebugInstr
+	return runtimeStateMgr.DebugInstrEnabled(activeGameDebugState())
 }
 
 func isDebugEventEnabled() bool {
-	if g := activeGame(); g != nil {
-		return g.debugEvent
-	}
-	return defaultDebugEvent
+	return runtimeStateMgr.DebugEventEnabled(activeGameDebugState())
 }
 
 func isDebugPerfEnabled() bool {
-	if g := activeGame(); g != nil {
-		return g.debugPerf
-	}
-	return defaultDebugPerf
+	return runtimeStateMgr.DebugPerfEnabled(activeGameDebugState())
 }
 
 func setPhysicsEnabled(enabled bool) {
-	defaultPhysicsEnabled = enabled
-	if g := activeGame(); g != nil {
-		g.enabledPhysics = enabled
-	}
+	runtimeStateMgr.SetPhysicsEnabled(activeGameRuntimeState(), enabled)
 }
 
 func (p *Game) setPhysicsEnabled(enabled bool) {
-	p.enabledPhysics = enabled
-	defaultPhysicsEnabled = enabled
+	runtimeStateMgr.SetPhysicsEnabled(&p.GameRuntimeState, enabled)
 }
 
 func isPhysicsEnabled() bool {
-	if g := activeGame(); g != nil {
-		return g.enabledPhysics
-	}
-	return defaultPhysicsEnabled
+	return runtimeStateMgr.PhysicsEnabled(activeGameRuntimeState())
 }
 
 func resetImageSizeCache(g *Game) {
-	if g != nil {
-		g.imageSizeCache = sync.Map{}
-		return
-	}
-	fallbackImageSizeCache = sync.Map{}
+	runtimeStateMgr.ResetImageSizeCache(gameRuntimeState(g))
 }
 
 func imageSizeCacheRef() *sync.Map {
-	if g := activeGame(); g != nil {
-		return &g.imageSizeCache
-	}
-	return &fallbackImageSizeCache
+	return runtimeStateMgr.ImageSizeCacheRef(activeGameRuntimeState())
 }
 
 func setSchedInMain(inMain bool) {
-	if g := activeGame(); g != nil {
-		g.isSchedInMain = inMain
-		return
-	}
-	fallbackSchedInMain = inMain
+	runtimeStateMgr.SetSchedInMain(activeGameRuntimeState(), inMain)
 }
 
 func isSchedInMainState() bool {
-	if g := activeGame(); g != nil {
-		return g.isSchedInMain
-	}
-	return fallbackSchedInMain
+	return runtimeStateMgr.IsSchedInMain(activeGameRuntimeState())
 }
 
 func setMainSchedTime(t time.Time) {
-	if g := activeGame(); g != nil {
-		g.mainSchedTime = t
-		return
-	}
-	fallbackMainSchedAt = t
+	runtimeStateMgr.SetMainSchedTime(activeGameRuntimeState(), t)
 }
 
 func mainSchedTime() time.Time {
+	return runtimeStateMgr.MainSchedTime(activeGameRuntimeState())
+}
+
+func activeGameDebugState() *corestate.GameDebugState {
 	if g := activeGame(); g != nil {
-		return g.mainSchedTime
+		return &g.GameDebugState
 	}
-	return fallbackMainSchedAt
+	return nil
+}
+
+func activeGameRuntimeState() *corestate.GameRuntimeState {
+	return gameRuntimeState(activeGame())
+}
+
+func gameRuntimeState(g *Game) *corestate.GameRuntimeState {
+	if g == nil {
+		return nil
+	}
+	return &g.GameRuntimeState
 }
