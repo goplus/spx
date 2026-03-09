@@ -34,11 +34,11 @@ func (p *Game) KeyPressed(key Key) bool {
 // ============================================================================
 
 func (p *Game) MouseX() float64 {
-	return p.mousePos.X
+	return p.inputMgr.currentMousePos().X
 }
 
 func (p *Game) MouseY() float64 {
-	return p.mousePos.Y
+	return p.inputMgr.currentMousePos().Y
 }
 
 func (p *Game) MousePressed() bool {

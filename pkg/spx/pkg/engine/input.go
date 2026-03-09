@@ -1,6 +1,6 @@
 package engine
 
-import inkey "github.com/goplus/spx/v2/internal/keycode"
+import inkey "github.com/goplus/spx/v2/internal/input/keycode"
 
 type KeyCode int64
 

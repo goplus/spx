@@ -147,7 +147,7 @@ func (c *cameraImpl) getFollowPos() (bool, mathf.Vec2) {
 			return v.isDirty, mathf.NewVec2(v.getXY())
 		case specialObj:
 			if c.followTarget == Mouse {
-				return true, c.g.mousePos
+				return true, c.g.inputMgr.currentMousePos()
 			}
 		}
 	}
