@@ -29,6 +29,7 @@ func LoadBuilderProject(fs spxfs.Dir, gameConf *Config) (LoadedBuilderProject, e
 	if err := LoadConfig(&loaded.Project, fs, index); err != nil {
 		return LoadedBuilderProject{}, err
 	}
+	normalizeProjectConfigPaths(&loaded.Project)
 
 	if gameConf == nil && loaded.Project.Run != nil {
 		loaded.Config = *loaded.Project.Run

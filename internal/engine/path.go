@@ -2,6 +2,7 @@ package engine
 
 import (
 	"path/filepath"
+	"slices"
 	"strings"
 
 	spxlog "github.com/goplus/spx/v2/internal/log"
@@ -71,14 +72,13 @@ func buildFilesystemAssetPath(relPath string) string {
 
 	root := cleanFilesystemPath(assetPaths.root)
 	path := cleanFilesystemPath(filepath.Join(root, relPath))
-	if !isWithinAssetRoot(path, root) {
-		return ""
+	if isWithinRoot(path, root) {
+		return path
 	}
-	return path
-}
-
-func buildPackmodeAssetPath(relPath string) string {
-	return normalizeSlashes(assetPaths.root + relPath)
+	if leadingParentCount(relPath) >= 2 && isWithinCompatibilityRoot(path, root) {
+		return path
+	}
+	return ""
 }
 
 func rewriteExtAssetPath(relPath string) string {
@@ -118,18 +118,32 @@ func rewriteExtAssetPath(relPath string) string {
 	return ""
 }
 
-func isWithinAssetRoot(path, root string) bool {
-	if path == root {
-		return true
+func isWithinRoot(path, root string) bool {
+	rel, err := filepath.Rel(root, path)
+	if err != nil {
+		return false
 	}
-	return strings.HasPrefix(path, root+"/")
+	rel = normalizeSlashes(rel)
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, "../"))
+}
+
+func isWithinCompatibilityRoot(path, assetRoot string) bool {
+	root := cleanFilesystemPath(filepath.Join(assetRoot, "../.."))
+	return isWithinRoot(path, root)
+}
+
+func leadingParentCount(relPath string) int {
+	normalized := cleanFilesystemPath(relPath)
+	count := 0
+	for segment := range strings.SplitSeq(normalized, "/") {
+		if segment != ".." {
+			break
+		}
+		count++
+	}
+	return count
 }
 
 func containsPathSegment(segments []string, target string) bool {
-	for _, segment := range segments {
-		if segment == target {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(segments, target)
 }
