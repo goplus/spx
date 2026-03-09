@@ -17,9 +17,13 @@
 package spx
 
 import (
+	"flag"
+	"fmt"
+	"os"
 	"reflect"
 	"time"
 
+	spxfs "github.com/goplus/spx/v2/fs"
 	coreproject "github.com/goplus/spx/v2/internal/core/project"
 	coreruntime "github.com/goplus/spx/v2/internal/core/runtime"
 	"github.com/goplus/spx/v2/internal/coroutine"
@@ -53,6 +57,227 @@ func XGot_Game_Run(game Gamer, resource any, gameConf ...*Config) {
 	if err := builder.buildAndRun(); err != nil {
 		engine.Panic(err)
 	}
+}
+
+type gameBuilder struct {
+	gamer    Gamer
+	resource any
+	gameConf []*Config
+
+	fs   spxfs.Dir
+	conf Config
+	proj projConfig
+
+	game       *Game
+	gamerValue reflect.Value
+	err        error
+}
+
+func newGameBuilder(game Gamer, resource any, gameConf ...*Config) *gameBuilder {
+	return &gameBuilder{
+		gamer:    game,
+		resource: resource,
+		gameConf: gameConf,
+	}
+}
+
+func (b *gameBuilder) loadResources() *gameBuilder {
+	if b.err != nil {
+		return b
+	}
+
+	var gameConf *Config
+	if len(b.gameConf) > 0 {
+		gameConf = b.gameConf[0]
+	}
+	opened, err := coreproject.OpenBuilderResources(b.resource, gameConf)
+	if err != nil {
+		b.err = err
+		return b
+	}
+	if opened.AssetDir != "" {
+		engine.SetAssetDir(opened.AssetDir)
+	}
+	b.fs = opened.FS
+	b.conf = opened.Config
+	b.proj = opened.Project
+
+	b.game.engine().ResMgr.SetDefaultFont("res://engine/fonts/CnFont.ttf")
+	return b
+}
+
+func (b *gameBuilder) parseFlags() *gameBuilder {
+	if b.err != nil {
+		return b
+	}
+	parseCommandLineFlags(&b.conf)
+	return b
+}
+
+func (b *gameBuilder) initializeGame() *gameBuilder {
+	if b.err != nil {
+		return b
+	}
+	b.gamerValue = reflect.ValueOf(b.gamer).Elem()
+	b.game = instance(b.gamerValue)
+	return b
+}
+
+func (b *gameBuilder) setupConfig() *gameBuilder {
+	if b.err != nil {
+		return b
+	}
+	setupGameConfig(b.game, &b.conf, &b.proj)
+	return b
+}
+
+func (b *gameBuilder) setupSystems() *gameBuilder {
+	if b.err != nil {
+		return b
+	}
+	setupGameSystems(b.game, &b.proj)
+	return b
+}
+
+func (b *gameBuilder) loadSprites() *gameBuilder {
+	if b.err != nil {
+		return b
+	}
+	loadGameSprites(b.game, b.gamerValue, b.fs, &b.proj)
+	return b
+}
+
+func (b *gameBuilder) finalizeLoad() *gameBuilder {
+	if b.err != nil {
+		return b
+	}
+	if err := b.game.endLoad(b.gamerValue, &b.proj); err != nil {
+		b.err = err
+		return b
+	}
+	return b
+}
+
+func (b *gameBuilder) run() error {
+	return b.game.runLoop(&b.conf)
+}
+
+func (b *gameBuilder) build() (*Game, error) {
+	b.initializeGame().
+		loadResources().
+		parseFlags().
+		setupConfig().
+		setupSystems().
+		loadSprites().
+		finalizeLoad()
+
+	return b.game, b.err
+}
+
+func (b *gameBuilder) buildAndRun() error {
+	if _, err := b.build(); err != nil {
+		return err
+	}
+	return b.run()
+}
+
+// setupGameConfig configures game settings.
+func setupGameConfig(g *Game, conf *Config, proj *projConfig) {
+	cwd, _ := os.Getwd()
+	runtimeCfg := coreproject.ResolveRuntimeConfig(conf, proj, cwd, os.Getenv("SPX_SCREENSHOT_KEY"))
+
+	conf.Title = runtimeCfg.Title
+	proj.FullScreen = runtimeCfg.FullScreen
+	g.setPhysicsEnabled(runtimeCfg.PhysicsEnabled)
+	g.setEventQueuePolicy(parseEventQueuePolicy(runtimeCfg.EventQueuePolicy))
+	g.WindowHeight = runtimeCfg.WindowHeight
+	g.WindowWidth = runtimeCfg.WindowWidth
+
+	if runtimeCfg.ScreenshotKey != "" {
+		if err := os.Setenv("SPX_SCREENSHOT_KEY", runtimeCfg.ScreenshotKey); err != nil {
+			engine.Panic(err)
+		}
+	}
+}
+
+// setupGameSystems initializes game subsystems.
+func setupGameSystems(g *Game, proj *projConfig) {
+	settings := coreproject.ResolveSystemSettings(proj)
+	engine.SetLayerSortMode(settings.LayerSortMode)
+	g.applyPathFinderSettings(settings)
+	g.applyAudioSettings(settings)
+	g.applyPhysicsSettings(settings)
+}
+
+// loadGameSprites loads all sprites.
+func loadGameSprites(g *Game, v reflect.Value, fs spxfs.Dir, proj *projConfig) {
+	spxlog.Debug("==> StartLoad")
+
+	g.startLoad(fs)
+	err := coreproject.WalkFields(v, func(fieldIndex int) (string, any) {
+		return getFieldPtrOrAlloc(g, v, fieldIndex)
+	}, func(name string, val any) error {
+		fld, ok := val.(Sprite)
+		if !ok || !g.canBindSprite(name) {
+			return nil
+		}
+		return g.loadSprite(fld, name, v)
+	})
+	if err != nil {
+		engine.Panic(err)
+	}
+	g.tilemapMgr.init(g, fs, proj.TilemapPath)
+}
+
+func (p *Game) startLoad(fs spxfs.Dir) {
+	p.soundMgr.Init(&p.engine().AudioMgr)
+	p.sounds = make(map[string]sound)
+	p.inputMgr.init(p)
+	p.events = make(chan event, eventBufferSize)
+	p.resetEventQueueStats()
+	p.fs = fs
+}
+
+func (p *Game) canBindSprite(name string) bool {
+	return p.typs[name] != nil
+}
+
+func parseCommandLineFlags(conf *Config) {
+	f := flag.CommandLine
+	effects, err := coreproject.ParseCommandLineFlags(f, os.Args[1:], conf)
+	if err != nil {
+		engine.Panic(err)
+	}
+
+	if effects.ShowHelp {
+		fmt.Fprintf(os.Stderr, "Usage: %v [-v -f -h]\n", os.Args[0])
+		f.PrintDefaults()
+		os.Exit(0)
+	}
+
+	if effects.Verbose {
+		SetDebug(DbgFlagAll)
+	}
+}
+
+func instance(gamer reflect.Value) *Game {
+	fld := gamer.FieldByName("Game")
+	if !fld.IsValid() {
+		panic("type doesn't have field spx.Game")
+	}
+	return fld.Addr().Interface().(*Game)
+}
+
+func getFieldPtrOrAlloc(g *Game, v reflect.Value, i int) (name string, val any) {
+	return coreproject.FieldPtrOrAlloc(v, i, coreproject.FieldAllocConfig{
+		IsPointerSpriteType: func(typ reflect.Type) bool {
+			return typ.Implements(tySprite)
+		},
+		ResolveInterfaceSpriteType: func(fieldName string) (reflect.Type, bool) {
+			typ, ok := g.typs[fieldName]
+			return typ, ok
+		},
+	})
 }
 
 // XGot_Game_Reload reloads the game with new configuration

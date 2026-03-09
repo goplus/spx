@@ -16,6 +16,8 @@
 
 package spx
 
+import "github.com/goplus/spx/v2/internal/base/collisionutil"
+
 // ======================== Collision Optimization System ========================
 // This file implements spatial partitioning and AABB (Axis-Aligned Bounding Box)
 // based broad-phase collision detection to reduce expensive pixel-perfect checks.
@@ -26,147 +28,40 @@ package spx
 // This value can be tuned based on your game's average sprite size:
 const defaultSpatialHashCellSize = 100.0
 
-// ======================== Data Structures ========================
-
-// SpriteAABB represents an axis-aligned bounding box for a sprite.
-type SpriteAABB struct {
-	sprite *SpriteImpl
-	minX   float64
-	minY   float64
-	maxX   float64
-	maxY   float64
-}
-
-// newSpriteAABB creates an AABB from a sprite's bounds.
-func newSpriteAABB(sprite *SpriteImpl) *SpriteAABB {
+func newSpriteAABB(sprite *SpriteImpl) *collisionutil.Entry[*SpriteImpl] {
 	bounds := sprite.bounds()
 	if bounds == nil {
 		return nil
 	}
 
-	return &SpriteAABB{
-		sprite: sprite,
-		minX:   bounds.Position.X,
-		minY:   bounds.Position.Y,
-		maxX:   bounds.Position.X + bounds.Size.X,
-		maxY:   bounds.Position.Y + bounds.Size.Y,
+	return &collisionutil.Entry[*SpriteImpl]{
+		Value: sprite,
+		Box: collisionutil.AABB{
+			MinX: bounds.Position.X,
+			MinY: bounds.Position.Y,
+			MaxX: bounds.Position.X + bounds.Size.X,
+			MaxY: bounds.Position.Y + bounds.Size.Y,
+		},
 	}
-}
-
-// intersects checks if two AABBs overlap (broad-phase collision detection).
-func (a *SpriteAABB) intersects(b *SpriteAABB) bool {
-	if a == nil || b == nil {
-		return false
-	}
-
-	// AABB intersection test
-	return a.minX <= b.maxX &&
-		a.maxX >= b.minX &&
-		a.minY <= b.maxY &&
-		a.maxY >= b.minY
-}
-
-// SpatialHash implements a simple spatial hash grid for broad-phase collision detection.
-type SpatialHash struct {
-	cellSize float64
-	grid     map[int64]map[int64][]*SpriteAABB
-}
-
-// newSpatialHash creates a new spatial hash grid.
-func newSpatialHash(cellSize float64) *SpatialHash {
-	return &SpatialHash{
-		cellSize: cellSize,
-		grid:     make(map[int64]map[int64][]*SpriteAABB),
-	}
-}
-
-// clear empties the spatial hash by clearing all existing entries.
-// This reuses both the top-level and inner map memory instead of reallocating.
-// Note: Maps may grow but never shrink, which is acceptable for typical game scenarios.
-// where sprites move within a bounded area.
-func (s *SpatialHash) clear() {
-	for _, yGrid := range s.grid {
-		for y := range yGrid {
-			delete(yGrid, y)
-		}
-	}
-}
-
-// getCellCoords converts world coordinates to cell coordinates.
-func (s *SpatialHash) getCellCoords(x, y float64) (int64, int64) {
-	return int64(x / s.cellSize), int64(y / s.cellSize)
-}
-
-// insert adds a sprite AABB to the spatial hash
-func (s *SpatialHash) insert(aabb *SpriteAABB) {
-	if aabb == nil {
-		return
-	}
-
-	// Get all cells that this AABB overlaps
-	minCellX, minCellY := s.getCellCoords(aabb.minX, aabb.minY)
-	maxCellX, maxCellY := s.getCellCoords(aabb.maxX, aabb.maxY)
-
-	// Insert into all overlapping cells
-	for x := minCellX; x <= maxCellX; x++ {
-		if s.grid[x] == nil {
-			s.grid[x] = make(map[int64][]*SpriteAABB)
-		}
-		for y := minCellY; y <= maxCellY; y++ {
-			s.grid[x][y] = append(s.grid[x][y], aabb)
-		}
-	}
-}
-
-// query returns all AABBs that might collide with the given AABB.
-func (s *SpatialHash) query(aabb *SpriteAABB) []*SpriteAABB {
-	if aabb == nil {
-		return nil
-	}
-
-	// Get all cells that this AABB overlaps
-	minCellX, minCellY := s.getCellCoords(aabb.minX, aabb.minY)
-	maxCellX, maxCellY := s.getCellCoords(aabb.maxX, aabb.maxY)
-
-	// Use a map to avoid duplicates
-	seen := make(map[*SpriteAABB]bool)
-	var results []*SpriteAABB
-
-	// Gather all sprites from overlapping cells
-	for x := minCellX; x <= maxCellX; x++ {
-		if s.grid[x] == nil {
-			continue
-		}
-		for y := minCellY; y <= maxCellY; y++ {
-			for _, candidate := range s.grid[x][y] {
-				if !seen[candidate] && candidate != aabb {
-					seen[candidate] = true
-					results = append(results, candidate)
-				}
-			}
-		}
-	}
-
-	return results
 }
 
 // buildSpatialHashForNames builds a spatial hash with sprites matching the given name filter.
 // Uses a reusable spatial hash to avoid repeated allocations.
-func (p *Game) buildSpatialHashForNames(dst *SpriteImpl, nameFilter func(string) bool) *SpatialHash {
+func (p *Game) buildSpatialHashForNames(dst *SpriteImpl, nameFilter func(string) bool) *collisionutil.SpatialHash[*SpriteImpl] {
 	// Lazy initialization of the reusable spatial hash
 	if p.spatialHash == nil {
-		p.spatialHash = newSpatialHash(defaultSpatialHashCellSize)
+		p.spatialHash = collisionutil.NewSpatialHash[*SpriteImpl](defaultSpatialHashCellSize)
 	}
 
 	// Clear and reuse the existing spatial hash
-	p.spatialHash.clear()
+	p.spatialHash.Clear()
 
 	for _, item := range p.spriteMgr.items {
 		if sp, ok := item.(*SpriteImpl); ok && sp != dst {
 			if nameFilter(sp.name) && sp.IsVisible && !sp.IsDying && sp.SyncSprite != nil {
 				aabb := newSpriteAABB(sp)
 				if aabb != nil {
-					p.spatialHash.insert(aabb)
+					p.spatialHash.Insert(aabb)
 				}
 			}
 		}
@@ -176,21 +71,25 @@ func (p *Game) buildSpatialHashForNames(dst *SpriteImpl, nameFilter func(string)
 }
 
 // findCollisionsInSpatialHash performs AABB and pixel-perfect collision detection.
-func findCollisionsInSpatialHash(dstAABB *SpriteAABB, spatialHash *SpatialHash, findFirst bool) []*SpriteImpl {
+func findCollisionsInSpatialHash(
+	dstAABB *collisionutil.Entry[*SpriteImpl],
+	spatialHash *collisionutil.SpatialHash[*SpriteImpl],
+	findFirst bool,
+) []*SpriteImpl {
 	var results []*SpriteImpl
 
 	// Query spatial hash for potential collisions
-	potentialCollisions := spatialHash.query(dstAABB)
+	potentialCollisions := spatialHash.Query(dstAABB.Box)
 
 	// AABB intersection and pixel-perfect collision tests
 	for _, candidateAABB := range potentialCollisions {
-		if !dstAABB.intersects(candidateAABB) {
+		if !dstAABB.Box.Intersects(candidateAABB.Box) {
 			continue
 		}
 
 		// Pixel-perfect collision detection (narrow-phase)
-		if candidateAABB.sprite.touchingSprite(dstAABB.sprite) {
-			results = append(results, candidateAABB.sprite)
+		if candidateAABB.Value.touchingSprite(dstAABB.Value) {
+			results = append(results, candidateAABB.Value)
 			if findFirst {
 				return results
 			}

@@ -56,26 +56,6 @@ type costumesConfig = coreproject.CostumesConfig
 type actionConfig = coreproject.ActionConfig
 type aniConfig = coreproject.AniConfig
 
-type frameNormal struct {
-	Path   string     `json:"path"`
-	Offset [2]float64 `json:"offset"`
-	Bitmap int64      `json:"bitmap"`
-}
-
-type frameAtlas struct {
-	X      int64      `json:"x"`
-	Y      int64      `json:"y"`
-	W      int64      `json:"w"`
-	H      int64      `json:"h"`
-	Offset [2]float64 `json:"offset"`
-}
-
-type animPayload struct {
-	BasePath  string `json:"base_path,omitempty"`
-	Frames    []any  `json:"frames"`
-	MaxBitmap int64  `json:"max_bitmap"`
-}
-
 // -----------------------------------------------------------------------------
 // Sprite configuration
 // -----------------------------------------------------------------------------

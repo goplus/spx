@@ -1,0 +1,177 @@
+package audio
+
+import (
+	"testing"
+
+	"github.com/goplus/spx/v2/internal/engine"
+)
+
+type fakeBackend struct {
+	nextID      int64
+	plays       []playCall
+	pauses      []int64
+	resumes     []int64
+	stops       []int64
+	loops       []loopCall
+	volumes     []float64
+	lastDestroy engine.Object
+	pan         float64
+	pitch       float64
+	volume      float64
+}
+
+type playCall struct {
+	path       string
+	owner      engine.Object
+	attenation float64
+	maxDist    float64
+}
+
+type loopCall struct {
+	id   int64
+	loop bool
+}
+
+func (f *fakeBackend) CreateAudio() engine.Object {
+	return 77
+}
+
+func (f *fakeBackend) DestroyAudio(obj engine.Object) {
+	f.lastDestroy = obj
+}
+
+func (f *fakeBackend) SetPitch(obj engine.Object, pitch float64) {
+	f.pitch = pitch
+}
+
+func (f *fakeBackend) GetPitch(obj engine.Object) float64 {
+	return f.pitch
+}
+
+func (f *fakeBackend) SetPan(obj engine.Object, pan float64) {
+	f.pan = pan
+}
+
+func (f *fakeBackend) GetPan(obj engine.Object) float64 {
+	return f.pan
+}
+
+func (f *fakeBackend) SetVolume(obj engine.Object, volume float64) {
+	f.volume = volume
+	f.volumes = append(f.volumes, volume)
+}
+
+func (f *fakeBackend) GetVolume(obj engine.Object) float64 {
+	return f.volume
+}
+
+func (f *fakeBackend) PlayWithAttenuation(obj engine.Object, path string, ownerID engine.Object, attenuation, maxDistance float64) int64 {
+	f.nextID++
+	f.plays = append(f.plays, playCall{
+		path:       path,
+		owner:      ownerID,
+		attenation: attenuation,
+		maxDist:    maxDistance,
+	})
+	return f.nextID
+}
+
+func (f *fakeBackend) Pause(aid int64) {
+	f.pauses = append(f.pauses, aid)
+}
+
+func (f *fakeBackend) Resume(aid int64) {
+	f.resumes = append(f.resumes, aid)
+}
+
+func (f *fakeBackend) Stop(aid int64) {
+	f.stops = append(f.stops, aid)
+}
+
+func (f *fakeBackend) SetLoop(aid int64, loop bool) {
+	f.loops = append(f.loops, loopCall{id: aid, loop: loop})
+}
+
+func (f *fakeBackend) IsPlaying(aid int64) bool {
+	return false
+}
+
+func (f *fakeBackend) StopAll() {}
+
+func TestManagerPlayPauseResumeStop(t *testing.T) {
+	backend := &fakeBackend{}
+	var mgr Manager
+	mgr.Init(backend)
+
+	id1 := mgr.Play(1, "sounds/a.wav", false, false, 9, 0, 100)
+	id2 := mgr.Play(1, "sounds/a.wav", true, false, 9, 12, 100)
+
+	if id1 != 1 || id2 != 2 {
+		t.Fatalf("Play ids = %d, %d; want 1, 2", id1, id2)
+	}
+	if backend.plays[0].path != engine.ToAssetPath("sounds/a.wav") {
+		t.Fatalf("Play path = %q, want %q", backend.plays[0].path, engine.ToAssetPath("sounds/a.wav"))
+	}
+	if backend.plays[0].owner != 0 {
+		t.Fatalf("owner with zero attenuation = %d, want 0", backend.plays[0].owner)
+	}
+	if backend.plays[1].owner != 9 {
+		t.Fatalf("owner with attenuation = %d, want 9", backend.plays[1].owner)
+	}
+
+	mgr.Pause("sounds/a.wav")
+	mgr.Resume("sounds/a.wav")
+	mgr.Stop("sounds/a.wav")
+
+	if len(backend.pauses) != 2 || len(backend.resumes) != 2 || len(backend.stops) != 2 {
+		t.Fatalf("pause/resume/stop lens = %d/%d/%d, want 2/2/2", len(backend.pauses), len(backend.resumes), len(backend.stops))
+	}
+	if len(backend.loops) != 2 {
+		t.Fatalf("SetLoop calls = %d, want 2", len(backend.loops))
+	}
+}
+
+func TestManagerVolumeAndEffects(t *testing.T) {
+	backend := &fakeBackend{pan: 0.25, pitch: 1.5, volume: 0.8}
+	var mgr Manager
+	mgr.Init(backend)
+
+	if got := mgr.GetPan(1); got != 25 {
+		t.Fatalf("GetPan = %v, want 25", got)
+	}
+	if got := mgr.GetPitch(1); got != 150 {
+		t.Fatalf("GetPitch = %v, want 150", got)
+	}
+	if got := mgr.GetVolume(1); got != 80 {
+		t.Fatalf("GetVolume = %v, want 80", got)
+	}
+
+	mgr.SetPan(1, 40)
+	mgr.SetPitch(1, 125)
+	mgr.SetVolume(1, -5)
+
+	if backend.pan != 0.4 {
+		t.Fatalf("SetPan backend = %v, want 0.4", backend.pan)
+	}
+	if backend.pitch != 1.25 {
+		t.Fatalf("SetPitch backend = %v, want 1.25", backend.pitch)
+	}
+	if got := backend.volumes[len(backend.volumes)-1]; got != 0.01 {
+		t.Fatalf("SetVolume backend = %v, want 0.01", got)
+	}
+}
+
+func TestManagerAllocAndRelease(t *testing.T) {
+	backend := &fakeBackend{}
+	var mgr Manager
+	mgr.Init(backend)
+
+	if got := mgr.AllocSound(); got != 77 {
+		t.Fatalf("AllocSound = %d, want 77", got)
+	}
+
+	mgr.ReleaseSound(13)
+	if backend.lastDestroy != 13 {
+		t.Fatalf("ReleaseSound destroyed = %d, want 13", backend.lastDestroy)
+	}
+}

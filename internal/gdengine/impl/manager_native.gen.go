@@ -151,7 +151,8 @@ func (pself *audioMgr) StopAll() {
 	CallAudioStopAll()
 }
 func (pself *audioMgr) CreateAudio() Object {
-	retValue := CallAudioCreateAudio()
+	var retValue GdObj
+	CallAudioCreateAudio(&retValue)
 	return ToObject(retValue)
 }
 func (pself *audioMgr) DestroyAudio(obj Object) {
@@ -165,7 +166,8 @@ func (pself *audioMgr) SetPitch(obj Object, pitch float64) {
 }
 func (pself *audioMgr) GetPitch(obj Object) float64 {
 	arg0 := ToGdObj(obj)
-	retValue := CallAudioGetPitch(arg0)
+	var retValue GdFloat
+	CallAudioGetPitch(arg0, &retValue)
 	return ToFloat64(retValue)
 }
 func (pself *audioMgr) SetPan(obj Object, pan float64) {
@@ -175,7 +177,8 @@ func (pself *audioMgr) SetPan(obj Object, pan float64) {
 }
 func (pself *audioMgr) GetPan(obj Object) float64 {
 	arg0 := ToGdObj(obj)
-	retValue := CallAudioGetPan(arg0)
+	var retValue GdFloat
+	CallAudioGetPan(arg0, &retValue)
 	return ToFloat64(retValue)
 }
 func (pself *audioMgr) SetVolume(obj Object, volume float64) {
@@ -185,7 +188,8 @@ func (pself *audioMgr) SetVolume(obj Object, volume float64) {
 }
 func (pself *audioMgr) GetVolume(obj Object) float64 {
 	arg0 := ToGdObj(obj)
-	retValue := CallAudioGetVolume(arg0)
+	var retValue GdFloat
+	CallAudioGetVolume(arg0, &retValue)
 	return ToFloat64(retValue)
 }
 func (pself *audioMgr) PlayWithAttenuation(obj Object, path string, owner_id Object, attenuation float64, max_distance float64) int64 {
@@ -196,7 +200,8 @@ func (pself *audioMgr) PlayWithAttenuation(obj Object, path string, owner_id Obj
 	arg2 := ToGdObj(owner_id)
 	arg3 := ToGdFloat(attenuation)
 	arg4 := ToGdFloat(max_distance)
-	retValue := CallAudioPlayWithAttenuation(arg0, arg1, arg2, arg3, arg4)
+	var retValue GdInt
+	CallAudioPlayWithAttenuation(arg0, arg1, arg2, arg3, arg4, &retValue)
 	return ToInt64(retValue)
 }
 func (pself *audioMgr) Play(obj Object, path string) int64 {
@@ -204,7 +209,8 @@ func (pself *audioMgr) Play(obj Object, path string) int64 {
 	arg1Str := C.CString(path)
 	arg1 := (GdString)(arg1Str)
 	defer C.free(unsafe.Pointer(arg1Str))
-	retValue := CallAudioPlay(arg0, arg1)
+	var retValue GdInt
+	CallAudioPlay(arg0, arg1, &retValue)
 	return ToInt64(retValue)
 }
 func (pself *audioMgr) Pause(aid int64) {
@@ -226,12 +232,14 @@ func (pself *audioMgr) SetLoop(aid int64, loop bool) {
 }
 func (pself *audioMgr) GetLoop(aid int64) bool {
 	arg0 := ToGdInt(aid)
-	retValue := CallAudioGetLoop(arg0)
+	var retValue GdBool
+	CallAudioGetLoop(arg0, &retValue)
 	return ToBool(retValue)
 }
 func (pself *audioMgr) GetTimer(aid int64) float64 {
 	arg0 := ToGdInt(aid)
-	retValue := CallAudioGetTimer(arg0)
+	var retValue GdFloat
+	CallAudioGetTimer(arg0, &retValue)
 	return ToFloat64(retValue)
 }
 func (pself *audioMgr) SetTimer(aid int64, time float64) {
@@ -241,11 +249,13 @@ func (pself *audioMgr) SetTimer(aid int64, time float64) {
 }
 func (pself *audioMgr) IsPlaying(aid int64) bool {
 	arg0 := ToGdInt(aid)
-	retValue := CallAudioIsPlaying(arg0)
+	var retValue GdBool
+	CallAudioIsPlaying(arg0, &retValue)
 	return ToBool(retValue)
 }
 func (pself *cameraMgr) GetCameraPosition() Vec2 {
-	retValue := CallCameraGetCameraPosition()
+	var retValue GdVec2
+	CallCameraGetCameraPosition(&retValue)
 	return ToVec2(retValue)
 }
 func (pself *cameraMgr) SetCameraPosition(position Vec2) {
@@ -253,7 +263,8 @@ func (pself *cameraMgr) SetCameraPosition(position Vec2) {
 	CallCameraSetCameraPosition(arg0)
 }
 func (pself *cameraMgr) GetCameraZoom() Vec2 {
-	retValue := CallCameraGetCameraZoom()
+	var retValue GdVec2
+	CallCameraGetCameraZoom(&retValue)
 	return ToVec2(retValue)
 }
 func (pself *cameraMgr) SetCameraZoom(size Vec2) {
@@ -261,15 +272,18 @@ func (pself *cameraMgr) SetCameraZoom(size Vec2) {
 	CallCameraSetCameraZoom(arg0)
 }
 func (pself *cameraMgr) GetViewportRect() Rect2 {
-	retValue := CallCameraGetViewportRect()
+	var retValue GdRect2
+	CallCameraGetViewportRect(&retValue)
 	return ToRect2(retValue)
 }
 func (pself *cameraMgr) GetGlobalCameraRect() Rect2 {
-	retValue := CallCameraGetGlobalCameraRect()
+	var retValue GdRect2
+	CallCameraGetGlobalCameraRect(&retValue)
 	return ToRect2(retValue)
 }
 func (pself *cameraMgr) GetStageLimitsRect() Rect2 {
-	retValue := CallCameraGetStageLimitsRect()
+	var retValue GdRect2
+	CallCameraGetStageLimitsRect(&retValue)
 	return ToRect2(retValue)
 }
 func (pself *cameraMgr) SetCameraLimit(side int64, limit int64) {
@@ -323,7 +337,8 @@ func (pself *extMgr) Resume() {
 	CallExtResume()
 }
 func (pself *extMgr) IsPaused() bool {
-	retValue := CallExtIsPaused()
+	var retValue GdBool
+	CallExtIsPaused(&retValue)
 	return ToBool(retValue)
 }
 func (pself *extMgr) NextFrame() {
@@ -334,22 +349,26 @@ func (pself *extMgr) SetLayerSorterMode(mode int64) {
 	CallExtSetLayerSorterMode(arg0)
 }
 func (pself *inputMgr) GetGlobalMousePos() Vec2 {
-	retValue := CallInputGetGlobalMousePos()
+	var retValue GdVec2
+	CallInputGetGlobalMousePos(&retValue)
 	return ToVec2(retValue)
 }
 func (pself *inputMgr) GetKey(key int64) bool {
 	arg0 := ToGdInt(key)
-	retValue := CallInputGetKey(arg0)
+	var retValue GdBool
+	CallInputGetKey(arg0, &retValue)
 	return ToBool(retValue)
 }
 func (pself *inputMgr) GetMouseState(mouse_id int64) bool {
 	arg0 := ToGdInt(mouse_id)
-	retValue := CallInputGetMouseState(arg0)
+	var retValue GdBool
+	CallInputGetMouseState(arg0, &retValue)
 	return ToBool(retValue)
 }
 func (pself *inputMgr) GetKeyState(key int64) int64 {
 	arg0 := ToGdInt(key)
-	retValue := CallInputGetKeyState(arg0)
+	var retValue GdInt
+	CallInputGetKeyState(arg0, &retValue)
 	return ToInt64(retValue)
 }
 func (pself *inputMgr) GetAxis(neg_action string, pos_action string) float64 {
@@ -359,28 +378,32 @@ func (pself *inputMgr) GetAxis(neg_action string, pos_action string) float64 {
 	arg1Str := C.CString(pos_action)
 	arg1 := (GdString)(arg1Str)
 	defer C.free(unsafe.Pointer(arg1Str))
-	retValue := CallInputGetAxis(arg0, arg1)
+	var retValue GdFloat
+	CallInputGetAxis(arg0, arg1, &retValue)
 	return ToFloat64(retValue)
 }
 func (pself *inputMgr) IsActionPressed(action string) bool {
 	arg0Str := C.CString(action)
 	arg0 := (GdString)(arg0Str)
 	defer C.free(unsafe.Pointer(arg0Str))
-	retValue := CallInputIsActionPressed(arg0)
+	var retValue GdBool
+	CallInputIsActionPressed(arg0, &retValue)
 	return ToBool(retValue)
 }
 func (pself *inputMgr) IsActionJustPressed(action string) bool {
 	arg0Str := C.CString(action)
 	arg0 := (GdString)(arg0Str)
 	defer C.free(unsafe.Pointer(arg0Str))
-	retValue := CallInputIsActionJustPressed(arg0)
+	var retValue GdBool
+	CallInputIsActionJustPressed(arg0, &retValue)
 	return ToBool(retValue)
 }
 func (pself *inputMgr) IsActionJustReleased(action string) bool {
 	arg0Str := C.CString(action)
 	arg0 := (GdString)(arg0Str)
 	defer C.free(unsafe.Pointer(arg0Str))
-	retValue := CallInputIsActionJustReleased(arg0)
+	var retValue GdBool
+	CallInputIsActionJustReleased(arg0, &retValue)
 	return ToBool(retValue)
 }
 func (pself *navigationMgr) SetupPathFinderWithSize(grid_size Vec2, cell_size Vec2, with_jump bool, with_debug bool) {
@@ -403,14 +426,16 @@ func (pself *navigationMgr) FindPath(p_from Vec2, p_to Vec2, with_jump bool) Arr
 	arg0 := ToGdVec2(p_from)
 	arg1 := ToGdVec2(p_to)
 	arg2 := ToGdBool(with_jump)
-	retValue := CallNavigationFindPath(arg0, arg1, arg2)
+	var retValue GdArray
+	CallNavigationFindPath(arg0, arg1, arg2, &retValue)
 	return ToArray(retValue)
 }
 func (pself *penMgr) DestroyAllPens() {
 	CallPenDestroyAllPens()
 }
 func (pself *penMgr) CreatePen() Object {
-	retValue := CallPenCreatePen()
+	var retValue GdObj
+	CallPenCreatePen(&retValue)
 	return ToObject(retValue)
 }
 func (pself *penMgr) DestroyPen(obj Object) {
@@ -473,7 +498,8 @@ func (pself *physicsMgr) Raycast(from Vec2, to Vec2, collision_mask int64) Objec
 	arg0 := ToGdVec2(from)
 	arg1 := ToGdVec2(to)
 	arg2 := ToGdInt(collision_mask)
-	retValue := CallPhysicsRaycast(arg0, arg1, arg2)
+	var retValue GdObj
+	CallPhysicsRaycast(arg0, arg1, arg2, &retValue)
 	return ToObject(retValue)
 }
 func (pself *physicsMgr) CheckCollision(from Vec2, to Vec2, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) bool {
@@ -482,39 +508,46 @@ func (pself *physicsMgr) CheckCollision(from Vec2, to Vec2, collision_mask int64
 	arg2 := ToGdInt(collision_mask)
 	arg3 := ToGdBool(collide_with_areas)
 	arg4 := ToGdBool(collide_with_bodies)
-	retValue := CallPhysicsCheckCollision(arg0, arg1, arg2, arg3, arg4)
+	var retValue GdBool
+	CallPhysicsCheckCollision(arg0, arg1, arg2, arg3, arg4, &retValue)
 	return ToBool(retValue)
 }
 func (pself *physicsMgr) CheckTouchedCameraBoundaries(obj Object) int64 {
 	arg0 := ToGdObj(obj)
-	retValue := CallPhysicsCheckTouchedCameraBoundaries(arg0)
+	var retValue GdInt
+	CallPhysicsCheckTouchedCameraBoundaries(arg0, &retValue)
 	return ToInt64(retValue)
 }
 func (pself *physicsMgr) CheckTouchedCameraBoundary(obj Object, board_type int64) bool {
 	arg0 := ToGdObj(obj)
 	arg1 := ToGdInt(board_type)
-	retValue := CallPhysicsCheckTouchedCameraBoundary(arg0, arg1)
+	var retValue GdBool
+	CallPhysicsCheckTouchedCameraBoundary(arg0, arg1, &retValue)
 	return ToBool(retValue)
 }
 func (pself *physicsMgr) CheckNearestTouchedCameraBoundary(obj Object) int64 {
 	arg0 := ToGdObj(obj)
-	retValue := CallPhysicsCheckNearestTouchedCameraBoundary(arg0)
+	var retValue GdInt
+	CallPhysicsCheckNearestTouchedCameraBoundary(arg0, &retValue)
 	return ToInt64(retValue)
 }
 func (pself *physicsMgr) CheckTouchedStageBoundaries(obj Object) int64 {
 	arg0 := ToGdObj(obj)
-	retValue := CallPhysicsCheckTouchedStageBoundaries(arg0)
+	var retValue GdInt
+	CallPhysicsCheckTouchedStageBoundaries(arg0, &retValue)
 	return ToInt64(retValue)
 }
 func (pself *physicsMgr) CheckTouchedStageBoundary(obj Object, board_type int64) bool {
 	arg0 := ToGdObj(obj)
 	arg1 := ToGdInt(board_type)
-	retValue := CallPhysicsCheckTouchedStageBoundary(arg0, arg1)
+	var retValue GdBool
+	CallPhysicsCheckTouchedStageBoundary(arg0, arg1, &retValue)
 	return ToBool(retValue)
 }
 func (pself *physicsMgr) CheckNearestTouchedStageBoundary(obj Object) int64 {
 	arg0 := ToGdObj(obj)
-	retValue := CallPhysicsCheckNearestTouchedStageBoundary(arg0)
+	var retValue GdInt
+	CallPhysicsCheckNearestTouchedStageBoundary(arg0, &retValue)
 	return ToInt64(retValue)
 }
 func (pself *physicsMgr) SetCollisionSystemType(is_collision_by_alpha bool) {
@@ -526,7 +559,8 @@ func (pself *physicsMgr) SetGlobalGravity(gravity float64) {
 	CallPhysicsSetGlobalGravity(arg0)
 }
 func (pself *physicsMgr) GetGlobalGravity() float64 {
-	retValue := CallPhysicsGetGlobalGravity()
+	var retValue GdFloat
+	CallPhysicsGetGlobalGravity(&retValue)
 	return ToFloat64(retValue)
 }
 func (pself *physicsMgr) SetGlobalFriction(friction float64) {
@@ -534,7 +568,8 @@ func (pself *physicsMgr) SetGlobalFriction(friction float64) {
 	CallPhysicsSetGlobalFriction(arg0)
 }
 func (pself *physicsMgr) GetGlobalFriction() float64 {
-	retValue := CallPhysicsGetGlobalFriction()
+	var retValue GdFloat
+	CallPhysicsGetGlobalFriction(&retValue)
 	return ToFloat64(retValue)
 }
 func (pself *physicsMgr) SetGlobalAirDrag(air_drag float64) {
@@ -542,21 +577,24 @@ func (pself *physicsMgr) SetGlobalAirDrag(air_drag float64) {
 	CallPhysicsSetGlobalAirDrag(arg0)
 }
 func (pself *physicsMgr) GetGlobalAirDrag() float64 {
-	retValue := CallPhysicsGetGlobalAirDrag()
+	var retValue GdFloat
+	CallPhysicsGetGlobalAirDrag(&retValue)
 	return ToFloat64(retValue)
 }
 func (pself *physicsMgr) CheckCollisionRect(pos Vec2, size Vec2, collision_mask int64) Array {
 	arg0 := ToGdVec2(pos)
 	arg1 := ToGdVec2(size)
 	arg2 := ToGdInt(collision_mask)
-	retValue := CallPhysicsCheckCollisionRect(arg0, arg1, arg2)
+	var retValue GdArray
+	CallPhysicsCheckCollisionRect(arg0, arg1, arg2, &retValue)
 	return ToArray(retValue)
 }
 func (pself *physicsMgr) CheckCollisionCircle(pos Vec2, radius float64, collision_mask int64) Array {
 	arg0 := ToGdVec2(pos)
 	arg1 := ToGdFloat(radius)
 	arg2 := ToGdInt(collision_mask)
-	retValue := CallPhysicsCheckCollisionCircle(arg0, arg1, arg2)
+	var retValue GdArray
+	CallPhysicsCheckCollisionCircle(arg0, arg1, arg2, &retValue)
 	return ToArray(retValue)
 }
 func (pself *physicsMgr) RaycastWithDetails(from Vec2, to Vec2, ignore_sprites Array, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) Array {
@@ -566,7 +604,8 @@ func (pself *physicsMgr) RaycastWithDetails(from Vec2, to Vec2, ignore_sprites A
 	arg3 := ToGdInt(collision_mask)
 	arg4 := ToGdBool(collide_with_areas)
 	arg5 := ToGdBool(collide_with_bodies)
-	retValue := CallPhysicsRaycastWithDetails(arg0, arg1, arg2, arg3, arg4, arg5)
+	var retValue GdArray
+	CallPhysicsRaycastWithDetails(arg0, arg1, arg2, arg3, arg4, arg5, &retValue)
 	return ToArray(retValue)
 }
 func (pself *platformMgr) SetStretchMode(enable bool) {
@@ -587,7 +626,8 @@ func (pself *platformMgr) SetWindowPosition(pos Vec2) {
 	CallPlatformSetWindowPosition(arg0)
 }
 func (pself *platformMgr) GetWindowPosition() Vec2 {
-	retValue := CallPlatformGetWindowPosition()
+	var retValue GdVec2
+	CallPlatformGetWindowPosition(&retValue)
 	return ToVec2(retValue)
 }
 func (pself *platformMgr) SetWindowSize(width int64, height int64, with_content_scale bool) {
@@ -597,7 +637,8 @@ func (pself *platformMgr) SetWindowSize(width int64, height int64, with_content_
 	CallPlatformSetWindowSize(arg0, arg1, arg2)
 }
 func (pself *platformMgr) GetWindowSize() Vec2 {
-	retValue := CallPlatformGetWindowSize()
+	var retValue GdVec2
+	CallPlatformGetWindowSize(&retValue)
 	return ToVec2(retValue)
 }
 func (pself *platformMgr) SetWindowTitle(title string) {
@@ -607,7 +648,8 @@ func (pself *platformMgr) SetWindowTitle(title string) {
 	CallPlatformSetWindowTitle(arg0)
 }
 func (pself *platformMgr) GetWindowTitle() string {
-	retValue := CallPlatformGetWindowTitle()
+	var retValue GdString
+	CallPlatformGetWindowTitle(&retValue)
 	return ToString(retValue)
 }
 func (pself *platformMgr) SetWindowFullscreen(enable bool) {
@@ -615,7 +657,8 @@ func (pself *platformMgr) SetWindowFullscreen(enable bool) {
 	CallPlatformSetWindowFullscreen(arg0)
 }
 func (pself *platformMgr) IsWindowFullscreen() bool {
-	retValue := CallPlatformIsWindowFullscreen()
+	var retValue GdBool
+	CallPlatformIsWindowFullscreen(&retValue)
 	return ToBool(retValue)
 }
 func (pself *platformMgr) SetDebugMode(enable bool) {
@@ -623,11 +666,13 @@ func (pself *platformMgr) SetDebugMode(enable bool) {
 	CallPlatformSetDebugMode(arg0)
 }
 func (pself *platformMgr) IsDebugMode() bool {
-	retValue := CallPlatformIsDebugMode()
+	var retValue GdBool
+	CallPlatformIsDebugMode(&retValue)
 	return ToBool(retValue)
 }
 func (pself *platformMgr) GetTimeScale() float64 {
-	retValue := CallPlatformGetTimeScale()
+	var retValue GdFloat
+	CallPlatformGetTimeScale(&retValue)
 	return ToFloat64(retValue)
 }
 func (pself *platformMgr) SetTimeScale(time_scale float64) {
@@ -635,7 +680,8 @@ func (pself *platformMgr) SetTimeScale(time_scale float64) {
 	CallPlatformSetTimeScale(arg0)
 }
 func (pself *platformMgr) GetMaxFps() int64 {
-	retValue := CallPlatformGetMaxFps()
+	var retValue GdInt
+	CallPlatformGetMaxFps(&retValue)
 	return ToInt64(retValue)
 }
 func (pself *platformMgr) SetMaxFps(fps int64) {
@@ -643,7 +689,8 @@ func (pself *platformMgr) SetMaxFps(fps int64) {
 	CallPlatformSetMaxFps(arg0)
 }
 func (pself *platformMgr) GetPersistantDataDir() string {
-	retValue := CallPlatformGetPersistantDataDir()
+	var retValue GdString
+	CallPlatformGetPersistantDataDir(&retValue)
 	return ToString(retValue)
 }
 func (pself *platformMgr) SetPersistantDataDir(path string) {
@@ -656,7 +703,8 @@ func (pself *platformMgr) IsInPersistantDataDir(path string) bool {
 	arg0Str := C.CString(path)
 	arg0 := (GdString)(arg0Str)
 	defer C.free(unsafe.Pointer(arg0Str))
-	retValue := CallPlatformIsInPersistantDataDir(arg0)
+	var retValue GdBool
+	CallPlatformIsInPersistantDataDir(arg0, &retValue)
 	return ToBool(retValue)
 }
 func (pself *resMgr) CreateAnimation(p_sprite_type string, p_anim_name string, p_json_ctx string, fps int64, is_atlas bool) {
@@ -678,35 +726,40 @@ func (pself *resMgr) SetLoadMode(is_direct_mode bool) {
 	CallResSetLoadMode(arg0)
 }
 func (pself *resMgr) GetLoadMode() bool {
-	retValue := CallResGetLoadMode()
+	var retValue GdBool
+	CallResGetLoadMode(&retValue)
 	return ToBool(retValue)
 }
 func (pself *resMgr) GetBoundFromAlpha(p_path string) Rect2 {
 	arg0Str := C.CString(p_path)
 	arg0 := (GdString)(arg0Str)
 	defer C.free(unsafe.Pointer(arg0Str))
-	retValue := CallResGetBoundFromAlpha(arg0)
+	var retValue GdRect2
+	CallResGetBoundFromAlpha(arg0, &retValue)
 	return ToRect2(retValue)
 }
 func (pself *resMgr) GetImageSize(p_path string) Vec2 {
 	arg0Str := C.CString(p_path)
 	arg0 := (GdString)(arg0Str)
 	defer C.free(unsafe.Pointer(arg0Str))
-	retValue := CallResGetImageSize(arg0)
+	var retValue GdVec2
+	CallResGetImageSize(arg0, &retValue)
 	return ToVec2(retValue)
 }
 func (pself *resMgr) ReadAllText(p_path string) string {
 	arg0Str := C.CString(p_path)
 	arg0 := (GdString)(arg0Str)
 	defer C.free(unsafe.Pointer(arg0Str))
-	retValue := CallResReadAllText(arg0)
+	var retValue GdString
+	CallResReadAllText(arg0, &retValue)
 	return ToString(retValue)
 }
 func (pself *resMgr) HasFile(p_path string) bool {
 	arg0Str := C.CString(p_path)
 	arg0 := (GdString)(arg0Str)
 	defer C.free(unsafe.Pointer(arg0Str))
-	retValue := CallResHasFile(arg0)
+	var retValue GdBool
+	CallResHasFile(arg0, &retValue)
 	return ToBool(retValue)
 }
 func (pself *resMgr) ReloadTexture(path string) {
@@ -737,7 +790,8 @@ func (pself *sceneMgr) DestroyAllSprites() {
 	CallSceneDestroyAllSprites()
 }
 func (pself *sceneMgr) ReloadCurrentScene() int64 {
-	retValue := CallSceneReloadCurrentScene()
+	var retValue GdInt
+	CallSceneReloadCurrentScene(&retValue)
 	return ToInt64(retValue)
 }
 func (pself *sceneMgr) UnloadCurrentScene() {
@@ -767,7 +821,8 @@ func (pself *sceneMgr) CreateRenderSprite(texture_path string, pos Vec2, degree 
 	arg3 := ToGdVec2(scale)
 	arg4 := ToGdInt(zindex)
 	arg5 := ToGdVec2(pivot)
-	retValue := CallSceneCreateRenderSprite(arg0, arg1, arg2, arg3, arg4, arg5)
+	var retValue GdObj
+	CallSceneCreateRenderSprite(arg0, arg1, arg2, arg3, arg4, arg5, &retValue)
 	return ToObject(retValue)
 }
 func (pself *sceneMgr) CreateStaticSprite(texture_path string, pos Vec2, degree float64, scale Vec2, zindex int64, pivot Vec2, collider_type int64, collider_pivot Vec2, collider_params Array) Object {
@@ -782,7 +837,8 @@ func (pself *sceneMgr) CreateStaticSprite(texture_path string, pos Vec2, degree 
 	arg6 := ToGdInt(collider_type)
 	arg7 := ToGdVec2(collider_pivot)
 	arg8 := ToGdArray(collider_params)
-	retValue := CallSceneCreateStaticSprite(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8)
+	var retValue GdObj
+	CallSceneCreateStaticSprite(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, &retValue)
 	return ToObject(retValue)
 }
 func (pself *spriteMgr) SetDontDestroyOnLoad(obj Object) {
@@ -813,7 +869,8 @@ func (pself *spriteMgr) SetPivot(obj Object, pivot Vec2) {
 }
 func (pself *spriteMgr) GetPivot(obj Object) Vec2 {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteGetPivot(arg0)
+	var retValue GdVec2
+	CallSpriteGetPivot(arg0, &retValue)
 	return ToVec2(retValue)
 }
 func (pself *spriteMgr) SetChildPosition(obj Object, path string, pos Vec2) {
@@ -829,7 +886,8 @@ func (pself *spriteMgr) GetChildPosition(obj Object, path string) Vec2 {
 	arg1Str := C.CString(path)
 	arg1 := (GdString)(arg1Str)
 	defer C.free(unsafe.Pointer(arg1Str))
-	retValue := CallSpriteGetChildPosition(arg0, arg1)
+	var retValue GdVec2
+	CallSpriteGetChildPosition(arg0, arg1, &retValue)
 	return ToVec2(retValue)
 }
 func (pself *spriteMgr) SetChildRotation(obj Object, path string, rot float64) {
@@ -845,7 +903,8 @@ func (pself *spriteMgr) GetChildRotation(obj Object, path string) float64 {
 	arg1Str := C.CString(path)
 	arg1 := (GdString)(arg1Str)
 	defer C.free(unsafe.Pointer(arg1Str))
-	retValue := CallSpriteGetChildRotation(arg0, arg1)
+	var retValue GdFloat
+	CallSpriteGetChildRotation(arg0, arg1, &retValue)
 	return ToFloat64(retValue)
 }
 func (pself *spriteMgr) SetChildScale(obj Object, path string, scale Vec2) {
@@ -861,7 +920,8 @@ func (pself *spriteMgr) GetChildScale(obj Object, path string) Vec2 {
 	arg1Str := C.CString(path)
 	arg1 := (GdString)(arg1Str)
 	defer C.free(unsafe.Pointer(arg1Str))
-	retValue := CallSpriteGetChildScale(arg0, arg1)
+	var retValue GdVec2
+	CallSpriteGetChildScale(arg0, arg1, &retValue)
 	return ToVec2(retValue)
 }
 func (pself *spriteMgr) CheckCollision(obj Object, target Object, is_src_trigger bool, is_dst_trigger bool) bool {
@@ -869,14 +929,16 @@ func (pself *spriteMgr) CheckCollision(obj Object, target Object, is_src_trigger
 	arg1 := ToGdObj(target)
 	arg2 := ToGdBool(is_src_trigger)
 	arg3 := ToGdBool(is_dst_trigger)
-	retValue := CallSpriteCheckCollision(arg0, arg1, arg2, arg3)
+	var retValue GdBool
+	CallSpriteCheckCollision(arg0, arg1, arg2, arg3, &retValue)
 	return ToBool(retValue)
 }
 func (pself *spriteMgr) CheckCollisionWithPoint(obj Object, point Vec2, is_trigger bool) bool {
 	arg0 := ToGdObj(obj)
 	arg1 := ToGdVec2(point)
 	arg2 := ToGdBool(is_trigger)
-	retValue := CallSpriteCheckCollisionWithPoint(arg0, arg1, arg2)
+	var retValue GdBool
+	CallSpriteCheckCollisionWithPoint(arg0, arg1, arg2, &retValue)
 	return ToBool(retValue)
 }
 func (pself *spriteMgr) SetDebugCollisionVisible(obj Object, visible bool) {
@@ -886,14 +948,16 @@ func (pself *spriteMgr) SetDebugCollisionVisible(obj Object, visible bool) {
 }
 func (pself *spriteMgr) IsDebugCollisionVisible(obj Object) bool {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteIsDebugCollisionVisible(arg0)
+	var retValue GdBool
+	CallSpriteIsDebugCollisionVisible(arg0, &retValue)
 	return ToBool(retValue)
 }
 func (pself *spriteMgr) CreateBackdrop(path string) Object {
 	arg0Str := C.CString(path)
 	arg0 := (GdString)(arg0Str)
 	defer C.free(unsafe.Pointer(arg0Str))
-	retValue := CallSpriteCreateBackdrop(arg0)
+	var retValue GdObj
+	CallSpriteCreateBackdrop(arg0, &retValue)
 	return ToObject(retValue)
 }
 func (pself *spriteMgr) CreateSprite(path string, pos Vec2) Object {
@@ -901,22 +965,26 @@ func (pself *spriteMgr) CreateSprite(path string, pos Vec2) Object {
 	arg0 := (GdString)(arg0Str)
 	defer C.free(unsafe.Pointer(arg0Str))
 	arg1 := ToGdVec2(pos)
-	retValue := CallSpriteCreateSprite(arg0, arg1)
+	var retValue GdObj
+	CallSpriteCreateSprite(arg0, arg1, &retValue)
 	return ToObject(retValue)
 }
 func (pself *spriteMgr) CloneSprite(obj Object) Object {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteCloneSprite(arg0)
+	var retValue GdObj
+	CallSpriteCloneSprite(arg0, &retValue)
 	return ToObject(retValue)
 }
 func (pself *spriteMgr) DestroySprite(obj Object) bool {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteDestroySprite(arg0)
+	var retValue GdBool
+	CallSpriteDestroySprite(arg0, &retValue)
 	return ToBool(retValue)
 }
 func (pself *spriteMgr) IsSpriteAlive(obj Object) bool {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteIsSpriteAlive(arg0)
+	var retValue GdBool
+	CallSpriteIsSpriteAlive(arg0, &retValue)
 	return ToBool(retValue)
 }
 func (pself *spriteMgr) SetPosition(obj Object, pos Vec2) {
@@ -926,7 +994,8 @@ func (pself *spriteMgr) SetPosition(obj Object, pos Vec2) {
 }
 func (pself *spriteMgr) GetPosition(obj Object) Vec2 {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteGetPosition(arg0)
+	var retValue GdVec2
+	CallSpriteGetPosition(arg0, &retValue)
 	return ToVec2(retValue)
 }
 func (pself *spriteMgr) SetRotation(obj Object, rot float64) {
@@ -936,7 +1005,8 @@ func (pself *spriteMgr) SetRotation(obj Object, rot float64) {
 }
 func (pself *spriteMgr) GetRotation(obj Object) float64 {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteGetRotation(arg0)
+	var retValue GdFloat
+	CallSpriteGetRotation(arg0, &retValue)
 	return ToFloat64(retValue)
 }
 func (pself *spriteMgr) SetScale(obj Object, scale Vec2) {
@@ -946,7 +1016,8 @@ func (pself *spriteMgr) SetScale(obj Object, scale Vec2) {
 }
 func (pself *spriteMgr) GetScale(obj Object) Vec2 {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteGetScale(arg0)
+	var retValue GdVec2
+	CallSpriteGetScale(arg0, &retValue)
 	return ToVec2(retValue)
 }
 func (pself *spriteMgr) SetRenderScale(obj Object, scale Vec2) {
@@ -956,7 +1027,8 @@ func (pself *spriteMgr) SetRenderScale(obj Object, scale Vec2) {
 }
 func (pself *spriteMgr) GetRenderScale(obj Object) Vec2 {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteGetRenderScale(arg0)
+	var retValue GdVec2
+	CallSpriteGetRenderScale(arg0, &retValue)
 	return ToVec2(retValue)
 }
 func (pself *spriteMgr) SetColor(obj Object, color Color) {
@@ -966,7 +1038,8 @@ func (pself *spriteMgr) SetColor(obj Object, color Color) {
 }
 func (pself *spriteMgr) GetColor(obj Object) Color {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteGetColor(arg0)
+	var retValue GdColor
+	CallSpriteGetColor(arg0, &retValue)
 	return ToColor(retValue)
 }
 func (pself *spriteMgr) SetMaterialShader(obj Object, path string) {
@@ -978,7 +1051,8 @@ func (pself *spriteMgr) SetMaterialShader(obj Object, path string) {
 }
 func (pself *spriteMgr) GetMaterialShader(obj Object) string {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteGetMaterialShader(arg0)
+	var retValue GdString
+	CallSpriteGetMaterialShader(arg0, &retValue)
 	return ToString(retValue)
 }
 func (pself *spriteMgr) SetMaterialParams(obj Object, effect string, amount float64) {
@@ -994,7 +1068,8 @@ func (pself *spriteMgr) GetMaterialParams(obj Object, effect string) float64 {
 	arg1Str := C.CString(effect)
 	arg1 := (GdString)(arg1Str)
 	defer C.free(unsafe.Pointer(arg1Str))
-	retValue := CallSpriteGetMaterialParams(arg0, arg1)
+	var retValue GdFloat
+	CallSpriteGetMaterialParams(arg0, arg1, &retValue)
 	return ToFloat64(retValue)
 }
 func (pself *spriteMgr) SetMaterialParamsVec(obj Object, effect string, x float64, y float64, z float64, w float64) {
@@ -1021,7 +1096,8 @@ func (pself *spriteMgr) GetMaterialParamsVec4(obj Object, effect string) Vec4 {
 	arg1Str := C.CString(effect)
 	arg1 := (GdString)(arg1Str)
 	defer C.free(unsafe.Pointer(arg1Str))
-	retValue := CallSpriteGetMaterialParamsVec4(arg0, arg1)
+	var retValue GdVec4
+	CallSpriteGetMaterialParamsVec4(arg0, arg1, &retValue)
 	return ToVec4(retValue)
 }
 func (pself *spriteMgr) SetMaterialParamsColor(obj Object, effect string, color Color) {
@@ -1037,7 +1113,8 @@ func (pself *spriteMgr) GetMaterialParamsColor(obj Object, effect string) Color 
 	arg1Str := C.CString(effect)
 	arg1 := (GdString)(arg1Str)
 	defer C.free(unsafe.Pointer(arg1Str))
-	retValue := CallSpriteGetMaterialParamsColor(arg0, arg1)
+	var retValue GdColor
+	CallSpriteGetMaterialParamsColor(arg0, arg1, &retValue)
 	return ToColor(retValue)
 }
 func (pself *spriteMgr) SetTextureAtlas(obj Object, path string, rect2 Rect2) {
@@ -1072,7 +1149,8 @@ func (pself *spriteMgr) SetTextureDirect(obj Object, path string) {
 }
 func (pself *spriteMgr) GetTexture(obj Object) string {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteGetTexture(arg0)
+	var retValue GdString
+	CallSpriteGetTexture(arg0, &retValue)
 	return ToString(retValue)
 }
 func (pself *spriteMgr) SetVisible(obj Object, visible bool) {
@@ -1082,12 +1160,14 @@ func (pself *spriteMgr) SetVisible(obj Object, visible bool) {
 }
 func (pself *spriteMgr) GetVisible(obj Object) bool {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteGetVisible(arg0)
+	var retValue GdBool
+	CallSpriteGetVisible(arg0, &retValue)
 	return ToBool(retValue)
 }
 func (pself *spriteMgr) GetZIndex(obj Object) int64 {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteGetZIndex(arg0)
+	var retValue GdInt
+	CallSpriteGetZIndex(arg0, &retValue)
 	return ToInt64(retValue)
 }
 func (pself *spriteMgr) SetZIndex(obj Object, z int64) {
@@ -1122,7 +1202,8 @@ func (pself *spriteMgr) StopAnim(obj Object) {
 }
 func (pself *spriteMgr) IsPlayingAnim(obj Object) bool {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteIsPlayingAnim(arg0)
+	var retValue GdBool
+	CallSpriteIsPlayingAnim(arg0, &retValue)
 	return ToBool(retValue)
 }
 func (pself *spriteMgr) SetAnim(obj Object, p_name string) {
@@ -1134,7 +1215,8 @@ func (pself *spriteMgr) SetAnim(obj Object, p_name string) {
 }
 func (pself *spriteMgr) GetAnim(obj Object) string {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteGetAnim(arg0)
+	var retValue GdString
+	CallSpriteGetAnim(arg0, &retValue)
 	return ToString(retValue)
 }
 func (pself *spriteMgr) SetAnimFrame(obj Object, p_frame int64) {
@@ -1144,7 +1226,8 @@ func (pself *spriteMgr) SetAnimFrame(obj Object, p_frame int64) {
 }
 func (pself *spriteMgr) GetAnimFrame(obj Object) int64 {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteGetAnimFrame(arg0)
+	var retValue GdInt
+	CallSpriteGetAnimFrame(arg0, &retValue)
 	return ToInt64(retValue)
 }
 func (pself *spriteMgr) SetAnimSpeedScale(obj Object, p_speed_scale float64) {
@@ -1154,12 +1237,14 @@ func (pself *spriteMgr) SetAnimSpeedScale(obj Object, p_speed_scale float64) {
 }
 func (pself *spriteMgr) GetAnimSpeedScale(obj Object) float64 {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteGetAnimSpeedScale(arg0)
+	var retValue GdFloat
+	CallSpriteGetAnimSpeedScale(arg0, &retValue)
 	return ToFloat64(retValue)
 }
 func (pself *spriteMgr) GetAnimPlayingSpeed(obj Object) float64 {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteGetAnimPlayingSpeed(arg0)
+	var retValue GdFloat
+	CallSpriteGetAnimPlayingSpeed(arg0, &retValue)
 	return ToFloat64(retValue)
 }
 func (pself *spriteMgr) SetAnimCentered(obj Object, p_center bool) {
@@ -1169,7 +1254,8 @@ func (pself *spriteMgr) SetAnimCentered(obj Object, p_center bool) {
 }
 func (pself *spriteMgr) IsAnimCentered(obj Object) bool {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteIsAnimCentered(arg0)
+	var retValue GdBool
+	CallSpriteIsAnimCentered(arg0, &retValue)
 	return ToBool(retValue)
 }
 func (pself *spriteMgr) SetAnimOffset(obj Object, p_offset Vec2) {
@@ -1179,7 +1265,8 @@ func (pself *spriteMgr) SetAnimOffset(obj Object, p_offset Vec2) {
 }
 func (pself *spriteMgr) GetAnimOffset(obj Object) Vec2 {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteGetAnimOffset(arg0)
+	var retValue GdVec2
+	CallSpriteGetAnimOffset(arg0, &retValue)
 	return ToVec2(retValue)
 }
 func (pself *spriteMgr) SetAnimFlipH(obj Object, p_flip bool) {
@@ -1189,7 +1276,8 @@ func (pself *spriteMgr) SetAnimFlipH(obj Object, p_flip bool) {
 }
 func (pself *spriteMgr) IsAnimFlippedH(obj Object) bool {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteIsAnimFlippedH(arg0)
+	var retValue GdBool
+	CallSpriteIsAnimFlippedH(arg0, &retValue)
 	return ToBool(retValue)
 }
 func (pself *spriteMgr) SetAnimFlipV(obj Object, p_flip bool) {
@@ -1199,12 +1287,14 @@ func (pself *spriteMgr) SetAnimFlipV(obj Object, p_flip bool) {
 }
 func (pself *spriteMgr) IsAnimFlippedV(obj Object) bool {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteIsAnimFlippedV(arg0)
+	var retValue GdBool
+	CallSpriteIsAnimFlippedV(arg0, &retValue)
 	return ToBool(retValue)
 }
 func (pself *spriteMgr) GetCurrentAnimName(obj Object) string {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteGetCurrentAnimName(arg0)
+	var retValue GdString
+	CallSpriteGetCurrentAnimName(arg0, &retValue)
 	return ToString(retValue)
 }
 func (pself *spriteMgr) SetVelocity(obj Object, velocity Vec2) {
@@ -1214,62 +1304,74 @@ func (pself *spriteMgr) SetVelocity(obj Object, velocity Vec2) {
 }
 func (pself *spriteMgr) GetVelocity(obj Object) Vec2 {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteGetVelocity(arg0)
+	var retValue GdVec2
+	CallSpriteGetVelocity(arg0, &retValue)
 	return ToVec2(retValue)
 }
 func (pself *spriteMgr) IsOnFloor(obj Object) bool {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteIsOnFloor(arg0)
+	var retValue GdBool
+	CallSpriteIsOnFloor(arg0, &retValue)
 	return ToBool(retValue)
 }
 func (pself *spriteMgr) IsOnFloorOnly(obj Object) bool {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteIsOnFloorOnly(arg0)
+	var retValue GdBool
+	CallSpriteIsOnFloorOnly(arg0, &retValue)
 	return ToBool(retValue)
 }
 func (pself *spriteMgr) IsOnWall(obj Object) bool {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteIsOnWall(arg0)
+	var retValue GdBool
+	CallSpriteIsOnWall(arg0, &retValue)
 	return ToBool(retValue)
 }
 func (pself *spriteMgr) IsOnWallOnly(obj Object) bool {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteIsOnWallOnly(arg0)
+	var retValue GdBool
+	CallSpriteIsOnWallOnly(arg0, &retValue)
 	return ToBool(retValue)
 }
 func (pself *spriteMgr) IsOnCeiling(obj Object) bool {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteIsOnCeiling(arg0)
+	var retValue GdBool
+	CallSpriteIsOnCeiling(arg0, &retValue)
 	return ToBool(retValue)
 }
 func (pself *spriteMgr) IsOnCeilingOnly(obj Object) bool {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteIsOnCeilingOnly(arg0)
+	var retValue GdBool
+	CallSpriteIsOnCeilingOnly(arg0, &retValue)
 	return ToBool(retValue)
 }
 func (pself *spriteMgr) GetLastMotion(obj Object) Vec2 {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteGetLastMotion(arg0)
+	var retValue GdVec2
+	CallSpriteGetLastMotion(arg0, &retValue)
 	return ToVec2(retValue)
 }
 func (pself *spriteMgr) GetPositionDelta(obj Object) Vec2 {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteGetPositionDelta(arg0)
+	var retValue GdVec2
+	CallSpriteGetPositionDelta(arg0, &retValue)
 	return ToVec2(retValue)
 }
 func (pself *spriteMgr) GetFloorNormal(obj Object) Vec2 {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteGetFloorNormal(arg0)
+	var retValue GdVec2
+	CallSpriteGetFloorNormal(arg0, &retValue)
 	return ToVec2(retValue)
 }
 func (pself *spriteMgr) GetWallNormal(obj Object) Vec2 {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteGetWallNormal(arg0)
+	var retValue GdVec2
+	CallSpriteGetWallNormal(arg0, &retValue)
 	return ToVec2(retValue)
 }
 func (pself *spriteMgr) GetRealVelocity(obj Object) Vec2 {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteGetRealVelocity(arg0)
+	var retValue GdVec2
+	CallSpriteGetRealVelocity(arg0, &retValue)
 	return ToVec2(retValue)
 }
 func (pself *spriteMgr) MoveAndSlide(obj Object) {
@@ -1283,7 +1385,8 @@ func (pself *spriteMgr) SetGravity(obj Object, gravity float64) {
 }
 func (pself *spriteMgr) GetGravity(obj Object) float64 {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteGetGravity(arg0)
+	var retValue GdFloat
+	CallSpriteGetGravity(arg0, &retValue)
 	return ToFloat64(retValue)
 }
 func (pself *spriteMgr) SetMass(obj Object, mass float64) {
@@ -1293,7 +1396,8 @@ func (pself *spriteMgr) SetMass(obj Object, mass float64) {
 }
 func (pself *spriteMgr) GetMass(obj Object) float64 {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteGetMass(arg0)
+	var retValue GdFloat
+	CallSpriteGetMass(arg0, &retValue)
 	return ToFloat64(retValue)
 }
 func (pself *spriteMgr) AddForce(obj Object, force Vec2) {
@@ -1313,7 +1417,8 @@ func (pself *spriteMgr) SetPhysicsMode(obj Object, mode int64) {
 }
 func (pself *spriteMgr) GetPhysicsMode(obj Object) int64 {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteGetPhysicsMode(arg0)
+	var retValue GdInt
+	CallSpriteGetPhysicsMode(arg0, &retValue)
 	return ToInt64(retValue)
 }
 func (pself *spriteMgr) SetUseGravity(obj Object, enabled bool) {
@@ -1323,7 +1428,8 @@ func (pself *spriteMgr) SetUseGravity(obj Object, enabled bool) {
 }
 func (pself *spriteMgr) IsUseGravity(obj Object) bool {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteIsUseGravity(arg0)
+	var retValue GdBool
+	CallSpriteIsUseGravity(arg0, &retValue)
 	return ToBool(retValue)
 }
 func (pself *spriteMgr) SetGravityScale(obj Object, scale float64) {
@@ -1333,7 +1439,8 @@ func (pself *spriteMgr) SetGravityScale(obj Object, scale float64) {
 }
 func (pself *spriteMgr) GetGravityScale(obj Object) float64 {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteGetGravityScale(arg0)
+	var retValue GdFloat
+	CallSpriteGetGravityScale(arg0, &retValue)
 	return ToFloat64(retValue)
 }
 func (pself *spriteMgr) SetDrag(obj Object, drag float64) {
@@ -1343,7 +1450,8 @@ func (pself *spriteMgr) SetDrag(obj Object, drag float64) {
 }
 func (pself *spriteMgr) GetDrag(obj Object) float64 {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteGetDrag(arg0)
+	var retValue GdFloat
+	CallSpriteGetDrag(arg0, &retValue)
 	return ToFloat64(retValue)
 }
 func (pself *spriteMgr) SetFriction(obj Object, friction float64) {
@@ -1353,7 +1461,8 @@ func (pself *spriteMgr) SetFriction(obj Object, friction float64) {
 }
 func (pself *spriteMgr) GetFriction(obj Object) float64 {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteGetFriction(arg0)
+	var retValue GdFloat
+	CallSpriteGetFriction(arg0, &retValue)
 	return ToFloat64(retValue)
 }
 func (pself *spriteMgr) SetCollisionLayer(obj Object, layer int64) {
@@ -1363,7 +1472,8 @@ func (pself *spriteMgr) SetCollisionLayer(obj Object, layer int64) {
 }
 func (pself *spriteMgr) GetCollisionLayer(obj Object) int64 {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteGetCollisionLayer(arg0)
+	var retValue GdInt
+	CallSpriteGetCollisionLayer(arg0, &retValue)
 	return ToInt64(retValue)
 }
 func (pself *spriteMgr) SetCollisionMask(obj Object, mask int64) {
@@ -1373,7 +1483,8 @@ func (pself *spriteMgr) SetCollisionMask(obj Object, mask int64) {
 }
 func (pself *spriteMgr) GetCollisionMask(obj Object) int64 {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteGetCollisionMask(arg0)
+	var retValue GdInt
+	CallSpriteGetCollisionMask(arg0, &retValue)
 	return ToInt64(retValue)
 }
 func (pself *spriteMgr) SetTriggerLayer(obj Object, layer int64) {
@@ -1383,7 +1494,8 @@ func (pself *spriteMgr) SetTriggerLayer(obj Object, layer int64) {
 }
 func (pself *spriteMgr) GetTriggerLayer(obj Object) int64 {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteGetTriggerLayer(arg0)
+	var retValue GdInt
+	CallSpriteGetTriggerLayer(arg0, &retValue)
 	return ToInt64(retValue)
 }
 func (pself *spriteMgr) SetTriggerMask(obj Object, mask int64) {
@@ -1393,7 +1505,8 @@ func (pself *spriteMgr) SetTriggerMask(obj Object, mask int64) {
 }
 func (pself *spriteMgr) GetTriggerMask(obj Object) int64 {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteGetTriggerMask(arg0)
+	var retValue GdInt
+	CallSpriteGetTriggerMask(arg0, &retValue)
 	return ToInt64(retValue)
 }
 func (pself *spriteMgr) SetColliderRect(obj Object, center Vec2, size Vec2) {
@@ -1427,7 +1540,8 @@ func (pself *spriteMgr) SetCollisionEnabled(obj Object, enabled bool) {
 }
 func (pself *spriteMgr) IsCollisionEnabled(obj Object) bool {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteIsCollisionEnabled(arg0)
+	var retValue GdBool
+	CallSpriteIsCollisionEnabled(arg0, &retValue)
 	return ToBool(retValue)
 }
 func (pself *spriteMgr) SetTriggerRect(obj Object, center Vec2, size Vec2) {
@@ -1461,7 +1575,8 @@ func (pself *spriteMgr) SetTriggerEnabled(obj Object, trigger bool) {
 }
 func (pself *spriteMgr) IsTriggerEnabled(obj Object) bool {
 	arg0 := ToGdObj(obj)
-	retValue := CallSpriteIsTriggerEnabled(arg0)
+	var retValue GdBool
+	CallSpriteIsTriggerEnabled(arg0, &retValue)
 	return ToBool(retValue)
 }
 func (pself *spriteMgr) CheckCollisionByColor(obj Object, color Color, color_threshold float64, alpha_threshold float64) bool {
@@ -1469,13 +1584,15 @@ func (pself *spriteMgr) CheckCollisionByColor(obj Object, color Color, color_thr
 	arg1 := ToGdColor(color)
 	arg2 := ToGdFloat(color_threshold)
 	arg3 := ToGdFloat(alpha_threshold)
-	retValue := CallSpriteCheckCollisionByColor(arg0, arg1, arg2, arg3)
+	var retValue GdBool
+	CallSpriteCheckCollisionByColor(arg0, arg1, arg2, arg3, &retValue)
 	return ToBool(retValue)
 }
 func (pself *spriteMgr) CheckCollisionByAlpha(obj Object, alpha_threshold float64) bool {
 	arg0 := ToGdObj(obj)
 	arg1 := ToGdFloat(alpha_threshold)
-	retValue := CallSpriteCheckCollisionByAlpha(arg0, arg1)
+	var retValue GdBool
+	CallSpriteCheckCollisionByAlpha(arg0, arg1, &retValue)
 	return ToBool(retValue)
 }
 func (pself *spriteMgr) CheckCollisionWithSprite(obj Object, obj_b Object, alpha_threshold float64, use_pixel_perfect bool) bool {
@@ -1483,7 +1600,8 @@ func (pself *spriteMgr) CheckCollisionWithSprite(obj Object, obj_b Object, alpha
 	arg1 := ToGdObj(obj_b)
 	arg2 := ToGdFloat(alpha_threshold)
 	arg3 := ToGdBool(use_pixel_perfect)
-	retValue := CallSpriteCheckCollisionWithSprite(arg0, arg1, arg2, arg3)
+	var retValue GdBool
+	CallSpriteCheckCollisionWithSprite(arg0, arg1, arg2, arg3, &retValue)
 	return ToBool(retValue)
 }
 func (pself *spriteMgr) SetPixelCollisionSamplingStep(step int64) {
@@ -1491,7 +1609,8 @@ func (pself *spriteMgr) SetPixelCollisionSamplingStep(step int64) {
 	CallSpriteSetPixelCollisionSamplingStep(arg0)
 }
 func (pself *spriteMgr) GetPixelCollisionSamplingStep() int64 {
-	retValue := CallSpriteGetPixelCollisionSamplingStep()
+	var retValue GdInt
+	CallSpriteGetPixelCollisionSamplingStep(&retValue)
 	return ToInt64(retValue)
 }
 func (pself *spriteMgr) BatchUpdateTransforms(buffer Array) {
@@ -1504,7 +1623,8 @@ func (pself *spriteMgr) BatchUpdateVisuals(buffer Array) {
 }
 func (pself *spriteMgr) BatchRetrievePositions(objs Array) Array {
 	arg0 := ToGdArray(objs)
-	retValue := CallSpriteBatchRetrievePositions(arg0)
+	var retValue GdArray
+	CallSpriteBatchRetrievePositions(arg0, &retValue)
 	return ToArray(retValue)
 }
 func (pself *tilemapMgr) OpenDrawTilesWithSize(tile_size int64) {
@@ -1539,7 +1659,8 @@ func (pself *tilemapMgr) SetLayerOffset(index int64, offset Vec2) {
 }
 func (pself *tilemapMgr) GetLayerOffset(index int64) Vec2 {
 	arg0 := ToGdInt(index)
-	retValue := CallTilemapGetLayerOffset(arg0)
+	var retValue GdVec2
+	CallTilemapGetLayerOffset(arg0, &retValue)
 	return ToVec2(retValue)
 }
 func (pself *tilemapMgr) PlaceTiles(positions Array, texture_path string) {
@@ -1583,13 +1704,15 @@ func (pself *tilemapMgr) EraseTileWithLayer(pos Vec2, layer_index int64) {
 }
 func (pself *tilemapMgr) GetTile(pos Vec2) string {
 	arg0 := ToGdVec2(pos)
-	retValue := CallTilemapGetTile(arg0)
+	var retValue GdString
+	CallTilemapGetTile(arg0, &retValue)
 	return ToString(retValue)
 }
 func (pself *tilemapMgr) GetTileWithLayer(pos Vec2, layer_index int64) string {
 	arg0 := ToGdVec2(pos)
 	arg1 := ToGdInt(layer_index)
-	retValue := CallTilemapGetTileWithLayer(arg0, arg1)
+	var retValue GdString
+	CallTilemapGetTileWithLayer(arg0, arg1, &retValue)
 	return ToString(retValue)
 }
 func (pself *tilemapMgr) CloseDrawTiles() {
@@ -1617,14 +1740,16 @@ func (pself *tilemapparserMgr) HasTilemap(name string) bool {
 	arg0Str := C.CString(name)
 	arg0 := (GdString)(arg0Str)
 	defer C.free(unsafe.Pointer(arg0Str))
-	retValue := CallTilemapparserHasTilemap(arg0)
+	var retValue GdBool
+	CallTilemapparserHasTilemap(arg0, &retValue)
 	return ToBool(retValue)
 }
 func (pself *tilemapparserMgr) GetTilemapLayerCount(name string) int64 {
 	arg0Str := C.CString(name)
 	arg0 := (GdString)(arg0Str)
 	defer C.free(unsafe.Pointer(arg0Str))
-	retValue := CallTilemapparserGetTilemapLayerCount(arg0)
+	var retValue GdInt
+	CallTilemapparserGetTilemapLayerCount(arg0, &retValue)
 	return ToInt64(retValue)
 }
 func (pself *uiMgr) BindNode(obj Object, rel_path string) Object {
@@ -1632,14 +1757,16 @@ func (pself *uiMgr) BindNode(obj Object, rel_path string) Object {
 	arg1Str := C.CString(rel_path)
 	arg1 := (GdString)(arg1Str)
 	defer C.free(unsafe.Pointer(arg1Str))
-	retValue := CallUiBindNode(arg0, arg1)
+	var retValue GdObj
+	CallUiBindNode(arg0, arg1, &retValue)
 	return ToObject(retValue)
 }
 func (pself *uiMgr) CreateNode(path string) Object {
 	arg0Str := C.CString(path)
 	arg0 := (GdString)(arg0Str)
 	defer C.free(unsafe.Pointer(arg0Str))
-	retValue := CallUiCreateNode(arg0)
+	var retValue GdObj
+	CallUiCreateNode(arg0, &retValue)
 	return ToObject(retValue)
 }
 func (pself *uiMgr) CreateButton(path string, text string) Object {
@@ -1649,7 +1776,8 @@ func (pself *uiMgr) CreateButton(path string, text string) Object {
 	arg1Str := C.CString(text)
 	arg1 := (GdString)(arg1Str)
 	defer C.free(unsafe.Pointer(arg1Str))
-	retValue := CallUiCreateButton(arg0, arg1)
+	var retValue GdObj
+	CallUiCreateButton(arg0, arg1, &retValue)
 	return ToObject(retValue)
 }
 func (pself *uiMgr) CreateLabel(path string, text string) Object {
@@ -1659,14 +1787,16 @@ func (pself *uiMgr) CreateLabel(path string, text string) Object {
 	arg1Str := C.CString(text)
 	arg1 := (GdString)(arg1Str)
 	defer C.free(unsafe.Pointer(arg1Str))
-	retValue := CallUiCreateLabel(arg0, arg1)
+	var retValue GdObj
+	CallUiCreateLabel(arg0, arg1, &retValue)
 	return ToObject(retValue)
 }
 func (pself *uiMgr) CreateImage(path string) Object {
 	arg0Str := C.CString(path)
 	arg0 := (GdString)(arg0Str)
 	defer C.free(unsafe.Pointer(arg0Str))
-	retValue := CallUiCreateImage(arg0)
+	var retValue GdObj
+	CallUiCreateImage(arg0, &retValue)
 	return ToObject(retValue)
 }
 func (pself *uiMgr) CreateToggle(path string, value bool) Object {
@@ -1674,7 +1804,8 @@ func (pself *uiMgr) CreateToggle(path string, value bool) Object {
 	arg0 := (GdString)(arg0Str)
 	defer C.free(unsafe.Pointer(arg0Str))
 	arg1 := ToGdBool(value)
-	retValue := CallUiCreateToggle(arg0, arg1)
+	var retValue GdObj
+	CallUiCreateToggle(arg0, arg1, &retValue)
 	return ToObject(retValue)
 }
 func (pself *uiMgr) CreateSlider(path string, value float64) Object {
@@ -1682,7 +1813,8 @@ func (pself *uiMgr) CreateSlider(path string, value float64) Object {
 	arg0 := (GdString)(arg0Str)
 	defer C.free(unsafe.Pointer(arg0Str))
 	arg1 := ToGdFloat(value)
-	retValue := CallUiCreateSlider(arg0, arg1)
+	var retValue GdObj
+	CallUiCreateSlider(arg0, arg1, &retValue)
 	return ToObject(retValue)
 }
 func (pself *uiMgr) CreateInput(path string, text string) Object {
@@ -1692,17 +1824,20 @@ func (pself *uiMgr) CreateInput(path string, text string) Object {
 	arg1Str := C.CString(text)
 	arg1 := (GdString)(arg1Str)
 	defer C.free(unsafe.Pointer(arg1Str))
-	retValue := CallUiCreateInput(arg0, arg1)
+	var retValue GdObj
+	CallUiCreateInput(arg0, arg1, &retValue)
 	return ToObject(retValue)
 }
 func (pself *uiMgr) DestroyNode(obj Object) bool {
 	arg0 := ToGdObj(obj)
-	retValue := CallUiDestroyNode(arg0)
+	var retValue GdBool
+	CallUiDestroyNode(arg0, &retValue)
 	return ToBool(retValue)
 }
 func (pself *uiMgr) GetType(obj Object) int64 {
 	arg0 := ToGdObj(obj)
-	retValue := CallUiGetType(arg0)
+	var retValue GdInt
+	CallUiGetType(arg0, &retValue)
 	return ToInt64(retValue)
 }
 func (pself *uiMgr) SetText(obj Object, text string) {
@@ -1714,7 +1849,8 @@ func (pself *uiMgr) SetText(obj Object, text string) {
 }
 func (pself *uiMgr) GetText(obj Object) string {
 	arg0 := ToGdObj(obj)
-	retValue := CallUiGetText(arg0)
+	var retValue GdString
+	CallUiGetText(arg0, &retValue)
 	return ToString(retValue)
 }
 func (pself *uiMgr) SetTexture(obj Object, path string) {
@@ -1726,7 +1862,8 @@ func (pself *uiMgr) SetTexture(obj Object, path string) {
 }
 func (pself *uiMgr) GetTexture(obj Object) string {
 	arg0 := ToGdObj(obj)
-	retValue := CallUiGetTexture(arg0)
+	var retValue GdString
+	CallUiGetTexture(arg0, &retValue)
 	return ToString(retValue)
 }
 func (pself *uiMgr) SetColor(obj Object, color Color) {
@@ -1736,7 +1873,8 @@ func (pself *uiMgr) SetColor(obj Object, color Color) {
 }
 func (pself *uiMgr) GetColor(obj Object) Color {
 	arg0 := ToGdObj(obj)
-	retValue := CallUiGetColor(arg0)
+	var retValue GdColor
+	CallUiGetColor(arg0, &retValue)
 	return ToColor(retValue)
 }
 func (pself *uiMgr) SetFontSize(obj Object, size int64) {
@@ -1746,7 +1884,8 @@ func (pself *uiMgr) SetFontSize(obj Object, size int64) {
 }
 func (pself *uiMgr) GetFontSize(obj Object) int64 {
 	arg0 := ToGdObj(obj)
-	retValue := CallUiGetFontSize(arg0)
+	var retValue GdInt
+	CallUiGetFontSize(arg0, &retValue)
 	return ToInt64(retValue)
 }
 func (pself *uiMgr) SetVisible(obj Object, visible bool) {
@@ -1756,7 +1895,8 @@ func (pself *uiMgr) SetVisible(obj Object, visible bool) {
 }
 func (pself *uiMgr) GetVisible(obj Object) bool {
 	arg0 := ToGdObj(obj)
-	retValue := CallUiGetVisible(arg0)
+	var retValue GdBool
+	CallUiGetVisible(arg0, &retValue)
 	return ToBool(retValue)
 }
 func (pself *uiMgr) SetInteractable(obj Object, interactable bool) {
@@ -1766,7 +1906,8 @@ func (pself *uiMgr) SetInteractable(obj Object, interactable bool) {
 }
 func (pself *uiMgr) GetInteractable(obj Object) bool {
 	arg0 := ToGdObj(obj)
-	retValue := CallUiGetInteractable(arg0)
+	var retValue GdBool
+	CallUiGetInteractable(arg0, &retValue)
 	return ToBool(retValue)
 }
 func (pself *uiMgr) SetRect(obj Object, rect Rect2) {
@@ -1776,12 +1917,14 @@ func (pself *uiMgr) SetRect(obj Object, rect Rect2) {
 }
 func (pself *uiMgr) GetRect(obj Object) Rect2 {
 	arg0 := ToGdObj(obj)
-	retValue := CallUiGetRect(arg0)
+	var retValue GdRect2
+	CallUiGetRect(arg0, &retValue)
 	return ToRect2(retValue)
 }
 func (pself *uiMgr) GetLayoutDirection(obj Object) int64 {
 	arg0 := ToGdObj(obj)
-	retValue := CallUiGetLayoutDirection(arg0)
+	var retValue GdInt
+	CallUiGetLayoutDirection(arg0, &retValue)
 	return ToInt64(retValue)
 }
 func (pself *uiMgr) SetLayoutDirection(obj Object, value int64) {
@@ -1791,7 +1934,8 @@ func (pself *uiMgr) SetLayoutDirection(obj Object, value int64) {
 }
 func (pself *uiMgr) GetLayoutMode(obj Object) int64 {
 	arg0 := ToGdObj(obj)
-	retValue := CallUiGetLayoutMode(arg0)
+	var retValue GdInt
+	CallUiGetLayoutMode(arg0, &retValue)
 	return ToInt64(retValue)
 }
 func (pself *uiMgr) SetLayoutMode(obj Object, value int64) {
@@ -1801,7 +1945,8 @@ func (pself *uiMgr) SetLayoutMode(obj Object, value int64) {
 }
 func (pself *uiMgr) GetAnchorsPreset(obj Object) int64 {
 	arg0 := ToGdObj(obj)
-	retValue := CallUiGetAnchorsPreset(arg0)
+	var retValue GdInt
+	CallUiGetAnchorsPreset(arg0, &retValue)
 	return ToInt64(retValue)
 }
 func (pself *uiMgr) SetAnchorsPreset(obj Object, value int64) {
@@ -1811,7 +1956,8 @@ func (pself *uiMgr) SetAnchorsPreset(obj Object, value int64) {
 }
 func (pself *uiMgr) GetScale(obj Object) Vec2 {
 	arg0 := ToGdObj(obj)
-	retValue := CallUiGetScale(arg0)
+	var retValue GdVec2
+	CallUiGetScale(arg0, &retValue)
 	return ToVec2(retValue)
 }
 func (pself *uiMgr) SetScale(obj Object, value Vec2) {
@@ -1821,7 +1967,8 @@ func (pself *uiMgr) SetScale(obj Object, value Vec2) {
 }
 func (pself *uiMgr) GetPosition(obj Object) Vec2 {
 	arg0 := ToGdObj(obj)
-	retValue := CallUiGetPosition(arg0)
+	var retValue GdVec2
+	CallUiGetPosition(arg0, &retValue)
 	return ToVec2(retValue)
 }
 func (pself *uiMgr) SetPosition(obj Object, value Vec2) {
@@ -1831,7 +1978,8 @@ func (pself *uiMgr) SetPosition(obj Object, value Vec2) {
 }
 func (pself *uiMgr) GetSize(obj Object) Vec2 {
 	arg0 := ToGdObj(obj)
-	retValue := CallUiGetSize(arg0)
+	var retValue GdVec2
+	CallUiGetSize(arg0, &retValue)
 	return ToVec2(retValue)
 }
 func (pself *uiMgr) SetSize(obj Object, value Vec2) {
@@ -1841,7 +1989,8 @@ func (pself *uiMgr) SetSize(obj Object, value Vec2) {
 }
 func (pself *uiMgr) GetGlobalPosition(obj Object) Vec2 {
 	arg0 := ToGdObj(obj)
-	retValue := CallUiGetGlobalPosition(arg0)
+	var retValue GdVec2
+	CallUiGetGlobalPosition(arg0, &retValue)
 	return ToVec2(retValue)
 }
 func (pself *uiMgr) SetGlobalPosition(obj Object, value Vec2) {
@@ -1851,7 +2000,8 @@ func (pself *uiMgr) SetGlobalPosition(obj Object, value Vec2) {
 }
 func (pself *uiMgr) GetRotation(obj Object) float64 {
 	arg0 := ToGdObj(obj)
-	retValue := CallUiGetRotation(arg0)
+	var retValue GdFloat
+	CallUiGetRotation(arg0, &retValue)
 	return ToFloat64(retValue)
 }
 func (pself *uiMgr) SetRotation(obj Object, value float64) {
@@ -1862,7 +2012,8 @@ func (pself *uiMgr) SetRotation(obj Object, value float64) {
 func (pself *uiMgr) GetFlip(obj Object, horizontal bool) bool {
 	arg0 := ToGdObj(obj)
 	arg1 := ToGdBool(horizontal)
-	retValue := CallUiGetFlip(arg0, arg1)
+	var retValue GdBool
+	CallUiGetFlip(arg0, arg1, &retValue)
 	return ToBool(retValue)
 }
 func (pself *uiMgr) SetFlip(obj Object, horizontal bool, is_flip bool) {

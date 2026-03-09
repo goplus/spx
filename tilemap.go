@@ -19,22 +19,15 @@ package spx
 import (
 	"fmt"
 	"path"
-	"sort"
-	"strings"
-
-	spxfs "github.com/goplus/spx/v2/fs"
-	coreproject "github.com/goplus/spx/v2/internal/core/project"
-	"github.com/goplus/spx/v2/internal/engine"
-	tm "github.com/goplus/spx/v2/internal/tilemap"
 
 	"github.com/goplus/spbase/mathf"
+	spxfs "github.com/goplus/spx/v2/fs"
+	"github.com/goplus/spx/v2/internal/base/collisionutil"
+	"github.com/goplus/spx/v2/internal/engine"
+	tm "github.com/goplus/spx/v2/internal/tilemap"
 )
 
-// DecoratorJSON represents the structure of decorator.json file (new format).
-type DecoratorJSON struct {
-	Version    int                `json:"version"`
-	Decorators []tm.DecoratorNode `json:"decorators"`
-}
+type DecoratorJSON = tm.DecoratorJSON
 
 type gameTilemapMgr struct {
 	g              *Game
@@ -61,26 +54,8 @@ func (p *gameTilemapMgr) init(g *Game, fs spxfs.Dir, tilemapPath string) {
 	p.loadMap(tilemapPath)
 }
 
-// loadDecoratorJSON loads decorator data from a separate decorator.json file.
-func (p *gameTilemapMgr) loadDecoratorJSON(fs spxfs.Dir, decoratorPath string) {
-	var data DecoratorJSON
-	err := coreproject.LoadJSON(&data, fs, decoratorPath)
-	if err != nil {
-		fmt.Printf("[TILEMAP] No decorator.json found at %s (this is OK if no decorators)\n", decoratorPath)
-		return
-	}
-	p.decoratorDatas = &data
-}
-
 func (p *gameTilemapMgr) hasData() bool {
 	return p.datas != nil || p.useNewLoader
-}
-
-// isNewFormat checks if the tilemap path is in the new format (directory path).
-// New format: path does NOT contain ".json" (e.g., "tilemaps/map1")
-// Old format: path contains ".json" (e.g., "tilemaps/map1.json")
-func (p *gameTilemapMgr) isNewFormat(tilemapPath string) bool {
-	return !strings.Contains(tilemapPath, ".json")
 }
 
 // loadMap loads a tilemap from the specified path.
@@ -92,38 +67,22 @@ func (p *gameTilemapMgr) loadMap(mapDir string) {
 		return
 	}
 
-	// Determine format based on path
-	p.useNewLoader = p.isNewFormat(mapDir)
+	loaded, err := tm.Load(p.fs, mapDir)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to load tilemap JSON file %s: %v", mapDir, err))
+	}
+
+	p.datas = loaded.Data
+	p.decoratorDatas = loaded.DecoratorData
+	p.useNewLoader = loaded.UseNewLoader
+	p.tilemapDir = loaded.TilemapDir
+	p.currentMap = loaded.CurrentMap
 
 	if p.useNewLoader {
-		// New format: directory path
-		p.tilemapDir = mapDir
-		p.currentMap = path.Base(mapDir)
-
-		// Build paths to tilemap.json and decorator.json
-		tilemapPath := path.Join(mapDir, "tilemap.json")
-		decoratorPath := path.Join(mapDir, "decorator.json")
-
-		// Load tilemap using C++ TileMapParser
-		enginePath := engine.ToAssetPath(tilemapPath)
-		p.engine().TilemapparserMgr.LoadTilemap(enginePath)
-		p.useNewLoader = true
-
-		// Load decorator.json
-		p.loadDecoratorJSON(p.fs, decoratorPath)
-	} else {
-		// Old format: file path (contains .json)
-		p.tilemapDir = path.Dir(mapDir)
-		p.currentMap = strings.TrimSuffix(path.Base(mapDir), ".json")
-
-		// Load using Go loader
-		var data tm.TscnMapData
-		err := coreproject.LoadJSON(&data, p.fs, mapDir)
-		if err != nil {
-			panic(fmt.Sprintf("Failed to load tilemap JSON file %s: %v", mapDir, err))
+		p.engine().TilemapparserMgr.LoadTilemap(engine.ToAssetPath(loaded.TilemapPath))
+		if loaded.DecoratorErr != nil {
+			fmt.Printf("[TILEMAP] No decorator.json found at %s (this is OK if no decorators)\n", loaded.DecoratorPath)
 		}
-		p.datas = &data
-		tm.ConvertData(&data)
 	}
 }
 
@@ -160,7 +119,7 @@ func (p *gameTilemapMgr) cleanupDecorators() {
 }
 
 func (p *gameTilemapMgr) loadTilemaps(datas *tm.TscnMapData) {
-	tm.LoadTilemaps(datas, p.g.setTileInfo__1, p.g.setTileMapLayerIndex, p.g.PlaceTiles__1)
+	tm.LoadTilemaps(datas, p.g.setTileInfo, p.g.setTileMapLayerIndex, p.g.PlaceTiles__1)
 }
 
 func (p *gameTilemapMgr) loadDecorators(datas *tm.TscnMapData) {
@@ -190,24 +149,6 @@ func (p *gameTilemapMgr) loadDecoratorsFromJSON() {
 	p.loadDecoratorNodes(p.decoratorDatas.Decorators, p.tilemapDir)
 }
 
-func (p *gameTilemapMgr) loadSprites(datas *tm.TscnMapData) {
-
-	sort.Slice(datas.Sprites, func(i, j int) bool {
-		return datas.Sprites[i].Path < datas.Sprites[j].Path
-	})
-
-	for _, item := range datas.Sprites {
-		sp, ok := p.g.sprs[item.Path]
-		if ok {
-			x, y := item.Position.X, item.Position.Y
-			doClone(sp, nil, true, func(sprite *SpriteImpl) {
-				sprite.SetXYpos(x, y)
-				sprite.Show()
-			})
-		}
-	}
-}
-
 func (p *gameTilemapMgr) parseTilemap() {
 	// Handle new format: load decorators from separate JSON file
 	if p.useNewLoader {
@@ -234,77 +175,105 @@ func (p *gameTilemapMgr) calcWorldSize() {
 		return
 	}
 
-	tileSizeX := int(p.datas.TileMap.TileSize.Width)
-	tileSizeY := int(p.datas.TileMap.TileSize.Height)
-
-	var minX, maxX, minY, maxY int32 = 0, 0, 0, 0
-	hasAnyTiles := false
-	totalTiles := 0
-
-	for _, layer := range p.datas.TileMap.Layers {
-		tiles := p.parseTileDataForBounds(layer.TileData)
-		totalTiles += len(tiles)
-		for _, tile := range tiles {
-			if !hasAnyTiles {
-				minX, maxX = tile.X, tile.X
-				minY, maxY = tile.Y, tile.Y
-				hasAnyTiles = true
-			} else {
-				if tile.X < minX {
-					minX = tile.X
-				}
-				if tile.X > maxX {
-					maxX = tile.X
-				}
-				if tile.Y < minY {
-					minY = tile.Y
-				}
-				if tile.Y > maxY {
-					maxY = tile.Y
-				}
-			}
-		}
-	}
-
-	if hasAnyTiles {
-		minWorldX := int((minX) * int32(tileSizeX))
-		maxWorldX := int((maxX + 1) * int32(tileSizeX)) // +1 to include the full size of the last tile
-		minWorldY := int((minY - 1) * int32(tileSizeY)) // -1 to include the full size of the last tile
-		maxWorldY := int((maxY) * int32(tileSizeY))
-
-		worldWidth := maxWorldX - minWorldX
-		worldHeight := maxWorldY - minWorldY
-
-		p.g.MinWorldX = minWorldX
-		p.g.MinWorldY = minWorldY
-		p.g.WorldWidth = worldWidth
-		p.g.WorldHeight = worldHeight
-
-	} else {
+	bounds, ok := tm.CalcWorldBounds(p.datas)
+	if !ok {
 		fmt.Println("[TILEMAP DEBUG] No tiles found in any layer")
+		return
 	}
+
+	p.g.MinWorldX = bounds.MinWorldX
+	p.g.MinWorldY = bounds.MinWorldY
+	p.g.WorldWidth = bounds.WorldWidth
+	p.g.WorldHeight = bounds.WorldHeight
 }
 
-// parseTileDataForBounds parses tile data for boundary calculation (copied logic from internal/tilemap package).
-func (p *gameTilemapMgr) parseTileDataForBounds(tileData []int32) []mathf.Vec2i {
-	tileCount := len(tileData) / 5
-	tiles := make([]mathf.Vec2i, 0, tileCount)
+// ============================================================================
+// Public API - Tile Placement
+// ============================================================================
 
-	for i := 0; i < len(tileData); i += 5 {
-		if i+4 >= len(tileData) {
-			break
-		}
+// PlaceTiles__0 places multiple tiles at specified positions using default layer.
+func (p *Game) PlaceTiles__0(positions []float64, texturePath string) {
+	path := engine.ToAssetPath(texturePath)
+	p.engine().TilemapMgr.PlaceTiles(engine.F64Tof32(positions), path)
+}
 
-		tileX := tileData[i+1]
-		tileY := tileData[i+2]
+// PlaceTiles__1 places multiple tiles at specified positions on a specific layer.
+func (p *Game) PlaceTiles__1(positions []float64, texturePath string, layerIndex int64) {
+	path := engine.ToAssetPath(texturePath)
+	p.engine().TilemapMgr.PlaceTilesWithLayer(engine.F64Tof32(positions), path, layerIndex)
+}
 
-		tile := mathf.Vec2i{
-			X: tileX,
-			Y: tileY,
-		}
+// PlaceTile places a single tile at the specified position.
+func (p *Game) PlaceTile(x, y float64, texturePath string) {
+	path := engine.ToAssetPath(texturePath)
+	p.engine().TilemapMgr.PlaceTile(mathf.NewVec2(x, y), path)
+}
 
-		tiles = append(tiles, tile)
-	}
+// ============================================================================
+// Public API - Tile Removal
+// ============================================================================
 
-	return tiles
+// EraseTile__0 erases a tile at the specified position using default layer.
+func (p *Game) EraseTile__0(x, y float64) {
+	p.engine().TilemapMgr.EraseTile(mathf.NewVec2(x, y))
+}
+
+// EraseTile__1 erases a tile at the specified position on a specific layer.
+func (p *Game) EraseTile__1(x, y float64, layerIndex int64) {
+	p.engine().TilemapMgr.EraseTileWithLayer(mathf.NewVec2(x, y), layerIndex)
+}
+
+// ============================================================================
+// Public API - Tile Query
+// ============================================================================
+
+// GetTile__0 gets the tile texture path at the specified position using default layer.
+func (p *Game) GetTile__0(x, y float64) string {
+	return p.engine().TilemapMgr.GetTile(mathf.NewVec2(x, y))
+}
+
+// GetTile__1 gets the tile texture path at the specified position on a specific layer.
+func (p *Game) GetTile__1(x, y float64, layerIndex int64) string {
+	return p.engine().TilemapMgr.GetTileWithLayer(mathf.NewVec2(x, y), layerIndex)
+}
+
+// ============================================================================
+// Public API - Dynamic Tilemap Loading
+// ============================================================================
+
+// LoadTilemap dynamically loads a tilemap from the specified path
+// mapDir can be either:
+//   - A directory path (new format): "tilemaps/map1" -> uses C++ TileMapParser
+//   - A file path (old format): "tilemaps/map1.json" -> uses Go loader
+//
+// This will unload any currently loaded tilemap before loading the new one.
+func (p *Game) LoadTilemap(mapDir string) {
+	p.tilemapMgr.unloadMap()
+	p.tilemapMgr.loadMap(mapDir)
+	p.tilemapMgr.parseTilemap()
+}
+
+// UnloadTilemap unloads the currently loaded tilemap and cleans up resources.
+func (p *Game) UnloadTilemap() {
+	p.tilemapMgr.unloadMap()
+}
+
+// TilemapName returns the name of the currently loaded tilemap.
+// Returns empty string if no tilemap is loaded.
+func (p *Game) TilemapName() string {
+	return p.tilemapMgr.getCurrentMap()
+}
+
+func (p *Game) setTileMapLayerIndex(index int64) {
+	p.engine().TilemapMgr.SetLayerIndex(index)
+}
+
+func (p *Game) setTileInfo(texturePath string, collisionPoints []float64) {
+	path := engine.ToAssetPath(texturePath)
+	p.engine().TilemapMgr.SetTileWithCollisionInfo(path, engine.F64Tof32(collisionPoints))
+}
+
+func (p *Game) createStaticSprite(texturePath string, pos mathf.Vec2, rot float64, scale mathf.Vec2, zindex int64, pivot mathf.Vec2, colliderType string, colliderPivot mathf.Vec2, colliderParams []float64) {
+	colliderTypeInt := collisionutil.ParseColliderShapeType(colliderType, 0)
+	p.engine().SceneMgr.CreateStaticSprite(engine.ToAssetPath(texturePath), pos, rot, scale, zindex, pivot, colliderTypeInt, colliderPivot, colliderParams)
 }

@@ -217,7 +217,7 @@ func (p *Game) runSpriteCallbacks(inits []Sprite, proj *projConfig, g reflect.Va
 // loadAudioAndTilemap loads tilemap and background music.
 func (p *Game) loadAudioAndTilemap(proj *projConfig) {
 	p.tilemapMgr.parseTilemap()
-	p.SoundObj = p.soundMgr.allocSound()
+	p.SoundObj = p.soundMgr.AllocSound()
 	if proj.Bgm != "" {
 		p.Play__0(proj.Bgm, true)
 	}
@@ -241,7 +241,7 @@ func (p *Game) addSpecialShape(g reflect.Value, v coreproject.StageShape, inits 
 			return nil
 		},
 		Measure: func(shape coreproject.StageShape) error {
-			p.spriteMgr.addShape(newMeasure(shape))
+			p.spriteMgr.addShape(ui.NewMeasureShape(shape))
 			return nil
 		},
 		Sprites: func(shape coreproject.StageShape) ([]Sprite, error) {
@@ -256,7 +256,7 @@ func (p *Game) addSpecialShape(g reflect.Value, v coreproject.StageShape, inits 
 func (p *Game) addStageSprite(g reflect.Value, v coreproject.StageShape) (Sprite, error) {
 	target := v["target"].(string)
 	var added Sprite
-	err := coreproject.BindStageSprite(g, target, findObjPtr, func(val any) error {
+	err := coreproject.BindStageSprite(g, target, coreproject.FindObjectPtr, func(val any) error {
 		sp, ok := val.(Sprite)
 		if !ok {
 			return fmt.Errorf("stage sprite target is not a sprite")
@@ -280,7 +280,7 @@ func (p *Game) addStageSprites(g reflect.Value, v coreproject.StageShape) ([]Spr
 		g,
 		target,
 		v["items"].([]any),
-		findFieldPtr,
+		coreproject.FindFieldPtr,
 		func(typ reflect.Type) bool {
 			return typ.Implements(tySprite)
 		},

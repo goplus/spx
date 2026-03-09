@@ -56,7 +56,7 @@ func (s *soundComponent) cloneFrom(src component, newSprite *SpriteImpl) compone
 // OnDestroy cleanup when component is destroyed.
 func (s *soundComponent) onDestroy() {
 	if s.soundObj != 0 {
-		s.sprite.g.soundMgr.releaseSound(s.soundObj)
+		s.sprite.g.soundMgr.ReleaseSound(s.soundObj)
 		s.soundObj = 0
 	}
 }
@@ -93,17 +93,17 @@ func (s *soundComponent) StopPlaying(name SoundName) {
 
 func (s *soundComponent) GetVolume() float64 {
 	s.checkSoundObj()
-	return s.sprite.g.soundMgr.getVolume(s.soundObj)
+	return s.sprite.g.soundMgr.GetVolume(s.soundObj)
 }
 
 func (s *soundComponent) SetVolume(volume float64) {
 	s.checkSoundObj()
-	s.sprite.g.soundMgr.setVolume(s.soundObj, volume)
+	s.sprite.g.soundMgr.SetVolume(s.soundObj, volume)
 }
 
 func (s *soundComponent) ChangeVolume(delta float64) {
 	s.checkSoundObj()
-	s.sprite.g.soundMgr.changeVolume(s.soundObj, delta)
+	s.sprite.g.soundMgr.ChangeVolume(s.soundObj, delta)
 }
 
 // ============================================================================
@@ -112,17 +112,17 @@ func (s *soundComponent) ChangeVolume(delta float64) {
 
 func (s *soundComponent) GetSoundEffect(kind SoundEffectKind) float64 {
 	s.checkSoundObj()
-	return s.sprite.g.soundMgr.getEffect(s.soundObj, kind)
+	return s.sprite.g.getSoundEffect(s.soundObj, kind)
 }
 
 func (s *soundComponent) SetSoundEffect(kind SoundEffectKind, value float64) {
 	s.checkSoundObj()
-	s.sprite.g.soundMgr.setEffect(s.soundObj, kind, value)
+	s.sprite.g.setSoundEffect(s.soundObj, kind, value)
 }
 
 func (s *soundComponent) ChangeSoundEffect(kind SoundEffectKind, delta float64) {
 	s.checkSoundObj()
-	s.sprite.g.soundMgr.changeEffect(s.soundObj, kind, delta)
+	s.sprite.g.changeSoundEffect(s.soundObj, kind, delta)
 }
 
 // ============================================================================
@@ -136,7 +136,7 @@ func (s *soundComponent) playAudio(name SoundName, loop bool) soundId {
 
 func (s *soundComponent) checkSoundObj() {
 	if s.soundObj == 0 {
-		s.soundObj = s.sprite.g.soundMgr.allocSound()
+		s.soundObj = s.sprite.g.soundMgr.AllocSound()
 	}
 }
 
