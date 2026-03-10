@@ -25,7 +25,7 @@ jobs:
         run: git diff --exit-code
 
       - name: Test Go code
-        run: go test -v -ldflags=-checklinkname=0 $(go list ./... | grep -v /internal/webffi)
+        run: go test -v $(go list ./... | grep -v /internal/webffi)
 
   test-go-build:
     needs: test
