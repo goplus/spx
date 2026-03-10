@@ -50,7 +50,7 @@ type RuntimeConfig struct {
 func ResolveRuntimeConfig(conf *Config, proj *ProjectConfig, cwd string, screenshotEnv string) RuntimeConfig {
 	title := conf.Title
 	if title == "" {
-		title = filepath.Base(cwd) + " (by XGo Builder)"
+		title = filepath.Base(cwd)
 	}
 
 	key := conf.ScreenshotKey

@@ -247,16 +247,6 @@ func (pself *CmdTool) getWasmPath() string {
 	return filePath
 }
 
-// getIspxWebDir returns the path to the ispx web runtime directory.
-func (pself *CmdTool) getIspxWebDir() (string, error) {
-	ispxWebDir := path.Join(pself.GoBinPath, "ispx")
-	if _, err := os.Stat(ispxWebDir); os.IsNotExist(err) {
-		return "", fmt.Errorf("ispx web runtime not found at %s; "+
-			"run 'cd cmd/gox && ./install.sh --web' to install", ispxWebDir)
-	}
-	return ispxWebDir, nil
-}
-
 // SetupPC sets up the PC environment by running the initialization script
 func (pself *CmdTool) SetupPC() error {
 	// Get current working directory

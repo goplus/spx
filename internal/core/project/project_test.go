@@ -319,7 +319,7 @@ func TestResolveRuntimeConfig(t *testing.T) {
 	conf := &Config{Width: 640, Height: 480, EventQueuePolicy: "block"}
 	proj := &ProjectConfig{FullScreen: true, Physics: true}
 	runtime := ResolveRuntimeConfig(conf, proj, "/tmp/demo", "env-key")
-	if runtime.Title != "demo (by XGo Builder)" {
+	if runtime.Title != "demo" {
 		t.Fatalf("runtime.Title = %q", runtime.Title)
 	}
 	if !runtime.FullScreen || !runtime.PhysicsEnabled {

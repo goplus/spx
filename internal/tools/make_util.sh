@@ -96,48 +96,33 @@ do_exportweb() {
         return 1
     fi
 
-    # Determine the spx command based on mode
-    local spx_cmd="exportweb"
     local output_zip="spx_web.zip"
     case "$mode" in
         normal)
-            spx_cmd="exportweb"
             output_zip="spx_web.zip"
             ;;
         worker)
-            spx_cmd="exportwebworker"
             output_zip="spx_web_worker.zip"
             ;;
         minigame)
-            spx_cmd="exportminigame"
             output_zip="spx_web_minigame.zip"
             ;;
         miniprogram)
-            spx_cmd="exportminiprogram"
             output_zip="spx_web_miniprogram.zip"
             ;;
     esac
 
-    # Create temporary directory
-    mkdir -p "$CURRENT_PATH/.tmp/web"
-
-    # Execute the exportweb commands
-    (cd "$CURRENT_PATH/.tmp/web"
-     mkdir -p assets
-     echo '{"map":{"width":480,"height":360}}' > assets/index.json
-     echo "" > main.spx
-     rm -rf ./project/.builds/*web
-     spx $spx_cmd
-     cd ./project/.builds/web
-     rm -f game.zip
-     zip -r "$CURRENT_PATH/$output_zip" *
+    (cd "$CURRENT_PATH"
+     spx exportwebruntime -mode "$mode"
+     if [ ! -f "$output_zip" ]; then
+         echo "Error: Failed to create web runtime bundle $output_zip"
+         exit 1
+     fi
      echo "$CURRENT_PATH/$output_zip has been created") || {
-        echo "Error: Failed to create web export (mode: $mode)"
-        return 1
-    }
+         echo "Error: Failed to create web export (mode: $mode)"
+         return 1
+     }
 
-    # Clean up
-    rm -rf "$CURRENT_PATH/.tmp"
     echo "exportweb (mode: $mode) completed successfully"
     return 0
 }
@@ -177,6 +162,64 @@ do_prepare_export() {
     ls $GOPATH/bin
 }
 
+resolve_gdspx_path() {
+    local version binary_name binary_path
+    version=$(cat "$CURRENT_PATH/cmd/gox/template/version")
+    binary_name="gdspx${version}"
+    if [ "$OS" = "Windows_NT" ]; then
+        binary_name="${binary_name}.exe"
+    fi
+
+    if command -v "$binary_name" > /dev/null 2>&1; then
+        command -v "$binary_name"
+        return 0
+    fi
+
+    binary_path="$GOPATH/bin/$binary_name"
+    if [ -x "$binary_path" ]; then
+        echo "$binary_path"
+        return 0
+    fi
+
+    echo "Error: $binary_name not found. Please run 'make download-engine MODE=editor' or 'make build-editor' first." >&2
+    return 1
+}
+
+prepare_web_template_project() {
+    local project_dir
+    project_dir="$PWD/project"
+
+    rm -rf "$project_dir"
+    mkdir -p "$project_dir"
+    cp -R "$CURRENT_PATH/cmd/gox/template/project/." "$project_dir/" || return 1
+
+    if [ -d "$PWD/assets" ]; then
+        mkdir -p "$project_dir/assets"
+        cp -R "$PWD/assets/." "$project_dir/assets/" || return 1
+    fi
+
+    if [ -f "$project_dir/.gitignore.txt" ]; then
+        mv "$project_dir/.gitignore.txt" "$project_dir/.gitignore"
+    fi
+}
+
+export_web_template_internal() {
+    local gdspx_path project_dir target_dir target_path
+    gdspx_path="$(resolve_gdspx_path)" || return 1
+
+    prepare_web_template_project || return 1
+
+    project_dir="$PWD/project"
+    target_dir="$project_dir/.builds/webi"
+    target_path="$target_dir/engine.html"
+
+    mkdir -p "$target_dir"
+    rm -f "$project_dir/gdspx.gdextension"
+    rm -f "$project_dir/.godot/extension_list.cfg"
+
+    "$gdspx_path" --headless --quit --path "$project_dir" --export-debug Web "$target_path"
+}
+
 # Define a function for the exportpack functionality
 do_extra_webtemplate() {
     local mode="${1:-normal}"
@@ -184,7 +227,7 @@ do_extra_webtemplate() {
     dstdir="$GOPATH/bin/gdspxrt"$TEMP_VERSION"_web"$mode
     echo "exporting web runtime..." $mode
     
-    spx exporttemplateweb 
+    export_web_template_internal || return 1
 
     rm -rf "$dstdir" 
     cp -rf ./project/.builds/webi  "$dstdir" 

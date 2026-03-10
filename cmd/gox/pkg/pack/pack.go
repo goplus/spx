@@ -73,6 +73,46 @@ func PackProject(baseFolder string, dstZipPath string) {
 	PackZip(zipWriter, baseFolder, paths)
 }
 
+// PackDir packs all files under baseFolder into dstZipPath.
+func PackDir(baseFolder string, dstZipPath string) error {
+	paths := []DirInfos{}
+	if util.IsFileExist(dstZipPath) {
+		if err := os.Remove(dstZipPath); err != nil {
+			return err
+		}
+	}
+
+	file, err := os.Create(dstZipPath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	zipWriter := zip.NewWriter(file)
+	defer zipWriter.Close()
+
+	err = filepath.Walk(baseFolder, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(baseFolder, path)
+		if err != nil {
+			return err
+		}
+		if rel == "." {
+			return nil
+		}
+		paths = append(paths, DirInfos{path, info})
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	PackZip(zipWriter, baseFolder, paths)
+	return nil
+}
+
 func PackZip(zipWriter *zip.Writer, baseFolder string, paths []DirInfos) {
 	baseFolder = strings.ReplaceAll(baseFolder, "\\", "/")
 	slices.SortFunc(paths, func(a, b DirInfos) int {

@@ -100,6 +100,9 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 	if cmd.Args.CmdName == "init" {
 		return cmd.Init()
 	}
+	if cmd.Args.CmdName == "exportwebruntime" {
+		return cmd.ExportWebRuntime()
+	}
 
 	// Setup paths
 	err = cmd.setupPaths(dstRelDir)
@@ -241,8 +244,6 @@ func (cmd *CmdTool) handleExecutionPhase() error {
 		return cmd.RunWebWorker()
 	case "export":
 		return cmd.Export()
-	case "exporttemplateweb":
-		return cmd.ExportTemplateWeb()
 	case "exportweb":
 		return cmd.ExportWeb()
 	case "exportwebworker":

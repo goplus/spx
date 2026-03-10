@@ -72,7 +72,7 @@ func (pself *CmdTool) CheckCmd(ext ...string) bool {
 		"build", "buildtinygo", "rune", "export",
 		"runweb", "buildweb", "exportweb", "stopweb", "runwebworker",
 		"runm", "exportbot", "exportapk", "exportios",
-		"run", "runi", "exporttemplateweb", "exportminigame", "exportminiprogram", "exportwebworker",
+		"run", "runi", "exportwebruntime", "exportminigame", "exportminiprogram", "exportwebworker",
 	}
 	cmds = append(cmds, ext...)
 
@@ -192,8 +192,8 @@ Available commands:
     - runweb          # Launch the web server
     - runwebworker    # Run web worker
     - exportweb       # Export the web package
+    - exportwebruntime  # Export the reusable web runtime bundle
     - exportwebworker # Export web worker package
-    - exporttemplateweb # Export template web package
     - stopweb         # Stop the web server
 
     Export & Distribution:
@@ -216,6 +216,7 @@ Examples:
     #CMDNAME run --ixgogen --goenv=./cmd/portable-go  # Run with xgobuild and portable Go
     #CMDNAME build --servermode           # Build in server mode
     #CMDNAME runweb --debugweb            # Run web server with debug service
+    #CMDNAME exportwebruntime -mode=normal # Export the reusable web runtime bundle
     #CMDNAME buildtinygo                  # Build TinyGo static library for ESP32
     #CMDNAME exportminigame -build=fast   # Export minigame without compression (faster)
     #CMDNAME run -tags=pure_engine        # Run in pure engine mode
