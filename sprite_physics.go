@@ -164,7 +164,7 @@ func (cfg *physicConfig) syncToProxy(syncProxy *engine.Sprite, isTrigger bool, s
 
 // syncShape synchronizes shape to engine proxy.
 func (cfg *physicConfig) syncShape(syncProxy *engine.Sprite, isTrigger bool, sprite *SpriteImpl) {
-	scale := sprite.Scale
+	scale := sprite.runtimeState.Scale
 	if cfg.Type != physicsColliderNone && cfg.Type != physicsColliderAuto {
 		center := mathf.NewVec2(0, 0)
 		applyRenderOffset(sprite, &center.X, &center.Y)
@@ -214,8 +214,8 @@ func (cfg *physicConfig) applyShape(syncProxy *engine.Sprite, isTrigger bool, sc
 // updatePhysicsShapesScale updates collision and trigger shapes when sprite scale changes.
 func (p *SpriteImpl) updatePhysicsShapesScale() {
 	physics := p.physics()
-	physics.getTriggerInfo().applyShape(p.SyncSprite, true, p.Scale)
-	physics.getCollisionInfo().applyShape(p.SyncSprite, false, p.Scale)
+	physics.getTriggerInfo().applyShape(p.runtimeState.SyncSprite, true, p.runtimeState.Scale)
+	physics.getCollisionInfo().applyShape(p.runtimeState.SyncSprite, false, p.runtimeState.Scale)
 }
 
 func (p *SpriteImpl) SetPhysicsMode(mode PhysicsMode) {

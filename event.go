@@ -69,7 +69,7 @@ func (p *eventSinkMgr) AddStart(sink eventSink) {
 	p.startMu.Lock()
 	defer p.startMu.Unlock()
 	if p.startFired {
-		if sprite, ok := sink.Owner.(*SpriteImpl); ok && sprite.Cloned {
+		if sprite, ok := sink.Owner.(*SpriteImpl); ok && sprite.spriteState.Cloned {
 			return
 		}
 		spxlog.Warn("event: ignoring late OnStart registration for %s", nameOf(sink.Owner))
@@ -378,16 +378,16 @@ func parseEventQueuePolicy(policy string) eventQueuePolicy {
 type eventQueueSnapshot = coreevent.QueueSnapshot
 
 func (p *Game) initEventQueueState() {
-	p.EventQueuePolicy = defaultEventQueuePolicy
-	p.EventQueueStats.Reset()
+	p.gameRuntimeState.EventQueuePolicy = defaultEventQueuePolicy
+	p.gameRuntimeState.EventQueueStats.Reset()
 }
 
 func (p *Game) resetEventQueueStats() {
-	p.EventQueueStats.Reset()
+	p.gameRuntimeState.EventQueueStats.Reset()
 }
 
 func (p *Game) setEventQueuePolicy(policy eventQueuePolicy) {
-	p.EventQueuePolicy = policy
+	p.gameRuntimeState.EventQueuePolicy = policy
 }
 
 func (p *Game) eventQueueSnapshot() eventQueueSnapshot {
@@ -396,9 +396,9 @@ func (p *Game) eventQueueSnapshot() eventQueueSnapshot {
 		queueLen = len(p.events)
 		queueCap = cap(p.events)
 	}
-	return coreevent.Snapshot(p.EventQueuePolicy, &p.EventQueueStats, queueLen, queueCap)
+	return coreevent.Snapshot(p.gameRuntimeState.EventQueuePolicy, &p.gameRuntimeState.EventQueueStats, queueLen, queueCap)
 }
 
 func (p *Game) queueEventWithPolicy(ev event) bool {
-	return coreevent.EnqueueWithPolicy(p.events, ev, p.EventQueuePolicy, &p.EventQueueStats, &p.EventQueueMu)
+	return coreevent.EnqueueWithPolicy(p.events, ev, p.gameRuntimeState.EventQueuePolicy, &p.gameRuntimeState.EventQueueStats, &p.gameRuntimeState.EventQueueMu)
 }

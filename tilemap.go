@@ -181,10 +181,10 @@ func (p *gameTilemapMgr) calcWorldSize() {
 		return
 	}
 
-	p.g.MinWorldX = bounds.MinWorldX
-	p.g.MinWorldY = bounds.MinWorldY
-	p.g.WorldWidth = bounds.WorldWidth
-	p.g.WorldHeight = bounds.WorldHeight
+	p.g.displayState.MinWorldX = bounds.MinWorldX
+	p.g.displayState.MinWorldY = bounds.MinWorldY
+	p.g.displayState.WorldWidth = bounds.WorldWidth
+	p.g.displayState.WorldHeight = bounds.WorldHeight
 }
 
 // ============================================================================

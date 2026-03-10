@@ -120,7 +120,7 @@ func (t *transformComponent) onDestroy() {
 // markDirty marks the transform as dirty, triggering an update.
 func (t *transformComponent) markDirty() {
 	t.isDirty = true
-	t.sprite.IsDirty = true
+	t.sprite.spriteState.IsDirty = true
 }
 
 // getPivot returns the current pivot point.
@@ -209,8 +209,8 @@ func (t *transformComponent) SetSize(size float64) {
 		spxlog.Debug("SetSize: sprite=%s, size=%v", t.sprite.name, size)
 	}
 
-	t.sprite.Scale = size
-	t.sprite.IsCostumeDirty = true
+	t.sprite.runtimeState.Scale = size
+	t.sprite.runtimeState.IsCostumeDirty = true
 	t.markDirty()
 	t.sprite.updatePhysicsShapesScale()
 }
@@ -220,7 +220,7 @@ func (t *transformComponent) ChangeSize(delta float64) {
 	if isDebugInstrEnabled() {
 		spxlog.Debug("ChangeSize: sprite=%s, delta=%v", t.sprite.name, delta)
 	}
-	t.SetSize(t.sprite.Scale + delta)
+	t.SetSize(t.sprite.runtimeState.Scale + delta)
 }
 
 // XY returns the current position coordinates.

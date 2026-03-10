@@ -83,13 +83,13 @@ type Game struct {
 	eventSinks
 	fs spxfs.Dir
 
-	corestate.GameLifecycleState
-	corestate.GameDisplayState
-	corestate.GameDialogState
-	corestate.GameDebugState
-	corestate.GameRuntimeState
-	corestate.GamePathfindingState
-	corestate.GameAudioState
+	lifecycleState   corestate.GameLifecycleState
+	displayState     corestate.GameDisplayState
+	dialogState      corestate.GameDialogState
+	debugState       corestate.GameDebugState
+	gameRuntimeState corestate.GameRuntimeState
+	pathfindingState corestate.GamePathfindingState
+	audioState       corestate.GameAudioState
 
 	Camera Camera
 	camera *cameraImpl
@@ -130,7 +130,7 @@ func activeGame() *Game {
 }
 
 func (p *Game) initRuntimeState() {
-	runtimeStateMgr.Init(&p.GameDebugState, &p.GameRuntimeState)
+	runtimeStateMgr.Init(&p.debugState, &p.gameRuntimeState)
 	p.initEventQueueState()
 }
 
@@ -139,7 +139,7 @@ func setDefaultDebugFlags(instr, event, perf bool) {
 }
 
 func (p *Game) setDebugFlags(instr, event, perf bool) {
-	runtimeStateMgr.ApplyDebugFlags(&p.GameDebugState, instr, event, perf)
+	runtimeStateMgr.ApplyDebugFlags(&p.debugState, instr, event, perf)
 }
 
 func isDebugInstrEnabled() bool {
@@ -159,7 +159,7 @@ func setPhysicsEnabled(enabled bool) {
 }
 
 func (p *Game) setPhysicsEnabled(enabled bool) {
-	runtimeStateMgr.SetPhysicsEnabled(&p.GameRuntimeState, enabled)
+	runtimeStateMgr.SetPhysicsEnabled(&p.gameRuntimeState, enabled)
 }
 
 func isPhysicsEnabled() bool {
@@ -167,7 +167,7 @@ func isPhysicsEnabled() bool {
 }
 
 func resetImageSizeCache(g *Game) {
-	runtimeStateMgr.ResetImageSizeCache(gameRuntimeState(g))
+	runtimeStateMgr.ResetImageSizeCache(runtimeStateOfGame(g))
 }
 
 func imageSizeCacheRef() *sync.Map {
@@ -192,20 +192,20 @@ func mainSchedTime() time.Time {
 
 func activeGameDebugState() *corestate.GameDebugState {
 	if g := activeGame(); g != nil {
-		return &g.GameDebugState
+		return &g.debugState
 	}
 	return nil
 }
 
 func activeGameRuntimeState() *corestate.GameRuntimeState {
-	return gameRuntimeState(activeGame())
+	return runtimeStateOfGame(activeGame())
 }
 
-func gameRuntimeState(g *Game) *corestate.GameRuntimeState {
+func runtimeStateOfGame(g *Game) *corestate.GameRuntimeState {
 	if g == nil {
 		return nil
 	}
-	return &g.GameRuntimeState
+	return &g.gameRuntimeState
 }
 
 func (p *Game) newSpriteAndLoad(name string, tySpr reflect.Type, g reflect.Value) Sprite {
@@ -238,7 +238,7 @@ func (p *Game) getSpriteProtoByName(name string, g reflect.Value) Sprite {
 }
 
 func (p *Game) reset() {
-	p.IsRunned = false
+	p.lifecycleState.IsRunned = false
 
 	p.releaseGameAudio()
 	p.EraseAll()
@@ -246,13 +246,13 @@ func (p *Game) reset() {
 	p.sinkMgr.Reset()
 	p.spriteMgr.reset()
 
-	p.DebugPanel = nil
-	p.AskPanel = nil
-	p.IsLoaded = false
+	p.debugState.DebugPanel = nil
+	p.dialogState.AskPanel = nil
+	p.lifecycleState.IsLoaded = false
 
-	p.StartFlag = sync.Once{}
-	p.RunOnce = sync.Once{}
-	p.OncePathFinder = sync.Once{}
+	p.lifecycleState.StartFlag = sync.Once{}
+	p.lifecycleState.RunOnce = sync.Once{}
+	p.lifecycleState.OncePathFinder = sync.Once{}
 	p.sprs = make(map[string]Sprite)
 
 	resetImageSizeCache(p)

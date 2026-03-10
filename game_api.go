@@ -90,16 +90,16 @@ func (p *Game) setupBackdrop() {
 	layout := coreproject.ResolveBackdropLayout(
 		imgW,
 		imgH,
-		float64(p.WorldWidth),
-		float64(p.WorldHeight),
-		p.MapMode,
+		float64(p.displayState.WorldWidth),
+		float64(p.displayState.WorldHeight),
+		p.displayState.MapMode,
 	)
 	if layout.RepeatScale != nil {
 		p.setMaterialParamsVec4("repeat_scale", *layout.RepeatScale, false)
 	}
-	p.Scale = 1
+	p.runtimeState.Scale = 1
 	checkUpdateCostume(&p.baseObj)
-	p.engine().SpriteMgr.SetScale(p.SyncSprite.GetId(), mathf.NewVec2(layout.ScaleX, layout.ScaleY))
+	p.engine().SpriteMgr.SetScale(p.runtimeState.SyncSprite.GetId(), mathf.NewVec2(layout.ScaleX, layout.ScaleY))
 }
 
 // SetWindowSize sets the window size to the specified width and height.
@@ -118,30 +118,30 @@ func (p *Game) getWindowSize() mathf.Vec2 {
 }
 
 func (p *Game) windowSize() (int, int) {
-	if p.WindowWidth == 0 {
+	if p.displayState.WindowWidth == 0 {
 		p.doWindowSize()
 	}
-	return p.WindowWidth, p.WindowHeight
+	return p.displayState.WindowWidth, p.displayState.WindowHeight
 }
 
 func (p *Game) doWindowSize() {
-	if p.WindowWidth == 0 {
+	if p.displayState.WindowWidth == 0 {
 		c := p.costumes[p.costumeIndex]
-		p.WindowWidth, p.WindowHeight = c.getSize()
+		p.displayState.WindowWidth, p.displayState.WindowHeight = c.getSize()
 	}
 }
 
 func (p *Game) worldSize() (int, int) {
-	if p.WorldWidth == 0 {
+	if p.displayState.WorldWidth == 0 {
 		p.doWorldSize()
 	}
-	return p.WorldWidth, p.WorldHeight
+	return p.displayState.WorldWidth, p.displayState.WorldHeight
 }
 
 func (p *Game) doWorldSize() {
-	if p.WorldWidth == 0 {
+	if p.displayState.WorldWidth == 0 {
 		c := p.costumes[p.costumeIndex]
-		p.WorldWidth, p.WorldHeight = c.getSize()
+		p.displayState.WorldWidth, p.displayState.WorldHeight = c.getSize()
 	}
 }
 
@@ -198,17 +198,17 @@ func (p *Game) Ask(msg any) {
 }
 
 func (p *Game) Answer() string {
-	return p.AnswerVal
+	return p.dialogState.AnswerVal
 }
 
 func (p *Game) ask(isSprite bool, question string, callback func(string)) {
-	if p.AskPanel == nil {
-		p.AskPanel = ui.NewUiAsk()
-		p.addShape(p.AskPanel)
+	if p.dialogState.AskPanel == nil {
+		p.dialogState.AskPanel = ui.NewUiAsk()
+		p.addShape(p.dialogState.AskPanel)
 	}
 	hasAnswer := false
-	p.AskPanel.Show(isSprite, question, func(msg string) {
-		p.AnswerVal = msg
+	p.dialogState.AskPanel.Show(isSprite, question, func(msg string) {
+		p.dialogState.AnswerVal = msg
 		callback(msg)
 		hasAnswer = true
 	})
@@ -216,7 +216,7 @@ func (p *Game) ask(isSprite bool, question string, callback func(string)) {
 		if hasAnswer {
 			break
 		}
-		p.AskPanel.Update()
+		p.dialogState.AskPanel.Update()
 		engine.WaitNextFrame()
 	}
 }
@@ -467,8 +467,8 @@ func XGot_Game_XGox_GetWidget[T any](sg ShapeGetter, name WidgetName) *T {
 
 // Path Finding System
 func (p *Game) applyPathFinderSettings(settings coreproject.SystemSettings) {
-	p.PathCellSizeX = settings.PathCellSizeX
-	p.PathCellSizeY = settings.PathCellSizeY
+	p.pathfindingState.PathCellSizeX = settings.PathCellSizeX
+	p.pathfindingState.PathCellSizeY = settings.PathCellSizeY
 }
 
 func (p *Game) SetupPathFinder__0() {
@@ -480,8 +480,8 @@ func (p *Game) SetupPathFinder__1(x_grid_size, y_grid_size, x_cell_size, y_cell_
 }
 
 func (p *Game) setupPathFinder(with_jump, with_debug bool) {
-	cellSize := mathf.NewVec2(float64(p.PathCellSizeX), float64(p.PathCellSizeY))
-	gridSize := mathf.NewVec2(float64(p.WorldWidth), float64(p.WorldHeight)).Div(cellSize)
+	cellSize := mathf.NewVec2(float64(p.pathfindingState.PathCellSizeX), float64(p.pathfindingState.PathCellSizeY))
+	gridSize := mathf.NewVec2(float64(p.displayState.WorldWidth), float64(p.displayState.WorldHeight)).Div(cellSize)
 	p.engine().NavigationMgr.SetupPathFinderWithSize(gridSize, cellSize, with_jump, with_debug)
 }
 
@@ -494,7 +494,7 @@ func (p *Game) FindPath__1(x_from, y_from, x_to, y_to float64, with_debug bool) 
 }
 
 func (p *Game) FindPath__2(x_from, y_from, x_to, y_to float64, with_debug, with_jump bool) []float64 {
-	p.OncePathFinder.Do(func() {
+	p.lifecycleState.OncePathFinder.Do(func() {
 		p.setupPathFinder(with_jump, with_debug)
 	})
 

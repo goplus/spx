@@ -53,22 +53,22 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 	p.setupCollisionLayers(inits)
 	p.loadAudioAndTilemap(proj)
 
-	p.IsLoaded = true
+	p.lifecycleState.IsLoaded = true
 	return
 }
 
 // setupDisplayConfig initializes display configuration.
 func (p *Game) setupDisplayConfig(proj *projConfig) {
 	display := coreproject.ResolveDisplaySettings(proj)
-	p.WindowScale = display.WindowScale
-	p.StretchMode = display.StretchMode
-	p.Debug = display.Debug
-	if p.Debug {
+	p.displayState.WindowScale = display.WindowScale
+	p.displayState.StretchMode = display.StretchMode
+	p.debugState.Debug = display.Debug
+	if p.debugState.Debug {
 		spxlog.SetLevel(spxlog.LevelDebug)
 	} else {
 		spxlog.SetLevel(spxlog.LevelInfo)
 	}
-	engine.SetDebugMode(p.Debug)
+	engine.SetDebugMode(p.debugState.Debug)
 }
 
 // setupWorldAndWindow configures world and window sizes.
@@ -79,41 +79,41 @@ func (p *Game) setupWorldAndWindow(proj *projConfig) {
 		backdrops = make([]*backdropConfig, 0)
 	}
 
-	p.WorldWidth = proj.Map.Width
-	p.WorldHeight = proj.Map.Height
+	p.displayState.WorldWidth = proj.Map.Width
+	p.displayState.WorldHeight = proj.Map.Height
 
 	if len(backdrops) > 0 {
 		p.baseObj.initBackdrops("", backdrops, proj.GetBackdropIndex())
 		p.doWorldSize()
 	} else {
-		p.baseObj.initWithSize(p.WorldWidth, p.WorldHeight)
+		p.baseObj.initWithSize(p.displayState.WorldWidth, p.displayState.WorldHeight)
 	}
-	spxlog.Debug("==> SetWorldSize: %d, %d", p.WorldWidth, p.WorldHeight)
+	spxlog.Debug("==> SetWorldSize: %d, %d", p.displayState.WorldWidth, p.displayState.WorldHeight)
 
 	metrics := coreproject.ResolveWorldWindowMetrics(
-		p.WorldWidth,
-		p.WorldHeight,
-		p.WindowWidth,
-		p.WindowHeight,
+		p.displayState.WorldWidth,
+		p.displayState.WorldHeight,
+		p.displayState.WindowWidth,
+		p.displayState.WindowHeight,
 		toMapMode(proj.Map.Mode),
 	)
-	p.WorldWidth = metrics.WorldWidth
-	p.WorldHeight = metrics.WorldHeight
-	p.MinWorldX = metrics.MinWorldX
-	p.MinWorldY = metrics.MinWorldY
-	p.MapMode = metrics.MapMode
+	p.displayState.WorldWidth = metrics.WorldWidth
+	p.displayState.WorldHeight = metrics.WorldHeight
+	p.displayState.MinWorldX = metrics.MinWorldX
+	p.displayState.MinWorldY = metrics.MinWorldY
+	p.displayState.MapMode = metrics.MapMode
 	p.doWindowSize()
-	spxlog.Debug("==> SetWindowSize: %d, %d", p.WindowWidth, p.WindowHeight)
+	spxlog.Debug("==> SetWindowSize: %d, %d", p.displayState.WindowWidth, p.displayState.WindowHeight)
 
 	metrics = coreproject.ResolveWorldWindowMetrics(
-		p.WorldWidth,
-		p.WorldHeight,
-		p.WindowWidth,
-		p.WindowHeight,
-		p.MapMode,
+		p.displayState.WorldWidth,
+		p.displayState.WorldHeight,
+		p.displayState.WindowWidth,
+		p.displayState.WindowHeight,
+		p.displayState.MapMode,
 	)
-	p.WindowWidth = metrics.WindowWidth
-	p.WindowHeight = metrics.WindowHeight
+	p.displayState.WindowWidth = metrics.WindowWidth
+	p.displayState.WindowHeight = metrics.WindowHeight
 }
 
 // setupPlatformAndCamera configures platform settings and camera.
@@ -121,9 +121,9 @@ func (p *Game) setupPlatformAndCamera(proj *projConfig) {
 	platformMgr := p.engine().PlatformMgr
 
 	layout := coreproject.ResolvePlatformLayout(coreproject.PlatformLayoutInput{
-		WindowWidth:       p.WindowWidth,
-		WindowHeight:      p.WindowHeight,
-		WindowScale:       p.WindowScale,
+		WindowWidth:       p.displayState.WindowWidth,
+		WindowHeight:      p.displayState.WindowHeight,
+		WindowScale:       p.displayState.WindowScale,
 		Fullscreen:        proj.FullScreen,
 		IsMobile:          platform.IsMobile(),
 		IsWeb:             platform.IsWeb(),
@@ -132,27 +132,27 @@ func (p *Game) setupPlatformAndCamera(proj *projConfig) {
 	if layout.Fullscreen {
 		platformMgr.SetWindowFullscreen(true)
 	}
-	p.WindowScale = layout.WindowScale
+	p.displayState.WindowScale = layout.WindowScale
 	platformMgr.SetWindowSize(layout.WindowWidth, layout.WindowHeight, true)
 	platformMgr.SetMaxFps(int64(proj.MaxFPS))
-	platformMgr.SetStretchMode(p.StretchMode)
+	platformMgr.SetStretchMode(p.displayState.StretchMode)
 
 	p.camera = &cameraImpl{}
 	p.Camera = p.camera
 	p.camera.init(p)
 
 	isWindowMapSizeEqual := coreproject.IsWindowWorldSizeEqual(
-		p.WorldWidth,
-		p.WorldHeight,
-		p.WindowWidth,
-		p.WindowHeight,
+		p.displayState.WorldWidth,
+		p.displayState.WorldHeight,
+		p.displayState.WindowWidth,
+		p.displayState.WindowHeight,
 	)
-	engine.SetWindowScale(p.WindowScale)
-	ui.SetWindowScale(p.WindowScale)
+	engine.SetWindowScale(p.displayState.WindowScale)
+	ui.SetWindowScale(p.displayState.WindowScale)
 	ui.SetBaseScreenSize(baseScreenWidth, baseScreenHeight)
 	ui.ClampUIPositionInScreen(isWindowMapSizeEqual)
 
-	p.SyncSprite = engine.NewBackdropProxy(p, p.getCostumePath(), p.getCostumeRenderScale())
+	p.runtimeState.SyncSprite = engine.NewBackdropProxy(p, p.getCostumePath(), p.getCostumeRenderScale())
 	p.setupBackdrop()
 }
 
@@ -216,7 +216,7 @@ func (p *Game) runSpriteCallbacks(inits []Sprite, proj *projConfig, g reflect.Va
 // loadAudioAndTilemap loads tilemap and background music.
 func (p *Game) loadAudioAndTilemap(proj *projConfig) {
 	p.tilemapMgr.parseTilemap()
-	p.SoundObj = p.soundMgr.AllocSound()
+	p.audioState.SoundObj = p.soundMgr.AllocSound()
 	if proj.Bgm != "" {
 		p.Play__0(proj.Bgm, true)
 	}

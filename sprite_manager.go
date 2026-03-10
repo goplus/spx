@@ -103,9 +103,9 @@ func (sm *spriteManager) flushDestroy(buffer *engine.SpriteSyncBuffer) {
 	}
 
 	for _, item := range sm.destroyItems {
-		if sprite, ok := item.(*SpriteImpl); ok && sprite.SyncSprite != nil {
-			buffer.AddDelete(int64(sprite.SyncSprite.Id))
-			sprite.SyncSprite = nil
+		if sprite, ok := item.(*SpriteImpl); ok && sprite.runtimeState.SyncSprite != nil {
+			buffer.AddDelete(int64(sprite.runtimeState.SyncSprite.Id))
+			sprite.runtimeState.SyncSprite = nil
 		}
 	}
 
@@ -227,7 +227,7 @@ func (sm *spriteManager) count() int {
 func (sm *spriteManager) findSprite(name SpriteName) *SpriteImpl {
 	for _, item := range sm.items {
 		if sp, ok := item.(*SpriteImpl); ok {
-			if !sp.Cloned && sp.name == name {
+			if !sp.spriteState.Cloned && sp.name == name {
 				return sp
 			}
 		}

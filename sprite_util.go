@@ -59,7 +59,7 @@ func spriteOf(sprite Sprite) *SpriteImpl {
 
 // bounds returns the bounding rectangle of the sprite.
 func (p *SpriteImpl) bounds() *mathf.Rect2 {
-	if !p.IsVisible {
+	if !p.spriteState.IsVisible {
 		return nil
 	}
 
@@ -82,23 +82,23 @@ func (p *SpriteImpl) adjustPositionAndGetDimensions(x, y *float64) (width, heigh
 	if triggerInfo.Type == physicsColliderNone {
 		// Use costume dimensions
 		wi, hi := p.costumes[p.costumeIndex].getSize()
-		return float64(wi) * p.Scale, float64(hi) * p.Scale
+		return float64(wi) * p.runtimeState.Scale, float64(hi) * p.runtimeState.Scale
 	}
 
 	// Update auto collider parameters if needed
-	if triggerInfo.Type == physicsColliderAuto && p.SyncSprite == nil {
+	if triggerInfo.Type == physicsColliderAuto && p.runtimeState.SyncSprite == nil {
 		center, size := getCostumeBoundByAlpha(p, false)
 		triggerInfo.Pivot = center
 		triggerInfo.Params = []float64{size.X, size.Y}
 	}
 
 	// Apply trigger pivot offset
-	*x += triggerInfo.Pivot.X * p.Scale
-	*y += triggerInfo.Pivot.Y * p.Scale
+	*x += triggerInfo.Pivot.X * p.runtimeState.Scale
+	*y += triggerInfo.Pivot.Y * p.runtimeState.Scale
 
 	// Get dimensions and apply scale
 	w, h := triggerInfo.getDimensions()
-	return w * p.Scale, h * p.Scale
+	return w * p.runtimeState.Scale, h * p.runtimeState.Scale
 }
 
 // Touching checks if sprite is touching:
@@ -106,7 +106,7 @@ func (p *SpriteImpl) adjustPositionAndGetDimensions(x, y *float64) (width, heigh
 //   - spx.Mouse
 //   - spx.Edge, spx.EdgeLeft, spx.EdgeTop, spx.EdgeRight, spx.EdgeBottom
 func (p *SpriteImpl) touching(obj any) bool {
-	if !p.IsVisible || p.IsDying {
+	if !p.spriteState.IsVisible || p.spriteState.IsDying {
 		return false
 	}
 	switch v := obj.(type) {
@@ -130,7 +130,7 @@ func (p *SpriteImpl) touching(obj any) bool {
 
 // touchingSprite checks if src sprite is touching dst sprite.
 func touchingSprite(dst, src *SpriteImpl) bool {
-	if !src.IsVisible || src.IsDying {
+	if !src.spriteState.IsVisible || src.spriteState.IsDying {
 		return false
 	}
 	ret := src.touchingSprite(dst)
@@ -139,43 +139,43 @@ func touchingSprite(dst, src *SpriteImpl) bool {
 
 // touchPoint checks if a point touches the sprite.
 func (p *SpriteImpl) touchPoint(x, y float64) bool {
-	if p.SyncSprite == nil {
+	if p.runtimeState.SyncSprite == nil {
 		return false
 	}
-	return p.engine().SpriteMgr.CheckCollisionWithPoint(p.SyncSprite.GetId(), mathf.NewVec2(x, y), true)
+	return p.engine().SpriteMgr.CheckCollisionWithPoint(p.runtimeState.SyncSprite.GetId(), mathf.NewVec2(x, y), true)
 }
 
 // touchingColor checks if sprite is touching a specific color.
 func (p *SpriteImpl) touchingColor(color mathf.Color) bool {
-	if p.SyncSprite == nil {
+	if p.runtimeState.SyncSprite == nil {
 		return false
 	}
-	return p.engine().SpriteMgr.CheckCollisionByColor(p.SyncSprite.GetId(), color, colorThreshold, alphaThreshold)
+	return p.engine().SpriteMgr.CheckCollisionByColor(p.runtimeState.SyncSprite.GetId(), color, colorThreshold, alphaThreshold)
 }
 
 // touchingSprite checks if sprite is touching another sprite.
 func (p *SpriteImpl) touchingSprite(dst *SpriteImpl) bool {
-	if p.SyncSprite == nil || dst.SyncSprite == nil {
+	if p.runtimeState.SyncSprite == nil || dst.runtimeState.SyncSprite == nil {
 		return false
 	}
-	return p.engine().SpriteMgr.CheckCollisionWithSprite(p.SyncSprite.GetId(), dst.SyncSprite.GetId(), alphaThreshold, !isPhysicsEnabled())
+	return p.engine().SpriteMgr.CheckCollisionWithSprite(p.runtimeState.SyncSprite.GetId(), dst.runtimeState.SyncSprite.GetId(), alphaThreshold, !isPhysicsEnabled())
 }
 
 // checkTouchingScreen checks which edges of the screen the sprite is touching.
 func (p *SpriteImpl) checkTouchingScreen(where int) (touching int) {
-	if p.SyncSprite == nil {
+	if p.runtimeState.SyncSprite == nil {
 		return 0
 	}
-	touching = int(p.engine().PhysicsMgr.CheckTouchedStageBoundaries(p.SyncSprite.GetId()))
+	touching = int(p.engine().PhysicsMgr.CheckTouchedStageBoundaries(p.runtimeState.SyncSprite.GetId()))
 	return touching & where
 }
 
 // checkNearestTouchedBoundary returns the nearest screen boundary that the sprite is touching.
 func (p *SpriteImpl) checkNearestTouchedBoundary() int {
-	if p.SyncSprite == nil {
+	if p.runtimeState.SyncSprite == nil {
 		return 0
 	}
-	return int(p.engine().PhysicsMgr.CheckNearestTouchedStageBoundary(p.SyncSprite.GetId()))
+	return int(p.engine().PhysicsMgr.CheckNearestTouchedStageBoundary(p.runtimeState.SyncSprite.GetId()))
 }
 
 // ============================================================================
@@ -198,14 +198,14 @@ func (p *SpriteImpl) ShowVar(name string) {
 func getRenderOffset(p *SpriteImpl) (float64, float64) {
 	cs := p.costumes[p.costumeIndex]
 	pivot := p.getPivot()
-	x, y := -((cs.center.X)/float64(cs.bitmapResolution)+pivot.X)*p.Scale,
-		((cs.center.Y)/float64(cs.bitmapResolution)-pivot.Y)*p.Scale
+	x, y := -((cs.center.X)/float64(cs.bitmapResolution)+pivot.X)*p.runtimeState.Scale,
+		((cs.center.Y)/float64(cs.bitmapResolution)-pivot.Y)*p.runtimeState.Scale
 
 	// spx's start point is top left, gdspx's start point is center
 	// so we should remove the offset to make the pivot point is the same
 	w, h := p.getCostumeSize()
-	x = x + float64(w)/2*p.Scale
-	y = y - float64(h)/2*p.Scale
+	x = x + float64(w)/2*p.runtimeState.Scale
+	y = y - float64(h)/2*p.runtimeState.Scale
 
 	return x, y
 }

@@ -161,51 +161,51 @@ func (p *physicsComponent) SetGravity(gravity float64) {
 }
 
 func (p *physicsComponent) SetCollisionLayer(layer int64) {
-	p.sprite.SyncSprite.SetCollisionLayer(layer)
+	p.sprite.runtimeState.SyncSprite.SetCollisionLayer(layer)
 }
 
 func (p *physicsComponent) SetCollisionMask(mask int64) {
-	p.sprite.SyncSprite.SetCollisionMask(mask)
+	p.sprite.runtimeState.SyncSprite.SetCollisionMask(mask)
 }
 
 func (p *physicsComponent) SetCollisionEnabled(enabled bool) {
-	p.sprite.SyncSprite.SetCollisionEnabled(enabled)
+	p.sprite.runtimeState.SyncSprite.SetCollisionEnabled(enabled)
 }
 
 func (p *physicsComponent) GetCollisionLayer() int64 {
-	return p.sprite.SyncSprite.GetCollisionLayer()
+	return p.sprite.runtimeState.SyncSprite.GetCollisionLayer()
 }
 
 func (p *physicsComponent) GetCollisionMask() int64 {
-	return p.sprite.SyncSprite.GetCollisionMask()
+	return p.sprite.runtimeState.SyncSprite.GetCollisionMask()
 }
 
 func (p *physicsComponent) IsCollisionEnabled() bool {
-	return p.sprite.SyncSprite.IsCollisionEnabled()
+	return p.sprite.runtimeState.SyncSprite.IsCollisionEnabled()
 }
 
 func (p *physicsComponent) SetTriggerEnabled(trigger bool) {
-	p.sprite.SyncSprite.SetTriggerEnabled(trigger)
+	p.sprite.runtimeState.SyncSprite.SetTriggerEnabled(trigger)
 }
 
 func (p *physicsComponent) SetTriggerLayer(layer int64) {
-	p.sprite.SyncSprite.SetTriggerLayer(layer)
+	p.sprite.runtimeState.SyncSprite.SetTriggerLayer(layer)
 }
 
 func (p *physicsComponent) SetTriggerMask(mask int64) {
-	p.sprite.SyncSprite.SetTriggerMask(mask)
+	p.sprite.runtimeState.SyncSprite.SetTriggerMask(mask)
 }
 
 func (p *physicsComponent) GetTriggerLayer() int64 {
-	return p.sprite.SyncSprite.GetTriggerLayer()
+	return p.sprite.runtimeState.SyncSprite.GetTriggerLayer()
 }
 
 func (p *physicsComponent) GetTriggerMask() int64 {
-	return p.sprite.SyncSprite.GetTriggerMask()
+	return p.sprite.runtimeState.SyncSprite.GetTriggerMask()
 }
 
 func (p *physicsComponent) IsTriggerEnabled() bool {
-	return p.sprite.SyncSprite.IsTriggerEnabled()
+	return p.sprite.runtimeState.SyncSprite.IsTriggerEnabled()
 }
 
 func (p *physicsComponent) getCollisionTargets() map[string]bool {
@@ -247,7 +247,7 @@ func (p *physicsComponent) GetColliderShape(isTrigger bool) (ColliderShapeType, 
 func (p *physicsComponent) SetColliderPivot(isTrigger bool, offsetX, offsetY float64) {
 	config := p.getPhysicConfig(isTrigger)
 	config.Pivot = mathf.NewVec2(offsetX, offsetY)
-	if p.sprite.SyncSprite != nil {
+	if p.sprite.runtimeState.SyncSprite != nil {
 		p.applyPhysicShape(isTrigger)
 	}
 }
@@ -277,26 +277,26 @@ func (p *physicsComponent) applyPhysicShape(isTrigger bool) {
 	ctype := config.Type
 	params := config.Params
 
-	if p.sprite.SyncSprite == nil {
+	if p.sprite.runtimeState.SyncSprite == nil {
 		return
 	}
 
 	switch ctype {
 	case RectCollider:
 		if len(params) >= 2 {
-			p.sprite.SyncSprite.SetColliderShapeRect(isTrigger, config.Pivot, mathf.NewVec2(params[0], params[1]))
+			p.sprite.runtimeState.SyncSprite.SetColliderShapeRect(isTrigger, config.Pivot, mathf.NewVec2(params[0], params[1]))
 		}
 	case CircleCollider:
 		if len(params) >= 1 {
-			p.sprite.SyncSprite.SetColliderShapeCircle(isTrigger, config.Pivot, params[0])
+			p.sprite.runtimeState.SyncSprite.SetColliderShapeCircle(isTrigger, config.Pivot, params[0])
 		}
 	case CapsuleCollider:
 		if len(params) >= 2 {
-			p.sprite.SyncSprite.SetColliderShapeCapsule(isTrigger, config.Pivot, mathf.NewVec2(params[0]*2, params[1]))
+			p.sprite.runtimeState.SyncSprite.SetColliderShapeCapsule(isTrigger, config.Pivot, mathf.NewVec2(params[0]*2, params[1]))
 		}
 	case PolygonCollider:
 		if len(params) >= 6 {
-			p.sprite.SyncSprite.SetColliderShapePolygon(isTrigger, config.Pivot, params)
+			p.sprite.runtimeState.SyncSprite.SetColliderShapePolygon(isTrigger, config.Pivot, params)
 		}
 	}
 }

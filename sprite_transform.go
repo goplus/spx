@@ -286,7 +286,7 @@ func (p *SpriteImpl) BounceOffEdge() {
 // -----------------------------------------------------------------------------
 
 func (p *SpriteImpl) Size() float64 {
-	return p.Scale
+	return p.runtimeState.Scale
 }
 
 func (p *SpriteImpl) SetSize(size float64) {
