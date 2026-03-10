@@ -33,6 +33,8 @@ const (
 type Manager struct {
 	mu      sync.RWMutex
 	buckets [bucketCount][]Sink
+
+	startFired bool
 }
 
 func (m *Manager) Reset() {
@@ -42,6 +44,7 @@ func (m *Manager) Reset() {
 	for i := range m.buckets {
 		m.buckets[i] = nil
 	}
+	m.startFired = false
 }
 
 func (m *Manager) DeleteOwner(owner any) {
@@ -81,6 +84,16 @@ func (m *Manager) Add(bucket Bucket, sink Sink) {
 
 func (m *Manager) AddStart(sink Sink) {
 	m.Add(BucketStart, sink)
+}
+
+func (m *Manager) TryAddStart(sink Sink) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.startFired {
+		return false
+	}
+	m.buckets[BucketStart] = append(m.buckets[BucketStart], sink)
+	return true
 }
 
 func (m *Manager) AddAwake(sink Sink) {
@@ -136,6 +149,16 @@ func (m *Manager) Snapshot(bucket Bucket) []Sink {
 
 func (m *Manager) SnapshotStart() []Sink {
 	return m.Snapshot(BucketStart)
+}
+
+func (m *Manager) SnapshotStartOnce() []Sink {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.startFired {
+		return nil
+	}
+	m.startFired = true
+	return slices.Clone(m.buckets[BucketStart])
 }
 
 func (m *Manager) SnapshotAwake() []Sink {
