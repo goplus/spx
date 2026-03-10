@@ -60,8 +60,7 @@ jobs:
             xorg-dev \
             libasound2-dev \
             libopenal-dev \
-            binaryen \
-            unzip
+            binaryen
 
       - name: Setup go/xgo & engine
         uses: ./.github/actions/deps
@@ -76,24 +75,9 @@ jobs:
       - name: Build web bundle
         run: make export-web
 
-      - name: Prepare runtime artifact
-        run: |
-          rm -rf web-runtime-artifact
-          mkdir -p web-runtime-artifact
-          unzip -oq spx_web.zip -d web-runtime-artifact
-
-      - name: Upload runtime directory artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: spx-web-runtime-${{ steps.version.outputs.version }}
-          path: web-runtime-artifact/
-          retention-days: 90
-          compression-level: 0
-
       - name: Upload `spx_web.zip` artifact
         uses: actions/upload-artifact@v7
         with:
           name: spx-web-zip-${{ steps.version.outputs.version }}
           path: spx_web.zip
-          retention-days: 90
-          compression-level: 0
+          archive: false
