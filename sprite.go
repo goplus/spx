@@ -16,12 +16,14 @@
 
 package spx
 
+import coreevent "github.com/goplus/spx/v2/internal/core/event"
+
 // ============================================================================
 // Type Definitions
 // ============================================================================
 
 // Direction represents the heading direction in degrees.
-type Direction = float64
+type Direction = coreevent.Direction
 
 // RotationStyle defines how a sprite rotates.
 type RotationStyle int
@@ -131,6 +133,18 @@ const (
 	touchingScreenRight  = 4
 	touchingScreenBottom = 8
 	touchingAllEdges     = 15
+)
+
+type IEventSinks = coreevent.IEventSinks
+type StopKind = coreevent.StopKind
+
+const (
+	AllStop              StopKind = coreevent.AllStop
+	AllOtherScripts      StopKind = coreevent.AllOtherScripts
+	AllSprites           StopKind = coreevent.AllSprites
+	ThisSprite           StopKind = coreevent.ThisSprite
+	ThisScript           StopKind = coreevent.ThisScript
+	OtherScriptsInSprite StopKind = coreevent.OtherScriptsInSprite
 )
 
 // ============================================================================

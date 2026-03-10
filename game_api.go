@@ -22,6 +22,7 @@ import (
 	"math/rand"
 
 	"github.com/goplus/spbase/mathf"
+	coreevent "github.com/goplus/spx/v2/internal/core/event"
 	coreproject "github.com/goplus/spx/v2/internal/core/project"
 	"github.com/goplus/spx/v2/internal/engine"
 	spxlog "github.com/goplus/spx/v2/internal/log"
@@ -29,7 +30,7 @@ import (
 	"github.com/goplus/spx/v2/internal/ui"
 )
 
-type BackdropName = string
+type BackdropName = coreevent.BackdropName
 
 func (p *Game) BackdropName() string {
 	return p.getCostumeName()
@@ -265,7 +266,7 @@ func (p *Game) doBroadcast(msg string, data any, wait bool) {
 	if isDebugInstrEnabled() {
 		spxlog.Debug("Broadcast: msg=%s, wait=%v", msg, wait)
 	}
-	p.sinkMgr.doWhenIReceive(msg, data, wait)
+	p.scriptEvents.doWhenIReceive(msg, data, wait)
 }
 
 func (p *Game) Broadcast__0(msg string) {

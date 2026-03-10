@@ -28,7 +28,7 @@ import (
 type SpriteImpl struct {
 	baseObj
 	spriteState corestate.SpriteRuntimeState
-	eventSinks
+	scriptEventBindings
 	g      *Game
 	sprite Sprite
 	name   string
@@ -69,7 +69,7 @@ func (p *SpriteImpl) initBaseObjects(base string, spriteCfg *spriteConfig, g *Ga
 		p.baseObj.initWith(base, spriteCfg)
 	}
 	p.spriteState.DefaultCostumeIndex = p.baseObj.costumeIndex
-	p.eventSinks.init(&g.sinkMgr, p)
+	p.scriptEventBindings.init(&g.scriptEvents, p)
 }
 
 func (p *SpriteImpl) initBasicProperties(g *Game, name string, sprite Sprite, gamer reflect.Value, spriteCfg *spriteConfig) {
@@ -96,7 +96,7 @@ func (p *SpriteImpl) awake() {
 
 func (p *SpriteImpl) InitFrom(src *SpriteImpl) {
 	p.baseObj.initFrom(&src.baseObj)
-	p.eventSinks.initFrom(&src.eventSinks, p)
+	p.scriptEventBindings.initFrom(&src.scriptEventBindings, p)
 
 	p.g, p.name, p.runtimeState.Scale = src.g, src.name, src.runtimeState.Scale
 	p.greffUniforms = maps.Clone(src.greffUniforms)

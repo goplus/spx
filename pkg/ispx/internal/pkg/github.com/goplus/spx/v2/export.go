@@ -69,7 +69,6 @@ func init() {
 		Interfaces: map[string]reflect.Type{
 			"Camera":      reflect.TypeOf((*q.Camera)(nil)).Elem(),
 			"Gamer":       reflect.TypeOf((*q.Gamer)(nil)).Elem(),
-			"IEventSinks": reflect.TypeOf((*q.IEventSinks)(nil)).Elem(),
 			"Shape":       reflect.TypeOf((*q.Shape)(nil)).Elem(),
 			"ShapeGetter": reflect.TypeOf((*q.ShapeGetter)(nil)).Elem(),
 			"Sprite":      reflect.TypeOf((*q.Sprite)(nil)).Elem(),
@@ -93,6 +92,7 @@ func init() {
 			"Config":              reflect.TypeOf((*q.Config)(nil)).Elem(),
 			"DecoratorJSON":       reflect.TypeOf((*q.DecoratorJSON)(nil)).Elem(),
 			"Direction":           reflect.TypeOf((*q.Direction)(nil)).Elem(),
+			"IEventSinks":         reflect.TypeOf((*q.IEventSinks)(nil)).Elem(),
 			"Key":                 reflect.TypeOf((*q.Key)(nil)).Elem(),
 			"PhysicsMode":         reflect.TypeOf((*q.PhysicsMode)(nil)).Elem(),
 			"Pos":                 reflect.TypeOf((*q.Pos)(nil)).Elem(),

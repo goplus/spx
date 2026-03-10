@@ -64,3 +64,29 @@ func TestManagerConvenienceMethods(t *testing.T) {
 		t.Fatalf("SnapshotTimer = %+v, want timer sink", got)
 	}
 }
+
+func TestManagerStartLifecycle(t *testing.T) {
+	var mgr Manager
+	if !mgr.TryAddStart(Sink{Owner: "first", Handler: func() {}}) {
+		t.Fatal("expected first start sink to be registered")
+	}
+
+	first := mgr.SnapshotStartOnce()
+	if len(first) != 1 || first[0].Owner != "first" {
+		t.Fatalf("SnapshotStartOnce = %+v, want first sink", first)
+	}
+
+	if mgr.TryAddStart(Sink{Owner: "late", Handler: func() {}}) {
+		t.Fatal("expected late start sink to be rejected after first snapshot")
+	}
+
+	second := mgr.SnapshotStartOnce()
+	if len(second) != 0 {
+		t.Fatalf("second SnapshotStartOnce len = %d, want 0", len(second))
+	}
+
+	mgr.Reset()
+	if !mgr.TryAddStart(Sink{Owner: "after-reset", Handler: func() {}}) {
+		t.Fatal("expected reset to reopen start registration")
+	}
+}

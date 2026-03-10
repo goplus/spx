@@ -29,7 +29,7 @@ import (
 )
 
 // Key represents a keyboard key code.
-type Key = engine.KeyCode
+type Key = coreevent.Key
 
 // Keyboard key constants
 const (
@@ -212,7 +212,7 @@ func (p *inputManager) swipeHooks() coreruntime.SwipeHooks[*SpriteImpl] {
 			targetSprite.doWhenSwipe(Direction(direction), targetSprite)
 		},
 		DispatchStage: func(direction float64) {
-			p.g.sinkMgr.doWhenSwipe(Direction(direction), p.g)
+			p.g.scriptEvents.doWhenSwipe(Direction(direction), p.g)
 		},
 	}
 }

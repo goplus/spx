@@ -75,12 +75,11 @@ const (
 )
 
 type Shape any
-type threadObj = coroutine.ThreadObj
 
 // Game represents the main game instance with all core systems
 type Game struct {
 	baseObj
-	eventSinks
+	scriptEventBindings
 	fs spxfs.Dir
 
 	lifecycleState   corestate.GameLifecycleState
@@ -101,8 +100,8 @@ type Game struct {
 	events chan event
 	aurec  *audiorecord.Recorder
 
-	sinkMgr eventSinkMgr
-	gamer   Gamer
+	scriptEvents scriptEventRegistry
+	gamer        Gamer
 
 	sprCollisionInfos       map[string]*spriteCollisionInfo
 	isCollisionByPixel      bool
@@ -243,7 +242,7 @@ func (p *Game) reset() {
 	p.releaseGameAudio()
 	p.EraseAll()
 
-	p.sinkMgr.Reset()
+	p.scriptEvents.Reset()
 	p.spriteMgr.reset()
 
 	p.debugState.DebugPanel = nil
@@ -267,7 +266,7 @@ func (p *Game) initGame(sprites []Sprite) *Game {
 	engine.SetGame(p)
 	p.initSpriteMgr()
 	p.initRuntimeState()
-	p.eventSinks.init(&p.sinkMgr, p)
+	p.scriptEventBindings.init(&p.scriptEvents, p)
 	p.engineMgr = engineManagers{}
 	ui.Init(&p.engineMgr)
 	p.sprs = make(map[string]Sprite)
