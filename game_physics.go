@@ -217,7 +217,7 @@ func (p *Game) setupCollisionLayers(inits []Sprite) {
 	// Recalculate physics info
 	engine.WaitMainThread(func() {
 		for _, data := range spriteData {
-			syncInitSpritePhysicInfo(data.sprite, data.sprite.SyncSprite)
+			syncInitSpritePhysicInfo(data.sprite, data.sprite.runtimeState.SyncSprite)
 		}
 	})
 }

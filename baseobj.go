@@ -28,7 +28,7 @@ import (
 
 // baseObj provides common functionality for sprites and backdrops.
 type baseObj struct {
-	corestate.BaseObjRuntimeState
+	runtimeState corestate.BaseObjRuntimeState
 
 	costumes     []*costume
 	costumeIndex int
@@ -39,27 +39,39 @@ type baseObj struct {
 
 // getSpriteId returns the unique identifier for this sprite.
 func (p *baseObj) getSpriteId() engine.Object {
-	return p.SyncSprite.GetId()
+	return p.runtimeState.SyncSprite.GetId()
 }
 
 // getProxy returns the underlying engine sprite.
 func (p *baseObj) getProxy() *engine.Sprite {
-	return p.SyncSprite
+	return p.runtimeState.SyncSprite
 }
 
 // setLayer sets the layer/z-order of the object.
 func (p *baseObj) setLayer(layer int) {
-	if p.Layer != layer {
-		p.Layer = layer
-		p.IsLayerDirty = true
+	if p.runtimeState.Layer != layer {
+		p.runtimeState.Layer = layer
+		p.runtimeState.IsLayerDirty = true
 	}
 }
 
 // setCostumeIndex sets the current costume by index.
 func (p *baseObj) setCostumeIndex(value int) {
 	p.costumeIndex = value
-	p.IsCostumeDirty = true
-	p.IsAnimating = false
+	p.runtimeState.IsCostumeDirty = true
+	p.runtimeState.IsAnimating = false
+}
+
+// isDestroyed reports whether the object has been permanently destroyed.
+// It is safe to call from the engine thread while scripts are still tearing down.
+func (p *baseObj) isDestroyed() bool {
+	return p.runtimeState.IsDestroyed()
+}
+
+// markDestroyed records that the object has been permanently destroyed.
+// It is safe to call from script goroutines and read from the engine thread.
+func (p *baseObj) markDestroyed() {
+	p.runtimeState.MarkDestroyed()
 }
 
 // initWith initializes the base object with sprite configuration.
@@ -117,7 +129,7 @@ func initWithCS(p *baseObj, base string, cs *costumeSet) {
 
 // initCSPart initializes a costume set part.
 func initCSPart(p *baseObj, img *costumeSetImage, faceRight float64, bitmapResolution, nx int, items []costumeSetItem) {
-	p.IsCostumeSet = true
+	p.runtimeState.IsCostumeSet = true
 	if nx <= 0 {
 		engine.Panicf("initCSPart: invalid costume set frame count %d", nx)
 		return
@@ -174,7 +186,7 @@ func (p *baseObj) init(base string, configs []*costumeConfig, costumeIndex int) 
 	if costumeIndex >= len(configs) || costumeIndex < 0 {
 		costumeIndex = 0
 	}
-	p.IsLayerDirty = true
+	p.runtimeState.IsLayerDirty = true
 	p.setCostumeIndex(costumeIndex)
 }
 
@@ -188,7 +200,7 @@ func (p *baseObj) initWithSize(width, height int) {
 // initFrom initializes from another base object (cloning).
 func (p *baseObj) initFrom(src *baseObj) {
 	p.costumes = src.costumes
-	p.HasShader = false
+	p.runtimeState.HasShader = false
 	p.setCostumeIndex(src.costumeIndex)
 }
 
@@ -272,12 +284,12 @@ func (p *baseObj) getCostumePath() string {
 
 // getCostumeRenderScale returns the render scale for the current costume.
 func (p *baseObj) getCostumeRenderScale() float64 {
-	return p.Scale / float64(p.getCurrentBitmapResolution())
+	return p.runtimeState.Scale / float64(p.getCurrentBitmapResolution())
 }
 
 // getAnimRenderScale returns the render scale for animation with given bitmap resolution.
 func (p *baseObj) getAnimRenderScale(bitmapResolution int) float64 {
-	return p.Scale / float64(bitmapResolution)
+	return p.runtimeState.Scale / float64(bitmapResolution)
 }
 
 // getCurrentBitmapResolution returns the bitmap resolution of the current costume.
@@ -367,7 +379,7 @@ func (p *baseObj) applyGraphicEffects(isSync bool) {
 
 // doSetGraphicEffect applies a single graphic effect.
 func (p *baseObj) doSetGraphicEffect(kind EffectKind, isSync bool) {
-	if p.SyncSprite == nil {
+	if p.runtimeState.SyncSprite == nil {
 		return
 	}
 
@@ -431,24 +443,24 @@ func (p *baseObj) setMaterialParamsVec4(effect string, amount mathf.Vec4, isSync
 
 // applyMaterialParams is the internal implementation for setting scalar material params.
 func (p *baseObj) applyMaterialParams(effect string, amount float64) {
-	if p.SyncSprite == nil {
+	if p.runtimeState.SyncSprite == nil {
 		return
 	}
-	if !p.HasShader {
-		p.SyncSprite.SetMaterialShader(shaderPath)
-		p.HasShader = true
+	if !p.runtimeState.HasShader {
+		p.runtimeState.SyncSprite.SetMaterialShader(shaderPath)
+		p.runtimeState.HasShader = true
 	}
-	p.SyncSprite.SetMaterialParams(effect, amount)
+	p.runtimeState.SyncSprite.SetMaterialParams(effect, amount)
 }
 
 // applyMaterialParamsVec4 is the internal implementation for setting vector material params.
 func (p *baseObj) applyMaterialParamsVec4(effect string, val mathf.Vec4) {
-	if p.SyncSprite == nil {
+	if p.runtimeState.SyncSprite == nil {
 		return
 	}
-	if !p.HasShader {
-		p.SyncSprite.SetMaterialShader(shaderPath)
-		p.HasShader = true
+	if !p.runtimeState.HasShader {
+		p.runtimeState.SyncSprite.SetMaterialShader(shaderPath)
+		p.runtimeState.HasShader = true
 	}
-	p.SyncSprite.SetMaterialParamsVec(effect, val.X, val.Y, val.Z, val.W)
+	p.runtimeState.SyncSprite.SetMaterialParamsVec(effect, val.X, val.Y, val.Z, val.W)
 }

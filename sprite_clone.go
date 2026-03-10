@@ -50,7 +50,7 @@ func doClone(sprite Sprite, data any, isAsync bool, onCloned func(sprite *Sprite
 	if onCloned != nil {
 		onCloned(dest)
 	}
-	if dest.HasOnCloned {
+	if dest.spriteState.HasOnCloned {
 		if isAsync {
 			engine.Go(dest.pthis, func(ctx context.Context) {
 				dest.doWhenAwake(dest)
@@ -75,7 +75,7 @@ func cloneSprite(out reflect.Value, outPtr Sprite, in reflect.Value, v coreproje
 		}
 	}()
 	dest.sprite = outPtr
-	dest.IsCostumeDirty = true
+	dest.runtimeState.IsCostumeDirty = true
 
 	src := spriteOf(in.Addr().Interface().(Sprite))
 	dest.components.cloneFrom(&src.components, dest)
@@ -88,7 +88,7 @@ func cloneSprite(out reflect.Value, outPtr Sprite, in reflect.Value, v coreproje
 		})
 		runMain(outPtr.Main)
 	}
-	dest.SyncSprite = nil
+	dest.runtimeState.SyncSprite = nil
 	engine.WaitMainThread(func() {
 		dest.syncCheckInitProxy()
 		syncCheckUpdateCostume(&dest.baseObj)
@@ -111,15 +111,15 @@ func applySpriteProps(dest *SpriteImpl, v coreproject.StageShape) {
 		transform.rotationStyle = toRotationStyle(style.(string))
 	}
 	if visible, ok := v["visible"]; ok {
-		dest.IsVisible = visible.(bool)
+		dest.spriteState.IsVisible = visible.(bool)
 	}
 	if size, ok := v["size"]; ok {
-		dest.Scale = size.(float64)
+		dest.runtimeState.Scale = size.(float64)
 	}
 	if idx, ok := v["costumeIndex"]; ok {
 		dest.setCostumeIndex(int(idx.(float64)))
 	}
-	dest.Cloned = false
+	dest.spriteState.Cloned = false
 }
 
 func applySprite(out reflect.Value, sprite Sprite, v coreproject.StageShape) (*SpriteImpl, Sprite) {

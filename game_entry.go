@@ -191,8 +191,8 @@ func setupGameConfig(g *Game, conf *Config, proj *projConfig) {
 	proj.FullScreen = runtimeCfg.FullScreen
 	g.setPhysicsEnabled(runtimeCfg.PhysicsEnabled)
 	g.setEventQueuePolicy(parseEventQueuePolicy(runtimeCfg.EventQueuePolicy))
-	g.WindowHeight = runtimeCfg.WindowHeight
-	g.WindowWidth = runtimeCfg.WindowWidth
+	g.displayState.WindowHeight = runtimeCfg.WindowHeight
+	g.displayState.WindowWidth = runtimeCfg.WindowWidth
 
 	if runtimeCfg.ScreenshotKey != "" {
 		if err := os.Setenv("SPX_SCREENSHOT_KEY", runtimeCfg.ScreenshotKey); err != nil {
@@ -407,7 +407,7 @@ func (p *Game) runLoop(cfg *Config) (err error) {
 	}
 	p.initEventLoop()
 	p.engine().PlatformMgr.SetWindowTitle(cfg.Title)
-	p.IsRunned = true
+	p.lifecycleState.IsRunned = true
 	return nil
 }
 

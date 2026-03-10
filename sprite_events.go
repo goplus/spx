@@ -23,7 +23,7 @@ import (
 )
 
 func (p *SpriteImpl) OnCloned__0(onCloned func(data any)) {
-	p.HasOnCloned = true
+	p.spriteState.HasOnCloned = true
 	p.eventSinkMgr.AddCloned(coreevent.NewSink(p, onCloned, coreevent.MatchOwner(p)))
 }
 
@@ -32,13 +32,13 @@ func (p *SpriteImpl) OnCloned__1(onCloned func()) {
 }
 
 func (p *SpriteImpl) fireTouchStart(obj *SpriteImpl) {
-	if p.HasOnTouchStart {
+	if p.spriteState.HasOnTouchStart {
 		p.doWhenTouchStart(p, obj)
 	}
 }
 
 func (p *SpriteImpl) addTouchStartHandler(onTouchStart func(Sprite)) {
-	p.HasOnTouchStart = true
+	p.spriteState.HasOnTouchStart = true
 	p.eventSinkMgr.AddTouchStart(coreevent.NewSink(p, onTouchStart, coreevent.MatchOwner(p)))
 }
 

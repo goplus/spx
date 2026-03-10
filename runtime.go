@@ -50,7 +50,7 @@ var (
 // OnEngineStart is called when the engine starts.
 // It initializes the game and starts the main game loop.
 func (p *Game) OnEngineStart() {
-	p.RunOnce.Do(func() {
+	p.lifecycleState.RunOnce.Do(func() {
 		cachedBounds = make(map[string]mathf.Rect2)
 		onStart := func() {
 			defer engine.CheckPanic()
@@ -58,7 +58,7 @@ func (p *Game) OnEngineStart() {
 			if me, ok := gamer.(interface{ MainEntry() }); ok {
 				runMain(me.MainEntry)
 			}
-			if !p.IsRunned {
+			if !p.lifecycleState.IsRunned {
 				XGot_Game_Run(gamer, "assets")
 			}
 			engine.OnGameStarted()
@@ -79,7 +79,7 @@ func (p *Game) OnEngineReset() {
 // OnEngineUpdate is called every frame to update game logic.
 // All updates are performed on the main thread.
 func (p *Game) OnEngineUpdate(delta float64) {
-	if !p.IsRunned {
+	if !p.lifecycleState.IsRunned {
 		return
 	}
 	p.syncUpdateInput()
@@ -90,7 +90,7 @@ func (p *Game) OnEngineUpdate(delta float64) {
 
 // OnEngineRender is called every frame to render the game.
 func (p *Game) OnEngineRender(delta float64) {
-	if !p.IsRunned {
+	if !p.lifecycleState.IsRunned {
 		return
 	}
 	p.syncUpdatePhysic()
@@ -98,7 +98,7 @@ func (p *Game) OnEngineRender(delta float64) {
 
 // OnEnginePause is called when the engine is paused or resumed.
 func (p *Game) OnEnginePause(isPaused bool) {
-	if !p.IsRunned {
+	if !p.lifecycleState.IsRunned {
 		return
 	}
 }
@@ -146,7 +146,7 @@ func (p *Game) fireEvent(ev event) {
 		return
 	}
 	if isDebugInstrEnabled() {
-		spxlog.Warn("Event buffer is full (policy=%s). Drop event: %v", p.EventQueuePolicy, ev)
+		spxlog.Warn("Event buffer is full (policy=%s). Drop event: %v", p.gameRuntimeState.EventQueuePolicy, ev)
 	}
 }
 
@@ -281,7 +281,7 @@ func (p *Game) syncUpdatePhysic() {
 		},
 		isSpriteTouchable,
 		func(srcSprite, dstSprite *SpriteImpl) {
-			srcSprite.HasOnTouchStart = true
+			srcSprite.spriteState.HasOnTouchStart = true
 			srcSprite.fireTouchStart(dstSprite)
 		},
 		func() {
@@ -291,12 +291,12 @@ func (p *Game) syncUpdatePhysic() {
 }
 
 func isSpriteTouchable(sprite *SpriteImpl) bool {
-	return sprite.IsVisible && !sprite.IsDying
+	return sprite.spriteState.IsVisible && !sprite.spriteState.IsDying
 }
 
 // syncUpdateLogic updates game logic and fires start events.
 func (p *Game) syncUpdateLogic() error {
-	coreruntime.SyncOnce(&p.StartFlag, func() {
+	coreruntime.SyncOnce(&p.lifecycleState.StartFlag, func() {
 		p.fireEvent(&eventStart{})
 	})
 	return nil
@@ -312,7 +312,7 @@ func (p *Game) syncEnginePositions() error {
 			return ok && sprite.shouldSyncPhysicsPosition()
 		},
 		func(item Shape) int64 {
-			return int64(item.(*SpriteImpl).SyncSprite.Id)
+			return int64(item.(*SpriteImpl).runtimeState.SyncSprite.Id)
 		},
 		engine.SyncBatchGetPositions,
 		func(item Shape, x, y float64) {
@@ -357,26 +357,26 @@ func checkUpdateCostume(p *baseObj) {
 
 // syncCheckUpdateCostume updates sprite costume and layer if they are dirty.
 func syncCheckUpdateCostume(p *baseObj) {
-	syncSprite := p.SyncSprite
-	if p.IsLayerDirty {
+	syncSprite := p.runtimeState.SyncSprite
+	if p.runtimeState.IsLayerDirty {
 		if !engine.HasLayerSortMethod() {
-			syncSprite.SetZIndex(int64(p.Layer))
+			syncSprite.SetZIndex(int64(p.runtimeState.Layer))
 		}
-		p.IsLayerDirty = false
+		p.runtimeState.IsLayerDirty = false
 	}
-	if !p.IsCostumeDirty {
+	if !p.runtimeState.IsCostumeDirty {
 		return
 	}
-	p.IsCostumeDirty = false
+	p.runtimeState.IsCostumeDirty = false
 	path := p.getCostumePath()
 	renderScale := p.getCostumeRenderScale()
 	if p.isCostumeAtlas() {
 		rect := p.getCostumeAtlasRegion()
-		syncSprite.UpdateTextureAtlas(path, rect, renderScale, !p.IsAnimating)
+		syncSprite.UpdateTextureAtlas(path, rect, renderScale, !p.runtimeState.IsAnimating)
 		syncOnAtlasChanged(p)
 		return
 	}
-	syncSprite.UpdateTexture(path, renderScale, !p.IsAnimating)
+	syncSprite.UpdateTexture(path, renderScale, !p.runtimeState.IsAnimating)
 }
 
 func syncOnAtlasChanged(p *baseObj) {
@@ -387,18 +387,18 @@ func syncOnAtlasChanged(p *baseObj) {
 
 // syncCheckInitProxy initializes the sprite's engine proxy if it hasn't been created yet.
 func (sprite *SpriteImpl) syncCheckInitProxy() {
-	if sprite.SyncSprite != nil || sprite.IsDestroyed() {
+	if sprite.runtimeState.SyncSprite != nil || sprite.isDestroyed() {
 		return
 	}
-	sprite.SyncSprite = engine.MainThreadNewSprite(sprite, mathf.NewVec2(sprite.getXYWithRenderOffset()))
-	syncInitSpritePhysicInfo(sprite, sprite.SyncSprite)
-	sprite.SyncSprite.SetVisible(sprite.IsVisible)
-	sprite.SyncSprite.Name = sprite.name
-	sprite.SyncSprite.SetTypeName(sprite.name)
+	sprite.runtimeState.SyncSprite = engine.MainThreadNewSprite(sprite, mathf.NewVec2(sprite.getXYWithRenderOffset()))
+	syncInitSpritePhysicInfo(sprite, sprite.runtimeState.SyncSprite)
+	sprite.runtimeState.SyncSprite.SetVisible(sprite.spriteState.IsVisible)
+	sprite.runtimeState.SyncSprite.Name = sprite.name
+	sprite.runtimeState.SyncSprite.SetTypeName(sprite.name)
 	sprite.applyGraphicEffects(true)
 	sprite.animation().registerOnAnimationLooped(sprite.syncOnAnimationLooped)
 	sprite.animation().registerOnAnimationFinished(sprite.syncOnAnimationFinished)
-	sprite.IsDirty = true
+	sprite.spriteState.IsDirty = true
 }
 
 // syncOnAnimationFinished is called when an animation finishes.
@@ -406,8 +406,8 @@ func (sprite *SpriteImpl) syncOnAnimationFinished() {
 	engine.Lock()
 	defer engine.Unlock()
 	state := sprite.animation().getCurAnimState()
-	if state != nil && state.Name != "" && sprite.SyncSprite != nil {
-		sprite.animation().addDonedAnimation(sprite.SyncSprite.GetCurrentAnimName())
+	if state != nil && state.Name != "" && sprite.runtimeState.SyncSprite != nil {
+		sprite.animation().addDonedAnimation(sprite.runtimeState.SyncSprite.GetCurrentAnimName())
 	}
 }
 
@@ -426,7 +426,7 @@ func syncInitSpritePhysicInfo(sprite *SpriteImpl, syncProxy *engine.Sprite) {
 }
 
 func (sprite *SpriteImpl) shouldSyncPhysicsPosition() bool {
-	return sprite.SyncSprite != nil && sprite.PhysicsMode() != NoPhysics
+	return sprite.runtimeState.SyncSprite != nil && sprite.PhysicsMode() != NoPhysics
 }
 
 func (sprite *SpriteImpl) syncPhysicsPosition(x, y float64) {
@@ -435,17 +435,17 @@ func (sprite *SpriteImpl) syncPhysicsPosition(x, y float64) {
 }
 
 func (sprite *SpriteImpl) syncProxyState(buffer *engine.SpriteSyncBuffer) {
-	if sprite.IsDestroyed() || sprite.SyncSprite == nil {
+	if sprite.isDestroyed() || sprite.runtimeState.SyncSprite == nil {
 		return
 	}
-	if sprite.IsVisible {
+	if sprite.spriteState.IsVisible {
 		syncCheckUpdateCostume(&sprite.baseObj)
 	}
-	if !sprite.IsDirty {
+	if !sprite.spriteState.IsDirty {
 		return
 	}
 	sprite.appendSyncTransform(buffer)
-	sprite.IsDirty = false
+	sprite.spriteState.IsDirty = false
 }
 
 func (sprite *SpriteImpl) appendSyncTransform(buffer *engine.SpriteSyncBuffer) {
@@ -453,11 +453,11 @@ func (sprite *SpriteImpl) appendSyncTransform(buffer *engine.SpriteSyncBuffer) {
 	offsetX, offsetY := getRenderOffset(sprite)
 	rot, scaleX, scaleY := getRenderRotationAndScale(sprite)
 	buffer.Add(
-		int64(sprite.SyncSprite.Id),
+		int64(sprite.runtimeState.SyncSprite.Id),
 		x+offsetX, y+offsetY,
 		engine.DegToRad(rot),
 		scaleX, scaleY,
 		offsetX, offsetY,
-		sprite.IsVisible,
+		sprite.spriteState.IsVisible,
 	)
 }

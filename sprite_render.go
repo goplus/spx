@@ -29,12 +29,12 @@ func (p *SpriteImpl) setVisible(visible bool) {
 		spxlog.Debug("%s visible is %t", p.name, visible)
 	}
 
-	if visible == p.IsVisible {
+	if visible == p.spriteState.IsVisible {
 		return
 	}
 
-	p.IsVisible = visible
-	p.IsDirty = true
+	p.spriteState.IsVisible = visible
+	p.spriteState.IsDirty = true
 }
 
 func (p *SpriteImpl) Hide() {
@@ -47,7 +47,7 @@ func (p *SpriteImpl) Show() {
 }
 
 func (p *SpriteImpl) Visible() bool {
-	return p.IsVisible
+	return p.spriteState.IsVisible
 }
 
 // ============================================================================
@@ -71,8 +71,8 @@ func (p *SpriteImpl) setCostume(costume any) {
 		spxlog.Debug("SetCostume: sprite=%s, costume=%v", p.name, costume)
 	}
 	p.goSetCostume(costume)
-	p.DefaultCostumeIndex = p.costumeIndex
-	p.IsDirty = true
+	p.spriteState.DefaultCostumeIndex = p.costumeIndex
+	p.spriteState.IsDirty = true
 }
 
 func (p *SpriteImpl) SetCostume__0(costume SpriteCostumeName) {

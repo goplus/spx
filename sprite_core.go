@@ -27,7 +27,7 @@ import (
 // SpriteImpl is the concrete implementation of the Sprite interface.
 type SpriteImpl struct {
 	baseObj
-	corestate.SpriteRuntimeState
+	spriteState corestate.SpriteRuntimeState
 	eventSinks
 	g      *Game
 	sprite Sprite
@@ -43,11 +43,11 @@ func (p *SpriteImpl) Name() string {
 }
 
 func (p *SpriteImpl) IsCloned() bool {
-	return p.Cloned
+	return p.spriteState.Cloned
 }
 
 func (p *SpriteImpl) setDying() {
-	p.IsDying = true
+	p.spriteState.IsDying = true
 }
 
 func (p *SpriteImpl) getAllShapes() []Shape {
@@ -68,19 +68,19 @@ func (p *SpriteImpl) initBaseObjects(base string, spriteCfg *spriteConfig, g *Ga
 	} else {
 		p.baseObj.initWith(base, spriteCfg)
 	}
-	p.DefaultCostumeIndex = p.baseObj.costumeIndex
+	p.spriteState.DefaultCostumeIndex = p.baseObj.costumeIndex
 	p.eventSinks.init(&g.sinkMgr, p)
 }
 
 func (p *SpriteImpl) initBasicProperties(g *Game, name string, sprite Sprite, gamer reflect.Value, spriteCfg *spriteConfig) {
 	p.gamer = gamer
 	p.g, p.name, p.sprite = g, name, sprite
-	p.Scale = spriteCfg.Size
-	p.IsVisible = spriteCfg.Visible
+	p.runtimeState.Scale = spriteCfg.Size
+	p.spriteState.IsVisible = spriteCfg.Visible
 }
 
 func (p *SpriteImpl) initEngineObjects() {
-	p.SyncSprite = nil
+	p.runtimeState.SyncSprite = nil
 	engine.WaitMainThread(func() {
 		p.syncCheckInitProxy()
 	})
@@ -98,17 +98,17 @@ func (p *SpriteImpl) InitFrom(src *SpriteImpl) {
 	p.baseObj.initFrom(&src.baseObj)
 	p.eventSinks.initFrom(&src.eventSinks, p)
 
-	p.g, p.name, p.Scale = src.g, src.name, src.Scale
+	p.g, p.name, p.runtimeState.Scale = src.g, src.name, src.runtimeState.Scale
 	p.greffUniforms = maps.Clone(src.greffUniforms)
 
-	p.IsVisible = src.IsVisible
-	p.Cloned = true
-	p.IsDying = false
+	p.spriteState.IsVisible = src.spriteState.IsVisible
+	p.spriteState.Cloned = true
+	p.spriteState.IsDying = false
 
-	p.HasOnCloned = false
-	p.HasOnTouchStart = false
-	p.HasOnTouching = false
-	p.HasOnTouchEnd = false
+	p.spriteState.HasOnCloned = false
+	p.spriteState.HasOnTouchStart = false
+	p.spriteState.HasOnTouching = false
+	p.spriteState.HasOnTouchEnd = false
 }
 
 func (p *SpriteImpl) transform() *transformComponent {

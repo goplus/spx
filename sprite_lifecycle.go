@@ -36,8 +36,8 @@ func (p *SpriteImpl) Destroy() {
 	}
 	p.Hide()
 	p.doDeleteClone()
-	if p.SyncSprite != nil {
-		p.g.inputMgr.removeClickTarget(p.SyncSprite.GetId())
+	if p.runtimeState.SyncSprite != nil {
+		p.g.inputMgr.removeClickTarget(p.runtimeState.SyncSprite.GetId())
 	}
 	p.components.destroyComponents()
 	p.g.removeShape(p)
@@ -45,13 +45,13 @@ func (p *SpriteImpl) Destroy() {
 	if p == gco.Current().Obj {
 		gco.Abort()
 	}
-	p.SetDestroyed(true)
+	p.markDestroyed()
 }
 
 // DeleteThisClone deletes only cloned sprite, no effect on prototype sprite.
 // Add this interface to match Scratch.
 func (p *SpriteImpl) DeleteThisClone() {
-	if !p.Cloned {
+	if !p.spriteState.Cloned {
 		return
 	}
 	p.Destroy()

@@ -1,6 +1,10 @@
 package state
 
-import "github.com/goplus/spx/v2/internal/engine"
+import (
+	"sync/atomic"
+
+	"github.com/goplus/spx/v2/internal/engine"
+)
 
 type BaseObjRuntimeState struct {
 	SyncSprite     *engine.Sprite
@@ -11,13 +15,13 @@ type BaseObjRuntimeState struct {
 	IsLayerDirty   bool
 	HasShader      bool
 	IsAnimating    bool
-	hasDestroyed   bool
+	hasDestroyed   atomic.Bool
 }
 
 func (s *BaseObjRuntimeState) IsDestroyed() bool {
-	return s.hasDestroyed
+	return s.hasDestroyed.Load()
 }
 
-func (s *BaseObjRuntimeState) SetDestroyed(destroyed bool) {
-	s.hasDestroyed = destroyed
+func (s *BaseObjRuntimeState) MarkDestroyed() {
+	s.hasDestroyed.Store(true)
 }

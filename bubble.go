@@ -40,7 +40,7 @@ func (b *bubbleBase) checkNeedsUpdate() bool {
 	if !b.sprite.Visible() {
 		return false
 	}
-	return b.isDirty || b.sprite.IsDirty || b.camera.isDirty
+	return b.isDirty || b.sprite.spriteState.IsDirty || b.camera.isDirty
 }
 
 // getBounds returns the sprite's bounds information.

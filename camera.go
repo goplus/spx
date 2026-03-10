@@ -72,16 +72,16 @@ func (c *cameraImpl) onUpdate() {
 
 func (c *cameraImpl) setLimits() {
 	p := c.g
-	if p.WorldWidth <= 0 || p.WorldHeight <= 0 {
+	if p.displayState.WorldWidth <= 0 || p.displayState.WorldHeight <= 0 {
 		return
 	}
 
 	// Calculate actual world boundaries (based on minWorld coordinates and world size)
 	world := map[side]int{
-		sideLeft:   p.MinWorldX,
-		sideTop:    -p.MinWorldY - p.WorldHeight,
-		sideRight:  p.MinWorldX + p.WorldWidth,
-		sideBottom: -p.MinWorldY,
+		sideLeft:   p.displayState.MinWorldX,
+		sideTop:    -p.displayState.MinWorldY - p.displayState.WorldHeight,
+		sideRight:  p.displayState.MinWorldX + p.displayState.WorldWidth,
+		sideBottom: -p.displayState.MinWorldY,
 	}
 
 	// Apply camera limits
@@ -100,13 +100,13 @@ func (c *cameraImpl) ViewportRect() (float64, float64, float64, float64) {
 
 func (c *cameraImpl) SetZoom(scale float64) {
 	c.setDirtyFlag(true)
-	scale *= c.g.WindowScale
+	scale *= c.g.displayState.WindowScale
 	c.engine().CameraMgr.SetCameraZoom(mathf.NewVec2(scale, scale))
 }
 
 func (c *cameraImpl) Zoom() float64 {
 	scale := c.engine().CameraMgr.GetCameraZoom().X
-	scale /= c.g.WindowScale
+	scale /= c.g.displayState.WindowScale
 	return scale
 }
 
@@ -144,7 +144,7 @@ func (c *cameraImpl) getFollowPos() (bool, mathf.Vec2) {
 	if c.followTarget != nil {
 		switch v := c.followTarget.(type) {
 		case *SpriteImpl:
-			return v.IsDirty, mathf.NewVec2(v.getXY())
+			return v.spriteState.IsDirty, mathf.NewVec2(v.getXY())
 		case specialObj:
 			if c.followTarget == Mouse {
 				return true, c.g.inputMgr.currentMousePos()

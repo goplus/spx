@@ -92,7 +92,7 @@ func (a *animationComponent) initFromConfig(spriteCfg *spriteConfig) {
 			spriteName:   a.sprite.name,
 			ani:          ani,
 			costumes:     a.sprite.costumes,
-			isCostumeSet: a.sprite.IsCostumeSet,
+			isCostumeSet: a.sprite.runtimeState.IsCostumeSet,
 			engineMgr:    a.engine(),
 		}
 	}
@@ -118,19 +118,19 @@ func (a *animationComponent) onDestroy() {
 }
 
 func (a *animationComponent) registerOnAnimationLooped(f func()) {
-	a.sprite.SyncSprite.RegisterOnAnimationLooped(f)
+	a.sprite.runtimeState.SyncSprite.RegisterOnAnimationLooped(f)
 }
 
 func (a *animationComponent) unRegisterOnAnimationLooped() {
-	a.sprite.SyncSprite.UnRegisterOnAnimationLooped()
+	a.sprite.runtimeState.SyncSprite.UnRegisterOnAnimationLooped()
 }
 
 func (a *animationComponent) registerOnAnimationFinished(f func()) {
-	a.sprite.SyncSprite.RegisterOnAnimationFinished(f)
+	a.sprite.runtimeState.SyncSprite.RegisterOnAnimationFinished(f)
 }
 
 func (a *animationComponent) unRegisterOnAnimationFinished() {
-	a.sprite.SyncSprite.UnRegisterOnAnimationFinished()
+	a.sprite.runtimeState.SyncSprite.UnRegisterOnAnimationFinished()
 }
 
 func (a *animationComponent) Animate(name SpriteAnimationName, loop bool) {
@@ -149,7 +149,7 @@ func (a *animationComponent) StopAnimation(name SpriteAnimationName) {
 		return
 	}
 
-	a.sprite.SyncSprite.PauseAnim()
+	a.sprite.runtimeState.SyncSprite.PauseAnim()
 	a.playDefaultAnim()
 }
 
@@ -183,23 +183,23 @@ func (a *animationComponent) doAnimation(animName SpriteAnimationName, ani *aniC
 	syncCheckUpdateCostume(&a.sprite.baseObj)
 	a.prepareAnimationPlayback(animName, ani)
 
-	a.engine().SpriteMgr.PlayAnim(a.sprite.SyncSprite.GetId(), animName, speed, loop, false)
+	a.engine().SpriteMgr.PlayAnim(a.sprite.runtimeState.SyncSprite.GetId(), animName, speed, loop, false)
 	if isBlocking {
-		a.sprite.IsAnimating = true
-		for a.engine().SpriteMgr.IsPlayingAnim(a.sprite.SyncSprite.GetId()) {
+		a.sprite.runtimeState.IsAnimating = true
+		for a.engine().SpriteMgr.IsPlayingAnim(a.sprite.runtimeState.SyncSprite.GetId()) {
 			if info.IsCanceled {
 				break
 			}
 			engine.WaitNextFrame()
 		}
-		a.sprite.IsAnimating = false
+		a.sprite.runtimeState.IsAnimating = false
 		a.stopAnimState(info)
 	}
 }
 
 func (a *animationComponent) playDefaultAnim() {
 	animName := ""
-	if !a.sprite.IsVisible || a.sprite.IsDying {
+	if !a.sprite.spriteState.IsVisible || a.sprite.spriteState.IsDying {
 		return
 	}
 
@@ -224,9 +224,9 @@ func (a *animationComponent) playDefaultAnim() {
 
 	if _, ok := a.shared.animations[animName]; ok {
 		a.prepareAnimationPlayback(animName, a.shared.animations[animName])
-		a.engine().SpriteMgr.PlayAnim(a.sprite.SyncSprite.GetId(), animName, speed, true, false)
+		a.engine().SpriteMgr.PlayAnim(a.sprite.runtimeState.SyncSprite.GetId(), animName, speed, true, false)
 	} else {
-		a.sprite.goSetCostume(a.sprite.DefaultCostumeIndex)
+		a.sprite.goSetCostume(a.sprite.spriteState.DefaultCostumeIndex)
 	}
 }
 
@@ -239,7 +239,7 @@ func (a *animationComponent) playAnimAudio(ani *aniConfig, info *animState) {
 
 func (a *animationComponent) adaptAnimBitmapResolution(ani *aniConfig) {
 	renderScale := a.sprite.getAnimRenderScale(ani.AdaptAnimBitmapResolution)
-	a.sprite.SyncSprite.SetRenderScale(mathf.NewVec2(renderScale, renderScale))
+	a.sprite.runtimeState.SyncSprite.SetRenderScale(mathf.NewVec2(renderScale, renderScale))
 }
 
 func (a *animationComponent) prepareAnimationPlayback(animName SpriteAnimationName, ani *aniConfig) {
