@@ -14,9 +14,9 @@ case "${GOOS}" in
         ;;
 esac
 
-LDFLAGS="-checklinkname=0"
+LDFLAGS=""
 if [[ "${GOOS}" != "darwin" ]]; then
-    LDFLAGS="${LDFLAGS} -extldflags=-Wl,--allow-multiple-definition"
+    LDFLAGS="-extldflags=-Wl,--allow-multiple-definition"
 fi
 
 go build -buildmode c-shared -ldflags "${LDFLAGS}" -o "gdspx-${GOOS}-${GOARCH}.${EXT}"

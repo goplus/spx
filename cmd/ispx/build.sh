@@ -5,4 +5,4 @@ set -e
 (cd ../../pkg/ispx && go generate)
 
 # Build the WASM binary
-GOOS=js GOARCH=wasm go build -trimpath -ldflags "-s -w -checklinkname=0" -o ispx.wasm
+GOOS=js GOARCH=wasm go build -trimpath -ldflags "-s -w" -o ispx.wasm

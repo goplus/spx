@@ -47,9 +47,9 @@ jobs:
         run: |
           mkdir -p goenv/gotoolchain
           cd goenv/gotoolchain
-          curl -L -O https://go.dev/dl/go1.25.7.windows-${{ matrix.arch }}.zip
-          unzip -q go1.25.7.windows-${{ matrix.arch }}.zip
-          rm go1.25.7.windows-${{ matrix.arch }}.zip
+          curl -L -O https://go.dev/dl/go1.25.8.windows-${{ matrix.arch }}.zip
+          unzip -q go1.25.8.windows-${{ matrix.arch }}.zip
+          rm go1.25.8.windows-${{ matrix.arch }}.zip
           cd ../..
 
       - name: Get GOPATH and short SHA

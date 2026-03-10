@@ -4,7 +4,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd $SCRIPT_DIR
 
 # Pin Go toolchain version
-export GOTOOLCHAIN=go1.25.7
+export GOTOOLCHAIN=go1.25.8
 
 go mod tidy
 if ! go generate pkg/gengo/embedded_pkgs.go > /dev/null 2>&1; then
@@ -34,9 +34,9 @@ fi
 
 if [ "$OS" = "Windows_NT" ]; then
    # Fix for Windows MinGW linker duplicate symbol errors with Go 1.24
-   go build -ldflags="-checklinkname=0 -extldflags=-Wl,--allow-multiple-definition" -o $appname
+   go build -ldflags="-extldflags=-Wl,--allow-multiple-definition" -o $appname
 else
-   go build -ldflags="-checklinkname=0" -o $appname
+   go build -o $appname
 fi 
 GOPATH="$(go env GOPATH)"
 
