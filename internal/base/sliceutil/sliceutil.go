@@ -18,32 +18,29 @@ package sliceutil
 
 // InsertAt inserts an item at the specified index.
 func InsertAt[T any](slice []T, idx int, item T) []T {
-	n := len(slice)
-	newSlice := make([]T, n+1)
-	copy(newSlice[:idx], slice[:idx])
-	newSlice[idx] = item
-	copy(newSlice[idx+1:], slice[idx:])
-	return newSlice
+	var zero T
+	slice = append(slice, zero)
+	copy(slice[idx+1:], slice[idx:])
+	slice[idx] = item
+	return slice
 }
 
 // DeleteAt removes an item at the specified index.
 func DeleteAt[T any](slice []T, idx int) []T {
-	n := len(slice)
-	newSlice := make([]T, n-1)
-	copy(newSlice[:idx], slice[:idx])
-	copy(newSlice[idx:], slice[idx+1:])
-	return newSlice
+	last := len(slice) - 1
+	copy(slice[idx:], slice[idx+1:])
+	var zero T
+	slice[last] = zero
+	return slice[:last]
 }
 
 // MoveToEnd moves an item from idx to the end of the slice.
 func MoveToEnd[T any](slice []T, idx int) []T {
 	n := len(slice)
 	item := slice[idx]
-	newSlice := make([]T, n)
-	copy(newSlice[:idx], slice[:idx])
-	copy(newSlice[idx:n-1], slice[idx+1:])
-	newSlice[n-1] = item
-	return newSlice
+	copy(slice[idx:n-1], slice[idx+1:])
+	slice[n-1] = item
+	return slice
 }
 
 // MoveToIndex moves an item from oldIdx to newIdx.
@@ -52,32 +49,26 @@ func MoveToIndex[T any](slice []T, oldIdx, newIdx int) []T {
 		return slice
 	}
 
-	n := len(slice)
 	item := slice[oldIdx]
-	newSlice := make([]T, n)
-
 	if oldIdx < newIdx {
-		copy(newSlice[:oldIdx], slice[:oldIdx])
-		copy(newSlice[oldIdx:newIdx], slice[oldIdx+1:newIdx+1])
-		newSlice[newIdx] = item
-		copy(newSlice[newIdx+1:], slice[newIdx+1:])
+		copy(slice[oldIdx:newIdx], slice[oldIdx+1:newIdx+1])
+		slice[newIdx] = item
 	} else {
-		copy(newSlice[:newIdx], slice[:newIdx])
-		newSlice[newIdx] = item
-		copy(newSlice[newIdx+1:oldIdx+1], slice[newIdx:oldIdx])
-		copy(newSlice[oldIdx+1:], slice[oldIdx+1:])
+		copy(slice[newIdx+1:oldIdx+1], slice[newIdx:oldIdx])
+		slice[newIdx] = item
 	}
 
-	return newSlice
+	return slice
 }
 
 // CopyInto copies src into dst, reusing dst's capacity when possible.
 func CopyInto[T any](dst, src []T, minCap int) []T {
-	if dst == nil {
-		dst = make([]T, 0, minCap)
+	requiredCap := len(src)
+	if minCap > requiredCap {
+		requiredCap = minCap
 	}
-	if cap(dst) < len(src) {
-		dst = make([]T, len(src))
+	if cap(dst) < requiredCap {
+		dst = make([]T, len(src), requiredCap)
 	} else {
 		dst = dst[:len(src)]
 	}

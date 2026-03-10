@@ -18,6 +18,7 @@ type fakeBackend struct {
 	pan         float64
 	pitch       float64
 	volume      float64
+	playing     map[int64]bool
 }
 
 type playCall struct {
@@ -67,6 +68,10 @@ func (f *fakeBackend) GetVolume(obj engine.Object) float64 {
 
 func (f *fakeBackend) PlayWithAttenuation(obj engine.Object, path string, ownerID engine.Object, attenuation, maxDistance float64) int64 {
 	f.nextID++
+	if f.playing == nil {
+		f.playing = make(map[int64]bool)
+	}
+	f.playing[f.nextID] = true
 	f.plays = append(f.plays, playCall{
 		path:       path,
 		owner:      ownerID,
@@ -85,6 +90,9 @@ func (f *fakeBackend) Resume(aid int64) {
 }
 
 func (f *fakeBackend) Stop(aid int64) {
+	if f.playing != nil {
+		f.playing[aid] = false
+	}
 	f.stops = append(f.stops, aid)
 }
 
@@ -93,10 +101,12 @@ func (f *fakeBackend) SetLoop(aid int64, loop bool) {
 }
 
 func (f *fakeBackend) IsPlaying(aid int64) bool {
-	return false
+	return f.playing[aid]
 }
 
-func (f *fakeBackend) StopAll() {}
+func (f *fakeBackend) StopAll() {
+	f.playing = make(map[int64]bool)
+}
 
 func TestManagerPlayPauseResumeStop(t *testing.T) {
 	backend := &fakeBackend{}
@@ -126,8 +136,27 @@ func TestManagerPlayPauseResumeStop(t *testing.T) {
 	if len(backend.pauses) != 2 || len(backend.resumes) != 2 || len(backend.stops) != 2 {
 		t.Fatalf("pause/resume/stop lens = %d/%d/%d, want 2/2/2", len(backend.pauses), len(backend.resumes), len(backend.stops))
 	}
-	if len(backend.loops) != 2 {
-		t.Fatalf("SetLoop calls = %d, want 2", len(backend.loops))
+	if len(backend.loops) != 1 || backend.loops[0].id != 2 {
+		t.Fatalf("SetLoop calls = %+v, want loop only on latest id", backend.loops)
+	}
+}
+
+func TestManagerPlayPrunesFinishedIDs(t *testing.T) {
+	backend := &fakeBackend{}
+	var mgr Manager
+	mgr.Init(backend)
+
+	first := mgr.Play(1, "sounds/a.wav", false, false, 0, 0, 0)
+	backend.playing[first] = false
+
+	second := mgr.Play(1, "sounds/a.wav", false, false, 0, 0, 0)
+	mgr.Pause("sounds/a.wav")
+
+	if len(mgr.path2ids["sounds/a.wav"]) != 1 || mgr.path2ids["sounds/a.wav"][0] != second {
+		t.Fatalf("path2ids = %+v, want only latest live id", mgr.path2ids["sounds/a.wav"])
+	}
+	if len(backend.pauses) != 1 || backend.pauses[0] != second {
+		t.Fatalf("Pause calls = %+v, want [%d]", backend.pauses, second)
 	}
 }
 

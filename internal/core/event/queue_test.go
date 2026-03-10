@@ -1,6 +1,7 @@
 package event
 
 import (
+	"sync"
 	"testing"
 	"time"
 )
@@ -22,10 +23,10 @@ func TestEnqueueWithPolicyDropNewest(t *testing.T) {
 	var stats QueueStats
 	stats.Reset()
 
-	if !EnqueueWithPolicy(ch, 1, QueueDropNewest, &stats) {
+	if !EnqueueWithPolicy(ch, 1, QueueDropNewest, &stats, nil) {
 		t.Fatal("expected first enqueue to succeed")
 	}
-	if EnqueueWithPolicy(ch, 2, QueueDropNewest, &stats) {
+	if EnqueueWithPolicy(ch, 2, QueueDropNewest, &stats, nil) {
 		t.Fatal("expected second enqueue to be dropped")
 	}
 	if got := <-ch; got != 1 {
@@ -38,20 +39,21 @@ func TestEnqueueWithPolicyDropNewest(t *testing.T) {
 
 func TestEnqueueWithPolicyDropOldest(t *testing.T) {
 	ch := make(chan int, 1)
+	var mu sync.Mutex
 	var stats QueueStats
 	stats.Reset()
 
-	if !EnqueueWithPolicy(ch, 1, QueueDropOldest, &stats) {
+	if !EnqueueWithPolicy(ch, 1, QueueDropOldest, &stats, &mu) {
 		t.Fatal("expected first enqueue to succeed")
 	}
-	if !EnqueueWithPolicy(ch, 2, QueueDropOldest, &stats) {
+	if !EnqueueWithPolicy(ch, 2, QueueDropOldest, &stats, &mu) {
 		t.Fatal("expected second enqueue to succeed")
 	}
 	if got := <-ch; got != 2 {
 		t.Fatalf("queue retained %d, want 2", got)
 	}
-	if stats.DroppedTotal() != 0 {
-		t.Fatalf("DroppedTotal = %d, want 0", stats.DroppedTotal())
+	if stats.DroppedTotal() != 1 {
+		t.Fatalf("DroppedTotal = %d, want 1", stats.DroppedTotal())
 	}
 }
 
@@ -60,13 +62,13 @@ func TestEnqueueWithPolicyBlock(t *testing.T) {
 	var stats QueueStats
 	stats.Reset()
 
-	if !EnqueueWithPolicy(ch, 1, QueueBlock, &stats) {
+	if !EnqueueWithPolicy(ch, 1, QueueBlock, &stats, nil) {
 		t.Fatal("expected first enqueue to succeed")
 	}
 
 	done := make(chan struct{})
 	go func() {
-		EnqueueWithPolicy(ch, 2, QueueBlock, &stats)
+		EnqueueWithPolicy(ch, 2, QueueBlock, &stats, nil)
 		close(done)
 	}()
 

@@ -75,6 +75,9 @@ func buildFilesystemAssetPath(relPath string) string {
 	if isWithinRoot(path, root) {
 		return path
 	}
+	// Preserve legacy projects that referenced a shared sibling resource directory
+	// with "../../...". The compatibility root is still bounded to two parent levels
+	// above the configured asset root, so paths outside that legacy scope stay rejected.
 	if leadingParentCount(relPath) >= 2 && isWithinCompatibilityRoot(path, root) {
 		return path
 	}

@@ -2,7 +2,7 @@ package project
 
 import (
 	"encoding/json"
-	"errors"
+	"fmt"
 	"io"
 	"path"
 	"strings"
@@ -28,7 +28,11 @@ func ResourceDir(resource any) (spxfs.Dir, error) {
 	if fs, ok := resource.(spxfs.Dir); ok {
 		return fs, nil
 	}
-	return spxfs.Open(resource.(string))
+	path, ok := resource.(string)
+	if !ok {
+		return nil, fmt.Errorf("unsupported resource type %T", resource)
+	}
+	return spxfs.Open(path)
 }
 
 type OpenedBuilderResources struct {
@@ -62,7 +66,7 @@ func LoadJSON(ret any, fs spxfs.Dir, file string) error {
 			value := engine.ReadAllText(filePath)
 			return json.Unmarshal([]byte(value), ret)
 		}
-		return errors.New("error : Load json failed,file not exit " + filePath)
+		return fmt.Errorf("load json failed: %s does not exist", file)
 	}
 
 	f, err := fs.Open(file)

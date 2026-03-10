@@ -97,6 +97,41 @@ func TestBuildPayloadJSONAtlasReverse(t *testing.T) {
 	}
 }
 
+func TestBuildPayloadJSONNormalReverse(t *testing.T) {
+	got, _, err := BuildPayloadJSON(
+		Config{FrameFrom: 1, FrameTo: 0},
+		[]FrameSource{
+			{
+				Path:             "sprites/cat/a.png",
+				BitmapResolution: 1,
+				Center:           mathf.NewVec2(5, 5),
+				ImageSize:        mathf.NewVec2(10, 10),
+			},
+			{
+				Path:             "sprites/cat/b.png",
+				BitmapResolution: 1,
+				Center:           mathf.NewVec2(5, 5),
+				ImageSize:        mathf.NewVec2(10, 10),
+			},
+		},
+		false,
+	)
+	if err != nil {
+		t.Fatalf("BuildPayloadJSON(reverse normal) error: %v", err)
+	}
+
+	var payload decodedPayload
+	if err := json.Unmarshal([]byte(got), &payload); err != nil {
+		t.Fatalf("json.Unmarshal error: %v", err)
+	}
+	if len(payload.Frames) != 2 {
+		t.Fatalf("len(Frames) = %d, want 2", len(payload.Frames))
+	}
+	if payload.Frames[0]["path"] != engine.ToAssetPath("sprites/cat/b.png") {
+		t.Fatalf("frame[0].path = %v, want %q", payload.Frames[0]["path"], engine.ToAssetPath("sprites/cat/b.png"))
+	}
+}
+
 func TestBuildPayloadJSONBoundsError(t *testing.T) {
 	_, _, err := BuildPayloadJSON(Config{FrameFrom: -1, FrameTo: 0}, nil, false)
 	if err == nil {

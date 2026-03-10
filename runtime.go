@@ -387,7 +387,7 @@ func syncOnAtlasChanged(p *baseObj) {
 
 // syncCheckInitProxy initializes the sprite's engine proxy if it hasn't been created yet.
 func (sprite *SpriteImpl) syncCheckInitProxy() {
-	if sprite.SyncSprite != nil || sprite.HasDestroyed {
+	if sprite.SyncSprite != nil || sprite.IsDestroyed() {
 		return
 	}
 	sprite.SyncSprite = engine.MainThreadNewSprite(sprite, mathf.NewVec2(sprite.getXYWithRenderOffset()))
@@ -435,7 +435,7 @@ func (sprite *SpriteImpl) syncPhysicsPosition(x, y float64) {
 }
 
 func (sprite *SpriteImpl) syncProxyState(buffer *engine.SpriteSyncBuffer) {
-	if sprite.HasDestroyed || sprite.SyncSprite == nil {
+	if sprite.IsDestroyed() || sprite.SyncSprite == nil {
 		return
 	}
 	if sprite.IsVisible {

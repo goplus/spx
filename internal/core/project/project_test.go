@@ -87,6 +87,10 @@ func TestResourceDirAndLoadConfig(t *testing.T) {
 	if cfg.Name != "reader" {
 		t.Fatalf("cfg.Name = %q, want reader", cfg.Name)
 	}
+
+	if _, err := ResourceDir(123); err == nil {
+		t.Fatal("expected ResourceDir to reject unsupported resource type")
+	}
 }
 
 func TestDispatchStageShape(t *testing.T) {

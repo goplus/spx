@@ -36,13 +36,16 @@ func (p *SpriteImpl) Destroy() {
 	}
 	p.Hide()
 	p.doDeleteClone()
+	if p.SyncSprite != nil {
+		p.g.inputMgr.removeClickTarget(p.SyncSprite.GetId())
+	}
 	p.components.destroyComponents()
 	p.g.removeShape(p)
 	p.Stop(ThisSprite)
 	if p == gco.Current().Obj {
 		gco.Abort()
 	}
-	p.HasDestroyed = true
+	p.SetDestroyed(true)
 }
 
 // DeleteThisClone deletes only cloned sprite, no effect on prototype sprite.

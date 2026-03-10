@@ -17,6 +17,7 @@
 package spx
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -330,7 +331,7 @@ func SchedNow() int {
 			},
 		},
 	)
-	if err != nil {
+	if err != nil && !errors.Is(err, coreruntime.ErrLoopExecutionTimedOut) {
 		engine.Panic(err.Error())
 	}
 	return 0

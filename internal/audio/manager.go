@@ -42,13 +42,15 @@ func (m *Manager) ReleaseSound(soundObj engine.Object) {
 }
 
 func (m *Manager) Pause(path string) {
-	for _, id := range m.path2ids[path] {
+	ids := m.pruneDeadIDs(path)
+	for _, id := range ids {
 		m.backend.Pause(id)
 	}
 }
 
 func (m *Manager) Resume(path string) {
-	for _, id := range m.path2ids[path] {
+	ids := m.pruneDeadIDs(path)
+	for _, id := range ids {
 		m.backend.Resume(id)
 	}
 }
@@ -71,16 +73,17 @@ func (m *Manager) Play(
 		owner = 0
 	}
 
+	ids := m.pruneDeadIDs(path)
 	curID := m.backend.PlayWithAttenuation(soundObj, engine.ToAssetPath(path), owner, attenuation, maxDistance)
-	m.path2ids[path] = append(m.path2ids[path], curID)
+	ids = append(ids, curID)
+	m.path2ids[path] = ids
 	if isLoop {
-		for _, id := range m.path2ids[path] {
-			m.backend.SetLoop(id, true)
-		}
+		m.backend.SetLoop(curID, true)
 	} else if isWait {
 		for m.backend.IsPlaying(curID) {
 			engine.WaitNextFrame()
 		}
+		m.pruneDeadIDs(path)
 	}
 	return curID
 }
@@ -128,4 +131,25 @@ func (m *Manager) SetVolume(soundObj engine.Object, value float64) {
 
 func (m *Manager) ChangeVolume(soundObj engine.Object, delta float64) {
 	m.SetVolume(soundObj, m.GetVolume(soundObj)+delta)
+}
+
+func (m *Manager) pruneDeadIDs(path string) []int64 {
+	ids := m.path2ids[path]
+	if len(ids) == 0 {
+		delete(m.path2ids, path)
+		return nil
+	}
+
+	live := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		if m.backend.IsPlaying(id) {
+			live = append(live, id)
+		}
+	}
+	if len(live) == 0 {
+		delete(m.path2ids, path)
+		return nil
+	}
+	m.path2ids[path] = live
+	return live
 }

@@ -63,3 +63,12 @@ func TestSwipeRecognizerTimeLimitStopsTracking(t *testing.T) {
 		t.Fatal("expected expired swipe tracking to stop")
 	}
 }
+
+func TestCalculateDirectionMapsVerticalSwipesToScreenCoordinates(t *testing.T) {
+	if got := calculateDirection(mathf.NewVec2(0, 0), mathf.NewVec2(0, 100)); got != 180 {
+		t.Fatalf("downward direction = %v, want 180", got)
+	}
+	if got := calculateDirection(mathf.NewVec2(0, 100), mathf.NewVec2(0, 0)); got != 0 {
+		t.Fatalf("upward direction = %v, want 0", got)
+	}
+}

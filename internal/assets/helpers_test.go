@@ -77,6 +77,16 @@ func TestNewAtlasFrame(t *testing.T) {
 	}
 }
 
+func TestNewAtlasFrameDefaultsZeroNxToOne(t *testing.T) {
+	got := NewAtlasFrame(100, 20, "path", 0, 0, 0, 0, 0, 0, 1, func(string) mathf.Vec2 {
+		t.Fatal("fallback should not be called")
+		return mathf.Vec2{}
+	})
+	if got.Width != 100 || got.Height != 20 {
+		t.Fatalf("NewAtlasFrame size = (%d, %d), want (100, 20)", got.Width, got.Height)
+	}
+}
+
 func TestNewStandaloneFrame(t *testing.T) {
 	got := NewStandaloneFrame(32, 16, "path", 0, func(string) mathf.Vec2 {
 		t.Fatal("fallback should not be called")
@@ -87,5 +97,8 @@ func TestNewStandaloneFrame(t *testing.T) {
 	}
 	if got.BitmapResolution != DefaultBitmapResolution {
 		t.Fatalf("NewStandaloneFrame bitmap resolution = %d, want %d", got.BitmapResolution, DefaultBitmapResolution)
+	}
+	if got.Center != mathf.NewVec2(16, 8) {
+		t.Fatalf("NewStandaloneFrame center = %v, want {16 8}", got.Center)
 	}
 }

@@ -46,6 +46,9 @@ type payload struct {
 }
 
 func BuildPayloadJSON(cfg Config, costumes []FrameSource, isAtlas bool) (string, int, error) {
+	if len(costumes) == 0 {
+		return "", 0, fmt.Errorf("createAnimation: no costumes configured")
+	}
 	if cfg.FrameFrom < 0 || cfg.FrameFrom >= len(costumes) ||
 		cfg.FrameTo < 0 || cfg.FrameTo >= len(costumes) {
 		return "", 0, fmt.Errorf(
@@ -71,9 +74,13 @@ func buildPayload(cfg Config, costumes []FrameSource, isAtlas bool) (payload, in
 
 func buildNormalPayload(cfg Config, costumes []FrameSource) (payload, int) {
 	maxBitmap := 0
-	frameCount := cfg.FrameTo - cfg.FrameFrom + 1
+	step := 1
+	if cfg.FrameTo < cfg.FrameFrom {
+		step = -1
+	}
+	frameCount := (cfg.FrameTo-cfg.FrameFrom)*step + 1
 	frames := make([]any, 0, frameCount)
-	for i := cfg.FrameFrom; i <= cfg.FrameTo; i++ {
+	for i := cfg.FrameFrom; i != cfg.FrameTo+step; i += step {
 		c := costumes[i]
 		b := assetutil.ToBitmapResolution(c.BitmapResolution)
 		if b > maxBitmap {

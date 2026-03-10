@@ -1,6 +1,9 @@
 package event
 
-import "sync"
+import (
+	"slices"
+	"sync"
+)
 
 type Sink struct {
 	Owner   any
@@ -28,9 +31,8 @@ const (
 )
 
 type Manager struct {
-	mu          sync.RWMutex
-	buckets     [bucketCount][]Sink
-	calledStart bool
+	mu      sync.RWMutex
+	buckets [bucketCount][]Sink
 }
 
 func (m *Manager) Reset() {
@@ -38,10 +40,8 @@ func (m *Manager) Reset() {
 	defer m.mu.Unlock()
 
 	for i := range m.buckets {
-		clear(m.buckets[i])
 		m.buckets[i] = nil
 	}
-	m.calledStart = false
 }
 
 func (m *Manager) DeleteOwner(owner any) {
@@ -49,35 +49,34 @@ func (m *Manager) DeleteOwner(owner any) {
 	defer m.mu.Unlock()
 
 	for i := range m.buckets {
-		m.buckets[i] = deleteOwner(m.buckets[i], owner)
+		m.buckets[i] = deleteOwnerCopy(m.buckets[i], owner)
 	}
 }
 
-func deleteOwner(sinks []Sink, owner any) []Sink {
-	n := 0
-	for _, sink := range sinks {
-		if sink.Owner != owner {
-			sinks[n] = sink
-			n++
-		}
-	}
-	clear(sinks[n:])
-	return sinks[:n]
-}
-
-func copySinks(sinks []Sink) []Sink {
+func deleteOwnerCopy(sinks []Sink, owner any) []Sink {
 	if len(sinks) == 0 {
 		return nil
 	}
-	out := make([]Sink, len(sinks))
-	copy(out, sinks)
+
+	out := make([]Sink, 0, len(sinks))
+	for _, sink := range sinks {
+		if sink.Owner != owner {
+			out = append(out, sink)
+		}
+	}
+	if len(out) == len(sinks) {
+		return sinks
+	}
+	if len(out) == 0 {
+		return nil
+	}
 	return out
 }
 
 func (m *Manager) Add(bucket Bucket, sink Sink) {
 	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.buckets[bucket] = append(m.buckets[bucket], sink)
-	m.mu.Unlock()
 }
 
 func (m *Manager) AddStart(sink Sink) {
@@ -130,9 +129,13 @@ func (m *Manager) AddTimer(sink Sink) {
 
 func (m *Manager) Snapshot(bucket Bucket) []Sink {
 	m.mu.RLock()
-	out := copySinks(m.buckets[bucket])
+	out := slices.Clone(m.buckets[bucket])
 	m.mu.RUnlock()
 	return out
+}
+
+func (m *Manager) SnapshotStart() []Sink {
+	return m.Snapshot(BucketStart)
 }
 
 func (m *Manager) SnapshotAwake() []Sink {
@@ -177,14 +180,4 @@ func (m *Manager) SnapshotClick() []Sink {
 
 func (m *Manager) SnapshotTimer() []Sink {
 	return m.Snapshot(BucketTimer)
-}
-
-func (m *Manager) SnapshotStartOnce() []Sink {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.calledStart {
-		return nil
-	}
-	m.calledStart = true
-	return copySinks(m.buckets[BucketStart])
 }

@@ -17,14 +17,19 @@ func (a AABB) Intersects(b AABB) bool {
 type Entry[T any] struct {
 	Value T
 	Box   AABB
+	seen  uint64
 }
 
 type SpatialHash[T any] struct {
 	cellSize float64
 	grid     map[int64]map[int64][]*Entry[T]
+	queryID  uint64
 }
 
 func NewSpatialHash[T any](cellSize float64) *SpatialHash[T] {
+	if cellSize <= 0 {
+		panic("collisionutil: cellSize must be greater than zero")
+	}
 	return &SpatialHash[T]{
 		cellSize: cellSize,
 		grid:     make(map[int64]map[int64][]*Entry[T]),
@@ -32,11 +37,7 @@ func NewSpatialHash[T any](cellSize float64) *SpatialHash[T] {
 }
 
 func (s *SpatialHash[T]) Clear() {
-	for _, yGrid := range s.grid {
-		for y := range yGrid {
-			delete(yGrid, y)
-		}
-	}
+	s.grid = make(map[int64]map[int64][]*Entry[T])
 }
 
 func (s *SpatialHash[T]) Insert(entry *Entry[T]) {
@@ -61,8 +62,20 @@ func (s *SpatialHash[T]) Query(box AABB) []*Entry[T] {
 	minCellX, minCellY := s.cellCoords(box.MinX, box.MinY)
 	maxCellX, maxCellY := s.cellCoords(box.MaxX, box.MaxY)
 
-	seen := make(map[*Entry[T]]bool)
-	var results []*Entry[T]
+	s.queryID++
+	if s.queryID == 0 {
+		s.queryID++
+	}
+
+	cellsWide := int(maxCellX-minCellX) + 1
+	cellsHigh := int(maxCellY-minCellY) + 1
+	if cellsWide < 0 {
+		cellsWide = 0
+	}
+	if cellsHigh < 0 {
+		cellsHigh = 0
+	}
+	results := make([]*Entry[T], 0, cellsWide*cellsHigh)
 
 	for x := minCellX; x <= maxCellX; x++ {
 		if s.grid[x] == nil {
@@ -70,10 +83,10 @@ func (s *SpatialHash[T]) Query(box AABB) []*Entry[T] {
 		}
 		for y := minCellY; y <= maxCellY; y++ {
 			for _, candidate := range s.grid[x][y] {
-				if seen[candidate] {
+				if candidate.seen == s.queryID {
 					continue
 				}
-				seen[candidate] = true
+				candidate.seen = s.queryID
 				results = append(results, candidate)
 			}
 		}

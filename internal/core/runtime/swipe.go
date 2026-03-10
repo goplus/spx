@@ -1,11 +1,14 @@
 package runtime
 
 import (
+	"sync"
+
 	"github.com/goplus/spbase/mathf"
 	inputstate "github.com/goplus/spx/v2/internal/input"
 )
 
 type SwipeState[T comparable] struct {
+	mu         sync.Mutex
 	recognizer inputstate.SwipeRecognizer
 	target     T
 }
@@ -24,22 +27,29 @@ type SwipeHooks[T comparable] struct {
 }
 
 func (s *SwipeState[T]) Init() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.recognizer.Init()
 	s.target = zeroValue[T]()
 }
 
 func (s *SwipeState[T]) Begin(startPos mathf.Vec2, target T) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.target = target
 	s.recognizer.StartTracking(startPos)
 }
 
 func (s *SwipeState[T]) Finish(point mathf.Vec2, hooks SwipeHooks[T]) {
+	s.mu.Lock()
 	if !s.recognizer.IsTracking() {
+		s.mu.Unlock()
 		return
 	}
 	target := s.target
 	s.target = zeroValue[T]()
 	result, ok := s.recognizer.Finish(point)
+	s.mu.Unlock()
 	if !ok {
 		return
 	}
@@ -47,7 +57,9 @@ func (s *SwipeState[T]) Finish(point mathf.Vec2, hooks SwipeHooks[T]) {
 }
 
 func (s *SwipeState[T]) OnMouseMove(pos mathf.Vec2, hooks SwipeHooks[T]) {
+	s.mu.Lock()
 	if !s.recognizer.IsTracking() {
+		s.mu.Unlock()
 		return
 	}
 	result, ok := s.recognizer.OnMouseMove(pos)
@@ -55,10 +67,12 @@ func (s *SwipeState[T]) OnMouseMove(pos mathf.Vec2, hooks SwipeHooks[T]) {
 		if !s.recognizer.IsTracking() {
 			s.target = zeroValue[T]()
 		}
+		s.mu.Unlock()
 		return
 	}
 	target := s.target
 	s.target = zeroValue[T]()
+	s.mu.Unlock()
 	dispatchSwipeResult(result, target, hooks)
 }
 
