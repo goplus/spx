@@ -47,6 +47,7 @@ type GameRuntimeState struct {
 	IsSchedInMain    bool
 	MainSchedTime    time.Time
 	ImageSizeCache   sync.Map
+	EventQueueMu     sync.Mutex
 	EventQueuePolicy coreevent.QueuePolicy
 	EventQueueStats  coreevent.QueueStats
 }

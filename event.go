@@ -17,6 +17,8 @@
 package spx
 
 import (
+	"sync"
+
 	coreevent "github.com/goplus/spx/v2/internal/core/event"
 	"github.com/goplus/spx/v2/internal/coroutine"
 	"github.com/goplus/spx/v2/internal/engine"
@@ -33,6 +35,9 @@ type eventSinks struct {
 
 type eventSinkMgr struct {
 	coreevent.Manager
+
+	startMu    sync.Mutex
+	startFired bool
 }
 
 func (p *eventSinks) init(mgr *eventSinkMgr, this threadObj) {
@@ -53,6 +58,36 @@ func (p *eventSinks) doWhenSwipe(direction Direction, target threadObj) {
 	p.eventSinkMgr.doWhenSwipe(direction, target)
 }
 
+func (p *eventSinkMgr) Reset() {
+	p.Manager.Reset()
+	p.startMu.Lock()
+	p.startFired = false
+	p.startMu.Unlock()
+}
+
+func (p *eventSinkMgr) AddStart(sink eventSink) {
+	p.startMu.Lock()
+	defer p.startMu.Unlock()
+	if p.startFired {
+		if sprite, ok := sink.Owner.(*SpriteImpl); ok && sprite.Cloned {
+			return
+		}
+		spxlog.Warn("event: ignoring late OnStart registration for %s", nameOf(sink.Owner))
+		return
+	}
+	p.Manager.AddStart(sink)
+}
+
+func (p *eventSinkMgr) snapshotStartOnce() []eventSink {
+	p.startMu.Lock()
+	defer p.startMu.Unlock()
+	if p.startFired {
+		return nil
+	}
+	p.startFired = true
+	return p.Manager.SnapshotStart()
+}
+
 func (p *eventSinks) onAwake(onAwake func()) {
 	pthis := p.pthis
 	p.eventSinkMgr.AddAwake(coreevent.NewSink(p.pthis, onAwake, coreevent.MatchOwnerOrNil(pthis)))
@@ -70,7 +105,7 @@ func nameOf(this any) string {
 }
 
 func (p *eventSinkMgr) doWhenStart() {
-	sinks := p.SnapshotStartOnce()
+	sinks := p.snapshotStartOnce()
 	if len(sinks) == 0 {
 		return
 	}
@@ -365,5 +400,5 @@ func (p *Game) eventQueueSnapshot() eventQueueSnapshot {
 }
 
 func (p *Game) queueEventWithPolicy(ev event) bool {
-	return coreevent.EnqueueWithPolicy(p.events, ev, p.EventQueuePolicy, &p.EventQueueStats)
+	return coreevent.EnqueueWithPolicy(p.events, ev, p.EventQueuePolicy, &p.EventQueueStats, &p.EventQueueMu)
 }

@@ -85,6 +85,9 @@ func NewAtlasFrame(
 	nx, frameIndex, bitmapResolution int,
 	fallback func(string) mathf.Vec2,
 ) FrameDescriptor {
+	if nx <= 0 {
+		nx = 1
+	}
 	imageSize := ResolveImageSize(cfgWidth, cfgHeight, imagePath, fallback)
 	width := int(imageSize.X) / nx
 	height := int(imageSize.Y)
@@ -123,6 +126,7 @@ func NewStandaloneFrame(
 		Height:           int(imageSize.Y),
 		BitmapResolution: ToBitmapResolution(bitmapResolution),
 		ImageSize:        imageSize,
+		Center:           mathf.NewVec2(float64(int(imageSize.X))/2, float64(int(imageSize.Y))/2),
 		AtlasUVRect:      DefaultAtlasUV(),
 	}
 }

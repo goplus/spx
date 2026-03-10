@@ -40,8 +40,7 @@ func (p *Game) loadSprite(sprite Sprite, name string, gamer reflect.Value) error
 	base := vSpr.Field(0).Addr().Interface().(*SpriteImpl)
 	base.init(loaded.BaseDir, p, name, &loaded.Config, gamer, sprite)
 	p.sprs[name] = sprite
-	*(*uintptr)(unsafe.Pointer(vSpr.Field(1).Addr().Pointer())) = gamer.Addr().Pointer()
-	return nil
+	return bindSpriteOwner(vSpr, gamer)
 }
 
 func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
@@ -254,9 +253,12 @@ func (p *Game) addSpecialShape(g reflect.Value, v coreproject.StageShape, inits 
 }
 
 func (p *Game) addStageSprite(g reflect.Value, v coreproject.StageShape) (Sprite, error) {
-	target := v["target"].(string)
+	target, err := stageShapeTarget(v)
+	if err != nil {
+		return nil, err
+	}
 	var added Sprite
-	err := coreproject.BindStageSprite(g, target, coreproject.FindObjectPtr, func(val any) error {
+	err = coreproject.BindStageSprite(g, target, coreproject.FindObjectPtr, func(val any) error {
 		sp, ok := val.(Sprite)
 		if !ok {
 			return fmt.Errorf("stage sprite target is not a sprite")
@@ -274,12 +276,19 @@ func (p *Game) addStageSprite(g reflect.Value, v coreproject.StageShape) (Sprite
 }
 
 func (p *Game) addStageSprites(g reflect.Value, v coreproject.StageShape) ([]Sprite, error) {
-	target := v["target"].(string)
-	items := make([]Sprite, 0, len(v["items"].([]any)))
-	err := coreproject.BindStageSprites(
+	target, err := stageShapeTarget(v)
+	if err != nil {
+		return nil, err
+	}
+	rawItems, err := stageShapeItems(v)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]Sprite, 0, len(rawItems))
+	err = coreproject.BindStageSprites(
 		g,
 		target,
-		v["items"].([]any),
+		rawItems,
 		coreproject.FindFieldPtr,
 		func(typ reflect.Type) bool {
 			return typ.Implements(tySprite)
@@ -294,6 +303,46 @@ func (p *Game) addStageSprites(g reflect.Value, v coreproject.StageShape) ([]Spr
 	)
 	if err != nil {
 		return nil, fmt.Errorf("addStageSprites: %w", err)
+	}
+	return items, nil
+}
+
+func bindSpriteOwner(spriteValue reflect.Value, gamer reflect.Value) error {
+	if spriteValue.NumField() < 2 {
+		return fmt.Errorf("sprite %s is missing owner field", spriteValue.Type())
+	}
+
+	ownerField := spriteValue.Field(1)
+	if !ownerField.CanAddr() {
+		return fmt.Errorf("sprite %s owner field is not addressable", spriteValue.Type())
+	}
+
+	gamerPtr := gamer.Addr()
+	if !gamerPtr.Type().AssignableTo(ownerField.Type()) {
+		return fmt.Errorf(
+			"sprite %s owner field type %s cannot hold %s",
+			spriteValue.Type(), ownerField.Type(), gamerPtr.Type(),
+		)
+	}
+
+	// ownerField may be unexported in generated sprite structs, so Set would panic.
+	// reflect.NewAt gives us a typed, settable view over the same storage.
+	reflect.NewAt(ownerField.Type(), unsafe.Pointer(ownerField.UnsafeAddr())).Elem().Set(gamerPtr)
+	return nil
+}
+
+func stageShapeTarget(shape coreproject.StageShape) (string, error) {
+	target, ok := shape["target"].(string)
+	if !ok || target == "" {
+		return "", fmt.Errorf("stage shape target must be a non-empty string")
+	}
+	return target, nil
+}
+
+func stageShapeItems(shape coreproject.StageShape) ([]any, error) {
+	items, ok := shape["items"].([]any)
+	if !ok {
+		return nil, fmt.Errorf("stage shape items must be an array")
 	}
 	return items, nil
 }

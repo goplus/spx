@@ -69,7 +69,8 @@ func (p *baseObj) initWith(base string, sprite *spriteConfig) {
 	} else if sprite.CostumeMPSet != nil {
 		initWithCMPS(p, base, sprite.CostumeMPSet)
 	} else {
-		panic("initWith: sprite configuration must have either CostumeSet or CostumeMPSet defined")
+		engine.Panic("initWith: sprite configuration must have either CostumeSet or CostumeMPSet defined")
+		return
 	}
 
 	costumeIndex := sprite.GetCostumeIndex()
@@ -117,6 +118,10 @@ func initWithCS(p *baseObj, base string, cs *costumeSet) {
 // initCSPart initializes a costume set part.
 func initCSPart(p *baseObj, img *costumeSetImage, faceRight float64, bitmapResolution, nx int, items []costumeSetItem) {
 	p.IsCostumeSet = true
+	if nx <= 0 {
+		engine.Panicf("initCSPart: invalid costume set frame count %d", nx)
+		return
+	}
 	if nx == 1 {
 		name := strconv.Itoa(len(p.costumes))
 		addCostumeWith(p, name, img, faceRight, 0, bitmapResolution)
@@ -138,7 +143,7 @@ func initCSPart(p *baseObj, img *costumeSetImage, faceRight float64, bitmapResol
 		}
 	}
 	if frameIndex != nx {
-		panic("initCostumeSetPart: incomplete costume set loading")
+		engine.Panicf("initCSPart: incomplete costume set loading (loaded=%d, expected=%d)", frameIndex, nx)
 	}
 }
 
@@ -214,14 +219,16 @@ func (p *baseObj) goSetCostume(val any) bool {
 	case float64:
 		return p.setCostumeByIndex(int(v))
 	default:
-		panic("setCostume: invalid argument type")
+		engine.Panic("setCostume: invalid argument type")
+		return false
 	}
 }
 
 // setCostumeByIndex sets the costume by its index.
 func (p *baseObj) setCostumeByIndex(idx int) bool {
 	if idx < 0 || idx >= len(p.costumes) {
-		panic("invalid costume index")
+		engine.Panicf("invalid costume index: %d (count: %d)", idx, len(p.costumes))
+		return false
 	}
 	p.setCostumeIndex(idx)
 	return true
@@ -232,6 +239,7 @@ func (p *baseObj) setCostumeByName(name SpriteCostumeName) bool {
 	if idx := p.findCostume(name); idx >= 0 {
 		return p.setCostumeByIndex(idx)
 	}
+	engine.Panicf("invalid costume name: %s", name)
 	return false
 }
 

@@ -26,7 +26,11 @@ func WalkZOrder(
 			}
 			continue
 		}
-		if err := onSpecial(layer, entry.(StageShape)); err != nil {
+		shape, ok := entry.(StageShape)
+		if !ok {
+			return fmt.Errorf("invalid zorder entry type %T", entry)
+		}
+		if err := onSpecial(layer, shape); err != nil {
 			return err
 		}
 	}
@@ -117,7 +121,11 @@ func BindStageSprites(
 			newItem.Set(reflect.New(typItem))
 			newItem = newItem.Elem()
 		}
-		if err := bind(newItem, items[i].(StageShape)); err != nil {
+		shape, ok := items[i].(StageShape)
+		if !ok {
+			return fmt.Errorf("unexpected stage sprite item type %T", items[i])
+		}
+		if err := bind(newItem, shape); err != nil {
 			return err
 		}
 	}

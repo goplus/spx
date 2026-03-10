@@ -70,3 +70,18 @@ func TestRuntimeManagerImageSizeCacheSwitchesByState(t *testing.T) {
 		t.Fatal("runtime cache should not contain fallback entries")
 	}
 }
+
+func TestRuntimeManagerSetPhysicsEnabledDoesNotMutateDefaultWhenRuntimeProvided(t *testing.T) {
+	var mgr RuntimeManager
+	mgr.SetPhysicsEnabled(nil, true)
+
+	runtime := &GameRuntimeState{}
+	mgr.SetPhysicsEnabled(runtime, false)
+
+	if runtime.EnabledPhysics {
+		t.Fatal("expected runtime-specific physics flag to be updated")
+	}
+	if !mgr.PhysicsEnabled(nil) {
+		t.Fatal("expected default physics flag to remain unchanged")
+	}
+}

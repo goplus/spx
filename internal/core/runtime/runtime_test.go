@@ -322,11 +322,25 @@ func TestSched(t *testing.T) {
 			},
 		},
 	)
-	if err != nil {
-		t.Fatalf("Sched error: %v", err)
+	if err != ErrLoopExecutionTimedOut {
+		t.Fatalf("Sched error = %v, want %v", err, ErrLoopExecutionTimedOut)
 	}
 	if !called {
 		t.Fatal("expected sched timeout hook to run")
+	}
+
+	err = Sched(
+		ScheduleState{
+			Now:             time.Unix(1, 0),
+			MainExecTimeout: time.Second,
+		},
+		3000,
+		SchedulerHooks{
+			IsSchedTimeout: func(float64) bool { return true },
+		},
+	)
+	if err != ErrLoopExecutionTimedOut {
+		t.Fatalf("Sched timeout error = %v, want %v", err, ErrLoopExecutionTimedOut)
 	}
 }
 

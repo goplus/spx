@@ -36,18 +36,19 @@ func TestManagerDeleteOwner(t *testing.T) {
 	}
 }
 
-func TestManagerSnapshotStartOnce(t *testing.T) {
+func TestManagerSnapshotIsStableAcrossWrites(t *testing.T) {
 	var mgr Manager
 	mgr.Add(BucketStart, Sink{Owner: "game", Handler: func() {}})
 
-	first := mgr.SnapshotStartOnce()
-	second := mgr.SnapshotStartOnce()
+	first := mgr.SnapshotStart()
+	mgr.Add(BucketStart, Sink{Owner: "later", Handler: func() {}})
+	second := mgr.SnapshotStart()
 
 	if len(first) != 1 {
 		t.Fatalf("first snapshot len = %d, want 1", len(first))
 	}
-	if len(second) != 0 {
-		t.Fatalf("second snapshot len = %d, want 0", len(second))
+	if len(second) != 2 {
+		t.Fatalf("second snapshot len = %d, want 2", len(second))
 	}
 }
 

@@ -43,7 +43,6 @@ type SwipeRecognizer struct {
 	startTime  time.Time
 	startPoint mathf.Vec2
 	endPoint   mathf.Vec2
-	points     []mathf.Vec2
 	now        func() time.Time
 }
 
@@ -52,7 +51,6 @@ func (sr *SwipeRecognizer) Init() {
 	sr.enableTimeLimit = true
 	sr.minimumDistance = 50.0
 	sr.maximumDistance = 500.0
-	sr.points = make([]mathf.Vec2, 0, 50)
 	if sr.now == nil {
 		sr.now = time.Now
 	}
@@ -63,8 +61,6 @@ func (sr *SwipeRecognizer) StartTracking(startPos mathf.Vec2) {
 	sr.startTime = sr.nowTime()
 	sr.startPoint = startPos
 	sr.endPoint = startPos
-	sr.points = sr.points[:0]
-	sr.points = append(sr.points, startPos)
 }
 
 func (sr *SwipeRecognizer) StopTracking() {
@@ -85,7 +81,6 @@ func (sr *SwipeRecognizer) OnMouseMove(pos mathf.Vec2) (SwipeResult, bool) {
 			return SwipeResult{}, false
 		}
 	}
-	sr.points = append(sr.points, pos)
 	sr.endPoint = pos
 	return SwipeResult{}, false
 }
@@ -101,11 +96,10 @@ func (sr *SwipeRecognizer) Finish(point mathf.Vec2) (SwipeResult, bool) {
 }
 
 func (sr *SwipeRecognizer) checkForSwipeCompletion() (SwipeResult, bool) {
-	if len(sr.points) < 2 {
+	elapsed := sr.elapsedSeconds()
+	if elapsed <= 0 {
 		return SwipeResult{}, false
 	}
-
-	elapsed := sr.elapsedSeconds()
 	if sr.enableTimeLimit && sr.timeToSwipe > 0 {
 		if elapsed > sr.timeToSwipe {
 			return SwipeResult{}, false
@@ -138,21 +132,22 @@ func calculateDirection(startPoint, endPoint mathf.Vec2) float64 {
 	case angle >= 315 || angle < 45:
 		return 90
 	case angle >= 45 && angle < 135:
-		return 0
+		return 180
 	case angle >= 135 && angle < 225:
 		return -90
 	case angle >= 225 && angle < 315:
-		return 180
+		return 0
 	default:
 		return -1
 	}
 }
 
 func (sr *SwipeRecognizer) nowTime() time.Time {
-	if sr.now == nil {
-		sr.now = time.Now
+	now := sr.now
+	if now == nil {
+		now = time.Now
 	}
-	return sr.now()
+	return now()
 }
 
 func (sr *SwipeRecognizer) elapsedSeconds() float64 {

@@ -17,6 +17,7 @@
 package input
 
 import (
+	"sync"
 	"time"
 
 	engine "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
@@ -24,6 +25,7 @@ import (
 
 // ClickGate suppresses repeated click handling within a minimum interval.
 type ClickGate struct {
+	mu            sync.Mutex
 	minIntervalMs int64
 	lastClickMs   map[engine.Object]int64
 	now           func() time.Time
@@ -39,6 +41,17 @@ func (g *ClickGate) Init(minInterval time.Duration) {
 
 func (g *ClickGate) Allow(id engine.Object) bool {
 	currentTimeMs := g.nowMs()
+	if g.minIntervalMs <= 0 {
+		return true
+	}
+
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	if g.lastClickMs == nil {
+		g.lastClickMs = make(map[engine.Object]int64)
+	}
+	g.pruneLocked(currentTimeMs - g.minIntervalMs)
 	if lastTimeMs, ok := g.lastClickMs[id]; ok {
 		if currentTimeMs-lastTimeMs < g.minIntervalMs {
 			return false
@@ -48,9 +61,30 @@ func (g *ClickGate) Allow(id engine.Object) bool {
 	return true
 }
 
-func (g *ClickGate) nowMs() int64 {
-	if g.now == nil {
-		g.now = time.Now
+func (g *ClickGate) Remove(id engine.Object) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	delete(g.lastClickMs, id)
+}
+
+func (g *ClickGate) Reset() {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	clear(g.lastClickMs)
+}
+
+func (g *ClickGate) pruneLocked(expireBefore int64) {
+	for id, lastTimeMs := range g.lastClickMs {
+		if lastTimeMs <= expireBefore {
+			delete(g.lastClickMs, id)
+		}
 	}
-	return g.now().UnixNano() / int64(time.Millisecond)
+}
+
+func (g *ClickGate) nowMs() int64 {
+	now := g.now
+	if now == nil {
+		now = time.Now
+	}
+	return now().UnixNano() / int64(time.Millisecond)
 }

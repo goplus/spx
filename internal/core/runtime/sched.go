@@ -11,6 +11,7 @@ const (
 )
 
 var ErrMainExecutionTimedOut = errors.New(MainExecutionTimedOutMsg)
+var ErrLoopExecutionTimedOut = errors.New(LoopExecutionTimedOutMsg)
 
 type ScheduleState struct {
 	IsSchedInMain   bool
@@ -50,6 +51,7 @@ func Sched(state ScheduleState, schedTimeoutMs float64, hooks SchedulerHooks) er
 		if hooks.OnSchedTimeout != nil {
 			hooks.OnSchedTimeout()
 		}
+		return ErrLoopExecutionTimedOut
 	}
 	return nil
 }

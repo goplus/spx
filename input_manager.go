@@ -182,6 +182,10 @@ func (p *inputManager) canTriggerClickEvent(id engine.Object) bool {
 	return p.clickGate.Allow(id)
 }
 
+func (p *inputManager) removeClickTarget(id engine.Object) {
+	p.clickGate.Remove(id)
+}
+
 func (p *inputManager) beginSwipeTracking(startPos mathf.Vec2, targetSprite *SpriteImpl) {
 	p.swipe.Begin(startPos, targetSprite)
 }

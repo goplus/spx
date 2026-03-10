@@ -31,3 +31,21 @@ func TestSpatialHashQueryDeduplicatesEntries(t *testing.T) {
 		t.Fatalf("unexpected query result: %q", results[0].Value)
 	}
 }
+
+func TestSpatialHashClearResetsOuterBuckets(t *testing.T) {
+	hash := NewSpatialHash[string](10)
+	hash.Insert(&Entry[string]{Value: "sprite", Box: AABB{MinX: 0, MinY: 0, MaxX: 5, MaxY: 5}})
+	hash.Clear()
+	if len(hash.grid) != 0 {
+		t.Fatalf("grid len = %d, want 0 after Clear", len(hash.grid))
+	}
+}
+
+func TestNewSpatialHashRejectsNonPositiveCellSize(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("expected panic for non-positive cell size")
+		}
+	}()
+	_ = NewSpatialHash[string](0)
+}

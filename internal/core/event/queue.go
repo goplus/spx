@@ -1,6 +1,7 @@
 package event
 
 import (
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -121,7 +122,7 @@ func TryEnqueue[T any](ch chan T, item T, stats *QueueStats) bool {
 	}
 }
 
-func EnqueueWithPolicy[T any](ch chan T, item T, policy QueuePolicy, stats *QueueStats) bool {
+func EnqueueWithPolicy[T any](ch chan T, item T, policy QueuePolicy, stats *QueueStats, dropOldestMu *sync.Mutex) bool {
 	if ch == nil {
 		return false
 	}
@@ -131,8 +132,16 @@ func EnqueueWithPolicy[T any](ch chan T, item T, policy QueuePolicy, stats *Queu
 
 	switch policy {
 	case QueueDropOldest:
+		if dropOldestMu != nil {
+			dropOldestMu.Lock()
+			defer dropOldestMu.Unlock()
+		}
+		if TryEnqueue(ch, item, stats) {
+			return true
+		}
 		select {
 		case <-ch:
+			stats.OnDrop()
 		default:
 		}
 		if TryEnqueue(ch, item, stats) {

@@ -48,3 +48,11 @@ func TestCopyInto(t *testing.T) {
 		t.Fatalf("CopyInto changed reusable capacity: got cap=%d want cap=%d", cap(got), cap(dst))
 	}
 }
+
+func TestCopyIntoHonorsMinCapForReusableSlices(t *testing.T) {
+	dst := make([]int, 0, 2)
+	got := CopyInto(dst, []int{1}, 4)
+	if cap(got) < 4 {
+		t.Fatalf("CopyInto cap = %d, want at least 4", cap(got))
+	}
+}
