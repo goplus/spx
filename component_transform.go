@@ -20,7 +20,6 @@ import (
 	"math"
 
 	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v2/internal/base/valueutil"
 	spxlog "github.com/goplus/spx/v2/internal/log"
 	engine "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
 )
@@ -304,8 +303,8 @@ func (t *transformComponent) fixWorldRange(x, y float64) (float64, float64) {
 	maxW := float64(worldW)/2.0 + float64(rect.Size.X)
 	maxH := float64(worldH)/2.0 + float64(rect.Size.Y)
 
-	x = valueutil.ClampFloat64(x, -maxW, maxW)
-	y = valueutil.ClampFloat64(y, -maxH, maxH)
+	x = mathf.Clamp(x, -maxW, maxW)
+	y = mathf.Clamp(y, -maxH, maxH)
 
 	return x, y
 }

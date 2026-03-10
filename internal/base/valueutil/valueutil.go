@@ -16,17 +16,6 @@
 
 package valueutil
 
-// ClampFloat64 constrains a float64 value to the specified range.
-func ClampFloat64(val, min, max float64) float64 {
-	if val < min {
-		return min
-	}
-	if val > max {
-		return max
-	}
-	return val
-}
-
 // OrDefault returns defaultValue when pval is nil.
 func OrDefault[T any](pval *T, defaultValue T) T {
 	if pval == nil {
