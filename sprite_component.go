@@ -40,12 +40,10 @@ type component interface {
 // componentBase provides default implementations for component interface
 type componentBase struct {
 	sprite *SpriteImpl
-	config *coreproject.SpriteConfig
 }
 
 func (c *componentBase) initialize(sprite *SpriteImpl, spriteCfg *coreproject.SpriteConfig) {
 	c.sprite = sprite
-	c.config = spriteCfg
 }
 
 func (c *componentBase) onDestroy() {

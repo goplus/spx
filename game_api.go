@@ -22,15 +22,12 @@ import (
 	"math/rand"
 
 	"github.com/goplus/spbase/mathf"
-	coreevent "github.com/goplus/spx/v2/internal/core/event"
 	coreproject "github.com/goplus/spx/v2/internal/core/project"
 	"github.com/goplus/spx/v2/internal/engine"
 	spxlog "github.com/goplus/spx/v2/internal/log"
 	"github.com/goplus/spx/v2/internal/timer"
 	"github.com/goplus/spx/v2/internal/ui"
 )
-
-type BackdropName = coreevent.BackdropName
 
 func (p *Game) BackdropName() string {
 	return p.getCostumeName()
