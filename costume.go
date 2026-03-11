@@ -97,7 +97,7 @@ func newCostumeWith(name string, img *costumeSetImage, faceRight float64, frameI
 }
 
 // newCostume creates a costume from a costume configuration.
-func newCostume(base string, config *coreproject.CostumeConfig) *costume {
+func newCostume(config *coreproject.CostumeConfig) *costume {
 	fullPath := config.Path
 	frame := assetutil.NewStandaloneFrame(
 		config.ImageWidth,
