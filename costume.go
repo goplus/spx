@@ -19,13 +19,14 @@ package spx
 import (
 	"github.com/goplus/spbase/mathf"
 	assetutil "github.com/goplus/spx/v2/internal/assets"
+	coreproject "github.com/goplus/spx/v2/internal/core/project"
 	"github.com/goplus/spx/v2/internal/engine"
 )
 
 // costumeSetImage represents metadata for a costume set image.
 type costumeSetImage struct {
 	path   string
-	rc     costumeSetRect
+	rc     coreproject.CostumeSetRect
 	width  float64
 	height float64
 	nx     int // number of frames in the image
@@ -96,7 +97,7 @@ func newCostumeWith(name string, img *costumeSetImage, faceRight float64, frameI
 }
 
 // newCostume creates a costume from a costume configuration.
-func newCostume(base string, config *costumeConfig) *costume {
+func newCostume(base string, config *coreproject.CostumeConfig) *costume {
 	fullPath := config.Path
 	frame := assetutil.NewStandaloneFrame(
 		config.ImageWidth,

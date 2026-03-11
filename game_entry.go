@@ -33,6 +33,8 @@ import (
 	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
+type Config = coreproject.Config
+
 // SetDebug sets debug flags for the game
 func SetDebug(flags dbgFlags) {
 	spxlog.SetLevel(spxlog.LevelDebug)
@@ -67,7 +69,7 @@ type gameBuilder struct {
 
 	fs   spxfs.Dir
 	conf Config
-	proj projConfig
+	proj coreproject.ProjectConfig
 
 	game       *Game
 	gamerValue reflect.Value
@@ -183,7 +185,7 @@ func (b *gameBuilder) buildAndRun() error {
 }
 
 // setupGameConfig configures game settings.
-func setupGameConfig(g *Game, conf *Config, proj *projConfig) {
+func setupGameConfig(g *Game, conf *Config, proj *coreproject.ProjectConfig) {
 	cwd, _ := os.Getwd()
 	runtimeCfg := coreproject.ResolveRuntimeConfig(conf, proj, cwd, os.Getenv("SPX_SCREENSHOT_KEY"))
 
@@ -202,7 +204,7 @@ func setupGameConfig(g *Game, conf *Config, proj *projConfig) {
 }
 
 // setupGameSystems initializes game subsystems.
-func setupGameSystems(g *Game, proj *projConfig) {
+func setupGameSystems(g *Game, proj *coreproject.ProjectConfig) {
 	settings := coreproject.ResolveSystemSettings(proj)
 	engine.SetLayerSortMode(settings.LayerSortMode)
 	g.applyPathFinderSettings(settings)
@@ -211,7 +213,7 @@ func setupGameSystems(g *Game, proj *projConfig) {
 }
 
 // loadGameSprites loads all sprites.
-func loadGameSprites(g *Game, v reflect.Value, fs spxfs.Dir, proj *projConfig) {
+func loadGameSprites(g *Game, v reflect.Value, fs spxfs.Dir, proj *coreproject.ProjectConfig) {
 	spxlog.Debug("==> StartLoad")
 
 	g.startLoad(fs)
@@ -303,7 +305,7 @@ func XGot_Game_Reload(game Gamer, index any) (err error) {
 	if err != nil {
 		engine.Panic(err)
 	}
-	var proj projConfig
+	var proj coreproject.ProjectConfig
 	if err = coreproject.LoadConfig(&proj, g.fs, index); err != nil {
 		return
 	}

@@ -20,6 +20,7 @@ import (
 	"sync"
 
 	intani "github.com/goplus/spx/v2/internal/animation"
+	coreproject "github.com/goplus/spx/v2/internal/core/project"
 	"github.com/goplus/spx/v2/internal/engine"
 	spxlog "github.com/goplus/spx/v2/internal/log"
 )
@@ -35,7 +36,7 @@ import (
 
 type animationWrapper struct {
 	spriteName   string
-	ani          *aniConfig
+	ani          *coreproject.AniConfig
 	costumes     []*costume
 	isCostumeSet bool
 	engineMgr    *engineManagers
@@ -85,7 +86,7 @@ func buildAnimationSources(costumes []*costume) []intani.FrameSource {
 }
 
 type animState struct {
-	AniType    aniTypeEnum
+	AniType    coreproject.AniType
 	Name       string
 	IsCanceled bool
 	Speed      float64
@@ -105,7 +106,7 @@ func (p *SpriteImpl) hasAnim(animName string) bool {
 	return p.animation().hasAnim(animName)
 }
 
-func (p *SpriteImpl) getAnimation(animName SpriteAnimationName) (*aniConfig, bool) {
+func (p *SpriteImpl) getAnimation(animName SpriteAnimationName) (*coreproject.AniConfig, bool) {
 	return p.animation().getAnimation(animName)
 }
 
@@ -132,7 +133,7 @@ func (p *SpriteImpl) flushCompletedAnimations(buffer []string) []string {
 // Core Animation Functions
 // -----------------------------------------------------------------------------
 
-func (p *SpriteImpl) doTween(name SpriteAnimationName, ani *aniConfig) {
+func (p *SpriteImpl) doTween(name SpriteAnimationName, ani *coreproject.AniConfig) {
 	p.animation().doTween(name, ani)
 }
 

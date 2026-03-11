@@ -20,6 +20,7 @@ import (
 	"math"
 
 	"github.com/goplus/spbase/mathf"
+	coreproject "github.com/goplus/spx/v2/internal/core/project"
 	spxlog "github.com/goplus/spx/v2/internal/log"
 	engine "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
 )
@@ -87,7 +88,7 @@ type transformComponent struct {
 }
 
 // initialize initializes the transform component from configuration.
-func (t *transformComponent) initialize(sprite *SpriteImpl, spriteCfg *spriteConfig) {
+func (t *transformComponent) initialize(sprite *SpriteImpl, spriteCfg *coreproject.SpriteConfig) {
 	t.componentBase.initialize(sprite, spriteCfg)
 
 	t.x = spriteCfg.X
@@ -145,11 +146,11 @@ func (t *transformComponent) Glide(x, y float64, secs float64) {
 	from := mathf.NewVec2(x0, y0)
 	to := mathf.NewVec2(x, y)
 
-	aniCopy := aniConfig{
+	aniCopy := coreproject.AniConfig{
 		Duration: secs,
 		From:     &from,
 		To:       &to,
-		AniType:  aniTypeGlide,
+		AniType:  coreproject.AniTypeGlide,
 		IsLoop:   true,
 	}
 
@@ -194,7 +195,7 @@ func (t *transformComponent) StepToPos(x, y, speed float64, animation SpriteAnim
 	}
 
 	duration := math.Abs(distance) * ani.StepDuration / math.Max(speed, minSpeed)
-	t.doAnimatedTween(animation, ani, &from, &to, aniTypeMove, duration, speed)
+	t.doAnimatedTween(animation, ani, &from, &to, coreproject.AniTypeMove, duration, speed)
 }
 
 // StepTo moves the sprite to the specified object's position using a stepping animation.
@@ -454,16 +455,16 @@ func (t *transformComponent) doTurnAnimation(
 
 	absDelta := math.Abs(from - to)
 	duration := ani.TurnToDuration / fullCircleDegrees * absDelta / math.Max(speed, minSpeed)
-	t.doAnimatedTween(animation, ani, from, to, aniTypeTurn, duration, speed)
+	t.doAnimatedTween(animation, ani, from, to, coreproject.AniTypeTurn, duration, speed)
 }
 
 // doAnimatedTween creates and executes a tween animation with the specified parameters.
 // This helper eliminates code duplication in animation methods.
 func (t *transformComponent) doAnimatedTween(
 	name SpriteAnimationName,
-	base *aniConfig,
+	base *coreproject.AniConfig,
 	from, to any,
-	aniType aniTypeEnum,
+	aniType coreproject.AniType,
 	duration float64,
 	speed float64,
 ) {

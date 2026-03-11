@@ -22,6 +22,7 @@ import (
 
 	"github.com/goplus/spbase/mathf"
 	assetutil "github.com/goplus/spx/v2/internal/assets"
+	coreproject "github.com/goplus/spx/v2/internal/core/project"
 	corestate "github.com/goplus/spx/v2/internal/core/state"
 	"github.com/goplus/spx/v2/internal/engine"
 )
@@ -75,7 +76,7 @@ func (p *baseObj) markDestroyed() {
 }
 
 // initWith initializes the base object with sprite configuration.
-func (p *baseObj) initWith(base string, sprite *spriteConfig) {
+func (p *baseObj) initWith(base string, sprite *coreproject.SpriteConfig) {
 	if sprite.CostumeSet != nil {
 		initWithCS(p, base, sprite.CostumeSet)
 	} else if sprite.CostumeMPSet != nil {
@@ -93,7 +94,7 @@ func (p *baseObj) initWith(base string, sprite *spriteConfig) {
 }
 
 // initWithCMPS initializes with a multi-part costume set.
-func initWithCMPS(p *baseObj, base string, cmps *costumeMPSet) {
+func initWithCMPS(p *baseObj, base string, cmps *coreproject.CostumeMPSet) {
 	faceRight := cmps.FaceRight
 	bitmapResolution := assetutil.ToBitmapResolution(cmps.BitmapResolution)
 	imgPath := cmps.Path
@@ -109,7 +110,7 @@ func initWithCMPS(p *baseObj, base string, cmps *costumeMPSet) {
 }
 
 // initWithCS initializes with a costume set.
-func initWithCS(p *baseObj, base string, cs *costumeSet) {
+func initWithCS(p *baseObj, base string, cs *coreproject.CostumeSet) {
 	nx := cs.Nx
 	imgPath := cs.Path
 
@@ -128,7 +129,7 @@ func initWithCS(p *baseObj, base string, cs *costumeSet) {
 }
 
 // initCSPart initializes a costume set part.
-func initCSPart(p *baseObj, img *costumeSetImage, faceRight float64, bitmapResolution, nx int, items []costumeSetItem) {
+func initCSPart(p *baseObj, img *costumeSetImage, faceRight float64, bitmapResolution, nx int, items []coreproject.CostumeSetItem) {
 	p.runtimeState.IsCostumeSet = true
 	if nx <= 0 {
 		engine.Panicf("initCSPart: invalid costume set frame count %d", nx)
@@ -166,7 +167,7 @@ func addCostumeWith(p *baseObj, name SpriteCostumeName, img *costumeSetImage, fa
 }
 
 // initBackdrops initializes backdrops from configuration.
-func (p *baseObj) initBackdrops(base string, configs []*backdropConfig, costumeIndex int) {
+func (p *baseObj) initBackdrops(base string, configs []*coreproject.BackdropConfig, costumeIndex int) {
 	p.costumes = make([]*costume, len(configs))
 	for i, cfg := range configs {
 		p.costumes[i] = newCostume(base, &cfg.CostumeConfig)
@@ -178,7 +179,7 @@ func (p *baseObj) initBackdrops(base string, configs []*backdropConfig, costumeI
 }
 
 // init initializes costumes from configuration.
-func (p *baseObj) init(base string, configs []*costumeConfig, costumeIndex int) {
+func (p *baseObj) init(base string, configs []*coreproject.CostumeConfig, costumeIndex int) {
 	p.costumes = make([]*costume, len(configs))
 	for i, cfg := range configs {
 		p.costumes[i] = newCostume(base, cfg)

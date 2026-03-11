@@ -27,7 +27,7 @@ import (
 // Public types
 // -----------------------------------------------------------------------------
 
-type sound *soundConfig
+type sound *coreproject.SoundConfig
 
 type SoundName = string
 type soundId = int64

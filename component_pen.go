@@ -18,6 +18,7 @@ package spx
 
 import (
 	"github.com/goplus/spbase/mathf"
+	coreproject "github.com/goplus/spx/v2/internal/core/project"
 	engine "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
 )
 
@@ -43,7 +44,7 @@ type penComponent struct {
 }
 
 // initialize initializes the pen component from config.
-func (p *penComponent) initialize(sprite *SpriteImpl, spriteCfg *spriteConfig) {
+func (p *penComponent) initialize(sprite *SpriteImpl, spriteCfg *coreproject.SpriteConfig) {
 	p.componentBase.initialize(sprite, spriteCfg)
 	// Always initialize with default pen values
 	p.penColor = mathf.NewColor(66, 133, 244, 255)

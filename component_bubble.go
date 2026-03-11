@@ -16,6 +16,8 @@
 
 package spx
 
+import coreproject "github.com/goplus/spx/v2/internal/core/project"
+
 // ============================================================================
 // Bubble Component
 // ============================================================================
@@ -29,7 +31,7 @@ type bubbleComponent struct {
 }
 
 // initialize initializes the bubble component.
-func (b *bubbleComponent) initialize(sprite *SpriteImpl, spriteCfg *spriteConfig) {
+func (b *bubbleComponent) initialize(sprite *SpriteImpl, spriteCfg *coreproject.SpriteConfig) {
 	b.componentBase.initialize(sprite, spriteCfg)
 	// Bubbles are created on-demand (lazy initialization)
 	b.textObj = nil
