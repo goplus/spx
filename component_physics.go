@@ -317,8 +317,8 @@ func (p *physicsComponent) initCollisionParams() {
 	}
 }
 
-// syncInitPhysicInfo synchronizes physics information to the engine sprite proxy.
-func (p *physicsComponent) syncInitPhysicInfo(syncProxy *engine.Sprite) {
+// applyProxyPhysicsConfig synchronizes physics information to the engine sprite proxy.
+func (p *physicsComponent) applyProxyPhysicsConfig(syncProxy *engine.Sprite) {
 	p.initCollisionParams()
 	p.collisionInfo.syncToProxy(syncProxy, false, p.sprite)
 	p.triggerInfo.syncToProxy(syncProxy, true, p.sprite)

@@ -88,10 +88,10 @@ func (sm *spriteManager) flushActivate() {
 	}
 }
 
-func (sm *spriteManager) syncProxyStates(buffer *engine.SpriteSyncBuffer) {
+func (sm *spriteManager) collectProxyUpdates(buffer *engine.SpriteSyncBuffer) {
 	for _, item := range sm.getTempShapes() {
 		if sprite, ok := item.(*SpriteImpl); ok {
-			sprite.syncProxyState(buffer)
+			sprite.collectProxyUpdate(buffer)
 		}
 	}
 }
