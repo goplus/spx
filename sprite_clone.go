@@ -90,8 +90,8 @@ func cloneSprite(out reflect.Value, outPtr Sprite, in reflect.Value, v coreproje
 	}
 	dest.runtimeState.SyncSprite = nil
 	engine.WaitMainThread(func() {
-		dest.syncCheckInitProxy()
-		syncCheckUpdateCostume(&dest.baseObj)
+		dest.ensureProxyInitialized()
+		dest.baseObj.applyCostumeUpdate()
 	})
 	return dest
 }

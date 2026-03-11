@@ -181,7 +181,7 @@ func (a *animationComponent) doAnimation(animName SpriteAnimationName, ani *core
 		a.playAnimAudio(ani, info)
 	}
 
-	syncCheckUpdateCostume(&a.sprite.baseObj)
+	a.sprite.baseObj.applyCostumeUpdate()
 	a.prepareAnimationPlayback(animName, ani)
 
 	a.engine().SpriteMgr.PlayAnim(a.sprite.runtimeState.SyncSprite.GetId(), animName, speed, loop, false)

@@ -99,7 +99,7 @@ func (p *Game) setupBackdrop() {
 		p.setMaterialParamsVec4("repeat_scale", *layout.RepeatScale, false)
 	}
 	p.runtimeState.Scale = 1
-	checkUpdateCostume(&p.baseObj)
+	p.baseObj.scheduleCostumeUpdate()
 	p.engine().SpriteMgr.SetScale(p.runtimeState.SyncSprite.GetId(), mathf.NewVec2(layout.ScaleX, layout.ScaleY))
 }
 

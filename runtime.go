@@ -31,6 +31,49 @@ import (
 // It groups all engine-facing manager wrappers for a Game instance.
 type engineManagers = enginewrap.EngineManagers
 
+type threadObj = coroutine.ThreadObj
+type eventSink = coreevent.Sink
+
+type scriptEventBindings struct {
+	*scriptEventRegistry
+	pthis threadObj
+}
+
+type scriptEventRegistry struct {
+	coreevent.Manager
+}
+
+type eventQueuePolicy = coreevent.QueuePolicy
+
+const defaultEventQueuePolicy = coreevent.DefaultQueuePolicy
+
+type eventQueueSnapshot = coreevent.QueueSnapshot
+
+type event any
+
+type eventStart struct{}
+
+type eventKeyDown struct {
+	Key Key
+}
+
+type eventLeftButtonDown struct {
+	Pos mathf.Vec2
+}
+
+type eventLeftButtonUp struct {
+	Pos mathf.Vec2
+}
+
+type eventTimer struct {
+	Time float64
+}
+
+var (
+	// cachedBounds stores cached sprite bounds for performance optimization.
+	cachedBounds map[string]mathf.Rect2
+)
+
 func (p *Game) engine() *engineManagers {
 	return &p.engineMgr
 }
@@ -43,17 +86,9 @@ func (c *componentBase) engine() *engineManagers {
 	return c.sprite.engine()
 }
 
-type threadObj = coroutine.ThreadObj
-type eventSink = coreevent.Sink
-
-type scriptEventBindings struct {
-	*scriptEventRegistry
-	pthis threadObj
-}
-
-type scriptEventRegistry struct {
-	coreevent.Manager
-}
+// -----------------------------------------------------------------------------
+// Script Event Bindings
+// -----------------------------------------------------------------------------
 
 func (p *scriptEventBindings) init(mgr *scriptEventRegistry, this threadObj) {
 	p.scriptEventRegistry = mgr
@@ -98,6 +133,8 @@ func isSprite(obj threadObj) bool {
 	_, ok := obj.(*SpriteImpl)
 	return ok
 }
+
+// Registration helpers exposed to Game and SpriteImpl.
 
 func (p *scriptEventBindings) OnStart(onStart func()) {
 	sink := coreevent.NewSink(p.pthis, onStart)
@@ -210,11 +247,9 @@ func (p *scriptEventBindings) Stop(kind StopKind) {
 	}
 }
 
-type eventQueuePolicy = coreevent.QueuePolicy
-
-const defaultEventQueuePolicy = coreevent.DefaultQueuePolicy
-
-type eventQueueSnapshot = coreevent.QueueSnapshot
+// -----------------------------------------------------------------------------
+// Event Queue State
+// -----------------------------------------------------------------------------
 
 func parseEventQueuePolicy(policy string) eventQueuePolicy {
 	return coreevent.ParsePolicy(policy)
@@ -246,10 +281,9 @@ func (p *Game) queueEventWithPolicy(ev event) bool {
 	return coreevent.EnqueueWithPolicy(p.events, ev, p.gameRuntimeState.EventQueuePolicy, &p.gameRuntimeState.EventQueueStats, &p.gameRuntimeState.EventQueueMu)
 }
 
-var (
-	// cachedBounds stores cached sprite bounds for performance optimization
-	cachedBounds map[string]mathf.Rect2
-)
+// -----------------------------------------------------------------------------
+// Engine Lifecycle
+// -----------------------------------------------------------------------------
 
 // OnEngineStart is called when the engine starts.
 // It initializes the game and starts the main game loop.
@@ -286,10 +320,10 @@ func (p *Game) OnEngineUpdate(delta float64) {
 	if !p.lifecycleState.IsRunned {
 		return
 	}
-	p.syncUpdateInput()
-	p.syncUpdateLogic()
-	p.syncUpdateProxy()
-	p.syncEnginePositions()
+	p.updateInputState()
+	p.dispatchStartEventIfNeeded()
+	p.updateSpriteProxies()
+	p.pullPhysicsPositions()
 }
 
 // OnEngineRender is called every frame to render the game.
@@ -297,7 +331,7 @@ func (p *Game) OnEngineRender(delta float64) {
 	if !p.lifecycleState.IsRunned {
 		return
 	}
-	p.syncUpdatePhysic()
+	p.processPhysicsTriggers()
 }
 
 // OnEnginePause is called when the engine is paused or resumed.
@@ -307,25 +341,9 @@ func (p *Game) OnEnginePause(isPaused bool) {
 	}
 }
 
-type event any
-
-type eventStart struct{}
-
-type eventKeyDown struct {
-	Key Key
-}
-
-type eventLeftButtonDown struct {
-	Pos mathf.Vec2
-}
-
-type eventLeftButtonUp struct {
-	Pos mathf.Vec2
-}
-
-type eventTimer struct {
-	Time float64
-}
+// -----------------------------------------------------------------------------
+// Event Dispatch
+// -----------------------------------------------------------------------------
 
 // handleEvent dispatches events to their respective handlers.
 func (p *Game) handleEvent(ev event) {
@@ -476,12 +494,16 @@ func eventDispatchHooks() coreevent.DispatchHooks {
 	}
 }
 
-func (p *Game) eventLoop(me coroutine.Thread) int {
-	return coreruntime.RunEventLoop(me, p.events, p.handleEvent)
-}
+// -----------------------------------------------------------------------------
+// Runtime Loops
+// -----------------------------------------------------------------------------
 
 func (p *Game) initEventLoop() {
 	coreruntime.InitLoops(gco.Create, p.eventLoop, p.inputEventLoop, p.logicLoop)
+}
+
+func (p *Game) eventLoop(me coroutine.Thread) int {
+	return coreruntime.RunEventLoop(me, p.events, p.handleEvent)
 }
 
 func (p *Game) inputEventLoop(me coroutine.Thread) int {
@@ -595,8 +617,65 @@ func (p *Game) logicLoop(me coroutine.Thread) int {
 	})
 }
 
-// syncUpdatePhysic processes physics trigger events and fires collision callbacks.
-func (p *Game) syncUpdatePhysic() {
+// -----------------------------------------------------------------------------
+// Frame Synchronization
+// -----------------------------------------------------------------------------
+
+// updateInputState refreshes input state from the engine.
+func (p *Game) updateInputState() {
+	coreruntime.SyncMousePos(engine.MainThreadGetMousePos(), p.inputMgr.setMousePos)
+}
+
+// dispatchStartEventIfNeeded fires the start event once after the game begins running.
+func (p *Game) dispatchStartEventIfNeeded() error {
+	coreruntime.SyncOnce(&p.lifecycleState.StartFlag, func() {
+		p.fireEvent(&eventStart{})
+	})
+	return nil
+}
+
+// updateSpriteProxies refreshes camera state and batches dirty sprite proxy updates.
+func (p *Game) updateSpriteProxies() {
+	p.camera.onUpdate()
+	p.spriteMgr.flushActivate()
+	p.syncBuffer.Clear()
+	p.spriteMgr.collectProxyUpdates(p.syncBuffer)
+	p.spriteMgr.flushDestroy(p.syncBuffer)
+	p.flushSyncBuffer()
+	p.camera.setDirtyFlag(false)
+}
+
+// flushSyncBuffer sends batched updates to the engine if there are any changes.
+func (p *Game) flushSyncBuffer() {
+	coreruntime.FlushSerializedBuffer(
+		p.syncBuffer.UpdateCount(),
+		p.syncBuffer.DeleteCount(),
+		p.syncBuffer.Serialize,
+		engine.SyncBatchUpdateSprites,
+	)
+}
+
+// pullPhysicsPositions retrieves sprite positions from the physics engine in batch.
+func (p *Game) pullPhysicsPositions() error {
+	coreruntime.SyncBatchPositions(
+		p.getTempShapes(),
+		func(item Shape) bool {
+			sprite, ok := item.(*SpriteImpl)
+			return ok && sprite.shouldPullPhysicsPosition()
+		},
+		func(item Shape) int64 {
+			return int64(item.(*SpriteImpl).runtimeState.SyncSprite.Id)
+		},
+		engine.SyncBatchGetPositions,
+		func(item Shape, x, y float64) {
+			item.(*SpriteImpl).applyPhysicsPosition(x, y)
+		},
+	)
+	return nil
+}
+
+// processPhysicsTriggers consumes trigger events and fires collision callbacks.
+func (p *Game) processPhysicsTriggers() {
 	triggers := make([]engine.TriggerEvent, 0)
 	triggers = engine.GetTriggerEvents(triggers)
 	coreruntime.ProcessTriggerPairs(
@@ -620,69 +699,19 @@ func isSpriteTouchable(sprite *SpriteImpl) bool {
 	return sprite.spriteState.IsVisible && !sprite.spriteState.IsDying
 }
 
-// syncUpdateLogic updates game logic and fires start events.
-func (p *Game) syncUpdateLogic() error {
-	coreruntime.SyncOnce(&p.lifecycleState.StartFlag, func() {
-		p.fireEvent(&eventStart{})
-	})
-	return nil
-}
+// -----------------------------------------------------------------------------
+// Costume and Proxy Synchronization
+// -----------------------------------------------------------------------------
 
-// syncEnginePositions synchronizes sprite positions from the physics engine.
-// This is done in batch for performance optimization.
-func (p *Game) syncEnginePositions() error {
-	coreruntime.SyncBatchPositions(
-		p.getTempShapes(),
-		func(item Shape) bool {
-			sprite, ok := item.(*SpriteImpl)
-			return ok && sprite.shouldSyncPhysicsPosition()
-		},
-		func(item Shape) int64 {
-			return int64(item.(*SpriteImpl).runtimeState.SyncSprite.Id)
-		},
-		engine.SyncBatchGetPositions,
-		func(item Shape, x, y float64) {
-			item.(*SpriteImpl).syncPhysicsPosition(x, y)
-		},
-	)
-	return nil
-}
-
-// syncUpdateInput updates input state from the engine.
-func (p *Game) syncUpdateInput() {
-	coreruntime.SyncMousePos(engine.MainThreadGetMousePos(), p.inputMgr.setMousePos)
-}
-
-// syncUpdateProxy updates all sprite proxies and synchronizes them with the engine.
-func (p *Game) syncUpdateProxy() {
-	p.camera.onUpdate()
-	p.spriteMgr.flushActivate()
-	p.syncBuffer.Clear()
-	p.spriteMgr.syncProxyStates(p.syncBuffer)
-	p.spriteMgr.flushDestroy(p.syncBuffer)
-	p.flushSyncBuffer()
-	p.camera.setDirtyFlag(false)
-}
-
-// flushSyncBuffer sends batched updates to the engine if there are any changes.
-func (p *Game) flushSyncBuffer() {
-	coreruntime.FlushSerializedBuffer(
-		p.syncBuffer.UpdateCount(),
-		p.syncBuffer.DeleteCount(),
-		p.syncBuffer.Serialize,
-		engine.SyncBatchUpdateSprites,
-	)
-}
-
-// checkUpdateCostume schedules a costume update on the main thread.
-func checkUpdateCostume(p *baseObj) {
+// scheduleCostumeUpdate schedules a costume update on the main thread.
+func (p *baseObj) scheduleCostumeUpdate() {
 	engine.WaitMainThread(func() {
-		syncCheckUpdateCostume(p)
+		p.applyCostumeUpdate()
 	})
 }
 
-// syncCheckUpdateCostume updates sprite costume and layer if they are dirty.
-func syncCheckUpdateCostume(p *baseObj) {
+// applyCostumeUpdate pushes pending costume and layer changes to the proxy.
+func (p *baseObj) applyCostumeUpdate() {
 	syncSprite := p.runtimeState.SyncSprite
 	if p.runtimeState.IsLayerDirty {
 		if !engine.HasLayerSortMethod() {
@@ -699,36 +728,38 @@ func syncCheckUpdateCostume(p *baseObj) {
 	if p.isCostumeAtlas() {
 		rect := p.getCostumeAtlasRegion()
 		syncSprite.UpdateTextureAtlas(path, rect, renderScale, !p.runtimeState.IsAnimating)
-		syncOnAtlasChanged(p)
+		p.applyAtlasUVRemap()
 		return
 	}
 	syncSprite.UpdateTexture(path, renderScale, !p.runtimeState.IsAnimating)
 }
 
-func syncOnAtlasChanged(p *baseObj) {
+func (p *baseObj) applyAtlasUVRemap() {
 	uvRemap := p.getCostumeAtlasUvRemap()
 	val := mathf.NewVec4(uvRemap.Position.X, uvRemap.Position.Y, uvRemap.Size.X, uvRemap.Size.Y)
 	p.setMaterialParamsVec4("atlas_uv_rect2", val, true)
 }
 
-// syncCheckInitProxy initializes the sprite's engine proxy if it hasn't been created yet.
-func (sprite *SpriteImpl) syncCheckInitProxy() {
+// Sprite proxy lifecycle hooks.
+
+// ensureProxyInitialized initializes the sprite's engine proxy if it hasn't been created yet.
+func (sprite *SpriteImpl) ensureProxyInitialized() {
 	if sprite.runtimeState.SyncSprite != nil || sprite.isDestroyed() {
 		return
 	}
 	sprite.runtimeState.SyncSprite = engine.MainThreadNewSprite(sprite, mathf.NewVec2(sprite.getXYWithRenderOffset()))
-	syncInitSpritePhysicInfo(sprite, sprite.runtimeState.SyncSprite)
+	sprite.applyPhysicsProxyConfig()
 	sprite.runtimeState.SyncSprite.SetVisible(sprite.spriteState.IsVisible)
 	sprite.runtimeState.SyncSprite.Name = sprite.name
 	sprite.runtimeState.SyncSprite.SetTypeName(sprite.name)
 	sprite.applyGraphicEffects(true)
-	sprite.animation().registerOnAnimationLooped(sprite.syncOnAnimationLooped)
-	sprite.animation().registerOnAnimationFinished(sprite.syncOnAnimationFinished)
+	sprite.animation().registerOnAnimationLooped(sprite.handleAnimationLooped)
+	sprite.animation().registerOnAnimationFinished(sprite.handleAnimationFinished)
 	sprite.spriteState.IsDirty = true
 }
 
-// syncOnAnimationFinished is called when an animation finishes.
-func (sprite *SpriteImpl) syncOnAnimationFinished() {
+// handleAnimationFinished records completed animation events from the proxy.
+func (sprite *SpriteImpl) handleAnimationFinished() {
 	engine.Lock()
 	defer engine.Unlock()
 	state := sprite.animation().getCurAnimState()
@@ -737,8 +768,8 @@ func (sprite *SpriteImpl) syncOnAnimationFinished() {
 	}
 }
 
-// syncOnAnimationLooped is called when an animation loops.
-func (sprite *SpriteImpl) syncOnAnimationLooped() {
+// handleAnimationLooped records looped animation audio playback requests.
+func (sprite *SpriteImpl) handleAnimationLooped() {
 	engine.Lock()
 	defer engine.Unlock()
 	state := sprite.animation().getCurTweenState()
@@ -747,34 +778,34 @@ func (sprite *SpriteImpl) syncOnAnimationLooped() {
 	}
 }
 
-func syncInitSpritePhysicInfo(sprite *SpriteImpl, syncProxy *engine.Sprite) {
-	sprite.physics().syncInitPhysicInfo(syncProxy)
+func (sprite *SpriteImpl) applyPhysicsProxyConfig() {
+	sprite.physics().applyProxyPhysicsConfig(sprite.runtimeState.SyncSprite)
 }
 
-func (sprite *SpriteImpl) shouldSyncPhysicsPosition() bool {
+func (sprite *SpriteImpl) shouldPullPhysicsPosition() bool {
 	return sprite.runtimeState.SyncSprite != nil && sprite.PhysicsMode() != NoPhysics
 }
 
-func (sprite *SpriteImpl) syncPhysicsPosition(x, y float64) {
+func (sprite *SpriteImpl) applyPhysicsPosition(x, y float64) {
 	revertRenderOffset(sprite, &x, &y)
 	sprite.transform().setXY(x, y)
 }
 
-func (sprite *SpriteImpl) syncProxyState(buffer *engine.SpriteSyncBuffer) {
+func (sprite *SpriteImpl) collectProxyUpdate(buffer *engine.SpriteSyncBuffer) {
 	if sprite.isDestroyed() || sprite.runtimeState.SyncSprite == nil {
 		return
 	}
 	if sprite.spriteState.IsVisible {
-		syncCheckUpdateCostume(&sprite.baseObj)
+		sprite.baseObj.applyCostumeUpdate()
 	}
 	if !sprite.spriteState.IsDirty {
 		return
 	}
-	sprite.appendSyncTransform(buffer)
+	sprite.appendTransformUpdate(buffer)
 	sprite.spriteState.IsDirty = false
 }
 
-func (sprite *SpriteImpl) appendSyncTransform(buffer *engine.SpriteSyncBuffer) {
+func (sprite *SpriteImpl) appendTransformUpdate(buffer *engine.SpriteSyncBuffer) {
 	x, y := sprite.getXY()
 	offsetX, offsetY := getRenderOffset(sprite)
 	rot, scaleX, scaleY := getRenderRotationAndScale(sprite)

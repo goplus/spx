@@ -83,7 +83,7 @@ func (p *SpriteImpl) initBasicProperties(g *Game, name string, sprite Sprite, ga
 func (p *SpriteImpl) initEngineObjects() {
 	p.runtimeState.SyncSprite = nil
 	engine.WaitMainThread(func() {
-		p.syncCheckInitProxy()
+		p.ensureProxyInitialized()
 	})
 }
 
