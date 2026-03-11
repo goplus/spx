@@ -33,8 +33,6 @@ import (
 	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
-type Config = coreproject.Config
-
 // SetDebug sets debug flags for the game
 func SetDebug(flags dbgFlags) {
 	spxlog.SetLevel(spxlog.LevelDebug)

@@ -634,7 +634,8 @@ func (p *Game) dispatchStartEventIfNeeded() error {
 	return nil
 }
 
-// updateSpriteProxies refreshes camera state and batches dirty sprite proxy updates.
+// updateSpriteProxies activates pending shapes, batches dirty sprite proxy changes,
+// processes pending destroys, flushes the batch to the engine, and updates camera state.
 func (p *Game) updateSpriteProxies() {
 	p.camera.onUpdate()
 	p.spriteMgr.flushActivate()
@@ -779,7 +780,7 @@ func (sprite *SpriteImpl) handleAnimationLooped() {
 }
 
 func (sprite *SpriteImpl) applyPhysicsProxyConfig() {
-	sprite.physics().applyProxyPhysicsConfig(sprite.runtimeState.SyncSprite)
+	sprite.physics().applyPhysicsProxyConfig(sprite.runtimeState.SyncSprite)
 }
 
 func (sprite *SpriteImpl) shouldPullPhysicsPosition() bool {

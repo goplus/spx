@@ -74,8 +74,6 @@ const (
 	baseScreenHeight            = 360
 )
 
-type Shape any
-
 // Game represents the main game instance with all core systems
 type Game struct {
 	baseObj
@@ -116,11 +114,6 @@ type Game struct {
 
 	syncBuffer  *engine.SpriteSyncBuffer
 	spatialHash *collisionutil.SpatialHash[*SpriteImpl]
-}
-
-type Gamer interface {
-	engine.IGame
-	initGame(sprites []Sprite) *Game
 }
 
 func activeGame() *Game {
