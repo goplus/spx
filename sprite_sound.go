@@ -107,6 +107,10 @@ func (p *SpriteImpl) flushPendingAudios(buffer []string) []string {
 	buffer = p.sound().takePendingAudios(buffer)
 	engine.Unlock()
 
+	if p.isDestroyed() || p.runtimeState.SyncSprite == nil {
+		return buffer[:0]
+	}
+
 	for _, audio := range buffer {
 		p.playAudio(audio, false)
 	}

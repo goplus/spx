@@ -42,10 +42,10 @@ func (p *SpriteImpl) Destroy() {
 	p.components.destroyComponents()
 	p.g.removeShape(p)
 	p.Stop(ThisSprite)
+	p.markDestroyed()
 	if p == gco.Current().Obj {
 		gco.Abort()
 	}
-	p.markDestroyed()
 }
 
 // DeleteThisClone deletes only cloned sprite, no effect on prototype sprite.
