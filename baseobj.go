@@ -78,9 +78,9 @@ func (p *baseObj) markDestroyed() {
 // initWith initializes the base object with sprite configuration.
 func (p *baseObj) initWith(sprite *coreproject.SpriteConfig) {
 	if sprite.CostumeSet != nil {
-		initWithCS(p, sprite.CostumeSet)
+		p.initWithCS(sprite.CostumeSet)
 	} else if sprite.CostumeMPSet != nil {
-		initWithCMPS(p, sprite.CostumeMPSet)
+		p.initWithCMPS(sprite.CostumeMPSet)
 	} else {
 		engine.Panic("initWith: sprite configuration must have either CostumeSet or CostumeMPSet defined")
 		return
@@ -94,7 +94,7 @@ func (p *baseObj) initWith(sprite *coreproject.SpriteConfig) {
 }
 
 // initWithCMPS initializes with a multi-part costume set.
-func initWithCMPS(p *baseObj, cmps *coreproject.CostumeMPSet) {
+func (p *baseObj) initWithCMPS(cmps *coreproject.CostumeMPSet) {
 	faceRight := cmps.FaceRight
 	bitmapResolution := assetutil.ToBitmapResolution(cmps.BitmapResolution)
 	imgPath := cmps.Path
@@ -105,12 +105,12 @@ func initWithCMPS(p *baseObj, cmps *coreproject.CostumeMPSet) {
 			rc:   cs.Rect,
 			nx:   cs.Nx,
 		}
-		initCSPart(p, img, faceRight, bitmapResolution, cs.Nx, cs.Items)
+		p.initCSPart(img, faceRight, bitmapResolution, cs.Nx, cs.Items)
 	}
 }
 
 // initWithCS initializes with a costume set.
-func initWithCS(p *baseObj, cs *coreproject.CostumeSet) {
+func (p *baseObj) initWithCS(cs *coreproject.CostumeSet) {
 	nx := cs.Nx
 	imgPath := cs.Path
 
@@ -125,11 +125,11 @@ func initWithCS(p *baseObj, cs *coreproject.CostumeSet) {
 	}
 
 	p.costumes = make([]*costume, 0, nx)
-	initCSPart(p, img, cs.FaceRight, assetutil.ToBitmapResolution(cs.BitmapResolution), nx, cs.Items)
+	p.initCSPart(img, cs.FaceRight, assetutil.ToBitmapResolution(cs.BitmapResolution), nx, cs.Items)
 }
 
 // initCSPart initializes a costume set part.
-func initCSPart(p *baseObj, img *costumeSetImage, faceRight float64, bitmapResolution, nx int, items []coreproject.CostumeSetItem) {
+func (p *baseObj) initCSPart(img *costumeSetImage, faceRight float64, bitmapResolution, nx int, items []coreproject.CostumeSetItem) {
 	p.runtimeState.IsCostumeSet = true
 	if nx <= 0 {
 		engine.Panicf("initCSPart: invalid costume set frame count %d", nx)
@@ -137,13 +137,13 @@ func initCSPart(p *baseObj, img *costumeSetImage, faceRight float64, bitmapResol
 	}
 	if nx == 1 {
 		name := strconv.Itoa(len(p.costumes))
-		addCostumeWith(p, name, img, faceRight, 0, bitmapResolution)
+		p.addCostumeWith(name, img, faceRight, 0, bitmapResolution)
 		return
 	}
 	if items == nil {
 		for index := range nx {
 			name := strconv.Itoa(len(p.costumes))
-			addCostumeWith(p, name, img, faceRight, index, bitmapResolution)
+			p.addCostumeWith(name, img, faceRight, index, bitmapResolution)
 		}
 		return
 	}
@@ -151,7 +151,7 @@ func initCSPart(p *baseObj, img *costumeSetImage, faceRight float64, bitmapResol
 	for _, item := range items {
 		for i := 0; i < item.N; i++ {
 			name := item.NamePrefix + strconv.Itoa(i)
-			addCostumeWith(p, name, img, faceRight, frameIndex, bitmapResolution)
+			p.addCostumeWith(name, img, faceRight, frameIndex, bitmapResolution)
 			frameIndex++
 		}
 	}
@@ -161,7 +161,7 @@ func initCSPart(p *baseObj, img *costumeSetImage, faceRight float64, bitmapResol
 }
 
 // addCostumeWith adds a costume to the base object.
-func addCostumeWith(p *baseObj, name SpriteCostumeName, img *costumeSetImage, faceRight float64, frameIndex, bitmapResolution int) {
+func (p *baseObj) addCostumeWith(name SpriteCostumeName, img *costumeSetImage, faceRight float64, frameIndex, bitmapResolution int) {
 	c := newCostumeWith(name, img, faceRight, frameIndex, bitmapResolution)
 	p.costumes = append(p.costumes, c)
 }
