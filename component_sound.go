@@ -17,6 +17,7 @@
 package spx
 
 import (
+	coreproject "github.com/goplus/spx/v2/internal/core/project"
 	engine "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
 )
 
@@ -36,7 +37,7 @@ type soundComponent struct {
 }
 
 // initialize initializes the sound component from config.
-func (s *soundComponent) initialize(sprite *SpriteImpl, spriteCfg *spriteConfig) {
+func (s *soundComponent) initialize(sprite *SpriteImpl, spriteCfg *coreproject.SpriteConfig) {
 	s.componentBase.initialize(sprite, spriteCfg)
 	// Always initialize with default sound values
 	s.soundObj = 0

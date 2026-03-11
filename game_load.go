@@ -43,7 +43,7 @@ func (p *Game) loadSprite(sprite Sprite, name string, gamer reflect.Value) error
 	return bindSpriteOwner(vSpr, gamer)
 }
 
-func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
+func (p *Game) loadIndex(g reflect.Value, proj *coreproject.ProjectConfig) (err error) {
 	p.setupDisplayConfig(proj)
 	p.setupWorldAndWindow(proj)
 	p.setupPlatformAndCamera(proj)
@@ -58,7 +58,7 @@ func (p *Game) loadIndex(g reflect.Value, proj *projConfig) (err error) {
 }
 
 // setupDisplayConfig initializes display configuration.
-func (p *Game) setupDisplayConfig(proj *projConfig) {
+func (p *Game) setupDisplayConfig(proj *coreproject.ProjectConfig) {
 	display := coreproject.ResolveDisplaySettings(proj)
 	p.displayState.WindowScale = display.WindowScale
 	p.displayState.StretchMode = display.StretchMode
@@ -72,11 +72,11 @@ func (p *Game) setupDisplayConfig(proj *projConfig) {
 }
 
 // setupWorldAndWindow configures world and window sizes.
-func (p *Game) setupWorldAndWindow(proj *projConfig) {
+func (p *Game) setupWorldAndWindow(proj *coreproject.ProjectConfig) {
 	proj.Map = coreproject.ResolveMapConfig(proj.Map, p.tilemapMgr.hasData(), baseScreenWidth, baseScreenHeight)
 	backdrops := proj.GetBackdrops()
 	if p.tilemapMgr.hasData() {
-		backdrops = make([]*backdropConfig, 0)
+		backdrops = make([]*coreproject.BackdropConfig, 0)
 	}
 
 	p.displayState.WorldWidth = proj.Map.Width
@@ -95,7 +95,7 @@ func (p *Game) setupWorldAndWindow(proj *projConfig) {
 		p.displayState.WorldHeight,
 		p.displayState.WindowWidth,
 		p.displayState.WindowHeight,
-		toMapMode(proj.Map.Mode),
+		coreproject.ToMapMode(proj.Map.Mode),
 	)
 	p.displayState.WorldWidth = metrics.WorldWidth
 	p.displayState.WorldHeight = metrics.WorldHeight
@@ -117,7 +117,7 @@ func (p *Game) setupWorldAndWindow(proj *projConfig) {
 }
 
 // setupPlatformAndCamera configures platform settings and camera.
-func (p *Game) setupPlatformAndCamera(proj *projConfig) {
+func (p *Game) setupPlatformAndCamera(proj *coreproject.ProjectConfig) {
 	platformMgr := p.engine().PlatformMgr
 
 	layout := coreproject.ResolvePlatformLayout(coreproject.PlatformLayoutInput{
@@ -157,7 +157,7 @@ func (p *Game) setupPlatformAndCamera(proj *projConfig) {
 }
 
 // loadAndInitSprites loads all sprites from project configuration.
-func (p *Game) loadAndInitSprites(g reflect.Value, proj *projConfig) []Sprite {
+func (p *Game) loadAndInitSprites(g reflect.Value, proj *coreproject.ProjectConfig) []Sprite {
 	inits := make([]Sprite, 0, len(proj.Zorder))
 	err := coreproject.WalkZOrder(
 		proj.Zorder,
@@ -185,7 +185,7 @@ func (p *Game) loadAndInitSprites(g reflect.Value, proj *projConfig) []Sprite {
 }
 
 // runSpriteCallbacks executes sprite initialization callbacks.
-func (p *Game) runSpriteCallbacks(inits []Sprite, proj *projConfig, g reflect.Value) {
+func (p *Game) runSpriteCallbacks(inits []Sprite, proj *coreproject.ProjectConfig, g reflect.Value) {
 	var onLoaded func()
 	if loader, ok := g.Addr().Interface().(interface{ OnLoaded() }); ok {
 		onLoaded = loader.OnLoaded
@@ -214,7 +214,7 @@ func (p *Game) runSpriteCallbacks(inits []Sprite, proj *projConfig, g reflect.Va
 }
 
 // loadAudioAndTilemap loads tilemap and background music.
-func (p *Game) loadAudioAndTilemap(proj *projConfig) {
+func (p *Game) loadAudioAndTilemap(proj *coreproject.ProjectConfig) {
 	p.tilemapMgr.parseTilemap()
 	p.audioState.SoundObj = p.soundMgr.AllocSound()
 	if proj.Bgm != "" {
@@ -222,7 +222,7 @@ func (p *Game) loadAudioAndTilemap(proj *projConfig) {
 	}
 }
 
-func (p *Game) endLoad(g reflect.Value, proj *projConfig) (err error) {
+func (p *Game) endLoad(g reflect.Value, proj *coreproject.ProjectConfig) (err error) {
 	spxlog.Debug("==> EndLoad")
 	return p.loadIndex(g, proj)
 }

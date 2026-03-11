@@ -20,6 +20,7 @@ import (
 	"maps"
 	"reflect"
 
+	coreproject "github.com/goplus/spx/v2/internal/core/project"
 	corestate "github.com/goplus/spx/v2/internal/core/state"
 	"github.com/goplus/spx/v2/internal/engine"
 )
@@ -55,14 +56,14 @@ func (p *SpriteImpl) getAllShapes() []Shape {
 }
 
 func (p *SpriteImpl) init(
-	base string, g *Game, name string, spriteCfg *spriteConfig, gamer reflect.Value, sprite Sprite) {
+	base string, g *Game, name string, spriteCfg *coreproject.SpriteConfig, gamer reflect.Value, sprite Sprite) {
 	p.initBaseObjects(base, spriteCfg, g)
 	p.initBasicProperties(g, name, sprite, gamer, spriteCfg)
 	p.initComponents(spriteCfg)
 	p.initEngineObjects()
 }
 
-func (p *SpriteImpl) initBaseObjects(base string, spriteCfg *spriteConfig, g *Game) {
+func (p *SpriteImpl) initBaseObjects(base string, spriteCfg *coreproject.SpriteConfig, g *Game) {
 	if spriteCfg.Costumes != nil {
 		p.baseObj.init(base, spriteCfg.Costumes, spriteCfg.GetCostumeIndex())
 	} else {
@@ -72,7 +73,7 @@ func (p *SpriteImpl) initBaseObjects(base string, spriteCfg *spriteConfig, g *Ga
 	p.scriptEventBindings.init(&g.scriptEvents, p)
 }
 
-func (p *SpriteImpl) initBasicProperties(g *Game, name string, sprite Sprite, gamer reflect.Value, spriteCfg *spriteConfig) {
+func (p *SpriteImpl) initBasicProperties(g *Game, name string, sprite Sprite, gamer reflect.Value, spriteCfg *coreproject.SpriteConfig) {
 	p.gamer = gamer
 	p.g, p.name, p.sprite = g, name, sprite
 	p.runtimeState.Scale = spriteCfg.Size
@@ -86,7 +87,7 @@ func (p *SpriteImpl) initEngineObjects() {
 	})
 }
 
-func (p *SpriteImpl) initComponents(spriteCfg *spriteConfig) {
+func (p *SpriteImpl) initComponents(spriteCfg *coreproject.SpriteConfig) {
 	p.components.initComponents(p, spriteCfg)
 }
 

@@ -22,6 +22,7 @@ import (
 	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v2/internal/base/collisionutil"
 	"github.com/goplus/spx/v2/internal/base/valueutil"
+	coreproject "github.com/goplus/spx/v2/internal/core/project"
 	"github.com/goplus/spx/v2/internal/engine"
 	spxlog "github.com/goplus/spx/v2/internal/log"
 )
@@ -47,7 +48,7 @@ type physicsComponent struct {
 }
 
 // initialize initializes the physics component from config.
-func (p *physicsComponent) initialize(sprite *SpriteImpl, spriteCfg *spriteConfig) {
+func (p *physicsComponent) initialize(sprite *SpriteImpl, spriteCfg *coreproject.SpriteConfig) {
 	p.componentBase.initialize(sprite, spriteCfg)
 	p.initCollisionConfig(sprite, spriteCfg)
 	p.initTriggerConfig(sprite, spriteCfg)
@@ -61,7 +62,7 @@ func (p *physicsComponent) initialize(sprite *SpriteImpl, spriteCfg *spriteConfi
 }
 
 // initCollisionConfig initializes collision configuration.
-func (p *physicsComponent) initCollisionConfig(sprite *SpriteImpl, spriteCfg *spriteConfig) {
+func (p *physicsComponent) initCollisionConfig(sprite *SpriteImpl, spriteCfg *coreproject.SpriteConfig) {
 	p.collisionInfo.Mask = parseLayerMaskValue(spriteCfg.CollisionMask)
 	p.collisionInfo.Layer = parseLayerMaskValue(spriteCfg.CollisionLayer)
 
@@ -82,7 +83,7 @@ func (p *physicsComponent) initCollisionConfig(sprite *SpriteImpl, spriteCfg *sp
 }
 
 // initTriggerConfig initializes trigger configuration.
-func (p *physicsComponent) initTriggerConfig(sprite *SpriteImpl, spriteCfg *spriteConfig) {
+func (p *physicsComponent) initTriggerConfig(sprite *SpriteImpl, spriteCfg *coreproject.SpriteConfig) {
 	p.triggerInfo.Mask = parseLayerMaskValue(spriteCfg.TriggerMask)
 	p.triggerInfo.Layer = parseLayerMaskValue(spriteCfg.TriggerLayer)
 	p.triggerInfo.Type = collisionutil.ParseColliderShapeType(spriteCfg.TriggerShapeType, physicsColliderAuto)

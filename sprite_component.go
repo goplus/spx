@@ -16,6 +16,8 @@
 
 package spx
 
+import coreproject "github.com/goplus/spx/v2/internal/core/project"
+
 // ============================================================================
 // Component System - Base Interfaces and Structures
 // ============================================================================
@@ -26,7 +28,7 @@ package spx
 type component interface {
 	// initialize is called when the component is first created
 	// spriteCfg can be nil when cloning
-	initialize(sprite *SpriteImpl, spriteCfg *spriteConfig)
+	initialize(sprite *SpriteImpl, spriteCfg *coreproject.SpriteConfig)
 
 	// cloneFrom creates a new component instance by cloning from source
 	cloneFrom(src component, newSprite *SpriteImpl) component
@@ -38,10 +40,10 @@ type component interface {
 // componentBase provides default implementations for component interface
 type componentBase struct {
 	sprite *SpriteImpl
-	config *spriteConfig
+	config *coreproject.SpriteConfig
 }
 
-func (c *componentBase) initialize(sprite *SpriteImpl, spriteCfg *spriteConfig) {
+func (c *componentBase) initialize(sprite *SpriteImpl, spriteCfg *coreproject.SpriteConfig) {
 	c.sprite = sprite
 	c.config = spriteCfg
 }
@@ -65,7 +67,7 @@ type spriteComponents struct {
 }
 
 // initComponents initializes all sprite components.
-func (sc *spriteComponents) initComponents(sprite *SpriteImpl, spriteCfg *spriteConfig) {
+func (sc *spriteComponents) initComponents(sprite *SpriteImpl, spriteCfg *coreproject.SpriteConfig) {
 	sc.transform = &transformComponent{}
 	sc.transform.initialize(sprite, spriteCfg)
 

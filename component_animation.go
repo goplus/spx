@@ -23,6 +23,7 @@ import (
 
 	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v2/internal/base/valueutil"
+	coreproject "github.com/goplus/spx/v2/internal/core/project"
 	"github.com/goplus/spx/v2/internal/engine"
 	spxlog "github.com/goplus/spx/v2/internal/log"
 	"github.com/goplus/spx/v2/internal/time"
@@ -31,7 +32,7 @@ import (
 
 // sharedAnimationData contains read-only animation data shared across cloned sprites (Flyweight Pattern).
 type sharedAnimationData struct {
-	animations        map[SpriteAnimationName]*aniConfig
+	animations        map[SpriteAnimationName]*coreproject.AniConfig
 	animBindings      map[string]string
 	defaultAnimation  SpriteAnimationName
 	animationWrappers map[SpriteAnimationName]*animationWrapper
@@ -52,17 +53,17 @@ type animationComponent struct {
 }
 
 // initialize initializes the animation component from configuration.
-func (a *animationComponent) initialize(sprite *SpriteImpl, spriteCfg *spriteConfig) {
+func (a *animationComponent) initialize(sprite *SpriteImpl, spriteCfg *coreproject.SpriteConfig) {
 	a.componentBase.initialize(sprite, spriteCfg)
 	a.initFromConfig(spriteCfg)
 	a.donedAnimations = make([]string, 0)
 }
 
 // initFromConfig initializes animations from sprite configuration.
-func (a *animationComponent) initFromConfig(spriteCfg *spriteConfig) {
+func (a *animationComponent) initFromConfig(spriteCfg *coreproject.SpriteConfig) {
 	a.shared = &sharedAnimationData{
 		defaultAnimation:  spriteCfg.DefaultAnimation,
-		animations:        make(map[string]*aniConfig),
+		animations:        make(map[SpriteAnimationName]*coreproject.AniConfig),
 		animBindings:      make(map[string]string),
 		animationWrappers: make(map[SpriteAnimationName]*animationWrapper),
 	}
@@ -167,10 +168,10 @@ func (a *animationComponent) playAnimation(name SpriteAnimationName, loop, block
 	a.doAnimation(name, ani, loop, 1, blocking, true)
 }
 
-func (a *animationComponent) doAnimation(animName SpriteAnimationName, ani *aniConfig, loop bool, speed float64, isBlocking bool, playAudio bool) {
+func (a *animationComponent) doAnimation(animName SpriteAnimationName, ani *coreproject.AniConfig, loop bool, speed float64, isBlocking bool, playAudio bool) {
 	a.stopAnimState(a.curAnimState)
 	a.curAnimState = &animState{
-		AniType: aniTypeFrame,
+		AniType: coreproject.AniTypeFrame,
 		Name:    animName,
 		Speed:   speed,
 	}
@@ -208,11 +209,11 @@ func (a *animationComponent) playDefaultAnim() {
 		animName = a.shared.defaultAnimation
 	} else {
 		switch a.curTweenState.AniType {
-		case aniTypeMove:
+		case coreproject.AniTypeMove:
 			animName = a.sprite.getStateAnimName(StateStep)
-		case aniTypeTurn:
+		case coreproject.AniTypeTurn:
 			animName = a.sprite.getStateAnimName(StateTurn)
-		case aniTypeGlide:
+		case coreproject.AniTypeGlide:
 			animName = a.sprite.getStateAnimName(StateGlide)
 		}
 		speed = a.curTweenState.Speed
@@ -230,19 +231,19 @@ func (a *animationComponent) playDefaultAnim() {
 	}
 }
 
-func (a *animationComponent) playAnimAudio(ani *aniConfig, info *animState) {
+func (a *animationComponent) playAnimAudio(ani *coreproject.AniConfig, info *animState) {
 	if ani.OnStart != nil && ani.OnStart.Play != "" {
 		info.AudioName = ani.OnStart.Play
 		info.AudioId = a.sprite.playAudio(info.AudioName, false)
 	}
 }
 
-func (a *animationComponent) adaptAnimBitmapResolution(ani *aniConfig) {
+func (a *animationComponent) adaptAnimBitmapResolution(ani *coreproject.AniConfig) {
 	renderScale := a.sprite.getAnimRenderScale(ani.AdaptAnimBitmapResolution)
 	a.sprite.runtimeState.SyncSprite.SetRenderScale(mathf.NewVec2(renderScale, renderScale))
 }
 
-func (a *animationComponent) prepareAnimationPlayback(animName SpriteAnimationName, ani *aniConfig) {
+func (a *animationComponent) prepareAnimationPlayback(animName SpriteAnimationName, ani *coreproject.AniConfig) {
 	a.shared.animationWrappers[animName].ensureRegistered(animName)
 	a.adaptAnimBitmapResolution(ani)
 }
@@ -283,7 +284,7 @@ func (a *animationComponent) hasAnim(animName string) bool {
 	return ok
 }
 
-func (a *animationComponent) getAnimation(animName SpriteAnimationName) (*aniConfig, bool) {
+func (a *animationComponent) getAnimation(animName SpriteAnimationName) (*coreproject.AniConfig, bool) {
 	ani, ok := a.shared.animations[animName]
 	return ani, ok
 }
@@ -321,7 +322,7 @@ type tweenParams struct {
 	turnDiff  float64
 }
 
-func (a *animationComponent) doTween(name SpriteAnimationName, ani *aniConfig) {
+func (a *animationComponent) doTween(name SpriteAnimationName, ani *coreproject.AniConfig) {
 	info := a.initTweenState(name, ani)
 	if info == nil {
 		return
@@ -336,7 +337,7 @@ func (a *animationComponent) doTween(name SpriteAnimationName, ani *aniConfig) {
 	a.cleanupTween(info, name, ani)
 }
 
-func (a *animationComponent) initTweenState(name SpriteAnimationName, ani *aniConfig) *animState {
+func (a *animationComponent) initTweenState(name SpriteAnimationName, ani *coreproject.AniConfig) *animState {
 	info := &animState{
 		AniType: ani.AniType,
 		Name:    name,
@@ -358,12 +359,12 @@ func (a *animationComponent) initTweenState(name SpriteAnimationName, ani *aniCo
 	return info
 }
 
-func (a *animationComponent) prepareTweenParams(ani *aniConfig) (*tweenParams, bool) {
+func (a *animationComponent) prepareTweenParams(ani *coreproject.AniConfig) (*tweenParams, bool) {
 	params := &tweenParams{}
 	duration := ani.Duration
 
 	switch ani.AniType {
-	case aniTypeMove, aniTypeGlide:
+	case coreproject.AniTypeMove, coreproject.AniTypeGlide:
 		src, srcOk := tools.GetVec2(ani.From)
 		dst, dstOk := tools.GetVec2(ani.To)
 		if !srcOk || !dstOk {
@@ -372,11 +373,11 @@ func (a *animationComponent) prepareTweenParams(ani *aniConfig) (*tweenParams, b
 		}
 
 		params.moveDiff = dst.Sub(src)
-		if ani.AniType == aniTypeMove {
+		if ani.AniType == coreproject.AniTypeMove {
 			params.moveSpeed = params.moveDiff.Length() / duration
 			params.moveDir = params.moveDiff.Normalize()
 		}
-	case aniTypeTurn:
+	case coreproject.AniTypeTurn:
 		src, srcOk := tools.GetFloat(ani.From)
 		dst, dstOk := tools.GetFloat(ani.To)
 		if !srcOk || !dstOk {
@@ -390,7 +391,7 @@ func (a *animationComponent) prepareTweenParams(ani *aniConfig) (*tweenParams, b
 	return params, true
 }
 
-func (a *animationComponent) executeTweenLoop(info *animState, ani *aniConfig, params *tweenParams) {
+func (a *animationComponent) executeTweenLoop(info *animState, ani *coreproject.AniConfig, params *tweenParams) {
 	timer := 0.0
 	prePercent := 0.0
 	duration := ani.Duration
@@ -410,9 +411,9 @@ func (a *animationComponent) executeTweenLoop(info *animState, ani *aniConfig, p
 	}
 }
 
-func (a *animationComponent) applyTweenStep(aniType aniTypeEnum, deltaPercent float64, params *tweenParams) {
+func (a *animationComponent) applyTweenStep(aniType coreproject.AniType, deltaPercent float64, params *tweenParams) {
 	switch aniType {
-	case aniTypeMove:
+	case coreproject.AniTypeMove:
 		physicsMode := a.sprite.PhysicsMode()
 		if isPhysicsEnabled() && physicsMode != NoPhysics && physicsMode != StaticPhysics {
 			vel := params.moveDir.Mulf(params.moveSpeed)
@@ -421,17 +422,17 @@ func (a *animationComponent) applyTweenStep(aniType aniTypeEnum, deltaPercent fl
 			val := params.moveDiff.Mulf(deltaPercent)
 			a.sprite.ChangeXYpos(val.X, val.Y)
 		}
-	case aniTypeGlide:
+	case coreproject.AniTypeGlide:
 		val := params.moveDiff.Mulf(deltaPercent)
 		a.sprite.ChangeXYpos(val.X, val.Y)
-	case aniTypeTurn:
+	case coreproject.AniTypeTurn:
 		val := params.turnDiff * deltaPercent
 		a.sprite.ChangeHeading(val)
 	}
 }
 
-func (a *animationComponent) cleanupTween(info *animState, name SpriteAnimationName, ani *aniConfig) {
-	if ani.AniType == aniTypeMove {
+func (a *animationComponent) cleanupTween(info *animState, name SpriteAnimationName, ani *coreproject.AniConfig) {
+	if ani.AniType == coreproject.AniTypeMove {
 		physicsMode := a.sprite.PhysicsMode()
 		if isPhysicsEnabled() && physicsMode != NoPhysics && physicsMode != StaticPhysics {
 			a.sprite.SetVelocity(0, 0)
