@@ -76,11 +76,11 @@ func (p *baseObj) markDestroyed() {
 }
 
 // initWith initializes the base object with sprite configuration.
-func (p *baseObj) initWith(base string, sprite *coreproject.SpriteConfig) {
+func (p *baseObj) initWith(sprite *coreproject.SpriteConfig) {
 	if sprite.CostumeSet != nil {
-		initWithCS(p, base, sprite.CostumeSet)
+		initWithCS(p, sprite.CostumeSet)
 	} else if sprite.CostumeMPSet != nil {
-		initWithCMPS(p, base, sprite.CostumeMPSet)
+		initWithCMPS(p, sprite.CostumeMPSet)
 	} else {
 		engine.Panic("initWith: sprite configuration must have either CostumeSet or CostumeMPSet defined")
 		return
@@ -94,7 +94,7 @@ func (p *baseObj) initWith(base string, sprite *coreproject.SpriteConfig) {
 }
 
 // initWithCMPS initializes with a multi-part costume set.
-func initWithCMPS(p *baseObj, base string, cmps *coreproject.CostumeMPSet) {
+func initWithCMPS(p *baseObj, cmps *coreproject.CostumeMPSet) {
 	faceRight := cmps.FaceRight
 	bitmapResolution := assetutil.ToBitmapResolution(cmps.BitmapResolution)
 	imgPath := cmps.Path
@@ -110,7 +110,7 @@ func initWithCMPS(p *baseObj, base string, cmps *coreproject.CostumeMPSet) {
 }
 
 // initWithCS initializes with a costume set.
-func initWithCS(p *baseObj, base string, cs *coreproject.CostumeSet) {
+func initWithCS(p *baseObj, cs *coreproject.CostumeSet) {
 	nx := cs.Nx
 	imgPath := cs.Path
 
@@ -167,10 +167,10 @@ func addCostumeWith(p *baseObj, name SpriteCostumeName, img *costumeSetImage, fa
 }
 
 // initBackdrops initializes backdrops from configuration.
-func (p *baseObj) initBackdrops(base string, configs []*coreproject.BackdropConfig, costumeIndex int) {
+func (p *baseObj) initBackdrops(configs []*coreproject.BackdropConfig, costumeIndex int) {
 	p.costumes = make([]*costume, len(configs))
 	for i, cfg := range configs {
-		p.costumes[i] = newCostume(base, &cfg.CostumeConfig)
+		p.costumes[i] = newCostume(&cfg.CostumeConfig)
 	}
 	if costumeIndex >= len(configs) || costumeIndex < 0 {
 		costumeIndex = 0
@@ -179,10 +179,10 @@ func (p *baseObj) initBackdrops(base string, configs []*coreproject.BackdropConf
 }
 
 // init initializes costumes from configuration.
-func (p *baseObj) init(base string, configs []*coreproject.CostumeConfig, costumeIndex int) {
+func (p *baseObj) init(configs []*coreproject.CostumeConfig, costumeIndex int) {
 	p.costumes = make([]*costume, len(configs))
 	for i, cfg := range configs {
-		p.costumes[i] = newCostume(base, cfg)
+		p.costumes[i] = newCostume(cfg)
 	}
 	if costumeIndex >= len(configs) || costumeIndex < 0 {
 		costumeIndex = 0

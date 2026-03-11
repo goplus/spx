@@ -38,7 +38,7 @@ func (p *Game) loadSprite(sprite Sprite, name string, gamer reflect.Value) error
 	vSpr := reflect.ValueOf(sprite).Elem()
 	vSpr.Set(reflect.Zero(vSpr.Type()))
 	base := vSpr.Field(0).Addr().Interface().(*SpriteImpl)
-	base.init(loaded.BaseDir, p, name, &loaded.Config, gamer, sprite)
+	base.init(p, name, &loaded.Config, gamer, sprite)
 	p.sprs[name] = sprite
 	return bindSpriteOwner(vSpr, gamer)
 }
@@ -83,7 +83,7 @@ func (p *Game) setupWorldAndWindow(proj *coreproject.ProjectConfig) {
 	p.displayState.WorldHeight = proj.Map.Height
 
 	if len(backdrops) > 0 {
-		p.baseObj.initBackdrops("", backdrops, proj.GetBackdropIndex())
+		p.baseObj.initBackdrops(backdrops, proj.GetBackdropIndex())
 		p.doWorldSize()
 	} else {
 		p.baseObj.initWithSize(p.displayState.WorldWidth, p.displayState.WorldHeight)

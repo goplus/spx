@@ -56,18 +56,18 @@ func (p *SpriteImpl) getAllShapes() []Shape {
 }
 
 func (p *SpriteImpl) init(
-	base string, g *Game, name string, spriteCfg *coreproject.SpriteConfig, gamer reflect.Value, sprite Sprite) {
-	p.initBaseObjects(base, spriteCfg, g)
+	g *Game, name string, spriteCfg *coreproject.SpriteConfig, gamer reflect.Value, sprite Sprite) {
+	p.initBaseObjects(spriteCfg, g)
 	p.initBasicProperties(g, name, sprite, gamer, spriteCfg)
 	p.initComponents(spriteCfg)
 	p.initEngineObjects()
 }
 
-func (p *SpriteImpl) initBaseObjects(base string, spriteCfg *coreproject.SpriteConfig, g *Game) {
+func (p *SpriteImpl) initBaseObjects(spriteCfg *coreproject.SpriteConfig, g *Game) {
 	if spriteCfg.Costumes != nil {
-		p.baseObj.init(base, spriteCfg.Costumes, spriteCfg.GetCostumeIndex())
+		p.baseObj.init(spriteCfg.Costumes, spriteCfg.GetCostumeIndex())
 	} else {
-		p.baseObj.initWith(base, spriteCfg)
+		p.baseObj.initWith(spriteCfg)
 	}
 	p.spriteState.DefaultCostumeIndex = p.baseObj.costumeIndex
 	p.scriptEventBindings.init(&g.scriptEvents, p)
