@@ -220,6 +220,9 @@ func ToFloat(val GdFloat) float64 {
 }
 
 func ToString(val GdString) string {
+	if val == nil {
+		return ""
+	}
 	cstrPtr := (*C.char)(unsafe.Pointer(val))
 	str := C.GoString(cstrPtr)
 	// free the memory allocated in c++
@@ -796,7 +799,9 @@ func ToArray(arrayInfo GdArray) any {
 	if arrayInfo == nil {
 		return nil
 	}
-	info := ArrayInfoImpl{gdArray: C.GdArray(arrayInfo), needsFree: false}
+	// Returned GdArray values own a temporary bridge buffer and must be freed
+	// after converting them into Go slices.
+	info := ArrayInfoImpl{gdArray: C.GdArray(arrayInfo), needsFree: true}
 	defer info.Free()
 	switch info.Type() {
 	case ArrayTypeInt64:

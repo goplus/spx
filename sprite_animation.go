@@ -123,6 +123,10 @@ func (p *SpriteImpl) flushCompletedAnimations(buffer []string) []string {
 	buffer = p.animation().takeDonedAnimations(buffer)
 	engine.Unlock()
 
+	if p.isDestroyed() || p.runtimeState.SyncSprite == nil {
+		return buffer[:0]
+	}
+
 	for _, animName := range buffer {
 		p.onAnimationDone(animName)
 	}

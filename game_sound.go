@@ -153,7 +153,11 @@ func (p *Game) playSound(sprite *engine.Sprite, audioId engine.Object, name Soun
 	if err != nil {
 		return invalidSoundId
 	}
-	return p.soundMgr.Play(audioId, m.Path, isLoop, false, sprite.Id, attenuation, maxDistance)
+	ownerID := engine.Object(0)
+	if sprite != nil {
+		ownerID = sprite.Id
+	}
+	return p.soundMgr.Play(audioId, m.Path, isLoop, false, ownerID, attenuation, maxDistance)
 }
 
 func (p *Game) playSoundAndWait(sprite *engine.Sprite, audioId engine.Object, name SoundName, attenuation, maxDistance float64) {
@@ -161,7 +165,11 @@ func (p *Game) playSoundAndWait(sprite *engine.Sprite, audioId engine.Object, na
 	if err != nil {
 		return
 	}
-	p.soundMgr.Play(audioId, m.Path, false, true, sprite.Id, attenuation, maxDistance)
+	ownerID := engine.Object(0)
+	if sprite != nil {
+		ownerID = sprite.Id
+	}
+	p.soundMgr.Play(audioId, m.Path, false, true, ownerID, attenuation, maxDistance)
 }
 
 func (p *Game) withSound(name SoundName, action func(m sound)) {

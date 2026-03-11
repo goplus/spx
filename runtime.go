@@ -763,8 +763,11 @@ func (sprite *SpriteImpl) ensureProxyInitialized() {
 func (sprite *SpriteImpl) handleAnimationFinished() {
 	engine.Lock()
 	defer engine.Unlock()
+	if sprite.isDestroyed() || sprite.runtimeState.SyncSprite == nil {
+		return
+	}
 	state := sprite.animation().getCurAnimState()
-	if state != nil && state.Name != "" && sprite.runtimeState.SyncSprite != nil {
+	if state != nil && state.Name != "" {
 		sprite.animation().addDonedAnimation(sprite.runtimeState.SyncSprite.GetCurrentAnimName())
 	}
 }
@@ -773,6 +776,9 @@ func (sprite *SpriteImpl) handleAnimationFinished() {
 func (sprite *SpriteImpl) handleAnimationLooped() {
 	engine.Lock()
 	defer engine.Unlock()
+	if sprite.isDestroyed() || sprite.runtimeState.SyncSprite == nil {
+		return
+	}
 	state := sprite.animation().getCurTweenState()
 	if state != nil && state.AudioName != "" {
 		sprite.sound().addPendingAudio(state.AudioName)
