@@ -406,14 +406,11 @@ func CallAudioStopAll() {
 
 	C.cgo_callfn_GDExtensionSpxAudioStopAll(arg0)
 }
-func CallAudioCreateAudio(
-	ret_value *GdObj,
-) {
+func CallAudioCreateAudio() GdObj {
 	arg0 := (C.GDExtensionSpxAudioCreateAudio)(api.SpxAudioCreateAudio)
-	arg1 := (*C.GdObj)(ret_value)
-
-	C.cgo_callfn_GDExtensionSpxAudioCreateAudio(arg0, arg1)
-
+	var ret_val C.GdObj
+	C.cgo_callfn_GDExtensionSpxAudioCreateAudio(arg0, &ret_val)
+	return (GdObj)(ret_val)
 }
 func CallAudioDestroyAudio(
 	obj GdObj,
@@ -437,14 +434,13 @@ func CallAudioSetPitch(
 }
 func CallAudioGetPitch(
 	obj GdObj,
-	ret_value *GdFloat,
-) {
+) GdFloat {
 	arg0 := (C.GDExtensionSpxAudioGetPitch)(api.SpxAudioGetPitch)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdFloat)(ret_value)
+	var ret_val C.GdFloat
+	C.cgo_callfn_GDExtensionSpxAudioGetPitch(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxAudioGetPitch(arg0, arg1, arg2)
-
+	return (GdFloat)(ret_val)
 }
 func CallAudioSetPan(
 	obj GdObj,
@@ -459,14 +455,13 @@ func CallAudioSetPan(
 }
 func CallAudioGetPan(
 	obj GdObj,
-	ret_value *GdFloat,
-) {
+) GdFloat {
 	arg0 := (C.GDExtensionSpxAudioGetPan)(api.SpxAudioGetPan)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdFloat)(ret_value)
+	var ret_val C.GdFloat
+	C.cgo_callfn_GDExtensionSpxAudioGetPan(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxAudioGetPan(arg0, arg1, arg2)
-
+	return (GdFloat)(ret_val)
 }
 func CallAudioSetVolume(
 	obj GdObj,
@@ -481,14 +476,13 @@ func CallAudioSetVolume(
 }
 func CallAudioGetVolume(
 	obj GdObj,
-	ret_value *GdFloat,
-) {
+) GdFloat {
 	arg0 := (C.GDExtensionSpxAudioGetVolume)(api.SpxAudioGetVolume)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdFloat)(ret_value)
+	var ret_val C.GdFloat
+	C.cgo_callfn_GDExtensionSpxAudioGetVolume(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxAudioGetVolume(arg0, arg1, arg2)
-
+	return (GdFloat)(ret_val)
 }
 func CallAudioPlayWithAttenuation(
 	obj GdObj,
@@ -496,31 +490,29 @@ func CallAudioPlayWithAttenuation(
 	owner_id GdObj,
 	attenuation GdFloat,
 	max_distance GdFloat,
-	ret_value *GdInt,
-) {
+) GdInt {
 	arg0 := (C.GDExtensionSpxAudioPlayWithAttenuation)(api.SpxAudioPlayWithAttenuation)
 	arg1 := (C.GdObj)(obj)
 	arg2 := (C.GdString)(path)
 	arg3 := (C.GdObj)(owner_id)
 	arg4 := (C.GdFloat)(attenuation)
 	arg5 := (C.GdFloat)(max_distance)
-	arg6 := (*C.GdInt)(ret_value)
+	var ret_val C.GdInt
+	C.cgo_callfn_GDExtensionSpxAudioPlayWithAttenuation(arg0, arg1, arg2, arg3, arg4, arg5, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxAudioPlayWithAttenuation(arg0, arg1, arg2, arg3, arg4, arg5, arg6)
-
+	return (GdInt)(ret_val)
 }
 func CallAudioPlay(
 	obj GdObj,
 	path GdString,
-	ret_value *GdInt,
-) {
+) GdInt {
 	arg0 := (C.GDExtensionSpxAudioPlay)(api.SpxAudioPlay)
 	arg1 := (C.GdObj)(obj)
 	arg2 := (C.GdString)(path)
-	arg3 := (*C.GdInt)(ret_value)
+	var ret_val C.GdInt
+	C.cgo_callfn_GDExtensionSpxAudioPlay(arg0, arg1, arg2, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxAudioPlay(arg0, arg1, arg2, arg3)
-
+	return (GdInt)(ret_val)
 }
 func CallAudioPause(
 	aid GdInt,
@@ -562,25 +554,23 @@ func CallAudioSetLoop(
 }
 func CallAudioGetLoop(
 	aid GdInt,
-	ret_value *GdBool,
-) {
+) GdBool {
 	arg0 := (C.GDExtensionSpxAudioGetLoop)(api.SpxAudioGetLoop)
 	arg1 := (C.GdInt)(aid)
-	arg2 := (*C.GdBool)(ret_value)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxAudioGetLoop(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxAudioGetLoop(arg0, arg1, arg2)
-
+	return (GdBool)(ret_val)
 }
 func CallAudioGetTimer(
 	aid GdInt,
-	ret_value *GdFloat,
-) {
+) GdFloat {
 	arg0 := (C.GDExtensionSpxAudioGetTimer)(api.SpxAudioGetTimer)
 	arg1 := (C.GdInt)(aid)
-	arg2 := (*C.GdFloat)(ret_value)
+	var ret_val C.GdFloat
+	C.cgo_callfn_GDExtensionSpxAudioGetTimer(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxAudioGetTimer(arg0, arg1, arg2)
-
+	return (GdFloat)(ret_val)
 }
 func CallAudioSetTimer(
 	aid GdInt,
@@ -595,23 +585,19 @@ func CallAudioSetTimer(
 }
 func CallAudioIsPlaying(
 	aid GdInt,
-	ret_value *GdBool,
-) {
+) GdBool {
 	arg0 := (C.GDExtensionSpxAudioIsPlaying)(api.SpxAudioIsPlaying)
 	arg1 := (C.GdInt)(aid)
-	arg2 := (*C.GdBool)(ret_value)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxAudioIsPlaying(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxAudioIsPlaying(arg0, arg1, arg2)
-
+	return (GdBool)(ret_val)
 }
-func CallCameraGetCameraPosition(
-	ret_value *GdVec2,
-) {
+func CallCameraGetCameraPosition() GdVec2 {
 	arg0 := (C.GDExtensionSpxCameraGetCameraPosition)(api.SpxCameraGetCameraPosition)
-	arg1 := (*C.GdVec2)(ret_value)
-
-	C.cgo_callfn_GDExtensionSpxCameraGetCameraPosition(arg0, arg1)
-
+	var ret_val C.GdVec2
+	C.cgo_callfn_GDExtensionSpxCameraGetCameraPosition(arg0, &ret_val)
+	return (GdVec2)(ret_val)
 }
 func CallCameraSetCameraPosition(
 	position GdVec2,
@@ -622,14 +608,11 @@ func CallCameraSetCameraPosition(
 	C.cgo_callfn_GDExtensionSpxCameraSetCameraPosition(arg0, arg1)
 
 }
-func CallCameraGetCameraZoom(
-	ret_value *GdVec2,
-) {
+func CallCameraGetCameraZoom() GdVec2 {
 	arg0 := (C.GDExtensionSpxCameraGetCameraZoom)(api.SpxCameraGetCameraZoom)
-	arg1 := (*C.GdVec2)(ret_value)
-
-	C.cgo_callfn_GDExtensionSpxCameraGetCameraZoom(arg0, arg1)
-
+	var ret_val C.GdVec2
+	C.cgo_callfn_GDExtensionSpxCameraGetCameraZoom(arg0, &ret_val)
+	return (GdVec2)(ret_val)
 }
 func CallCameraSetCameraZoom(
 	size GdVec2,
@@ -640,32 +623,23 @@ func CallCameraSetCameraZoom(
 	C.cgo_callfn_GDExtensionSpxCameraSetCameraZoom(arg0, arg1)
 
 }
-func CallCameraGetViewportRect(
-	ret_value *GdRect2,
-) {
+func CallCameraGetViewportRect() GdRect2 {
 	arg0 := (C.GDExtensionSpxCameraGetViewportRect)(api.SpxCameraGetViewportRect)
-	arg1 := (*C.GdRect2)(ret_value)
-
-	C.cgo_callfn_GDExtensionSpxCameraGetViewportRect(arg0, arg1)
-
+	var ret_val C.GdRect2
+	C.cgo_callfn_GDExtensionSpxCameraGetViewportRect(arg0, &ret_val)
+	return (GdRect2)(ret_val)
 }
-func CallCameraGetGlobalCameraRect(
-	ret_value *GdRect2,
-) {
+func CallCameraGetGlobalCameraRect() GdRect2 {
 	arg0 := (C.GDExtensionSpxCameraGetGlobalCameraRect)(api.SpxCameraGetGlobalCameraRect)
-	arg1 := (*C.GdRect2)(ret_value)
-
-	C.cgo_callfn_GDExtensionSpxCameraGetGlobalCameraRect(arg0, arg1)
-
+	var ret_val C.GdRect2
+	C.cgo_callfn_GDExtensionSpxCameraGetGlobalCameraRect(arg0, &ret_val)
+	return (GdRect2)(ret_val)
 }
-func CallCameraGetStageLimitsRect(
-	ret_value *GdRect2,
-) {
+func CallCameraGetStageLimitsRect() GdRect2 {
 	arg0 := (C.GDExtensionSpxCameraGetStageLimitsRect)(api.SpxCameraGetStageLimitsRect)
-	arg1 := (*C.GdRect2)(ret_value)
-
-	C.cgo_callfn_GDExtensionSpxCameraGetStageLimitsRect(arg0, arg1)
-
+	var ret_val C.GdRect2
+	C.cgo_callfn_GDExtensionSpxCameraGetStageLimitsRect(arg0, &ret_val)
+	return (GdRect2)(ret_val)
 }
 func CallCameraSetCameraLimit(
 	side GdInt,
@@ -768,14 +742,11 @@ func CallExtResume() {
 
 	C.cgo_callfn_GDExtensionSpxExtResume(arg0)
 }
-func CallExtIsPaused(
-	ret_value *GdBool,
-) {
+func CallExtIsPaused() GdBool {
 	arg0 := (C.GDExtensionSpxExtIsPaused)(api.SpxExtIsPaused)
-	arg1 := (*C.GdBool)(ret_value)
-
-	C.cgo_callfn_GDExtensionSpxExtIsPaused(arg0, arg1)
-
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxExtIsPaused(arg0, &ret_val)
+	return (GdBool)(ret_val)
 }
 func CallExtNextFrame() {
 	arg0 := (C.GDExtensionSpxExtNextFrame)(api.SpxExtNextFrame)
@@ -791,93 +762,83 @@ func CallExtSetLayerSorterMode(
 	C.cgo_callfn_GDExtensionSpxExtSetLayerSorterMode(arg0, arg1)
 
 }
-func CallInputGetGlobalMousePos(
-	ret_value *GdVec2,
-) {
+func CallInputGetGlobalMousePos() GdVec2 {
 	arg0 := (C.GDExtensionSpxInputGetGlobalMousePos)(api.SpxInputGetGlobalMousePos)
-	arg1 := (*C.GdVec2)(ret_value)
-
-	C.cgo_callfn_GDExtensionSpxInputGetGlobalMousePos(arg0, arg1)
-
+	var ret_val C.GdVec2
+	C.cgo_callfn_GDExtensionSpxInputGetGlobalMousePos(arg0, &ret_val)
+	return (GdVec2)(ret_val)
 }
 func CallInputGetKey(
 	key GdInt,
-	ret_value *GdBool,
-) {
+) GdBool {
 	arg0 := (C.GDExtensionSpxInputGetKey)(api.SpxInputGetKey)
 	arg1 := (C.GdInt)(key)
-	arg2 := (*C.GdBool)(ret_value)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxInputGetKey(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxInputGetKey(arg0, arg1, arg2)
-
+	return (GdBool)(ret_val)
 }
 func CallInputGetMouseState(
 	mouse_id GdInt,
-	ret_value *GdBool,
-) {
+) GdBool {
 	arg0 := (C.GDExtensionSpxInputGetMouseState)(api.SpxInputGetMouseState)
 	arg1 := (C.GdInt)(mouse_id)
-	arg2 := (*C.GdBool)(ret_value)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxInputGetMouseState(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxInputGetMouseState(arg0, arg1, arg2)
-
+	return (GdBool)(ret_val)
 }
 func CallInputGetKeyState(
 	key GdInt,
-	ret_value *GdInt,
-) {
+) GdInt {
 	arg0 := (C.GDExtensionSpxInputGetKeyState)(api.SpxInputGetKeyState)
 	arg1 := (C.GdInt)(key)
-	arg2 := (*C.GdInt)(ret_value)
+	var ret_val C.GdInt
+	C.cgo_callfn_GDExtensionSpxInputGetKeyState(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxInputGetKeyState(arg0, arg1, arg2)
-
+	return (GdInt)(ret_val)
 }
 func CallInputGetAxis(
 	neg_action GdString,
 	pos_action GdString,
-	ret_value *GdFloat,
-) {
+) GdFloat {
 	arg0 := (C.GDExtensionSpxInputGetAxis)(api.SpxInputGetAxis)
 	arg1 := (C.GdString)(neg_action)
 	arg2 := (C.GdString)(pos_action)
-	arg3 := (*C.GdFloat)(ret_value)
+	var ret_val C.GdFloat
+	C.cgo_callfn_GDExtensionSpxInputGetAxis(arg0, arg1, arg2, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxInputGetAxis(arg0, arg1, arg2, arg3)
-
+	return (GdFloat)(ret_val)
 }
 func CallInputIsActionPressed(
 	action GdString,
-	ret_value *GdBool,
-) {
+) GdBool {
 	arg0 := (C.GDExtensionSpxInputIsActionPressed)(api.SpxInputIsActionPressed)
 	arg1 := (C.GdString)(action)
-	arg2 := (*C.GdBool)(ret_value)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxInputIsActionPressed(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxInputIsActionPressed(arg0, arg1, arg2)
-
+	return (GdBool)(ret_val)
 }
 func CallInputIsActionJustPressed(
 	action GdString,
-	ret_value *GdBool,
-) {
+) GdBool {
 	arg0 := (C.GDExtensionSpxInputIsActionJustPressed)(api.SpxInputIsActionJustPressed)
 	arg1 := (C.GdString)(action)
-	arg2 := (*C.GdBool)(ret_value)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxInputIsActionJustPressed(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxInputIsActionJustPressed(arg0, arg1, arg2)
-
+	return (GdBool)(ret_val)
 }
 func CallInputIsActionJustReleased(
 	action GdString,
-	ret_value *GdBool,
-) {
+) GdBool {
 	arg0 := (C.GDExtensionSpxInputIsActionJustReleased)(api.SpxInputIsActionJustReleased)
 	arg1 := (C.GdString)(action)
-	arg2 := (*C.GdBool)(ret_value)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxInputIsActionJustReleased(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxInputIsActionJustReleased(arg0, arg1, arg2)
-
+	return (GdBool)(ret_val)
 }
 func CallNavigationSetupPathFinderWithSize(
 	grid_size GdVec2,
@@ -918,30 +879,26 @@ func CallNavigationFindPath(
 	p_from GdVec2,
 	p_to GdVec2,
 	with_jump GdBool,
-	ret_value *GdArray,
-) {
+) GdArray {
 	arg0 := (C.GDExtensionSpxNavigationFindPath)(api.SpxNavigationFindPath)
 	arg1 := (C.GdVec2)(p_from)
 	arg2 := (C.GdVec2)(p_to)
 	arg3 := (C.GdBool)(with_jump)
-	arg4 := (*C.GdArray)(ret_value)
+	var ret_val C.GdArray
+	C.cgo_callfn_GDExtensionSpxNavigationFindPath(arg0, arg1, arg2, arg3, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxNavigationFindPath(arg0, arg1, arg2, arg3, arg4)
-
+	return GdArray(ret_val)
 }
 func CallPenDestroyAllPens() {
 	arg0 := (C.GDExtensionSpxPenDestroyAllPens)(api.SpxPenDestroyAllPens)
 
 	C.cgo_callfn_GDExtensionSpxPenDestroyAllPens(arg0)
 }
-func CallPenCreatePen(
-	ret_value *GdObj,
-) {
+func CallPenCreatePen() GdObj {
 	arg0 := (C.GDExtensionSpxPenCreatePen)(api.SpxPenCreatePen)
-	arg1 := (*C.GdObj)(ret_value)
-
-	C.cgo_callfn_GDExtensionSpxPenCreatePen(arg0, arg1)
-
+	var ret_val C.GdObj
+	C.cgo_callfn_GDExtensionSpxPenCreatePen(arg0, &ret_val)
+	return (GdObj)(ret_val)
 }
 func CallPenDestroyPen(
 	obj GdObj,
@@ -1066,16 +1023,15 @@ func CallPhysicsRaycast(
 	from GdVec2,
 	to GdVec2,
 	collision_mask GdInt,
-	ret_value *GdObj,
-) {
+) GdObj {
 	arg0 := (C.GDExtensionSpxPhysicsRaycast)(api.SpxPhysicsRaycast)
 	arg1 := (C.GdVec2)(from)
 	arg2 := (C.GdVec2)(to)
 	arg3 := (C.GdInt)(collision_mask)
-	arg4 := (*C.GdObj)(ret_value)
+	var ret_val C.GdObj
+	C.cgo_callfn_GDExtensionSpxPhysicsRaycast(arg0, arg1, arg2, arg3, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxPhysicsRaycast(arg0, arg1, arg2, arg3, arg4)
-
+	return (GdObj)(ret_val)
 }
 func CallPhysicsCheckCollision(
 	from GdVec2,
@@ -1083,88 +1039,81 @@ func CallPhysicsCheckCollision(
 	collision_mask GdInt,
 	collide_with_areas GdBool,
 	collide_with_bodies GdBool,
-	ret_value *GdBool,
-) {
+) GdBool {
 	arg0 := (C.GDExtensionSpxPhysicsCheckCollision)(api.SpxPhysicsCheckCollision)
 	arg1 := (C.GdVec2)(from)
 	arg2 := (C.GdVec2)(to)
 	arg3 := (C.GdInt)(collision_mask)
 	arg4 := (C.GdBool)(collide_with_areas)
 	arg5 := (C.GdBool)(collide_with_bodies)
-	arg6 := (*C.GdBool)(ret_value)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxPhysicsCheckCollision(arg0, arg1, arg2, arg3, arg4, arg5, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxPhysicsCheckCollision(arg0, arg1, arg2, arg3, arg4, arg5, arg6)
-
+	return (GdBool)(ret_val)
 }
 func CallPhysicsCheckTouchedCameraBoundaries(
 	obj GdObj,
-	ret_value *GdInt,
-) {
+) GdInt {
 	arg0 := (C.GDExtensionSpxPhysicsCheckTouchedCameraBoundaries)(api.SpxPhysicsCheckTouchedCameraBoundaries)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdInt)(ret_value)
+	var ret_val C.GdInt
+	C.cgo_callfn_GDExtensionSpxPhysicsCheckTouchedCameraBoundaries(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxPhysicsCheckTouchedCameraBoundaries(arg0, arg1, arg2)
-
+	return (GdInt)(ret_val)
 }
 func CallPhysicsCheckTouchedCameraBoundary(
 	obj GdObj,
 	board_type GdInt,
-	ret_value *GdBool,
-) {
+) GdBool {
 	arg0 := (C.GDExtensionSpxPhysicsCheckTouchedCameraBoundary)(api.SpxPhysicsCheckTouchedCameraBoundary)
 	arg1 := (C.GdObj)(obj)
 	arg2 := (C.GdInt)(board_type)
-	arg3 := (*C.GdBool)(ret_value)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxPhysicsCheckTouchedCameraBoundary(arg0, arg1, arg2, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxPhysicsCheckTouchedCameraBoundary(arg0, arg1, arg2, arg3)
-
+	return (GdBool)(ret_val)
 }
 func CallPhysicsCheckNearestTouchedCameraBoundary(
 	obj GdObj,
-	ret_value *GdInt,
-) {
+) GdInt {
 	arg0 := (C.GDExtensionSpxPhysicsCheckNearestTouchedCameraBoundary)(api.SpxPhysicsCheckNearestTouchedCameraBoundary)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdInt)(ret_value)
+	var ret_val C.GdInt
+	C.cgo_callfn_GDExtensionSpxPhysicsCheckNearestTouchedCameraBoundary(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxPhysicsCheckNearestTouchedCameraBoundary(arg0, arg1, arg2)
-
+	return (GdInt)(ret_val)
 }
 func CallPhysicsCheckTouchedStageBoundaries(
 	obj GdObj,
-	ret_value *GdInt,
-) {
+) GdInt {
 	arg0 := (C.GDExtensionSpxPhysicsCheckTouchedStageBoundaries)(api.SpxPhysicsCheckTouchedStageBoundaries)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdInt)(ret_value)
+	var ret_val C.GdInt
+	C.cgo_callfn_GDExtensionSpxPhysicsCheckTouchedStageBoundaries(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxPhysicsCheckTouchedStageBoundaries(arg0, arg1, arg2)
-
+	return (GdInt)(ret_val)
 }
 func CallPhysicsCheckTouchedStageBoundary(
 	obj GdObj,
 	board_type GdInt,
-	ret_value *GdBool,
-) {
+) GdBool {
 	arg0 := (C.GDExtensionSpxPhysicsCheckTouchedStageBoundary)(api.SpxPhysicsCheckTouchedStageBoundary)
 	arg1 := (C.GdObj)(obj)
 	arg2 := (C.GdInt)(board_type)
-	arg3 := (*C.GdBool)(ret_value)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxPhysicsCheckTouchedStageBoundary(arg0, arg1, arg2, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxPhysicsCheckTouchedStageBoundary(arg0, arg1, arg2, arg3)
-
+	return (GdBool)(ret_val)
 }
 func CallPhysicsCheckNearestTouchedStageBoundary(
 	obj GdObj,
-	ret_value *GdInt,
-) {
+) GdInt {
 	arg0 := (C.GDExtensionSpxPhysicsCheckNearestTouchedStageBoundary)(api.SpxPhysicsCheckNearestTouchedStageBoundary)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdInt)(ret_value)
+	var ret_val C.GdInt
+	C.cgo_callfn_GDExtensionSpxPhysicsCheckNearestTouchedStageBoundary(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxPhysicsCheckNearestTouchedStageBoundary(arg0, arg1, arg2)
-
+	return (GdInt)(ret_val)
 }
 func CallPhysicsSetCollisionSystemType(
 	is_collision_by_alpha GdBool,
@@ -1184,14 +1133,11 @@ func CallPhysicsSetGlobalGravity(
 	C.cgo_callfn_GDExtensionSpxPhysicsSetGlobalGravity(arg0, arg1)
 
 }
-func CallPhysicsGetGlobalGravity(
-	ret_value *GdFloat,
-) {
+func CallPhysicsGetGlobalGravity() GdFloat {
 	arg0 := (C.GDExtensionSpxPhysicsGetGlobalGravity)(api.SpxPhysicsGetGlobalGravity)
-	arg1 := (*C.GdFloat)(ret_value)
-
-	C.cgo_callfn_GDExtensionSpxPhysicsGetGlobalGravity(arg0, arg1)
-
+	var ret_val C.GdFloat
+	C.cgo_callfn_GDExtensionSpxPhysicsGetGlobalGravity(arg0, &ret_val)
+	return (GdFloat)(ret_val)
 }
 func CallPhysicsSetGlobalFriction(
 	friction GdFloat,
@@ -1202,14 +1148,11 @@ func CallPhysicsSetGlobalFriction(
 	C.cgo_callfn_GDExtensionSpxPhysicsSetGlobalFriction(arg0, arg1)
 
 }
-func CallPhysicsGetGlobalFriction(
-	ret_value *GdFloat,
-) {
+func CallPhysicsGetGlobalFriction() GdFloat {
 	arg0 := (C.GDExtensionSpxPhysicsGetGlobalFriction)(api.SpxPhysicsGetGlobalFriction)
-	arg1 := (*C.GdFloat)(ret_value)
-
-	C.cgo_callfn_GDExtensionSpxPhysicsGetGlobalFriction(arg0, arg1)
-
+	var ret_val C.GdFloat
+	C.cgo_callfn_GDExtensionSpxPhysicsGetGlobalFriction(arg0, &ret_val)
+	return (GdFloat)(ret_val)
 }
 func CallPhysicsSetGlobalAirDrag(
 	air_drag GdFloat,
@@ -1220,44 +1163,39 @@ func CallPhysicsSetGlobalAirDrag(
 	C.cgo_callfn_GDExtensionSpxPhysicsSetGlobalAirDrag(arg0, arg1)
 
 }
-func CallPhysicsGetGlobalAirDrag(
-	ret_value *GdFloat,
-) {
+func CallPhysicsGetGlobalAirDrag() GdFloat {
 	arg0 := (C.GDExtensionSpxPhysicsGetGlobalAirDrag)(api.SpxPhysicsGetGlobalAirDrag)
-	arg1 := (*C.GdFloat)(ret_value)
-
-	C.cgo_callfn_GDExtensionSpxPhysicsGetGlobalAirDrag(arg0, arg1)
-
+	var ret_val C.GdFloat
+	C.cgo_callfn_GDExtensionSpxPhysicsGetGlobalAirDrag(arg0, &ret_val)
+	return (GdFloat)(ret_val)
 }
 func CallPhysicsCheckCollisionRect(
 	pos GdVec2,
 	size GdVec2,
 	collision_mask GdInt,
-	ret_value *GdArray,
-) {
+) GdArray {
 	arg0 := (C.GDExtensionSpxPhysicsCheckCollisionRect)(api.SpxPhysicsCheckCollisionRect)
 	arg1 := (C.GdVec2)(pos)
 	arg2 := (C.GdVec2)(size)
 	arg3 := (C.GdInt)(collision_mask)
-	arg4 := (*C.GdArray)(ret_value)
+	var ret_val C.GdArray
+	C.cgo_callfn_GDExtensionSpxPhysicsCheckCollisionRect(arg0, arg1, arg2, arg3, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxPhysicsCheckCollisionRect(arg0, arg1, arg2, arg3, arg4)
-
+	return GdArray(ret_val)
 }
 func CallPhysicsCheckCollisionCircle(
 	pos GdVec2,
 	radius GdFloat,
 	collision_mask GdInt,
-	ret_value *GdArray,
-) {
+) GdArray {
 	arg0 := (C.GDExtensionSpxPhysicsCheckCollisionCircle)(api.SpxPhysicsCheckCollisionCircle)
 	arg1 := (C.GdVec2)(pos)
 	arg2 := (C.GdFloat)(radius)
 	arg3 := (C.GdInt)(collision_mask)
-	arg4 := (*C.GdArray)(ret_value)
+	var ret_val C.GdArray
+	C.cgo_callfn_GDExtensionSpxPhysicsCheckCollisionCircle(arg0, arg1, arg2, arg3, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxPhysicsCheckCollisionCircle(arg0, arg1, arg2, arg3, arg4)
-
+	return GdArray(ret_val)
 }
 func CallPhysicsRaycastWithDetails(
 	from GdVec2,
@@ -1266,8 +1204,7 @@ func CallPhysicsRaycastWithDetails(
 	collision_mask GdInt,
 	collide_with_areas GdBool,
 	collide_with_bodies GdBool,
-	ret_value *GdArray,
-) {
+) GdArray {
 	arg0 := (C.GDExtensionSpxPhysicsRaycastWithDetails)(api.SpxPhysicsRaycastWithDetails)
 	arg1 := (C.GdVec2)(from)
 	arg2 := (C.GdVec2)(to)
@@ -1275,10 +1212,10 @@ func CallPhysicsRaycastWithDetails(
 	arg4 := (C.GdInt)(collision_mask)
 	arg5 := (C.GdBool)(collide_with_areas)
 	arg6 := (C.GdBool)(collide_with_bodies)
-	arg7 := (*C.GdArray)(ret_value)
+	var ret_val C.GdArray
+	C.cgo_callfn_GDExtensionSpxPhysicsRaycastWithDetails(arg0, arg1, arg2, arg3, arg4, arg5, arg6, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxPhysicsRaycastWithDetails(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7)
-
+	return GdArray(ret_val)
 }
 func CallPlatformSetStretchMode(
 	enable GdBool,
@@ -1318,14 +1255,11 @@ func CallPlatformSetWindowPosition(
 	C.cgo_callfn_GDExtensionSpxPlatformSetWindowPosition(arg0, arg1)
 
 }
-func CallPlatformGetWindowPosition(
-	ret_value *GdVec2,
-) {
+func CallPlatformGetWindowPosition() GdVec2 {
 	arg0 := (C.GDExtensionSpxPlatformGetWindowPosition)(api.SpxPlatformGetWindowPosition)
-	arg1 := (*C.GdVec2)(ret_value)
-
-	C.cgo_callfn_GDExtensionSpxPlatformGetWindowPosition(arg0, arg1)
-
+	var ret_val C.GdVec2
+	C.cgo_callfn_GDExtensionSpxPlatformGetWindowPosition(arg0, &ret_val)
+	return (GdVec2)(ret_val)
 }
 func CallPlatformSetWindowSize(
 	width GdInt,
@@ -1340,14 +1274,11 @@ func CallPlatformSetWindowSize(
 	C.cgo_callfn_GDExtensionSpxPlatformSetWindowSize(arg0, arg1, arg2, arg3)
 
 }
-func CallPlatformGetWindowSize(
-	ret_value *GdVec2,
-) {
+func CallPlatformGetWindowSize() GdVec2 {
 	arg0 := (C.GDExtensionSpxPlatformGetWindowSize)(api.SpxPlatformGetWindowSize)
-	arg1 := (*C.GdVec2)(ret_value)
-
-	C.cgo_callfn_GDExtensionSpxPlatformGetWindowSize(arg0, arg1)
-
+	var ret_val C.GdVec2
+	C.cgo_callfn_GDExtensionSpxPlatformGetWindowSize(arg0, &ret_val)
+	return (GdVec2)(ret_val)
 }
 func CallPlatformSetWindowTitle(
 	title GdString,
@@ -1358,14 +1289,11 @@ func CallPlatformSetWindowTitle(
 	C.cgo_callfn_GDExtensionSpxPlatformSetWindowTitle(arg0, arg1)
 
 }
-func CallPlatformGetWindowTitle(
-	ret_value *GdString,
-) {
+func CallPlatformGetWindowTitle() GdString {
 	arg0 := (C.GDExtensionSpxPlatformGetWindowTitle)(api.SpxPlatformGetWindowTitle)
-	arg1 := (*C.GdString)(ret_value)
-
-	C.cgo_callfn_GDExtensionSpxPlatformGetWindowTitle(arg0, arg1)
-
+	var ret_val C.GdString
+	C.cgo_callfn_GDExtensionSpxPlatformGetWindowTitle(arg0, &ret_val)
+	return (GdString)(ret_val)
 }
 func CallPlatformSetWindowFullscreen(
 	enable GdBool,
@@ -1376,14 +1304,11 @@ func CallPlatformSetWindowFullscreen(
 	C.cgo_callfn_GDExtensionSpxPlatformSetWindowFullscreen(arg0, arg1)
 
 }
-func CallPlatformIsWindowFullscreen(
-	ret_value *GdBool,
-) {
+func CallPlatformIsWindowFullscreen() GdBool {
 	arg0 := (C.GDExtensionSpxPlatformIsWindowFullscreen)(api.SpxPlatformIsWindowFullscreen)
-	arg1 := (*C.GdBool)(ret_value)
-
-	C.cgo_callfn_GDExtensionSpxPlatformIsWindowFullscreen(arg0, arg1)
-
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxPlatformIsWindowFullscreen(arg0, &ret_val)
+	return (GdBool)(ret_val)
 }
 func CallPlatformSetDebugMode(
 	enable GdBool,
@@ -1394,23 +1319,17 @@ func CallPlatformSetDebugMode(
 	C.cgo_callfn_GDExtensionSpxPlatformSetDebugMode(arg0, arg1)
 
 }
-func CallPlatformIsDebugMode(
-	ret_value *GdBool,
-) {
+func CallPlatformIsDebugMode() GdBool {
 	arg0 := (C.GDExtensionSpxPlatformIsDebugMode)(api.SpxPlatformIsDebugMode)
-	arg1 := (*C.GdBool)(ret_value)
-
-	C.cgo_callfn_GDExtensionSpxPlatformIsDebugMode(arg0, arg1)
-
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxPlatformIsDebugMode(arg0, &ret_val)
+	return (GdBool)(ret_val)
 }
-func CallPlatformGetTimeScale(
-	ret_value *GdFloat,
-) {
+func CallPlatformGetTimeScale() GdFloat {
 	arg0 := (C.GDExtensionSpxPlatformGetTimeScale)(api.SpxPlatformGetTimeScale)
-	arg1 := (*C.GdFloat)(ret_value)
-
-	C.cgo_callfn_GDExtensionSpxPlatformGetTimeScale(arg0, arg1)
-
+	var ret_val C.GdFloat
+	C.cgo_callfn_GDExtensionSpxPlatformGetTimeScale(arg0, &ret_val)
+	return (GdFloat)(ret_val)
 }
 func CallPlatformSetTimeScale(
 	time_scale GdFloat,
@@ -1421,14 +1340,11 @@ func CallPlatformSetTimeScale(
 	C.cgo_callfn_GDExtensionSpxPlatformSetTimeScale(arg0, arg1)
 
 }
-func CallPlatformGetMaxFps(
-	ret_value *GdInt,
-) {
+func CallPlatformGetMaxFps() GdInt {
 	arg0 := (C.GDExtensionSpxPlatformGetMaxFps)(api.SpxPlatformGetMaxFps)
-	arg1 := (*C.GdInt)(ret_value)
-
-	C.cgo_callfn_GDExtensionSpxPlatformGetMaxFps(arg0, arg1)
-
+	var ret_val C.GdInt
+	C.cgo_callfn_GDExtensionSpxPlatformGetMaxFps(arg0, &ret_val)
+	return (GdInt)(ret_val)
 }
 func CallPlatformSetMaxFps(
 	fps GdInt,
@@ -1439,14 +1355,11 @@ func CallPlatformSetMaxFps(
 	C.cgo_callfn_GDExtensionSpxPlatformSetMaxFps(arg0, arg1)
 
 }
-func CallPlatformGetPersistantDataDir(
-	ret_value *GdString,
-) {
+func CallPlatformGetPersistantDataDir() GdString {
 	arg0 := (C.GDExtensionSpxPlatformGetPersistantDataDir)(api.SpxPlatformGetPersistantDataDir)
-	arg1 := (*C.GdString)(ret_value)
-
-	C.cgo_callfn_GDExtensionSpxPlatformGetPersistantDataDir(arg0, arg1)
-
+	var ret_val C.GdString
+	C.cgo_callfn_GDExtensionSpxPlatformGetPersistantDataDir(arg0, &ret_val)
+	return (GdString)(ret_val)
 }
 func CallPlatformSetPersistantDataDir(
 	path GdString,
@@ -1459,14 +1372,13 @@ func CallPlatformSetPersistantDataDir(
 }
 func CallPlatformIsInPersistantDataDir(
 	path GdString,
-	ret_value *GdBool,
-) {
+) GdBool {
 	arg0 := (C.GDExtensionSpxPlatformIsInPersistantDataDir)(api.SpxPlatformIsInPersistantDataDir)
 	arg1 := (C.GdString)(path)
-	arg2 := (*C.GdBool)(ret_value)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxPlatformIsInPersistantDataDir(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxPlatformIsInPersistantDataDir(arg0, arg1, arg2)
-
+	return (GdBool)(ret_val)
 }
 func CallResCreateAnimation(
 	p_sprite_type GdString,
@@ -1494,58 +1406,51 @@ func CallResSetLoadMode(
 	C.cgo_callfn_GDExtensionSpxResSetLoadMode(arg0, arg1)
 
 }
-func CallResGetLoadMode(
-	ret_value *GdBool,
-) {
+func CallResGetLoadMode() GdBool {
 	arg0 := (C.GDExtensionSpxResGetLoadMode)(api.SpxResGetLoadMode)
-	arg1 := (*C.GdBool)(ret_value)
-
-	C.cgo_callfn_GDExtensionSpxResGetLoadMode(arg0, arg1)
-
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxResGetLoadMode(arg0, &ret_val)
+	return (GdBool)(ret_val)
 }
 func CallResGetBoundFromAlpha(
 	p_path GdString,
-	ret_value *GdRect2,
-) {
+) GdRect2 {
 	arg0 := (C.GDExtensionSpxResGetBoundFromAlpha)(api.SpxResGetBoundFromAlpha)
 	arg1 := (C.GdString)(p_path)
-	arg2 := (*C.GdRect2)(ret_value)
+	var ret_val C.GdRect2
+	C.cgo_callfn_GDExtensionSpxResGetBoundFromAlpha(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxResGetBoundFromAlpha(arg0, arg1, arg2)
-
+	return (GdRect2)(ret_val)
 }
 func CallResGetImageSize(
 	p_path GdString,
-	ret_value *GdVec2,
-) {
+) GdVec2 {
 	arg0 := (C.GDExtensionSpxResGetImageSize)(api.SpxResGetImageSize)
 	arg1 := (C.GdString)(p_path)
-	arg2 := (*C.GdVec2)(ret_value)
+	var ret_val C.GdVec2
+	C.cgo_callfn_GDExtensionSpxResGetImageSize(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxResGetImageSize(arg0, arg1, arg2)
-
+	return (GdVec2)(ret_val)
 }
 func CallResReadAllText(
 	p_path GdString,
-	ret_value *GdString,
-) {
+) GdString {
 	arg0 := (C.GDExtensionSpxResReadAllText)(api.SpxResReadAllText)
 	arg1 := (C.GdString)(p_path)
-	arg2 := (*C.GdString)(ret_value)
+	var ret_val C.GdString
+	C.cgo_callfn_GDExtensionSpxResReadAllText(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxResReadAllText(arg0, arg1, arg2)
-
+	return (GdString)(ret_val)
 }
 func CallResHasFile(
 	p_path GdString,
-	ret_value *GdBool,
-) {
+) GdBool {
 	arg0 := (C.GDExtensionSpxResHasFile)(api.SpxResHasFile)
 	arg1 := (C.GdString)(p_path)
-	arg2 := (*C.GdBool)(ret_value)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxResHasFile(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxResHasFile(arg0, arg1, arg2)
-
+	return (GdBool)(ret_val)
 }
 func CallResReloadTexture(
 	path GdString,
@@ -1588,14 +1493,11 @@ func CallSceneDestroyAllSprites() {
 
 	C.cgo_callfn_GDExtensionSpxSceneDestroyAllSprites(arg0)
 }
-func CallSceneReloadCurrentScene(
-	ret_value *GdInt,
-) {
+func CallSceneReloadCurrentScene() GdInt {
 	arg0 := (C.GDExtensionSpxSceneReloadCurrentScene)(api.SpxSceneReloadCurrentScene)
-	arg1 := (*C.GdInt)(ret_value)
-
-	C.cgo_callfn_GDExtensionSpxSceneReloadCurrentScene(arg0, arg1)
-
+	var ret_val C.GdInt
+	C.cgo_callfn_GDExtensionSpxSceneReloadCurrentScene(arg0, &ret_val)
+	return (GdInt)(ret_val)
 }
 func CallSceneUnloadCurrentScene() {
 	arg0 := (C.GDExtensionSpxSceneUnloadCurrentScene)(api.SpxSceneUnloadCurrentScene)
@@ -1636,8 +1538,7 @@ func CallSceneCreateRenderSprite(
 	scale GdVec2,
 	zindex GdInt,
 	pivot GdVec2,
-	ret_value *GdObj,
-) {
+) GdObj {
 	arg0 := (C.GDExtensionSpxSceneCreateRenderSprite)(api.SpxSceneCreateRenderSprite)
 	arg1 := (C.GdString)(texture_path)
 	arg2 := (C.GdVec2)(pos)
@@ -1645,10 +1546,10 @@ func CallSceneCreateRenderSprite(
 	arg4 := (C.GdVec2)(scale)
 	arg5 := (C.GdInt)(zindex)
 	arg6 := (C.GdVec2)(pivot)
-	arg7 := (*C.GdObj)(ret_value)
+	var ret_val C.GdObj
+	C.cgo_callfn_GDExtensionSpxSceneCreateRenderSprite(arg0, arg1, arg2, arg3, arg4, arg5, arg6, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSceneCreateRenderSprite(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7)
-
+	return (GdObj)(ret_val)
 }
 func CallSceneCreateStaticSprite(
 	texture_path GdString,
@@ -1660,8 +1561,7 @@ func CallSceneCreateStaticSprite(
 	collider_type GdInt,
 	collider_pivot GdVec2,
 	collider_params GdArray,
-	ret_value *GdObj,
-) {
+) GdObj {
 	arg0 := (C.GDExtensionSpxSceneCreateStaticSprite)(api.SpxSceneCreateStaticSprite)
 	arg1 := (C.GdString)(texture_path)
 	arg2 := (C.GdVec2)(pos)
@@ -1672,10 +1572,10 @@ func CallSceneCreateStaticSprite(
 	arg7 := (C.GdInt)(collider_type)
 	arg8 := (C.GdVec2)(collider_pivot)
 	arg9 := (C.GdArray)(collider_params)
-	arg10 := (*C.GdObj)(ret_value)
+	var ret_val C.GdObj
+	C.cgo_callfn_GDExtensionSpxSceneCreateStaticSprite(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSceneCreateStaticSprite(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10)
-
+	return (GdObj)(ret_val)
 }
 func CallSpriteSetDontDestroyOnLoad(
 	obj GdObj,
@@ -1732,14 +1632,13 @@ func CallSpriteSetPivot(
 }
 func CallSpriteGetPivot(
 	obj GdObj,
-	ret_value *GdVec2,
-) {
+) GdVec2 {
 	arg0 := (C.GDExtensionSpxSpriteGetPivot)(api.SpxSpriteGetPivot)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdVec2)(ret_value)
+	var ret_val C.GdVec2
+	C.cgo_callfn_GDExtensionSpxSpriteGetPivot(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteGetPivot(arg0, arg1, arg2)
-
+	return (GdVec2)(ret_val)
 }
 func CallSpriteSetChildPosition(
 	obj GdObj,
@@ -1757,15 +1656,14 @@ func CallSpriteSetChildPosition(
 func CallSpriteGetChildPosition(
 	obj GdObj,
 	path GdString,
-	ret_value *GdVec2,
-) {
+) GdVec2 {
 	arg0 := (C.GDExtensionSpxSpriteGetChildPosition)(api.SpxSpriteGetChildPosition)
 	arg1 := (C.GdObj)(obj)
 	arg2 := (C.GdString)(path)
-	arg3 := (*C.GdVec2)(ret_value)
+	var ret_val C.GdVec2
+	C.cgo_callfn_GDExtensionSpxSpriteGetChildPosition(arg0, arg1, arg2, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteGetChildPosition(arg0, arg1, arg2, arg3)
-
+	return (GdVec2)(ret_val)
 }
 func CallSpriteSetChildRotation(
 	obj GdObj,
@@ -1783,15 +1681,14 @@ func CallSpriteSetChildRotation(
 func CallSpriteGetChildRotation(
 	obj GdObj,
 	path GdString,
-	ret_value *GdFloat,
-) {
+) GdFloat {
 	arg0 := (C.GDExtensionSpxSpriteGetChildRotation)(api.SpxSpriteGetChildRotation)
 	arg1 := (C.GdObj)(obj)
 	arg2 := (C.GdString)(path)
-	arg3 := (*C.GdFloat)(ret_value)
+	var ret_val C.GdFloat
+	C.cgo_callfn_GDExtensionSpxSpriteGetChildRotation(arg0, arg1, arg2, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteGetChildRotation(arg0, arg1, arg2, arg3)
-
+	return (GdFloat)(ret_val)
 }
 func CallSpriteSetChildScale(
 	obj GdObj,
@@ -1809,47 +1706,44 @@ func CallSpriteSetChildScale(
 func CallSpriteGetChildScale(
 	obj GdObj,
 	path GdString,
-	ret_value *GdVec2,
-) {
+) GdVec2 {
 	arg0 := (C.GDExtensionSpxSpriteGetChildScale)(api.SpxSpriteGetChildScale)
 	arg1 := (C.GdObj)(obj)
 	arg2 := (C.GdString)(path)
-	arg3 := (*C.GdVec2)(ret_value)
+	var ret_val C.GdVec2
+	C.cgo_callfn_GDExtensionSpxSpriteGetChildScale(arg0, arg1, arg2, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteGetChildScale(arg0, arg1, arg2, arg3)
-
+	return (GdVec2)(ret_val)
 }
 func CallSpriteCheckCollision(
 	obj GdObj,
 	target GdObj,
 	is_src_trigger GdBool,
 	is_dst_trigger GdBool,
-	ret_value *GdBool,
-) {
+) GdBool {
 	arg0 := (C.GDExtensionSpxSpriteCheckCollision)(api.SpxSpriteCheckCollision)
 	arg1 := (C.GdObj)(obj)
 	arg2 := (C.GdObj)(target)
 	arg3 := (C.GdBool)(is_src_trigger)
 	arg4 := (C.GdBool)(is_dst_trigger)
-	arg5 := (*C.GdBool)(ret_value)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxSpriteCheckCollision(arg0, arg1, arg2, arg3, arg4, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteCheckCollision(arg0, arg1, arg2, arg3, arg4, arg5)
-
+	return (GdBool)(ret_val)
 }
 func CallSpriteCheckCollisionWithPoint(
 	obj GdObj,
 	point GdVec2,
 	is_trigger GdBool,
-	ret_value *GdBool,
-) {
+) GdBool {
 	arg0 := (C.GDExtensionSpxSpriteCheckCollisionWithPoint)(api.SpxSpriteCheckCollisionWithPoint)
 	arg1 := (C.GdObj)(obj)
 	arg2 := (C.GdVec2)(point)
 	arg3 := (C.GdBool)(is_trigger)
-	arg4 := (*C.GdBool)(ret_value)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxSpriteCheckCollisionWithPoint(arg0, arg1, arg2, arg3, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteCheckCollisionWithPoint(arg0, arg1, arg2, arg3, arg4)
-
+	return (GdBool)(ret_val)
 }
 func CallSpriteSetDebugCollisionVisible(
 	obj GdObj,
@@ -1864,71 +1758,65 @@ func CallSpriteSetDebugCollisionVisible(
 }
 func CallSpriteIsDebugCollisionVisible(
 	obj GdObj,
-	ret_value *GdBool,
-) {
+) GdBool {
 	arg0 := (C.GDExtensionSpxSpriteIsDebugCollisionVisible)(api.SpxSpriteIsDebugCollisionVisible)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdBool)(ret_value)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxSpriteIsDebugCollisionVisible(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteIsDebugCollisionVisible(arg0, arg1, arg2)
-
+	return (GdBool)(ret_val)
 }
 func CallSpriteCreateBackdrop(
 	path GdString,
-	ret_value *GdObj,
-) {
+) GdObj {
 	arg0 := (C.GDExtensionSpxSpriteCreateBackdrop)(api.SpxSpriteCreateBackdrop)
 	arg1 := (C.GdString)(path)
-	arg2 := (*C.GdObj)(ret_value)
+	var ret_val C.GdObj
+	C.cgo_callfn_GDExtensionSpxSpriteCreateBackdrop(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteCreateBackdrop(arg0, arg1, arg2)
-
+	return (GdObj)(ret_val)
 }
 func CallSpriteCreateSprite(
 	path GdString,
 	pos GdVec2,
-	ret_value *GdObj,
-) {
+) GdObj {
 	arg0 := (C.GDExtensionSpxSpriteCreateSprite)(api.SpxSpriteCreateSprite)
 	arg1 := (C.GdString)(path)
 	arg2 := (C.GdVec2)(pos)
-	arg3 := (*C.GdObj)(ret_value)
+	var ret_val C.GdObj
+	C.cgo_callfn_GDExtensionSpxSpriteCreateSprite(arg0, arg1, arg2, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteCreateSprite(arg0, arg1, arg2, arg3)
-
+	return (GdObj)(ret_val)
 }
 func CallSpriteCloneSprite(
 	obj GdObj,
-	ret_value *GdObj,
-) {
+) GdObj {
 	arg0 := (C.GDExtensionSpxSpriteCloneSprite)(api.SpxSpriteCloneSprite)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdObj)(ret_value)
+	var ret_val C.GdObj
+	C.cgo_callfn_GDExtensionSpxSpriteCloneSprite(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteCloneSprite(arg0, arg1, arg2)
-
+	return (GdObj)(ret_val)
 }
 func CallSpriteDestroySprite(
 	obj GdObj,
-	ret_value *GdBool,
-) {
+) GdBool {
 	arg0 := (C.GDExtensionSpxSpriteDestroySprite)(api.SpxSpriteDestroySprite)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdBool)(ret_value)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxSpriteDestroySprite(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteDestroySprite(arg0, arg1, arg2)
-
+	return (GdBool)(ret_val)
 }
 func CallSpriteIsSpriteAlive(
 	obj GdObj,
-	ret_value *GdBool,
-) {
+) GdBool {
 	arg0 := (C.GDExtensionSpxSpriteIsSpriteAlive)(api.SpxSpriteIsSpriteAlive)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdBool)(ret_value)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxSpriteIsSpriteAlive(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteIsSpriteAlive(arg0, arg1, arg2)
-
+	return (GdBool)(ret_val)
 }
 func CallSpriteSetPosition(
 	obj GdObj,
@@ -1943,14 +1831,13 @@ func CallSpriteSetPosition(
 }
 func CallSpriteGetPosition(
 	obj GdObj,
-	ret_value *GdVec2,
-) {
+) GdVec2 {
 	arg0 := (C.GDExtensionSpxSpriteGetPosition)(api.SpxSpriteGetPosition)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdVec2)(ret_value)
+	var ret_val C.GdVec2
+	C.cgo_callfn_GDExtensionSpxSpriteGetPosition(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteGetPosition(arg0, arg1, arg2)
-
+	return (GdVec2)(ret_val)
 }
 func CallSpriteSetRotation(
 	obj GdObj,
@@ -1965,14 +1852,13 @@ func CallSpriteSetRotation(
 }
 func CallSpriteGetRotation(
 	obj GdObj,
-	ret_value *GdFloat,
-) {
+) GdFloat {
 	arg0 := (C.GDExtensionSpxSpriteGetRotation)(api.SpxSpriteGetRotation)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdFloat)(ret_value)
+	var ret_val C.GdFloat
+	C.cgo_callfn_GDExtensionSpxSpriteGetRotation(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteGetRotation(arg0, arg1, arg2)
-
+	return (GdFloat)(ret_val)
 }
 func CallSpriteSetScale(
 	obj GdObj,
@@ -1987,14 +1873,13 @@ func CallSpriteSetScale(
 }
 func CallSpriteGetScale(
 	obj GdObj,
-	ret_value *GdVec2,
-) {
+) GdVec2 {
 	arg0 := (C.GDExtensionSpxSpriteGetScale)(api.SpxSpriteGetScale)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdVec2)(ret_value)
+	var ret_val C.GdVec2
+	C.cgo_callfn_GDExtensionSpxSpriteGetScale(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteGetScale(arg0, arg1, arg2)
-
+	return (GdVec2)(ret_val)
 }
 func CallSpriteSetRenderScale(
 	obj GdObj,
@@ -2009,14 +1894,13 @@ func CallSpriteSetRenderScale(
 }
 func CallSpriteGetRenderScale(
 	obj GdObj,
-	ret_value *GdVec2,
-) {
+) GdVec2 {
 	arg0 := (C.GDExtensionSpxSpriteGetRenderScale)(api.SpxSpriteGetRenderScale)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdVec2)(ret_value)
+	var ret_val C.GdVec2
+	C.cgo_callfn_GDExtensionSpxSpriteGetRenderScale(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteGetRenderScale(arg0, arg1, arg2)
-
+	return (GdVec2)(ret_val)
 }
 func CallSpriteSetColor(
 	obj GdObj,
@@ -2031,14 +1915,13 @@ func CallSpriteSetColor(
 }
 func CallSpriteGetColor(
 	obj GdObj,
-	ret_value *GdColor,
-) {
+) GdColor {
 	arg0 := (C.GDExtensionSpxSpriteGetColor)(api.SpxSpriteGetColor)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdColor)(ret_value)
+	var ret_val C.GdColor
+	C.cgo_callfn_GDExtensionSpxSpriteGetColor(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteGetColor(arg0, arg1, arg2)
-
+	return (GdColor)(ret_val)
 }
 func CallSpriteSetMaterialShader(
 	obj GdObj,
@@ -2053,14 +1936,13 @@ func CallSpriteSetMaterialShader(
 }
 func CallSpriteGetMaterialShader(
 	obj GdObj,
-	ret_value *GdString,
-) {
+) GdString {
 	arg0 := (C.GDExtensionSpxSpriteGetMaterialShader)(api.SpxSpriteGetMaterialShader)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdString)(ret_value)
+	var ret_val C.GdString
+	C.cgo_callfn_GDExtensionSpxSpriteGetMaterialShader(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteGetMaterialShader(arg0, arg1, arg2)
-
+	return (GdString)(ret_val)
 }
 func CallSpriteSetMaterialParams(
 	obj GdObj,
@@ -2078,15 +1960,14 @@ func CallSpriteSetMaterialParams(
 func CallSpriteGetMaterialParams(
 	obj GdObj,
 	effect GdString,
-	ret_value *GdFloat,
-) {
+) GdFloat {
 	arg0 := (C.GDExtensionSpxSpriteGetMaterialParams)(api.SpxSpriteGetMaterialParams)
 	arg1 := (C.GdObj)(obj)
 	arg2 := (C.GdString)(effect)
-	arg3 := (*C.GdFloat)(ret_value)
+	var ret_val C.GdFloat
+	C.cgo_callfn_GDExtensionSpxSpriteGetMaterialParams(arg0, arg1, arg2, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteGetMaterialParams(arg0, arg1, arg2, arg3)
-
+	return (GdFloat)(ret_val)
 }
 func CallSpriteSetMaterialParamsVec(
 	obj GdObj,
@@ -2123,15 +2004,14 @@ func CallSpriteSetMaterialParamsVec4(
 func CallSpriteGetMaterialParamsVec4(
 	obj GdObj,
 	effect GdString,
-	ret_value *GdVec4,
-) {
+) GdVec4 {
 	arg0 := (C.GDExtensionSpxSpriteGetMaterialParamsVec4)(api.SpxSpriteGetMaterialParamsVec4)
 	arg1 := (C.GdObj)(obj)
 	arg2 := (C.GdString)(effect)
-	arg3 := (*C.GdVec4)(ret_value)
+	var ret_val C.GdVec4
+	C.cgo_callfn_GDExtensionSpxSpriteGetMaterialParamsVec4(arg0, arg1, arg2, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteGetMaterialParamsVec4(arg0, arg1, arg2, arg3)
-
+	return (GdVec4)(ret_val)
 }
 func CallSpriteSetMaterialParamsColor(
 	obj GdObj,
@@ -2149,15 +2029,14 @@ func CallSpriteSetMaterialParamsColor(
 func CallSpriteGetMaterialParamsColor(
 	obj GdObj,
 	effect GdString,
-	ret_value *GdColor,
-) {
+) GdColor {
 	arg0 := (C.GDExtensionSpxSpriteGetMaterialParamsColor)(api.SpxSpriteGetMaterialParamsColor)
 	arg1 := (C.GdObj)(obj)
 	arg2 := (C.GdString)(effect)
-	arg3 := (*C.GdColor)(ret_value)
+	var ret_val C.GdColor
+	C.cgo_callfn_GDExtensionSpxSpriteGetMaterialParamsColor(arg0, arg1, arg2, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteGetMaterialParamsColor(arg0, arg1, arg2, arg3)
-
+	return (GdColor)(ret_val)
 }
 func CallSpriteSetTextureAtlas(
 	obj GdObj,
@@ -2209,14 +2088,13 @@ func CallSpriteSetTextureDirect(
 }
 func CallSpriteGetTexture(
 	obj GdObj,
-	ret_value *GdString,
-) {
+) GdString {
 	arg0 := (C.GDExtensionSpxSpriteGetTexture)(api.SpxSpriteGetTexture)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdString)(ret_value)
+	var ret_val C.GdString
+	C.cgo_callfn_GDExtensionSpxSpriteGetTexture(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteGetTexture(arg0, arg1, arg2)
-
+	return (GdString)(ret_val)
 }
 func CallSpriteSetVisible(
 	obj GdObj,
@@ -2231,25 +2109,23 @@ func CallSpriteSetVisible(
 }
 func CallSpriteGetVisible(
 	obj GdObj,
-	ret_value *GdBool,
-) {
+) GdBool {
 	arg0 := (C.GDExtensionSpxSpriteGetVisible)(api.SpxSpriteGetVisible)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdBool)(ret_value)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxSpriteGetVisible(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteGetVisible(arg0, arg1, arg2)
-
+	return (GdBool)(ret_val)
 }
 func CallSpriteGetZIndex(
 	obj GdObj,
-	ret_value *GdInt,
-) {
+) GdInt {
 	arg0 := (C.GDExtensionSpxSpriteGetZIndex)(api.SpxSpriteGetZIndex)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdInt)(ret_value)
+	var ret_val C.GdInt
+	C.cgo_callfn_GDExtensionSpxSpriteGetZIndex(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteGetZIndex(arg0, arg1, arg2)
-
+	return (GdInt)(ret_val)
 }
 func CallSpriteSetZIndex(
 	obj GdObj,
@@ -2310,14 +2186,13 @@ func CallSpriteStopAnim(
 }
 func CallSpriteIsPlayingAnim(
 	obj GdObj,
-	ret_value *GdBool,
-) {
+) GdBool {
 	arg0 := (C.GDExtensionSpxSpriteIsPlayingAnim)(api.SpxSpriteIsPlayingAnim)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdBool)(ret_value)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxSpriteIsPlayingAnim(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteIsPlayingAnim(arg0, arg1, arg2)
-
+	return (GdBool)(ret_val)
 }
 func CallSpriteSetAnim(
 	obj GdObj,
@@ -2332,14 +2207,13 @@ func CallSpriteSetAnim(
 }
 func CallSpriteGetAnim(
 	obj GdObj,
-	ret_value *GdString,
-) {
+) GdString {
 	arg0 := (C.GDExtensionSpxSpriteGetAnim)(api.SpxSpriteGetAnim)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdString)(ret_value)
+	var ret_val C.GdString
+	C.cgo_callfn_GDExtensionSpxSpriteGetAnim(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteGetAnim(arg0, arg1, arg2)
-
+	return (GdString)(ret_val)
 }
 func CallSpriteSetAnimFrame(
 	obj GdObj,
@@ -2354,14 +2228,13 @@ func CallSpriteSetAnimFrame(
 }
 func CallSpriteGetAnimFrame(
 	obj GdObj,
-	ret_value *GdInt,
-) {
+) GdInt {
 	arg0 := (C.GDExtensionSpxSpriteGetAnimFrame)(api.SpxSpriteGetAnimFrame)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdInt)(ret_value)
+	var ret_val C.GdInt
+	C.cgo_callfn_GDExtensionSpxSpriteGetAnimFrame(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteGetAnimFrame(arg0, arg1, arg2)
-
+	return (GdInt)(ret_val)
 }
 func CallSpriteSetAnimSpeedScale(
 	obj GdObj,
@@ -2376,25 +2249,23 @@ func CallSpriteSetAnimSpeedScale(
 }
 func CallSpriteGetAnimSpeedScale(
 	obj GdObj,
-	ret_value *GdFloat,
-) {
+) GdFloat {
 	arg0 := (C.GDExtensionSpxSpriteGetAnimSpeedScale)(api.SpxSpriteGetAnimSpeedScale)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdFloat)(ret_value)
+	var ret_val C.GdFloat
+	C.cgo_callfn_GDExtensionSpxSpriteGetAnimSpeedScale(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteGetAnimSpeedScale(arg0, arg1, arg2)
-
+	return (GdFloat)(ret_val)
 }
 func CallSpriteGetAnimPlayingSpeed(
 	obj GdObj,
-	ret_value *GdFloat,
-) {
+) GdFloat {
 	arg0 := (C.GDExtensionSpxSpriteGetAnimPlayingSpeed)(api.SpxSpriteGetAnimPlayingSpeed)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdFloat)(ret_value)
+	var ret_val C.GdFloat
+	C.cgo_callfn_GDExtensionSpxSpriteGetAnimPlayingSpeed(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteGetAnimPlayingSpeed(arg0, arg1, arg2)
-
+	return (GdFloat)(ret_val)
 }
 func CallSpriteSetAnimCentered(
 	obj GdObj,
@@ -2409,14 +2280,13 @@ func CallSpriteSetAnimCentered(
 }
 func CallSpriteIsAnimCentered(
 	obj GdObj,
-	ret_value *GdBool,
-) {
+) GdBool {
 	arg0 := (C.GDExtensionSpxSpriteIsAnimCentered)(api.SpxSpriteIsAnimCentered)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdBool)(ret_value)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxSpriteIsAnimCentered(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteIsAnimCentered(arg0, arg1, arg2)
-
+	return (GdBool)(ret_val)
 }
 func CallSpriteSetAnimOffset(
 	obj GdObj,
@@ -2431,14 +2301,13 @@ func CallSpriteSetAnimOffset(
 }
 func CallSpriteGetAnimOffset(
 	obj GdObj,
-	ret_value *GdVec2,
-) {
+) GdVec2 {
 	arg0 := (C.GDExtensionSpxSpriteGetAnimOffset)(api.SpxSpriteGetAnimOffset)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdVec2)(ret_value)
+	var ret_val C.GdVec2
+	C.cgo_callfn_GDExtensionSpxSpriteGetAnimOffset(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteGetAnimOffset(arg0, arg1, arg2)
-
+	return (GdVec2)(ret_val)
 }
 func CallSpriteSetAnimFlipH(
 	obj GdObj,
@@ -2453,14 +2322,13 @@ func CallSpriteSetAnimFlipH(
 }
 func CallSpriteIsAnimFlippedH(
 	obj GdObj,
-	ret_value *GdBool,
-) {
+) GdBool {
 	arg0 := (C.GDExtensionSpxSpriteIsAnimFlippedH)(api.SpxSpriteIsAnimFlippedH)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdBool)(ret_value)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxSpriteIsAnimFlippedH(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteIsAnimFlippedH(arg0, arg1, arg2)
-
+	return (GdBool)(ret_val)
 }
 func CallSpriteSetAnimFlipV(
 	obj GdObj,
@@ -2475,25 +2343,23 @@ func CallSpriteSetAnimFlipV(
 }
 func CallSpriteIsAnimFlippedV(
 	obj GdObj,
-	ret_value *GdBool,
-) {
+) GdBool {
 	arg0 := (C.GDExtensionSpxSpriteIsAnimFlippedV)(api.SpxSpriteIsAnimFlippedV)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdBool)(ret_value)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxSpriteIsAnimFlippedV(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteIsAnimFlippedV(arg0, arg1, arg2)
-
+	return (GdBool)(ret_val)
 }
 func CallSpriteGetCurrentAnimName(
 	obj GdObj,
-	ret_value *GdString,
-) {
+) GdString {
 	arg0 := (C.GDExtensionSpxSpriteGetCurrentAnimName)(api.SpxSpriteGetCurrentAnimName)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdString)(ret_value)
+	var ret_val C.GdString
+	C.cgo_callfn_GDExtensionSpxSpriteGetCurrentAnimName(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteGetCurrentAnimName(arg0, arg1, arg2)
-
+	return (GdString)(ret_val)
 }
 func CallSpriteSetVelocity(
 	obj GdObj,
@@ -2508,135 +2374,123 @@ func CallSpriteSetVelocity(
 }
 func CallSpriteGetVelocity(
 	obj GdObj,
-	ret_value *GdVec2,
-) {
+) GdVec2 {
 	arg0 := (C.GDExtensionSpxSpriteGetVelocity)(api.SpxSpriteGetVelocity)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdVec2)(ret_value)
+	var ret_val C.GdVec2
+	C.cgo_callfn_GDExtensionSpxSpriteGetVelocity(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteGetVelocity(arg0, arg1, arg2)
-
+	return (GdVec2)(ret_val)
 }
 func CallSpriteIsOnFloor(
 	obj GdObj,
-	ret_value *GdBool,
-) {
+) GdBool {
 	arg0 := (C.GDExtensionSpxSpriteIsOnFloor)(api.SpxSpriteIsOnFloor)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdBool)(ret_value)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxSpriteIsOnFloor(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteIsOnFloor(arg0, arg1, arg2)
-
+	return (GdBool)(ret_val)
 }
 func CallSpriteIsOnFloorOnly(
 	obj GdObj,
-	ret_value *GdBool,
-) {
+) GdBool {
 	arg0 := (C.GDExtensionSpxSpriteIsOnFloorOnly)(api.SpxSpriteIsOnFloorOnly)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdBool)(ret_value)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxSpriteIsOnFloorOnly(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteIsOnFloorOnly(arg0, arg1, arg2)
-
+	return (GdBool)(ret_val)
 }
 func CallSpriteIsOnWall(
 	obj GdObj,
-	ret_value *GdBool,
-) {
+) GdBool {
 	arg0 := (C.GDExtensionSpxSpriteIsOnWall)(api.SpxSpriteIsOnWall)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdBool)(ret_value)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxSpriteIsOnWall(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteIsOnWall(arg0, arg1, arg2)
-
+	return (GdBool)(ret_val)
 }
 func CallSpriteIsOnWallOnly(
 	obj GdObj,
-	ret_value *GdBool,
-) {
+) GdBool {
 	arg0 := (C.GDExtensionSpxSpriteIsOnWallOnly)(api.SpxSpriteIsOnWallOnly)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdBool)(ret_value)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxSpriteIsOnWallOnly(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteIsOnWallOnly(arg0, arg1, arg2)
-
+	return (GdBool)(ret_val)
 }
 func CallSpriteIsOnCeiling(
 	obj GdObj,
-	ret_value *GdBool,
-) {
+) GdBool {
 	arg0 := (C.GDExtensionSpxSpriteIsOnCeiling)(api.SpxSpriteIsOnCeiling)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdBool)(ret_value)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxSpriteIsOnCeiling(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteIsOnCeiling(arg0, arg1, arg2)
-
+	return (GdBool)(ret_val)
 }
 func CallSpriteIsOnCeilingOnly(
 	obj GdObj,
-	ret_value *GdBool,
-) {
+) GdBool {
 	arg0 := (C.GDExtensionSpxSpriteIsOnCeilingOnly)(api.SpxSpriteIsOnCeilingOnly)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdBool)(ret_value)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxSpriteIsOnCeilingOnly(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteIsOnCeilingOnly(arg0, arg1, arg2)
-
+	return (GdBool)(ret_val)
 }
 func CallSpriteGetLastMotion(
 	obj GdObj,
-	ret_value *GdVec2,
-) {
+) GdVec2 {
 	arg0 := (C.GDExtensionSpxSpriteGetLastMotion)(api.SpxSpriteGetLastMotion)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdVec2)(ret_value)
+	var ret_val C.GdVec2
+	C.cgo_callfn_GDExtensionSpxSpriteGetLastMotion(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteGetLastMotion(arg0, arg1, arg2)
-
+	return (GdVec2)(ret_val)
 }
 func CallSpriteGetPositionDelta(
 	obj GdObj,
-	ret_value *GdVec2,
-) {
+) GdVec2 {
 	arg0 := (C.GDExtensionSpxSpriteGetPositionDelta)(api.SpxSpriteGetPositionDelta)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdVec2)(ret_value)
+	var ret_val C.GdVec2
+	C.cgo_callfn_GDExtensionSpxSpriteGetPositionDelta(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteGetPositionDelta(arg0, arg1, arg2)
-
+	return (GdVec2)(ret_val)
 }
 func CallSpriteGetFloorNormal(
 	obj GdObj,
-	ret_value *GdVec2,
-) {
+) GdVec2 {
 	arg0 := (C.GDExtensionSpxSpriteGetFloorNormal)(api.SpxSpriteGetFloorNormal)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdVec2)(ret_value)
+	var ret_val C.GdVec2
+	C.cgo_callfn_GDExtensionSpxSpriteGetFloorNormal(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteGetFloorNormal(arg0, arg1, arg2)
-
+	return (GdVec2)(ret_val)
 }
 func CallSpriteGetWallNormal(
 	obj GdObj,
-	ret_value *GdVec2,
-) {
+) GdVec2 {
 	arg0 := (C.GDExtensionSpxSpriteGetWallNormal)(api.SpxSpriteGetWallNormal)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdVec2)(ret_value)
+	var ret_val C.GdVec2
+	C.cgo_callfn_GDExtensionSpxSpriteGetWallNormal(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteGetWallNormal(arg0, arg1, arg2)
-
+	return (GdVec2)(ret_val)
 }
 func CallSpriteGetRealVelocity(
 	obj GdObj,
-	ret_value *GdVec2,
-) {
+) GdVec2 {
 	arg0 := (C.GDExtensionSpxSpriteGetRealVelocity)(api.SpxSpriteGetRealVelocity)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdVec2)(ret_value)
+	var ret_val C.GdVec2
+	C.cgo_callfn_GDExtensionSpxSpriteGetRealVelocity(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteGetRealVelocity(arg0, arg1, arg2)
-
+	return (GdVec2)(ret_val)
 }
 func CallSpriteMoveAndSlide(
 	obj GdObj,
@@ -2660,14 +2514,13 @@ func CallSpriteSetGravity(
 }
 func CallSpriteGetGravity(
 	obj GdObj,
-	ret_value *GdFloat,
-) {
+) GdFloat {
 	arg0 := (C.GDExtensionSpxSpriteGetGravity)(api.SpxSpriteGetGravity)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdFloat)(ret_value)
+	var ret_val C.GdFloat
+	C.cgo_callfn_GDExtensionSpxSpriteGetGravity(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteGetGravity(arg0, arg1, arg2)
-
+	return (GdFloat)(ret_val)
 }
 func CallSpriteSetMass(
 	obj GdObj,
@@ -2682,14 +2535,13 @@ func CallSpriteSetMass(
 }
 func CallSpriteGetMass(
 	obj GdObj,
-	ret_value *GdFloat,
-) {
+) GdFloat {
 	arg0 := (C.GDExtensionSpxSpriteGetMass)(api.SpxSpriteGetMass)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdFloat)(ret_value)
+	var ret_val C.GdFloat
+	C.cgo_callfn_GDExtensionSpxSpriteGetMass(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteGetMass(arg0, arg1, arg2)
-
+	return (GdFloat)(ret_val)
 }
 func CallSpriteAddForce(
 	obj GdObj,
@@ -2726,14 +2578,13 @@ func CallSpriteSetPhysicsMode(
 }
 func CallSpriteGetPhysicsMode(
 	obj GdObj,
-	ret_value *GdInt,
-) {
+) GdInt {
 	arg0 := (C.GDExtensionSpxSpriteGetPhysicsMode)(api.SpxSpriteGetPhysicsMode)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdInt)(ret_value)
+	var ret_val C.GdInt
+	C.cgo_callfn_GDExtensionSpxSpriteGetPhysicsMode(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteGetPhysicsMode(arg0, arg1, arg2)
-
+	return (GdInt)(ret_val)
 }
 func CallSpriteSetUseGravity(
 	obj GdObj,
@@ -2748,14 +2599,13 @@ func CallSpriteSetUseGravity(
 }
 func CallSpriteIsUseGravity(
 	obj GdObj,
-	ret_value *GdBool,
-) {
+) GdBool {
 	arg0 := (C.GDExtensionSpxSpriteIsUseGravity)(api.SpxSpriteIsUseGravity)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdBool)(ret_value)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxSpriteIsUseGravity(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteIsUseGravity(arg0, arg1, arg2)
-
+	return (GdBool)(ret_val)
 }
 func CallSpriteSetGravityScale(
 	obj GdObj,
@@ -2770,14 +2620,13 @@ func CallSpriteSetGravityScale(
 }
 func CallSpriteGetGravityScale(
 	obj GdObj,
-	ret_value *GdFloat,
-) {
+) GdFloat {
 	arg0 := (C.GDExtensionSpxSpriteGetGravityScale)(api.SpxSpriteGetGravityScale)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdFloat)(ret_value)
+	var ret_val C.GdFloat
+	C.cgo_callfn_GDExtensionSpxSpriteGetGravityScale(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteGetGravityScale(arg0, arg1, arg2)
-
+	return (GdFloat)(ret_val)
 }
 func CallSpriteSetDrag(
 	obj GdObj,
@@ -2792,14 +2641,13 @@ func CallSpriteSetDrag(
 }
 func CallSpriteGetDrag(
 	obj GdObj,
-	ret_value *GdFloat,
-) {
+) GdFloat {
 	arg0 := (C.GDExtensionSpxSpriteGetDrag)(api.SpxSpriteGetDrag)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdFloat)(ret_value)
+	var ret_val C.GdFloat
+	C.cgo_callfn_GDExtensionSpxSpriteGetDrag(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteGetDrag(arg0, arg1, arg2)
-
+	return (GdFloat)(ret_val)
 }
 func CallSpriteSetFriction(
 	obj GdObj,
@@ -2814,14 +2662,13 @@ func CallSpriteSetFriction(
 }
 func CallSpriteGetFriction(
 	obj GdObj,
-	ret_value *GdFloat,
-) {
+) GdFloat {
 	arg0 := (C.GDExtensionSpxSpriteGetFriction)(api.SpxSpriteGetFriction)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdFloat)(ret_value)
+	var ret_val C.GdFloat
+	C.cgo_callfn_GDExtensionSpxSpriteGetFriction(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteGetFriction(arg0, arg1, arg2)
-
+	return (GdFloat)(ret_val)
 }
 func CallSpriteSetCollisionLayer(
 	obj GdObj,
@@ -2836,14 +2683,13 @@ func CallSpriteSetCollisionLayer(
 }
 func CallSpriteGetCollisionLayer(
 	obj GdObj,
-	ret_value *GdInt,
-) {
+) GdInt {
 	arg0 := (C.GDExtensionSpxSpriteGetCollisionLayer)(api.SpxSpriteGetCollisionLayer)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdInt)(ret_value)
+	var ret_val C.GdInt
+	C.cgo_callfn_GDExtensionSpxSpriteGetCollisionLayer(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteGetCollisionLayer(arg0, arg1, arg2)
-
+	return (GdInt)(ret_val)
 }
 func CallSpriteSetCollisionMask(
 	obj GdObj,
@@ -2858,14 +2704,13 @@ func CallSpriteSetCollisionMask(
 }
 func CallSpriteGetCollisionMask(
 	obj GdObj,
-	ret_value *GdInt,
-) {
+) GdInt {
 	arg0 := (C.GDExtensionSpxSpriteGetCollisionMask)(api.SpxSpriteGetCollisionMask)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdInt)(ret_value)
+	var ret_val C.GdInt
+	C.cgo_callfn_GDExtensionSpxSpriteGetCollisionMask(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteGetCollisionMask(arg0, arg1, arg2)
-
+	return (GdInt)(ret_val)
 }
 func CallSpriteSetTriggerLayer(
 	obj GdObj,
@@ -2880,14 +2725,13 @@ func CallSpriteSetTriggerLayer(
 }
 func CallSpriteGetTriggerLayer(
 	obj GdObj,
-	ret_value *GdInt,
-) {
+) GdInt {
 	arg0 := (C.GDExtensionSpxSpriteGetTriggerLayer)(api.SpxSpriteGetTriggerLayer)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdInt)(ret_value)
+	var ret_val C.GdInt
+	C.cgo_callfn_GDExtensionSpxSpriteGetTriggerLayer(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteGetTriggerLayer(arg0, arg1, arg2)
-
+	return (GdInt)(ret_val)
 }
 func CallSpriteSetTriggerMask(
 	obj GdObj,
@@ -2902,14 +2746,13 @@ func CallSpriteSetTriggerMask(
 }
 func CallSpriteGetTriggerMask(
 	obj GdObj,
-	ret_value *GdInt,
-) {
+) GdInt {
 	arg0 := (C.GDExtensionSpxSpriteGetTriggerMask)(api.SpxSpriteGetTriggerMask)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdInt)(ret_value)
+	var ret_val C.GdInt
+	C.cgo_callfn_GDExtensionSpxSpriteGetTriggerMask(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteGetTriggerMask(arg0, arg1, arg2)
-
+	return (GdInt)(ret_val)
 }
 func CallSpriteSetColliderRect(
 	obj GdObj,
@@ -2976,14 +2819,13 @@ func CallSpriteSetCollisionEnabled(
 }
 func CallSpriteIsCollisionEnabled(
 	obj GdObj,
-	ret_value *GdBool,
-) {
+) GdBool {
 	arg0 := (C.GDExtensionSpxSpriteIsCollisionEnabled)(api.SpxSpriteIsCollisionEnabled)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdBool)(ret_value)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxSpriteIsCollisionEnabled(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteIsCollisionEnabled(arg0, arg1, arg2)
-
+	return (GdBool)(ret_val)
 }
 func CallSpriteSetTriggerRect(
 	obj GdObj,
@@ -3050,61 +2892,57 @@ func CallSpriteSetTriggerEnabled(
 }
 func CallSpriteIsTriggerEnabled(
 	obj GdObj,
-	ret_value *GdBool,
-) {
+) GdBool {
 	arg0 := (C.GDExtensionSpxSpriteIsTriggerEnabled)(api.SpxSpriteIsTriggerEnabled)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdBool)(ret_value)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxSpriteIsTriggerEnabled(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteIsTriggerEnabled(arg0, arg1, arg2)
-
+	return (GdBool)(ret_val)
 }
 func CallSpriteCheckCollisionByColor(
 	obj GdObj,
 	color GdColor,
 	color_threshold GdFloat,
 	alpha_threshold GdFloat,
-	ret_value *GdBool,
-) {
+) GdBool {
 	arg0 := (C.GDExtensionSpxSpriteCheckCollisionByColor)(api.SpxSpriteCheckCollisionByColor)
 	arg1 := (C.GdObj)(obj)
 	arg2 := (C.GdColor)(color)
 	arg3 := (C.GdFloat)(color_threshold)
 	arg4 := (C.GdFloat)(alpha_threshold)
-	arg5 := (*C.GdBool)(ret_value)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxSpriteCheckCollisionByColor(arg0, arg1, arg2, arg3, arg4, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteCheckCollisionByColor(arg0, arg1, arg2, arg3, arg4, arg5)
-
+	return (GdBool)(ret_val)
 }
 func CallSpriteCheckCollisionByAlpha(
 	obj GdObj,
 	alpha_threshold GdFloat,
-	ret_value *GdBool,
-) {
+) GdBool {
 	arg0 := (C.GDExtensionSpxSpriteCheckCollisionByAlpha)(api.SpxSpriteCheckCollisionByAlpha)
 	arg1 := (C.GdObj)(obj)
 	arg2 := (C.GdFloat)(alpha_threshold)
-	arg3 := (*C.GdBool)(ret_value)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxSpriteCheckCollisionByAlpha(arg0, arg1, arg2, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteCheckCollisionByAlpha(arg0, arg1, arg2, arg3)
-
+	return (GdBool)(ret_val)
 }
 func CallSpriteCheckCollisionWithSprite(
 	obj GdObj,
 	obj_b GdObj,
 	alpha_threshold GdFloat,
 	use_pixel_perfect GdBool,
-	ret_value *GdBool,
-) {
+) GdBool {
 	arg0 := (C.GDExtensionSpxSpriteCheckCollisionWithSprite)(api.SpxSpriteCheckCollisionWithSprite)
 	arg1 := (C.GdObj)(obj)
 	arg2 := (C.GdObj)(obj_b)
 	arg3 := (C.GdFloat)(alpha_threshold)
 	arg4 := (C.GdBool)(use_pixel_perfect)
-	arg5 := (*C.GdBool)(ret_value)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxSpriteCheckCollisionWithSprite(arg0, arg1, arg2, arg3, arg4, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteCheckCollisionWithSprite(arg0, arg1, arg2, arg3, arg4, arg5)
-
+	return (GdBool)(ret_val)
 }
 func CallSpriteSetPixelCollisionSamplingStep(
 	step GdInt,
@@ -3115,14 +2953,11 @@ func CallSpriteSetPixelCollisionSamplingStep(
 	C.cgo_callfn_GDExtensionSpxSpriteSetPixelCollisionSamplingStep(arg0, arg1)
 
 }
-func CallSpriteGetPixelCollisionSamplingStep(
-	ret_value *GdInt,
-) {
+func CallSpriteGetPixelCollisionSamplingStep() GdInt {
 	arg0 := (C.GDExtensionSpxSpriteGetPixelCollisionSamplingStep)(api.SpxSpriteGetPixelCollisionSamplingStep)
-	arg1 := (*C.GdInt)(ret_value)
-
-	C.cgo_callfn_GDExtensionSpxSpriteGetPixelCollisionSamplingStep(arg0, arg1)
-
+	var ret_val C.GdInt
+	C.cgo_callfn_GDExtensionSpxSpriteGetPixelCollisionSamplingStep(arg0, &ret_val)
+	return (GdInt)(ret_val)
 }
 func CallSpriteBatchUpdateTransforms(
 	buffer GdArray,
@@ -3144,14 +2979,13 @@ func CallSpriteBatchUpdateVisuals(
 }
 func CallSpriteBatchRetrievePositions(
 	objs GdArray,
-	ret_value *GdArray,
-) {
+) GdArray {
 	arg0 := (C.GDExtensionSpxSpriteBatchRetrievePositions)(api.SpxSpriteBatchRetrievePositions)
 	arg1 := (C.GdArray)(objs)
-	arg2 := (*C.GdArray)(ret_value)
+	var ret_val C.GdArray
+	C.cgo_callfn_GDExtensionSpxSpriteBatchRetrievePositions(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteBatchRetrievePositions(arg0, arg1, arg2)
-
+	return GdArray(ret_val)
 }
 func CallTilemapOpenDrawTilesWithSize(
 	tile_size GdInt,
@@ -3211,14 +3045,13 @@ func CallTilemapSetLayerOffset(
 }
 func CallTilemapGetLayerOffset(
 	index GdInt,
-	ret_value *GdVec2,
-) {
+) GdVec2 {
 	arg0 := (C.GDExtensionSpxTilemapGetLayerOffset)(api.SpxTilemapGetLayerOffset)
 	arg1 := (C.GdInt)(index)
-	arg2 := (*C.GdVec2)(ret_value)
+	var ret_val C.GdVec2
+	C.cgo_callfn_GDExtensionSpxTilemapGetLayerOffset(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxTilemapGetLayerOffset(arg0, arg1, arg2)
-
+	return (GdVec2)(ret_val)
 }
 func CallTilemapPlaceTiles(
 	positions GdArray,
@@ -3290,27 +3123,25 @@ func CallTilemapEraseTileWithLayer(
 }
 func CallTilemapGetTile(
 	pos GdVec2,
-	ret_value *GdString,
-) {
+) GdString {
 	arg0 := (C.GDExtensionSpxTilemapGetTile)(api.SpxTilemapGetTile)
 	arg1 := (C.GdVec2)(pos)
-	arg2 := (*C.GdString)(ret_value)
+	var ret_val C.GdString
+	C.cgo_callfn_GDExtensionSpxTilemapGetTile(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxTilemapGetTile(arg0, arg1, arg2)
-
+	return (GdString)(ret_val)
 }
 func CallTilemapGetTileWithLayer(
 	pos GdVec2,
 	layer_index GdInt,
-	ret_value *GdString,
-) {
+) GdString {
 	arg0 := (C.GDExtensionSpxTilemapGetTileWithLayer)(api.SpxTilemapGetTileWithLayer)
 	arg1 := (C.GdVec2)(pos)
 	arg2 := (C.GdInt)(layer_index)
-	arg3 := (*C.GdString)(ret_value)
+	var ret_val C.GdString
+	C.cgo_callfn_GDExtensionSpxTilemapGetTileWithLayer(arg0, arg1, arg2, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxTilemapGetTileWithLayer(arg0, arg1, arg2, arg3)
-
+	return (GdString)(ret_val)
 }
 func CallTilemapCloseDrawTiles() {
 	arg0 := (C.GDExtensionSpxTilemapCloseDrawTiles)(api.SpxTilemapCloseDrawTiles)
@@ -3347,147 +3178,135 @@ func CallTilemapparserDestroyAllTilemaps() {
 }
 func CallTilemapparserHasTilemap(
 	name GdString,
-	ret_value *GdBool,
-) {
+) GdBool {
 	arg0 := (C.GDExtensionSpxTilemapparserHasTilemap)(api.SpxTilemapparserHasTilemap)
 	arg1 := (C.GdString)(name)
-	arg2 := (*C.GdBool)(ret_value)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxTilemapparserHasTilemap(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxTilemapparserHasTilemap(arg0, arg1, arg2)
-
+	return (GdBool)(ret_val)
 }
 func CallTilemapparserGetTilemapLayerCount(
 	name GdString,
-	ret_value *GdInt,
-) {
+) GdInt {
 	arg0 := (C.GDExtensionSpxTilemapparserGetTilemapLayerCount)(api.SpxTilemapparserGetTilemapLayerCount)
 	arg1 := (C.GdString)(name)
-	arg2 := (*C.GdInt)(ret_value)
+	var ret_val C.GdInt
+	C.cgo_callfn_GDExtensionSpxTilemapparserGetTilemapLayerCount(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxTilemapparserGetTilemapLayerCount(arg0, arg1, arg2)
-
+	return (GdInt)(ret_val)
 }
 func CallUiBindNode(
 	obj GdObj,
 	rel_path GdString,
-	ret_value *GdObj,
-) {
+) GdObj {
 	arg0 := (C.GDExtensionSpxUiBindNode)(api.SpxUiBindNode)
 	arg1 := (C.GdObj)(obj)
 	arg2 := (C.GdString)(rel_path)
-	arg3 := (*C.GdObj)(ret_value)
+	var ret_val C.GdObj
+	C.cgo_callfn_GDExtensionSpxUiBindNode(arg0, arg1, arg2, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxUiBindNode(arg0, arg1, arg2, arg3)
-
+	return (GdObj)(ret_val)
 }
 func CallUiCreateNode(
 	path GdString,
-	ret_value *GdObj,
-) {
+) GdObj {
 	arg0 := (C.GDExtensionSpxUiCreateNode)(api.SpxUiCreateNode)
 	arg1 := (C.GdString)(path)
-	arg2 := (*C.GdObj)(ret_value)
+	var ret_val C.GdObj
+	C.cgo_callfn_GDExtensionSpxUiCreateNode(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxUiCreateNode(arg0, arg1, arg2)
-
+	return (GdObj)(ret_val)
 }
 func CallUiCreateButton(
 	path GdString,
 	text GdString,
-	ret_value *GdObj,
-) {
+) GdObj {
 	arg0 := (C.GDExtensionSpxUiCreateButton)(api.SpxUiCreateButton)
 	arg1 := (C.GdString)(path)
 	arg2 := (C.GdString)(text)
-	arg3 := (*C.GdObj)(ret_value)
+	var ret_val C.GdObj
+	C.cgo_callfn_GDExtensionSpxUiCreateButton(arg0, arg1, arg2, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxUiCreateButton(arg0, arg1, arg2, arg3)
-
+	return (GdObj)(ret_val)
 }
 func CallUiCreateLabel(
 	path GdString,
 	text GdString,
-	ret_value *GdObj,
-) {
+) GdObj {
 	arg0 := (C.GDExtensionSpxUiCreateLabel)(api.SpxUiCreateLabel)
 	arg1 := (C.GdString)(path)
 	arg2 := (C.GdString)(text)
-	arg3 := (*C.GdObj)(ret_value)
+	var ret_val C.GdObj
+	C.cgo_callfn_GDExtensionSpxUiCreateLabel(arg0, arg1, arg2, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxUiCreateLabel(arg0, arg1, arg2, arg3)
-
+	return (GdObj)(ret_val)
 }
 func CallUiCreateImage(
 	path GdString,
-	ret_value *GdObj,
-) {
+) GdObj {
 	arg0 := (C.GDExtensionSpxUiCreateImage)(api.SpxUiCreateImage)
 	arg1 := (C.GdString)(path)
-	arg2 := (*C.GdObj)(ret_value)
+	var ret_val C.GdObj
+	C.cgo_callfn_GDExtensionSpxUiCreateImage(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxUiCreateImage(arg0, arg1, arg2)
-
+	return (GdObj)(ret_val)
 }
 func CallUiCreateToggle(
 	path GdString,
 	value GdBool,
-	ret_value *GdObj,
-) {
+) GdObj {
 	arg0 := (C.GDExtensionSpxUiCreateToggle)(api.SpxUiCreateToggle)
 	arg1 := (C.GdString)(path)
 	arg2 := (C.GdBool)(value)
-	arg3 := (*C.GdObj)(ret_value)
+	var ret_val C.GdObj
+	C.cgo_callfn_GDExtensionSpxUiCreateToggle(arg0, arg1, arg2, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxUiCreateToggle(arg0, arg1, arg2, arg3)
-
+	return (GdObj)(ret_val)
 }
 func CallUiCreateSlider(
 	path GdString,
 	value GdFloat,
-	ret_value *GdObj,
-) {
+) GdObj {
 	arg0 := (C.GDExtensionSpxUiCreateSlider)(api.SpxUiCreateSlider)
 	arg1 := (C.GdString)(path)
 	arg2 := (C.GdFloat)(value)
-	arg3 := (*C.GdObj)(ret_value)
+	var ret_val C.GdObj
+	C.cgo_callfn_GDExtensionSpxUiCreateSlider(arg0, arg1, arg2, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxUiCreateSlider(arg0, arg1, arg2, arg3)
-
+	return (GdObj)(ret_val)
 }
 func CallUiCreateInput(
 	path GdString,
 	text GdString,
-	ret_value *GdObj,
-) {
+) GdObj {
 	arg0 := (C.GDExtensionSpxUiCreateInput)(api.SpxUiCreateInput)
 	arg1 := (C.GdString)(path)
 	arg2 := (C.GdString)(text)
-	arg3 := (*C.GdObj)(ret_value)
+	var ret_val C.GdObj
+	C.cgo_callfn_GDExtensionSpxUiCreateInput(arg0, arg1, arg2, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxUiCreateInput(arg0, arg1, arg2, arg3)
-
+	return (GdObj)(ret_val)
 }
 func CallUiDestroyNode(
 	obj GdObj,
-	ret_value *GdBool,
-) {
+) GdBool {
 	arg0 := (C.GDExtensionSpxUiDestroyNode)(api.SpxUiDestroyNode)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdBool)(ret_value)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxUiDestroyNode(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxUiDestroyNode(arg0, arg1, arg2)
-
+	return (GdBool)(ret_val)
 }
 func CallUiGetType(
 	obj GdObj,
-	ret_value *GdInt,
-) {
+) GdInt {
 	arg0 := (C.GDExtensionSpxUiGetType)(api.SpxUiGetType)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdInt)(ret_value)
+	var ret_val C.GdInt
+	C.cgo_callfn_GDExtensionSpxUiGetType(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxUiGetType(arg0, arg1, arg2)
-
+	return (GdInt)(ret_val)
 }
 func CallUiSetText(
 	obj GdObj,
@@ -3502,14 +3321,13 @@ func CallUiSetText(
 }
 func CallUiGetText(
 	obj GdObj,
-	ret_value *GdString,
-) {
+) GdString {
 	arg0 := (C.GDExtensionSpxUiGetText)(api.SpxUiGetText)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdString)(ret_value)
+	var ret_val C.GdString
+	C.cgo_callfn_GDExtensionSpxUiGetText(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxUiGetText(arg0, arg1, arg2)
-
+	return (GdString)(ret_val)
 }
 func CallUiSetTexture(
 	obj GdObj,
@@ -3524,14 +3342,13 @@ func CallUiSetTexture(
 }
 func CallUiGetTexture(
 	obj GdObj,
-	ret_value *GdString,
-) {
+) GdString {
 	arg0 := (C.GDExtensionSpxUiGetTexture)(api.SpxUiGetTexture)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdString)(ret_value)
+	var ret_val C.GdString
+	C.cgo_callfn_GDExtensionSpxUiGetTexture(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxUiGetTexture(arg0, arg1, arg2)
-
+	return (GdString)(ret_val)
 }
 func CallUiSetColor(
 	obj GdObj,
@@ -3546,14 +3363,13 @@ func CallUiSetColor(
 }
 func CallUiGetColor(
 	obj GdObj,
-	ret_value *GdColor,
-) {
+) GdColor {
 	arg0 := (C.GDExtensionSpxUiGetColor)(api.SpxUiGetColor)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdColor)(ret_value)
+	var ret_val C.GdColor
+	C.cgo_callfn_GDExtensionSpxUiGetColor(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxUiGetColor(arg0, arg1, arg2)
-
+	return (GdColor)(ret_val)
 }
 func CallUiSetFontSize(
 	obj GdObj,
@@ -3568,14 +3384,13 @@ func CallUiSetFontSize(
 }
 func CallUiGetFontSize(
 	obj GdObj,
-	ret_value *GdInt,
-) {
+) GdInt {
 	arg0 := (C.GDExtensionSpxUiGetFontSize)(api.SpxUiGetFontSize)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdInt)(ret_value)
+	var ret_val C.GdInt
+	C.cgo_callfn_GDExtensionSpxUiGetFontSize(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxUiGetFontSize(arg0, arg1, arg2)
-
+	return (GdInt)(ret_val)
 }
 func CallUiSetVisible(
 	obj GdObj,
@@ -3590,14 +3405,13 @@ func CallUiSetVisible(
 }
 func CallUiGetVisible(
 	obj GdObj,
-	ret_value *GdBool,
-) {
+) GdBool {
 	arg0 := (C.GDExtensionSpxUiGetVisible)(api.SpxUiGetVisible)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdBool)(ret_value)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxUiGetVisible(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxUiGetVisible(arg0, arg1, arg2)
-
+	return (GdBool)(ret_val)
 }
 func CallUiSetInteractable(
 	obj GdObj,
@@ -3612,14 +3426,13 @@ func CallUiSetInteractable(
 }
 func CallUiGetInteractable(
 	obj GdObj,
-	ret_value *GdBool,
-) {
+) GdBool {
 	arg0 := (C.GDExtensionSpxUiGetInteractable)(api.SpxUiGetInteractable)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdBool)(ret_value)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxUiGetInteractable(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxUiGetInteractable(arg0, arg1, arg2)
-
+	return (GdBool)(ret_val)
 }
 func CallUiSetRect(
 	obj GdObj,
@@ -3634,25 +3447,23 @@ func CallUiSetRect(
 }
 func CallUiGetRect(
 	obj GdObj,
-	ret_value *GdRect2,
-) {
+) GdRect2 {
 	arg0 := (C.GDExtensionSpxUiGetRect)(api.SpxUiGetRect)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdRect2)(ret_value)
+	var ret_val C.GdRect2
+	C.cgo_callfn_GDExtensionSpxUiGetRect(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxUiGetRect(arg0, arg1, arg2)
-
+	return (GdRect2)(ret_val)
 }
 func CallUiGetLayoutDirection(
 	obj GdObj,
-	ret_value *GdInt,
-) {
+) GdInt {
 	arg0 := (C.GDExtensionSpxUiGetLayoutDirection)(api.SpxUiGetLayoutDirection)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdInt)(ret_value)
+	var ret_val C.GdInt
+	C.cgo_callfn_GDExtensionSpxUiGetLayoutDirection(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxUiGetLayoutDirection(arg0, arg1, arg2)
-
+	return (GdInt)(ret_val)
 }
 func CallUiSetLayoutDirection(
 	obj GdObj,
@@ -3667,14 +3478,13 @@ func CallUiSetLayoutDirection(
 }
 func CallUiGetLayoutMode(
 	obj GdObj,
-	ret_value *GdInt,
-) {
+) GdInt {
 	arg0 := (C.GDExtensionSpxUiGetLayoutMode)(api.SpxUiGetLayoutMode)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdInt)(ret_value)
+	var ret_val C.GdInt
+	C.cgo_callfn_GDExtensionSpxUiGetLayoutMode(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxUiGetLayoutMode(arg0, arg1, arg2)
-
+	return (GdInt)(ret_val)
 }
 func CallUiSetLayoutMode(
 	obj GdObj,
@@ -3689,14 +3499,13 @@ func CallUiSetLayoutMode(
 }
 func CallUiGetAnchorsPreset(
 	obj GdObj,
-	ret_value *GdInt,
-) {
+) GdInt {
 	arg0 := (C.GDExtensionSpxUiGetAnchorsPreset)(api.SpxUiGetAnchorsPreset)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdInt)(ret_value)
+	var ret_val C.GdInt
+	C.cgo_callfn_GDExtensionSpxUiGetAnchorsPreset(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxUiGetAnchorsPreset(arg0, arg1, arg2)
-
+	return (GdInt)(ret_val)
 }
 func CallUiSetAnchorsPreset(
 	obj GdObj,
@@ -3711,14 +3520,13 @@ func CallUiSetAnchorsPreset(
 }
 func CallUiGetScale(
 	obj GdObj,
-	ret_value *GdVec2,
-) {
+) GdVec2 {
 	arg0 := (C.GDExtensionSpxUiGetScale)(api.SpxUiGetScale)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdVec2)(ret_value)
+	var ret_val C.GdVec2
+	C.cgo_callfn_GDExtensionSpxUiGetScale(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxUiGetScale(arg0, arg1, arg2)
-
+	return (GdVec2)(ret_val)
 }
 func CallUiSetScale(
 	obj GdObj,
@@ -3733,14 +3541,13 @@ func CallUiSetScale(
 }
 func CallUiGetPosition(
 	obj GdObj,
-	ret_value *GdVec2,
-) {
+) GdVec2 {
 	arg0 := (C.GDExtensionSpxUiGetPosition)(api.SpxUiGetPosition)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdVec2)(ret_value)
+	var ret_val C.GdVec2
+	C.cgo_callfn_GDExtensionSpxUiGetPosition(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxUiGetPosition(arg0, arg1, arg2)
-
+	return (GdVec2)(ret_val)
 }
 func CallUiSetPosition(
 	obj GdObj,
@@ -3755,14 +3562,13 @@ func CallUiSetPosition(
 }
 func CallUiGetSize(
 	obj GdObj,
-	ret_value *GdVec2,
-) {
+) GdVec2 {
 	arg0 := (C.GDExtensionSpxUiGetSize)(api.SpxUiGetSize)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdVec2)(ret_value)
+	var ret_val C.GdVec2
+	C.cgo_callfn_GDExtensionSpxUiGetSize(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxUiGetSize(arg0, arg1, arg2)
-
+	return (GdVec2)(ret_val)
 }
 func CallUiSetSize(
 	obj GdObj,
@@ -3777,14 +3583,13 @@ func CallUiSetSize(
 }
 func CallUiGetGlobalPosition(
 	obj GdObj,
-	ret_value *GdVec2,
-) {
+) GdVec2 {
 	arg0 := (C.GDExtensionSpxUiGetGlobalPosition)(api.SpxUiGetGlobalPosition)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdVec2)(ret_value)
+	var ret_val C.GdVec2
+	C.cgo_callfn_GDExtensionSpxUiGetGlobalPosition(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxUiGetGlobalPosition(arg0, arg1, arg2)
-
+	return (GdVec2)(ret_val)
 }
 func CallUiSetGlobalPosition(
 	obj GdObj,
@@ -3799,14 +3604,13 @@ func CallUiSetGlobalPosition(
 }
 func CallUiGetRotation(
 	obj GdObj,
-	ret_value *GdFloat,
-) {
+) GdFloat {
 	arg0 := (C.GDExtensionSpxUiGetRotation)(api.SpxUiGetRotation)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (*C.GdFloat)(ret_value)
+	var ret_val C.GdFloat
+	C.cgo_callfn_GDExtensionSpxUiGetRotation(arg0, arg1, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxUiGetRotation(arg0, arg1, arg2)
-
+	return (GdFloat)(ret_val)
 }
 func CallUiSetRotation(
 	obj GdObj,
@@ -3822,15 +3626,14 @@ func CallUiSetRotation(
 func CallUiGetFlip(
 	obj GdObj,
 	horizontal GdBool,
-	ret_value *GdBool,
-) {
+) GdBool {
 	arg0 := (C.GDExtensionSpxUiGetFlip)(api.SpxUiGetFlip)
 	arg1 := (C.GdObj)(obj)
 	arg2 := (C.GdBool)(horizontal)
-	arg3 := (*C.GdBool)(ret_value)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxUiGetFlip(arg0, arg1, arg2, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxUiGetFlip(arg0, arg1, arg2, arg3)
-
+	return (GdBool)(ret_val)
 }
 func CallUiSetFlip(
 	obj GdObj,
