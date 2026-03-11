@@ -284,13 +284,14 @@ func (p *Game) BroadcastAndWait__1(msg string, data any) {
 	p.doBroadcast(msg, data, true)
 }
 
-func (p *Game) setStageMonitor(target string, val string, visible bool) {
+func (p *Game) setStageMonitor(target string, val string, visible bool) bool {
 	for _, item := range p.spriteMgr.items {
 		if sp, ok := item.(*Monitor); ok && sp.val == val && sp.target == target {
 			sp.setVisible(visible)
-			return
+			return true
 		}
 	}
+	return false
 }
 
 func (p *Game) HideVar(name string) {

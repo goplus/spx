@@ -183,11 +183,17 @@ func (p *SpriteImpl) checkNearestTouchedBoundary() int {
 // ============================================================================
 
 func (p *SpriteImpl) HideVar(name string) {
-	p.g.setStageMonitor(p.name, getVarPrefix+name, false)
+	// sprite can hide its own variable and stage variable.
+	if !p.g.setStageMonitor(p.name, getVarPrefix+name, false) {
+		p.g.setStageMonitor("", getVarPrefix+name, false)
+	}
 }
 
 func (p *SpriteImpl) ShowVar(name string) {
-	p.g.setStageMonitor(p.name, getVarPrefix+name, true)
+	// sprite can show its own variable and stage variable.
+	if !p.g.setStageMonitor(p.name, getVarPrefix+name, true) {
+		p.g.setStageMonitor("", getVarPrefix+name, true)
+	}
 }
 
 // -----------------------------------------------------------------------------
