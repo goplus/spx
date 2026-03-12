@@ -336,6 +336,21 @@ func getManagerFuncBody(function *clang.TypedefFunction) string {
 			sb.WriteString("\n" + prefixTab)
 			sb.WriteString(argName + " := " + "(GdString)(" + argName + "Str) \n")
 			sb.WriteString("\tdefer " + "C.free(unsafe.Pointer(" + argName + "Str))")
+		case "GdArray":
+			sb.WriteString(argName + "Info := ")
+			sb.WriteString("ToGdArrayInfo(")
+			sb.WriteString(arg.Name)
+			sb.WriteString(")")
+			sb.WriteString("\n" + prefixTab)
+			sb.WriteString("if " + argName + "Info != nil {\n")
+			sb.WriteString(prefixTab + "\tdefer " + argName + "Info.Free()\n")
+			sb.WriteString(prefixTab + "}\n")
+			sb.WriteString(prefixTab)
+			sb.WriteString(argName + " := GdArray(nil)\n")
+			sb.WriteString(prefixTab)
+			sb.WriteString("if " + argName + "Info != nil {\n")
+			sb.WriteString(prefixTab + "\t" + argName + " = " + argName + "Info.Raw()\n")
+			sb.WriteString(prefixTab + "}")
 
 		default:
 			sb.WriteString(argName + " := ")

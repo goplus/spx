@@ -423,10 +423,21 @@ func (p *Coroutines) WaitYield(me Thread) {
 
 func WaitForChan[T any](p *Coroutines, ch chan T, data *T) {
 	me := p.Current()
+	if me == nil {
+		*data = <-ch
+		return
+	}
 	// Delegate channel receive to separate goroutine to prevent blocking the scheduler.
 	go func() {
-		*data = <-ch
-		p.markIdleAndResume(me)
+		select {
+		case value := <-ch:
+			if p.isThreadCanceled(me) {
+				return
+			}
+			*data = value
+			p.markIdleAndResume(me)
+		case <-me.Context().Done():
+		}
 	}()
 	p.blockAndYield(me)
 }
