@@ -94,6 +94,7 @@ func init() {
 			"Direction":           reflect.TypeOf((*q.Direction)(nil)).Elem(),
 			"IEventSinks":         reflect.TypeOf((*q.IEventSinks)(nil)).Elem(),
 			"Key":                 reflect.TypeOf((*q.Key)(nil)).Elem(),
+			"MsgName":             reflect.TypeOf((*q.MsgName)(nil)).Elem(),
 			"PhysicsMode":         reflect.TypeOf((*q.PhysicsMode)(nil)).Elem(),
 			"Pos":                 reflect.TypeOf((*q.Pos)(nil)).Elem(),
 			"PropertyName":        reflect.TypeOf((*q.PropertyName)(nil)).Elem(),
