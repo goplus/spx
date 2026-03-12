@@ -131,6 +131,13 @@ type ArrayInfoImpl struct {
 	needsFree bool
 }
 
+func (a *ArrayInfoImpl) Raw() GdArray {
+	if a == nil {
+		return nil
+	}
+	return GdArray(a.gdArray)
+}
+
 func ToGdBool(val bool) GdBool {
 	if val {
 		return GdBool(1)
@@ -767,7 +774,7 @@ func (a *ArrayInfoImpl) ToStrings() []string {
 	}
 	return result
 }
-func ToGdArray(slice interface{}) GdArray {
+func ToGdArrayInfo(slice interface{}) *ArrayInfoImpl {
 	var info *ArrayInfoImpl = nil
 	switch v := slice.(type) {
 	case []int64:
@@ -790,6 +797,14 @@ func ToGdArray(slice interface{}) GdArray {
 		info = createGdArrayFromBytes(v)
 	default:
 		panic(fmt.Sprintf("unsupported array type: %T", slice))
+	}
+	return info
+}
+
+func ToGdArray(slice interface{}) GdArray {
+	info := ToGdArrayInfo(slice)
+	if info == nil {
+		return nil
 	}
 	return GdArray(info.gdArray)
 }

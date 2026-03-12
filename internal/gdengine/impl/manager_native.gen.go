@@ -562,7 +562,14 @@ func (pself *physicsMgr) CheckCollisionCircle(pos Vec2, radius float64, collisio
 func (pself *physicsMgr) RaycastWithDetails(from Vec2, to Vec2, ignore_sprites Array, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) Array {
 	arg0 := ToGdVec2(from)
 	arg1 := ToGdVec2(to)
-	arg2 := ToGdArray(ignore_sprites)
+	arg2Info := ToGdArrayInfo(ignore_sprites)
+	if arg2Info != nil {
+		defer arg2Info.Free()
+	}
+	arg2 := GdArray(nil)
+	if arg2Info != nil {
+		arg2 = arg2Info.Raw()
+	}
 	arg3 := ToGdInt(collision_mask)
 	arg4 := ToGdBool(collide_with_areas)
 	arg5 := ToGdBool(collide_with_bodies)
@@ -781,7 +788,14 @@ func (pself *sceneMgr) CreateStaticSprite(texture_path string, pos Vec2, degree 
 	arg5 := ToGdVec2(pivot)
 	arg6 := ToGdInt(collider_type)
 	arg7 := ToGdVec2(collider_pivot)
-	arg8 := ToGdArray(collider_params)
+	arg8Info := ToGdArrayInfo(collider_params)
+	if arg8Info != nil {
+		defer arg8Info.Free()
+	}
+	arg8 := GdArray(nil)
+	if arg8Info != nil {
+		arg8 = arg8Info.Raw()
+	}
 	retValue := CallSceneCreateStaticSprite(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8)
 	return ToObject(retValue)
 }
@@ -1417,7 +1431,14 @@ func (pself *spriteMgr) SetColliderCapsule(obj Object, center Vec2, size Vec2) {
 func (pself *spriteMgr) SetColliderPolygon(obj Object, center Vec2, points Array) {
 	arg0 := ToGdObj(obj)
 	arg1 := ToGdVec2(center)
-	arg2 := ToGdArray(points)
+	arg2Info := ToGdArrayInfo(points)
+	if arg2Info != nil {
+		defer arg2Info.Free()
+	}
+	arg2 := GdArray(nil)
+	if arg2Info != nil {
+		arg2 = arg2Info.Raw()
+	}
 	CallSpriteSetColliderPolygon(arg0, arg1, arg2)
 }
 func (pself *spriteMgr) SetCollisionEnabled(obj Object, enabled bool) {
@@ -1451,7 +1472,14 @@ func (pself *spriteMgr) SetTriggerCapsule(obj Object, center Vec2, size Vec2) {
 func (pself *spriteMgr) SetTriggerPolygon(obj Object, center Vec2, points Array) {
 	arg0 := ToGdObj(obj)
 	arg1 := ToGdVec2(center)
-	arg2 := ToGdArray(points)
+	arg2Info := ToGdArrayInfo(points)
+	if arg2Info != nil {
+		defer arg2Info.Free()
+	}
+	arg2 := GdArray(nil)
+	if arg2Info != nil {
+		arg2 = arg2Info.Raw()
+	}
 	CallSpriteSetTriggerPolygon(arg0, arg1, arg2)
 }
 func (pself *spriteMgr) SetTriggerEnabled(obj Object, trigger bool) {
@@ -1495,15 +1523,36 @@ func (pself *spriteMgr) GetPixelCollisionSamplingStep() int64 {
 	return ToInt64(retValue)
 }
 func (pself *spriteMgr) BatchUpdateTransforms(buffer Array) {
-	arg0 := ToGdArray(buffer)
+	arg0Info := ToGdArrayInfo(buffer)
+	if arg0Info != nil {
+		defer arg0Info.Free()
+	}
+	arg0 := GdArray(nil)
+	if arg0Info != nil {
+		arg0 = arg0Info.Raw()
+	}
 	CallSpriteBatchUpdateTransforms(arg0)
 }
 func (pself *spriteMgr) BatchUpdateVisuals(buffer Array) {
-	arg0 := ToGdArray(buffer)
+	arg0Info := ToGdArrayInfo(buffer)
+	if arg0Info != nil {
+		defer arg0Info.Free()
+	}
+	arg0 := GdArray(nil)
+	if arg0Info != nil {
+		arg0 = arg0Info.Raw()
+	}
 	CallSpriteBatchUpdateVisuals(arg0)
 }
 func (pself *spriteMgr) BatchRetrievePositions(objs Array) Array {
-	arg0 := ToGdArray(objs)
+	arg0Info := ToGdArrayInfo(objs)
+	if arg0Info != nil {
+		defer arg0Info.Free()
+	}
+	arg0 := GdArray(nil)
+	if arg0Info != nil {
+		arg0 = arg0Info.Raw()
+	}
 	retValue := CallSpriteBatchRetrievePositions(arg0)
 	return ToArray(retValue)
 }
@@ -1529,7 +1578,14 @@ func (pself *tilemapMgr) SetTileWithCollisionInfo(texture_path string, collision
 	arg0Str := C.CString(texture_path)
 	arg0 := (GdString)(arg0Str)
 	defer C.free(unsafe.Pointer(arg0Str))
-	arg1 := ToGdArray(collision_points)
+	arg1Info := ToGdArrayInfo(collision_points)
+	if arg1Info != nil {
+		defer arg1Info.Free()
+	}
+	arg1 := GdArray(nil)
+	if arg1Info != nil {
+		arg1 = arg1Info.Raw()
+	}
 	CallTilemapSetTileWithCollisionInfo(arg0, arg1)
 }
 func (pself *tilemapMgr) SetLayerOffset(index int64, offset Vec2) {
@@ -1543,14 +1599,28 @@ func (pself *tilemapMgr) GetLayerOffset(index int64) Vec2 {
 	return ToVec2(retValue)
 }
 func (pself *tilemapMgr) PlaceTiles(positions Array, texture_path string) {
-	arg0 := ToGdArray(positions)
+	arg0Info := ToGdArrayInfo(positions)
+	if arg0Info != nil {
+		defer arg0Info.Free()
+	}
+	arg0 := GdArray(nil)
+	if arg0Info != nil {
+		arg0 = arg0Info.Raw()
+	}
 	arg1Str := C.CString(texture_path)
 	arg1 := (GdString)(arg1Str)
 	defer C.free(unsafe.Pointer(arg1Str))
 	CallTilemapPlaceTiles(arg0, arg1)
 }
 func (pself *tilemapMgr) PlaceTilesWithLayer(positions Array, texture_path string, layer_index int64) {
-	arg0 := ToGdArray(positions)
+	arg0Info := ToGdArrayInfo(positions)
+	if arg0Info != nil {
+		defer arg0Info.Free()
+	}
+	arg0 := GdArray(nil)
+	if arg0Info != nil {
+		arg0 = arg0Info.Raw()
+	}
 	arg1Str := C.CString(texture_path)
 	arg1 := (GdString)(arg1Str)
 	defer C.free(unsafe.Pointer(arg1Str))

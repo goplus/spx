@@ -67,7 +67,10 @@ func (e *Event0) Trigger() {
 	for i := range count {
 		e.tempActions[i]()
 	}
+	e.mutex.Lock()
+	clearEventTempActions(e.tempActions)
 	e.tempIds = e.tempIds[:0]
+	e.mutex.Unlock()
 }
 
 type Action1[T any] func(data T)
@@ -133,7 +136,10 @@ func (e *Event1[T]) Trigger(data T) {
 	for i := range count {
 		e.tempActions[i](data)
 	}
+	e.mutex.Lock()
+	clearEventTempActions(e.tempActions)
 	e.tempIds = e.tempIds[:0]
+	e.mutex.Unlock()
 }
 
 type Action2[T1 any, T2 any] func(data1 T1, data2 T2)
@@ -198,5 +204,15 @@ func (e *Event2[T1, T2]) Trigger(data1 T1, data2 T2) {
 	for i := range count {
 		e.tempActions[i](data1, data2)
 	}
+	e.mutex.Lock()
+	clearEventTempActions(e.tempActions)
 	e.tempIds = e.tempIds[:0]
+	e.mutex.Unlock()
+}
+
+func clearEventTempActions[T any](actions []T) {
+	var zero T
+	for i := range actions {
+		actions[i] = zero
+	}
 }
