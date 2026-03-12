@@ -23,40 +23,40 @@ func NewUiMonitor() *UiMonitor {
 	return panel
 }
 
-// !!Warning: this method was called in main thread
+// !!Warning: this method is called from the engine callback context
 func (pself *UiMonitor) OnStart() {
-	pself.bgAll = engine.MainThreadBindUI[UiNode](pself.GetId(), "BG")
-	pself.labelName = engine.MainThreadBindUI[UiNode](pself.GetId(), "BG/H/LabelName")
-	pself.labelBg = engine.MainThreadBindUI[UiNode](pself.GetId(), "BG/H/C")
-	pself.labelValue = engine.MainThreadBindUI[UiNode](pself.GetId(), "BG/H/C/H/LabelValue")
+	pself.bgAll = engine.BridgeBindUI[UiNode](pself.GetId(), "BG")
+	pself.labelName = engine.BridgeBindUI[UiNode](pself.GetId(), "BG/H/LabelName")
+	pself.labelBg = engine.BridgeBindUI[UiNode](pself.GetId(), "BG/H/C")
+	pself.labelValue = engine.BridgeBindUI[UiNode](pself.GetId(), "BG/H/C/H/LabelValue")
 
-	pself.valueOnly = engine.MainThreadBindUI[UiNode](pself.GetId(), "ValueOnly")
-	pself.labelValueOnly = engine.MainThreadBindUI[UiNode](pself.GetId(), "ValueOnly/LabelValue")
+	pself.valueOnly = engine.BridgeBindUI[UiNode](pself.GetId(), "ValueOnly")
+	pself.labelValueOnly = engine.BridgeBindUI[UiNode](pself.GetId(), "ValueOnly/LabelValue")
 
 }
 func (pself *UiMonitor) ShowAll(isOn bool) {
-	engine.MainThreadUiSetVisible(pself.bgAll.GetId(), isOn)
-	engine.MainThreadUiSetVisible(pself.valueOnly.GetId(), !isOn)
+	mgr.UiMgr.SetVisible(pself.bgAll.GetId(), isOn)
+	mgr.UiMgr.SetVisible(pself.valueOnly.GetId(), !isOn)
 }
 
 func (pself *UiMonitor) SetVisible(isOn bool) {
-	engine.MainThreadUiSetVisible(pself.GetId(), isOn)
+	mgr.UiMgr.SetVisible(pself.GetId(), isOn)
 }
 
 func (pself *UiMonitor) UpdateScale(x float64) {
 	x *= windowScale
-	engine.MainThreadUiSetScale(pself.GetId(), mathf.NewVec2(x, x))
+	mgr.UiMgr.SetScale(pself.GetId(), mathf.NewVec2(x, x))
 }
 func (pself *UiMonitor) UpdatePos(wpos Vec2) {
-	engine.MainThreadUiSetGlobalPosition(pself.GetId(), WorldToUI(wpos, true))
+	mgr.UiMgr.SetGlobalPosition(pself.GetId(), WorldToUI(wpos))
 }
 
 func (pself *UiMonitor) UpdateText(name, value string) {
-	engine.MainThreadUiSetText(pself.labelName.GetId(), name)
-	engine.MainThreadUiSetText(pself.labelValue.GetId(), value)
-	engine.MainThreadUiSetText(pself.labelValueOnly.GetId(), value)
+	mgr.UiMgr.SetText(pself.labelName.GetId(), name)
+	mgr.UiMgr.SetText(pself.labelValue.GetId(), value)
+	mgr.UiMgr.SetText(pself.labelValueOnly.GetId(), value)
 }
 func (pself *UiMonitor) UpdateColor(color Color) {
-	engine.MainThreadUiSetColor(pself.labelBg.GetId(), color)
-	engine.MainThreadUiSetColor(pself.valueOnly.GetId(), color)
+	mgr.UiMgr.SetColor(pself.labelBg.GetId(), color)
+	mgr.UiMgr.SetColor(pself.valueOnly.GetId(), color)
 }

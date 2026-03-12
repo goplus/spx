@@ -139,8 +139,7 @@ func getCostumeAssetSize(imagePath string) mathf.Vec2 {
 	if game, ok := engine.GetGame().(*Game); ok && game != nil {
 		return game.engine().ResMgr.GetImageSize(assetPath)
 	}
-	var engineMgr engineManagers
-	return engineMgr.ResMgr.GetImageSize(assetPath)
+	return engine.Managers().ResMgr.GetImageSize(assetPath)
 }
 
 // getSize returns the size of the costume accounting for bitmap resolution.

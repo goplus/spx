@@ -187,17 +187,17 @@ func bindSceneInstantiatedSprite(id Object, typeName string) {
 }
 
 func createPrefabSprite(t reflect.Type, pos mathf.Vec2) reflect.Value {
-	id := gdx.SpriteMgr.CreateSprite(getPrefabPath(t.Name()), pos)
+	id := Managers().SpriteMgr.CreateSprite(getPrefabPath(t.Name()), pos)
 	return createSpriteValue(t, id)
 }
 
 func createEmptySprite(t reflect.Type, pos mathf.Vec2) reflect.Value {
-	id := gdx.SpriteMgr.CreateSprite("", pos)
+	id := Managers().SpriteMgr.CreateSprite("", pos)
 	return createSpriteValue(t, id)
 }
 
 func createBackdrop(t reflect.Type) reflect.Value {
-	id := gdx.SpriteMgr.CreateBackdrop("")
+	id := Managers().SpriteMgr.CreateBackdrop("")
 	return createSpriteValue(t, id)
 }
 
@@ -207,7 +207,7 @@ func createUI(t reflect.Type, prefabName string, isEngine bool) reflect.Value {
 		name = prefabName
 	}
 	nodeValue := reflect.New(t).Elem()
-	id := gdx.UiMgr.CreateNode(getUIPath(name, isEngine))
+	id := Managers().UiMgr.CreateNode(getUIPath(name, isEngine))
 	node := nodeValue.Addr().Interface().(gdx.IUiNode)
 	gdx.InitUINodeInstance(id, node, func(id Object, node gdx.IUiNode) {
 		state.uiNodes[id] = node
@@ -216,7 +216,7 @@ func createUI(t reflect.Type, prefabName string, isEngine bool) reflect.Value {
 }
 
 func bindUI(t reflect.Type, parentNode Object, path string) reflect.Value {
-	id := gdx.UiMgr.BindNode(parentNode, path)
+	id := Managers().UiMgr.BindNode(parentNode, path)
 	if id == 0 {
 		spxlog.Error("BindUI failed: parentNode=%d path=%s", parentNode, path)
 		return reflect.Value{}

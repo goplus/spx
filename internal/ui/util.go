@@ -37,18 +37,10 @@ func ClampUIPositionInScreen(isClamp bool) {
 	clampUIPositionInScreen = isClamp
 }
 
-// WorldToUI converts world space position to screen space
-// If useDirect is true, uses direct gdx calls (safe for main thread, e.g., onUpdate methods)
-// If useDirect is false, uses cameraMgr (may deadlock if called from main thread)
-func WorldToUI(pos Vec2, useDirect bool) Vec2 {
+// WorldToUI converts world space position to screen space.
+func WorldToUI(pos Vec2) Vec2 {
 	pos = pos.Mulf(windowScale)
 	pos = NewVec2(pos.X, -pos.Y)
-
-	var viewport Rect2
-	if useDirect {
-		viewport = engine.MainThreadGetViewportRect()
-	} else {
-		viewport = mgr.CameraMgr.GetViewportRect()
-	}
+	viewport := mgr.CameraMgr.GetViewportRect()
 	return pos.Add(viewport.Size.Mulf(0.5)).Sub(viewport.Position)
 }

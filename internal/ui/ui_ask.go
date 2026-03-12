@@ -20,13 +20,13 @@ func NewUiAsk() *UiAsk {
 	return panel
 }
 
-// !!Warning: this method was called in main thread
+// !!Warning: this method is called from the engine callback context
 func (pself *UiAsk) OnStart() {
-	pself.askBody = engine.MainThreadBindUI[UiNode](pself.GetId(), "MF/Frame/AskBody")
-	pself.askLabel = engine.MainThreadBindUI[UiNode](pself.GetId(), "MF/Frame/AskBody/LabelAsk")
+	pself.askBody = engine.BridgeBindUI[UiNode](pself.GetId(), "MF/Frame/AskBody")
+	pself.askLabel = engine.BridgeBindUI[UiNode](pself.GetId(), "MF/Frame/AskBody/LabelAsk")
 
-	pself.input = engine.MainThreadBindUI[UiNode](pself.GetId(), "M/Input")
-	pself.checkBtn = engine.MainThreadBindUI[UiNode](pself.GetId(), "M/Input/Check")
+	pself.input = engine.BridgeBindUI[UiNode](pself.GetId(), "M/Input")
+	pself.checkBtn = engine.BridgeBindUI[UiNode](pself.GetId(), "M/Input/Check")
 
 	// Handle check button click
 	pself.checkBtn.OnUiClickEvent.Subscribe(func() {

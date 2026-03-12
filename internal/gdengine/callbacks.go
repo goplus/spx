@@ -1,9 +1,14 @@
 package gdengine
 
 import (
+	"github.com/goplus/spx/v2/internal/engine/platform"
 	spxlog "github.com/goplus/spx/v2/internal/log"
 	. "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
 )
+
+func onMainThread(call func()) {
+	platform.RunOnMainThread(call)
+}
 
 func bindCallbacks() CallbackInfo {
 	infos := CallbackInfo{}
@@ -65,89 +70,105 @@ func bindCallbacks() CallbackInfo {
 }
 
 func onEngineStart() {
-	for _, mgr := range mgrs {
-		mgr.OnStart()
-	}
-	if coreCallbacks.OnEngineStart != nil {
-		coreCallbacks.OnEngineStart()
-	}
+	onMainThread(func() {
+		for _, mgr := range mgrs {
+			mgr.OnStart()
+		}
+		if coreCallbacks.OnEngineStart != nil {
+			coreCallbacks.OnEngineStart()
+		}
+	})
 }
 
 func onEngineUpdate(delta float64) {
-	for _, mgr := range mgrs {
-		mgr.OnUpdate(delta)
-	}
-	AdvanceTimeSinceGameStart(delta)
-	sprites = sprites[:0]
-	for _, sprite := range Sprites() {
-		sprites = append(sprites, sprite)
-	}
-	for _, sprite := range sprites {
-		sprite.OnUpdate(delta)
-	}
-	if coreCallbacks.OnEngineUpdate != nil {
-		coreCallbacks.OnEngineUpdate(delta)
-	}
-	InternalUpdateEngine(delta)
+	onMainThread(func() {
+		for _, mgr := range mgrs {
+			mgr.OnUpdate(delta)
+		}
+		AdvanceTimeSinceGameStart(delta)
+		sprites = sprites[:0]
+		for _, sprite := range Sprites() {
+			sprites = append(sprites, sprite)
+		}
+		for _, sprite := range sprites {
+			sprite.OnUpdate(delta)
+		}
+		if coreCallbacks.OnEngineUpdate != nil {
+			coreCallbacks.OnEngineUpdate(delta)
+		}
+		InternalUpdateEngine(delta)
+	})
 }
 
 func onEngineFixedUpdate(delta float64) {
-	for _, mgr := range mgrs {
-		mgr.OnFixedUpdate(delta)
-	}
-	sprites = sprites[:0]
-	for _, sprite := range Sprites() {
-		sprites = append(sprites, sprite)
-	}
-	for _, sprite := range sprites {
-		sprite.OnFixedUpdate(delta)
-	}
-	if coreCallbacks.OnEngineFixedUpdate != nil {
-		coreCallbacks.OnEngineFixedUpdate(delta)
-	}
+	onMainThread(func() {
+		for _, mgr := range mgrs {
+			mgr.OnFixedUpdate(delta)
+		}
+		sprites = sprites[:0]
+		for _, sprite := range Sprites() {
+			sprites = append(sprites, sprite)
+		}
+		for _, sprite := range sprites {
+			sprite.OnFixedUpdate(delta)
+		}
+		if coreCallbacks.OnEngineFixedUpdate != nil {
+			coreCallbacks.OnEngineFixedUpdate(delta)
+		}
+	})
 }
 
 func onEngineDestroy() {
-	if coreCallbacks.OnEngineDestroy != nil {
-		coreCallbacks.OnEngineDestroy()
-	}
-	sprites = sprites[:0]
-	for _, sprite := range Sprites() {
-		sprites = append(sprites, sprite)
-	}
-	for _, sprite := range sprites {
-		sprite.OnDestroy()
-	}
-	for _, mgr := range mgrs {
-		mgr.OnDestroy()
-	}
+	onMainThread(func() {
+		if coreCallbacks.OnEngineDestroy != nil {
+			coreCallbacks.OnEngineDestroy()
+		}
+		sprites = sprites[:0]
+		for _, sprite := range Sprites() {
+			sprites = append(sprites, sprite)
+		}
+		for _, sprite := range sprites {
+			sprite.OnDestroy()
+		}
+		for _, mgr := range mgrs {
+			mgr.OnDestroy()
+		}
+	})
 }
 
 func onEngineReset() {
-	if coreCallbacks.OnEngineReset != nil {
-		coreCallbacks.OnEngineReset()
-	}
+	onMainThread(func() {
+		if coreCallbacks.OnEngineReset != nil {
+			coreCallbacks.OnEngineReset()
+		}
+	})
 }
 
 func onEnginePause(isPaused bool) {
-	if coreCallbacks.OnEnginePause != nil {
-		coreCallbacks.OnEnginePause(isPaused)
-	}
+	onMainThread(func() {
+		if coreCallbacks.OnEnginePause != nil {
+			coreCallbacks.OnEnginePause(isPaused)
+		}
 
-	for _, mgr := range mgrs {
-		mgr.OnPause(isPaused)
-	}
+		for _, mgr := range mgrs {
+			mgr.OnPause(isPaused)
+		}
+	})
 }
 
 func onSceneSpriteInstantiated(id int64, type_name string) {
-	BindSceneInstantiatedSprite(Object(id), type_name)
+	onMainThread(func() {
+		BindSceneInstantiatedSprite(Object(id), type_name)
+	})
 }
 
 // sprite
 func onSpriteReady(id int64) {
-	if sprite := GetSprite(Object(id)); sprite != nil {
-		sprite.OnStart()
-	}
+	onMainThread(func() {
+		if sprite := GetSprite(Object(id)); sprite != nil {
+			sprite.OnStart()
+		}
+	})
 }
 func onSpriteUpdated(delta float64) {
 	spxlog.Debug("OnSpriteUpdated %f", delta)
@@ -156,7 +177,9 @@ func onSpriteFixedUpdated(delta float64) {
 	spxlog.Debug("OnSpriteFixedUpdated %f", delta)
 }
 func onSpriteDestroyed(id int64) {
-	DeleteSprite(Object(id))
+	onMainThread(func() {
+		DeleteSprite(Object(id))
+	})
 }
 
 // input
@@ -167,14 +190,18 @@ func onMouseReleased(id int64) {
 	spxlog.Debug("OnMouseReleased %d", id)
 }
 func onKeyPressed(id int64) {
-	if coreCallbacks.OnKeyPressed != nil {
-		coreCallbacks.OnKeyPressed(id)
-	}
+	onMainThread(func() {
+		if coreCallbacks.OnKeyPressed != nil {
+			coreCallbacks.OnKeyPressed(id)
+		}
+	})
 }
 func onKeyReleased(id int64) {
-	if coreCallbacks.OnKeyReleased != nil {
-		coreCallbacks.OnKeyReleased(id)
-	}
+	onMainThread(func() {
+		if coreCallbacks.OnKeyReleased != nil {
+			coreCallbacks.OnKeyReleased(id)
+		}
+	})
 }
 func onActionPressed(name string) {
 	spxlog.Debug("OnActionPressed %s", name)
@@ -201,117 +228,151 @@ func onCollisionExit(id int64, oid int64) {
 }
 
 func onTriggerEnter(id int64, oid int64) {
-	if sprite := GetSprite(Object(id)); sprite != nil {
-		if other := GetSprite(Object(oid)); other != nil {
-			sprite.V_OnTriggerEnter(other)
-			sprite.OnTriggerEnter(other)
+	onMainThread(func() {
+		if sprite := GetSprite(Object(id)); sprite != nil {
+			if other := GetSprite(Object(oid)); other != nil {
+				sprite.V_OnTriggerEnter(other)
+				sprite.OnTriggerEnter(other)
+			}
 		}
-	}
+	})
 }
 func onTriggerStay(id int64, oid int64) {
 }
 func onTriggerExit(id int64, oid int64) {
-	if sprite := GetSprite(Object(id)); sprite != nil {
-		if other := GetSprite(Object(oid)); other != nil {
-			sprite.V_OnTriggerExit(other)
-			sprite.OnTriggerExit(other)
+	onMainThread(func() {
+		if sprite := GetSprite(Object(id)); sprite != nil {
+			if other := GetSprite(Object(oid)); other != nil {
+				sprite.V_OnTriggerExit(other)
+				sprite.OnTriggerExit(other)
+			}
 		}
-	}
+	})
 }
 
 // ui
 func onUiPressed(id int64) {
-	if node := GetUINode(Object(id)); node != nil {
-		node.V_OnUiPressed()
-		node.OnUiPressed()
-	}
+	onMainThread(func() {
+		if node := GetUINode(Object(id)); node != nil {
+			node.V_OnUiPressed()
+			node.OnUiPressed()
+		}
+	})
 }
 func onUiReleased(id int64) {
-	if node := GetUINode(Object(id)); node != nil {
-		node.V_OnUiReleased()
-		node.OnUiReleased()
-	}
+	onMainThread(func() {
+		if node := GetUINode(Object(id)); node != nil {
+			node.V_OnUiReleased()
+			node.OnUiReleased()
+		}
+	})
 }
 func onUiHovered(id int64) {
-	if node := GetUINode(Object(id)); node != nil {
-		node.V_OnUiHovered()
-		node.OnUiHovered()
-	}
+	onMainThread(func() {
+		if node := GetUINode(Object(id)); node != nil {
+			node.V_OnUiHovered()
+			node.OnUiHovered()
+		}
+	})
 }
 func onUiClicked(id int64) {
-	if node := GetUINode(Object(id)); node != nil {
-		node.V_OnUiClick()
-		node.OnUiClick()
-	}
+	onMainThread(func() {
+		if node := GetUINode(Object(id)); node != nil {
+			node.V_OnUiClick()
+			node.OnUiClick()
+		}
+	})
 }
 func onUiToggle(id int64, isOn bool) {
-	if node := GetUINode(Object(id)); node != nil {
-		node.V_OnUiToggle(isOn)
-		node.OnUiToggle(isOn)
-	}
+	onMainThread(func() {
+		if node := GetUINode(Object(id)); node != nil {
+			node.V_OnUiToggle(isOn)
+			node.OnUiToggle(isOn)
+		}
+	})
 }
 func onUiTextChanged(id int64, text string) {
-	if node := GetUINode(Object(id)); node != nil {
-		node.V_OnUiTextChanged(text)
-		node.OnUiTextChanged(text)
-	}
+	onMainThread(func() {
+		if node := GetUINode(Object(id)); node != nil {
+			node.V_OnUiTextChanged(text)
+			node.OnUiTextChanged(text)
+		}
+	})
 }
 
 func onUiDestroyed(id int64) {
-	DeleteUINode(Object(id))
+	onMainThread(func() {
+		DeleteUINode(Object(id))
+	})
 }
 
 func onSpriteScreenEntered(id int64) {
-	if sprite := GetSprite(Object(id)); sprite != nil {
-		sprite.V_OnScreenEntered()
-		sprite.OnScreenEntered()
-	}
+	onMainThread(func() {
+		if sprite := GetSprite(Object(id)); sprite != nil {
+			sprite.V_OnScreenEntered()
+			sprite.OnScreenEntered()
+		}
+	})
 }
 
 func onSpriteScreenExited(id int64) {
-	if sprite := GetSprite(Object(id)); sprite != nil {
-		sprite.V_OnScreenExited()
-		sprite.OnScreenExited()
-	}
+	onMainThread(func() {
+		if sprite := GetSprite(Object(id)); sprite != nil {
+			sprite.V_OnScreenExited()
+			sprite.OnScreenExited()
+		}
+	})
 }
 func onSpriteVfxFinished(id int64) {
-	if sprite := GetSprite(Object(id)); sprite != nil {
-		sprite.V_OnVfxFinished()
-		sprite.OnVfxFinished()
-	}
+	onMainThread(func() {
+		if sprite := GetSprite(Object(id)); sprite != nil {
+			sprite.V_OnVfxFinished()
+			sprite.OnVfxFinished()
+		}
+	})
 }
 
 func onSpriteAnimationFinished(id int64) {
-	if sprite := GetSprite(Object(id)); sprite != nil {
-		sprite.V_OnAnimationFinished()
-		sprite.OnAnimationFinished()
-	}
+	onMainThread(func() {
+		if sprite := GetSprite(Object(id)); sprite != nil {
+			sprite.V_OnAnimationFinished()
+			sprite.OnAnimationFinished()
+		}
+	})
 }
 
 func onSpriteAnimationLooped(id int64) {
-	if sprite := GetSprite(Object(id)); sprite != nil {
-		sprite.V_OnAnimationLooped()
-		sprite.OnAnimationLooped()
-	}
+	onMainThread(func() {
+		if sprite := GetSprite(Object(id)); sprite != nil {
+			sprite.V_OnAnimationLooped()
+			sprite.OnAnimationLooped()
+		}
+	})
 }
 
 func onSpriteFrameChanged(id int64) {
-	if sprite := GetSprite(Object(id)); sprite != nil {
-		sprite.V_OnFrameChanged()
-		sprite.OnFrameChanged()
-	}
+	onMainThread(func() {
+		if sprite := GetSprite(Object(id)); sprite != nil {
+			sprite.V_OnFrameChanged()
+			sprite.OnFrameChanged()
+		}
+	})
 }
 
 func onSpriteAnimationChanged(id int64) {
-	if sprite := GetSprite(Object(id)); sprite != nil {
-		sprite.V_OnAnimationChanged()
-		sprite.OnAnimationChanged()
-	}
+	onMainThread(func() {
+		if sprite := GetSprite(Object(id)); sprite != nil {
+			sprite.V_OnAnimationChanged()
+			sprite.OnAnimationChanged()
+		}
+	})
 }
 
 func onSpriteFramesSetChanged(id int64) {
-	if sprite := GetSprite(Object(id)); sprite != nil {
-		sprite.V_OnFramesSetChanged()
-		sprite.OnFramesSetChanged()
-	}
+	onMainThread(func() {
+		if sprite := GetSprite(Object(id)); sprite != nil {
+			sprite.V_OnFramesSetChanged()
+			sprite.OnFramesSetChanged()
+		}
+	})
 }

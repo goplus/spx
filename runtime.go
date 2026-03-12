@@ -315,7 +315,7 @@ func (p *Game) OnEngineReset() {
 }
 
 // OnEngineUpdate is called every frame to update game logic.
-// All updates are performed on the main thread.
+// All updates are performed in the engine callback context.
 func (p *Game) OnEngineUpdate(delta float64) {
 	if !p.lifecycleState.IsRunned {
 		return
@@ -623,7 +623,7 @@ func (p *Game) logicLoop(me coroutine.Thread) int {
 
 // updateInputState refreshes input state from the engine.
 func (p *Game) updateInputState() {
-	coreruntime.SyncMousePos(engine.MainThreadGetMousePos(), p.inputMgr.setMousePos)
+	coreruntime.SyncMousePos(engine.Managers().InputMgr.GetGlobalMousePos(), p.inputMgr.setMousePos)
 }
 
 // dispatchStartEventIfNeeded fires the start event once after the game begins running.
@@ -748,7 +748,7 @@ func (sprite *SpriteImpl) ensureProxyInitialized() {
 	if sprite.runtimeState.SyncSprite != nil || sprite.isDestroyed() {
 		return
 	}
-	sprite.runtimeState.SyncSprite = engine.MainThreadNewSprite(sprite, mathf.NewVec2(sprite.getXYWithRenderOffset()))
+	sprite.runtimeState.SyncSprite = engine.BridgeNewSprite(sprite, mathf.NewVec2(sprite.getXYWithRenderOffset()))
 	sprite.applyPhysicsProxyConfig()
 	sprite.runtimeState.SyncSprite.SetVisible(sprite.spriteState.IsVisible)
 	sprite.runtimeState.SyncSprite.Name = sprite.name

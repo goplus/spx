@@ -45,23 +45,23 @@ func NewUiSay() *UiSay {
 }
 
 // OnStart initializes the UI nodes
-// Warning: this method is called in main thread
+// Warning: this method is called from the engine callback context
 func (s *UiSay) OnStart() {
 	s.left = sayNodes{
-		vbox:  engine.MainThreadBindUI[UiNode](s.GetId(), "VL"),
-		label: engine.MainThreadBindUI[UiNode](s.GetId(), "VL/BG/Label"),
+		vbox:  engine.BridgeBindUI[UiNode](s.GetId(), "VL"),
+		label: engine.BridgeBindUI[UiNode](s.GetId(), "VL/BG/Label"),
 	}
 	s.right = sayNodes{
-		vbox:  engine.MainThreadBindUI[UiNode](s.GetId(), "VR"),
-		label: engine.MainThreadBindUI[UiNode](s.GetId(), "VR/BG/Label"),
+		vbox:  engine.BridgeBindUI[UiNode](s.GetId(), "VR"),
+		label: engine.BridgeBindUI[UiNode](s.GetId(), "VR/BG/Label"),
 	}
 	s.leftThink = sayNodes{
-		vbox:  engine.MainThreadBindUI[UiNode](s.GetId(), "VLThink"),
-		label: engine.MainThreadBindUI[UiNode](s.GetId(), "VLThink/BG/MC/Label"),
+		vbox:  engine.BridgeBindUI[UiNode](s.GetId(), "VLThink"),
+		label: engine.BridgeBindUI[UiNode](s.GetId(), "VLThink/BG/MC/Label"),
 	}
 	s.rightThink = sayNodes{
-		vbox:  engine.MainThreadBindUI[UiNode](s.GetId(), "VRThink"),
-		label: engine.MainThreadBindUI[UiNode](s.GetId(), "VRThink/BG/MC/Label"),
+		vbox:  engine.BridgeBindUI[UiNode](s.GetId(), "VRThink"),
+		label: engine.BridgeBindUI[UiNode](s.GetId(), "VRThink/BG/MC/Label"),
 	}
 }
 
@@ -90,7 +90,7 @@ func (s *UiSay) calculateScale(winSize mathf.Vec2, isThink bool) mathf.Vec2 {
 	// Choose the smaller scale to maintain aspect ratio
 	uniformScale := math.Min(scaleVec.X, scaleVec.Y)
 
-	zoom := engine.MainThreadGetCameraZoom()
+	zoom := mgr.CameraMgr.GetCameraZoom()
 	windowScaleVec := mathf.NewVec2(windowScale, windowScale)
 
 	return zoom.Div(windowScaleVec).Mulf(uniformScale * specialScale)
@@ -98,8 +98,8 @@ func (s *UiSay) calculateScale(winSize mathf.Vec2, isThink bool) mathf.Vec2 {
 
 // calculatePosition computes the UI position based on sprite position and size
 func (s *UiSay) calculatePosition(winSize mathf.Vec2, pos mathf.Vec2, size mathf.Vec2, msg string) mathf.Vec2 {
-	zoom := engine.MainThreadGetCameraZoom()
-	camPos := engine.MainThreadGetCameraPosition()
+	zoom := mgr.CameraMgr.GetCameraZoom()
+	camPos := engine.BridgeGetCameraPosition()
 	localPos := pos.Sub(camPos)
 	localPos = localPos.Mul(zoom.Divf(windowScale))
 
@@ -146,16 +146,15 @@ func (s *UiSay) formatMessage(msg string) string {
 
 // updateVisibility sets the visibility of all UI nodes based on style and direction
 func (s *UiSay) updateVisibility(isLeft bool, isThink bool) {
-	// Direct gdx calls to avoid callInMainThread deadlock when called from main thread (onUpdate)
-	engine.MainThreadUiSetVisible(s.left.vbox.GetId(), !isThink && isLeft)
-	engine.MainThreadUiSetVisible(s.right.vbox.GetId(), !isThink && !isLeft)
-	engine.MainThreadUiSetVisible(s.leftThink.vbox.GetId(), isThink && isLeft)
-	engine.MainThreadUiSetVisible(s.rightThink.vbox.GetId(), isThink && !isLeft)
+	mgr.UiMgr.SetVisible(s.left.vbox.GetId(), !isThink && isLeft)
+	mgr.UiMgr.SetVisible(s.right.vbox.GetId(), !isThink && !isLeft)
+	mgr.UiMgr.SetVisible(s.leftThink.vbox.GetId(), isThink && isLeft)
+	mgr.UiMgr.SetVisible(s.rightThink.vbox.GetId(), isThink && !isLeft)
 }
 
 // updateUI updates the scale, position, and text of the UI element
 func (s *UiSay) updateUI(position mathf.Vec2, scale mathf.Vec2, label engine.Object, text string) {
-	engine.MainThreadUiSetScale(s.GetId(), scale)
-	engine.MainThreadUiSetPosition(s.GetId(), WorldToUI(position, true))
-	engine.MainThreadUiSetText(label, text)
+	mgr.UiMgr.SetScale(s.GetId(), scale)
+	mgr.UiMgr.SetPosition(s.GetId(), WorldToUI(position))
+	mgr.UiMgr.SetText(label, text)
 }
