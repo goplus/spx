@@ -1,4 +1,4 @@
+/**/project
 /**/.gitignore
-!/.gitignore
 *.mod
 *.sum
