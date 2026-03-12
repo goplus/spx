@@ -1,43 +1,43 @@
-.vscode
-.gop
-.gocache
-.DS_Store
-sprite.txt
-game.txt
-gop.mod
-go.work
-go.json
-gop.json
-gop_autogen.go
-xgo_autogen.go
-_gsc
-_test
-haiyang/
-feijidazhan/
-.idea
+# Editors and local workspace
+/.vscode/
+/.idea/
 *.code-workspace
-*.wasm
-mv.sh
 
-# Binaries for programs and plugins
+# OS files
+.DS_Store
+
+# Local tool caches and generated workspace files
+/.gop/
+/.gocache/
+/_gsc/
+/_test/
+/gop.mod
+/go.work
+/go.json
+/gop.json
+/gop_autogen.go
+/xgo_autogen.go
+
+# Local scratch files
+/sprite.txt
+/game.txt
+/mv.sh
+/CLAUDE.md
+
+# Build outputs
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
-
-# Test binary, built with `go test -c`
+*.wasm
 *.test
-
-# Output of the go coverage tool, specifically when used with LiteIDE
 *.out
 
-# Dependency directories (remove the comment below to include it)
-# vendor/
+# Temp directories
+/**/.temp/
+/.tmp/
 
-/godot
-/bin
-/**/.temp
-/.tmp
-CLAUDE.md
-internal/gdengine/binding/native/_temp_output.h
+# Repo-local generated artifacts
+/bin/
+/godot/

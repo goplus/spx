@@ -426,12 +426,6 @@ func (pself *CmdTool) Clear() error {
 	if err := os.RemoveAll(path.Join(pself.TargetDir, ".temp")); err != nil {
 		return fmt.Errorf("failed to remove project directory: %w", err)
 	}
-	// Remove the gitignore file
-	gitignorePath := path.Join(pself.ProjectDir, "../.gitignore")
-	if err := os.Remove(gitignorePath); err != nil && !os.IsNotExist(err) {
-		// Only return an error if the file exists and couldn't be removed
-		return fmt.Errorf("failed to remove gitignore file: %w", err)
-	}
 	// Remove go.mod
 	if err := os.RemoveAll(path.Join(pself.TargetDir, "go.sum")); err != nil {
 		return fmt.Errorf("failed to remove project directory: %w", err)

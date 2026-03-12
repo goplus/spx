@@ -6,7 +6,6 @@ go.work.sum
 *library.gdextension
 
 # Directories
-/godot
 /builds
 /webtools
 /bin
@@ -15,5 +14,4 @@ go.work.sum
 
 # Files
 cmd/_debug_parsed_ast.json
-ffi/_temp_output.h
-ffi/_temp_output*.h
+gdengine/binding/native/_temp_output.h

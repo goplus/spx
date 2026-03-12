@@ -225,9 +225,6 @@ func (pself *CmdTool) exportWebCommon(mode string) error {
 	println("==> _exportWeb", dstPath)
 	// copy project files
 	util.CopyDir(pself.ProjectFS, "template/project", pself.ProjectDir, true)
-	dir := pself.TargetDir
-	util.SetupFile(false, filepath.Join(dir, ".gitignore"), pself.GitignoreTxt)
-	os.Rename(filepath.Join(dir, ".gitignore.txt"), filepath.Join(dir, ".gitignore"))
 
 	os.Rename(filepath.Join(dstPath, "godot.editor.html"), filepath.Join(dstPath, "index.html"))
 

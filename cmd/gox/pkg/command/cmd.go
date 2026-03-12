@@ -29,11 +29,10 @@ type CmdTool struct {
 	GoBinPath      string
 
 	// Resource files
-	ProjectFS    embed.FS // Embedded project filesystem
-	PlatformFS   embed.FS // Embedded platform filesystem
-	GitignoreTxt string   // Gitignore template content
-	RunSh        string   // Run script content
-	MainSh       string   // Main script content
+	ProjectFS  embed.FS // Embedded project filesystem
+	PlatformFS embed.FS // Embedded platform filesystem
+	RunSh      string   // Run script content
+	MainSh     string   // Main script content
 
 	// Build and runtime information
 	ServerPort int    // Server port for web operations

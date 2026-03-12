@@ -17,6 +17,7 @@
 /go.mod
 /go.sum
 /gdspx.gdextension
+/gdspx.gdextension.uid
 /main.go
 /main.tscn
 /project.godot
@@ -25,6 +26,5 @@
 /go
 
 # user specify ignores
-# ...
 /assets/**/*.import
 /runtime.gdextension.txt
