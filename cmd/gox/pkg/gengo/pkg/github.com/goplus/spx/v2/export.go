@@ -96,6 +96,7 @@ func init() {
 			"Key":                 reflect.TypeOf((*q.Key)(nil)).Elem(),
 			"PhysicsMode":         reflect.TypeOf((*q.PhysicsMode)(nil)).Elem(),
 			"Pos":                 reflect.TypeOf((*q.Pos)(nil)).Elem(),
+			"PropertyName":        reflect.TypeOf((*q.PropertyName)(nil)).Elem(),
 			"SoundName":           reflect.TypeOf((*q.SoundName)(nil)).Elem(),
 			"SpriteAnimationName": reflect.TypeOf((*q.SpriteAnimationName)(nil)).Elem(),
 			"SpriteCostumeName":   reflect.TypeOf((*q.SpriteCostumeName)(nil)).Elem(),
