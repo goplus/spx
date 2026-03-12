@@ -43,7 +43,7 @@ type animationWrapper struct {
 	loadOnce     sync.Once
 }
 
-func (aw *animationWrapper) ensureRegistered(animName string) {
+func (aw *animationWrapper) ensureRegistered(animName string, callerAni *coreproject.AniConfig) {
 	aw.loadOnce.Do(func() {
 		payloadJSON, maxBitmap, err := intani.BuildPayloadJSON(
 			intani.Config{
@@ -56,8 +56,12 @@ func (aw *animationWrapper) ensureRegistered(animName string) {
 		if err != nil {
 			panic(err)
 		}
-
 		aw.ani.AdaptAnimBitmapResolution = maxBitmap
+		// AdaptAnimBitmapResolution is computed during registration.
+		// Propagate it to the caller's config when it differs from the canonical aw.ani.
+		if callerAni != nil && callerAni != aw.ani {
+			callerAni.AdaptAnimBitmapResolution = aw.ani.AdaptAnimBitmapResolution
+		}
 		aw.engineMgr.ResMgr.CreateAnimation(
 			aw.spriteName,
 			animName,

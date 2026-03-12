@@ -258,8 +258,8 @@ func (a *animationComponent) playDefaultAnim() {
 		animName = a.shared.defaultAnimation
 	}
 
-	if _, ok := a.shared.animations[animName]; ok {
-		a.prepareAnimationPlayback(animName, a.shared.animations[animName])
+	if ani, ok := a.shared.animations[animName]; ok {
+		a.prepareAnimationPlayback(animName, ani)
 		a.engine().SpriteMgr.PlayAnim(syncSprite.GetId(), animName, speed, true, false)
 	} else {
 		a.sprite.goSetCostume(a.sprite.spriteState.DefaultCostumeIndex)
@@ -283,7 +283,7 @@ func (a *animationComponent) adaptAnimBitmapResolution(ani *coreproject.AniConfi
 }
 
 func (a *animationComponent) prepareAnimationPlayback(animName SpriteAnimationName, ani *coreproject.AniConfig) {
-	a.shared.animationWrappers[animName].ensureRegistered(animName)
+	a.shared.animationWrappers[animName].ensureRegistered(animName, ani)
 	a.adaptAnimBitmapResolution(ani)
 }
 
@@ -482,6 +482,10 @@ func (a *animationComponent) cleanupTween(info *animState, name SpriteAnimationN
 	}
 
 	a.stopAnimState(info)
+	if a.curTweenState != info {
+		return
+	}
+
 	a.curTweenState = nil
 	if name != a.shared.defaultAnimation && !ani.IsKeepOnStop {
 		a.playDefaultAnim()
