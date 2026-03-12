@@ -372,7 +372,7 @@ func (p *Coroutines) WaitNextFrame() {
 }
 
 func (p *Coroutines) WaitMainThread(call func()) {
-	if platform.IsWeb() {
+	if platform.IsWeb() || platform.IsMainThread() {
 		call()
 		return
 	}

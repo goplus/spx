@@ -20,12 +20,12 @@ func NewUiMeasure() *UiMeasure {
 	return panel
 }
 
-// !!Warning: this method was called in main thread
+// !!Warning: this method is called from the engine callback context
 func (pself *UiMeasure) OnStart() {
-	pself.container = engine.MainThreadBindUI[UiNode](pself.GetId(), "C")
-	pself.imageLine = engine.MainThreadBindUI[UiNode](pself.GetId(), "C/Line")
-	pself.labelContainer = engine.MainThreadBindUI[UiNode](pself.GetId(), "LC")
-	pself.labelValue = engine.MainThreadBindUI[UiNode](pself.GetId(), "LC/Label")
+	pself.container = engine.BridgeBindUI[UiNode](pself.GetId(), "C")
+	pself.imageLine = engine.BridgeBindUI[UiNode](pself.GetId(), "C/Line")
+	pself.labelContainer = engine.BridgeBindUI[UiNode](pself.GetId(), "LC")
+	pself.labelValue = engine.BridgeBindUI[UiNode](pself.GetId(), "LC/Label")
 }
 
 func (pself *UiMeasure) UpdateInfo(wpos Vec2, length, heading float64, name string, color Color) {
@@ -35,7 +35,7 @@ func (pself *UiMeasure) UpdateInfo(wpos Vec2, length, heading float64, name stri
 
 	rad := engine.DegToRad(heading - 90)
 	sc := engine.Sincos(rad).Mulf(length / 2)
-	pos := WorldToUI(wpos, false)
+	pos := WorldToUI(wpos)
 	labelPos := pos
 	pos = pos.Sub(NewVec2(sc.Y, sc.X))
 

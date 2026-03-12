@@ -15,9 +15,9 @@ func NewUiDebug() *UiDebug {
 	return panel
 }
 
-// !!Warning: this method was called in main thread
+// !!Warning: this method is called from the engine callback context
 func (pself *UiDebug) OnStart() {
-	pself.input = engine.MainThreadBindUI[UiNode](pself.GetId(), "Label")
+	pself.input = engine.BridgeBindUI[UiNode](pself.GetId(), "Label")
 }
 
 func (pself *UiDebug) Show(msg string) {

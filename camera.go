@@ -127,7 +127,7 @@ func (c *cameraImpl) SetXYpos(x float64, y float64) {
 
 func (c *cameraImpl) setXYposDirect(x float64, y float64) {
 	c.setDirtyFlag(true)
-	engine.MainThreadSetCameraPosition(mathf.NewVec2(x, y))
+	engine.BridgeSetCameraPosition(mathf.NewVec2(x, y))
 }
 
 func (c *cameraImpl) ChangeXYpos(x float64, y float64) {

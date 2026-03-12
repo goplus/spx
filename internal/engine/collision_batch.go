@@ -1,9 +1,5 @@
 package engine
 
-import (
-	gdx "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
-)
-
 // CollisionPair represents a pair of sprites to check for collision
 type CollisionPair struct {
 	SpriteA int64
@@ -82,9 +78,9 @@ func BatchCheckCollisions(buffer []float32, alphaThreshold float64, usePixelPerf
 	// This still helps by organizing the collision checks in one place
 	idx := 1
 	for i := 0; i < count; i++ {
-		spriteA := gdx.Object(buffer[idx])
-		spriteB := gdx.Object(buffer[idx+1])
-		boolResults[i] = gdx.SpriteMgr.CheckCollisionWithSprite(spriteA, spriteB, alphaThreshold, usePixelPerfect)
+		spriteA := Object(buffer[idx])
+		spriteB := Object(buffer[idx+1])
+		boolResults[i] = Managers().SpriteMgr.CheckCollisionWithSprite(spriteA, spriteB, alphaThreshold, usePixelPerfect)
 		idx += 2
 	}
 

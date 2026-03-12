@@ -1,5 +1,7 @@
 package enginewrap
 
+import "github.com/goplus/spx/v2/internal/engine/platform"
+
 var mainCallback func(call func())
 
 func Init(call func(f func())) {
@@ -7,6 +9,13 @@ func Init(call func(f func())) {
 }
 
 func callInMainThread(call func()) {
+	if platform.IsMainThread() {
+		call()
+		return
+	}
+	if mainCallback == nil {
+		panic("enginewrap: Init must be called before using manager methods off the main thread")
+	}
 	mainCallback(call)
 }
 

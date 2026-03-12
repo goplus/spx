@@ -1,9 +1,5 @@
 package engine
 
-import (
-	gdx "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
-)
-
 const (
 	// Batch sync constants
 	SyncFieldsPerSprite     = 9  // id, x, y, rotation, scaleX, scaleY, offsetX, offsetY, visibility
@@ -138,7 +134,7 @@ func SyncBatchUpdateSprites(buffer []float32) {
 
 	// Send entire buffer to Godot in a single FFI call
 	// The buffer is processed on the C++ side for optimal performance
-	gdx.SpriteMgr.BatchUpdateTransforms(buffer)
+	Managers().SpriteMgr.BatchUpdateTransforms(buffer)
 }
 
 // SyncBatchGetPositions retrieves positions for multiple sprites
@@ -148,7 +144,7 @@ func SyncBatchGetPositions(spriteIDs []int64) []float32 {
 		return nil
 	}
 
-	positions := gdx.SpriteMgr.BatchRetrievePositions(spriteIDs)
+	positions := Managers().SpriteMgr.BatchRetrievePositions(spriteIDs)
 	f32Pos, _ := positions.([]float32)
 	return f32Pos
 }
@@ -262,5 +258,5 @@ func SyncBatchUpdateVisuals(buffer []float32) {
 	if len(buffer) == 0 {
 		return
 	}
-	gdx.SpriteMgr.BatchUpdateVisuals(buffer)
+	Managers().SpriteMgr.BatchUpdateVisuals(buffer)
 }

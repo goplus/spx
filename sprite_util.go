@@ -282,7 +282,7 @@ func getCostumeBoundByAlpha(p *SpriteImpl, isSync bool) (mathf.Vec2, mathf.Vec2)
 		} else {
 			assetPath := engine.ToAssetPath(cs.path)
 			if isSync {
-				rect = engine.MainThreadGetBoundFromAlpha(assetPath)
+				rect = engine.Managers().ResMgr.GetBoundFromAlpha(assetPath)
 			} else {
 				rect = p.engine().ResMgr.GetBoundFromAlpha(assetPath)
 			}

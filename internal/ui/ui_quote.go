@@ -20,24 +20,24 @@ func NewUiQuote() *UiQuote {
 	return panel
 }
 
-// !!Warning: this method was called in main thread
+// !!Warning: this method is called from the engine callback context
 func (pself *UiQuote) OnStart() {
-	pself.container = engine.MainThreadBindUI[UiNode](pself.GetId(), "C")
-	pself.imageL = engine.MainThreadBindUI[UiNode](pself.GetId(), "C/ImageL")
-	pself.imageR = engine.MainThreadBindUI[UiNode](pself.GetId(), "C/ImageR")
-	pself.labelDes = engine.MainThreadBindUI[UiNode](pself.GetId(), "C/LabelDes")
-	pself.labelMsg = engine.MainThreadBindUI[UiNode](pself.GetId(), "C/LabelMsg")
+	pself.container = engine.BridgeBindUI[UiNode](pself.GetId(), "C")
+	pself.imageL = engine.BridgeBindUI[UiNode](pself.GetId(), "C/ImageL")
+	pself.imageR = engine.BridgeBindUI[UiNode](pself.GetId(), "C/ImageR")
+	pself.labelDes = engine.BridgeBindUI[UiNode](pself.GetId(), "C/LabelDes")
+	pself.labelMsg = engine.BridgeBindUI[UiNode](pself.GetId(), "C/LabelMsg")
 }
 
 func (pself *UiQuote) SetText(pos mathf.Vec2, size mathf.Vec2, msg, description string) {
-	engine.MainThreadUiSetScale(pself.GetId(), mathf.NewVec2(windowScale, windowScale))
-	camPos := engine.MainThreadGetCameraPosition()
+	mgr.UiMgr.SetScale(pself.GetId(), mathf.NewVec2(windowScale, windowScale))
+	camPos := engine.BridgeGetCameraPosition()
 	pos = pos.Sub(camPos)
-	zoom := engine.MainThreadGetCameraZoom()
+	zoom := mgr.CameraMgr.GetCameraZoom()
 	pos = pos.Mul(zoom.Divf(windowScale))
 	targetPos := pos.Sub(mathf.NewVec2(size.X, -size.Y))
-	engine.MainThreadUiSetGlobalPosition(pself.container.GetId(), WorldToUI(targetPos, true))
-	engine.MainThreadUiSetSize(pself.container.GetId(), size.Mulf(2))
-	engine.MainThreadUiSetText(pself.labelMsg.GetId(), msg)
-	engine.MainThreadUiSetText(pself.labelDes.GetId(), description)
+	mgr.UiMgr.SetGlobalPosition(pself.container.GetId(), WorldToUI(targetPos))
+	mgr.UiMgr.SetSize(pself.container.GetId(), size.Mulf(2))
+	mgr.UiMgr.SetText(pself.labelMsg.GetId(), msg)
+	mgr.UiMgr.SetText(pself.labelDes.GetId(), description)
 }

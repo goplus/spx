@@ -261,6 +261,7 @@ func (p *Game) initGame(sprites []Sprite) *Game {
 	p.initRuntimeState()
 	p.scriptEventBindings.init(&p.scriptEvents, p)
 	p.engineMgr = engineManagers{}
+	engine.SetManagers(&p.engineMgr)
 	ui.Init(&p.engineMgr)
 	p.sprs = make(map[string]Sprite)
 	p.sounds = make(map[string]sound)
