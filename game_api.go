@@ -22,7 +22,7 @@ import (
 	"math/rand"
 
 	"github.com/goplus/spbase/mathf"
-	coreevnet "github.com/goplus/spx/v2/internal/core/event"
+	coreevent "github.com/goplus/spx/v2/internal/core/event"
 	coreproject "github.com/goplus/spx/v2/internal/core/project"
 	"github.com/goplus/spx/v2/internal/engine"
 	spxlog "github.com/goplus/spx/v2/internal/log"
@@ -260,26 +260,29 @@ func (p *Game) ClearGraphicEffects() {
 	p.baseObj.clearGraphicEffects()
 }
 
-func (p *Game) doBroadcast(msg coreevnet.MsgName, data any, wait bool) {
+// MsgName represents a message name for broadcasting events.
+type MsgName = coreevent.MsgName
+
+func (p *Game) doBroadcast(msg MsgName, data any, wait bool) {
 	if isDebugInstrEnabled() {
 		spxlog.Debug("Broadcast: msg=%s, wait=%v", msg, wait)
 	}
 	p.scriptEvents.doWhenIReceive(msg, data, wait)
 }
 
-func (p *Game) Broadcast__0(msg coreevnet.MsgName) {
+func (p *Game) Broadcast__0(msg MsgName) {
 	p.doBroadcast(msg, nil, false)
 }
 
-func (p *Game) Broadcast__1(msg coreevnet.MsgName, data any) {
+func (p *Game) Broadcast__1(msg MsgName, data any) {
 	p.doBroadcast(msg, data, false)
 }
 
-func (p *Game) BroadcastAndWait__0(msg coreevnet.MsgName) {
+func (p *Game) BroadcastAndWait__0(msg MsgName) {
 	p.doBroadcast(msg, nil, true)
 }
 
-func (p *Game) BroadcastAndWait__1(msg coreevnet.MsgName, data any) {
+func (p *Game) BroadcastAndWait__1(msg MsgName, data any) {
 	p.doBroadcast(msg, data, true)
 }
 
