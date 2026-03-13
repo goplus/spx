@@ -201,11 +201,11 @@ func (p *scriptEventBindings) OnKey__2(keys []Key, onKey func()) {
 	p.OnKey__1(keys, coreevent.Ignore1[Key](onKey))
 }
 
-func (p *scriptEventBindings) OnMsg__0(onMsg func(msg string, data any)) {
+func (p *scriptEventBindings) OnMsg__0(onMsg func(msg MsgName, data any)) {
 	p.scriptEventRegistry.AddIReceive(coreevent.NewSink(p.pthis, onMsg))
 }
 
-func (p *scriptEventBindings) OnMsg__1(msg string, onMsg func()) {
+func (p *scriptEventBindings) OnMsg__1(msg MsgName, onMsg func()) {
 	p.scriptEventRegistry.AddIReceive(coreevent.NewSink(
 		p.pthis,
 		coreevent.TapVoid2(onMsg, coreevent.If2(isDebugEventEnabled, func(msg string, data any) {
