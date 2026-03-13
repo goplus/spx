@@ -49,7 +49,3 @@ func gdspxDispatch(this js.Value, args []js.Value) any {
 	}
 	return nil
 }
-
-func registerCallbackDispatcher() {
-	js.Global().Set("gdspx_dispatch", js.FuncOf(gdspxDispatch))
-}
