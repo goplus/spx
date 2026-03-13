@@ -25,6 +25,18 @@ const (
 	GdArrayTypeGdObj   = 6
 )
 
+const (
+	fastGdArrayFlagKey  = "__gdspx_fast_array"
+	fastGdArrayTypeKey  = "type"
+	fastGdArrayCountKey = "count"
+	fastGdArrayDataKey  = "data"
+)
+
+var (
+	jsObject     = js.Global().Get("Object")
+	jsUint8Array = js.Global().Get("Uint8Array")
+)
+
 type GdArrayInfo struct {
 	Size int32
 	Type int32
@@ -165,7 +177,7 @@ func serializeInt64Array(data []int64) ([]byte, error) {
 	if len(data) == 0 {
 		return []byte{}, nil
 	}
-	return unsafe.Slice((*byte)(unsafe.Pointer(unsafe.SliceData(data))), len(data)*8), nil
+	return bytesFromInt64Slice(data), nil
 }
 
 func deserializeInt64Array(data []byte, size int32) ([]int64, error) {
@@ -186,7 +198,7 @@ func serializeFloatArray(data []float32) ([]byte, error) {
 	if len(data) == 0 {
 		return []byte{}, nil
 	}
-	return unsafe.Slice((*byte)(unsafe.Pointer(unsafe.SliceData(data))), len(data)*4), nil
+	return bytesFromFloat32Slice(data), nil
 }
 
 func deserializeFloatArray(data []byte, size int32) ([]float32, error) {
@@ -295,7 +307,7 @@ func jsValue2Go(value js.Value) any {
 	switch value.Type() {
 	case js.TypeObject:
 		obj := make(map[string]any)
-		keys := js.Global().Get("Object").Call("keys", value)
+		keys := jsObject.Call("keys", value)
 		for i := 0; i < keys.Length(); i++ {
 			key := keys.Index(i).String()
 			obj[key] = jsValue2Go(value.Get(key)) // Recursively process nested objects
@@ -327,7 +339,7 @@ func JsFromGdObj(val Object) js.Value {
 }
 
 func JsFromGdInt(val int64) js.Value {
-	vec2Js := js.Global().Get("Object").New()
+	vec2Js := jsObject.New()
 
 	low := uint32(val & 0xFFFFFFFF)
 	high := uint32((val >> 32) & 0xFFFFFFFF)
@@ -357,14 +369,14 @@ func JsFromGdString(object string) js.Value {
 }
 
 func JsFromGdVec2(vec Vec2) js.Value {
-	vec2Js := js.Global().Get("Object").New()
+	vec2Js := jsObject.New()
 	vec2Js.Set("x", float32(vec.X))
 	vec2Js.Set("y", float32(vec.Y))
 	return vec2Js
 }
 
 func JsFromGdVec3(vec Vec3) js.Value {
-	vec3Js := js.Global().Get("Object").New()
+	vec3Js := jsObject.New()
 	vec3Js.Set("x", float32(vec.X))
 	vec3Js.Set("y", float32(vec.Y))
 	vec3Js.Set("z", float32(vec.Z))
@@ -372,7 +384,7 @@ func JsFromGdVec3(vec Vec3) js.Value {
 }
 
 func JsFromGdVec4(vec Vec4) js.Value {
-	vec4Js := js.Global().Get("Object").New()
+	vec4Js := jsObject.New()
 	vec4Js.Set("x", float32(vec.X))
 	vec4Js.Set("y", float32(vec.Y))
 	vec4Js.Set("z", float32(vec.Z))
@@ -381,7 +393,7 @@ func JsFromGdVec4(vec Vec4) js.Value {
 }
 
 func JsFromGdColor(color Color) js.Value {
-	colorJs := js.Global().Get("Object").New()
+	colorJs := jsObject.New()
 	colorJs.Set("r", float32(color.R))
 	colorJs.Set("g", float32(color.G))
 	colorJs.Set("b", float32(color.B))
@@ -390,7 +402,7 @@ func JsFromGdColor(color Color) js.Value {
 }
 
 func JsFromGdRect2(rect Rect2) js.Value {
-	rectJs := js.Global().Get("Object").New()
+	rectJs := jsObject.New()
 	rectJs.Set("position", JsFromGdVec2(rect.Position))
 	rectJs.Set("size", JsFromGdVec2(rect.Size))
 	return rectJs
@@ -473,9 +485,49 @@ func JsToGdInt64(val js.Value) int64 {
 	return int64(val.Int())
 }
 
+func bytesFromInt64Slice(data []int64) []byte {
+	return unsafe.Slice((*byte)(unsafe.Pointer(unsafe.SliceData(data))), len(data)*8)
+}
+
+func bytesFromUint64Slice(data []uint64) []byte {
+	return unsafe.Slice((*byte)(unsafe.Pointer(unsafe.SliceData(data))), len(data)*8)
+}
+
+func bytesFromFloat32Slice(data []float32) []byte {
+	return unsafe.Slice((*byte)(unsafe.Pointer(unsafe.SliceData(data))), len(data)*4)
+}
+
+func newFastGdArrayValue(arrayType int32, count int, data []byte) js.Value {
+	jsBytes := jsUint8Array.New(len(data))
+	js.CopyBytesToJS(jsBytes, data)
+	fastArray := jsObject.New()
+	fastArray.Set(fastGdArrayFlagKey, true)
+	fastArray.Set(fastGdArrayTypeKey, arrayType)
+	fastArray.Set(fastGdArrayCountKey, count)
+	fastArray.Set(fastGdArrayDataKey, jsBytes)
+	return fastArray
+}
+
+func arrayToFastGdArrayValue(arrayPtr Array) (js.Value, bool) {
+	switch data := arrayPtr.(type) {
+	case []float32:
+		return newFastGdArrayValue(GdArrayTypeFloat, len(data), bytesFromFloat32Slice(data)), true
+	case []int64:
+		return newFastGdArrayValue(GdArrayTypeInt64, len(data), bytesFromInt64Slice(data)), true
+	case []uint64:
+		return newFastGdArrayValue(GdArrayTypeGdObj, len(data), bytesFromUint64Slice(data)), true
+	default:
+		return js.Value{}, false
+	}
+}
+
 func JsFromGdArray(arrayPtr Array) js.Value {
 	if arrayPtr == nil {
 		panic("JsFromGdArray doesn't support nil array")
+	}
+
+	if fastValue, ok := arrayToFastGdArrayValue(arrayPtr); ok {
+		return fastValue
 	}
 
 	info := arrayToGdArrayInfo(arrayPtr)
@@ -488,7 +540,7 @@ func JsFromGdArray(arrayPtr Array) js.Value {
 		return js.ValueOf(nil)
 	}
 
-	jsBytes := js.Global().Get("Uint8Array").New(len(serializedBytes))
+	jsBytes := jsUint8Array.New(len(serializedBytes))
 	js.CopyBytesToJS(jsBytes, serializedBytes)
 	return jsBytes
 }

@@ -126,7 +126,9 @@ func (b *SpriteSyncBuffer) Serialize() []float32 {
 		idx++
 	}
 
-	return result
+	// The returned view is backed by reusable scratch storage and remains valid
+	// only until the next buffer mutation.
+	return result[:totalSize:totalSize]
 }
 
 // SyncBatchUpdateSprites sends batch sprite updates to Godot via a single FFI call
@@ -257,7 +259,9 @@ func (b *VisualSyncBuffer) Serialize() []float32 {
 		idx += VisualFieldsPerSprite
 	}
 
-	return result
+	// The returned view is backed by reusable scratch storage and remains valid
+	// only until the next buffer mutation.
+	return result[:totalSize:totalSize]
 }
 
 // SyncBatchUpdateVisuals sends batch visual updates to Godot via a single FFI call
@@ -270,7 +274,14 @@ func SyncBatchUpdateVisuals(buffer []float32) {
 
 func ensureFloat32BufferSize(buffer []float32, size int) []float32 {
 	if cap(buffer) < size {
-		return make([]float32, size)
+		newCap := size * 2
+		if newCap < size || newCap < 16 {
+			newCap = size
+			if newCap < 16 {
+				newCap = 16
+			}
+		}
+		return make([]float32, size, newCap)
 	}
 	return buffer[:size]
 }

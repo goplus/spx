@@ -26,6 +26,9 @@ func TestSpriteSyncBufferSerializeReusesScratch(t *testing.T) {
 	if got, want := len(second), 2+SyncFieldsPerSprite; got != want {
 		t.Fatalf("Serialize len = %d, want %d", got, want)
 	}
+	if got, want := cap(second), len(second); got != want {
+		t.Fatalf("Serialize cap = %d, want %d", got, want)
+	}
 	if got, want := second[0], float32(1); got != want {
 		t.Fatalf("header updateCount = %v, want %v", got, want)
 	}
@@ -60,10 +63,23 @@ func TestVisualSyncBufferSerializeReusesScratch(t *testing.T) {
 	if got, want := len(second), 1+VisualFieldsPerSprite; got != want {
 		t.Fatalf("Serialize len = %d, want %d", got, want)
 	}
+	if got, want := cap(second), len(second); got != want {
+		t.Fatalf("Serialize cap = %d, want %d", got, want)
+	}
 	if got, want := second[0], float32(1); got != want {
 		t.Fatalf("header count = %v, want %v", got, want)
 	}
 	if got, want := second[1], float32(8); got != want {
 		t.Fatalf("sprite id = %v, want %v", got, want)
+	}
+}
+
+func TestEnsureFloat32BufferSizeAddsHeadroom(t *testing.T) {
+	buf := ensureFloat32BufferSize(nil, 17)
+	if got, want := len(buf), 17; got != want {
+		t.Fatalf("len(buf) = %d, want %d", got, want)
+	}
+	if got := cap(buf); got <= len(buf) {
+		t.Fatalf("cap(buf) = %d, want > %d", got, len(buf))
 	}
 }
