@@ -21,15 +21,18 @@ type SpriteSyncData struct {
 
 // SpriteSyncBuffer collects sync data for batch processing
 type SpriteSyncBuffer struct {
-	data      []SpriteSyncData
-	deleteIDs []int64
+	data       []SpriteSyncData
+	deleteIDs  []int64
+	serialized []float32
 }
 
 // NewSpriteSyncBuffer creates a new sync buffer
 func NewSpriteSyncBuffer(capacity int) *SpriteSyncBuffer {
+	serializedCapacity := 2 + capacity*SyncFieldsPerSprite + DefaultDeleteBufferSize
 	return &SpriteSyncBuffer{
-		data:      make([]SpriteSyncData, 0, capacity),
-		deleteIDs: make([]int64, 0, DefaultDeleteBufferSize),
+		data:       make([]SpriteSyncData, 0, capacity),
+		deleteIDs:  make([]int64, 0, DefaultDeleteBufferSize),
+		serialized: make([]float32, 0, serializedCapacity),
 	}
 }
 
@@ -94,7 +97,8 @@ func (b *SpriteSyncBuffer) Serialize() []float32 {
 
 	// Calculate total size: header(2) + updates(updateCount * 9) + deletes(deleteCount * 1)
 	totalSize := 2 + updateCount*SyncFieldsPerSprite + deleteCount
-	result := make([]float32, totalSize)
+	b.serialized = ensureFloat32BufferSize(b.serialized, totalSize)
+	result := b.serialized
 
 	// Write header
 	result[0] = float32(updateCount)
@@ -122,7 +126,9 @@ func (b *SpriteSyncBuffer) Serialize() []float32 {
 		idx++
 	}
 
-	return result
+	// The returned view is backed by reusable scratch storage and remains valid
+	// only until the next buffer mutation.
+	return result[:totalSize:totalSize]
 }
 
 // SyncBatchUpdateSprites sends batch sprite updates to Godot via a single FFI call
@@ -174,13 +180,15 @@ type VisualSyncData struct {
 
 // VisualSyncBuffer collects visual sync data for batch processing
 type VisualSyncBuffer struct {
-	data []VisualSyncData
+	data       []VisualSyncData
+	serialized []float32
 }
 
 // NewVisualSyncBuffer creates a new visual sync buffer
 func NewVisualSyncBuffer(capacity int) *VisualSyncBuffer {
 	return &VisualSyncBuffer{
-		data: make([]VisualSyncData, 0, capacity),
+		data:       make([]VisualSyncData, 0, capacity),
+		serialized: make([]float32, 0, 1+capacity*VisualFieldsPerSprite),
 	}
 }
 
@@ -232,7 +240,8 @@ func (b *VisualSyncBuffer) Serialize() []float32 {
 	}
 
 	totalSize := 1 + count*VisualFieldsPerSprite
-	result := make([]float32, totalSize)
+	b.serialized = ensureFloat32BufferSize(b.serialized, totalSize)
+	result := b.serialized
 
 	result[0] = float32(count)
 	idx := 1
@@ -250,7 +259,9 @@ func (b *VisualSyncBuffer) Serialize() []float32 {
 		idx += VisualFieldsPerSprite
 	}
 
-	return result
+	// The returned view is backed by reusable scratch storage and remains valid
+	// only until the next buffer mutation.
+	return result[:totalSize:totalSize]
 }
 
 // SyncBatchUpdateVisuals sends batch visual updates to Godot via a single FFI call
@@ -259,4 +270,18 @@ func SyncBatchUpdateVisuals(buffer []float32) {
 		return
 	}
 	Managers().SpriteMgr.BatchUpdateVisuals(buffer)
+}
+
+func ensureFloat32BufferSize(buffer []float32, size int) []float32 {
+	if cap(buffer) < size {
+		newCap := size * 2
+		if newCap < size || newCap < 16 {
+			newCap = size
+			if newCap < 16 {
+				newCap = 16
+			}
+		}
+		return make([]float32, size, newCap)
+	}
+	return buffer[:size]
 }
