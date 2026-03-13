@@ -49,6 +49,14 @@ COMMON_ARGS='
 EXTRA_OPT_ARGS='disable_3d=true'
 
 BUILD_LOCK_DIR=""
+ACTIVE_BUILD_PID=""
+ACTIVE_BUILD_PGID=""
+
+get_lock_dir_mtime() {
+    local lock_dir="$1"
+
+    stat -f '%m' "$lock_dir" 2>/dev/null || stat -c '%Y' "$lock_dir" 2>/dev/null
+}
 
 remove_engine_build_lock_dir() {
     local lock_dir="$1"
@@ -61,9 +69,44 @@ remove_engine_build_lock_dir() {
         return
     fi
     if [ -d "$lock_dir" ]; then
-        rm -f "$lock_dir/pid"
+        find "$lock_dir" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} + 2>/dev/null || true
         rmdir "$lock_dir" 2>/dev/null || true
     fi
+}
+
+clear_active_build_state() {
+    ACTIVE_BUILD_PID=""
+    ACTIVE_BUILD_PGID=""
+}
+
+terminate_active_build() {
+    local target_pid="$ACTIVE_BUILD_PID"
+    local target_pgid="$ACTIVE_BUILD_PGID"
+
+    clear_active_build_state
+
+    if [ -n "$target_pid" ] && kill -0 "$target_pid" 2>/dev/null; then
+        if [ -n "$target_pgid" ]; then
+            kill -TERM -- "-$target_pgid" 2>/dev/null || true
+        else
+            kill -TERM "$target_pid" 2>/dev/null || true
+        fi
+
+        sleep 1
+
+        if kill -0 "$target_pid" 2>/dev/null; then
+            if [ -n "$target_pgid" ]; then
+                kill -KILL -- "-$target_pgid" 2>/dev/null || true
+            else
+                kill -KILL "$target_pid" 2>/dev/null || true
+            fi
+        fi
+    fi
+}
+
+cleanup_engine_build() {
+    terminate_active_build
+    release_engine_build_lock
 }
 
 release_engine_build_lock() {
@@ -76,13 +119,26 @@ release_engine_build_lock() {
 handle_engine_build_lock_signal() {
     local exit_code="$1"
 
-    release_engine_build_lock
+    cleanup_engine_build
     exit "$exit_code"
 }
 
-trap release_engine_build_lock EXIT
+trap cleanup_engine_build EXIT
 trap 'handle_engine_build_lock_signal 130' INT
 trap 'handle_engine_build_lock_signal 143' TERM
+trap 'handle_engine_build_lock_signal 129' HUP
+
+run_tracked_command() {
+    "$@" &
+    ACTIVE_BUILD_PID=$!
+    ACTIVE_BUILD_PGID=$(ps -o pgid= -p "$ACTIVE_BUILD_PID" 2>/dev/null | tr -d '[:space:]')
+
+    wait "$ACTIVE_BUILD_PID"
+    local status=$?
+
+    clear_active_build_state
+    return "$status"
+}
 
 acquire_engine_build_lock() {
     local engine_dir="$1"
@@ -98,8 +154,23 @@ acquire_engine_build_lock() {
         if [ -f "$lock_dir/pid" ]; then
             local owner_pid
             owner_pid=$(cat "$lock_dir/pid" 2>/dev/null)
-            if [ -n "$owner_pid" ] && ! kill -0 "$owner_pid" 2>/dev/null; then
+            if [ -z "$owner_pid" ] || ! [[ "$owner_pid" =~ ^[0-9]+$ ]]; then
+                echo "Removing stale build lock (invalid pid metadata)..."
+                remove_engine_build_lock_dir "$lock_dir"
+                continue
+            fi
+            if ! kill -0 "$owner_pid" 2>/dev/null; then
                 echo "Removing stale build lock (pid $owner_pid is dead)..."
+                remove_engine_build_lock_dir "$lock_dir"
+                continue
+            fi
+        else
+            local lock_mtime
+            local now
+            lock_mtime=$(get_lock_dir_mtime "$lock_dir")
+            now=$(date +%s)
+            if [ -n "$lock_mtime" ] && [ $((now - lock_mtime)) -ge 5 ]; then
+                echo "Removing stale build lock (missing pid metadata)..."
                 remove_engine_build_lock_dir "$lock_dir"
                 continue
             fi
@@ -133,24 +204,24 @@ build_template() {
     echo "Destination binary path: $dstBinPath"
     local target_build_str="template_release"
     if [ "$platform" = "linux" ]; then
-        scons platform=linuxbsd target=$target_build_str $COMMON_ARGS
+        run_tracked_command scons platform=linuxbsd target=$target_build_str $COMMON_ARGS
         cp "bin/godot.linuxbsd.$target_build_str.$ARCH" "$dstBinPath"
 
     elif [ "$platform" = "windows" ]; then
-        scons platform=windows target=$target_build_str $COMMON_ARGS
+        run_tracked_command scons platform=windows target=$target_build_str $COMMON_ARGS
         cp "bin/godot.windows.$target_build_str.$ARCH.exe" "$dstBinPath.exe"
 
     elif [ "$platform" = "macos" ]; then
-        scons platform=macos target=$target_build_str $COMMON_ARGS
+        run_tracked_command scons platform=macos target=$target_build_str $COMMON_ARGS
         cp "bin/godot.macos.$target_build_str.$ARCH" "$dstBinPath"
 
     elif [ "$platform" = "ios" ]; then
-        scons $COMMON_ARGS platform=ios vulkan=True target=template_debug ios_simulator=yes arch=arm64 
-        scons $COMMON_ARGS platform=ios vulkan=True target=template_debug ios_simulator=yes arch=x86_64
-        scons $COMMON_ARGS platform=ios vulkan=True target=template_release ios_simulator=yes arch=arm64 
-        scons $COMMON_ARGS platform=ios vulkan=True target=template_release ios_simulator=yes arch=x86_64 generate_bundle=yes
-        scons $COMMON_ARGS platform=ios vulkan=True target=template_debug ios_simulator=no
-        scons $COMMON_ARGS platform=ios vulkan=True target=template_release ios_simulator=no generate_bundle=yes 
+        run_tracked_command scons $COMMON_ARGS platform=ios vulkan=True target=template_debug ios_simulator=yes arch=arm64
+        run_tracked_command scons $COMMON_ARGS platform=ios vulkan=True target=template_debug ios_simulator=yes arch=x86_64
+        run_tracked_command scons $COMMON_ARGS platform=ios vulkan=True target=template_release ios_simulator=yes arch=arm64
+        run_tracked_command scons $COMMON_ARGS platform=ios vulkan=True target=template_release ios_simulator=yes arch=x86_64 generate_bundle=yes
+        run_tracked_command scons $COMMON_ARGS platform=ios vulkan=True target=template_debug ios_simulator=no
+        run_tracked_command scons $COMMON_ARGS platform=ios vulkan=True target=template_release ios_simulator=no generate_bundle=yes
 
         cp -f bin/godot_ios.zip "$template_dir/ios.zip"
 
@@ -158,13 +229,13 @@ build_template() {
         # Ensure JDK 17 is installed for Android builds
         ensure_jdk
         cd "$engine_dir" || exit
-        scons $COMMON_ARGS platform=android target=template_debug arch=arm32
-        scons $COMMON_ARGS platform=android target=template_debug arch=arm64
-        scons $COMMON_ARGS platform=android target=template_release arch=arm32
-        scons $COMMON_ARGS platform=android target=template_release arch=arm64
+        run_tracked_command scons $COMMON_ARGS platform=android target=template_debug arch=arm32
+        run_tracked_command scons $COMMON_ARGS platform=android target=template_debug arch=arm64
+        run_tracked_command scons $COMMON_ARGS platform=android target=template_release arch=arm32
+        run_tracked_command scons $COMMON_ARGS platform=android target=template_release arch=arm64
         cd platform/android/java || exit
         # On Linux and macOS
-        ./gradlew generateGodotTemplates
+        run_tracked_command ./gradlew generateGodotTemplates
 
         cd "$engine_dir" || exit
         cp -f bin/android*.apk "$template_dir/"
@@ -194,7 +265,7 @@ build_template() {
         fi
 
         echo "scons platform=web target=template_release $COMMON_ARGS $EXTRA_OPT_ARGS $WEB_ARGS"
-        scons platform=web target=template_release $COMMON_ARGS $EXTRA_OPT_ARGS $WEB_ARGS
+        run_tracked_command scons platform=web target=template_release $COMMON_ARGS $EXTRA_OPT_ARGS $WEB_ARGS
         echo "Wait zip file to finished ..."
         sleep 1
         cp "bin/godot.web.template_release.wasm32$thread_flags.zip" "bin/web_dlink_debug.zip"
@@ -528,9 +599,9 @@ build_editor(){
     
     echo scons target=editor dev_build=yes $COMMON_ARGS
     if [ "$OS" = "Windows_NT" ]; then
-        scons target=editor dev_build=yes $COMMON_ARGS vsproj=yes 
+        run_tracked_command scons target=editor dev_build=yes $COMMON_ARGS vsproj=yes 
     else
-        scons target=editor dev_build=yes $COMMON_ARGS
+        run_tracked_command scons target=editor dev_build=yes $COMMON_ARGS
     fi
     
     dstBinPath="$GOPATH/bin/gdspx$VERSION"
