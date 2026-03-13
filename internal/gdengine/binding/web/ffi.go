@@ -10,14 +10,15 @@ import (
 )
 
 var (
-	callbacks     engine.CallbackInfo
-	hasInitEngine bool
-	exitChan      chan struct{}
+	callbacks                engine.CallbackInfo
+	hasInitEngine            bool
+	exitChan                 chan struct{}
+	goWasmInitCallbackHandle js.Func
+	callbackDispatcherHandle js.Func
 )
 
 func Link() bool {
-	js.Global().Set("go_wasm_init", js.FuncOf(goWasmInit))
-	registerCallbackDispatcher()
+	registerWebGlobals()
 	API.resolveAPIFunctions()
 	return !hasInitEngine
 }
@@ -50,10 +51,24 @@ func resolveJSFunc(funcName string) js.Value {
 	return val
 }
 
+func registerWebGlobals() {
+	if goWasmInitCallbackHandle.Type() == js.TypeUndefined {
+		goWasmInitCallbackHandle = js.FuncOf(goWasmInit)
+		js.Global().Set("go_wasm_init", goWasmInitCallbackHandle)
+	}
+	registerCallbackDispatcher()
+}
+
+func registerCallbackDispatcher() {
+	if callbackDispatcherHandle.Type() == js.TypeUndefined {
+		callbackDispatcherHandle = js.FuncOf(gdspxDispatch)
+		js.Global().Set("gdspx_dispatch", callbackDispatcherHandle)
+	}
+}
+
 // goWasmInit is only called in worker mode.
 func goWasmInit(this js.Value, args []js.Value) any {
 	spxlog.Info("Go wasm init success!")
 	hasInitEngine = true
-	registerCallbackDispatcher()
 	return js.ValueOf(nil)
 }
