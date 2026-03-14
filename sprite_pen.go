@@ -16,15 +16,9 @@
 
 package spx
 
-// ======================== Pen Component ========================
-// This file contains pen-related functionality for sprites,
-// including pen drawing, color control, and size management.
-// All methods proxy to the pen component implementation.
-
 // -----------------------------------------------------------------------------
-// Pen Color Parameter Types
+// Color
 // -----------------------------------------------------------------------------
-
 type PenColorParam int
 
 const (
@@ -35,9 +29,8 @@ const (
 )
 
 // -----------------------------------------------------------------------------
-// Pen Control
+// Pen
 // -----------------------------------------------------------------------------
-
 func (p *SpriteImpl) PenUp() {
 	p.pen().PenUp()
 }
@@ -51,9 +44,8 @@ func (p *SpriteImpl) Stamp() {
 }
 
 // -----------------------------------------------------------------------------
-// Pen Color Control
+// Color Control
 // -----------------------------------------------------------------------------
-
 func (p *SpriteImpl) SetPenColor__0(color Color) {
 	p.pen().SetPenColor(color)
 }
@@ -67,9 +59,8 @@ func (p *SpriteImpl) ChangePenColor(kind PenColorParam, delta float64) {
 }
 
 // -----------------------------------------------------------------------------
-// Pen Size Control
+// Size
 // -----------------------------------------------------------------------------
-
 func (p *SpriteImpl) SetPenSize(size float64) {
 	p.pen().SetPenSize(size)
 }
@@ -79,9 +70,8 @@ func (p *SpriteImpl) ChangePenSize(delta float64) {
 }
 
 // -----------------------------------------------------------------------------
-// Internal Pen Management (used by other components)
+// Internals
 // -----------------------------------------------------------------------------
-
 func (p *SpriteImpl) movePen(x, y float64) {
 	p.pen().movePen(x, y)
 }

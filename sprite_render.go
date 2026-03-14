@@ -20,10 +20,9 @@ import (
 	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
-// ============================================================================
-// Visibility Methods
-// ============================================================================
-
+// -----------------------------------------------------------------------------
+// Visibility
+// -----------------------------------------------------------------------------
 func (p *SpriteImpl) setVisible(visible bool) {
 	if isDebugInstrEnabled() {
 		spxlog.Debug("%s visible is %t", p.name, visible)
@@ -50,10 +49,9 @@ func (p *SpriteImpl) Visible() bool {
 	return p.spriteState.IsVisible
 }
 
-// ============================================================================
-// Costume Methods
-// ============================================================================
-
+// -----------------------------------------------------------------------------
+// Costume
+// -----------------------------------------------------------------------------
 func (p *SpriteImpl) CostumeName() SpriteCostumeName {
 	return p.getCostumeName()
 }
@@ -62,10 +60,6 @@ func (p *SpriteImpl) CostumeIndex() int {
 	return p.getCostumeIndex()
 }
 
-// SetCostume sets the costume by:
-//   - costume name
-//   - index (float64 or int)
-//   - spx.Next or spx.Prev
 func (p *SpriteImpl) setCostume(costume any) {
 	if isDebugInstrEnabled() {
 		spxlog.Debug("SetCostume: sprite=%s, costume=%v", p.name, costume)
@@ -91,10 +85,9 @@ func (p *SpriteImpl) SetCostume__3(action switchAction) {
 	p.setCostume(action)
 }
 
-// ============================================================================
-// Graphic Effects Methods
-// ============================================================================
-
+// -----------------------------------------------------------------------------
+// Effects
+// -----------------------------------------------------------------------------
 func (p *SpriteImpl) SetGraphicEffect(kind EffectKind, val float64) {
 	p.setGraphicEffect(kind, val)
 }
@@ -107,10 +100,9 @@ func (p *SpriteImpl) ClearGraphicEffects() {
 	p.clearGraphicEffects()
 }
 
-// ============================================================================
-// Layer Methods
-// ============================================================================
-
+// -----------------------------------------------------------------------------
+// Layer
+// -----------------------------------------------------------------------------
 func (p *SpriteImpl) SetLayer__0(layer layerAction) {
 	switch layer {
 	case Front:

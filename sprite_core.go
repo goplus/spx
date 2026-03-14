@@ -22,23 +22,27 @@ import (
 
 	coreproject "github.com/goplus/spx/v2/internal/core/project"
 	corestate "github.com/goplus/spx/v2/internal/core/state"
-	"github.com/goplus/spx/v2/internal/engine"
+	spxlog "github.com/goplus/spx/v2/internal/log"
+	"github.com/goplus/spx/v2/internal/time"
 )
 
 // SpriteImpl is the concrete implementation of the Sprite interface.
 type SpriteImpl struct {
 	baseObj
-	spriteState corestate.SpriteRuntimeState
 	scriptEventBindings
-	g      *Game
-	sprite Sprite
-	name   string
 
+	sprite      Sprite
+	spriteState corestate.SpriteRuntimeState
+	name        string
+	components  spriteComponents
+
+	g     *Game
 	gamer reflect.Value
-
-	components spriteComponents
 }
 
+// -----------------------------------------------------------------------------
+// Basic State
+// -----------------------------------------------------------------------------
 func (p *SpriteImpl) Name() string {
 	return p.name
 }
@@ -51,10 +55,9 @@ func (p *SpriteImpl) setDying() {
 	p.spriteState.IsDying = true
 }
 
-func (p *SpriteImpl) getAllShapes() []Shape {
-	return p.g.getAllShapes()
-}
-
+// -----------------------------------------------------------------------------
+// Initialization
+// -----------------------------------------------------------------------------
 func (p *SpriteImpl) init(
 	g *Game, name string, spriteCfg *coreproject.SpriteConfig, gamer reflect.Value, sprite Sprite) {
 	p.initBaseObjects(spriteCfg, g)
@@ -80,19 +83,8 @@ func (p *SpriteImpl) initBasicProperties(g *Game, name string, sprite Sprite, ga
 	p.spriteState.IsVisible = spriteCfg.Visible
 }
 
-func (p *SpriteImpl) initEngineObjects() {
-	p.runtimeState.SyncSprite = nil
-	engine.WaitMainThread(func() {
-		p.ensureProxyInitialized()
-	})
-}
-
 func (p *SpriteImpl) initComponents(spriteCfg *coreproject.SpriteConfig) {
 	p.components.initComponents(p, spriteCfg)
-}
-
-func (p *SpriteImpl) awake() {
-	p.playDefaultAnim()
 }
 
 func (p *SpriteImpl) InitFrom(src *SpriteImpl) {
@@ -112,6 +104,9 @@ func (p *SpriteImpl) InitFrom(src *SpriteImpl) {
 	p.spriteState.HasOnTouchEnd = false
 }
 
+// -----------------------------------------------------------------------------
+// Components
+// -----------------------------------------------------------------------------
 func (p *SpriteImpl) transform() *transformComponent {
 	return p.components.Transform()
 }
@@ -130,4 +125,74 @@ func (p *SpriteImpl) pen() *penComponent {
 
 func (p *SpriteImpl) sound() *soundComponent {
 	return p.components.Sound()
+}
+
+// -----------------------------------------------------------------------------
+// Lifecycle
+// -----------------------------------------------------------------------------
+func (p *SpriteImpl) Die() {
+	aniName := p.getStateAnimName(StateDie)
+	p.setDying()
+
+	p.Stop(OtherScriptsInSprite)
+	if p.hasAnim(aniName) {
+		p.AnimateAndWait(aniName)
+	}
+	p.Destroy()
+}
+
+func (p *SpriteImpl) Destroy() {
+	if isDebugInstrEnabled() {
+		spxlog.Debug("Destroy: %s", p.name)
+	}
+	p.Hide()
+	p.doDeleteClone()
+	if p.runtimeState.SyncSprite != nil {
+		p.g.inputMgr.removeClickTarget(p.runtimeState.SyncSprite.GetId())
+	}
+	p.components.destroyComponents()
+	p.g.removeShape(p)
+	p.Stop(ThisSprite)
+	p.markDestroyed()
+	if p == gco.Current().Obj {
+		gco.Abort()
+	}
+}
+
+func (p *SpriteImpl) DeleteThisClone() {
+	if !p.spriteState.Cloned {
+		return
+	}
+	p.Destroy()
+}
+
+// -----------------------------------------------------------------------------
+// Helpers
+// -----------------------------------------------------------------------------
+func spriteOf(sprite Sprite) *SpriteImpl {
+	vSpr := reflect.ValueOf(sprite)
+	if vSpr.Kind() == reflect.Pointer {
+		vSpr = vSpr.Elem()
+	}
+	if vSpr.Kind() != reflect.Struct {
+		return nil
+	}
+	for i, n := 0, vSpr.NumField(); i < n; i++ {
+		fld := vSpr.Field(i)
+		if fld.Kind() == reflect.Struct && fld.Type() == reflect.TypeOf(SpriteImpl{}) {
+			return fld.Addr().Interface().(*SpriteImpl)
+		}
+	}
+	return nil
+}
+
+// -----------------------------------------------------------------------------
+// Timing
+// -----------------------------------------------------------------------------
+func (p *SpriteImpl) DeltaTime() float64 {
+	return time.DeltaTime()
+}
+
+func (p *SpriteImpl) TimeSinceLevelLoad() float64 {
+	return time.TimeSinceLevelLoad()
 }

@@ -25,15 +25,9 @@ import (
 	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
-// ======================== Animation Component ========================
-// This file contains animation-related functionality for sprites,
-// including animation playback, tweening, and animation state management.
-// All methods proxy to the animation component implementation.
-
 // -----------------------------------------------------------------------------
-// Animation Wrapper and State (Shared Types)
+// Types
 // -----------------------------------------------------------------------------
-
 type animationWrapper struct {
 	spriteName   string
 	ani          *coreproject.AniConfig
@@ -99,9 +93,8 @@ type animState struct {
 }
 
 // -----------------------------------------------------------------------------
-// Animation Utility Functions (Delegated or Shared)
+// Shared Helpers
 // -----------------------------------------------------------------------------
-
 func (p *SpriteImpl) getStateAnimName(stateName string) string {
 	return p.animation().getStateAnimName(stateName)
 }
@@ -115,9 +108,8 @@ func (p *SpriteImpl) getAnimation(animName SpriteAnimationName) (*coreproject.An
 }
 
 // -----------------------------------------------------------------------------
-// Animation State Management
+// State
 // -----------------------------------------------------------------------------
-
 func (p *SpriteImpl) onAnimationDone(animName string) {
 	p.animation().onAnimationDone(animName)
 }
@@ -138,9 +130,8 @@ func (p *SpriteImpl) flushCompletedAnimations(buffer []string) []string {
 }
 
 // -----------------------------------------------------------------------------
-// Core Animation Functions
+// Internals
 // -----------------------------------------------------------------------------
-
 func (p *SpriteImpl) doTween(name SpriteAnimationName, ani *coreproject.AniConfig) {
 	p.animation().doTween(name, ani)
 }
@@ -150,9 +141,8 @@ func (p *SpriteImpl) playDefaultAnim() {
 }
 
 // -----------------------------------------------------------------------------
-// Public Animation API
+// Playback
 // -----------------------------------------------------------------------------
-
 func (p *SpriteImpl) Animate__0(name SpriteAnimationName) {
 	p.Animate__1(name, false)
 }

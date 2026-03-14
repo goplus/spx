@@ -28,14 +28,17 @@ import (
 	"github.com/goplus/spx/v2/internal/ui"
 )
 
-// -------------------------------------------------------------------------------------
-
+// -----------------------------------------------------------------------------
+// Constants
+// -----------------------------------------------------------------------------
 const (
 	getVarPrefix           = "getVar:"
-	monitorUpdateIntervalS = 0.2 // Monitor update interval in seconds
+	monitorUpdateIntervalS = 0.2
 )
 
-// Monitor class.
+// -----------------------------------------------------------------------------
+// Monitor
+// -----------------------------------------------------------------------------
 type Monitor struct {
 	game        *Game
 	name        WidgetName
@@ -53,6 +56,9 @@ type Monitor struct {
 	updateTimer float64
 }
 
+// -----------------------------------------------------------------------------
+// Construction
+// -----------------------------------------------------------------------------
 /*
 "type": "Monitor",
 "target": "",
@@ -93,7 +99,7 @@ func newMonitor(g reflect.Value, v coreproject.StageShape) (*Monitor, error) {
 	monitor := &Monitor{
 		target: target, val: val, eval: eval, name: name, size: size,
 		visible: visible, mode: mode, color: color, pos: mathf.NewVec2(x, y), label: label, panel: panel,
-		isDirty: true, // Initial dirty state to ensure first render
+		isDirty: true, // Initial dirty state to ensure first render.
 	}
 
 	return monitor, nil
@@ -115,7 +121,7 @@ func (pself *Monitor) onUpdate(delta float64) {
 		pself.setDirtyFlag(false)
 		return
 	}
-	val := pself.eval() // only evaluate when visible
+	val := pself.eval()
 	pself.panel.ShowAll(pself.mode == 1)
 	pself.panel.UpdateScale(pself.size)
 	pself.panel.UpdatePos(pself.pos)
@@ -123,6 +129,9 @@ func (pself *Monitor) onUpdate(delta float64) {
 	pself.setDirtyFlag(false)
 }
 
+// -----------------------------------------------------------------------------
+// Evaluation
+// -----------------------------------------------------------------------------
 func getTarget(g reflect.Value, target string) (reflect.Value, int) {
 	if target == "" {
 		return g, 1 // spx.Game
@@ -162,6 +171,9 @@ func buildMonitorEval(g reflect.Value, t, val string) func() string {
 	return nil
 }
 
+// -----------------------------------------------------------------------------
+// Visibility Control
+// -----------------------------------------------------------------------------
 func (pself *Monitor) setVisible(visible bool) {
 	if visible == pself.visible {
 		return
@@ -171,8 +183,9 @@ func (pself *Monitor) setVisible(visible bool) {
 	pself.setDirtyFlag(true)
 }
 
-// -------------------------------------------------------------------------------------
-// IWidget
+// -----------------------------------------------------------------------------
+// Widget Methods
+// -----------------------------------------------------------------------------
 func (pself *Monitor) GetName() WidgetName {
 	return pself.name
 }
@@ -244,6 +257,9 @@ func (pself *Monitor) updateSize() {
 	pself.setDirtyFlag(true)
 }
 
+// -----------------------------------------------------------------------------
+// Dirty State
+// -----------------------------------------------------------------------------
 func (pself *Monitor) setDirtyFlag(isDirty bool) {
 	pself.isDirty = isDirty
 }

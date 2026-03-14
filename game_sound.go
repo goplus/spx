@@ -24,17 +24,15 @@ import (
 )
 
 // -----------------------------------------------------------------------------
-// Internal types
+// Sound Types
 // -----------------------------------------------------------------------------
-
 type sound *coreproject.SoundConfig
 
 type soundId = int64
 
 // -----------------------------------------------------------------------------
-// Public sound control methods
+// Playback
 // -----------------------------------------------------------------------------
-
 func (p *Game) Volume() float64 {
 	return p.withGameSoundFloat(func(soundObj engine.Object) float64 {
 		return p.soundMgr.GetVolume(soundObj)
@@ -115,11 +113,10 @@ func (p *Game) Loudness() float64 {
 }
 
 // -----------------------------------------------------------------------------
-// Private audio configuration
+// Settings
 // -----------------------------------------------------------------------------
-
 const (
-	defaultAudioMaxDist         = coreproject.DefaultAudioMaxDistance // default maximum audio distance
+	defaultAudioMaxDist         = coreproject.DefaultAudioMaxDistance
 	invalidSoundId      soundId = 0
 )
 
@@ -129,9 +126,8 @@ func (p *Game) applyAudioSettings(settings coreproject.SystemSettings) {
 }
 
 // -----------------------------------------------------------------------------
-// Private sound loading and playback
+// Internals
 // -----------------------------------------------------------------------------
-
 func (p *Game) loadSound(name SoundName) (media sound, err error) {
 	if media, ok := p.sounds[name]; ok {
 		return media, nil
