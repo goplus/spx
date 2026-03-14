@@ -27,27 +27,22 @@ import (
 	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
-// =============================================================================
-// Public API - Physics Detection and Collision
-// =============================================================================
-
-// IntersectRect detects sprites intersecting with a rectangular area
+// -----------------------------------------------------------------------------
+// Detection
+// -----------------------------------------------------------------------------
 func (p *Game) IntersectRect(posX, posY, width, height float64) []Sprite {
 	ary := p.engine().PhysicsMgr.CheckCollisionRect(mathf.NewVec2(posX, posY), mathf.NewVec2(width, height), -1)
 	return p.checkCollision(ary)
 }
 
-// IntersectCircle detects sprites intersecting with a circular area
 func (p *Game) IntersectCircle(posX, posY, radius float64) []Sprite {
 	ary := p.engine().PhysicsMgr.CheckCollisionCircle(mathf.NewVec2(posX, posY), radius, -1)
 	return p.checkCollision(ary)
 }
 
-// =============================================================================
-// Public API - Raycast Methods
-// =============================================================================
-
-// Raycast__0 performs a raycast, ignoring specified sprites
+// -----------------------------------------------------------------------------
+// Raycast
+// -----------------------------------------------------------------------------
 func (p *Game) Raycast__0(fromX, fromY, toX, toY float64, ignoreSprites []Sprite) (hit bool, sprite Sprite, hitX, hitY float64) {
 	from := mathf.NewVec2(fromX, fromY)
 	to := mathf.NewVec2(toX, toY)
@@ -78,36 +73,29 @@ func (p *Game) Raycast__0(fromX, fromY, toX, toY float64, ignoreSprites []Sprite
 	return result.Hited, target, result.PosX, result.PosY
 }
 
-// Raycast__1 performs a raycast, ignoring a single sprite
 func (p *Game) Raycast__1(fromX, fromY, toX, toY float64, ignoreSprite Sprite) (hit bool, sprite Sprite, hitX, hitY float64) {
 	return p.Raycast__0(fromX, fromY, toX, toY, []Sprite{ignoreSprite})
 }
 
-// Raycast__2 performs a raycast without ignoring any sprites
 func (p *Game) Raycast__2(fromX, fromY, toX, toY float64) (hit bool, sprite Sprite, hitX, hitY float64) {
 	return p.Raycast__0(fromX, fromY, toX, toY, []Sprite{})
 }
 
-// =============================================================================
-// Public API - Debug Drawing
-// =============================================================================
-
-// DebugDrawRect draws a debug rectangle
+// -----------------------------------------------------------------------------
+// Debug Draw
+// -----------------------------------------------------------------------------
 func (p *Game) DebugDrawRect(posX, posY, width, height float64, color Color) {
 	p.engine().DebugMgr.DebugDrawRect(mathf.NewVec2(posX, posY), mathf.NewVec2(width, height), toMathfColor(color))
 }
 
-// DebugDrawCircle draws a debug circle
 func (p *Game) DebugDrawCircle(posX, posY, radius float64, color Color) {
 	p.engine().DebugMgr.DebugDrawCircle(mathf.NewVec2(posX, posY), radius, toMathfColor(color))
 }
 
-// DebugDrawLine draws a debug line
 func (p *Game) DebugDrawLine(fromX, fromY, toX, toY float64, color Color) {
 	p.engine().DebugMgr.DebugDrawLine(mathf.NewVec2(fromX, fromY), mathf.NewVec2(toX, toY), toMathfColor(color))
 }
 
-// DebugDrawLines draws multiple debug lines
 func (p *Game) DebugDrawLines(points []float64, color Color) {
 	if len(points) < 4 || len(points)%2 != 0 {
 		return
@@ -120,10 +108,9 @@ func (p *Game) DebugDrawLines(points []float64, color Color) {
 	}
 }
 
-// =============================================================================
-// Private - Constants and Types
-// =============================================================================
-
+// -----------------------------------------------------------------------------
+// Types
+// -----------------------------------------------------------------------------
 const (
 	physicsColliderNone    = collisionutil.ColliderNone
 	physicsColliderAuto    = collisionutil.ColliderAuto
@@ -135,7 +122,6 @@ const (
 
 const maxCollisionLayerIdx = 32 // Engine limit: max 32 collision layers
 
-// rayCastResult represents the result of a raycast query.
 type rayCastResult struct {
 	Hited    bool
 	SpriteId int64
@@ -145,35 +131,29 @@ type rayCastResult struct {
 	NormalY  float64
 }
 
-// spriteCollisionInfo contains collision information for a sprite.
 type spriteCollisionInfo struct {
 	Index int
 	Layer int64
 	Mask  int64
 }
 
-// spriteCollisionData caches sprite collision information.
 type spriteCollisionData struct {
 	sprite *SpriteImpl
 	info   *spriteCollisionInfo
 	modIdx int
 }
 
-// =============================================================================
-// Private - Physics Configuration
-// =============================================================================
-
-// applyPhysicsSettings initializes physics system configuration.
+// -----------------------------------------------------------------------------
+// Setup
+// -----------------------------------------------------------------------------
 func (p *Game) applyPhysicsSettings(settings coreproject.SystemSettings) {
 	p.isCollisionByPixel = settings.CollisionByPixel
 	p.isAutoSetCollisionLayer = settings.AutoSetCollisionLayer
 	spxlog.Debug("==> isCollisionByPixel: %v", p.isCollisionByPixel)
 	spxlog.Debug("==> isAutoSetCollisionLayer: %v", p.isAutoSetCollisionLayer)
 
-	// Set pixel collision sampling step based on configuration
 	p.engine().SpriteMgr.SetPixelCollisionSamplingStep(settings.PixelCollisionPrecision)
 
-	// Set global physics parameters
 	p.engine().PhysicsMgr.SetGlobalGravity(settings.GlobalGravity)
 	p.engine().PhysicsMgr.SetGlobalAirDrag(settings.GlobalAirDrag)
 	p.engine().PhysicsMgr.SetGlobalFriction(settings.GlobalFriction)
@@ -190,7 +170,6 @@ func (p *Game) applyPhysicsSettings(settings coreproject.SystemSettings) {
 	}
 }
 
-// setupCollisionLayers configures collision layers for sprites.
 func (p *Game) setupCollisionLayers(inits []Sprite) {
 	if !p.isAutoSetCollisionLayer {
 		return
@@ -199,7 +178,6 @@ func (p *Game) setupCollisionLayers(inits []Sprite) {
 	spriteData := p.buildSpriteCollisionData(inits)
 	maskMap := make([]int64, maxCollisionLayerIdx)
 
-	// Gather collision masks
 	for _, data := range spriteData {
 		data.info.Mask = 0
 		for target := range data.sprite.physics().getCollisionTargets() {
@@ -208,13 +186,11 @@ func (p *Game) setupCollisionLayers(inits []Sprite) {
 		}
 	}
 
-	// Apply collision masks
 	for _, data := range spriteData {
 		data.info.Mask = maskMap[data.modIdx]
 		spxlog.Debug("init sprite collision info: name=%s, layer=%d, mask=%d", data.sprite.name, data.info.Layer, data.info.Mask)
 	}
 
-	// Recalculate physics info
 	engine.WaitMainThread(func() {
 		for _, data := range spriteData {
 			data.sprite.applyPhysicsProxyConfig()
@@ -222,11 +198,9 @@ func (p *Game) setupCollisionLayers(inits []Sprite) {
 	})
 }
 
-// =============================================================================
-// Private - Helper Functions
-// =============================================================================
-
-// getSpriteCollisionInfo retrieves collision info for a sprite by name.
+// -----------------------------------------------------------------------------
+// Helpers
+// -----------------------------------------------------------------------------
 func (p *Game) getSpriteCollisionInfo(name string) *spriteCollisionInfo {
 	if info, ok := p.sprCollisionInfos[name]; ok {
 		return info
@@ -235,12 +209,10 @@ func (p *Game) getSpriteCollisionInfo(name string) *spriteCollisionInfo {
 	return &spriteCollisionInfo{}
 }
 
-// getCollisionLayerIndex calculates the collision layer index.
 func getCollisionLayerIndex(info *spriteCollisionInfo) int {
 	return info.Index % maxCollisionLayerIdx
 }
 
-// buildSpriteCollisionData builds collision data for sprites.
 func (p *Game) buildSpriteCollisionData(inits []Sprite) []*spriteCollisionData {
 	spriteData := make([]*spriteCollisionData, 0, len(inits))
 	for _, ini := range inits {
@@ -255,7 +227,6 @@ func (p *Game) buildSpriteCollisionData(inits []Sprite) []*spriteCollisionData {
 	return spriteData
 }
 
-// checkCollision checks collision and returns a list of sprites.
 func (p *Game) checkCollision(ary any) []Sprite {
 	spriteIdAry := ary.([]engine.Object)
 	sprites := make([]Sprite, 0, len(spriteIdAry))

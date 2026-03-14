@@ -18,15 +18,9 @@ package spx
 
 import "github.com/goplus/spx/v2/internal/engine"
 
-// ======================== Sound Component ========================
-// This file contains sound-related functionality for sprites,
-// including sound playback, volume control, and sound effects.
-// All methods proxy to the sound component implementation.
-
 // -----------------------------------------------------------------------------
-// Sound Effect Types
+// Sound Effects
 // -----------------------------------------------------------------------------
-
 type SoundEffectKind int
 
 const (
@@ -35,9 +29,8 @@ const (
 )
 
 // -----------------------------------------------------------------------------
-// Sound Playback Control
+// Playback
 // -----------------------------------------------------------------------------
-
 func (p *SpriteImpl) Play__0(name SoundName, loop bool) {
 	p.sound().Play(name, loop)
 }
@@ -63,9 +56,8 @@ func (p *SpriteImpl) StopPlaying(name SoundName) {
 }
 
 // -----------------------------------------------------------------------------
-// Sound Volume Control
+// Volume
 // -----------------------------------------------------------------------------
-
 func (p *SpriteImpl) Volume() float64 {
 	return p.sound().GetVolume()
 }
@@ -79,9 +71,8 @@ func (p *SpriteImpl) ChangeVolume(delta float64) {
 }
 
 // -----------------------------------------------------------------------------
-// Sound Effects Control
+// Effect Control
 // -----------------------------------------------------------------------------
-
 func (p *SpriteImpl) GetSoundEffect(kind SoundEffectKind) float64 {
 	return p.sound().GetSoundEffect(kind)
 }
@@ -95,9 +86,8 @@ func (p *SpriteImpl) ChangeSoundEffect(kind SoundEffectKind, delta float64) {
 }
 
 // -----------------------------------------------------------------------------
-// Internal Audio Management
+// Internals
 // -----------------------------------------------------------------------------
-
 func (p *SpriteImpl) playAudio(name SoundName, loop bool) soundId {
 	return p.sound().playAudio(name, loop)
 }

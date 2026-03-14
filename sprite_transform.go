@@ -21,23 +21,13 @@ import (
 	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
-// ======================== Transform Component ========================
-// This file contains position, rotation, and scale related functionality
-// for sprite transformations.
-
 // -----------------------------------------------------------------------------
-// Position Query and Distance Calculation
+// Position
 // -----------------------------------------------------------------------------
-
 func (p *SpriteImpl) getXY() (x, y float64) {
 	return p.transform().XY()
 }
 
-// DistanceTo func:
-//
-//	DistanceTo(sprite)
-//	DistanceTo(spx.Mouse)
-//	DistanceTo(spx.Random)
 func (p *SpriteImpl) DistanceTo__0(sprite Sprite) float64 {
 	return p.transform().DistanceTo(sprite)
 }
@@ -55,9 +45,8 @@ func (p *SpriteImpl) DistanceTo__3(pos Pos) float64 {
 }
 
 // -----------------------------------------------------------------------------
-// Core Movement Functions
+// Movement
 // -----------------------------------------------------------------------------
-
 func (p *SpriteImpl) Move__0(step float64) {
 	if isDebugInstrEnabled() {
 		spxlog.Debug("Move: sprite=%s, step=%v", p.name, step)
@@ -198,9 +187,8 @@ func (p *SpriteImpl) ChangeYpos(dy float64) {
 }
 
 // -----------------------------------------------------------------------------
-// Rotation and Direction Control
+// Rotation
 // -----------------------------------------------------------------------------
-
 func (p *SpriteImpl) SetRotationStyle(style RotationStyle) {
 	p.transform().SetRotationStyle(style)
 }
@@ -284,7 +272,6 @@ func (p *SpriteImpl) BounceOffEdge() {
 // -----------------------------------------------------------------------------
 // Scale Control
 // -----------------------------------------------------------------------------
-
 func (p *SpriteImpl) Size() float64 {
 	return p.runtimeState.Scale
 }
@@ -300,7 +287,6 @@ func (p *SpriteImpl) ChangeSize(delta float64) {
 // -----------------------------------------------------------------------------
 // Pivot Control
 // -----------------------------------------------------------------------------
-
 func (p *SpriteImpl) getPivot() mathf.Vec2 {
 	return p.transform().getPivot()
 }

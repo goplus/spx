@@ -58,7 +58,9 @@ func (p *Game) loadIndex(g reflect.Value, proj *coreproject.ProjectConfig) (err 
 	return
 }
 
-// setupDisplayConfig initializes display configuration.
+// -----------------------------------------------------------------------------
+// Display Setup
+// -----------------------------------------------------------------------------
 func (p *Game) setupDisplayConfig(proj *coreproject.ProjectConfig) {
 	display := coreproject.ResolveDisplaySettings(proj)
 	p.displayState.WindowScale = display.WindowScale
@@ -72,7 +74,6 @@ func (p *Game) setupDisplayConfig(proj *coreproject.ProjectConfig) {
 	engine.SetDebugMode(p.debugState.Debug)
 }
 
-// setupWorldAndWindow configures world and window sizes.
 func (p *Game) setupWorldAndWindow(proj *coreproject.ProjectConfig) {
 	proj.Map = coreproject.ResolveMapConfig(proj.Map, p.tilemapMgr.hasData(), baseScreenWidth, baseScreenHeight)
 	backdrops := proj.GetBackdrops()
@@ -117,7 +118,6 @@ func (p *Game) setupWorldAndWindow(proj *coreproject.ProjectConfig) {
 	p.displayState.WindowHeight = metrics.WindowHeight
 }
 
-// setupPlatformAndCamera configures platform settings and camera.
 func (p *Game) setupPlatformAndCamera(proj *coreproject.ProjectConfig) {
 	platformMgr := p.engine().PlatformMgr
 
@@ -157,7 +157,9 @@ func (p *Game) setupPlatformAndCamera(proj *coreproject.ProjectConfig) {
 	p.setupBackdrop()
 }
 
-// loadAndInitSprites loads all sprites from project configuration.
+// -----------------------------------------------------------------------------
+// Sprite Setup
+// -----------------------------------------------------------------------------
 func (p *Game) loadAndInitSprites(g reflect.Value, proj *coreproject.ProjectConfig) []Sprite {
 	inits := make([]Sprite, 0, len(proj.Zorder))
 	err := coreproject.WalkZOrder(
@@ -185,7 +187,6 @@ func (p *Game) loadAndInitSprites(g reflect.Value, proj *coreproject.ProjectConf
 	return inits
 }
 
-// runSpriteCallbacks executes sprite initialization callbacks.
 func (p *Game) runSpriteCallbacks(inits []Sprite, proj *coreproject.ProjectConfig, g reflect.Value) {
 	var onLoaded func()
 	if loader, ok := g.Addr().Interface().(interface{ OnLoaded() }); ok {
@@ -214,7 +215,9 @@ func (p *Game) runSpriteCallbacks(inits []Sprite, proj *coreproject.ProjectConfi
 	})
 }
 
-// loadAudioAndTilemap loads tilemap and background music.
+// -----------------------------------------------------------------------------
+// Stage Items
+// -----------------------------------------------------------------------------
 func (p *Game) loadAudioAndTilemap(proj *coreproject.ProjectConfig) {
 	p.tilemapMgr.parseTilemap()
 	p.audioState.SoundObj = p.soundMgr.AllocSound()

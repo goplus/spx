@@ -18,39 +18,30 @@ package spx
 
 import coreevent "github.com/goplus/spx/v2/internal/core/event"
 
-// ============================================================================
-// Type Definitions
-// ============================================================================
-
-// Direction represents the heading direction in degrees.
+// -----------------------------------------------------------------------------
+// Types
+// -----------------------------------------------------------------------------
 type Direction = coreevent.Direction
 
-// RotationStyle defines how a sprite rotates.
 type RotationStyle int
 
-// specialObj represents special target objects for sprite operations.
 type specialObj int
 
-// switchAction represents the direction for switching costumes/backdrops.
 type switchAction int
 
-// layerAction represents the direction for layer changes.
 type layerAction int
 
-// dirAction represents forward or backward direction.
 type dirAction int
 
-// Type aliases for sprite-related identifiers.
 type (
 	SpriteName          = string
 	SpriteCostumeName   = string
 	SpriteAnimationName = string
 )
 
-// ============================================================================
-// Direction Constants
-// ============================================================================
-
+// -----------------------------------------------------------------------------
+// Constants
+// -----------------------------------------------------------------------------
 const (
 	Right Direction = 90
 	Left  Direction = -90
@@ -58,9 +49,13 @@ const (
 	Down  Direction = 180
 )
 
-// ============================================================================
-// Special Object Constants
-// ============================================================================
+const (
+	touchingScreenLeft   = 1
+	touchingScreenTop    = 2
+	touchingScreenRight  = 4
+	touchingScreenBottom = 8
+	touchingAllEdges     = 15
+)
 
 const (
 	Mouse      specialObj = -5
@@ -86,19 +81,11 @@ const (
 	Backward dirAction = 1
 )
 
-// ============================================================================
-// Rotation Style Constants
-// ============================================================================
-
 const (
 	None RotationStyle = iota
 	Normal
 	LeftRight
 )
-
-// ============================================================================
-// State Constants
-// ============================================================================
 
 const (
 	StateDie   string = "die"
@@ -107,10 +94,6 @@ const (
 	StateStep  string = "step"
 )
 
-// ============================================================================
-// Animation Channel Constants
-// ============================================================================
-
 const (
 	AnimChannelFrame string = "@frame"
 	AnimChannelTurn  string = "@turn"
@@ -118,21 +101,9 @@ const (
 	AnimChannelMove  string = "@move"
 )
 
-// ============================================================================
-// Internal Constants
-// ============================================================================
-
 const (
 	colorThreshold = 0.1
 	alphaThreshold = 0.05
-)
-
-const (
-	touchingScreenLeft   = 1
-	touchingScreenTop    = 2
-	touchingScreenRight  = 4
-	touchingScreenBottom = 8
-	touchingAllEdges     = 15
 )
 
 type IEventSinks = coreevent.IEventSinks
@@ -147,11 +118,9 @@ const (
 	OtherScriptsInSprite StopKind = coreevent.OtherScriptsInSprite
 )
 
-// ============================================================================
+// -----------------------------------------------------------------------------
 // Sprite Interface
-// ============================================================================
-
-// Sprite defines the interface for all sprite objects in the game
+// -----------------------------------------------------------------------------
 type Sprite interface {
 	IEventSinks
 	Shape
