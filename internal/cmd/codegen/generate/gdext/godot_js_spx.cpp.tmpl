@@ -35,6 +35,7 @@
 #include "core/extension/gdextension_interface.h"
 #include "scene/main/window.h"
 #include "modules/spx/spx_engine.h"
+#include "modules/spx/spx_sprite.h"
 {{ $view := . -}}
 
 {{ range $i, $name := $view.Mangers -}}
@@ -45,6 +46,116 @@
 {{- range $i, $name := $view.Mangers }}
 #define {{$name}}Mgr SpxEngine::get_singleton()->get_{{$name}}()
 {{- end }}
+
+namespace {
+
+void gdspx_batch_update_transforms_raw(const float *buffer_data, int32_t len) {
+	const int FIELDS_PER_SPRITE = 9;
+	const int HEADER_SIZE = 2;
+
+	if (buffer_data == nullptr || len < HEADER_SIZE) {
+		return;
+	}
+
+	int update_count = static_cast<int>(buffer_data[0]);
+	int delete_count = static_cast<int>(buffer_data[1]);
+	int expected_size = HEADER_SIZE + update_count * FIELDS_PER_SPRITE + delete_count;
+	if (len != expected_size) {
+		print_error("batch_update_transforms_raw: buffer size " + itos(len) +
+				" does not match expected size " + itos(expected_size) +
+				" (updateCount=" + itos(update_count) + ", deleteCount=" + itos(delete_count) + ")");
+		return;
+	}
+
+	int idx = HEADER_SIZE;
+	for (int i = 0; i < update_count; i++) {
+		auto sprite_id = static_cast<GdObj>(buffer_data[idx]);
+		auto x = buffer_data[idx + 1];
+		auto y = buffer_data[idx + 2];
+		auto rotation = buffer_data[idx + 3];
+		auto scale_x = buffer_data[idx + 4];
+		auto scale_y = buffer_data[idx + 5];
+		auto offset_x = buffer_data[idx + 6];
+		auto offset_y = buffer_data[idx + 7];
+		auto visible = buffer_data[idx + 8] != 0.0;
+
+		idx += FIELDS_PER_SPRITE;
+
+		SpxSprite *sprite = spriteMgr->get_sprite(sprite_id);
+		if (sprite == nullptr) {
+			continue;
+		}
+
+		sprite->set_position(GdVec2(x, -y));
+		sprite->set_rotation(rotation);
+		sprite->set_scale(GdVec2(scale_x, scale_y));
+		sprite->set_visible(visible);
+		sprite->on_set_visible(visible);
+		sprite->set_pivot(GdVec2(offset_x, -offset_y));
+	}
+
+	for (int i = 0; i < delete_count; i++) {
+		auto sprite_id = static_cast<GdObj>(buffer_data[idx]);
+		idx++;
+
+		SpxSprite *sprite = spriteMgr->get_sprite(sprite_id);
+		if (sprite != nullptr) {
+			sprite->set_block_signals(true);
+			sprite->queue_free();
+		}
+	}
+}
+
+void gdspx_batch_update_visuals_raw(const float *buffer_data, int32_t len) {
+	const int VISUAL_FIELDS_PER_SPRITE = 9;
+	const int HEADER_SIZE = 1;
+	const int FLAG_HAS_ZINDEX = 1;
+	const int FLAG_HAS_UV_REMAP = 2;
+
+	if (buffer_data == nullptr || len < HEADER_SIZE) {
+		return;
+	}
+
+	int count = static_cast<int>(buffer_data[0]);
+	int expected_size = HEADER_SIZE + count * VISUAL_FIELDS_PER_SPRITE;
+	if (len != expected_size) {
+		print_error("batch_update_visuals_raw: buffer size " + itos(len) +
+				" does not match expected size " + itos(expected_size) +
+				" (count=" + itos(count) + ")");
+		return;
+	}
+
+	int idx = HEADER_SIZE;
+	for (int i = 0; i < count; i++) {
+		auto sprite_id = static_cast<GdObj>(buffer_data[idx]);
+		auto render_scale_x = buffer_data[idx + 1];
+		auto render_scale_y = buffer_data[idx + 2];
+		auto z_index = static_cast<int>(buffer_data[idx + 3]);
+		auto flags = static_cast<int>(buffer_data[idx + 4]);
+		auto uv_x = buffer_data[idx + 5];
+		auto uv_y = buffer_data[idx + 6];
+		auto uv_w = buffer_data[idx + 7];
+		auto uv_h = buffer_data[idx + 8];
+
+		idx += VISUAL_FIELDS_PER_SPRITE;
+
+		SpxSprite *sprite = spriteMgr->get_sprite(sprite_id);
+		if (sprite == nullptr) {
+			continue;
+		}
+
+		sprite->set_render_scale(GdVec2(render_scale_x, render_scale_y));
+		if (flags & FLAG_HAS_ZINDEX) {
+			sprite->set_z_index(z_index);
+		}
+		if (flags & FLAG_HAS_UV_REMAP) {
+			String uv_param = "uv_remap";
+			sprite->set_material_params_vec4(SpxReturnStr(uv_param), GdVec4(uv_x, uv_y, uv_w, uv_h));
+		}
+	}
+}
+
+} // namespace
 
 
 extern "C" {
@@ -79,7 +190,19 @@ void gd{{ loadProcAddressName $f.Name }}(
 		{{- end -}}
 	);
 }
-{{- end -}}
-{{ end }}
+	{{- if eq (loadProcAddressName $f.Name) "spx_sprite_batch_update_transforms" }}
+EMSCRIPTEN_KEEPALIVE
+void gdspx_sprite_batch_update_transforms_raw(float *buffer_data, int32_t len) {
+	gdspx_batch_update_transforms_raw(buffer_data, len);
+}
+	{{- end -}}
+	{{- if eq (loadProcAddressName $f.Name) "spx_sprite_batch_update_visuals" }}
+EMSCRIPTEN_KEEPALIVE
+void gdspx_sprite_batch_update_visuals_raw(float *buffer_data, int32_t len) {
+	gdspx_batch_update_visuals_raw(buffer_data, len);
+}
+	{{- end -}}
+	{{- end -}}
+	{{ end }}
 
 }
