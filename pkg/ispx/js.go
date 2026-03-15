@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"syscall/js"
 	_ "unsafe"
+
+	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
 // JavaScript built-in types.
@@ -91,7 +93,7 @@ func ispxStop(this js.Value, args []js.Value) any {
 
 // reportRuntimeError reports a runtime error to JavaScript and requests a reset.
 func reportRuntimeError(err error) {
-	fmt.Println(err)
+	spxlog.Error("%v", err)
 	js.Global().Call("gdspx_ext_on_runtime_panic", err.Error())
 	js.Global().Call("gdspx_ext_request_reset", 1)
 }

@@ -13,6 +13,7 @@ import (
 	"unicode"
 
 	"github.com/goplus/spx/v2/internal/cmd/codegen/gdextensionparser/clang"
+	spxlog "github.com/goplus/spx/v2/internal/cmd/codegen/internal/log"
 
 	"github.com/iancoleman/strcase"
 )
@@ -593,6 +594,6 @@ func GenerateFile(funcs template.FuncMap, name string, text string, data any, ds
 	f.Close()
 	exec.Command("go", "fmt", dstPath).Run()
 	exec.Command("goimports", "-w", dstPath).Run()
-	println("generate file: " + dstPath)
+	spxlog.Info("generate file: %s", dstPath)
 	return nil
 }

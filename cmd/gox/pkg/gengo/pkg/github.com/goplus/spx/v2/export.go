@@ -51,7 +51,6 @@ func init() {
 			"github.com/goplus/spx/v2/internal/tools":              "tools",
 			"github.com/goplus/spx/v2/internal/ui":                 "ui",
 			"github.com/goplus/spx/v2/pkg/spx/pkg/engine":          "engine",
-			"log":       "log",
 			"maps":      "maps",
 			"math":      "math",
 			"math/rand": "rand",

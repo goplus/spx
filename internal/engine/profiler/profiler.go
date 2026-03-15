@@ -1,11 +1,11 @@
 package profiler
 
 import (
-	"fmt"
 	"runtime/debug"
 	stime "time"
 
 	"github.com/goplus/spx/v2/internal/coroutine"
+	spxlog "github.com/goplus/spx/v2/internal/log"
 	"github.com/goplus/spx/v2/internal/time"
 )
 
@@ -72,7 +72,7 @@ func BeginSample(sampleName ...string) {
 	if len(sampleName) > 0 {
 		name = sampleName[0]
 	}
-	fmt.Printf("========== Begin profiling sample: %s ==========\n", name)
+	spxlog.Info("========== Begin profiling sample: %s ==========", name)
 
 	totalStart = stime.Now()
 	// Clear the timing data of the previous frame
@@ -95,7 +95,7 @@ func EndSample(sampleName ...string) {
 
 	// print a brief message
 	if total > interval {
-		fmt.Printf("Total time: %.3fms (GameUpdate: %.3fms, CoroUpdateJobs: %.3fms, GameRender: %.3fms)\n",
+		spxlog.Info("Total time: %.3fms (GameUpdate: %.3fms, CoroUpdateJobs: %.3fms, GameRender: %.3fms)",
 			total, timingData["GameUpdate"].ActualCall, timingData["CoroUpdateJobs"].ActualCall, timingData["GameRender"].ActualCall)
 	}
 
@@ -121,7 +121,7 @@ func EndSample(sampleName ...string) {
 
 	lastUpdateDuration = total
 
-	fmt.Printf("========== End profiling sample: %s ==========\n", name)
+	spxlog.Info("========== End profiling sample: %s ==========", name)
 }
 
 func GetStats(name string) (TimingInfo, bool) {
@@ -206,14 +206,14 @@ func getGCDiff() debug.GCStats {
 
 // printTimingInfo prints timing information
 func printTimingInfo() {
-	fmt.Println("========== Engine Module Detailed Timing Information ==========")
+	spxlog.Info("========== Engine Module Detailed Timing Information ==========")
 	for name, info := range timingData {
 		total := info.PreCall + info.ActualCall + info.PostCall
-		fmt.Printf("%s: Total %.3fms (Preparation: %.3fms, Execution: %.3fms, Cleanup: %.3fms)\n",
+		spxlog.Info("%s: Total %.3fms (Preparation: %.3fms, Execution: %.3fms, Cleanup: %.3fms)",
 			name, total, info.PreCall, info.ActualCall, info.PostCall)
 
 		if info.GCStats.NumGC > 0 {
-			fmt.Printf("  GC: %d times, Total pause: %.3fms\n",
+			spxlog.Info("  GC: %d times, Total pause: %.3fms",
 				info.GCStats.NumGC,
 				float64(info.GCStats.PauseTotal)/float64(stime.Millisecond))
 		}
@@ -224,14 +224,14 @@ func printTimingInfo() {
 		printCoroStats(info)
 	}
 
-	fmt.Println("====================================")
+	spxlog.Info("====================================")
 }
 
 // printCoroStats prints detailed statistics of the coroutine module
 func printCoroStats(coroInfo TimingInfo) {
 	// If gco is nil, return
 	if gco == nil {
-		fmt.Println("Coroutine system not initialized")
+		spxlog.Warn("Coroutine system not initialized")
 		return
 	}
 
@@ -270,85 +270,85 @@ func printCoroStats(coroInfo TimingInfo) {
 		coroInternalDifference = stats.TotalTime - coroInternalParts
 	}
 
-	fmt.Println("\n========== Coroutine Module Detailed Statistics ==========")
-	fmt.Printf("Engine measured total time: %.3fms (Preparation: %.3fms, Execution: %.3fms, Cleanup: %.3fms Last total time %.3fms)\n",
+	spxlog.Info("========== Coroutine Module Detailed Statistics ==========")
+	spxlog.Info("Engine measured total time: %.3fms (Preparation: %.3fms, Execution: %.3fms, Cleanup: %.3fms Last total time %.3fms)",
 		engineMeasuredTotal, coroInfo.PreCall, coroInfo.ActualCall, coroInfo.PostCall, lastUpdateDuration)
-	fmt.Printf("Coroutine internal measured total time: %.3fms\n", coroInternalTotal)
-	fmt.Printf("Time difference: %.3fms (%.2f%%)\n",
+	spxlog.Info("Coroutine internal measured total time: %.3fms", coroInternalTotal)
+	spxlog.Info("Time difference: %.3fms (%.2f%%)",
 		difference, (difference/engineMeasuredTotal)*100)
 
 	// If there is an internal difference, display it
 	if stats.TotalTime > 0 && coroInternalDifference > 0.1 {
-		fmt.Printf("Coroutine internal difference: %.3fms (%.2f%%)\n",
+		spxlog.Info("Coroutine internal difference: %.3fms (%.2f%%)",
 			coroInternalDifference, (coroInternalDifference/stats.TotalTime)*100)
 	}
 
-	fmt.Println("\nCoroutine internal detailed time distribution:")
-	fmt.Printf("  Initialization: %.3fms (%.2f%%)\n",
+	spxlog.Info("Coroutine internal detailed time distribution:")
+	spxlog.Info("  Initialization: %.3fms (%.2f%%)",
 		stats.InitTime, (stats.InitTime/coroInternalTotal)*100)
-	fmt.Printf("  Main loop: %.3fms (%.2f%%)\n",
+	spxlog.Info("  Main loop: %.3fms (%.2f%%)",
 		stats.LoopTime, (stats.LoopTime/coroInternalTotal)*100)
 
 	if stats.LoopIterations > 0 {
-		fmt.Printf("    - Loop iterations: %d\n", stats.LoopIterations)
+		spxlog.Info("    - Loop iterations: %d", stats.LoopIterations)
 	}
 
-	fmt.Printf("    - Task processing: %.3fms (Task count: %d)\n",
+	spxlog.Info("    - Task processing: %.3fms (Task count: %d)",
 		stats.TaskProcessing, stats.TaskCounts)
-	fmt.Printf("    - Wait time: %.3fms\n", stats.WaitTime)
-	fmt.Printf("  Queue movement: %.3fms (%.2f%%, Next frame tasks: %d)\n",
+	spxlog.Info("    - Wait time: %.3fms", stats.WaitTime)
+	spxlog.Info("  Queue movement: %.3fms (%.2f%%, Next frame tasks: %d)",
 		stats.MoveTime, (stats.MoveTime/coroInternalTotal)*100, stats.NextCount)
 
 	if stats.ExternalTime > 0 {
-		fmt.Printf("  External time: %.3fms (%.2f%%)\n",
+		spxlog.Info("  External time: %.3fms (%.2f%%)",
 			stats.ExternalTime, (stats.ExternalTime/coroInternalTotal)*100)
 	}
 
 	if stats.GCCount > 0 {
-		fmt.Printf("  GC: %d times, Pause: %.3fms\n", stats.GCCount, stats.GCPauses)
+		spxlog.Info("  GC: %d times, Pause: %.3fms", stats.GCCount, stats.GCPauses)
 	}
 
 	// Analyze possible reasons for the difference
 	if difference > 5 { // If the difference is greater than 5 milliseconds
-		fmt.Println("\nPossible reasons for the performance difference:")
+		spxlog.Info("Possible reasons for the performance difference:")
 
 		// Check GC
 		if coroInfo.GCStats.NumGC > 0 {
-			fmt.Printf("  - Garbage collection: %d GCs occurred during the engine's measurement, total pause time %.3fms\n",
+			spxlog.Info("  - Garbage collection: %d GCs occurred during the engine's measurement, total pause time %.3fms",
 				coroInfo.GCStats.NumGC,
 				float64(coroInfo.GCStats.PauseTotal)/float64(stime.Millisecond))
 		}
 
 		// Check coroutine internal GC
 		if stats.GCCount > 0 {
-			fmt.Printf("  - Coroutine internal GC: %d GCs occurred during the coroutine's measurement, total pause time %.3fms\n",
+			spxlog.Info("  - Coroutine internal GC: %d GCs occurred during the coroutine's measurement, total pause time %.3fms",
 				stats.GCCount, stats.GCPauses)
 		}
 
 		// Check function call overhead
 		if coroInfo.PreCall > 1 || coroInfo.PostCall > 1 {
-			fmt.Printf("  - Function call overhead: Preparation phase %.3fms, Cleanup phase %.3fms\n",
+			spxlog.Info("  - Function call overhead: Preparation phase %.3fms, Cleanup phase %.3fms",
 				coroInfo.PreCall, coroInfo.PostCall)
 		}
 
 		// Check loop iterations
 		if stats.LoopIterations > 100 {
-			fmt.Printf("  - Loop iterations are too many: %d times\n", stats.LoopIterations)
+			spxlog.Info("  - Loop iterations are too many: %d times", stats.LoopIterations)
 		}
 
 		// Check if there are unaccounted parts in the coroutine
 		unaccountedTime := stats.LoopTime - (stats.TaskProcessing + stats.WaitTime)
 		if unaccountedTime > 5 {
-			fmt.Printf("  - There are unaccounted parts in the coroutine: approximately %.3fms\n", unaccountedTime)
+			spxlog.Info("  - There are unaccounted parts in the coroutine: approximately %.3fms", unaccountedTime)
 		}
 
 		// Check external time
 		if stats.ExternalTime > 5 {
-			fmt.Printf("  - External time is too long: %.3fms\n", stats.ExternalTime)
+			spxlog.Info("  - External time is too long: %.3fms", stats.ExternalTime)
 		}
 
 		// Check Go runtime scheduling overhead
-		fmt.Println("  - Go runtime scheduling: Possible goroutine scheduling delay")
-		fmt.Println("  - External factors: Possible competition from other programs or system resources")
+		spxlog.Info("  - Go runtime scheduling: Possible goroutine scheduling delay")
+		spxlog.Info("  - External factors: Possible competition from other programs or system resources")
 	}
 }
