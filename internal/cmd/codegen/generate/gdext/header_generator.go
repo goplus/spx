@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/goplus/spx/v2/internal/cmd/codegen/generate/common"
+	spxlog "github.com/goplus/spx/v2/internal/cmd/codegen/internal/log"
 	"github.com/iancoleman/strcase"
 )
 
@@ -44,7 +45,7 @@ func generateSpxExtHeader(dir, outputFile string, isRawFormat bool) {
 func mergeManagerHeader(dir string) string {
 	files, err := filepath.Glob(filepath.Join(dir, "spx*mgr.h"))
 	if err != nil {
-		fmt.Println("Error finding files:", err)
+		spxlog.Error("Error finding files: %v", err)
 		return ""
 	}
 
@@ -59,7 +60,7 @@ func mergeManagerHeader(dir string) string {
 
 		f, err := os.Open(file)
 		if err != nil {
-			fmt.Println("Error opening file:", err)
+			spxlog.Error("Error opening file: %v", err)
 			continue
 		}
 		defer f.Close()
@@ -110,7 +111,7 @@ func mergeManagerHeader(dir string) string {
 		}
 
 		if err := scanner.Err(); err != nil {
-			fmt.Println("Error reading file:", err)
+			spxlog.Error("Error reading file: %v", err)
 		}
 	}
 
@@ -176,7 +177,7 @@ func generateManagerHeader(input string, rawFormat bool) string {
 	}
 
 	if err := scanner.Err(); err != nil {
-		fmt.Println("Error reading string:", err)
+		spxlog.Error("Error reading string: %v", err)
 	}
 
 	return builder.String()

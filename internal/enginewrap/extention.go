@@ -1,6 +1,9 @@
 package enginewrap
 
-import "github.com/goplus/spx/v2/internal/engine/platform"
+import (
+	"github.com/goplus/spx/v2/internal/engine/platform"
+	spxlog "github.com/goplus/spx/v2/internal/log"
+)
 
 var mainCallback func(call func())
 
@@ -34,6 +37,6 @@ func (pself *inputMgrImpl) MousePressed() bool {
 
 func (pself *platformMgrImpl) SetRunnableOnUnfocused(flag bool) {
 	if !flag {
-		println("TODO tanjp SetRunnableOnUnfocused")
+		spxlog.Warn("SetRunnableOnUnfocused(false) is not implemented yet")
 	}
 }

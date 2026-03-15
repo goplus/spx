@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,6 +13,7 @@ import (
 	"github.com/goplus/spx/v2/internal/cmd/codegen/generate/ffi"
 	"github.com/goplus/spx/v2/internal/cmd/codegen/generate/gdext"
 	"github.com/goplus/spx/v2/internal/cmd/codegen/generate/webffi"
+	spxlog "github.com/goplus/spx/v2/internal/cmd/codegen/internal/log"
 )
 
 var (
@@ -62,13 +62,13 @@ func generateCode() error {
 		err error
 	)
 	if verbose {
-		println(fmt.Sprintf(`build configuration "%s" selected`, buildConfig))
-		println(fmt.Sprintf(`godot source "%s" selected`, godotPath))
+		spxlog.Info(`build configuration "%s" selected`, buildConfig)
+		spxlog.Info(`godot source "%s" selected`, godotPath)
 	}
 	// generte c++ ext header file
 	if genClangAPI {
 		if verbose {
-			println("Generating gdextension godot ext functions...")
+			spxlog.Info("Generating gdextension godot ext functions...")
 		}
 		gdext.GenerateHeader(packagePath, godotPath)
 	}
@@ -82,7 +82,7 @@ func generateCode() error {
 	}
 	if genClangAPI {
 		if verbose {
-			println("Generating gdextension C wrapper functions...")
+			spxlog.Info("Generating gdextension C wrapper functions...")
 		}
 		ffi.Generate(packagePath, ast)
 		webffi.Generate(packagePath, godotPath, ast)
@@ -90,7 +90,7 @@ func generateCode() error {
 	}
 
 	if verbose {
-		println("cli tool done")
+		spxlog.Info("cli tool done")
 	}
 	return nil
 }
@@ -98,7 +98,8 @@ func execGoFmt(filePath string) {
 	cmd := exec.Command("gofmt", "-w", filePath)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		log.Panic(fmt.Errorf("error running gofmt: \n%s\n%w", output, err))
+		spxlog.Error("error running gofmt:\n%s\n%v", output, err)
+		panic(fmt.Errorf("error running gofmt: \n%s\n%w", output, err))
 	}
 }
 
@@ -106,7 +107,7 @@ func execGoImports(filePath string) {
 	cmd := exec.Command("goimports", "-w", filePath)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		log.Print(fmt.Errorf("error running goimports: \n%s\n%w", output, err))
+		spxlog.Error("error running goimports:\n%s\n%v", output, err)
 	}
 }
 

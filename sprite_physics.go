@@ -22,6 +22,7 @@ import (
 
 	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v2/internal/engine"
+	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
 type PhysicsMode = int64
@@ -58,7 +59,7 @@ func toPhysicsMode(mode string) PhysicsMode {
 	case "no":
 		return NoPhysics
 	}
-	println("config error: unknown physics mode ", mode)
+	spxlog.Warn("config error: unknown physics mode %s", mode)
 	return NoPhysics
 }
 
@@ -107,17 +108,17 @@ func (cfg *physicConfig) validateShape() bool {
 		typeName = "CapsuleTrigger"
 	case physicsColliderPolygon:
 		if len(cfg.Params) < 6 || len(cfg.Params)%2 != 0 {
-			fmt.Printf("Shape validation error: PolygonTrigger requires at least 6 parameters (3 vertices) and even count, got %d\n", len(cfg.Params))
+			spxlog.Warn("Shape validation error: PolygonTrigger requires at least 6 parameters (3 vertices) and even count, got %d", len(cfg.Params))
 			return false
 		}
 		return true
 	default:
-		fmt.Printf("Shape validation error: Unknown trigger type: %d\n", cfg.Type)
+		spxlog.Warn("Shape validation error: unknown trigger type: %d", cfg.Type)
 		return false
 	}
 
 	if len(cfg.Params) != expectedLen {
-		fmt.Printf("Shape validation error: %s requires exactly %d parameters, got %d\n", typeName, expectedLen, len(cfg.Params))
+		spxlog.Warn("Shape validation error: %s requires exactly %d parameters, got %d", typeName, expectedLen, len(cfg.Params))
 		return false
 	}
 	return true

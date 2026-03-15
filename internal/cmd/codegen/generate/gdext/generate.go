@@ -13,6 +13,7 @@ import (
 
 	"github.com/goplus/spx/v2/internal/cmd/codegen/gdextensionparser/clang"
 	. "github.com/goplus/spx/v2/internal/cmd/codegen/generate/common"
+	spxlog "github.com/goplus/spx/v2/internal/cmd/codegen/internal/log"
 
 	"github.com/iancoleman/strcase"
 )
@@ -52,7 +53,7 @@ func GenerateHeader(projectPath, godotPath string) {
 	dir := filepath.Join(godotPath, "modules", "spx")
 	_, err := os.Stat(dir)
 	if os.IsNotExist(err) {
-		println("dir not exist", dir)
+		spxlog.Warn("dir not exist %s", dir)
 		return
 	}
 	outputFile := filepath.Join(projectPath, NativeRelDir, "gdextension_spx_ext.h")
@@ -62,7 +63,7 @@ func Generate(projectPath, godotPath string, ast clang.CHeaderFileAST) {
 	dir := filepath.Join(godotPath, "modules", "spx")
 	_, err := os.Stat(dir)
 	if os.IsNotExist(err) {
-		println("dir not exist", dir)
+		spxlog.Warn("dir not exist %s", dir)
 		return
 	}
 	err = generateGdCppFile(projectPath, gdSpxExtCpp, ast, "gdextension_spx_ext.cpp")

@@ -18,7 +18,6 @@ package spx
 
 import (
 	"context"
-	"log"
 	"reflect"
 
 	coreproject "github.com/goplus/spx/v2/internal/core/project"
@@ -36,7 +35,7 @@ func XGot_SpriteImpl_Clone__1(sprite Sprite, data any) {
 
 func doClone(sprite Sprite, data any, isAsync bool, onCloned func(sprite *SpriteImpl)) {
 	if sprite == nil {
-		log.Panicln("doClone, sprite is nil")
+		spxlog.Panicf("doClone: sprite is nil")
 	}
 	src := spriteOf(sprite)
 	if isDebugInstrEnabled() {

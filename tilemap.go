@@ -17,13 +17,13 @@
 package spx
 
 import (
-	"fmt"
 	"path"
 
 	"github.com/goplus/spbase/mathf"
 	spxfs "github.com/goplus/spx/v2/fs"
 	"github.com/goplus/spx/v2/internal/base/collisionutil"
 	"github.com/goplus/spx/v2/internal/engine"
+	spxlog "github.com/goplus/spx/v2/internal/log"
 	tm "github.com/goplus/spx/v2/internal/tilemap"
 )
 
@@ -76,7 +76,8 @@ func (p *gameTilemapMgr) loadMap(mapDir string) {
 	}
 	loaded, err := tm.Load(p.fs, mapDir)
 	if err != nil {
-		panic(fmt.Sprintf("Failed to load tilemap JSON file %s: %v", mapDir, err))
+		spxlog.Error("Failed to load tilemap JSON file %s: %v", mapDir, err)
+		panic(err)
 	}
 	p.datas = loaded.Data
 	p.decoratorDatas = loaded.DecoratorData
@@ -87,7 +88,7 @@ func (p *gameTilemapMgr) loadMap(mapDir string) {
 	if p.useNewLoader {
 		p.engine().TilemapparserMgr.LoadTilemap(engine.ToAssetPath(loaded.TilemapPath))
 		if loaded.DecoratorErr != nil {
-			fmt.Printf("[TILEMAP] No decorator.json found at %s (this is OK if no decorators)\n", loaded.DecoratorPath)
+			spxlog.Info("Tilemap: no decorator.json found at %s (this is OK if no decorators)", loaded.DecoratorPath)
 		}
 	}
 }
@@ -165,12 +166,12 @@ func (p *gameTilemapMgr) parseTilemap() {
 // calcWorldSize calculates and updates world size based on actual tile distribution in tilemap.
 func (p *gameTilemapMgr) calcWorldSize() {
 	if p.datas == nil || len(p.datas.TileMap.Layers) == 0 {
-		fmt.Println("[TILEMAP DEBUG] No tilemap data or layers, skipping world size update")
+		spxlog.Debug("Tilemap: no tilemap data or layers, skipping world size update")
 		return
 	}
 	bounds, ok := tm.CalcWorldBounds(p.datas)
 	if !ok {
-		fmt.Println("[TILEMAP DEBUG] No tiles found in any layer")
+		spxlog.Debug("Tilemap: no tiles found in any layer")
 		return
 	}
 	p.g.displayState.MinWorldX = bounds.MinWorldX

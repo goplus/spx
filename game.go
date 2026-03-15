@@ -17,7 +17,6 @@
 package spx
 
 import (
-	"log"
 	"reflect"
 	"sync"
 	"time"
@@ -31,6 +30,7 @@ import (
 	corestate "github.com/goplus/spx/v2/internal/core/state"
 	"github.com/goplus/spx/v2/internal/coroutine"
 	"github.com/goplus/spx/v2/internal/engine"
+	spxlog "github.com/goplus/spx/v2/internal/log"
 	"github.com/goplus/spx/v2/internal/timer"
 	"github.com/goplus/spx/v2/internal/ui"
 )
@@ -221,7 +221,7 @@ func (p *Game) getSpriteProtoByName(name string, g reflect.Value) Sprite {
 	if !ok {
 		tySpr, ok := p.typs[name]
 		if !ok {
-			log.Panicf("sprite %s is not defined\n", name)
+			spxlog.Panicf("sprite %s is not defined", name)
 		}
 		spr = p.newSpriteAndLoad(name, tySpr, g)
 	}

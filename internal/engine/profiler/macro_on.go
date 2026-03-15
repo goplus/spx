@@ -3,7 +3,9 @@
 
 package profiler
 
+import spxlog "github.com/goplus/spx/v2/internal/log"
+
 func init() {
 	Enabled = true
-	println("Profiler Enabled (macro_on)")
+	spxlog.Info("Profiler enabled (macro_on)")
 }

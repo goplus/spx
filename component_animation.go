@@ -17,7 +17,6 @@
 package spx
 
 import (
-	"log"
 	"maps"
 	"math"
 
@@ -73,7 +72,7 @@ func (a *animationComponent) initFromConfig(spriteCfg *coreproject.SpriteConfig)
 		var ani = val
 		_, ok := a.shared.animations[key]
 		if ok {
-			log.Panicf("animation key [%s] is exist", key)
+			spxlog.Panicf("animation key [%s] already exists", key)
 		}
 
 		valueutil.SetDefaultIfZero(&ani.FrameFps, 25)
@@ -308,7 +307,7 @@ func (a *animationComponent) costumeIndex(nameOrIndex any) int {
 	case SpriteCostumeName:
 		idx := a.sprite.findCostume(v)
 		if idx < 0 {
-			log.Panicf("findCostume %s failed", v)
+			spxlog.Panicf("findCostume %s failed", v)
 		}
 		return idx
 	default:

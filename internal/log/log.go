@@ -117,6 +117,13 @@ func (l *Logger) log(level Level, format string, args ...any) {
 	l.logger.Printf("[%s] [%s] %s", level, l.prefix, msg)
 }
 
+func (l *Logger) format(format string, args ...any) string {
+	if len(args) > 0 {
+		return fmt.Sprintf(format, args...)
+	}
+	return format
+}
+
 // Debug logs a debug message
 func (l *Logger) Debug(format string, args ...any) {
 	l.log(LevelDebug, format, args...)
@@ -135,6 +142,18 @@ func (l *Logger) Warn(format string, args ...any) {
 // Error logs an error message
 func (l *Logger) Error(format string, args ...any) {
 	l.log(LevelError, format, args...)
+}
+
+// Panicf logs an error message and panics with the formatted message.
+func (l *Logger) Panicf(format string, args ...any) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	if l.level > LevelError {
+		panic(l.format(format, args...))
+	}
+	msg := l.format(format, args...)
+	l.logger.Panicf("[%s] [%s] %s", LevelError, l.prefix, msg)
 }
 
 // Package-level convenience functions using the default logger
@@ -157,6 +176,11 @@ func Warn(format string, args ...any) {
 // Error logs an error message using the default logger
 func Error(format string, args ...any) {
 	defaultLogger.Error(format, args...)
+}
+
+// Panicf logs an error message using the default logger and panics with the formatted message.
+func Panicf(format string, args ...any) {
+	defaultLogger.Panicf(format, args...)
 }
 
 // ParseLevel converts a string to a log level
