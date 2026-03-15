@@ -7,9 +7,10 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 )
 
-type Level int
+type Level int32
 
 const (
 	LevelDebug Level = iota
@@ -37,9 +38,7 @@ func New(prefix string, level Level, out io.Writer) *Logger {
 }
 
 func (l *Logger) SetLevel(level Level) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.level = level
+	atomic.StoreInt32((*int32)(&l.level), int32(level))
 }
 
 func (l *Logger) SetOutput(w io.Writer) {
@@ -49,9 +48,13 @@ func (l *Logger) SetOutput(w io.Writer) {
 }
 
 func (l *Logger) log(level Level, format string, args ...any) {
+	if Level(atomic.LoadInt32((*int32)(&l.level))) > level {
+		return
+	}
+
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if l.level > level {
+	if Level(atomic.LoadInt32((*int32)(&l.level))) > level {
 		return
 	}
 
@@ -63,14 +66,18 @@ func (l *Logger) log(level Level, format string, args ...any) {
 }
 
 func (l *Logger) Panicf(format string, args ...any) {
+	msg := l.format(format, args...)
+	if Level(atomic.LoadInt32((*int32)(&l.level))) > LevelError {
+		panic(msg)
+	}
+
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	if l.level > LevelError {
-		panic(l.format(format, args...))
+	if Level(atomic.LoadInt32((*int32)(&l.level))) > LevelError {
+		panic(msg)
 	}
-	msg := l.format(format, args...)
-	l.logger.Panicf("[%s] [%s] %s", LevelError, l.prefix, msg)
+	l.logger.Panicf("[%s] [%s] %s", LevelError.String(), l.prefix, msg)
 }
 
 func (l *Logger) format(format string, args ...any) string {

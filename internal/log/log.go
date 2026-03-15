@@ -8,10 +8,11 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 )
 
 // Level represents the logging level
-type Level int
+type Level int32
 
 const (
 	// LevelDebug logs everything including debug information
@@ -82,9 +83,7 @@ func SetLevel(level Level) {
 
 // SetLevel sets the logging level for this logger
 func (l *Logger) SetLevel(level Level) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.level = level
+	atomic.StoreInt32((*int32)(&l.level), int32(level))
 }
 
 // SetOutput sets the output destination for the default logger
@@ -101,10 +100,14 @@ func (l *Logger) SetOutput(w io.Writer) {
 
 // log is the internal logging function
 func (l *Logger) log(level Level, format string, args ...any) {
+	if Level(atomic.LoadInt32((*int32)(&l.level))) > level {
+		return
+	}
+
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	if l.level > level {
+	if Level(atomic.LoadInt32((*int32)(&l.level))) > level {
 		return
 	}
 
@@ -144,16 +147,20 @@ func (l *Logger) Error(format string, args ...any) {
 	l.log(LevelError, format, args...)
 }
 
-// Panicf logs an error message and panics with the formatted message.
+// Panicf panics with the formatted message, also logging it at error level if the current log level permits.
 func (l *Logger) Panicf(format string, args ...any) {
+	msg := l.format(format, args...)
+	if Level(atomic.LoadInt32((*int32)(&l.level))) > LevelError {
+		panic(msg)
+	}
+
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	if l.level > LevelError {
-		panic(l.format(format, args...))
+	if Level(atomic.LoadInt32((*int32)(&l.level))) > LevelError {
+		panic(msg)
 	}
-	msg := l.format(format, args...)
-	l.logger.Panicf("[%s] [%s] %s", LevelError, l.prefix, msg)
+	l.logger.Panicf("[%s] [%s] %s", LevelError.String(), l.prefix, msg)
 }
 
 // Package-level convenience functions using the default logger
@@ -178,7 +185,7 @@ func Error(format string, args ...any) {
 	defaultLogger.Error(format, args...)
 }
 
-// Panicf logs an error message using the default logger and panics with the formatted message.
+// Panicf panics with the formatted message, also logging it at error level if the current log level permits.
 func Panicf(format string, args ...any) {
 	defaultLogger.Panicf(format, args...)
 }

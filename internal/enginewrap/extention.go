@@ -37,6 +37,7 @@ func (pself *inputMgrImpl) MousePressed() bool {
 
 func (pself *platformMgrImpl) SetRunnableOnUnfocused(flag bool) {
 	if !flag {
+		// TODO: implement pausing when window loses focus
 		spxlog.Warn("SetRunnableOnUnfocused(false) is not implemented yet")
 	}
 }
