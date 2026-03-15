@@ -17,7 +17,6 @@
 package spx
 
 import (
-	"fmt"
 	"path"
 
 	"github.com/goplus/spbase/mathf"
@@ -77,9 +76,7 @@ func (p *gameTilemapMgr) loadMap(mapDir string) {
 	}
 	loaded, err := tm.Load(p.fs, mapDir)
 	if err != nil {
-		loadErr := fmt.Errorf("failed to load tilemap JSON file %s: %w", mapDir, err)
-		spxlog.Error("%v", loadErr)
-		panic(loadErr)
+		spxlog.Panicf("failed to load tilemap JSON file %s: %v", mapDir, err)
 	}
 	p.datas = loaded.Data
 	p.decoratorDatas = loaded.DecoratorData
