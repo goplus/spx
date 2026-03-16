@@ -76,7 +76,7 @@ func BeginSample(sampleName ...string) {
 
 	totalStart = stime.Now()
 	// Clear the timing data of the previous frame
-	timingData = make(map[string]TimingInfo)
+	clear(timingData)
 }
 
 func EndSample(sampleName ...string) {
