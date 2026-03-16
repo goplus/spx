@@ -13,10 +13,41 @@ type Queue[T any] struct {
 	head  *node[T]
 	tail  *node[T]
 	count int
+	pool  sync.Pool
 }
 
 func NewQueue[T any]() *Queue[T] {
-	return &Queue[T]{}
+	q := &Queue[T]{}
+	q.pool.New = func() any {
+		return new(node[T])
+	}
+	return q
+}
+
+func (s *Queue[T]) ensurePool() {
+	if s.pool.New == nil {
+		s.pool.New = func() any {
+			return new(node[T])
+		}
+	}
+}
+
+func (s *Queue[T]) acquireNode(value T) *node[T] {
+	s.ensurePool()
+	n := s.pool.Get().(*node[T])
+	n.value = value
+	n.prev = nil
+	n.next = nil
+	return n
+}
+
+func (s *Queue[T]) releaseNode(n *node[T]) {
+	var zero T
+	n.value = zero
+	n.prev = nil
+	n.next = nil
+	s.ensurePool()
+	s.pool.Put(n)
 }
 
 // Move all tasks from the src queue to the current queue.
@@ -57,7 +88,7 @@ func (s *Queue[T]) PushBack(value T) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	newNode := &node[T]{value: value}
+	newNode := s.acquireNode(value)
 	if s.count == 0 {
 		s.head = newNode
 		s.tail = newNode
@@ -73,7 +104,7 @@ func (s *Queue[T]) PushFront(value T) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	newNode := &node[T]{value: value}
+	newNode := s.acquireNode(value)
 	if s.count == 0 {
 		s.head = newNode
 		s.tail = newNode
@@ -93,8 +124,9 @@ func (s *Queue[T]) PopFront() T {
 		panic("queue is empty")
 	}
 
-	value := s.head.value
-	s.head = s.head.next
+	n := s.head
+	value := n.value
+	s.head = n.next
 	s.count--
 
 	if s.count == 0 {
@@ -103,6 +135,7 @@ func (s *Queue[T]) PopFront() T {
 		s.head.prev = nil
 	}
 
+	s.releaseNode(n)
 	return value
 }
 
@@ -114,8 +147,9 @@ func (s *Queue[T]) PopBack() T {
 		panic("queue is empty")
 	}
 
-	value := s.tail.value
-	s.tail = s.tail.prev
+	n := s.tail
+	value := n.value
+	s.tail = n.prev
 	s.count--
 
 	if s.count == 0 {
@@ -124,5 +158,6 @@ func (s *Queue[T]) PopBack() T {
 		s.tail.next = nil
 	}
 
+	s.releaseNode(n)
 	return value
 }
