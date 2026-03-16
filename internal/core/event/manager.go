@@ -1,7 +1,6 @@
 package event
 
 import (
-	"slices"
 	"sync"
 )
 
@@ -37,6 +36,20 @@ type Manager struct {
 	startFired bool
 }
 
+func appendSinkCopy(sinks []Sink, sink Sink) []Sink {
+	out := make([]Sink, len(sinks)+1)
+	copy(out, sinks)
+	out[len(sinks)] = sink
+	return out
+}
+
+func readOnlySnapshot(sinks []Sink) []Sink {
+	if len(sinks) == 0 {
+		return sinks
+	}
+	return sinks[:len(sinks):len(sinks)]
+}
+
 func (m *Manager) Reset() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -61,14 +74,23 @@ func deleteOwnerCopy(sinks []Sink, owner any) []Sink {
 		return nil
 	}
 
-	out := make([]Sink, 0, len(sinks))
-	for _, sink := range sinks {
+	firstMatch := -1
+	for i, sink := range sinks {
+		if sink.Owner == owner {
+			firstMatch = i
+			break
+		}
+	}
+	if firstMatch < 0 {
+		return sinks
+	}
+
+	out := make([]Sink, 0, len(sinks)-1)
+	out = append(out, sinks[:firstMatch]...)
+	for _, sink := range sinks[firstMatch+1:] {
 		if sink.Owner != owner {
 			out = append(out, sink)
 		}
-	}
-	if len(out) == len(sinks) {
-		return sinks
 	}
 	if len(out) == 0 {
 		return nil
@@ -79,7 +101,7 @@ func deleteOwnerCopy(sinks []Sink, owner any) []Sink {
 func (m *Manager) Add(bucket Bucket, sink Sink) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.buckets[bucket] = append(m.buckets[bucket], sink)
+	m.buckets[bucket] = appendSinkCopy(m.buckets[bucket], sink)
 }
 
 func (m *Manager) AddStart(sink Sink) {
@@ -92,7 +114,7 @@ func (m *Manager) TryAddStart(sink Sink) bool {
 	if m.startFired {
 		return false
 	}
-	m.buckets[BucketStart] = append(m.buckets[BucketStart], sink)
+	m.buckets[BucketStart] = appendSinkCopy(m.buckets[BucketStart], sink)
 	return true
 }
 
@@ -142,7 +164,7 @@ func (m *Manager) AddTimer(sink Sink) {
 
 func (m *Manager) Snapshot(bucket Bucket) []Sink {
 	m.mu.RLock()
-	out := slices.Clone(m.buckets[bucket])
+	out := readOnlySnapshot(m.buckets[bucket])
 	m.mu.RUnlock()
 	return out
 }
@@ -158,7 +180,7 @@ func (m *Manager) SnapshotStartOnce() []Sink {
 		return nil
 	}
 	m.startFired = true
-	return slices.Clone(m.buckets[BucketStart])
+	return readOnlySnapshot(m.buckets[BucketStart])
 }
 
 func (m *Manager) SnapshotAwake() []Sink {
