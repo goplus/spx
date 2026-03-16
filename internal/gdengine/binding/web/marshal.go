@@ -35,7 +35,15 @@ const (
 var (
 	jsObject     = js.Global().Get("Object")
 	jsUint8Array = js.Global().Get("Uint8Array")
+
+	fastGdArrayScratchByType = map[int32]*fastGdArrayScratch{}
 )
+
+type fastGdArrayScratch struct {
+	bytes   js.Value
+	wrapper js.Value
+	byteCap int
+}
 
 type GdArrayInfo struct {
 	Size int32
@@ -497,15 +505,33 @@ func bytesFromFloat32Slice(data []float32) []byte {
 	return unsafe.Slice((*byte)(unsafe.Pointer(unsafe.SliceData(data))), len(data)*4)
 }
 
+func getFastGdArrayScratch(arrayType int32) *fastGdArrayScratch {
+	if scratch, ok := fastGdArrayScratchByType[arrayType]; ok {
+		return scratch
+	}
+	scratch := &fastGdArrayScratch{
+		wrapper: jsObject.New(),
+	}
+	scratch.wrapper.Set(fastGdArrayFlagKey, true)
+	scratch.wrapper.Set(fastGdArrayTypeKey, arrayType)
+	fastGdArrayScratchByType[arrayType] = scratch
+	return scratch
+}
+
 func newFastGdArrayValue(arrayType int32, count int, data []byte) js.Value {
-	jsBytes := jsUint8Array.New(len(data))
-	js.CopyBytesToJS(jsBytes, data)
-	fastArray := jsObject.New()
-	fastArray.Set(fastGdArrayFlagKey, true)
-	fastArray.Set(fastGdArrayTypeKey, arrayType)
-	fastArray.Set(fastGdArrayCountKey, count)
-	fastArray.Set(fastGdArrayDataKey, jsBytes)
-	return fastArray
+	scratch := getFastGdArrayScratch(arrayType)
+	if scratch.byteCap < len(data) || scratch.bytes.Type() == js.TypeUndefined {
+		scratch.bytes = jsUint8Array.New(len(data))
+		scratch.byteCap = len(data)
+	}
+	if len(data) > 0 {
+		js.CopyBytesToJS(scratch.bytes, data)
+	}
+	// Expose only the valid prefix so JS consumers that rely on byteLength/length
+	// do not read stale capacity bytes from previous larger buffers.
+	scratch.wrapper.Set(fastGdArrayDataKey, scratch.bytes.Call("subarray", 0, len(data)))
+	scratch.wrapper.Set(fastGdArrayCountKey, count)
+	return scratch.wrapper
 }
 
 func arrayToFastGdArrayValue(arrayPtr Array) (js.Value, bool) {
