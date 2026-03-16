@@ -72,6 +72,24 @@ func TestManagerSnapshotIsStableAcrossDeleteOwner(t *testing.T) {
 	}
 }
 
+func TestManagerSnapshotAppendDoesNotMutateBucket(t *testing.T) {
+	var mgr Manager
+	mgr.Add(BucketClick, Sink{Owner: "keep", Handler: func() {}})
+
+	snapshot := mgr.SnapshotClick()
+	snapshot = append(snapshot, Sink{Owner: "extra", Handler: func() {}})
+
+	if len(snapshot) != 2 {
+		t.Fatalf("snapshot len = %d, want 2", len(snapshot))
+	}
+	if got := mgr.SnapshotClick(); len(got) != 1 {
+		t.Fatalf("bucket len = %d, want 1", len(got))
+	}
+	if got := mgr.SnapshotClick()[0].Owner; got != "keep" {
+		t.Fatalf("bucket owner = %v, want keep", got)
+	}
+}
+
 func TestManagerConvenienceMethods(t *testing.T) {
 	var mgr Manager
 	mgr.AddClick(Sink{Owner: "click", Handler: func() {}})
