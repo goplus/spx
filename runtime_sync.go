@@ -97,10 +97,9 @@ func (p *Game) pullPhysicsPositions() error {
 
 // processPhysicsTriggers consumes trigger events and fires collision callbacks.
 func (p *Game) processPhysicsTriggers() {
-	triggers := make([]engine.TriggerEvent, 0)
-	triggers = engine.GetTriggerEvents(triggers)
+	p.triggerEvents = engine.GetTriggerEvents(p.triggerEvents[:0])
 	coreruntime.ProcessTriggerPairs(
-		triggers,
+		p.triggerEvents,
 		func(target any) (*SpriteImpl, bool) {
 			sprite, ok := target.(*SpriteImpl)
 			return sprite, ok
@@ -114,6 +113,8 @@ func (p *Game) processPhysicsTriggers() {
 			spxlog.Info("Physics error: unexpected trigger pair - invalid sprite types")
 		},
 	)
+	clear(p.triggerEvents)
+	p.triggerEvents = p.triggerEvents[:0]
 }
 
 func isSpriteTouchable(sprite *SpriteImpl) bool {
