@@ -1,7 +1,6 @@
 package event
 
 import (
-	"slices"
 	"sync"
 )
 
@@ -61,14 +60,23 @@ func deleteOwnerCopy(sinks []Sink, owner any) []Sink {
 		return nil
 	}
 
-	out := make([]Sink, 0, len(sinks))
-	for _, sink := range sinks {
+	firstMatch := -1
+	for i, sink := range sinks {
+		if sink.Owner == owner {
+			firstMatch = i
+			break
+		}
+	}
+	if firstMatch < 0 {
+		return sinks
+	}
+
+	out := make([]Sink, 0, len(sinks)-1)
+	out = append(out, sinks[:firstMatch]...)
+	for _, sink := range sinks[firstMatch+1:] {
 		if sink.Owner != owner {
 			out = append(out, sink)
 		}
-	}
-	if len(out) == len(sinks) {
-		return sinks
 	}
 	if len(out) == 0 {
 		return nil
@@ -142,7 +150,7 @@ func (m *Manager) AddTimer(sink Sink) {
 
 func (m *Manager) Snapshot(bucket Bucket) []Sink {
 	m.mu.RLock()
-	out := slices.Clone(m.buckets[bucket])
+	out := m.buckets[bucket]
 	m.mu.RUnlock()
 	return out
 }
@@ -158,7 +166,7 @@ func (m *Manager) SnapshotStartOnce() []Sink {
 		return nil
 	}
 	m.startFired = true
-	return slices.Clone(m.buckets[BucketStart])
+	return m.buckets[BucketStart]
 }
 
 func (m *Manager) SnapshotAwake() []Sink {
