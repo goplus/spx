@@ -1,5 +1,21 @@
 var Module = null
 
+if (!globalThis.__spxRuntimeErrorHooksInstalled) {
+    globalThis.__spxRuntimeErrorHooksInstalled = true;
+    globalThis.addEventListener('error', (event) => {
+        console.error('[spx-runtime] window.error', {
+            message: event.message,
+            filename: event.filename,
+            lineno: event.lineno,
+            colno: event.colno,
+            error: event.error,
+        });
+    });
+    globalThis.addEventListener('unhandledrejection', (event) => {
+        console.error('[spx-runtime] unhandledrejection', event.reason);
+    });
+}
+
 /**
  * @typedef {Object} FileMeta
  * @property {number} lastModified Last modified time in milliseconds since Unix epoch.

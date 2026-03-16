@@ -111,8 +111,9 @@ type Game struct {
 	spriteMgr  spriteManager
 	tilemapMgr gameTilemapMgr
 
-	syncBuffer  *engine.SpriteSyncBuffer
-	spatialHash *collisionutil.SpatialHash[*SpriteImpl]
+	syncBuffer    *engine.SpriteSyncBuffer
+	triggerEvents []engine.TriggerEvent
+	spatialHash   *collisionutil.SpatialHash[*SpriteImpl]
 }
 
 func activeGame() *Game {
