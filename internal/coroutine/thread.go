@@ -38,6 +38,10 @@ type threadImpl struct {
 // Thread represents a coroutine id.
 type Thread = *threadImpl
 
+type threadNamer interface {
+	Name() string
+}
+
 // -------------------------------------------------------------------------------------
 // Thread Methods
 // -------------------------------------------------------------------------------------
@@ -72,8 +76,9 @@ func (p *threadImpl) Stopped() bool {
 }
 
 func (p Thread) IsSchedTimeout(ms float64) bool {
-	if p.schedFrame < time.Frame() {
-		p.schedFrame = time.Frame()
+	frame := time.Frame()
+	if p.schedFrame < frame {
+		p.schedFrame = frame
 		p.schedTimestamp = stime.Now()
 	}
 	timeout := stime.Since(p.schedTimestamp) > stime.Duration(ms)*stime.Millisecond
@@ -132,37 +137,45 @@ func (p *Coroutines) AbortAll() {
 func (p *Coroutines) AbortAllAndWait(timeout stime.Duration) bool {
 	p.AbortAll()
 
-	done := make(chan struct{})
-	go func() {
-		p.wg.Wait()
-		close(done)
-	}()
-
 	if timeout <= 0 {
-		<-done
+		p.wg.Wait()
 		return true
 	}
 
-	select {
-	case <-done:
-		return true
-	case <-stime.After(timeout):
-		return false
+	deadline := stime.Now().Add(timeout)
+	for {
+		p.mutex.Lock()
+		done := len(p.allThreads) == 0
+		p.mutex.Unlock()
+		if done {
+			return true
+		}
+
+		remaining := stime.Until(deadline)
+		if remaining <= 0 {
+			return false
+		}
+		if remaining > 10*stime.Millisecond {
+			remaining = 10 * stime.Millisecond
+		}
+		stime.Sleep(remaining)
 	}
 }
 
 func (p *Coroutines) StopIf(filter func(th Thread) bool) {
-	threads := func() []Thread {
-		p.mutex.Lock()
-		defer p.mutex.Unlock()
-		list := make([]Thread, 0, len(p.suspended))
-		for th := range p.suspended {
-			if filter(th) {
-				list = append(list, th)
-			}
+	p.mutex.Lock()
+	allThreads := make([]Thread, 0, len(p.allThreads))
+	for th := range p.allThreads {
+		allThreads = append(allThreads, th)
+	}
+	p.mutex.Unlock()
+
+	threads := allThreads[:0]
+	for _, th := range allThreads {
+		if filter(th) {
+			threads = append(threads, th)
 		}
-		return list
-	}()
+	}
 
 	// Stop each thread with proper signaling
 	for _, th := range threads {
@@ -197,23 +210,16 @@ func resolveThreadName(obj ThreadObj) string {
 		return str
 	}
 
+	if named, ok := obj.(threadNamer); ok {
+		return named.Name()
+	}
+
 	t := reflect.TypeOf(obj)
 	if t.Kind() != reflect.Pointer || t.Elem().Name() == "" {
 		return ""
 	}
 
-	name := "*" + t.Elem().Name()
-	v := reflect.ValueOf(obj)
-	nameMethod := v.MethodByName("Name")
-	if !nameMethod.IsValid() {
-		return name
-	}
-
-	results := nameMethod.Call(nil)
-	if len(results) > 0 {
-		name = results[0].String()
-	}
-	return name
+	return "*" + t.Elem().Name()
 }
 
 func (p *Coroutines) newThread(obj ThreadObj) Thread {
