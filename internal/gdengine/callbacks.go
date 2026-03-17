@@ -170,12 +170,15 @@ func onSpriteReady(id int64) {
 		}
 	})
 }
+
 func onSpriteUpdated(delta float64) {
 	spxlog.Debug("OnSpriteUpdated %f", delta)
 }
+
 func onSpriteFixedUpdated(delta float64) {
 	spxlog.Debug("OnSpriteFixedUpdated %f", delta)
 }
+
 func onSpriteDestroyed(id int64) {
 	onMainThread(func() {
 		DeleteSprite(Object(id))
@@ -186,9 +189,11 @@ func onSpriteDestroyed(id int64) {
 func onMousePressed(id int64) {
 	spxlog.Debug("OnMousePressed %d", id)
 }
+
 func onMouseReleased(id int64) {
 	spxlog.Debug("OnMouseReleased %d", id)
 }
+
 func onKeyPressed(id int64) {
 	onMainThread(func() {
 		if coreCallbacks.OnKeyPressed != nil {
@@ -196,6 +201,7 @@ func onKeyPressed(id int64) {
 		}
 	})
 }
+
 func onKeyReleased(id int64) {
 	onMainThread(func() {
 		if coreCallbacks.OnKeyReleased != nil {
@@ -203,15 +209,19 @@ func onKeyReleased(id int64) {
 		}
 	})
 }
+
 func onActionPressed(name string) {
 	spxlog.Debug("OnActionPressed %s", name)
 }
+
 func onActionJustPressed(name string) {
 	spxlog.Debug("OnActionJustPressed %s", name)
 }
+
 func onActionJustReleased(name string) {
 	spxlog.Debug("OnActionJustReleased %s", name)
 }
+
 func onAxisChanged(name string, value float64) {
 	spxlog.Debug("OnAxisChanged %s %f", name, value)
 }
@@ -220,9 +230,11 @@ func onAxisChanged(name string, value float64) {
 func onCollisionEnter(id int64, oid int64) {
 	spxlog.Debug("OnCollisionEnter %d %d", id, oid)
 }
+
 func onCollisionStay(id int64, oid int64) {
 	spxlog.Debug("OnCollisionStay %d %d", id, oid)
 }
+
 func onCollisionExit(id int64, oid int64) {
 	spxlog.Debug("OnCollisionExit %d %d", id, oid)
 }
@@ -237,8 +249,10 @@ func onTriggerEnter(id int64, oid int64) {
 		}
 	})
 }
+
 func onTriggerStay(id int64, oid int64) {
 }
+
 func onTriggerExit(id int64, oid int64) {
 	onMainThread(func() {
 		if sprite := GetSprite(Object(id)); sprite != nil {
@@ -259,6 +273,7 @@ func onUiPressed(id int64) {
 		}
 	})
 }
+
 func onUiReleased(id int64) {
 	onMainThread(func() {
 		if node := GetUINode(Object(id)); node != nil {
@@ -267,6 +282,7 @@ func onUiReleased(id int64) {
 		}
 	})
 }
+
 func onUiHovered(id int64) {
 	onMainThread(func() {
 		if node := GetUINode(Object(id)); node != nil {
@@ -275,6 +291,7 @@ func onUiHovered(id int64) {
 		}
 	})
 }
+
 func onUiClicked(id int64) {
 	onMainThread(func() {
 		if node := GetUINode(Object(id)); node != nil {
@@ -283,6 +300,7 @@ func onUiClicked(id int64) {
 		}
 	})
 }
+
 func onUiToggle(id int64, isOn bool) {
 	onMainThread(func() {
 		if node := GetUINode(Object(id)); node != nil {
@@ -291,6 +309,7 @@ func onUiToggle(id int64, isOn bool) {
 		}
 	})
 }
+
 func onUiTextChanged(id int64, text string) {
 	onMainThread(func() {
 		if node := GetUINode(Object(id)); node != nil {
@@ -323,6 +342,7 @@ func onSpriteScreenExited(id int64) {
 		}
 	})
 }
+
 func onSpriteVfxFinished(id int64) {
 	onMainThread(func() {
 		if sprite := GetSprite(Object(id)); sprite != nil {
