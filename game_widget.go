@@ -60,8 +60,7 @@ func GetWidget(sg ShapeGetter, name WidgetName) Widget {
 	panic("GetWidget: widget not found - " + name)
 }
 
-// XGot_Game_XGox_GetWidget returns a pointer to the widget of type T with the given name.
-// It panics if the widget is not found or if the type does not match.
+// GetWidget returns the widget instance (in given type) with given name. It panics if not found.
 func XGot_Game_XGox_GetWidget[T any](sg ShapeGetter, name WidgetName) *T {
 	widget, ok := GetWidget(sg, name).(any).(*T)
 	if !ok {
