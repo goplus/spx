@@ -12,9 +12,25 @@ import (
 	"github.com/goplus/xgo/parser"
 )
 
-// GenGoFromFS generates Go code from .spx files in the provided filesystem
+const (
+	preferredSourceExt = "_spx.gox"
+	legacySourceExt    = ".spx"
+	preferredMainFile  = "main" + preferredSourceExt
+	legacyMainFile     = "main" + legacySourceExt
+)
+
+func registerProject(ext string) {
+	xgobuild.RegisterProject(&modfile.Project{
+		Ext:      ext,
+		Class:    "Game",
+		Works:    []*modfile.Class{{Ext: ext, Class: "SpriteImpl", Embedded: true}},
+		PkgPaths: []string{"github.com/goplus/spx/v2", "math"},
+	})
+}
+
+// GenGoFromFS generates Go code from spx classfiles in the provided filesystem.
 // Parameters:
-//   - fsys: filesystem containing .spx files (should implement fsx.FileSystem interface)
+//   - fsys: filesystem containing spx classfiles (should implement fsx.FileSystem interface)
 //   - outputPath: absolute path where the generated main.go should be written
 //
 // Returns:
@@ -26,13 +42,9 @@ func GenGoFromFS(fsys parser.FileSystem, outputPath string) error {
 		fmt.Printf("Failed to resolve package import %q\n", path)
 		return
 	}
-	// NOTE(everyone): Keep sync with the config in spx [gop.mod](https://github.com/goplus/spx/blob/main/gop.mod)
-	xgobuild.RegisterProject(&modfile.Project{
-		Ext:      ".spx",
-		Class:    "Game",
-		Works:    []*modfile.Class{{Ext: ".spx", Class: "SpriteImpl", Embedded: true}},
-		PkgPaths: []string{"github.com/goplus/spx/v2", "math"},
-	})
+	// NOTE(everyone): Keep sync with the config in spx [gox.mod](https://github.com/goplus/spx/blob/main/gox.mod)
+	registerProject(preferredSourceExt)
+	registerProject(legacySourceExt)
 
 	// Register patch for spx to support functions with generic type like `XGot_Game_XGox_GetWidget`.
 	// See details in https://github.com/goplus/builder/issues/765#issuecomment-2313915805
@@ -40,7 +52,7 @@ func GenGoFromFS(fsys parser.FileSystem, outputPath string) error {
 		return fmt.Errorf("failed to register package patches: %w", err)
 	}
 
-	// Build Go source code from .spx files
+	// Build Go source code from spx classfiles.
 	source, err := xgobuild.BuildFSDir(ctx, fsys, "")
 	if err != nil {
 		return fmt.Errorf("failed to build XGo source: %w", err)

@@ -63,7 +63,7 @@ func (pself *Sprite) UnRegisterOnAnimationFinished() {
 
 // --------------------------------------------------------------------------
 // Override coordinate system-related functions to accommodate the
-// difference between SPX and Godot coordinate systems (Y-axis inverted)
+// difference between spx and Godot coordinate systems (Y-axis inverted)
 
 func (pself *Sprite) SetColliderShapeRect(isTrigger bool, center Vec2, size Vec2) {
 	center.Y = -center.Y

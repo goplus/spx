@@ -6,7 +6,16 @@ import (
 	"path/filepath"
 )
 
-// Init initializes a new SPX project in the specified directory
+const (
+	preferredSourceExt = "_spx.gox"
+	legacySourceExt    = ".spx"
+	preferredMainFile  = "main" + preferredSourceExt
+	legacyMainFile     = "main" + legacySourceExt
+)
+
+var sourceExts = []string{preferredSourceExt, legacySourceExt}
+
+// Init initializes a new spx project in the specified directory
 func (cmd *CmdTool) Init() error {
 	// Use the path from command line arguments, default to current directory
 	targetPath := *cmd.Args.Path
@@ -30,7 +39,7 @@ func (cmd *CmdTool) Init() error {
 		}
 	}
 
-	fmt.Printf("Initializing SPX project in: %s\n", targetPath)
+	fmt.Printf("Initializing spx project in: %s\n", targetPath)
 
 	// Create assets directory
 	assetsDir := filepath.Join(targetPath, "assets")
@@ -51,24 +60,24 @@ func (cmd *CmdTool) Init() error {
 		return fmt.Errorf("failed to create assets/index.json: %w", err)
 	}
 
-	// Create main.spx file
-	mainSpxPath := filepath.Join(targetPath, "main.spx")
-	mainSpxContent := `// SPX Project Main File
-// This is the entry point for your SPX project
+	// Create the preferred spx project entry file.
+	mainSpxPath := filepath.Join(targetPath, preferredMainFile)
+	mainSpxContent := `// spx Project Main File
+// This is the entry point for your spx project
 
 onStart => {
-	println("Hello, SPX!")
+	println("Hello, spx!")
 	println("Project started successfully!")
 }
 `
 	if err := os.WriteFile(mainSpxPath, []byte(mainSpxContent), 0644); err != nil {
-		return fmt.Errorf("failed to create main.spx: %w", err)
+		return fmt.Errorf("failed to create %s: %w", preferredMainFile, err)
 	}
 
 	cmd.createDefaultGoMod(targetPath, true)
 
 	fmt.Println("")
-	fmt.Println("SPX project initialized successfully!")
+	fmt.Println("spx project initialized successfully!")
 	fmt.Println("You can now run 'spx run' to start your project.")
 
 	return nil

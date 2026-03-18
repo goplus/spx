@@ -125,7 +125,7 @@ do_exportweb() {
     (cd "$CURRENT_PATH/.tmp/web"
      mkdir -p assets
      echo '{"map":{"width":480,"height":360}}' > assets/index.json
-     echo "" > main.spx
+     echo "" > main_spx.gox
      rm -rf ./project/.builds/*web
      spx $spx_cmd
      cd ./project/.builds/web
@@ -168,7 +168,7 @@ do_prepare_export() {
     cd "$CURRENT_PATH/.tmp/web" 
     mkdir -p assets 
     echo '{"map":{"width":480,"height":360}}' > assets/index.json 
-    echo "" > main.spx 
+    echo "" > main_spx.gox
     rm -rf ./project/.builds/*web 
     mkdir -p "$GOPATH/bin" 
 

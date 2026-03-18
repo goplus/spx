@@ -122,9 +122,9 @@ func (pself *CmdTool) adaptGoMod() {
 	}
 }
 
-// createDefaultGoMod ensures gop.mod exists if not in spx directory
+// createDefaultGoMod ensures go.mod exists if not in the spx directory.
 func (pself *CmdTool) createDefaultGoMod(dir string, forceWrite bool) {
-	// Not in spx directory, create gop.mod in target directory
+	// Not in the spx directory, create go.mod in the target directory.
 	gopModPath, _ := filepath.Abs(path.Join(dir, "go.mod"))
 	if _, err := os.Stat(gopModPath); os.IsNotExist(err) || forceWrite {
 		gopModContent := pself.GoModTemplate
@@ -132,14 +132,13 @@ func (pself *CmdTool) createDefaultGoMod(dir string, forceWrite bool) {
 	}
 }
 
-// findSpxRoot finds the spx root directory by looking for gop.mod
+// findSpxRoot finds the spx root directory by looking for gox.mod.
 func (pself *CmdTool) findSpxRoot(startDir string) string {
 	currentDir := filepath.Dir(startDir)
 	for {
-		gopModPath := path.Join(currentDir, "gop.mod")
-		if _, err := os.Stat(gopModPath); err == nil {
-			// Check if this gop.mod contains spx project definition
-			content, err := os.ReadFile(gopModPath)
+		modPath := path.Join(currentDir, "gox.mod")
+		if _, err := os.Stat(modPath); err == nil {
+			content, err := os.ReadFile(modPath)
 			if err == nil && strings.Contains(string(content), "github.com/goplus/spx/v2") {
 				return currentDir
 			}
@@ -301,11 +300,12 @@ func (pself *CmdTool) CheckEnv() error {
 		return fmt.Errorf("failed to resolve target directory path: %w", err)
 	}
 
-	exist := util.CheckFileExist(dir, pself.FileSuffix, false)
-	if !exist {
-		return fmt.Errorf("cannot find %s file, not a valid project directory", pself.FileSuffix)
+	for _, ext := range sourceExts {
+		if util.CheckFileExist(dir, ext, false) {
+			return nil
+		}
 	}
-	return nil
+	return fmt.Errorf("cannot find spx source files, not a valid project directory")
 }
 
 func (pself *CmdTool) ShouldReimport() bool {
@@ -355,7 +355,7 @@ func (cmd *CmdTool) setupPortableGoEnv() error {
 	cmd.GoRoot = path.Join(goEnvDir, "gotoolchain", "go")
 	cmd.GoPath = filepath.Join(goEnvDir, "go")
 	if _, err := os.Stat(cmd.GoRoot); os.IsNotExist(err) {
-		return fmt.Errorf("portable Go toolchain not found at the expected path: %s\n\nThis is expected to be provided by the SPX release package. If you are setting this up manually, please ensure the Go toolchain is extracted to '%s/gotoolchain/go'.", cmd.GoRoot, goEnvDir)
+		return fmt.Errorf("portable Go toolchain not found at the expected path: %s\n\nThis is expected to be provided by the spx release package. If you are setting this up manually, please ensure the Go toolchain is extracted to '%s/gotoolchain/go'.", cmd.GoRoot, goEnvDir)
 	}
 	// Set GoBinPath to point to portable Go environment's bin directory
 	cmd.GoBinPath, err = filepath.Abs(filepath.Join(cmd.GoPath, "bin"))

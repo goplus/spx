@@ -628,7 +628,7 @@ exportweb() {
     (cd "$PROJ_DIR/.tmp/web" 
      mkdir -p assets 
      echo '{"map":{"width":480,"height":360}}' > assets/index.json 
-     echo "" > main.spx 
+     echo "" > main_spx.gox
      rm -rf ./project/.builds/*web 
      spx exportweb 
      cd ./project/.builds/web 

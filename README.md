@@ -55,7 +55,7 @@ How to run games powered by XGo spx engine?
 
 Through this example you can learn how to listen events and do somethings.
 
-Here are some codes in [Kai.spx](tutorial/01-Weather/Kai.spx):
+Here are some codes in [Kai_spx.gox](tutorial/01-Weather/Kai_spx.gox):
 
 ```coffee
 onStart => {
@@ -76,7 +76,7 @@ onMsg "4", => {
 
 We call `onStart` and `onMsg` to listen events. `onStart` is called when the program is started. And `onMsg` is called when someone calls `broadcast` to broadcast a message.
 
-When the program starts, Kai says `Where do you come from?`, and then broadcasts the message `1`. Who will recieve this message? Let's see codes in [Jaime.spx](tutorial/01-Weather/Jaime.spx):
+When the program starts, Kai says `Where do you come from?`, and then broadcasts the message `1`. Who will recieve this message? Let's see codes in [Jaime_spx.gox](tutorial/01-Weather/Jaime_spx.gox):
 
 ```coffee
 onMsg "1", => {
@@ -101,7 +101,7 @@ The following procedures are very similar. In this way you can implement dialogu
 
 Through this example you can learn how to define variables and show them on the stage.
 
-Here are all the codes of [Dragon](tutorial/02-Dragon/Dragon.spx):
+Here are all the codes of [Dragon](tutorial/02-Dragon/Dragon_spx.gox):
 
 ```coffee
 var (
@@ -154,7 +154,7 @@ Through this example you can learn:
 * Clone sprites and destory them.
 * Distinguish between sprite variables and shared variables that can access by all sprites.
 
-Here are some codes in [Calf.spx](tutorial/03-Clone/Calf.spx):
+Here are some codes in [Calf_spx.gox](tutorial/03-Clone/Calf_spx.gox):
 
 ```coffee
 var (
@@ -173,10 +173,10 @@ onCloned => {
 
 When we click the sprite `Calf`, it receives an `onClick` event. Then it calls `clone` to clone itself. And after cloning, the new `Calf` sprite will receive an `onCloned` event.
 
-In `onCloned` event, the new `Calf` sprite uses a variable named `gid`. It doesn't define in [Calf.spx](tutorial/03-Clone/Calf.spx), but in [main.spx](tutorial/03-Clone/main.spx).
+In `onCloned` event, the new `Calf` sprite uses a variable named `gid`. It doesn't define in [Calf_spx.gox](tutorial/03-Clone/Calf_spx.gox), but in [main_spx.gox](tutorial/03-Clone/main_spx.gox).
 
 
-Here are all the codes of [main.spx](tutorial/03-Clone/main.spx):
+Here are all the codes of [main_spx.gox](tutorial/03-Clone/main_spx.gox):
 
 ```coffee
 var (
@@ -188,9 +188,9 @@ var (
 run "res", {Title: "Clone and Destory (by XGo)"}
 ```
 
-All these three variables in [main.spx](tutorial/03-Clone/main.spx) are shared by all sprites. `Arrow` and `Calf` are sprites that exist in this project. `gid` means `global id`. It is used to allocate id for all cloned `Calf` sprites.
+All these three variables in [main_spx.gox](tutorial/03-Clone/main_spx.gox) are shared by all sprites. `Arrow` and `Calf` are sprites that exist in this project. `gid` means `global id`. It is used to allocate id for all cloned `Calf` sprites.
 
-Let's back to [Calf.spx](tutorial/03-Clone/Calf.spx) to see the full codes of `onCloned`:
+Let's back to [Calf_spx.gox](tutorial/03-Clone/Calf_spx.gox) to see the full codes of `onCloned`:
 
 ```coffee
 onCloned => {
@@ -205,7 +205,7 @@ It increases `gid` value and assigns it to sprite `id`. This makes all these `Ca
 
 Why these `Calf` sprites need different `id`? Because we want destory one of them by its `id`.
 
-Here are all the codes in [Arrow.spx](tutorial/03-Clone/Arrow.spx):
+Here are all the codes in [Arrow_spx.gox](tutorial/03-Clone/Arrow_spx.gox):
 
 ```coffee
 onClick => {
@@ -216,7 +216,7 @@ onClick => {
 
 When we click `Arrow`, it broadcasts an "undo" message (NOTE: We pass the second parameter `true` to broadcast to indicate we wait all sprites to finish processing this message).
 
-All `Calf` sprites receive this message, but only the last cloned sprite finds its `id` is equal to `gid` then destroys itself. Here are the related codes in [Calf.spx](tutorial/03-Clone/Calf.spx):
+All `Calf` sprites receive this message, but only the last cloned sprite finds its `id` is equal to `gid` then destroys itself. Here are the related codes in [Calf_spx.gox](tutorial/03-Clone/Calf_spx.gox):
 
 ```coffee
 onMsg "undo", => {
@@ -234,7 +234,7 @@ Through this example you can learn:
 * How to keep a sprite following mouse position.
 * How to fire bullets.
 
-It's simple to keep a sprite following mouse position. Here are some related codes in [MyAircraft.spx](tutorial/04-Bullet/MyAircraft.spx):
+It's simple to keep a sprite following mouse position. Here are some related codes in [MyAircraft_spx.gox](tutorial/04-Bullet/MyAircraft_spx.gox):
 
 
 ```coffee
@@ -248,7 +248,7 @@ onStart => {
 
 Yes, we just need to call `setXYpos mouseX, mouseY` to follow mouse position.
 
-But how to fire bullets? Let's see all codes of [MyAircraft.spx](tutorial/04-Bullet/MyAircraft.spx):
+But how to fire bullets? Let's see all codes of [MyAircraft_spx.gox](tutorial/04-Bullet/MyAircraft_spx.gox):
 
 ```coffee
 onStart => {
@@ -262,7 +262,7 @@ onStart => {
 
 In this example, `MyAircraft` fires bullets every 0.1 seconds. It just calls `Bullet.clone` to create a new bullet. All the rest things are the responsibility of `Bullet`.
 
-Here are all the codes in [Bullet.spx](tutorial/04-Bullet/Bullet.spx):
+Here are all the codes in [Bullet_spx.gox](tutorial/04-Bullet/Bullet_spx.gox):
 
 ```coffee
 onCloned => {

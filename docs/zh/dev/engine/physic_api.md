@@ -652,7 +652,7 @@ if !input.Left && !input.Right {
 
 **需求**: *"我需要一个在平台间来回巡逻的敌人，不受重力影响"*
 
-PatrolEnemy.spx
+PatrolEnemy_spx.gox
 ```go
 var (
     patrolPoints [][2]float64

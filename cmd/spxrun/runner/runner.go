@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-// Package runner implements the SPX 2.0 project runner.
+// Package runner implements the spx 2.0 project runner.
 package runner
 
 import (
@@ -76,10 +76,10 @@ type RuntimeOptions struct {
 	Debug       bool   // Enable debug mode
 }
 
-// Runner handles the SPX project running process
+// Runner handles the spx project running process
 type Runner struct {
 	// Project paths
-	ProjectDir string // SPX project directory (contains .spx files)
+	ProjectDir string // spx project directory (contains spx source files)
 	GoDir      string // Generated Go code directory
 	LibDir     string // Library output directory
 	TempDir    string // Temporary runtime directory
@@ -155,14 +155,14 @@ func New(projectPath string, version ...string) (*Runner, error) {
 	return r, nil
 }
 
-// Run executes the complete SPX project running process
+// Run executes the complete spx project running process
 func (r *Runner) Run() error {
 	return r.RunWithOptions(nil)
 }
 
-// RunWithOptions executes the SPX project running process with custom runtime options
+// RunWithOptions executes the spx project running process with custom runtime options
 func (r *Runner) RunWithOptions(opts *RuntimeOptions) error {
-	fmt.Println("=== SPX Runner ===")
+	fmt.Println("=== spx Runner ===")
 	fmt.Printf("Project: %s\n", r.ProjectDir)
 
 	// Step 1: Check and download runtime
@@ -294,7 +294,7 @@ func (r *Runner) downloadRuntimePck() error {
 	return nil
 }
 
-// buildLibrary builds the Go dynamic library for the SPX project
+// buildLibrary builds the Go dynamic library for the spx project
 func (r *Runner) buildLibrary() error {
 	fmt.Println("Building dynamic library...")
 
@@ -315,7 +315,7 @@ func (r *Runner) buildLibrary() error {
 		return fmt.Errorf("failed to ensure go.mod: %w", err)
 	}
 
-	// Always regenerate Go code from .spx files (project may have changed)
+	// Always regenerate Go code from spx source files because the project may have changed.
 	fmt.Println("Generating Go code with xgo...")
 	if err := r.generateGoCode(); err != nil {
 		return fmt.Errorf("failed to generate Go code: %w", err)
@@ -333,7 +333,7 @@ func (r *Runner) buildLibrary() error {
 		// Remove xgo_autogen.go from project directory to keep it clean
 		os.Remove(autogenPath)
 	} else {
-		return fmt.Errorf("xgo failed to generate code. Check if .spx files exist in project")
+		return fmt.Errorf("xgo failed to generate code. Check if spx source files exist in project")
 	}
 
 	// Build library for all architectures on macOS
@@ -483,19 +483,21 @@ func (r *Runner) runWithRuntimeOptions(opts *RuntimeOptions) error {
 	return cmd.Run()
 }
 
-// ensureGopMod ensures gop.mod exists in the project directory
-func (r *Runner) ensureGopMod() error {
-	gopModPath := filepath.Join(r.ProjectDir, "gop.mod")
-	if _, err := os.Stat(gopModPath); os.IsNotExist(err) {
-		fmt.Println("Creating gop.mod...")
-		if err := os.WriteFile(gopModPath, []byte(GopModTemplate), 0644); err != nil {
-			return fmt.Errorf("failed to create gop.mod: %w", err)
-		}
+// ensureGoxMod ensures gox.mod exists in the project directory.
+func (r *Runner) ensureGoxMod() error {
+	goxModPath := filepath.Join(r.ProjectDir, "gox.mod")
+	if _, err := os.Stat(goxModPath); err == nil {
+		return nil
+	}
+
+	fmt.Println("Creating gox.mod...")
+	if err := os.WriteFile(goxModPath, []byte(GoxModTemplate), 0644); err != nil {
+		return fmt.Errorf("failed to create gox.mod: %w", err)
 	}
 	return nil
 }
 
-// SpxModule is the SPX v2 module path
+// SpxModule is the spx v2 module path
 const SpxModule = "github.com/goplus/spx/v2"
 
 // ensureGoMod ensures go.mod exists in both project root and project/go directory
@@ -546,10 +548,10 @@ func (r *Runner) ensureGoMod() error {
 	return nil
 }
 
-// generateGoCode runs xgo to generate Go code from .spx files
+// generateGoCode runs xgo to generate Go code from spx source files.
 func (r *Runner) generateGoCode() error {
-	// Ensure gop.mod exists first
-	if err := r.ensureGopMod(); err != nil {
+	// Ensure a classfile config exists first.
+	if err := r.ensureGoxMod(); err != nil {
 		return err
 	}
 

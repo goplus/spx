@@ -1,4 +1,4 @@
-// Package text provides text processing utilities for SPX.
+// Package text provides text processing utilities for spx.
 package text
 
 import (

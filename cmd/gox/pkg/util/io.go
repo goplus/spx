@@ -50,7 +50,7 @@ func CopyDir2(src string, dst string) error {
 	return nil
 }
 func CheckFileExist(dir, ext string, recursive bool) bool {
-	if !strings.HasPrefix(ext, ".") {
+	if !strings.HasPrefix(ext, ".") && !strings.HasPrefix(ext, "_") {
 		ext = "." + ext
 	}
 

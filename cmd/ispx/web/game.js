@@ -230,8 +230,8 @@ class GameApp {
         /** @type {{ [path: string]: Uint8Array }} */
         const nonAssetFiles = {};
         Object.entries(files).forEach(([path, file]) => {
-            // `.spx` and `.json` files are treated as non-asset files
-            if (path.endsWith(".spx") || path.endsWith('.json')) {
+            // spx classfiles and `.json` files are treated as non-asset files.
+            if (path.endsWith("_spx.gox") || path.endsWith(".spx") || path.endsWith('.json')) {
                 nonAssetFiles[path] = new Uint8Array(file.content);
             }
         });

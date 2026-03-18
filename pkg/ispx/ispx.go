@@ -16,7 +16,13 @@ import (
 )
 
 func init() {
-	// NOTE: Keep in sync with the config in spx's gop.mod.
+	// NOTE: Keep in sync with the config in spx's gox.mod.
+	xgobuild.RegisterProject(&modfile.Project{
+		Ext:      "_spx.gox",
+		Class:    "Game",
+		Works:    []*modfile.Class{{Ext: "_spx.gox", Class: "SpriteImpl", Embedded: true}},
+		PkgPaths: []string{"github.com/goplus/spx/v2", "math"},
+	})
 	xgobuild.RegisterProject(&modfile.Project{
 		Ext:      ".spx",
 		Class:    "Game",

@@ -17,7 +17,7 @@ func main() {
 	//   - .temp/ directory (spx run mode)
 	//   - project/ directory (spx run/editor mode)
 	//
-	// In both cases, the spx source files (.spx) are in the parent directory.
+	// In both cases, the spx source files are in the parent directory.
 	projDir, err := filepath.Abs("..")
 	if err != nil {
 		panic("failed to get project directory: " + err.Error())

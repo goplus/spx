@@ -44,7 +44,7 @@ func main() {
 	cmd.GoModTemplate = gomodtemplate
 
 	// Initialize the Args field if not already initialized
-	err := cmd.RunCmd(appName, appName, cmd.Version, projectFS, "template/project", "project")
+	err := cmd.RunCmd(appName, "_spx.gox", cmd.Version, projectFS, "template/project", "project")
 	if err != nil {
 		println("failed to run cmd:", err)
 		return

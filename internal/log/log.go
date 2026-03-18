@@ -1,4 +1,4 @@
-// Package log provides a unified logging system for SPX engine.
+// Package log provides a unified logging system for spx engine.
 package log
 
 import (

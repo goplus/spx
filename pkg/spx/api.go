@@ -12,8 +12,8 @@ func isSpxEnv() bool {
 	return engine.GetGame() != nil
 }
 
-// IsAbortThreadError checks whether the given error is an SPX coroutine termination error.
-// This function is used to determine if an error was thrown due to SPX coroutine termination.
+// IsAbortThreadError checks whether the given error is an spx coroutine termination error.
+// This function is used to determine if an error was thrown due to spx coroutine termination.
 //
 // Parameters:
 //
@@ -21,14 +21,14 @@ func isSpxEnv() bool {
 //
 // Returns:
 //
-//	true if the error is an SPX coroutine termination error, false otherwise
+//	true if the error is an spx coroutine termination error, false otherwise
 //
 // Example:
 //
 //	defer func() {
 //	    if r := recover(); r != nil {
 //	        if spx.IsAbortThreadError(r) {
-//	            // Handle SPX coroutine termination
+//	            // Handle spx coroutine termination
 //	            return
 //	        }
 //	        // Handle other panics
@@ -39,17 +39,17 @@ func IsAbortThreadError(err any) bool {
 	return engine.IsAbortThreadError(err)
 }
 
-// IsInCoroutine checks whether the current execution context is within an SPX coroutine.
-// Returns true if running inside an SPX coroutine, false if running in a regular Go goroutine
+// IsInCoroutine checks whether the current execution context is within an spx coroutine.
+// Returns true if running inside an spx coroutine, false if running in a regular Go goroutine
 // or the main thread.
 //
 // This function is useful for determining the appropriate execution strategy when your code
-// needs to work in both SPX coroutine and regular Go contexts.
+// needs to work in both spx coroutine and regular Go contexts.
 //
 // Example:
 //
 //	if spx.IsInCoroutine() {
-//	    // Use SPX-specific functions like Wait() or WaitNextFrame()
+//	    // Use spx-specific functions like Wait() or WaitNextFrame()
 //	    spx.Wait(1.0)
 //	} else {
 //	    // Use regular Go functions
@@ -60,17 +60,17 @@ func IsInCoroutine() bool {
 }
 
 // ExecuteNative executes the given function in a native Go goroutine and waits for its completion.
-// While waiting, if called from within an SPX coroutine, it yields control via WaitNextFrame to avoid blocking
-// the SPX main thread.
+// While waiting, if called from within an spx coroutine, it yields control via WaitNextFrame to avoid blocking
+// the spx main thread.
 //
-// The function receives the context from the current SPX coroutine, which will be canceled when
+// The function receives the context from the current spx coroutine, which will be canceled when
 // the coroutine is aborted (e.g., game reset, owner destroyed). The native function SHOULD respect the
 // context and return when ctx.Done() is closed to allow proper cleanup.
 //
 // This function is essential when you need to perform blocking Go operations (such as network requests,
-// file I/O, or system calls) from within an SPX coroutine without freezing the game engine.
+// file I/O, or system calls) from within an spx coroutine without freezing the game engine.
 //
-// If called from outside an SPX coroutine context, the function receives context.Background() and nil owner.
+// If called from outside an spx coroutine context, the function receives context.Background() and nil owner.
 //
 // Parameters:
 //
@@ -107,30 +107,30 @@ func ExecuteNative(fn func(ctx context.Context, owner any)) {
 		defer done.Store(true)
 		fn(ctx, owner)
 	}()
-	// Wait for completion while yielding control to SPX
+	// Wait for completion while yielding control to spx
 	for !done.Load() {
 		WaitNextFrame()
 	}
 }
 
-// Execute executes the given function in an SPX coroutine from the current Go goroutine context and waits for completion.
+// Execute executes the given function in an spx coroutine from the current Go goroutine context and waits for completion.
 // This function blocks until fn finishes execution.
 //
-// If already in an SPX coroutine, the function executes directly in the current coroutine.
-// If not in a coroutine, a new SPX coroutine is created and the caller blocks until it completes.
+// If already in an spx coroutine, the function executes directly in the current coroutine.
+// If not in a coroutine, a new spx coroutine is created and the caller blocks until it completes.
 //
 // The function receives the current coroutine's context, which will be canceled when the coroutine
 // is aborted (e.g., game reset, owner destroyed).
 //
 // Parameters:
 //
-//	owner - The SPX coroutine owner. When the owner is destroyed, all coroutines created by this owner will be properly stopped.
+//	owner - The spx coroutine owner. When the owner is destroyed, all coroutines created by this owner will be properly stopped.
 //	fn - The function to execute in the coroutine context, receiving the context and owner.
 //
 // Example:
 //
 //	spx.Execute(sprite, func(ctx context.Context, owner any) {
-//	    // This runs in an SPX coroutine and can use SPX APIs
+//	    // This runs in an spx coroutine and can use spx APIs
 //	    spx.Wait(1.0)
 //	    sprite := owner.(*MySprite)
 //	    sprite.Say("Hello")
@@ -150,7 +150,7 @@ func Execute(owner any, fn func(ctx context.Context, owner any)) {
 	<-done
 }
 
-// Go starts a new SPX coroutine that executes the given function concurrently.
+// Go starts a new spx coroutine that executes the given function concurrently.
 // This is useful for running multiple operations in parallel without blocking
 // the main execution flow.
 //
@@ -160,7 +160,7 @@ func Execute(owner any, fn func(ctx context.Context, owner any)) {
 //
 // Parameters:
 //
-//	owner - The SPX coroutine owner. When the owner is destroyed, all coroutines created by this owner will be properly stopped.
+//	owner - The spx coroutine owner. When the owner is destroyed, all coroutines created by this owner will be properly stopped.
 //	        If nil, the current coroutine's owner or the game instance will be used as the owner.
 //	fn - The function to execute in the coroutine context, receiving the context and owner.
 //

@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-// Package main implements the spxrun command for running SPX 2.0 projects.
-// This command is called by xgo when a project has a "run" directive in gop.mod.
+// Package main implements the spxrun command for running spx 2.0 projects.
+// This command is called by xgo when a project has a "run" directive in gox.mod.
 package main
 
 import (
@@ -37,7 +37,7 @@ func main() {
 	maximized := flag.Bool("maximized", false, "Start maximized")
 	alwaysOnTop := flag.Bool("always-on-top", false, "Keep window always on top")
 	debug := flag.Bool("debug", false, "Enable debug mode")
-	version := flag.String("version", "", "SPX version to use (e.g., 'v2.0.0', 'latest')")
+	version := flag.String("version", "", "spx version to use (e.g., 'v2.0.0', 'latest')")
 
 	// Parse command line arguments with custom logic to support project path before flags.
 	// Standard Go flag package stops parsing at the first non-flag argument, so we need

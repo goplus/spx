@@ -24,18 +24,18 @@ import (
 // Sync files from repository before building.
 // Run: go generate ./cmd/spxrun/runner
 //
-//go:generate cp ../../../gop.mod gop.mod
+//go:generate cp ../../../gox.mod gox.mod
 //go:generate cp ../../gox/template/version version
 //go:generate cp ../../gox/template/go.mod.template go.mod.template
 
-// GopModTemplate is the embedded content of gop.mod from the SPX repository root.
-// This template is used to create gop.mod for new SPX projects.
+// GoxModTemplate is the embedded content of gox.mod from the spx repository root.
+// This template is used to create gox.mod for new spx projects.
 //
-//go:embed gop.mod
-var GopModTemplate string
+//go:embed gox.mod
+var GoxModTemplate string
 
 // GoModTemplate is the embedded content of go.mod.template
-// This template is used to create go.mod for SPX project's Go code.
+// This template is used to create go.mod for spx project's Go code.
 //
 //go:embed go.mod.template
 var GoModTemplate string
@@ -45,7 +45,7 @@ var GoModTemplate string
 //go:embed version
 var versionFile string
 
-// Version returns the SPX runtime version (trimmed)
+// Version returns the spx runtime version (trimmed)
 func Version() string {
 	return strings.TrimSpace(versionFile)
 }

@@ -1,8 +1,8 @@
-# Godot 与 SPX 游戏暂停系统详解
+# Godot 与 spx 游戏暂停系统详解
 
 ## 概述
 
-本文档详细描述了 Godot 引擎的暂停机制以及 SPX 引擎如何基于 Godot 实现游戏暂停和恢复功能。
+本文档详细描述了 Godot 引擎的暂停机制以及 spx 引擎如何基于 Godot 实现游戏暂停和恢复功能。
 
 ---
 
@@ -157,11 +157,11 @@ case NOTIFICATION_UNPAUSED: {
 
 ---
 
-## 第二部分：SPX 引擎的暂停实现
+## 第二部分：spx 引擎的暂停实现
 
-### 1. SPX 暂停架构设计
+### 1. spx 暂停架构设计
 
-SPX 引擎采用分层架构，通过监听 Godot 的暂停通知来实现与 Godot 的同步暂停：
+spx 引擎采用分层架构，通过监听 Godot 的暂停通知来实现与 Godot 的同步暂停：
 
 ```
 外部调用层: SpxExtMgr
@@ -236,7 +236,7 @@ void SpxEngine::pause() {
     if (tree != nullptr) {
         tree->set_pause(true);  // 只设置 Godot 状态
     }
-    // SPX 状态将通过 SpxEngineNode 的通知机制自动同步
+    // spx 状态将通过 SpxEngineNode 的通知机制自动同步
 }
 
 void SpxEngine::resume() {
@@ -247,13 +247,13 @@ void SpxEngine::resume() {
 
 void SpxEngine::_on_godot_pause_changed(bool is_godot_paused) {
     if (is_godot_paused && !is_spx_paused) {
-        // Godot 暂停，SPX 同步暂停
+        // Godot 暂停，spx 同步暂停
         is_spx_paused = true;
         for (auto mgr : mgrs) {
             mgr->on_pause();
         }
     } else if (!is_godot_paused && is_spx_paused) {
-        // Godot 恢复，SPX 同步恢复
+        // Godot 恢复，spx 同步恢复
         is_spx_paused = false;
         for (auto mgr : mgrs) {
             mgr->on_resume();
@@ -334,7 +334,7 @@ public:
 };
 ```
 
-### 3. SPX 暂停工作流程
+### 3. spx 暂停工作流程
 
 #### 3.1 用户手动暂停流程
 
@@ -353,7 +353,7 @@ SpxEngineNode 接收通知
     ↓
 SpxEngine::_on_godot_pause_changed(true)
     ↓
-设置 is_spx_paused = true + 通知所有 SPX 管理器暂停
+设置 is_spx_paused = true + 通知所有 spx 管理器暂停
 ```
 
 #### 3.2 编辑器暂停按钮流程
@@ -369,7 +369,7 @@ SpxEngineNode 接收通知
     ↓
 SpxEngine::_on_godot_pause_changed(true)
     ↓
-设置 is_spx_paused = true + 通知所有 SPX 管理器暂停
+设置 is_spx_paused = true + 通知所有 spx 管理器暂停
 ```
 
 #### 3.3 子管理器暂停处理
@@ -398,18 +398,18 @@ public:
 };
 ```
 
-### 4. SPX 暂停特性
+### 4. spx 暂停特性
 
 #### 4.1 统一的暂停入口
 - 无论是代码调用还是编辑器操作，都通过 Godot 的 SceneTree 暂停机制
 - 避免了多个暂停路径导致的状态不一致
 
 #### 4.2 自动状态同步
-- SPX 自动跟随 Godot 的暂停状态变化
+- spx 自动跟随 Godot 的暂停状态变化
 - 无需手动维护两套暂停状态
 
 #### 4.3 管理器级暂停支持
-- 所有 SPX 子管理器都可以实现自定义的暂停/恢复逻辑
+- 所有 spx 子管理器都可以实现自定义的暂停/恢复逻辑
 - 提供统一的暂停事件通知机制
 
 #### 4.4 架构清晰
