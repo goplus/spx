@@ -133,3 +133,40 @@ func TestMustGoTypeForCTypePanicsOnMissingMapping(t *testing.T) {
 		},
 	)
 }
+
+func TestEffectiveGoArgumentTypeUsesNativeArrayBridgeSpec(t *testing.T) {
+	ClearNativeArrayBridgeSpecs()
+	RegisterNativeArrayBridgeSpec(NativeArrayBridgeSpec{
+		BaseFunctionName: "GDExtensionSpxSpriteBatchUpdateTransforms",
+		BaseArgName:      "buffer",
+		DataArgName:      "buffer_data",
+		DataArgGoType:    "[]float32",
+		DataArgPtrType:   "*float32",
+		LenArgName:       "len",
+		LenArgGoType:     "int32",
+		GoArgType:        "[]float32",
+	})
+
+	function := &clang.TypedefFunction{
+		Name: "GDExtensionSpxSpriteBatchUpdateTransforms",
+		Arguments: []clang.Argument{
+			{
+				Name: "buffer_data",
+				Type: clang.Type{
+					Primative: &clang.PrimativeType{Name: "float", IsPointer: true},
+				},
+			},
+			{
+				Name: "len",
+				Type: clang.Type{
+					Primative: &clang.PrimativeType{Name: "int"},
+				},
+			},
+		},
+	}
+
+	require.Equal(t, "[]float32", EffectiveGoArgumentType(function, function.Arguments[0]))
+	require.Equal(t, "[]float32", EffectiveGdxArgumentType(function, function.Arguments[0]))
+	require.Equal(t, "buffer", EffectiveGoArgumentName(function, function.Arguments[0]))
+	require.True(t, ShouldSkipHighLevelArgument(function, function.Arguments[1]))
+}

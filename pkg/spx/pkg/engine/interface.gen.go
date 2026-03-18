@@ -313,8 +313,8 @@ type ISpriteMgr interface {
 	CheckCollisionWithSprite(obj Object, obj_b Object, alpha_threshold float64, use_pixel_perfect bool) bool
 	SetPixelCollisionSamplingStep(step int64)
 	GetPixelCollisionSamplingStep() int64
-	BatchUpdateTransforms(buffer Array)
-	BatchUpdateVisuals(buffer Array)
+	BatchUpdateTransforms(buffer []float32)
+	BatchUpdateVisuals(buffer []float32)
 	BatchRetrievePositions(objs Array) Array
 }
 

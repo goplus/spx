@@ -1522,27 +1522,21 @@ func (pself *spriteMgr) GetPixelCollisionSamplingStep() int64 {
 	retValue := CallSpriteGetPixelCollisionSamplingStep()
 	return ToInt64(retValue)
 }
-func (pself *spriteMgr) BatchUpdateTransforms(buffer Array) {
-	arg0Info := ToGdArrayInfo(buffer)
-	if arg0Info != nil {
-		defer arg0Info.Free()
+func (pself *spriteMgr) BatchUpdateTransforms(buffer []float32) {
+	var arg0 *float32
+	if len(buffer) > 0 {
+		arg0 = &buffer[0]
 	}
-	arg0 := GdArray(nil)
-	if arg0Info != nil {
-		arg0 = arg0Info.Raw()
-	}
-	CallSpriteBatchUpdateTransforms(arg0)
+	arg1 := int32(len(buffer))
+	CallSpriteBatchUpdateTransforms(arg0, arg1)
 }
-func (pself *spriteMgr) BatchUpdateVisuals(buffer Array) {
-	arg0Info := ToGdArrayInfo(buffer)
-	if arg0Info != nil {
-		defer arg0Info.Free()
+func (pself *spriteMgr) BatchUpdateVisuals(buffer []float32) {
+	var arg0 *float32
+	if len(buffer) > 0 {
+		arg0 = &buffer[0]
 	}
-	arg0 := GdArray(nil)
-	if arg0Info != nil {
-		arg0 = arg0Info.Raw()
-	}
-	CallSpriteBatchUpdateVisuals(arg0)
+	arg1 := int32(len(buffer))
+	CallSpriteBatchUpdateVisuals(arg0, arg1)
 }
 func (pself *spriteMgr) BatchRetrievePositions(objs Array) Array {
 	arg0Info := ToGdArrayInfo(objs)

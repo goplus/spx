@@ -60,6 +60,13 @@ void cfree(void* ptr) {
 
 {{- range $i, $f := $view.Ast.CollectGDExtensionInterfaceFunctions -}}
 {{- if isManagerMethod $f }}
+{{- if hasNativeArrayBridgeSpec $f }}
+	{{- $spec := getNativeArrayBridgeSpec $f }}
+EMSCRIPTEN_KEEPALIVE
+void gd{{ loadProcAddressName $f.Name }}({{ cDecl $spec.RawDataCType $spec.RawDataArgName }}, {{ cDecl $spec.RawLenCType $spec.RawLenArgName }}) {
+	{{ getManagerName $f.Name}}Mgr->{{ $spec.RawMethodName }}({{ $spec.RawDataArgName }}, {{ $spec.RawLenArgName }});
+}
+{{- else }}
 EMSCRIPTEN_KEEPALIVE
 void gd{{ loadProcAddressName $f.Name }}(
 	{{- range $j, $arg := $f.Arguments -}}
@@ -72,25 +79,14 @@ void gd{{ loadProcAddressName $f.Name }}(
 ) {
 	{{ if ne "void" $f.ReturnType.CStyleString -}} *ret_val = {{- end }} {{ getManagerName $f.Name}}Mgr->
 	{{- trimPrefix (trimPrefix (trimPrefix (loadProcAddressName $f.Name) "spx_") (getManagerName $f.Name)) "_" }}(
-		{{- range $j, $arg := $f.Arguments }}
+	{{- range $j, $arg := $f.Arguments }}
 			{{- if gt $j 0 }}, {{ end -}}
 			{{- $arg.ResolvedPtrName $j }}
 		{{- end -}}
 	);
 }
-	{{- if eq (loadProcAddressName $f.Name) "spx_sprite_batch_update_transforms" }}
-EMSCRIPTEN_KEEPALIVE
-void gdspx_sprite_batch_update_transforms_raw(float *buffer_data, int32_t len) {
-	spriteMgr->batch_update_transforms_raw(buffer_data, len);
-}
-	{{- end -}}
-	{{- if eq (loadProcAddressName $f.Name) "spx_sprite_batch_update_visuals" }}
-EMSCRIPTEN_KEEPALIVE
-void gdspx_sprite_batch_update_visuals_raw(float *buffer_data, int32_t len) {
-	spriteMgr->batch_update_visuals_raw(buffer_data, len);
-}
-	{{- end -}}
-	{{- end -}}
+{{- end }}
+{{- end -}}
 	{{ end }}
 
 }

@@ -298,14 +298,19 @@ func getManagerFuncName(function *clang.TypedefFunction) string {
 	sb.WriteString("Mgr) ")
 	sb.WriteString(funcName)
 	sb.WriteString("(")
-	for i, arg := range args {
-		sb.WriteString(arg.Name)
-		sb.WriteString(" ")
-		typeName := MustGoTypeForCType(MustPrimitiveTypeName(arg, function.Name), function.Name)
-		sb.WriteString(typeName)
-		if i != len(args)-1 {
+	wroteArg := false
+	for _, arg := range args {
+		if ShouldSkipHighLevelArgument(function, arg) {
+			continue
+		}
+		if wroteArg {
 			sb.WriteString(", ")
 		}
+		sb.WriteString(EffectiveGoArgumentName(function, arg))
+		sb.WriteString(" ")
+		typeName := EffectiveGoArgumentType(function, arg)
+		sb.WriteString(typeName)
+		wroteArg = true
 	}
 	sb.WriteString(")")
 
@@ -324,9 +329,27 @@ func getManagerFuncBody(function *clang.TypedefFunction) string {
 	hasSyntheticReturn := function.ReturnType.Name == "void" && HasEffectiveReturn(function)
 	// convert arguments
 	for i, arg := range args {
+		if ShouldSkipHighLevelArgument(function, arg) {
+			continue
+		}
 		sb.WriteString(prefixTab)
 		typeName := MustPrimitiveTypeName(arg, function.Name)
 		argName := "arg" + strconv.Itoa(i)
+		if IsNativeArrayDataArg(function, arg) {
+			spec, _ := GetNativeArrayBridgeSpec(function.Name)
+			goArgName := EffectiveGoArgumentName(function, arg)
+			sb.WriteString("var " + argName + " " + spec.DataArgPtrType + "\n")
+			sb.WriteString(prefixTab)
+			sb.WriteString("if len(" + goArgName + ") > 0 {\n")
+			sb.WriteString(prefixTab + "\t" + argName + " = &" + goArgName + "[0]\n")
+			sb.WriteString(prefixTab + "}\n")
+			lenArgName := "arg" + strconv.Itoa(i+1)
+			sb.WriteString(prefixTab)
+			sb.WriteString(lenArgName + " := " + NativeArrayLenExpr(function, goArgName))
+			params = append(params, argName, lenArgName)
+			sb.WriteString("\n")
+			continue
+		}
 		switch typeName {
 		case "GdString":
 			sb.WriteString(argName + "Str := ")
@@ -408,14 +431,19 @@ func getManagerInterface(function *clang.TypedefFunction) string {
 	args := EffectiveArguments(function)
 	sb.WriteString(funcName)
 	sb.WriteString("(")
-	for i, arg := range args {
-		sb.WriteString(arg.Name)
-		sb.WriteString(" ")
-		typeName := MustGoTypeForCType(MustPrimitiveTypeName(arg, function.Name), function.Name)
-		sb.WriteString(typeName)
-		if i != len(args)-1 {
+	wroteArg := false
+	for _, arg := range args {
+		if ShouldSkipHighLevelArgument(function, arg) {
+			continue
+		}
+		if wroteArg {
 			sb.WriteString(", ")
 		}
+		sb.WriteString(EffectiveGoArgumentName(function, arg))
+		sb.WriteString(" ")
+		typeName := EffectiveGoArgumentType(function, arg)
+		sb.WriteString(typeName)
+		wroteArg = true
 	}
 	sb.WriteString(")")
 
@@ -424,17 +452,6 @@ func getManagerInterface(function *clang.TypedefFunction) string {
 		sb.WriteString(" " + typeName + " ")
 	}
 	return sb.String()
-}
-
-func MustGdxFuncParamTypeString(typeName string, functionName string) string {
-	name := MustGoTypeForCType(typeName, functionName)
-	if name == "Object" {
-		return "gdx." + name
-	}
-	if name == "Array" {
-		return "gdx.Array"
-	}
-	return name
 }
 
 func goZeroValue(typeName string) string {
@@ -452,6 +469,17 @@ func goZeroValue(typeName string) string {
 	}
 }
 
+func MustGdxReturnType(function *clang.TypedefFunction) string {
+	typeName := EffectiveGoReturnType(function)
+	if typeName == "Object" {
+		return "gdx.Object"
+	}
+	if typeName == "Array" {
+		return "gdx.Array"
+	}
+	return typeName
+}
+
 func genSyncPureApiWrapFunction(function *clang.TypedefFunction) string {
 	prefix := "GDExtensionSpx"
 	sb := strings.Builder{}
@@ -464,25 +492,30 @@ func genSyncPureApiWrapFunction(function *clang.TypedefFunction) string {
 	sb.WriteString(fmt.Sprintf("func (pself *%s) ", mgrTypeName+"Impl"))
 	sb.WriteString(pureFuncName)
 	sb.WriteString("(")
-	for i, arg := range args {
-		sb.WriteString(arg.Name)
-		sb.WriteString(" ")
-		typeName := MustGdxFuncParamTypeString(MustPrimitiveTypeName(arg, function.Name), function.Name)
-		sb.WriteString(typeName)
-		if i != len(args)-1 {
+	wroteArg := false
+	for _, arg := range args {
+		if ShouldSkipHighLevelArgument(function, arg) {
+			continue
+		}
+		if wroteArg {
 			sb.WriteString(", ")
 		}
+		sb.WriteString(EffectiveGoArgumentName(function, arg))
+		sb.WriteString(" ")
+		typeName := EffectiveGdxArgumentType(function, arg)
+		sb.WriteString(typeName)
+		wroteArg = true
 	}
 	sb.WriteString(")")
 
 	if retType != "" {
-		sb.WriteString(" " + MustGdxFuncParamTypeString(EffectiveRawReturnType(function), function.Name))
+		sb.WriteString(" " + MustGdxReturnType(function))
 	}
 	sb.WriteString(" {")
 	prefixStr := "\t"
 	// body
 	if retType != "" {
-		sb.WriteString("\n" + prefixStr + "return " + goZeroValue(MustGdxFuncParamTypeString(EffectiveRawReturnType(function), function.Name)) + "\n")
+		sb.WriteString("\n" + prefixStr + "return " + goZeroValue(MustGdxReturnType(function)) + "\n")
 	}
 	sb.WriteString("}")
 	return sb.String()
@@ -512,25 +545,30 @@ func genSyncApiWrapFunction(function *clang.TypedefFunction) string {
 	sb.WriteString(fmt.Sprintf("func (pself *%s) ", mgrTypeName+"Impl"))
 	sb.WriteString(pureFuncName)
 	sb.WriteString("(")
-	for i, arg := range args {
-		sb.WriteString(arg.Name)
-		sb.WriteString(" ")
-		typeName := MustGdxFuncParamTypeString(MustPrimitiveTypeName(arg, function.Name), function.Name)
-		sb.WriteString(typeName)
-		if i != len(args)-1 {
+	wroteArg := false
+	for _, arg := range args {
+		if ShouldSkipHighLevelArgument(function, arg) {
+			continue
+		}
+		if wroteArg {
 			sb.WriteString(", ")
 		}
+		sb.WriteString(EffectiveGoArgumentName(function, arg))
+		sb.WriteString(" ")
+		typeName := EffectiveGdxArgumentType(function, arg)
+		sb.WriteString(typeName)
+		wroteArg = true
 	}
 	sb.WriteString(")")
 
 	if retType != "" {
-		sb.WriteString(" " + MustGdxFuncParamTypeString(EffectiveRawReturnType(function), function.Name))
+		sb.WriteString(" " + MustGdxReturnType(function))
 	}
 	sb.WriteString(" {")
 	prefixStr := "\t"
 	// body
 	if retType != "" {
-		sb.WriteString("\n" + prefixStr + "var _ret1 " + MustGdxFuncParamTypeString(EffectiveRawReturnType(function), function.Name) + "")
+		sb.WriteString("\n" + prefixStr + "var _ret1 " + MustGdxReturnType(function) + "")
 	}
 
 	sb.WriteString(`	
@@ -542,11 +580,16 @@ func genSyncApiWrapFunction(function *clang.TypedefFunction) string {
 		sb.WriteString(prefixStr + "\t")
 	}
 	sb.WriteString(gdxMgrName + "." + pureFuncName + "(")
-	for i, arg := range args {
-		sb.WriteString(arg.Name)
-		if i != len(args)-1 {
+	wroteArg = false
+	for _, arg := range args {
+		if ShouldSkipHighLevelArgument(function, arg) {
+			continue
+		}
+		if wroteArg {
 			sb.WriteString(", ")
 		}
+		sb.WriteString(EffectiveGoArgumentName(function, arg))
+		wroteArg = true
 	}
 	sb.WriteString(")")
 
@@ -589,12 +632,15 @@ func getManagerImplPure(function *clang.TypedefFunction, clsName string) string 
 		if i == 0 && arg.Name == "obj" {
 			continue
 		}
+		if ShouldSkipHighLevelArgument(function, arg) {
+			continue
+		}
 		if wroteArg {
 			sb.WriteString(", ")
 		}
-		sb.WriteString(arg.Name)
+		sb.WriteString(EffectiveGoArgumentName(function, arg))
 		sb.WriteString(" ")
-		typeName := MustGoTypeForCType(MustPrimitiveTypeName(arg, function.Name), function.Name)
+		typeName := EffectiveGoArgumentType(function, arg)
 		sb.WriteString(typeName)
 		wroteArg = true
 	}
@@ -627,12 +673,15 @@ func getManagerImpl(function *clang.TypedefFunction, clsName string) string {
 		if i == 0 && arg.Name == "obj" {
 			continue
 		}
+		if ShouldSkipHighLevelArgument(function, arg) {
+			continue
+		}
 		if wroteArg {
 			sb.WriteString(", ")
 		}
-		sb.WriteString(arg.Name)
+		sb.WriteString(EffectiveGoArgumentName(function, arg))
 		sb.WriteString(" ")
-		typeName := MustGoTypeForCType(MustPrimitiveTypeName(arg, function.Name), function.Name)
+		typeName := EffectiveGoArgumentType(function, arg)
 		sb.WriteString(typeName)
 		wroteArg = true
 	}
@@ -656,10 +705,13 @@ func getManagerImpl(function *clang.TypedefFunction, clsName string) string {
 		if i == 0 && arg.Name == "obj" {
 			continue
 		}
+		if ShouldSkipHighLevelArgument(function, arg) {
+			continue
+		}
 		if wroteCallArg {
 			sb.WriteString(", ")
 		}
-		sb.WriteString(arg.Name)
+		sb.WriteString(EffectiveGoArgumentName(function, arg))
 		wroteCallArg = true
 	}
 	sb.WriteString(")\n")

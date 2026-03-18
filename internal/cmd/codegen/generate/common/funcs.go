@@ -25,6 +25,27 @@ var (
 	EnginePkgRelDir    = "../../../pkg/spx/pkg/engine"
 )
 
+type NativeArrayBridgeSpec struct {
+	BaseFunctionName string
+	BaseArgName      string
+
+	DataArgName    string
+	DataArgGoType  string
+	DataArgPtrType string
+	LenArgName     string
+	LenArgGoType   string
+
+	RawFunctionName string
+	RawMethodName   string
+	RawDataArgName  string
+	RawDataCType    string
+	RawLenArgName   string
+	RawLenCType     string
+
+	GoArgType     string
+	FastArrayType int32
+}
+
 func init() {
 	// Set callback function so the clang package can get the list of known manager names
 	clang.KnownManagerNamesProvider = func() []string {
@@ -52,7 +73,7 @@ func GoArgumentType(t clang.PrimativeType, name string) string {
 		return ""
 	case "float", "real_t":
 		if t.IsPointer {
-			panic(fmt.Sprintf("unhandled type: %s", t.CStyleString()))
+			return "*float32"
 		}
 		return "float32"
 	case "size_t":
@@ -417,9 +438,10 @@ func TrimPrefix(typeName, prefix string) string {
 }
 
 var (
-	managerSet        = map[string]bool{}
-	cppType2Go        = map[string]string{}
-	KnownManagerNames = []string{} // List of correct manager names obtained from header parsing
+	managerSet         = map[string]bool{}
+	cppType2Go         = map[string]string{}
+	KnownManagerNames  = []string{} // List of correct manager names obtained from header parsing
+	nativeArrayBridges = map[string]NativeArrayBridgeSpec{}
 )
 
 type ManagerData struct {
@@ -442,6 +464,90 @@ func RegisterManagerName(name string) {
 // ClearKnownManagerNames clears the list of known manager names.
 func ClearKnownManagerNames() {
 	KnownManagerNames = []string{}
+}
+
+func ClearNativeArrayBridgeSpecs() {
+	nativeArrayBridges = map[string]NativeArrayBridgeSpec{}
+}
+
+func RegisterNativeArrayBridgeSpec(spec NativeArrayBridgeSpec) {
+	nativeArrayBridges[spec.BaseFunctionName] = spec
+}
+
+func GetNativeArrayBridgeSpec(functionName string) (NativeArrayBridgeSpec, bool) {
+	spec, ok := nativeArrayBridges[functionName]
+	return spec, ok
+}
+
+func HasNativeArrayBridgeSpec(function *clang.TypedefFunction) bool {
+	if function == nil {
+		return false
+	}
+	_, ok := GetNativeArrayBridgeSpec(function.Name)
+	return ok
+}
+
+func IsNativeArrayBridgeArg(function *clang.TypedefFunction, arg clang.Argument) bool {
+	return IsNativeArrayDataArg(function, arg)
+}
+
+func IsNativeArrayDataArg(function *clang.TypedefFunction, arg clang.Argument) bool {
+	if function == nil {
+		return false
+	}
+	spec, ok := GetNativeArrayBridgeSpec(function.Name)
+	if !ok {
+		return false
+	}
+	return arg.Name == spec.DataArgName || arg.Name == spec.BaseArgName
+}
+
+func IsNativeArrayLenArg(function *clang.TypedefFunction, arg clang.Argument) bool {
+	if function == nil {
+		return false
+	}
+	spec, ok := GetNativeArrayBridgeSpec(function.Name)
+	if !ok {
+		return false
+	}
+	return arg.Name == spec.LenArgName && spec.LenArgName != ""
+}
+
+func ShouldSkipHighLevelArgument(function *clang.TypedefFunction, arg clang.Argument) bool {
+	return IsNativeArrayLenArg(function, arg)
+}
+
+func EffectiveGoArgumentName(function *clang.TypedefFunction, arg clang.Argument) string {
+	if IsNativeArrayDataArg(function, arg) {
+		spec, _ := GetNativeArrayBridgeSpec(function.Name)
+		return spec.BaseArgName
+	}
+	return arg.Name
+}
+
+func EffectiveGoArgumentType(function *clang.TypedefFunction, arg clang.Argument) string {
+	if IsNativeArrayDataArg(function, arg) {
+		spec, _ := GetNativeArrayBridgeSpec(function.Name)
+		return spec.DataArgGoType
+	}
+	return MustGoTypeForCType(MustPrimitiveTypeName(arg, function.Name), function.Name)
+}
+
+func EffectiveGdxArgumentType(function *clang.TypedefFunction, arg clang.Argument) string {
+	typeName := EffectiveGoArgumentType(function, arg)
+	switch typeName {
+	case "Object":
+		return "gdx.Object"
+	case "Array":
+		return "gdx.Array"
+	default:
+		return typeName
+	}
+}
+
+func NativeArrayLenExpr(function *clang.TypedefFunction, argName string) string {
+	spec, _ := GetNativeArrayBridgeSpec(function.Name)
+	return spec.LenArgGoType + "(len(" + argName + "))"
 }
 
 func GetManagerName(str string) string {
@@ -488,6 +594,20 @@ func EffectiveArguments(function *clang.TypedefFunction) []clang.Argument {
 		return args[:len(args)-1]
 	}
 	return args
+}
+
+func HighLevelArguments(function *clang.TypedefFunction) []clang.Argument {
+	args := EffectiveArguments(function)
+	result := make([]clang.Argument, 0, len(args))
+	for _, arg := range args {
+		if ShouldSkipHighLevelArgument(function, arg) {
+			continue
+		}
+		cloned := arg
+		cloned.Name = EffectiveGoArgumentName(function, arg)
+		result = append(result, cloned)
+	}
+	return result
 }
 
 func EffectiveRawReturnType(function *clang.TypedefFunction) string {

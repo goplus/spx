@@ -6,6 +6,7 @@ package webffi
 import (
 	"bytes"
 	_ "embed"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -156,7 +157,7 @@ func GenerateJsEngineJsFile(projectPath, godotPath string, ast clang.CHeaderFile
 		"goEnumValue":         GoEnumValue,
 		"add":                 Add,
 		"sub":                 Sub,
-		"effectiveArgs":       EffectiveArguments,
+		"effectiveArgs":       HighLevelArguments,
 		"cgoCastArgument":     CgoCastArgument,
 		"cgoCastReturnType":   CgoCastReturnType,
 		"cgoCleanUpArgument":  CgoCleanUpArgument,
@@ -204,14 +205,19 @@ func getManagerFuncName(function *clang.TypedefFunction) string {
 	sb.WriteString("Mgr) ")
 	sb.WriteString(funcName)
 	sb.WriteString("(")
-	for i, arg := range args {
-		sb.WriteString(arg.Name)
-		sb.WriteString(" ")
-		typeName := MustGoTypeForCType(MustPrimitiveTypeName(arg, function.Name), function.Name)
-		sb.WriteString(typeName)
-		if i != len(args)-1 {
+	wroteArg := false
+	for _, arg := range args {
+		if ShouldSkipHighLevelArgument(function, arg) {
+			continue
+		}
+		if wroteArg {
 			sb.WriteString(", ")
 		}
+		sb.WriteString(EffectiveGoArgumentName(function, arg))
+		sb.WriteString(" ")
+		typeName := EffectiveGoArgumentType(function, arg)
+		sb.WriteString(typeName)
+		wroteArg = true
 	}
 	sb.WriteString(")")
 
@@ -229,13 +235,24 @@ func getManagerFuncBody(function *clang.TypedefFunction) string {
 	args := EffectiveArguments(function)
 	// convert arguments
 	for i, arg := range args {
+		if ShouldSkipHighLevelArgument(function, arg) {
+			continue
+		}
 		sb.WriteString(prefixTab)
+		if IsNativeArrayDataArg(function, arg) {
+			argName := "arg" + strconv.Itoa(i)
+			sb.WriteString(argName + " := JsFromGdArray(")
+			sb.WriteString(EffectiveGoArgumentName(function, arg))
+			sb.WriteString(")\n")
+			params = append(params, argName)
+			continue
+		}
 		typeName := MustPrimitiveTypeName(arg, function.Name)
 		argName := "arg" + strconv.Itoa(i)
 		sb.WriteString(argName + " := ")
 		sb.WriteString("JsFrom" + typeName)
 		sb.WriteString("(")
-		sb.WriteString(arg.Name)
+		sb.WriteString(EffectiveGoArgumentName(function, arg))
 		sb.WriteString(")")
 
 		sb.WriteString("\n")
@@ -279,14 +296,19 @@ func getManagerInterface(function *clang.TypedefFunction) string {
 	args := EffectiveArguments(function)
 	sb.WriteString(funcName)
 	sb.WriteString("(")
-	for i, arg := range args {
-		sb.WriteString(arg.Name)
-		sb.WriteString(" ")
-		typeName := MustGoTypeForCType(MustPrimitiveTypeName(arg, function.Name), function.Name)
-		sb.WriteString(typeName)
-		if i != len(args)-1 {
+	wroteArg := false
+	for _, arg := range args {
+		if ShouldSkipHighLevelArgument(function, arg) {
+			continue
+		}
+		if wroteArg {
 			sb.WriteString(", ")
 		}
+		sb.WriteString(EffectiveGoArgumentName(function, arg))
+		sb.WriteString(" ")
+		typeName := EffectiveGoArgumentType(function, arg)
+		sb.WriteString(typeName)
+		wroteArg = true
 	}
 	sb.WriteString(")")
 
@@ -297,47 +319,14 @@ func getManagerInterface(function *clang.TypedefFunction) string {
 	return sb.String()
 }
 func getJsFuncBody(function *clang.TypedefFunction) string {
-	switch LoadProcAddressName(function.Name) {
-	case "spx_sprite_batch_update_transforms":
-		return `var _gdRawFuncPtr = Module._gdspx_sprite_batch_update_transforms_raw; 
-	
-	if (_gdRawFuncPtr && buffer && buffer.__gdspx_fast_array === true && buffer.type === 2) {
-		try {
-			var _arg0 = CopyFastArrayToWasm(buffer);
-			_gdRawFuncPtr(_arg0, buffer.count);
-			return;
-		} catch (_rawErr) {
-			console.error("[spx-webffi] raw batch_update_transforms failed", {
-				count: buffer.count,
-				dataLength: buffer.data ? buffer.data.length : null,
-				type: buffer.type,
-				error: _rawErr,
-			});
+	if spec, ok := GetNativeArrayBridgeSpec(function.Name); ok {
+		if HasEffectiveReturn(function) {
+			panic(fmt.Sprintf("native-array webffi path does not support return values: %s", function.Name))
 		}
-	}
-	var _arg0 = ToGdArray(buffer);
-	_gdFuncPtr(_arg0);
-	FreeGdArray(_arg0); `
-	case "spx_sprite_batch_update_visuals":
-		return `var _gdRawFuncPtr = Module._gdspx_sprite_batch_update_visuals_raw; 
-	
-	if (_gdRawFuncPtr && buffer && buffer.__gdspx_fast_array === true && buffer.type === 2) {
-		try {
-			var _arg0 = CopyFastArrayToWasm(buffer);
-			_gdRawFuncPtr(_arg0, buffer.count);
-			return;
-		} catch (_rawErr) {
-			console.error("[spx-webffi] raw batch_update_visuals failed", {
-				count: buffer.count,
-				dataLength: buffer.data ? buffer.data.length : null,
-				type: buffer.type,
-				error: _rawErr,
-			});
-		}
-	}
-	var _arg0 = ToGdArray(buffer);
-	_gdFuncPtr(_arg0);
-	FreeGdArray(_arg0); `
+		argName := spec.BaseArgName
+		return "var _arg0 = CopyFastArrayToWasm(" + argName + ");\n" +
+			"\tvar _arg1 = " + argName + ".count;\n" +
+			"\t_gdFuncPtr(_arg0, _arg1);"
 	}
 
 	sb := strings.Builder{}
