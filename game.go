@@ -108,7 +108,7 @@ type Game struct {
 
 	inputMgr   inputManager
 	soundMgr   audio.Manager
-	spriteMgr  spriteManager
+	shapeMgr   shapeManager
 	tilemapMgr gameTilemapMgr
 
 	syncBuffer    *engine.SpriteSyncBuffer
@@ -236,7 +236,7 @@ func (p *Game) reset() {
 	p.EraseAll()
 
 	p.scriptEvents.Reset()
-	p.spriteMgr.reset()
+	p.shapeMgr.reset()
 
 	p.debugState.DebugPanel = nil
 	p.dialogState.AskPanel = nil
@@ -257,7 +257,7 @@ func (p *Game) reset() {
 
 func (p *Game) initGame(sprites []Sprite) *Game {
 	engine.SetGame(p)
-	p.initSpriteMgr()
+	p.initShapeMgr()
 	p.initRuntimeState()
 	p.scriptEventBindings.init(&p.scriptEvents, p)
 	p.engineMgr = engineManagers{}
@@ -274,6 +274,6 @@ func (p *Game) initGame(sprites []Sprite) *Game {
 	return p
 }
 
-func (p *Game) initSpriteMgr() {
-	p.spriteMgr.init()
+func (p *Game) initShapeMgr() {
+	p.shapeMgr.init()
 }

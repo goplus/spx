@@ -56,7 +56,7 @@ func (p *Game) buildSpatialHashForNames(dst *SpriteImpl, nameFilter func(string)
 	// Clear and reuse the existing spatial hash
 	p.spatialHash.Clear()
 
-	for _, item := range p.spriteMgr.items {
+	for _, item := range p.shapeMgr.items {
 		if sp, ok := item.(*SpriteImpl); ok && sp != dst {
 			if nameFilter(sp.name) && sp.spriteState.IsVisible && !sp.spriteState.IsDying && sp.runtimeState.SyncSprite != nil {
 				aabb := newSpriteAABB(sp)

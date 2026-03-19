@@ -240,11 +240,11 @@ func (p *Game) addSpecialShape(g reflect.Value, v coreproject.StageShape, inits 
 				return nil
 			}
 			sm.game = p
-			p.spriteMgr.addShape(sm)
+			p.shapeMgr.addShape(sm)
 			return nil
 		},
 		Measure: func(shape coreproject.StageShape) error {
-			p.spriteMgr.addShape(ui.NewMeasureShape(shape))
+			p.shapeMgr.addShape(ui.NewMeasureShape(shape))
 			return nil
 		},
 		Sprites: func(shape coreproject.StageShape) ([]Sprite, error) {
@@ -269,7 +269,7 @@ func (p *Game) addStageSprite(g reflect.Value, v coreproject.StageShape) (Sprite
 		}
 		dest := spriteOf(sp)
 		applySpriteProps(dest, v)
-		p.spriteMgr.addShape(dest)
+		p.shapeMgr.addShape(dest)
 		added = sp
 		return nil
 	})
@@ -300,7 +300,7 @@ func (p *Game) addStageSprites(g reflect.Value, v coreproject.StageShape) ([]Spr
 		func(newItem reflect.Value, shape coreproject.StageShape) error {
 			spr := p.getSpriteProto(newItem.Type(), g)
 			dest, sp := applySprite(newItem, spr, shape)
-			p.spriteMgr.addShape(dest)
+			p.shapeMgr.addShape(dest)
 			items = append(items, sp)
 			return nil
 		},

@@ -58,10 +58,10 @@ func (p *Game) dispatchStartEventIfNeeded() error {
 // processes pending destroys, flushes the batch to the engine, and updates camera state.
 func (p *Game) updateSpriteProxies() {
 	p.camera.onUpdate()
-	p.spriteMgr.flushActivate()
+	p.shapeMgr.flushActivate()
 	p.syncBuffer.Clear()
-	p.spriteMgr.collectProxyUpdates(p.syncBuffer)
-	p.spriteMgr.flushDestroy(p.syncBuffer)
+	p.shapeMgr.collectProxyUpdates(p.syncBuffer)
+	p.shapeMgr.flushDestroy(p.syncBuffer)
 	p.flushSyncBuffer()
 	p.camera.setDirtyFlag(false)
 }

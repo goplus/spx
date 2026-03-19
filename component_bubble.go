@@ -51,7 +51,7 @@ func (b *bubbleComponent) cloneFrom(src component, newSprite *SpriteImpl) compon
 
 // onDestroy cleanup when component is destroyed.
 func (b *bubbleComponent) onDestroy() {
-	// Bubbles will be cleaned up by sprite manager
+	// Bubbles will be cleaned up by the shape manager.
 	b.textObj = nil
 	b.quoteObj = nil
 }
