@@ -49,17 +49,7 @@ func doClone(sprite Sprite, data any, isAsync bool, onCloned func(sprite *Sprite
 	if onCloned != nil {
 		onCloned(dest)
 	}
-	if dest.spriteState.HasOnCloned {
-		if isAsync {
-			engine.Go(dest.pthis, func(ctx context.Context) {
-				dest.doWhenAwake(dest)
-				dest.doWhenCloned(dest, data)
-			})
-		} else {
-			dest.doWhenAwake(dest)
-			dest.doWhenCloned(dest, data)
-		}
-	}
+	dispatchCloneLifecycle(dest, data, isAsync)
 }
 
 func cloneSprite(out reflect.Value, outPtr Sprite, in reflect.Value, v coreproject.StageShape) *SpriteImpl {
@@ -89,6 +79,22 @@ func cloneSprite(out reflect.Value, outPtr Sprite, in reflect.Value, v coreproje
 	}
 	dest.resetRuntimeProxy(true)
 	return dest
+}
+
+func dispatchCloneLifecycle(dest *SpriteImpl, data any, isAsync bool) {
+	dispatch := func() {
+		dest.doWhenAwake(dest)
+		if dest.spriteState.HasOnCloned {
+			dest.doWhenCloned(dest, data)
+		}
+	}
+	if isAsync {
+		engine.Go(dest.pthis, func(context.Context) {
+			dispatch()
+		})
+		return
+	}
+	dispatch()
 }
 
 func applySpriteProps(dest *SpriteImpl, v coreproject.StageShape) {

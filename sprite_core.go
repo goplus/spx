@@ -131,13 +131,9 @@ func (p *SpriteImpl) sound() *soundComponent {
 // Lifecycle
 // -----------------------------------------------------------------------------
 func (p *SpriteImpl) Die() {
-	aniName := p.getStateAnimName(StateDie)
 	p.setDying()
-
 	p.Stop(OtherScriptsInSprite)
-	if p.hasAnim(aniName) {
-		p.AnimateAndWait(aniName)
-	}
+	p.playStateAnimationAndWait(StateDie)
 	p.Destroy()
 }
 
@@ -145,18 +141,10 @@ func (p *SpriteImpl) Destroy() {
 	if isDebugInstrEnabled() {
 		spxlog.Debug("Destroy: %s", p.name)
 	}
-	p.Hide()
-	p.doDeleteClone()
-	if p.runtimeState.SyncSprite != nil {
-		p.g.inputMgr.removeClickTarget(p.runtimeState.SyncSprite.GetId())
-	}
-	p.components.destroyComponents()
-	p.g.removeShape(p)
+	p.teardown()
 	p.Stop(ThisSprite)
 	p.markDestroyed()
-	if p == gco.Current().Obj {
-		gco.Abort()
-	}
+	p.abortIfCurrentCoroutine()
 }
 
 func (p *SpriteImpl) DeleteThisClone() {
@@ -164,6 +152,30 @@ func (p *SpriteImpl) DeleteThisClone() {
 		return
 	}
 	p.Destroy()
+}
+
+func (p *SpriteImpl) playStateAnimationAndWait(stateName string) {
+	animName := p.getStateAnimName(stateName)
+	if animName == "" || !p.hasAnim(animName) {
+		return
+	}
+	p.AnimateAndWait(animName)
+}
+
+func (p *SpriteImpl) teardown() {
+	p.Hide()
+	p.doDeleteClone()
+	p.components.destroyComponents()
+	p.g.removeShape(p)
+	if syncSprite := p.runtimeState.SyncSprite; syncSprite != nil {
+		p.g.inputMgr.removeClickTarget(syncSprite.GetId())
+	}
+}
+
+func (p *SpriteImpl) abortIfCurrentCoroutine() {
+	if p == gco.Current().Obj {
+		gco.Abort()
+	}
 }
 
 // -----------------------------------------------------------------------------
