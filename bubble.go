@@ -74,6 +74,14 @@ type textBubble struct {
 	panel      *ui.UiSay
 }
 
+func (pself *textBubble) destroyPanel() {
+	panel := pself.panel
+	pself.panel = nil
+	if panel != nil {
+		panel.Destroy()
+	}
+}
+
 func (pself *textBubble) onUpdate(delta float64) {
 	if pself.checkNeedsUpdate() {
 		pself.refresh()
@@ -89,50 +97,19 @@ func (pself *textBubble) refresh() {
 	pself.panel.SetText(pself.sprite.g.getWindowSize(), center, size, pself.msg, pself.style)
 }
 
-func (p *SpriteImpl) sayOrThink(msg any, style int) {
-	msgStr, ok := msg.(string)
-	if !ok {
-		msgStr = fmt.Sprint(msg)
-	}
-	if msgStr == "" {
-		p.doStopText()
-		return
-	}
-
-	bubble := p.components.Bubble()
-	old := bubble.getTextObj()
-	if old == nil {
-		newSay := &textBubble{
-			bubbleBase: bubbleBase{sprite: p, camera: p.g.camera, isDirty: true},
-			msg:        msgStr,
-			style:      style,
-		}
-		bubble.setTextObj(newSay)
-		p.g.addShape(newSay)
-		newSay.panel = ui.NewUiSay()
-	} else {
-		old.msg, old.style = msgStr, style
-		p.g.activateShape(old)
-	}
-	bubble.getTextObj().markDirty()
-}
-
-func (p *SpriteImpl) waitStopText(secs float64) {
-	waitAndStop(secs, p.doStopText)
-}
-
-func (p *SpriteImpl) doStopText() {
-	bubble := p.components.bubble
-	if bubble != nil {
-		bubble.stopText()
-	}
-}
-
 type quoterBubble struct {
 	bubbleBase  // Embedded common bubble functionality
 	message     string
 	description string
 	panel       *ui.UiQuote
+}
+
+func (pself *quoterBubble) destroyPanel() {
+	panel := pself.panel
+	pself.panel = nil
+	if panel != nil {
+		panel.Destroy()
+	}
 }
 
 func (pself *quoterBubble) onUpdate(delta float64) {
@@ -152,23 +129,38 @@ func (pself *quoterBubble) refresh() {
 	pself.panel.SetText(center, size.Divf(2).Addf(extSize), pself.message, pself.description)
 }
 
+func (p *SpriteImpl) newBubbleBase() bubbleBase {
+	return bubbleBase{sprite: p, camera: p.g.camera, isDirty: true}
+}
+
+func (p *SpriteImpl) sayOrThink(msg any, style int) {
+	msgStr, ok := msg.(string)
+	if !ok {
+		msgStr = fmt.Sprint(msg)
+	}
+	if msgStr == "" {
+		p.doStopText()
+		return
+	}
+
+	bubble := p.components.Bubble()
+	bubble.upsertText(msgStr, style)
+}
+
+func (p *SpriteImpl) waitStopText(secs float64) {
+	waitAndStop(secs, p.doStopText)
+}
+
+func (p *SpriteImpl) doStopText() {
+	bubble := p.components.bubble
+	if bubble != nil {
+		bubble.stopText()
+	}
+}
+
 func (p *SpriteImpl) quote(message, description string) {
 	bubble := p.components.Bubble()
-	old := bubble.getQuoteObj()
-	if old == nil {
-		newQuote := &quoterBubble{
-			bubbleBase:  bubbleBase{sprite: p, camera: p.g.camera, isDirty: true},
-			message:     message,
-			description: description,
-		}
-		bubble.setQuoteObj(newQuote)
-		p.g.addShape(newQuote)
-		newQuote.panel = ui.NewUiQuote()
-	} else {
-		old.message, old.description = message, description
-		p.g.activateShape(old)
-	}
-	bubble.getQuoteObj().markDirty()
+	bubble.upsertQuote(message, description)
 }
 
 func (p *SpriteImpl) waitStopQuote(secs float64) {

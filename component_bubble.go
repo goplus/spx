@@ -16,7 +16,12 @@
 
 package spx
 
-import coreproject "github.com/goplus/spx/v2/internal/core/project"
+import (
+	"sync"
+
+	coreproject "github.com/goplus/spx/v2/internal/core/project"
+	"github.com/goplus/spx/v2/internal/ui"
+)
 
 // ============================================================================
 // Bubble Component
@@ -25,9 +30,14 @@ import coreproject "github.com/goplus/spx/v2/internal/core/project"
 
 type bubbleComponent struct {
 	componentBase
+	mu sync.Mutex
 
 	textObj  *textBubble   // Text bubble object (Say/Think)
 	quoteObj *quoterBubble // Quote bubble object
+}
+
+type bubbleShape interface {
+	destroyPanel()
 }
 
 // initialize initializes the bubble component.
@@ -51,59 +61,91 @@ func (b *bubbleComponent) cloneFrom(src component, newSprite *SpriteImpl) compon
 
 // onDestroy cleanup when component is destroyed.
 func (b *bubbleComponent) onDestroy() {
-	// Bubbles will be cleaned up by the shape manager.
-	b.textObj = nil
-	b.quoteObj = nil
+	b.stopAll()
 }
 
-// ============================================================================
-// Say/Think Methods
-// ============================================================================
+func (b *bubbleComponent) upsertText(msg string, style int) {
+	b.mu.Lock()
+	textObj := b.textObj
+	created := false
+	if textObj == nil {
+		textObj = &textBubble{
+			bubbleBase: b.sprite.newBubbleBase(),
+			msg:        msg,
+			style:      style,
+			panel:      ui.NewUiSay(),
+		}
+		b.textObj = textObj
+		created = true
+	} else {
+		textObj.msg = msg
+		textObj.style = style
+		textObj.markDirty()
+	}
+	b.mu.Unlock()
 
-func (b *bubbleComponent) getTextObj() *textBubble {
-	return b.textObj
+	if created {
+		b.sprite.g.addShape(textObj)
+		return
+	}
+	b.sprite.g.activateShape(textObj)
 }
 
-func (b *bubbleComponent) setTextObj(obj *textBubble) {
-	b.textObj = obj
-}
+func (b *bubbleComponent) upsertQuote(message, description string) {
+	b.mu.Lock()
+	quoteObj := b.quoteObj
+	created := false
+	if quoteObj == nil {
+		quoteObj = &quoterBubble{
+			bubbleBase:  b.sprite.newBubbleBase(),
+			message:     message,
+			description: description,
+			panel:       ui.NewUiQuote(),
+		}
+		b.quoteObj = quoteObj
+		created = true
+	} else {
+		quoteObj.message = message
+		quoteObj.description = description
+		quoteObj.markDirty()
+	}
+	b.mu.Unlock()
 
-func (b *bubbleComponent) hasText() bool {
-	return b.textObj != nil
+	if created {
+		b.sprite.g.addShape(quoteObj)
+		return
+	}
+	b.sprite.g.activateShape(quoteObj)
 }
 
 func (b *bubbleComponent) stopText() {
-	if b.hasText() {
-		textObj := b.getTextObj()
-		textObj.panel.Destroy()
-		textObj.panel = nil
-		b.sprite.g.removeShape(textObj)
-		b.setTextObj(nil)
+	b.mu.Lock()
+	textObj := b.textObj
+	b.textObj = nil
+	b.mu.Unlock()
+	if textObj == nil {
+		return
 	}
-}
-
-// ============================================================================
-// Quote Methods
-// ============================================================================
-
-func (b *bubbleComponent) getQuoteObj() *quoterBubble {
-	return b.quoteObj
-}
-
-func (b *bubbleComponent) setQuoteObj(obj *quoterBubble) {
-	b.quoteObj = obj
-}
-
-func (b *bubbleComponent) hasQuote() bool {
-	return b.quoteObj != nil
+	b.stopBubble(textObj)
 }
 
 func (b *bubbleComponent) stopQuote() {
-	if b.hasQuote() {
-		quoteObj := b.getQuoteObj()
-		quoteObj.panel.Destroy()
-		quoteObj.panel = nil
-		b.sprite.g.removeShape(quoteObj)
-		b.setQuoteObj(nil)
+	b.mu.Lock()
+	quoteObj := b.quoteObj
+	b.quoteObj = nil
+	b.mu.Unlock()
+	if quoteObj == nil {
+		return
 	}
+	b.stopBubble(quoteObj)
+}
+
+func (b *bubbleComponent) stopAll() {
+	b.stopText()
+	b.stopQuote()
+}
+
+func (b *bubbleComponent) stopBubble(obj bubbleShape) {
+	obj.destroyPanel()
+	b.sprite.g.removeShape(obj)
 }

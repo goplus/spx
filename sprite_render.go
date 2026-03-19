@@ -37,7 +37,9 @@ func (p *SpriteImpl) setVisible(visible bool) {
 }
 
 func (p *SpriteImpl) Hide() {
-	p.doStopText()
+	if bubble := p.components.bubble; bubble != nil {
+		bubble.stopAll()
+	}
 	p.setVisible(false)
 }
 

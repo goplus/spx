@@ -163,7 +163,10 @@ func (p *SpriteImpl) playStateAnimationAndWait(stateName string) {
 }
 
 func (p *SpriteImpl) teardown() {
-	p.Hide()
+	if bubble := p.components.bubble; bubble != nil {
+		bubble.stopAll()
+	}
+	p.setVisible(false)
 	p.doDeleteClone()
 	p.components.destroyComponents()
 	p.g.removeShape(p)
