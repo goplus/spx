@@ -61,14 +61,14 @@ func (s *shapeManager) reset() {
 	s.init()
 }
 
-// flushActivate updates all pending shapes in the active list.
-func (s *shapeManager) flushActivate() {
-	if len(s.tempItems) == 0 {
+// flushActivate updates all active non-sprite shapes for the current frame.
+func (s *shapeManager) flushActivate(items []Shape) {
+	if len(items) == 0 {
 		return
 	}
 
 	delta := gtime.DeltaTime()
-	for _, item := range s.tempItems {
+	for _, item := range items {
 		if _, ok := item.(*SpriteImpl); ok {
 			continue
 		}
@@ -88,8 +88,8 @@ func (s *shapeManager) flushActivate() {
 	}
 }
 
-func (s *shapeManager) collectProxyUpdates(buffer *engine.SpriteSyncBuffer) {
-	for _, item := range s.getTempShapes() {
+func (s *shapeManager) collectProxyUpdates(items []Shape, buffer *engine.SpriteSyncBuffer) {
+	for _, item := range items {
 		if sprite, ok := item.(*SpriteImpl); ok {
 			sprite.collectProxyUpdate(buffer)
 		}
