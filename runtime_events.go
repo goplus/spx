@@ -241,8 +241,6 @@ func (p *Game) doWhenLeftButtonDown(ev *eventLeftButtonDown) {
 // -----------------------------------------------------------------------------
 // Message Broadcast
 // -----------------------------------------------------------------------------
-type MsgName = coreevent.MsgName
-
 func (p *Game) Broadcast__0(msg MsgName) {
 	p.doBroadcast(msg, nil, false)
 }

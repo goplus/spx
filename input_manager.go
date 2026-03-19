@@ -28,9 +28,6 @@ import (
 	engine "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
 )
 
-// Key represents a keyboard key code.
-type Key = coreevent.Key
-
 // Keyboard key constants
 const (
 	Key0            Key = engine.Key0

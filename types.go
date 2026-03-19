@@ -28,14 +28,73 @@ type Config = coreproject.Config
 // Shape is the common runtime item type stored by the game.
 type Shape any
 
+// Event types.
+type (
+	// BackdropName identifies a stage backdrop.
+	BackdropName = coreevent.BackdropName
+
+	// Direction represents a heading or swipe direction.
+	Direction = coreevent.Direction
+
+	// IEventSinks exposes script event binding helpers.
+	IEventSinks = coreevent.IEventSinks
+
+	// Key represents a keyboard key code.
+	Key = coreevent.Key
+
+	// StopKind controls how script execution is stopped.
+	StopKind = coreevent.StopKind
+
+	// MsgName identifies a broadcast message.
+	MsgName = coreevent.MsgName
+)
+
+// Name types.
+type (
+	// SoundName identifies a registered sound asset.
+	SoundName = string
+
+	// SpriteName identifies a sprite instance or prototype by name.
+	SpriteName = string
+
+	// SpriteCostumeName identifies a sprite costume by name.
+	SpriteCostumeName = string
+
+	// SpriteAnimationName identifies a sprite animation by name.
+	SpriteAnimationName = string
+
+	// WidgetName identifies a widget by name.
+	WidgetName = string
+)
+
+// Widget is the common interface for runtime UI objects stored by the game.
+type Widget interface {
+	GetName() WidgetName
+	Visible() bool
+	Show()
+	Hide()
+
+	Xpos() float64
+	Ypos() float64
+	SetXpos(x float64)
+	SetYpos(y float64)
+	SetXYpos(x float64, y float64)
+	ChangeXpos(dx float64)
+	ChangeYpos(dy float64)
+	ChangeXYpos(dx float64, dy float64)
+
+	Size() float64
+	SetSize(size float64)
+	ChangeSize(delta float64)
+}
+
+// ShapeGetter exposes the runtime shape collection used by shared helpers.
+type ShapeGetter interface {
+	getAllShapes() []Shape
+}
+
 // Gamer is the runtime entry interface expected by the engine.
 type Gamer interface {
 	engine.IGame
 	initGame(sprites []Sprite) *Game
 }
-
-// BackdropName identifies a stage backdrop.
-type BackdropName = coreevent.BackdropName
-
-// SoundName identifies a registered sound asset.
-type SoundName = string
