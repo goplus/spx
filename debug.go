@@ -47,7 +47,7 @@ func (p *Game) showDebugPanel() {
 	eventQ := p.eventQueueSnapshot()
 
 	msg := fmt.Sprintf("FPS: %.f\n", itime.FPS())
-	msg += fmt.Sprintf("Shape: %v\n", p.spriteMgr.count())
+	msg += fmt.Sprintf("Shape: %v\n", p.shapeMgr.count())
 	msg += fmt.Sprintf("GameUpdate: %v\n", updateInfo.ActualCall)
 	msg += fmt.Sprintf("GameRender: %v\n", renderInfo.ActualCall)
 	msg += fmt.Sprintf("CoroUpdateJobs: %v\n", coroInfo.ActualCall)

@@ -23,31 +23,31 @@ func (p *SpriteImpl) getAllShapes() []Shape {
 }
 
 func (p *Game) addShape(child Shape) {
-	p.spriteMgr.addShape(child)
+	p.shapeMgr.addShape(child)
 }
 
 func (p *Game) addClonedShape(src, clone Shape) {
-	p.spriteMgr.addClonedShape(src, clone)
+	p.shapeMgr.addClonedShape(src, clone)
 }
 
 func (p *Game) removeShape(child Shape) {
-	p.spriteMgr.removeShape(child)
+	p.shapeMgr.removeShape(child)
 }
 
 func (p *Game) activateShape(child Shape) {
-	p.spriteMgr.activateShape(child)
+	p.shapeMgr.activateShape(child)
 }
 
 func (p *Game) findSprite(name SpriteName) *SpriteImpl {
-	return p.spriteMgr.findSprite(name)
+	return p.shapeMgr.findSprite(name)
 }
 
 func (p *Game) getAllShapes() []Shape {
-	return p.spriteMgr.all()
+	return p.shapeMgr.all()
 }
 
 func (p *Game) getTempShapes() []Shape {
-	return p.spriteMgr.getTempShapes()
+	return p.shapeMgr.getTempShapes()
 }
 
 func (p *Game) gotoFront(spr *SpriteImpl) {
@@ -59,5 +59,5 @@ func (p *Game) gotoBack(spr *SpriteImpl) {
 }
 
 func (p *Game) goBackLayers(spr *SpriteImpl, n int) {
-	p.spriteMgr.goBackLayers(spr, n)
+	p.shapeMgr.goBackLayers(spr, n)
 }

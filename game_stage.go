@@ -210,7 +210,7 @@ func (p *Game) ask(isSprite bool, question string, callback func(string)) {
 type PropertyName = string
 
 func (p *Game) setStageMonitor(target string, val PropertyName, visible bool) bool {
-	for _, item := range p.spriteMgr.items {
+	for _, item := range p.shapeMgr.items {
 		if sp, ok := item.(*Monitor); ok && sp.val == val && sp.target == target {
 			sp.setVisible(visible)
 			return true
@@ -244,7 +244,7 @@ func (p *Game) touchingSpriteBy(dst *SpriteImpl, name string) *SpriteImpl {
 func (p *Game) objectPos(obj any) (float64, float64) {
 	switch v := obj.(type) {
 	case SpriteName:
-		if sp := p.spriteMgr.findSprite(v); sp != nil {
+		if sp := p.shapeMgr.findSprite(v); sp != nil {
 			return sp.getXY()
 		}
 		engine.Panic("objectPos: sprite not found - " + v)
