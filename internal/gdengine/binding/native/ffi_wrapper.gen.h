@@ -1494,17 +1494,17 @@ void cgo_callfn_GDExtensionSpxSpriteGetPixelCollisionSamplingStep(const GDExtens
 	}
 	fn(ret_val);
 }
-void cgo_callfn_GDExtensionSpxSpriteBatchUpdateTransforms(const GDExtensionSpxSpriteBatchUpdateTransforms fn, GdArray buffer) {
+void cgo_callfn_GDExtensionSpxSpriteBatchUpdateTransforms(const GDExtensionSpxSpriteBatchUpdateTransforms fn, const float *buffer_data, int len) {
 	if (!fn) {
 		return;
 	}
-	fn(buffer);
+	fn(buffer_data, len);
 }
-void cgo_callfn_GDExtensionSpxSpriteBatchUpdateVisuals(const GDExtensionSpxSpriteBatchUpdateVisuals fn, GdArray buffer) {
+void cgo_callfn_GDExtensionSpxSpriteBatchUpdateVisuals(const GDExtensionSpxSpriteBatchUpdateVisuals fn, const float *buffer_data, int len) {
 	if (!fn) {
 		return;
 	}
-	fn(buffer);
+	fn(buffer_data, len);
 }
 void cgo_callfn_GDExtensionSpxSpriteBatchRetrievePositions(const GDExtensionSpxSpriteBatchRetrievePositions fn, GdArray objs, GdArray* ret_val) {
 	if (!fn) {

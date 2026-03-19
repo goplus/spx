@@ -1626,12 +1626,12 @@ func (pself *spriteMgrImpl) GetPixelCollisionSamplingStep() int64 {
 	})
 	return _ret1
 }
-func (pself *spriteMgrImpl) BatchUpdateTransforms(buffer gdx.Array) {
+func (pself *spriteMgrImpl) BatchUpdateTransforms(buffer []float32) {
 	callInMainThread(func() {
 		gdx.SpriteMgr.BatchUpdateTransforms(buffer)
 	})
 }
-func (pself *spriteMgrImpl) BatchUpdateVisuals(buffer gdx.Array) {
+func (pself *spriteMgrImpl) BatchUpdateVisuals(buffer []float32) {
 	callInMainThread(func() {
 		gdx.SpriteMgr.BatchUpdateVisuals(buffer)
 	})

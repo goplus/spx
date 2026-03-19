@@ -28,11 +28,11 @@ func (pself *Sprite) BatchRetrievePositions(objs Array) Array {
 	return SpriteMgr.BatchRetrievePositions(objs)
 }
 
-func (pself *Sprite) BatchUpdateTransforms(buffer Array) {
+func (pself *Sprite) BatchUpdateTransforms(buffer []float32) {
 	SpriteMgr.BatchUpdateTransforms(buffer)
 }
 
-func (pself *Sprite) BatchUpdateVisuals(buffer Array) {
+func (pself *Sprite) BatchUpdateVisuals(buffer []float32) {
 	SpriteMgr.BatchUpdateVisuals(buffer)
 }
 

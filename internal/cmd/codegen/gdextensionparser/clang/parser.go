@@ -368,9 +368,8 @@ func (a Argument) CStylePtrString(i int) string {
 	}
 
 	name := a.ResolvedName(i)
-	typeName := a.Type.CStyleString()
-	typeName = typeName + "*"
-	return fmt.Sprintf("%s %s", typeName, name)
+	typeName := strings.TrimSpace(a.Type.CStyleString())
+	return typeName + " *" + name
 }
 func (a Argument) ResolvedPtrName(i int) string {
 	if a.Type.Function != nil && a.Type.Function.Name != "" {
@@ -392,8 +391,15 @@ func (a Argument) CStyleString(i int) string {
 	}
 
 	name := a.ResolvedName(i)
+	return joinCTypeAndName(a.Type.CStyleString(), name)
+}
 
-	return fmt.Sprintf("%s %s", a.Type.CStyleString(), name)
+func joinCTypeAndName(typeName, name string) string {
+	typeName = strings.TrimSpace(typeName)
+	if strings.HasSuffix(typeName, "*") {
+		return typeName + name
+	}
+	return typeName + " " + name
 }
 
 func (a Argument) ResolvedName(i int) string {

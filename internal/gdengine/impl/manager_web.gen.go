@@ -1389,11 +1389,11 @@ func (pself *spriteMgr) GetPixelCollisionSamplingStep() int64 {
 	_retValue := API.SpxSpriteGetPixelCollisionSamplingStep.Invoke()
 	return JsToGdInt(_retValue)
 }
-func (pself *spriteMgr) BatchUpdateTransforms(buffer Array) {
+func (pself *spriteMgr) BatchUpdateTransforms(buffer []float32) {
 	arg0 := JsFromGdArray(buffer)
 	API.SpxSpriteBatchUpdateTransforms.Invoke(arg0)
 }
-func (pself *spriteMgr) BatchUpdateVisuals(buffer Array) {
+func (pself *spriteMgr) BatchUpdateVisuals(buffer []float32) {
 	arg0 := JsFromGdArray(buffer)
 	API.SpxSpriteBatchUpdateVisuals.Invoke(arg0)
 }

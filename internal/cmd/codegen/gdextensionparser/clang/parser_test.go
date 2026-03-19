@@ -383,3 +383,31 @@ func TestParseTypedefFunctionNoArgumentNames(t *testing.T) {
 
 	require.Len(t, f.Expr[0].Function.Arguments, 2)
 }
+
+func TestArgumentCStyleStringKeepsPointerAttachedToName(t *testing.T) {
+	content := `typedef void (*GDExtensionSpxSpriteBatchUpdateTransforms)(const float *buffer_data, int len);`
+
+	f, err := ParseCString(content)
+
+	require.NoError(t, err)
+	require.Len(t, f.Expr, 1)
+	require.NotNil(t, f.Expr[0].Function)
+	require.Len(t, f.Expr[0].Function.Arguments, 2)
+
+	arg := f.Expr[0].Function.Arguments[0]
+	require.Equal(t, "const float *buffer_data", arg.CStyleString(0))
+}
+
+func TestArgumentCStylePtrStringKeepsSpaceBeforePointer(t *testing.T) {
+	content := `typedef void (*GDExtensionSpxAudioDestroyAudio)(GdObj obj);`
+
+	f, err := ParseCString(content)
+
+	require.NoError(t, err)
+	require.Len(t, f.Expr, 1)
+	require.NotNil(t, f.Expr[0].Function)
+	require.Len(t, f.Expr[0].Function.Arguments, 1)
+
+	arg := f.Expr[0].Function.Arguments[0]
+	require.Equal(t, "GdObj *obj", arg.CStylePtrString(0))
+}

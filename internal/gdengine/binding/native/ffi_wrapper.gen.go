@@ -2960,21 +2960,25 @@ func CallSpriteGetPixelCollisionSamplingStep() GdInt {
 	return (GdInt)(ret_val)
 }
 func CallSpriteBatchUpdateTransforms(
-	buffer GdArray,
+	buffer_data *float32,
+	len int32,
 ) {
 	arg0 := (C.GDExtensionSpxSpriteBatchUpdateTransforms)(api.SpxSpriteBatchUpdateTransforms)
-	arg1 := (C.GdArray)(buffer)
+	arg1 := (*C.float)(buffer_data)
+	arg2 := (C.int)(len)
 
-	C.cgo_callfn_GDExtensionSpxSpriteBatchUpdateTransforms(arg0, arg1)
+	C.cgo_callfn_GDExtensionSpxSpriteBatchUpdateTransforms(arg0, arg1, arg2)
 
 }
 func CallSpriteBatchUpdateVisuals(
-	buffer GdArray,
+	buffer_data *float32,
+	len int32,
 ) {
 	arg0 := (C.GDExtensionSpxSpriteBatchUpdateVisuals)(api.SpxSpriteBatchUpdateVisuals)
-	arg1 := (C.GdArray)(buffer)
+	arg1 := (*C.float)(buffer_data)
+	arg2 := (C.int)(len)
 
-	C.cgo_callfn_GDExtensionSpxSpriteBatchUpdateVisuals(arg0, arg1)
+	C.cgo_callfn_GDExtensionSpxSpriteBatchUpdateVisuals(arg0, arg1, arg2)
 
 }
 func CallSpriteBatchRetrievePositions(

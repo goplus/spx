@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"text/template"
 
 	"github.com/goplus/spx/v2/internal/cmd/codegen/gdextensionparser/clang"
@@ -90,21 +91,33 @@ func Generate(projectPath, godotPath string, ast clang.CHeaderFileAST) {
 
 func generateGdCppFile(projectPath string, templateStr string, ast clang.CHeaderFileAST, outputFileName string) error {
 	funcs := template.FuncMap{
-		"gdiVariableName":     GdiVariableName,
-		"snakeCase":           strcase.ToSnake,
-		"camelCase":           strcase.ToCamel,
-		"goReturnType":        GoReturnType,
-		"goArgumentType":      GoArgumentType,
-		"goEnumValue":         GoEnumValue,
-		"add":                 Add,
-		"sub":                 Sub,
-		"cgoCastArgument":     CgoCastArgument,
-		"cgoCastReturnType":   CgoCastReturnType,
-		"cgoCleanUpArgument":  CgoCleanUpArgument,
-		"trimPrefix":          TrimPrefix,
-		"loadProcAddressName": LoadProcAddressName,
-		"isManagerMethod":     IsManagerMethod,
-		"getManagerName":      GetManagerName,
+		"gdiVariableName":          GdiVariableName,
+		"snakeCase":                strcase.ToSnake,
+		"camelCase":                strcase.ToCamel,
+		"goReturnType":             GoReturnType,
+		"goArgumentType":           GoArgumentType,
+		"goEnumValue":              GoEnumValue,
+		"add":                      Add,
+		"sub":                      Sub,
+		"cgoCastArgument":          CgoCastArgument,
+		"cgoCastReturnType":        CgoCastReturnType,
+		"cgoCleanUpArgument":       CgoCleanUpArgument,
+		"trimPrefix":               TrimPrefix,
+		"loadProcAddressName":      LoadProcAddressName,
+		"isManagerMethod":          IsManagerMethod,
+		"getManagerName":           GetManagerName,
+		"hasNativeArrayBridgeSpec": HasNativeArrayBridgeSpec,
+		"getNativeArrayBridgeSpec": func(function *clang.TypedefFunction) NativeArrayBridgeSpec {
+			spec, _ := GetNativeArrayBridgeSpec(function.Name)
+			return spec
+		},
+		"cDecl": func(typeName, name string) string {
+			typeName = strings.TrimSpace(typeName)
+			if strings.HasSuffix(typeName, "*") {
+				return typeName + name
+			}
+			return typeName + " " + name
+		},
 	}
 
 	tmpl, err := template.New(outputFileName).

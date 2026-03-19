@@ -25,9 +25,24 @@ var (
 	reClassDefinition = regexp.MustCompile(`class\s+(\w+)\s*:\s*(?:public\s+)?(?:SpxBaseMgr|SpxObjectMgr<\w+>)\s*{`)
 
 	// For generateManagerHeader function
-	reMethodVoid   = regexp.MustCompile(`\s*void\s+(\w+)\((.*)\);`)
-	reMethodReturn = regexp.MustCompile(`\s*(\w+)\s+(\w+)\((.*)\);`)
+	reMethodVoid           = regexp.MustCompile(`\s*void\s+(\w+)\((.*)\);`)
+	reMethodReturn         = regexp.MustCompile(`\s*(\w+)\s+(\w+)\((.*)\);`)
+	reSingleGdArrayParam   = regexp.MustCompile(`^\s*GdArray\s+([A-Za-z_][A-Za-z0-9_]*)\s*$`)
+	reRawNativeArrayParams = regexp.MustCompile(`^\s*((?:const\s+)?[A-Za-z_][A-Za-z0-9_]*\s*\*)\s*([A-Za-z_][A-Za-z0-9_]*)\s*,\s*(int32_t|int)\s+([A-Za-z_][A-Za-z0-9_]*)\s*$`)
 )
+
+func shouldSkipGeneratedMethod(methodName string) bool {
+	// Raw helpers are web-only entry points and should not leak into the shared
+	// gdextension interface consumed by native ffi/codegen.
+	return strings.HasSuffix(methodName, "_raw")
+}
+
+type classMethodDecl struct {
+	ClassName  string
+	ReturnType string
+	MethodName string
+	Params     string
+}
 
 func generateSpxExtHeader(dir, outputFile string, isRawFormat bool) {
 	mergedStr := mergeManagerHeader(dir)
@@ -140,6 +155,10 @@ func generateManagerHeader(input string, rawFormat bool) string {
 
 	// Clear the previous list of manager names
 	common.ClearKnownManagerNames()
+	common.ClearNativeArrayBridgeSpecs()
+
+	baseMethods := map[string]classMethodDecl{}
+	rawMethods := map[string]classMethodDecl{}
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -157,14 +176,36 @@ func generateManagerHeader(input string, rawFormat bool) string {
 		}
 		if reMethodVoid.MatchString(line) {
 			matches := reMethodVoid.FindStringSubmatch(line)
-			methodName := strcase.ToCamel(matches[1])
 			params := normalizeParams(matches[2])
+			methodDecl := classMethodDecl{
+				ClassName:  currentClassName,
+				ReturnType: "void",
+				MethodName: matches[1],
+				Params:     params,
+			}
+			if shouldSkipGeneratedMethod(matches[1]) {
+				rawMethods[currentClassName+"::"+strings.TrimSuffix(matches[1], "_raw")] = methodDecl
+				continue
+			}
+			baseMethods[currentClassName+"::"+matches[1]] = methodDecl
+			methodName := strcase.ToCamel(matches[1])
 			builder.WriteString(fmt.Sprintf("typedef void (*GDExtension%s%s)(%s);\n", currentClassName, methodName, params))
 		} else if reMethodReturn.MatchString(line) {
 			matches := reMethodReturn.FindStringSubmatch(line)
+			params := normalizeParams(matches[3])
+			methodDecl := classMethodDecl{
+				ClassName:  currentClassName,
+				ReturnType: matches[1],
+				MethodName: matches[2],
+				Params:     params,
+			}
+			if shouldSkipGeneratedMethod(matches[2]) {
+				rawMethods[currentClassName+"::"+strings.TrimSuffix(matches[2], "_raw")] = methodDecl
+				continue
+			}
+			baseMethods[currentClassName+"::"+matches[2]] = methodDecl
 			returnType := matches[1]
 			methodName := strcase.ToCamel(matches[2])
-			params := normalizeParams(matches[3])
 			if rawFormat {
 				builder.WriteString(fmt.Sprintf("typedef %s (*GDExtension%s%s)(%s);\n", returnType, currentClassName, methodName, params))
 			} else {
@@ -180,5 +221,119 @@ func generateManagerHeader(input string, rawFormat bool) string {
 		spxlog.Error("Error reading string: %v", err)
 	}
 
+	registerNativeArrayBridgeSpecs(baseMethods, rawMethods)
+
 	return builder.String()
+}
+
+func registerNativeArrayBridgeSpecs(baseMethods map[string]classMethodDecl, rawMethods map[string]classMethodDecl) {
+	for _, baseMethod := range baseMethods {
+		dataType, dataArgName, lenType, lenArgName, goArgType, ptrType, lenGoType, fastArrayType, ok := parseRawNativeArrayParams(baseMethod.Params)
+		if !ok {
+			continue
+		}
+
+		baseFunctionName := "GDExtension" + baseMethod.ClassName + strcase.ToCamel(baseMethod.MethodName)
+		common.RegisterNativeArrayBridgeSpec(common.NativeArrayBridgeSpec{
+			BaseFunctionName: baseFunctionName,
+			BaseArgName:      highLevelArrayArgName(dataArgName),
+			DataArgName:      dataArgName,
+			DataArgGoType:    goArgType,
+			DataArgPtrType:   ptrType,
+			LenArgName:       lenArgName,
+			LenArgGoType:     lenGoType,
+			GoArgType:        goArgType,
+			RawFunctionName:  baseFunctionName,
+			RawMethodName:    baseMethod.MethodName,
+			RawDataArgName:   dataArgName,
+			RawDataCType:     dataType,
+			RawLenArgName:    lenArgName,
+			RawLenCType:      lenType,
+			FastArrayType:    fastArrayType,
+		})
+	}
+
+	for key, rawMethod := range rawMethods {
+		baseMethod, ok := baseMethods[key]
+		if !ok || baseMethod.ReturnType != rawMethod.ReturnType {
+			continue
+		}
+
+		baseArgName, ok := parseSingleGdArrayParam(baseMethod.Params)
+		if !ok {
+			continue
+		}
+
+		rawDataType, rawDataArgName, rawLenType, rawLenArgName, goArgType, ptrType, lenGoType, fastArrayType, ok := parseRawNativeArrayParams(rawMethod.Params)
+		if !ok {
+			continue
+		}
+
+		baseFunctionName := "GDExtension" + rawMethod.ClassName + strcase.ToCamel(baseMethod.MethodName)
+		rawFunctionName := "GDExtension" + rawMethod.ClassName + strcase.ToCamel(rawMethod.MethodName)
+
+		common.RegisterNativeArrayBridgeSpec(common.NativeArrayBridgeSpec{
+			BaseFunctionName: baseFunctionName,
+			BaseArgName:      baseArgName,
+			DataArgName:      baseArgName,
+			DataArgGoType:    goArgType,
+			DataArgPtrType:   ptrType,
+			LenArgName:       rawLenArgName,
+			LenArgGoType:     lenGoType,
+			GoArgType:        goArgType,
+			RawFunctionName:  rawFunctionName,
+			RawMethodName:    rawMethod.MethodName,
+			RawDataArgName:   rawDataArgName,
+			RawDataCType:     rawDataType,
+			RawLenArgName:    rawLenArgName,
+			RawLenCType:      rawLenType,
+			FastArrayType:    fastArrayType,
+		})
+	}
+}
+
+func parseSingleGdArrayParam(params string) (string, bool) {
+	matches := reSingleGdArrayParam.FindStringSubmatch(params)
+	if len(matches) != 2 {
+		return "", false
+	}
+	return matches[1], true
+}
+
+func parseRawNativeArrayParams(params string) (rawDataType string, rawDataArgName string, rawLenType string, rawLenArgName string, goArgType string, ptrType string, lenGoType string, fastArrayType int32, ok bool) {
+	matches := reRawNativeArrayParams.FindStringSubmatch(params)
+	if len(matches) != 5 {
+		return "", "", "", "", "", "", "", 0, false
+	}
+
+	rawDataType = normalizeRawDataType(matches[1])
+	rawDataArgName = matches[2]
+	rawLenType = matches[3]
+	rawLenArgName = matches[4]
+
+	switch strings.TrimPrefix(rawDataType, "const ") {
+	case "float *":
+		return rawDataType, rawDataArgName, rawLenType, rawLenArgName, "[]float32", "*float32", "int32", 2, true
+	case "real_t *":
+		return rawDataType, rawDataArgName, rawLenType, rawLenArgName, "[]float32", "*float32", "int32", 2, true
+	case "int64_t *":
+		return rawDataType, rawDataArgName, rawLenType, rawLenArgName, "[]int64", "*int64", "int32", 1, true
+	case "uint8_t *":
+		return rawDataType, rawDataArgName, rawLenType, rawLenArgName, "[]byte", "*uint8", "int32", 5, true
+	default:
+		return "", "", "", "", "", "", "", 0, false
+	}
+}
+
+func normalizeRawDataType(rawDataType string) string {
+	rawDataType = strings.Join(strings.Fields(rawDataType), " ")
+	rawDataType = strings.ReplaceAll(rawDataType, " *", " *")
+	return rawDataType
+}
+
+func highLevelArrayArgName(rawDataArgName string) string {
+	if strings.HasSuffix(rawDataArgName, "_data") {
+		return strings.TrimSuffix(rawDataArgName, "_data")
+	}
+	return rawDataArgName
 }
