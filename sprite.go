@@ -21,8 +21,6 @@ import coreevent "github.com/goplus/spx/v2/internal/core/event"
 // -----------------------------------------------------------------------------
 // Types
 // -----------------------------------------------------------------------------
-type Direction = coreevent.Direction
-
 type RotationStyle int
 
 type specialObj int
@@ -32,12 +30,6 @@ type switchAction int
 type layerAction int
 
 type dirAction int
-
-type (
-	SpriteName          = string
-	SpriteCostumeName   = string
-	SpriteAnimationName = string
-)
 
 // -----------------------------------------------------------------------------
 // Constants
@@ -105,9 +97,6 @@ const (
 	colorThreshold = 0.1
 	alphaThreshold = 0.05
 )
-
-type IEventSinks = coreevent.IEventSinks
-type StopKind = coreevent.StopKind
 
 const (
 	AllStop              StopKind = coreevent.AllStop

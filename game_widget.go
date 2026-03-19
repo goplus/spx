@@ -16,32 +16,6 @@
 
 package spx
 
-type WidgetName = string
-
-type Widget interface {
-	GetName() WidgetName
-	Visible() bool
-	Show()
-	Hide()
-
-	Xpos() float64
-	Ypos() float64
-	SetXpos(x float64)
-	SetYpos(y float64)
-	SetXYpos(x float64, y float64)
-	ChangeXpos(dx float64)
-	ChangeYpos(dy float64)
-	ChangeXYpos(dx float64, dy float64)
-
-	Size() float64
-	SetSize(size float64)
-	ChangeSize(delta float64)
-}
-
-type ShapeGetter interface {
-	getAllShapes() []Shape
-}
-
 // GetWidget returns the widget instance with given name. It panics if not found.
 // Instead of being used directly, it is meant to be called by `XGot_Game_XGox_GetWidget` only.
 // We extract `GetWidget` to keep `XGot_Game_XGox_GetWidget` simple, which simplifies work in ispx,
