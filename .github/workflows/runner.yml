@@ -44,6 +44,53 @@ jobs:
     name: 🏁 Windows
     uses: ./.github/workflows/build_windows.yml
 
+  ci-gate:
+    if: always()
+    needs:
+      - static-checks
+      - go-builds
+      - android-build
+      - ios-build
+      - web-build
+      - linux-build
+      - macos-build
+      - windows-build
+    name: ✅ CI Gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify all required jobs passed
+        env:
+          STATIC_CHECKS_RESULT: ${{ needs.static-checks.result }}
+          GO_BUILDS_RESULT: ${{ needs.go-builds.result }}
+          ANDROID_BUILD_RESULT: ${{ needs.android-build.result }}
+          IOS_BUILD_RESULT: ${{ needs.ios-build.result }}
+          WEB_BUILD_RESULT: ${{ needs.web-build.result }}
+          LINUX_BUILD_RESULT: ${{ needs.linux-build.result }}
+          MACOS_BUILD_RESULT: ${{ needs.macos-build.result }}
+          WINDOWS_BUILD_RESULT: ${{ needs.windows-build.result }}
+        run: |
+          set -euo pipefail
+
+          for item in \
+            "static-checks:$STATIC_CHECKS_RESULT" \
+            "go-builds:$GO_BUILDS_RESULT" \
+            "android-build:$ANDROID_BUILD_RESULT" \
+            "ios-build:$IOS_BUILD_RESULT" \
+            "web-build:$WEB_BUILD_RESULT" \
+            "linux-build:$LINUX_BUILD_RESULT" \
+            "macos-build:$MACOS_BUILD_RESULT" \
+            "windows-build:$WINDOWS_BUILD_RESULT"
+          do
+            job_name="${item%%:*}"
+            job_result="${item#*:}"
+
+            if [ "$job_result" != "success" ]; then
+              echo "$job_name did not succeed: $job_result"
+              exit 1
+            fi
+          done
+
+          echo "All required CI jobs passed."
 
   # Third stage: Run auxiliary tests using build artifacts from previous jobs.
 

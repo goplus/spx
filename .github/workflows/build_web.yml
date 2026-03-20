@@ -39,6 +39,7 @@ jobs:
             xorg-dev \
             libasound2-dev \
             libopenal-dev \
+            binaryen \
             brotli
 
       - name: Setup go/xgo & engine
@@ -48,9 +49,11 @@ jobs:
           web-mode: ${{ matrix.mode }}
 
       - name: Export web bundle
+        env:
+          MATRIX_MODE: ${{ matrix.mode }}
         run: |
-          if [ "${{ matrix.mode }}" != "normal" ]; then
-            make export-web MODE=${{ matrix.mode }}
+          if [ "$MATRIX_MODE" != "normal" ]; then
+            make export-web MODE="$MATRIX_MODE"
           else
             make export-web
           fi

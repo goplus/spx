@@ -49,9 +49,11 @@ jobs:
           web-mode: ${{ matrix.mode }}
 
       - name: Build release pack
+        env:
+          MATRIX_MODE: ${{ matrix.mode }}
         run: |
-          if [ "${{ matrix.mode }}" != "normal" ]; then
-            make export-web MODE=${{ matrix.mode }}
+          if [ "$MATRIX_MODE" != "normal" ]; then
+            make export-web MODE="$MATRIX_MODE"
           else
             make export-web
           fi
