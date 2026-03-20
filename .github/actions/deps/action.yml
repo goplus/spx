@@ -64,8 +64,6 @@ runs:
       uses: actions/cache@v4
       with:
         path: |
-          ${{ steps.gopath.outputs.GOPATH }}/bin/spx*
-          ${{ steps.gopath.outputs.GOPATH }}/bin/gdspx*
           ${{ steps.gopath.outputs.GOPATH }}/bin/gdspxrt*
           ${{ steps.gopath.outputs.GOPATH }}/bin/ispx
           ${{ steps.gopath.outputs.GOPATH }}/bin/ispx.wasm
@@ -73,10 +71,16 @@ runs:
           ~/.local/share/godot/export_templates
           ~/Library/Application Support/Godot/export_templates
           ~/AppData/Roaming/Godot/export_templates
-        key: spx-godot-${{ inputs.cache-version }}-${{ runner.os }}-${{ inputs.setup-mode }}-${{ inputs.web-mode }}-${{ hashFiles('Makefile', 'go.mod', 'go.sum', 'cmd/**/*.go', 'cmd/**/*.sh', 'cmd/gox/template/**', 'cmd/ispx/web/**', 'internal/**/*.go', 'internal/**/*.sh', 'pkg/**/*.go', '.github/actions/deps/action.yml') }}
+        key: spx-godot-${{ inputs.cache-version }}-${{ runner.os }}-${{ inputs.setup-mode }}-${{ inputs.setup-mode != 'runtime' && inputs.web-mode || 'runtime' }}-${{ hashFiles('Makefile', 'go.mod', 'go.sum', 'cmd/gox/go.mod', 'cmd/gox/go.sum', 'cmd/gox/**/*.go', 'cmd/gox/**/*.sh', 'cmd/ispx/**/*.go', 'cmd/ispx/**/*.sh', 'cmd/ispx/web/**', 'cmd/ispxnative/**/*.go', 'cmd/ispxnative/**/*.sh', 'cmd/gox/template/**', 'internal/tools/**/*.sh', 'internal/gdengine/binding/web/**/*.go', 'pkg/ispx/**/*.go', '.github/actions/deps/action.yml') }}
         restore-keys: |
-          spx-godot-${{ inputs.cache-version }}-${{ runner.os }}-${{ inputs.setup-mode }}-${{ inputs.web-mode }}-
+          spx-godot-${{ inputs.cache-version }}-${{ runner.os }}-${{ inputs.setup-mode }}-${{ inputs.setup-mode != 'runtime' && inputs.web-mode || 'runtime' }}-
           spx-godot-${{ inputs.cache-version }}-${{ runner.os }}-${{ inputs.setup-mode }}-
+
+    - name: Install SPX tools
+      shell: bash
+      run: |
+        set -euo pipefail
+        make install
 
     - name: Validate cached engine files
       id: cache-verify
@@ -92,11 +96,9 @@ runs:
         version="$(cat cmd/gox/template/version)"
         missing=0
         bin_suffix=""
-        spx_bin="spx"
 
         if [ "${RUNNER_OS}" = "Windows" ]; then
           bin_suffix=".exe"
-          spx_bin="spx.exe"
         fi
 
         require_path() {
@@ -106,14 +108,10 @@ runs:
           fi
         }
 
-        require_path "$GOPATH_DIR/bin/$spx_bin"
-        require_path "$GOPATH_DIR/bin/gdspxrt${version}${bin_suffix}"
-        require_path "$GOPATH_DIR/bin/gdspxrt${version}.pck"
-        require_path "$GOPATH_DIR/bin/runtime.gdextension"
-
-        if ! compgen -G "$GOPATH_DIR/bin/gdspx-*" > /dev/null; then
-          echo "Missing cached native runtime library"
-          missing=1
+        if [ "$SETUP_MODE" = "runtime" ] || [ "$SETUP_MODE" = "full" ]; then
+          require_path "$GOPATH_DIR/bin/gdspxrt${version}${bin_suffix}"
+          require_path "$GOPATH_DIR/bin/gdspxrt${version}.pck"
+          require_path "$GOPATH_DIR/bin/runtime.gdextension"
         fi
 
         if [ "$SETUP_MODE" = "web" ] || [ "$SETUP_MODE" = "full" ]; then
@@ -124,8 +122,8 @@ runs:
 
         echo "repair=$missing" >> "$GITHUB_OUTPUT"
 
-    - name: Setup engine (cache miss)
-      if: steps.cache-godot.outputs.cache-hit != 'true'
+    - name: Setup engine assets
+      if: steps.cache-godot.outputs.cache-hit != 'true' || steps.cache-verify.outputs.repair == '1'
       shell: bash
       env:
         SETUP_MODE: ${{ inputs.setup-mode }}
@@ -135,39 +133,13 @@ runs:
 
         case "$SETUP_MODE" in
           runtime)
-            make setup
+            make download
             ;;
           web)
-            make setup
             make setup-web MODE="$WEB_MODE"
             ;;
           full)
-            make setup
-            make download-engine MODE=editor
-            make setup-web MODE="$WEB_MODE"
-            ;;
-        esac
-
-    - name: Repair engine setup (cache hit)
-      if: steps.cache-godot.outputs.cache-hit == 'true' && steps.cache-verify.outputs.repair == '1'
-      shell: bash
-      env:
-        SETUP_MODE: ${{ inputs.setup-mode }}
-        WEB_MODE: ${{ inputs.web-mode }}
-      run: |
-        set -euo pipefail
-
-        case "$SETUP_MODE" in
-          runtime)
-            make setup
-            ;;
-          web)
-            make setup
-            make setup-web MODE="$WEB_MODE"
-            ;;
-          full)
-            make setup
-            make download-engine MODE=editor
+            make download
             make setup-web MODE="$WEB_MODE"
             ;;
         esac
