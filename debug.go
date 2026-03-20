@@ -20,14 +20,12 @@ import (
 	"fmt"
 	stdtime "time"
 
-	"github.com/goplus/spx/v2/internal/engine"
 	"github.com/goplus/spx/v2/internal/engine/profiler"
 	itime "github.com/goplus/spx/v2/internal/time"
 	"github.com/goplus/spx/v2/internal/ui"
 )
 
 func (p *Game) showDebugPanel() {
-	engine.SetDebugMode(p.debugState.Debug)
 	profiler.Debug = p.debugState.Debug
 	if !p.debugState.Debug {
 		if p.debugState.DebugPanel != nil {
