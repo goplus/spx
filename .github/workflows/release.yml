@@ -59,9 +59,9 @@ jobs:
           echo "platforms=$PLATFORMS" >> $GITHUB_OUTPUT
 
   static-checks:
-    name: 📊 static-checks
+    name: 📊 Static checks
     needs: setup
-    uses: ./.github/workflows/test.yml
+    uses: ./.github/workflows/static_checks.yml
 
   web-build:
     name: 🌐 Web Release

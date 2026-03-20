@@ -58,10 +58,14 @@ jobs:
             xorg-dev \
             libasound2-dev \
             libopenal-dev \
-            binaryen
+            binaryen \
+            brotli
 
       - name: Setup go/xgo & engine
         uses: ./.github/actions/deps
+        with:
+          setup-mode: web
+          web-mode: normal
 
       - name: Setup ORAS
         uses: oras-project/setup-oras@v1

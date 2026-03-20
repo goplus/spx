@@ -39,17 +39,21 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Get dependencies
-        run: sudo apt-get update && sudo apt-get install gcc libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libx11-dev xorg-dev libasound2-dev libopenal-dev binaryen
+        run: sudo apt-get update && sudo apt-get install gcc libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libx11-dev xorg-dev libasound2-dev libopenal-dev binaryen brotli
         if: ${{ runner.os == 'Linux' }}
 
       - name: Setup go/xgo & engine
         uses: ./.github/actions/deps
+        with:
+          setup-mode: web
+          web-mode: ${{ matrix.mode }}
 
       - name: Build release pack
+        env:
+          MATRIX_MODE: ${{ matrix.mode }}
         run: |
-          if [ "${{ matrix.mode }}" != "normal" ]; then
-            make setup-web MODE=${{ matrix.mode }}
-            make export-web MODE=${{ matrix.mode }}
+          if [ "$MATRIX_MODE" != "normal" ]; then
+            make export-web MODE="$MATRIX_MODE"
           else
             make export-web
           fi
