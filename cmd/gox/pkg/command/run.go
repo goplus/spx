@@ -7,7 +7,9 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/goplus/spx/v2/cmd/gox/pkg/util"
 )
@@ -51,27 +53,36 @@ func (pself *CmdTool) RunPackMode(pargs ...string) error {
 }
 
 func (pself *CmdTool) RunWeb() error {
-	if !util.IsFileExist(filepath.Join(pself.ProjectDir, ".builds", "web", "game.zip")) {
-		pself.ExportWeb()
-	}
-	return pself.runWebServer()
+	return runWebCommand(pself.ExportWeb, pself.runWebServer)
 }
 
 func (pself *CmdTool) RunWebWorker() error {
-	if !util.IsFileExist(filepath.Join(pself.ProjectDir, ".builds", "web", "game.zip")) {
-		pself.ExportWebWorker()
+	return runWebCommand(pself.ExportWebWorker, pself.runWebServer)
+}
+
+// Always re-export before serving so direct `spx runweb` matches `make run-web`
+// and never reuses stale web artifacts from a previous invocation.
+func runWebCommand(exportFn func() error, serverFn func() error) error {
+	if err := exportFn(); err != nil {
+		return err
 	}
-	return pself.runWebServer()
+	return serverFn()
+}
+
+func (pself *CmdTool) webServerPIDPath() string {
+	pidPath, _ := filepath.Abs(path.Join(pself.TargetDir, ".gdspx_web_server.pid"))
+	return pidPath
 }
 
 func (pself *CmdTool) runWebServer() error {
 	port := pself.ServerPort
-	pself.StopWeb()
+	if err := pself.StopWeb(); err != nil {
+		return err
+	}
 	scriptPath := filepath.Join(pself.ProjectDir, ".godot", "gdspx_web_server.py")
 	scriptPath = strings.ReplaceAll(scriptPath, "\\", "/")
 	executeDir := filepath.Join(pself.ProjectDir, ".builds/web")
 	executeDir = strings.ReplaceAll(executeDir, "\\", "/")
-	fmt.Printf("Web server running at http://127.0.0.1:%d\n", port)
 
 	// Check if python command is available, try python3 if not
 	pythonCmd := "python"
@@ -83,26 +94,59 @@ func (pself *CmdTool) runWebServer() error {
 	}
 
 	cmd := exec.Command(pythonCmd, scriptPath, "-r", executeDir, "-p", fmt.Sprint(port))
-	err := cmd.Start()
-	if err != nil {
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("error starting server: %v", err)
 	}
+	if err := os.WriteFile(pself.webServerPIDPath(), []byte(strconv.Itoa(cmd.Process.Pid)), 0644); err != nil {
+		_ = cmd.Process.Kill()
+		return fmt.Errorf("failed to record web server pid: %w", err)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- cmd.Wait()
+	}()
+
+	select {
+	case err := <-done:
+		_ = os.Remove(pself.webServerPIDPath())
+		if err != nil {
+			return fmt.Errorf("web server exited early: %w", err)
+		}
+		return fmt.Errorf("web server exited unexpectedly without an error")
+	// Wait briefly to detect immediate startup failures; if the server
+	// is still running after this window, assume it started successfully.
+	case <-time.After(500 * time.Millisecond):
+	}
+	fmt.Printf("Web server running at http://127.0.0.1:%d\n", port)
 	return nil
 }
 
 func (pself *CmdTool) StopWeb() (err error) {
-	if runtime.GOOS == "windows" {
-		content := "taskkill /F /IM python.exe\r\ntaskkill /F /IM pythonw.exe\r\n"
-		tempFileName := "temp_kill.bat"
-		os.WriteFile(tempFileName, []byte(content), 0644)
-		cmd := exec.Command("cmd.exe", "/C", tempFileName)
-		cmd.Run()
-		os.Remove(tempFileName)
-	} else {
-		cmd := exec.Command("pkill", "-f", "gdx_web_server.py")
-		cmd.Run()
+	pidBytes, readErr := os.ReadFile(pself.webServerPIDPath())
+	if os.IsNotExist(readErr) {
+		return nil
 	}
-	return
+	if readErr != nil {
+		return fmt.Errorf("failed to read web server pid: %w", readErr)
+	}
+
+	pid, convErr := strconv.Atoi(strings.TrimSpace(string(pidBytes)))
+	if convErr != nil {
+		_ = os.Remove(pself.webServerPIDPath())
+		return nil
+	}
+
+	process, findErr := os.FindProcess(pid)
+	if findErr == nil {
+		_ = process.Kill()
+	}
+
+	_ = os.Remove(pself.webServerPIDPath())
+	return nil
 }
 
 func (pself *CmdTool) RunPureEngine(pargs ...string) error {
