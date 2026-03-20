@@ -118,7 +118,7 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 	}
 
 	// Set runtime mode
-	if cmd.Args.CmdName == "run" || cmd.Args.CmdName == "runweb" {
+	if isRuntimeModeCommand(cmd.Args.CmdName) {
 		cmd.RuntimeMode = true
 	}
 
@@ -300,6 +300,15 @@ func (cmd *CmdTool) checkMovieArgs(rootDir string) []string {
 		args = append(args, "--write-movie", fpath)
 	}
 	return args
+}
+
+func isRuntimeModeCommand(cmdName string) bool {
+	switch cmdName {
+	case "run", "runweb", "runwebworker":
+		return true
+	default:
+		return false
+	}
 }
 
 // handleRuniCommand handles the runi command with minimal setup.

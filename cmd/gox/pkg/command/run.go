@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/goplus/spx/v2/cmd/gox/pkg/util"
 )
@@ -51,17 +52,18 @@ func (pself *CmdTool) RunPackMode(pargs ...string) error {
 }
 
 func (pself *CmdTool) RunWeb() error {
-	if !util.IsFileExist(filepath.Join(pself.ProjectDir, ".builds", "web", "game.zip")) {
-		pself.ExportWeb()
-	}
-	return pself.runWebServer()
+	return runWebCommand(pself.ExportWeb, pself.runWebServer)
 }
 
 func (pself *CmdTool) RunWebWorker() error {
-	if !util.IsFileExist(filepath.Join(pself.ProjectDir, ".builds", "web", "game.zip")) {
-		pself.ExportWebWorker()
+	return runWebCommand(pself.ExportWebWorker, pself.runWebServer)
+}
+
+func runWebCommand(exportFn func() error, serverFn func() error) error {
+	if err := exportFn(); err != nil {
+		return err
 	}
-	return pself.runWebServer()
+	return serverFn()
 }
 
 func (pself *CmdTool) runWebServer() error {
@@ -83,9 +85,25 @@ func (pself *CmdTool) runWebServer() error {
 	}
 
 	cmd := exec.Command(pythonCmd, scriptPath, "-r", executeDir, "-p", fmt.Sprint(port))
-	err := cmd.Start()
-	if err != nil {
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("error starting server: %v", err)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- cmd.Wait()
+	}()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			return fmt.Errorf("web server exited early: %w", err)
+		}
+		return nil
+	case <-time.After(500 * time.Millisecond):
 	}
 	return nil
 }
@@ -99,7 +117,7 @@ func (pself *CmdTool) StopWeb() (err error) {
 		cmd.Run()
 		os.Remove(tempFileName)
 	} else {
-		cmd := exec.Command("pkill", "-f", "gdx_web_server.py")
+		cmd := exec.Command("pkill", "-f", "gdspx_web_server.py")
 		cmd.Run()
 	}
 	return
