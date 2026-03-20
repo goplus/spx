@@ -57,7 +57,6 @@ func (p *Game) OnEngineUpdate(delta float64) {
 	if !p.lifecycleState.IsRunned {
 		return
 	}
-	p.updateInputState()
 	p.dispatchStartEventIfNeeded()
 	p.updateSpriteProxies()
 	p.pullPhysicsPositions()

@@ -129,6 +129,8 @@ func Main(g IGame) {
 		OnEngineDestroy: onDestroy,
 		OnEngineReset:   onReset,
 		OnEnginePause:   onPaused,
+		OnMousePressed:  onMousePressed,
+		OnMouseReleased: onMouseReleased,
 		OnKeyPressed:    onKeyPressed,
 		OnKeyReleased:   onKeyReleased,
 	})
@@ -141,6 +143,7 @@ func OnGameStarted() {
 // callbacks
 func onStart() {
 	defer CheckPanic()
+	resetMouseButtonStates()
 	triggerEventsTemp = make([]TriggerEvent, 0)
 	triggerEvents = make([]TriggerEvent, 0)
 	keyEventsTemp = make([]KeyEvent, 0)
@@ -192,6 +195,14 @@ func onKeyPressed(id int64) {
 
 func onKeyReleased(id int64) {
 	keyEventsTemp = append(keyEventsTemp, KeyEvent{Id: id, IsPressed: false})
+}
+
+func onMousePressed(id int64) {
+	setMouseButtonPressed(id, true)
+}
+
+func onMouseReleased(id int64) {
+	setMouseButtonPressed(id, false)
 }
 
 func updateTime(delta float64) {

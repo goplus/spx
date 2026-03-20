@@ -39,7 +39,7 @@ func (p *Game) inputEventLoop(me coroutine.Thread) int {
 			return mathf.Vec2{X: float64(curMousePos.X), Y: float64(curMousePos.Y)}
 		},
 		IsLeftButtonPressed: func() bool {
-			return p.engine().InputMgr.GetMouseState(MOUSE_BUTTON_LEFT)
+			return engine.IsMouseButtonPressed(MOUSE_BUTTON_LEFT)
 		},
 		FireLeftButtonDown: func(point mathf.Vec2) {
 			p.fireEvent(&eventLeftButtonDown{Pos: point})

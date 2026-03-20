@@ -41,11 +41,6 @@ func (p *SpriteImpl) resetRuntimeProxy(applyCostume bool) {
 	})
 }
 
-// updateInputState refreshes input state from the engine.
-func (p *Game) updateInputState() {
-	coreruntime.SyncMousePos(engine.Managers().InputMgr.GetGlobalMousePos(), p.inputMgr.setMousePos)
-}
-
 // dispatchStartEventIfNeeded fires the start event once after the game begins running.
 func (p *Game) dispatchStartEventIfNeeded() error {
 	coreruntime.SyncOnce(&p.lifecycleState.StartFlag, func() {
