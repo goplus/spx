@@ -64,6 +64,7 @@ runs:
       uses: actions/cache@v4
       with:
         path: |
+          ${{ steps.gopath.outputs.GOPATH }}/bin/gdspx[0-9]*
           ${{ steps.gopath.outputs.GOPATH }}/bin/gdspxrt*
           ${{ steps.gopath.outputs.GOPATH }}/bin/ispx
           ${{ steps.gopath.outputs.GOPATH }}/bin/ispx.wasm
@@ -109,6 +110,7 @@ runs:
         }
 
         if [ "$SETUP_MODE" = "runtime" ] || [ "$SETUP_MODE" = "full" ]; then
+          require_path "$GOPATH_DIR/bin/gdspx${version}${bin_suffix}"
           require_path "$GOPATH_DIR/bin/gdspxrt${version}${bin_suffix}"
           require_path "$GOPATH_DIR/bin/gdspxrt${version}.pck"
           require_path "$GOPATH_DIR/bin/runtime.gdextension"
