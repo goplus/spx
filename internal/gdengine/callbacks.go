@@ -187,15 +187,26 @@ func onSpriteDestroyed(id int64) {
 
 // input
 func onMousePressed(id int64) {
-	spxlog.Debug("OnMousePressed %d", id)
+	onMainThread(func() {
+		spxlog.Debug("OnMousePressed %d", id)
+		if coreCallbacks.OnMousePressed != nil {
+			coreCallbacks.OnMousePressed(id)
+		}
+	})
 }
 
 func onMouseReleased(id int64) {
-	spxlog.Debug("OnMouseReleased %d", id)
+	onMainThread(func() {
+		spxlog.Debug("OnMouseReleased %d", id)
+		if coreCallbacks.OnMouseReleased != nil {
+			coreCallbacks.OnMouseReleased(id)
+		}
+	})
 }
 
 func onKeyPressed(id int64) {
 	onMainThread(func() {
+		spxlog.Debug("OnKeyPressed %d", id)
 		if coreCallbacks.OnKeyPressed != nil {
 			coreCallbacks.OnKeyPressed(id)
 		}
@@ -204,6 +215,7 @@ func onKeyPressed(id int64) {
 
 func onKeyReleased(id int64) {
 	onMainThread(func() {
+		spxlog.Debug("OnKeyReleased %d", id)
 		if coreCallbacks.OnKeyReleased != nil {
 			coreCallbacks.OnKeyReleased(id)
 		}

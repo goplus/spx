@@ -328,6 +328,21 @@ func getJsFuncBody(function *clang.TypedefFunction) string {
 			"\tvar _arg1 = " + argName + ".count;\n" +
 			"\t_gdFuncPtr(_arg0, _arg1);"
 	}
+	if function.Name == "GDExtensionSpxInputGetGlobalMousePos" {
+		return "var _retValue = AllocGdVec2();\n" +
+			"\t_gdFuncPtr(_retValue);\n" +
+			"\tvar _scratch = GdspxFuncs._inputMousePosScratch;\n" +
+			"\tif (!_scratch) {\n" +
+			"\t\t_scratch = { x: 0, y: 0 };\n" +
+			"\t\tGdspxFuncs._inputMousePosScratch = _scratch;\n" +
+			"\t}\n" +
+			"\tvar _floatIndex = _retValue / 4;\n" +
+			"\tvar _heap = Module.HEAPF32;\n" +
+			"\t_scratch.x = _heap[_floatIndex];\n" +
+			"\t_scratch.y = _heap[_floatIndex + 1];\n" +
+			"\tFreeGdVec2(_retValue);\n" +
+			"\treturn _scratch"
+	}
 
 	sb := strings.Builder{}
 	prefixTab := "\t"

@@ -79,6 +79,9 @@ func RunInputLoop(me coroutine.Thread, cfg InputLoopConfig) int {
 
 	for {
 		point := cfg.CurrentMousePos()
+		// Keep the cached mouse position in sync with the engine every frame,
+		// so callers don't need a second engine-side mouse query elsewhere.
+		cfg.SetMousePos(point)
 		keyEvents = cfg.GetKeyEvents(keyEvents)
 		lastMousePos, lastLeftButtonPressed = ProcessInputFrame(
 			InputFrame{

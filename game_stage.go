@@ -138,7 +138,7 @@ func (p *Game) MouseY() float64 {
 }
 
 func (p *Game) MousePressed() bool {
-	return p.engine().InputMgr.MousePressed()
+	return engine.AnyMouseButtonPressed()
 }
 
 func (p *Game) getMousePos() (x, y float64) {
