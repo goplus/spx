@@ -1,6 +1,9 @@
 package event
 
-import "math"
+import (
+	"math"
+	"slices"
+)
 
 func NewSink(owner any, handler any, cond ...func(any) bool) Sink {
 	sink := Sink{
@@ -38,12 +41,7 @@ func MatchAnyOf[T comparable](values []T) func(any) bool {
 		if !ok {
 			return false
 		}
-		for _, value := range values {
-			if value == got {
-				return true
-			}
-		}
-		return false
+		return slices.Contains(values, got)
 	}
 }
 
