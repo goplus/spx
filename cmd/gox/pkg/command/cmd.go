@@ -303,6 +303,9 @@ func (cmd *CmdTool) checkMovieArgs(rootDir string) []string {
 }
 
 func isRuntimeModeCommand(cmdName string) bool {
+	// Runtime-mode commands execute from packaged runtime assets and should skip
+	// the full project reimport path during setup. `runwebworker` belongs here
+	// for the same reason as `runweb`: both serve exported runtime artifacts.
 	switch cmdName {
 	case "run", "runweb", "runwebworker":
 		return true

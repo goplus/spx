@@ -2,6 +2,8 @@ package command
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 )
@@ -68,5 +70,21 @@ func TestIsRuntimeModeCommand(t *testing.T) {
 				t.Fatalf("isRuntimeModeCommand(%q) = %v, want %v", tt.cmdName, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestStopWebIgnoresInvalidPIDFile(t *testing.T) {
+	targetDir := t.TempDir()
+	cmd := CmdTool{TargetDir: targetDir}
+	pidFile := filepath.Join(targetDir, ".gdspx_web_server.pid")
+	if err := os.WriteFile(pidFile, []byte("invalid"), 0644); err != nil {
+		t.Fatalf("write pid file: %v", err)
+	}
+
+	if err := cmd.StopWeb(); err != nil {
+		t.Fatalf("StopWeb returned error for invalid pid file: %v", err)
+	}
+	if _, err := os.Stat(pidFile); !os.IsNotExist(err) {
+		t.Fatalf("pid file should be removed, stat err = %v", err)
 	}
 }
