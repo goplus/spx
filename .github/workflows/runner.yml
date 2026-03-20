@@ -1,42 +1,46 @@
 name: 🔗 GHA
-on: [push, pull_request]
+on: [push, pull_request, merge_group]
 
 concurrency:
   group: ci-${{github.actor}}-${{github.head_ref || github.run_number}}-${{github.ref}}-runner
   cancel-in-progress: true
 
 jobs:
-  test:
-    name: 🧪 Test
-    uses: ./.github/workflows/test.yml
+  static-checks:
+    name: 📊 Static checks
+    uses: ./.github/workflows/static_checks.yml
+
+  go-builds:
+    name: 🧪 Go builds
+    uses: ./.github/workflows/go_builds.yml
 
   android-build:
-    needs: test
+    needs: static-checks
     name: 🤖 Android
     uses: ./.github/workflows/build_android.yml
 
   ios-build:
-    needs: test
+    needs: static-checks
     name: 🍏 iOS
     uses: ./.github/workflows/build_ios.yml
 
   web-build:
-    needs: test
+    needs: static-checks
     name: 🌐 Web
     uses: ./.github/workflows/build_web.yml
 
   linux-build:
-    needs: test
+    needs: static-checks
     name: 🐧 Linux
     uses: ./.github/workflows/build_linux.yml
 
   macos-build:
-    needs: test
+    needs: static-checks
     name: 🍎 macOS
     uses: ./.github/workflows/build_macos.yml
 
   windows-build:
-    needs: test
+    needs: static-checks
     name: 🏁 Windows
     uses: ./.github/workflows/build_windows.yml
 

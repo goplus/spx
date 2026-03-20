@@ -8,18 +8,58 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-
   build:
     runs-on: ubuntu-latest
+    name: web-export (${{ matrix.mode }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - mode: normal
+            zip_file: spx_web.zip
+          - mode: worker
+            zip_file: spx_web_worker.zip
+          - mode: minigame
+            zip_file: spx_web_minigame.zip
+          - mode: miniprogram
+            zip_file: spx_web_miniprogram.zip
     steps:
-    - uses: actions/checkout@v6
+      - uses: actions/checkout@v6
 
-    - name: Get dependencies
-      run: sudo apt-get update && sudo apt-get install gcc libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libx11-dev xorg-dev libasound2-dev libopenal-dev
-      if: ${{ runner.os == 'Linux' }}
+      - name: Get dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install \
+            gcc \
+            libgl1-mesa-dev \
+            libegl1-mesa-dev \
+            libgles2-mesa-dev \
+            libx11-dev \
+            xorg-dev \
+            libasound2-dev \
+            libopenal-dev \
+            brotli
 
-    - name: Setup go/xgo & engine
-      uses: ./.github/actions/deps
+      - name: Setup go/xgo & engine
+        uses: ./.github/actions/deps
+        with:
+          setup-mode: web
+          web-mode: ${{ matrix.mode }}
 
-    - name: Test
-      uses: ./.github/actions/project-test
+      - name: Export web bundle
+        run: |
+          if [ "${{ matrix.mode }}" != "normal" ]; then
+            make export-web MODE=${{ matrix.mode }}
+          else
+            make export-web
+          fi
+
+      - name: Verify web bundle
+        run: |
+          if [ ! -f "${{ matrix.zip_file }}" ]; then
+            echo "${{ matrix.zip_file }} not found"
+            exit 1
+          fi
+
+          ls -lh "${{ matrix.zip_file }}"

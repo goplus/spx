@@ -1,0 +1,32 @@
+name: Static Checks
+
+on:
+  workflow_call:
+
+jobs:
+  static-checks:
+    name: static-checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: 1.25.x
+          cache-dependency-path: |
+            go.sum
+            cmd/gox/go.sum
+
+      - name: Download Go modules
+        run: go mod download
+
+      - name: Run go generate for pkg/ispx
+        run: go generate ./pkg/ispx/...
+
+      - name: Ensure working tree is clean
+        run: git diff --exit-code
+
+      - name: Test Go code
+        run: go test -v $(go list ./... | grep -v /internal/webffi)
