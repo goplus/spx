@@ -292,8 +292,22 @@ download_editor() {
     setup_global_variables
     local saved_platform=$PLATFORM
     local saved_mode=$MODE
-    echo "===> Downloading pc via download_engine..."
+
+    echo "===> Downloading pc template via download_engine..."
+    MODE=""
     download_engine || exit
+
+    if [ "$saved_platform" = "android" ] || [ "$saved_platform" = "ios" ] || [ "$saved_platform" = "web" ]; then
+        PLATFORM=""
+        setup_global_variables
+    fi
+
+    echo "===> Downloading pc editor via download_engine..."
+    MODE="editor"
+    download_engine || exit
+
+    PLATFORM="$saved_platform"
+    MODE="$saved_mode"
 
     # Download and extract gdspxrt.pck zip file
     echo "===> Downloading gdspxrt.pck..."
