@@ -17,12 +17,16 @@ import (
 type DirInfos struct {
 	path string
 	info os.FileInfo
+	// zipPath optionally overrides the archive entry path for assets outside baseFolder.
+	zipPath string
 }
 
-func PackProject(baseFolder string, dstZipPath string) {
+func PackProject(baseFolder string, dstZipPath string) error {
 	paths := []DirInfos{}
 	if util.IsFileExist(dstZipPath) {
-		os.Remove(dstZipPath)
+		if err := os.Remove(dstZipPath); err != nil {
+			return err
+		}
 	}
 	skipDirs := map[string]struct{}{
 		".git": {}, "project": {},
@@ -30,12 +34,18 @@ func PackProject(baseFolder string, dstZipPath string) {
 
 	file, err := os.Create(dstZipPath)
 	if err != nil {
-		panic(err)
+		return err
 	}
-	defer file.Close()
-
 	zipWriter := zip.NewWriter(file)
-	defer zipWriter.Close()
+	closeZip := func(err error) error {
+		if closeErr := zipWriter.Close(); err == nil && closeErr != nil {
+			err = closeErr
+		}
+		if closeErr := file.Close(); err == nil && closeErr != nil {
+			err = closeErr
+		}
+		return err
+	}
 
 	err = filepath.Walk(baseFolder, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -63,22 +73,35 @@ func PackProject(baseFolder string, dstZipPath string) {
 				return nil
 			}
 		}
-		paths = append(paths, DirInfos{path, info})
+		paths = append(paths, DirInfos{path: path, info: info})
 		return nil
 	})
 	if err != nil {
-		panic(err)
+		return closeZip(err)
 	}
 
-	PackZip(zipWriter, baseFolder, paths)
+	existingZipPaths := make(map[string]struct{}, len(paths))
+	for _, dirInfo := range paths {
+		existingZipPaths[zipEntryName(baseFolder, dirInfo)] = struct{}{}
+	}
+
+	extraPaths, err := collectExternalAssetPaths(baseFolder, existingZipPaths)
+	if err != nil {
+		return closeZip(err)
+	}
+	paths = append(paths, extraPaths...)
+
+	return closeZip(PackZip(zipWriter, baseFolder, paths))
 }
 
-func PackZip(zipWriter *zip.Writer, baseFolder string, paths []DirInfos) {
+func PackZip(zipWriter *zip.Writer, baseFolder string, paths []DirInfos) error {
 	baseFolder = strings.ReplaceAll(baseFolder, "\\", "/")
 	slices.SortFunc(paths, func(a, b DirInfos) int {
-		if a.path < b.path {
+		nameA := zipEntryName(baseFolder, a)
+		nameB := zipEntryName(baseFolder, b)
+		if nameA < nameB {
 			return -1
-		} else if a.path > b.path {
+		} else if nameA > nameB {
 			return 1
 		}
 		return 0
@@ -89,40 +112,58 @@ func PackZip(zipWriter *zip.Writer, baseFolder string, paths []DirInfos) {
 		info := dirInfo.info
 		header, err := zip.FileInfoHeader(info)
 		if err != nil {
-			panic(err)
+			return err
 		}
 		// Set a fixed timestamp
 		header.Modified = time.Unix(0, 0)
 
-		header.Name = strings.TrimPrefix(path, baseFolder)
-		header.Name = strings.ReplaceAll(header.Name, "\\", "/")
-		if header.Name[0] == '/' {
-			header.Name = header.Name[1:]
+		header.Name = zipEntryName(baseFolder, dirInfo)
+		if header.Name == "" {
+			continue
 		}
 		if info.IsDir() {
 			header.Name += "/"
 			_, err := zipWriter.CreateHeader(header)
 			if err != nil {
-				panic(err)
+				return err
 			}
 			continue
 		}
 
 		fileToZip, err := os.Open(path)
 		if err != nil {
-			panic(err)
+			return err
 		}
-		defer fileToZip.Close()
 
 		writer, err := zipWriter.CreateHeader(header)
 		if err != nil {
-			panic(err)
+			fileToZip.Close()
+			return err
 		}
-		_, err = io.Copy(writer, fileToZip)
-		if err != nil {
-			panic(err)
+		_, copyErr := io.Copy(writer, fileToZip)
+		closeErr := fileToZip.Close()
+		if copyErr != nil {
+			return copyErr
+		}
+		if closeErr != nil {
+			return closeErr
 		}
 	}
+	return nil
+}
+
+func zipEntryName(baseFolder string, dirInfo DirInfos) string {
+	if dirInfo.zipPath != "" {
+		return strings.TrimPrefix(normalizeZipPath(dirInfo.zipPath), "/")
+	}
+
+	baseFolder = normalizeZipPath(baseFolder)
+	name := strings.TrimPrefix(normalizeZipPath(dirInfo.path), baseFolder)
+	return strings.TrimPrefix(name, "/")
+}
+
+func normalizeZipPath(path string) string {
+	return strings.ReplaceAll(path, "\\", "/")
 }
 
 func PackEngineRes(proejct_fs embed.FS, webDir string) {
@@ -143,44 +184,56 @@ func PackDirFiles(zipName string, targetDir string, directories, files []string)
 	if err != nil {
 		return err
 	}
-	defer zipFile.Close()
-
 	zipWriter := zip.NewWriter(zipFile)
-	defer zipWriter.Close()
+	closeZip := func(err error) error {
+		if closeErr := zipWriter.Close(); err == nil && closeErr != nil {
+			err = closeErr
+		}
+		if closeErr := zipFile.Close(); err == nil && closeErr != nil {
+			err = closeErr
+		}
+		return err
+	}
+
 	paths := []DirInfos{}
 	for _, dir := range directories {
-		paths = addDirToZip(path.Join(targetDir, dir), paths)
+		paths, err = addDirToZip(path.Join(targetDir, dir), paths)
+		if err != nil {
+			return closeZip(err)
+		}
 	}
 
 	for _, file := range files {
-		paths = addFileToZip(path.Join(targetDir, file), paths)
+		paths, err = addFileToZip(path.Join(targetDir, file), paths)
+		if err != nil {
+			return closeZip(err)
+		}
 	}
 
-	PackZip(zipWriter, targetDir, paths)
-	return nil
+	return closeZip(PackZip(zipWriter, targetDir, paths))
 }
 
-func addDirToZip(dirPath string, paths []DirInfos) []DirInfos {
-	filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
+func addDirToZip(dirPath string, paths []DirInfos) ([]DirInfos, error) {
+	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
-		paths = append(paths, DirInfos{path, info})
+		paths = append(paths, DirInfos{path: path, info: info})
 		return nil
 	})
-	return paths
+	return paths, err
 }
 
-func addFileToZip(path string, paths []DirInfos) []DirInfos {
+func addFileToZip(path string, paths []DirInfos) ([]DirInfos, error) {
 	file, err := os.Open(path)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	defer file.Close()
 	info, err := file.Stat()
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-	paths = append(paths, DirInfos{path, info})
-	return paths
+	paths = append(paths, DirInfos{path: path, info: info})
+	return paths, nil
 }

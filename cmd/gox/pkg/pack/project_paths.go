@@ -1,0 +1,306 @@
+package pack
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"path"
+	"path/filepath"
+	"strings"
+
+	spxfs "github.com/goplus/spx/v2/fs"
+	coreproject "github.com/goplus/spx/v2/internal/core/project"
+)
+
+const (
+	projectConfigName = ".config"
+	// engineExtAssetDir is the fixed zip-internal directory name used by the web runtime.
+	engineExtAssetDir = "extasset"
+	// sharedAssetEscapeDepth counts how many leading ".." segments are needed to leave <project>/assets.
+	sharedAssetEscapeDepth = 2
+)
+
+type assetProjectConfig struct {
+	// ExtAsset is the user-configured source directory name on disk.
+	// Packed entries are still rewritten into engineExtAssetDir.
+	ExtAsset string `json:"extasset"`
+}
+
+type assetPathRef struct {
+	configDir string
+	path      string
+}
+
+// collectExternalAssetPaths mirrors the runtime's shared-resource compatibility rules
+// so runweb packs files that are referenced outside assets/ but still loadable at runtime.
+func collectExternalAssetPaths(baseFolder string, existingZipPaths map[string]struct{}) ([]DirInfos, error) {
+	assetRoot := filepath.Join(baseFolder, "assets")
+	info, err := os.Stat(assetRoot)
+	if os.IsNotExist(err) || (err == nil && !info.IsDir()) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	refs, err := collectAssetPathRefs(assetRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	extAssetDir, err := readExtAssetDir(baseFolder)
+	if err != nil {
+		return nil, err
+	}
+
+	seen := make(map[string]struct{}, len(existingZipPaths))
+	for zipPath := range existingZipPaths {
+		seen[zipPath] = struct{}{}
+	}
+
+	assetRoot = cleanFilesystemPath(assetRoot)
+	compatibilityRoot := sharedAssetCompatibilityRoot(assetRoot)
+
+	var extraPaths []DirInfos
+	for _, ref := range refs {
+		normalized := normalizeConfigPath(ref.configDir, ref.path)
+		sourcePath, zipPath, ok := resolveExternalAssetPath(assetRoot, compatibilityRoot, extAssetDir, normalized)
+		if !ok {
+			continue
+		}
+		if _, exists := seen[zipPath]; exists {
+			continue
+		}
+
+		info, err := os.Stat(sourcePath)
+		if err != nil {
+			return nil, fmt.Errorf("stat external asset %s referenced by %q: %w", sourcePath, normalized, err)
+		}
+		if info.IsDir() {
+			return nil, fmt.Errorf("external asset %s referenced by %q is a directory", sourcePath, normalized)
+		}
+
+		seen[zipPath] = struct{}{}
+		extraPaths = append(extraPaths, DirInfos{path: sourcePath, info: info, zipPath: zipPath})
+	}
+
+	return extraPaths, nil
+}
+
+func collectAssetPathRefs(assetRoot string) ([]assetPathRef, error) {
+	var refs []assetPathRef
+
+	projectConfigPath := filepath.Join(assetRoot, "index.json")
+	if _, err := os.Stat(projectConfigPath); err != nil {
+		if !os.IsNotExist(err) {
+			return nil, fmt.Errorf("stat %s: %w", projectConfigPath, err)
+		}
+	} else {
+		var conf coreproject.ProjectConfig
+		if err := readJSONFile(projectConfigPath, &conf); err != nil {
+			return nil, fmt.Errorf("parse %s: %w", projectConfigPath, err)
+		}
+		for _, backdrop := range conf.Backdrops {
+			if backdrop != nil {
+				refs = appendAssetPathRef(refs, "", backdrop.Path)
+			}
+		}
+		refs = appendAssetPathRef(refs, "", conf.Bgm)
+		refs = appendAssetPathRef(refs, "", conf.TilemapPath)
+	}
+
+	spriteConfigPaths, err := filepath.Glob(filepath.Join(assetRoot, "sprites", "*", "index.json"))
+	if err != nil {
+		return nil, err
+	}
+	for _, spriteConfigPath := range spriteConfigPaths {
+		configDir, err := relConfigDir(assetRoot, filepath.Dir(spriteConfigPath))
+		if err != nil {
+			return nil, err
+		}
+
+		var conf coreproject.SpriteConfig
+		if err := readJSONFile(spriteConfigPath, &conf); err != nil {
+			return nil, fmt.Errorf("parse %s: %w", spriteConfigPath, err)
+		}
+
+		for _, costume := range conf.Costumes {
+			if costume != nil {
+				refs = appendAssetPathRef(refs, configDir, costume.Path)
+			}
+		}
+		if conf.CostumeSet != nil && conf.CostumeSet.Path != "" {
+			refs = appendAssetPathRef(refs, configDir, conf.CostumeSet.Path)
+		}
+		if conf.CostumeMPSet != nil && conf.CostumeMPSet.Path != "" {
+			refs = appendAssetPathRef(refs, configDir, conf.CostumeMPSet.Path)
+		}
+	}
+
+	soundConfigPaths, err := filepath.Glob(filepath.Join(assetRoot, "sounds", "*", "index.json"))
+	if err != nil {
+		return nil, err
+	}
+	for _, soundConfigPath := range soundConfigPaths {
+		configDir, err := relConfigDir(assetRoot, filepath.Dir(soundConfigPath))
+		if err != nil {
+			return nil, err
+		}
+
+		var conf coreproject.SoundConfig
+		if err := readJSONFile(soundConfigPath, &conf); err != nil {
+			return nil, fmt.Errorf("parse %s: %w", soundConfigPath, err)
+		}
+		refs = appendAssetPathRef(refs, configDir, conf.Path)
+	}
+
+	return refs, nil
+}
+
+func appendAssetPathRef(refs []assetPathRef, configDir, relPath string) []assetPathRef {
+	if relPath == "" {
+		return refs
+	}
+	return append(refs, assetPathRef{configDir: configDir, path: relPath})
+}
+
+// resolveExternalAssetPath keeps pack-time path handling aligned with internal/engine/path.go.
+func resolveExternalAssetPath(assetRoot, compatibilityRoot, extAssetDir, relPath string) (string, string, bool) {
+	if relPath == "" || strings.HasPrefix(relPath, "/") {
+		return "", "", false
+	}
+	if schema, _ := spxfs.SplitSchema(relPath); schema != "" {
+		return "", "", false
+	}
+
+	sourcePath := cleanFilesystemPath(filepath.Join(assetRoot, filepath.FromSlash(relPath)))
+	if zipPath := rewriteExtAssetZipPath(relPath, extAssetDir); zipPath != "" {
+		if isWithinRoot(sourcePath, compatibilityRoot) {
+			return sourcePath, zipPath, true
+		}
+		return "", "", false
+	}
+
+	if isWithinRoot(sourcePath, assetRoot) {
+		return "", "", false
+	}
+	// Preserve legacy shared resources referenced from outside <project>/assets.
+	// assets/ sits one level below the project root, so at least two ".." segments
+	// are required before the path can reach the shared parent directory.
+	if leadingParentCount(relPath) < sharedAssetEscapeDepth || !isWithinRoot(sourcePath, compatibilityRoot) {
+		return "", "", false
+	}
+
+	zipPath, err := filepath.Rel(compatibilityRoot, sourcePath)
+	if err != nil {
+		return "", "", false
+	}
+	zipPath = normalizeZipPath(zipPath)
+	if zipPath == "." || strings.HasPrefix(zipPath, "../") {
+		return "", "", false
+	}
+	return sourcePath, zipPath, true
+}
+
+// rewriteExtAssetZipPath rewrites a user-configured extasset source path to the
+// fixed engineExtAssetDir zip location expected by the web runtime.
+func rewriteExtAssetZipPath(relPath, extAssetDir string) string {
+	if extAssetDir == "" {
+		return ""
+	}
+
+	segments := strings.Split(cleanFilesystemPath(relPath), "/")
+	leadingParents := 0
+	for i, segment := range segments {
+		if segment == "" {
+			continue
+		}
+		if segment == ".." {
+			leadingParents++
+			continue
+		}
+		if segment != extAssetDir || leadingParents == 0 {
+			return ""
+		}
+
+		suffix := filepath.Join(segments[i+1:]...)
+		return normalizeZipPath(filepath.Join(engineExtAssetDir, suffix))
+	}
+
+	return ""
+}
+
+func readExtAssetDir(baseFolder string) (string, error) {
+	configPath := filepath.Join(baseFolder, projectConfigName)
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		return "", nil
+	} else if err != nil {
+		return "", err
+	}
+
+	var conf assetProjectConfig
+	if err := readJSONFile(configPath, &conf); err != nil {
+		return "", fmt.Errorf("parse %s: %w", configPath, err)
+	}
+	return conf.ExtAsset, nil
+}
+
+func readJSONFile(filePath string, v any) error {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(data, v)
+}
+
+func relConfigDir(assetRoot, configDir string) (string, error) {
+	rel, err := filepath.Rel(assetRoot, configDir)
+	if err != nil {
+		return "", err
+	}
+	return normalizeZipPath(rel), nil
+}
+
+// normalizeConfigPath mirrors internal/core/project/resources.go:normalizeConfigPath
+// so build-time packing and runtime loading resolve asset references identically.
+func normalizeConfigPath(configDir, relPath string) string {
+	if relPath == "" {
+		return ""
+	}
+	if strings.HasPrefix(relPath, "/") {
+		return relPath
+	}
+	if schema, _ := spxfs.SplitSchema(relPath); schema != "" {
+		return relPath
+	}
+	return path.Clean(path.Join(configDir, relPath))
+}
+
+func cleanFilesystemPath(path string) string {
+	return normalizeZipPath(filepath.Clean(path))
+}
+
+func sharedAssetCompatibilityRoot(assetRoot string) string {
+	return cleanFilesystemPath(filepath.Join(assetRoot, "..", ".."))
+}
+
+func isWithinRoot(path, root string) bool {
+	rel, err := filepath.Rel(root, path)
+	if err != nil {
+		return false
+	}
+	rel = normalizeZipPath(rel)
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, "../"))
+}
+
+func leadingParentCount(relPath string) int {
+	segments := strings.Split(cleanFilesystemPath(relPath), "/")
+	count := 0
+	for _, segment := range segments {
+		if segment != ".." {
+			break
+		}
+		count++
+	}
+	return count
+}

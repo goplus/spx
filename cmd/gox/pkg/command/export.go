@@ -250,7 +250,9 @@ func (pself *CmdTool) exportWebCommon(mode string) error {
 	}
 	// Append ext/*.js to engine.worker.js then remove them
 
-	pack.PackProject(pself.TargetDir, filepath.Join(pself.WebDir, "game.zip"))
+	if err := pack.PackProject(pself.TargetDir, filepath.Join(pself.WebDir, "game.zip")); err != nil {
+		return err
+	}
 	//pack.PackEngineRes(pself.ProjectFS, pself.WebDir)
 	util.CopyFile(pself.getWasmPath(), filepath.Join(pself.WebDir, "ispx.wasm"))
 	util.CopyFile(pself.getWasmPath()+".br", filepath.Join(pself.WebDir, "ispx.wasm.br"))
