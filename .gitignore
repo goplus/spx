@@ -41,3 +41,4 @@
 # Repo-local generated artifacts
 /bin/
 /godot/
+.gdspx_web_server*.pid
