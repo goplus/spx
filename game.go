@@ -124,18 +124,25 @@ func activeGame() *Game {
 
 func (p *Game) initRuntimeState() {
 	runtimeStateMgr.Init(&p.debugState, &p.gameRuntimeState)
-	gco.SetPerfDebug(p.debugState.DebugPerf)
+	syncCoroutinePerfDebug(p.debugState.DebugPerf)
 	p.initEventQueueState()
 }
 
 func setDefaultDebugFlags(instr, event, perf bool) {
 	runtimeStateMgr.SetDefaultDebugFlags(instr, event, perf)
-	gco.SetPerfDebug(perf)
+	syncCoroutinePerfDebug(perf)
 }
 
 func (p *Game) setDebugFlags(instr, event, perf bool) {
 	runtimeStateMgr.ApplyDebugFlags(&p.debugState, instr, event, perf)
-	gco.SetPerfDebug(perf)
+	syncCoroutinePerfDebug(perf)
+}
+
+// syncCoroutinePerfDebug keeps the process-wide coroutine scheduler aligned with
+// the most recently applied perf-debug setting. The scheduler is global, so this
+// flag is intentionally global as well.
+func syncCoroutinePerfDebug(enabled bool) {
+	gco.SetPerfDebug(enabled)
 }
 
 func isDebugInstrEnabled() bool {
