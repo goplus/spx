@@ -24,6 +24,7 @@ import (
 	spxfs "github.com/goplus/spx/v2/fs"
 	_ "github.com/goplus/spx/v2/fs/asset"
 	_ "github.com/goplus/spx/v2/fs/zip"
+
 	"github.com/goplus/spx/v2/internal/audio"
 	"github.com/goplus/spx/v2/internal/audiorecord"
 	"github.com/goplus/spx/v2/internal/base/collisionutil"
@@ -42,7 +43,7 @@ const (
 
 var (
 	gco      *coroutine.Coroutines
-	tySprite = reflect.TypeOf((*Sprite)(nil)).Elem()
+	tySprite = reflect.TypeFor[Sprite]()
 )
 
 var runtimeStateMgr corestate.RuntimeManager
@@ -123,15 +124,25 @@ func activeGame() *Game {
 
 func (p *Game) initRuntimeState() {
 	runtimeStateMgr.Init(&p.debugState, &p.gameRuntimeState)
+	syncCoroutinePerfDebug(p.debugState.DebugPerf)
 	p.initEventQueueState()
 }
 
 func setDefaultDebugFlags(instr, event, perf bool) {
 	runtimeStateMgr.SetDefaultDebugFlags(instr, event, perf)
+	syncCoroutinePerfDebug(perf)
 }
 
 func (p *Game) setDebugFlags(instr, event, perf bool) {
 	runtimeStateMgr.ApplyDebugFlags(&p.debugState, instr, event, perf)
+	syncCoroutinePerfDebug(perf)
+}
+
+// syncCoroutinePerfDebug keeps the process-wide coroutine scheduler aligned with
+// the most recently applied perf-debug setting. The scheduler is global, so this
+// flag is intentionally global as well.
+func syncCoroutinePerfDebug(enabled bool) {
+	gco.SetPerfDebug(enabled)
 }
 
 func isDebugInstrEnabled() bool {

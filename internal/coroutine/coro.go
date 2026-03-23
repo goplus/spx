@@ -38,10 +38,12 @@ type Coroutines struct {
 	nextJobID    int64
 	nextThreadID int64
 
-	waiting   map[Thread]bool
-	waitMutex sync.Mutex
-	waitCond  sync.Cond
-	debug     bool
+	waiting     map[Thread]bool
+	waitMutex   sync.Mutex
+	waitCond    sync.Cond
+	debug       bool
+	perfDebug   atomic.Bool
+	readGCStats func(*sdebug.GCStats)
 
 	// goroutineIDs tracks all goroutine IDs created by CreateAndStart
 	goroutineIDs sync.Map // map[int64]bool
@@ -96,6 +98,7 @@ func New(onPanic func(name, stack string)) *Coroutines {
 	p.cond.L = &p.mutex
 	p.curQueue = NewQueue[*WaitJob]()
 	p.nextQueue = NewQueue[*WaitJob]()
+	p.readGCStats = sdebug.ReadGCStats
 	p.hasInited = false
 	p.waitCond.L = &p.waitMutex
 	p.debug = false
@@ -112,6 +115,11 @@ func (p *Coroutines) OnRestart() {
 
 func (p *Coroutines) OnInited() {
 	p.hasInited = true
+}
+
+// SetPerfDebug enables or disables GC statistics collection during Update.
+func (p *Coroutines) SetPerfDebug(enabled bool) {
+	p.perfDebug.Store(enabled)
 }
 
 // -------------------------------------------------------------------------------------
@@ -279,12 +287,17 @@ func WaitForChan[T any](p *Coroutines, ch <-chan T, data *T) {
 
 func (p *Coroutines) Update() {
 	start := stime.Now()
-	var gcStatsBefore sdebug.GCStats
-	sdebug.ReadGCStats(&gcStatsBefore)
+	var gcStatsBefore *sdebug.GCStats
+	if p.perfDebug.Load() {
+		stats := &sdebug.GCStats{}
+		p.readGCStats(stats)
+		gcStatsBefore = stats
+	}
 
 	jobsStats, loopState := p.initializeUpdate()
+	jobsStats.GCStatsEnabled = gcStatsBefore != nil
 	p.runMainLoop(&jobsStats, &loopState)
-	p.finalizeUpdate(&jobsStats, start, &gcStatsBefore)
+	p.finalizeUpdate(&jobsStats, start, gcStatsBefore)
 	lastDebugUpdateStats = jobsStats
 }
 
@@ -341,11 +354,13 @@ func (p *Coroutines) moveQueues(state *updateLoopState, stats *UpdateJobsStats) 
 }
 
 func (p *Coroutines) finalizeUpdate(stats *UpdateJobsStats, start stime.Time, gcStatsBefore *sdebug.GCStats) {
-	// Get GC statistics after update
-	var gcStatsAfter sdebug.GCStats
-	sdebug.ReadGCStats(&gcStatsAfter)
-	stats.GCCount = int(gcStatsAfter.NumGC - gcStatsBefore.NumGC)
-	stats.GCPauses = float64(gcStatsAfter.PauseTotal-gcStatsBefore.PauseTotal) / float64(stime.Millisecond)
+	if gcStatsBefore != nil {
+		// Get GC statistics after update only when perf debugging is enabled.
+		var gcStatsAfter sdebug.GCStats
+		p.readGCStats(&gcStatsAfter)
+		stats.GCCount = int(gcStatsAfter.NumGC - gcStatsBefore.NumGC)
+		stats.GCPauses = float64(gcStatsAfter.PauseTotal-gcStatsBefore.PauseTotal) / float64(stime.Millisecond)
+	}
 
 	// Calculate timing statistics
 	totalTime := elapsedMillis(start)

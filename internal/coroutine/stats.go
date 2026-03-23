@@ -16,13 +16,15 @@ type UpdateJobsStats struct {
 	WaitMainCount  int     // Number of times waiting for the main thread
 	NextCount      int     // Number of next frame queue
 	GCCount        int     // Number of GC occurrences
+	GCStatsEnabled bool    // Whether GCCount and GCPauses were collected this update
 	LoopIterations int     // Number of loop iterations
 }
 
 // Global variable storing the most recent update statistics
 var lastDebugUpdateStats UpdateJobsStats
 
-// GetLastUpdateStats returns the most recent update statistics
+// GetLastUpdateStats returns the most recent update statistics.
+// GCCount and GCPauses are meaningful only when GCStatsEnabled is true.
 func (p *Coroutines) GetLastUpdateStats() UpdateJobsStats {
 	return lastDebugUpdateStats
 }
