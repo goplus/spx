@@ -38,20 +38,18 @@ type Coroutines struct {
 	nextJobID    int64
 	nextThreadID int64
 
-	waiting   map[Thread]bool
-	waitMutex sync.Mutex
-	waitCond  sync.Cond
-	debug     bool
-	perfDebug atomic.Bool
+	waiting     map[Thread]bool
+	waitMutex   sync.Mutex
+	waitCond    sync.Cond
+	debug       bool
+	perfDebug   atomic.Bool
+	readGCStats func(*sdebug.GCStats)
 
 	// goroutineIDs tracks all goroutine IDs created by CreateAndStart
 	goroutineIDs sync.Map // map[int64]bool
 	allThreads   map[Thread]struct{}
 	wg           sync.WaitGroup // tracks active coroutines
 }
-
-// readGCStats is a variable so tests can replace runtime/debug collection.
-var readGCStats = sdebug.ReadGCStats
 
 const (
 	waitStatusAdd = iota
@@ -100,6 +98,7 @@ func New(onPanic func(name, stack string)) *Coroutines {
 	p.cond.L = &p.mutex
 	p.curQueue = NewQueue[*WaitJob]()
 	p.nextQueue = NewQueue[*WaitJob]()
+	p.readGCStats = sdebug.ReadGCStats
 	p.hasInited = false
 	p.waitCond.L = &p.waitMutex
 	p.debug = false
@@ -291,11 +290,12 @@ func (p *Coroutines) Update() {
 	var gcStatsBefore *sdebug.GCStats
 	if p.perfDebug.Load() {
 		stats := &sdebug.GCStats{}
-		readGCStats(stats)
+		p.readGCStats(stats)
 		gcStatsBefore = stats
 	}
 
 	jobsStats, loopState := p.initializeUpdate()
+	jobsStats.GCStatsEnabled = gcStatsBefore != nil
 	p.runMainLoop(&jobsStats, &loopState)
 	p.finalizeUpdate(&jobsStats, start, gcStatsBefore)
 	lastDebugUpdateStats = jobsStats
@@ -357,7 +357,7 @@ func (p *Coroutines) finalizeUpdate(stats *UpdateJobsStats, start stime.Time, gc
 	if gcStatsBefore != nil {
 		// Get GC statistics after update only when perf debugging is enabled.
 		var gcStatsAfter sdebug.GCStats
-		readGCStats(&gcStatsAfter)
+		p.readGCStats(&gcStatsAfter)
 		stats.GCCount = int(gcStatsAfter.NumGC - gcStatsBefore.NumGC)
 		stats.GCPauses = float64(gcStatsAfter.PauseTotal-gcStatsBefore.PauseTotal) / float64(stime.Millisecond)
 	}

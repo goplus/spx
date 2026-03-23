@@ -13,14 +13,14 @@ func TestUpdateReadsGCStatsOnlyWhenPerfDebugEnabled(t *testing.T) {
 	co := New(nil)
 	co.OnInited()
 
-	originalReadGCStats := readGCStats
+	originalReadGCStats := co.readGCStats
 	t.Cleanup(func() {
-		readGCStats = originalReadGCStats
+		co.readGCStats = originalReadGCStats
 		lastDebugUpdateStats = UpdateJobsStats{}
 	})
 
 	var calls int
-	readGCStats = func(*sdebug.GCStats) {
+	co.readGCStats = func(*sdebug.GCStats) {
 		calls++
 	}
 
@@ -28,11 +28,17 @@ func TestUpdateReadsGCStatsOnlyWhenPerfDebugEnabled(t *testing.T) {
 	if calls != 0 {
 		t.Fatalf("expected GC stats collection to be disabled by default, got %d calls", calls)
 	}
+	if co.GetLastUpdateStats().GCStatsEnabled {
+		t.Fatal("expected GC stats to be marked disabled by default")
+	}
 
 	co.SetPerfDebug(true)
 	co.Update()
 	if calls != 2 {
 		t.Fatalf("expected GC stats to be read twice when perf debug is enabled, got %d calls", calls)
+	}
+	if !co.GetLastUpdateStats().GCStatsEnabled {
+		t.Fatal("expected GC stats to be marked enabled when perf debug is on")
 	}
 }
 
