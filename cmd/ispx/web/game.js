@@ -31,9 +31,14 @@ var Module = null
  * Immutable global wrappers dispatch through this shared registry so rebinding
  * a GameApp updates handlers without replacing worker globals.
  */
+const DIRECT_CALLBACK_HANDLER_SLOTS = globalThis.__spxDirectCallbackHandlerSlots || (globalThis.__spxDirectCallbackHandlerSlots = Object.create(null))
 const DIRECT_CALLBACK_BRIDGE_STATE = globalThis.__spxDirectCallbackBridgeState || (globalThis.__spxDirectCallbackBridgeState = {
-    handlers: Object.create(null),
+    handlers: DIRECT_CALLBACK_HANDLER_SLOTS,
 })
+if (DIRECT_CALLBACK_BRIDGE_STATE.handlers !== DIRECT_CALLBACK_HANDLER_SLOTS) {
+    Object.assign(DIRECT_CALLBACK_HANDLER_SLOTS, DIRECT_CALLBACK_BRIDGE_STATE.handlers)
+    DIRECT_CALLBACK_BRIDGE_STATE.handlers = DIRECT_CALLBACK_HANDLER_SLOTS
+}
 
 /**
  * String-bearing callbacks intentionally stay on gdspx_dispatch until we have
@@ -408,7 +413,7 @@ class GameApp {
 
         Object.defineProperty(globalThis, name, {
             value: (...args) => {
-                const handler = DIRECT_CALLBACK_BRIDGE_STATE.handlers[name]
+                const handler = DIRECT_CALLBACK_HANDLER_SLOTS[name]
                 if (typeof handler === 'function') {
                     return handler(...args)
                 }
@@ -462,14 +467,10 @@ class GameApp {
         if (typeof value === 'bigint') {
             return value
         }
-        // {low, high} is the legacy int64 encoding emitted by JsFromGdInt on
-        // the older gdspx_dispatch/syscall/js bridge before the direct wasm
-        // export path normalizes gdint payloads to BigInt.
+        // Older callback bridges still pass the legacy {low, high} int64
+        // encoding, so keep this coercion as a compatibility backstop.
         if (value && typeof value.low === 'number' && typeof value.high === 'number') {
             return BigInt.asIntN(64, (BigInt(value.high >>> 0) << 32n) | BigInt(value.low >>> 0))
-        }
-        if (typeof value === 'number') {
-            return BigInt(Math.trunc(value))
         }
         throw new TypeError(`unsupported gdint value: ${value}`)
     }
