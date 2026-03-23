@@ -2,11 +2,39 @@ package coroutine
 
 import (
 	"runtime"
+	sdebug "runtime/debug"
 	"testing"
 	"time"
 
 	"github.com/goplus/spx/v2/internal/engine/platform"
 )
+
+func TestUpdateReadsGCStatsOnlyWhenPerfDebugEnabled(t *testing.T) {
+	co := New(nil)
+	co.OnInited()
+
+	originalReadGCStats := readGCStats
+	t.Cleanup(func() {
+		readGCStats = originalReadGCStats
+		lastDebugUpdateStats = UpdateJobsStats{}
+	})
+
+	var calls int
+	readGCStats = func(*sdebug.GCStats) {
+		calls++
+	}
+
+	co.Update()
+	if calls != 0 {
+		t.Fatalf("expected GC stats collection to be disabled by default, got %d calls", calls)
+	}
+
+	co.SetPerfDebug(true)
+	co.Update()
+	if calls != 2 {
+		t.Fatalf("expected GC stats to be read twice when perf debug is enabled, got %d calls", calls)
+	}
+}
 
 func TestWaitMainThreadFastPathOnMainThread(t *testing.T) {
 	co := New(nil)

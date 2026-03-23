@@ -24,6 +24,7 @@ import (
 	spxfs "github.com/goplus/spx/v2/fs"
 	_ "github.com/goplus/spx/v2/fs/asset"
 	_ "github.com/goplus/spx/v2/fs/zip"
+
 	"github.com/goplus/spx/v2/internal/audio"
 	"github.com/goplus/spx/v2/internal/audiorecord"
 	"github.com/goplus/spx/v2/internal/base/collisionutil"
@@ -42,7 +43,7 @@ const (
 
 var (
 	gco      *coroutine.Coroutines
-	tySprite = reflect.TypeOf((*Sprite)(nil)).Elem()
+	tySprite = reflect.TypeFor[Sprite]()
 )
 
 var runtimeStateMgr corestate.RuntimeManager
@@ -123,15 +124,18 @@ func activeGame() *Game {
 
 func (p *Game) initRuntimeState() {
 	runtimeStateMgr.Init(&p.debugState, &p.gameRuntimeState)
+	gco.SetPerfDebug(p.debugState.DebugPerf)
 	p.initEventQueueState()
 }
 
 func setDefaultDebugFlags(instr, event, perf bool) {
 	runtimeStateMgr.SetDefaultDebugFlags(instr, event, perf)
+	gco.SetPerfDebug(perf)
 }
 
 func (p *Game) setDebugFlags(instr, event, perf bool) {
 	runtimeStateMgr.ApplyDebugFlags(&p.debugState, instr, event, perf)
+	gco.SetPerfDebug(perf)
 }
 
 func isDebugInstrEnabled() bool {
