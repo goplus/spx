@@ -206,6 +206,7 @@ type ISpriteMgr interface {
 	IsDebugCollisionVisible(obj Object) bool
 	CreateBackdrop(path string) Object
 	CreateSprite(path string, pos Vec2) Object
+	CreateBareSprite(pos Vec2) Object
 	CloneSprite(obj Object) Object
 	DestroySprite(obj Object) bool
 	IsSpriteAlive(obj Object) bool

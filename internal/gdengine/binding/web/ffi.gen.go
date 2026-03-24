@@ -164,6 +164,7 @@ type GDExtensionInterface struct {
 	SpxSpriteIsDebugCollisionVisible            js.Value
 	SpxSpriteCreateBackdrop                     js.Value
 	SpxSpriteCreateSprite                       js.Value
+	SpxSpriteCreateBareSprite                   js.Value
 	SpxSpriteCloneSprite                        js.Value
 	SpxSpriteDestroySprite                      js.Value
 	SpxSpriteIsSpriteAlive                      js.Value
@@ -481,6 +482,7 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxSpriteIsDebugCollisionVisible = resolveJSFunc("gdspx_sprite_is_debug_collision_visible")
 	x.SpxSpriteCreateBackdrop = resolveJSFunc("gdspx_sprite_create_backdrop")
 	x.SpxSpriteCreateSprite = resolveJSFunc("gdspx_sprite_create_sprite")
+	x.SpxSpriteCreateBareSprite = resolveJSFunc("gdspx_sprite_create_bare_sprite")
 	x.SpxSpriteCloneSprite = resolveJSFunc("gdspx_sprite_clone_sprite")
 	x.SpxSpriteDestroySprite = resolveJSFunc("gdspx_sprite_destroy_sprite")
 	x.SpxSpriteIsSpriteAlive = resolveJSFunc("gdspx_sprite_is_sprite_alive")

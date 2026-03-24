@@ -918,6 +918,11 @@ func (pself *spriteMgr) CreateSprite(path string, pos Vec2) Object {
 	retValue := CallSpriteCreateSprite(arg0, arg1)
 	return ToObject(retValue)
 }
+func (pself *spriteMgr) CreateBareSprite(pos Vec2) Object {
+	arg0 := ToGdVec2(pos)
+	retValue := CallSpriteCreateBareSprite(arg0)
+	return ToObject(retValue)
+}
 func (pself *spriteMgr) CloneSprite(obj Object) Object {
 	arg0 := ToGdObj(obj)
 	retValue := CallSpriteCloneSprite(arg0)

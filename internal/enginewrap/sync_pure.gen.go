@@ -425,6 +425,9 @@ func (pself *spriteMgrImpl) CreateBackdrop(path string) gdx.Object {
 func (pself *spriteMgrImpl) CreateSprite(path string, pos Vec2) gdx.Object {
 	return 0
 }
+func (pself *spriteMgrImpl) CreateBareSprite(pos Vec2) gdx.Object {
+	return 0
+}
 func (pself *spriteMgrImpl) CloneSprite(obj gdx.Object) gdx.Object {
 	return 0
 }

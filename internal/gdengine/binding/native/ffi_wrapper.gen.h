@@ -852,6 +852,12 @@ void cgo_callfn_GDExtensionSpxSpriteCreateSprite(const GDExtensionSpxSpriteCreat
 	}
 	fn(path, pos, ret_val);
 }
+void cgo_callfn_GDExtensionSpxSpriteCreateBareSprite(const GDExtensionSpxSpriteCreateBareSprite fn, GdVec2 pos, GdObj* ret_val) {
+	if (!fn) {
+		return;
+	}
+	fn(pos, ret_val);
+}
 void cgo_callfn_GDExtensionSpxSpriteCloneSprite(const GDExtensionSpxSpriteCloneSprite fn, GdObj obj, GdObj* ret_val) {
 	if (!fn) {
 		return;

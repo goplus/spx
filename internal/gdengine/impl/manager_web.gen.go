@@ -829,6 +829,11 @@ func (pself *spriteMgr) CreateSprite(path string, pos Vec2) Object {
 	_retValue := API.SpxSpriteCreateSprite.Invoke(arg0, arg1)
 	return JsToGdObject(_retValue)
 }
+func (pself *spriteMgr) CreateBareSprite(pos Vec2) Object {
+	arg0 := JsFromGdVec2(pos)
+	_retValue := API.SpxSpriteCreateBareSprite.Invoke(arg0)
+	return JsToGdObject(_retValue)
+}
 func (pself *spriteMgr) CloneSprite(obj Object) Object {
 	arg0 := JsFromGdObj(obj)
 	_retValue := API.SpxSpriteCloneSprite.Invoke(arg0)
