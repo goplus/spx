@@ -1,21 +1,5 @@
 var Module = null
 
-if (!globalThis.__spxRuntimeErrorHooksInstalled) {
-    globalThis.__spxRuntimeErrorHooksInstalled = true;
-    globalThis.addEventListener('error', (event) => {
-        console.error('[spx-runtime] window.error', {
-            message: event.message,
-            filename: event.filename,
-            lineno: event.lineno,
-            colno: event.colno,
-            error: event.error,
-        });
-    });
-    globalThis.addEventListener('unhandledrejection', (event) => {
-        console.error('[spx-runtime] unhandledrejection', event.reason);
-    });
-}
-
 /**
  * @typedef {Object} FileMeta
  * @property {number} lastModified Last modified time in milliseconds since Unix epoch.
@@ -31,6 +15,74 @@ if (!globalThis.__spxRuntimeErrorHooksInstalled) {
  * @typedef {{ [path: string]: FileWithMeta }} Files - File entries only; directories should be omitted.
  * @typedef {{ [path: string]: FileMeta }} FilesMeta
  */
+
+/**
+ * @typedef {'f64' | 'bool' | 'gdint' | 'string'} DirectCallbackArgType
+ */
+
+/**
+ * @typedef {Object} DirectCallbackSpec
+ * @property {string} name
+ * @property {string} fallbackEventName
+ * @property {DirectCallbackArgType[]} argTypes
+ */
+
+/**
+ * Immutable global wrappers dispatch through this shared registry so rebinding
+ * a GameApp updates handlers without replacing worker globals.
+ */
+const DIRECT_CALLBACK_BRIDGE_STATE = globalThis.__spxDirectCallbackBridgeState || (globalThis.__spxDirectCallbackBridgeState = {
+    handlers: Object.create(null),
+})
+
+/**
+ * String-bearing callbacks intentionally stay on gdspx_dispatch until we have
+ * a lower-overhead ABI than a JS handle lookup round-trip.
+ * @type {DirectCallbackSpec[]}
+ */
+const DIRECT_CALLBACK_SPECS = [
+    { name: "gdspx_on_engine_update", fallbackEventName: "OnEngineUpdate", argTypes: ["f64"] },
+    { name: "gdspx_on_engine_fixed_update", fallbackEventName: "OnEngineFixedUpdate", argTypes: ["f64"] },
+    { name: "gdspx_on_engine_destroy", fallbackEventName: "OnEngineDestroy", argTypes: [] },
+    { name: "gdspx_on_engine_reset", fallbackEventName: "OnEngineReset", argTypes: [] },
+    { name: "gdspx_on_engine_pause", fallbackEventName: "OnEnginePause", argTypes: ["bool"] },
+    { name: "gdspx_on_scene_sprite_instantiated", fallbackEventName: "OnSceneSpriteInstantiated", argTypes: ["gdint", "string"] },
+    { name: "gdspx_on_sprite_ready", fallbackEventName: "OnSpriteReady", argTypes: ["gdint"] },
+    { name: "gdspx_on_sprite_updated", fallbackEventName: "OnSpriteUpdated", argTypes: ["f64"] },
+    { name: "gdspx_on_sprite_fixed_updated", fallbackEventName: "OnSpriteFixedUpdated", argTypes: ["f64"] },
+    { name: "gdspx_on_sprite_destroyed", fallbackEventName: "OnSpriteDestroyed", argTypes: ["gdint"] },
+    { name: "gdspx_on_sprite_frames_set_changed", fallbackEventName: "OnSpriteFramesSetChanged", argTypes: ["gdint"] },
+    { name: "gdspx_on_sprite_animation_changed", fallbackEventName: "OnSpriteAnimationChanged", argTypes: ["gdint"] },
+    { name: "gdspx_on_sprite_frame_changed", fallbackEventName: "OnSpriteFrameChanged", argTypes: ["gdint"] },
+    { name: "gdspx_on_sprite_animation_looped", fallbackEventName: "OnSpriteAnimationLooped", argTypes: ["gdint"] },
+    { name: "gdspx_on_sprite_animation_finished", fallbackEventName: "OnSpriteAnimationFinished", argTypes: ["gdint"] },
+    { name: "gdspx_on_sprite_vfx_finished", fallbackEventName: "OnSpriteVfxFinished", argTypes: ["gdint"] },
+    { name: "gdspx_on_sprite_screen_exited", fallbackEventName: "OnSpriteScreenExited", argTypes: ["gdint"] },
+    { name: "gdspx_on_sprite_screen_entered", fallbackEventName: "OnSpriteScreenEntered", argTypes: ["gdint"] },
+    { name: "gdspx_on_mouse_pressed", fallbackEventName: "OnMousePressed", argTypes: ["gdint"] },
+    { name: "gdspx_on_mouse_released", fallbackEventName: "OnMouseReleased", argTypes: ["gdint"] },
+    { name: "gdspx_on_key_pressed", fallbackEventName: "OnKeyPressed", argTypes: ["gdint"] },
+    { name: "gdspx_on_key_released", fallbackEventName: "OnKeyReleased", argTypes: ["gdint"] },
+    { name: "gdspx_on_action_pressed", fallbackEventName: "OnActionPressed", argTypes: ["string"] },
+    { name: "gdspx_on_action_just_pressed", fallbackEventName: "OnActionJustPressed", argTypes: ["string"] },
+    { name: "gdspx_on_action_just_released", fallbackEventName: "OnActionJustReleased", argTypes: ["string"] },
+    { name: "gdspx_on_axis_changed", fallbackEventName: "OnAxisChanged", argTypes: ["string", "f64"] },
+    { name: "gdspx_on_collision_enter", fallbackEventName: "OnCollisionEnter", argTypes: ["gdint", "gdint"] },
+    { name: "gdspx_on_collision_stay", fallbackEventName: "OnCollisionStay", argTypes: ["gdint", "gdint"] },
+    { name: "gdspx_on_collision_exit", fallbackEventName: "OnCollisionExit", argTypes: ["gdint", "gdint"] },
+    { name: "gdspx_on_trigger_enter", fallbackEventName: "OnTriggerEnter", argTypes: ["gdint", "gdint"] },
+    { name: "gdspx_on_trigger_stay", fallbackEventName: "OnTriggerStay", argTypes: ["gdint", "gdint"] },
+    { name: "gdspx_on_trigger_exit", fallbackEventName: "OnTriggerExit", argTypes: ["gdint", "gdint"] },
+    { name: "gdspx_on_ui_ready", fallbackEventName: "OnUiReady", argTypes: ["gdint"] },
+    { name: "gdspx_on_ui_updated", fallbackEventName: "OnUiUpdated", argTypes: ["gdint"] },
+    { name: "gdspx_on_ui_destroyed", fallbackEventName: "OnUiDestroyed", argTypes: ["gdint"] },
+    { name: "gdspx_on_ui_pressed", fallbackEventName: "OnUiPressed", argTypes: ["gdint"] },
+    { name: "gdspx_on_ui_released", fallbackEventName: "OnUiReleased", argTypes: ["gdint"] },
+    { name: "gdspx_on_ui_hovered", fallbackEventName: "OnUiHovered", argTypes: ["gdint"] },
+    { name: "gdspx_on_ui_clicked", fallbackEventName: "OnUiClicked", argTypes: ["gdint"] },
+    { name: "gdspx_on_ui_toggle", fallbackEventName: "OnUiToggle", argTypes: ["gdint", "bool"] },
+    { name: "gdspx_on_ui_text_changed", fallbackEventName: "OnUiTextChanged", argTypes: ["gdint", "string"] },
+]
 
 class GameApp {
     constructor(config) {
@@ -340,6 +392,88 @@ class GameApp {
         this.workerMessageManager.callWorkerFunction(funcName, ...args)
     }
 
+    bindDirectCallbackBridge() {
+        if (!this.logicWasmInstance || !this.logicWasmInstance.exports) {
+            return
+        }
+
+        DIRECT_CALLBACK_SPECS.forEach((spec) => this.bindDirectCallback(spec))
+    }
+
+    installDirectCallbackGlobal(name, fallbackEventName) {
+        const descriptor = Object.getOwnPropertyDescriptor(globalThis, name)
+        if (descriptor && !descriptor.configurable) {
+            return
+        }
+
+        Object.defineProperty(globalThis, name, {
+            value: (...args) => {
+                const handler = DIRECT_CALLBACK_BRIDGE_STATE.handlers[name]
+                if (typeof handler === 'function') {
+                    return handler(...args)
+                }
+                return globalThis.gdspx_dispatch(fallbackEventName, ...args)
+            },
+            writable: false,
+            enumerable: true,
+            configurable: false,
+        })
+    }
+
+    bindDirectCallback(spec) {
+        const { name, fallbackEventName } = spec
+        this.installDirectCallbackGlobal(name, fallbackEventName)
+        DIRECT_CALLBACK_BRIDGE_STATE.handlers[name] = this.createDirectCallbackHandler(spec)
+    }
+
+    createDirectCallbackHandler(spec) {
+        const { name, argTypes = [] } = spec
+        const directExport = this.logicWasmInstance.exports[name]
+        if (typeof directExport !== 'function' || this.shouldUseDispatchFallback(argTypes)) {
+            return null
+        }
+
+        return (...args) => directExport(...this.encodeDirectCallbackArgs(argTypes, args))
+    }
+
+    shouldUseDispatchFallback(argTypes) {
+        return Array.isArray(argTypes) && argTypes.includes('string')
+    }
+
+    encodeDirectCallbackArgs(argTypes, args) {
+        if (!argTypes || argTypes.length === 0) {
+            return args
+        }
+        return args.map((arg, index) => this.encodeDirectCallbackArg(argTypes[index], arg))
+    }
+
+    encodeDirectCallbackArg(argType, arg) {
+        switch (argType) {
+            case 'bool':
+                return arg ? 1 : 0
+            case 'gdint':
+                return this.gdIntToBigInt(arg)
+            default:
+                return arg
+        }
+    }
+
+    gdIntToBigInt(value) {
+        if (typeof value === 'bigint') {
+            return value
+        }
+        // {low, high} is the legacy int64 encoding emitted by JsFromGdInt on
+        // the older gdspx_dispatch/syscall/js bridge before the direct wasm
+        // export path normalizes gdint payloads to BigInt.
+        if (value && typeof value.low === 'number' && typeof value.high === 'number') {
+            return BigInt.asIntN(64, (BigInt(value.high >>> 0) << 32n) | BigInt(value.low >>> 0))
+        }
+        if (typeof value === 'number') {
+            return BigInt(Math.trunc(value))
+        }
+        throw new TypeError(`unsupported gdint value: ${value}`)
+    }
+
 
     //------------------ onRun ------------------
     async onRunPrepareEngineWasm() {
@@ -440,6 +574,7 @@ class GameApp {
         this.go.exit = (code) => {
             this.notifyExit(code);
         };
+        this.bindDirectCallbackBridge();
         this.go.run(this.logicWasmInstance);
     }
 }
