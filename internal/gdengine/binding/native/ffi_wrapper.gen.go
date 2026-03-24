@@ -225,6 +225,7 @@ type GDExtensionSpxSpriteSetDebugCollisionVisible C.GDExtensionSpxSpriteSetDebug
 type GDExtensionSpxSpriteIsDebugCollisionVisible C.GDExtensionSpxSpriteIsDebugCollisionVisible
 type GDExtensionSpxSpriteCreateBackdrop C.GDExtensionSpxSpriteCreateBackdrop
 type GDExtensionSpxSpriteCreateSprite C.GDExtensionSpxSpriteCreateSprite
+type GDExtensionSpxSpriteCreateBareSprite C.GDExtensionSpxSpriteCreateBareSprite
 type GDExtensionSpxSpriteCloneSprite C.GDExtensionSpxSpriteCloneSprite
 type GDExtensionSpxSpriteDestroySprite C.GDExtensionSpxSpriteDestroySprite
 type GDExtensionSpxSpriteIsSpriteAlive C.GDExtensionSpxSpriteIsSpriteAlive
@@ -1785,6 +1786,16 @@ func CallSpriteCreateSprite(
 	arg2 := (C.GdVec2)(pos)
 	var ret_val C.GdObj
 	C.cgo_callfn_GDExtensionSpxSpriteCreateSprite(arg0, arg1, arg2, &ret_val)
+
+	return (GdObj)(ret_val)
+}
+func CallSpriteCreateBareSprite(
+	pos GdVec2,
+) GdObj {
+	arg0 := (C.GDExtensionSpxSpriteCreateBareSprite)(api.SpxSpriteCreateBareSprite)
+	arg1 := (C.GdVec2)(pos)
+	var ret_val C.GdObj
+	C.cgo_callfn_GDExtensionSpxSpriteCreateBareSprite(arg0, arg1, &ret_val)
 
 	return (GdObj)(ret_val)
 }

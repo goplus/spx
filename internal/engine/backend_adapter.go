@@ -38,8 +38,8 @@ func NewBackdropProxy(obj any, path string, renderScale float64) *Sprite {
 	return ret
 }
 
-func BridgeNewSprite(obj any, pos Vec2) *Sprite {
-	syncSprite := CreateEmptySpriteForType[Sprite](pos)
+func BridgeNewBareSprite(obj any, pos Vec2) *Sprite {
+	syncSprite := CreateBareSpriteForType[Sprite](pos)
 	syncSprite.Target = obj
 	return syncSprite
 }

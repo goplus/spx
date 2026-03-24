@@ -55,7 +55,7 @@ func (runtimeBridge) CreateSprite(t reflect.Type, pos mathf.Vec2) reflect.Value 
 }
 
 func (runtimeBridge) CreateEmptySprite(t reflect.Type, pos mathf.Vec2) reflect.Value {
-	return createEmptySprite(t, pos)
+	return createBareSprite(t, pos)
 }
 
 func (runtimeBridge) CreateBackdrop(t reflect.Type) reflect.Value {
@@ -123,9 +123,9 @@ func IsNodeExist(id Object) bool {
 	return isNodeExist(id)
 }
 
-func CreateEmptySpriteForType[T any](pos mathf.Vec2) *T {
+func CreateBareSpriteForType[T any](pos mathf.Vec2) *T {
 	tType := reflect.TypeOf((*T)(nil)).Elem()
-	value := createEmptySprite(tType, pos)
+	value := createBareSprite(tType, pos)
 	return value.Addr().Interface().(*T)
 }
 
@@ -191,8 +191,8 @@ func createPrefabSprite(t reflect.Type, pos mathf.Vec2) reflect.Value {
 	return createSpriteValue(t, id)
 }
 
-func createEmptySprite(t reflect.Type, pos mathf.Vec2) reflect.Value {
-	id := Managers().SpriteMgr.CreateSprite("", pos)
+func createBareSprite(t reflect.Type, pos mathf.Vec2) reflect.Value {
+	id := Managers().SpriteMgr.CreateBareSprite(pos)
 	return createSpriteValue(t, id)
 }
 

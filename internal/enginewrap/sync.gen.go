@@ -983,6 +983,13 @@ func (pself *spriteMgrImpl) CreateSprite(path string, pos Vec2) gdx.Object {
 	})
 	return _ret1
 }
+func (pself *spriteMgrImpl) CreateBareSprite(pos Vec2) gdx.Object {
+	var _ret1 gdx.Object
+	callInMainThread(func() {
+		_ret1 = gdx.SpriteMgr.CreateBareSprite(pos)
+	})
+	return _ret1
+}
 func (pself *spriteMgrImpl) CloneSprite(obj gdx.Object) gdx.Object {
 	var _ret1 gdx.Object
 	callInMainThread(func() {

@@ -368,6 +368,7 @@ typedef void (*GDExtensionSpxSpriteSetDebugCollisionVisible)(GdObj obj, GdBool v
 typedef void (*GDExtensionSpxSpriteIsDebugCollisionVisible)(GdObj obj, GdBool *ret_value);
 typedef void (*GDExtensionSpxSpriteCreateBackdrop)(GdString path, GdObj *ret_value);
 typedef void (*GDExtensionSpxSpriteCreateSprite)(GdString path, GdVec2 pos, GdObj *ret_value);
+typedef void (*GDExtensionSpxSpriteCreateBareSprite)(GdVec2 pos, GdObj *ret_value);
 typedef void (*GDExtensionSpxSpriteCloneSprite)(GdObj obj, GdObj *ret_value);
 typedef void (*GDExtensionSpxSpriteDestroySprite)(GdObj obj, GdBool *ret_value);
 typedef void (*GDExtensionSpxSpriteIsSpriteAlive)(GdObj obj, GdBool *ret_value);

@@ -160,6 +160,7 @@ type GDExtensionInterface struct {
 	SpxSpriteIsDebugCollisionVisible            GDExtensionSpxSpriteIsDebugCollisionVisible
 	SpxSpriteCreateBackdrop                     GDExtensionSpxSpriteCreateBackdrop
 	SpxSpriteCreateSprite                       GDExtensionSpxSpriteCreateSprite
+	SpxSpriteCreateBareSprite                   GDExtensionSpxSpriteCreateBareSprite
 	SpxSpriteCloneSprite                        GDExtensionSpxSpriteCloneSprite
 	SpxSpriteDestroySprite                      GDExtensionSpxSpriteDestroySprite
 	SpxSpriteIsSpriteAlive                      GDExtensionSpxSpriteIsSpriteAlive
@@ -477,6 +478,7 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxSpriteIsDebugCollisionVisible = (GDExtensionSpxSpriteIsDebugCollisionVisible)(resolveCFunc("spx_sprite_is_debug_collision_visible"))
 	x.SpxSpriteCreateBackdrop = (GDExtensionSpxSpriteCreateBackdrop)(resolveCFunc("spx_sprite_create_backdrop"))
 	x.SpxSpriteCreateSprite = (GDExtensionSpxSpriteCreateSprite)(resolveCFunc("spx_sprite_create_sprite"))
+	x.SpxSpriteCreateBareSprite = (GDExtensionSpxSpriteCreateBareSprite)(resolveCFunc("spx_sprite_create_bare_sprite"))
 	x.SpxSpriteCloneSprite = (GDExtensionSpxSpriteCloneSprite)(resolveCFunc("spx_sprite_clone_sprite"))
 	x.SpxSpriteDestroySprite = (GDExtensionSpxSpriteDestroySprite)(resolveCFunc("spx_sprite_destroy_sprite"))
 	x.SpxSpriteIsSpriteAlive = (GDExtensionSpxSpriteIsSpriteAlive)(resolveCFunc("spx_sprite_is_sprite_alive"))

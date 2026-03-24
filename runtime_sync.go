@@ -161,7 +161,7 @@ func (sprite *SpriteImpl) ensureProxyInitialized() {
 	if sprite.runtimeState.SyncSprite != nil || sprite.isDestroyed() {
 		return
 	}
-	sprite.runtimeState.SyncSprite = engine.BridgeNewSprite(sprite, mathf.NewVec2(sprite.getXYWithRenderOffset()))
+	sprite.runtimeState.SyncSprite = engine.BridgeNewBareSprite(sprite, mathf.NewVec2(sprite.getXYWithRenderOffset()))
 	sprite.applyPhysicsProxyConfig()
 	sprite.runtimeState.SyncSprite.SetVisible(sprite.spriteState.IsVisible)
 	sprite.runtimeState.SyncSprite.Name = sprite.name
