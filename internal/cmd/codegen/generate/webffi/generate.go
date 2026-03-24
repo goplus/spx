@@ -333,8 +333,7 @@ func getJsFuncBody(function *clang.TypedefFunction) string {
 			"\t_gdFuncPtr(_retValue);\n" +
 			"\tvar _scratch = GdspxFuncs._inputMousePosScratch;\n" +
 			"\tif (!_scratch) {\n" +
-			"\t\t_scratch = { x: 0, y: 0 };\n" +
-			"\t\tGdspxFuncs._inputMousePosScratch = _scratch;\n" +
+			"\t\t_scratch = GdspxFuncs._inputMousePosScratch = { x: 0, y: 0 };\n" +
 			"\t}\n" +
 			"\tvar _floatIndex = _retValue / 4;\n" +
 			"\tvar _heap = Module.HEAPF32;\n" +
