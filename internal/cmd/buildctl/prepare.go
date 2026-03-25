@@ -78,6 +78,9 @@ func prepareAssets(cfg prepareConfig, runner scriptRunner) error {
 		}
 		return prepareRuntimeAssets(runner)
 	case "web":
+		if err := prepareHostEditorAsset(runner.repoRootDir()); err != nil {
+			return err
+		}
 		if err := downloadEngineAssets(engineDownloadConfig{platform: "web", mode: cfg.webMode}, runner.repoRootDir()); err != nil {
 			return err
 		}
@@ -105,7 +108,18 @@ func prepareRuntimeAssets(runner scriptRunner) error {
 	return downloadEngineAssets(engineDownloadConfig{runtime: true}, runner.repoRootDir())
 }
 
+func prepareHostEditorAsset(repoRoot string) error {
+	env, err := engineDownloadResolveEnv(repoRoot, "")
+	if err != nil {
+		return err
+	}
+	return downloadPlatformAssets(env, "editor", true)
+}
+
 func prepareWebAssets(webMode string, runner scriptRunner) error {
+	if err := prepareHostEditorAsset(runner.repoRootDir()); err != nil {
+		return err
+	}
 	if err := downloadEngineAssets(engineDownloadConfig{platform: "web", mode: webMode}, runner.repoRootDir()); err != nil {
 		return err
 	}

@@ -175,6 +175,9 @@ func TestPrepareAssetsWeb(t *testing.T) {
 	if !reflect.DeepEqual(runner.calls, expectedCalls) {
 		t.Fatalf("unexpected calls: %#v", runner.calls)
 	}
+	if !fileExists(filepath.Join(os.Getenv("GOPATH"), "bin", "gdspx2.1.44")) {
+		t.Fatalf("expected host editor binary to exist")
+	}
 
 	assertRuntimeWorkspaceCommands(t, runner.commands, runner.repoRoot, []recordedCommand{
 		{name: "spx", args: []string{"exporttemplateweb"}},

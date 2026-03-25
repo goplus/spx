@@ -87,6 +87,7 @@ runs:
         fi
 
         if [ "$SETUP_MODE" = "web" ] || [ "$SETUP_MODE" = "full" ]; then
+          require_path "$GOPATH_DIR/bin/gdspx${version}${bin_suffix}"
           require_path "$GOPATH_DIR/bin/ispx"
           require_path "$GOPATH_DIR/bin/ispx.wasm"
           require_path "$GOPATH_DIR/bin/gdspxrt${version}_web${WEB_MODE}"
