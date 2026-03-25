@@ -104,4 +104,4 @@ runs:
         set -euo pipefail
         mkdir -p ./.bin
         go build -o "./.bin/buildctl$(go env GOEXE)" ./internal/cmd/buildctl
-        bash ./internal/tools/buildctl.sh prepare --setup-mode "$SETUP_MODE" --web-mode "$WEB_MODE"
+        "./.bin/buildctl$(go env GOEXE)" prepare --setup-mode "$SETUP_MODE" --web-mode "$WEB_MODE"
