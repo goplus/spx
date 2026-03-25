@@ -254,8 +254,15 @@ func (pself *CmdTool) exportWebCommon(mode string) error {
 		return err
 	}
 	//pack.PackEngineRes(pself.ProjectFS, pself.WebDir)
-	util.CopyFile(pself.getWasmPath(), filepath.Join(pself.WebDir, "ispx.wasm"))
-	util.CopyFile(pself.getWasmPath()+".br", filepath.Join(pself.WebDir, "ispx.wasm.br"))
+	wasmPath, wasmBrPath := pself.getWasmPaths()
+	if err := util.CopyFile(wasmPath, filepath.Join(pself.WebDir, "ispx.wasm")); err != nil {
+		return fmt.Errorf("failed to copy ispx wasm from %s: %w", wasmPath, err)
+	}
+	if wasmBrPath != "" {
+		if err := util.CopyFile(wasmBrPath, filepath.Join(pself.WebDir, "ispx.wasm.br")); err != nil {
+			return fmt.Errorf("failed to copy compressed ispx wasm from %s: %w", wasmBrPath, err)
+		}
+	}
 	return nil
 }
 

@@ -1,0 +1,447 @@
+package main
+
+import (
+	"archive/zip"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"path/filepath"
+	"time"
+)
+
+const (
+	pckReleaseVersion = "2.0.30"
+	pckReleaseTag     = "v2.0.0-pre.30"
+)
+
+type engineDownloadEnv struct {
+	repoRoot    string
+	version     string
+	platform    string
+	arch        string
+	goBinDir    string
+	templateDir string
+	cacheDir    string
+	urlPrefix   string
+}
+
+var engineDownloadFetcher = fetchURLToFile
+var engineDownloadResolveEnv = resolveEngineDownloadEnv
+
+func downloadEngineAssets(cfg engineDownloadConfig, repoRoot string) error {
+	env, err := engineDownloadResolveEnv(repoRoot, cfg.platform)
+	if err != nil {
+		return err
+	}
+
+	if cfg.runtime {
+		if err := downloadHostRuntimeAssets(env); err != nil {
+			return err
+		}
+		if err := downloadRuntimePack(env); err != nil {
+			fmt.Fprintf(osStderr, "warning: failed to download runtime pack: %v\n", err)
+		}
+		return nil
+	}
+
+	return downloadPlatformAssets(env, cfg.mode, false)
+}
+
+func resolveEngineDownloadEnv(repoRoot, platform string) (engineDownloadEnv, error) {
+	buildEnv, err := resolveBuildEnvironment(repoRoot, platform)
+	if err != nil {
+		return engineDownloadEnv{}, err
+	}
+
+	env := engineDownloadEnv{
+		repoRoot:    buildEnv.RepoRoot,
+		version:     buildEnv.Version,
+		platform:    buildEnv.Platform,
+		arch:        buildEnv.Arch,
+		goBinDir:    filepath.Join(buildEnv.GoPath, "bin"),
+		templateDir: buildEnv.TemplateDir,
+		cacheDir:    filepath.Join(repoRoot, "internal", "cmd", "buildctl", "bin"),
+		urlPrefix:   fmt.Sprintf("https://github.com/goplus/godot/releases/download/spx%s/", buildEnv.Version),
+	}
+
+	if err := os.MkdirAll(env.goBinDir, 0o755); err != nil {
+		return engineDownloadEnv{}, err
+	}
+	if err := os.MkdirAll(env.templateDir, 0o755); err != nil {
+		return engineDownloadEnv{}, err
+	}
+	if err := os.MkdirAll(env.cacheDir, 0o755); err != nil {
+		return engineDownloadEnv{}, err
+	}
+	return env, nil
+}
+
+func downloadHostRuntimeAssets(env engineDownloadEnv) error {
+	if err := downloadPlatformAssets(env, "", false); err != nil {
+		return err
+	}
+	return downloadPlatformAssets(env, "editor", true)
+}
+
+func downloadPlatformAssets(env engineDownloadEnv, mode string, editor bool) error {
+	switch env.platform {
+	case "android":
+		return downloadAndroidAssets(env)
+	case "ios":
+		return downloadIOSAssets(env)
+	case "web":
+		if mode == "" {
+			mode = "normal"
+		}
+		return downloadWebAssets(env, mode)
+	case "linux", "windows", "macos":
+		return downloadDesktopAssets(env, editor)
+	default:
+		return fmt.Errorf("unsupported platform for engine download: %s", env.platform)
+	}
+}
+
+func downloadRuntimePack(env engineDownloadEnv) error {
+	url := fmt.Sprintf("https://github.com/goplus/spx/releases/download/%s/gdspxrt.pck.%s.zip", pckReleaseTag, pckReleaseVersion)
+	zipPath := filepath.Join(env.cacheDir, fmt.Sprintf("gdspxrt.pck.%s.zip", pckReleaseVersion))
+	if err := engineDownloadFetcher(url, zipPath); err != nil {
+		return err
+	}
+	defer os.Remove(zipPath)
+
+	extractDir, err := os.MkdirTemp(env.cacheDir, "runtime-pck-*")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(extractDir)
+
+	if err := extractZip(zipPath, extractDir); err != nil {
+		return err
+	}
+
+	entries, err := os.ReadDir(extractDir)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		src := filepath.Join(extractDir, entry.Name())
+		dst := filepath.Join(env.goBinDir, entry.Name())
+		if err := copyFile(src, dst); err != nil {
+			return err
+		}
+	}
+
+	defaultPack := filepath.Join(env.goBinDir, "gdspxrt.pck")
+	versionedPack := filepath.Join(env.goBinDir, fmt.Sprintf("gdspxrt%s.pck", env.version))
+	if fileExists(defaultPack) {
+		if err := os.Rename(defaultPack, versionedPack); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func downloadAndroidAssets(env engineDownloadEnv) error {
+	url := env.urlPrefix + "android.zip"
+	zipPath := filepath.Join(env.cacheDir, "android.zip")
+	if err := engineDownloadFetcher(url, zipPath); err != nil {
+		return err
+	}
+	defer os.Remove(zipPath)
+
+	extractDir, err := os.MkdirTemp(env.cacheDir, "android-assets-*")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(extractDir)
+
+	if err := extractZip(zipPath, extractDir); err != nil {
+		return err
+	}
+
+	for _, name := range []string{"android_debug.apk", "android_release.apk", "android_source.zip"} {
+		src := filepath.Join(extractDir, name)
+		if fileExists(src) {
+			if err := copyFile(src, filepath.Join(env.templateDir, name)); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func downloadIOSAssets(env engineDownloadEnv) error {
+	return engineDownloadFetcher(env.urlPrefix+"ios.zip", filepath.Join(env.templateDir, "ios.zip"))
+}
+
+func downloadWebAssets(env engineDownloadEnv, mode string) error {
+	templateName, err := webModeReleaseTemplateName(mode)
+	if err != nil {
+		return err
+	}
+	cachedName, err := webModeCachedTemplatePath(env.version, mode)
+	if err != nil {
+		return err
+	}
+	cachedZip := filepath.Join(env.goBinDir, cachedName)
+	if !fileExists(cachedZip) {
+		if err := engineDownloadFetcher(env.urlPrefix+templateName, cachedZip); err != nil {
+			return err
+		}
+	}
+
+	for _, name := range []string{
+		"web_dlink_nothreads_debug.zip",
+		"web_dlink_nothreads_release.zip",
+		"web_nothreads_debug.zip",
+		"web_nothreads_release.zip",
+		"web_dlink_debug.zip",
+		"web_dlink_release.zip",
+		"web_debug.zip",
+		"web_release.zip",
+	} {
+		if err := copyFile(cachedZip, filepath.Join(env.templateDir, name)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func downloadDesktopAssets(env engineDownloadEnv, editor bool) error {
+	platformName := env.platform
+	postfix := ""
+	if env.platform == "linux" {
+		platformName = "linuxbsd"
+	}
+	if env.platform == "windows" {
+		postfix = ".exe"
+	}
+
+	if editor {
+		zipName := fmt.Sprintf("editor-%s-%s.zip", env.platform, env.arch)
+		binaryName := fmt.Sprintf("godot.%s.editor.%s%s", platformName, env.arch, postfix)
+		finalBinary := filepath.Join(env.goBinDir, fmt.Sprintf("gdspx%s%s", env.version, postfix))
+		if fileExists(finalBinary) {
+			return nil
+		}
+		return downloadBinaryFromZip(env, zipName, binaryName, finalBinary)
+	}
+
+	zipName := fmt.Sprintf("%s-%s.zip", env.platform, env.arch)
+	binaryName := fmt.Sprintf("godot.%s.template_release.%s%s", platformName, env.arch, postfix)
+	templateBinary := filepath.Join(env.goBinDir, fmt.Sprintf("gdspxrt%s%s", env.version, postfix))
+	if !fileExists(templateBinary) {
+		if err := downloadBinaryFromZip(env, zipName, binaryName, templateBinary); err != nil {
+			return err
+		}
+	}
+
+	switch env.platform {
+	case "linux":
+		for _, name := range []string{
+			"linux_debug.arm32",
+			"linux_debug.arm64",
+			"linux_debug.x86_32",
+			"linux_debug.x86_64",
+			"linux_release.arm32",
+			"linux_release.arm64",
+			"linux_release.x86_32",
+			"linux_release.x86_64",
+		} {
+			if err := copyFile(templateBinary, filepath.Join(env.templateDir, name)); err != nil {
+				return err
+			}
+		}
+	case "windows":
+		for _, name := range []string{
+			"windows_debug_x86_32_console.exe",
+			"windows_debug_x86_32.exe",
+			"windows_debug_x86_64_console.exe",
+			"windows_debug_x86_64.exe",
+			"windows_release_x86_32_console.exe",
+			"windows_release_x86_32.exe",
+			"windows_release_x86_64_console.exe",
+			"windows_release_x86_64.exe",
+		} {
+			if err := copyFile(templateBinary, filepath.Join(env.templateDir, name)); err != nil {
+				return err
+			}
+		}
+	case "macos":
+		macosZip := filepath.Join(env.templateDir, "macos.zip")
+		if !fileExists(macosZip) {
+			if err := engineDownloadFetcher(env.urlPrefix+"macos.zip", macosZip); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func downloadBinaryFromZip(env engineDownloadEnv, zipName, assetName, dst string) error {
+	zipPath := filepath.Join(env.cacheDir, zipName)
+	if err := engineDownloadFetcher(env.urlPrefix+zipName, zipPath); err != nil {
+		return err
+	}
+	defer os.Remove(zipPath)
+
+	extractDir, err := os.MkdirTemp(env.cacheDir, "engine-zip-*")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(extractDir)
+
+	if err := extractZip(zipPath, extractDir); err != nil {
+		return err
+	}
+	return copyFile(filepath.Join(extractDir, assetName), dst)
+}
+
+func extractZip(srcZip, dstDir string) error {
+	reader, err := zip.OpenReader(srcZip)
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+
+	for _, file := range reader.File {
+		targetPath := filepath.Join(dstDir, file.Name)
+		if file.FileInfo().IsDir() {
+			if err := os.MkdirAll(targetPath, file.Mode()); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+			return err
+		}
+		if err := extractZipFile(file, targetPath); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func extractZipFile(file *zip.File, dst string) error {
+	reader, err := file.Open()
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+
+	output, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, file.Mode())
+	if err != nil {
+		return err
+	}
+	defer output.Close()
+
+	_, err = io.Copy(output, reader)
+	return err
+}
+
+func fetchURLToFile(url, dst string) error {
+	fmt.Fprintf(os.Stdout, "Downloading %s -> %s\n", url, dst)
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("download %s failed: %s", url, resp.Status)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+	file, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	if resp.ContentLength <= 0 {
+		_, err = io.Copy(file, resp.Body)
+		return err
+	}
+
+	var downloaded int64
+	lastReport := time.Now().Add(-time.Second)
+	buffer := make([]byte, 128*1024)
+
+	for {
+		n, readErr := resp.Body.Read(buffer)
+		if n > 0 {
+			if _, err := file.Write(buffer[:n]); err != nil {
+				return err
+			}
+			downloaded += int64(n)
+			if time.Since(lastReport) >= 500*time.Millisecond || downloaded == resp.ContentLength {
+				fmt.Fprintf(os.Stdout, "  %.1f%% (%s/%s)\r", float64(downloaded)*100/float64(resp.ContentLength), formatDownloadSize(downloaded), formatDownloadSize(resp.ContentLength))
+				lastReport = time.Now()
+			}
+		}
+		if readErr == io.EOF {
+			break
+		}
+		if readErr != nil {
+			return readErr
+		}
+	}
+
+	fmt.Fprintf(os.Stdout, "  100.0%% (%s/%s)\n", formatDownloadSize(resp.ContentLength), formatDownloadSize(resp.ContentLength))
+	return nil
+}
+
+func formatDownloadSize(size int64) string {
+	const (
+		kb = 1024
+		mb = 1024 * kb
+		gb = 1024 * mb
+	)
+
+	switch {
+	case size >= gb:
+		return fmt.Sprintf("%.1fGB", float64(size)/float64(gb))
+	case size >= mb:
+		return fmt.Sprintf("%.1fMB", float64(size)/float64(mb))
+	case size >= kb:
+		return fmt.Sprintf("%.1fKB", float64(size)/float64(kb))
+	default:
+		return fmt.Sprintf("%dB", size)
+	}
+}
+
+func webModeReleaseTemplateName(mode string) (string, error) {
+	if err := validateWebMode(mode); err != nil {
+		return "", err
+	}
+	switch mode {
+	case "normal":
+		return "web.zip", nil
+	case "worker":
+		return "web-worker.zip", nil
+	case "minigame":
+		return "web-minigame.zip", nil
+	case "miniprogram":
+		return "web-miniprogram.zip", nil
+	default:
+		return "", fmt.Errorf("unsupported web-mode: %s", mode)
+	}
+}
+
+func webModeCachedTemplatePath(version, mode string) (string, error) {
+	if err := validateWebMode(mode); err != nil {
+		return "", err
+	}
+	if mode == "normal" {
+		return fmt.Sprintf("gdspx%s_webpack.zip", version), nil
+	}
+	return fmt.Sprintf("gdspx%s_web%s.zip", version, mode), nil
+}
