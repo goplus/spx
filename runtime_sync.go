@@ -181,7 +181,7 @@ func (sprite *SpriteImpl) handleAnimationFinished() {
 	}
 	state := sprite.animation().getCurAnimState()
 	if state != nil && state.Name != "" {
-		sprite.animation().addDonedAnimation(sprite.runtimeState.SyncSprite.GetCurrentAnimName())
+		sprite.animation().addDonedAnimation(state.Name)
 	}
 }
 
