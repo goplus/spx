@@ -62,13 +62,16 @@ make help
 ./.bin/buildctl help
 
 # 准备本机 host 资产
-make prepare-host-assets
+make prepare-host
 
 # 构建完整本地开发环境
-make build-dev
+make build-dev MODE=normal
 
-# 准备 Web 资产
-make prepare-web-assets MODE=normal
+# 准备 Web 导出资产
+make prepare-web MODE=normal
+
+# 同时准备 host + Web 导出资产
+make prepare-full MODE=worker
 ```
 
 ## 常用参数
@@ -82,16 +85,6 @@ make prepare-web-assets MODE=normal
 | `APK_PROJECT_DIR` | `tutorial/01_aircraft` | `install-apk` 使用的项目目录 |
 | `PORT` | `8106` | `run-web` 和 `run-web-worker` 使用的端口 |
 | `MOVIE` | `false` | 运行 demo 时是否启用录制模式 |
-
-兼容别名：
-
-- `make prepare-runtime` -> `make prepare-host-assets`
-- `make prepare-web` -> `make prepare-web-assets`
-- `make prepare-runtime-web` -> `make prepare-all-assets`
-- `make setup` -> `make prepare-host-assets`
-- `make setup-web` -> `make prepare-web-assets`
-- `make setup-web-full` -> `make prepare-all-assets`
-- `make setup-dev` -> `make build-dev`
 
 ## buildctl 总览
 
@@ -110,10 +103,10 @@ make prepare-web-assets MODE=normal
 
 | 命令 | 说明 |
 | --- | --- |
-| `make prepare-host-assets` | 安装 `spx`，下载当前平台 editor、runtime template 和 `gdspxrt.pck` |
-| `make build-dev` | 一次性构建带 Web runtime 的 `spx` 工具链、当前平台 editor/template、runtime pck 和 Web template |
-| `make prepare-web-assets MODE=...` | 安装 `spx`，构建 wasm，并下载指定模式的 Web template/runtime |
-| `make prepare-all-assets` | 一次性准备 host editor/runtime 资产和 normal Web 资产 |
+| `make prepare-host` | 安装 `spx`，下载当前平台 editor、runtime template 和 `gdspxrt.pck` |
+| `make build-dev [MODE=...]` | 一次性构建带指定 Web mode runtime 的 `spx` 工具链、当前平台 editor/template、runtime pck 和 Web template |
+| `make prepare-web MODE=...` | 安装 Web 导出所需工具链，下载指定模式的 Web template/runtime，并补齐 `exporttemplateweb` 依赖的 host editor |
+| `make prepare-full [MODE=...]` | 一次性准备 host editor/runtime 资产和指定 Web mode 的导出资产 |
 | `make install` | 安装 `spx` 命令 |
 | `make download` | 下载当前平台 runtime 所需的 editor/template/pck 资产 |
 | `make download-engine PLATFORM=... [MODE=...]` | 下载指定平台的引擎模板或 editor 资产 |
@@ -205,7 +198,7 @@ make run-web DEMO_INDEX=2 PORT=8080
 ### 本地开发
 
 ```bash
-	make build-dev
+	make build-dev MODE=normal
 	make run DEMO_INDEX=1
 	make run-web DEMO_INDEX=1
 ```
@@ -213,7 +206,7 @@ make run-web DEMO_INDEX=2 PORT=8080
 ### 仅准备 Web 导出环境
 
 ```bash
-	make prepare-web-assets MODE=worker
+	make prepare-web MODE=worker
 	make export-web MODE=worker
 ```
 
