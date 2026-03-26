@@ -24,7 +24,7 @@ import (
 	coreproject "github.com/goplus/spx/v2/internal/core/project"
 	"github.com/goplus/spx/v2/internal/engine"
 	spxlog "github.com/goplus/spx/v2/internal/log"
-	"github.com/goplus/spx/v2/internal/timer"
+	itime "github.com/goplus/spx/v2/internal/time"
 	"github.com/goplus/spx/v2/internal/ui"
 )
 
@@ -158,11 +158,11 @@ func (p *Game) Wait(secs float64) {
 }
 
 func (p *Game) Timer() float64 {
-	return timer.Timer()
+	return itime.Timer()
 }
 
 func (p *Game) ResetTimer() {
-	timer.ResetTimer()
+	itime.ResetTimer()
 }
 
 // -----------------------------------------------------------------------------

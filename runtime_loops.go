@@ -21,7 +21,7 @@ import (
 	coreruntime "github.com/goplus/spx/v2/internal/core/runtime"
 	"github.com/goplus/spx/v2/internal/coroutine"
 	"github.com/goplus/spx/v2/internal/engine"
-	"github.com/goplus/spx/v2/internal/timer"
+	itime "github.com/goplus/spx/v2/internal/time"
 )
 
 func (p *Game) initEventLoop() {
@@ -74,7 +74,7 @@ func (p *Game) logicLoop(me coroutine.Thread) int {
 			}
 			return sprite.flushCompletedAnimations(tempAnimations)
 		},
-		NextTimer: timer.NextTimer,
+		NextTimer: itime.NextTimer,
 		FireTimer: func(targetTimer float64) {
 			p.fireEvent(&eventTimer{Time: targetTimer})
 		},

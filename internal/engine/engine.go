@@ -3,7 +3,6 @@ package engine
 import (
 	"fmt"
 	"sync"
-
 	stime "time"
 
 	"github.com/goplus/spx/v2/internal/engine/platform"
@@ -93,14 +92,7 @@ var (
 	keyEvents     []KeyEvent
 	keyMutex      sync.Mutex
 
-	// time
-	startTimestamp     stime.Time
-	lastTimestamp      stime.Time
-	timeSinceLevelLoad float64
-
 	logicMutex sync.Mutex
-	// statistic info
-	fps float64
 )
 
 func Lock() {
@@ -152,9 +144,6 @@ func onStart() {
 	time.Start(func(scale float64) {
 		platformMgr.SetTimeScale(scale)
 	})
-
-	startTimestamp = stime.Now()
-	lastTimestamp = stime.Now()
 	game.OnEngineStart()
 }
 
@@ -206,16 +195,7 @@ func onMouseReleased(id int64) {
 }
 
 func updateTime(delta float64) {
-	deltaTime := delta
-	timeSinceLevelLoad += deltaTime
-
-	curTime := stime.Now()
-	unscaledTimeSinceLevelLoad := curTime.Sub(startTimestamp).Seconds()
-	unscaledDeltaTime := curTime.Sub(lastTimestamp).Seconds()
-	lastTimestamp = curTime
-	timeScale := time.TimeScale()
-	fps = profiler.Calcfps()
-	time.Update(float64(timeScale), unscaledTimeSinceLevelLoad, timeSinceLevelLoad, deltaTime, unscaledDeltaTime, fps)
+	time.Update(delta, profiler.Calcfps())
 }
 
 func cacheTriggerEvents() {

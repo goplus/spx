@@ -4,6 +4,7 @@ import (
 	"math"
 
 	. "github.com/goplus/spbase/mathf"
+	"github.com/goplus/spx/v2/internal/time"
 	gdx "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
 )
 
@@ -125,7 +126,7 @@ func GetSprite(id gdx.Object) *Sprite {
 }
 
 func GetFPS() float64 {
-	return fps
+	return time.FPS()
 }
 
 func DegToRad(degree float64) float64 {

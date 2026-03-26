@@ -20,7 +20,7 @@ import (
 	"github.com/goplus/spx/v2/internal/base/sliceutil"
 	"github.com/goplus/spx/v2/internal/engine"
 	spxlog "github.com/goplus/spx/v2/internal/log"
-	gtime "github.com/goplus/spx/v2/internal/time"
+	itime "github.com/goplus/spx/v2/internal/time"
 )
 
 // shapeManager manages the lifecycle of all runtime shapes.
@@ -67,7 +67,7 @@ func (s *shapeManager) flushActivate(items []Shape) {
 		return
 	}
 
-	delta := gtime.DeltaTime()
+	delta := itime.DeltaTime()
 	for _, item := range items {
 		if _, ok := item.(*SpriteImpl); ok {
 			continue

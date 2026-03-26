@@ -23,7 +23,7 @@ import (
 	"github.com/goplus/spx/v2/internal/coroutine"
 	"github.com/goplus/spx/v2/internal/engine"
 	spxlog "github.com/goplus/spx/v2/internal/log"
-	"github.com/goplus/spx/v2/internal/timer"
+	itime "github.com/goplus/spx/v2/internal/time"
 )
 
 const (
@@ -89,7 +89,7 @@ func (p *scriptEventBindings) OnAnyKey(onKey func(key Key)) {
 }
 
 func (p *scriptEventBindings) OnTimer(time float64, call func()) {
-	timer.RegisterTimer(time)
+	itime.RegisterTimer(time)
 	p.scriptEventRegistry.AddTimer(coreevent.NewSink(
 		p.pthis,
 		coreevent.TapVoid1(call, coreevent.If1(isDebugEventEnabled, func(float64) {
