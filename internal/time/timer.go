@@ -1,6 +1,8 @@
 package time
 
-import "sort"
+import (
+	"sort"
+)
 
 const timePrecision = 1000
 
@@ -10,25 +12,20 @@ var (
 	nextTimerIndex int
 )
 
-// Timer returns the current timer value with millisecond precision.
 func Timer() float64 {
 	return timestampToTimerValue(currentTimerTimestamp())
 }
 
-// ResetTimer restarts the timer from the current level-load time.
-// Previously registered timer points remain active and will fire again relative to the new base.
 func ResetTimer() {
 	timerBaseTime = timeSinceLevelLoad
 	nextTimerIndex = 0
 }
 
-// OnReload clears registered timers and resets timer state.
 func OnReload() {
 	ResetTimer()
 	timestamps = timestamps[:0]
 }
 
-// RegisterTimer adds a timer point if it is not already registered.
 func RegisterTimer(timer float64) {
 	timestamp := timerValueToTimestamp(timer)
 
@@ -45,7 +42,6 @@ func RegisterTimer(timer float64) {
 	timestamps[insertIndex] = timestamp
 }
 
-// NextTimer returns and advances past the next ready timer point.
 func NextTimer() (float64, bool) {
 	if len(timestamps) == 0 {
 		return 0, false

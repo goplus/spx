@@ -1,22 +1,22 @@
 package time
 
 import (
+	"math"
 	"testing"
 	stdtime "time"
 )
 
 func resetStateForTest() {
-	unscaledTimeSinceLevelLoad = 0
+	realTimeSinceLevelLoad = 0
 	timeSinceLevelLoad = 0
 	deltaTime = 0
-	unscaledDeltaTime = 0
+	realDeltaTime = 0
 	timeScale = 0
 	curFrame = 0
 	setTimeScaleCallback = nil
 	startTimestamp = stdtime.Time{}
 	lastTimestamp = stdtime.Time{}
 	fps = 0
-	curFrameRealTimeSinceStart = 0
 	timerBaseTime = 0
 	timestamps = nil
 	nextTimerIndex = 0
@@ -24,14 +24,13 @@ func resetStateForTest() {
 
 func TestStartInitializesTimeState(t *testing.T) {
 	resetStateForTest()
-	unscaledTimeSinceLevelLoad = 9
+	realTimeSinceLevelLoad = 9
 	timeSinceLevelLoad = 8
 	deltaTime = 7
-	unscaledDeltaTime = 6
+	realDeltaTime = 6
 	timeScale = 5
 	curFrame = 4
 	fps = 3
-	curFrameRealTimeSinceStart = 2
 	timerBaseTime = 1
 	timestamps = []int64{100, 200}
 	nextTimerIndex = 1
@@ -65,21 +64,24 @@ func TestStartInitializesTimeState(t *testing.T) {
 	if startTimestamp.IsZero() {
 		t.Fatal("expected non-zero start timestamp")
 	}
-	if curFrameRealTimeSinceStart != 0 {
-		t.Fatalf("curFrameRealTimeSinceStart = %v, want 0", curFrameRealTimeSinceStart)
-	}
 	if nextTimerIndex != 0 {
 		t.Fatalf("nextTimerIndex = %d, want 0", nextTimerIndex)
 	}
 }
 
-func TestUpdateUsesProvidedRealDuration(t *testing.T) {
+func TestUpdateRefreshesRealTimeState(t *testing.T) {
 	resetStateForTest()
+	now := stdtime.Now()
+	startTimestamp = now.Add(-2500 * stdtime.Millisecond)
+	lastTimestamp = now.Add(-1250 * stdtime.Millisecond)
 
-	applyFrameUpdate(2.5, 1.5, 1.5, 1.25, 60)
+	Update(1.5, 60)
 
-	if curFrameRealTimeSinceStart != 2.5 {
-		t.Fatalf("curFrameRealTimeSinceStart = %v, want 2.5", curFrameRealTimeSinceStart)
+	if diff := math.Abs(UnscaledTimeSinceLevelLoad() - 2.5); diff > 0.1 {
+		t.Fatalf("UnscaledTimeSinceLevelLoad() = %v, want about 2.5", UnscaledTimeSinceLevelLoad())
+	}
+	if diff := math.Abs(UnscaledDeltaTime() - 1.25); diff > 0.1 {
+		t.Fatalf("UnscaledDeltaTime() = %v, want about 1.25", UnscaledDeltaTime())
 	}
 	if got := Frame(); got != 1 {
 		t.Fatalf("Frame() = %v, want 1", got)
@@ -91,7 +93,7 @@ func TestTimerTracksTimeRelativeToReset(t *testing.T) {
 	Start(nil)
 	RegisterTimer(0.5)
 
-	applyFrameUpdate(0.4, 0.4, 0.4, 0.4, 60)
+	Update(0.4, 60)
 	if got := Timer(); got != 0.4 {
 		t.Fatalf("Timer() = %v, want 0.4", got)
 	}
@@ -99,7 +101,7 @@ func TestTimerTracksTimeRelativeToReset(t *testing.T) {
 		t.Fatal("did not expect timer to fire before reaching target")
 	}
 
-	applyFrameUpdate(0.5, 0.5, 0.1, 0.1, 60)
+	Update(0.1, 60)
 	if got := Timer(); got != 0.5 {
 		t.Fatalf("Timer() = %v, want 0.5", got)
 	}
@@ -115,7 +117,7 @@ func TestTimerTracksTimeRelativeToReset(t *testing.T) {
 		t.Fatal("did not expect timer to fire immediately after reset")
 	}
 
-	applyFrameUpdate(1.0, 1.0, 0.5, 0.5, 60)
+	Update(0.5, 60)
 	if got := Timer(); got != 0.5 {
 		t.Fatalf("Timer() after reset update = %v, want 0.5", got)
 	}
@@ -128,7 +130,7 @@ func TestOnReloadClearsRegisteredTimers(t *testing.T) {
 	resetStateForTest()
 	Start(nil)
 	RegisterTimer(0.1)
-	applyFrameUpdate(0.2, 0.2, 0.2, 0.2, 60)
+	Update(0.2, 60)
 
 	OnReload()
 
