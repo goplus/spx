@@ -4,7 +4,6 @@ import (
 	"math"
 
 	. "github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v2/internal/enginewrap"
 	gdx "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
 )
 
@@ -64,44 +63,36 @@ func SetDefaultFont(path string) {
 	Managers().ResMgr.SetDefaultFont(path)
 }
 
-// BridgeSetCameraPosition updates the camera from engine callback code without
-// dispatching to the main thread.
 func BridgeSetCameraPosition(pos Vec2) {
 	Managers().CameraMgr.SetCameraPosition(NewVec2(pos.X, -pos.Y))
 }
 
-// BridgeScreenToWorld converts screen coordinates from engine callback code
-// without dispatching to the main thread.
 func BridgeScreenToWorld(pos Vec2) Vec2 {
-	mgr := Managers()
-	zoom := mgr.CameraMgr.GetCameraZoom().X
-	camPos := bridgeGetCameraPosition(mgr)
-	return pos.Divf(zoom / windowScale).Add(camPos.Mulf(windowScale))
+	cameraOffset, screenScale := bridgeCameraTransform()
+	return pos.Divf(screenScale).Add(cameraOffset)
 }
 
-// BridgeWorldToScreen converts world coordinates from engine callback code
-// without dispatching to the main thread.
 func BridgeWorldToScreen(pos Vec2) Vec2 {
-	mgr := Managers()
-	zoom := mgr.CameraMgr.GetCameraZoom().X
-	camPos := bridgeGetCameraPosition(mgr)
-	return pos.Sub(camPos.Mulf(windowScale)).Mulf(zoom / windowScale)
+	cameraOffset, screenScale := bridgeCameraTransform()
+	return pos.Sub(cameraOffset).Mulf(screenScale)
 }
 
-// BridgeGetCameraPosition reads the camera position from engine callback code
-// without dispatching to the main thread.
 func BridgeGetCameraPosition() Vec2 {
-	return bridgeGetCameraPosition(Managers())
+	return bridgeCameraPosition()
 }
 
-func bridgeGetCameraPosition(managers *enginewrap.EngineManagers) Vec2 {
-	pos := managers.CameraMgr.GetCameraPosition()
+func bridgeCameraTransform() (Vec2, float64) {
+	cameraPos := bridgeCameraPosition()
+	return cameraPos.Mulf(windowScale), Managers().CameraMgr.GetCameraZoom().X / windowScale
+}
+
+func bridgeCameraPosition() Vec2 {
+	cameraMgr := Managers().CameraMgr
+	pos := cameraMgr.GetCameraPosition()
 	pos.Y = -pos.Y
 	return pos
 }
 
-// ScreenToWorld converts screen coordinates and dispatches to the main thread
-// when needed, so it is safe to call from any goroutine.
 func ScreenToWorld(pos Vec2) Vec2 {
 	var ret Vec2
 	WaitMainThread(func() {
@@ -110,8 +101,6 @@ func ScreenToWorld(pos Vec2) Vec2 {
 	return ret
 }
 
-// WorldToScreen converts world coordinates and dispatches to the main thread
-// when needed, so it is safe to call from any goroutine.
 func WorldToScreen(pos Vec2) Vec2 {
 	var ret Vec2
 	WaitMainThread(func() {
@@ -120,8 +109,6 @@ func WorldToScreen(pos Vec2) Vec2 {
 	return ret
 }
 
-// ClearAllSprites dispatches sprite teardown to the main thread and is safe to
-// call from any goroutine.
 func ClearAllSprites() {
 	WaitMainThread(func() {
 		clearAllSprites()
