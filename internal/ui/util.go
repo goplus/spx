@@ -37,8 +37,8 @@ func ClampUIPositionInScreen(isClamp bool) {
 	clampUIPositionInScreen = isClamp
 }
 
-// WorldToUI converts world space position to screen space.
-func WorldToUI(pos Vec2) Vec2 {
+// ViewToUI converts centered view coordinates to UI coordinates.
+func ViewToUI(pos Vec2) Vec2 {
 	pos = pos.Mulf(windowScale)
 	pos = NewVec2(pos.X, -pos.Y)
 	viewport := mgr.CameraMgr.GetViewportRect()

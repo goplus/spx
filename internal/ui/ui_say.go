@@ -98,12 +98,8 @@ func (s *UiSay) calculateScale(winSize mathf.Vec2, isThink bool) mathf.Vec2 {
 
 // calculatePosition computes the UI position based on sprite position and size
 func (s *UiSay) calculatePosition(winSize mathf.Vec2, pos mathf.Vec2, size mathf.Vec2, msg string) mathf.Vec2 {
-	zoom := mgr.CameraMgr.GetCameraZoom()
-	camPos := engine.BridgeGetCameraPosition()
-	localPos := pos.Sub(camPos)
-	localPos = localPos.Mul(zoom.Divf(windowScale))
-
-	position := mathf.NewVec2(localPos.X, localPos.Y+size.Y/2)
+	pos = engine.BridgeWorldToView(pos)
+	position := mathf.NewVec2(pos.X, pos.Y+size.Y/2)
 	if clampUIPositionInScreen {
 		position = s.clampPosition(position, winSize, msg)
 	}
@@ -155,6 +151,6 @@ func (s *UiSay) updateVisibility(isLeft bool, isThink bool) {
 // updateUI updates the scale, position, and text of the UI element
 func (s *UiSay) updateUI(position mathf.Vec2, scale mathf.Vec2, label engine.Object, text string) {
 	mgr.UiMgr.SetScale(s.GetId(), scale)
-	mgr.UiMgr.SetPosition(s.GetId(), WorldToUI(position))
+	mgr.UiMgr.SetPosition(s.GetId(), ViewToUI(position))
 	mgr.UiMgr.SetText(label, text)
 }
