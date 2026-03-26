@@ -17,7 +17,6 @@
 package spx
 
 import (
-	"github.com/goplus/spx/v2/internal/audiorecord"
 	coreproject "github.com/goplus/spx/v2/internal/core/project"
 	"github.com/goplus/spx/v2/internal/engine"
 	spxlog "github.com/goplus/spx/v2/internal/log"
@@ -106,10 +105,7 @@ func (p *Game) StopAllSounds() {
 }
 
 func (p *Game) Loudness() float64 {
-	if p.aurec == nil {
-		p.aurec = audiorecord.Open(gco)
-	}
-	return p.aurec.Loudness() * 100
+	return 0
 }
 
 // -----------------------------------------------------------------------------
