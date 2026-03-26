@@ -68,44 +68,35 @@ func BridgeSetCameraPosition(pos Vec2) {
 	Managers().CameraMgr.SetCameraPosition(NewVec2(pos.X, -pos.Y))
 }
 
-func BridgeScreenToWorld(pos Vec2) Vec2 {
-	cameraOffset, screenScale := bridgeCameraTransform()
-	return pos.Divf(screenScale).Add(cameraOffset)
+func BridgeViewToWorld(pos Vec2) Vec2 {
+	cameraOffset, viewScale := bridgeCameraTransform()
+	return pos.Divf(viewScale).Add(cameraOffset)
 }
 
-func BridgeWorldToScreen(pos Vec2) Vec2 {
-	cameraOffset, screenScale := bridgeCameraTransform()
-	return pos.Sub(cameraOffset).Mulf(screenScale)
-}
-
-func BridgeGetCameraPosition() Vec2 {
-	return bridgeCameraPosition()
+func BridgeWorldToView(pos Vec2) Vec2 {
+	cameraOffset, viewScale := bridgeCameraTransform()
+	return pos.Sub(cameraOffset).Mulf(viewScale)
 }
 
 func bridgeCameraTransform() (Vec2, float64) {
-	cameraPos := bridgeCameraPosition()
-	return cameraPos.Mulf(windowScale), Managers().CameraMgr.GetCameraZoom().X / windowScale
-}
-
-func bridgeCameraPosition() Vec2 {
 	cameraMgr := Managers().CameraMgr
-	pos := cameraMgr.GetCameraPosition()
-	pos.Y = -pos.Y
-	return pos
+	cameraPos := cameraMgr.GetCameraPosition()
+	cameraPos.Y = -cameraPos.Y
+	return cameraPos, cameraMgr.GetCameraZoom().X / windowScale
 }
 
-func ScreenToWorld(pos Vec2) Vec2 {
+func ViewToWorld(pos Vec2) Vec2 {
 	var ret Vec2
 	WaitMainThread(func() {
-		ret = BridgeScreenToWorld(pos)
+		ret = BridgeViewToWorld(pos)
 	})
 	return ret
 }
 
-func WorldToScreen(pos Vec2) Vec2 {
+func WorldToView(pos Vec2) Vec2 {
 	var ret Vec2
 	WaitMainThread(func() {
-		ret = BridgeWorldToScreen(pos)
+		ret = BridgeWorldToView(pos)
 	})
 	return ret
 }

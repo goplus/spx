@@ -35,7 +35,7 @@ func (pself *UiMeasure) UpdateInfo(wpos Vec2, length, heading float64, name stri
 
 	rad := engine.DegToRad(heading - 90)
 	sc := engine.Sincos(rad).Mulf(length / 2)
-	pos := WorldToUI(wpos)
+	pos := ViewToUI(wpos)
 	labelPos := pos
 	pos = pos.Sub(NewVec2(sc.Y, sc.X))
 

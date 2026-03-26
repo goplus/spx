@@ -31,9 +31,9 @@ func (pself *UiQuote) OnStart() {
 
 func (pself *UiQuote) SetText(pos mathf.Vec2, size mathf.Vec2, msg, description string) {
 	mgr.UiMgr.SetScale(pself.GetId(), mathf.NewVec2(windowScale, windowScale))
-	pos = engine.BridgeWorldToScreen(pos)
+	pos = engine.BridgeWorldToView(pos)
 	targetPos := pos.Sub(mathf.NewVec2(size.X, -size.Y))
-	mgr.UiMgr.SetGlobalPosition(pself.container.GetId(), WorldToUI(targetPos))
+	mgr.UiMgr.SetGlobalPosition(pself.container.GetId(), ViewToUI(targetPos))
 	mgr.UiMgr.SetSize(pself.container.GetId(), size.Mulf(2))
 	mgr.UiMgr.SetText(pself.labelMsg.GetId(), msg)
 	mgr.UiMgr.SetText(pself.labelDes.GetId(), description)

@@ -48,7 +48,7 @@ func (pself *UiMonitor) UpdateScale(x float64) {
 	mgr.UiMgr.SetScale(pself.GetId(), mathf.NewVec2(x, x))
 }
 func (pself *UiMonitor) UpdatePos(wpos Vec2) {
-	mgr.UiMgr.SetGlobalPosition(pself.GetId(), WorldToUI(wpos))
+	mgr.UiMgr.SetGlobalPosition(pself.GetId(), ViewToUI(wpos))
 }
 
 func (pself *UiMonitor) UpdateText(name, value string) {
