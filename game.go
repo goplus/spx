@@ -26,7 +26,6 @@ import (
 	_ "github.com/goplus/spx/v2/fs/zip"
 
 	"github.com/goplus/spx/v2/internal/audio"
-	"github.com/goplus/spx/v2/internal/audiorecord"
 	"github.com/goplus/spx/v2/internal/base/collisionutil"
 	corestate "github.com/goplus/spx/v2/internal/core/state"
 	"github.com/goplus/spx/v2/internal/coroutine"
@@ -96,7 +95,6 @@ type Game struct {
 	sounds map[string]sound
 
 	events chan event
-	aurec  *audiorecord.Recorder
 
 	scriptEvents scriptEventRegistry
 	gamer        Gamer

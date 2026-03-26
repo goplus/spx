@@ -28,7 +28,6 @@ func init() {
 			"github.com/goplus/spx/v2/internal/animation":          "animation",
 			"github.com/goplus/spx/v2/internal/assets":             "assets",
 			"github.com/goplus/spx/v2/internal/audio":              "audio",
-			"github.com/goplus/spx/v2/internal/audiorecord":        "audiorecord",
 			"github.com/goplus/spx/v2/internal/base/collisionutil": "collisionutil",
 			"github.com/goplus/spx/v2/internal/base/sliceutil":     "sliceutil",
 			"github.com/goplus/spx/v2/internal/base/valueutil":     "valueutil",
