@@ -47,7 +47,6 @@ func init() {
 			"github.com/goplus/spx/v2/internal/log":                "log",
 			"github.com/goplus/spx/v2/internal/tilemap":            "tilemap",
 			"github.com/goplus/spx/v2/internal/time":               "time",
-			"github.com/goplus/spx/v2/internal/timer":              "timer",
 			"github.com/goplus/spx/v2/internal/tools":              "tools",
 			"github.com/goplus/spx/v2/internal/ui":                 "ui",
 			"github.com/goplus/spx/v2/pkg/spx/pkg/engine":          "engine",

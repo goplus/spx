@@ -1,10 +1,10 @@
 package time
 
 import (
-	stime "time"
-
-	"github.com/goplus/spx/v2/internal/timer"
+	stdtime "time"
 )
+
+const defaultFPS = 30
 
 var (
 	unscaledTimeSinceLevelLoad float64
@@ -14,17 +14,18 @@ var (
 	timeScale                  float64
 	curFrame                   int64
 	setTimeScaleCallback       func(float64)
-	startTimestamp             stime.Time
+	startTimestamp             stdtime.Time
+	lastTimestamp              stdtime.Time
 	fps                        float64
 	curFrameRealTimeSinceStart float64
 )
 
 func Sleep(ms float64) {
-	stime.Sleep(stime.Microsecond * stime.Duration((ms * 1000)))
+	stdtime.Sleep(stdtime.Microsecond * stdtime.Duration(ms*1000))
 }
 
 func RealTimeSinceStart() float64 {
-	return stime.Since(startTimestamp).Seconds()
+	return stdtime.Since(startTimestamp).Seconds()
 }
 
 func RealTimeSinceCurFrame() float64 {
@@ -69,19 +70,38 @@ func TimeSinceLevelLoad() float64 {
 }
 
 func Start(setTimeScaleCB func(float64)) {
-	Update(1, 0, 0, 0, 0, 30)
+	unscaledTimeSinceLevelLoad = 0
+	timeSinceLevelLoad = 0
+	deltaTime = 0
+	unscaledDeltaTime = 0
+	timeScale = 1
+	curFrame = 0
+	fps = defaultFPS
+	curFrameRealTimeSinceStart = 0
 	setTimeScaleCallback = setTimeScaleCB
-	startTimestamp = stime.Now()
+	now := stdtime.Now()
+	startTimestamp = now
+	lastTimestamp = now
+	ResetTimer()
 }
 
-func Update(scale float64, realDuration float64, duration float64, delta float64, unscaledDelta float64, pfps float64) {
-	timeScale = scale
+func Update(delta float64, pfps float64) {
+	timeSinceLevelLoad += delta
+
+	curTime := stdtime.Now()
+	unscaledTimeSinceLevelLoad := curTime.Sub(startTimestamp).Seconds()
+	unscaledDeltaTime := curTime.Sub(lastTimestamp).Seconds()
+	lastTimestamp = curTime
+
+	applyFrameUpdate(unscaledTimeSinceLevelLoad, timeSinceLevelLoad, delta, unscaledDeltaTime, pfps)
+}
+
+func applyFrameUpdate(realDuration float64, duration float64, delta float64, unscaledDelta float64, pfps float64) {
 	unscaledDeltaTime = unscaledDelta
 	unscaledTimeSinceLevelLoad = realDuration
 	timeSinceLevelLoad = duration
 	deltaTime = delta
 	curFrame += 1
 	fps = pfps
-	curFrameRealTimeSinceStart = RealTimeSinceStart()
-	timer.OnUpdate(deltaTime)
+	curFrameRealTimeSinceStart = realDuration
 }

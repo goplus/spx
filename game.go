@@ -32,7 +32,7 @@ import (
 	"github.com/goplus/spx/v2/internal/coroutine"
 	"github.com/goplus/spx/v2/internal/engine"
 	spxlog "github.com/goplus/spx/v2/internal/log"
-	"github.com/goplus/spx/v2/internal/timer"
+	itime "github.com/goplus/spx/v2/internal/time"
 	"github.com/goplus/spx/v2/internal/ui"
 )
 
@@ -262,7 +262,7 @@ func (p *Game) reset() {
 	p.resetEventQueueStats()
 	close(p.events)
 
-	timer.OnReload()
+	itime.OnReload()
 	p.Stop(AllOtherScripts)
 }
 

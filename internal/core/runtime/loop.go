@@ -126,7 +126,7 @@ func ProcessLogicFrame[T any](cfg LogicFrameConfig[T]) ([]string, []string) {
 		tempAnimations = cfg.FlushCompletedAnimations(item, tempAnimations)
 	}
 
-	if targetTimer, ok := cfg.NextTimer(); ok {
+	for targetTimer, ok := cfg.NextTimer(); ok; targetTimer, ok = cfg.NextTimer() {
 		cfg.FireTimer(targetTimer)
 	}
 	return tempAudios, tempAnimations
