@@ -85,15 +85,16 @@ func Start(setTimeScaleCB func(float64)) {
 	ResetTimer()
 }
 
+// Update consumes the frame delta after platform-side time scaling has been applied.
 func Update(delta float64, pfps float64) {
-	timeSinceLevelLoad += delta
+	newDuration := timeSinceLevelLoad + delta
 
 	curTime := stdtime.Now()
-	unscaledTimeSinceLevelLoad := curTime.Sub(startTimestamp).Seconds()
-	unscaledDeltaTime := curTime.Sub(lastTimestamp).Seconds()
+	unscaledTotal := curTime.Sub(startTimestamp).Seconds()
+	unscaledDelta := curTime.Sub(lastTimestamp).Seconds()
 	lastTimestamp = curTime
 
-	applyFrameUpdate(unscaledTimeSinceLevelLoad, timeSinceLevelLoad, delta, unscaledDeltaTime, pfps)
+	applyFrameUpdate(unscaledTotal, newDuration, delta, unscaledDelta, pfps)
 }
 
 func applyFrameUpdate(realDuration float64, duration float64, delta float64, unscaledDelta float64, pfps float64) {

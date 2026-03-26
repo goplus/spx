@@ -16,6 +16,7 @@ func Timer() float64 {
 }
 
 // ResetTimer restarts the timer from the current level-load time.
+// Previously registered timer points remain active and will fire again relative to the new base.
 func ResetTimer() {
 	timerBaseTime = timeSinceLevelLoad
 	nextTimerIndex = 0
@@ -44,7 +45,7 @@ func RegisterTimer(timer float64) {
 	timestamps[insertIndex] = timestamp
 }
 
-// NextTimer returns and consumes the next ready timer point.
+// NextTimer returns and advances past the next ready timer point.
 func NextTimer() (float64, bool) {
 	if len(timestamps) == 0 {
 		return 0, false
