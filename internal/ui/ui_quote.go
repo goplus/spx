@@ -31,10 +31,7 @@ func (pself *UiQuote) OnStart() {
 
 func (pself *UiQuote) SetText(pos mathf.Vec2, size mathf.Vec2, msg, description string) {
 	mgr.UiMgr.SetScale(pself.GetId(), mathf.NewVec2(windowScale, windowScale))
-	camPos := engine.BridgeGetCameraPosition()
-	pos = pos.Sub(camPos)
-	zoom := mgr.CameraMgr.GetCameraZoom()
-	pos = pos.Mul(zoom.Divf(windowScale))
+	pos = engine.BridgeWorldToScreen(pos)
 	targetPos := pos.Sub(mathf.NewVec2(size.X, -size.Y))
 	mgr.UiMgr.SetGlobalPosition(pself.container.GetId(), WorldToUI(targetPos))
 	mgr.UiMgr.SetSize(pself.container.GetId(), size.Mulf(2))

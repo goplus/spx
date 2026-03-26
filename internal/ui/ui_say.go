@@ -98,12 +98,8 @@ func (s *UiSay) calculateScale(winSize mathf.Vec2, isThink bool) mathf.Vec2 {
 
 // calculatePosition computes the UI position based on sprite position and size
 func (s *UiSay) calculatePosition(winSize mathf.Vec2, pos mathf.Vec2, size mathf.Vec2, msg string) mathf.Vec2 {
-	zoom := mgr.CameraMgr.GetCameraZoom()
-	camPos := engine.BridgeGetCameraPosition()
-	localPos := pos.Sub(camPos)
-	localPos = localPos.Mul(zoom.Divf(windowScale))
-
-	position := mathf.NewVec2(localPos.X, localPos.Y+size.Y/2)
+	pos = engine.BridgeWorldToScreen(pos)
+	position := mathf.NewVec2(pos.X, pos.Y+size.Y/2)
 	if clampUIPositionInScreen {
 		position = s.clampPosition(position, winSize, msg)
 	}
