@@ -7,17 +7,16 @@ import (
 const defaultFPS = 30
 
 var (
-	unscaledTimeSinceLevelLoad float64
-	timeSinceLevelLoad         float64
-	deltaTime                  float64
-	unscaledDeltaTime          float64
-	timeScale                  float64
-	curFrame                   int64
-	setTimeScaleCallback       func(float64)
-	startTimestamp             stdtime.Time
-	lastTimestamp              stdtime.Time
-	fps                        float64
-	curFrameRealTimeSinceStart float64
+	realTimeSinceLevelLoad float64
+	timeSinceLevelLoad     float64
+	deltaTime              float64
+	realDeltaTime          float64
+	timeScale              float64
+	curFrame               int64
+	setTimeScaleCallback   func(float64)
+	startTimestamp         stdtime.Time
+	lastTimestamp          stdtime.Time
+	fps                    float64
 )
 
 func Sleep(ms float64) {
@@ -29,15 +28,17 @@ func RealTimeSinceStart() float64 {
 }
 
 func RealTimeSinceCurFrame() float64 {
-	return RealTimeSinceStart() - curFrameRealTimeSinceStart
+	return stdtime.Since(lastTimestamp).Seconds()
 }
 
 func RealTimeSinceCurFrameMs() float64 {
-	return (RealTimeSinceStart() - curFrameRealTimeSinceStart) * 1000
+	return RealTimeSinceCurFrame() * 1000
 }
+
 func FPS() float64 {
 	return fps
 }
+
 func Frame() int64 {
 	return curFrame
 }
@@ -58,11 +59,11 @@ func DeltaTime() float64 {
 }
 
 func UnscaledDeltaTime() float64 {
-	return unscaledDeltaTime
+	return realDeltaTime
 }
 
 func UnscaledTimeSinceLevelLoad() float64 {
-	return unscaledTimeSinceLevelLoad
+	return realTimeSinceLevelLoad
 }
 
 func TimeSinceLevelLoad() float64 {
@@ -70,39 +71,27 @@ func TimeSinceLevelLoad() float64 {
 }
 
 func Start(setTimeScaleCB func(float64)) {
-	unscaledTimeSinceLevelLoad = 0
-	timeSinceLevelLoad = 0
-	deltaTime = 0
-	unscaledDeltaTime = 0
+	now := stdtime.Now()
+
+	realTimeSinceLevelLoad, timeSinceLevelLoad = 0, 0
+	deltaTime, realDeltaTime = 0, 0
 	timeScale = 1
 	curFrame = 0
 	fps = defaultFPS
-	curFrameRealTimeSinceStart = 0
+
 	setTimeScaleCallback = setTimeScaleCB
-	now := stdtime.Now()
-	startTimestamp = now
-	lastTimestamp = now
+	startTimestamp, lastTimestamp = now, now
 	ResetTimer()
 }
 
-// Update consumes the frame delta after platform-side time scaling has been applied.
 func Update(delta float64, pfps float64) {
-	newDuration := timeSinceLevelLoad + delta
-
 	curTime := stdtime.Now()
-	unscaledTotal := curTime.Sub(startTimestamp).Seconds()
-	unscaledDelta := curTime.Sub(lastTimestamp).Seconds()
+	realTimeSinceLevelLoad = curTime.Sub(startTimestamp).Seconds()
+	realDeltaTime = curTime.Sub(lastTimestamp).Seconds()
 	lastTimestamp = curTime
 
-	applyFrameUpdate(unscaledTotal, newDuration, delta, unscaledDelta, pfps)
-}
-
-func applyFrameUpdate(realDuration float64, duration float64, delta float64, unscaledDelta float64, pfps float64) {
-	unscaledDeltaTime = unscaledDelta
-	unscaledTimeSinceLevelLoad = realDuration
-	timeSinceLevelLoad = duration
 	deltaTime = delta
+	timeSinceLevelLoad += delta
 	curFrame += 1
 	fps = pfps
-	curFrameRealTimeSinceStart = realDuration
 }
