@@ -70,6 +70,52 @@ func TestDownloadEngineAssetsRuntime(t *testing.T) {
 	}
 }
 
+func TestDownloadEngineAssetsRuntimeOverwritesStaleDesktopBinaries(t *testing.T) {
+	runner := newRuntimeFixtureRunner(t)
+	installFakeEngineDownload(t, runner.repoRoot, "linux", "x86_64")
+
+	gopathBin := filepath.Join(os.Getenv("GOPATH"), "bin")
+	editorPath := filepath.Join(gopathBin, "gdspx2.1.44")
+	templatePath := filepath.Join(gopathBin, "gdspxrt2.1.44")
+	templateFanout := filepath.Join(runner.repoRoot, "templates", "linux_release.x86_64")
+
+	if err := os.MkdirAll(gopathBin, 0o755); err != nil {
+		t.Fatalf("MkdirAll(%s) returned error: %v", gopathBin, err)
+	}
+	if err := os.MkdirAll(filepath.Dir(templateFanout), 0o755); err != nil {
+		t.Fatalf("MkdirAll(%s) returned error: %v", filepath.Dir(templateFanout), err)
+	}
+	if err := os.WriteFile(editorPath, []byte("stale-editor"), 0o755); err != nil {
+		t.Fatalf("WriteFile(%s) returned error: %v", editorPath, err)
+	}
+	if err := os.WriteFile(templatePath, []byte("stale-template"), 0o755); err != nil {
+		t.Fatalf("WriteFile(%s) returned error: %v", templatePath, err)
+	}
+	if err := os.WriteFile(templateFanout, []byte("stale-fanout"), 0o644); err != nil {
+		t.Fatalf("WriteFile(%s) returned error: %v", templateFanout, err)
+	}
+
+	if err := downloadEngineAssets(engineDownloadConfig{runtime: true}, runner.repoRoot); err != nil {
+		t.Fatalf("downloadEngineAssets returned error: %v", err)
+	}
+
+	if content, err := os.ReadFile(editorPath); err != nil {
+		t.Fatalf("ReadFile(%s) returned error: %v", editorPath, err)
+	} else if string(content) != "linux-editor" {
+		t.Fatalf("editor content = %q, want refreshed engine binary", string(content))
+	}
+	if content, err := os.ReadFile(templatePath); err != nil {
+		t.Fatalf("ReadFile(%s) returned error: %v", templatePath, err)
+	} else if string(content) != "linux-template" {
+		t.Fatalf("template content = %q, want refreshed runtime binary", string(content))
+	}
+	if content, err := os.ReadFile(templateFanout); err != nil {
+		t.Fatalf("ReadFile(%s) returned error: %v", templateFanout, err)
+	} else if string(content) != "linux-template" {
+		t.Fatalf("fanout content = %q, want refreshed template fanout", string(content))
+	}
+}
+
 func TestDownloadEngineAssetsWeb(t *testing.T) {
 	runner := newRuntimeFixtureRunner(t)
 	installFakeEngineDownload(t, runner.repoRoot, "linux", "x86_64")
