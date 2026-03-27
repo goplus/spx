@@ -42,6 +42,7 @@ runs:
         path: |
           ${{ steps.gopath.outputs.GOPATH }}/bin/spx*
           ${{ steps.gopath.outputs.GOPATH }}/bin/gdspx[0-9]*
+          ${{ steps.gopath.outputs.GOPATH }}/bin/gdspx-*
           ${{ steps.gopath.outputs.GOPATH }}/bin/gdspxrt*
           ${{ steps.gopath.outputs.GOPATH }}/bin/ispx
           ${{ steps.gopath.outputs.GOPATH }}/bin/ispx.wasm
@@ -68,10 +69,25 @@ runs:
         version="$(cat cmd/gox/template/version)"
         missing=0
         bin_suffix=""
+        lib_suffix=""
+        goos="$(go env GOOS)"
+        goarch="$(go env GOARCH)"
 
         if [ "${RUNNER_OS}" = "Windows" ]; then
           bin_suffix=".exe"
         fi
+
+        case "$goos" in
+          windows)
+            lib_suffix=".dll"
+            ;;
+          darwin)
+            lib_suffix=".dylib"
+            ;;
+          *)
+            lib_suffix=".so"
+            ;;
+        esac
 
         require_path() {
           if [ ! -e "$1" ]; then
@@ -84,6 +100,7 @@ runs:
 
         if [ "$SETUP_MODE" = "runtime" ] || [ "$SETUP_MODE" = "full" ]; then
           require_path "$GOPATH_DIR/bin/gdspx${version}${bin_suffix}"
+          require_path "$GOPATH_DIR/bin/gdspx-${goos}-${goarch}${lib_suffix}"
           require_path "$GOPATH_DIR/bin/gdspxrt${version}${bin_suffix}"
           require_path "$GOPATH_DIR/bin/gdspxrt${version}.pck"
           require_path "$GOPATH_DIR/bin/runtime.gdextension"
