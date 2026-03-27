@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -71,5 +72,28 @@ func TestDetectStaleEngineBuildLockMissingPIDAfterGracePeriod(t *testing.T) {
 	}
 	if !strings.Contains(message, "missing pid metadata") {
 		t.Fatalf("unexpected stale lock message: %s", message)
+	}
+}
+
+func TestAcquireEngineBuildLockTimesOut(t *testing.T) {
+	lockDir := filepath.Join(t.TempDir(), ".spx_build_lock")
+	mustMkdirAll(t, lockDir)
+	mustWriteFile(t, filepath.Join(lockDir, "pid"), []byte(strconv.Itoa(os.Getpid())))
+
+	oldPollInterval := engineBuildLockPollInterval
+	oldTimeout := engineBuildLockAcquireTimeout
+	engineBuildLockPollInterval = 5 * time.Millisecond
+	engineBuildLockAcquireTimeout = 20 * time.Millisecond
+	defer func() {
+		engineBuildLockPollInterval = oldPollInterval
+		engineBuildLockAcquireTimeout = oldTimeout
+	}()
+
+	err := acquireEngineBuildLock(lockDir)
+	if err == nil {
+		t.Fatal("expected acquireEngineBuildLock to time out")
+	}
+	if !strings.Contains(err.Error(), "timed out waiting for build lock") {
+		t.Fatalf("unexpected timeout error: %v", err)
 	}
 }

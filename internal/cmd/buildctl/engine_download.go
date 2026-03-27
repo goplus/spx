@@ -2,11 +2,16 @@ package main
 
 import (
 	"archive/zip"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
+	"syscall"
 	"time"
 )
 
@@ -28,6 +33,7 @@ type engineDownloadEnv struct {
 
 var engineDownloadFetcher = fetchURLToFile
 var engineDownloadResolveEnv = resolveEngineDownloadEnv
+var engineDownloadHTTPClient = &http.Client{Timeout: 30 * time.Minute}
 
 func downloadEngineAssets(cfg engineDownloadConfig, repoRoot string) error {
 	env, err := engineDownloadResolveEnv(repoRoot, cfg.platform)
@@ -204,7 +210,7 @@ func downloadWebAssets(env engineDownloadEnv, mode string) error {
 		"web_debug.zip",
 		"web_release.zip",
 	} {
-		if err := copyFile(cachedZip, filepath.Join(env.templateDir, name)); err != nil {
+		if err := linkOrCopyFile(cachedZip, filepath.Join(env.templateDir, name)); err != nil {
 			return err
 		}
 	}
@@ -252,7 +258,7 @@ func downloadDesktopAssets(env engineDownloadEnv, editor bool) error {
 			"linux_release.x86_32",
 			"linux_release.x86_64",
 		} {
-			if err := copyFile(templateBinary, filepath.Join(env.templateDir, name)); err != nil {
+			if err := linkOrCopyFile(templateBinary, filepath.Join(env.templateDir, name)); err != nil {
 				return err
 			}
 		}
@@ -267,7 +273,7 @@ func downloadDesktopAssets(env engineDownloadEnv, editor bool) error {
 			"windows_release_x86_64_console.exe",
 			"windows_release_x86_64.exe",
 		} {
-			if err := copyFile(templateBinary, filepath.Join(env.templateDir, name)); err != nil {
+			if err := linkOrCopyFile(templateBinary, filepath.Join(env.templateDir, name)); err != nil {
 				return err
 			}
 		}
@@ -310,7 +316,10 @@ func extractZip(srcZip, dstDir string) error {
 	defer reader.Close()
 
 	for _, file := range reader.File {
-		targetPath := filepath.Join(dstDir, file.Name)
+		targetPath, err := resolveZipExtractPath(dstDir, file.Name)
+		if err != nil {
+			return err
+		}
 		if file.FileInfo().IsDir() {
 			if err := os.MkdirAll(targetPath, file.Mode()); err != nil {
 				return err
@@ -325,6 +334,23 @@ func extractZip(srcZip, dstDir string) error {
 		}
 	}
 	return nil
+}
+
+func resolveZipExtractPath(dstDir, name string) (string, error) {
+	cleanBase := filepath.Clean(dstDir)
+	targetPath := filepath.Clean(filepath.Join(cleanBase, name))
+	basePrefix := cleanBase
+	if !strings.HasSuffix(basePrefix, string(os.PathSeparator)) {
+		basePrefix += string(os.PathSeparator)
+	}
+	targetPrefix := targetPath
+	if !strings.HasSuffix(targetPrefix, string(os.PathSeparator)) {
+		targetPrefix += string(os.PathSeparator)
+	}
+	if targetPath != cleanBase && !strings.HasPrefix(targetPrefix, basePrefix) {
+		return "", fmt.Errorf("illegal path in archive entry: %s", name)
+	}
+	return targetPath, nil
 }
 
 func extractZipFile(file *zip.File, dst string) error {
@@ -344,10 +370,10 @@ func extractZipFile(file *zip.File, dst string) error {
 	return err
 }
 
-func fetchURLToFile(url, dst string) error {
+func fetchURLToFile(url, dst string) (err error) {
 	fmt.Fprintf(os.Stdout, "Downloading %s -> %s\n", url, dst)
 
-	resp, err := http.Get(url)
+	resp, err := engineDownloadHTTPClient.Get(url)
 	if err != nil {
 		return err
 	}
@@ -360,43 +386,101 @@ func fetchURLToFile(url, dst string) error {
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return err
 	}
-	file, err := os.Create(dst)
+	file, err := os.CreateTemp(filepath.Dir(dst), filepath.Base(dst)+".tmp-*")
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	tmpPath := file.Name()
+	defer func() {
+		if file != nil {
+			_ = file.Close()
+		}
+		if err != nil {
+			_ = os.Remove(tmpPath)
+		}
+	}()
 
 	if resp.ContentLength <= 0 {
-		_, err = io.Copy(file, resp.Body)
+		if _, err := io.Copy(file, resp.Body); err != nil {
+			return err
+		}
+	} else {
+		var downloaded int64
+		lastReport := time.Now().Add(-time.Second)
+		buffer := make([]byte, 128*1024)
+
+		for {
+			n, readErr := resp.Body.Read(buffer)
+			if n > 0 {
+				if _, err := file.Write(buffer[:n]); err != nil {
+					return err
+				}
+				downloaded += int64(n)
+				if time.Since(lastReport) >= 500*time.Millisecond || downloaded == resp.ContentLength {
+					fmt.Fprintf(os.Stdout, "  %.1f%% (%s/%s)\r", float64(downloaded)*100/float64(resp.ContentLength), formatDownloadSize(downloaded), formatDownloadSize(resp.ContentLength))
+					lastReport = time.Now()
+				}
+			}
+			if readErr == io.EOF {
+				break
+			}
+			if readErr != nil {
+				return readErr
+			}
+		}
+
+		fmt.Fprintf(os.Stdout, "  100.0%% (%s/%s)\n", formatDownloadSize(resp.ContentLength), formatDownloadSize(resp.ContentLength))
+	}
+
+	if err := file.Close(); err != nil {
 		return err
 	}
+	file = nil
 
-	var downloaded int64
-	lastReport := time.Now().Add(-time.Second)
-	buffer := make([]byte, 128*1024)
+	return replaceDownloadedFile(tmpPath, dst)
+}
 
-	for {
-		n, readErr := resp.Body.Read(buffer)
-		if n > 0 {
-			if _, err := file.Write(buffer[:n]); err != nil {
-				return err
-			}
-			downloaded += int64(n)
-			if time.Since(lastReport) >= 500*time.Millisecond || downloaded == resp.ContentLength {
-				fmt.Fprintf(os.Stdout, "  %.1f%% (%s/%s)\r", float64(downloaded)*100/float64(resp.ContentLength), formatDownloadSize(downloaded), formatDownloadSize(resp.ContentLength))
-				lastReport = time.Now()
-			}
-		}
-		if readErr == io.EOF {
-			break
-		}
-		if readErr != nil {
-			return readErr
-		}
+func replaceDownloadedFile(src, dst string) error {
+	if err := os.Rename(src, dst); err == nil {
+		return nil
+	} else if runtime.GOOS != "windows" || !fileExists(dst) {
+		return err
 	}
+	if err := os.Remove(dst); err != nil {
+		return err
+	}
+	return os.Rename(src, dst)
+}
 
-	fmt.Fprintf(os.Stdout, "  100.0%% (%s/%s)\n", formatDownloadSize(resp.ContentLength), formatDownloadSize(resp.ContentLength))
-	return nil
+func linkOrCopyFile(src, dst string) error {
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+	if err := os.Link(src, dst); err == nil {
+		return nil
+	} else if !errors.Is(err, fs.ErrExist) && !isLinkFallbackError(err) {
+		return err
+	}
+	return copyFile(src, dst)
+}
+
+func isLinkFallbackError(err error) bool {
+	switch {
+	case errors.Is(err, fs.ErrExist):
+		return true
+	case errors.Is(err, fs.ErrPermission):
+		return true
+	case errors.Is(err, syscall.EXDEV):
+		return true
+	case errors.Is(err, syscall.ENOTSUP):
+		return true
+	case errors.Is(err, syscall.EPERM):
+		return true
+	case errors.Is(err, syscall.EACCES):
+		return true
+	default:
+		return false
+	}
 }
 
 func formatDownloadSize(size int64) string {

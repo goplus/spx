@@ -42,13 +42,13 @@ func (r commandRunner) runCommand(workdir string, name string, args ...string) e
 		dir = filepath.Join(r.repoRoot, workdir)
 	}
 
-	env := currentEnvMap()
-	commandName := name
-	if buildctlEnv, err := buildctlCommandEnv(); err == nil {
-		env = buildctlEnv
+	env, err := buildctlCommandEnv()
+	if err != nil {
+		return fmt.Errorf("resolve command environment: %w", err)
 	}
-	if resolved, err := resolveCommandPath(name, env); err == nil {
-		commandName = resolved
+	commandName, err := resolveCommandPath(name, env)
+	if err != nil {
+		return fmt.Errorf("resolve command path for %s: %w", name, err)
 	}
 
 	cmd := exec.Command(commandName, args...)

@@ -246,7 +246,7 @@ func updateNDKShellConfig(env androidNDKEnv) error {
 	}
 
 	current, _ := os.ReadFile(env.shellConfig)
-	exportLine := fmt.Sprintf("export ANDROID_NDK_ROOT=\"%s\"", env.ndkRoot)
+	exportLine := "export ANDROID_NDK_ROOT=" + shellQuote(env.ndkRoot)
 	if strings.Contains(string(current), exportLine) {
 		return nil
 	}
@@ -260,7 +260,7 @@ func updateNDKShellConfig(env androidNDKEnv) error {
 	}
 	defer file.Close()
 
-	block := fmt.Sprintf("\n# Android NDK environment variables - added by buildctl\nexport ANDROID_SDK_ROOT=\"%s\"\nexport ANDROID_NDK_ROOT=\"%s\"\nexport PATH=\"${ANDROID_NDK_ROOT}:${PATH}\"\n", env.sdkRoot, env.ndkRoot)
+	block := fmt.Sprintf("\n# Android NDK environment variables - added by buildctl\nexport ANDROID_SDK_ROOT=%s\nexport ANDROID_NDK_ROOT=%s\nexport PATH=\"$ANDROID_NDK_ROOT:$PATH\"\n", shellQuote(env.sdkRoot), shellQuote(env.ndkRoot))
 	_, err = file.WriteString(block)
 	return err
 }

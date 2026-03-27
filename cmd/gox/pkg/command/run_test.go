@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -196,5 +197,27 @@ func TestParsePIDList(t *testing.T) {
 	want := []int{123, 456}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("parsePIDList = %v, want %v", got, want)
+	}
+}
+
+func TestLooksLikeGDSPXWebServerCommandLine(t *testing.T) {
+	if !looksLikeGDSPXWebServerCommandLine(`python.exe C:\tmp\gdspx_web_server.py -r build -p 8080`) {
+		t.Fatal("expected gdspx web server command line to match")
+	}
+	if looksLikeGDSPXWebServerCommandLine(`python.exe C:\tmp\other_server.py -p 8080`) {
+		t.Fatal("did not expect unrelated python process to match")
+	}
+}
+
+func TestWindowsProcessCommandLineQuery(t *testing.T) {
+	got := windowsProcessCommandLineQuery(321)
+	if !strings.Contains(got, "Get-CimInstance Win32_Process") {
+		t.Fatalf("windowsProcessCommandLineQuery = %q, want Get-CimInstance query", got)
+	}
+	if !strings.Contains(got, "ProcessId = 321") {
+		t.Fatalf("windowsProcessCommandLineQuery = %q, want pid filter", got)
+	}
+	if strings.Contains(strings.ToLower(got), "tasklist") {
+		t.Fatalf("windowsProcessCommandLineQuery = %q, should not use tasklist", got)
 	}
 }

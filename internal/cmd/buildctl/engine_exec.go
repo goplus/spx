@@ -21,6 +21,11 @@ type engineExecConfig struct {
 	command []string
 }
 
+var (
+	engineBuildLockPollInterval   = time.Second
+	engineBuildLockAcquireTimeout = 30 * time.Minute
+)
+
 func runEngineExec(args []string) error {
 	cfg, err := parseEngineExecArgs(args)
 	if err != nil {
@@ -104,6 +109,7 @@ func withEngineBuildLock(lockDir string, fn func() error) error {
 }
 
 func acquireEngineBuildLock(lockDir string) error {
+	deadline := time.Now().Add(engineBuildLockAcquireTimeout)
 	waitLogged := false
 	for {
 		if err := os.Mkdir(lockDir, 0o755); err == nil {
@@ -132,7 +138,15 @@ func acquireEngineBuildLock(lockDir string) error {
 			fmt.Fprintf(os.Stdout, "Another build is using %s; waiting for build lock...\n", filepath.Dir(lockDir))
 			waitLogged = true
 		}
-		time.Sleep(time.Second)
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return fmt.Errorf("timed out waiting for build lock %s after %s", lockDir, engineBuildLockAcquireTimeout)
+		}
+		sleepDuration := engineBuildLockPollInterval
+		if remaining < sleepDuration {
+			sleepDuration = remaining
+		}
+		time.Sleep(sleepDuration)
 	}
 }
 

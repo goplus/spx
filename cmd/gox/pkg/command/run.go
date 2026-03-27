@@ -272,13 +272,28 @@ func looksLikeGDSPXWebServerProcessUnix(pid int) bool {
 }
 
 func looksLikeGDSPXWebServerProcessWindows(pid int) bool {
-	cmd := exec.Command("tasklist", "/FI", fmt.Sprintf("PID eq %d", pid), "/FO", "CSV", "/NH")
-	output, err := cmd.Output()
+	commandLine, err := windowsProcessCommandLine(pid)
 	if err != nil {
 		return false
 	}
-	lower := strings.ToLower(string(output))
-	return strings.Contains(lower, "python.exe") || strings.Contains(lower, "python3.exe") || strings.Contains(lower, "py.exe")
+	return looksLikeGDSPXWebServerCommandLine(commandLine)
+}
+
+func windowsProcessCommandLine(pid int) (string, error) {
+	cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", windowsProcessCommandLineQuery(pid))
+	output, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return string(output), nil
+}
+
+func windowsProcessCommandLineQuery(pid int) string {
+	return fmt.Sprintf("(Get-CimInstance Win32_Process -Filter \"ProcessId = %d\").CommandLine", pid)
+}
+
+func looksLikeGDSPXWebServerCommandLine(commandLine string) bool {
+	return strings.Contains(strings.ToLower(commandLine), "gdspx_web_server.py")
 }
 
 func (pself *CmdTool) RunPureEngine(pargs ...string) error {

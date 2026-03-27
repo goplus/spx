@@ -205,14 +205,12 @@ func verifyEMSDK(env emsdkEnvironment) error {
 	if err != nil {
 		return err
 	}
-	if _, err := buildEnvRunOutputWithDir("", envMapToSlice(verifyEnv), emppPath, "--version"); err != nil {
+	output, err := buildEnvRunOutputWithDir("", envMapToSlice(verifyEnv), emppPath, "--version")
+	if err != nil {
 		return fmt.Errorf("failed to set up emsdk. Please check the installation: %w", err)
 	}
 	fmt.Fprintln(os.Stdout, "emsdk is set up successfully:")
-	output, err := buildEnvRunOutputWithDir("", envMapToSlice(verifyEnv), emppPath, "--version")
-	if err == nil {
-		fmt.Fprint(os.Stdout, string(output))
-	}
+	fmt.Fprint(os.Stdout, string(output))
 	return nil
 }
 

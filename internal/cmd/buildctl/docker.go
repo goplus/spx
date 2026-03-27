@@ -179,15 +179,7 @@ func runPodmanSConsBuild(podmanPath, logsDir, godotPath, platform string, sconsA
 	fmt.Fprintf(os.Stdout, "Scons arguments: %s\n", strings.Join(sconsArgs, " "))
 	fmt.Fprintln(os.Stdout, "----------------------------------------")
 
-	args := []string{"run", "--rm"}
-	if stdinHasTTY() {
-		args = append(args, "-it")
-	}
-	args = append(args,
-		"-v", godotPath+":/root/godot:z",
-		fmt.Sprintf("godot-%s:%s", platform, dockerImageVersion),
-		"bash", "-c", "cd /root/godot && scons platform="+platform+" "+strings.Join(sconsArgs, " "),
-	)
+	args := buildPodmanSConsArgs(godotPath, platform, sconsArgs, stdinHasTTY())
 	logPath := filepath.Join(logsDir, fmt.Sprintf("godot_%s.log", platform))
 	if err := runLoggedCommand("", logPath, nil, podmanPath, args...); err != nil {
 		return fmt.Errorf("build failed for platform %s: %w", platform, err)
@@ -196,6 +188,20 @@ func runPodmanSConsBuild(podmanPath, logsDir, godotPath, platform string, sconsA
 	fmt.Fprintf(os.Stdout, "Build completed successfully for %s\n", platform)
 	fmt.Fprintln(os.Stdout, "----------------------------------------")
 	return nil
+}
+
+func buildPodmanSConsArgs(godotPath, platform string, sconsArgs []string, useTTY bool) []string {
+	args := []string{"run", "--rm"}
+	if useTTY {
+		args = append(args, "-it")
+	}
+	args = append(args,
+		"-w", "/root/godot",
+		"-v", godotPath+":/root/godot:z",
+		fmt.Sprintf("godot-%s:%s", platform, dockerImageVersion),
+		"scons", "platform="+platform,
+	)
+	return append(args, sconsArgs...)
 }
 
 func runLoggedCommand(dir, logPath string, extraEnv map[string]string, name string, args ...string) error {

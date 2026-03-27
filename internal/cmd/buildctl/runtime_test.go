@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -31,5 +32,34 @@ func TestCommandRunnerRunCommandUsesGoPathBin(t *testing.T) {
 
 	if !fileExists(outPath) {
 		t.Fatalf("expected fake command output at %s", outPath)
+	}
+}
+
+func TestCommandRunnerRunCommandReturnsEnvironmentError(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("GOPATH", "")
+	t.Setenv("PATH", "")
+
+	runner := commandRunner{repoRoot: root}
+	err := runner.runCommand(".", "fakecmd")
+	if err == nil {
+		t.Fatal("expected runCommand to fail when command environment cannot be resolved")
+	}
+	if !strings.Contains(err.Error(), "resolve command environment") {
+		t.Fatalf("runCommand error = %v, want environment resolution context", err)
+	}
+}
+
+func TestCommandRunnerRunCommandReturnsResolvePathError(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("GOPATH", filepath.Join(root, "gopath"))
+
+	runner := commandRunner{repoRoot: root}
+	err := runner.runCommand(".", "missingcmd")
+	if err == nil {
+		t.Fatal("expected runCommand to fail when the command cannot be found")
+	}
+	if !strings.Contains(err.Error(), "resolve command path for missingcmd") {
+		t.Fatalf("runCommand error = %v, want command path resolution context", err)
 	}
 }

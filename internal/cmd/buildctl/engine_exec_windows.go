@@ -5,7 +5,10 @@ package main
 import (
 	"os"
 	"os/exec"
+	"syscall"
 )
+
+const processQueryLimitedInformation = 0x1000
 
 func configureTrackedCommand(cmd *exec.Cmd) {}
 
@@ -14,8 +17,21 @@ func trackedSignals() []os.Signal {
 }
 
 func trackedProcessExists(pid int) bool {
-	_, err := os.FindProcess(pid)
-	return err == nil
+	if pid <= 0 {
+		return false
+	}
+
+	handle, err := syscall.OpenProcess(processQueryLimitedInformation, false, uint32(pid))
+	if err != nil {
+		return false
+	}
+	defer syscall.CloseHandle(handle)
+
+	waitStatus, err := syscall.WaitForSingleObject(handle, 0)
+	if err != nil {
+		return false
+	}
+	return waitStatus == syscall.WAIT_TIMEOUT
 }
 
 func terminateTrackedProcessGroup(process *os.Process) {

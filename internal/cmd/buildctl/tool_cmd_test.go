@@ -57,6 +57,34 @@ func TestSetupAndroidNDKManualInstall(t *testing.T) {
 	}
 }
 
+func TestUpdateNDKShellConfigQuotesPaths(t *testing.T) {
+	shellConfig := filepath.Join(t.TempDir(), ".zshrc")
+	env := androidNDKEnv{
+		sdkRoot:     `/tmp/sdk$HOME"quoted"'single`,
+		ndkRoot:     `/tmp/ndk$PATH"quoted"'single`,
+		shellConfig: shellConfig,
+	}
+
+	if err := updateNDKShellConfig(env); err != nil {
+		t.Fatalf("updateNDKShellConfig returned error: %v", err)
+	}
+
+	content, err := os.ReadFile(shellConfig)
+	if err != nil {
+		t.Fatalf("ReadFile(%s) returned error: %v", shellConfig, err)
+	}
+	got := string(content)
+	if !strings.Contains(got, "export ANDROID_SDK_ROOT="+shellQuote(env.sdkRoot)) {
+		t.Fatalf("expected quoted ANDROID_SDK_ROOT export in shell config: %s", got)
+	}
+	if !strings.Contains(got, "export ANDROID_NDK_ROOT="+shellQuote(env.ndkRoot)) {
+		t.Fatalf("expected quoted ANDROID_NDK_ROOT export in shell config: %s", got)
+	}
+	if !strings.Contains(got, "export PATH=\"$ANDROID_NDK_ROOT:$PATH\"") {
+		t.Fatalf("expected PATH export to preserve variable expansion: %s", got)
+	}
+}
+
 func writeNDKZipFixture(dst string) error {
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return err

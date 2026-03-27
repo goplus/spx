@@ -81,24 +81,12 @@ func prepareAssets(cfg prepareConfig, runner scriptRunner) error {
 		if err := prepareHostEditorAsset(runner.repoRootDir()); err != nil {
 			return err
 		}
-		if err := downloadEngineAssets(engineDownloadConfig{platform: "web", mode: cfg.webMode}, runner.repoRootDir()); err != nil {
-			return err
-		}
-		if err := runner.runScript(filepath.Join("cmd", "gox", "install.sh"), "--web"); err != nil {
-			return err
-		}
-		return exportWebTemplateRuntime(cfg.webMode, runner)
+		return prepareWebAssets(cfg.webMode, runner)
 	case "full":
 		if err := prepareRuntimeAssets(runner); err != nil {
 			return err
 		}
-		if err := downloadEngineAssets(engineDownloadConfig{platform: "web", mode: cfg.webMode}, runner.repoRootDir()); err != nil {
-			return err
-		}
-		if err := runner.runScript(filepath.Join("cmd", "gox", "install.sh"), "--web"); err != nil {
-			return err
-		}
-		return exportWebTemplateRuntime(cfg.webMode, runner)
+		return prepareWebAssets(cfg.webMode, runner)
 	default:
 		return fmt.Errorf("unsupported setup-mode: %s", cfg.setupMode)
 	}
@@ -117,10 +105,10 @@ func prepareHostEditorAsset(repoRoot string) error {
 }
 
 func prepareWebAssets(webMode string, runner scriptRunner) error {
-	if err := prepareHostEditorAsset(runner.repoRootDir()); err != nil {
+	if err := downloadEngineAssets(engineDownloadConfig{platform: "web", mode: webMode}, runner.repoRootDir()); err != nil {
 		return err
 	}
-	if err := downloadEngineAssets(engineDownloadConfig{platform: "web", mode: webMode}, runner.repoRootDir()); err != nil {
+	if err := runner.runScript(filepath.Join("cmd", "gox", "install.sh"), "--web"); err != nil {
 		return err
 	}
 	return exportWebTemplateRuntime(webMode, runner)
