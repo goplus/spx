@@ -45,7 +45,7 @@
 1. 使用 `make init` 初始化用户环境
 2. 首先阅读 [命令行工具 (spx) 使用指南](./game/cmd-spx.zh.md) 了解基本命令
 3. 使用 `spx init` 创建新项目
-4. 使用 `spx run-editor` 在编辑器模式下运行项目
+4. 使用 `spx rune` 在编辑器运行时模式下运行项目
 
 ### 对于 SPX 开发者
 
