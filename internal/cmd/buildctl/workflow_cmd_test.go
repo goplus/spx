@@ -190,14 +190,14 @@ func TestParseWorkflowInstallAPKArgsDefault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parseWorkflowInstallAPKArgs returned error: %v", err)
 	}
-	if cfg.projectDir != filepath.Join("tutorial", "01_aircraft") {
+	if cfg.projectDir != filepath.Join("tutorial", "00-Hello") {
 		t.Fatalf("unexpected projectDir: %q", cfg.projectDir)
 	}
 }
 
 func TestInstallAPKWorkflow(t *testing.T) {
 	repoRoot := t.TempDir()
-	projectDir := filepath.Join(repoRoot, "tutorial", "01_aircraft")
+	projectDir := filepath.Join(repoRoot, "tutorial", "00-Hello")
 	if err := os.MkdirAll(projectDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll returned error: %v", err)
 	}

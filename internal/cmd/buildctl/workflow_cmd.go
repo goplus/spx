@@ -35,7 +35,7 @@ type workflowInstallAPKConfig struct {
 	projectDir string
 }
 
-var defaultInstallAPKProjectDir = filepath.Join("tutorial", "01_aircraft")
+var defaultInstallAPKProjectDir = filepath.Join("tutorial", "00-Hello")
 
 func runWorkflow(args []string) error {
 	if len(args) == 0 {
@@ -197,7 +197,7 @@ func parseWorkflowInstallAPKArgs(args []string) (workflowInstallAPKConfig, error
 	fs.SetOutput(osStderr)
 	fs.StringVar(&cfg.projectDir, "project-dir", cfg.projectDir, "project directory used for exportapk --install")
 	fs.Usage = func() {
-		fmt.Fprintln(osStderr, "Usage: buildctl workflow install-apk [--project-dir tutorial/01_aircraft]")
+		fmt.Fprintln(osStderr, "Usage: buildctl workflow install-apk [--project-dir tutorial/00-Hello]")
 	}
 
 	if err := fs.Parse(args); err != nil {

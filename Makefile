@@ -16,7 +16,7 @@ BUILDCTL_RUNTIME_CMD := $(BUILDCTL_CMD) runtime
 BUILDCTL_WORKFLOW_CMD := $(BUILDCTL_CMD) workflow
 
 DEMO_INDEX ?= 3
-APK_PROJECT_DIR ?= tutorial/01_aircraft
+APK_PROJECT_DIR ?= tutorial/00-Hello
 
 PORT    ?= 8106
 MOVIE   ?= false
@@ -121,7 +121,7 @@ build-android: ## Build android engine. Optional: GODOT_SRC=/abs/path/to/godot
 build-ios: ## Build ios engine. Optional: GODOT_SRC=/abs/path/to/godot
 	$(BUILDCTL_TOOL_CMD) install && $(BUILDCTL_ENGINE_BUILD_CMD) --target template --platform ios
 
-install-apk: ## Export and install Android APK. Usage: make install-apk [APK_PROJECT_DIR=tutorial/01_aircraft]
+install-apk: ## Export and install Android APK. Usage: make install-apk [APK_PROJECT_DIR=tutorial/00-Hello]
 	$(BUILDCTL_WORKFLOW_CMD) install-apk --project-dir "$(APK_PROJECT_DIR)"
 
 # ============================================

@@ -194,10 +194,10 @@ func downloadWebAssets(env engineDownloadEnv, mode string) error {
 		return err
 	}
 	cachedZip := filepath.Join(env.goBinDir, cachedName)
-	if !fileExists(cachedZip) {
-		if err := engineDownloadFetcher(env.urlPrefix+templateName, cachedZip); err != nil {
-			return err
-		}
+	// Refresh the cached archive whenever prepare runs so a restore-key cache
+	// cannot keep serving an older template after the hash key changes.
+	if err := engineDownloadFetcher(env.urlPrefix+templateName, cachedZip); err != nil {
+		return err
 	}
 
 	for _, name := range []string{
@@ -231,19 +231,16 @@ func downloadDesktopAssets(env engineDownloadEnv, editor bool) error {
 		zipName := fmt.Sprintf("editor-%s-%s.zip", env.platform, env.arch)
 		binaryName := fmt.Sprintf("godot.%s.editor.%s%s", platformName, env.arch, postfix)
 		finalBinary := filepath.Join(env.goBinDir, fmt.Sprintf("gdspx%s%s", env.version, postfix))
-		if fileExists(finalBinary) {
-			return nil
-		}
 		return downloadBinaryFromZip(env, zipName, binaryName, finalBinary)
 	}
 
 	zipName := fmt.Sprintf("%s-%s.zip", env.platform, env.arch)
 	binaryName := fmt.Sprintf("godot.%s.template_release.%s%s", platformName, env.arch, postfix)
 	templateBinary := filepath.Join(env.goBinDir, fmt.Sprintf("gdspxrt%s%s", env.version, postfix))
-	if !fileExists(templateBinary) {
-		if err := downloadBinaryFromZip(env, zipName, binaryName, templateBinary); err != nil {
-			return err
-		}
+	// Refresh the host runtime binary even if a restore-key cache already left
+	// a file behind. Otherwise prepare can preserve an incompatible stale binary.
+	if err := downloadBinaryFromZip(env, zipName, binaryName, templateBinary); err != nil {
+		return err
 	}
 
 	switch env.platform {
@@ -279,10 +276,8 @@ func downloadDesktopAssets(env engineDownloadEnv, editor bool) error {
 		}
 	case "macos":
 		macosZip := filepath.Join(env.templateDir, "macos.zip")
-		if !fileExists(macosZip) {
-			if err := engineDownloadFetcher(env.urlPrefix+"macos.zip", macosZip); err != nil {
-				return err
-			}
+		if err := engineDownloadFetcher(env.urlPrefix+"macos.zip", macosZip); err != nil {
+			return err
 		}
 	}
 
@@ -453,7 +448,13 @@ func replaceDownloadedFile(src, dst string) error {
 }
 
 func linkOrCopyFile(src, dst string) error {
+	if filepath.Clean(src) == filepath.Clean(dst) {
+		return nil
+	}
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+	if err := removeIfExists(dst); err != nil {
 		return err
 	}
 	if err := os.Link(src, dst); err == nil {
@@ -462,6 +463,14 @@ func linkOrCopyFile(src, dst string) error {
 		return err
 	}
 	return copyFile(src, dst)
+}
+
+func removeIfExists(path string) error {
+	if err := os.Remove(path); err == nil || errors.Is(err, fs.ErrNotExist) {
+		return nil
+	} else {
+		return err
+	}
 }
 
 func isLinkFallbackError(err error) bool {
