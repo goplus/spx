@@ -2,12 +2,14 @@
 # Config
 # ============================================
 .DEFAULT_GOAL := help
-.PHONY: help buildctl list-demos prepare-host prepare-web prepare-full build-dev install clean-assets download download-engine build-editor build-desktop build-web build-web-worker build-web-minigame build-web-miniprogram build-wasm build-wasm-opt build-android build-ios install-apk editor run rune run-editor run-web run-web-worker format generate export-pack export-web stop validate-web-mode validate-download-engine
+.PHONY: help buildctl list-demos prepare-host prepare-web prepare-full build-dev install clean-assets download download-engine build-editor build-desktop build-web build-wasm build-wasm-opt build-android build-ios install-apk editor run rune run-web run-web-worker format generate export-pack export-web stop validate-web-mode validate-download-engine
 
 export GODOT_SRC
 
 BUILDCTL_BIN := .bin/buildctl$(shell go env GOEXE)
-BUILDCTL_SOURCES := go.mod $(wildcard go.sum) $(shell find cmd internal -type f -name '*.go' ! -name '*_test.go' | LC_ALL=C sort)
+# Keep go.sum optional so clean repos without it can still build buildctl.
+OPTIONAL_GO_SUM := $(wildcard go.sum)
+BUILDCTL_SOURCES := go.mod $(OPTIONAL_GO_SUM) $(shell find cmd internal -type f -name '*.go' ! -name '*_test.go' | LC_ALL=C sort)
 BUILDCTL_CMD := $(BUILDCTL_BIN)
 BUILDCTL_TOOL_CMD := $(BUILDCTL_CMD) tool
 BUILDCTL_ENGINE_DOWNLOAD_CMD := $(BUILDCTL_CMD) engine download
@@ -25,16 +27,10 @@ WEB_MODE = $(or $(strip $(MODE)),normal)
 VALID_WEB_MODES := normal worker minigame miniprogram
 VALID_ENGINE_PLATFORMS := android ios web linux windows macos
 
-validate-web-mode = $(if $(filter $(WEB_MODE),$(VALID_WEB_MODES)),,$(error invalid MODE "$(MODE)". Expected one of: $(VALID_WEB_MODES)))
+validate-web-mode = $(if $(filter $(WEB_MODE),$(VALID_WEB_MODES)),,$(error invalid WEB_MODE/MODE "$(WEB_MODE)". Expected one of: $(VALID_WEB_MODES)))
 validate-platform-required = $(if $(strip $(PLATFORM)),,$(error PLATFORM is required. Usage: make download-engine PLATFORM=android|ios|web [MODE=normal|worker|minigame|miniprogram]))
 validate-engine-platform = $(if $(filter $(PLATFORM),$(VALID_ENGINE_PLATFORMS)),,$(error invalid PLATFORM "$(PLATFORM)". Expected one of: $(VALID_ENGINE_PLATFORMS)))
 validate-download-engine-mode = $(if $(filter web,$(PLATFORM)),$(call validate-web-mode),$(if $(strip $(MODE)),$(error MODE is only supported when PLATFORM=web),))
-
-$(BUILDCTL_TARGETS): $(BUILDCTL_BIN)
-
-$(BUILDCTL_BIN): $(BUILDCTL_SOURCES)
-	@mkdir -p $(dir $@)
-	go build -o $@ ./internal/cmd/buildctl
 
 validate-web-mode:
 	$(call validate-web-mode)
@@ -46,6 +42,12 @@ validate-download-engine:
 
 prepare-full prepare-web build-dev build-web export-web: validate-web-mode
 download-engine: validate-download-engine
+
+$(BUILDCTL_TARGETS): $(BUILDCTL_BIN)
+
+$(BUILDCTL_BIN): $(BUILDCTL_SOURCES)
+	@mkdir -p $(dir $@)
+	go build -o $@ ./internal/cmd/buildctl
 
 # ============================================
 # Help

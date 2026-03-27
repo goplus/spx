@@ -120,7 +120,7 @@ make download-engine PLATFORM=web MODE=worker
 
 ## 构建命令
 
-以下命令会读取 `GODOT_SRC`，默认值为 `./godot`。其他 `make` 目标会忽略这个变量。
+以下构建命令会读取 `GODOT_SRC`，默认值为 `./godot`；此外 `make generate` 也会读取这个变量。其他 `make` 目标会忽略这个变量。
 
 | 命令 | 说明 |
 | --- | --- |
@@ -132,8 +132,6 @@ make download-engine PLATFORM=web MODE=worker
 | `make build-android` | 构建 Android template |
 | `make build-ios` | 构建 iOS template |
 | `make install-apk [APK_PROJECT_DIR=...]` | 导出并安装 Android APK 到设备 |
-
-兼容保留 `make build-web-worker`、`make build-web-minigame`、`make build-web-miniprogram`，分别等价于给 `make build-web` 传入对应的 `MODE`。
 
 示例：
 
