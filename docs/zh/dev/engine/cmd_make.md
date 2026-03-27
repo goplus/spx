@@ -78,7 +78,7 @@ make prepare-full MODE=worker
 
 | 参数 | 默认值 | 说明 |
 | --- | --- | --- |
-| `GODOT_SRC` | `./godot` | Godot 源码目录 |
+| `GODOT_SRC` | `./godot` | Godot 源码目录；仅 `build-dev`、`build-editor`、`build-desktop`、`build-web`、`build-android`、`build-ios`、`generate` 使用 |
 | `MODE` | `normal` | Web 模式，可选 `normal`、`worker`、`minigame`、`miniprogram` |
 | `PLATFORM` | 当前宿主平台 | `download-engine` 使用的平台名 |
 | `DEMO_INDEX` | `3` | `tutorial/*` 演示索引 |
@@ -120,25 +120,24 @@ make download-engine PLATFORM=web MODE=worker
 
 ## 构建命令
 
+以下构建命令会读取 `GODOT_SRC`，默认值为 `./godot`；此外 `make generate` 也会读取这个变量。其他 `make` 目标会忽略这个变量。
+
 | 命令 | 说明 |
 | --- | --- |
-| `make build-editor` | 从 `GODOT_SRC` 构建当前平台 editor，并安装到 `GOPATH/bin` |
-| `make build-desktop` | 从 `GODOT_SRC` 构建当前平台 desktop template，并导出 runtime pck |
-| `make build-web` | 构建 normal Web template，并导出 normal Web runtime |
-| `make build-web-worker` | 构建 worker Web template，并导出 worker Web runtime |
-| `make build-web-minigame` | 构建 minigame Web template，并导出 minigame runtime |
-| `make build-web-miniprogram` | 构建 miniprogram Web template，并导出 miniprogram runtime |
+| `make build-editor` | 构建当前平台 editor，并安装到 `GOPATH/bin` |
+| `make build-desktop` | 构建当前平台 desktop template，并导出 runtime pck |
+| `make build-web [MODE=...]` | 构建指定模式的 Web template，并导出对应 Web runtime |
 | `make build-wasm` | 构建 WebAssembly 版本的 `ispx` |
 | `make build-wasm-opt` | 构建优化版 `ispx.wasm`，并执行 brotli 压缩 |
-| `make build-android` | 从 `GODOT_SRC` 构建 Android template |
-| `make build-ios` | 从 `GODOT_SRC` 构建 iOS template |
+| `make build-android` | 构建 Android template |
+| `make build-ios` | 构建 iOS template |
 | `make install-apk [APK_PROJECT_DIR=...]` | 导出并安装 Android APK 到设备 |
 
 示例：
 
 ```bash
 make build-editor
-make build-web-worker
+make build-web MODE=worker
 make build-android
 make install-apk APK_PROJECT_DIR=tutorial/00-Hello
 ```
@@ -173,7 +172,7 @@ make export-web MODE=worker
 | `make list-demos` | 打印 `tutorial/*` 的索引 |
 | `make editor DEMO_INDEX=N` | 打开指定 demo 的编辑器模式 |
 | `make run DEMO_INDEX=N` | 运行指定 demo |
-| `make run-editor DEMO_INDEX=N` | 以 editor runtime 模式运行指定 demo |
+| `make rune DEMO_INDEX=N` | 以 editor runtime 模式运行指定 demo |
 | `make run-web DEMO_INDEX=N` | 构建 wasm 后启动指定 demo 的 Web 版本 |
 | `make run-web-worker DEMO_INDEX=N` | 构建 wasm 后启动指定 demo 的 Web Worker 版本 |
 | `make stop` | 停止本地 Web server 进程 |
@@ -183,6 +182,7 @@ make export-web MODE=worker
 ```bash
 make list-demos
 make run DEMO_INDEX=1
+make rune DEMO_INDEX=1
 make run-web DEMO_INDEX=2 PORT=8080
 ```
 
@@ -191,7 +191,7 @@ make run-web DEMO_INDEX=2 PORT=8080
 | 命令 | 说明 |
 | --- | --- |
 | `make format` | 运行 `go fmt ./...` |
-| `make generate` | 执行代码生成并格式化 |
+| `make generate` | 执行代码生成并格式化；可用 `GODOT_SRC` 覆盖源码目录 |
 
 ## 推荐流程
 

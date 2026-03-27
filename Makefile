@@ -2,18 +2,21 @@
 # Config
 # ============================================
 .DEFAULT_GOAL := help
-.PHONY: help buildctl list-demos prepare-host prepare-web prepare-full build-dev install clean-assets download download-engine build-editor build-desktop build-web build-web-worker build-web-minigame build-web-miniprogram build-wasm build-wasm-opt build-android build-ios install-apk editor run run-editor run-web run-web-worker format generate export-pack export-web stop
+.PHONY: help buildctl list-demos prepare-host prepare-web prepare-full build-dev install clean-assets download download-engine build-editor build-desktop build-web build-wasm build-wasm-opt build-android build-ios install-apk editor run rune run-web run-web-worker format generate export-pack export-web stop validate-web-mode validate-download-engine
 
 export GODOT_SRC
 
-BUILDCTL_BIN := ./.bin/buildctl$(shell go env GOEXE)
-BUILDCTL_LAUNCHER := bash ./internal/cmd/buildctl/buildctl.sh
-BUILDCTL_CMD := $(BUILDCTL_LAUNCHER)
+BUILDCTL_BIN := .bin/buildctl$(shell go env GOEXE)
+# Keep go.sum optional so clean repos without it can still build buildctl.
+OPTIONAL_GO_SUM := $(wildcard go.sum)
+BUILDCTL_SOURCES := go.mod $(OPTIONAL_GO_SUM) $(shell find cmd internal -type f -name '*.go' ! -name '*_test.go' | LC_ALL=C sort)
+BUILDCTL_CMD := $(BUILDCTL_BIN)
 BUILDCTL_TOOL_CMD := $(BUILDCTL_CMD) tool
 BUILDCTL_ENGINE_DOWNLOAD_CMD := $(BUILDCTL_CMD) engine download
 BUILDCTL_ENGINE_BUILD_CMD := $(BUILDCTL_CMD) engine build
 BUILDCTL_RUNTIME_CMD := $(BUILDCTL_CMD) runtime
 BUILDCTL_WORKFLOW_CMD := $(BUILDCTL_CMD) workflow
+BUILDCTL_TARGETS := list-demos prepare-host prepare-web prepare-full build-dev install clean-assets download download-engine build-editor build-desktop build-web build-wasm build-wasm-opt build-android build-ios install-apk editor run rune run-web run-web-worker export-pack export-web stop
 
 DEMO_INDEX ?= 3
 APK_PROJECT_DIR ?= tutorial/00-Hello
@@ -21,19 +24,46 @@ APK_PROJECT_DIR ?= tutorial/00-Hello
 PORT    ?= 8106
 MOVIE   ?= false
 WEB_MODE = $(or $(strip $(MODE)),normal)
+VALID_WEB_MODES := normal worker minigame miniprogram
+VALID_ENGINE_PLATFORMS := android ios web linux windows macos
+
+validate-web-mode = $(if $(filter $(WEB_MODE),$(VALID_WEB_MODES)),,$(error invalid WEB_MODE/MODE "$(WEB_MODE)". Expected one of: $(VALID_WEB_MODES)))
+validate-platform-required = $(if $(strip $(PLATFORM)),,$(error PLATFORM is required. Usage: make download-engine PLATFORM=android|ios|web [MODE=normal|worker|minigame|miniprogram]))
+validate-engine-platform = $(if $(filter $(PLATFORM),$(VALID_ENGINE_PLATFORMS)),,$(error invalid PLATFORM "$(PLATFORM)". Expected one of: $(VALID_ENGINE_PLATFORMS)))
+validate-download-engine-mode = $(if $(filter web,$(PLATFORM)),$(call validate-web-mode),$(if $(strip $(MODE)),$(error MODE is only supported when PLATFORM=web),))
+
+validate-web-mode:
+	$(call validate-web-mode)
+
+validate-download-engine:
+	$(call validate-platform-required)
+	$(call validate-engine-platform)
+	$(call validate-download-engine-mode)
+
+prepare-full prepare-web build-dev build-web export-web: validate-web-mode
+download-engine: validate-download-engine
+
+$(BUILDCTL_TARGETS): $(BUILDCTL_BIN)
+
+$(BUILDCTL_BIN): $(BUILDCTL_SOURCES)
+	@mkdir -p $(dir $@)
+	go build -o $@ ./internal/cmd/buildctl
 
 # ============================================
 # Help
 # ============================================
-buildctl: ## Build cached buildctl binary at ./.bin/buildctl
-	@mkdir -p ./.bin
-	go build -o $(BUILDCTL_BIN) ./internal/cmd/buildctl
+buildctl: $(BUILDCTL_BIN) ## Build cached buildctl binary at ./.bin/buildctl
 
 help: ## Show available commands
 	@echo "Make Commands:"
 	@echo "================================"
 	@grep -E '^[a-zA-Z0-9._-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  make %-25s %s\n", $$1, $$2}'
+	@echo ""
+	@echo "Variable notes:"
+	@echo "  MODE defaults to normal for Web-related targets."
+	@echo "  GODOT_SRC defaults to ./godot and is used by:"
+	@echo "    build-dev build-editor build-desktop build-web build-android build-ios generate"
 	@echo ""
 	@echo "Demo targets via index:"
 	@i=1; \
@@ -42,7 +72,7 @@ help: ## Show available commands
 			echo "  make run DEMO_INDEX=$$i            # Run $$demo"; \
 			echo "  make run-web DEMO_INDEX=$$i        # Run web $$demo"; \
 			echo "  make run-web-worker DEMO_INDEX=$$i # Run web-worker $$demo"; \
-			echo "  make run-editor DEMO_INDEX=$$i     # Run editor $$demo"; \
+			echo "  make rune DEMO_INDEX=$$i           # Run editor runtime $$demo"; \
 			i=$$((i+1)); \
 		fi; \
 	done
@@ -50,13 +80,13 @@ help: ## Show available commands
 # ============================================
 # Prepare Commands
 # ============================================
-prepare-host: ## Prepare host assets, including editor/runtime files. Optional: GODOT_SRC=/abs/path/to/godot
+prepare-host: ## Prepare host assets, including editor/runtime files
 	$(BUILDCTL_CMD) prepare --setup-mode runtime
 
-prepare-full: ## Prepare host assets plus web export assets. Usage: make prepare-full [MODE=normal|worker|minigame|miniprogram] [GODOT_SRC=/abs/path/to/godot]
+prepare-full: ## Prepare host assets plus web export assets. Usage: make prepare-full [MODE=normal|worker|minigame|miniprogram]
 	$(BUILDCTL_CMD) prepare --setup-mode full --web-mode "$(WEB_MODE)"
 
-prepare-web: ## Prepare web export assets for MODE, including the host editor required by exporttemplateweb. Usage: make prepare-web MODE=normal [GODOT_SRC=/abs/path/to/godot] (MODE: normal|worker|minigame|miniprogram)
+prepare-web: ## Prepare web export assets for MODE, including the host editor required by exporttemplateweb. Usage: make prepare-web MODE=normal (MODE: normal|worker|minigame|miniprogram)
 	$(BUILDCTL_CMD) prepare --setup-mode web --web-mode "$(WEB_MODE)"
 
 # ============================================
@@ -68,10 +98,10 @@ install: ## Install SPX command
 clean-assets: ## Remove installed SPX/Godot runtime assets from GOPATH/bin
 	$(BUILDCTL_TOOL_CMD) clean-assets
 
-download: ## Download engines. Optional: GODOT_SRC=/abs/path/to/godot
+download: ## Download engines
 	$(BUILDCTL_ENGINE_DOWNLOAD_CMD) --runtime
 
-download-engine: ## Download engine templates for specific platform. Usage: make download-engine PLATFORM=android|ios|web [MODE=normal|worker|minigame|miniprogram] [GODOT_SRC=/abs/path/to/godot]
+download-engine: ## Download engine templates for specific platform. Usage: make download-engine PLATFORM=android|ios|web [MODE=normal|worker|minigame|miniprogram]
 	@echo "Downloading engine templates for platform: $(PLATFORM)"
 	@set --; \
 	if [ -n "$(PLATFORM)" ]; then \
@@ -86,28 +116,19 @@ download-engine: ## Download engine templates for specific platform. Usage: make
 # ============================================
 # Build Commands
 # ============================================
-build-dev: ## Build the full local development environment. Usage: make build-dev [MODE=normal|worker|minigame|miniprogram] [GODOT_SRC=/abs/path/to/godot]
+build-dev: ## Build the full local development environment. Usage: make build-dev [MODE=normal|worker|minigame|miniprogram]
 	$(BUILDCTL_WORKFLOW_CMD) build-dev --web-mode "$(WEB_MODE)"
 
-build-editor: ## Build editor mode engine. Optional: GODOT_SRC=/abs/path/to/godot
+build-editor: ## Build editor mode engine
 	$(BUILDCTL_TOOL_CMD) install && $(BUILDCTL_ENGINE_BUILD_CMD) --target editor
 
-build-desktop: ## Build desktop engine. Optional: GODOT_SRC=/abs/path/to/godot
+build-desktop: ## Build desktop engine
 	$(BUILDCTL_TOOL_CMD) install
 	$(BUILDCTL_ENGINE_BUILD_CMD) --target template
 	$(BUILDCTL_RUNTIME_CMD) export-pack
 
-build-web: ## Build web engine template. Optional: GODOT_SRC=/abs/path/to/godot
-	$(BUILDCTL_WORKFLOW_CMD) build-web --mode normal
-
-build-web-worker: ## Build web worker engine template. Optional: GODOT_SRC=/abs/path/to/godot
-	$(BUILDCTL_WORKFLOW_CMD) build-web --mode worker
-
-build-web-minigame: ## Build minigame template. Optional: GODOT_SRC=/abs/path/to/godot
-	$(BUILDCTL_WORKFLOW_CMD) build-web --mode minigame
-
-build-web-miniprogram: ## Build miniprogram template. Optional: GODOT_SRC=/abs/path/to/godot
-	$(BUILDCTL_WORKFLOW_CMD) build-web --mode miniprogram
+build-web: ## Build web engine template. Usage: make build-web [MODE=normal|worker|minigame|miniprogram]
+	$(BUILDCTL_WORKFLOW_CMD) build-web --mode "$(WEB_MODE)"
 
 build-wasm: ## Build wasm
 	$(BUILDCTL_RUNTIME_CMD) build-wasm
@@ -115,10 +136,10 @@ build-wasm: ## Build wasm
 build-wasm-opt: ## Build wasm with optimization
 	$(BUILDCTL_RUNTIME_CMD) build-wasm --opt
 
-build-android: ## Build android engine. Optional: GODOT_SRC=/abs/path/to/godot
+build-android: ## Build android engine
 	$(BUILDCTL_TOOL_CMD) install && $(BUILDCTL_ENGINE_BUILD_CMD) --target template --platform android
 
-build-ios: ## Build ios engine. Optional: GODOT_SRC=/abs/path/to/godot
+build-ios: ## Build ios engine
 	$(BUILDCTL_TOOL_CMD) install && $(BUILDCTL_ENGINE_BUILD_CMD) --target template --platform ios
 
 install-apk: ## Export and install Android APK. Usage: make install-apk [APK_PROJECT_DIR=tutorial/00-Hello]
@@ -136,7 +157,7 @@ editor: ## Open demo in editor: make editor DEMO_INDEX=N
 run: ## Run demo on PC: make run DEMO_INDEX=N
 	$(BUILDCTL_WORKFLOW_CMD) run-demo --demo-index "$(DEMO_INDEX)" --mode run --movie "$(MOVIE)"
 
-run-editor: ## Run demo in editor mode: make run-editor DEMO_INDEX=N
+rune: ## Run demo in editor runtime mode: make rune DEMO_INDEX=N
 	$(BUILDCTL_WORKFLOW_CMD) run-demo --demo-index "$(DEMO_INDEX)" --mode rune --movie "$(MOVIE)"
 
 run-web: ## Run demo on web: make run-web DEMO_INDEX=N
@@ -154,7 +175,7 @@ stop: ## Stop running processes
 format: ## Format Go code
 	go fmt ./...
 
-generate: ## Generate code. Optional: GODOT_SRC=/abs/path/to/godot
+generate: ## Generate code
 	cd ./internal/cmd/codegen && GODOT_SRC="$(GODOT_SRC)" go run .
 	go generate ./cmd/spxrun/runner
 	$(MAKE) format
