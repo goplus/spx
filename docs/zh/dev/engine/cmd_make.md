@@ -45,7 +45,7 @@ go run ./internal/cmd/buildctl engine build --target template --platform web --m
 go run ./internal/cmd/buildctl runtime build-wasm --opt
 go run ./internal/cmd/buildctl runtime export-web --mode worker
 go run ./internal/cmd/buildctl workflow build-dev
-go run ./internal/cmd/buildctl workflow install-apk --project-dir tutorial/01_aircraft
+go run ./internal/cmd/buildctl workflow install-apk --project-dir tutorial/00-Hello
 go run ./internal/cmd/buildctl workflow run-demo --demo-index 1 --mode web
 ```
 
@@ -82,7 +82,7 @@ make prepare-full MODE=worker
 | `MODE` | `normal` | Web 模式，可选 `normal`、`worker`、`minigame`、`miniprogram` |
 | `PLATFORM` | 当前宿主平台 | `download-engine` 使用的平台名 |
 | `DEMO_INDEX` | `3` | `tutorial/*` 演示索引 |
-| `APK_PROJECT_DIR` | `tutorial/01_aircraft` | `install-apk` 使用的项目目录 |
+| `APK_PROJECT_DIR` | `tutorial/00-Hello` | `install-apk` 使用的项目目录 |
 | `PORT` | `8106` | `run-web` 和 `run-web-worker` 使用的端口 |
 | `MOVIE` | `false` | 运行 demo 时是否启用录制模式 |
 
@@ -97,7 +97,7 @@ make prepare-full MODE=worker
 | `tool` | `go run ./internal/cmd/buildctl tool install --web` / `go run ./internal/cmd/buildctl tool setup-ndk` |
 | `engine` | `go run ./internal/cmd/buildctl engine build --target template --platform android` |
 | `runtime` | `go run ./internal/cmd/buildctl runtime export-web --mode worker` |
-| `workflow` | `go run ./internal/cmd/buildctl workflow run-demo --demo-index 1 --mode web` / `go run ./internal/cmd/buildctl workflow install-apk --project-dir tutorial/01_aircraft` |
+| `workflow` | `go run ./internal/cmd/buildctl workflow run-demo --demo-index 1 --mode web` / `go run ./internal/cmd/buildctl workflow install-apk --project-dir tutorial/00-Hello` |
 
 ## 设置命令
 
