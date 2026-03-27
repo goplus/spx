@@ -448,7 +448,13 @@ func replaceDownloadedFile(src, dst string) error {
 }
 
 func linkOrCopyFile(src, dst string) error {
+	if filepath.Clean(src) == filepath.Clean(dst) {
+		return nil
+	}
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+	if err := removeIfExists(dst); err != nil {
 		return err
 	}
 	if err := os.Link(src, dst); err == nil {
@@ -457,6 +463,14 @@ func linkOrCopyFile(src, dst string) error {
 		return err
 	}
 	return copyFile(src, dst)
+}
+
+func removeIfExists(path string) error {
+	if err := os.Remove(path); err == nil || errors.Is(err, fs.ErrNotExist) {
+		return nil
+	} else {
+		return err
+	}
 }
 
 func isLinkFallbackError(err error) bool {

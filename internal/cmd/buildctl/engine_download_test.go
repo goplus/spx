@@ -131,3 +131,35 @@ func TestLinkOrCopyFilePrefersHardLinkWhenAvailable(t *testing.T) {
 		t.Fatal("expected destination to be created as a hard link")
 	}
 }
+
+func TestLinkOrCopyFileReplacesExistingHardLinkWithoutTruncatingSource(t *testing.T) {
+	tempDir := t.TempDir()
+	src := filepath.Join(tempDir, "src.bin")
+	dst := filepath.Join(tempDir, "dst.bin")
+	if err := os.WriteFile(src, []byte("content"), 0o644); err != nil {
+		t.Fatalf("WriteFile(%s) returned error: %v", src, err)
+	}
+	if err := os.Link(src, dst); err != nil {
+		t.Skipf("hard links unavailable: %v", err)
+	}
+
+	if err := linkOrCopyFile(src, dst); err != nil {
+		t.Fatalf("linkOrCopyFile returned error: %v", err)
+	}
+
+	content, err := os.ReadFile(src)
+	if err != nil {
+		t.Fatalf("ReadFile(%s) returned error: %v", src, err)
+	}
+	if string(content) != "content" {
+		t.Fatalf("source content = %q, want original content preserved", string(content))
+	}
+
+	dstContent, err := os.ReadFile(dst)
+	if err != nil {
+		t.Fatalf("ReadFile(%s) returned error: %v", dst, err)
+	}
+	if string(dstContent) != "content" {
+		t.Fatalf("destination content = %q, want copied content preserved", string(dstContent))
+	}
+}
