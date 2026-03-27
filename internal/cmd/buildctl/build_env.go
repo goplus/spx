@@ -1,0 +1,160 @@
+package main
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+)
+
+const engineBuildVersion = "4.4.1.stable"
+
+type buildEnvironment struct {
+	RepoRoot      string
+	ProjectDir    string
+	EngineDir     string
+	GodotSrc      string
+	GoPath        string
+	Version       string
+	EngineGitTag  string
+	EngineVersion string
+	TemplateDir   string
+	Platform      string
+	Arch          string
+}
+
+func resolveBuildEnvironment(repoRoot string, requestedPlatform string) (buildEnvironment, error) {
+	version, err := readSPXVersion(repoRoot)
+	if err != nil {
+		return buildEnvironment{}, err
+	}
+	goPath, err := ensureGoPath()
+	if err != nil {
+		return buildEnvironment{}, err
+	}
+	engineDir, err := resolveGodotSrc(repoRoot)
+	if err != nil {
+		return buildEnvironment{}, err
+	}
+	templateDir, err := detectGodotTemplateDir()
+	if err != nil {
+		return buildEnvironment{}, err
+	}
+	arch, err := detectBuildArch()
+	if err != nil {
+		return buildEnvironment{}, err
+	}
+
+	platform := requestedPlatform
+	if platform == "" {
+		platform = strings.TrimSpace(os.Getenv("PLATFORM"))
+	}
+	if platform == "" {
+		platform, err = detectBuildPlatform()
+		if err != nil {
+			return buildEnvironment{}, err
+		}
+	}
+	if err := validateOptionalPlatform(platform); err != nil {
+		return buildEnvironment{}, err
+	}
+
+	return buildEnvironment{
+		RepoRoot:      repoRoot,
+		ProjectDir:    repoRoot,
+		EngineDir:     engineDir,
+		GodotSrc:      engineDir,
+		GoPath:        goPath,
+		Version:       version,
+		EngineGitTag:  "spx" + version,
+		EngineVersion: engineBuildVersion,
+		TemplateDir:   templateDir,
+		Platform:      platform,
+		Arch:          arch,
+	}, nil
+}
+
+func resolveGodotSrc(repoRoot string) (string, error) {
+	rawPath := strings.TrimSpace(os.Getenv("GODOT_SRC"))
+	if rawPath == "" {
+		rawPath = filepath.Join(repoRoot, "godot")
+	}
+	if !filepath.IsAbs(rawPath) {
+		rawPath = filepath.Join(repoRoot, rawPath)
+	}
+	return filepath.Clean(rawPath), nil
+}
+
+func detectBuildPlatform() (string, error) {
+	switch runtime.GOOS {
+	case "linux":
+		return "linux", nil
+	case "darwin":
+		return "macos", nil
+	case "windows":
+		return "windows", nil
+	default:
+		return "", fmt.Errorf("unsupported host OS: %s", runtime.GOOS)
+	}
+}
+
+func detectBuildArch() (string, error) {
+	switch runtime.GOARCH {
+	case "amd64":
+		return "x86_64", nil
+	case "386":
+		return "x86_32", nil
+	case "arm64":
+		return "arm64", nil
+	case "arm":
+		return "arm32", nil
+	default:
+		return "", fmt.Errorf("unsupported host architecture: %s", runtime.GOARCH)
+	}
+}
+
+func detectGodotTemplateDir() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+
+	switch runtime.GOOS {
+	case "linux":
+		return filepath.Join(home, ".local", "share", "godot", "export_templates", engineBuildVersion), nil
+	case "darwin":
+		return filepath.Join(home, "Library", "Application Support", "Godot", "export_templates", engineBuildVersion), nil
+	case "windows":
+		appData := os.Getenv("APPDATA")
+		if appData == "" {
+			return "", fmt.Errorf("APPDATA is not set")
+		}
+		return filepath.Join(appData, "Godot", "export_templates", engineBuildVersion), nil
+	default:
+		return "", fmt.Errorf("unsupported host OS: %s", runtime.GOOS)
+	}
+}
+
+func (env buildEnvironment) shellExports() string {
+	lines := []string{
+		"export PROJ_DIR=" + shellQuote(env.ProjectDir),
+		"export ENGINE_DIR=" + shellQuote(env.EngineDir),
+		"export GODOT_SRC=" + shellQuote(env.GodotSrc),
+		"export ENGINE_VERSION=" + shellQuote(env.EngineVersion),
+		"export GOPATH=" + shellQuote(env.GoPath),
+		"export VERSION=" + shellQuote(env.Version),
+		"export ENGINE_GIT_TAG=" + shellQuote(env.EngineGitTag),
+		"export TEMPLATE_DIR=" + shellQuote(env.TemplateDir),
+		"export PLATFORM=" + shellQuote(env.Platform),
+		"export ARCH=" + shellQuote(env.Arch),
+	}
+	return strings.Join(lines, "\n") + "\n"
+}
+
+func shellQuote(value string) string {
+	if value == "" {
+		return "''"
+	}
+	return "'" + strings.ReplaceAll(value, "'", `'"'"'`) + "'"
+}

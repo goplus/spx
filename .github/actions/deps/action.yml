@@ -24,30 +24,6 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Validate setup inputs
-      shell: bash
-      env:
-        SETUP_MODE: ${{ inputs.setup-mode }}
-        WEB_MODE: ${{ inputs.web-mode }}
-      run: |
-        set -euo pipefail
-
-        case "$SETUP_MODE" in
-          runtime|web|full) ;;
-          *)
-            echo "Unsupported setup-mode: $SETUP_MODE"
-            exit 1
-            ;;
-        esac
-
-        case "$WEB_MODE" in
-          normal|worker|minigame|miniprogram) ;;
-          *)
-            echo "Unsupported web-mode: $WEB_MODE"
-            exit 1
-            ;;
-        esac
-
     - name: Set up Go/XGo
       uses: goplus/setup-xgo@v1
       with:
@@ -64,7 +40,9 @@ runs:
       uses: actions/cache@v4
       with:
         path: |
+          ${{ steps.gopath.outputs.GOPATH }}/bin/spx*
           ${{ steps.gopath.outputs.GOPATH }}/bin/gdspx[0-9]*
+          ${{ steps.gopath.outputs.GOPATH }}/bin/gdspx-*
           ${{ steps.gopath.outputs.GOPATH }}/bin/gdspxrt*
           ${{ steps.gopath.outputs.GOPATH }}/bin/ispx
           ${{ steps.gopath.outputs.GOPATH }}/bin/ispx.wasm
@@ -72,16 +50,10 @@ runs:
           ~/.local/share/godot/export_templates
           ~/Library/Application Support/Godot/export_templates
           ~/AppData/Roaming/Godot/export_templates
-        key: spx-godot-${{ inputs.cache-version }}-${{ runner.os }}-${{ inputs.setup-mode }}-${{ inputs.setup-mode != 'runtime' && inputs.web-mode || 'runtime' }}-${{ hashFiles('Makefile', 'go.mod', 'go.sum', 'cmd/gox/go.mod', 'cmd/gox/go.sum', 'cmd/gox/**/*.go', 'cmd/gox/**/*.sh', 'cmd/ispx/**/*.go', 'cmd/ispx/**/*.sh', 'cmd/ispx/web/**', 'cmd/ispxnative/**/*.go', 'cmd/ispxnative/**/*.sh', 'cmd/gox/template/**', 'internal/tools/**/*.sh', 'internal/gdengine/binding/web/**/*.go', 'pkg/ispx/**/*.go', '.github/actions/deps/action.yml') }}
+        key: spx-godot-${{ inputs.cache-version }}-${{ runner.os }}-${{ inputs.setup-mode }}-${{ inputs.setup-mode != 'runtime' && inputs.web-mode || 'runtime' }}-${{ hashFiles('Makefile', 'go.mod', 'go.sum', 'cmd/gox/go.mod', 'cmd/gox/go.sum', 'cmd/gox/**/*.go', 'cmd/gox/**/*.sh', 'cmd/ispx/**/*.go', 'cmd/ispx/**/*.sh', 'cmd/ispx/web/**', 'cmd/ispxnative/**/*.go', 'cmd/ispxnative/**/*.sh', 'cmd/gox/template/**', 'internal/cmd/buildctl/**/*.go', 'internal/tools/**/*.sh', 'internal/gdengine/binding/web/**/*.go', 'pkg/ispx/**/*.go', '.github/actions/deps/action.yml') }}
         restore-keys: |
           spx-godot-${{ inputs.cache-version }}-${{ runner.os }}-${{ inputs.setup-mode }}-${{ inputs.setup-mode != 'runtime' && inputs.web-mode || 'runtime' }}-
           spx-godot-${{ inputs.cache-version }}-${{ runner.os }}-${{ inputs.setup-mode }}-
-
-    - name: Install SPX tools
-      shell: bash
-      run: |
-        set -euo pipefail
-        make install
 
     - name: Validate cached engine files
       id: cache-verify
@@ -97,10 +69,25 @@ runs:
         version="$(cat cmd/gox/template/version)"
         missing=0
         bin_suffix=""
+        lib_suffix=""
+        goos="$(go env GOOS)"
+        goarch="$(go env GOARCH)"
 
         if [ "${RUNNER_OS}" = "Windows" ]; then
           bin_suffix=".exe"
         fi
+
+        case "$goos" in
+          windows)
+            lib_suffix=".dll"
+            ;;
+          darwin)
+            lib_suffix=".dylib"
+            ;;
+          *)
+            lib_suffix=".so"
+            ;;
+        esac
 
         require_path() {
           if [ ! -e "$1" ]; then
@@ -109,14 +96,18 @@ runs:
           fi
         }
 
+        require_path "$GOPATH_DIR/bin/spx${bin_suffix}"
+
         if [ "$SETUP_MODE" = "runtime" ] || [ "$SETUP_MODE" = "full" ]; then
           require_path "$GOPATH_DIR/bin/gdspx${version}${bin_suffix}"
+          require_path "$GOPATH_DIR/bin/gdspx-${goos}-${goarch}${lib_suffix}"
           require_path "$GOPATH_DIR/bin/gdspxrt${version}${bin_suffix}"
           require_path "$GOPATH_DIR/bin/gdspxrt${version}.pck"
           require_path "$GOPATH_DIR/bin/runtime.gdextension"
         fi
 
         if [ "$SETUP_MODE" = "web" ] || [ "$SETUP_MODE" = "full" ]; then
+          require_path "$GOPATH_DIR/bin/gdspx${version}${bin_suffix}"
           require_path "$GOPATH_DIR/bin/ispx"
           require_path "$GOPATH_DIR/bin/ispx.wasm"
           require_path "$GOPATH_DIR/bin/gdspxrt${version}_web${WEB_MODE}"
@@ -132,16 +123,6 @@ runs:
         WEB_MODE: ${{ inputs.web-mode }}
       run: |
         set -euo pipefail
-
-        case "$SETUP_MODE" in
-          runtime)
-            make download
-            ;;
-          web)
-            make setup-web MODE="$WEB_MODE"
-            ;;
-          full)
-            make download
-            make setup-web MODE="$WEB_MODE"
-            ;;
-        esac
+        mkdir -p ./.bin
+        go build -o "./.bin/buildctl$(go env GOEXE)" ./internal/cmd/buildctl
+        "./.bin/buildctl$(go env GOEXE)" prepare --setup-mode "$SETUP_MODE" --web-mode "$WEB_MODE"

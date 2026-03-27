@@ -2,26 +2,34 @@
 # Config
 # ============================================
 .DEFAULT_GOAL := help
+.PHONY: help buildctl list-demos prepare-host prepare-web prepare-full build-dev install clean-assets download download-engine build-editor build-desktop build-web build-web-worker build-web-minigame build-web-miniprogram build-wasm build-wasm-opt build-android build-ios install-apk editor run run-editor run-web run-web-worker format generate export-pack export-web stop
 
-CURRENT_PATH := $(shell pwd)
 export GODOT_SRC
 
-# Automatically collect demos from directories
-DEMOS := $(wildcard tutorial/*)
+BUILDCTL_BIN := ./.bin/buildctl$(shell go env GOEXE)
+BUILDCTL_LAUNCHER := bash ./internal/cmd/buildctl/buildctl.sh
+BUILDCTL_CMD := $(BUILDCTL_LAUNCHER)
+BUILDCTL_TOOL_CMD := $(BUILDCTL_CMD) tool
+BUILDCTL_ENGINE_DOWNLOAD_CMD := $(BUILDCTL_CMD) engine download
+BUILDCTL_ENGINE_BUILD_CMD := $(BUILDCTL_CMD) engine build
+BUILDCTL_RUNTIME_CMD := $(BUILDCTL_CMD) runtime
+BUILDCTL_WORKFLOW_CMD := $(BUILDCTL_CMD) workflow
+
 DEMO_INDEX ?= 3
+APK_PROJECT_DIR ?= tutorial/01_aircraft
 
 PORT    ?= 8106
 MOVIE   ?= false
-
-# Command to install spx
-INSTALL_CMD = cd ./cmd/gox && ./install.sh && cd $(CURRENT_PATH)
-
+WEB_MODE = $(or $(strip $(MODE)),normal)
 
 # ============================================
 # Help
 # ============================================
+buildctl: ## Build cached buildctl binary at ./.bin/buildctl
+	@mkdir -p ./.bin
+	go build -o $(BUILDCTL_BIN) ./internal/cmd/buildctl
+
 help: ## Show available commands
-	echo "Detected demos: $(DEMOS)"
 	@echo "Make Commands:"
 	@echo "================================"
 	@grep -E '^[a-zA-Z0-9._-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -29,181 +37,117 @@ help: ## Show available commands
 	@echo ""
 	@echo "Demo targets via index:"
 	@i=1; \
-	for demo in $(DEMOS); do \
-		echo "  make run DEMO_INDEX=$$i            # Run $$demo"; \
-		echo "  make run-web DEMO_INDEX=$$i        # Run web $$demo"; \
-		echo "  make run-web-worker DEMO_INDEX=$$i # Run web-worker $$demo"; \
-		echo "  make run-editor DEMO_INDEX=$$i     # Run editor $$demo"; \
-		i=$$((i+1)); \
+	for demo in tutorial/*; do \
+		if [ -d "$$demo" ]; then \
+			echo "  make run DEMO_INDEX=$$i            # Run $$demo"; \
+			echo "  make run-web DEMO_INDEX=$$i        # Run web $$demo"; \
+			echo "  make run-web-worker DEMO_INDEX=$$i # Run web-worker $$demo"; \
+			echo "  make run-editor DEMO_INDEX=$$i     # Run editor $$demo"; \
+			i=$$((i+1)); \
+		fi; \
 	done
 
 # ============================================
-# Demo Commands
+# Prepare Commands
 # ============================================
-list-demos: ## List all demos with index
-	@i=1; \
-	for demo in $(DEMOS); do \
-		echo "$$i: $$demo"; \
-		i=$$((i+1)); \
-	done
+prepare-host: ## Prepare host assets, including editor/runtime files. Optional: GODOT_SRC=/abs/path/to/godot
+	$(BUILDCTL_CMD) prepare --setup-mode runtime
 
-# ============================================
-# Setup Commands
-# ============================================
-setup: ## Initialize the user environment. Optional: GODOT_SRC=/abs/path/to/godot
-	chmod +x ./internal/tools/*.sh && \
-	echo "===> Step 1/2: Install spx" && \
-	make install && \
-	echo "===> Step 2/2: Download engine" && \
-	make download && \
-	echo "===> setup done"
+prepare-full: ## Prepare host assets plus web export assets. Usage: make prepare-full [MODE=normal|worker|minigame|miniprogram] [GODOT_SRC=/abs/path/to/godot]
+	$(BUILDCTL_CMD) prepare --setup-mode full --web-mode "$(WEB_MODE)"
 
-
-setup-dev: ## Initialize development environment (full). Optional: GODOT_SRC=/abs/path/to/godot
-	chmod +x ./internal/tools/*.sh && \
-	echo "===> Step 1/6: Install spx" && \
-	make install && \
-	echo "===> Step 2/6: Download engine" && \
-	make download && \
-	echo "===> Step 3/6: Build wasm" && \
-	make build-wasm && \
-	echo "===> Step 4/6: Build editor engine" && \
-	make build-editor && \
-	echo "===> Step 5/6: Build desktop engine" && \
-	make build-desktop && \
-	echo "===> Step 6/6: Build web engine" && \
-	make build-web && \
-	echo "===> setup-dev done, use 'make run DEMO_INDEX=N' to run demo"
-
-setup-web-full: ## Download and install web engine from godot releases(full). Optional: GODOT_SRC=/abs/path/to/godot
-	echo "===> Setup engine runtime" && \
-	make setup && \
-	echo "===> Download engine editor" && \
-	make download-engine MODE=editor && \
-	make setup-web MODE=normal 
-
-setup-web: ## Download and install web engine from godot releases. Usage: make setup-web MODE=normal [GODOT_SRC=/abs/path/to/godot] (MODE: normal|worker|minigame|miniprogram)
-ifndef MODE
-	$(error MODE is not set! Usage: make setup-web MODE=normal or MODE=worker or MODE=minigame or MODE=miniprogram)
-endif
-	@if [ "$(MODE)" != "normal" ] && [ "$(MODE)" != "worker" ] && [ "$(MODE)" != "minigame" ] && [ "$(MODE)" != "miniprogram" ]; then \
-		echo "Error: Invalid MODE '$(MODE)'. Supported modes: normal, worker, minigame, miniprogram"; \
-		exit 1; \
-	fi
-	echo "===> Setting up web ${MODE} engine..." && \
-	make build-wasm && \
-	./internal/tools/build_engine.sh -g -p web -m ${MODE} && \
-	./internal/tools/make_util.sh extrawebtemplate ${MODE} && \
-	echo "===> Web ${MODE} engine setup complete"
-
+prepare-web: ## Prepare web export assets for MODE, including the host editor required by exporttemplateweb. Usage: make prepare-web MODE=normal [GODOT_SRC=/abs/path/to/godot] (MODE: normal|worker|minigame|miniprogram)
+	$(BUILDCTL_CMD) prepare --setup-mode web --web-mode "$(WEB_MODE)"
 
 # ============================================
 # Install & Download
 # ============================================
-install: ## Install spx command
-	$(INSTALL_CMD)
+install: ## Install SPX command
+	$(BUILDCTL_TOOL_CMD) install
+
+clean-assets: ## Remove installed SPX/Godot runtime assets from GOPATH/bin
+	$(BUILDCTL_TOOL_CMD) clean-assets
 
 download: ## Download engines. Optional: GODOT_SRC=/abs/path/to/godot
-	echo "" && ./internal/tools/build_engine.sh -e -d
+	$(BUILDCTL_ENGINE_DOWNLOAD_CMD) --runtime
 
 download-engine: ## Download engine templates for specific platform. Usage: make download-engine PLATFORM=android|ios|web [MODE=normal|worker|minigame|miniprogram] [GODOT_SRC=/abs/path/to/godot]
-
 	@echo "Downloading engine templates for platform: $(PLATFORM)"
-	@if [ -n "$(MODE)" ]; then \
-		MODE_ENV="$(MODE)" ./internal/tools/build_engine.sh -p "$(PLATFORM)" -g -m "$(MODE)"; \
-	else \
-		./internal/tools/build_engine.sh -p "$(PLATFORM)" -g; \
-	fi
+	@set --; \
+	if [ -n "$(PLATFORM)" ]; then \
+		set -- "$$@" --platform "$(PLATFORM)"; \
+	fi; \
+	if [ -n "$(MODE)" ]; then \
+		set -- "$$@" --mode "$(MODE)"; \
+	fi; \
+	$(BUILDCTL_ENGINE_DOWNLOAD_CMD) "$$@"
 
 
 # ============================================
 # Build Commands
 # ============================================
+build-dev: ## Build the full local development environment. Usage: make build-dev [MODE=normal|worker|minigame|miniprogram] [GODOT_SRC=/abs/path/to/godot]
+	$(BUILDCTL_WORKFLOW_CMD) build-dev --web-mode "$(WEB_MODE)"
+
 build-editor: ## Build editor mode engine. Optional: GODOT_SRC=/abs/path/to/godot
-	make install && ./internal/tools/build_engine.sh -e
+	$(BUILDCTL_TOOL_CMD) install && $(BUILDCTL_ENGINE_BUILD_CMD) --target editor
 
 build-desktop: ## Build desktop engine. Optional: GODOT_SRC=/abs/path/to/godot
-	make install && ./internal/tools/build_engine.sh && \
-	./internal/tools/make_util.sh exportpack 
+	$(BUILDCTL_TOOL_CMD) install
+	$(BUILDCTL_ENGINE_BUILD_CMD) --target template
+	$(BUILDCTL_RUNTIME_CMD) export-pack
 
 build-web: ## Build web engine template. Optional: GODOT_SRC=/abs/path/to/godot
-	./internal/tools/build_engine.sh -p web && \
-	./internal/tools/make_util.sh extrawebtemplate normal
+	$(BUILDCTL_WORKFLOW_CMD) build-web --mode normal
 
 build-web-worker: ## Build web worker engine template. Optional: GODOT_SRC=/abs/path/to/godot
-	make install && \
-	./internal/tools/build_engine.sh -p web -m worker && \
-	./internal/tools/make_util.sh extrawebtemplate worker
+	$(BUILDCTL_WORKFLOW_CMD) build-web --mode worker
 
 build-web-minigame: ## Build minigame template. Optional: GODOT_SRC=/abs/path/to/godot
-	./internal/tools/build_engine.sh -p web -m minigame && \
-	./internal/tools/make_util.sh extrawebtemplate minigame
+	$(BUILDCTL_WORKFLOW_CMD) build-web --mode minigame
 
 build-web-miniprogram: ## Build miniprogram template. Optional: GODOT_SRC=/abs/path/to/godot
-	./internal/tools/build_engine.sh -p web -m miniprogram && \
-	./internal/tools/make_util.sh extrawebtemplate miniprogram
+	$(BUILDCTL_WORKFLOW_CMD) build-web --mode miniprogram
 
 build-wasm: ## Build wasm
-	cd ./cmd/gox/ && ./install.sh --web && cd $(CURRENT_PATH)
+	$(BUILDCTL_RUNTIME_CMD) build-wasm
 
 build-wasm-opt: ## Build wasm with optimization
-	cd ./cmd/gox/ && ./install.sh --web --opt && cd $(CURRENT_PATH)
-	./internal/tools/make_util.sh compresswasm
+	$(BUILDCTL_RUNTIME_CMD) build-wasm --opt
 
 build-android: ## Build android engine. Optional: GODOT_SRC=/abs/path/to/godot
-	make install &&./internal/tools/build_engine.sh -p android
+	$(BUILDCTL_TOOL_CMD) install && $(BUILDCTL_ENGINE_BUILD_CMD) --target template --platform android
 
 build-ios: ## Build ios engine. Optional: GODOT_SRC=/abs/path/to/godot
-	make install &&./internal/tools/build_engine.sh -p ios 
+	$(BUILDCTL_TOOL_CMD) install && $(BUILDCTL_ENGINE_BUILD_CMD) --target template --platform ios
+
+install-apk: ## Export and install Android APK. Usage: make install-apk [APK_PROJECT_DIR=tutorial/01_aircraft]
+	$(BUILDCTL_WORKFLOW_CMD) install-apk --project-dir "$(APK_PROJECT_DIR)"
 
 # ============================================
-# Run Commands (by index)
+# Run Commands
 # ============================================
-define GET_DEMO
-$(word $(DEMO_INDEX),$(DEMOS))
-endef
+list-demos: ## List all demos with index
+	$(BUILDCTL_WORKFLOW_CMD) list-demos
 
 editor: ## Open demo in editor: make editor DEMO_INDEX=N
-ifndef DEMO_INDEX
-	$(error DEMO_INDEX is not set! Usage: make editor DEMO_INDEX=N)
-endif
-	@DEMO=$(GET_DEMO); \
-	echo "Opening editor for demo #$(DEMO_INDEX): $$DEMO"; \
-	cd $$DEMO && spx editor -movie=$(MOVIE)
+	$(BUILDCTL_WORKFLOW_CMD) run-demo --demo-index "$(DEMO_INDEX)" --mode editor --movie "$(MOVIE)"
 
 run: ## Run demo on PC: make run DEMO_INDEX=N
-ifndef DEMO_INDEX
-	$(error DEMO_INDEX is not set! Usage: make run DEMO_INDEX=N)
-endif
-	@DEMO=$(GET_DEMO); \
-	echo "Running demo #$(DEMO_INDEX): $$DEMO"; \
-	cd $$DEMO && spx run -movie=$(MOVIE)
+	$(BUILDCTL_WORKFLOW_CMD) run-demo --demo-index "$(DEMO_INDEX)" --mode run --movie "$(MOVIE)"
 
 run-editor: ## Run demo in editor mode: make run-editor DEMO_INDEX=N
-ifndef DEMO_INDEX
-	$(error DEMO_INDEX is not set! Usage: make run-editor DEMO_INDEX=N)
-endif
-	@DEMO=$(GET_DEMO); \
-	echo "Running editor demo #$(DEMO_INDEX): $$DEMO"; \
-	cd $$DEMO && spx rune -movie=$(MOVIE)
+	$(BUILDCTL_WORKFLOW_CMD) run-demo --demo-index "$(DEMO_INDEX)" --mode rune --movie "$(MOVIE)"
 
 run-web: ## Run demo on web: make run-web DEMO_INDEX=N
-ifndef DEMO_INDEX
-	$(error DEMO_INDEX is not set! Usage: make run-web DEMO_INDEX=N)
-endif
-	@DEMO=$(GET_DEMO); \
-	echo "Running web demo #$(DEMO_INDEX): $$DEMO"; \
-	make stop && make build-wasm && \
-	cd $$DEMO && spx clear && spx runweb -serveraddr=":$(PORT)"
+	$(BUILDCTL_WORKFLOW_CMD) run-demo --demo-index "$(DEMO_INDEX)" --mode web --port "$(PORT)"
 
 run-web-worker: ## Run demo on web: make run-web-worker DEMO_INDEX=N
-ifndef DEMO_INDEX
-	$(error DEMO_INDEX is not set! Usage: make run-web-worker DEMO_INDEX=N)
-endif
-	@DEMO=$(GET_DEMO); \
-	echo "Running web worker mode: demo #$(DEMO_INDEX): $$DEMO"; \
-	make stop && make build-wasm && \
-	cd $$DEMO && spx clear && spx runwebworker -serveraddr=":$(PORT)"
+	$(BUILDCTL_WORKFLOW_CMD) run-demo --demo-index "$(DEMO_INDEX)" --mode web-worker --port "$(PORT)"
+
+stop: ## Stop running processes
+	$(BUILDCTL_WORKFLOW_CMD) stop-web
+
 # ============================================
 # Utility Commands
 # ============================================
@@ -211,33 +155,12 @@ format: ## Format Go code
 	go fmt ./...
 
 generate: ## Generate code. Optional: GODOT_SRC=/abs/path/to/godot
-	cd ./internal/cmd/codegen && GODOT_SRC="$(GODOT_SRC)" go run . && cd $(CURRENT_PATH) && \
-	go generate ./cmd/spxrun/runner && \
-	make format
+	cd ./internal/cmd/codegen && GODOT_SRC="$(GODOT_SRC)" go run .
+	go generate ./cmd/spxrun/runner
+	$(MAKE) format
 
 export-pack: ## Export runtime pck file
-	./internal/tools/make_util.sh exportpack && cd $(CURRENT_PATH)
+	$(BUILDCTL_RUNTIME_CMD) export-pack
 
 export-web: ## Export web engine. Usage: make export-web MODE=normal (MODE: normal|worker|minigame|miniprogram)
-	@if [ -z "$(MODE)" ]; then \
-		EXPORT_MODE=normal; \
-	else \
-		EXPORT_MODE=$(MODE); \
-	fi; \
-	if [ "$$EXPORT_MODE" != "normal" ] && [ "$$EXPORT_MODE" != "worker" ] && [ "$$EXPORT_MODE" != "minigame" ] && [ "$$EXPORT_MODE" != "miniprogram" ]; then \
-		echo "Error: Invalid MODE '$$EXPORT_MODE'. Supported modes: normal, worker, minigame, miniprogram"; \
-		exit 1; \
-	fi; \
-	cd ./cmd/gox && ./install.sh --web --opt && cd $(CURRENT_PATH) && \
-	./internal/tools/make_util.sh exportweb $$EXPORT_MODE && cd $(CURRENT_PATH)
-
-stop: ## Stop running processes
-	@echo "Stopping running processes..."
-	@if [ "$$OS" = "Windows_NT" ]; then \
-		taskkill /F /FI "IMAGENAME eq python.exe" 2>NUL || true; \
-		taskkill /F /FI "IMAGENAME eq python3.exe" 2>NUL || true; \
-	else \
-		PIDS=$$(pgrep -f gdspx_web_server.py || true); \
-		if [ -n "$$PIDS" ]; then kill -9 $$PIDS; fi \
-	fi
-	@echo "Processes stopped."
+	$(BUILDCTL_RUNTIME_CMD) export-web --mode "$(WEB_MODE)"

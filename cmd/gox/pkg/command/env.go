@@ -22,12 +22,12 @@ var ENV_NAME = "gdspx"
 func (cmd *CmdTool) setupPaths(dstRelDir string) error {
 	// Set target and project directories
 	var err error
-	cmd.TargetDir, err = filepath.Abs(*cmd.Args.Path)
+	cmd.TargetAbsDir, err = filepath.Abs(*cmd.Args.Path)
 	if err != nil {
 		return fmt.Errorf("failed to resolve target directory: %w", err)
 	}
 
-	os.Chdir(cmd.TargetDir)
+	os.Chdir(cmd.TargetAbsDir)
 	cmd.TargetDir = "."
 	cmd.Args.Path = &cmd.TargetDir
 
@@ -241,10 +241,30 @@ func (pself *CmdTool) SetupEnv(version string, fs embed.FS, fsRelDir string, pro
 	return
 }
 
-// getWasmPath returns the path to the wasm file.
-func (pself *CmdTool) getWasmPath() string {
-	filePath := path.Join(pself.GoBinPath, "ispx.wasm")
-	return filePath
+func (pself *CmdTool) getProjectWasmPath() string {
+	return path.Join(pself.ProjectDir, ".builds", "web", "ispx.wasm")
+}
+
+// getWasmPaths returns the wasm file path and its optional brotli-compressed pair.
+// When a command has just built a project-local wasm, prefer that artifact so
+// `spx runweb` and `spx exportweb` use the freshly built binary instead of the
+// preinstalled runtime copy under GOPATH/bin.
+func (pself *CmdTool) getWasmPaths() (string, string) {
+	projectWasmPath := pself.getProjectWasmPath()
+	if util.IsFileExist(projectWasmPath) {
+		projectWasmBrPath := projectWasmPath + ".br"
+		if util.IsFileExist(projectWasmBrPath) {
+			return projectWasmPath, projectWasmBrPath
+		}
+		return projectWasmPath, ""
+	}
+
+	wasmPath := path.Join(pself.GoBinPath, "ispx.wasm")
+	wasmBrPath := wasmPath + ".br"
+	if util.IsFileExist(wasmBrPath) {
+		return wasmPath, wasmBrPath
+	}
+	return wasmPath, ""
 }
 
 // getIspxWebDir returns the path to the ispx web runtime directory.

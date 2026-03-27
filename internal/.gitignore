@@ -15,4 +15,4 @@ go.work.sum
 # Files
 cmd/_debug_parsed_ast.json
 gdengine/binding/native/_temp_output.h
-tools/common/bin
+cmd/buildctl/bin

@@ -1,10 +1,9 @@
 package command
 
 import (
-	"encoding/json"
+	"bytes"
 	"errors"
 	"fmt"
-	"net"
 	"os"
 	"os/exec"
 	"path"
@@ -20,21 +19,6 @@ import (
 type projConf struct {
 	Robots []string `json:"robots"`
 }
-
-const defaultWebServerPort = 8005
-
-type webServerPIDRecord struct {
-	PID          int    `json:"pid"`
-	LocalPIDPath string `json:"localPidPath,omitempty"`
-}
-
-var (
-	isPortAvailableFn    = isPortAvailable
-	findListeningPIDsFn  = findListeningPIDs
-	processCommandLineFn = processCommandLine
-	killPIDFn            = killPID
-	waitForPortFreeFn    = waitForPortFree
-)
 
 func (pself *CmdTool) Run(arg string) (err error) {
 	return util.RunCommandInDir(pself.ProjectDir, pself.CmdPath, arg)
@@ -88,86 +72,16 @@ func runWebCommand(exportFn func() error, serverFn func() error) error {
 }
 
 func (pself *CmdTool) webServerPIDPath() string {
-	pidPath, _ := filepath.Abs(path.Join(pself.TargetDir, ".gdspx_web_server.pid"))
+	baseDir := pself.TargetAbsDir
+	if baseDir == "" {
+		baseDir = pself.TargetDir
+	}
+	pidPath, _ := filepath.Abs(path.Join(baseDir, ".gdspx_web_server.pid"))
 	return pidPath
 }
 
-func (pself *CmdTool) webServerPort() int {
-	if pself.ServerPort != 0 {
-		return pself.ServerPort
-	}
-	return defaultWebServerPort
-}
-
-func (pself *CmdTool) globalWebServerPIDPath() string {
-	return filepath.Join(os.TempDir(), fmt.Sprintf("gdspx_web_server_%d.pid", pself.webServerPort()))
-}
-
-func (pself *CmdTool) webServerPIDPaths() []string {
-	paths := []string{pself.webServerPIDPath()}
-	globalPIDPath := pself.globalWebServerPIDPath()
-	if globalPIDPath != paths[0] {
-		paths = append(paths, globalPIDPath)
-	}
-	return paths
-}
-
-func (pself *CmdTool) writeWebServerPIDFiles(pid int) error {
-	localPIDPath := pself.webServerPIDPath()
-	pidBytes := []byte(strconv.Itoa(pid))
-	if err := os.WriteFile(localPIDPath, pidBytes, 0644); err != nil {
-		return fmt.Errorf("failed to record web server pid: %w", err)
-	}
-
-	recordBytes, err := json.Marshal(webServerPIDRecord{
-		PID:          pid,
-		LocalPIDPath: localPIDPath,
-	})
-	if err != nil {
-		_ = os.Remove(localPIDPath)
-		return fmt.Errorf("failed to marshal web server pid record: %w", err)
-	}
-	if err := os.WriteFile(pself.globalWebServerPIDPath(), recordBytes, 0644); err != nil {
-		_ = os.Remove(localPIDPath)
-		return fmt.Errorf("failed to record global web server pid: %w", err)
-	}
-	return nil
-}
-
-func (pself *CmdTool) cleanupWebServerPIDFiles(paths map[string]struct{}) {
-	for _, pidPath := range pself.webServerPIDPaths() {
-		paths[pidPath] = struct{}{}
-	}
-	for pidPath := range paths {
-		if pidPath == "" {
-			continue
-		}
-		_ = os.Remove(pidPath)
-	}
-}
-
-func (pself *CmdTool) readWebServerPIDRecord(pidPath string) (webServerPIDRecord, error) {
-	pidBytes, err := os.ReadFile(pidPath)
-	if err != nil {
-		return webServerPIDRecord{}, err
-	}
-
-	if pidPath == pself.globalWebServerPIDPath() {
-		var record webServerPIDRecord
-		if err := json.Unmarshal(pidBytes, &record); err == nil && record.PID > 0 {
-			return record, nil
-		}
-	}
-
-	pid, err := strconv.Atoi(strings.TrimSpace(string(pidBytes)))
-	if err != nil {
-		return webServerPIDRecord{}, err
-	}
-	return webServerPIDRecord{PID: pid}, nil
-}
-
 func (pself *CmdTool) runWebServer() error {
-	port := pself.webServerPort()
+	port := pself.ServerPort
 	if err := pself.StopWeb(); err != nil {
 		return err
 	}
@@ -192,9 +106,9 @@ func (pself *CmdTool) runWebServer() error {
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("error starting server: %v", err)
 	}
-	if err := pself.writeWebServerPIDFiles(cmd.Process.Pid); err != nil {
+	if err := os.WriteFile(pself.webServerPIDPath(), []byte(strconv.Itoa(cmd.Process.Pid)), 0644); err != nil {
 		_ = cmd.Process.Kill()
-		return err
+		return fmt.Errorf("failed to record web server pid: %w", err)
 	}
 
 	done := make(chan error, 1)
@@ -204,7 +118,7 @@ func (pself *CmdTool) runWebServer() error {
 
 	select {
 	case err := <-done:
-		pself.cleanupWebServerPIDFiles(map[string]struct{}{})
+		_ = os.Remove(pself.webServerPIDPath())
 		if err != nil {
 			return fmt.Errorf("web server exited early: %w", err)
 		}
@@ -218,144 +132,62 @@ func (pself *CmdTool) runWebServer() error {
 }
 
 func (pself *CmdTool) StopWeb() (err error) {
-	stopped := make(map[int]struct{})
-	cleanupPaths := make(map[string]struct{})
-	for _, pidPath := range pself.webServerPIDPaths() {
-		cleanupPaths[pidPath] = struct{}{}
-
-		record, readErr := pself.readWebServerPIDRecord(pidPath)
-		if os.IsNotExist(readErr) {
-			continue
-		}
-		if readErr != nil {
-			continue
-		}
-		if record.LocalPIDPath != "" {
-			cleanupPaths[record.LocalPIDPath] = struct{}{}
-		}
-		if record.PID <= 0 {
-			continue
-		}
-		if _, ok := stopped[record.PID]; ok {
-			continue
-		}
-		stoppedServer, stopErr := stopRecordedWebServerPID(record.PID)
-		if stopErr != nil {
-			pself.cleanupWebServerPIDFiles(cleanupPaths)
-			return stopErr
-		}
-		if stoppedServer {
-			stopped[record.PID] = struct{}{}
-		}
+	pidBytes, readErr := os.ReadFile(pself.webServerPIDPath())
+	if os.IsNotExist(readErr) {
+		return pself.stopOrphanedWebServerByPort()
+	}
+	if readErr != nil {
+		return fmt.Errorf("failed to read web server pid: %w", readErr)
 	}
 
-	defer pself.cleanupWebServerPIDFiles(cleanupPaths)
-	return pself.stopWebServerOnPort(stopped)
+	pid, convErr := strconv.Atoi(strings.TrimSpace(string(pidBytes)))
+	if convErr != nil {
+		_ = os.Remove(pself.webServerPIDPath())
+		return pself.stopOrphanedWebServerByPort()
+	}
+
+	if pself.killWebServerProcess(pid) {
+		_ = os.Remove(pself.webServerPIDPath())
+		return nil
+	}
+
+	_ = os.Remove(pself.webServerPIDPath())
+	return pself.stopOrphanedWebServerByPort()
 }
 
-func stopRecordedWebServerPID(pid int) (bool, error) {
-	if pid <= 0 {
-		return false, nil
-	}
-
-	cmdline, err := processCommandLineFn(pid)
-	if err != nil && runtime.GOOS != "windows" {
-		return false, nil
-	}
-	if cmdline != "" && !isGdspxWebServerCommand(cmdline) {
-		return false, nil
-	}
-
-	if err := killPIDFn(pid); err != nil {
-		return false, err
-	}
-	return true, nil
-}
-
-func (pself *CmdTool) stopWebServerOnPort(stopped map[int]struct{}) error {
-	port := pself.webServerPort()
-	if port <= 0 {
+func (pself *CmdTool) stopOrphanedWebServerByPort() error {
+	if pself.ServerPort <= 0 {
 		return nil
 	}
 
-	if len(stopped) > 0 {
-		if err := waitForPortFreeFn(port, 1500*time.Millisecond); err == nil {
-			return nil
-		}
-	}
-	if isPortAvailableFn(port) {
-		return nil
-	}
-
-	listeningPIDs, err := findListeningPIDsFn(port)
-	if err == nil {
-		for _, pid := range listeningPIDs {
-			if _, ok := stopped[pid]; ok {
-				continue
-			}
-			cmdline, cmdErr := processCommandLineFn(pid)
-			if cmdErr != nil || !isGdspxWebServerCommand(cmdline) {
-				continue
-			}
-			if killErr := killPIDFn(pid); killErr != nil {
-				return killErr
-			}
-			stopped[pid] = struct{}{}
-		}
-		if len(stopped) > 0 {
-			if err := waitForPortFreeFn(port, 2*time.Second); err == nil {
-				return nil
-			}
-		}
-	}
-
-	if isPortAvailableFn(port) {
-		return nil
-	}
+	pids, err := pself.listListeningPIDs(pself.ServerPort)
 	if err != nil {
-		return fmt.Errorf("port %d is already in use and the existing gdspx web server could not be identified: %w", port, err)
-	}
-	return fmt.Errorf("port %d is already in use by another process", port)
-}
-
-func isGdspxWebServerCommand(cmdline string) bool {
-	return strings.Contains(cmdline, "gdspx_web_server.py")
-}
-
-func isPortAvailable(port int) bool {
-	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
-	if err != nil {
-		return false
-	}
-	_ = ln.Close()
-	return true
-}
-
-func waitForPortFree(port int, timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		if isPortAvailableFn(port) {
-			return nil
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	if isPortAvailableFn(port) {
 		return nil
 	}
-	return fmt.Errorf("timed out waiting for port %d to become available", port)
+
+	for _, pid := range pids {
+		if pself.killWebServerProcess(pid) {
+			break
+		}
+	}
+	return nil
 }
 
-func findListeningPIDs(port int) ([]int, error) {
+func (pself *CmdTool) listListeningPIDs(port int) ([]int, error) {
 	switch runtime.GOOS {
 	case "windows":
-		return nil, errors.New("listing listening pids is not supported on windows")
+		return listListeningPIDsWindows(port)
 	default:
-		return findListeningPIDsUnix(port)
+		return listListeningPIDsUnix(port)
 	}
 }
 
-func findListeningPIDsUnix(port int) ([]int, error) {
-	cmd := exec.Command("lsof", "-nP", fmt.Sprintf("-iTCP:%d", port), "-sTCP:LISTEN", "-t")
+func listListeningPIDsUnix(port int) ([]int, error) {
+	if _, err := exec.LookPath("lsof"); err != nil {
+		return nil, err
+	}
+
+	cmd := exec.Command("lsof", "-nP", "-t", fmt.Sprintf("-iTCP:%d", port), "-sTCP:LISTEN")
 	output, err := cmd.Output()
 	if err != nil {
 		var exitErr *exec.ExitError
@@ -364,46 +196,104 @@ func findListeningPIDsUnix(port int) ([]int, error) {
 		}
 		return nil, err
 	}
+	return parsePIDList(output), nil
+}
+
+func listListeningPIDsWindows(port int) ([]int, error) {
+	cmd := exec.Command("netstat", "-ano", "-p", "tcp")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
 
 	var pids []int
-	for _, field := range strings.Fields(string(output)) {
-		pid, convErr := strconv.Atoi(strings.TrimSpace(field))
-		if convErr != nil {
+	portSuffix := ":" + strconv.Itoa(port)
+	for _, line := range strings.Split(string(output), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 5 {
 			continue
 		}
-		pids = append(pids, pid)
+		if !strings.EqualFold(fields[0], "TCP") {
+			continue
+		}
+		if !strings.HasSuffix(fields[1], portSuffix) {
+			continue
+		}
+		if !strings.EqualFold(fields[3], "LISTENING") && !strings.EqualFold(fields[3], "LISTEN") {
+			continue
+		}
+		pid, err := strconv.Atoi(fields[4])
+		if err == nil {
+			pids = append(pids, pid)
+		}
 	}
 	return pids, nil
 }
 
-func processCommandLine(pid int) (string, error) {
+func parsePIDList(output []byte) []int {
+	var pids []int
+	for _, field := range bytes.Fields(output) {
+		pid, err := strconv.Atoi(string(field))
+		if err == nil {
+			pids = append(pids, pid)
+		}
+	}
+	return pids
+}
+
+func (pself *CmdTool) killWebServerProcess(pid int) bool {
+	if pid <= 0 || !looksLikeGDSPXWebServerProcess(pid) {
+		return false
+	}
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		return false
+	}
+	_ = process.Kill()
+	return true
+}
+
+func looksLikeGDSPXWebServerProcess(pid int) bool {
 	switch runtime.GOOS {
 	case "windows":
-		cmd := exec.Command("powershell", "-NoProfile", "-Command", fmt.Sprintf("(Get-CimInstance Win32_Process -Filter \"ProcessId = %d\").CommandLine", pid))
-		output, err := cmd.Output()
-		if err != nil {
-			return "", err
-		}
-		return strings.TrimSpace(string(output)), nil
+		return looksLikeGDSPXWebServerProcessWindows(pid)
 	default:
-		cmd := exec.Command("ps", "-p", strconv.Itoa(pid), "-o", "command=")
-		output, err := cmd.Output()
-		if err != nil {
-			return "", err
-		}
-		return strings.TrimSpace(string(output)), nil
+		return looksLikeGDSPXWebServerProcessUnix(pid)
 	}
 }
 
-func killPID(pid int) error {
-	process, err := os.FindProcess(pid)
+func looksLikeGDSPXWebServerProcessUnix(pid int) bool {
+	cmd := exec.Command("ps", "-o", "args=", "-p", strconv.Itoa(pid))
+	output, err := cmd.Output()
 	if err != nil {
-		return err
+		return false
 	}
-	if err := process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
-		return err
+	return strings.Contains(string(output), "gdspx_web_server.py")
+}
+
+func looksLikeGDSPXWebServerProcessWindows(pid int) bool {
+	commandLine, err := windowsProcessCommandLine(pid)
+	if err != nil {
+		return false
 	}
-	return nil
+	return looksLikeGDSPXWebServerCommandLine(commandLine)
+}
+
+func windowsProcessCommandLine(pid int) (string, error) {
+	cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", windowsProcessCommandLineQuery(pid))
+	output, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return string(output), nil
+}
+
+func windowsProcessCommandLineQuery(pid int) string {
+	return fmt.Sprintf("(Get-CimInstance Win32_Process -Filter \"ProcessId = %d\").CommandLine", pid)
+}
+
+func looksLikeGDSPXWebServerCommandLine(commandLine string) bool {
+	return strings.Contains(strings.ToLower(commandLine), "gdspx_web_server.py")
 }
 
 func (pself *CmdTool) RunPureEngine(pargs ...string) error {

@@ -25,6 +25,7 @@ type CmdTool struct {
 	ProjectDir     string // Absolute path to the project directory
 	GoDir          string // Absolute path to the Go directory
 	TargetDir      string // Target directory for operations
+	TargetAbsDir   string // Absolute target directory for stable file paths
 	WebDir         string // Web directory for web operations
 	GoBinPath      string
 
@@ -213,10 +214,11 @@ func (cmd *CmdTool) handleBuildPhase() error {
 		} else {
 			fmt.Println("[DEBUG] Skipping BuildDll for pure_engine mode")
 		}
-	case "buildweb", "runweb", "exportweb":
-		fmt.Println("[DEBUG] Executing BuildWasm")
-		return cmd.BuildWasm()
 	default:
+		if shouldBuildWasmForCommand(cmd.Args.CmdName) {
+			fmt.Println("[DEBUG] Executing BuildWasm")
+			return cmd.BuildWasm()
+		}
 		fmt.Printf("[DEBUG] No build phase needed for command: %s\n", cmd.Args.CmdName)
 	}
 	return nil
@@ -308,6 +310,17 @@ func isRuntimeModeCommand(cmdName string) bool {
 	// for the same reason as `runweb`: both serve exported runtime artifacts.
 	switch cmdName {
 	case "run", "runweb", "runwebworker":
+		return true
+	default:
+		return false
+	}
+}
+
+func shouldBuildWasmForCommand(cmdName string) bool {
+	// These commands export or serve web assets, and the export path now prefers a
+	// freshly built project-local `.builds/web/ispx.wasm` when it exists.
+	switch cmdName {
+	case "buildweb", "exportweb", "runweb", "runwebworker":
 		return true
 	default:
 		return false
