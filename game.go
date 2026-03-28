@@ -26,7 +26,7 @@ import (
 	_ "github.com/goplus/spx/v2/fs/zip"
 
 	"github.com/goplus/spx/v2/internal/audio"
-	"github.com/goplus/spx/v2/internal/base/collisionutil"
+	"github.com/goplus/spx/v2/internal/base/collision"
 	corestate "github.com/goplus/spx/v2/internal/core/state"
 	"github.com/goplus/spx/v2/internal/coroutine"
 	"github.com/goplus/spx/v2/internal/engine"
@@ -112,7 +112,7 @@ type Game struct {
 
 	syncBuffer    *engine.SpriteSyncBuffer
 	triggerEvents []engine.TriggerEvent
-	spatialHash   *collisionutil.SpatialHash[*SpriteImpl]
+	spatialHash   *collision.SpatialHash[*SpriteImpl]
 }
 
 func activeGame() *Game {

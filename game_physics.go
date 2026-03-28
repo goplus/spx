@@ -21,7 +21,7 @@ import (
 	"slices"
 
 	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v2/internal/base/collisionutil"
+	"github.com/goplus/spx/v2/internal/base/collision"
 	coreproject "github.com/goplus/spx/v2/internal/core/project"
 	"github.com/goplus/spx/v2/internal/engine"
 	spxlog "github.com/goplus/spx/v2/internal/log"
@@ -112,12 +112,12 @@ func (p *Game) DebugDrawLines(points []float64, color Color) {
 // Types
 // -----------------------------------------------------------------------------
 const (
-	physicsColliderNone    = collisionutil.ColliderNone
-	physicsColliderAuto    = collisionutil.ColliderAuto
-	physicsColliderCircle  = collisionutil.ColliderCircle
-	physicsColliderRect    = collisionutil.ColliderRect
-	physicsColliderCapsule = collisionutil.ColliderCapsule
-	physicsColliderPolygon = collisionutil.ColliderPolygon
+	physicsColliderNone    = collision.ColliderNone
+	physicsColliderAuto    = collision.ColliderAuto
+	physicsColliderCircle  = collision.ColliderCircle
+	physicsColliderRect    = collision.ColliderRect
+	physicsColliderCapsule = collision.ColliderCapsule
+	physicsColliderPolygon = collision.ColliderPolygon
 )
 
 const maxCollisionLayerIdx = 32 // Engine limit: max 32 collision layers

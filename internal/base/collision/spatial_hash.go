@@ -1,4 +1,4 @@
-package collisionutil
+package collision
 
 type AABB struct {
 	MinX float64
@@ -28,7 +28,7 @@ type SpatialHash[T any] struct {
 
 func NewSpatialHash[T any](cellSize float64) *SpatialHash[T] {
 	if cellSize <= 0 {
-		panic("collisionutil: cellSize must be greater than zero")
+		panic("collision: cellSize must be greater than zero")
 	}
 	return &SpatialHash[T]{
 		cellSize: cellSize,
