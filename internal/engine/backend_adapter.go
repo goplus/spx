@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	windowScale float64
+	windowScale float64 = 1.0
 )
 
 func SetWindowScale(scale float64) {

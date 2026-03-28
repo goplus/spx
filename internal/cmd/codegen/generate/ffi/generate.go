@@ -489,7 +489,7 @@ func genSyncPureApiWrapFunction(function *clang.TypedefFunction) string {
 	args := EffectiveArguments(function)
 	retType := EffectiveGoReturnType(function)
 
-	sb.WriteString(fmt.Sprintf("func (pself *%s) ", mgrTypeName+"Impl"))
+	sb.WriteString(fmt.Sprintf("func (*%s) ", mgrTypeName+"Impl"))
 	sb.WriteString(pureFuncName)
 	sb.WriteString("(")
 	wroteArg := false
@@ -542,7 +542,7 @@ func genSyncApiWrapFunction(function *clang.TypedefFunction) string {
 	args := EffectiveArguments(function)
 	retType := EffectiveGoReturnType(function)
 
-	sb.WriteString(fmt.Sprintf("func (pself *%s) ", mgrTypeName+"Impl"))
+	sb.WriteString(fmt.Sprintf("func (*%s) ", mgrTypeName+"Impl"))
 	sb.WriteString(pureFuncName)
 	sb.WriteString("(")
 	wroteArg := false

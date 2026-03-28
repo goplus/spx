@@ -131,656 +131,655 @@ type UiMgrImpl struct {
 }
 
 // IAudioMgr
-func (pself *audioMgrImpl) StopAll() {}
-func (pself *audioMgrImpl) CreateAudio() gdx.Object {
+func (*audioMgrImpl) StopAll() {}
+func (*audioMgrImpl) CreateAudio() gdx.Object {
 	return 0
 }
-func (pself *audioMgrImpl) DestroyAudio(obj gdx.Object)            {}
-func (pself *audioMgrImpl) SetPitch(obj gdx.Object, pitch float64) {}
-func (pself *audioMgrImpl) GetPitch(obj gdx.Object) float64 {
+func (*audioMgrImpl) DestroyAudio(obj gdx.Object)            {}
+func (*audioMgrImpl) SetPitch(obj gdx.Object, pitch float64) {}
+func (*audioMgrImpl) GetPitch(obj gdx.Object) float64 {
 	return 0
 }
-func (pself *audioMgrImpl) SetPan(obj gdx.Object, pan float64) {}
-func (pself *audioMgrImpl) GetPan(obj gdx.Object) float64 {
+func (*audioMgrImpl) SetPan(obj gdx.Object, pan float64) {}
+func (*audioMgrImpl) GetPan(obj gdx.Object) float64 {
 	return 0
 }
-func (pself *audioMgrImpl) SetVolume(obj gdx.Object, volume float64) {}
-func (pself *audioMgrImpl) GetVolume(obj gdx.Object) float64 {
+func (*audioMgrImpl) SetVolume(obj gdx.Object, volume float64) {}
+func (*audioMgrImpl) GetVolume(obj gdx.Object) float64 {
 	return 0
 }
-func (pself *audioMgrImpl) PlayWithAttenuation(obj gdx.Object, path string, owner_id gdx.Object, attenuation float64, max_distance float64) int64 {
+func (*audioMgrImpl) PlayWithAttenuation(obj gdx.Object, path string, owner_id gdx.Object, attenuation float64, max_distance float64) int64 {
 	return 0
 }
-func (pself *audioMgrImpl) Play(obj gdx.Object, path string) int64 {
+func (*audioMgrImpl) Play(obj gdx.Object, path string) int64 {
 	return 0
 }
-func (pself *audioMgrImpl) Pause(aid int64)              {}
-func (pself *audioMgrImpl) Resume(aid int64)             {}
-func (pself *audioMgrImpl) Stop(aid int64)               {}
-func (pself *audioMgrImpl) SetLoop(aid int64, loop bool) {}
-func (pself *audioMgrImpl) GetLoop(aid int64) bool {
+func (*audioMgrImpl) Pause(aid int64)              {}
+func (*audioMgrImpl) Resume(aid int64)             {}
+func (*audioMgrImpl) Stop(aid int64)               {}
+func (*audioMgrImpl) SetLoop(aid int64, loop bool) {}
+func (*audioMgrImpl) GetLoop(aid int64) bool {
 	return false
 }
-func (pself *audioMgrImpl) GetTimer(aid int64) float64 {
+func (*audioMgrImpl) GetTimer(aid int64) float64 {
 	return 0
 }
-func (pself *audioMgrImpl) SetTimer(aid int64, time float64) {}
-func (pself *audioMgrImpl) IsPlaying(aid int64) bool {
+func (*audioMgrImpl) SetTimer(aid int64, time float64) {}
+func (*audioMgrImpl) IsPlaying(aid int64) bool {
 	return false
 }
 
 // ICameraMgr
-func (pself *cameraMgrImpl) GetCameraPosition() Vec2 {
+func (*cameraMgrImpl) GetCameraPosition() Vec2 {
 	return Vec2{}
 }
-func (pself *cameraMgrImpl) SetCameraPosition(position Vec2) {}
-func (pself *cameraMgrImpl) GetCameraZoom() Vec2 {
+func (*cameraMgrImpl) SetCameraPosition(position Vec2) {}
+func (*cameraMgrImpl) GetCameraZoom() Vec2 {
 	return Vec2{}
 }
-func (pself *cameraMgrImpl) SetCameraZoom(size Vec2) {}
-func (pself *cameraMgrImpl) GetViewportRect() Rect2 {
+func (*cameraMgrImpl) SetCameraZoom(size Vec2) {}
+func (*cameraMgrImpl) GetViewportRect() Rect2 {
 	return Rect2{}
 }
-func (pself *cameraMgrImpl) GetGlobalCameraRect() Rect2 {
+func (*cameraMgrImpl) GetGlobalCameraRect() Rect2 {
 	return Rect2{}
 }
-func (pself *cameraMgrImpl) GetStageLimitsRect() Rect2 {
+func (*cameraMgrImpl) GetStageLimitsRect() Rect2 {
 	return Rect2{}
 }
-func (pself *cameraMgrImpl) SetCameraLimit(side int64, limit int64) {}
-func (pself *cameraMgrImpl) SetCameraSmoothing(enabled bool)        {}
+func (*cameraMgrImpl) SetCameraLimit(side int64, limit int64) {}
+func (*cameraMgrImpl) SetCameraSmoothing(enabled bool)        {}
 
 // IDebugMgr
-func (pself *debugMgrImpl) DebugDrawCircle(pos Vec2, radius float64, color Color) {}
-func (pself *debugMgrImpl) DebugDrawRect(pos Vec2, size Vec2, color Color)        {}
-func (pself *debugMgrImpl) DebugDrawLine(from Vec2, to Vec2, color Color)         {}
+func (*debugMgrImpl) DebugDrawCircle(pos Vec2, radius float64, color Color) {}
+func (*debugMgrImpl) DebugDrawRect(pos Vec2, size Vec2, color Color)        {}
+func (*debugMgrImpl) DebugDrawLine(from Vec2, to Vec2, color Color)         {}
 
 // IExtMgr
-func (pself *extMgrImpl) RequestExit(exit_code int64)  {}
-func (pself *extMgrImpl) RequestReset(exit_code int64) {}
-func (pself *extMgrImpl) RequestRestart()              {}
-func (pself *extMgrImpl) OnRuntimePanic(msg string)    {}
-func (pself *extMgrImpl) Pause()                       {}
-func (pself *extMgrImpl) Resume()                      {}
-func (pself *extMgrImpl) IsPaused() bool {
+func (*extMgrImpl) RequestExit(exit_code int64)  {}
+func (*extMgrImpl) RequestReset(exit_code int64) {}
+func (*extMgrImpl) RequestRestart()              {}
+func (*extMgrImpl) OnRuntimePanic(msg string)    {}
+func (*extMgrImpl) Pause()                       {}
+func (*extMgrImpl) Resume()                      {}
+func (*extMgrImpl) IsPaused() bool {
 	return false
 }
-func (pself *extMgrImpl) NextFrame()                    {}
-func (pself *extMgrImpl) SetLayerSorterMode(mode int64) {}
+func (*extMgrImpl) NextFrame()                    {}
+func (*extMgrImpl) SetLayerSorterMode(mode int64) {}
 
 // IInputMgr
-func (pself *inputMgrImpl) GetGlobalMousePos() Vec2 {
+func (*inputMgrImpl) GetGlobalMousePos() Vec2 {
 	return Vec2{}
 }
-func (pself *inputMgrImpl) GetKey(key int64) bool {
+func (*inputMgrImpl) GetKey(key int64) bool {
 	return false
 }
-func (pself *inputMgrImpl) GetMouseState(mouse_id int64) bool {
+func (*inputMgrImpl) GetMouseState(mouse_id int64) bool {
 	return false
 }
-func (pself *inputMgrImpl) GetKeyState(key int64) int64 {
+func (*inputMgrImpl) GetKeyState(key int64) int64 {
 	return 0
 }
-func (pself *inputMgrImpl) GetAxis(neg_action string, pos_action string) float64 {
+func (*inputMgrImpl) GetAxis(neg_action string, pos_action string) float64 {
 	return 0
 }
-func (pself *inputMgrImpl) IsActionPressed(action string) bool {
+func (*inputMgrImpl) IsActionPressed(action string) bool {
 	return false
 }
-func (pself *inputMgrImpl) IsActionJustPressed(action string) bool {
+func (*inputMgrImpl) IsActionJustPressed(action string) bool {
 	return false
 }
-func (pself *inputMgrImpl) IsActionJustReleased(action string) bool {
+func (*inputMgrImpl) IsActionJustReleased(action string) bool {
 	return false
 }
 
 // INavigationMgr
-func (pself *navigationMgrImpl) SetupPathFinderWithSize(grid_size Vec2, cell_size Vec2, with_jump bool, with_debug bool) {
+func (*navigationMgrImpl) SetupPathFinderWithSize(grid_size Vec2, cell_size Vec2, with_jump bool, with_debug bool) {
 }
-func (pself *navigationMgrImpl) SetupPathFinder(with_jump bool)           {}
-func (pself *navigationMgrImpl) SetObstacle(obj gdx.Object, enabled bool) {}
-func (pself *navigationMgrImpl) FindPath(p_from Vec2, p_to Vec2, with_jump bool) gdx.Array {
+func (*navigationMgrImpl) SetupPathFinder(with_jump bool)           {}
+func (*navigationMgrImpl) SetObstacle(obj gdx.Object, enabled bool) {}
+func (*navigationMgrImpl) FindPath(p_from Vec2, p_to Vec2, with_jump bool) gdx.Array {
 	return nil
 }
 
 // IPenMgr
-func (pself *penMgrImpl) DestroyAllPens() {}
-func (pself *penMgrImpl) CreatePen() gdx.Object {
+func (*penMgrImpl) DestroyAllPens() {}
+func (*penMgrImpl) CreatePen() gdx.Object {
 	return 0
 }
-func (pself *penMgrImpl) DestroyPen(obj gdx.Object)                                  {}
-func (pself *penMgrImpl) PenStamp(obj gdx.Object)                                    {}
-func (pself *penMgrImpl) MovePenTo(obj gdx.Object, position Vec2)                    {}
-func (pself *penMgrImpl) PenDown(obj gdx.Object, move_by_mouse bool)                 {}
-func (pself *penMgrImpl) PenUp(obj gdx.Object)                                       {}
-func (pself *penMgrImpl) SetPenColorTo(obj gdx.Object, color Color)                  {}
-func (pself *penMgrImpl) ChangePenBy(obj gdx.Object, property int64, amount float64) {}
-func (pself *penMgrImpl) SetPenTo(obj gdx.Object, property int64, value float64)     {}
-func (pself *penMgrImpl) ChangePenSizeBy(obj gdx.Object, amount float64)             {}
-func (pself *penMgrImpl) SetPenSizeTo(obj gdx.Object, size float64)                  {}
-func (pself *penMgrImpl) SetPenStampTexture(obj gdx.Object, texture_path string)     {}
+func (*penMgrImpl) DestroyPen(obj gdx.Object)                                  {}
+func (*penMgrImpl) PenStamp(obj gdx.Object)                                    {}
+func (*penMgrImpl) MovePenTo(obj gdx.Object, position Vec2)                    {}
+func (*penMgrImpl) PenDown(obj gdx.Object, move_by_mouse bool)                 {}
+func (*penMgrImpl) PenUp(obj gdx.Object)                                       {}
+func (*penMgrImpl) SetPenColorTo(obj gdx.Object, color Color)                  {}
+func (*penMgrImpl) ChangePenBy(obj gdx.Object, property int64, amount float64) {}
+func (*penMgrImpl) SetPenTo(obj gdx.Object, property int64, value float64)     {}
+func (*penMgrImpl) ChangePenSizeBy(obj gdx.Object, amount float64)             {}
+func (*penMgrImpl) SetPenSizeTo(obj gdx.Object, size float64)                  {}
+func (*penMgrImpl) SetPenStampTexture(obj gdx.Object, texture_path string)     {}
 
 // IPhysicsMgr
-func (pself *physicsMgrImpl) Raycast(from Vec2, to Vec2, collision_mask int64) gdx.Object {
+func (*physicsMgrImpl) Raycast(from Vec2, to Vec2, collision_mask int64) gdx.Object {
 	return 0
 }
-func (pself *physicsMgrImpl) CheckCollision(from Vec2, to Vec2, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) bool {
+func (*physicsMgrImpl) CheckCollision(from Vec2, to Vec2, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) bool {
 	return false
 }
-func (pself *physicsMgrImpl) CheckTouchedCameraBoundaries(obj gdx.Object) int64 {
+func (*physicsMgrImpl) CheckTouchedCameraBoundaries(obj gdx.Object) int64 {
 	return 0
 }
-func (pself *physicsMgrImpl) CheckTouchedCameraBoundary(obj gdx.Object, board_type int64) bool {
+func (*physicsMgrImpl) CheckTouchedCameraBoundary(obj gdx.Object, board_type int64) bool {
 	return false
 }
-func (pself *physicsMgrImpl) CheckNearestTouchedCameraBoundary(obj gdx.Object) int64 {
+func (*physicsMgrImpl) CheckNearestTouchedCameraBoundary(obj gdx.Object) int64 {
 	return 0
 }
-func (pself *physicsMgrImpl) CheckTouchedStageBoundaries(obj gdx.Object) int64 {
+func (*physicsMgrImpl) CheckTouchedStageBoundaries(obj gdx.Object) int64 {
 	return 0
 }
-func (pself *physicsMgrImpl) CheckTouchedStageBoundary(obj gdx.Object, board_type int64) bool {
+func (*physicsMgrImpl) CheckTouchedStageBoundary(obj gdx.Object, board_type int64) bool {
 	return false
 }
-func (pself *physicsMgrImpl) CheckNearestTouchedStageBoundary(obj gdx.Object) int64 {
+func (*physicsMgrImpl) CheckNearestTouchedStageBoundary(obj gdx.Object) int64 {
 	return 0
 }
-func (pself *physicsMgrImpl) SetCollisionSystemType(is_collision_by_alpha bool) {}
-func (pself *physicsMgrImpl) SetGlobalGravity(gravity float64)                  {}
-func (pself *physicsMgrImpl) GetGlobalGravity() float64 {
+func (*physicsMgrImpl) SetCollisionSystemType(is_collision_by_alpha bool) {}
+func (*physicsMgrImpl) SetGlobalGravity(gravity float64)                  {}
+func (*physicsMgrImpl) GetGlobalGravity() float64 {
 	return 0
 }
-func (pself *physicsMgrImpl) SetGlobalFriction(friction float64) {}
-func (pself *physicsMgrImpl) GetGlobalFriction() float64 {
+func (*physicsMgrImpl) SetGlobalFriction(friction float64) {}
+func (*physicsMgrImpl) GetGlobalFriction() float64 {
 	return 0
 }
-func (pself *physicsMgrImpl) SetGlobalAirDrag(air_drag float64) {}
-func (pself *physicsMgrImpl) GetGlobalAirDrag() float64 {
+func (*physicsMgrImpl) SetGlobalAirDrag(air_drag float64) {}
+func (*physicsMgrImpl) GetGlobalAirDrag() float64 {
 	return 0
 }
-func (pself *physicsMgrImpl) CheckCollisionRect(pos Vec2, size Vec2, collision_mask int64) gdx.Array {
+func (*physicsMgrImpl) CheckCollisionRect(pos Vec2, size Vec2, collision_mask int64) gdx.Array {
 	return nil
 }
-func (pself *physicsMgrImpl) CheckCollisionCircle(pos Vec2, radius float64, collision_mask int64) gdx.Array {
+func (*physicsMgrImpl) CheckCollisionCircle(pos Vec2, radius float64, collision_mask int64) gdx.Array {
 	return nil
 }
-func (pself *physicsMgrImpl) RaycastWithDetails(from Vec2, to Vec2, ignore_sprites gdx.Array, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) gdx.Array {
+func (*physicsMgrImpl) RaycastWithDetails(from Vec2, to Vec2, ignore_sprites gdx.Array, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) gdx.Array {
 	return nil
 }
 
 // IPlatformMgr
-func (pself *platformMgrImpl) SetStretchMode(enable bool)                       {}
-func (pself *platformMgrImpl) SetStretchAspect(is_keep bool)                    {}
-func (pself *platformMgrImpl) SetStretchContentScale(width int64, height int64) {}
-func (pself *platformMgrImpl) SetWindowPosition(pos Vec2)                       {}
-func (pself *platformMgrImpl) GetWindowPosition() Vec2 {
+func (*platformMgrImpl) SetStretchMode(enable bool)                       {}
+func (*platformMgrImpl) SetStretchAspect(is_keep bool)                    {}
+func (*platformMgrImpl) SetStretchContentScale(width int64, height int64) {}
+func (*platformMgrImpl) SetWindowPosition(pos Vec2)                       {}
+func (*platformMgrImpl) GetWindowPosition() Vec2 {
 	return Vec2{}
 }
-func (pself *platformMgrImpl) SetWindowSize(width int64, height int64, with_content_scale bool) {}
-func (pself *platformMgrImpl) GetWindowSize() Vec2 {
+func (*platformMgrImpl) SetWindowSize(width int64, height int64, with_content_scale bool) {}
+func (*platformMgrImpl) GetWindowSize() Vec2 {
 	return Vec2{}
 }
-func (pself *platformMgrImpl) SetWindowTitle(title string) {}
-func (pself *platformMgrImpl) GetWindowTitle() string {
+func (*platformMgrImpl) SetWindowTitle(title string) {}
+func (*platformMgrImpl) GetWindowTitle() string {
 	return ""
 }
-func (pself *platformMgrImpl) SetWindowFullscreen(enable bool) {}
-func (pself *platformMgrImpl) IsWindowFullscreen() bool {
+func (*platformMgrImpl) SetWindowFullscreen(enable bool) {}
+func (*platformMgrImpl) IsWindowFullscreen() bool {
 	return false
 }
-func (pself *platformMgrImpl) SetDebugMode(enable bool) {}
-func (pself *platformMgrImpl) IsDebugMode() bool {
+func (*platformMgrImpl) SetDebugMode(enable bool) {}
+func (*platformMgrImpl) IsDebugMode() bool {
 	return false
 }
-func (pself *platformMgrImpl) GetTimeScale() float64 {
+func (*platformMgrImpl) GetTimeScale() float64 {
 	return 0
 }
-func (pself *platformMgrImpl) SetTimeScale(time_scale float64) {}
-func (pself *platformMgrImpl) GetMaxFps() int64 {
+func (*platformMgrImpl) SetTimeScale(time_scale float64) {}
+func (*platformMgrImpl) GetMaxFps() int64 {
 	return 0
 }
-func (pself *platformMgrImpl) SetMaxFps(fps int64) {}
-func (pself *platformMgrImpl) GetPersistantDataDir() string {
+func (*platformMgrImpl) SetMaxFps(fps int64) {}
+func (*platformMgrImpl) GetPersistantDataDir() string {
 	return ""
 }
-func (pself *platformMgrImpl) SetPersistantDataDir(path string) {}
-func (pself *platformMgrImpl) IsInPersistantDataDir(path string) bool {
+func (*platformMgrImpl) SetPersistantDataDir(path string) {}
+func (*platformMgrImpl) IsInPersistantDataDir(path string) bool {
 	return false
 }
 
 // IResMgr
-func (pself *resMgrImpl) CreateAnimation(p_sprite_type string, p_anim_name string, p_json_ctx string, fps int64, is_atlas bool) {
+func (*resMgrImpl) CreateAnimation(p_sprite_type string, p_anim_name string, p_json_ctx string, fps int64, is_atlas bool) {
 }
-func (pself *resMgrImpl) SetLoadMode(is_direct_mode bool) {}
-func (pself *resMgrImpl) GetLoadMode() bool {
+func (*resMgrImpl) SetLoadMode(is_direct_mode bool) {}
+func (*resMgrImpl) GetLoadMode() bool {
 	return false
 }
-func (pself *resMgrImpl) GetBoundFromAlpha(p_path string) Rect2 {
+func (*resMgrImpl) GetBoundFromAlpha(p_path string) Rect2 {
 	return Rect2{}
 }
-func (pself *resMgrImpl) GetImageSize(p_path string) Vec2 {
+func (*resMgrImpl) GetImageSize(p_path string) Vec2 {
 	return Vec2{}
 }
-func (pself *resMgrImpl) ReadAllText(p_path string) string {
+func (*resMgrImpl) ReadAllText(p_path string) string {
 	return ""
 }
-func (pself *resMgrImpl) HasFile(p_path string) bool {
+func (*resMgrImpl) HasFile(p_path string) bool {
 	return false
 }
-func (pself *resMgrImpl) ReloadTexture(path string)       {}
-func (pself *resMgrImpl) FreeStr(str string)              {}
-func (pself *resMgrImpl) SetDefaultFont(font_path string) {}
+func (*resMgrImpl) ReloadTexture(path string)       {}
+func (*resMgrImpl) FreeStr(str string)              {}
+func (*resMgrImpl) SetDefaultFont(font_path string) {}
 
 // ISceneMgr
-func (pself *sceneMgrImpl) ChangeSceneToFile(path string) {}
-func (pself *sceneMgrImpl) DestroyAllSprites()            {}
-func (pself *sceneMgrImpl) ReloadCurrentScene() int64 {
+func (*sceneMgrImpl) ChangeSceneToFile(path string) {}
+func (*sceneMgrImpl) DestroyAllSprites()            {}
+func (*sceneMgrImpl) ReloadCurrentScene() int64 {
 	return 0
 }
-func (pself *sceneMgrImpl) UnloadCurrentScene()                                          {}
-func (pself *sceneMgrImpl) ClearPureSprites()                                            {}
-func (pself *sceneMgrImpl) CreatePureSprite(texture_path string, pos Vec2, zindex int64) {}
-func (pself *sceneMgrImpl) DestroyPureSprite(id gdx.Object)                              {}
-func (pself *sceneMgrImpl) CreateRenderSprite(texture_path string, pos Vec2, degree float64, scale Vec2, zindex int64, pivot Vec2) gdx.Object {
+func (*sceneMgrImpl) UnloadCurrentScene()                                          {}
+func (*sceneMgrImpl) ClearPureSprites()                                            {}
+func (*sceneMgrImpl) CreatePureSprite(texture_path string, pos Vec2, zindex int64) {}
+func (*sceneMgrImpl) DestroyPureSprite(id gdx.Object)                              {}
+func (*sceneMgrImpl) CreateRenderSprite(texture_path string, pos Vec2, degree float64, scale Vec2, zindex int64, pivot Vec2) gdx.Object {
 	return 0
 }
-func (pself *sceneMgrImpl) CreateStaticSprite(texture_path string, pos Vec2, degree float64, scale Vec2, zindex int64, pivot Vec2, collider_type int64, collider_pivot Vec2, collider_params gdx.Array) gdx.Object {
+func (*sceneMgrImpl) CreateStaticSprite(texture_path string, pos Vec2, degree float64, scale Vec2, zindex int64, pivot Vec2, collider_type int64, collider_pivot Vec2, collider_params gdx.Array) gdx.Object {
 	return 0
 }
 
 // ISpriteMgr
-func (pself *spriteMgrImpl) SetDontDestroyOnLoad(obj gdx.Object)          {}
-func (pself *spriteMgrImpl) SetProcess(obj gdx.Object, is_on bool)        {}
-func (pself *spriteMgrImpl) SetPhysicProcess(obj gdx.Object, is_on bool)  {}
-func (pself *spriteMgrImpl) SetTypeName(obj gdx.Object, type_name string) {}
-func (pself *spriteMgrImpl) SetPivot(obj gdx.Object, pivot Vec2)          {}
-func (pself *spriteMgrImpl) GetPivot(obj gdx.Object) Vec2 {
+func (*spriteMgrImpl) SetDontDestroyOnLoad(obj gdx.Object)          {}
+func (*spriteMgrImpl) SetProcess(obj gdx.Object, is_on bool)        {}
+func (*spriteMgrImpl) SetPhysicProcess(obj gdx.Object, is_on bool)  {}
+func (*spriteMgrImpl) SetTypeName(obj gdx.Object, type_name string) {}
+func (*spriteMgrImpl) SetPivot(obj gdx.Object, pivot Vec2)          {}
+func (*spriteMgrImpl) GetPivot(obj gdx.Object) Vec2 {
 	return Vec2{}
 }
-func (pself *spriteMgrImpl) SetChildPosition(obj gdx.Object, path string, pos Vec2) {}
-func (pself *spriteMgrImpl) GetChildPosition(obj gdx.Object, path string) Vec2 {
+func (*spriteMgrImpl) SetChildPosition(obj gdx.Object, path string, pos Vec2) {}
+func (*spriteMgrImpl) GetChildPosition(obj gdx.Object, path string) Vec2 {
 	return Vec2{}
 }
-func (pself *spriteMgrImpl) SetChildRotation(obj gdx.Object, path string, rot float64) {}
-func (pself *spriteMgrImpl) GetChildRotation(obj gdx.Object, path string) float64 {
+func (*spriteMgrImpl) SetChildRotation(obj gdx.Object, path string, rot float64) {}
+func (*spriteMgrImpl) GetChildRotation(obj gdx.Object, path string) float64 {
 	return 0
 }
-func (pself *spriteMgrImpl) SetChildScale(obj gdx.Object, path string, scale Vec2) {}
-func (pself *spriteMgrImpl) GetChildScale(obj gdx.Object, path string) Vec2 {
+func (*spriteMgrImpl) SetChildScale(obj gdx.Object, path string, scale Vec2) {}
+func (*spriteMgrImpl) GetChildScale(obj gdx.Object, path string) Vec2 {
 	return Vec2{}
 }
-func (pself *spriteMgrImpl) CheckCollision(obj gdx.Object, target gdx.Object, is_src_trigger bool, is_dst_trigger bool) bool {
+func (*spriteMgrImpl) CheckCollision(obj gdx.Object, target gdx.Object, is_src_trigger bool, is_dst_trigger bool) bool {
 	return false
 }
-func (pself *spriteMgrImpl) CheckCollisionWithPoint(obj gdx.Object, point Vec2, is_trigger bool) bool {
+func (*spriteMgrImpl) CheckCollisionWithPoint(obj gdx.Object, point Vec2, is_trigger bool) bool {
 	return false
 }
-func (pself *spriteMgrImpl) SetDebugCollisionVisible(obj gdx.Object, visible bool) {}
-func (pself *spriteMgrImpl) IsDebugCollisionVisible(obj gdx.Object) bool {
+func (*spriteMgrImpl) SetDebugCollisionVisible(obj gdx.Object, visible bool) {}
+func (*spriteMgrImpl) IsDebugCollisionVisible(obj gdx.Object) bool {
 	return false
 }
-func (pself *spriteMgrImpl) CreateBackdrop(path string) gdx.Object {
+func (*spriteMgrImpl) CreateBackdrop(path string) gdx.Object {
 	return 0
 }
-func (pself *spriteMgrImpl) CreateSprite(path string, pos Vec2) gdx.Object {
+func (*spriteMgrImpl) CreateSprite(path string, pos Vec2) gdx.Object {
 	return 0
 }
-func (pself *spriteMgrImpl) CreateBareSprite(pos Vec2) gdx.Object {
+func (*spriteMgrImpl) CreateBareSprite(pos Vec2) gdx.Object {
 	return 0
 }
-func (pself *spriteMgrImpl) CloneSprite(obj gdx.Object) gdx.Object {
+func (*spriteMgrImpl) CloneSprite(obj gdx.Object) gdx.Object {
 	return 0
 }
-func (pself *spriteMgrImpl) DestroySprite(obj gdx.Object) bool {
+func (*spriteMgrImpl) DestroySprite(obj gdx.Object) bool {
 	return false
 }
-func (pself *spriteMgrImpl) IsSpriteAlive(obj gdx.Object) bool {
+func (*spriteMgrImpl) IsSpriteAlive(obj gdx.Object) bool {
 	return false
 }
-func (pself *spriteMgrImpl) SetPosition(obj gdx.Object, pos Vec2) {}
-func (pself *spriteMgrImpl) GetPosition(obj gdx.Object) Vec2 {
+func (*spriteMgrImpl) SetPosition(obj gdx.Object, pos Vec2) {}
+func (*spriteMgrImpl) GetPosition(obj gdx.Object) Vec2 {
 	return Vec2{}
 }
-func (pself *spriteMgrImpl) SetRotation(obj gdx.Object, rot float64) {}
-func (pself *spriteMgrImpl) GetRotation(obj gdx.Object) float64 {
+func (*spriteMgrImpl) SetRotation(obj gdx.Object, rot float64) {}
+func (*spriteMgrImpl) GetRotation(obj gdx.Object) float64 {
 	return 0
 }
-func (pself *spriteMgrImpl) SetScale(obj gdx.Object, scale Vec2) {}
-func (pself *spriteMgrImpl) GetScale(obj gdx.Object) Vec2 {
+func (*spriteMgrImpl) SetScale(obj gdx.Object, scale Vec2) {}
+func (*spriteMgrImpl) GetScale(obj gdx.Object) Vec2 {
 	return Vec2{}
 }
-func (pself *spriteMgrImpl) SetRenderScale(obj gdx.Object, scale Vec2) {}
-func (pself *spriteMgrImpl) GetRenderScale(obj gdx.Object) Vec2 {
+func (*spriteMgrImpl) SetRenderScale(obj gdx.Object, scale Vec2) {}
+func (*spriteMgrImpl) GetRenderScale(obj gdx.Object) Vec2 {
 	return Vec2{}
 }
-func (pself *spriteMgrImpl) SetColor(obj gdx.Object, color Color) {}
-func (pself *spriteMgrImpl) GetColor(obj gdx.Object) Color {
+func (*spriteMgrImpl) SetColor(obj gdx.Object, color Color) {}
+func (*spriteMgrImpl) GetColor(obj gdx.Object) Color {
 	return Color{}
 }
-func (pself *spriteMgrImpl) SetMaterialShader(obj gdx.Object, path string) {}
-func (pself *spriteMgrImpl) GetMaterialShader(obj gdx.Object) string {
+func (*spriteMgrImpl) SetMaterialShader(obj gdx.Object, path string) {}
+func (*spriteMgrImpl) GetMaterialShader(obj gdx.Object) string {
 	return ""
 }
-func (pself *spriteMgrImpl) SetMaterialParams(obj gdx.Object, effect string, amount float64) {}
-func (pself *spriteMgrImpl) GetMaterialParams(obj gdx.Object, effect string) float64 {
+func (*spriteMgrImpl) SetMaterialParams(obj gdx.Object, effect string, amount float64) {}
+func (*spriteMgrImpl) GetMaterialParams(obj gdx.Object, effect string) float64 {
 	return 0
 }
-func (pself *spriteMgrImpl) SetMaterialParamsVec(obj gdx.Object, effect string, x float64, y float64, z float64, w float64) {
+func (*spriteMgrImpl) SetMaterialParamsVec(obj gdx.Object, effect string, x float64, y float64, z float64, w float64) {
 }
-func (pself *spriteMgrImpl) SetMaterialParamsVec4(obj gdx.Object, effect string, vec4 Vec4) {}
-func (pself *spriteMgrImpl) GetMaterialParamsVec4(obj gdx.Object, effect string) Vec4 {
+func (*spriteMgrImpl) SetMaterialParamsVec4(obj gdx.Object, effect string, vec4 Vec4) {}
+func (*spriteMgrImpl) GetMaterialParamsVec4(obj gdx.Object, effect string) Vec4 {
 	return Vec4{}
 }
-func (pself *spriteMgrImpl) SetMaterialParamsColor(obj gdx.Object, effect string, color Color) {}
-func (pself *spriteMgrImpl) GetMaterialParamsColor(obj gdx.Object, effect string) Color {
+func (*spriteMgrImpl) SetMaterialParamsColor(obj gdx.Object, effect string, color Color) {}
+func (*spriteMgrImpl) GetMaterialParamsColor(obj gdx.Object, effect string) Color {
 	return Color{}
 }
-func (pself *spriteMgrImpl) SetTextureAtlas(obj gdx.Object, path string, rect2 Rect2)       {}
-func (pself *spriteMgrImpl) SetTexture(obj gdx.Object, path string)                         {}
-func (pself *spriteMgrImpl) SetTextureAtlasDirect(obj gdx.Object, path string, rect2 Rect2) {}
-func (pself *spriteMgrImpl) SetTextureDirect(obj gdx.Object, path string)                   {}
-func (pself *spriteMgrImpl) GetTexture(obj gdx.Object) string {
+func (*spriteMgrImpl) SetTextureAtlas(obj gdx.Object, path string, rect2 Rect2)       {}
+func (*spriteMgrImpl) SetTexture(obj gdx.Object, path string)                         {}
+func (*spriteMgrImpl) SetTextureAtlasDirect(obj gdx.Object, path string, rect2 Rect2) {}
+func (*spriteMgrImpl) SetTextureDirect(obj gdx.Object, path string)                   {}
+func (*spriteMgrImpl) GetTexture(obj gdx.Object) string {
 	return ""
 }
-func (pself *spriteMgrImpl) SetVisible(obj gdx.Object, visible bool) {}
-func (pself *spriteMgrImpl) GetVisible(obj gdx.Object) bool {
+func (*spriteMgrImpl) SetVisible(obj gdx.Object, visible bool) {}
+func (*spriteMgrImpl) GetVisible(obj gdx.Object) bool {
 	return false
 }
-func (pself *spriteMgrImpl) GetZIndex(obj gdx.Object) int64 {
+func (*spriteMgrImpl) GetZIndex(obj gdx.Object) int64 {
 	return 0
 }
-func (pself *spriteMgrImpl) SetZIndex(obj gdx.Object, z int64) {}
-func (pself *spriteMgrImpl) PlayAnim(obj gdx.Object, p_name string, p_speed float64, isLoop bool, p_revert bool) {
+func (*spriteMgrImpl) SetZIndex(obj gdx.Object, z int64) {}
+func (*spriteMgrImpl) PlayAnim(obj gdx.Object, p_name string, p_speed float64, isLoop bool, p_revert bool) {
 }
-func (pself *spriteMgrImpl) PlayBackwardsAnim(obj gdx.Object, p_name string) {}
-func (pself *spriteMgrImpl) PauseAnim(obj gdx.Object)                        {}
-func (pself *spriteMgrImpl) StopAnim(obj gdx.Object)                         {}
-func (pself *spriteMgrImpl) IsPlayingAnim(obj gdx.Object) bool {
+func (*spriteMgrImpl) PlayBackwardsAnim(obj gdx.Object, p_name string) {}
+func (*spriteMgrImpl) PauseAnim(obj gdx.Object)                        {}
+func (*spriteMgrImpl) StopAnim(obj gdx.Object)                         {}
+func (*spriteMgrImpl) IsPlayingAnim(obj gdx.Object) bool {
 	return false
 }
-func (pself *spriteMgrImpl) SetAnim(obj gdx.Object, p_name string) {}
-func (pself *spriteMgrImpl) GetAnim(obj gdx.Object) string {
+func (*spriteMgrImpl) SetAnim(obj gdx.Object, p_name string) {}
+func (*spriteMgrImpl) GetAnim(obj gdx.Object) string {
 	return ""
 }
-func (pself *spriteMgrImpl) SetAnimFrame(obj gdx.Object, p_frame int64) {}
-func (pself *spriteMgrImpl) GetAnimFrame(obj gdx.Object) int64 {
+func (*spriteMgrImpl) SetAnimFrame(obj gdx.Object, p_frame int64) {}
+func (*spriteMgrImpl) GetAnimFrame(obj gdx.Object) int64 {
 	return 0
 }
-func (pself *spriteMgrImpl) SetAnimSpeedScale(obj gdx.Object, p_speed_scale float64) {}
-func (pself *spriteMgrImpl) GetAnimSpeedScale(obj gdx.Object) float64 {
+func (*spriteMgrImpl) SetAnimSpeedScale(obj gdx.Object, p_speed_scale float64) {}
+func (*spriteMgrImpl) GetAnimSpeedScale(obj gdx.Object) float64 {
 	return 0
 }
-func (pself *spriteMgrImpl) GetAnimPlayingSpeed(obj gdx.Object) float64 {
+func (*spriteMgrImpl) GetAnimPlayingSpeed(obj gdx.Object) float64 {
 	return 0
 }
-func (pself *spriteMgrImpl) SetAnimCentered(obj gdx.Object, p_center bool) {}
-func (pself *spriteMgrImpl) IsAnimCentered(obj gdx.Object) bool {
+func (*spriteMgrImpl) SetAnimCentered(obj gdx.Object, p_center bool) {}
+func (*spriteMgrImpl) IsAnimCentered(obj gdx.Object) bool {
 	return false
 }
-func (pself *spriteMgrImpl) SetAnimOffset(obj gdx.Object, p_offset Vec2) {}
-func (pself *spriteMgrImpl) GetAnimOffset(obj gdx.Object) Vec2 {
+func (*spriteMgrImpl) SetAnimOffset(obj gdx.Object, p_offset Vec2) {}
+func (*spriteMgrImpl) GetAnimOffset(obj gdx.Object) Vec2 {
 	return Vec2{}
 }
-func (pself *spriteMgrImpl) SetAnimFlipH(obj gdx.Object, p_flip bool) {}
-func (pself *spriteMgrImpl) IsAnimFlippedH(obj gdx.Object) bool {
+func (*spriteMgrImpl) SetAnimFlipH(obj gdx.Object, p_flip bool) {}
+func (*spriteMgrImpl) IsAnimFlippedH(obj gdx.Object) bool {
 	return false
 }
-func (pself *spriteMgrImpl) SetAnimFlipV(obj gdx.Object, p_flip bool) {}
-func (pself *spriteMgrImpl) IsAnimFlippedV(obj gdx.Object) bool {
+func (*spriteMgrImpl) SetAnimFlipV(obj gdx.Object, p_flip bool) {}
+func (*spriteMgrImpl) IsAnimFlippedV(obj gdx.Object) bool {
 	return false
 }
-func (pself *spriteMgrImpl) GetCurrentAnimName(obj gdx.Object) string {
+func (*spriteMgrImpl) GetCurrentAnimName(obj gdx.Object) string {
 	return ""
 }
-func (pself *spriteMgrImpl) SetVelocity(obj gdx.Object, velocity Vec2) {}
-func (pself *spriteMgrImpl) GetVelocity(obj gdx.Object) Vec2 {
+func (*spriteMgrImpl) SetVelocity(obj gdx.Object, velocity Vec2) {}
+func (*spriteMgrImpl) GetVelocity(obj gdx.Object) Vec2 {
 	return Vec2{}
 }
-func (pself *spriteMgrImpl) IsOnFloor(obj gdx.Object) bool {
+func (*spriteMgrImpl) IsOnFloor(obj gdx.Object) bool {
 	return false
 }
-func (pself *spriteMgrImpl) IsOnFloorOnly(obj gdx.Object) bool {
+func (*spriteMgrImpl) IsOnFloorOnly(obj gdx.Object) bool {
 	return false
 }
-func (pself *spriteMgrImpl) IsOnWall(obj gdx.Object) bool {
+func (*spriteMgrImpl) IsOnWall(obj gdx.Object) bool {
 	return false
 }
-func (pself *spriteMgrImpl) IsOnWallOnly(obj gdx.Object) bool {
+func (*spriteMgrImpl) IsOnWallOnly(obj gdx.Object) bool {
 	return false
 }
-func (pself *spriteMgrImpl) IsOnCeiling(obj gdx.Object) bool {
+func (*spriteMgrImpl) IsOnCeiling(obj gdx.Object) bool {
 	return false
 }
-func (pself *spriteMgrImpl) IsOnCeilingOnly(obj gdx.Object) bool {
+func (*spriteMgrImpl) IsOnCeilingOnly(obj gdx.Object) bool {
 	return false
 }
-func (pself *spriteMgrImpl) GetLastMotion(obj gdx.Object) Vec2 {
+func (*spriteMgrImpl) GetLastMotion(obj gdx.Object) Vec2 {
 	return Vec2{}
 }
-func (pself *spriteMgrImpl) GetPositionDelta(obj gdx.Object) Vec2 {
+func (*spriteMgrImpl) GetPositionDelta(obj gdx.Object) Vec2 {
 	return Vec2{}
 }
-func (pself *spriteMgrImpl) GetFloorNormal(obj gdx.Object) Vec2 {
+func (*spriteMgrImpl) GetFloorNormal(obj gdx.Object) Vec2 {
 	return Vec2{}
 }
-func (pself *spriteMgrImpl) GetWallNormal(obj gdx.Object) Vec2 {
+func (*spriteMgrImpl) GetWallNormal(obj gdx.Object) Vec2 {
 	return Vec2{}
 }
-func (pself *spriteMgrImpl) GetRealVelocity(obj gdx.Object) Vec2 {
+func (*spriteMgrImpl) GetRealVelocity(obj gdx.Object) Vec2 {
 	return Vec2{}
 }
-func (pself *spriteMgrImpl) MoveAndSlide(obj gdx.Object)                {}
-func (pself *spriteMgrImpl) SetGravity(obj gdx.Object, gravity float64) {}
-func (pself *spriteMgrImpl) GetGravity(obj gdx.Object) float64 {
+func (*spriteMgrImpl) MoveAndSlide(obj gdx.Object)                {}
+func (*spriteMgrImpl) SetGravity(obj gdx.Object, gravity float64) {}
+func (*spriteMgrImpl) GetGravity(obj gdx.Object) float64 {
 	return 0
 }
-func (pself *spriteMgrImpl) SetMass(obj gdx.Object, mass float64) {}
-func (pself *spriteMgrImpl) GetMass(obj gdx.Object) float64 {
+func (*spriteMgrImpl) SetMass(obj gdx.Object, mass float64) {}
+func (*spriteMgrImpl) GetMass(obj gdx.Object) float64 {
 	return 0
 }
-func (pself *spriteMgrImpl) AddForce(obj gdx.Object, force Vec2)       {}
-func (pself *spriteMgrImpl) AddImpulse(obj gdx.Object, impulse Vec2)   {}
-func (pself *spriteMgrImpl) SetPhysicsMode(obj gdx.Object, mode int64) {}
-func (pself *spriteMgrImpl) GetPhysicsMode(obj gdx.Object) int64 {
+func (*spriteMgrImpl) AddForce(obj gdx.Object, force Vec2)       {}
+func (*spriteMgrImpl) AddImpulse(obj gdx.Object, impulse Vec2)   {}
+func (*spriteMgrImpl) SetPhysicsMode(obj gdx.Object, mode int64) {}
+func (*spriteMgrImpl) GetPhysicsMode(obj gdx.Object) int64 {
 	return 0
 }
-func (pself *spriteMgrImpl) SetUseGravity(obj gdx.Object, enabled bool) {}
-func (pself *spriteMgrImpl) IsUseGravity(obj gdx.Object) bool {
+func (*spriteMgrImpl) SetUseGravity(obj gdx.Object, enabled bool) {}
+func (*spriteMgrImpl) IsUseGravity(obj gdx.Object) bool {
 	return false
 }
-func (pself *spriteMgrImpl) SetGravityScale(obj gdx.Object, scale float64) {}
-func (pself *spriteMgrImpl) GetGravityScale(obj gdx.Object) float64 {
+func (*spriteMgrImpl) SetGravityScale(obj gdx.Object, scale float64) {}
+func (*spriteMgrImpl) GetGravityScale(obj gdx.Object) float64 {
 	return 0
 }
-func (pself *spriteMgrImpl) SetDrag(obj gdx.Object, drag float64) {}
-func (pself *spriteMgrImpl) GetDrag(obj gdx.Object) float64 {
+func (*spriteMgrImpl) SetDrag(obj gdx.Object, drag float64) {}
+func (*spriteMgrImpl) GetDrag(obj gdx.Object) float64 {
 	return 0
 }
-func (pself *spriteMgrImpl) SetFriction(obj gdx.Object, friction float64) {}
-func (pself *spriteMgrImpl) GetFriction(obj gdx.Object) float64 {
+func (*spriteMgrImpl) SetFriction(obj gdx.Object, friction float64) {}
+func (*spriteMgrImpl) GetFriction(obj gdx.Object) float64 {
 	return 0
 }
-func (pself *spriteMgrImpl) SetCollisionLayer(obj gdx.Object, layer int64) {}
-func (pself *spriteMgrImpl) GetCollisionLayer(obj gdx.Object) int64 {
+func (*spriteMgrImpl) SetCollisionLayer(obj gdx.Object, layer int64) {}
+func (*spriteMgrImpl) GetCollisionLayer(obj gdx.Object) int64 {
 	return 0
 }
-func (pself *spriteMgrImpl) SetCollisionMask(obj gdx.Object, mask int64) {}
-func (pself *spriteMgrImpl) GetCollisionMask(obj gdx.Object) int64 {
+func (*spriteMgrImpl) SetCollisionMask(obj gdx.Object, mask int64) {}
+func (*spriteMgrImpl) GetCollisionMask(obj gdx.Object) int64 {
 	return 0
 }
-func (pself *spriteMgrImpl) SetTriggerLayer(obj gdx.Object, layer int64) {}
-func (pself *spriteMgrImpl) GetTriggerLayer(obj gdx.Object) int64 {
+func (*spriteMgrImpl) SetTriggerLayer(obj gdx.Object, layer int64) {}
+func (*spriteMgrImpl) GetTriggerLayer(obj gdx.Object) int64 {
 	return 0
 }
-func (pself *spriteMgrImpl) SetTriggerMask(obj gdx.Object, mask int64) {}
-func (pself *spriteMgrImpl) GetTriggerMask(obj gdx.Object) int64 {
+func (*spriteMgrImpl) SetTriggerMask(obj gdx.Object, mask int64) {}
+func (*spriteMgrImpl) GetTriggerMask(obj gdx.Object) int64 {
 	return 0
 }
-func (pself *spriteMgrImpl) SetColliderRect(obj gdx.Object, center Vec2, size Vec2)           {}
-func (pself *spriteMgrImpl) SetColliderCircle(obj gdx.Object, center Vec2, radius float64)    {}
-func (pself *spriteMgrImpl) SetColliderCapsule(obj gdx.Object, center Vec2, size Vec2)        {}
-func (pself *spriteMgrImpl) SetColliderPolygon(obj gdx.Object, center Vec2, points gdx.Array) {}
-func (pself *spriteMgrImpl) SetCollisionEnabled(obj gdx.Object, enabled bool)                 {}
-func (pself *spriteMgrImpl) IsCollisionEnabled(obj gdx.Object) bool {
+func (*spriteMgrImpl) SetColliderRect(obj gdx.Object, center Vec2, size Vec2)           {}
+func (*spriteMgrImpl) SetColliderCircle(obj gdx.Object, center Vec2, radius float64)    {}
+func (*spriteMgrImpl) SetColliderCapsule(obj gdx.Object, center Vec2, size Vec2)        {}
+func (*spriteMgrImpl) SetColliderPolygon(obj gdx.Object, center Vec2, points gdx.Array) {}
+func (*spriteMgrImpl) SetCollisionEnabled(obj gdx.Object, enabled bool)                 {}
+func (*spriteMgrImpl) IsCollisionEnabled(obj gdx.Object) bool {
 	return false
 }
-func (pself *spriteMgrImpl) SetTriggerRect(obj gdx.Object, center Vec2, size Vec2)           {}
-func (pself *spriteMgrImpl) SetTriggerCircle(obj gdx.Object, center Vec2, radius float64)    {}
-func (pself *spriteMgrImpl) SetTriggerCapsule(obj gdx.Object, center Vec2, size Vec2)        {}
-func (pself *spriteMgrImpl) SetTriggerPolygon(obj gdx.Object, center Vec2, points gdx.Array) {}
-func (pself *spriteMgrImpl) SetTriggerEnabled(obj gdx.Object, trigger bool)                  {}
-func (pself *spriteMgrImpl) IsTriggerEnabled(obj gdx.Object) bool {
+func (*spriteMgrImpl) SetTriggerRect(obj gdx.Object, center Vec2, size Vec2)           {}
+func (*spriteMgrImpl) SetTriggerCircle(obj gdx.Object, center Vec2, radius float64)    {}
+func (*spriteMgrImpl) SetTriggerCapsule(obj gdx.Object, center Vec2, size Vec2)        {}
+func (*spriteMgrImpl) SetTriggerPolygon(obj gdx.Object, center Vec2, points gdx.Array) {}
+func (*spriteMgrImpl) SetTriggerEnabled(obj gdx.Object, trigger bool)                  {}
+func (*spriteMgrImpl) IsTriggerEnabled(obj gdx.Object) bool {
 	return false
 }
-func (pself *spriteMgrImpl) CheckCollisionByColor(obj gdx.Object, color Color, color_threshold float64, alpha_threshold float64) bool {
+func (*spriteMgrImpl) CheckCollisionByColor(obj gdx.Object, color Color, color_threshold float64, alpha_threshold float64) bool {
 	return false
 }
-func (pself *spriteMgrImpl) CheckCollisionByAlpha(obj gdx.Object, alpha_threshold float64) bool {
+func (*spriteMgrImpl) CheckCollisionByAlpha(obj gdx.Object, alpha_threshold float64) bool {
 	return false
 }
-func (pself *spriteMgrImpl) CheckCollisionWithSprite(obj gdx.Object, obj_b gdx.Object, alpha_threshold float64, use_pixel_perfect bool) bool {
+func (*spriteMgrImpl) CheckCollisionWithSprite(obj gdx.Object, obj_b gdx.Object, alpha_threshold float64, use_pixel_perfect bool) bool {
 	return false
 }
-func (pself *spriteMgrImpl) SetPixelCollisionSamplingStep(step int64) {}
-func (pself *spriteMgrImpl) GetPixelCollisionSamplingStep() int64 {
+func (*spriteMgrImpl) SetPixelCollisionSamplingStep(step int64) {}
+func (*spriteMgrImpl) GetPixelCollisionSamplingStep() int64 {
 	return 0
 }
-func (pself *spriteMgrImpl) BatchUpdateTransforms(buffer []float32) {}
-func (pself *spriteMgrImpl) BatchUpdateVisuals(buffer []float32)    {}
-func (pself *spriteMgrImpl) BatchRetrievePositions(objs gdx.Array) gdx.Array {
+func (*spriteMgrImpl) BatchUpdateTransforms(buffer []float32) {}
+func (*spriteMgrImpl) BatchUpdateVisuals(buffer []float32)    {}
+func (*spriteMgrImpl) BatchRetrievePositions(objs gdx.Array) gdx.Array {
 	return nil
 }
 
 // ITilemapMgr
-func (pself *tilemapMgrImpl) OpenDrawTilesWithSize(tile_size int64)            {}
-func (pself *tilemapMgrImpl) OpenDrawTiles()                                   {}
-func (pself *tilemapMgrImpl) SetLayerIndex(index int64)                        {}
-func (pself *tilemapMgrImpl) SetTile(texture_path string, with_collision bool) {}
-func (pself *tilemapMgrImpl) SetTileWithCollisionInfo(texture_path string, collision_points gdx.Array) {
-}
-func (pself *tilemapMgrImpl) SetLayerOffset(index int64, offset Vec2) {}
-func (pself *tilemapMgrImpl) GetLayerOffset(index int64) Vec2 {
+func (*tilemapMgrImpl) OpenDrawTilesWithSize(tile_size int64)                                    {}
+func (*tilemapMgrImpl) OpenDrawTiles()                                                           {}
+func (*tilemapMgrImpl) SetLayerIndex(index int64)                                                {}
+func (*tilemapMgrImpl) SetTile(texture_path string, with_collision bool)                         {}
+func (*tilemapMgrImpl) SetTileWithCollisionInfo(texture_path string, collision_points gdx.Array) {}
+func (*tilemapMgrImpl) SetLayerOffset(index int64, offset Vec2)                                  {}
+func (*tilemapMgrImpl) GetLayerOffset(index int64) Vec2 {
 	return Vec2{}
 }
-func (pself *tilemapMgrImpl) PlaceTiles(positions gdx.Array, texture_path string) {}
-func (pself *tilemapMgrImpl) PlaceTilesWithLayer(positions gdx.Array, texture_path string, layer_index int64) {
+func (*tilemapMgrImpl) PlaceTiles(positions gdx.Array, texture_path string) {}
+func (*tilemapMgrImpl) PlaceTilesWithLayer(positions gdx.Array, texture_path string, layer_index int64) {
 }
-func (pself *tilemapMgrImpl) PlaceTile(pos Vec2, texture_path string)                             {}
-func (pself *tilemapMgrImpl) PlaceTileWithLayer(pos Vec2, texture_path string, layer_index int64) {}
-func (pself *tilemapMgrImpl) EraseTile(pos Vec2)                                                  {}
-func (pself *tilemapMgrImpl) EraseTileWithLayer(pos Vec2, layer_index int64)                      {}
-func (pself *tilemapMgrImpl) GetTile(pos Vec2) string {
+func (*tilemapMgrImpl) PlaceTile(pos Vec2, texture_path string)                             {}
+func (*tilemapMgrImpl) PlaceTileWithLayer(pos Vec2, texture_path string, layer_index int64) {}
+func (*tilemapMgrImpl) EraseTile(pos Vec2)                                                  {}
+func (*tilemapMgrImpl) EraseTileWithLayer(pos Vec2, layer_index int64)                      {}
+func (*tilemapMgrImpl) GetTile(pos Vec2) string {
 	return ""
 }
-func (pself *tilemapMgrImpl) GetTileWithLayer(pos Vec2, layer_index int64) string {
+func (*tilemapMgrImpl) GetTileWithLayer(pos Vec2, layer_index int64) string {
 	return ""
 }
-func (pself *tilemapMgrImpl) CloseDrawTiles()        {}
-func (pself *tilemapMgrImpl) ExitTilemapEditorMode() {}
+func (*tilemapMgrImpl) CloseDrawTiles()        {}
+func (*tilemapMgrImpl) ExitTilemapEditorMode() {}
 
 // ITilemapparserMgr
-func (pself *tilemapparserMgrImpl) LoadTilemap(json_path string) {}
-func (pself *tilemapparserMgrImpl) UnloadTilemap(name string)    {}
-func (pself *tilemapparserMgrImpl) DestroyAllTilemaps()          {}
-func (pself *tilemapparserMgrImpl) HasTilemap(name string) bool {
+func (*tilemapparserMgrImpl) LoadTilemap(json_path string) {}
+func (*tilemapparserMgrImpl) UnloadTilemap(name string)    {}
+func (*tilemapparserMgrImpl) DestroyAllTilemaps()          {}
+func (*tilemapparserMgrImpl) HasTilemap(name string) bool {
 	return false
 }
-func (pself *tilemapparserMgrImpl) GetTilemapLayerCount(name string) int64 {
+func (*tilemapparserMgrImpl) GetTilemapLayerCount(name string) int64 {
 	return 0
 }
 
 // IUiMgr
-func (pself *uiMgrImpl) BindNode(obj gdx.Object, rel_path string) gdx.Object {
+func (*uiMgrImpl) BindNode(obj gdx.Object, rel_path string) gdx.Object {
 	return 0
 }
-func (pself *uiMgrImpl) CreateNode(path string) gdx.Object {
+func (*uiMgrImpl) CreateNode(path string) gdx.Object {
 	return 0
 }
-func (pself *uiMgrImpl) CreateButton(path string, text string) gdx.Object {
+func (*uiMgrImpl) CreateButton(path string, text string) gdx.Object {
 	return 0
 }
-func (pself *uiMgrImpl) CreateLabel(path string, text string) gdx.Object {
+func (*uiMgrImpl) CreateLabel(path string, text string) gdx.Object {
 	return 0
 }
-func (pself *uiMgrImpl) CreateImage(path string) gdx.Object {
+func (*uiMgrImpl) CreateImage(path string) gdx.Object {
 	return 0
 }
-func (pself *uiMgrImpl) CreateToggle(path string, value bool) gdx.Object {
+func (*uiMgrImpl) CreateToggle(path string, value bool) gdx.Object {
 	return 0
 }
-func (pself *uiMgrImpl) CreateSlider(path string, value float64) gdx.Object {
+func (*uiMgrImpl) CreateSlider(path string, value float64) gdx.Object {
 	return 0
 }
-func (pself *uiMgrImpl) CreateInput(path string, text string) gdx.Object {
+func (*uiMgrImpl) CreateInput(path string, text string) gdx.Object {
 	return 0
 }
-func (pself *uiMgrImpl) DestroyNode(obj gdx.Object) bool {
+func (*uiMgrImpl) DestroyNode(obj gdx.Object) bool {
 	return false
 }
-func (pself *uiMgrImpl) GetType(obj gdx.Object) int64 {
+func (*uiMgrImpl) GetType(obj gdx.Object) int64 {
 	return 0
 }
-func (pself *uiMgrImpl) SetText(obj gdx.Object, text string) {}
-func (pself *uiMgrImpl) GetText(obj gdx.Object) string {
+func (*uiMgrImpl) SetText(obj gdx.Object, text string) {}
+func (*uiMgrImpl) GetText(obj gdx.Object) string {
 	return ""
 }
-func (pself *uiMgrImpl) SetTexture(obj gdx.Object, path string) {}
-func (pself *uiMgrImpl) GetTexture(obj gdx.Object) string {
+func (*uiMgrImpl) SetTexture(obj gdx.Object, path string) {}
+func (*uiMgrImpl) GetTexture(obj gdx.Object) string {
 	return ""
 }
-func (pself *uiMgrImpl) SetColor(obj gdx.Object, color Color) {}
-func (pself *uiMgrImpl) GetColor(obj gdx.Object) Color {
+func (*uiMgrImpl) SetColor(obj gdx.Object, color Color) {}
+func (*uiMgrImpl) GetColor(obj gdx.Object) Color {
 	return Color{}
 }
-func (pself *uiMgrImpl) SetFontSize(obj gdx.Object, size int64) {}
-func (pself *uiMgrImpl) GetFontSize(obj gdx.Object) int64 {
+func (*uiMgrImpl) SetFontSize(obj gdx.Object, size int64) {}
+func (*uiMgrImpl) GetFontSize(obj gdx.Object) int64 {
 	return 0
 }
-func (pself *uiMgrImpl) SetVisible(obj gdx.Object, visible bool) {}
-func (pself *uiMgrImpl) GetVisible(obj gdx.Object) bool {
+func (*uiMgrImpl) SetVisible(obj gdx.Object, visible bool) {}
+func (*uiMgrImpl) GetVisible(obj gdx.Object) bool {
 	return false
 }
-func (pself *uiMgrImpl) SetInteractable(obj gdx.Object, interactable bool) {}
-func (pself *uiMgrImpl) GetInteractable(obj gdx.Object) bool {
+func (*uiMgrImpl) SetInteractable(obj gdx.Object, interactable bool) {}
+func (*uiMgrImpl) GetInteractable(obj gdx.Object) bool {
 	return false
 }
-func (pself *uiMgrImpl) SetRect(obj gdx.Object, rect Rect2) {}
-func (pself *uiMgrImpl) GetRect(obj gdx.Object) Rect2 {
+func (*uiMgrImpl) SetRect(obj gdx.Object, rect Rect2) {}
+func (*uiMgrImpl) GetRect(obj gdx.Object) Rect2 {
 	return Rect2{}
 }
-func (pself *uiMgrImpl) GetLayoutDirection(obj gdx.Object) int64 {
+func (*uiMgrImpl) GetLayoutDirection(obj gdx.Object) int64 {
 	return 0
 }
-func (pself *uiMgrImpl) SetLayoutDirection(obj gdx.Object, value int64) {}
-func (pself *uiMgrImpl) GetLayoutMode(obj gdx.Object) int64 {
+func (*uiMgrImpl) SetLayoutDirection(obj gdx.Object, value int64) {}
+func (*uiMgrImpl) GetLayoutMode(obj gdx.Object) int64 {
 	return 0
 }
-func (pself *uiMgrImpl) SetLayoutMode(obj gdx.Object, value int64) {}
-func (pself *uiMgrImpl) GetAnchorsPreset(obj gdx.Object) int64 {
+func (*uiMgrImpl) SetLayoutMode(obj gdx.Object, value int64) {}
+func (*uiMgrImpl) GetAnchorsPreset(obj gdx.Object) int64 {
 	return 0
 }
-func (pself *uiMgrImpl) SetAnchorsPreset(obj gdx.Object, value int64) {}
-func (pself *uiMgrImpl) GetScale(obj gdx.Object) Vec2 {
+func (*uiMgrImpl) SetAnchorsPreset(obj gdx.Object, value int64) {}
+func (*uiMgrImpl) GetScale(obj gdx.Object) Vec2 {
 	return Vec2{}
 }
-func (pself *uiMgrImpl) SetScale(obj gdx.Object, value Vec2) {}
-func (pself *uiMgrImpl) GetPosition(obj gdx.Object) Vec2 {
+func (*uiMgrImpl) SetScale(obj gdx.Object, value Vec2) {}
+func (*uiMgrImpl) GetPosition(obj gdx.Object) Vec2 {
 	return Vec2{}
 }
-func (pself *uiMgrImpl) SetPosition(obj gdx.Object, value Vec2) {}
-func (pself *uiMgrImpl) GetSize(obj gdx.Object) Vec2 {
+func (*uiMgrImpl) SetPosition(obj gdx.Object, value Vec2) {}
+func (*uiMgrImpl) GetSize(obj gdx.Object) Vec2 {
 	return Vec2{}
 }
-func (pself *uiMgrImpl) SetSize(obj gdx.Object, value Vec2) {}
-func (pself *uiMgrImpl) GetGlobalPosition(obj gdx.Object) Vec2 {
+func (*uiMgrImpl) SetSize(obj gdx.Object, value Vec2) {}
+func (*uiMgrImpl) GetGlobalPosition(obj gdx.Object) Vec2 {
 	return Vec2{}
 }
-func (pself *uiMgrImpl) SetGlobalPosition(obj gdx.Object, value Vec2) {}
-func (pself *uiMgrImpl) GetRotation(obj gdx.Object) float64 {
+func (*uiMgrImpl) SetGlobalPosition(obj gdx.Object, value Vec2) {}
+func (*uiMgrImpl) GetRotation(obj gdx.Object) float64 {
 	return 0
 }
-func (pself *uiMgrImpl) SetRotation(obj gdx.Object, value float64) {}
-func (pself *uiMgrImpl) GetFlip(obj gdx.Object, horizontal bool) bool {
+func (*uiMgrImpl) SetRotation(obj gdx.Object, value float64) {}
+func (*uiMgrImpl) GetFlip(obj gdx.Object, horizontal bool) bool {
 	return false
 }
-func (pself *uiMgrImpl) SetFlip(obj gdx.Object, horizontal bool, is_flip bool) {}
+func (*uiMgrImpl) SetFlip(obj gdx.Object, horizontal bool, is_flip bool) {}
