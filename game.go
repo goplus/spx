@@ -155,10 +155,6 @@ func isDebugPerfEnabled() bool {
 	return runtimeStateMgr.DebugPerfEnabled(activeGameDebugState())
 }
 
-func setPhysicsEnabled(enabled bool) {
-	runtimeStateMgr.SetPhysicsEnabled(activeGameRuntimeState(), enabled)
-}
-
 func (p *Game) setPhysicsEnabled(enabled bool) {
 	runtimeStateMgr.SetPhysicsEnabled(&p.gameRuntimeState, enabled)
 }
@@ -167,8 +163,8 @@ func isPhysicsEnabled() bool {
 	return runtimeStateMgr.PhysicsEnabled(activeGameRuntimeState())
 }
 
-func resetImageSizeCache(g *Game) {
-	runtimeStateMgr.ResetImageSizeCache(runtimeStateOfGame(g))
+func (p *Game) resetImageSizeCache() {
+	runtimeStateMgr.ResetImageSizeCache(&p.gameRuntimeState)
 }
 
 func imageSizeCacheRef() *sync.Map {
@@ -256,7 +252,7 @@ func (p *Game) reset() {
 	p.lifecycleState.OncePathFinder = sync.Once{}
 	p.sprs = make(map[string]Sprite)
 
-	resetImageSizeCache(p)
+	p.resetImageSizeCache()
 	p.resetEventQueueStats()
 	close(p.events)
 
