@@ -16,6 +16,10 @@ func SetWindowScale(scale float64) {
 	windowScale = scale
 }
 
+func WindowScale() float64 {
+	return windowScale
+}
+
 type UiNode = gdx.UiNode
 
 func NewUiNode[T any]() *T {
@@ -65,7 +69,7 @@ func SetDefaultFont(path string) {
 }
 
 func BridgeSetCameraPosition(pos Vec2) {
-	Managers().CameraMgr.SetCameraPosition(NewVec2(pos.X, -pos.Y))
+	Managers().CameraMgr.SetPosition(pos)
 }
 
 func BridgeViewToWorld(pos Vec2) Vec2 {
@@ -80,9 +84,8 @@ func BridgeWorldToView(pos Vec2) Vec2 {
 
 func bridgeCameraTransform() (Vec2, float64) {
 	cameraMgr := Managers().CameraMgr
-	cameraPos := cameraMgr.GetCameraPosition()
-	cameraPos.Y = -cameraPos.Y
-	return cameraPos, cameraMgr.GetCameraZoom().X / windowScale
+	cameraPos := cameraMgr.GetPosition()
+	return cameraPos, cameraMgr.GetCameraZoom().X / WindowScale()
 }
 
 func ViewToWorld(pos Vec2) Vec2 {
@@ -130,6 +133,10 @@ func RadToDeg(radians float64) float64 {
 
 func Sincos(rad float64) Vec2 {
 	return NewVec2(math.Sincos(rad))
+}
+
+func UniformVec2(v float64) Vec2 {
+	return NewVec2(v, v)
 }
 
 func F64Tof32(slice []float64) []float32 {

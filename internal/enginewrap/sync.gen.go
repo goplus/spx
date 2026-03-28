@@ -246,57 +246,57 @@ func (pself *audioMgrImpl) IsPlaying(aid int64) bool {
 }
 
 // ICameraMgr
-func (pself *cameraMgrImpl) GetCameraPosition() Vec2 {
+func (p *cameraMgrImpl) GetCameraPosition() Vec2 {
 	var _ret1 Vec2
 	callInMainThread(func() {
 		_ret1 = gdx.CameraMgr.GetCameraPosition()
 	})
 	return _ret1
 }
-func (pself *cameraMgrImpl) SetCameraPosition(position Vec2) {
+func (p *cameraMgrImpl) SetCameraPosition(position Vec2) {
 	callInMainThread(func() {
 		gdx.CameraMgr.SetCameraPosition(position)
 	})
 }
-func (pself *cameraMgrImpl) GetCameraZoom() Vec2 {
+func (p *cameraMgrImpl) GetCameraZoom() Vec2 {
 	var _ret1 Vec2
 	callInMainThread(func() {
 		_ret1 = gdx.CameraMgr.GetCameraZoom()
 	})
 	return _ret1
 }
-func (pself *cameraMgrImpl) SetCameraZoom(size Vec2) {
+func (p *cameraMgrImpl) SetCameraZoom(size Vec2) {
 	callInMainThread(func() {
 		gdx.CameraMgr.SetCameraZoom(size)
 	})
 }
-func (pself *cameraMgrImpl) GetViewportRect() Rect2 {
+func (p *cameraMgrImpl) GetViewportRect() Rect2 {
 	var _ret1 Rect2
 	callInMainThread(func() {
 		_ret1 = gdx.CameraMgr.GetViewportRect()
 	})
 	return _ret1
 }
-func (pself *cameraMgrImpl) GetGlobalCameraRect() Rect2 {
+func (p *cameraMgrImpl) GetGlobalCameraRect() Rect2 {
 	var _ret1 Rect2
 	callInMainThread(func() {
 		_ret1 = gdx.CameraMgr.GetGlobalCameraRect()
 	})
 	return _ret1
 }
-func (pself *cameraMgrImpl) GetStageLimitsRect() Rect2 {
+func (p *cameraMgrImpl) GetStageLimitsRect() Rect2 {
 	var _ret1 Rect2
 	callInMainThread(func() {
 		_ret1 = gdx.CameraMgr.GetStageLimitsRect()
 	})
 	return _ret1
 }
-func (pself *cameraMgrImpl) SetCameraLimit(side int64, limit int64) {
+func (p *cameraMgrImpl) SetCameraLimit(side int64, limit int64) {
 	callInMainThread(func() {
 		gdx.CameraMgr.SetCameraLimit(side, limit)
 	})
 }
-func (pself *cameraMgrImpl) SetCameraSmoothing(enabled bool) {
+func (p *cameraMgrImpl) SetCameraSmoothing(enabled bool) {
 	callInMainThread(func() {
 		gdx.CameraMgr.SetCameraSmoothing(enabled)
 	})

@@ -91,7 +91,7 @@ func (s *UiSay) calculateScale(winSize mathf.Vec2, isThink bool) mathf.Vec2 {
 	uniformScale := math.Min(scaleVec.X, scaleVec.Y)
 
 	zoom := mgr.CameraMgr.GetCameraZoom()
-	windowScaleVec := mathf.NewVec2(windowScale, windowScale)
+	windowScaleVec := engine.UniformVec2(engine.WindowScale())
 
 	return zoom.Div(windowScaleVec).Mulf(uniformScale * specialScale)
 }

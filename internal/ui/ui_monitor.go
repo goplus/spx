@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"github.com/goplus/spbase/mathf"
 	. "github.com/goplus/spbase/mathf"
 
 	"github.com/goplus/spx/v2/internal/engine"
@@ -44,8 +43,8 @@ func (pself *UiMonitor) SetVisible(isOn bool) {
 }
 
 func (pself *UiMonitor) UpdateScale(x float64) {
-	x *= windowScale
-	mgr.UiMgr.SetScale(pself.GetId(), mathf.NewVec2(x, x))
+	x *= engine.WindowScale()
+	mgr.UiMgr.SetScale(pself.GetId(), engine.UniformVec2(x))
 }
 func (pself *UiMonitor) UpdatePos(wpos Vec2) {
 	mgr.UiMgr.SetGlobalPosition(pself.GetId(), ViewToUI(wpos))

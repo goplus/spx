@@ -278,7 +278,7 @@ func (a *animationComponent) adaptAnimBitmapResolution(ani *coreproject.AniConfi
 		return
 	}
 	renderScale := a.sprite.getAnimRenderScale(ani.AdaptAnimBitmapResolution)
-	syncSprite.SetRenderScale(mathf.NewVec2(renderScale, renderScale))
+	syncSprite.SetRenderScale(engine.UniformVec2(renderScale))
 }
 
 func (a *animationComponent) prepareAnimationPlayback(animName SpriteAnimationName, ani *coreproject.AniConfig) {

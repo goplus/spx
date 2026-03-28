@@ -10,7 +10,6 @@ import (
 var (
 	mgr *enginewrap.EngineManagers
 
-	windowScale             float64
 	baseScreenWidth         int
 	baseScreenHeight        int
 	clampUIPositionInScreen bool
@@ -24,10 +23,6 @@ func Init(managers *enginewrap.EngineManagers) {
 	mgr = managers
 }
 
-func SetWindowScale(scale float64) {
-	windowScale = scale
-}
-
 func SetBaseScreenSize(width, height int) {
 	baseScreenWidth = width
 	baseScreenHeight = height
@@ -39,7 +34,7 @@ func ClampUIPositionInScreen(isClamp bool) {
 
 // ViewToUI converts centered view coordinates to UI coordinates.
 func ViewToUI(pos Vec2) Vec2 {
-	pos = pos.Mulf(windowScale)
+	pos = pos.Mulf(engine.WindowScale())
 	pos = NewVec2(pos.X, -pos.Y)
 	viewport := mgr.CameraMgr.GetViewportRect()
 	return pos.Add(viewport.Size.Mulf(0.5)).Sub(viewport.Position)
