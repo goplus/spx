@@ -146,7 +146,7 @@ func (p *Game) getMousePos() (x, y float64) {
 }
 
 func (p *Game) Username() string {
-	panic("todo")
+	return ""
 }
 
 func (p *Game) WaitNextFrame() float64 {

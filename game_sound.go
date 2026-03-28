@@ -97,7 +97,10 @@ func (p *Game) ChangeSoundEffect(kind SoundEffectKind, delta float64) {
 }
 
 func (p *Game) ClearSoundEffects() {
-	panic("todo")
+	if p.audioState.SoundObj == 0 {
+		return
+	}
+	p.clearSoundEffects(p.audioState.SoundObj)
 }
 
 func (p *Game) StopAllSounds() {
@@ -238,4 +241,9 @@ func (p *Game) setSoundEffect(soundObj engine.Object, kind SoundEffectKind, valu
 
 func (p *Game) changeSoundEffect(soundObj engine.Object, kind SoundEffectKind, delta float64) {
 	p.setSoundEffect(soundObj, kind, p.getSoundEffect(soundObj, kind)+delta)
+}
+
+func (p *Game) clearSoundEffects(soundObj engine.Object) {
+	p.soundMgr.SetPan(soundObj, 0)
+	p.soundMgr.SetPitch(soundObj, 0)
 }
