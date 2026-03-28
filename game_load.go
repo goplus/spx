@@ -149,7 +149,6 @@ func (p *Game) setupPlatformAndCamera(proj *coreproject.ProjectConfig) {
 		p.displayState.WindowHeight,
 	)
 	engine.SetWindowScale(p.displayState.WindowScale)
-	ui.SetWindowScale(p.displayState.WindowScale)
 	ui.SetBaseScreenSize(baseScreenWidth, baseScreenHeight)
 	ui.ClampUIPositionInScreen(isWindowMapSizeEqual)
 

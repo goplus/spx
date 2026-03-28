@@ -1,9 +1,6 @@
 package ui
 
-import (
-	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v2/internal/engine"
-)
+import "github.com/goplus/spx/v2/internal/engine"
 
 type UiDebug struct {
 	UiNode
@@ -21,7 +18,7 @@ func (pself *UiDebug) OnStart() {
 }
 
 func (pself *UiDebug) Show(msg string) {
-	mgr.UiMgr.SetScale(pself.GetId(), mathf.NewVec2(windowScale, windowScale))
+	mgr.UiMgr.SetScale(pself.GetId(), engine.UniformVec2(engine.WindowScale()))
 	mgr.UiMgr.SetVisible(pself.input.GetId(), msg != "")
 	mgr.UiMgr.SetText(pself.input.GetId(), msg)
 }

@@ -23,7 +23,7 @@ func (pself *Sprite) UpdateTexture(path string, renderScale float64, isUpdateTex
 	if isUpdateTexture {
 		pself.SetTexture(pself.PicPath)
 	}
-	pself.SetRenderScale(NewVec2(renderScale, renderScale))
+	pself.SetRenderScale(UniformVec2(renderScale))
 }
 
 func (pself *Sprite) UpdateTextureAtlas(path string, rect2 Rect2, renderScale float64, isUpdateTexture bool) {
@@ -35,7 +35,7 @@ func (pself *Sprite) UpdateTextureAtlas(path string, rect2 Rect2, renderScale fl
 	if isUpdateTexture {
 		pself.SetTextureAtlas(pself.PicPath, rect2)
 	}
-	pself.SetRenderScale(NewVec2(renderScale, renderScale))
+	pself.SetRenderScale(UniformVec2(renderScale))
 }
 
 func (pself *Sprite) OnTriggerEnter(target gdx.ISpriter) {

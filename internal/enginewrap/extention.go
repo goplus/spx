@@ -1,6 +1,7 @@
 package enginewrap
 
 import (
+	. "github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v2/internal/engine/platform"
 	spxlog "github.com/goplus/spx/v2/internal/log"
 )
@@ -28,16 +29,21 @@ const (
 	MOUSE_BUTTON_MIDDLE int64 = 3
 )
 
-// =============== input ===================
 func (pself *inputMgrImpl) MousePressed() bool {
 	return inputMgr.GetMouseState(MOUSE_BUTTON_LEFT) || inputMgr.GetMouseState(MOUSE_BUTTON_RIGHT)
 }
 
-// =============== window ===================
-
 func (pself *platformMgrImpl) SetRunnableOnUnfocused(flag bool) {
 	if !flag {
-		// TODO: implement pausing when window loses focus
 		spxlog.Warn("SetRunnableOnUnfocused(false) is not implemented yet")
 	}
+}
+
+func (p *cameraMgrImpl) GetPosition() Vec2 {
+	pos := p.GetCameraPosition()
+	return NewVec2(pos.X, -pos.Y)
+}
+
+func (p *cameraMgrImpl) SetPosition(position Vec2) {
+	p.SetCameraPosition(NewVec2(position.X, -position.Y))
 }

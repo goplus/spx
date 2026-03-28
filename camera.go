@@ -101,7 +101,7 @@ func (c *cameraImpl) ViewportRect() (float64, float64, float64, float64) {
 func (c *cameraImpl) SetZoom(scale float64) {
 	c.setDirtyFlag(true)
 	scale *= c.g.displayState.WindowScale
-	c.engine().CameraMgr.SetCameraZoom(mathf.NewVec2(scale, scale))
+	c.engine().CameraMgr.SetCameraZoom(engine.UniformVec2(scale))
 }
 
 func (c *cameraImpl) Zoom() float64 {
