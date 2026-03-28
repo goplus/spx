@@ -70,16 +70,25 @@ func TestGameClearSoundEffectsResetsPanAndPitch(t *testing.T) {
 	}
 }
 
-func TestGameClearSoundEffectsSkipsAllocWhenUnused(t *testing.T) {
-	backend := &fakeAudioBackend{}
+func TestGameClearSoundEffectsAllocatesWhenUnused(t *testing.T) {
+	backend := &fakeAudioBackend{pan: 0.4, pitch: 1.25}
 	var g Game
 	g.soundMgr = internalaudio.Manager{}
 	g.soundMgr.Init(backend)
 
 	g.ClearSoundEffects()
 
-	if backend.createCalls != 0 {
-		t.Fatalf("CreateAudio calls = %d, want 0", backend.createCalls)
+	if backend.createCalls != 1 {
+		t.Fatalf("CreateAudio calls = %d, want 1", backend.createCalls)
+	}
+	if g.audioState.SoundObj != 77 {
+		t.Fatalf("SoundObj = %d, want 77", g.audioState.SoundObj)
+	}
+	if backend.pan != 0 {
+		t.Fatalf("pan = %v, want 0", backend.pan)
+	}
+	if backend.pitch != 0 {
+		t.Fatalf("pitch = %v, want 0", backend.pitch)
 	}
 }
 
