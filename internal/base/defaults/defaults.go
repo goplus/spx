@@ -1,4 +1,4 @@
-package valueutil
+package defaults
 
 func OrDefault[T any](pval *T, defaultValue T) T {
 	if pval == nil {

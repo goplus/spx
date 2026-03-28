@@ -20,15 +20,15 @@ import (
 	"fmt"
 
 	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v2/internal/base/collisionutil"
-	"github.com/goplus/spx/v2/internal/base/valueutil"
+	"github.com/goplus/spx/v2/internal/base/collision"
+	"github.com/goplus/spx/v2/internal/base/defaults"
 	coreproject "github.com/goplus/spx/v2/internal/core/project"
 	"github.com/goplus/spx/v2/internal/engine"
 	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
 func parseLayerMaskValue(pval *int64) int64 {
-	return valueutil.OrDefault(pval, 1)
+	return defaults.OrDefault(pval, 1)
 }
 
 // physicsComponent encapsulates all physics-related functionality.
@@ -54,10 +54,10 @@ func (p *physicsComponent) initialize(sprite *SpriteImpl, spriteCfg *coreproject
 	p.initTriggerConfig(sprite, spriteCfg)
 
 	p.physicsMode = toPhysicsMode(spriteCfg.PhysicsMode)
-	p.airDrag = valueutil.OrDefault(spriteCfg.AirDrag, 1)
-	p.gravity = valueutil.OrDefault(spriteCfg.Gravity, 1)
-	p.friction = valueutil.OrDefault(spriteCfg.Friction, 1)
-	p.mass = valueutil.OrDefault(spriteCfg.Mass, 1)
+	p.airDrag = defaults.OrDefault(spriteCfg.AirDrag, 1)
+	p.gravity = defaults.OrDefault(spriteCfg.Gravity, 1)
+	p.friction = defaults.OrDefault(spriteCfg.Friction, 1)
+	p.mass = defaults.OrDefault(spriteCfg.Mass, 1)
 	p.collisionTargets = make(map[string]bool)
 }
 
@@ -71,7 +71,7 @@ func (p *physicsComponent) initCollisionConfig(sprite *SpriteImpl, spriteCfg *co
 		defaultCollisionType = physicsColliderAuto
 	}
 
-	p.collisionInfo.Type = collisionutil.ParseColliderShapeType(spriteCfg.CollisionShapeType, defaultCollisionType)
+	p.collisionInfo.Type = collision.ParseColliderShapeType(spriteCfg.CollisionShapeType, defaultCollisionType)
 	p.collisionInfo.Pivot = spriteCfg.CollisionPivot
 	p.collisionInfo.Params = spriteCfg.CollisionShapeParams
 
@@ -86,7 +86,7 @@ func (p *physicsComponent) initCollisionConfig(sprite *SpriteImpl, spriteCfg *co
 func (p *physicsComponent) initTriggerConfig(sprite *SpriteImpl, spriteCfg *coreproject.SpriteConfig) {
 	p.triggerInfo.Mask = parseLayerMaskValue(spriteCfg.TriggerMask)
 	p.triggerInfo.Layer = parseLayerMaskValue(spriteCfg.TriggerLayer)
-	p.triggerInfo.Type = collisionutil.ParseColliderShapeType(spriteCfg.TriggerShapeType, physicsColliderAuto)
+	p.triggerInfo.Type = collision.ParseColliderShapeType(spriteCfg.TriggerShapeType, physicsColliderAuto)
 	p.triggerInfo.Pivot = spriteCfg.TriggerPivot
 	p.triggerInfo.Params = spriteCfg.TriggerShapeParams
 

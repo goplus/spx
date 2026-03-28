@@ -21,7 +21,7 @@ import (
 	"math"
 
 	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v2/internal/base/valueutil"
+	"github.com/goplus/spx/v2/internal/base/defaults"
 	coreproject "github.com/goplus/spx/v2/internal/core/project"
 	"github.com/goplus/spx/v2/internal/engine"
 	spxlog "github.com/goplus/spx/v2/internal/log"
@@ -75,9 +75,9 @@ func (a *animationComponent) initFromConfig(spriteCfg *coreproject.SpriteConfig)
 			spxlog.Panicf("animation key [%s] already exists", key)
 		}
 
-		valueutil.SetDefaultIfZero(&ani.FrameFps, 25)
-		valueutil.SetDefaultIfZero(&ani.TurnToDuration, 1.0)
-		valueutil.SetDefaultIfZero(&ani.StepDuration, 0.01)
+		defaults.SetDefaultIfZero(&ani.FrameFps, 25)
+		defaults.SetDefaultIfZero(&ani.TurnToDuration, 1.0)
+		defaults.SetDefaultIfZero(&ani.StepDuration, 0.01)
 
 		ani.IFrameFrom, ani.IFrameTo = a.frameRange(ani.FrameFrom, ani.FrameTo)
 		ani.Speed = 1

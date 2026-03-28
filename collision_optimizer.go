@@ -16,7 +16,7 @@
 
 package spx
 
-import "github.com/goplus/spx/v2/internal/base/collisionutil"
+import "github.com/goplus/spx/v2/internal/base/collision"
 
 // ======================== Collision Optimization System ========================
 // This file implements spatial partitioning and AABB (Axis-Aligned Bounding Box)
@@ -28,15 +28,15 @@ import "github.com/goplus/spx/v2/internal/base/collisionutil"
 // This value can be tuned based on your game's average sprite size:
 const defaultSpatialHashCellSize = 100.0
 
-func newSpriteAABB(sprite *SpriteImpl) *collisionutil.Entry[*SpriteImpl] {
+func newSpriteAABB(sprite *SpriteImpl) *collision.Entry[*SpriteImpl] {
 	bounds := sprite.bounds()
 	if bounds == nil {
 		return nil
 	}
 
-	return &collisionutil.Entry[*SpriteImpl]{
+	return &collision.Entry[*SpriteImpl]{
 		Value: sprite,
-		Box: collisionutil.AABB{
+		Box: collision.AABB{
 			MinX: bounds.Position.X,
 			MinY: bounds.Position.Y,
 			MaxX: bounds.Position.X + bounds.Size.X,
@@ -47,10 +47,10 @@ func newSpriteAABB(sprite *SpriteImpl) *collisionutil.Entry[*SpriteImpl] {
 
 // buildSpatialHashForNames builds a spatial hash with sprites matching the given name filter.
 // Uses a reusable spatial hash to avoid repeated allocations.
-func (p *Game) buildSpatialHashForNames(dst *SpriteImpl, nameFilter func(string) bool) *collisionutil.SpatialHash[*SpriteImpl] {
+func (p *Game) buildSpatialHashForNames(dst *SpriteImpl, nameFilter func(string) bool) *collision.SpatialHash[*SpriteImpl] {
 	// Lazy initialization of the reusable spatial hash
 	if p.spatialHash == nil {
-		p.spatialHash = collisionutil.NewSpatialHash[*SpriteImpl](defaultSpatialHashCellSize)
+		p.spatialHash = collision.NewSpatialHash[*SpriteImpl](defaultSpatialHashCellSize)
 	}
 
 	// Clear and reuse the existing spatial hash
@@ -72,8 +72,8 @@ func (p *Game) buildSpatialHashForNames(dst *SpriteImpl, nameFilter func(string)
 
 // findCollisionsInSpatialHash performs AABB and pixel-perfect collision detection.
 func findCollisionsInSpatialHash(
-	dstAABB *collisionutil.Entry[*SpriteImpl],
-	spatialHash *collisionutil.SpatialHash[*SpriteImpl],
+	dstAABB *collision.Entry[*SpriteImpl],
+	spatialHash *collision.SpatialHash[*SpriteImpl],
 	findFirst bool,
 ) []*SpriteImpl {
 	var results []*SpriteImpl

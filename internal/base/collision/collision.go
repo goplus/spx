@@ -1,4 +1,4 @@
-package collisionutil
+package collision
 
 import spxlog "github.com/goplus/spx/v2/internal/log"
 

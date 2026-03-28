@@ -21,7 +21,7 @@ import (
 
 	"github.com/goplus/spbase/mathf"
 	spxfs "github.com/goplus/spx/v2/fs"
-	"github.com/goplus/spx/v2/internal/base/collisionutil"
+	"github.com/goplus/spx/v2/internal/base/collision"
 	"github.com/goplus/spx/v2/internal/engine"
 	spxlog "github.com/goplus/spx/v2/internal/log"
 	tm "github.com/goplus/spx/v2/internal/tilemap"
@@ -257,6 +257,6 @@ func (p *Game) setTileInfo(texturePath string, collisionPoints []float64) {
 }
 
 func (p *Game) createStaticSprite(texturePath string, pos mathf.Vec2, rot float64, scale mathf.Vec2, zindex int64, pivot mathf.Vec2, colliderType string, colliderPivot mathf.Vec2, colliderParams []float64) {
-	colliderTypeInt := collisionutil.ParseColliderShapeType(colliderType, 0)
+	colliderTypeInt := collision.ParseColliderShapeType(colliderType, 0)
 	p.engine().SceneMgr.CreateStaticSprite(engine.ToAssetPath(texturePath), pos, rot, scale, zindex, pivot, colliderTypeInt, colliderPivot, colliderParams)
 }
