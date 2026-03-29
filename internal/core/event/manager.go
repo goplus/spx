@@ -29,6 +29,9 @@ const (
 	bucketCount
 )
 
+// Manager groups event sinks by Bucket and tracks the one-time BucketStart lifecycle.
+// DispatchBucketAsync, DispatchBucketSync, DispatchBucket, and DispatchStartOnce
+// treat a nil receiver as a no-op.
 type Manager struct {
 	mu      sync.RWMutex
 	buckets [bucketCount][]Sink

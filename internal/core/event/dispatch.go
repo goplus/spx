@@ -7,6 +7,44 @@ type DispatchHooks struct {
 	Wait  func(func())
 }
 
+// DispatchBucketAsync snapshots the requested bucket and dispatches matching sinks asynchronously.
+// A nil Manager is treated as a no-op.
+func (m *Manager) DispatchBucketAsync(bucket Bucket, start bool, data any, hooks DispatchHooks, do func(*Sink)) {
+	if m == nil {
+		return
+	}
+	DispatchAsync(m.Snapshot(bucket), start, data, hooks, do)
+}
+
+// DispatchBucketSync snapshots the requested bucket and dispatches matching sinks synchronously.
+// A nil Manager is treated as a no-op.
+func (m *Manager) DispatchBucketSync(bucket Bucket, data any, hooks DispatchHooks, do func(*Sink)) {
+	if m == nil {
+		return
+	}
+	DispatchSync(m.Snapshot(bucket), data, hooks, do)
+}
+
+// DispatchBucket snapshots the requested bucket and dispatches matching sinks.
+// When wait is true it waits for synchronous completion; otherwise it dispatches asynchronously.
+// A nil Manager is treated as a no-op.
+func (m *Manager) DispatchBucket(bucket Bucket, wait bool, data any, hooks DispatchHooks, do func(*Sink)) {
+	if m == nil {
+		return
+	}
+	Dispatch(m.Snapshot(bucket), wait, data, hooks, do)
+}
+
+// DispatchStartOnce dispatches BucketStart sinks at most once per Manager lifetime.
+// After the first call, subsequent calls are no-ops.
+// A nil Manager is treated as a no-op.
+func (m *Manager) DispatchStartOnce(data any, hooks DispatchHooks, do func(*Sink)) {
+	if m == nil {
+		return
+	}
+	DispatchAsync(m.SnapshotStartOnce(), false, data, hooks, do)
+}
+
 func DispatchAsync(sinks []Sink, start bool, data any, hooks DispatchHooks, do func(*Sink)) {
 	for _, sink := range sinks {
 		sink := sink
