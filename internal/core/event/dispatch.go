@@ -7,6 +7,34 @@ type DispatchHooks struct {
 	Wait  func(func())
 }
 
+func (m *Manager) DispatchBucketAsync(bucket Bucket, start bool, data any, hooks DispatchHooks, do func(*Sink)) {
+	if m == nil {
+		return
+	}
+	DispatchAsync(m.Snapshot(bucket), start, data, hooks, do)
+}
+
+func (m *Manager) DispatchBucketSync(bucket Bucket, data any, hooks DispatchHooks, do func(*Sink)) {
+	if m == nil {
+		return
+	}
+	DispatchSync(m.Snapshot(bucket), data, hooks, do)
+}
+
+func (m *Manager) DispatchBucket(bucket Bucket, wait bool, data any, hooks DispatchHooks, do func(*Sink)) {
+	if m == nil {
+		return
+	}
+	Dispatch(m.Snapshot(bucket), wait, data, hooks, do)
+}
+
+func (m *Manager) DispatchStartOnce(start bool, data any, hooks DispatchHooks, do func(*Sink)) {
+	if m == nil {
+		return
+	}
+	DispatchAsync(m.SnapshotStartOnce(), start, data, hooks, do)
+}
+
 func DispatchAsync(sinks []Sink, start bool, data any, hooks DispatchHooks, do func(*Sink)) {
 	for _, sink := range sinks {
 		sink := sink
