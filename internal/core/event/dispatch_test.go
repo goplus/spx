@@ -192,16 +192,16 @@ func TestManagerDispatchStartOnce(t *testing.T) {
 	hooks := DispatchHooks{
 		Spawn: func(start bool, owner any, call func()) {
 			if start {
-				t.Fatal("DispatchStartOnce should not require start=true in this test")
+				t.Fatal("DispatchStartOnce should always dispatch with start=false")
 			}
 			call()
 		},
 	}
 
-	mgr.DispatchStartOnce(false, nil, hooks, func(sink *Sink) {
+	mgr.DispatchStartOnce(nil, hooks, func(sink *Sink) {
 		calls = append(calls, sink.Handler.(string))
 	})
-	mgr.DispatchStartOnce(false, nil, hooks, func(sink *Sink) {
+	mgr.DispatchStartOnce(nil, hooks, func(sink *Sink) {
 		calls = append(calls, sink.Handler.(string))
 	})
 

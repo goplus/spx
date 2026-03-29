@@ -77,8 +77,8 @@ func (p *scriptEventRegistry) dispatch(bucket coreevent.Bucket, wait bool, data 
 	p.DispatchBucket(bucket, wait, data, scriptEventDispatchHooks, do)
 }
 
-func (p *scriptEventRegistry) dispatchStartOnce(start bool, data any, do func(*eventSink)) {
-	p.DispatchStartOnce(start, data, scriptEventDispatchHooks, do)
+func (p *scriptEventRegistry) dispatchStartOnce(data any, do func(*eventSink)) {
+	p.DispatchStartOnce(data, scriptEventDispatchHooks, do)
 }
 
 func (p *scriptEventBindings) doDeleteClone() {
@@ -323,7 +323,7 @@ func (p *Game) fireEvent(ev event) {
 // Event Dispatch
 // -----------------------------------------------------------------------------
 func (p *scriptEventRegistry) doWhenStart() {
-	p.dispatchStartOnce(false, nil, func(ev *eventSink) {
+	p.dispatchStartOnce(nil, func(ev *eventSink) {
 		coreevent.If0(isDebugEventEnabled, func() {
 			spxlog.Debug("==> onStart: %s", nameOf(ev.Owner))
 		})()

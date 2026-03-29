@@ -36,13 +36,13 @@ func (m *Manager) DispatchBucket(bucket Bucket, wait bool, data any, hooks Dispa
 }
 
 // DispatchStartOnce dispatches BucketStart sinks at most once per Manager lifetime.
-// The start flag controls async spawn semantics independently from the once-only guarantee.
+// After the first call, subsequent calls are no-ops.
 // A nil Manager is treated as a no-op.
-func (m *Manager) DispatchStartOnce(start bool, data any, hooks DispatchHooks, do func(*Sink)) {
+func (m *Manager) DispatchStartOnce(data any, hooks DispatchHooks, do func(*Sink)) {
 	if m == nil {
 		return
 	}
-	DispatchAsync(m.SnapshotStartOnce(), start, data, hooks, do)
+	DispatchAsync(m.SnapshotStartOnce(), false, data, hooks, do)
 }
 
 func DispatchAsync(sinks []Sink, start bool, data any, hooks DispatchHooks, do func(*Sink)) {
