@@ -31,6 +31,16 @@ const (
 	clickTimerStage  = 0
 )
 
+var scriptEventDispatchHooks = coreevent.DispatchHooks{
+	Spawn: func(start bool, owner any, call func()) {
+		gco.CreateAndStart(start, owner, func(coroutine.Thread) int {
+			call()
+			return 0
+		})
+	},
+	Wait: engine.WaitToDo,
+}
+
 // -----------------------------------------------------------------------------
 // Event Bindings
 // -----------------------------------------------------------------------------
@@ -56,19 +66,19 @@ func (p *scriptEventBindings) initFrom(src *scriptEventBindings, this threadObj)
 }
 
 func (p *scriptEventRegistry) dispatchAsync(bucket coreevent.Bucket, start bool, data any, do func(*eventSink)) {
-	p.DispatchBucketAsync(bucket, start, data, eventDispatchHooks(), do)
+	p.DispatchBucketAsync(bucket, start, data, scriptEventDispatchHooks, do)
 }
 
 func (p *scriptEventRegistry) dispatchSync(bucket coreevent.Bucket, data any, do func(*eventSink)) {
-	p.DispatchBucketSync(bucket, data, eventDispatchHooks(), do)
+	p.DispatchBucketSync(bucket, data, scriptEventDispatchHooks, do)
 }
 
 func (p *scriptEventRegistry) dispatch(bucket coreevent.Bucket, wait bool, data any, do func(*eventSink)) {
-	p.DispatchBucket(bucket, wait, data, eventDispatchHooks(), do)
+	p.DispatchBucket(bucket, wait, data, scriptEventDispatchHooks, do)
 }
 
 func (p *scriptEventRegistry) dispatchStartOnce(start bool, data any, do func(*eventSink)) {
-	p.DispatchStartOnce(start, data, eventDispatchHooks(), do)
+	p.DispatchStartOnce(start, data, scriptEventDispatchHooks, do)
 }
 
 func (p *scriptEventBindings) doDeleteClone() {
@@ -405,16 +415,4 @@ func (p *scriptEventRegistry) doWhenBackdropChanged(name BackdropName, wait bool
 	p.dispatch(coreevent.BucketBackdropChanged, wait, name, func(ev *eventSink) {
 		ev.Handler.(func(BackdropName))(name)
 	})
-}
-
-func eventDispatchHooks() coreevent.DispatchHooks {
-	return coreevent.DispatchHooks{
-		Spawn: func(start bool, owner any, call func()) {
-			gco.CreateAndStart(start, owner, func(coroutine.Thread) int {
-				call()
-				return 0
-			})
-		},
-		Wait: engine.WaitToDo,
-	}
 }

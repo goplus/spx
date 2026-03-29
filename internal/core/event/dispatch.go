@@ -7,6 +7,8 @@ type DispatchHooks struct {
 	Wait  func(func())
 }
 
+// DispatchBucketAsync snapshots the requested bucket and dispatches matching sinks asynchronously.
+// A nil Manager is treated as a no-op.
 func (m *Manager) DispatchBucketAsync(bucket Bucket, start bool, data any, hooks DispatchHooks, do func(*Sink)) {
 	if m == nil {
 		return
@@ -14,6 +16,8 @@ func (m *Manager) DispatchBucketAsync(bucket Bucket, start bool, data any, hooks
 	DispatchAsync(m.Snapshot(bucket), start, data, hooks, do)
 }
 
+// DispatchBucketSync snapshots the requested bucket and dispatches matching sinks synchronously.
+// A nil Manager is treated as a no-op.
 func (m *Manager) DispatchBucketSync(bucket Bucket, data any, hooks DispatchHooks, do func(*Sink)) {
 	if m == nil {
 		return
@@ -21,6 +25,9 @@ func (m *Manager) DispatchBucketSync(bucket Bucket, data any, hooks DispatchHook
 	DispatchSync(m.Snapshot(bucket), data, hooks, do)
 }
 
+// DispatchBucket snapshots the requested bucket and dispatches matching sinks.
+// When wait is true it waits for synchronous completion; otherwise it dispatches asynchronously.
+// A nil Manager is treated as a no-op.
 func (m *Manager) DispatchBucket(bucket Bucket, wait bool, data any, hooks DispatchHooks, do func(*Sink)) {
 	if m == nil {
 		return
@@ -28,6 +35,9 @@ func (m *Manager) DispatchBucket(bucket Bucket, wait bool, data any, hooks Dispa
 	Dispatch(m.Snapshot(bucket), wait, data, hooks, do)
 }
 
+// DispatchStartOnce dispatches BucketStart sinks at most once per Manager lifetime.
+// The start flag controls async spawn semantics independently from the once-only guarantee.
+// A nil Manager is treated as a no-op.
 func (m *Manager) DispatchStartOnce(start bool, data any, hooks DispatchHooks, do func(*Sink)) {
 	if m == nil {
 		return

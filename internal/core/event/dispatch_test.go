@@ -1,6 +1,9 @@
 package event
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 func TestDispatchAsync(t *testing.T) {
 	var (
@@ -46,10 +49,10 @@ func TestDispatchAsync(t *testing.T) {
 	if len(starts) != 2 || !starts[0] || !starts[1] {
 		t.Fatalf("starts = %+v, want [true true]", starts)
 	}
-	if want := []string{"a", "b"}; len(owners) != len(want) || owners[0] != want[0] || owners[1] != want[1] {
+	if want := []string{"a", "b"}; !reflect.DeepEqual(owners, want) {
 		t.Fatalf("owners = %+v, want %+v", owners, want)
 	}
-	if want := []string{"A", "B"}; len(calls) != len(want) || calls[0] != want[0] || calls[1] != want[1] {
+	if want := []string{"A", "B"}; !reflect.DeepEqual(calls, want) {
 		t.Fatalf("calls = %+v, want %+v", calls, want)
 	}
 }
@@ -89,7 +92,7 @@ func TestDispatchSync(t *testing.T) {
 	if !waited {
 		t.Fatal("expected wait hook to be called")
 	}
-	if want := []string{"A", "B"}; len(calls) != len(want) || calls[0] != want[0] || calls[1] != want[1] {
+	if want := []string{"A", "B"}; !reflect.DeepEqual(calls, want) {
 		t.Fatalf("calls = %+v, want %+v", calls, want)
 	}
 }
@@ -140,10 +143,10 @@ func TestManagerDispatchBucketAsync(t *testing.T) {
 	if len(starts) != 2 || !starts[0] || !starts[1] {
 		t.Fatalf("starts = %+v, want [true true]", starts)
 	}
-	if want := []string{"a", "b"}; len(owners) != len(want) || owners[0] != want[0] || owners[1] != want[1] {
+	if want := []string{"a", "b"}; !reflect.DeepEqual(owners, want) {
 		t.Fatalf("owners = %+v, want %+v", owners, want)
 	}
-	if want := []string{"A", "B"}; len(calls) != len(want) || calls[0] != want[0] || calls[1] != want[1] {
+	if want := []string{"A", "B"}; !reflect.DeepEqual(calls, want) {
 		t.Fatalf("calls = %+v, want %+v", calls, want)
 	}
 }
@@ -173,8 +176,8 @@ func TestManagerDispatchBucketSync(t *testing.T) {
 	if !waited {
 		t.Fatal("expected wait hook to be called")
 	}
-	if len(calls) != 1 || calls[0] != "A" {
-		t.Fatalf("calls = %+v, want [A]", calls)
+	if want := []string{"A"}; !reflect.DeepEqual(calls, want) {
+		t.Fatalf("calls = %+v, want %+v", calls, want)
 	}
 }
 
@@ -202,7 +205,75 @@ func TestManagerDispatchStartOnce(t *testing.T) {
 		calls = append(calls, sink.Handler.(string))
 	})
 
-	if len(calls) != 1 || calls[0] != "start" {
-		t.Fatalf("calls = %+v, want [start]", calls)
+	if want := []string{"start"}; !reflect.DeepEqual(calls, want) {
+		t.Fatalf("calls = %+v, want %+v", calls, want)
 	}
+}
+
+func TestManagerDispatchBucket(t *testing.T) {
+	t.Run("async", func(t *testing.T) {
+		waited := false
+		var calls []string
+
+		var mgr Manager
+		mgr.Add(BucketIReceive, Sink{
+			Owner:   "msg",
+			Handler: "A",
+			Cond: func(data any) bool {
+				return data == "ok"
+			},
+		})
+
+		mgr.DispatchBucket(BucketIReceive, false, "ok", DispatchHooks{
+			Spawn: func(start bool, owner any, call func()) {
+				if start {
+					t.Fatal("DispatchBucket async path should not force start=true")
+				}
+				call()
+			},
+			Wait: func(wait func()) {
+				waited = true
+				wait()
+			},
+		}, func(sink *Sink) {
+			calls = append(calls, sink.Handler.(string))
+		})
+
+		if waited {
+			t.Fatal("wait hook should not be called for async DispatchBucket")
+		}
+		if want := []string{"A"}; !reflect.DeepEqual(calls, want) {
+			t.Fatalf("calls = %+v, want %+v", calls, want)
+		}
+	})
+
+	t.Run("sync", func(t *testing.T) {
+		waited := false
+		var calls []string
+
+		var mgr Manager
+		mgr.Add(BucketBackdropChanged, Sink{Owner: "backdrop", Handler: "B"})
+
+		mgr.DispatchBucket(BucketBackdropChanged, true, "stage", DispatchHooks{
+			Spawn: func(start bool, owner any, call func()) {
+				if start {
+					t.Fatal("DispatchBucket sync path should not force start=true")
+				}
+				call()
+			},
+			Wait: func(wait func()) {
+				waited = true
+				wait()
+			},
+		}, func(sink *Sink) {
+			calls = append(calls, sink.Handler.(string))
+		})
+
+		if !waited {
+			t.Fatal("expected wait hook to be called for sync DispatchBucket")
+		}
+		if want := []string{"B"}; !reflect.DeepEqual(calls, want) {
+			t.Fatalf("calls = %+v, want %+v", calls, want)
+		}
+	})
 }
