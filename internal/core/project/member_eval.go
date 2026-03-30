@@ -40,7 +40,7 @@ func ResolveMemberStringEval(target reflect.Value, name string, from int) func()
 }
 
 func getValueRef(target reflect.Value, name string, from int) reflect.Value {
-	if valPtr := FindFieldPtr(target, name, from); valPtr != nil {
+	if valPtr := findPromotedFieldPtr(target, name, from); valPtr != nil {
 		return reflect.ValueOf(valPtr).Elem()
 	}
 	return reflect.Value{}

@@ -49,6 +49,38 @@ func FindFieldPtr(v reflect.Value, name string, from int) any {
 	return nil
 }
 
+// findPromotedFieldPtr is like FindFieldPtr but also recurses into anonymous
+// (embedded) fields following Go's embedding promotion rules:
+// current-level fields are checked first (respecting `from`), then embedded
+// fields are searched. Embedded fields starting before `from` (e.g. *Game at
+// index 1 when from=2 for sprites) are still recursed into.
+func findPromotedFieldPtr(v reflect.Value, name string, from int) any {
+	if v.Kind() == reflect.Pointer {
+		v = v.Elem()
+	}
+	t := v.Type()
+	n := v.NumField()
+	// First pass: direct fields at this level (respecting `from`).
+	if result := FindFieldPtr(v, name, from); result != nil {
+		return result
+	}
+	// Second pass: recurse into all anonymous fields (start from 0 to cover
+	// embedded fields that appear before `from`).
+	for i := range n {
+		if !t.Field(i).Anonymous {
+			continue
+		}
+		embedded := v.Field(i)
+		if embedded.Kind() == reflect.Pointer && embedded.IsNil() {
+			continue
+		}
+		if result := findPromotedFieldPtr(embedded, name, 0); result != nil {
+			return result
+		}
+	}
+	return nil
+}
+
 func FindFieldRefCaseInsensitive(v reflect.Value, name string, from int) any {
 	if v.Kind() == reflect.Pointer {
 		v = v.Elem()
