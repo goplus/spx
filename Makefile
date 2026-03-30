@@ -177,7 +177,7 @@ format: ## Format Go code
 
 generate: ## Generate code
 	cd ./internal/cmd/codegen && GODOT_SRC="$(GODOT_SRC)" go run .
-	go generate ./cmd/spxrun/runner
+	go generate ./cmd/spxrunner/runner
 	$(MAKE) format
 
 export-pack: ## Export runtime pck file

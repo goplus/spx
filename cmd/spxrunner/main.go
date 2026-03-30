@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-// Package main implements the spxrun command for running SPX 2.0 projects.
-// This command is called by xgo when a project has a "run" directive in gop.mod.
+// Package main implements the spxrunner command for running SPX PC projects.
+// This is the command-package entry used by xgo's generic runner directive.
 package main
 
 import (
@@ -24,11 +24,10 @@ import (
 	"log"
 	"os"
 
-	"github.com/goplus/spx/v2/cmd/spxrun/runner"
+	"github.com/goplus/spx/v2/cmd/spxrunner/runner"
 )
 
 func main() {
-	// Define command line flags
 	fullscreen := flag.Bool("fullscreen", false, "Run in fullscreen mode")
 	windowed := flag.Bool("windowed", false, "Run in windowed mode (opposite of fullscreen)")
 	width := flag.Int("width", 0, "Window width (e.g., 1280)")
@@ -39,46 +38,22 @@ func main() {
 	debug := flag.Bool("debug", false, "Enable debug mode")
 	version := flag.String("version", "", "SPX version to use (e.g., 'v2.0.0', 'latest')")
 
-	// Parse command line arguments with custom logic to support project path before flags.
-	// Standard Go flag package stops parsing at the first non-flag argument, so we need
-	// to manually extract the project path if it appears before any flags.
-	//
-	// Supported usage patterns:
-	//   spxrun                        # runs current directory
-	//   spxrun .                      # runs current directory
-	//   spxrun /path/to/project       # runs specified project
-	//   spxrun . --debug              # project path followed by flags
-	//   spxrun /path/to/project --fullscreen --width 1920
-	//
-	// Usage: spxrun [project_path] [flags]
 	projectPath := "."
-
-	// Check if the first argument exists and is not a flag (doesn't start with '-').
-	// If so, treat it as the project path and remove it from os.Args before flag.Parse().
 	if len(os.Args) > 1 && (len(os.Args[1]) == 0 || os.Args[1][0] != '-') {
 		projectPath = os.Args[1]
-		// Reconstruct os.Args without the project path so flag.Parse() only sees flags.
-		// We must preserve os.Args[0] (the program name) as flag.Parse() expects it.
 		os.Args = append([]string{os.Args[0]}, os.Args[2:]...)
 	}
-
-	// Ensure projectPath is not empty (should never happen due to default value,
-	// but adding this as a safety check)
 	if projectPath == "" {
 		projectPath = "."
 	}
 
-	// Parse remaining flags
 	flag.Parse()
 
-	// Create runner with optional version from flag
-	// If not specified, defaults to "latest" in runner.New()
 	r, err := runner.New(projectPath, *version)
 	if err != nil {
 		log.Fatalf("Failed to create runner: %v", err)
 	}
 
-	// Configure runtime options
 	opts := &runner.RuntimeOptions{
 		Fullscreen:  *fullscreen,
 		Windowed:    *windowed,
@@ -90,7 +65,6 @@ func main() {
 		Debug:       *debug,
 	}
 
-	// Run the project with options
 	if err := r.RunWithOptions(opts); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)

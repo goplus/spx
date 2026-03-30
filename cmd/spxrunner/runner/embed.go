@@ -22,7 +22,7 @@ import (
 )
 
 // Sync files from repository before building.
-// Run: go generate ./cmd/spxrun/runner
+// Run: go generate ./cmd/spxrunner/runner
 //
 //go:generate cp ../../../gop.mod gop.mod
 //go:generate cp ../../gox/template/version version
@@ -45,7 +45,13 @@ var GoModTemplate string
 //go:embed version
 var versionFile string
 
-// Version returns the SPX runtime version (trimmed)
-func Version() string {
+// RuntimeVersion returns the SPX runtime version (trimmed).
+func RuntimeVersion() string {
 	return strings.TrimSpace(versionFile)
+}
+
+// Version returns the SPX runtime version.
+// Deprecated: use RuntimeVersion instead.
+func Version() string {
+	return RuntimeVersion()
 }

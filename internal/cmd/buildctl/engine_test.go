@@ -70,7 +70,7 @@ func TestDownloadEngineAssetsRuntime(t *testing.T) {
 	}
 }
 
-func TestDownloadEngineAssetsRuntimeSkipsExistingDesktopBinariesAndPackLocally(t *testing.T) {
+func TestDownloadEngineAssetsRuntimeRefreshesPackLocally(t *testing.T) {
 	runner := newRuntimeFixtureRunner(t)
 	installFakeEngineDownload(t, runner.repoRoot, "linux", "x86_64")
 	t.Setenv("GITHUB_ACTIONS", "")
@@ -118,16 +118,16 @@ func TestDownloadEngineAssetsRuntimeSkipsExistingDesktopBinariesAndPackLocally(t
 	}
 	if content, err := os.ReadFile(packPath); err != nil {
 		t.Fatalf("ReadFile(%s) returned error: %v", packPath, err)
-	} else if string(content) != "local-pack" {
-		t.Fatalf("pack content = %q, want existing runtime pack reused", string(content))
+	} else if string(content) != "runtime-pck" {
+		t.Fatalf("pack content = %q, want runtime pack refreshed", string(content))
 	}
 	if content, err := os.ReadFile(templateFanout); err != nil {
 		t.Fatalf("ReadFile(%s) returned error: %v", templateFanout, err)
 	} else if string(content) != "local-template" {
 		t.Fatalf("fanout content = %q, want existing runtime binary copied to template fanout", string(content))
 	}
-	if downloads != 0 {
-		t.Fatalf("download count = %d, want 0 when local assets already exist", downloads)
+	if downloads != 1 {
+		t.Fatalf("download count = %d, want 1 when local runtime pack is refreshed", downloads)
 	}
 }
 
