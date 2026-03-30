@@ -31,20 +31,6 @@ import (
 )
 
 const (
-	// PckVersion is the pck file version
-	PckVersion = "2.0.30"
-
-	// RuntimeURLBase is the base URL for downloading runtime executable
-	// Format: https://github.com/goplus/godot/releases/download/spx{VERSION}/{platform}-{arch}.zip
-	RuntimeURLBase = "https://github.com/goplus/godot/releases/download/"
-
-	// PckURLBase is the base URL for downloading pck file
-	// Format: https://github.com/goplus/spx/releases/download/v2.0.0-pre.30/gdspxrt.pck.{PCK_VERSION}.zip
-	PckURLBase = "https://github.com/goplus/spx/releases/download/v2.0.0-pre.30/"
-
-	// RuntimeTag is the tag name for runtime files
-	RuntimeTag = "gdspxrt"
-
 	// GDExtensionTemplate is the template for runtime.gdextension file
 	GDExtensionTemplate = `[configuration]
 
@@ -96,6 +82,7 @@ type Runner struct {
 
 	// Runner version (same as spx since runner is a subpackage of spx)
 	RunnerVersion string // Runner version (e.g., "latest", "v2.0.0")
+	ReleaseMeta   ReleaseMeta
 }
 
 // New creates a new Runner for the given project path and optional version
@@ -128,6 +115,7 @@ func New(projectPath string, version ...string) (*Runner, error) {
 		GOOS:          runtime.GOOS,
 		GOARCH:        runtime.GOARCH,
 		RunnerVersion: runnerVersion,
+		ReleaseMeta:   ReleaseMetaForSPXVersion(runnerVersion),
 	}
 
 	// Setup runtime paths
@@ -136,7 +124,7 @@ func New(projectPath string, version ...string) (*Runner, error) {
 		binPostfix = ".exe"
 	}
 
-	tagName := RuntimeTag + Version()
+	tagName := r.ReleaseMeta.RuntimeBinaryTag()
 	r.RuntimeCmdPath = filepath.Join(goBinPath, tagName+binPostfix)
 	r.RuntimePckPath = filepath.Join(goBinPath, tagName+".pck")
 
@@ -247,9 +235,8 @@ func (r *Runner) downloadRuntime() error {
 	// Binary name inside zip
 	binaryName := fmt.Sprintf("godot.%s.template_release.%s%s", binaryPlatform, urlArch, binaryPostfix)
 
-	// URL: https://github.com/goplus/godot/releases/download/spx{VERSION}/{platform}-{arch}.zip
 	zipName := fmt.Sprintf("%s-%s.zip", urlPlatform, urlArch)
-	url := RuntimeURLBase + "spx" + Version() + "/" + zipName
+	url := r.ReleaseMeta.RuntimeDownloadURL(zipName)
 
 	// Download and extract
 	tmpZip := filepath.Join(r.GoBinPath, zipName)
@@ -270,11 +257,10 @@ func (r *Runner) downloadRuntime() error {
 }
 
 // downloadRuntimePck downloads the Godot runtime pck file from spx releases
-// URL format: https://github.com/goplus/spx/releases/download/v2.0.0-pre.30/gdspxrt.pck.{PCK_VERSION}.zip
+// URL format: https://github.com/goplus/spx/releases/download/{spxTag}/gdspxrt.pck.{pckVersion}.zip
 func (r *Runner) downloadRuntimePck() error {
-	// URL: https://github.com/goplus/spx/releases/download/v2.0.0-pre.30/gdspxrt.pck.{PCK_VERSION}.zip
-	zipName := fmt.Sprintf("gdspxrt.pck.%s.zip", PckVersion)
-	url := PckURLBase + zipName
+	zipName := fmt.Sprintf("gdspxrt.pck.%s.zip", r.ReleaseMeta.Pck.Version)
+	url := r.ReleaseMeta.PckDownloadURL(zipName)
 
 	// Download to temp file
 	tmpZip := filepath.Join(r.GoBinPath, zipName)
@@ -308,9 +294,8 @@ func (r *Runner) buildLibrary() error {
 		return fmt.Errorf("failed to create go directory: %w", err)
 	}
 
-	// Ensure go.mod exists in both project root and project/go directory
-	// Root go.mod is needed for xgo to resolve dependencies during code generation
-	// Create in project root first, then copy to project/go
+	// Ensure the project root has a go.mod before generating or building code.
+	// project/go only carries generated sources and should stay in the root module.
 	if err := r.ensureGoMod(); err != nil {
 		return fmt.Errorf("failed to ensure go.mod: %w", err)
 	}
@@ -339,25 +324,9 @@ func (r *Runner) buildLibrary() error {
 	// Build library for all architectures on macOS
 	archs := r.determineTargetArchs()
 
-	// Save current directory
-	origDir, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("failed to get current directory: %w", err)
-	}
-
-	// Change to go directory
-	if err := os.Chdir(r.GoDir); err != nil {
-		return fmt.Errorf("failed to change to go directory: %w", err)
-	}
-	defer os.Chdir(origDir)
-
-	// Run go mod tidy first
+	// Refresh the root module after generating project/go/main.go.
 	fmt.Println("Running go mod tidy...")
-	tidyCmd := exec.Command("go", "mod", "tidy")
-	tidyCmd.Dir = r.GoDir
-	tidyCmd.Stdout = os.Stdout
-	tidyCmd.Stderr = os.Stderr
-	if err := tidyCmd.Run(); err != nil {
+	if err := runCommand(r.ProjectDir, nil, "go", "mod", "tidy"); err != nil {
 		return fmt.Errorf("go mod tidy failed: %w", err)
 	}
 
@@ -377,16 +346,11 @@ func (r *Runner) buildLibrary() error {
 			"build",
 			"-buildmode=c-shared",
 			"-o", libPath,
+			"./project/go",
 		}
 
-		cmd := exec.Command("go", args...)
-		cmd.Env = env
-		cmd.Dir = r.GoDir
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-
 		fmt.Printf("Running: CGO_ENABLED=1 GOARCH=%s go %s\n", arch, strings.Join(args, " "))
-		if err := cmd.Run(); err != nil {
+		if err := runCommand(r.ProjectDir, env, "go", args...); err != nil {
 			return fmt.Errorf("build failed for %s: %w", arch, err)
 		}
 
@@ -475,12 +439,7 @@ func (r *Runner) runWithRuntimeOptions(opts *RuntimeOptions) error {
 
 	fmt.Printf("Running: %s %s\n", r.RuntimeCmdPath, strings.Join(args, " "))
 
-	cmd := exec.Command(r.RuntimeCmdPath, args...)
-	cmd.Dir = r.TempDir
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	return cmd.Run()
+	return runCommand(r.TempDir, nil, r.RuntimeCmdPath, args...)
 }
 
 // ensureGopMod ensures gop.mod exists in the project directory
@@ -498,10 +457,9 @@ func (r *Runner) ensureGopMod() error {
 // SpxModule is the SPX v2 module path
 const SpxModule = "github.com/goplus/spx/v2"
 
-// ensureGoMod ensures go.mod exists in both project root and project/go directory
+// ensureGoMod ensures the project root has a go.mod file.
 func (r *Runner) ensureGoMod() error {
 	rootGoModPath := filepath.Join(r.ProjectDir, "go.mod")
-	goGoModPath := filepath.Join(r.GoDir, "go.mod")
 
 	// Check if root go.mod already exists
 	if _, err := os.Stat(rootGoModPath); os.IsNotExist(err) {
@@ -516,7 +474,7 @@ func (r *Runner) ensureGoMod() error {
 		// Use embedded template and replace placeholders
 		content := GoModTemplate
 		content = strings.Replace(content, "github.com/goplus/spxdemo", moduleName, 1)
-		content = strings.Replace(content, "v2.0.0-pre.28", r.RunnerVersion, 1)
+		content = strings.Replace(content, "{{SPX_VERSION}}", r.RunnerVersion, 1)
 
 		if err := os.WriteFile(rootGoModPath, []byte(content), 0644); err != nil {
 			return fmt.Errorf("failed to create go.mod: %w", err)
@@ -525,21 +483,9 @@ func (r *Runner) ensureGoMod() error {
 		// If version is "latest", use go get to update to actual latest version
 		if r.RunnerVersion == "latest" {
 			fmt.Println("Updating to latest spx version...")
-			getCmd := exec.Command("go", "get", SpxModule+"@latest")
-			getCmd.Dir = r.ProjectDir
-			getCmd.Stdout = os.Stdout
-			getCmd.Stderr = os.Stderr
-			if err := getCmd.Run(); err != nil {
+			if err := runCommand(r.ProjectDir, nil, "go", "get", SpxModule+"@latest"); err != nil {
 				return fmt.Errorf("go get @latest failed: %w", err)
 			}
-		}
-	}
-
-	// Copy root go.mod to project/go if it doesn't exist
-	if _, err := os.Stat(goGoModPath); os.IsNotExist(err) {
-		fmt.Println("Copying go.mod to project/go...")
-		if err := copyFile(rootGoModPath, goGoModPath); err != nil {
-			return fmt.Errorf("failed to copy go.mod: %w", err)
 		}
 	}
 
@@ -553,12 +499,7 @@ func (r *Runner) generateGoCode() error {
 		return err
 	}
 
-	cmd := exec.Command("xgo", "go", ".")
-	cmd.Dir = r.ProjectDir
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Run(); err != nil {
+	if err := runCommand(r.ProjectDir, nil, "xgo", "go", "."); err != nil {
 		return fmt.Errorf("xgo go failed: %w (make sure xgo is installed)", err)
 	}
 	return nil
@@ -588,6 +529,17 @@ func (r *Runner) getLibPathForArch(arch string) string {
 		libName += ".so"
 	}
 	return filepath.Join(r.LibDir, libName)
+}
+
+func runCommand(dir string, env []string, name string, args ...string) error {
+	cmd := exec.Command(name, args...)
+	cmd.Dir = dir
+	if env != nil {
+		cmd.Env = env
+	}
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
 
 // progressWriter wraps an io.Writer to track and display download progress
