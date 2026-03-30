@@ -16,7 +16,7 @@
 
 package runner
 
-import releasemeta "github.com/goplus/spx/v2/internal/releasemeta"
+import "github.com/goplus/spx/v2/internal/releasemeta"
 
 const (
 	RuntimeURLBase    = releasemeta.RuntimeURLBase

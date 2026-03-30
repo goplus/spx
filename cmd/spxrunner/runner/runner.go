@@ -335,11 +335,11 @@ func (r *Runner) buildLibrary() error {
 		libPath := r.getLibPathForArch(arch)
 		fmt.Printf("Building for %s/%s -> %s\n", r.GOOS, arch, libPath)
 
-		// Set environment variables
-		env := append(os.Environ(),
+		// Set extra environment variables for the build.
+		env := []string{
 			"CGO_ENABLED=1",
-			"GOARCH="+arch,
-		)
+			"GOARCH=" + arch,
+		}
 
 		// Build command
 		args := []string{
@@ -531,11 +531,13 @@ func (r *Runner) getLibPathForArch(arch string) string {
 	return filepath.Join(r.LibDir, libName)
 }
 
+// runCommand executes a command in dir, streaming stdout/stderr to the current process.
+// Any env entries are appended to the inherited environment.
 func runCommand(dir string, env []string, name string, args ...string) error {
 	cmd := exec.Command(name, args...)
 	cmd.Dir = dir
-	if env != nil {
-		cmd.Env = env
+	if len(env) > 0 {
+		cmd.Env = append(os.Environ(), env...)
 	}
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

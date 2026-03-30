@@ -10,7 +10,7 @@ const (
 	// Format: https://github.com/goplus/spx/releases/download/{spxTag}/{assetName}
 	SpxReleaseURLBase = "https://github.com/goplus/spx/releases/download/"
 
-	// RuntimeTag is the runtime binary prefix stored under GOPATH/bin.
+	// RuntimeTag is the filename prefix for the runtime binary/pck files.
 	RuntimeTag = "gdspxrt"
 )
 
@@ -33,6 +33,7 @@ type PckRelease struct {
 }
 
 var defaultPckRelease = PckRelease{
+	// Current packaged runtime assets are only published from the pre.30 SPX release.
 	SPXTag:  "v2.0.0-pre.30",
 	Version: "2.0.30",
 }

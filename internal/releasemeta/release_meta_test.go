@@ -17,27 +17,22 @@ func TestReleaseMetaForSPXVersionMapped(t *testing.T) {
 
 func TestReleaseMetaForSPXVersionLatestFallback(t *testing.T) {
 	meta := ReleaseMetaForSPXVersion("latest")
-	if meta.SPXVersion != DefaultReleaseMeta().SPXVersion {
-		t.Fatalf("spx version = %q, want default %q", meta.SPXVersion, DefaultReleaseMeta().SPXVersion)
+	defaultMeta := DefaultReleaseMeta()
+	if meta.SPXVersion != defaultMeta.SPXVersion {
+		t.Fatalf("spx version = %q, want default %q", meta.SPXVersion, defaultMeta.SPXVersion)
 	}
-	if meta.Runtime.Version != "2.1.45" {
-		t.Fatalf("runtime version = %q, want %q", meta.Runtime.Version, "2.1.45")
+	if meta.Runtime.Version != defaultMeta.Runtime.Version {
+		t.Fatalf("runtime version = %q, want default %q", meta.Runtime.Version, defaultMeta.Runtime.Version)
 	}
 }
 
 func TestReleaseMetaForSPXVersionUnknownFallback(t *testing.T) {
 	meta := ReleaseMetaForSPXVersion("v2.0.0-pre.99")
-	if meta.SPXVersion != DefaultReleaseMeta().SPXVersion {
-		t.Fatalf("spx version = %q, want default %q", meta.SPXVersion, DefaultReleaseMeta().SPXVersion)
+	defaultMeta := DefaultReleaseMeta()
+	if meta.SPXVersion != defaultMeta.SPXVersion {
+		t.Fatalf("spx version = %q, want default %q", meta.SPXVersion, defaultMeta.SPXVersion)
 	}
-	if meta.Runtime.Version != DefaultReleaseMeta().Runtime.Version {
-		t.Fatalf("runtime version = %q, want default %q", meta.Runtime.Version, DefaultReleaseMeta().Runtime.Version)
-	}
-}
-
-func TestLookupReleaseMetaUnknown(t *testing.T) {
-	meta := ReleaseMetaForSPXVersion("latest")
-	if meta.SPXVersion != DefaultReleaseMeta().SPXVersion {
-		t.Fatalf("spx version = %q, want default %q", meta.SPXVersion, DefaultReleaseMeta().SPXVersion)
+	if meta.Runtime.Version != defaultMeta.Runtime.Version {
+		t.Fatalf("runtime version = %q, want default %q", meta.Runtime.Version, defaultMeta.Runtime.Version)
 	}
 }
