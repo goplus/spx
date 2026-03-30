@@ -109,6 +109,17 @@ func downloadPlatformAssets(env engineDownloadEnv, mode string, editor bool) err
 }
 
 func downloadRuntimePack(env engineDownloadEnv) error {
+	versionedPack := filepath.Join(env.goBinDir, fmt.Sprintf("gdspxrt%s.pck", env.version))
+	defaultPack := filepath.Join(env.goBinDir, "gdspxrt.pck")
+	if !shouldRefreshPreparedAssets() {
+		if fileExists(versionedPack) {
+			return nil
+		}
+		if fileExists(defaultPack) {
+			return replaceDownloadedFile(defaultPack, versionedPack)
+		}
+	}
+
 	url := fmt.Sprintf("https://github.com/goplus/spx/releases/download/%s/gdspxrt.pck.%s.zip", pckReleaseTag, pckReleaseVersion)
 	zipPath := filepath.Join(env.cacheDir, fmt.Sprintf("gdspxrt.pck.%s.zip", pckReleaseVersion))
 	if err := engineDownloadFetcher(url, zipPath); err != nil {
@@ -141,10 +152,8 @@ func downloadRuntimePack(env engineDownloadEnv) error {
 		}
 	}
 
-	defaultPack := filepath.Join(env.goBinDir, "gdspxrt.pck")
-	versionedPack := filepath.Join(env.goBinDir, fmt.Sprintf("gdspxrt%s.pck", env.version))
 	if fileExists(defaultPack) {
-		if err := os.Rename(defaultPack, versionedPack); err != nil {
+		if err := replaceDownloadedFile(defaultPack, versionedPack); err != nil {
 			return err
 		}
 	}
@@ -194,10 +203,10 @@ func downloadWebAssets(env engineDownloadEnv, mode string) error {
 		return err
 	}
 	cachedZip := filepath.Join(env.goBinDir, cachedName)
-	// Refresh the cached archive whenever prepare runs so a restore-key cache
-	// cannot keep serving an older template after the hash key changes.
-	if err := engineDownloadFetcher(env.urlPrefix+templateName, cachedZip); err != nil {
-		return err
+	if shouldDownloadPreparedAsset(cachedZip) {
+		if err := engineDownloadFetcher(env.urlPrefix+templateName, cachedZip); err != nil {
+			return err
+		}
 	}
 
 	for _, name := range []string{
@@ -231,16 +240,19 @@ func downloadDesktopAssets(env engineDownloadEnv, editor bool) error {
 		zipName := fmt.Sprintf("editor-%s-%s.zip", env.platform, env.arch)
 		binaryName := fmt.Sprintf("godot.%s.editor.%s%s", platformName, env.arch, postfix)
 		finalBinary := filepath.Join(env.goBinDir, fmt.Sprintf("gdspx%s%s", env.version, postfix))
+		if !shouldDownloadPreparedAsset(finalBinary) {
+			return nil
+		}
 		return downloadBinaryFromZip(env, zipName, binaryName, finalBinary)
 	}
 
 	zipName := fmt.Sprintf("%s-%s.zip", env.platform, env.arch)
 	binaryName := fmt.Sprintf("godot.%s.template_release.%s%s", platformName, env.arch, postfix)
 	templateBinary := filepath.Join(env.goBinDir, fmt.Sprintf("gdspxrt%s%s", env.version, postfix))
-	// Refresh the host runtime binary even if a restore-key cache already left
-	// a file behind. Otherwise prepare can preserve an incompatible stale binary.
-	if err := downloadBinaryFromZip(env, zipName, binaryName, templateBinary); err != nil {
-		return err
+	if shouldDownloadPreparedAsset(templateBinary) {
+		if err := downloadBinaryFromZip(env, zipName, binaryName, templateBinary); err != nil {
+			return err
+		}
 	}
 
 	switch env.platform {
@@ -276,12 +288,34 @@ func downloadDesktopAssets(env engineDownloadEnv, editor bool) error {
 		}
 	case "macos":
 		macosZip := filepath.Join(env.templateDir, "macos.zip")
-		if err := engineDownloadFetcher(env.urlPrefix+"macos.zip", macosZip); err != nil {
-			return err
+		if shouldDownloadPreparedAsset(macosZip) {
+			if err := engineDownloadFetcher(env.urlPrefix+"macos.zip", macosZip); err != nil {
+				return err
+			}
 		}
 	}
 
 	return nil
+}
+
+func shouldDownloadPreparedAsset(path string) bool {
+	return shouldRefreshPreparedAssets() || !fileExists(path)
+}
+
+func shouldRefreshPreparedAssets() bool {
+	// GitHub Actions may restore a fallback cache entry via restore-keys before
+	// prepare runs, so CI refreshes assets while local prepares reuse GOPATH/bin.
+	return envFlagEnabled("GITHUB_ACTIONS") || envFlagEnabled("SPX_PREPARE_FORCE_REFRESH")
+}
+
+func envFlagEnabled(name string) bool {
+	value := strings.TrimSpace(os.Getenv(name))
+	switch strings.ToLower(value) {
+	case "", "0", "false", "no", "off":
+		return false
+	default:
+		return true
+	}
 }
 
 func downloadBinaryFromZip(env engineDownloadEnv, zipName, assetName, dst string) error {
