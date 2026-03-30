@@ -70,13 +70,93 @@ func TestDownloadEngineAssetsRuntime(t *testing.T) {
 	}
 }
 
-func TestDownloadEngineAssetsRuntimeOverwritesStaleDesktopBinaries(t *testing.T) {
+func TestDownloadEngineAssetsRuntimeSkipsExistingDesktopBinariesAndPackLocally(t *testing.T) {
 	runner := newRuntimeFixtureRunner(t)
 	installFakeEngineDownload(t, runner.repoRoot, "linux", "x86_64")
+	t.Setenv("GITHUB_ACTIONS", "")
 
 	gopathBin := filepath.Join(os.Getenv("GOPATH"), "bin")
 	editorPath := filepath.Join(gopathBin, "gdspx2.1.44")
 	templatePath := filepath.Join(gopathBin, "gdspxrt2.1.44")
+	packPath := filepath.Join(gopathBin, "gdspxrt2.1.44.pck")
+	templateFanout := filepath.Join(runner.repoRoot, "templates", "linux_release.x86_64")
+
+	if err := os.MkdirAll(gopathBin, 0o755); err != nil {
+		t.Fatalf("MkdirAll(%s) returned error: %v", gopathBin, err)
+	}
+	if err := os.WriteFile(editorPath, []byte("local-editor"), 0o755); err != nil {
+		t.Fatalf("WriteFile(%s) returned error: %v", editorPath, err)
+	}
+	if err := os.WriteFile(templatePath, []byte("local-template"), 0o755); err != nil {
+		t.Fatalf("WriteFile(%s) returned error: %v", templatePath, err)
+	}
+	if err := os.WriteFile(packPath, []byte("local-pack"), 0o644); err != nil {
+		t.Fatalf("WriteFile(%s) returned error: %v", packPath, err)
+	}
+
+	downloads := 0
+	oldFetcher := engineDownloadFetcher
+	engineDownloadFetcher = func(url, dst string) error {
+		downloads++
+		return oldFetcher(url, dst)
+	}
+	t.Cleanup(func() { engineDownloadFetcher = oldFetcher })
+
+	if err := downloadEngineAssets(engineDownloadConfig{runtime: true}, runner.repoRoot); err != nil {
+		t.Fatalf("downloadEngineAssets returned error: %v", err)
+	}
+
+	if content, err := os.ReadFile(editorPath); err != nil {
+		t.Fatalf("ReadFile(%s) returned error: %v", editorPath, err)
+	} else if string(content) != "local-editor" {
+		t.Fatalf("editor content = %q, want existing engine binary reused", string(content))
+	}
+	if content, err := os.ReadFile(templatePath); err != nil {
+		t.Fatalf("ReadFile(%s) returned error: %v", templatePath, err)
+	} else if string(content) != "local-template" {
+		t.Fatalf("template content = %q, want existing runtime binary reused", string(content))
+	}
+	if content, err := os.ReadFile(packPath); err != nil {
+		t.Fatalf("ReadFile(%s) returned error: %v", packPath, err)
+	} else if string(content) != "local-pack" {
+		t.Fatalf("pack content = %q, want existing runtime pack reused", string(content))
+	}
+	if content, err := os.ReadFile(templateFanout); err != nil {
+		t.Fatalf("ReadFile(%s) returned error: %v", templateFanout, err)
+	} else if string(content) != "local-template" {
+		t.Fatalf("fanout content = %q, want existing runtime binary copied to template fanout", string(content))
+	}
+	if downloads != 0 {
+		t.Fatalf("download count = %d, want 0 when local assets already exist", downloads)
+	}
+}
+
+func TestDownloadEngineAssetsWeb(t *testing.T) {
+	runner := newRuntimeFixtureRunner(t)
+	installFakeEngineDownload(t, runner.repoRoot, "linux", "x86_64")
+
+	if err := downloadEngineAssets(engineDownloadConfig{platform: "web", mode: "worker"}, runner.repoRoot); err != nil {
+		t.Fatalf("downloadEngineAssets returned error: %v", err)
+	}
+
+	gopathBin := filepath.Join(os.Getenv("GOPATH"), "bin")
+	if !fileExists(filepath.Join(gopathBin, "gdspx2.1.44_webworker.zip")) {
+		t.Fatalf("expected cached web template zip to exist")
+	}
+	if !fileExists(filepath.Join(runner.repoRoot, "templates", "web_release.zip")) {
+		t.Fatalf("expected web template copy to exist")
+	}
+}
+
+func TestDownloadEngineAssetsRuntimeOverwritesStaleDesktopBinariesInGitHubActions(t *testing.T) {
+	runner := newRuntimeFixtureRunner(t)
+	installFakeEngineDownload(t, runner.repoRoot, "linux", "x86_64")
+	t.Setenv("GITHUB_ACTIONS", "true")
+
+	gopathBin := filepath.Join(os.Getenv("GOPATH"), "bin")
+	editorPath := filepath.Join(gopathBin, "gdspx2.1.44")
+	templatePath := filepath.Join(gopathBin, "gdspxrt2.1.44")
+	packPath := filepath.Join(gopathBin, "gdspxrt2.1.44.pck")
 	templateFanout := filepath.Join(runner.repoRoot, "templates", "linux_release.x86_64")
 
 	if err := os.MkdirAll(gopathBin, 0o755); err != nil {
@@ -90,6 +170,9 @@ func TestDownloadEngineAssetsRuntimeOverwritesStaleDesktopBinaries(t *testing.T)
 	}
 	if err := os.WriteFile(templatePath, []byte("stale-template"), 0o755); err != nil {
 		t.Fatalf("WriteFile(%s) returned error: %v", templatePath, err)
+	}
+	if err := os.WriteFile(packPath, []byte("stale-pack"), 0o644); err != nil {
+		t.Fatalf("WriteFile(%s) returned error: %v", packPath, err)
 	}
 	if err := os.WriteFile(templateFanout, []byte("stale-fanout"), 0o644); err != nil {
 		t.Fatalf("WriteFile(%s) returned error: %v", templateFanout, err)
@@ -109,6 +192,11 @@ func TestDownloadEngineAssetsRuntimeOverwritesStaleDesktopBinaries(t *testing.T)
 	} else if string(content) != "linux-template" {
 		t.Fatalf("template content = %q, want refreshed runtime binary", string(content))
 	}
+	if content, err := os.ReadFile(packPath); err != nil {
+		t.Fatalf("ReadFile(%s) returned error: %v", packPath, err)
+	} else if string(content) != "runtime-pck" {
+		t.Fatalf("pack content = %q, want refreshed runtime pack", string(content))
+	}
 	if content, err := os.ReadFile(templateFanout); err != nil {
 		t.Fatalf("ReadFile(%s) returned error: %v", templateFanout, err)
 	} else if string(content) != "linux-template" {
@@ -116,20 +204,40 @@ func TestDownloadEngineAssetsRuntimeOverwritesStaleDesktopBinaries(t *testing.T)
 	}
 }
 
-func TestDownloadEngineAssetsWeb(t *testing.T) {
+func TestDownloadEngineAssetsWebSkipsExistingCachedTemplateLocally(t *testing.T) {
 	runner := newRuntimeFixtureRunner(t)
 	installFakeEngineDownload(t, runner.repoRoot, "linux", "x86_64")
+	t.Setenv("GITHUB_ACTIONS", "")
+
+	gopathBin := filepath.Join(os.Getenv("GOPATH"), "bin")
+	cachedZip := filepath.Join(gopathBin, "gdspx2.1.44_webworker.zip")
+	if err := os.MkdirAll(gopathBin, 0o755); err != nil {
+		t.Fatalf("MkdirAll(%s) returned error: %v", gopathBin, err)
+	}
+	if err := os.WriteFile(cachedZip, []byte("local-web-template"), 0o644); err != nil {
+		t.Fatalf("WriteFile(%s) returned error: %v", cachedZip, err)
+	}
+
+	downloads := 0
+	oldFetcher := engineDownloadFetcher
+	engineDownloadFetcher = func(url, dst string) error {
+		downloads++
+		return oldFetcher(url, dst)
+	}
+	t.Cleanup(func() { engineDownloadFetcher = oldFetcher })
 
 	if err := downloadEngineAssets(engineDownloadConfig{platform: "web", mode: "worker"}, runner.repoRoot); err != nil {
 		t.Fatalf("downloadEngineAssets returned error: %v", err)
 	}
 
-	gopathBin := filepath.Join(os.Getenv("GOPATH"), "bin")
-	if !fileExists(filepath.Join(gopathBin, "gdspx2.1.44_webworker.zip")) {
-		t.Fatalf("expected cached web template zip to exist")
+	templateCopy := filepath.Join(runner.repoRoot, "templates", "web_release.zip")
+	if content, err := os.ReadFile(templateCopy); err != nil {
+		t.Fatalf("ReadFile(%s) returned error: %v", templateCopy, err)
+	} else if string(content) != "local-web-template" {
+		t.Fatalf("template content = %q, want existing cached web template reused", string(content))
 	}
-	if !fileExists(filepath.Join(runner.repoRoot, "templates", "web_release.zip")) {
-		t.Fatalf("expected web template copy to exist")
+	if downloads != 0 {
+		t.Fatalf("download count = %d, want 0 when cached web template already exists", downloads)
 	}
 }
 
