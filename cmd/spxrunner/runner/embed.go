@@ -18,14 +18,14 @@ package runner
 
 import (
 	_ "embed"
-	"strings"
+
+	"github.com/goplus/spx/v2/internal/releasemeta"
 )
 
 // Sync files from repository before building.
 // Run: go generate ./cmd/spxrunner/runner
 //
 //go:generate cp ../../../gop.mod gop.mod
-//go:generate cp ../../gox/template/version version
 //go:generate cp ../../gox/template/go.mod.template go.mod.template
 
 // GopModTemplate is the embedded content of gop.mod from the SPX repository root.
@@ -40,14 +40,9 @@ var GopModTemplate string
 //go:embed go.mod.template
 var GoModTemplate string
 
-// versionFile is the embedded version from cmd/gox/template/version
-//
-//go:embed version
-var versionFile string
-
-// RuntimeVersion returns the SPX runtime version (trimmed).
+// RuntimeVersion returns the default SPX runtime version.
 func RuntimeVersion() string {
-	return strings.TrimSpace(versionFile)
+	return releasemeta.DefaultReleaseMeta().Runtime.Version
 }
 
 // Version returns the SPX runtime version.

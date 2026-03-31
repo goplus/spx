@@ -9,11 +9,8 @@ import (
 	"strings"
 )
 
-func compressWasmArtifacts(repoRoot string) error {
-	version, err := readSPXVersion(repoRoot)
-	if err != nil {
-		return err
-	}
+func compressWasmArtifacts() error {
+	version := defaultRuntimeVersion()
 	goPath, err := ensureGoPath()
 	if err != nil {
 		return err

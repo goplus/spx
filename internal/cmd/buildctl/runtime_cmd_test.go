@@ -43,8 +43,9 @@ func TestRuntimeBuildWasmOptSequence(t *testing.T) {
 	runner := newRuntimeFixtureRunner(t)
 	installFakeBrotli(t, runner.repoRoot)
 	gopathBin := filepath.Join(os.Getenv("GOPATH"), "bin")
+	version := defaultRuntimeVersion()
 	mustWriteFile(t, filepath.Join(gopathBin, "ispx.wasm"), []byte("wasm"))
-	mustWriteFile(t, filepath.Join(gopathBin, "gdspxrt2.1.44_webnormal", "engine.wasm"), []byte("engine"))
+	mustWriteFile(t, filepath.Join(gopathBin, "gdspxrt"+version+"_webnormal", "engine.wasm"), []byte("engine"))
 
 	if err := buildWasmRuntime(runtimeBuildWasmConfig{opt: true}, runner); err != nil {
 		t.Fatalf("buildWasmRuntime returned error: %v", err)
@@ -59,7 +60,7 @@ func TestRuntimeBuildWasmOptSequence(t *testing.T) {
 	if !fileExists(filepath.Join(gopathBin, "ispx.wasm.br")) {
 		t.Fatalf("expected compressed ispx.wasm.br to exist")
 	}
-	if !fileExists(filepath.Join(gopathBin, "gdspxrt2.1.44_webnormal", "engine.wasm.br")) {
+	if !fileExists(filepath.Join(gopathBin, "gdspxrt"+version+"_webnormal", "engine.wasm.br")) {
 		t.Fatalf("expected compressed engine.wasm.br to exist")
 	}
 }
@@ -98,6 +99,7 @@ func TestRuntimeExportWebSequence(t *testing.T) {
 
 func TestRuntimeExportPackSequence(t *testing.T) {
 	runner := newRuntimeFixtureRunner(t)
+	version := defaultRuntimeVersion()
 
 	if err := exportPackRuntime(runner); err != nil {
 		t.Fatalf("exportPackRuntime returned error: %v", err)
@@ -106,10 +108,10 @@ func TestRuntimeExportPackSequence(t *testing.T) {
 	assertSingleRuntimeWorkspaceCommand(t, runner, "spx", []string{"export"})
 
 	gopathBin := filepath.Join(os.Getenv("GOPATH"), "bin")
-	if !fileExists(filepath.Join(gopathBin, "gdspxrt2.1.44.pck")) {
+	if !fileExists(filepath.Join(gopathBin, "gdspxrt"+version+".pck")) {
 		t.Fatalf("expected exported pck to exist")
 	}
-	if !fileExists(filepath.Join(gopathBin, "gdspxrt.pck.2.1.44.zip")) {
+	if !fileExists(filepath.Join(gopathBin, "gdspxrt.pck."+version+".zip")) {
 		t.Fatalf("expected exported zip to exist")
 	}
 }
@@ -119,19 +121,19 @@ func TestCompressWasmArtifactsLegacyWebDirFallback(t *testing.T) {
 	gopath := filepath.Join(root, "gopath")
 	t.Setenv("GOPATH", gopath)
 	installFakeBrotli(t, root)
-	mustWriteFile(t, filepath.Join(root, "cmd", "gox", "template", "version"), []byte("2.1.44"))
+	version := defaultRuntimeVersion()
 
 	gopathBin := filepath.Join(gopath, "bin")
 	mustWriteFile(t, filepath.Join(gopathBin, "ispx.wasm"), []byte("wasm"))
-	mustWriteFile(t, filepath.Join(gopathBin, "gdspxrt2.1.44_web", "engine.wasm"), []byte("engine"))
+	mustWriteFile(t, filepath.Join(gopathBin, "gdspxrt"+version+"_web", "engine.wasm"), []byte("engine"))
 
-	if err := compressWasmArtifacts(root); err != nil {
+	if err := compressWasmArtifacts(); err != nil {
 		t.Fatalf("compressWasmArtifacts returned error: %v", err)
 	}
 	if !fileExists(filepath.Join(gopathBin, "ispx.wasm.br")) {
 		t.Fatalf("expected compressed ispx.wasm.br to exist")
 	}
-	if !fileExists(filepath.Join(gopathBin, "gdspxrt2.1.44_web", "engine.wasm.br")) {
+	if !fileExists(filepath.Join(gopathBin, "gdspxrt"+version+"_web", "engine.wasm.br")) {
 		t.Fatalf("expected compressed engine.wasm.br to exist in legacy dir")
 	}
 }

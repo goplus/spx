@@ -50,7 +50,7 @@ runs:
           ~/.local/share/godot/export_templates
           ~/Library/Application Support/Godot/export_templates
           ~/AppData/Roaming/Godot/export_templates
-        key: spx-godot-${{ inputs.cache-version }}-${{ runner.os }}-${{ inputs.setup-mode }}-${{ inputs.setup-mode != 'runtime' && inputs.web-mode || 'runtime' }}-${{ hashFiles('Makefile', 'go.mod', 'go.sum', 'cmd/gox/go.mod', 'cmd/gox/go.sum', 'cmd/gox/**/*.go', 'cmd/gox/**/*.sh', 'cmd/ispx/**/*.go', 'cmd/ispx/**/*.sh', 'cmd/ispx/web/**', 'cmd/ispxnative/**/*.go', 'cmd/ispxnative/**/*.sh', 'cmd/gox/template/**', 'internal/cmd/buildctl/**/*.go', 'internal/tools/**/*.sh', 'internal/gdengine/binding/web/**/*.go', 'pkg/ispx/**/*.go', '.github/actions/deps/action.yml') }}
+        key: spx-godot-${{ inputs.cache-version }}-${{ runner.os }}-${{ inputs.setup-mode }}-${{ inputs.setup-mode != 'runtime' && inputs.web-mode || 'runtime' }}-${{ hashFiles('Makefile', 'go.mod', 'go.sum', 'cmd/gox/go.mod', 'cmd/gox/go.sum', 'cmd/gox/**/*.go', 'cmd/gox/**/*.sh', 'cmd/ispx/**/*.go', 'cmd/ispx/**/*.sh', 'cmd/ispx/web/**', 'cmd/ispxnative/**/*.go', 'cmd/ispxnative/**/*.sh', 'cmd/gox/template/**', 'internal/cmd/buildctl/**/*.go', 'internal/releasemeta/**/*.go', 'internal/tools/**/*.sh', 'internal/gdengine/binding/web/**/*.go', 'pkg/ispx/**/*.go', '.github/actions/deps/action.yml', '.github/scripts/runtime_version.go') }}
         restore-keys: |
           spx-godot-${{ inputs.cache-version }}-${{ runner.os }}-${{ inputs.setup-mode }}-${{ inputs.setup-mode != 'runtime' && inputs.web-mode || 'runtime' }}-
           spx-godot-${{ inputs.cache-version }}-${{ runner.os }}-${{ inputs.setup-mode }}-
@@ -66,7 +66,7 @@ runs:
       run: |
         set -euo pipefail
 
-        version="$(cat cmd/gox/template/version)"
+        version="$(go run ./.github/scripts/runtime_version.go)"
         missing=0
         bin_suffix=""
         lib_suffix=""

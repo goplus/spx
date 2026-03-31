@@ -61,7 +61,6 @@ func newRuntimeFixtureRunner(t *testing.T) *recordingRunner {
 	t.Setenv("GOPATH", gopath)
 
 	mustMkdirAll(t, filepath.Join(root, "cmd", "gox", "template", "project"))
-	mustWriteFile(t, filepath.Join(root, "cmd", "gox", "template", "version"), []byte("2.1.44"))
 	mustWriteFile(t, filepath.Join(root, "cmd", "gox", "template", "project", "runtime.gdextension.txt"), []byte("runtime extension"))
 
 	return &recordingRunner{
@@ -145,6 +144,7 @@ func TestPrepareAssetsRuntime(t *testing.T) {
 	runner := newRuntimeFixtureRunner(t)
 	installFakeEngineDownload(t, runner.repoRoot, "linux", "x86_64")
 	cfg := prepareConfig{setupMode: "runtime", webMode: "normal"}
+	version := defaultRuntimeVersion()
 
 	if err := prepareAssets(cfg, runner); err != nil {
 		t.Fatalf("prepareAssets returned error: %v", err)
@@ -157,7 +157,7 @@ func TestPrepareAssetsRuntime(t *testing.T) {
 		t.Fatalf("unexpected calls: %#v", runner.calls)
 	}
 
-	if !fileExists(filepath.Join(os.Getenv("GOPATH"), "bin", "gdspx2.1.44")) {
+	if !fileExists(filepath.Join(os.Getenv("GOPATH"), "bin", "gdspx"+version)) {
 		t.Fatalf("expected host editor binary to exist")
 	}
 }
@@ -166,6 +166,7 @@ func TestPrepareAssetsWeb(t *testing.T) {
 	runner := newRuntimeFixtureRunner(t)
 	installFakeEngineDownload(t, runner.repoRoot, "linux", "x86_64")
 	cfg := prepareConfig{setupMode: "web", webMode: "worker"}
+	version := defaultRuntimeVersion()
 
 	if err := prepareAssets(cfg, runner); err != nil {
 		t.Fatalf("prepareAssets returned error: %v", err)
@@ -175,7 +176,7 @@ func TestPrepareAssetsWeb(t *testing.T) {
 	if !reflect.DeepEqual(runner.calls, expectedCalls) {
 		t.Fatalf("unexpected calls: %#v", runner.calls)
 	}
-	if !fileExists(filepath.Join(os.Getenv("GOPATH"), "bin", "gdspx2.1.44")) {
+	if !fileExists(filepath.Join(os.Getenv("GOPATH"), "bin", "gdspx"+version)) {
 		t.Fatalf("expected host editor binary to exist")
 	}
 
@@ -183,7 +184,7 @@ func TestPrepareAssetsWeb(t *testing.T) {
 		{name: "spx", args: []string{"exporttemplateweb"}},
 	})
 
-	dstDir := filepath.Join(os.Getenv("GOPATH"), "bin", "gdspxrt2.1.44_webworker")
+	dstDir := filepath.Join(os.Getenv("GOPATH"), "bin", "gdspxrt"+version+"_webworker")
 	if !fileExists(filepath.Join(dstDir, "engine.zip")) {
 		t.Fatalf("expected engine.zip in %s", dstDir)
 	}

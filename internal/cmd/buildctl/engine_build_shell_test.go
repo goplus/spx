@@ -19,10 +19,10 @@ func TestParseEnvExportEngineBuildShellArgsWebDefaultMode(t *testing.T) {
 
 func TestResolveEngineBuildShellPlanWebWorker(t *testing.T) {
 	repoRoot := t.TempDir()
-	mustWriteFile(t, filepath.Join(repoRoot, "cmd", "gox", "template", "version"), []byte("2.1.44"))
 	t.Setenv("GOPATH", filepath.Join(repoRoot, "gopath"))
 	t.Setenv("HOME", repoRoot)
 	t.Setenv("APPDATA", filepath.Join(repoRoot, "AppData"))
+	version := defaultRuntimeVersion()
 
 	plan, err := resolveEngineBuildShellPlan(repoRoot, envExportEngineBuildShellConfig{
 		target:   "template",
@@ -42,14 +42,13 @@ func TestResolveEngineBuildShellPlanWebWorker(t *testing.T) {
 	if plan.WebThreadSuffix != "" {
 		t.Fatalf("web thread suffix = %s, want empty", plan.WebThreadSuffix)
 	}
-	if got, want := plan.WebCachedTemplateZip, filepath.Join(repoRoot, "gopath", "bin", "gdspx2.1.44_webpack.zip"); got != want {
+	if got, want := plan.WebCachedTemplateZip, filepath.Join(repoRoot, "gopath", "bin", "gdspx"+version+"_webpack.zip"); got != want {
 		t.Fatalf("cached template zip = %s, want %s", got, want)
 	}
 }
 
 func TestResolveEngineBuildShellPlanWebMiniGame(t *testing.T) {
 	repoRoot := t.TempDir()
-	mustWriteFile(t, filepath.Join(repoRoot, "cmd", "gox", "template", "version"), []byte("2.1.44"))
 	t.Setenv("GOPATH", filepath.Join(repoRoot, "gopath"))
 	t.Setenv("HOME", repoRoot)
 	t.Setenv("APPDATA", filepath.Join(repoRoot, "AppData"))
@@ -76,7 +75,6 @@ func TestResolveEngineBuildShellPlanWebMiniGame(t *testing.T) {
 
 func TestResolveEngineBuildShellPlanIOSMatrix(t *testing.T) {
 	repoRoot := t.TempDir()
-	mustWriteFile(t, filepath.Join(repoRoot, "cmd", "gox", "template", "version"), []byte("2.1.44"))
 	t.Setenv("GOPATH", filepath.Join(repoRoot, "gopath"))
 	t.Setenv("HOME", repoRoot)
 	t.Setenv("APPDATA", filepath.Join(repoRoot, "AppData"))
@@ -102,7 +100,6 @@ func TestResolveEngineBuildShellPlanIOSMatrix(t *testing.T) {
 
 func TestResolveEngineBuildShellPlanAndroidMatrix(t *testing.T) {
 	repoRoot := t.TempDir()
-	mustWriteFile(t, filepath.Join(repoRoot, "cmd", "gox", "template", "version"), []byte("2.1.44"))
 	t.Setenv("GOPATH", filepath.Join(repoRoot, "gopath"))
 	t.Setenv("HOME", repoRoot)
 	t.Setenv("APPDATA", filepath.Join(repoRoot, "AppData"))
@@ -128,10 +125,10 @@ func TestResolveEngineBuildShellPlanAndroidMatrix(t *testing.T) {
 
 func TestResolveEngineBuildShellPlanEditorUsesHostArtifactNames(t *testing.T) {
 	repoRoot := t.TempDir()
-	mustWriteFile(t, filepath.Join(repoRoot, "cmd", "gox", "template", "version"), []byte("2.1.44"))
 	t.Setenv("GOPATH", filepath.Join(repoRoot, "gopath"))
 	t.Setenv("HOME", repoRoot)
 	t.Setenv("APPDATA", filepath.Join(repoRoot, "AppData"))
+	version := defaultRuntimeVersion()
 
 	plan, err := resolveEngineBuildShellPlan(repoRoot, envExportEngineBuildShellConfig{target: "editor"})
 	if err != nil {
@@ -143,7 +140,7 @@ func TestResolveEngineBuildShellPlanEditorUsesHostArtifactNames(t *testing.T) {
 		if !strings.Contains(plan.EditorSource, "godot.macos.editor.dev.") {
 			t.Fatalf("unexpected editor source: %s", plan.EditorSource)
 		}
-		if !strings.HasSuffix(plan.EditorDestination, "gdspx2.1.44") {
+		if !strings.HasSuffix(plan.EditorDestination, "gdspx"+version) {
 			t.Fatalf("unexpected editor destination: %s", plan.EditorDestination)
 		}
 		if plan.EditorUseVSProj {
@@ -153,7 +150,7 @@ func TestResolveEngineBuildShellPlanEditorUsesHostArtifactNames(t *testing.T) {
 		if !strings.Contains(plan.EditorSource, "godot.linuxbsd.editor.dev.") {
 			t.Fatalf("unexpected editor source: %s", plan.EditorSource)
 		}
-		if !strings.HasSuffix(plan.EditorDestination, "gdspx2.1.44") {
+		if !strings.HasSuffix(plan.EditorDestination, "gdspx"+version) {
 			t.Fatalf("unexpected editor destination: %s", plan.EditorDestination)
 		}
 		if plan.EditorUseVSProj {
@@ -163,7 +160,7 @@ func TestResolveEngineBuildShellPlanEditorUsesHostArtifactNames(t *testing.T) {
 		if !strings.Contains(plan.EditorSource, "godot.windows.editor.dev.") {
 			t.Fatalf("unexpected editor source: %s", plan.EditorSource)
 		}
-		if !strings.HasSuffix(plan.EditorDestination, "gdspx2.1.44.exe") {
+		if !strings.HasSuffix(plan.EditorDestination, "gdspx"+version+".exe") {
 			t.Fatalf("unexpected editor destination: %s", plan.EditorDestination)
 		}
 		if !plan.EditorUseVSProj {

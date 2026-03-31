@@ -129,7 +129,7 @@ func buildWasmRuntime(cfg runtimeBuildWasmConfig, runner scriptRunner) error {
 	if !cfg.opt {
 		return nil
 	}
-	return compressWasmArtifacts(runner.repoRootDir())
+	return compressWasmArtifacts()
 }
 
 func buildctlCommandEnv() (map[string]string, error) {

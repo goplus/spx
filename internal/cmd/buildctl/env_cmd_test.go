@@ -18,7 +18,6 @@ func TestParseEnvExportShellArgsDefault(t *testing.T) {
 
 func TestResolveBuildEnvironmentUsesGodotSrcOverride(t *testing.T) {
 	repoRoot := t.TempDir()
-	mustWriteFile(t, filepath.Join(repoRoot, "cmd", "gox", "template", "version"), []byte("2.1.44"))
 
 	goPath := filepath.Join(repoRoot, "gopath")
 	t.Setenv("GOPATH", goPath)
@@ -41,14 +40,15 @@ func TestResolveBuildEnvironmentUsesGodotSrcOverride(t *testing.T) {
 }
 
 func TestBuildEnvironmentShellExports(t *testing.T) {
+	version := defaultRuntimeVersion()
 	env := buildEnvironment{
 		ProjectDir:    "/repo",
 		EngineDir:     "/repo/godot src",
 		GodotSrc:      "/repo/godot src",
 		EngineVersion: engineBuildVersion,
 		GoPath:        "/tmp/go path",
-		Version:       "2.1.44",
-		EngineGitTag:  "spx2.1.44",
+		Version:       version,
+		EngineGitTag:  "spx" + version,
 		TemplateDir:   "/tmp/templates",
 		Platform:      "linux",
 		Arch:          "x86_64",
@@ -104,7 +104,6 @@ func TestResolveMacOSVulkanSDKRootSelectsLatestInstalledVersion(t *testing.T) {
 
 func TestEnsureEngineSourceRunsCloneWhenMissing(t *testing.T) {
 	repoRoot := t.TempDir()
-	mustWriteFile(t, filepath.Join(repoRoot, "cmd", "gox", "template", "version"), []byte("2.1.44"))
 	t.Setenv("GOPATH", filepath.Join(repoRoot, "gopath"))
 	t.Setenv("HOME", repoRoot)
 	t.Setenv("APPDATA", filepath.Join(repoRoot, "AppData"))
@@ -131,7 +130,6 @@ func TestEnsureEngineSourceRunsCloneWhenMissing(t *testing.T) {
 
 func TestEnsureEngineSourceSkipsCloneWhenPresent(t *testing.T) {
 	repoRoot := t.TempDir()
-	mustWriteFile(t, filepath.Join(repoRoot, "cmd", "gox", "template", "version"), []byte("2.1.44"))
 	t.Setenv("GOPATH", filepath.Join(repoRoot, "gopath"))
 	t.Setenv("HOME", repoRoot)
 	t.Setenv("APPDATA", filepath.Join(repoRoot, "AppData"))
