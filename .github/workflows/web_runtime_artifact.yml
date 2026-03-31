@@ -1,4 +1,4 @@
-name: 🧪 Web Runtime Artifact
+name: Publish Web Runtime Artifact
 
 on:
   push:
@@ -17,9 +17,10 @@ concurrency:
 
 jobs:
   build:
+    name: Publish web runtime artifact
     runs-on: ubuntu-latest
     steps:
-      - name: Validate manual target
+      - name: Validate dispatch target
         if: github.event_name == 'workflow_dispatch'
         env:
           TARGET: ${{ inputs.target }}
@@ -38,14 +39,14 @@ jobs:
             exit 1
           fi
 
-      - name: Checkout
+      - name: Check out code
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
           fetch-tags: true
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.target || github.sha }}
 
-      - name: Get dependencies
+      - name: Install Linux dependencies
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
@@ -61,23 +62,24 @@ jobs:
             binaryen \
             brotli
 
-      - name: Setup go/xgo & engine
+      - name: Set up toolchain and engine assets
         uses: ./.github/actions/deps
         with:
           setup-mode: web
           web-mode: normal
 
-      - name: Setup ORAS
+      - name: Set up ORAS
         uses: oras-project/setup-oras@v1
 
-      - name: Compute pseudo version
+      - name: Compute pseudo-version
         run: |
           SPX_VERSION="$(go run ./.github/scripts/pseudo_version.go HEAD)"
           echo "SPX_VERSION=${SPX_VERSION}"
           echo "SPX_VERSION=${SPX_VERSION}" >> "${GITHUB_ENV}"
 
       - name: Build web bundle
-        run: make export-web
+        run: |
+          "$BUILDCTL" runtime export-web --mode normal
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v4
@@ -86,7 +88,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
 
-      - name: Publish `spx_web.zip` to GitHub Container Registry
+      - name: Publish web bundle to GitHub Container Registry
         run: |
           REVISION="$(git rev-parse HEAD)"
           oras push \

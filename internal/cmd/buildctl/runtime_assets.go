@@ -191,7 +191,11 @@ func ensureGoPath() (string, error) {
 }
 
 func defaultRuntimeVersion() string {
-	return releasemeta.DefaultReleaseMeta().Runtime.Version
+	version := releasemeta.DefaultReleaseMeta().Runtime.Version
+	if version == "" {
+		panic("releasemeta: Runtime.Version is empty")
+	}
+	return version
 }
 
 func webModeOutputZip(mode string) (string, error) {

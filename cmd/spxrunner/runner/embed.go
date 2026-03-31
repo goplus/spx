@@ -40,7 +40,7 @@ var GopModTemplate string
 //go:embed go.mod.template
 var GoModTemplate string
 
-// RuntimeVersion returns the default SPX runtime version.
+// RuntimeVersion returns the latest known SPX runtime version.
 func RuntimeVersion() string {
 	return releasemeta.DefaultReleaseMeta().Runtime.Version
 }

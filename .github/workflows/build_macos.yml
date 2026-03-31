@@ -1,4 +1,4 @@
-name: MacOS
+name: Build macOS
 
 on:
   workflow_call:
@@ -10,13 +10,13 @@ concurrency:
 jobs:
   build:
     runs-on: "macos-latest"
-    name: macos
+    name: Build macOS
     steps:
-    - uses: actions/checkout@v6
+    - name: Check out code
+      uses: actions/checkout@v6
 
-    - name: Setup go/xgo & engine
+    - name: Set up toolchain and engine assets
       uses: ./.github/actions/deps
 
-    - name: Test
+    - name: Run project test
       uses: ./.github/actions/project-test
-

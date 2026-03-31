@@ -1,10 +1,10 @@
-name: 🏁 Release Windows Build
+name: Release Windows Package
 
 on:
   workflow_call:
     inputs:
       version:
-        description: 'Release version (e.g., v2.0.1)'
+        description: 'Release version without the leading v (for example, 2.0.1)'
         required: true
         type: string
 
@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   windows-goenv:
-    name: 🏁 Windows Goenv Package
+    name: Package Windows goenv (${{ matrix.arch_name }})
     runs-on: windows-latest
     strategy:
       matrix:
@@ -24,7 +24,8 @@ jobs:
           - arch: amd64
             arch_name: x64
     steps:
-      - uses: actions/checkout@v6
+      - name: Check out code
+        uses: actions/checkout@v6
 
       - name: Set up MSYS2
         uses: msys2/setup-msys2@v2
@@ -35,14 +36,13 @@ jobs:
             mingw-w64-x86_64-toolchain
             zip
             unzip
-            make
             bash
             rsync
 
-      - name: Setup go/xgo & engine
+      - name: Set up toolchain and engine assets
         uses: ./.github/actions/deps
 
-      - name: Download and extract Go toolchain
+      - name: Download Go toolchain
         shell: msys2 {0}
         run: |
           mkdir -p goenv/gotoolchain
@@ -52,7 +52,7 @@ jobs:
           rm go1.25.8.windows-${{ matrix.arch }}.zip
           cd ../..
 
-      - name: Get GOPATH and short SHA
+      - name: Resolve GOPATH and short SHA
         id: env-vars
         shell: pwsh
         run: |
@@ -63,7 +63,7 @@ jobs:
           $shortSha = "${{ github.sha }}".Substring(0, 7)
           echo "short_sha=$shortSha" >> $env:GITHUB_OUTPUT
 
-      - name: Collect Go module cache
+      - name: Collect module cache
         shell: msys2 {0}
         run: |
           # Set up mod cache directory (no build cache needed)
@@ -110,12 +110,12 @@ jobs:
           ls -lah goenv/.cache/mod || true
           du -sh goenv/.cache/mod || true
 
-      - name: Replace version
+      - name: Update template version
         uses: ./.github/actions/replace-version
         with:
           version: ${{ inputs.version }}
 
-      - name: Update spx binary with versioned build
+      - name: Refresh versioned spx binary
         shell: msys2 {0}
         run: |
           # After replace-version rebuilds spx with the new version,
@@ -138,7 +138,7 @@ jobs:
           zip -r ../spx-windows-${{ matrix.arch_name }}.zip .
           cd ..
 
-      - name: Upload artifact
+      - name: Upload release artifact
         uses: actions/upload-artifact@v7
         with:
           name: spx-windows-${{ matrix.arch_name }}
@@ -151,7 +151,7 @@ jobs:
           package-file: spx-windows-${{ matrix.arch_name }}.zip
           platform: windows
 
-      - name: Publish to GitHub Release
+      - name: Publish release asset
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:

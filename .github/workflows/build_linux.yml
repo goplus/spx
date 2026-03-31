@@ -1,4 +1,4 @@
-name: Linux
+name: Build Linux
 
 on:
   workflow_call:
@@ -9,16 +9,18 @@ concurrency:
 
 jobs:
   build:
+    name: Build Linux
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - name: Check out code
+      uses: actions/checkout@v6
 
-    - name: Get dependencies
+    - name: Install Linux dependencies
       run: sudo apt-get update && sudo apt-get install gcc libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libx11-dev xorg-dev libasound2-dev libopenal-dev
       if: ${{ runner.os == 'Linux' }}
 
-    - name: Setup go/xgo & engine
+    - name: Set up toolchain and engine assets
       uses: ./.github/actions/deps
 
-    - name: Test
+    - name: Run project test
       uses: ./.github/actions/project-test

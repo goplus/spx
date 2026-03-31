@@ -1,4 +1,4 @@
-name: Android
+name: Build Android APK
 
 on:
   workflow_call:
@@ -10,16 +10,17 @@ concurrency:
 jobs:
 
   build:
+    name: Build Android APK
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
     steps:
-    - name: Checkout
+    - name: Check out code
       uses: actions/checkout@v6
       with:
         submodules: recursive
 
-    - name: Get dependencies
+    - name: Install Linux dependencies
       run: sudo apt-get update && sudo apt-get install gcc libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libx11-dev xorg-dev libasound2-dev libopenal-dev
       if: ${{ runner.os == 'Linux' }}
 
@@ -37,13 +38,13 @@ jobs:
         add-to-path: true
         local-cache: true
 
-    - name: Setup go/xgo & engine
+    - name: Set up toolchain and engine assets
       uses: ./.github/actions/deps
 
-    - name: Set Android NDK environment variable
+    - name: Export ANDROID_NDK_ROOT
       run: echo "ANDROID_NDK_ROOT=${{ steps.setup-ndk.outputs.ndk-path }}" >> $GITHUB_ENV
 
-    - name: Verify and fix NDK installation
+    - name: Verify Android NDK
       run: |
         echo "ANDROID_NDK_ROOT: $ANDROID_NDK_ROOT"
         echo "Checking for clang binary:"
@@ -80,18 +81,18 @@ jobs:
         ls -la "$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" || echo "❌ clang still not found"
         ls -la "$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang" || echo "❌ wrapper not found"
 
-    - name: Download Android engine templates
+    - name: Download Android export templates
       run: |
         echo "Downloading Android engine templates..."
-        make download-engine PLATFORM=android
+        "$BUILDCTL" engine download --platform android
         echo "Listing downloaded templates:"
         ls -la ~/.local/share/godot/export_templates/
 
-    - name: Run test demo
+    - name: Build sample APK
       shell: bash
       run: cd tutorial/00-Hello && spx exportapk 2>&1 | tee build_apk.txt || true
 
-    - name: Check build result
+    - name: Verify APK output
       shell: bash
       run: |
         echo "Checking if APK was built successfully..."

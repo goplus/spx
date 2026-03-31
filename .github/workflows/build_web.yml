@@ -1,4 +1,4 @@
-name: Web
+name: Build Web Bundle
 
 on:
   workflow_call:
@@ -10,7 +10,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    name: web-export (${{ matrix.mode }})
+    name: Build web bundle (${{ matrix.mode }})
     strategy:
       fail-fast: false
       matrix:
@@ -24,9 +24,10 @@ jobs:
           - mode: miniprogram
             zip_file: spx_web_miniprogram.zip
     steps:
-      - uses: actions/checkout@v6
+      - name: Check out code
+        uses: actions/checkout@v6
 
-      - name: Get dependencies
+      - name: Install Linux dependencies
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
@@ -42,7 +43,7 @@ jobs:
             binaryen \
             brotli
 
-      - name: Setup go/xgo & engine
+      - name: Set up toolchain and engine assets
         uses: ./.github/actions/deps
         with:
           setup-mode: web
@@ -52,13 +53,9 @@ jobs:
         env:
           MATRIX_MODE: ${{ matrix.mode }}
         run: |
-          if [ "$MATRIX_MODE" != "normal" ]; then
-            make export-web MODE="$MATRIX_MODE"
-          else
-            make export-web
-          fi
+          "$BUILDCTL" runtime export-web --mode "$MATRIX_MODE"
 
-      - name: Verify web bundle
+      - name: Verify bundle artifact
         run: |
           if [ ! -f "${{ matrix.zip_file }}" ]; then
             echo "${{ matrix.zip_file }} not found"
