@@ -49,6 +49,86 @@ func FindFieldPtr(v reflect.Value, name string, from int) any {
 	return nil
 }
 
+// embeddedStructs returns the dereferenced struct values of all exported
+// anonymous fields of v. Nil pointers and nil interfaces are skipped.
+func embeddedStructs(v reflect.Value) []reflect.Value {
+	t := v.Type()
+	var out []reflect.Value
+	for i := range v.NumField() {
+		tFld := t.Field(i)
+		if !tFld.Anonymous || !tFld.IsExported() {
+			continue
+		}
+		f := v.Field(i)
+		if f.Kind() == reflect.Pointer {
+			if f.IsNil() {
+				continue
+			}
+			f = f.Elem()
+		}
+		if f.Kind() == reflect.Interface {
+			if f.IsNil() {
+				continue
+			}
+			f = f.Elem()
+		}
+		if f.Kind() != reflect.Struct {
+			continue
+		}
+		out = append(out, f)
+	}
+	return out
+}
+
+// findPromotedFieldPtr approximates Go's embedding promotion rules: direct
+// fields at the current level are checked first (respecting `from`), then
+// exported anonymous (embedded) fields are searched using BFS so that the
+// shallowest match always wins. Anonymous fields before `from` at the top
+// level are still included in the BFS (e.g. *Game at index 1 when from=2 for
+// sprites).
+//
+// Access boundary: only exported anonymous fields are recursed into. This
+// relies on the assumption that gogen-generated user types always use exported
+// (uppercase) type names, so an unexported anonymous field always indicates a
+// framework-internal type rather than a user-defined one.
+//
+// Ambiguity: if the same field name appears at equal depth in multiple
+// branches, the first match in declaration order is returned rather than
+// raising an error (unlike the Go compiler which rejects such access as
+// ambiguous).
+func findPromotedFieldPtr(v reflect.Value, name string, from int) any {
+	if v.Kind() == reflect.Pointer {
+		v = v.Elem()
+	}
+	if v.Kind() != reflect.Struct {
+		return nil
+	}
+
+	// First pass: direct fields at this level (respecting `from`).
+	if result := FindFieldPtr(v, name, from); result != nil {
+		return result
+	}
+
+	// Second pass: BFS through exported anonymous fields.
+	// `from` only restricts direct field access at the top level; all
+	// embedded fields are searched starting from index 0.
+	for queue := embeddedStructs(v); len(queue) > 0; {
+		var next []reflect.Value
+		var found any
+		for _, ev := range queue {
+			if result := FindFieldPtr(ev, name, 0); result != nil && found == nil {
+				found = result
+			}
+			next = append(next, embeddedStructs(ev)...)
+		}
+		if found != nil {
+			return found
+		}
+		queue = next
+	}
+	return nil
+}
+
 func FindFieldRefCaseInsensitive(v reflect.Value, name string, from int) any {
 	if v.Kind() == reflect.Pointer {
 		v = v.Elem()
