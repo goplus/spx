@@ -40,7 +40,7 @@ func TestResolveBuildEnvironmentUsesGodotSrcOverride(t *testing.T) {
 }
 
 func TestBuildEnvironmentShellExports(t *testing.T) {
-	version := defaultRuntimeVersion()
+	version := mustDefaultRuntimeVersion(t)
 	env := buildEnvironment{
 		ProjectDir:    "/repo",
 		EngineDir:     "/repo/godot src",

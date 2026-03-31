@@ -50,7 +50,7 @@ func TestParseEngineBuildArgsWebDefaultMode(t *testing.T) {
 func TestDownloadEngineAssetsRuntime(t *testing.T) {
 	runner := newRuntimeFixtureRunner(t)
 	installFakeEngineDownload(t, runner.repoRoot, "linux", "x86_64")
-	version := defaultRuntimeVersion()
+	version := mustDefaultRuntimeVersion(t)
 
 	if err := downloadEngineAssets(engineDownloadConfig{runtime: true}, runner.repoRoot); err != nil {
 		t.Fatalf("downloadEngineAssets returned error: %v", err)
@@ -75,7 +75,7 @@ func TestDownloadEngineAssetsRuntimeRefreshesPackLocally(t *testing.T) {
 	runner := newRuntimeFixtureRunner(t)
 	installFakeEngineDownload(t, runner.repoRoot, "linux", "x86_64")
 	t.Setenv("GITHUB_ACTIONS", "")
-	version := defaultRuntimeVersion()
+	version := mustDefaultRuntimeVersion(t)
 
 	gopathBin := filepath.Join(os.Getenv("GOPATH"), "bin")
 	editorPath := filepath.Join(gopathBin, "gdspx"+version)
@@ -136,7 +136,7 @@ func TestDownloadEngineAssetsRuntimeRefreshesPackLocally(t *testing.T) {
 func TestDownloadEngineAssetsWeb(t *testing.T) {
 	runner := newRuntimeFixtureRunner(t)
 	installFakeEngineDownload(t, runner.repoRoot, "linux", "x86_64")
-	version := defaultRuntimeVersion()
+	version := mustDefaultRuntimeVersion(t)
 
 	if err := downloadEngineAssets(engineDownloadConfig{platform: "web", mode: "worker"}, runner.repoRoot); err != nil {
 		t.Fatalf("downloadEngineAssets returned error: %v", err)
@@ -155,7 +155,7 @@ func TestDownloadEngineAssetsRuntimeOverwritesStaleDesktopBinariesInGitHubAction
 	runner := newRuntimeFixtureRunner(t)
 	installFakeEngineDownload(t, runner.repoRoot, "linux", "x86_64")
 	t.Setenv("GITHUB_ACTIONS", "true")
-	version := defaultRuntimeVersion()
+	version := mustDefaultRuntimeVersion(t)
 
 	gopathBin := filepath.Join(os.Getenv("GOPATH"), "bin")
 	editorPath := filepath.Join(gopathBin, "gdspx"+version)
@@ -212,7 +212,7 @@ func TestDownloadEngineAssetsWebSkipsExistingCachedTemplateLocally(t *testing.T)
 	runner := newRuntimeFixtureRunner(t)
 	installFakeEngineDownload(t, runner.repoRoot, "linux", "x86_64")
 	t.Setenv("GITHUB_ACTIONS", "")
-	version := defaultRuntimeVersion()
+	version := mustDefaultRuntimeVersion(t)
 
 	gopathBin := filepath.Join(os.Getenv("GOPATH"), "bin")
 	cachedZip := filepath.Join(gopathBin, "gdspx"+version+"_webworker.zip")
@@ -256,7 +256,7 @@ func installFakeEngineDownload(t *testing.T, repoRoot, defaultPlatform, arch str
 		if platform == "" {
 			platform = defaultPlatform
 		}
-		version := defaultRuntimeVersion()
+		version := mustDefaultRuntimeVersion(t)
 		return engineDownloadEnv{
 			repoRoot:    repoRootArg,
 			version:     version,

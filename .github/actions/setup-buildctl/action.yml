@@ -8,6 +8,11 @@ runs:
       run: |
         set -euo pipefail
 
+        if [ -n "${BUILDCTL:-}" ] && [ -x "$BUILDCTL" ]; then
+          echo "BUILDCTL=$BUILDCTL" >> "$GITHUB_ENV"
+          exit 0
+        fi
+
         buildctl_path="$(pwd)/.bin/buildctl$(go env GOEXE)"
 
         mkdir -p ./.bin

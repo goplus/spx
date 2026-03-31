@@ -10,7 +10,7 @@ func TestCleanInstalledAssetsRemovesKnownArtifactsOnly(t *testing.T) {
 	root := t.TempDir()
 	gopath := filepath.Join(root, "gopath")
 	t.Setenv("GOPATH", gopath)
-	version := defaultRuntimeVersion()
+	version := mustDefaultRuntimeVersion(t)
 
 	binDir := filepath.Join(gopath, "bin")
 	if err := os.MkdirAll(binDir, 0o755); err != nil {
