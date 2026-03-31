@@ -11,18 +11,11 @@
 /.gocache/
 /_gsc/
 /_test/
-/gop.mod
 /go.work
 /go.json
 /gop.json
 /gop_autogen.go
 /xgo_autogen.go
-
-# Local scratch files
-/sprite.txt
-/game.txt
-/mv.sh
-/CLAUDE.md
 
 # Build outputs
 *.exe
@@ -35,7 +28,7 @@
 *.out
 
 # Temp directories
-/**/.temp/
+.temp/
 /.tmp/
 
 # Repo-local generated artifacts
