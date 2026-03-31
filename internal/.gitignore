@@ -1,18 +1,11 @@
 go.work
 go.work.sum
+
 *.so
 *.dylib
 *.DS_Store
-*library.gdextension
 
-# Directories
-/builds
-/webtools
-/bin
-/tools/publish
-/tools/version
+_debug_parsed_ast*.json
+_temp_output*.h
 
-# Files
-cmd/_debug_parsed_ast.json
-gdengine/binding/native/_temp_output.h
 cmd/buildctl/bin
