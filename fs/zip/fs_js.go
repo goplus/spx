@@ -1,6 +1,3 @@
-//go:build !js
-// +build !js
-
 /*
  * Copyright (c) 2021 The XGo Authors (xgo.dev). All rights reserved.
  *
@@ -21,28 +18,23 @@ package zip
 
 import (
 	"archive/zip"
+	"bytes"
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"path"
 	"syscall"
 
 	"github.com/goplus/spx/v2/fs"
 )
 
-// -------------------------------------------------------------------------------------
-
 // A FS represents a zip filesystem.
-type FS zip.ReadCloser
+type FS struct {
+	*zip.Reader
+}
 
 // Open opens a zip filesystem object.
 func Open(file string) (fs.Dir, error) {
-	zipf, err := zip.OpenReader(file)
-	if err != nil {
-		return nil, err
-	}
-	return (*FS)(zipf), nil
+	return OpenHttp(file)
 }
 
 // Open opens a zipped file object.
@@ -57,7 +49,7 @@ func (zipf *FS) Open(name string) (io.ReadCloser, error) {
 
 // Close closes the filesystem object.
 func (zipf *FS) Close() error {
-	return ((*zip.ReadCloser)(zipf)).Close()
+	return nil
 }
 
 // OpenHttp opens hzip:<domain>/<path>
@@ -73,48 +65,26 @@ func OpenHttps(url string) (fs.Dir, error) {
 }
 
 func openHttpWith(url string, schema string) (dir fs.Dir, err error) {
-	local := spxBaseDir + url
-	dir, err = Open(local)
-	if err == nil {
-		return
-	}
-
 	remote := schema + url
 	resp, err := http.Get(remote)
 	if err != nil {
-		return
+		return nil, err
 	}
 	defer resp.Body.Close()
-
-	err = saveTo(local, resp)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return
+		return nil, err
 	}
-	return Open(local)
-}
-
-func saveTo(local string, resp *http.Response) (err error) {
-	dir := path.Dir(local)
-	os.MkdirAll(dir, 0777)
-
-	f, err := os.Create(local)
+	r := bytes.NewReader(body)
+	zipf, err := zip.NewReader(r, int64(r.Len()))
 	if err != nil {
-		return
+		return nil, err
 	}
-	defer f.Close()
-
-	_, err = io.Copy(f, resp.Body)
-	return
+	return &FS{zipf}, nil
 }
-
-var (
-	spxBaseDir = os.Getenv("HOME") + "/.spx/"
-)
 
 func init() {
 	fs.RegisterSchema("zip", Open)
 	fs.RegisterSchema("hzip", OpenHttp)
 	fs.RegisterSchema("hzips", OpenHttps)
 }
-
-// -------------------------------------------------------------------------------------
