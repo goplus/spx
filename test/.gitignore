@@ -1,4 +1,5 @@
 /**/project
 /**/.gitignore
-*.mod
-*.sum
+go.mod
+go.sum
+gop.sum
