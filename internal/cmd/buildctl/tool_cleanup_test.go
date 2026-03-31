@@ -10,6 +10,7 @@ func TestCleanInstalledAssetsRemovesKnownArtifactsOnly(t *testing.T) {
 	root := t.TempDir()
 	gopath := filepath.Join(root, "gopath")
 	t.Setenv("GOPATH", gopath)
+	version := defaultRuntimeVersion()
 
 	binDir := filepath.Join(gopath, "bin")
 	if err := os.MkdirAll(binDir, 0o755); err != nil {
@@ -21,11 +22,11 @@ func TestCleanInstalledAssetsRemovesKnownArtifactsOnly(t *testing.T) {
 		"ispx",
 		"ispx.wasm",
 		"runtime.gdextension",
-		"gdspx2.1.44",
-		"gdspx2.1.44_webpack.zip",
-		"gdspxrt2.1.44",
-		"gdspxrt2.1.44.pck",
-		"gdspxrt2.1.44_webnormal/engine.js",
+		"gdspx" + version,
+		"gdspx" + version + "_webpack.zip",
+		"gdspxrt" + version,
+		"gdspxrt" + version + ".pck",
+		"gdspxrt" + version + "_webnormal/engine.js",
 	}
 	for _, rel := range toCreate {
 		dst := filepath.Join(binDir, rel)
@@ -51,11 +52,11 @@ func TestCleanInstalledAssetsRemovesKnownArtifactsOnly(t *testing.T) {
 		"ispx",
 		"ispx.wasm",
 		"runtime.gdextension",
-		"gdspx2.1.44",
-		"gdspx2.1.44_webpack.zip",
-		"gdspxrt2.1.44",
-		"gdspxrt2.1.44.pck",
-		"gdspxrt2.1.44_webnormal",
+		"gdspx" + version,
+		"gdspx" + version + "_webpack.zip",
+		"gdspxrt" + version,
+		"gdspxrt" + version + ".pck",
+		"gdspxrt" + version + "_webnormal",
 	} {
 		if fileExists(filepath.Join(binDir, rel)) {
 			t.Fatalf("expected %s to be removed", rel)

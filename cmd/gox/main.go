@@ -4,9 +4,9 @@ import (
 	"embed"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/goplus/spx/v2/cmd/gox/pkg/command"
+	"github.com/goplus/spx/v2/internal/releasemeta"
 )
 
 var (
@@ -15,9 +15,6 @@ var (
 
 	//go:embed template/project/*
 	projectFS embed.FS
-
-	//go:embed template/version
-	version string
 
 	//go:embed template/go.mod.template
 	gomodtemplate string
@@ -40,7 +37,7 @@ func main() {
 	// Initialize with provided values
 	cmd.ProjectFS = projectFS
 	cmd.PlatformFS = platformFS
-	cmd.Version = strings.TrimSpace(version)
+	cmd.Version = releasemeta.DefaultReleaseMeta().Runtime.Version
 	cmd.RunSh = runSh
 	cmd.MainSh = mainSh
 	cmd.GoModTemplate = gomodtemplate

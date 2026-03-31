@@ -25,10 +25,7 @@ type buildEnvironment struct {
 }
 
 func resolveBuildEnvironment(repoRoot string, requestedPlatform string) (buildEnvironment, error) {
-	version, err := readSPXVersion(repoRoot)
-	if err != nil {
-		return buildEnvironment{}, err
-	}
+	version := defaultRuntimeVersion()
 	goPath, err := ensureGoPath()
 	if err != nil {
 		return buildEnvironment{}, err

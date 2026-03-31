@@ -50,19 +50,20 @@ func TestParseEngineBuildArgsWebDefaultMode(t *testing.T) {
 func TestDownloadEngineAssetsRuntime(t *testing.T) {
 	runner := newRuntimeFixtureRunner(t)
 	installFakeEngineDownload(t, runner.repoRoot, "linux", "x86_64")
+	version := defaultRuntimeVersion()
 
 	if err := downloadEngineAssets(engineDownloadConfig{runtime: true}, runner.repoRoot); err != nil {
 		t.Fatalf("downloadEngineAssets returned error: %v", err)
 	}
 
 	gopathBin := filepath.Join(os.Getenv("GOPATH"), "bin")
-	if !fileExists(filepath.Join(gopathBin, "gdspx2.1.44")) {
+	if !fileExists(filepath.Join(gopathBin, "gdspx"+version)) {
 		t.Fatalf("expected host editor binary to exist")
 	}
-	if !fileExists(filepath.Join(gopathBin, "gdspxrt2.1.44")) {
+	if !fileExists(filepath.Join(gopathBin, "gdspxrt"+version)) {
 		t.Fatalf("expected host template binary to exist")
 	}
-	if !fileExists(filepath.Join(gopathBin, "gdspxrt2.1.44.pck")) {
+	if !fileExists(filepath.Join(gopathBin, "gdspxrt"+version+".pck")) {
 		t.Fatalf("expected runtime pck to exist")
 	}
 	if !fileExists(filepath.Join(runner.repoRoot, "templates", "linux_release.x86_64")) {
@@ -74,11 +75,12 @@ func TestDownloadEngineAssetsRuntimeRefreshesPackLocally(t *testing.T) {
 	runner := newRuntimeFixtureRunner(t)
 	installFakeEngineDownload(t, runner.repoRoot, "linux", "x86_64")
 	t.Setenv("GITHUB_ACTIONS", "")
+	version := defaultRuntimeVersion()
 
 	gopathBin := filepath.Join(os.Getenv("GOPATH"), "bin")
-	editorPath := filepath.Join(gopathBin, "gdspx2.1.44")
-	templatePath := filepath.Join(gopathBin, "gdspxrt2.1.44")
-	packPath := filepath.Join(gopathBin, "gdspxrt2.1.44.pck")
+	editorPath := filepath.Join(gopathBin, "gdspx"+version)
+	templatePath := filepath.Join(gopathBin, "gdspxrt"+version)
+	packPath := filepath.Join(gopathBin, "gdspxrt"+version+".pck")
 	templateFanout := filepath.Join(runner.repoRoot, "templates", "linux_release.x86_64")
 
 	if err := os.MkdirAll(gopathBin, 0o755); err != nil {
@@ -134,13 +136,14 @@ func TestDownloadEngineAssetsRuntimeRefreshesPackLocally(t *testing.T) {
 func TestDownloadEngineAssetsWeb(t *testing.T) {
 	runner := newRuntimeFixtureRunner(t)
 	installFakeEngineDownload(t, runner.repoRoot, "linux", "x86_64")
+	version := defaultRuntimeVersion()
 
 	if err := downloadEngineAssets(engineDownloadConfig{platform: "web", mode: "worker"}, runner.repoRoot); err != nil {
 		t.Fatalf("downloadEngineAssets returned error: %v", err)
 	}
 
 	gopathBin := filepath.Join(os.Getenv("GOPATH"), "bin")
-	if !fileExists(filepath.Join(gopathBin, "gdspx2.1.44_webworker.zip")) {
+	if !fileExists(filepath.Join(gopathBin, "gdspx"+version+"_webworker.zip")) {
 		t.Fatalf("expected cached web template zip to exist")
 	}
 	if !fileExists(filepath.Join(runner.repoRoot, "templates", "web_release.zip")) {
@@ -152,11 +155,12 @@ func TestDownloadEngineAssetsRuntimeOverwritesStaleDesktopBinariesInGitHubAction
 	runner := newRuntimeFixtureRunner(t)
 	installFakeEngineDownload(t, runner.repoRoot, "linux", "x86_64")
 	t.Setenv("GITHUB_ACTIONS", "true")
+	version := defaultRuntimeVersion()
 
 	gopathBin := filepath.Join(os.Getenv("GOPATH"), "bin")
-	editorPath := filepath.Join(gopathBin, "gdspx2.1.44")
-	templatePath := filepath.Join(gopathBin, "gdspxrt2.1.44")
-	packPath := filepath.Join(gopathBin, "gdspxrt2.1.44.pck")
+	editorPath := filepath.Join(gopathBin, "gdspx"+version)
+	templatePath := filepath.Join(gopathBin, "gdspxrt"+version)
+	packPath := filepath.Join(gopathBin, "gdspxrt"+version+".pck")
 	templateFanout := filepath.Join(runner.repoRoot, "templates", "linux_release.x86_64")
 
 	if err := os.MkdirAll(gopathBin, 0o755); err != nil {
@@ -208,9 +212,10 @@ func TestDownloadEngineAssetsWebSkipsExistingCachedTemplateLocally(t *testing.T)
 	runner := newRuntimeFixtureRunner(t)
 	installFakeEngineDownload(t, runner.repoRoot, "linux", "x86_64")
 	t.Setenv("GITHUB_ACTIONS", "")
+	version := defaultRuntimeVersion()
 
 	gopathBin := filepath.Join(os.Getenv("GOPATH"), "bin")
-	cachedZip := filepath.Join(gopathBin, "gdspx2.1.44_webworker.zip")
+	cachedZip := filepath.Join(gopathBin, "gdspx"+version+"_webworker.zip")
 	if err := os.MkdirAll(gopathBin, 0o755); err != nil {
 		t.Fatalf("MkdirAll(%s) returned error: %v", gopathBin, err)
 	}
@@ -251,9 +256,10 @@ func installFakeEngineDownload(t *testing.T, repoRoot, defaultPlatform, arch str
 		if platform == "" {
 			platform = defaultPlatform
 		}
+		version := defaultRuntimeVersion()
 		return engineDownloadEnv{
 			repoRoot:    repoRootArg,
-			version:     "2.1.44",
+			version:     version,
 			platform:    platform,
 			arch:        arch,
 			goBinDir:    filepath.Join(os.Getenv("GOPATH"), "bin"),

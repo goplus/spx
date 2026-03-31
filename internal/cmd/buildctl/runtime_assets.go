@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/goplus/spx/v2/internal/releasemeta"
 )
 
 const runtimeIndexJSON = `{"map":{"width":480,"height":360}}`
@@ -122,10 +124,7 @@ func exportWebTemplateRuntime(mode string, runner scriptRunner) error {
 }
 
 func prepareRuntimeWorkspace(repoRoot string, includeRuntimeExtension bool) (runtimeWorkspace, func(), error) {
-	version, err := readSPXVersion(repoRoot)
-	if err != nil {
-		return runtimeWorkspace{}, nil, err
-	}
+	version := defaultRuntimeVersion()
 	goPath, err := ensureGoPath()
 	if err != nil {
 		return runtimeWorkspace{}, nil, err
@@ -191,16 +190,8 @@ func ensureGoPath() (string, error) {
 	return goPath, nil
 }
 
-func readSPXVersion(repoRoot string) (string, error) {
-	content, err := os.ReadFile(filepath.Join(repoRoot, "cmd", "gox", "template", "version"))
-	if err != nil {
-		return "", err
-	}
-	version := strings.TrimSpace(string(content))
-	if version == "" {
-		return "", fmt.Errorf("empty SPX version")
-	}
-	return version, nil
+func defaultRuntimeVersion() string {
+	return releasemeta.DefaultReleaseMeta().Runtime.Version
 }
 
 func webModeOutputZip(mode string) (string, error) {

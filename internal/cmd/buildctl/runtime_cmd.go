@@ -96,12 +96,7 @@ func runRuntimeCompressWasm(args []string) error {
 		}
 		return err
 	}
-
-	repoRoot, err := findRepoRoot()
-	if err != nil {
-		return err
-	}
-	return compressWasmArtifacts(repoRoot)
+	return compressWasmArtifacts()
 }
 
 func parseRuntimeCompressWasmArgs(args []string) error {
