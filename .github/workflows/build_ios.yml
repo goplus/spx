@@ -1,4 +1,4 @@
-name: iOS
+name: Build iOS IPA
 
 on:
   workflow_call:
@@ -9,19 +9,20 @@ concurrency:
 
 jobs:
   build:
+    name: Build iOS IPA
     runs-on: macos-latest
     timeout-minutes: 60
 
     steps:
-    - name: Checkout
+    - name: Check out code
       uses: actions/checkout@v6
       with:
         submodules: recursive
 
-    - name: Setup go/xgo & engine
+    - name: Set up toolchain and engine assets
       uses: ./.github/actions/deps
 
-    - name: Setup Vulkan SDK
+    - name: Set up Vulkan SDK
       run: |
         echo "Installing Vulkan SDK for MoltenVK support..."
         # Install jq if not available
@@ -57,14 +58,14 @@ jobs:
         rm -f /tmp/vulkan-sdk.json /tmp/vulkan-sdk.zip
         rm -rf /tmp/vulkansdk-macOS-$VULKAN_VERSION.app
 
-    - name: Download iOS engine templates
+    - name: Download iOS export templates
       run: |
         echo "Downloading iOS engine templates..."
-        make download-engine PLATFORM=ios
+        "$BUILDCTL" engine download --platform ios
         echo "Listing downloaded templates:"
         ls -la ~/Library/Application\ Support/Godot/export_templates/
 
-    - name: Configure export preset for CI
+    - name: Configure iOS export preset
       shell: bash
       run: |
         echo "Configuring iOS export preset for CI (export Xcode project only)..."
@@ -79,9 +80,12 @@ jobs:
 
     - name: Export Xcode project
       shell: bash
-      run: make install && cd tutorial/00-Hello && spx exportios 2>&1 | tee build_ios.txt || true
+      run: |
+        "$BUILDCTL" tool install
+        cd tutorial/00-Hello
+        spx exportios 2>&1 | tee build_ios.txt || true
 
-    - name: Copy MoltenVK framework to Xcode project
+    - name: Copy MoltenVK framework
       shell: bash
       run: |
         echo "Copying MoltenVK.xcframework to Xcode project..."
@@ -110,7 +114,7 @@ jobs:
           exit 1
         fi
 
-    - name: Build IPA from Xcode project without code signing
+    - name: Build unsigned IPA
       shell: bash
       run: |
         echo "Building IPA from Xcode project..."
@@ -160,7 +164,7 @@ jobs:
         echo "✅ IPA created successfully"
         ls -lh Game.ipa
 
-    - name: Check build result
+    - name: Verify IPA output
       shell: bash
       run: |
         echo "Checking if IPA was built successfully..."

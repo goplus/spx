@@ -1,93 +1,78 @@
-name: Setup go/xgo & engine
-description: Setup go/xgo & engine.
+name: Set up Go, XGo, and engine assets
+description: Set up the toolchain, restore downloaded engine assets, and prepare local build artifacts.
 inputs:
   go-version:
-    description: 'Go version to setup'
+    description: 'Go version to install'
     required: false
     default: '1.25.8'
   xgo-version:
-    description: 'XGo version to setup'
+    description: 'XGo version to install'
     required: false
     default: '1.6.6'
   setup-mode:
-    description: 'Engine setup mode: runtime, web, or full'
+    description: 'Asset preparation mode: runtime, web, or full'
     required: false
     default: 'runtime'
   web-mode:
-    description: 'Web template mode when setup-mode is web/full'
+    description: 'Web runtime mode to prepare when setup-mode is web or full'
     required: false
     default: 'normal'
   cache-version:
-    description: 'Cache version for manual invalidation'
+    description: 'Manual cache version for download cache invalidation'
     required: false
     default: 'v3'
 runs:
   using: "composite"
   steps:
-    - name: Set up Go/XGo
+    - name: Set up Go and XGo
       uses: goplus/setup-xgo@v1
       with:
         go-version: ${{ inputs.go-version }}
         xgo-version: ${{ inputs.xgo-version }}
 
-    - name: Get GOPATH
+    - name: Resolve GOPATH
       id: gopath
       run: echo "GOPATH=$(go env GOPATH)" >> $GITHUB_OUTPUT
       shell: bash
 
-    - name: Cache Godot engine files
-      id: cache-godot
+    - name: Resolve runtime version
+      id: runtime-version
+      run: echo "version=$(go run ./.github/scripts/runtime_version.go)" >> $GITHUB_OUTPUT
+      shell: bash
+
+    - name: Restore downloaded engine assets
+      id: cache-downloads
       uses: actions/cache@v4
       with:
         path: |
-          ${{ steps.gopath.outputs.GOPATH }}/bin/spx*
           ${{ steps.gopath.outputs.GOPATH }}/bin/gdspx[0-9]*
-          ${{ steps.gopath.outputs.GOPATH }}/bin/gdspx-*
-          ${{ steps.gopath.outputs.GOPATH }}/bin/gdspxrt*
-          ${{ steps.gopath.outputs.GOPATH }}/bin/ispx
-          ${{ steps.gopath.outputs.GOPATH }}/bin/ispx.wasm
-          ${{ steps.gopath.outputs.GOPATH }}/bin/runtime.gdextension
+          ${{ steps.gopath.outputs.GOPATH }}/bin/gdspxrt[0-9]*
+          !${{ steps.gopath.outputs.GOPATH }}/bin/gdspxrt[0-9]*_web*
           ~/.local/share/godot/export_templates
           ~/Library/Application Support/Godot/export_templates
           ~/AppData/Roaming/Godot/export_templates
-        key: spx-godot-${{ inputs.cache-version }}-${{ runner.os }}-${{ inputs.setup-mode }}-${{ inputs.setup-mode != 'runtime' && inputs.web-mode || 'runtime' }}-${{ hashFiles('Makefile', 'go.mod', 'go.sum', 'cmd/gox/go.mod', 'cmd/gox/go.sum', 'cmd/gox/**/*.go', 'cmd/gox/**/*.sh', 'cmd/ispx/**/*.go', 'cmd/ispx/**/*.sh', 'cmd/ispx/web/**', 'cmd/ispxnative/**/*.go', 'cmd/ispxnative/**/*.sh', 'cmd/gox/template/**', 'internal/cmd/buildctl/**/*.go', 'internal/releasemeta/**/*.go', 'internal/tools/**/*.sh', 'internal/gdengine/binding/web/**/*.go', 'pkg/ispx/**/*.go', '.github/actions/deps/action.yml', '.github/scripts/runtime_version.go') }}
+        key: spx-download-${{ inputs.cache-version }}-${{ runner.os }}-${{ inputs.setup-mode }}-${{ inputs.setup-mode != 'runtime' && inputs.web-mode || 'runtime' }}-${{ steps.runtime-version.outputs.version }}
         restore-keys: |
-          spx-godot-${{ inputs.cache-version }}-${{ runner.os }}-${{ inputs.setup-mode }}-${{ inputs.setup-mode != 'runtime' && inputs.web-mode || 'runtime' }}-
-          spx-godot-${{ inputs.cache-version }}-${{ runner.os }}-${{ inputs.setup-mode }}-
+          spx-download-${{ inputs.cache-version }}-${{ runner.os }}-${{ inputs.setup-mode }}-${{ inputs.setup-mode != 'runtime' && inputs.web-mode || 'runtime' }}-
+          spx-download-${{ inputs.cache-version }}-${{ runner.os }}-${{ inputs.setup-mode }}-
 
-    - name: Validate cached engine files
-      id: cache-verify
-      if: steps.cache-godot.outputs.cache-hit == 'true'
+    - name: Validate downloaded engine assets
+      id: cache-download-verify
+      if: steps.cache-downloads.outputs.cache-hit == 'true'
       shell: bash
       env:
         GOPATH_DIR: ${{ steps.gopath.outputs.GOPATH }}
         SETUP_MODE: ${{ inputs.setup-mode }}
-        WEB_MODE: ${{ inputs.web-mode }}
+        RUNTIME_VERSION: ${{ steps.runtime-version.outputs.version }}
       run: |
         set -euo pipefail
 
-        version="$(go run ./.github/scripts/runtime_version.go)"
         missing=0
         bin_suffix=""
-        lib_suffix=""
-        goos="$(go env GOOS)"
-        goarch="$(go env GOARCH)"
 
         if [ "${RUNNER_OS}" = "Windows" ]; then
           bin_suffix=".exe"
         fi
-
-        case "$goos" in
-          windows)
-            lib_suffix=".dll"
-            ;;
-          darwin)
-            lib_suffix=".dylib"
-            ;;
-          *)
-            lib_suffix=".so"
-            ;;
-        esac
 
         require_path() {
           if [ ! -e "$1" ]; then
@@ -96,33 +81,32 @@ runs:
           fi
         }
 
-        require_path "$GOPATH_DIR/bin/spx${bin_suffix}"
+        require_path "$GOPATH_DIR/bin/gdspx${RUNTIME_VERSION}${bin_suffix}"
 
         if [ "$SETUP_MODE" = "runtime" ] || [ "$SETUP_MODE" = "full" ]; then
-          require_path "$GOPATH_DIR/bin/gdspx${version}${bin_suffix}"
-          require_path "$GOPATH_DIR/bin/gdspx-${goos}-${goarch}${lib_suffix}"
-          require_path "$GOPATH_DIR/bin/gdspxrt${version}${bin_suffix}"
-          require_path "$GOPATH_DIR/bin/gdspxrt${version}.pck"
-          require_path "$GOPATH_DIR/bin/runtime.gdextension"
-        fi
-
-        if [ "$SETUP_MODE" = "web" ] || [ "$SETUP_MODE" = "full" ]; then
-          require_path "$GOPATH_DIR/bin/gdspx${version}${bin_suffix}"
-          require_path "$GOPATH_DIR/bin/ispx"
-          require_path "$GOPATH_DIR/bin/ispx.wasm"
-          require_path "$GOPATH_DIR/bin/gdspxrt${version}_web${WEB_MODE}"
+          require_path "$GOPATH_DIR/bin/gdspxrt${RUNTIME_VERSION}${bin_suffix}"
+          require_path "$GOPATH_DIR/bin/gdspxrt${RUNTIME_VERSION}.pck"
         fi
 
         echo "repair=$missing" >> "$GITHUB_OUTPUT"
 
-    - name: Setup engine assets
-      if: steps.cache-godot.outputs.cache-hit != 'true' || steps.cache-verify.outputs.repair == '1'
+    - name: Build local buildctl
+      uses: ./.github/actions/setup-buildctl
+
+    - name: Prepare engine assets
       shell: bash
       env:
         SETUP_MODE: ${{ inputs.setup-mode }}
         WEB_MODE: ${{ inputs.web-mode }}
+        DOWNLOAD_CACHE_HIT: ${{ steps.cache-downloads.outputs.cache-hit }}
+        DOWNLOAD_CACHE_REPAIR: ${{ steps.cache-download-verify.outputs.repair }}
       run: |
         set -euo pipefail
-        mkdir -p ./.bin
-        go build -o "./.bin/buildctl$(go env GOEXE)" ./internal/cmd/buildctl
-        "./.bin/buildctl$(go env GOEXE)" prepare --setup-mode "$SETUP_MODE" --web-mode "$WEB_MODE"
+
+        force_refresh=1
+        if [ "${DOWNLOAD_CACHE_HIT}" = "true" ] && [ "${DOWNLOAD_CACHE_REPAIR:-0}" != "1" ]; then
+          force_refresh=0
+        fi
+
+        export SPX_PREPARE_FORCE_REFRESH="$force_refresh"
+        "$BUILDCTL" prepare --setup-mode "$SETUP_MODE" --web-mode "$WEB_MODE"

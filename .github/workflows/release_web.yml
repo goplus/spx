@@ -1,10 +1,10 @@
-name: 🌐 Release Web Build
+name: Release Web Bundle
 
 on:
   workflow_call:
     inputs:
       version:
-        description: 'Release version (e.g., v2.0.1)'
+        description: 'Release version without the leading v (for example, 2.0.1)'
         required: true
         type: string
 
@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   web-build:
-    name: 🌐 Web Release (${{ matrix.mode }})
+    name: Release web bundle (${{ matrix.mode }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -36,40 +36,37 @@ jobs:
             artifact_name: web-miniprogram-release
             display_name: Web Miniprogram Release
     steps:
-      - uses: actions/checkout@v6
+      - name: Check out code
+        uses: actions/checkout@v6
 
-      - name: Get dependencies
+      - name: Install Linux dependencies
         run: sudo apt-get update && sudo apt-get install gcc libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libx11-dev xorg-dev libasound2-dev libopenal-dev binaryen brotli
         if: ${{ runner.os == 'Linux' }}
 
-      - name: Setup go/xgo & engine
+      - name: Set up toolchain and engine assets
         uses: ./.github/actions/deps
         with:
           setup-mode: web
           web-mode: ${{ matrix.mode }}
 
-      - name: Build release pack
+      - name: Build release bundle
         env:
           MATRIX_MODE: ${{ matrix.mode }}
         run: |
-          if [ "$MATRIX_MODE" != "normal" ]; then
-            make export-web MODE="$MATRIX_MODE"
-          else
-            make export-web
-          fi
+          "$BUILDCTL" runtime export-web --mode "$MATRIX_MODE"
           if [ ! -f "${{ matrix.zip_file }}" ]; then
             echo "${{ matrix.zip_file }} not found"
             exit 1
           fi
 
-      - name: Upload Web Build Results
+      - name: Upload release artifact
         uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact_name }}
           path: ${{ matrix.zip_file }}
           retention-days: 14
 
-      - name: Publish to GitHub Release
+      - name: Publish release asset
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:

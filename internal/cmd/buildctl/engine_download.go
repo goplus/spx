@@ -293,13 +293,28 @@ func shouldDownloadPreparedAsset(path string) bool {
 }
 
 func shouldRefreshPreparedAssets() bool {
+	if value, ok := envFlagValue("SPX_PREPARE_FORCE_REFRESH"); ok {
+		return flagValueEnabled(value)
+	}
 	// GitHub Actions may restore a fallback cache entry via restore-keys before
 	// prepare runs, so CI refreshes assets while local prepares reuse GOPATH/bin.
-	return envFlagEnabled("GITHUB_ACTIONS") || envFlagEnabled("SPX_PREPARE_FORCE_REFRESH")
+	return envFlagEnabled("GITHUB_ACTIONS")
 }
 
 func envFlagEnabled(name string) bool {
-	value := strings.TrimSpace(os.Getenv(name))
+	value, _ := envFlagValue(name)
+	return flagValueEnabled(value)
+}
+
+func envFlagValue(name string) (string, bool) {
+	value, ok := os.LookupEnv(name)
+	if !ok {
+		return "", false
+	}
+	return strings.TrimSpace(value), true
+}
+
+func flagValueEnabled(value string) bool {
 	switch strings.ToLower(value) {
 	case "", "0", "false", "no", "off":
 		return false

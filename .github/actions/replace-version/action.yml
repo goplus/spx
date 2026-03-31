@@ -1,13 +1,16 @@
-name: Replace Version
-description: Replace version in go.mod.template with the release version
+name: Update template version
+description: Update cmd/gox/template/go.mod.template for a release build and reinstall spx.
 inputs:
   version:
-    description: 'Version to replace (e.g., v2.0.1)'
+    description: 'Release version without the leading v (for example, 2.0.1)'
     required: true
 runs:
   using: "composite"
   steps:
-    - name: Replace version in go.mod.template
+    - name: Build local buildctl
+      uses: ./.github/actions/setup-buildctl
+
+    - name: Update go.mod.template version
       shell: bash
       run: |
         VERSION="v${{ inputs.version }}"
@@ -42,4 +45,4 @@ runs:
         echo ""
         echo "✅ Successfully updated $FILE with version $VERSION"
         echo "reinstall spx"
-        make install
+        "$BUILDCTL" tool install

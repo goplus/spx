@@ -163,3 +163,32 @@ func TestLinkOrCopyFileReplacesExistingHardLinkWithoutTruncatingSource(t *testin
 		t.Fatalf("destination content = %q, want copied content preserved", string(dstContent))
 	}
 }
+
+func TestShouldRefreshPreparedAssetsDefaultsToGitHubActions(t *testing.T) {
+	t.Setenv("GITHUB_ACTIONS", "true")
+	if err := os.Unsetenv("SPX_PREPARE_FORCE_REFRESH"); err != nil {
+		t.Fatalf("Unsetenv returned error: %v", err)
+	}
+
+	if !shouldRefreshPreparedAssets() {
+		t.Fatal("expected GitHub Actions runs to refresh prepared assets by default")
+	}
+}
+
+func TestShouldRefreshPreparedAssetsAllowsExplicitDisableInCI(t *testing.T) {
+	t.Setenv("GITHUB_ACTIONS", "true")
+	t.Setenv("SPX_PREPARE_FORCE_REFRESH", "0")
+
+	if shouldRefreshPreparedAssets() {
+		t.Fatal("expected SPX_PREPARE_FORCE_REFRESH=0 to disable forced refresh in CI")
+	}
+}
+
+func TestShouldRefreshPreparedAssetsAllowsExplicitEnableLocally(t *testing.T) {
+	t.Setenv("GITHUB_ACTIONS", "")
+	t.Setenv("SPX_PREPARE_FORCE_REFRESH", "1")
+
+	if !shouldRefreshPreparedAssets() {
+		t.Fatal("expected SPX_PREPARE_FORCE_REFRESH=1 to force refresh locally")
+	}
+}

@@ -7,41 +7,41 @@ concurrency:
 
 jobs:
   static-checks:
-    name: 📊 Static checks
+    name: Static checks
     uses: ./.github/workflows/static_checks.yml
 
   go-builds:
-    name: 🧪 Go builds
+    name: Go builds
     uses: ./.github/workflows/go_builds.yml
 
   android-build:
     needs: static-checks
-    name: 🤖 Android
+    name: Build Android APK
     uses: ./.github/workflows/build_android.yml
 
   ios-build:
     needs: static-checks
-    name: 🍏 iOS
+    name: Build iOS IPA
     uses: ./.github/workflows/build_ios.yml
 
   web-build:
     needs: static-checks
-    name: 🌐 Web
+    name: Build web bundle
     uses: ./.github/workflows/build_web.yml
 
   linux-build:
     needs: static-checks
-    name: 🐧 Linux
+    name: Build Linux
     uses: ./.github/workflows/build_linux.yml
 
   macos-build:
     needs: static-checks
-    name: 🍎 macOS
+    name: Build macOS
     uses: ./.github/workflows/build_macos.yml
 
   windows-build:
     needs: static-checks
-    name: 🏁 Windows
+    name: Build Windows
     uses: ./.github/workflows/build_windows.yml
 
   ci-gate:
@@ -55,7 +55,7 @@ jobs:
       - linux-build
       - macos-build
       - windows-build
-    name: ✅ CI Gate
+    name: CI gate
     runs-on: ubuntu-latest
     steps:
       - name: Verify all required jobs passed
