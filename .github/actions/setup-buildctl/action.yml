@@ -9,7 +9,6 @@ runs:
         set -euo pipefail
 
         if [ -n "${BUILDCTL:-}" ] && [ -x "$BUILDCTL" ]; then
-          echo "BUILDCTL=$BUILDCTL" >> "$GITHUB_ENV"
           exit 0
         fi
 

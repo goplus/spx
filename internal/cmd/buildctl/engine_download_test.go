@@ -167,9 +167,6 @@ func TestLinkOrCopyFileReplacesExistingHardLinkWithoutTruncatingSource(t *testin
 func TestShouldRefreshPreparedAssetsDefaultsToGitHubActions(t *testing.T) {
 	t.Setenv("GITHUB_ACTIONS", "true")
 	previous, ok := os.LookupEnv("SPX_PREPARE_FORCE_REFRESH")
-	if err := os.Unsetenv("SPX_PREPARE_FORCE_REFRESH"); err != nil {
-		t.Fatalf("Unsetenv returned error: %v", err)
-	}
 	t.Cleanup(func() {
 		if !ok {
 			_ = os.Unsetenv("SPX_PREPARE_FORCE_REFRESH")
@@ -177,6 +174,9 @@ func TestShouldRefreshPreparedAssetsDefaultsToGitHubActions(t *testing.T) {
 		}
 		_ = os.Setenv("SPX_PREPARE_FORCE_REFRESH", previous)
 	})
+	if err := os.Unsetenv("SPX_PREPARE_FORCE_REFRESH"); err != nil {
+		t.Fatalf("Unsetenv returned error: %v", err)
+	}
 
 	if !shouldRefreshPreparedAssets() {
 		t.Fatal("expected GitHub Actions runs to refresh prepared assets by default")
