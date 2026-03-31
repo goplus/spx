@@ -124,7 +124,10 @@ func exportWebTemplateRuntime(mode string, runner scriptRunner) error {
 }
 
 func prepareRuntimeWorkspace(repoRoot string, includeRuntimeExtension bool) (runtimeWorkspace, func(), error) {
-	version := defaultRuntimeVersion()
+	version, err := defaultRuntimeVersion()
+	if err != nil {
+		return runtimeWorkspace{}, nil, err
+	}
 	goPath, err := ensureGoPath()
 	if err != nil {
 		return runtimeWorkspace{}, nil, err
@@ -190,12 +193,12 @@ func ensureGoPath() (string, error) {
 	return goPath, nil
 }
 
-func defaultRuntimeVersion() string {
+func defaultRuntimeVersion() (string, error) {
 	version := releasemeta.DefaultReleaseMeta().Runtime.Version
 	if version == "" {
-		panic("releasemeta: Runtime.Version is empty")
+		return "", fmt.Errorf("releasemeta: Runtime.Version is empty")
 	}
-	return version
+	return version, nil
 }
 
 func webModeOutputZip(mode string) (string, error) {

@@ -8,6 +8,10 @@ runs:
       run: |
         set -euo pipefail
 
+        if [ -n "${BUILDCTL:-}" ] && [ -x "$BUILDCTL" ]; then
+          exit 0
+        fi
+
         buildctl_path="$(pwd)/.bin/buildctl$(go env GOEXE)"
 
         mkdir -p ./.bin

@@ -43,7 +43,7 @@ func TestRuntimeBuildWasmOptSequence(t *testing.T) {
 	runner := newRuntimeFixtureRunner(t)
 	installFakeBrotli(t, runner.repoRoot)
 	gopathBin := filepath.Join(os.Getenv("GOPATH"), "bin")
-	version := defaultRuntimeVersion()
+	version := mustDefaultRuntimeVersion(t)
 	mustWriteFile(t, filepath.Join(gopathBin, "ispx.wasm"), []byte("wasm"))
 	mustWriteFile(t, filepath.Join(gopathBin, "gdspxrt"+version+"_webnormal", "engine.wasm"), []byte("engine"))
 
@@ -99,7 +99,7 @@ func TestRuntimeExportWebSequence(t *testing.T) {
 
 func TestRuntimeExportPackSequence(t *testing.T) {
 	runner := newRuntimeFixtureRunner(t)
-	version := defaultRuntimeVersion()
+	version := mustDefaultRuntimeVersion(t)
 
 	if err := exportPackRuntime(runner); err != nil {
 		t.Fatalf("exportPackRuntime returned error: %v", err)
@@ -121,7 +121,7 @@ func TestCompressWasmArtifactsLegacyWebDirFallback(t *testing.T) {
 	gopath := filepath.Join(root, "gopath")
 	t.Setenv("GOPATH", gopath)
 	installFakeBrotli(t, root)
-	version := defaultRuntimeVersion()
+	version := mustDefaultRuntimeVersion(t)
 
 	gopathBin := filepath.Join(gopath, "bin")
 	mustWriteFile(t, filepath.Join(gopathBin, "ispx.wasm"), []byte("wasm"))

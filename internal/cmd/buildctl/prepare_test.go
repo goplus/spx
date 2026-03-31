@@ -144,7 +144,7 @@ func TestPrepareAssetsRuntime(t *testing.T) {
 	runner := newRuntimeFixtureRunner(t)
 	installFakeEngineDownload(t, runner.repoRoot, "linux", "x86_64")
 	cfg := prepareConfig{setupMode: "runtime", webMode: "normal"}
-	version := defaultRuntimeVersion()
+	version := mustDefaultRuntimeVersion(t)
 
 	if err := prepareAssets(cfg, runner); err != nil {
 		t.Fatalf("prepareAssets returned error: %v", err)
@@ -166,7 +166,7 @@ func TestPrepareAssetsWeb(t *testing.T) {
 	runner := newRuntimeFixtureRunner(t)
 	installFakeEngineDownload(t, runner.repoRoot, "linux", "x86_64")
 	cfg := prepareConfig{setupMode: "web", webMode: "worker"}
-	version := defaultRuntimeVersion()
+	version := mustDefaultRuntimeVersion(t)
 
 	if err := prepareAssets(cfg, runner); err != nil {
 		t.Fatalf("prepareAssets returned error: %v", err)

@@ -42,9 +42,9 @@ jobs:
       uses: ./.github/actions/deps
 
     - name: Export ANDROID_NDK_ROOT
-      run: echo "ANDROID_NDK_ROOT=${{ steps.setup-ndk.outputs.ndk-path }}" >> $GITHUB_ENV
+      run: echo "ANDROID_NDK_ROOT=${{ steps.setup-ndk.outputs.ndk-path }}" >> "$GITHUB_ENV"
 
-    - name: Verify Android NDK
+    - name: Verify and fix Android NDK installation
       run: |
         echo "ANDROID_NDK_ROOT: $ANDROID_NDK_ROOT"
         echo "Checking for clang binary:"

@@ -20,7 +20,7 @@ inputs:
   cache-version:
     description: 'Manual cache version for download cache invalidation'
     required: false
-    default: 'v3'
+    default: 'v4'
 runs:
   using: "composite"
   steps:
@@ -32,13 +32,39 @@ runs:
 
     - name: Resolve GOPATH
       id: gopath
-      run: echo "GOPATH=$(go env GOPATH)" >> $GITHUB_OUTPUT
+      run: echo "GOPATH=$(go env GOPATH)" >> "$GITHUB_OUTPUT"
       shell: bash
 
     - name: Resolve runtime version
       id: runtime-version
-      run: echo "version=$(go run ./.github/scripts/runtime_version.go)" >> $GITHUB_OUTPUT
+      run: echo "version=$(go run ./.github/scripts/runtime_version.go)" >> "$GITHUB_OUTPUT"
       shell: bash
+
+    - name: Resolve download cache keys
+      id: cache-keys
+      shell: bash
+      env:
+        CACHE_VERSION: ${{ inputs.cache-version }}
+        SETUP_MODE: ${{ inputs.setup-mode }}
+        WEB_MODE: ${{ inputs.web-mode }}
+        RUNNER_OS_NAME: ${{ runner.os }}
+      run: |
+        set -euo pipefail
+
+        scope="$SETUP_MODE"
+        if [ "$SETUP_MODE" != "runtime" ]; then
+          scope="$SETUP_MODE-$WEB_MODE"
+        fi
+
+        echo "scope=$scope" >> "$GITHUB_OUTPUT"
+        {
+          echo "restore_keys<<EOF"
+          echo "spx-download-${CACHE_VERSION}-${RUNNER_OS_NAME}-${scope}-"
+          if [ "$SETUP_MODE" != "runtime" ]; then
+            echo "spx-download-${CACHE_VERSION}-${RUNNER_OS_NAME}-${SETUP_MODE}-"
+          fi
+          echo "EOF"
+        } >> "$GITHUB_OUTPUT"
 
     - name: Restore downloaded engine assets
       id: cache-downloads
@@ -51,10 +77,8 @@ runs:
           ~/.local/share/godot/export_templates
           ~/Library/Application Support/Godot/export_templates
           ~/AppData/Roaming/Godot/export_templates
-        key: spx-download-${{ inputs.cache-version }}-${{ runner.os }}-${{ inputs.setup-mode }}-${{ inputs.setup-mode != 'runtime' && inputs.web-mode || 'runtime' }}-${{ steps.runtime-version.outputs.version }}
-        restore-keys: |
-          spx-download-${{ inputs.cache-version }}-${{ runner.os }}-${{ inputs.setup-mode }}-${{ inputs.setup-mode != 'runtime' && inputs.web-mode || 'runtime' }}-
-          spx-download-${{ inputs.cache-version }}-${{ runner.os }}-${{ inputs.setup-mode }}-
+        key: spx-download-${{ inputs.cache-version }}-${{ runner.os }}-${{ steps.cache-keys.outputs.scope }}-${{ steps.runtime-version.outputs.version }}
+        restore-keys: ${{ steps.cache-keys.outputs.restore_keys }}
 
     - name: Validate downloaded engine assets
       id: cache-download-verify

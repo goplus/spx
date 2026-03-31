@@ -22,7 +22,7 @@ func TestResolveEngineBuildShellPlanWebWorker(t *testing.T) {
 	t.Setenv("GOPATH", filepath.Join(repoRoot, "gopath"))
 	t.Setenv("HOME", repoRoot)
 	t.Setenv("APPDATA", filepath.Join(repoRoot, "AppData"))
-	version := defaultRuntimeVersion()
+	version := mustDefaultRuntimeVersion(t)
 
 	plan, err := resolveEngineBuildShellPlan(repoRoot, envExportEngineBuildShellConfig{
 		target:   "template",
@@ -128,7 +128,7 @@ func TestResolveEngineBuildShellPlanEditorUsesHostArtifactNames(t *testing.T) {
 	t.Setenv("GOPATH", filepath.Join(repoRoot, "gopath"))
 	t.Setenv("HOME", repoRoot)
 	t.Setenv("APPDATA", filepath.Join(repoRoot, "AppData"))
-	version := defaultRuntimeVersion()
+	version := mustDefaultRuntimeVersion(t)
 
 	plan, err := resolveEngineBuildShellPlan(repoRoot, envExportEngineBuildShellConfig{target: "editor"})
 	if err != nil {

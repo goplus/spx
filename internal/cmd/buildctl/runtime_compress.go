@@ -10,7 +10,10 @@ import (
 )
 
 func compressWasmArtifacts() error {
-	version := defaultRuntimeVersion()
+	version, err := defaultRuntimeVersion()
+	if err != nil {
+		return err
+	}
 	goPath, err := ensureGoPath()
 	if err != nil {
 		return err
