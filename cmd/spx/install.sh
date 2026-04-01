@@ -8,9 +8,9 @@ cd "$SCRIPT_DIR"
 # Pin Go toolchain version
 export GOTOOLCHAIN=go1.25.8
 
-if ! go generate pkg/gengo/embedded_pkgs.go > /dev/null 2>&1; then
+if ! go generate internal/gengo/embedded_pkgs.go > /dev/null 2>&1; then
     echo "Error during go generate, showing full output:"
-    go generate pkg/gengo/embedded_pkgs.go
+    go generate internal/gengo/embedded_pkgs.go
 fi
 
 target_font_dir=./template/project/engine/fonts/
@@ -53,8 +53,7 @@ mv "$appname" "$GOPATH/bin/"
 echo "Building ispx..."
 
 if [ "$web_mode" = "--web" ]; then
-    go env -w GOFLAGS="-buildvcs=false"
-    ( cd ../ispx && ./build.sh )
+    ( cd ../ispx && GOFLAGS="-buildvcs=false" ./build.sh )
     cp ../ispx/ispx.wasm "$GOPATH/bin/"
 
     # Install ispx web runtime
