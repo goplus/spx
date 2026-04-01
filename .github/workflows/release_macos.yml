@@ -44,10 +44,12 @@ jobs:
         with:
           version: ${{ inputs.version }}
 
-      - name: Sync release goenv contents
+      - name: Prepare release goenv
         uses: ./.github/actions/prepare-release-goenv
         with:
           version: ${{ inputs.version }}
+          platform: darwin
+          package-arch: ${{ matrix.arch_name }}
 
       - name: Package goenv
         run: |

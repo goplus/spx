@@ -4,6 +4,12 @@ inputs:
   version:
     description: 'Release version without the leading v (for example, 2.0.1)'
     required: true
+  platform:
+    description: 'Platform name (darwin/windows/linux)'
+    required: true
+  package-arch:
+    description: 'Package architecture name (x86/x64/arm64)'
+    required: true
   goenv-dir:
     description: 'Portable goenv directory'
     required: false
@@ -11,11 +17,15 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Prepare release goenv contents
+    - name: Prepare release goenv
       shell: bash
       env:
         RELEASE_VERSION: v${{ inputs.version }}
+        PLATFORM: ${{ inputs.platform }}
+        PACKAGE_ARCH: ${{ inputs.package-arch }}
         GOENV_DIR: ${{ inputs.goenv-dir }}
+        RUNNER_OS_CONTEXT: ${{ runner.os }}
+        RUNNER_ARCH_CONTEXT: ${{ runner.arch }}
       run: |
         set -euo pipefail
 
@@ -26,6 +36,40 @@ runs:
             return
           fi
           printf '%s\n' "$raw_path"
+        }
+
+        normalize_platform() {
+          case "$1" in
+            darwin|macos|macOS)
+              printf 'macos\n'
+              ;;
+            linux|Linux)
+              printf 'linux\n'
+              ;;
+            windows|Windows)
+              printf 'windows\n'
+              ;;
+            *)
+              printf '%s\n' "$1" | tr '[:upper:]' '[:lower:]'
+              ;;
+          esac
+        }
+
+        normalize_arch() {
+          case "$1" in
+            X64|x64|amd64|x86_64)
+              printf 'x64\n'
+              ;;
+            X86|x86|386|i386|i686)
+              printf 'x86\n'
+              ;;
+            ARM64|arm64|aarch64)
+              printf 'arm64\n'
+              ;;
+            *)
+              printf '%s\n' "$1" | tr '[:upper:]' '[:lower:]'
+              ;;
+          esac
         }
 
         GOEXE="$(go env GOEXE)"
@@ -51,6 +95,10 @@ runs:
         PACKAGED_SPX="$PACKAGED_BIN_DIR/spx$GOEXE"
         DEST="$GOENV_ROOT/.cache/mod/github.com/goplus/spx/v2@$RELEASE_VERSION"
         SMOKE_LOG_PATH="$GOENV_ROOT/prepare-release-goenv.log"
+        TARGET_PLATFORM="$(normalize_platform "$PLATFORM")"
+        TARGET_ARCH="$(normalize_arch "$PACKAGE_ARCH")"
+        RUNNER_PLATFORM="$(normalize_platform "$RUNNER_OS_CONTEXT")"
+        RUNNER_ARCH="$(normalize_arch "$RUNNER_ARCH_CONTEXT")"
 
         if [ ! -f "$INSTALLED_SPX" ]; then
           echo "❌ Error: rebuilt spx binary not found: $INSTALLED_SPX"
@@ -78,6 +126,8 @@ runs:
         cp "$INSTALLED_SPX" "$PACKAGED_SPX"
 
         echo "Installing spx source to module cache: $RELEASE_VERSION"
+        echo "Runner platform/arch: $RUNNER_PLATFORM/$RUNNER_ARCH"
+        echo "Package target: $TARGET_PLATFORM/$TARGET_ARCH"
         rm -rf "$DEST"
         mkdir -p "$DEST"
 
@@ -101,6 +151,12 @@ runs:
         if [ ! -f "$PACKAGED_SPX" ]; then
           echo "❌ Error: packaged spx binary not found: $PACKAGED_SPX"
           exit 1
+        fi
+
+        if [ "$TARGET_PLATFORM" != "$RUNNER_PLATFORM" ] || [ "$TARGET_ARCH" != "$RUNNER_ARCH" ]; then
+          echo "Skipping dependency warm-up on non-native runner."
+          echo "Release goenv preparation completed without smoke run."
+          exit 0
         fi
 
         # Run the smoke test with a bounded timeout so dependency downloads can warm GOMODCACHE.
