@@ -41,7 +41,7 @@ jobs:
       - name: Set up toolchain and engine assets
         uses: ./.github/actions/deps
 
-      - name: Download Go toolchain
+      - name: Download go toolchain
         shell: msys2 {0}
         run: |
           mkdir -p goenv/gotoolchain
