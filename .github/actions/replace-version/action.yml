@@ -1,5 +1,5 @@
-name: Update template versions
-description: Update checked-in go.mod templates for a release build and reinstall spx.
+name: Update shared template version
+description: Update the shared go.mod template for a release build and reinstall spx.
 inputs:
   version:
     description: 'Release version without the leading v (for example, 2.0.1)'
@@ -10,43 +10,40 @@ runs:
     - name: Build local buildctl
       uses: ./.github/actions/setup-buildctl
 
-    - name: Update go.mod.template versions
+    - name: Update shared go.mod template version
       shell: bash
       run: |
         VERSION="v${{ inputs.version }}"
         pwd && ls -la
 
-        for FILE in \
-          "cmd/spx/template/go.mod.template" \
-          "cmd/spxrunner/runner/go.mod.template"
-        do
-          if [ ! -f "$FILE" ]; then
-            echo "Error: $FILE not found"
-            exit 1
-          fi
+        FILE="internal/projecttemplate/go.mod.template"
 
-          echo "=========================================="
-          echo "Replacing version with: $VERSION"
-          echo "File: $FILE"
-          echo "=========================================="
-          echo ""
-          echo "📄 Before replacement:"
-          echo "----------------------------------------"
-          cat "$FILE"
-          echo "----------------------------------------"
-          echo ""
+        if [ ! -f "$FILE" ]; then
+          echo "Error: $FILE not found"
+          exit 1
+        fi
 
-          # Create backup and replace version
-          sed -i.bak -E "s|(require github.com/goplus/spx/v2) v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)? (//xgo:class)|\1 $VERSION \3|" "$FILE"
-          rm -f "$FILE.bak"
+        echo "=========================================="
+        echo "Replacing version with: $VERSION"
+        echo "File: $FILE"
+        echo "=========================================="
+        echo ""
+        echo "📄 Before replacement:"
+        echo "----------------------------------------"
+        cat "$FILE"
+        echo "----------------------------------------"
+        echo ""
 
-          echo "📄 After replacement:"
-          echo "----------------------------------------"
-          cat "$FILE"
-          echo "----------------------------------------"
-          echo ""
-          echo "✅ Successfully updated $FILE with version $VERSION"
-        done
+        # Create backup and replace version
+        sed -i.bak -E "s|(require github.com/goplus/spx/v2) v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)? (//xgo:class)|\1 $VERSION \3|" "$FILE"
+        rm -f "$FILE.bak"
+
+        echo "📄 After replacement:"
+        echo "----------------------------------------"
+        cat "$FILE"
+        echo "----------------------------------------"
+        echo ""
+        echo "✅ Successfully updated $FILE with version $VERSION"
 
         echo "reinstall spx"
         "$BUILDCTL" tool install
