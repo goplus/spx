@@ -1,5 +1,5 @@
-name: Verify Release Package
-description: Verify the release package by extracting and running a test project
+name: Verify release package
+description: Verify a release package by extracting it and running a smoke test project.
 inputs:
   package-file:
     description: 'Path to the release package file'
@@ -7,91 +7,150 @@ inputs:
   platform:
     description: 'Platform name (darwin/windows/linux)'
     required: true
+  package-arch:
+    description: 'Package architecture name (x86/x64/arm64)'
+    required: true
 runs:
   using: "composite"
   steps:
     - name: Verify release package
       shell: bash
+      env:
+        PACKAGE_FILE: ${{ inputs.package-file }}
+        PLATFORM: ${{ inputs.platform }}
+        PACKAGE_ARCH: ${{ inputs.package-arch }}
+        RUNNER_OS_CONTEXT: ${{ runner.os }}
+        RUNNER_ARCH_CONTEXT: ${{ runner.arch }}
       run: |
-        set -e
+        set -euo pipefail
+        source ./.github/actions/lib/release_platform.sh
 
         echo "=========================================="
-        echo "🔍 Verifying Release Package"
-        echo "Package: ${{ inputs.package-file }}"
-        echo "Platform: ${{ inputs.platform }}"
+        echo "🔍 Verifying release package"
+        echo "Package: $PACKAGE_FILE"
+        echo "Platform: $PLATFORM"
+        echo "Package arch: $PACKAGE_ARCH"
         echo "=========================================="
         echo ""
 
-        # Get current directory
-        CURRENT_DIR=$(pwd)
-        echo "📁 Current directory: $CURRENT_DIR"
-        ls -la $CURRENT_DIR
-        echo "=========================================="
-        # Check if package file exists
-        if [ ! -f "${{ inputs.package-file }}" ]; then
-          echo "❌ Error: Package file not found: ${{ inputs.package-file }}"
+        WORKSPACE_DIR=$(pwd)
+        PACKAGE_PATH="$WORKSPACE_DIR/$PACKAGE_FILE"
+        if [ -f "$PACKAGE_FILE" ]; then
+          PACKAGE_PATH="$PACKAGE_FILE"
+        fi
+
+        VERIFY_ROOT_DIR="$WORKSPACE_DIR/release-verification"
+        VERIFY_TEST_ROOT_DIR="$VERIFY_ROOT_DIR/test"
+        TEST_PROJECT_DIR="$VERIFY_TEST_ROOT_DIR/CI"
+        VERIFY_LOG_PATH="$WORKSPACE_DIR/release-verification.log"
+        TARGET_PLATFORM="$(normalize_platform "$PLATFORM")"
+        TARGET_ARCH="$(normalize_arch "$PACKAGE_ARCH")"
+        RUNNER_PLATFORM="$(normalize_platform "$RUNNER_OS_CONTEXT")"
+        RUNNER_ARCH="$(normalize_arch "$RUNNER_ARCH_CONTEXT")"
+
+        echo "📁 Workspace: $WORKSPACE_DIR"
+        echo "🖥️ Runner: $RUNNER_PLATFORM/$RUNNER_ARCH"
+        echo "📦 Package target: $TARGET_PLATFORM/$TARGET_ARCH"
+
+        if ! command -v unzip >/dev/null 2>&1; then
+          echo "❌ Error: unzip command is required but not available"
           exit 1
         fi
-        echo "✓ Package file found"
 
-        # Create test directory
-        rm -rf rlcheck
-        mkdir -p rlcheck
-        echo "✓ Created test directory: rlcheck"
+        if [ ! -f "$PACKAGE_PATH" ]; then
+          echo "❌ Error: package file not found: $PACKAGE_PATH"
+          exit 1
+        fi
+        echo "✓ Package file found: $PACKAGE_PATH"
 
-        # Extract package
+        rm -rf "$VERIFY_ROOT_DIR"
+        mkdir -p "$VERIFY_ROOT_DIR"
+        echo "✓ Created verification directory: $VERIFY_ROOT_DIR"
+
         echo ""
         echo "📦 Extracting package..."
-        cd rlcheck
-        unzip -q "$CURRENT_DIR/${{ inputs.package-file }}"
-        cd "$CURRENT_DIR"
+        unzip -q "$PACKAGE_PATH" -d "$VERIFY_ROOT_DIR"
         echo "✓ Package extracted"
 
-        # Verify extracted structure
-        echo ""
-        echo "📂 Extracted structure:"
-        ls -la rlcheck/
-        echo ""
-        echo "📂 Go bin directory:"
-        ls -la rlcheck/go/bin/ || echo "Warning: go/bin directory not found"
-        echo ""
-        echo "📂 Go toolchain directory:"
-        ls -la rlcheck/gotoolchain/ || echo "Warning: gotoolchain directory not found"
-
-        # Create test subdirectory and copy test project
-        echo ""
-        echo "📋 Preparing test project..."
-        mkdir -p rlcheck/test
-        cp -r test/CI rlcheck/test/
-        echo "✓ Test project copied"
-
-        # Verify spx executable exists
-        SPX_BIN="rlcheck/go/bin/spx"
-        if [ "${{ inputs.platform }}" = "windows" ]; then
-          SPX_BIN="rlcheck/go/bin/spx.exe"
-        fi
-
-        if [ ! -f "$SPX_BIN" ]; then
-          echo "❌ Error: spx executable not found: $SPX_BIN"
+        if [ ! -d "$VERIFY_ROOT_DIR/go/bin" ]; then
+          echo "❌ Error: go/bin directory not found in extracted package"
           exit 1
         fi
-        echo "✓ SPX executable found: $SPX_BIN"
 
-        # Make spx executable (for Unix-like systems)
-        if [ "${{ inputs.platform }}" != "windows" ]; then
-          chmod +x "$SPX_BIN"
+        if [ ! -d "$VERIFY_ROOT_DIR/gotoolchain/go" ]; then
+          echo "❌ Error: portable Go toolchain not found in extracted package"
+          exit 1
         fi
 
-        # Run test
         echo ""
-        echo "🚀 Running test project..."
-        echo "Command: $SPX_BIN run --ixgogen --goenv=$CURRENT_DIR/rlcheck --path=$CURRENT_DIR/rlcheck/test/CI"
+        echo "📂 Extracted top-level contents:"
+        ls -la "$VERIFY_ROOT_DIR"
+        echo ""
+        echo "📂 Go bin directory:"
+        ls -la "$VERIFY_ROOT_DIR/go/bin"
+        echo ""
+        echo "📂 Go toolchain directory:"
+        ls -la "$VERIFY_ROOT_DIR/gotoolchain"
+
+        echo ""
+        echo "📋 Preparing test project..."
+        mkdir -p "$VERIFY_TEST_ROOT_DIR"
+        cp -R test/CI "$VERIFY_TEST_ROOT_DIR/"
+        echo "✓ Test project copied"
+
+        case "$PLATFORM" in
+          windows)
+            SPX_BIN_PATH="$VERIFY_ROOT_DIR/go/bin/spx.exe"
+            ;;
+          darwin|linux)
+            SPX_BIN_PATH="$VERIFY_ROOT_DIR/go/bin/spx"
+            ;;
+          *)
+            echo "❌ Error: unsupported platform: $PLATFORM"
+            exit 1
+            ;;
+        esac
+
+        if [ ! -f "$SPX_BIN_PATH" ]; then
+          echo "❌ Error: spx executable not found: $SPX_BIN_PATH"
+          exit 1
+        fi
+        echo "✓ SPX executable found: $SPX_BIN_PATH"
+
+        if [ "$PLATFORM" != "windows" ]; then
+          chmod +x "$SPX_BIN_PATH"
+        fi
+
+        if [ "$TARGET_PLATFORM" != "$RUNNER_PLATFORM" ] || [ "$TARGET_ARCH" != "$RUNNER_ARCH" ]; then
+          echo ""
+          echo "⏭️ Skipping smoke test on non-native runner"
+          echo "Runner platform/arch does not match package target."
+          echo "Structure verification completed successfully."
+          echo ""
+          echo "=========================================="
+          echo "✅ Release package verification PASSED"
+          echo "=========================================="
+          exit 0
+        fi
+
+        echo ""
+        echo "🚀 Running smoke test..."
+        echo "Command: $SPX_BIN_PATH run --ixgogen --goenv=$VERIFY_ROOT_DIR --path=$TEST_PROJECT_DIR --headless"
         echo ""
 
-        cd rlcheck
-        # Skip the check since the real version hasn't been released yet.
-        # "$CURRENT_DIR/$SPX_BIN" run --ixgogen --goenv="$CURRENT_DIR/rlcheck" --path="$CURRENT_DIR/rlcheck/test/CI" 
-        cd "$CURRENT_DIR"
+        rm -f "$VERIFY_LOG_PATH"
+        if ! "$SPX_BIN_PATH" run --ixgogen --goenv="$VERIFY_ROOT_DIR" --path="$TEST_PROJECT_DIR" --headless 2>&1 | tee "$VERIFY_LOG_PATH"; then
+          echo "❌ Error: smoke test command failed"
+          exit 1
+        fi
+
+        if ! grep -q "===>SpxCIRunSucc" "$VERIFY_LOG_PATH"; then
+          echo "❌ Error: smoke test success marker not found"
+          echo "Smoke test log:"
+          cat "$VERIFY_LOG_PATH"
+          exit 1
+        fi
+        echo "✓ Smoke test success marker found"
 
         echo ""
         echo "=========================================="

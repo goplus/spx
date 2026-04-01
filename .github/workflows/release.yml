@@ -10,9 +10,9 @@ on:
         required: true
         default: 'v2.0.1'
       platforms:
-        description: 'Platforms to build (comma-separated, for example: web,all)'
+        description: 'Platforms to build (comma-separated: all,web,macos,windows,linux)'
         required: true
-        default: 'web'
+        default: 'all'
 concurrency:
   group: ci-${{github.actor}}-${{github.head_ref || github.run_number}}-${{github.ref}}-release
   cancel-in-progress: true
@@ -23,7 +23,10 @@ jobs:
     runs-on: ubuntu-22.04
     outputs:
       version: ${{ steps.set-version.outputs.version }}
-      platforms: ${{ steps.set-platforms.outputs.platforms }}
+      run_web: ${{ steps.set-platforms.outputs.run_web }}
+      run_macos: ${{ steps.set-platforms.outputs.run_macos }}
+      run_windows: ${{ steps.set-platforms.outputs.run_windows }}
+      run_linux: ${{ steps.set-platforms.outputs.run_linux }}
     steps:
       - name: Check out code
         uses: actions/checkout@v6
@@ -32,11 +35,13 @@ jobs:
 
       - name: Resolve release version
         id: set-version
+        env:
+          RELEASE_TAG_INPUT: ${{ github.event.inputs.release_tag }}
         run: |
           if [ "${{ github.event_name }}" == "release" ]; then
             VERSION="${{ github.event.release.tag_name }}"
           else
-            VERSION="${{ github.event.inputs.release_tag }}"
+            VERSION="$RELEASE_TAG_INPUT"
           fi
           VERSION="${VERSION#v}"  # Remove 'v' prefix (if present)
           echo "VERSION=$VERSION"
@@ -44,19 +49,67 @@ jobs:
 
       - name: Resolve target platforms
         id: set-platforms
+        env:
+          PLATFORMS_INPUT: ${{ github.event.inputs.platforms }}
         run: |
-          if [ "${{ github.event_name }}" == "release" ]; then
-            PLATFORMS="all"
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "release" ]; then
+            RAW_PLATFORMS="all"
           else
-            PLATFORMS="${{ github.event.inputs.platforms }}"
+            RAW_PLATFORMS="$PLATFORMS_INPUT"
           fi
 
-          if [ "$PLATFORMS" == "all" ]; then
-            PLATFORMS="web"
+          PLATFORMS=$(printf '%s' "$RAW_PLATFORMS" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
+          if [ -z "$PLATFORMS" ]; then
+            PLATFORMS="all"
+          fi
+
+          case ",$PLATFORMS," in
+            *,all,*)
+              PLATFORMS="web,macos,windows,linux"
+              ;;
+          esac
+
+          IFS=',' read -r -a PLATFORM_ITEMS <<< "$PLATFORMS"
+          RUN_WEB=false
+          RUN_MACOS=false
+          RUN_WINDOWS=false
+          RUN_LINUX=false
+
+          for PLATFORM in "${PLATFORM_ITEMS[@]}"; do
+            case "$PLATFORM" in
+              web)
+                RUN_WEB=true
+                ;;
+              macos)
+                RUN_MACOS=true
+                ;;
+              windows)
+                RUN_WINDOWS=true
+                ;;
+              linux)
+                RUN_LINUX=true
+                ;;
+              "")
+                ;;
+              *)
+                echo "Unsupported platform: $PLATFORM"
+                exit 1
+                ;;
+            esac
+          done
+
+          if [ "$RUN_WEB" = false ] && [ "$RUN_MACOS" = false ] && [ "$RUN_WINDOWS" = false ] && [ "$RUN_LINUX" = false ]; then
+            echo "No valid platforms resolved from: $RAW_PLATFORMS"
+            exit 1
           fi
 
           echo "PLATFORMS=$PLATFORMS"
-          echo "platforms=$PLATFORMS" >> $GITHUB_OUTPUT
+          echo "run_web=$RUN_WEB" >> $GITHUB_OUTPUT
+          echo "run_macos=$RUN_MACOS" >> $GITHUB_OUTPUT
+          echo "run_windows=$RUN_WINDOWS" >> $GITHUB_OUTPUT
+          echo "run_linux=$RUN_LINUX" >> $GITHUB_OUTPUT
 
   static-checks:
     name: Static checks
@@ -66,6 +119,7 @@ jobs:
   web-build:
     name: Release web bundle
     needs: [setup, static-checks]
+    if: needs.setup.outputs.run_web == 'true'
     uses: ./.github/workflows/release_web.yml
     with:
       version: ${{ needs.setup.outputs.version }}
@@ -73,6 +127,7 @@ jobs:
   macos-build:
     name: Release macOS package
     needs: [setup, static-checks]
+    if: needs.setup.outputs.run_macos == 'true'
     uses: ./.github/workflows/release_macos.yml
     with:
       version: ${{ needs.setup.outputs.version }}
@@ -80,6 +135,7 @@ jobs:
   windows-build:
     name: Release Windows package
     needs: [setup, static-checks]
+    if: needs.setup.outputs.run_windows == 'true'
     uses: ./.github/workflows/release_windows.yml
     with:
       version: ${{ needs.setup.outputs.version }}
@@ -87,6 +143,7 @@ jobs:
   linux-build:
     name: Release Linux package
     needs: [setup, static-checks]
+    if: needs.setup.outputs.run_linux == 'true'
     uses: ./.github/workflows/release_linux.yml
     with:
       version: ${{ needs.setup.outputs.version }}

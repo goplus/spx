@@ -37,12 +37,11 @@ jobs:
             zip
             unzip
             bash
-            rsync
 
       - name: Set up toolchain and engine assets
         uses: ./.github/actions/deps
 
-      - name: Download Go toolchain
+      - name: Download go toolchain
         shell: msys2 {0}
         run: |
           mkdir -p goenv/gotoolchain
@@ -52,76 +51,17 @@ jobs:
           rm go1.25.8.windows-${{ matrix.arch }}.zip
           cd ../..
 
-      - name: Resolve GOPATH and short SHA
-        id: env-vars
-        shell: pwsh
-        run: |
-          $gopath = go env GOPATH
-          echo "gopath=$gopath" >> $env:GITHUB_OUTPUT
-
-          # Get short SHA (first 7 characters)
-          $shortSha = "${{ github.sha }}".Substring(0, 7)
-          echo "short_sha=$shortSha" >> $env:GITHUB_OUTPUT
-
-      - name: Collect module cache
-        shell: msys2 {0}
-        run: |
-          # Set up mod cache directory (no build cache needed)
-          mkdir -p goenv/.cache/mod
-
-          # Get GOPATH in Unix format
-          GOPATH_UNIX=$(cygpath "${{ steps.env-vars.outputs.gopath }}")
-
-          # IMPORTANT: Copy binaries BEFORE running spx to collect dependencies
-          # Without these, spx run will fail and won't download dependencies
-          mkdir -p goenv/go/bin
-          cp "$GOPATH_UNIX"/bin/gdspxrt* goenv/go/bin/ || true
-          cp "$GOPATH_UNIX"/bin/runtime.gdextension goenv/go/bin/ || true
-          cp "$GOPATH_UNIX"/bin/spx.exe goenv/go/bin/
-
-          # Set environment to use our mod cache location
-          export GOMODCACHE=$(pwd)/goenv/.cache/mod
-
-          # Add current spx source to mod cache so users can use offline
-          SPX_VERSION="v2.0.0-${{ steps.env-vars.outputs.short_sha }}"
-          DEST="$GOMODCACHE/github.com/goplus/spx/v2@$SPX_VERSION"
-
-          echo "Installing spx source to mod cache: $SPX_VERSION"
-          mkdir -p "$DEST"
-          rsync -av --exclude='.git' --exclude='goenv' \
-            --exclude='test' --exclude='tutorial' --exclude='demo-game' \
-            --exclude='spx_demos' --exclude='cmd/demo' \
-            . "$DEST/"
-
-          # Run test/CI demo to collect other dependencies
-          cd test/CI
-          "$GOPATH_UNIX"/bin/spx.exe run --goenv=../../goenv --path=. --headless &
-          SPX_PID=$!
-
-          # Wait a few seconds for initialization
-          sleep 5
-
-          # Kill the process
-          kill $SPX_PID || true
-
-          cd ../..
-
-          echo "Module cache collection completed"
-          ls -lah goenv/.cache/mod || true
-          du -sh goenv/.cache/mod || true
-
       - name: Update template version
         uses: ./.github/actions/replace-version
         with:
           version: ${{ inputs.version }}
 
-      - name: Refresh versioned spx binary
-        shell: msys2 {0}
-        run: |
-          # After replace-version rebuilds spx with the new version,
-          # update the binary in goenv to match
-          GOPATH_UNIX=$(cygpath "${{ steps.env-vars.outputs.gopath }}")
-          cp "$GOPATH_UNIX"/bin/spx.exe goenv/go/bin/spx.exe
+      - name: Prepare release goenv
+        uses: ./.github/actions/prepare-release-goenv
+        with:
+          version: ${{ inputs.version }}
+          platform: windows
+          package-arch: ${{ matrix.arch_name }}
 
       - name: Package goenv
         shell: msys2 {0}
@@ -150,6 +90,7 @@ jobs:
         with:
           package-file: spx-windows-${{ matrix.arch_name }}.zip
           platform: windows
+          package-arch: ${{ matrix.arch_name }}
 
       - name: Publish release asset
         if: github.event_name == 'release'

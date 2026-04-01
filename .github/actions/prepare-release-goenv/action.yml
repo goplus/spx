@@ -1,0 +1,163 @@
+name: Prepare release goenv
+description: Prepare release goenv with rebuilt binaries, release-version source, and dependent modules.
+inputs:
+  version:
+    description: 'Release version without the leading v (for example, 2.0.1)'
+    required: true
+  platform:
+    description: 'Platform name (darwin/windows/linux)'
+    required: true
+  package-arch:
+    description: 'Package architecture name (x86/x64/arm64)'
+    required: true
+  goenv-dir:
+    description: 'Portable goenv directory'
+    required: false
+    default: goenv
+runs:
+  using: composite
+  steps:
+    - name: Prepare release goenv
+      shell: bash
+      env:
+        RELEASE_VERSION: v${{ inputs.version }}
+        PLATFORM: ${{ inputs.platform }}
+        PACKAGE_ARCH: ${{ inputs.package-arch }}
+        GOENV_DIR: ${{ inputs.goenv-dir }}
+        RUNNER_OS_CONTEXT: ${{ runner.os }}
+        RUNNER_ARCH_CONTEXT: ${{ runner.arch }}
+      run: |
+        set -euo pipefail
+        source ./.github/actions/lib/release_platform.sh
+
+        normalize_path() {
+          local raw_path="$1"
+          if command -v cygpath >/dev/null 2>&1; then
+            cygpath -u "$raw_path" 2>/dev/null || printf '%s\n' "$raw_path"
+            return
+          fi
+          printf '%s\n' "$raw_path"
+        }
+
+        GOEXE="$(go env GOEXE)"
+        GOPATH_RAW="$(go env GOPATH | tr -d '\r')"
+        if [ -z "$GOPATH_RAW" ]; then
+          echo "❌ Error: GOPATH is empty"
+          exit 1
+        fi
+
+        GOPATH_SEP=':'
+        if [ "$GOEXE" = ".exe" ]; then
+          GOPATH_SEP=';'
+        fi
+
+        GOPATH_FIRST="${GOPATH_RAW%%${GOPATH_SEP}*}"
+        GOPATH_FIRST="$(normalize_path "$GOPATH_FIRST")"
+        INSTALLED_BIN_DIR="$GOPATH_FIRST/bin"
+        INSTALLED_SPX="$INSTALLED_BIN_DIR/spx$GOEXE"
+        GOENV_ROOT="$(pwd)/$GOENV_DIR"
+        GOENV_EXCLUDE="./${GOENV_DIR#./}"
+        GOMODCACHE_DIR="$GOENV_ROOT/.cache/mod"
+        PACKAGED_BIN_DIR="$GOENV_ROOT/go/bin"
+        PACKAGED_SPX="$PACKAGED_BIN_DIR/spx$GOEXE"
+        DEST="$GOENV_ROOT/.cache/mod/github.com/goplus/spx/v2@$RELEASE_VERSION"
+        SMOKE_LOG_PATH="$GOENV_ROOT/prepare-release-goenv.log"
+        TARGET_PLATFORM="$(normalize_platform "$PLATFORM")"
+        TARGET_ARCH="$(normalize_arch "$PACKAGE_ARCH")"
+        RUNNER_PLATFORM="$(normalize_platform "$RUNNER_OS_CONTEXT")"
+        RUNNER_ARCH="$(normalize_arch "$RUNNER_ARCH_CONTEXT")"
+
+        if [ ! -f "$INSTALLED_SPX" ]; then
+          echo "❌ Error: rebuilt spx binary not found: $INSTALLED_SPX"
+          exit 1
+        fi
+
+        mkdir -p "$GOMODCACHE_DIR" "$PACKAGED_BIN_DIR"
+
+        shopt -s nullglob
+        RUNTIME_BINARIES=("$INSTALLED_BIN_DIR"/gdspxrt*)
+        shopt -u nullglob
+        if [ "${#RUNTIME_BINARIES[@]}" -eq 0 ]; then
+          echo "❌ Error: runtime binaries not found in $INSTALLED_BIN_DIR"
+          exit 1
+        fi
+        if [ ! -f "$INSTALLED_BIN_DIR/runtime.gdextension" ]; then
+          echo "❌ Error: runtime.gdextension not found in $INSTALLED_BIN_DIR"
+          exit 1
+        fi
+
+        cp "${RUNTIME_BINARIES[@]}" "$PACKAGED_BIN_DIR"/
+        cp "$INSTALLED_BIN_DIR/runtime.gdextension" "$PACKAGED_BIN_DIR"/
+
+        echo "Installing rebuilt spx binary: $INSTALLED_SPX -> $PACKAGED_SPX"
+        cp "$INSTALLED_SPX" "$PACKAGED_SPX"
+
+        echo "Installing spx source to module cache: $RELEASE_VERSION"
+        echo "Runner platform/arch: $RUNNER_PLATFORM/$RUNNER_ARCH"
+        echo "Package target: $TARGET_PLATFORM/$TARGET_ARCH"
+        rm -rf "$DEST"
+        mkdir -p "$DEST"
+
+        tar \
+          --exclude='./.git' \
+          --exclude='./.bin' \
+          --exclude='./.github' \
+          --exclude='./docs' \
+          --exclude="$GOENV_EXCLUDE" \
+          --exclude='./test' \
+          --exclude='./tutorial' \
+          --exclude='./godot' \
+          -cf - . | (
+            cd "$DEST"
+            tar -xf -
+          )
+
+        # Set GOMODCACHE so the following smoke run populates the bundled offline cache.
+        export GOMODCACHE="$GOMODCACHE_DIR"
+
+        if [ ! -f "$PACKAGED_SPX" ]; then
+          echo "❌ Error: packaged spx binary not found: $PACKAGED_SPX"
+          exit 1
+        fi
+
+        if [ "$TARGET_PLATFORM" != "$RUNNER_PLATFORM" ] || [ "$TARGET_ARCH" != "$RUNNER_ARCH" ]; then
+          echo "Skipping dependency warm-up on non-native runner."
+          echo "Release goenv preparation completed without smoke run."
+          exit 0
+        fi
+
+        # Run the smoke test with a bounded timeout so dependency downloads can warm GOMODCACHE.
+        rm -f "$SMOKE_LOG_PATH"
+        "$PACKAGED_SPX" run --goenv="$GOENV_ROOT" --path=test/CI --headless >"$SMOKE_LOG_PATH" 2>&1 &
+        SPX_PID=$!
+        EXIT_STATUS=""
+        TIMED_OUT=true
+        for _ in $(seq 1 30); do
+          if ! kill -0 "$SPX_PID" 2>/dev/null; then
+            wait "$SPX_PID"
+            EXIT_STATUS=$?
+            TIMED_OUT=false
+            break
+          fi
+          sleep 1
+        done
+
+        if [ "$TIMED_OUT" = true ]; then
+          echo "Smoke run exceeded 30s; stopping after warming module cache."
+          kill "$SPX_PID" 2>/dev/null || true
+          wait "$SPX_PID" 2>/dev/null || true
+        elif [ "$EXIT_STATUS" -ne 0 ]; then
+          echo "❌ Error: dependency warm-up run failed"
+          cat "$SMOKE_LOG_PATH"
+          exit 1
+        fi
+
+        if ! find "$GOMODCACHE_DIR" -type d -name '*@*' ! -path "$DEST" -print -quit | grep -q .; then
+          echo "❌ Error: dependency warm-up did not cache any additional modules"
+          cat "$SMOKE_LOG_PATH"
+          exit 1
+        fi
+
+        echo "Module cache collection completed"
+        ls -lah "$GOMODCACHE_DIR" || true
+        du -sh "$GOMODCACHE_DIR" || true
