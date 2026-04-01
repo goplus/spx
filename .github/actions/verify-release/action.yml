@@ -25,6 +25,20 @@ runs:
         set -euo pipefail
         source ./.github/actions/lib/release_platform.sh
 
+        reset_test_project_state() {
+          local project_dir="$1"
+
+          # Warm-up steps earlier in the workflow can leave generated module and
+          # engine files in test/CI. Remove them so verification starts from the
+          # checked-in sources and regenerates everything inside the package.
+          rm -rf "$project_dir/.godot" "$project_dir/go"
+          rm -f \
+            "$project_dir/go.mod" \
+            "$project_dir/go.sum" \
+            "$project_dir/project.godot" \
+            "$project_dir/xgo_autogen.go"
+        }
+
         echo "=========================================="
         echo "🔍 Verifying release package"
         echo "Package: $PACKAGE_FILE"
@@ -96,6 +110,7 @@ runs:
         echo "📋 Preparing test project..."
         mkdir -p "$VERIFY_TEST_ROOT_DIR"
         cp -R test/CI "$VERIFY_TEST_ROOT_DIR/"
+        reset_test_project_state "$TEST_PROJECT_DIR"
         echo "✓ Test project copied"
 
         case "$PLATFORM" in
