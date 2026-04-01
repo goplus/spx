@@ -12,8 +12,8 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/goplus/spx/v2/cmd/gox/pkg/pack"
-	"github.com/goplus/spx/v2/cmd/gox/pkg/util"
+	"github.com/goplus/spx/v2/cmd/spx/pkg/pack"
+	"github.com/goplus/spx/v2/cmd/spx/pkg/util"
 )
 
 func (pself *CmdTool) prepareExport() error {
@@ -235,7 +235,7 @@ func (pself *CmdTool) exportWebCommon(mode string) error {
 	}
 	util.CopyDir2(ispxWebDir, pself.WebDir)
 
-	// Copy gox-specific web files (index.html, fflate.js, engine.worker.js)
+	// Copy spx-specific web files (index.html, fflate.js, engine.worker.js)
 	util.CopyDir(pself.PlatformFS, "template/platform/web", pself.WebDir, true)
 
 	// copy wasm_exec.js from GOROOT

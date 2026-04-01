@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/goplus/spx/v2/cmd/gox/pkg/util"
+	"github.com/goplus/spx/v2/cmd/spx/pkg/util"
 )
 
 type projConf struct {

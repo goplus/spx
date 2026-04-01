@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/goplus/spx/v2/cmd/gox/pkg/command"
+	"github.com/goplus/spx/v2/cmd/spx/pkg/command"
 	"github.com/goplus/spx/v2/internal/releasemeta"
 )
 

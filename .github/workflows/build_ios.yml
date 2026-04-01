@@ -69,7 +69,7 @@ jobs:
       shell: bash
       run: |
         echo "Configuring iOS export preset for CI (export Xcode project only)..."
-        cd cmd/gox/template/project
+        cd cmd/spx/template/project
         # Backup original preset
         cp export_presets.cfg export_presets.cfg.bak
         # Enable export_project_only to skip code signing

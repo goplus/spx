@@ -26,7 +26,7 @@ import (
 // Run: go generate ./cmd/spxrunner/runner
 //
 //go:generate cp ../../../gop.mod gop.mod
-//go:generate cp ../../gox/template/go.mod.template go.mod.template
+//go:generate cp ../../spx/template/go.mod.template go.mod.template
 
 // GopModTemplate is the embedded content of gop.mod from the SPX repository root.
 // This template is used to create gop.mod for new SPX projects.

@@ -1,5 +1,5 @@
 name: Update template version
-description: Update cmd/gox/template/go.mod.template for a release build and reinstall spx.
+description: Update cmd/spx/template/go.mod.template for a release build and reinstall spx.
 inputs:
   version:
     description: 'Release version without the leading v (for example, 2.0.1)'
@@ -17,7 +17,7 @@ runs:
         pwd && ls -la
 
         # Update version in go.mod.template
-        FILE="cmd/gox/template/go.mod.template"
+        FILE="cmd/spx/template/go.mod.template"
 
         if [ ! -f "$FILE" ]; then
           echo "Error: $FILE not found"

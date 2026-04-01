@@ -451,7 +451,7 @@ func installAPKWorkflow(cfg workflowInstallAPKConfig, runner workflowRunner) err
 		return fmt.Errorf("project directory is not a directory: %s", projectDir)
 	}
 
-	return runner.runCommand(filepath.Join("cmd", "gox"), "go", "run", ".", "exportapk", "--install", "--path", projectDir)
+	return runner.runCommand(filepath.Join("cmd", "spx"), "go", "run", ".", "exportapk", "--install", "--path", projectDir)
 }
 
 func runEngineBuildWorkflow(runner scriptRunner, cfg engineBuildConfig) error {

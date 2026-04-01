@@ -10,7 +10,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/goplus/spx/v2/cmd/gox/pkg/util"
+	"github.com/goplus/spx/v2/cmd/spx/pkg/util"
 )
 
 const PcExportName = "gdexport"

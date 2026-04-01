@@ -60,8 +60,8 @@ func newRuntimeFixtureRunner(t *testing.T) *recordingRunner {
 	gopath := filepath.Join(root, "gopath")
 	t.Setenv("GOPATH", gopath)
 
-	mustMkdirAll(t, filepath.Join(root, "cmd", "gox", "template", "project"))
-	mustWriteFile(t, filepath.Join(root, "cmd", "gox", "template", "project", "runtime.gdextension.txt"), []byte("runtime extension"))
+	mustMkdirAll(t, filepath.Join(root, "cmd", "spx", "template", "project"))
+	mustWriteFile(t, filepath.Join(root, "cmd", "spx", "template", "project", "runtime.gdextension.txt"), []byte("runtime extension"))
 
 	return &recordingRunner{
 		repoRoot:    root,
@@ -151,7 +151,7 @@ func TestPrepareAssetsRuntime(t *testing.T) {
 	}
 
 	expected := []recordedCall{
-		{script: "cmd/gox/install.sh", args: nil},
+		{script: "cmd/spx/install.sh", args: nil},
 	}
 	if !reflect.DeepEqual(runner.calls, expected) {
 		t.Fatalf("unexpected calls: %#v", runner.calls)
@@ -172,7 +172,7 @@ func TestPrepareAssetsWeb(t *testing.T) {
 		t.Fatalf("prepareAssets returned error: %v", err)
 	}
 
-	expectedCalls := []recordedCall{{script: "cmd/gox/install.sh", args: []string{"--web"}}}
+	expectedCalls := []recordedCall{{script: "cmd/spx/install.sh", args: []string{"--web"}}}
 	if !reflect.DeepEqual(runner.calls, expectedCalls) {
 		t.Fatalf("unexpected calls: %#v", runner.calls)
 	}
@@ -202,7 +202,7 @@ func TestPrepareAssetsFull(t *testing.T) {
 		t.Fatalf("prepareAssets returned error: %v", err)
 	}
 
-	expectedCalls := []recordedCall{{script: "cmd/gox/install.sh", args: []string{"--web"}}}
+	expectedCalls := []recordedCall{{script: "cmd/spx/install.sh", args: []string{"--web"}}}
 	if !reflect.DeepEqual(runner.calls, expectedCalls) {
 		t.Fatalf("unexpected calls: %#v", runner.calls)
 	}

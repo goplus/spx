@@ -12,8 +12,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/goplus/spx/v2/cmd/gox/pkg/impl"
-	"github.com/goplus/spx/v2/cmd/gox/pkg/util"
+	"github.com/goplus/spx/v2/cmd/spx/pkg/impl"
+	"github.com/goplus/spx/v2/cmd/spx/pkg/util"
 )
 
 var ENV_NAME = "gdspx"
@@ -272,7 +272,7 @@ func (pself *CmdTool) getIspxWebDir() (string, error) {
 	ispxWebDir := path.Join(pself.GoBinPath, "ispx")
 	if _, err := os.Stat(ispxWebDir); os.IsNotExist(err) {
 		return "", fmt.Errorf("ispx web runtime not found at %s; "+
-			"run 'cd cmd/gox && ./install.sh --web' to install", ispxWebDir)
+			"run 'cd cmd/spx && ./install.sh --web' to install", ispxWebDir)
 	}
 	return ispxWebDir, nil
 }
