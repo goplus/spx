@@ -1,5 +1,5 @@
 name: Set up Go, XGo, and engine assets
-description: Set up the toolchain, restore downloaded engine assets, and prepare local build artifacts.
+description: Set up the toolchain, build local buildctl, and prepare engine assets.
 inputs:
   go-version:
     description: 'Go version to install'
@@ -17,10 +17,6 @@ inputs:
     description: 'Web runtime mode to prepare when setup-mode is web or full'
     required: false
     default: 'normal'
-  cache-version:
-    description: 'Manual cache version for download cache invalidation'
-    required: false
-    default: 'v4'
 runs:
   using: "composite"
   steps:
@@ -30,90 +26,6 @@ runs:
         go-version: ${{ inputs.go-version }}
         xgo-version: ${{ inputs.xgo-version }}
 
-    - name: Resolve GOPATH
-      id: gopath
-      run: echo "GOPATH=$(go env GOPATH)" >> "$GITHUB_OUTPUT"
-      shell: bash
-
-    - name: Resolve runtime version
-      id: runtime-version
-      run: echo "version=$(go run ./.github/scripts/runtime_version.go)" >> "$GITHUB_OUTPUT"
-      shell: bash
-
-    - name: Resolve download cache keys
-      id: cache-keys
-      shell: bash
-      env:
-        CACHE_VERSION: ${{ inputs.cache-version }}
-        SETUP_MODE: ${{ inputs.setup-mode }}
-        WEB_MODE: ${{ inputs.web-mode }}
-        RUNNER_OS_NAME: ${{ runner.os }}
-      run: |
-        set -euo pipefail
-
-        scope="$SETUP_MODE"
-        if [ "$SETUP_MODE" != "runtime" ]; then
-          scope="$SETUP_MODE-$WEB_MODE"
-        fi
-
-        echo "scope=$scope" >> "$GITHUB_OUTPUT"
-        {
-          echo "restore_keys<<EOF"
-          echo "spx-download-${CACHE_VERSION}-${RUNNER_OS_NAME}-${scope}-"
-          if [ "$SETUP_MODE" != "runtime" ]; then
-            echo "spx-download-${CACHE_VERSION}-${RUNNER_OS_NAME}-${SETUP_MODE}-"
-          fi
-          echo "EOF"
-        } >> "$GITHUB_OUTPUT"
-
-    - name: Restore downloaded engine assets
-      id: cache-downloads
-      uses: actions/cache@v4
-      with:
-        path: |
-          ${{ steps.gopath.outputs.GOPATH }}/bin/gdspx[0-9]*
-          ${{ steps.gopath.outputs.GOPATH }}/bin/gdspxrt[0-9]*
-          !${{ steps.gopath.outputs.GOPATH }}/bin/gdspxrt[0-9]*_web*
-          ~/.local/share/godot/export_templates
-          ~/Library/Application Support/Godot/export_templates
-          ~/AppData/Roaming/Godot/export_templates
-        key: spx-download-${{ inputs.cache-version }}-${{ runner.os }}-${{ steps.cache-keys.outputs.scope }}-${{ steps.runtime-version.outputs.version }}
-        restore-keys: ${{ steps.cache-keys.outputs.restore_keys }}
-
-    - name: Validate downloaded engine assets
-      id: cache-download-verify
-      if: steps.cache-downloads.outputs.cache-hit == 'true'
-      shell: bash
-      env:
-        GOPATH_DIR: ${{ steps.gopath.outputs.GOPATH }}
-        SETUP_MODE: ${{ inputs.setup-mode }}
-        RUNTIME_VERSION: ${{ steps.runtime-version.outputs.version }}
-      run: |
-        set -euo pipefail
-
-        missing=0
-        bin_suffix=""
-
-        if [ "${RUNNER_OS}" = "Windows" ]; then
-          bin_suffix=".exe"
-        fi
-
-        require_path() {
-          if [ ! -e "$1" ]; then
-            echo "Missing cached asset: $1"
-            missing=1
-          fi
-        }
-
-        require_path "$GOPATH_DIR/bin/gdspx${RUNTIME_VERSION}${bin_suffix}"
-
-        if [ "$SETUP_MODE" = "runtime" ] || [ "$SETUP_MODE" = "full" ]; then
-          require_path "$GOPATH_DIR/bin/gdspxrt${RUNTIME_VERSION}${bin_suffix}"
-          require_path "$GOPATH_DIR/bin/gdspxrt${RUNTIME_VERSION}.pck"
-        fi
-
-        echo "repair=$missing" >> "$GITHUB_OUTPUT"
-
     - name: Build local buildctl
       uses: ./.github/actions/setup-buildctl
 
@@ -122,15 +34,7 @@ runs:
       env:
         SETUP_MODE: ${{ inputs.setup-mode }}
         WEB_MODE: ${{ inputs.web-mode }}
-        DOWNLOAD_CACHE_HIT: ${{ steps.cache-downloads.outputs.cache-hit }}
-        DOWNLOAD_CACHE_REPAIR: ${{ steps.cache-download-verify.outputs.repair }}
       run: |
         set -euo pipefail
 
-        force_refresh=1
-        if [ "${DOWNLOAD_CACHE_HIT}" = "true" ] && [ "${DOWNLOAD_CACHE_REPAIR:-0}" != "1" ]; then
-          force_refresh=0
-        fi
-
-        export SPX_PREPARE_FORCE_REFRESH="$force_refresh"
         "$BUILDCTL" prepare --setup-mode "$SETUP_MODE" --web-mode "$WEB_MODE"
