@@ -16,13 +16,8 @@ require github.com/goplus/spx/v2 v0.0.0-test //xgo:class
 `)
 }
 
-func TestEnsureGoModUsesExplicitVersionFromPlaceholderTemplate(t *testing.T) {
-	testEnsureGoModUsesExplicitVersion(t, `module github.com/goplus/spxdemo
-
-go 1.25.0
-
-require github.com/goplus/spx/v2 {{SPX_VERSION}} //xgo:class
-`)
+func TestEnsureGoModUsesExplicitVersionFromCRLFTemplate(t *testing.T) {
+	testEnsureGoModUsesExplicitVersion(t, "module github.com/goplus/spxdemo\r\n\r\ngo 1.25.0\r\n\r\nrequire github.com/goplus/spx/v2 v0.0.0-test //xgo:class\r\n")
 }
 
 func testEnsureGoModUsesExplicitVersion(t *testing.T, template string) {
@@ -59,7 +54,7 @@ func testEnsureGoModUsesExplicitVersion(t *testing.T, template string) {
 		t.Fatalf("go.mod should pin requested spx version %q, got:\n%s", expectedRequire, content)
 	}
 
-	if strings.Contains(content, "{{SPX_VERSION}}") {
-		t.Fatalf("go.mod should not keep SPX_VERSION placeholder, got:\n%s", content)
+	if strings.Contains(template, "\r\n") && !strings.Contains(content, expectedRequire+"\r\n") {
+		t.Fatalf("go.mod should preserve CRLF line endings for %q, got:\n%s", expectedRequire, content)
 	}
 }

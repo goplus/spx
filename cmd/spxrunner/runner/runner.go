@@ -462,17 +462,23 @@ func applyRunnerVersionToGoModTemplate(content, version string) string {
 		return content
 	}
 
-	content = strings.Replace(content, "{{SPX_VERSION}}", version, 1)
-
 	const (
+		// The embedded template already carries a concrete release version.
+		// Override that single require line in-place when callers request
+		// an explicit runner version.
 		requirePrefix = "require " + SpxModule + " "
 		requireSuffix = " //xgo:class"
 	)
 
 	lines := strings.Split(content, "\n")
 	for i, line := range lines {
-		if strings.HasPrefix(line, requirePrefix) && strings.HasSuffix(line, requireSuffix) {
-			lines[i] = requirePrefix + version + requireSuffix
+		trimmed := strings.TrimRight(line, "\r")
+		if strings.HasPrefix(trimmed, requirePrefix) && strings.HasSuffix(trimmed, requireSuffix) {
+			replacement := requirePrefix + version + requireSuffix
+			if strings.HasSuffix(line, "\r") {
+				replacement += "\r"
+			}
+			lines[i] = replacement
 			return strings.Join(lines, "\n")
 		}
 	}
