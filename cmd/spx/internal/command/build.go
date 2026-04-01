@@ -10,8 +10,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/goplus/spx/v2/cmd/spx/pkg/gengo"
-	"github.com/goplus/spx/v2/cmd/spx/pkg/util"
+	"github.com/goplus/spx/v2/cmd/spx/internal/gengo"
+	"github.com/goplus/spx/v2/cmd/spx/internal/util"
 )
 
 // withGoDir executes a function f inside the pself.GoDir and ensures

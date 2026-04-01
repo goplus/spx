@@ -12,8 +12,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/goplus/spx/v2/cmd/spx/pkg/impl"
-	"github.com/goplus/spx/v2/cmd/spx/pkg/util"
+	"github.com/goplus/spx/v2/cmd/spx/internal/impl"
+	"github.com/goplus/spx/v2/cmd/spx/internal/util"
 )
 
 var ENV_NAME = "gdspx"

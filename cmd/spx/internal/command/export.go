@@ -12,8 +12,8 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/goplus/spx/v2/cmd/spx/pkg/pack"
-	"github.com/goplus/spx/v2/cmd/spx/pkg/util"
+	"github.com/goplus/spx/v2/cmd/spx/internal/pack"
+	"github.com/goplus/spx/v2/cmd/spx/internal/util"
 )
 
 func (pself *CmdTool) prepareExport() error {

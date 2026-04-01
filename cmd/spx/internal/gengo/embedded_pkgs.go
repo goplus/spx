@@ -174,7 +174,7 @@ import (
 	// _ "github.com/goplus/ixgo/pkg/testing/slogtest"
 
 	// Embedded third-party packages.
-	_ "github.com/goplus/spx/v2/cmd/spx/pkg/gengo/pkg/github.com/goplus/spx/v2"
-	_ "github.com/goplus/spx/v2/cmd/spx/pkg/gengo/pkg/github.com/goplus/spx/v2/pkg/spx"
-	_ "github.com/goplus/spx/v2/cmd/spx/pkg/gengo/pkg/github.com/goplus/spx/v2/pkg/spx/pkg/engine"
+	_ "github.com/goplus/spx/v2/cmd/spx/internal/gengo/pkg/github.com/goplus/spx/v2"
+	_ "github.com/goplus/spx/v2/cmd/spx/internal/gengo/pkg/github.com/goplus/spx/v2/pkg/spx"
+	_ "github.com/goplus/spx/v2/cmd/spx/internal/gengo/pkg/github.com/goplus/spx/v2/pkg/spx/pkg/engine"
 )
