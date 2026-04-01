@@ -113,15 +113,15 @@ runs:
         reset_test_project_state "$TEST_PROJECT_DIR"
         echo "✓ Test project copied"
 
-        case "$PLATFORM" in
+        case "$TARGET_PLATFORM" in
           windows)
             SPX_BIN_PATH="$VERIFY_ROOT_DIR/go/bin/spx.exe"
             ;;
-          darwin|linux)
+          macos|linux)
             SPX_BIN_PATH="$VERIFY_ROOT_DIR/go/bin/spx"
             ;;
           *)
-            echo "❌ Error: unsupported platform: $PLATFORM"
+            echo "❌ Error: unsupported platform: $TARGET_PLATFORM"
             exit 1
             ;;
         esac
@@ -132,7 +132,7 @@ runs:
         fi
         echo "✓ SPX executable found: $SPX_BIN_PATH"
 
-        if [ "$PLATFORM" != "windows" ]; then
+        if [ "$TARGET_PLATFORM" != "windows" ]; then
           chmod +x "$SPX_BIN_PATH"
         fi
 
@@ -154,8 +154,12 @@ runs:
         echo ""
 
         rm -f "$VERIFY_LOG_PATH"
-        if ! "$SPX_BIN_PATH" run --ixgogen --goenv="$VERIFY_ROOT_DIR" --path="$TEST_PROJECT_DIR" --headless 2>&1 | tee "$VERIFY_LOG_PATH"; then
-          echo "❌ Error: smoke test command failed"
+        set +e
+        "$SPX_BIN_PATH" run --ixgogen --goenv="$VERIFY_ROOT_DIR" --path="$TEST_PROJECT_DIR" --headless 2>&1 | tee "$VERIFY_LOG_PATH"
+        SPX_STATUS=${PIPESTATUS[0]}
+        set -e
+        if [ "$SPX_STATUS" -ne 0 ]; then
+          echo "❌ Error: smoke test command failed (exit $SPX_STATUS)"
           exit 1
         fi
 
