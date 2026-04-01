@@ -88,6 +88,7 @@ jobs:
         with:
           package-file: spx-windows-${{ matrix.arch_name }}.zip
           platform: windows
+          package-arch: ${{ matrix.arch_name }}
 
       - name: Publish release asset
         if: github.event_name == 'release'

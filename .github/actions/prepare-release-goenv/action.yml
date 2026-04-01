@@ -45,10 +45,12 @@ runs:
         INSTALLED_BIN_DIR="$GOPATH_FIRST/bin"
         INSTALLED_SPX="$INSTALLED_BIN_DIR/spx$GOEXE"
         GOENV_ROOT="$(pwd)/$GOENV_DIR"
+        GOENV_EXCLUDE="./${GOENV_DIR#./}"
         GOMODCACHE_DIR="$GOENV_ROOT/.cache/mod"
         PACKAGED_BIN_DIR="$GOENV_ROOT/go/bin"
         PACKAGED_SPX="$PACKAGED_BIN_DIR/spx$GOEXE"
-        DEST="$GOENV_DIR/.cache/mod/github.com/goplus/spx/v2@$RELEASE_VERSION"
+        DEST="$GOENV_ROOT/.cache/mod/github.com/goplus/spx/v2@$RELEASE_VERSION"
+        SMOKE_LOG_PATH="$GOENV_ROOT/prepare-release-goenv.log"
 
         if [ ! -f "$INSTALLED_SPX" ]; then
           echo "❌ Error: rebuilt spx binary not found: $INSTALLED_SPX"
@@ -57,8 +59,20 @@ runs:
 
         mkdir -p "$GOMODCACHE_DIR" "$PACKAGED_BIN_DIR"
 
-        cp "$INSTALLED_BIN_DIR"/gdspxrt* "$PACKAGED_BIN_DIR"/ || true
-        cp "$INSTALLED_BIN_DIR"/runtime.gdextension "$PACKAGED_BIN_DIR"/ || true
+        shopt -s nullglob
+        RUNTIME_BINARIES=("$INSTALLED_BIN_DIR"/gdspxrt*)
+        shopt -u nullglob
+        if [ "${#RUNTIME_BINARIES[@]}" -eq 0 ]; then
+          echo "❌ Error: runtime binaries not found in $INSTALLED_BIN_DIR"
+          exit 1
+        fi
+        if [ ! -f "$INSTALLED_BIN_DIR/runtime.gdextension" ]; then
+          echo "❌ Error: runtime.gdextension not found in $INSTALLED_BIN_DIR"
+          exit 1
+        fi
+
+        cp "${RUNTIME_BINARIES[@]}" "$PACKAGED_BIN_DIR"/
+        cp "$INSTALLED_BIN_DIR/runtime.gdextension" "$PACKAGED_BIN_DIR"/
 
         echo "Installing rebuilt spx binary: $INSTALLED_SPX -> $PACKAGED_SPX"
         cp "$INSTALLED_SPX" "$PACKAGED_SPX"
@@ -72,7 +86,7 @@ runs:
           --exclude='./.bin' \
           --exclude='./.github' \
           --exclude='./docs' \
-          --exclude='./goenv' \
+          --exclude="$GOENV_EXCLUDE" \
           --exclude='./test' \
           --exclude='./tutorial' \
           --exclude='./godot' \
@@ -81,6 +95,7 @@ runs:
             tar -xf -
           )
 
+        # Set GOMODCACHE so the following smoke run populates the bundled offline cache.
         export GOMODCACHE="$GOMODCACHE_DIR"
 
         if [ ! -f "$PACKAGED_SPX" ]; then
@@ -88,13 +103,36 @@ runs:
           exit 1
         fi
 
-        if [ "$GOEXE" = ".exe" ]; then
-          "$PACKAGED_SPX" run --goenv="$GOENV_ROOT" --path=test/CI --headless &
-          SPX_PID=$!
-          sleep 5
-          kill "$SPX_PID" || true
-        else
-          "$PACKAGED_SPX" run --goenv="$GOENV_ROOT" --path=test/CI --headless || true
+        # Run the smoke test with a bounded timeout so dependency downloads can warm GOMODCACHE.
+        rm -f "$SMOKE_LOG_PATH"
+        "$PACKAGED_SPX" run --goenv="$GOENV_ROOT" --path=test/CI --headless >"$SMOKE_LOG_PATH" 2>&1 &
+        SPX_PID=$!
+        EXIT_STATUS=""
+        TIMED_OUT=true
+        for _ in $(seq 1 30); do
+          if ! kill -0 "$SPX_PID" 2>/dev/null; then
+            wait "$SPX_PID"
+            EXIT_STATUS=$?
+            TIMED_OUT=false
+            break
+          fi
+          sleep 1
+        done
+
+        if [ "$TIMED_OUT" = true ]; then
+          echo "Smoke run exceeded 30s; stopping after warming module cache."
+          kill "$SPX_PID" 2>/dev/null || true
+          wait "$SPX_PID" 2>/dev/null || true
+        elif [ "$EXIT_STATUS" -ne 0 ]; then
+          echo "❌ Error: dependency warm-up run failed"
+          cat "$SMOKE_LOG_PATH"
+          exit 1
+        fi
+
+        if ! find "$GOMODCACHE_DIR" -type d -name '*@*' ! -path "$DEST" -print -quit | grep -q .; then
+          echo "❌ Error: dependency warm-up did not cache any additional modules"
+          cat "$SMOKE_LOG_PATH"
+          exit 1
         fi
 
         echo "Module cache collection completed"

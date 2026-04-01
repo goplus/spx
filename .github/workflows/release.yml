@@ -35,11 +35,13 @@ jobs:
 
       - name: Resolve release version
         id: set-version
+        env:
+          RELEASE_TAG_INPUT: ${{ github.event.inputs.release_tag }}
         run: |
           if [ "${{ github.event_name }}" == "release" ]; then
             VERSION="${{ github.event.release.tag_name }}"
           else
-            VERSION="${{ github.event.inputs.release_tag }}"
+            VERSION="$RELEASE_TAG_INPUT"
           fi
           VERSION="${VERSION#v}"  # Remove 'v' prefix (if present)
           echo "VERSION=$VERSION"
@@ -47,13 +49,15 @@ jobs:
 
       - name: Resolve target platforms
         id: set-platforms
+        env:
+          PLATFORMS_INPUT: ${{ github.event.inputs.platforms }}
         run: |
           set -euo pipefail
 
           if [ "${{ github.event_name }}" = "release" ]; then
             RAW_PLATFORMS="all"
           else
-            RAW_PLATFORMS="${{ github.event.inputs.platforms }}"
+            RAW_PLATFORMS="$PLATFORMS_INPUT"
           fi
 
           PLATFORMS=$(printf '%s' "$RAW_PLATFORMS" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')

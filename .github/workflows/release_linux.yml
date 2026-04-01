@@ -80,6 +80,7 @@ jobs:
         with:
           package-file: spx-linux-${{ matrix.arch_name }}.zip
           platform: linux
+          package-arch: ${{ matrix.arch_name }}
 
       - name: Publish release asset
         if: github.event_name == 'release'

@@ -7,6 +7,9 @@ inputs:
   platform:
     description: 'Platform name (darwin/windows/linux)'
     required: true
+  package-arch:
+    description: 'Package architecture name (x86/x64/arm64)'
+    required: true
 runs:
   using: "composite"
   steps:
@@ -15,13 +18,54 @@ runs:
       env:
         PACKAGE_FILE: ${{ inputs.package-file }}
         PLATFORM: ${{ inputs.platform }}
+        PACKAGE_ARCH: ${{ inputs.package-arch }}
+        RUNNER_OS_CONTEXT: ${{ runner.os }}
+        RUNNER_ARCH_CONTEXT: ${{ runner.arch }}
       run: |
         set -euo pipefail
+
+        normalize_platform() {
+          case "$1" in
+            darwin)
+              printf 'macos\n'
+              ;;
+            linux)
+              printf 'linux\n'
+              ;;
+            windows)
+              printf 'windows\n'
+              ;;
+            macos)
+              printf 'macos\n'
+              ;;
+            *)
+              printf '%s\n' "$1"
+              ;;
+          esac
+        }
+
+        normalize_arch() {
+          case "$1" in
+            X64|x64|amd64|x86_64)
+              printf 'x64\n'
+              ;;
+            X86|x86|386|i386|i686)
+              printf 'x86\n'
+              ;;
+            ARM64|arm64|aarch64)
+              printf 'arm64\n'
+              ;;
+            *)
+              printf '%s\n' "$1" | tr '[:upper:]' '[:lower:]'
+              ;;
+          esac
+        }
 
         echo "=========================================="
         echo "🔍 Verifying release package"
         echo "Package: $PACKAGE_FILE"
         echo "Platform: $PLATFORM"
+        echo "Package arch: $PACKAGE_ARCH"
         echo "=========================================="
         echo ""
 
@@ -35,8 +79,14 @@ runs:
         VERIFY_TEST_ROOT_DIR="$VERIFY_ROOT_DIR/test"
         TEST_PROJECT_DIR="$VERIFY_TEST_ROOT_DIR/CI"
         VERIFY_LOG_PATH="$WORKSPACE_DIR/release-verification.log"
+        TARGET_PLATFORM="$(normalize_platform "$PLATFORM")"
+        TARGET_ARCH="$(normalize_arch "$PACKAGE_ARCH")"
+        RUNNER_PLATFORM="$(normalize_platform "$RUNNER_OS_CONTEXT")"
+        RUNNER_ARCH="$(normalize_arch "$RUNNER_ARCH_CONTEXT")"
 
         echo "📁 Workspace: $WORKSPACE_DIR"
+        echo "🖥️ Runner: $RUNNER_PLATFORM/$RUNNER_ARCH"
+        echo "📦 Package target: $TARGET_PLATFORM/$TARGET_ARCH"
 
         if ! command -v unzip >/dev/null 2>&1; then
           echo "❌ Error: unzip command is required but not available"
@@ -105,6 +155,18 @@ runs:
 
         if [ "$PLATFORM" != "windows" ]; then
           chmod +x "$SPX_BIN_PATH"
+        fi
+
+        if [ "$TARGET_PLATFORM" != "$RUNNER_PLATFORM" ] || [ "$TARGET_ARCH" != "$RUNNER_ARCH" ]; then
+          echo ""
+          echo "⏭️ Skipping smoke test on non-native runner"
+          echo "Runner platform/arch does not match package target."
+          echo "Structure verification completed successfully."
+          echo ""
+          echo "=========================================="
+          echo "✅ Release package verification PASSED"
+          echo "=========================================="
+          exit 0
         fi
 
         echo ""

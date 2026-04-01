@@ -75,6 +75,7 @@ jobs:
         with:
           package-file: spx-darwin-${{ matrix.arch_name }}.zip
           platform: darwin
+          package-arch: ${{ matrix.arch_name }}
 
       - name: Publish release asset
         if: github.event_name == 'release'
