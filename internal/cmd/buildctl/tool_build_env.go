@@ -115,7 +115,7 @@ func setupJDK() error {
 	switch runtime.GOOS {
 	case "darwin":
 		if _, err := buildEnvLookPath("brew"); err != nil {
-			return errors.New("Homebrew not found. Please install Homebrew first or install JDK 17 manually")
+			return errors.New("homebrew not found; install Homebrew first or install JDK 17 manually")
 		}
 		if err := buildEnvRunStreaming("", "brew", "install", "openjdk@17"); err != nil {
 			return err
@@ -294,7 +294,7 @@ func resolveJavaHome(env map[string]string) (string, error) {
 			return strings.TrimSpace(string(output)), nil
 		}
 	}
-	return "", errors.New("JAVA_HOME not found")
+	return "", errors.New("missing JAVA_HOME")
 }
 
 func candidateJDKBinDirs() []string {
@@ -372,7 +372,7 @@ func resolveEMSDKEnvironment() (emsdkEnvironment, error) {
 	case "windows":
 		appData := os.Getenv("APPDATA")
 		if appData == "" {
-			return emsdkEnvironment{}, errors.New("APPDATA is not set")
+			return emsdkEnvironment{}, errors.New("missing APPDATA")
 		}
 		root := filepath.Join(appData, "emsdk")
 		return emsdkEnvironment{rootDir: root, repoDir: filepath.Join(root, "emsdk")}, nil

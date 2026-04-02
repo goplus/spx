@@ -171,7 +171,7 @@ func (cmd *CmdTool) executeCommand() error {
 
 	err := cmd.handleExecutionPhase()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error executing command: %v\n", err)
+		fmt.Fprintf(os.Stderr, "error executing command: %v\n", err)
 	}
 	return err
 
@@ -179,23 +179,23 @@ func (cmd *CmdTool) executeCommand() error {
 
 // handleBuildPhase runs the build step.
 func (cmd *CmdTool) handleBuildPhase() error {
-	spxlog.Debug("handleBuildPhase: command=%s %s", cmd.Args.CmdName, cmd.SafeTagArgs())
+	spxlog.Debug("handling build phase: command=%s %s", cmd.Args.CmdName, cmd.SafeTagArgs())
 
 	switch cmd.Args.CmdName {
 	case "buildtinygo":
-		spxlog.Debug("executing BuildTinyGoLib")
+		spxlog.Debug("running TinyGo library build")
 		return cmd.BuildTinyGoLib()
 	case "editor", "rune", "export", "build", "run":
-		spxlog.Debug("checking BuildDll conditions")
+		spxlog.Debug("checking DLL build conditions")
 		if cmd.Args.Tags == nil || !strings.Contains(*cmd.Args.Tags, "pure_engine") {
-			spxlog.Debug("executing BuildDll")
+			spxlog.Debug("running DLL build")
 			return cmd.BuildDll()
 		} else {
-			spxlog.Debug("skipping BuildDll for pure_engine mode")
+			spxlog.Debug("skipping DLL build for pure_engine mode")
 		}
 	default:
 		if shouldBuildWasmForCommand(cmd.Args.CmdName) {
-			spxlog.Debug("executing BuildWasm")
+			spxlog.Debug("running WebAssembly build")
 			return cmd.BuildWasm()
 		}
 		spxlog.Debug("no build phase needed for command: %s", cmd.Args.CmdName)
