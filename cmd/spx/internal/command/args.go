@@ -27,9 +27,9 @@ type ExtraArgs struct {
 	Build           *string
 	Mode            *string
 	Movie           *bool
-	GoEnv           *string // Portable Go environment directory
-	IxgoGen         *bool   // Use xgobuild library for code generation (new method)
-	Verbose         *bool   // Verbose mode - print verbose information
+	GoEnv           *string
+	IxgoGen         *bool
+	Verbose         *bool
 }
 
 func (e *ExtraArgs) String() []string {
@@ -64,7 +64,7 @@ func (e *ExtraArgs) String() []string {
 	return args
 }
 
-// CheckCmd checks if the command is valid
+// CheckCmd reports whether the command is supported.
 func (pself *CmdTool) CheckCmd(ext ...string) bool {
 	cmds := []string{
 		"help", "version", "editor",
@@ -99,12 +99,11 @@ func (cmd *CmdTool) SafeTagArgs() string {
 	return "-tags=" + *tags
 }
 
-// initializeFlags initializes command line flags
+// initializeFlags binds CLI flags.
 func (cmd *CmdTool) initializeFlags() *bool {
 	f := flag.CommandLine
 	help := f.Bool("h", false, "show help information")
 
-	// Initialize command line arguments
 	cmd.Args.ServerAddr = f.String("serveraddr", "", "server address")
 	cmd.Args.Path = f.String("path", ".", "project path")
 	cmd.Args.ControllerName = f.String("controller", "", "controller's type name")
@@ -128,25 +127,21 @@ func (cmd *CmdTool) initializeFlags() *bool {
 	return help
 }
 
-// parseCommandLineArgs parses command line arguments and handles help requests
+// parseCommandLineArgs parses the CLI input.
 func (cmd *CmdTool) parseCommandLineArgs(help *bool, ext ...string) error {
-	// Check for help command
 	if len(os.Args) == 1 || os.Args[1] == "help" || os.Args[1] == "-h" || os.Args[1] == "h" {
 		cmd.ShowHelpInfo()
 		return nil
 	}
 
-	// Set command name and parse remaining arguments
 	cmd.Args.CmdName = os.Args[1]
 	flag.CommandLine.Parse(os.Args[2:])
 
-	// Show help if requested
 	if *help {
 		cmd.ShowHelpInfo()
 		return nil
 	}
 
-	// Validate command
 	if !cmd.CheckCmd(ext...) {
 		return fmt.Errorf("unknown command: %s", cmd.Args.CmdName)
 	}
@@ -154,13 +149,7 @@ func (cmd *CmdTool) parseCommandLineArgs(help *bool, ext ...string) error {
 	return nil
 }
 
-// ShowHelpInfo displays comprehensive help information for the command
-// It prints the command version, usage instructions, available commands with descriptions,
-// and usage examples to guide users on how to use the tool effectively.
-//
-// Parameters:
-//   - cmdName: The name of the command to display in help text (e.g., "rbx")
-//   - version: The version string to display (e.g., "2.0.1")
+// ShowHelpInfo prints usage.
 func (pself *CmdTool) ShowHelpInfo() {
 	cmdName := pself.AppName
 	version := pself.Version

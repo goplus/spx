@@ -14,8 +14,7 @@ import (
 	"github.com/goplus/spx/v2/cmd/spx/internal/util"
 )
 
-// withGoDir executes a function f inside the pself.GoDir and ensures
-// the original working directory is restored via defer.
+// withGoDir runs f in pself.GoDir.
 func (pself *CmdTool) withGoDir(f func() error) error {
 	rawdir, err := os.Getwd()
 	if err != nil {
@@ -26,7 +25,6 @@ func (pself *CmdTool) withGoDir(f func() error) error {
 		return fmt.Errorf("failed to change directory to GoDir %s: %w", pself.GoDir, err)
 	}
 
-	// Defer restoration of the original directory
 	defer func() {
 		if err := os.Chdir(rawdir); err != nil {
 			log.Printf("Warning: Failed to restore working directory to %s: %v", rawdir, err)
@@ -36,7 +34,7 @@ func (pself *CmdTool) withGoDir(f func() error) error {
 	return f()
 }
 
-// hideIOSFiles does renaming of files matching 'ios*' in the 'go' subdirectory.
+// hideIOSFiles renames ios* files to *.txt.
 func (pself *CmdTool) hideIOSFiles() error {
 	searchPattern := filepath.Join(pself.ProjectDir, "go", "ios*")
 	files, err := filepath.Glob(searchPattern)
@@ -56,16 +54,14 @@ func (pself *CmdTool) hideIOSFiles() error {
 	return nil
 }
 
-// determineTargetArchs calculates the list of architectures to build for.
+// determineTargetArchs resolves target architectures.
 func (pself *CmdTool) determineTargetArchs() ([]string, error) {
-	// If running on darwin, unconditionally build for both amd64 and arm64, ignoring Args.Arch.
 	if runtime.GOOS == "darwin" {
 		return []string{"amd64", "arm64"}, nil
 	}
 
 	tarArch := *pself.Args.Arch
 	if tarArch == "" {
-		// If no target arch specified, use the current runtime arch.
 		return []string{runtime.GOARCH}, nil
 	}
 
@@ -85,7 +81,6 @@ func (pself *CmdTool) determineTargetArchs() ([]string, error) {
 		return validArchs, nil
 	}
 
-	// Check if the explicitly provided target arch is valid for the current OS.
 	if slices.Contains(validArchs, tarArch) {
 		return []string{tarArch}, nil
 	}
@@ -93,10 +88,6 @@ func (pself *CmdTool) determineTargetArchs() ([]string, error) {
 	return nil, fmt.Errorf("invalid arch %s. Valid archs for %s: %s",
 		tarArch, runtime.GOOS, strings.Join(validArchs, ","))
 }
-
-// =================================================================
-// Generate Go
-// =================================================================
 
 func (pself *CmdTool) genGo() string {
 	rawdir, err := os.Getwd()
@@ -116,11 +107,10 @@ func (pself *CmdTool) genGo() string {
 		}
 	}
 
-	// Return tags string for subsequent build steps, common to both methods
 	return pself.SafeTagArgs()
 }
 
-// genGoUsingXgobuild generates Go code using xgobuild library (new method)
+// genGoUsingXgobuild uses xgobuild.
 func (pself *CmdTool) genGoUsingXgobuild(rawdir, spxProjPath string) error {
 	if err := os.MkdirAll(pself.GoDir, 0755); err != nil {
 		return fmt.Errorf("failed to create GoDir: %w", err)
@@ -147,7 +137,7 @@ func (pself *CmdTool) genGoUsingXgobuild(rawdir, spxProjPath string) error {
 	return nil
 }
 
-// genGoUsingXgoCLI generates Go code using xgo CLI (old method)
+// genGoUsingXgoCLI uses xgo.
 func (pself *CmdTool) genGoUsingXgoCLI(rawdir, spxProjPath string) error {
 	if err := os.Chdir(spxProjPath); err != nil {
 		return fmt.Errorf("failed to change directory to project root for XGo: %w", err)
@@ -184,21 +174,15 @@ func (pself *CmdTool) genGoUsingXgoCLI(rawdir, spxProjPath string) error {
 	return nil
 }
 
-// =================================================================
-// Build Functions
-// =================================================================
-
 func (pself *CmdTool) BuildWasm() error {
 	pself.genGo()
 
-	// 1. Prepare output directory
 	webBuildDir := path.Join(pself.ProjectDir, ".builds/web/")
 	if err := os.MkdirAll(webBuildDir, 0755); err != nil {
 		return fmt.Errorf("failed to create web build directory: %w", err)
 	}
 	filePath := path.Join(webBuildDir, "ispx.wasm")
 
-	// 2. Execute build inside GoDir
 	return pself.withGoDir(func() error {
 		log.Printf("Building WebAssembly binary: %s", filePath)
 		envVars := []string{"GOOS=js", "GOARCH=wasm"}
@@ -208,24 +192,21 @@ func (pself *CmdTool) BuildWasm() error {
 	})
 }
 
-// BuildTinyGoLib builds static library using TinyGo for ESP32 or other targets.
+// BuildTinyGoLib builds a TinyGo static library.
 func (pself *CmdTool) BuildTinyGoLib() error {
 	pself.genGo()
 
-	// 1. Determine target board
 	target := *pself.Args.Target
 	if target == "" || target == "esp32" {
 		target = "esp32-coreboard-v2"
 	}
 
-	// 2. Prepare output directory
 	tinyGoBuildDir := path.Join(pself.ProjectDir, ".builds/tinygo/")
 	if err := os.MkdirAll(tinyGoBuildDir, 0755); err != nil {
 		return fmt.Errorf("failed to create TinyGo build directory: %w", err)
 	}
 	outputPath := path.Join(tinyGoBuildDir, "golib.o")
 
-	// 3. Define build arguments
 	args := []string{
 		"build",
 		"-o", outputPath,
@@ -240,10 +221,8 @@ func (pself *CmdTool) BuildTinyGoLib() error {
 	}
 	args = append(args, ".")
 
-	// 4. Set environment variables
 	envVars := []string{"GODEBUG=gotypesalias=0"}
 
-	// 5. Execute build inside GoDir
 	if err := pself.withGoDir(func() error {
 		log.Printf("Building TinyGo static library for target: %s", target)
 		if err := util.RunTinyGo(envVars, args...); err != nil {
@@ -259,26 +238,21 @@ func (pself *CmdTool) BuildTinyGoLib() error {
 }
 
 func (pself *CmdTool) BuildDll() error {
-	// 1. Hide original files (undoing a potential previous step)
 	if err := pself.hideIOSFiles(); err != nil {
 		return err
 	}
 
-	// 2. Determine the list of target architectures.
 	targetArchs, err := pself.determineTargetArchs()
 	if err != nil {
 		return err
 	}
 
-	// 3. Generate Go code and get tags
 	tagStr := pself.genGo()
 
-	// 4. Execute the build for each target architecture inside GoDir.
 	return pself.withGoDir(func() error {
 		if err := pself.executeDllBuild(targetArchs, tagStr); err != nil {
 			return err
 		}
-		// 5. Final check: ensure the resulting library path is set.
 		if pself.LibPath == "" {
 			return fmt.Errorf("build error: cannot find matched dylib for runtime arch %s", runtime.GOARCH)
 		}
@@ -286,7 +260,7 @@ func (pself *CmdTool) BuildDll() error {
 	})
 }
 
-// executeDllBuild performs the multi-arch C-shared build.
+// executeDllBuild runs the multi-arch C-shared build.
 func (pself *CmdTool) executeDllBuild(archs []string, tagStr string) error {
 	rawPath := filepath.Base(pself.LibPath)
 	rawDir := filepath.Dir(pself.LibPath)

@@ -15,7 +15,6 @@ func CopyDir2(src string, dst string) error {
 		return err
 	}
 
-	// Create the destination directory
 	err = os.MkdirAll(dst, srcInfo.Mode())
 	if err != nil {
 		return err
@@ -31,13 +30,11 @@ func CopyDir2(src string, dst string) error {
 		dstPath := filepath.Join(dst, entry.Name())
 
 		if entry.IsDir() {
-			// Recursively copy subdirectory
 			err = CopyDir2(srcPath, dstPath)
 			if err != nil {
 				return err
 			}
 		} else {
-			// Copy file
 			err = CopyFile(srcPath, dstPath)
 			if err != nil {
 				return err
@@ -52,7 +49,6 @@ func CheckFileExist(dir, ext string, recursive bool) bool {
 	}
 
 	if recursive {
-		// Recursive search using filepath.Walk
 		err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return err
@@ -67,7 +63,6 @@ func CheckFileExist(dir, ext string, recursive bool) bool {
 			return true
 		}
 	} else {
-		// Non-recursive search, only check the top-level directory
 		entries, err := os.ReadDir(dir)
 		if err != nil {
 			return false
@@ -87,7 +82,7 @@ func IsFileExist(path string) bool {
 	return err == nil
 }
 
-// Copy a file
+// CopyFile copies a file.
 func CopyFile(src, dst string) error {
 	input, err := os.ReadFile(src)
 	if err != nil {
@@ -120,8 +115,6 @@ func CopyDir(fsys fs.FS, srcDir, dstDir string, isOverride bool) error {
 		if d.IsDir() {
 			return os.MkdirAll(dstPath, 0755)
 		} else {
-			// Skip if file already exists and is not overriden
-
 			if strings.HasSuffix(dstPath, "go.mod.txt") {
 				i := strings.LastIndex(dstPath, "go.mod.txt")
 				dstPath = dstPath[:i] + "go.mod"

@@ -4,10 +4,10 @@ package gengo
 //go:generate go tool qexp -outdir pkg github.com/goplus/spx/v2/pkg/spx/pkg/engine
 //go:generate go tool qexp -outdir pkg github.com/goplus/spx/v2/pkg/spx
 
-// All packages available in the ispx Wasm runtime.
-// This file is only used for go:generate directive and is excluded from build.
+// Packages in the ispx Wasm runtime.
+// Used by go:generate only; excluded from builds.
 import (
-	// Embedded stdlib packages.
+	// Embedded stdlib.
 	_ "github.com/goplus/ixgo/pkg/archive/tar"
 	_ "github.com/goplus/ixgo/pkg/archive/zip"
 	_ "github.com/goplus/ixgo/pkg/bufio"
@@ -106,7 +106,7 @@ import (
 	_ "github.com/goplus/ixgo/pkg/unicode/utf8"
 	_ "github.com/goplus/ixgo/pkg/unique"
 
-	// Excluded stdlib packages.
+	// Excluded stdlib.
 	// _ "github.com/goplus/ixgo/pkg/container/heap"
 	// _ "github.com/goplus/ixgo/pkg/container/list"
 	// _ "github.com/goplus/ixgo/pkg/container/ring"
@@ -173,7 +173,7 @@ import (
 	// _ "github.com/goplus/ixgo/pkg/testing/quick"
 	// _ "github.com/goplus/ixgo/pkg/testing/slogtest"
 
-	// Embedded third-party packages.
+	// Embedded third-party.
 	_ "github.com/goplus/spx/v2/cmd/spx/internal/gengo/pkg/github.com/goplus/spx/v2"
 	_ "github.com/goplus/spx/v2/cmd/spx/internal/gengo/pkg/github.com/goplus/spx/v2/pkg/spx"
 	_ "github.com/goplus/spx/v2/cmd/spx/internal/gengo/pkg/github.com/goplus/spx/v2/pkg/spx/pkg/engine"

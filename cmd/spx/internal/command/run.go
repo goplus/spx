@@ -24,13 +24,12 @@ func (pself *CmdTool) Run(arg string) (err error) {
 	return util.RunCommandInDir(pself.ProjectDir, pself.CmdPath, arg)
 }
 
-// buildRuntimeArgs builds the arguments for running gdspxrt.
-// It filters out --path and adds the runtime-specific arguments.
+// buildRuntimeArgs builds gdspxrt args.
 func (pself *CmdTool) buildRuntimeArgs(inputArgs []string, tempDir, extPath string, extraArgs ...string) []string {
 	args := []string{}
 	for i := 0; i < len(inputArgs); i++ {
 		if inputArgs[i] == "--path" {
-			i++ // Skip the path value
+			i++
 			continue
 		}
 		args = append(args, inputArgs[i])
@@ -38,17 +37,15 @@ func (pself *CmdTool) buildRuntimeArgs(inputArgs []string, tempDir, extPath stri
 	args = append(args, "--path", tempDir)
 	args = append(args, "--gdextpath", extPath)
 	args = append(args, extraArgs...)
-	args = append(args, "--no-header") // disable engine's header output
+	args = append(args, "--no-header")
 	return args
 }
 
 func (pself *CmdTool) RunPackMode(pargs ...string) error {
-	// copy libs
 	dllPath := path.Join(pself.RuntimeTempDir, filepath.Base(pself.LibPath))
 	util.CopyFile(pself.LibPath, dllPath)
-	// copy configs
-	extensionPath := path.Join(pself.RuntimeTempDir, "runtime.gdextension")              // copy runtime
-	util.CopyFile(path.Join(pself.ProjectDir, "runtime.gdextension.txt"), extensionPath) // copy gdextension
+	extensionPath := path.Join(pself.RuntimeTempDir, "runtime.gdextension")
+	util.CopyFile(path.Join(pself.ProjectDir, "runtime.gdextension.txt"), extensionPath)
 
 	args := pself.buildRuntimeArgs(pargs, pself.RuntimeTempDir, extensionPath)
 	return util.RunCommandInDir(pself.RuntimeTempDir, pself.RuntimeCmdPath, args...)
@@ -62,8 +59,7 @@ func (pself *CmdTool) RunWebWorker() error {
 	return runWebCommand(pself.ExportWebWorker, pself.runWebServer)
 }
 
-// Always re-export before serving so direct `spx runweb` matches `make run-web`
-// and never reuses stale web artifacts from a previous invocation.
+// runWebCommand exports before serving.
 func runWebCommand(exportFn func() error, serverFn func() error) error {
 	if err := exportFn(); err != nil {
 		return err
@@ -90,7 +86,6 @@ func (pself *CmdTool) runWebServer() error {
 	executeDir := filepath.Join(pself.ProjectDir, ".builds/web")
 	executeDir = strings.ReplaceAll(executeDir, "\\", "/")
 
-	// Check if python command is available, try python3 if not
 	pythonCmd := "python"
 	if _, err := exec.LookPath("python"); err != nil {
 		if _, err := exec.LookPath("python3"); err != nil {
@@ -123,8 +118,6 @@ func (pself *CmdTool) runWebServer() error {
 			return fmt.Errorf("web server exited early: %w", err)
 		}
 		return fmt.Errorf("web server exited unexpectedly without an error")
-	// Wait briefly to detect immediate startup failures; if the server
-	// is still running after this window, assume it started successfully.
 	case <-time.After(500 * time.Millisecond):
 	}
 	fmt.Printf("Web server running at http://127.0.0.1:%d\n", port)
@@ -297,11 +290,9 @@ func looksLikeGDSPXWebServerCommandLine(commandLine string) bool {
 }
 
 func (pself *CmdTool) RunPureEngine(pargs ...string) error {
-	// Build the Go binary first
 	rawdir, _ := os.Getwd()
 	os.Chdir(pself.GoDir)
 
-	// Build the executable
 	binaryName := "main"
 	if runtime.GOOS == "windows" {
 		binaryName += ".exe"
@@ -322,7 +313,6 @@ func (pself *CmdTool) RunPureEngine(pargs ...string) error {
 		}
 	}
 
-	// Run the binary
 	binaryPath := filepath.Join(pself.GoDir, binaryName)
 	os.Chdir(rawdir)
 	return util.RunCommandInDir(pself.TargetDir, binaryPath, pargs...)
@@ -332,17 +322,14 @@ func (pself *CmdTool) RunWithAiMode(pargs ...string) error {
 	return pself.RunPackMode(pargs...)
 }
 
-// RunInterpreted runs the project in interpreted mode.
+// RunInterpreted runs the project with a prebuilt runtime.
 func (pself *CmdTool) RunInterpreted(pargs ...string) error {
-	// Get gdextension path from GOPATH/bin
 	extensionPath := path.Join(pself.GoBinPath, "runtime.gdextension")
 
-	// Verify runtime.gdextension exists
 	if _, err := os.Stat(extensionPath); os.IsNotExist(err) {
 		return fmt.Errorf("runtime.gdextension not found at %s. Please run 'spx install' first", extensionPath)
 	}
 
-	// Verify the shared library exists
 	GOOS := runtime.GOOS
 	GOARCH := runtime.GOARCH
 	var libExt string
@@ -360,8 +347,6 @@ func (pself *CmdTool) RunInterpreted(pargs ...string) error {
 		return fmt.Errorf("shared library %s not found at %s. Please run 'make install' first", libName, pself.GoBinPath)
 	}
 
-	// Build command arguments using common function
 	args := pself.buildRuntimeArgs(pargs, pself.RuntimeTempDir, extensionPath)
-	// Run the gdspxrt runtime
 	return util.RunCommandInDir(pself.RuntimeTempDir, pself.RuntimeCmdPath, args...)
 }

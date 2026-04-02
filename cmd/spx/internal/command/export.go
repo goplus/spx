@@ -17,7 +17,6 @@ import (
 )
 
 func (pself *CmdTool) prepareExport() error {
-	// copy assets
 	projectDir, _ := filepath.Abs(pself.ProjectDir)
 	util.CopyDir2(filepath.Join(projectDir, "..", "assets"), filepath.Join(pself.ProjectDir, "assets"))
 	return nil
@@ -39,7 +38,6 @@ func (pself *CmdTool) ExportTemplateWeb() error {
 	targetPath := filepath.Join(targetDir, "engine.html")
 	platformName := "Web"
 	os.Mkdir(targetDir, 0755)
-	// delete gdextension configs
 	os.Remove(filepath.Join(pself.ProjectDir, "gdspx.gdextension"))
 	os.Remove(filepath.Join(pself.ProjectDir, ".godot", "extension_list.cfg"))
 	return util.RunCommandInDir(pself.ProjectDir, pself.CmdPath, "--headless", "--quit", "--path", pself.ProjectDir, "--export-debug", platformName, targetPath)
@@ -54,27 +52,22 @@ const (
 
 func (pself *CmdTool) ExportWeb() error {
 	pself.exportWebCommon(webNormalMode)
-	// copy minigame files
 	util.CopyDir(pself.PlatformFS, "template/platform/web"+webNormalMode, pself.WebDir, true)
 	return nil
 }
 
 func (pself *CmdTool) ExportMinigame() error {
 	pself.exportWebCommon(webMinigameMode)
-	// move to subdir
 	os.Rename(pself.WebDir, pself.WebDir+"_bck")
 	os.MkdirAll(filepath.Join(pself.WebDir), os.ModePerm)
 	os.Rename(pself.WebDir+"_bck", filepath.Join(pself.WebDir, "rawWeb"))
 
-	// copy minigame files
 	util.CopyDir(pself.PlatformFS, "template/platform/web"+webMinigameMode, pself.WebDir, true)
 
 	workDir := pself.WebDir
 
-	// safely get build mode with default fallback
 	buildMode := *pself.Args.Build
 
-	// create target directories
 	engineDir := filepath.Join(workDir, "engine")
 	jsDir := filepath.Join(workDir, "js")
 	rawWebDir := filepath.Join(workDir, "rawWeb")
@@ -82,12 +75,10 @@ func (pself *CmdTool) ExportMinigame() error {
 	os.MkdirAll(engineDir, os.ModePerm)
 	os.MkdirAll(jsDir, os.ModePerm)
 
-	// handle WASM files based on build mode
 	godotEditorWasm := filepath.Join(rawWebDir, "engine.wasm")
 	ispxWasm := filepath.Join(rawWebDir, "ispx.wasm")
 
 	if buildMode == "fast" {
-		// fast build: move WASM files directly without compression
 		if err := pself.moveFile(godotEditorWasm, filepath.Join(engineDir, "engine.wasm")); err != nil {
 			return fmt.Errorf("failed to move %s: %w", godotEditorWasm, err)
 		}
@@ -96,8 +87,6 @@ func (pself *CmdTool) ExportMinigame() error {
 			return fmt.Errorf("failed to move %s: %w", ispxWasm, err)
 		}
 	} else {
-		// normal build: compress WASM files
-		// check if brotli is installed
 		if _, err := exec.LookPath("brotli"); err != nil {
 			return fmt.Errorf("error: brotli is not installed")
 		}
@@ -112,31 +101,25 @@ func (pself *CmdTool) ExportMinigame() error {
 			return fmt.Errorf("failed to compress %s: %w", ispxWasm, err)
 		}
 
-		// move compressed files to engine directory
 		if err := pself.moveFilesByPattern(rawWebDir, engineDir, "*.br"); err != nil {
 			return fmt.Errorf("failed to move br files: %w", err)
 		}
 	}
 
-	// move files to engine directory
 	if err := pself.moveFilesByPattern(rawWebDir, engineDir, "*.zip"); err != nil {
 		return fmt.Errorf("failed to move zip files: %w", err)
 	}
 
-	// move js files to js directory
 	if err := pself.moveFilesByPattern(rawWebDir, jsDir, "*.js"); err != nil {
 		return fmt.Errorf("failed to move js files: %w", err)
 	}
 
-	// merge JS files
 	if err := pself.mergeJSFiles(jsDir, buildMode != "fast"); err != nil {
 		return fmt.Errorf("failed to merge JS files: %w", err)
 	}
 
-	// remove minigame directory
 	os.RemoveAll(rawWebDir)
 
-	// optionally open WeChat Developer Tools
 	if wechatDevTools := os.Getenv("WECHAT_DEV_TOOLS"); wechatDevTools != "" {
 		println("open wechat dev tools", workDir)
 		cmd := exec.Command(filepath.Join(wechatDevTools, "cli"), "open", "--project", workDir, "-y")
@@ -150,7 +133,6 @@ func (pself *CmdTool) ExportMinigame() error {
 
 func (pself *CmdTool) ExportMiniprogram() error {
 	pself.exportWebCommon(webMiniprogramMode)
-	// copy miniprogram files
 	util.CopyDir(pself.PlatformFS, "template/platform/web"+webMiniprogramMode, pself.WebDir, true)
 	return nil
 }
@@ -158,11 +140,9 @@ func (pself *CmdTool) ExportMiniprogram() error {
 func (pself *CmdTool) ExportWebWorker() error {
 	pself.exportWebCommon(webWorkerMode)
 	extDir := filepath.Join(pself.WebDir, "__"+webWorkerMode)
-	// copy miniprogram files
 	util.CopyDir(pself.PlatformFS, "template/platform/web"+webWorkerMode, extDir, true)
 
 	var filesToMerge []string
-	// merge ext/*.js to engine.worker.js
 	os.Rename(filepath.Join(pself.WebDir, "go.wasm.exec.js"), filepath.Join(extDir, "go.wasm.exec.js"))
 	if entries, err := os.ReadDir(extDir); err == nil {
 		for _, entry := range entries {
@@ -186,18 +166,17 @@ func (pself *CmdTool) ExportWebWorker() error {
 		}
 	}
 
-	// insert worker code
 	engineBytes, _ := os.ReadFile(filepath.Join(pself.WebDir, "engine.js"))
 	engineStr := string(engineBytes)
 
-	// 1. insert handleGameAppMessage, dirty code to fix minigame
+	// Patch the worker message hook.
 	keyStr := "{if(initializedJS){checkMailbox()}}"
 	if !strings.Contains(engineStr, keyStr) {
 		println("engine.js not contains keyStr: ", keyStr)
 		os.Exit(1)
 	}
 	engineStr = strings.ReplaceAll(engineStr, keyStr, keyStr+"else if(e.data._gameAppMessageId) {handleGameAppMessage(e.data);}")
-	// 2. insert worker code , dirty code to fix minigame
+	// Inject the worker bundle.
 	keyStr = ";throw ex}}self.onmessage=handleMessage}"
 	if !strings.Contains(engineStr, keyStr) {
 		println("engine.js not contains keyStr: ", keyStr)
@@ -223,22 +202,18 @@ func (pself *CmdTool) exportWebCommon(mode string) error {
 	util.CopyDir2(templateDir, dstPath)
 
 	println("==> _exportWeb", dstPath)
-	// copy project files
 	util.CopyDir(pself.ProjectFS, "template/project", pself.ProjectDir, true)
 
 	os.Rename(filepath.Join(dstPath, "godot.editor.html"), filepath.Join(dstPath, "index.html"))
 
-	// Copy ispx web runtime files from $GOPATH/bin/ispx/
 	ispxWebDir, err := pself.getIspxWebDir()
 	if err != nil {
 		return err
 	}
 	util.CopyDir2(ispxWebDir, pself.WebDir)
 
-	// Copy spx-specific web files (index.html, fflate.js, engine.worker.js)
 	util.CopyDir(pself.PlatformFS, "template/platform/web", pself.WebDir, true)
 
-	// copy wasm_exec.js from GOROOT
 	output, err := exec.Command("go", "env", "GOROOT").Output()
 	if err != nil {
 		return fmt.Errorf("failed to get GOROOT: %w", err)
@@ -248,8 +223,6 @@ func (pself *CmdTool) exportWebCommon(mode string) error {
 	if err := util.CopyFile(wasmExecPath, filepath.Join(pself.WebDir, "go.wasm.exec.js")); err != nil {
 		return fmt.Errorf("failed to copy wasm_exec.js: %w", err)
 	}
-	// Append ext/*.js to engine.worker.js then remove them
-
 	if err := pack.PackProject(pself.TargetDir, filepath.Join(pself.WebDir, "game.zip")); err != nil {
 		return err
 	}
@@ -289,7 +262,6 @@ func (pself *CmdTool) ExportIos() error {
 	pself.prepareExport()
 	pself.BuildDll()
 
-	// include ios files to build
 	files, _ := filepath.Glob(filepath.Join(pself.ProjectDir, "go", "ios*"))
 	for _, file := range files {
 		if strings.HasSuffix(file, ".txt") {
@@ -298,38 +270,32 @@ func (pself *CmdTool) ExportIos() error {
 		}
 	}
 
-	// First build the iOS libraries
 	fmt.Println("===> Building iOS libraries...")
 	if err := pself.buildIosLibraries(); err != nil {
 		return fmt.Errorf("failed to build iOS libraries: %w", err)
 	}
 	fmt.Println("===> iOS libraries build completed successfully!")
 
-	// Set up paths
 	ipaPath := filepath.Join(pself.ProjectDir, ".builds", "ios", "Game.ipa")
 	buildDir := filepath.Dir(ipaPath)
 	fmt.Printf("===> IPA output path: %s\n", ipaPath)
 
-	// Create builds directory if it doesn't exist
 	if err := os.MkdirAll(buildDir, os.ModePerm); err != nil {
 		return fmt.Errorf("failed to create build directory: %w", err)
 	}
 	fmt.Printf("===> Build directory created: %s\n", buildDir)
 
-	// Check if Godot binary exists
 	if _, err := os.Stat(pself.CmdPath); os.IsNotExist(err) {
 		return fmt.Errorf("Godot binary not found at %s", pself.CmdPath)
 	}
 	fmt.Printf("===> Godot binary found at: %s\n", pself.CmdPath)
 
-	// Check if project file exists
 	projectFilePath := filepath.Join(pself.ProjectDir, "project.godot")
 	if _, err := os.Stat(projectFilePath); os.IsNotExist(err) {
 		return fmt.Errorf("Godot project file not found at %s", projectFilePath)
 	}
 	fmt.Printf("===> Godot project file found at: %s\n", projectFilePath)
 
-	// Check for export templates
 	homeDir, err := os.UserHomeDir()
 	if err == nil {
 		var templateDir string
@@ -349,7 +315,6 @@ func (pself *CmdTool) ExportIos() error {
 					if entry.IsDir() {
 						versionDir := filepath.Join(templateDir, entry.Name())
 						fmt.Printf("     - %s\n", entry.Name())
-						// Check for iOS templates
 						if files, err := os.ReadDir(versionDir); err == nil {
 							iosFiles := []string{}
 							for _, f := range files {
@@ -369,7 +334,6 @@ func (pself *CmdTool) ExportIos() error {
 		}
 	}
 
-	// Import project to ensure resources are up to date
 	fmt.Println("===> Importing project resources...")
 	cmd := exec.Command(pself.CmdPath, "--headless", "--path", pself.ProjectDir, "--editor", "--quit")
 	cmd.Stdout = os.Stdout
@@ -378,14 +342,12 @@ func (pself *CmdTool) ExportIos() error {
 		fmt.Printf("===> Warning: Project import had issues: %v\n", err)
 	}
 
-	// Export the project to IPA
 	fmt.Println("===> Exporting Godot project to IPA...")
 	fmt.Printf("===> Export command: %s --headless --path %s --export-debug iOS %s\n",
 		pself.CmdPath, pself.ProjectDir, ipaPath)
 
 	cmd = exec.Command(pself.CmdPath, "--headless", "--path", pself.ProjectDir, "--export-debug", "iOS", ipaPath)
 
-	// Capture standard output and error
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
@@ -393,7 +355,6 @@ func (pself *CmdTool) ExportIos() error {
 		return fmt.Errorf("IPA export failed: %w", err)
 	}
 
-	// Check if IPA was created
 	if _, err := os.Stat(ipaPath); os.IsNotExist(err) {
 		return fmt.Errorf("IPA export failed: file not created at %s", ipaPath)
 	}
@@ -401,10 +362,8 @@ func (pself *CmdTool) ExportIos() error {
 	log.Println("===> IPA export completed successfully!", ipaPath)
 	if *pself.Args.Install {
 		log.Println("Try to install ipa to devices...")
-		// install ipa to device
 		cmd = exec.Command("ios-deploy", "--bundle", ipaPath)
 
-		// Capture standard output and error
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 
@@ -416,7 +375,6 @@ func (pself *CmdTool) ExportIos() error {
 }
 
 func (pself *CmdTool) buildIosLibraries() error {
-	// Configuration variables
 	frameworkName := "gdspx"
 	libDir := filepath.Join(pself.ProjectDir, "lib")
 	xcframeworkPath := filepath.Join(libDir, "lib"+frameworkName+".ios.xcframework")
@@ -426,7 +384,6 @@ func (pself *CmdTool) buildIosLibraries() error {
 	headersDir := filepath.Join(buildDir, "headers")
 	goSrcDir := filepath.Join(pself.ProjectDir, "go")
 
-	// Create directories
 	os.RemoveAll(buildDir)
 	os.RemoveAll(xcframeworkPath)
 	for _, dir := range []string{simulatorDir, deviceDir, libDir, headersDir} {
@@ -437,13 +394,12 @@ func (pself *CmdTool) buildIosLibraries() error {
 
 	fmt.Println("📦 Building Go libraries for iOS...")
 
-	// Create a dummy header file with the required exports
 	headerContent := `#ifndef LIBGDSPX_H
 #define LIBGDSPX_H
 
 #include <stdlib.h>
 
-// GDExtension initialization function
+// GDExtension entry point.
 void GDExtensionInit(void *p_interface, const void *p_library, void *r_initialization);
 
 #endif // LIBGDSPX_H
@@ -452,7 +408,6 @@ void GDExtensionInit(void *p_interface, const void *p_library, void *r_initializ
 		return fmt.Errorf("failed to create header file: %w", err)
 	}
 
-	// Copy C headers to the headers directory
 	headerFiles, err := filepath.Glob(filepath.Join(goSrcDir, "*.h"))
 	if err != nil {
 		return fmt.Errorf("failed to find header files: %w", err)
@@ -464,7 +419,6 @@ void GDExtensionInit(void *p_interface, const void *p_library, void *r_initializ
 		}
 	}
 
-	// Get SDK paths
 	simulatorSdkPath, err := exec.Command("xcrun", "--sdk", "iphonesimulator", "--show-sdk-path").Output()
 	if err != nil {
 		return fmt.Errorf("failed to get simulator SDK path: %w", err)
@@ -474,10 +428,8 @@ void GDExtensionInit(void *p_interface, const void *p_library, void *r_initializ
 		return fmt.Errorf("failed to get device SDK path: %w", err)
 	}
 
-	// Disable signal handling in Go for iOS
 	os.Setenv("GODEBUG", "cgocheck=0,asyncpreemptoff=1,panicnil=1")
 
-	// Build for iOS Simulator (x86_64)
 	fmt.Println("🔨 Building for iOS Simulator (x86_64)...")
 	cmd := exec.Command("go", "build", "-tags=ios,packmode", "-buildmode=c-archive", "-trimpath", "-ldflags=-w -s", "-o", filepath.Join(simulatorDir, "libgdspx-x86_64.a"), ".")
 	cmd.Dir = goSrcDir
@@ -492,7 +444,6 @@ void GDExtensionInit(void *p_interface, const void *p_library, void *r_initializ
 		return fmt.Errorf("failed to build for iOS Simulator (x86_64): %w", err)
 	}
 
-	// Build for iOS Simulator (arm64)
 	fmt.Println("🔨 Building for iOS Simulator (arm64)...")
 	cmd = exec.Command("go", "build", "-tags=ios,packmode", "-buildmode=c-archive", "-trimpath", "-ldflags=-w -s", "-o", filepath.Join(simulatorDir, "libgdspx-arm64-sim.a"), ".")
 	cmd.Dir = goSrcDir
@@ -507,7 +458,6 @@ void GDExtensionInit(void *p_interface, const void *p_library, void *r_initializ
 		return fmt.Errorf("failed to build for iOS Simulator (arm64): %w", err)
 	}
 
-	// Build for iOS Device (arm64)
 	fmt.Println("🔨 Building for iOS Device (arm64)...")
 	cmd = exec.Command("go", "build", "-tags=ios,packmode", "-buildmode=c-archive", "-trimpath", "-ldflags=-w -s", "-o", filepath.Join(deviceDir, "libgdspx-arm64.a"), ".")
 	cmd.Dir = goSrcDir
@@ -522,7 +472,6 @@ void GDExtensionInit(void *p_interface, const void *p_library, void *r_initializ
 		return fmt.Errorf("failed to build for iOS Device (arm64): %w", err)
 	}
 
-	// Create a fat binary for simulator (combines arm64 and x86_64)
 	fmt.Println("🔗 Creating fat binary for simulator...")
 	cmd = exec.Command("lipo", "-create", "-output", filepath.Join(simulatorDir, "libgdspx.a"),
 		filepath.Join(simulatorDir, "libgdspx-x86_64.a"),
@@ -531,7 +480,6 @@ void GDExtensionInit(void *p_interface, const void *p_library, void *r_initializ
 		return fmt.Errorf("failed to create fat binary for simulator: %w", err)
 	}
 
-	// Create XCFramework
 	fmt.Println("🎁 Creating XCFramework...")
 	cmd = exec.Command("xcrun", "xcodebuild", "-create-xcframework",
 		"-library", filepath.Join(simulatorDir, "libgdspx.a"), "-headers", headersDir,
@@ -541,7 +489,6 @@ void GDExtensionInit(void *p_interface, const void *p_library, void *r_initializ
 		return fmt.Errorf("failed to create XCFramework: %w", err)
 	}
 
-	// Clean up temporary build files
 	fmt.Println("🧹 Cleaning up temporary build files...")
 	os.RemoveAll(buildDir)
 
@@ -554,42 +501,34 @@ void GDExtensionInit(void *p_interface, const void *p_library, void *r_initializ
 func (pself *CmdTool) ExportApk() error {
 	pself.prepareExport()
 	pself.BuildDll()
-	// First build the dynamic libraries for Android
 	if err := pself.buildAndroidLibraries(); err != nil {
 		return fmt.Errorf("failed to build Android libraries: %w", err)
 	}
 
-	// Set up paths
 	apkPath := filepath.Join(pself.ProjectDir, ".builds", "android", "game.apk")
 	buildDir := filepath.Dir(apkPath)
 
-	// Create builds directory if it doesn't exist
 	if err := os.MkdirAll(buildDir, os.ModePerm); err != nil {
 		return fmt.Errorf("failed to create build directory: %w", err)
 	}
 
-	// Check if Godot binary exists
 	if _, err := os.Stat(pself.CmdPath); os.IsNotExist(err) {
 		return fmt.Errorf("Godot binary not found at %s", pself.CmdPath)
 	}
 
-	// Check if project file exists
 	projectFilePath := filepath.Join(pself.ProjectDir, "project.godot")
 	if _, err := os.Stat(projectFilePath); os.IsNotExist(err) {
 		return fmt.Errorf("Godot project file not found at %s", projectFilePath)
 	}
 
-	// Import project to ensure resources are up to date
 	fmt.Println("Importing project resources...")
 	cmd := exec.Command(pself.CmdPath, "--headless", "--path", pself.ProjectDir, "--editor", "--quit")
 	if err := cmd.Run(); err != nil {
 	}
 
-	// Export the project to APK
 	fmt.Println("Exporting Godot project to APK...")
 	cmd = exec.Command(pself.CmdPath, "--headless", "--path", pself.ProjectDir, "--export-debug", "Android", apkPath)
 
-	// Capture standard output and error
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
@@ -597,21 +536,18 @@ func (pself *CmdTool) ExportApk() error {
 		fmt.Println("APK export failed: %w", err)
 	}
 
-	// Check if APK was created
 	if _, err := os.Stat(apkPath); os.IsNotExist(err) {
 		fmt.Println("APK export failed: file not created at ", apkPath)
 		return nil
 	}
 	log.Println("APK export completed successfully!", apkPath)
 
-	// Check if adb is available
 	_, err := exec.LookPath("adb")
 	if err != nil {
 		fmt.Println("adb command not found. Please ensure Android SDK platform tools are installed and in your PATH")
 		return nil
 	}
 
-	// Check if any Android device is connected
 	cmd = exec.Command("adb", "devices")
 	output, err := cmd.Output()
 	if err != nil {
@@ -625,7 +561,6 @@ func (pself *CmdTool) ExportApk() error {
 	}
 
 	if *pself.Args.Install {
-		// Install the APK
 		fmt.Println("Installing APK...")
 		cmd = exec.Command("adb", "install", "-r", apkPath)
 		if err := cmd.Run(); err != nil {
@@ -641,18 +576,15 @@ func (pself *CmdTool) buildAndroidLibraries() error {
 	libDir := filepath.Join(pself.ProjectDir, "lib")
 	goDir := filepath.Join(pself.ProjectDir, "go")
 
-	// Check if ANDROID_NDK_ROOT is set
 	androidNdkRoot := os.Getenv("ANDROID_NDK_ROOT")
 	if androidNdkRoot == "" {
 		fmt.Println("ANDROID_NDK_ROOT environment variable is not set")
 		return nil
 	}
 
-	// Detect system architecture and OS
 	osName := runtime.GOOS
 	arch := runtime.GOARCH
 
-	// Set host tag based on OS and architecture
 	hostTag := ""
 	switch osName {
 	case "windows":
@@ -671,16 +603,13 @@ func (pself *CmdTool) buildAndroidLibraries() error {
 		return fmt.Errorf("unsupported operating system: %s", osName)
 	}
 
-	// Create lib directory if it doesn't exist
 	if err := os.MkdirAll(libDir, os.ModePerm); err != nil {
 		return fmt.Errorf("failed to create lib directory: %w", err)
 	}
 
-	// Set NDK toolchain path and minimum SDK version
 	ndkToolchain := filepath.Join(androidNdkRoot, "toolchains", "llvm", "prebuilt", hostTag, "bin")
 	minSdk := "21"
 
-	// Define build configurations for different Android architectures
 	type androidBuildConfig struct {
 		name       string
 		goArch     string
@@ -703,7 +632,6 @@ func (pself *CmdTool) buildAndroidLibraries() error {
 		},
 	}
 
-	// Build for each architecture
 	for _, build := range builds {
 		fmt.Printf("Building for %s... %s\n", build.name, goDir)
 
@@ -727,18 +655,18 @@ func (pself *CmdTool) buildAndroidLibraries() error {
 	return nil
 }
 
-// compressBrotli compresses a file using brotli
+// compressBrotli runs brotli on a file.
 func (pself *CmdTool) compressBrotli(filePath string) error {
 	cmd := exec.Command("brotli", "-f", "-q", "11", filePath)
 	return cmd.Run()
 }
 
-// moveFile moves a single file from source to destination
+// moveFile moves one file.
 func (pself *CmdTool) moveFile(srcFile, dstFile string) error {
 	return os.Rename(srcFile, dstFile)
 }
 
-// moveFilesByPattern moves files matching a pattern
+// moveFilesByPattern moves matching files.
 func (pself *CmdTool) moveFilesByPattern(srcDir, dstDir, pattern string) error {
 	files, err := filepath.Glob(filepath.Join(srcDir, pattern))
 	if err != nil {
@@ -756,13 +684,11 @@ func (pself *CmdTool) moveFilesByPattern(srcDir, dstDir, pattern string) error {
 	return nil
 }
 
-// mergeJSFiles merges JavaScript files
+// mergeJSFiles merges JavaScript files.
 func (pself *CmdTool) mergeJSFiles(jsDir string, isCompressed bool) error {
-	// file merge order
 	jsFiles := []string{"header.js", "engine.js", "go.wasm.exec.js", "worker.message.manager.js", "game.js"}
 	outputFile := filepath.Join(jsDir, "engine_new.js")
 
-	// create output file
 	output, err := os.Create(outputFile)
 	if err != nil {
 		return err
@@ -772,17 +698,15 @@ func (pself *CmdTool) mergeJSFiles(jsDir string, isCompressed bool) error {
 	writer := bufio.NewWriter(output)
 	defer writer.Flush()
 
-	// write compression flag at the beginning
 	compressionFlag := fmt.Sprintf("var FFI = null;\nconst isWasmCompressed = %t;\n\n", isCompressed)
 	if _, err := writer.WriteString(compressionFlag); err != nil {
 		return err
 	}
 
-	// merge file contents
 	for _, jsFile := range jsFiles {
 		filePath := filepath.Join(jsDir, jsFile)
 		if _, err := os.Stat(filePath); os.IsNotExist(err) {
-			continue // skip non-existent files
+			continue
 		}
 
 		file, err := os.Open(filePath)
@@ -796,10 +720,8 @@ func (pself *CmdTool) mergeJSFiles(jsDir string, isCompressed bool) error {
 			return err
 		}
 
-		// remove original file
 		os.Remove(filePath)
 	}
 
-	// rename output file
 	return os.Rename(outputFile, filepath.Join(jsDir, "engine.js"))
 }

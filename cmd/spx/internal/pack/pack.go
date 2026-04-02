@@ -16,7 +16,7 @@ import (
 type DirInfos struct {
 	path string
 	info os.FileInfo
-	// zipPath optionally overrides the archive entry path for assets outside baseFolder.
+	// zipPath overrides the zip entry path.
 	zipPath string
 }
 
@@ -50,7 +50,6 @@ func PackProject(baseFolder string, dstZipPath string) error {
 		if err != nil {
 			return err
 		}
-		// Check if the path is directly under the base folder
 		rel, err := filepath.Rel(baseFolder, path)
 		if err != nil {
 			return err
@@ -58,13 +57,11 @@ func PackProject(baseFolder string, dstZipPath string) error {
 		if rel == "." {
 			return nil
 		}
-		// skip .import files
 		if strings.HasSuffix(path, ".import") {
 			return nil
 		}
 		parts := strings.Split(rel, string(filepath.Separator))
 		if len(parts) == 1 || (len(parts) == 2 && info.IsDir()) {
-			// Check if the file or directory is in the skip list
 			if _, ok := skipDirs[info.Name()]; ok {
 				if info.IsDir() {
 					return filepath.SkipDir
@@ -113,7 +110,6 @@ func PackZip(zipWriter *zip.Writer, baseFolder string, paths []DirInfos) error {
 		if err != nil {
 			return err
 		}
-		// Set a fixed timestamp
 		header.Modified = time.Unix(0, 0)
 
 		header.Name = zipEntryName(baseFolder, dirInfo)

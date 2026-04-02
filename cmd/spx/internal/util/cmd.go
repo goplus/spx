@@ -6,7 +6,7 @@ import (
 	"os/exec"
 )
 
-// Helper function to run a command
+// RunCommandInDir runs a command in dir.
 func RunCommandInDir(dir string, name string, args ...string) error {
 	return RunCommand(nil, dir, name, args...)
 }
@@ -40,7 +40,7 @@ func RunGolang(envVars []string, args ...string) error {
 	return RunCommandWithEnv(envVars, "go", args...)
 }
 
-// RunTinyGo runs tinygo command with given environment variables and arguments
+// RunTinyGo runs tinygo.
 func RunTinyGo(envVars []string, args ...string) error {
 	return RunCommandWithEnv(envVars, "tinygo", args...)
 }
