@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 )
 
-// Init creates a project.
+// Init creates a project in the target path.
 func (cmd *CmdTool) Init() error {
 	targetPath := *cmd.Args.Path
 	if targetPath == "." {
@@ -27,7 +27,7 @@ func (cmd *CmdTool) Init() error {
 		}
 	}
 
-	fmt.Printf("Initializing SPX project in: %s\n", targetPath)
+	fmt.Printf("initializing SPX project in: %s\n", targetPath)
 
 	assetsDir := filepath.Join(targetPath, "assets")
 	if err := os.MkdirAll(assetsDir, 0755); err != nil {
@@ -62,8 +62,8 @@ onStart => {
 	cmd.createDefaultGoMod(targetPath, true)
 
 	fmt.Println("")
-	fmt.Println("SPX project initialized successfully!")
-	fmt.Println("You can now run 'spx run' to start your project.")
+	fmt.Println("initialized SPX project successfully")
+	fmt.Println("run 'spx run' to start your project")
 
 	return nil
 }

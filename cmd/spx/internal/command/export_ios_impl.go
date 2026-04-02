@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -35,7 +34,7 @@ type iosArchiveBuild struct {
 
 // ExportIos exports the current project as an iOS IPA.
 func (cmd *CmdTool) ExportIos() error {
-	fmt.Println("===> Starting iOS IPA export process...")
+	fmt.Println("===> starting iOS IPA export process...")
 
 	if err := cmd.prepareExport(); err != nil {
 		return err
@@ -45,11 +44,11 @@ func (cmd *CmdTool) ExportIos() error {
 		return err
 	}
 
-	fmt.Println("===> Building iOS libraries...")
+	fmt.Println("===> building iOS libraries...")
 	if err := cmd.buildIosLibraries(); err != nil {
 		return fmt.Errorf("failed to build iOS libraries: %w", err)
 	}
-	fmt.Println("===> iOS libraries build completed successfully!")
+	fmt.Println("===> built iOS libraries successfully")
 
 	ipaPath, err := cmd.prepareIosOutput()
 	if err != nil {
@@ -62,7 +61,7 @@ func (cmd *CmdTool) ExportIos() error {
 	cmd.logIosExportTemplates()
 	cmd.importIosProjectResources()
 
-	if err := cmd.runIosExport(ipaPath); err != nil {
+	if err := cmd.exportIosIPA(ipaPath); err != nil {
 		return err
 	}
 	return cmd.installIosIPA(ipaPath)
@@ -89,12 +88,12 @@ func (cmd *CmdTool) renameIosArtifacts() error {
 func (cmd *CmdTool) prepareIosOutput() (string, error) {
 	ipaPath := filepath.Join(cmd.ProjectDir, ".builds", "ios", "Game.ipa")
 	buildDir := filepath.Dir(ipaPath)
-	fmt.Printf("===> IPA output path: %s\n", ipaPath)
+	fmt.Printf("===> output IPA path: %s\n", ipaPath)
 
 	if err := os.MkdirAll(buildDir, 0o755); err != nil {
 		return "", fmt.Errorf("failed to create build directory: %w", err)
 	}
-	fmt.Printf("===> Build directory created: %s\n", buildDir)
+	fmt.Printf("===> build directory created: %s\n", buildDir)
 	return ipaPath, nil
 }
 
@@ -102,13 +101,13 @@ func (cmd *CmdTool) validateIosExportInputs() error {
 	if _, err := os.Stat(cmd.CmdPath); os.IsNotExist(err) {
 		return fmt.Errorf("Godot binary not found at %s", cmd.CmdPath)
 	}
-	fmt.Printf("===> Godot binary found at: %s\n", cmd.CmdPath)
+	fmt.Printf("===> found Godot binary at: %s\n", cmd.CmdPath)
 
 	projectFilePath := filepath.Join(cmd.ProjectDir, "project.godot")
 	if _, err := os.Stat(projectFilePath); os.IsNotExist(err) {
 		return fmt.Errorf("Godot project file not found at %s", projectFilePath)
 	}
-	fmt.Printf("===> Godot project file found at: %s\n", projectFilePath)
+	fmt.Printf("===> found Godot project file at: %s\n", projectFilePath)
 	return nil
 }
 
@@ -131,14 +130,14 @@ func (cmd *CmdTool) logIosExportTemplates() {
 		return
 	}
 
-	fmt.Printf("===> Checking export templates at: %s\n", templateDir)
+	fmt.Printf("===> checking export templates at: %s\n", templateDir)
 	entries, err := os.ReadDir(templateDir)
 	if err != nil {
-		fmt.Printf("===> Warning: Could not read template directory: %v\n", err)
+		fmt.Printf("===> warning: could not read template directory: %v\n", err)
 		return
 	}
 
-	fmt.Println("===> Available export template versions:")
+	fmt.Println("===> available export template versions:")
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
@@ -164,31 +163,31 @@ func (cmd *CmdTool) logIosExportTemplates() {
 }
 
 func (cmd *CmdTool) importIosProjectResources() {
-	fmt.Println("===> Importing project resources...")
-	execCmd := exec.Command(cmd.CmdPath, "--headless", "--path", cmd.ProjectDir, "--editor", "--quit")
-	execCmd.Stdout = os.Stdout
-	execCmd.Stderr = os.Stderr
-	if err := execCmd.Run(); err != nil {
-		fmt.Printf("===> Warning: Project import had issues: %v\n", err)
+	fmt.Println("===> importing project resources...")
+	if err := util.ExecCommand(
+		util.CommandOptions{},
+		cmd.CmdPath, "--headless", "--path", cmd.ProjectDir, "--editor", "--quit",
+	); err != nil {
+		fmt.Printf("===> warning: project import had issues: %v\n", err)
 	}
 }
 
-func (cmd *CmdTool) runIosExport(ipaPath string) error {
-	fmt.Println("===> Exporting Godot project to IPA...")
-	fmt.Printf("===> Export command: %s --headless --path %s --export-debug iOS %s\n",
+func (cmd *CmdTool) exportIosIPA(ipaPath string) error {
+	fmt.Println("===> exporting Godot project to IPA...")
+	fmt.Printf("===> export command: %s --headless --path %s --export-debug iOS %s\n",
 		cmd.CmdPath, cmd.ProjectDir, ipaPath)
 
-	execCmd := exec.Command(cmd.CmdPath, "--headless", "--path", cmd.ProjectDir, "--export-debug", "iOS", ipaPath)
-	execCmd.Stdout = os.Stdout
-	execCmd.Stderr = os.Stderr
-	if err := execCmd.Run(); err != nil {
+	if err := util.ExecCommand(
+		util.CommandOptions{},
+		cmd.CmdPath, "--headless", "--path", cmd.ProjectDir, "--export-debug", "iOS", ipaPath,
+	); err != nil {
 		return fmt.Errorf("IPA export failed: %w", err)
 	}
 	if _, err := os.Stat(ipaPath); os.IsNotExist(err) {
 		return fmt.Errorf("IPA export failed: file not created at %s", ipaPath)
 	}
 
-	log.Println("===> IPA export completed successfully!", ipaPath)
+	log.Println("===> exported IPA successfully:", ipaPath)
 	return nil
 }
 
@@ -197,11 +196,8 @@ func (cmd *CmdTool) installIosIPA(ipaPath string) error {
 		return nil
 	}
 
-	log.Println("Try to install ipa to devices...")
-	execCmd := exec.Command("ios-deploy", "--bundle", ipaPath)
-	execCmd.Stdout = os.Stdout
-	execCmd.Stderr = os.Stderr
-	if err := execCmd.Run(); err != nil {
+	log.Println("trying to install IPA to devices...")
+	if err := util.ExecCommand(util.CommandOptions{}, "ios-deploy", "--bundle", ipaPath); err != nil {
 		return fmt.Errorf("IPA install failed: %w", err)
 	}
 	return nil
@@ -213,7 +209,7 @@ func (cmd *CmdTool) buildIosLibraries() error {
 		return err
 	}
 
-	fmt.Println("📦 Building Go libraries for iOS...")
+	fmt.Println("📦 building Go libraries for iOS...")
 	if err := cmd.prepareIosHeaders(paths); err != nil {
 		return err
 	}
@@ -232,13 +228,13 @@ func (cmd *CmdTool) buildIosLibraries() error {
 		return err
 	}
 
-	fmt.Println("🧹 Cleaning up temporary build files...")
+	fmt.Println("🧹 cleaning up temporary build files...")
 	if err := os.RemoveAll(paths.buildDir); err != nil {
 		return fmt.Errorf("failed to remove temporary build directory: %w", err)
 	}
 
-	fmt.Println("✅ Successfully built libgdspx.ios.xcframework!")
-	fmt.Println("📍 Location:", paths.xcframeworkPath)
+	fmt.Println("✅ built libgdspx.ios.xcframework successfully")
+	fmt.Println("📍 location:", paths.xcframeworkPath)
 	return nil
 }
 
@@ -360,7 +356,7 @@ func (cmd *CmdTool) buildIosArchives(paths iosLibraryPaths, sdkPaths iosSDKPaths
 	}
 
 	for _, build := range builds {
-		fmt.Printf("🔨 Building for %s...\n", build.name)
+		fmt.Printf("🔨 building for %s...\n", build.name)
 		if err := util.ExecCommand(util.CommandOptions{Env: build.env, Dir: paths.goSrcDir}, "go",
 			"build", "-tags=ios,packmode", "-buildmode=c-archive", "-trimpath", "-ldflags=-w -s",
 			"-o", build.outputPath, ".",
@@ -387,7 +383,7 @@ func newIosArchiveBuild(name, outputPath, sdkPath, goarch, cgoCFlags, cgoLDFlags
 }
 
 func createIosSimulatorFatBinary(paths iosLibraryPaths) error {
-	fmt.Println("🔗 Creating fat binary for simulator...")
+	fmt.Println("🔗 creating fat binary for simulator...")
 	if err := util.ExecCommand(util.CommandOptions{}, "lipo", "-create", "-output",
 		filepath.Join(paths.simulatorDir, "libgdspx.a"),
 		filepath.Join(paths.simulatorDir, "libgdspx-x86_64.a"),
@@ -399,7 +395,7 @@ func createIosSimulatorFatBinary(paths iosLibraryPaths) error {
 }
 
 func createIosXCFramework(paths iosLibraryPaths) error {
-	fmt.Println("🎁 Creating XCFramework...")
+	fmt.Println("🎁 creating XCFramework...")
 	if err := util.ExecCommand(util.CommandOptions{}, "xcrun", "xcodebuild", "-create-xcframework",
 		"-library", filepath.Join(paths.simulatorDir, "libgdspx.a"), "-headers", paths.headersDir,
 		"-library", filepath.Join(paths.deviceDir, "libgdspx-arm64.a"), "-headers", paths.headersDir,

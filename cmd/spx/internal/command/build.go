@@ -73,7 +73,7 @@ func (cmd *CmdTool) BuildTinyGoLib() error {
 		return err
 	}
 
-	spxlog.Info("TinyGo static library built: %s", outputPath)
+	spxlog.Info("built TinyGo static library: %s", outputPath)
 	return nil
 }
 
@@ -100,7 +100,7 @@ func (cmd *CmdTool) BuildDll() error {
 	})
 }
 
-// withGoDir runs f in GoDir.
+// withGoDir runs f in cmd.GoDir.
 func (cmd *CmdTool) withGoDir(f func() error) error {
 	rawdir, err := os.Getwd()
 	if err != nil {
@@ -120,7 +120,7 @@ func (cmd *CmdTool) withGoDir(f func() error) error {
 	return f()
 }
 
-// hideIOSFiles renames ios* files to *.txt.
+// hideIOSFiles renames ios* files to .txt files.
 func (cmd *CmdTool) hideIOSFiles() error {
 	searchPattern := filepath.Join(cmd.ProjectDir, "go", "ios*")
 	files, err := filepath.Glob(searchPattern)
@@ -196,7 +196,7 @@ func (cmd *CmdTool) genGo() string {
 	return cmd.SafeTagArgs()
 }
 
-// genGoUsingXgobuild uses xgobuild.
+// genGoUsingXgobuild generates code with xgobuild.
 func (cmd *CmdTool) genGoUsingXgobuild(rawdir, spxProjPath string) error {
 	if err := os.MkdirAll(cmd.GoDir, 0755); err != nil {
 		return fmt.Errorf("failed to create GoDir: %w", err)
@@ -223,7 +223,7 @@ func (cmd *CmdTool) genGoUsingXgobuild(rawdir, spxProjPath string) error {
 	return nil
 }
 
-// genGoUsingXgoCLI uses xgo.
+// genGoUsingXgoCLI generates code with xgo.
 func (cmd *CmdTool) genGoUsingXgoCLI(rawdir, spxProjPath string) error {
 	if err := os.Chdir(spxProjPath); err != nil {
 		return fmt.Errorf("failed to change directory to project root for XGo: %w", err)
@@ -235,7 +235,7 @@ func (cmd *CmdTool) genGoUsingXgoCLI(rawdir, spxProjPath string) error {
 	}()
 
 	tagStr := cmd.SafeTagArgs()
-	spxlog.Debug("genGo tagStr: %s", tagStr)
+	spxlog.Debug("genGo tags: %s", tagStr)
 	envVars := []string{""}
 
 	args := []string{"go"}
@@ -260,7 +260,7 @@ func (cmd *CmdTool) genGoUsingXgoCLI(rawdir, spxProjPath string) error {
 	return nil
 }
 
-// executeDllBuild runs the multi-arch C-shared build.
+// executeDllBuild runs a multi-arch C-shared build.
 func (cmd *CmdTool) executeDllBuild(archs []string, tagStr string) error {
 	rawPath := filepath.Base(cmd.LibPath)
 	rawDir := filepath.Dir(cmd.LibPath)

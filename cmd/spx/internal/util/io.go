@@ -1,6 +1,7 @@
 package util
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -9,6 +10,9 @@ import (
 	"strings"
 )
 
+var errFileFound = errors.New("file found")
+
+// CopyDir2 copies a directory from the local filesystem.
 func CopyDir2(src string, dst string) error {
 	srcInfo, err := os.Stat(src)
 	if err != nil {
@@ -43,6 +47,8 @@ func CopyDir2(src string, dst string) error {
 	}
 	return nil
 }
+
+// CheckFileExist reports whether dir contains a file with ext.
 func CheckFileExist(dir, ext string, recursive bool) bool {
 	if !strings.HasPrefix(ext, ".") {
 		ext = "." + ext
@@ -54,12 +60,12 @@ func CheckFileExist(dir, ext string, recursive bool) bool {
 				return err
 			}
 			if !info.IsDir() && strings.HasSuffix(info.Name(), ext) {
-				return fmt.Errorf("file found")
+				return errFileFound
 			}
 			return nil
 		})
 
-		if err != nil && err.Error() == "file found" {
+		if errors.Is(err, errFileFound) {
 			return true
 		}
 	} else {
@@ -77,6 +83,8 @@ func CheckFileExist(dir, ext string, recursive bool) bool {
 
 	return false
 }
+
+// IsFileExist reports whether path exists.
 func IsFileExist(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
@@ -95,20 +103,18 @@ func CopyFile(src, dst string) error {
 	return nil
 }
 
+// CopyDir copies a directory from fsys into dstDir.
 func CopyDir(fsys fs.FS, srcDir, dstDir string, isOverride bool) error {
 	subfs, err := fs.Sub(fsys, srcDir)
 	if err != nil {
-		println("Error: create sub fs: ", srcDir, dstDir)
-		return err
+		return fmt.Errorf("create sub fs for %s: %w", srcDir, err)
 	}
 	if err := os.MkdirAll(dstDir, 0755); err != nil {
-		println("Error: creating directory: ", dstDir)
-		return err
+		return fmt.Errorf("create directory %s: %w", dstDir, err)
 	}
 	return fs.WalkDir(subfs, ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			println("Error: walking directory: ", srcDir)
-			return err
+			return fmt.Errorf("walk directory %s: %w", srcDir, err)
 		}
 
 		dstPath := filepath.Join(dstDir, path)

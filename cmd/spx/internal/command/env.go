@@ -118,7 +118,7 @@ func (cmd *CmdTool) Reimport() {
 	default:
 		cmd.BuildDll()
 	}
-	fmt.Println(" ================= Importing ... ================= ")
+	fmt.Println(" ================= importing ... ================= ")
 	execCmd := exec.Command(cmd.CmdPath, "--import", "--headless")
 	execCmd.Dir = cmd.ProjectDir
 	execCmd.Start()
@@ -343,7 +343,7 @@ func (cmd *CmdTool) applyPortableGoEnv(goPaths portableGoPaths) error {
 
 func printPortableGoEnv(cmd *CmdTool, goPaths portableGoPaths) {
 	const portableGoEnvFormat = "" +
-		"Using portable Go environment:\n" +
+		"using portable Go environment:\n" +
 		"  GOROOT: %s\n" +
 		"  GOPATH: %s\n" +
 		"  GoBinPath: %s (for gdspx, gdspxrt, etc.)\n" +

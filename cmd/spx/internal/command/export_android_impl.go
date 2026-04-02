@@ -52,15 +52,15 @@ func (cmd *CmdTool) ExportApk() error {
 		return fmt.Errorf("Godot project file not found at %s", projectFilePath)
 	}
 
-	fmt.Println("Importing project resources...")
+	fmt.Println("importing project resources...")
 	execCmd := exec.Command(cmd.CmdPath, "--headless", "--path", cmd.ProjectDir, "--editor", "--quit")
 	execCmd.Stdout = os.Stdout
 	execCmd.Stderr = os.Stderr
 	if err := execCmd.Run(); err != nil {
-		fmt.Printf("Warning: project import failed: %v\n", err)
+		fmt.Printf("warning: project import failed: %v\n", err)
 	}
 
-	fmt.Println("Exporting Godot project to APK...")
+	fmt.Println("exporting Godot project to APK...")
 	execCmd = exec.Command(cmd.CmdPath, "--headless", "--path", cmd.ProjectDir, "--export-debug", "Android", apkPath)
 	execCmd.Stdout = os.Stdout
 	execCmd.Stderr = os.Stderr
@@ -74,7 +74,7 @@ func (cmd *CmdTool) ExportApk() error {
 	} else if err != nil {
 		return fmt.Errorf("failed to verify APK output: %w", err)
 	}
-	log.Println("APK export completed successfully!", apkPath)
+	log.Println("exported APK successfully:", apkPath)
 
 	if !*cmd.Args.Install {
 		return nil
@@ -92,11 +92,11 @@ func (cmd *CmdTool) ExportApk() error {
 	if !strings.Contains(string(output), "device\n") {
 		return fmt.Errorf("no Android device connected; connect a device and enable USB debugging")
 	}
-	fmt.Println("Installing APK...")
+	fmt.Println("installing APK...")
 	if err := util.ExecCommand(util.CommandOptions{}, "adb", "install", "-r", apkPath); err != nil {
 		return fmt.Errorf("APK installation failed: %w", err)
 	}
-	fmt.Println("APK installation successful!")
+	fmt.Println("installed APK successfully")
 	return nil
 }
 
@@ -117,7 +117,7 @@ func (cmd *CmdTool) buildAndroidLibraries() error {
 		return err
 	}
 
-	fmt.Println("Build android so completed successfully!")
+	fmt.Println("built Android shared libraries successfully")
 	return nil
 }
 
@@ -164,7 +164,7 @@ func prepareAndroidLibraryDir(libDir string) error {
 
 func (cmd *CmdTool) buildAndroidSharedLibraries(paths androidBuildContext) error {
 	for _, build := range androidBuildConfigs() {
-		fmt.Printf("Building for %s... %s\n", build.name, paths.goDir)
+		fmt.Printf("building for %s: %s\n", build.name, paths.goDir)
 		if err := cmd.buildAndroidSharedLibrary(paths, build); err != nil {
 			return err
 		}
