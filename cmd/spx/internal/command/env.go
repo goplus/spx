@@ -296,7 +296,7 @@ func (cmd *CmdTool) resolvePortableGoEnvPaths() (portableGoPaths, error) {
 		return portableGoPaths{}, fmt.Errorf("failed to resolve Go bin path: %w", err)
 	}
 	if _, err := os.Stat(cmd.GoBinPath); os.IsNotExist(err) {
-		return portableGoPaths{}, fmt.Errorf("Go bin directory not found: %s", cmd.GoBinPath)
+		return portableGoPaths{}, fmt.Errorf("go bin directory not found: %s", cmd.GoBinPath)
 	}
 
 	goPaths := portableGoPaths{
@@ -305,12 +305,12 @@ func (cmd *CmdTool) resolvePortableGoEnvPaths() (portableGoPaths, error) {
 		goModCacheDir: filepath.Join(goEnvDir, ".cache", "mod"),
 	}
 	if _, err := os.Stat(goPaths.goRootBinPath); os.IsNotExist(err) {
-		return portableGoPaths{}, fmt.Errorf("Go bin directory not found: %s", goPaths.goRootBinPath)
+		return portableGoPaths{}, fmt.Errorf("go bin directory not found: %s", goPaths.goRootBinPath)
 	}
 
 	goPaths.goBinaryPath = goBinaryPath(goPaths.goRootBinPath)
 	if _, err := os.Stat(goPaths.goBinaryPath); os.IsNotExist(err) {
-		return portableGoPaths{}, fmt.Errorf("Go executable not found: %s", goPaths.goBinaryPath)
+		return portableGoPaths{}, fmt.Errorf("go executable not found: %s", goPaths.goBinaryPath)
 	}
 
 	if err := os.MkdirAll(goPaths.goCacheDir, 0o755); err != nil {

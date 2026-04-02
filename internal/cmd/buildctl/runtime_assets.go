@@ -188,7 +188,7 @@ func ensureGoPath() (string, error) {
 	}
 	goPath := strings.TrimSpace(string(output))
 	if goPath == "" {
-		return "", fmt.Errorf("GOPATH is not set")
+		return "", fmt.Errorf("missing GOPATH")
 	}
 	return goPath, nil
 }

@@ -44,12 +44,12 @@ func (cmd *CmdTool) ExportApk() error {
 	}
 
 	if _, err := os.Stat(cmd.CmdPath); os.IsNotExist(err) {
-		return fmt.Errorf("Godot binary not found at %s", cmd.CmdPath)
+		return fmt.Errorf("godot binary not found at %s", cmd.CmdPath)
 	}
 
 	projectFilePath := filepath.Join(cmd.ProjectDir, "project.godot")
 	if _, err := os.Stat(projectFilePath); os.IsNotExist(err) {
-		return fmt.Errorf("Godot project file not found at %s", projectFilePath)
+		return fmt.Errorf("godot project file not found at %s", projectFilePath)
 	}
 
 	fmt.Println("importing project resources...")
@@ -66,11 +66,11 @@ func (cmd *CmdTool) ExportApk() error {
 	execCmd.Stderr = os.Stderr
 
 	if err := execCmd.Run(); err != nil {
-		return fmt.Errorf("APK export failed: %w", err)
+		return fmt.Errorf("failed to export APK: %w", err)
 	}
 
 	if _, err := os.Stat(apkPath); os.IsNotExist(err) {
-		return fmt.Errorf("APK export failed: file not created at %s", apkPath)
+		return fmt.Errorf("failed to export APK: file not created at %s", apkPath)
 	} else if err != nil {
 		return fmt.Errorf("failed to verify APK output: %w", err)
 	}
@@ -94,7 +94,7 @@ func (cmd *CmdTool) ExportApk() error {
 	}
 	fmt.Println("installing APK...")
 	if err := util.ExecCommand(util.CommandOptions{}, "adb", "install", "-r", apkPath); err != nil {
-		return fmt.Errorf("APK installation failed: %w", err)
+		return fmt.Errorf("failed to install APK: %w", err)
 	}
 	fmt.Println("installed APK successfully")
 	return nil
@@ -103,7 +103,7 @@ func (cmd *CmdTool) ExportApk() error {
 func (cmd *CmdTool) buildAndroidLibraries() error {
 	androidNdkRoot := os.Getenv("ANDROID_NDK_ROOT")
 	if androidNdkRoot == "" {
-		return fmt.Errorf("ANDROID_NDK_ROOT environment variable is not set")
+		return fmt.Errorf("missing ANDROID_NDK_ROOT")
 	}
 
 	paths, err := cmd.resolveAndroidBuildContext(androidNdkRoot)

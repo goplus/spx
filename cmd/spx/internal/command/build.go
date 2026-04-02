@@ -66,7 +66,7 @@ func (cmd *CmdTool) BuildTinyGoLib() error {
 	if err := cmd.withGoDir(func() error {
 		spxlog.Info("building TinyGo static library for target: %s", target)
 		if err := util.RunTinyGo(envVars, args...); err != nil {
-			return fmt.Errorf("TinyGo build failed: %w", err)
+			return fmt.Errorf("tinygo build failed: %w", err)
 		}
 		return nil
 	}); err != nil {
