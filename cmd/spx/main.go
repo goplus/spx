@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/goplus/spx/v2/cmd/gox/pkg/command"
+	"github.com/goplus/spx/v2/cmd/spx/internal/command"
+	"github.com/goplus/spx/v2/internal/projecttemplate"
 	"github.com/goplus/spx/v2/internal/releasemeta"
 )
 
@@ -16,14 +17,8 @@ var (
 	//go:embed template/project/*
 	projectFS embed.FS
 
-	//go:embed template/go.mod.template
-	gomodtemplate string
-
 	//go:embed appname.txt
 	appName string
-
-	mainSh string
-	runSh  string
 )
 
 func main() {
@@ -38,9 +33,7 @@ func main() {
 	cmd.ProjectFS = projectFS
 	cmd.PlatformFS = platformFS
 	cmd.Version = releasemeta.DefaultReleaseMeta().Runtime.Version
-	cmd.RunSh = runSh
-	cmd.MainSh = mainSh
-	cmd.GoModTemplate = gomodtemplate
+	cmd.GoModTemplate = projecttemplate.GoMod()
 
 	// Initialize the Args field if not already initialized
 	err := cmd.RunCmd(appName, appName, cmd.Version, projectFS, "template/project", "project")

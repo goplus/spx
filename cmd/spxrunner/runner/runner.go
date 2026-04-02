@@ -457,6 +457,34 @@ func (r *Runner) ensureGopMod() error {
 // SpxModule is the SPX v2 module path
 const SpxModule = "github.com/goplus/spx/v2"
 
+func applyRunnerVersionToGoModTemplate(content, version string) string {
+	if version == "" || version == "latest" {
+		return content
+	}
+
+	const (
+		// The embedded template already carries a concrete release version.
+		// Override that single require line in-place when callers request
+		// an explicit runner version.
+		requirePrefix = "require " + SpxModule + " "
+		requireSuffix = " //xgo:class"
+	)
+
+	lines := strings.Split(content, "\n")
+	for i, line := range lines {
+		trimmed := strings.TrimRight(line, "\r")
+		if strings.HasPrefix(trimmed, requirePrefix) && strings.HasSuffix(trimmed, requireSuffix) {
+			replacement := requirePrefix + version + requireSuffix
+			if strings.HasSuffix(line, "\r") {
+				replacement += "\r"
+			}
+			lines[i] = replacement
+			return strings.Join(lines, "\n")
+		}
+	}
+	return content
+}
+
 // ensureGoMod ensures the project root has a go.mod file.
 func (r *Runner) ensureGoMod() error {
 	rootGoModPath := filepath.Join(r.ProjectDir, "go.mod")
@@ -474,7 +502,7 @@ func (r *Runner) ensureGoMod() error {
 		// Use embedded template and replace placeholders
 		content := GoModTemplate
 		content = strings.Replace(content, "github.com/goplus/spxdemo", moduleName, 1)
-		content = strings.Replace(content, "{{SPX_VERSION}}", r.RunnerVersion, 1)
+		content = applyRunnerVersionToGoModTemplate(content, r.RunnerVersion)
 
 		if err := os.WriteFile(rootGoModPath, []byte(content), 0644); err != nil {
 			return fmt.Errorf("failed to create go.mod: %w", err)

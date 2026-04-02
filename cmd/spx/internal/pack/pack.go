@@ -2,7 +2,6 @@ package pack
 
 import (
 	"archive/zip"
-	"embed"
 	"io"
 	"os"
 	"path"
@@ -11,13 +10,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/goplus/spx/v2/cmd/gox/pkg/util"
+	"github.com/goplus/spx/v2/cmd/spx/internal/util"
 )
 
 type DirInfos struct {
 	path string
 	info os.FileInfo
-	// zipPath optionally overrides the archive entry path for assets outside baseFolder.
+	// zipPath overrides the zip entry path.
 	zipPath string
 }
 
@@ -51,7 +50,6 @@ func PackProject(baseFolder string, dstZipPath string) error {
 		if err != nil {
 			return err
 		}
-		// Check if the path is directly under the base folder
 		rel, err := filepath.Rel(baseFolder, path)
 		if err != nil {
 			return err
@@ -59,13 +57,11 @@ func PackProject(baseFolder string, dstZipPath string) error {
 		if rel == "." {
 			return nil
 		}
-		// skip .import files
 		if strings.HasSuffix(path, ".import") {
 			return nil
 		}
 		parts := strings.Split(rel, string(filepath.Separator))
 		if len(parts) == 1 || (len(parts) == 2 && info.IsDir()) {
-			// Check if the file or directory is in the skip list
 			if _, ok := skipDirs[info.Name()]; ok {
 				if info.IsDir() {
 					return filepath.SkipDir
@@ -114,7 +110,6 @@ func PackZip(zipWriter *zip.Writer, baseFolder string, paths []DirInfos) error {
 		if err != nil {
 			return err
 		}
-		// Set a fixed timestamp
 		header.Modified = time.Unix(0, 0)
 
 		header.Name = zipEntryName(baseFolder, dirInfo)
@@ -152,33 +147,6 @@ func PackZip(zipWriter *zip.Writer, baseFolder string, paths []DirInfos) error {
 	return nil
 }
 
-func zipEntryName(baseFolder string, dirInfo DirInfos) string {
-	if dirInfo.zipPath != "" {
-		return strings.TrimPrefix(normalizeZipPath(dirInfo.zipPath), "/")
-	}
-
-	baseFolder = normalizeZipPath(baseFolder)
-	name := strings.TrimPrefix(normalizeZipPath(dirInfo.path), baseFolder)
-	return strings.TrimPrefix(name, "/")
-}
-
-func normalizeZipPath(path string) string {
-	return strings.ReplaceAll(path, "\\", "/")
-}
-
-func PackEngineRes(proejct_fs embed.FS, webDir string) {
-	dstDir := path.Join(webDir, "project")
-	util.CopyDir(proejct_fs, "template/project", dstDir, true)
-
-	directories := []string{"engine"}
-	files := []string{"main.tscn", "project.godot"}
-	err := PackDirFiles(path.Join(webDir, "engineres.zip"), dstDir, directories, files)
-	if err != nil {
-		panic(err)
-	}
-	os.RemoveAll(dstDir)
-}
-
 func PackDirFiles(zipName string, targetDir string, directories, files []string) error {
 	zipFile, err := os.Create(zipName)
 	if err != nil {
@@ -211,6 +179,20 @@ func PackDirFiles(zipName string, targetDir string, directories, files []string)
 	}
 
 	return closeZip(PackZip(zipWriter, targetDir, paths))
+}
+
+func zipEntryName(baseFolder string, dirInfo DirInfos) string {
+	if dirInfo.zipPath != "" {
+		return strings.TrimPrefix(normalizeZipPath(dirInfo.zipPath), "/")
+	}
+
+	baseFolder = normalizeZipPath(baseFolder)
+	name := strings.TrimPrefix(normalizeZipPath(dirInfo.path), baseFolder)
+	return strings.TrimPrefix(name, "/")
+}
+
+func normalizeZipPath(path string) string {
+	return strings.ReplaceAll(path, "\\", "/")
 }
 
 func addDirToZip(dirPath string, paths []DirInfos) ([]DirInfos, error) {

@@ -19,6 +19,7 @@ package runner
 import (
 	_ "embed"
 
+	"github.com/goplus/spx/v2/internal/projecttemplate"
 	"github.com/goplus/spx/v2/internal/releasemeta"
 )
 
@@ -26,7 +27,6 @@ import (
 // Run: go generate ./cmd/spxrunner/runner
 //
 //go:generate cp ../../../gop.mod gop.mod
-//go:generate cp ../../gox/template/go.mod.template go.mod.template
 
 // GopModTemplate is the embedded content of gop.mod from the SPX repository root.
 // This template is used to create gop.mod for new SPX projects.
@@ -34,11 +34,8 @@ import (
 //go:embed gop.mod
 var GopModTemplate string
 
-// GoModTemplate is the embedded content of go.mod.template
-// This template is used to create go.mod for SPX project's Go code.
-//
-//go:embed go.mod.template
-var GoModTemplate string
+// GoModTemplate is the shared project go.mod template embedded in internal/projecttemplate.
+var GoModTemplate = projecttemplate.GoMod()
 
 // RuntimeVersion returns the latest known SPX runtime version.
 func RuntimeVersion() string {

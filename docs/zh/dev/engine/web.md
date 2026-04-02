@@ -32,13 +32,12 @@
  - web-view -> 小程序 需要通过 postMessage 进行传递（但是只能在特定时机生效）
 
 ### web平台适配代码规范
-`cmd/gox/template/platform/` 目录下是多平台的适配代码
-其中 `cmd/gox/template/platform/web` 目录是web平台的公共代码
+`cmd/spx/template/platform/` 目录下是多平台的适配代码
+其中 `cmd/spx/template/platform/web` 目录是web平台的公共代码
 - `webnormal` 是普通模式
 - `webworker` 是独立Worker模式
 - `webminigame` 是小游戏模式
 - `webminiprogram` 是小程序模式
-
 
 
 

@@ -1,5 +1,5 @@
-name: Update template version
-description: Update cmd/gox/template/go.mod.template for a release build and reinstall spx.
+name: Update shared template version
+description: Update the shared go.mod template for a release build and reinstall spx.
 inputs:
   version:
     description: 'Release version without the leading v (for example, 2.0.1)'
@@ -10,14 +10,13 @@ runs:
     - name: Build local buildctl
       uses: ./.github/actions/setup-buildctl
 
-    - name: Update go.mod.template version
+    - name: Update shared go.mod template version
       shell: bash
       run: |
         VERSION="v${{ inputs.version }}"
         pwd && ls -la
 
-        # Update version in go.mod.template
-        FILE="cmd/gox/template/go.mod.template"
+        FILE="internal/projecttemplate/go.mod.template"
 
         if [ ! -f "$FILE" ]; then
           echo "Error: $FILE not found"
@@ -26,6 +25,7 @@ runs:
 
         echo "=========================================="
         echo "Replacing version with: $VERSION"
+        echo "File: $FILE"
         echo "=========================================="
         echo ""
         echo "📄 Before replacement:"
@@ -44,5 +44,6 @@ runs:
         echo "----------------------------------------"
         echo ""
         echo "✅ Successfully updated $FILE with version $VERSION"
+
         echo "reinstall spx"
         "$BUILDCTL" tool install

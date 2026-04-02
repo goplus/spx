@@ -1,21 +1,20 @@
 #!/bin/bash
+set -euo pipefail
+
 # Read app name from appname.txt file
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd $SCRIPT_DIR
+cd "$SCRIPT_DIR"
 
 # Pin Go toolchain version
 export GOTOOLCHAIN=go1.25.8
 
-go mod tidy
-if ! go generate pkg/gengo/embedded_pkgs.go > /dev/null 2>&1; then
+if ! go generate internal/gengo/embedded_pkgs.go > /dev/null 2>&1; then
     echo "Error during go generate, showing full output:"
-    go generate pkg/gengo/embedded_pkgs.go
+    go generate internal/gengo/embedded_pkgs.go
 fi
 
-go mod tidy
-
 target_font_dir=./template/project/engine/fonts/
-mkdir -p $target_font_dir
+mkdir -p "$target_font_dir"
 font_path=$target_font_dir/CnFont.ttf
 if [ ! -f "$font_path" ]; then
     curl -L https://github.com/goplus/godot/releases/download/spx2.0.14/CnFont.ttf -o "$font_path"
@@ -27,16 +26,18 @@ if [ ! -f "$font_path" ]; then
 fi
 
 appname=$(cat appname.txt)
+os_name="${OS:-}"
+web_mode="${1:-}"
 # install cmd
-if [ "$OS" = "Windows_NT" ]; then
+if [ "$os_name" = "Windows_NT" ]; then
    appname="${appname}.exe"
 fi
 
-if [ "$OS" = "Windows_NT" ]; then
+if [ "$os_name" = "Windows_NT" ]; then
    # Fix for Windows MinGW linker duplicate symbol errors with Go 1.24
-   go build -ldflags="-extldflags=-Wl,--allow-multiple-definition" -o $appname
+   go build -ldflags="-extldflags=-Wl,--allow-multiple-definition" -o "$appname"
 else
-   go build -o $appname
+   go build -o "$appname"
 fi 
 GOPATH="$(go env GOPATH)"
 
@@ -46,14 +47,13 @@ if [ ! -f "$appname" ]; then
     exit 1
 fi
 
-mv $appname $GOPATH/bin/
+mv "$appname" "$GOPATH/bin/"
 
 # build and install ispx
 echo "Building ispx..."
 
-if [ "$1" = "--web" ]; then
-    go env -w GOFLAGS="-buildvcs=false"
-    ( cd ../ispx && ./build.sh )
+if [ "$web_mode" = "--web" ]; then
+    ( cd ../ispx && GOFLAGS="-buildvcs=false" ./build.sh )
     cp ../ispx/ispx.wasm "$GOPATH/bin/"
 
     # Install ispx web runtime

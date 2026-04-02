@@ -119,7 +119,7 @@ func installTools(cfg toolInstallConfig, runner scriptRunner) error {
 	if cfg.opt {
 		args = append(args, "--opt")
 	}
-	return runner.runScript(filepath.Join("cmd", "gox", "install.sh"), args...)
+	return runner.runScript(filepath.Join("cmd", "spx", "install.sh"), args...)
 }
 
 func buildWasmRuntime(cfg runtimeBuildWasmConfig, runner scriptRunner) error {

@@ -101,7 +101,7 @@ func GenerateWorkerWrapJsFile(projectPath string, ast clang.CHeaderFileAST) erro
 	}
 
 	return GenerateFile(funcs, "worker.wrap.gen.js", workerWrapJsFileText, ast,
-		filepath.Join(projectPath, "../../../cmd/gox/template/platform/webworker/worker.wrap.gen.js"))
+		filepath.Join(projectPath, "../../../cmd/spx/template/platform/webworker/worker.wrap.gen.js"))
 }
 
 func GenerateGDExtensionInterfaceGoFile(projectPath string, ast clang.CHeaderFileAST) error {

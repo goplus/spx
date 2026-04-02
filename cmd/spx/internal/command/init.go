@@ -6,9 +6,8 @@ import (
 	"path/filepath"
 )
 
-// Init initializes a new SPX project in the specified directory
+// Init creates a project.
 func (cmd *CmdTool) Init() error {
-	// Use the path from command line arguments, default to current directory
 	targetPath := *cmd.Args.Path
 	if targetPath == "." {
 		var err error
@@ -17,14 +16,12 @@ func (cmd *CmdTool) Init() error {
 			return fmt.Errorf("failed to get current directory: %w", err)
 		}
 	} else {
-		// Convert to absolute path
 		var err error
 		targetPath, err = filepath.Abs(targetPath)
 		if err != nil {
 			return fmt.Errorf("failed to resolve target path: %w", err)
 		}
 
-		// Create the target directory if it doesn't exist
 		if err := os.MkdirAll(targetPath, 0755); err != nil {
 			return fmt.Errorf("failed to create target directory: %w", err)
 		}
@@ -32,13 +29,11 @@ func (cmd *CmdTool) Init() error {
 
 	fmt.Printf("Initializing SPX project in: %s\n", targetPath)
 
-	// Create assets directory
 	assetsDir := filepath.Join(targetPath, "assets")
 	if err := os.MkdirAll(assetsDir, 0755); err != nil {
 		return fmt.Errorf("failed to create assets directory: %w", err)
 	}
 
-	// Create assets/index.json file
 	indexJsonPath := filepath.Join(assetsDir, "index.json")
 	indexJsonContent := `
 {
@@ -51,7 +46,6 @@ func (cmd *CmdTool) Init() error {
 		return fmt.Errorf("failed to create assets/index.json: %w", err)
 	}
 
-	// Create main.spx file
 	mainSpxPath := filepath.Join(targetPath, "main.spx")
 	mainSpxContent := `// SPX Project Main File
 // This is the entry point for your SPX project

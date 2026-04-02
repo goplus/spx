@@ -77,7 +77,7 @@ func TestInstallToolsWebOpt(t *testing.T) {
 	}
 
 	expected := []recordedCall{
-		{script: "cmd/gox/install.sh", args: []string{"--web", "--opt"}},
+		{script: "cmd/spx/install.sh", args: []string{"--web", "--opt"}},
 	}
 	if !reflect.DeepEqual(runner.calls, expected) {
 		t.Fatalf("unexpected calls: %#v", runner.calls)
@@ -102,7 +102,7 @@ func TestBuildWebWorkflow(t *testing.T) {
 	}
 
 	expectedCalls := []recordedCall{
-		{script: "cmd/gox/install.sh", args: nil},
+		{script: "cmd/spx/install.sh", args: nil},
 	}
 	if !reflect.DeepEqual(runner.calls, expectedCalls) {
 		t.Fatalf("unexpected calls: %#v", runner.calls)
@@ -159,7 +159,7 @@ func TestBuildDevWorkflow(t *testing.T) {
 	}
 
 	expectedCalls := []recordedCall{
-		{script: "cmd/gox/install.sh", args: []string{"--web"}},
+		{script: "cmd/spx/install.sh", args: []string{"--web"}},
 	}
 	if !reflect.DeepEqual(runner.calls, expectedCalls) {
 		t.Fatalf("unexpected calls: %#v", runner.calls)
@@ -208,7 +208,7 @@ func TestInstallAPKWorkflow(t *testing.T) {
 	}
 
 	expectedCommands := []recordedCommand{
-		{dir: filepath.Join(repoRoot, "cmd", "gox"), name: "go", args: []string{"run", ".", "exportapk", "--install", "--path", projectDir}},
+		{dir: filepath.Join(repoRoot, "cmd", "spx"), name: "go", args: []string{"run", ".", "exportapk", "--install", "--path", projectDir}},
 	}
 	if !reflect.DeepEqual(runner.commands, expectedCommands) {
 		t.Fatalf("unexpected commands: %#v", runner.commands)
@@ -257,7 +257,7 @@ func TestRunDemoWorkflowWebWorker(t *testing.T) {
 	}
 
 	expectedScripts := []recordedCall{
-		{script: "cmd/gox/install.sh", args: []string{"--web"}},
+		{script: "cmd/spx/install.sh", args: []string{"--web"}},
 	}
 	if !reflect.DeepEqual(runner.calls, expectedScripts) {
 		t.Fatalf("unexpected script calls: %#v", runner.calls)
@@ -290,7 +290,7 @@ func TestRunDemoWorkflowWeb(t *testing.T) {
 	}
 
 	expectedScripts := []recordedCall{
-		{script: "cmd/gox/install.sh", args: []string{"--web"}},
+		{script: "cmd/spx/install.sh", args: []string{"--web"}},
 	}
 	if !reflect.DeepEqual(runner.calls, expectedScripts) {
 		t.Fatalf("unexpected script calls: %#v", runner.calls)

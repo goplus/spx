@@ -2,7 +2,6 @@ package command
 
 import (
 	"embed"
-	_ "embed"
 	"fmt"
 	"go/build"
 	"os"
@@ -10,63 +9,58 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/goplus/spx/v2/cmd/gox/pkg/util"
+	"github.com/goplus/spx/v2/cmd/spx/internal/util"
+	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
 const PcExportName = "gdexport"
 
-// CmdTool represents the main command tool for managing project operations
+// CmdTool stores command state.
 type CmdTool struct {
-	// Project information
-	FileSuffix     string // File suffix of the project file
-	AppName        string // Name of the application
-	Version        string // Version of the application
-	ProjectRelPath string // Relative path to the project
-	ProjectDir     string // Absolute path to the project directory
-	GoDir          string // Absolute path to the Go directory
-	TargetDir      string // Target directory for operations
-	TargetAbsDir   string // Absolute target directory for stable file paths
-	WebDir         string // Web directory for web operations
+	// Project.
+	FileSuffix     string
+	AppName        string
+	Version        string
+	ProjectRelPath string
+	ProjectDir     string
+	GoDir          string
+	TargetDir      string
+	TargetAbsDir   string
+	WebDir         string
 	GoBinPath      string
 
-	// Resource files
-	ProjectFS  embed.FS // Embedded project filesystem
-	PlatformFS embed.FS // Embedded platform filesystem
-	RunSh      string   // Run script content
-	MainSh     string   // Main script content
+	// Embedded assets.
+	ProjectFS  embed.FS
+	PlatformFS embed.FS
 
-	// Build and runtime information
-	ServerPort int    // Server port for web operations
-	CmdPath    string // Path to the command executable
-	LibPath    string // Path to the library
-	BinPostfix string // Binary postfix
+	// Build.
+	ServerPort int
+	CmdPath    string
+	LibPath    string
+	BinPostfix string
 
-	// Command line arguments
-	Args ExtraArgs // Command line arguments
+	// CLI args.
+	Args ExtraArgs
 
-	// runtime mode
+	// Runtime.
 	RuntimeMode    bool
 	RuntimeTempDir string
-	RuntimePckPath string
 	RuntimeCmdPath string
 
 	GoModTemplate string
 
-	// Code generation mode
-	// true: use xgobuild library (new method)
-	// false: use xgo CLI (old method, default)
+	// Codegen.
 	UseXgobuildForCodegen bool
 
-	// Portable Go environment
-	GoEnvDir    string // Portable Go environment directory
-	GoRoot      string // Calculated GOROOT path
-	GoPath      string // Calculated GOPATH path
-	CustomGoEnv bool   // Custom Go environment
+	// Portable Go.
+	GoEnvDir    string
+	GoRoot      string
+	GoPath      string
+	CustomGoEnv bool
 }
 
-// RunCmd executes the specified command with the given parameters
+// RunCmd runs the CLI.
 func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS, fsRelDir string, dstRelDir string, ext ...string) (err error) {
-	// Store the parameters in the CmdTool struct
 	cmd.AppName = projectName
 	cmd.FileSuffix = fileSuffix
 	cmd.Version = version
@@ -80,55 +74,48 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 	cmd.GoBinPath, _ = filepath.Abs(filepath.Join(paths[0], "bin"))
 
 	cmd.Args = ExtraArgs{}
-	// Check if we have enough arguments
 	if len(os.Args) < 2 {
 		cmd.ShowHelpInfo()
 		return
 	}
 
-	// Initialize flags
 	help := cmd.initializeFlags()
 
-	// Parse command line arguments
 	err = cmd.parseCommandLineArgs(help, ext...)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		return err
 	}
+	if cmd.Args.Verbose != nil && *cmd.Args.Verbose {
+		spxlog.SetLevel(spxlog.LevelDebug)
+	}
 
-	// Handle init command early, before setupPaths
 	if cmd.Args.CmdName == "init" {
 		return cmd.Init()
 	}
 
-	// Setup paths
 	err = cmd.setupPaths(dstRelDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error setting up paths: %v\n", err)
 		return err
 	}
 
-	// Handle special commands that don't need full setup
 	if cmd.handleSpecialCommands() {
 		return nil
 	}
 
-	// Handle runi command - interpreted mode with minimal setup
 	if cmd.Args.CmdName == "runi" {
 		return cmd.handleRuniCommand()
 	}
 
-	// Set runtime mode
 	if isRuntimeModeCommand(cmd.Args.CmdName) {
 		cmd.RuntimeMode = true
 	}
 
-	// Set code generation mode based on --ixgogen parameter
 	if cmd.Args.IxgoGen != nil && *cmd.Args.IxgoGen {
 		cmd.UseXgobuildForCodegen = true
 	}
 
-	// Setup portable Go environment if specified
 	if cmd.Args.GoEnv != nil && *cmd.Args.GoEnv != "" {
 		if err := cmd.setupPortableGoEnv(); err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to setup portable Go environment: %v\n", err)
@@ -136,32 +123,27 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 		}
 	}
 
-	// Check environment
 	err = cmd.CheckEnv()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Environment check failed: %v\n", err)
 		return err
 	}
 
-	// fix https://github.com/goplus/spx/issues/619
-	// fatal error: non-Go code set up signal handler without SA_ONSTACK flag
+	// Work around goplus/spx#619.
 	os.Setenv("GODEBUG", "asyncpreemptoff=1")
 
-	// Set up the web directory path
 	cmd.WebDir, _ = filepath.Abs(filepath.Join(cmd.ProjectDir, ".builds", "web"))
 
-	// Setup environment
 	err = cmd.SetupEnv(version, fs, fsRelDir, dstRelDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to setup environment: %v\n", err)
 		return err
 	}
 
-	// Execute the command based on its type
 	return cmd.executeCommand()
 }
 
-// handleSpecialCommands handles commands that don't need full setup
+// handleSpecialCommands handles commands without setup.
 func (cmd *CmdTool) handleSpecialCommands() bool {
 	switch cmd.Args.CmdName {
 	case "help", "version":
@@ -181,14 +163,12 @@ func (cmd *CmdTool) handleSpecialCommands() bool {
 	return false
 }
 
-// executeCommand executes the main command logic
+// executeCommand runs the main command flow.
 func (cmd *CmdTool) executeCommand() error {
-	// First, handle build phase if needed
 	if err := cmd.handleBuildPhase(); err != nil {
 		return err
 	}
 
-	// Then, handle execution phase
 	err := cmd.handleExecutionPhase()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error executing command: %v\n", err)
@@ -197,38 +177,36 @@ func (cmd *CmdTool) executeCommand() error {
 
 }
 
-// handleBuildPhase handles the build phase for commands that need it
+// handleBuildPhase runs the build step.
 func (cmd *CmdTool) handleBuildPhase() error {
-	fmt.Printf("[DEBUG] handleBuildPhase: command=%s %s\n", cmd.Args.CmdName, cmd.SafeTagArgs())
+	spxlog.Debug("handleBuildPhase: command=%s %s", cmd.Args.CmdName, cmd.SafeTagArgs())
 
 	switch cmd.Args.CmdName {
 	case "buildtinygo":
-		fmt.Println("[DEBUG] Executing BuildTinyGoLib")
+		spxlog.Debug("executing BuildTinyGoLib")
 		return cmd.BuildTinyGoLib()
 	case "editor", "rune", "export", "build", "run":
-		fmt.Println("[DEBUG] Checking BuildDll conditions")
-		// Skip BuildDll for pure_engine mode
+		spxlog.Debug("checking BuildDll conditions")
 		if cmd.Args.Tags == nil || !strings.Contains(*cmd.Args.Tags, "pure_engine") {
-			fmt.Println("[DEBUG] Executing BuildDll")
+			spxlog.Debug("executing BuildDll")
 			return cmd.BuildDll()
 		} else {
-			fmt.Println("[DEBUG] Skipping BuildDll for pure_engine mode")
+			spxlog.Debug("skipping BuildDll for pure_engine mode")
 		}
 	default:
 		if shouldBuildWasmForCommand(cmd.Args.CmdName) {
-			fmt.Println("[DEBUG] Executing BuildWasm")
+			spxlog.Debug("executing BuildWasm")
 			return cmd.BuildWasm()
 		}
-		fmt.Printf("[DEBUG] No build phase needed for command: %s\n", cmd.Args.CmdName)
+		spxlog.Debug("no build phase needed for command: %s", cmd.Args.CmdName)
 	}
 	return nil
 }
 
-// handleExecutionPhase handles the execution phase for commands that need it
+// handleExecutionPhase runs the command step.
 func (cmd *CmdTool) handleExecutionPhase() error {
 	switch cmd.Args.CmdName {
 	case "buildtinygo":
-		// Build-only command, no execution phase needed
 		return nil
 	case "editor":
 		return cmd.executeEditor()
@@ -257,12 +235,11 @@ func (cmd *CmdTool) handleExecutionPhase() error {
 	case "exportminiprogram":
 		return cmd.ExportMiniprogram()
 	default:
-		// For build-only commands, no execution needed
 		return nil
 	}
 }
 
-// executeEditor handles the editor command execution
+// executeEditor runs the editor command.
 func (cmd *CmdTool) executeEditor() error {
 	if cmd.Args.Tags != nil && strings.Contains(*cmd.Args.Tags, "pure_engine") {
 		return fmt.Errorf("editor command is not supported in pure_engine mode")
@@ -272,7 +249,7 @@ func (cmd *CmdTool) executeEditor() error {
 	return util.RunCommandInDir(cmd.ProjectDir, cmd.CmdPath, args...)
 }
 
-// executeRune handles the rune command execution
+// executeRune runs the rune command.
 func (cmd *CmdTool) executeRune() error {
 	if cmd.Args.Tags != nil && strings.Contains(*cmd.Args.Tags, "pure_engine") {
 		return fmt.Errorf("rune command is not supported in pure_engine mode")
@@ -281,10 +258,9 @@ func (cmd *CmdTool) executeRune() error {
 	return util.RunCommandInDir(cmd.ProjectDir, cmd.CmdPath, args...)
 }
 
-// executeRun handles the run command execution
+// executeRun runs the run command.
 func (cmd *CmdTool) executeRun() error {
 	if cmd.Args.Tags != nil && strings.Contains(*cmd.Args.Tags, "pure_engine") {
-		// For pure_engine mode, run the Go binary directly
 		args := cmd.Args.String()
 		return cmd.RunPureEngine(args...)
 	} else {
@@ -304,10 +280,8 @@ func (cmd *CmdTool) checkMovieArgs(rootDir string) []string {
 	return args
 }
 
+// isRuntimeModeCommand reports whether the command uses runtime assets.
 func isRuntimeModeCommand(cmdName string) bool {
-	// Runtime-mode commands execute from packaged runtime assets and should skip
-	// the full project reimport path during setup. `runwebworker` belongs here
-	// for the same reason as `runweb`: both serve exported runtime artifacts.
 	switch cmdName {
 	case "run", "runweb", "runwebworker":
 		return true
@@ -316,9 +290,8 @@ func isRuntimeModeCommand(cmdName string) bool {
 	}
 }
 
+// shouldBuildWasmForCommand reports whether the command needs wasm output.
 func shouldBuildWasmForCommand(cmdName string) bool {
-	// These commands export or serve web assets, and the export path now prefers a
-	// freshly built project-local `.builds/web/ispx.wasm` when it exists.
 	switch cmdName {
 	case "buildweb", "exportweb", "runweb", "runwebworker":
 		return true
@@ -327,15 +300,12 @@ func shouldBuildWasmForCommand(cmdName string) bool {
 	}
 }
 
-// handleRuniCommand handles the runi command with minimal setup.
-// It skips CheckEnv, SetupEnv, and BuildDll since the dll is pre-installed.
+// handleRuniCommand runs runi with minimal setup.
 func (cmd *CmdTool) handleRuniCommand() error {
-	// Setup minimal required paths
 	cmd.RuntimeMode = true
 	cmd.RuntimeTempDir, _ = filepath.Abs(filepath.Join(cmd.TargetDir, ".temp"))
 	os.MkdirAll(cmd.RuntimeTempDir, 0755)
 
-	// Get binary postfix based on OS
 	cmd.BinPostfix = ""
 	GOOS := runtime.GOOS
 	if os.Getenv("GOOS") != "" {
@@ -346,7 +316,6 @@ func (cmd *CmdTool) handleRuniCommand() error {
 	}
 	cmd.RuntimeCmdPath = filepath.Join(cmd.GoBinPath, "gdspxrt"+cmd.Version+cmd.BinPostfix)
 
-	// Execute the interpreted run
 	args := cmd.checkMovieArgs(cmd.RuntimeTempDir)
 	return cmd.RunInterpreted(args...)
 }

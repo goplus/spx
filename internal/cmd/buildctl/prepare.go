@@ -73,7 +73,7 @@ func (cfg prepareConfig) validate() error {
 func prepareAssets(cfg prepareConfig, runner scriptRunner) error {
 	switch cfg.setupMode {
 	case "runtime":
-		if err := runner.runScript(filepath.Join("cmd", "gox", "install.sh")); err != nil {
+		if err := runner.runScript(filepath.Join("cmd", "spx", "install.sh")); err != nil {
 			return err
 		}
 		return prepareRuntimeAssets(runner)
@@ -108,7 +108,7 @@ func prepareWebAssets(webMode string, runner scriptRunner) error {
 	if err := downloadEngineAssets(engineDownloadConfig{platform: "web", mode: webMode}, runner.repoRootDir()); err != nil {
 		return err
 	}
-	if err := runner.runScript(filepath.Join("cmd", "gox", "install.sh"), "--web"); err != nil {
+	if err := runner.runScript(filepath.Join("cmd", "spx", "install.sh"), "--web"); err != nil {
 		return err
 	}
 	return exportWebTemplateRuntime(webMode, runner)

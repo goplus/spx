@@ -14,15 +14,14 @@ import (
 
 const (
 	projectConfigName = ".config"
-	// engineExtAssetDir is the fixed zip-internal directory name used by the web runtime.
+	// engineExtAssetDir is the extasset zip root.
 	engineExtAssetDir = "extasset"
-	// sharedAssetEscapeDepth counts how many leading ".." segments are needed to leave <project>/assets.
+	// sharedAssetEscapeDepth is the minimum "../" depth.
 	sharedAssetEscapeDepth = 2
 )
 
 type assetProjectConfig struct {
-	// ExtAsset is the user-configured source directory name on disk.
-	// Packed entries are still rewritten into engineExtAssetDir.
+	// ExtAsset is the external asset directory.
 	ExtAsset string `json:"extasset"`
 }
 
@@ -31,8 +30,7 @@ type assetPathRef struct {
 	path      string
 }
 
-// collectExternalAssetPaths mirrors the runtime's shared-resource compatibility rules
-// so runweb packs files that are referenced outside assets/ but still loadable at runtime.
+// collectExternalAssetPaths matches runtime asset lookup.
 func collectExternalAssetPaths(baseFolder string, existingZipPaths map[string]struct{}) ([]DirInfos, error) {
 	assetRoot := filepath.Join(baseFolder, "assets")
 	info, err := os.Stat(assetRoot)
@@ -164,7 +162,7 @@ func appendAssetPathRef(refs []assetPathRef, configDir, relPath string) []assetP
 	return append(refs, assetPathRef{configDir: configDir, path: relPath})
 }
 
-// resolveExternalAssetPath keeps pack-time path handling aligned with internal/engine/path.go.
+// resolveExternalAssetPath resolves external assets for packing.
 func resolveExternalAssetPath(assetRoot, compatibilityRoot, extAssetDir, relPath string) (string, string, bool) {
 	if relPath == "" || strings.HasPrefix(relPath, "/") {
 		return "", "", false
@@ -184,9 +182,7 @@ func resolveExternalAssetPath(assetRoot, compatibilityRoot, extAssetDir, relPath
 	if isWithinRoot(sourcePath, assetRoot) {
 		return "", "", false
 	}
-	// Preserve legacy shared resources referenced from outside <project>/assets.
-	// assets/ sits one level below the project root, so at least two ".." segments
-	// are required before the path can reach the shared parent directory.
+	// Allow legacy shared assets outside assets/.
 	if leadingParentCount(relPath) < sharedAssetEscapeDepth || !isWithinRoot(sourcePath, compatibilityRoot) {
 		return "", "", false
 	}
@@ -202,8 +198,7 @@ func resolveExternalAssetPath(assetRoot, compatibilityRoot, extAssetDir, relPath
 	return sourcePath, zipPath, true
 }
 
-// rewriteExtAssetZipPath rewrites a user-configured extasset source path to the
-// fixed engineExtAssetDir zip location expected by the web runtime.
+// rewriteExtAssetZipPath rewrites extasset paths for the zip.
 func rewriteExtAssetZipPath(relPath, extAssetDir string) string {
 	if extAssetDir == "" {
 		return ""
@@ -261,8 +256,7 @@ func relConfigDir(assetRoot, configDir string) (string, error) {
 	return normalizeZipPath(rel), nil
 }
 
-// normalizeConfigPath mirrors internal/core/project/resources.go:normalizeConfigPath
-// so build-time packing and runtime loading resolve asset references identically.
+// normalizeConfigPath matches runtime path rules.
 func normalizeConfigPath(configDir, relPath string) string {
 	if relPath == "" {
 		return ""

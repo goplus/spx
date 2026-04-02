@@ -1,12 +1,13 @@
 package util
 
 import (
-	"log"
 	"os"
 	"os/exec"
+
+	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
-// Helper function to run a command
+// RunCommandInDir runs a command in dir.
 func RunCommandInDir(dir string, name string, args ...string) error {
 	return RunCommand(nil, dir, name, args...)
 }
@@ -27,13 +28,9 @@ func RunCommand(envVars []string, dir string, name string, args ...string) error
 	cmd.Stderr = os.Stderr
 	err := cmd.Run()
 	if err != nil {
-		log.Fatalf("Command %s failed: %v", name, err)
+		spxlog.Fatalf("command %s failed: %v", name, err)
 	}
 	return err
-}
-
-func RunGoModTidy() error {
-	return RunCommandWithEnv(nil, "go", "mod", "tidy")
 }
 
 func RunXGo(envVars []string, args ...string) error {
@@ -44,7 +41,7 @@ func RunGolang(envVars []string, args ...string) error {
 	return RunCommandWithEnv(envVars, "go", args...)
 }
 
-// RunTinyGo runs tinygo command with given environment variables and arguments
+// RunTinyGo runs tinygo.
 func RunTinyGo(envVars []string, args ...string) error {
 	return RunCommandWithEnv(envVars, "tinygo", args...)
 }
