@@ -18,24 +18,24 @@ import (
 var ENV_NAME = "gdspx"
 
 // CheckEnv validates the target directory.
-func (pself *CmdTool) CheckEnv() error {
-	dir, err := filepath.Abs(pself.TargetDir)
+func (cmd *CmdTool) CheckEnv() error {
+	dir, err := filepath.Abs(cmd.TargetDir)
 	if err != nil {
 		return fmt.Errorf("failed to resolve target directory path: %w", err)
 	}
 
-	exist := util.CheckFileExist(dir, pself.FileSuffix, false)
+	exist := util.CheckFileExist(dir, cmd.FileSuffix, false)
 	if !exist {
-		return fmt.Errorf("cannot find %s file, not a valid project directory", pself.FileSuffix)
+		return fmt.Errorf("cannot find %s file, not a valid project directory", cmd.FileSuffix)
 	}
 	return nil
 }
 
 // SetupEnv prepares command state.
-func (pself *CmdTool) SetupEnv(version string, fs embed.FS, fsRelDir string, projectRelPath string) (err error) {
-	pself.ProjectFS = fs
-	pself.Version = version
-	pself.ProjectRelPath = projectRelPath
+func (cmd *CmdTool) SetupEnv(version string, fs embed.FS, fsRelDir string, projectRelPath string) (err error) {
+	cmd.ProjectFS = fs
+	cmd.Version = version
+	cmd.ProjectRelPath = projectRelPath
 
 	var GOOS, GOARCH = runtime.GOOS, runtime.GOARCH
 	if os.Getenv("GOOS") != "" {
@@ -48,27 +48,27 @@ func (pself *CmdTool) SetupEnv(version string, fs embed.FS, fsRelDir string, pro
 		return errors.New("gdx requires an amd64, or an arm64 system")
 	}
 
-	if pself.Args.Tags != nil && strings.Contains(*pself.Args.Tags, "pure_engine") {
-		pself.BinPostfix = ""
+	if cmd.Args.Tags != nil && strings.Contains(*cmd.Args.Tags, "pure_engine") {
+		cmd.BinPostfix = ""
 		if runtime.GOOS == "windows" {
-			pself.BinPostfix = ".exe"
+			cmd.BinPostfix = ".exe"
 		}
-		pself.CmdPath = ""
+		cmd.CmdPath = ""
 	} else {
-		pself.BinPostfix, pself.CmdPath, err = resolveAppPath(pself.GoBinPath, ENV_NAME, pself.Version, pself.CustomGoEnv)
+		cmd.BinPostfix, cmd.CmdPath, err = resolveAppPath(cmd.GoBinPath, ENV_NAME, cmd.Version, cmd.CustomGoEnv)
 		if err != nil {
-			return fmt.Errorf(ENV_NAME+"requires engine to be installed as a binary at %s: %w", pself.GoBinPath, err)
+			return fmt.Errorf(ENV_NAME+"requires engine to be installed as a binary at %s: %w", cmd.GoBinPath, err)
 		}
 	}
 
-	pself.ProjectDir, _ = filepath.Abs(path.Join(pself.TargetDir, pself.ProjectRelPath))
-	pself.GoDir, _ = filepath.Abs(pself.ProjectDir + "/go")
+	cmd.ProjectDir, _ = filepath.Abs(path.Join(cmd.TargetDir, cmd.ProjectRelPath))
+	cmd.GoDir, _ = filepath.Abs(cmd.ProjectDir + "/go")
 
-	if pself.Args.Tags == nil || !strings.Contains(*pself.Args.Tags, "pure_engine") {
-		pself.RuntimeCmdPath = path.Join(pself.GoBinPath, "gdspxrt"+pself.Version+pself.BinPostfix)
+	if cmd.Args.Tags == nil || !strings.Contains(*cmd.Args.Tags, "pure_engine") {
+		cmd.RuntimeCmdPath = path.Join(cmd.GoBinPath, "gdspxrt"+cmd.Version+cmd.BinPostfix)
 	}
-	pself.RuntimeTempDir, _ = filepath.Abs(path.Join(pself.TargetDir, ".temp"))
-	os.Mkdir(pself.RuntimeTempDir, 0755)
+	cmd.RuntimeTempDir, _ = filepath.Abs(path.Join(cmd.TargetDir, ".temp"))
+	os.Mkdir(cmd.RuntimeTempDir, 0755)
 
 	var libraryName = fmt.Sprintf(ENV_NAME+"-%v-%v", GOOS, GOARCH)
 	switch GOOS {
@@ -79,15 +79,15 @@ func (pself *CmdTool) SetupEnv(version string, fs embed.FS, fsRelDir string, pro
 	default:
 		libraryName += ".so"
 	}
-	pself.LibPath, _ = filepath.Abs(path.Join(pself.ProjectDir, "lib", libraryName))
+	cmd.LibPath, _ = filepath.Abs(path.Join(cmd.ProjectDir, "lib", libraryName))
 
-	pself.PrepareEnv(fsRelDir, pself.ProjectDir)
+	cmd.PrepareEnv(fsRelDir, cmd.ProjectDir)
 
-	targetDir, _ := filepath.Abs(pself.TargetDir)
+	targetDir, _ := filepath.Abs(cmd.TargetDir)
 	projectName := filepath.Base(targetDir)
 	projectName = strings.ReplaceAll(projectName, "_", "")
 	projectName = strings.ReplaceAll(projectName, " ", "")
-	engineFilePath := path.Join(pself.ProjectDir, "project.godot")
+	engineFilePath := path.Join(cmd.ProjectDir, "project.godot")
 	content, err := os.ReadFile(engineFilePath)
 	if err != nil {
 		return fmt.Errorf("Failed to read project file: %v", err)
@@ -102,17 +102,17 @@ func (pself *CmdTool) SetupEnv(version string, fs embed.FS, fsRelDir string, pro
 		return fmt.Errorf("Failed to write project file: %v", err)
 	}
 
-	if pself.ShouldReimport() {
-		pself.Reimport()
+	if cmd.ShouldReimport() {
+		cmd.Reimport()
 	}
 	return
 }
 
 // PrepareEnv syncs project files.
-func (pself *CmdTool) PrepareEnv(fsRelDir, dstDir string) {
-	util.CopyDir(pself.ProjectFS, fsRelDir, dstDir, false)
+func (cmd *CmdTool) PrepareEnv(fsRelDir, dstDir string) {
+	util.CopyDir(cmd.ProjectFS, fsRelDir, dstDir, false)
 
-	tempFile, _ := filepath.Abs(path.Join(pself.TargetDir, "xgo_autogen.go"))
+	tempFile, _ := filepath.Abs(path.Join(cmd.TargetDir, "xgo_autogen.go"))
 	tmp := `
 package main
 import "github.com/goplus/spx/v2"
@@ -120,10 +120,10 @@ func main() {print(&spx.Game{})}
 `
 	os.WriteFile(tempFile, []byte(tmp), 0644)
 
-	pself.adaptGoMod()
+	cmd.adaptGoMod()
 
 	rawDir, _ := os.Getwd()
-	os.Chdir(pself.TargetDir)
+	os.Chdir(cmd.TargetDir)
 
 	util.RunGolang(nil, "mod", "tidy")
 
@@ -133,45 +133,45 @@ func main() {print(&spx.Game{})}
 }
 
 // ShouldReimport reports whether Godot reimport is needed.
-func (pself *CmdTool) ShouldReimport() bool {
+func (cmd *CmdTool) ShouldReimport() bool {
 	// TinyGo skips Godot import.
-	if pself.Args.CmdName == "buildtinygo" {
+	if cmd.Args.CmdName == "buildtinygo" {
 		return false
 	}
-	return !util.IsFileExist(path.Join(pself.ProjectDir, ".godot/uid_cache.bin")) && !pself.RuntimeMode
+	return !util.IsFileExist(path.Join(cmd.ProjectDir, ".godot/uid_cache.bin")) && !cmd.RuntimeMode
 }
 
 // Reimport refreshes Godot import data.
-func (pself *CmdTool) Reimport() {
-	switch pself.Args.CmdName {
+func (cmd *CmdTool) Reimport() {
+	switch cmd.Args.CmdName {
 	case "buildtinygo":
 		return
 	case "buildweb", "runweb", "exportweb":
-		pself.BuildWasm()
+		cmd.BuildWasm()
 	default:
-		pself.BuildDll()
+		cmd.BuildDll()
 	}
 	fmt.Println(" ================= Importing ... ================= ")
-	cmd := exec.Command(pself.CmdPath, "--import", "--headless")
-	cmd.Dir = pself.ProjectDir
-	cmd.Start()
-	cmd.Wait()
+	execCmd := exec.Command(cmd.CmdPath, "--import", "--headless")
+	execCmd.Dir = cmd.ProjectDir
+	execCmd.Start()
+	execCmd.Wait()
 }
 
 // Clear removes generated project files.
-func (pself *CmdTool) Clear() error {
-	if err := os.RemoveAll(pself.ProjectDir); err != nil {
+func (cmd *CmdTool) Clear() error {
+	if err := os.RemoveAll(cmd.ProjectDir); err != nil {
 		return fmt.Errorf("failed to remove project directory: %w", err)
 	}
 
-	if err := os.RemoveAll(path.Join(pself.TargetDir, ".temp")); err != nil {
+	if err := os.RemoveAll(path.Join(cmd.TargetDir, ".temp")); err != nil {
 		return fmt.Errorf("failed to remove project directory: %w", err)
 	}
-	if err := os.RemoveAll(path.Join(pself.TargetDir, "go.sum")); err != nil {
+	if err := os.RemoveAll(path.Join(cmd.TargetDir, "go.sum")); err != nil {
 		return fmt.Errorf("failed to remove project directory: %w", err)
 	}
 
-	if err := os.RemoveAll(path.Join(pself.TargetDir, "xgo_autogen.go")); err != nil {
+	if err := os.RemoveAll(path.Join(cmd.TargetDir, "xgo_autogen.go")); err != nil {
 		return fmt.Errorf("failed to remove project directory: %w", err)
 	}
 
@@ -281,14 +281,14 @@ func (cmd *CmdTool) setupPaths(dstRelDir string) error {
 }
 
 // adaptGoMod patches go.mod for local development.
-func (pself *CmdTool) adaptGoMod() {
-	rootGoModPath, _ := filepath.Abs(path.Join(pself.TargetDir, "go.mod"))
+func (cmd *CmdTool) adaptGoMod() {
+	rootGoModPath, _ := filepath.Abs(path.Join(cmd.TargetDir, "go.mod"))
 	if _, err := os.Stat(rootGoModPath); os.IsNotExist(err) {
-		pself.createDefaultGoMod(pself.TargetDir, false)
+		cmd.createDefaultGoMod(cmd.TargetDir, false)
 	}
 
-	absTargetDir, _ := filepath.Abs(pself.TargetDir)
-	spxPath := pself.findSpxRoot(absTargetDir)
+	absTargetDir, _ := filepath.Abs(cmd.TargetDir)
+	spxPath := cmd.findSpxRoot(absTargetDir)
 
 	if spxPath != "" {
 		content, err := os.ReadFile(rootGoModPath)
@@ -312,16 +312,16 @@ func (pself *CmdTool) adaptGoMod() {
 }
 
 // createDefaultGoMod writes the default go.mod.
-func (pself *CmdTool) createDefaultGoMod(dir string, forceWrite bool) {
+func (cmd *CmdTool) createDefaultGoMod(dir string, forceWrite bool) {
 	gopModPath, _ := filepath.Abs(path.Join(dir, "go.mod"))
 	if _, err := os.Stat(gopModPath); os.IsNotExist(err) || forceWrite {
-		gopModContent := pself.GoModTemplate
+		gopModContent := cmd.GoModTemplate
 		os.WriteFile(gopModPath, []byte(gopModContent), 0644)
 	}
 }
 
 // findSpxRoot finds a local spx repo.
-func (pself *CmdTool) findSpxRoot(startDir string) string {
+func (cmd *CmdTool) findSpxRoot(startDir string) string {
 	currentDir := filepath.Dir(startDir)
 	for {
 		gopModPath := path.Join(currentDir, "gop.mod")
@@ -372,13 +372,13 @@ func resolveAppPath(gobinDir, tag, version string, customGoEnv bool) (string, st
 	return binPostfix, cmdPath, nil
 }
 
-func (pself *CmdTool) getProjectWasmPath() string {
-	return path.Join(pself.ProjectDir, ".builds", "web", "ispx.wasm")
+func (cmd *CmdTool) getProjectWasmPath() string {
+	return path.Join(cmd.ProjectDir, ".builds", "web", "ispx.wasm")
 }
 
 // getWasmPaths prefers project-local wasm.
-func (pself *CmdTool) getWasmPaths() (string, string) {
-	projectWasmPath := pself.getProjectWasmPath()
+func (cmd *CmdTool) getWasmPaths() (string, string) {
+	projectWasmPath := cmd.getProjectWasmPath()
 	if util.IsFileExist(projectWasmPath) {
 		projectWasmBrPath := projectWasmPath + ".br"
 		if util.IsFileExist(projectWasmBrPath) {
@@ -387,7 +387,7 @@ func (pself *CmdTool) getWasmPaths() (string, string) {
 		return projectWasmPath, ""
 	}
 
-	wasmPath := path.Join(pself.GoBinPath, "ispx.wasm")
+	wasmPath := path.Join(cmd.GoBinPath, "ispx.wasm")
 	wasmBrPath := wasmPath + ".br"
 	if util.IsFileExist(wasmBrPath) {
 		return wasmPath, wasmBrPath
@@ -396,8 +396,8 @@ func (pself *CmdTool) getWasmPaths() (string, string) {
 }
 
 // getIspxWebDir returns the installed web runtime.
-func (pself *CmdTool) getIspxWebDir() (string, error) {
-	ispxWebDir := path.Join(pself.GoBinPath, "ispx")
+func (cmd *CmdTool) getIspxWebDir() (string, error) {
+	ispxWebDir := path.Join(cmd.GoBinPath, "ispx")
 	if _, err := os.Stat(ispxWebDir); os.IsNotExist(err) {
 		return "", fmt.Errorf("ispx web runtime not found at %s; "+
 			"run 'go run ./internal/cmd/buildctl tool install --web' to install", ispxWebDir)

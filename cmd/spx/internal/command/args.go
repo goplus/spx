@@ -65,7 +65,7 @@ func (e *ExtraArgs) String() []string {
 }
 
 // CheckCmd reports whether the command is supported.
-func (pself *CmdTool) CheckCmd(ext ...string) bool {
+func (cmd *CmdTool) CheckCmd(ext ...string) bool {
 	cmds := []string{
 		"help", "version", "editor",
 		"init", "clear", "clearbuild",
@@ -76,17 +76,17 @@ func (pself *CmdTool) CheckCmd(ext ...string) bool {
 	}
 	cmds = append(cmds, ext...)
 
-	cmdName := pself.Args.CmdName
+	cmdName := cmd.Args.CmdName
 	return slices.Contains(cmds, cmdName)
 }
-func (pself *CmdTool) CheckCmdWithError(ext ...string) (err error) {
+func (cmd *CmdTool) CheckCmdWithError(ext ...string) (err error) {
 	if len(os.Args) <= 1 {
-		pself.ShowHelpInfo()
+		cmd.ShowHelpInfo()
 		return
 	}
-	if !pself.CheckCmd(ext...) {
+	if !cmd.CheckCmd(ext...) {
 		fmt.Fprintf(os.Stderr, "Error: invalid cmd, please refer to help\n")
-		pself.ShowHelpInfo()
+		cmd.ShowHelpInfo()
 	}
 	return
 }
@@ -99,60 +99,10 @@ func (cmd *CmdTool) SafeTagArgs() string {
 	return "-tags=" + *tags
 }
 
-// initializeFlags binds CLI flags.
-func (cmd *CmdTool) initializeFlags() *bool {
-	f := flag.CommandLine
-	help := f.Bool("h", false, "show help information")
-
-	cmd.Args.ServerAddr = f.String("serveraddr", "", "server address")
-	cmd.Args.Path = f.String("path", ".", "project path")
-	cmd.Args.ControllerName = f.String("controller", "", "controller's type name")
-	cmd.Args.ServerMode = f.Bool("servermode", false, "server mode")
-	cmd.Args.HeadlessMode = f.Bool("headless", false, "Headless Mode")
-	cmd.Args.Arch = f.String("arch", "", "cpu arch")
-	cmd.Args.OnlyServer = f.Bool("onlys", false, "mutil player mode server only")
-	cmd.Args.OnlyClient = f.Bool("onlyc", false, "mutil player mode clients only")
-	cmd.Args.Tags = f.String("tags", "", "build tags")
-	cmd.Args.Target = f.String("target", "esp32", "target board (default: esp32)")
-	cmd.Args.NoMap = f.Bool("nomap", false, "no map mode")
-	cmd.Args.Install = f.Bool("install", false, "install mode")
-	cmd.Args.DebugWebService = f.Bool("debugweb", false, "open debug web service")
-	cmd.Args.FullScreen = f.Bool("fullscreen", false, "full screen")
-	cmd.Args.Build = f.String("build", "normal", "build mode: normal or fast")
-	cmd.Args.Mode = f.String("mode", "none", "mode: none, worker, minigame")
-	cmd.Args.Movie = f.Bool("movie", false, "record movie mode")
-	cmd.Args.GoEnv = f.String("goenv", "", "portable Go environment directory (e.g., ./cmd/portable-go)")
-	cmd.Args.IxgoGen = f.Bool("ixgogen", false, "use xgobuild library for code generation (default: use xgo CLI)")
-	cmd.Args.Verbose = f.Bool("v", false, "print verbose information")
-	return help
-}
-
-// parseCommandLineArgs parses the CLI input.
-func (cmd *CmdTool) parseCommandLineArgs(help *bool, ext ...string) error {
-	if len(os.Args) == 1 || os.Args[1] == "help" || os.Args[1] == "-h" || os.Args[1] == "h" {
-		cmd.ShowHelpInfo()
-		return nil
-	}
-
-	cmd.Args.CmdName = os.Args[1]
-	flag.CommandLine.Parse(os.Args[2:])
-
-	if *help {
-		cmd.ShowHelpInfo()
-		return nil
-	}
-
-	if !cmd.CheckCmd(ext...) {
-		return fmt.Errorf("unknown command: %s", cmd.Args.CmdName)
-	}
-
-	return nil
-}
-
 // ShowHelpInfo prints usage.
-func (pself *CmdTool) ShowHelpInfo() {
-	cmdName := pself.AppName
-	version := pself.Version
+func (cmd *CmdTool) ShowHelpInfo() {
+	cmdName := cmd.AppName
+	version := cmd.Version
 	msg := `
 Usage:
 
@@ -214,4 +164,54 @@ Examples:
 
 	fmt.Println("Available Arguments:")
 	flag.PrintDefaults()
+}
+
+// initializeFlags binds CLI flags.
+func (cmd *CmdTool) initializeFlags() *bool {
+	f := flag.CommandLine
+	help := f.Bool("h", false, "show help information")
+
+	cmd.Args.ServerAddr = f.String("serveraddr", "", "server address")
+	cmd.Args.Path = f.String("path", ".", "project path")
+	cmd.Args.ControllerName = f.String("controller", "", "controller's type name")
+	cmd.Args.ServerMode = f.Bool("servermode", false, "server mode")
+	cmd.Args.HeadlessMode = f.Bool("headless", false, "Headless Mode")
+	cmd.Args.Arch = f.String("arch", "", "cpu arch")
+	cmd.Args.OnlyServer = f.Bool("onlys", false, "mutil player mode server only")
+	cmd.Args.OnlyClient = f.Bool("onlyc", false, "mutil player mode clients only")
+	cmd.Args.Tags = f.String("tags", "", "build tags")
+	cmd.Args.Target = f.String("target", "esp32", "target board (default: esp32)")
+	cmd.Args.NoMap = f.Bool("nomap", false, "no map mode")
+	cmd.Args.Install = f.Bool("install", false, "install mode")
+	cmd.Args.DebugWebService = f.Bool("debugweb", false, "open debug web service")
+	cmd.Args.FullScreen = f.Bool("fullscreen", false, "full screen")
+	cmd.Args.Build = f.String("build", "normal", "build mode: normal or fast")
+	cmd.Args.Mode = f.String("mode", "none", "mode: none, worker, minigame")
+	cmd.Args.Movie = f.Bool("movie", false, "record movie mode")
+	cmd.Args.GoEnv = f.String("goenv", "", "portable Go environment directory (e.g., ./cmd/portable-go)")
+	cmd.Args.IxgoGen = f.Bool("ixgogen", false, "use xgobuild library for code generation (default: use xgo CLI)")
+	cmd.Args.Verbose = f.Bool("v", false, "print verbose information")
+	return help
+}
+
+// parseCommandLineArgs parses the CLI input.
+func (cmd *CmdTool) parseCommandLineArgs(help *bool, ext ...string) error {
+	if len(os.Args) == 1 || os.Args[1] == "help" || os.Args[1] == "-h" || os.Args[1] == "h" {
+		cmd.ShowHelpInfo()
+		return nil
+	}
+
+	cmd.Args.CmdName = os.Args[1]
+	flag.CommandLine.Parse(os.Args[2:])
+
+	if *help {
+		cmd.ShowHelpInfo()
+		return nil
+	}
+
+	if !cmd.CheckCmd(ext...) {
+		return fmt.Errorf("unknown command: %s", cmd.Args.CmdName)
+	}
+
+	return nil
 }

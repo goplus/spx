@@ -20,12 +20,116 @@ type projConf struct {
 	Robots []string `json:"robots"`
 }
 
-func (pself *CmdTool) Run(arg string) (err error) {
-	return util.RunCommandInDir(pself.ProjectDir, pself.CmdPath, arg)
+func (cmd *CmdTool) Run(arg string) (err error) {
+	return util.RunCommandInDir(cmd.ProjectDir, cmd.CmdPath, arg)
+}
+
+func (cmd *CmdTool) RunPackMode(pargs ...string) error {
+	dllPath := path.Join(cmd.RuntimeTempDir, filepath.Base(cmd.LibPath))
+	util.CopyFile(cmd.LibPath, dllPath)
+	extensionPath := path.Join(cmd.RuntimeTempDir, "runtime.gdextension")
+	util.CopyFile(path.Join(cmd.ProjectDir, "runtime.gdextension.txt"), extensionPath)
+
+	args := cmd.buildRuntimeArgs(pargs, cmd.RuntimeTempDir, extensionPath)
+	return util.RunCommandInDir(cmd.RuntimeTempDir, cmd.RuntimeCmdPath, args...)
+}
+
+func (cmd *CmdTool) RunWeb() error {
+	return runWebCommand(cmd.ExportWeb, cmd.runWebServer)
+}
+
+func (cmd *CmdTool) RunWebWorker() error {
+	return runWebCommand(cmd.ExportWebWorker, cmd.runWebServer)
+}
+
+func (cmd *CmdTool) StopWeb() (err error) {
+	pidBytes, readErr := os.ReadFile(cmd.webServerPIDPath())
+	if os.IsNotExist(readErr) {
+		return cmd.stopOrphanedWebServerByPort()
+	}
+	if readErr != nil {
+		return fmt.Errorf("failed to read web server pid: %w", readErr)
+	}
+
+	pid, convErr := strconv.Atoi(strings.TrimSpace(string(pidBytes)))
+	if convErr != nil {
+		_ = os.Remove(cmd.webServerPIDPath())
+		return cmd.stopOrphanedWebServerByPort()
+	}
+
+	if cmd.killWebServerProcess(pid) {
+		_ = os.Remove(cmd.webServerPIDPath())
+		return nil
+	}
+
+	_ = os.Remove(cmd.webServerPIDPath())
+	return cmd.stopOrphanedWebServerByPort()
+}
+
+func (cmd *CmdTool) RunPureEngine(pargs ...string) error {
+	rawdir, _ := os.Getwd()
+	os.Chdir(cmd.GoDir)
+
+	binaryName := "main"
+	if runtime.GOOS == "windows" {
+		binaryName += ".exe"
+	}
+
+	envVars := []string{"CGO_ENABLED=0"}
+	if cmd.Args.Tags != nil && *cmd.Args.Tags != "" {
+		err := util.RunGolang(envVars, "build", "-tags="+*cmd.Args.Tags, "-o", binaryName)
+		if err != nil {
+			os.Chdir(rawdir)
+			return fmt.Errorf("failed to build Go binary: %w", err)
+		}
+	} else {
+		err := util.RunGolang(envVars, "build", "-o", binaryName)
+		if err != nil {
+			os.Chdir(rawdir)
+			return fmt.Errorf("failed to build Go binary: %w", err)
+		}
+	}
+
+	binaryPath := filepath.Join(cmd.GoDir, binaryName)
+	os.Chdir(rawdir)
+	return util.RunCommandInDir(cmd.TargetDir, binaryPath, pargs...)
+}
+
+func (cmd *CmdTool) RunWithAiMode(pargs ...string) error {
+	return cmd.RunPackMode(pargs...)
+}
+
+// RunInterpreted runs the project with a prebuilt runtime.
+func (cmd *CmdTool) RunInterpreted(pargs ...string) error {
+	extensionPath := path.Join(cmd.GoBinPath, "runtime.gdextension")
+
+	if _, err := os.Stat(extensionPath); os.IsNotExist(err) {
+		return fmt.Errorf("runtime.gdextension not found at %s. Please run 'spx install' first", extensionPath)
+	}
+
+	GOOS := runtime.GOOS
+	GOARCH := runtime.GOARCH
+	var libExt string
+	switch GOOS {
+	case "windows":
+		libExt = ".dll"
+	case "darwin":
+		libExt = ".dylib"
+	default:
+		libExt = ".so"
+	}
+	libName := fmt.Sprintf("gdspx-%s-%s%s", GOOS, GOARCH, libExt)
+	libPath := path.Join(cmd.GoBinPath, libName)
+	if _, err := os.Stat(libPath); os.IsNotExist(err) {
+		return fmt.Errorf("shared library %s not found at %s. Please run 'make install' first", libName, cmd.GoBinPath)
+	}
+
+	args := cmd.buildRuntimeArgs(pargs, cmd.RuntimeTempDir, extensionPath)
+	return util.RunCommandInDir(cmd.RuntimeTempDir, cmd.RuntimeCmdPath, args...)
 }
 
 // buildRuntimeArgs builds gdspxrt args.
-func (pself *CmdTool) buildRuntimeArgs(inputArgs []string, tempDir, extPath string, extraArgs ...string) []string {
+func (cmd *CmdTool) buildRuntimeArgs(inputArgs []string, tempDir, extPath string, extraArgs ...string) []string {
 	args := []string{}
 	for i := 0; i < len(inputArgs); i++ {
 		if inputArgs[i] == "--path" {
@@ -41,24 +145,6 @@ func (pself *CmdTool) buildRuntimeArgs(inputArgs []string, tempDir, extPath stri
 	return args
 }
 
-func (pself *CmdTool) RunPackMode(pargs ...string) error {
-	dllPath := path.Join(pself.RuntimeTempDir, filepath.Base(pself.LibPath))
-	util.CopyFile(pself.LibPath, dllPath)
-	extensionPath := path.Join(pself.RuntimeTempDir, "runtime.gdextension")
-	util.CopyFile(path.Join(pself.ProjectDir, "runtime.gdextension.txt"), extensionPath)
-
-	args := pself.buildRuntimeArgs(pargs, pself.RuntimeTempDir, extensionPath)
-	return util.RunCommandInDir(pself.RuntimeTempDir, pself.RuntimeCmdPath, args...)
-}
-
-func (pself *CmdTool) RunWeb() error {
-	return runWebCommand(pself.ExportWeb, pself.runWebServer)
-}
-
-func (pself *CmdTool) RunWebWorker() error {
-	return runWebCommand(pself.ExportWebWorker, pself.runWebServer)
-}
-
 // runWebCommand exports before serving.
 func runWebCommand(exportFn func() error, serverFn func() error) error {
 	if err := exportFn(); err != nil {
@@ -67,23 +153,23 @@ func runWebCommand(exportFn func() error, serverFn func() error) error {
 	return serverFn()
 }
 
-func (pself *CmdTool) webServerPIDPath() string {
-	baseDir := pself.TargetAbsDir
+func (cmd *CmdTool) webServerPIDPath() string {
+	baseDir := cmd.TargetAbsDir
 	if baseDir == "" {
-		baseDir = pself.TargetDir
+		baseDir = cmd.TargetDir
 	}
 	pidPath, _ := filepath.Abs(path.Join(baseDir, ".gdspx_web_server.pid"))
 	return pidPath
 }
 
-func (pself *CmdTool) runWebServer() error {
-	port := pself.ServerPort
-	if err := pself.StopWeb(); err != nil {
+func (cmd *CmdTool) runWebServer() error {
+	port := cmd.ServerPort
+	if err := cmd.StopWeb(); err != nil {
 		return err
 	}
-	scriptPath := filepath.Join(pself.ProjectDir, ".godot", "gdspx_web_server.py")
+	scriptPath := filepath.Join(cmd.ProjectDir, ".godot", "gdspx_web_server.py")
 	scriptPath = strings.ReplaceAll(scriptPath, "\\", "/")
-	executeDir := filepath.Join(pself.ProjectDir, ".builds/web")
+	executeDir := filepath.Join(cmd.ProjectDir, ".builds/web")
 	executeDir = strings.ReplaceAll(executeDir, "\\", "/")
 
 	pythonCmd := "python"
@@ -94,26 +180,26 @@ func (pself *CmdTool) runWebServer() error {
 		pythonCmd = "python3"
 	}
 
-	cmd := exec.Command(pythonCmd, scriptPath, "-r", executeDir, "-p", fmt.Sprint(port))
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	execCmd := exec.Command(pythonCmd, scriptPath, "-r", executeDir, "-p", fmt.Sprint(port))
+	execCmd.Stdout = os.Stdout
+	execCmd.Stderr = os.Stderr
 
-	if err := cmd.Start(); err != nil {
+	if err := execCmd.Start(); err != nil {
 		return fmt.Errorf("error starting server: %v", err)
 	}
-	if err := os.WriteFile(pself.webServerPIDPath(), []byte(strconv.Itoa(cmd.Process.Pid)), 0644); err != nil {
-		_ = cmd.Process.Kill()
+	if err := os.WriteFile(cmd.webServerPIDPath(), []byte(strconv.Itoa(execCmd.Process.Pid)), 0644); err != nil {
+		_ = execCmd.Process.Kill()
 		return fmt.Errorf("failed to record web server pid: %w", err)
 	}
 
 	done := make(chan error, 1)
 	go func() {
-		done <- cmd.Wait()
+		done <- execCmd.Wait()
 	}()
 
 	select {
 	case err := <-done:
-		_ = os.Remove(pself.webServerPIDPath())
+		_ = os.Remove(cmd.webServerPIDPath())
 		if err != nil {
 			return fmt.Errorf("web server exited early: %w", err)
 		}
@@ -124,49 +210,25 @@ func (pself *CmdTool) runWebServer() error {
 	return nil
 }
 
-func (pself *CmdTool) StopWeb() (err error) {
-	pidBytes, readErr := os.ReadFile(pself.webServerPIDPath())
-	if os.IsNotExist(readErr) {
-		return pself.stopOrphanedWebServerByPort()
-	}
-	if readErr != nil {
-		return fmt.Errorf("failed to read web server pid: %w", readErr)
-	}
-
-	pid, convErr := strconv.Atoi(strings.TrimSpace(string(pidBytes)))
-	if convErr != nil {
-		_ = os.Remove(pself.webServerPIDPath())
-		return pself.stopOrphanedWebServerByPort()
-	}
-
-	if pself.killWebServerProcess(pid) {
-		_ = os.Remove(pself.webServerPIDPath())
+func (cmd *CmdTool) stopOrphanedWebServerByPort() error {
+	if cmd.ServerPort <= 0 {
 		return nil
 	}
 
-	_ = os.Remove(pself.webServerPIDPath())
-	return pself.stopOrphanedWebServerByPort()
-}
-
-func (pself *CmdTool) stopOrphanedWebServerByPort() error {
-	if pself.ServerPort <= 0 {
-		return nil
-	}
-
-	pids, err := pself.listListeningPIDs(pself.ServerPort)
+	pids, err := cmd.listListeningPIDs(cmd.ServerPort)
 	if err != nil {
 		return nil
 	}
 
 	for _, pid := range pids {
-		if pself.killWebServerProcess(pid) {
+		if cmd.killWebServerProcess(pid) {
 			break
 		}
 	}
 	return nil
 }
 
-func (pself *CmdTool) listListeningPIDs(port int) ([]int, error) {
+func (cmd *CmdTool) listListeningPIDs(port int) ([]int, error) {
 	switch runtime.GOOS {
 	case "windows":
 		return listListeningPIDsWindows(port)
@@ -234,7 +296,7 @@ func parsePIDList(output []byte) []int {
 	return pids
 }
 
-func (pself *CmdTool) killWebServerProcess(pid int) bool {
+func (cmd *CmdTool) killWebServerProcess(pid int) bool {
 	if pid <= 0 || !looksLikeGDSPXWebServerProcess(pid) {
 		return false
 	}
@@ -287,66 +349,4 @@ func windowsProcessCommandLineQuery(pid int) string {
 
 func looksLikeGDSPXWebServerCommandLine(commandLine string) bool {
 	return strings.Contains(strings.ToLower(commandLine), "gdspx_web_server.py")
-}
-
-func (pself *CmdTool) RunPureEngine(pargs ...string) error {
-	rawdir, _ := os.Getwd()
-	os.Chdir(pself.GoDir)
-
-	binaryName := "main"
-	if runtime.GOOS == "windows" {
-		binaryName += ".exe"
-	}
-
-	envVars := []string{"CGO_ENABLED=0"}
-	if pself.Args.Tags != nil && *pself.Args.Tags != "" {
-		err := util.RunGolang(envVars, "build", "-tags="+*pself.Args.Tags, "-o", binaryName)
-		if err != nil {
-			os.Chdir(rawdir)
-			return fmt.Errorf("failed to build Go binary: %w", err)
-		}
-	} else {
-		err := util.RunGolang(envVars, "build", "-o", binaryName)
-		if err != nil {
-			os.Chdir(rawdir)
-			return fmt.Errorf("failed to build Go binary: %w", err)
-		}
-	}
-
-	binaryPath := filepath.Join(pself.GoDir, binaryName)
-	os.Chdir(rawdir)
-	return util.RunCommandInDir(pself.TargetDir, binaryPath, pargs...)
-}
-
-func (pself *CmdTool) RunWithAiMode(pargs ...string) error {
-	return pself.RunPackMode(pargs...)
-}
-
-// RunInterpreted runs the project with a prebuilt runtime.
-func (pself *CmdTool) RunInterpreted(pargs ...string) error {
-	extensionPath := path.Join(pself.GoBinPath, "runtime.gdextension")
-
-	if _, err := os.Stat(extensionPath); os.IsNotExist(err) {
-		return fmt.Errorf("runtime.gdextension not found at %s. Please run 'spx install' first", extensionPath)
-	}
-
-	GOOS := runtime.GOOS
-	GOARCH := runtime.GOARCH
-	var libExt string
-	switch GOOS {
-	case "windows":
-		libExt = ".dll"
-	case "darwin":
-		libExt = ".dylib"
-	default:
-		libExt = ".so"
-	}
-	libName := fmt.Sprintf("gdspx-%s-%s%s", GOOS, GOARCH, libExt)
-	libPath := path.Join(pself.GoBinPath, libName)
-	if _, err := os.Stat(libPath); os.IsNotExist(err) {
-		return fmt.Errorf("shared library %s not found at %s. Please run 'make install' first", libName, pself.GoBinPath)
-	}
-
-	args := pself.buildRuntimeArgs(pargs, pself.RuntimeTempDir, extensionPath)
-	return util.RunCommandInDir(pself.RuntimeTempDir, pself.RuntimeCmdPath, args...)
 }

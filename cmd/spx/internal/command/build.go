@@ -14,15 +14,101 @@ import (
 	"github.com/goplus/spx/v2/cmd/spx/internal/util"
 )
 
-// withGoDir runs f in pself.GoDir.
-func (pself *CmdTool) withGoDir(f func() error) error {
+func (cmd *CmdTool) BuildWasm() error {
+	cmd.genGo()
+
+	webBuildDir := path.Join(cmd.ProjectDir, ".builds/web/")
+	if err := os.MkdirAll(webBuildDir, 0755); err != nil {
+		return fmt.Errorf("failed to create web build directory: %w", err)
+	}
+	filePath := path.Join(webBuildDir, "ispx.wasm")
+
+	return cmd.withGoDir(func() error {
+		log.Printf("Building WebAssembly binary: %s", filePath)
+		envVars := []string{"GOOS=js", "GOARCH=wasm"}
+
+		util.RunGolang(envVars, "build", "-o", filePath)
+		return nil
+	})
+}
+
+// BuildTinyGoLib builds a TinyGo static library.
+func (cmd *CmdTool) BuildTinyGoLib() error {
+	cmd.genGo()
+
+	target := *cmd.Args.Target
+	if target == "" || target == "esp32" {
+		target = "esp32-coreboard-v2"
+	}
+
+	tinyGoBuildDir := path.Join(cmd.ProjectDir, ".builds/tinygo/")
+	if err := os.MkdirAll(tinyGoBuildDir, 0755); err != nil {
+		return fmt.Errorf("failed to create TinyGo build directory: %w", err)
+	}
+	outputPath := path.Join(tinyGoBuildDir, "golib.o")
+
+	args := []string{
+		"build",
+		"-o", outputPath,
+		"-target=" + target,
+		"-no-debug",
+		"-opt=2",
+		"-gc=leaking",
+		"-scheduler=none",
+	}
+	if tags := *cmd.Args.Tags; tags != "" {
+		args = append(args, "-tags="+tags)
+	}
+	args = append(args, ".")
+
+	envVars := []string{"GODEBUG=gotypesalias=0"}
+
+	if err := cmd.withGoDir(func() error {
+		log.Printf("Building TinyGo static library for target: %s", target)
+		if err := util.RunTinyGo(envVars, args...); err != nil {
+			return fmt.Errorf("TinyGo build failed: %w", err)
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	log.Printf("TinyGo static library built successfully: %s", outputPath)
+	return nil
+}
+
+func (cmd *CmdTool) BuildDll() error {
+	if err := cmd.hideIOSFiles(); err != nil {
+		return err
+	}
+
+	targetArchs, err := cmd.determineTargetArchs()
+	if err != nil {
+		return err
+	}
+
+	tagStr := cmd.genGo()
+
+	return cmd.withGoDir(func() error {
+		if err := cmd.executeDllBuild(targetArchs, tagStr); err != nil {
+			return err
+		}
+		if cmd.LibPath == "" {
+			return fmt.Errorf("build error: cannot find matched dylib for runtime arch %s", runtime.GOARCH)
+		}
+		return nil
+	})
+}
+
+// withGoDir runs f in GoDir.
+func (cmd *CmdTool) withGoDir(f func() error) error {
 	rawdir, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("failed to get current working directory: %w", err)
 	}
 
-	if err := os.Chdir(pself.GoDir); err != nil {
-		return fmt.Errorf("failed to change directory to GoDir %s: %w", pself.GoDir, err)
+	if err := os.Chdir(cmd.GoDir); err != nil {
+		return fmt.Errorf("failed to change directory to GoDir %s: %w", cmd.GoDir, err)
 	}
 
 	defer func() {
@@ -35,8 +121,8 @@ func (pself *CmdTool) withGoDir(f func() error) error {
 }
 
 // hideIOSFiles renames ios* files to *.txt.
-func (pself *CmdTool) hideIOSFiles() error {
-	searchPattern := filepath.Join(pself.ProjectDir, "go", "ios*")
+func (cmd *CmdTool) hideIOSFiles() error {
+	searchPattern := filepath.Join(cmd.ProjectDir, "go", "ios*")
 	files, err := filepath.Glob(searchPattern)
 	if err != nil {
 		log.Printf("Warning: Glob failed for pattern %s: %v", searchPattern, err)
@@ -55,12 +141,12 @@ func (pself *CmdTool) hideIOSFiles() error {
 }
 
 // determineTargetArchs resolves target architectures.
-func (pself *CmdTool) determineTargetArchs() ([]string, error) {
+func (cmd *CmdTool) determineTargetArchs() ([]string, error) {
 	if runtime.GOOS == "darwin" {
 		return []string{"amd64", "arm64"}, nil
 	}
 
-	tarArch := *pself.Args.Arch
+	tarArch := *cmd.Args.Arch
 	if tarArch == "" {
 		return []string{runtime.GOARCH}, nil
 	}
@@ -89,33 +175,33 @@ func (pself *CmdTool) determineTargetArchs() ([]string, error) {
 		tarArch, runtime.GOOS, strings.Join(validArchs, ","))
 }
 
-func (pself *CmdTool) genGo() string {
+func (cmd *CmdTool) genGo() string {
 	rawdir, err := os.Getwd()
 	if err != nil {
 		log.Fatalf("Failed to get current working directory: %v", err)
 	}
 
-	spxProjPath := filepath.Join(pself.ProjectDir, "..")
+	spxProjPath := filepath.Join(cmd.ProjectDir, "..")
 
-	if pself.UseXgobuildForCodegen {
-		if err := pself.genGoUsingXgobuild(rawdir, spxProjPath); err != nil {
+	if cmd.UseXgobuildForCodegen {
+		if err := cmd.genGoUsingXgobuild(rawdir, spxProjPath); err != nil {
 			log.Fatalf("Code generation failed using xgobuild: %v", err)
 		}
 	} else {
-		if err := pself.genGoUsingXgoCLI(rawdir, spxProjPath); err != nil {
+		if err := cmd.genGoUsingXgoCLI(rawdir, spxProjPath); err != nil {
 			log.Fatalf("Code generation failed using xgo CLI: %v", err)
 		}
 	}
 
-	return pself.SafeTagArgs()
+	return cmd.SafeTagArgs()
 }
 
 // genGoUsingXgobuild uses xgobuild.
-func (pself *CmdTool) genGoUsingXgobuild(rawdir, spxProjPath string) error {
-	if err := os.MkdirAll(pself.GoDir, 0755); err != nil {
+func (cmd *CmdTool) genGoUsingXgobuild(rawdir, spxProjPath string) error {
+	if err := os.MkdirAll(cmd.GoDir, 0755); err != nil {
 		return fmt.Errorf("failed to create GoDir: %w", err)
 	}
-	outputPath := path.Join(pself.GoDir, "main.go")
+	outputPath := path.Join(cmd.GoDir, "main.go")
 
 	fsys := gengo.NewDirFS(spxProjPath)
 	if err := gengo.GenGoFromFS(fsys, outputPath); err != nil {
@@ -138,7 +224,7 @@ func (pself *CmdTool) genGoUsingXgobuild(rawdir, spxProjPath string) error {
 }
 
 // genGoUsingXgoCLI uses xgo.
-func (pself *CmdTool) genGoUsingXgoCLI(rawdir, spxProjPath string) error {
+func (cmd *CmdTool) genGoUsingXgoCLI(rawdir, spxProjPath string) error {
 	if err := os.Chdir(spxProjPath); err != nil {
 		return fmt.Errorf("failed to change directory to project root for XGo: %w", err)
 	}
@@ -148,7 +234,7 @@ func (pself *CmdTool) genGoUsingXgoCLI(rawdir, spxProjPath string) error {
 		}
 	}()
 
-	tagStr := pself.SafeTagArgs()
+	tagStr := cmd.SafeTagArgs()
 	log.Printf("genGo tagStr: %s", tagStr)
 	envVars := []string{""}
 
@@ -158,12 +244,12 @@ func (pself *CmdTool) genGoUsingXgoCLI(rawdir, spxProjPath string) error {
 	}
 	util.RunXGo(envVars, args...)
 
-	if err := os.MkdirAll(pself.GoDir, 0755); err != nil {
+	if err := os.MkdirAll(cmd.GoDir, 0755); err != nil {
 		return fmt.Errorf("failed to create GoDir: %w", err)
 	}
 
 	sourceFile := path.Join(spxProjPath, "xgo_autogen.go")
-	destFile := path.Join(pself.GoDir, "main.go")
+	destFile := path.Join(cmd.GoDir, "main.go")
 
 	if err := os.Rename(sourceFile, destFile); err != nil {
 		return fmt.Errorf("failed to rename/move generated file %s to %s: %w", sourceFile, destFile, err)
@@ -174,98 +260,12 @@ func (pself *CmdTool) genGoUsingXgoCLI(rawdir, spxProjPath string) error {
 	return nil
 }
 
-func (pself *CmdTool) BuildWasm() error {
-	pself.genGo()
-
-	webBuildDir := path.Join(pself.ProjectDir, ".builds/web/")
-	if err := os.MkdirAll(webBuildDir, 0755); err != nil {
-		return fmt.Errorf("failed to create web build directory: %w", err)
-	}
-	filePath := path.Join(webBuildDir, "ispx.wasm")
-
-	return pself.withGoDir(func() error {
-		log.Printf("Building WebAssembly binary: %s", filePath)
-		envVars := []string{"GOOS=js", "GOARCH=wasm"}
-
-		util.RunGolang(envVars, "build", "-o", filePath)
-		return nil
-	})
-}
-
-// BuildTinyGoLib builds a TinyGo static library.
-func (pself *CmdTool) BuildTinyGoLib() error {
-	pself.genGo()
-
-	target := *pself.Args.Target
-	if target == "" || target == "esp32" {
-		target = "esp32-coreboard-v2"
-	}
-
-	tinyGoBuildDir := path.Join(pself.ProjectDir, ".builds/tinygo/")
-	if err := os.MkdirAll(tinyGoBuildDir, 0755); err != nil {
-		return fmt.Errorf("failed to create TinyGo build directory: %w", err)
-	}
-	outputPath := path.Join(tinyGoBuildDir, "golib.o")
-
-	args := []string{
-		"build",
-		"-o", outputPath,
-		"-target=" + target,
-		"-no-debug",
-		"-opt=2",
-		"-gc=leaking",
-		"-scheduler=none",
-	}
-	if tags := *pself.Args.Tags; tags != "" {
-		args = append(args, "-tags="+tags)
-	}
-	args = append(args, ".")
-
-	envVars := []string{"GODEBUG=gotypesalias=0"}
-
-	if err := pself.withGoDir(func() error {
-		log.Printf("Building TinyGo static library for target: %s", target)
-		if err := util.RunTinyGo(envVars, args...); err != nil {
-			return fmt.Errorf("TinyGo build failed: %w", err)
-		}
-		return nil
-	}); err != nil {
-		return err
-	}
-
-	log.Printf("TinyGo static library built successfully: %s", outputPath)
-	return nil
-}
-
-func (pself *CmdTool) BuildDll() error {
-	if err := pself.hideIOSFiles(); err != nil {
-		return err
-	}
-
-	targetArchs, err := pself.determineTargetArchs()
-	if err != nil {
-		return err
-	}
-
-	tagStr := pself.genGo()
-
-	return pself.withGoDir(func() error {
-		if err := pself.executeDllBuild(targetArchs, tagStr); err != nil {
-			return err
-		}
-		if pself.LibPath == "" {
-			return fmt.Errorf("build error: cannot find matched dylib for runtime arch %s", runtime.GOARCH)
-		}
-		return nil
-	})
-}
-
 // executeDllBuild runs the multi-arch C-shared build.
-func (pself *CmdTool) executeDllBuild(archs []string, tagStr string) error {
-	rawPath := filepath.Base(pself.LibPath)
-	rawDir := filepath.Dir(pself.LibPath)
+func (cmd *CmdTool) executeDllBuild(archs []string, tagStr string) error {
+	rawPath := filepath.Base(cmd.LibPath)
+	rawDir := filepath.Dir(cmd.LibPath)
 
-	pself.LibPath = ""
+	cmd.LibPath = ""
 	baseEnvs := []string{"CGO_ENABLED=1"}
 
 	buildArgs := []string{"build"}
@@ -287,7 +287,7 @@ func (pself *CmdTool) executeDllBuild(archs []string, tagStr string) error {
 		newPath := filepath.Join(rawDir, fmt.Sprintf("%s-%s.%s", baseName, arch, fileExt))
 
 		if arch == runtime.GOARCH {
-			pself.LibPath = newPath
+			cmd.LibPath = newPath
 		}
 
 		envs := append(baseEnvs, "GOARCH="+arch)

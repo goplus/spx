@@ -147,20 +147,6 @@ func PackZip(zipWriter *zip.Writer, baseFolder string, paths []DirInfos) error {
 	return nil
 }
 
-func zipEntryName(baseFolder string, dirInfo DirInfos) string {
-	if dirInfo.zipPath != "" {
-		return strings.TrimPrefix(normalizeZipPath(dirInfo.zipPath), "/")
-	}
-
-	baseFolder = normalizeZipPath(baseFolder)
-	name := strings.TrimPrefix(normalizeZipPath(dirInfo.path), baseFolder)
-	return strings.TrimPrefix(name, "/")
-}
-
-func normalizeZipPath(path string) string {
-	return strings.ReplaceAll(path, "\\", "/")
-}
-
 func PackDirFiles(zipName string, targetDir string, directories, files []string) error {
 	zipFile, err := os.Create(zipName)
 	if err != nil {
@@ -193,6 +179,20 @@ func PackDirFiles(zipName string, targetDir string, directories, files []string)
 	}
 
 	return closeZip(PackZip(zipWriter, targetDir, paths))
+}
+
+func zipEntryName(baseFolder string, dirInfo DirInfos) string {
+	if dirInfo.zipPath != "" {
+		return strings.TrimPrefix(normalizeZipPath(dirInfo.zipPath), "/")
+	}
+
+	baseFolder = normalizeZipPath(baseFolder)
+	name := strings.TrimPrefix(normalizeZipPath(dirInfo.path), baseFolder)
+	return strings.TrimPrefix(name, "/")
+}
+
+func normalizeZipPath(path string) string {
+	return strings.ReplaceAll(path, "\\", "/")
 }
 
 func addDirToZip(dirPath string, paths []DirInfos) ([]DirInfos, error) {
