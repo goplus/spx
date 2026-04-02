@@ -272,46 +272,9 @@ func (pself *CmdTool) getIspxWebDir() (string, error) {
 	ispxWebDir := path.Join(pself.GoBinPath, "ispx")
 	if _, err := os.Stat(ispxWebDir); os.IsNotExist(err) {
 		return "", fmt.Errorf("ispx web runtime not found at %s; "+
-			"run 'cd cmd/spx && ./install.sh --web' to install", ispxWebDir)
+			"run 'go run ./internal/cmd/buildctl tool install --web' to install", ispxWebDir)
 	}
 	return ispxWebDir, nil
-}
-
-// SetupPC sets up the PC environment by running the initialization script
-func (pself *CmdTool) SetupPC() error {
-	// Get current working directory
-	rawdir, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("failed to get current directory: %w", err)
-	}
-
-	// Check if the initialization script exists
-	toolPath, err := filepath.Abs(path.Join(rawdir, "gdspx/tools/init.sh"))
-	if err != nil {
-		return fmt.Errorf("failed to resolve tool path: %w", err)
-	}
-
-	// Verify the script exists
-	if _, err := os.Stat(toolPath); err != nil {
-		return fmt.Errorf("initialization script not found at %s: %w", toolPath, err)
-	}
-
-	// Change to the gdspx directory and run the initialization script
-	if err := os.Chdir("./gdspx"); err != nil {
-		return fmt.Errorf("failed to change to gdspx directory: %w", err)
-	}
-
-	// Run the initialization script
-	if err := util.RunCommandInDir(".", "./tools/init.sh", "-a"); err != nil {
-		return fmt.Errorf("failed to run initialization script: %w", err)
-	}
-
-	// Return to the original directory
-	if err := os.Chdir(rawdir); err != nil {
-		return fmt.Errorf("failed to return to original directory: %w", err)
-	}
-
-	return nil
 }
 
 // CheckEnv verifies that the target directory is a valid project directory

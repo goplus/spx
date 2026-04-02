@@ -5,45 +5,16 @@ import (
 	"os/exec"
 	"path"
 	"runtime"
-
-	_ "embed"
-
-	"github.com/goplus/spx/v2/cmd/spx/internal/util"
 )
-
-func downloadPack(dstDir, tagName, postfix string) error {
-	urlHeader := "https://github.com/goplus/godot/releases/download/"
-	fileName := tagName + postfix
-	url := urlHeader + tagName + "/" + fileName
-	// download pc
-	err := util.DownloadFile(url, path.Join(dstDir, fileName))
-	if err != nil {
-		return err
-	}
-	// download web
-	fileName = tagName + "_web.zip"
-	url = urlHeader + tagName + "/" + fileName
-	err = util.DownloadFile(url, path.Join(dstDir, fileName))
-	if err != nil {
-		return err
-	}
-	// download webpack
-	fileName = tagName + "_webpack.zip"
-	url = urlHeader + tagName + "/" + fileName
-	err = util.DownloadFile(url, path.Join(dstDir, fileName))
-	if err != nil {
-		return err
-	}
-	return err
-}
 
 func CheckAndGetAppPath(gobinDir, tag, version string, customGoEnv bool) (string, string, error) {
 	binPostfix := ""
-	if runtime.GOOS == "windows" {
+	switch runtime.GOOS {
+	case "windows":
 		binPostfix = ".exe"
-	} else if runtime.GOOS == "darwin" {
+	case "darwin":
 		binPostfix = ""
-	} else if runtime.GOOS == "linux" {
+	case "linux":
 		binPostfix = ""
 	}
 
