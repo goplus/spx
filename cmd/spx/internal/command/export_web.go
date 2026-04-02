@@ -313,7 +313,7 @@ func (cmd *CmdTool) moveFilesByPattern(srcDir, dstDir, pattern string) error {
 }
 
 // mergeJSFiles merges JavaScript files.
-func (cmd *CmdTool) mergeJSFiles(jsDir string, isCompressed bool) error {
+func (cmd *CmdTool) mergeJSFiles(jsDir string, isCompressed bool) (err error) {
 	jsFiles := []string{"header.js", "engine.js", "go.wasm.exec.js", "worker.message.manager.js", "game.js"}
 	outputFile := filepath.Join(jsDir, "engine_new.js")
 
@@ -321,7 +321,14 @@ func (cmd *CmdTool) mergeJSFiles(jsDir string, isCompressed bool) error {
 	if err != nil {
 		return err
 	}
-	defer output.Close()
+	defer func() {
+		if output == nil {
+			return
+		}
+		if closeErr := output.Close(); err == nil && closeErr != nil {
+			err = fmt.Errorf("closing merged JS output: %w", closeErr)
+		}
+	}()
 
 	writer := bufio.NewWriter(output)
 
@@ -342,16 +349,26 @@ func (cmd *CmdTool) mergeJSFiles(jsDir string, isCompressed bool) error {
 		}
 
 		_, err = io.Copy(writer, file)
-		file.Close()
+		closeErr := file.Close()
 		if err != nil {
 			return err
 		}
+		if closeErr != nil {
+			return closeErr
+		}
 
-		os.Remove(filePath)
+		if err := os.Remove(filePath); err != nil {
+			return err
+		}
 	}
 
-	if err := writer.Flush(); err != nil {
+	if err = writer.Flush(); err != nil {
 		return fmt.Errorf("flushing merged JS output: %w", err)
 	}
+	if err = output.Close(); err != nil {
+		output = nil
+		return fmt.Errorf("closing merged JS output: %w", err)
+	}
+	output = nil
 	return os.Rename(outputFile, filepath.Join(jsDir, "engine.js"))
 }
