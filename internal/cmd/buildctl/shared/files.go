@@ -4,15 +4,19 @@ import (
 	"archive/zip"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/goplus/spx/v2/internal/releasemeta"
 )
+
+var fileDownloadHTTPClient = &http.Client{Timeout: 30 * time.Minute}
 
 func ensureGoPath() (string, error) {
 	if goPath := os.Getenv("GOPATH"); goPath != "" {
@@ -38,12 +42,16 @@ func defaultRuntimeVersion() (string, error) {
 	return version, nil
 }
 
-func copyFile(src, dst string) error {
+func copyFile(src, dst string) (err error) {
 	input, err := os.Open(src)
 	if err != nil {
 		return err
 	}
-	defer input.Close()
+	defer func() {
+		if cerr := input.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
 
 	info, err := input.Stat()
 	if err != nil {
@@ -57,14 +65,18 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer output.Close()
+	defer func() {
+		if cerr := output.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
 
 	_, err = io.Copy(output, input)
 	return err
 }
 
 func copyDir(src, dst string) error {
-	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+	return filepath.WalkDir(src, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -74,14 +86,18 @@ func copyDir(src, dst string) error {
 			return err
 		}
 		target := filepath.Join(dst, rel)
-		if info.IsDir() {
+		if entry.IsDir() {
+			info, err := entry.Info()
+			if err != nil {
+				return err
+			}
 			return os.MkdirAll(target, info.Mode())
 		}
 		return copyFile(path, target)
 	})
 }
 
-func writeNamedZip(dst string, namedFiles map[string]string) error {
+func writeNamedZip(dst string, namedFiles map[string]string) (err error) {
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return err
 	}
@@ -93,7 +109,11 @@ func writeNamedZip(dst string, namedFiles map[string]string) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() {
+		if cerr := file.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
 
 	writer := zip.NewWriter(file)
 
@@ -125,15 +145,17 @@ func writeNamedZip(dst string, namedFiles map[string]string) error {
 			return err
 		}
 		if _, err := io.Copy(entry, input); err != nil {
-			input.Close()
+			_ = input.Close()
 			return err
 		}
-		input.Close()
+		if err := input.Close(); err != nil {
+			return err
+		}
 	}
 	return writer.Close()
 }
 
-func zipDirectory(srcDir, dstZip string) error {
+func zipDirectory(srcDir, dstZip string) (err error) {
 	if !fileExists(srcDir) {
 		return fmt.Errorf("source directory does not exist: %s", srcDir)
 	}
@@ -145,11 +167,11 @@ func zipDirectory(srcDir, dstZip string) error {
 	}
 
 	var files []string
-	if err := filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
+	if err := filepath.WalkDir(srcDir, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if info.IsDir() {
+		if entry.IsDir() {
 			return nil
 		}
 		files = append(files, path)
@@ -163,7 +185,11 @@ func zipDirectory(srcDir, dstZip string) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() {
+		if cerr := file.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
 
 	writer := zip.NewWriter(file)
 
@@ -192,10 +218,12 @@ func zipDirectory(srcDir, dstZip string) error {
 			return err
 		}
 		if _, err := io.Copy(entry, input); err != nil {
-			input.Close()
+			_ = input.Close()
 			return err
 		}
-		input.Close()
+		if err := input.Close(); err != nil {
+			return err
+		}
 	}
 	return writer.Close()
 }
@@ -245,29 +273,41 @@ func resolveZipExtractPath(dstDir, name string) (string, error) {
 	return targetPath, nil
 }
 
-func extractZipFile(file *zip.File, dst string) error {
+func extractZipFile(file *zip.File, dst string) (err error) {
 	reader, err := file.Open()
 	if err != nil {
 		return err
 	}
-	defer reader.Close()
+	defer func() {
+		if cerr := reader.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
 
 	output, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, file.Mode())
 	if err != nil {
 		return err
 	}
-	defer output.Close()
+	defer func() {
+		if cerr := output.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
 
 	_, err = io.Copy(output, reader)
 	return err
 }
 
 func fetchURLToFile(url, dst string) (err error) {
-	resp, err := http.Get(url)
+	resp, err := fileDownloadHTTPClient.Get(url)
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("download %s failed: %s", url, resp.Status)
