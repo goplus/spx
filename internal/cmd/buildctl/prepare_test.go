@@ -1,6 +1,7 @@
 package main
 
 import (
+	"archive/zip"
 	"errors"
 	"flag"
 	"os"
@@ -8,11 +9,20 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	enginepkg "github.com/goplus/spx/v2/internal/cmd/buildctl/engine"
+	"github.com/goplus/spx/v2/internal/cmd/buildctl/shared"
 )
 
 type recordedCall struct {
 	script string
 	args   []string
+}
+
+type recordedCommand struct {
+	dir  string
+	name string
+	args []string
 }
 
 type recordingRunner struct {
@@ -22,7 +32,7 @@ type recordingRunner struct {
 	commandHook func(workdir string, name string, args ...string) error
 }
 
-func (r *recordingRunner) runScript(relativePath string, args ...string) error {
+func (r *recordingRunner) RunScript(relativePath string, args ...string) error {
 	r.calls = append(r.calls, recordedCall{
 		script: relativePath,
 		args:   append([]string(nil), args...),
@@ -30,7 +40,7 @@ func (r *recordingRunner) runScript(relativePath string, args ...string) error {
 	return nil
 }
 
-func (r *recordingRunner) runCommand(workdir string, name string, args ...string) error {
+func (r *recordingRunner) RunCommand(workdir string, name string, args ...string) error {
 	dir := workdir
 	if r.repoRoot != "" && !filepath.IsAbs(dir) {
 		dir = filepath.Join(r.repoRoot, dir)
@@ -46,7 +56,7 @@ func (r *recordingRunner) runCommand(workdir string, name string, args ...string
 	return nil
 }
 
-func (r *recordingRunner) repoRootDir() string {
+func (r *recordingRunner) RepoRootDir() string {
 	if r.repoRoot == "" {
 		return "."
 	}
@@ -157,7 +167,7 @@ func TestPrepareAssetsRuntime(t *testing.T) {
 		t.Fatalf("unexpected calls: %#v", runner.calls)
 	}
 
-	if !fileExists(filepath.Join(os.Getenv("GOPATH"), "bin", "gdspx"+version)) {
+	if !shared.FileExists(filepath.Join(os.Getenv("GOPATH"), "bin", "gdspx"+version)) {
 		t.Fatalf("expected host editor binary to exist")
 	}
 }
@@ -176,7 +186,7 @@ func TestPrepareAssetsWeb(t *testing.T) {
 	if !reflect.DeepEqual(runner.calls, expectedCalls) {
 		t.Fatalf("unexpected calls: %#v", runner.calls)
 	}
-	if !fileExists(filepath.Join(os.Getenv("GOPATH"), "bin", "gdspx"+version)) {
+	if !shared.FileExists(filepath.Join(os.Getenv("GOPATH"), "bin", "gdspx"+version)) {
 		t.Fatalf("expected host editor binary to exist")
 	}
 
@@ -185,10 +195,10 @@ func TestPrepareAssetsWeb(t *testing.T) {
 	})
 
 	dstDir := filepath.Join(os.Getenv("GOPATH"), "bin", "gdspxrt"+version+"_webworker")
-	if !fileExists(filepath.Join(dstDir, "engine.zip")) {
+	if !shared.FileExists(filepath.Join(dstDir, "engine.zip")) {
 		t.Fatalf("expected engine.zip in %s", dstDir)
 	}
-	if !fileExists(filepath.Join(runner.repoRoot, "templates", "web_release.zip")) {
+	if !shared.FileExists(filepath.Join(runner.repoRoot, "templates", "web_release.zip")) {
 		t.Fatalf("expected downloaded web template in template dir")
 	}
 }
@@ -210,6 +220,95 @@ func TestPrepareAssetsFull(t *testing.T) {
 	assertRuntimeWorkspaceCommands(t, runner.commands, runner.repoRoot, []recordedCommand{
 		{name: "spx", args: []string{"exporttemplateweb"}},
 	})
+}
+
+func installFakeEngineDownload(t *testing.T, repoRoot, defaultPlatform, arch string) {
+	t.Helper()
+
+	restoreResolve := enginepkg.SetEngineDownloadResolveEnv(func(repoRootArg, platform string) (enginepkg.DownloadEnv, error) {
+		if platform == "" {
+			platform = defaultPlatform
+		}
+		version := mustDefaultRuntimeVersion(t)
+		return enginepkg.DownloadEnv{
+			RepoRoot:    repoRootArg,
+			Version:     version,
+			Platform:    platform,
+			Arch:        arch,
+			GoBinDir:    filepath.Join(os.Getenv("GOPATH"), "bin"),
+			TemplateDir: filepath.Join(repoRootArg, "templates"),
+			CacheDir:    filepath.Join(repoRootArg, "cache"),
+			URLPrefix:   "https://example.invalid/",
+		}, nil
+	})
+	oldFetch := enginepkg.EngineDownloadFetcher
+	enginepkg.EngineDownloadFetcher = fakeEngineDownloadFetcher
+
+	t.Cleanup(func() {
+		restoreResolve()
+		enginepkg.EngineDownloadFetcher = oldFetch
+	})
+}
+
+func fakeEngineDownloadFetcher(url, dst string) error {
+	base := filepath.Base(url)
+
+	switch base {
+	case "linux-x86_64.zip":
+		return writeZipFixture(dst, map[string]string{
+			"godot.linuxbsd.template_release.x86_64": "linux-template",
+		})
+	case "editor-linux-x86_64.zip":
+		return writeZipFixture(dst, map[string]string{
+			"godot.linuxbsd.editor.x86_64": "linux-editor",
+		})
+	case "web-worker.zip":
+		return writeZipFixture(dst, map[string]string{
+			"web-template.bin": "worker-web-template",
+		})
+	case "web.zip":
+		return writeZipFixture(dst, map[string]string{
+			"web-template.bin": "normal-web-template",
+		})
+	case "web-minigame.zip":
+		return writeZipFixture(dst, map[string]string{
+			"web-template.bin": "minigame-web-template",
+		})
+	case "web-miniprogram.zip":
+		return writeZipFixture(dst, map[string]string{
+			"web-template.bin": "miniprogram-web-template",
+		})
+	case "gdspxrt.pck.2.0.30.zip":
+		return writeZipFixture(dst, map[string]string{
+			"gdspxrt.pck": "runtime-pck",
+		})
+	default:
+		return errors.New("unexpected download URL: " + url)
+	}
+}
+
+func writeZipFixture(dst string, files map[string]string) error {
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+
+	file, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	writer := zip.NewWriter(file)
+	for name, content := range files {
+		entry, err := writer.Create(name)
+		if err != nil {
+			return err
+		}
+		if _, err := entry.Write([]byte(content)); err != nil {
+			return err
+		}
+	}
+	return writer.Close()
 }
 
 func assertRuntimeWorkspaceCommands(t *testing.T, got []recordedCommand, repoRoot string, want []recordedCommand) {

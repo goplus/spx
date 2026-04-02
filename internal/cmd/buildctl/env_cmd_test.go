@@ -4,6 +4,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/goplus/spx/v2/internal/cmd/buildctl/shared"
+	toolpkg "github.com/goplus/spx/v2/internal/cmd/buildctl/tool"
 )
 
 func TestParseEnvExportShellArgsDefault(t *testing.T) {
@@ -25,9 +28,9 @@ func TestResolveBuildEnvironmentUsesGodotSrcOverride(t *testing.T) {
 	t.Setenv("APPDATA", filepath.Join(repoRoot, "AppData"))
 	t.Setenv("GODOT_SRC", "./custom-godot")
 
-	env, err := resolveBuildEnvironment(repoRoot, "")
+	env, err := shared.ResolveBuildEnvironment(repoRoot, "")
 	if err != nil {
-		t.Fatalf("resolveBuildEnvironment returned error: %v", err)
+		t.Fatalf("ResolveBuildEnvironment returned error: %v", err)
 	}
 
 	wantEngineDir := filepath.Join(repoRoot, "custom-godot")
@@ -41,11 +44,11 @@ func TestResolveBuildEnvironmentUsesGodotSrcOverride(t *testing.T) {
 
 func TestBuildEnvironmentShellExports(t *testing.T) {
 	version := mustDefaultRuntimeVersion(t)
-	env := buildEnvironment{
+	env := shared.BuildEnvironment{
 		ProjectDir:    "/repo",
 		EngineDir:     "/repo/godot src",
 		GodotSrc:      "/repo/godot src",
-		EngineVersion: engineBuildVersion,
+		EngineVersion: shared.EngineBuildVersion,
 		GoPath:        "/tmp/go path",
 		Version:       version,
 		EngineGitTag:  "spx" + version,
@@ -54,7 +57,7 @@ func TestBuildEnvironmentShellExports(t *testing.T) {
 		Arch:          "x86_64",
 	}
 
-	out := env.shellExports()
+	out := env.ShellExports()
 	for _, key := range []string{
 		"export PROJ_DIR=",
 		"export ENGINE_DIR=",
@@ -78,9 +81,9 @@ func TestResolveMacOSVulkanSDKRootPrefersEnvOverride(t *testing.T) {
 	override := filepath.Join(homeDir, "custom-sdk")
 	mustWriteFile(t, filepath.Join(override, "bin", "vulkaninfo"), []byte("bin"))
 
-	got, err := resolveMacOSVulkanSDKRoot(homeDir, override)
+	got, err := shared.ResolveMacOSVulkanSDKRoot(homeDir, override)
 	if err != nil {
-		t.Fatalf("resolveMacOSVulkanSDKRoot returned error: %v", err)
+		t.Fatalf("ResolveMacOSVulkanSDKRoot returned error: %v", err)
 	}
 	if got != override {
 		t.Fatalf("sdk root = %s, want %s", got, override)
@@ -92,9 +95,9 @@ func TestResolveMacOSVulkanSDKRootSelectsLatestInstalledVersion(t *testing.T) {
 	mustWriteFile(t, filepath.Join(homeDir, "VulkanSDK", "1.3.99.0", "macOS", "bin", "vulkaninfo"), []byte("old"))
 	mustWriteFile(t, filepath.Join(homeDir, "VulkanSDK", "1.3.296.0", "macOS", "bin", "vulkaninfo"), []byte("new"))
 
-	got, err := resolveMacOSVulkanSDKRoot(homeDir, "")
+	got, err := shared.ResolveMacOSVulkanSDKRoot(homeDir, "")
 	if err != nil {
-		t.Fatalf("resolveMacOSVulkanSDKRoot returned error: %v", err)
+		t.Fatalf("ResolveMacOSVulkanSDKRoot returned error: %v", err)
 	}
 	want := filepath.Join(homeDir, "VulkanSDK", "1.3.296.0", "macOS")
 	if got != want {
@@ -111,13 +114,13 @@ func TestEnsureEngineSourceRunsCloneWhenMissing(t *testing.T) {
 
 	var gotName string
 	var gotArgs []string
-	err := ensureEngineSource(repoRoot, func(name string, args ...string) error {
+	err := shared.EnsureEngineSource(repoRoot, func(name string, args ...string) error {
 		gotName = name
 		gotArgs = append([]string(nil), args...)
 		return nil
 	})
 	if err != nil {
-		t.Fatalf("ensureEngineSource returned error: %v", err)
+		t.Fatalf("EnsureEngineSource returned error: %v", err)
 	}
 	if gotName != "git" {
 		t.Fatalf("command = %s, want git", gotName)
@@ -137,12 +140,12 @@ func TestEnsureEngineSourceSkipsCloneWhenPresent(t *testing.T) {
 	mustMkdirAll(t, filepath.Join(repoRoot, "custom-godot"))
 
 	called := false
-	err := ensureEngineSource(repoRoot, func(name string, args ...string) error {
+	err := shared.EnsureEngineSource(repoRoot, func(name string, args ...string) error {
 		called = true
 		return nil
 	})
 	if err != nil {
-		t.Fatalf("ensureEngineSource returned error: %v", err)
+		t.Fatalf("EnsureEngineSource returned error: %v", err)
 	}
 	if called {
 		t.Fatal("git clone should not be called when engine dir already exists")
@@ -158,9 +161,9 @@ func TestResolveJDKShellExportsIncludesPATHWhenJavaHomeExists(t *testing.T) {
 	mustWriteFile(t, filepath.Join(binDir, "java"), []byte("bin"))
 	t.Setenv("JAVA_HOME", filepath.Join(home, "custom-jdk"))
 
-	exports, err := resolveJDKShellExports()
+	exports, err := toolpkg.ResolveJDKShellExports()
 	if err != nil {
-		t.Fatalf("resolveJDKShellExports returned error: %v", err)
+		t.Fatalf("ResolveJDKShellExports returned error: %v", err)
 	}
 	if exports["JAVA_HOME"] == "" {
 		t.Fatalf("missing JAVA_HOME export: %#v", exports)
