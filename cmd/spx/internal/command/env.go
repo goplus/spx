@@ -22,6 +22,13 @@ type envVar struct {
 	value string
 }
 
+type portableGoPaths struct {
+	goRootBinPath string
+	goBinaryPath  string
+	goCacheDir    string
+	goModCacheDir string
+}
+
 // CheckEnv validates the target directory.
 func (cmd *CmdTool) CheckEnv() error {
 	dir, err := filepath.Abs(cmd.TargetDir)
@@ -42,69 +49,23 @@ func (cmd *CmdTool) SetupEnv(version string, fs embed.FS, fsRelDir string, proje
 	cmd.Version = version
 	cmd.ProjectRelPath = projectRelPath
 
-	var GOOS, GOARCH = runtime.GOOS, runtime.GOARCH
-	if os.Getenv("GOOS") != "" {
-		GOOS = os.Getenv("GOOS")
-	}
-	if os.Getenv("GOARCH") != "" {
-		GOARCH = os.Getenv("GOARCH")
-	}
-	if GOARCH != "amd64" && GOARCH != "arm64" {
-		return errors.New("gdx requires an amd64, or an arm64 system")
+	goos, goarch, err := resolveTargetPlatform()
+	if err != nil {
+		return err
 	}
 
-	if cmd.Args.Tags != nil && strings.Contains(*cmd.Args.Tags, "pure_engine") {
-		cmd.BinPostfix = ""
-		if runtime.GOOS == "windows" {
-			cmd.BinPostfix = ".exe"
-		}
-		cmd.CmdPath = ""
-	} else {
-		cmd.BinPostfix, cmd.CmdPath, err = resolveAppPath(cmd.GoBinPath, ENV_NAME, cmd.Version, cmd.CustomGoEnv)
-		if err != nil {
-			return fmt.Errorf(ENV_NAME+"requires engine to be installed as a binary at %s: %w", cmd.GoBinPath, err)
-		}
+	if err := cmd.setupEnginePaths(); err != nil {
+		return err
 	}
 
-	cmd.ProjectDir, _ = filepath.Abs(path.Join(cmd.TargetDir, cmd.ProjectRelPath))
-	cmd.GoDir, _ = filepath.Abs(cmd.ProjectDir + "/go")
-
-	if cmd.Args.Tags == nil || !strings.Contains(*cmd.Args.Tags, "pure_engine") {
-		cmd.RuntimeCmdPath = path.Join(cmd.GoBinPath, "gdspxrt"+cmd.Version+cmd.BinPostfix)
+	if err := cmd.setupProjectPaths(goos, goarch); err != nil {
+		return err
 	}
-	cmd.RuntimeTempDir, _ = filepath.Abs(path.Join(cmd.TargetDir, ".temp"))
-	os.Mkdir(cmd.RuntimeTempDir, 0755)
-
-	var libraryName = fmt.Sprintf(ENV_NAME+"-%v-%v", GOOS, GOARCH)
-	switch GOOS {
-	case "windows":
-		libraryName += ".dll"
-	case "darwin":
-		libraryName += ".dylib"
-	default:
-		libraryName += ".so"
-	}
-	cmd.LibPath, _ = filepath.Abs(path.Join(cmd.ProjectDir, "lib", libraryName))
 
 	cmd.PrepareEnv(fsRelDir, cmd.ProjectDir)
 
-	targetDir, _ := filepath.Abs(cmd.TargetDir)
-	projectName := filepath.Base(targetDir)
-	projectName = strings.ReplaceAll(projectName, "_", "")
-	projectName = strings.ReplaceAll(projectName, " ", "")
-	engineFilePath := path.Join(cmd.ProjectDir, "project.godot")
-	content, err := os.ReadFile(engineFilePath)
-	if err != nil {
-		return fmt.Errorf("Failed to read project file: %v", err)
-	}
-	strContent := string(content)
-
-	oldStr := `config/name="spx"`
-	newStr := fmt.Sprintf(`config/name="%s"`, projectName)
-	replacedContent := strings.ReplaceAll(strContent, oldStr, newStr)
-	err = os.WriteFile(engineFilePath, []byte(replacedContent), 0644)
-	if err != nil {
-		return fmt.Errorf("Failed to write project file: %v", err)
+	if err := cmd.updateProjectName(); err != nil {
+		return err
 	}
 
 	if cmd.ShouldReimport() {
@@ -183,76 +144,228 @@ func (cmd *CmdTool) Clear() error {
 	return nil
 }
 
+func resolveTargetPlatform() (string, string, error) {
+	goos := runtime.GOOS
+	if value := os.Getenv("GOOS"); value != "" {
+		goos = value
+	}
+
+	goarch := runtime.GOARCH
+	if value := os.Getenv("GOARCH"); value != "" {
+		goarch = value
+	}
+	if goarch != "amd64" && goarch != "arm64" {
+		return "", "", errors.New("gdx requires an amd64, or an arm64 system")
+	}
+
+	return goos, goarch, nil
+}
+
+func (cmd *CmdTool) setupEnginePaths() error {
+	if cmd.usesPureEngine() {
+		cmd.BinPostfix = ""
+		if runtime.GOOS == "windows" {
+			cmd.BinPostfix = ".exe"
+		}
+		cmd.CmdPath = ""
+		return nil
+	}
+
+	binPostfix, cmdPath, err := resolveAppPath(cmd.GoBinPath, ENV_NAME, cmd.Version, cmd.CustomGoEnv)
+	if err != nil {
+		return fmt.Errorf("%s requires engine to be installed as a binary at %s: %w", ENV_NAME, cmd.GoBinPath, err)
+	}
+	cmd.BinPostfix = binPostfix
+	cmd.CmdPath = cmdPath
+	return nil
+}
+
+func (cmd *CmdTool) setupProjectPaths(goos, goarch string) error {
+	projectDir, err := filepath.Abs(path.Join(cmd.TargetDir, cmd.ProjectRelPath))
+	if err != nil {
+		return fmt.Errorf("failed to resolve project directory: %w", err)
+	}
+	cmd.ProjectDir = projectDir
+
+	goDir, err := filepath.Abs(filepath.Join(projectDir, "go"))
+	if err != nil {
+		return fmt.Errorf("failed to resolve Go directory: %w", err)
+	}
+	cmd.GoDir = goDir
+
+	if cmd.usesPureEngine() {
+		cmd.RuntimeCmdPath = ""
+	} else {
+		cmd.RuntimeCmdPath = path.Join(cmd.GoBinPath, "gdspxrt"+cmd.Version+cmd.BinPostfix)
+	}
+
+	runtimeTempDir, err := filepath.Abs(path.Join(cmd.TargetDir, ".temp"))
+	if err != nil {
+		return fmt.Errorf("failed to resolve temp directory: %w", err)
+	}
+	cmd.RuntimeTempDir = runtimeTempDir
+	if err := os.MkdirAll(runtimeTempDir, 0o755); err != nil {
+		return fmt.Errorf("failed to create temp directory: %w", err)
+	}
+
+	libPath, err := filepath.Abs(path.Join(projectDir, "lib", libraryFileName(goos, goarch)))
+	if err != nil {
+		return fmt.Errorf("failed to resolve library path: %w", err)
+	}
+	cmd.LibPath = libPath
+	return nil
+}
+
+func libraryFileName(goos, goarch string) string {
+	libraryName := fmt.Sprintf("%s-%s-%s", ENV_NAME, goos, goarch)
+	switch goos {
+	case "windows":
+		return libraryName + ".dll"
+	case "darwin":
+		return libraryName + ".dylib"
+	default:
+		return libraryName + ".so"
+	}
+}
+
+func (cmd *CmdTool) updateProjectName() error {
+	targetDir, err := filepath.Abs(cmd.TargetDir)
+	if err != nil {
+		return fmt.Errorf("failed to resolve target directory: %w", err)
+	}
+	projectName := strings.ReplaceAll(strings.ReplaceAll(filepath.Base(targetDir), "_", ""), " ", "")
+
+	engineFilePath := path.Join(cmd.ProjectDir, "project.godot")
+	content, err := os.ReadFile(engineFilePath)
+	if err != nil {
+		return fmt.Errorf("failed to read project file: %w", err)
+	}
+
+	replacedContent := strings.ReplaceAll(
+		string(content),
+		`config/name="spx"`,
+		fmt.Sprintf(`config/name="%s"`, projectName),
+	)
+	if err := os.WriteFile(engineFilePath, []byte(replacedContent), 0o644); err != nil {
+		return fmt.Errorf("failed to write project file: %w", err)
+	}
+	return nil
+}
+
+func (cmd *CmdTool) usesPureEngine() bool {
+	return cmd.Args.Tags != nil && strings.Contains(*cmd.Args.Tags, "pure_engine")
+}
+
 // setupPortableGoEnv configures a portable Go toolchain.
 func (cmd *CmdTool) setupPortableGoEnv() error {
+	goPaths, err := cmd.resolvePortableGoEnvPaths()
+	if err != nil {
+		return err
+	}
+
+	if err := cmd.applyPortableGoEnv(goPaths); err != nil {
+		return err
+	}
+
+	printPortableGoEnv(cmd, goPaths)
+	return nil
+}
+
+func (cmd *CmdTool) resolvePortableGoEnvPaths() (portableGoPaths, error) {
 	goEnvDir, err := filepath.Abs(*cmd.Args.GoEnv)
 	if err != nil {
-		return fmt.Errorf("invalid goenv path: %w", err)
+		return portableGoPaths{}, fmt.Errorf("invalid goenv path: %w", err)
 	}
 
 	cmd.GoEnvDir = goEnvDir
 	cmd.CustomGoEnv = true
 
 	if _, err := os.Stat(goEnvDir); os.IsNotExist(err) {
-		return fmt.Errorf("goenv directory does not exist: %s", goEnvDir)
+		return portableGoPaths{}, fmt.Errorf("goenv directory does not exist: %s", goEnvDir)
 	}
 
 	cmd.GoRoot = path.Join(goEnvDir, "gotoolchain", "go")
 	cmd.GoPath = filepath.Join(goEnvDir, "go")
 	if _, err := os.Stat(cmd.GoRoot); os.IsNotExist(err) {
-		return fmt.Errorf("portable Go toolchain not found at the expected path: %s\n\nThis is expected to be provided by the SPX release package. If you are setting this up manually, please ensure the Go toolchain is extracted to '%s/gotoolchain/go'.", cmd.GoRoot, goEnvDir)
+		return portableGoPaths{}, fmt.Errorf("portable Go toolchain not found at the expected path: %s\n\nThis is expected to be provided by the SPX release package. If you are setting this up manually, please ensure the Go toolchain is extracted to '%s/gotoolchain/go'.", cmd.GoRoot, goEnvDir)
 	}
+
 	cmd.GoBinPath, err = filepath.Abs(filepath.Join(cmd.GoPath, "bin"))
 	if err != nil {
-		return fmt.Errorf("failed to resolve Go bin path: %w", err)
+		return portableGoPaths{}, fmt.Errorf("failed to resolve Go bin path: %w", err)
 	}
-
 	if _, err := os.Stat(cmd.GoBinPath); os.IsNotExist(err) {
-		return fmt.Errorf("Go bin directory not found: %s", cmd.GoBinPath)
+		return portableGoPaths{}, fmt.Errorf("Go bin directory not found: %s", cmd.GoBinPath)
 	}
 
-	goRootBinPath := filepath.Join(cmd.GoRoot, "bin")
-	if _, err := os.Stat(goRootBinPath); os.IsNotExist(err) {
-		return fmt.Errorf("Go bin directory not found: %s", goRootBinPath)
+	goPaths := portableGoPaths{
+		goRootBinPath: filepath.Join(cmd.GoRoot, "bin"),
+		goCacheDir:    filepath.Join(goEnvDir, ".cache", "build"),
+		goModCacheDir: filepath.Join(goEnvDir, ".cache", "mod"),
+	}
+	if _, err := os.Stat(goPaths.goRootBinPath); os.IsNotExist(err) {
+		return portableGoPaths{}, fmt.Errorf("Go bin directory not found: %s", goPaths.goRootBinPath)
 	}
 
-	goCacheDir := filepath.Join(goEnvDir, ".cache", "build")
-	goModCacheDir := filepath.Join(goEnvDir, ".cache", "mod")
+	goPaths.goBinaryPath = goBinaryPath(goPaths.goRootBinPath)
+	if _, err := os.Stat(goPaths.goBinaryPath); os.IsNotExist(err) {
+		return portableGoPaths{}, fmt.Errorf("Go executable not found: %s", goPaths.goBinaryPath)
+	}
 
-	os.MkdirAll(goCacheDir, 0755)
-	os.MkdirAll(goModCacheDir, 0755)
+	if err := os.MkdirAll(goPaths.goCacheDir, 0o755); err != nil {
+		return portableGoPaths{}, fmt.Errorf("failed to create Go build cache directory: %w", err)
+	}
+	if err := os.MkdirAll(goPaths.goModCacheDir, 0o755); err != nil {
+		return portableGoPaths{}, fmt.Errorf("failed to create Go module cache directory: %w", err)
+	}
 
-	currentPath := os.Getenv("PATH")
-	newPath := cmd.GoBinPath + string(os.PathListSeparator) + goRootBinPath + string(os.PathListSeparator) + currentPath
+	return goPaths, nil
+}
+
+func (cmd *CmdTool) applyPortableGoEnv(goPaths portableGoPaths) error {
+	pathEntries := []string{cmd.GoBinPath, goPaths.goRootBinPath}
+	if pathValue := os.Getenv("PATH"); pathValue != "" {
+		pathEntries = append(pathEntries, pathValue)
+	}
 	if err := setEnvVars(
 		envVar{key: "GOROOT", value: cmd.GoRoot},
 		envVar{key: "GOPATH", value: cmd.GoPath},
 		envVar{key: "GOTOOLCHAIN", value: ""},
-		envVar{key: "GOCACHE", value: goCacheDir},
-		envVar{key: "GOMODCACHE", value: goModCacheDir},
-		envVar{key: "PATH", value: newPath},
+		envVar{key: "GOCACHE", value: goPaths.goCacheDir},
+		envVar{key: "GOMODCACHE", value: goPaths.goModCacheDir},
+		envVar{key: "PATH", value: strings.Join(pathEntries, string(os.PathListSeparator))},
 	); err != nil {
 		return err
 	}
+	return nil
+}
 
-	fmt.Printf("Using portable Go environment:\n")
-	fmt.Printf("  GOROOT: %s\n", cmd.GoRoot)
-	fmt.Printf("  GOPATH: %s\n", cmd.GoPath)
-	fmt.Printf("  GoBinPath: %s (for gdspx, gdspxrt, etc.)\n", cmd.GoBinPath)
-	fmt.Printf("  Go binary: %s\n", filepath.Join(goRootBinPath, "go"))
-	fmt.Printf("  GOCACHE: %s\n", goCacheDir)
-	fmt.Printf("  GOMODCACHE: %s\n", goModCacheDir)
+func printPortableGoEnv(cmd *CmdTool, goPaths portableGoPaths) {
+	const portableGoEnvFormat = "" +
+		"Using portable Go environment:\n" +
+		"  GOROOT: %s\n" +
+		"  GOPATH: %s\n" +
+		"  GoBinPath: %s (for gdspx, gdspxrt, etc.)\n" +
+		"  Go binary: %s\n" +
+		"  GOCACHE: %s\n" +
+		"  GOMODCACHE: %s\n"
 
+	fmt.Printf(portableGoEnvFormat,
+		cmd.GoRoot,
+		cmd.GoPath,
+		cmd.GoBinPath,
+		goPaths.goBinaryPath,
+		goPaths.goCacheDir,
+		goPaths.goModCacheDir,
+	)
+}
+
+func goBinaryPath(goRootBinPath string) string {
 	goExe := "go"
 	if runtime.GOOS == "windows" {
 		goExe = "go.exe"
 	}
-	goPath := filepath.Join(goRootBinPath, goExe)
-	if _, err := os.Stat(goPath); os.IsNotExist(err) {
-		return fmt.Errorf("Go executable not found: %s", goPath)
-	}
-
-	return nil
+	return filepath.Join(goRootBinPath, goExe)
 }
 
 func setEnvVars(vars ...envVar) error {
