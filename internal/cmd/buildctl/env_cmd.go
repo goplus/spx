@@ -6,6 +6,10 @@ import (
 	"fmt"
 	"os"
 	"slices"
+
+	"github.com/goplus/spx/v2/internal/cmd/buildctl/engine"
+	"github.com/goplus/spx/v2/internal/cmd/buildctl/shared"
+	toolpkg "github.com/goplus/spx/v2/internal/cmd/buildctl/tool"
 )
 
 type envExportShellConfig struct {
@@ -15,7 +19,7 @@ type envExportShellConfig struct {
 func runEnv(args []string) error {
 	if len(args) == 0 {
 		printEnvUsage()
-		return errUsage
+		return shared.ErrUsage
 	}
 
 	switch args[0] {
@@ -41,19 +45,19 @@ func runEnv(args []string) error {
 }
 
 func printEnvUsage() {
-	fmt.Fprintln(osStderr, "Usage: buildctl env <ensure-engine-source|export-emsdk-shell|export-engine-build-shell|export-jdk-shell|export-shell|export-macos-vulkan-shell> [options]")
-	fmt.Fprintln(osStderr)
-	fmt.Fprintln(osStderr, "Commands:")
-	fmt.Fprintln(osStderr, "  ensure-engine-source      Clone the tagged Godot source tree when it is missing")
-	fmt.Fprintln(osStderr, "  export-emsdk-shell        Print shell exports for the activated emsdk environment")
-	fmt.Fprintln(osStderr, "  export-shell              Print shell export statements for shared build environment values")
-	fmt.Fprintln(osStderr, "  export-engine-build-shell Print shell exports for engine build target/platform values")
-	fmt.Fprintln(osStderr, "  export-jdk-shell          Print shell exports for the configured JDK environment")
-	fmt.Fprintln(osStderr, "  export-macos-vulkan-shell Print shell exports for the detected macOS Vulkan SDK")
+	fmt.Fprintln(os.Stderr, "Usage: buildctl env <ensure-engine-source|export-emsdk-shell|export-engine-build-shell|export-jdk-shell|export-shell|export-macos-vulkan-shell> [options]")
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, "Commands:")
+	fmt.Fprintln(os.Stderr, "  ensure-engine-source      Clone the tagged Godot source tree when it is missing")
+	fmt.Fprintln(os.Stderr, "  export-emsdk-shell        Print shell exports for the activated emsdk environment")
+	fmt.Fprintln(os.Stderr, "  export-shell              Print shell export statements for shared build environment values")
+	fmt.Fprintln(os.Stderr, "  export-engine-build-shell Print shell exports for engine build target/platform values")
+	fmt.Fprintln(os.Stderr, "  export-jdk-shell          Print shell exports for the configured JDK environment")
+	fmt.Fprintln(os.Stderr, "  export-macos-vulkan-shell Print shell exports for the detected macOS Vulkan SDK")
 }
 
 func runEnvExportEngineBuildShell(args []string) error {
-	cfg, err := parseEnvExportEngineBuildShellArgs(args)
+	cfg, err := engine.ParseEnvExportEngineBuildShellArgs(args)
 	if err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
@@ -61,15 +65,15 @@ func runEnvExportEngineBuildShell(args []string) error {
 		return err
 	}
 
-	repoRoot, err := findRepoRoot()
+	repoRoot, err := shared.FindRepoRoot()
 	if err != nil {
 		return err
 	}
-	plan, err := resolveEngineBuildShellPlan(repoRoot, cfg)
+	plan, err := engine.ResolveEngineBuildShellPlan(repoRoot, cfg)
 	if err != nil {
 		return err
 	}
-	fmt.Fprint(os.Stdout, plan.shellExports())
+	fmt.Fprint(os.Stdout, plan.ShellExports())
 	return nil
 }
 
@@ -80,13 +84,13 @@ func runEnvExportJDKShell(args []string) error {
 		}
 		return err
 	}
-	exports, err := resolveJDKShellExports()
+	exports, err := toolpkg.ResolveJDKShellExports()
 	if err != nil {
 		return err
 	}
 	for _, key := range []string{"JAVA_HOME", "PATH"} {
 		if value, ok := exports[key]; ok && value != "" {
-			fmt.Fprintf(os.Stdout, "export %s=%s\n", key, shellQuote(value))
+			fmt.Fprintf(os.Stdout, "export %s=%s\n", key, shared.ShellQuote(value))
 		}
 	}
 	return nil
@@ -99,7 +103,7 @@ func runEnvExportEMSDKShell(args []string) error {
 		}
 		return err
 	}
-	exports, err := resolveEMSDKShellExports()
+	exports, err := toolpkg.ResolveEMSDKShellExports()
 	if err != nil {
 		return err
 	}
@@ -109,23 +113,23 @@ func runEnvExportEMSDKShell(args []string) error {
 	}
 	slices.Sort(keys)
 	for _, key := range keys {
-		fmt.Fprintf(os.Stdout, "export %s=%s\n", key, shellQuote(exports[key]))
+		fmt.Fprintf(os.Stdout, "export %s=%s\n", key, shared.ShellQuote(exports[key]))
 	}
 	return nil
 }
 
 func parseEnvExportSimpleArgs(name, usage string, args []string) error {
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
-	fs.SetOutput(osStderr)
+	fs.SetOutput(os.Stderr)
 	fs.Usage = func() {
-		fmt.Fprintln(osStderr, usage)
+		fmt.Fprintln(os.Stderr, usage)
 	}
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() != 0 {
 		fs.Usage()
-		return errUsage
+		return shared.ErrUsage
 	}
 	return nil
 }
@@ -139,15 +143,15 @@ func runEnvExportShell(args []string) error {
 		return err
 	}
 
-	repoRoot, err := findRepoRoot()
+	repoRoot, err := shared.FindRepoRoot()
 	if err != nil {
 		return err
 	}
-	env, err := resolveBuildEnvironment(repoRoot, cfg.platform)
+	env, err := shared.ResolveBuildEnvironment(repoRoot, cfg.platform)
 	if err != nil {
 		return err
 	}
-	fmt.Fprint(os.Stdout, env.shellExports())
+	fmt.Fprint(os.Stdout, env.ShellExports())
 	return nil
 }
 
@@ -155,10 +159,10 @@ func parseEnvExportShellArgs(args []string) (envExportShellConfig, error) {
 	cfg := envExportShellConfig{}
 
 	fs := flag.NewFlagSet("env export-shell", flag.ContinueOnError)
-	fs.SetOutput(osStderr)
+	fs.SetOutput(os.Stderr)
 	fs.StringVar(&cfg.platform, "platform", "", "override detected platform: android, ios, web, linux, windows, or macos")
 	fs.Usage = func() {
-		fmt.Fprintln(osStderr, "Usage: buildctl env export-shell [--platform android|ios|web|linux|windows|macos]")
+		fmt.Fprintln(os.Stderr, "Usage: buildctl env export-shell [--platform android|ios|web|linux|windows|macos]")
 	}
 
 	if err := fs.Parse(args); err != nil {
@@ -166,9 +170,9 @@ func parseEnvExportShellArgs(args []string) (envExportShellConfig, error) {
 	}
 	if fs.NArg() != 0 {
 		fs.Usage()
-		return envExportShellConfig{}, errUsage
+		return envExportShellConfig{}, shared.ErrUsage
 	}
-	if err := validateOptionalPlatform(cfg.platform); err != nil {
+	if err := shared.ValidateOptionalPlatform(cfg.platform); err != nil {
 		return envExportShellConfig{}, err
 	}
 	return cfg, nil
@@ -182,20 +186,20 @@ func runEnvEnsureEngineSource(args []string) error {
 		return err
 	}
 
-	repoRoot, err := findRepoRoot()
+	repoRoot, err := shared.FindRepoRoot()
 	if err != nil {
 		return err
 	}
-	return ensureEngineSource(repoRoot, func(name string, args ...string) error {
-		return runStreamingCommand("", name, args...)
+	return shared.EnsureEngineSource(repoRoot, func(name string, args ...string) error {
+		return shared.RunStreamingCommand("", name, args...)
 	})
 }
 
 func parseEnvEnsureEngineSourceArgs(args []string) error {
 	fs := flag.NewFlagSet("env ensure-engine-source", flag.ContinueOnError)
-	fs.SetOutput(osStderr)
+	fs.SetOutput(os.Stderr)
 	fs.Usage = func() {
-		fmt.Fprintln(osStderr, "Usage: buildctl env ensure-engine-source")
+		fmt.Fprintln(os.Stderr, "Usage: buildctl env ensure-engine-source")
 	}
 
 	if err := fs.Parse(args); err != nil {
@@ -203,7 +207,7 @@ func parseEnvEnsureEngineSourceArgs(args []string) error {
 	}
 	if fs.NArg() != 0 {
 		fs.Usage()
-		return errUsage
+		return shared.ErrUsage
 	}
 	return nil
 }
@@ -220,19 +224,19 @@ func runEnvExportMacOSVulkanShell(args []string) error {
 	if err != nil {
 		return err
 	}
-	sdkRoot, err := resolveMacOSVulkanSDKRoot(homeDir, os.Getenv("VULKAN_SDK"))
+	sdkRoot, err := shared.ResolveMacOSVulkanSDKRoot(homeDir, os.Getenv("VULKAN_SDK"))
 	if err != nil {
 		return err
 	}
-	fmt.Fprint(os.Stdout, macOSVulkanSDKShellExports(sdkRoot))
+	fmt.Fprint(os.Stdout, shared.MacOSVulkanSDKShellExports(sdkRoot))
 	return nil
 }
 
 func parseEnvExportMacOSVulkanShellArgs(args []string) error {
 	fs := flag.NewFlagSet("env export-macos-vulkan-shell", flag.ContinueOnError)
-	fs.SetOutput(osStderr)
+	fs.SetOutput(os.Stderr)
 	fs.Usage = func() {
-		fmt.Fprintln(osStderr, "Usage: buildctl env export-macos-vulkan-shell")
+		fmt.Fprintln(os.Stderr, "Usage: buildctl env export-macos-vulkan-shell")
 	}
 
 	if err := fs.Parse(args); err != nil {
@@ -240,7 +244,7 @@ func parseEnvExportMacOSVulkanShellArgs(args []string) error {
 	}
 	if fs.NArg() != 0 {
 		fs.Usage()
-		return errUsage
+		return shared.ErrUsage
 	}
 	return nil
 }

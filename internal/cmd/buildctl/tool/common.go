@@ -1,0 +1,72 @@
+package tool
+
+import (
+	"os"
+
+	"github.com/goplus/spx/v2/internal/cmd/buildctl/shared"
+)
+
+var osStderr = os.Stderr
+
+var errUsage = shared.ErrUsage
+
+type scriptRunner interface {
+	runScript(relativePath string, args ...string) error
+	runCommand(workdir string, name string, args ...string) error
+	repoRootDir() string
+}
+
+type commandRunner struct {
+	repoRoot string
+}
+
+type scriptRunnerAdapter struct {
+	inner shared.ScriptRunner
+}
+
+func (r commandRunner) runScript(relativePath string, args ...string) error {
+	return shared.CommandRunner{RepoRoot: r.repoRoot}.RunScript(relativePath, args...)
+}
+
+func (r commandRunner) runCommand(workdir string, name string, args ...string) error {
+	return shared.CommandRunner{RepoRoot: r.repoRoot}.RunCommand(workdir, name, args...)
+}
+
+func (r commandRunner) repoRootDir() string {
+	return r.repoRoot
+}
+
+func (a scriptRunnerAdapter) runScript(relativePath string, args ...string) error {
+	return a.inner.RunScript(relativePath, args...)
+}
+
+func (a scriptRunnerAdapter) runCommand(workdir string, name string, args ...string) error {
+	return a.inner.RunCommand(workdir, name, args...)
+}
+
+func (a scriptRunnerAdapter) repoRootDir() string {
+	return a.inner.RepoRootDir()
+}
+
+func findRepoRoot() (string, error)  { return shared.FindRepoRoot() }
+func fileExists(path string) bool    { return shared.FileExists(path) }
+func ensureGoPath() (string, error)  { return shared.EnsureGoPath() }
+func copyDir(src, dst string) error  { return shared.CopyDir(src, dst) }
+func shellQuote(value string) string { return shared.ShellQuote(value) }
+func runStreamingCommand(workdir, name string, args ...string) error {
+	return shared.RunStreamingCommand(workdir, name, args...)
+}
+func fetchURLToFile(url, dst string) error   { return shared.FetchURLToFile(url, dst) }
+func extractZip(srcZip, dstDir string) error { return shared.ExtractZip(srcZip, dstDir) }
+func copyFile(src, dst string) error         { return shared.CopyFile(src, dst) }
+
+func installTools(cfg toolInstallConfig, runner scriptRunner) error {
+	args := []string{}
+	if cfg.web {
+		args = append(args, "--web")
+	}
+	if cfg.opt {
+		args = append(args, "--opt")
+	}
+	return runner.runScript("cmd/spx/install.sh", args...)
+}

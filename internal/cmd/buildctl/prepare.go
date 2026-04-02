@@ -4,7 +4,12 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"os"
 	"path/filepath"
+
+	"github.com/goplus/spx/v2/internal/cmd/buildctl/engine"
+	"github.com/goplus/spx/v2/internal/cmd/buildctl/runtimecmd"
+	"github.com/goplus/spx/v2/internal/cmd/buildctl/shared"
 )
 
 type prepareConfig struct {
@@ -21,12 +26,12 @@ func runPrepare(args []string) error {
 		return err
 	}
 
-	repoRoot, err := findRepoRoot()
+	repoRoot, err := shared.FindRepoRoot()
 	if err != nil {
 		return err
 	}
 
-	runner := commandRunner{repoRoot: repoRoot}
+	runner := shared.CommandRunner{RepoRoot: repoRoot}
 	return prepareAssets(cfg, runner)
 }
 
@@ -37,12 +42,12 @@ func parsePrepareArgs(args []string) (prepareConfig, error) {
 	}
 
 	fs := flag.NewFlagSet("prepare", flag.ContinueOnError)
-	fs.SetOutput(osStderr)
+	fs.SetOutput(os.Stderr)
 	fs.StringVar(&cfg.setupMode, "setup-mode", cfg.setupMode, "setup mode: runtime, web, or full")
 	fs.StringVar(&cfg.webMode, "web-mode", cfg.webMode, "web mode: normal, worker, minigame, or miniprogram")
 
 	fs.Usage = func() {
-		fmt.Fprintln(osStderr, "Usage: buildctl prepare [--setup-mode runtime|web|full] [--web-mode normal|worker|minigame|miniprogram]")
+		fmt.Fprintln(os.Stderr, "Usage: buildctl prepare [--setup-mode runtime|web|full] [--web-mode normal|worker|minigame|miniprogram]")
 	}
 
 	if err := fs.Parse(args); err != nil {
@@ -50,7 +55,7 @@ func parsePrepareArgs(args []string) (prepareConfig, error) {
 	}
 	if fs.NArg() != 0 {
 		fs.Usage()
-		return prepareConfig{}, errUsage
+		return prepareConfig{}, shared.ErrUsage
 	}
 
 	if err := cfg.validate(); err != nil {
@@ -61,24 +66,24 @@ func parsePrepareArgs(args []string) (prepareConfig, error) {
 }
 
 func (cfg prepareConfig) validate() error {
-	if err := validateSetupMode(cfg.setupMode); err != nil {
+	if err := shared.ValidateSetupMode(cfg.setupMode); err != nil {
 		return err
 	}
-	if err := validateWebMode(cfg.webMode); err != nil {
+	if err := shared.ValidateWebMode(cfg.webMode); err != nil {
 		return err
 	}
 	return nil
 }
 
-func prepareAssets(cfg prepareConfig, runner scriptRunner) error {
+func prepareAssets(cfg prepareConfig, runner shared.ScriptRunner) error {
 	switch cfg.setupMode {
 	case "runtime":
-		if err := runner.runScript(filepath.Join("cmd", "spx", "install.sh")); err != nil {
+		if err := runner.RunScript(filepath.Join("cmd", "spx", "install.sh")); err != nil {
 			return err
 		}
 		return prepareRuntimeAssets(runner)
 	case "web":
-		if err := prepareHostEditorAsset(runner.repoRootDir()); err != nil {
+		if err := prepareHostEditorAsset(runner.RepoRootDir()); err != nil {
 			return err
 		}
 		return prepareWebAssets(cfg.webMode, runner)
@@ -92,24 +97,20 @@ func prepareAssets(cfg prepareConfig, runner scriptRunner) error {
 	}
 }
 
-func prepareRuntimeAssets(runner scriptRunner) error {
-	return downloadEngineAssets(engineDownloadConfig{runtime: true}, runner.repoRootDir())
+func prepareRuntimeAssets(runner shared.ScriptRunner) error {
+	return engine.DownloadEngineAssets(engine.DownloadConfig{Runtime: true}, runner.RepoRootDir())
 }
 
 func prepareHostEditorAsset(repoRoot string) error {
-	env, err := engineDownloadResolveEnv(repoRoot, "")
-	if err != nil {
-		return err
-	}
-	return downloadPlatformAssets(env, "editor", true)
+	return engine.PrepareHostEditorAsset(repoRoot)
 }
 
-func prepareWebAssets(webMode string, runner scriptRunner) error {
-	if err := downloadEngineAssets(engineDownloadConfig{platform: "web", mode: webMode}, runner.repoRootDir()); err != nil {
+func prepareWebAssets(webMode string, runner shared.ScriptRunner) error {
+	if err := engine.DownloadEngineAssets(engine.DownloadConfig{Platform: "web", Mode: webMode}, runner.RepoRootDir()); err != nil {
 		return err
 	}
-	if err := runner.runScript(filepath.Join("cmd", "spx", "install.sh"), "--web"); err != nil {
+	if err := runner.RunScript(filepath.Join("cmd", "spx", "install.sh"), "--web"); err != nil {
 		return err
 	}
-	return exportWebTemplateRuntime(webMode, runner)
+	return runtimecmd.ExportWebTemplateRuntime(webMode, runner)
 }

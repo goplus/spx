@@ -1,0 +1,157 @@
+package workflow
+
+import (
+	"os"
+
+	"github.com/goplus/spx/v2/internal/cmd/buildctl/runtimecmd"
+	"github.com/goplus/spx/v2/internal/cmd/buildctl/shared"
+	toolpkg "github.com/goplus/spx/v2/internal/cmd/buildctl/tool"
+)
+
+var osStderr = os.Stderr
+
+var errUsage = shared.ErrUsage
+
+type scriptRunner interface {
+	runScript(relativePath string, args ...string) error
+	runCommand(workdir string, name string, args ...string) error
+	repoRootDir() string
+}
+
+type commandRunner struct {
+	repoRoot string
+}
+
+type sharedScriptRunnerAdapter struct {
+	inner shared.ScriptRunner
+}
+
+type sharedWorkflowRunnerAdapter struct {
+	inner shared.WorkflowRunner
+}
+
+func (r commandRunner) runScript(relativePath string, args ...string) error {
+	return shared.CommandRunner{RepoRoot: r.repoRoot}.RunScript(relativePath, args...)
+}
+
+func (r commandRunner) runCommand(workdir string, name string, args ...string) error {
+	return shared.CommandRunner{RepoRoot: r.repoRoot}.RunCommand(workdir, name, args...)
+}
+
+func (r commandRunner) repoRootDir() string {
+	return r.repoRoot
+}
+
+func (r commandRunner) listDemoDirs() ([]string, error) {
+	return shared.CommandRunner{RepoRoot: r.repoRoot}.ListDemoDirs()
+}
+
+func (r commandRunner) stopWebServers() error {
+	return shared.CommandRunner{RepoRoot: r.repoRoot}.StopWebServers()
+}
+
+func (a sharedScriptRunnerAdapter) runScript(relativePath string, args ...string) error {
+	return a.inner.RunScript(relativePath, args...)
+}
+
+func (a sharedScriptRunnerAdapter) runCommand(workdir string, name string, args ...string) error {
+	return a.inner.RunCommand(workdir, name, args...)
+}
+
+func (a sharedScriptRunnerAdapter) repoRootDir() string {
+	return a.inner.RepoRootDir()
+}
+
+func (a sharedWorkflowRunnerAdapter) runScript(relativePath string, args ...string) error {
+	return a.inner.RunScript(relativePath, args...)
+}
+
+func (a sharedWorkflowRunnerAdapter) runCommand(workdir string, name string, args ...string) error {
+	return a.inner.RunCommand(workdir, name, args...)
+}
+
+func (a sharedWorkflowRunnerAdapter) repoRootDir() string {
+	return a.inner.RepoRootDir()
+}
+
+func (a sharedWorkflowRunnerAdapter) listDemoDirs() ([]string, error) {
+	return a.inner.ListDemoDirs()
+}
+
+func (a sharedWorkflowRunnerAdapter) stopWebServers() error {
+	return a.inner.StopWebServers()
+}
+
+func findRepoRoot() (string, error)     { return shared.FindRepoRoot() }
+func validateWebMode(mode string) error { return shared.ValidateWebMode(mode) }
+
+type toolInstallConfig struct {
+	web bool
+	opt bool
+}
+
+type engineBuildConfig struct {
+	target   string
+	platform string
+	mode     string
+}
+
+type runtimeBuildWasmConfig struct {
+	opt bool
+}
+
+func installTools(cfg toolInstallConfig, runner scriptRunner) error {
+	return toolpkg.InstallTools(toolpkg.InstallConfig{Web: cfg.web, Opt: cfg.opt}, runnerAdapter{inner: runner})
+}
+
+func buildWasmRuntime(cfg runtimeBuildWasmConfig, runner workflowRunner) error {
+	return runtimecmd.BuildWasmRuntime(runtimecmd.BuildWasmConfig{Opt: cfg.opt}, workflowRunnerAdapter{inner: runner})
+}
+
+func exportWebTemplateRuntime(mode string, runner scriptRunner) error {
+	return runtimecmd.ExportWebTemplateRuntime(mode, runnerAdapter{inner: runner})
+}
+
+func exportPackRuntime(runner scriptRunner) error {
+	return runtimecmd.ExportPackRuntime(runnerAdapter{inner: runner})
+}
+
+type runnerAdapter struct {
+	inner scriptRunner
+}
+
+func (a runnerAdapter) RunScript(relativePath string, args ...string) error {
+	return a.inner.runScript(relativePath, args...)
+}
+
+func (a runnerAdapter) RunCommand(workdir string, name string, args ...string) error {
+	return a.inner.runCommand(workdir, name, args...)
+}
+
+func (a runnerAdapter) RepoRootDir() string {
+	return a.inner.repoRootDir()
+}
+
+type workflowRunnerAdapter struct {
+	inner workflowRunner
+}
+
+func (a workflowRunnerAdapter) RunScript(relativePath string, args ...string) error {
+	return a.inner.runScript(relativePath, args...)
+}
+
+func (a workflowRunnerAdapter) RunCommand(workdir string, name string, args ...string) error {
+	return a.inner.runCommand(workdir, name, args...)
+}
+
+func (a workflowRunnerAdapter) RepoRootDir() string {
+	return a.inner.repoRootDir()
+}
+
+func (a workflowRunnerAdapter) ListDemoDirs() ([]string, error) {
+	return a.inner.listDemoDirs()
+}
+
+func (a workflowRunnerAdapter) StopWebServers() error {
+	return a.inner.stopWebServers()
+}
