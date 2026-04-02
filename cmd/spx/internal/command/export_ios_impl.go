@@ -33,6 +33,7 @@ type iosArchiveBuild struct {
 	env        []string
 }
 
+// ExportIos exports the current project as an iOS IPA.
 func (cmd *CmdTool) ExportIos() error {
 	fmt.Println("===> Starting iOS IPA export process...")
 
@@ -90,7 +91,7 @@ func (cmd *CmdTool) prepareIosOutput() (string, error) {
 	buildDir := filepath.Dir(ipaPath)
 	fmt.Printf("===> IPA output path: %s\n", ipaPath)
 
-	if err := os.MkdirAll(buildDir, os.ModePerm); err != nil {
+	if err := os.MkdirAll(buildDir, 0o755); err != nil {
 		return "", fmt.Errorf("failed to create build directory: %w", err)
 	}
 	fmt.Printf("===> Build directory created: %s\n", buildDir)
@@ -263,7 +264,7 @@ func prepareIosLibraryDirs(paths iosLibraryPaths) error {
 		return fmt.Errorf("failed to clean xcframework path: %w", err)
 	}
 	for _, dir := range []string{paths.simulatorDir, paths.deviceDir, paths.libDir, paths.headersDir} {
-		if err := os.MkdirAll(dir, os.ModePerm); err != nil {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return fmt.Errorf("failed to create directory %s: %w", dir, err)
 		}
 	}
@@ -308,10 +309,26 @@ func lookupIosSDKPaths() (iosSDKPaths, error) {
 		return iosSDKPaths{}, fmt.Errorf("failed to get device SDK path: %w", err)
 	}
 
+	simulatorPath := strings.TrimSpace(string(simulator))
+	devicePath := strings.TrimSpace(string(device))
+	if err := validateSDKPath("simulator", simulatorPath); err != nil {
+		return iosSDKPaths{}, err
+	}
+	if err := validateSDKPath("device", devicePath); err != nil {
+		return iosSDKPaths{}, err
+	}
+
 	return iosSDKPaths{
-		simulator: strings.TrimSpace(string(simulator)),
-		device:    strings.TrimSpace(string(device)),
+		simulator: simulatorPath,
+		device:    devicePath,
 	}, nil
+}
+
+func validateSDKPath(name, sdkPath string) error {
+	if strings.ContainsAny(sdkPath, " \t\n") {
+		return fmt.Errorf("%s SDK path contains whitespace: %q", name, sdkPath)
+	}
+	return nil
 }
 
 func (cmd *CmdTool) buildIosArchives(paths iosLibraryPaths, sdkPaths iosSDKPaths) error {

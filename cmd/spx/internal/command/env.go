@@ -16,6 +16,7 @@ import (
 )
 
 var ENV_NAME = "gdspx"
+var projectNameReplacer = strings.NewReplacer("_", "", " ", "", "\"", "", "\n", "", "\r", "")
 
 type envVar struct {
 	key   string
@@ -233,7 +234,7 @@ func (cmd *CmdTool) updateProjectName() error {
 	if err != nil {
 		return fmt.Errorf("failed to resolve target directory: %w", err)
 	}
-	projectName := strings.ReplaceAll(strings.ReplaceAll(filepath.Base(targetDir), "_", ""), " ", "")
+	projectName := projectNameReplacer.Replace(filepath.Base(targetDir))
 
 	engineFilePath := path.Join(cmd.ProjectDir, "project.godot")
 	content, err := os.ReadFile(engineFilePath)

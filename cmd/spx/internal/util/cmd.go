@@ -12,22 +12,25 @@ type CommandOptions struct {
 	Dir string
 }
 
+// RunCommandInDir runs a command in dir and exits the process on failure.
 func RunCommandInDir(dir string, name string, args ...string) error {
 	return RunCommand(nil, dir, name, args...)
 }
 
+// RunCommandWithEnv runs a command with envVars and exits the process on failure.
 func RunCommandWithEnv(envVars []string, name string, args ...string) error {
 	return RunCommand(envVars, "", name, args...)
 }
 
+// RunCommand runs a command and terminates the process if it fails.
 func RunCommand(envVars []string, dir string, name string, args ...string) error {
-	err := ExecCommand(CommandOptions{Env: envVars, Dir: dir}, name, args...)
-	if err != nil {
+	if err := ExecCommand(CommandOptions{Env: envVars, Dir: dir}, name, args...); err != nil {
 		spxlog.Fatalf("command %s failed: %v", name, err)
 	}
-	return err
+	return nil
 }
 
+// ExecCommand runs a command and returns any execution error to the caller.
 func ExecCommand(options CommandOptions, name string, args ...string) error {
 	execCmd := exec.Command(name, args...)
 	applyCommandOptions(execCmd, options)
@@ -36,6 +39,7 @@ func ExecCommand(options CommandOptions, name string, args ...string) error {
 	return execCmd.Run()
 }
 
+// OutputCommand runs a command and returns its stdout without exiting the process.
 func OutputCommand(options CommandOptions, name string, args ...string) ([]byte, error) {
 	execCmd := exec.Command(name, args...)
 	applyCommandOptions(execCmd, options)

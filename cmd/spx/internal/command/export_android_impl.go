@@ -26,6 +26,7 @@ type androidBuildContext struct {
 	minSDK       string
 }
 
+// ExportApk exports the current project as an Android APK.
 func (cmd *CmdTool) ExportApk() error {
 	if err := cmd.prepareExport(); err != nil {
 		return err
@@ -38,7 +39,7 @@ func (cmd *CmdTool) ExportApk() error {
 	apkPath := filepath.Join(cmd.ProjectDir, ".builds", "android", "game.apk")
 	buildDir := filepath.Dir(apkPath)
 
-	if err := os.MkdirAll(buildDir, os.ModePerm); err != nil {
+	if err := os.MkdirAll(buildDir, 0o755); err != nil {
 		return fmt.Errorf("failed to create build directory: %w", err)
 	}
 
@@ -53,7 +54,10 @@ func (cmd *CmdTool) ExportApk() error {
 
 	fmt.Println("Importing project resources...")
 	execCmd := exec.Command(cmd.CmdPath, "--headless", "--path", cmd.ProjectDir, "--editor", "--quit")
+	execCmd.Stdout = os.Stdout
+	execCmd.Stderr = os.Stderr
 	if err := execCmd.Run(); err != nil {
+		fmt.Printf("Warning: project import failed: %v\n", err)
 	}
 
 	fmt.Println("Exporting Godot project to APK...")
@@ -62,50 +66,44 @@ func (cmd *CmdTool) ExportApk() error {
 	execCmd.Stderr = os.Stderr
 
 	if err := execCmd.Run(); err != nil {
-		fmt.Println("APK export failed: %w", err)
+		return fmt.Errorf("APK export failed: %w", err)
 	}
 
 	if _, err := os.Stat(apkPath); os.IsNotExist(err) {
-		fmt.Println("APK export failed: file not created at ", apkPath)
-		return nil
+		return fmt.Errorf("APK export failed: file not created at %s", apkPath)
+	} else if err != nil {
+		return fmt.Errorf("failed to verify APK output: %w", err)
 	}
 	log.Println("APK export completed successfully!", apkPath)
 
-	_, err := exec.LookPath("adb")
-	if err != nil {
-		fmt.Println("adb command not found. Please ensure Android SDK platform tools are installed and in your PATH")
+	if !*cmd.Args.Install {
 		return nil
 	}
 
-	execCmd = exec.Command("adb", "devices")
-	output, err := execCmd.Output()
+	if _, err := exec.LookPath("adb"); err != nil {
+		return fmt.Errorf("adb command not found; ensure Android SDK platform tools are installed and in PATH: %w", err)
+	}
+
+	output, err := util.OutputCommand(util.CommandOptions{}, "adb", "devices")
 	if err != nil {
-		fmt.Println("failed to check for connected devices:", err)
-		return nil
+		return fmt.Errorf("failed to check connected devices: %w", err)
 	}
 
 	if !strings.Contains(string(output), "device\n") {
-		fmt.Println("no Android device connected. Please connect a device and enable USB debugging")
-		return nil
+		return fmt.Errorf("no Android device connected; connect a device and enable USB debugging")
 	}
-
-	if *cmd.Args.Install {
-		fmt.Println("Installing APK...")
-		execCmd = exec.Command("adb", "install", "-r", apkPath)
-		if err := execCmd.Run(); err != nil {
-			fmt.Println("APK installation failed:", err)
-			return nil
-		}
-		fmt.Println("APK installation successful!")
+	fmt.Println("Installing APK...")
+	if err := util.ExecCommand(util.CommandOptions{}, "adb", "install", "-r", apkPath); err != nil {
+		return fmt.Errorf("APK installation failed: %w", err)
 	}
+	fmt.Println("APK installation successful!")
 	return nil
 }
 
 func (cmd *CmdTool) buildAndroidLibraries() error {
 	androidNdkRoot := os.Getenv("ANDROID_NDK_ROOT")
 	if androidNdkRoot == "" {
-		fmt.Println("ANDROID_NDK_ROOT environment variable is not set")
-		return nil
+		return fmt.Errorf("ANDROID_NDK_ROOT environment variable is not set")
 	}
 
 	paths, err := cmd.resolveAndroidBuildContext(androidNdkRoot)
@@ -158,7 +156,7 @@ func resolveAndroidHostTag() (string, error) {
 }
 
 func prepareAndroidLibraryDir(libDir string) error {
-	if err := os.MkdirAll(libDir, os.ModePerm); err != nil {
+	if err := os.MkdirAll(libDir, 0o755); err != nil {
 		return fmt.Errorf("failed to create lib directory: %w", err)
 	}
 	return nil

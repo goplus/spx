@@ -11,9 +11,10 @@ import (
 	"github.com/goplus/spx/v2/cmd/spx/internal/util"
 )
 
+// ExportBuild runs a platform export with the current Godot project.
 func (cmd *CmdTool) ExportBuild(platform string) error {
 	fmt.Printf("Starting export: platform=%s, ProjectDir=%s\n", platform, cmd.ProjectDir)
-	os.MkdirAll(filepath.Join(cmd.ProjectDir, ".builds", strings.ToLower(platform)), os.ModePerm)
+	os.MkdirAll(filepath.Join(cmd.ProjectDir, ".builds", strings.ToLower(platform)), 0o755)
 	execCmd := exec.Command(cmd.CmdPath, "--headless", "--quit", "--path", cmd.ProjectDir, "--export-debug", platform)
 	err := execCmd.Run()
 	if err != nil {
@@ -22,6 +23,7 @@ func (cmd *CmdTool) ExportBuild(platform string) error {
 	return err
 }
 
+// Export exports the current project for the host desktop platform.
 func (cmd *CmdTool) Export() error {
 	targetDir := filepath.Join(cmd.ProjectDir, ".builds", "pc")
 	targetPath := filepath.Join(targetDir, PcExportName)

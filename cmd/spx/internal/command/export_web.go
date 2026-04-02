@@ -12,7 +12,6 @@ import (
 
 	"github.com/goplus/spx/v2/cmd/spx/internal/pack"
 	"github.com/goplus/spx/v2/cmd/spx/internal/util"
-	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
 const (
@@ -29,6 +28,7 @@ type minigamePaths struct {
 	rawWebDir string
 }
 
+// ExportTemplateWeb exports the web template project.
 func (cmd *CmdTool) ExportTemplateWeb() error {
 	targetDir := filepath.Join(cmd.ProjectDir, ".builds", "webi")
 	targetPath := filepath.Join(targetDir, "engine.html")
@@ -39,6 +39,7 @@ func (cmd *CmdTool) ExportTemplateWeb() error {
 	return util.RunCommandInDir(cmd.ProjectDir, cmd.CmdPath, "--headless", "--quit", "--path", cmd.ProjectDir, "--export-debug", platformName, targetPath)
 }
 
+// ExportWeb exports the project for the standard web runtime.
 func (cmd *CmdTool) ExportWeb() error {
 	if err := cmd.exportWebCommon(webNormalMode); err != nil {
 		return err
@@ -47,6 +48,7 @@ func (cmd *CmdTool) ExportWeb() error {
 	return nil
 }
 
+// ExportMinigame exports the project for the minigame runtime.
 func (cmd *CmdTool) ExportMinigame() error {
 	if err := cmd.exportWebCommon(webMinigameMode); err != nil {
 		return err
@@ -67,6 +69,7 @@ func (cmd *CmdTool) ExportMinigame() error {
 	return nil
 }
 
+// ExportMiniprogram exports the project for the miniprogram runtime.
 func (cmd *CmdTool) ExportMiniprogram() error {
 	if err := cmd.exportWebCommon(webMiniprogramMode); err != nil {
 		return err
@@ -75,6 +78,7 @@ func (cmd *CmdTool) ExportMiniprogram() error {
 	return nil
 }
 
+// ExportWebWorker exports the project for the worker-based web runtime.
 func (cmd *CmdTool) ExportWebWorker() error {
 	if err := cmd.exportWebCommon(webWorkerMode); err != nil {
 		return err
@@ -98,7 +102,7 @@ func (cmd *CmdTool) prepareMinigameWorkspace() (minigamePaths, error) {
 	if err := os.Rename(cmd.WebDir, backupDir); err != nil {
 		return minigamePaths{}, fmt.Errorf("failed to backup web directory: %w", err)
 	}
-	if err := os.MkdirAll(cmd.WebDir, os.ModePerm); err != nil {
+	if err := os.MkdirAll(cmd.WebDir, 0o755); err != nil {
 		return minigamePaths{}, fmt.Errorf("failed to create minigame directory: %w", err)
 	}
 
@@ -114,7 +118,7 @@ func (cmd *CmdTool) prepareMinigameWorkspace() (minigamePaths, error) {
 
 	util.CopyDir(cmd.PlatformFS, "template/platform/web"+webMinigameMode, cmd.WebDir, true)
 	for _, dir := range []string{paths.engineDir, paths.jsDir} {
-		if err := os.MkdirAll(dir, os.ModePerm); err != nil {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return minigamePaths{}, fmt.Errorf("failed to create %s: %w", dir, err)
 		}
 	}
@@ -216,13 +220,13 @@ func (cmd *CmdTool) patchWebWorkerEngine(insertCode string) error {
 
 	keyStr := "{if(initializedJS){checkMailbox()}}"
 	if !strings.Contains(engineStr, keyStr) {
-		spxlog.Fatalf("engine.js missing worker hook anchor: %s", keyStr)
+		return fmt.Errorf("engine.js missing worker hook anchor: %s", keyStr)
 	}
 	engineStr = strings.ReplaceAll(engineStr, keyStr, keyStr+"else if(e.data._gameAppMessageId) {handleGameAppMessage(e.data);}")
 
 	keyStr = ";throw ex}}self.onmessage=handleMessage}"
 	if !strings.Contains(engineStr, keyStr) {
-		spxlog.Fatalf("engine.js missing worker bundle anchor: %s", keyStr)
+		return fmt.Errorf("engine.js missing worker bundle anchor: %s", keyStr)
 	}
 	engineStr = strings.ReplaceAll(engineStr, keyStr, keyStr+insertCode)
 	if err := os.WriteFile(enginePath, []byte(engineStr), 0o644); err != nil {
@@ -239,7 +243,7 @@ func (cmd *CmdTool) exportWebCommon(mode string) error {
 	}
 
 	dstPath := filepath.Join(cmd.ProjectDir, ".builds", "web")
-	os.MkdirAll(dstPath, os.ModePerm)
+	os.MkdirAll(dstPath, 0o755)
 	util.CopyDir2(templateDir, dstPath)
 
 	println("==> _exportWeb", dstPath)
@@ -320,7 +324,6 @@ func (cmd *CmdTool) mergeJSFiles(jsDir string, isCompressed bool) error {
 	defer output.Close()
 
 	writer := bufio.NewWriter(output)
-	defer writer.Flush()
 
 	compressionFlag := fmt.Sprintf("var FFI = null;\nconst isWasmCompressed = %t;\n\n", isCompressed)
 	if _, err := writer.WriteString(compressionFlag); err != nil {
@@ -347,5 +350,8 @@ func (cmd *CmdTool) mergeJSFiles(jsDir string, isCompressed bool) error {
 		os.Remove(filePath)
 	}
 
+	if err := writer.Flush(); err != nil {
+		return fmt.Errorf("flushing merged JS output: %w", err)
+	}
 	return os.Rename(outputFile, filepath.Join(jsDir, "engine.js"))
 }
