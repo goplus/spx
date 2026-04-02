@@ -19,9 +19,6 @@ var (
 
 	//go:embed appname.txt
 	appName string
-
-	mainSh string
-	runSh  string
 )
 
 func main() {
@@ -36,8 +33,6 @@ func main() {
 	cmd.ProjectFS = projectFS
 	cmd.PlatformFS = platformFS
 	cmd.Version = releasemeta.DefaultReleaseMeta().Runtime.Version
-	cmd.RunSh = runSh
-	cmd.MainSh = mainSh
 	cmd.GoModTemplate = projecttemplate.GoMod()
 
 	// Initialize the Args field if not already initialized

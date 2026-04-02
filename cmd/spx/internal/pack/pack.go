@@ -2,7 +2,6 @@ package pack
 
 import (
 	"archive/zip"
-	"embed"
 	"io"
 	"os"
 	"path"
@@ -164,19 +163,6 @@ func zipEntryName(baseFolder string, dirInfo DirInfos) string {
 
 func normalizeZipPath(path string) string {
 	return strings.ReplaceAll(path, "\\", "/")
-}
-
-func PackEngineRes(proejct_fs embed.FS, webDir string) {
-	dstDir := path.Join(webDir, "project")
-	util.CopyDir(proejct_fs, "template/project", dstDir, true)
-
-	directories := []string{"engine"}
-	files := []string{"main.tscn", "project.godot"}
-	err := PackDirFiles(path.Join(webDir, "engineres.zip"), dstDir, directories, files)
-	if err != nil {
-		panic(err)
-	}
-	os.RemoveAll(dstDir)
 }
 
 func PackDirFiles(zipName string, targetDir string, directories, files []string) error {

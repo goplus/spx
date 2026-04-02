@@ -32,10 +32,6 @@ func RunCommand(envVars []string, dir string, name string, args ...string) error
 	return err
 }
 
-func RunGoModTidy() error {
-	return RunCommandWithEnv(nil, "go", "mod", "tidy")
-}
-
 func RunXGo(envVars []string, args ...string) error {
 	return RunCommandWithEnv(envVars, "xgo", args...)
 }

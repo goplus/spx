@@ -253,7 +253,6 @@ func (pself *CmdTool) exportWebCommon(mode string) error {
 	if err := pack.PackProject(pself.TargetDir, filepath.Join(pself.WebDir, "game.zip")); err != nil {
 		return err
 	}
-	//pack.PackEngineRes(pself.ProjectFS, pself.WebDir)
 	wasmPath, wasmBrPath := pself.getWasmPaths()
 	if err := util.CopyFile(wasmPath, filepath.Join(pself.WebDir, "ispx.wasm")); err != nil {
 		return fmt.Errorf("failed to copy ispx wasm from %s: %w", wasmPath, err)

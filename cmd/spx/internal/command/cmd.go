@@ -2,7 +2,6 @@ package command
 
 import (
 	"embed"
-	_ "embed"
 	"fmt"
 	"go/build"
 	"os"
@@ -32,8 +31,6 @@ type CmdTool struct {
 	// Resource files
 	ProjectFS  embed.FS // Embedded project filesystem
 	PlatformFS embed.FS // Embedded platform filesystem
-	RunSh      string   // Run script content
-	MainSh     string   // Main script content
 
 	// Build and runtime information
 	ServerPort int    // Server port for web operations
@@ -47,7 +44,6 @@ type CmdTool struct {
 	// runtime mode
 	RuntimeMode    bool
 	RuntimeTempDir string
-	RuntimePckPath string
 	RuntimeCmdPath string
 
 	GoModTemplate string

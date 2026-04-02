@@ -195,9 +195,6 @@ func (pself *CmdTool) SetupEnv(version string, fs embed.FS, fsRelDir string, pro
 	// setup runtime path - skip for pure_engine mode
 	if pself.Args.Tags == nil || !strings.Contains(*pself.Args.Tags, "pure_engine") {
 		pself.RuntimeCmdPath = path.Join(pself.GoBinPath, "gdspxrt"+pself.Version+pself.BinPostfix)
-		pckName := pself.RuntimeCmdPath
-		pckName = pckName[:len(pckName)-len(pself.BinPostfix)]
-		pself.RuntimePckPath = pckName + ".pck"
 	}
 	pself.RuntimeTempDir, _ = filepath.Abs(path.Join(pself.TargetDir, ".temp"))
 	os.Mkdir(pself.RuntimeTempDir, 0755)
