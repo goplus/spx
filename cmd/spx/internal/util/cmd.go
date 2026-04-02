@@ -1,9 +1,10 @@
 package util
 
 import (
-	"log"
 	"os"
 	"os/exec"
+
+	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
 // RunCommandInDir runs a command in dir.
@@ -27,7 +28,7 @@ func RunCommand(envVars []string, dir string, name string, args ...string) error
 	cmd.Stderr = os.Stderr
 	err := cmd.Run()
 	if err != nil {
-		log.Fatalf("Command %s failed: %v", name, err)
+		spxlog.Fatalf("command %s failed: %v", name, err)
 	}
 	return err
 }

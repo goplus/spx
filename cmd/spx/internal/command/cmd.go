@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/goplus/spx/v2/cmd/spx/internal/util"
+	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
 const PcExportName = "gdexport"
@@ -84,6 +85,9 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		return err
+	}
+	if cmd.Args.Verbose != nil && *cmd.Args.Verbose {
+		spxlog.SetLevel(spxlog.LevelDebug)
 	}
 
 	if cmd.Args.CmdName == "init" {
@@ -175,26 +179,26 @@ func (cmd *CmdTool) executeCommand() error {
 
 // handleBuildPhase runs the build step.
 func (cmd *CmdTool) handleBuildPhase() error {
-	fmt.Printf("[DEBUG] handleBuildPhase: command=%s %s\n", cmd.Args.CmdName, cmd.SafeTagArgs())
+	spxlog.Debug("handleBuildPhase: command=%s %s", cmd.Args.CmdName, cmd.SafeTagArgs())
 
 	switch cmd.Args.CmdName {
 	case "buildtinygo":
-		fmt.Println("[DEBUG] Executing BuildTinyGoLib")
+		spxlog.Debug("executing BuildTinyGoLib")
 		return cmd.BuildTinyGoLib()
 	case "editor", "rune", "export", "build", "run":
-		fmt.Println("[DEBUG] Checking BuildDll conditions")
+		spxlog.Debug("checking BuildDll conditions")
 		if cmd.Args.Tags == nil || !strings.Contains(*cmd.Args.Tags, "pure_engine") {
-			fmt.Println("[DEBUG] Executing BuildDll")
+			spxlog.Debug("executing BuildDll")
 			return cmd.BuildDll()
 		} else {
-			fmt.Println("[DEBUG] Skipping BuildDll for pure_engine mode")
+			spxlog.Debug("skipping BuildDll for pure_engine mode")
 		}
 	default:
 		if shouldBuildWasmForCommand(cmd.Args.CmdName) {
-			fmt.Println("[DEBUG] Executing BuildWasm")
+			spxlog.Debug("executing BuildWasm")
 			return cmd.BuildWasm()
 		}
-		fmt.Printf("[DEBUG] No build phase needed for command: %s\n", cmd.Args.CmdName)
+		spxlog.Debug("no build phase needed for command: %s", cmd.Args.CmdName)
 	}
 	return nil
 }

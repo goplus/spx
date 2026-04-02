@@ -14,6 +14,7 @@ import (
 
 	"github.com/goplus/spx/v2/cmd/spx/internal/pack"
 	"github.com/goplus/spx/v2/cmd/spx/internal/util"
+	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
 func (cmd *CmdTool) ExportBuild(platform string) error {
@@ -166,15 +167,13 @@ func (cmd *CmdTool) ExportWebWorker() error {
 	// Patch the worker message hook.
 	keyStr := "{if(initializedJS){checkMailbox()}}"
 	if !strings.Contains(engineStr, keyStr) {
-		println("engine.js not contains keyStr: ", keyStr)
-		os.Exit(1)
+		spxlog.Fatalf("engine.js missing worker hook anchor: %s", keyStr)
 	}
 	engineStr = strings.ReplaceAll(engineStr, keyStr, keyStr+"else if(e.data._gameAppMessageId) {handleGameAppMessage(e.data);}")
 	// Inject the worker bundle.
 	keyStr = ";throw ex}}self.onmessage=handleMessage}"
 	if !strings.Contains(engineStr, keyStr) {
-		println("engine.js not contains keyStr: ", keyStr)
-		os.Exit(1)
+		spxlog.Fatalf("engine.js missing worker bundle anchor: %s", keyStr)
 	}
 
 	engineStr = strings.ReplaceAll(engineStr, keyStr, keyStr+insertCode)

@@ -3,12 +3,12 @@ package gengo
 import (
 	"fmt"
 	"os"
-
 	"regexp"
 
 	"github.com/goplus/ixgo"
 	"github.com/goplus/ixgo/xgobuild"
 	"github.com/goplus/mod/modfile"
+	spxlog "github.com/goplus/spx/v2/internal/log"
 	"github.com/goplus/xgo/parser"
 )
 
@@ -16,7 +16,7 @@ import (
 func GenGoFromFS(fsys parser.FileSystem, outputPath string) error {
 	ctx := ixgo.NewContext(0)
 	ctx.Lookup = func(root, path string) (dir string, found bool) {
-		fmt.Printf("Failed to resolve package import %q\n", path)
+		spxlog.Warn("failed to resolve package import %q", path)
 		return
 	}
 	// Keep this in sync with gop.mod.
@@ -45,7 +45,7 @@ func GenGoFromFS(fsys parser.FileSystem, outputPath string) error {
 		return fmt.Errorf("failed to write generated Go code to %s: %w", outputPath, err)
 	}
 
-	println("xgobuild generated Go code: ", outputPath, "len = ", len(source))
+	spxlog.Info("xgobuild generated Go code: %s len=%d", outputPath, len(source))
 	return nil
 }
 

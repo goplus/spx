@@ -147,6 +147,21 @@ func (l *Logger) Error(format string, args ...any) {
 	l.log(LevelError, format, args...)
 }
 
+// Fatalf exits with the formatted message, also logging it at error level if the current log level permits.
+func (l *Logger) Fatalf(format string, args ...any) {
+	msg := l.format(format, args...)
+	if Level(atomic.LoadInt32((*int32)(&l.level))) > LevelError {
+		os.Exit(1)
+	}
+
+	l.mu.Lock()
+	if Level(atomic.LoadInt32((*int32)(&l.level))) > LevelError {
+		l.mu.Unlock()
+		os.Exit(1)
+	}
+	l.logger.Fatalf("[%s] [%s] %s", LevelError.String(), l.prefix, msg)
+}
+
 // Panicf panics with the formatted message, also logging it at error level if the current log level permits.
 func (l *Logger) Panicf(format string, args ...any) {
 	msg := l.format(format, args...)
@@ -183,6 +198,11 @@ func Warn(format string, args ...any) {
 // Error logs an error message using the default logger
 func Error(format string, args ...any) {
 	defaultLogger.Error(format, args...)
+}
+
+// Fatalf exits with the formatted message, also logging it at error level if the current log level permits.
+func Fatalf(format string, args ...any) {
+	defaultLogger.Fatalf(format, args...)
 }
 
 // Panicf panics with the formatted message, also logging it at error level if the current log level permits.

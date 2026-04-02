@@ -2,7 +2,6 @@ package command
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"path"
 	"path/filepath"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/goplus/spx/v2/cmd/spx/internal/gengo"
 	"github.com/goplus/spx/v2/cmd/spx/internal/util"
+	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
 func (cmd *CmdTool) BuildWasm() error {
@@ -24,7 +24,7 @@ func (cmd *CmdTool) BuildWasm() error {
 	filePath := path.Join(webBuildDir, "ispx.wasm")
 
 	return cmd.withGoDir(func() error {
-		log.Printf("Building WebAssembly binary: %s", filePath)
+		spxlog.Debug("building WebAssembly binary: %s", filePath)
 		envVars := []string{"GOOS=js", "GOARCH=wasm"}
 
 		util.RunGolang(envVars, "build", "-o", filePath)
@@ -64,7 +64,7 @@ func (cmd *CmdTool) BuildTinyGoLib() error {
 	envVars := []string{"GODEBUG=gotypesalias=0"}
 
 	if err := cmd.withGoDir(func() error {
-		log.Printf("Building TinyGo static library for target: %s", target)
+		spxlog.Info("building TinyGo static library for target: %s", target)
 		if err := util.RunTinyGo(envVars, args...); err != nil {
 			return fmt.Errorf("TinyGo build failed: %w", err)
 		}
@@ -73,7 +73,7 @@ func (cmd *CmdTool) BuildTinyGoLib() error {
 		return err
 	}
 
-	log.Printf("TinyGo static library built successfully: %s", outputPath)
+	spxlog.Info("TinyGo static library built: %s", outputPath)
 	return nil
 }
 
@@ -113,7 +113,7 @@ func (cmd *CmdTool) withGoDir(f func() error) error {
 
 	defer func() {
 		if err := os.Chdir(rawdir); err != nil {
-			log.Printf("Warning: Failed to restore working directory to %s: %v", rawdir, err)
+			spxlog.Warn("failed to restore working directory to %s: %v", rawdir, err)
 		}
 	}()
 
@@ -125,7 +125,7 @@ func (cmd *CmdTool) hideIOSFiles() error {
 	searchPattern := filepath.Join(cmd.ProjectDir, "go", "ios*")
 	files, err := filepath.Glob(searchPattern)
 	if err != nil {
-		log.Printf("Warning: Glob failed for pattern %s: %v", searchPattern, err)
+		spxlog.Warn("glob failed for pattern %s: %v", searchPattern, err)
 		return nil
 	}
 
@@ -133,7 +133,7 @@ func (cmd *CmdTool) hideIOSFiles() error {
 		if !strings.HasSuffix(file, ".txt") {
 			newName := file + ".txt"
 			if err := os.Rename(file, newName); err != nil {
-				log.Printf("Warning: Failed to rename %s to %s: %v", file, newName, err)
+				spxlog.Warn("failed to rename %s to %s: %v", file, newName, err)
 			}
 		}
 	}
@@ -178,18 +178,18 @@ func (cmd *CmdTool) determineTargetArchs() ([]string, error) {
 func (cmd *CmdTool) genGo() string {
 	rawdir, err := os.Getwd()
 	if err != nil {
-		log.Fatalf("Failed to get current working directory: %v", err)
+		spxlog.Fatalf("failed to get current working directory: %v", err)
 	}
 
 	spxProjPath := filepath.Join(cmd.ProjectDir, "..")
 
 	if cmd.UseXgobuildForCodegen {
 		if err := cmd.genGoUsingXgobuild(rawdir, spxProjPath); err != nil {
-			log.Fatalf("Code generation failed using xgobuild: %v", err)
+			spxlog.Fatalf("code generation failed using xgobuild: %v", err)
 		}
 	} else {
 		if err := cmd.genGoUsingXgoCLI(rawdir, spxProjPath); err != nil {
-			log.Fatalf("Code generation failed using xgo CLI: %v", err)
+			spxlog.Fatalf("code generation failed using xgo CLI: %v", err)
 		}
 	}
 
@@ -214,7 +214,7 @@ func (cmd *CmdTool) genGoUsingXgobuild(rawdir, spxProjPath string) error {
 
 	defer func() {
 		if err := os.Chdir(rawdir); err != nil {
-			log.Printf("Warning: Failed to restore working directory to %s: %v", rawdir, err)
+			spxlog.Warn("failed to restore working directory to %s: %v", rawdir, err)
 		}
 	}()
 
@@ -230,12 +230,12 @@ func (cmd *CmdTool) genGoUsingXgoCLI(rawdir, spxProjPath string) error {
 	}
 	defer func() {
 		if err := os.Chdir(rawdir); err != nil {
-			log.Printf("Warning: Failed to restore working directory to %s: %v", rawdir, err)
+			spxlog.Warn("failed to restore working directory to %s: %v", rawdir, err)
 		}
 	}()
 
 	tagStr := cmd.SafeTagArgs()
-	log.Printf("genGo tagStr: %s", tagStr)
+	spxlog.Debug("genGo tagStr: %s", tagStr)
 	envVars := []string{""}
 
 	args := []string{"go"}
@@ -293,7 +293,7 @@ func (cmd *CmdTool) executeDllBuild(archs []string, tagStr string) error {
 		envs := append(baseEnvs, "GOARCH="+arch)
 		currentArgs := append(buildArgs, "-o", newPath)
 
-		log.Printf("Building shared library: envs=%s, args=%s", envs, currentArgs)
+		spxlog.Debug("building shared library: envs=%s, args=%s", envs, currentArgs)
 		util.RunGolang(envs, currentArgs...)
 	}
 	return nil

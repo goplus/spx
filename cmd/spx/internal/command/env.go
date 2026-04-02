@@ -17,6 +17,11 @@ import (
 
 var ENV_NAME = "gdspx"
 
+type envVar struct {
+	key   string
+	value string
+}
+
 // CheckEnv validates the target directory.
 func (cmd *CmdTool) CheckEnv() error {
 	dir, err := filepath.Abs(cmd.TargetDir)
@@ -217,15 +222,18 @@ func (cmd *CmdTool) setupPortableGoEnv() error {
 	os.MkdirAll(goCacheDir, 0755)
 	os.MkdirAll(goModCacheDir, 0755)
 
-	os.Setenv("GOROOT", cmd.GoRoot)
-	os.Setenv("GOPATH", cmd.GoPath)
-	os.Setenv("GOTOOLCHAIN", "")
-	os.Setenv("GOCACHE", goCacheDir)
-	os.Setenv("GOMODCACHE", goModCacheDir)
-
 	currentPath := os.Getenv("PATH")
 	newPath := cmd.GoBinPath + string(os.PathListSeparator) + goRootBinPath + string(os.PathListSeparator) + currentPath
-	os.Setenv("PATH", newPath)
+	if err := setEnvVars(
+		envVar{key: "GOROOT", value: cmd.GoRoot},
+		envVar{key: "GOPATH", value: cmd.GoPath},
+		envVar{key: "GOTOOLCHAIN", value: ""},
+		envVar{key: "GOCACHE", value: goCacheDir},
+		envVar{key: "GOMODCACHE", value: goModCacheDir},
+		envVar{key: "PATH", value: newPath},
+	); err != nil {
+		return err
+	}
 
 	fmt.Printf("Using portable Go environment:\n")
 	fmt.Printf("  GOROOT: %s\n", cmd.GoRoot)
@@ -244,6 +252,15 @@ func (cmd *CmdTool) setupPortableGoEnv() error {
 		return fmt.Errorf("Go executable not found: %s", goPath)
 	}
 
+	return nil
+}
+
+func setEnvVars(vars ...envVar) error {
+	for _, env := range vars {
+		if err := os.Setenv(env.key, env.value); err != nil {
+			return fmt.Errorf("set %s: %w", env.key, err)
+		}
+	}
 	return nil
 }
 
