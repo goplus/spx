@@ -53,7 +53,7 @@ type GdArrayInfo struct {
 
 func serializeGdArray(info *GdArrayInfo) ([]byte, error) {
 	if info == nil {
-		return nil, fmt.Errorf("GdArrayInfo is null")
+		return nil, fmt.Errorf("nil GdArrayInfo")
 	}
 
 	dataBytes, err := serializeDataByType(info.Type, info.Data)

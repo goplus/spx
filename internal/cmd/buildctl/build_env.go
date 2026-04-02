@@ -128,7 +128,7 @@ func detectGodotTemplateDir() (string, error) {
 	case "windows":
 		appData := os.Getenv("APPDATA")
 		if appData == "" {
-			return "", fmt.Errorf("APPDATA is not set")
+			return "", fmt.Errorf("missing APPDATA")
 		}
 		return filepath.Join(appData, "Godot", "export_templates", engineBuildVersion), nil
 	default:

@@ -175,7 +175,7 @@ func resolveAndroidNDKEnv() (androidNDKEnv, error) {
 func resolveNDKArchivePath(cfg toolSetupNDKConfig, env androidNDKEnv, tempDir string) (string, error) {
 	if cfg.manualInstall {
 		if !fileExists(cfg.ndkPath) {
-			return "", fmt.Errorf("NDK archive does not exist: %s", cfg.ndkPath)
+			return "", fmt.Errorf("ndk archive does not exist: %s", cfg.ndkPath)
 		}
 		return cfg.ndkPath, nil
 	}

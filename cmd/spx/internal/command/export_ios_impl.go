@@ -99,13 +99,13 @@ func (cmd *CmdTool) prepareIosOutput() (string, error) {
 
 func (cmd *CmdTool) validateIosExportInputs() error {
 	if _, err := os.Stat(cmd.CmdPath); os.IsNotExist(err) {
-		return fmt.Errorf("Godot binary not found at %s", cmd.CmdPath)
+		return fmt.Errorf("godot binary not found at %s", cmd.CmdPath)
 	}
 	fmt.Printf("===> found Godot binary at: %s\n", cmd.CmdPath)
 
 	projectFilePath := filepath.Join(cmd.ProjectDir, "project.godot")
 	if _, err := os.Stat(projectFilePath); os.IsNotExist(err) {
-		return fmt.Errorf("Godot project file not found at %s", projectFilePath)
+		return fmt.Errorf("godot project file not found at %s", projectFilePath)
 	}
 	fmt.Printf("===> found Godot project file at: %s\n", projectFilePath)
 	return nil
@@ -181,10 +181,10 @@ func (cmd *CmdTool) exportIosIPA(ipaPath string) error {
 		util.CommandOptions{},
 		cmd.CmdPath, "--headless", "--path", cmd.ProjectDir, "--export-debug", "iOS", ipaPath,
 	); err != nil {
-		return fmt.Errorf("IPA export failed: %w", err)
+		return fmt.Errorf("failed to export IPA: %w", err)
 	}
 	if _, err := os.Stat(ipaPath); os.IsNotExist(err) {
-		return fmt.Errorf("IPA export failed: file not created at %s", ipaPath)
+		return fmt.Errorf("failed to export IPA: file not created at %s", ipaPath)
 	}
 
 	log.Println("===> exported IPA successfully:", ipaPath)
@@ -198,7 +198,7 @@ func (cmd *CmdTool) installIosIPA(ipaPath string) error {
 
 	log.Println("trying to install IPA to devices...")
 	if err := util.ExecCommand(util.CommandOptions{}, "ios-deploy", "--bundle", ipaPath); err != nil {
-		return fmt.Errorf("IPA install failed: %w", err)
+		return fmt.Errorf("failed to install IPA: %w", err)
 	}
 	return nil
 }
