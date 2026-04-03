@@ -2,7 +2,7 @@
 # Config
 # ============================================
 .DEFAULT_GOAL := help
-.PHONY: help buildctl list-demos prepare-host prepare-web prepare-full build-dev install clean-assets download download-engine build-editor build-desktop build-web build-wasm build-wasm-opt build-android build-ios install-apk editor run rune run-web run-web-worker format generate sync-gopmod export-pack export-web stop validate-web-mode validate-download-engine
+.PHONY: help buildctl list-demos prepare-host prepare-web prepare-full prepare-all build-dev install clean-assets download download-engine build-editor build-desktop build-web build-wasm build-wasm-opt build-android build-ios install-apk editor run rune run-web run-web-worker format generate sync-gopmod export-pack export-web stop validate-web-mode validate-download-engine
 
 export GODOT_SRC
 
@@ -80,11 +80,13 @@ help: ## Show available commands
 # ============================================
 # Prepare Commands
 # ============================================
-prepare-host: ## Prepare host assets, including editor/runtime files
-	$(BUILDCTL_CMD) prepare --setup-mode runtime
-
 prepare-full: ## Prepare host assets plus web export assets. Usage: make prepare-full [MODE=normal|worker|minigame|miniprogram]
 	$(BUILDCTL_CMD) prepare --setup-mode full --web-mode "$(WEB_MODE)"
+
+prepare-all: prepare-full ## Alias of prepare-full. Prepare host assets plus web export assets. Usage: make prepare-all [MODE=normal|worker|minigame|miniprogram]
+
+prepare-host: ## Prepare host assets, including editor/runtime files
+	$(BUILDCTL_CMD) prepare --setup-mode runtime
 
 prepare-web: ## Prepare web export assets for MODE, including the host editor required by exporttemplateweb. Usage: make prepare-web MODE=normal (MODE: normal|worker|minigame|miniprogram)
 	$(BUILDCTL_CMD) prepare --setup-mode web --web-mode "$(WEB_MODE)"
