@@ -413,9 +413,9 @@ func getJsFuncBody(function *clang.TypedefFunction) string {
 	if function.Name == "GDExtensionSpxInputGetGlobalMousePos" {
 		return "var _retValue = AllocGdVec2();\n" +
 			"\t_gdFuncPtr(_retValue);\n" +
-			"\tvar _scratch = GdspxFuncs._inputMousePosScratch;\n" +
+			"\tvar _scratch = this._inputMousePosScratch;\n" +
 			"\tif (!_scratch) {\n" +
-			"\t\t_scratch = GdspxFuncs._inputMousePosScratch = { x: 0, y: 0 };\n" +
+			"\t\t_scratch = this._inputMousePosScratch = { x: 0, y: 0 };\n" +
 			"\t}\n" +
 			"\tvar _floatIndex = _retValue / 4;\n" +
 			"\tvar _heap = Module.HEAPF32;\n" +

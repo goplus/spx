@@ -132,3 +132,18 @@ func TestJsTemplateUsesHeapU32ForFlatReads(t *testing.T) {
 func TestJsTemplateDocumentsFlatCtorAbiOrder(t *testing.T) {
 	require.Contains(t, jsEngineJsFileText, "_gdspx_new_int` / `_gdspx_new_obj` follow the C ABI and expect (high, low)")
 }
+
+func TestJsTemplateDeclaresInstanceScratchForMousePos(t *testing.T) {
+	require.Contains(t, jsEngineJsFileText, "this._inputMousePosScratch = null;")
+}
+
+func TestGetJsFuncBodyUsesInstanceScratchForMousePos(t *testing.T) {
+	function := &clang.TypedefFunction{
+		Name: "GDExtensionSpxInputGetGlobalMousePos",
+	}
+
+	body := getJsFuncBody(function)
+	require.Contains(t, body, "var _scratch = this._inputMousePosScratch;")
+	require.Contains(t, body, "this._inputMousePosScratch = { x: 0, y: 0 };")
+	require.NotContains(t, body, "GdspxFuncs._inputMousePosScratch")
+}
