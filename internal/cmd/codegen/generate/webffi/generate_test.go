@@ -68,7 +68,7 @@ func TestGetJsFuncArgsSkipsNativeArrayLenArg(t *testing.T) {
 	require.Equal(t, []string{"buffer"}, getJsFuncArgs(function))
 }
 
-func TestGetJsFuncBodyUsesLowHighOrderForFlatGdIntArgs(t *testing.T) {
+func TestGetJsFuncBodyUsesHighLowCtorOrderForFlatGdIntArgs(t *testing.T) {
 	function := &clang.TypedefFunction{
 		Name: "GDExtensionSpxPhysicsCheckTouchedStageBoundaries",
 		ReturnType: clang.PrimativeType{
@@ -91,7 +91,7 @@ func TestGetJsFuncBodyUsesLowHighOrderForFlatGdIntArgs(t *testing.T) {
 	}
 
 	body := getJsFuncBody(function)
-	require.Contains(t, body, "Module._gdspx_new_obj(obj_low, obj_high)")
+	require.Contains(t, body, "Module._gdspx_new_obj(obj_high, obj_low)")
 }
 
 func TestGetJsFuncBodyUsesFixedScratchAccessorForFlatReturn(t *testing.T) {
@@ -127,4 +127,8 @@ func TestJsTemplateUsesHeapU32ForFlatReads(t *testing.T) {
 	require.Contains(t, jsEngineJsFileText, "scratch.high = _u32[_word + 1];")
 	require.NotContains(t, jsEngineJsFileText, "_getGdDataView()")
 	require.NotContains(t, jsEngineJsFileText, "getUint32(")
+}
+
+func TestJsTemplateDocumentsFlatCtorAbiOrder(t *testing.T) {
+	require.Contains(t, jsEngineJsFileText, "_gdspx_new_int` / `_gdspx_new_obj` follow the C ABI and expect (high, low)")
 }

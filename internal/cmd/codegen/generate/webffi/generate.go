@@ -446,7 +446,7 @@ func getJsFuncBody(function *clang.TypedefFunction) string {
 			sb.WriteString("var " + argName + " = ")
 			sb.WriteString(flatJsCtor(typeName))
 			sb.WriteString("(")
-			sb.WriteString(arg.Name + "_low, " + arg.Name + "_high")
+			sb.WriteString(arg.Name + "_high, " + arg.Name + "_low")
 			sb.WriteString(");")
 
 			sb.WriteString("\n")

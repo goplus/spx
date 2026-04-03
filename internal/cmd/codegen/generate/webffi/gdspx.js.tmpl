@@ -13,6 +13,9 @@ constructor() {
 	this._gdObjScratch = null;
 }
 
+// NOTE: flattened JS-facing params use (low, high), but the wasm helpers
+// `_gdspx_new_int` / `_gdspx_new_obj` follow the C ABI and expect (high, low).
+
 _getGdIntScratch() {
 	var _scratch = this._gdIntScratch;
 	if (!_scratch) {
