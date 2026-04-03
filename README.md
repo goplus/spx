@@ -27,8 +27,8 @@ How to run games powered by XGo spx engine?
 	git clone https://github.com/goplus/spx.git
 	cd spx
 	git checkout dev
-	make setup
-
+	# prepare all required host and web assets, use `make prepare-full` instead.
+	make prepare-host
 	# run the demo
 	spx run -path tutorial/00-Hello
 	```
