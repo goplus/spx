@@ -15,7 +15,7 @@ import (
 	gdx "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
 )
 
-// copy these variable to any namespace you want
+// Shared engine managers.
 var (
 	platformMgr enginewrap.PlatformMgrImpl
 	resMgr      enginewrap.ResMgrImpl
@@ -40,12 +40,12 @@ type LayerSortInfo struct {
 
 var curLayerSortMode layerSortMode
 
-// SetLayerSortMode configures automatic layer sorting for sprites.
+// SetLayerSortMode sets sprite layer sorting.
 // Supported modes:
-//   - "" or "none": Disables automatic sorting (default)
-//   - "vertical": Sorts by Y-coordinate (descending), then X-coordinate (descending)
+//   - "" or "none": disable sorting (default)
+//   - "vertical": sort by Y, then X, both descending
 //
-// When enabled, manual layer control methods are disabled to prevent conflicts.
+// When enabled, manual layer changes are disabled.
 func SetLayerSortMode(s string) error {
 	switch s {
 	case "", "none":
@@ -132,7 +132,7 @@ func OnGameStarted() {
 	gco.OnInited()
 }
 
-// callbacks
+// Engine callbacks.
 func onStart() {
 	defer CheckPanic()
 	resetMouseButtonStates()
@@ -204,6 +204,7 @@ func cacheTriggerEvents() {
 	triggerMutex.Unlock()
 	triggerEventsTemp = triggerEventsTemp[:0]
 }
+
 func GetTriggerEvents(lst []TriggerEvent) []TriggerEvent {
 	triggerMutex.Lock()
 	lst = append(lst, triggerEvents...)
@@ -211,6 +212,7 @@ func GetTriggerEvents(lst []TriggerEvent) []TriggerEvent {
 	triggerMutex.Unlock()
 	return lst
 }
+
 func cacheKeyEvents() {
 	keyMutex.Lock()
 	keyEvents = append(keyEvents, keyEventsTemp...)
@@ -226,36 +228,27 @@ func GetKeyEvents(lst []KeyEvent) []KeyEvent {
 	return lst
 }
 
-// DeferPanic is a generic panic handler that should be called with defer.
-// It recovers from panics and handles them appropriately.
-// Parameters:
-//   - name: optional identifier for the panic source (pass "" if not needed)
-//   - stack: optional stack trace (pass "" to auto-generate)
-//   - exitOnPanic: if true, calls RequestExit(1) after handling the panic
+// DeferPanic recovers a panic, reports it, and optionally exits.
 func DeferPanic(name, stack string, exitOnPanic bool) {
 	if e := recover(); e != nil {
 		handlePanic(name, stack, e, exitOnPanic)
 	}
 }
 
-// CheckPanic is a simplified defer panic handler for engine callbacks.
-// It auto-generates stack trace and exits on panic.
-// Usage: defer CheckPanic()
+// CheckPanic is a shorthand panic handler for engine callbacks.
 func CheckPanic() {
 	if e := recover(); e != nil {
 		handlePanic("", "", e, true)
 	}
 }
 
-// OnPanic handles a panic with the given name and stack trace.
-// This is typically called from coroutine panic handlers.
+// OnPanic reports a panic with an optional name and stack.
 func OnPanic(name, stack string) {
 	handlePanic(name, stack, nil, true)
 }
 
-// handlePanic is the internal panic handler implementation.
+// handlePanic reports a panic and optionally exits.
 func handlePanic(name, stack string, err any, exitOnPanic bool) {
-	// Build panic message
 	var msg string
 	if err != nil {
 		msg = fmt.Sprintf("panic: %v", err)
@@ -271,31 +264,27 @@ func handlePanic(name, stack string, err any, exitOnPanic bool) {
 		msg += "\nstack:\n" + stack
 	}
 
-	// Report runtime panic to external manager
 	extMgr.OnRuntimePanic(msg)
 
-	// Exit if requested
 	if exitOnPanic {
 		RequestExit(1)
 	}
 }
 
-// Panic triggers a panic with the given message and handles it through the engine's panic system.
-// This function should be used instead of log.Panicln or panic() for consistent error handling.
-// It reports the error to the external manager and then panics.
+// Panic reports a panic message through the engine.
 func Panic(args ...any) {
 	msg := fmt.Sprint(args...)
 	OnPanic(msg, "")
 }
 
-// Panicf triggers a panic with a formatted message.
+// Panicf reports a formatted panic message through the engine.
 func Panicf(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	OnPanic(msg, "")
 }
 
-// abortCoroutinesAndReset aborts all running coroutines and resets the engine.
-// This is primarily used on web platforms where we cannot truly exit the process.
+// abortCoroutinesAndReset aborts coroutines and resets the engine.
+// Used on web, where the process cannot exit.
 func abortCoroutinesAndReset(exitCode int64) {
 	completed := gco.AbortAllAndWait(2 * stime.Second)
 	spxlog.Debug("AbortAllAndWait completed: %v. Requesting engine reset.", completed)
@@ -304,7 +293,7 @@ func abortCoroutinesAndReset(exitCode int64) {
 
 func RequestExit(exitCode int64) {
 	if platform.IsWeb() {
-		// On web platform, abort coroutines and request reset
+		// Web resets instead of exiting.
 		abortCoroutinesAndReset(exitCode)
 		return
 	}
