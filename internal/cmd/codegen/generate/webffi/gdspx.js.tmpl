@@ -8,14 +8,27 @@
 //----------------------------------------------------------------------------*/
 {{ $view := . -}}
 class GdspxFuncs {
+constructor() {
+	this._gdIntScratch = null;
+	this._gdObjScratch = null;
+}
+
 _getGdDataView() {
 	return GetHeapDataView();
 }
 
-_getGdIntScratch(key) {
-	var _scratch = this[key];
+_getGdIntScratch() {
+	var _scratch = this._gdIntScratch;
 	if (!_scratch) {
-		_scratch = this[key] = { low: 0, high: 0 };
+		_scratch = this._gdIntScratch = { low: 0, high: 0 };
+	}
+	return _scratch;
+}
+
+_getGdObjScratch() {
+	var _scratch = this._gdObjScratch;
+	if (!_scratch) {
+		_scratch = this._gdObjScratch = { low: 0, high: 0 };
 	}
 	return _scratch;
 }
@@ -23,15 +36,14 @@ _getGdIntScratch(key) {
 /**
  * Reads a GdInt/GdObj from wasm memory into a reusable scratch object.
  * The returned object is mutable and will be overwritten by the next call
- * that uses the same scratch key, so callers must consume or copy it
+ * that uses the same scratch object, so callers must consume or copy it
  * immediately.
  */
-_readGdIntLike(ptr, scratchKey) {
+_readGdIntLike(ptr, scratch) {
 	var _view = this._getGdDataView();
-	var _scratch = this._getGdIntScratch(scratchKey);
-	_scratch.low = _view.getUint32(ptr, true);
-	_scratch.high = _view.getUint32(ptr + 4, true);
-	return _scratch;
+	scratch.low = _view.getUint32(ptr, true);
+	scratch.high = _view.getUint32(ptr + 4, true);
+	return scratch;
 }
 
 {{- range $i, $f := $view.CollectGDExtensionInterfaceFunctions -}}

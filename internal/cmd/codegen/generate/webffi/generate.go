@@ -389,12 +389,12 @@ func flatJsSplitHelper(typeName string) string {
 	}
 }
 
-func flatJsScratchKey(typeName string) string {
+func flatJsScratchAccessor(typeName string) string {
 	switch typeName {
 	case "GdInt":
-		return "_gdIntScratch"
+		return "this._getGdIntScratch()"
 	case "GdObj":
-		return "_gdObjScratch"
+		return "this._getGdObjScratch()"
 	default:
 		panic(fmt.Sprintf("unsupported flat js gdint-like type: %s", typeName))
 	}
@@ -491,9 +491,9 @@ func getJsFuncBody(function *clang.TypedefFunction) string {
 	if rawRetType != "" {
 		sb.WriteString(prefixTab + "var _finalRetValue = ")
 		if isFlatJsGdIntLikeType(rawRetType) {
-			sb.WriteString(`this._readGdIntLike(_retValue, "`)
-			sb.WriteString(flatJsScratchKey(rawRetType))
-			sb.WriteString(`");` + "\n")
+			sb.WriteString("this._readGdIntLike(_retValue, ")
+			sb.WriteString(flatJsScratchAccessor(rawRetType))
+			sb.WriteString(");\n")
 		} else {
 			typeName := rawRetType
 			funcName := strcase.ToCamel(typeName)

@@ -93,3 +93,30 @@ func TestGetJsFuncBodyUsesLowHighOrderForFlatGdIntArgs(t *testing.T) {
 	body := getJsFuncBody(function)
 	require.Contains(t, body, "Module._gdspx_new_obj(obj_low, obj_high)")
 }
+
+func TestGetJsFuncBodyUsesFixedScratchAccessorForFlatReturn(t *testing.T) {
+	function := &clang.TypedefFunction{
+		Name: "GDExtensionSpxPhysicsCheckTouchedStageBoundaries",
+		ReturnType: clang.PrimativeType{
+			Name: "void",
+		},
+		Arguments: []clang.Argument{
+			{
+				Name: "obj",
+				Type: clang.Type{
+					Primative: &clang.PrimativeType{Name: "GdObj"},
+				},
+			},
+			{
+				Name: "ret_value",
+				Type: clang.Type{
+					Primative: &clang.PrimativeType{Name: "GdInt"},
+				},
+			},
+		},
+	}
+
+	body := getJsFuncBody(function)
+	require.Contains(t, body, "this._readGdIntLike(_retValue, this._getGdIntScratch())")
+	require.NotContains(t, body, `"_gdIntScratch"`)
+}
