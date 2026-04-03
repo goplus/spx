@@ -4,5 +4,5 @@
 package platform
 
 func GetPlatformType() int {
-	return PlatformTypeIos
+	return PlatformTypeAndroid
 }
