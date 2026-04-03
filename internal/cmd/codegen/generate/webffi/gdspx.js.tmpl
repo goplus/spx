@@ -19,7 +19,7 @@ constructor() {
 
 _getGdIntScratch() {
 	var _scratch = this._gdIntScratch;
-	if (!_scratch) {
+	if (_scratch == null) {
 		_scratch = this._gdIntScratch = { low: 0, high: 0 };
 	}
 	return _scratch;
@@ -27,7 +27,7 @@ _getGdIntScratch() {
 
 _getGdObjScratch() {
 	var _scratch = this._gdObjScratch;
-	if (!_scratch) {
+	if (_scratch == null) {
 		_scratch = this._gdObjScratch = { low: 0, high: 0 };
 	}
 	return _scratch;

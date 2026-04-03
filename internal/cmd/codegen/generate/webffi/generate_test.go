@@ -137,6 +137,11 @@ func TestJsTemplateDeclaresInstanceScratchForMousePos(t *testing.T) {
 	require.Contains(t, jsEngineJsFileText, "this._inputMousePosScratch = null;")
 }
 
+func TestJsTemplateUsesExplicitNullChecksForScratch(t *testing.T) {
+	require.Contains(t, jsEngineJsFileText, "if (_scratch == null) {")
+	require.NotContains(t, jsEngineJsFileText, "if (!_scratch) {")
+}
+
 func TestGetJsFuncBodyUsesInstanceScratchForMousePos(t *testing.T) {
 	function := &clang.TypedefFunction{
 		Name: "GDExtensionSpxInputGetGlobalMousePos",
@@ -144,6 +149,7 @@ func TestGetJsFuncBodyUsesInstanceScratchForMousePos(t *testing.T) {
 
 	body := getJsFuncBody(function)
 	require.Contains(t, body, "var _scratch = this._inputMousePosScratch;")
+	require.Contains(t, body, "if (_scratch == null) {")
 	require.Contains(t, body, "this._inputMousePosScratch = { x: 0, y: 0 };")
 	require.NotContains(t, body, "GdspxFuncs._inputMousePosScratch")
 }
