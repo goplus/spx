@@ -31,8 +31,8 @@ var (
 	//go:embed ffi.go.tmpl
 	ffiFileText string
 
-	//go:embed manager_wrapper.go.tmpl
-	wrapManagerGoFileText string
+	//go:embed manager_native.go.tmpl
+	managerNativeText string
 	//go:embed interface.go.tmpl
 	interfaceGoFileText string
 	//go:embed sprite.go.tmpl
@@ -181,7 +181,7 @@ func GenerateManagerWrapperGoFile(projectPath string, ast clang.CHeaderFileAST) 
 		"getManagerInterface": getManagerInterface,
 	}
 
-	return GenerateFile(funcs, "manager_native.gen.go", wrapManagerGoFileText, ManagerData{Ast: ast, Mangers: GetManagers(ast)},
+	return GenerateFile(funcs, "manager_native.gen.go", managerNativeText, ManagerData{Ast: ast, Mangers: GetManagers(ast)},
 		filepath.Join(projectPath, GdengineImplRelDir, "manager_native.gen.go"))
 
 }

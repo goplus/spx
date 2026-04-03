@@ -30,8 +30,8 @@ var (
 	//go:embed ffi.go.tmpl
 	ffiFileText string
 
-	//go:embed manager_wrapper.go.tmpl
-	wrapManagerGoFileText string
+	//go:embed manager_web.go.tmpl
+	managerWebText string
 
 	//go:embed gdspx.js.tmpl
 	jsEngineJsFileText string
@@ -143,7 +143,7 @@ func GenerateManagerWrapperGoFile(projectPath string, ast clang.CHeaderFileAST) 
 		"getManagerInterface": getManagerInterface,
 	}
 
-	return GenerateFile(funcs, "manager_web.gen.go", wrapManagerGoFileText, ManagerData{Ast: ast, Mangers: GetManagers(ast)},
+	return GenerateFile(funcs, "manager_web.gen.go", managerWebText, ManagerData{Ast: ast, Mangers: GetManagers(ast)},
 		filepath.Join(projectPath, GdengineImplRelDir, "manager_web.gen.go"))
 }
 
@@ -157,7 +157,7 @@ func GenerateJsEngineJsFile(projectPath, godotPath string, ast clang.CHeaderFile
 		"goEnumValue":         GoEnumValue,
 		"add":                 Add,
 		"sub":                 Sub,
-		"effectiveArgs":       HighLevelArguments,
+		"getJsFuncArgs":       getJsFuncArgs,
 		"cgoCastArgument":     CgoCastArgument,
 		"cgoCastReturnType":   CgoCastReturnType,
 		"cgoCleanUpArgument":  CgoCleanUpArgument,
@@ -248,6 +248,18 @@ func getManagerFuncBody(function *clang.TypedefFunction) string {
 			continue
 		}
 		typeName := MustPrimitiveTypeName(arg, function.Name)
+		if usesFlatJsGdIntArg(function, arg) {
+			argName := "arg" + strconv.Itoa(i)
+			lowName := argName + "Low"
+			highName := argName + "High"
+			sb.WriteString(lowName + ", " + highName + " := ")
+			sb.WriteString(flatJsSplitHelper(typeName))
+			sb.WriteString("(")
+			sb.WriteString(EffectiveGoArgumentName(function, arg))
+			sb.WriteString(")\n")
+			params = append(params, lowName, highName)
+			continue
+		}
 		argName := "arg" + strconv.Itoa(i)
 		sb.WriteString(argName + " := ")
 		sb.WriteString("JsFrom" + typeName)
@@ -318,6 +330,76 @@ func getManagerInterface(function *clang.TypedefFunction) string {
 	}
 	return sb.String()
 }
+
+func getJsFuncArgs(function *clang.TypedefFunction) []string {
+	args := EffectiveArguments(function)
+	result := make([]string, 0, len(args))
+	for _, arg := range args {
+		if ShouldSkipHighLevelArgument(function, arg) {
+			continue
+		}
+		argName := EffectiveGoArgumentName(function, arg)
+		if usesFlatJsGdIntArg(function, arg) {
+			result = append(result, argName+"_low", argName+"_high")
+			continue
+		}
+		result = append(result, argName)
+	}
+	return result
+}
+
+func usesFlatJsGdIntArg(function *clang.TypedefFunction, arg clang.Argument) bool {
+	if function == nil {
+		return false
+	}
+	if IsNativeArrayDataArg(function, arg) {
+		return false
+	}
+	return isFlatJsGdIntLikeType(MustPrimitiveTypeName(arg, function.Name))
+}
+
+func isFlatJsGdIntLikeType(typeName string) bool {
+	switch typeName {
+	case "GdInt", "GdObj":
+		return true
+	default:
+		return false
+	}
+}
+
+func flatJsCtor(typeName string) string {
+	switch typeName {
+	case "GdInt":
+		return "Module._gdspx_new_int"
+	case "GdObj":
+		return "Module._gdspx_new_obj"
+	default:
+		panic(fmt.Sprintf("unsupported flat js gdint-like type: %s", typeName))
+	}
+}
+
+func flatJsSplitHelper(typeName string) string {
+	switch typeName {
+	case "GdInt":
+		return "JsSplitGdInt"
+	case "GdObj":
+		return "JsSplitGdObj"
+	default:
+		panic(fmt.Sprintf("unsupported flat js gdint-like type: %s", typeName))
+	}
+}
+
+func flatJsScratchAccessor(typeName string) string {
+	switch typeName {
+	case "GdInt":
+		return "this._getGdIntScratch()"
+	case "GdObj":
+		return "this._getGdObjScratch()"
+	default:
+		panic(fmt.Sprintf("unsupported flat js gdint-like type: %s", typeName))
+	}
+}
+
 func getJsFuncBody(function *clang.TypedefFunction) string {
 	if spec, ok := GetNativeArrayBridgeSpec(function.Name); ok {
 		if HasEffectiveReturn(function) {
@@ -331,9 +413,9 @@ func getJsFuncBody(function *clang.TypedefFunction) string {
 	if function.Name == "GDExtensionSpxInputGetGlobalMousePos" {
 		return "var _retValue = AllocGdVec2();\n" +
 			"\t_gdFuncPtr(_retValue);\n" +
-			"\tvar _scratch = GdspxFuncs._inputMousePosScratch;\n" +
-			"\tif (!_scratch) {\n" +
-			"\t\t_scratch = GdspxFuncs._inputMousePosScratch = { x: 0, y: 0 };\n" +
+			"\tvar _scratch = this._inputMousePosScratch;\n" +
+			"\tif (_scratch == null) {\n" +
+			"\t\t_scratch = this._inputMousePosScratch = { x: 0, y: 0 };\n" +
 			"\t}\n" +
 			"\tvar _floatIndex = _retValue / 4;\n" +
 			"\tvar _heap = Module.HEAPF32;\n" +
@@ -360,6 +442,17 @@ func getJsFuncBody(function *clang.TypedefFunction) string {
 		sb.WriteString(prefixTab)
 		typeName := MustPrimitiveTypeName(arg, function.Name)
 		argName := "_arg" + strconv.Itoa(i)
+		if usesFlatJsGdIntArg(function, arg) {
+			sb.WriteString("var " + argName + " = ")
+			sb.WriteString(flatJsCtor(typeName))
+			sb.WriteString("(")
+			sb.WriteString(arg.Name + "_high, " + arg.Name + "_low")
+			sb.WriteString(");")
+
+			sb.WriteString("\n")
+			params = append(params, argName)
+			continue
+		}
 		sb.WriteString("var " + argName + " = ")
 		sb.WriteString("To" + typeName)
 		sb.WriteString("(")
@@ -397,11 +490,17 @@ func getJsFuncBody(function *clang.TypedefFunction) string {
 
 	if rawRetType != "" {
 		sb.WriteString(prefixTab + "var _finalRetValue = ")
-		typeName := rawRetType
-		funcName := strcase.ToCamel(typeName)
-		funcName = "ToJs" + strings.ReplaceAll(funcName, "Gd", "")
-		sb.WriteString(funcName + "(_retValue);\n")
-		sb.WriteString(prefixTab + "Free" + typeName + "(_retValue); \n")
+		if isFlatJsGdIntLikeType(rawRetType) {
+			sb.WriteString("this._readGdIntLike(_retValue, ")
+			sb.WriteString(flatJsScratchAccessor(rawRetType))
+			sb.WriteString(");\n")
+		} else {
+			typeName := rawRetType
+			funcName := strcase.ToCamel(typeName)
+			funcName = "ToJs" + strings.ReplaceAll(funcName, "Gd", "")
+			sb.WriteString(funcName + "(_retValue);\n")
+		}
+		sb.WriteString(prefixTab + "Free" + rawRetType + "(_retValue); \n")
 		sb.WriteString(prefixTab + "return _finalRetValue")
 	}
 	return sb.String()

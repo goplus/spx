@@ -8,12 +8,51 @@
 //----------------------------------------------------------------------------*/
 {{ $view := . -}}
 class GdspxFuncs {
+constructor() {
+	this._inputMousePosScratch = null;
+	this._gdIntScratch = null;
+	this._gdObjScratch = null;
+}
+
+// NOTE: flattened JS-facing params use (low, high), but the wasm helpers
+// `_gdspx_new_int` / `_gdspx_new_obj` follow the C ABI and expect (high, low).
+
+_getGdIntScratch() {
+	var _scratch = this._gdIntScratch;
+	if (_scratch == null) {
+		_scratch = this._gdIntScratch = { low: 0, high: 0 };
+	}
+	return _scratch;
+}
+
+_getGdObjScratch() {
+	var _scratch = this._gdObjScratch;
+	if (_scratch == null) {
+		_scratch = this._gdObjScratch = { low: 0, high: 0 };
+	}
+	return _scratch;
+}
+
+/**
+ * Reads a GdInt/GdObj from wasm memory into a reusable scratch object.
+ * The returned object is mutable and will be overwritten by the next call
+ * that uses the same scratch object, so callers must consume or copy it
+ * immediately.
+ */
+_readGdIntLike(ptr, scratch) {
+	var _u32 = Module.HEAPU32;
+	var _word = ptr >> 2;
+	scratch.low = _u32[_word];
+	scratch.high = _u32[_word + 1];
+	return scratch;
+}
+
 {{- range $i, $f := $view.CollectGDExtensionInterfaceFunctions -}}
 {{ $rt := goReturnType .ReturnType }}
 gd{{ loadProcAddressName $f.Name }}(
-	{{- $args := effectiveArgs $f -}}
+	{{- $args := getJsFuncArgs $f -}}
 	{{- range $j, $arg := $args -}}
-		{{ $arg.Name -}}
+		{{ $arg -}}
 		{{- if ne $j (sub (len $args) 1) -}}, {{- end -}}
 	{{ end -}}
 ) {

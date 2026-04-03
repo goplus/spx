@@ -346,14 +346,25 @@ func JsFromGdObj(val Object) js.Value {
 	return JsFromGdInt(int64(val))
 }
 
-func JsFromGdInt(val int64) js.Value {
-	vec2Js := jsObject.New()
+func JsSplitGdObj(val Object) (uint32, uint32) {
+	return JsSplitGdInt(int64(val))
+}
 
+// JsSplitGdInt encodes a web bridge GdInt/GdObj as (low, high) uint32 parts.
+// JS-facing wrappers keep this order, while the wasm-side constructors rebuild
+// the 64-bit value according to the platform ABI.
+func JsSplitGdInt(val int64) (uint32, uint32) {
 	low := uint32(val & 0xFFFFFFFF)
 	high := uint32((val >> 32) & 0xFFFFFFFF)
-	vec2Js.Set("low", low)
-	vec2Js.Set("high", high)
-	return vec2Js
+	return low, high
+}
+
+func JsFromGdInt(val int64) js.Value {
+	intJs := jsObject.New()
+	low, high := JsSplitGdInt(val)
+	intJs.Set("low", low)
+	intJs.Set("high", high)
+	return intJs
 }
 
 func JsToGdObject(val js.Value) Object {
@@ -367,9 +378,7 @@ func JsToGdObj(val js.Value) int64 {
 func JsToGdInt(val js.Value) int64 {
 	low := uint32(val.Get("low").Int())
 	high := uint32(val.Get("high").Int())
-
-	int64Value := int64(high)<<32 | int64(low)
-	return int64Value
+	return gdIntFromParts(low, high)
 }
 
 func JsFromGdString(object string) js.Value {
@@ -491,6 +500,12 @@ func JsToGdFloat32(val js.Value) float32 {
 
 func JsToGdInt64(val js.Value) int64 {
 	return int64(val.Int())
+}
+
+// gdIntFromParts reconstructs the 64-bit GdInt/GdObj value from the web
+// bridge's JS-visible (low, high) representation.
+func gdIntFromParts(low, high uint32) int64 {
+	return int64(uint64(high)<<32 | uint64(low))
 }
 
 func bytesFromInt64Slice(data []int64) []byte {
