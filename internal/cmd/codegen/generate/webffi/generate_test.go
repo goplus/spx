@@ -120,3 +120,11 @@ func TestGetJsFuncBodyUsesFixedScratchAccessorForFlatReturn(t *testing.T) {
 	require.Contains(t, body, "this._readGdIntLike(_retValue, this._getGdIntScratch())")
 	require.NotContains(t, body, `"_gdIntScratch"`)
 }
+
+func TestJsTemplateUsesHeapU32ForFlatReads(t *testing.T) {
+	require.Contains(t, jsEngineJsFileText, "var _u32 = Module.HEAPU32;")
+	require.Contains(t, jsEngineJsFileText, "scratch.low = _u32[_word];")
+	require.Contains(t, jsEngineJsFileText, "scratch.high = _u32[_word + 1];")
+	require.NotContains(t, jsEngineJsFileText, "_getGdDataView()")
+	require.NotContains(t, jsEngineJsFileText, "getUint32(")
+}
