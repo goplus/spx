@@ -89,7 +89,6 @@ type animState struct {
 	IsCanceled bool
 	Speed      float64
 	AudioName  string
-	AudioId    soundId
 }
 
 // -----------------------------------------------------------------------------
