@@ -130,9 +130,9 @@ func (s *soundComponent) ChangeSoundEffect(kind SoundEffectKind, delta float64) 
 // Internal Audio Management
 // ============================================================================
 
-func (s *soundComponent) playAudio(name SoundName, loop bool) soundId {
+func (s *soundComponent) playAudio(name SoundName, loop bool) {
 	s.checkSoundObj()
-	return s.sprite.g.playSound(s.sprite.runtimeState.SyncSprite, s.soundObj, name, loop, s.sprite.g.audioState.AudioAttenuation, s.sprite.g.audioState.AudioMaxDistance)
+	s.sprite.g.playSound(s.sprite.runtimeState.SyncSprite, s.soundObj, name, loop, s.sprite.g.audioState.AudioAttenuation, s.sprite.g.audioState.AudioMaxDistance)
 }
 
 func (s *soundComponent) checkSoundObj() {

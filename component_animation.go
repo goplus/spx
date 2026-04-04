@@ -268,7 +268,7 @@ func (a *animationComponent) playDefaultAnim() {
 func (a *animationComponent) playAnimAudio(ani *coreproject.AniConfig, info *animState) {
 	if ani.OnStart != nil && ani.OnStart.Play != "" {
 		info.AudioName = ani.OnStart.Play
-		info.AudioId = a.sprite.playAudio(info.AudioName, false)
+		a.sprite.playAudio(info.AudioName, false)
 	}
 }
 
