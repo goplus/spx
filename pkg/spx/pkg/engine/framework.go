@@ -6,15 +6,6 @@ import (
 	"github.com/goplus/spbase/mathf"
 )
 
-var (
-	// Deprecated: prefer accessor functions such as GetSprite or Sprites.
-	Id2Sprites = make(map[Object]ISpriter)
-	// Deprecated: prefer accessor functions such as GetUINode or UiNodes.
-	Id2UiNodes = make(map[Object]IUiNode)
-	// Deprecated: prefer AdvanceTimeSinceGameStart and TimeSinceGameStarted.
-	TimeSinceGameStart = float64(0)
-)
-
 func typeOf[T any]() reflect.Type {
 	return reflect.TypeOf((*T)(nil)).Elem()
 }
