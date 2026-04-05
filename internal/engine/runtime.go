@@ -22,8 +22,6 @@ var state = runtimeState{
 }
 
 func init() {
-	gdx.Id2Sprites = state.sprites
-	gdx.Id2UiNodes = state.uiNodes
 	gdx.SetRuntimeBridge(runtimeBridge{})
 }
 
@@ -111,7 +109,6 @@ func (runtimeBridge) DeleteUINode(id Object) {
 
 func (runtimeBridge) AdvanceTimeSinceGameStart(delta float64) float64 {
 	state.timeSinceStart += delta
-	gdx.TimeSinceGameStart = state.timeSinceStart
 	return state.timeSinceStart
 }
 
