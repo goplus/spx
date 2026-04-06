@@ -1,4 +1,11 @@
-/**/project
-/**/.gitignore
+# Example outputs
+project/
+.temp/
+.gdspx_web_server*.pid
+
+# Example modules
 go.mod
 go.sum
+
+# Local ignores
+*/.gitignore

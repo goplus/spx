@@ -1,23 +1,17 @@
-# Editors and local workspace
-/.vscode/
-/.idea/
+# Editors
+.vscode/
+.idea/
 *.code-workspace
 
-# OS files
+# OS
 .DS_Store
 
-# Local tool caches and generated workspace files
-/.gop/
+# Tool cache
 /.gocache/
-/_gsc/
-/_test/
-/go.work
-/go.json
-/gop.json
-/gop_autogen.go
-/xgo_autogen.go
 
-# Build outputs
+# Builds
+/go.work
+/xgo_autogen.go
 *.exe
 *.exe~
 *.dll
@@ -27,12 +21,10 @@
 *.test
 *.out
 
-# Temp directories
-.temp/
+# Root outputs
+/.temp/
 /.tmp/
-
-# Repo-local generated artifacts
 /bin/
 /.bin/
 /godot/
-.gdspx_web_server*.pid
+/.gdspx_web_server*.pid
