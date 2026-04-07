@@ -69,7 +69,7 @@ jobs:
           web-mode: normal
 
       - name: Set up ORAS
-        uses: oras-project/setup-oras@v1
+        uses: oras-project/setup-oras@v2
 
       - name: Compute pseudo-version
         run: |
