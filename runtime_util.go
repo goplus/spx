@@ -46,12 +46,12 @@ func Iround(v float64) int {
 	return int(v - 0.5)
 }
 
-// Exit__0 exits the program with the specified exit code.
-func Exit__0(code int) {
-	engine.RequestExit(int64(code))
+// Exit__0 exits the program with exit code 0.
+func Exit__0() {
+	engine.RequestExit(0)
 }
 
-// Exit__1 exits the program with exit code 0.
-func Exit__1() {
-	engine.RequestExit(0)
+// Exit__1 exits the program with the specified exit code.
+func Exit__1(code int) {
+	engine.RequestExit(int64(code))
 }

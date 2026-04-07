@@ -43,17 +43,28 @@ func (p *Game) IntersectCircle(posX, posY, radius float64) []Sprite {
 // -----------------------------------------------------------------------------
 // Raycast
 // -----------------------------------------------------------------------------
-func (p *Game) Raycast__0(fromX, fromY, toX, toY float64, ignoreSprites []Sprite) (hit bool, sprite Sprite, hitX, hitY float64) {
+func (p *Game) Raycast__0(fromX, fromY, toX, toY float64) (hit bool, sprite Sprite, hitX, hitY float64) {
+	return p.Raycast__2(fromX, fromY, toX, toY, nil)
+}
+
+func (p *Game) Raycast__1(fromX, fromY, toX, toY float64, ignoreSprite Sprite) (hit bool, sprite Sprite, hitX, hitY float64) {
+	return p.Raycast__2(fromX, fromY, toX, toY, []Sprite{ignoreSprite})
+}
+
+func (p *Game) Raycast__2(fromX, fromY, toX, toY float64, ignoreSprites []Sprite) (hit bool, sprite Sprite, hitX, hitY float64) {
 	from := mathf.NewVec2(fromX, fromY)
 	to := mathf.NewVec2(toX, toY)
-	ignoreSpritesIds := make([]int64, 0)
-	for _, item := range ignoreSprites {
-		if item == nil {
-			continue
-		}
-		impl := spriteOf(item)
-		if impl != nil {
-			ignoreSpritesIds = append(ignoreSpritesIds, impl.getSpriteId())
+	var ignoreSpritesIds []int64
+	if len(ignoreSprites) > 0 {
+		ignoreSpritesIds = make([]int64, 0, len(ignoreSprites))
+		for _, item := range ignoreSprites {
+			if item == nil {
+				continue
+			}
+			impl := spriteOf(item)
+			if impl != nil {
+				ignoreSpritesIds = append(ignoreSpritesIds, impl.getSpriteId())
+			}
 		}
 	}
 	result := p.raycast(from, to, ignoreSpritesIds, -1)
@@ -71,14 +82,6 @@ func (p *Game) Raycast__0(fromX, fromY, toX, toY float64, ignoreSprites []Sprite
 		}
 	}
 	return result.Hited, target, result.PosX, result.PosY
-}
-
-func (p *Game) Raycast__1(fromX, fromY, toX, toY float64, ignoreSprite Sprite) (hit bool, sprite Sprite, hitX, hitY float64) {
-	return p.Raycast__0(fromX, fromY, toX, toY, []Sprite{ignoreSprite})
-}
-
-func (p *Game) Raycast__2(fromX, fromY, toX, toY float64) (hit bool, sprite Sprite, hitX, hitY float64) {
-	return p.Raycast__0(fromX, fromY, toX, toY, []Sprite{})
 }
 
 // -----------------------------------------------------------------------------

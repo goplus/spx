@@ -147,21 +147,21 @@ type Sprite interface {
 	Step__2(step float64, speed float64, animation SpriteAnimationName)
 	StepTo__0(sprite Sprite)
 	StepTo__1(sprite SpriteName)
-	StepTo__2(x, y float64)
-	StepTo__3(obj specialObj)
+	StepTo__2(obj specialObj)
+	StepTo__3(x, y float64)
 	StepTo__4(sprite Sprite, speed float64)
 	StepTo__5(sprite SpriteName, speed float64)
-	StepTo__6(x, y, speed float64)
-	StepTo__7(obj specialObj, speed float64)
+	StepTo__6(obj specialObj, speed float64)
+	StepTo__7(x, y, speed float64)
 	StepTo__8(sprite Sprite, speed float64, animation SpriteAnimationName)
 	StepTo__9(sprite SpriteName, speed float64, animation SpriteAnimationName)
-	StepTo__a(x, y, speed float64, animation SpriteAnimationName)
-	StepTo__b(obj specialObj, speed float64, animation SpriteAnimationName)
-	Glide__0(x, y float64, secs float64)
-	Glide__1(sprite Sprite, secs float64)
-	Glide__2(sprite SpriteName, secs float64)
-	Glide__3(obj specialObj, secs float64)
-	Glide__4(pos Pos, secs float64)
+	StepTo__a(obj specialObj, speed float64, animation SpriteAnimationName)
+	StepTo__b(x, y, speed float64, animation SpriteAnimationName)
+	Glide__0(sprite Sprite, secs float64)
+	Glide__1(sprite SpriteName, secs float64)
+	Glide__2(obj specialObj, secs float64)
+	Glide__3(pos Pos, secs float64)
+	Glide__4(x, y float64, secs float64)
 
 	// Heading and Rotation Methods
 	Heading() Direction
@@ -228,8 +228,8 @@ type Sprite interface {
 	DistanceTo__1(sprite SpriteName) float64
 	DistanceTo__2(obj specialObj) float64
 	DistanceTo__3(pos Pos) float64
-	Touching__0(sprite SpriteName) bool
-	Touching__1(sprite Sprite) bool
+	Touching__0(sprite Sprite) bool
+	Touching__1(sprite SpriteName) bool
 	Touching__2(obj specialObj) bool
 	TouchingColor(color Color) bool
 
@@ -245,12 +245,12 @@ type Sprite interface {
 	Quote__3(message, description string, secs float64)
 
 	// Event Methods
-	OnCloned__0(onCloned func(data any))
-	OnCloned__1(onCloned func())
-	OnTouchStart__0(sprite SpriteName, onTouchStart func(Sprite))
-	OnTouchStart__1(sprite SpriteName, onTouchStart func())
-	OnTouchStart__2(sprites []SpriteName, onTouchStart func(Sprite))
-	OnTouchStart__3(sprites []SpriteName, onTouchStart func())
+	OnCloned__0(onCloned func())
+	OnCloned__1(onCloned func(data any))
+	OnTouchStart__0(sprite SpriteName, onTouchStart func())
+	OnTouchStart__1(sprite SpriteName, onTouchStart func(Sprite))
+	OnTouchStart__2(sprites []SpriteName, onTouchStart func())
+	OnTouchStart__3(sprites []SpriteName, onTouchStart func(Sprite))
 
 	// Sound Methods
 	Volume() float64
@@ -259,8 +259,8 @@ type Sprite interface {
 	GetSoundEffect(kind SoundEffectKind) float64
 	SetSoundEffect(kind SoundEffectKind, value float64)
 	ChangeSoundEffect(kind SoundEffectKind, delta float64)
-	Play__0(name SoundName, loop bool)
-	Play__1(name SoundName)
+	Play__0(name SoundName)
+	Play__1(name SoundName, loop bool)
 	PlayAndWait(name SoundName)
 	PausePlaying(name SoundName)
 	ResumePlaying(name SoundName)

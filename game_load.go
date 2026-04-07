@@ -221,7 +221,7 @@ func (p *Game) loadAudioAndTilemap(proj *coreproject.ProjectConfig) {
 	p.tilemapMgr.parseTilemap()
 	p.audioState.SoundObj = p.soundMgr.AllocSound()
 	if proj.Bgm != "" {
-		p.Play__0(proj.Bgm, true)
+		p.Play__1(proj.Bgm, true)
 	}
 }
 

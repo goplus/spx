@@ -86,12 +86,12 @@ func (p *SpriteImpl) StepTo__1(sprite SpriteName) {
 	p.doStepTo(sprite, 1, "")
 }
 
-func (p *SpriteImpl) StepTo__2(x, y float64) {
-	p.transform().StepToPos(x, y, 1, "")
+func (p *SpriteImpl) StepTo__2(obj specialObj) {
+	p.doStepTo(obj, 1, "")
 }
 
-func (p *SpriteImpl) StepTo__3(obj specialObj) {
-	p.doStepTo(obj, 1, "")
+func (p *SpriteImpl) StepTo__3(x, y float64) {
+	p.transform().StepToPos(x, y, 1, "")
 }
 
 func (p *SpriteImpl) StepTo__4(sprite Sprite, speed float64) {
@@ -102,12 +102,12 @@ func (p *SpriteImpl) StepTo__5(sprite SpriteName, speed float64) {
 	p.doStepTo(sprite, speed, "")
 }
 
-func (p *SpriteImpl) StepTo__6(x, y, speed float64) {
-	p.transform().StepToPos(x, y, speed, "")
+func (p *SpriteImpl) StepTo__6(obj specialObj, speed float64) {
+	p.doStepTo(obj, speed, "")
 }
 
-func (p *SpriteImpl) StepTo__7(obj specialObj, speed float64) {
-	p.doStepTo(obj, speed, "")
+func (p *SpriteImpl) StepTo__7(x, y, speed float64) {
+	p.transform().StepToPos(x, y, speed, "")
 }
 
 func (p *SpriteImpl) StepTo__8(sprite Sprite, speed float64, animation SpriteAnimationName) {
@@ -118,12 +118,12 @@ func (p *SpriteImpl) StepTo__9(sprite SpriteName, speed float64, animation Sprit
 	p.doStepTo(sprite, speed, animation)
 }
 
-func (p *SpriteImpl) StepTo__a(x, y, speed float64, animation SpriteAnimationName) {
-	p.transform().StepToPos(x, y, speed, animation)
+func (p *SpriteImpl) StepTo__a(obj specialObj, speed float64, animation SpriteAnimationName) {
+	p.doStepTo(obj, speed, animation)
 }
 
-func (p *SpriteImpl) StepTo__b(obj specialObj, speed float64, animation SpriteAnimationName) {
-	p.doStepTo(obj, speed, animation)
+func (p *SpriteImpl) StepTo__b(x, y, speed float64, animation SpriteAnimationName) {
+	p.transform().StepToPos(x, y, speed, animation)
 }
 
 func (p *SpriteImpl) doGlideTo(obj any, secs float64) {
@@ -134,24 +134,24 @@ func (p *SpriteImpl) doGlideTo(obj any, secs float64) {
 	p.transform().Glide(x, y, secs)
 }
 
-func (p *SpriteImpl) Glide__0(x, y float64, secs float64) {
-	p.transform().Glide(x, y, secs)
-}
-
-func (p *SpriteImpl) Glide__1(sprite Sprite, secs float64) {
+func (p *SpriteImpl) Glide__0(sprite Sprite, secs float64) {
 	p.doGlideTo(sprite, secs)
 }
 
-func (p *SpriteImpl) Glide__2(sprite SpriteName, secs float64) {
+func (p *SpriteImpl) Glide__1(sprite SpriteName, secs float64) {
 	p.doGlideTo(sprite, secs)
 }
 
-func (p *SpriteImpl) Glide__3(obj specialObj, secs float64) {
+func (p *SpriteImpl) Glide__2(obj specialObj, secs float64) {
 	p.doGlideTo(obj, secs)
 }
 
-func (p *SpriteImpl) Glide__4(pos Pos, secs float64) {
+func (p *SpriteImpl) Glide__3(pos Pos, secs float64) {
 	p.doGlideTo(pos, secs)
+}
+
+func (p *SpriteImpl) Glide__4(x, y float64, secs float64) {
+	p.transform().Glide(x, y, secs)
 }
 
 func (p *SpriteImpl) SetXYpos(x, y float64) {
