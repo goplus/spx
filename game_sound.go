@@ -38,14 +38,14 @@ func (p *Game) Volume() float64 {
 	})
 }
 
-func (p *Game) Play__0(name SoundName, loop bool) {
+func (p *Game) Play__0(name SoundName) {
+	p.Play__1(name, false)
+}
+
+func (p *Game) Play__1(name SoundName, loop bool) {
 	p.withGameSound(func(soundObj engine.Object) {
 		p.playSound(p.runtimeState.SyncSprite, soundObj, name, loop, 0, defaultAudioMaxDist)
 	})
-}
-
-func (p *Game) Play__1(name SoundName) {
-	p.Play__0(name, false)
 }
 
 func (p *Game) PlayAndWait(name SoundName) {

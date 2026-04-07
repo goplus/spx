@@ -31,12 +31,12 @@ const (
 // -----------------------------------------------------------------------------
 // Playback
 // -----------------------------------------------------------------------------
-func (p *SpriteImpl) Play__0(name SoundName, loop bool) {
-	p.sound().Play(name, loop)
+func (p *SpriteImpl) Play__0(name SoundName) {
+	p.Play__1(name, false)
 }
 
-func (p *SpriteImpl) Play__1(name SoundName) {
-	p.Play__0(name, false)
+func (p *SpriteImpl) Play__1(name SoundName, loop bool) {
+	p.sound().Play(name, loop)
 }
 
 func (p *SpriteImpl) PlayAndWait(name SoundName) {

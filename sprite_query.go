@@ -57,11 +57,11 @@ func (p *SpriteImpl) TouchingColor(color Color) bool {
 	return p.touchingColor(toMathfColor(color))
 }
 
-func (p *SpriteImpl) Touching__0(sprite SpriteName) bool {
+func (p *SpriteImpl) Touching__0(sprite Sprite) bool {
 	return p.touching(sprite)
 }
 
-func (p *SpriteImpl) Touching__1(sprite Sprite) bool {
+func (p *SpriteImpl) Touching__1(sprite SpriteName) bool {
 	return p.touching(sprite)
 }
 
