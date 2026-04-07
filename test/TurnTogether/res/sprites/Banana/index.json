@@ -1,7 +1,7 @@
 {
   "costumeSet": {
     "faceRight": 180,
-    "path": "../../../../res/banana.png",
+    "path": "../../../../shared-assets/banana.png",
     "nx": 58
   },
   "costumeIndex": 0,

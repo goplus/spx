@@ -6,7 +6,7 @@
   "backdrops": [
     {
       "name": "backdrop1",
-      "path": "../../res/bg.jpg"
+      "path": "../../shared-assets/bg.jpg"
     }
   ],
   "camera": {

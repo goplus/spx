@@ -3,7 +3,7 @@ mkdir  res/
 GOEXPERIMENT=noregabi GOOS=js GOARCH=wasm go build --tags canvas -o test.wasm
 cp -f "$(go env GOROOT)/lib/wasm/wasm_exec.js" ./go.wasm.exec.js
 cp -f "$(go env GOROOT)/lib/wasm/wasm_exec.html" ./go.wasm.exec.html
-cp -f -p ../res/* ./res/
+cp -f -p ../shared-assets/* ./res/
 
 
 echo '// test.go

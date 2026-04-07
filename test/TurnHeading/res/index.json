@@ -2,7 +2,7 @@
   "backdrops": [
     {
       "name": "backdrop1",
-      "path": "../../res/lake.jpg"
+      "path": "../../shared-assets/lake.jpg"
     }
   ],
   "zorder": [

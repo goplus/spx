@@ -2,11 +2,11 @@
   "backdrops": [
     {
       "name": "backdrop1",
-      "path": "../../res/lake.jpg"
+      "path": "../../shared-assets/lake.jpg"
     },
     {
       "name": "backdrop2",
-      "path": "../../res/bg.jpg"
+      "path": "../../shared-assets/bg.jpg"
     }
   ],
   "map": {
