@@ -3,7 +3,7 @@
       {
         "bitmapResolution": 2,
         "name": "red",
-        "path": "../../../../res/red.png",
+        "path": "../../../../shared-assets/red.png",
         "x": 72,
         "y": 17
       }

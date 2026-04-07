@@ -1,6 +1,6 @@
 {
   "costumeSet": {
-    "path": "../../../../res/crocodile.png",
+    "path": "../../../../shared-assets/crocodile.png",
     "nx": 5,
     "items": [
       {
