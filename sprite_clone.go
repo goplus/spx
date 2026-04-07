@@ -25,12 +25,12 @@ import (
 	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
-func XGot_SpriteImpl_Clone__0(sprite Sprite) {
-	XGot_SpriteImpl_Clone__1(sprite, nil)
+func (p *SpriteImpl) Clone__0() {
+	p.Clone__1(nil)
 }
 
-func XGot_SpriteImpl_Clone__1(sprite Sprite, data any) {
-	doClone(sprite, data, false, nil)
+func (p *SpriteImpl) Clone__1(data any) {
+	doClone(p.sprite, data, false, nil)
 }
 
 func doClone(sprite Sprite, data any, isAsync bool, onCloned func(sprite *SpriteImpl)) {

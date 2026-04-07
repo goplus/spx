@@ -118,6 +118,8 @@ type Sprite interface {
 	Main()
 	Name() string
 	IsCloned() bool
+	Clone__0()
+	Clone__1(data any)
 	DeleteThisClone()
 	Destroy()
 	Die()
