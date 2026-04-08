@@ -50,14 +50,6 @@ func XGot_Game_Main(game Gamer, sprites ...Sprite) {
 	engine.Main(game)
 }
 
-// XGot_Game_Run runs the game using the builder pattern.
-func XGot_Game_Run(game Gamer, resource any, gameConf ...*Config) {
-	builder := newGameBuilder(game, resource, gameConf...)
-	if err := builder.buildAndRun(); err != nil {
-		engine.Panic(err)
-	}
-}
-
 // XGot_Game_Reload reloads the game with new configuration.
 func XGot_Game_Reload(game Gamer, index any) (err error) {
 	v := reflect.ValueOf(game).Elem()
