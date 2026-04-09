@@ -22,8 +22,8 @@ import (
 	"os"
 
 	"github.com/goplus/spx/v2/cmd/spx/internal/command"
-	"github.com/goplus/spx/v2/internal/projecttemplate"
-	"github.com/goplus/spx/v2/internal/releasemeta"
+	"github.com/goplus/spx/v2/internal/release"
+	"github.com/goplus/spx/v2/internal/scaffold"
 )
 
 var (
@@ -48,8 +48,8 @@ func main() {
 	// Initialize with provided values
 	cmd.ProjectFS = projectFS
 	cmd.PlatformFS = platformFS
-	cmd.Version = releasemeta.DefaultReleaseMeta().Runtime.Version
-	cmd.GoModTemplate = projecttemplate.GoMod()
+	cmd.Version = release.DefaultReleaseMeta().Runtime.Version
+	cmd.GoModTemplate = scaffold.GoMod()
 
 	// Initialize the Args field if not already initialized
 	err := cmd.RunCmd(appName, appName, cmd.Version, projectFS, "template/project", "project")

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package projecttemplate
+package scaffold
 
 import _ "embed"
 

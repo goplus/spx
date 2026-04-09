@@ -16,7 +16,7 @@ runs:
         VERSION="v${{ inputs.version }}"
         pwd && ls -la
 
-        FILE="internal/projecttemplate/go.mod.template"
+        FILE="internal/scaffold/go.mod.template"
 
         if [ ! -f "$FILE" ]; then
           echo "Error: $FILE not found"

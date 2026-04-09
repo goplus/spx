@@ -26,7 +26,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/goplus/spx/v2/internal/releasemeta"
+	"github.com/goplus/spx/v2/internal/release"
 )
 
 const runtimeIndexJSON = `{"map":{"width":480,"height":360}}`
@@ -210,9 +210,9 @@ func ensureGoPath() (string, error) {
 }
 
 func defaultRuntimeVersion() (string, error) {
-	version := releasemeta.DefaultReleaseMeta().Runtime.Version
+	version := release.DefaultReleaseMeta().Runtime.Version
 	if version == "" {
-		return "", fmt.Errorf("releasemeta: Runtime.Version is empty")
+		return "", fmt.Errorf("release: Runtime.Version is empty")
 	}
 	return version, nil
 }

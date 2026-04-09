@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package releasemeta
+package release
 
 import "testing"
 

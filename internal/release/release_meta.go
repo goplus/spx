@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-// Package releasemeta provides shared SPX/runtime release metadata.
-package releasemeta
+// Package release provides shared SPX/runtime release metadata.
+package release
 
 const (
 	// RuntimeURLBase is the base URL for downloading runtime executables.
@@ -105,7 +105,7 @@ var releaseMetaBySPXVersion = func() map[string]ReleaseMeta {
 // DefaultReleaseMeta returns the latest known released metadata.
 func DefaultReleaseMeta() ReleaseMeta {
 	if len(releaseVersionMappings) == 0 {
-		panic("releasemeta: releaseVersionMappings is empty")
+		panic("release: releaseVersionMappings is empty")
 	}
 	item := releaseVersionMappings[len(releaseVersionMappings)-1]
 	return newReleaseMeta(item.spxVersion, item.runtimeVersion)
