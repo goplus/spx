@@ -19,9 +19,9 @@ package main
 import (
 	"fmt"
 
-	"github.com/goplus/spx/v2/internal/releasemeta"
+	"github.com/goplus/spx/v2/internal/release"
 )
 
 func main() {
-	fmt.Println(releasemeta.DefaultReleaseMeta().Runtime.Version)
+	fmt.Println(release.DefaultReleaseMeta().Runtime.Version)
 }

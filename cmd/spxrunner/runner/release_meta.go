@@ -49,5 +49,5 @@ func ReleaseMetaForSPXVersion(spxVersion string) ReleaseMeta {
 }
 
 func CurrentReleaseMeta() ReleaseMeta {
-	return release.CurrentReleaseMeta()
+	return release.DefaultReleaseMeta()
 }
