@@ -209,6 +209,10 @@ func (t *transformComponent) SetSize(size float64) {
 	if isDebugInstrEnabled() {
 		spxlog.Debug("SetSize: sprite=%s, size=%v", t.sprite.name, size)
 	}
+	if size < 0 {
+		spxlog.Warn("SetSize: sprite=%s, size=%v is negative, clamping to 0", t.sprite.name, size)
+		size = 0
+	}
 
 	t.sprite.runtimeState.Scale = size
 	t.sprite.runtimeState.IsCostumeDirty = true
