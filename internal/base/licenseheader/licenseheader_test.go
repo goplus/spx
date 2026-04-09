@@ -48,3 +48,14 @@ func TestAddToGoSourcePreservesExistingHeader(t *testing.T) {
 		t.Fatalf("header duplicated:\n%s", got)
 	}
 }
+
+func TestAddToGoSourcePreservesUTF8BOM(t *testing.T) {
+	src := append([]byte{0xEF, 0xBB, 0xBF}, []byte("package demo\n")...)
+
+	got := AddToGoSource(src)
+	want := append([]byte{0xEF, 0xBB, 0xBF}, []byte(Text+"package demo\n")...)
+
+	if string(got) != string(want) {
+		t.Fatalf("unexpected output:\n%s", string(got))
+	}
+}

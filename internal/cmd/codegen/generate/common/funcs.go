@@ -721,7 +721,8 @@ func GenerateFile(funcs template.FuncMap, name string, text string, data any, ds
 		return err
 	}
 	output := b.Bytes()
-	if filepath.Ext(dstPath) == ".go" {
+	isGoFile := filepath.Ext(dstPath) == ".go"
+	if isGoFile {
 		output = licenseheader.AddToGoSource(output)
 	}
 
@@ -733,8 +734,10 @@ func GenerateFile(funcs template.FuncMap, name string, text string, data any, ds
 	}
 	f.Write(output)
 	f.Close()
-	exec.Command("go", "fmt", dstPath).Run()
-	exec.Command("goimports", "-w", dstPath).Run()
+	if isGoFile {
+		exec.Command("go", "fmt", dstPath).Run()
+		exec.Command("goimports", "-w", dstPath).Run()
+	}
 	spxlog.Info("generate file: %s", dstPath)
 	return nil
 }

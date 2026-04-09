@@ -32,7 +32,11 @@ func main() {
 	cmd.Stderr = os.Stderr
 	cmd.Dir = "."
 	if err := cmd.Run(); err != nil {
-		os.Exit(cmd.ProcessState.ExitCode())
+		code := 1
+		if cmd.ProcessState != nil {
+			code = cmd.ProcessState.ExitCode()
+		}
+		os.Exit(code)
 	}
 
 	outdir, ok := flagValue(args, "-outdir")
@@ -58,7 +62,7 @@ func addHeadersInDir(root string) error {
 }
 
 func flagValue(args []string, name string) (string, bool) {
-	for i := 0; i < len(args); i++ {
+	for i := range args {
 		arg := args[i]
 		if arg == name {
 			if i+1 >= len(args) {
