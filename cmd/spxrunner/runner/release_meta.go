@@ -32,22 +32,22 @@
 
 package runner
 
-import "github.com/goplus/spx/v2/internal/releasemeta"
+import "github.com/goplus/spx/v2/internal/release"
 
 const (
-	RuntimeURLBase    = releasemeta.RuntimeURLBase
-	SpxReleaseURLBase = releasemeta.SpxReleaseURLBase
-	RuntimeTag        = releasemeta.RuntimeTag
+	RuntimeURLBase    = release.RuntimeURLBase
+	SpxReleaseURLBase = release.SpxReleaseURLBase
+	RuntimeTag        = release.RuntimeTag
 )
 
-type ReleaseMeta = releasemeta.ReleaseMeta
-type RuntimeRelease = releasemeta.RuntimeRelease
-type PckRelease = releasemeta.PckRelease
+type ReleaseMeta = release.ReleaseMeta
+type RuntimeRelease = release.RuntimeRelease
+type PckRelease = release.PckRelease
 
 func ReleaseMetaForSPXVersion(spxVersion string) ReleaseMeta {
-	return releasemeta.ReleaseMetaForSPXVersion(spxVersion)
+	return release.ReleaseMetaForSPXVersion(spxVersion)
 }
 
 func CurrentReleaseMeta() ReleaseMeta {
-	return releasemeta.CurrentReleaseMeta()
+	return release.CurrentReleaseMeta()
 }

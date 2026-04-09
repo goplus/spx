@@ -30,7 +30,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/goplus/spx/v2/internal/releasemeta"
+	"github.com/goplus/spx/v2/internal/release"
 )
 
 type engineDownloadEnv struct {
@@ -124,7 +124,7 @@ func downloadPlatformAssets(env engineDownloadEnv, mode string, editor bool) err
 func downloadRuntimePack(env engineDownloadEnv) error {
 	versionedPack := filepath.Join(env.goBinDir, fmt.Sprintf("gdspxrt%s.pck", env.version))
 	defaultPack := filepath.Join(env.goBinDir, "gdspxrt.pck")
-	meta := releasemeta.CurrentReleaseMeta()
+	meta := release.CurrentReleaseMeta()
 	zipName := fmt.Sprintf("gdspxrt.pck.%s.zip", meta.Pck.Version)
 	url := meta.PckDownloadURL(zipName)
 	zipPath := filepath.Join(env.cacheDir, zipName)

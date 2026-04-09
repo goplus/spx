@@ -35,8 +35,8 @@ package runner
 import (
 	_ "embed"
 
-	"github.com/goplus/spx/v2/internal/projecttemplate"
-	"github.com/goplus/spx/v2/internal/releasemeta"
+	"github.com/goplus/spx/v2/internal/release"
+	"github.com/goplus/spx/v2/internal/scaffold"
 )
 
 // Sync files from repository before building.
@@ -50,12 +50,12 @@ import (
 //go:embed gop.mod
 var GopModTemplate string
 
-// GoModTemplate is the shared project go.mod template embedded in internal/projecttemplate.
-var GoModTemplate = projecttemplate.GoMod()
+// GoModTemplate is the shared project go.mod template embedded in internal/scaffold.
+var GoModTemplate = scaffold.GoMod()
 
 // RuntimeVersion returns the latest known SPX runtime version.
 func RuntimeVersion() string {
-	return releasemeta.DefaultReleaseMeta().Runtime.Version
+	return release.DefaultReleaseMeta().Runtime.Version
 }
 
 // Version returns the SPX runtime version.
