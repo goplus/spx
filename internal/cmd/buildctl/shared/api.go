@@ -58,47 +58,114 @@ func (r CommandRunner) StopWebServers() error {
 	return commandRunner{repoRoot: r.RepoRoot}.stopWebServers()
 }
 
-func FindRepoRoot() (string, error) { return findRepoRoot() }
-func FileExists(path string) bool   { return fileExists(path) }
-func DirExists(path string) bool    { return dirExists(path) }
+func FindRepoRoot() (string, error) {
+	return findRepoRoot()
+}
+
+func FileExists(path string) bool {
+	return fileExists(path)
+}
+
+func DirExists(path string) bool {
+	return dirExists(path)
+}
+
 func ResolveBuildEnvironment(repoRoot string, requestedPlatform string) (BuildEnvironment, error) {
 	return resolveBuildEnvironment(repoRoot, requestedPlatform)
 }
-func (env BuildEnvironment) ShellExports() string { return buildEnvironment(env).shellExports() }
-func ShellQuote(value string) string              { return shellQuote(value) }
+
+func (env BuildEnvironment) ShellExports() string {
+	return buildEnvironment(env).shellExports()
+}
+
+func ShellQuote(value string) string {
+	return shellQuote(value)
+}
+
 func EnsureEngineSource(repoRoot string, run func(name string, args ...string) error) error {
 	return ensureEngineSource(repoRoot, run)
 }
+
 func ResolveMacOSVulkanSDKRoot(homeDir string, envSDK string) (string, error) {
 	return resolveMacOSVulkanSDKRoot(homeDir, envSDK)
 }
-func MacOSVulkanSDKShellExports(sdkRoot string) string      { return macOSVulkanSDKShellExports(sdkRoot) }
-func ValidateSetupMode(mode string) error                   { return validateSetupMode(mode) }
-func ValidateWebMode(mode string) error                     { return validateWebMode(mode) }
-func ValidateOptionalPlatform(platform string) error        { return validateOptionalPlatform(platform) }
-func CurrentEnvMap() map[string]string                      { return currentEnvMap() }
-func EnvMapToSlice(env map[string]string) []string          { return envMapToSlice(env) }
-func PrependToPath(pathValue string, dirs ...string) string { return prependToPath(pathValue, dirs...) }
+
+func MacOSVulkanSDKShellExports(sdkRoot string) string {
+	return macOSVulkanSDKShellExports(sdkRoot)
+}
+
+func ValidateSetupMode(mode string) error {
+	return validateSetupMode(mode)
+}
+
+func ValidateWebMode(mode string) error {
+	return validateWebMode(mode)
+}
+
+func ValidateOptionalPlatform(platform string) error {
+	return validateOptionalPlatform(platform)
+}
+
+func CurrentEnvMap() map[string]string {
+	return currentEnvMap()
+}
+
+func EnvMapToSlice(env map[string]string) []string {
+	return envMapToSlice(env)
+}
+
+func PrependToPath(pathValue string, dirs ...string) string {
+	return prependToPath(pathValue, dirs...)
+}
+
 func RunCommandOutput(name string, args ...string) ([]byte, error) {
 	return runCommandOutput(name, args...)
 }
+
 func RunCommandOutputWithEnv(workdir string, env []string, name string, args ...string) ([]byte, error) {
 	return runCommandOutputWithEnv(workdir, env, name, args...)
 }
+
 func RunStreamingCommand(workdir, name string, args ...string) error {
 	return runStreamingCommand(workdir, name, args...)
 }
-func BuildctlCommandEnv() (map[string]string, error) { return buildctlCommandEnv() }
+
+func BuildctlCommandEnv() (map[string]string, error) {
+	return buildctlCommandEnv()
+}
+
 func ResolveCommandPath(name string, env map[string]string) (string, error) {
 	return resolveCommandPath(name, env)
 }
-func EnsureGoPath() (string, error)          { return ensureGoPath() }
-func DefaultRuntimeVersion() (string, error) { return defaultRuntimeVersion() }
-func CopyFile(src, dst string) error         { return copyFile(src, dst) }
-func CopyDir(src, dst string) error          { return copyDir(src, dst) }
+
+func EnsureGoPath() (string, error) {
+	return ensureGoPath()
+}
+
+func DefaultRuntimeVersion() (string, error) {
+	return defaultRuntimeVersion()
+}
+
+func CopyFile(src, dst string) error {
+	return copyFile(src, dst)
+}
+
+func CopyDir(src, dst string) error {
+	return copyDir(src, dst)
+}
+
 func WriteNamedZip(dst string, namedFiles map[string]string) error {
 	return writeNamedZip(dst, namedFiles)
 }
-func ZipDirectory(srcDir, dstZip string) error { return zipDirectory(srcDir, dstZip) }
-func ExtractZip(srcZip, dstDir string) error   { return extractZip(srcZip, dstDir) }
-func FetchURLToFile(url, dst string) error     { return fetchURLToFile(url, dst) }
+
+func ZipDirectory(srcDir, dstZip string) error {
+	return zipDirectory(srcDir, dstZip)
+}
+
+func ExtractZip(srcZip, dstDir string) error {
+	return extractZip(srcZip, dstDir)
+}
+
+func FetchURLToFile(url, dst string) error {
+	return fetchURLToFile(url, dst)
+}
