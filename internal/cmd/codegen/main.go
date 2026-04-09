@@ -17,9 +17,7 @@
 package main
 
 import (
-	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -34,10 +32,6 @@ import (
 
 var (
 	verbose          bool
-	cleanAll         bool
-	cleanGdextension bool
-	cleanTypes       bool
-	cleanClasses     bool
 	genClangAPI      bool
 	genExtensionAPI  bool
 	packagePath      string
@@ -109,22 +103,6 @@ func generateCode() error {
 		spxlog.Info("cli tool done")
 	}
 	return nil
-}
-func execGoFmt(filePath string) {
-	cmd := exec.Command("gofmt", "-w", filePath)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		spxlog.Error("error running gofmt:\n%s\n%v", output, err)
-		panic(fmt.Errorf("error running gofmt: \n%s\n%w", output, err))
-	}
-}
-
-func execGoImports(filePath string) {
-	cmd := exec.Command("goimports", "-w", filePath)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		spxlog.Error("error running goimports:\n%s\n%v", output, err)
-	}
 }
 
 func main() {
