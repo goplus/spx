@@ -62,6 +62,13 @@ func appendSinkCopy(sinks []Sink, sink Sink) []Sink {
 	return out
 }
 
+func prependSinkCopy(sinks []Sink, sink Sink) []Sink {
+	out := make([]Sink, len(sinks)+1)
+	out[0] = sink
+	copy(out[1:], sinks)
+	return out
+}
+
 func readOnlySnapshot(sinks []Sink) []Sink {
 	if len(sinks) == 0 {
 		return sinks
@@ -134,6 +141,16 @@ func (m *Manager) TryAddStart(sink Sink) bool {
 		return false
 	}
 	m.buckets[BucketStart] = appendSinkCopy(m.buckets[BucketStart], sink)
+	return true
+}
+
+func (m *Manager) TryAddStartPrepend(sink Sink) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.startFired {
+		return false
+	}
+	m.buckets[BucketStart] = prependSinkCopy(m.buckets[BucketStart], sink)
 	return true
 }
 
