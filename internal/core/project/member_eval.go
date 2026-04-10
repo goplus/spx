@@ -21,16 +21,18 @@ import (
 	"reflect"
 )
 
-func ResolveMemberStringEval(target reflect.Value, name string, from int) func() string {
-	// Try as field first (fields don't support lowercase aliases in gogen).
+type resolvedMember struct {
+	field        reflect.Value
+	method       reflect.Value
+	autoProperty bool
+}
+
+func resolveMember(target reflect.Value, name string, from int) resolvedMember {
 	ref := getValueRef(target, name, from)
 	if ref.IsValid() {
-		return func() string {
-			return fmt.Sprint(ref.Interface())
-		}
+		return resolvedMember{field: ref}
 	}
 
-	// Try as method with alias support (lowercase -> uppercase).
 	targetForMethod := target
 	if target.Kind() != reflect.Ptr && target.CanAddr() {
 		targetForMethod = target.Addr()
@@ -38,18 +40,44 @@ func ResolveMemberStringEval(target reflect.Value, name string, from int) func()
 
 	aliasName := aliasNameOf(name, true)
 
-	// Try original name first.
 	m := targetForMethod.MethodByName(name)
 	if m.IsValid() && methodHasAutoProperty(m) {
-		return makeAutoPropertyAccessor(m, false)
+		return resolvedMember{method: m}
 	}
 
-	// Only try alias if original name didn't find any method.
 	if !m.IsValid() && aliasName != name {
 		mAlias := targetForMethod.MethodByName(aliasName)
 		if mAlias.IsValid() && methodHasAutoProperty(mAlias) {
-			return makeAutoPropertyAccessor(mAlias, true)
+			return resolvedMember{method: mAlias, autoProperty: true}
 		}
+	}
+
+	return resolvedMember{}
+}
+
+func ResolveMemberValueEval(target reflect.Value, name string, from int) func() any {
+	member := resolveMember(target, name, from)
+	if member.field.IsValid() {
+		return func() any {
+			return member.field.Interface()
+		}
+	}
+	if member.method.IsValid() {
+		return makeMethodValueAccessor(member.method)
+	}
+
+	return nil
+}
+
+func ResolveMemberStringEval(target reflect.Value, name string, from int) func() string {
+	member := resolveMember(target, name, from)
+	if member.field.IsValid() {
+		return func() string {
+			return fmt.Sprint(member.field.Interface())
+		}
+	}
+	if member.method.IsValid() {
+		return makeAutoPropertyAccessor(member.method, member.autoProperty)
 	}
 
 	return nil
@@ -82,10 +110,16 @@ func methodHasAutoProperty(m reflect.Value) bool {
 	return mType.NumIn() == 0 && mType.NumOut() == 1
 }
 
+func makeMethodValueAccessor(m reflect.Value) func() any {
+	return func() any {
+		return callMethodValue(m)
+	}
+}
+
 func makeAutoPropertyAccessor(m reflect.Value, autoProperty bool) func() string {
 	return func() string {
 		if autoProperty {
-			result := m.Call(nil)[0].Interface()
+			result := callMethodValue(m)
 			if fVal, ok := result.(float64); ok {
 				return fmt.Sprintf("%.2f", fVal)
 			}
@@ -98,4 +132,8 @@ func makeAutoPropertyAccessor(m reflect.Value, autoProperty bool) func() string 
 		// Keep current behavior for non-auto-property path.
 		return fmt.Sprintf("%p", m.Interface())
 	}
+}
+
+func callMethodValue(m reflect.Value) any {
+	return m.Call(nil)[0].Interface()
 }

@@ -191,3 +191,36 @@ func TestResolveMemberStringEvalPromotedFieldNotShadowed(t *testing.T) {
 		t.Fatalf("expected outer field to shadow promoted field, got %q", got)
 	}
 }
+
+func TestResolveMemberValueEvalField(t *testing.T) {
+	fixture := memberEvalFixture{Score: 7}
+	eval := ResolveMemberValueEval(reflect.ValueOf(&fixture).Elem(), "Score", 0)
+	if eval == nil {
+		t.Fatal("expected eval function for field")
+	}
+	if got := eval(); got != 7 {
+		t.Fatalf("unexpected field value: %v", got)
+	}
+}
+
+func TestResolveMemberValueEvalAliasMethod(t *testing.T) {
+	fixture := memberEvalFixture{}
+	eval := ResolveMemberValueEval(reflect.ValueOf(&fixture).Elem(), "value", 0)
+	if eval == nil {
+		t.Fatal("expected eval function for aliased method")
+	}
+	if got := eval(); got != 1.234 {
+		t.Fatalf("unexpected alias method value: %v", got)
+	}
+}
+
+func TestResolveMemberValueEvalOriginalMethod(t *testing.T) {
+	fixture := memberEvalFixture{}
+	eval := ResolveMemberValueEval(reflect.ValueOf(&fixture).Elem(), "Value", 0)
+	if eval == nil {
+		t.Fatal("expected eval function for original method")
+	}
+	if got := eval(); got != 1.234 {
+		t.Fatalf("unexpected original method value: %v", got)
+	}
+}
