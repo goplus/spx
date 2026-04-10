@@ -2,7 +2,7 @@
 # Config
 # ============================================
 .DEFAULT_GOAL := help
-.PHONY: help buildctl list-demos prepare-host prepare-web prepare-full prepare-all build-dev install clean-assets download download-engine build-editor build-desktop build-web build-wasm build-wasm-opt build-android build-ios install-apk editor run rune run-web run-web-worker format generate sync-goxmod clean-goxmod export-pack export-web stop validate-web-mode validate-download-engine
+.PHONY: help buildctl list-demos prepare-host prepare-web prepare-full prepare-all build-dev install clean-assets download download-engine build-editor build-desktop build-web build-wasm build-wasm-opt build-android build-ios install-apk editor run rune run-web run-web-worker format generate clean-projects export-pack export-web stop validate-web-mode validate-download-engine
 
 export GODOT_SRC
 
@@ -181,18 +181,14 @@ generate: ## Generate code
 	cd ./internal/cmd/codegen && GODOT_SRC="$(GODOT_SRC)" go run .
 	go generate ./cmd/spxrunner/runner
 	$(MAKE) format
-	$(MAKE) sync-goxmod
 
-sync-goxmod: ## Sync root gox.mod to all tutorial/test projects containing .spx
-	@find tutorial test -type f -name 'main.spx' -exec dirname {} \; | sort -u | while read -r dir; do \
-		cp gox.mod "$$dir/gox.mod" || exit 1; \
-		echo "synced $$dir/gox.mod"; \
-	done
-
-clean-goxmod: ## Delete gox.mod from all tutorial/test projects
-	@find tutorial test -type f -name 'gox.mod' | sort | while read -r file; do \
-		rm -f "$$file" || exit 1; \
-		echo "removed $$file"; \
+clean-projects: ## Delete generated files from all tutorial/test projects
+	@find tutorial test \( \
+		-type d \( -name '.temp' -o -name 'project' \) -o \
+		-type f \( -name 'go.mod' -o -name 'go.sum' -o -name 'gox.mod' \) \
+	\) | sort | while read -r path; do \
+		rm -rf "$$path" || exit 1; \
+		echo "removed $$path"; \
 	done
 
 export-pack: ## Export runtime pck file
