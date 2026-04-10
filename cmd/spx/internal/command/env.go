@@ -443,27 +443,48 @@ func (cmd *CmdTool) adaptGoMod() {
 			return
 		}
 
-		strContent := string(content)
-		if !strings.Contains(strContent, "replace github.com/goplus/spx/v2") {
-			relPath, err := filepath.Rel(absTargetDir, spxPath)
-			if err != nil {
-				return
-			}
-
-			replaceDir := fmt.Sprintf("\n\nreplace github.com/goplus/spx/v2 => %s\n", relPath)
-			strContent += replaceDir
-
-			os.WriteFile(rootGoModPath, []byte(strContent), 0644)
+		relPath, err := filepath.Rel(absTargetDir, spxPath)
+		if err != nil {
+			return
 		}
+
+		strContent := ensureSpxModuleReplace(string(content), filepath.ToSlash(relPath))
+		os.WriteFile(rootGoModPath, []byte(strContent), 0644)
 	}
+}
+
+func ensureSpxModuleReplace(content, relPath string) string {
+	const replacePrefix = "replace github.com/goplus/spx/v2 => "
+
+	wantLine := replacePrefix + relPath
+	lines := strings.Split(content, "\n")
+	for i, line := range lines {
+		trimmed := strings.TrimRight(line, "\r")
+		if !strings.HasPrefix(trimmed, replacePrefix) {
+			continue
+		}
+		if trimmed == wantLine {
+			return content
+		}
+
+		if strings.HasSuffix(line, "\r") {
+			lines[i] = wantLine + "\r"
+		} else {
+			lines[i] = wantLine
+		}
+		return strings.Join(lines, "\n")
+	}
+
+	replaceBlock := fmt.Sprintf("\n\n%s\n", wantLine)
+	return strings.TrimRight(content, "\r\n") + replaceBlock
 }
 
 // createDefaultGoMod writes the default go.mod.
 func (cmd *CmdTool) createDefaultGoMod(dir string, forceWrite bool) {
-	gopModPath, _ := filepath.Abs(path.Join(dir, "go.mod"))
-	if _, err := os.Stat(gopModPath); os.IsNotExist(err) || forceWrite {
-		gopModContent := cmd.GoModTemplate
-		os.WriteFile(gopModPath, []byte(gopModContent), 0644)
+	goModPath, _ := filepath.Abs(path.Join(dir, "go.mod"))
+	if _, err := os.Stat(goModPath); os.IsNotExist(err) || forceWrite {
+		goModContent := cmd.GoModTemplate
+		os.WriteFile(goModPath, []byte(goModContent), 0644)
 	}
 }
 
