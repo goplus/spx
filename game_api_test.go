@@ -29,6 +29,21 @@ type fakeAudioBackend struct {
 	createCalls int
 }
 
+type targetPropertyActor struct {
+	Score int
+	Power float64
+}
+
+func (a *targetPropertyActor) Health() float64 {
+	return a.Power
+}
+
+type targetPropertyGame struct {
+	Game
+	StageScore int
+	Actor      targetPropertyActor
+}
+
 func (f *fakeAudioBackend) CreateAudio() internalengine.Object {
 	f.createCalls++
 	return 77
@@ -112,5 +127,35 @@ func TestGameUsernameReturnsEmptyString(t *testing.T) {
 	var g Game
 	if got := g.Username(); got != "" {
 		t.Fatalf("Username = %q, want empty string", got)
+	}
+}
+
+func TestGameGetTargetPropertyStageField(t *testing.T) {
+	g := &targetPropertyGame{StageScore: 23}
+	g.gamer = g
+
+	got := g.GetTargetProperty("", "StageScore")
+	if got.Int() != 23 {
+		t.Fatalf("StageScore = %d, want 23", got.Int())
+	}
+}
+
+func TestGameGetTargetPropertyTargetField(t *testing.T) {
+	g := &targetPropertyGame{Actor: targetPropertyActor{Score: 9}}
+	g.gamer = g
+
+	got := g.GetTargetProperty("Actor", "Score")
+	if got.Int() != 9 {
+		t.Fatalf("Actor.Score = %d, want 9", got.Int())
+	}
+}
+
+func TestGameGetTargetPropertyTargetMethod(t *testing.T) {
+	g := &targetPropertyGame{Actor: targetPropertyActor{Power: 3.5}}
+	g.gamer = g
+
+	got := g.GetTargetProperty("Actor", "Health")
+	if got.Float() != 3.5 {
+		t.Fatalf("Actor.Health = %v, want 3.5", got.Float())
 	}
 }

@@ -19,6 +19,7 @@ package spx
 import (
 	"fmt"
 	"math/rand"
+	"reflect"
 
 	"github.com/goplus/spbase/mathf"
 	coreproject "github.com/goplus/spx/v2/internal/core/project"
@@ -205,9 +206,62 @@ func (p *Game) ask(isSprite bool, question string, callback func(string)) {
 }
 
 // -----------------------------------------------------------------------------
-// Monitor
+// Property
 // -----------------------------------------------------------------------------
 type PropertyName = string
+
+func (p *Game) propertyRootValue() reflect.Value {
+	if p.gamer != nil {
+		return reflect.ValueOf(p.gamer).Elem()
+	}
+	return reflect.ValueOf(p).Elem()
+}
+
+func (p *Game) resolveTargetProperty(target string, name PropertyName) (Value, bool) {
+	if name == "" {
+		return Value{}, false
+	}
+
+	resolvedTarget, from := p.resolvePropertyTarget(target)
+	if from < 0 {
+		return Value{}, false
+	}
+
+	eval := coreproject.ResolveMemberValueEval(resolvedTarget, name, from)
+	if eval == nil {
+		return Value{}, false
+	}
+	return Value{data: eval()}, true
+}
+
+func (p *Game) resolvePropertyTarget(target string) (reflect.Value, int) {
+	root := p.propertyRootValue()
+	if target == "" {
+		return root, 1 // spx.Game
+	}
+
+	val := coreproject.FindFieldPtr(root, target, 0)
+	if val == nil {
+		return reflect.Value{}, -1
+	}
+
+	v := reflect.ValueOf(val).Elem()
+	if _, ok := val.(Sprite); ok {
+		return v, 2 // (spx.Sprite, *Game)
+	}
+	return v, 0 // normal target field
+}
+
+func (p *Game) GetTargetProperty(target string, name PropertyName) Value {
+	if val, ok := p.resolveTargetProperty(target, name); ok {
+		return val
+	}
+	return Value{}
+}
+
+// -----------------------------------------------------------------------------
+// Monitor
+// -----------------------------------------------------------------------------
 
 func (p *Game) setStageMonitor(target string, val PropertyName, visible bool) bool {
 	for _, item := range p.shapeMgr.items {
