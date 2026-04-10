@@ -38,7 +38,10 @@ func (p *Game) OnEngineStart() {
 				runMain(me.MainEntry)
 			}
 			if !p.lifecycleState.IsRunned {
-				XGot_Game_Run(gamer, "assets")
+				builder := newGameBuilder(gamer, "assets")
+				if err := builder.buildAndRun(); err != nil {
+					engine.Panic(err)
+				}
 			}
 			engine.OnGameStarted()
 		}

@@ -140,7 +140,6 @@ func init() {
 			"WaitUntil":        reflect.ValueOf(q.WaitUntil),
 			"XGot_Game_Main":   reflect.ValueOf(q.XGot_Game_Main),
 			"XGot_Game_Reload": reflect.ValueOf(q.XGot_Game_Reload),
-			"XGot_Game_Run":    reflect.ValueOf(q.XGot_Game_Run),
 		},
 		TypedConsts: map[string]ixgo.TypedConst{
 			"AllOtherScripts":      {Typ: reflect.TypeOf(q.AllOtherScripts), Value: constant.MakeInt64(int64(q.AllOtherScripts))},

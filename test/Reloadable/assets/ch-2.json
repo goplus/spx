@@ -1,11 +1,11 @@
 {
-  "costumes": [
+  "backdrops": [
     {
       "name": "backdrop1",
-      "path": "../../Dinosaur/res/6.png"
+      "path": "../../Dinosaur/assets/6.png"
     }
   ],
-  "costumeIndex": 0,
+  "backdropIndex": 0,
   "zorder": [
     {
       "type": "sprite",

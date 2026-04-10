@@ -1,5 +1,3 @@
 onKey KeySpace, => {
 	reload "ch-2.json"
 }
-
-run "res", {Title: "Reloadable (by XGo)", Index: "ch-1.json"}
