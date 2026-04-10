@@ -75,7 +75,9 @@ onStart => {
 		return fmt.Errorf("failed to create main.spx: %w", err)
 	}
 
-	cmd.createDefaultGoMod(targetPath, true)
+	if err := cmd.createDefaultGoMod(targetPath, true); err != nil {
+		return fmt.Errorf("failed to create go.mod: %w", err)
+	}
 
 	fmt.Println("")
 	fmt.Println("initialized SPX project successfully")
