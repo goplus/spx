@@ -144,7 +144,3 @@ func (p *SpriteImpl) ShowVar(name PropertyName) {
 		p.g.setStageMonitor("", name, true)
 	}
 }
-
-func (p *SpriteImpl) GetTargetProperty(target string, name PropertyName) Value {
-	return p.g.GetTargetProperty(target, name)
-}

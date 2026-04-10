@@ -45,7 +45,7 @@ func resolveMember(target reflect.Value, name string, from int) resolvedMember {
 		return resolvedMember{method: m}
 	}
 
-	if !m.IsValid() && aliasName != name {
+	if !m.IsValid() && aliasName != "" && aliasName != name {
 		mAlias := targetForMethod.MethodByName(aliasName)
 		if mAlias.IsValid() && methodHasAutoProperty(mAlias) {
 			return resolvedMember{method: mAlias, autoProperty: true}
@@ -63,7 +63,10 @@ func ResolveMemberValueEval(target reflect.Value, name string, from int) func() 
 		}
 	}
 	if member.method.IsValid() {
-		return makeMethodValueAccessor(member.method)
+		m := member.method
+		return func() any {
+			return callMethodValue(m)
+		}
 	}
 
 	return nil
@@ -77,7 +80,7 @@ func ResolveMemberStringEval(target reflect.Value, name string, from int) func()
 		}
 	}
 	if member.method.IsValid() {
-		return makeAutoPropertyAccessor(member.method, member.autoProperty)
+		return makeMethodStringAccessor(member.method, member.autoProperty)
 	}
 
 	return nil
@@ -110,27 +113,19 @@ func methodHasAutoProperty(m reflect.Value) bool {
 	return mType.NumIn() == 0 && mType.NumOut() == 1
 }
 
-func makeMethodValueAccessor(m reflect.Value) func() any {
-	return func() any {
-		return callMethodValue(m)
-	}
-}
-
-func makeAutoPropertyAccessor(m reflect.Value, autoProperty bool) func() string {
+func makeMethodStringAccessor(m reflect.Value, autoProperty bool) func() string {
 	return func() string {
-		if autoProperty {
-			result := callMethodValue(m)
-			if fVal, ok := result.(float64); ok {
-				return fmt.Sprintf("%.2f", fVal)
-			}
-			if f32Val, ok := result.(float32); ok {
-				return fmt.Sprintf("%.2f", f32Val)
-			}
-			return fmt.Sprint(result)
+		if !autoProperty {
+			return fmt.Sprintf("%p", m.Interface())
 		}
-
-		// Keep current behavior for non-auto-property path.
-		return fmt.Sprintf("%p", m.Interface())
+		result := callMethodValue(m)
+		if fVal, ok := result.(float64); ok {
+			return fmt.Sprintf("%.2f", fVal)
+		}
+		if f32Val, ok := result.(float32); ok {
+			return fmt.Sprintf("%.2f", f32Val)
+		}
+		return fmt.Sprint(result)
 	}
 }
 

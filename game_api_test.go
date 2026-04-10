@@ -159,25 +159,3 @@ func TestGameGetTargetPropertyTargetMethod(t *testing.T) {
 		t.Fatalf("Actor.Health = %v, want 3.5", got.Float())
 	}
 }
-
-func TestSpriteGetTargetPropertyExplicitTarget(t *testing.T) {
-	g := &targetPropertyGame{Actor: targetPropertyActor{Score: 9}}
-	g.gamer = g
-
-	sp := &SpriteImpl{g: &g.Game, name: "Actor"}
-	got := sp.GetTargetProperty("Actor", "Score")
-	if got.Int() != 9 {
-		t.Fatalf("explicit target Score = %d, want 9", got.Int())
-	}
-}
-
-func TestSpriteGetTargetPropertyEmptyTargetUsesStage(t *testing.T) {
-	g := &targetPropertyGame{StageScore: 23, Actor: targetPropertyActor{Score: 9}}
-	g.gamer = g
-
-	sp := &SpriteImpl{g: &g.Game, name: "Actor"}
-	got := sp.GetTargetProperty("", "StageScore")
-	if got.Int() != 23 {
-		t.Fatalf("empty target StageScore = %d, want 23", got.Int())
-	}
-}

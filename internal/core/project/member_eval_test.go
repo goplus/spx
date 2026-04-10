@@ -83,7 +83,7 @@ func TestResolveMemberStringEvalAliasMethod(t *testing.T) {
 	}
 }
 
-func TestResolveMemberStringEvalOriginalMethodReturnsPointer(t *testing.T) {
+func TestResolveMemberStringEvalOriginalMethod(t *testing.T) {
 	fixture := memberEvalFixture{}
 	eval := ResolveMemberStringEval(reflect.ValueOf(&fixture).Elem(), "Value", 0)
 	if eval == nil {

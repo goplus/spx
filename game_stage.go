@@ -222,7 +222,7 @@ func (p *Game) resolveTargetProperty(target string, name PropertyName) (Value, b
 		return Value{}, false
 	}
 
-	resolvedTarget, from := getTarget(p.propertyRootValue(), target)
+	resolvedTarget, from := p.resolvePropertyTarget(target)
 	if from < 0 {
 		return Value{}, false
 	}
@@ -232,6 +232,24 @@ func (p *Game) resolveTargetProperty(target string, name PropertyName) (Value, b
 		return Value{}, false
 	}
 	return Value{data: eval()}, true
+}
+
+func (p *Game) resolvePropertyTarget(target string) (reflect.Value, int) {
+	root := p.propertyRootValue()
+	if target == "" {
+		return root, 1 // spx.Game
+	}
+
+	val := coreproject.FindFieldPtr(root, target, 0)
+	if val == nil {
+		return reflect.Value{}, -1
+	}
+
+	v := reflect.ValueOf(val).Elem()
+	if _, ok := val.(Sprite); ok {
+		return v, 2 // (spx.Sprite, *Game)
+	}
+	return v, 0 // normal target field
 }
 
 func (p *Game) GetTargetProperty(target string, name PropertyName) Value {
