@@ -42,13 +42,13 @@ import (
 // Sync files from repository before building.
 // Run: go generate ./cmd/spxrunner/runner
 //
-//go:generate cp ../../../gop.mod gop.mod
+//go:generate cp ../../../gox.mod gox.mod
 
-// GopModTemplate is the embedded content of gop.mod from the SPX repository root.
-// This template is used to create gop.mod for new SPX projects.
+// GoxModTemplate is the embedded content of gox.mod from the SPX repository root.
+// This template is used to create gox.mod for new SPX projects.
 //
-//go:embed gop.mod
-var GopModTemplate string
+//go:embed gox.mod
+var GoxModTemplate string
 
 // GoModTemplate is the shared project go.mod template embedded in internal/scaffold.
 var GoModTemplate = scaffold.GoMod()

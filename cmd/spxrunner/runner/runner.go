@@ -458,13 +458,13 @@ func (r *Runner) runWithRuntimeOptions(opts *RuntimeOptions) error {
 	return runCommand(r.TempDir, nil, r.RuntimeCmdPath, args...)
 }
 
-// ensureGopMod ensures gop.mod exists in the project directory
-func (r *Runner) ensureGopMod() error {
-	gopModPath := filepath.Join(r.ProjectDir, "gop.mod")
-	if _, err := os.Stat(gopModPath); os.IsNotExist(err) {
-		fmt.Println("Creating gop.mod...")
-		if err := os.WriteFile(gopModPath, []byte(GopModTemplate), 0644); err != nil {
-			return fmt.Errorf("failed to create gop.mod: %w", err)
+// ensureGoxMod ensures gox.mod exists in the project directory.
+func (r *Runner) ensureGoxMod() error {
+	goxModPath := filepath.Join(r.ProjectDir, "gox.mod")
+	if _, err := os.Stat(goxModPath); os.IsNotExist(err) {
+		fmt.Println("Creating gox.mod...")
+		if err := os.WriteFile(goxModPath, []byte(GoxModTemplate), 0644); err != nil {
+			return fmt.Errorf("failed to create gox.mod: %w", err)
 		}
 	}
 	return nil
@@ -538,8 +538,8 @@ func (r *Runner) ensureGoMod() error {
 
 // generateGoCode runs xgo to generate Go code from .spx files
 func (r *Runner) generateGoCode() error {
-	// Ensure gop.mod exists first
-	if err := r.ensureGopMod(); err != nil {
+	// Ensure gox.mod exists first.
+	if err := r.ensureGoxMod(); err != nil {
 		return err
 	}
 

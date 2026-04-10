@@ -2,7 +2,7 @@
 # Config
 # ============================================
 .DEFAULT_GOAL := help
-.PHONY: help buildctl list-demos prepare-host prepare-web prepare-full prepare-all build-dev install clean-assets download download-engine build-editor build-desktop build-web build-wasm build-wasm-opt build-android build-ios install-apk editor run rune run-web run-web-worker format generate sync-gopmod export-pack export-web stop validate-web-mode validate-download-engine
+.PHONY: help buildctl list-demos prepare-host prepare-web prepare-full prepare-all build-dev install clean-assets download download-engine build-editor build-desktop build-web build-wasm build-wasm-opt build-android build-ios install-apk editor run rune run-web run-web-worker format generate sync-goxmod export-pack export-web stop validate-web-mode validate-download-engine
 
 export GODOT_SRC
 
@@ -181,12 +181,12 @@ generate: ## Generate code
 	cd ./internal/cmd/codegen && GODOT_SRC="$(GODOT_SRC)" go run .
 	go generate ./cmd/spxrunner/runner
 	$(MAKE) format
-	$(MAKE) sync-gopmod
+	$(MAKE) sync-goxmod
 
-sync-gopmod: ## Sync root gop.mod to all tutorial/test projects containing .spx
+sync-goxmod: ## Sync root gox.mod to all tutorial/test projects containing .spx
 	@find tutorial test -type f -name 'main.spx' -exec dirname {} \; | sort -u | while read -r dir; do \
-		cp gop.mod "$$dir/gop.mod" || exit 1; \
-		echo "synced $$dir/gop.mod"; \
+		cp gox.mod "$$dir/gox.mod" || exit 1; \
+		echo "synced $$dir/gox.mod"; \
 	done
 
 export-pack: ## Export runtime pck file

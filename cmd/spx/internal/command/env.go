@@ -471,9 +471,9 @@ func (cmd *CmdTool) createDefaultGoMod(dir string, forceWrite bool) {
 func (cmd *CmdTool) findSpxRoot(startDir string) string {
 	currentDir := filepath.Dir(startDir)
 	for {
-		gopModPath := path.Join(currentDir, "gop.mod")
-		if _, err := os.Stat(gopModPath); err == nil {
-			content, err := os.ReadFile(gopModPath)
+		goxModPath := path.Join(currentDir, "gox.mod")
+		if _, err := os.Stat(goxModPath); err == nil {
+			content, err := os.ReadFile(goxModPath)
 			if err == nil && strings.Contains(string(content), "github.com/goplus/spx/v2") {
 				return currentDir
 			}

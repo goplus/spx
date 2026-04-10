@@ -36,7 +36,7 @@ func GenGoFromFS(fsys parser.FileSystem, outputPath string) error {
 		spxlog.Warn("failed to resolve package import %q", path)
 		return
 	}
-	// Keep this in sync with gop.mod.
+	// Keep this in sync with gox.mod.
 	xgobuild.RegisterProject(&modfile.Project{
 		Ext:      ".spx",
 		Class:    "Game",
