@@ -24,6 +24,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -33,6 +34,7 @@ import (
 
 var ENV_NAME = "gdspx"
 var projectNameReplacer = strings.NewReplacer("_", "", " ", "", "\"", "", "\n", "", "\r", "")
+var spxModuleReplaceLinePattern = regexp.MustCompile(`^(\s*)(replace\s+)?github\.com/goplus/spx/v2\s*=>\s*(\S+)(\s*//.*)?$`)
 
 type envVar struct {
 	key   string
@@ -429,9 +431,11 @@ func (cmd *CmdTool) setupPaths(dstRelDir string) error {
 
 // adaptGoMod patches go.mod for local development.
 func (cmd *CmdTool) adaptGoMod() {
-	rootGoModPath, _ := filepath.Abs(path.Join(cmd.TargetDir, "go.mod"))
+	rootGoModPath, _ := filepath.Abs(filepath.Join(cmd.TargetDir, "go.mod"))
 	if _, err := os.Stat(rootGoModPath); os.IsNotExist(err) {
-		cmd.createDefaultGoMod(cmd.TargetDir, false)
+		if err := cmd.createDefaultGoMod(cmd.TargetDir, false); err != nil {
+			return
+		}
 	}
 
 	absTargetDir, _ := filepath.Abs(cmd.TargetDir)
@@ -443,28 +447,83 @@ func (cmd *CmdTool) adaptGoMod() {
 			return
 		}
 
-		strContent := string(content)
-		if !strings.Contains(strContent, "replace github.com/goplus/spx/v2") {
-			relPath, err := filepath.Rel(absTargetDir, spxPath)
-			if err != nil {
-				return
-			}
+		relPath, err := filepath.Rel(absTargetDir, spxPath)
+		if err != nil {
+			return
+		}
 
-			replaceDir := fmt.Sprintf("\n\nreplace github.com/goplus/spx/v2 => %s\n", relPath)
-			strContent += replaceDir
-
-			os.WriteFile(rootGoModPath, []byte(strContent), 0644)
+		strContent := ensureSpxModuleReplace(string(content), filepath.ToSlash(relPath))
+		if strContent == string(content) {
+			return
+		}
+		if err := os.WriteFile(rootGoModPath, []byte(strContent), 0644); err != nil {
+			return
 		}
 	}
 }
 
-// createDefaultGoMod writes the default go.mod.
-func (cmd *CmdTool) createDefaultGoMod(dir string, forceWrite bool) {
-	gopModPath, _ := filepath.Abs(path.Join(dir, "go.mod"))
-	if _, err := os.Stat(gopModPath); os.IsNotExist(err) || forceWrite {
-		gopModContent := cmd.GoModTemplate
-		os.WriteFile(gopModPath, []byte(gopModContent), 0644)
+// ensureSpxModuleReplace idempotently upserts the local spx replace directive,
+// repairing stale single-line or block entries while preserving newline style.
+func ensureSpxModuleReplace(content, relPath string) string {
+	const replaceLine = "github.com/goplus/spx/v2 => "
+
+	wantLine := replaceLine + relPath
+	lines := strings.Split(content, "\n")
+	for i, line := range lines {
+		hasCR := strings.HasSuffix(line, "\r")
+		trimmed := strings.TrimSuffix(line, "\r")
+		match := spxModuleReplaceLinePattern.FindStringSubmatch(trimmed)
+		if match == nil {
+			continue
+		}
+
+		if match[3] == relPath {
+			return content
+		}
+
+		replacePrefix := match[1]
+		if match[2] != "" {
+			replacePrefix += "replace "
+		}
+
+		lines[i] = replacePrefix + wantLine + match[4]
+		if hasCR {
+			lines[i] += "\r"
+		}
+		return strings.Join(lines, "\n")
 	}
+
+	return appendSpxModuleReplace(content, "replace "+wantLine)
+}
+
+func appendSpxModuleReplace(content, replaceLine string) string {
+	lineEnding := "\n"
+	if strings.Contains(content, "\r\n") {
+		lineEnding = "\r\n"
+	}
+
+	switch {
+	case content == "":
+		return replaceLine + lineEnding
+	case strings.HasSuffix(content, lineEnding+lineEnding):
+		return content + replaceLine + lineEnding
+	case strings.HasSuffix(content, lineEnding):
+		return content + lineEnding + replaceLine + lineEnding
+	default:
+		return content + lineEnding + lineEnding + replaceLine + lineEnding
+	}
+}
+
+// createDefaultGoMod writes the default go.mod.
+func (cmd *CmdTool) createDefaultGoMod(dir string, forceWrite bool) error {
+	goModPath, _ := filepath.Abs(filepath.Join(dir, "go.mod"))
+	if _, err := os.Stat(goModPath); os.IsNotExist(err) || forceWrite {
+		goModContent := cmd.GoModTemplate
+		if err := os.WriteFile(goModPath, []byte(goModContent), 0644); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // findSpxRoot finds a local spx repo.
