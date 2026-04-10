@@ -438,8 +438,8 @@ func (cmd *CmdTool) adaptGoMod() {
 		}
 	}
 
-	absTargetDir, _ := filepath.Abs(cmd.TargetDir)
-	spxPath := cmd.findSpxRoot(absTargetDir)
+	absTargetDir := cmd.TargetAbsDir
+	spxPath := cmd.findSpxRoot()
 
 	if spxPath != "" {
 		content, err := os.ReadFile(rootGoModPath)
@@ -527,15 +527,22 @@ func (cmd *CmdTool) createDefaultGoMod(dir string, forceWrite bool) error {
 }
 
 // findSpxRoot finds a local spx repo.
-func (cmd *CmdTool) findSpxRoot(startDir string) string {
-	currentDir := filepath.Dir(startDir)
+func (cmd *CmdTool) findSpxRoot() string {
+	startDir := cmd.TargetAbsDir
+	if startDir == "" && cmd.TargetDir != "" {
+		absTargetDir, err := filepath.Abs(cmd.TargetDir)
+		if err != nil {
+			return ""
+		}
+		startDir = absTargetDir
+	}
+	if startDir == "" {
+		return ""
+	}
+	currentDir := filepath.Clean(startDir)
 	for {
-		goxModPath := path.Join(currentDir, "gox.mod")
-		if _, err := os.Stat(goxModPath); err == nil {
-			content, err := os.ReadFile(goxModPath)
-			if err == nil && strings.Contains(string(content), "github.com/goplus/spx/v2") {
-				return currentDir
-			}
+		if isLocalSpxRepoRoot(currentDir) {
+			return currentDir
 		}
 
 		parent := filepath.Dir(currentDir)
@@ -545,6 +552,30 @@ func (cmd *CmdTool) findSpxRoot(startDir string) string {
 		currentDir = parent
 	}
 	return ""
+}
+
+func isLocalSpxRepoRoot(dir string) bool {
+	goModPath := filepath.Join(dir, "go.mod")
+	content, err := os.ReadFile(goModPath)
+	if err != nil {
+		return false
+	}
+	if !hasGoModuleDeclaration(string(content), "github.com/goplus/spx/v2") {
+		return false
+	}
+	return util.IsFileExist(filepath.Join(dir, "cmd", "spx", "install.sh"))
+}
+
+func hasGoModuleDeclaration(content, modulePath string) bool {
+	moduleDecl := "module " + modulePath
+	for _, line := range strings.Split(content, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "//") {
+			continue
+		}
+		return line == moduleDecl
+	}
+	return false
 }
 
 func resolveAppPath(gobinDir, tag, version string, customGoEnv bool) (string, string, error) {

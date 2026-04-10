@@ -51,11 +51,15 @@ func (cmd *CmdTool) RunPackMode(pargs ...string) error {
 }
 
 func (cmd *CmdTool) RunWeb() error {
-	return runWebCommand(cmd.ExportWeb, cmd.runWebServer)
+	return runWebCommandWithSetup(func() error {
+		return cmd.installRepoWebRuntime(webNormalMode)
+	}, cmd.ExportWeb, cmd.runWebServer)
 }
 
 func (cmd *CmdTool) RunWebWorker() error {
-	return runWebCommand(cmd.ExportWebWorker, cmd.runWebServer)
+	return runWebCommandWithSetup(func() error {
+		return cmd.installRepoWebRuntime(webWorkerMode)
+	}, cmd.ExportWebWorker, cmd.runWebServer)
 }
 
 func (cmd *CmdTool) StopWeb() (err error) {
@@ -163,10 +167,48 @@ func (cmd *CmdTool) buildRuntimeArgs(inputArgs []string, tempDir, extPath string
 
 // runWebCommand exports before serving.
 func runWebCommand(exportFn func() error, serverFn func() error) error {
+	return runWebCommandWithSetup(nil, exportFn, serverFn)
+}
+
+func runWebCommandWithSetup(setupFn func() error, exportFn func() error, serverFn func() error) error {
+	if setupFn != nil {
+		if err := setupFn(); err != nil {
+			return err
+		}
+	}
 	if err := exportFn(); err != nil {
 		return err
 	}
 	return serverFn()
+}
+
+func (cmd *CmdTool) installRepoWebRuntime(mode string) error {
+	if cmd.hasInstalledWebRuntimeAssets(mode) {
+		return nil
+	}
+	spxRoot := cmd.findSpxRoot()
+	if spxRoot == "" {
+		return nil
+	}
+	scriptPath := filepath.Join(spxRoot, "cmd", "spx", "install.sh")
+	if !util.IsFileExist(scriptPath) {
+		return nil
+	}
+	return util.ExecCommand(util.CommandOptions{}, "bash", scriptPath, "--web")
+}
+
+func (cmd *CmdTool) hasInstalledWebRuntimeAssets(mode string) bool {
+	requiredPaths := []string{
+		filepath.Join(cmd.GoBinPath, "ispx"),
+		filepath.Join(cmd.GoBinPath, "ispx.wasm"),
+		filepath.Join(cmd.GoBinPath, "gdspxrt"+cmd.Version+"_web"+mode),
+	}
+	for _, requiredPath := range requiredPaths {
+		if !util.IsFileExist(requiredPath) {
+			return false
+		}
+	}
+	return true
 }
 
 func (cmd *CmdTool) webServerPIDPath() string {
