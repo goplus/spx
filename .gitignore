@@ -28,3 +28,17 @@
 /.bin/
 /godot/
 /.gdspx_web_server*.pid
+
+# Tutorial/test generated outputs
+tutorial/**/.temp/
+tutorial/**/project/
+tutorial/**/.gdspx_web_server*.pid
+tutorial/**/go.mod
+tutorial/**/go.sum
+tutorial/**/gox.mod
+test/**/.temp/
+test/**/project/
+test/**/.gdspx_web_server*.pid
+test/**/go.mod
+test/**/go.sum
+test/**/gox.mod

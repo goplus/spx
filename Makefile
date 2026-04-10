@@ -182,11 +182,11 @@ generate: ## Generate code
 	go generate ./cmd/spxrunner/runner
 	$(MAKE) format
 
-clean-projects: ## Delete generated files from all tutorial/test projects
-	@find tutorial test \( \
-		-type d \( -name '.temp' -o -name 'project' \) -o \
-		-type f \( -name 'go.mod' -o -name 'go.sum' -o -name 'gox.mod' \) \
-	\) | sort | while read -r path; do \
+clean-projects: ## Delete generated artifacts (.temp/, project/, .gdspx_web_server*.pid, go.mod, go.sum, gox.mod) from tutorial/test projects
+	@find -P tutorial test \( \
+		-type d \( -name '.temp' -o -name 'project' \) -prune -print -o \
+		-type f \( -name '.gdspx_web_server*.pid' -o -name 'go.mod' -o -name 'go.sum' -o -name 'gox.mod' \) -print \
+	\) | sort | while IFS= read -r path; do \
 		rm -rf "$$path" || exit 1; \
 		echo "removed $$path"; \
 	done
