@@ -128,3 +128,21 @@ func TestManagerStartLifecycle(t *testing.T) {
 		t.Fatal("expected reset to reopen start registration")
 	}
 }
+
+func TestManagerTryAddStartPrepend(t *testing.T) {
+	var mgr Manager
+	if !mgr.TryAddStart(Sink{Owner: "sprite", Handler: func() {}}) {
+		t.Fatal("expected sprite start sink to be registered")
+	}
+	if !mgr.TryAddStartPrepend(Sink{Owner: "game", Handler: func() {}}) {
+		t.Fatal("expected game start sink to be prepended")
+	}
+
+	got := mgr.SnapshotStart()
+	if len(got) != 2 {
+		t.Fatalf("SnapshotStart len = %d, want 2", len(got))
+	}
+	if got[0].Owner != "game" || got[1].Owner != "sprite" {
+		t.Fatalf("SnapshotStart order = [%v %v], want [game sprite]", got[0].Owner, got[1].Owner)
+	}
+}

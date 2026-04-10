@@ -4,7 +4,7 @@ import (
 	stdtime "time"
 )
 
-const defaultFPS = 30
+const DefaultFPS = 30
 
 var (
 	realTimeSinceLevelLoad float64
@@ -77,7 +77,7 @@ func Start(setTimeScaleCB func(float64)) {
 	deltaTime, realDeltaTime = 0, 0
 	timeScale = 1
 	curFrame = 0
-	fps = defaultFPS
+	fps = DefaultFPS
 
 	setTimeScaleCallback = setTimeScaleCB
 	startTimestamp, lastTimestamp = now, now

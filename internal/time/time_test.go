@@ -55,8 +55,8 @@ func TestStartInitializesTimeState(t *testing.T) {
 	if got := Frame(); got != 0 {
 		t.Fatalf("Frame() = %v, want 0", got)
 	}
-	if got := FPS(); got != defaultFPS {
-		t.Fatalf("FPS() = %v, want %v", got, defaultFPS)
+	if got := FPS(); got != DefaultFPS {
+		t.Fatalf("FPS() = %v, want %v", got, DefaultFPS)
 	}
 	if got := Timer(); got != 0 {
 		t.Fatalf("Timer() = %v, want 0", got)

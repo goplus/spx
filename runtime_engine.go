@@ -35,7 +35,9 @@ func (p *Game) OnEngineStart() {
 			defer engine.CheckPanic()
 			gamer := p.gamer
 			if me, ok := gamer.(interface{ MainEntry() }); ok {
-				runMain(me.MainEntry)
+				p.onAwake(func() {
+					runMain(me.MainEntry)
+				})
 			}
 			if !p.lifecycleState.IsRunned {
 				XGot_Game_Run(gamer, "assets")

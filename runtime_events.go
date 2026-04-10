@@ -96,7 +96,13 @@ func (p *scriptEventBindings) onAwake(onAwake func()) {
 
 func (p *scriptEventBindings) OnStart(onStart func()) {
 	sink := coreevent.NewSink(p.pthis, onStart)
-	if p.scriptEventRegistry.TryAddStart(sink) {
+	var added bool
+	if _, ok := sink.Owner.(*Game); ok {
+		added = p.scriptEventRegistry.TryAddStartPrepend(sink)
+	} else {
+		added = p.scriptEventRegistry.TryAddStart(sink)
+	}
+	if added {
 		return
 	}
 	if sprite, ok := sink.Owner.(*SpriteImpl); ok && sprite.spriteState.Cloned {
