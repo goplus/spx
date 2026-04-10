@@ -32,7 +32,7 @@ import (
 )
 
 func init() {
-	// NOTE: Keep in sync with the config in spx's gop.mod.
+	// NOTE: Keep in sync with the config in spx's gox.mod.
 	xgobuild.RegisterProject(&modfile.Project{
 		Ext:      ".spx",
 		Class:    "Game",
