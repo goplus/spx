@@ -80,6 +80,7 @@ make prepare-full MODE=worker
 | --- | --- | --- |
 | `GODOT_SRC` | `./godot` | Godot 源码目录；仅 `build-dev`、`build-editor`、`build-desktop`、`build-web`、`build-android`、`build-ios`、`generate` 使用 |
 | `MODE` | `normal` | Web 模式，可选 `normal`、`worker`、`minigame`、`miniprogram` |
+| `WEB` | `0` | `make install` 是否追加 `--web`，可选 `1/true/yes/on` 或 `0/false/no/off` |
 | `PLATFORM` | 当前宿主平台 | `download-engine` 使用的平台名 |
 | `DEMO_INDEX` | `3` | `tutorial/*` 演示索引 |
 | `APK_PROJECT_DIR` | `tutorial/00-Hello` | `install-apk` 使用的项目目录 |
@@ -107,13 +108,15 @@ make prepare-full MODE=worker
 | `make build-dev [MODE=...]` | 一次性构建带指定 Web mode runtime 的 `spx` 工具链、当前平台 editor/template、runtime pck 和 Web template |
 | `make prepare-web MODE=...` | 安装 Web 导出所需工具链，下载指定模式的 Web template/runtime，并补齐 `exporttemplateweb` 依赖的 host editor |
 | `make prepare-full [MODE=...]` | 一次性准备 host editor/runtime 资产和指定 Web mode 的导出资产 |
-| `make install` | 安装 `spx` 命令 |
+| `make install [WEB=1]` | 安装 `spx` 命令；`WEB=1` 时会透传为 `buildctl tool install --web` |
 | `make download` | 下载当前平台 runtime 所需的 editor/template/pck 资产 |
 | `make download-engine PLATFORM=... [MODE=...]` | 下载指定平台的引擎模板或 editor 资产 |
 
 示例：
 
 ```bash
+make install
+make install WEB=1
 make download-engine PLATFORM=android
 make download-engine PLATFORM=web MODE=worker
 ```

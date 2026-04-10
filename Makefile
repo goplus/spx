@@ -62,6 +62,7 @@ help: ## Show available commands
 	@echo ""
 	@echo "Variable notes:"
 	@echo "  MODE defaults to normal for Web-related targets."
+	@echo "  WEB=1 enables web tooling/runtime for 'make install'."
 	@echo "  GODOT_SRC defaults to ./godot and is used by:"
 	@echo "    build-dev build-editor build-desktop build-web build-android build-ios generate"
 	@echo ""
@@ -94,8 +95,15 @@ prepare-web: ## Prepare web export assets for MODE, including the host editor re
 # ============================================
 # Install & Download
 # ============================================
-install: ## Install SPX command
-	$(BUILDCTL_TOOL_CMD) install
+install: ## Install SPX command. Usage: make install [WEB=1]
+	@set --; \
+	web_enabled=0; \
+	case "$(WEB)" in \
+		""|0|false|FALSE|no|NO|off|OFF) ;; \
+		1|true|TRUE|yes|YES|on|ON) web_enabled=1; set -- "$$@" --web ;; \
+		*) echo "invalid WEB \"$(WEB)\". Expected one of: 1 true yes on 0 false no off" >&2; exit 2 ;; \
+	esac; \
+	$(BUILDCTL_TOOL_CMD) install "$$@"
 
 clean-assets: ## Remove installed SPX/Godot runtime assets from GOPATH/bin
 	$(BUILDCTL_TOOL_CMD) clean-assets
