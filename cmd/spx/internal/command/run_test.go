@@ -48,6 +48,62 @@ func TestRunWebCommandRunsExportBeforeServer(t *testing.T) {
 	}
 }
 
+func TestRunWebCommandRunsSetupBeforeExportAndServer(t *testing.T) {
+	var calls []string
+
+	err := runWebCommandWithSetup(
+		func() error {
+			calls = append(calls, "setup")
+			return nil
+		},
+		func() error {
+			calls = append(calls, "export")
+			return nil
+		},
+		func() error {
+			calls = append(calls, "serve")
+			return nil
+		},
+	)
+	if err != nil {
+		t.Fatalf("runWebCommandWithSetup returned error: %v", err)
+	}
+
+	want := []string{"setup", "export", "serve"}
+	if !reflect.DeepEqual(calls, want) {
+		t.Fatalf("unexpected call order: got %v, want %v", calls, want)
+	}
+}
+
+func TestRunWebCommandStopsOnSetupError(t *testing.T) {
+	wantErr := errors.New("setup failed")
+	exportCalled := false
+	serverCalled := false
+
+	err := runWebCommandWithSetup(
+		func() error {
+			return wantErr
+		},
+		func() error {
+			exportCalled = true
+			return nil
+		},
+		func() error {
+			serverCalled = true
+			return nil
+		},
+	)
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("runWebCommandWithSetup error = %v, want %v", err, wantErr)
+	}
+	if exportCalled {
+		t.Fatal("export should not start when setup fails")
+	}
+	if serverCalled {
+		t.Fatal("server should not start when setup fails")
+	}
+}
+
 func TestRunWebCommandStopsOnExportError(t *testing.T) {
 	wantErr := errors.New("export failed")
 	serverCalled := false
@@ -66,6 +122,100 @@ func TestRunWebCommandStopsOnExportError(t *testing.T) {
 	}
 	if serverCalled {
 		t.Fatal("server should not start when export fails")
+	}
+}
+
+func writeLocalSpxRepoMarker(t *testing.T, root string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Join(root, "cmd", "spx"), 0755); err != nil {
+		t.Fatalf("mkdir cmd/spx: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module github.com/goplus/spx/v2\n"), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "cmd", "spx", "install.sh"), []byte("#!/bin/bash\n"), 0755); err != nil {
+		t.Fatalf("write install.sh: %v", err)
+	}
+}
+
+func TestFindSpxRootFindsCurrentDir(t *testing.T) {
+	root := t.TempDir()
+	writeLocalSpxRepoMarker(t, root)
+
+	cmd := CmdTool{}
+	cmd.TargetAbsDir = root
+	got := cmd.findSpxRoot()
+	if got != root {
+		t.Fatalf("findSpxRoot = %s, want %s", got, root)
+	}
+}
+
+func TestFindSpxRootFindsParentDir(t *testing.T) {
+	root := t.TempDir()
+	startDir := filepath.Join(root, "tutorial", "00-Hello")
+	if err := os.MkdirAll(startDir, 0755); err != nil {
+		t.Fatalf("mkdir start dir: %v", err)
+	}
+	writeLocalSpxRepoMarker(t, root)
+
+	cmd := CmdTool{}
+	cmd.TargetAbsDir = startDir
+	got := cmd.findSpxRoot()
+	if got != root {
+		t.Fatalf("findSpxRoot = %s, want %s", got, root)
+	}
+}
+
+func TestFindSpxRootReturnsEmptyWhenMissing(t *testing.T) {
+	root := t.TempDir()
+
+	cmd := CmdTool{}
+	cmd.TargetAbsDir = root
+	got := cmd.findSpxRoot()
+	if got != "" {
+		t.Fatalf("findSpxRoot = %s, want empty", got)
+	}
+}
+
+func TestFindSpxRootIgnoresProjectsThatOnlyReferenceSpx(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "cmd", "spx"), 0755); err != nil {
+		t.Fatalf("mkdir cmd/spx: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/demo\n"), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "gox.mod"), []byte("project main.spx Game github.com/goplus/spx/v2 math\n"), 0644); err != nil {
+		t.Fatalf("write gox.mod: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "cmd", "spx", "install.sh"), []byte("#!/bin/bash\n"), 0755); err != nil {
+		t.Fatalf("write install.sh: %v", err)
+	}
+
+	cmd := CmdTool{TargetAbsDir: root}
+	if got := cmd.findSpxRoot(); got != "" {
+		t.Fatalf("findSpxRoot = %s, want empty", got)
+	}
+}
+
+func TestHasInstalledWebRuntimeAssetsIsModeSpecific(t *testing.T) {
+	goBinPath := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(goBinPath, "ispx"), 0755); err != nil {
+		t.Fatalf("mkdir ispx: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(goBinPath, "ispx.wasm"), []byte("wasm"), 0644); err != nil {
+		t.Fatalf("write ispx.wasm: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(goBinPath, "gdspxrt2.0.0_webnormal"), 0755); err != nil {
+		t.Fatalf("mkdir webnormal template dir: %v", err)
+	}
+
+	cmd := CmdTool{GoBinPath: goBinPath, Version: "2.0.0"}
+	if !cmd.hasInstalledWebRuntimeAssets(webNormalMode) {
+		t.Fatal("hasInstalledWebRuntimeAssets(normal) = false, want true")
+	}
+	if cmd.hasInstalledWebRuntimeAssets(webWorkerMode) {
+		t.Fatal("hasInstalledWebRuntimeAssets(worker) = true, want false")
 	}
 }
 

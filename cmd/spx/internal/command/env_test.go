@@ -28,6 +28,7 @@ func TestAdaptGoModAddsLocalReplaceForGeneratedGoMod(t *testing.T) {
 
 	cmd := CmdTool{
 		TargetDir:     targetDir,
+		TargetAbsDir:  targetDir,
 		GoModTemplate: "module github.com/goplus/spxdemo\n\ngo 1.25.0\n",
 	}
 	cmd.adaptGoMod()
@@ -50,7 +51,7 @@ func TestAdaptGoModRepairsStaleLocalReplacePath(t *testing.T) {
 		t.Fatalf("WriteFile(go.mod) returned error: %v", err)
 	}
 
-	cmd := CmdTool{TargetDir: targetDir}
+	cmd := CmdTool{TargetDir: targetDir, TargetAbsDir: targetDir}
 	cmd.adaptGoMod()
 
 	updated, err := os.ReadFile(goModPath)
@@ -103,8 +104,6 @@ func setupAdaptGoModFixture(t *testing.T) string {
 	if err := os.MkdirAll(targetDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll(%s) returned error: %v", targetDir, err)
 	}
-	if err := os.WriteFile(filepath.Join(repoRoot, "gox.mod"), []byte("project main.spx Game github.com/goplus/spx/v2 math\n"), 0o644); err != nil {
-		t.Fatalf("WriteFile(gox.mod) returned error: %v", err)
-	}
+	writeLocalSpxRepoMarker(t, repoRoot)
 	return targetDir
 }
