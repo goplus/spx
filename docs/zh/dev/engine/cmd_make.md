@@ -80,7 +80,7 @@ make prepare-full MODE=worker
 | --- | --- | --- |
 | `GODOT_SRC` | `./godot` | Godot 源码目录；仅 `build-dev`、`build-editor`、`build-desktop`、`build-web`、`build-android`、`build-ios`、`generate` 使用 |
 | `MODE` | `normal` | Web 模式，可选 `normal`、`worker`、`minigame`、`miniprogram` |
-| `WEB` | `0` | `make install` 是否追加 `--web`，可选 `1/true/yes/on` 或 `0/false/no/off` |
+| `WEB` | `0` | `make install` 是否追加 `--web`，可选 `1/true/TRUE/yes/YES/on/ON` 或 `0/false/FALSE/no/NO/off/OFF` |
 | `PLATFORM` | 当前宿主平台 | `download-engine` 使用的平台名 |
 | `DEMO_INDEX` | `3` | `tutorial/*` 演示索引 |
 | `APK_PROJECT_DIR` | `tutorial/00-Hello` | `install-apk` 使用的项目目录 |

@@ -2,7 +2,7 @@
 # Config
 # ============================================
 .DEFAULT_GOAL := help
-.PHONY: help buildctl list-demos prepare-host prepare-web prepare-full prepare-all build-dev install clean-assets download download-engine build-editor build-desktop build-web build-wasm build-wasm-opt build-android build-ios install-apk editor run rune run-web run-web-worker format generate clean-projects export-pack export-web stop validate-web-mode validate-download-engine
+.PHONY: help buildctl list-demos prepare-host prepare-web prepare-full prepare-all build-dev install clean-assets download download-engine build-editor build-desktop build-web build-wasm build-wasm-opt build-android build-ios install-apk editor run rune run-web run-web-worker format generate clean-projects export-pack export-web stop validate-web-mode validate-download-engine validate-install-web
 
 export GODOT_SRC
 
@@ -23,14 +23,20 @@ APK_PROJECT_DIR ?= tutorial/00-Hello
 
 PORT    ?= 8106
 MOVIE   ?= false
+WEB     ?= 0
 WEB_MODE = $(or $(strip $(MODE)),normal)
 VALID_WEB_MODES := normal worker minigame miniprogram
 VALID_ENGINE_PLATFORMS := android ios web linux windows macos
+VALID_INSTALL_WEB_TRUE_VALUES := 1 true TRUE yes YES on ON
+VALID_INSTALL_WEB_FALSE_VALUES := 0 false FALSE no NO off OFF
+VALID_INSTALL_WEB_VALUES := $(VALID_INSTALL_WEB_TRUE_VALUES) $(VALID_INSTALL_WEB_FALSE_VALUES)
 
 validate-web-mode = $(if $(filter $(WEB_MODE),$(VALID_WEB_MODES)),,$(error invalid WEB_MODE/MODE "$(WEB_MODE)". Expected one of: $(VALID_WEB_MODES)))
 validate-platform-required = $(if $(strip $(PLATFORM)),,$(error PLATFORM is required. Usage: make download-engine PLATFORM=android|ios|web [MODE=normal|worker|minigame|miniprogram]))
 validate-engine-platform = $(if $(filter $(PLATFORM),$(VALID_ENGINE_PLATFORMS)),,$(error invalid PLATFORM "$(PLATFORM)". Expected one of: $(VALID_ENGINE_PLATFORMS)))
 validate-download-engine-mode = $(if $(filter web,$(PLATFORM)),$(call validate-web-mode),$(if $(strip $(MODE)),$(error MODE is only supported when PLATFORM=web),))
+validate-install-web = $(if $(filter $(strip $(WEB)),$(VALID_INSTALL_WEB_VALUES)),,$(error invalid WEB "$(WEB)". Expected one of: $(VALID_INSTALL_WEB_TRUE_VALUES) $(VALID_INSTALL_WEB_FALSE_VALUES)))
+install-web-flag = $(if $(filter $(strip $(WEB)),$(VALID_INSTALL_WEB_TRUE_VALUES)),--web)
 
 validate-web-mode:
 	$(call validate-web-mode)
@@ -39,6 +45,9 @@ validate-download-engine:
 	$(call validate-platform-required)
 	$(call validate-engine-platform)
 	$(call validate-download-engine-mode)
+
+validate-install-web:
+	$(call validate-install-web)
 
 prepare-full prepare-web build-dev build-web export-web: validate-web-mode
 download-engine: validate-download-engine
@@ -62,7 +71,7 @@ help: ## Show available commands
 	@echo ""
 	@echo "Variable notes:"
 	@echo "  MODE defaults to normal for Web-related targets."
-	@echo "  WEB=1 enables web tooling/runtime for 'make install'."
+	@echo "  WEB defaults to 0; truthy values enable web tooling/runtime for 'make install'."
 	@echo "  GODOT_SRC defaults to ./godot and is used by:"
 	@echo "    build-dev build-editor build-desktop build-web build-android build-ios generate"
 	@echo ""
@@ -95,15 +104,8 @@ prepare-web: ## Prepare web export assets for MODE, including the host editor re
 # ============================================
 # Install & Download
 # ============================================
-install: ## Install SPX command. Usage: make install [WEB=1]
-	@set --; \
-	web_enabled=0; \
-	case "$(WEB)" in \
-		""|0|false|FALSE|no|NO|off|OFF) ;; \
-		1|true|TRUE|yes|YES|on|ON) web_enabled=1; set -- "$$@" --web ;; \
-		*) echo "invalid WEB \"$(WEB)\". Expected one of: 1 true yes on 0 false no off" >&2; exit 2 ;; \
-	esac; \
-	$(BUILDCTL_TOOL_CMD) install "$$@"
+install: validate-install-web ## Install SPX command. Usage: make install [WEB=1]
+	$(BUILDCTL_TOOL_CMD) install $(call install-web-flag)
 
 clean-assets: ## Remove installed SPX/Godot runtime assets from GOPATH/bin
 	$(BUILDCTL_TOOL_CMD) clean-assets
