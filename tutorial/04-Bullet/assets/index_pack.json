@@ -1,0 +1,54 @@
+{
+	"backdrops": [
+		{
+			"bitmapResolution": 2,
+			"name": "backdrop1",
+			"path": "1.png"
+		}
+	],
+	"sprites": {
+		"Bullet": {
+			"costumeIndex": 0,
+			"costumes": [
+				{
+					"bitmapResolution": 2,
+					"faceRight": 90,
+					"name": "bullet",
+					"path": "30.png",
+					"x": 8,
+					"y": 20
+				}
+			],
+			"heading": 0,
+			"isDraggable": false,
+			"rotationStyle": "normal",
+			"size": 0.65,
+			"visible": false,
+			"x": 230,
+			"y": 185
+		},
+		"MyAircraft": {
+			"costumeIndex": 0,
+			"costumes": [
+				{
+					"bitmapResolution": 2,
+					"name": "hero",
+					"path": "8.png",
+					"x": 98,
+					"y": 122
+				}
+			],
+			"heading": 90,
+			"isDraggable": false,
+			"rotationStyle": "normal",
+			"size": 0.45,
+			"visible": true,
+			"x": -131,
+			"y": -161
+		}
+	},
+	"zorder": [
+		"MyAircraft",
+		"Bullet"
+	]
+}
