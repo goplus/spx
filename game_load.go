@@ -51,7 +51,9 @@ func (p *Game) loadIndex(g reflect.Value, proj *coreproject.ProjectConfig) (err 
 
 	inits := p.loadAndInitSprites(g, proj)
 	p.runSpriteCallbacks(inits, proj, g)
-	p.setupCollisionLayers(inits)
+	p.deferAfterAwake(func() {
+		p.setupCollisionLayers(inits)
+	})
 	p.loadAudioAndTilemap(proj)
 
 	p.lifecycleState.IsLoaded = true
@@ -197,16 +199,14 @@ func (p *Game) runSpriteCallbacks(inits []Sprite, proj *coreproject.ProjectConfi
 	}
 	coreproject.RunSpriteInitializers(coreproject.SpriteInitConfig[Sprite]{
 		Items: inits,
-		BeforeMain: func(ini Sprite) {
+		Setup: func(ini Sprite) {
 			spr := spriteOf(ini)
 			if spr != nil {
 				spr.onAwake(func() {
+					runMain(ini.Main)
 					spr.awake()
 				})
 			}
-		},
-		RunMain: func(ini Sprite) {
-			runMain(ini.Main)
 		},
 		CameraTarget: cameraTarget,
 		FollowCamera: p.Camera.Follow__1,

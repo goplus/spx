@@ -99,6 +99,8 @@ type Game struct {
 	scriptEvents scriptEventRegistry
 	gamer        Gamer
 
+	pendingAfterAwake []func()
+
 	sprCollisionInfos       map[string]*spriteCollisionInfo
 	isCollisionByPixel      bool
 	isAutoSetCollisionLayer bool
@@ -251,6 +253,7 @@ func (p *Game) reset() {
 	p.lifecycleState.RunOnce = sync.Once{}
 	p.lifecycleState.OncePathFinder = sync.Once{}
 	p.sprs = make(map[string]Sprite)
+	p.pendingAfterAwake = nil
 
 	p.resetImageSizeCache()
 	p.resetEventQueueStats()

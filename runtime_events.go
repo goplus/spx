@@ -96,13 +96,7 @@ func (p *scriptEventBindings) onAwake(onAwake func()) {
 
 func (p *scriptEventBindings) OnStart(onStart func()) {
 	sink := coreevent.NewSink(p.pthis, onStart)
-	var added bool
-	if _, ok := sink.Owner.(*Game); ok {
-		added = p.scriptEventRegistry.TryAddStartPrepend(sink)
-	} else {
-		added = p.scriptEventRegistry.TryAddStart(sink)
-	}
-	if added {
+	if p.scriptEventRegistry.TryAddStart(sink) {
 		return
 	}
 	if sprite, ok := sink.Owner.(*SpriteImpl); ok && sprite.spriteState.Cloned {
@@ -310,6 +304,7 @@ func (p *Game) handleEvent(ev event) {
 		p.scriptEvents.doWhenKeyPressed(e.Key)
 	case *eventStart:
 		p.scriptEvents.doWhenAwake(nil)
+		p.runAfterAwake()
 		p.scriptEvents.doWhenStart()
 	case *eventTimer:
 		p.scriptEvents.doWhenTimer(e.Time)
@@ -335,6 +330,21 @@ func (p *scriptEventRegistry) doWhenStart() {
 		})()
 		ev.Handler.(func())()
 	})
+}
+
+func (p *Game) deferAfterAwake(call func()) {
+	if call == nil {
+		return
+	}
+	p.pendingAfterAwake = append(p.pendingAfterAwake, call)
+}
+
+func (p *Game) runAfterAwake() {
+	hooks := p.pendingAfterAwake
+	p.pendingAfterAwake = nil
+	for _, hook := range hooks {
+		hook()
+	}
 }
 
 func (p *scriptEventRegistry) doWhenAwake(this threadObj) {
