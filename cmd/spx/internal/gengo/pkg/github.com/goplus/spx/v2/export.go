@@ -93,6 +93,7 @@ func init() {
 			"Game":            reflect.TypeOf((*q.Game)(nil)).Elem(),
 			"List":            reflect.TypeOf((*q.List)(nil)).Elem(),
 			"Monitor":         reflect.TypeOf((*q.Monitor)(nil)).Elem(),
+			"MotionOptions":   reflect.TypeOf((*q.MotionOptions)(nil)).Elem(),
 			"PenColorParam":   reflect.TypeOf((*q.PenColorParam)(nil)).Elem(),
 			"RotationStyle":   reflect.TypeOf((*q.RotationStyle)(nil)).Elem(),
 			"SoundEffectKind": reflect.TypeOf((*q.SoundEffectKind)(nil)).Elem(),
