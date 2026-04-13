@@ -8,7 +8,7 @@ inputs:
   xgo-version:
     description: 'XGo version to install'
     required: false
-    default: '1.6.6'
+    default: '1.7.0'
   setup-mode:
     description: 'Asset preparation mode: runtime, web, or full'
     required: false
