@@ -19,6 +19,8 @@ package spx
 import (
 	"time"
 
+	"github.com/goplus/spx/v2/internal/coroutine"
+
 	"github.com/goplus/spbase/mathf"
 	coreruntime "github.com/goplus/spx/v2/internal/core/runtime"
 	"github.com/goplus/spx/v2/internal/engine"
@@ -31,23 +33,24 @@ import (
 func (p *Game) OnEngineStart() {
 	p.lifecycleState.RunOnce.Do(func() {
 		cachedBounds = make(map[string]mathf.Rect2)
-		onStart := func() {
+		generation := p.currentBootstrapGeneration()
+		go func() {
 			defer engine.CheckPanic()
-			gamer := p.gamer
-			if me, ok := gamer.(interface{ MainEntry() }); ok {
-				p.onAwake(func() {
+			if me, ok := p.gamer.(interface{ MainEntry() }); ok {
+				p.deferBootstrapFor(generation, func() {
 					runMain(me.MainEntry)
 				})
 			}
-			if !p.lifecycleState.IsRunned {
-				builder := newGameBuilder(gamer, "assets")
+			if !p.lifecycleState.IsRunned.Load() {
+				builder := newGameBuilder(p.gamer, "assets", generation)
 				if err := builder.buildAndRun(); err != nil {
 					engine.Panic(err)
 				}
 			}
 			engine.OnGameStarted()
-		}
-		go onStart()
+			p.lifecycleState.IsRunned.Store(true)
+			p.startBootstrapPhaseFor(generation)
+		}()
 	})
 }
 
@@ -59,25 +62,25 @@ func (p *Game) OnEngineReset() {
 }
 
 func (p *Game) OnEngineUpdate(delta float64) {
-	if !p.lifecycleState.IsRunned {
+	if !p.lifecycleState.IsRunned.Load() {
 		return
 	}
-	p.dispatchStartEventIfNeeded()
+	if p.lifecycleState.BootstrapDone.Load() {
+		p.dispatchStartEventIfNeeded()
+	}
 	p.updateSpriteProxies()
 	p.pullPhysicsPositions()
 }
 
 func (p *Game) OnEngineRender(delta float64) {
-	if !p.lifecycleState.IsRunned {
+	if !p.lifecycleState.StartDispatched.Load() {
 		return
 	}
 	p.processPhysicsTriggers()
 }
 
-func (p *Game) OnEnginePause(isPaused bool) {
-	if !p.lifecycleState.IsRunned {
-		return
-	}
+func (p *Game) OnEnginePause(bool) {
+	// Pause lifecycle hooks are intentionally handled by engine-level managers.
 }
 
 // -----------------------------------------------------------------------------
@@ -90,10 +93,117 @@ func (p *Game) runLoop(cfg *Config) (err error) {
 	}
 	p.initEventLoop()
 	p.engine().PlatformMgr.SetWindowTitle(cfg.Title)
-	p.lifecycleState.IsRunned = true
 	return nil
 }
 
 func runMain(call func()) {
 	coreruntime.RunMain(call, time.Now(), setSchedInMain, setMainSchedTime)
+}
+
+func (p *Game) deferBootstrap(call func()) {
+	p.deferBootstrapFor(p.currentBootstrapGeneration(), call)
+}
+
+func (p *Game) deferBootstrapFor(generation uint64, call func()) bool {
+	if call == nil {
+		return false
+	}
+	p.bootstrapMu.Lock()
+	defer p.bootstrapMu.Unlock()
+	if generation != p.bootstrapGen {
+		return false
+	}
+	p.pendingBootstrap = append(p.pendingBootstrap, call)
+	return true
+}
+
+func (p *Game) currentBootstrapGeneration() uint64 {
+	p.bootstrapMu.Lock()
+	defer p.bootstrapMu.Unlock()
+	return p.bootstrapGen
+}
+
+func (p *Game) resetBootstrapState() {
+	p.bootstrapMu.Lock()
+	p.bootstrapGen++
+	p.bootstrapStarted = false
+	p.pendingBootstrap = nil
+	p.bootstrapMu.Unlock()
+	p.lifecycleState.BootstrapDone.Store(false)
+}
+
+func (p *Game) runBootstrapTasks() {
+	p.runBootstrapTasksFor(p.currentBootstrapGeneration())
+}
+
+func (p *Game) runBootstrapTasksFor(generation uint64) {
+	for {
+		tasks, ok := p.takeBootstrapTasksFor(generation)
+		if !ok || len(tasks) == 0 {
+			return
+		}
+		// Re-check after each pass so tasks queued by tasks are also consumed.
+		for _, task := range tasks {
+			if !p.isBootstrapGenerationCurrent(generation) {
+				return
+			}
+			task()
+		}
+	}
+}
+
+func (p *Game) takeBootstrapTasksFor(generation uint64) ([]func(), bool) {
+	p.bootstrapMu.Lock()
+	defer p.bootstrapMu.Unlock()
+	if generation != p.bootstrapGen {
+		return nil, false
+	}
+	if len(p.pendingBootstrap) == 0 {
+		return nil, true
+	}
+	tasks := p.pendingBootstrap
+	p.pendingBootstrap = nil
+	return tasks, true
+}
+
+func (p *Game) isBootstrapGenerationCurrent(generation uint64) bool {
+	p.bootstrapMu.Lock()
+	defer p.bootstrapMu.Unlock()
+	return generation == p.bootstrapGen
+}
+
+func (p *Game) claimBootstrapPhaseFor(generation uint64) (hasTasks, ok bool) {
+	p.bootstrapMu.Lock()
+	defer p.bootstrapMu.Unlock()
+	if generation != p.bootstrapGen || p.bootstrapStarted {
+		return false, false
+	}
+	p.bootstrapStarted = true
+	return len(p.pendingBootstrap) > 0, true
+}
+
+func (p *Game) startBootstrapPhaseFor(generation uint64) {
+	engine.WaitMainThread(func() {
+		hasTasks, ok := p.claimBootstrapPhaseFor(generation)
+		if !ok {
+			return
+		}
+		if !hasTasks {
+			p.lifecycleState.BootstrapDone.Store(true)
+			return
+		}
+
+		p.lifecycleState.BootstrapDone.Store(false)
+		gco.CreateAndStart(false, p, func(coroutine.Thread) int {
+			p.runBootstrapTasksFor(generation)
+			if p.isBootstrapGenerationCurrent(generation) {
+				p.lifecycleState.BootstrapDone.Store(true)
+			}
+			return 0
+		})
+	})
+}
+
+func (p *Game) startBootstrapPhase() {
+	p.startBootstrapPhaseFor(p.currentBootstrapGeneration())
 }

@@ -41,12 +41,11 @@ func (p *SpriteImpl) resetRuntimeProxy(applyCostume bool) {
 	})
 }
 
-// dispatchStartEventIfNeeded fires the start event once after the game begins running.
-func (p *Game) dispatchStartEventIfNeeded() error {
+// dispatchStartEventIfNeeded fires the start event once after bootstrap completes.
+func (p *Game) dispatchStartEventIfNeeded() {
 	coreruntime.SyncOnce(&p.lifecycleState.StartFlag, func() {
 		p.fireEvent(&eventStart{})
 	})
-	return nil
 }
 
 // updateSpriteProxies activates pending shapes, batches dirty sprite proxy changes,
@@ -73,7 +72,7 @@ func (p *Game) flushSyncBuffer() {
 }
 
 // pullPhysicsPositions retrieves sprite positions from the physics engine in batch.
-func (p *Game) pullPhysicsPositions() error {
+func (p *Game) pullPhysicsPositions() {
 	coreruntime.SyncBatchPositions(
 		p.getTempShapes(),
 		func(item Shape) bool {
@@ -88,7 +87,6 @@ func (p *Game) pullPhysicsPositions() error {
 			item.(*SpriteImpl).applyPhysicsPosition(x, y)
 		},
 	)
-	return nil
 }
 
 // processPhysicsTriggers consumes trigger events and fires collision callbacks.
@@ -153,8 +151,6 @@ func (p *baseObj) applyAtlasUVRemap() {
 	val := mathf.NewVec4(uvRemap.Position.X, uvRemap.Position.Y, uvRemap.Size.X, uvRemap.Size.Y)
 	p.setMaterialParamsVec4("atlas_uv_rect2", val, true)
 }
-
-// Sprite proxy lifecycle hooks.
 
 // ensureProxyInitialized initializes the sprite's engine proxy if it hasn't been created yet.
 func (sprite *SpriteImpl) ensureProxyInitialized() {

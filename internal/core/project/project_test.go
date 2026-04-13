@@ -476,18 +476,14 @@ func TestRunSpriteInitializers(t *testing.T) {
 	var got []string
 	RunSpriteInitializers(SpriteInitConfig[string]{
 		Items: []string{"a", "b"},
-		Setup: func(item string) {
-			got = append(got, "setup:"+item)
+		BeforeMain: func(item string) {
+			got = append(got, "before:"+item)
 		},
-		CameraTarget: "hero",
-		FollowCamera: func(target string) {
-			got = append(got, "follow:"+target)
-		},
-		OnLoaded: func() {
-			got = append(got, "loaded")
+		RunMain: func(item string) {
+			got = append(got, "main:"+item)
 		},
 	})
-	want := []string{"setup:a", "setup:b", "follow:hero", "loaded"}
+	want := []string{"before:a", "main:a", "before:b", "main:b"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("RunSpriteInitializers got %v, want %v", got, want)
 	}

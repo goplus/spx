@@ -55,6 +55,7 @@ func XGot_Game_Reload(game Gamer, index any) (err error) {
 	v := reflect.ValueOf(game).Elem()
 	g := instance(v)
 	g.reset()
+	generation := g.currentBootstrapGeneration()
 	engine.ClearAllSprites()
 
 	g.events = make(chan event, eventBufferSize)
@@ -78,9 +79,14 @@ func XGot_Game_Reload(game Gamer, index any) (err error) {
 		return
 	}
 	gco.OnRestart()
-	err = g.loadIndex(v, &proj)
-	gco.OnInited()
+	err = g.loadIndex(v, &proj, generation)
+	if err != nil {
+		return
+	}
 	g.initEventLoop()
+	gco.OnInited()
+	g.lifecycleState.IsRunned.Store(true)
+	g.startBootstrapPhaseFor(generation)
 	return
 }
 

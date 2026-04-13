@@ -44,19 +44,14 @@ func (p *Game) loadSprite(sprite Sprite, name string, gamer reflect.Value) error
 	return bindSpriteOwner(vSpr, gamer)
 }
 
-func (p *Game) loadIndex(g reflect.Value, proj *coreproject.ProjectConfig) (err error) {
+func (p *Game) loadIndex(g reflect.Value, proj *coreproject.ProjectConfig, generation uint64) (err error) {
 	p.setupDisplayConfig(proj)
 	p.setupWorldAndWindow(proj)
 	p.setupPlatformAndCamera(proj)
 
 	inits := p.loadAndInitSprites(g, proj)
-	p.runSpriteCallbacks(inits, proj, g)
-	p.deferAfterAwake(func() {
-		p.setupCollisionLayers(inits)
-	})
+	p.runSpriteCallbacks(inits, proj, g, generation)
 	p.loadAudioAndTilemap(proj)
-
-	p.lifecycleState.IsLoaded = true
 	return
 }
 
@@ -188,7 +183,7 @@ func (p *Game) loadAndInitSprites(g reflect.Value, proj *coreproject.ProjectConf
 	return inits
 }
 
-func (p *Game) runSpriteCallbacks(inits []Sprite, proj *coreproject.ProjectConfig, g reflect.Value) {
+func (p *Game) runSpriteCallbacks(inits []Sprite, proj *coreproject.ProjectConfig, g reflect.Value, generation uint64) {
 	var onLoaded func()
 	if loader, ok := g.Addr().Interface().(interface{ OnLoaded() }); ok {
 		onLoaded = loader.OnLoaded
@@ -199,18 +194,28 @@ func (p *Game) runSpriteCallbacks(inits []Sprite, proj *coreproject.ProjectConfi
 	}
 	coreproject.RunSpriteInitializers(coreproject.SpriteInitConfig[Sprite]{
 		Items: inits,
-		Setup: func(ini Sprite) {
+		BeforeMain: func(ini Sprite) {
 			spr := spriteOf(ini)
 			if spr != nil {
 				spr.onAwake(func() {
-					runMain(ini.Main)
 					spr.awake()
 				})
 			}
 		},
-		CameraTarget: cameraTarget,
-		FollowCamera: p.Camera.Follow__1,
-		OnLoaded:     onLoaded,
+		RunMain: func(ini Sprite) {
+			p.deferBootstrapFor(generation, func() {
+				runMain(ini.Main)
+			})
+		},
+	})
+	p.deferBootstrapFor(generation, func() {
+		p.setupCollisionLayers(inits)
+		if cameraTarget != "" {
+			p.Camera.Follow__1(cameraTarget)
+		}
+		if onLoaded != nil {
+			onLoaded()
+		}
 	})
 }
 
@@ -225,9 +230,9 @@ func (p *Game) loadAudioAndTilemap(proj *coreproject.ProjectConfig) {
 	}
 }
 
-func (p *Game) endLoad(g reflect.Value, proj *coreproject.ProjectConfig) (err error) {
+func (p *Game) endLoad(g reflect.Value, proj *coreproject.ProjectConfig, generation uint64) (err error) {
 	spxlog.Debug("==> EndLoad")
-	return p.loadIndex(g, proj)
+	return p.loadIndex(g, proj, generation)
 }
 
 func (p *Game) addSpecialShape(g reflect.Value, v coreproject.StageShape, inits []Sprite) ([]Sprite, error) {
