@@ -1,0 +1,29 @@
+{
+	"map": {
+		"height": 360,
+		"width": 480
+	},
+	"sprites": {
+		"Calf": {
+			"costumeIndex": 0,
+			"costumes": [
+				{
+					"name": "calf-0",
+					"path": "1.png",
+					"x": 55,
+					"y": 50
+				}
+			],
+			"heading": 90,
+			"isDraggable": false,
+			"rotationStyle": "normal",
+			"size": 1,
+			"visible": true,
+			"x": -59,
+			"y": 2
+		}
+	},
+	"zorder": [
+		"Calf"
+	]
+}

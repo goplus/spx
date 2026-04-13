@@ -1,0 +1,66 @@
+{
+	"backdrops": [
+		{
+			"name": "backdrop1",
+			"path": "6.png"
+		}
+	],
+	"sprites": {
+		"Arrow": {
+			"costumeIndex": 0,
+			"costumes": [
+				{
+					"name": "normal",
+					"path": "1.svg",
+					"x": 65,
+					"y": 60
+				}
+			],
+			"heading": 90,
+			"isDraggable": false,
+			"rotationStyle": "normal",
+			"size": 1,
+			"visible": true,
+			"x": 168.08139823593658,
+			"y": 81.24749447883225
+		},
+		"Calf": {
+			"costumeIndex": 0,
+			"costumes": [
+				{
+					"name": "normal",
+					"path": "1.png",
+					"x": 75,
+					"y": 75
+				}
+			],
+			"heading": 90,
+			"isDraggable": false,
+			"rotationStyle": "normal",
+			"size": 1,
+			"visible": true,
+			"x": -100,
+			"y": -21
+		}
+	},
+	"zorder": [
+		{
+			"color": 15629590,
+			"isDiscrete": true,
+			"label": "gid",
+			"mode": 1,
+			"name": "monitor-1",
+			"size": 1,
+			"sliderMax": 100,
+			"sliderMin": 0,
+			"target": "",
+			"type": "monitor",
+			"val": "getVar:gid",
+			"visible": true,
+			"x": -240,
+			"y": 180
+		},
+		"Calf",
+		"Arrow"
+	]
+}

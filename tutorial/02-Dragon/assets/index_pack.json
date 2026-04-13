@@ -1,0 +1,73 @@
+{
+	"backdrops": [
+		{
+			"name": "backdrop1",
+			"path": "6.png"
+		}
+	],
+	"sounds": {
+		"chomp": {
+			"path": "1.wav",
+			"rate": 11025,
+			"sampleCount": 2912
+		}
+	},
+	"sprites": {
+		"Dragon": {
+			"costumeIndex": 0,
+			"costumes": [
+				{
+					"name": "dragon",
+					"path": "1.svg",
+					"x": 65,
+					"y": 60
+				}
+			],
+			"heading": -165,
+			"isDraggable": false,
+			"rotationStyle": "normal",
+			"size": 1,
+			"visible": true,
+			"x": 168.08139823593658,
+			"y": 81.24749447883225
+		},
+		"Shark": {
+			"costumeIndex": 0,
+			"costumes": [
+				{
+					"name": "shark-a ",
+					"path": "3.svg",
+					"x": 75,
+					"y": 75
+				}
+			],
+			"heading": 90,
+			"isDraggable": false,
+			"rotationStyle": "normal",
+			"size": 1,
+			"visible": true,
+			"x": 70,
+			"y": -21
+		}
+	},
+	"zorder": [
+		{
+			"color": 15629590,
+			"isDiscrete": true,
+			"label": "score",
+			"mode": 1,
+			"name": "monitor-1",
+			"size": 1,
+			"sliderMax": 100,
+			"sliderMin": 0,
+			"target": "Dragon",
+			"type": "monitor",
+			"val": "getVar:score",
+			"visible": true,
+			"x": 5,
+			"y": 5
+		},
+		"Dragon",
+		"Shark"
+	]
+}

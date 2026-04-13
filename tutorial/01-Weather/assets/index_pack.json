@@ -1,0 +1,71 @@
+{
+	"backdropIndex": 0,
+	"backdrops": [
+		{
+			"bitmapResolution": 2,
+			"name": "urban1",
+			"path": "6.png",
+			"x": 480,
+			"y": 360
+		}
+	],
+	"sprites": {
+		"Jaime": {
+			"costumeIndex": 1,
+			"costumes": [
+				{
+					"bitmapResolution": 2,
+					"name": "jaime-a",
+					"path": "1.png",
+					"x": 76,
+					"y": 154
+				},
+				{
+					"bitmapResolution": 2,
+					"name": "jaime-b",
+					"path": "2.png",
+					"x": 68,
+					"y": 154
+				}
+			],
+			"heading": 90,
+			"isDraggable": false,
+			"rotationStyle": "normal",
+			"size": 0.95,
+			"visible": true,
+			"x": -45,
+			"y": -67
+		},
+		"Kai": {
+			"costumeIndex": 0,
+			"costumes": [
+				{
+					"bitmapResolution": 2,
+					"name": "kai-a",
+					"path": "3.png",
+					"x": 68,
+					"y": 160
+				},
+				{
+					"bitmapResolution": 2,
+					"name": "kai-b",
+					"path": "4.png",
+					"x": 82,
+					"y": 158
+				}
+			],
+			"heading": 90,
+			"isDraggable": false,
+			"rotationStyle": "normal",
+			"size": 0.95,
+			"visible": true,
+			"x": 88,
+			"y": -76
+		}
+	},
+	"stretchMode": true,
+	"zorder": [
+		"Jaime",
+		"Kai"
+	]
+}

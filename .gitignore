@@ -4,6 +4,7 @@
 *.code-workspace
 
 # OS
+#index_pack.json
 .DS_Store
 
 # Tool cache
