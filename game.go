@@ -96,10 +96,12 @@ type Game struct {
 
 	events chan event
 
-	scriptEvents scriptEventRegistry
-	gamer        Gamer
-
-	pendingAfterAwake []func()
+	scriptEvents     scriptEventRegistry
+	gamer            Gamer
+	bootstrapMu      sync.Mutex
+	bootstrapGen     uint64
+	bootstrapStarted bool
+	pendingBootstrap []func()
 
 	sprCollisionInfos       map[string]*spriteCollisionInfo
 	isCollisionByPixel      bool
@@ -237,7 +239,7 @@ func (p *Game) getSpriteProtoByName(name string, g reflect.Value) Sprite {
 }
 
 func (p *Game) reset() {
-	p.lifecycleState.IsRunned = false
+	p.lifecycleState.IsRunned.Store(false)
 
 	p.releaseGameAudio()
 	p.EraseAll()
@@ -247,20 +249,20 @@ func (p *Game) reset() {
 
 	p.debugState.DebugPanel = nil
 	p.dialogState.AskPanel = nil
-	p.lifecycleState.IsLoaded = false
+	p.resetBootstrapState()
+	p.lifecycleState.StartDispatched.Store(false)
+	p.Stop(AllOtherScripts)
 
 	p.lifecycleState.StartFlag = sync.Once{}
 	p.lifecycleState.RunOnce = sync.Once{}
 	p.lifecycleState.OncePathFinder = sync.Once{}
 	p.sprs = make(map[string]Sprite)
-	p.pendingAfterAwake = nil
 
 	p.resetImageSizeCache()
 	p.resetEventQueueStats()
 	close(p.events)
 
 	itime.OnReload()
-	p.Stop(AllOtherScripts)
 }
 
 func (p *Game) initGame(sprites []Sprite) *Game {

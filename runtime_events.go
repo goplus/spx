@@ -304,8 +304,8 @@ func (p *Game) handleEvent(ev event) {
 		p.scriptEvents.doWhenKeyPressed(e.Key)
 	case *eventStart:
 		p.scriptEvents.doWhenAwake(nil)
-		p.runAfterAwake()
 		p.scriptEvents.doWhenStart()
+		p.lifecycleState.StartDispatched.Store(true)
 	case *eventTimer:
 		p.scriptEvents.doWhenTimer(e.Time)
 	}
@@ -330,21 +330,6 @@ func (p *scriptEventRegistry) doWhenStart() {
 		})()
 		ev.Handler.(func())()
 	})
-}
-
-func (p *Game) deferAfterAwake(call func()) {
-	if call == nil {
-		return
-	}
-	p.pendingAfterAwake = append(p.pendingAfterAwake, call)
-}
-
-func (p *Game) runAfterAwake() {
-	hooks := p.pendingAfterAwake
-	p.pendingAfterAwake = nil
-	for _, hook := range hooks {
-		hook()
-	}
 }
 
 func (p *scriptEventRegistry) doWhenAwake(this threadObj) {

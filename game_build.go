@@ -39,17 +39,19 @@ type gameBuilder struct {
 
 	game       *Game
 	gamerValue reflect.Value
+	generation uint64
 	err        error
 }
 
 // -----------------------------------------------------------------------------
 // Builder
 // -----------------------------------------------------------------------------
-func newGameBuilder(game Gamer, resource any, gameConf ...*Config) *gameBuilder {
+func newGameBuilder(game Gamer, resource any, generation uint64, gameConf ...*Config) *gameBuilder {
 	return &gameBuilder{
-		gamer:    game,
-		resource: resource,
-		gameConf: gameConf,
+		gamer:      game,
+		resource:   resource,
+		gameConf:   gameConf,
+		generation: generation,
 	}
 }
 
@@ -123,7 +125,7 @@ func (b *gameBuilder) finalizeLoad() *gameBuilder {
 	if b.err != nil {
 		return b
 	}
-	if err := b.game.endLoad(b.gamerValue, &b.proj); err != nil {
+	if err := b.game.endLoad(b.gamerValue, &b.proj, b.generation); err != nil {
 		b.err = err
 		return b
 	}

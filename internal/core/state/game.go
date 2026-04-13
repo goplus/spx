@@ -18,6 +18,7 @@ package state
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 
 	coreevent "github.com/goplus/spx/v2/internal/core/event"
@@ -26,11 +27,12 @@ import (
 )
 
 type GameLifecycleState struct {
-	StartFlag      sync.Once
-	RunOnce        sync.Once
-	OncePathFinder sync.Once
-	IsLoaded       bool
-	IsRunned       bool
+	StartFlag       sync.Once
+	RunOnce         sync.Once
+	OncePathFinder  sync.Once
+	BootstrapDone   atomic.Bool
+	StartDispatched atomic.Bool
+	IsRunned        atomic.Bool
 }
 
 type GameDisplayState struct {
