@@ -23,8 +23,7 @@ import (
 
 type SpriteInitConfig[T any] struct {
 	Items        []T
-	BeforeMain   func(T)
-	RunMain      func(T)
+	Setup        func(T)
 	CameraTarget string
 	FollowCamera func(string)
 	OnLoaded     func()
@@ -55,11 +54,8 @@ func WalkZOrder(
 
 func RunSpriteInitializers[T any](cfg SpriteInitConfig[T]) {
 	for _, item := range cfg.Items {
-		if cfg.BeforeMain != nil {
-			cfg.BeforeMain(item)
-		}
-		if cfg.RunMain != nil {
-			cfg.RunMain(item)
+		if cfg.Setup != nil {
+			cfg.Setup(item)
 		}
 	}
 
