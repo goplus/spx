@@ -68,7 +68,7 @@ func (p *SpriteImpl) Think__0(msg any) {
 	p.ThinkWith(msg, 0)
 }
 
-func (p *SpriteImpl) Think__1(msg any, secs float64) {
+func (p *SpriteImpl) Think__1(msg any, secs Seconds) {
 	p.ThinkWith(msg, secs)
 }
 
@@ -86,7 +86,7 @@ func (p *SpriteImpl) Quote__0(message string) {
 	p.QuoteMsg(message, 0)
 }
 
-func (p *SpriteImpl) Quote__1(message string, secs float64) {
+func (p *SpriteImpl) Quote__1(message string, secs Seconds) {
 	p.QuoteMsg(message, secs)
 }
 
@@ -94,7 +94,7 @@ func (p *SpriteImpl) Quote__2(message, description string) {
 	p.QuoteMsgEx(message, description, 0)
 }
 
-func (p *SpriteImpl) Quote__3(message, description string, secs float64) {
+func (p *SpriteImpl) Quote__3(message, description string, secs Seconds) {
 	p.QuoteMsgEx(message, description, secs)
 }
 
