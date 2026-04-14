@@ -1,7 +1,5 @@
-
 import "fmt"
 import "math"
-
 
 onMsg "testMotion", => {
     onTestStart(this)
@@ -26,7 +24,7 @@ onMsg "testMotion", => {
 	assertPos(this,0, -100, "Sprite::Turn && Move")
 
 	// 5. Sprite::Goto
-	stepToTarget "Red", speed = 2
+	stepToWith "Red", speed = 2
 	assertPos(this,0, 0, "Sprite::Goto")
 
 	// 6. Sprite::Glide
@@ -88,8 +86,6 @@ onMsg "testMotion", => {
 	wait 0.3
 	bounceOffEdge()
 	assertDir(this, 90, "Sprite::BounceOffEdge")
-
-
 
     onTestDone(this)
 }

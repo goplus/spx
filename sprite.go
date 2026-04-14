@@ -136,6 +136,12 @@ const (
 	XGoo_Sprite_TurnToWith   = ".TurnToDir,.TurnToTarget"
 	XGoo_Sprite_SetLayerWith = ".SetLayerTo,.ChangeLayer"
 	XGoo_Sprite_QuoteWith    = ".QuoteMsg,.QuoteMsgEx"
+
+	XGoo_SpriteImpl_GlideWith    = ".GlideToTarget,.GlideToXYpos"
+	XGoo_SpriteImpl_StepToWith   = ".StepToTarget,.StepToXYpos"
+	XGoo_SpriteImpl_TurnToWith   = ".TurnToDir,.TurnToTarget"
+	XGoo_SpriteImpl_SetLayerWith = ".SetLayerTo,.ChangeLayer"
+	XGoo_SpriteImpl_QuoteWith    = ".QuoteMsg,.QuoteMsgEx"
 )
 
 // -----------------------------------------------------------------------------
