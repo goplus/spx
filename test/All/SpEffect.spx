@@ -1,53 +1,51 @@
 import "fmt"
-import "math"
 
-import "fmt"
 func effectTest(eff EffectKind, start, end float64, step float64, waitTime float64) {
-    for i := start; i <= end; i += step {
-        setGraphicEffect eff, i
-        say fmt.Sprintf("test %d i=%.0f", eff, i)
-        wait waitTime
-    }
+	for i := start; i <= end; i += step {
+		setGraphicEffect eff, i
+		say fmt.Sprintf("test %d i=%.0f", eff, i)
+		wait waitTime
+	}
 	say "done"
-	wait 0.5
-	ClearGraphicEffects
+	wait 0.5s
+	clearGraphicEffects
 }
+
 func testCloneEffect() {
-	wait 0.5
+	wait 0.5s
 	setGraphicEffect ColorEffect, 100
-	wait 0.1
+	wait 0.1s
 	cloneNum++
-	clone 
+	clone
 
-	wait 0.5
+	wait 0.5s
 	setGraphicEffect PixelateEffect, 50
-	wait 0.1
-	clone 
+	wait 0.1s
+	clone
 	cloneNum++
 
-	wait 0.5
+	wait 0.5s
 }
-
 
 onCloned => {
-	// test effect clone 
+	// test effect clone
 	setXpos 100*float64(cloneNum)
 	say fmt.Sprintf("cloned %d", cloneNum)
-	wait 3
+	wait 3s
 	deleteThisClone
 }
 
 onMsg "testEffect", => {
 	onTestStart(this)
 
-    setSize 1
+	setSize 1
 
-    // 1. string
-    say "testEffect"
-    wait 0.1
+	// 1. string
+	say "testEffect"
+	wait 0.1s
 
 	setXpos -100
-	testCloneEffect()
+	testCloneEffect
 
 	effectTest(ColorEffect, -200, 200, 20, 0.05)
 	effectTest(FishEyeEffect, -150, 150, 5, 0.05)

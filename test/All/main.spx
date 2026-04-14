@@ -1,21 +1,19 @@
-
-
 import "fmt"
 import "math"
 
 var (
-	hasTestDone bool
-	hasInputKey bool
-	hasClicked bool
+	hasTestDone        bool
+	hasInputKey        bool
+	hasClicked         bool
 	hasChangedBackdrop bool
-	hasReceivedMsgA bool
-	hasReceivedMsgB bool 
+	hasReceivedMsgA    bool
+	hasReceivedMsgB    bool
 
 	cloneNum int
 )
 
-func doPanic(msg string){
-	println("panic error: ",msg)
+func doPanic(msg string) {
+	println("panic error: ", msg)
 }
 
 func assert(val bool, msg string, args ...interface{}) {
@@ -26,36 +24,35 @@ func assert(val bool, msg string, args ...interface{}) {
 
 func assertFloat(val float64, expect float64, msg string, args ...interface{}) {
 	if math.Abs(val-expect) > 0.001 {
-		doPanic(fmt.Sprintf("Value (%v) not equal to %v :: ",val, expect) + fmt.Sprintf(msg, args...))
+		doPanic(fmt.Sprintf("Value (%v) not equal to %v :: ", val, expect) + fmt.Sprintf(msg, args...))
 	}
 }
 
-func assertPosWithErr(p Sprite, x,y float64, err float64, msg string, args ...interface{}) {
+func assertPosWithErr(p Sprite, x, y float64, err float64, msg string, args ...interface{}) {
 	if math.Abs(x-p.xpos()) > err || math.Abs(y-p.ypos()) > err {
-		doPanic(fmt.Sprintf("Pos (%v %v) not equal to %v %v :: ",p.xpos(), p.ypos(), x, y) + fmt.Sprintf(msg, args...))
+		doPanic(fmt.Sprintf("Pos (%v %v) not equal to %v %v :: ", p.xpos(), p.ypos(), x, y) + fmt.Sprintf(msg, args...))
 	}
 }
 
-func assertPos(p Sprite,x,y float64, msg string, args ...interface{}) {
+func assertPos(p Sprite, x, y float64, msg string, args ...interface{}) {
 	assertPosWithErr(p, x, y, 0.001, msg, args...)
 }
 
 func assertDir(p Sprite, dir float64, msg string, args ...interface{}) {
 	if math.Abs(dir-p.heading()) > 0.001 {
-		doPanic(fmt.Sprintf("Heading (%v) not equal to %v :: ",p.heading(), dir) + fmt.Sprintf(msg, args...))
+		doPanic(fmt.Sprintf("Heading (%v) not equal to %v :: ", p.heading(), dir) + fmt.Sprintf(msg, args...))
 	}
 }
 
 func onTestStart(p Sprite) {
-    p.setXYpos(0,0)
-    p.say(p.name, 1)
+	p.setXYpos(0, 0)
+	p.say(p.name, 1)
 }
 
 func onTestDone(p Sprite) {
-    p.hide()
+	p.hide()
 	hasTestDone = true
 }
-
 
 func waitAndTest(msg string) {
 	for !hasTestDone {
@@ -65,7 +62,7 @@ func waitAndTest(msg string) {
 	broadcast msg
 }
 
-onStart =>{
+onStart => {
 	hasTestDone = true
 	waitAndTest "testControl"
 	waitAndTest "testEvent"

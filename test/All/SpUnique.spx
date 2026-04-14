@@ -3,57 +3,55 @@ import "math"
 
 var color1, color2, color3, color4, color5, color6 Color
 var x, y float64
-var backdropName string
 var hitItem, touching bool
 var parent any
-var costumeName string
 var width, height float64
 
 onMsg "testUnique", => {
 	onTestStart(this)
 
-    // 1. Color conversion test
-    say "test color conversion"
-    wait 0.1
+	// 1. Color conversion test
+	say "test color conversion"
+	wait 0.1s
 
-    // 2. Camera test
-    say "test camera function"
-    Camera.SetZoom(1.5)
-    assert(Camera.Zoom() == 1.5, "Camera zoom setting failed")
-    Camera.Follow(this)
-    wait 0.1
+	// 2. Camera test
+	say "test camera function"
+	Camera.setZoom 1.5
+	assert(Camera.zoom == 1.5, "Camera zoom setting failed")
+	Camera.follow this
+	wait 0.1s
 
-    // 3. Game state test
-    say "test game state"
-    wait 0.1
+	// 3. Game state test
+	say "test game state"
+	wait 0.1s
 
-    // 4. Background test
-    say "test background function"
-    backdropName = BackdropName()
-    assert(backdropName != "", "Backdrop name should not be empty")
-    SetBackdrop(Prev)
-    wait 0.1
+	// 4. Background test
+	say "test background function"
+	backdropName := backdropName
+	assert(backdropName != "", "Backdrop name should not be empty")
+	setBackdrop Prev
+	wait 0.1s
 
-    // 6. Sprite property test
-    say "test sprite properties"
-    if Visible() {
-        say "sprite is visible"
-        assert(true, "Sprite should be visible")
-    }
-    if IsCloned() {
-        say "this is a clone"
-        assert(true, "Sprite should be a clone")
-    }
-    costumeName = CostumeName()
-    assert(costumeName != "", "Costume name should not be empty")
-    setCostume Prev
-    wait 0.1
+	// 6. Sprite property test
+	say "test sprite properties"
+	if Visible() {
+		say "sprite is visible"
+		assert(true, "Sprite should be visible")
+	}
+	if IsCloned() {
+		say "this is a clone"
+		assert(true, "Sprite should be a clone")
+	}
+	costumeName := costumeName
+	assert(costumeName != "", "Costume name should not be empty")
+	setCostume Prev
+	wait 0.1s
 
-    // 7. Animation test
-    say "test animation"
-    animateAndWait("walk")
-    assert(true, "Animation should start")
-    wait 0.1
+	// 7. Animation test
+	say "test animation"
+	animateAndWait "walk"
+	assert(true, "Animation should start")
+	wait 0.1s
 
 	onTestDone(this)
 }

@@ -1,101 +1,99 @@
-
 import "fmt"
 import "math"
 
-
-
 onMsg "testLook", => {
-    onTestStart(this)
+	onTestStart(this)
 
 	setXYpos(0, 0)
-	// 1. Sprite::Say	
-	say "Say", 0.5
+	// 1. Sprite::Say
+	say "Say", 0.5s
 
-	// 2. Sprite::Think	
-	think "Think", 0.5
+	// 2. Sprite::Think
+	think "Think", 0.5s
 
-	// 3. Sprite::NextCostume	
+	// 3. Sprite::NextCostume
 	setCostume Next
-	wait 0.1
+	wait 0.1s
 	setCostume Next
-	wait 0.1
+	wait 0.1s
 	setCostume Next
-	wait 0.1
+	wait 0.1s
 
-	// 4. Sprite::CostumeIndex	
+	// 4. Sprite::CostumeIndex
 	assertFloat(float64(costumeIndex()), 3, "Sprite::CostumeIndex")
-	wait 0.2
+	wait 0.2s
 
-	// 5. Sprite::SetCostume	
+	// 5. Sprite::SetCostume
 	setCostume 0
-	wait 0.2
+	wait 0.2s
 	assertFloat(float64(costumeIndex()), 0, "Sprite::CostumeIndex")
 
-	// 6. Sprite::ChangeSize	
+	// 6. Sprite::ChangeSize
 	changeSize 50
-	wait 0.2
+	wait 0.2s
 	changeSize -50
-	wait 0.2
+	wait 0.2s
 
-	// 7. Sprite::SetSize	
+	// 7. Sprite::SetSize
 	setSize 100
-	wait 0.2
+	wait 0.2s
 
-	// 8. Sprite::Size	
+	// 8. Sprite::Size
 	assertFloat(size(), 100, "Sprite::Size")
-	wait 0.2
-	
-	// 9. Sprite::ChangeGraphicEffect	
+	wait 0.2s
+
+	// 9. Sprite::ChangeGraphicEffect
 	changeGraphicEffect GhostEffect, 50
-	wait 0.2
+	wait 0.2s
 
-	// 10. Sprite::SetGraphicEffect	
+	// 10. Sprite::SetGraphicEffect
 	setGraphicEffect GhostEffect, 50
-	wait 0.2
+	wait 0.2s
 
-	// 11. Sprite::ClearGraphicEffects	
-	clearGraphicEffects()
-	wait 0.2
+	// 11. Sprite::ClearGraphicEffects
+	clearGraphicEffects
+	wait 0.2s
 
 	// 12. Sprite::Hide
-	say "Hide", 0.5	
-	hide()
-	wait 0.2
+	say "Hide", 0.5s
+	hide
+	wait 0.2s
 
-	// 13. Sprite::Show	
-	show()
-	say "Show", 0.5
+	// 13. Sprite::Show
+	show
+	say "Show", 0.5s
 
 	// TODO tanjp check
 	// 14. Sprite::SetLayer	Back
-	setLayer(Back)
-	wait 0.1
-	
+	setLayer Back
+	wait 0.1s
+
 	// 15.  Sprite::SetLayer Front
-	setLayer(Front)
-	wait 0.1
-	
-	// 16. Sprite::GoBackLayers	
-	setLayer( Backward,1)
-	wait 0.1
-	
-	// 17. Game::SetBackdrop	
-	setBackdrop("backdrop1")
-	wait 0.1
+	setLayer Front
+	wait 0.1s
 
-	// 18. Game::BackdropIndex	
+	// 16. Sprite::GoBackLayers
+	setLayer Backward, 1
+	wait 0.1s
+
+	// 17. Game::SetBackdrop
+	setBackdrop "backdrop1"
+	wait 0.1s
+
+	// 18. Game::BackdropIndex
 	assertFloat(float64(backdropIndex()), 0, "Game::BackdropIndex")
-	wait 0.1
+	wait 0.1s
 
-	// 19. Game::SetBackdrop Next	
-	SetBackdrop(Next)
-	wait 0.1
+	// 19. Game::SetBackdrop Next
+	setBackdrop Next
+	wait 0.1s
 	assertFloat(float64(backdropIndex()), 1, "Game::BackdropIndex")
-	setBackdrop("backdrop1")
-	wait 0.1
+
+	setBackdrop "backdrop1"
+	wait 0.1s
 	assertFloat(float64(backdropIndex()), 0, "Game::BackdropIndex")
-	wait 0.1
 
+	wait 0.1s
 
-    onTestDone(this)
+	onTestDone(this)
 }

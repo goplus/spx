@@ -126,6 +126,12 @@ type Target = any
 // Seconds is a time duration in seconds
 type Seconds = float64
 
+const (
+	// literals with unit for Seconds type.
+	// You can use 1s, 0.5s, 100ms, etc.
+	XGou_Seconds = "s=1,ms=0.001"
+)
+
 // Speed is a motion speed multiplier, where 1 is the default speed
 type Speed = float64
 

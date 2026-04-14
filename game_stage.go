@@ -150,15 +150,15 @@ func (p *Game) Username() string {
 	return ""
 }
 
-func (p *Game) WaitNextFrame() float64 {
+func (p *Game) WaitNextFrame() Seconds {
 	return engine.WaitNextFrame()
 }
 
-func (p *Game) Wait(secs float64) {
+func (p *Game) Wait(secs Seconds) {
 	engine.Wait(secs)
 }
 
-func (p *Game) Timer() float64 {
+func (p *Game) Timer() Seconds {
 	return itime.Timer()
 }
 
