@@ -22,7 +22,7 @@ func TestMotionOptions(t *testing.T) {
 	tests := []struct {
 		name          string
 		opts          *MotionOptions
-		wantSpeed     float64
+		wantSpeed     Speed
 		wantAnimation SpriteAnimationName
 	}{
 		{

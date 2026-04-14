@@ -73,7 +73,7 @@ func (p *SpriteImpl) TouchingWith(target Target) bool {
 	return p.touching(target)
 }
 
-func (p *SpriteImpl) touching(obj any) bool {
+func (p *SpriteImpl) touching(obj Target) bool {
 	if !p.spriteState.IsVisible || p.spriteState.IsDying {
 		return false
 	}

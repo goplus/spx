@@ -87,7 +87,7 @@ func (p *SpriteImpl) doStepTo(obj any, speed float64, animation SpriteAnimationN
 	p.transform().StepToPos(x, y, speed, animation)
 }
 
-func motionOptions(opts *MotionOptions) (speed float64, animation SpriteAnimationName) {
+func motionOptions(opts *MotionOptions) (speed Speed, animation SpriteAnimationName) {
 	speed = 1
 	if opts == nil {
 		return
@@ -149,7 +149,7 @@ func (p *SpriteImpl) StepTo__b(x, y, speed float64, animation SpriteAnimationNam
 	p.transform().StepToPos(x, y, speed, animation)
 }
 
-func (p *SpriteImpl) StepToTarget(target any, __xgo_optional_opts *MotionOptions) {
+func (p *SpriteImpl) StepToTarget(target Target, __xgo_optional_opts *MotionOptions) {
 	speed, animation := motionOptions(__xgo_optional_opts)
 	p.doStepTo(target, speed, animation)
 }
@@ -161,7 +161,7 @@ func (p *SpriteImpl) StepToXYpos(x, y float64, __xgo_optional_opts *MotionOption
 	p.transform().StepToPos(x, y, speed, animation)
 }
 
-func (p *SpriteImpl) doGlideTo(obj any, secs float64) {
+func (p *SpriteImpl) doGlideTo(obj Target, secs Seconds) {
 	if isDebugInstrEnabled() {
 		spxlog.Debug("Glide: obj=%v, secs=%v", obj, secs)
 	}
@@ -169,29 +169,28 @@ func (p *SpriteImpl) doGlideTo(obj any, secs float64) {
 	p.transform().Glide(x, y, secs)
 }
 
-func (p *SpriteImpl) Glide__0(sprite Sprite, secs float64) {
+func (p *SpriteImpl) Glide__0(sprite Sprite, secs Seconds) {
 	p.doGlideTo(sprite, secs)
 }
 
-func (p *SpriteImpl) Glide__1(sprite SpriteName, secs float64) {
+func (p *SpriteImpl) Glide__1(sprite SpriteName, secs Seconds) {
 	p.doGlideTo(sprite, secs)
 }
 
-func (p *SpriteImpl) Glide__2(obj specialObj, secs float64) {
+func (p *SpriteImpl) Glide__2(obj specialObj, secs Seconds) {
 	p.doGlideTo(obj, secs)
 }
 
-func (p *SpriteImpl) Glide__3(pos Pos, secs float64) {
+func (p *SpriteImpl) Glide__3(pos Pos, secs Seconds) {
 	p.doGlideTo(pos, secs)
 }
 
-func (p *SpriteImpl) Glide__4(x, y float64, secs float64) {
+func (p *SpriteImpl) Glide__4(x, y float64, secs Seconds) {
 	p.transform().Glide(x, y, secs)
 }
 
 func (p *SpriteImpl) GlideToTarget(target Target, secs Seconds) {
-	x, y := p.g.objectPos(target)
-	p.transform().Glide(x, y, secs)
+	p.doGlideTo(target, secs)
 }
 
 func (p *SpriteImpl) GlideToXYpos(x, y float64, secs Seconds) {

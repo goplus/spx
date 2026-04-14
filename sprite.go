@@ -120,7 +120,7 @@ const (
 // VarName identifies a monitor variable by name.
 type VarName = string
 
-// Target can be a Sprite, SpriteName, specialObj, or Pos (Random).
+// Target can be a Sprite, SpriteName, specialObj (Mouse), or Pos (Random).
 type Target = any
 
 // Seconds is a time duration in seconds
@@ -129,6 +129,7 @@ type Seconds = float64
 // Speed is a motion speed multiplier, where 1 is the default speed
 type Speed = float64
 
+// XGo method overloads for Sprite interface
 const (
 	XGoo_Sprite_GlideWith    = ".GlideToTarget,.GlideToXYpos"
 	XGoo_Sprite_StepToWith   = ".StepToTarget,.StepToXYpos"
