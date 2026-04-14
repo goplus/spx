@@ -78,6 +78,20 @@ func (p *SpriteImpl) doStepTo(obj any, speed float64, animation SpriteAnimationN
 	p.transform().StepToPos(x, y, speed, animation)
 }
 
+func motionOptions(opts *MotionOptions) (speed float64, animation SpriteAnimationName) {
+	speed = 1
+	if opts == nil {
+		return
+	}
+	if opts.Speed > 0 {
+		speed = opts.Speed
+	} else if opts.Speed < 0 {
+		spxlog.Warn("MotionOptions.Speed=%v is negative, defaulting to 1", opts.Speed)
+	}
+	animation = opts.Animation
+	return
+}
+
 func (p *SpriteImpl) StepTo__0(sprite Sprite) {
 	p.doStepTo(sprite, 1, "")
 }

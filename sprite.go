@@ -31,6 +31,15 @@ type layerAction int
 
 type dirAction int
 
+// MotionOptions groups optional motion parameters so XGo callers can use kwargs.
+type MotionOptions struct {
+	// Speed scales motion playback. A zero value keeps the default speed (1),
+	// and negative values are ignored.
+	Speed float64
+	// Animation overrides the default state animation used for the motion.
+	Animation SpriteAnimationName
+}
+
 // -----------------------------------------------------------------------------
 // Constants
 // -----------------------------------------------------------------------------
@@ -147,6 +156,8 @@ type Sprite interface {
 	Step__0(step float64)
 	Step__1(step float64, speed float64)
 	Step__2(step float64, speed float64, animation SpriteAnimationName)
+	StepWith__0(step float64)
+	StepWith__1(step float64, opts *MotionOptions)
 	StepTo__0(sprite Sprite)
 	StepTo__1(sprite SpriteName)
 	StepTo__2(obj specialObj)
@@ -159,6 +170,9 @@ type Sprite interface {
 	StepTo__9(sprite SpriteName, speed float64, animation SpriteAnimationName)
 	StepTo__a(obj specialObj, speed float64, animation SpriteAnimationName)
 	StepTo__b(x, y, speed float64, animation SpriteAnimationName)
+	StepToWith__0(target any)
+	StepToWith__1(target any, opts *MotionOptions)
+	StepToWith__2(x, y float64, opts *MotionOptions)
 	Glide__0(sprite Sprite, secs float64)
 	Glide__1(sprite SpriteName, secs float64)
 	Glide__2(obj specialObj, secs float64)
@@ -185,6 +199,10 @@ type Sprite interface {
 	TurnTo__9(target SpriteName, speed float64, animation SpriteAnimationName)
 	TurnTo__a(dir Direction, speed float64, animation SpriteAnimationName)
 	TurnTo__b(target specialObj, speed float64, animation SpriteAnimationName)
+	TurnWith__0(dir Direction)
+	TurnWith__1(dir Direction, opts *MotionOptions)
+	TurnToWith__0(target any)
+	TurnToWith__1(target any, opts *MotionOptions)
 	BounceOffEdge()
 
 	// Size Methods
