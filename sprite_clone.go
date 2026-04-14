@@ -26,13 +26,18 @@ import (
 )
 
 func (p *SpriteImpl) Clone__0() {
-	p.Clone__1(nil)
+	p.CloneWith(nil)
 }
 
 func (p *SpriteImpl) Clone__1(data any) {
-	doClone(p.sprite, data, false, nil)
+	p.CloneWith(data)
 }
 
+func (p *SpriteImpl) CloneWith(__xgo_optional_data any) {
+	doClone(p.sprite, __xgo_optional_data, false, nil)
+}
+
+// TODO(xsw): use classfile clone mechanism instead of reflection.
 func doClone(sprite Sprite, data any, isAsync bool, onCloned func(sprite *SpriteImpl)) {
 	if sprite == nil {
 		spxlog.Panicf("doClone: sprite is nil")

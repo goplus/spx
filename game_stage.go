@@ -295,7 +295,7 @@ func (p *Game) touchingSpriteBy(dst *SpriteImpl, name string) *SpriteImpl {
 	return p.findTouchingSpriteOptimized(dst, name)
 }
 
-func (p *Game) objectPos(obj any) (float64, float64) {
+func (p *Game) objectPos(obj Target) (float64, float64) {
 	switch v := obj.(type) {
 	case SpriteName:
 		if sp := p.shapeMgr.findSprite(v); sp != nil {

@@ -106,16 +106,23 @@ func (p *SpriteImpl) ClearGraphicEffects() {
 // Layer
 // -----------------------------------------------------------------------------
 func (p *SpriteImpl) SetLayer__0(layer layerAction) {
+	p.SetLayerTo(layer)
+}
+
+func (p *SpriteImpl) SetLayer__1(dir dirAction, delta int) {
+	p.ChangeLayer(dir, delta)
+}
+
+func (p *SpriteImpl) SetLayerTo(layer layerAction) {
 	switch layer {
 	case Front:
 		p.g.gotoFront(p)
 	case Back:
 		p.g.gotoBack(p)
 	}
-
 }
 
-func (p *SpriteImpl) SetLayer__1(dir dirAction, delta int) {
+func (p *SpriteImpl) ChangeLayer(dir dirAction, delta int) {
 	switch dir {
 	case Forward:
 		p.g.goBackLayers(p, -delta)

@@ -44,6 +44,10 @@ func (p *SpriteImpl) DistanceTo__3(pos Pos) float64 {
 	return p.transform().DistanceTo(pos)
 }
 
+func (p *SpriteImpl) DistanceToWith(target Target) float64 {
+	return p.transform().DistanceTo(target)
+}
+
 // -----------------------------------------------------------------------------
 // Movement
 // -----------------------------------------------------------------------------
@@ -70,12 +74,31 @@ func (p *SpriteImpl) Step__2(step float64, speed float64, animation SpriteAnimat
 	p.transform().Step(step, speed, animation)
 }
 
+func (p *SpriteImpl) StepWith(step float64, __xgo_optional_opts *MotionOptions) {
+	speed, animation := motionOptions(__xgo_optional_opts)
+	p.transform().Step(step, speed, animation)
+}
+
 func (p *SpriteImpl) doStepTo(obj any, speed float64, animation SpriteAnimationName) {
 	if isDebugInstrEnabled() {
 		spxlog.Debug("Goto: sprite=%s, obj=%v", p.name, obj)
 	}
 	x, y := p.g.objectPos(obj)
 	p.transform().StepToPos(x, y, speed, animation)
+}
+
+func motionOptions(opts *MotionOptions) (speed Speed, animation SpriteAnimationName) {
+	speed = 1
+	if opts == nil {
+		return
+	}
+	if opts.Speed > 0 {
+		speed = opts.Speed
+	} else if opts.Speed < 0 {
+		spxlog.Warn("MotionOptions.Speed=%v is negative, defaulting to 1", opts.Speed)
+	}
+	animation = opts.Animation
+	return
 }
 
 func (p *SpriteImpl) StepTo__0(sprite Sprite) {
@@ -126,7 +149,19 @@ func (p *SpriteImpl) StepTo__b(x, y, speed float64, animation SpriteAnimationNam
 	p.transform().StepToPos(x, y, speed, animation)
 }
 
-func (p *SpriteImpl) doGlideTo(obj any, secs float64) {
+func (p *SpriteImpl) StepToTarget(target Target, __xgo_optional_opts *MotionOptions) {
+	speed, animation := motionOptions(__xgo_optional_opts)
+	p.doStepTo(target, speed, animation)
+}
+
+func (p *SpriteImpl) StepToXYpos(x, y float64, __xgo_optional_opts *MotionOptions) {
+	speed, animation := motionOptions(__xgo_optional_opts)
+	// Coordinate overloads already have their target position, so they mirror
+	// the positional StepTo variants and intentionally skip doStepTo's logging.
+	p.transform().StepToPos(x, y, speed, animation)
+}
+
+func (p *SpriteImpl) doGlideTo(obj Target, secs Seconds) {
 	if isDebugInstrEnabled() {
 		spxlog.Debug("Glide: obj=%v, secs=%v", obj, secs)
 	}
@@ -134,23 +169,31 @@ func (p *SpriteImpl) doGlideTo(obj any, secs float64) {
 	p.transform().Glide(x, y, secs)
 }
 
-func (p *SpriteImpl) Glide__0(sprite Sprite, secs float64) {
+func (p *SpriteImpl) Glide__0(sprite Sprite, secs Seconds) {
 	p.doGlideTo(sprite, secs)
 }
 
-func (p *SpriteImpl) Glide__1(sprite SpriteName, secs float64) {
+func (p *SpriteImpl) Glide__1(sprite SpriteName, secs Seconds) {
 	p.doGlideTo(sprite, secs)
 }
 
-func (p *SpriteImpl) Glide__2(obj specialObj, secs float64) {
+func (p *SpriteImpl) Glide__2(obj specialObj, secs Seconds) {
 	p.doGlideTo(obj, secs)
 }
 
-func (p *SpriteImpl) Glide__3(pos Pos, secs float64) {
+func (p *SpriteImpl) Glide__3(pos Pos, secs Seconds) {
 	p.doGlideTo(pos, secs)
 }
 
-func (p *SpriteImpl) Glide__4(x, y float64, secs float64) {
+func (p *SpriteImpl) Glide__4(x, y float64, secs Seconds) {
+	p.transform().Glide(x, y, secs)
+}
+
+func (p *SpriteImpl) GlideToTarget(target Target, secs Seconds) {
+	p.doGlideTo(target, secs)
+}
+
+func (p *SpriteImpl) GlideToXYpos(x, y float64, secs Seconds) {
 	p.transform().Glide(x, y, secs)
 }
 
@@ -209,6 +252,11 @@ func (p *SpriteImpl) Turn__2(dir Direction, speed float64, animation SpriteAnima
 	p.transform().Turn(dir, speed, animation)
 }
 
+func (p *SpriteImpl) TurnWith(dir Direction, __xgo_optional_opts *MotionOptions) {
+	speed, animation := motionOptions(__xgo_optional_opts)
+	p.transform().Turn(dir, speed, animation)
+}
+
 func (p *SpriteImpl) TurnTo__0(target Sprite) {
 	p.transform().TurnTo(target, 1, "")
 }
@@ -254,6 +302,16 @@ func (p *SpriteImpl) TurnTo__a(dir Direction, speed float64, animation SpriteAni
 }
 
 func (p *SpriteImpl) TurnTo__b(target specialObj, speed float64, animation SpriteAnimationName) {
+	p.transform().TurnTo(target, speed, animation)
+}
+
+func (p *SpriteImpl) TurnToDir(dir Direction, __xgo_optional_opts *MotionOptions) {
+	speed, animation := motionOptions(__xgo_optional_opts)
+	p.transform().TurnTo(dir, speed, animation)
+}
+
+func (p *SpriteImpl) TurnToTarget(target Target, __xgo_optional_opts *MotionOptions) {
+	speed, animation := motionOptions(__xgo_optional_opts)
 	p.transform().TurnTo(target, speed, animation)
 }
 

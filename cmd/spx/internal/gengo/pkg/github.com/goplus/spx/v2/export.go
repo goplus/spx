@@ -93,6 +93,7 @@ func init() {
 			"Game":            reflect.TypeOf((*q.Game)(nil)).Elem(),
 			"List":            reflect.TypeOf((*q.List)(nil)).Elem(),
 			"Monitor":         reflect.TypeOf((*q.Monitor)(nil)).Elem(),
+			"MotionOptions":   reflect.TypeOf((*q.MotionOptions)(nil)).Elem(),
 			"PenColorParam":   reflect.TypeOf((*q.PenColorParam)(nil)).Elem(),
 			"RotationStyle":   reflect.TypeOf((*q.RotationStyle)(nil)).Elem(),
 			"SoundEffectKind": reflect.TypeOf((*q.SoundEffectKind)(nil)).Elem(),
@@ -312,7 +313,7 @@ func init() {
 		},
 		UntypedConsts: map[string]ixgo.UntypedConst{
 			"All":        {Typ: "untyped int", Value: constant.MakeInt64(int64(q.All))},
-			"GopPackage": {Typ: "untyped bool", Value: constant.MakeBool(bool(q.GopPackage))},
+			"XGoPackage": {Typ: "untyped bool", Value: constant.MakeBool(bool(q.XGoPackage))},
 			"Gop_sched":  {Typ: "untyped string", Value: constant.MakeString(string(q.Gop_sched))},
 		},
 	})

@@ -47,55 +47,71 @@ func (p *SpriteImpl) Ask(msg any) {
 }
 
 func (p *SpriteImpl) Say__0(msg any) {
-	p.Say__1(msg, 0)
+	p.SayWith(msg, 0)
 }
 
-func (p *SpriteImpl) Say__1(msg any, secs float64) {
+func (p *SpriteImpl) Say__1(msg any, secs Seconds) {
+	p.SayWith(msg, secs)
+}
+
+func (p *SpriteImpl) SayWith(msg any, __xgo_optional_secs Seconds) {
 	if isDebugInstrEnabled() {
-		spxlog.Debug("Say: sprite=%s, msg=%v, secs=%v", p.name, msg, secs)
+		spxlog.Debug("Say: sprite=%s, msg=%v, secs=%v", p.name, msg, __xgo_optional_secs)
 	}
 	p.sayOrThink(msg, ui.StyleSay)
-	if secs > 0 {
-		p.waitStopText(secs)
+	if __xgo_optional_secs > 0 {
+		p.waitStopText(__xgo_optional_secs)
 	}
 }
 
 func (p *SpriteImpl) Think__0(msg any) {
-	p.Think__1(msg, 0)
+	p.ThinkWith(msg, 0)
 }
 
-func (p *SpriteImpl) Think__1(msg any, secs float64) {
+func (p *SpriteImpl) Think__1(msg any, secs Seconds) {
+	p.ThinkWith(msg, secs)
+}
+
+func (p *SpriteImpl) ThinkWith(msg any, __xgo_optional_secs Seconds) {
 	if isDebugInstrEnabled() {
-		spxlog.Debug("Think: sprite=%s, msg=%v, secs=%v", p.name, msg, secs)
+		spxlog.Debug("Think: sprite=%s, msg=%v, secs=%v", p.name, msg, __xgo_optional_secs)
 	}
 	p.sayOrThink(msg, ui.StyleThink)
-	if secs > 0 {
-		p.waitStopText(secs)
+	if __xgo_optional_secs > 0 {
+		p.waitStopText(__xgo_optional_secs)
 	}
 }
 
 func (p *SpriteImpl) Quote__0(message string) {
+	p.QuoteMsg(message, 0)
+}
+
+func (p *SpriteImpl) Quote__1(message string, secs Seconds) {
+	p.QuoteMsg(message, secs)
+}
+
+func (p *SpriteImpl) Quote__2(message, description string) {
+	p.QuoteMsgEx(message, description, 0)
+}
+
+func (p *SpriteImpl) Quote__3(message, description string, secs Seconds) {
+	p.QuoteMsgEx(message, description, secs)
+}
+
+func (p *SpriteImpl) QuoteMsg(message string, __xgo_optional_secs Seconds) {
 	if message == "" {
 		p.doStopQuote()
 		return
 	}
-	p.Quote__2(message, "")
+	p.QuoteMsgEx(message, "", __xgo_optional_secs)
 }
 
-func (p *SpriteImpl) Quote__1(message string, secs float64) {
-	p.Quote__3(message, "", secs)
-}
-
-func (p *SpriteImpl) Quote__2(message, description string) {
-	p.Quote__3(message, description, 0)
-}
-
-func (p *SpriteImpl) Quote__3(message, description string, secs float64) {
+func (p *SpriteImpl) QuoteMsgEx(message, description string, __xgo_optional_secs Seconds) {
 	if isDebugInstrEnabled() {
-		spxlog.Debug("Quote: sprite=%s, message=%s, description=%s, secs=%v", p.name, message, description, secs)
+		spxlog.Debug("Quote: sprite=%s, message=%s, description=%s, secs=%v", p.name, message, description, __xgo_optional_secs)
 	}
 	p.quote(message, description)
-	if secs > 0 {
-		p.waitStopQuote(secs)
+	if __xgo_optional_secs > 0 {
+		p.waitStopQuote(__xgo_optional_secs)
 	}
 }
