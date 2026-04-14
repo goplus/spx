@@ -44,6 +44,10 @@ func (p *SpriteImpl) DistanceTo__3(pos Pos) float64 {
 	return p.transform().DistanceTo(pos)
 }
 
+func (p *SpriteImpl) DistanceToWith(target Target) float64 {
+	return p.transform().DistanceTo(target)
+}
+
 // -----------------------------------------------------------------------------
 // Movement
 // -----------------------------------------------------------------------------
@@ -67,6 +71,11 @@ func (p *SpriteImpl) Step__1(step float64, speed float64) {
 }
 
 func (p *SpriteImpl) Step__2(step float64, speed float64, animation SpriteAnimationName) {
+	p.transform().Step(step, speed, animation)
+}
+
+func (p *SpriteImpl) StepWith(step float64, __xgo_optional_opts *MotionOptions) {
+	speed, animation := motionOptions(__xgo_optional_opts)
 	p.transform().Step(step, speed, animation)
 }
 
@@ -140,6 +149,18 @@ func (p *SpriteImpl) StepTo__b(x, y, speed float64, animation SpriteAnimationNam
 	p.transform().StepToPos(x, y, speed, animation)
 }
 
+func (p *SpriteImpl) StepToTarget(target any, __xgo_optional_opts *MotionOptions) {
+	speed, animation := motionOptions(__xgo_optional_opts)
+	p.doStepTo(target, speed, animation)
+}
+
+func (p *SpriteImpl) StepToXYpos(x, y float64, __xgo_optional_opts *MotionOptions) {
+	speed, animation := motionOptions(__xgo_optional_opts)
+	// Coordinate overloads already have their target position, so they mirror
+	// the positional StepTo variants and intentionally skip doStepTo's logging.
+	p.transform().StepToPos(x, y, speed, animation)
+}
+
 func (p *SpriteImpl) doGlideTo(obj any, secs float64) {
 	if isDebugInstrEnabled() {
 		spxlog.Debug("Glide: obj=%v, secs=%v", obj, secs)
@@ -165,6 +186,15 @@ func (p *SpriteImpl) Glide__3(pos Pos, secs float64) {
 }
 
 func (p *SpriteImpl) Glide__4(x, y float64, secs float64) {
+	p.transform().Glide(x, y, secs)
+}
+
+func (p *SpriteImpl) GlideToTarget(target Target, secs Seconds) {
+	x, y := p.g.objectPos(target)
+	p.transform().Glide(x, y, secs)
+}
+
+func (p *SpriteImpl) GlideToXYpos(x, y float64, secs Seconds) {
 	p.transform().Glide(x, y, secs)
 }
 
@@ -223,6 +253,11 @@ func (p *SpriteImpl) Turn__2(dir Direction, speed float64, animation SpriteAnima
 	p.transform().Turn(dir, speed, animation)
 }
 
+func (p *SpriteImpl) TurnWith(dir Direction, __xgo_optional_opts *MotionOptions) {
+	speed, animation := motionOptions(__xgo_optional_opts)
+	p.transform().Turn(dir, speed, animation)
+}
+
 func (p *SpriteImpl) TurnTo__0(target Sprite) {
 	p.transform().TurnTo(target, 1, "")
 }
@@ -268,6 +303,16 @@ func (p *SpriteImpl) TurnTo__a(dir Direction, speed float64, animation SpriteAni
 }
 
 func (p *SpriteImpl) TurnTo__b(target specialObj, speed float64, animation SpriteAnimationName) {
+	p.transform().TurnTo(target, speed, animation)
+}
+
+func (p *SpriteImpl) TurnToDir(dir Direction, __xgo_optional_opts *MotionOptions) {
+	speed, animation := motionOptions(__xgo_optional_opts)
+	p.transform().TurnTo(dir, speed, animation)
+}
+
+func (p *SpriteImpl) TurnToTarget(target Target, __xgo_optional_opts *MotionOptions) {
+	speed, animation := motionOptions(__xgo_optional_opts)
 	p.transform().TurnTo(target, speed, animation)
 }
 

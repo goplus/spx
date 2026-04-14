@@ -6,13 +6,14 @@
 # OS
 #index_pack.json
 .DS_Store
+log.txt
 
 # Tool cache
 /.gocache/
 
 # Builds
 /go.work
-/xgo_autogen.go
+xgo_autogen*.go
 *.exe
 *.exe~
 *.dll
@@ -34,12 +35,6 @@
 tutorial/**/.temp/
 tutorial/**/project/
 tutorial/**/.gdspx_web_server*.pid
-tutorial/**/go.mod
-tutorial/**/go.sum
-tutorial/**/gox.mod
 test/**/.temp/
 test/**/project/
 test/**/.gdspx_web_server*.pid
-test/**/go.mod
-test/**/go.sum
-test/**/gox.mod

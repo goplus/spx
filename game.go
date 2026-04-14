@@ -36,8 +36,11 @@ import (
 )
 
 const (
-	GopPackage = true
-	Gop_sched  = "Sched,SchedNow"
+	XGoPackage = true
+)
+
+const (
+	Gop_sched = "Sched,SchedNow"
 )
 
 var (

@@ -39,6 +39,10 @@ func (p *SpriteImpl) Play__1(name SoundName, loop bool) {
 	p.sound().Play(name, loop)
 }
 
+func (p *SpriteImpl) PlayWith(name SoundName, __xgo_optional_loop bool) {
+	p.sound().Play(name, __xgo_optional_loop)
+}
+
 func (p *SpriteImpl) PlayAndWait(name SoundName) {
 	p.sound().PlayAndWait(name)
 }

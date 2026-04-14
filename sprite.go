@@ -35,7 +35,8 @@ type dirAction int
 type MotionOptions struct {
 	// Speed scales motion playback. A zero value keeps the default speed (1),
 	// and negative values are ignored.
-	Speed float64
+	Speed Speed
+
 	// Animation overrides the default state animation used for the motion.
 	Animation SpriteAnimationName
 }
@@ -116,6 +117,26 @@ const (
 	OtherScriptsInSprite StopKind = coreevent.OtherScriptsInSprite
 )
 
+// VarName identifies a monitor variable by name.
+type VarName = string
+
+// Target can be a Sprite, SpriteName, specialObj, or Pos (Random).
+type Target = any
+
+// Seconds is a time duration in seconds
+type Seconds = float64
+
+// Speed is a motion speed multiplier, where 1 is the default speed
+type Speed = float64
+
+const (
+	XGoo_Sprite_GlideWith    = ".GlideToTarget,.GlideToXYpos"
+	XGoo_Sprite_StepToWith   = ".StepToTarget,.StepToXYpos"
+	XGoo_Sprite_TurnToWith   = ".TurnToDir,.TurnToTarget"
+	XGoo_Sprite_SetLayerWith = ".SetLayerTo,.ChangeLayer"
+	XGoo_Sprite_QuoteWith    = ".QuoteMsg,.QuoteMsgEx"
+)
+
 // -----------------------------------------------------------------------------
 // Sprite Interface
 // -----------------------------------------------------------------------------
@@ -127,20 +148,24 @@ type Sprite interface {
 	Main()
 	Name() string
 	IsCloned() bool
+
 	Clone__0()
 	Clone__1(data any)
+
+	CloneWith(__xgo_optional_data any)
+
 	DeleteThisClone()
 	Destroy()
 	Die()
-	DeltaTime() float64
-	TimeSinceLevelLoad() float64
+	DeltaTime() Seconds
+	TimeSinceLevelLoad() Seconds
 
 	// Visibility Methods
 	Hide()
 	Show()
 	Visible() bool
-	HideVar(name string)
-	ShowVar(name string)
+	HideVar(name VarName)
+	ShowVar(name VarName)
 
 	// Position Methods
 	Xpos() float64
@@ -154,55 +179,64 @@ type Sprite interface {
 
 	// Movement Methods
 	Step__0(step float64)
-	Step__1(step float64, speed float64)
-	Step__2(step float64, speed float64, animation SpriteAnimationName)
-	StepWith__0(step float64)
-	StepWith__1(step float64, opts *MotionOptions)
+	Step__1(step float64, speed Speed)
+	Step__2(step float64, speed Speed, animation SpriteAnimationName)
+
+	StepWith(step float64, __xgo_optional_opts *MotionOptions)
+
 	StepTo__0(sprite Sprite)
 	StepTo__1(sprite SpriteName)
 	StepTo__2(obj specialObj)
 	StepTo__3(x, y float64)
-	StepTo__4(sprite Sprite, speed float64)
-	StepTo__5(sprite SpriteName, speed float64)
-	StepTo__6(obj specialObj, speed float64)
-	StepTo__7(x, y, speed float64)
-	StepTo__8(sprite Sprite, speed float64, animation SpriteAnimationName)
-	StepTo__9(sprite SpriteName, speed float64, animation SpriteAnimationName)
-	StepTo__a(obj specialObj, speed float64, animation SpriteAnimationName)
-	StepTo__b(x, y, speed float64, animation SpriteAnimationName)
-	StepToWith__0(target any)
-	StepToWith__1(target any, opts *MotionOptions)
-	StepToWith__2(x, y float64, opts *MotionOptions)
-	Glide__0(sprite Sprite, secs float64)
-	Glide__1(sprite SpriteName, secs float64)
-	Glide__2(obj specialObj, secs float64)
-	Glide__3(pos Pos, secs float64)
-	Glide__4(x, y float64, secs float64)
+	StepTo__4(sprite Sprite, speed Speed)
+	StepTo__5(sprite SpriteName, speed Speed)
+	StepTo__6(obj specialObj, speed Speed)
+	StepTo__7(x, y, speed Speed)
+	StepTo__8(sprite Sprite, speed Speed, animation SpriteAnimationName)
+	StepTo__9(sprite SpriteName, speed Speed, animation SpriteAnimationName)
+	StepTo__a(obj specialObj, speed Speed, animation SpriteAnimationName)
+	StepTo__b(x, y, speed Speed, animation SpriteAnimationName)
+
+	StepToTarget(target Target, __xgo_optional_opts *MotionOptions)
+	StepToXYpos(x, y float64, __xgo_optional_opts *MotionOptions)
+
+	Glide__0(sprite Sprite, secs Seconds)
+	Glide__1(sprite SpriteName, secs Seconds)
+	Glide__2(obj specialObj, secs Seconds)
+	Glide__3(pos Pos, secs Seconds)
+	Glide__4(x, y float64, secs Seconds)
+
+	GlideToTarget(target Target, secs Seconds)
+	GlideToXYpos(x, y float64, secs Seconds)
 
 	// Heading and Rotation Methods
 	Heading() Direction
 	SetHeading(dir Direction)
 	ChangeHeading(dir Direction)
 	SetRotationStyle(style RotationStyle)
+
 	Turn__0(dir Direction)
-	Turn__1(dir Direction, speed float64)
-	Turn__2(dir Direction, speed float64, animation SpriteAnimationName)
+	Turn__1(dir Direction, speed Speed)
+	Turn__2(dir Direction, speed Speed, animation SpriteAnimationName)
+
+	TurnWith(dir Direction, __xgo_optional_opts *MotionOptions)
+
 	TurnTo__0(target Sprite)
 	TurnTo__1(target SpriteName)
 	TurnTo__2(dir Direction)
 	TurnTo__3(target specialObj)
-	TurnTo__4(target Sprite, speed float64)
-	TurnTo__5(target SpriteName, speed float64)
-	TurnTo__6(dir Direction, speed float64)
-	TurnTo__7(target specialObj, speed float64)
-	TurnTo__8(target Sprite, speed float64, animation SpriteAnimationName)
-	TurnTo__9(target SpriteName, speed float64, animation SpriteAnimationName)
-	TurnTo__a(dir Direction, speed float64, animation SpriteAnimationName)
-	TurnTo__b(target specialObj, speed float64, animation SpriteAnimationName)
-	TurnWith__0(dir Direction)
-	TurnWith__1(dir Direction, opts *MotionOptions)
-	TurnToWith__0(target any)
-	TurnToWith__1(target any, opts *MotionOptions)
+	TurnTo__4(target Sprite, speed Speed)
+	TurnTo__5(target SpriteName, speed Speed)
+	TurnTo__6(dir Direction, speed Speed)
+	TurnTo__7(target specialObj, speed Speed)
+	TurnTo__8(target Sprite, speed Speed, animation SpriteAnimationName)
+	TurnTo__9(target SpriteName, speed Speed, animation SpriteAnimationName)
+	TurnTo__a(dir Direction, speed Speed, animation SpriteAnimationName)
+	TurnTo__b(target specialObj, speed Speed, animation SpriteAnimationName)
+
+	TurnToDir(dir Direction, __xgo_optional_opts *MotionOptions)
+	TurnToTarget(target Target, __xgo_optional_opts *MotionOptions)
+
 	BounceOffEdge()
 
 	// Size Methods
@@ -214,9 +248,13 @@ type Sprite interface {
 	SetLayer__0(layer layerAction)
 	SetLayer__1(dir dirAction, delta int)
 
+	SetLayerTo(layer layerAction)
+	ChangeLayer(dir dirAction, delta int)
+
 	// Costume Methods
 	CostumeName() SpriteCostumeName
 	CostumeIndex() int
+
 	SetCostume__0(costume SpriteCostumeName)
 	SetCostume__1(index float64)
 	SetCostume__2(index int)
@@ -225,6 +263,8 @@ type Sprite interface {
 	// Animation Methods
 	Animate__0(name SpriteAnimationName)
 	Animate__1(name SpriteAnimationName, loop bool)
+
+	AnimateWith(name SpriteAnimationName, __xgo_optional_loop bool)
 	AnimateAndWait(name SpriteAnimationName)
 	StopAnimation(name SpriteAnimationName)
 
@@ -236,8 +276,10 @@ type Sprite interface {
 	// Pen Methods
 	PenDown()
 	PenUp()
+
 	SetPenColor__0(color Color)
 	SetPenColor__1(kind PenColorParam, value float64)
+
 	ChangePenColor(kind PenColorParam, delta float64)
 	SetPenSize(size float64)
 	ChangePenSize(delta float64)
@@ -248,25 +290,41 @@ type Sprite interface {
 	DistanceTo__1(sprite SpriteName) float64
 	DistanceTo__2(obj specialObj) float64
 	DistanceTo__3(pos Pos) float64
+
+	DistanceToWith(target Target) float64
+
 	Touching__0(sprite Sprite) bool
 	Touching__1(sprite SpriteName) bool
 	Touching__2(obj specialObj) bool
+
+	TouchingWith(target Target) bool
 	TouchingColor(color Color) bool
 
 	// Communication Methods
 	Say__0(msg any)
-	Say__1(msg any, secs float64)
+	Say__1(msg any, secs Seconds)
+
+	SayWith(msg any, __xgo_optional_secs Seconds)
+
 	Think__0(msg any)
-	Think__1(msg any, secs float64)
+	Think__1(msg any, secs Seconds)
+
+	ThinkWith(msg any, __xgo_optional_secs Seconds)
+
 	Ask(msg any)
+
 	Quote__0(message string)
-	Quote__1(message string, secs float64)
+	Quote__1(message string, secs Seconds)
 	Quote__2(message, description string)
-	Quote__3(message, description string, secs float64)
+	Quote__3(message, description string, secs Seconds)
+
+	QuoteMsg(message string, __xgo_optional_secs Seconds)
+	QuoteMsgEx(message, description string, __xgo_optional_secs Seconds)
 
 	// Event Methods
 	OnCloned__0(onCloned func())
 	OnCloned__1(onCloned func(data any))
+
 	OnTouchStart__0(sprite SpriteName, onTouchStart func())
 	OnTouchStart__1(sprite SpriteName, onTouchStart func(Sprite))
 	OnTouchStart__2(sprites []SpriteName, onTouchStart func())
@@ -279,8 +337,11 @@ type Sprite interface {
 	GetSoundEffect(kind SoundEffectKind) float64
 	SetSoundEffect(kind SoundEffectKind, value float64)
 	ChangeSoundEffect(kind SoundEffectKind, delta float64)
+
 	Play__0(name SoundName)
 	Play__1(name SoundName, loop bool)
+
+	PlayWith(name SoundName, __xgo_optional_loop bool)
 	PlayAndWait(name SoundName)
 	PausePlaying(name SoundName)
 	ResumePlaying(name SoundName)
