@@ -192,6 +192,11 @@ func (p *Game) runSpriteCallbacks(inits []Sprite, proj *coreproject.ProjectConfi
 	if proj.Camera != nil {
 		cameraTarget = proj.Camera.On
 	}
+	// Apply the project camera target as an initial default so bootstrap hooks
+	// such as MainEntry/Main/OnLoaded can still override it later.
+	if cameraTarget != "" {
+		p.Camera.Follow__1(cameraTarget)
+	}
 	coreproject.RunSpriteInitializers(coreproject.SpriteInitConfig[Sprite]{
 		Items: inits,
 		BeforeMain: func(ini Sprite) {
@@ -210,9 +215,6 @@ func (p *Game) runSpriteCallbacks(inits []Sprite, proj *coreproject.ProjectConfi
 	})
 	p.deferBootstrapFor(generation, func() {
 		p.setupCollisionLayers(inits)
-		if cameraTarget != "" {
-			p.Camera.Follow__1(cameraTarget)
-		}
 		if onLoaded != nil {
 			onLoaded()
 		}
