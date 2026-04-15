@@ -20,8 +20,8 @@ jobs:
       - name: Download Go modules
         run: go mod download
 
-      - name: Run go generate for pkg/ispx
-        run: go generate ./pkg/ispx/...
+      - name: Run go generate for shared embedded packages
+        run: go generate ./internal/embeddedpkgs
 
       - name: Ensure working tree is clean
         run: git diff --exit-code
