@@ -23,8 +23,10 @@ import (
 
 type SpriteInitConfig[T any] struct {
 	Items      []T
+	Setup      func([]T)
 	BeforeMain func(T)
 	RunMain    func(T)
+	OnLoaded   func()
 }
 
 func WalkZOrder(
@@ -51,13 +53,21 @@ func WalkZOrder(
 }
 
 func RunSpriteInitializers[T any](cfg SpriteInitConfig[T]) {
+	if cfg.Setup != nil {
+		cfg.Setup(cfg.Items)
+	}
 	for _, item := range cfg.Items {
 		if cfg.BeforeMain != nil {
 			cfg.BeforeMain(item)
 		}
+	}
+	for _, item := range cfg.Items {
 		if cfg.RunMain != nil {
 			cfg.RunMain(item)
 		}
+	}
+	if cfg.OnLoaded != nil {
+		cfg.OnLoaded()
 	}
 }
 

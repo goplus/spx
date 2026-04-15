@@ -195,6 +195,9 @@ func (sprite *SpriteImpl) handleAnimationLooped() {
 }
 
 func (sprite *SpriteImpl) applyPhysicsProxyConfig() {
+	if sprite.runtimeState.SyncSprite == nil {
+		return
+	}
 	sprite.physics().applyPhysicsProxyConfig(sprite.runtimeState.SyncSprite)
 }
 

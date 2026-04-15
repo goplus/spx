@@ -48,10 +48,10 @@ func (p *Game) loadIndex(g reflect.Value, proj *coreproject.ProjectConfig, gener
 	p.setupDisplayConfig(proj)
 	p.setupWorldAndWindow(proj)
 	p.setupPlatformAndCamera(proj)
+	p.setupAudioAndTilemap(proj)
 
 	inits := p.loadAndInitSprites(g, proj)
 	p.runSpriteCallbacks(inits, proj, g, generation)
-	p.loadAudioAndTilemap(proj)
 	return
 }
 
@@ -199,6 +199,11 @@ func (p *Game) runSpriteCallbacks(inits []Sprite, proj *coreproject.ProjectConfi
 	}
 	coreproject.RunSpriteInitializers(coreproject.SpriteInitConfig[Sprite]{
 		Items: inits,
+		Setup: func(items []Sprite) {
+			p.deferBootstrapFor(generation, func() {
+				p.setupCollisionLayers(items)
+			})
+		},
 		BeforeMain: func(ini Sprite) {
 			spr := spriteOf(ini)
 			if spr != nil {
@@ -212,19 +217,20 @@ func (p *Game) runSpriteCallbacks(inits []Sprite, proj *coreproject.ProjectConfi
 				runMain(ini.Main)
 			})
 		},
-	})
-	p.deferBootstrapFor(generation, func() {
-		p.setupCollisionLayers(inits)
-		if onLoaded != nil {
-			onLoaded()
-		}
+		OnLoaded: func() {
+			p.deferBootstrapFor(generation, func() {
+				if onLoaded != nil {
+					onLoaded()
+				}
+			})
+		},
 	})
 }
 
 // -----------------------------------------------------------------------------
 // Stage Items
 // -----------------------------------------------------------------------------
-func (p *Game) loadAudioAndTilemap(proj *coreproject.ProjectConfig) {
+func (p *Game) setupAudioAndTilemap(proj *coreproject.ProjectConfig) {
 	p.tilemapMgr.parseTilemap()
 	p.audioState.SoundObj = p.soundMgr.AllocSound()
 	if proj.Bgm != "" {
