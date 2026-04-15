@@ -39,6 +39,9 @@ const (
 // -----------------------------------------------------------------------------
 // Monitor
 // -----------------------------------------------------------------------------
+// Monitor is the concrete runtime widget used for stage monitor entries.
+//
+//xgo:class:resource widget
 type Monitor struct {
 	game        *Game
 	name        WidgetName

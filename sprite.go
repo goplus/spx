@@ -141,6 +141,8 @@ const (
 // -----------------------------------------------------------------------------
 // Sprite Interface
 // -----------------------------------------------------------------------------
+//
+//xgo:class:resource sprite
 type Sprite interface {
 	IEventSinks
 	Shape
@@ -181,6 +183,8 @@ type Sprite interface {
 	// Movement Methods
 	Step__0(step float64)
 	Step__1(step float64, speed Speed)
+
+	//xgo:class:resource-api-scope-binding param.2 receiver
 	Step__2(step float64, speed Speed, animation SpriteAnimationName)
 
 	StepWith(step float64, __xgo_optional_opts *MotionOptions)
@@ -193,9 +197,17 @@ type Sprite interface {
 	StepTo__5(sprite SpriteName, speed Speed)
 	StepTo__6(obj specialObj, speed Speed)
 	StepTo__7(x, y, speed Speed)
+
+	//xgo:class:resource-api-scope-binding param.2 receiver
 	StepTo__8(sprite Sprite, speed Speed, animation SpriteAnimationName)
+
+	//xgo:class:resource-api-scope-binding param.2 receiver
 	StepTo__9(sprite SpriteName, speed Speed, animation SpriteAnimationName)
+
+	//xgo:class:resource-api-scope-binding param.2 receiver
 	StepTo__a(obj specialObj, speed Speed, animation SpriteAnimationName)
+
+	//xgo:class:resource-api-scope-binding param.3 receiver
 	StepTo__b(x, y, speed Speed, animation SpriteAnimationName)
 
 	StepToTarget(target Target, __xgo_optional_opts *MotionOptions)
@@ -218,6 +230,8 @@ type Sprite interface {
 
 	Turn__0(dir Direction)
 	Turn__1(dir Direction, speed Speed)
+
+	//xgo:class:resource-api-scope-binding param.2 receiver
 	Turn__2(dir Direction, speed Speed, animation SpriteAnimationName)
 
 	TurnWith(dir Direction, __xgo_optional_opts *MotionOptions)
@@ -230,9 +244,17 @@ type Sprite interface {
 	TurnTo__5(target SpriteName, speed Speed)
 	TurnTo__6(dir Direction, speed Speed)
 	TurnTo__7(target specialObj, speed Speed)
+
+	//xgo:class:resource-api-scope-binding param.2 receiver
 	TurnTo__8(target Sprite, speed Speed, animation SpriteAnimationName)
+
+	//xgo:class:resource-api-scope-binding param.2 receiver
 	TurnTo__9(target SpriteName, speed Speed, animation SpriteAnimationName)
+
+	//xgo:class:resource-api-scope-binding param.2 receiver
 	TurnTo__a(dir Direction, speed Speed, animation SpriteAnimationName)
+
+	//xgo:class:resource-api-scope-binding param.2 receiver
 	TurnTo__b(target specialObj, speed Speed, animation SpriteAnimationName)
 
 	TurnToDir(dir Direction, __xgo_optional_opts *MotionOptions)
@@ -256,17 +278,27 @@ type Sprite interface {
 	CostumeName() SpriteCostumeName
 	CostumeIndex() int
 
+	//xgo:class:resource-api-scope-binding param.0 receiver
 	SetCostume__0(costume SpriteCostumeName)
 	SetCostume__1(index float64)
 	SetCostume__2(index int)
 	SetCostume__3(action switchAction)
 
 	// Animation Methods
+
+	//xgo:class:resource-api-scope-binding param.0 receiver
 	Animate__0(name SpriteAnimationName)
+
+	//xgo:class:resource-api-scope-binding param.0 receiver
 	Animate__1(name SpriteAnimationName, loop bool)
 
+	//xgo:class:resource-api-scope-binding param.0 receiver
 	AnimateWith(name SpriteAnimationName, __xgo_optional_loop bool)
+
+	//xgo:class:resource-api-scope-binding param.0 receiver
 	AnimateAndWait(name SpriteAnimationName)
+
+	//xgo:class:resource-api-scope-binding param.0 receiver
 	StopAnimation(name SpriteAnimationName)
 
 	// Graphic Effects Methods

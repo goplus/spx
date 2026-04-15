@@ -142,14 +142,17 @@ func (p *SpriteImpl) playDefaultAnim() {
 // -----------------------------------------------------------------------------
 // Playback
 // -----------------------------------------------------------------------------
+//xgo:class:resource-api-scope-binding param.0 receiver
 func (p *SpriteImpl) Animate__0(name SpriteAnimationName) {
 	p.AnimateWith(name, false)
 }
 
+//xgo:class:resource-api-scope-binding param.0 receiver
 func (p *SpriteImpl) Animate__1(name SpriteAnimationName, loop bool) {
 	p.AnimateWith(name, loop)
 }
 
+//xgo:class:resource-api-scope-binding param.0 receiver
 func (p *SpriteImpl) AnimateWith(name SpriteAnimationName, __xgo_optional_loop bool) {
 	if isDebugInstrEnabled() {
 		spxlog.Debug("==> Animate %s", name)
@@ -157,6 +160,7 @@ func (p *SpriteImpl) AnimateWith(name SpriteAnimationName, __xgo_optional_loop b
 	p.animation().Animate(name, __xgo_optional_loop)
 }
 
+//xgo:class:resource-api-scope-binding param.0 receiver
 func (p *SpriteImpl) AnimateAndWait(name SpriteAnimationName) {
 	if isDebugInstrEnabled() {
 		spxlog.Debug("==> AnimateAndWait %s", name)
@@ -164,6 +168,7 @@ func (p *SpriteImpl) AnimateAndWait(name SpriteAnimationName) {
 	p.animation().AnimateAndWait(name)
 }
 
+//xgo:class:resource-api-scope-binding param.0 receiver
 func (p *SpriteImpl) StopAnimation(name SpriteAnimationName) {
 	p.animation().StopAnimation(name)
 }
