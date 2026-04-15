@@ -218,7 +218,7 @@ func (p *physicsComponent) addCollisionTarget(target string) {
 		return
 	}
 	p.collisionTargets[target] = true
-	if p.sprite != nil && p.sprite.g != nil {
+	if p.sprite != nil && !p.sprite.IsCloned() && p.sprite.g != nil {
 		p.sprite.g.refreshCollisionLayers()
 	}
 }
