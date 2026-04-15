@@ -329,6 +329,7 @@ func init() {
 			"XGoo_Sprite_SetLayerWith":     {Typ: "untyped string", Value: constant.MakeString(string(q.XGoo_Sprite_SetLayerWith))},
 			"XGoo_Sprite_StepToWith":       {Typ: "untyped string", Value: constant.MakeString(string(q.XGoo_Sprite_StepToWith))},
 			"XGoo_Sprite_TurnToWith":       {Typ: "untyped string", Value: constant.MakeString(string(q.XGoo_Sprite_TurnToWith))},
+			"XGou_Seconds":                 {Typ: "untyped string", Value: constant.MakeString(string(q.XGou_Seconds))},
 		},
 	})
 }
