@@ -157,6 +157,41 @@ func TestPackProjectFailsOnMissingExternalAsset(t *testing.T) {
 	}
 }
 
+func TestPackProjectIncludesExternalAssetsFromPackedConfigFallback(t *testing.T) {
+	tmpDir := t.TempDir()
+	projectDir := filepath.Join(tmpDir, "Game")
+
+	writeTestFile(t, filepath.Join(projectDir, "assets", "index_pack.json"), `{
+  "backdrops":[{"path":"../../shared/bg.jpg"}],
+  "map":{"width":480,"height":360},
+  "sprites":{
+    "Hero":{
+      "costumeSet":{
+        "faceRight":180,
+        "path":"../../../../shared/hero.png",
+        "nx":96
+      }
+    }
+  },
+  "sounds":{
+    "Bell":{"path":"../../../../shared/audio/ring.wav"}
+  }
+}`)
+	writeTestFile(t, filepath.Join(tmpDir, "shared", "bg.jpg"), "bg")
+	writeTestFile(t, filepath.Join(tmpDir, "shared", "hero.png"), "hero")
+	writeTestFile(t, filepath.Join(tmpDir, "shared", "audio", "ring.wav"), "ring")
+
+	zipPath := filepath.Join(tmpDir, "game.zip")
+	if err := PackProject(projectDir, zipPath); err != nil {
+		t.Fatal(err)
+	}
+
+	snapshot := readZipSnapshot(t, zipPath)
+	assertZipEntryContent(t, snapshot, "shared/bg.jpg", "bg")
+	assertZipEntryContent(t, snapshot, "shared/hero.png", "hero")
+	assertZipEntryContent(t, snapshot, "shared/audio/ring.wav", "ring")
+}
+
 type zipSnapshot struct {
 	counts   map[string]int
 	contents map[string]string

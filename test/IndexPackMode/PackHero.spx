@@ -1,0 +1,9 @@
+onStart => {
+	play "click"
+	say "pack-only config", 1
+}
+
+onClick => {
+	play "click"
+	say "sound from pack", 1
+}

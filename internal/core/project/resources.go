@@ -65,10 +65,16 @@ func OpenBuilderResources(resource any, gameConf *Config) (OpenedBuilderResource
 	if err != nil {
 		return OpenedBuilderResources{}, err
 	}
+	fs, _, err = wrapPackedConfigDir(fs)
+	if err != nil {
+		fs.Close()
+		return OpenedBuilderResources{}, err
+	}
 	opened.FS = fs
 
 	loaded, err := LoadBuilderProject(fs, gameConf)
 	if err != nil {
+		fs.Close()
 		return OpenedBuilderResources{}, err
 	}
 	opened.LoadedBuilderProject = loaded
@@ -76,13 +82,15 @@ func OpenBuilderResources(resource any, gameConf *Config) (OpenedBuilderResource
 }
 
 func LoadJSON(ret any, fs spxfs.Dir, file string) error {
-	if _, ok := fs.(spxfs.GdDir); ok {
-		filePath := engine.ToAssetPath(file)
+	if assetDir, ok := gdAssetDir(fs); ok {
+		filePath := joinAssetConfigPath(assetDir, normalizePackedConfigPath(file))
+		if filePath == "" {
+			filePath = engine.ToAssetPath(file)
+		}
 		if engine.HasFile(filePath) {
 			value := engine.ReadAllText(filePath)
 			return json.Unmarshal([]byte(value), ret)
 		}
-		return fmt.Errorf("load json failed: %s does not exist", file)
 	}
 
 	f, err := fs.Open(file)
@@ -92,6 +100,15 @@ func LoadJSON(ret any, fs spxfs.Dir, file string) error {
 	}
 	defer f.Close()
 	return json.NewDecoder(f).Decode(ret)
+}
+
+func gdAssetDir(fs spxfs.Dir) (string, bool) {
+	gdDir, ok := fs.(spxfs.GdDir)
+	if !ok {
+		return "", false
+	}
+	assetDir := strings.TrimSuffix(gdDir.GetPath(), "/")
+	return assetDir, assetDir != ""
 }
 
 func LoadConfig(ret any, fs spxfs.Dir, index any) error {
