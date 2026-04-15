@@ -1,29 +1,24 @@
-
-import "fmt"
-import "math"
-
 var (
 	hasStarted bool
 )
 
-
-onKey KeyY, =>{
+onKey KeyY, => {
 	hasInputKey = true
 }
 
-onClick =>{
+onClick => {
 	hasClicked = true
 }
 
-onBackdrop "backdrop2", =>{
+onBackdrop "backdrop2", => {
 	hasChangedBackdrop = true
 }
 
-onMsg "msgA", =>{
+onMsg "msgA", => {
 	hasReceivedMsgA = true
 }
 
-onMsg "msgB", =>{
+onMsg "msgB", => {
 	hasReceivedMsgB = true
 }
 
@@ -35,7 +30,7 @@ onStart => {
 // onLoudness =>{}
 
 onMsg "testEvent", => {
-    onTestStart(this)
+	onTestStart(this)
 
 	// 1. Sprite::onKey
 	say "Please presse key 'y' "
@@ -51,23 +46,23 @@ onMsg "testEvent", => {
 	say ""
 
 	// 3. Sprite::onStart
-	wait 0.1
+	wait 0.1s
 	assert(hasStarted, "Sprite::OnStart")
 
 	// 4. Sprite::onBackdrop
 	setBackdrop "backdrop2"
-	wait 0.1
+	wait 0.1s
 	for !hasChangedBackdrop {
 		waitNextFrame
 	}
 
 	// 5. Sprite::onMsg
 	broadcast "msgA"
-	wait 0.1
+	wait 0.1s
 	assert(hasReceivedMsgA, "Sprite::OnMsg send to self")
 	broadcast "msgB"
-	wait 0.1
+	wait 0.1s
 	assert(hasReceivedMsgB, "Sprite::OnMsg send to other sprite")
 
-    onTestDone(this)
+	onTestDone(this)
 }
