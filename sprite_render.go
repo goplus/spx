@@ -71,6 +71,7 @@ func (p *SpriteImpl) setCostume(costume any) {
 	p.spriteState.IsDirty = true
 }
 
+//xgo:class:resource-api-scope-binding param.0 receiver
 func (p *SpriteImpl) SetCostume__0(costume SpriteCostumeName) {
 	p.setCostume(costume)
 }

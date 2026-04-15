@@ -66,6 +66,7 @@ func (p *SpriteImpl) Step__1(step float64, speed float64) {
 	p.transform().Step(step, speed, "")
 }
 
+//xgo:class:resource-api-scope-binding param.2 receiver
 func (p *SpriteImpl) Step__2(step float64, speed float64, animation SpriteAnimationName) {
 	p.transform().Step(step, speed, animation)
 }
@@ -110,18 +111,22 @@ func (p *SpriteImpl) StepTo__7(x, y, speed float64) {
 	p.transform().StepToPos(x, y, speed, "")
 }
 
+//xgo:class:resource-api-scope-binding param.2 receiver
 func (p *SpriteImpl) StepTo__8(sprite Sprite, speed float64, animation SpriteAnimationName) {
 	p.doStepTo(sprite, speed, animation)
 }
 
+//xgo:class:resource-api-scope-binding param.2 receiver
 func (p *SpriteImpl) StepTo__9(sprite SpriteName, speed float64, animation SpriteAnimationName) {
 	p.doStepTo(sprite, speed, animation)
 }
 
+//xgo:class:resource-api-scope-binding param.2 receiver
 func (p *SpriteImpl) StepTo__a(obj specialObj, speed float64, animation SpriteAnimationName) {
 	p.doStepTo(obj, speed, animation)
 }
 
+//xgo:class:resource-api-scope-binding param.3 receiver
 func (p *SpriteImpl) StepTo__b(x, y, speed float64, animation SpriteAnimationName) {
 	p.transform().StepToPos(x, y, speed, animation)
 }
@@ -205,6 +210,7 @@ func (p *SpriteImpl) Turn__1(dir Direction, speed float64) {
 	p.transform().Turn(dir, speed, "")
 }
 
+//xgo:class:resource-api-scope-binding param.2 receiver
 func (p *SpriteImpl) Turn__2(dir Direction, speed float64, animation SpriteAnimationName) {
 	p.transform().Turn(dir, speed, animation)
 }
@@ -241,18 +247,22 @@ func (p *SpriteImpl) TurnTo__7(target specialObj, speed float64) {
 	p.transform().TurnTo(target, speed, "")
 }
 
+//xgo:class:resource-api-scope-binding param.2 receiver
 func (p *SpriteImpl) TurnTo__8(target Sprite, speed float64, animation SpriteAnimationName) {
 	p.transform().TurnTo(target, speed, animation)
 }
 
+//xgo:class:resource-api-scope-binding param.2 receiver
 func (p *SpriteImpl) TurnTo__9(target SpriteName, speed float64, animation SpriteAnimationName) {
 	p.transform().TurnTo(target, speed, animation)
 }
 
+//xgo:class:resource-api-scope-binding param.2 receiver
 func (p *SpriteImpl) TurnTo__a(dir Direction, speed float64, animation SpriteAnimationName) {
 	p.transform().TurnTo(dir, speed, animation)
 }
 
+//xgo:class:resource-api-scope-binding param.2 receiver
 func (p *SpriteImpl) TurnTo__b(target specialObj, speed float64, animation SpriteAnimationName) {
 	p.transform().TurnTo(target, speed, animation)
 }

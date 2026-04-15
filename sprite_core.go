@@ -27,6 +27,8 @@ import (
 )
 
 // SpriteImpl is the concrete implementation of the Sprite interface.
+//
+//xgo:class:resource sprite
 type SpriteImpl struct {
 	baseObj
 	scriptEventBindings

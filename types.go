@@ -31,6 +31,9 @@ type Shape any
 // Event types.
 type (
 	// BackdropName identifies a stage backdrop.
+	//
+	//xgo:class:resource backdrop
+	//xgo:class:resource-discovery backdrops.*
 	BackdropName = coreevent.BackdropName
 
 	// Direction represents a heading or swipe direction.
@@ -52,22 +55,39 @@ type (
 // Name types.
 type (
 	// SoundName identifies a registered sound asset.
+	//
+	//xgo:class:resource sound
+	//xgo:class:resource-discovery sounds.*
 	SoundName = string
 
 	// SpriteName identifies a sprite instance or prototype by name.
+	//
+	//xgo:class:resource sprite
+	//xgo:class:resource-discovery sprites.*
 	SpriteName = string
 
 	// SpriteCostumeName identifies a sprite costume by name.
+	//
+	//xgo:class:resource sprite.costume
+	//xgo:class:resource-discovery costumes.*
 	SpriteCostumeName = string
 
 	// SpriteAnimationName identifies a sprite animation by name.
+	//
+	//xgo:class:resource sprite.animation
+	//xgo:class:resource-discovery fAnimations.*
 	SpriteAnimationName = string
 
 	// WidgetName identifies a widget by name.
+	//
+	//xgo:class:resource widget
+	//xgo:class:resource-discovery zorder.*@($type == "monitor" || $type == "stageMonitor")
 	WidgetName = string
 )
 
 // Widget is the common interface for runtime UI objects stored by the game.
+//
+//xgo:class:resource widget
 type Widget interface {
 	GetName() WidgetName
 	Visible() bool
