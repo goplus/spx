@@ -201,7 +201,7 @@ func (p *Game) runSpriteCallbacks(inits []Sprite, proj *coreproject.ProjectConfi
 		Items: inits,
 		Setup: func(items []Sprite) {
 			p.deferBootstrapFor(generation, func() {
-				p.setupCollisionLayers(items)
+				p.setupCollisionData(items)
 			})
 		},
 		BeforeMain: func(ini Sprite) {

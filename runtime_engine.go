@@ -203,7 +203,3 @@ func (p *Game) startBootstrapPhaseFor(generation uint64) {
 		})
 	})
 }
-
-func (p *Game) startBootstrapPhase() {
-	p.startBootstrapPhaseFor(p.currentBootstrapGeneration())
-}

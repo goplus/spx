@@ -161,24 +161,36 @@ func (p *Game) applyPhysicsSettings(settings coreproject.SystemSettings) {
 	p.engine().PhysicsMgr.SetGlobalAirDrag(settings.GlobalAirDrag)
 	p.engine().PhysicsMgr.SetGlobalFriction(settings.GlobalFriction)
 	p.engine().PhysicsMgr.SetCollisionSystemType(p.isCollisionByPixel)
+
+	p.resetCollisionLayerState()
 	if p.isAutoSetCollisionLayer {
-		p.sprCollisionInfos = make(map[string]*spriteCollisionInfo)
-		idx := 0
-		for name := range p.typs {
-			modIdx := idx % maxCollisionLayerIdx
-			info := &spriteCollisionInfo{Index: idx, Layer: 1 << modIdx}
-			p.sprCollisionInfos[name] = info
-			idx++
-		}
+		p.sprCollisionInfos = p.buildSpriteCollisionInfos()
 	}
 }
 
-func (p *Game) setupCollisionLayers(inits []Sprite) {
+func (p *Game) resetCollisionLayerState() {
+	p.sprCollisionInfos = nil
+	p.sprCollisionData = nil
+}
+
+func (p *Game) buildSpriteCollisionInfos() map[string]*spriteCollisionInfo {
+	infos := make(map[string]*spriteCollisionInfo, len(p.typs))
+	idx := 0
+	for name := range p.typs {
+		modIdx := idx % maxCollisionLayerIdx
+		infos[name] = &spriteCollisionInfo{Index: idx, Layer: 1 << modIdx}
+		idx++
+	}
+	return infos
+}
+
+func (p *Game) setupCollisionData(inits []Sprite) {
 	if !p.isAutoSetCollisionLayer {
+		p.resetCollisionLayerState()
 		return
 	}
 
-	p.applyCollisionLayers(p.buildSpriteCollisionData(inits))
+	p.sprCollisionData = p.buildSpriteCollisionData(inits)
 }
 
 func (p *Game) refreshCollisionLayers() {
@@ -186,7 +198,7 @@ func (p *Game) refreshCollisionLayers() {
 		return
 	}
 
-	p.applyCollisionLayers(p.buildActiveSpriteCollisionData())
+	p.applyCollisionLayers(p.sprCollisionData)
 }
 
 // -----------------------------------------------------------------------------
@@ -209,24 +221,6 @@ func (p *Game) buildSpriteCollisionData(inits []Sprite) []*spriteCollisionData {
 	for _, ini := range inits {
 		spr := spriteOf(ini)
 		if spr == nil {
-			continue
-		}
-		info := p.getSpriteCollisionInfo(spr.name)
-		spriteData = append(spriteData, &spriteCollisionData{
-			sprite: spr,
-			info:   info,
-			modIdx: getCollisionLayerIndex(info),
-		})
-	}
-	return spriteData
-}
-
-func (p *Game) buildActiveSpriteCollisionData() []*spriteCollisionData {
-	shapes := p.getTempShapes()
-	spriteData := make([]*spriteCollisionData, 0, len(shapes))
-	for _, item := range shapes {
-		spr, ok := item.(*SpriteImpl)
-		if !ok {
 			continue
 		}
 		info := p.getSpriteCollisionInfo(spr.name)

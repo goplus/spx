@@ -159,3 +159,22 @@ func TestGameGetTargetPropertyTargetMethod(t *testing.T) {
 		t.Fatalf("Actor.Health = %v, want 3.5", got.Float())
 	}
 }
+
+func TestGameResetCollisionLayerStateClearsCollisionLayerState(t *testing.T) {
+	var g Game
+	g.sprCollisionInfos = map[string]*spriteCollisionInfo{
+		"SpriteA": {Index: 0, Layer: 1 << 0, Mask: 1 << 1},
+	}
+	g.sprCollisionData = []*spriteCollisionData{{
+		info: g.sprCollisionInfos["SpriteA"],
+	}}
+
+	g.resetCollisionLayerState()
+
+	if g.sprCollisionInfos != nil {
+		t.Fatalf("sprCollisionInfos = %#v, want nil", g.sprCollisionInfos)
+	}
+	if g.sprCollisionData != nil {
+		t.Fatalf("sprCollisionData = %#v, want nil", g.sprCollisionData)
+	}
+}
