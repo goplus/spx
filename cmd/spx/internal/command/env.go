@@ -431,6 +431,11 @@ func (cmd *CmdTool) setupPaths(dstRelDir string) error {
 
 // adaptGoMod patches go.mod for local development.
 func (cmd *CmdTool) adaptGoMod() {
+	spxPath := cmd.findSpxRoot()
+	if spxPath != "" {
+		return
+	}
+
 	rootGoModPath, _ := filepath.Abs(filepath.Join(cmd.TargetDir, "go.mod"))
 	if _, err := os.Stat(rootGoModPath); os.IsNotExist(err) {
 		if err := cmd.createDefaultGoMod(cmd.TargetDir, false); err != nil {
@@ -439,26 +444,22 @@ func (cmd *CmdTool) adaptGoMod() {
 	}
 
 	absTargetDir := cmd.TargetAbsDir
-	spxPath := cmd.findSpxRoot()
+	content, err := os.ReadFile(rootGoModPath)
+	if err != nil {
+		return
+	}
 
-	if spxPath != "" {
-		content, err := os.ReadFile(rootGoModPath)
-		if err != nil {
-			return
-		}
+	relPath, err := filepath.Rel(absTargetDir, spxPath)
+	if err != nil {
+		return
+	}
 
-		relPath, err := filepath.Rel(absTargetDir, spxPath)
-		if err != nil {
-			return
-		}
-
-		strContent := ensureSpxModuleReplace(string(content), filepath.ToSlash(relPath))
-		if strContent == string(content) {
-			return
-		}
-		if err := os.WriteFile(rootGoModPath, []byte(strContent), 0644); err != nil {
-			return
-		}
+	strContent := ensureSpxModuleReplace(string(content), filepath.ToSlash(relPath))
+	if strContent == string(content) {
+		return
+	}
+	if err := os.WriteFile(rootGoModPath, []byte(strContent), 0644); err != nil {
+		return
 	}
 }
 

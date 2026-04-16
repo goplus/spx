@@ -5,8 +5,6 @@ github.com/goccy/go-yaml v1.19.2 h1:PmFC1S6h8ljIz6gMRBopkjP1TVT7xuwrButHID66PoM=
 github.com/goccy/go-yaml v1.19.2/go.mod h1:XBurs7gK8ATbW4ZPGKgcbrY1Br56PdM69F7LkFRi1kA=
 github.com/google/go-cmp v0.6.0 h1:ofyhxvXcZhMsU5ulbFiLKl/XBFqE1GSq7atu8tAmTRI=
 github.com/google/go-cmp v0.6.0/go.mod h1:17dUlkBOakJ0+DkrSSNjCkIjxS6bF9zb3elmeNGIjoY=
-github.com/goplus/gogen v1.22.0 h1:clM2eMVWQZz7tYUU/u9xwKFCBLcyVbcstzdiZrgRdfA=
-github.com/goplus/gogen v1.22.0/go.mod h1:Y7ulYW3wonQ3d9er00b0uGFEV/IUZa6okWJZh892ACQ=
 github.com/goplus/gogen v1.23.0-pre.3 h1:38hvKzldmugkauPS+uk/u8olATdW33ecznfBWGkQYew=
 github.com/goplus/gogen v1.23.0-pre.3/go.mod h1:Y7ulYW3wonQ3d9er00b0uGFEV/IUZa6okWJZh892ACQ=
 github.com/goplus/ixgo v1.0.5 h1:4GSrPurExmjR/vyGCNQge2BVilo7sKzu2SN/TfgTPkE=
@@ -17,8 +15,6 @@ github.com/goplus/reflectx v1.6.3 h1:RyLu8ioQou88Ds5M1PqZKiOe41Nm9hpF0tmmjHdrMjQ
 github.com/goplus/reflectx v1.6.3/go.mod h1:ksfFSbZGiPzW+EZ3umw7e0pKYlPAb3rkgOCZDo4MCmk=
 github.com/goplus/spbase v0.1.0 h1:JNZ0D/65DerYyv9/9IfrXHZZbd0WNK0jHiVvgCtZhwY=
 github.com/goplus/spbase v0.1.0/go.mod h1:brnD3OJnHtipqob2IsJ3/QzGBf+eOnqXNnHGKpv1irQ=
-github.com/goplus/xgo v1.7.0 h1:Dk+3x0MgVUsEAxomd/Jkq0X3XZ+e+iDSZH/aXujtQyw=
-github.com/goplus/xgo v1.7.0/go.mod h1:8eHozsEQhKduo87uSxx36tEJxQ2XUco5fq4ksKtKcj0=
 github.com/goplus/xgo v1.7.1 h1:PLlCNjYgtgIvO/NSIg78hbH4qzOFmyKOK15g8p3ZMLY=
 github.com/goplus/xgo v1.7.1/go.mod h1:HfwLG2QD3RBFPXIrTFNKEEWISSdxnWO3u8fY6tUjQ3I=
 github.com/petermattis/goid v0.0.0-20250721140440-ea1c0173183e h1:D0bJD+4O3G4izvrQUmzCL80zazlN7EwJ0PPDhpJWC/I=
