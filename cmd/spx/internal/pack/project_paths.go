@@ -110,81 +110,86 @@ func collectExternalAssetPaths(baseFolder string, existingZipPaths map[string]st
 
 func collectAssetPathRefs(assetRoot string) ([]assetPathRef, error) {
 	var refs []assetPathRef
+
 	packed, hasPacked, err := readPackedAssetIndex(assetRoot)
 	if err != nil {
 		return nil, err
 	}
 
-	projectConfigPath := filepath.Join(assetRoot, "index.json")
-	if _, err := os.Stat(projectConfigPath); err != nil {
-		if !os.IsNotExist(err) {
-			return nil, fmt.Errorf("stat %s: %w", projectConfigPath, err)
-		}
-		if hasPacked {
-			refs = appendProjectAssetRefs(refs, packed.Project)
-		}
+	if hasPacked {
+		refs = appendProjectAssetRefs(refs, packed.Project)
 	} else {
-		var conf coreproject.ProjectConfig
-		if err := readJSONFile(projectConfigPath, &conf); err != nil {
-			return nil, fmt.Errorf("parse %s: %w", projectConfigPath, err)
+		projectConfigPath := filepath.Join(assetRoot, "index.json")
+		if _, err := os.Stat(projectConfigPath); err != nil {
+			if !os.IsNotExist(err) {
+				return nil, fmt.Errorf("stat %s: %w", projectConfigPath, err)
+			}
+		} else {
+			var conf coreproject.ProjectConfig
+			if err := readJSONFile(projectConfigPath, &conf); err != nil {
+				return nil, fmt.Errorf("parse %s: %w", projectConfigPath, err)
+			}
+			refs = appendProjectAssetRefs(refs, conf)
 		}
-		refs = appendProjectAssetRefs(refs, conf)
 	}
 
-	spriteConfigPaths, err := filepath.Glob(filepath.Join(assetRoot, "sprites", "*", "index.json"))
+	spriteRefs, err := collectIndexedAssetRefs(
+		assetRoot,
+		"sprites",
+		packed.Sprites,
+		appendSpriteAssetRefs,
+	)
 	if err != nil {
 		return nil, err
 	}
-	for _, spriteConfigPath := range spriteConfigPaths {
-		configDir, err := relConfigDir(assetRoot, filepath.Dir(spriteConfigPath))
+	refs = append(refs, spriteRefs...)
+
+	soundRefs, err := collectIndexedAssetRefs(
+		assetRoot,
+		"sounds",
+		packed.Sounds,
+		appendSoundAssetRefs,
+	)
+	if err != nil {
+		return nil, err
+	}
+	refs = append(refs, soundRefs...)
+
+	return refs, nil
+}
+
+func collectIndexedAssetRefs[T any](
+	assetRoot string,
+	category string,
+	packed map[string]T,
+	appendRefs func([]assetPathRef, string, T) []assetPathRef,
+) ([]assetPathRef, error) {
+	var refs []assetPathRef
+
+	for name, conf := range packed {
+		refs = appendRefs(refs, path.Join(category, name), conf)
+	}
+
+	configPaths, err := filepath.Glob(filepath.Join(assetRoot, category, "*", "index.json"))
+	if err != nil {
+		return nil, err
+	}
+	for _, configPath := range configPaths {
+		name := filepath.Base(filepath.Dir(configPath))
+		if _, exists := packed[name]; exists {
+			continue
+		}
+
+		configDir, err := relConfigDir(assetRoot, filepath.Dir(configPath))
 		if err != nil {
 			return nil, err
 		}
 
-		var conf coreproject.SpriteConfig
-		if err := readJSONFile(spriteConfigPath, &conf); err != nil {
-			return nil, fmt.Errorf("parse %s: %w", spriteConfigPath, err)
+		var conf T
+		if err := readJSONFile(configPath, &conf); err != nil {
+			return nil, fmt.Errorf("parse %s: %w", configPath, err)
 		}
-		refs = appendSpriteAssetRefs(refs, configDir, conf)
-	}
-	if hasPacked {
-		for name, conf := range packed.Sprites {
-			configPath := filepath.Join(assetRoot, "sprites", name, "index.json")
-			if _, err := os.Stat(configPath); err == nil {
-				continue
-			} else if !os.IsNotExist(err) {
-				return nil, fmt.Errorf("stat %s: %w", configPath, err)
-			}
-			refs = appendSpriteAssetRefs(refs, path.Join("sprites", name), conf)
-		}
-	}
-
-	soundConfigPaths, err := filepath.Glob(filepath.Join(assetRoot, "sounds", "*", "index.json"))
-	if err != nil {
-		return nil, err
-	}
-	for _, soundConfigPath := range soundConfigPaths {
-		configDir, err := relConfigDir(assetRoot, filepath.Dir(soundConfigPath))
-		if err != nil {
-			return nil, err
-		}
-
-		var conf coreproject.SoundConfig
-		if err := readJSONFile(soundConfigPath, &conf); err != nil {
-			return nil, fmt.Errorf("parse %s: %w", soundConfigPath, err)
-		}
-		refs = appendSoundAssetRefs(refs, configDir, conf)
-	}
-	if hasPacked {
-		for name, conf := range packed.Sounds {
-			configPath := filepath.Join(assetRoot, "sounds", name, "index.json")
-			if _, err := os.Stat(configPath); err == nil {
-				continue
-			} else if !os.IsNotExist(err) {
-				return nil, fmt.Errorf("stat %s: %w", configPath, err)
-			}
-			refs = appendSoundAssetRefs(refs, path.Join("sounds", name), conf)
-		}
+		refs = appendRefs(refs, configDir, conf)
 	}
 
 	return refs, nil
