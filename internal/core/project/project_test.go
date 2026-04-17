@@ -26,6 +26,7 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
+	spxfs "github.com/goplus/spx/v2/fs"
 	_ "github.com/goplus/spx/v2/fs/asset"
 )
 
@@ -410,6 +411,37 @@ func TestOpenBuilderResourcesFromPackedConfig(t *testing.T) {
 	}
 }
 
+func TestOpenBuilderResourcesFallsBackToSourceRootConfigWhenPackedRootMissing(t *testing.T) {
+	dir := t.TempDir()
+	writeProjectFile(t, dir, "index.json", `{
+		"run":{"title":"source-demo"},
+		"backdrops":[{"name":"bg","path":"bg.png"}],
+		"bgm":"theme.mp3"
+	}`)
+	writeProjectFile(t, dir, packedIndexJSON, `{
+		"zorder":["Hero"]
+	}`)
+
+	opened, err := OpenBuilderResources(localDir{base: dir}, nil)
+	if err != nil {
+		t.Fatalf("OpenBuilderResources(root fallback) error: %v", err)
+	}
+	defer opened.FS.Close()
+
+	if opened.Config.Title != "source-demo" {
+		t.Fatalf("opened.Config.Title = %q, want source-demo", opened.Config.Title)
+	}
+	if len(opened.Project.Backdrops) != 1 || opened.Project.Backdrops[0].Path != "bg.png" {
+		t.Fatalf("opened.Project.Backdrops = %#v, want [bg.png]", opened.Project.Backdrops)
+	}
+	if opened.Project.Bgm != "theme.mp3" {
+		t.Fatalf("opened.Project.Bgm = %q, want theme.mp3", opened.Project.Bgm)
+	}
+	if len(opened.Project.Zorder) != 1 || opened.Project.Zorder[0] != "Hero" {
+		t.Fatalf("opened.Project.Zorder = %#v, want [Hero]", opened.Project.Zorder)
+	}
+}
+
 func TestOpenBuilderResourcesPrefersPackedConfigOverSource(t *testing.T) {
 	dir := t.TempDir()
 	writeProjectFile(t, dir, "index.json", `{"run":{"title":"source-demo"}}`)
@@ -507,6 +539,42 @@ func TestOpenBuilderResourcesFallsBackToSourceChildConfigWhenPackedChildMissing(
 	}
 	if sound.Config.Rate != 1 {
 		t.Fatalf("sound.Config.Rate = %d, want 1", sound.Config.Rate)
+	}
+}
+
+func TestOpenBuilderResourcesFromStringResourceWithPackedFallback(t *testing.T) {
+	dir := t.TempDir()
+	writeProjectFile(t, dir, "index.json", `{"run":{"title":"source-demo"}}`)
+	writeProjectFile(t, dir, "sprites/Hero/index.json", `{
+		"costumes":[{"name":"hero-source","path":"source.png","x":1,"y":2}],
+		"size":60
+	}`)
+	writeProjectFile(t, dir, packedIndexJSON, `{
+		"run":{"title":"packed-demo"}
+	}`)
+
+	opened, err := OpenBuilderResources(dir, nil)
+	if err != nil {
+		t.Fatalf("OpenBuilderResources(string resource) error: %v", err)
+	}
+	defer opened.FS.Close()
+
+	if opened.AssetDir != dir {
+		t.Fatalf("opened.AssetDir = %q, want %q", opened.AssetDir, dir)
+	}
+	if opened.Config.Title != "packed-demo" {
+		t.Fatalf("opened.Config.Title = %q, want packed-demo", opened.Config.Title)
+	}
+	if _, ok := opened.FS.(spxfs.GdDir); !ok {
+		t.Fatalf("opened.FS does not implement spxfs.GdDir: %T", opened.FS)
+	}
+
+	sprite, err := LoadSpriteConfig(opened.FS, "Hero")
+	if err != nil {
+		t.Fatalf("LoadSpriteConfig(string resource) error: %v", err)
+	}
+	if got := sprite.Config.Costumes[0].Path; got != "sprites/Hero/source.png" {
+		t.Fatalf("sprite.Config.Costumes[0].Path = %q, want sprites/Hero/source.png", got)
 	}
 }
 

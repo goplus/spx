@@ -38,9 +38,10 @@ type packedConfigDir struct {
 }
 
 type packedConfigIndex struct {
-	raw     []byte
-	sprites map[string]json.RawMessage
-	sounds  map[string]json.RawMessage
+	raw        []byte
+	projectRaw []byte
+	sprites    map[string]json.RawMessage
+	sounds     map[string]json.RawMessage
 }
 
 func wrapPackedConfigDir(fs spxfs.Dir) (spxfs.Dir, bool, error) {
@@ -60,16 +61,29 @@ func loadPackedConfigIndex(fs spxfs.Dir) (packedConfigIndex, bool, error) {
 		return packedConfigIndex{}, false, nil
 	}
 
-	index, err := parsePackedConfigIndex(data)
+	sourceData, ok, err := readConfigBytes(fs, "index.json")
+	if err != nil {
+		return packedConfigIndex{}, false, err
+	}
+	if !ok {
+		sourceData = nil
+	}
+
+	index, err := parsePackedConfigIndex(data, sourceData)
 	if err != nil {
 		return packedConfigIndex{}, false, fmt.Errorf("parse %s: %w", packedIndexJSON, err)
 	}
 	return index, true, nil
 }
 
-func parsePackedConfigIndex(data []byte) (packedConfigIndex, error) {
+func parsePackedConfigIndex(data []byte, sourceData []byte) (packedConfigIndex, error) {
 	var root map[string]json.RawMessage
 	if err := json.Unmarshal(data, &root); err != nil {
+		return packedConfigIndex{}, err
+	}
+
+	projectRaw, err := mergePackedProjectRoot(data, root, sourceData)
+	if err != nil {
 		return packedConfigIndex{}, err
 	}
 
@@ -83,10 +97,34 @@ func parsePackedConfigIndex(data []byte) (packedConfigIndex, error) {
 	}
 
 	return packedConfigIndex{
-		raw:     data,
-		sprites: sprites,
-		sounds:  sounds,
+		raw:        data,
+		projectRaw: projectRaw,
+		sprites:    sprites,
+		sounds:     sounds,
 	}, nil
+}
+
+func mergePackedProjectRoot(data []byte, packedRoot map[string]json.RawMessage, sourceData []byte) ([]byte, error) {
+	if len(sourceData) == 0 {
+		return data, nil
+	}
+
+	var sourceRoot map[string]json.RawMessage
+	if err := json.Unmarshal(sourceData, &sourceRoot); err != nil {
+		return nil, fmt.Errorf("parse index.json: %w", err)
+	}
+	if len(sourceRoot) == 0 {
+		return data, nil
+	}
+
+	merged := make(map[string]json.RawMessage, len(sourceRoot)+len(packedRoot))
+	for key, value := range sourceRoot {
+		merged[key] = value
+	}
+	for key, value := range packedRoot {
+		merged[key] = value
+	}
+	return json.Marshal(merged)
 }
 
 func parsePackedSection(root map[string]json.RawMessage, key string) (map[string]json.RawMessage, error) {
@@ -104,7 +142,9 @@ func parsePackedSection(root map[string]json.RawMessage, key string) (map[string
 
 func (p *packedConfigDir) Open(name string) (io.ReadCloser, error) {
 	switch normalizePackedConfigPath(name) {
-	case "index.json", packedIndexJSON:
+	case "index.json":
+		return io.NopCloser(bytes.NewReader(p.index.projectRaw)), nil
+	case packedIndexJSON:
 		return io.NopCloser(bytes.NewReader(p.index.raw)), nil
 	}
 
@@ -116,6 +156,13 @@ func (p *packedConfigDir) Open(name string) (io.ReadCloser, error) {
 
 func (p *packedConfigDir) Close() error {
 	return p.base.Close()
+}
+
+func (p *packedConfigDir) GetPath() string {
+	if gdDir, ok := p.base.(spxfs.GdDir); ok {
+		return gdDir.GetPath()
+	}
+	return ""
 }
 
 func (p *packedConfigDir) lookupPackedChild(name string) (json.RawMessage, bool) {
@@ -153,7 +200,7 @@ func openConfigReader(fs spxfs.Dir, file string) (io.ReadCloser, error) {
 }
 
 func readConfigBytes(fs spxfs.Dir, file string) ([]byte, bool, error) {
-	if assetDir, ok := gdAssetDir(fs); ok {
+	if assetDir, ok := gdAssetDir(fs); ok && shouldReadConfigFromEngine(assetDir) {
 		for _, filePath := range configAssetPaths(assetDir, file) {
 			if filePath == "" || !engine.HasFile(filePath) {
 				continue

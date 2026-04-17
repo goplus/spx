@@ -82,7 +82,7 @@ func OpenBuilderResources(resource any, gameConf *Config) (OpenedBuilderResource
 }
 
 func LoadJSON(ret any, fs spxfs.Dir, file string) error {
-	if assetDir, ok := gdAssetDir(fs); ok {
+	if assetDir, ok := gdAssetDir(fs); ok && shouldReadConfigFromEngine(assetDir) {
 		filePath := joinAssetConfigPath(assetDir, normalizePackedConfigPath(file))
 		if filePath == "" {
 			filePath = engine.ToAssetPath(file)
@@ -109,6 +109,11 @@ func gdAssetDir(fs spxfs.Dir) (string, bool) {
 	}
 	assetDir := strings.TrimSuffix(gdDir.GetPath(), "/")
 	return assetDir, assetDir != ""
+}
+
+func shouldReadConfigFromEngine(assetDir string) bool {
+	schema, _ := spxfs.SplitSchema(assetDir)
+	return schema != ""
 }
 
 func LoadConfig(ret any, fs spxfs.Dir, index any) error {

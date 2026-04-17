@@ -239,8 +239,14 @@ func readPackedAssetIndex(assetRoot string) (packedAssetIndex, bool, error) {
 		return packedAssetIndex{}, false, fmt.Errorf("parse %s: %w", packedPath, err)
 	}
 
+	sourceRoot, err := readSourceAssetIndexRoot(assetRoot)
+	if err != nil {
+		return packedAssetIndex{}, false, err
+	}
+	mergedRoot := mergePackedRootSections(root, sourceRoot)
+
 	var packed packedAssetIndex
-	if err := decodePackedAssetSection(root, &packed.Project); err != nil {
+	if err := decodePackedAssetSection(mergedRoot, &packed.Project); err != nil {
 		return packedAssetIndex{}, false, fmt.Errorf("parse %s root: %w", packedPath, err)
 	}
 	packed.Sprites = make(map[string]coreproject.SpriteConfig)
@@ -252,6 +258,37 @@ func readPackedAssetIndex(assetRoot string) (packedAssetIndex, bool, error) {
 		return packedAssetIndex{}, false, fmt.Errorf("parse %s sounds: %w", packedPath, err)
 	}
 	return packed, true, nil
+}
+
+func readSourceAssetIndexRoot(assetRoot string) (map[string]json.RawMessage, error) {
+	projectConfigPath := filepath.Join(assetRoot, "index.json")
+	if _, err := os.Stat(projectConfigPath); err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("stat %s: %w", projectConfigPath, err)
+	}
+
+	var root map[string]json.RawMessage
+	if err := readJSONFile(projectConfigPath, &root); err != nil {
+		return nil, fmt.Errorf("parse %s: %w", projectConfigPath, err)
+	}
+	return root, nil
+}
+
+func mergePackedRootSections(packedRoot map[string]json.RawMessage, sourceRoot map[string]json.RawMessage) map[string]json.RawMessage {
+	if len(sourceRoot) == 0 {
+		return packedRoot
+	}
+
+	merged := make(map[string]json.RawMessage, len(sourceRoot)+len(packedRoot))
+	for key, value := range sourceRoot {
+		merged[key] = value
+	}
+	for key, value := range packedRoot {
+		merged[key] = value
+	}
+	return merged
 }
 
 func decodePackedAssetSection(root map[string]json.RawMessage, dest *coreproject.ProjectConfig) error {
