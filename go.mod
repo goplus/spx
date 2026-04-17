@@ -15,6 +15,7 @@ require (
 )
 
 require (
+	github.com/goccy/go-yaml v1.19.2 // indirect
 	github.com/goplus/gogen v1.23.0-pre.3 // indirect
 	github.com/qiniu/x v1.17.0 // indirect
 	github.com/timandy/routine v1.1.5 // indirect

@@ -71,10 +71,6 @@ func applyCommandOptions(execCmd *exec.Cmd, options CommandOptions) {
 	}
 }
 
-func RunXGo(envVars []string, args ...string) error {
-	return RunCommandWithEnv(envVars, "xgo", args...)
-}
-
 func RunGolang(envVars []string, args ...string) error {
 	return RunCommandWithEnv(envVars, "go", args...)
 }

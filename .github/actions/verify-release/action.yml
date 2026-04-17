@@ -150,12 +150,12 @@ runs:
 
         echo ""
         echo "🚀 Running smoke test..."
-        echo "Command: $SPX_BIN_PATH run --ixgogen --goenv=$VERIFY_ROOT_DIR --path=$TEST_PROJECT_DIR --headless"
+        echo "Command: $SPX_BIN_PATH run --goenv=$VERIFY_ROOT_DIR --path=$TEST_PROJECT_DIR --headless"
         echo ""
 
         rm -f "$VERIFY_LOG_PATH"
         set +e
-        "$SPX_BIN_PATH" run --ixgogen --goenv="$VERIFY_ROOT_DIR" --path="$TEST_PROJECT_DIR" --headless 2>&1 | tee "$VERIFY_LOG_PATH"
+        "$SPX_BIN_PATH" run --goenv="$VERIFY_ROOT_DIR" --path="$TEST_PROJECT_DIR" --headless 2>&1 | tee "$VERIFY_LOG_PATH"
         SPX_STATUS=${PIPESTATUS[0]}
         set -e
         if [ "$SPX_STATUS" -ne 0 ]; then

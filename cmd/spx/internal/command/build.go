@@ -25,9 +25,11 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/goplus/spx/v2/cmd/spx/internal/gengo"
+	modenv "github.com/goplus/mod/env"
 	"github.com/goplus/spx/v2/cmd/spx/internal/util"
 	spxlog "github.com/goplus/spx/v2/internal/log"
+	xgotoken "github.com/goplus/xgo/token"
+	xgotool "github.com/goplus/xgo/tool"
 )
 
 func (cmd *CmdTool) BuildWasm() error {
@@ -199,50 +201,17 @@ func (cmd *CmdTool) genGo() string {
 
 	spxProjPath := filepath.Join(cmd.ProjectDir, "..")
 
-	if cmd.UseXgobuildForCodegen {
-		if err := cmd.genGoUsingXgobuild(rawdir, spxProjPath); err != nil {
-			spxlog.Fatalf("code generation failed using xgobuild: %v", err)
-		}
-	} else {
-		if err := cmd.genGoUsingXgoCLI(rawdir, spxProjPath); err != nil {
-			spxlog.Fatalf("code generation failed using xgo CLI: %v", err)
-		}
+	if err := cmd.genGoUsingXgoTool(rawdir, spxProjPath); err != nil {
+		spxlog.Fatalf("code generation failed using xgo tool: %v", err)
 	}
 
 	return cmd.SafeTagArgs()
 }
 
-// genGoUsingXgobuild generates code with xgobuild.
-func (cmd *CmdTool) genGoUsingXgobuild(rawdir, spxProjPath string) error {
-	if err := os.MkdirAll(cmd.GoDir, 0755); err != nil {
-		return fmt.Errorf("failed to create GoDir: %w", err)
-	}
-	outputPath := path.Join(cmd.GoDir, "main.go")
-
-	fsys := gengo.NewDirFS(spxProjPath)
-	if err := gengo.GenGoFromFS(fsys, outputPath); err != nil {
-		return fmt.Errorf("failed to generate Go code using xgobuild: %w", err)
-	}
-
+// genGoUsingXgoTool generates code with the embedded xgo tool package.
+func (cmd *CmdTool) genGoUsingXgoTool(rawdir, spxProjPath string) error {
 	if err := os.Chdir(spxProjPath); err != nil {
-		return fmt.Errorf("failed to change directory to project root for mod tidy: %w", err)
-	}
-
-	defer func() {
-		if err := os.Chdir(rawdir); err != nil {
-			spxlog.Warn("failed to restore working directory to %s: %v", rawdir, err)
-		}
-	}()
-
-	util.RunGolang(nil, "mod", "tidy")
-
-	return nil
-}
-
-// genGoUsingXgoCLI generates code with xgo.
-func (cmd *CmdTool) genGoUsingXgoCLI(rawdir, spxProjPath string) error {
-	if err := os.Chdir(spxProjPath); err != nil {
-		return fmt.Errorf("failed to change directory to project root for XGo: %w", err)
+		return fmt.Errorf("failed to change directory to project root for xgo generation: %w", err)
 	}
 	defer func() {
 		if err := os.Chdir(rawdir); err != nil {
@@ -250,15 +219,17 @@ func (cmd *CmdTool) genGoUsingXgoCLI(rawdir, spxProjPath string) error {
 		}
 	}()
 
-	tagStr := cmd.SafeTagArgs()
-	spxlog.Debug("genGo tags: %s", tagStr)
-	envVars := []string{""}
-
-	args := []string{"go"}
-	if tagStr != "" {
-		args = append(args, tagStr)
+	conf, err := cmd.newXGoToolConfig(spxProjPath)
+	if err != nil {
+		return err
 	}
-	util.RunXGo(envVars, args...)
+	if conf.CacheFile != "" {
+		defer conf.UpdateCache()
+	}
+
+	if _, _, err := xgotool.GenGoEx(spxProjPath, conf, true, 0); err != nil {
+		return fmt.Errorf("failed to generate xgo_autogen.go: %w", err)
+	}
 
 	if err := os.MkdirAll(cmd.GoDir, 0755); err != nil {
 		return fmt.Errorf("failed to create GoDir: %w", err)
@@ -274,6 +245,90 @@ func (cmd *CmdTool) genGoUsingXgoCLI(rawdir, spxProjPath string) error {
 	util.RunGolang(nil, "mod", "tidy")
 
 	return nil
+}
+
+func (cmd *CmdTool) newXGoToolConfig(spxProjPath string) (*xgotool.Config, error) {
+	xgoInfo, err := resolveXGoModuleInfo(spxProjPath)
+	if err != nil {
+		return nil, err
+	}
+
+	mod, err := xgotool.LoadMod(spxProjPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load xgo module config: %w", err)
+	}
+
+	fset := xgotoken.NewFileSet()
+	imp := xgotool.NewImporter(mod, xgoInfo, fset)
+	if cmd.Args.Tags != nil && *cmd.Args.Tags != "" {
+		imp.SetTags(*cmd.Args.Tags)
+	}
+
+	conf := &xgotool.Config{
+		XGo:      xgoInfo,
+		Fset:     fset,
+		Mod:      mod,
+		Importer: imp,
+	}
+	conf.CacheFile = imp.CacheFile()
+	imp.Cache().Load(conf.CacheFile)
+	return conf, nil
+}
+
+func resolveXGoModuleInfo(workDir string) (*modenv.XGo, error) {
+	xgoInfo, err := resolveXGoModuleInfoFromGoList(workDir)
+	if err == nil {
+		return xgoInfo, nil
+	}
+
+	spxlog.Warn("failed to resolve github.com/goplus/xgo via go list; falling back to system xgo: %v", err)
+	xgoInfo, fallbackErr := resolveSystemXGoInfo(workDir)
+	if fallbackErr != nil {
+		return nil, fmt.Errorf("failed to resolve github.com/goplus/xgo module: %v; system xgo fallback failed: %w", err, fallbackErr)
+	}
+	spxlog.Warn("using system xgo %s at %s", xgoInfo.Version, xgoInfo.Root)
+	return xgoInfo, nil
+}
+
+func resolveXGoModuleInfoFromGoList(workDir string) (*modenv.XGo, error) {
+	output, err := util.OutputCommand(
+		util.CommandOptions{Dir: workDir},
+		"go", "list", "-f", "{{.Dir}}\n{{.Version}}", "-m", "github.com/goplus/xgo",
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve github.com/goplus/xgo module: %w", err)
+	}
+
+	return parseXGoInfoOutput(output, "go list returned an empty directory for github.com/goplus/xgo")
+}
+
+func resolveSystemXGoInfo(workDir string) (*modenv.XGo, error) {
+	output, err := util.OutputCommand(
+		util.CommandOptions{Dir: workDir},
+		"xgo", "env", "XGOROOT", "XGOVERSION",
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query system xgo: %w", err)
+	}
+
+	return parseXGoInfoOutput(output, "xgo env returned an empty XGOROOT")
+}
+
+func parseXGoInfoOutput(output []byte, emptyRootErr string) (*modenv.XGo, error) {
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	if len(lines) == 0 || strings.TrimSpace(lines[0]) == "" {
+		return nil, fmt.Errorf("%s", emptyRootErr)
+	}
+
+	version := "(devel)"
+	if len(lines) > 1 && strings.TrimSpace(lines[1]) != "" {
+		version = strings.TrimSpace(lines[1])
+	}
+
+	return &modenv.XGo{
+		Version: version,
+		Root:    strings.TrimSpace(lines[0]),
+	}, nil
 }
 
 // executeDllBuild runs a multi-arch C-shared build.
