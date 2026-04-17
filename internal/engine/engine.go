@@ -280,6 +280,10 @@ func handlePanic(name, stack string, err any, exitOnPanic bool) {
 		msg += "\nstack:\n" + stack
 	}
 
+	if msg != "" {
+		spxlog.Error("%s", msg)
+	}
+
 	extMgr.OnRuntimePanic(msg)
 
 	if exitOnPanic {

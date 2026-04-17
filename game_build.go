@@ -178,6 +178,9 @@ func setupGameConfig(g *Game, conf *Config, proj *coreproject.ProjectConfig) {
 
 func setupGameSystems(g *Game, proj *coreproject.ProjectConfig) {
 	settings := coreproject.ResolveSystemSettings(proj)
+	if settings.AutoSetCollisionLayer == isPhysicsEnabled() {
+		engine.Panic("invalid configuration: autoSetCollisionLayer and physics enabled state must not be the same")
+	}
 	engine.SetLayerSortMode(settings.LayerSortMode)
 	g.applyPathFinderSettings(settings)
 	g.applyAudioSettings(settings)

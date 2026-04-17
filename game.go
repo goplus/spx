@@ -104,6 +104,7 @@ type Game struct {
 	pendingBootstrap []func()
 
 	sprCollisionInfos       map[string]*spriteCollisionInfo
+	sprCollisionData        []*spriteCollisionData
 	isCollisionByPixel      bool
 	isAutoSetCollisionLayer bool
 
@@ -249,15 +250,17 @@ func (p *Game) reset() {
 
 	p.debugState.DebugPanel = nil
 	p.dialogState.AskPanel = nil
-	p.resetBootstrapState()
-	p.lifecycleState.StartDispatched.Store(false)
+
 	p.Stop(AllOtherScripts)
 
 	p.lifecycleState.StartFlag = sync.Once{}
 	p.lifecycleState.RunOnce = sync.Once{}
 	p.lifecycleState.OncePathFinder = sync.Once{}
+	p.lifecycleState.StartDispatched.Store(false)
 	p.sprs = make(map[string]Sprite)
 
+	p.resetBootstrapState()
+	p.resetCollisionLayerState()
 	p.resetImageSizeCache()
 	p.resetEventQueueStats()
 	close(p.events)

@@ -214,7 +214,13 @@ func (p *physicsComponent) getCollisionTargets() map[string]bool {
 }
 
 func (p *physicsComponent) addCollisionTarget(target string) {
+	if p.collisionTargets[target] {
+		return
+	}
 	p.collisionTargets[target] = true
+	if p.sprite != nil && !p.sprite.IsCloned() && p.sprite.g != nil {
+		p.sprite.g.refreshCollisionLayers()
+	}
 }
 
 // SetColliderShape sets the collider shape type and parameters.

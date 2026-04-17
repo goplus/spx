@@ -161,44 +161,44 @@ func (p *Game) applyPhysicsSettings(settings coreproject.SystemSettings) {
 	p.engine().PhysicsMgr.SetGlobalAirDrag(settings.GlobalAirDrag)
 	p.engine().PhysicsMgr.SetGlobalFriction(settings.GlobalFriction)
 	p.engine().PhysicsMgr.SetCollisionSystemType(p.isCollisionByPixel)
+
+	p.resetCollisionLayerState()
 	if p.isAutoSetCollisionLayer {
-		p.sprCollisionInfos = make(map[string]*spriteCollisionInfo)
-		idx := 0
-		for name := range p.typs {
-			modIdx := idx % maxCollisionLayerIdx
-			info := &spriteCollisionInfo{Index: idx, Layer: 1 << modIdx}
-			p.sprCollisionInfos[name] = info
-			idx++
-		}
+		p.sprCollisionInfos = p.buildSpriteCollisionInfos()
 	}
 }
 
-func (p *Game) setupCollisionLayers(inits []Sprite) {
+func (p *Game) resetCollisionLayerState() {
+	p.sprCollisionInfos = nil
+	p.sprCollisionData = nil
+}
+
+func (p *Game) buildSpriteCollisionInfos() map[string]*spriteCollisionInfo {
+	infos := make(map[string]*spriteCollisionInfo, len(p.typs))
+	idx := 0
+	for name := range p.typs {
+		modIdx := idx % maxCollisionLayerIdx
+		infos[name] = &spriteCollisionInfo{Index: idx, Layer: 1 << modIdx}
+		idx++
+	}
+	return infos
+}
+
+func (p *Game) setupCollisionData(inits []Sprite) {
+	if !p.isAutoSetCollisionLayer {
+		p.resetCollisionLayerState()
+		return
+	}
+
+	p.sprCollisionData = p.buildSpriteCollisionData(inits)
+}
+
+func (p *Game) refreshCollisionLayers() {
 	if !p.isAutoSetCollisionLayer {
 		return
 	}
 
-	spriteData := p.buildSpriteCollisionData(inits)
-	maskMap := make([]int64, maxCollisionLayerIdx)
-
-	for _, data := range spriteData {
-		data.info.Mask = 0
-		for target := range data.sprite.physics().getCollisionTargets() {
-			targetInfo := p.getSpriteCollisionInfo(target)
-			maskMap[data.modIdx] |= targetInfo.Layer
-		}
-	}
-
-	for _, data := range spriteData {
-		data.info.Mask = maskMap[data.modIdx]
-		spxlog.Debug("init sprite collision info: name=%s, layer=%d, mask=%d", data.sprite.name, data.info.Layer, data.info.Mask)
-	}
-
-	engine.WaitMainThread(func() {
-		for _, data := range spriteData {
-			data.sprite.applyPhysicsProxyConfig()
-		}
-	})
+	p.applyCollisionLayers(p.sprCollisionData)
 }
 
 // -----------------------------------------------------------------------------
@@ -220,6 +220,9 @@ func (p *Game) buildSpriteCollisionData(inits []Sprite) []*spriteCollisionData {
 	spriteData := make([]*spriteCollisionData, 0, len(inits))
 	for _, ini := range inits {
 		spr := spriteOf(ini)
+		if spr == nil {
+			continue
+		}
 		info := p.getSpriteCollisionInfo(spr.name)
 		spriteData = append(spriteData, &spriteCollisionData{
 			sprite: spr,
@@ -228,6 +231,33 @@ func (p *Game) buildSpriteCollisionData(inits []Sprite) []*spriteCollisionData {
 		})
 	}
 	return spriteData
+}
+
+func (p *Game) applyCollisionLayers(spriteData []*spriteCollisionData) {
+	if len(spriteData) == 0 {
+		return
+	}
+
+	maskMap := make([]int64, maxCollisionLayerIdx)
+
+	for _, data := range spriteData {
+		data.info.Mask = 0
+		for target := range data.sprite.physics().getCollisionTargets() {
+			targetInfo := p.getSpriteCollisionInfo(target)
+			maskMap[data.modIdx] |= targetInfo.Layer
+		}
+	}
+
+	for _, data := range spriteData {
+		data.info.Mask = maskMap[data.modIdx]
+		spxlog.Debug("init sprite collision info: name=%s, layer=%d, mask=%d", data.sprite.name, data.info.Layer, data.info.Mask)
+	}
+
+	engine.WaitMainThread(func() {
+		for _, data := range spriteData {
+			data.sprite.applyPhysicsProxyConfig()
+		}
+	})
 }
 
 func (p *Game) checkCollision(ary any) []Sprite {

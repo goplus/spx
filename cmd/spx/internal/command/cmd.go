@@ -65,9 +65,6 @@ type CmdTool struct {
 
 	GoModTemplate string
 
-	// Codegen.
-	UseXgobuildForCodegen bool
-
 	// Portable Go.
 	GoEnvDir    string
 	GoRoot      string
@@ -126,10 +123,6 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 
 	if isRuntimeModeCommand(cmd.Args.CmdName) {
 		cmd.RuntimeMode = true
-	}
-
-	if cmd.Args.IxgoGen != nil && *cmd.Args.IxgoGen {
-		cmd.UseXgobuildForCodegen = true
 	}
 
 	if cmd.Args.GoEnv != nil && *cmd.Args.GoEnv != "" {

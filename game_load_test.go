@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	coreproject "github.com/goplus/spx/v2/internal/core/project"
+	"github.com/goplus/spx/v2/internal/engine/platform"
 )
 
 type cameraFollowOverrideGame struct {
@@ -16,9 +17,24 @@ type cameraFollowOverrideSprite struct {
 	followTarget SpriteName
 }
 
+type collisionLayerOrderGame struct {
+	Game
+}
+
+type collisionLayerOrderSprite struct {
+	SpriteImpl
+	onMain func()
+}
+
 func (s *cameraFollowOverrideSprite) Main() {
 	if s.followTarget != "" {
 		s.g.Camera.Follow__1(s.followTarget)
+	}
+}
+
+func (s *collisionLayerOrderSprite) Main() {
+	if s.onMain != nil {
+		s.onMain()
 	}
 }
 
@@ -28,6 +44,16 @@ func newCameraFollowOverrideSprite(g *Game, name string, followTarget SpriteName
 	sprite.name = name
 	sprite.sprite = sprite
 	sprite.scriptEventBindings.init(&g.scriptEvents, &sprite.SpriteImpl)
+	return sprite
+}
+
+func newCollisionLayerOrderSprite(g *Game, name string, onMain func()) *collisionLayerOrderSprite {
+	sprite := &collisionLayerOrderSprite{onMain: onMain}
+	sprite.g = g
+	sprite.name = name
+	sprite.sprite = sprite
+	sprite.scriptEventBindings.init(&g.scriptEvents, &sprite.SpriteImpl)
+	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{})
 	return sprite
 }
 
@@ -57,5 +83,109 @@ func TestRunSpriteCallbacksKeepsManualCameraFollowLast(t *testing.T) {
 	}
 	if followTarget != spriteOf(spriteB) {
 		t.Fatalf("camera follow target = %q, want %q", followTarget.name, spriteOf(spriteB).name)
+	}
+}
+
+func TestRefreshCollisionLayersUsesCurrentTargetsFromSetupCollisionData(t *testing.T) {
+	game := &collisionLayerOrderGame{}
+	game.isAutoSetCollisionLayer = true
+	game.sprCollisionInfos = map[string]*spriteCollisionInfo{
+		"SpriteA": {Index: 0, Layer: 1 << 0},
+		"SpriteB": {Index: 1, Layer: 1 << 1},
+	}
+
+	var spriteA *collisionLayerOrderSprite
+	spriteA = newCollisionLayerOrderSprite(&game.Game, "SpriteA", func() {
+		delete(spriteA.physics().collisionTargets, "SpriteB")
+	})
+	spriteB := newCollisionLayerOrderSprite(&game.Game, "SpriteB", nil)
+
+	spriteA.physics().addCollisionTarget("SpriteB")
+	spriteB.physics().addCollisionTarget("SpriteA")
+
+	generation := game.currentBootstrapGeneration()
+	platform.RunOnMainThread(func() {
+		game.runSpriteCallbacks(
+			[]Sprite{spriteA, spriteB},
+			&coreproject.ProjectConfig{},
+			reflect.ValueOf(game).Elem(),
+			generation,
+		)
+	})
+	platform.RunOnMainThread(func() {
+		game.runBootstrapTasksFor(generation)
+		game.refreshCollisionLayers()
+	})
+
+	if got := game.sprCollisionInfos["SpriteA"].Mask; got != 0 {
+		t.Fatalf("SpriteA collision mask = %d, want 0", got)
+	}
+	if got := game.sprCollisionInfos["SpriteB"].Mask; got != game.sprCollisionInfos["SpriteA"].Layer {
+		t.Fatalf("SpriteB collision mask = %d, want %d", got, game.sprCollisionInfos["SpriteA"].Layer)
+	}
+}
+
+func TestRunSpriteCallbacksRefreshesCollisionLayersRegisteredInMain(t *testing.T) {
+	game := &collisionLayerOrderGame{}
+	game.initShapeMgr()
+	game.isAutoSetCollisionLayer = true
+	game.sprCollisionInfos = map[string]*spriteCollisionInfo{
+		"SpriteA": {Index: 0, Layer: 1 << 0},
+		"SpriteB": {Index: 1, Layer: 1 << 1},
+	}
+
+	var spriteA *collisionLayerOrderSprite
+	spriteA = newCollisionLayerOrderSprite(&game.Game, "SpriteA", func() {
+		spriteA.OnTouchStart__0("SpriteB", func() {})
+	})
+	spriteB := newCollisionLayerOrderSprite(&game.Game, "SpriteB", nil)
+	game.addShape(spriteOf(spriteA))
+	game.addShape(spriteOf(spriteB))
+
+	generation := game.currentBootstrapGeneration()
+	platform.RunOnMainThread(func() {
+		game.runSpriteCallbacks(
+			[]Sprite{spriteA, spriteB},
+			&coreproject.ProjectConfig{},
+			reflect.ValueOf(game).Elem(),
+			generation,
+		)
+	})
+	platform.RunOnMainThread(func() {
+		game.runBootstrapTasksFor(generation)
+	})
+
+	if got := game.sprCollisionInfos["SpriteA"].Mask; got != game.sprCollisionInfos["SpriteB"].Layer {
+		t.Fatalf("SpriteA collision mask = %d, want %d", got, game.sprCollisionInfos["SpriteB"].Layer)
+	}
+	if got := game.sprCollisionInfos["SpriteB"].Mask; got != 0 {
+		t.Fatalf("SpriteB collision mask = %d, want 0", got)
+	}
+}
+
+func TestClonedSpriteCollisionTargetRegistrationDoesNotRefreshCollisionLayers(t *testing.T) {
+	game := &collisionLayerOrderGame{}
+	game.isAutoSetCollisionLayer = true
+	game.sprCollisionInfos = map[string]*spriteCollisionInfo{
+		"SpriteA": {Index: 0, Layer: 1 << 0},
+		"SpriteB": {Index: 1, Layer: 1 << 1},
+	}
+
+	spriteA := newCollisionLayerOrderSprite(&game.Game, "SpriteA", nil)
+	spriteB := newCollisionLayerOrderSprite(&game.Game, "SpriteB", nil)
+	cloneA := newCollisionLayerOrderSprite(&game.Game, "SpriteA", nil)
+	cloneA.spriteState.Cloned = true
+
+	platform.RunOnMainThread(func() {
+		game.setupCollisionData([]Sprite{spriteA, spriteB})
+		spriteA.physics().collisionTargets["SpriteB"] = true
+		cloneA.physics().addCollisionTarget("SpriteB")
+	})
+
+	if got := game.sprCollisionInfos["SpriteA"].Mask; got != 0 {
+		t.Fatalf("SpriteA collision mask = %d, want 0", got)
+	}
+	if got := game.sprCollisionInfos["SpriteB"].Mask; got != 0 {
+		t.Fatalf("SpriteB collision mask = %d, want 0", got)
 	}
 }
