@@ -296,20 +296,26 @@ func resolveXGoModuleInfo(workDir string) (*modenv.XGo, error) {
 			return xgoInfo, nil
 		}
 
-		envInfo, envErr := resolveXGoModuleInfoFromEnvMatching(target)
+		envInfo, envErr := resolveXGoModuleInfoFromEnv()
 		if envErr == nil {
+			if !xgoVersionsMatch(envInfo.Version, target.Version) {
+				spxlog.Warn("environment xgo version %s does not match spx xgo version %s; continuing with %s", envInfo.Version, target.Version, envInfo.Root)
+			}
 			spxlog.Warn("using environment xgo %s at %s", envInfo.Version, envInfo.Root)
 			return envInfo, nil
 		}
 
-		sysInfo, sysErr := resolveSystemXGoInfoMatching(workDir, target)
+		sysInfo, sysErr := resolveSystemXGoInfo(workDir)
 		if sysErr == nil {
+			if !xgoVersionsMatch(sysInfo.Version, target.Version) {
+				spxlog.Warn("system xgo version %s does not match spx xgo version %s; continuing with %s", sysInfo.Version, target.Version, sysInfo.Root)
+			}
 			spxlog.Warn("using system xgo %s at %s", sysInfo.Version, sysInfo.Root)
 			return sysInfo, nil
 		}
 
 		return nil, fmt.Errorf(
-			"failed to resolve %s %s from GOMODCACHE or matching xgo installation: %v; env fallback failed: %v; system xgo fallback failed: %w",
+			"failed to resolve %s %s from GOMODCACHE or installed xgo sources: %v; env fallback failed: %v; system xgo fallback failed: %w",
 			target.ModPath, target.Version, err, envErr, sysErr,
 		)
 	}
@@ -451,28 +457,6 @@ func resolveXGoModuleInfoFromTargetWithCache(target *xgoBuildTarget, goModCache 
 		Version: target.Version,
 		Root:    root,
 	}, nil
-}
-
-func resolveXGoModuleInfoFromEnvMatching(target *xgoBuildTarget) (*modenv.XGo, error) {
-	xgoInfo, err := resolveXGoModuleInfoFromEnv()
-	if err != nil {
-		return nil, err
-	}
-	if !xgoVersionsMatch(xgoInfo.Version, target.Version) {
-		return nil, fmt.Errorf("XGOVERSION %s does not match spx xgo version %s", xgoInfo.Version, target.Version)
-	}
-	return xgoInfo, nil
-}
-
-func resolveSystemXGoInfoMatching(workDir string, target *xgoBuildTarget) (*modenv.XGo, error) {
-	xgoInfo, err := resolveSystemXGoInfo(workDir)
-	if err != nil {
-		return nil, err
-	}
-	if !xgoVersionsMatch(xgoInfo.Version, target.Version) {
-		return nil, fmt.Errorf("system xgo version %s does not match spx xgo version %s", xgoInfo.Version, target.Version)
-	}
-	return xgoInfo, nil
 }
 
 func findBuildInfoDep(info *debug.BuildInfo, modulePath string) *debug.Module {

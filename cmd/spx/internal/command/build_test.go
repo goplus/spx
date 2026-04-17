@@ -112,38 +112,9 @@ func TestResolveXGoModuleInfoFromEnvUsesProvidedRoot(t *testing.T) {
 	}
 }
 
-func TestResolveXGoModuleInfoFromEnvMatchingRejectsMismatchedVersion(t *testing.T) {
-	xgoRoot := t.TempDir()
-	writeTestXGoRoot(t, xgoRoot)
-
-	oldRoot, hadRoot := os.LookupEnv("XGOROOT")
-	oldVersion, hadVersion := os.LookupEnv("XGOVERSION")
-	t.Cleanup(func() {
-		if hadRoot {
-			os.Setenv("XGOROOT", oldRoot)
-		} else {
-			os.Unsetenv("XGOROOT")
-		}
-		if hadVersion {
-			os.Setenv("XGOVERSION", oldVersion)
-		} else {
-			os.Unsetenv("XGOVERSION")
-		}
-	})
-
-	if err := os.Setenv("XGOROOT", xgoRoot); err != nil {
-		t.Fatalf("Setenv(XGOROOT) returned error: %v", err)
-	}
-	if err := os.Setenv("XGOVERSION", "v1.7.2"); err != nil {
-		t.Fatalf("Setenv(XGOVERSION) returned error: %v", err)
-	}
-
-	_, err := resolveXGoModuleInfoFromEnvMatching(&xgoBuildTarget{
-		ModPath: "github.com/goplus/xgo",
-		Version: "v1.7.1",
-	})
-	if err == nil {
-		t.Fatal("resolveXGoModuleInfoFromEnvMatching returned nil error, want mismatch")
+func TestXGoVersionsMatchIgnoresDevelopmentSuffix(t *testing.T) {
+	if !xgoVersionsMatch("v1.7.1 devel", "v1.7.1") {
+		t.Fatal("xgoVersionsMatch returned false, want true")
 	}
 }
 
