@@ -28,12 +28,10 @@ func TestInstallScriptUsesExistingGenerateTarget(t *testing.T) {
 		t.Fatalf("read install script: %v", err)
 	}
 
-	const generateTarget = "internal/gengo/embedded_pkgs.go"
-	if !strings.Contains(string(content), "go generate "+generateTarget) {
-		t.Fatalf("install script should generate %s", generateTarget)
+	if strings.Contains(string(content), "internal/gengo/embedded_pkgs.go") {
+		t.Fatal("install script should not reference removed internal/gengo generate target")
 	}
-
-	if _, err := os.Stat(generateTarget); err != nil {
-		t.Fatalf("generate target %s missing: %v", generateTarget, err)
+	if strings.Contains(string(content), "go generate ") {
+		t.Fatal("install script should not invoke go generate during install")
 	}
 }
