@@ -26,6 +26,7 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
+	spxfs "github.com/goplus/spx/v2/fs"
 	_ "github.com/goplus/spx/v2/fs/asset"
 )
 
@@ -35,6 +36,18 @@ type fakeGdDir struct {
 
 type localDir struct {
 	base string
+}
+
+func writeProjectFile(t *testing.T, dir, relPath, content string) {
+	t.Helper()
+
+	filePath := filepath.Join(dir, relPath)
+	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filePath, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func (d fakeGdDir) Open(string) (io.ReadCloser, error) {
@@ -332,6 +345,250 @@ func TestOpenBuilderResources(t *testing.T) {
 	}
 	if opened.Config.Title != "demo" {
 		t.Fatalf("opened.Config.Title = %q, want demo", opened.Config.Title)
+	}
+}
+
+func TestOpenBuilderResourcesFromPackedConfig(t *testing.T) {
+	dir := t.TempDir()
+	packed := `{
+		"run":{"title":"packed-demo"},
+		"backdrops":[{"name":"bg","path":"bg.png"}],
+		"sprites":{
+			"Hero":{
+				"costumes":[{"name":"hero","path":"hero.png","x":10,"y":20}],
+				"costumeIndex":0,
+				"size":80
+			}
+		},
+		"sounds":{
+			"Jump":{
+				"path":"jump.wav",
+				"rate":1
+			}
+		},
+		"zorder":["Hero"]
+	}`
+	if err := os.WriteFile(filepath.Join(dir, packedIndexJSON), []byte(packed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	opened, err := OpenBuilderResources(localDir{base: dir}, nil)
+	if err != nil {
+		t.Fatalf("OpenBuilderResources(packed) error: %v", err)
+	}
+	defer opened.FS.Close()
+
+	if opened.Config.Title != "packed-demo" {
+		t.Fatalf("opened.Config.Title = %q, want packed-demo", opened.Config.Title)
+	}
+	if len(opened.Project.Zorder) != 1 || opened.Project.Zorder[0] != "Hero" {
+		t.Fatalf("opened.Project.Zorder = %#v, want [Hero]", opened.Project.Zorder)
+	}
+	if got := opened.Project.Backdrops[0].Path; got != "bg.png" {
+		t.Fatalf("opened.Project.Backdrops[0].Path = %q, want bg.png", got)
+	}
+
+	sprite, err := LoadSpriteConfig(opened.FS, "Hero")
+	if err != nil {
+		t.Fatalf("LoadSpriteConfig(packed) error: %v", err)
+	}
+	if sprite.BaseDir != "sprites/Hero/" {
+		t.Fatalf("sprite.BaseDir = %q, want sprites/Hero/", sprite.BaseDir)
+	}
+	if got := sprite.Config.Costumes[0].Path; got != "sprites/Hero/hero.png" {
+		t.Fatalf("sprite.Config.Costumes[0].Path = %q, want sprites/Hero/hero.png", got)
+	}
+
+	sound, err := LoadSoundConfig(opened.FS, "Jump")
+	if err != nil {
+		t.Fatalf("LoadSoundConfig(packed) error: %v", err)
+	}
+	if sound.BaseDir != "sounds/Jump" {
+		t.Fatalf("sound.BaseDir = %q, want sounds/Jump", sound.BaseDir)
+	}
+	if got := sound.Config.Path; got != "sounds/Jump/jump.wav" {
+		t.Fatalf("sound.Config.Path = %q, want sounds/Jump/jump.wav", got)
+	}
+}
+
+func TestOpenBuilderResourcesFallsBackToSourceRootConfigWhenPackedRootMissing(t *testing.T) {
+	dir := t.TempDir()
+	writeProjectFile(t, dir, "index.json", `{
+		"run":{"title":"source-demo"},
+		"backdrops":[{"name":"bg","path":"bg.png"}],
+		"bgm":"theme.mp3"
+	}`)
+	writeProjectFile(t, dir, packedIndexJSON, `{
+		"zorder":["Hero"]
+	}`)
+
+	opened, err := OpenBuilderResources(localDir{base: dir}, nil)
+	if err != nil {
+		t.Fatalf("OpenBuilderResources(root fallback) error: %v", err)
+	}
+	defer opened.FS.Close()
+
+	if opened.Config.Title != "source-demo" {
+		t.Fatalf("opened.Config.Title = %q, want source-demo", opened.Config.Title)
+	}
+	if len(opened.Project.Backdrops) != 1 || opened.Project.Backdrops[0].Path != "bg.png" {
+		t.Fatalf("opened.Project.Backdrops = %#v, want [bg.png]", opened.Project.Backdrops)
+	}
+	if opened.Project.Bgm != "theme.mp3" {
+		t.Fatalf("opened.Project.Bgm = %q, want theme.mp3", opened.Project.Bgm)
+	}
+	if len(opened.Project.Zorder) != 1 || opened.Project.Zorder[0] != "Hero" {
+		t.Fatalf("opened.Project.Zorder = %#v, want [Hero]", opened.Project.Zorder)
+	}
+}
+
+func TestOpenBuilderResourcesPrefersPackedConfigOverSource(t *testing.T) {
+	dir := t.TempDir()
+	writeProjectFile(t, dir, "index.json", `{"run":{"title":"source-demo"}}`)
+	writeProjectFile(t, dir, "sprites/Hero/index.json", `{
+		"costumes":[{"name":"hero-source","path":"source.png","x":1,"y":2}],
+		"size":60
+	}`)
+	writeProjectFile(t, dir, "sounds/Jump/index.json", `{"path":"source.wav","rate":1}`)
+	writeProjectFile(t, dir, packedIndexJSON, `{
+		"run":{"title":"packed-demo"},
+		"sprites":{
+			"Hero":{
+				"costumes":[{"name":"hero-packed","path":"packed.png","x":10,"y":20}],
+				"size":80
+			}
+		},
+		"sounds":{
+			"Jump":{"path":"packed.wav","rate":2}
+		}
+	}`)
+
+	opened, err := OpenBuilderResources(localDir{base: dir}, nil)
+	if err != nil {
+		t.Fatalf("OpenBuilderResources(prefer packed) error: %v", err)
+	}
+	defer opened.FS.Close()
+
+	if opened.Config.Title != "packed-demo" {
+		t.Fatalf("opened.Config.Title = %q, want packed-demo", opened.Config.Title)
+	}
+
+	sprite, err := LoadSpriteConfig(opened.FS, "Hero")
+	if err != nil {
+		t.Fatalf("LoadSpriteConfig(prefer packed) error: %v", err)
+	}
+	if got := sprite.Config.Costumes[0].Path; got != "sprites/Hero/packed.png" {
+		t.Fatalf("sprite.Config.Costumes[0].Path = %q, want sprites/Hero/packed.png", got)
+	}
+	if sprite.Config.Size != 80 {
+		t.Fatalf("sprite.Config.Size = %v, want 80", sprite.Config.Size)
+	}
+
+	sound, err := LoadSoundConfig(opened.FS, "Jump")
+	if err != nil {
+		t.Fatalf("LoadSoundConfig(prefer packed) error: %v", err)
+	}
+	if got := sound.Config.Path; got != "sounds/Jump/packed.wav" {
+		t.Fatalf("sound.Config.Path = %q, want sounds/Jump/packed.wav", got)
+	}
+	if sound.Config.Rate != 2 {
+		t.Fatalf("sound.Config.Rate = %d, want 2", sound.Config.Rate)
+	}
+}
+
+func TestOpenBuilderResourcesFallsBackToSourceChildConfigWhenPackedChildMissing(t *testing.T) {
+	dir := t.TempDir()
+	writeProjectFile(t, dir, "index.json", `{"run":{"title":"source-demo"}}`)
+	writeProjectFile(t, dir, "sprites/Hero/index.json", `{
+		"costumes":[{"name":"hero-source","path":"source.png","x":1,"y":2}],
+		"size":60
+	}`)
+	writeProjectFile(t, dir, "sounds/Jump/index.json", `{"path":"source.wav","rate":1}`)
+	writeProjectFile(t, dir, packedIndexJSON, `{
+		"run":{"title":"packed-demo"},
+		"zorder":["Hero"]
+	}`)
+
+	opened, err := OpenBuilderResources(localDir{base: dir}, nil)
+	if err != nil {
+		t.Fatalf("OpenBuilderResources(fallback child) error: %v", err)
+	}
+	defer opened.FS.Close()
+
+	if opened.Config.Title != "packed-demo" {
+		t.Fatalf("opened.Config.Title = %q, want packed-demo", opened.Config.Title)
+	}
+
+	sprite, err := LoadSpriteConfig(opened.FS, "Hero")
+	if err != nil {
+		t.Fatalf("LoadSpriteConfig(fallback child) error: %v", err)
+	}
+	if got := sprite.Config.Costumes[0].Path; got != "sprites/Hero/source.png" {
+		t.Fatalf("sprite.Config.Costumes[0].Path = %q, want sprites/Hero/source.png", got)
+	}
+	if sprite.Config.Size != 60 {
+		t.Fatalf("sprite.Config.Size = %v, want 60", sprite.Config.Size)
+	}
+
+	sound, err := LoadSoundConfig(opened.FS, "Jump")
+	if err != nil {
+		t.Fatalf("LoadSoundConfig(fallback child) error: %v", err)
+	}
+	if got := sound.Config.Path; got != "sounds/Jump/source.wav" {
+		t.Fatalf("sound.Config.Path = %q, want sounds/Jump/source.wav", got)
+	}
+	if sound.Config.Rate != 1 {
+		t.Fatalf("sound.Config.Rate = %d, want 1", sound.Config.Rate)
+	}
+}
+
+func TestOpenBuilderResourcesFromStringResourceWithPackedFallback(t *testing.T) {
+	dir := t.TempDir()
+	writeProjectFile(t, dir, "index.json", `{"run":{"title":"source-demo"}}`)
+	writeProjectFile(t, dir, "sprites/Hero/index.json", `{
+		"costumes":[{"name":"hero-source","path":"source.png","x":1,"y":2}],
+		"size":60
+	}`)
+	writeProjectFile(t, dir, packedIndexJSON, `{
+		"run":{"title":"packed-demo"}
+	}`)
+
+	opened, err := OpenBuilderResources(dir, nil)
+	if err != nil {
+		t.Fatalf("OpenBuilderResources(string resource) error: %v", err)
+	}
+	defer opened.FS.Close()
+
+	if opened.AssetDir != dir {
+		t.Fatalf("opened.AssetDir = %q, want %q", opened.AssetDir, dir)
+	}
+	if opened.Config.Title != "packed-demo" {
+		t.Fatalf("opened.Config.Title = %q, want packed-demo", opened.Config.Title)
+	}
+	if _, ok := opened.FS.(spxfs.GdDir); !ok {
+		t.Fatalf("opened.FS does not implement spxfs.GdDir: %T", opened.FS)
+	}
+
+	sprite, err := LoadSpriteConfig(opened.FS, "Hero")
+	if err != nil {
+		t.Fatalf("LoadSpriteConfig(string resource) error: %v", err)
+	}
+	if got := sprite.Config.Costumes[0].Path; got != "sprites/Hero/source.png" {
+		t.Fatalf("sprite.Config.Costumes[0].Path = %q, want sprites/Hero/source.png", got)
+	}
+}
+
+func TestOpenBuilderResourcesFailsOnInvalidPackedConfig(t *testing.T) {
+	dir := t.TempDir()
+	writeProjectFile(t, dir, "index.json", `{"run":{"title":"source-demo"}}`)
+	writeProjectFile(t, dir, packedIndexJSON, `{`)
+
+	_, err := OpenBuilderResources(localDir{base: dir}, nil)
+	if err == nil {
+		t.Fatal("OpenBuilderResources(invalid packed) error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), packedIndexJSON) {
+		t.Fatalf("OpenBuilderResources(invalid packed) error = %q, want mention of %s", err, packedIndexJSON)
 	}
 }
 

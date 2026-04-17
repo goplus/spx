@@ -1,0 +1,33 @@
+{
+  "map": {
+    "width": 480,
+    "height": 360
+  },
+  "sprites": {
+    "PackHero": {
+      "costumeSet": {
+        "faceRight": 180,
+        "path": "1.png",
+        "nx": 96
+      },
+      "costumeIndex": 0,
+      "heading": 90,
+      "isDraggable": false,
+      "rotationStyle": "normal",
+      "size": 1,
+      "visible": true,
+      "x": 0,
+      "y": 0
+    }
+  },
+  "sounds": {
+    "click": {
+      "path": "1.wav",
+      "rate": 11025,
+      "sampleCount": 2912
+    }
+  },
+  "zorder": [
+    "PackHero"
+  ]
+}

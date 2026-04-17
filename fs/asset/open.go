@@ -33,5 +33,10 @@ func Open(base string) (fs.Dir, error) {
 }
 
 func openAsset(path string) (io.ReadSeekCloser, error) {
-	return os.Open(filepath.FromSlash(path))
+	filePath := filepath.FromSlash(path)
+	f, err := os.Open(filePath)
+	if err == nil {
+		return f, nil
+	}
+	return os.Open(filepath.Join("..", filePath))
 }
