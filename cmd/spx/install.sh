@@ -8,6 +8,11 @@ cd "$SCRIPT_DIR"
 # Pin Go toolchain version
 export GOTOOLCHAIN=go1.25.8
 
+if ! go generate internal/gengo/embedded_pkgs.go > /dev/null 2>&1; then
+    echo "Error during go generate, showing full output:"
+    go generate internal/gengo/embedded_pkgs.go
+fi
+
 target_font_dir=./template/project/engine/fonts/
 mkdir -p "$target_font_dir"
 font_path=$target_font_dir/CnFont.ttf
