@@ -28,8 +28,13 @@ func TestInstallScriptDoesNotReferenceLegacyGengoTarget(t *testing.T) {
 		t.Fatalf("read install script: %v", err)
 	}
 
-	const legacyGenerateTarget = "internal/gengo/embedded_pkgs.go"
-	if strings.Contains(string(content), legacyGenerateTarget) {
-		t.Fatalf("install script should not reference removed target %s", legacyGenerateTarget)
+	legacyTargets := []string{
+		"internal/gengo/embedded_pkgs.go",
+		"internal/embeddedpkgs",
+	}
+	for _, legacyTarget := range legacyTargets {
+		if strings.Contains(string(content), legacyTarget) {
+			t.Fatalf("install script should not reference removed target %s", legacyTarget)
+		}
 	}
 }

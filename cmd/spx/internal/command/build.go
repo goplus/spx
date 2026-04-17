@@ -22,6 +22,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"slices"
 	"strings"
 
@@ -30,6 +31,12 @@ import (
 	spxlog "github.com/goplus/spx/v2/internal/log"
 	xgotoken "github.com/goplus/xgo/token"
 	xgotool "github.com/goplus/xgo/tool"
+	"golang.org/x/mod/module"
+)
+
+var (
+	readBuildInfo = debug.ReadBuildInfo
+	outputCommand = util.OutputCommand
 )
 
 func (cmd *CmdTool) BuildWasm() error {
@@ -276,34 +283,36 @@ func (cmd *CmdTool) newXGoToolConfig(spxProjPath string) (*xgotool.Config, error
 }
 
 func resolveXGoModuleInfo(workDir string) (*modenv.XGo, error) {
-	xgoInfo, err := resolveXGoModuleInfoFromGoList(workDir)
+	xgoInfo, err := resolveXGoModuleInfoFromBuildInfo()
 	if err == nil {
 		return xgoInfo, nil
 	}
 
-	spxlog.Warn("failed to resolve github.com/goplus/xgo via go list; falling back to system xgo: %v", err)
+	spxlog.Warn("failed to resolve github.com/goplus/xgo from spx build info; falling back to system xgo: %v", err)
 	xgoInfo, fallbackErr := resolveSystemXGoInfo(workDir)
 	if fallbackErr != nil {
-		return nil, fmt.Errorf("failed to resolve github.com/goplus/xgo module: %v; system xgo fallback failed: %w", err, fallbackErr)
+		return nil, fmt.Errorf("failed to resolve github.com/goplus/xgo from spx build info: %v; system xgo fallback failed: %w", err, fallbackErr)
 	}
 	spxlog.Warn("using system xgo %s at %s", xgoInfo.Version, xgoInfo.Root)
 	return xgoInfo, nil
 }
 
-func resolveXGoModuleInfoFromGoList(workDir string) (*modenv.XGo, error) {
-	output, err := util.OutputCommand(
-		util.CommandOptions{Dir: workDir},
-		"go", "list", "-f", "{{.Dir}}\n{{.Version}}", "-m", "github.com/goplus/xgo",
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve github.com/goplus/xgo module: %w", err)
+func resolveXGoModuleInfoFromBuildInfo() (*modenv.XGo, error) {
+	info, ok := readBuildInfo()
+	if !ok || info == nil {
+		return nil, fmt.Errorf("build info unavailable")
 	}
 
-	return parseXGoInfoOutput(output, "go list returned an empty directory for github.com/goplus/xgo")
+	goModCache, err := resolveGoModCacheDir()
+	if err != nil {
+		return nil, err
+	}
+
+	return resolveXGoModuleInfoFromBuildData(info, goModCache)
 }
 
 func resolveSystemXGoInfo(workDir string) (*modenv.XGo, error) {
-	output, err := util.OutputCommand(
+	output, err := outputCommand(
 		util.CommandOptions{Dir: workDir},
 		"xgo", "env", "XGOROOT", "XGOVERSION",
 	)
@@ -314,21 +323,135 @@ func resolveSystemXGoInfo(workDir string) (*modenv.XGo, error) {
 	return parseXGoInfoOutput(output, "xgo env returned an empty XGOROOT")
 }
 
+func resolveXGoModuleInfoFromBuildData(info *debug.BuildInfo, goModCache string) (*modenv.XGo, error) {
+	dep := findBuildInfoDep(info, "github.com/goplus/xgo")
+	if dep == nil {
+		return nil, fmt.Errorf("github.com/goplus/xgo not found in build info")
+	}
+
+	if dep.Replace != nil && isLocalModulePath(dep.Replace.Path) {
+		root, err := filepath.Abs(dep.Replace.Path)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve replaced xgo path %q: %w", dep.Replace.Path, err)
+		}
+		if !isValidXGoRoot(root) {
+			return nil, fmt.Errorf("replaced xgo root is invalid: %s", root)
+		}
+		return &modenv.XGo{
+			Version: normalizeXGoVersion(dep.Replace.Version, dep.Version),
+			Root:    root,
+		}, nil
+	}
+
+	modPath := dep.Path
+	modVersion := dep.Version
+	if dep.Replace != nil {
+		modPath = dep.Replace.Path
+		modVersion = normalizeXGoVersion(dep.Replace.Version, dep.Version)
+	}
+	if modVersion == "(devel)" {
+		return nil, fmt.Errorf("xgo build info version is unavailable")
+	}
+	if goModCache == "" {
+		return nil, fmt.Errorf("GOMODCACHE is empty")
+	}
+
+	root, err := resolveModuleCacheDir(goModCache, modPath, modVersion)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve xgo module cache path: %w", err)
+	}
+	if !isValidXGoRoot(root) {
+		return nil, fmt.Errorf("xgo module cache root is invalid or missing: %s", root)
+	}
+
+	return &modenv.XGo{
+		Version: modVersion,
+		Root:    root,
+	}, nil
+}
+
+func findBuildInfoDep(info *debug.BuildInfo, modulePath string) *debug.Module {
+	for _, dep := range info.Deps {
+		if dep != nil && dep.Path == modulePath {
+			return dep
+		}
+	}
+	return nil
+}
+
+func resolveModuleCacheDir(goModCache, modPath, modVersion string) (string, error) {
+	escapedPath, err := module.EscapePath(modPath)
+	if err != nil {
+		return "", err
+	}
+	escapedVersion, err := module.EscapeVersion(modVersion)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(goModCache, escapedPath+"@"+escapedVersion), nil
+}
+
+func resolveGoModCacheDir() (string, error) {
+	if goModCache := strings.TrimSpace(os.Getenv("GOMODCACHE")); goModCache != "" {
+		return goModCache, nil
+	}
+
+	output, err := outputCommand(util.CommandOptions{}, "go", "env", "GOMODCACHE")
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve GOMODCACHE: %w", err)
+	}
+
+	goModCache := strings.TrimSpace(string(output))
+	if goModCache == "" {
+		return "", fmt.Errorf("GOMODCACHE is empty")
+	}
+	return goModCache, nil
+}
+
+func isLocalModulePath(modulePath string) bool {
+	return filepath.IsAbs(modulePath) || strings.HasPrefix(modulePath, ".")
+}
+
+func isValidXGoRoot(root string) bool {
+	if root == "" {
+		return false
+	}
+	if info, err := os.Stat(filepath.Join(root, "cmd", "xgo")); err != nil || !info.IsDir() {
+		return false
+	}
+	if info, err := os.Stat(filepath.Join(root, "go.mod")); err != nil || info.IsDir() {
+		return false
+	}
+	return true
+}
+
+func normalizeXGoVersion(primary, fallback string) string {
+	if strings.TrimSpace(primary) != "" {
+		return strings.TrimSpace(primary)
+	}
+	if strings.TrimSpace(fallback) != "" {
+		return strings.TrimSpace(fallback)
+	}
+	return "(devel)"
+}
+
 func parseXGoInfoOutput(output []byte, emptyRootErr string) (*modenv.XGo, error) {
 	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
 	if len(lines) == 0 || strings.TrimSpace(lines[0]) == "" {
 		return nil, fmt.Errorf("%s", emptyRootErr)
 	}
 
-	version := "(devel)"
-	if len(lines) > 1 && strings.TrimSpace(lines[1]) != "" {
-		version = strings.TrimSpace(lines[1])
-	}
-
 	return &modenv.XGo{
-		Version: version,
+		Version: normalizeXGoVersion("", valueAt(lines, 1)),
 		Root:    strings.TrimSpace(lines[0]),
 	}, nil
+}
+
+func valueAt(lines []string, idx int) string {
+	if idx < 0 || idx >= len(lines) {
+		return ""
+	}
+	return strings.TrimSpace(lines[idx])
 }
 
 // executeDllBuild runs a multi-arch C-shared build.
