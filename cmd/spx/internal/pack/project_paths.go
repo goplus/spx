@@ -30,6 +30,7 @@ import (
 
 const (
 	projectConfigName = ".config"
+	packedIndexName   = "index_pack.json"
 	// engineExtAssetDir is the extasset zip root.
 	engineExtAssetDir = "extasset"
 	// sharedAssetEscapeDepth is the minimum "../" depth.
@@ -44,6 +45,12 @@ type assetProjectConfig struct {
 type assetPathRef struct {
 	configDir string
 	path      string
+}
+
+type packedAssetIndex struct {
+	Project coreproject.ProjectConfig
+	Sprites map[string]coreproject.SpriteConfig
+	Sounds  map[string]coreproject.SoundConfig
 }
 
 // collectExternalAssetPaths matches runtime asset lookup.
@@ -104,71 +111,214 @@ func collectExternalAssetPaths(baseFolder string, existingZipPaths map[string]st
 func collectAssetPathRefs(assetRoot string) ([]assetPathRef, error) {
 	var refs []assetPathRef
 
-	projectConfigPath := filepath.Join(assetRoot, "index.json")
-	if _, err := os.Stat(projectConfigPath); err != nil {
-		if !os.IsNotExist(err) {
-			return nil, fmt.Errorf("stat %s: %w", projectConfigPath, err)
-		}
+	packed, hasPacked, err := readPackedAssetIndex(assetRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	if hasPacked {
+		refs = appendProjectAssetRefs(refs, packed.Project)
 	} else {
-		var conf coreproject.ProjectConfig
-		if err := readJSONFile(projectConfigPath, &conf); err != nil {
-			return nil, fmt.Errorf("parse %s: %w", projectConfigPath, err)
-		}
-		for _, backdrop := range conf.Backdrops {
-			if backdrop != nil {
-				refs = appendAssetPathRef(refs, "", backdrop.Path)
+		projectConfigPath := filepath.Join(assetRoot, "index.json")
+		if _, err := os.Stat(projectConfigPath); err != nil {
+			if !os.IsNotExist(err) {
+				return nil, fmt.Errorf("stat %s: %w", projectConfigPath, err)
 			}
+		} else {
+			var conf coreproject.ProjectConfig
+			if err := readJSONFile(projectConfigPath, &conf); err != nil {
+				return nil, fmt.Errorf("parse %s: %w", projectConfigPath, err)
+			}
+			refs = appendProjectAssetRefs(refs, conf)
 		}
-		refs = appendAssetPathRef(refs, "", conf.Bgm)
-		refs = appendAssetPathRef(refs, "", conf.TilemapPath)
 	}
 
-	spriteConfigPaths, err := filepath.Glob(filepath.Join(assetRoot, "sprites", "*", "index.json"))
+	spriteRefs, err := collectIndexedAssetRefs(
+		assetRoot,
+		"sprites",
+		packed.Sprites,
+		appendSpriteAssetRefs,
+	)
 	if err != nil {
 		return nil, err
 	}
-	for _, spriteConfigPath := range spriteConfigPaths {
-		configDir, err := relConfigDir(assetRoot, filepath.Dir(spriteConfigPath))
+	refs = append(refs, spriteRefs...)
+
+	soundRefs, err := collectIndexedAssetRefs(
+		assetRoot,
+		"sounds",
+		packed.Sounds,
+		appendSoundAssetRefs,
+	)
+	if err != nil {
+		return nil, err
+	}
+	refs = append(refs, soundRefs...)
+
+	return refs, nil
+}
+
+func collectIndexedAssetRefs[T any](
+	assetRoot string,
+	category string,
+	packed map[string]T,
+	appendRefs func([]assetPathRef, string, T) []assetPathRef,
+) ([]assetPathRef, error) {
+	var refs []assetPathRef
+
+	for name, conf := range packed {
+		refs = appendRefs(refs, path.Join(category, name), conf)
+	}
+
+	configPaths, err := filepath.Glob(filepath.Join(assetRoot, category, "*", "index.json"))
+	if err != nil {
+		return nil, err
+	}
+	for _, configPath := range configPaths {
+		name := filepath.Base(filepath.Dir(configPath))
+		if _, exists := packed[name]; exists {
+			continue
+		}
+
+		configDir, err := relConfigDir(assetRoot, filepath.Dir(configPath))
 		if err != nil {
 			return nil, err
 		}
 
-		var conf coreproject.SpriteConfig
-		if err := readJSONFile(spriteConfigPath, &conf); err != nil {
-			return nil, fmt.Errorf("parse %s: %w", spriteConfigPath, err)
+		var conf T
+		if err := readJSONFile(configPath, &conf); err != nil {
+			return nil, fmt.Errorf("parse %s: %w", configPath, err)
 		}
-
-		for _, costume := range conf.Costumes {
-			if costume != nil {
-				refs = appendAssetPathRef(refs, configDir, costume.Path)
-			}
-		}
-		if conf.CostumeSet != nil && conf.CostumeSet.Path != "" {
-			refs = appendAssetPathRef(refs, configDir, conf.CostumeSet.Path)
-		}
-		if conf.CostumeMPSet != nil && conf.CostumeMPSet.Path != "" {
-			refs = appendAssetPathRef(refs, configDir, conf.CostumeMPSet.Path)
-		}
-	}
-
-	soundConfigPaths, err := filepath.Glob(filepath.Join(assetRoot, "sounds", "*", "index.json"))
-	if err != nil {
-		return nil, err
-	}
-	for _, soundConfigPath := range soundConfigPaths {
-		configDir, err := relConfigDir(assetRoot, filepath.Dir(soundConfigPath))
-		if err != nil {
-			return nil, err
-		}
-
-		var conf coreproject.SoundConfig
-		if err := readJSONFile(soundConfigPath, &conf); err != nil {
-			return nil, fmt.Errorf("parse %s: %w", soundConfigPath, err)
-		}
-		refs = appendAssetPathRef(refs, configDir, conf.Path)
+		refs = appendRefs(refs, configDir, conf)
 	}
 
 	return refs, nil
+}
+
+func appendProjectAssetRefs(refs []assetPathRef, conf coreproject.ProjectConfig) []assetPathRef {
+	for _, backdrop := range conf.Backdrops {
+		if backdrop != nil {
+			refs = appendAssetPathRef(refs, "", backdrop.Path)
+		}
+	}
+	refs = appendAssetPathRef(refs, "", conf.Bgm)
+	refs = appendAssetPathRef(refs, "", conf.TilemapPath)
+	return refs
+}
+
+func appendSpriteAssetRefs(refs []assetPathRef, configDir string, conf coreproject.SpriteConfig) []assetPathRef {
+	for _, costume := range conf.Costumes {
+		if costume != nil {
+			refs = appendAssetPathRef(refs, configDir, costume.Path)
+		}
+	}
+	if conf.CostumeSet != nil && conf.CostumeSet.Path != "" {
+		refs = appendAssetPathRef(refs, configDir, conf.CostumeSet.Path)
+	}
+	if conf.CostumeMPSet != nil && conf.CostumeMPSet.Path != "" {
+		refs = appendAssetPathRef(refs, configDir, conf.CostumeMPSet.Path)
+	}
+	return refs
+}
+
+func appendSoundAssetRefs(refs []assetPathRef, configDir string, conf coreproject.SoundConfig) []assetPathRef {
+	return appendAssetPathRef(refs, configDir, conf.Path)
+}
+
+func readPackedAssetIndex(assetRoot string) (packedAssetIndex, bool, error) {
+	packedPath := filepath.Join(assetRoot, packedIndexName)
+	if _, err := os.Stat(packedPath); err != nil {
+		if os.IsNotExist(err) {
+			return packedAssetIndex{}, false, nil
+		}
+		return packedAssetIndex{}, false, fmt.Errorf("stat %s: %w", packedPath, err)
+	}
+
+	var root map[string]json.RawMessage
+	if err := readJSONFile(packedPath, &root); err != nil {
+		return packedAssetIndex{}, false, fmt.Errorf("parse %s: %w", packedPath, err)
+	}
+
+	sourceRoot, err := readSourceAssetIndexRoot(assetRoot)
+	if err != nil {
+		return packedAssetIndex{}, false, err
+	}
+	mergedRoot := mergePackedRootSections(root, sourceRoot)
+
+	var packed packedAssetIndex
+	if err := decodePackedAssetSection(mergedRoot, &packed.Project); err != nil {
+		return packedAssetIndex{}, false, fmt.Errorf("parse %s root: %w", packedPath, err)
+	}
+	packed.Sprites = make(map[string]coreproject.SpriteConfig)
+	if err := decodePackedAssetObjects(root["sprites"], packed.Sprites); err != nil {
+		return packedAssetIndex{}, false, fmt.Errorf("parse %s sprites: %w", packedPath, err)
+	}
+	packed.Sounds = make(map[string]coreproject.SoundConfig)
+	if err := decodePackedAssetObjects(root["sounds"], packed.Sounds); err != nil {
+		return packedAssetIndex{}, false, fmt.Errorf("parse %s sounds: %w", packedPath, err)
+	}
+	return packed, true, nil
+}
+
+func readSourceAssetIndexRoot(assetRoot string) (map[string]json.RawMessage, error) {
+	projectConfigPath := filepath.Join(assetRoot, "index.json")
+	if _, err := os.Stat(projectConfigPath); err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("stat %s: %w", projectConfigPath, err)
+	}
+
+	var root map[string]json.RawMessage
+	if err := readJSONFile(projectConfigPath, &root); err != nil {
+		return nil, fmt.Errorf("parse %s: %w", projectConfigPath, err)
+	}
+	return root, nil
+}
+
+func mergePackedRootSections(packedRoot map[string]json.RawMessage, sourceRoot map[string]json.RawMessage) map[string]json.RawMessage {
+	if len(sourceRoot) == 0 {
+		return packedRoot
+	}
+
+	merged := make(map[string]json.RawMessage, len(sourceRoot)+len(packedRoot))
+	for key, value := range sourceRoot {
+		merged[key] = value
+	}
+	for key, value := range packedRoot {
+		merged[key] = value
+	}
+	return merged
+}
+
+func decodePackedAssetSection(root map[string]json.RawMessage, dest *coreproject.ProjectConfig) error {
+	if len(root) == 0 {
+		return nil
+	}
+	raw, err := json.Marshal(root)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(raw, dest)
+}
+
+func decodePackedAssetObjects[T any](raw json.RawMessage, dest map[string]T) error {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil
+	}
+
+	entries := make(map[string]json.RawMessage)
+	if err := json.Unmarshal(raw, &entries); err != nil {
+		return err
+	}
+	for name, entry := range entries {
+		var conf T
+		if err := json.Unmarshal(entry, &conf); err != nil {
+			return fmt.Errorf("%s: %w", name, err)
+		}
+		dest[name] = conf
+	}
+	return nil
 }
 
 func appendAssetPathRef(refs []assetPathRef, configDir, relPath string) []assetPathRef {
