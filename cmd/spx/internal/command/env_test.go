@@ -83,6 +83,20 @@ func TestEnsureSpxModuleReplacePreservesTrailingBlankLinesAndCRLF(t *testing.T) 
 	}
 }
 
+func TestShouldRunGoModTidy(t *testing.T) {
+	repoTargetDir := setupAdaptGoModFixture(t)
+	repoCmd := CmdTool{TargetDir: repoTargetDir, TargetAbsDir: repoTargetDir}
+	if repoCmd.shouldRunGoModTidy() {
+		t.Fatal("shouldRunGoModTidy returned true in local repo, want false")
+	}
+
+	externalTargetDir := t.TempDir()
+	externalCmd := CmdTool{TargetDir: externalTargetDir, TargetAbsDir: externalTargetDir}
+	if !externalCmd.shouldRunGoModTidy() {
+		t.Fatal("shouldRunGoModTidy returned false outside local repo, want true")
+	}
+}
+
 func setupAdaptGoModFixture(t *testing.T) string {
 	t.Helper()
 

@@ -110,11 +110,17 @@ func main() {print(&spx.Game{})}
 	rawDir, _ := os.Getwd()
 	os.Chdir(cmd.TargetDir)
 
-	util.RunGolang(nil, "mod", "tidy")
+	if cmd.shouldRunGoModTidy() {
+		util.RunGolang(nil, "mod", "tidy")
+	}
 
 	os.Remove(tempFile)
 
 	os.Chdir(rawDir)
+}
+
+func (cmd *CmdTool) shouldRunGoModTidy() bool {
+	return cmd.findSpxRoot() == ""
 }
 
 // ShouldReimport reports whether Godot reimport is needed.

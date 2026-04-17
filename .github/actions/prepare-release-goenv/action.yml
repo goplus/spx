@@ -75,8 +75,14 @@ runs:
         mkdir -p "$GOMODCACHE_DIR" "$PACKAGED_BIN_DIR"
 
         shopt -s nullglob
-        RUNTIME_BINARIES=("$INSTALLED_BIN_DIR"/gdspxrt*)
+        RUNTIME_BINARY_CANDIDATES=("$INSTALLED_BIN_DIR"/gdspxrt*)
         shopt -u nullglob
+        RUNTIME_BINARIES=()
+        for candidate in "${RUNTIME_BINARY_CANDIDATES[@]}"; do
+          if [ -f "$candidate" ]; then
+            RUNTIME_BINARIES+=("$candidate")
+          fi
+        done
         if [ "${#RUNTIME_BINARIES[@]}" -eq 0 ]; then
           echo "❌ Error: runtime binaries not found in $INSTALLED_BIN_DIR"
           exit 1
@@ -126,6 +132,11 @@ runs:
           exit 0
         fi
 
+        if ! command -v xgo >/dev/null 2>&1; then
+          echo "❌ Error: xgo is required for native dependency warm-up but was not found in PATH"
+          exit 1
+        fi
+
         # Run the smoke test with a bounded timeout so dependency downloads can warm GOMODCACHE.
         rm -f "$SMOKE_LOG_PATH"
         "$PACKAGED_SPX" run --goenv="$GOENV_ROOT" --path=test/CI --headless >"$SMOKE_LOG_PATH" 2>&1 &
@@ -134,8 +145,10 @@ runs:
         TIMED_OUT=true
         for _ in $(seq 1 30); do
           if ! kill -0 "$SPX_PID" 2>/dev/null; then
+            set +e
             wait "$SPX_PID"
             EXIT_STATUS=$?
+            set -e
             TIMED_OUT=false
             break
           fi
