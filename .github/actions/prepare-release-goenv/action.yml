@@ -75,7 +75,12 @@ runs:
         mkdir -p "$GOMODCACHE_DIR" "$PACKAGED_BIN_DIR"
 
         shopt -s nullglob
-        RUNTIME_BINARIES=("$INSTALLED_BIN_DIR"/gdspxrt*)
+        RUNTIME_BINARIES=()
+        for runtime_path in "$INSTALLED_BIN_DIR"/gdspxrt*; do
+          if [ -f "$runtime_path" ]; then
+            RUNTIME_BINARIES+=("$runtime_path")
+          fi
+        done
         shopt -u nullglob
         if [ "${#RUNTIME_BINARIES[@]}" -eq 0 ]; then
           echo "❌ Error: runtime binaries not found in $INSTALLED_BIN_DIR"
