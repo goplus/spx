@@ -283,18 +283,37 @@ func (cmd *CmdTool) newXGoToolConfig(spxProjPath string) (*xgotool.Config, error
 }
 
 func resolveXGoModuleInfo(workDir string) (*modenv.XGo, error) {
-	xgoInfo, err := resolveXGoModuleInfoFromBuildInfo()
-	if err == nil {
+	if xgoInfo, err := resolveXGoModuleInfoFromEnv(); err == nil {
 		return xgoInfo, nil
 	}
 
-	spxlog.Warn("failed to resolve github.com/goplus/xgo from spx build info; falling back to system xgo: %v", err)
-	xgoInfo, fallbackErr := resolveSystemXGoInfo(workDir)
-	if fallbackErr != nil {
-		return nil, fmt.Errorf("failed to resolve github.com/goplus/xgo from spx build info: %v; system xgo fallback failed: %w", err, fallbackErr)
+	xgoInfo, err := resolveSystemXGoInfo(workDir)
+	if err == nil {
+		spxlog.Warn("using system xgo %s at %s", xgoInfo.Version, xgoInfo.Root)
+		return xgoInfo, nil
 	}
-	spxlog.Warn("using system xgo %s at %s", xgoInfo.Version, xgoInfo.Root)
+
+	spxlog.Warn("failed to resolve github.com/goplus/xgo from environment or system xgo; falling back to spx build info: %v", err)
+	xgoInfo, fallbackErr := resolveXGoModuleInfoFromBuildInfo()
+	if fallbackErr != nil {
+		return nil, fmt.Errorf("failed to resolve github.com/goplus/xgo from environment or system xgo: %v; spx build info fallback failed: %w", err, fallbackErr)
+	}
 	return xgoInfo, nil
+}
+
+func resolveXGoModuleInfoFromEnv() (*modenv.XGo, error) {
+	xgoRoot := strings.TrimSpace(os.Getenv("XGOROOT"))
+	if xgoRoot == "" {
+		return nil, fmt.Errorf("XGOROOT is empty")
+	}
+	if !isValidXGoRoot(xgoRoot) {
+		return nil, fmt.Errorf("XGOROOT is invalid: %s", xgoRoot)
+	}
+
+	return &modenv.XGo{
+		Version: normalizeXGoVersion(os.Getenv("XGOVERSION"), ""),
+		Root:    xgoRoot,
+	}, nil
 }
 
 func resolveXGoModuleInfoFromBuildInfo() (*modenv.XGo, error) {

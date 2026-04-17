@@ -119,6 +119,12 @@ runs:
 
         # Set GOMODCACHE so the following smoke run populates the bundled offline cache.
         export GOMODCACHE="$GOMODCACHE_DIR"
+        if command -v xgo >/dev/null 2>&1; then
+          export XGOROOT="$(xgo env XGOROOT | tr -d '\r')"
+          export XGOVERSION="$(xgo env XGOVERSION | tr -d '\r')"
+          echo "Using system xgo root: $XGOROOT"
+          echo "Using system xgo version: $XGOVERSION"
+        fi
 
         if [ ! -f "$PACKAGED_SPX" ]; then
           echo "❌ Error: packaged spx binary not found: $PACKAGED_SPX"

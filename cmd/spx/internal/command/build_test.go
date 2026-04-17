@@ -74,6 +74,44 @@ func TestResolveXGoModuleInfoFromBuildDataUsesLocalReplace(t *testing.T) {
 	}
 }
 
+func TestResolveXGoModuleInfoFromEnvUsesProvidedRoot(t *testing.T) {
+	xgoRoot := t.TempDir()
+	writeTestXGoRoot(t, xgoRoot)
+
+	oldRoot, hadRoot := os.LookupEnv("XGOROOT")
+	oldVersion, hadVersion := os.LookupEnv("XGOVERSION")
+	t.Cleanup(func() {
+		if hadRoot {
+			os.Setenv("XGOROOT", oldRoot)
+		} else {
+			os.Unsetenv("XGOROOT")
+		}
+		if hadVersion {
+			os.Setenv("XGOVERSION", oldVersion)
+		} else {
+			os.Unsetenv("XGOVERSION")
+		}
+	})
+
+	if err := os.Setenv("XGOROOT", xgoRoot); err != nil {
+		t.Fatalf("Setenv(XGOROOT) returned error: %v", err)
+	}
+	if err := os.Setenv("XGOVERSION", "v1.7.1"); err != nil {
+		t.Fatalf("Setenv(XGOVERSION) returned error: %v", err)
+	}
+
+	got, err := resolveXGoModuleInfoFromEnv()
+	if err != nil {
+		t.Fatalf("resolveXGoModuleInfoFromEnv returned error: %v", err)
+	}
+	if got.Root != xgoRoot {
+		t.Fatalf("xgo root = %s, want %s", got.Root, xgoRoot)
+	}
+	if got.Version != "v1.7.1" {
+		t.Fatalf("xgo version = %s, want v1.7.1", got.Version)
+	}
+}
+
 func TestResolveGoModCacheDirFallsBackToGoEnv(t *testing.T) {
 	oldOutputCommand := outputCommand
 	oldGoModCache, hadGoModCache := os.LookupEnv("GOMODCACHE")

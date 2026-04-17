@@ -153,6 +153,13 @@ runs:
         echo "Command: $SPX_BIN_PATH run --goenv=$VERIFY_ROOT_DIR --path=$TEST_PROJECT_DIR --headless"
         echo ""
 
+        if command -v xgo >/dev/null 2>&1; then
+          export XGOROOT="$(xgo env XGOROOT | tr -d '\r')"
+          export XGOVERSION="$(xgo env XGOVERSION | tr -d '\r')"
+          echo "Using system xgo root: $XGOROOT"
+          echo "Using system xgo version: $XGOVERSION"
+        fi
+
         rm -f "$VERIFY_LOG_PATH"
         set +e
         "$SPX_BIN_PATH" run --goenv="$VERIFY_ROOT_DIR" --path="$TEST_PROJECT_DIR" --headless 2>&1 | tee "$VERIFY_LOG_PATH"
