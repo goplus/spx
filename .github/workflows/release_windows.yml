@@ -16,8 +16,6 @@ jobs:
   windows-goenv:
     name: Package Windows goenv (${{ matrix.arch_name }})
     runs-on: windows-latest
-    env:
-      GOENV_DIR: ../release-goenv
     strategy:
       matrix:
         include:
@@ -46,9 +44,9 @@ jobs:
       - name: Download go toolchain
         shell: msys2 {0}
         run: |
-          rm -rf "$GOENV_DIR"
-          mkdir -p "$GOENV_DIR/gotoolchain"
-          cd "$GOENV_DIR/gotoolchain"
+          rm -rf goenv
+          mkdir -p goenv/gotoolchain
+          cd goenv/gotoolchain
           curl -L -O https://go.dev/dl/go1.25.8.windows-${{ matrix.arch }}.zip
           unzip -q go1.25.8.windows-${{ matrix.arch }}.zip
           rm go1.25.8.windows-${{ matrix.arch }}.zip
@@ -65,23 +63,20 @@ jobs:
           version: ${{ inputs.version }}
           platform: windows
           package-arch: ${{ matrix.arch_name }}
-          goenv-dir: ${{ env.GOENV_DIR }}
 
       - name: Package goenv
         shell: msys2 {0}
         run: |
-          WORKSPACE_ROOT="$(pwd)"
-
           # Remove build cache if it exists (users can rebuild locally)
-          rm -rf "$GOENV_DIR/.cache/build"
+          rm -rf goenv/.cache/build
 
           # Verify what will be packaged
           echo "Contents to be packaged:"
-          du -sh "$GOENV_DIR"/* "$GOENV_DIR"/.cache/* 2>/dev/null || true
+          du -sh goenv/* goenv/.cache/* 2>/dev/null || true
 
           # Create zip archive
-          cd "$GOENV_DIR"
-          zip -r "$WORKSPACE_ROOT/spx-windows-${{ matrix.arch_name }}.zip" .
+          cd goenv
+          zip -r ../spx-windows-${{ matrix.arch_name }}.zip .
 
       - name: Upload release artifact
         uses: actions/upload-artifact@v7

@@ -16,8 +16,6 @@ jobs:
   linux-goenv:
     name: Package Linux goenv (${{ matrix.arch_name }})
     runs-on: ubuntu-latest
-    env:
-      GOENV_DIR: ../release-goenv
     strategy:
       matrix:
         include:
@@ -39,9 +37,9 @@ jobs:
 
       - name: Download go toolchain
         run: |
-          rm -rf "$GOENV_DIR"
-          mkdir -p "$GOENV_DIR/gotoolchain"
-          cd "$GOENV_DIR/gotoolchain"
+          rm -rf goenv
+          mkdir -p goenv/gotoolchain
+          cd goenv/gotoolchain
           curl -L -O https://go.dev/dl/go1.25.8.linux-${{ matrix.arch }}.tar.gz
           tar -xzf go1.25.8.linux-${{ matrix.arch }}.tar.gz
           rm go1.25.8.linux-${{ matrix.arch }}.tar.gz
@@ -58,22 +56,19 @@ jobs:
           version: ${{ inputs.version }}
           platform: linux
           package-arch: ${{ matrix.arch_name }}
-          goenv-dir: ${{ env.GOENV_DIR }}
 
       - name: Package goenv
         run: |
-          WORKSPACE_ROOT="$(pwd)"
-
           # Remove build cache if it exists (users can rebuild locally)
-          rm -rf "$GOENV_DIR/.cache/build"
+          rm -rf goenv/.cache/build
 
           # Verify what will be packaged
           echo "Contents to be packaged:"
-          du -sh "$GOENV_DIR"/* "$GOENV_DIR"/.cache/* 2>/dev/null || true
+          du -sh goenv/* goenv/.cache/* 2>/dev/null || true
 
           # Create zip archive
-          cd "$GOENV_DIR"
-          zip -r "$WORKSPACE_ROOT/spx-linux-${{ matrix.arch_name }}.zip" .
+          cd goenv
+          zip -r ../spx-linux-${{ matrix.arch_name }}.zip .
 
       - name: Upload release artifact
         uses: actions/upload-artifact@v7
