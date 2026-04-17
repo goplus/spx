@@ -25,7 +25,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/goplus/spx/v2/cmd/spx/internal/gengo"
 	"github.com/goplus/spx/v2/cmd/spx/internal/util"
 	spxlog "github.com/goplus/spx/v2/internal/log"
 )
@@ -199,44 +198,11 @@ func (cmd *CmdTool) genGo() string {
 
 	spxProjPath := filepath.Join(cmd.ProjectDir, "..")
 
-	if cmd.UseXgobuildForCodegen {
-		if err := cmd.genGoUsingXgobuild(rawdir, spxProjPath); err != nil {
-			spxlog.Fatalf("code generation failed using xgobuild: %v", err)
-		}
-	} else {
-		if err := cmd.genGoUsingXgoCLI(rawdir, spxProjPath); err != nil {
-			spxlog.Fatalf("code generation failed using xgo CLI: %v", err)
-		}
+	if err := cmd.genGoUsingXgoCLI(rawdir, spxProjPath); err != nil {
+		spxlog.Fatalf("code generation failed using xgo CLI: %v", err)
 	}
 
 	return cmd.SafeTagArgs()
-}
-
-// genGoUsingXgobuild generates code with xgobuild.
-func (cmd *CmdTool) genGoUsingXgobuild(rawdir, spxProjPath string) error {
-	if err := os.MkdirAll(cmd.GoDir, 0755); err != nil {
-		return fmt.Errorf("failed to create GoDir: %w", err)
-	}
-	outputPath := path.Join(cmd.GoDir, "main.go")
-
-	fsys := gengo.NewDirFS(spxProjPath)
-	if err := gengo.GenGoFromFS(fsys, outputPath); err != nil {
-		return fmt.Errorf("failed to generate Go code using xgobuild: %w", err)
-	}
-
-	if err := os.Chdir(spxProjPath); err != nil {
-		return fmt.Errorf("failed to change directory to project root for mod tidy: %w", err)
-	}
-
-	defer func() {
-		if err := os.Chdir(rawdir); err != nil {
-			spxlog.Warn("failed to restore working directory to %s: %v", rawdir, err)
-		}
-	}()
-
-	util.RunGolang(nil, "mod", "tidy")
-
-	return nil
 }
 
 // genGoUsingXgoCLI generates code with xgo.
@@ -271,7 +237,9 @@ func (cmd *CmdTool) genGoUsingXgoCLI(rawdir, spxProjPath string) error {
 		return fmt.Errorf("failed to rename/move generated file %s to %s: %w", sourceFile, destFile, err)
 	}
 
-	util.RunGolang(nil, "mod", "tidy")
+	if cmd.shouldRunGoModTidy() {
+		util.RunGolang(nil, "mod", "tidy")
+	}
 
 	return nil
 }
