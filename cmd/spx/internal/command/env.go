@@ -432,15 +432,14 @@ func (cmd *CmdTool) setupPaths(dstRelDir string) error {
 // adaptGoMod patches go.mod for local development.
 func (cmd *CmdTool) adaptGoMod() {
 	spxPath := cmd.findSpxRoot()
-	if spxPath != "" {
-		return
-	}
-
 	rootGoModPath, _ := filepath.Abs(filepath.Join(cmd.TargetDir, "go.mod"))
 	if _, err := os.Stat(rootGoModPath); os.IsNotExist(err) {
 		if err := cmd.createDefaultGoMod(cmd.TargetDir, false); err != nil {
 			return
 		}
+	}
+	if spxPath == "" {
+		return
 	}
 
 	absTargetDir := cmd.TargetAbsDir
