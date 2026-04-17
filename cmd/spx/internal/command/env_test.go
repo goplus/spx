@@ -23,9 +23,24 @@ import (
 	"testing"
 )
 
-func TestAdaptGoModAddsLocalReplaceForGeneratedGoMod(t *testing.T) {
+func TestAdaptGoModDoesNotGenerateGoModInLocalRepo(t *testing.T) {
 	targetDir := setupAdaptGoModFixture(t)
 
+	cmd := CmdTool{
+		TargetDir:     targetDir,
+		TargetAbsDir:  targetDir,
+		GoModTemplate: "module github.com/goplus/spxdemo\n\ngo 1.25.0\n",
+	}
+	cmd.adaptGoMod()
+
+	_, err := os.ReadFile(filepath.Join(targetDir, "go.mod"))
+	if err == nil {
+		t.Fatal("ReadFile(go.mod) returned nil error, want file to remain absent")
+	}
+}
+
+func TestAdaptGoModCreatesGoModOutsideLocalRepo(t *testing.T) {
+	targetDir := t.TempDir()
 	cmd := CmdTool{
 		TargetDir:     targetDir,
 		TargetAbsDir:  targetDir,
@@ -37,35 +52,22 @@ func TestAdaptGoModAddsLocalReplaceForGeneratedGoMod(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadFile(go.mod) returned error: %v", err)
 	}
-	if !strings.Contains(string(content), "module github.com/goplus/spxdemo") {
-		t.Fatalf("go.mod content = %q, want generated module declaration", string(content))
-	}
-	if !strings.Contains(string(content), "replace github.com/goplus/spx/v2 => ../..") {
-		t.Fatalf("go.mod content = %q, want local spx replace", string(content))
+	if string(content) != cmd.GoModTemplate {
+		t.Fatalf("go.mod content = %q, want %q", string(content), cmd.GoModTemplate)
 	}
 }
 
-func TestAdaptGoModRepairsStaleLocalReplacePath(t *testing.T) {
-	targetDir := setupAdaptGoModFixture(t)
-
-	goModPath := filepath.Join(targetDir, "go.mod")
-	content := "module github.com/goplus/spxdemo\n\ngo 1.25.0\n\nreplace github.com/goplus/spx/v2 => ../../..\n"
-	if err := os.WriteFile(goModPath, []byte(content), 0o644); err != nil {
-		t.Fatalf("WriteFile(go.mod) returned error: %v", err)
+func TestShouldRunGoModTidy(t *testing.T) {
+	repoTargetDir := setupAdaptGoModFixture(t)
+	repoCmd := CmdTool{TargetDir: repoTargetDir, TargetAbsDir: repoTargetDir}
+	if repoCmd.shouldRunGoModTidy() {
+		t.Fatal("shouldRunGoModTidy returned true in local repo, want false")
 	}
 
-	cmd := CmdTool{TargetDir: targetDir, TargetAbsDir: targetDir}
-	cmd.adaptGoMod()
-
-	updated, err := os.ReadFile(goModPath)
-	if err != nil {
-		t.Fatalf("ReadFile(go.mod) returned error: %v", err)
-	}
-	if strings.Contains(string(updated), "../../..") {
-		t.Fatalf("go.mod content = %q, stale replace path still present", string(updated))
-	}
-	if !strings.Contains(string(updated), "replace github.com/goplus/spx/v2 => ../..") {
-		t.Fatalf("go.mod content = %q, want repaired replace path ../..", string(updated))
+	externalTargetDir := t.TempDir()
+	externalCmd := CmdTool{TargetDir: externalTargetDir, TargetAbsDir: externalTargetDir}
+	if !externalCmd.shouldRunGoModTidy() {
+		t.Fatal("shouldRunGoModTidy returned false outside local repo, want true")
 	}
 }
 

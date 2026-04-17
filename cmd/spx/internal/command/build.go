@@ -255,7 +255,9 @@ func (cmd *CmdTool) genGoUsingXgoTool(rawdir, spxProjPath string) error {
 		return fmt.Errorf("failed to rename/move generated file %s to %s: %w", sourceFile, destFile, err)
 	}
 
-	util.RunGolang(nil, "mod", "tidy")
+	if cmd.shouldRunGoModTidy() {
+		util.RunGolang(nil, "mod", "tidy")
+	}
 
 	return nil
 }
