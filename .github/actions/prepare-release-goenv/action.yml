@@ -39,10 +39,32 @@ runs:
           printf '%s\n' "$raw_path"
         }
 
+        canonical_xgo_version() {
+          local raw_version="${1:-}"
+          local first=""
+          raw_version="$(printf '%s\n' "$raw_version" | tr -d '\r')"
+          read -r first _ <<< "$raw_version"
+          if [ -z "$first" ]; then
+            printf '\n'
+            return
+          fi
+          printf '%s\n' "$first"
+        }
+
         GOEXE="$(go env GOEXE)"
         GOPATH_RAW="$(go env GOPATH | tr -d '\r')"
+        HOST_GOMODCACHE="$(go env GOMODCACHE | tr -d '\r')"
+        TARGET_XGO_VERSION="$(canonical_xgo_version "$(go list -m -f '{{if .Replace}}{{if .Replace.Version}}{{.Replace.Version}}{{else}}{{.Version}}{{end}}{{else}}{{.Version}}{{end}}' github.com/goplus/xgo)")"
         if [ -z "$GOPATH_RAW" ]; then
           echo "❌ Error: GOPATH is empty"
+          exit 1
+        fi
+        if [ -z "$HOST_GOMODCACHE" ]; then
+          echo "❌ Error: host GOMODCACHE is empty"
+          exit 1
+        fi
+        if [ -z "$TARGET_XGO_VERSION" ]; then
+          echo "❌ Error: failed to resolve xgo version from spx go.mod"
           exit 1
         fi
 
@@ -100,6 +122,7 @@ runs:
         echo "Installing spx source to module cache: $RELEASE_VERSION"
         echo "Runner platform/arch: $RUNNER_PLATFORM/$RUNNER_ARCH"
         echo "Package target: $TARGET_PLATFORM/$TARGET_ARCH"
+        echo "Bundled xgo version: $TARGET_XGO_VERSION"
         rm -rf "$DEST"
         mkdir -p "$DEST"
 
@@ -119,11 +142,36 @@ runs:
 
         # Set GOMODCACHE so the following smoke run populates the bundled offline cache.
         export GOMODCACHE="$GOMODCACHE_DIR"
-        if command -v xgo >/dev/null 2>&1; then
-          export XGOROOT="$(xgo env XGOROOT | tr -d '\r')"
-          export XGOVERSION="$(xgo env XGOVERSION | tr -d '\r')"
-          echo "Using system xgo root: $XGOROOT"
-          echo "Using system xgo version: $XGOVERSION"
+        XGO_CACHE_DEST="$GOMODCACHE_DIR/github.com/goplus/xgo@$TARGET_XGO_VERSION"
+        HOST_XGO_CACHE_SRC="$HOST_GOMODCACHE/github.com/goplus/xgo@$TARGET_XGO_VERSION"
+        rm -rf "$XGO_CACHE_DEST"
+        mkdir -p "$XGO_CACHE_DEST"
+        if [ -d "$HOST_XGO_CACHE_SRC" ]; then
+          echo "Seeding xgo source from host module cache: $HOST_XGO_CACHE_SRC"
+          tar --exclude='./.git' -C "$HOST_XGO_CACHE_SRC" -cf - . | (
+            cd "$XGO_CACHE_DEST"
+            tar -xf -
+          )
+        elif command -v xgo >/dev/null 2>&1; then
+          SYSTEM_XGO_ROOT="$(xgo env XGOROOT | tr -d '\r')"
+          SYSTEM_XGO_VERSION_RAW="$(xgo env XGOVERSION | tr -d '\r')"
+          SYSTEM_XGO_VERSION="$(canonical_xgo_version "$SYSTEM_XGO_VERSION_RAW")"
+          if [ ! -d "$SYSTEM_XGO_ROOT" ]; then
+            echo "❌ Error: system xgo root not found: $SYSTEM_XGO_ROOT"
+            exit 1
+          fi
+          echo "Host module cache missing xgo source, falling back to system xgo root: $SYSTEM_XGO_ROOT"
+          echo "System xgo version: $SYSTEM_XGO_VERSION_RAW"
+          if [ "$SYSTEM_XGO_VERSION" != "$TARGET_XGO_VERSION" ]; then
+            echo "⚠️ Warning: system xgo version differs from bundled target version ($SYSTEM_XGO_VERSION vs $TARGET_XGO_VERSION)"
+          fi
+          tar --exclude='./.git' -C "$SYSTEM_XGO_ROOT" -cf - . | (
+            cd "$XGO_CACHE_DEST"
+            tar -xf -
+          )
+        else
+          echo "❌ Error: no xgo source available from host module cache or system xgo"
+          exit 1
         fi
 
         if [ ! -f "$PACKAGED_SPX" ]; then
@@ -139,14 +187,17 @@ runs:
 
         # Run the smoke test with a bounded timeout so dependency downloads can warm GOMODCACHE.
         rm -f "$SMOKE_LOG_PATH"
+        echo "Warming dependency cache: $PACKAGED_SPX run --goenv=$GOENV_ROOT --path=test/CI --headless"
         "$PACKAGED_SPX" run --goenv="$GOENV_ROOT" --path=test/CI --headless >"$SMOKE_LOG_PATH" 2>&1 &
         SPX_PID=$!
         EXIT_STATUS=""
         TIMED_OUT=true
         for _ in $(seq 1 30); do
           if ! kill -0 "$SPX_PID" 2>/dev/null; then
+            set +e
             wait "$SPX_PID"
             EXIT_STATUS=$?
+            set -e
             TIMED_OUT=false
             break
           fi

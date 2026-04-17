@@ -96,7 +96,7 @@ func TestResolveXGoModuleInfoFromEnvUsesProvidedRoot(t *testing.T) {
 	if err := os.Setenv("XGOROOT", xgoRoot); err != nil {
 		t.Fatalf("Setenv(XGOROOT) returned error: %v", err)
 	}
-	if err := os.Setenv("XGOVERSION", "v1.7.1"); err != nil {
+	if err := os.Setenv("XGOVERSION", "v1.7.1 devel"); err != nil {
 		t.Fatalf("Setenv(XGOVERSION) returned error: %v", err)
 	}
 
@@ -109,6 +109,41 @@ func TestResolveXGoModuleInfoFromEnvUsesProvidedRoot(t *testing.T) {
 	}
 	if got.Version != "v1.7.1" {
 		t.Fatalf("xgo version = %s, want v1.7.1", got.Version)
+	}
+}
+
+func TestResolveXGoModuleInfoFromEnvMatchingRejectsMismatchedVersion(t *testing.T) {
+	xgoRoot := t.TempDir()
+	writeTestXGoRoot(t, xgoRoot)
+
+	oldRoot, hadRoot := os.LookupEnv("XGOROOT")
+	oldVersion, hadVersion := os.LookupEnv("XGOVERSION")
+	t.Cleanup(func() {
+		if hadRoot {
+			os.Setenv("XGOROOT", oldRoot)
+		} else {
+			os.Unsetenv("XGOROOT")
+		}
+		if hadVersion {
+			os.Setenv("XGOVERSION", oldVersion)
+		} else {
+			os.Unsetenv("XGOVERSION")
+		}
+	})
+
+	if err := os.Setenv("XGOROOT", xgoRoot); err != nil {
+		t.Fatalf("Setenv(XGOROOT) returned error: %v", err)
+	}
+	if err := os.Setenv("XGOVERSION", "v1.7.2"); err != nil {
+		t.Fatalf("Setenv(XGOVERSION) returned error: %v", err)
+	}
+
+	_, err := resolveXGoModuleInfoFromEnvMatching(&xgoBuildTarget{
+		ModPath: "github.com/goplus/xgo",
+		Version: "v1.7.1",
+	})
+	if err == nil {
+		t.Fatal("resolveXGoModuleInfoFromEnvMatching returned nil error, want mismatch")
 	}
 }
 

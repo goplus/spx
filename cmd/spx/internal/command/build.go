@@ -39,6 +39,12 @@ var (
 	outputCommand = util.OutputCommand
 )
 
+type xgoBuildTarget struct {
+	ModPath string
+	Version string
+	Root    string
+}
+
 func (cmd *CmdTool) BuildWasm() error {
 	cmd.genGo()
 
@@ -283,22 +289,46 @@ func (cmd *CmdTool) newXGoToolConfig(spxProjPath string) (*xgotool.Config, error
 }
 
 func resolveXGoModuleInfo(workDir string) (*modenv.XGo, error) {
-	if xgoInfo, err := resolveXGoModuleInfoFromEnv(); err == nil {
-		return xgoInfo, nil
+	target, targetErr := resolveXGoBuildTargetFromBuildInfo()
+	if targetErr == nil {
+		xgoInfo, err := resolveXGoModuleInfoFromBuildTarget(target)
+		if err == nil {
+			return xgoInfo, nil
+		}
+
+		envInfo, envErr := resolveXGoModuleInfoFromEnvMatching(target)
+		if envErr == nil {
+			spxlog.Warn("using environment xgo %s at %s", envInfo.Version, envInfo.Root)
+			return envInfo, nil
+		}
+
+		sysInfo, sysErr := resolveSystemXGoInfoMatching(workDir, target)
+		if sysErr == nil {
+			spxlog.Warn("using system xgo %s at %s", sysInfo.Version, sysInfo.Root)
+			return sysInfo, nil
+		}
+
+		return nil, fmt.Errorf(
+			"failed to resolve %s %s from GOMODCACHE or matching xgo installation: %v; env fallback failed: %v; system xgo fallback failed: %w",
+			target.ModPath, target.Version, err, envErr, sysErr,
+		)
 	}
 
-	xgoInfo, err := resolveSystemXGoInfo(workDir)
-	if err == nil {
-		spxlog.Warn("using system xgo %s at %s", xgoInfo.Version, xgoInfo.Root)
-		return xgoInfo, nil
+	envInfo, envErr := resolveXGoModuleInfoFromEnv()
+	if envErr == nil {
+		return envInfo, nil
 	}
 
-	spxlog.Warn("failed to resolve github.com/goplus/xgo from environment or system xgo; falling back to spx build info: %v", err)
-	xgoInfo, fallbackErr := resolveXGoModuleInfoFromBuildInfo()
-	if fallbackErr != nil {
-		return nil, fmt.Errorf("failed to resolve github.com/goplus/xgo from environment or system xgo: %v; spx build info fallback failed: %w", err, fallbackErr)
+	sysInfo, sysErr := resolveSystemXGoInfo(workDir)
+	if sysErr == nil {
+		spxlog.Warn("using system xgo %s at %s", sysInfo.Version, sysInfo.Root)
+		return sysInfo, nil
 	}
-	return xgoInfo, nil
+
+	return nil, fmt.Errorf(
+		"failed to resolve github.com/goplus/xgo: build info unavailable: %v; env fallback failed: %v; system xgo fallback failed: %w",
+		targetErr, envErr, sysErr,
+	)
 }
 
 func resolveXGoModuleInfoFromEnv() (*modenv.XGo, error) {
@@ -317,17 +347,19 @@ func resolveXGoModuleInfoFromEnv() (*modenv.XGo, error) {
 }
 
 func resolveXGoModuleInfoFromBuildInfo() (*modenv.XGo, error) {
+	target, err := resolveXGoBuildTargetFromBuildInfo()
+	if err != nil {
+		return nil, err
+	}
+	return resolveXGoModuleInfoFromBuildTarget(target)
+}
+
+func resolveXGoBuildTargetFromBuildInfo() (*xgoBuildTarget, error) {
 	info, ok := readBuildInfo()
 	if !ok || info == nil {
 		return nil, fmt.Errorf("build info unavailable")
 	}
-
-	goModCache, err := resolveGoModCacheDir()
-	if err != nil {
-		return nil, err
-	}
-
-	return resolveXGoModuleInfoFromBuildData(info, goModCache)
+	return resolveXGoBuildTargetFromBuildData(info)
 }
 
 func resolveSystemXGoInfo(workDir string) (*modenv.XGo, error) {
@@ -343,6 +375,14 @@ func resolveSystemXGoInfo(workDir string) (*modenv.XGo, error) {
 }
 
 func resolveXGoModuleInfoFromBuildData(info *debug.BuildInfo, goModCache string) (*modenv.XGo, error) {
+	target, err := resolveXGoBuildTargetFromBuildData(info)
+	if err != nil {
+		return nil, err
+	}
+	return resolveXGoModuleInfoFromTargetWithCache(target, goModCache)
+}
+
+func resolveXGoBuildTargetFromBuildData(info *debug.BuildInfo) (*xgoBuildTarget, error) {
 	dep := findBuildInfoDep(info, "github.com/goplus/xgo")
 	if dep == nil {
 		return nil, fmt.Errorf("github.com/goplus/xgo not found in build info")
@@ -356,7 +396,8 @@ func resolveXGoModuleInfoFromBuildData(info *debug.BuildInfo, goModCache string)
 		if !isValidXGoRoot(root) {
 			return nil, fmt.Errorf("replaced xgo root is invalid: %s", root)
 		}
-		return &modenv.XGo{
+		return &xgoBuildTarget{
+			ModPath: dep.Path,
 			Version: normalizeXGoVersion(dep.Replace.Version, dep.Version),
 			Root:    root,
 		}, nil
@@ -371,11 +412,34 @@ func resolveXGoModuleInfoFromBuildData(info *debug.BuildInfo, goModCache string)
 	if modVersion == "(devel)" {
 		return nil, fmt.Errorf("xgo build info version is unavailable")
 	}
+
+	return &xgoBuildTarget{
+		ModPath: modPath,
+		Version: modVersion,
+	}, nil
+}
+
+func resolveXGoModuleInfoFromBuildTarget(target *xgoBuildTarget) (*modenv.XGo, error) {
+	goModCache, err := resolveGoModCacheDir()
+	if err != nil {
+		return nil, err
+	}
+	return resolveXGoModuleInfoFromTargetWithCache(target, goModCache)
+}
+
+func resolveXGoModuleInfoFromTargetWithCache(target *xgoBuildTarget, goModCache string) (*modenv.XGo, error) {
+	if target.Root != "" {
+		return &modenv.XGo{
+			Version: target.Version,
+			Root:    target.Root,
+		}, nil
+	}
+
 	if goModCache == "" {
 		return nil, fmt.Errorf("GOMODCACHE is empty")
 	}
 
-	root, err := resolveModuleCacheDir(goModCache, modPath, modVersion)
+	root, err := resolveModuleCacheDir(goModCache, target.ModPath, target.Version)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve xgo module cache path: %w", err)
 	}
@@ -384,9 +448,31 @@ func resolveXGoModuleInfoFromBuildData(info *debug.BuildInfo, goModCache string)
 	}
 
 	return &modenv.XGo{
-		Version: modVersion,
+		Version: target.Version,
 		Root:    root,
 	}, nil
+}
+
+func resolveXGoModuleInfoFromEnvMatching(target *xgoBuildTarget) (*modenv.XGo, error) {
+	xgoInfo, err := resolveXGoModuleInfoFromEnv()
+	if err != nil {
+		return nil, err
+	}
+	if !xgoVersionsMatch(xgoInfo.Version, target.Version) {
+		return nil, fmt.Errorf("XGOVERSION %s does not match spx xgo version %s", xgoInfo.Version, target.Version)
+	}
+	return xgoInfo, nil
+}
+
+func resolveSystemXGoInfoMatching(workDir string, target *xgoBuildTarget) (*modenv.XGo, error) {
+	xgoInfo, err := resolveSystemXGoInfo(workDir)
+	if err != nil {
+		return nil, err
+	}
+	if !xgoVersionsMatch(xgoInfo.Version, target.Version) {
+		return nil, fmt.Errorf("system xgo version %s does not match spx xgo version %s", xgoInfo.Version, target.Version)
+	}
+	return xgoInfo, nil
 }
 
 func findBuildInfoDep(info *debug.BuildInfo, modulePath string) *debug.Module {
@@ -445,13 +531,25 @@ func isValidXGoRoot(root string) bool {
 }
 
 func normalizeXGoVersion(primary, fallback string) string {
-	if strings.TrimSpace(primary) != "" {
-		return strings.TrimSpace(primary)
+	if version := canonicalizeXGoVersion(primary); version != "" {
+		return version
 	}
-	if strings.TrimSpace(fallback) != "" {
-		return strings.TrimSpace(fallback)
+	if version := canonicalizeXGoVersion(fallback); version != "" {
+		return version
 	}
 	return "(devel)"
+}
+
+func canonicalizeXGoVersion(version string) string {
+	fields := strings.Fields(strings.TrimSpace(version))
+	if len(fields) == 0 {
+		return ""
+	}
+	return fields[0]
+}
+
+func xgoVersionsMatch(actual, expected string) bool {
+	return normalizeXGoVersion(actual, "") == normalizeXGoVersion(expected, "")
 }
 
 func parseXGoInfoOutput(output []byte, emptyRootErr string) (*modenv.XGo, error) {
