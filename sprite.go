@@ -170,8 +170,6 @@ type Sprite interface {
 	DeleteThisClone()
 	Destroy()
 	Die()
-	DeltaTime() Seconds
-	TimeSinceLevelLoad() Seconds
 
 	// Visibility Methods
 	Hide()
