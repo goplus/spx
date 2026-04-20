@@ -66,6 +66,11 @@ func toIntAny(v any) (int, bool) {
 	const minInt = -maxInt - 1
 
 	switch x := v.(type) {
+	case bool:
+		if x {
+			return 1, true
+		}
+		return 0, true
 	case int:
 		return x, true
 	case int8:
@@ -128,6 +133,11 @@ func toFloat64Any(v any) (float64, bool) {
 	}
 
 	switch x := v.(type) {
+	case bool:
+		if x {
+			return 1, true
+		}
+		return 0, true
 	case float64:
 		return x, true
 	case float32:
