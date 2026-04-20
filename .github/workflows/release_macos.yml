@@ -15,14 +15,16 @@ concurrency:
 jobs:
   macos-goenv:
     name: Package macOS goenv (${{ matrix.arch_name }})
-    runs-on: macos-latest
+    runs-on: ${{ matrix.runs_on }}
     strategy:
       matrix:
         include:
           - arch: amd64
             arch_name: x64
+            runs_on: macos-15-intel
           - arch: arm64
             arch_name: arm64
+            runs_on: macos-15
     steps:
       - name: Check out code
         uses: actions/checkout@v6

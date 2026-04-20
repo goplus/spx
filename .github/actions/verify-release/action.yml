@@ -44,6 +44,33 @@ runs:
             "$project_dir/xgo_autogen.go"
         }
 
+        assert_macos_binary_arch() {
+          local binary_path="$1"
+          local expected_arch="$2"
+          local actual_archs
+
+          if ! command -v lipo >/dev/null 2>&1; then
+            echo "❌ Error: lipo command is required to verify macOS binaries"
+            exit 1
+          fi
+
+          actual_archs="$(lipo -archs "$binary_path" 2>/dev/null | tr -s '[:space:]' ' ' | sed -e 's/^ //' -e 's/ $//')"
+          if [ -z "$actual_archs" ]; then
+            echo "❌ Error: failed to inspect macOS binary architecture: $binary_path"
+            exit 1
+          fi
+
+          case " $actual_archs " in
+            *" $expected_arch "*)
+              echo "✓ macOS binary architecture matches target: $actual_archs"
+              ;;
+            *)
+              echo "❌ Error: macOS binary architecture mismatch (expected $expected_arch, got $actual_archs)"
+              exit 1
+              ;;
+          esac
+        }
+
         echo "=========================================="
         echo "🔍 Verifying release package"
         echo "Package: $PACKAGE_FILE"
@@ -155,6 +182,17 @@ runs:
           exit 1
         fi
         echo "✓ SPX executable found: $SPX_BIN_PATH"
+
+        if [ "$TARGET_PLATFORM" = "macos" ]; then
+          case "$TARGET_ARCH" in
+            x64)
+              assert_macos_binary_arch "$SPX_BIN_PATH" "x86_64"
+              ;;
+            arm64)
+              assert_macos_binary_arch "$SPX_BIN_PATH" "arm64"
+              ;;
+          esac
+        fi
 
         if [ "$TARGET_PLATFORM" != "windows" ]; then
           chmod +x "$SPX_BIN_PATH"
