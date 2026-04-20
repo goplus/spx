@@ -59,15 +59,16 @@ runs:
           PACKAGE_PATH="$PACKAGE_FILE"
         fi
 
-        VERIFY_ROOT_DIR="$WORKSPACE_DIR/release-verification"
-        VERIFY_TEST_ROOT_DIR="$VERIFY_ROOT_DIR/test"
-        TEST_PROJECT_DIR="$VERIFY_TEST_ROOT_DIR/CI"
-        VERIFY_LOG_PATH="$WORKSPACE_DIR/release-verification.log"
-        STANDALONE_BIN_DIR="$VERIFY_ROOT_DIR/standalone-bin"
         TARGET_PLATFORM="$(normalize_platform "$PLATFORM")"
         TARGET_ARCH="$(normalize_arch "$PACKAGE_ARCH")"
         RUNNER_PLATFORM="$(normalize_platform "$RUNNER_OS_CONTEXT")"
         RUNNER_ARCH="$(normalize_arch "$RUNNER_ARCH_CONTEXT")"
+        VERIFY_BASENAME="release-verification-${LAYOUT}-${TARGET_PLATFORM}-${TARGET_ARCH}"
+        VERIFY_ROOT_DIR="$WORKSPACE_DIR/$VERIFY_BASENAME"
+        VERIFY_TEST_ROOT_DIR="$VERIFY_ROOT_DIR/test"
+        TEST_PROJECT_DIR="$VERIFY_TEST_ROOT_DIR/CI"
+        VERIFY_LOG_PATH="$WORKSPACE_DIR/$VERIFY_BASENAME.log"
+        STANDALONE_BIN_DIR="$VERIFY_ROOT_DIR/standalone-bin"
 
         echo "📁 Workspace: $WORKSPACE_DIR"
         echo "🖥️ Runner: $RUNNER_PLATFORM/$RUNNER_ARCH"
