@@ -77,6 +77,18 @@ jobs:
           path: spx-linux-${{ matrix.arch_name }}.zip
           retention-days: 14
 
+      - name: Package standalone spx
+        uses: ./.github/actions/package-standalone-release
+        with:
+          package-file: spx-standalone-linux-${{ matrix.arch_name }}.zip
+
+      - name: Upload standalone release artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: spx-standalone-linux-${{ matrix.arch_name }}
+          path: spx-standalone-linux-${{ matrix.arch_name }}.zip
+          retention-days: 14
+
       - name: Verify release package
         uses: ./.github/actions/verify-release
         with:
@@ -84,11 +96,21 @@ jobs:
           platform: linux
           package-arch: ${{ matrix.arch_name }}
 
+      - name: Verify standalone release package
+        uses: ./.github/actions/verify-release
+        with:
+          package-file: spx-standalone-linux-${{ matrix.arch_name }}.zip
+          layout: standalone
+          platform: linux
+          package-arch: ${{ matrix.arch_name }}
+
       - name: Publish release asset
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v3
         with:
-          files: spx-linux-${{ matrix.arch_name }}.zip
+          files: |
+            spx-linux-${{ matrix.arch_name }}.zip
+            spx-standalone-linux-${{ matrix.arch_name }}.zip
           tag_name: ${{ github.event.release.tag_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

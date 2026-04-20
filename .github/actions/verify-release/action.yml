@@ -4,6 +4,10 @@ inputs:
   package-file:
     description: 'Path to the release package file'
     required: true
+  layout:
+    description: 'Package layout: goenv or standalone'
+    required: false
+    default: goenv
   platform:
     description: 'Platform name (darwin/windows/linux)'
     required: true
@@ -17,6 +21,7 @@ runs:
       shell: bash
       env:
         PACKAGE_FILE: ${{ inputs.package-file }}
+        LAYOUT: ${{ inputs.layout }}
         PLATFORM: ${{ inputs.platform }}
         PACKAGE_ARCH: ${{ inputs.package-arch }}
         RUNNER_OS_CONTEXT: ${{ runner.os }}
@@ -42,6 +47,7 @@ runs:
         echo "=========================================="
         echo "🔍 Verifying release package"
         echo "Package: $PACKAGE_FILE"
+        echo "Layout: $LAYOUT"
         echo "Platform: $PLATFORM"
         echo "Package arch: $PACKAGE_ARCH"
         echo "=========================================="
@@ -57,6 +63,7 @@ runs:
         VERIFY_TEST_ROOT_DIR="$VERIFY_ROOT_DIR/test"
         TEST_PROJECT_DIR="$VERIFY_TEST_ROOT_DIR/CI"
         VERIFY_LOG_PATH="$WORKSPACE_DIR/release-verification.log"
+        STANDALONE_BIN_DIR="$VERIFY_ROOT_DIR/standalone-bin"
         TARGET_PLATFORM="$(normalize_platform "$PLATFORM")"
         TARGET_ARCH="$(normalize_arch "$PACKAGE_ARCH")"
         RUNNER_PLATFORM="$(normalize_platform "$RUNNER_OS_CONTEXT")"
@@ -99,29 +106,55 @@ runs:
         echo ""
         echo "📂 Extracted top-level contents:"
         ls -la "$VERIFY_ROOT_DIR"
-        echo ""
-        echo "📂 Go bin directory:"
-        ls -la "$VERIFY_ROOT_DIR/go/bin"
-        echo ""
-        echo "📂 Go toolchain directory:"
-        ls -la "$VERIFY_ROOT_DIR/gotoolchain"
 
-        echo ""
-        echo "📋 Preparing test project..."
-        mkdir -p "$VERIFY_TEST_ROOT_DIR"
-        cp -R test/CI "$VERIFY_TEST_ROOT_DIR/"
-        reset_test_project_state "$TEST_PROJECT_DIR"
-        echo "✓ Test project copied"
+        case "$LAYOUT" in
+          goenv)
+            if [ ! -d "$VERIFY_ROOT_DIR/go/bin" ]; then
+              echo "❌ Error: go/bin directory not found in extracted package"
+              exit 1
+            fi
 
-        case "$TARGET_PLATFORM" in
-          windows)
-            SPX_BIN_PATH="$VERIFY_ROOT_DIR/go/bin/spx.exe"
+            if [ ! -d "$VERIFY_ROOT_DIR/gotoolchain/go" ]; then
+              echo "❌ Error: portable Go toolchain not found in extracted package"
+              exit 1
+            fi
+
+            echo ""
+            echo "📂 Go bin directory:"
+            ls -la "$VERIFY_ROOT_DIR/go/bin"
+            echo ""
+            echo "📂 Go toolchain directory:"
+            ls -la "$VERIFY_ROOT_DIR/gotoolchain"
+
+            case "$TARGET_PLATFORM" in
+              windows)
+                SPX_BIN_PATH="$VERIFY_ROOT_DIR/go/bin/spx.exe"
+                ;;
+              macos|linux)
+                SPX_BIN_PATH="$VERIFY_ROOT_DIR/go/bin/spx"
+                ;;
+              *)
+                echo "❌ Error: unsupported platform: $TARGET_PLATFORM"
+                exit 1
+                ;;
+            esac
             ;;
-          macos|linux)
-            SPX_BIN_PATH="$VERIFY_ROOT_DIR/go/bin/spx"
+          standalone)
+            case "$TARGET_PLATFORM" in
+              windows)
+                SPX_BIN_PATH="$VERIFY_ROOT_DIR/spx.exe"
+                ;;
+              macos|linux)
+                SPX_BIN_PATH="$VERIFY_ROOT_DIR/spx"
+                ;;
+              *)
+                echo "❌ Error: unsupported platform: $TARGET_PLATFORM"
+                exit 1
+                ;;
+            esac
             ;;
           *)
-            echo "❌ Error: unsupported platform: $TARGET_PLATFORM"
+            echo "❌ Error: unsupported package layout: $LAYOUT"
             exit 1
             ;;
         esac
@@ -136,6 +169,13 @@ runs:
           chmod +x "$SPX_BIN_PATH"
         fi
 
+        echo ""
+        echo "📋 Preparing test project..."
+        mkdir -p "$VERIFY_TEST_ROOT_DIR"
+        cp -R test/CI "$VERIFY_TEST_ROOT_DIR/"
+        reset_test_project_state "$TEST_PROJECT_DIR"
+        echo "✓ Test project copied"
+
         if [ "$TARGET_PLATFORM" != "$RUNNER_PLATFORM" ] || [ "$TARGET_ARCH" != "$RUNNER_ARCH" ]; then
           echo ""
           echo "⏭️ Skipping smoke test on non-native runner"
@@ -148,19 +188,21 @@ runs:
           exit 0
         fi
 
-        if ! command -v xgo >/dev/null 2>&1; then
-          echo "❌ Error: xgo is required for native smoke tests but was not found in PATH"
-          exit 1
+        mkdir -p "$STANDALONE_BIN_DIR"
+        STANDALONE_SPX="$STANDALONE_BIN_DIR/$(basename "$SPX_BIN_PATH")"
+        cp "$SPX_BIN_PATH" "$STANDALONE_SPX"
+        if [ "$TARGET_PLATFORM" != "windows" ]; then
+          chmod +x "$STANDALONE_SPX"
         fi
 
         echo ""
         echo "🚀 Running smoke test..."
-        echo "Command: $SPX_BIN_PATH run --goenv=$VERIFY_ROOT_DIR --path=$TEST_PROJECT_DIR --headless"
+        echo "Command: $STANDALONE_SPX run --path=$TEST_PROJECT_DIR --headless"
         echo ""
 
         rm -f "$VERIFY_LOG_PATH"
         set +e
-        "$SPX_BIN_PATH" run --goenv="$VERIFY_ROOT_DIR" --path="$TEST_PROJECT_DIR" --headless 2>&1 | tee "$VERIFY_LOG_PATH"
+        "$STANDALONE_SPX" run --path="$TEST_PROJECT_DIR" --headless 2>&1 | tee "$VERIFY_LOG_PATH"
         SPX_STATUS=${PIPESTATUS[0]}
         set -e
         if [ "$SPX_STATUS" -ne 0 ]; then

@@ -84,5 +84,8 @@ func installTools(cfg toolInstallConfig, runner scriptRunner) error {
 	if cfg.opt {
 		args = append(args, "--opt")
 	}
+	if cfg.noEmbedRuntime {
+		args = append(args, "--no-embed-runtime")
+	}
 	return runner.runScript("cmd/spx/install.sh", args...)
 }

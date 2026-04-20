@@ -237,7 +237,7 @@ func TestRunDemoWorkflowNative(t *testing.T) {
 	}
 
 	expectedCommands := []recordedCommand{
-		{dir: "tutorial/01-Weather", name: "spx", args: []string{"run", "-movie=true"}},
+		{dir: "tutorial/01-Weather", name: "spx", args: []string{"runpc", "-movie=true"}},
 	}
 	if !reflect.DeepEqual(runner.commands, expectedCommands) {
 		t.Fatalf("unexpected commands: %#v", runner.commands)

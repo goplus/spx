@@ -419,7 +419,7 @@ func runDemoWorkflow(cfg workflowRunDemoConfig, runner workflowRunner) error {
 		return runner.runCommand(demo, "spx", "editor", movieArg)
 	case "run":
 		fmt.Fprintf(os.Stdout, "Running demo #%d: %s\n", cfg.demoIndex, demo)
-		return runner.runCommand(demo, "spx", "run", movieArg)
+		return runner.runCommand(demo, "spx", "runpc", movieArg)
 	case "rune":
 		fmt.Fprintf(os.Stdout, "Running editor demo #%d: %s\n", cfg.demoIndex, demo)
 		return runner.runCommand(demo, "spx", "rune", movieArg)

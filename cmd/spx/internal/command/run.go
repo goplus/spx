@@ -30,7 +30,26 @@ import (
 	"time"
 
 	"github.com/goplus/spx/v2/cmd/spx/internal/util"
+	"github.com/goplus/spx/v2/cmd/spx/internal/runtimeasset"
 )
+
+// Keep in sync with cmd/spxrunner/runner.GDExtensionTemplate.
+const defaultRuntimeGDExtensionTemplate = `[configuration]
+
+entry_symbol = "gdspx_init"
+compatibility_minimum = 4.1
+
+[libraries]
+
+macos.debug.x86_64 = "gdspx-darwin-amd64.dylib"
+macos.release.x86_64 = "gdspx-darwin-amd64.dylib"
+macos.debug.arm64 = "gdspx-darwin-arm64.dylib"
+macos.release.arm64 = "gdspx-darwin-arm64.dylib"
+windows.debug.x86_64 = "gdspx-windows-amd64.dll"
+windows.release.x86_64 = "gdspx-windows-amd64.dll"
+linux.debug.x86_64 = "gdspx-linux-amd64.so"
+linux.release.x86_64 = "gdspx-linux-amd64.so"
+`
 
 type projConf struct {
 	Robots []string `json:"robots"`
@@ -121,12 +140,7 @@ func (cmd *CmdTool) RunWithAiMode(pargs ...string) error {
 
 // RunInterpreted runs the project with a prebuilt runtime.
 func (cmd *CmdTool) RunInterpreted(pargs ...string) error {
-	extensionPath := path.Join(cmd.GoBinPath, "runtime.gdextension")
-
-	if _, err := os.Stat(extensionPath); os.IsNotExist(err) {
-		return fmt.Errorf("runtime.gdextension not found at %s. Please run 'spx install' first", extensionPath)
-	}
-
+	runtimeName := "gdspxrt" + cmd.Version + cmd.BinPostfix
 	GOOS := runtime.GOOS
 	GOARCH := runtime.GOARCH
 	var libExt string
@@ -139,13 +153,21 @@ func (cmd *CmdTool) RunInterpreted(pargs ...string) error {
 		libExt = ".so"
 	}
 	libName := fmt.Sprintf("gdspx-%s-%s%s", GOOS, GOARCH, libExt)
-	libPath := path.Join(cmd.GoBinPath, libName)
-	if _, err := os.Stat(libPath); os.IsNotExist(err) {
-		return fmt.Errorf("shared library %s not found at %s. Please run 'make install' first", libName, cmd.GoBinPath)
+	packName := runtimePackFileName(runtimeName)
+
+	runtimePath, libPath, err := cmd.resolveInterpretedRuntimeAssets(runtimeName, packName, libName)
+	if err != nil {
+		return err
+	}
+	cmd.RuntimeCmdPath = runtimePath
+
+	extensionPath, err := cmd.prepareInterpretedRuntimeDir(libPath)
+	if err != nil {
+		return err
 	}
 
 	args := cmd.buildRuntimeArgs(pargs, cmd.RuntimeTempDir, extensionPath)
-	return util.RunCommandInDir(cmd.RuntimeTempDir, cmd.RuntimeCmdPath, args...)
+	return util.RunCommandInDir(cmd.RuntimeTempDir, runtimePath, args...)
 }
 
 // buildRuntimeArgs builds gdspxrt args.
@@ -163,6 +185,119 @@ func (cmd *CmdTool) buildRuntimeArgs(inputArgs []string, tempDir, extPath string
 	args = append(args, extraArgs...)
 	args = append(args, "--no-header")
 	return args
+}
+
+func (cmd *CmdTool) runtimeSearchDirs() []string {
+	var dirs []string
+	appendDir := func(dir string) {
+		if dir == "" {
+			return
+		}
+		absDir, err := filepath.Abs(dir)
+		if err != nil {
+			absDir = dir
+		}
+		for _, existing := range dirs {
+			if existing == absDir {
+				return
+			}
+		}
+		dirs = append(dirs, absDir)
+	}
+
+	appendDir(cmd.GoBinPath)
+
+	exePath, err := os.Executable()
+	if err == nil {
+		if realExePath, realErr := filepath.EvalSymlinks(exePath); realErr == nil {
+			exePath = realExePath
+		}
+		appendDir(filepath.Dir(exePath))
+	}
+
+	return dirs
+}
+
+func (cmd *CmdTool) findRuntimeAsset(name string) (string, error) {
+	searchDirs := cmd.runtimeSearchDirs()
+	if len(searchDirs) == 0 {
+		return "", fmt.Errorf("no runtime search directories configured")
+	}
+
+	candidates := make([]string, 0, len(searchDirs))
+	for _, dir := range searchDirs {
+		candidate := filepath.Join(dir, name)
+		candidates = append(candidates, candidate)
+		if util.IsFileExist(candidate) {
+			return candidate, nil
+		}
+	}
+	return "", fmt.Errorf("searched %s", strings.Join(candidates, ", "))
+}
+
+func (cmd *CmdTool) resolveInterpretedRuntimeAssets(runtimeName, packName, libName string) (runtimePath, libPath string, err error) {
+	runtimePath, runtimeErr := cmd.findRuntimeAsset(runtimeName)
+	libPath, libErr := cmd.findRuntimeAsset(libName)
+	if runtimeErr == nil {
+		packPath := runtimePackPath(runtimePath)
+		if _, err := os.Stat(packPath); err == nil && libErr == nil {
+			return runtimePath, libPath, nil
+		} else if os.IsNotExist(err) {
+			runtimeErr = fmt.Errorf("runtime pack %s not found next to %s", filepath.Base(packPath), runtimePath)
+		} else if err != nil {
+			runtimeErr = fmt.Errorf("runtime pack check failed for %s: %w", packPath, err)
+		}
+	}
+
+	embeddedDir, ok, err := runtimeasset.Prepare(cmd.Version, runtimeName, packName, libName)
+	if err != nil {
+		return "", "", fmt.Errorf("prepare embedded runtime assets: %w", err)
+	}
+	if ok {
+		return filepath.Join(embeddedDir, runtimeName), filepath.Join(embeddedDir, libName), nil
+	}
+
+	var reasons []string
+	if runtimeErr != nil {
+		reasons = append(reasons, runtimeErr.Error())
+	}
+	if libErr != nil {
+		reasons = append(reasons, libErr.Error())
+	}
+	if len(reasons) == 0 {
+		reasons = append(reasons, "embedded runtime assets are not available in this spx binary")
+	}
+	return "", "", fmt.Errorf("interpreted runtime assets not available: %s", strings.Join(reasons, "; "))
+}
+
+func runtimePackFileName(runtimeName string) string {
+	if strings.HasSuffix(runtimeName, ".exe") {
+		return strings.TrimSuffix(runtimeName, ".exe") + ".pck"
+	}
+	return runtimeName + ".pck"
+}
+
+func runtimePackPath(runtimePath string) string {
+	return filepath.Join(filepath.Dir(runtimePath), runtimePackFileName(filepath.Base(runtimePath)))
+}
+
+func (cmd *CmdTool) prepareInterpretedRuntimeDir(libPath string) (string, error) {
+	if err := os.MkdirAll(cmd.RuntimeTempDir, 0o755); err != nil {
+		return "", fmt.Errorf("failed to create runtime temp dir %s: %w", cmd.RuntimeTempDir, err)
+	}
+
+	// Place the shared library next to runtime.gdextension so Godot can resolve it
+	// without depending on a pre-installed runtime.gdextension file.
+	dstLibPath := filepath.Join(cmd.RuntimeTempDir, filepath.Base(libPath))
+	if err := util.CopyFile(libPath, dstLibPath); err != nil {
+		return "", fmt.Errorf("failed to copy shared library %s to %s: %w", libPath, dstLibPath, err)
+	}
+
+	extensionPath := filepath.Join(cmd.RuntimeTempDir, "runtime.gdextension")
+	if err := os.WriteFile(extensionPath, []byte(defaultRuntimeGDExtensionTemplate), 0o644); err != nil {
+		return "", fmt.Errorf("failed to write runtime.gdextension: %w", err)
+	}
+	return extensionPath, nil
 }
 
 // runWebCommand exports before serving.

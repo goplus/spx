@@ -88,13 +88,26 @@ runs:
           echo "❌ Error: runtime binaries not found in $INSTALLED_BIN_DIR"
           exit 1
         fi
-        if [ ! -f "$INSTALLED_BIN_DIR/runtime.gdextension" ]; then
-          echo "❌ Error: runtime.gdextension not found in $INSTALLED_BIN_DIR"
+
+        shopt -s nullglob
+        GDSPX_LIBRARY_CANDIDATES=("$INSTALLED_BIN_DIR"/gdspx-*)
+        shopt -u nullglob
+        GDSPX_LIBRARIES=()
+        for candidate in "${GDSPX_LIBRARY_CANDIDATES[@]}"; do
+          if [ -f "$candidate" ]; then
+            GDSPX_LIBRARIES+=("$candidate")
+          fi
+        done
+        if [ "${#GDSPX_LIBRARIES[@]}" -eq 0 ]; then
+          echo "❌ Error: gdspx shared libraries not found in $INSTALLED_BIN_DIR"
           exit 1
         fi
 
         cp "${RUNTIME_BINARIES[@]}" "$PACKAGED_BIN_DIR"/
-        cp "$INSTALLED_BIN_DIR/runtime.gdextension" "$PACKAGED_BIN_DIR"/
+        cp "${GDSPX_LIBRARIES[@]}" "$PACKAGED_BIN_DIR"/
+        if [ -f "$INSTALLED_BIN_DIR/runtime.gdextension" ]; then
+          cp "$INSTALLED_BIN_DIR/runtime.gdextension" "$PACKAGED_BIN_DIR"/
+        fi
 
         echo "Installing rebuilt spx binary: $INSTALLED_SPX -> $PACKAGED_SPX"
         cp "$INSTALLED_SPX" "$PACKAGED_SPX"
@@ -140,7 +153,7 @@ runs:
 
         # Run the smoke test with a bounded timeout so dependency downloads can warm GOMODCACHE.
         rm -f "$SMOKE_LOG_PATH"
-        "$PACKAGED_SPX" run --goenv="$GOENV_ROOT" --path=test/CI --headless >"$SMOKE_LOG_PATH" 2>&1 &
+        "$PACKAGED_SPX" runpc --goenv="$GOENV_ROOT" --path=test/CI --headless >"$SMOKE_LOG_PATH" 2>&1 &
         SPX_PID=$!
         EXIT_STATUS=""
         TIMED_OUT=true

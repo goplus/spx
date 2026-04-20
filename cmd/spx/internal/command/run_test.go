@@ -17,10 +17,13 @@
 package command
 
 import (
+	"embed"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -225,7 +228,8 @@ func TestIsRuntimeModeCommand(t *testing.T) {
 		cmdName string
 		want    bool
 	}{
-		{name: "run", cmdName: "run", want: true},
+		{name: "run interpreted", cmdName: "run", want: false},
+		{name: "runpc", cmdName: "runpc", want: true},
 		{name: "runweb", cmdName: "runweb", want: true},
 		{name: "runwebworker", cmdName: "runwebworker", want: true},
 		{name: "exportweb", cmdName: "exportweb", want: false},
@@ -258,6 +262,117 @@ func TestShouldBuildWasmForCommand(t *testing.T) {
 				t.Fatalf("shouldBuildWasmForCommand(%q) = %v, want %v", tt.cmdName, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestRunInterpretedCreatesRuntimeExtensionAndCopiesSharedLibrary(t *testing.T) {
+	goBinPath := t.TempDir()
+	runtimeTempDir := t.TempDir()
+	logPath := filepath.Join(t.TempDir(), "runtime.log")
+	version := "9.9.9-test"
+
+	runtimeName := "gdspxrt" + version
+	if runtime.GOOS == "windows" {
+		runtimeName += ".exe"
+	}
+	writeTestRuntimeExecutable(t, filepath.Join(goBinPath, runtimeName), logPath)
+	if err := os.WriteFile(filepath.Join(goBinPath, runtimePackFileName(runtimeName)), []byte("runtime pack"), 0o644); err != nil {
+		t.Fatalf("write runtime pack: %v", err)
+	}
+
+	libName := runtimeLibraryFileName()
+	if err := os.WriteFile(filepath.Join(goBinPath, libName), []byte("shared library"), 0o755); err != nil {
+		t.Fatalf("write shared library: %v", err)
+	}
+
+	cmd := CmdTool{
+		GoBinPath:      goBinPath,
+		RuntimeTempDir: runtimeTempDir,
+		Version:        version,
+	}
+	if runtime.GOOS == "windows" {
+		cmd.BinPostfix = ".exe"
+	}
+
+	if err := cmd.RunInterpreted("--path", "ignored"); err != nil {
+		t.Fatalf("RunInterpreted returned error: %v", err)
+	}
+
+	extensionPath := filepath.Join(runtimeTempDir, "runtime.gdextension")
+	if !fileExists(extensionPath) {
+		t.Fatalf("runtime.gdextension not created at %s", extensionPath)
+	}
+	gotExtension, err := os.ReadFile(extensionPath)
+	if err != nil {
+		t.Fatalf("read runtime.gdextension: %v", err)
+	}
+	if string(gotExtension) != defaultRuntimeGDExtensionTemplate {
+		t.Fatalf("runtime.gdextension contents mismatch")
+	}
+
+	copiedLibPath := filepath.Join(runtimeTempDir, libName)
+	if !fileExists(copiedLibPath) {
+		t.Fatalf("shared library not copied to %s", copiedLibPath)
+	}
+
+	gotLog, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("read runtime log: %v", err)
+	}
+	logContent := string(gotLog)
+	if !strings.Contains(logContent, "--path\n"+runtimeTempDir+"\n") {
+		t.Fatalf("runtime log = %q, want --path followed by %s", logContent, runtimeTempDir)
+	}
+	if !strings.Contains(logContent, "--gdextpath\n"+extensionPath+"\n") {
+		t.Fatalf("runtime log = %q, want --gdextpath followed by %s", logContent, extensionPath)
+	}
+}
+
+func TestRunCmdRunHonorsPortableGoEnv(t *testing.T) {
+	targetDir := t.TempDir()
+	goEnvDir := filepath.Join(t.TempDir(), "goenv")
+	goBinPath := filepath.Join(goEnvDir, "go", "bin")
+	goRootBinPath := filepath.Join(goEnvDir, "gotoolchain", "go", "bin")
+	logPath := filepath.Join(t.TempDir(), "runtime.log")
+	version := "9.9.9-test"
+
+	if err := os.MkdirAll(goBinPath, 0o755); err != nil {
+		t.Fatalf("mkdir go/bin: %v", err)
+	}
+	if err := os.MkdirAll(goRootBinPath, 0o755); err != nil {
+		t.Fatalf("mkdir gotoolchain/go/bin: %v", err)
+	}
+	writeTestRuntimeExecutable(t, filepath.Join(goRootBinPath, goBinaryName()), filepath.Join(t.TempDir(), "go.log"))
+
+	runtimeName := "gdspxrt" + version
+	if runtime.GOOS == "windows" {
+		runtimeName += ".exe"
+	}
+	writeTestRuntimeExecutable(t, filepath.Join(goBinPath, runtimeName), logPath)
+	if err := os.WriteFile(filepath.Join(goBinPath, runtimePackFileName(runtimeName)), []byte("runtime pack"), 0o644); err != nil {
+		t.Fatalf("write runtime pack: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(goBinPath, runtimeLibraryFileName()), []byte("shared library"), 0o755); err != nil {
+		t.Fatalf("write shared library: %v", err)
+	}
+
+	rawArgs := os.Args
+	t.Cleanup(func() {
+		os.Args = rawArgs
+	})
+	os.Args = []string{"spx", "run", "--goenv", goEnvDir, "--path", targetDir}
+
+	cmd := CmdTool{}
+	if err := cmd.RunCmd("spx", "spx", version, embed.FS{}, "", "project"); err != nil {
+		t.Fatalf("RunCmd returned error: %v", err)
+	}
+
+	gotLog, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("read runtime log: %v", err)
+	}
+	if !strings.Contains(string(gotLog), filepath.Join(targetDir, ".temp")) {
+		t.Fatalf("runtime log = %q, want runtime temp dir under %s", string(gotLog), targetDir)
 	}
 }
 
@@ -386,4 +501,46 @@ func TestWindowsProcessCommandLineQuery(t *testing.T) {
 	if strings.Contains(strings.ToLower(got), "tasklist") {
 		t.Fatalf("windowsProcessCommandLineQuery = %q, should not use tasklist", got)
 	}
+}
+
+func writeTestRuntimeExecutable(t *testing.T, path string, logPath string) {
+	t.Helper()
+
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir runtime dir: %v", err)
+	}
+
+	var script string
+	if runtime.GOOS == "windows" {
+		script = fmt.Sprintf("@echo off\r\ncd > %q\r\nfor %%%%a in (%%*) do @echo %%%%a>>%q\r\n", logPath, logPath)
+	} else {
+		script = fmt.Sprintf("#!/bin/sh\npwd > %q\nprintf '%%s\\n' \"$@\" >> %q\n", logPath, logPath)
+	}
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatalf("write runtime executable: %v", err)
+	}
+}
+
+func runtimeLibraryFileName() string {
+	libName := fmt.Sprintf("gdspx-%s-%s", runtime.GOOS, runtime.GOARCH)
+	switch runtime.GOOS {
+	case "windows":
+		return libName + ".dll"
+	case "darwin":
+		return libName + ".dylib"
+	default:
+		return libName + ".so"
+	}
+}
+
+func goBinaryName() string {
+	if runtime.GOOS == "windows" {
+		return "go.exe"
+	}
+	return "go"
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
