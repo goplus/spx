@@ -49,8 +49,14 @@ macos.debug.arm64 = "gdspx-darwin-arm64.dylib"
 macos.release.arm64 = "gdspx-darwin-arm64.dylib"
 windows.debug.x86_64 = "gdspx-windows-amd64.dll"
 windows.release.x86_64 = "gdspx-windows-amd64.dll"
+windows.debug.x86_32 = "gdspx-windows-386.dll"
+windows.release.x86_32 = "gdspx-windows-386.dll"
 linux.debug.x86_64 = "gdspx-linux-amd64.so"
 linux.release.x86_64 = "gdspx-linux-amd64.so"
+linux.debug.x86_32 = "gdspx-linux-386.so"
+linux.release.x86_32 = "gdspx-linux-386.so"
+linux.debug.arm64 = "gdspx-linux-arm64.so"
+linux.release.arm64 = "gdspx-linux-arm64.so"
 `
 
 type projConf struct {

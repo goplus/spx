@@ -21,8 +21,10 @@ jobs:
         include:
           - arch: 386
             arch_name: x86
+            standalone: false
           - arch: amd64
             arch_name: x64
+            standalone: true
     steps:
       - name: Check out code
         uses: actions/checkout@v6
@@ -86,11 +88,13 @@ jobs:
           retention-days: 14
 
       - name: Package standalone spx
+        if: ${{ matrix.standalone }}
         uses: ./.github/actions/package-standalone-release
         with:
           package-file: spx-standalone-windows-${{ matrix.arch_name }}.zip
 
       - name: Upload standalone release artifact
+        if: ${{ matrix.standalone }}
         uses: actions/upload-artifact@v7
         with:
           name: spx-standalone-windows-${{ matrix.arch_name }}
@@ -105,6 +109,7 @@ jobs:
           package-arch: ${{ matrix.arch_name }}
 
       - name: Verify standalone release package
+        if: ${{ matrix.standalone }}
         uses: ./.github/actions/verify-release
         with:
           package-file: spx-standalone-windows-${{ matrix.arch_name }}.zip
@@ -112,13 +117,20 @@ jobs:
           platform: windows
           package-arch: ${{ matrix.arch_name }}
 
-      - name: Publish release asset
+      - name: Publish goenv release asset
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v3
         with:
-          files: |
-            spx-windows-${{ matrix.arch_name }}.zip
-            spx-standalone-windows-${{ matrix.arch_name }}.zip
+          files: spx-windows-${{ matrix.arch_name }}.zip
+          tag_name: ${{ github.event.release.tag_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish standalone release asset
+        if: github.event_name == 'release' && matrix.standalone
+        uses: softprops/action-gh-release@v3
+        with:
+          files: spx-standalone-windows-${{ matrix.arch_name }}.zip
           tag_name: ${{ github.event.release.tag_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

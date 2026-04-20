@@ -83,6 +83,50 @@ func TestPrepareReturnsFalseWhenAssetMissing(t *testing.T) {
 	}
 }
 
+func TestPrepareSeparatesCacheDirsByEmbeddedContent(t *testing.T) {
+	oldFS := assetsFS
+	oldCacheBaseDirFn := cacheBaseDirFn
+	t.Cleanup(func() {
+		assetsFS = oldFS
+		cacheBaseDirFn = oldCacheBaseDirFn
+	})
+
+	cacheRoot := t.TempDir()
+	cacheBaseDirFn = func() string { return cacheRoot }
+
+	assetsFS = fstest.MapFS{
+		"assets/gdspxrt9.9.9":         &fstest.MapFile{Data: []byte("runtime-v1")},
+		"assets/gdspxrt9.9.9.pck":     &fstest.MapFile{Data: []byte("pack-v1")},
+		"assets/gdspx-linux-amd64.so": &fstest.MapFile{Data: []byte("shared-one")},
+	}
+	dirV1, ok, err := Prepare("9.9.9", "gdspxrt9.9.9", "gdspxrt9.9.9.pck", "gdspx-linux-amd64.so")
+	if err != nil {
+		t.Fatalf("Prepare(v1) returned error: %v", err)
+	}
+	if !ok {
+		t.Fatal("Prepare(v1) returned ok=false, want true")
+	}
+	assertFileContent(t, filepath.Join(dirV1, "gdspx-linux-amd64.so"), "shared-one")
+
+	assetsFS = fstest.MapFS{
+		"assets/gdspxrt9.9.9":         &fstest.MapFile{Data: []byte("runtime-v2")},
+		"assets/gdspxrt9.9.9.pck":     &fstest.MapFile{Data: []byte("pack-v2")},
+		"assets/gdspx-linux-amd64.so": &fstest.MapFile{Data: []byte("shared-two")},
+	}
+	dirV2, ok, err := Prepare("9.9.9", "gdspxrt9.9.9", "gdspxrt9.9.9.pck", "gdspx-linux-amd64.so")
+	if err != nil {
+		t.Fatalf("Prepare(v2) returned error: %v", err)
+	}
+	if !ok {
+		t.Fatal("Prepare(v2) returned ok=false, want true")
+	}
+	if dirV1 == dirV2 {
+		t.Fatalf("Prepare reused cache dir %s for different embedded content", dirV1)
+	}
+	assertFileContent(t, filepath.Join(dirV1, "gdspx-linux-amd64.so"), "shared-one")
+	assertFileContent(t, filepath.Join(dirV2, "gdspx-linux-amd64.so"), "shared-two")
+}
+
 func assertFileContent(t *testing.T, path string, want string) {
 	t.Helper()
 	data, err := os.ReadFile(path)

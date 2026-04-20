@@ -1,8 +1,11 @@
 package runtimeasset
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"embed"
 	"fmt"
+	"hash"
 	"io"
 	"io/fs"
 	"os"
@@ -40,7 +43,12 @@ func Prepare(version string, names ...string) (dir string, ok bool, err error) {
 		}
 	}
 
-	cacheDir := filepath.Join(cacheBaseDirFn(), "spx", "embedded-runtime", version, runtime.GOOS+"-"+runtime.GOARCH)
+	cacheKey, err := assetCacheKey(names)
+	if err != nil {
+		return "", false, fmt.Errorf("compute runtime cache key: %w", err)
+	}
+
+	cacheDir := filepath.Join(cacheBaseDirFn(), "spx", "embedded-runtime", version, runtime.GOOS+"-"+runtime.GOARCH, cacheKey)
 	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
 		return "", false, fmt.Errorf("create runtime cache dir %s: %w", cacheDir, err)
 	}
@@ -83,6 +91,40 @@ func assetMode(name string) os.FileMode {
 	return 0o644
 }
 
+func assetCacheKey(names []string) (string, error) {
+	hasher := sha256.New()
+	for _, name := range names {
+		if err := addAssetHash(hasher, name); err != nil {
+			return "", err
+		}
+	}
+	return hex.EncodeToString(hasher.Sum(nil))[:16], nil
+}
+
+func addAssetHash(hasher hash.Hash, name string) (err error) {
+	srcPath := assetPath(name)
+	srcFile, err := assetsFS.Open(srcPath)
+	if err != nil {
+		return fmt.Errorf("open embedded runtime asset %s for hashing: %w", name, err)
+	}
+	defer func() {
+		if closeErr := srcFile.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}()
+
+	if _, err := io.WriteString(hasher, name+"\x00"); err != nil {
+		return fmt.Errorf("hash embedded runtime asset name %s: %w", name, err)
+	}
+	if _, err := io.Copy(hasher, srcFile); err != nil {
+		return fmt.Errorf("hash embedded runtime asset %s: %w", name, err)
+	}
+	if _, err := io.WriteString(hasher, "\x00"); err != nil {
+		return fmt.Errorf("finalize embedded runtime asset hash %s: %w", name, err)
+	}
+	return nil
+}
+
 func extractAsset(cacheDir, name string) (err error) {
 	srcPath := assetPath(name)
 	info, err := fs.Stat(assetsFS, srcPath)
@@ -112,10 +154,11 @@ func extractAsset(cacheDir, name string) (err error) {
 	if err := os.MkdirAll(filepath.Dir(dstPath), 0o755); err != nil {
 		return fmt.Errorf("create runtime cache parent dir for %s: %w", dstPath, err)
 	}
-	outFile, err := os.OpenFile(tmpPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode)
+	outFile, err := os.CreateTemp(filepath.Dir(dstPath), filepath.Base(dstPath)+".tmp-*")
 	if err != nil {
-		return fmt.Errorf("create extracted runtime asset %s: %w", tmpPath, err)
+		return fmt.Errorf("create extracted runtime asset for %s: %w", dstPath, err)
 	}
+	tmpPath = outFile.Name()
 	defer func() {
 		if outFile == nil {
 			return
@@ -135,14 +178,20 @@ func extractAsset(cacheDir, name string) (err error) {
 	}
 	outFile = nil
 
-	if err := os.RemoveAll(dstPath); err != nil {
-		_ = os.Remove(tmpPath)
-		return fmt.Errorf("replace runtime cache asset %s: %w", dstPath, err)
-	}
 	if err := os.Rename(tmpPath, dstPath); err != nil {
+		if runtime.GOOS == "windows" {
+			if removeErr := os.Remove(dstPath); removeErr != nil && !os.IsNotExist(removeErr) {
+				_ = os.Remove(tmpPath)
+				return fmt.Errorf("replace runtime cache asset %s: %w", dstPath, removeErr)
+			}
+			if retryErr := os.Rename(tmpPath, dstPath); retryErr == nil {
+				goto chmod
+			}
+		}
 		_ = os.Remove(tmpPath)
 		return fmt.Errorf("move runtime cache asset %s into place: %w", dstPath, err)
 	}
+chmod:
 	if chmodErr := os.Chmod(dstPath, mode); chmodErr != nil && runtime.GOOS != "windows" {
 		return fmt.Errorf("chmod runtime cache asset %s: %w", dstPath, chmodErr)
 	}

@@ -326,7 +326,6 @@ func shouldBuildWasmForCommand(cmdName string) bool {
 func (cmd *CmdTool) handleInterpretedRunCommand() error {
 	cmd.RuntimeMode = true
 	cmd.RuntimeTempDir, _ = filepath.Abs(filepath.Join(cmd.TargetDir, ".temp"))
-	os.MkdirAll(cmd.RuntimeTempDir, 0755)
 
 	cmd.BinPostfix = ""
 	GOOS := runtime.GOOS
