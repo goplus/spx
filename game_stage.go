@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math/rand"
 	"reflect"
+	"time"
 
 	"github.com/goplus/spbase/mathf"
 	coreproject "github.com/goplus/spx/v2/internal/core/project"
@@ -164,6 +165,10 @@ func (p *Game) Timer() Seconds {
 
 func (p *Game) ResetTimer() {
 	itime.ResetTimer()
+}
+
+func (p *Game) Now() time.Time {
+	return time.Now()
 }
 
 // -----------------------------------------------------------------------------
