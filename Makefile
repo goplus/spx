@@ -2,7 +2,7 @@
 # Config
 # ============================================
 .DEFAULT_GOAL := help
-.PHONY: help buildctl list-demos prepare-host prepare-web prepare-full prepare-all build-dev install clean-assets download download-engine build-editor build-desktop build-web build-wasm build-wasm-opt build-android build-ios install-apk editor run rune run-web run-web-worker format generate clean-projects export-pack export-web stop validate-web-mode validate-download-engine validate-install-web
+.PHONY: help buildctl list-demos prepare-host prepare-web prepare-full prepare-all build-dev install clean-assets download download-engine build-editor build-desktop build-web build-wasm build-wasm-opt build-android build-ios install-apk editor run rune run-web run-web-worker format generate generate-bindings generate-runtime clean-projects export-pack export-web stop validate-web-mode validate-download-engine validate-install-web
 
 export GODOT_SRC
 
@@ -187,10 +187,17 @@ stop: ## Stop running processes
 format: ## Format Go code
 	go fmt ./...
 
-generate: ## Generate code
-	cd ./internal/cmd/codegen && GODOT_SRC="$(GODOT_SRC)" go run .
-	go generate ./cmd/spxrunner/runner
+generate: ## Generate all code
+	$(MAKE) generate-bindings
+	$(MAKE) generate-runtime
 	$(MAKE) format
+
+generate-bindings: ## Generate Godot/GDExtension binding code
+	cd ./internal/cmd/codegen && GODOT_SRC="$(GODOT_SRC)" go run .
+
+generate-runtime: ## Generate runtime registration code
+	go generate ./pkg/ispx
+	go generate ./cmd/spxrunner/runner
 
 clean-projects: ## Delete generated artifacts (.temp/, project/, .gdspx_web_server*.pid, go.mod, go.sum, gox.mod) from tutorial/test projects
 	@find -P tutorial test \( \
