@@ -23,6 +23,7 @@ fi
 appname=$(cat appname.txt)
 os_name="${OS:-}"
 GOPATH="$(go env GOPATH)"
+gopath_bin_dir="$GOPATH/bin"
 install_web=0
 embed_runtime="${SPX_EMBED_RUNTIME:-1}"
 
@@ -58,21 +59,38 @@ is_truthy() {
 
 runtime_asset_dir="./internal/runtimeasset/assets"
 runtime_asset_placeholder="$runtime_asset_dir/placeholder.txt"
+runtime_version=""
+runtime_name=""
+runtime_pack=""
 
 cleanup_embedded_runtime_assets() {
     mkdir -p "$runtime_asset_dir"
     find "$runtime_asset_dir" -maxdepth 1 -type f ! -name "$(basename "$runtime_asset_placeholder")" -delete
 }
 
-ensure_runtime_assets_for_embedding() {
-    local runtime_version runtime_name runtime_pack goexe
+require_file() {
+    local path="$1"
+    local description="$2"
+
+    if [ ! -f "$path" ]; then
+        echo "Error: $description not found: $path"
+        exit 1
+    fi
+}
+
+resolve_runtime_asset_names() {
+    local goexe
 
     runtime_version="$(GOFLAGS="-buildvcs=false" go run ../../.github/scripts/runtime_version.go | tr -d '\r\n')"
     goexe="$(go env GOEXE | tr -d '\r\n')"
     runtime_name="gdspxrt${runtime_version}${goexe}"
     runtime_pack="gdspxrt${runtime_version}.pck"
+}
 
-    if [ -f "$GOPATH/bin/$runtime_name" ] && [ -f "$GOPATH/bin/$runtime_pack" ]; then
+ensure_runtime_assets_for_embedding() {
+    resolve_runtime_asset_names
+
+    if [ -f "$gopath_bin_dir/$runtime_name" ] && [ -f "$gopath_bin_dir/$runtime_pack" ]; then
         return 0
     fi
 
@@ -84,31 +102,14 @@ build_ispxnative() {
     ( cd ../ispxnative && ./build.sh )
 }
 
-stage_embedded_runtime_assets() {
-    local runtime_version runtime_name runtime_pack goexe copied
+copy_ispxnative_libs() {
+    local destination_dir="$1"
+    local copied=0
 
-    runtime_version="$(GOFLAGS="-buildvcs=false" go run ../../.github/scripts/runtime_version.go | tr -d '\r\n')"
-    goexe="$(go env GOEXE | tr -d '\r\n')"
-    runtime_name="gdspxrt${runtime_version}${goexe}"
-    runtime_pack="gdspxrt${runtime_version}.pck"
-
-    if [ ! -f "$GOPATH/bin/$runtime_name" ]; then
-        echo "Error: runtime executable not found: $GOPATH/bin/$runtime_name"
-        exit 1
-    fi
-    if [ ! -f "$GOPATH/bin/$runtime_pack" ]; then
-        echo "Error: runtime pack not found: $GOPATH/bin/$runtime_pack"
-        exit 1
-    fi
-
-    cleanup_embedded_runtime_assets
-    cp "$GOPATH/bin/$runtime_name" "$runtime_asset_dir/"
-    cp "$GOPATH/bin/$runtime_pack" "$runtime_asset_dir/"
-
-    copied=0
+    mkdir -p "$destination_dir"
     shopt -s nullglob
     for lib in ../ispxnative/gdspx-*; do
-        cp "$lib" "$runtime_asset_dir/"
+        cp "$lib" "$destination_dir/"
         copied=1
     done
     shopt -u nullglob
@@ -118,11 +119,44 @@ stage_embedded_runtime_assets() {
     fi
 }
 
+stage_embedded_runtime_assets() {
+    resolve_runtime_asset_names
+
+    require_file "$gopath_bin_dir/$runtime_name" "runtime executable"
+    require_file "$gopath_bin_dir/$runtime_pack" "runtime pack"
+
+    cleanup_embedded_runtime_assets
+    cp "$gopath_bin_dir/$runtime_name" "$runtime_asset_dir/"
+    cp "$gopath_bin_dir/$runtime_pack" "$runtime_asset_dir/"
+    copy_ispxnative_libs "$runtime_asset_dir"
+}
+
+build_spx_binary() {
+    if [ "$os_name" = "Windows_NT" ]; then
+       # Fix for Windows MinGW linker duplicate symbol errors with Go 1.24
+       go build -ldflags="-extldflags=-Wl,--allow-multiple-definition" -o "$appname"
+    else
+       go build -o "$appname"
+    fi
+}
+
+install_web_runtime() {
+    echo "Installing ispx web runtime..."
+    rm -rf "$gopath_bin_dir/ispx"
+    mkdir -p "$gopath_bin_dir/ispx"
+    cp ../ispx/web/* "$gopath_bin_dir/ispx/"
+    echo "ispx web runtime installed to $gopath_bin_dir/ispx/"
+}
+
 if is_truthy "$embed_runtime"; then
     cleanup_embedded_runtime_assets
     trap cleanup_embedded_runtime_assets EXIT
     ensure_runtime_assets_for_embedding
-    build_ispxnative
+fi
+
+build_ispxnative
+
+if is_truthy "$embed_runtime"; then
     stage_embedded_runtime_assets
 fi
 
@@ -131,37 +165,18 @@ if [ "$os_name" = "Windows_NT" ]; then
    appname="${appname}.exe"
 fi
 
-if [ "$os_name" = "Windows_NT" ]; then
-   # Fix for Windows MinGW linker duplicate symbol errors with Go 1.24
-   go build -ldflags="-extldflags=-Wl,--allow-multiple-definition" -o "$appname"
-else
-   go build -o "$appname"
-fi 
-
-
-if [ ! -f "$appname" ]; then
-    echo "Error: $appname not found"
-    exit 1
-fi
-
-mv "$appname" "$GOPATH/bin/"
+build_spx_binary
+require_file "$appname" "built spx binary"
+mv "$appname" "$gopath_bin_dir/"
 
 # build and install ispx
 echo "Building ispx..."
 
 if [ "$install_web" -eq 1 ]; then
     ( cd ../ispx && GOFLAGS="-buildvcs=false" ./build.sh )
-    cp ../ispx/ispx.wasm "$GOPATH/bin/"
+    cp ../ispx/ispx.wasm "$gopath_bin_dir/"
 
-    # Install ispx web runtime
-    echo "Installing ispx web runtime..."
-    rm -rf "$GOPATH/bin/ispx"
-    mkdir -p "$GOPATH/bin/ispx"
-    cp ../ispx/web/* "$GOPATH/bin/ispx/"
-    echo "ispx web runtime installed to $GOPATH/bin/ispx/"
+    install_web_runtime
 fi
 
-if ! is_truthy "$embed_runtime"; then
-    build_ispxnative
-fi
-cp ../ispxnative/gdspx-* "$GOPATH/bin/"
+copy_ispxnative_libs "$gopath_bin_dir"
