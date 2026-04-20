@@ -23,7 +23,6 @@ import (
 	coreproject "github.com/goplus/spx/v2/internal/core/project"
 	corestate "github.com/goplus/spx/v2/internal/core/state"
 	spxlog "github.com/goplus/spx/v2/internal/log"
-	"github.com/goplus/spx/v2/internal/time"
 )
 
 // SpriteImpl is the concrete implementation of the Sprite interface.
@@ -199,15 +198,4 @@ func spriteOf(sprite Sprite) *SpriteImpl {
 		}
 	}
 	return nil
-}
-
-// -----------------------------------------------------------------------------
-// Timing
-// -----------------------------------------------------------------------------
-func (p *SpriteImpl) DeltaTime() float64 {
-	return time.DeltaTime()
-}
-
-func (p *SpriteImpl) TimeSinceLevelLoad() float64 {
-	return time.TimeSinceLevelLoad()
 }

@@ -20,6 +20,7 @@ import (
 	"math/rand"
 
 	"github.com/goplus/spx/v2/internal/engine"
+	itime "github.com/goplus/spx/v2/internal/time"
 )
 
 // Rand__0 returns a random integer between from and to (inclusive).
@@ -44,6 +45,16 @@ func Iround(v float64) int {
 		return int(v + 0.5)
 	}
 	return int(v - 0.5)
+}
+
+// DeltaTime returns the time elapsed since the previous frame.
+func DeltaTime() Seconds {
+	return itime.DeltaTime()
+}
+
+// TimeSinceLevelLoad returns the time elapsed since the current level started.
+func TimeSinceLevelLoad() Seconds {
+	return itime.TimeSinceLevelLoad()
 }
 
 // Exit__0 exits the program with exit code 0.
