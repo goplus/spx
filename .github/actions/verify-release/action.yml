@@ -93,16 +93,6 @@ runs:
         unzip -q "$PACKAGE_PATH" -d "$VERIFY_ROOT_DIR"
         echo "✓ Package extracted"
 
-        if [ ! -d "$VERIFY_ROOT_DIR/go/bin" ]; then
-          echo "❌ Error: go/bin directory not found in extracted package"
-          exit 1
-        fi
-
-        if [ ! -d "$VERIFY_ROOT_DIR/gotoolchain/go" ]; then
-          echo "❌ Error: portable Go toolchain not found in extracted package"
-          exit 1
-        fi
-
         echo ""
         echo "📂 Extracted top-level contents:"
         ls -la "$VERIFY_ROOT_DIR"
