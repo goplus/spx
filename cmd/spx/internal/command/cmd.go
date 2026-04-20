@@ -194,7 +194,7 @@ func (cmd *CmdTool) handleBuildPhase() error {
 	case "buildtinygo":
 		spxlog.Debug("running TinyGo library build")
 		return cmd.BuildTinyGoLib()
-	case "editor", "rune", "export", "build", "runpc":
+	case "editor", "rune", "export", "build", "runnative":
 		spxlog.Debug("checking DLL build conditions")
 		if cmd.Args.Tags == nil || !strings.Contains(*cmd.Args.Tags, "pure_engine") {
 			spxlog.Debug("running DLL build")
@@ -223,8 +223,8 @@ func (cmd *CmdTool) handleExecutionPhase() error {
 		return cmd.executeRune()
 	case "run":
 		return nil
-	case "runpc":
-		return cmd.executeRunPC()
+	case "runnative":
+		return cmd.executeRunNative()
 	case "runweb":
 		return cmd.RunWeb()
 	case "runwebworker":
@@ -269,8 +269,8 @@ func (cmd *CmdTool) executeRune() error {
 	return util.RunCommandInDir(cmd.ProjectDir, cmd.CmdPath, args...)
 }
 
-// executeRunPC runs the runpc command.
-func (cmd *CmdTool) executeRunPC() error {
+// executeRunNative runs the native desktop runtime command.
+func (cmd *CmdTool) executeRunNative() error {
 	if cmd.Args.Tags != nil && strings.Contains(*cmd.Args.Tags, "pure_engine") {
 		args := cmd.Args.String()
 		return cmd.RunPureEngine(args...)
@@ -305,7 +305,7 @@ func isInterpretedRunCommand(cmdName string) bool {
 // isRuntimeModeCommand reports whether the command uses runtime assets.
 func isRuntimeModeCommand(cmdName string) bool {
 	switch cmdName {
-	case "runpc", "runweb", "runwebworker":
+	case "runnative", "runweb", "runwebworker":
 		return true
 	default:
 		return false

@@ -9,7 +9,7 @@ runs:
 
     - name: Run test demo
       shell: bash
-      run: spx runpc -path="test/CI" -headless=true 2>&1 | tee cilog.txt
+      run: spx runnative -path="test/CI" -headless=true 2>&1 | tee cilog.txt
 
     - name: Check test result
       shell: bash

@@ -257,11 +257,11 @@ func parseWorkflowRunDemoArgs(args []string) (workflowRunDemoConfig, error) {
 	fs := flag.NewFlagSet("workflow run-demo", flag.ContinueOnError)
 	fs.SetOutput(osStderr)
 	fs.IntVar(&cfg.demoIndex, "demo-index", 0, "1-based index under tutorial/")
-	fs.StringVar(&cfg.mode, "mode", cfg.mode, "demo mode: editor, run, rune, web, or web-worker")
+	fs.StringVar(&cfg.mode, "mode", cfg.mode, "demo mode: editor, run, runnative, rune, web, or web-worker")
 	fs.IntVar(&cfg.port, "port", cfg.port, "web server port used by web demo modes")
 	fs.StringVar(&cfg.movie, "movie", cfg.movie, "movie flag passed through to spx native/editor modes")
 	fs.Usage = func() {
-		fmt.Fprintln(osStderr, "Usage: buildctl workflow run-demo --demo-index N [--mode editor|run|rune|web|web-worker] [--port 8106] [--movie false]")
+		fmt.Fprintln(osStderr, "Usage: buildctl workflow run-demo --demo-index N [--mode editor|run|runnative|rune|web|web-worker] [--port 8106] [--movie false]")
 	}
 
 	if err := fs.Parse(args); err != nil {
@@ -275,7 +275,7 @@ func parseWorkflowRunDemoArgs(args []string) (workflowRunDemoConfig, error) {
 		return workflowRunDemoConfig{}, errors.New("--demo-index must be greater than 0")
 	}
 	switch cfg.mode {
-	case "editor", "run", "rune", "web", "web-worker":
+	case "editor", "run", "runnative", "rune", "web", "web-worker":
 	default:
 		return workflowRunDemoConfig{}, fmt.Errorf("unsupported demo mode: %s", cfg.mode)
 	}
@@ -419,7 +419,10 @@ func runDemoWorkflow(cfg workflowRunDemoConfig, runner workflowRunner) error {
 		return runner.runCommand(demo, "spx", "editor", movieArg)
 	case "run":
 		fmt.Fprintf(os.Stdout, "Running demo #%d: %s\n", cfg.demoIndex, demo)
-		return runner.runCommand(demo, "spx", "runpc", movieArg)
+		return runner.runCommand(demo, "spx", "run", movieArg)
+	case "runnative":
+		fmt.Fprintf(os.Stdout, "Running native demo #%d: %s\n", cfg.demoIndex, demo)
+		return runner.runCommand(demo, "spx", "runnative", movieArg)
 	case "rune":
 		fmt.Fprintf(os.Stdout, "Running editor demo #%d: %s\n", cfg.demoIndex, demo)
 		return runner.runCommand(demo, "spx", "rune", movieArg)

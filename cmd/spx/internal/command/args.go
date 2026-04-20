@@ -87,7 +87,7 @@ func (cmd *CmdTool) CheckCmd(ext ...string) bool {
 		"build", "buildtinygo", "rune", "export",
 		"runweb", "buildweb", "exportweb", "stopweb", "runwebworker",
 		"runm", "exportbot", "exportapk", "exportios",
-		"run", "runpc", "runi", "exporttemplateweb", "exportminigame", "exportminiprogram", "exportwebworker",
+		"run", "runnative", "runi", "exporttemplateweb", "exportminigame", "exportminiprogram", "exportwebworker",
 	}
 	cmds = append(cmds, ext...)
 
@@ -138,7 +138,7 @@ Available commands:
     - build           # Build the dynamic library
     - buildtinygo     # Build static library using TinyGo for ESP32
     - run             # Run the current project in interpreted mode
-    - runpc           # Run the current project with the PC runtime
+    - runnative       # Run the current project with the native PC runtime
     - editor          # Open the current project in editor mode
     - rune            # Run with engine after import all assets
 
@@ -167,13 +167,13 @@ Examples:
     #CMDNAME init                         # Create a project in current path
     #CMDNAME init ./test/demo01           # Create a project at path ./test/demo01
     #CMDNAME run --path ./myproject       # Run project in interpreted mode
-    #CMDNAME runpc --path ./myproject     # Run project with the PC runtime
+    #CMDNAME runnative --path ./myproject # Run project with the native PC runtime
 	#CMDNAME run --goenv=/path/to/goenv   # Run interpreted mode with a portable Go environment
     #CMDNAME build --servermode           # Build in server mode
     #CMDNAME runweb --debugweb            # Run web server with debug service
     #CMDNAME buildtinygo                  # Build TinyGo static library for ESP32
     #CMDNAME exportminigame -build=fast   # Export minigame without compression (faster)
-    #CMDNAME runpc -tags=pure_engine      # Run in pure engine mode
+    #CMDNAME runnative -tags=pure_engine  # Run in pure engine mode
     #CMDNAME export --fullscreen          # Export with fullscreen mode
 	`
 	fmt.Println(cmdName + " Version = " + version + "\n" + strings.ReplaceAll(msg, "#CMDNAME", cmdName))

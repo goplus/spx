@@ -31,7 +31,7 @@ func main() {
 	// The project directory is one level up from the current working directory
 	// because this shared library runs from either:
 	//   - .temp/ directory (spx run interpreted mode)
-	//   - project/ directory (spx runpc/editor mode)
+	//   - project/ directory (spx runnative/editor mode)
 	//
 	// In both cases, the spx source files (.spx) are in the parent directory.
 	projDir, err := filepath.Abs("..")

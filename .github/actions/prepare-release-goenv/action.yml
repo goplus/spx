@@ -153,7 +153,7 @@ runs:
 
         # Run the smoke test with a bounded timeout so dependency downloads can warm GOMODCACHE.
         rm -f "$SMOKE_LOG_PATH"
-        "$PACKAGED_SPX" runpc --goenv="$GOENV_ROOT" --path=test/CI --headless >"$SMOKE_LOG_PATH" 2>&1 &
+        "$PACKAGED_SPX" runnative --goenv="$GOENV_ROOT" --path=test/CI --headless >"$SMOKE_LOG_PATH" 2>&1 &
         SPX_PID=$!
         EXIT_STATUS=""
         TIMED_OUT=true

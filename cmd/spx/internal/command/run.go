@@ -33,6 +33,8 @@ import (
 	"github.com/goplus/spx/v2/cmd/spx/internal/runtimeasset"
 )
 
+var prepareEmbeddedRuntimeAssets = runtimeasset.Prepare
+
 // Keep in sync with cmd/spxrunner/runner.GDExtensionTemplate.
 const defaultRuntimeGDExtensionTemplate = `[configuration]
 
@@ -236,6 +238,14 @@ func (cmd *CmdTool) findRuntimeAsset(name string) (string, error) {
 }
 
 func (cmd *CmdTool) resolveInterpretedRuntimeAssets(runtimeName, packName, libName string) (runtimePath, libPath string, err error) {
+	embeddedDir, ok, err := prepareEmbeddedRuntimeAssets(cmd.Version, runtimeName, packName, libName)
+	if err != nil {
+		return "", "", fmt.Errorf("prepare embedded runtime assets: %w", err)
+	}
+	if ok {
+		return filepath.Join(embeddedDir, runtimeName), filepath.Join(embeddedDir, libName), nil
+	}
+
 	runtimePath, runtimeErr := cmd.findRuntimeAsset(runtimeName)
 	libPath, libErr := cmd.findRuntimeAsset(libName)
 	if runtimeErr == nil {
@@ -247,14 +257,6 @@ func (cmd *CmdTool) resolveInterpretedRuntimeAssets(runtimeName, packName, libNa
 		} else if err != nil {
 			runtimeErr = fmt.Errorf("runtime pack check failed for %s: %w", packPath, err)
 		}
-	}
-
-	embeddedDir, ok, err := runtimeasset.Prepare(cmd.Version, runtimeName, packName, libName)
-	if err != nil {
-		return "", "", fmt.Errorf("prepare embedded runtime assets: %w", err)
-	}
-	if ok {
-		return filepath.Join(embeddedDir, runtimeName), filepath.Join(embeddedDir, libName), nil
 	}
 
 	var reasons []string

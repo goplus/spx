@@ -229,7 +229,7 @@ func TestIsRuntimeModeCommand(t *testing.T) {
 		want    bool
 	}{
 		{name: "run interpreted", cmdName: "run", want: false},
-		{name: "runpc", cmdName: "runpc", want: true},
+		{name: "runnative", cmdName: "runnative", want: true},
 		{name: "runweb", cmdName: "runweb", want: true},
 		{name: "runwebworker", cmdName: "runwebworker", want: true},
 		{name: "exportweb", cmdName: "exportweb", want: false},
@@ -266,6 +266,14 @@ func TestShouldBuildWasmForCommand(t *testing.T) {
 }
 
 func TestRunInterpretedCreatesRuntimeExtensionAndCopiesSharedLibrary(t *testing.T) {
+	oldPrepareEmbeddedRuntimeAssets := prepareEmbeddedRuntimeAssets
+	prepareEmbeddedRuntimeAssets = func(string, ...string) (string, bool, error) {
+		return "", false, nil
+	}
+	t.Cleanup(func() {
+		prepareEmbeddedRuntimeAssets = oldPrepareEmbeddedRuntimeAssets
+	})
+
 	goBinPath := t.TempDir()
 	runtimeTempDir := t.TempDir()
 	logPath := filepath.Join(t.TempDir(), "runtime.log")
@@ -328,7 +336,104 @@ func TestRunInterpretedCreatesRuntimeExtensionAndCopiesSharedLibrary(t *testing.
 	}
 }
 
+func TestResolveInterpretedRuntimeAssetsPrefersEmbedded(t *testing.T) {
+	oldPrepareEmbeddedRuntimeAssets := prepareEmbeddedRuntimeAssets
+	embeddedDir := t.TempDir()
+	prepareEmbeddedRuntimeAssets = func(string, ...string) (string, bool, error) {
+		return embeddedDir, true, nil
+	}
+	t.Cleanup(func() {
+		prepareEmbeddedRuntimeAssets = oldPrepareEmbeddedRuntimeAssets
+	})
+
+	goBinPath := t.TempDir()
+	version := "9.9.9-test"
+	runtimeName := "gdspxrt" + version
+	if runtime.GOOS == "windows" {
+		runtimeName += ".exe"
+	}
+	if err := os.WriteFile(filepath.Join(goBinPath, runtimeName), []byte("external runtime"), 0o755); err != nil {
+		t.Fatalf("write external runtime: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(goBinPath, runtimePackFileName(runtimeName)), []byte("external pack"), 0o644); err != nil {
+		t.Fatalf("write external runtime pack: %v", err)
+	}
+	libName := runtimeLibraryFileName()
+	if err := os.WriteFile(filepath.Join(goBinPath, libName), []byte("external library"), 0o755); err != nil {
+		t.Fatalf("write external shared library: %v", err)
+	}
+
+	cmd := CmdTool{
+		GoBinPath: goBinPath,
+		Version:   version,
+	}
+
+	runtimePath, libPath, err := cmd.resolveInterpretedRuntimeAssets(runtimeName, runtimePackFileName(runtimeName), libName)
+	if err != nil {
+		t.Fatalf("resolveInterpretedRuntimeAssets returned error: %v", err)
+	}
+	if got, want := runtimePath, filepath.Join(embeddedDir, runtimeName); got != want {
+		t.Fatalf("runtime path = %s, want %s", got, want)
+	}
+	if got, want := libPath, filepath.Join(embeddedDir, libName); got != want {
+		t.Fatalf("shared library path = %s, want %s", got, want)
+	}
+}
+
+func TestResolveInterpretedRuntimeAssetsFallsBackToExternalWhenEmbeddedUnavailable(t *testing.T) {
+	oldPrepareEmbeddedRuntimeAssets := prepareEmbeddedRuntimeAssets
+	prepareEmbeddedRuntimeAssets = func(string, ...string) (string, bool, error) {
+		return "", false, nil
+	}
+	t.Cleanup(func() {
+		prepareEmbeddedRuntimeAssets = oldPrepareEmbeddedRuntimeAssets
+	})
+
+	goBinPath := t.TempDir()
+	version := "9.9.9-test"
+	runtimeName := "gdspxrt" + version
+	if runtime.GOOS == "windows" {
+		runtimeName += ".exe"
+	}
+	runtimePathWant := filepath.Join(goBinPath, runtimeName)
+	if err := os.WriteFile(runtimePathWant, []byte("external runtime"), 0o755); err != nil {
+		t.Fatalf("write external runtime: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(goBinPath, runtimePackFileName(runtimeName)), []byte("external pack"), 0o644); err != nil {
+		t.Fatalf("write external runtime pack: %v", err)
+	}
+	libName := runtimeLibraryFileName()
+	libPathWant := filepath.Join(goBinPath, libName)
+	if err := os.WriteFile(libPathWant, []byte("external library"), 0o755); err != nil {
+		t.Fatalf("write external shared library: %v", err)
+	}
+
+	cmd := CmdTool{
+		GoBinPath: goBinPath,
+		Version:   version,
+	}
+
+	runtimePath, libPath, err := cmd.resolveInterpretedRuntimeAssets(runtimeName, runtimePackFileName(runtimeName), libName)
+	if err != nil {
+		t.Fatalf("resolveInterpretedRuntimeAssets returned error: %v", err)
+	}
+	if runtimePath != runtimePathWant {
+		t.Fatalf("runtime path = %s, want %s", runtimePath, runtimePathWant)
+	}
+	if libPath != libPathWant {
+		t.Fatalf("shared library path = %s, want %s", libPath, libPathWant)
+	}
+}
+
 func TestRunCmdRunHonorsPortableGoEnv(t *testing.T) {
+	oldPrepareEmbeddedRuntimeAssets := prepareEmbeddedRuntimeAssets
+	prepareEmbeddedRuntimeAssets = func(string, ...string) (string, bool, error) {
+		return "", false, nil
+	}
+	t.Cleanup(func() {
+		prepareEmbeddedRuntimeAssets = oldPrepareEmbeddedRuntimeAssets
+	})
+
 	targetDir := t.TempDir()
 	goEnvDir := filepath.Join(t.TempDir(), "goenv")
 	goBinPath := filepath.Join(goEnvDir, "go", "bin")
