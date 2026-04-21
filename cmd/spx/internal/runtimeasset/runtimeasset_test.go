@@ -83,6 +83,37 @@ func TestPrepareReturnsFalseWhenAssetMissing(t *testing.T) {
 	}
 }
 
+func TestPrepareUsesManifestCacheKeyWhenAvailable(t *testing.T) {
+	oldFS := assetsFS
+	oldCacheBaseDirFn := cacheBaseDirFn
+	t.Cleanup(func() {
+		assetsFS = oldFS
+		cacheBaseDirFn = oldCacheBaseDirFn
+	})
+
+	cacheRoot := t.TempDir()
+	cacheBaseDirFn = func() string { return cacheRoot }
+	assetsFS = fstest.MapFS{
+		"assets/manifest.json":        &fstest.MapFile{Data: []byte(`{"cache_key":"manifest-key","names":["gdspxrt9.9.9","gdspxrt9.9.9.pck","gdspx-linux-amd64.so"]}`)},
+		"assets/gdspxrt9.9.9":         &fstest.MapFile{Data: []byte("runtime")},
+		"assets/gdspxrt9.9.9.pck":     &fstest.MapFile{Data: []byte("runtime-pck")},
+		"assets/gdspx-linux-amd64.so": &fstest.MapFile{Data: []byte("shared-lib")},
+		"assets/placeholder.txt":      &fstest.MapFile{Data: []byte("placeholder")},
+	}
+
+	dir, ok, err := Prepare("9.9.9", "gdspxrt9.9.9", "gdspxrt9.9.9.pck", "gdspx-linux-amd64.so")
+	if err != nil {
+		t.Fatalf("Prepare returned error: %v", err)
+	}
+	if !ok {
+		t.Fatal("Prepare returned ok=false, want true")
+	}
+	if filepath.Base(dir) != "manifest-key" {
+		t.Fatalf("Prepare cache dir = %s, want suffix manifest-key", dir)
+	}
+	assertFileContent(t, filepath.Join(dir, "gdspx-linux-amd64.so"), "shared-lib")
+}
+
 func TestPrepareSeparatesCacheDirsByEmbeddedContent(t *testing.T) {
 	oldFS := assetsFS
 	oldCacheBaseDirFn := cacheBaseDirFn

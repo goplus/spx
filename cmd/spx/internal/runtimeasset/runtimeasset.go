@@ -2,8 +2,10 @@ package runtimeasset
 
 import (
 	"crypto/sha256"
-	"encoding/hex"
 	"embed"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"hash"
 	"io"
@@ -17,14 +19,20 @@ import (
 )
 
 const assetsDir = "assets"
+const manifestFileName = "manifest.json"
+
+type assetManifest struct {
+	CacheKey string   `json:"cache_key"`
+	Names    []string `json:"names"`
+}
 
 //go:embed assets/*
 var embeddedAssets embed.FS
 
 var (
-	assetsFS      fs.FS = embeddedAssets
-	cacheBaseDirFn      = defaultCacheBaseDir
-	extractMu     sync.Mutex
+	assetsFS       fs.FS = embeddedAssets
+	cacheBaseDirFn       = defaultCacheBaseDir
+	extractMu      sync.Mutex
 )
 
 // Prepare extracts the named embedded runtime assets into a stable cache dir.
@@ -43,9 +51,15 @@ func Prepare(version string, names ...string) (dir string, ok bool, err error) {
 		}
 	}
 
-	cacheKey, err := assetCacheKey(names)
+	cacheKey, ok, err := manifestCacheKey(names)
 	if err != nil {
-		return "", false, fmt.Errorf("compute runtime cache key: %w", err)
+		return "", false, fmt.Errorf("load runtime asset manifest: %w", err)
+	}
+	if !ok {
+		cacheKey, err = assetCacheKey(names)
+		if err != nil {
+			return "", false, fmt.Errorf("compute runtime cache key: %w", err)
+		}
 	}
 
 	cacheDir := filepath.Join(cacheBaseDirFn(), "spx", "embedded-runtime", version, runtime.GOOS+"-"+runtime.GOARCH, cacheKey)
@@ -89,6 +103,30 @@ func assetMode(name string) os.FileMode {
 		return 0o755
 	}
 	return 0o644
+}
+
+func manifestCacheKey(names []string) (string, bool, error) {
+	data, err := fs.ReadFile(assetsFS, assetPath(manifestFileName))
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return "", false, nil
+		}
+		return "", false, err
+	}
+
+	var manifest assetManifest
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		return "", false, err
+	}
+	if manifest.CacheKey == "" || len(manifest.Names) != len(names) {
+		return "", false, nil
+	}
+	for i, name := range names {
+		if manifest.Names[i] != name {
+			return "", false, nil
+		}
+	}
+	return manifest.CacheKey, true, nil
 }
 
 func assetCacheKey(names []string) (string, error) {

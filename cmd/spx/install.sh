@@ -59,9 +59,13 @@ is_truthy() {
 
 runtime_asset_dir="./internal/runtimeasset/assets"
 runtime_asset_placeholder="$runtime_asset_dir/placeholder.txt"
+runtime_asset_manifest="$runtime_asset_dir/manifest.json"
 runtime_version=""
 runtime_name=""
 runtime_pack=""
+runtime_goos=""
+runtime_goarch=""
+runtime_lib_name=""
 
 cleanup_embedded_runtime_assets() {
     mkdir -p "$runtime_asset_dir"
@@ -79,12 +83,31 @@ require_file() {
 }
 
 resolve_runtime_asset_names() {
-    local goexe
+    local goexe libext
 
     runtime_version="$(GOFLAGS="-buildvcs=false" go run ../../.github/scripts/runtime_version.go | tr -d '\r\n')"
+    runtime_goos="$(go env GOOS | tr -d '\r\n')"
+    runtime_goarch="$(go env GOARCH | tr -d '\r\n')"
     goexe="$(go env GOEXE | tr -d '\r\n')"
     runtime_name="gdspxrt${runtime_version}${goexe}"
     runtime_pack="gdspxrt${runtime_version}.pck"
+
+    case "$runtime_goos" in
+        darwin)
+            libext="dylib"
+            ;;
+        linux)
+            libext="so"
+            ;;
+        windows)
+            libext="dll"
+            ;;
+        *)
+            echo "Error: unsupported runtime OS: $runtime_goos"
+            exit 1
+            ;;
+    esac
+    runtime_lib_name="gdspx-${runtime_goos}-${runtime_goarch}.${libext}"
 }
 
 ensure_runtime_assets_for_embedding() {
@@ -102,21 +125,20 @@ build_ispxnative() {
     ( cd ../ispxnative && ./build.sh )
 }
 
-copy_ispxnative_libs() {
+copy_ispxnative_runtime_lib() {
     local destination_dir="$1"
-    local copied=0
 
+    resolve_runtime_asset_names
     mkdir -p "$destination_dir"
-    shopt -s nullglob
-    for lib in ../ispxnative/gdspx-*; do
-        cp "$lib" "$destination_dir/"
-        copied=1
-    done
-    shopt -u nullglob
-    if [ "$copied" -eq 0 ]; then
-        echo "Error: no gdspx shared libraries found under ../ispxnative"
-        exit 1
-    fi
+    require_file "../ispxnative/$runtime_lib_name" "runtime shared library"
+    cp "../ispxnative/$runtime_lib_name" "$destination_dir/"
+}
+
+write_runtime_asset_manifest() {
+    GOFLAGS="-buildvcs=false" go run ../../.github/scripts/runtime_asset_manifest.go \
+        "$runtime_name=$gopath_bin_dir/$runtime_name" \
+        "$runtime_pack=$gopath_bin_dir/$runtime_pack" \
+        "$runtime_lib_name=../ispxnative/$runtime_lib_name" > "$runtime_asset_manifest"
 }
 
 stage_embedded_runtime_assets() {
@@ -124,11 +146,13 @@ stage_embedded_runtime_assets() {
 
     require_file "$gopath_bin_dir/$runtime_name" "runtime executable"
     require_file "$gopath_bin_dir/$runtime_pack" "runtime pack"
+    require_file "../ispxnative/$runtime_lib_name" "runtime shared library"
 
     cleanup_embedded_runtime_assets
     cp "$gopath_bin_dir/$runtime_name" "$runtime_asset_dir/"
     cp "$gopath_bin_dir/$runtime_pack" "$runtime_asset_dir/"
-    copy_ispxnative_libs "$runtime_asset_dir"
+    copy_ispxnative_runtime_lib "$runtime_asset_dir"
+    write_runtime_asset_manifest
 }
 
 build_spx_binary() {
@@ -179,4 +203,4 @@ if [ "$install_web" -eq 1 ]; then
     install_web_runtime
 fi
 
-copy_ispxnative_libs "$gopath_bin_dir"
+copy_ispxnative_runtime_lib "$gopath_bin_dir"
