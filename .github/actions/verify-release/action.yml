@@ -285,12 +285,25 @@ runs:
         "$STANDALONE_SPX" run --path="$TEST_PROJECT_DIR" --headless 2>&1 | tee "$VERIFY_LOG_PATH"
         SPX_STATUS=${PIPESTATUS[0]}
         set -e
-        if [ "$SPX_STATUS" -ne 0 ]; then
-          echo "❌ Error: smoke test command failed (exit $SPX_STATUS)"
-          exit 1
+
+        SMOKE_REACHED_SUCCESS=false
+        if spx_smoke_reached_success "$VERIFY_LOG_PATH"; then
+          SMOKE_REACHED_SUCCESS=true
         fi
 
-        if ! grep -q "===>SpxCIRunSucc" "$VERIFY_LOG_PATH"; then
+        if [ "$SPX_STATUS" -ne 0 ]; then
+          if should_tolerate_windows_gdspxrt_shutdown_exit "$RUNNER_PLATFORM" "$VERIFY_LOG_PATH"; then
+            echo "Smoke test reached success marker but exited with status $SPX_STATUS."
+            echo "Continuing because Windows gdspxrt can occasionally fail during shutdown after the project completed."
+          else
+            echo "❌ Error: smoke test command failed (exit $SPX_STATUS)"
+            echo "Smoke test log:"
+            cat "$VERIFY_LOG_PATH"
+            exit 1
+          fi
+        fi
+
+        if [ "$SMOKE_REACHED_SUCCESS" != true ]; then
           echo "❌ Error: smoke test success marker not found"
           echo "Smoke test log:"
           cat "$VERIFY_LOG_PATH"

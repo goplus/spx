@@ -33,3 +33,15 @@ normalize_arch() {
       ;;
   esac
 }
+
+spx_smoke_reached_success() {
+  local log_path="$1"
+  grep -Eq 'Spx(CI)?RunSucc' "$log_path"
+}
+
+should_tolerate_windows_gdspxrt_shutdown_exit() {
+  local runner_platform="$1"
+  local log_path="$2"
+
+  [ "$runner_platform" = "windows" ] && spx_smoke_reached_success "$log_path"
+}

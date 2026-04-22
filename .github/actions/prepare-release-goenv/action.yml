@@ -62,7 +62,6 @@ runs:
         PACKAGED_SPX="$PACKAGED_BIN_DIR/spx$GOEXE"
         DEST="$GOENV_ROOT/.cache/mod/github.com/goplus/spx/v2@$RELEASE_VERSION"
         SMOKE_LOG_PATH="$GOENV_ROOT/prepare-release-goenv.log"
-        SMOKE_SUCCESS_MARKER_REGEX='Spx(CI)?RunSucc'
         TARGET_PLATFORM="$(normalize_platform "$PLATFORM")"
         TARGET_ARCH="$(normalize_arch "$PACKAGE_ARCH")"
         RUNNER_PLATFORM="$(normalize_platform "$RUNNER_OS_CONTEXT")"
@@ -174,7 +173,7 @@ runs:
           kill "$SPX_PID" 2>/dev/null || true
           wait "$SPX_PID" 2>/dev/null || true
         elif [ "$EXIT_STATUS" -ne 0 ]; then
-          if [ "$RUNNER_PLATFORM" = "windows" ] && grep -Eq "$SMOKE_SUCCESS_MARKER_REGEX" "$SMOKE_LOG_PATH"; then
+          if should_tolerate_windows_gdspxrt_shutdown_exit "$RUNNER_PLATFORM" "$SMOKE_LOG_PATH"; then
             echo "Dependency warm-up reached success marker but exited with status $EXIT_STATUS."
             echo "Continuing because Windows gdspxrt can occasionally fail during shutdown after the project completed."
           else
