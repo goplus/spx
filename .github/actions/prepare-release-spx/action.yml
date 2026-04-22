@@ -1,0 +1,58 @@
+name: Prepare release spx
+description: Update the shared go.mod template for a release build, reinstall spx, and expose the rebuilt binary path.
+inputs:
+  version:
+    description: 'Release version without the leading v (for example, 2.0.1)'
+    required: true
+outputs:
+  spx-bin:
+    description: 'Path to the rebuilt spx binary'
+    value: ${{ steps.prepare-release-spx.outputs.spx-bin }}
+runs:
+  using: "composite"
+  steps:
+    - name: Build local buildctl
+      uses: ./.github/actions/setup-buildctl
+
+    - name: Update template version and install spx
+      id: prepare-release-spx
+      shell: bash
+      run: |
+        set -euo pipefail
+        source ./.github/actions/lib/release_platform.sh
+
+        VERSION="v${{ inputs.version }}"
+        FILE="internal/scaffold/go.mod.template"
+
+        if [ ! -f "$FILE" ]; then
+          log_error "$FILE not found"
+          exit 1
+        fi
+
+        log_section "Prepare release spx"
+        log_info "Workspace: $(pwd)"
+        log_info "Version: $VERSION"
+        log_info "Template: $FILE"
+
+        log_section "Template before replacement"
+        cat "$FILE"
+
+        # Create backup and replace version
+        sed -i.bak -E "s|(require github.com/goplus/spx/v2) v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)? (//xgo:class)|\1 $VERSION \3|" "$FILE"
+        rm -f "$FILE.bak"
+
+        log_section "Template after replacement"
+        cat "$FILE"
+        log_success "Updated $FILE with version $VERSION"
+
+        log_info "Reinstalling spx with default embedded runtime assets"
+        "$BUILDCTL" tool install
+
+        GOEXE="$(go_env_goexe)"
+        SPX_BIN_PATH="$(go_env_spx_path "$GOEXE")"
+        if [ ! -f "$SPX_BIN_PATH" ]; then
+          log_error "rebuilt spx binary not found: $SPX_BIN_PATH"
+          exit 1
+        fi
+        echo "spx-bin=$SPX_BIN_PATH" >> "$GITHUB_OUTPUT"
+        log_success "Rebuilt spx binary: $SPX_BIN_PATH"

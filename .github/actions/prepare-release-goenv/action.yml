@@ -30,30 +30,8 @@ runs:
         set -euo pipefail
         source ./.github/actions/lib/release_platform.sh
 
-        normalize_path() {
-          local raw_path="$1"
-          if command -v cygpath >/dev/null 2>&1; then
-            cygpath -u "$raw_path" 2>/dev/null || printf '%s\n' "$raw_path"
-            return
-          fi
-          printf '%s\n' "$raw_path"
-        }
-
-        GOEXE="$(go env GOEXE)"
-        GOPATH_RAW="$(go env GOPATH | tr -d '\r')"
-        if [ -z "$GOPATH_RAW" ]; then
-          echo "❌ Error: GOPATH is empty"
-          exit 1
-        fi
-
-        GOPATH_SEP=':'
-        if [ "$GOEXE" = ".exe" ]; then
-          GOPATH_SEP=';'
-        fi
-
-        GOPATH_FIRST="${GOPATH_RAW%%${GOPATH_SEP}*}"
-        GOPATH_FIRST="$(normalize_path "$GOPATH_FIRST")"
-        INSTALLED_BIN_DIR="$GOPATH_FIRST/bin"
+        GOEXE="$(go_env_goexe)"
+        INSTALLED_BIN_DIR="$(go_env_bin_dir "$GOEXE")"
         INSTALLED_SPX="$INSTALLED_BIN_DIR/spx$GOEXE"
         GOENV_ROOT="$(pwd)/$GOENV_DIR"
         GOENV_EXCLUDE="./${GOENV_DIR#./}"
@@ -68,9 +46,14 @@ runs:
         RUNNER_ARCH="$(normalize_arch "$RUNNER_ARCH_CONTEXT")"
 
         if [ ! -f "$INSTALLED_SPX" ]; then
-          echo "❌ Error: rebuilt spx binary not found: $INSTALLED_SPX"
+          log_error "rebuilt spx binary not found: $INSTALLED_SPX"
           exit 1
         fi
+
+        log_section "Prepare release goenv"
+        log_info "Runner: $RUNNER_PLATFORM/$RUNNER_ARCH"
+        log_info "Package target: $TARGET_PLATFORM/$TARGET_ARCH"
+        log_info "Goenv root: $GOENV_ROOT"
 
         mkdir -p "$GOMODCACHE_DIR" "$PACKAGED_BIN_DIR"
 
@@ -84,7 +67,7 @@ runs:
           fi
         done
         if [ "${#RUNTIME_BINARIES[@]}" -eq 0 ]; then
-          echo "❌ Error: runtime binaries not found in $INSTALLED_BIN_DIR"
+          log_error "runtime binaries not found in $INSTALLED_BIN_DIR"
           exit 1
         fi
 
@@ -98,7 +81,7 @@ runs:
           fi
         done
         if [ "${#GDSPX_LIBRARIES[@]}" -eq 0 ]; then
-          echo "❌ Error: gdspx shared libraries not found in $INSTALLED_BIN_DIR"
+          log_error "gdspx shared libraries not found in $INSTALLED_BIN_DIR"
           exit 1
         fi
 
@@ -108,12 +91,10 @@ runs:
           cp "$INSTALLED_BIN_DIR/runtime.gdextension" "$PACKAGED_BIN_DIR"/
         fi
 
-        echo "Installing rebuilt spx binary: $INSTALLED_SPX -> $PACKAGED_SPX"
+        log_info "Installing rebuilt spx binary: $INSTALLED_SPX -> $PACKAGED_SPX"
         cp "$INSTALLED_SPX" "$PACKAGED_SPX"
 
-        echo "Installing spx source to module cache: $RELEASE_VERSION"
-        echo "Runner platform/arch: $RUNNER_PLATFORM/$RUNNER_ARCH"
-        echo "Package target: $TARGET_PLATFORM/$TARGET_ARCH"
+        log_info "Installing spx source to module cache: $RELEASE_VERSION"
         rm -rf "$DEST"
         mkdir -p "$DEST"
 
@@ -135,22 +116,24 @@ runs:
         export GOMODCACHE="$GOMODCACHE_DIR"
 
         if [ ! -f "$PACKAGED_SPX" ]; then
-          echo "❌ Error: packaged spx binary not found: $PACKAGED_SPX"
+          log_error "packaged spx binary not found: $PACKAGED_SPX"
           exit 1
         fi
 
         if [ "$TARGET_PLATFORM" != "$RUNNER_PLATFORM" ] || [ "$TARGET_ARCH" != "$RUNNER_ARCH" ]; then
-          echo "Skipping dependency warm-up on non-native runner."
-          echo "Release goenv preparation completed without smoke run."
+          log_info "Skipping dependency warm-up on non-native runner"
+          log_success "Release goenv preparation completed without smoke run"
           exit 0
         fi
 
         if ! command -v xgo >/dev/null 2>&1; then
-          echo "❌ Error: xgo is required for native dependency warm-up but was not found in PATH"
+          log_error "xgo is required for native dependency warm-up but was not found in PATH"
           exit 1
         fi
 
         # Run the smoke test with a bounded timeout so dependency downloads can warm GOMODCACHE.
+        log_section "Warm dependency cache"
+        log_info "Command: $PACKAGED_SPX runnative --goenv=$GOENV_ROOT --path=test/CI --headless"
         rm -f "$SMOKE_LOG_PATH"
         "$PACKAGED_SPX" runnative --goenv="$GOENV_ROOT" --path=test/CI --headless >"$SMOKE_LOG_PATH" 2>&1 &
         SPX_PID=$!
@@ -169,26 +152,26 @@ runs:
         done
 
         if [ "$TIMED_OUT" = true ]; then
-          echo "Smoke run exceeded 30s; stopping after warming module cache."
+          log_warn "Smoke run exceeded 30s; stopping after warming module cache"
           kill "$SPX_PID" 2>/dev/null || true
           wait "$SPX_PID" 2>/dev/null || true
         elif [ "$EXIT_STATUS" -ne 0 ]; then
           if should_tolerate_windows_gdspxrt_shutdown_exit "$RUNNER_PLATFORM" "$SMOKE_LOG_PATH"; then
-            echo "Dependency warm-up reached success marker but exited with status $EXIT_STATUS."
-            echo "Continuing because Windows gdspxrt can occasionally fail during shutdown after the project completed."
+            log_warn "Dependency warm-up reached success marker but exited with status $EXIT_STATUS"
+            log_info "Continuing because Windows gdspxrt can occasionally fail during shutdown after the project completed"
           else
-            echo "❌ Error: dependency warm-up run failed"
+            log_error "dependency warm-up run failed"
             cat "$SMOKE_LOG_PATH"
             exit 1
           fi
         fi
 
         if ! find "$GOMODCACHE_DIR" -type d -name '*@*' ! -path "$DEST" -print -quit | grep -q .; then
-          echo "❌ Error: dependency warm-up did not cache any additional modules"
+          log_error "dependency warm-up did not cache any additional modules"
           cat "$SMOKE_LOG_PATH"
           exit 1
         fi
 
-        echo "Module cache collection completed"
+        log_success "Module cache collection completed"
         ls -lah "$GOMODCACHE_DIR" || true
         du -sh "$GOMODCACHE_DIR" || true
