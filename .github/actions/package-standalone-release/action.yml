@@ -4,6 +4,9 @@ inputs:
   package-file:
     description: 'Output zip archive path'
     required: true
+  spx-bin:
+    description: 'Path to the rebuilt standalone-capable spx binary'
+    required: true
 runs:
   using: composite
   steps:
@@ -11,69 +14,51 @@ runs:
       shell: bash
       env:
         PACKAGE_FILE: ${{ inputs.package-file }}
+        SPX_BIN: ${{ inputs.spx-bin }}
       run: |
         set -euo pipefail
+        source ./.github/actions/lib/release_platform.sh
 
-        normalize_path() {
-          local raw_path="$1"
-          if command -v cygpath >/dev/null 2>&1; then
-            cygpath -u "$raw_path" 2>/dev/null || printf '%s\n' "$raw_path"
-            return
-          fi
-          printf '%s\n' "$raw_path"
-        }
-
-        normalize_windows_path() {
-          local raw_path="$1"
-          if command -v cygpath >/dev/null 2>&1; then
-            cygpath -w "$raw_path" 2>/dev/null || printf '%s\n' "$raw_path"
-            return
-          fi
-          printf '%s\n' "$raw_path"
-        }
-
-        GOEXE="$(go env GOEXE)"
-        GOPATH_RAW="$(go env GOPATH | tr -d '\r')"
-        if [ -z "$GOPATH_RAW" ]; then
-          echo "❌ Error: GOPATH is empty"
+        if [ -z "$SPX_BIN" ]; then
+          log_error "spx-bin input is empty"
           exit 1
         fi
 
-        GOPATH_SEP=':'
-        if [ "$GOEXE" = ".exe" ]; then
-          GOPATH_SEP=';'
-        fi
-
-        GOPATH_FIRST="${GOPATH_RAW%%${GOPATH_SEP}*}"
-        GOPATH_FIRST="$(normalize_path "$GOPATH_FIRST")"
-        INSTALLED_SPX="$GOPATH_FIRST/bin/spx$GOEXE"
+        SPX_BIN_PATH="$(normalize_path "$SPX_BIN")"
+        SPX_BIN_NAME="$(basename "$SPX_BIN_PATH")"
         PACKAGE_PATH="$(pwd)/$PACKAGE_FILE"
         STAGING_DIR="$(pwd)/standalone-package"
 
-        if [ ! -f "$INSTALLED_SPX" ]; then
-          echo "❌ Error: rebuilt spx binary not found: $INSTALLED_SPX"
+        if [ ! -f "$SPX_BIN_PATH" ]; then
+          log_error "spx binary not found: $SPX_BIN_PATH"
           exit 1
         fi
 
+        log_section "Package standalone spx"
+        log_info "SPX binary: $SPX_BIN_PATH"
+        log_info "Package: $PACKAGE_PATH"
+
         rm -rf "$STAGING_DIR" "$PACKAGE_PATH"
         mkdir -p "$STAGING_DIR"
-        cp "$INSTALLED_SPX" "$STAGING_DIR/"
+        cp "$SPX_BIN_PATH" "$STAGING_DIR/"
 
         if command -v zip >/dev/null 2>&1; then
           (
             cd "$STAGING_DIR"
-            zip -r "$PACKAGE_PATH" "spx$GOEXE"
+            zip -r "$PACKAGE_PATH" "$SPX_BIN_NAME"
           )
+          log_success "Packaged standalone spx: $PACKAGE_PATH"
           exit 0
         fi
 
-        if [ "$GOEXE" = ".exe" ] && command -v powershell.exe >/dev/null 2>&1; then
+        if [ "$SPX_BIN_NAME" = "spx.exe" ] && command -v powershell.exe >/dev/null 2>&1; then
           PACKAGE_PATH_WIN="$(normalize_windows_path "$PACKAGE_PATH")"
           STAGING_DIR_WIN="$(normalize_windows_path "$STAGING_DIR")"
           powershell.exe -NoLogo -NoProfile -Command \
-            "Compress-Archive -LiteralPath (Join-Path '$STAGING_DIR_WIN' 'spx$GOEXE') -DestinationPath '$PACKAGE_PATH_WIN' -Force"
+            "Compress-Archive -LiteralPath (Join-Path '$STAGING_DIR_WIN' '$SPX_BIN_NAME') -DestinationPath '$PACKAGE_PATH_WIN' -Force"
+          log_success "Packaged standalone spx: $PACKAGE_PATH"
           exit 0
         fi
 
-        echo "❌ Error: neither zip nor a Windows PowerShell zip fallback is available"
+        log_error "neither zip nor a Windows PowerShell zip fallback is available"
         exit 1

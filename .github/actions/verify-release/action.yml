@@ -50,22 +50,22 @@ runs:
           local actual_archs
 
           if ! command -v lipo >/dev/null 2>&1; then
-            echo "❌ Error: lipo command is required to verify macOS binaries"
+            log_error "lipo command is required to verify macOS binaries"
             exit 1
           fi
 
           actual_archs="$(lipo -archs "$binary_path" 2>/dev/null | tr -s '[:space:]' ' ' | sed -e 's/^ //' -e 's/ $//')"
           if [ -z "$actual_archs" ]; then
-            echo "❌ Error: failed to inspect macOS binary architecture: $binary_path"
+            log_error "failed to inspect macOS binary architecture: $binary_path"
             exit 1
           fi
 
           case " $actual_archs " in
             *" $expected_arch "*)
-              echo "✓ macOS binary architecture matches target: $actual_archs"
+              log_success "macOS binary architecture matches target: $actual_archs"
               ;;
             *)
-              echo "❌ Error: macOS binary architecture mismatch (expected $expected_arch, got $actual_archs)"
+              log_error "macOS binary architecture mismatch (expected $expected_arch, got $actual_archs)"
               exit 1
               ;;
           esac
@@ -78,12 +78,12 @@ runs:
           local description
 
           if ! command -v file >/dev/null 2>&1; then
-            echo "❌ Error: file command is required to verify binary architecture"
+            log_error "file command is required to verify binary architecture"
             exit 1
           fi
 
           description="$(file "$binary_path")"
-          echo "Binary architecture: $description"
+          log_info "Binary architecture: $description"
 
           case "$platform/$arch" in
             linux/x64)
@@ -120,23 +120,27 @@ runs:
               return
               ;;
             *)
-              echo "❌ Error: unsupported binary architecture target: $platform/$arch"
+              log_error "unsupported binary architecture target: $platform/$arch"
               exit 1
               ;;
           esac
 
-          echo "❌ Error: binary architecture mismatch for $platform/$arch"
+          log_error "binary architecture mismatch for $platform/$arch"
           exit 1
         }
 
-        echo "=========================================="
-        echo "🔍 Verifying release package"
-        echo "Package: $PACKAGE_FILE"
-        echo "Layout: $LAYOUT"
-        echo "Platform: $PLATFORM"
-        echo "Package arch: $PACKAGE_ARCH"
-        echo "=========================================="
-        echo ""
+        should_check_spx_binary_arch() {
+          local layout="$1"
+          local platform="$2"
+
+          [ "$layout" = "standalone" ] || { [ "$layout" = "goenv" ] && [ "$platform" = "macos" ]; }
+        }
+
+        log_section "Verify release package"
+        log_info "Package: $PACKAGE_FILE"
+        log_info "Layout: $LAYOUT"
+        log_info "Platform: $PLATFORM"
+        log_info "Package arch: $PACKAGE_ARCH"
 
         WORKSPACE_DIR=$(pwd)
         PACKAGE_PATH="$WORKSPACE_DIR/$PACKAGE_FILE"
@@ -148,6 +152,7 @@ runs:
         TARGET_ARCH="$(normalize_arch "$PACKAGE_ARCH")"
         RUNNER_PLATFORM="$(normalize_platform "$RUNNER_OS_CONTEXT")"
         RUNNER_ARCH="$(normalize_arch "$RUNNER_ARCH_CONTEXT")"
+        SPX_BINARY_NAME="$(spx_binary_name_for_platform "$TARGET_PLATFORM")"
         VERIFY_BASENAME="release-verification-${LAYOUT}-${TARGET_PLATFORM}-${TARGET_ARCH}"
         VERIFY_ROOT_DIR="$WORKSPACE_DIR/$VERIFY_BASENAME"
         VERIFY_TEST_ROOT_DIR="$VERIFY_ROOT_DIR/test"
@@ -155,93 +160,66 @@ runs:
         VERIFY_LOG_PATH="$WORKSPACE_DIR/$VERIFY_BASENAME.log"
         STANDALONE_BIN_DIR="$VERIFY_ROOT_DIR/standalone-bin"
 
-        echo "📁 Workspace: $WORKSPACE_DIR"
-        echo "🖥️ Runner: $RUNNER_PLATFORM/$RUNNER_ARCH"
-        echo "📦 Package target: $TARGET_PLATFORM/$TARGET_ARCH"
+        log_info "Workspace: $WORKSPACE_DIR"
+        log_info "Runner: $RUNNER_PLATFORM/$RUNNER_ARCH"
+        log_info "Package target: $TARGET_PLATFORM/$TARGET_ARCH"
 
         if ! command -v unzip >/dev/null 2>&1; then
-          echo "❌ Error: unzip command is required but not available"
+          log_error "unzip command is required but not available"
           exit 1
         fi
 
         if [ ! -f "$PACKAGE_PATH" ]; then
-          echo "❌ Error: package file not found: $PACKAGE_PATH"
+          log_error "package file not found: $PACKAGE_PATH"
           exit 1
         fi
-        echo "✓ Package file found: $PACKAGE_PATH"
+        log_success "Package file found: $PACKAGE_PATH"
 
         rm -rf "$VERIFY_ROOT_DIR"
         mkdir -p "$VERIFY_ROOT_DIR"
-        echo "✓ Created verification directory: $VERIFY_ROOT_DIR"
+        log_success "Created verification directory: $VERIFY_ROOT_DIR"
 
-        echo ""
-        echo "📦 Extracting package..."
+        log_section "Extract package"
         unzip -q "$PACKAGE_PATH" -d "$VERIFY_ROOT_DIR"
-        echo "✓ Package extracted"
+        log_success "Package extracted"
 
-        echo ""
-        echo "📂 Extracted top-level contents:"
+        log_info "Extracted top-level contents:"
         ls -la "$VERIFY_ROOT_DIR"
 
         case "$LAYOUT" in
           goenv)
             if [ ! -d "$VERIFY_ROOT_DIR/go/bin" ]; then
-              echo "❌ Error: go/bin directory not found in extracted package"
+              log_error "go/bin directory not found in extracted package"
               exit 1
             fi
 
             if [ ! -d "$VERIFY_ROOT_DIR/gotoolchain/go" ]; then
-              echo "❌ Error: portable Go toolchain not found in extracted package"
+              log_error "portable Go toolchain not found in extracted package"
               exit 1
             fi
 
-            echo ""
-            echo "📂 Go bin directory:"
+            log_info "Go bin directory:"
             ls -la "$VERIFY_ROOT_DIR/go/bin"
-            echo ""
-            echo "📂 Go toolchain directory:"
+            log_info "Go toolchain directory:"
             ls -la "$VERIFY_ROOT_DIR/gotoolchain"
-
-            case "$TARGET_PLATFORM" in
-              windows)
-                SPX_BIN_PATH="$VERIFY_ROOT_DIR/go/bin/spx.exe"
-                ;;
-              macos|linux)
-                SPX_BIN_PATH="$VERIFY_ROOT_DIR/go/bin/spx"
-                ;;
-              *)
-                echo "❌ Error: unsupported platform: $TARGET_PLATFORM"
-                exit 1
-                ;;
-            esac
+            SPX_BIN_PATH="$VERIFY_ROOT_DIR/go/bin/$SPX_BINARY_NAME"
             ;;
           standalone)
-            case "$TARGET_PLATFORM" in
-              windows)
-                SPX_BIN_PATH="$VERIFY_ROOT_DIR/spx.exe"
-                ;;
-              macos|linux)
-                SPX_BIN_PATH="$VERIFY_ROOT_DIR/spx"
-                ;;
-              *)
-                echo "❌ Error: unsupported platform: $TARGET_PLATFORM"
-                exit 1
-                ;;
-            esac
+            SPX_BIN_PATH="$VERIFY_ROOT_DIR/$SPX_BINARY_NAME"
             ;;
           *)
-            echo "❌ Error: unsupported package layout: $LAYOUT"
+            log_error "unsupported package layout: $LAYOUT"
             exit 1
             ;;
         esac
 
         if [ ! -f "$SPX_BIN_PATH" ]; then
-          echo "❌ Error: spx executable not found: $SPX_BIN_PATH"
+          log_error "spx executable not found: $SPX_BIN_PATH"
           exit 1
         fi
-        echo "✓ SPX executable found: $SPX_BIN_PATH"
+        log_success "SPX executable found: $SPX_BIN_PATH"
 
-        if [ "$LAYOUT" = "standalone" ] || [ "$TARGET_PLATFORM" = "macos" ]; then
+        if should_check_spx_binary_arch "$LAYOUT" "$TARGET_PLATFORM"; then
           assert_binary_arch "$SPX_BIN_PATH" "$TARGET_PLATFORM" "$TARGET_ARCH"
         fi
 
@@ -249,22 +227,16 @@ runs:
           chmod +x "$SPX_BIN_PATH"
         fi
 
-        echo ""
-        echo "📋 Preparing test project..."
+        log_section "Prepare test project"
         mkdir -p "$VERIFY_TEST_ROOT_DIR"
         cp -R test/CI "$VERIFY_TEST_ROOT_DIR/"
         reset_test_project_state "$TEST_PROJECT_DIR"
-        echo "✓ Test project copied"
+        log_success "Test project copied"
 
         if [ "$TARGET_PLATFORM" != "$RUNNER_PLATFORM" ] || [ "$TARGET_ARCH" != "$RUNNER_ARCH" ]; then
-          echo ""
-          echo "⏭️ Skipping smoke test on non-native runner"
-          echo "Runner platform/arch does not match package target."
-          echo "Structure verification completed successfully."
-          echo ""
-          echo "=========================================="
-          echo "✅ Release package verification PASSED"
-          echo "=========================================="
+          log_info "Skipping smoke test on non-native runner"
+          log_info "Runner platform/arch does not match package target"
+          log_success "Release package verification passed"
           exit 0
         fi
 
@@ -275,10 +247,8 @@ runs:
           chmod +x "$STANDALONE_SPX"
         fi
 
-        echo ""
-        echo "🚀 Running smoke test..."
-        echo "Command: $STANDALONE_SPX run --path=$TEST_PROJECT_DIR --headless"
-        echo ""
+        log_section "Run smoke test"
+        log_info "Command: $STANDALONE_SPX run --path=$TEST_PROJECT_DIR --headless"
 
         rm -f "$VERIFY_LOG_PATH"
         set +e
@@ -293,25 +263,22 @@ runs:
 
         if [ "$SPX_STATUS" -ne 0 ]; then
           if should_tolerate_windows_gdspxrt_shutdown_exit "$RUNNER_PLATFORM" "$VERIFY_LOG_PATH"; then
-            echo "Smoke test reached success marker but exited with status $SPX_STATUS."
-            echo "Continuing because Windows gdspxrt can occasionally fail during shutdown after the project completed."
+            log_warn "Smoke test reached success marker but exited with status $SPX_STATUS"
+            log_info "Continuing because Windows gdspxrt can occasionally fail during shutdown after the project completed"
           else
-            echo "❌ Error: smoke test command failed (exit $SPX_STATUS)"
-            echo "Smoke test log:"
+            log_error "smoke test command failed (exit $SPX_STATUS)"
+            log_info "Smoke test log:"
             cat "$VERIFY_LOG_PATH"
             exit 1
           fi
         fi
 
         if [ "$SMOKE_REACHED_SUCCESS" != true ]; then
-          echo "❌ Error: smoke test success marker not found"
-          echo "Smoke test log:"
+          log_error "smoke test success marker not found"
+          log_info "Smoke test log:"
           cat "$VERIFY_LOG_PATH"
           exit 1
         fi
-        echo "✓ Smoke test success marker found"
+        log_success "Smoke test success marker found"
 
-        echo ""
-        echo "=========================================="
-        echo "✅ Release package verification PASSED"
-        echo "=========================================="
+        log_success "Release package verification passed"

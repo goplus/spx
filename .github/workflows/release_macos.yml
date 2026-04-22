@@ -41,8 +41,9 @@ jobs:
           rm go1.25.8.darwin-${{ matrix.arch }}.tar.gz
           cd ../..
 
-      - name: Update template version
-        uses: ./.github/actions/replace-version
+      - name: Prepare release spx
+        id: prepare_release_spx
+        uses: ./.github/actions/prepare-release-spx
         with:
           version: ${{ inputs.version }}
 
@@ -59,7 +60,7 @@ jobs:
           rm -rf goenv/.cache/build
 
           # Verify what will be packaged
-          echo "Contents to be packaged:"
+          echo "[info] Contents to be packaged:"
           du -sh goenv/* goenv/.cache/* 2>/dev/null || true
 
           # Create zip archive
@@ -78,6 +79,7 @@ jobs:
         uses: ./.github/actions/package-standalone-release
         with:
           package-file: spx-standalone-darwin-${{ matrix.arch_name }}.zip
+          spx-bin: ${{ steps.prepare_release_spx.outputs.spx-bin }}
 
       - name: Upload standalone release artifact
         uses: actions/upload-artifact@v7
