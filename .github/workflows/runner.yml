@@ -85,12 +85,12 @@ jobs:
             job_result="${item#*:}"
 
             if [ "$job_result" != "success" ]; then
-              echo "$job_name did not succeed: $job_result"
+              echo "[error] Required job failed: $job_name ($job_result)" >&2
               exit 1
             fi
           done
 
-          echo "All required CI jobs passed."
+          echo "[ok] All required CI jobs passed"
 
   # Third stage: Run auxiliary tests using build artifacts from previous jobs.
 

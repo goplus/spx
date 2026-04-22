@@ -1,4 +1,4 @@
-name: Package standalone spx
+name: Package standalone release
 description: Package the rebuilt standalone-capable spx binary into a zip archive.
 inputs:
   package-file:
@@ -10,7 +10,7 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Package standalone spx
+    - name: Package standalone release
       shell: bash
       env:
         PACKAGE_FILE: ${{ inputs.package-file }}
@@ -20,7 +20,7 @@ runs:
         source ./.github/actions/lib/release_platform.sh
 
         if [ -z "$SPX_BIN" ]; then
-          log_error "spx-bin input is empty"
+          log_error "SPX binary input is empty"
           exit 1
         fi
 
@@ -30,11 +30,11 @@ runs:
         STAGING_DIR="$(pwd)/standalone-package"
 
         if [ ! -f "$SPX_BIN_PATH" ]; then
-          log_error "spx binary not found: $SPX_BIN_PATH"
+          log_error "SPX binary not found: $SPX_BIN_PATH"
           exit 1
         fi
 
-        log_section "Package standalone spx"
+        log_section "Package standalone release"
         log_info "SPX binary: $SPX_BIN_PATH"
         log_info "Package: $PACKAGE_PATH"
 
@@ -47,7 +47,7 @@ runs:
             cd "$STAGING_DIR"
             zip -r "$PACKAGE_PATH" "$SPX_BIN_NAME"
           )
-          log_success "Packaged standalone spx: $PACKAGE_PATH"
+          log_success "Packaged standalone SPX: $PACKAGE_PATH"
           exit 0
         fi
 
@@ -56,9 +56,9 @@ runs:
           STAGING_DIR_WIN="$(normalize_windows_path "$STAGING_DIR")"
           powershell.exe -NoLogo -NoProfile -Command \
             "Compress-Archive -LiteralPath (Join-Path '$STAGING_DIR_WIN' '$SPX_BIN_NAME') -DestinationPath '$PACKAGE_PATH_WIN' -Force"
-          log_success "Packaged standalone spx: $PACKAGE_PATH"
+          log_success "Packaged standalone SPX: $PACKAGE_PATH"
           exit 0
         fi
 
-        log_error "neither zip nor a Windows PowerShell zip fallback is available"
+        log_error "Neither zip nor a Windows PowerShell zip fallback is available"
         exit 1

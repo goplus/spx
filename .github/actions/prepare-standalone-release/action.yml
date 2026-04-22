@@ -1,5 +1,5 @@
-name: Prepare release spx
-description: Update the shared go.mod template for a release build, reinstall spx, and expose the rebuilt binary path.
+name: Prepare standalone release
+description: Update the shared go.mod template for a standalone release build, reinstall spx, and expose the rebuilt binary path.
 inputs:
   version:
     description: 'Release version without the leading v (for example, 2.0.1)'
@@ -7,7 +7,7 @@ inputs:
 outputs:
   spx-bin:
     description: 'Path to the rebuilt spx binary'
-    value: ${{ steps.prepare-release-spx.outputs.spx-bin }}
+    value: ${{ steps.prepare-standalone-release.outputs.spx-bin }}
 runs:
   using: "composite"
   steps:
@@ -15,7 +15,7 @@ runs:
       uses: ./.github/actions/setup-buildctl
 
     - name: Update template version and install spx
-      id: prepare-release-spx
+      id: prepare-standalone-release
       shell: bash
       run: |
         set -euo pipefail
@@ -25,11 +25,11 @@ runs:
         FILE="internal/scaffold/go.mod.template"
 
         if [ ! -f "$FILE" ]; then
-          log_error "$FILE not found"
+          log_error "Template file not found: $FILE"
           exit 1
         fi
 
-        log_section "Prepare release spx"
+        log_section "Prepare standalone release"
         log_info "Workspace: $(pwd)"
         log_info "Version: $VERSION"
         log_info "Template: $FILE"
@@ -51,7 +51,7 @@ runs:
         GOEXE="$(go_env_goexe)"
         SPX_BIN_PATH="$(go_env_spx_path "$GOEXE")"
         if [ ! -f "$SPX_BIN_PATH" ]; then
-          log_error "rebuilt spx binary not found: $SPX_BIN_PATH"
+          log_error "Rebuilt SPX binary not found: $SPX_BIN_PATH"
           exit 1
         fi
         echo "spx-bin=$SPX_BIN_PATH" >> "$GITHUB_OUTPUT"

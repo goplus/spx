@@ -44,7 +44,7 @@ jobs:
             VERSION="$RELEASE_TAG_INPUT"
           fi
           VERSION="${VERSION#v}"  # Remove 'v' prefix (if present)
-          echo "VERSION=$VERSION"
+          echo "[info] Version: $VERSION"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Resolve target platforms
@@ -94,18 +94,18 @@ jobs:
               "")
                 ;;
               *)
-                echo "Unsupported platform: $PLATFORM"
+                echo "[error] Unsupported platform: $PLATFORM" >&2
                 exit 1
                 ;;
             esac
           done
 
           if [ "$RUN_WEB" = false ] && [ "$RUN_MACOS" = false ] && [ "$RUN_WINDOWS" = false ] && [ "$RUN_LINUX" = false ]; then
-            echo "No valid platforms resolved from: $RAW_PLATFORMS"
+            echo "[error] No valid platforms resolved from: $RAW_PLATFORMS" >&2
             exit 1
           fi
 
-          echo "PLATFORMS=$PLATFORMS"
+          echo "[info] Platforms: $PLATFORMS"
           echo "run_web=$RUN_WEB" >> $GITHUB_OUTPUT
           echo "run_macos=$RUN_MACOS" >> $GITHUB_OUTPUT
           echo "run_windows=$RUN_WINDOWS" >> $GITHUB_OUTPUT

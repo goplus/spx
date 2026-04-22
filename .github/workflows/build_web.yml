@@ -58,8 +58,9 @@ jobs:
       - name: Verify bundle artifact
         run: |
           if [ ! -f "${{ matrix.zip_file }}" ]; then
-            echo "${{ matrix.zip_file }} not found"
+            echo "[error] Bundle artifact not found: ${{ matrix.zip_file }}" >&2
             exit 1
           fi
 
+          echo "[ok] Bundle artifact found: ${{ matrix.zip_file }}"
           ls -lh "${{ matrix.zip_file }}"

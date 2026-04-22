@@ -24,7 +24,7 @@ jobs:
 
     - name: Set up Vulkan SDK
       run: |
-        echo "Installing Vulkan SDK for MoltenVK support..."
+        echo "[info] Installing Vulkan SDK for MoltenVK support"
         # Install jq if not available
         if ! command -v jq &> /dev/null; then
           brew install jq
@@ -32,15 +32,15 @@ jobs:
 
         # Check if Vulkan SDK is already installed
         if [ -d "$HOME/VulkanSDK" ] && [ "$(ls -A $HOME/VulkanSDK 2>/dev/null)" ]; then
-          echo "Vulkan SDK already installed, skipping installation"
+          echo "[ok] Vulkan SDK already installed"
           exit 0
         fi
 
         # Download and install Vulkan SDK
-        echo "Downloading Vulkan SDK..."
+        echo "[info] Downloading Vulkan SDK"
         curl -L "https://sdk.lunarg.com/sdk/download/latest/mac/config.json" -o /tmp/vulkan-sdk.json
         VULKAN_VERSION=$(jq -r '.version' /tmp/vulkan-sdk.json)
-        echo "Vulkan SDK version: $VULKAN_VERSION"
+        echo "[info] Vulkan SDK version: $VULKAN_VERSION"
 
         curl -L "https://sdk.lunarg.com/sdk/download/latest/mac/vulkan-sdk.zip" -o /tmp/vulkan-sdk.zip
         unzip -q /tmp/vulkan-sdk.zip -d /tmp
@@ -48,9 +48,9 @@ jobs:
         if [ -d "/tmp/vulkansdk-macOS-$VULKAN_VERSION.app" ]; then
           /tmp/vulkansdk-macOS-$VULKAN_VERSION.app/Contents/MacOS/vulkansdk-macOS-$VULKAN_VERSION \
             --accept-licenses --default-answer --confirm-command install
-          echo "Vulkan SDK $VULKAN_VERSION installed successfully"
+          echo "[ok] Vulkan SDK installed: $VULKAN_VERSION"
         else
-          echo "Error: Could not find Vulkan SDK installer"
+          echo "[error] Vulkan SDK installer not found" >&2
           exit 1
         fi
 
@@ -60,22 +60,22 @@ jobs:
 
     - name: Download iOS export templates
       run: |
-        echo "Downloading iOS engine templates..."
+        echo "[info] Downloading iOS engine templates"
         "$BUILDCTL" engine download --platform ios
-        echo "Listing downloaded templates:"
+        echo "[info] Downloaded template directory:"
         ls -la ~/Library/Application\ Support/Godot/export_templates/
 
     - name: Configure iOS export preset
       shell: bash
       run: |
-        echo "Configuring iOS export preset for CI (export Xcode project only)..."
+        echo "[info] Configuring iOS export preset for CI"
         cd cmd/spx/template/project
         # Backup original preset
         cp export_presets.cfg export_presets.cfg.bak
         # Enable export_project_only to skip code signing
         sed -i.tmp 's/application\/export_project_only=false/application\/export_project_only=true/' export_presets.cfg
         rm -f export_presets.cfg.tmp
-        echo "Updated export preset:"
+        echo "[info] Updated export preset:"
         grep -A 25 "\[preset.0.options\]" export_presets.cfg | head -100
 
     - name: Export Xcode project
@@ -88,28 +88,28 @@ jobs:
     - name: Copy MoltenVK framework
       shell: bash
       run: |
-        echo "Copying MoltenVK.xcframework to Xcode project..."
+        echo "[info] Copying MoltenVK.xcframework to Xcode project"
         XCODE_BUILD_DIR="tutorial/00-Hello/project/.builds/ios"
 
         # Find Vulkan SDK installation
         VULKAN_SDK=$(find ~/VulkanSDK -maxdepth 1 -type d -name "[0-9]*" | head -1)
-        echo "Vulkan SDK found at: $VULKAN_SDK"
+        echo "[info] Vulkan SDK path: $VULKAN_SDK"
 
         if [ -z "$VULKAN_SDK" ]; then
-          echo "❌ Error: Vulkan SDK not found"
+          echo "[error] Vulkan SDK not found" >&2
           exit 1
         fi
 
         # Copy MoltenVK.xcframework
         MOLTENVK_SOURCE="$VULKAN_SDK/macOS/lib/MoltenVK.xcframework"
         if [ -d "$MOLTENVK_SOURCE" ]; then
-          echo "Copying MoltenVK from: $MOLTENVK_SOURCE"
+          echo "[info] MoltenVK source: $MOLTENVK_SOURCE"
           cp -r "$MOLTENVK_SOURCE" "$XCODE_BUILD_DIR/"
-          echo "✅ MoltenVK.xcframework copied successfully"
+          echo "[ok] MoltenVK.xcframework copied"
           ls -la "$XCODE_BUILD_DIR/MoltenVK.xcframework"
         else
-          echo "❌ Error: MoltenVK.xcframework not found at $MOLTENVK_SOURCE"
-          echo "Listing Vulkan SDK contents to find MoltenVK:"
+          echo "[error] MoltenVK.xcframework not found: $MOLTENVK_SOURCE" >&2
+          echo "[info] Vulkan SDK MoltenVK candidates:"
           find "$VULKAN_SDK" -name "*MoltenVK*" -type d
           exit 1
         fi
@@ -117,16 +117,17 @@ jobs:
     - name: Build unsigned IPA
       shell: bash
       run: |
-        echo "Building IPA from Xcode project..."
+        echo "[info] Building IPA from Xcode project"
         XCODE_PROJECT="tutorial/00-Hello/project/.builds/ios/Game.xcodeproj"
         IPA_DIR="tutorial/00-Hello/project/.builds/ios"
 
         if [ ! -d "$XCODE_PROJECT" ]; then
-          echo "❌ Error: Xcode project not found: $XCODE_PROJECT"
+          echo "[error] Xcode project not found: $XCODE_PROJECT" >&2
           exit 1
         fi
 
-        echo "✅ Xcode project found, building without code signing..."
+        echo "[ok] Xcode project found"
+        echo "[info] Building without code signing"
         cd "$(dirname "$XCODE_PROJECT")"
 
         # Build for iOS device without code signing
@@ -142,51 +143,51 @@ jobs:
           build | tail -20
 
         # Find the app bundle in DerivedData
-        echo "Looking for Game.app in DerivedData..."
+        echo "[info] Searching for Game.app in DerivedData"
         APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "Game.app" -path "*/Debug-iphoneos/*" -type d | head -1)
 
         if [ -z "$APP_PATH" ]; then
-          echo "❌ Error: Game.app not found in DerivedData"
-          echo "Searching all possible locations:"
+          echo "[error] Game.app not found in DerivedData" >&2
+          echo "[info] Game.app candidates:"
           find ~/Library/Developer/Xcode/DerivedData -name "Game.app" -type d
           exit 1
         fi
 
-        echo "✅ Found app bundle at: $APP_PATH"
+        echo "[ok] App bundle found: $APP_PATH"
         ls -lh "$APP_PATH"
 
         # Create IPA manually from app bundle
-        echo "Creating IPA from app bundle..."
+        echo "[info] Creating IPA from app bundle"
         mkdir -p Payload
         cp -r "$APP_PATH" Payload/
         zip -r Game.ipa Payload
         rm -rf Payload
-        echo "✅ IPA created successfully"
+        echo "[ok] IPA created"
         ls -lh Game.ipa
 
     - name: Verify IPA output
       shell: bash
       run: |
-        echo "Checking if IPA was built successfully..."
+        echo "[info] Checking IPA output"
         IPA_DIR="tutorial/00-Hello/project/.builds/ios"
 
         if [ ! -d "$IPA_DIR" ]; then
-          echo "❌ Error: Build directory not found: $IPA_DIR"
+          echo "[error] Build directory not found: $IPA_DIR" >&2
           exit 1
         fi
 
-        echo "Build directory contents:"
+        echo "[info] Build directory contents:"
         ls -la "$IPA_DIR"
 
         IPA_COUNT=$(find "$IPA_DIR" -name "*.ipa" -type f | wc -l)
 
         if [ "$IPA_COUNT" -eq 0 ]; then
-          echo "❌ Error: No IPA file found in $IPA_DIR"
-          echo "Build failed - no IPA was generated"
+          echo "[error] No IPA file found in $IPA_DIR" >&2
+          echo "[error] Build failed; no IPA was generated" >&2
           exit 1
         fi
 
-        echo "✅ Success: Found $IPA_COUNT IPA file(s)"
+        echo "[ok] Found $IPA_COUNT IPA file(s)"
         find "$IPA_DIR" -name "*.ipa" -type f -exec ls -lh {} \;
 
     - name: Upload IPA artifact
