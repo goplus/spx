@@ -13,119 +13,50 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  linux-goenv:
-    name: Package Linux goenv (${{ matrix.arch_name }})
+  linux-standalone:
+    name: Package Linux standalone
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - arch: 386
-            arch_name: x86
-            standalone: false
-          - arch: amd64
-            arch_name: x64
-            standalone: true
-          - arch: arm64
-            arch_name: arm64
-            standalone: false
     steps:
       - name: Check out code
         uses: actions/checkout@v6
-      
+
       - name: Install Linux dependencies
         run: sudo apt-get update && sudo apt-get install gcc libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libx11-dev xorg-dev libasound2-dev libopenal-dev zip
 
       - name: Set up toolchain and engine assets
         uses: ./.github/actions/deps
 
-      - name: Download go toolchain
-        run: |
-          mkdir -p goenv/gotoolchain
-          cd goenv/gotoolchain
-          curl -L -O https://go.dev/dl/go1.25.8.linux-${{ matrix.arch }}.tar.gz
-          tar -xzf go1.25.8.linux-${{ matrix.arch }}.tar.gz
-          rm go1.25.8.linux-${{ matrix.arch }}.tar.gz
-          cd ../..
-
-      - name: Prepare release spx
-        id: prepare_release_spx
-        uses: ./.github/actions/prepare-release-spx
+      - name: Prepare standalone release
+        id: prepare_standalone_release
+        uses: ./.github/actions/prepare-standalone-release
         with:
           version: ${{ inputs.version }}
 
-      - name: Prepare release goenv
-        uses: ./.github/actions/prepare-release-goenv
-        with:
-          version: ${{ inputs.version }}
-          platform: linux
-          package-arch: ${{ matrix.arch_name }}
-
-      - name: Package goenv
-        run: |
-          # Remove build cache if it exists (users can rebuild locally)
-          rm -rf goenv/.cache/build
-
-          # Verify what will be packaged
-          echo "[info] Contents to be packaged:"
-          du -sh goenv/* goenv/.cache/* 2>/dev/null || true
-
-          # Create zip archive
-          cd goenv
-          zip -r ../spx-linux-${{ matrix.arch_name }}.zip .
-          cd ..
-
-      - name: Upload release artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: spx-linux-${{ matrix.arch_name }}
-          path: spx-linux-${{ matrix.arch_name }}.zip
-          retention-days: 14
-
-      - name: Package standalone spx
-        if: ${{ matrix.standalone }}
+      - name: Package standalone release
         uses: ./.github/actions/package-standalone-release
         with:
-          package-file: spx-standalone-linux-${{ matrix.arch_name }}.zip
-          spx-bin: ${{ steps.prepare_release_spx.outputs.spx-bin }}
+          package-file: spx-standalone-linux-x64.zip
+          spx-bin: ${{ steps.prepare_standalone_release.outputs.spx-bin }}
 
       - name: Upload standalone release artifact
-        if: ${{ matrix.standalone }}
         uses: actions/upload-artifact@v7
         with:
-          name: spx-standalone-linux-${{ matrix.arch_name }}
-          path: spx-standalone-linux-${{ matrix.arch_name }}.zip
+          name: spx-standalone-linux-x64
+          path: spx-standalone-linux-x64.zip
           retention-days: 14
 
-      - name: Verify release package
-        uses: ./.github/actions/verify-release
-        with:
-          package-file: spx-linux-${{ matrix.arch_name }}.zip
-          platform: linux
-          package-arch: ${{ matrix.arch_name }}
-
       - name: Verify standalone release package
-        if: ${{ matrix.standalone }}
         uses: ./.github/actions/verify-release
         with:
-          package-file: spx-standalone-linux-${{ matrix.arch_name }}.zip
-          layout: standalone
+          package-file: spx-standalone-linux-x64.zip
           platform: linux
-          package-arch: ${{ matrix.arch_name }}
+          package-arch: x64
 
-      - name: Publish goenv release asset
+      - name: Publish standalone release asset
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v3
         with:
-          files: spx-linux-${{ matrix.arch_name }}.zip
-          tag_name: ${{ github.event.release.tag_name }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Publish standalone release asset
-        if: github.event_name == 'release' && matrix.standalone
-        uses: softprops/action-gh-release@v3
-        with:
-          files: spx-standalone-linux-${{ matrix.arch_name }}.zip
+          files: spx-standalone-linux-x64.zip
           tag_name: ${{ github.event.release.tag_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

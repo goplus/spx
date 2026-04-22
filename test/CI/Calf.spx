@@ -1,6 +1,6 @@
 onStart => {
-	say "Hello XGo"
+	say "SPX CI test"
 	wait 0.1
-	println "===>SpxCIRunSucc"
+	println "SPX_CI_TEST_OK"
 	exit 0
 }

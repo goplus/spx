@@ -46,12 +46,12 @@ jobs:
 
     - name: Verify and fix Android NDK installation
       run: |
-        echo "ANDROID_NDK_ROOT: $ANDROID_NDK_ROOT"
-        echo "Checking for clang binary:"
+        echo "[info] Android NDK root: $ANDROID_NDK_ROOT"
+        echo "[info] Checking for clang binary"
         CLANG_PATH="$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
         
         if [ ! -f "$CLANG_PATH" ]; then
-          echo "⚠️  clang binary not found, downloading and installing NDK r23c manually..."
+          echo "[warn] Clang binary not found; installing NDK r23c manually"
           
           # Create temporary directory
           TMP_DIR=$(mktemp -d)
@@ -71,21 +71,21 @@ jobs:
           cd -
           rm -rf "$TMP_DIR"
           
-          echo "✅ NDK r23c installed successfully"
+          echo "[ok] NDK r23c installed"
         else
-          echo "✅ clang binary found at $CLANG_PATH"
+          echo "[ok] Clang binary found: $CLANG_PATH"
         fi
         
         # Verify installation
-        echo "Verifying NDK installation:"
-        ls -la "$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" || echo "❌ clang still not found"
-        ls -la "$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang" || echo "❌ wrapper not found"
+        echo "[info] Verifying NDK installation"
+        ls -la "$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" || echo "[error] Clang still not found" >&2
+        ls -la "$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang" || echo "[error] Android clang wrapper not found" >&2
 
     - name: Download Android export templates
       run: |
-        echo "Downloading Android engine templates..."
+        echo "[info] Downloading Android engine templates"
         "$BUILDCTL" engine download --platform android
-        echo "Listing downloaded templates:"
+        echo "[info] Downloaded template directory:"
         ls -la ~/.local/share/godot/export_templates/
 
     - name: Build sample APK
@@ -95,26 +95,26 @@ jobs:
     - name: Verify APK output
       shell: bash
       run: |
-        echo "Checking if APK was built successfully..."
+        echo "[info] Checking APK output"
         APK_DIR="tutorial/00-Hello/project/.builds/android"
 
         if [ ! -d "$APK_DIR" ]; then
-          echo "❌ Error: Build directory not found: $APK_DIR"
+          echo "[error] Build directory not found: $APK_DIR" >&2
           exit 1
         fi
 
-        echo "Build directory contents:"
+        echo "[info] Build directory contents:"
         ls -la "$APK_DIR"
 
         APK_COUNT=$(find "$APK_DIR" -name "*.apk" -type f | wc -l)
 
         if [ "$APK_COUNT" -eq 0 ]; then
-          echo "❌ Error: No APK file found in $APK_DIR"
-          echo "Build failed - no APK was generated"
+          echo "[error] No APK file found in $APK_DIR" >&2
+          echo "[error] Build failed; no APK was generated" >&2
           exit 1
         fi
 
-        echo "✅ Success: Found $APK_COUNT APK file(s)"
+        echo "[ok] Found $APK_COUNT APK file(s)"
         find "$APK_DIR" -name "*.apk" -type f -exec ls -lh {} \;
 
     - name: Upload APK artifact

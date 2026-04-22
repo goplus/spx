@@ -30,12 +30,12 @@ jobs:
           fi
 
           if [[ "${TARGET}" == refs/* ]]; then
-            echo "workflow_dispatch target must be a branch name or full commit SHA" >&2
+            echo "[error] Dispatch target must be a branch name or full commit SHA" >&2
             exit 1
           fi
 
           if ! git check-ref-format --branch "${TARGET}" >/dev/null 2>&1; then
-            echo "invalid workflow_dispatch target: ${TARGET}" >&2
+            echo "[error] Invalid workflow_dispatch target: ${TARGET}" >&2
             exit 1
           fi
 
@@ -74,7 +74,7 @@ jobs:
       - name: Compute pseudo-version
         run: |
           SPX_VERSION="$(go run ./.github/scripts/pseudo_version.go HEAD)"
-          echo "SPX_VERSION=${SPX_VERSION}"
+          echo "[info] SPX version: ${SPX_VERSION}"
           echo "SPX_VERSION=${SPX_VERSION}" >> "${GITHUB_ENV}"
 
       - name: Build web bundle

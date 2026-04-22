@@ -13,17 +13,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  macos-goenv:
-    name: Package macOS goenv (${{ matrix.arch_name }})
+  macos-standalone:
+    name: Package macOS standalone (${{ matrix.arch_name }})
     runs-on: ${{ matrix.runs_on }}
     strategy:
       matrix:
         include:
-          - arch: amd64
-            arch_name: x64
+          - arch_name: x64
             runs_on: macos-15-intel
-          - arch: arm64
-            arch_name: arm64
+          - arch_name: arm64
             runs_on: macos-15
     steps:
       - name: Check out code
@@ -32,54 +30,17 @@ jobs:
       - name: Set up toolchain and engine assets
         uses: ./.github/actions/deps
 
-      - name: Download go toolchain
-        run: |
-          mkdir -p goenv/gotoolchain
-          cd goenv/gotoolchain
-          curl -L -O https://go.dev/dl/go1.25.8.darwin-${{ matrix.arch }}.tar.gz
-          tar -xzf go1.25.8.darwin-${{ matrix.arch }}.tar.gz
-          rm go1.25.8.darwin-${{ matrix.arch }}.tar.gz
-          cd ../..
-
-      - name: Prepare release spx
-        id: prepare_release_spx
-        uses: ./.github/actions/prepare-release-spx
+      - name: Prepare standalone release
+        id: prepare_standalone_release
+        uses: ./.github/actions/prepare-standalone-release
         with:
           version: ${{ inputs.version }}
 
-      - name: Prepare release goenv
-        uses: ./.github/actions/prepare-release-goenv
-        with:
-          version: ${{ inputs.version }}
-          platform: darwin
-          package-arch: ${{ matrix.arch_name }}
-
-      - name: Package goenv
-        run: |
-          # Remove build cache if it exists (users can rebuild locally)
-          rm -rf goenv/.cache/build
-
-          # Verify what will be packaged
-          echo "[info] Contents to be packaged:"
-          du -sh goenv/* goenv/.cache/* 2>/dev/null || true
-
-          # Create zip archive
-          cd goenv
-          zip -r ../spx-darwin-${{ matrix.arch_name }}.zip .
-          cd ..
-
-      - name: Upload release artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: spx-darwin-${{ matrix.arch_name }}
-          path: spx-darwin-${{ matrix.arch_name }}.zip
-          retention-days: 14
-
-      - name: Package standalone spx
+      - name: Package standalone release
         uses: ./.github/actions/package-standalone-release
         with:
           package-file: spx-standalone-darwin-${{ matrix.arch_name }}.zip
-          spx-bin: ${{ steps.prepare_release_spx.outputs.spx-bin }}
+          spx-bin: ${{ steps.prepare_standalone_release.outputs.spx-bin }}
 
       - name: Upload standalone release artifact
         uses: actions/upload-artifact@v7
@@ -88,28 +49,18 @@ jobs:
           path: spx-standalone-darwin-${{ matrix.arch_name }}.zip
           retention-days: 14
 
-      - name: Verify release package
-        uses: ./.github/actions/verify-release
-        with:
-          package-file: spx-darwin-${{ matrix.arch_name }}.zip
-          platform: darwin
-          package-arch: ${{ matrix.arch_name }}
-
       - name: Verify standalone release package
         uses: ./.github/actions/verify-release
         with:
           package-file: spx-standalone-darwin-${{ matrix.arch_name }}.zip
-          layout: standalone
           platform: darwin
           package-arch: ${{ matrix.arch_name }}
 
-      - name: Publish release asset
+      - name: Publish standalone release asset
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v3
         with:
-          files: |
-            spx-darwin-${{ matrix.arch_name }}.zip
-            spx-standalone-darwin-${{ matrix.arch_name }}.zip
+          files: spx-standalone-darwin-${{ matrix.arch_name }}.zip
           tag_name: ${{ github.event.release.tag_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
