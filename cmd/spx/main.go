@@ -26,6 +26,8 @@ import (
 	"github.com/goplus/spx/v2/internal/scaffold"
 )
 
+//go:generate go run ../../.github/scripts/write_runtime_gdextension_templates.go
+
 var (
 	//go:embed template/platform/*
 	platformFS embed.FS

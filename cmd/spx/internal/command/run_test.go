@@ -26,6 +26,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/goplus/spx/v2/internal/scaffold"
 )
 
 func TestRunWebCommandRunsExportBeforeServer(t *testing.T) {
@@ -314,7 +316,7 @@ func TestRunInterpretedCreatesRuntimeExtensionAndCopiesSharedLibrary(t *testing.
 	if err != nil {
 		t.Fatalf("read runtime.gdextension: %v", err)
 	}
-	if string(gotExtension) != defaultRuntimeGDExtensionTemplate {
+	if string(gotExtension) != scaffold.RuntimeGDExtension() {
 		t.Fatalf("runtime.gdextension contents mismatch")
 	}
 

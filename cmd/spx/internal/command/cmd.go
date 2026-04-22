@@ -293,9 +293,7 @@ func (cmd *CmdTool) checkMovieArgs(rootDir string) []string {
 
 func isInterpretedRunCommand(cmdName string) bool {
 	switch cmdName {
-	case "run", "runi":
-		// Keep "runi" as a hidden compatibility alias while "run" becomes the
-		// documented interpreted-mode command.
+	case "run":
 		return true
 	default:
 		return false

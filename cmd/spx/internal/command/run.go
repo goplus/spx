@@ -29,35 +29,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/goplus/spx/v2/cmd/spx/internal/util"
 	"github.com/goplus/spx/v2/cmd/spx/internal/runtimeasset"
+	"github.com/goplus/spx/v2/cmd/spx/internal/util"
+	"github.com/goplus/spx/v2/internal/scaffold"
 )
 
 var prepareEmbeddedRuntimeAssets = runtimeasset.Prepare
-
-// Keep in sync with cmd/spxrunner/runner.GDExtensionTemplate.
-const defaultRuntimeGDExtensionTemplate = `[configuration]
-
-entry_symbol = "gdspx_init"
-compatibility_minimum = 4.1
-
-[libraries]
-
-macos.debug.x86_64 = "gdspx-darwin-amd64.dylib"
-macos.release.x86_64 = "gdspx-darwin-amd64.dylib"
-macos.debug.arm64 = "gdspx-darwin-arm64.dylib"
-macos.release.arm64 = "gdspx-darwin-arm64.dylib"
-windows.debug.x86_64 = "gdspx-windows-amd64.dll"
-windows.release.x86_64 = "gdspx-windows-amd64.dll"
-windows.debug.x86_32 = "gdspx-windows-386.dll"
-windows.release.x86_32 = "gdspx-windows-386.dll"
-linux.debug.x86_64 = "gdspx-linux-amd64.so"
-linux.release.x86_64 = "gdspx-linux-amd64.so"
-linux.debug.x86_32 = "gdspx-linux-386.so"
-linux.release.x86_32 = "gdspx-linux-386.so"
-linux.debug.arm64 = "gdspx-linux-arm64.so"
-linux.release.arm64 = "gdspx-linux-arm64.so"
-`
 
 type projConf struct {
 	Robots []string `json:"robots"`
@@ -302,7 +279,7 @@ func (cmd *CmdTool) prepareInterpretedRuntimeDir(libPath string) (string, error)
 	}
 
 	extensionPath := filepath.Join(cmd.RuntimeTempDir, "runtime.gdextension")
-	if err := os.WriteFile(extensionPath, []byte(defaultRuntimeGDExtensionTemplate), 0o644); err != nil {
+	if err := os.WriteFile(extensionPath, []byte(scaffold.RuntimeGDExtension()), 0o644); err != nil {
 		return "", fmt.Errorf("failed to write runtime.gdextension: %w", err)
 	}
 	return extensionPath, nil
