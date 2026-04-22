@@ -15,14 +15,16 @@ concurrency:
 jobs:
   macos-goenv:
     name: Package macOS goenv (${{ matrix.arch_name }})
-    runs-on: macos-latest
+    runs-on: ${{ matrix.runs_on }}
     strategy:
       matrix:
         include:
           - arch: amd64
             arch_name: x64
+            runs_on: macos-15-intel
           - arch: arm64
             arch_name: arm64
+            runs_on: macos-15
     steps:
       - name: Check out code
         uses: actions/checkout@v6
@@ -72,6 +74,18 @@ jobs:
           path: spx-darwin-${{ matrix.arch_name }}.zip
           retention-days: 14
 
+      - name: Package standalone spx
+        uses: ./.github/actions/package-standalone-release
+        with:
+          package-file: spx-standalone-darwin-${{ matrix.arch_name }}.zip
+
+      - name: Upload standalone release artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: spx-standalone-darwin-${{ matrix.arch_name }}
+          path: spx-standalone-darwin-${{ matrix.arch_name }}.zip
+          retention-days: 14
+
       - name: Verify release package
         uses: ./.github/actions/verify-release
         with:
@@ -79,11 +93,21 @@ jobs:
           platform: darwin
           package-arch: ${{ matrix.arch_name }}
 
+      - name: Verify standalone release package
+        uses: ./.github/actions/verify-release
+        with:
+          package-file: spx-standalone-darwin-${{ matrix.arch_name }}.zip
+          layout: standalone
+          platform: darwin
+          package-arch: ${{ matrix.arch_name }}
+
       - name: Publish release asset
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v3
         with:
-          files: spx-darwin-${{ matrix.arch_name }}.zip
+          files: |
+            spx-darwin-${{ matrix.arch_name }}.zip
+            spx-standalone-darwin-${{ matrix.arch_name }}.zip
           tag_name: ${{ github.event.release.tag_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

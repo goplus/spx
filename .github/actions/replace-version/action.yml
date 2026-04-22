@@ -45,5 +45,5 @@ runs:
         echo ""
         echo "✅ Successfully updated $FILE with version $VERSION"
 
-        echo "reinstall spx"
+        echo "reinstall spx with default embedded runtime assets"
         "$BUILDCTL" tool install

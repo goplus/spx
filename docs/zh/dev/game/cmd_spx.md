@@ -28,7 +28,8 @@ SPX 命令工具提供以下几类命令：
 | 命令 | 描述 |
 | --- | --- |
 | `build` | 构建动态库 |
-| `run` | 运行当前项目 |
+| `run` | 以解释器模式运行当前项目 |
+| `runnative` | 以原生 PC 运行时运行当前项目 |
 | `rune` | 在编辑器模式下运行当前项目 |
 | `export` | 导出 PC 包（macOS、Windows、Linux） |
 | `runm` | 在多人模式下运行项目 |
@@ -125,7 +126,7 @@ spx build --servermode
 
 #### `run`
 
-运行当前项目。这个命令会在运行时模式下启动项目，适合查看最终效果。
+以解释器模式运行当前项目。
 
 ```bash
 # 运行当前目录的项目
@@ -133,6 +134,18 @@ spx run
 
 # 运行指定路径的项目
 spx run --path ./myproject
+```
+
+#### `runnative`
+
+以原生 PC 运行时运行当前项目，适合查看桌面运行效果。
+
+```bash
+# 运行当前目录的项目
+spx runnative
+
+# 运行指定路径的项目
+spx runnative --path ./myproject
 ```
 
 #### `rune`

@@ -39,7 +39,17 @@ func TestParseToolInstallArgsDefault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parseToolInstallArgs returned error: %v", err)
 	}
-	if cfg.web || cfg.opt {
+	if cfg.web || cfg.opt || cfg.noEmbedRuntime {
+		t.Fatalf("unexpected tool install flags: %#v", cfg)
+	}
+}
+
+func TestParseToolInstallArgsNoEmbedRuntime(t *testing.T) {
+	cfg, err := parseToolInstallArgs([]string{"--no-embed-runtime"})
+	if err != nil {
+		t.Fatalf("parseToolInstallArgs returned error: %v", err)
+	}
+	if !cfg.noEmbedRuntime || cfg.web || cfg.opt {
 		t.Fatalf("unexpected tool install flags: %#v", cfg)
 	}
 }

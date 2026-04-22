@@ -1,0 +1,79 @@
+name: Package standalone spx
+description: Package the rebuilt standalone-capable spx binary into a zip archive.
+inputs:
+  package-file:
+    description: 'Output zip archive path'
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Package standalone spx
+      shell: bash
+      env:
+        PACKAGE_FILE: ${{ inputs.package-file }}
+      run: |
+        set -euo pipefail
+
+        normalize_path() {
+          local raw_path="$1"
+          if command -v cygpath >/dev/null 2>&1; then
+            cygpath -u "$raw_path" 2>/dev/null || printf '%s\n' "$raw_path"
+            return
+          fi
+          printf '%s\n' "$raw_path"
+        }
+
+        normalize_windows_path() {
+          local raw_path="$1"
+          if command -v cygpath >/dev/null 2>&1; then
+            cygpath -w "$raw_path" 2>/dev/null || printf '%s\n' "$raw_path"
+            return
+          fi
+          printf '%s\n' "$raw_path"
+        }
+
+        GOEXE="$(go env GOEXE)"
+        GOPATH_RAW="$(go env GOPATH | tr -d '\r')"
+        if [ -z "$GOPATH_RAW" ]; then
+          echo "❌ Error: GOPATH is empty"
+          exit 1
+        fi
+
+        GOPATH_SEP=':'
+        if [ "$GOEXE" = ".exe" ]; then
+          GOPATH_SEP=';'
+        fi
+
+        GOPATH_FIRST="${GOPATH_RAW%%${GOPATH_SEP}*}"
+        GOPATH_FIRST="$(normalize_path "$GOPATH_FIRST")"
+        INSTALLED_SPX="$GOPATH_FIRST/bin/spx$GOEXE"
+        PACKAGE_PATH="$(pwd)/$PACKAGE_FILE"
+        STAGING_DIR="$(pwd)/standalone-package"
+
+        if [ ! -f "$INSTALLED_SPX" ]; then
+          echo "❌ Error: rebuilt spx binary not found: $INSTALLED_SPX"
+          exit 1
+        fi
+
+        rm -rf "$STAGING_DIR" "$PACKAGE_PATH"
+        mkdir -p "$STAGING_DIR"
+        cp "$INSTALLED_SPX" "$STAGING_DIR/"
+
+        if command -v zip >/dev/null 2>&1; then
+          (
+            cd "$STAGING_DIR"
+            zip -r "$PACKAGE_PATH" "spx$GOEXE"
+          )
+          exit 0
+        fi
+
+        if [ "$GOEXE" = ".exe" ] && command -v powershell.exe >/dev/null 2>&1; then
+          PACKAGE_PATH_WIN="$(normalize_windows_path "$PACKAGE_PATH")"
+          STAGING_DIR_WIN="$(normalize_windows_path "$STAGING_DIR")"
+          powershell.exe -NoLogo -NoProfile -Command \
+            "Compress-Archive -LiteralPath (Join-Path '$STAGING_DIR_WIN' 'spx$GOEXE') -DestinationPath '$PACKAGE_PATH_WIN' -Force"
+          exit 0
+        fi
+
+        echo "❌ Error: neither zip nor a Windows PowerShell zip fallback is available"
+        exit 1

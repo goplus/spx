@@ -23,8 +23,9 @@ import (
 )
 
 type toolInstallConfig struct {
-	web bool
-	opt bool
+	web            bool
+	opt            bool
+	noEmbedRuntime bool
 }
 
 func runTool(args []string) error {
@@ -60,7 +61,7 @@ func printToolUsage() {
 	fmt.Fprintln(osStderr)
 	fmt.Fprintln(osStderr, "Commands:")
 	fmt.Fprintln(osStderr, "  clean-assets Remove installed SPX/Godot runtime assets from GOPATH/bin")
-	fmt.Fprintln(osStderr, "  install     Build and install spx tooling")
+	fmt.Fprintln(osStderr, "  install     Build and install spx tooling with embedded runtime by default")
 	fmt.Fprintln(osStderr, "  setup-emsdk Install or activate the pinned Emscripten SDK")
 	fmt.Fprintln(osStderr, "  setup-jdk   Install or verify JDK 17")
 	fmt.Fprintln(osStderr, "  setup-ndk   Download and install Android NDK")
@@ -118,8 +119,9 @@ func parseToolInstallArgs(args []string) (toolInstallConfig, error) {
 	fs.SetOutput(osStderr)
 	fs.BoolVar(&cfg.web, "web", false, "build web tooling and install ispx web runtime")
 	fs.BoolVar(&cfg.opt, "opt", false, "pass through the optional optimized web install mode")
+	fs.BoolVar(&cfg.noEmbedRuntime, "no-embed-runtime", false, "build spx without embedded desktop runtime assets")
 	fs.Usage = func() {
-		fmt.Fprintln(osStderr, "Usage: buildctl tool install [--web] [--opt]")
+		fmt.Fprintln(osStderr, "Usage: buildctl tool install [--web] [--opt] [--no-embed-runtime]")
 	}
 
 	if err := fs.Parse(args); err != nil {

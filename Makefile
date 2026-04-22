@@ -2,7 +2,7 @@
 # Config
 # ============================================
 .DEFAULT_GOAL := help
-.PHONY: help buildctl list-demos prepare-host prepare-web prepare-full prepare-all build-dev install clean-assets download download-engine build-editor build-desktop build-web build-wasm build-wasm-opt build-android build-ios install-apk editor run rune run-web run-web-worker format generate generate-bindings generate-runtime clean-projects export-pack export-web stop validate-web-mode validate-download-engine validate-install-web
+.PHONY: help buildctl list-demos prepare-host prepare-web prepare-full prepare-all build-dev install clean-assets download download-engine build-editor build-desktop build-web build-wasm build-wasm-opt build-android build-ios install-apk editor run runnative rune runweb runwebworker format generate generate-bindings generate-runtime clean-projects export-pack export-web stop validate-web-mode validate-download-engine validate-install-web
 
 export GODOT_SRC
 
@@ -16,7 +16,7 @@ BUILDCTL_ENGINE_DOWNLOAD_CMD := $(BUILDCTL_CMD) engine download
 BUILDCTL_ENGINE_BUILD_CMD := $(BUILDCTL_CMD) engine build
 BUILDCTL_RUNTIME_CMD := $(BUILDCTL_CMD) runtime
 BUILDCTL_WORKFLOW_CMD := $(BUILDCTL_CMD) workflow
-BUILDCTL_TARGETS := list-demos prepare-host prepare-web prepare-full build-dev install clean-assets download download-engine build-editor build-desktop build-web build-wasm build-wasm-opt build-android build-ios install-apk editor run rune run-web run-web-worker export-pack export-web stop
+BUILDCTL_TARGETS := list-demos prepare-host prepare-web prepare-full build-dev install clean-assets download download-engine build-editor build-desktop build-web build-wasm build-wasm-opt build-android build-ios install-apk editor run runnative rune runweb runwebworker export-pack export-web stop
 
 DEMO_INDEX ?= 3
 APK_PROJECT_DIR ?= tutorial/00-Hello
@@ -79,9 +79,10 @@ help: ## Show available commands
 	@i=1; \
 	for demo in tutorial/*; do \
 		if [ -d "$$demo" ]; then \
-			echo "  make run DEMO_INDEX=$$i            # Run $$demo"; \
-			echo "  make run-web DEMO_INDEX=$$i        # Run web $$demo"; \
-			echo "  make run-web-worker DEMO_INDEX=$$i # Run web-worker $$demo"; \
+			echo "  make run DEMO_INDEX=$$i            # Run interpreted $$demo"; \
+			echo "  make runnative DEMO_INDEX=$$i      # Run $$demo"; \
+			echo "  make runweb DEMO_INDEX=$$i         # Run web $$demo"; \
+			echo "  make runwebworker DEMO_INDEX=$$i   # Run web-worker $$demo"; \
 			echo "  make rune DEMO_INDEX=$$i           # Run editor runtime $$demo"; \
 			i=$$((i+1)); \
 		fi; \
@@ -166,16 +167,19 @@ list-demos: ## List all demos with index
 editor: ## Open demo in editor: make editor DEMO_INDEX=N
 	$(BUILDCTL_WORKFLOW_CMD) run-demo --demo-index "$(DEMO_INDEX)" --mode editor --movie "$(MOVIE)"
 
-run: ## Run demo on PC: make run DEMO_INDEX=N
+run: ## Run demo in interpreted mode (spx run): make run DEMO_INDEX=N
 	$(BUILDCTL_WORKFLOW_CMD) run-demo --demo-index "$(DEMO_INDEX)" --mode run --movie "$(MOVIE)"
 
-rune: ## Run demo in editor runtime mode: make rune DEMO_INDEX=N
+runnative: ## Run demo on native runtime (spx runnative): make runnative DEMO_INDEX=N
+	$(BUILDCTL_WORKFLOW_CMD) run-demo --demo-index "$(DEMO_INDEX)" --mode runnative --movie "$(MOVIE)"
+
+rune: ## Run demo in editor runtime mode (spx rune): make rune DEMO_INDEX=N
 	$(BUILDCTL_WORKFLOW_CMD) run-demo --demo-index "$(DEMO_INDEX)" --mode rune --movie "$(MOVIE)"
 
-run-web: ## Run demo on web: make run-web DEMO_INDEX=N
+runweb: ## Run demo on web: make runweb DEMO_INDEX=N
 	$(BUILDCTL_WORKFLOW_CMD) run-demo --demo-index "$(DEMO_INDEX)" --mode web --port "$(PORT)"
 
-run-web-worker: ## Run demo on web: make run-web-worker DEMO_INDEX=N
+runwebworker: ## Run demo on web worker: make runwebworker DEMO_INDEX=N
 	$(BUILDCTL_WORKFLOW_CMD) run-demo --demo-index "$(DEMO_INDEX)" --mode web-worker --port "$(PORT)"
 
 stop: ## Stop running processes

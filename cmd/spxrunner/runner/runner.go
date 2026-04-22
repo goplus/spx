@@ -44,26 +44,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-)
 
-const (
-	// GDExtensionTemplate is the template for runtime.gdextension file
-	GDExtensionTemplate = `[configuration]
-
-entry_symbol = "gdspx_init"
-compatibility_minimum = 4.1
-
-[libraries]
-
-macos.debug.x86_64 = "gdspx-darwin-amd64.dylib"
-macos.release.x86_64 = "gdspx-darwin-amd64.dylib"
-macos.debug.arm64 = "gdspx-darwin-arm64.dylib"
-macos.release.arm64 = "gdspx-darwin-arm64.dylib"
-windows.debug.x86_64 = "gdspx-windows-amd64.dll"
-windows.release.x86_64 = "gdspx-windows-amd64.dll"
-linux.debug.x86_64 = "gdspx-linux-amd64.so"
-linux.release.x86_64 = "gdspx-linux-amd64.so"
-`
+	"github.com/goplus/spx/v2/internal/scaffold"
 )
 
 // RuntimeOptions holds runtime configuration options
@@ -408,7 +390,7 @@ func (r *Runner) runWithRuntimeOptions(opts *RuntimeOptions) error {
 		}
 	} else {
 		// Generate default gdextension file from template
-		if err := os.WriteFile(extensionDst, []byte(GDExtensionTemplate), 0644); err != nil {
+		if err := os.WriteFile(extensionDst, []byte(scaffold.RuntimeGDExtension()), 0644); err != nil {
 			return fmt.Errorf("failed to generate runtime.gdextension: %w", err)
 		}
 	}

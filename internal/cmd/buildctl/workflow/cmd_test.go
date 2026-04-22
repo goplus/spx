@@ -221,7 +221,7 @@ func TestInstallAPKWorkflow(t *testing.T) {
 	}
 }
 
-func TestRunDemoWorkflowNative(t *testing.T) {
+func TestRunDemoWorkflowInterpreted(t *testing.T) {
 	runner := &workflowRecordingRunner{
 		demos: []string{"tutorial/00-Hello", "tutorial/01-Weather"},
 	}
@@ -238,6 +238,32 @@ func TestRunDemoWorkflowNative(t *testing.T) {
 
 	expectedCommands := []recordedCommand{
 		{dir: "tutorial/01-Weather", name: "spx", args: []string{"run", "-movie=true"}},
+	}
+	if !reflect.DeepEqual(runner.commands, expectedCommands) {
+		t.Fatalf("unexpected commands: %#v", runner.commands)
+	}
+	if runner.stopCalls != 0 {
+		t.Fatalf("unexpected stopCalls: %d", runner.stopCalls)
+	}
+}
+
+func TestRunDemoWorkflowNative(t *testing.T) {
+	runner := &workflowRecordingRunner{
+		demos: []string{"tutorial/00-Hello", "tutorial/01-Weather"},
+	}
+
+	err := runDemoWorkflow(workflowRunDemoConfig{
+		demoIndex: 2,
+		mode:      "runnative",
+		movie:     "true",
+		port:      8106,
+	}, runner)
+	if err != nil {
+		t.Fatalf("runDemoWorkflow returned error: %v", err)
+	}
+
+	expectedCommands := []recordedCommand{
+		{dir: "tutorial/01-Weather", name: "spx", args: []string{"runnative", "-movie=true"}},
 	}
 	if !reflect.DeepEqual(runner.commands, expectedCommands) {
 		t.Fatalf("unexpected commands: %#v", runner.commands)

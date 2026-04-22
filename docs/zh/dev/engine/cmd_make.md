@@ -84,7 +84,7 @@ make prepare-full MODE=worker
 | `PLATFORM` | 当前宿主平台 | `download-engine` 使用的平台名 |
 | `DEMO_INDEX` | `3` | `tutorial/*` 演示索引 |
 | `APK_PROJECT_DIR` | `tutorial/00-Hello` | `install-apk` 使用的项目目录 |
-| `PORT` | `8106` | `run-web` 和 `run-web-worker` 使用的端口 |
+| `PORT` | `8106` | `runweb` 和 `runwebworker` 使用的端口 |
 | `MOVIE` | `false` | 运行 demo 时是否启用录制模式 |
 
 ## buildctl 总览
@@ -174,10 +174,11 @@ make export-web MODE=worker
 | --- | --- |
 | `make list-demos` | 打印 `tutorial/*` 的索引 |
 | `make editor DEMO_INDEX=N` | 打开指定 demo 的编辑器模式 |
-| `make run DEMO_INDEX=N` | 运行指定 demo |
-| `make rune DEMO_INDEX=N` | 以 editor runtime 模式运行指定 demo |
-| `make run-web DEMO_INDEX=N` | 构建 wasm 后启动指定 demo 的 Web 版本 |
-| `make run-web-worker DEMO_INDEX=N` | 构建 wasm 后启动指定 demo 的 Web Worker 版本 |
+| `make run DEMO_INDEX=N` | 以解释器运行模式启动指定 demo（对应 `spx run`） |
+| `make runnative DEMO_INDEX=N` | 以原生运行时启动指定 demo（对应 `spx runnative`） |
+| `make rune DEMO_INDEX=N` | 以编辑器运行时模式启动指定 demo（对应 `spx rune`） |
+| `make runweb DEMO_INDEX=N` | 构建 wasm 后启动指定 demo 的 Web 版本 |
+| `make runwebworker DEMO_INDEX=N` | 构建 wasm 后启动指定 demo 的 Web Worker 版本 |
 | `make stop` | 停止本地 Web server 进程 |
 
 示例：
@@ -185,8 +186,9 @@ make export-web MODE=worker
 ```bash
 make list-demos
 make run DEMO_INDEX=1
+make runnative DEMO_INDEX=1
 make rune DEMO_INDEX=1
-make run-web DEMO_INDEX=2 PORT=8080
+make runweb DEMO_INDEX=2 PORT=8080
 ```
 
 ## 其他命令
@@ -203,7 +205,8 @@ make run-web DEMO_INDEX=2 PORT=8080
 ```bash
 	make build-dev MODE=normal
 	make run DEMO_INDEX=1
-	make run-web DEMO_INDEX=1
+	make runnative DEMO_INDEX=1
+	make runweb DEMO_INDEX=1
 ```
 
 ### 仅准备 Web 导出环境

@@ -117,19 +117,19 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 		return nil
 	}
 
-	if cmd.Args.CmdName == "runi" {
-		return cmd.handleRuniCommand()
-	}
-
-	if isRuntimeModeCommand(cmd.Args.CmdName) {
-		cmd.RuntimeMode = true
-	}
-
 	if cmd.Args.GoEnv != nil && *cmd.Args.GoEnv != "" {
 		if err := cmd.setupPortableGoEnv(); err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to setup portable Go environment: %v\n", err)
 			return fmt.Errorf("failed to setup portable Go environment: %w", err)
 		}
+	}
+
+	if isInterpretedRunCommand(cmd.Args.CmdName) {
+		return cmd.handleInterpretedRunCommand()
+	}
+
+	if isRuntimeModeCommand(cmd.Args.CmdName) {
+		cmd.RuntimeMode = true
 	}
 
 	err = cmd.CheckEnv()
@@ -194,7 +194,7 @@ func (cmd *CmdTool) handleBuildPhase() error {
 	case "buildtinygo":
 		spxlog.Debug("running TinyGo library build")
 		return cmd.BuildTinyGoLib()
-	case "editor", "rune", "export", "build", "run":
+	case "editor", "rune", "export", "build", "runnative":
 		spxlog.Debug("checking DLL build conditions")
 		if cmd.Args.Tags == nil || !strings.Contains(*cmd.Args.Tags, "pure_engine") {
 			spxlog.Debug("running DLL build")
@@ -222,7 +222,9 @@ func (cmd *CmdTool) handleExecutionPhase() error {
 	case "rune":
 		return cmd.executeRune()
 	case "run":
-		return cmd.executeRun()
+		return nil
+	case "runnative":
+		return cmd.executeRunNative()
 	case "runweb":
 		return cmd.RunWeb()
 	case "runwebworker":
@@ -267,8 +269,8 @@ func (cmd *CmdTool) executeRune() error {
 	return util.RunCommandInDir(cmd.ProjectDir, cmd.CmdPath, args...)
 }
 
-// executeRun runs the run command.
-func (cmd *CmdTool) executeRun() error {
+// executeRunNative runs the native desktop runtime command.
+func (cmd *CmdTool) executeRunNative() error {
 	if cmd.Args.Tags != nil && strings.Contains(*cmd.Args.Tags, "pure_engine") {
 		args := cmd.Args.String()
 		return cmd.RunPureEngine(args...)
@@ -289,10 +291,19 @@ func (cmd *CmdTool) checkMovieArgs(rootDir string) []string {
 	return args
 }
 
+func isInterpretedRunCommand(cmdName string) bool {
+	switch cmdName {
+	case "run":
+		return true
+	default:
+		return false
+	}
+}
+
 // isRuntimeModeCommand reports whether the command uses runtime assets.
 func isRuntimeModeCommand(cmdName string) bool {
 	switch cmdName {
-	case "run", "runweb", "runwebworker":
+	case "runnative", "runweb", "runwebworker":
 		return true
 	default:
 		return false
@@ -309,11 +320,10 @@ func shouldBuildWasmForCommand(cmdName string) bool {
 	}
 }
 
-// handleRuniCommand runs runi with minimal setup.
-func (cmd *CmdTool) handleRuniCommand() error {
+// handleInterpretedRunCommand runs the interpreted-mode command with minimal setup.
+func (cmd *CmdTool) handleInterpretedRunCommand() error {
 	cmd.RuntimeMode = true
 	cmd.RuntimeTempDir, _ = filepath.Abs(filepath.Join(cmd.TargetDir, ".temp"))
-	os.MkdirAll(cmd.RuntimeTempDir, 0755)
 
 	cmd.BinPostfix = ""
 	GOOS := runtime.GOOS
