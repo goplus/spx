@@ -71,6 +71,64 @@ runs:
           esac
         }
 
+        assert_binary_arch() {
+          local binary_path="$1"
+          local platform="$2"
+          local arch="$3"
+          local description
+
+          if ! command -v file >/dev/null 2>&1; then
+            echo "❌ Error: file command is required to verify binary architecture"
+            exit 1
+          fi
+
+          description="$(file "$binary_path")"
+          echo "Binary architecture: $description"
+
+          case "$platform/$arch" in
+            linux/x64)
+              case "$description" in
+                *"ELF 64-bit"*"x86-64"*) return ;;
+              esac
+              ;;
+            linux/x86)
+              case "$description" in
+                *"ELF 32-bit"*"Intel 80386"*) return ;;
+              esac
+              ;;
+            linux/arm64)
+              case "$description" in
+                *"ELF 64-bit"*"ARM aarch64"*) return ;;
+              esac
+              ;;
+            windows/x64)
+              case "$description" in
+                *"PE32+ executable"*"x86-64"*) return ;;
+              esac
+              ;;
+            windows/x86)
+              case "$description" in
+                *"PE32 executable"*"Intel 80386"*) return ;;
+              esac
+              ;;
+            macos/x64)
+              assert_macos_binary_arch "$binary_path" "x86_64"
+              return
+              ;;
+            macos/arm64)
+              assert_macos_binary_arch "$binary_path" "arm64"
+              return
+              ;;
+            *)
+              echo "❌ Error: unsupported binary architecture target: $platform/$arch"
+              exit 1
+              ;;
+          esac
+
+          echo "❌ Error: binary architecture mismatch for $platform/$arch"
+          exit 1
+        }
+
         echo "=========================================="
         echo "🔍 Verifying release package"
         echo "Package: $PACKAGE_FILE"
@@ -183,15 +241,8 @@ runs:
         fi
         echo "✓ SPX executable found: $SPX_BIN_PATH"
 
-        if [ "$TARGET_PLATFORM" = "macos" ]; then
-          case "$TARGET_ARCH" in
-            x64)
-              assert_macos_binary_arch "$SPX_BIN_PATH" "x86_64"
-              ;;
-            arm64)
-              assert_macos_binary_arch "$SPX_BIN_PATH" "arm64"
-              ;;
-          esac
+        if [ "$LAYOUT" = "standalone" ] || [ "$TARGET_PLATFORM" = "macos" ]; then
+          assert_binary_arch "$SPX_BIN_PATH" "$TARGET_PLATFORM" "$TARGET_ARCH"
         fi
 
         if [ "$TARGET_PLATFORM" != "windows" ]; then
