@@ -200,8 +200,8 @@ generate-bindings: ## Generate Godot/GDExtension binding code
 	cd ./internal/cmd/codegen && GODOT_SRC="$(GODOT_SRC)" go run .
 
 generate-runtime: ## Generate runtime registration code
-	go generate ./pkg/ispx
-	go generate ./cmd/spxrunner/runner
+	go generate ./pkg/ispx/...
+	go generate ./cmd/spxrunner/runner/...
 
 clean-projects: ## Delete generated artifacts (.temp/, project/, .gdspx_web_server*.pid, go.mod, go.sum, gox.mod) from tutorial/test projects
 	@find -P tutorial test \( \
