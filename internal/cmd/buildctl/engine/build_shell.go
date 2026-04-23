@@ -198,12 +198,10 @@ func resolveWebTemplateBuildConfig(mode string) (threads string, proxyToPThread 
 		return "", false, "", err
 	}
 	switch mode {
-	case "normal":
-		return "yes", false, "", nil
+	case "normal", "minigame", "miniprogram":
+		return "no", false, ".nothreads", nil
 	case "worker":
 		return "yes", true, "", nil
-	case "minigame", "miniprogram":
-		return "no", false, ".nothreads", nil
 	default:
 		return "", false, "", fmt.Errorf("unsupported web-mode: %s", mode)
 	}

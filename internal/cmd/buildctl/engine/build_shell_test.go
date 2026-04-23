@@ -63,6 +63,36 @@ func TestResolveEngineBuildShellPlanWebWorker(t *testing.T) {
 	}
 }
 
+func TestResolveEngineBuildShellPlanWebNormal(t *testing.T) {
+	repoRoot := t.TempDir()
+	t.Setenv("GOPATH", filepath.Join(repoRoot, "gopath"))
+	t.Setenv("HOME", repoRoot)
+	t.Setenv("APPDATA", filepath.Join(repoRoot, "AppData"))
+	version := mustDefaultRuntimeVersion(t)
+
+	plan, err := resolveEngineBuildShellPlan(repoRoot, envExportEngineBuildShellConfig{
+		target:   "template",
+		platform: "web",
+		mode:     "normal",
+	})
+	if err != nil {
+		t.Fatalf("resolveEngineBuildShellPlan returned error: %v", err)
+	}
+
+	if plan.WebThreads != "no" {
+		t.Fatalf("web threads = %s, want no", plan.WebThreads)
+	}
+	if plan.WebProxyToPThread {
+		t.Fatal("proxy_to_pthread should be disabled for normal mode")
+	}
+	if plan.WebThreadSuffix != ".nothreads" {
+		t.Fatalf("web thread suffix = %s, want .nothreads", plan.WebThreadSuffix)
+	}
+	if got, want := plan.WebCachedTemplateZip, filepath.Join(repoRoot, "gopath", "bin", "gdspx"+version+"_webpack.zip"); got != want {
+		t.Fatalf("cached template zip = %s, want %s", got, want)
+	}
+}
+
 func TestResolveEngineBuildShellPlanWebMiniGame(t *testing.T) {
 	repoRoot := t.TempDir()
 	t.Setenv("GOPATH", filepath.Join(repoRoot, "gopath"))
