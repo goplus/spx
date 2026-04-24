@@ -209,6 +209,7 @@ func init() {
 			"KeyEnter":             {Typ: reflect.TypeOf(q.KeyEnter), Value: constant.MakeInt64(int64(q.KeyEnter))},
 			"KeyEqual":             {Typ: reflect.TypeOf(q.KeyEqual), Value: constant.MakeInt64(int64(q.KeyEqual))},
 			"KeyEscape":            {Typ: reflect.TypeOf(q.KeyEscape), Value: constant.MakeInt64(int64(q.KeyEscape))},
+			"KeyExclam":            {Typ: reflect.TypeOf(q.KeyExclam), Value: constant.MakeInt64(int64(q.KeyExclam))},
 			"KeyF":                 {Typ: reflect.TypeOf(q.KeyF), Value: constant.MakeInt64(int64(q.KeyF))},
 			"KeyF1":                {Typ: reflect.TypeOf(q.KeyF1), Value: constant.MakeInt64(int64(q.KeyF1))},
 			"KeyF10":               {Typ: reflect.TypeOf(q.KeyF10), Value: constant.MakeInt64(int64(q.KeyF10))},

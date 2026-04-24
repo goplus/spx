@@ -28,6 +28,7 @@ func TestParseRecognizesAliases(t *testing.T) {
 		{name: "Enter", want: KeyEnter},
 		{name: "Return", want: KeyEnter},
 		{name: "Ctrl", want: KeyControl},
+		{name: "!", want: KeyExclam},
 		{name: "KP/", want: KeyKPDivide},
 		{name: " ", want: KeySpace},
 	}

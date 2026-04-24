@@ -77,6 +77,7 @@ const (
 	KeyEnter        Key = engine.KeyEnter
 	KeyEqual        Key = engine.KeyEqual
 	KeyEscape       Key = engine.KeyEscape
+	KeyExclam       Key = engine.KeyExclam
 	KeyF1           Key = engine.KeyF1
 	KeyF2           Key = engine.KeyF2
 	KeyF3           Key = engine.KeyF3

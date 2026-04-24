@@ -40,6 +40,7 @@ var stringMap = map[string]int64{
 	"Enter": KeyEnter, "Return": KeyEnter,
 	"Equal": KeyEqual, "=": KeyEqual,
 	"Escape": KeyEscape, "Esc": KeyEscape,
+	"Exclam": KeyExclam, "!": KeyExclam,
 	"F1": KeyF1, "F2": KeyF2, "F3": KeyF3, "F4": KeyF4,
 	"F5": KeyF5, "F6": KeyF6, "F7": KeyF7, "F8": KeyF8,
 	"F9": KeyF9, "F10": KeyF10, "F11": KeyF11, "F12": KeyF12,
