@@ -83,6 +83,7 @@ var releaseVersionMappings = []releaseVersionMapping{
 	{"v2.0.0-pre.48", "2.1.45"},
 	{"v2.0.0-pre.49", "2.1.46"},
 	{"v2.0.0-pre.50", "2.1.47"},
+	{"v2.0.0-pre.51", "2.1.48"},
 }
 
 func newReleaseMeta(spxVersion, runtimeVersion string) ReleaseMeta {
