@@ -335,66 +335,13 @@ func init() {
 			"XGou_Seconds":                 {Typ: "untyped string", Value: constant.MakeString(string(q.XGou_Seconds))},
 		},
 		Alias: map[string]alias.Type{
-			"AllOtherScripts": &alias.Alias{Typ: "StopKind"},
-			"AllSprites":      &alias.Alias{Typ: "StopKind"},
-			"AllStop":         &alias.Alias{Typ: "StopKind"},
-			"Camera": &alias.Named{
-				Underlying: &alias.Interface{
-					Methods: map[string]*alias.Func{
-						"Follow__1": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "SpriteName"}},
-							Results: nil,
-						},
-					},
-				},
-			},
-			"CapsuleCollider": &alias.Alias{Typ: "ColliderShapeType"},
-			"CircleCollider":  &alias.Alias{Typ: "ColliderShapeType"},
 			"DeltaTime": &alias.Func{
 				Params:  nil,
 				Results: []alias.Type{&alias.Alias{Typ: "Seconds"}},
 			},
-			"Down":           &alias.Alias{Typ: "Direction"},
-			"DynamicPhysics": &alias.Alias{Typ: "PhysicsMode"},
 			"Game": &alias.Named{
-				Underlying: &alias.Struct{Fields: []alias.Type{nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, &alias.Alias{Typ: "engineManagers"}, nil, nil, nil, nil, nil, nil, nil}},
+				Underlying: nil,
 				Methods: map[string]*alias.Func{
-					"Play__0": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "SoundName"}},
-						Results: nil,
-					},
-					"Play__1": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "SoundName"}, nil},
-						Results: nil,
-					},
-					"PlayAndWait": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "SoundName"}},
-						Results: nil,
-					},
-					"PausePlaying": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "SoundName"}},
-						Results: nil,
-					},
-					"ResumePlaying": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "SoundName"}},
-						Results: nil,
-					},
-					"StopPlaying": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "SoundName"}},
-						Results: nil,
-					},
-					"SetBackdrop__0": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "BackdropName"}},
-						Results: nil,
-					},
-					"SetBackdropAndWait__0": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "BackdropName"}},
-						Results: nil,
-					},
-					"KeyPressed": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "Key"}},
-						Results: nil,
-					},
 					"WaitNextFrame": &alias.Func{
 						Params:  nil,
 						Results: []alias.Type{&alias.Alias{Typ: "Seconds"}},
@@ -407,257 +354,13 @@ func init() {
 						Params:  nil,
 						Results: []alias.Type{&alias.Alias{Typ: "Seconds"}},
 					},
-					"GetTargetProperty": &alias.Func{
-						Params:  []alias.Type{nil, &alias.Alias{Typ: "PropertyName"}},
-						Results: nil,
-					},
-					"HideVar": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "PropertyName"}},
-						Results: nil,
-					},
-					"ShowVar": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "PropertyName"}},
-						Results: nil,
-					},
-					"Broadcast__0": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "MsgName"}},
-						Results: nil,
-					},
-					"Broadcast__1": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "MsgName"}, nil},
-						Results: nil,
-					},
-					"BroadcastAndWait__0": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "MsgName"}},
-						Results: nil,
-					},
-					"BroadcastAndWait__1": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "MsgName"}, nil},
-						Results: nil,
-					},
 				},
 			},
-			"GetWidget": &alias.Func{
-				Params:  []alias.Type{nil, &alias.Alias{Typ: "WidgetName"}},
-				Results: nil,
-			},
-			"Invalid":       &alias.Alias{Typ: "Pos"},
-			"Key0":          &alias.Alias{Typ: "Key"},
-			"Key1":          &alias.Alias{Typ: "Key"},
-			"Key2":          &alias.Alias{Typ: "Key"},
-			"Key3":          &alias.Alias{Typ: "Key"},
-			"Key4":          &alias.Alias{Typ: "Key"},
-			"Key5":          &alias.Alias{Typ: "Key"},
-			"Key6":          &alias.Alias{Typ: "Key"},
-			"Key7":          &alias.Alias{Typ: "Key"},
-			"Key8":          &alias.Alias{Typ: "Key"},
-			"Key9":          &alias.Alias{Typ: "Key"},
-			"KeyA":          &alias.Alias{Typ: "Key"},
-			"KeyAlt":        &alias.Alias{Typ: "Key"},
-			"KeyAny":        &alias.Alias{Typ: "Key"},
-			"KeyApostrophe": &alias.Alias{Typ: "Key"},
-			"KeyB":          &alias.Alias{Typ: "Key"},
-			"KeyBackslash":  &alias.Alias{Typ: "Key"},
-			"KeyBackspace":  &alias.Alias{Typ: "Key"},
-			"KeyC":          &alias.Alias{Typ: "Key"},
-			"KeyCapsLock":   &alias.Alias{Typ: "Key"},
-			"KeyComma":      &alias.Alias{Typ: "Key"},
-			"KeyControl":    &alias.Alias{Typ: "Key"},
-			"KeyD":          &alias.Alias{Typ: "Key"},
-			"KeyDelete":     &alias.Alias{Typ: "Key"},
-			"KeyDown":       &alias.Alias{Typ: "Key"},
-			"KeyE":          &alias.Alias{Typ: "Key"},
-			"KeyEnd":        &alias.Alias{Typ: "Key"},
-			"KeyEnter":      &alias.Alias{Typ: "Key"},
-			"KeyEqual":      &alias.Alias{Typ: "Key"},
-			"KeyEscape":     &alias.Alias{Typ: "Key"},
-			"KeyF":          &alias.Alias{Typ: "Key"},
-			"KeyF1":         &alias.Alias{Typ: "Key"},
-			"KeyF10":        &alias.Alias{Typ: "Key"},
-			"KeyF11":        &alias.Alias{Typ: "Key"},
-			"KeyF12":        &alias.Alias{Typ: "Key"},
-			"KeyF2":         &alias.Alias{Typ: "Key"},
-			"KeyF3":         &alias.Alias{Typ: "Key"},
-			"KeyF4":         &alias.Alias{Typ: "Key"},
-			"KeyF5":         &alias.Alias{Typ: "Key"},
-			"KeyF6":         &alias.Alias{Typ: "Key"},
-			"KeyF7":         &alias.Alias{Typ: "Key"},
-			"KeyF8":         &alias.Alias{Typ: "Key"},
-			"KeyF9":         &alias.Alias{Typ: "Key"},
-			"KeyFromString": &alias.Func{
-				Params:  nil,
-				Results: []alias.Type{&alias.Alias{Typ: "Key"}},
-			},
-			"KeyG":             &alias.Alias{Typ: "Key"},
-			"KeyGraveAccent":   &alias.Alias{Typ: "Key"},
-			"KeyH":             &alias.Alias{Typ: "Key"},
-			"KeyHome":          &alias.Alias{Typ: "Key"},
-			"KeyI":             &alias.Alias{Typ: "Key"},
-			"KeyInsert":        &alias.Alias{Typ: "Key"},
-			"KeyJ":             &alias.Alias{Typ: "Key"},
-			"KeyK":             &alias.Alias{Typ: "Key"},
-			"KeyKP0":           &alias.Alias{Typ: "Key"},
-			"KeyKP1":           &alias.Alias{Typ: "Key"},
-			"KeyKP2":           &alias.Alias{Typ: "Key"},
-			"KeyKP3":           &alias.Alias{Typ: "Key"},
-			"KeyKP4":           &alias.Alias{Typ: "Key"},
-			"KeyKP5":           &alias.Alias{Typ: "Key"},
-			"KeyKP6":           &alias.Alias{Typ: "Key"},
-			"KeyKP7":           &alias.Alias{Typ: "Key"},
-			"KeyKP8":           &alias.Alias{Typ: "Key"},
-			"KeyKP9":           &alias.Alias{Typ: "Key"},
-			"KeyKPDecimal":     &alias.Alias{Typ: "Key"},
-			"KeyKPDivide":      &alias.Alias{Typ: "Key"},
-			"KeyKPEnter":       &alias.Alias{Typ: "Key"},
-			"KeyKPEqual":       &alias.Alias{Typ: "Key"},
-			"KeyKPMultiply":    &alias.Alias{Typ: "Key"},
-			"KeyKPSubtract":    &alias.Alias{Typ: "Key"},
-			"KeyL":             &alias.Alias{Typ: "Key"},
-			"KeyLeft":          &alias.Alias{Typ: "Key"},
-			"KeyLeftBracket":   &alias.Alias{Typ: "Key"},
-			"KeyM":             &alias.Alias{Typ: "Key"},
-			"KeyMax":           &alias.Alias{Typ: "Key"},
-			"KeyMenu":          &alias.Alias{Typ: "Key"},
-			"KeyMinus":         &alias.Alias{Typ: "Key"},
-			"KeyN":             &alias.Alias{Typ: "Key"},
-			"KeyNumLock":       &alias.Alias{Typ: "Key"},
-			"KeyO":             &alias.Alias{Typ: "Key"},
-			"KeyP":             &alias.Alias{Typ: "Key"},
-			"KeyPageDown":      &alias.Alias{Typ: "Key"},
-			"KeyPageUp":        &alias.Alias{Typ: "Key"},
-			"KeyPause":         &alias.Alias{Typ: "Key"},
-			"KeyPeriod":        &alias.Alias{Typ: "Key"},
-			"KeyPrintScreen":   &alias.Alias{Typ: "Key"},
-			"KeyQ":             &alias.Alias{Typ: "Key"},
-			"KeyR":             &alias.Alias{Typ: "Key"},
-			"KeyRight":         &alias.Alias{Typ: "Key"},
-			"KeyRightBracket":  &alias.Alias{Typ: "Key"},
-			"KeyS":             &alias.Alias{Typ: "Key"},
-			"KeyScrollLock":    &alias.Alias{Typ: "Key"},
-			"KeySemicolon":     &alias.Alias{Typ: "Key"},
-			"KeyShift":         &alias.Alias{Typ: "Key"},
-			"KeySlash":         &alias.Alias{Typ: "Key"},
-			"KeySpace":         &alias.Alias{Typ: "Key"},
-			"KeyT":             &alias.Alias{Typ: "Key"},
-			"KeyTab":           &alias.Alias{Typ: "Key"},
-			"KeyU":             &alias.Alias{Typ: "Key"},
-			"KeyUp":            &alias.Alias{Typ: "Key"},
-			"KeyV":             &alias.Alias{Typ: "Key"},
-			"KeyW":             &alias.Alias{Typ: "Key"},
-			"KeyX":             &alias.Alias{Typ: "Key"},
-			"KeyY":             &alias.Alias{Typ: "Key"},
-			"KeyZ":             &alias.Alias{Typ: "Key"},
-			"KinematicPhysics": &alias.Alias{Typ: "PhysicsMode"},
-			"Last":             &alias.Alias{Typ: "Pos"},
-			"Left":             &alias.Alias{Typ: "Direction"},
-			"List": &alias.Named{
-				Underlying: &alias.Struct{Fields: []alias.Type{&alias.Slice{Elem: &alias.Alias{Typ: "obj"}}}},
-				Methods: map[string]*alias.Func{
-					"Init": &alias.Func{
-						Params:  []alias.Type{&alias.Slice{Elem: &alias.Alias{Typ: "obj"}}},
-						Results: nil,
-					},
-					"Contains": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "obj"}},
-						Results: nil,
-					},
-					"Append": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "obj"}},
-						Results: nil,
-					},
-					"Set": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "Pos"}, &alias.Alias{Typ: "obj"}},
-						Results: nil,
-					},
-					"Insert": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "Pos"}, &alias.Alias{Typ: "obj"}},
-						Results: nil,
-					},
-					"Delete": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "Pos"}},
-						Results: nil,
-					},
-					"At": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "Pos"}},
-						Results: nil,
-					},
-					"IndexOf": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "obj"}},
-						Results: []alias.Type{&alias.Alias{Typ: "Pos"}},
-					},
-				},
-			},
-			"Monitor": &alias.Named{
-				Underlying: &alias.Struct{Fields: []alias.Type{nil, &alias.Alias{Typ: "WidgetName"}, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil}},
-				Methods: map[string]*alias.Func{
-					"GetName": &alias.Func{
-						Params:  nil,
-						Results: []alias.Type{&alias.Alias{Typ: "WidgetName"}},
-					},
-				},
-			},
-			"MotionOptions": &alias.Named{
-				Underlying: &alias.Struct{Fields: []alias.Type{&alias.Alias{Typ: "Speed"}, &alias.Alias{Typ: "SpriteAnimationName"}}},
-			},
-			"NewList": &alias.Func{
-				Params:  []alias.Type{&alias.Slice{Elem: &alias.Alias{Typ: "obj"}}},
-				Results: nil,
-			},
-			"NewValue": &alias.Func{
-				Params:  []alias.Type{&alias.Alias{Typ: "obj"}},
-				Results: nil,
-			},
-			"NoPhysics":            &alias.Alias{Typ: "PhysicsMode"},
-			"OtherScriptsInSprite": &alias.Alias{Typ: "StopKind"},
-			"PolygonCollider":      &alias.Alias{Typ: "ColliderShapeType"},
-			"Random":               &alias.Alias{Typ: "Pos"},
-			"RectCollider":         &alias.Alias{Typ: "ColliderShapeType"},
-			"Right":                &alias.Alias{Typ: "Direction"},
 			"Sprite": &alias.Named{
 				Underlying: &alias.Interface{
 					Methods: map[string]*alias.Func{
-						"AnimateAndWait": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "SpriteAnimationName"}},
-							Results: nil,
-						},
-						"AnimateWith": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "SpriteAnimationName"}, nil},
-							Results: nil,
-						},
-						"Animate__0": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "SpriteAnimationName"}},
-							Results: nil,
-						},
-						"Animate__1": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "SpriteAnimationName"}, nil},
-							Results: nil,
-						},
-						"ChangeHeading": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "Direction"}},
-							Results: nil,
-						},
-						"ColliderShape": &alias.Func{
-							Params:  nil,
-							Results: []alias.Type{&alias.Alias{Typ: "ColliderShapeType"}, nil},
-						},
-						"CostumeName": &alias.Func{
-							Params:  nil,
-							Results: []alias.Type{&alias.Alias{Typ: "SpriteCostumeName"}},
-						},
-						"DistanceToWith": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "Target"}},
-							Results: nil,
-						},
-						"DistanceTo__1": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "SpriteName"}},
-							Results: nil,
-						},
-						"DistanceTo__3": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "Pos"}},
-							Results: nil,
-						},
 						"GlideToTarget": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "Target"}, &alias.Alias{Typ: "Seconds"}},
+							Params:  []alias.Type{nil, &alias.Alias{Typ: "Seconds"}},
 							Results: nil,
 						},
 						"GlideToXYpos": &alias.Func{
@@ -669,7 +372,7 @@ func init() {
 							Results: nil,
 						},
 						"Glide__1": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "SpriteName"}, &alias.Alias{Typ: "Seconds"}},
+							Params:  []alias.Type{nil, &alias.Alias{Typ: "Seconds"}},
 							Results: nil,
 						},
 						"Glide__2": &alias.Func{
@@ -677,107 +380,11 @@ func init() {
 							Results: nil,
 						},
 						"Glide__3": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "Pos"}, &alias.Alias{Typ: "Seconds"}},
+							Params:  []alias.Type{nil, &alias.Alias{Typ: "Seconds"}},
 							Results: nil,
 						},
 						"Glide__4": &alias.Func{
 							Params:  []alias.Type{nil, nil, &alias.Alias{Typ: "Seconds"}},
-							Results: nil,
-						},
-						"Heading": &alias.Func{
-							Params:  nil,
-							Results: []alias.Type{&alias.Alias{Typ: "Direction"}},
-						},
-						"HideVar": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "VarName"}},
-							Results: nil,
-						},
-						"OnAnyKey": &alias.Func{
-							Params: []alias.Type{&alias.Func{
-								Params:  []alias.Type{&alias.Alias{Typ: "github.com/goplus/spx/v2/internal/core/event.Key"}},
-								Results: nil,
-							}},
-							Results: nil,
-						},
-						"OnBackdrop__0": &alias.Func{
-							Params: []alias.Type{&alias.Func{
-								Params:  []alias.Type{&alias.Alias{Typ: "github.com/goplus/spx/v2/internal/core/event.BackdropName"}},
-								Results: nil,
-							}},
-							Results: nil,
-						},
-						"OnBackdrop__1": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "github.com/goplus/spx/v2/internal/core/event.BackdropName"}, nil},
-							Results: nil,
-						},
-						"OnKey__0": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "github.com/goplus/spx/v2/internal/core/event.Key"}, nil},
-							Results: nil,
-						},
-						"OnKey__1": &alias.Func{
-							Params: []alias.Type{&alias.Slice{Elem: &alias.Alias{Typ: "github.com/goplus/spx/v2/internal/core/event.Key"}}, &alias.Func{
-								Params:  []alias.Type{&alias.Alias{Typ: "github.com/goplus/spx/v2/internal/core/event.Key"}},
-								Results: nil,
-							}},
-							Results: nil,
-						},
-						"OnKey__2": &alias.Func{
-							Params:  []alias.Type{&alias.Slice{Elem: &alias.Alias{Typ: "github.com/goplus/spx/v2/internal/core/event.Key"}}, nil},
-							Results: nil,
-						},
-						"OnMsg__0": &alias.Func{
-							Params: []alias.Type{&alias.Func{
-								Params:  []alias.Type{&alias.Alias{Typ: "github.com/goplus/spx/v2/internal/core/event.MsgName"}, nil},
-								Results: nil,
-							}},
-							Results: nil,
-						},
-						"OnMsg__1": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "github.com/goplus/spx/v2/internal/core/event.MsgName"}, nil},
-							Results: nil,
-						},
-						"OnSwipe__0": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "github.com/goplus/spx/v2/internal/core/event.Direction"}, nil},
-							Results: nil,
-						},
-						"OnTouchStart__0": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "SpriteName"}, nil},
-							Results: nil,
-						},
-						"OnTouchStart__1": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "SpriteName"}, nil},
-							Results: nil,
-						},
-						"OnTouchStart__2": &alias.Func{
-							Params:  []alias.Type{&alias.Slice{Elem: &alias.Alias{Typ: "SpriteName"}}, nil},
-							Results: nil,
-						},
-						"OnTouchStart__3": &alias.Func{
-							Params:  []alias.Type{&alias.Slice{Elem: &alias.Alias{Typ: "SpriteName"}}, nil},
-							Results: nil,
-						},
-						"PausePlaying": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "SoundName"}},
-							Results: nil,
-						},
-						"PhysicsMode": &alias.Func{
-							Params:  nil,
-							Results: []alias.Type{&alias.Alias{Typ: "PhysicsMode"}},
-						},
-						"PlayAndWait": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "SoundName"}},
-							Results: nil,
-						},
-						"PlayWith": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "SoundName"}, nil},
-							Results: nil,
-						},
-						"Play__0": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "SoundName"}},
-							Results: nil,
-						},
-						"Play__1": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "SoundName"}, nil},
 							Results: nil,
 						},
 						"QuoteMsg": &alias.Func{
@@ -796,92 +403,12 @@ func init() {
 							Params:  []alias.Type{nil, nil, &alias.Alias{Typ: "Seconds"}},
 							Results: nil,
 						},
-						"ResumePlaying": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "SoundName"}},
-							Results: nil,
-						},
 						"SayWith": &alias.Func{
 							Params:  []alias.Type{nil, &alias.Alias{Typ: "Seconds"}},
 							Results: nil,
 						},
 						"Say__1": &alias.Func{
 							Params:  []alias.Type{nil, &alias.Alias{Typ: "Seconds"}},
-							Results: nil,
-						},
-						"SetColliderShape": &alias.Func{
-							Params:  []alias.Type{nil, &alias.Alias{Typ: "ColliderShapeType"}, nil},
-							Results: nil,
-						},
-						"SetCostume__0": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "SpriteCostumeName"}},
-							Results: nil,
-						},
-						"SetHeading": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "Direction"}},
-							Results: nil,
-						},
-						"SetPhysicsMode": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "PhysicsMode"}},
-							Results: nil,
-						},
-						"ShowVar": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "VarName"}},
-							Results: nil,
-						},
-						"StepToTarget": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "Target"}, nil},
-							Results: nil,
-						},
-						"StepTo__1": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "SpriteName"}},
-							Results: nil,
-						},
-						"StepTo__4": &alias.Func{
-							Params:  []alias.Type{nil, &alias.Alias{Typ: "Speed"}},
-							Results: nil,
-						},
-						"StepTo__5": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "SpriteName"}, &alias.Alias{Typ: "Speed"}},
-							Results: nil,
-						},
-						"StepTo__6": &alias.Func{
-							Params:  []alias.Type{nil, &alias.Alias{Typ: "Speed"}},
-							Results: nil,
-						},
-						"StepTo__7": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "Speed"}, &alias.Alias{Typ: "Speed"}, &alias.Alias{Typ: "Speed"}},
-							Results: nil,
-						},
-						"StepTo__8": &alias.Func{
-							Params:  []alias.Type{nil, &alias.Alias{Typ: "Speed"}, &alias.Alias{Typ: "SpriteAnimationName"}},
-							Results: nil,
-						},
-						"StepTo__9": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "SpriteName"}, &alias.Alias{Typ: "Speed"}, &alias.Alias{Typ: "SpriteAnimationName"}},
-							Results: nil,
-						},
-						"StepTo__a": &alias.Func{
-							Params:  []alias.Type{nil, &alias.Alias{Typ: "Speed"}, &alias.Alias{Typ: "SpriteAnimationName"}},
-							Results: nil,
-						},
-						"StepTo__b": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "Speed"}, &alias.Alias{Typ: "Speed"}, &alias.Alias{Typ: "Speed"}, &alias.Alias{Typ: "SpriteAnimationName"}},
-							Results: nil,
-						},
-						"Step__1": &alias.Func{
-							Params:  []alias.Type{nil, &alias.Alias{Typ: "Speed"}},
-							Results: nil,
-						},
-						"Step__2": &alias.Func{
-							Params:  []alias.Type{nil, &alias.Alias{Typ: "Speed"}, &alias.Alias{Typ: "SpriteAnimationName"}},
-							Results: nil,
-						},
-						"StopAnimation": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "SpriteAnimationName"}},
-							Results: nil,
-						},
-						"StopPlaying": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "SoundName"}},
 							Results: nil,
 						},
 						"ThinkWith": &alias.Func{
@@ -892,104 +419,12 @@ func init() {
 							Params:  []alias.Type{nil, &alias.Alias{Typ: "Seconds"}},
 							Results: nil,
 						},
-						"TouchingWith": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "Target"}},
-							Results: nil,
-						},
-						"Touching__1": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "SpriteName"}},
-							Results: nil,
-						},
-						"TurnToDir": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "Direction"}, nil},
-							Results: nil,
-						},
-						"TurnToTarget": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "Target"}, nil},
-							Results: nil,
-						},
-						"TurnTo__1": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "SpriteName"}},
-							Results: nil,
-						},
-						"TurnTo__2": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "Direction"}},
-							Results: nil,
-						},
-						"TurnTo__4": &alias.Func{
-							Params:  []alias.Type{nil, &alias.Alias{Typ: "Speed"}},
-							Results: nil,
-						},
-						"TurnTo__5": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "SpriteName"}, &alias.Alias{Typ: "Speed"}},
-							Results: nil,
-						},
-						"TurnTo__6": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "Direction"}, &alias.Alias{Typ: "Speed"}},
-							Results: nil,
-						},
-						"TurnTo__7": &alias.Func{
-							Params:  []alias.Type{nil, &alias.Alias{Typ: "Speed"}},
-							Results: nil,
-						},
-						"TurnTo__8": &alias.Func{
-							Params:  []alias.Type{nil, &alias.Alias{Typ: "Speed"}, &alias.Alias{Typ: "SpriteAnimationName"}},
-							Results: nil,
-						},
-						"TurnTo__9": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "SpriteName"}, &alias.Alias{Typ: "Speed"}, &alias.Alias{Typ: "SpriteAnimationName"}},
-							Results: nil,
-						},
-						"TurnTo__a": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "Direction"}, &alias.Alias{Typ: "Speed"}, &alias.Alias{Typ: "SpriteAnimationName"}},
-							Results: nil,
-						},
-						"TurnTo__b": &alias.Func{
-							Params:  []alias.Type{nil, &alias.Alias{Typ: "Speed"}, &alias.Alias{Typ: "SpriteAnimationName"}},
-							Results: nil,
-						},
-						"TurnWith": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "Direction"}, nil},
-							Results: nil,
-						},
-						"Turn__0": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "Direction"}},
-							Results: nil,
-						},
-						"Turn__1": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "Direction"}, &alias.Alias{Typ: "Speed"}},
-							Results: nil,
-						},
-						"Turn__2": &alias.Func{
-							Params:  []alias.Type{&alias.Alias{Typ: "Direction"}, &alias.Alias{Typ: "Speed"}, &alias.Alias{Typ: "SpriteAnimationName"}},
-							Results: nil,
-						},
 					},
 				},
 			},
 			"SpriteImpl": &alias.Named{
 				Underlying: nil,
 				Methods: map[string]*alias.Func{
-					"Animate__0": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "SpriteAnimationName"}},
-						Results: nil,
-					},
-					"Animate__1": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "SpriteAnimationName"}, nil},
-						Results: nil,
-					},
-					"AnimateWith": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "SpriteAnimationName"}, nil},
-						Results: nil,
-					},
-					"AnimateAndWait": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "SpriteAnimationName"}},
-						Results: nil,
-					},
-					"StopAnimation": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "SpriteAnimationName"}},
-						Results: nil,
-					},
 					"Say__1": &alias.Func{
 						Params:  []alias.Type{nil, &alias.Alias{Typ: "Seconds"}},
 						Results: nil,
@@ -1022,140 +457,12 @@ func init() {
 						Params:  []alias.Type{nil, nil, &alias.Alias{Typ: "Seconds"}},
 						Results: nil,
 					},
-					"OnTouchStart__0": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "SpriteName"}, nil},
-						Results: nil,
-					},
-					"OnTouchStart__1": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "SpriteName"}, nil},
-						Results: nil,
-					},
-					"OnTouchStart__2": &alias.Func{
-						Params:  []alias.Type{&alias.Slice{Elem: &alias.Alias{Typ: "SpriteName"}}, nil},
-						Results: nil,
-					},
-					"OnTouchStart__3": &alias.Func{
-						Params:  []alias.Type{&alias.Slice{Elem: &alias.Alias{Typ: "SpriteName"}}, nil},
-						Results: nil,
-					},
-					"SetPhysicsMode": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "PhysicsMode"}},
-						Results: nil,
-					},
-					"PhysicsMode": &alias.Func{
-						Params:  nil,
-						Results: []alias.Type{&alias.Alias{Typ: "PhysicsMode"}},
-					},
-					"SetColliderShape": &alias.Func{
-						Params:  []alias.Type{nil, &alias.Alias{Typ: "ColliderShapeType"}, nil},
-						Results: nil,
-					},
-					"ColliderShape": &alias.Func{
-						Params:  nil,
-						Results: []alias.Type{&alias.Alias{Typ: "ColliderShapeType"}, nil},
-					},
-					"Touching__1": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "SpriteName"}},
-						Results: nil,
-					},
-					"TouchingWith": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "Target"}},
-						Results: nil,
-					},
-					"HideVar": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "PropertyName"}},
-						Results: nil,
-					},
-					"ShowVar": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "PropertyName"}},
-						Results: nil,
-					},
-					"CostumeName": &alias.Func{
-						Params:  nil,
-						Results: []alias.Type{&alias.Alias{Typ: "SpriteCostumeName"}},
-					},
-					"SetCostume__0": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "SpriteCostumeName"}},
-						Results: nil,
-					},
-					"Play__0": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "SoundName"}},
-						Results: nil,
-					},
-					"Play__1": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "SoundName"}, nil},
-						Results: nil,
-					},
-					"PlayWith": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "SoundName"}, nil},
-						Results: nil,
-					},
-					"PlayAndWait": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "SoundName"}},
-						Results: nil,
-					},
-					"PausePlaying": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "SoundName"}},
-						Results: nil,
-					},
-					"ResumePlaying": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "SoundName"}},
-						Results: nil,
-					},
-					"StopPlaying": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "SoundName"}},
-						Results: nil,
-					},
-					"DistanceTo__1": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "SpriteName"}},
-						Results: nil,
-					},
-					"DistanceTo__3": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "Pos"}},
-						Results: nil,
-					},
-					"DistanceToWith": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "Target"}},
-						Results: nil,
-					},
-					"Step__2": &alias.Func{
-						Params:  []alias.Type{nil, nil, &alias.Alias{Typ: "SpriteAnimationName"}},
-						Results: nil,
-					},
-					"StepTo__1": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "SpriteName"}},
-						Results: nil,
-					},
-					"StepTo__5": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "SpriteName"}, nil},
-						Results: nil,
-					},
-					"StepTo__8": &alias.Func{
-						Params:  []alias.Type{nil, nil, &alias.Alias{Typ: "SpriteAnimationName"}},
-						Results: nil,
-					},
-					"StepTo__9": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "SpriteName"}, nil, &alias.Alias{Typ: "SpriteAnimationName"}},
-						Results: nil,
-					},
-					"StepTo__a": &alias.Func{
-						Params:  []alias.Type{nil, nil, &alias.Alias{Typ: "SpriteAnimationName"}},
-						Results: nil,
-					},
-					"StepTo__b": &alias.Func{
-						Params:  []alias.Type{nil, nil, nil, &alias.Alias{Typ: "SpriteAnimationName"}},
-						Results: nil,
-					},
-					"StepToTarget": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "Target"}, nil},
-						Results: nil,
-					},
 					"Glide__0": &alias.Func{
 						Params:  []alias.Type{nil, &alias.Alias{Typ: "Seconds"}},
 						Results: nil,
 					},
 					"Glide__1": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "SpriteName"}, &alias.Alias{Typ: "Seconds"}},
+						Params:  []alias.Type{nil, &alias.Alias{Typ: "Seconds"}},
 						Results: nil,
 					},
 					"Glide__2": &alias.Func{
@@ -1163,7 +470,7 @@ func init() {
 						Results: nil,
 					},
 					"Glide__3": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "Pos"}, &alias.Alias{Typ: "Seconds"}},
+						Params:  []alias.Type{nil, &alias.Alias{Typ: "Seconds"}},
 						Results: nil,
 					},
 					"Glide__4": &alias.Func{
@@ -1171,113 +478,18 @@ func init() {
 						Results: nil,
 					},
 					"GlideToTarget": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "Target"}, &alias.Alias{Typ: "Seconds"}},
+						Params:  []alias.Type{nil, &alias.Alias{Typ: "Seconds"}},
 						Results: nil,
 					},
 					"GlideToXYpos": &alias.Func{
 						Params:  []alias.Type{nil, nil, &alias.Alias{Typ: "Seconds"}},
 						Results: nil,
 					},
-					"Heading": &alias.Func{
-						Params:  nil,
-						Results: []alias.Type{&alias.Alias{Typ: "Direction"}},
-					},
-					"Turn__0": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "Direction"}},
-						Results: nil,
-					},
-					"Turn__1": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "Direction"}, nil},
-						Results: nil,
-					},
-					"Turn__2": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "Direction"}, nil, &alias.Alias{Typ: "SpriteAnimationName"}},
-						Results: nil,
-					},
-					"TurnWith": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "Direction"}, nil},
-						Results: nil,
-					},
-					"TurnTo__1": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "SpriteName"}},
-						Results: nil,
-					},
-					"TurnTo__2": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "Direction"}},
-						Results: nil,
-					},
-					"TurnTo__5": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "SpriteName"}, nil},
-						Results: nil,
-					},
-					"TurnTo__6": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "Direction"}, nil},
-						Results: nil,
-					},
-					"TurnTo__8": &alias.Func{
-						Params:  []alias.Type{nil, nil, &alias.Alias{Typ: "SpriteAnimationName"}},
-						Results: nil,
-					},
-					"TurnTo__9": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "SpriteName"}, nil, &alias.Alias{Typ: "SpriteAnimationName"}},
-						Results: nil,
-					},
-					"TurnTo__a": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "Direction"}, nil, &alias.Alias{Typ: "SpriteAnimationName"}},
-						Results: nil,
-					},
-					"TurnTo__b": &alias.Func{
-						Params:  []alias.Type{nil, nil, &alias.Alias{Typ: "SpriteAnimationName"}},
-						Results: nil,
-					},
-					"TurnToDir": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "Direction"}, nil},
-						Results: nil,
-					},
-					"TurnToTarget": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "Target"}, nil},
-						Results: nil,
-					},
-					"SetHeading": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "Direction"}},
-						Results: nil,
-					},
-					"ChangeHeading": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "Direction"}},
-						Results: nil,
-					},
 				},
 			},
-			"StaticPhysics": &alias.Alias{Typ: "PhysicsMode"},
-			"ThisScript":    &alias.Alias{Typ: "StopKind"},
-			"ThisSprite":    &alias.Alias{Typ: "StopKind"},
 			"TimeSinceLevelLoad": &alias.Func{
 				Params:  nil,
 				Results: []alias.Type{&alias.Alias{Typ: "Seconds"}},
-			},
-			"Up": &alias.Alias{Typ: "Direction"},
-			"Value": &alias.Named{
-				Underlying: nil,
-				Methods: map[string]*alias.Func{
-					"Equal": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "obj"}},
-						Results: nil,
-					},
-					"Set": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "obj"}},
-						Results: nil,
-					},
-				},
-			},
-			"Widget": &alias.Named{
-				Underlying: &alias.Interface{
-					Methods: map[string]*alias.Func{
-						"GetName": &alias.Func{
-							Params:  nil,
-							Results: []alias.Type{&alias.Alias{Typ: "WidgetName"}},
-						},
-					},
-				},
 			},
 		},
 	})
