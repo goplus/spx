@@ -20,7 +20,7 @@ import "fmt"
 
 func validateSetupMode(mode string) error {
 	switch mode {
-	case "runtime", "web", "full":
+	case "none", "runtime", "web", "full":
 		return nil
 	default:
 		return fmt.Errorf("unsupported setup-mode: %s", mode)
