@@ -10,7 +10,7 @@ inputs:
     required: false
     default: '1.7.1'
   setup-mode:
-    description: 'Asset preparation mode: runtime, web, or full'
+    description: 'Asset preparation mode: none, runtime, web, or full'
     required: false
     default: 'runtime'
   web-mode:

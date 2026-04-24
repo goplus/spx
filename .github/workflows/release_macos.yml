@@ -29,6 +29,8 @@ jobs:
 
       - name: Set up toolchain and engine assets
         uses: ./.github/actions/deps
+        with:
+          setup-mode: none
 
       - name: Prepare standalone release
         id: prepare_standalone_release

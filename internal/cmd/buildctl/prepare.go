@@ -63,7 +63,7 @@ func parsePrepareArgs(args []string) (prepareConfig, error) {
 	fs.StringVar(&cfg.webMode, "web-mode", cfg.webMode, "web mode: normal, worker, minigame, or miniprogram")
 
 	fs.Usage = func() {
-		fmt.Fprintln(os.Stderr, "Usage: buildctl prepare [--setup-mode runtime|web|full] [--web-mode normal|worker|minigame|miniprogram]")
+		fmt.Fprintln(os.Stderr, "Usage: buildctl prepare [--setup-mode none|runtime|web|full] [--web-mode normal|worker|minigame|miniprogram]")
 	}
 
 	if err := fs.Parse(args); err != nil {
@@ -93,6 +93,8 @@ func (cfg prepareConfig) validate() error {
 
 func prepareAssets(cfg prepareConfig, runner shared.ScriptRunner) error {
 	switch cfg.setupMode {
+	case "none":
+		return nil
 	case "runtime":
 		if err := runner.RunScript(filepath.Join("cmd", "spx", "install.sh")); err != nil {
 			return err

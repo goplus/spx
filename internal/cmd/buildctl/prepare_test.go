@@ -188,6 +188,22 @@ func TestPrepareAssetsRuntime(t *testing.T) {
 	}
 }
 
+func TestPrepareAssetsNone(t *testing.T) {
+	runner := newRuntimeFixtureRunner(t)
+	cfg := prepareConfig{setupMode: "none", webMode: "normal"}
+
+	if err := prepareAssets(cfg, runner); err != nil {
+		t.Fatalf("prepareAssets returned error: %v", err)
+	}
+
+	if len(runner.calls) != 0 {
+		t.Fatalf("unexpected script calls: %#v", runner.calls)
+	}
+	if len(runner.commands) != 0 {
+		t.Fatalf("unexpected commands: %#v", runner.commands)
+	}
+}
+
 func TestPrepareAssetsWeb(t *testing.T) {
 	runner := newRuntimeFixtureRunner(t)
 	installFakeEngineDownload(t, runner.repoRoot, "linux", "x86_64")
