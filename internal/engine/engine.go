@@ -306,9 +306,26 @@ func Panicf(format string, args ...any) {
 // abortCoroutinesAndReset aborts coroutines and resets the engine.
 // Used on web, where the process cannot exit.
 func abortCoroutinesAndReset(exitCode int64) {
-	completed := gco.AbortAllAndWait(2 * stime.Second)
-	spxlog.Debug("AbortAllAndWait completed: %v. Requesting engine reset.", completed)
+	completed, abortCurrent := abortCoroutinesForWebReset(2 * stime.Second)
+	if abortCurrent {
+		spxlog.Debug("Requested coroutine aborts from current coroutine. Requesting engine reset.")
+	} else {
+		spxlog.Debug("AbortAllAndWait completed: %v. Requesting engine reset.", completed)
+	}
 	extMgr.RequestReset(exitCode)
+	if abortCurrent {
+		gco.Abort()
+	}
+}
+
+func abortCoroutinesForWebReset(timeout stime.Duration) (completed bool, abortCurrent bool) {
+	if gco.IsInCoroutine() {
+		// Web exit must request reset immediately. Waiting here can let game code
+		// keep running before the reset is requested.
+		gco.AbortAll()
+		return false, true
+	}
+	return gco.AbortAllAndWait(timeout), false
 }
 
 func RequestExit(exitCode int64) {

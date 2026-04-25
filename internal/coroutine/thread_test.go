@@ -157,3 +157,81 @@ func TestStopIfEvaluatesFilterWithoutHoldingMutex(t *testing.T) {
 		t.Fatal("active coroutine did not stop after StopIf")
 	}
 }
+
+func TestAbortAllAndWaitFromCoroutineWaitsForPeersWithoutWaitingForCaller(t *testing.T) {
+	co := New(nil)
+	result := make(chan bool, 1)
+	otherYielding := make(chan struct{})
+	otherDone := make(chan struct{})
+
+	co.CreateAndStart(true, "other", func(other Thread) int {
+		defer close(otherDone)
+		close(otherYielding)
+		co.Yield(other)
+		return 0
+	})
+
+	timer := time.NewTimer(time.Second)
+	defer timer.Stop()
+	select {
+	case <-otherYielding:
+	case <-timer.C:
+		t.Fatal("other coroutine did not reach yield")
+	}
+
+	co.CreateAndStart(true, "caller", func(me Thread) int {
+		result <- co.AbortAllAndWait(time.Hour)
+		return 0
+	})
+
+	timer = time.NewTimer(time.Second)
+	defer timer.Stop()
+	select {
+	case completed := <-result:
+		if !completed {
+			t.Fatal("AbortAllAndWait should report success after other coroutines stop")
+		}
+	case <-timer.C:
+		t.Fatal("AbortAllAndWait did not finish after peer coroutine stopped")
+	}
+
+	timer = time.NewTimer(time.Second)
+	defer timer.Stop()
+	select {
+	case <-otherDone:
+	case <-timer.C:
+		t.Fatal("other coroutine did not exit while caller was waiting")
+	}
+}
+
+func TestAbortAllAndWaitFromCoroutineDoesNotStartStoppedPeer(t *testing.T) {
+	co := New(nil)
+	result := make(chan bool, 1)
+	peerRan := make(chan struct{}, 1)
+
+	co.CreateAndStart(true, "caller", func(me Thread) int {
+		co.CreateAndStart(false, "peer", func(peer Thread) int {
+			close(peerRan)
+			return 0
+		})
+		result <- co.AbortAllAndWait(time.Second)
+		return 0
+	})
+
+	timer := time.NewTimer(time.Second)
+	defer timer.Stop()
+	select {
+	case completed := <-result:
+		if !completed {
+			t.Fatal("AbortAllAndWait should wait for the stopped peer to unregister")
+		}
+	case <-timer.C:
+		t.Fatal("AbortAllAndWait did not finish after stopped peer unregistered")
+	}
+
+	select {
+	case <-peerRan:
+		t.Fatal("stopped peer coroutine should not run")
+	default:
+	}
+}

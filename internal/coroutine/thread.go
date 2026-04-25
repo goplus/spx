@@ -151,31 +151,14 @@ func (p *Coroutines) AbortAll() {
 }
 
 func (p *Coroutines) AbortAllAndWait(timeout stime.Duration) bool {
+	caller := p.currentCoroutineThread()
 	p.AbortAll()
 
-	if timeout <= 0 {
-		p.wg.Wait()
-		return true
+	if caller != nil {
+		return p.waitForThreadsToStopFromCoroutine(timeout, caller)
 	}
 
-	deadline := stime.Now().Add(timeout)
-	for {
-		p.mutex.Lock()
-		done := len(p.allThreads) == 0
-		p.mutex.Unlock()
-		if done {
-			return true
-		}
-
-		remaining := stime.Until(deadline)
-		if remaining <= 0 {
-			return false
-		}
-		if remaining > 10*stime.Millisecond {
-			remaining = 10 * stime.Millisecond
-		}
-		stime.Sleep(remaining)
-	}
+	return p.waitForThreadsToStop(timeout, nil)
 }
 
 func (p *Coroutines) StopIf(filter func(th Thread) bool) {
@@ -271,6 +254,61 @@ func (p *Coroutines) unregisterThread(th Thread) {
 	p.wg.Done()
 }
 
+func (p *Coroutines) currentCoroutineThread() Thread {
+	if !p.IsInCoroutine() {
+		return nil
+	}
+	return p.Current()
+}
+
+func (p *Coroutines) hasThreadsOtherThan(skip Thread) bool {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	for th := range p.allThreads {
+		if th != skip {
+			return true
+		}
+	}
+	return false
+}
+
+func (p *Coroutines) waitForThreadsToStopFromCoroutine(timeout stime.Duration, caller Thread) bool {
+	// Release the scheduler while waiting so aborted peer coroutines can
+	// observe cancellation and unregister.
+	p.sema.Unlock()
+	completed := p.waitForThreadsToStop(timeout, caller)
+	p.sema.Lock()
+	p.setCurrent(caller)
+	return completed
+}
+
+func (p *Coroutines) waitForThreadsToStop(timeout stime.Duration, skip Thread) bool {
+	hasTimeout := timeout > 0
+	deadline := stime.Time{}
+	if hasTimeout {
+		deadline = stime.Now().Add(timeout)
+	}
+
+	for {
+		if !p.hasThreadsOtherThan(skip) {
+			return true
+		}
+
+		sleepFor := 10 * stime.Millisecond
+		if hasTimeout {
+			remaining := stime.Until(deadline)
+			if remaining <= 0 {
+				return false
+			}
+			if remaining < sleepFor {
+				sleepFor = remaining
+			}
+		}
+		stime.Sleep(sleepFor)
+	}
+}
+
 func (p *Coroutines) handleThreadPanic(th Thread, recovered any) {
 	if recovered == nil || recovered == ErrAbortThread {
 		return
@@ -297,6 +335,9 @@ func (p *Coroutines) runThread(th Thread, fn func(me Thread) int) {
 		p.goroutineIDs.Delete(gid)
 		p.handleThreadPanic(th, recovered)
 	}()
+	if th.stopped.Load() {
+		panic(ErrAbortThread)
+	}
 	p.setWaitState(th, waitStatusAdd)
 	fn(th)
 }
