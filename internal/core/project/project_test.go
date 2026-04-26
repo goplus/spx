@@ -773,7 +773,7 @@ func TestFieldPtrOrAllocAndFinders(t *testing.T) {
 		t.Fatalf("expected allocated pointer, got %#v / %#v", value, h.Spr)
 	}
 
-	_, value = FieldPtrOrAlloc(reflect.ValueOf(&h).Elem(), 1, FieldAllocConfig{
+	_, _ = FieldPtrOrAlloc(reflect.ValueOf(&h).Elem(), 1, FieldAllocConfig{
 		ResolveInterfaceSpriteType: func(fieldName string) (reflect.Type, bool) {
 			if fieldName == "Any" {
 				return reflect.TypeOf(spriteLike{}), true

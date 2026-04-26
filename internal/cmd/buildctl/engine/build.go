@@ -60,11 +60,7 @@ func buildEngine(cfg engineBuildConfig, repoRoot string) error {
 	if err != nil {
 		return err
 	}
-	plan, err := resolveEngineBuildShellPlan(repoRoot, envExportEngineBuildShellConfig{
-		target:   cfg.target,
-		platform: cfg.platform,
-		mode:     cfg.mode,
-	})
+	plan, err := resolveEngineBuildShellPlan(repoRoot, envExportEngineBuildShellConfig(cfg))
 	if err != nil {
 		return err
 	}

@@ -50,7 +50,6 @@ type emsdkEnvironment struct {
 var (
 	buildEnvLookPath           = exec.LookPath
 	buildEnvRunStreaming       = runStreamingCommand
-	buildEnvRunOutput          = runCommandOutput
 	BuildEnvRunOutputWithDir   = runCommandOutputWithEnv
 	ResolveEMSDKShellExportsFn = resolveEMSDKShellExports
 )
@@ -497,10 +496,6 @@ func envMapToSlice(env map[string]string) []string {
 		out = append(out, key+"="+env[key])
 	}
 	return out
-}
-
-func runCommandOutput(name string, args ...string) ([]byte, error) {
-	return runCommandOutputWithEnv("", os.Environ(), name, args...)
 }
 
 func runCommandOutputWithEnv(workdir string, env []string, name string, args ...string) ([]byte, error) {

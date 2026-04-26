@@ -257,7 +257,3 @@ func percentToNormalized(percent float64) float64 {
 func (p *penComponent) updatePenColor() {
 	p.engine().PenMgr.SetPenColorTo(*p.penObj, p.penColor)
 }
-
-func (p *penComponent) isPenDown() bool {
-	return p.penDown
-}

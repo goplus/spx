@@ -16,6 +16,8 @@
 
 package gdengine
 
+//lint:file-ignore ST1001 Godot callback glue intentionally dot-imports engine API types.
+
 import (
 	"github.com/goplus/spx/v2/internal/engine/platform"
 	spxlog "github.com/goplus/spx/v2/internal/log"

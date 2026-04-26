@@ -26,7 +26,10 @@ const (
 	LoopExecutionTimedOutMsg = "For loop execution timed out. Please check if there is an infinite loop in the code."
 )
 
+//lint:ignore ST1005 This wraps a user-facing runtime message kept as a complete sentence.
 var ErrMainExecutionTimedOut = errors.New(MainExecutionTimedOutMsg)
+
+//lint:ignore ST1005 This wraps a user-facing runtime message kept as a complete sentence.
 var ErrLoopExecutionTimedOut = errors.New(LoopExecutionTimedOutMsg)
 
 type ScheduleState struct {

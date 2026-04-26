@@ -16,6 +16,8 @@
 
 package ui
 
+//lint:file-ignore ST1001 UI glue intentionally dot-imports mathf to mirror engine type names.
+
 import (
 	. "github.com/goplus/spbase/mathf"
 

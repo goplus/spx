@@ -159,10 +159,6 @@ func isDebugEventEnabled() bool {
 	return runtimeStateMgr.DebugEventEnabled(activeGameDebugState())
 }
 
-func isDebugPerfEnabled() bool {
-	return runtimeStateMgr.DebugPerfEnabled(activeGameDebugState())
-}
-
 func (p *Game) setPhysicsEnabled(enabled bool) {
 	runtimeStateMgr.SetPhysicsEnabled(&p.gameRuntimeState, enabled)
 }

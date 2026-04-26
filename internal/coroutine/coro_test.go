@@ -115,9 +115,8 @@ func TestWaitForChanDoesNotKeepReceiverAfterCancel(t *testing.T) {
 	co := New(nil)
 	ch := make(chan int)
 	done := make(chan struct{})
-	var th Thread
 
-	th = co.CreateAndStart(false, nil, func(me Thread) int {
+	th := co.CreateAndStart(false, nil, func(me Thread) int {
 		defer close(done)
 		var value int
 		WaitForChan(co, ch, &value)

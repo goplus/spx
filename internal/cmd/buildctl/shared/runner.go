@@ -68,10 +68,6 @@ func (r commandRunner) runCommand(workdir string, name string, args ...string) e
 	return cmd.Run()
 }
 
-func (r commandRunner) repoRootDir() string {
-	return r.repoRoot
-}
-
 func (r commandRunner) listDemoDirs() ([]string, error) {
 	entries, err := os.ReadDir(filepath.Join(r.repoRoot, "tutorial"))
 	if err != nil {

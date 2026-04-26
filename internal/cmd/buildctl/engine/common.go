@@ -32,7 +32,6 @@ type buildEnvironment = shared.BuildEnvironment
 func findRepoRoot() (string, error)          { return shared.FindRepoRoot() }
 func fileExists(path string) bool            { return shared.FileExists(path) }
 func copyFile(src, dst string) error         { return shared.CopyFile(src, dst) }
-func ensureGoPath() (string, error)          { return shared.EnsureGoPath() }
 func defaultRuntimeVersion() (string, error) { return shared.DefaultRuntimeVersion() }
 func resolveBuildEnvironment(repoRoot string, requestedPlatform string) (buildEnvironment, error) {
 	return shared.ResolveBuildEnvironment(repoRoot, requestedPlatform)

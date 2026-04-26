@@ -16,8 +16,9 @@
 
 package ui
 
+//lint:file-ignore ST1001 UI glue intentionally dot-imports mathf to mirror engine type names.
+
 import (
-	"github.com/goplus/spbase/mathf"
 	. "github.com/goplus/spbase/mathf"
 
 	"github.com/goplus/spx/v2/internal/engine"
@@ -57,7 +58,7 @@ func (pself *UiMeasure) UpdateInfo(wpos Vec2, length, heading float64, name stri
 
 	mgr.UiMgr.SetGlobalPosition(pself.container.GetId(), pos)
 	mgr.UiMgr.SetColor(pself.container.GetId(), color)
-	mgr.UiMgr.SetSize(pself.container.GetId(), mathf.NewVec2(length+extraLen, 26))
+	mgr.UiMgr.SetSize(pself.container.GetId(), NewVec2(length+extraLen, 26))
 	mgr.UiMgr.SetRotation(pself.container.GetId(), rad)
 
 	mgr.UiMgr.SetGlobalPosition(pself.labelContainer.GetId(), labelPos)

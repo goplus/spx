@@ -36,10 +36,6 @@ import (
 
 var prepareEmbeddedRuntimeAssets = runtimeasset.Prepare
 
-type projConf struct {
-	Robots []string `json:"robots"`
-}
-
 func (cmd *CmdTool) Run(arg string) (err error) {
 	return util.RunCommandInDir(cmd.ProjectDir, cmd.CmdPath, arg)
 }
