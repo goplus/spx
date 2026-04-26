@@ -16,6 +16,8 @@
 
 package engine
 
+//lint:file-ignore ST1001 Public engine API intentionally exposes mathf type names directly.
+
 import (
 	. "github.com/goplus/spbase/mathf"
 )

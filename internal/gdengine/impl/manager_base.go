@@ -16,6 +16,8 @@
 
 package impl
 
+//lint:file-ignore ST1001 Godot manager glue intentionally dot-imports engine API types.
+
 import (
 	. "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
 )

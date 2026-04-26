@@ -124,30 +124,3 @@ func (p *Game) findTouchingSpriteOptimized(dst *SpriteImpl, name string) *Sprite
 
 	return nil
 }
-
-// touchingSpritesByOptimized returns all sprites touching the target sprite (optimized version).
-func (p *Game) touchingSpritesByOptimized(dst *SpriteImpl, names []string) []*SpriteImpl {
-	if dst == nil || dst.runtimeState.SyncSprite == nil {
-		return nil
-	}
-
-	// Create AABB for the target sprite
-	dstAABB := newSpriteAABB(dst)
-	if dstAABB == nil {
-		return nil
-	}
-
-	// Build a name set for quick lookup
-	nameSet := make(map[string]bool)
-	for _, name := range names {
-		nameSet[name] = true
-	}
-
-	// Build spatial hash with name filter
-	spatialHash := p.buildSpatialHashForNames(dst, func(spriteName string) bool {
-		return nameSet[spriteName]
-	})
-
-	// Find all collisions
-	return findCollisionsInSpatialHash(dstAABB, spatialHash, false)
-}

@@ -16,6 +16,8 @@
 
 package engine
 
+//lint:file-ignore ST1001 Bridge code intentionally dot-imports mathf to mirror engine type names.
+
 import (
 	. "github.com/goplus/spbase/mathf"
 	gdx "github.com/goplus/spx/v2/pkg/spx/pkg/engine"

@@ -46,10 +46,6 @@ func (c *componentBase) initialize(sprite *SpriteImpl, spriteCfg *coreproject.Sp
 	c.sprite = sprite
 }
 
-func (c *componentBase) onDestroy() {
-	// Default: do nothing
-}
-
 // ============================================================================
 // Component Registry
 // ============================================================================

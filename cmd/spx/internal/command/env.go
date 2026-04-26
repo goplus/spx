@@ -312,6 +312,7 @@ func (cmd *CmdTool) resolvePortableGoEnvPaths() (portableGoPaths, error) {
 	cmd.GoRoot = path.Join(goEnvDir, "gotoolchain", "go")
 	cmd.GoPath = filepath.Join(goEnvDir, "go")
 	if _, err := os.Stat(cmd.GoRoot); os.IsNotExist(err) {
+		//lint:ignore ST1005 This is a user-facing setup hint with complete sentences.
 		return portableGoPaths{}, fmt.Errorf("portable Go toolchain not found at the expected path: %s\n\nThis is expected to be provided by the SPX release package. If you are setting this up manually, please ensure the Go toolchain is extracted to '%s/gotoolchain/go'.", cmd.GoRoot, goEnvDir)
 	}
 

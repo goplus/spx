@@ -16,6 +16,8 @@
 
 package enginewrap
 
+//lint:file-ignore ST1001 Engine manager extension code intentionally dot-imports engine API types.
+
 import (
 	. "github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v2/internal/engine/platform"

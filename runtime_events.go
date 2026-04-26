@@ -379,24 +379,6 @@ func (p *scriptEventRegistry) doWhenTouchStart(this threadObj, obj *SpriteImpl) 
 	})
 }
 
-func (p *scriptEventRegistry) doWhenTouching(this threadObj, obj *SpriteImpl) {
-	p.dispatchAsync(coreevent.BucketTouching, false, this, func(ev *eventSink) {
-		coreevent.If0(isDebugEventEnabled, func() {
-			spxlog.Debug("==> onTouching: %s, %s", nameOf(this), obj.name)
-		})()
-		ev.Handler.(func(Sprite))(obj.sprite)
-	})
-}
-
-func (p *scriptEventRegistry) doWhenTouchEnd(this threadObj, obj *SpriteImpl) {
-	p.dispatchAsync(coreevent.BucketTouchEnd, false, this, func(ev *eventSink) {
-		coreevent.If0(isDebugEventEnabled, func() {
-			spxlog.Debug("===> onTouchEnd: %s, %s", nameOf(this), obj.name)
-		})()
-		ev.Handler.(func(Sprite))(obj.sprite)
-	})
-}
-
 func (p *scriptEventRegistry) doWhenCloned(this threadObj, data any) {
 	p.dispatchAsync(coreevent.BucketCloned, true, this, func(ev *eventSink) {
 		coreevent.If0(isDebugEventEnabled, func() {

@@ -188,7 +188,6 @@ func extractAsset(cacheDir, name string) (err error) {
 		}
 	}()
 
-	tmpPath := dstPath + ".tmp"
 	if err := os.MkdirAll(filepath.Dir(dstPath), 0o755); err != nil {
 		return fmt.Errorf("create runtime cache parent dir for %s: %w", dstPath, err)
 	}
@@ -196,7 +195,7 @@ func extractAsset(cacheDir, name string) (err error) {
 	if err != nil {
 		return fmt.Errorf("create extracted runtime asset for %s: %w", dstPath, err)
 	}
-	tmpPath = outFile.Name()
+	tmpPath := outFile.Name()
 	defer func() {
 		if outFile == nil {
 			return
