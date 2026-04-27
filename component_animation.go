@@ -44,8 +44,9 @@ type animationComponent struct {
 	shared *sharedAnimationData
 
 	// Animation state (per-instance)
-	curAnimState  *animState
-	curTweenState *animState
+	curAnimState     *animState
+	curTweenState    *animState
+	defaultAnimActive bool
 
 	// Animation tracking (per-instance)
 	donedAnimations []string
@@ -167,7 +168,8 @@ func (a *animationComponent) StopAnimation(name SpriteAnimationName) {
 	if name == "" || !a.hasAnim(name) {
 		return
 	}
-	if a.curAnimState == nil || a.curAnimState.Name != name {
+	state := a.curAnimState
+	if state == nil || state.Name != name {
 		return
 	}
 	syncSprite := a.syncSpriteForPlayback()
@@ -175,6 +177,9 @@ func (a *animationComponent) StopAnimation(name SpriteAnimationName) {
 		return
 	}
 
+	if !a.stopCurrentAnimState(state) {
+		return
+	}
 	syncSprite.PauseAnim()
 	a.playDefaultAnim()
 }
@@ -200,6 +205,7 @@ func (a *animationComponent) doAnimation(animName SpriteAnimationName, ani *core
 	}
 
 	a.stopAnimState(a.curAnimState)
+	a.defaultAnimActive = false
 	a.curAnimState = &animState{
 		AniType: coreproject.AniTypeFrame,
 		Name:    animName,
@@ -260,9 +266,25 @@ func (a *animationComponent) playDefaultAnim() {
 	if ani, ok := a.shared.animations[animName]; ok {
 		a.prepareAnimationPlayback(animName, ani)
 		a.engine().SpriteMgr.PlayAnim(syncSprite.GetId(), animName, speed, true, false)
+		a.defaultAnimActive = true
 	} else {
+		a.defaultAnimActive = false
 		a.sprite.goSetCostume(a.sprite.spriteState.DefaultCostumeIndex)
 	}
+}
+
+func (a *animationComponent) playDefaultAnimIfIdle() {
+	if a.hasActiveAnimationPlayback() {
+		return
+	}
+	a.playDefaultAnim()
+}
+
+func (a *animationComponent) hasActiveAnimationPlayback() bool {
+	if a.defaultAnimActive {
+		return true
+	}
+	return a.curAnimState != nil && !a.curAnimState.IsCanceled
 }
 
 func (a *animationComponent) playAnimAudio(ani *coreproject.AniConfig, info *animState) {
@@ -290,9 +312,21 @@ func (a *animationComponent) onAnimationDone(animName string) {
 	if a.syncSpriteForPlayback() == nil {
 		return
 	}
-	if a.curAnimState != nil && a.curAnimState.Name == animName {
+	if state := a.curAnimState; state != nil && state.Name == animName {
+		if !a.stopCurrentAnimState(state) {
+			return
+		}
 		a.playDefaultAnim()
 	}
+}
+
+func (a *animationComponent) stopCurrentAnimState(state *animState) bool {
+	a.stopAnimState(state)
+	if a.curAnimState != state {
+		return false
+	}
+	a.curAnimState = nil
+	return true
 }
 
 func (a *animationComponent) stopAnimState(state *animState) {
