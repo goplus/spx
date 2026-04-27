@@ -19,8 +19,11 @@ package spx
 import "github.com/goplus/spbase/mathf"
 
 // Color represents an RGBA color.
+//
+// XGo treats structs whose fields are named X_0, X_1, ... as tuple types, so
+// script code can construct colors with Color(r, g, b, a).
 type Color struct {
-	r, g, b, a float64
+	X_0, X_1, X_2, X_3 float64
 }
 
 // HSB creates a color from HSB values.
@@ -35,12 +38,22 @@ func HSB(h, s, b float64) Color {
 // h, s, b, a in range [0, 100], just like Scratch
 func HSBA(h, s, b, a float64) Color {
 	color := HSB(h, s, b)
-	color.a = a / 100
+	color.X_3 = a / 100
 	return color
 }
 
+// NewColor creates a color from a supported color value.
+// It accepts packed RGB numbers, hex strings, and color names.
+func NewColor(color any) Color {
+	c, err := mathf.NewColorAny(color)
+	if err != nil {
+		return Color{}
+	}
+	return toSpxColor(c)
+}
+
 func toMathfColor(c Color) mathf.Color {
-	return mathf.Color{R: c.r, G: c.g, B: c.b, A: c.a}
+	return mathf.Color{R: c.X_0, G: c.X_1, B: c.X_2, A: c.X_3}
 }
 
 func toSpxColor(c mathf.Color) Color {
