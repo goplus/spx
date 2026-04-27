@@ -28,7 +28,7 @@ func (p *SpriteImpl) initEngineObjects() {
 }
 
 func (p *SpriteImpl) awake() {
-	p.playDefaultAnim()
+	p.animation().playDefaultAnimIfIdle()
 }
 
 func (p *SpriteImpl) resetRuntimeProxy(applyCostume bool) {
