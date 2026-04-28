@@ -208,14 +208,10 @@ func buildEngineTemplate(buildEnv buildEnvironment, commandEnv map[string]string
 		if err := waitForNonEmptyFile(srcZip, 5*time.Second); err != nil {
 			return err
 		}
-		webDlinkDebug := filepath.Join(buildEnv.EngineDir, "bin", "web_dlink_debug.zip")
-		if err := copyFile(srcZip, webDlinkDebug); err != nil {
+		if err := copyFile(srcZip, plan.WebCachedTemplateZip); err != nil {
 			return err
 		}
-		if err := copyFile(webDlinkDebug, plan.WebCachedTemplateZip); err != nil {
-			return err
-		}
-		return populateWebTemplateCopies(webDlinkDebug, buildEnv.TemplateDir)
+		return populateWebTemplateCopies(srcZip, buildEnv.TemplateDir)
 	default:
 		return fmt.Errorf("unknown platform: %s", plan.Platform)
 	}
