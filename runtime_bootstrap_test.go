@@ -45,7 +45,7 @@ func TestGameBootstrapCanOrderGameStartBeforeSpriteStart(t *testing.T) {
 
 	g.runBootstrapTasks()
 
-	got := g.scriptEvents.SnapshotStart()
+	got := g.scriptEvents.manager.SnapshotStart()
 	if len(got) != 2 {
 		t.Fatalf("SnapshotStart len = %d, want 2", len(got))
 	}

@@ -244,7 +244,7 @@ func (p *Game) reset() {
 	p.releaseGameAudio()
 	p.EraseAll()
 
-	p.scriptEvents.Reset()
+	p.scriptEvents.manager.Reset()
 	p.shapeMgr.reset()
 
 	p.debugState.DebugPanel = nil
