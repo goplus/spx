@@ -44,8 +44,8 @@ type animationComponent struct {
 	shared *sharedAnimationData
 
 	// Animation state (per-instance)
-	curAnimState     *animState
-	curTweenState    *animState
+	curAnimState      *animState
+	curTweenState     *animState
 	defaultAnimActive bool
 
 	// Animation tracking (per-instance)
