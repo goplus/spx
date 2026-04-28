@@ -20,15 +20,14 @@ import (
 	"archive/zip"
 	"fmt"
 	"io"
-	"io/fs"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
+	"github.com/goplus/spx/v2/internal/base/fileutil"
 	"github.com/goplus/spx/v2/internal/release"
 )
 
@@ -59,189 +58,19 @@ func defaultRuntimeVersion() (string, error) {
 }
 
 func copyFile(src, dst string) (err error) {
-	input, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if cerr := input.Close(); cerr != nil && err == nil {
-			err = cerr
-		}
-	}()
-
-	info, err := input.Stat()
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-		return err
-	}
-
-	output, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, info.Mode())
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if cerr := output.Close(); cerr != nil && err == nil {
-			err = cerr
-		}
-	}()
-
-	_, err = io.Copy(output, input)
-	return err
+	return fileutil.CopyFile(src, dst)
 }
 
 func copyDir(src, dst string) error {
-	return filepath.WalkDir(src, func(path string, entry fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-
-		rel, err := filepath.Rel(src, path)
-		if err != nil {
-			return err
-		}
-		target := filepath.Join(dst, rel)
-		if entry.IsDir() {
-			info, err := entry.Info()
-			if err != nil {
-				return err
-			}
-			return os.MkdirAll(target, info.Mode())
-		}
-		return copyFile(path, target)
-	})
+	return fileutil.CopyDir(src, dst)
 }
 
 func writeNamedZip(dst string, namedFiles map[string]string) (err error) {
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-		return err
-	}
-	if err := os.RemoveAll(dst); err != nil {
-		return err
-	}
-
-	file, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if cerr := file.Close(); cerr != nil && err == nil {
-			err = cerr
-		}
-	}()
-
-	writer := zip.NewWriter(file)
-
-	names := make([]string, 0, len(namedFiles))
-	for name := range namedFiles {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-
-	for _, name := range names {
-		src := namedFiles[name]
-		info, err := os.Stat(src)
-		if err != nil {
-			return err
-		}
-		header, err := zip.FileInfoHeader(info)
-		if err != nil {
-			return err
-		}
-		header.Name = name
-		header.Method = zip.Deflate
-
-		entry, err := writer.CreateHeader(header)
-		if err != nil {
-			return err
-		}
-		input, err := os.Open(src)
-		if err != nil {
-			return err
-		}
-		if _, err := io.Copy(entry, input); err != nil {
-			_ = input.Close()
-			return err
-		}
-		if err := input.Close(); err != nil {
-			return err
-		}
-	}
-	return writer.Close()
+	return fileutil.WriteNamedZip(dst, namedFiles)
 }
 
 func zipDirectory(srcDir, dstZip string) (err error) {
-	if !fileExists(srcDir) {
-		return fmt.Errorf("source directory does not exist: %s", srcDir)
-	}
-	if err := os.MkdirAll(filepath.Dir(dstZip), 0o755); err != nil {
-		return err
-	}
-	if err := os.RemoveAll(dstZip); err != nil {
-		return err
-	}
-
-	var files []string
-	if err := filepath.WalkDir(srcDir, func(path string, entry fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if entry.IsDir() {
-			return nil
-		}
-		files = append(files, path)
-		return nil
-	}); err != nil {
-		return err
-	}
-	sort.Strings(files)
-
-	file, err := os.Create(dstZip)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if cerr := file.Close(); cerr != nil && err == nil {
-			err = cerr
-		}
-	}()
-
-	writer := zip.NewWriter(file)
-
-	for _, path := range files {
-		info, err := os.Stat(path)
-		if err != nil {
-			return err
-		}
-		header, err := zip.FileInfoHeader(info)
-		if err != nil {
-			return err
-		}
-		rel, err := filepath.Rel(srcDir, path)
-		if err != nil {
-			return err
-		}
-		header.Name = filepath.ToSlash(rel)
-		header.Method = zip.Deflate
-
-		entry, err := writer.CreateHeader(header)
-		if err != nil {
-			return err
-		}
-		input, err := os.Open(path)
-		if err != nil {
-			return err
-		}
-		if _, err := io.Copy(entry, input); err != nil {
-			_ = input.Close()
-			return err
-		}
-		if err := input.Close(); err != nil {
-			return err
-		}
-	}
-	return writer.Close()
+	return fileutil.ZipDirectory(srcDir, dstZip)
 }
 
 func extractZip(srcZip, dstDir string) error {

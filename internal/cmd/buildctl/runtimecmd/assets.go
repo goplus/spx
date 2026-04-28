@@ -17,16 +17,10 @@
 package runtimecmd
 
 import (
-	"archive/zip"
 	"fmt"
-	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
-	"strings"
-
-	"github.com/goplus/spx/v2/internal/release"
 )
 
 const runtimeIndexJSON = `{"map":{"width":480,"height":360}}`
@@ -193,30 +187,6 @@ func prepareRuntimeWorkspace(repoRoot string, includeRuntimeExtension bool) (run
 	}, cleanup, nil
 }
 
-func ensureGoPath() (string, error) {
-	if goPath := os.Getenv("GOPATH"); goPath != "" {
-		return goPath, nil
-	}
-
-	output, err := exec.Command("go", "env", "GOPATH").Output()
-	if err != nil {
-		return "", err
-	}
-	goPath := strings.TrimSpace(string(output))
-	if goPath == "" {
-		return "", fmt.Errorf("missing GOPATH")
-	}
-	return goPath, nil
-}
-
-func defaultRuntimeVersion() (string, error) {
-	version := release.DefaultReleaseMeta().Runtime.Version
-	if version == "" {
-		return "", fmt.Errorf("release: Runtime.Version is empty")
-	}
-	return version, nil
-}
-
 func webModeOutputZip(mode string) (string, error) {
 	if err := validateWebMode(mode); err != nil {
 		return "", err
@@ -268,166 +238,4 @@ func findExportedPack(workDir string) (string, error) {
 		return appResources[0], nil
 	}
 	return "", fmt.Errorf("exported runtime pack not found in %s", workDir)
-}
-
-func copyFile(src, dst string) error {
-	input, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer input.Close()
-
-	info, err := input.Stat()
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-		return err
-	}
-
-	output, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, info.Mode())
-	if err != nil {
-		return err
-	}
-	defer output.Close()
-
-	_, err = io.Copy(output, input)
-	return err
-}
-
-func copyDir(src, dst string) error {
-	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		rel, err := filepath.Rel(src, path)
-		if err != nil {
-			return err
-		}
-		target := filepath.Join(dst, rel)
-		if info.IsDir() {
-			return os.MkdirAll(target, info.Mode())
-		}
-		return copyFile(path, target)
-	})
-}
-
-func writeNamedZip(dst string, namedFiles map[string]string) error {
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-		return err
-	}
-	if err := os.RemoveAll(dst); err != nil {
-		return err
-	}
-
-	file, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	writer := zip.NewWriter(file)
-
-	names := make([]string, 0, len(namedFiles))
-	for name := range namedFiles {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-
-	for _, name := range names {
-		src := namedFiles[name]
-		info, err := os.Stat(src)
-		if err != nil {
-			return err
-		}
-		header, err := zip.FileInfoHeader(info)
-		if err != nil {
-			return err
-		}
-		header.Name = name
-		header.Method = zip.Deflate
-
-		entry, err := writer.CreateHeader(header)
-		if err != nil {
-			return err
-		}
-		input, err := os.Open(src)
-		if err != nil {
-			return err
-		}
-		if _, err := io.Copy(entry, input); err != nil {
-			input.Close()
-			return err
-		}
-		input.Close()
-	}
-	return writer.Close()
-}
-
-func zipDirectory(srcDir, dstZip string) error {
-	if !fileExists(srcDir) {
-		return fmt.Errorf("source directory does not exist: %s", srcDir)
-	}
-	if err := os.MkdirAll(filepath.Dir(dstZip), 0o755); err != nil {
-		return err
-	}
-	if err := os.RemoveAll(dstZip); err != nil {
-		return err
-	}
-
-	var files []string
-	if err := filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info.IsDir() {
-			return nil
-		}
-		files = append(files, path)
-		return nil
-	}); err != nil {
-		return err
-	}
-	sort.Strings(files)
-
-	file, err := os.Create(dstZip)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	writer := zip.NewWriter(file)
-
-	for _, path := range files {
-		info, err := os.Stat(path)
-		if err != nil {
-			return err
-		}
-		header, err := zip.FileInfoHeader(info)
-		if err != nil {
-			return err
-		}
-		rel, err := filepath.Rel(srcDir, path)
-		if err != nil {
-			return err
-		}
-		header.Name = filepath.ToSlash(rel)
-		header.Method = zip.Deflate
-
-		entry, err := writer.CreateHeader(header)
-		if err != nil {
-			return err
-		}
-		input, err := os.Open(path)
-		if err != nil {
-			return err
-		}
-		if _, err := io.Copy(entry, input); err != nil {
-			input.Close()
-			return err
-		}
-		input.Close()
-	}
-	return writer.Close()
 }
