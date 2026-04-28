@@ -17,6 +17,7 @@
 package engine
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -44,7 +45,7 @@ func TestMergeStringMapsOverridesExisting(t *testing.T) {
 
 func TestPopulateWebTemplateCopies(t *testing.T) {
 	root := t.TempDir()
-	src := filepath.Join(root, "web_dlink_debug.zip")
+	src := filepath.Join(root, "godot.web.template_release.wasm32.nothreads.zip")
 	mustWriteFile(t, src, []byte("zip"))
 	mustWriteFile(t, filepath.Join(root, "web_old.zip"), []byte("old"))
 
@@ -64,8 +65,16 @@ func TestPopulateWebTemplateCopies(t *testing.T) {
 		"web_debug.zip",
 		"web_release.zip",
 	} {
-		if !fileExists(filepath.Join(root, name)) {
+		path := filepath.Join(root, name)
+		if !fileExists(path) {
 			t.Fatalf("expected %s to exist", name)
+		}
+		content, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("ReadFile(%s) returned error: %v", path, err)
+		}
+		if string(content) != "zip" {
+			t.Fatalf("%s content = %q, want zip", name, string(content))
 		}
 	}
 }
