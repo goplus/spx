@@ -45,6 +45,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/goplus/spx/v2/internal/base/fileutil"
 	"github.com/goplus/spx/v2/internal/scaffold"
 )
 
@@ -647,11 +648,7 @@ func downloadFile(url, dest string) error {
 
 // copyFile copies a file from src to dst
 func copyFile(src, dst string) error {
-	input, err := os.ReadFile(src)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(dst, input, 0755)
+	return fileutil.CopyFile(src, dst)
 }
 
 // extractFileFromZip extracts a specific file from a zip archive using pure Go

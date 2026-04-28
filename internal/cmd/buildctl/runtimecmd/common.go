@@ -65,9 +65,21 @@ func (a sharedScriptRunnerAdapter) repoRootDir() string {
 	return a.inner.RepoRootDir()
 }
 
-func findRepoRoot() (string, error)     { return shared.FindRepoRoot() }
-func fileExists(path string) bool       { return shared.FileExists(path) }
-func validateWebMode(mode string) error { return shared.ValidateWebMode(mode) }
+func findRepoRoot() (string, error)          { return shared.FindRepoRoot() }
+func fileExists(path string) bool            { return shared.FileExists(path) }
+func validateWebMode(mode string) error      { return shared.ValidateWebMode(mode) }
+func ensureGoPath() (string, error)          { return shared.EnsureGoPath() }
+func defaultRuntimeVersion() (string, error) { return shared.DefaultRuntimeVersion() }
+
+func copyFile(src, dst string) error { return shared.CopyFile(src, dst) }
+func copyDir(src, dst string) error  { return shared.CopyDir(src, dst) }
+
+func writeNamedZip(dst string, namedFiles map[string]string) error {
+	return shared.WriteNamedZip(dst, namedFiles)
+}
+func zipDirectory(srcDir, dstZip string) error {
+	return shared.ZipDirectory(srcDir, dstZip)
+}
 
 type toolInstallConfig struct {
 	web bool

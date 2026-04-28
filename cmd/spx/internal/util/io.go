@@ -24,44 +24,15 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/goplus/spx/v2/internal/base/fileutil"
 )
 
 var errFileFound = errors.New("file found")
 
 // CopyDir2 copies a directory from the local filesystem.
 func CopyDir2(src string, dst string) error {
-	srcInfo, err := os.Stat(src)
-	if err != nil {
-		return err
-	}
-
-	err = os.MkdirAll(dst, srcInfo.Mode())
-	if err != nil {
-		return err
-	}
-
-	entries, err := os.ReadDir(src)
-	if err != nil {
-		return err
-	}
-
-	for _, entry := range entries {
-		srcPath := filepath.Join(src, entry.Name())
-		dstPath := filepath.Join(dst, entry.Name())
-
-		if entry.IsDir() {
-			err = CopyDir2(srcPath, dstPath)
-			if err != nil {
-				return err
-			}
-		} else {
-			err = CopyFile(srcPath, dstPath)
-			if err != nil {
-				return err
-			}
-		}
-	}
-	return nil
+	return fileutil.CopyDir(src, dst)
 }
 
 // CheckFileExist reports whether dir contains a file with ext.
@@ -108,15 +79,7 @@ func IsFileExist(path string) bool {
 
 // CopyFile copies a file.
 func CopyFile(src, dst string) error {
-	input, err := os.ReadFile(src)
-	if err != nil {
-		return err
-	}
-
-	if err := os.WriteFile(dst, input, 0755); err != nil {
-		return err
-	}
-	return nil
+	return fileutil.CopyFile(src, dst)
 }
 
 // CopyDir copies a directory from fsys into dstDir.
