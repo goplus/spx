@@ -2,6 +2,17 @@ name: Static Checks
 
 on:
   workflow_call:
+    inputs:
+      godot-repository:
+        description: 'Godot repository URL used by binding generation'
+        required: false
+        type: string
+        default: ''
+      godot-ref:
+        description: 'Godot branch, tag, or commit used by binding generation'
+        required: false
+        type: string
+        default: ''
 
 jobs:
   static-checks:
@@ -23,20 +34,49 @@ jobs:
 
       - name: Check out Godot source
         env:
-          GODOT_REPOSITORY: https://github.com/goplus/godot.git
+          GODOT_REPOSITORY_INPUT: ${{ inputs.godot-repository }}
+          GODOT_REF_INPUT: ${{ inputs.godot-ref }}
+          GODOT_PR_HEAD_OWNER: ${{ github.event.pull_request.head.repo.owner.login }}
+          GODOT_DEFAULT_OWNER: ${{ github.repository_owner }}
+          GODOT_DEFAULT_REPOSITORY: https://github.com/goplus/godot.git
           GODOT_REF_CANDIDATE: ${{ github.head_ref || github.ref_name }}
           GODOT_FALLBACK_REF: spx4.4.1
         run: |
           set -euo pipefail
 
-          if git ls-remote --exit-code --heads "$GODOT_REPOSITORY" "$GODOT_REF_CANDIDATE" >/dev/null 2>&1; then
-            GODOT_REF="$GODOT_REF_CANDIDATE"
-          else
-            GODOT_REF="$GODOT_FALLBACK_REF"
+          GODOT_FORK_OWNER="${GODOT_PR_HEAD_OWNER:-$GODOT_DEFAULT_OWNER}"
+          GODOT_FORK_REPOSITORY="https://github.com/${GODOT_FORK_OWNER}/godot.git"
+
+          GODOT_REPOSITORIES=()
+          if [ -n "$GODOT_REPOSITORY_INPUT" ]; then
+            GODOT_REPOSITORIES+=("$GODOT_REPOSITORY_INPUT")
+          fi
+          GODOT_REPOSITORIES+=("$GODOT_FORK_REPOSITORY")
+          if [ "$GODOT_FORK_REPOSITORY" != "$GODOT_DEFAULT_REPOSITORY" ]; then
+            GODOT_REPOSITORIES+=("$GODOT_DEFAULT_REPOSITORY")
           fi
 
-          echo "[info] Checking out Godot source from $GODOT_REPOSITORY@$GODOT_REF"
-          git clone --depth 1 --branch "$GODOT_REF" "$GODOT_REPOSITORY" godot
+          GODOT_REFS=()
+          if [ -n "$GODOT_REF_INPUT" ]; then
+            GODOT_REFS+=("$GODOT_REF_INPUT")
+          else
+            GODOT_REFS+=("$GODOT_REF_CANDIDATE" "$GODOT_FALLBACK_REF")
+          fi
+
+          git init godot
+          for GODOT_REPOSITORY in "${GODOT_REPOSITORIES[@]}"; do
+            for GODOT_REF in "${GODOT_REFS[@]}"; do
+              echo "[info] Trying Godot source from $GODOT_REPOSITORY@$GODOT_REF"
+              if git -C godot fetch --depth 1 "$GODOT_REPOSITORY" "$GODOT_REF"; then
+                git -C godot checkout --detach FETCH_HEAD
+                echo "[info] Checked out Godot source from $GODOT_REPOSITORY@$GODOT_REF"
+                exit 0
+              fi
+            done
+          done
+
+          echo "[error] Failed to check out Godot source" >&2
+          exit 1
 
       - name: Run binding code generation
         run: make generate-bindings
