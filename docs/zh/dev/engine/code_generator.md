@@ -129,7 +129,7 @@ function getJsFuncBody(function *clang.TypedefFunction) string {
 ## 6. 开发工作流
 
 1. 修改 `spx_sprite_mgr.h` 添加新方法，并在需要导出到 Go/Web 绑定的声明前添加 `SPX_API`
-2. 运行 `make gen` 生成绑定
+2. 运行 `make generate-bindings` 生成绑定
 3. 检查生成的 `gdextension_spx_ext.h` 和绑定代码
 4. 在 Go/JS 中调用新接口
 
