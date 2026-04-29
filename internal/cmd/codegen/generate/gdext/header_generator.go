@@ -40,9 +40,10 @@ var (
 	// For mergeManagerHeader function
 	reClassDefinition = regexp.MustCompile(`class\s+(\w+)\s*:\s*(?:public\s+)?(?:SpxBaseMgr|SpxObjectMgr<\w+>)\s*{`)
 
-	// For generateManagerHeader function
-	reMethodVoid           = regexp.MustCompile(`\s*void\s+(\w+)\((.*)\);`)
-	reMethodReturn         = regexp.MustCompile(`\s*(\w+)\s+(\w+)\((.*)\);`)
+	// For generateManagerHeader function. Only methods explicitly marked with
+	// SPX_API or SPX_BIND become part of the cross-language ABI.
+	reMethodVoid           = regexp.MustCompile(`\s*(?:SPX_API|SPX_BIND)\s+void\s+(\w+)\((.*)\);`)
+	reMethodReturn         = regexp.MustCompile(`\s*(?:SPX_API|SPX_BIND)\s+(\w+)\s+(\w+)\((.*)\);`)
 	reSingleGdArrayParam   = regexp.MustCompile(`^\s*GdArray\s+([A-Za-z_][A-Za-z0-9_]*)\s*$`)
 	reRawNativeArrayParams = regexp.MustCompile(`^\s*((?:const\s+)?[A-Za-z_][A-Za-z0-9_]*\s*\*)\s*([A-Za-z_][A-Za-z0-9_]*)\s*,\s*(int32_t|int)\s+([A-Za-z_][A-Za-z0-9_]*)\s*$`)
 )

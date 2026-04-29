@@ -21,6 +21,12 @@ jobs:
       - name: Download Go modules
         run: go mod download
 
+      - name: Check out Godot source
+        run: git clone --depth 1 --branch spx4.4.1 https://github.com/goplus/godot.git godot
+
+      - name: Run binding code generation
+        run: cd internal/cmd/codegen && GODOT_SRC="$GITHUB_WORKSPACE/godot" go run .
+
       - name: Run go generate for pkg/ispx
         run: go generate ./pkg/ispx/...
 
