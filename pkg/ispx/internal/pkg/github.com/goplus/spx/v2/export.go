@@ -30,6 +30,9 @@ import (
 )
 
 func init() {
+	var (
+		alias_Seconds = &alias.Alias{Typ: "Seconds"}
+	)
 	ixgo.RegisterPackage(&ixgo.Package{
 		Name: "spx",
 		Path: "github.com/goplus/spx/v2",
@@ -339,22 +342,22 @@ func init() {
 		Alias: map[string]alias.Type{
 			"DeltaTime": &alias.Func{
 				Params:  nil,
-				Results: []alias.Type{&alias.Alias{Typ: "Seconds"}},
+				Results: []alias.Type{alias_Seconds},
 			},
 			"Game": &alias.Named{
 				Underlying: nil,
 				Methods: map[string]*alias.Func{
 					"WaitNextFrame": &alias.Func{
 						Params:  nil,
-						Results: []alias.Type{&alias.Alias{Typ: "Seconds"}},
+						Results: []alias.Type{alias_Seconds},
 					},
 					"Wait": &alias.Func{
-						Params:  []alias.Type{&alias.Alias{Typ: "Seconds"}},
+						Params:  []alias.Type{alias_Seconds},
 						Results: nil,
 					},
 					"Timer": &alias.Func{
 						Params:  nil,
-						Results: []alias.Type{&alias.Alias{Typ: "Seconds"}},
+						Results: []alias.Type{alias_Seconds},
 					},
 				},
 			},
@@ -362,63 +365,63 @@ func init() {
 				Underlying: &alias.Interface{
 					Methods: map[string]*alias.Func{
 						"GlideToTarget": &alias.Func{
-							Params:  []alias.Type{nil, &alias.Alias{Typ: "Seconds"}},
+							Params:  []alias.Type{nil, alias_Seconds},
 							Results: nil,
 						},
 						"GlideToXYpos": &alias.Func{
-							Params:  []alias.Type{nil, nil, &alias.Alias{Typ: "Seconds"}},
+							Params:  []alias.Type{nil, nil, alias_Seconds},
 							Results: nil,
 						},
 						"Glide__0": &alias.Func{
-							Params:  []alias.Type{nil, &alias.Alias{Typ: "Seconds"}},
+							Params:  []alias.Type{nil, alias_Seconds},
 							Results: nil,
 						},
 						"Glide__1": &alias.Func{
-							Params:  []alias.Type{nil, &alias.Alias{Typ: "Seconds"}},
+							Params:  []alias.Type{nil, alias_Seconds},
 							Results: nil,
 						},
 						"Glide__2": &alias.Func{
-							Params:  []alias.Type{nil, &alias.Alias{Typ: "Seconds"}},
+							Params:  []alias.Type{nil, alias_Seconds},
 							Results: nil,
 						},
 						"Glide__3": &alias.Func{
-							Params:  []alias.Type{nil, &alias.Alias{Typ: "Seconds"}},
+							Params:  []alias.Type{nil, alias_Seconds},
 							Results: nil,
 						},
 						"Glide__4": &alias.Func{
-							Params:  []alias.Type{nil, nil, &alias.Alias{Typ: "Seconds"}},
+							Params:  []alias.Type{nil, nil, alias_Seconds},
 							Results: nil,
 						},
 						"QuoteMsg": &alias.Func{
-							Params:  []alias.Type{nil, &alias.Alias{Typ: "Seconds"}},
+							Params:  []alias.Type{nil, alias_Seconds},
 							Results: nil,
 						},
 						"QuoteMsgEx": &alias.Func{
-							Params:  []alias.Type{nil, nil, &alias.Alias{Typ: "Seconds"}},
+							Params:  []alias.Type{nil, nil, alias_Seconds},
 							Results: nil,
 						},
 						"Quote__1": &alias.Func{
-							Params:  []alias.Type{nil, &alias.Alias{Typ: "Seconds"}},
+							Params:  []alias.Type{nil, alias_Seconds},
 							Results: nil,
 						},
 						"Quote__3": &alias.Func{
-							Params:  []alias.Type{nil, nil, &alias.Alias{Typ: "Seconds"}},
+							Params:  []alias.Type{nil, nil, alias_Seconds},
 							Results: nil,
 						},
 						"SayWith": &alias.Func{
-							Params:  []alias.Type{nil, &alias.Alias{Typ: "Seconds"}},
+							Params:  []alias.Type{nil, alias_Seconds},
 							Results: nil,
 						},
 						"Say__1": &alias.Func{
-							Params:  []alias.Type{nil, &alias.Alias{Typ: "Seconds"}},
+							Params:  []alias.Type{nil, alias_Seconds},
 							Results: nil,
 						},
 						"ThinkWith": &alias.Func{
-							Params:  []alias.Type{nil, &alias.Alias{Typ: "Seconds"}},
+							Params:  []alias.Type{nil, alias_Seconds},
 							Results: nil,
 						},
 						"Think__1": &alias.Func{
-							Params:  []alias.Type{nil, &alias.Alias{Typ: "Seconds"}},
+							Params:  []alias.Type{nil, alias_Seconds},
 							Results: nil,
 						},
 					},
@@ -428,70 +431,70 @@ func init() {
 				Underlying: nil,
 				Methods: map[string]*alias.Func{
 					"Say__1": &alias.Func{
-						Params:  []alias.Type{nil, &alias.Alias{Typ: "Seconds"}},
+						Params:  []alias.Type{nil, alias_Seconds},
 						Results: nil,
 					},
 					"SayWith": &alias.Func{
-						Params:  []alias.Type{nil, &alias.Alias{Typ: "Seconds"}},
+						Params:  []alias.Type{nil, alias_Seconds},
 						Results: nil,
 					},
 					"Think__1": &alias.Func{
-						Params:  []alias.Type{nil, &alias.Alias{Typ: "Seconds"}},
+						Params:  []alias.Type{nil, alias_Seconds},
 						Results: nil,
 					},
 					"ThinkWith": &alias.Func{
-						Params:  []alias.Type{nil, &alias.Alias{Typ: "Seconds"}},
+						Params:  []alias.Type{nil, alias_Seconds},
 						Results: nil,
 					},
 					"Quote__1": &alias.Func{
-						Params:  []alias.Type{nil, &alias.Alias{Typ: "Seconds"}},
+						Params:  []alias.Type{nil, alias_Seconds},
 						Results: nil,
 					},
 					"Quote__3": &alias.Func{
-						Params:  []alias.Type{nil, nil, &alias.Alias{Typ: "Seconds"}},
+						Params:  []alias.Type{nil, nil, alias_Seconds},
 						Results: nil,
 					},
 					"QuoteMsg": &alias.Func{
-						Params:  []alias.Type{nil, &alias.Alias{Typ: "Seconds"}},
+						Params:  []alias.Type{nil, alias_Seconds},
 						Results: nil,
 					},
 					"QuoteMsgEx": &alias.Func{
-						Params:  []alias.Type{nil, nil, &alias.Alias{Typ: "Seconds"}},
+						Params:  []alias.Type{nil, nil, alias_Seconds},
 						Results: nil,
 					},
 					"Glide__0": &alias.Func{
-						Params:  []alias.Type{nil, &alias.Alias{Typ: "Seconds"}},
+						Params:  []alias.Type{nil, alias_Seconds},
 						Results: nil,
 					},
 					"Glide__1": &alias.Func{
-						Params:  []alias.Type{nil, &alias.Alias{Typ: "Seconds"}},
+						Params:  []alias.Type{nil, alias_Seconds},
 						Results: nil,
 					},
 					"Glide__2": &alias.Func{
-						Params:  []alias.Type{nil, &alias.Alias{Typ: "Seconds"}},
+						Params:  []alias.Type{nil, alias_Seconds},
 						Results: nil,
 					},
 					"Glide__3": &alias.Func{
-						Params:  []alias.Type{nil, &alias.Alias{Typ: "Seconds"}},
+						Params:  []alias.Type{nil, alias_Seconds},
 						Results: nil,
 					},
 					"Glide__4": &alias.Func{
-						Params:  []alias.Type{nil, nil, &alias.Alias{Typ: "Seconds"}},
+						Params:  []alias.Type{nil, nil, alias_Seconds},
 						Results: nil,
 					},
 					"GlideToTarget": &alias.Func{
-						Params:  []alias.Type{nil, &alias.Alias{Typ: "Seconds"}},
+						Params:  []alias.Type{nil, alias_Seconds},
 						Results: nil,
 					},
 					"GlideToXYpos": &alias.Func{
-						Params:  []alias.Type{nil, nil, &alias.Alias{Typ: "Seconds"}},
+						Params:  []alias.Type{nil, nil, alias_Seconds},
 						Results: nil,
 					},
 				},
 			},
 			"TimeSinceLevelLoad": &alias.Func{
 				Params:  nil,
-				Results: []alias.Type{&alias.Alias{Typ: "Seconds"}},
+				Results: []alias.Type{alias_Seconds},
 			},
 		},
 	})
