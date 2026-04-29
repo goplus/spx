@@ -28,10 +28,11 @@ func TestGenerateManagerHeaderSkipsRawMethods(t *testing.T) {
 	input := strings.TrimSpace(`
 class SpxSpriteMgr {
 public:
-	void batch_update_transforms(GdArray buffer);
-	void batch_update_transforms_raw(const float *buffer_data, int len);
-	GdBool destroy_sprite(GdObj obj);
-	void batch_update_visuals_raw(const float *buffer_data, int len);
+	SPX_API void batch_update_transforms(GdArray buffer);
+	SPX_API void batch_update_transforms_raw(const float *buffer_data, int len);
+	SPX_BIND GdBool destroy_sprite(GdObj obj);
+	SPX_API void batch_update_visuals_raw(const float *buffer_data, int len);
+	void helper_not_exported();
 };
 `)
 
@@ -39,6 +40,7 @@ public:
 
 	require.Contains(t, output, "GDExtensionSpxSpriteBatchUpdateTransforms")
 	require.Contains(t, output, "GDExtensionSpxSpriteDestroySprite")
+	require.NotContains(t, output, "GDExtensionSpxSpriteHelperNotExported")
 	require.NotContains(t, output, "GDExtensionSpxSpriteBatchUpdateTransformsRaw")
 	require.NotContains(t, output, "GDExtensionSpxSpriteBatchUpdateVisualsRaw")
 
@@ -54,7 +56,7 @@ func TestGenerateManagerHeaderRegistersDirectNativeArrayBridge(t *testing.T) {
 	input := strings.TrimSpace(`
 class SpxSpriteMgr {
 public:
-	void batch_update_transforms(const float *buffer_data, int len);
+	SPX_API void batch_update_transforms(const float *buffer_data, int len);
 };
 `)
 
