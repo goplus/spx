@@ -61,3 +61,73 @@ func TestPlayDefaultAnimIfIdleSkipsActiveDefaultAnimation(t *testing.T) {
 		t.Fatal("playDefaultAnimIfIdle restarted or cleared the active default animation")
 	}
 }
+
+func TestCleanupTweenWithoutPlaybackKeepsActiveAnimation(t *testing.T) {
+	anim := newTestAnimationComponent()
+	anim.sprite.costumes = []*costume{newCostumeWithSize(1, 1), newCostumeWithSize(1, 1)}
+	anim.sprite.spriteState.DefaultCostumeIndex = 0
+	anim.sprite.costumeIndex = 1
+
+	activeAnim := &animState{Name: "wave"}
+	tween := &animState{Name: StateGlide, AniType: coreproject.AniTypeGlide}
+	anim.curAnimState = activeAnim
+	anim.curTweenState = tween
+
+	anim.cleanupTween(tween, nil, StateGlide, &coreproject.AniConfig{AniType: coreproject.AniTypeGlide})
+
+	if anim.curTweenState != nil {
+		t.Fatal("cleanupTween did not clear the completed tween state")
+	}
+	if anim.curAnimState != activeAnim {
+		t.Fatal("cleanupTween replaced an unrelated active animation")
+	}
+	if anim.sprite.costumeIndex != 1 {
+		t.Fatalf("costumeIndex = %d, want active animation costume 1", anim.sprite.costumeIndex)
+	}
+}
+
+func TestCleanupTweenWithoutPlaybackRestoresDefaultWhenIdle(t *testing.T) {
+	anim := newTestAnimationComponent()
+	anim.sprite.costumes = []*costume{newCostumeWithSize(1, 1), newCostumeWithSize(1, 1)}
+	anim.sprite.spriteState.DefaultCostumeIndex = 0
+	anim.sprite.costumeIndex = 1
+
+	tween := &animState{Name: StateGlide, AniType: coreproject.AniTypeGlide}
+	anim.curTweenState = tween
+
+	anim.cleanupTween(tween, nil, StateGlide, &coreproject.AniConfig{AniType: coreproject.AniTypeGlide})
+
+	if anim.curTweenState != nil {
+		t.Fatal("cleanupTween did not clear the completed tween state")
+	}
+	if anim.sprite.costumeIndex != 0 {
+		t.Fatalf("costumeIndex = %d, want default costume 0", anim.sprite.costumeIndex)
+	}
+}
+
+func TestCleanupTweenRestoresDefaultForOwnedPlayback(t *testing.T) {
+	anim := newTestAnimationComponent()
+	anim.sprite.costumes = []*costume{newCostumeWithSize(1, 1), newCostumeWithSize(1, 1)}
+	anim.sprite.spriteState.DefaultCostumeIndex = 0
+	anim.sprite.costumeIndex = 1
+
+	playback := &animState{Name: StateGlide}
+	tween := &animState{
+		Name:    StateGlide,
+		AniType: coreproject.AniTypeGlide,
+	}
+	anim.curAnimState = playback
+	anim.curTweenState = tween
+
+	anim.cleanupTween(tween, playback, StateGlide, &coreproject.AniConfig{AniType: coreproject.AniTypeGlide})
+
+	if anim.curTweenState != nil {
+		t.Fatal("cleanupTween did not clear the completed tween state")
+	}
+	if anim.curAnimState != nil {
+		t.Fatal("cleanupTween did not clear its own animation playback state")
+	}
+	if anim.sprite.costumeIndex != 0 {
+		t.Fatalf("costumeIndex = %d, want default costume 0", anim.sprite.costumeIndex)
+	}
+}
