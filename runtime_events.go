@@ -52,11 +52,11 @@ type scriptEventBindings struct {
 }
 
 type scriptEventRegistry struct {
-	coreevent.Manager
+	manager coreevent.Manager
 }
 
-func (p *scriptEventBindings) init(mgr *scriptEventRegistry, this threadObj) {
-	p.scriptEventRegistry = mgr
+func (p *scriptEventBindings) init(registry *scriptEventRegistry, this threadObj) {
+	p.scriptEventRegistry = registry
 	p.pthis = this
 }
 
@@ -65,24 +65,8 @@ func (p *scriptEventBindings) initFrom(src *scriptEventBindings, this threadObj)
 	p.pthis = this
 }
 
-func (p *scriptEventRegistry) dispatchAsync(bucket coreevent.Bucket, start bool, data any, do func(*eventSink)) {
-	p.DispatchBucketAsync(bucket, start, data, scriptEventDispatchHooks, do)
-}
-
-func (p *scriptEventRegistry) dispatchSync(bucket coreevent.Bucket, data any, do func(*eventSink)) {
-	p.DispatchBucketSync(bucket, data, scriptEventDispatchHooks, do)
-}
-
-func (p *scriptEventRegistry) dispatch(bucket coreevent.Bucket, wait bool, data any, do func(*eventSink)) {
-	p.DispatchBucket(bucket, wait, data, scriptEventDispatchHooks, do)
-}
-
-func (p *scriptEventRegistry) dispatchStartOnce(data any, do func(*eventSink)) {
-	p.DispatchStartOnce(data, scriptEventDispatchHooks, do)
-}
-
 func (p *scriptEventBindings) doDeleteClone() {
-	p.scriptEventRegistry.DeleteOwner(p.pthis)
+	p.scriptEventRegistry.manager.DeleteOwner(p.pthis)
 }
 
 func (p *scriptEventBindings) doWhenSwipe(direction Direction, target threadObj) {
@@ -91,12 +75,12 @@ func (p *scriptEventBindings) doWhenSwipe(direction Direction, target threadObj)
 
 func (p *scriptEventBindings) onAwake(onAwake func()) {
 	pthis := p.pthis
-	p.scriptEventRegistry.AddAwake(coreevent.NewSink(p.pthis, onAwake, coreevent.MatchOwnerOrNil(pthis)))
+	p.scriptEventRegistry.manager.AddAwake(coreevent.NewSink(p.pthis, onAwake, coreevent.MatchOwnerOrNil(pthis)))
 }
 
 func (p *scriptEventBindings) OnStart(onStart func()) {
 	sink := coreevent.NewSink(p.pthis, onStart)
-	if p.scriptEventRegistry.TryAddStart(sink) {
+	if p.scriptEventRegistry.manager.TryAddStart(sink) {
 		return
 	}
 	if sprite, ok := sink.Owner.(*SpriteImpl); ok && sprite.spriteState.Cloned {
@@ -107,16 +91,16 @@ func (p *scriptEventBindings) OnStart(onStart func()) {
 
 func (p *scriptEventBindings) OnClick(onClick func()) {
 	pthis := p.pthis
-	p.scriptEventRegistry.AddClick(coreevent.NewSink(pthis, onClick, coreevent.MatchOwner(pthis)))
+	p.scriptEventRegistry.manager.AddClick(coreevent.NewSink(pthis, onClick, coreevent.MatchOwner(pthis)))
 }
 
 func (p *scriptEventBindings) OnAnyKey(onKey func(key Key)) {
-	p.scriptEventRegistry.AddKeyPressed(coreevent.NewSink(p.pthis, onKey))
+	p.scriptEventRegistry.manager.AddKeyPressed(coreevent.NewSink(p.pthis, onKey))
 }
 
 func (p *scriptEventBindings) OnTimer(time float64, call func()) {
 	itime.RegisterTimer(time)
-	p.scriptEventRegistry.AddTimer(coreevent.NewSink(
+	p.scriptEventRegistry.manager.AddTimer(coreevent.NewSink(
 		p.pthis,
 		coreevent.TapVoid1(call, coreevent.If1(isDebugEventEnabled, func(float64) {
 			spxlog.Debug("==> onTimer: %s", nameOf(p.pthis))
@@ -126,7 +110,7 @@ func (p *scriptEventBindings) OnTimer(time float64, call func()) {
 }
 
 func (p *scriptEventBindings) OnKey__0(key Key, onKey func()) {
-	p.scriptEventRegistry.AddKeyPressed(coreevent.NewSink(
+	p.scriptEventRegistry.manager.AddKeyPressed(coreevent.NewSink(
 		p.pthis,
 		coreevent.TapVoid1(onKey, coreevent.If1(isDebugEventEnabled, func(Key) {
 			spxlog.Debug("==> onKey: %v, %s", key, nameOf(p.pthis))
@@ -136,7 +120,7 @@ func (p *scriptEventBindings) OnKey__0(key Key, onKey func()) {
 }
 
 func (p *scriptEventBindings) OnSwipe__0(direction Direction, onSwipe func()) {
-	p.scriptEventRegistry.AddSwipe(coreevent.NewSink(
+	p.scriptEventRegistry.manager.AddSwipe(coreevent.NewSink(
 		p.pthis,
 		coreevent.TapVoid1(onSwipe, coreevent.If1(isDebugEventEnabled, func(Direction) {
 			spxlog.Debug("==> onSwipe: %v, %s", direction, nameOf(p.pthis))
@@ -146,7 +130,7 @@ func (p *scriptEventBindings) OnSwipe__0(direction Direction, onSwipe func()) {
 }
 
 func (p *scriptEventBindings) OnKey__1(keys []Key, onKey func(Key)) {
-	p.scriptEventRegistry.AddKeyPressed(coreevent.NewSink(
+	p.scriptEventRegistry.manager.AddKeyPressed(coreevent.NewSink(
 		p.pthis,
 		coreevent.Tap1(onKey, coreevent.If1(isDebugEventEnabled, func(key Key) {
 			spxlog.Debug("==> onKey: %v, %s", keys, nameOf(p.pthis))
@@ -160,11 +144,11 @@ func (p *scriptEventBindings) OnKey__2(keys []Key, onKey func()) {
 }
 
 func (p *scriptEventBindings) OnMsg__0(onMsg func(msg MsgName, data any)) {
-	p.scriptEventRegistry.AddIReceive(coreevent.NewSink(p.pthis, onMsg))
+	p.scriptEventRegistry.manager.AddIReceive(coreevent.NewSink(p.pthis, onMsg))
 }
 
 func (p *scriptEventBindings) OnMsg__1(msg MsgName, onMsg func()) {
-	p.scriptEventRegistry.AddIReceive(coreevent.NewSink(
+	p.scriptEventRegistry.manager.AddIReceive(coreevent.NewSink(
 		p.pthis,
 		coreevent.TapVoid2(onMsg, coreevent.If2(isDebugEventEnabled, func(msg string, data any) {
 			spxlog.Debug("==> onMsg: %s, %s", msg, nameOf(p.pthis))
@@ -174,11 +158,11 @@ func (p *scriptEventBindings) OnMsg__1(msg MsgName, onMsg func()) {
 }
 
 func (p *scriptEventBindings) OnBackdrop__0(onBackdrop func(name BackdropName)) {
-	p.scriptEventRegistry.AddBackdropChanged(coreevent.NewSink(p.pthis, onBackdrop))
+	p.scriptEventRegistry.manager.AddBackdropChanged(coreevent.NewSink(p.pthis, onBackdrop))
 }
 
 func (p *scriptEventBindings) OnBackdrop__1(name BackdropName, onBackdrop func()) {
-	p.scriptEventRegistry.AddBackdropChanged(coreevent.NewSink(
+	p.scriptEventRegistry.manager.AddBackdropChanged(coreevent.NewSink(
 		p.pthis,
 		coreevent.TapVoid1(onBackdrop, coreevent.If1(isDebugEventEnabled, func(name BackdropName) {
 			spxlog.Debug("==> onBackdrop: %s, %s", name, nameOf(p.pthis))
@@ -398,4 +382,20 @@ func (p *scriptEventRegistry) doWhenBackdropChanged(name BackdropName, wait bool
 	p.dispatch(coreevent.BucketBackdropChanged, wait, name, func(ev *eventSink) {
 		ev.Handler.(func(BackdropName))(name)
 	})
+}
+
+func (p *scriptEventRegistry) dispatchAsync(bucket coreevent.Bucket, start bool, data any, do func(*eventSink)) {
+	p.manager.DispatchBucketAsync(bucket, start, data, scriptEventDispatchHooks, do)
+}
+
+func (p *scriptEventRegistry) dispatchSync(bucket coreevent.Bucket, data any, do func(*eventSink)) {
+	p.manager.DispatchBucketSync(bucket, data, scriptEventDispatchHooks, do)
+}
+
+func (p *scriptEventRegistry) dispatch(bucket coreevent.Bucket, wait bool, data any, do func(*eventSink)) {
+	p.manager.DispatchBucket(bucket, wait, data, scriptEventDispatchHooks, do)
+}
+
+func (p *scriptEventRegistry) dispatchStartOnce(data any, do func(*eventSink)) {
+	p.manager.DispatchStartOnce(data, scriptEventDispatchHooks, do)
 }
