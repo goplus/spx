@@ -198,10 +198,10 @@ func (a *animationComponent) playAnimation(name SpriteAnimationName, loop, block
 	a.doAnimation(name, ani, loop, 1, blocking, true)
 }
 
-func (a *animationComponent) doAnimation(animName SpriteAnimationName, ani *coreproject.AniConfig, loop bool, speed float64, isBlocking bool, playAudio bool) {
+func (a *animationComponent) doAnimation(animName SpriteAnimationName, ani *coreproject.AniConfig, loop bool, speed float64, isBlocking bool, playAudio bool) *animState {
 	syncSprite := a.syncSpriteForPlayback()
 	if syncSprite == nil {
-		return
+		return nil
 	}
 
 	a.stopAnimState(a.curAnimState)
@@ -232,6 +232,7 @@ func (a *animationComponent) doAnimation(animName SpriteAnimationName, ani *core
 		a.sprite.runtimeState.IsAnimating = false
 		a.stopAnimState(info)
 	}
+	return info
 }
 
 func (a *animationComponent) playDefaultAnim() {
@@ -398,7 +399,7 @@ type tweenParams struct {
 }
 
 func (a *animationComponent) doTween(name SpriteAnimationName, ani *coreproject.AniConfig) {
-	info := a.initTweenState(name, ani)
+	info, ownedPlayback := a.initTweenState(name, ani)
 	if info == nil {
 		return
 	}
@@ -409,10 +410,15 @@ func (a *animationComponent) doTween(name SpriteAnimationName, ani *coreproject.
 	}
 
 	a.executeTweenLoop(info, ani, params)
-	a.cleanupTween(info, name, ani)
+	a.cleanupTween(info, ownedPlayback, name, ani)
 }
 
-func (a *animationComponent) initTweenState(name SpriteAnimationName, ani *coreproject.AniConfig) *animState {
+func (a *animationComponent) initTweenState(name SpriteAnimationName, ani *coreproject.AniConfig) (*animState, *animState) {
+	if ani.Duration <= 0 {
+		spxlog.Warn("Invalid animation duration: %v", ani.Duration)
+		return nil, nil
+	}
+
 	info := &animState{
 		AniType: ani.AniType,
 		Name:    name,
@@ -421,17 +427,13 @@ func (a *animationComponent) initTweenState(name SpriteAnimationName, ani *corep
 	a.stopAnimState(a.curTweenState)
 	a.curTweenState = info
 
+	var ownedPlayback *animState
 	if a.hasAnim(name) {
-		a.doAnimation(name, ani, ani.IsLoop, ani.Speed, false, false)
+		ownedPlayback = a.doAnimation(name, ani, ani.IsLoop, ani.Speed, false, false)
 		a.playAnimAudio(ani, info)
 	}
 
-	if ani.Duration <= 0 {
-		spxlog.Warn("Invalid animation duration: %v", ani.Duration)
-		return nil
-	}
-
-	return info
+	return info, ownedPlayback
 }
 
 func (a *animationComponent) prepareTweenParams(ani *coreproject.AniConfig) (*tweenParams, bool) {
@@ -506,7 +508,7 @@ func (a *animationComponent) applyTweenStep(aniType coreproject.AniType, deltaPe
 	}
 }
 
-func (a *animationComponent) cleanupTween(info *animState, name SpriteAnimationName, ani *coreproject.AniConfig) {
+func (a *animationComponent) cleanupTween(info, ownedPlayback *animState, name SpriteAnimationName, ani *coreproject.AniConfig) {
 	if ani.AniType == coreproject.AniTypeMove {
 		physicsMode := a.sprite.PhysicsMode()
 		if isPhysicsEnabled() && physicsMode != NoPhysics && physicsMode != StaticPhysics {
@@ -520,7 +522,11 @@ func (a *animationComponent) cleanupTween(info *animState, name SpriteAnimationN
 	}
 
 	a.curTweenState = nil
-	if name != a.shared.defaultAnimation && !ani.IsKeepOnStop {
-		a.playDefaultAnim()
+	if name == a.shared.defaultAnimation || ani.IsKeepOnStop {
+		return
 	}
+	if ownedPlayback != nil && a.curAnimState == ownedPlayback {
+		a.stopCurrentAnimState(ownedPlayback)
+	}
+	a.playDefaultAnimIfIdle()
 }
