@@ -144,7 +144,7 @@ func (c *cameraImpl) getFollowPos() (bool, mathf.Vec2) {
 	if c.followTarget != nil {
 		switch v := c.followTarget.(type) {
 		case *SpriteImpl:
-			return v.spriteState.IsDirty, mathf.NewVec2(v.getXY())
+			return c.isDirty || v.spriteState.IsDirty, mathf.NewVec2(v.getXY())
 		case specialObj:
 			if c.followTarget == Mouse {
 				return true, c.g.inputMgr.currentMousePos()
@@ -178,7 +178,7 @@ func (c *cameraImpl) follow(obj any) {
 		panic("Camera.Follow: unexpected parameter")
 	}
 	c.followTarget = obj
-	c.setLimits()
+	c.setDirtyFlag(true)
 }
 
 func (c *cameraImpl) Follow__0(sprite Sprite) {
