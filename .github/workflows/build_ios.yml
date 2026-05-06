@@ -117,6 +117,7 @@ jobs:
     - name: Build unsigned IPA
       shell: bash
       run: |
+        set -o pipefail
         echo "[info] Building IPA from Xcode project"
         XCODE_PROJECT="tutorial/00-Hello/project/.builds/ios/Game.xcodeproj"
         IPA_DIR="tutorial/00-Hello/project/.builds/ios"
@@ -131,7 +132,11 @@ jobs:
         cd "$(dirname "$XCODE_PROJECT")"
 
         # Build for iOS device without code signing
-        xcodebuild -project "$(basename "$XCODE_PROJECT")" \
+        {
+          echo
+          echo "[info] Starting xcodebuild"
+        } | tee -a "$GITHUB_WORKSPACE/tutorial/00-Hello/build_ios.txt"
+        if ! xcodebuild -project "$(basename "$XCODE_PROJECT")" \
           -scheme Game \
           -configuration Debug \
           -destination 'generic/platform=iOS' \
@@ -140,7 +145,12 @@ jobs:
           CODE_SIGNING_ALLOWED=NO \
           ARCHS=arm64 \
           ONLY_ACTIVE_ARCH=NO \
-          build | tail -20
+          build 2>&1 | tee -a "$GITHUB_WORKSPACE/tutorial/00-Hello/build_ios.txt"; then
+          echo "[error] xcodebuild failed" >&2
+          echo "[info] Last 50 lines of build_ios.txt:"
+          tail -50 "$GITHUB_WORKSPACE/tutorial/00-Hello/build_ios.txt" || true
+          exit 1
+        fi
 
         # Find the app bundle in DerivedData
         echo "[info] Searching for Game.app in DerivedData"
