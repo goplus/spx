@@ -3,9 +3,14 @@ package spx
 import (
 	"testing"
 
+	internalaudio "github.com/goplus/spx/v2/internal/audio"
 	coreproject "github.com/goplus/spx/v2/internal/core/project"
 	"github.com/goplus/spx/v2/internal/engine"
 )
+
+func boolPtr(v bool) *bool {
+	return &v
+}
 
 func newTestAnimationComponent() *animationComponent {
 	sprite := &SpriteImpl{
@@ -28,7 +33,100 @@ func newTestAnimationComponent() *animationComponent {
 		donedAnimations: make([]string, 0),
 	}
 	sprite.components.animation = anim
+	sprite.components.sound = &soundComponent{
+		componentBase: componentBase{sprite: sprite},
+		pendingAudios: make([]string, 0),
+	}
 	return anim
+}
+
+type animationAudioBackend struct {
+	nextID  int64
+	plays   []animationPlayCall
+	loops   []animationLoopCall
+	stops   []int64
+	playing map[int64]bool
+}
+
+type animationPlayCall struct {
+	path       string
+	owner      engine.Object
+	attenation float64
+	maxDist    float64
+}
+
+type animationLoopCall struct {
+	id   int64
+	loop bool
+}
+
+func (f *animationAudioBackend) CreateAudio() engine.Object {
+	return 77
+}
+
+func (f *animationAudioBackend) DestroyAudio(obj engine.Object) {}
+
+func (f *animationAudioBackend) SetPitch(obj engine.Object, pitch float64) {}
+
+func (f *animationAudioBackend) GetPitch(obj engine.Object) float64 {
+	return 0
+}
+
+func (f *animationAudioBackend) SetPan(obj engine.Object, pan float64) {}
+
+func (f *animationAudioBackend) GetPan(obj engine.Object) float64 {
+	return 0
+}
+
+func (f *animationAudioBackend) SetVolume(obj engine.Object, volume float64) {}
+
+func (f *animationAudioBackend) GetVolume(obj engine.Object) float64 {
+	return 1
+}
+
+func (f *animationAudioBackend) PlayWithAttenuation(obj engine.Object, path string, ownerID engine.Object, attenuation, maxDistance float64) int64 {
+	f.nextID++
+	if f.playing == nil {
+		f.playing = make(map[int64]bool)
+	}
+	f.playing[f.nextID] = true
+	f.plays = append(f.plays, animationPlayCall{
+		path:       path,
+		owner:      ownerID,
+		attenation: attenuation,
+		maxDist:    maxDistance,
+	})
+	return f.nextID
+}
+
+func (f *animationAudioBackend) Pause(aid int64) {}
+
+func (f *animationAudioBackend) Resume(aid int64) {}
+
+func (f *animationAudioBackend) Stop(aid int64) {
+	if f.playing != nil {
+		f.playing[aid] = false
+	}
+	f.stops = append(f.stops, aid)
+}
+
+func (f *animationAudioBackend) SetLoop(aid int64, loop bool) {
+	f.loops = append(f.loops, animationLoopCall{id: aid, loop: loop})
+}
+
+func (f *animationAudioBackend) IsPlaying(aid int64) bool {
+	return f.playing[aid]
+}
+
+func (f *animationAudioBackend) StopAll() {}
+
+func initTestAnimationAudio(anim *animationComponent, backend *animationAudioBackend) {
+	anim.sprite.g.soundMgr = internalaudio.Manager{}
+	anim.sprite.g.soundMgr.Init(backend)
+	anim.sprite.g.sounds = map[string]sound{
+		"walk": &coreproject.SoundConfig{Path: "sounds/walk.wav"},
+		"step": &coreproject.SoundConfig{Path: "sounds/step.wav"},
+	}
 }
 
 func TestStopCurrentAnimStateDoesNotClearReplacement(t *testing.T) {
@@ -129,5 +227,107 @@ func TestCleanupTweenRestoresDefaultForOwnedPlayback(t *testing.T) {
 	}
 	if anim.sprite.costumeIndex != 0 {
 		t.Fatalf("costumeIndex = %d, want default costume 0", anim.sprite.costumeIndex)
+	}
+}
+
+func TestPlayAnimAudioStartsAndStopsOnPlaySound(t *testing.T) {
+	anim := newTestAnimationComponent()
+	backend := &animationAudioBackend{}
+	initTestAnimationAudio(anim, backend)
+
+	state := &animState{Name: "walk"}
+	anim.curAnimState = state
+	anim.playAnimAudio(&coreproject.AniConfig{
+		OnPlay: &coreproject.ActionConfig{Play: "walk"},
+	}, state)
+
+	if state.PlayAudioID == 0 {
+		t.Fatal("onPlay did not capture a playback id")
+	}
+	if len(backend.plays) != 1 {
+		t.Fatalf("plays = %d, want 1", len(backend.plays))
+	}
+	if len(backend.loops) != 1 || backend.loops[0].id != state.PlayAudioID || !backend.loops[0].loop {
+		t.Fatalf("loop calls = %+v, want one loop call for playback %d", backend.loops, state.PlayAudioID)
+	}
+
+	playID := state.PlayAudioID
+	anim.onAnimationDone("walk")
+
+	if len(backend.stops) != 1 || backend.stops[0] != playID {
+		t.Fatalf("stops = %+v, want [%d]", backend.stops, playID)
+	}
+	if anim.curAnimState != nil {
+		t.Fatal("onAnimationDone did not clear the finished animation state")
+	}
+}
+
+func TestPlayAnimAudioHonorsOnPlayLoopConfig(t *testing.T) {
+	anim := newTestAnimationComponent()
+	backend := &animationAudioBackend{}
+	initTestAnimationAudio(anim, backend)
+
+	state := &animState{Name: "walk"}
+	anim.playAnimAudio(&coreproject.AniConfig{
+		OnPlay: &coreproject.ActionConfig{
+			Play: "walk",
+			Loop: boolPtr(false),
+		},
+	}, state)
+
+	if state.PlayAudioID == 0 {
+		t.Fatal("onPlay did not capture a playback id")
+	}
+	if len(backend.plays) != 1 {
+		t.Fatalf("plays = %d, want 1", len(backend.plays))
+	}
+	if len(backend.loops) != 0 {
+		t.Fatalf("loop calls = %+v, want none", backend.loops)
+	}
+}
+
+func TestPlayAnimAudioHonorsOnStartLoopConfig(t *testing.T) {
+	anim := newTestAnimationComponent()
+	backend := &animationAudioBackend{}
+	initTestAnimationAudio(anim, backend)
+
+	state := &animState{Name: "walk"}
+	anim.playAnimAudio(&coreproject.AniConfig{
+		OnStart: &coreproject.ActionConfig{
+			Play: "step",
+			Loop: boolPtr(true),
+		},
+	}, state)
+
+	if len(backend.plays) != 1 {
+		t.Fatalf("plays = %d, want 1", len(backend.plays))
+	}
+	if len(backend.loops) != 1 || !backend.loops[0].loop {
+		t.Fatalf("loop calls = %+v, want one looping playback", backend.loops)
+	}
+	if state.AudioName != "" {
+		t.Fatalf("AudioName = %q, want empty when onStart uses loop playback", state.AudioName)
+	}
+}
+
+func TestStopAnimStateLeavesOnStartSoundAlone(t *testing.T) {
+	anim := newTestAnimationComponent()
+	backend := &animationAudioBackend{}
+	initTestAnimationAudio(anim, backend)
+
+	state := &animState{Name: "walk"}
+	anim.playAnimAudio(&coreproject.AniConfig{
+		OnStart: &coreproject.ActionConfig{Play: "step"},
+	}, state)
+	anim.stopAnimState(state)
+
+	if len(backend.plays) != 1 {
+		t.Fatalf("plays = %d, want 1", len(backend.plays))
+	}
+	if len(backend.loops) != 0 {
+		t.Fatalf("loop calls = %+v, want none", backend.loops)
+	}
+	if len(backend.stops) != 0 {
+		t.Fatalf("stops = %+v, want none", backend.stops)
 	}
 }

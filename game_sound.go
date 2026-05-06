@@ -143,24 +143,24 @@ func (p *Game) loadSound(name SoundName) (media sound, err error) {
 	return
 }
 
-func (p *Game) playSound(sprite *engine.Sprite, audioId engine.Object, name SoundName, isLoop bool, attenuation, maxDistance float64) {
-	p.playSoundInternal(sprite, audioId, name, isLoop, false, attenuation, maxDistance)
+func (p *Game) playSound(sprite *engine.Sprite, audioId engine.Object, name SoundName, isLoop bool, attenuation, maxDistance float64) int64 {
+	return p.playSoundInternal(sprite, audioId, name, isLoop, false, attenuation, maxDistance)
 }
 
-func (p *Game) playSoundAndWait(sprite *engine.Sprite, audioId engine.Object, name SoundName, attenuation, maxDistance float64) {
-	p.playSoundInternal(sprite, audioId, name, false, true, attenuation, maxDistance)
+func (p *Game) playSoundAndWait(sprite *engine.Sprite, audioId engine.Object, name SoundName, attenuation, maxDistance float64) int64 {
+	return p.playSoundInternal(sprite, audioId, name, false, true, attenuation, maxDistance)
 }
 
-func (p *Game) playSoundInternal(sprite *engine.Sprite, audioId engine.Object, name SoundName, isLoop, wait bool, attenuation, maxDistance float64) {
+func (p *Game) playSoundInternal(sprite *engine.Sprite, audioId engine.Object, name SoundName, isLoop, wait bool, attenuation, maxDistance float64) int64 {
 	m, err := p.loadSound(name)
 	if err != nil {
-		return
+		return 0
 	}
 	ownerID := engine.Object(0)
 	if sprite != nil {
 		ownerID = sprite.Id
 	}
-	p.soundMgr.Play(audioId, m.Path, isLoop, wait, ownerID, attenuation, maxDistance)
+	return p.soundMgr.Play(audioId, m.Path, isLoop, wait, ownerID, attenuation, maxDistance)
 }
 
 func (p *Game) withSound(name SoundName, action func(m sound)) {
@@ -187,6 +187,10 @@ func (p *Game) stopSound(name SoundName) {
 	p.withSound(name, func(m sound) {
 		p.soundMgr.Stop(m.Path)
 	})
+}
+
+func (p *Game) stopSoundPlayback(id int64) {
+	p.soundMgr.StopID(id)
 }
 
 func (p *Game) checkSoundObj() {

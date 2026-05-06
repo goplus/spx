@@ -78,6 +78,14 @@ func (m *Manager) Stop(path string) {
 	delete(m.path2ids, path)
 }
 
+func (m *Manager) StopID(id int64) {
+	if id == 0 {
+		return
+	}
+	m.backend.Stop(id)
+	m.removeID(id)
+}
+
 func (m *Manager) Play(
 	soundObj engine.Object,
 	path string,
@@ -168,4 +176,23 @@ func (m *Manager) pruneDeadIDs(path string) []int64 {
 	}
 	m.path2ids[path] = live
 	return live
+}
+
+func (m *Manager) removeID(target int64) {
+	for path, ids := range m.path2ids {
+		live := ids[:0]
+		for _, id := range ids {
+			if id == target {
+				continue
+			}
+			if m.backend.IsPlaying(id) {
+				live = append(live, id)
+			}
+		}
+		if len(live) == 0 {
+			delete(m.path2ids, path)
+			continue
+		}
+		m.path2ids[path] = live
+	}
 }

@@ -92,8 +92,12 @@ func (p *SpriteImpl) ChangeSoundEffect(kind SoundEffectKind, delta float64) {
 // -----------------------------------------------------------------------------
 // Internals
 // -----------------------------------------------------------------------------
-func (p *SpriteImpl) playAudio(name SoundName, loop bool) {
-	p.sound().playAudio(name, loop)
+func (p *SpriteImpl) playAudio(name SoundName, loop bool) int64 {
+	return p.sound().playAudio(name, loop)
+}
+
+func (p *SpriteImpl) stopAudioPlayback(id int64) {
+	p.sound().stopAudioPlayback(id)
 }
 
 func (p *SpriteImpl) flushPendingAudios(buffer []string) []string {
