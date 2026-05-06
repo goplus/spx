@@ -6,7 +6,7 @@ cd $SCRIPT_DIR
 target_font_path="./template/project/engine/fonts/CnFont.ttf"
 
 if [ -e "$target_font_path" ]; then
-    echo font path: $target_font_path
+    echo "Font path: $target_font_path"
     exit 0  
 fi
 

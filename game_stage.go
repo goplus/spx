@@ -180,7 +180,7 @@ func (p *Game) Ask(msg any) {
 		msgStr = fmt.Sprint(msg)
 	}
 	if msgStr == "" {
-		spxlog.Warn("ask: msg should not be empty")
+		spxlog.Warn("Ask: message should not be empty")
 		return
 	}
 	p.ask(false, msgStr, func(answer string) {})

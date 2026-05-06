@@ -20,7 +20,7 @@ import (
 	"os"
 	"os/exec"
 
-	spxlog "github.com/goplus/spx/v2/internal/log"
+	"github.com/goplus/spx/v2/cmd/spx/internal/logutil"
 )
 
 type CommandOptions struct {
@@ -41,7 +41,7 @@ func RunCommandWithEnv(envVars []string, name string, args ...string) error {
 // RunCommand runs a command and terminates the process if it fails.
 func RunCommand(envVars []string, dir string, name string, args ...string) error {
 	if err := ExecCommand(CommandOptions{Env: envVars, Dir: dir}, name, args...); err != nil {
-		spxlog.Fatalf("command %s failed: %v", name, err)
+		logutil.Fatalf("command %s failed: %v", name, err)
 	}
 	return nil
 }

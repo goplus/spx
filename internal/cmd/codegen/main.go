@@ -31,13 +31,13 @@ import (
 )
 
 var (
-	verbose          bool
-	genClangAPI      bool
-	genExtensionAPI  bool
-	packagePath      string
-	godotPath        string
-	parsedASTPath    string
-	buildConfig      string
+	verbose         bool
+	genClangAPI     bool
+	genExtensionAPI bool
+	packagePath     string
+	godotPath       string
+	parsedASTPath   string
+	buildConfig     string
 )
 
 func init() {
@@ -100,7 +100,7 @@ func generateCode() error {
 	}
 
 	if verbose {
-		spxlog.Info("cli tool done")
+		spxlog.Info("CLI tool completed")
 	}
 	return nil
 }

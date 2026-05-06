@@ -152,8 +152,8 @@ type spriteCollisionData struct {
 func (p *Game) applyPhysicsSettings(settings coreproject.SystemSettings) {
 	p.isCollisionByPixel = settings.CollisionByPixel
 	p.isAutoSetCollisionLayer = settings.AutoSetCollisionLayer
-	spxlog.Debug("==> isCollisionByPixel: %v", p.isCollisionByPixel)
-	spxlog.Debug("==> isAutoSetCollisionLayer: %v", p.isAutoSetCollisionLayer)
+	spxlog.Debug("IsCollisionByPixel: %v", p.isCollisionByPixel)
+	spxlog.Debug("IsAutoSetCollisionLayer: %v", p.isAutoSetCollisionLayer)
 
 	p.engine().SpriteMgr.SetPixelCollisionSamplingStep(settings.PixelCollisionPrecision)
 
@@ -250,7 +250,7 @@ func (p *Game) applyCollisionLayers(spriteData []*spriteCollisionData) {
 
 	for _, data := range spriteData {
 		data.info.Mask = maskMap[data.modIdx]
-		spxlog.Debug("init sprite collision info: name=%s, layer=%d, mask=%d", data.sprite.name, data.info.Layer, data.info.Mask)
+		spxlog.Debug("Init sprite collision info: name=%s, layer=%d, mask=%d", data.sprite.name, data.info.Layer, data.info.Mask)
 	}
 
 	engine.WaitMainThread(func() {

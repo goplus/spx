@@ -86,7 +86,7 @@ func (p *scriptEventBindings) OnStart(onStart func()) {
 	if sprite, ok := sink.Owner.(*SpriteImpl); ok && sprite.spriteState.Cloned {
 		return
 	}
-	spxlog.Warn("event: ignoring late OnStart registration for %s", nameOf(sink.Owner))
+	spxlog.Warn("Event: ignoring late OnStart registration for %s", nameOf(sink.Owner))
 }
 
 func (p *scriptEventBindings) OnClick(onClick func()) {
@@ -103,7 +103,7 @@ func (p *scriptEventBindings) OnTimer(time float64, call func()) {
 	p.scriptEventRegistry.manager.AddTimer(coreevent.NewSink(
 		p.pthis,
 		coreevent.TapVoid1(call, coreevent.If1(isDebugEventEnabled, func(float64) {
-			spxlog.Debug("==> onTimer: %s", nameOf(p.pthis))
+			spxlog.Debug("OnTimer: %s", nameOf(p.pthis))
 		})),
 		coreevent.MatchApproxFloat(time, 0.001),
 	))
@@ -113,7 +113,7 @@ func (p *scriptEventBindings) OnKey__0(key Key, onKey func()) {
 	p.scriptEventRegistry.manager.AddKeyPressed(coreevent.NewSink(
 		p.pthis,
 		coreevent.TapVoid1(onKey, coreevent.If1(isDebugEventEnabled, func(Key) {
-			spxlog.Debug("==> onKey: %v, %s", key, nameOf(p.pthis))
+			spxlog.Debug("OnKey: %v, %s", key, nameOf(p.pthis))
 		})),
 		coreevent.MatchValue(key),
 	))
@@ -123,7 +123,7 @@ func (p *scriptEventBindings) OnSwipe__0(direction Direction, onSwipe func()) {
 	p.scriptEventRegistry.manager.AddSwipe(coreevent.NewSink(
 		p.pthis,
 		coreevent.TapVoid1(onSwipe, coreevent.If1(isDebugEventEnabled, func(Direction) {
-			spxlog.Debug("==> onSwipe: %v, %s", direction, nameOf(p.pthis))
+			spxlog.Debug("OnSwipe: %v, %s", direction, nameOf(p.pthis))
 		})),
 		coreevent.MatchValue(direction),
 	))
@@ -133,7 +133,7 @@ func (p *scriptEventBindings) OnKey__1(keys []Key, onKey func(Key)) {
 	p.scriptEventRegistry.manager.AddKeyPressed(coreevent.NewSink(
 		p.pthis,
 		coreevent.Tap1(onKey, coreevent.If1(isDebugEventEnabled, func(key Key) {
-			spxlog.Debug("==> onKey: %v, %s", keys, nameOf(p.pthis))
+			spxlog.Debug("OnKey: %v, %s", keys, nameOf(p.pthis))
 		})),
 		coreevent.MatchAnyOf(keys),
 	))
@@ -151,7 +151,7 @@ func (p *scriptEventBindings) OnMsg__1(msg MsgName, onMsg func()) {
 	p.scriptEventRegistry.manager.AddIReceive(coreevent.NewSink(
 		p.pthis,
 		coreevent.TapVoid2(onMsg, coreevent.If2(isDebugEventEnabled, func(msg string, data any) {
-			spxlog.Debug("==> onMsg: %s, %s", msg, nameOf(p.pthis))
+			spxlog.Debug("OnMsg: %s, %s", msg, nameOf(p.pthis))
 		})),
 		coreevent.MatchValue(msg),
 	))
@@ -165,7 +165,7 @@ func (p *scriptEventBindings) OnBackdrop__1(name BackdropName, onBackdrop func()
 	p.scriptEventRegistry.manager.AddBackdropChanged(coreevent.NewSink(
 		p.pthis,
 		coreevent.TapVoid1(onBackdrop, coreevent.If1(isDebugEventEnabled, func(name BackdropName) {
-			spxlog.Debug("==> onBackdrop: %s, %s", name, nameOf(p.pthis))
+			spxlog.Debug("OnBackdrop: %s, %s", name, nameOf(p.pthis))
 		})),
 		coreevent.MatchValue(name),
 	))
@@ -310,7 +310,7 @@ func (p *Game) fireEvent(ev event) {
 func (p *scriptEventRegistry) doWhenStart() {
 	p.dispatchStartOnce(nil, func(ev *eventSink) {
 		coreevent.If0(isDebugEventEnabled, func() {
-			spxlog.Debug("==> onStart: %s", nameOf(ev.Owner))
+			spxlog.Debug("OnStart: %s", nameOf(ev.Owner))
 		})()
 		ev.Handler.(func())()
 	})
@@ -319,7 +319,7 @@ func (p *scriptEventRegistry) doWhenStart() {
 func (p *scriptEventRegistry) doWhenAwake(this threadObj) {
 	p.dispatchSync(coreevent.BucketAwake, this, func(ev *eventSink) {
 		coreevent.If0(isDebugEventEnabled, func() {
-			spxlog.Debug("==> onAwake: %s", nameOf(ev.Owner))
+			spxlog.Debug("OnAwake: %s", nameOf(ev.Owner))
 		})()
 		ev.Handler.(func())()
 	})
@@ -348,7 +348,7 @@ func (p *scriptEventRegistry) doWhenSwipe(direction Direction, this threadObj) {
 func (p *scriptEventRegistry) doWhenClick(this threadObj) {
 	p.dispatchAsync(coreevent.BucketClick, false, this, func(ev *eventSink) {
 		coreevent.If0(isDebugEventEnabled, func() {
-			spxlog.Debug("==> onClick: %s", nameOf(this))
+			spxlog.Debug("OnClick: %s", nameOf(this))
 		})()
 		ev.Handler.(func())()
 	})
@@ -357,7 +357,7 @@ func (p *scriptEventRegistry) doWhenClick(this threadObj) {
 func (p *scriptEventRegistry) doWhenTouchStart(this threadObj, obj *SpriteImpl) {
 	p.dispatchAsync(coreevent.BucketTouchStart, false, this, func(ev *eventSink) {
 		coreevent.If0(isDebugEventEnabled, func() {
-			spxlog.Debug("===> onTouchStart: %s, %s", nameOf(this), obj.name)
+			spxlog.Debug("OnTouchStart: %s, %s", nameOf(this), obj.name)
 		})()
 		ev.Handler.(func(Sprite))(obj.sprite)
 	})
@@ -366,7 +366,7 @@ func (p *scriptEventRegistry) doWhenTouchStart(this threadObj, obj *SpriteImpl) 
 func (p *scriptEventRegistry) doWhenCloned(this threadObj, data any) {
 	p.dispatchAsync(coreevent.BucketCloned, true, this, func(ev *eventSink) {
 		coreevent.If0(isDebugEventEnabled, func() {
-			spxlog.Debug("==> onCloned: %s", nameOf(this))
+			spxlog.Debug("OnCloned: %s", nameOf(this))
 		})()
 		ev.Handler.(func(any))(data)
 	})

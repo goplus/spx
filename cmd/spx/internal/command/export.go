@@ -17,7 +17,6 @@
 package command
 
 import (
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -29,12 +28,12 @@ import (
 
 // ExportBuild runs a platform export with the current Godot project.
 func (cmd *CmdTool) ExportBuild(platform string) error {
-	fmt.Printf("starting export: platform=%s, project=%s\n", platform, cmd.ProjectDir)
+	logInfof("Starting export: platform=%s, project=%s", platform, cmd.ProjectDir)
 	os.MkdirAll(filepath.Join(cmd.ProjectDir, ".builds", strings.ToLower(platform)), 0o755)
 	execCmd := exec.Command(cmd.CmdPath, "--headless", "--quit", "--path", cmd.ProjectDir, "--export-debug", platform)
 	err := execCmd.Run()
 	if err != nil {
-		fmt.Println("exporting to web failed:", err)
+		logWarnf("Export failed for platform=%s: %v", platform, err)
 	}
 	return err
 }

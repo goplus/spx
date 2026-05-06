@@ -26,7 +26,6 @@ import (
 	"strings"
 
 	"github.com/goplus/spx/v2/cmd/spx/internal/util"
-	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
 const PcExportName = "gdexport"
@@ -96,20 +95,24 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 
 	err = cmd.parseCommandLineArgs(help, ext...)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		logErrorf("%v", err)
 		return err
 	}
 	if cmd.Args.Verbose != nil && *cmd.Args.Verbose {
-		spxlog.SetLevel(spxlog.LevelDebug)
+		enableDebugLogging()
 	}
 
 	if cmd.Args.CmdName == "init" {
-		return cmd.Init()
+		err = cmd.Init()
+		if err != nil {
+			logErrorf("Initializing project: %v", err)
+		}
+		return err
 	}
 
 	err = cmd.setupPaths(dstRelDir)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error setting up paths: %v\n", err)
+		logErrorf("Setting up paths: %v", err)
 		return err
 	}
 
@@ -119,13 +122,17 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 
 	if cmd.Args.GoEnv != nil && *cmd.Args.GoEnv != "" {
 		if err := cmd.setupPortableGoEnv(); err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to setup portable Go environment: %v\n", err)
+			logErrorf("Setting up portable Go environment: %v", err)
 			return fmt.Errorf("failed to setup portable Go environment: %w", err)
 		}
 	}
 
 	if isInterpretedRunCommand(cmd.Args.CmdName) {
-		return cmd.handleInterpretedRunCommand()
+		err = cmd.handleInterpretedRunCommand()
+		if err != nil {
+			logErrorf("Executing interpreted run command: %v", err)
+		}
+		return err
 	}
 
 	if isRuntimeModeCommand(cmd.Args.CmdName) {
@@ -134,7 +141,7 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 
 	err = cmd.CheckEnv()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Environment check failed: %v\n", err)
+		logErrorf("Environment check failed: %v", err)
 		return err
 	}
 
@@ -145,7 +152,7 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 
 	err = cmd.SetupEnv(version, fs, fsRelDir, dstRelDir)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to setup environment: %v\n", err)
+		logErrorf("Setting up environment: %v", err)
 		return err
 	}
 
@@ -160,12 +167,12 @@ func (cmd *CmdTool) handleSpecialCommands() bool {
 		return true
 	case "clear":
 		if err := cmd.Clear(); err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to clear project: %v\n", err)
+			logErrorf("Clearing project: %v", err)
 		}
 		return true
 	case "stopweb":
 		if err := cmd.StopWeb(); err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to stop web server: %v\n", err)
+			logErrorf("Stopping web server: %v", err)
 		}
 		return true
 	}
@@ -180,7 +187,7 @@ func (cmd *CmdTool) executeCommand() error {
 
 	err := cmd.handleExecutionPhase()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error executing command: %v\n", err)
+		logErrorf("Executing command: %v", err)
 	}
 	return err
 
@@ -188,26 +195,26 @@ func (cmd *CmdTool) executeCommand() error {
 
 // handleBuildPhase runs the build step.
 func (cmd *CmdTool) handleBuildPhase() error {
-	spxlog.Debug("handling build phase: command=%s %s", cmd.Args.CmdName, cmd.SafeTagArgs())
+	logDebugf("Handling build phase: command=%s %s", cmd.Args.CmdName, cmd.SafeTagArgs())
 
 	switch cmd.Args.CmdName {
 	case "buildtinygo":
-		spxlog.Debug("running TinyGo library build")
+		logDebugf("Running TinyGo library build")
 		return cmd.BuildTinyGoLib()
 	case "editor", "rune", "export", "build", "runnative":
-		spxlog.Debug("checking DLL build conditions")
+		logDebugf("Checking DLL build conditions")
 		if cmd.Args.Tags == nil || !strings.Contains(*cmd.Args.Tags, "pure_engine") {
-			spxlog.Debug("running DLL build")
+			logDebugf("Running DLL build")
 			return cmd.BuildDll()
 		} else {
-			spxlog.Debug("skipping DLL build for pure_engine mode")
+			logDebugf("Skipping DLL build for pure_engine mode")
 		}
 	default:
 		if shouldBuildWasmForCommand(cmd.Args.CmdName) {
-			spxlog.Debug("running WebAssembly build")
+			logDebugf("Running WebAssembly build")
 			return cmd.BuildWasm()
 		}
-		spxlog.Debug("no build phase needed for command: %s", cmd.Args.CmdName)
+		logDebugf("No build phase needed for command: %s", cmd.Args.CmdName)
 	}
 	return nil
 }

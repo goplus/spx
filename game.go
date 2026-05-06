@@ -231,7 +231,7 @@ func (p *Game) getSpriteProtoByName(name string, g reflect.Value) Sprite {
 	if !ok {
 		tySpr, ok := p.typs[name]
 		if !ok {
-			spxlog.Panicf("sprite %s is not defined", name)
+			spxlog.Panicf("Sprite %s is not defined", name)
 		}
 		spr = p.newSpriteAndLoad(name, tySpr, g)
 	}

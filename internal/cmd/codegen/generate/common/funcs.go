@@ -738,6 +738,6 @@ func GenerateFile(funcs template.FuncMap, name string, text string, data any, ds
 		exec.Command("go", "fmt", dstPath).Run()
 		exec.Command("goimports", "-w", dstPath).Run()
 	}
-	spxlog.Info("generate file: %s", dstPath)
+	spxlog.Info("Generated file: %s", dstPath)
 	return nil
 }

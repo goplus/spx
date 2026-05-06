@@ -95,7 +95,7 @@ func LoadJSON(ret any, fs spxfs.Dir, file string) error {
 
 	f, err := fs.Open(file)
 	if err != nil {
-		spxlog.Error("failed to open file %s: %v", file, err)
+		spxlog.Error("Failed to open file %s: %v", file, err)
 		return err
 	}
 	defer f.Close()

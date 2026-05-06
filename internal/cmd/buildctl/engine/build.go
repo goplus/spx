@@ -100,7 +100,7 @@ func prepareEngineBuildEnvironment(repoRoot, requestedPlatform string) (buildEnv
 
 	commandEnv := currentEnvMap()
 	if runtime.GOOS == "darwin" {
-		fmt.Fprintln(os.Stdout, "try to install macos vulkan sdk")
+		fmt.Fprintf(os.Stdout, "Installing macOS Vulkan SDK...\n")
 		if err := runStreamingCommand(buildEnv.EngineDir, filepath.Join("misc", "scripts", "install_vulkan_sdk_macos.sh")); err != nil {
 			return buildEnvironment{}, nil, err
 		}
@@ -110,10 +110,10 @@ func prepareEngineBuildEnvironment(repoRoot, requestedPlatform string) (buildEnv
 				commandEnv["PATH"] = prependToPath(commandEnv["PATH"], filepath.Join(sdkRoot, "bin"))
 				fmt.Fprintf(os.Stdout, "Using macOS Vulkan SDK from %s\n", sdkRoot)
 				if _, err := runCommandOutputWithEnv("", envMapToSlice(commandEnv), "vulkaninfo", "--summary"); err != nil {
-					fmt.Fprintln(os.Stdout, "Warning: vulkaninfo check failed, continuing with configured Vulkan SDK.")
+					fmt.Fprintf(os.Stdout, "Warning: vulkaninfo check failed. Continuing with the configured Vulkan SDK.\n")
 				}
 			} else {
-				fmt.Fprintln(os.Stdout, "Warning: vulkaninfo not found after Vulkan SDK setup, continuing anyway.")
+				fmt.Fprintf(os.Stdout, "Warning: vulkaninfo was not found after Vulkan SDK setup. Continuing anyway.\n")
 			}
 		}
 	}
@@ -122,15 +122,12 @@ func prepareEngineBuildEnvironment(repoRoot, requestedPlatform string) (buildEnv
 }
 
 func printBuildEnvironmentSummary(buildEnv buildEnvironment) {
-	fmt.Fprintf(os.Stdout, "version=%s GOPATH=%s\n", buildEnv.Version, buildEnv.GoPath)
 	fmt.Fprintf(os.Stdout, "PROJ_DIR=%s\n", buildEnv.ProjectDir)
 	fmt.Fprintf(os.Stdout, "ENGINE_DIR=%s\n", buildEnv.EngineDir)
 	fmt.Fprintf(os.Stdout, "GODOT_SRC=%s\n", buildEnv.GodotSrc)
 	fmt.Fprintf(os.Stdout, "ENGINE_VERSION=%s\n", buildEnv.EngineVersion)
 	fmt.Fprintf(os.Stdout, "GOPATH=%s\n", buildEnv.GoPath)
 	fmt.Fprintf(os.Stdout, "VERSION=%s\n", buildEnv.Version)
-	fmt.Fprintln(os.Stdout, "Detecting platform...")
-	fmt.Fprintln(os.Stdout, runtime.GOOS)
 	fmt.Fprintf(os.Stdout, "Platform: %s\n", buildEnv.Platform)
 	fmt.Fprintf(os.Stdout, "Architecture: %s\n", buildEnv.Arch)
 	fmt.Fprintf(os.Stdout, "Destination directory: %s\n", buildEnv.TemplateDir)
@@ -138,7 +135,7 @@ func printBuildEnvironmentSummary(buildEnv buildEnvironment) {
 }
 
 func buildEngineEditor(buildEnv buildEnvironment, commandEnv map[string]string, plan engineBuildShellPlan) error {
-	fmt.Fprintln(os.Stdout, "scons target=editor dev_build=yes "+strings.Join(engineCommonArgs, " "))
+	fmt.Fprintf(os.Stdout, "scons target=editor dev_build=yes %s\n", strings.Join(engineCommonArgs, " "))
 	args := append([]string{"target=editor", "dev_build=yes"}, engineCommonArgs...)
 	if plan.EditorUseVSProj {
 		args = append(args, "vsproj=yes")
@@ -152,7 +149,7 @@ func buildEngineEditor(buildEnv buildEnvironment, commandEnv map[string]string, 
 }
 
 func buildEngineTemplate(buildEnv buildEnvironment, commandEnv map[string]string, plan engineBuildShellPlan) error {
-	fmt.Fprintf(os.Stdout, "save to %s\n", buildEnv.TemplateDir)
+	fmt.Fprintf(os.Stdout, "Output directory: %s\n", buildEnv.TemplateDir)
 	fmt.Fprintf(os.Stdout, "Destination binary path: %s\n", filepath.Join(buildEnv.GoPath, "bin", "gdspxrt"+buildEnv.Version))
 
 	switch plan.Platform {
@@ -200,7 +197,7 @@ func buildEngineTemplate(buildEnv buildEnvironment, commandEnv map[string]string
 		if plan.WebProxyToPThread {
 			webArgs = append(webArgs, "proxy_to_pthread=true")
 		}
-		fmt.Fprintln(os.Stdout, "scons "+strings.Join(webArgs, " "))
+		fmt.Fprintf(os.Stdout, "scons %s\n", strings.Join(webArgs, " "))
 		if err := runLockedEngineCommandWithEnv(buildEnv.EngineDir, commandEnv, "scons", webArgs...); err != nil {
 			return err
 		}

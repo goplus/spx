@@ -31,10 +31,10 @@ import (
 )
 
 const (
+	webNormalMode      = "normal"
 	webWorkerMode      = "worker"
 	webMinigameMode    = "minigame"
 	webMiniprogramMode = "miniprogram"
-	webNormalMode      = "normal"
 )
 
 type minigamePaths struct {
@@ -61,6 +61,27 @@ func (cmd *CmdTool) ExportWeb() error {
 		return err
 	}
 	util.CopyDir(cmd.PlatformFS, "template/platform/web"+webNormalMode, cmd.WebDir, true)
+	return nil
+}
+
+// ExportWebWorker exports the project for the worker-based web runtime.
+func (cmd *CmdTool) ExportWebWorker() error {
+	if err := cmd.exportWebCommon(webWorkerMode); err != nil {
+		return err
+	}
+	extDir := filepath.Join(cmd.WebDir, "__"+webWorkerMode)
+	util.CopyDir(cmd.PlatformFS, "template/platform/web"+webWorkerMode, extDir, true)
+	defer func() {
+		_ = os.RemoveAll(extDir)
+	}()
+
+	insertCode, err := cmd.readWebWorkerBundle(extDir)
+	if err != nil {
+		return err
+	}
+	if err := cmd.patchWebWorkerEngine(insertCode); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -91,25 +112,6 @@ func (cmd *CmdTool) ExportMiniprogram() error {
 		return err
 	}
 	util.CopyDir(cmd.PlatformFS, "template/platform/web"+webMiniprogramMode, cmd.WebDir, true)
-	return nil
-}
-
-// ExportWebWorker exports the project for the worker-based web runtime.
-func (cmd *CmdTool) ExportWebWorker() error {
-	if err := cmd.exportWebCommon(webWorkerMode); err != nil {
-		return err
-	}
-	extDir := filepath.Join(cmd.WebDir, "__"+webWorkerMode)
-	util.CopyDir(cmd.PlatformFS, "template/platform/web"+webWorkerMode, extDir, true)
-
-	insertCode, err := cmd.readWebWorkerBundle(extDir)
-	if err != nil {
-		return err
-	}
-	if err := cmd.patchWebWorkerEngine(insertCode); err != nil {
-		return err
-	}
-	os.RemoveAll(extDir)
 	return nil
 }
 
@@ -157,11 +159,11 @@ func (cmd *CmdTool) prepareMinigameEngineAssets(paths minigamePaths, buildMode s
 			return fmt.Errorf("error: brotli is not installed")
 		}
 
-		fmt.Printf("compress %s...\n", godotEditorWasm)
+		logInfof("Compressing %s", godotEditorWasm)
 		if err := cmd.compressBrotli(godotEditorWasm); err != nil {
 			return fmt.Errorf("failed to compress %s: %w", godotEditorWasm, err)
 		}
-		fmt.Printf("compress %s...\n", ispxWasm)
+		logInfof("Compressing %s", ispxWasm)
 		if err := cmd.compressBrotli(ispxWasm); err != nil {
 			return fmt.Errorf("failed to compress %s: %w", ispxWasm, err)
 		}
@@ -191,12 +193,12 @@ func (cmd *CmdTool) finalizeMinigameJS(paths minigamePaths, isCompressed bool) e
 
 func (cmd *CmdTool) openWeChatDevTools(workDir string) {
 	if wechatDevTools := os.Getenv("WECHAT_DEV_TOOLS"); wechatDevTools != "" {
-		fmt.Printf("open wechat dev tools %s\n", workDir)
+		logInfof("Opening WeChat DevTools for %s", workDir)
 		execCmd := exec.Command(filepath.Join(wechatDevTools, "cli"), "open", "--project", workDir, "-y")
 		execCmd.Run()
 		return
 	}
-	fmt.Printf("WECHAT_DEV_TOOLS is not set, please open project manually %s\n", workDir)
+	logWarnf("WECHAT_DEV_TOOLS is not set; open the project manually: %s", workDir)
 }
 
 func (cmd *CmdTool) readWebWorkerBundle(extDir string) (string, error) {
@@ -262,7 +264,7 @@ func (cmd *CmdTool) exportWebCommon(mode string) error {
 	os.MkdirAll(dstPath, 0o755)
 	util.CopyDir2(templateDir, dstPath)
 
-	println("==> _exportWeb", dstPath)
+	logInfof("Exporting web assets to %s", dstPath)
 	util.CopyDir(cmd.ProjectFS, "template/project", cmd.ProjectDir, true)
 
 	os.Rename(filepath.Join(dstPath, "godot.editor.html"), filepath.Join(dstPath, "index.html"))

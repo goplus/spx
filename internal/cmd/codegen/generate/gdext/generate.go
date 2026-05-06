@@ -70,7 +70,7 @@ func GenerateHeader(projectPath, godotPath string) {
 	dir := filepath.Join(godotPath, "modules", "spx")
 	_, err := os.Stat(dir)
 	if os.IsNotExist(err) {
-		spxlog.Warn("dir not exist %s", dir)
+		spxlog.Warn("Directory does not exist: %s", dir)
 		return
 	}
 	outputFile := filepath.Join(projectPath, NativeRelDir, "gdextension_spx_ext.h")
@@ -80,7 +80,7 @@ func Generate(projectPath, godotPath string, ast clang.CHeaderFileAST) {
 	dir := filepath.Join(godotPath, "modules", "spx")
 	_, err := os.Stat(dir)
 	if os.IsNotExist(err) {
-		spxlog.Warn("dir not exist %s", dir)
+		spxlog.Warn("Directory does not exist: %s", dir)
 		return
 	}
 	err = generateGdCppFile(projectPath, gdSpxExtCpp, ast, "gdextension_spx_ext.cpp")

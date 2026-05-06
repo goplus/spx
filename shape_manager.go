@@ -132,7 +132,7 @@ func (s *shapeManager) addShape(child Shape) {
 func (s *shapeManager) addClonedShape(src, clone Shape) {
 	idx := s.findShapeIndex(src)
 	if idx < 0 {
-		spxlog.Debug("addClonedShape: clone a deleted sprite")
+		spxlog.Debug("AddClonedShape: cloning a deleted sprite")
 		gco.Abort()
 		return
 	}

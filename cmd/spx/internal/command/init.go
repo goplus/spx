@@ -43,7 +43,7 @@ func (cmd *CmdTool) Init() error {
 		}
 	}
 
-	fmt.Printf("initializing SPX project in: %s\n", targetPath)
+	logInfof("Initializing SPX project in: %s", targetPath)
 
 	assetsDir := filepath.Join(targetPath, "assets")
 	if err := os.MkdirAll(assetsDir, 0755); err != nil {
@@ -79,9 +79,8 @@ onStart => {
 		return fmt.Errorf("failed to create go.mod: %w", err)
 	}
 
-	fmt.Println("")
-	fmt.Println("initialized SPX project successfully")
-	fmt.Println("run 'spx run' to start your project")
+	logInfof("Initialized SPX project successfully")
+	logInfof("Run 'spx run' to start your project")
 
 	return nil
 }

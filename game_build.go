@@ -191,7 +191,7 @@ func setupGameSystems(g *Game, proj *coreproject.ProjectConfig) {
 // Loading
 // -----------------------------------------------------------------------------
 func loadGameSprites(g *Game, v reflect.Value, fs spxfs.Dir, proj *coreproject.ProjectConfig) {
-	spxlog.Debug("==> StartLoad")
+	spxlog.Debug("StartLoad")
 
 	g.startLoad(fs)
 	err := coreproject.WalkFields(v, func(fieldIndex int) (string, any) {

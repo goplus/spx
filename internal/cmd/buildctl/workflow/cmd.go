@@ -386,7 +386,7 @@ func buildDevWorkflow(cfg workflowBuildDevConfig, runner scriptRunner) error {
 		return err
 	}
 
-	fmt.Fprintln(os.Stdout, "===> build-dev done, use 'make run DEMO_INDEX=N' to run demo")
+	fmt.Fprintln(os.Stdout, "Build complete. Run a demo with: make run DEMO_INDEX=N")
 	return nil
 }
 
@@ -485,5 +485,5 @@ func runEngineBuildWorkflow(runner scriptRunner, cfg engineBuildConfig) error {
 }
 
 func printWorkflowStep(step, total int, label string) {
-	fmt.Fprintf(os.Stdout, "===> Step %d/%d: %s\n", step, total, label)
+	fmt.Fprintf(os.Stdout, "Step %d/%d: %s\n", step, total, label)
 }

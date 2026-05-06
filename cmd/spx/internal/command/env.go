@@ -142,7 +142,7 @@ func (cmd *CmdTool) Reimport() {
 	default:
 		cmd.BuildDll()
 	}
-	fmt.Println(" ================= importing ... ================= ")
+	logInfof("Importing project resources")
 	execCmd := exec.Command(cmd.CmdPath, "--import", "--headless")
 	execCmd.Dir = cmd.ProjectDir
 	execCmd.Start()

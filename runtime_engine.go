@@ -87,7 +87,7 @@ func (p *Game) OnEnginePause(bool) {
 // Loop Setup
 // -----------------------------------------------------------------------------
 func (p *Game) runLoop(cfg *Config) (err error) {
-	spxlog.Debug("==> RunLoop")
+	spxlog.Debug("RunLoop")
 	if !cfg.DontRunOnUnfocused {
 		p.engine().PlatformMgr.SetRunnableOnUnfocused(true)
 	}

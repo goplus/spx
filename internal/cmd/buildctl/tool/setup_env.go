@@ -177,13 +177,13 @@ func setupEMSDK() error {
 		return err
 	}
 
-	fmt.Fprintf(os.Stdout, "Using emsdk installation directory: %s\n", env.rootDir)
+	fmt.Fprintf(os.Stdout, "EMSDK installation directory: %s\n", env.rootDir)
 	if err := os.MkdirAll(env.rootDir, 0o755); err != nil {
 		return err
 	}
 
 	if !fileExists(env.repoDir) {
-		fmt.Fprintln(os.Stdout, "emsdk not found in global location, installing emsdk...")
+		fmt.Fprintln(os.Stdout, "EMSDK not found in the global location. Installing...")
 		if err := buildEnvRunStreaming(env.rootDir, "git", "clone", "https://github.com/emscripten-core/emsdk.git"); err != nil {
 			return err
 		}
@@ -198,16 +198,16 @@ func setupEMSDK() error {
 
 	currentVersion, ok := detectEMSDKVersion(env)
 	if ok {
-		fmt.Fprintf(os.Stdout, "current emcc version: %s, target version: %s\n", currentVersion, requiredEMSDKVersion)
+		fmt.Fprintf(os.Stdout, "Current emcc version: %s; target version: %s\n", currentVersion, requiredEMSDKVersion)
 	}
 
 	if !ok || currentVersion != requiredEMSDKVersion {
-		fmt.Fprintf(os.Stdout, "emcc version mismatch, installing target version %s...\n", requiredEMSDKVersion)
+		fmt.Fprintf(os.Stdout, "Installing target emcc version %s...\n", requiredEMSDKVersion)
 		if err := buildEnvRunStreaming(env.repoDir, "./emsdk", "install", requiredEMSDKVersion); err != nil {
 			return err
 		}
 	} else {
-		fmt.Fprintln(os.Stdout, "emcc version matches, no need to re-install")
+		fmt.Fprintln(os.Stdout, "Current emcc version matches the target version. No reinstall needed.")
 	}
 	if err := buildEnvRunStreaming(env.repoDir, "./emsdk", "activate", requiredEMSDKVersion); err != nil {
 		return err
@@ -224,7 +224,7 @@ func verifyEMSDK(env emsdkEnvironment) error {
 	if err != nil {
 		return fmt.Errorf("failed to set up emsdk. Please check the installation: %w", err)
 	}
-	fmt.Fprintln(os.Stdout, "emsdk is set up successfully:")
+	fmt.Fprintln(os.Stdout, "EMSDK setup completed:")
 	fmt.Fprint(os.Stdout, string(output))
 	return nil
 }
