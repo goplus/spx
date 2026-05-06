@@ -176,6 +176,28 @@ func TestManagerPlayPrunesFinishedIDs(t *testing.T) {
 	}
 }
 
+func TestManagerStopIDOnlyStopsRequestedPlayback(t *testing.T) {
+	backend := &fakeBackend{}
+	var mgr Manager
+	mgr.Init(backend)
+
+	first := mgr.Play(1, "sounds/a.wav", true, false, 0, 0, 0)
+	second := mgr.Play(1, "sounds/a.wav", true, false, 0, 0, 0)
+
+	mgr.StopID(first)
+	mgr.Pause("sounds/a.wav")
+
+	if len(backend.stops) != 1 || backend.stops[0] != first {
+		t.Fatalf("Stop calls = %+v, want [%d]", backend.stops, first)
+	}
+	if len(mgr.path2ids["sounds/a.wav"]) != 1 || mgr.path2ids["sounds/a.wav"][0] != second {
+		t.Fatalf("path2ids = %+v, want only second playback %d", mgr.path2ids["sounds/a.wav"], second)
+	}
+	if len(backend.pauses) != 1 || backend.pauses[0] != second {
+		t.Fatalf("Pause calls = %+v, want [%d]", backend.pauses, second)
+	}
+}
+
 func TestManagerVolumeAndEffects(t *testing.T) {
 	backend := &fakeBackend{pan: 0.25, pitch: 1.5, volume: 0.8}
 	var mgr Manager

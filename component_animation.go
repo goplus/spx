@@ -290,9 +290,23 @@ func (a *animationComponent) hasActiveAnimationPlayback() bool {
 
 func (a *animationComponent) playAnimAudio(ani *coreproject.AniConfig, info *animState) {
 	if ani.OnStart != nil && ani.OnStart.Play != "" {
-		info.AudioName = ani.OnStart.Play
-		a.sprite.playAudio(info.AudioName, false)
+		loop := ani.OnStart.GetLoop(false)
+		if !loop {
+			info.LoopReplayAudioName = ani.OnStart.Play
+		}
+		a.sprite.playAudio(ani.OnStart.Play, loop)
 	}
+	if ani.OnPlay != nil && ani.OnPlay.Play != "" {
+		info.BoundAudioPlaybackID = a.sprite.playAudio(ani.OnPlay.Play, ani.OnPlay.GetLoop(true))
+	}
+}
+
+func (a *animationComponent) stopAnimPlaybackAudio(state *animState) {
+	if state == nil || state.BoundAudioPlaybackID == 0 {
+		return
+	}
+	a.sprite.stopAudioPlayback(state.BoundAudioPlaybackID)
+	state.BoundAudioPlaybackID = 0
 }
 
 func (a *animationComponent) adaptAnimBitmapResolution(ani *coreproject.AniConfig) {
@@ -334,6 +348,7 @@ func (a *animationComponent) stopAnimState(state *animState) {
 	if state == nil {
 		return
 	}
+	a.stopAnimPlaybackAudio(state)
 	state.IsCanceled = true
 }
 

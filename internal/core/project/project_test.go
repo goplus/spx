@@ -206,6 +206,19 @@ func TestProjectConfigHelpers(t *testing.T) {
 		t.Fatalf("GetCostumeIndex = %d, want 3", got)
 	}
 
+	action := &ActionConfig{}
+	if got := action.GetLoop(true); got != true {
+		t.Fatalf("ActionConfig.GetLoop(default true) = %v, want true", got)
+	}
+	if got := (*ActionConfig)(nil).GetLoop(false); got != false {
+		t.Fatalf("nil ActionConfig.GetLoop(default false) = %v, want false", got)
+	}
+	loop := false
+	action.Loop = &loop
+	if got := action.GetLoop(true); got != false {
+		t.Fatalf("ActionConfig.GetLoop(explicit false) = %v, want false", got)
+	}
+
 	if got := ToMapMode("repeat"); got != MapModeRepeat {
 		t.Fatalf("ToMapMode(repeat) = %d, want %d", got, MapModeRepeat)
 	}
