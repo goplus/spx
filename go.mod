@@ -5,7 +5,7 @@ go 1.25.0
 tool github.com/goplus/ixgo/cmd/qexp
 
 require (
-	github.com/goplus/ixgo v1.0.7
+	github.com/goplus/ixgo v1.0.8
 	github.com/goplus/mod v0.20.2
 	github.com/goplus/reflectx v1.6.4
 	github.com/goplus/spbase v0.1.0
@@ -19,7 +19,6 @@ require (
 	github.com/qiniu/x v1.17.0 // indirect
 	github.com/timandy/routine v1.1.5 // indirect
 	github.com/visualfc/funcval v0.1.4 // indirect
-	github.com/visualfc/goembed v0.3.4 // indirect
 	github.com/visualfc/xtype v0.3.0 // indirect
 	golang.org/x/image v0.23.0 // indirect
 	golang.org/x/mod v0.29.0 // indirect
