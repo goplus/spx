@@ -37,7 +37,7 @@ func (p *SpriteImpl) Ask(msg any) {
 		msgStr = fmt.Sprint(msg)
 	}
 	if msgStr == "" {
-		spxlog.Warn("ask: msg should not be empty")
+		spxlog.Warn("Ask: message should not be empty")
 		return
 	}
 	p.Say__0(msgStr)

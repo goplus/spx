@@ -59,7 +59,7 @@ func toPhysicsMode(mode string) PhysicsMode {
 	case "no":
 		return NoPhysics
 	}
-	spxlog.Warn("config error: unknown physics mode %s", mode)
+	spxlog.Warn("Config error: unknown physics mode %s", mode)
 	return NoPhysics
 }
 

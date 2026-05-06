@@ -16,7 +16,7 @@ if [ ! -f "$font_path" ]; then
 fi
 
 if [ ! -f "$font_path" ]; then
-    echo "can not find font or download it, please checkout your network " $font_path
+    echo "Cannot find or download font. Please check your network: $font_path"
     exit 1
 fi
 
@@ -41,7 +41,7 @@ for arg in "$@"; do
         --opt)
             ;;
         *)
-            echo "warning: ignoring unknown install.sh flag: $arg"
+            echo "Warning: ignoring unknown install.sh flag: $arg"
             ;;
     esac
 done
@@ -117,7 +117,7 @@ ensure_runtime_assets_for_embedding() {
         return 0
     fi
 
-    echo "Preparing runtime assets for embedded spx build..."
+    echo "Preparing runtime assets for embedded SPX build..."
     GOFLAGS="-buildvcs=false" go run ../../internal/cmd/buildctl engine download --runtime
 }
 
@@ -169,7 +169,7 @@ install_web_runtime() {
     rm -rf "$gopath_bin_dir/ispx"
     mkdir -p "$gopath_bin_dir/ispx"
     cp ../ispx/web/* "$gopath_bin_dir/ispx/"
-    echo "ispx web runtime installed to $gopath_bin_dir/ispx/"
+    echo "Installed ispx web runtime to $gopath_bin_dir/ispx/"
 }
 
 if is_truthy "$embed_runtime"; then

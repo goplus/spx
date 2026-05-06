@@ -59,7 +59,7 @@ func downloadEngineAssets(cfg engineDownloadConfig, repoRoot string) error {
 			return err
 		}
 		if err := downloadRuntimePack(env); err != nil {
-			fmt.Fprintf(osStderr, "warning: failed to download runtime pack: %v\n", err)
+			fmt.Fprintf(osStderr, "Warning: failed to download runtime pack: %v\n", err)
 		}
 		return nil
 	}

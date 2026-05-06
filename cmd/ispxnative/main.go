@@ -36,15 +36,15 @@ func main() {
 	// In both cases, the spx source files (.spx) are in the parent directory.
 	projDir, err := filepath.Abs("..")
 	if err != nil {
-		panic("failed to get project directory: " + err.Error())
+		panic("Failed to get project directory: " + err.Error())
 	}
 
 	if err := ispx.Init(nil); err != nil {
-		panic("failed to initialize: " + err.Error())
+		panic("Failed to initialize: " + err.Error())
 	}
 
 	if err := ispx.BuildFS(os.DirFS(projDir)); err != nil {
-		panic("failed to build: " + err.Error())
+		panic("Failed to build: " + err.Error())
 	}
 
 	if exitCode, err := ispx.Run(); err != nil {

@@ -29,7 +29,7 @@ import (
 )
 
 func (p *Game) loadSprite(sprite Sprite, name string, gamer reflect.Value) error {
-	spxlog.Debug("==> LoadSprite: %s", name)
+	spxlog.Debug("LoadSprite: %s", name)
 	loaded, err := coreproject.LoadSpriteConfig(p.fs, name)
 	if err != nil {
 		return err
@@ -87,7 +87,7 @@ func (p *Game) setupWorldAndWindow(proj *coreproject.ProjectConfig) {
 	} else {
 		p.baseObj.initWithSize(p.displayState.WorldWidth, p.displayState.WorldHeight)
 	}
-	spxlog.Debug("==> SetWorldSize: %d, %d", p.displayState.WorldWidth, p.displayState.WorldHeight)
+	spxlog.Debug("SetWorldSize: %d, %d", p.displayState.WorldWidth, p.displayState.WorldHeight)
 
 	metrics := coreproject.ResolveWorldWindowMetrics(
 		p.displayState.WorldWidth,
@@ -102,7 +102,7 @@ func (p *Game) setupWorldAndWindow(proj *coreproject.ProjectConfig) {
 	p.displayState.MinWorldY = metrics.MinWorldY
 	p.displayState.MapMode = metrics.MapMode
 	p.doWindowSize()
-	spxlog.Debug("==> SetWindowSize: %d, %d", p.displayState.WindowWidth, p.displayState.WindowHeight)
+	spxlog.Debug("SetWindowSize: %d, %d", p.displayState.WindowWidth, p.displayState.WindowHeight)
 
 	metrics = coreproject.ResolveWorldWindowMetrics(
 		p.displayState.WorldWidth,
@@ -239,7 +239,7 @@ func (p *Game) setupAudioAndTilemap(proj *coreproject.ProjectConfig) {
 }
 
 func (p *Game) endLoad(g reflect.Value, proj *coreproject.ProjectConfig, generation uint64) (err error) {
-	spxlog.Debug("==> EndLoad")
+	spxlog.Debug("EndLoad")
 	return p.loadIndex(g, proj, generation)
 }
 
@@ -248,7 +248,7 @@ func (p *Game) addSpecialShape(g reflect.Value, v coreproject.StageShape, inits 
 		StageMonitor: func(shape coreproject.StageShape) error {
 			sm, err := newMonitor(g, shape)
 			if err != nil {
-				spxlog.Error("addSpecialShape type: %s", shape["type"])
+				spxlog.Error("AddSpecialShape type: %s", shape["type"])
 				return nil
 			}
 			sm.game = p

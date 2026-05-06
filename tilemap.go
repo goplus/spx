@@ -76,7 +76,7 @@ func (p *gameTilemapMgr) loadMap(mapDir string) {
 	}
 	loaded, err := tm.Load(p.fs, mapDir)
 	if err != nil {
-		spxlog.Panicf("failed to load tilemap JSON file %s: %v", mapDir, err)
+		spxlog.Panicf("Failed to load tilemap JSON file %s: %v", mapDir, err)
 	}
 	p.datas = loaded.Data
 	p.decoratorDatas = loaded.DecoratorData

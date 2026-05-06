@@ -35,7 +35,7 @@ func ensureEngineSource(repoRoot string, run func(name string, args ...string) e
 		return nil
 	}
 
-	fmt.Fprintf(os.Stdout, "Godot directory not found. Cloning to %s ...\n", env.EngineDir)
+	fmt.Fprintf(os.Stdout, "Godot directory not found. Cloning to %s...\n", env.EngineDir)
 	if err := os.MkdirAll(filepath.Dir(env.EngineDir), 0o755); err != nil {
 		return err
 	}

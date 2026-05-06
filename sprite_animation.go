@@ -153,14 +153,14 @@ func (p *SpriteImpl) Animate__1(name SpriteAnimationName, loop bool) {
 
 func (p *SpriteImpl) AnimateWith(name SpriteAnimationName, __xgo_optional_loop bool) {
 	if isDebugInstrEnabled() {
-		spxlog.Debug("==> Animate %s", name)
+		spxlog.Debug("Animate: %s", name)
 	}
 	p.animation().Animate(name, __xgo_optional_loop)
 }
 
 func (p *SpriteImpl) AnimateAndWait(name SpriteAnimationName) {
 	if isDebugInstrEnabled() {
-		spxlog.Debug("==> AnimateAndWait %s", name)
+		spxlog.Debug("AnimateAndWait: %s", name)
 	}
 	p.animation().AnimateAndWait(name)
 }

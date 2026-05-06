@@ -69,7 +69,7 @@ func ensureBrotliAvailable() error {
 		return nil
 	}
 
-	fmt.Fprintln(os.Stdout, "brotli not detected, trying to install...")
+	fmt.Fprintln(os.Stdout, "Brotli not detected. Installing...")
 	switch runtime.GOOS {
 	case "linux":
 		if err := installBrotliLinux(); err != nil {
@@ -141,7 +141,7 @@ func compressWithBrotli(inputFile, outputFile string) error {
 	if err := runStreamingCommand("", "brotli", "-q", "11", "-o", outputFile, inputFile); err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stdout, "%s has been created\n", outputFile)
+	fmt.Fprintf(os.Stdout, "Created %s\n", outputFile)
 	return nil
 }
 

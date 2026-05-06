@@ -18,7 +18,6 @@ package main
 
 import (
 	"embed"
-	"fmt"
 	"os"
 
 	"github.com/goplus/spx/v2/cmd/spx/internal/command"
@@ -56,7 +55,6 @@ func main() {
 	// Initialize the Args field if not already initialized
 	err := cmd.RunCmd(appName, appName, cmd.Version, projectFS, "template/project", "project")
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "failed to run cmd:", err)
 		os.Exit(1)
 	}
 }

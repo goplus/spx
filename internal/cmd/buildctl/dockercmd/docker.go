@@ -160,8 +160,8 @@ func runDockerBuildEngine(cfg dockerBuildEngineConfig) error {
 		return err
 	}
 
-	fmt.Fprintln(os.Stdout, "All builds completed successfully!")
-	fmt.Fprintln(os.Stdout, "Build logs can be found in the logs directory")
+	fmt.Fprintln(os.Stdout, "All builds completed successfully.")
+	fmt.Fprintln(os.Stdout, "Build logs are available in the logs directory.")
 	return nil
 }
 
@@ -188,11 +188,9 @@ func resolveDockerGodotPath(repoRoot, explicit string) (string, error) {
 
 func runPodmanSConsBuild(podmanPath, logsDir, godotPath, platform string, sconsArgs ...string) error {
 	fmt.Fprintf(os.Stdout, "Building for platform: %s\n", platform)
-	fmt.Fprintf(os.Stdout, "Build arguments: %s\n", strings.Join(sconsArgs, " "))
-	fmt.Fprintf(os.Stdout, "Platform: %s\n", platform)
 	fmt.Fprintf(os.Stdout, "Using image version: %s\n", DockerImageVersion)
 	fmt.Fprintf(os.Stdout, "Godot source path: %s\n", godotPath)
-	fmt.Fprintf(os.Stdout, "Scons arguments: %s\n", strings.Join(sconsArgs, " "))
+	fmt.Fprintf(os.Stdout, "SCons arguments: %s\n", strings.Join(sconsArgs, " "))
 	fmt.Fprintln(os.Stdout, "----------------------------------------")
 
 	args := buildPodmanSConsArgs(godotPath, platform, sconsArgs, stdinHasTTY())
@@ -201,7 +199,7 @@ func runPodmanSConsBuild(podmanPath, logsDir, godotPath, platform string, sconsA
 		return fmt.Errorf("build failed for platform %s: %w", platform, err)
 	}
 
-	fmt.Fprintf(os.Stdout, "Build completed successfully for %s\n", platform)
+	fmt.Fprintf(os.Stdout, "Completed build for %s\n", platform)
 	fmt.Fprintln(os.Stdout, "----------------------------------------")
 	return nil
 }

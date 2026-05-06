@@ -40,7 +40,7 @@ func (p *SpriteImpl) CloneWith(__xgo_optional_data any) {
 // TODO(xsw): use classfile clone mechanism instead of reflection.
 func doClone(sprite Sprite, data any, isAsync bool, onCloned func(sprite *SpriteImpl)) {
 	if sprite == nil {
-		spxlog.Panicf("doClone: sprite is nil")
+		spxlog.Panicf("DoClone: sprite is nil")
 	}
 	src := spriteOf(sprite)
 	if isDebugInstrEnabled() {

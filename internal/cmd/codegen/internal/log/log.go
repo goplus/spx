@@ -37,19 +37,31 @@ const (
 )
 
 type Logger struct {
-	mu     sync.Mutex
-	level  Level
-	logger *stdlog.Logger
-	prefix string
+	mu           sync.Mutex
+	level        Level
+	stdoutLogger *stdlog.Logger
+	stderrLogger *stdlog.Logger
+	prefix       string
 }
 
-var defaultLogger = New("SPX-CODEGEN", LevelInfo, os.Stdout)
+var defaultLogger = NewWithOutputs("SPX-CODEGEN", LevelInfo, os.Stdout, os.Stderr)
 
 func New(prefix string, level Level, out io.Writer) *Logger {
+	return NewWithOutputs(prefix, level, out, out)
+}
+
+func NewWithOutputs(prefix string, level Level, stdout, stderr io.Writer) *Logger {
+	if stdout == nil {
+		stdout = io.Discard
+	}
+	if stderr == nil {
+		stderr = io.Discard
+	}
 	return &Logger{
-		level:  level,
-		logger: stdlog.New(out, "", stdlog.Ldate|stdlog.Ltime|stdlog.Lmicroseconds),
-		prefix: prefix,
+		level:        level,
+		stdoutLogger: stdlog.New(stdout, "", stdlog.Ldate|stdlog.Ltime|stdlog.Lmicroseconds),
+		stderrLogger: stdlog.New(stderr, "", stdlog.Ldate|stdlog.Ltime|stdlog.Lmicroseconds),
+		prefix:       prefix,
 	}
 }
 
@@ -60,7 +72,18 @@ func (l *Logger) SetLevel(level Level) {
 func (l *Logger) SetOutput(w io.Writer) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	l.logger.SetOutput(w)
+	if w == nil {
+		w = io.Discard
+	}
+	l.stdoutLogger.SetOutput(w)
+	l.stderrLogger.SetOutput(w)
+}
+
+func (l *Logger) targetLogger(level Level) *stdlog.Logger {
+	if level >= LevelError {
+		return l.stderrLogger
+	}
+	return l.stdoutLogger
 }
 
 func (l *Logger) log(level Level, format string, args ...any) {
@@ -78,7 +101,7 @@ func (l *Logger) log(level Level, format string, args ...any) {
 	if len(args) > 0 {
 		msg = fmt.Sprintf(format, args...)
 	}
-	l.logger.Printf("[%s] [%s] %s", level.String(), l.prefix, msg)
+	l.targetLogger(level).Printf("[%s] [%s] %s", level.String(), l.prefix, msg)
 }
 
 func (l *Logger) Panicf(format string, args ...any) {
@@ -93,7 +116,7 @@ func (l *Logger) Panicf(format string, args ...any) {
 	if Level(atomic.LoadInt32((*int32)(&l.level))) > LevelError {
 		panic(msg)
 	}
-	l.logger.Panicf("[%s] [%s] %s", LevelError.String(), l.prefix, msg)
+	l.stderrLogger.Panicf("[%s] [%s] %s", LevelError.String(), l.prefix, msg)
 }
 
 func (l *Logger) format(format string, args ...any) string {

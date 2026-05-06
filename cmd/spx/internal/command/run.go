@@ -380,7 +380,7 @@ func (cmd *CmdTool) runWebServer() error {
 		return fmt.Errorf("web server exited unexpectedly without an error")
 	case <-time.After(500 * time.Millisecond):
 	}
-	fmt.Printf("web server running at http://127.0.0.1:%d\n", port)
+	logInfof("Web server running at http://127.0.0.1:%d", port)
 	return nil
 }
 

@@ -73,7 +73,7 @@ func (a *animationComponent) initFromConfig(spriteCfg *coreproject.SpriteConfig)
 		var ani = val
 		_, ok := a.shared.animations[key]
 		if ok {
-			spxlog.Panicf("animation key [%s] already exists", key)
+			spxlog.Panicf("Animation key [%s] already exists", key)
 		}
 
 		defaults.SetDefaultIfZero(&ani.FrameFps, 25)
@@ -157,11 +157,11 @@ func (a *animationComponent) unRegisterOnAnimationFinished() {
 }
 
 func (a *animationComponent) Animate(name SpriteAnimationName, loop bool) {
-	a.playAnimation(name, loop, false, "==> Animation %s")
+	a.playAnimation(name, loop, false, "Animation: %s")
 }
 
 func (a *animationComponent) AnimateAndWait(name SpriteAnimationName) {
-	a.playAnimation(name, false, true, "==> AnimateAndWait %s")
+	a.playAnimation(name, false, true, "AnimateAndWait: %s")
 }
 
 func (a *animationComponent) StopAnimation(name SpriteAnimationName) {
@@ -357,7 +357,7 @@ func (a *animationComponent) costumeIndex(nameOrIndex any) int {
 	case SpriteCostumeName:
 		idx := a.sprite.findCostume(v)
 		if idx < 0 {
-			spxlog.Panicf("findCostume %s failed", v)
+			spxlog.Panicf("FindCostume failed for %s", v)
 		}
 		return idx
 	default:
