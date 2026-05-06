@@ -241,17 +241,17 @@ func TestPlayAnimAudioStartsAndStopsOnPlaySound(t *testing.T) {
 		OnPlay: &coreproject.ActionConfig{Play: "walk"},
 	}, state)
 
-	if state.PlayAudioID == 0 {
+	if state.BoundAudioPlaybackID == 0 {
 		t.Fatal("onPlay did not capture a playback id")
 	}
 	if len(backend.plays) != 1 {
 		t.Fatalf("plays = %d, want 1", len(backend.plays))
 	}
-	if len(backend.loops) != 1 || backend.loops[0].id != state.PlayAudioID || !backend.loops[0].loop {
-		t.Fatalf("loop calls = %+v, want one loop call for playback %d", backend.loops, state.PlayAudioID)
+	if len(backend.loops) != 1 || backend.loops[0].id != state.BoundAudioPlaybackID || !backend.loops[0].loop {
+		t.Fatalf("loop calls = %+v, want one loop call for playback %d", backend.loops, state.BoundAudioPlaybackID)
 	}
 
-	playID := state.PlayAudioID
+	playID := state.BoundAudioPlaybackID
 	anim.onAnimationDone("walk")
 
 	if len(backend.stops) != 1 || backend.stops[0] != playID {
@@ -275,7 +275,7 @@ func TestPlayAnimAudioHonorsOnPlayLoopConfig(t *testing.T) {
 		},
 	}, state)
 
-	if state.PlayAudioID == 0 {
+	if state.BoundAudioPlaybackID == 0 {
 		t.Fatal("onPlay did not capture a playback id")
 	}
 	if len(backend.plays) != 1 {
@@ -305,8 +305,8 @@ func TestPlayAnimAudioHonorsOnStartLoopConfig(t *testing.T) {
 	if len(backend.loops) != 1 || !backend.loops[0].loop {
 		t.Fatalf("loop calls = %+v, want one looping playback", backend.loops)
 	}
-	if state.AudioName != "" {
-		t.Fatalf("AudioName = %q, want empty when onStart uses loop playback", state.AudioName)
+	if state.LoopReplayAudioName != "" {
+		t.Fatalf("LoopReplayAudioName = %q, want empty when onStart uses loop playback", state.LoopReplayAudioName)
 	}
 }
 

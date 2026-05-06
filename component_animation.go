@@ -292,22 +292,21 @@ func (a *animationComponent) playAnimAudio(ani *coreproject.AniConfig, info *ani
 	if ani.OnStart != nil && ani.OnStart.Play != "" {
 		loop := ani.OnStart.GetLoop(false)
 		if !loop {
-			info.AudioName = ani.OnStart.Play
+			info.LoopReplayAudioName = ani.OnStart.Play
 		}
 		a.sprite.playAudio(ani.OnStart.Play, loop)
 	}
 	if ani.OnPlay != nil && ani.OnPlay.Play != "" {
-		info.PlayAudioName = ani.OnPlay.Play
-		info.PlayAudioID = a.sprite.playAudio(info.PlayAudioName, ani.OnPlay.GetLoop(true))
+		info.BoundAudioPlaybackID = a.sprite.playAudio(ani.OnPlay.Play, ani.OnPlay.GetLoop(true))
 	}
 }
 
 func (a *animationComponent) stopAnimPlaybackAudio(state *animState) {
-	if state == nil || state.PlayAudioID == 0 {
+	if state == nil || state.BoundAudioPlaybackID == 0 {
 		return
 	}
-	a.sprite.stopAudioPlayback(state.PlayAudioID)
-	state.PlayAudioID = 0
+	a.sprite.stopAudioPlayback(state.BoundAudioPlaybackID)
+	state.BoundAudioPlaybackID = 0
 }
 
 func (a *animationComponent) adaptAnimBitmapResolution(ani *coreproject.AniConfig) {

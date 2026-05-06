@@ -180,19 +180,17 @@ func (m *Manager) pruneDeadIDs(path string) []int64 {
 
 func (m *Manager) removeID(target int64) {
 	for path, ids := range m.path2ids {
-		live := ids[:0]
-		for _, id := range ids {
-			if id == target {
+		for i, id := range ids {
+			if id != target {
 				continue
 			}
-			if m.backend.IsPlaying(id) {
-				live = append(live, id)
+			ids = append(ids[:i], ids[i+1:]...)
+			if len(ids) == 0 {
+				delete(m.path2ids, path)
+			} else {
+				m.path2ids[path] = ids
 			}
+			return
 		}
-		if len(live) == 0 {
-			delete(m.path2ids, path)
-			continue
-		}
-		m.path2ids[path] = live
 	}
 }

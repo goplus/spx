@@ -189,8 +189,8 @@ func (sprite *SpriteImpl) handleAnimationLooped() {
 		return
 	}
 	state := sprite.animation().getCurTweenState()
-	if state != nil && state.AudioName != "" {
-		sprite.sound().addPendingAudio(state.AudioName)
+	if state != nil && state.LoopReplayAudioName != "" {
+		sprite.sound().addPendingAudio(state.LoopReplayAudioName)
 	}
 }
 
