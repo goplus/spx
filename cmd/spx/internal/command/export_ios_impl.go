@@ -47,9 +47,20 @@ type iosArchiveBuild struct {
 	env        []string
 }
 
-// ExportIos exports the current project as an iOS IPA.
+type iosExportOutput struct {
+	buildDir         string
+	ipaPath          string
+	xcodeProjectPath string
+}
+
+const (
+	iosExportPresetName     = "iOS"
+	iosExportProjectOnlyKey = "application/export_project_only"
+)
+
+// ExportIos exports the current project for iOS.
 func (cmd *CmdTool) ExportIos() error {
-	logInfof("Starting iOS IPA export process")
+	logInfof("Starting iOS export process")
 
 	if err := cmd.prepareExport(); err != nil {
 		return err
@@ -65,7 +76,15 @@ func (cmd *CmdTool) ExportIos() error {
 	}
 	logInfof("Built iOS libraries successfully")
 
-	ipaPath, err := cmd.prepareIosOutput()
+	exportProjectOnly, err := cmd.isIosExportProjectOnly()
+	if err != nil {
+		return err
+	}
+	if exportProjectOnly {
+		logInfof("iOS export preset is configured for Xcode project-only output")
+	}
+
+	output, err := cmd.prepareIosOutput(exportProjectOnly)
 	if err != nil {
 		return err
 	}
@@ -76,10 +95,10 @@ func (cmd *CmdTool) ExportIos() error {
 	cmd.logIosExportTemplates()
 	cmd.importIosProjectResources()
 
-	if err := cmd.exportIosIPA(ipaPath); err != nil {
+	if err := cmd.exportIos(output, exportProjectOnly); err != nil {
 		return err
 	}
-	return cmd.installIosIPA(ipaPath)
+	return cmd.installIosIPA(output.ipaPath, exportProjectOnly)
 }
 
 func (cmd *CmdTool) renameIosArtifacts() error {
@@ -100,16 +119,24 @@ func (cmd *CmdTool) renameIosArtifacts() error {
 	return nil
 }
 
-func (cmd *CmdTool) prepareIosOutput() (string, error) {
-	ipaPath := filepath.Join(cmd.ProjectDir, ".builds", "ios", "Game.ipa")
-	buildDir := filepath.Dir(ipaPath)
-	logInfof("Output IPA path: %s", ipaPath)
-
-	if err := os.MkdirAll(buildDir, 0o755); err != nil {
-		return "", fmt.Errorf("failed to create build directory: %w", err)
+func (cmd *CmdTool) prepareIosOutput(exportProjectOnly bool) (iosExportOutput, error) {
+	output := iosExportOutput{
+		buildDir:         filepath.Join(cmd.ProjectDir, ".builds", "ios"),
+		ipaPath:          filepath.Join(cmd.ProjectDir, ".builds", "ios", "Game.ipa"),
+		xcodeProjectPath: filepath.Join(cmd.ProjectDir, ".builds", "ios", "Game.xcodeproj"),
 	}
-	logInfof("Build directory created: %s", buildDir)
-	return ipaPath, nil
+	logInfof("iOS build output directory: %s", output.buildDir)
+	if exportProjectOnly {
+		logInfof("Expected Xcode project path: %s", output.xcodeProjectPath)
+	} else {
+		logInfof("Expected IPA path: %s", output.ipaPath)
+	}
+
+	if err := os.MkdirAll(output.buildDir, 0o755); err != nil {
+		return iosExportOutput{}, fmt.Errorf("failed to create build directory: %w", err)
+	}
+	logInfof("Build directory created: %s", output.buildDir)
+	return output, nil
 }
 
 func (cmd *CmdTool) validateIosExportInputs() error {
@@ -187,28 +214,147 @@ func (cmd *CmdTool) importIosProjectResources() {
 	}
 }
 
-func (cmd *CmdTool) exportIosIPA(ipaPath string) error {
-	logInfof("Exporting Godot project to IPA")
-	logInfof("Export command: %s --headless --path %s --export-debug iOS %s",
-		cmd.CmdPath, cmd.ProjectDir, ipaPath)
+func (cmd *CmdTool) isIosExportProjectOnly() (bool, error) {
+	exportPresetsPath := filepath.Join(cmd.ProjectDir, "export_presets.cfg")
+	content, err := os.ReadFile(exportPresetsPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to read export presets %s: %w", exportPresetsPath, err)
+	}
+	return parseIosExportProjectOnly(content), nil
+}
+
+func parseIosExportProjectOnly(content []byte) bool {
+	presetNames := make(map[string]string)
+	projectOnlyValues := make(map[string]string)
+	seenPresets := make(map[string]bool)
+	var presetOrder []string
+	var currentPreset string
+	var currentOptions bool
+
+	for _, line := range strings.Split(string(content), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, ";") || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
+			preset, options, ok := parseExportPresetSection(line)
+			if !ok {
+				currentPreset = ""
+				currentOptions = false
+				continue
+			}
+			currentPreset = preset
+			currentOptions = options
+			if !options && !seenPresets[preset] {
+				seenPresets[preset] = true
+				presetOrder = append(presetOrder, preset)
+			}
+			continue
+		}
+
+		key, value, ok := parseExportPresetAssignment(line)
+		if !ok || currentPreset == "" {
+			continue
+		}
+		value = strings.Trim(value, "\"")
+
+		if currentOptions {
+			if key == iosExportProjectOnlyKey {
+				projectOnlyValues[currentPreset] = value
+			}
+			continue
+		}
+		if key == "name" {
+			presetNames[currentPreset] = value
+		}
+	}
+
+	for _, preset := range presetOrder {
+		if presetNames[preset] != iosExportPresetName {
+			continue
+		}
+		return strings.EqualFold(projectOnlyValues[preset], "true")
+	}
+	return false
+}
+
+func parseExportPresetSection(line string) (preset string, options bool, ok bool) {
+	if !strings.HasPrefix(line, "[") || !strings.HasSuffix(line, "]") {
+		return "", false, false
+	}
+
+	section := strings.TrimSpace(line[1 : len(line)-1])
+	if !strings.HasPrefix(section, "preset.") {
+		return "", false, false
+	}
+
+	preset = strings.TrimPrefix(section, "preset.")
+	if strings.HasSuffix(preset, ".options") {
+		preset = strings.TrimSuffix(preset, ".options")
+		options = true
+	}
+	if preset == "" || strings.Contains(preset, ".") {
+		return "", false, false
+	}
+	return preset, options, true
+}
+
+func parseExportPresetAssignment(line string) (key string, value string, ok bool) {
+	parts := strings.SplitN(line, "=", 2)
+	if len(parts) != 2 {
+		return "", "", false
+	}
+	return strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1]), true
+}
+
+func (cmd *CmdTool) exportIos(output iosExportOutput, exportProjectOnly bool) error {
+	logInfof("Exporting Godot project for iOS")
+	logInfof("Export command: %s --headless --path %s --export-debug %s %s",
+		cmd.CmdPath, cmd.ProjectDir, iosExportPresetName, output.ipaPath)
 
 	if err := util.ExecCommand(
 		util.CommandOptions{},
-		cmd.CmdPath, "--headless", "--path", cmd.ProjectDir, "--export-debug", "iOS", ipaPath,
+		cmd.CmdPath, "--headless", "--path", cmd.ProjectDir, "--export-debug", iosExportPresetName, output.ipaPath,
 	); err != nil {
-		return fmt.Errorf("failed to export IPA: %w", err)
-	}
-	if _, err := os.Stat(ipaPath); os.IsNotExist(err) {
-		return fmt.Errorf("failed to export IPA: file not created at %s", ipaPath)
+		return fmt.Errorf("failed to export iOS build: %w", err)
 	}
 
-	logInfof("Exported IPA successfully: %s", ipaPath)
+	return validateIosExportOutput(output, exportProjectOnly)
+}
+
+func validateIosExportOutput(output iosExportOutput, exportProjectOnly bool) error {
+	if exportProjectOnly {
+		if _, err := os.Stat(output.xcodeProjectPath); err != nil {
+			if os.IsNotExist(err) {
+				return fmt.Errorf("failed to export Xcode project: file not created at %s", output.xcodeProjectPath)
+			}
+			return fmt.Errorf("failed to check Xcode project output %s: %w", output.xcodeProjectPath, err)
+		}
+		logInfof("Exported Xcode project successfully: %s", output.xcodeProjectPath)
+		return nil
+	}
+
+	if _, err := os.Stat(output.ipaPath); err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("failed to export IPA: file not created at %s", output.ipaPath)
+		}
+		return fmt.Errorf("failed to check IPA output %s: %w", output.ipaPath, err)
+	}
+
+	logInfof("Exported IPA successfully: %s", output.ipaPath)
 	return nil
 }
 
-func (cmd *CmdTool) installIosIPA(ipaPath string) error {
+func (cmd *CmdTool) installIosIPA(ipaPath string, exportProjectOnly bool) error {
 	if !*cmd.Args.Install {
 		return nil
+	}
+	if exportProjectOnly {
+		return fmt.Errorf("cannot install IPA when application/export_project_only=true")
 	}
 
 	logInfof("Installing IPA on connected devices")
