@@ -19,9 +19,9 @@ package release
 import "testing"
 
 func TestReleaseMetaForSPXVersionMapped(t *testing.T) {
-	meta := ReleaseMetaForSPXVersion("v2.0.0-pre.30")
-	if meta.Runtime.Version != "2.1.27" {
-		t.Fatalf("runtime version = %q, want %q", meta.Runtime.Version, "2.1.27")
+	meta := ReleaseMetaForSPXVersion("v2.0.0")
+	if meta.Runtime.Version != "2.2.0" {
+		t.Fatalf("runtime version = %q, want %q", meta.Runtime.Version, "2.2.0")
 	}
 	if meta.Pck.SPXTag != "v2.0.0-pre.30" {
 		t.Fatalf("pck tag = %q, want %q", meta.Pck.SPXTag, "v2.0.0-pre.30")
