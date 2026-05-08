@@ -17,6 +17,7 @@
 package command
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -41,19 +42,14 @@ func (cmd *CmdTool) ExportBuild(platform string) error {
 // Export exports the current project for the host desktop platform.
 func (cmd *CmdTool) Export() error {
 	targetDir := filepath.Join(cmd.ProjectDir, ".builds", "pc")
-	targetPath := filepath.Join(targetDir, PcExportName)
-	platformName := ""
-	if runtime.GOOS == "windows" {
-		targetPath += ".exe"
-		platformName = "Win"
-	} else if runtime.GOOS == "darwin" {
-		platformName = "Mac"
-		targetPath += ".app"
-	} else if runtime.GOOS == "linux" {
-		platformName = "Linux"
+	targetPath, platformName, err := resolveDesktopExportTarget(runtime.GOOS, filepath.Join(targetDir, PcExportName))
+	if err != nil {
+		return err
 	}
 
-	os.Mkdir(targetDir, 0o755)
+	if err := os.MkdirAll(targetDir, 0o755); err != nil {
+		return fmt.Errorf("failed to create export directory: %w", err)
+	}
 	return util.RunCommandInDir(cmd.ProjectDir, cmd.CmdPath, "--headless", "--quit", "--path", cmd.ProjectDir, "--export-debug", platformName, targetPath)
 }
 

@@ -90,10 +90,7 @@ func (cmd *CmdTool) RunPureEngine(pargs ...string) error {
 	rawdir, _ := os.Getwd()
 	os.Chdir(cmd.GoDir)
 
-	binaryName := "main"
-	if runtime.GOOS == "windows" {
-		binaryName += ".exe"
-	}
+	binaryName := "main" + executableSuffix(runtime.GOOS)
 
 	envVars := []string{"CGO_ENABLED=0"}
 	if cmd.Args.Tags != nil && *cmd.Args.Tags != "" {
@@ -124,16 +121,7 @@ func (cmd *CmdTool) RunInterpreted(pargs ...string) error {
 	runtimeName := "gdspxrt" + cmd.Version + cmd.BinPostfix
 	GOOS := runtime.GOOS
 	GOARCH := runtime.GOARCH
-	var libExt string
-	switch GOOS {
-	case "windows":
-		libExt = ".dll"
-	case "darwin":
-		libExt = ".dylib"
-	default:
-		libExt = ".so"
-	}
-	libName := fmt.Sprintf("gdspx-%s-%s%s", GOOS, GOARCH, libExt)
+	libName := libraryFileName(GOOS, GOARCH)
 	packName := runtimePackFileName(runtimeName)
 
 	runtimePath, libPath, err := cmd.resolveInterpretedRuntimeAssets(runtimeName, packName, libName)

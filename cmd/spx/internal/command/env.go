@@ -188,10 +188,7 @@ func resolveTargetPlatform() (string, string, error) {
 
 func (cmd *CmdTool) setupEnginePaths() error {
 	if cmd.usesPureEngine() {
-		cmd.BinPostfix = ""
-		if runtime.GOOS == "windows" {
-			cmd.BinPostfix = ".exe"
-		}
+		cmd.BinPostfix = executableSuffix(runtime.GOOS)
 		cmd.CmdPath = ""
 		return nil
 	}
@@ -239,18 +236,6 @@ func (cmd *CmdTool) setupProjectPaths(goos, goarch string) error {
 	}
 	cmd.LibPath = libPath
 	return nil
-}
-
-func libraryFileName(goos, goarch string) string {
-	libraryName := fmt.Sprintf("%s-%s-%s", ENV_NAME, goos, goarch)
-	switch goos {
-	case "windows":
-		return libraryName + ".dll"
-	case "darwin":
-		return libraryName + ".dylib"
-	default:
-		return libraryName + ".so"
-	}
 }
 
 func (cmd *CmdTool) updateProjectName() error {
@@ -387,11 +372,7 @@ func printPortableGoEnv(cmd *CmdTool, goPaths portableGoPaths) {
 }
 
 func goBinaryPath(goRootBinPath string) string {
-	goExe := "go"
-	if runtime.GOOS == "windows" {
-		goExe = "go.exe"
-	}
-	return filepath.Join(goRootBinPath, goExe)
+	return filepath.Join(goRootBinPath, goBinaryName(runtime.GOOS))
 }
 
 func setEnvVars(vars ...envVar) error {
@@ -587,10 +568,7 @@ func hasGoModuleDeclaration(content, modulePath string) bool {
 }
 
 func resolveAppPath(gobinDir, tag, version string, customGoEnv bool) (string, string, error) {
-	binPostfix := ""
-	if runtime.GOOS == "windows" {
-		binPostfix = ".exe"
-	}
+	binPostfix := executableSuffix(runtime.GOOS)
 
 	tagName := tag + version
 	dstFileName := tagName + binPostfix

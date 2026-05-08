@@ -281,16 +281,13 @@ func TestRunInterpretedCreatesRuntimeExtensionAndCopiesSharedLibrary(t *testing.
 	logPath := filepath.Join(t.TempDir(), "runtime.log")
 	version := "9.9.9-test"
 
-	runtimeName := "gdspxrt" + version
-	if runtime.GOOS == "windows" {
-		runtimeName += ".exe"
-	}
+	runtimeName := "gdspxrt" + version + executableSuffix(runtime.GOOS)
 	writeTestRuntimeExecutable(t, filepath.Join(goBinPath, runtimeName), logPath)
 	if err := os.WriteFile(filepath.Join(goBinPath, runtimePackFileName(runtimeName)), []byte("runtime pack"), 0o644); err != nil {
 		t.Fatalf("write runtime pack: %v", err)
 	}
 
-	libName := runtimeLibraryFileName()
+	libName := libraryFileName(runtime.GOOS, runtime.GOARCH)
 	if err := os.WriteFile(filepath.Join(goBinPath, libName), []byte("shared library"), 0o755); err != nil {
 		t.Fatalf("write shared library: %v", err)
 	}
@@ -300,9 +297,7 @@ func TestRunInterpretedCreatesRuntimeExtensionAndCopiesSharedLibrary(t *testing.
 		RuntimeTempDir: runtimeTempDir,
 		Version:        version,
 	}
-	if runtime.GOOS == "windows" {
-		cmd.BinPostfix = ".exe"
-	}
+	cmd.BinPostfix = executableSuffix(runtime.GOOS)
 
 	if err := cmd.RunInterpreted("--path", "ignored"); err != nil {
 		t.Fatalf("RunInterpreted returned error: %v", err)
@@ -360,7 +355,7 @@ func TestResolveInterpretedRuntimeAssetsPrefersEmbedded(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(goBinPath, runtimePackFileName(runtimeName)), []byte("external pack"), 0o644); err != nil {
 		t.Fatalf("write external runtime pack: %v", err)
 	}
-	libName := runtimeLibraryFileName()
+	libName := libraryFileName(runtime.GOOS, runtime.GOARCH)
 	if err := os.WriteFile(filepath.Join(goBinPath, libName), []byte("external library"), 0o755); err != nil {
 		t.Fatalf("write external shared library: %v", err)
 	}
@@ -404,7 +399,7 @@ func TestResolveInterpretedRuntimeAssetsFallsBackToExternalWhenEmbeddedUnavailab
 	if err := os.WriteFile(filepath.Join(goBinPath, runtimePackFileName(runtimeName)), []byte("external pack"), 0o644); err != nil {
 		t.Fatalf("write external runtime pack: %v", err)
 	}
-	libName := runtimeLibraryFileName()
+	libName := libraryFileName(runtime.GOOS, runtime.GOARCH)
 	libPathWant := filepath.Join(goBinPath, libName)
 	if err := os.WriteFile(libPathWant, []byte("external library"), 0o755); err != nil {
 		t.Fatalf("write external shared library: %v", err)
@@ -449,17 +444,14 @@ func TestRunCmdRunHonorsPortableGoEnv(t *testing.T) {
 	if err := os.MkdirAll(goRootBinPath, 0o755); err != nil {
 		t.Fatalf("mkdir gotoolchain/go/bin: %v", err)
 	}
-	writeTestRuntimeExecutable(t, filepath.Join(goRootBinPath, goBinaryName()), filepath.Join(t.TempDir(), "go.log"))
+	writeTestRuntimeExecutable(t, filepath.Join(goRootBinPath, goBinaryName(runtime.GOOS)), filepath.Join(t.TempDir(), "go.log"))
 
-	runtimeName := "gdspxrt" + version
-	if runtime.GOOS == "windows" {
-		runtimeName += ".exe"
-	}
+	runtimeName := "gdspxrt" + version + executableSuffix(runtime.GOOS)
 	writeTestRuntimeExecutable(t, filepath.Join(goBinPath, runtimeName), logPath)
 	if err := os.WriteFile(filepath.Join(goBinPath, runtimePackFileName(runtimeName)), []byte("runtime pack"), 0o644); err != nil {
 		t.Fatalf("write runtime pack: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(goBinPath, runtimeLibraryFileName()), []byte("shared library"), 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(goBinPath, libraryFileName(runtime.GOOS, runtime.GOARCH)), []byte("shared library"), 0o755); err != nil {
 		t.Fatalf("write shared library: %v", err)
 	}
 
@@ -626,25 +618,6 @@ func writeTestRuntimeExecutable(t *testing.T, path string, logPath string) {
 	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
 		t.Fatalf("write runtime executable: %v", err)
 	}
-}
-
-func runtimeLibraryFileName() string {
-	libName := fmt.Sprintf("gdspx-%s-%s", runtime.GOOS, runtime.GOARCH)
-	switch runtime.GOOS {
-	case "windows":
-		return libName + ".dll"
-	case "darwin":
-		return libName + ".dylib"
-	default:
-		return libName + ".so"
-	}
-}
-
-func goBinaryName() string {
-	if runtime.GOOS == "windows" {
-		return "go.exe"
-	}
-	return "go"
 }
 
 func fileExists(path string) bool {
