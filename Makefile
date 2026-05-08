@@ -190,6 +190,7 @@ stop: ## Stop running processes
 # ============================================
 format: ## Format Go code
 	go fmt ./...
+	cd ./cmd/ispx && go fmt ./...
 
 generate: ## Generate all code
 	$(MAKE) generate-bindings
@@ -201,7 +202,9 @@ generate-bindings: ## Generate Godot/GDExtension binding code
 
 generate-runtime: ## Generate runtime registration code
 	go generate ./pkg/ispx/...
+	go generate ./cmd/spx/internal/command
 	go generate ./cmd/spxrunner/runner/...
+	cd ./cmd/ispx && go generate ./...
 
 clean-projects: ## Delete generated artifacts (.temp/, project/, .gdspx_web_server*.pid, go.mod, go.sum, gox.mod) from tutorial/test projects
 	@find -P tutorial test \( \

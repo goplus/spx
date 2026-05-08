@@ -206,6 +206,10 @@ func (cmd *CmdTool) genGo() string {
 
 // genGoUsingXgoCLI generates code with xgo.
 func (cmd *CmdTool) genGoUsingXgoCLI(rawdir, spxProjPath string) error {
+	if err := cmd.ensureBuilderAIModuleFiles(spxProjPath); err != nil {
+		return err
+	}
+
 	if err := os.Chdir(spxProjPath); err != nil {
 		return fmt.Errorf("failed to change directory to project root for XGo: %w", err)
 	}
