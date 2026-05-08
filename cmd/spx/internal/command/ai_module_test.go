@@ -39,7 +39,7 @@ func TestEnsureBuilderAIModuleFilesCreatesFilesInProjectRoot(t *testing.T) {
 
 go 1.25.0
 
-require github.com/goplus/spx/v2 v0.0.0-test //xgo:class
+require github.com/goplus/spx/v2 v2.0.0-test //xgo:class
 `,
 	}
 	if err := cmd.ensureBuilderAIModuleFiles(projectRoot); err != nil {
@@ -55,7 +55,7 @@ require github.com/goplus/spx/v2 v0.0.0-test //xgo:class
 	}
 
 	goMod := readTestFile(t, filepath.Join(projectRoot, "go.mod"))
-	if !strings.Contains(goMod, `require `+builderAIModule+` `+builderAIModuleVersion) {
+	if !strings.Contains(goMod, builderAIModule+` `+builderAIModuleVersion) {
 		t.Fatalf("go.mod should require builder ai before xgo go, got:\n%s", goMod)
 	}
 	if strings.Contains(goMod, "//xgo:class") {
@@ -83,7 +83,7 @@ func TestEnsureBuilderAIModuleFilesUpdatesExistingFiles(t *testing.T) {
 go 1.25.0
 
 require (
-	github.com/goplus/spx/v2 v0.0.0-test //xgo:class
+	github.com/goplus/spx/v2 v2.0.0-test //xgo:class
 )
 `), 0644); err != nil {
 		t.Fatalf("write go.mod: %v", err)
@@ -119,7 +119,7 @@ func TestEnsureBuilderAIModuleFilesSupportsRawDescriptionFilename(t *testing.T) 
 
 go 1.25.0
 
-require github.com/goplus/spx/v2 v0.0.0-test //xgo:class
+require github.com/goplus/spx/v2 v2.0.0-test //xgo:class
 `,
 	}
 	if err := cmd.ensureBuilderAIModuleFiles(projectRoot); err != nil {
@@ -132,7 +132,7 @@ require github.com/goplus/spx/v2 v0.0.0-test //xgo:class
 	}
 
 	goMod := readTestFile(t, filepath.Join(projectRoot, "go.mod"))
-	if !strings.Contains(goMod, `require `+builderAIModule+` `+builderAIModuleVersion) {
+	if !strings.Contains(goMod, builderAIModule+` `+builderAIModuleVersion) {
 		t.Fatalf("go.mod should require builder ai for raw description filename, got:\n%s", goMod)
 	}
 }
@@ -154,7 +154,7 @@ func TestEnsureBuilderAIModuleFilesReusesLocalSpxReplace(t *testing.T) {
 
 go 1.25.0
 
-require github.com/goplus/spx/v2 v0.0.0-test //xgo:class
+require github.com/goplus/spx/v2 v2.0.0-test //xgo:class
 `,
 	}
 	if err := cmd.ensureBuilderAIModuleFiles(projectRoot); err != nil {
@@ -165,7 +165,7 @@ require github.com/goplus/spx/v2 v0.0.0-test //xgo:class
 	if !strings.Contains(goMod, "replace github.com/goplus/spx/v2 => ../..") {
 		t.Fatalf("go.mod should reuse local spx replace, got:\n%s", goMod)
 	}
-	if !strings.Contains(goMod, `require `+builderAIModule+` `+builderAIModuleVersion) {
+	if !strings.Contains(goMod, builderAIModule+` `+builderAIModuleVersion) {
 		t.Fatalf("go.mod should require builder ai before xgo go, got:\n%s", goMod)
 	}
 	if strings.Contains(goMod, "//xgo:class") {

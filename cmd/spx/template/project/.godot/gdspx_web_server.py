@@ -2,6 +2,7 @@
 
 import argparse
 import contextlib
+import ipaddress
 import json
 import os
 import socket
@@ -153,7 +154,13 @@ class SPXRequestHandler(SimpleHTTPRequestHandler):
         return normalized_origin
 
     def require_same_origin_browser_request(self):
-        if self.headers.get("Origin", "").strip() and self.allowed_origin() is None:
+        if not server_allows_ai_proxy(self.server):
+            raise OriginAccessError("AI interaction proxy is only available on loopback servers")
+
+        origin = self.headers.get("Origin", "").strip()
+        if not origin:
+            raise OriginAccessError("AI interaction proxy requires a same-origin Origin header")
+        if self.allowed_origin() is None:
             raise OriginAccessError("AI interaction proxy only accepts same-origin browser requests")
 
     def proxy_ai_request(self, endpoint, action, payload):
@@ -221,6 +228,24 @@ def content_type_from_headers(headers):
     return headers.get_content_type()
 
 
+def is_loopback_host(host):
+    if not host:
+        return False
+    if host == "localhost":
+        return True
+    if host.startswith("[") and host.endswith("]"):
+        host = host[1:-1]
+    if "%" in host:
+        host = host.split("%", 1)[0]
+    with contextlib.suppress(ValueError):
+        return ipaddress.ip_address(host).is_loopback
+    return False
+
+
+def server_allows_ai_proxy(server):
+    return bool(getattr(server, "spx_ai_proxy_loopback_only", False))
+
+
 def open_in_browser(url):
     if sys.platform == "win32":
         os.startfile(url)
@@ -243,6 +268,7 @@ def serve(root, host, port, open_browser):
     handler = partial(SPXRequestHandler, directory=str(root))
 
     with DualStackServer((host, port), handler) as httpd:
+        httpd.spx_ai_proxy_loopback_only = is_loopback_host(host)
         print(f"Serving {root} at: {url}")
         if open_browser:
             print(f"Opening the served URL in the default browser: {url}")

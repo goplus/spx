@@ -23,12 +23,14 @@ import (
 	"path/filepath"
 	"strings"
 
+	"golang.org/x/mod/modfile"
+
 	"github.com/goplus/spx/v2/internal/scaffold"
 )
 
 const (
 	builderAIModule             = "github.com/goplus/builder/tools/ai"
-	builderAIModuleVersion      = "v0.0.0-20260429075709-408b30d11459"
+	spxModulePath               = "github.com/goplus/spx/v2"
 	builderAIDescriptionFile    = "builder-ai-description.md"
 	builderAIDescriptionFileRaw = "builder-ai-description"
 )
@@ -36,8 +38,14 @@ const (
 // Sync from repository root before building.
 //
 //go:generate cp ../../../../gox.mod gox.mod
+//go:generate cp ../../../ispx/go.mod ispx.go.mod
 //go:embed gox.mod
 var defaultGoxModTemplate string
+
+//go:embed ispx.go.mod
+var embeddedISPXGoMod string
+
+var builderAIModuleVersion = mustBuilderAIModuleVersion()
 
 func (cmd *CmdTool) ensureBuilderAIModuleFiles(projectRoot string) error {
 	if !hasBuilderAIDescription(projectRoot) {
@@ -98,18 +106,28 @@ func (cmd *CmdTool) ensureBuilderAIGoMod(projectRoot string) error {
 		return fmt.Errorf("failed to read go.mod: %w", err)
 	}
 	original := string(data)
-	content := original
-	content = removeSpxXGoClassRequireComment(content)
-	content = addGoModRequire(content, builderAIModule, builderAIModuleVersion)
-
+	file, err := parseGoModFile(goModPath, data)
+	if err != nil {
+		return err
+	}
+	removeSpxXGoClassRequireComment(file)
+	if err := file.AddRequire(builderAIModule, builderAIModuleVersion); err != nil {
+		return fmt.Errorf("failed to add builder ai require: %w", err)
+	}
 	if spxRoot := findSpxRootFrom(projectRoot); spxRoot != "" {
 		relPath, err := filepath.Rel(projectRoot, spxRoot)
 		if err != nil {
 			return fmt.Errorf("failed to resolve local spx replace path: %w", err)
 		}
-		content = ensureSpxModuleReplace(content, filepath.ToSlash(relPath))
+		if err := ensureGoModReplace(file, spxModulePath, filepath.ToSlash(relPath)); err != nil {
+			return err
+		}
 	}
-
+	file.Cleanup()
+	content, err := formatGoModFile(file, original)
+	if err != nil {
+		return err
+	}
 	if content == original {
 		return nil
 	}
@@ -119,82 +137,77 @@ func (cmd *CmdTool) ensureBuilderAIGoMod(projectRoot string) error {
 	return nil
 }
 
-func removeSpxXGoClassRequireComment(content string) string {
+func mustBuilderAIModuleVersion() string {
+	version, err := builderAIModuleVersionFromGoMod(embeddedISPXGoMod)
+	if err != nil {
+		panic(err)
+	}
+	return version
+}
+
+func builderAIModuleVersionFromGoMod(content string) (string, error) {
+	file, err := modfile.Parse("ispx.go.mod", []byte(content), nil)
+	if err != nil {
+		return "", fmt.Errorf("parse embedded ispx go.mod: %w", err)
+	}
+	for _, req := range file.Require {
+		if req.Mod.Path == builderAIModule {
+			return req.Mod.Version, nil
+		}
+	}
+	return "", fmt.Errorf("builder ai module %q not found in embedded ispx go.mod", builderAIModule)
+}
+
+func parseGoModFile(path string, data []byte) (*modfile.File, error) {
+	file, err := modfile.Parse(path, data, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse go.mod: %w", err)
+	}
+	return file, nil
+}
+
+func removeSpxXGoClassRequireComment(file *modfile.File) {
 	const marker = "//xgo:class"
 
-	lineEnding := configLineEnding(content)
-	lines := splitConfigLines(content)
-	changed := false
-	for i, line := range lines {
-		if !strings.Contains(line, marker) {
+	for _, req := range file.Require {
+		if req.Mod.Path != spxModulePath || req.Syntax == nil {
 			continue
 		}
-		if !strings.Contains(line, "github.com/goplus/spx/v2 ") {
+		suffix := req.Syntax.Suffix[:0]
+		for _, comment := range req.Syntax.Suffix {
+			if strings.Contains(comment.Token, marker) {
+				continue
+			}
+			suffix = append(suffix, comment)
+		}
+		req.Syntax.Suffix = suffix
+	}
+}
+
+func ensureGoModReplace(file *modfile.File, modulePath, relPath string) error {
+	for _, repl := range append([]*modfile.Replace(nil), file.Replace...) {
+		if repl.Old.Path != modulePath {
 			continue
 		}
-		idx := strings.Index(line, marker)
-		lines[i] = strings.TrimRight(line[:idx], " \t")
-		changed = true
-	}
-	if !changed {
-		return content
-	}
-	return strings.Join(lines, lineEnding)
-}
-
-func addGoModRequire(content, modulePath, version string) string {
-	requireLine := modulePath + " " + version
-	lineEnding := configLineEnding(content)
-	lines := splitConfigLines(content)
-	inRequireBlock := false
-	firstRequireLine := -1
-	firstRequireBlockClose := -1
-
-	for i, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		switch {
-		case trimmed == "require (":
-			if firstRequireLine == -1 {
-				firstRequireLine = i
-			}
-			inRequireBlock = true
-		case inRequireBlock && trimmed == ")":
-			if firstRequireBlockClose == -1 {
-				firstRequireBlockClose = i
-			}
-			inRequireBlock = false
-		case inRequireBlock:
-			if isGoModRequireFor(trimmed, modulePath) {
-				lines[i] = leadingWhitespace(line) + requireLine
-				return strings.Join(lines, lineEnding)
-			}
-		case strings.HasPrefix(trimmed, "require "):
-			if isGoModRequireFor(strings.TrimSpace(strings.TrimPrefix(trimmed, "require ")), modulePath) {
-				lines[i] = leadingWhitespace(line) + "require " + requireLine
-				return strings.Join(lines, lineEnding)
-			}
-			if firstRequireLine == -1 {
-				firstRequireLine = i
-			}
+		if err := file.DropReplace(repl.Old.Path, repl.Old.Version); err != nil {
+			return fmt.Errorf("failed to drop existing replace for %s: %w", modulePath, err)
 		}
 	}
-
-	if firstRequireBlockClose != -1 {
-		return strings.Join(insertLines(lines, firstRequireBlockClose, "\t"+requireLine), lineEnding)
+	if err := file.AddReplace(modulePath, "", relPath, ""); err != nil {
+		return fmt.Errorf("failed to add replace for %s: %w", modulePath, err)
 	}
-	if firstRequireLine != -1 {
-		return strings.Join(insertLines(lines, firstRequireLine+1, "require "+requireLine), lineEnding)
-	}
-	return appendConfigLine(content, "require "+requireLine)
+	return nil
 }
 
-func isGoModRequireFor(requireBody, modulePath string) bool {
-	fields := strings.Fields(requireBody)
-	return len(fields) >= 2 && fields[0] == modulePath
-}
-
-func leadingWhitespace(line string) string {
-	return line[:len(line)-len(strings.TrimLeft(line, " \t"))]
+func formatGoModFile(file *modfile.File, original string) (string, error) {
+	content, err := file.Format()
+	if err != nil {
+		return "", fmt.Errorf("failed to format go.mod: %w", err)
+	}
+	if configLineEnding(original) == "\r\n" {
+		return strings.ReplaceAll(string(content), "\n", "\r\n"), nil
+	}
+	return string(content), nil
 }
 
 func addGoxModImport(content, modulePath string) string {
