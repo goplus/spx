@@ -287,7 +287,7 @@ func TestRunInterpretedCreatesRuntimeExtensionAndCopiesSharedLibrary(t *testing.
 		t.Fatalf("write runtime pack: %v", err)
 	}
 
-	libName := libraryFileName(runtime.GOOS, runtime.GOARCH)
+	libName := libraryFileName(envName, runtime.GOOS, runtime.GOARCH)
 	if err := os.WriteFile(filepath.Join(goBinPath, libName), []byte("shared library"), 0o755); err != nil {
 		t.Fatalf("write shared library: %v", err)
 	}
@@ -355,7 +355,7 @@ func TestResolveInterpretedRuntimeAssetsPrefersEmbedded(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(goBinPath, runtimePackFileName(runtimeName)), []byte("external pack"), 0o644); err != nil {
 		t.Fatalf("write external runtime pack: %v", err)
 	}
-	libName := libraryFileName(runtime.GOOS, runtime.GOARCH)
+	libName := libraryFileName(envName, runtime.GOOS, runtime.GOARCH)
 	if err := os.WriteFile(filepath.Join(goBinPath, libName), []byte("external library"), 0o755); err != nil {
 		t.Fatalf("write external shared library: %v", err)
 	}
@@ -399,7 +399,7 @@ func TestResolveInterpretedRuntimeAssetsFallsBackToExternalWhenEmbeddedUnavailab
 	if err := os.WriteFile(filepath.Join(goBinPath, runtimePackFileName(runtimeName)), []byte("external pack"), 0o644); err != nil {
 		t.Fatalf("write external runtime pack: %v", err)
 	}
-	libName := libraryFileName(runtime.GOOS, runtime.GOARCH)
+	libName := libraryFileName(envName, runtime.GOOS, runtime.GOARCH)
 	libPathWant := filepath.Join(goBinPath, libName)
 	if err := os.WriteFile(libPathWant, []byte("external library"), 0o755); err != nil {
 		t.Fatalf("write external shared library: %v", err)
@@ -451,7 +451,7 @@ func TestRunCmdRunHonorsPortableGoEnv(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(goBinPath, runtimePackFileName(runtimeName)), []byte("runtime pack"), 0o644); err != nil {
 		t.Fatalf("write runtime pack: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(goBinPath, libraryFileName(runtime.GOOS, runtime.GOARCH)), []byte("shared library"), 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(goBinPath, libraryFileName(envName, runtime.GOOS, runtime.GOARCH)), []byte("shared library"), 0o755); err != nil {
 		t.Fatalf("write shared library: %v", err)
 	}
 

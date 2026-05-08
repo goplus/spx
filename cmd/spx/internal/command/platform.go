@@ -30,14 +30,14 @@ func sharedLibrarySuffix(goos string) string {
 	}
 }
 
-func libraryFileName(goos, goarch string) string {
-	return fmt.Sprintf("%s-%s-%s%s", ENV_NAME, goos, goarch, sharedLibrarySuffix(goos))
+func libraryFileName(prefix, goos, goarch string) string {
+	return fmt.Sprintf("%s-%s-%s%s", prefix, goos, goarch, sharedLibrarySuffix(goos))
 }
 
 func resolveDesktopExportTarget(goos, basePath string) (targetPath, platformName string, err error) {
 	switch goos {
 	case goosWindows:
-		return basePath + executableSuffix(goos), "Win", nil
+		return basePath + ".exe", "Win", nil
 	case goosDarwin:
 		return basePath + ".app", "Mac", nil
 	case goosLinux:

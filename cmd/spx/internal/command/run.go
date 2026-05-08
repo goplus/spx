@@ -121,7 +121,7 @@ func (cmd *CmdTool) RunInterpreted(pargs ...string) error {
 	runtimeName := "gdspxrt" + cmd.Version + cmd.BinPostfix
 	GOOS := runtime.GOOS
 	GOARCH := runtime.GOARCH
-	libName := libraryFileName(GOOS, GOARCH)
+	libName := libraryFileName(envName, GOOS, GOARCH)
 	packName := runtimePackFileName(runtimeName)
 
 	runtimePath, libPath, err := cmd.resolveInterpretedRuntimeAssets(runtimeName, packName, libName)

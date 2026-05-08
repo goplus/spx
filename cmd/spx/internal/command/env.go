@@ -32,7 +32,8 @@ import (
 	"github.com/goplus/spx/v2/cmd/spx/internal/util"
 )
 
-var ENV_NAME = "gdspx"
+const envName = "gdspx"
+
 var projectNameReplacer = strings.NewReplacer("_", "", " ", "", "\"", "", "\n", "", "\r", "")
 var spxModuleReplaceLinePattern = regexp.MustCompile(`^(\s*)(replace\s+)?github\.com/goplus/spx/v2\s*=>\s*(\S+)(\s*//.*)?$`)
 
@@ -193,9 +194,9 @@ func (cmd *CmdTool) setupEnginePaths() error {
 		return nil
 	}
 
-	binPostfix, cmdPath, err := resolveAppPath(cmd.GoBinPath, ENV_NAME, cmd.Version, cmd.CustomGoEnv)
+	binPostfix, cmdPath, err := resolveAppPath(cmd.GoBinPath, envName, cmd.Version, cmd.CustomGoEnv)
 	if err != nil {
-		return fmt.Errorf("%s requires engine to be installed as a binary at %s: %w", ENV_NAME, cmd.GoBinPath, err)
+		return fmt.Errorf("%s requires engine to be installed as a binary at %s: %w", envName, cmd.GoBinPath, err)
 	}
 	cmd.BinPostfix = binPostfix
 	cmd.CmdPath = cmdPath
@@ -230,7 +231,7 @@ func (cmd *CmdTool) setupProjectPaths(goos, goarch string) error {
 		return fmt.Errorf("failed to create temp directory: %w", err)
 	}
 
-	libPath, err := filepath.Abs(path.Join(projectDir, "lib", libraryFileName(goos, goarch)))
+	libPath, err := filepath.Abs(path.Join(projectDir, "lib", libraryFileName(envName, goos, goarch)))
 	if err != nil {
 		return fmt.Errorf("failed to resolve library path: %w", err)
 	}
