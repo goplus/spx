@@ -332,14 +332,11 @@ func (cmd *CmdTool) handleInterpretedRunCommand() error {
 	cmd.RuntimeMode = true
 	cmd.RuntimeTempDir, _ = filepath.Abs(filepath.Join(cmd.TargetDir, ".temp"))
 
-	cmd.BinPostfix = ""
 	GOOS := runtime.GOOS
 	if os.Getenv("GOOS") != "" {
 		GOOS = os.Getenv("GOOS")
 	}
-	if GOOS == "windows" {
-		cmd.BinPostfix = ".exe"
-	}
+	cmd.BinPostfix = executableSuffix(GOOS)
 	cmd.RuntimeCmdPath = filepath.Join(cmd.GoBinPath, "gdspxrt"+cmd.Version+cmd.BinPostfix)
 
 	args := cmd.checkMovieArgs(cmd.RuntimeTempDir)
