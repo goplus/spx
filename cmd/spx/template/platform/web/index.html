@@ -241,6 +241,7 @@
 
 			let zipped = await (await (fetch(zipUrl))).arrayBuffer()
 			let unzipped = fflate.unzipSync(new Uint8Array(zipped))
+			configureAIInteraction(unzipped)
 			let files = {}
 			Object.entries(unzipped).forEach(([path, data]) => {
 				if (path.endsWith('/')) return // skip directories
@@ -249,6 +250,39 @@
 			await runnerWindow.initGame(files)
 			await runnerWindow.startGame()
 			stopGameFlag = false
+		}
+
+		function resolveAIEndpointParam(value) {
+			if (!value) return null
+			try {
+				const resolvedAIEndpoint = new URL(value, window.location.href)
+				if (!['http:', 'https:'].includes(resolvedAIEndpoint.protocol)) {
+					console.warn('Ignoring aiEndpoint query parameter with unsupported protocol', value)
+					return null
+				}
+				if (resolvedAIEndpoint.origin !== window.location.origin) {
+					console.warn('Ignoring cross-origin aiEndpoint query parameter', value)
+					return null
+				}
+				return `${resolvedAIEndpoint.pathname}${resolvedAIEndpoint.search}${resolvedAIEndpoint.hash}`
+			} catch (error) {
+				console.warn('Ignoring invalid aiEndpoint query parameter', value, error)
+				return null
+			}
+		}
+
+		function configureAIInteraction(unzipped) {
+			const params = new URLSearchParams(window.location.search)
+			const aiEndpoint = resolveAIEndpointParam(params.get('aiEndpoint'))
+			if (aiEndpoint && runnerWindow.xbuilder_set_ai_interaction_api_endpoint) {
+				runnerWindow.xbuilder_set_ai_interaction_api_endpoint(aiEndpoint)
+			}
+
+			const descriptionFile = unzipped['builder-ai-description.md'] || unzipped['builder-ai-description']
+			if (descriptionFile && runnerWindow.xbuilder_set_ai_description) {
+				const description = new TextDecoder('utf-8').decode(descriptionFile)
+				runnerWindow.xbuilder_set_ai_description(description)
+			}
 		}
 	</script>
 </body>

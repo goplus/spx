@@ -16,18 +16,28 @@ jobs:
           go-version: 1.25.x
           cache-dependency-path: |
             go.sum
+            cmd/ispx/go.sum
 
       - name: Download Go modules
-        run: go mod download
+        shell: bash
+        run: |
+          go mod download
+          cd cmd/ispx && go mod download
 
-      - name: Run go generate for pkg/ispx
-        run: go generate ./pkg/ispx/...
+      - name: Run go generate for runtime packages
+        shell: bash
+        run: |
+          go generate ./pkg/ispx/...
+          cd cmd/ispx && go generate ./...
 
       - name: Ensure working tree is clean
         run: git diff --exit-code
 
       - name: Test Go code
-        run: go test -v $(go list ./... | grep -v /internal/webffi)
+        shell: bash
+        run: |
+          go test -v $(go list ./... | grep -v /internal/webffi)
+          cd cmd/ispx && go test -v ./...
 
   test-go-build:
     strategy:
@@ -48,9 +58,13 @@ jobs:
           go-version: 1.25.x
           cache-dependency-path: |
             go.sum
+            cmd/ispx/go.sum
 
       - name: Download Go modules
-        run: go mod download
+        shell: bash
+        run: |
+          go mod download
+          cd cmd/ispx && go mod download
 
       - name: Build Go packages
         shell: bash

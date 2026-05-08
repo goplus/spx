@@ -120,7 +120,7 @@ func main() {print(&spx.Game{})}
 }
 
 func (cmd *CmdTool) shouldRunGoModTidy() bool {
-	return cmd.findSpxRoot() == ""
+	return cmd.findSpxRoot() == "" || hasBuilderAIDescription(cmd.targetRootDir())
 }
 
 // ShouldReimport reports whether Godot reimport is needed.
@@ -536,14 +536,29 @@ func (cmd *CmdTool) createDefaultGoMod(dir string, forceWrite bool) error {
 
 // findSpxRoot finds a local spx repo.
 func (cmd *CmdTool) findSpxRoot() string {
-	startDir := cmd.TargetAbsDir
-	if startDir == "" && cmd.TargetDir != "" {
-		absTargetDir, err := filepath.Abs(cmd.TargetDir)
-		if err != nil {
-			return ""
-		}
-		startDir = absTargetDir
+	return findSpxRootFrom(cmd.targetRootDir())
+}
+
+func (cmd *CmdTool) targetRootDir() string {
+	if cmd.TargetAbsDir != "" {
+		return cmd.TargetAbsDir
 	}
+	if cmd.TargetDir != "" {
+		absTargetDir, err := filepath.Abs(cmd.TargetDir)
+		if err == nil {
+			return absTargetDir
+		}
+	}
+	if cmd.ProjectDir != "" {
+		projectDir, err := filepath.Abs(cmd.ProjectDir)
+		if err == nil {
+			return filepath.Dir(projectDir)
+		}
+	}
+	return ""
+}
+
+func findSpxRootFrom(startDir string) string {
 	if startDir == "" {
 		return ""
 	}
