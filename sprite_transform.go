@@ -48,6 +48,30 @@ func (p *SpriteImpl) DistanceToWith(target Target) float64 {
 	return p.transform().DistanceTo(target)
 }
 
+func (p *SpriteImpl) DirectionTo__0(sprite Sprite) Direction {
+	return p.transform().DirectionTo(sprite)
+}
+
+func (p *SpriteImpl) DirectionTo__1(sprite SpriteName) Direction {
+	return p.transform().DirectionTo(sprite)
+}
+
+func (p *SpriteImpl) DirectionTo__2(obj specialObj) Direction {
+	return p.transform().DirectionTo(obj)
+}
+
+func (p *SpriteImpl) DirectionTo__3(pos Pos) Direction {
+	return p.transform().DirectionTo(pos)
+}
+
+func (p *SpriteImpl) DirectionTo__4(x, y float64) Direction {
+	return p.transform().DirectionToPos(x, y)
+}
+
+func (p *SpriteImpl) DirectionToWith(target Target) Direction {
+	return p.transform().DirectionTo(target)
+}
+
 // -----------------------------------------------------------------------------
 // Movement
 // -----------------------------------------------------------------------------
@@ -313,6 +337,11 @@ func (p *SpriteImpl) TurnToDir(dir Direction, __xgo_optional_opts *MotionOptions
 func (p *SpriteImpl) TurnToTarget(target Target, __xgo_optional_opts *MotionOptions) {
 	speed, animation := motionOptions(__xgo_optional_opts)
 	p.transform().TurnTo(target, speed, animation)
+}
+
+func (p *SpriteImpl) TurnToXYpos(x, y float64, __xgo_optional_opts *MotionOptions) {
+	speed, animation := motionOptions(__xgo_optional_opts)
+	p.transform().TurnToPos(x, y, speed, animation)
 }
 
 func (p *SpriteImpl) SetHeading(dir Direction) {

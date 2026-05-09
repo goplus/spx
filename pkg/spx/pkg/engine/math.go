@@ -42,11 +42,18 @@ func RadToDeg(radians float64) float64 {
 	return radians * (180.0 / math.Pi)
 }
 
-func AngleToPoint(v mathf.Vec2, v2 mathf.Vec2) float64 {
-	return Angle(v.Sub(v2))
+func AngleToPoint(from, to mathf.Vec2) float64 {
+	return Angle(to.Sub(from))
 }
 
 // Angle returns the angle of v in radians, measured from the positive X axis.
 func Angle(v mathf.Vec2) float64 {
 	return float64(mathf.Atan2(float64(v.Y), float64(v.X)))
+}
+
+// HeadingToPoint returns the SPX heading in degrees needed to face from `from`
+// toward `to`. The result uses SPX heading semantics, where 0 points up and 90
+// points right, and is intentionally not normalized to (-180, 180].
+func HeadingToPoint(from, to mathf.Vec2) float64 {
+	return 90 - RadToDeg(AngleToPoint(from, to))
 }
