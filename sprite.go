@@ -139,13 +139,13 @@ type Speed = float64
 const (
 	XGoo_Sprite_GlideWith    = ".GlideToTarget,.GlideToXYpos"
 	XGoo_Sprite_StepToWith   = ".StepToTarget,.StepToXYpos"
-	XGoo_Sprite_TurnToWith   = ".TurnToDir,.TurnToTarget"
+	XGoo_Sprite_TurnToWith   = ".TurnToDir,.TurnToTarget,.TurnToXYpos"
 	XGoo_Sprite_SetLayerWith = ".SetLayerTo,.ChangeLayer"
 	XGoo_Sprite_QuoteWith    = ".QuoteMsg,.QuoteMsgEx"
 
 	XGoo_SpriteImpl_GlideWith    = ".GlideToTarget,.GlideToXYpos"
 	XGoo_SpriteImpl_StepToWith   = ".StepToTarget,.StepToXYpos"
-	XGoo_SpriteImpl_TurnToWith   = ".TurnToDir,.TurnToTarget"
+	XGoo_SpriteImpl_TurnToWith   = ".TurnToDir,.TurnToTarget,.TurnToXYpos"
 	XGoo_SpriteImpl_SetLayerWith = ".SetLayerTo,.ChangeLayer"
 	XGoo_SpriteImpl_QuoteWith    = ".QuoteMsg,.QuoteMsgEx"
 )
@@ -247,6 +247,7 @@ type Sprite interface {
 
 	TurnToDir(dir Direction, __xgo_optional_opts *MotionOptions)
 	TurnToTarget(target Target, __xgo_optional_opts *MotionOptions)
+	TurnToXYpos(x, y float64, __xgo_optional_opts *MotionOptions)
 
 	BounceOffEdge()
 
@@ -303,6 +304,14 @@ type Sprite interface {
 	DistanceTo__3(pos Pos) float64
 
 	DistanceToWith(target Target) float64
+
+	DirectionTo__0(sprite Sprite) Direction
+	DirectionTo__1(sprite SpriteName) Direction
+	DirectionTo__2(obj specialObj) Direction
+	DirectionTo__3(pos Pos) Direction
+	DirectionTo__4(x, y float64) Direction
+
+	DirectionToWith(target Target) Direction
 
 	Touching__0(sprite Sprite) bool
 	Touching__1(sprite SpriteName) bool

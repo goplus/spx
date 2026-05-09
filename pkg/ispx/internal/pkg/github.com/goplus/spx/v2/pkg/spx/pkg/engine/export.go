@@ -108,6 +108,7 @@ func init() {
 			"DeleteUINode":                reflect.ValueOf(q.DeleteUINode),
 			"GetSprite":                   reflect.ValueOf(q.GetSprite),
 			"GetUINode":                   reflect.ValueOf(q.GetUINode),
+			"HeadingToPoint":              reflect.ValueOf(q.HeadingToPoint),
 			"InitSpriteInstance":          reflect.ValueOf(q.InitSpriteInstance),
 			"InitUINodeInstance":          reflect.ValueOf(q.InitUINodeInstance),
 			"InternalUpdateEngine":        reflect.ValueOf(q.InternalUpdateEngine),

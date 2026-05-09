@@ -360,6 +360,18 @@ func (t *transformComponent) TurnTo(obj any, speed float64, animation SpriteAnim
 	})
 }
 
+// TurnToPos turns the sprite to face the specified position using an animation.
+func (t *transformComponent) TurnToPos(x, y, speed float64, animation SpriteAnimationName) {
+	targetAngle := t.calculateTargetAngleToPos(x, y)
+	fromAngle, toAngle := t.normalizeAngleRange(t.direction, targetAngle)
+
+	t.doTurnAnimation(fromAngle, toAngle, speed, animation, func() {
+		if t.applyDirection(targetAngle) && isDebugInstrEnabled() {
+			spxlog.Debug("TurnToPos: sprite=%s, x=%v, y=%v", t.sprite.name, x, y)
+		}
+	})
+}
+
 // BounceOffEdge bounces the sprite off the edge of the stage by reflecting
 // its direction vector based on the edge that was touched.
 func (t *transformComponent) BounceOffEdge() {
@@ -395,6 +407,16 @@ func (t *transformComponent) applyDirection(dir float64) bool {
 	return true
 }
 
+// DirectionTo returns the normalized heading needed to face the specified object.
+func (t *transformComponent) DirectionTo(obj any) Direction {
+	return normalizeDirection(t.calculateTargetAngle(obj))
+}
+
+// DirectionToPos returns the normalized heading needed to face the specified position.
+func (t *transformComponent) DirectionToPos(x, y float64) Direction {
+	return normalizeDirection(t.calculateTargetAngleToPos(x, y))
+}
+
 // calculateTargetAngle calculates the angle to turn toward the specified object.
 func (t *transformComponent) calculateTargetAngle(obj any) float64 {
 	switch v := obj.(type) {
@@ -402,10 +424,15 @@ func (t *transformComponent) calculateTargetAngle(obj any) float64 {
 		return v
 	default:
 		x, y := t.sprite.g.objectPos(obj)
-		dx := x - t.x
-		dy := y - t.y
-		return 90 - engine.RadToDeg(math.Atan2(dy, dx))
+		return t.calculateTargetAngleToPos(x, y)
 	}
+}
+
+func (t *transformComponent) calculateTargetAngleToPos(x, y float64) float64 {
+	if t.x == x && t.y == y {
+		return t.direction
+	}
+	return engine.HeadingToPoint(mathf.NewVec2(t.x, t.y), mathf.NewVec2(x, y))
 }
 
 // normalizeAngleRange normalizes two angles to minimize the rotation distance.

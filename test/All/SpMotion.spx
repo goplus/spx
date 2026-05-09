@@ -34,46 +34,58 @@ onMsg "testMotion", => {
 	wait 0.1s
 	assertDir(this, -135, "Sprite::TurnTo")
 
+	// 8. Sprite::DirectionTo
+	setXYpos 0, 0
+	wait 0.1s
+	turnTo directionTo(-100, -100)
+	wait 0.1s
+	assertDir(this, -135, "Sprite::DirectionTo")
+
+	// 9. Sprite::TurnToXYpos
+	turnToWith 100, -100, speed = 2
+	wait 0.1s
+	assertDir(this, 135, "Sprite::TurnToXYpos")
+
 	// reset position
 	setXYpos 0, 0
 	wait 0.1s
 	assertPos(this, 0, 0, "Reset Position")
 
-	// 8. Sprite::ChangeXpos
+	// 10. Sprite::ChangeXpos
 	changeXpos 100
 	wait 0.1s
 	assertPos(this, 100, 0, "Sprite::ChangeXpos")
 
-	// 9. Sprite::SetXpos
+	// 11. Sprite::SetXpos
 	setXpos 100
 	wait 0.1s
 	assertPos(this, 100, 0, "Sprite::SetXpos")
 
-	// 10. Sprite::ChangeYpos
+	// 12. Sprite::ChangeYpos
 	changeYpos -100
 	wait 0.1s
 	assertPos(this, 100, -100, "Sprite::ChangeYpos")
 
-	// 11. Sprite::SetYpos
+	// 13. Sprite::SetYpos
 	setYpos 100
 	wait 0.1s
 	assertPos(this, 100, 100, "Sprite::SetYpos")
 
-	// 12. Sprite::Xpos
+	// 14. Sprite::Xpos
 	assertFloat(xpos, 100, "Sprite::Xpos")
 
-	// 13. Sprite::Ypos
+	// 15. Sprite::Ypos
 	assertFloat(ypos, 100, "Sprite::Ypos")
 
-	// 14. Sprite::Heading
+	// 16. Sprite::Heading
 	assertDir(this, -135, "Sprite::Heading")
 
-	// 15. Sprite::SetRotationStyle
+	// 17. Sprite::SetRotationStyle
 	wait 0.1s
 	setRotationStyle LeftRight // render face to right, but the direction is still -135
 	assertDir(this, -135, "Sprite::setRotationStyle LeftRight")
 
-	// 16. Sprite::BounceOffEdge
+	// 18. Sprite::BounceOffEdge
 	wait 0.1s
 	setRotationStyle Normal
 	setHeading -90
