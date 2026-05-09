@@ -89,6 +89,7 @@ func Init(ctx *ixgo.Context) error {
 	if ctx.Lookup == nil {
 		ctx.Lookup = defaultIXGoContextLookup
 	}
+	ctx.SetPanic(logRuntimePanic)
 
 	for _, pkg := range defaultPackagesToImport {
 		ctx.Loader.Import(pkg)
