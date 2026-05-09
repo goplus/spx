@@ -429,6 +429,9 @@ func (t *transformComponent) calculateTargetAngle(obj any) float64 {
 }
 
 func (t *transformComponent) calculateTargetAngleToPos(x, y float64) float64 {
+	if t.x == x && t.y == y {
+		return t.direction
+	}
 	return engine.HeadingToPoint(mathf.NewVec2(t.x, t.y), mathf.NewVec2(x, y))
 }
 
