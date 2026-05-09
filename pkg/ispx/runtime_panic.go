@@ -39,18 +39,46 @@ func newRuntimePanicLogger(w io.Writer) *slog.Logger {
 }
 
 func logRuntimePanic(info *ixgo.PanicInfo) {
-	if info == nil {
+	if !shouldLogRuntimePanic(info) {
 		return
 	}
 
 	position := info.Position()
 	logRuntimePanicFields(runtimePanicLogger, runtimePanicFields{
 		Error:    info.Error,
-		Function: info.String(),
+		Function: runtimePanicFunction(info),
 		File:     position.Filename,
 		Line:     position.Line,
 		Column:   position.Column,
 	})
+}
+
+func shouldLogRuntimePanic(info *ixgo.PanicInfo) bool {
+	if info == nil {
+		return false
+	}
+
+	fatal, ok := info.Error.(ixgo.FatalError)
+	if !ok {
+		return true
+	}
+
+	switch fatal.Value.(type) {
+	case ixgo.RuntimeError, ixgo.PlainError, ixgo.PanicError:
+		return false
+	default:
+		return true
+	}
+}
+
+func runtimePanicFunction(info *ixgo.PanicInfo) string {
+	if info == nil {
+		return ""
+	}
+	if fn := info.Parent(); fn != nil {
+		return fn.String()
+	}
+	return info.String()
 }
 
 func logRuntimePanicFields(logger *slog.Logger, fields runtimePanicFields) {
