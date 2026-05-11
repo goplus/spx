@@ -1,67 +1,98 @@
 import "fmt"
 import "math"
 
-onMsg "testSensing", => {
-	onTestStart(this)
+const sensingTargetName = "Red"
+const sensingRedHex = "#ED1C24"
+const sensingStartOffset = -100.0
+const sensingMoveSpeed = 80.0
+const sensingMoveDuration = 5.0
+const sensingMouseErr = 10.0
 
+func setupSensingScene() {
 	setXYpos 10, 10
 	Red.SetXYpos 0, 0
 	Red.SetSize 1
+}
 
-	startOffset := -100.0
-	mvSpeed := 10.0
-	// 1. Sprite::Touching
+func assertTouchingRed(startOffset, mvSpeed float64, byColor bool) {
+	detectMsg := "touching"
+	assertMsg := "Sprite::Touching"
+	redColor := NewColor(sensingRedHex)
+	if byColor {
+		detectMsg = "touching color"
+		assertMsg = "Sprite::TouchingColor"
+	}
+
+	setXYpos startOffset, 0
+	touched := false
 	tt := 0.0
-	for tt < 200 {
+	for tt < sensingMoveDuration {
 		tt += deltaTime()
-		setXpos startOffset*mvSpeed
-		//if Touching "Red" {
-		//	say "touching"
-		//}
+		setXpos startOffset + tt*mvSpeed
+
+		if byColor {
+			touched = touchingColor(redColor)
+		} else {
+			touched = touching(sensingTargetName)
+		}
+		if touched {
+			say detectMsg
+			break
+		}
 		waitNextFrame
 	}
+	assert(touched, assertMsg)
+}
+
+func waitForKeyPress(key Key, prompt, success string) {
+	say prompt
+	for !keyPressed(key) {
+		waitNextFrame
+	}
+	say success
+}
+
+func waitForMouseClick(prompt, success string) {
+	say prompt
+	for !mousePressed {
+		waitNextFrame
+	}
+	say success
+}
+
+onMsg "testSensing", => {
+	onTestStart(this)
+
+	setupSensingScene()
+
+	// 1. Sprite::Touching
+	assertTouchingRed(sensingStartOffset, sensingMoveSpeed, false)
 
 	// 2. Sprite::TouchingColor
-	tt = 0
-	for tt < 200 {
-		tt += deltaTime()
-		setXpos startOffset*mvSpeed
-		//if isTouchingColor "Red" {
-		say "touching color"
-		//}
-		waitNextFrame
-	}
+	assertTouchingRed(sensingStartOffset, sensingMoveSpeed, true)
 
 	// 3. Sprite::DistanceTo
-	Red.setXYpos 0, 0
+	Red.SetXYpos 0, 0
 	setXYpos 30, 40
-	dist := distanceTo("Red")
+	dist := distanceTo(sensingTargetName)
 	assertFloat(dist, 50, "Sprite::DistanceTo")
 	// 4. Sprite::Ask
 	ask "test ask"
 	// 5. Game::Answer
 	say answer
 	// 6. Game::KeyPressed
-	say "test key pressed A"
-	for !keyPressed(KeyA) {
-		waitNextFrame
-	}
-	say "key A pressed"
-	say "please click the red sprite"
+	waitForKeyPress(KeyA, "test key pressed A", "key A pressed")
 	// 7. Game::MousePressed
-	for !mousePressed {
-		waitNextFrame
-	}
-	say "mouse clicked"
+	waitForMouseClick("please click the red sprite", "mouse clicked")
 
-	Red.setXYpos 0, 0
+	Red.SetXYpos 0, 0
 	setXYpos 100, 200
 	// 8. Game::MouseX
 	mouseX := mouseX
-	assertPosWithErr(this, mouseX, 0, 10, "Game::MouseX")
+	assertPosWithErr(this, mouseX, 0, sensingMouseErr, "Game::MouseX")
 	// 9. Game::MouseY
 	mouseY := mouseY
-	assertPosWithErr(this, mouseY, 0, 10, "Game::MouseY")
+	assertPosWithErr(this, mouseY, 0, sensingMouseErr, "Game::MouseY")
 	// 10. Game::Timer
 	assert(timer > 1, "Game::Timer")
 	// 11. Game::ResetTimer
