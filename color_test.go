@@ -18,8 +18,6 @@ package spx
 
 import (
 	"math"
-	"os"
-	"path/filepath"
 	"testing"
 )
 
@@ -33,13 +31,6 @@ func TestNewColor(t *testing.T) {
 func TestNewColorUsesMathfPackedNumberBehavior(t *testing.T) {
 	assertColor(t, NewColor(-1), Color{1, 1, 1, 1})
 	assertColor(t, NewColor(float64(0x1000000)), Color{0, 0, 0, 1})
-}
-
-func writeTestFile(t *testing.T, dir, name, content string) {
-	t.Helper()
-	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0644); err != nil {
-		t.Fatalf("write %s: %v", name, err)
-	}
 }
 
 func assertColor(t *testing.T, got, want Color) {
