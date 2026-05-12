@@ -16,11 +16,9 @@ func setupSensingScene() {
 
 func assertTouchingRed(startOffset, mvSpeed float64, byColor bool) {
 	detectMsg := "touching"
-	assertMsg := "Sprite::Touching"
 	redColor := NewColor(sensingRedHex)
 	if byColor {
 		detectMsg = "touching color"
-		assertMsg = "Sprite::TouchingColor"
 	}
 
 	setXYpos startOffset, 0
@@ -41,7 +39,11 @@ func assertTouchingRed(startOffset, mvSpeed float64, byColor bool) {
 		}
 		waitNextFrame
 	}
-	assert(touched, assertMsg)
+	if byColor {
+		assert(touched, "Sprite::TouchingColor")
+	} else {
+		assert(touched, "Sprite::Touching")
+	}
 }
 
 func waitForKeyPress(key Key, prompt, success string) {

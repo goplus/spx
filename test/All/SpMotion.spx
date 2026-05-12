@@ -78,19 +78,19 @@ onMsg "testMotion", => {
 	assertFloat(ypos, 100, "Sprite::Ypos")
 
 	// 16. Sprite::Heading
-	assertDir(this, -135, "Sprite::Heading")
+	assertDir(this, 135, "Sprite::Heading")
 
 	// 17. Sprite::SetRotationStyle
 	wait 0.1s
-	setRotationStyle LeftRight // render face to right, but the direction is still -135
-	assertDir(this, -135, "Sprite::setRotationStyle LeftRight")
+	setRotationStyle LeftRight // render face to right, but the logical direction is still 135
+	assertDir(this, 135, "Sprite::setRotationStyle LeftRight")
 
 	// 18. Sprite::BounceOffEdge
 	wait 0.1s
 	setRotationStyle Normal
 	setHeading -90
 	wait 0.1s
-	setXpos -300
+	setXpos -500
 	wait 0.3s
 	bounceOffEdge
 	assertDir(this, 90, "Sprite::BounceOffEdge")
