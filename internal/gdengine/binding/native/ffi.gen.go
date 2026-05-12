@@ -280,6 +280,7 @@ type GDExtensionInterface struct {
 	SpxSpriteSetTriggerEnabled                  GDExtensionSpxSpriteSetTriggerEnabled
 	SpxSpriteIsTriggerEnabled                   GDExtensionSpxSpriteIsTriggerEnabled
 	SpxSpriteCheckCollisionByColor              GDExtensionSpxSpriteCheckCollisionByColor
+	SpxSpriteCheckCollisionByColors             GDExtensionSpxSpriteCheckCollisionByColors
 	SpxSpriteCheckCollisionByAlpha              GDExtensionSpxSpriteCheckCollisionByAlpha
 	SpxSpriteCheckCollisionWithSprite           GDExtensionSpxSpriteCheckCollisionWithSprite
 	SpxSpriteSetPixelCollisionSamplingStep      GDExtensionSpxSpriteSetPixelCollisionSamplingStep
@@ -598,6 +599,7 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxSpriteSetTriggerEnabled = (GDExtensionSpxSpriteSetTriggerEnabled)(resolveCFunc("spx_sprite_set_trigger_enabled"))
 	x.SpxSpriteIsTriggerEnabled = (GDExtensionSpxSpriteIsTriggerEnabled)(resolveCFunc("spx_sprite_is_trigger_enabled"))
 	x.SpxSpriteCheckCollisionByColor = (GDExtensionSpxSpriteCheckCollisionByColor)(resolveCFunc("spx_sprite_check_collision_by_color"))
+	x.SpxSpriteCheckCollisionByColors = (GDExtensionSpxSpriteCheckCollisionByColors)(resolveCFunc("spx_sprite_check_collision_by_colors"))
 	x.SpxSpriteCheckCollisionByAlpha = (GDExtensionSpxSpriteCheckCollisionByAlpha)(resolveCFunc("spx_sprite_check_collision_by_alpha"))
 	x.SpxSpriteCheckCollisionWithSprite = (GDExtensionSpxSpriteCheckCollisionWithSprite)(resolveCFunc("spx_sprite_check_collision_with_sprite"))
 	x.SpxSpriteSetPixelCollisionSamplingStep = (GDExtensionSpxSpriteSetPixelCollisionSamplingStep)(resolveCFunc("spx_sprite_set_pixel_collision_sampling_step"))

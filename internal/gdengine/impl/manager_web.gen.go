@@ -1390,6 +1390,15 @@ func (pself *spriteMgr) CheckCollisionByColor(obj Object, color Color, color_thr
 	_retValue := API.SpxSpriteCheckCollisionByColor.Invoke(arg0Low, arg0High, arg1, arg2, arg3)
 	return JsToGdBool(_retValue)
 }
+func (pself *spriteMgr) CheckCollisionByColors(obj Object, sprite_color Color, target_color Color, color_threshold float64, alpha_threshold float64) bool {
+	arg0Low, arg0High := JsSplitGdObj(obj)
+	arg1 := JsFromGdColor(sprite_color)
+	arg2 := JsFromGdColor(target_color)
+	arg3 := JsFromGdFloat(color_threshold)
+	arg4 := JsFromGdFloat(alpha_threshold)
+	_retValue := API.SpxSpriteCheckCollisionByColors.Invoke(arg0Low, arg0High, arg1, arg2, arg3, arg4)
+	return JsToGdBool(_retValue)
+}
 func (pself *spriteMgr) CheckCollisionByAlpha(obj Object, alpha_threshold float64) bool {
 	arg0Low, arg0High := JsSplitGdObj(obj)
 	arg1 := JsFromGdFloat(alpha_threshold)

@@ -653,6 +653,9 @@ func (*spriteMgrImpl) IsTriggerEnabled(obj gdx.Object) bool {
 func (*spriteMgrImpl) CheckCollisionByColor(obj gdx.Object, color Color, color_threshold float64, alpha_threshold float64) bool {
 	return false
 }
+func (*spriteMgrImpl) CheckCollisionByColors(obj gdx.Object, sprite_color Color, target_color Color, color_threshold float64, alpha_threshold float64) bool {
+	return false
+}
 func (*spriteMgrImpl) CheckCollisionByAlpha(obj gdx.Object, alpha_threshold float64) bool {
 	return false
 }

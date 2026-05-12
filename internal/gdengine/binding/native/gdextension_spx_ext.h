@@ -472,6 +472,7 @@ typedef void (*GDExtensionSpxSpriteSetTriggerPolygon)(GdObj obj, GdVec2 center, 
 typedef void (*GDExtensionSpxSpriteSetTriggerEnabled)(GdObj obj, GdBool trigger);
 typedef void (*GDExtensionSpxSpriteIsTriggerEnabled)(GdObj obj, GdBool *ret_value);
 typedef void (*GDExtensionSpxSpriteCheckCollisionByColor)(GdObj obj, GdColor color, GdFloat color_threshold, GdFloat alpha_threshold, GdBool *ret_value);
+typedef void (*GDExtensionSpxSpriteCheckCollisionByColors)(GdObj obj, GdColor sprite_color, GdColor target_color, GdFloat color_threshold, GdFloat alpha_threshold, GdBool *ret_value);
 typedef void (*GDExtensionSpxSpriteCheckCollisionByAlpha)(GdObj obj, GdFloat alpha_threshold, GdBool *ret_value);
 typedef void (*GDExtensionSpxSpriteCheckCollisionWithSprite)(GdObj obj, GdObj obj_b, GdFloat alpha_threshold, GdBool use_pixel_perfect, GdBool *ret_value);
 typedef void (*GDExtensionSpxSpriteSetPixelCollisionSamplingStep)(GdInt step);

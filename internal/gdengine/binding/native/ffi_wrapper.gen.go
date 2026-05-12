@@ -345,6 +345,7 @@ type GDExtensionSpxSpriteSetTriggerPolygon C.GDExtensionSpxSpriteSetTriggerPolyg
 type GDExtensionSpxSpriteSetTriggerEnabled C.GDExtensionSpxSpriteSetTriggerEnabled
 type GDExtensionSpxSpriteIsTriggerEnabled C.GDExtensionSpxSpriteIsTriggerEnabled
 type GDExtensionSpxSpriteCheckCollisionByColor C.GDExtensionSpxSpriteCheckCollisionByColor
+type GDExtensionSpxSpriteCheckCollisionByColors C.GDExtensionSpxSpriteCheckCollisionByColors
 type GDExtensionSpxSpriteCheckCollisionByAlpha C.GDExtensionSpxSpriteCheckCollisionByAlpha
 type GDExtensionSpxSpriteCheckCollisionWithSprite C.GDExtensionSpxSpriteCheckCollisionWithSprite
 type GDExtensionSpxSpriteSetPixelCollisionSamplingStep C.GDExtensionSpxSpriteSetPixelCollisionSamplingStep
@@ -2940,6 +2941,24 @@ func CallSpriteCheckCollisionByColor(
 	arg4 := (C.GdFloat)(alpha_threshold)
 	var ret_val C.GdBool
 	C.cgo_callfn_GDExtensionSpxSpriteCheckCollisionByColor(arg0, arg1, arg2, arg3, arg4, &ret_val)
+
+	return (GdBool)(ret_val)
+}
+func CallSpriteCheckCollisionByColors(
+	obj GdObj,
+	sprite_color GdColor,
+	target_color GdColor,
+	color_threshold GdFloat,
+	alpha_threshold GdFloat,
+) GdBool {
+	arg0 := (C.GDExtensionSpxSpriteCheckCollisionByColors)(api.SpxSpriteCheckCollisionByColors)
+	arg1 := (C.GdObj)(obj)
+	arg2 := (C.GdColor)(sprite_color)
+	arg3 := (C.GdColor)(target_color)
+	arg4 := (C.GdFloat)(color_threshold)
+	arg5 := (C.GdFloat)(alpha_threshold)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxSpriteCheckCollisionByColors(arg0, arg1, arg2, arg3, arg4, arg5, &ret_val)
 
 	return (GdBool)(ret_val)
 }

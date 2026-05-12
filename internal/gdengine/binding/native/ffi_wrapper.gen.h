@@ -1476,6 +1476,12 @@ void cgo_callfn_GDExtensionSpxSpriteCheckCollisionByColor(const GDExtensionSpxSp
 	}
 	fn(obj, color, color_threshold, alpha_threshold, ret_val);
 }
+void cgo_callfn_GDExtensionSpxSpriteCheckCollisionByColors(const GDExtensionSpxSpriteCheckCollisionByColors fn, GdObj obj, GdColor sprite_color, GdColor target_color, GdFloat color_threshold, GdFloat alpha_threshold, GdBool* ret_val) {
+	if (!fn) {
+		return;
+	}
+	fn(obj, sprite_color, target_color, color_threshold, alpha_threshold, ret_val);
+}
 void cgo_callfn_GDExtensionSpxSpriteCheckCollisionByAlpha(const GDExtensionSpxSpriteCheckCollisionByAlpha fn, GdObj obj, GdFloat alpha_threshold, GdBool* ret_val) {
 	if (!fn) {
 		return;

@@ -1,6 +1,3 @@
-import "fmt"
-import "math"
-
 const sensingTargetName = "Red"
 const sensingRedHex = "#ED1C24"
 const sensingStartOffset = -100.0
@@ -14,13 +11,7 @@ func setupSensingScene() {
 	Red.SetSize 1
 }
 
-func assertTouchingRed(startOffset, mvSpeed float64, byColor bool) {
-	detectMsg := "touching"
-	redColor := NewColor(sensingRedHex)
-	if byColor {
-		detectMsg = "touching color"
-	}
-
+func assertTouchingRed(startOffset, mvSpeed float64, detect func() bool, detectMsg, assertMsg string) {
 	setXYpos startOffset, 0
 	touched := false
 	tt := 0.0
@@ -28,22 +19,14 @@ func assertTouchingRed(startOffset, mvSpeed float64, byColor bool) {
 		tt += deltaTime()
 		setXpos startOffset + tt*mvSpeed
 
-		if byColor {
-			touched = touchingColor(redColor)
-		} else {
-			touched = touching(sensingTargetName)
-		}
+		touched = detect()
 		if touched {
 			say detectMsg
 			break
 		}
 		waitNextFrame
 	}
-	if byColor {
-		assert(touched, "Sprite::TouchingColor")
-	} else {
-		assert(touched, "Sprite::Touching")
-	}
+	assert(touched, assertMsg)
 }
 
 func waitForKeyPress(key Key, prompt, success string) {
@@ -66,24 +49,57 @@ onMsg "testSensing", => {
 	onTestStart(this)
 
 	setupSensingScene()
+	redColor := NewColor(sensingRedHex)
+	brownColor := NewColor("#795535")
 
 	// 1. Sprite::Touching
-	assertTouchingRed(sensingStartOffset, sensingMoveSpeed, false)
+	assertTouchingRed(
+		sensingStartOffset,
+		sensingMoveSpeed,
+		func() bool {
+			return touching(sensingTargetName)
+		},
+		"touching",
+		"Sprite::Touching",
+	)
 
 	// 2. Sprite::TouchingColor
-	assertTouchingRed(sensingStartOffset, sensingMoveSpeed, true)
+	assertTouchingRed(
+		sensingStartOffset,
+		sensingMoveSpeed,
+		func() bool {
+			return touchingColor(redColor)
+		},
+		"touching color",
+		"Sprite::TouchingColor",
+	)
+
+	// 2.1 Sprite::TouchingColor(color1, color2)
+	assertTouchingRed(
+		sensingStartOffset,
+		sensingMoveSpeed,
+		func() bool {
+			return touchingColor(brownColor, redColor)
+		},
+		"brown touching red",
+		"Sprite::TouchingColor(color1, color2)",
+	)
 
 	// 3. Sprite::DistanceTo
 	Red.SetXYpos 0, 0
 	setXYpos 30, 40
 	dist := distanceTo(sensingTargetName)
 	assertFloat(dist, 50, "Sprite::DistanceTo")
+
 	// 4. Sprite::Ask
 	ask "test ask"
+
 	// 5. Game::Answer
 	say answer
+
 	// 6. Game::KeyPressed
 	waitForKeyPress(KeyA, "test key pressed A", "key A pressed")
+
 	// 7. Game::MousePressed
 	waitForMouseClick("please click the red sprite", "mouse clicked")
 
@@ -92,23 +108,20 @@ onMsg "testSensing", => {
 	// 8. Game::MouseX
 	mouseX := mouseX
 	assertPosWithErr(this, mouseX, 0, sensingMouseErr, "Game::MouseX")
+
 	// 9. Game::MouseY
 	mouseY := mouseY
 	assertPosWithErr(this, mouseY, 0, sensingMouseErr, "Game::MouseY")
+
 	// 10. Game::Timer
 	assert(timer > 1, "Game::Timer")
+
 	// 11. Game::ResetTimer
 	resetTimer
 	assertFloat(timer, 0.001, "Game::ResetTimer")
+	
 	// 12. Game::BackdropIndex
 	assertFloat(float64(backdropIndex), 0, "Game::BackdropIndex")
-
-	// Game::Loudness
-	// Game::Username
-	// color [ ] is touching [ ]
-	// set drag mode [draggable ▼]
-	// current [year ▼]
-	// days since 2000
 
 	onTestDone(this)
 }

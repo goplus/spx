@@ -318,7 +318,8 @@ type Sprite interface {
 	Touching__2(obj specialObj) bool
 
 	TouchingWith(target Target) bool
-	TouchingColor(color Color) bool
+	TouchingColor__0(color Color) bool
+	TouchingColor__1(spriteColor, targetColor Color) bool
 
 	// Communication Methods
 	Say__0(msg any)
