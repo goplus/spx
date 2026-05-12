@@ -11,6 +11,8 @@ github.com/goplus/gogen v1.23.0-pre.3.0.20260414234848-6641c10c9d6f h1:qb3Vcmljq
 github.com/goplus/gogen v1.23.0-pre.3.0.20260414234848-6641c10c9d6f/go.mod h1:Y7ulYW3wonQ3d9er00b0uGFEV/IUZa6okWJZh892ACQ=
 github.com/goplus/ixgo v1.0.8 h1:NQK8bp6U7yXUPa0tK/xgUbhGghZqRXWCgTzHUuCsClA=
 github.com/goplus/ixgo v1.0.8/go.mod h1:l0XUB88nNGjr95mdA+MoJOZMnaqgQdtSQIMGUC6VFkE=
+github.com/goplus/ixgo v1.0.9-0.20260512081821-cdcff18eba44 h1:zeRi1YdlVS74zzFD1Z4XsEf13YyJgyqWDApJPwbyyJY=
+github.com/goplus/ixgo v1.0.9-0.20260512081821-cdcff18eba44/go.mod h1:l0XUB88nNGjr95mdA+MoJOZMnaqgQdtSQIMGUC6VFkE=
 github.com/goplus/mod v0.20.2 h1:YX72E6AhhRLvlkVnI9cBK6PZvUwtge2hwROh7w9N6Yk=
 github.com/goplus/mod v0.20.2/go.mod h1:lWW62tH7L3Vm42Lr6wlUMYHvsm5w3TkEpE2ulKTgmU8=
 github.com/goplus/reflectx v1.6.4 h1:luq+mKbdG4dGXwcpR7eZpWrsOAg46/lGPnQdRLSzyzY=
