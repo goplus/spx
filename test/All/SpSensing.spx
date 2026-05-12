@@ -26,7 +26,7 @@ func assertTouchingRed(startOffset, mvSpeed float64, detect func() bool, detectM
 		}
 		waitNextFrame
 	}
-	assert(touched, assertMsg)
+	assert(touched, "%s", assertMsg)
 }
 
 func waitForKeyPress(key Key, prompt, success string) {
