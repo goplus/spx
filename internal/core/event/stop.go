@@ -25,12 +25,21 @@ const (
 	ThisSprite           StopKind = -102
 	ThisScript           StopKind = -103
 	OtherScriptsInSprite StopKind = -104
+	OtherScriptsInGame   StopKind = -105
 )
 
 type StopFilter func(obj any, isCurrent bool) bool
 
 func ResolveStop(kind StopKind, owner any, isSprite func(any) bool, isGame func(any) bool) (StopFilter, bool) {
 	switch kind {
+	case AllStop:
+		return func(obj any, isCurrent bool) bool {
+			return isSprite(obj) || isGame(obj)
+		}, true
+	case AllOtherScripts:
+		return func(obj any, isCurrent bool) bool {
+			return !isCurrent && (isSprite(obj) || isGame(obj))
+		}, false
 	case AllSprites:
 		return func(obj any, isCurrent bool) bool {
 			return isSprite(obj)
@@ -39,20 +48,16 @@ func ResolveStop(kind StopKind, owner any, isSprite func(any) bool, isGame func(
 		return func(obj any, isCurrent bool) bool {
 			return obj == owner
 		}, false
-	case OtherScriptsInSprite:
-		return func(obj any, isCurrent bool) bool {
-			return obj == owner && !isCurrent
-		}, false
-	case AllOtherScripts:
-		return func(obj any, isCurrent bool) bool {
-			return !isCurrent && (isSprite(obj) || isGame(obj))
-		}, false
-	case AllStop:
-		return func(obj any, isCurrent bool) bool {
-			return isSprite(obj) || isGame(obj)
-		}, true
 	case ThisScript:
 		return nil, true
+	case OtherScriptsInSprite:
+		return func(obj any, isCurrent bool) bool {
+			return !isCurrent && obj == owner
+		}, false
+	case OtherScriptsInGame:
+		return func(obj any, isCurrent bool) bool {
+			return !isCurrent && isGame(obj)
+		}, false
 	default:
 		return nil, false
 	}

@@ -299,6 +299,7 @@ func init() {
 			"NoPhysics":            {Typ: reflect.TypeOf(q.NoPhysics), Value: constant.MakeInt64(int64(q.NoPhysics))},
 			"None":                 {Typ: reflect.TypeOf(q.None), Value: constant.MakeInt64(int64(q.None))},
 			"Normal":               {Typ: reflect.TypeOf(q.Normal), Value: constant.MakeInt64(int64(q.Normal))},
+			"OtherScriptsInGame":   {Typ: reflect.TypeOf(q.OtherScriptsInGame), Value: constant.MakeInt64(int64(q.OtherScriptsInGame))},
 			"OtherScriptsInSprite": {Typ: reflect.TypeOf(q.OtherScriptsInSprite), Value: constant.MakeInt64(int64(q.OtherScriptsInSprite))},
 			"PenBrightness":        {Typ: reflect.TypeOf(q.PenBrightness), Value: constant.MakeInt64(int64(q.PenBrightness))},
 			"PenHue":               {Typ: reflect.TypeOf(q.PenHue), Value: constant.MakeInt64(int64(q.PenHue))},

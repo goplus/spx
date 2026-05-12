@@ -115,6 +115,7 @@ const (
 	ThisSprite           StopKind = coreevent.ThisSprite
 	ThisScript           StopKind = coreevent.ThisScript
 	OtherScriptsInSprite StopKind = coreevent.OtherScriptsInSprite
+	OtherScriptsInGame   StopKind = coreevent.OtherScriptsInGame
 )
 
 // VarName identifies a monitor variable by name.
