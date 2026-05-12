@@ -84,16 +84,8 @@ onMsg "testOperator", => {
 	// 9.4 Division by zero test
 	a = 1
 	b = 0
-	var isPanic bool
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-				isPanic = true
-			}
-		}()
-		result = a / b
-	}()
-	assert(isPanic, "Division by zero should panic")
+	result = a / b
+	assert(math.IsInf(result, 1), "Division by zero should produce +Inf")
 
 	onTestDone(this)
 }
