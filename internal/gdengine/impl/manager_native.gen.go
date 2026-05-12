@@ -1523,6 +1523,15 @@ func (pself *spriteMgr) CheckCollisionByColor(obj Object, color Color, color_thr
 	retValue := CallSpriteCheckCollisionByColor(arg0, arg1, arg2, arg3)
 	return ToBool(retValue)
 }
+func (pself *spriteMgr) CheckCollisionByColors(obj Object, sprite_color Color, target_color Color, color_threshold float64, alpha_threshold float64) bool {
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdColor(sprite_color)
+	arg2 := ToGdColor(target_color)
+	arg3 := ToGdFloat(color_threshold)
+	arg4 := ToGdFloat(alpha_threshold)
+	retValue := CallSpriteCheckCollisionByColors(arg0, arg1, arg2, arg3, arg4)
+	return ToBool(retValue)
+}
 func (pself *spriteMgr) CheckCollisionByAlpha(obj Object, alpha_threshold float64) bool {
 	arg0 := ToGdObj(obj)
 	arg1 := ToGdFloat(alpha_threshold)

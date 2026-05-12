@@ -53,8 +53,12 @@ func (p *SpriteImpl) adjustPositionAndGetDimensions(x, y *float64) (width, heigh
 	return w * p.runtimeState.Scale, h * p.runtimeState.Scale
 }
 
-func (p *SpriteImpl) TouchingColor(color Color) bool {
+func (p *SpriteImpl) TouchingColor__0(color Color) bool {
 	return p.touchingColor(toMathfColor(color))
+}
+
+func (p *SpriteImpl) TouchingColor__1(spriteColor, targetColor Color) bool {
+	return p.touchingColors(toMathfColor(spriteColor), toMathfColor(targetColor))
 }
 
 func (p *SpriteImpl) Touching__0(sprite Sprite) bool {
@@ -113,6 +117,19 @@ func (p *SpriteImpl) touchingColor(color mathf.Color) bool {
 		return false
 	}
 	return p.engine().SpriteMgr.CheckCollisionByColor(p.runtimeState.SyncSprite.GetId(), color, colorThreshold, alphaThreshold)
+}
+
+func (p *SpriteImpl) touchingColors(spriteColor, targetColor mathf.Color) bool {
+	if p.runtimeState.SyncSprite == nil {
+		return false
+	}
+	return p.engine().SpriteMgr.CheckCollisionByColors(
+		p.runtimeState.SyncSprite.GetId(),
+		spriteColor,
+		targetColor,
+		colorThreshold,
+		alphaThreshold,
+	)
 }
 
 func (p *SpriteImpl) touchingSprite(dst *SpriteImpl) bool {

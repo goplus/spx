@@ -284,6 +284,7 @@ type GDExtensionInterface struct {
 	SpxSpriteSetTriggerEnabled                  js.Value
 	SpxSpriteIsTriggerEnabled                   js.Value
 	SpxSpriteCheckCollisionByColor              js.Value
+	SpxSpriteCheckCollisionByColors             js.Value
 	SpxSpriteCheckCollisionByAlpha              js.Value
 	SpxSpriteCheckCollisionWithSprite           js.Value
 	SpxSpriteSetPixelCollisionSamplingStep      js.Value
@@ -602,6 +603,7 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxSpriteSetTriggerEnabled = resolveJSFunc("gdspx_sprite_set_trigger_enabled")
 	x.SpxSpriteIsTriggerEnabled = resolveJSFunc("gdspx_sprite_is_trigger_enabled")
 	x.SpxSpriteCheckCollisionByColor = resolveJSFunc("gdspx_sprite_check_collision_by_color")
+	x.SpxSpriteCheckCollisionByColors = resolveJSFunc("gdspx_sprite_check_collision_by_colors")
 	x.SpxSpriteCheckCollisionByAlpha = resolveJSFunc("gdspx_sprite_check_collision_by_alpha")
 	x.SpxSpriteCheckCollisionWithSprite = resolveJSFunc("gdspx_sprite_check_collision_with_sprite")
 	x.SpxSpriteSetPixelCollisionSamplingStep = resolveJSFunc("gdspx_sprite_set_pixel_collision_sampling_step")

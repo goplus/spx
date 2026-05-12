@@ -326,6 +326,7 @@ type ISpriteMgr interface {
 	SetTriggerEnabled(obj Object, trigger bool)
 	IsTriggerEnabled(obj Object) bool
 	CheckCollisionByColor(obj Object, color Color, color_threshold float64, alpha_threshold float64) bool
+	CheckCollisionByColors(obj Object, sprite_color Color, target_color Color, color_threshold float64, alpha_threshold float64) bool
 	CheckCollisionByAlpha(obj Object, alpha_threshold float64) bool
 	CheckCollisionWithSprite(obj Object, obj_b Object, alpha_threshold float64, use_pixel_perfect bool) bool
 	SetPixelCollisionSamplingStep(step int64)

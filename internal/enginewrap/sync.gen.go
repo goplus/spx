@@ -1625,6 +1625,13 @@ func (*spriteMgrImpl) CheckCollisionByColor(obj gdx.Object, color Color, color_t
 	})
 	return _ret1
 }
+func (*spriteMgrImpl) CheckCollisionByColors(obj gdx.Object, sprite_color Color, target_color Color, color_threshold float64, alpha_threshold float64) bool {
+	var _ret1 bool
+	callInMainThread(func() {
+		_ret1 = gdx.SpriteMgr.CheckCollisionByColors(obj, sprite_color, target_color, color_threshold, alpha_threshold)
+	})
+	return _ret1
+}
 func (*spriteMgrImpl) CheckCollisionByAlpha(obj gdx.Object, alpha_threshold float64) bool {
 	var _ret1 bool
 	callInMainThread(func() {
