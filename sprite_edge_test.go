@@ -133,8 +133,11 @@ func TestSpriteTouchingTargetUsesRequestedEdgeArea(t *testing.T) {
 	if sprite.touching(EdgeLeft, edgeAreaCamera) {
 		t.Fatal("touching(EdgeLeft, camera) = true, want false")
 	}
-	if !sprite.touching(EdgeRight, normalizeEdgeArea(edgeAreaViewport)) {
+	if !sprite.touching(EdgeRight, edgeAreaViewport) {
 		t.Fatal("touching(EdgeRight, viewport) = false, want true")
+	}
+	if !sprite.touching(EdgeRight, "Camera") {
+		t.Fatal("touching(EdgeRight, Camera) = false, want true")
 	}
 }
 

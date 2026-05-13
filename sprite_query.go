@@ -143,7 +143,7 @@ func (p *SpriteImpl) checkTouchingScreen(where int, area string) (touching int) 
 	if p.runtimeState.SyncSprite == nil {
 		return 0
 	}
-	switch area {
+	switch normalizeEdgeArea(area) {
 	case edgeAreaCamera:
 		touching = int(p.engine().PhysicsMgr.CheckTouchedCameraBoundaries(p.runtimeState.SyncSprite.GetId()))
 	default:
@@ -156,7 +156,7 @@ func (p *SpriteImpl) checkNearestTouchedBoundary(area string) int {
 	if p.runtimeState.SyncSprite == nil {
 		return 0
 	}
-	switch area {
+	switch normalizeEdgeArea(area) {
 	case edgeAreaCamera:
 		return int(p.engine().PhysicsMgr.CheckNearestTouchedCameraBoundary(p.runtimeState.SyncSprite.GetId()))
 	default:
