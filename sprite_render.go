@@ -66,7 +66,9 @@ func (p *SpriteImpl) setCostume(costume any) {
 	if isDebugInstrEnabled() {
 		spxlog.Debug("SetCostume: sprite=%s, costume=%v", p.name, costume)
 	}
-	p.goSetCostume(costume)
+	if !p.goSetCostume(costume) {
+		return
+	}
 	p.spriteState.DefaultCostumeIndex = p.costumeIndex
 	p.spriteState.IsDirty = true
 }

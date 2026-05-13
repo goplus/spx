@@ -233,7 +233,7 @@ func (p *baseObj) goSetCostume(val any) bool {
 	case float64:
 		return p.setCostumeByIndex(int(v))
 	default:
-		spxlog.Error("setCostume: invalid argument type")
+		spxlog.Error("setCostume: invalid argument type: %T", val)
 		return false
 	}
 }
@@ -241,7 +241,7 @@ func (p *baseObj) goSetCostume(val any) bool {
 // setCostumeByIndex sets the costume by its index.
 func (p *baseObj) setCostumeByIndex(idx int) bool {
 	if idx < 0 || idx >= len(p.costumes) {
-		spxlog.Error("invalid costume index: %d (count: %d)", idx, len(p.costumes))
+		spxlog.Error("setCostume: invalid index %d (count: %d)", idx, len(p.costumes))
 		return false
 	}
 	p.setCostumeIndex(idx)
@@ -253,7 +253,7 @@ func (p *baseObj) setCostumeByName(name SpriteCostumeName) bool {
 	if idx := p.findCostume(name); idx >= 0 {
 		return p.setCostumeByIndex(idx)
 	}
-	spxlog.Error("invalid costume name: %s", name)
+	spxlog.Error("setCostume: invalid name %s", name)
 	return false
 }
 
