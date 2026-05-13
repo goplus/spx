@@ -25,6 +25,7 @@ import (
 	coreproject "github.com/goplus/spx/v2/internal/core/project"
 	corestate "github.com/goplus/spx/v2/internal/core/state"
 	"github.com/goplus/spx/v2/internal/engine"
+	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
 // baseObj provides common functionality for sprites and backdrops.
@@ -232,7 +233,7 @@ func (p *baseObj) goSetCostume(val any) bool {
 	case float64:
 		return p.setCostumeByIndex(int(v))
 	default:
-		engine.Panic("setCostume: invalid argument type")
+		spxlog.Error("setCostume: invalid argument type")
 		return false
 	}
 }
@@ -240,7 +241,7 @@ func (p *baseObj) goSetCostume(val any) bool {
 // setCostumeByIndex sets the costume by its index.
 func (p *baseObj) setCostumeByIndex(idx int) bool {
 	if idx < 0 || idx >= len(p.costumes) {
-		engine.Panicf("invalid costume index: %d (count: %d)", idx, len(p.costumes))
+		spxlog.Error("invalid costume index: %d (count: %d)", idx, len(p.costumes))
 		return false
 	}
 	p.setCostumeIndex(idx)
@@ -252,7 +253,7 @@ func (p *baseObj) setCostumeByName(name SpriteCostumeName) bool {
 	if idx := p.findCostume(name); idx >= 0 {
 		return p.setCostumeByIndex(idx)
 	}
-	engine.Panicf("invalid costume name: %s", name)
+	spxlog.Error("invalid costume name: %s", name)
 	return false
 }
 
