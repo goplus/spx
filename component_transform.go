@@ -372,14 +372,14 @@ func (t *transformComponent) TurnToPos(x, y, speed float64, animation SpriteAnim
 	})
 }
 
-// BounceOffEdge bounces the sprite off the edge of the stage by reflecting
+// BounceOffEdge bounces the sprite off the selected edge area by reflecting
 // its direction vector based on the edge that was touched.
-func (t *transformComponent) BounceOffEdge() {
+func (t *transformComponent) BounceOffEdge(area string) {
 	if isDebugInstrEnabled() {
 		spxlog.Debug("BounceOffEdge: %s", t.sprite.name)
 	}
 
-	nearestEdge := t.sprite.checkNearestTouchedBoundary()
+	nearestEdge := t.sprite.checkNearestTouchedBoundary(area)
 	if nearestEdge == 0 {
 		return
 	}
