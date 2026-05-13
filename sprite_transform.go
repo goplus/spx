@@ -353,7 +353,7 @@ func (p *SpriteImpl) ChangeHeading(dir Direction) {
 }
 
 func (p *SpriteImpl) BounceOffEdge() {
-	p.transform().BounceOffEdge()
+	p.transform().BounceOffEdge(edgeAreaStage)
 }
 
 // -----------------------------------------------------------------------------

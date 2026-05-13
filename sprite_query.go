@@ -62,22 +62,22 @@ func (p *SpriteImpl) TouchingColor__1(spriteColor, targetColor Color) bool {
 }
 
 func (p *SpriteImpl) Touching__0(sprite Sprite) bool {
-	return p.touching(sprite)
+	return p.touching(sprite, edgeAreaStage)
 }
 
 func (p *SpriteImpl) Touching__1(sprite SpriteName) bool {
-	return p.touching(sprite)
+	return p.touching(sprite, edgeAreaStage)
 }
 
 func (p *SpriteImpl) Touching__2(obj specialObj) bool {
-	return p.touching(obj)
+	return p.touching(obj, edgeAreaStage)
 }
 
 func (p *SpriteImpl) TouchingWith(target Target) bool {
-	return p.touching(target)
+	return p.touching(target, edgeAreaStage)
 }
 
-func (p *SpriteImpl) touching(obj Target) bool {
+func (p *SpriteImpl) touching(obj Target, area string) bool {
 	if !p.spriteState.IsVisible || p.spriteState.IsDying {
 		return false
 	}
@@ -86,7 +86,7 @@ func (p *SpriteImpl) touching(obj Target) bool {
 		return p.g.touchingSpriteBy(p, v) != nil
 	case specialObj:
 		if v > 0 {
-			return p.checkTouchingScreen(int(v)) != 0
+			return p.checkTouchingScreen(int(v), area) != 0
 		}
 		if v == Mouse {
 			x, y := p.g.getMousePos()
@@ -139,19 +139,29 @@ func (p *SpriteImpl) touchingSprite(dst *SpriteImpl) bool {
 	return p.engine().SpriteMgr.CheckCollisionWithSprite(p.runtimeState.SyncSprite.GetId(), dst.runtimeState.SyncSprite.GetId(), alphaThreshold, !isPhysicsEnabled())
 }
 
-func (p *SpriteImpl) checkTouchingScreen(where int) (touching int) {
+func (p *SpriteImpl) checkTouchingScreen(where int, area string) (touching int) {
 	if p.runtimeState.SyncSprite == nil {
 		return 0
 	}
-	touching = int(p.engine().PhysicsMgr.CheckTouchedStageBoundaries(p.runtimeState.SyncSprite.GetId()))
+	switch normalizeEdgeArea(area) {
+	case edgeAreaCamera:
+		touching = int(p.engine().PhysicsMgr.CheckTouchedCameraBoundaries(p.runtimeState.SyncSprite.GetId()))
+	default:
+		touching = int(p.engine().PhysicsMgr.CheckTouchedStageBoundaries(p.runtimeState.SyncSprite.GetId()))
+	}
 	return touching & where
 }
 
-func (p *SpriteImpl) checkNearestTouchedBoundary() int {
+func (p *SpriteImpl) checkNearestTouchedBoundary(area string) int {
 	if p.runtimeState.SyncSprite == nil {
 		return 0
 	}
-	return int(p.engine().PhysicsMgr.CheckNearestTouchedStageBoundary(p.runtimeState.SyncSprite.GetId()))
+	switch normalizeEdgeArea(area) {
+	case edgeAreaCamera:
+		return int(p.engine().PhysicsMgr.CheckNearestTouchedCameraBoundary(p.runtimeState.SyncSprite.GetId()))
+	default:
+		return int(p.engine().PhysicsMgr.CheckNearestTouchedStageBoundary(p.runtimeState.SyncSprite.GetId()))
+	}
 }
 
 func (p *SpriteImpl) HideVar(name PropertyName) {
