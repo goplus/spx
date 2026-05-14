@@ -76,12 +76,12 @@ func (c *cameraImpl) setLimits() {
 		return
 	}
 
-	// Calculate actual world boundaries (based on minWorld coordinates and world size)
+	worldLeft, worldTop, worldRight, worldBottom := p.worldBounds()
 	world := map[side]int{
-		sideLeft:   p.displayState.MinWorldX,
-		sideTop:    -p.displayState.MinWorldY - p.displayState.WorldHeight,
-		sideRight:  p.displayState.MinWorldX + p.displayState.WorldWidth,
-		sideBottom: -p.displayState.MinWorldY,
+		sideLeft:   worldLeft,
+		sideTop:    worldBottom,
+		sideRight:  worldRight,
+		sideBottom: worldTop,
 	}
 
 	// Apply camera limits

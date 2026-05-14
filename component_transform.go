@@ -304,12 +304,15 @@ func (t *transformComponent) fixWorldRange(x, y float64) (float64, float64) {
 		return x, y
 	}
 
-	worldW, worldH := t.sprite.g.worldSize()
-	maxW := float64(worldW)/2.0 + float64(rect.Size.X)
-	maxH := float64(worldH)/2.0 + float64(rect.Size.Y)
+	worldLeft, worldTop, worldRight, worldBottom := t.sprite.g.worldBounds()
 
-	x = mathf.Clamp(x, -maxW, maxW)
-	y = mathf.Clamp(y, -maxH, maxH)
+	leftOffset := t.x - rect.Position.X
+	rightOffset := rect.Position.X + rect.Size.X - t.x
+	bottomOffset := t.y - rect.Position.Y
+	topOffset := rect.Position.Y + rect.Size.Y - t.y
+
+	x = mathf.Clamp(x, float64(worldLeft)-rightOffset, float64(worldRight)+leftOffset)
+	y = mathf.Clamp(y, float64(worldBottom)-topOffset, float64(worldTop)+bottomOffset)
 
 	return x, y
 }
