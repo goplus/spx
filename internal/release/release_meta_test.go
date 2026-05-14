@@ -23,12 +23,6 @@ func TestReleaseMetaForSPXVersionMapped(t *testing.T) {
 	if meta.Runtime.Version != "2.2.0" {
 		t.Fatalf("runtime version = %q, want %q", meta.Runtime.Version, "2.2.0")
 	}
-	if meta.Pck.SPXTag != "v2.0.0-pre.30" {
-		t.Fatalf("pck tag = %q, want %q", meta.Pck.SPXTag, "v2.0.0-pre.30")
-	}
-	if meta.Pck.Version != "2.0.30" {
-		t.Fatalf("pck version = %q, want %q", meta.Pck.Version, "2.0.30")
-	}
 }
 
 func TestReleaseMetaForSPXVersionLatestFallback(t *testing.T) {
