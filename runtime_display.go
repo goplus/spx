@@ -78,6 +78,15 @@ func (p *Game) worldSize() (int, int) {
 	return p.displayState.WorldWidth, p.displayState.WorldHeight
 }
 
+func (p *Game) worldBounds() (left, top, right, bottom int) {
+	worldW, worldH := p.worldSize()
+	left = p.displayState.MinWorldX
+	right = left + worldW
+	top = -p.displayState.MinWorldY
+	bottom = top - worldH
+	return
+}
+
 func (p *Game) doWorldSize() {
 	if p.displayState.WorldWidth == 0 {
 		c := p.costumes[p.costumeIndex]
