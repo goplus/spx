@@ -49,9 +49,9 @@ type PckRelease struct {
 }
 
 var defaultPckRelease = PckRelease{
-	// Current packaged runtime assets are only published from the pre.30 SPX release.
-	SPXTag:  "v2.0.0-pre.30",
-	Version: "2.0.30",
+	// Current packaged runtime assets are only published from the v2.0.0 SPX release.
+	SPXTag:  "v2.0.0",
+	Version: "2.2.0",
 }
 
 type releaseVersionMapping struct {
