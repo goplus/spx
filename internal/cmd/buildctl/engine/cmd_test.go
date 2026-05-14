@@ -22,6 +22,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/goplus/spx/v2/internal/release"
 )
 
 func TestParseEngineDownloadArgsDefault(t *testing.T) {
@@ -292,6 +294,7 @@ func installFakeEngineDownload(t *testing.T, repoRoot, defaultPlatform, arch str
 
 func fakeEngineDownloadFetcher(url, dst string) error {
 	base := filepath.Base(url)
+	runtimePackZip := "gdspxrt.pck." + release.DefaultReleaseMeta().Pck.Version + ".zip"
 
 	switch base {
 	case "linux-x86_64.zip":
@@ -318,7 +321,7 @@ func fakeEngineDownloadFetcher(url, dst string) error {
 		return writeZipFixture(dst, map[string]string{
 			"web-template.bin": "miniprogram-web-template",
 		})
-	case "gdspxrt.pck.2.0.30.zip":
+	case runtimePackZip:
 		return writeZipFixture(dst, map[string]string{
 			"gdspxrt.pck": "runtime-pck",
 		})
