@@ -215,7 +215,7 @@ clean-projects: ## Delete generated artifacts (.temp/, project/, .gdspx_web_serv
 		echo "removed $$path"; \
 	done
 
-export-pack: ## Export runtime pck file
+export-pack: ## Export runtime asset bundle
 	$(BUILDCTL_RUNTIME_CMD) export-pack
 
 export-web: ## Export web engine. Usage: make export-web MODE=normal (MODE: normal|worker|minigame|miniprogram)

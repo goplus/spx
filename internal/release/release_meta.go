@@ -28,30 +28,20 @@ const (
 
 	// RuntimeTag is the filename prefix for the runtime binary/pck files.
 	RuntimeTag = "gdspxrt"
+
+	// RuntimeAssetZipName is the fixed runtime asset bundle name published under each SPX release tag.
+	RuntimeAssetZipName = "spx-runtime-assets.zip"
 )
 
 // ReleaseMeta captures the selected SPX/runtime asset mapping.
 type ReleaseMeta struct {
 	SPXVersion string
 	Runtime    RuntimeRelease
-	Pck        PckRelease
 }
 
 // RuntimeRelease describes the Godot runtime bundle used by SPX.
 type RuntimeRelease struct {
 	Version string
-}
-
-// PckRelease describes the packaged SPX runtime assets published from the spx repo.
-type PckRelease struct {
-	SPXTag  string
-	Version string
-}
-
-var defaultPckRelease = PckRelease{
-	// Current packaged runtime assets are only published from the v2.0.0 SPX release.
-	SPXTag:  "v2.0.0",
-	Version: "2.2.0",
 }
 
 type releaseVersionMapping struct {
@@ -64,20 +54,27 @@ var releaseVersionMappings = []releaseVersionMapping{
 	{"v2.0.1", "2.2.1"},
 }
 
-func newReleaseMeta(spxVersion, runtimeVersion string) ReleaseMeta {
+func newReleaseMeta(mapping releaseVersionMapping) ReleaseMeta {
 	return ReleaseMeta{
-		SPXVersion: spxVersion,
+		SPXVersion: mapping.spxVersion,
 		Runtime: RuntimeRelease{
-			Version: runtimeVersion,
+			Version: mapping.runtimeVersion,
 		},
-		Pck: defaultPckRelease,
 	}
 }
 
 var releaseMetaBySPXVersion = func() map[string]ReleaseMeta {
 	result := make(map[string]ReleaseMeta, len(releaseVersionMappings))
 	for _, item := range releaseVersionMappings {
-		result[item.spxVersion] = newReleaseMeta(item.spxVersion, item.runtimeVersion)
+		result[item.spxVersion] = newReleaseMeta(item)
+	}
+	return result
+}()
+
+var releaseMetaByRuntimeVersion = func() map[string]ReleaseMeta {
+	result := make(map[string]ReleaseMeta, len(releaseVersionMappings))
+	for _, item := range releaseVersionMappings {
+		result[item.runtimeVersion] = newReleaseMeta(item)
 	}
 	return result
 }()
@@ -88,7 +85,7 @@ func DefaultReleaseMeta() ReleaseMeta {
 		panic("release: releaseVersionMappings is empty")
 	}
 	item := releaseVersionMappings[len(releaseVersionMappings)-1]
-	return newReleaseMeta(item.spxVersion, item.runtimeVersion)
+	return newReleaseMeta(item)
 }
 
 // CurrentReleaseMeta is kept as a compatibility alias for the default release metadata.
@@ -105,6 +102,15 @@ func ReleaseMetaForSPXVersion(spxVersion string) ReleaseMeta {
 	return DefaultReleaseMeta()
 }
 
+// ReleaseMetaForRuntimeVersion resolves runtime/pck metadata for a runtime version.
+// Unknown versions fall back to the latest known runtime assets.
+func ReleaseMetaForRuntimeVersion(runtimeVersion string) ReleaseMeta {
+	if meta, ok := releaseMetaByRuntimeVersion[runtimeVersion]; ok {
+		return meta
+	}
+	return DefaultReleaseMeta()
+}
+
 // RuntimeBinaryTag returns the runtime executable/pck base filename.
 func (m ReleaseMeta) RuntimeBinaryTag() string {
 	return RuntimeTag + m.Runtime.Version
@@ -115,7 +121,7 @@ func (m ReleaseMeta) RuntimeDownloadURL(zipName string) string {
 	return RuntimeURLBase + "spx" + m.Runtime.Version + "/" + zipName
 }
 
-// PckDownloadURL returns the packaged runtime asset URL for the given zip asset name.
-func (m ReleaseMeta) PckDownloadURL(zipName string) string {
-	return SpxReleaseURLBase + m.Pck.SPXTag + "/" + zipName
+// RuntimeAssetDownloadURL returns the packaged runtime asset bundle URL for the given zip asset name.
+func (m ReleaseMeta) RuntimeAssetDownloadURL(zipName string) string {
+	return SpxReleaseURLBase + m.SPXVersion + "/" + zipName
 }

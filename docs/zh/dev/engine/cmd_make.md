@@ -149,7 +149,7 @@ make install-apk APK_PROJECT_DIR=tutorial/00-Hello
 
 | 命令 | 说明 |
 | --- | --- |
-| `make export-pack` | 导出 runtime pck zip 到 `GOPATH/bin` |
+| `make export-pack` | 导出 runtime assets zip `spx-runtime-assets.zip` 到 `GOPATH/bin` |
 | `make export-web [MODE=...]` | 导出 Web bundle，输出 zip 到仓库根目录 |
 
 `make export-web` 的输出文件：

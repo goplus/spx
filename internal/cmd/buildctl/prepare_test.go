@@ -27,8 +27,8 @@ import (
 	"testing"
 
 	enginepkg "github.com/goplus/spx/v2/internal/cmd/buildctl/engine"
-	"github.com/goplus/spx/v2/internal/release"
 	"github.com/goplus/spx/v2/internal/cmd/buildctl/shared"
+	"github.com/goplus/spx/v2/internal/release"
 )
 
 type recordedCall struct {
@@ -285,7 +285,7 @@ func installFakeEngineDownload(t *testing.T, repoRoot, defaultPlatform, arch str
 
 func fakeEngineDownloadFetcher(url, dst string) error {
 	base := filepath.Base(url)
-	runtimePackZip := "gdspxrt.pck." + release.DefaultReleaseMeta().Pck.Version + ".zip"
+	runtimePackZip := release.RuntimeAssetZipName
 
 	switch base {
 	case "linux-x86_64.zip":

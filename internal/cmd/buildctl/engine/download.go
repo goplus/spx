@@ -59,7 +59,7 @@ func downloadEngineAssets(cfg engineDownloadConfig, repoRoot string) error {
 			return err
 		}
 		if err := downloadRuntimePack(env); err != nil {
-			fmt.Fprintf(osStderr, "Warning: failed to download runtime pack: %v\n", err)
+			fmt.Fprintf(osStderr, "Warning: failed to download runtime asset bundle: %v\n", err)
 		}
 		return nil
 	}
@@ -124,9 +124,9 @@ func downloadPlatformAssets(env engineDownloadEnv, mode string, editor bool) err
 func downloadRuntimePack(env engineDownloadEnv) error {
 	versionedPack := filepath.Join(env.goBinDir, fmt.Sprintf("gdspxrt%s.pck", env.version))
 	defaultPack := filepath.Join(env.goBinDir, "gdspxrt.pck")
-	meta := release.DefaultReleaseMeta()
-	zipName := fmt.Sprintf("gdspxrt.pck.%s.zip", meta.Pck.Version)
-	url := meta.PckDownloadURL(zipName)
+	meta := release.ReleaseMetaForRuntimeVersion(env.version)
+	zipName := release.RuntimeAssetZipName
+	url := meta.RuntimeAssetDownloadURL(zipName)
 	zipPath := filepath.Join(env.cacheDir, zipName)
 	if err := EngineDownloadFetcher(url, zipPath); err != nil {
 		return err

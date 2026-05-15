@@ -21,6 +21,8 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+
+	"github.com/goplus/spx/v2/internal/release"
 )
 
 const runtimeIndexJSON = `{"map":{"width":480,"height":360}}`
@@ -57,7 +59,7 @@ func exportPackRuntime(runner scriptRunner) error {
 		return fmt.Errorf("runtime extension not found at %s", runtimeExtension)
 	}
 
-	dstZip := filepath.Join(workspace.goBinDir, fmt.Sprintf("gdspxrt.pck.%s.zip", workspace.version))
+	dstZip := filepath.Join(workspace.goBinDir, release.RuntimeAssetZipName)
 	return writeNamedZip(dstZip, map[string]string{
 		"gdspxrt.pck":         workspace.outputPack,
 		"runtime.gdextension": runtimeExtension,

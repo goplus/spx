@@ -35,14 +35,14 @@ package runner
 import "github.com/goplus/spx/v2/internal/release"
 
 const (
-	RuntimeURLBase    = release.RuntimeURLBase
-	SpxReleaseURLBase = release.SpxReleaseURLBase
-	RuntimeTag        = release.RuntimeTag
+	RuntimeURLBase      = release.RuntimeURLBase
+	SpxReleaseURLBase   = release.SpxReleaseURLBase
+	RuntimeTag          = release.RuntimeTag
+	RuntimeAssetZipName = release.RuntimeAssetZipName
 )
 
 type ReleaseMeta = release.ReleaseMeta
 type RuntimeRelease = release.RuntimeRelease
-type PckRelease = release.PckRelease
 
 func ReleaseMetaForSPXVersion(spxVersion string) ReleaseMeta {
 	return release.ReleaseMetaForSPXVersion(spxVersion)
