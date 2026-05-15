@@ -38,6 +38,11 @@ type InstallAPKConfig struct {
 	ProjectDir string
 }
 
+type OpenTemplateEditorConfig struct {
+	TemplateDir  string
+	WorkspaceDir string
+}
+
 func Run(args []string) error {
 	return runWorkflow(args)
 }
@@ -60,6 +65,11 @@ func ParseWorkflowRunDemoArgs(args []string) (RunDemoConfig, error) {
 func ParseWorkflowInstallAPKArgs(args []string) (InstallAPKConfig, error) {
 	cfg, err := parseWorkflowInstallAPKArgs(args)
 	return InstallAPKConfig{ProjectDir: cfg.projectDir}, err
+}
+
+func ParseWorkflowOpenTemplateEditorArgs(args []string) (OpenTemplateEditorConfig, error) {
+	cfg, err := parseWorkflowOpenTemplateEditorArgs(args)
+	return OpenTemplateEditorConfig{TemplateDir: cfg.templateDir, WorkspaceDir: cfg.workspaceDir}, err
 }
 
 func ParseWorkflowListDemosArgs(args []string) error {
@@ -96,4 +106,8 @@ func StopWebWorkflow(runner shared.WorkflowRunner) error {
 
 func InstallAPKWorkflow(cfg InstallAPKConfig, runner shared.WorkflowRunner) error {
 	return installAPKWorkflow(workflowInstallAPKConfig{projectDir: cfg.ProjectDir}, sharedWorkflowRunnerAdapter{inner: runner})
+}
+
+func OpenTemplateEditorWorkflow(cfg OpenTemplateEditorConfig, runner shared.ScriptRunner) error {
+	return openTemplateEditorWorkflow(workflowOpenTemplateEditorConfig{templateDir: cfg.TemplateDir, workspaceDir: cfg.WorkspaceDir}, sharedScriptRunnerAdapter{inner: runner})
 }

@@ -68,6 +68,8 @@ func runWorkflow(args []string) error {
 		return runWorkflowInstallAPK(args[1:])
 	case "list-demos":
 		return runWorkflowListDemos(args[1:])
+	case "open-template-editor":
+		return runWorkflowOpenTemplateEditor(args[1:])
 	case "run-demo":
 		return runWorkflowRunDemo(args[1:])
 	case "setup-dev":
@@ -84,13 +86,14 @@ func runWorkflow(args []string) error {
 }
 
 func printWorkflowUsage() {
-	fmt.Fprintln(osStderr, "Usage: buildctl workflow <build-dev|build-web|install-apk|list-demos|run-demo|stop-web> [options]")
+	fmt.Fprintln(osStderr, "Usage: buildctl workflow <build-dev|build-web|install-apk|list-demos|open-template-editor|run-demo|stop-web> [options]")
 	fmt.Fprintln(osStderr)
 	fmt.Fprintln(osStderr, "Commands:")
 	fmt.Fprintln(osStderr, "  build-dev  Run the full local development build workflow")
 	fmt.Fprintln(osStderr, "  build-web  Build web templates and export runtime assets")
 	fmt.Fprintln(osStderr, "  install-apk  Export and install an Android APK for a project")
 	fmt.Fprintln(osStderr, "  list-demos Print tutorial demo directories with their indexes")
+	fmt.Fprintln(osStderr, "  open-template-editor  Open the embedded template project in the Godot editor")
 	fmt.Fprintln(osStderr, "  run-demo   Run a tutorial demo in local/native/web modes")
 	fmt.Fprintln(osStderr, "  stop-web   Stop local gdspx web server processes")
 }
@@ -189,6 +192,24 @@ func runWorkflowListDemos(args []string) error {
 	return listDemosWorkflow(runner)
 }
 
+func runWorkflowOpenTemplateEditor(args []string) error {
+	cfg, err := parseWorkflowOpenTemplateEditorArgs(args)
+	if err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return nil
+		}
+		return err
+	}
+
+	repoRoot, err := findRepoRoot()
+	if err != nil {
+		return err
+	}
+
+	runner := commandRunner{repoRoot: repoRoot}
+	return openTemplateEditorWorkflow(cfg, runner)
+}
+
 func parseWorkflowListDemosArgs(args []string) error {
 	fs := flag.NewFlagSet("workflow list-demos", flag.ContinueOnError)
 	fs.SetOutput(osStderr)
@@ -225,6 +246,36 @@ func parseWorkflowInstallAPKArgs(args []string) (workflowInstallAPKConfig, error
 	}
 	if cfg.projectDir == "" {
 		return workflowInstallAPKConfig{}, errors.New("--project-dir must not be empty")
+	}
+	return cfg, nil
+}
+
+func parseWorkflowOpenTemplateEditorArgs(args []string) (workflowOpenTemplateEditorConfig, error) {
+	cfg := workflowOpenTemplateEditorConfig{
+		templateDir:  defaultTemplateProjectDir,
+		workspaceDir: defaultTemplateEditorWorkspaceDir,
+	}
+
+	fs := flag.NewFlagSet("workflow open-template-editor", flag.ContinueOnError)
+	fs.SetOutput(osStderr)
+	fs.StringVar(&cfg.templateDir, "template-dir", cfg.templateDir, "template project directory to open in the editor")
+	fs.StringVar(&cfg.workspaceDir, "workspace-dir", cfg.workspaceDir, "workspace directory used to stage the template editor project")
+	fs.Usage = func() {
+		fmt.Fprintln(osStderr, "Usage: buildctl workflow open-template-editor [--template-dir cmd/spx/template/project] [--workspace-dir .tmp/template-editor]")
+	}
+
+	if err := fs.Parse(args); err != nil {
+		return workflowOpenTemplateEditorConfig{}, err
+	}
+	if fs.NArg() != 0 {
+		fs.Usage()
+		return workflowOpenTemplateEditorConfig{}, errUsage
+	}
+	if cfg.templateDir == "" {
+		return workflowOpenTemplateEditorConfig{}, errors.New("--template-dir must not be empty")
+	}
+	if cfg.workspaceDir == "" {
+		return workflowOpenTemplateEditorConfig{}, errors.New("--workspace-dir must not be empty")
 	}
 	return cfg, nil
 }

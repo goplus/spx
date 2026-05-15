@@ -2,7 +2,7 @@
 # Config
 # ============================================
 .DEFAULT_GOAL := help
-.PHONY: help buildctl list-demos prepare-host prepare-web prepare-full prepare-all build-dev install clean-assets download download-engine build-editor build-desktop build-web build-wasm build-wasm-opt build-android build-ios install-apk editor run runnative rune runweb runwebworker format generate generate-bindings generate-runtime clean-projects export-pack export-web stop validate-web-mode validate-download-engine validate-install-web
+.PHONY: help buildctl list-demos prepare-host prepare-web prepare-full prepare-all build-dev install clean-assets download download-engine build-editor build-desktop build-web build-wasm build-wasm-opt build-android build-ios install-apk editor template-editor run runnative rune runweb runwebworker format generate generate-bindings generate-runtime clean-projects export-pack export-web stop validate-web-mode validate-download-engine validate-install-web
 
 export GODOT_SRC
 
@@ -16,7 +16,7 @@ BUILDCTL_ENGINE_DOWNLOAD_CMD := $(BUILDCTL_CMD) engine download
 BUILDCTL_ENGINE_BUILD_CMD := $(BUILDCTL_CMD) engine build
 BUILDCTL_RUNTIME_CMD := $(BUILDCTL_CMD) runtime
 BUILDCTL_WORKFLOW_CMD := $(BUILDCTL_CMD) workflow
-BUILDCTL_TARGETS := list-demos prepare-host prepare-web prepare-full build-dev install clean-assets download download-engine build-editor build-desktop build-web build-wasm build-wasm-opt build-android build-ios install-apk editor run runnative rune runweb runwebworker export-pack export-web stop
+BUILDCTL_TARGETS := list-demos prepare-host prepare-web prepare-full build-dev install clean-assets download download-engine build-editor build-desktop build-web build-wasm build-wasm-opt build-android build-ios install-apk editor template-editor run runnative rune runweb runwebworker export-pack export-web stop
 
 DEMO_INDEX ?= 3
 APK_PROJECT_DIR ?= tutorial/00-Hello
@@ -166,6 +166,9 @@ list-demos: ## List all demos with index
 
 editor: ## Open demo in editor: make editor DEMO_INDEX=N
 	$(BUILDCTL_WORKFLOW_CMD) run-demo --demo-index "$(DEMO_INDEX)" --mode editor --movie "$(MOVIE)"
+
+template-editor: ## Open cmd/spx template project in editor: make template-editor
+	$(BUILDCTL_WORKFLOW_CMD) open-template-editor
 
 run: ## Run demo in interpreted mode (spx run): make run DEMO_INDEX=N
 	$(BUILDCTL_WORKFLOW_CMD) run-demo --demo-index "$(DEMO_INDEX)" --mode run --movie "$(MOVIE)"
