@@ -50,14 +50,8 @@ type releaseVersionMapping struct {
 }
 
 var releaseVersionMappings = []releaseVersionMapping{
-	{
-		spxVersion:     "v2.0.0",
-		runtimeVersion: "2.2.0",
-	},
-	{
-		spxVersion:     "v2.0.1",
-		runtimeVersion: "2.2.1",
-	},
+	{"v2.0.0", "2.2.0"},
+	{"v2.0.1", "2.2.1"},
 }
 
 func newReleaseMeta(mapping releaseVersionMapping) ReleaseMeta {
