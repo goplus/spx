@@ -7,7 +7,7 @@ tool github.com/goplus/ixgo/cmd/qexp
 require (
 	github.com/goplus/ixgo v1.0.8
 	github.com/goplus/mod v0.20.2
-	github.com/goplus/reflectx v1.6.4
+	github.com/goplus/reflectx v1.7.0
 	github.com/goplus/spbase v0.1.0
 	github.com/goplus/xgo v1.7.2-0.20260414235301-df19f4a1b7c2
 	github.com/petermattis/goid v0.0.0-20250721140440-ea1c0173183e
