@@ -28,6 +28,16 @@ func TestReleaseMetaForSPXVersionMapped(t *testing.T) {
 	}
 }
 
+func TestReleaseMetaForRuntimeVersionMapped(t *testing.T) {
+	meta := ReleaseMetaForRuntimeVersion("2.2.0")
+	if meta.SPXVersion != "v2.0.0" {
+		t.Fatalf("spx version = %q, want %q", meta.SPXVersion, "v2.0.0")
+	}
+	if got := meta.RuntimeAssetDownloadURL(RuntimeAssetZipName); got != SpxReleaseURLBase+"v2.0.0/"+RuntimeAssetZipName {
+		t.Fatalf("runtime asset download url = %q, want %q", got, SpxReleaseURLBase+"v2.0.0/"+RuntimeAssetZipName)
+	}
+}
+
 func TestDefaultReleaseMetaUsesLatestSPXVersionForRuntimeAssets(t *testing.T) {
 	meta := DefaultReleaseMeta()
 	if meta.SPXVersion != "v2.0.1" {
@@ -38,6 +48,17 @@ func TestDefaultReleaseMetaUsesLatestSPXVersionForRuntimeAssets(t *testing.T) {
 	}
 	if got := meta.RuntimeAssetDownloadURL(RuntimeAssetZipName); got != SpxReleaseURLBase+"v2.0.1/"+RuntimeAssetZipName {
 		t.Fatalf("runtime asset download url = %q, want %q", got, SpxReleaseURLBase+"v2.0.1/"+RuntimeAssetZipName)
+	}
+}
+
+func TestReleaseMetaForRuntimeVersionUnknownFallback(t *testing.T) {
+	meta := ReleaseMetaForRuntimeVersion("2.2.0-unknown")
+	defaultMeta := DefaultReleaseMeta()
+	if meta.SPXVersion != defaultMeta.SPXVersion {
+		t.Fatalf("spx version = %q, want default %q", meta.SPXVersion, defaultMeta.SPXVersion)
+	}
+	if meta.Runtime.Version != defaultMeta.Runtime.Version {
+		t.Fatalf("runtime version = %q, want default %q", meta.Runtime.Version, defaultMeta.Runtime.Version)
 	}
 }
 

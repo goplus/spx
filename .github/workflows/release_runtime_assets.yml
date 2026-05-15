@@ -7,6 +7,10 @@ on:
         description: 'Release version without the leading v (for example, 2.0.1)'
         required: true
         type: string
+      release_tag:
+        description: 'Release tag with leading v when publishing release assets'
+        required: false
+        type: string
 
 concurrency:
   group: ci-${{github.actor}}-${{github.head_ref || github.run_number}}-${{github.ref}}-release-runtime-assets
@@ -54,10 +58,10 @@ jobs:
           retention-days: 14
 
       - name: Publish runtime asset bundle
-        if: github.event_name == 'release'
+        if: inputs.release_tag != ''
         uses: softprops/action-gh-release@v3
         with:
           files: ${{ steps.build_runtime_assets.outputs.asset-zip }}
-          tag_name: ${{ github.event.release.tag_name }}
+          tag_name: ${{ inputs.release_tag }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

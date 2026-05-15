@@ -71,6 +71,14 @@ var releaseMetaBySPXVersion = func() map[string]ReleaseMeta {
 	return result
 }()
 
+var releaseMetaByRuntimeVersion = func() map[string]ReleaseMeta {
+	result := make(map[string]ReleaseMeta, len(releaseVersionMappings))
+	for _, item := range releaseVersionMappings {
+		result[item.runtimeVersion] = newReleaseMeta(item)
+	}
+	return result
+}()
+
 // DefaultReleaseMeta returns the latest known released metadata.
 func DefaultReleaseMeta() ReleaseMeta {
 	if len(releaseVersionMappings) == 0 {
@@ -89,6 +97,15 @@ func CurrentReleaseMeta() ReleaseMeta {
 // Unknown versions fall back to the latest known runtime assets.
 func ReleaseMetaForSPXVersion(spxVersion string) ReleaseMeta {
 	if meta, ok := releaseMetaBySPXVersion[spxVersion]; ok {
+		return meta
+	}
+	return DefaultReleaseMeta()
+}
+
+// ReleaseMetaForRuntimeVersion resolves runtime/pck metadata for a runtime version.
+// Unknown versions fall back to the latest known runtime assets.
+func ReleaseMetaForRuntimeVersion(runtimeVersion string) ReleaseMeta {
+	if meta, ok := releaseMetaByRuntimeVersion[runtimeVersion]; ok {
 		return meta
 	}
 	return DefaultReleaseMeta()

@@ -226,6 +226,43 @@ func TestDownloadEngineAssetsRuntimeOverwritesStaleDesktopBinariesInGitHubAction
 	}
 }
 
+func TestDownloadRuntimePackUsesRequestedRuntimeVersionMeta(t *testing.T) {
+	root := t.TempDir()
+	env := engineDownloadEnv{
+		version:  "2.2.0",
+		goBinDir: filepath.Join(root, "bin"),
+		cacheDir: filepath.Join(root, "cache"),
+	}
+	if err := os.MkdirAll(env.goBinDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(%s) returned error: %v", env.goBinDir, err)
+	}
+	if err := os.MkdirAll(env.cacheDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(%s) returned error: %v", env.cacheDir, err)
+	}
+
+	var gotURL string
+	oldFetcher := EngineDownloadFetcher
+	EngineDownloadFetcher = func(url, dst string) error {
+		gotURL = url
+		return writeZipFixture(dst, map[string]string{
+			"gdspxrt.pck": "runtime-pck",
+		})
+	}
+	t.Cleanup(func() { EngineDownloadFetcher = oldFetcher })
+
+	if err := downloadRuntimePack(env); err != nil {
+		t.Fatalf("downloadRuntimePack returned error: %v", err)
+	}
+
+	wantURL := release.SpxReleaseURLBase + "v2.0.0/" + release.RuntimeAssetZipName
+	if gotURL != wantURL {
+		t.Fatalf("download url = %q, want %q", gotURL, wantURL)
+	}
+	if !fileExists(filepath.Join(env.goBinDir, "gdspxrt2.2.0.pck")) {
+		t.Fatalf("expected versioned runtime pck to exist")
+	}
+}
+
 func TestDownloadEngineAssetsWebSkipsExistingCachedTemplateLocally(t *testing.T) {
 	runner := newRuntimeFixtureRunner(t)
 	installFakeEngineDownload(t, runner.repoRoot, "linux", "x86_64")

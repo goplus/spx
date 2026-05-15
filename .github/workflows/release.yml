@@ -22,6 +22,7 @@ jobs:
     name: Prepare release inputs
     runs-on: ubuntu-22.04
     outputs:
+      release_tag: ${{ steps.set-version.outputs.release_tag }}
       version: ${{ steps.set-version.outputs.version }}
       run_runtime_assets: ${{ steps.set-platforms.outputs.run_runtime_assets }}
       run_web: ${{ steps.set-platforms.outputs.run_web }}
@@ -40,12 +41,15 @@ jobs:
           RELEASE_TAG_INPUT: ${{ github.event.inputs.release_tag }}
         run: |
           if [ "${{ github.event_name }}" == "release" ]; then
-            VERSION="${{ github.event.release.tag_name }}"
+            RELEASE_TAG="${{ github.event.release.tag_name }}"
+            VERSION="$RELEASE_TAG"
           else
+            RELEASE_TAG=""
             VERSION="$RELEASE_TAG_INPUT"
           fi
           VERSION="${VERSION#v}"  # Remove 'v' prefix (if present)
           echo "[info] Version: $VERSION"
+          echo "release_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Resolve target platforms
@@ -128,6 +132,7 @@ jobs:
     if: needs.setup.outputs.run_runtime_assets == 'true'
     uses: ./.github/workflows/release_runtime_assets.yml
     with:
+      release_tag: ${{ needs.setup.outputs.release_tag }}
       version: ${{ needs.setup.outputs.version }}
 
   web-build:

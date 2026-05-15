@@ -124,7 +124,7 @@ func downloadPlatformAssets(env engineDownloadEnv, mode string, editor bool) err
 func downloadRuntimePack(env engineDownloadEnv) error {
 	versionedPack := filepath.Join(env.goBinDir, fmt.Sprintf("gdspxrt%s.pck", env.version))
 	defaultPack := filepath.Join(env.goBinDir, "gdspxrt.pck")
-	meta := release.DefaultReleaseMeta()
+	meta := release.ReleaseMetaForRuntimeVersion(env.version)
 	zipName := release.RuntimeAssetZipName
 	url := meta.RuntimeAssetDownloadURL(zipName)
 	zipPath := filepath.Join(env.cacheDir, zipName)
