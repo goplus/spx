@@ -22,6 +22,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/goplus/spx/v2/internal/release"
 )
 
 func TestParseRuntimeExportPackArgsDefault(t *testing.T) {
@@ -127,7 +129,7 @@ func TestRuntimeExportPackSequence(t *testing.T) {
 	if !fileExists(filepath.Join(gopathBin, "gdspxrt"+version+".pck")) {
 		t.Fatalf("expected exported pck to exist")
 	}
-	if !fileExists(filepath.Join(gopathBin, "gdspxrt.pck."+version+".zip")) {
+	if !fileExists(filepath.Join(gopathBin, release.RuntimeAssetZipName)) {
 		t.Fatalf("expected exported zip to exist")
 	}
 }

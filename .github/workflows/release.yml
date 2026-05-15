@@ -10,7 +10,7 @@ on:
         required: true
         default: 'v2.0.1'
       platforms:
-        description: 'Platforms to build (comma-separated: all,web,macos,windows,linux)'
+        description: 'Platforms to build (comma-separated: all,runtime-assets,web,macos,windows,linux)'
         required: true
         default: 'all'
 concurrency:
@@ -23,6 +23,7 @@ jobs:
     runs-on: ubuntu-22.04
     outputs:
       version: ${{ steps.set-version.outputs.version }}
+      run_runtime_assets: ${{ steps.set-platforms.outputs.run_runtime_assets }}
       run_web: ${{ steps.set-platforms.outputs.run_web }}
       run_macos: ${{ steps.set-platforms.outputs.run_macos }}
       run_windows: ${{ steps.set-platforms.outputs.run_windows }}
@@ -67,11 +68,12 @@ jobs:
 
           case ",$PLATFORMS," in
             *,all,*)
-              PLATFORMS="web,macos,windows,linux"
+              PLATFORMS="runtime-assets,web,macos,windows,linux"
               ;;
           esac
 
           IFS=',' read -r -a PLATFORM_ITEMS <<< "$PLATFORMS"
+          RUN_RUNTIME_ASSETS=false
           RUN_WEB=false
           RUN_MACOS=false
           RUN_WINDOWS=false
@@ -79,6 +81,9 @@ jobs:
 
           for PLATFORM in "${PLATFORM_ITEMS[@]}"; do
             case "$PLATFORM" in
+              runtime-assets)
+                RUN_RUNTIME_ASSETS=true
+                ;;
               web)
                 RUN_WEB=true
                 ;;
@@ -100,12 +105,13 @@ jobs:
             esac
           done
 
-          if [ "$RUN_WEB" = false ] && [ "$RUN_MACOS" = false ] && [ "$RUN_WINDOWS" = false ] && [ "$RUN_LINUX" = false ]; then
+          if [ "$RUN_RUNTIME_ASSETS" = false ] && [ "$RUN_WEB" = false ] && [ "$RUN_MACOS" = false ] && [ "$RUN_WINDOWS" = false ] && [ "$RUN_LINUX" = false ]; then
             echo "[error] No valid platforms resolved from: $RAW_PLATFORMS" >&2
             exit 1
           fi
 
           echo "[info] Platforms: $PLATFORMS"
+          echo "run_runtime_assets=$RUN_RUNTIME_ASSETS" >> $GITHUB_OUTPUT
           echo "run_web=$RUN_WEB" >> $GITHUB_OUTPUT
           echo "run_macos=$RUN_MACOS" >> $GITHUB_OUTPUT
           echo "run_windows=$RUN_WINDOWS" >> $GITHUB_OUTPUT
@@ -115,6 +121,14 @@ jobs:
     name: Static checks
     needs: setup
     uses: ./.github/workflows/static_checks.yml
+
+  runtime-assets-build:
+    name: Release runtime assets
+    needs: [setup, static-checks]
+    if: needs.setup.outputs.run_runtime_assets == 'true'
+    uses: ./.github/workflows/release_runtime_assets.yml
+    with:
+      version: ${{ needs.setup.outputs.version }}
 
   web-build:
     name: Release web bundle

@@ -23,6 +23,22 @@ func TestReleaseMetaForSPXVersionMapped(t *testing.T) {
 	if meta.Runtime.Version != "2.2.0" {
 		t.Fatalf("runtime version = %q, want %q", meta.Runtime.Version, "2.2.0")
 	}
+	if got := meta.RuntimeAssetDownloadURL(RuntimeAssetZipName); got != SpxReleaseURLBase+"v2.0.0/"+RuntimeAssetZipName {
+		t.Fatalf("runtime asset download url = %q, want %q", got, SpxReleaseURLBase+"v2.0.0/"+RuntimeAssetZipName)
+	}
+}
+
+func TestDefaultReleaseMetaUsesLatestSPXVersionForRuntimeAssets(t *testing.T) {
+	meta := DefaultReleaseMeta()
+	if meta.SPXVersion != "v2.0.1" {
+		t.Fatalf("spx version = %q, want %q", meta.SPXVersion, "v2.0.1")
+	}
+	if meta.Runtime.Version != "2.2.1" {
+		t.Fatalf("runtime version = %q, want %q", meta.Runtime.Version, "2.2.1")
+	}
+	if got := meta.RuntimeAssetDownloadURL(RuntimeAssetZipName); got != SpxReleaseURLBase+"v2.0.1/"+RuntimeAssetZipName {
+		t.Fatalf("runtime asset download url = %q, want %q", got, SpxReleaseURLBase+"v2.0.1/"+RuntimeAssetZipName)
+	}
 }
 
 func TestReleaseMetaForSPXVersionLatestFallback(t *testing.T) {

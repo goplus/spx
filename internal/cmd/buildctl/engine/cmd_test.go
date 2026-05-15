@@ -294,7 +294,7 @@ func installFakeEngineDownload(t *testing.T, repoRoot, defaultPlatform, arch str
 
 func fakeEngineDownloadFetcher(url, dst string) error {
 	base := filepath.Base(url)
-	runtimePackZip := "gdspxrt.pck." + release.DefaultReleaseMeta().Pck.Version + ".zip"
+	runtimePackZip := release.RuntimeAssetZipName
 
 	switch base {
 	case "linux-x86_64.zip":

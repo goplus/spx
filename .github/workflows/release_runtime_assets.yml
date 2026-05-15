@@ -1,0 +1,63 @@
+name: Release Runtime Assets
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: 'Release version without the leading v (for example, 2.0.1)'
+        required: true
+        type: string
+
+concurrency:
+  group: ci-${{github.actor}}-${{github.head_ref || github.run_number}}-${{github.ref}}-release-runtime-assets
+  cancel-in-progress: true
+
+jobs:
+  runtime-assets:
+    name: Release runtime assets
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+
+      - name: Install Linux dependencies
+        run: sudo apt-get update && sudo apt-get install gcc libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libx11-dev xorg-dev libasound2-dev libopenal-dev zip
+
+      - name: Set up toolchain and engine assets
+        uses: ./.github/actions/deps
+        with:
+          setup-mode: runtime
+
+      - name: Build runtime asset bundle
+        id: build_runtime_assets
+        run: |
+          set -euo pipefail
+
+          "$BUILDCTL" runtime export-pack
+
+          GOPATH_DIR="$(go env GOPATH | tr -d '\r\n')"
+          ASSET_ZIP="${GOPATH_DIR}/bin/spx-runtime-assets.zip"
+
+          if [ ! -f "$ASSET_ZIP" ]; then
+            echo "[error] Runtime asset bundle not found: $ASSET_ZIP" >&2
+            exit 1
+          fi
+
+          echo "[info] Built runtime asset bundle: $ASSET_ZIP"
+          echo "asset-zip=$ASSET_ZIP" >> "$GITHUB_OUTPUT"
+
+      - name: Upload runtime asset bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: spx-runtime-assets-${{ inputs.version }}
+          path: ${{ steps.build_runtime_assets.outputs.asset-zip }}
+          retention-days: 14
+
+      - name: Publish runtime asset bundle
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v3
+        with:
+          files: ${{ steps.build_runtime_assets.outputs.asset-zip }}
+          tag_name: ${{ github.event.release.tag_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

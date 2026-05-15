@@ -184,7 +184,7 @@ func (r *Runner) ensureRuntime() error {
 
 	// Check if pck file exists
 	if _, err := os.Stat(r.RuntimePckPath); os.IsNotExist(err) {
-		fmt.Println("Downloading runtime pck...")
+		fmt.Println("Downloading runtime assets...")
 		if err := r.downloadRuntimePck(); err != nil {
 			return err
 		}
@@ -255,15 +255,15 @@ func (r *Runner) downloadRuntime() error {
 	return nil
 }
 
-// downloadRuntimePck downloads the Godot runtime pck file from spx releases
-// URL format: https://github.com/goplus/spx/releases/download/{spxTag}/gdspxrt.pck.{pckVersion}.zip
+// downloadRuntimePck downloads the runtime asset bundle from spx releases.
+// URL format: https://github.com/goplus/spx/releases/download/{spxTag}/spx-runtime-assets.zip
 func (r *Runner) downloadRuntimePck() error {
-	zipName := fmt.Sprintf("gdspxrt.pck.%s.zip", r.ReleaseMeta.Pck.Version)
-	url := r.ReleaseMeta.PckDownloadURL(zipName)
+	zipName := RuntimeAssetZipName
+	url := r.ReleaseMeta.RuntimeAssetDownloadURL(zipName)
 
 	// Download to temp file
 	tmpZip := filepath.Join(r.GoBinPath, zipName)
-	fmt.Printf("Downloading pck from: %s\n", url)
+	fmt.Printf("Downloading runtime assets from: %s\n", url)
 
 	if err := downloadFile(url, tmpZip); err != nil {
 		return fmt.Errorf("failed to download pck: %w", err)

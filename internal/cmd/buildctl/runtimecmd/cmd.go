@@ -62,7 +62,7 @@ func printRuntimeUsage() {
 	fmt.Fprintln(osStderr, "Commands:")
 	fmt.Fprintln(osStderr, "  build-wasm   Build ispx.wasm assets")
 	fmt.Fprintln(osStderr, "  compress-wasm Compress prebuilt web wasm assets with brotli")
-	fmt.Fprintln(osStderr, "  export-pack  Export runtime pck artifacts")
+	fmt.Fprintln(osStderr, "  export-pack  Export runtime asset bundle")
 	fmt.Fprintln(osStderr, "  export-web   Export web runtime bundles")
 	fmt.Fprintln(osStderr, "  export-web-template Export web runtime template bundles")
 }
