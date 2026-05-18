@@ -28,6 +28,13 @@ func boolPtr(v bool) *bool {
 	return &v
 }
 
+func lastBoundPlaybackID(state *animState) int64 {
+	if len(state.BoundAudioPlaybackIDs) == 0 {
+		return 0
+	}
+	return state.BoundAudioPlaybackIDs[len(state.BoundAudioPlaybackIDs)-1]
+}
+
 func newTestAnimationComponent() *animationComponent {
 	sprite := &SpriteImpl{
 		g:    &Game{},
@@ -257,17 +264,17 @@ func TestPlayAnimAudioStartsAndStopsOnPlaySound(t *testing.T) {
 		OnPlay: &coreproject.ActionConfig{Play: "walk"},
 	}, state)
 
-	if state.BoundAudioPlaybackID == 0 {
+	playID := lastBoundPlaybackID(state)
+	if playID == 0 {
 		t.Fatal("onPlay did not capture a playback id")
 	}
 	if len(backend.plays) != 1 {
 		t.Fatalf("plays = %d, want 1", len(backend.plays))
 	}
-	if len(backend.loops) != 1 || backend.loops[0].id != state.BoundAudioPlaybackID || !backend.loops[0].loop {
-		t.Fatalf("loop calls = %+v, want one loop call for playback %d", backend.loops, state.BoundAudioPlaybackID)
+	if len(backend.loops) != 1 || backend.loops[0].id != playID || !backend.loops[0].loop {
+		t.Fatalf("loop calls = %+v, want one loop call for playback %d", backend.loops, playID)
 	}
 
-	playID := state.BoundAudioPlaybackID
 	anim.onAnimationDone("walk")
 
 	if len(backend.stops) != 1 || backend.stops[0] != playID {
@@ -291,7 +298,7 @@ func TestPlayAnimAudioHonorsOnPlayLoopConfig(t *testing.T) {
 		},
 	}, state)
 
-	if state.BoundAudioPlaybackID == 0 {
+	if lastBoundPlaybackID(state) == 0 {
 		t.Fatal("onPlay did not capture a playback id")
 	}
 	if len(backend.plays) != 1 {
@@ -299,6 +306,68 @@ func TestPlayAnimAudioHonorsOnPlayLoopConfig(t *testing.T) {
 	}
 	if len(backend.loops) != 0 {
 		t.Fatalf("loop calls = %+v, want none", backend.loops)
+	}
+	if state.BoundLoopReplayAudio != "walk" {
+		t.Fatalf("BoundLoopReplayAudio = %q, want walk", state.BoundLoopReplayAudio)
+	}
+}
+
+func TestHandleAnimationLoopedReplaysOnStartSoundForCurrentAnimation(t *testing.T) {
+	anim := newTestAnimationComponent()
+	backend := &animationAudioBackend{}
+	initTestAnimationAudio(anim, backend)
+
+	state := &animState{Name: "walk"}
+	anim.curAnimState = state
+	anim.playAnimAudio(&coreproject.AniConfig{
+		OnStart: &coreproject.ActionConfig{
+			Play: "step",
+			Loop: boolPtr(false),
+		},
+	}, state)
+
+	anim.sprite.handleAnimationLooped()
+	anim.sprite.flushPendingAudios(nil)
+
+	if len(backend.plays) != 2 {
+		t.Fatalf("plays = %d, want 2", len(backend.plays))
+	}
+}
+
+func TestHandleAnimationLoopedReplaysLoopFalseOnPlaySound(t *testing.T) {
+	anim := newTestAnimationComponent()
+	backend := &animationAudioBackend{}
+	initTestAnimationAudio(anim, backend)
+
+	state := &animState{Name: "walk"}
+	anim.curAnimState = state
+	anim.playAnimAudio(&coreproject.AniConfig{
+		OnPlay: &coreproject.ActionConfig{
+			Play: "walk",
+			Loop: boolPtr(false),
+		},
+	}, state)
+
+	firstID := lastBoundPlaybackID(state)
+	anim.sprite.handleAnimationLooped()
+	anim.sprite.flushPendingAudios(nil)
+
+	if len(backend.plays) != 2 {
+		t.Fatalf("plays = %d, want 2", len(backend.plays))
+	}
+	if len(state.BoundAudioPlaybackIDs) != 2 {
+		t.Fatalf("BoundAudioPlaybackIDs = %+v, want 2 tracked playbacks", state.BoundAudioPlaybackIDs)
+	}
+
+	secondID := lastBoundPlaybackID(state)
+	if secondID == 0 || secondID == firstID {
+		t.Fatalf("last bound playback id = %d, want a new playback id after loop", secondID)
+	}
+
+	anim.onAnimationDone("walk")
+
+	if len(backend.stops) != 2 || backend.stops[0] != firstID || backend.stops[1] != secondID {
+		t.Fatalf("stops = %+v, want [%d %d]", backend.stops, firstID, secondID)
 	}
 }
 

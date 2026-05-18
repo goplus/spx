@@ -188,10 +188,8 @@ func (sprite *SpriteImpl) handleAnimationLooped() {
 	if sprite.isDestroyed() || sprite.runtimeState.SyncSprite == nil {
 		return
 	}
-	state := sprite.animation().getCurTweenState()
-	if state != nil && state.LoopReplayAudioName != "" {
-		sprite.sound().addPendingAudio(state.LoopReplayAudioName)
-	}
+	sprite.queueLoopReplayAudio(sprite.animation().getCurAnimState())
+	sprite.queueLoopReplayAudio(sprite.animation().getCurTweenState())
 }
 
 func (sprite *SpriteImpl) applyPhysicsProxyConfig() {
