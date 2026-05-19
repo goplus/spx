@@ -198,6 +198,25 @@ func TestManagerStopIDOnlyStopsRequestedPlayback(t *testing.T) {
 	}
 }
 
+func TestManagerPruneStoppedIDsRemovesStalePathEntries(t *testing.T) {
+	backend := &fakeBackend{}
+	var mgr Manager
+	mgr.Init(backend)
+
+	first := mgr.Play(1, "sounds/a.wav", false, false, 0, 0, 0)
+	second := mgr.Play(1, "sounds/a.wav", false, false, 0, 0, 0)
+	backend.playing[first] = false
+
+	live := mgr.PruneStoppedIDs([]int64{first, second})
+
+	if len(live) != 1 || live[0] != second {
+		t.Fatalf("live = %+v, want [%d]", live, second)
+	}
+	if len(mgr.path2ids["sounds/a.wav"]) != 1 || mgr.path2ids["sounds/a.wav"][0] != second {
+		t.Fatalf("path2ids = %+v, want only second playback %d", mgr.path2ids["sounds/a.wav"], second)
+	}
+}
+
 func TestManagerVolumeAndEffects(t *testing.T) {
 	backend := &fakeBackend{pan: 0.25, pitch: 1.5, volume: 0.8}
 	var mgr Manager

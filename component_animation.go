@@ -52,6 +52,7 @@ type animationComponent struct {
 	donedAnimations []string
 
 	pendingBoundAudioReplays []boundAudioReplay
+	drainedBoundAudioReplays []boundAudioReplay
 }
 
 type boundAudioReplay struct {
@@ -65,6 +66,7 @@ func (a *animationComponent) initialize(sprite *SpriteImpl, spriteCfg *coreproje
 	a.initFromConfig(spriteCfg)
 	a.donedAnimations = make([]string, 0)
 	a.pendingBoundAudioReplays = make([]boundAudioReplay, 0)
+	a.drainedBoundAudioReplays = make([]boundAudioReplay, 0)
 }
 
 // initFromConfig initializes animations from sprite configuration.
@@ -115,6 +117,7 @@ func (a *animationComponent) cloneFrom(src component, newSprite *SpriteImpl) com
 		shared:                   srcAnim.shared,
 		donedAnimations:          make([]string, 0),
 		pendingBoundAudioReplays: make([]boundAudioReplay, 0),
+		drainedBoundAudioReplays: make([]boundAudioReplay, 0),
 	}
 	return newAnim
 }
@@ -328,7 +331,15 @@ func (a *animationComponent) trackBoundAudioPlayback(state *animState, id int64)
 	if state == nil || id == 0 {
 		return
 	}
+	state.BoundAudioPlaybackIDs = a.pruneActiveBoundAudioPlaybackIDs(state.BoundAudioPlaybackIDs)
 	state.BoundAudioPlaybackIDs = append(state.BoundAudioPlaybackIDs, id)
+}
+
+func (a *animationComponent) pruneActiveBoundAudioPlaybackIDs(ids []int64) []int64 {
+	if len(ids) == 0 || a.sprite == nil || a.sprite.g == nil {
+		return ids
+	}
+	return a.sprite.g.soundMgr.PruneStoppedIDs(ids)
 }
 
 func (a *animationComponent) addPendingBoundAudioReplay(state *animState, name SoundName) {
@@ -343,7 +354,8 @@ func (a *animationComponent) addPendingBoundAudioReplay(state *animState, name S
 
 func (a *animationComponent) takePendingBoundAudioReplays() []boundAudioReplay {
 	pending := a.pendingBoundAudioReplays
-	a.pendingBoundAudioReplays = nil
+	a.pendingBoundAudioReplays = a.drainedBoundAudioReplays[:0]
+	a.drainedBoundAudioReplays = pending
 	return pending
 }
 
