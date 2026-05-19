@@ -93,6 +93,21 @@ func (m *Manager) IsPlaying(id int64) bool {
 	return m.backend.IsPlaying(id)
 }
 
+func (m *Manager) PruneStoppedIDs(ids []int64) []int64 {
+	if len(ids) == 0 || m.backend == nil {
+		return ids
+	}
+	live := ids[:0]
+	for _, id := range ids {
+		if m.backend.IsPlaying(id) {
+			live = append(live, id)
+			continue
+		}
+		m.removeID(id)
+	}
+	return live
+}
+
 func (m *Manager) Play(
 	soundObj engine.Object,
 	path string,

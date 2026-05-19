@@ -429,6 +429,18 @@ func TestTrackBoundAudioPlaybackPrunesFinishedPlaybackIDs(t *testing.T) {
 	}
 }
 
+func TestPruneActiveBoundAudioPlaybackIDsKeepsIDsWhenGameUnavailable(t *testing.T) {
+	anim := newTestAnimationComponent()
+	anim.sprite.g = nil
+
+	ids := []int64{1, 2}
+	live := anim.pruneActiveBoundAudioPlaybackIDs(ids)
+
+	if len(live) != 2 || live[0] != 1 || live[1] != 2 {
+		t.Fatalf("pruned ids = %+v, want [1 2]", live)
+	}
+}
+
 func TestPlayAnimAudioHonorsOnStartLoopConfig(t *testing.T) {
 	anim := newTestAnimationComponent()
 	backend := &animationAudioBackend{}

@@ -336,16 +336,10 @@ func (a *animationComponent) trackBoundAudioPlayback(state *animState, id int64)
 }
 
 func (a *animationComponent) pruneActiveBoundAudioPlaybackIDs(ids []int64) []int64 {
-	if len(ids) == 0 {
+	if len(ids) == 0 || a.sprite == nil || a.sprite.g == nil {
 		return ids
 	}
-	live := ids[:0]
-	for _, id := range ids {
-		if a.sprite != nil && a.sprite.g != nil && a.sprite.g.soundMgr.IsPlaying(id) {
-			live = append(live, id)
-		}
-	}
-	return live
+	return a.sprite.g.soundMgr.PruneStoppedIDs(ids)
 }
 
 func (a *animationComponent) addPendingBoundAudioReplay(state *animState, name SoundName) {
@@ -359,10 +353,10 @@ func (a *animationComponent) addPendingBoundAudioReplay(state *animState, name S
 }
 
 func (a *animationComponent) takePendingBoundAudioReplays() []boundAudioReplay {
-	a.drainedBoundAudioReplays = a.drainedBoundAudioReplays[:0]
-	a.drainedBoundAudioReplays = append(a.drainedBoundAudioReplays, a.pendingBoundAudioReplays...)
-	a.pendingBoundAudioReplays = a.pendingBoundAudioReplays[:0]
-	return a.drainedBoundAudioReplays
+	pending := a.pendingBoundAudioReplays
+	a.pendingBoundAudioReplays = a.drainedBoundAudioReplays[:0]
+	a.drainedBoundAudioReplays = pending
+	return pending
 }
 
 func (a *animationComponent) adaptAnimBitmapResolution(ani *coreproject.AniConfig) {
