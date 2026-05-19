@@ -274,19 +274,24 @@ func (p *baseObj) getCostumeIndex() int {
 	return p.costumeIndex
 }
 
+// currentCostume returns the currently selected costume.
+func (p *baseObj) currentCostume() *costume {
+	return p.costumes[p.costumeIndex]
+}
+
 // getCostumeName returns the name of the current costume.
 func (p *baseObj) getCostumeName() SpriteCostumeName {
-	return p.costumes[p.costumeIndex].name
+	return p.currentCostume().name
 }
 
 // getCostumePath returns the file path of the current costume.
 func (p *baseObj) getCostumePath() string {
-	return p.costumes[p.costumeIndex].path
+	return p.currentCostume().path
 }
 
 // getCostumeAssetPath returns the engine-ready asset path of the current costume.
 func (p *baseObj) getCostumeAssetPath() string {
-	return p.costumes[p.costumeIndex].getAssetPath()
+	return p.currentCostume().getAssetPath()
 }
 
 // getCostumeRenderScale returns the render scale for the current costume.
@@ -301,23 +306,23 @@ func (p *baseObj) getAnimRenderScale(bitmapResolution int) float64 {
 
 // getCurrentBitmapResolution returns the bitmap resolution of the current costume.
 func (p *baseObj) getCurrentBitmapResolution() int {
-	return p.costumes[p.costumeIndex].bitmapResolution
+	return p.currentCostume().bitmapResolution
 }
 
 // getCostumeSize returns the size of the current costume.
 func (p *baseObj) getCostumeSize() (float64, float64) {
-	x, y := p.costumes[p.costumeIndex].getSize()
+	x, y := p.currentCostume().getSize()
 	return float64(x), float64(y)
 }
 
 // isCostumeAtlas returns true if the current costume is part of an atlas.
 func (p *baseObj) isCostumeAtlas() bool {
-	return p.costumes[p.costumeIndex].isAtlas()
+	return p.currentCostume().isAtlas()
 }
 
 // getCostumeAtlasUvRemap returns the UV remap coordinates for the current costume.
 func (p *baseObj) getCostumeAtlasUvRemap() mathf.Rect2 {
-	costume := p.costumes[p.costumeIndex]
+	costume := p.currentCostume()
 	return mathf.NewRect2(
 		costume.atlasUVRect.X,
 		costume.atlasUVRect.Y,
@@ -328,7 +333,7 @@ func (p *baseObj) getCostumeAtlasUvRemap() mathf.Rect2 {
 
 // getCostumeAtlasRegion returns the pixel region of the current costume in the atlas.
 func (p *baseObj) getCostumeAtlasRegion() mathf.Rect2 {
-	costume := p.costumes[p.costumeIndex]
+	costume := p.currentCostume()
 	return mathf.NewRect2(
 		float64(costume.posX),
 		float64(costume.posY),
