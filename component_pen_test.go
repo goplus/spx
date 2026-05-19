@@ -163,6 +163,49 @@ func TestPenComponentIgnoresRepeatedPenStyleValues(t *testing.T) {
 	}
 }
 
+func TestPenComponentDefaultPenSizeStillMaterializesPen(t *testing.T) {
+	spy := setupSpyPenMgr(t)
+	sprite := newPenTestSprite()
+
+	sprite.pen().SetPenSize(1)
+
+	if spy.createCalls != 1 {
+		t.Fatalf("CreatePen calls = %d, want 1", spy.createCalls)
+	}
+	if spy.setSizeCalls != 1 {
+		t.Fatalf("SetPenSizeTo calls = %d, want 1", spy.setSizeCalls)
+	}
+}
+
+func TestPenComponentDefaultPenColorStillMaterializesPen(t *testing.T) {
+	spy := setupSpyPenMgr(t)
+	sprite := newPenTestSprite()
+
+	defaultColor := toSpxColor(sprite.pen().penColor)
+	sprite.pen().SetPenColor(defaultColor)
+
+	if spy.createCalls != 1 {
+		t.Fatalf("CreatePen calls = %d, want 1", spy.createCalls)
+	}
+	if spy.setColorCalls != 1 {
+		t.Fatalf("SetPenColorTo calls = %d, want 1", spy.setColorCalls)
+	}
+}
+
+func TestPenComponentDefaultHSVStillMaterializesPen(t *testing.T) {
+	spy := setupSpyPenMgr(t)
+	sprite := newPenTestSprite()
+
+	sprite.pen().SetPenColorParam(PenHue, sprite.pen().penHue)
+
+	if spy.createCalls != 1 {
+		t.Fatalf("CreatePen calls = %d, want 1", spy.createCalls)
+	}
+	if spy.setColorCalls != 1 {
+		t.Fatalf("SetPenColorTo calls = %d, want 1", spy.setColorCalls)
+	}
+}
+
 func TestPenComponentPenDownUsesLogicalPosition(t *testing.T) {
 	spy := setupSpyPenMgr(t)
 	sprite := newPenTestSprite()

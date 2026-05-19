@@ -119,7 +119,7 @@ func (p *penComponent) Stamp() {
 // ============================================================================
 
 func (p *penComponent) SetPenSize(size float64) {
-	if nearlyEqualPenValue(p.penWidth, size) {
+	if p.penObj != nil && nearlyEqualPenValue(p.penWidth, size) {
 		return
 	}
 	p.checkOrCreatePen()
@@ -138,10 +138,9 @@ func (p *penComponent) ChangePenSize(delta float64) {
 
 func (p *penComponent) SetPenColor(color Color) {
 	nextColor := toMathfColor(color)
-	if samePenColor(p.penColor, nextColor) {
+	if p.penObj != nil && samePenColor(p.penColor, nextColor) {
 		return
 	}
-	p.checkOrCreatePen()
 	p.penColor = nextColor
 	p.applyPenColorProperty()
 }
@@ -178,7 +177,7 @@ func (p *penComponent) ChangePenColor(kind PenColorParam, delta float64) {
 
 func (p *penComponent) setPenHue(value float64) {
 	nextValue := mathf.Clamp(value, 0, 100)
-	if nearlyEqualPenValue(p.penHue, nextValue) {
+	if p.penObj != nil && nearlyEqualPenValue(p.penHue, nextValue) {
 		return
 	}
 	p.checkOrCreatePen()
@@ -192,7 +191,7 @@ func (p *penComponent) changePenHue(delta float64) {
 
 func (p *penComponent) setPenSaturation(value float64) {
 	nextValue := mathf.Clamp(value, 0, 100)
-	if nearlyEqualPenValue(p.penSaturation, nextValue) {
+	if p.penObj != nil && nearlyEqualPenValue(p.penSaturation, nextValue) {
 		return
 	}
 	p.checkOrCreatePen()
@@ -206,7 +205,7 @@ func (p *penComponent) changePenSaturation(delta float64) {
 
 func (p *penComponent) setPenBrightness(value float64) {
 	nextValue := mathf.Clamp(value, 0, 100)
-	if nearlyEqualPenValue(p.penBrightness, nextValue) {
+	if p.penObj != nil && nearlyEqualPenValue(p.penBrightness, nextValue) {
 		return
 	}
 	p.checkOrCreatePen()
@@ -220,7 +219,7 @@ func (p *penComponent) changePenBrightness(delta float64) {
 
 func (p *penComponent) setPenTransparency(value float64) {
 	nextValue := mathf.Clamp(value, 0, 100)
-	if nearlyEqualPenValue(p.penTransparency, nextValue) {
+	if p.penObj != nil && nearlyEqualPenValue(p.penTransparency, nextValue) {
 		return
 	}
 	p.checkOrCreatePen()
