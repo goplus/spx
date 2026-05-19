@@ -97,7 +97,8 @@ func (p *penComponent) PenDown() {
 
 func (p *penComponent) Stamp() {
 	p.checkOrCreatePen()
-	p.engine().PenMgr.SetPenStampTexture(*p.penObj, p.sprite.getCostumePath())
+	p.syncPenPosition(p.sprite.getXY())
+	p.engine().PenMgr.SetPenStampTexture(*p.penObj, p.sprite.getCostumeAssetPath())
 	p.engine().PenMgr.PenStamp(*p.penObj)
 }
 
@@ -217,6 +218,13 @@ func (p *penComponent) destroyPen() {
 
 func (p *penComponent) movePen(x, y float64) {
 	if p.penObj == nil || !p.penDown {
+		return
+	}
+	p.syncPenPosition(x, y)
+}
+
+func (p *penComponent) syncPenPosition(x, y float64) {
+	if p.penObj == nil {
 		return
 	}
 	p.engine().PenMgr.MovePenTo(*p.penObj, mathf.NewVec2(x, -y))

@@ -45,7 +45,8 @@ onMsg "testPen", => {
 
 	// 3. Sprite::Stamp
 	say "Stamp"
-	// stamp()
+	stamp
+	wait 0.2s
 
 	// 4. Sprite::SetPenColor
 	say "Sprite::SetPenColor"
