@@ -1,0 +1,233 @@
+package spx
+
+import (
+	"testing"
+
+	"github.com/goplus/spbase/mathf"
+	coreproject "github.com/goplus/spx/v2/internal/core/project"
+	"github.com/goplus/spx/v2/internal/enginewrap"
+	"github.com/goplus/spx/v2/pkg/spx/pkg/engine"
+)
+
+type spyPenMgr struct {
+	createCalls   int
+	moveCalls     int
+	penDownCalls  int
+	penUpCalls    int
+	setColorCalls int
+	setSizeCalls  int
+	lastMove      mathf.Vec2
+}
+
+type penTestSprite struct {
+	SpriteImpl
+}
+
+func (*penTestSprite) Main() {}
+
+func (s *spyPenMgr) DestroyAllPens() {}
+
+func (s *spyPenMgr) CreatePen() engine.Object {
+	s.createCalls++
+	return engine.Object(s.createCalls)
+}
+
+func (s *spyPenMgr) DestroyPen(obj engine.Object) {}
+
+func (s *spyPenMgr) PenStamp(obj engine.Object) {}
+
+func (s *spyPenMgr) MovePenTo(obj engine.Object, position mathf.Vec2) {
+	s.moveCalls++
+	s.lastMove = position
+}
+
+func (s *spyPenMgr) PenDown(obj engine.Object, moveByMouse bool) {
+	s.penDownCalls++
+}
+
+func (s *spyPenMgr) PenUp(obj engine.Object) {
+	s.penUpCalls++
+}
+
+func (s *spyPenMgr) SetPenColorTo(obj engine.Object, color mathf.Color) {
+	s.setColorCalls++
+}
+
+func (s *spyPenMgr) ChangePenBy(obj engine.Object, property int64, amount float64) {}
+
+func (s *spyPenMgr) SetPenTo(obj engine.Object, property int64, value float64) {}
+
+func (s *spyPenMgr) ChangePenSizeBy(obj engine.Object, amount float64) {}
+
+func (s *spyPenMgr) SetPenSizeTo(obj engine.Object, size float64) {
+	s.setSizeCalls++
+}
+
+func (s *spyPenMgr) SetPenStampTexture(obj engine.Object, texturePath string) {}
+
+func newPenTestSprite() *penTestSprite {
+	game := &Game{}
+	sprite := &penTestSprite{}
+	sprite.g = game
+	sprite.name = "PenTest"
+	sprite.sprite = sprite
+	sprite.scriptEventBindings.init(&game.scriptEvents, &sprite.SpriteImpl)
+	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{})
+	return sprite
+}
+
+func configurePenRenderOffsetSprite(sprite *penTestSprite) {
+	sprite.runtimeState.Scale = 1
+	sprite.transform().x = 50
+	sprite.transform().y = 60
+	sprite.transform().pivot = mathf.NewVec2(3, 4)
+	sprite.costumes = []*costume{{
+		path:             "sprites/PenTest/costume1.svg",
+		center:           mathf.NewVec2(10, 20),
+		bitmapResolution: 1,
+		width:            100,
+		height:           80,
+	}}
+	sprite.costumeIndex = 0
+}
+
+func setupSpyPenMgr(t *testing.T) *spyPenMgr {
+	t.Helper()
+
+	enginewrap.Init(func(call func()) {
+		call()
+	})
+
+	spy := &spyPenMgr{}
+	original := engine.PenMgr
+	engine.PenMgr = spy
+	t.Cleanup(func() {
+		engine.PenMgr = original
+	})
+	return spy
+}
+
+func TestPenComponentPenDownIsIdempotent(t *testing.T) {
+	spy := setupSpyPenMgr(t)
+	sprite := newPenTestSprite()
+
+	sprite.pen().PenDown()
+	sprite.pen().PenDown()
+
+	if spy.createCalls != 1 {
+		t.Fatalf("CreatePen calls = %d, want 1", spy.createCalls)
+	}
+	if spy.penDownCalls != 1 {
+		t.Fatalf("PenDown calls = %d, want 1", spy.penDownCalls)
+	}
+	if spy.moveCalls != 1 {
+		t.Fatalf("MovePenTo calls = %d, want 1", spy.moveCalls)
+	}
+}
+
+func TestPenComponentPenUpDoesNotAllocateOrRepeat(t *testing.T) {
+	spy := setupSpyPenMgr(t)
+	sprite := newPenTestSprite()
+
+	sprite.pen().PenUp()
+	if spy.createCalls != 0 {
+		t.Fatalf("CreatePen calls after idle PenUp = %d, want 0", spy.createCalls)
+	}
+	if spy.penUpCalls != 0 {
+		t.Fatalf("PenUp calls after idle PenUp = %d, want 0", spy.penUpCalls)
+	}
+
+	sprite.pen().PenDown()
+	sprite.pen().PenUp()
+	sprite.pen().PenUp()
+
+	if spy.penUpCalls != 1 {
+		t.Fatalf("PenUp calls after repeated PenUp = %d, want 1", spy.penUpCalls)
+	}
+}
+
+func TestPenComponentIgnoresRepeatedPenStyleValues(t *testing.T) {
+	spy := setupSpyPenMgr(t)
+	sprite := newPenTestSprite()
+
+	sprite.pen().SetPenSize(10)
+	sprite.pen().SetPenSize(10)
+	sprite.pen().SetPenColor(HSB(85, 33, 100))
+	sprite.pen().SetPenColor(HSB(85, 33, 100))
+
+	if spy.setSizeCalls != 1 {
+		t.Fatalf("SetPenSizeTo calls = %d, want 1", spy.setSizeCalls)
+	}
+	if spy.setColorCalls != 1 {
+		t.Fatalf("SetPenColorTo calls = %d, want 1", spy.setColorCalls)
+	}
+}
+
+func TestPenComponentDefaultPenSizeStillMaterializesPen(t *testing.T) {
+	spy := setupSpyPenMgr(t)
+	sprite := newPenTestSprite()
+
+	sprite.pen().SetPenSize(1)
+
+	if spy.createCalls != 1 {
+		t.Fatalf("CreatePen calls = %d, want 1", spy.createCalls)
+	}
+	if spy.setSizeCalls != 1 {
+		t.Fatalf("SetPenSizeTo calls = %d, want 1", spy.setSizeCalls)
+	}
+}
+
+func TestPenComponentDefaultPenColorStillMaterializesPen(t *testing.T) {
+	spy := setupSpyPenMgr(t)
+	sprite := newPenTestSprite()
+
+	defaultColor := toSpxColor(sprite.pen().penColor)
+	sprite.pen().SetPenColor(defaultColor)
+
+	if spy.createCalls != 1 {
+		t.Fatalf("CreatePen calls = %d, want 1", spy.createCalls)
+	}
+	if spy.setColorCalls != 1 {
+		t.Fatalf("SetPenColorTo calls = %d, want 1", spy.setColorCalls)
+	}
+}
+
+func TestPenComponentDefaultHSVStillMaterializesPen(t *testing.T) {
+	spy := setupSpyPenMgr(t)
+	sprite := newPenTestSprite()
+
+	sprite.pen().SetPenColorParam(PenHue, sprite.pen().penHue)
+
+	if spy.createCalls != 1 {
+		t.Fatalf("CreatePen calls = %d, want 1", spy.createCalls)
+	}
+	if spy.setColorCalls != 1 {
+		t.Fatalf("SetPenColorTo calls = %d, want 1", spy.setColorCalls)
+	}
+}
+
+func TestPenComponentPenDownUsesLogicalPosition(t *testing.T) {
+	spy := setupSpyPenMgr(t)
+	sprite := newPenTestSprite()
+	configurePenRenderOffsetSprite(sprite)
+
+	sprite.pen().PenDown()
+
+	want := mathf.NewVec2(50, -60)
+	if spy.lastMove != want {
+		t.Fatalf("MovePenTo position = %v, want %v", spy.lastMove, want)
+	}
+}
+
+func TestPenComponentStampUsesRenderedPosition(t *testing.T) {
+	spy := setupSpyPenMgr(t)
+	sprite := newPenTestSprite()
+	configurePenRenderOffsetSprite(sprite)
+
+	sprite.pen().Stamp()
+
+	want := mathf.NewVec2(87, -36)
+	if spy.lastMove != want {
+		t.Fatalf("MovePenTo position = %v, want %v", spy.lastMove, want)
+	}
+}
