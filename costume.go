@@ -122,6 +122,14 @@ func newCostume(config *coreproject.CostumeConfig) *costume {
 	}
 }
 
+func costumeAssetPath(path string) string {
+	return engine.ToAssetPath(path)
+}
+
+func (c *costume) getAssetPath() string {
+	return costumeAssetPath(c.path)
+}
+
 // getImageSizeCached retrieves image size from cache or loads it.
 func getImageSizeCached(imagePath string) mathf.Vec2 {
 	cache := imageSizeCacheRef()
@@ -135,7 +143,7 @@ func getImageSizeCached(imagePath string) mathf.Vec2 {
 
 // getCostumeAssetSize loads the actual image size from the asset.
 func getCostumeAssetSize(imagePath string) mathf.Vec2 {
-	assetPath := engine.ToAssetPath(imagePath)
+	assetPath := costumeAssetPath(imagePath)
 	if game, ok := engine.GetGame().(*Game); ok && game != nil {
 		return game.engine().ResMgr.GetImageSize(assetPath)
 	}
