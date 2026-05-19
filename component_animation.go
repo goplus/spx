@@ -50,6 +50,13 @@ type animationComponent struct {
 
 	// Animation tracking (per-instance)
 	donedAnimations []string
+
+	pendingBoundAudioReplays []boundAudioReplay
+}
+
+type boundAudioReplay struct {
+	state *animState
+	name  SoundName
 }
 
 // initialize initializes the animation component from configuration.
@@ -57,6 +64,7 @@ func (a *animationComponent) initialize(sprite *SpriteImpl, spriteCfg *coreproje
 	a.componentBase.initialize(sprite, spriteCfg)
 	a.initFromConfig(spriteCfg)
 	a.donedAnimations = make([]string, 0)
+	a.pendingBoundAudioReplays = make([]boundAudioReplay, 0)
 }
 
 // initFromConfig initializes animations from sprite configuration.
@@ -103,9 +111,10 @@ func (a *animationComponent) initFromConfig(spriteCfg *coreproject.SpriteConfig)
 func (a *animationComponent) cloneFrom(src component, newSprite *SpriteImpl) component {
 	srcAnim := src.(*animationComponent)
 	newAnim := &animationComponent{
-		componentBase:   componentBase{sprite: newSprite},
-		shared:          srcAnim.shared,
-		donedAnimations: make([]string, 0),
+		componentBase:            componentBase{sprite: newSprite},
+		shared:                   srcAnim.shared,
+		donedAnimations:          make([]string, 0),
+		pendingBoundAudioReplays: make([]boundAudioReplay, 0),
 	}
 	return newAnim
 }
@@ -297,16 +306,45 @@ func (a *animationComponent) playAnimAudio(ani *coreproject.AniConfig, info *ani
 		a.sprite.playAudio(ani.OnStart.Play, loop)
 	}
 	if ani.OnPlay != nil && ani.OnPlay.Play != "" {
-		info.BoundAudioPlaybackID = a.sprite.playAudio(ani.OnPlay.Play, ani.OnPlay.GetLoop(true))
+		loop := ani.OnPlay.GetLoop(true)
+		if !loop {
+			info.BoundLoopReplayAudio = ani.OnPlay.Play
+		}
+		a.trackBoundAudioPlayback(info, a.sprite.playAudio(ani.OnPlay.Play, loop))
 	}
 }
 
 func (a *animationComponent) stopAnimPlaybackAudio(state *animState) {
-	if state == nil || state.BoundAudioPlaybackID == 0 {
+	if state == nil {
 		return
 	}
-	a.sprite.stopAudioPlayback(state.BoundAudioPlaybackID)
-	state.BoundAudioPlaybackID = 0
+	for _, id := range state.BoundAudioPlaybackIDs {
+		a.sprite.stopAudioPlayback(id)
+	}
+	state.BoundAudioPlaybackIDs = state.BoundAudioPlaybackIDs[:0]
+}
+
+func (a *animationComponent) trackBoundAudioPlayback(state *animState, id int64) {
+	if state == nil || id == 0 {
+		return
+	}
+	state.BoundAudioPlaybackIDs = append(state.BoundAudioPlaybackIDs, id)
+}
+
+func (a *animationComponent) addPendingBoundAudioReplay(state *animState, name SoundName) {
+	if state == nil || name == "" {
+		return
+	}
+	a.pendingBoundAudioReplays = append(a.pendingBoundAudioReplays, boundAudioReplay{
+		state: state,
+		name:  name,
+	})
+}
+
+func (a *animationComponent) takePendingBoundAudioReplays() []boundAudioReplay {
+	pending := a.pendingBoundAudioReplays
+	a.pendingBoundAudioReplays = nil
+	return pending
 }
 
 func (a *animationComponent) adaptAnimBitmapResolution(ani *coreproject.AniConfig) {

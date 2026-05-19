@@ -100,9 +100,22 @@ func (p *SpriteImpl) stopAudioPlayback(id int64) {
 	p.sound().stopAudioPlayback(id)
 }
 
+func (p *SpriteImpl) queueLoopReplayAudio(state *animState) {
+	if state == nil {
+		return
+	}
+	if state.LoopReplayAudioName != "" {
+		p.sound().addPendingAudio(state.LoopReplayAudioName)
+	}
+	if state.BoundLoopReplayAudio != "" {
+		p.animation().addPendingBoundAudioReplay(state, state.BoundLoopReplayAudio)
+	}
+}
+
 func (p *SpriteImpl) flushPendingAudios(buffer []string) []string {
 	engine.Lock()
 	buffer = p.sound().takePendingAudios(buffer)
+	pendingBoundReplays := p.animation().takePendingBoundAudioReplays()
 	engine.Unlock()
 
 	if p.isDestroyed() || p.runtimeState.SyncSprite == nil {
@@ -111,6 +124,12 @@ func (p *SpriteImpl) flushPendingAudios(buffer []string) []string {
 
 	for _, audio := range buffer {
 		p.playAudio(audio, false)
+	}
+	for _, replay := range pendingBoundReplays {
+		if replay.state == nil || replay.state.IsCanceled {
+			continue
+		}
+		p.animation().trackBoundAudioPlayback(replay.state, p.playAudio(replay.name, false))
 	}
 	return buffer[:0]
 }
