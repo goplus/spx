@@ -371,6 +371,64 @@ func TestHandleAnimationLoopedReplaysLoopFalseOnPlaySound(t *testing.T) {
 	}
 }
 
+func TestHandleAnimationLoopedReplayDoesNotStopPreviousOnPlaySound(t *testing.T) {
+	anim := newTestAnimationComponent()
+	backend := &animationAudioBackend{}
+	initTestAnimationAudio(anim, backend)
+
+	state := &animState{Name: "walk"}
+	anim.curAnimState = state
+	anim.playAnimAudio(&coreproject.AniConfig{
+		OnPlay: &coreproject.ActionConfig{
+			Play: "walk",
+			Loop: boolPtr(false),
+		},
+	}, state)
+
+	firstID := lastBoundPlaybackID(state)
+	if firstID == 0 {
+		t.Fatal("first onPlay playback id = 0, want a tracked playback")
+	}
+
+	anim.sprite.handleAnimationLooped()
+	anim.sprite.flushPendingAudios(nil)
+
+	secondID := lastBoundPlaybackID(state)
+	if secondID == 0 || secondID == firstID {
+		t.Fatalf("second onPlay playback id = %d, want a new tracked playback", secondID)
+	}
+	if len(backend.stops) != 0 {
+		t.Fatalf("stops = %+v, want none before animation ends", backend.stops)
+	}
+	if !backend.playing[firstID] || !backend.playing[secondID] {
+		t.Fatalf("playing = %+v, want both playback ids %d and %d to remain active", backend.playing, firstID, secondID)
+	}
+}
+
+func TestTrackBoundAudioPlaybackPrunesFinishedPlaybackIDs(t *testing.T) {
+	anim := newTestAnimationComponent()
+	backend := &animationAudioBackend{}
+	initTestAnimationAudio(anim, backend)
+
+	state := &animState{Name: "walk"}
+	anim.trackBoundAudioPlayback(state, 1)
+	anim.trackBoundAudioPlayback(state, 2)
+	backend.playing = map[int64]bool{
+		1: false,
+		2: true,
+		3: true,
+	}
+
+	anim.trackBoundAudioPlayback(state, 3)
+
+	if len(state.BoundAudioPlaybackIDs) != 2 {
+		t.Fatalf("BoundAudioPlaybackIDs = %+v, want [2 3]", state.BoundAudioPlaybackIDs)
+	}
+	if state.BoundAudioPlaybackIDs[0] != 2 || state.BoundAudioPlaybackIDs[1] != 3 {
+		t.Fatalf("BoundAudioPlaybackIDs = %+v, want [2 3]", state.BoundAudioPlaybackIDs)
+	}
+}
+
 func TestPlayAnimAudioHonorsOnStartLoopConfig(t *testing.T) {
 	anim := newTestAnimationComponent()
 	backend := &animationAudioBackend{}

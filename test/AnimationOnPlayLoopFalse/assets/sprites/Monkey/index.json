@@ -1,0 +1,35 @@
+{
+  "costumeSet": {
+    "faceRight": 180,
+    "path": "../../../../shared-assets/monkey.png",
+    "nx": 96
+  },
+  "costumeIndex": 42,
+  "fAnimations": {
+    "clapLoopFalse": {
+      "frameFps": 20,
+      "frameFrom": 42,
+      "frameTo": 67,
+      "onPlay": {
+        "play": "clap",
+        "loop": false
+      }
+    },
+    "clapLoopTrue": {
+      "frameFps": 20,
+      "frameFrom": 42,
+      "frameTo": 67,
+      "onPlay": {
+        "play": "clap",
+        "loop": true
+      }
+    }
+  },
+  "heading": -60,
+  "isDraggable": false,
+  "rotationStyle": "normal",
+  "size": 1,
+  "visible": true,
+  "x": 0,
+  "y": 0
+}

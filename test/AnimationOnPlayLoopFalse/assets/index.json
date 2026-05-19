@@ -1,0 +1,11 @@
+{
+  "backdrops": [
+    {
+      "name": "backdrop1",
+      "path": "../../shared-assets/lake.jpg"
+    }
+  ],
+  "zorder": [
+    "Monkey"
+  ]
+}

@@ -52,6 +52,7 @@ type animationComponent struct {
 	donedAnimations []string
 
 	pendingBoundAudioReplays []boundAudioReplay
+	drainedBoundAudioReplays []boundAudioReplay
 }
 
 type boundAudioReplay struct {
@@ -65,6 +66,7 @@ func (a *animationComponent) initialize(sprite *SpriteImpl, spriteCfg *coreproje
 	a.initFromConfig(spriteCfg)
 	a.donedAnimations = make([]string, 0)
 	a.pendingBoundAudioReplays = make([]boundAudioReplay, 0)
+	a.drainedBoundAudioReplays = make([]boundAudioReplay, 0)
 }
 
 // initFromConfig initializes animations from sprite configuration.
@@ -115,6 +117,7 @@ func (a *animationComponent) cloneFrom(src component, newSprite *SpriteImpl) com
 		shared:                   srcAnim.shared,
 		donedAnimations:          make([]string, 0),
 		pendingBoundAudioReplays: make([]boundAudioReplay, 0),
+		drainedBoundAudioReplays: make([]boundAudioReplay, 0),
 	}
 	return newAnim
 }
@@ -328,7 +331,21 @@ func (a *animationComponent) trackBoundAudioPlayback(state *animState, id int64)
 	if state == nil || id == 0 {
 		return
 	}
+	state.BoundAudioPlaybackIDs = a.pruneActiveBoundAudioPlaybackIDs(state.BoundAudioPlaybackIDs)
 	state.BoundAudioPlaybackIDs = append(state.BoundAudioPlaybackIDs, id)
+}
+
+func (a *animationComponent) pruneActiveBoundAudioPlaybackIDs(ids []int64) []int64 {
+	if len(ids) == 0 {
+		return ids
+	}
+	live := ids[:0]
+	for _, id := range ids {
+		if a.sprite != nil && a.sprite.g != nil && a.sprite.g.soundMgr.IsPlaying(id) {
+			live = append(live, id)
+		}
+	}
+	return live
 }
 
 func (a *animationComponent) addPendingBoundAudioReplay(state *animState, name SoundName) {
@@ -342,9 +359,10 @@ func (a *animationComponent) addPendingBoundAudioReplay(state *animState, name S
 }
 
 func (a *animationComponent) takePendingBoundAudioReplays() []boundAudioReplay {
-	pending := a.pendingBoundAudioReplays
-	a.pendingBoundAudioReplays = nil
-	return pending
+	a.drainedBoundAudioReplays = a.drainedBoundAudioReplays[:0]
+	a.drainedBoundAudioReplays = append(a.drainedBoundAudioReplays, a.pendingBoundAudioReplays...)
+	a.pendingBoundAudioReplays = a.pendingBoundAudioReplays[:0]
+	return a.drainedBoundAudioReplays
 }
 
 func (a *animationComponent) adaptAnimBitmapResolution(ani *coreproject.AniConfig) {
