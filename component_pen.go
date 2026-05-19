@@ -17,6 +17,8 @@
 package spx
 
 import (
+	"math"
+
 	"github.com/goplus/spbase/mathf"
 	coreproject "github.com/goplus/spx/v2/internal/core/project"
 	engine "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
@@ -83,12 +85,20 @@ func (p *penComponent) onDestroy() {
 // ============================================================================
 
 func (p *penComponent) PenUp() {
-	p.checkOrCreatePen()
+	if !p.penDown {
+		return
+	}
 	p.penDown = false
+	if p.penObj == nil {
+		return
+	}
 	p.engine().PenMgr.PenUp(*p.penObj)
 }
 
 func (p *penComponent) PenDown() {
+	if p.penDown && p.penObj != nil {
+		return
+	}
 	p.checkOrCreatePen()
 	p.penDown = true
 	p.movePen(p.sprite.getXY())
@@ -97,7 +107,9 @@ func (p *penComponent) PenDown() {
 
 func (p *penComponent) Stamp() {
 	p.checkOrCreatePen()
-	p.syncPenPosition(p.sprite.getXY())
+	x, y := p.sprite.getXY()
+	applyRenderOffset(p.sprite, &x, &y)
+	p.syncPenPosition(x, y)
 	p.engine().PenMgr.SetPenStampTexture(*p.penObj, p.sprite.getCostumeAssetPath())
 	p.engine().PenMgr.PenStamp(*p.penObj)
 }
@@ -107,6 +119,9 @@ func (p *penComponent) Stamp() {
 // ============================================================================
 
 func (p *penComponent) SetPenSize(size float64) {
+	if nearlyEqualPenValue(p.penWidth, size) {
+		return
+	}
 	p.checkOrCreatePen()
 	p.penWidth = size
 	p.engine().PenMgr.SetPenSizeTo(*p.penObj, size)
@@ -122,8 +137,12 @@ func (p *penComponent) ChangePenSize(delta float64) {
 // ============================================================================
 
 func (p *penComponent) SetPenColor(color Color) {
+	nextColor := toMathfColor(color)
+	if samePenColor(p.penColor, nextColor) {
+		return
+	}
 	p.checkOrCreatePen()
-	p.penColor = toMathfColor(color)
+	p.penColor = nextColor
 	p.applyPenColorProperty()
 }
 
@@ -158,8 +177,12 @@ func (p *penComponent) ChangePenColor(kind PenColorParam, delta float64) {
 // ============================================================================
 
 func (p *penComponent) setPenHue(value float64) {
+	nextValue := mathf.Clamp(value, 0, 100)
+	if nearlyEqualPenValue(p.penHue, nextValue) {
+		return
+	}
 	p.checkOrCreatePen()
-	p.penHue = mathf.Clamp(value, 0, 100)
+	p.penHue = nextValue
 	p.applyPenHsvProperty()
 }
 
@@ -168,8 +191,12 @@ func (p *penComponent) changePenHue(delta float64) {
 }
 
 func (p *penComponent) setPenSaturation(value float64) {
+	nextValue := mathf.Clamp(value, 0, 100)
+	if nearlyEqualPenValue(p.penSaturation, nextValue) {
+		return
+	}
 	p.checkOrCreatePen()
-	p.penSaturation = mathf.Clamp(value, 0, 100)
+	p.penSaturation = nextValue
 	p.applyPenHsvProperty()
 }
 
@@ -178,8 +205,12 @@ func (p *penComponent) changePenSaturation(delta float64) {
 }
 
 func (p *penComponent) setPenBrightness(value float64) {
+	nextValue := mathf.Clamp(value, 0, 100)
+	if nearlyEqualPenValue(p.penBrightness, nextValue) {
+		return
+	}
 	p.checkOrCreatePen()
-	p.penBrightness = mathf.Clamp(value, 0, 100)
+	p.penBrightness = nextValue
 	p.applyPenHsvProperty()
 }
 
@@ -188,8 +219,12 @@ func (p *penComponent) changePenBrightness(delta float64) {
 }
 
 func (p *penComponent) setPenTransparency(value float64) {
+	nextValue := mathf.Clamp(value, 0, 100)
+	if nearlyEqualPenValue(p.penTransparency, nextValue) {
+		return
+	}
 	p.checkOrCreatePen()
-	p.penTransparency = mathf.Clamp(value, 0, 100)
+	p.penTransparency = nextValue
 	p.applyPenHsvProperty()
 }
 
@@ -264,4 +299,15 @@ func percentToNormalized(percent float64) float64 {
 
 func (p *penComponent) updatePenColor() {
 	p.engine().PenMgr.SetPenColorTo(*p.penObj, p.penColor)
+}
+
+func nearlyEqualPenValue(a, b float64) bool {
+	return math.Abs(a-b) <= 1e-9
+}
+
+func samePenColor(a, b mathf.Color) bool {
+	return nearlyEqualPenValue(a.R, b.R) &&
+		nearlyEqualPenValue(a.G, b.G) &&
+		nearlyEqualPenValue(a.B, b.B) &&
+		nearlyEqualPenValue(a.A, b.A)
 }
