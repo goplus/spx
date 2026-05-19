@@ -280,6 +280,10 @@ func (p *penComponent) applyPenHsvProperty() {
 	p.updatePenColor()
 }
 
+func (p *penComponent) updatePenColor() {
+	p.engine().PenMgr.SetPenColorTo(*p.penObj, p.penColor)
+}
+
 func hueToPercent(hue float64) float64 {
 	return (hue / 360) * 100
 }
@@ -294,10 +298,6 @@ func normalizedToPercent(normalized float64) float64 {
 
 func percentToNormalized(percent float64) float64 {
 	return percent / 100
-}
-
-func (p *penComponent) updatePenColor() {
-	p.engine().PenMgr.SetPenColorTo(*p.penObj, p.penColor)
 }
 
 func nearlyEqualPenValue(a, b float64) bool {
