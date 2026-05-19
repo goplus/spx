@@ -284,6 +284,11 @@ func (p *baseObj) getCostumePath() string {
 	return p.costumes[p.costumeIndex].path
 }
 
+// getCostumeAssetPath returns the engine-ready asset path of the current costume.
+func (p *baseObj) getCostumeAssetPath() string {
+	return engine.ToAssetPath(p.getCostumePath())
+}
+
 // getCostumeRenderScale returns the render scale for the current costume.
 func (p *baseObj) getCostumeRenderScale() float64 {
 	return p.runtimeState.Scale / float64(p.getCurrentBitmapResolution())
