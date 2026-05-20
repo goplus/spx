@@ -71,6 +71,16 @@ func (p *Game) setupDisplayConfig(proj *coreproject.ProjectConfig) {
 	engine.SetDebugMode(p.debugState.Debug)
 }
 
+func (p *Game) applyWorldWindowMetrics(metrics coreproject.WorldWindowMetrics) {
+	p.displayState.WorldWidth = metrics.WorldWidth
+	p.displayState.WorldHeight = metrics.WorldHeight
+	p.displayState.MinWorldX = metrics.MinWorldX
+	p.displayState.MinWorldY = metrics.MinWorldY
+	p.displayState.MapMode = metrics.MapMode
+	p.displayState.WindowWidth = metrics.WindowWidth
+	p.displayState.WindowHeight = metrics.WindowHeight
+}
+
 func (p *Game) setupWorldAndWindow(proj *coreproject.ProjectConfig) {
 	proj.Map = coreproject.ResolveMapConfig(proj.Map, p.tilemapMgr.hasData(), baseScreenWidth, baseScreenHeight)
 	backdrops := proj.GetBackdrops()
@@ -97,13 +107,7 @@ func (p *Game) setupWorldAndWindow(proj *coreproject.ProjectConfig) {
 		p.displayState.WindowHeight,
 		coreproject.ToMapMode(proj.Map.Mode),
 	)
-	p.displayState.WorldWidth = metrics.WorldWidth
-	p.displayState.WorldHeight = metrics.WorldHeight
-	p.displayState.MinWorldX = metrics.MinWorldX
-	p.displayState.MinWorldY = metrics.MinWorldY
-	p.displayState.MapMode = metrics.MapMode
-	p.displayState.WindowWidth = metrics.WindowWidth
-	p.displayState.WindowHeight = metrics.WindowHeight
+	p.applyWorldWindowMetrics(metrics)
 	spxlog.Debug("SetWindowSize: %d, %d", p.displayState.WindowWidth, p.displayState.WindowHeight)
 }
 
