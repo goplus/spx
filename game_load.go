@@ -89,6 +89,7 @@ func (p *Game) setupWorldAndWindow(proj *coreproject.ProjectConfig) {
 	}
 	spxlog.Debug("SetWorldSize: %d, %d", p.displayState.WorldWidth, p.displayState.WorldHeight)
 
+	p.doWindowSize()
 	metrics := coreproject.ResolveWorldWindowMetrics(
 		p.displayState.WorldWidth,
 		p.displayState.WorldHeight,
@@ -101,18 +102,9 @@ func (p *Game) setupWorldAndWindow(proj *coreproject.ProjectConfig) {
 	p.displayState.MinWorldX = metrics.MinWorldX
 	p.displayState.MinWorldY = metrics.MinWorldY
 	p.displayState.MapMode = metrics.MapMode
-	p.doWindowSize()
-	spxlog.Debug("SetWindowSize: %d, %d", p.displayState.WindowWidth, p.displayState.WindowHeight)
-
-	metrics = coreproject.ResolveWorldWindowMetrics(
-		p.displayState.WorldWidth,
-		p.displayState.WorldHeight,
-		p.displayState.WindowWidth,
-		p.displayState.WindowHeight,
-		p.displayState.MapMode,
-	)
 	p.displayState.WindowWidth = metrics.WindowWidth
 	p.displayState.WindowHeight = metrics.WindowHeight
+	spxlog.Debug("SetWindowSize: %d, %d", p.displayState.WindowWidth, p.displayState.WindowHeight)
 }
 
 func (p *Game) setupPlatformAndCamera(proj *coreproject.ProjectConfig) {
