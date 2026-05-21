@@ -34,6 +34,7 @@ func (p *Game) setBackdrop(backdrop any, wait bool) {
 
 func (p *Game) setupBackdrop() {
 	imgW, imgH := p.getCostumeSize()
+	spriteMgr := p.engine().SpriteMgr
 	layout := coreproject.ResolveBackdropLayout(
 		imgW,
 		imgH,
@@ -46,7 +47,15 @@ func (p *Game) setupBackdrop() {
 	}
 	p.runtimeState.Scale = 1
 	p.baseObj.scheduleCostumeUpdate()
-	p.engine().SpriteMgr.SetScale(p.runtimeState.SyncSprite.GetId(), mathf.NewVec2(layout.ScaleX, layout.ScaleY))
+
+	if p.displayState.MapMode == coreproject.MapModeActualSize {
+		x, y := getCostumeRenderOffset(p.currentCostume(), p.currentCostume().pivot, layout.ScaleX, layout.ScaleY)
+		spriteMgr.SetPosition(
+			p.runtimeState.SyncSprite.GetId(),
+			mathf.NewVec2(x, y),
+		)
+	}
+	spriteMgr.SetScale(p.runtimeState.SyncSprite.GetId(), mathf.NewVec2(layout.ScaleX, layout.ScaleY))
 }
 
 // -----------------------------------------------------------------------------

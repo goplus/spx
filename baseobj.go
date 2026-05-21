@@ -171,7 +171,7 @@ func (p *baseObj) addCostumeWith(name SpriteCostumeName, img *costumeSetImage, f
 func (p *baseObj) initBackdrops(configs []*coreproject.BackdropConfig, costumeIndex int) {
 	p.costumes = make([]*costume, len(configs))
 	for i, cfg := range configs {
-		p.costumes[i] = newCostume(&cfg.CostumeConfig)
+		p.costumes[i] = newBackdropCostume(cfg)
 	}
 	if costumeIndex >= len(configs) || costumeIndex < 0 {
 		costumeIndex = 0

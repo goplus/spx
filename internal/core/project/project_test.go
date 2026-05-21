@@ -225,6 +225,9 @@ func TestProjectConfigHelpers(t *testing.T) {
 	if got := ToMapMode("fillCut"); got != MapModeFillCut {
 		t.Fatalf("ToMapMode(fillCut) = %d, want %d", got, MapModeFillCut)
 	}
+	if got := ToMapMode("actualSize"); got != MapModeActualSize {
+		t.Fatalf("ToMapMode(actualSize) = %d, want %d", got, MapModeActualSize)
+	}
 	if got := ToMapMode("unknown"); got != MapModeFill {
 		t.Fatalf("ToMapMode(unknown) = %d, want %d", got, MapModeFill)
 	}
@@ -304,6 +307,11 @@ func TestResolveBackdropLayout(t *testing.T) {
 	fillCut := ResolveBackdropLayout(100, 50, 100, 100, MapModeFillCut)
 	if fillCut.ScaleX != 1 || fillCut.ScaleY != 1 {
 		t.Fatalf("unexpected fillCut layout: %+v", fillCut)
+	}
+
+	actualSize := ResolveBackdropLayout(100, 50, 400, 200, MapModeActualSize)
+	if actualSize.ScaleX != 1 || actualSize.ScaleY != 1 {
+		t.Fatalf("unexpected actualSize layout: %+v", actualSize)
 	}
 
 	fillRatio := ResolveBackdropLayout(100, 50, 100, 100, MapModeFillRatio)

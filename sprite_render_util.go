@@ -22,15 +22,16 @@ import (
 )
 
 func getRenderOffset(p *SpriteImpl) (float64, float64) {
-	cs := p.costumes[p.costumeIndex]
-	pivot := p.getPivot()
-	x, y := -((cs.center.X)/float64(cs.bitmapResolution)+pivot.X)*p.runtimeState.Scale,
-		((cs.center.Y)/float64(cs.bitmapResolution)-pivot.Y)*p.runtimeState.Scale
+	return getCostumeRenderOffset(p.currentCostume(), p.getPivot(), p.runtimeState.Scale, p.runtimeState.Scale)
+}
 
-	w, h := p.getCostumeSize()
-	x = x + float64(w)/2*p.runtimeState.Scale
-	y = y - float64(h)/2*p.runtimeState.Scale
+func getCostumeRenderOffset(c *costume, pivot mathf.Vec2, scaleX, scaleY float64) (float64, float64) {
+	w, h := c.getSize()
+	centerX := c.center.X / float64(c.bitmapResolution)
+	centerY := c.center.Y / float64(c.bitmapResolution)
 
+	x := -(centerX+pivot.X)*scaleX + float64(w)/2*scaleX
+	y := (centerY-pivot.Y)*scaleY - float64(h)/2*scaleY
 	return x, y
 }
 
