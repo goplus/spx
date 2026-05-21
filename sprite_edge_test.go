@@ -119,7 +119,7 @@ func newEdgeTestSprite(direction Direction) *SpriteImpl {
 	return sprite
 }
 
-func TestSpriteTouchingTargetUsesRequestedEdgeArea(t *testing.T) {
+func TestSpriteTouchingTargetDefaultsToStageArea(t *testing.T) {
 	installEdgePhysicsMgr(t, &fakeEdgePhysicsMgr{
 		stageTouching:  touchingScreenLeft,
 		cameraTouching: touchingScreenRight,
@@ -130,14 +130,11 @@ func TestSpriteTouchingTargetUsesRequestedEdgeArea(t *testing.T) {
 	if !sprite.Touching__2(EdgeLeft) {
 		t.Fatal("Touching__2(EdgeLeft) = false, want true for default stage area")
 	}
-	if sprite.touching(EdgeLeft, edgeAreaCamera) {
-		t.Fatal("touching(EdgeLeft, camera) = true, want false")
+	if sprite.Touching__2(EdgeRight) {
+		t.Fatal("Touching__2(EdgeRight) = true, want false when only camera boundary is touched")
 	}
-	if !sprite.touching(EdgeRight, edgeAreaViewport) {
-		t.Fatal("touching(EdgeRight, viewport) = false, want true")
-	}
-	if !sprite.touching(EdgeRight, "Camera") {
-		t.Fatal("touching(EdgeRight, Camera) = false, want true")
+	if sprite.checkTouchingScreen(touchingScreenRight, edgeAreaViewport) == 0 {
+		t.Fatal("checkTouchingScreen(EdgeRight, viewport) = 0, want non-zero")
 	}
 }
 
