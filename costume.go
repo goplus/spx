@@ -38,6 +38,7 @@ type costume struct {
 	width, height int
 	center        mathf.Vec2 // center point
 	imageSize     mathf.Vec2 // actual image dimensions
+	pivot         mathf.Vec2
 
 	faceRight        float64
 	bitmapResolution int
@@ -120,6 +121,12 @@ func newCostume(config *coreproject.CostumeConfig) *costume {
 		posY:             frame.PosY,
 		atlasUVRect:      frame.AtlasUVRect,
 	}
+}
+
+func newBackdropCostume(config *coreproject.BackdropConfig) *costume {
+	costume := newCostume(&config.CostumeConfig)
+	costume.pivot = config.Pivot
+	return costume
 }
 
 func costumeAssetPath(path string) string {

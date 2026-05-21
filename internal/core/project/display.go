@@ -138,6 +138,9 @@ func ResolveBackdropLayout(imgW, imgH, dstW, dstH float64, mapMode int) Backdrop
 			X: dstW / imgW,
 			Y: dstH / imgH,
 		}
+	case MapModeActualSize:
+		dstW = imgW
+		dstH = imgH
 	case MapModeFillCut:
 		if isScaleHeight {
 			dstH = dstW / imgRatio

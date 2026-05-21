@@ -49,12 +49,15 @@ const (
 	MapModeRepeat
 	MapModeFillRatio
 	MapModeFillCut
+	MapModeActualSize
 )
 
 func ToMapMode(mode string) int {
 	switch mode {
 	case "repeat":
 		return MapModeRepeat
+	case "actualSize":
+		return MapModeActualSize
 	case "fillCut":
 		return MapModeFillCut
 	case "fillRatio":
@@ -155,6 +158,7 @@ type CostumeConfig struct {
 
 type BackdropConfig struct {
 	CostumeConfig
+	Pivot mathf.Vec2 `json:"pivot"`
 }
 
 type AniType int8
