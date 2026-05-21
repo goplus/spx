@@ -171,6 +171,11 @@ func (p *Game) Now() time.Time {
 	return time.Now()
 }
 
+func (p *Game) Dayssince2000() float64 {
+	base := time.Date(2000, time.January, 1, 0, 0, 0, 0, time.UTC)
+	return time.Since(base).Hours() / 24
+}
+
 // -----------------------------------------------------------------------------
 // Dialog
 // -----------------------------------------------------------------------------

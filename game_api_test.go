@@ -18,6 +18,7 @@ package spx
 
 import (
 	"testing"
+	"time"
 
 	internalaudio "github.com/goplus/spx/v2/internal/audio"
 	internalengine "github.com/goplus/spx/v2/internal/engine"
@@ -127,6 +128,19 @@ func TestGameUsernameReturnsEmptyString(t *testing.T) {
 	var g Game
 	if got := g.Username(); got != "" {
 		t.Fatalf("Username = %q, want empty string", got)
+	}
+}
+
+func TestGameDayssince2000(t *testing.T) {
+	var g Game
+	base := time.Date(2000, time.January, 1, 0, 0, 0, 0, time.UTC)
+
+	lower := time.Since(base).Hours() / 24
+	got := g.Dayssince2000()
+	upper := time.Since(base).Hours() / 24
+
+	if got < lower || got > upper {
+		t.Fatalf("Dayssince2000 = %v, want in [%v, %v]", got, lower, upper)
 	}
 }
 
