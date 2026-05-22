@@ -121,7 +121,11 @@ func buildctlCommandEnv() (map[string]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	env["PATH"] = prependToPath(env["PATH"], filepath.Join(goPath, "bin"))
+	pathDirs := []string{filepath.Join(goPath, "bin")}
+	if goRoot := runtime.GOROOT(); goRoot != "" {
+		pathDirs = append(pathDirs, filepath.Join(goRoot, "bin"))
+	}
+	setPathEnv(env, prependToPath(pathEnvValue(env), pathDirs...))
 	return env, nil
 }
 
@@ -129,19 +133,19 @@ func resolveCommandPath(name string, env map[string]string) (string, error) {
 	if filepath.IsAbs(name) || strings.ContainsRune(name, filepath.Separator) {
 		return name, nil
 	}
-	for _, dir := range filepath.SplitList(env["PATH"]) {
+	for _, dir := range filepath.SplitList(pathEnvValue(env)) {
 		if dir == "" {
 			continue
 		}
 		candidate := filepath.Join(dir, name)
 		info, err := os.Stat(candidate)
-		if err == nil && !info.IsDir() && info.Mode()&0o111 != 0 {
+		if err == nil && isCommandFile(info) {
 			return candidate, nil
 		}
 		for _, ext := range executableExtensions(env) {
 			candidateWithExt := candidate + ext
 			info, err := os.Stat(candidateWithExt)
-			if err == nil && !info.IsDir() && info.Mode()&0o111 != 0 {
+			if err == nil && isCommandFile(info) {
 				return candidateWithExt, nil
 			}
 		}
@@ -149,11 +153,25 @@ func resolveCommandPath(name string, env map[string]string) (string, error) {
 	return "", fmt.Errorf("%s not found in PATH", name)
 }
 
+func isCommandFile(info os.FileInfo) bool {
+	return isCommandFileForOS(info, runtime.GOOS)
+}
+
+func isCommandFileForOS(info os.FileInfo, goos string) bool {
+	if info.IsDir() {
+		return false
+	}
+	if goos == "windows" {
+		return true
+	}
+	return info.Mode()&0o111 != 0
+}
+
 func executableExtensions(env map[string]string) []string {
 	if runtime.GOOS != "windows" {
 		return nil
 	}
-	pathExt := env["PATHEXT"]
+	pathExt := envValue(env, "PATHEXT")
 	if pathExt == "" {
 		return []string{".com", ".exe", ".bat", ".cmd"}
 	}
@@ -172,6 +190,33 @@ func executableExtensions(env map[string]string) []string {
 		return []string{".com", ".exe", ".bat", ".cmd"}
 	}
 	return exts
+}
+
+func pathEnvValue(env map[string]string) string {
+	return envValue(env, "PATH")
+}
+
+func envValue(env map[string]string, key string) string {
+	if value, ok := env[key]; ok {
+		return value
+	}
+	for envKey, value := range env {
+		if strings.EqualFold(envKey, key) {
+			return value
+		}
+	}
+	return ""
+}
+
+func setPathEnv(env map[string]string, value string) {
+	if runtime.GOOS == "windows" {
+		for key := range env {
+			if key != "PATH" && strings.EqualFold(key, "PATH") {
+				delete(env, key)
+			}
+		}
+	}
+	env["PATH"] = value
 }
 
 func currentEnvMap() map[string]string {

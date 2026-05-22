@@ -43,6 +43,26 @@ func TestParseEngineDownloadArgsDefault(t *testing.T) {
 	}
 }
 
+func TestParseEngineDownloadArgsRuntimeSkipsPack(t *testing.T) {
+	cfg, err := parseEngineDownloadArgs([]string{"--runtime", "--skip-runtime-pack"})
+	if err != nil {
+		t.Fatalf("parseEngineDownloadArgs returned error: %v", err)
+	}
+
+	if !cfg.runtime {
+		t.Fatal("runtime should be true")
+	}
+	if !cfg.skipRuntimePack {
+		t.Fatal("skipRuntimePack should be true")
+	}
+}
+
+func TestParseEngineDownloadArgsRejectsSkipPackWithoutRuntime(t *testing.T) {
+	if _, err := parseEngineDownloadArgs([]string{"--skip-runtime-pack"}); err == nil {
+		t.Fatal("expected --skip-runtime-pack without --runtime to fail")
+	}
+}
+
 func TestParseEngineDownloadArgsWebDefaultMode(t *testing.T) {
 	cfg, err := parseEngineDownloadArgs([]string{"--platform", "web"})
 	if err != nil {
@@ -86,6 +106,36 @@ func TestDownloadEngineAssetsRuntime(t *testing.T) {
 	}
 	if !fileExists(filepath.Join(runner.repoRoot, "templates", "linux_release.x86_64")) {
 		t.Fatalf("expected linux template fanout to exist")
+	}
+}
+
+func TestDownloadEngineAssetsRuntimeSkipsPack(t *testing.T) {
+	runner := newRuntimeFixtureRunner(t)
+	installFakeEngineDownload(t, runner.repoRoot, "linux", "x86_64")
+	version := mustDefaultRuntimeVersion(t)
+
+	oldFetcher := EngineDownloadFetcher
+	EngineDownloadFetcher = func(url, dst string) error {
+		if filepath.Base(url) == release.RuntimeAssetZipName {
+			return errors.New("runtime pack should not be downloaded")
+		}
+		return oldFetcher(url, dst)
+	}
+	t.Cleanup(func() { EngineDownloadFetcher = oldFetcher })
+
+	if err := downloadEngineAssets(engineDownloadConfig{runtime: true, skipRuntimePack: true}, runner.repoRoot); err != nil {
+		t.Fatalf("downloadEngineAssets returned error: %v", err)
+	}
+
+	gopathBin := filepath.Join(os.Getenv("GOPATH"), "bin")
+	if !fileExists(filepath.Join(gopathBin, "gdspx"+version)) {
+		t.Fatalf("expected host editor binary to exist")
+	}
+	if !fileExists(filepath.Join(gopathBin, "gdspxrt"+version)) {
+		t.Fatalf("expected host template binary to exist")
+	}
+	if fileExists(filepath.Join(gopathBin, "gdspxrt"+version+".pck")) {
+		t.Fatalf("expected runtime pck not to exist")
 	}
 }
 

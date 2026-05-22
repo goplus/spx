@@ -19,9 +19,10 @@ package engine
 import "net/http"
 
 type DownloadConfig struct {
-	Runtime  bool
-	Platform string
-	Mode     string
+	Runtime         bool
+	SkipRuntimePack bool
+	Platform        string
+	Mode            string
 }
 
 type DownloadEnv struct {
@@ -62,7 +63,7 @@ func Run(args []string) error {
 
 func ParseEngineDownloadArgs(args []string) (DownloadConfig, error) {
 	cfg, err := parseEngineDownloadArgs(args)
-	return DownloadConfig{Runtime: cfg.runtime, Platform: cfg.platform, Mode: cfg.mode}, err
+	return DownloadConfig{Runtime: cfg.runtime, SkipRuntimePack: cfg.skipRuntimePack, Platform: cfg.platform, Mode: cfg.mode}, err
 }
 
 func ParseEngineBuildArgs(args []string) (BuildConfig, error) {
@@ -89,7 +90,7 @@ func (plan BuildShellPlan) ShellExports() string {
 }
 
 func DownloadEngineAssets(cfg DownloadConfig, repoRoot string) error {
-	return downloadEngineAssets(engineDownloadConfig{runtime: cfg.Runtime, platform: cfg.Platform, mode: cfg.Mode}, repoRoot)
+	return downloadEngineAssets(engineDownloadConfig{runtime: cfg.Runtime, skipRuntimePack: cfg.SkipRuntimePack, platform: cfg.Platform, mode: cfg.Mode}, repoRoot)
 }
 
 func BuildEngine(cfg BuildConfig, repoRoot string) error {

@@ -58,6 +58,9 @@ func downloadEngineAssets(cfg engineDownloadConfig, repoRoot string) error {
 		if err := downloadHostRuntimeAssets(env); err != nil {
 			return err
 		}
+		if cfg.skipRuntimePack {
+			return nil
+		}
 		if err := downloadRuntimePack(env); err != nil {
 			fmt.Fprintf(osStderr, "Warning: failed to download runtime asset bundle: %v\n", err)
 		}

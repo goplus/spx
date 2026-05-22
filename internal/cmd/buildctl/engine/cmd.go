@@ -23,9 +23,10 @@ import (
 )
 
 type engineDownloadConfig struct {
-	runtime  bool
-	platform string
-	mode     string
+	runtime         bool
+	skipRuntimePack bool
+	platform        string
+	mode            string
 }
 
 type engineBuildConfig struct {
@@ -88,10 +89,11 @@ func parseEngineDownloadArgs(args []string) (engineDownloadConfig, error) {
 	fs := flag.NewFlagSet("engine download", flag.ContinueOnError)
 	fs.SetOutput(osStderr)
 	fs.BoolVar(&cfg.runtime, "runtime", false, "download runtime assets for the current host platform")
+	fs.BoolVar(&cfg.skipRuntimePack, "skip-runtime-pack", false, "skip downloading the published runtime asset bundle")
 	fs.StringVar(&cfg.platform, "platform", "", "download templates for android, ios, web, linux, windows, or macos")
 	fs.StringVar(&cfg.mode, "mode", "", "web mode: normal, worker, minigame, or miniprogram")
 	fs.Usage = func() {
-		fmt.Fprintln(osStderr, "Usage: buildctl engine download [--runtime] [--platform android|ios|web|linux|windows|macos] [--mode normal|worker|minigame|miniprogram]")
+		fmt.Fprintln(osStderr, "Usage: buildctl engine download [--runtime] [--skip-runtime-pack] [--platform android|ios|web|linux|windows|macos] [--mode normal|worker|minigame|miniprogram]")
 	}
 
 	if err := fs.Parse(args); err != nil {
@@ -108,6 +110,9 @@ func parseEngineDownloadArgs(args []string) (engineDownloadConfig, error) {
 }
 
 func (cfg *engineDownloadConfig) validate() error {
+	if cfg.skipRuntimePack && !cfg.runtime {
+		return errors.New("--skip-runtime-pack requires --runtime")
+	}
 	if cfg.runtime && cfg.platform != "" {
 		return errors.New("--runtime cannot be combined with --platform")
 	}

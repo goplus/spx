@@ -67,7 +67,7 @@ func exportPackRuntime(runner scriptRunner) error {
 }
 
 func exportWebRuntime(cfg runtimeExportWebConfig, runner scriptRunner) error {
-	if err := installTools(toolInstallConfig{web: true, opt: true}, runner); err != nil {
+	if err := installTools(toolInstallConfig{web: true, opt: true, noEmbedRuntime: true}, runner); err != nil {
 		return err
 	}
 

@@ -19,6 +19,7 @@ package shared
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -48,6 +49,71 @@ func TestCommandRunnerRunCommandUsesGoPathBin(t *testing.T) {
 
 	if !fileExists(outPath) {
 		t.Fatalf("expected fake command output at %s", outPath)
+	}
+}
+
+func TestBuildctlCommandEnvPrependsGoBinDirs(t *testing.T) {
+	root := t.TempDir()
+	gopath := filepath.Join(root, "gopath")
+	t.Setenv("GOPATH", gopath)
+
+	env, err := buildctlCommandEnv()
+	if err != nil {
+		t.Fatalf("buildctlCommandEnv returned error: %v", err)
+	}
+
+	pathDirs := filepath.SplitList(pathEnvValue(env))
+	wantDirs := []string{filepath.Join(gopath, "bin")}
+	if goRoot := runtime.GOROOT(); goRoot != "" {
+		wantDirs = append(wantDirs, filepath.Join(goRoot, "bin"))
+	}
+	if len(pathDirs) < len(wantDirs) {
+		t.Fatalf("PATH dirs = %v, want prefix %v", pathDirs, wantDirs)
+	}
+	for i, want := range wantDirs {
+		if pathDirs[i] != want {
+			t.Fatalf("PATH dirs = %v, want prefix %v", pathDirs, wantDirs)
+		}
+	}
+}
+
+func TestResolveCommandPathUsesCaseInsensitivePathFallback(t *testing.T) {
+	root := t.TempDir()
+	binDir := filepath.Join(root, "bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll returned error: %v", err)
+	}
+
+	cmdPath := filepath.Join(binDir, "fakecmd")
+	if err := os.WriteFile(cmdPath, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	got, err := resolveCommandPath("fakecmd", map[string]string{"Path": binDir})
+	if err != nil {
+		t.Fatalf("resolveCommandPath returned error: %v", err)
+	}
+	if got != cmdPath {
+		t.Fatalf("resolveCommandPath = %q, want %q", got, cmdPath)
+	}
+}
+
+func TestIsCommandFileForOSAllowsWindowsFilesWithoutUnixExecBit(t *testing.T) {
+	root := t.TempDir()
+	cmdPath := filepath.Join(root, "fakecmd.exe")
+	if err := os.WriteFile(cmdPath, []byte("fake"), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+	info, err := os.Stat(cmdPath)
+	if err != nil {
+		t.Fatalf("Stat returned error: %v", err)
+	}
+
+	if !isCommandFileForOS(info, "windows") {
+		t.Fatal("expected regular Windows command file to be accepted without Unix exec bit")
+	}
+	if isCommandFileForOS(info, "linux") {
+		t.Fatal("expected non-executable Unix command file to be rejected")
 	}
 }
 

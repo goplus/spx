@@ -30,7 +30,11 @@ jobs:
       - name: Set up toolchain and engine assets
         uses: ./.github/actions/deps
         with:
-          setup-mode: runtime
+          setup-mode: none
+
+      - name: Prepare host export assets
+        run: |
+          "$BUILDCTL" engine download --runtime --skip-runtime-pack
 
       - name: Build runtime asset bundle
         id: build_runtime_assets

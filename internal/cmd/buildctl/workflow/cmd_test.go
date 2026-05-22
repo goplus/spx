@@ -289,7 +289,7 @@ func TestRunDemoWorkflowWebWorker(t *testing.T) {
 	}
 
 	expectedScripts := []recordedCall{
-		{script: "cmd/spx/install.sh", args: []string{"--web"}},
+		{script: "cmd/spx/install.sh", args: []string{"--web", "--no-embed-runtime"}},
 	}
 	if !reflect.DeepEqual(runner.calls, expectedScripts) {
 		t.Fatalf("unexpected script calls: %#v", runner.calls)
@@ -322,7 +322,7 @@ func TestRunDemoWorkflowWeb(t *testing.T) {
 	}
 
 	expectedScripts := []recordedCall{
-		{script: "cmd/spx/install.sh", args: []string{"--web"}},
+		{script: "cmd/spx/install.sh", args: []string{"--web", "--no-embed-runtime"}},
 	}
 	if !reflect.DeepEqual(runner.calls, expectedScripts) {
 		t.Fatalf("unexpected script calls: %#v", runner.calls)
