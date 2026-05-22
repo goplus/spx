@@ -345,6 +345,17 @@ func assertWorkflowRuntimeWorkspaceCommands(t *testing.T, got []recordedCommand,
 		t.Fatalf("unexpected commands: %#v", got)
 	}
 	for i := range want {
+		if want[i].name == "spx" {
+			projectDir, spxArgs, ok := simulatedSPXInvocation(got[i].dir, got[i].name, got[i].args...)
+			if !ok || !reflect.DeepEqual(want[i].args, spxArgs) {
+				t.Fatalf("unexpected command[%d]: %#v", i, got[i])
+			}
+			prefix := filepath.Join(repoRoot, ".tmp", "runtime-")
+			if !strings.HasPrefix(projectDir, prefix) {
+				t.Fatalf("unexpected runtime workspace dir[%d]: %s", i, projectDir)
+			}
+			continue
+		}
 		if want[i].name != got[i].name || !reflect.DeepEqual(want[i].args, got[i].args) {
 			t.Fatalf("unexpected command[%d]: %#v", i, got[i])
 		}

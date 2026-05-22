@@ -42,7 +42,7 @@ func exportPackRuntime(runner scriptRunner) error {
 	}
 	defer cleanup()
 
-	if err := runner.runCommand(workspace.workDir, "spx", "export"); err != nil {
+	if err := runRepoSPXCommand(runner, workspace.workDir, "export"); err != nil {
 		return err
 	}
 
@@ -86,7 +86,7 @@ func exportWebRuntime(cfg runtimeExportWebConfig, runner scriptRunner) error {
 	}
 	defer cleanup()
 
-	if err := runner.runCommand(workspace.workDir, "spx", spxCommand); err != nil {
+	if err := runRepoSPXCommand(runner, workspace.workDir, spxCommand); err != nil {
 		return err
 	}
 
@@ -104,7 +104,7 @@ func exportWebTemplateRuntime(mode string, runner scriptRunner) error {
 	}
 	defer cleanup()
 
-	if err := runner.runCommand(workspace.workDir, "spx", "exporttemplateweb"); err != nil {
+	if err := runRepoSPXCommand(runner, workspace.workDir, "exporttemplateweb"); err != nil {
 		return err
 	}
 
@@ -133,6 +133,13 @@ func exportWebTemplateRuntime(mode string, runner scriptRunner) error {
 	}
 	prefix := fmt.Sprintf("var EnginePackMode = '%s';\n", mode)
 	return os.WriteFile(engineJS, append([]byte(prefix), content...), 0o644)
+}
+
+func runRepoSPXCommand(runner scriptRunner, projectDir string, args ...string) error {
+	commandArgs := []string{"run", "./cmd/spx"}
+	commandArgs = append(commandArgs, args...)
+	commandArgs = append(commandArgs, "--path", projectDir)
+	return runner.runCommand(runner.repoRootDir(), "go", commandArgs...)
 }
 
 func prepareRuntimeWorkspace(repoRoot string, includeRuntimeExtension bool) (runtimeWorkspace, func(), error) {

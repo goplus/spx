@@ -176,11 +176,18 @@ func assertSingleRuntimeWorkspaceCommand(t *testing.T, runner *recordingRunner, 
 		t.Fatalf("unexpected commands: %#v", runner.commands)
 	}
 	got := runner.commands[0]
-	if got.name != name || !reflect.DeepEqual(got.args, args) {
+	if name != "spx" {
+		if got.name != name || !reflect.DeepEqual(got.args, args) {
+			t.Fatalf("unexpected command: %#v", got)
+		}
+		return
+	}
+	projectDir, spxArgs, ok := simulatedSPXInvocation(got.dir, got.name, got.args...)
+	if !ok || !reflect.DeepEqual(spxArgs, args) {
 		t.Fatalf("unexpected command: %#v", got)
 	}
 	prefix := filepath.Join(runner.repoRoot, ".tmp", "runtime-")
-	if !strings.HasPrefix(got.dir, prefix) {
-		t.Fatalf("unexpected runtime workspace dir: %s", got.dir)
+	if !strings.HasPrefix(projectDir, prefix) {
+		t.Fatalf("unexpected runtime workspace dir: %s", projectDir)
 	}
 }
