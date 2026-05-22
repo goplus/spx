@@ -40,14 +40,14 @@ func TestReleaseMetaForRuntimeVersionMapped(t *testing.T) {
 
 func TestDefaultReleaseMetaUsesLatestSPXVersionForRuntimeAssets(t *testing.T) {
 	meta := DefaultReleaseMeta()
-	if meta.SPXVersion != "v2.0.1" {
-		t.Fatalf("spx version = %q, want %q", meta.SPXVersion, "v2.0.1")
+	if meta.SPXVersion != "v2.0.2" {
+		t.Fatalf("spx version = %q, want %q", meta.SPXVersion, "v2.0.2")
 	}
-	if meta.Runtime.Version != "2.2.1" {
-		t.Fatalf("runtime version = %q, want %q", meta.Runtime.Version, "2.2.1")
+	if meta.Runtime.Version != "2.2.2" {
+		t.Fatalf("runtime version = %q, want %q", meta.Runtime.Version, "2.2.2")
 	}
-	if got := meta.RuntimeAssetDownloadURL(RuntimeAssetZipName); got != SpxReleaseURLBase+"v2.0.1/"+RuntimeAssetZipName {
-		t.Fatalf("runtime asset download url = %q, want %q", got, SpxReleaseURLBase+"v2.0.1/"+RuntimeAssetZipName)
+	if got := meta.RuntimeAssetDownloadURL(RuntimeAssetZipName); got != SpxReleaseURLBase+"v2.0.2/"+RuntimeAssetZipName {
+		t.Fatalf("runtime asset download url = %q, want %q", got, SpxReleaseURLBase+"v2.0.2/"+RuntimeAssetZipName)
 	}
 }
 
