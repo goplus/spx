@@ -62,22 +62,22 @@ func (p *SpriteImpl) TouchingColor__1(spriteColor, targetColor Color) bool {
 }
 
 func (p *SpriteImpl) Touching__0(sprite Sprite) bool {
-	return p.touching(sprite, edgeAreaStage)
+	return p.touching(sprite)
 }
 
 func (p *SpriteImpl) Touching__1(sprite SpriteName) bool {
-	return p.touching(sprite, edgeAreaStage)
+	return p.touching(sprite)
 }
 
 func (p *SpriteImpl) Touching__2(obj specialObj) bool {
-	return p.touching(obj, edgeAreaStage)
+	return p.touching(obj)
 }
 
 func (p *SpriteImpl) TouchingWith(target Target) bool {
-	return p.touching(target, edgeAreaStage)
+	return p.touching(target)
 }
 
-func (p *SpriteImpl) touching(obj Target, area string) bool {
+func (p *SpriteImpl) touching(obj Target) bool {
 	if p.spriteState.IsDying {
 		return false
 	}
@@ -86,7 +86,7 @@ func (p *SpriteImpl) touching(obj Target, area string) bool {
 		return p.g.touchingSpriteBy(p, v) != nil
 	case specialObj:
 		if v > 0 {
-			return p.checkTouchingScreen(int(v), area) != 0
+			return p.checkTouchingScreen(int(v), edgeAreaStage) != 0
 		}
 		if v == Mouse {
 			x, y := p.g.getMousePos()
