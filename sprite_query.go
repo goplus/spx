@@ -78,7 +78,7 @@ func (p *SpriteImpl) TouchingWith(target Target) bool {
 }
 
 func (p *SpriteImpl) touching(obj Target, area string) bool {
-	if !p.spriteState.IsVisible || p.spriteState.IsDying {
+	if p.spriteState.IsDying {
 		return false
 	}
 	switch v := obj.(type) {
@@ -99,7 +99,7 @@ func (p *SpriteImpl) touching(obj Target, area string) bool {
 }
 
 func touchingSprite(dst, src *SpriteImpl) bool {
-	if !src.spriteState.IsVisible || src.spriteState.IsDying {
+	if src.spriteState.IsDying {
 		return false
 	}
 	return src.touchingSprite(dst)
