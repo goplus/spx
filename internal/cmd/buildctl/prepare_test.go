@@ -97,19 +97,20 @@ func newRuntimeFixtureRunner(t *testing.T) *recordingRunner {
 }
 
 func simulateRuntimeCommandOutputs(workdir string, name string, args ...string) error {
-	if name != "spx" || len(args) == 0 {
+	projectDir, spxArgs, ok := simulatedSPXInvocation(workdir, name, args...)
+	if !ok || len(spxArgs) == 0 {
 		return nil
 	}
 
-	switch args[0] {
+	switch spxArgs[0] {
 	case "export":
-		dst := filepath.Join(workdir, "project", ".builds", "pc", "gdexport.pck")
+		dst := filepath.Join(projectDir, "project", ".builds", "pc", "gdexport.pck")
 		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 			return err
 		}
 		return os.WriteFile(dst, []byte("runtime-pack"), 0o644)
 	case "exporttemplateweb":
-		dstDir := filepath.Join(workdir, "project", ".builds", "webi")
+		dstDir := filepath.Join(projectDir, "project", ".builds", "webi")
 		if err := os.MkdirAll(dstDir, 0o755); err != nil {
 			return err
 		}
@@ -118,16 +119,39 @@ func simulateRuntimeCommandOutputs(workdir string, name string, args ...string) 
 		}
 		return os.WriteFile(filepath.Join(dstDir, "engine.js"), []byte("console.log('engine');\n"), 0o644)
 	case "exportweb", "exportwebworker", "exportminigame", "exportminiprogram":
-		dstDir := filepath.Join(workdir, "project", ".builds", "web", "subdir")
+		dstDir := filepath.Join(projectDir, "project", ".builds", "web", "subdir")
 		if err := os.MkdirAll(dstDir, 0o755); err != nil {
 			return err
 		}
-		if err := os.WriteFile(filepath.Join(workdir, "project", ".builds", "web", "index.html"), []byte("<html></html>"), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(projectDir, "project", ".builds", "web", "index.html"), []byte("<html></html>"), 0o644); err != nil {
 			return err
 		}
 		return os.WriteFile(filepath.Join(dstDir, "game.js"), []byte("console.log('game');\n"), 0o644)
 	default:
 		return nil
+	}
+}
+
+func simulatedSPXInvocation(workdir string, name string, args ...string) (string, []string, bool) {
+	switch name {
+	case "spx":
+		return workdir, append([]string(nil), args...), len(args) > 0
+	case "go":
+		if len(args) < 4 || args[0] != "run" || args[1] != "./cmd/spx" {
+			return "", nil, false
+		}
+		spxArgs := append([]string(nil), args[2:]...)
+		projectDir := workdir
+		for i := 0; i+1 < len(spxArgs); i++ {
+			if spxArgs[i] == "--path" {
+				projectDir = spxArgs[i+1]
+				spxArgs = append(spxArgs[:i], spxArgs[i+2:]...)
+				break
+			}
+		}
+		return projectDir, spxArgs, len(spxArgs) > 0
+	default:
+		return "", nil, false
 	}
 }
 
@@ -351,6 +375,17 @@ func assertRuntimeWorkspaceCommands(t *testing.T, got []recordedCommand, repoRoo
 		t.Fatalf("unexpected commands: %#v", got)
 	}
 	for i := range want {
+		if want[i].name == "spx" {
+			projectDir, spxArgs, ok := simulatedSPXInvocation(got[i].dir, got[i].name, got[i].args...)
+			if !ok || !reflect.DeepEqual(spxArgs, want[i].args) {
+				t.Fatalf("unexpected command[%d]: %#v", i, got[i])
+			}
+			prefix := filepath.Join(repoRoot, ".tmp", "runtime-")
+			if !strings.HasPrefix(projectDir, prefix) {
+				t.Fatalf("unexpected runtime workspace dir[%d]: %s", i, projectDir)
+			}
+			continue
+		}
 		if got[i].name != want[i].name || !reflect.DeepEqual(got[i].args, want[i].args) {
 			t.Fatalf("unexpected command[%d]: %#v", i, got[i])
 		}

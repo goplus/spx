@@ -417,23 +417,23 @@ func buildHostRuntimeWorkflow(runner scriptRunner) error {
 }
 
 func buildDevWorkflow(cfg workflowBuildDevConfig, runner scriptRunner) error {
-	printWorkflowStep(1, 4, "Install spx toolchain and web runtime")
-	if err := installTools(toolInstallConfig{web: true}, runner); err != nil {
-		return err
-	}
-
-	printWorkflowStep(2, 4, "Build host editor")
+	printWorkflowStep(1, 4, "Build host editor")
 	if err := runEngineBuildWorkflow(runner, engineBuildConfig{target: "editor"}); err != nil {
 		return err
 	}
 
-	printWorkflowStep(3, 4, "Build host runtime template and export pack")
+	printWorkflowStep(2, 4, "Build host runtime template and export pack")
 	if err := buildHostRuntimeWorkflow(runner); err != nil {
 		return err
 	}
 
-	printWorkflowStep(4, 4, "Build web template and export assets")
+	printWorkflowStep(3, 4, "Build web template and export assets")
 	if err := buildWebWorkflow(workflowBuildWebConfig{mode: cfg.webMode, skipToolInstall: true}, runner); err != nil {
+		return err
+	}
+
+	printWorkflowStep(4, 4, "Install spx toolchain and web runtime")
+	if err := installTools(toolInstallConfig{web: true}, runner); err != nil {
 		return err
 	}
 
