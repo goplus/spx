@@ -45,8 +45,8 @@ runs:
         cat "$FILE"
         log_success "Updated $FILE with version $VERSION"
 
-        log_info "Reinstalling spx with default embedded runtime assets"
-        "$BUILDCTL" tool install
+        log_info "Preparing runtime assets and reinstalling spx"
+        "$BUILDCTL" prepare --setup-mode runtime
 
         GOEXE="$(go_env_goexe)"
         SPX_BIN_PATH="$(go_env_spx_path "$GOEXE")"

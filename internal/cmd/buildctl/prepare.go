@@ -96,38 +96,61 @@ func prepareAssets(cfg prepareConfig, runner shared.ScriptRunner) error {
 	case "none":
 		return nil
 	case "runtime":
-		if err := runner.RunScript(filepath.Join("cmd", "spx", "install.sh")); err != nil {
+		if err := prepareRuntimeAssets(runner); err != nil {
 			return err
 		}
-		return prepareRuntimeAssets(runner)
+		return runner.RunScript(filepath.Join("cmd", "spx", "install.sh"))
 	case "web":
 		if err := prepareHostEditorAsset(runner.RepoRootDir()); err != nil {
 			return err
 		}
-		return prepareWebAssets(cfg.webMode, runner)
+		return prepareWebAssets(cfg.webMode, runner, false)
 	case "full":
 		if err := prepareRuntimeAssets(runner); err != nil {
 			return err
 		}
-		return prepareWebAssets(cfg.webMode, runner)
+		return prepareWebAssets(cfg.webMode, runner, true)
 	default:
 		return fmt.Errorf("unsupported setup-mode: %s", cfg.setupMode)
 	}
 }
 
 func prepareRuntimeAssets(runner shared.ScriptRunner) error {
-	return engine.DownloadEngineAssets(engine.DownloadConfig{Runtime: true}, runner.RepoRootDir())
+	if err := engine.DownloadEngineAssets(engine.DownloadConfig{Runtime: true, SkipRuntimePack: true}, runner.RepoRootDir()); err != nil {
+		return err
+	}
+	return ensureRuntimePack(runner)
+}
+
+func ensureRuntimePack(runner shared.ScriptRunner) error {
+	goPath, err := shared.EnsureGoPath()
+	if err != nil {
+		return err
+	}
+	version, err := shared.DefaultRuntimeVersion()
+	if err != nil {
+		return err
+	}
+	packPath := filepath.Join(goPath, "bin", fmt.Sprintf("gdspxrt%s.pck", version))
+	if !engine.ShouldRefreshPreparedAssets() && shared.FileExists(packPath) {
+		return nil
+	}
+	return runtimecmd.ExportPackRuntime(runner)
 }
 
 func prepareHostEditorAsset(repoRoot string) error {
 	return engine.PrepareHostEditorAsset(repoRoot)
 }
 
-func prepareWebAssets(webMode string, runner shared.ScriptRunner) error {
+func prepareWebAssets(webMode string, runner shared.ScriptRunner, embedRuntime bool) error {
 	if err := engine.DownloadEngineAssets(engine.DownloadConfig{Platform: "web", Mode: webMode}, runner.RepoRootDir()); err != nil {
 		return err
 	}
-	if err := runner.RunScript(filepath.Join("cmd", "spx", "install.sh"), "--web"); err != nil {
+	args := []string{"--web"}
+	if !embedRuntime {
+		args = append(args, "--no-embed-runtime")
+	}
+	if err := runner.RunScript(filepath.Join("cmd", "spx", "install.sh"), args...); err != nil {
 		return err
 	}
 	return runtimecmd.ExportWebTemplateRuntime(webMode, runner)

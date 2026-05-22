@@ -82,12 +82,13 @@ func zipDirectory(srcDir, dstZip string) error {
 }
 
 type toolInstallConfig struct {
-	web bool
-	opt bool
+	web            bool
+	opt            bool
+	noEmbedRuntime bool
 }
 
 func installTools(cfg toolInstallConfig, runner scriptRunner) error {
-	return toolpkg.InstallTools(toolpkg.InstallConfig{Web: cfg.web, Opt: cfg.opt}, runnerAdapter{inner: runner})
+	return toolpkg.InstallTools(toolpkg.InstallConfig{Web: cfg.web, Opt: cfg.opt, NoEmbedRuntime: cfg.noEmbedRuntime}, runnerAdapter{inner: runner})
 }
 
 type runnerAdapter struct {
@@ -107,7 +108,7 @@ func (a runnerAdapter) RepoRootDir() string {
 }
 
 func buildWasmRuntime(cfg runtimeBuildWasmConfig, runner scriptRunner) error {
-	if err := installTools(toolInstallConfig{web: true, opt: cfg.opt}, runner); err != nil {
+	if err := installTools(toolInstallConfig{web: true, opt: cfg.opt, noEmbedRuntime: true}, runner); err != nil {
 		return err
 	}
 	if !cfg.opt {

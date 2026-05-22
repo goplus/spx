@@ -19,8 +19,9 @@ package tool
 import "github.com/goplus/spx/v2/internal/cmd/buildctl/shared"
 
 type InstallConfig struct {
-	Web bool
-	Opt bool
+	Web            bool
+	Opt            bool
+	NoEmbedRuntime bool
 }
 
 type SetupNDKConfig struct {
@@ -57,7 +58,7 @@ func ParseToolCleanAssetsArgs(args []string) error {
 
 func ParseToolInstallArgs(args []string) (InstallConfig, error) {
 	cfg, err := parseToolInstallArgs(args)
-	return InstallConfig{Web: cfg.web, Opt: cfg.opt}, err
+	return InstallConfig{Web: cfg.web, Opt: cfg.opt, NoEmbedRuntime: cfg.noEmbedRuntime}, err
 }
 
 func ParseToolSetupNDKArgs(args []string) (SetupNDKConfig, error) {
@@ -85,7 +86,7 @@ func ParseToolSetupEMSDKArgs(args []string) (SetupEMSDKConfig, error) {
 }
 
 func InstallTools(cfg InstallConfig, runner shared.ScriptRunner) error {
-	return installTools(toolInstallConfig{web: cfg.Web, opt: cfg.Opt}, scriptRunnerAdapter{inner: runner})
+	return installTools(toolInstallConfig{web: cfg.Web, opt: cfg.Opt, noEmbedRuntime: cfg.NoEmbedRuntime}, scriptRunnerAdapter{inner: runner})
 }
 
 func CleanInstalledAssets() error {

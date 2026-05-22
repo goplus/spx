@@ -208,8 +208,15 @@ func TestPrepareAssetsRuntime(t *testing.T) {
 		t.Fatalf("unexpected calls: %#v", runner.calls)
 	}
 
+	assertRuntimeWorkspaceCommands(t, runner.commands, runner.repoRoot, []recordedCommand{
+		{name: "spx", args: []string{"export"}},
+	})
+
 	if !shared.FileExists(filepath.Join(os.Getenv("GOPATH"), "bin", "gdspx"+version)) {
 		t.Fatalf("expected host editor binary to exist")
+	}
+	if !shared.FileExists(filepath.Join(os.Getenv("GOPATH"), "bin", "gdspxrt"+version+".pck")) {
+		t.Fatalf("expected runtime pck to exist")
 	}
 }
 
@@ -239,7 +246,7 @@ func TestPrepareAssetsWeb(t *testing.T) {
 		t.Fatalf("prepareAssets returned error: %v", err)
 	}
 
-	expectedCalls := []recordedCall{{script: "cmd/spx/install.sh", args: []string{"--web"}}}
+	expectedCalls := []recordedCall{{script: "cmd/spx/install.sh", args: []string{"--web", "--no-embed-runtime"}}}
 	if !reflect.DeepEqual(runner.calls, expectedCalls) {
 		t.Fatalf("unexpected calls: %#v", runner.calls)
 	}
@@ -275,6 +282,7 @@ func TestPrepareAssetsFull(t *testing.T) {
 	}
 
 	assertRuntimeWorkspaceCommands(t, runner.commands, runner.repoRoot, []recordedCommand{
+		{name: "spx", args: []string{"export"}},
 		{name: "spx", args: []string{"exporttemplateweb"}},
 	})
 }
