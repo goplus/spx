@@ -1,1 +1,2 @@
 *.ttf
+!template/project/engine/fonts/scratch/*.ttf

@@ -28,6 +28,18 @@ import (
 	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
+const defaultEngineFontPath = "res://engine/fonts/CnFont.ttf"
+
+var scratchSVGFontRegistrations = []string{
+	"res://engine/fonts/scratch/NotoSans-Medium.ttf#spx-family=Sans Serif&spx-register-only=1",
+	"res://engine/fonts/scratch/SourceSerifPro-Regular.otf#spx-family=Serif&spx-register-only=1",
+	"res://engine/fonts/scratch/handlee-regular.ttf#spx-family=Handwriting&spx-register-only=1",
+	"res://engine/fonts/scratch/Knewave.ttf#spx-family=Marker&spx-register-only=1",
+	"res://engine/fonts/scratch/Griffy-Regular.ttf#spx-family=Curly&spx-register-only=1",
+	"res://engine/fonts/scratch/Grand9K-Pixel.ttf#spx-family=Pixel&spx-register-only=1",
+	"res://engine/fonts/scratch/Scratch.ttf#spx-family=Scratch&spx-register-only=1",
+}
+
 type gameBuilder struct {
 	gamer    Gamer
 	resource any
@@ -76,7 +88,11 @@ func (b *gameBuilder) loadResources() *gameBuilder {
 	b.conf = opened.Config
 	b.proj = opened.Project
 
-	b.game.engine().ResMgr.SetDefaultFont("res://engine/fonts/CnFont.ttf")
+	resMgr := b.game.engine().ResMgr
+	resMgr.SetDefaultFont(defaultEngineFontPath)
+	for _, fontPath := range scratchSVGFontRegistrations {
+		resMgr.SetDefaultFont(fontPath)
+	}
 	return b
 }
 
