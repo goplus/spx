@@ -21,6 +21,7 @@ type SpriteRuntimeState struct {
 	Cloned              bool
 	IsDying             bool
 	IsDirty             bool
+	IsAwakened          bool
 	HasOnCloned         bool
 	HasOnTouchStart     bool
 	HasOnTouching       bool

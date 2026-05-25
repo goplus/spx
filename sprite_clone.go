@@ -76,19 +76,17 @@ func cloneSprite(out reflect.Value, outPtr Sprite, in reflect.Value, v coreproje
 
 	if v != nil {
 		applySpriteProps(dest, v)
+		dest.initRuntimeProxy()
 	} else {
-		dest.onAwake(func() {
-			dest.awake()
-		})
+		dest.initRuntimeProxy()
+		dest.awake()
 		runMain(outPtr.Main)
 	}
-	dest.resetRuntimeProxy(true)
 	return dest
 }
 
 func dispatchCloneLifecycle(dest *SpriteImpl, data any, isAsync bool) {
 	dispatch := func() {
-		dest.doWhenAwake(dest)
 		if dest.spriteState.HasOnCloned {
 			dest.doWhenCloned(dest, data)
 		}

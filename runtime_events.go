@@ -287,7 +287,6 @@ func (p *Game) handleEvent(ev event) {
 		// Note: key-up callbacks are not part of the current event sink API.
 		p.scriptEvents.doWhenKeyPressed(e.Key)
 	case *eventStart:
-		p.scriptEvents.doWhenAwake(nil)
 		p.scriptEvents.doWhenStart()
 		p.lifecycleState.StartDispatched.Store(true)
 	case *eventTimer:
