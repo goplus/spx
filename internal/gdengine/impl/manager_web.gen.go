@@ -696,6 +696,11 @@ func (pself *resMgr) SetDefaultFont(font_path string) {
 	arg0 := JsFromGdString(font_path)
 	API.SpxResSetDefaultFont.Invoke(arg0)
 }
+func (pself *resMgr) RegisterSvgFontFace(font_path string, family string) {
+	arg0 := JsFromGdString(font_path)
+	arg1 := JsFromGdString(family)
+	API.SpxResRegisterSvgFontFace.Invoke(arg0, arg1)
+}
 func (pself *sceneMgr) ChangeSceneToFile(path string) {
 	arg0 := JsFromGdString(path)
 	API.SpxSceneChangeSceneToFile.Invoke(arg0)

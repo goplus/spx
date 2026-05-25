@@ -170,23 +170,14 @@ func TestGetJsFuncBodyUsesInstanceScratchForMousePos(t *testing.T) {
 	require.NotContains(t, body, "GdspxFuncs._inputMousePosScratch")
 }
 
-func TestJsTemplateDeclaresScratchFontCompatibilityMap(t *testing.T) {
-	require.Contains(t, jsEngineJsFileText, `const SPX_SCRATCH_PACKAGED_FONT_DEFS = [`)
-	require.Contains(t, jsEngineJsFileText, `SPX_SCRATCH_FONT_RESOURCE_ROOT + "Knewave.ttf"`)
-	require.Contains(t, jsEngineJsFileText, `SPX_SCRATCH_FONT_RESOURCE_ROOT + "Scratch.ttf"`)
-	require.Contains(t, jsEngineJsFileText, `const SPX_SCRATCH_CJK_FONT_STACKS = [`)
-}
-
-func TestJsTemplatePreloadsScratchSvgFontFaces(t *testing.T) {
-	require.Contains(t, jsEngineJsFileText, "function spxEnsureScratchFontFacesRegistered(runtimeModule, registerFontFace)")
-	require.Contains(t, jsEngineJsFileText, `registerOnly: true,`)
-	require.Contains(t, jsEngineJsFileText, `spx-family=`)
-}
-
-func TestJsTemplateUsesPackagedDefaultFontForScratchCjkAliases(t *testing.T) {
-	require.Contains(t, jsEngineJsFileText, "var _fontRequest = spxResolveFontRequest(font_path);")
-	require.Contains(t, jsEngineJsFileText, `_registerAlias(_cjkDef.label, SPX_DEFAULT_FONT_RESOURCE_PATH, "");`)
-	require.Contains(t, jsEngineJsFileText, `_registerAlias(_cjkDef.stack, SPX_DEFAULT_FONT_RESOURCE_PATH, "");`)
+func TestJsTemplateDoesNotCarryScratchFontAliasCompat(t *testing.T) {
+	require.NotContains(t, jsEngineJsFileText, "SPX_SCRATCH_PACKAGED_FONT_DEFS")
+	require.NotContains(t, jsEngineJsFileText, "SPX_SCRATCH_CJK_FONT_STACKS")
+	require.NotContains(t, jsEngineJsFileText, "spxResolveFontRequest")
+	require.NotContains(t, jsEngineJsFileText, "_invokeResRegisterSvgFontFace")
+	require.NotContains(t, jsEngineJsFileText, "_invokeResSetDefaultFont")
+	require.NotContains(t, jsEngineJsFileText, "spx-register-only=1")
+	require.NotContains(t, jsEngineJsFileText, `spx-family=`)
 	require.NotContains(t, jsEngineJsFileText, "queryLocalFonts")
 	require.NotContains(t, jsEngineJsFileText, "useLocalFontAccess")
 }

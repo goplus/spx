@@ -690,6 +690,12 @@ void cgo_callfn_GDExtensionSpxResSetDefaultFont(const GDExtensionSpxResSetDefaul
 	}
 	fn(font_path);
 }
+void cgo_callfn_GDExtensionSpxResRegisterSvgFontFace(const GDExtensionSpxResRegisterSvgFontFace fn, GdString font_path, GdString family) {
+	if (!fn) {
+		return;
+	}
+	fn(font_path, family);
+}
 void cgo_callfn_GDExtensionSpxSceneChangeSceneToFile(const GDExtensionSpxSceneChangeSceneToFile fn, GdString path) {
 	if (!fn) {
 		return;
