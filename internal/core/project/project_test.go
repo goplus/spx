@@ -266,6 +266,14 @@ func TestResolveDisplaySettings(t *testing.T) {
 	if fresh.SVGFontFaceRegistrations[0].Path == "mutated" {
 		t.Fatal("font registrations should be copied per call")
 	}
+
+	nilSettings := ResolveDisplaySettings(nil)
+	if nilSettings.WindowScale != 1 || !nilSettings.StretchMode || nilSettings.Debug {
+		t.Fatalf("unexpected nil settings defaults: %+v", nilSettings)
+	}
+	if nilSettings.DefaultFontPath != defaultDisplayFontPath {
+		t.Fatalf("nil default font path = %q", nilSettings.DefaultFontPath)
+	}
 }
 
 func TestRegisterDisplayFonts(t *testing.T) {

@@ -49,6 +49,9 @@ var scratchSVGFontRegistrations = []SVGFontFaceRegistration{
 }
 
 func ResolveDisplaySettings(proj *ProjectConfig) DisplaySettings {
+	if proj == nil {
+		proj = &ProjectConfig{}
+	}
 	windowScale := 1.0
 	if proj.WindowScale >= 0.001 {
 		windowScale = proj.WindowScale
