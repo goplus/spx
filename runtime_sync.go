@@ -23,15 +23,16 @@ import (
 	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
-func (p *SpriteImpl) initEngineObjects() {
-	p.resetRuntimeProxy(false)
+func (p *SpriteImpl) initRuntimeProxy() {
+	p.rebuildRuntimeProxy(true)
 }
 
 func (p *SpriteImpl) awake() {
 	p.animation().playDefaultAnimIfIdle()
+	p.spriteState.IsAwakened = true
 }
 
-func (p *SpriteImpl) resetRuntimeProxy(applyCostume bool) {
+func (p *SpriteImpl) rebuildRuntimeProxy(applyCostume bool) {
 	p.runtimeState.SyncSprite = nil
 	engine.WaitMainThread(func() {
 		p.ensureProxyInitialized()

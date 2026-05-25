@@ -62,7 +62,7 @@ func (p *SpriteImpl) init(
 	p.initBaseObjects(spriteCfg, g)
 	p.initBasicProperties(g, name, sprite, gamer, spriteCfg)
 	p.initComponents(spriteCfg)
-	p.initEngineObjects()
+	p.initRuntimeProxy()
 }
 
 func (p *SpriteImpl) initBaseObjects(spriteCfg *coreproject.SpriteConfig, g *Game) {
@@ -80,6 +80,7 @@ func (p *SpriteImpl) initBasicProperties(g *Game, name string, sprite Sprite, ga
 	p.g, p.name, p.sprite = g, name, sprite
 	p.runtimeState.Scale = spriteCfg.Size
 	p.spriteState.IsVisible = spriteCfg.Visible
+	p.spriteState.IsAwakened = false
 }
 
 func (p *SpriteImpl) initComponents(spriteCfg *coreproject.SpriteConfig) {
@@ -96,6 +97,7 @@ func (p *SpriteImpl) InitFrom(src *SpriteImpl) {
 	p.spriteState.IsVisible = src.spriteState.IsVisible
 	p.spriteState.Cloned = true
 	p.spriteState.IsDying = false
+	p.spriteState.IsAwakened = false
 
 	p.spriteState.HasOnCloned = false
 	p.spriteState.HasOnTouchStart = false

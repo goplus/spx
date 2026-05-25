@@ -203,7 +203,7 @@ func (p *Game) runSpriteCallbacks(inits []Sprite, proj *coreproject.ProjectConfi
 		BeforeMain: func(ini Sprite) {
 			spr := spriteOf(ini)
 			if spr != nil {
-				spr.onAwake(func() {
+				p.deferBootstrapFor(generation, func() {
 					spr.awake()
 				})
 			}
