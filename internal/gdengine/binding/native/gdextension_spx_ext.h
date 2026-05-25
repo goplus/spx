@@ -339,6 +339,7 @@ typedef void (*GDExtensionSpxResHasFile)(GdString p_path, GdBool *ret_value);
 typedef void (*GDExtensionSpxResReloadTexture)(GdString path);
 typedef void (*GDExtensionSpxResFreeStr)(GdString str);
 typedef void (*GDExtensionSpxResSetDefaultFont)(GdString font_path);
+typedef void (*GDExtensionSpxResRegisterSvgFontFace)(GdString font_path, GdString family);
 // SpxScene
 typedef void (*GDExtensionSpxSceneChangeSceneToFile)(GdString path);
 typedef void (*GDExtensionSpxSceneDestroyAllSprites)();

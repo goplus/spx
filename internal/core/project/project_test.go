@@ -243,10 +243,58 @@ func TestResolveDisplaySettings(t *testing.T) {
 	if settings.WindowScale != 2 || settings.StretchMode || !settings.Debug {
 		t.Fatalf("unexpected settings: %+v", settings)
 	}
+	if settings.DefaultFontPath != "res://engine/fonts/CnFont.ttf" {
+		t.Fatalf("default font path = %q", settings.DefaultFontPath)
+	}
+	if len(settings.SVGFontFaceRegistrations) == 0 {
+		t.Fatalf("expected scratch font registrations: %+v", settings)
+	}
+	if got := settings.SVGFontFaceRegistrations[0]; got != (SVGFontFaceRegistration{
+		Path:   "res://engine/fonts/scratch/NotoSans-Medium.ttf",
+		Family: "Sans Serif",
+	}) {
+		t.Fatalf("first font registration = %+v", got)
+	}
 
 	settings = ResolveDisplaySettings(&ProjectConfig{})
 	if settings.WindowScale != 1 || !settings.StretchMode || settings.Debug {
 		t.Fatalf("unexpected default settings: %+v", settings)
+	}
+
+	settings.SVGFontFaceRegistrations[0].Path = "mutated"
+	fresh := ResolveDisplaySettings(&ProjectConfig{})
+	if fresh.SVGFontFaceRegistrations[0].Path == "mutated" {
+		t.Fatal("font registrations should be copied per call")
+	}
+
+	nilSettings := ResolveDisplaySettings(nil)
+	if nilSettings.WindowScale != 1 || !nilSettings.StretchMode || nilSettings.Debug {
+		t.Fatalf("unexpected nil settings defaults: %+v", nilSettings)
+	}
+	if nilSettings.DefaultFontPath != defaultDisplayFontPath {
+		t.Fatalf("nil default font path = %q", nilSettings.DefaultFontPath)
+	}
+}
+
+func TestRegisterDisplayFonts(t *testing.T) {
+	settings := ResolveDisplaySettings(&ProjectConfig{})
+	var defaultFonts []string
+	var fontFaces []SVGFontFaceRegistration
+	RegisterDisplayFonts(
+		settings,
+		func(path string) {
+			defaultFonts = append(defaultFonts, path)
+		},
+		func(path, family string) {
+			fontFaces = append(fontFaces, SVGFontFaceRegistration{Path: path, Family: family})
+		},
+	)
+
+	if !reflect.DeepEqual(defaultFonts, []string{settings.DefaultFontPath}) {
+		t.Fatalf("default fonts = %#v, want %#v", defaultFonts, []string{settings.DefaultFontPath})
+	}
+	if !reflect.DeepEqual(fontFaces, settings.SVGFontFaceRegistrations) {
+		t.Fatalf("registered svg font faces = %#v, want %#v", fontFaces, settings.SVGFontFaceRegistrations)
 	}
 }
 

@@ -24,20 +24,63 @@ import (
 )
 
 type DisplaySettings struct {
-	WindowScale float64
-	StretchMode bool
-	Debug       bool
+	WindowScale              float64
+	StretchMode              bool
+	Debug                    bool
+	DefaultFontPath          string
+	SVGFontFaceRegistrations []SVGFontFaceRegistration
+}
+
+const defaultDisplayFontPath = "res://engine/fonts/CnFont.ttf"
+
+type SVGFontFaceRegistration struct {
+	Path   string
+	Family string
+}
+
+var scratchSVGFontRegistrations = []SVGFontFaceRegistration{
+	{Path: "res://engine/fonts/scratch/NotoSans-Medium.ttf", Family: "Sans Serif"},
+	{Path: "res://engine/fonts/scratch/SourceSerifPro-Regular.otf", Family: "Serif"},
+	{Path: "res://engine/fonts/scratch/handlee-regular.ttf", Family: "Handwriting"},
+	{Path: "res://engine/fonts/scratch/Knewave.ttf", Family: "Marker"},
+	{Path: "res://engine/fonts/scratch/Griffy-Regular.ttf", Family: "Curly"},
+	{Path: "res://engine/fonts/scratch/Grand9K-Pixel.ttf", Family: "Pixel"},
+	{Path: "res://engine/fonts/scratch/Scratch.ttf", Family: "Scratch"},
 }
 
 func ResolveDisplaySettings(proj *ProjectConfig) DisplaySettings {
+	if proj == nil {
+		proj = &ProjectConfig{}
+	}
 	windowScale := 1.0
 	if proj.WindowScale >= 0.001 {
 		windowScale = proj.WindowScale
 	}
 	return DisplaySettings{
-		WindowScale: windowScale,
-		StretchMode: proj.StretchMode == nil || *proj.StretchMode,
-		Debug:       proj.Debug,
+		WindowScale:              windowScale,
+		StretchMode:              proj.StretchMode == nil || *proj.StretchMode,
+		Debug:                    proj.Debug,
+		DefaultFontPath:          defaultDisplayFontPath,
+		SVGFontFaceRegistrations: append([]SVGFontFaceRegistration(nil), scratchSVGFontRegistrations...),
+	}
+}
+
+func RegisterDisplayFonts(
+	settings DisplaySettings,
+	setDefaultFont func(string),
+	registerSVGFontFace func(string, string),
+) {
+	if setDefaultFont != nil && settings.DefaultFontPath != "" {
+		setDefaultFont(settings.DefaultFontPath)
+	}
+	if registerSVGFontFace == nil {
+		return
+	}
+	for _, font := range settings.SVGFontFaceRegistrations {
+		if font.Path == "" || font.Family == "" {
+			continue
+		}
+		registerSVGFontFace(font.Path, font.Family)
 	}
 }
 

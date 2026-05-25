@@ -189,6 +189,7 @@ type IResMgr interface {
 	ReloadTexture(path string)
 	FreeStr(str string)
 	SetDefaultFont(font_path string)
+	RegisterSvgFontFace(font_path string, family string)
 }
 
 type ISceneMgr interface {

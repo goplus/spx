@@ -385,9 +385,10 @@ func (*resMgrImpl) ReadAllText(p_path string) string {
 func (*resMgrImpl) HasFile(p_path string) bool {
 	return false
 }
-func (*resMgrImpl) ReloadTexture(path string)       {}
-func (*resMgrImpl) FreeStr(str string)              {}
-func (*resMgrImpl) SetDefaultFont(font_path string) {}
+func (*resMgrImpl) ReloadTexture(path string)                           {}
+func (*resMgrImpl) FreeStr(str string)                                  {}
+func (*resMgrImpl) SetDefaultFont(font_path string)                     {}
+func (*resMgrImpl) RegisterSvgFontFace(font_path string, family string) {}
 
 // ISceneMgr
 func (*sceneMgrImpl) ChangeSceneToFile(path string) {}

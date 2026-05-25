@@ -153,6 +153,7 @@ type GDExtensionInterface struct {
 	SpxResReloadTexture                         js.Value
 	SpxResFreeStr                               js.Value
 	SpxResSetDefaultFont                        js.Value
+	SpxResRegisterSvgFontFace                   js.Value
 	SpxSceneChangeSceneToFile                   js.Value
 	SpxSceneDestroyAllSprites                   js.Value
 	SpxSceneReloadCurrentScene                  js.Value
@@ -472,6 +473,7 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxResReloadTexture = resolveJSFunc("gdspx_res_reload_texture")
 	x.SpxResFreeStr = resolveJSFunc("gdspx_res_free_str")
 	x.SpxResSetDefaultFont = resolveJSFunc("gdspx_res_set_default_font")
+	x.SpxResRegisterSvgFontFace = resolveJSFunc("gdspx_res_register_svg_font_face")
 	x.SpxSceneChangeSceneToFile = resolveJSFunc("gdspx_scene_change_scene_to_file")
 	x.SpxSceneDestroyAllSprites = resolveJSFunc("gdspx_scene_destroy_all_sprites")
 	x.SpxSceneReloadCurrentScene = resolveJSFunc("gdspx_scene_reload_current_scene")

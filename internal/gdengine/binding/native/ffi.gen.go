@@ -149,6 +149,7 @@ type GDExtensionInterface struct {
 	SpxResReloadTexture                         GDExtensionSpxResReloadTexture
 	SpxResFreeStr                               GDExtensionSpxResFreeStr
 	SpxResSetDefaultFont                        GDExtensionSpxResSetDefaultFont
+	SpxResRegisterSvgFontFace                   GDExtensionSpxResRegisterSvgFontFace
 	SpxSceneChangeSceneToFile                   GDExtensionSpxSceneChangeSceneToFile
 	SpxSceneDestroyAllSprites                   GDExtensionSpxSceneDestroyAllSprites
 	SpxSceneReloadCurrentScene                  GDExtensionSpxSceneReloadCurrentScene
@@ -468,6 +469,7 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxResReloadTexture = (GDExtensionSpxResReloadTexture)(resolveCFunc("spx_res_reload_texture"))
 	x.SpxResFreeStr = (GDExtensionSpxResFreeStr)(resolveCFunc("spx_res_free_str"))
 	x.SpxResSetDefaultFont = (GDExtensionSpxResSetDefaultFont)(resolveCFunc("spx_res_set_default_font"))
+	x.SpxResRegisterSvgFontFace = (GDExtensionSpxResRegisterSvgFontFace)(resolveCFunc("spx_res_register_svg_font_face"))
 	x.SpxSceneChangeSceneToFile = (GDExtensionSpxSceneChangeSceneToFile)(resolveCFunc("spx_scene_change_scene_to_file"))
 	x.SpxSceneDestroyAllSprites = (GDExtensionSpxSceneDestroyAllSprites)(resolveCFunc("spx_scene_destroy_all_sprites"))
 	x.SpxSceneReloadCurrentScene = (GDExtensionSpxSceneReloadCurrentScene)(resolveCFunc("spx_scene_reload_current_scene"))

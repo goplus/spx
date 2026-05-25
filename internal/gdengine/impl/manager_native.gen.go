@@ -752,6 +752,15 @@ func (pself *resMgr) SetDefaultFont(font_path string) {
 	defer C.free(unsafe.Pointer(arg0Str))
 	CallResSetDefaultFont(arg0)
 }
+func (pself *resMgr) RegisterSvgFontFace(font_path string, family string) {
+	arg0Str := C.CString(font_path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	arg1Str := C.CString(family)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	CallResRegisterSvgFontFace(arg0, arg1)
+}
 func (pself *sceneMgr) ChangeSceneToFile(path string) {
 	arg0Str := C.CString(path)
 	arg0 := (GdString)(arg0Str)

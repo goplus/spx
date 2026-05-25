@@ -838,6 +838,11 @@ func (*resMgrImpl) SetDefaultFont(font_path string) {
 		gdx.ResMgr.SetDefaultFont(font_path)
 	})
 }
+func (*resMgrImpl) RegisterSvgFontFace(font_path string, family string) {
+	callInMainThread(func() {
+		gdx.ResMgr.RegisterSvgFontFace(font_path, family)
+	})
+}
 
 // ISceneMgr
 func (*sceneMgrImpl) ChangeSceneToFile(path string) {
