@@ -76,9 +76,9 @@ func cloneSprite(out reflect.Value, outPtr Sprite, in reflect.Value, v coreproje
 
 	if v != nil {
 		applySpriteProps(dest, v)
-		dest.initRuntimeProxy()
-	} else {
-		dest.initRuntimeProxy()
+	}
+	dest.initRuntimeProxy()
+	if v == nil {
 		dest.awake()
 		runMain(outPtr.Main)
 	}
