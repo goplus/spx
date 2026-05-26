@@ -96,6 +96,12 @@ void cgo_callfn_GDExtensionSpxAudioStop(const GDExtensionSpxAudioStop fn, GdInt 
 	}
 	fn(aid);
 }
+void cgo_callfn_GDExtensionSpxAudioRestart(const GDExtensionSpxAudioRestart fn, GdInt aid, GdBool* ret_val) {
+	if (!fn) {
+		return;
+	}
+	fn(aid, ret_val);
+}
 void cgo_callfn_GDExtensionSpxAudioSetLoop(const GDExtensionSpxAudioSetLoop fn, GdInt aid, GdBool loop) {
 	if (!fn) {
 		return;

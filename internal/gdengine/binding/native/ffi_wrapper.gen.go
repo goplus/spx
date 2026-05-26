@@ -115,6 +115,7 @@ type GDExtensionSpxAudioPlay C.GDExtensionSpxAudioPlay
 type GDExtensionSpxAudioPause C.GDExtensionSpxAudioPause
 type GDExtensionSpxAudioResume C.GDExtensionSpxAudioResume
 type GDExtensionSpxAudioStop C.GDExtensionSpxAudioStop
+type GDExtensionSpxAudioRestart C.GDExtensionSpxAudioRestart
 type GDExtensionSpxAudioSetLoop C.GDExtensionSpxAudioSetLoop
 type GDExtensionSpxAudioGetLoop C.GDExtensionSpxAudioGetLoop
 type GDExtensionSpxAudioGetTimer C.GDExtensionSpxAudioGetTimer
@@ -559,6 +560,16 @@ func CallAudioStop(
 
 	C.cgo_callfn_GDExtensionSpxAudioStop(arg0, arg1)
 
+}
+func CallAudioRestart(
+	aid GdInt,
+) GdBool {
+	arg0 := (C.GDExtensionSpxAudioRestart)(api.SpxAudioRestart)
+	arg1 := (C.GdInt)(aid)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxAudioRestart(arg0, arg1, &ret_val)
+
+	return (GdBool)(ret_val)
 }
 func CallAudioSetLoop(
 	aid GdInt,

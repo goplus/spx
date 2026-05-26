@@ -18,7 +18,6 @@ package project
 
 import (
 	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v2/internal/base/defaults"
 )
 
 type Config struct {
@@ -177,15 +176,7 @@ type CostumesConfig struct {
 
 type ActionConfig struct {
 	Play     string          `json:"play"`
-	Loop     *bool           `json:"loop"`
 	Costumes *CostumesConfig `json:"costumes"`
-}
-
-func (p *ActionConfig) GetLoop(defaultLoop bool) bool {
-	if p == nil {
-		return defaultLoop
-	}
-	return defaults.OrDefault(p.Loop, defaultLoop)
 }
 
 type AniConfig struct {

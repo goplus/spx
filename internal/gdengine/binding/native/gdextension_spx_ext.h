@@ -231,6 +231,7 @@ typedef void (*GDExtensionSpxAudioPlay)(GdObj obj, GdString path, GdInt *ret_val
 typedef void (*GDExtensionSpxAudioPause)(GdInt aid);
 typedef void (*GDExtensionSpxAudioResume)(GdInt aid);
 typedef void (*GDExtensionSpxAudioStop)(GdInt aid);
+typedef void (*GDExtensionSpxAudioRestart)(GdInt aid, GdBool *ret_value);
 typedef void (*GDExtensionSpxAudioSetLoop)(GdInt aid, GdBool loop);
 typedef void (*GDExtensionSpxAudioGetLoop)(GdInt aid, GdBool *ret_value);
 typedef void (*GDExtensionSpxAudioGetTimer)(GdInt aid, GdFloat *ret_value);

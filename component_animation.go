@@ -50,14 +50,6 @@ type animationComponent struct {
 
 	// Animation tracking (per-instance)
 	donedAnimations []string
-
-	pendingBoundAudioReplays []boundAudioReplay
-	drainedBoundAudioReplays []boundAudioReplay
-}
-
-type boundAudioReplay struct {
-	state *animState
-	name  SoundName
 }
 
 // initialize initializes the animation component from configuration.
@@ -65,8 +57,6 @@ func (a *animationComponent) initialize(sprite *SpriteImpl, spriteCfg *coreproje
 	a.componentBase.initialize(sprite, spriteCfg)
 	a.initFromConfig(spriteCfg)
 	a.donedAnimations = make([]string, 0)
-	a.pendingBoundAudioReplays = make([]boundAudioReplay, 0)
-	a.drainedBoundAudioReplays = make([]boundAudioReplay, 0)
 }
 
 // initFromConfig initializes animations from sprite configuration.
@@ -113,11 +103,9 @@ func (a *animationComponent) initFromConfig(spriteCfg *coreproject.SpriteConfig)
 func (a *animationComponent) cloneFrom(src component, newSprite *SpriteImpl) component {
 	srcAnim := src.(*animationComponent)
 	newAnim := &animationComponent{
-		componentBase:            componentBase{sprite: newSprite},
-		shared:                   srcAnim.shared,
-		donedAnimations:          make([]string, 0),
-		pendingBoundAudioReplays: make([]boundAudioReplay, 0),
-		drainedBoundAudioReplays: make([]boundAudioReplay, 0),
+		componentBase:   componentBase{sprite: newSprite},
+		shared:          srcAnim.shared,
+		donedAnimations: make([]string, 0),
 	}
 	return newAnim
 }
@@ -226,7 +214,7 @@ func (a *animationComponent) doAnimation(animName SpriteAnimationName, ani *core
 
 	info := a.curAnimState
 	if playAudio {
-		a.playAnimAudio(ani, info)
+		a.playAnimationAudio(ani, info)
 	}
 
 	a.sprite.baseObj.applyCostumeUpdate()
@@ -300,65 +288,6 @@ func (a *animationComponent) hasActiveAnimationPlayback() bool {
 	return a.curAnimState != nil && !a.curAnimState.IsCanceled
 }
 
-func (a *animationComponent) playAnimAudio(ani *coreproject.AniConfig, info *animState) {
-	if ani.OnStart != nil && ani.OnStart.Play != "" {
-		loop := ani.OnStart.GetLoop(false)
-		if !loop {
-			info.LoopReplayAudioName = ani.OnStart.Play
-		}
-		a.sprite.playAudio(ani.OnStart.Play, loop)
-	}
-	if ani.OnPlay != nil && ani.OnPlay.Play != "" {
-		loop := ani.OnPlay.GetLoop(true)
-		if !loop {
-			info.BoundLoopReplayAudio = ani.OnPlay.Play
-		}
-		a.trackBoundAudioPlayback(info, a.sprite.playAudio(ani.OnPlay.Play, loop))
-	}
-}
-
-func (a *animationComponent) stopAnimPlaybackAudio(state *animState) {
-	if state == nil {
-		return
-	}
-	for _, id := range state.BoundAudioPlaybackIDs {
-		a.sprite.stopAudioPlayback(id)
-	}
-	state.BoundAudioPlaybackIDs = state.BoundAudioPlaybackIDs[:0]
-}
-
-func (a *animationComponent) trackBoundAudioPlayback(state *animState, id int64) {
-	if state == nil || id == 0 {
-		return
-	}
-	state.BoundAudioPlaybackIDs = a.pruneActiveBoundAudioPlaybackIDs(state.BoundAudioPlaybackIDs)
-	state.BoundAudioPlaybackIDs = append(state.BoundAudioPlaybackIDs, id)
-}
-
-func (a *animationComponent) pruneActiveBoundAudioPlaybackIDs(ids []int64) []int64 {
-	if len(ids) == 0 || a.sprite == nil || a.sprite.g == nil {
-		return ids
-	}
-	return a.sprite.g.soundMgr.PruneStoppedIDs(ids)
-}
-
-func (a *animationComponent) addPendingBoundAudioReplay(state *animState, name SoundName) {
-	if state == nil || name == "" {
-		return
-	}
-	a.pendingBoundAudioReplays = append(a.pendingBoundAudioReplays, boundAudioReplay{
-		state: state,
-		name:  name,
-	})
-}
-
-func (a *animationComponent) takePendingBoundAudioReplays() []boundAudioReplay {
-	pending := a.pendingBoundAudioReplays
-	a.pendingBoundAudioReplays = a.drainedBoundAudioReplays[:0]
-	a.drainedBoundAudioReplays = pending
-	return pending
-}
-
 func (a *animationComponent) adaptAnimBitmapResolution(ani *coreproject.AniConfig) {
 	syncSprite := a.syncSprite()
 	if syncSprite == nil {
@@ -398,8 +327,10 @@ func (a *animationComponent) stopAnimState(state *animState) {
 	if state == nil {
 		return
 	}
-	a.stopAnimPlaybackAudio(state)
+	engine.Lock()
 	state.IsCanceled = true
+	engine.Unlock()
+	a.stopAnimationAudio(state)
 }
 
 func (a *animationComponent) costumeIndex(nameOrIndex any) int {
@@ -495,7 +426,7 @@ func (a *animationComponent) initTweenState(name SpriteAnimationName, ani *corep
 	var ownedPlayback *animState
 	if a.hasAnim(name) {
 		ownedPlayback = a.doAnimation(name, ani, ani.IsLoop, ani.Speed, false, false)
-		a.playAnimAudio(ani, info)
+		a.playAnimationAudio(ani, info)
 	}
 
 	return info, ownedPlayback

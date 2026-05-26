@@ -193,6 +193,10 @@ func (p *Game) stopSoundPlayback(id int64) {
 	p.soundMgr.StopID(id)
 }
 
+func (p *Game) restartSoundPlayback(id int64) bool {
+	return p.soundMgr.RestartID(id)
+}
+
 func (p *Game) checkSoundObj() {
 	if p.audioState.SoundObj == 0 {
 		p.audioState.SoundObj = p.soundMgr.AllocSound()

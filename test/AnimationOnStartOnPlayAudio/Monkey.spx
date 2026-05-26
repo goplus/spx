@@ -1,0 +1,51 @@
+func stopDemoAnimations() {
+	stopAnimation "clapTruncate"
+	stopAnimation "clapComplete"
+	stopAnimation "longWalkTruncate"
+	stopAnimation "longWalkComplete"
+}
+
+onStart => {
+	println "AnimationOnStartOnPlayAudio demo"
+	println "onStart is one-shot only; onPlay is bound to animation cycles"
+	println "Each animation cycle start should play one chomp onStart, then loop clap onPlay"
+	println "Short cycle should cut off clap and restart it every loop"
+	println "Long cycle should keep clap looping until the animation loop ends"
+	println "H: long-walk short-cycle boundary demo"
+	println "J: long-walk long-cycle boundary demo"
+	println "F: short-cycle truncation demo with repeating onStart"
+	println "G: long-cycle continuous-loop demo with repeating onStart"
+	println "S: stop animation"
+
+	animate "clapTruncate", true
+	say "onStart plays once per cycle; onPlay truncates each loop"
+}
+
+onKey KeyF, => {
+	stopDemoAnimations()
+	animate "clapTruncate", true
+	say "onStart plays once per cycle; onPlay truncates each loop"
+}
+
+onKey KeyG, => {
+	stopDemoAnimations()
+	animate "clapComplete", true
+	say "onStart plays once per cycle; onPlay loops until the animation loop ends"
+}
+
+onKey KeyH, => {
+	stopDemoAnimations()
+	animate "longWalkTruncate", true
+	say "longWalk is much longer than the cycle and gets cut every loop"
+}
+
+onKey KeyJ, => {
+	stopDemoAnimations()
+	animate "longWalkComplete", true
+	say "longWalk runs within a long cycle, then gets cut at the next loop"
+}
+
+onKey KeyS, => {
+	stopDemoAnimations()
+	say "stopped"
+}

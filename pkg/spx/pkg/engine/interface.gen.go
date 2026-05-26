@@ -63,6 +63,7 @@ type IAudioMgr interface {
 	Pause(aid int64)
 	Resume(aid int64)
 	Stop(aid int64)
+	Restart(aid int64) bool
 	SetLoop(aid int64, loop bool)
 	GetLoop(aid int64) bool
 	GetTimer(aid int64) float64

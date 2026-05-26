@@ -1,0 +1,61 @@
+{
+  "costumeSet": {
+    "faceRight": 180,
+    "path": "../../../../shared-assets/monkey.png",
+    "nx": 96
+  },
+  "costumeIndex": 42,
+  "fAnimations": {
+    "clapTruncate": {
+      "frameFps": 20,
+      "frameFrom": 42,
+      "frameTo": 51,
+      "onStart": {
+        "play": "chomp"
+      },
+      "onPlay": {
+        "play": "clap"
+      }
+    },
+    "clapComplete": {
+      "frameFps": 20,
+      "frameFrom": 42,
+      "frameTo": 67,
+      "onStart": {
+        "play": "chomp"
+      },
+      "onPlay": {
+        "play": "clap"
+      }
+    },
+    "longWalkTruncate": {
+      "frameFps": 20,
+      "frameFrom": 42,
+      "frameTo": 51,
+      "onStart": {
+        "play": "chomp"
+      },
+      "onPlay": {
+        "play": "longWalk"
+      }
+    },
+    "longWalkComplete": {
+      "frameFps": 6,
+      "frameFrom": 42,
+      "frameTo": 67,
+      "onStart": {
+        "play": "chomp"
+      },
+      "onPlay": {
+        "play": "longWalk"
+      }
+    }
+  },
+  "heading": -60,
+  "isDraggable": false,
+  "rotationStyle": "normal",
+  "size": 1,
+  "visible": true,
+  "x": 0,
+  "y": 0
+}

@@ -139,6 +139,20 @@ func (s *soundComponent) stopAudioPlayback(id int64) {
 	s.sprite.g.stopSoundPlayback(id)
 }
 
+func (s *soundComponent) restartAudioPlayback(id int64) bool {
+	return s.sprite.g.restartSoundPlayback(id)
+}
+
+func (s *soundComponent) restartOrPlayLoopedAudio(name SoundName, id int64) int64 {
+	if name == "" {
+		return 0
+	}
+	if id != 0 && s.restartAudioPlayback(id) {
+		return id
+	}
+	return s.playAudio(name, true)
+}
+
 func (s *soundComponent) checkSoundObj() {
 	if s.soundObj == 0 {
 		s.soundObj = s.sprite.g.soundMgr.AllocSound()

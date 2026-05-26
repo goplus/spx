@@ -84,13 +84,14 @@ func buildAnimationSources(costumes []*costume) []intani.FrameSource {
 }
 
 type animState struct {
-	AniType               coreproject.AniType
-	Name                  string
-	IsCanceled            bool
-	Speed                 float64
-	LoopReplayAudioName   string
-	BoundLoopReplayAudio  string
-	BoundAudioPlaybackIDs []int64
+	AniType                   coreproject.AniType
+	Name                      string
+	IsCanceled                bool
+	Speed                     float64
+	OnStartReplayAudioName    string
+	OnPlayReplayAudioName     string
+	OnPlayAudioRestartPending bool
+	OnPlayAudioPlaybackID     int64
 }
 
 // -----------------------------------------------------------------------------

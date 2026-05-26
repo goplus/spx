@@ -50,6 +50,7 @@ type GDExtensionInterface struct {
 	SpxAudioPause                               GDExtensionSpxAudioPause
 	SpxAudioResume                              GDExtensionSpxAudioResume
 	SpxAudioStop                                GDExtensionSpxAudioStop
+	SpxAudioRestart                             GDExtensionSpxAudioRestart
 	SpxAudioSetLoop                             GDExtensionSpxAudioSetLoop
 	SpxAudioGetLoop                             GDExtensionSpxAudioGetLoop
 	SpxAudioGetTimer                            GDExtensionSpxAudioGetTimer
@@ -370,6 +371,7 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxAudioPause = (GDExtensionSpxAudioPause)(resolveCFunc("spx_audio_pause"))
 	x.SpxAudioResume = (GDExtensionSpxAudioResume)(resolveCFunc("spx_audio_resume"))
 	x.SpxAudioStop = (GDExtensionSpxAudioStop)(resolveCFunc("spx_audio_stop"))
+	x.SpxAudioRestart = (GDExtensionSpxAudioRestart)(resolveCFunc("spx_audio_restart"))
 	x.SpxAudioSetLoop = (GDExtensionSpxAudioSetLoop)(resolveCFunc("spx_audio_set_loop"))
 	x.SpxAudioGetLoop = (GDExtensionSpxAudioGetLoop)(resolveCFunc("spx_audio_get_loop"))
 	x.SpxAudioGetTimer = (GDExtensionSpxAudioGetTimer)(resolveCFunc("spx_audio_get_timer"))
