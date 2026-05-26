@@ -119,6 +119,20 @@ func TestManagerConvenienceMethods(t *testing.T) {
 	}
 }
 
+func TestHasOwner(t *testing.T) {
+	sinks := []Sink{
+		{Owner: "keep", Handler: func() {}},
+		{Owner: "click", Handler: func() {}},
+	}
+
+	if !HasOwner(sinks, "click") {
+		t.Fatal("HasOwner should find matching owner")
+	}
+	if HasOwner(sinks, "missing") {
+		t.Fatal("HasOwner should return false for missing owner")
+	}
+}
+
 func TestManagerStartLifecycle(t *testing.T) {
 	var mgr Manager
 	if !mgr.TryAddStart(Sink{Owner: "first", Handler: func() {}}) {

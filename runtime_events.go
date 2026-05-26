@@ -200,6 +200,7 @@ type clicker interface {
 }
 
 func (p *Game) findClickTarget(point mathf.Vec2) (coreruntime.ClickSelection[clicker, *SpriteImpl], bool) {
+	clickSinks := p.scriptEvents.manager.SnapshotClick()
 	return coreruntime.FindClickTarget(p.getTempShapes(), func(item Shape) (coreruntime.ClickSelection[clicker, *SpriteImpl], bool) {
 		o, ok := item.(clicker)
 		if !ok {
@@ -210,6 +211,9 @@ func (p *Game) findClickTarget(point mathf.Vec2) (coreruntime.ClickSelection[cli
 			return coreruntime.ClickSelection[clicker, *SpriteImpl]{}, false
 		}
 		if !p.engine().SpriteMgr.CheckCollisionWithPoint(syncSprite.GetId(), point, true) {
+			return coreruntime.ClickSelection[clicker, *SpriteImpl]{}, false
+		}
+		if !coreevent.HasOwner(clickSinks, o) {
 			return coreruntime.ClickSelection[clicker, *SpriteImpl]{}, false
 		}
 		if sprite, ok := o.(*SpriteImpl); ok {
