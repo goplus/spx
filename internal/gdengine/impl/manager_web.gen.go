@@ -228,6 +228,11 @@ func (pself *audioMgr) Stop(aid int64) {
 	arg0Low, arg0High := JsSplitGdInt(aid)
 	API.SpxAudioStop.Invoke(arg0Low, arg0High)
 }
+func (pself *audioMgr) Restart(aid int64) bool {
+	arg0Low, arg0High := JsSplitGdInt(aid)
+	_retValue := API.SpxAudioRestart.Invoke(arg0Low, arg0High)
+	return JsToGdBool(_retValue)
+}
 func (pself *audioMgr) SetLoop(aid int64, loop bool) {
 	arg0Low, arg0High := JsSplitGdInt(aid)
 	arg1 := JsFromGdBool(loop)

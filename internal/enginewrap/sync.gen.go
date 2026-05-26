@@ -231,6 +231,13 @@ func (*audioMgrImpl) Stop(aid int64) {
 		gdx.AudioMgr.Stop(aid)
 	})
 }
+func (*audioMgrImpl) Restart(aid int64) bool {
+	var _ret1 bool
+	callInMainThread(func() {
+		_ret1 = gdx.AudioMgr.Restart(aid)
+	})
+	return _ret1
+}
 func (*audioMgrImpl) SetLoop(aid int64, loop bool) {
 	callInMainThread(func() {
 		gdx.AudioMgr.SetLoop(aid, loop)

@@ -81,6 +81,7 @@ func (f *fakeAudioBackend) PlayWithAttenuation(obj internalengine.Object, path s
 func (f *fakeAudioBackend) Pause(aid int64)              {}
 func (f *fakeAudioBackend) Resume(aid int64)             {}
 func (f *fakeAudioBackend) Stop(aid int64)               {}
+func (f *fakeAudioBackend) Restart(aid int64) bool       { return false }
 func (f *fakeAudioBackend) SetLoop(aid int64, loop bool) {}
 func (f *fakeAudioBackend) IsPlaying(aid int64) bool     { return false }
 func (f *fakeAudioBackend) StopAll()                     {}

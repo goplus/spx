@@ -1,0 +1,35 @@
+func stopDemoAnimations() {
+	stopAnimation "clapTruncate"
+	stopAnimation "clapComplete"
+}
+
+onStart => {
+	println "AnimationOnStartOnPlayAudio demo"
+	println "onStart is one-shot only; onPlay is bound to animation cycles"
+	println "Each animate call should play one chomp onStart, then loop clap onPlay"
+	println "Short cycle should cut off clap and restart it every loop"
+	println "Long cycle should keep clap looping until the animation loop ends"
+	println "F: short-cycle truncation demo with one-shot onStart"
+	println "G: long-cycle continuous-loop demo with one-shot onStart"
+	println "S: stop animation"
+
+	animate "clapTruncate", true
+	say "onStart plays once; onPlay truncates each loop"
+}
+
+onKey KeyF, => {
+	stopDemoAnimations()
+	animate "clapTruncate", true
+	say "onStart plays once; onPlay truncates each loop"
+}
+
+onKey KeyG, => {
+	stopDemoAnimations()
+	animate "clapComplete", true
+	say "onStart plays once; onPlay loops until the animation loop ends"
+}
+
+onKey KeyS, => {
+	stopDemoAnimations()
+	say "stopped"
+}

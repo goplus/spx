@@ -28,6 +28,7 @@ type fakeBackend struct {
 	pauses      []int64
 	resumes     []int64
 	stops       []int64
+	restarts    []int64
 	loops       []loopCall
 	volumes     []float64
 	lastDestroy engine.Object
@@ -110,6 +111,14 @@ func (f *fakeBackend) Stop(aid int64) {
 		f.playing[aid] = false
 	}
 	f.stops = append(f.stops, aid)
+}
+
+func (f *fakeBackend) Restart(aid int64) bool {
+	if f.playing == nil || !f.playing[aid] {
+		return false
+	}
+	f.restarts = append(f.restarts, aid)
+	return true
 }
 
 func (f *fakeBackend) SetLoop(aid int64, loop bool) {
@@ -214,6 +223,40 @@ func TestManagerPruneStoppedIDsRemovesStalePathEntries(t *testing.T) {
 	}
 	if len(mgr.path2ids["sounds/a.wav"]) != 1 || mgr.path2ids["sounds/a.wav"][0] != second {
 		t.Fatalf("path2ids = %+v, want only second playback %d", mgr.path2ids["sounds/a.wav"], second)
+	}
+}
+
+func TestManagerRestartIDKeepsTrackedPlayback(t *testing.T) {
+	backend := &fakeBackend{}
+	var mgr Manager
+	mgr.Init(backend)
+
+	id := mgr.Play(1, "sounds/a.wav", true, false, 0, 0, 0)
+
+	if !mgr.RestartID(id) {
+		t.Fatalf("RestartID(%d) = false, want true", id)
+	}
+	if len(backend.restarts) != 1 || backend.restarts[0] != id {
+		t.Fatalf("restart calls = %+v, want [%d]", backend.restarts, id)
+	}
+	if len(mgr.path2ids["sounds/a.wav"]) != 1 || mgr.path2ids["sounds/a.wav"][0] != id {
+		t.Fatalf("path2ids = %+v, want [%d]", mgr.path2ids["sounds/a.wav"], id)
+	}
+}
+
+func TestManagerRestartIDPrunesStalePlayback(t *testing.T) {
+	backend := &fakeBackend{}
+	var mgr Manager
+	mgr.Init(backend)
+
+	id := mgr.Play(1, "sounds/a.wav", true, false, 0, 0, 0)
+	backend.playing[id] = false
+
+	if mgr.RestartID(id) {
+		t.Fatalf("RestartID(%d) = true, want false for stale playback", id)
+	}
+	if _, ok := mgr.path2ids["sounds/a.wav"]; ok {
+		t.Fatalf("path2ids still contains stale playback %d", id)
 	}
 }
 

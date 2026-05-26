@@ -54,6 +54,7 @@ type GDExtensionInterface struct {
 	SpxAudioPause                               js.Value
 	SpxAudioResume                              js.Value
 	SpxAudioStop                                js.Value
+	SpxAudioRestart                             js.Value
 	SpxAudioSetLoop                             js.Value
 	SpxAudioGetLoop                             js.Value
 	SpxAudioGetTimer                            js.Value
@@ -374,6 +375,7 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxAudioPause = resolveJSFunc("gdspx_audio_pause")
 	x.SpxAudioResume = resolveJSFunc("gdspx_audio_resume")
 	x.SpxAudioStop = resolveJSFunc("gdspx_audio_stop")
+	x.SpxAudioRestart = resolveJSFunc("gdspx_audio_restart")
 	x.SpxAudioSetLoop = resolveJSFunc("gdspx_audio_set_loop")
 	x.SpxAudioGetLoop = resolveJSFunc("gdspx_audio_get_loop")
 	x.SpxAudioGetTimer = resolveJSFunc("gdspx_audio_get_timer")

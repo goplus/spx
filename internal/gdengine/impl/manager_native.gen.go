@@ -237,6 +237,11 @@ func (pself *audioMgr) Stop(aid int64) {
 	arg0 := ToGdInt(aid)
 	CallAudioStop(arg0)
 }
+func (pself *audioMgr) Restart(aid int64) bool {
+	arg0 := ToGdInt(aid)
+	retValue := CallAudioRestart(arg0)
+	return ToBool(retValue)
+}
 func (pself *audioMgr) SetLoop(aid int64, loop bool) {
 	arg0 := ToGdInt(aid)
 	arg1 := ToGdBool(loop)

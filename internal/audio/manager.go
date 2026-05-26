@@ -31,6 +31,7 @@ type Backend interface {
 	Pause(aid int64)
 	Resume(aid int64)
 	Stop(aid int64)
+	Restart(aid int64) bool
 	SetLoop(aid int64, loop bool)
 	IsPlaying(aid int64) bool
 	StopAll()
@@ -84,6 +85,17 @@ func (m *Manager) StopID(id int64) {
 	}
 	m.backend.Stop(id)
 	m.removeID(id)
+}
+
+func (m *Manager) RestartID(id int64) bool {
+	if id == 0 || m.backend == nil {
+		return false
+	}
+	if !m.backend.Restart(id) {
+		m.removeID(id)
+		return false
+	}
+	return true
 }
 
 func (m *Manager) IsPlaying(id int64) bool {

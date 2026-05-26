@@ -100,22 +100,28 @@ func (p *SpriteImpl) stopAudioPlayback(id int64) {
 	p.sound().stopAudioPlayback(id)
 }
 
-func (p *SpriteImpl) queueLoopReplayAudio(state *animState) {
+func (p *SpriteImpl) restartOrPlayLoopedAudio(name SoundName, id int64) int64 {
+	return p.sound().restartOrPlayLoopedAudio(name, id)
+}
+
+func (p *SpriteImpl) queueAnimationLoopAudio(state *animState) {
 	if state == nil {
 		return
 	}
-	if state.LoopReplayAudioName != "" {
-		p.sound().addPendingAudio(state.LoopReplayAudioName)
+	if state.OnStartReplayAudioName != "" {
+		p.sound().addPendingAudio(state.OnStartReplayAudioName)
 	}
-	if state.BoundLoopReplayAudio != "" {
-		p.animation().addPendingBoundAudioReplay(state, state.BoundLoopReplayAudio)
+	if state.OnPlayReplayAudioName != "" {
+		p.animation().markOnPlayAudioRestartPending(state)
 	}
 }
 
 func (p *SpriteImpl) flushPendingAudios(buffer []string) []string {
+	var pendingOnPlayStates [2]*animState
+
 	engine.Lock()
 	buffer = p.sound().takePendingAudios(buffer)
-	pendingBoundReplays := p.animation().takePendingBoundAudioReplays()
+	pendingOnPlayAudioStates := p.animation().takePendingOnPlayAudioStates(pendingOnPlayStates[:0])
 	engine.Unlock()
 
 	if p.isDestroyed() || p.runtimeState.SyncSprite == nil {
@@ -125,11 +131,8 @@ func (p *SpriteImpl) flushPendingAudios(buffer []string) []string {
 	for _, audio := range buffer {
 		p.playAudio(audio, false)
 	}
-	for _, replay := range pendingBoundReplays {
-		if replay.state == nil || replay.state.IsCanceled {
-			continue
-		}
-		p.animation().trackBoundAudioPlayback(replay.state, p.playAudio(replay.name, false))
+	for _, state := range pendingOnPlayAudioStates {
+		p.animation().restartOnPlayAudio(state)
 	}
 	return buffer[:0]
 }

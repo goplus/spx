@@ -182,15 +182,15 @@ func (sprite *SpriteImpl) handleAnimationFinished() {
 	}
 }
 
-// handleAnimationLooped records looped animation audio playback requests.
+// handleAnimationLooped records audio work for animation loop boundaries.
 func (sprite *SpriteImpl) handleAnimationLooped() {
 	engine.Lock()
 	defer engine.Unlock()
 	if sprite.isDestroyed() || sprite.runtimeState.SyncSprite == nil {
 		return
 	}
-	sprite.queueLoopReplayAudio(sprite.animation().getCurAnimState())
-	sprite.queueLoopReplayAudio(sprite.animation().getCurTweenState())
+	sprite.queueAnimationLoopAudio(sprite.animation().getCurAnimState())
+	sprite.queueAnimationLoopAudio(sprite.animation().getCurTweenState())
 }
 
 func (sprite *SpriteImpl) applyPhysicsProxyConfig() {

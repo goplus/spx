@@ -172,9 +172,12 @@ func (*audioMgrImpl) PlayWithAttenuation(obj gdx.Object, path string, owner_id g
 func (*audioMgrImpl) Play(obj gdx.Object, path string) int64 {
 	return 0
 }
-func (*audioMgrImpl) Pause(aid int64)              {}
-func (*audioMgrImpl) Resume(aid int64)             {}
-func (*audioMgrImpl) Stop(aid int64)               {}
+func (*audioMgrImpl) Pause(aid int64)  {}
+func (*audioMgrImpl) Resume(aid int64) {}
+func (*audioMgrImpl) Stop(aid int64)   {}
+func (*audioMgrImpl) Restart(aid int64) bool {
+	return false
+}
 func (*audioMgrImpl) SetLoop(aid int64, loop bool) {}
 func (*audioMgrImpl) GetLoop(aid int64) bool {
 	return false
