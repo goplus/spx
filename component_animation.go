@@ -327,8 +327,10 @@ func (a *animationComponent) stopAnimState(state *animState) {
 	if state == nil {
 		return
 	}
-	a.stopAnimationAudio(state)
+	engine.Lock()
 	state.IsCanceled = true
+	engine.Unlock()
+	a.stopAnimationAudio(state)
 }
 
 func (a *animationComponent) costumeIndex(nameOrIndex any) int {

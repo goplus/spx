@@ -18,6 +18,7 @@ package spx
 
 import (
 	coreproject "github.com/goplus/spx/v2/internal/core/project"
+	"github.com/goplus/spx/v2/internal/engine"
 	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
@@ -56,19 +57,48 @@ func (a *animationComponent) stopAnimationAudio(state *animState) {
 }
 
 func (a *animationComponent) restartOnPlayAudio(state *animState) {
-	if state == nil || state.OnPlayReplayAudioName == "" {
+	if state == nil {
 		return
 	}
-	state.OnPlayAudioPlaybackID = a.sprite.restartOrPlayLoopedAudio(state.OnPlayReplayAudioName, state.OnPlayAudioPlaybackID)
+
+	engine.Lock()
+	name := state.OnPlayReplayAudioName
+	prevID := state.OnPlayAudioPlaybackID
+	canceled := state.IsCanceled
+	engine.Unlock()
+
+	if canceled || name == "" {
+		return
+	}
+
+	nextID := a.sprite.restartOrPlayLoopedAudio(name, prevID)
+	if nextID == 0 {
+		return
+	}
+
+	engine.Lock()
+	canceled = state.IsCanceled
+	if !canceled {
+		state.OnPlayAudioPlaybackID = nextID
+	}
+	engine.Unlock()
+
+	if canceled {
+		a.sprite.stopAudioPlayback(nextID)
+	}
 }
 
 func (a *animationComponent) stopOnPlayAudio(state *animState) {
 	if state == nil {
 		return
 	}
+
+	engine.Lock()
 	state.OnPlayAudioRestartPending = false
 	id := state.OnPlayAudioPlaybackID
 	state.OnPlayAudioPlaybackID = 0
+	engine.Unlock()
+
 	if id == 0 || a.sprite == nil || a.sprite.g == nil {
 		return
 	}

@@ -64,12 +64,14 @@ func newTestAnimationComponent() *animationComponent {
 }
 
 type animationAudioBackend struct {
-	nextID   int64
-	plays    []animationPlayCall
-	loops    []animationLoopCall
-	restarts []int64
-	stops    []int64
-	playing  map[int64]bool
+	nextID    int64
+	plays     []animationPlayCall
+	loops     []animationLoopCall
+	restarts  []int64
+	stops     []int64
+	playing   map[int64]bool
+	onPlay    func(id int64)
+	onRestart func(id int64)
 }
 
 type animationPlayCall struct {
@@ -120,6 +122,9 @@ func (f *animationAudioBackend) PlayWithAttenuation(obj engine.Object, path stri
 		attenation: attenuation,
 		maxDist:    maxDistance,
 	})
+	if f.onPlay != nil {
+		f.onPlay(f.nextID)
+	}
 	return f.nextID
 }
 
@@ -139,6 +144,9 @@ func (f *animationAudioBackend) Restart(aid int64) bool {
 		return false
 	}
 	f.restarts = append(f.restarts, aid)
+	if f.onRestart != nil {
+		f.onRestart(aid)
+	}
 	return true
 }
 
@@ -321,7 +329,7 @@ func TestPlayAnimAudioTreatsOnPlayLoopFalseAsAnimationBoundReplay(t *testing.T) 
 	}
 }
 
-func TestHandleAnimationLoopedReplaysOnStartSoundForCurrentAnimation(t *testing.T) {
+func TestHandleAnimationLoopedReplaysOnStartSound(t *testing.T) {
 	anim := newTestAnimationComponent()
 	backend := &animationAudioBackend{}
 	initTestAnimationAudio(anim, backend)
@@ -478,6 +486,46 @@ func TestHandleAnimationLoopedSkipsStopForFinishedOnPlaySound(t *testing.T) {
 	}
 	if len(backend.stops) != 0 {
 		t.Fatalf("stops = %+v, want none before animation ends when prior playback already finished", backend.stops)
+	}
+}
+
+func TestRestartOnPlayAudioStopsReplacementWhenStateIsCanceledDuringReplay(t *testing.T) {
+	anim := newTestAnimationComponent()
+	backend := &animationAudioBackend{}
+	initTestAnimationAudio(anim, backend)
+
+	state := &animState{Name: "walk"}
+	anim.curAnimState = state
+	anim.playAnimationAudio(&coreproject.AniConfig{
+		OnPlay: &coreproject.ActionConfig{Play: "walk"},
+	}, state)
+
+	firstID := lastOnPlayPlaybackID(state)
+	backend.playing[firstID] = false
+	backend.onPlay = func(id int64) {
+		if id == firstID {
+			return
+		}
+		anim.stopAnimState(state)
+	}
+
+	anim.restartOnPlayAudio(state)
+
+	if state.OnPlayAudioPlaybackID != 0 {
+		t.Fatalf("OnPlayAudioPlaybackID = %d, want 0 after cancellation", state.OnPlayAudioPlaybackID)
+	}
+	if !state.IsCanceled {
+		t.Fatal("state.IsCanceled = false, want true")
+	}
+	if len(backend.plays) != 2 {
+		t.Fatalf("plays = %d, want 2", len(backend.plays))
+	}
+	replacementID := backend.nextID
+	if len(backend.stops) != 1 || backend.stops[0] != replacementID {
+		t.Fatalf("stops = %+v, want [%d]", backend.stops, replacementID)
+	}
+	if backend.playing[replacementID] {
+		t.Fatalf("replacement playback %d is still marked playing", replacementID)
 	}
 }
 
