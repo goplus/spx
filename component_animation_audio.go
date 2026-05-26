@@ -19,7 +19,6 @@ package spx
 import (
 	coreproject "github.com/goplus/spx/v2/internal/core/project"
 	"github.com/goplus/spx/v2/internal/engine"
-	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
 func (a *animationComponent) playAnimationAudio(ani *coreproject.AniConfig, state *animState) {
@@ -31,9 +30,6 @@ func (a *animationComponent) playOnStartAudio(action *coreproject.ActionConfig, 
 	if action == nil || action.Play == "" || state == nil {
 		return
 	}
-	if action.Loop != nil && *action.Loop {
-		spxlog.Warn("Animation onStart only supports loop=false, ignoring loop=true for %s", action.Play)
-	}
 	state.OnStartReplayAudioName = action.Play
 	a.sprite.playAudio(action.Play, false)
 }
@@ -41,9 +37,6 @@ func (a *animationComponent) playOnStartAudio(action *coreproject.ActionConfig, 
 func (a *animationComponent) playOnPlayAudio(action *coreproject.ActionConfig, state *animState) {
 	if action == nil || action.Play == "" || state == nil {
 		return
-	}
-	if action.Loop != nil && !*action.Loop {
-		spxlog.Warn("Animation onPlay only supports loop=true, forcing looped playback for %s within animation cycles", action.Play)
 	}
 	state.OnPlayReplayAudioName = action.Play
 	a.restartOnPlayAudio(state)

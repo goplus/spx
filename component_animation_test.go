@@ -24,10 +24,6 @@ import (
 	"github.com/goplus/spx/v2/internal/engine"
 )
 
-func boolPtr(v bool) *bool {
-	return &v
-}
-
 func lastOnPlayPlaybackID(state *animState) int64 {
 	if state == nil {
 		return 0
@@ -302,17 +298,14 @@ func TestPlayAnimAudioStartsAndStopsOnPlaySound(t *testing.T) {
 	}
 }
 
-func TestPlayAnimAudioTreatsOnPlayLoopFalseAsAnimationBoundReplay(t *testing.T) {
+func TestPlayAnimAudioStartsAnimationBoundOnPlayReplay(t *testing.T) {
 	anim := newTestAnimationComponent()
 	backend := &animationAudioBackend{}
 	initTestAnimationAudio(anim, backend)
 
 	state := &animState{Name: "walk"}
 	anim.playAnimationAudio(&coreproject.AniConfig{
-		OnPlay: &coreproject.ActionConfig{
-			Play: "walk",
-			Loop: boolPtr(false),
-		},
+		OnPlay: &coreproject.ActionConfig{Play: "walk"},
 	}, state)
 
 	if lastOnPlayPlaybackID(state) == 0 {
@@ -337,10 +330,7 @@ func TestHandleAnimationLoopedReplaysOnStartSound(t *testing.T) {
 	state := &animState{Name: "walk"}
 	anim.curAnimState = state
 	anim.playAnimationAudio(&coreproject.AniConfig{
-		OnStart: &coreproject.ActionConfig{
-			Play: "step",
-			Loop: boolPtr(false),
-		},
+		OnStart: &coreproject.ActionConfig{Play: "step"},
 	}, state)
 
 	anim.sprite.handleAnimationLooped()
@@ -359,10 +349,7 @@ func TestHandleAnimationLoopedRestartsOnPlaySound(t *testing.T) {
 	state := &animState{Name: "walk"}
 	anim.curAnimState = state
 	anim.playAnimationAudio(&coreproject.AniConfig{
-		OnPlay: &coreproject.ActionConfig{
-			Play: "walk",
-			Loop: boolPtr(true),
-		},
+		OnPlay: &coreproject.ActionConfig{Play: "walk"},
 	}, state)
 
 	firstID := lastOnPlayPlaybackID(state)
@@ -399,10 +386,7 @@ func TestHandleAnimationLoopedCoalescesOnPlayRestartBeforeFlush(t *testing.T) {
 	state := &animState{Name: "walk"}
 	anim.curAnimState = state
 	anim.playAnimationAudio(&coreproject.AniConfig{
-		OnPlay: &coreproject.ActionConfig{
-			Play: "walk",
-			Loop: boolPtr(true),
-		},
+		OnPlay: &coreproject.ActionConfig{Play: "walk"},
 	}, state)
 
 	firstID := lastOnPlayPlaybackID(state)
@@ -459,10 +443,7 @@ func TestHandleAnimationLoopedSkipsStopForFinishedOnPlaySound(t *testing.T) {
 	state := &animState{Name: "walk"}
 	anim.curAnimState = state
 	anim.playAnimationAudio(&coreproject.AniConfig{
-		OnPlay: &coreproject.ActionConfig{
-			Play: "walk",
-			Loop: boolPtr(false),
-		},
+		OnPlay: &coreproject.ActionConfig{Play: "walk"},
 	}, state)
 
 	firstID := lastOnPlayPlaybackID(state)
@@ -529,17 +510,14 @@ func TestRestartOnPlayAudioStopsReplacementWhenStateIsCanceledDuringReplay(t *te
 	}
 }
 
-func TestPlayAnimAudioIgnoresOnStartLoopTrue(t *testing.T) {
+func TestPlayAnimAudioTracksOnStartReplayName(t *testing.T) {
 	anim := newTestAnimationComponent()
 	backend := &animationAudioBackend{}
 	initTestAnimationAudio(anim, backend)
 
 	state := &animState{Name: "walk"}
 	anim.playAnimationAudio(&coreproject.AniConfig{
-		OnStart: &coreproject.ActionConfig{
-			Play: "step",
-			Loop: boolPtr(true),
-		},
+		OnStart: &coreproject.ActionConfig{Play: "step"},
 	}, state)
 
 	if len(backend.plays) != 1 {

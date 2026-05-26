@@ -11,12 +11,10 @@
       "frameFrom": 42,
       "frameTo": 51,
       "onStart": {
-        "play": "chomp",
-        "loop": false
+        "play": "chomp"
       },
       "onPlay": {
-        "play": "clap",
-        "loop": true
+        "play": "clap"
       }
     },
     "clapComplete": {
@@ -24,12 +22,10 @@
       "frameFrom": 42,
       "frameTo": 67,
       "onStart": {
-        "play": "chomp",
-        "loop": false
+        "play": "chomp"
       },
       "onPlay": {
-        "play": "clap",
-        "loop": true
+        "play": "clap"
       }
     },
     "longWalkTruncate": {
@@ -37,12 +33,10 @@
       "frameFrom": 42,
       "frameTo": 51,
       "onStart": {
-        "play": "chomp",
-        "loop": false
+        "play": "chomp"
       },
       "onPlay": {
-        "play": "longWalk",
-        "loop": true
+        "play": "longWalk"
       }
     },
     "longWalkComplete": {
@@ -50,12 +44,10 @@
       "frameFrom": 42,
       "frameTo": 67,
       "onStart": {
-        "play": "chomp",
-        "loop": false
+        "play": "chomp"
       },
       "onPlay": {
-        "play": "longWalk",
-        "loop": true
+        "play": "longWalk"
       }
     }
   },

@@ -23,22 +23,22 @@
     "frameFrom": 1,
     "frameTo": 8,
     "onStart": {
-      "play": "step",
-      "loop": false
+      "play": "step"
     },
     "onPlay": {
-      "play": "grassWalk",
-      "loop": true
+      "play": "grassWalk"
     }
   }
 }
 ```
 
+其中 `onStart` 和 `onPlay` 现在只需要配置 `play`，不再需要也不再建议配置 `loop`。
+
 ## 语义约定
 
 ### `onStart`
 
-- `onStart` 只支持 `loop=false`
+- `onStart` 固定为非循环 one-shot，不需要配置 `loop`
 - `onStart` 会在每次动画开始时触发一次 one-shot 音效
 - 如果动画本身是循环播放的，那么每次进入新一轮循环，都视为一次新的动画开始，因此会再次触发一次 `onStart`
 
@@ -53,7 +53,7 @@
 
 ### `onPlay`
 
-- `onPlay` 只支持 `loop=true`
+- `onPlay` 固定为随动画周期重启的循环音效，不需要配置 `loop`
 - `onPlay` 会在每次动画开始时启动一个循环音效
 - 当动画进入下一轮循环时，上一轮 `onPlay` 音效会在边界被截断，并从头重新开始
 - 如果单轮动画周期长于音频长度，音频会在该周期内自行循环
@@ -112,4 +112,3 @@
 - `onStart`：每次动画周期开始时触发一次非循环音效
 - `onPlay`：每次动画周期开始时启动一个循环音效，并在下一轮边界截断重来
 - 动画停止后，`onPlay` 音效应立即停止
-
