@@ -104,6 +104,14 @@ func (p *SpriteImpl) ClearGraphicEffects() {
 	p.clearGraphicEffects()
 }
 
+func (p *SpriteImpl) isFullyGhosted() bool {
+	if p.greffUniforms == nil {
+		return false
+	}
+	val, ok := p.greffUniforms[GhostEffect]
+	return ok && normalizeEffectValue(GhostEffect, val) >= 1
+}
+
 // -----------------------------------------------------------------------------
 // Layer
 // -----------------------------------------------------------------------------

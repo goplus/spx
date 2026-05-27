@@ -83,7 +83,7 @@ func newClickTestSprite(g *Game, name string, id pkgengine.Object, registerClick
 	return sprite
 }
 
-func TestFindClickTargetSkipsCoveredSpriteWithoutClickHandler(t *testing.T) {
+func TestFindClickTargetKeepsTopmostSpriteWithoutClickHandler(t *testing.T) {
 	setupClickThroughSpriteMgr(t, map[pkgengine.Object]bool{
 		1: true,
 		2: true,
@@ -101,11 +101,11 @@ func TestFindClickTargetSkipsCoveredSpriteWithoutClickHandler(t *testing.T) {
 	if !ok {
 		t.Fatal("expected click target")
 	}
-	if selection.Target != bottom {
-		t.Fatalf("target = %p, want bottom %p", selection.Target, bottom)
+	if selection.Target != top {
+		t.Fatalf("target = %p, want top %p", selection.Target, top)
 	}
-	if selection.SwipeTarget != bottom {
-		t.Fatalf("swipe target = %p, want bottom %p", selection.SwipeTarget, bottom)
+	if selection.SwipeTarget != top {
+		t.Fatalf("swipe target = %p, want top %p", selection.SwipeTarget, top)
 	}
 }
 
@@ -132,5 +132,32 @@ func TestFindClickTargetKeepsTopmostClickableSprite(t *testing.T) {
 	}
 	if selection.SwipeTarget != top {
 		t.Fatalf("swipe target = %p, want top %p", selection.SwipeTarget, top)
+	}
+}
+
+func TestFindClickTargetSkipsFullyGhostedSpriteEvenWithClickHandler(t *testing.T) {
+	setupClickThroughSpriteMgr(t, map[pkgengine.Object]bool{
+		1: true,
+		2: true,
+	})
+
+	var g Game
+	g.initShapeMgr()
+
+	bottom := newClickTestSprite(&g, "bottom", 1, true)
+	top := newClickTestSprite(&g, "top", 2, true)
+	top.greffUniforms = map[EffectKind]float64{GhostEffect: 100}
+	g.addShape(bottom)
+	g.addShape(top)
+
+	selection, ok := g.findClickTarget(mathf.NewVec2(0, 0))
+	if !ok {
+		t.Fatal("expected click target")
+	}
+	if selection.Target != bottom {
+		t.Fatalf("target = %p, want bottom %p", selection.Target, bottom)
+	}
+	if selection.SwipeTarget != bottom {
+		t.Fatalf("swipe target = %p, want bottom %p", selection.SwipeTarget, bottom)
 	}
 }
