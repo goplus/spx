@@ -17,19 +17,53 @@
 package spx
 
 import (
+	"math/rand"
+
 	"github.com/goplus/spbase/mathf"
 	coreproject "github.com/goplus/spx/v2/internal/core/project"
+	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
 // -----------------------------------------------------------------------------
 // Backdrop
 // -----------------------------------------------------------------------------
 func (p *Game) setBackdrop(backdrop any, wait bool) {
-	if p.goSetCostume(backdrop) {
+	if p.goSetBackdrop(backdrop) {
 		p.setupBackdrop()
 		p.doWindowSize()
 		p.doWhenBackdropChanged(p.getCostumeName(), wait)
 	}
+}
+
+func (p *Game) goSetBackdrop(val any) bool {
+	switch v := val.(type) {
+	case int:
+		if Pos(v) == Random {
+			return p.setRandomBackdrop()
+		}
+	case float64:
+		if v == float64(Random) {
+			return p.setRandomBackdrop()
+		}
+	}
+	return p.goSetCostume(val)
+}
+
+func (p *Game) setRandomBackdrop() bool {
+	switch len(p.costumes) {
+	case 0:
+		spxlog.Error("setBackdrop: no backdrops available")
+		return false
+	case 1:
+		return true
+	}
+
+	nextIndex := rand.Intn(len(p.costumes) - 1)
+	if nextIndex >= p.costumeIndex {
+		nextIndex++
+	}
+	p.setCostumeIndex(nextIndex)
+	return true
 }
 
 func (p *Game) setupBackdrop() {
