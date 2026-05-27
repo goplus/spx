@@ -543,9 +543,9 @@ func (*penMgrImpl) SetPenStampTexture(obj gdx.Object, texture_path string) {
 		gdx.PenMgr.SetPenStampTexture(obj, texture_path)
 	})
 }
-func (*penMgrImpl) PenStampWithTransform(obj gdx.Object, position Vec2, texture_path string, rotation float64, scale Vec2) {
+func (*penMgrImpl) PenStampWithTransform(obj gdx.Object, texture_path string, position Vec2, rotation_radians float64, scale Vec2) {
 	callInMainThread(func() {
-		gdx.PenMgr.PenStampWithTransform(obj, position, texture_path, rotation, scale)
+		gdx.PenMgr.PenStampWithTransform(obj, texture_path, position, rotation_radians, scale)
 	})
 }
 

@@ -280,7 +280,7 @@ func (*penMgrImpl) SetPenTo(obj gdx.Object, property int64, value float64)     {
 func (*penMgrImpl) ChangePenSizeBy(obj gdx.Object, amount float64)             {}
 func (*penMgrImpl) SetPenSizeTo(obj gdx.Object, size float64)                  {}
 func (*penMgrImpl) SetPenStampTexture(obj gdx.Object, texture_path string)     {}
-func (*penMgrImpl) PenStampWithTransform(obj gdx.Object, position Vec2, texture_path string, rotation float64, scale Vec2) {
+func (*penMgrImpl) PenStampWithTransform(obj gdx.Object, texture_path string, position Vec2, rotation_radians float64, scale Vec2) {
 }
 
 // IPhysicsMgr

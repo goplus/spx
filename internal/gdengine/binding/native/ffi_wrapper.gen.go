@@ -1052,16 +1052,16 @@ func CallPenSetPenStampTexture(
 }
 func CallPenPenStampWithTransform(
 	obj GdObj,
-	position GdVec2,
 	texture_path GdString,
-	rotation GdFloat,
+	position GdVec2,
+	rotation_radians GdFloat,
 	scale GdVec2,
 ) {
 	arg0 := (C.GDExtensionSpxPenPenStampWithTransform)(api.SpxPenPenStampWithTransform)
 	arg1 := (C.GdObj)(obj)
-	arg2 := (C.GdVec2)(position)
-	arg3 := (C.GdString)(texture_path)
-	arg4 := (C.GdFloat)(rotation)
+	arg2 := (C.GdString)(texture_path)
+	arg3 := (C.GdVec2)(position)
+	arg4 := (C.GdFloat)(rotation_radians)
 	arg5 := (C.GdVec2)(scale)
 
 	C.cgo_callfn_GDExtensionSpxPenPenStampWithTransform(arg0, arg1, arg2, arg3, arg4, arg5)

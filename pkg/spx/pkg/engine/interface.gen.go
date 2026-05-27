@@ -133,7 +133,7 @@ type IPenMgr interface {
 	ChangePenSizeBy(obj Object, amount float64)
 	SetPenSizeTo(obj Object, size float64)
 	SetPenStampTexture(obj Object, texture_path string)
-	PenStampWithTransform(obj Object, position Vec2, texture_path string, rotation float64, scale Vec2)
+	PenStampWithTransform(obj Object, texture_path string, position Vec2, rotation_radians float64, scale Vec2)
 }
 
 type IPhysicsMgr interface {
