@@ -173,6 +173,18 @@ func (p *SpriteImpl) StepTo__b(x, y, speed float64, animation SpriteAnimationNam
 	p.transform().StepToPos(x, y, speed, animation)
 }
 
+func (p *SpriteImpl) StepTo__c(pos Pos) {
+	p.doStepTo(pos, 1, "")
+}
+
+func (p *SpriteImpl) StepTo__d(pos Pos, speed float64) {
+	p.doStepTo(pos, speed, "")
+}
+
+func (p *SpriteImpl) StepTo__e(pos Pos, speed float64, animation SpriteAnimationName) {
+	p.doStepTo(pos, speed, animation)
+}
+
 func (p *SpriteImpl) StepToTarget(target Target, __xgo_optional_opts *MotionOptions) {
 	speed, animation := motionOptions(__xgo_optional_opts)
 	p.doStepTo(target, speed, animation)

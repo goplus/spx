@@ -208,6 +208,9 @@ type Sprite interface {
 	StepTo__9(sprite SpriteName, speed Speed, animation SpriteAnimationName)
 	StepTo__a(obj specialObj, speed Speed, animation SpriteAnimationName)
 	StepTo__b(x, y, speed Speed, animation SpriteAnimationName)
+	StepTo__c(pos Pos)
+	StepTo__d(pos Pos, speed Speed)
+	StepTo__e(pos Pos, speed Speed, animation SpriteAnimationName)
 
 	StepToTarget(target Target, __xgo_optional_opts *MotionOptions)
 	StepToXYpos(x, y float64, __xgo_optional_opts *MotionOptions)
