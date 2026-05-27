@@ -117,6 +117,15 @@ func deleteOwnerCopy(sinks []Sink, owner any) []Sink {
 	return out
 }
 
+func HasOwner(sinks []Sink, owner any) bool {
+	for _, sink := range sinks {
+		if sink.Owner == owner {
+			return true
+		}
+	}
+	return false
+}
+
 func (m *Manager) Add(bucket Bucket, sink Sink) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
