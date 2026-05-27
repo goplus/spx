@@ -10,13 +10,18 @@ import (
 )
 
 type spyPenMgr struct {
-	createCalls   int
-	moveCalls     int
-	penDownCalls  int
-	penUpCalls    int
-	setColorCalls int
-	setSizeCalls  int
-	lastMove      mathf.Vec2
+	createCalls          int
+	moveCalls            int
+	penDownCalls         int
+	penUpCalls           int
+	setColorCalls        int
+	setSizeCalls         int
+	stampWithCalls       int
+	lastMove             mathf.Vec2
+	lastStampPosition    mathf.Vec2
+	lastStampTexturePath string
+	lastStampRotation    float64
+	lastStampScale       mathf.Vec2
 }
 
 type penTestSprite struct {
@@ -64,6 +69,14 @@ func (s *spyPenMgr) SetPenSizeTo(obj engine.Object, size float64) {
 }
 
 func (s *spyPenMgr) SetPenStampTexture(obj engine.Object, texturePath string) {}
+
+func (s *spyPenMgr) PenStampWithTransform(obj engine.Object, position mathf.Vec2, texturePath string, rotation float64, scale mathf.Vec2) {
+	s.stampWithCalls++
+	s.lastStampPosition = position
+	s.lastStampTexturePath = texturePath
+	s.lastStampRotation = rotation
+	s.lastStampScale = scale
+}
 
 func newPenTestSprite() *penTestSprite {
 	game := &Game{}
@@ -227,7 +240,57 @@ func TestPenComponentStampUsesRenderedPosition(t *testing.T) {
 	sprite.pen().Stamp()
 
 	want := mathf.NewVec2(87, -36)
-	if spy.lastMove != want {
-		t.Fatalf("MovePenTo position = %v, want %v", spy.lastMove, want)
+	if spy.stampWithCalls != 1 {
+		t.Fatalf("PenStampWithTransform calls = %d, want 1", spy.stampWithCalls)
+	}
+	if spy.lastStampPosition != want {
+		t.Fatalf("PenStampWithTransform position = %v, want %v", spy.lastStampPosition, want)
+	}
+}
+
+func TestPenComponentStampSyncsRenderedTransform(t *testing.T) {
+	penSpy := setupSpyPenMgr(t)
+	sprite := newPenTestSprite()
+	configurePenRenderOffsetSprite(sprite)
+	sprite.runtimeState.Scale = 2
+	sprite.transform().direction = -30
+	sprite.transform().rotationStyle = LeftRight
+
+	sprite.pen().Stamp()
+
+	if penSpy.createCalls != 1 {
+		t.Fatalf("CreatePen calls = %d, want 1", penSpy.createCalls)
+	}
+	if penSpy.stampWithCalls != 1 {
+		t.Fatalf("PenStampWithTransform calls = %d, want 1", penSpy.stampWithCalls)
+	}
+
+	wantRotation := 0.0
+	if penSpy.lastStampRotation != wantRotation {
+		t.Fatalf("PenStampWithTransform rotation = %v, want %v", penSpy.lastStampRotation, wantRotation)
+	}
+
+	wantScale := mathf.NewVec2(-2, 2)
+	if penSpy.lastStampScale != wantScale {
+		t.Fatalf("PenStampWithTransform scale = %v, want %v", penSpy.lastStampScale, wantScale)
+	}
+	wantTexturePath := sprite.getCostumeAssetPath()
+	if penSpy.lastStampTexturePath != wantTexturePath {
+		t.Fatalf("PenStampWithTransform texturePath = %q, want %q", penSpy.lastStampTexturePath, wantTexturePath)
+	}
+}
+
+func TestPenComponentStampSyncsNormalRotation(t *testing.T) {
+	penSpy := setupSpyPenMgr(t)
+	sprite := newPenTestSprite()
+	configurePenRenderOffsetSprite(sprite)
+	sprite.transform().direction = 45
+	sprite.transform().rotationStyle = Normal
+
+	sprite.pen().Stamp()
+
+	wantRotation := engine.DegToRad(-45)
+	if penSpy.lastStampRotation != wantRotation {
+		t.Fatalf("PenStampWithTransform rotation = %v, want %v", penSpy.lastStampRotation, wantRotation)
 	}
 }

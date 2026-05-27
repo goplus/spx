@@ -408,6 +408,12 @@ void cgo_callfn_GDExtensionSpxPenSetPenStampTexture(const GDExtensionSpxPenSetPe
 	}
 	fn(obj, texture_path);
 }
+void cgo_callfn_GDExtensionSpxPenPenStampWithTransform(const GDExtensionSpxPenPenStampWithTransform fn, GdObj obj, GdVec2 position, GdString texture_path, GdFloat rotation, GdVec2 scale) {
+	if (!fn) {
+		return;
+	}
+	fn(obj, position, texture_path, rotation, scale);
+}
 void cgo_callfn_GDExtensionSpxPhysicsRaycast(const GDExtensionSpxPhysicsRaycast fn, GdVec2 from, GdVec2 to, GdInt collision_mask, GdObj* ret_val) {
 	if (!fn) {
 		return;

@@ -289,6 +289,7 @@ typedef void (*GDExtensionSpxPenSetPenTo)(GdObj obj, GdInt property, GdFloat val
 typedef void (*GDExtensionSpxPenChangePenSizeBy)(GdObj obj, GdFloat amount);
 typedef void (*GDExtensionSpxPenSetPenSizeTo)(GdObj obj, GdFloat size);
 typedef void (*GDExtensionSpxPenSetPenStampTexture)(GdObj obj, GdString texture_path);
+typedef void (*GDExtensionSpxPenPenStampWithTransform)(GdObj obj, GdVec2 position, GdString texture_path, GdFloat rotation, GdVec2 scale);
 // SpxPhysics
 typedef void (*GDExtensionSpxPhysicsRaycast)(GdVec2 from, GdVec2 to, GdInt collision_mask, GdObj *ret_value);
 typedef void (*GDExtensionSpxPhysicsCheckCollision)(GdVec2 from, GdVec2 to, GdInt collision_mask, GdBool collide_with_areas, GdBool collide_with_bodies, GdBool *ret_value);

@@ -109,9 +109,14 @@ func (p *penComponent) Stamp() {
 	p.checkOrCreatePen()
 	x, y := p.sprite.getXY()
 	applyRenderOffset(p.sprite, &x, &y)
-	p.syncPenPosition(x, y)
-	p.engine().PenMgr.SetPenStampTexture(*p.penObj, p.sprite.getCostumeAssetPath())
-	p.engine().PenMgr.PenStamp(*p.penObj)
+	rotation, scale := p.getPenStampTransform()
+	p.engine().PenMgr.PenStampWithTransform(
+		*p.penObj,
+		mathf.NewVec2(x, -y),
+		p.sprite.getCostumeAssetPath(),
+		rotation,
+		scale,
+	)
 }
 
 // ============================================================================
@@ -262,6 +267,12 @@ func (p *penComponent) syncPenPosition(x, y float64) {
 		return
 	}
 	p.engine().PenMgr.MovePenTo(*p.penObj, mathf.NewVec2(x, -y))
+}
+
+func (p *penComponent) getPenStampTransform() (rotation float64, scale mathf.Vec2) {
+	rotation, scaleX, scaleY := getRenderRotationAndScale(p.sprite)
+	renderScale := p.sprite.getCostumeRenderScale()
+	return engine.DegToRad(rotation), mathf.NewVec2(scaleX*renderScale, scaleY*renderScale)
 }
 
 func (p *penComponent) applyPenColorProperty() {

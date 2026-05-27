@@ -492,6 +492,16 @@ func (pself *penMgr) SetPenStampTexture(obj Object, texture_path string) {
 	defer C.free(unsafe.Pointer(arg1Str))
 	CallPenSetPenStampTexture(arg0, arg1)
 }
+func (pself *penMgr) PenStampWithTransform(obj Object, position Vec2, texture_path string, rotation float64, scale Vec2) {
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdVec2(position)
+	arg2Str := C.CString(texture_path)
+	arg2 := (GdString)(arg2Str)
+	defer C.free(unsafe.Pointer(arg2Str))
+	arg3 := ToGdFloat(rotation)
+	arg4 := ToGdVec2(scale)
+	CallPenPenStampWithTransform(arg0, arg1, arg2, arg3, arg4)
+}
 func (pself *physicsMgr) Raycast(from Vec2, to Vec2, collision_mask int64) Object {
 	arg0 := ToGdVec2(from)
 	arg1 := ToGdVec2(to)

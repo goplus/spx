@@ -543,6 +543,11 @@ func (*penMgrImpl) SetPenStampTexture(obj gdx.Object, texture_path string) {
 		gdx.PenMgr.SetPenStampTexture(obj, texture_path)
 	})
 }
+func (*penMgrImpl) PenStampWithTransform(obj gdx.Object, position Vec2, texture_path string, rotation float64, scale Vec2) {
+	callInMainThread(func() {
+		gdx.PenMgr.PenStampWithTransform(obj, position, texture_path, rotation, scale)
+	})
+}
 
 // IPhysicsMgr
 func (*physicsMgrImpl) Raycast(from Vec2, to Vec2, collision_mask int64) gdx.Object {
