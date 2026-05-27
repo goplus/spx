@@ -167,6 +167,7 @@ type GDExtensionSpxPenSetPenTo C.GDExtensionSpxPenSetPenTo
 type GDExtensionSpxPenChangePenSizeBy C.GDExtensionSpxPenChangePenSizeBy
 type GDExtensionSpxPenSetPenSizeTo C.GDExtensionSpxPenSetPenSizeTo
 type GDExtensionSpxPenSetPenStampTexture C.GDExtensionSpxPenSetPenStampTexture
+type GDExtensionSpxPenPenStampWithTransform C.GDExtensionSpxPenPenStampWithTransform
 type GDExtensionSpxPhysicsRaycast C.GDExtensionSpxPhysicsRaycast
 type GDExtensionSpxPhysicsCheckCollision C.GDExtensionSpxPhysicsCheckCollision
 type GDExtensionSpxPhysicsCheckTouchedCameraBoundaries C.GDExtensionSpxPhysicsCheckTouchedCameraBoundaries
@@ -1047,6 +1048,23 @@ func CallPenSetPenStampTexture(
 	arg2 := (C.GdString)(texture_path)
 
 	C.cgo_callfn_GDExtensionSpxPenSetPenStampTexture(arg0, arg1, arg2)
+
+}
+func CallPenPenStampWithTransform(
+	obj GdObj,
+	texture_path GdString,
+	position GdVec2,
+	rotation_radians GdFloat,
+	scale GdVec2,
+) {
+	arg0 := (C.GDExtensionSpxPenPenStampWithTransform)(api.SpxPenPenStampWithTransform)
+	arg1 := (C.GdObj)(obj)
+	arg2 := (C.GdString)(texture_path)
+	arg3 := (C.GdVec2)(position)
+	arg4 := (C.GdFloat)(rotation_radians)
+	arg5 := (C.GdVec2)(scale)
+
+	C.cgo_callfn_GDExtensionSpxPenPenStampWithTransform(arg0, arg1, arg2, arg3, arg4, arg5)
 
 }
 func CallPhysicsRaycast(

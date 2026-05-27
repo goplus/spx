@@ -102,6 +102,7 @@ type GDExtensionInterface struct {
 	SpxPenChangePenSizeBy                       GDExtensionSpxPenChangePenSizeBy
 	SpxPenSetPenSizeTo                          GDExtensionSpxPenSetPenSizeTo
 	SpxPenSetPenStampTexture                    GDExtensionSpxPenSetPenStampTexture
+	SpxPenPenStampWithTransform                 GDExtensionSpxPenPenStampWithTransform
 	SpxPhysicsRaycast                           GDExtensionSpxPhysicsRaycast
 	SpxPhysicsCheckCollision                    GDExtensionSpxPhysicsCheckCollision
 	SpxPhysicsCheckTouchedCameraBoundaries      GDExtensionSpxPhysicsCheckTouchedCameraBoundaries
@@ -423,6 +424,7 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxPenChangePenSizeBy = (GDExtensionSpxPenChangePenSizeBy)(resolveCFunc("spx_pen_change_pen_size_by"))
 	x.SpxPenSetPenSizeTo = (GDExtensionSpxPenSetPenSizeTo)(resolveCFunc("spx_pen_set_pen_size_to"))
 	x.SpxPenSetPenStampTexture = (GDExtensionSpxPenSetPenStampTexture)(resolveCFunc("spx_pen_set_pen_stamp_texture"))
+	x.SpxPenPenStampWithTransform = (GDExtensionSpxPenPenStampWithTransform)(resolveCFunc("spx_pen_pen_stamp_with_transform"))
 	x.SpxPhysicsRaycast = (GDExtensionSpxPhysicsRaycast)(resolveCFunc("spx_physics_raycast"))
 	x.SpxPhysicsCheckCollision = (GDExtensionSpxPhysicsCheckCollision)(resolveCFunc("spx_physics_check_collision"))
 	x.SpxPhysicsCheckTouchedCameraBoundaries = (GDExtensionSpxPhysicsCheckTouchedCameraBoundaries)(resolveCFunc("spx_physics_check_touched_camera_boundaries"))

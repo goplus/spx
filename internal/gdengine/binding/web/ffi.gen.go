@@ -106,6 +106,7 @@ type GDExtensionInterface struct {
 	SpxPenChangePenSizeBy                       js.Value
 	SpxPenSetPenSizeTo                          js.Value
 	SpxPenSetPenStampTexture                    js.Value
+	SpxPenPenStampWithTransform                 js.Value
 	SpxPhysicsRaycast                           js.Value
 	SpxPhysicsCheckCollision                    js.Value
 	SpxPhysicsCheckTouchedCameraBoundaries      js.Value
@@ -427,6 +428,7 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxPenChangePenSizeBy = resolveJSFunc("gdspx_pen_change_pen_size_by")
 	x.SpxPenSetPenSizeTo = resolveJSFunc("gdspx_pen_set_pen_size_to")
 	x.SpxPenSetPenStampTexture = resolveJSFunc("gdspx_pen_set_pen_stamp_texture")
+	x.SpxPenPenStampWithTransform = resolveJSFunc("gdspx_pen_pen_stamp_with_transform")
 	x.SpxPhysicsRaycast = resolveJSFunc("gdspx_physics_raycast")
 	x.SpxPhysicsCheckCollision = resolveJSFunc("gdspx_physics_check_collision")
 	x.SpxPhysicsCheckTouchedCameraBoundaries = resolveJSFunc("gdspx_physics_check_touched_camera_boundaries")

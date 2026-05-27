@@ -469,6 +469,14 @@ func (pself *penMgr) SetPenStampTexture(obj Object, texture_path string) {
 	arg1 := JsFromGdString(texture_path)
 	API.SpxPenSetPenStampTexture.Invoke(arg0Low, arg0High, arg1)
 }
+func (pself *penMgr) PenStampWithTransform(obj Object, texture_path string, position Vec2, rotation_radians float64, scale Vec2) {
+	arg0Low, arg0High := JsSplitGdObj(obj)
+	arg1 := JsFromGdString(texture_path)
+	arg2 := JsFromGdVec2(position)
+	arg3 := JsFromGdFloat(rotation_radians)
+	arg4 := JsFromGdVec2(scale)
+	API.SpxPenPenStampWithTransform.Invoke(arg0Low, arg0High, arg1, arg2, arg3, arg4)
+}
 func (pself *physicsMgr) Raycast(from Vec2, to Vec2, collision_mask int64) Object {
 	arg0 := JsFromGdVec2(from)
 	arg1 := JsFromGdVec2(to)
