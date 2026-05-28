@@ -64,14 +64,19 @@ func TimeSinceLevelLoad() Seconds {
 }
 
 // CharAt returns the character at the given 1-based index in the string s.
-// It returns an empty string if idx is out of range (< 1 or > len(s)).
+// It returns an empty string if idx is out of range for the rune sequence.
 // This matches Scratch's "letter (idx) of (s)" block behavior.
 func CharAt(s string, idx int) string {
-	r := []rune(s)
-	if idx < 1 || idx > len(r) {
+	if idx < 1 {
 		return ""
 	}
-	return string(r[idx-1])
+	for _, r := range s {
+		idx--
+		if idx == 0 {
+			return string(r)
+		}
+	}
+	return ""
 }
 
 // Exit__0 exits the program with exit code 0.
