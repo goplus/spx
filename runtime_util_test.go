@@ -30,25 +30,25 @@ func TestCharAt(t *testing.T) {
 		{
 			name:     "first character",
 			s:        "hello",
-			idx:      1,
+			idx:      0,
 			expected: "h",
 		},
 		{
 			name:     "last character",
 			s:        "hello",
-			idx:      5,
+			idx:      4,
 			expected: "o",
 		},
 		{
 			name:     "middle character",
 			s:        "hello",
-			idx:      3,
+			idx:      2,
 			expected: "l",
 		},
 		{
-			name:     "index zero returns empty string",
+			name:     "index equals length returns empty string",
 			s:        "hello",
-			idx:      0,
+			idx:      5,
 			expected: "",
 		},
 		{
@@ -66,31 +66,31 @@ func TestCharAt(t *testing.T) {
 		{
 			name:     "empty string returns empty string",
 			s:        "",
-			idx:      1,
+			idx:      0,
 			expected: "",
 		},
 		{
 			name:     "unicode multibyte character",
 			s:        "你好世界",
-			idx:      1,
+			idx:      0,
 			expected: "你",
 		},
 		{
 			name:     "unicode last character",
 			s:        "你好世界",
-			idx:      4,
+			idx:      3,
 			expected: "界",
 		},
 		{
 			name:     "unicode index out of range",
 			s:        "你好世界",
-			idx:      5,
+			idx:      4,
 			expected: "",
 		},
 		{
 			name:     "single character string",
 			s:        "a",
-			idx:      1,
+			idx:      0,
 			expected: "a",
 		},
 	}
