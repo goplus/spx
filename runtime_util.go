@@ -63,6 +63,17 @@ func TimeSinceLevelLoad() Seconds {
 	return itime.TimeSinceLevelLoad()
 }
 
+// CharAt returns the character at the given 1-based index in the string s.
+// It returns an empty string if idx is out of range (< 1 or > len(s)).
+// This matches Scratch's "letter (idx) of (s)" block behavior.
+func CharAt(s string, idx int) string {
+	r := []rune(s)
+	if idx < 1 || idx > len(r) {
+		return ""
+	}
+	return string(r[idx-1])
+}
+
 // Exit__0 exits the program with exit code 0.
 func Exit__0() {
 	engine.RequestExit(0)
