@@ -30,4 +30,5 @@ realtime_mode=true
 
 [rendering]
 
+environment/defaults/default_clear_color=Color(1, 1, 1, 1)
 textures/vram_compression/import_etc2_astc=true
