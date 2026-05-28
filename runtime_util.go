@@ -63,6 +63,23 @@ func TimeSinceLevelLoad() Seconds {
 	return itime.TimeSinceLevelLoad()
 }
 
+// CharAt returns the character at the given 0-based index in the string s.
+// It is similar to Scratch's operator_letter_of block, but uses Go-style
+// 0-based indexing. It returns an empty string if idx is out of range for the
+// rune sequence.
+func CharAt(s string, idx int) string {
+	if idx < 0 {
+		return ""
+	}
+	for _, r := range s {
+		if idx == 0 {
+			return string(r)
+		}
+		idx--
+	}
+	return ""
+}
+
 // Exit__0 exits the program with exit code 0.
 func Exit__0() {
 	engine.RequestExit(0)
