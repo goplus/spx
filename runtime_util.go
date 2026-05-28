@@ -64,7 +64,9 @@ func TimeSinceLevelLoad() Seconds {
 }
 
 // CharAt returns the character at the given 0-based index in the string s.
-// It returns an empty string if idx is out of range for the rune sequence.
+// It is similar to Scratch's "letter () of ()" block, but uses Go-style
+// 0-based indexing. It returns an empty string if idx is out of range for the
+// rune sequence.
 func CharAt(s string, idx int) string {
 	if idx < 0 {
 		return ""
