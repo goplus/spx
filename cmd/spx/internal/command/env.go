@@ -96,7 +96,7 @@ func (cmd *CmdTool) SetupEnv(version string, fs embed.FS, fsRelDir string, proje
 
 // PrepareEnv syncs project files.
 func (cmd *CmdTool) PrepareEnv(fsRelDir, dstDir string) {
-	util.CopyDir(cmd.ProjectFS, fsRelDir, dstDir, false)
+	util.CopyDir(cmd.ProjectFS, fsRelDir, dstDir, true)
 
 	tempFile, _ := filepath.Abs(path.Join(cmd.TargetDir, "xgo_autogen.go"))
 	tmp := `
