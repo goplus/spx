@@ -129,6 +129,7 @@ func init() {
 		},
 		Vars: map[string]reflect.Value{},
 		Funcs: map[string]reflect.Value{
+			"Contains":           reflect.ValueOf(q.Contains),
 			"DeltaTime":          reflect.ValueOf(q.DeltaTime),
 			"Exit__0":            reflect.ValueOf(q.Exit__0),
 			"Exit__1":            reflect.ValueOf(q.Exit__1),

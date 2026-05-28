@@ -18,6 +18,7 @@ package spx
 
 import (
 	"math/rand"
+	"strings"
 
 	"github.com/goplus/spx/v2/internal/engine"
 	itime "github.com/goplus/spx/v2/internal/time"
@@ -45,6 +46,11 @@ func Iround(v float64) int {
 		return int(v + 0.5)
 	}
 	return int(v - 0.5)
+}
+
+// Contains reports whether substr is within s.
+func Contains(s, substr string) bool {
+	return strings.Contains(s, substr)
 }
 
 // DeltaTime returns the time elapsed since the previous frame.
