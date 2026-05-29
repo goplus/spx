@@ -376,6 +376,7 @@ typedef void (*GDExtensionSpxSpriteCloneSprite)(GdObj obj, GdObj *ret_value);
 typedef void (*GDExtensionSpxSpriteDestroySprite)(GdObj obj, GdBool *ret_value);
 typedef void (*GDExtensionSpxSpriteIsSpriteAlive)(GdObj obj, GdBool *ret_value);
 typedef void (*GDExtensionSpxSpriteSetPosition)(GdObj obj, GdVec2 pos);
+typedef void (*GDExtensionSpxSpriteSetTransform)(GdObj obj, GdVec2 pos, GdFloat rot, GdVec2 scale, GdBool visible, GdVec2 pivot);
 typedef void (*GDExtensionSpxSpriteGetPosition)(GdObj obj, GdVec2 *ret_value);
 typedef void (*GDExtensionSpxSpriteSetRotation)(GdObj obj, GdFloat rot);
 typedef void (*GDExtensionSpxSpriteGetRotation)(GdObj obj, GdFloat *ret_value);

@@ -230,6 +230,7 @@ type ISpriteMgr interface {
 	DestroySprite(obj Object) bool
 	IsSpriteAlive(obj Object) bool
 	SetPosition(obj Object, pos Vec2)
+	SetTransform(obj Object, pos Vec2, rot float64, scale Vec2, visible bool, pivot Vec2)
 	GetPosition(obj Object) Vec2
 	SetRotation(obj Object, rot float64)
 	GetRotation(obj Object) float64

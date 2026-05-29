@@ -121,7 +121,7 @@ func (t *transformComponent) onDestroy() {
 // markDirty marks the transform as dirty, triggering an update.
 func (t *transformComponent) markDirty() {
 	t.isDirty = true
-	t.sprite.spriteState.IsDirty = true
+	t.sprite.markProxyDirty()
 }
 
 // getPivot returns the current pivot point.

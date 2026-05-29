@@ -184,6 +184,7 @@ type GDExtensionInterface struct {
 	SpxSpriteDestroySprite                      GDExtensionSpxSpriteDestroySprite
 	SpxSpriteIsSpriteAlive                      GDExtensionSpxSpriteIsSpriteAlive
 	SpxSpriteSetPosition                        GDExtensionSpxSpriteSetPosition
+	SpxSpriteSetTransform                       GDExtensionSpxSpriteSetTransform
 	SpxSpriteGetPosition                        GDExtensionSpxSpriteGetPosition
 	SpxSpriteSetRotation                        GDExtensionSpxSpriteSetRotation
 	SpxSpriteGetRotation                        GDExtensionSpxSpriteGetRotation
@@ -506,6 +507,7 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxSpriteDestroySprite = (GDExtensionSpxSpriteDestroySprite)(resolveCFunc("spx_sprite_destroy_sprite"))
 	x.SpxSpriteIsSpriteAlive = (GDExtensionSpxSpriteIsSpriteAlive)(resolveCFunc("spx_sprite_is_sprite_alive"))
 	x.SpxSpriteSetPosition = (GDExtensionSpxSpriteSetPosition)(resolveCFunc("spx_sprite_set_position"))
+	x.SpxSpriteSetTransform = (GDExtensionSpxSpriteSetTransform)(resolveCFunc("spx_sprite_set_transform"))
 	x.SpxSpriteGetPosition = (GDExtensionSpxSpriteGetPosition)(resolveCFunc("spx_sprite_get_position"))
 	x.SpxSpriteSetRotation = (GDExtensionSpxSpriteSetRotation)(resolveCFunc("spx_sprite_set_rotation"))
 	x.SpxSpriteGetRotation = (GDExtensionSpxSpriteGetRotation)(resolveCFunc("spx_sprite_get_rotation"))

@@ -93,34 +93,39 @@ func (p *SpriteImpl) touching(obj Target) bool {
 			return p.g.touchingPoint(p, x, y)
 		}
 	case Sprite:
-		return touchingSprite(p, spriteOf(v))
+		src := spriteOf(v)
+		if src == nil || src.spriteState.IsDying {
+			return false
+		}
+		return src.touchingSprite(p)
 	}
 	panic("Touching: unexpected input")
 }
 
-func touchingSprite(dst, src *SpriteImpl) bool {
-	if src.spriteState.IsDying {
+func (p *SpriteImpl) prepareSelfCollisionQuery() bool {
+	if p.runtimeState.SyncSprite == nil {
 		return false
 	}
-	return src.touchingSprite(dst)
+	p.ensureProxyQueryStateSynced()
+	return true
 }
 
 func (p *SpriteImpl) touchPoint(x, y float64) bool {
-	if p.runtimeState.SyncSprite == nil {
+	if !p.prepareSelfCollisionQuery() {
 		return false
 	}
 	return p.engine().SpriteMgr.CheckCollisionWithPoint(p.runtimeState.SyncSprite.GetId(), mathf.NewVec2(x, y), true)
 }
 
 func (p *SpriteImpl) touchingColor(color mathf.Color) bool {
-	if p.runtimeState.SyncSprite == nil {
+	if !p.prepareSelfCollisionQuery() {
 		return false
 	}
 	return p.engine().SpriteMgr.CheckCollisionByColor(p.runtimeState.SyncSprite.GetId(), color, colorThreshold, alphaThreshold)
 }
 
 func (p *SpriteImpl) touchingColors(spriteColor, targetColor mathf.Color) bool {
-	if p.runtimeState.SyncSprite == nil {
+	if !p.prepareSelfCollisionQuery() {
 		return false
 	}
 	return p.engine().SpriteMgr.CheckCollisionByColors(
@@ -133,14 +138,14 @@ func (p *SpriteImpl) touchingColors(spriteColor, targetColor mathf.Color) bool {
 }
 
 func (p *SpriteImpl) touchingSprite(dst *SpriteImpl) bool {
-	if p.runtimeState.SyncSprite == nil || dst.runtimeState.SyncSprite == nil {
+	if !p.prepareSelfCollisionQuery() || !dst.prepareSelfCollisionQuery() {
 		return false
 	}
 	return p.engine().SpriteMgr.CheckCollisionWithSprite(p.runtimeState.SyncSprite.GetId(), dst.runtimeState.SyncSprite.GetId(), alphaThreshold, !isPhysicsEnabled())
 }
 
 func (p *SpriteImpl) checkTouchingScreen(where int, area string) (touching int) {
-	if p.runtimeState.SyncSprite == nil {
+	if !p.prepareSelfCollisionQuery() {
 		return 0
 	}
 	switch normalizeEdgeArea(area) {
@@ -153,7 +158,7 @@ func (p *SpriteImpl) checkTouchingScreen(where int, area string) (touching int) 
 }
 
 func (p *SpriteImpl) checkNearestTouchedBoundary(area string) int {
-	if p.runtimeState.SyncSprite == nil {
+	if !p.prepareSelfCollisionQuery() {
 		return 0
 	}
 	switch normalizeEdgeArea(area) {

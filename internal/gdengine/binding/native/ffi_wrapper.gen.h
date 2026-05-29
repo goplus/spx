@@ -900,6 +900,12 @@ void cgo_callfn_GDExtensionSpxSpriteSetPosition(const GDExtensionSpxSpriteSetPos
 	}
 	fn(obj, pos);
 }
+void cgo_callfn_GDExtensionSpxSpriteSetTransform(const GDExtensionSpxSpriteSetTransform fn, GdObj obj, GdVec2 pos, GdFloat rot, GdVec2 scale, GdBool visible, GdVec2 pivot) {
+	if (!fn) {
+		return;
+	}
+	fn(obj, pos, rot, scale, visible, pivot);
+}
 void cgo_callfn_GDExtensionSpxSpriteGetPosition(const GDExtensionSpxSpriteGetPosition fn, GdObj obj, GdVec2* ret_val) {
 	if (!fn) {
 		return;

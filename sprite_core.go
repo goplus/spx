@@ -54,6 +54,11 @@ func (p *SpriteImpl) setDying() {
 	p.spriteState.IsDying = true
 }
 
+func (p *SpriteImpl) markProxyDirty() {
+	p.spriteState.DirtyVersion++
+	p.spriteState.IsDirty = true
+}
+
 // -----------------------------------------------------------------------------
 // Initialization
 // -----------------------------------------------------------------------------
@@ -99,6 +104,8 @@ func (p *SpriteImpl) InitFrom(src *SpriteImpl) {
 	p.spriteState.IsDying = false
 	p.spriteState.IsAwakened = false
 
+	p.spriteState.DirtyVersion = 0
+	p.spriteState.ProxySyncVersion = 0
 	p.spriteState.HasOnCloned = false
 	p.spriteState.HasOnTouchStart = false
 	p.spriteState.HasOnTouching = false

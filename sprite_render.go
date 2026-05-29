@@ -33,7 +33,7 @@ func (p *SpriteImpl) setVisible(visible bool) {
 	}
 
 	p.spriteState.IsVisible = visible
-	p.spriteState.IsDirty = true
+	p.markProxyDirty()
 }
 
 func (p *SpriteImpl) Hide() {
@@ -70,7 +70,7 @@ func (p *SpriteImpl) setCostume(costume any) {
 		return
 	}
 	p.spriteState.DefaultCostumeIndex = p.costumeIndex
-	p.spriteState.IsDirty = true
+	p.markProxyDirty()
 }
 
 func (p *SpriteImpl) SetCostume__0(costume SpriteCostumeName) {

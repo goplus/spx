@@ -890,6 +890,15 @@ func (pself *spriteMgr) SetPosition(obj Object, pos Vec2) {
 	arg1 := JsFromGdVec2(pos)
 	API.SpxSpriteSetPosition.Invoke(arg0Low, arg0High, arg1)
 }
+func (pself *spriteMgr) SetTransform(obj Object, pos Vec2, rot float64, scale Vec2, visible bool, pivot Vec2) {
+	arg0Low, arg0High := JsSplitGdObj(obj)
+	arg1 := JsFromGdVec2(pos)
+	arg2 := JsFromGdFloat(rot)
+	arg3 := JsFromGdVec2(scale)
+	arg4 := JsFromGdBool(visible)
+	arg5 := JsFromGdVec2(pivot)
+	API.SpxSpriteSetTransform.Invoke(arg0Low, arg0High, arg1, arg2, arg3, arg4, arg5)
+}
 func (pself *spriteMgr) GetPosition(obj Object) Vec2 {
 	arg0Low, arg0High := JsSplitGdObj(obj)
 	_retValue := API.SpxSpriteGetPosition.Invoke(arg0Low, arg0High)
