@@ -106,7 +106,7 @@ func (p *SpriteImpl) prepareSelfCollisionQuery() bool {
 	if p.runtimeState.SyncSprite == nil {
 		return false
 	}
-	p.ensureProxyTransformSynced()
+	p.ensureProxyQueryStateSynced()
 	return true
 }
 

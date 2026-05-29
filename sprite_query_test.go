@@ -27,13 +27,41 @@ import (
 
 type touchingSyncSpriteMgr struct {
 	enginewrap.SpriteMgrImpl
-	positions         map[pkgengine.Object]mathf.Vec2
-	setTransformCalls map[pkgengine.Object]int
-	setPositionCalls  map[pkgengine.Object]int
-	setRotationCalls  map[pkgengine.Object]int
-	setScaleCalls     map[pkgengine.Object]int
-	setPivotCalls     map[pkgengine.Object]int
-	setVisibleCalls   map[pkgengine.Object]int
+	positions               map[pkgengine.Object]mathf.Vec2
+	texturePaths            map[pkgengine.Object]string
+	expectedTexturePaths    map[pkgengine.Object]string
+	checkedTexturePaths     map[pkgengine.Object]string
+	setTransformCalls       map[pkgengine.Object]int
+	setPositionCalls        map[pkgengine.Object]int
+	setRotationCalls        map[pkgengine.Object]int
+	setScaleCalls           map[pkgengine.Object]int
+	setPivotCalls           map[pkgengine.Object]int
+	setVisibleCalls         map[pkgengine.Object]int
+	setTextureCalls         map[pkgengine.Object]int
+	setTextureAtlasCalls    map[pkgengine.Object]int
+	setRenderScaleCalls     map[pkgengine.Object]int
+	setTextureDirectCalls   map[pkgengine.Object]int
+	setTextureAtlasPathByID map[pkgengine.Object]string
+}
+
+func newTouchingSyncSpriteMgr() *touchingSyncSpriteMgr {
+	return &touchingSyncSpriteMgr{
+		positions:               map[pkgengine.Object]mathf.Vec2{},
+		texturePaths:            map[pkgengine.Object]string{},
+		expectedTexturePaths:    map[pkgengine.Object]string{},
+		checkedTexturePaths:     map[pkgengine.Object]string{},
+		setTransformCalls:       map[pkgengine.Object]int{},
+		setPositionCalls:        map[pkgengine.Object]int{},
+		setRotationCalls:        map[pkgengine.Object]int{},
+		setScaleCalls:           map[pkgengine.Object]int{},
+		setPivotCalls:           map[pkgengine.Object]int{},
+		setVisibleCalls:         map[pkgengine.Object]int{},
+		setTextureCalls:         map[pkgengine.Object]int{},
+		setTextureAtlasCalls:    map[pkgengine.Object]int{},
+		setRenderScaleCalls:     map[pkgengine.Object]int{},
+		setTextureDirectCalls:   map[pkgengine.Object]int{},
+		setTextureAtlasPathByID: map[pkgengine.Object]string{},
+	}
 }
 
 func (s *touchingSyncSpriteMgr) SetTransform(
@@ -69,8 +97,39 @@ func (s *touchingSyncSpriteMgr) SetVisible(obj pkgengine.Object, visible bool) {
 	s.setVisibleCalls[obj]++
 }
 
+func (s *touchingSyncSpriteMgr) SetTexture(obj pkgengine.Object, path string) {
+	s.texturePaths[obj] = path
+	s.setTextureCalls[obj]++
+}
+
+func (s *touchingSyncSpriteMgr) SetTextureAtlas(obj pkgengine.Object, path string, rect2 mathf.Rect2) {
+	s.texturePaths[obj] = path
+	s.setTextureAtlasPathByID[obj] = path
+	s.setTextureAtlasCalls[obj]++
+}
+
+func (s *touchingSyncSpriteMgr) SetTextureDirect(obj pkgengine.Object, path string) {
+	s.texturePaths[obj] = path
+	s.setTextureDirectCalls[obj]++
+}
+
+func (s *touchingSyncSpriteMgr) SetRenderScale(obj pkgengine.Object, scale mathf.Vec2) {
+	s.setRenderScaleCalls[obj]++
+}
+
+func (s *touchingSyncSpriteMgr) SetMaterialShader(obj pkgengine.Object, path string) {}
+
+func (s *touchingSyncSpriteMgr) SetMaterialParamsVec4(obj pkgengine.Object, effect string, vec4 mathf.Vec4) {
+}
+
 func (s *touchingSyncSpriteMgr) CheckCollisionWithSprite(obj, objB pkgengine.Object, alphaThreshold float64, usePixelPerfect bool) bool {
 	return s.positions[obj] == s.positions[objB]
+}
+
+func (s *touchingSyncSpriteMgr) CheckCollisionByColor(obj pkgengine.Object, color mathf.Color, colorThreshold, alphaThreshold float64) bool {
+	s.checkedTexturePaths[obj] = s.texturePaths[obj]
+	expected, ok := s.expectedTexturePaths[obj]
+	return !ok || s.texturePaths[obj] == expected
 }
 
 func installTouchingSyncSpriteMgr(t *testing.T, mgr *touchingSyncSpriteMgr) {
@@ -101,15 +160,7 @@ func newTouchingTestSprite(name string, x, y float64, id pkgengine.Object) *Spri
 }
 
 func TestTouchingSpriteSyncsDirtyTransformImmediately(t *testing.T) {
-	mgr := &touchingSyncSpriteMgr{
-		positions:         map[pkgengine.Object]mathf.Vec2{},
-		setTransformCalls: map[pkgengine.Object]int{},
-		setPositionCalls:  map[pkgengine.Object]int{},
-		setRotationCalls:  map[pkgengine.Object]int{},
-		setScaleCalls:     map[pkgengine.Object]int{},
-		setPivotCalls:     map[pkgengine.Object]int{},
-		setVisibleCalls:   map[pkgengine.Object]int{},
-	}
+	mgr := newTouchingSyncSpriteMgr()
 	installTouchingSyncSpriteMgr(t, mgr)
 
 	mover := newTouchingTestSprite("mover", 0, 0, 1)
@@ -157,5 +208,44 @@ func TestTouchingSpriteSyncsDirtyTransformImmediately(t *testing.T) {
 	}
 	if mover.spriteState.IsDirty {
 		t.Fatal("spriteState.IsDirty = true, want false after frame-end collection")
+	}
+}
+
+func TestTouchingColorSyncsDirtyCostumeImmediately(t *testing.T) {
+	mgr := newTouchingSyncSpriteMgr()
+	installTouchingSyncSpriteMgr(t, mgr)
+
+	sprite := newTouchingTestSprite("mover", 0, 0, 1)
+	sprite.costumes = []*costume{
+		{name: "idle", path: "idle.png", bitmapResolution: 1, width: 1, height: 1, setIndex: -1},
+		{name: "hit", path: "hit.png", bitmapResolution: 1, width: 1, height: 1, setIndex: -1},
+	}
+	sprite.costumeIndex = 0
+	sprite.runtimeState.IsCostumeDirty = false
+	sprite.runtimeState.IsAnimating = false
+
+	mgr.texturePaths[1] = internalengine.ToAssetPath("idle.png")
+	mgr.expectedTexturePaths[1] = internalengine.ToAssetPath("hit.png")
+
+	sprite.SetCostume__0("hit")
+
+	if !sprite.touchingColor(mathf.Color{}) {
+		t.Fatal("touchingColor() = false, want true after immediate costume sync")
+	}
+	if got := mgr.setTextureCalls[1]; got != 1 {
+		t.Fatalf("SetTexture calls after first touchingColor = %d, want 1", got)
+	}
+	if got := mgr.checkedTexturePaths[1]; got != internalengine.ToAssetPath("hit.png") {
+		t.Fatalf("collision used texture %q, want %q", got, internalengine.ToAssetPath("hit.png"))
+	}
+	if sprite.runtimeState.IsCostumeDirty {
+		t.Fatal("runtimeState.IsCostumeDirty = true, want false after immediate query sync")
+	}
+
+	if !sprite.touchingColor(mathf.Color{}) {
+		t.Fatal("second touchingColor() = false, want synced costume to remain valid")
+	}
+	if got := mgr.setTextureCalls[1]; got != 1 {
+		t.Fatalf("SetTexture calls after second touchingColor = %d, want 1", got)
 	}
 }

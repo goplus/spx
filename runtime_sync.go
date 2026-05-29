@@ -221,8 +221,14 @@ func (p *SpriteImpl) applyPhysicsPosition(x, y float64) {
 	p.transform().setXY(x, y)
 }
 
-func (p *SpriteImpl) ensureProxyTransformSynced() {
-	if p.isDestroyed() || p.runtimeState.SyncSprite == nil || !p.spriteState.IsDirty {
+func (p *SpriteImpl) ensureProxyQueryStateSynced() {
+	if p.isDestroyed() || p.runtimeState.SyncSprite == nil {
+		return
+	}
+	if p.spriteState.IsVisible {
+		p.baseObj.applyCostumeUpdate()
+	}
+	if !p.spriteState.IsDirty {
 		return
 	}
 	if p.spriteState.ProxySyncVersion == p.spriteState.DirtyVersion {
@@ -233,7 +239,7 @@ func (p *SpriteImpl) ensureProxyTransformSynced() {
 	offsetX, offsetY := getRenderOffset(p)
 	rot, scaleX, scaleY := getRenderRotationAndScale(p)
 
-	p.getProxy().SetTransform(
+	p.runtimeState.SyncSprite.SetTransform(
 		mathf.NewVec2(x+offsetX, y+offsetY),
 		engine.DegToRad(rot),
 		mathf.NewVec2(scaleX, scaleY),
