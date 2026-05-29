@@ -451,6 +451,9 @@ func (pself *Sprite) SetTextureAtlasDirect(path string, rect2 Rect2) {
 func (pself *Sprite) SetTextureDirect(path string) {
 }
 
+func (pself *Sprite) SetTransform(pos Vec2, rot float64, scale Vec2, visible bool, pivot Vec2) {
+}
+
 func (pself *Sprite) SetTriggerCapsule(center Vec2, size Vec2) {
 }
 

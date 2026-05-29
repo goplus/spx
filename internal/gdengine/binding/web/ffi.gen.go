@@ -188,6 +188,7 @@ type GDExtensionInterface struct {
 	SpxSpriteDestroySprite                      js.Value
 	SpxSpriteIsSpriteAlive                      js.Value
 	SpxSpriteSetPosition                        js.Value
+	SpxSpriteSetTransform                       js.Value
 	SpxSpriteGetPosition                        js.Value
 	SpxSpriteSetRotation                        js.Value
 	SpxSpriteGetRotation                        js.Value
@@ -510,6 +511,7 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxSpriteDestroySprite = resolveJSFunc("gdspx_sprite_destroy_sprite")
 	x.SpxSpriteIsSpriteAlive = resolveJSFunc("gdspx_sprite_is_sprite_alive")
 	x.SpxSpriteSetPosition = resolveJSFunc("gdspx_sprite_set_position")
+	x.SpxSpriteSetTransform = resolveJSFunc("gdspx_sprite_set_transform")
 	x.SpxSpriteGetPosition = resolveJSFunc("gdspx_sprite_get_position")
 	x.SpxSpriteSetRotation = resolveJSFunc("gdspx_sprite_set_rotation")
 	x.SpxSpriteGetRotation = resolveJSFunc("gdspx_sprite_get_rotation")

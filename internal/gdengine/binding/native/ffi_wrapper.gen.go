@@ -249,6 +249,7 @@ type GDExtensionSpxSpriteCloneSprite C.GDExtensionSpxSpriteCloneSprite
 type GDExtensionSpxSpriteDestroySprite C.GDExtensionSpxSpriteDestroySprite
 type GDExtensionSpxSpriteIsSpriteAlive C.GDExtensionSpxSpriteIsSpriteAlive
 type GDExtensionSpxSpriteSetPosition C.GDExtensionSpxSpriteSetPosition
+type GDExtensionSpxSpriteSetTransform C.GDExtensionSpxSpriteSetTransform
 type GDExtensionSpxSpriteGetPosition C.GDExtensionSpxSpriteGetPosition
 type GDExtensionSpxSpriteSetRotation C.GDExtensionSpxSpriteSetRotation
 type GDExtensionSpxSpriteGetRotation C.GDExtensionSpxSpriteGetRotation
@@ -1896,6 +1897,25 @@ func CallSpriteSetPosition(
 	arg2 := (C.GdVec2)(pos)
 
 	C.cgo_callfn_GDExtensionSpxSpriteSetPosition(arg0, arg1, arg2)
+
+}
+func CallSpriteSetTransform(
+	obj GdObj,
+	pos GdVec2,
+	rot GdFloat,
+	scale GdVec2,
+	visible GdBool,
+	pivot GdVec2,
+) {
+	arg0 := (C.GDExtensionSpxSpriteSetTransform)(api.SpxSpriteSetTransform)
+	arg1 := (C.GdObj)(obj)
+	arg2 := (C.GdVec2)(pos)
+	arg3 := (C.GdFloat)(rot)
+	arg4 := (C.GdVec2)(scale)
+	arg5 := (C.GdBool)(visible)
+	arg6 := (C.GdVec2)(pivot)
+
+	C.cgo_callfn_GDExtensionSpxSpriteSetTransform(arg0, arg1, arg2, arg3, arg4, arg5, arg6)
 
 }
 func CallSpriteGetPosition(

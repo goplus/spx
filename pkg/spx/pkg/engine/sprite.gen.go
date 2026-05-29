@@ -502,6 +502,10 @@ func (pself *Sprite) SetTextureDirect(path string) {
 	SpriteMgr.SetTextureDirect(pself.Id, path)
 }
 
+func (pself *Sprite) SetTransform(pos Vec2, rot float64, scale Vec2, visible bool, pivot Vec2) {
+	SpriteMgr.SetTransform(pself.Id, pos, rot, scale, visible, pivot)
+}
+
 func (pself *Sprite) SetTriggerCapsule(center Vec2, size Vec2) {
 	SpriteMgr.SetTriggerCapsule(pself.Id, center, size)
 }

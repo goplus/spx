@@ -23,25 +23,9 @@ import (
 	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
-func (p *SpriteImpl) initRuntimeProxy() {
-	p.rebuildRuntimeProxy(true)
-}
-
-func (p *SpriteImpl) awake() {
-	p.animation().playDefaultAnimIfIdle()
-	p.spriteState.IsAwakened = true
-}
-
-func (p *SpriteImpl) rebuildRuntimeProxy(applyCostume bool) {
-	p.runtimeState.SyncSprite = nil
-	engine.WaitMainThread(func() {
-		p.ensureProxyInitialized()
-		if applyCostume {
-			p.baseObj.applyCostumeUpdate()
-		}
-	})
-}
-
+// -----------------------------------------------------------------------------
+// Game Sync Pipeline
+// -----------------------------------------------------------------------------
 // dispatchStartEventIfNeeded fires the start event once after bootstrap completes.
 func (p *Game) dispatchStartEventIfNeeded() {
 	coreruntime.SyncOnce(&p.lifecycleState.StartFlag, func() {
@@ -116,6 +100,9 @@ func isSpriteTouchable(sprite *SpriteImpl) bool {
 	return sprite.spriteState.IsVisible && !sprite.spriteState.IsDying
 }
 
+// -----------------------------------------------------------------------------
+// Base Object Visual Sync
+// -----------------------------------------------------------------------------
 // scheduleCostumeUpdate schedules a costume update on the main thread.
 func (p *baseObj) scheduleCostumeUpdate() {
 	engine.WaitMainThread(func() {
@@ -153,86 +140,136 @@ func (p *baseObj) applyAtlasUVRemap() {
 	p.setMaterialParamsVec4("atlas_uv_rect2", val, true)
 }
 
+// -----------------------------------------------------------------------------
+// Sprite Proxy Lifecycle
+// -----------------------------------------------------------------------------
+func (p *SpriteImpl) initRuntimeProxy() {
+	p.rebuildRuntimeProxy(true)
+}
+
+func (p *SpriteImpl) awake() {
+	p.animation().playDefaultAnimIfIdle()
+	p.spriteState.IsAwakened = true
+}
+
+func (p *SpriteImpl) rebuildRuntimeProxy(applyCostume bool) {
+	p.runtimeState.SyncSprite = nil
+	engine.WaitMainThread(func() {
+		p.ensureProxyInitialized()
+		if applyCostume {
+			p.baseObj.applyCostumeUpdate()
+		}
+	})
+}
+
 // ensureProxyInitialized initializes the sprite's engine proxy if it hasn't been created yet.
-func (sprite *SpriteImpl) ensureProxyInitialized() {
-	if sprite.runtimeState.SyncSprite != nil || sprite.isDestroyed() {
+func (p *SpriteImpl) ensureProxyInitialized() {
+	if p.runtimeState.SyncSprite != nil || p.isDestroyed() {
 		return
 	}
-	sprite.runtimeState.SyncSprite = engine.BridgeNewBareSprite(sprite, mathf.NewVec2(sprite.getXYWithRenderOffset()))
-	sprite.applyPhysicsProxyConfig()
-	sprite.runtimeState.SyncSprite.SetVisible(sprite.spriteState.IsVisible)
-	sprite.runtimeState.SyncSprite.Name = sprite.name
-	sprite.runtimeState.SyncSprite.SetTypeName(sprite.name)
-	sprite.applyGraphicEffects(true)
-	sprite.animation().registerOnAnimationLooped(sprite.handleAnimationLooped)
-	sprite.animation().registerOnAnimationFinished(sprite.handleAnimationFinished)
-	sprite.spriteState.IsDirty = true
+	p.runtimeState.SyncSprite = engine.BridgeNewBareSprite(p, mathf.NewVec2(p.getXYWithRenderOffset()))
+	p.applyPhysicsProxyConfig()
+	p.runtimeState.SyncSprite.SetVisible(p.spriteState.IsVisible)
+	p.runtimeState.SyncSprite.Name = p.name
+	p.runtimeState.SyncSprite.SetTypeName(p.name)
+	p.applyGraphicEffects(true)
+	p.animation().registerOnAnimationLooped(p.handleAnimationLooped)
+	p.animation().registerOnAnimationFinished(p.handleAnimationFinished)
+	p.markProxyDirty()
 }
 
 // handleAnimationFinished records completed animation events from the proxy.
-func (sprite *SpriteImpl) handleAnimationFinished() {
+func (p *SpriteImpl) handleAnimationFinished() {
 	engine.Lock()
 	defer engine.Unlock()
-	if sprite.isDestroyed() || sprite.runtimeState.SyncSprite == nil {
+	if p.isDestroyed() || p.runtimeState.SyncSprite == nil {
 		return
 	}
-	state := sprite.animation().getCurAnimState()
+	state := p.animation().getCurAnimState()
 	if state != nil && state.Name != "" {
-		sprite.animation().addDonedAnimation(state.Name)
+		p.animation().addDonedAnimation(state.Name)
 	}
 }
 
 // handleAnimationLooped records audio work for animation loop boundaries.
-func (sprite *SpriteImpl) handleAnimationLooped() {
+func (p *SpriteImpl) handleAnimationLooped() {
 	engine.Lock()
 	defer engine.Unlock()
-	if sprite.isDestroyed() || sprite.runtimeState.SyncSprite == nil {
+	if p.isDestroyed() || p.runtimeState.SyncSprite == nil {
 		return
 	}
-	sprite.queueAnimationLoopAudio(sprite.animation().getCurAnimState())
-	sprite.queueAnimationLoopAudio(sprite.animation().getCurTweenState())
+	p.queueAnimationLoopAudio(p.animation().getCurAnimState())
+	p.queueAnimationLoopAudio(p.animation().getCurTweenState())
 }
 
-func (sprite *SpriteImpl) applyPhysicsProxyConfig() {
-	if sprite.runtimeState.SyncSprite == nil {
+// -----------------------------------------------------------------------------
+// Sprite Sync Helpers
+// -----------------------------------------------------------------------------
+func (p *SpriteImpl) applyPhysicsProxyConfig() {
+	if p.runtimeState.SyncSprite == nil {
 		return
 	}
-	sprite.physics().applyPhysicsProxyConfig(sprite.runtimeState.SyncSprite)
+	p.physics().applyPhysicsProxyConfig(p.runtimeState.SyncSprite)
 }
 
-func (sprite *SpriteImpl) shouldPullPhysicsPosition() bool {
-	return sprite.runtimeState.SyncSprite != nil && sprite.PhysicsMode() != NoPhysics
+func (p *SpriteImpl) shouldPullPhysicsPosition() bool {
+	return p.runtimeState.SyncSprite != nil && p.PhysicsMode() != NoPhysics
 }
 
-func (sprite *SpriteImpl) applyPhysicsPosition(x, y float64) {
-	revertRenderOffset(sprite, &x, &y)
-	sprite.transform().setXY(x, y)
+func (p *SpriteImpl) applyPhysicsPosition(x, y float64) {
+	revertRenderOffset(p, &x, &y)
+	p.transform().setXY(x, y)
 }
 
-func (sprite *SpriteImpl) collectProxyUpdate(buffer *engine.SpriteSyncBuffer) {
-	if sprite.isDestroyed() || sprite.runtimeState.SyncSprite == nil {
+func (p *SpriteImpl) ensureProxyTransformSynced() {
+	if p.isDestroyed() || p.runtimeState.SyncSprite == nil || !p.spriteState.IsDirty {
 		return
 	}
-	if sprite.spriteState.IsVisible {
-		sprite.baseObj.applyCostumeUpdate()
-	}
-	if !sprite.spriteState.IsDirty {
+	if p.spriteState.ProxySyncVersion == p.spriteState.DirtyVersion {
 		return
 	}
-	sprite.appendTransformUpdate(buffer)
-	sprite.spriteState.IsDirty = false
+
+	x, y := p.getXY()
+	offsetX, offsetY := getRenderOffset(p)
+	rot, scaleX, scaleY := getRenderRotationAndScale(p)
+
+	p.getProxy().SetTransform(
+		mathf.NewVec2(x+offsetX, y+offsetY),
+		engine.DegToRad(rot),
+		mathf.NewVec2(scaleX, scaleY),
+		p.spriteState.IsVisible,
+		mathf.NewVec2(offsetX, offsetY),
+	)
+	p.spriteState.ProxySyncVersion = p.spriteState.DirtyVersion
 }
 
-func (sprite *SpriteImpl) appendTransformUpdate(buffer *engine.SpriteSyncBuffer) {
-	x, y := sprite.getXY()
-	offsetX, offsetY := getRenderOffset(sprite)
-	rot, scaleX, scaleY := getRenderRotationAndScale(sprite)
+func (p *SpriteImpl) collectProxyUpdate(buffer *engine.SpriteSyncBuffer) {
+	if p.isDestroyed() || p.runtimeState.SyncSprite == nil {
+		return
+	}
+	if p.spriteState.IsVisible {
+		p.baseObj.applyCostumeUpdate()
+	}
+	if !p.spriteState.IsDirty {
+		return
+	}
+	if p.spriteState.ProxySyncVersion != p.spriteState.DirtyVersion {
+		p.appendTransformUpdate(buffer)
+	}
+	p.spriteState.IsDirty = false
+}
+
+func (p *SpriteImpl) appendTransformUpdate(buffer *engine.SpriteSyncBuffer) {
+	x, y := p.getXY()
+	offsetX, offsetY := getRenderOffset(p)
+	rot, scaleX, scaleY := getRenderRotationAndScale(p)
 	buffer.Add(
-		int64(sprite.runtimeState.SyncSprite.Id),
+		int64(p.runtimeState.SyncSprite.Id),
 		x+offsetX, y+offsetY,
 		engine.DegToRad(rot),
 		scaleX, scaleY,
 		offsetX, offsetY,
-		sprite.spriteState.IsVisible,
+		p.spriteState.IsVisible,
 	)
+	p.spriteState.ProxySyncVersion = p.spriteState.DirtyVersion
 }

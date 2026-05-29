@@ -985,6 +985,15 @@ func (pself *spriteMgr) SetPosition(obj Object, pos Vec2) {
 	arg1 := ToGdVec2(pos)
 	CallSpriteSetPosition(arg0, arg1)
 }
+func (pself *spriteMgr) SetTransform(obj Object, pos Vec2, rot float64, scale Vec2, visible bool, pivot Vec2) {
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdVec2(pos)
+	arg2 := ToGdFloat(rot)
+	arg3 := ToGdVec2(scale)
+	arg4 := ToGdBool(visible)
+	arg5 := ToGdVec2(pivot)
+	CallSpriteSetTransform(arg0, arg1, arg2, arg3, arg4, arg5)
+}
 func (pself *spriteMgr) GetPosition(obj Object) Vec2 {
 	arg0 := ToGdObj(obj)
 	retValue := CallSpriteGetPosition(arg0)

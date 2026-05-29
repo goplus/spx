@@ -1051,6 +1051,11 @@ func (*spriteMgrImpl) SetPosition(obj gdx.Object, pos Vec2) {
 		gdx.SpriteMgr.SetPosition(obj, pos)
 	})
 }
+func (*spriteMgrImpl) SetTransform(obj gdx.Object, pos Vec2, rot float64, scale Vec2, visible bool, pivot Vec2) {
+	callInMainThread(func() {
+		gdx.SpriteMgr.SetTransform(obj, pos, rot, scale, visible, pivot)
+	})
+}
 func (*spriteMgrImpl) GetPosition(obj gdx.Object) Vec2 {
 	var _ret1 Vec2
 	callInMainThread(func() {

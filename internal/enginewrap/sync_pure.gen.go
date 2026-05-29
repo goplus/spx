@@ -462,6 +462,8 @@ func (*spriteMgrImpl) IsSpriteAlive(obj gdx.Object) bool {
 	return false
 }
 func (*spriteMgrImpl) SetPosition(obj gdx.Object, pos Vec2) {}
+func (*spriteMgrImpl) SetTransform(obj gdx.Object, pos Vec2, rot float64, scale Vec2, visible bool, pivot Vec2) {
+}
 func (*spriteMgrImpl) GetPosition(obj gdx.Object) Vec2 {
 	return Vec2{}
 }
