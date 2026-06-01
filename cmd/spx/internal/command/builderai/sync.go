@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-package command
+package builderai
 
-import builderai "github.com/goplus/spx/v2/cmd/spx/internal/command/builderai"
+import _ "embed"
 
-func (cmd *CmdTool) ensureBuilderAIModuleFiles(projectRoot string) error {
-	return builderai.EnsureProjectFiles(projectRoot, builderai.ProjectOptions{
-		GoModTemplate: cmd.GoModTemplate,
-		FindSpxRoot:   findSpxRootFrom,
-	})
-}
+// Sync Builder AI project templates and versions from repository sources.
+//
+//go:generate cp ../../../../../gox.mod gox.mod
+//go:generate go run ./genversion -source ../../../../../cmd/ispx/go.mod -output version_gen.go
+//go:embed gox.mod
+var defaultGoxModTemplate string

@@ -22,6 +22,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	builderai "github.com/goplus/spx/v2/cmd/spx/internal/command/builderai"
 )
 
 func TestAdaptGoModAddsLocalReplaceForGeneratedGoMod(t *testing.T) {
@@ -91,8 +93,8 @@ func TestShouldRunGoModTidy(t *testing.T) {
 		t.Fatal("shouldRunGoModTidy returned true in local repo, want false")
 	}
 
-	if err := os.WriteFile(filepath.Join(repoTargetDir, builderAIDescriptionFile), []byte("summary"), 0o644); err != nil {
-		t.Fatalf("WriteFile(%s) returned error: %v", builderAIDescriptionFile, err)
+	if err := os.WriteFile(filepath.Join(repoTargetDir, builderai.DescriptionFile), []byte("summary"), 0o644); err != nil {
+		t.Fatalf("WriteFile(%s) returned error: %v", builderai.DescriptionFile, err)
 	}
 	if !repoCmd.shouldRunGoModTidy() {
 		t.Fatal("shouldRunGoModTidy returned false for local ai project, want true")

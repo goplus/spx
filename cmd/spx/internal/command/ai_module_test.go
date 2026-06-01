@@ -21,6 +21,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	builderai "github.com/goplus/spx/v2/cmd/spx/internal/command/builderai"
 )
 
 func TestEnsureBuilderAIModuleFilesCreatesFilesInProjectRoot(t *testing.T) {
@@ -29,8 +31,8 @@ func TestEnsureBuilderAIModuleFilesCreatesFilesInProjectRoot(t *testing.T) {
 	if err := os.MkdirAll(godotProjectDir, 0755); err != nil {
 		t.Fatalf("mkdir project dir: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(projectRoot, builderAIDescriptionFile), []byte("summary"), 0644); err != nil {
-		t.Fatalf("write %s: %v", builderAIDescriptionFile, err)
+	if err := os.WriteFile(filepath.Join(projectRoot, builderai.DescriptionFile), []byte("summary"), 0644); err != nil {
+		t.Fatalf("write %s: %v", builderai.DescriptionFile, err)
 	}
 
 	cmd := CmdTool{
@@ -47,7 +49,7 @@ require github.com/goplus/spx/v2 v2.0.0-test //xgo:class
 	}
 
 	goxMod := readTestFile(t, filepath.Join(projectRoot, "gox.mod"))
-	if !strings.Contains(goxMod, `import "`+builderAIModule+`"`) {
+	if !strings.Contains(goxMod, `import "`+builderai.ModulePath+`"`) {
 		t.Fatalf("gox.mod should import builder ai, got:\n%s", goxMod)
 	}
 	if !strings.Contains(goxMod, "runner github.com/goplus/spx/v2/cmd/spxrunner") {
@@ -55,7 +57,7 @@ require github.com/goplus/spx/v2 v2.0.0-test //xgo:class
 	}
 
 	goMod := readTestFile(t, filepath.Join(projectRoot, "go.mod"))
-	if !strings.Contains(goMod, builderAIModule+` `+builderAIModuleVersion) {
+	if !strings.Contains(goMod, builderai.ModulePath+` `+builderai.Version) {
 		t.Fatalf("go.mod should require builder ai before xgo go, got:\n%s", goMod)
 	}
 	if strings.Contains(goMod, "//xgo:class") {
@@ -72,8 +74,8 @@ require github.com/goplus/spx/v2 v2.0.0-test //xgo:class
 
 func TestEnsureBuilderAIModuleFilesUpdatesExistingFiles(t *testing.T) {
 	projectRoot := t.TempDir()
-	if err := os.WriteFile(filepath.Join(projectRoot, builderAIDescriptionFile), []byte("summary"), 0644); err != nil {
-		t.Fatalf("write %s: %v", builderAIDescriptionFile, err)
+	if err := os.WriteFile(filepath.Join(projectRoot, builderai.DescriptionFile), []byte("summary"), 0644); err != nil {
+		t.Fatalf("write %s: %v", builderai.DescriptionFile, err)
 	}
 	if err := os.WriteFile(filepath.Join(projectRoot, "gox.mod"), []byte("project main.spx Game github.com/goplus/spx/v2 math\n"), 0644); err != nil {
 		t.Fatalf("write gox.mod: %v", err)
@@ -95,12 +97,12 @@ require (
 	}
 
 	goxMod := readTestFile(t, filepath.Join(projectRoot, "gox.mod"))
-	if !strings.Contains(goxMod, `import "`+builderAIModule+`"`) {
+	if !strings.Contains(goxMod, `import "`+builderai.ModulePath+`"`) {
 		t.Fatalf("existing gox.mod should import builder ai, got:\n%s", goxMod)
 	}
 
 	goMod := readTestFile(t, filepath.Join(projectRoot, "go.mod"))
-	if !strings.Contains(goMod, builderAIModule+` `+builderAIModuleVersion) {
+	if !strings.Contains(goMod, builderai.ModulePath+` `+builderai.Version) {
 		t.Fatalf("existing go.mod should require builder ai before xgo go, got:\n%s", goMod)
 	}
 	if strings.Contains(goMod, "//xgo:class") {
@@ -110,8 +112,8 @@ require (
 
 func TestEnsureBuilderAIModuleFilesSupportsRawDescriptionFilename(t *testing.T) {
 	projectRoot := t.TempDir()
-	if err := os.WriteFile(filepath.Join(projectRoot, builderAIDescriptionFileRaw), []byte("summary"), 0644); err != nil {
-		t.Fatalf("write %s: %v", builderAIDescriptionFileRaw, err)
+	if err := os.WriteFile(filepath.Join(projectRoot, builderai.DescriptionFileRaw), []byte("summary"), 0644); err != nil {
+		t.Fatalf("write %s: %v", builderai.DescriptionFileRaw, err)
 	}
 
 	cmd := CmdTool{
@@ -127,12 +129,12 @@ require github.com/goplus/spx/v2 v2.0.0-test //xgo:class
 	}
 
 	goxMod := readTestFile(t, filepath.Join(projectRoot, "gox.mod"))
-	if !strings.Contains(goxMod, `import "`+builderAIModule+`"`) {
+	if !strings.Contains(goxMod, `import "`+builderai.ModulePath+`"`) {
 		t.Fatalf("gox.mod should import builder ai for raw description filename, got:\n%s", goxMod)
 	}
 
 	goMod := readTestFile(t, filepath.Join(projectRoot, "go.mod"))
-	if !strings.Contains(goMod, builderAIModule+` `+builderAIModuleVersion) {
+	if !strings.Contains(goMod, builderai.ModulePath+` `+builderai.Version) {
 		t.Fatalf("go.mod should require builder ai for raw description filename, got:\n%s", goMod)
 	}
 }
@@ -145,8 +147,8 @@ func TestEnsureBuilderAIModuleFilesReusesLocalSpxReplace(t *testing.T) {
 	if err := os.MkdirAll(projectRoot, 0755); err != nil {
 		t.Fatalf("mkdir project root: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(projectRoot, builderAIDescriptionFile), []byte("summary"), 0644); err != nil {
-		t.Fatalf("write %s: %v", builderAIDescriptionFile, err)
+	if err := os.WriteFile(filepath.Join(projectRoot, builderai.DescriptionFile), []byte("summary"), 0644); err != nil {
+		t.Fatalf("write %s: %v", builderai.DescriptionFile, err)
 	}
 
 	cmd := CmdTool{
@@ -165,7 +167,7 @@ require github.com/goplus/spx/v2 v2.0.0-test //xgo:class
 	if !strings.Contains(goMod, "replace github.com/goplus/spx/v2 => ../..") {
 		t.Fatalf("go.mod should reuse local spx replace, got:\n%s", goMod)
 	}
-	if !strings.Contains(goMod, builderAIModule+` `+builderAIModuleVersion) {
+	if !strings.Contains(goMod, builderai.ModulePath+` `+builderai.Version) {
 		t.Fatalf("go.mod should require builder ai before xgo go, got:\n%s", goMod)
 	}
 	if strings.Contains(goMod, "//xgo:class") {
