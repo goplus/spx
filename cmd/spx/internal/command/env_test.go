@@ -111,11 +111,13 @@ func TestShouldReimport(t *testing.T) {
 		cmdName     string
 		runtimeMode bool
 		cacheExists bool
+		tags        string
 		want        bool
 	}{
 		{name: "skips buildweb", cmdName: "buildweb", want: false},
 		{name: "reimports exportweb when cache missing", cmdName: "exportweb", want: true},
 		{name: "skips runtime mode", cmdName: "runweb", runtimeMode: true, want: false},
+		{name: "skips pure engine mode", cmdName: "build", tags: "pure_engine", want: false},
 		{name: "skips when cache exists", cmdName: "exportweb", cacheExists: true, want: false},
 	}
 
@@ -130,6 +132,10 @@ func TestShouldReimport(t *testing.T) {
 				ProjectDir:  projectDir,
 				RuntimeMode: tt.runtimeMode,
 				Args:        ExtraArgs{CmdName: tt.cmdName},
+			}
+			if tt.tags != "" {
+				tags := tt.tags
+				cmd.Args.Tags = &tags
 			}
 
 			if got := cmd.ShouldReimport(); got != tt.want {

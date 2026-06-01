@@ -147,7 +147,7 @@ func (cmd *CmdTool) Reimport() error {
 }
 
 func (cmd *CmdTool) shouldSkipProjectImport() bool {
-	if cmd.RuntimeMode {
+	if cmd.RuntimeMode || cmd.usesPureEngine() {
 		return true
 	}
 	switch cmd.Args.CmdName {
