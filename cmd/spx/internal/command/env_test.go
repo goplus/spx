@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestAdaptGoModAddsLocalReplaceForGeneratedGoMod(t *testing.T) {
@@ -104,6 +105,71 @@ func TestShouldRunGoModTidy(t *testing.T) {
 	}
 }
 
+func TestShouldReimport(t *testing.T) {
+	tests := []struct {
+		name        string
+		cmdName     string
+		runtimeMode bool
+		cacheExists bool
+		tags        string
+		want        bool
+	}{
+		{name: "skips buildweb", cmdName: "buildweb", want: false},
+		{name: "reimports exportweb when cache missing", cmdName: "exportweb", want: true},
+		{name: "skips runtime mode", cmdName: "runweb", runtimeMode: true, want: false},
+		{name: "skips pure engine mode", cmdName: "build", tags: "pure_engine", want: false},
+		{name: "skips when cache exists", cmdName: "exportweb", cacheExists: true, want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			projectDir := t.TempDir()
+			if tt.cacheExists {
+				writeProjectImportCache(t, projectDir)
+			}
+
+			cmd := CmdTool{
+				ProjectDir:  projectDir,
+				RuntimeMode: tt.runtimeMode,
+				Args:        ExtraArgs{CmdName: tt.cmdName},
+			}
+			if tt.tags != "" {
+				tags := tt.tags
+				cmd.Args.Tags = &tags
+			}
+
+			if got := cmd.ShouldReimport(); got != tt.want {
+				t.Fatalf("ShouldReimport() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestProjectImportTimeout(t *testing.T) {
+	tests := []struct {
+		name     string
+		envValue string
+		want     time.Duration
+	}{
+		{name: "uses default", envValue: "", want: defaultProjectImportTimeout},
+		{name: "supports override", envValue: "90s", want: 90 * time.Second},
+		{name: "trims whitespace", envValue: " 90s ", want: 90 * time.Second},
+		{name: "supports disable", envValue: "0", want: 0},
+		{name: "falls back for invalid value", envValue: "abc", want: defaultProjectImportTimeout},
+		{name: "falls back for negative value", envValue: "-1s", want: defaultProjectImportTimeout},
+	}
+
+	cmd := CmdTool{}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv(projectImportTimeoutEnvVar, tt.envValue)
+			if got := cmd.projectImportTimeout(); got != tt.want {
+				t.Fatalf("projectImportTimeout() = %s, want %s", got, tt.want)
+			}
+		})
+	}
+}
+
 func setupAdaptGoModFixture(t *testing.T) string {
 	t.Helper()
 
@@ -115,4 +181,16 @@ func setupAdaptGoModFixture(t *testing.T) string {
 	}
 	writeLocalSpxRepoMarker(t, repoRoot)
 	return targetDir
+}
+
+func writeProjectImportCache(t *testing.T, projectDir string) {
+	t.Helper()
+
+	cachePath := filepath.Join(projectDir, ".godot", "uid_cache.bin")
+	if err := os.MkdirAll(filepath.Dir(cachePath), 0o755); err != nil {
+		t.Fatalf("mkdir cache dir: %v", err)
+	}
+	if err := os.WriteFile(cachePath, []byte("cache"), 0o644); err != nil {
+		t.Fatalf("write cache: %v", err)
+	}
 }

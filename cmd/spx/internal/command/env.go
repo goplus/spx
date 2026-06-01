@@ -17,6 +17,7 @@
 package command
 
 import (
+	"context"
 	"embed"
 	"errors"
 	"fmt"
@@ -28,11 +29,14 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/goplus/spx/v2/cmd/spx/internal/util"
 )
 
 const envName = "gdspx"
+const projectImportTimeoutEnvVar = "SPX_GODOT_IMPORT_TIMEOUT"
+const defaultProjectImportTimeout = 10 * time.Minute
 
 var projectNameReplacer = strings.NewReplacer("_", "", " ", "", "\"", "", "\n", "", "\r", "")
 var spxModuleReplaceLinePattern = regexp.MustCompile(`^(\s*)(replace\s+)?github\.com/goplus/spx/v2\s*=>\s*(\S+)(\s*//.*)?$`)
@@ -89,7 +93,9 @@ func (cmd *CmdTool) SetupEnv(version string, fs embed.FS, fsRelDir string, proje
 	}
 
 	if cmd.ShouldReimport() {
-		cmd.Reimport()
+		if err := cmd.Reimport(); err != nil {
+			return err
+		}
 	}
 	return
 }
@@ -126,28 +132,102 @@ func (cmd *CmdTool) shouldRunGoModTidy() bool {
 
 // ShouldReimport reports whether Godot reimport is needed.
 func (cmd *CmdTool) ShouldReimport() bool {
-	// TinyGo skips Godot import.
-	if cmd.Args.CmdName == "buildtinygo" {
+	if cmd.shouldSkipProjectImport() {
 		return false
 	}
-	return !util.IsFileExist(path.Join(cmd.ProjectDir, ".godot/uid_cache.bin")) && !cmd.RuntimeMode
+	return !util.IsFileExist(cmd.projectImportCachePath())
 }
 
 // Reimport refreshes Godot import data.
-func (cmd *CmdTool) Reimport() {
-	switch cmd.Args.CmdName {
-	case "buildtinygo":
-		return
-	case "buildweb", "runweb", "exportweb":
-		cmd.BuildWasm()
-	default:
-		cmd.BuildDll()
+func (cmd *CmdTool) Reimport() error {
+	if err := cmd.buildProjectImportArtifacts(); err != nil {
+		return err
 	}
+	return cmd.runProjectImport()
+}
+
+func (cmd *CmdTool) shouldSkipProjectImport() bool {
+	if cmd.RuntimeMode || cmd.usesPureEngine() {
+		return true
+	}
+	switch cmd.Args.CmdName {
+	case "buildtinygo", "buildweb":
+		return true
+	default:
+		return false
+	}
+}
+
+func shouldBuildWasmForProjectImport(cmdName string) bool {
+	switch cmdName {
+	case "runweb", "exportweb":
+		return true
+	default:
+		return false
+	}
+}
+
+func (cmd *CmdTool) projectImportCachePath() string {
+	return path.Join(cmd.ProjectDir, ".godot", "uid_cache.bin")
+}
+
+func (cmd *CmdTool) buildProjectImportArtifacts() error {
+	switch {
+	case cmd.shouldSkipProjectImport():
+		return nil
+	case shouldBuildWasmForProjectImport(cmd.Args.CmdName):
+		return cmd.BuildWasm()
+	default:
+		return cmd.BuildDll()
+	}
+}
+
+func (cmd *CmdTool) runProjectImport() error {
 	logInfof("Importing project resources")
-	execCmd := exec.Command(cmd.CmdPath, "--import", "--headless")
+	execCmd, ctx, timeout, cancel := cmd.newProjectImportCommand()
+	defer cancel()
 	execCmd.Dir = cmd.ProjectDir
-	execCmd.Start()
-	execCmd.Wait()
+	execCmd.Stdout = os.Stdout
+	execCmd.Stderr = os.Stderr
+	if err := execCmd.Run(); err != nil {
+		if timeout > 0 && errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return fmt.Errorf("godot import timed out after %s; override with %s: %w", timeout, projectImportTimeoutEnvVar, err)
+		}
+		return fmt.Errorf("godot import failed: %w", err)
+	}
+	return nil
+}
+
+func (cmd *CmdTool) newProjectImportCommand() (*exec.Cmd, context.Context, time.Duration, context.CancelFunc) {
+	timeout := cmd.projectImportTimeout()
+	args := []string{"--headless", "--path", cmd.ProjectDir, "--import"}
+	if timeout <= 0 {
+		return exec.Command(cmd.CmdPath, args...), context.Background(), 0, func() {}
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	return exec.CommandContext(ctx, cmd.CmdPath, args...), ctx, timeout, cancel
+}
+
+func (cmd *CmdTool) projectImportTimeout() time.Duration {
+	timeoutValue := strings.TrimSpace(os.Getenv(projectImportTimeoutEnvVar))
+	if timeoutValue == "" {
+		return defaultProjectImportTimeout
+	}
+	if timeoutValue == "0" {
+		return 0
+	}
+
+	timeout, err := time.ParseDuration(timeoutValue)
+	if err != nil {
+		logWarnf("Invalid %s=%q, using default %s", projectImportTimeoutEnvVar, timeoutValue, defaultProjectImportTimeout)
+		return defaultProjectImportTimeout
+	}
+	if timeout < 0 {
+		logWarnf("Ignoring negative %s=%q, using default %s", projectImportTimeoutEnvVar, timeoutValue, defaultProjectImportTimeout)
+		return defaultProjectImportTimeout
+	}
+	return timeout
 }
 
 // Clear removes generated project files.
