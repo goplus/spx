@@ -27,8 +27,8 @@ jobs:
       - name: Run go generate for runtime packages
         shell: bash
         run: |
+          go generate ./cmd/spx/internal/command/...
           go generate ./pkg/ispx/...
-          go generate ./cmd/spx/internal/command
 
       - name: Run go generate for cmd/ispx
         shell: bash

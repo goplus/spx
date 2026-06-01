@@ -31,6 +31,7 @@ import (
 	"strings"
 	"time"
 
+	builderai "github.com/goplus/spx/v2/cmd/spx/internal/command/builderai"
 	"github.com/goplus/spx/v2/cmd/spx/internal/util"
 )
 
@@ -127,7 +128,7 @@ func main() {print(&spx.Game{})}
 }
 
 func (cmd *CmdTool) shouldRunGoModTidy() bool {
-	return cmd.findSpxRoot() == "" || hasBuilderAIDescription(cmd.targetRootDir())
+	return cmd.findSpxRoot() == "" || builderai.HasDescription(cmd.targetRootDir())
 }
 
 // ShouldReimport reports whether Godot reimport is needed.
