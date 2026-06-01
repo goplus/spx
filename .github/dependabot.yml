@@ -12,6 +12,7 @@ updates:
       - actions
     schedule:
       interval: weekly
+      day: tuesday
     open-pull-requests-limit: 3
     groups:
       github-actions:
@@ -28,6 +29,7 @@ updates:
       - go
     schedule:
       interval: weekly
+      day: tuesday
     open-pull-requests-limit: 5
     groups:
       go-dependencies:
