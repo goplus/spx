@@ -135,11 +135,14 @@ func EnsureGoMod(projectRoot string, opts ProjectOptions) error {
 }
 
 func createDefaultGoMod(dir, content string, forceWrite bool) error {
-	goModPath, _ := filepath.Abs(filepath.Join(dir, "go.mod"))
-	if _, err := os.Stat(goModPath); os.IsNotExist(err) || forceWrite {
+	goModPath := filepath.Join(dir, "go.mod")
+	_, err := os.Stat(goModPath)
+	if os.IsNotExist(err) || forceWrite {
 		if err := os.WriteFile(goModPath, []byte(content), 0644); err != nil {
 			return err
 		}
+	} else if err != nil {
+		return err
 	}
 	return nil
 }
