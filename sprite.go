@@ -275,6 +275,7 @@ type Sprite interface {
 	SetCostume__1(index float64)
 	SetCostume__2(index int)
 	SetCostume__3(action switchAction)
+	SetCostumeByNameOrIndex(costume string)
 
 	// Animation Methods
 	Animate__0(name SpriteAnimationName)

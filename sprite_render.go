@@ -17,6 +17,8 @@
 package spx
 
 import (
+	"strconv"
+
 	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
@@ -71,6 +73,20 @@ func (p *SpriteImpl) setCostume(costume any) {
 	}
 	p.spriteState.DefaultCostumeIndex = p.costumeIndex
 	p.spriteState.IsDirty = true
+}
+
+func (p *SpriteImpl) SetCostumeByNameOrIndex(costume string) {
+	if isDebugInstrEnabled() {
+		spxlog.Debug("SetCostumeByNameOrIndex: sprite=%s, costume=%v", p.name, costume)
+	}
+	if idx := p.findCostume(costume); idx >= 0 {
+		p.setCostumeByIndex(idx)
+		return
+	}
+
+	if idx, err := strconv.Atoi(costume); err == nil {
+		p.setCostumeByIndex(idx)
+	}
 }
 
 func (p *SpriteImpl) SetCostume__0(costume SpriteCostumeName) {
