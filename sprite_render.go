@@ -75,18 +75,19 @@ func (p *SpriteImpl) setCostume(costume any) {
 	p.spriteState.IsDirty = true
 }
 
-func (p *SpriteImpl) SetCostumeByNameOrIndex(costume string) {
+func (p *SpriteImpl) ResolveCostumeIndex(costume string) int {
 	if isDebugInstrEnabled() {
-		spxlog.Debug("SetCostumeByNameOrIndex: sprite=%s, costume=%v", p.name, costume)
+		spxlog.Debug("ResolveCostumeIndex: sprite=%s, costume=%v", p.name, costume)
 	}
-	if idx := p.findCostume(costume); idx >= 0 {
-		p.setCostumeByIndex(idx)
-		return
+	if idx := p.findCostume(SpriteCostumeName(costume)); idx >= 0 {
+		return idx
 	}
 
-	if idx, err := strconv.Atoi(costume); err == nil {
-		p.setCostumeByIndex(idx)
+	idx, err := strconv.Atoi(costume)
+	if err != nil {
+		return -1
 	}
+	return idx
 }
 
 func (p *SpriteImpl) SetCostume__0(costume SpriteCostumeName) {

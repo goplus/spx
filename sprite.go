@@ -270,12 +270,12 @@ type Sprite interface {
 	// Costume Methods
 	CostumeName() SpriteCostumeName
 	CostumeIndex() int
+	ResolveCostumeIndex(costume string) int
 
 	SetCostume__0(costume SpriteCostumeName)
 	SetCostume__1(index float64)
 	SetCostume__2(index int)
 	SetCostume__3(action switchAction)
-	SetCostumeByNameOrIndex(costume string)
 
 	// Animation Methods
 	Animate__0(name SpriteAnimationName)
