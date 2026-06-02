@@ -87,7 +87,7 @@ func (p *SpriteImpl) ResolveCostumeIndex(costume string) int {
 	if err != nil {
 		return -1
 	}
-	return idx
+	return idx - 1
 }
 
 func (p *SpriteImpl) SetCostume__0(costume SpriteCostumeName) {
