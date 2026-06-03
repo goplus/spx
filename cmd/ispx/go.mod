@@ -23,8 +23,8 @@ require (
 	github.com/visualfc/xtype v0.3.0 // indirect
 	golang.org/x/image v0.23.0 // indirect
 	golang.org/x/mobile v0.0.0-20220518205345-8578da9835fd // indirect
-	golang.org/x/mod v0.29.0 // indirect
-	golang.org/x/tools v0.38.0 // indirect
+	golang.org/x/mod v0.36.0 // indirect
+	golang.org/x/tools v0.44.0 // indirect
 )
 
 replace github.com/goplus/spx/v2 => ../..
