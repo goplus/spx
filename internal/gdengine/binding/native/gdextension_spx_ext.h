@@ -270,6 +270,12 @@ typedef void (*GDExtensionSpxInputGetAxis)(GdString neg_action, GdString pos_act
 typedef void (*GDExtensionSpxInputIsActionPressed)(GdString action, GdBool *ret_value);
 typedef void (*GDExtensionSpxInputIsActionJustPressed)(GdString action, GdBool *ret_value);
 typedef void (*GDExtensionSpxInputIsActionJustReleased)(GdString action, GdBool *ret_value);
+typedef void (*GDExtensionSpxInputRegisterAction)(GdString action, GdInt *ret_value);
+typedef void (*GDExtensionSpxInputGetAxisId)(GdInt neg_action_id, GdInt pos_action_id, GdFloat *ret_value);
+typedef void (*GDExtensionSpxInputIsActionPressedId)(GdInt action_id, GdBool *ret_value);
+typedef void (*GDExtensionSpxInputIsActionJustPressedId)(GdInt action_id, GdBool *ret_value);
+typedef void (*GDExtensionSpxInputIsActionJustReleasedId)(GdInt action_id, GdBool *ret_value);
+typedef void (*GDExtensionSpxInputWriteSnapshot)(float *out, int len);
 // SpxNavigation
 typedef void (*GDExtensionSpxNavigationSetupPathFinderWithSize)(GdVec2 grid_size, GdVec2 cell_size, GdBool with_jump, GdBool with_debug);
 typedef void (*GDExtensionSpxNavigationSetupPathFinder)(GdBool with_jump);
@@ -483,7 +489,7 @@ typedef void (*GDExtensionSpxSpriteSetPixelCollisionSamplingStep)(GdInt step);
 typedef void (*GDExtensionSpxSpriteGetPixelCollisionSamplingStep)(GdInt *ret_value);
 typedef void (*GDExtensionSpxSpriteBatchUpdateTransforms)(const float *buffer_data, int len);
 typedef void (*GDExtensionSpxSpriteBatchUpdateVisuals)(const float *buffer_data, int len);
-typedef void (*GDExtensionSpxSpriteBatchRetrievePositions)(GdArray objs, GdArray *ret_value);
+typedef void (*GDExtensionSpxSpriteBatchUpdatePhysics)(const float *buffer_data, int len);
 // SpxTilemap
 typedef void (*GDExtensionSpxTilemapOpenDrawTilesWithSize)(GdInt tile_size);
 typedef void (*GDExtensionSpxTilemapOpenDrawTiles)();
@@ -551,6 +557,7 @@ typedef void (*GDExtensionSpxUiGetRotation)(GdObj obj, GdFloat *ret_value);
 typedef void (*GDExtensionSpxUiSetRotation)(GdObj obj, GdFloat value);
 typedef void (*GDExtensionSpxUiGetFlip)(GdObj obj, GdBool horizontal, GdBool *ret_value);
 typedef void (*GDExtensionSpxUiSetFlip)(GdObj obj, GdBool horizontal, GdBool is_flip);
+typedef void (*GDExtensionSpxSpriteBatchRetrievePositions)(GdArray objs, GdArray *ret_value);
 
 
 #ifdef __cplusplus

@@ -306,6 +306,42 @@ void cgo_callfn_GDExtensionSpxInputIsActionJustReleased(const GDExtensionSpxInpu
 	}
 	fn(action, ret_val);
 }
+void cgo_callfn_GDExtensionSpxInputRegisterAction(const GDExtensionSpxInputRegisterAction fn, GdString action, GdInt* ret_val) {
+	if (!fn) {
+		return;
+	}
+	fn(action, ret_val);
+}
+void cgo_callfn_GDExtensionSpxInputGetAxisId(const GDExtensionSpxInputGetAxisId fn, GdInt neg_action_id, GdInt pos_action_id, GdFloat* ret_val) {
+	if (!fn) {
+		return;
+	}
+	fn(neg_action_id, pos_action_id, ret_val);
+}
+void cgo_callfn_GDExtensionSpxInputIsActionPressedId(const GDExtensionSpxInputIsActionPressedId fn, GdInt action_id, GdBool* ret_val) {
+	if (!fn) {
+		return;
+	}
+	fn(action_id, ret_val);
+}
+void cgo_callfn_GDExtensionSpxInputIsActionJustPressedId(const GDExtensionSpxInputIsActionJustPressedId fn, GdInt action_id, GdBool* ret_val) {
+	if (!fn) {
+		return;
+	}
+	fn(action_id, ret_val);
+}
+void cgo_callfn_GDExtensionSpxInputIsActionJustReleasedId(const GDExtensionSpxInputIsActionJustReleasedId fn, GdInt action_id, GdBool* ret_val) {
+	if (!fn) {
+		return;
+	}
+	fn(action_id, ret_val);
+}
+void cgo_callfn_GDExtensionSpxInputWriteSnapshot(const GDExtensionSpxInputWriteSnapshot fn, float *out, int len) {
+	if (!fn) {
+		return;
+	}
+	fn(out, len);
+}
 void cgo_callfn_GDExtensionSpxNavigationSetupPathFinderWithSize(const GDExtensionSpxNavigationSetupPathFinderWithSize fn, GdVec2 grid_size, GdVec2 cell_size, GdBool with_jump, GdBool with_debug) {
 	if (!fn) {
 		return;
@@ -1542,11 +1578,11 @@ void cgo_callfn_GDExtensionSpxSpriteBatchUpdateVisuals(const GDExtensionSpxSprit
 	}
 	fn(buffer_data, len);
 }
-void cgo_callfn_GDExtensionSpxSpriteBatchRetrievePositions(const GDExtensionSpxSpriteBatchRetrievePositions fn, GdArray objs, GdArray* ret_val) {
+void cgo_callfn_GDExtensionSpxSpriteBatchUpdatePhysics(const GDExtensionSpxSpriteBatchUpdatePhysics fn, const float *buffer_data, int len) {
 	if (!fn) {
 		return;
 	}
-	fn(objs, ret_val);
+	fn(buffer_data, len);
 }
 void cgo_callfn_GDExtensionSpxTilemapOpenDrawTilesWithSize(const GDExtensionSpxTilemapOpenDrawTilesWithSize fn, GdInt tile_size) {
 	if (!fn) {
@@ -1931,5 +1967,11 @@ void cgo_callfn_GDExtensionSpxUiSetFlip(const GDExtensionSpxUiSetFlip fn, GdObj 
 		return;
 	}
 	fn(obj, horizontal, is_flip);
+}
+void cgo_callfn_GDExtensionSpxSpriteBatchRetrievePositions(const GDExtensionSpxSpriteBatchRetrievePositions fn, GdArray objs, GdArray* ret_val) {
+	if (!fn) {
+		return;
+	}
+	fn(objs, ret_val);
 }
 #endif

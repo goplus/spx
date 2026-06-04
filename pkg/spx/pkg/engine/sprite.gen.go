@@ -46,6 +46,10 @@ func (pself *Sprite) BatchRetrievePositions(objs Array) Array {
 	return SpriteMgr.BatchRetrievePositions(objs)
 }
 
+func (pself *Sprite) BatchUpdatePhysics(buffer []float32) {
+	SpriteMgr.BatchUpdatePhysics(buffer)
+}
+
 func (pself *Sprite) BatchUpdateTransforms(buffer []float32) {
 	SpriteMgr.BatchUpdateTransforms(buffer)
 }

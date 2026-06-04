@@ -17,6 +17,7 @@
 package runtime
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -472,6 +473,37 @@ func TestSyncBatchPositions(t *testing.T) {
 	}
 	if items[2].x != 31 || items[2].y != 32 {
 		t.Fatalf("item 2 = %+v, want synced coordinates", items[2])
+	}
+}
+
+func TestSyncBatchPositionsSkipsMissingSentinel(t *testing.T) {
+	type target struct {
+		id   int64
+		x, y float64
+	}
+
+	items := []*target{{id: 1}, {id: 2}}
+	SyncBatchPositions(
+		items,
+		func(item *target) bool { return true },
+		func(item *target) int64 { return item.id },
+		func(ids []int64) []float32 {
+			if len(ids) != 2 || ids[0] != 1 || ids[1] != 2 {
+				t.Fatalf("unexpected ids: %+v", ids)
+			}
+			missing := float32(math.NaN())
+			return []float32{11, 12, missing, missing}
+		},
+		func(item *target, x, y float64) {
+			item.x, item.y = x, y
+		},
+	)
+
+	if items[0].x != 11 || items[0].y != 12 {
+		t.Fatalf("item 0 = %+v, want synced coordinates", items[0])
+	}
+	if items[1].x != 0 || items[1].y != 0 {
+		t.Fatalf("item 1 should remain untouched when sprite is missing: %+v", items[1])
 	}
 }
 

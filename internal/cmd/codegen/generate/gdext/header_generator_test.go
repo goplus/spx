@@ -72,3 +72,45 @@ public:
 	require.Equal(t, "*float32", spec.DataArgPtrType)
 	require.Equal(t, "int32", spec.LenArgGoType)
 }
+
+func TestGenerateManagerHeaderRegistersArrayTransformBridge(t *testing.T) {
+	input := strings.TrimSpace(`
+class SpxSpriteMgr {
+public:
+	SPX_API void batch_retrieve_positions(const GdObj *ids, int count, float *out, int out_len);
+};
+`)
+
+	output := generateManagerHeader(input, false)
+
+	require.Contains(t, output, "GDExtensionSpxSpriteBatchRetrievePositions")
+	require.NotContains(t, output, "GDExtensionSpxSpriteBatchRetrievePositionsRaw")
+
+	specs := common.ListArrayTransformBridgeSpecs()
+	require.Len(t, specs, 1)
+	require.Equal(t, "GDExtensionSpxSpriteBatchRetrievePositions", specs[0].FunctionName)
+	require.Equal(t, "objs", specs[0].ArrayArgName)
+	require.Equal(t, "batch_retrieve_positions", specs[0].MethodName)
+	require.EqualValues(t, 6, specs[0].InputArrayType)
+	require.EqualValues(t, 2, specs[0].OutputArrayType)
+	require.Equal(t, 2, specs[0].OutputCountScale)
+	require.Len(t, specs[0].Params, 4)
+	require.Equal(t, "const GdObj *", specs[0].Params[0].CType)
+	require.Equal(t, "ids", specs[0].Params[0].Name)
+	require.Equal(t, "float *", specs[0].Params[2].CType)
+	require.Equal(t, "out", specs[0].Params[2].Name)
+}
+
+func TestGenerateManagerHeaderSynthesizesFastReturnTypedefForRawFormat(t *testing.T) {
+	input := strings.TrimSpace(`
+class SpxSpriteMgr {
+public:
+	SPX_API void batch_retrieve_positions(const GdObj *ids, int count, float *out, int out_len);
+};
+`)
+
+	output := generateManagerHeader(input, true)
+
+	require.Contains(t, output, "typedef GdArray (*GDExtensionSpxSpriteBatchRetrievePositions)(GdArray objs);")
+	require.NotContains(t, output, "GDExtensionSpxSpriteBatchRetrievePositionsRaw")
+}

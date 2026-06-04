@@ -27,6 +27,7 @@ func directBool(value uint32) bool {
 
 //go:wasmexport gdspx_on_engine_update
 func GdspxOnEngineUpdate(delta float64) {
+	SyncWebInputSnapshot()
 	if callbacks.OnEngineUpdate != nil {
 		callbacks.OnEngineUpdate(delta)
 	}
@@ -34,6 +35,7 @@ func GdspxOnEngineUpdate(delta float64) {
 
 //go:wasmexport gdspx_on_engine_fixed_update
 func GdspxOnEngineFixedUpdate(delta float64) {
+	SyncWebInputSnapshot()
 	if callbacks.OnEngineFixedUpdate != nil {
 		callbacks.OnEngineFixedUpdate(delta)
 	}
@@ -160,6 +162,7 @@ func GdspxOnMouseReleased(keyID int64) {
 
 //go:wasmexport gdspx_on_key_pressed
 func GdspxOnKeyPressed(keyID int64) {
+	RecordWebKeyState(keyID, true)
 	if callbacks.OnKeyPressed != nil {
 		callbacks.OnKeyPressed(keyID)
 	}
@@ -167,6 +170,7 @@ func GdspxOnKeyPressed(keyID int64) {
 
 //go:wasmexport gdspx_on_key_released
 func GdspxOnKeyReleased(keyID int64) {
+	RecordWebKeyState(keyID, false)
 	if callbacks.OnKeyReleased != nil {
 		callbacks.OnKeyReleased(keyID)
 	}

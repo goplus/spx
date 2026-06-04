@@ -63,6 +63,21 @@ type NativeArrayBridgeSpec struct {
 	FastArrayType int32
 }
 
+type RawExportParam struct {
+	CType string
+	Name  string
+}
+
+type ArrayTransformBridgeSpec struct {
+	FunctionName     string
+	ArrayArgName     string
+	MethodName       string
+	Params           []RawExportParam
+	InputArrayType   int32
+	OutputArrayType  int32
+	OutputCountScale int
+}
+
 func init() {
 	// Set callback function so the clang package can get the list of known manager names
 	clang.KnownManagerNamesProvider = func() []string {
@@ -455,10 +470,11 @@ func TrimPrefix(typeName, prefix string) string {
 }
 
 var (
-	managerSet         = map[string]bool{}
-	cppType2Go         = map[string]string{}
-	KnownManagerNames  = []string{} // List of correct manager names obtained from header parsing
-	nativeArrayBridges = map[string]NativeArrayBridgeSpec{}
+	managerSet            = map[string]bool{}
+	cppType2Go            = map[string]string{}
+	KnownManagerNames     = []string{} // List of correct manager names obtained from header parsing
+	nativeArrayBridges    = map[string]NativeArrayBridgeSpec{}
+	arrayTransformBridges = map[string]ArrayTransformBridgeSpec{}
 )
 
 type ManagerData struct {
@@ -487,13 +503,45 @@ func ClearNativeArrayBridgeSpecs() {
 	nativeArrayBridges = map[string]NativeArrayBridgeSpec{}
 }
 
+func ClearArrayTransformBridgeSpecs() {
+	arrayTransformBridges = map[string]ArrayTransformBridgeSpec{}
+}
+
 func RegisterNativeArrayBridgeSpec(spec NativeArrayBridgeSpec) {
 	nativeArrayBridges[spec.BaseFunctionName] = spec
+}
+
+func RegisterArrayTransformBridgeSpec(spec ArrayTransformBridgeSpec) {
+	arrayTransformBridges[spec.FunctionName] = spec
+}
+
+func HasArrayTransformBridgeSpec(function *clang.TypedefFunction) bool {
+	if function == nil {
+		return false
+	}
+	_, ok := arrayTransformBridges[function.Name]
+	return ok
 }
 
 func GetNativeArrayBridgeSpec(functionName string) (NativeArrayBridgeSpec, bool) {
 	spec, ok := nativeArrayBridges[functionName]
 	return spec, ok
+}
+
+func GetArrayTransformBridgeSpec(functionName string) (ArrayTransformBridgeSpec, bool) {
+	spec, ok := arrayTransformBridges[functionName]
+	return spec, ok
+}
+
+func ListArrayTransformBridgeSpecs() []ArrayTransformBridgeSpec {
+	specs := make([]ArrayTransformBridgeSpec, 0, len(arrayTransformBridges))
+	for _, spec := range arrayTransformBridges {
+		specs = append(specs, spec)
+	}
+	sort.Slice(specs, func(i, j int) bool {
+		return specs[i].FunctionName < specs[j].FunctionName
+	})
+	return specs
 }
 
 func HasNativeArrayBridgeSpec(function *clang.TypedefFunction) bool {

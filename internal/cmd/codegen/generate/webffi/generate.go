@@ -245,6 +245,10 @@ func getManagerFuncName(function *clang.TypedefFunction) string {
 }
 
 func getManagerFuncBody(function *clang.TypedefFunction) string {
+	if body, ok := getInputCacheManagerFuncBody(function.Name); ok {
+		return body
+	}
+
 	sb := strings.Builder{}
 	prefixTab := "\t"
 	params := []string{}
@@ -316,6 +320,108 @@ func getManagerFuncBody(function *clang.TypedefFunction) string {
 	}
 	return sb.String()
 }
+
+type managerFuncBodySpec struct {
+	call      string
+	fallback  []string
+	boolAsInt bool
+}
+
+var inputCacheManagerFuncBodies = map[string]managerFuncBodySpec{
+	"GDExtensionSpxInputGetGlobalMousePos": {
+		call: "WebInputMousePos(func() Vec2",
+		fallback: []string{
+			"_retValue := API.SpxInputGetGlobalMousePos.Invoke()",
+			"return JsToGdVec2(_retValue)",
+		},
+	},
+	"GDExtensionSpxInputGetKey": {
+		call: "WebInputKeyState(key, func() bool",
+		fallback: []string{
+			"arg0Low, arg0High := JsSplitGdInt(key)",
+			"_retValue := API.SpxInputGetKey.Invoke(arg0Low, arg0High)",
+			"return JsToGdBool(_retValue)",
+		},
+	},
+	"GDExtensionSpxInputGetMouseState": {
+		call: "WebInputMouseState(mouse_id, func() bool",
+		fallback: []string{
+			"arg0Low, arg0High := JsSplitGdInt(mouse_id)",
+			"_retValue := API.SpxInputGetMouseState.Invoke(arg0Low, arg0High)",
+			"return JsToGdBool(_retValue)",
+		},
+	},
+	"GDExtensionSpxInputGetKeyState": {
+		call: "WebInputKeyState(key, func() bool",
+		fallback: []string{
+			"arg0Low, arg0High := JsSplitGdInt(key)",
+			"_retValue := API.SpxInputGetKeyState.Invoke(arg0Low, arg0High)",
+			"return JsToGdInt(_retValue) != 0",
+		},
+		boolAsInt: true,
+	},
+	"GDExtensionSpxInputGetAxis": {
+		call: "CachedActionAxis(neg_action, pos_action, func() float64",
+		fallback: []string{
+			"arg0 := JsFromGdString(neg_action)",
+			"arg1 := JsFromGdString(pos_action)",
+			"_retValue := API.SpxInputGetAxis.Invoke(arg0, arg1)",
+			"return JsToGdFloat(_retValue)",
+		},
+	},
+	"GDExtensionSpxInputIsActionPressed":      actionBoolManagerFuncBody("pressed", "API.SpxInputIsActionPressed"),
+	"GDExtensionSpxInputIsActionJustPressed":  actionBoolManagerFuncBody("just_pressed", "API.SpxInputIsActionJustPressed"),
+	"GDExtensionSpxInputIsActionJustReleased": actionBoolManagerFuncBody("just_released", "API.SpxInputIsActionJustReleased"),
+}
+
+func getInputCacheManagerFuncBody(name string) (string, bool) {
+	spec, ok := inputCacheManagerFuncBodies[name]
+	if !ok {
+		return "", false
+	}
+	if spec.boolAsInt {
+		return cachedBoolAsIntBody(spec.call, spec.fallback...), true
+	}
+	return cachedReturnBody(spec.call, spec.fallback...), true
+}
+
+func actionBoolManagerFuncBody(kind, api string) managerFuncBodySpec {
+	return managerFuncBodySpec{
+		call: fmt.Sprintf("CachedActionBool(%q, action, func() bool", kind),
+		fallback: []string{
+			"arg0 := JsFromGdString(action)",
+			"_retValue := " + api + ".Invoke(arg0)",
+			"return JsToGdBool(_retValue)",
+		},
+	}
+}
+
+func cachedReturnBody(call string, fallbackLines ...string) string {
+	lines := []string{"return " + call + " {"}
+	lines = appendIndented(lines, "\t\t", fallbackLines...)
+	lines = append(lines, "\t})")
+	return strings.Join(lines, "\n")
+}
+
+func cachedBoolAsIntBody(call string, fallbackLines ...string) string {
+	lines := []string{"if " + call + " {"}
+	lines = appendIndented(lines, "\t\t", fallbackLines...)
+	lines = append(lines,
+		"\t}) {",
+		"\t\treturn 1",
+		"\t}",
+		"\treturn 0",
+	)
+	return strings.Join(lines, "\n")
+}
+
+func appendIndented(lines []string, indent string, values ...string) []string {
+	for _, value := range values {
+		lines = append(lines, indent+value)
+	}
+	return lines
+}
+
 func getManagerInterface(function *clang.TypedefFunction) string {
 	prefix := "GDExtensionSpx"
 	sb := strings.Builder{}
@@ -417,12 +523,26 @@ func flatJsScratchAccessor(typeName string) string {
 }
 
 func getJsFuncBody(function *clang.TypedefFunction) string {
+	if spec, ok := GetArrayTransformBridgeSpec(function.Name); ok {
+		return "var _fastRetValue = TryArrayTransformFastPath(_gdFuncPtr, " + spec.ArrayArgName + ", " +
+			strconv.Itoa(int(spec.InputArrayType)) + ", " + strconv.Itoa(int(spec.OutputArrayType)) + ", " +
+			strconv.Itoa(spec.OutputCountScale) + ");\n" +
+			"\tif (_fastRetValue == null) {\n" +
+			"\t\tthrow new Error(\"gd" + LoadProcAddressName(function.Name) + " fast path unavailable\");\n" +
+			"\t}\n" +
+			"\treturn _fastRetValue"
+	}
+	if function.Name == "GDExtensionSpxInputWriteSnapshot" {
+		return "var _arg0 = RequireWasmFastArray(out, \"gdspx_input_write_snapshot\");\n" +
+			"\tvar _arg1 = out.count;\n" +
+			"\t_gdFuncPtr(_arg0, _arg1);"
+	}
 	if spec, ok := GetNativeArrayBridgeSpec(function.Name); ok {
 		if HasEffectiveReturn(function) {
 			panic(fmt.Sprintf("native-array webffi path does not support return values: %s", function.Name))
 		}
 		argName := spec.BaseArgName
-		return "var _arg0 = CopyFastArrayToWasm(" + argName + ");\n" +
+		return "var _arg0 = GetFastArrayWasmPtr(" + argName + ");\n" +
 			"\tvar _arg1 = " + argName + ".count;\n" +
 			"\t_gdFuncPtr(_arg0, _arg1);"
 	}
@@ -440,7 +560,6 @@ func getJsFuncBody(function *clang.TypedefFunction) string {
 			"\tFreeGdVec2(_retValue);\n" +
 			"\treturn _scratch"
 	}
-
 	sb := strings.Builder{}
 	prefixTab := "\t"
 	params := []string{}

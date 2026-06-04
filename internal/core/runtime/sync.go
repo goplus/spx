@@ -17,6 +17,7 @@
 package runtime
 
 import (
+	"math"
 	"sync"
 
 	"github.com/goplus/spbase/mathf"
@@ -53,7 +54,15 @@ func SyncBatchPositions[T any](
 
 	positions := fetchPositions(spriteIDs)
 	for i, target := range targets {
-		applyPosition(target, float64(positions[i*2]), float64(positions[i*2+1]))
+		if i*2+1 >= len(positions) {
+			return
+		}
+		x := float64(positions[i*2])
+		y := float64(positions[i*2+1])
+		if math.IsNaN(x) || math.IsNaN(y) {
+			continue
+		}
+		applyPosition(target, x, y)
 	}
 }
 

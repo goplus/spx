@@ -73,6 +73,7 @@ func registerWebGlobals() {
 		js.Global().Set("go_wasm_init", goWasmInitCallbackHandle)
 	}
 	registerCallbackDispatcher()
+	registerContactEventQueue()
 }
 
 func registerCallbackDispatcher() {
