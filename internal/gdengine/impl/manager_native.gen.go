@@ -406,6 +406,42 @@ func (pself *inputMgr) IsActionJustReleased(action string) bool {
 	retValue := CallInputIsActionJustReleased(arg0)
 	return ToBool(retValue)
 }
+func (pself *inputMgr) RegisterAction(action string) int64 {
+	arg0Str := C.CString(action)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	retValue := CallInputRegisterAction(arg0)
+	return ToInt64(retValue)
+}
+func (pself *inputMgr) GetAxisId(neg_action_id int64, pos_action_id int64) float64 {
+	arg0 := ToGdInt(neg_action_id)
+	arg1 := ToGdInt(pos_action_id)
+	retValue := CallInputGetAxisId(arg0, arg1)
+	return ToFloat64(retValue)
+}
+func (pself *inputMgr) IsActionPressedId(action_id int64) bool {
+	arg0 := ToGdInt(action_id)
+	retValue := CallInputIsActionPressedId(arg0)
+	return ToBool(retValue)
+}
+func (pself *inputMgr) IsActionJustPressedId(action_id int64) bool {
+	arg0 := ToGdInt(action_id)
+	retValue := CallInputIsActionJustPressedId(arg0)
+	return ToBool(retValue)
+}
+func (pself *inputMgr) IsActionJustReleasedId(action_id int64) bool {
+	arg0 := ToGdInt(action_id)
+	retValue := CallInputIsActionJustReleasedId(arg0)
+	return ToBool(retValue)
+}
+func (pself *inputMgr) WriteSnapshot(out []float32) {
+	var arg0 *float32
+	if len(out) > 0 {
+		arg0 = &out[0]
+	}
+	arg1 := int32(len(out))
+	CallInputWriteSnapshot(arg0, arg1)
+}
 func (pself *navigationMgr) SetupPathFinderWithSize(grid_size Vec2, cell_size Vec2, with_jump bool, with_debug bool) {
 	arg0 := ToGdVec2(grid_size)
 	arg1 := ToGdVec2(cell_size)
@@ -1603,17 +1639,13 @@ func (pself *spriteMgr) BatchUpdateVisuals(buffer []float32) {
 	arg1 := int32(len(buffer))
 	CallSpriteBatchUpdateVisuals(arg0, arg1)
 }
-func (pself *spriteMgr) BatchRetrievePositions(objs Array) Array {
-	arg0Info := ToGdArrayInfo(objs)
-	if arg0Info != nil {
-		defer arg0Info.Free()
+func (pself *spriteMgr) BatchUpdatePhysics(buffer []float32) {
+	var arg0 *float32
+	if len(buffer) > 0 {
+		arg0 = &buffer[0]
 	}
-	arg0 := GdArray(nil)
-	if arg0Info != nil {
-		arg0 = arg0Info.Raw()
-	}
-	retValue := CallSpriteBatchRetrievePositions(arg0)
-	return ToArray(retValue)
+	arg1 := int32(len(buffer))
+	CallSpriteBatchUpdatePhysics(arg0, arg1)
 }
 func (pself *tilemapMgr) OpenDrawTilesWithSize(tile_size int64) {
 	arg0 := ToGdInt(tile_size)
@@ -1999,4 +2031,16 @@ func (pself *uiMgr) SetFlip(obj Object, horizontal bool, is_flip bool) {
 	arg1 := ToGdBool(horizontal)
 	arg2 := ToGdBool(is_flip)
 	CallUiSetFlip(arg0, arg1, arg2)
+}
+func (pself *spriteMgr) BatchRetrievePositions(objs Array) Array {
+	arg0Info := ToGdArrayInfo(objs)
+	if arg0Info != nil {
+		defer arg0Info.Free()
+	}
+	arg0 := GdArray(nil)
+	if arg0Info != nil {
+		arg0 = arg0Info.Raw()
+	}
+	retValue := CallSpriteBatchRetrievePositions(arg0)
+	return ToArray(retValue)
 }

@@ -42,6 +42,12 @@ func gdspxDispatch(this js.Value, args []js.Value) any {
 		{{ range $j, $arg := $f.Arguments -}}
 		arg{{ $j }} := JsTo{{mustPrimitiveTypeName $arg $f.Name}}(args[{{add $j 1}}])
 		{{ end -}}
+		{{ $cbName := trimPrefix $f.Name "GDExtensionSpxCallback" -}}
+		{{ if eq $cbName "OnKeyPressed" -}}
+		RecordWebKeyState(arg0, true)
+		{{ else if eq $cbName "OnKeyReleased" -}}
+		RecordWebKeyState(arg0, false)
+		{{ end -}}
 		callbacks.{{ trimPrefix $f.Name "GDExtensionSpxCallback" }}(
 			{{- range $j, $arg := $f.Arguments -}}
 				arg{{ $j }},

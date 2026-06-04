@@ -450,6 +450,46 @@ func (*inputMgrImpl) IsActionJustReleased(action string) bool {
 	})
 	return _ret1
 }
+func (*inputMgrImpl) RegisterAction(action string) int64 {
+	var _ret1 int64
+	callInMainThread(func() {
+		_ret1 = gdx.InputMgr.RegisterAction(action)
+	})
+	return _ret1
+}
+func (*inputMgrImpl) GetAxisId(neg_action_id int64, pos_action_id int64) float64 {
+	var _ret1 float64
+	callInMainThread(func() {
+		_ret1 = gdx.InputMgr.GetAxisId(neg_action_id, pos_action_id)
+	})
+	return _ret1
+}
+func (*inputMgrImpl) IsActionPressedId(action_id int64) bool {
+	var _ret1 bool
+	callInMainThread(func() {
+		_ret1 = gdx.InputMgr.IsActionPressedId(action_id)
+	})
+	return _ret1
+}
+func (*inputMgrImpl) IsActionJustPressedId(action_id int64) bool {
+	var _ret1 bool
+	callInMainThread(func() {
+		_ret1 = gdx.InputMgr.IsActionJustPressedId(action_id)
+	})
+	return _ret1
+}
+func (*inputMgrImpl) IsActionJustReleasedId(action_id int64) bool {
+	var _ret1 bool
+	callInMainThread(func() {
+		_ret1 = gdx.InputMgr.IsActionJustReleasedId(action_id)
+	})
+	return _ret1
+}
+func (*inputMgrImpl) WriteSnapshot(out []float32) {
+	callInMainThread(func() {
+		gdx.InputMgr.WriteSnapshot(out)
+	})
+}
 
 // INavigationMgr
 func (*navigationMgrImpl) SetupPathFinderWithSize(grid_size Vec2, cell_size Vec2, with_jump bool, with_debug bool) {
@@ -1688,6 +1728,11 @@ func (*spriteMgrImpl) BatchUpdateTransforms(buffer []float32) {
 func (*spriteMgrImpl) BatchUpdateVisuals(buffer []float32) {
 	callInMainThread(func() {
 		gdx.SpriteMgr.BatchUpdateVisuals(buffer)
+	})
+}
+func (*spriteMgrImpl) BatchUpdatePhysics(buffer []float32) {
+	callInMainThread(func() {
+		gdx.SpriteMgr.BatchUpdatePhysics(buffer)
 	})
 }
 func (*spriteMgrImpl) BatchRetrievePositions(objs gdx.Array) gdx.Array {

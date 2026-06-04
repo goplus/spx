@@ -16,7 +16,10 @@
 
 package engine
 
-import "testing"
+import (
+	"math"
+	"testing"
+)
 
 func TestSpriteSyncBufferSerializeReusesScratch(t *testing.T) {
 	buffer := NewSpriteSyncBuffer(1)
@@ -87,6 +90,71 @@ func TestVisualSyncBufferSerializeReusesScratch(t *testing.T) {
 	}
 	if got, want := second[1], float32(8); got != want {
 		t.Fatalf("sprite id = %v, want %v", got, want)
+	}
+}
+
+func TestPhysicsSyncBufferSerializeReusesScratch(t *testing.T) {
+	buffer := NewPhysicsSyncBuffer(2)
+	buffer.SetVelocity(7, 1.5, -2.5)
+	buffer.SetGravity(7, 9.8)
+
+	first := buffer.Serialize()
+	if len(first) == 0 {
+		t.Fatal("Serialize returned an empty buffer")
+	}
+	firstPtr := &first[0]
+
+	buffer.Clear()
+	buffer.SetUseGravity(8, true)
+
+	second := buffer.Serialize()
+	if len(second) == 0 {
+		t.Fatal("Serialize returned an empty buffer after reuse")
+	}
+	if firstPtr != &second[0] {
+		t.Fatal("Serialize allocated a new backing array instead of reusing scratch storage")
+	}
+	if got, want := len(second), 1+PhysicsCmdFields; got != want {
+		t.Fatalf("Serialize len = %d, want %d", got, want)
+	}
+	if got, want := cap(second), len(second); got != want {
+		t.Fatalf("Serialize cap = %d, want %d", got, want)
+	}
+	if got, want := second[0], float32(1); got != want {
+		t.Fatalf("header count = %v, want %v", got, want)
+	}
+	if got, want := second[1], float32(PhysicsCmdUseGravity); got != want {
+		t.Fatalf("first cmd = %v, want %v", got, want)
+	}
+	if got, want := math.Float32bits(second[2]), uint32(8); got != want {
+		t.Fatalf("first sprite id low bits = %x, want %x", got, want)
+	}
+	if got, want := math.Float32bits(second[3]), uint32(0); got != want {
+		t.Fatalf("first sprite id high bits = %x, want %x", got, want)
+	}
+	if got, want := second[4], float32(1); got != want {
+		t.Fatalf("first arg = %v, want %v", got, want)
+	}
+}
+
+func TestPhysicsSyncBufferSerializePreservesIntegerBits(t *testing.T) {
+	buffer := NewPhysicsSyncBuffer(1)
+	const id = int64(0x1122334455667788)
+	const layer = int64(0xf0000001)
+	buffer.SetCollisionLayer(id, layer)
+
+	got := buffer.Serialize()
+	if len(got) != 1+PhysicsCmdFields {
+		t.Fatalf("Serialize len = %d, want %d", len(got), 1+PhysicsCmdFields)
+	}
+	if got, want := math.Float32bits(got[2]), uint32(0x55667788); got != want {
+		t.Fatalf("sprite id low bits = %x, want %x", got, want)
+	}
+	if got, want := math.Float32bits(got[3]), uint32(0x11223344); got != want {
+		t.Fatalf("sprite id high bits = %x, want %x", got, want)
+	}
+	if got, want := math.Float32bits(got[4]), uint32(layer); got != want {
+		t.Fatalf("layer bits = %x, want %x", got, want)
 	}
 }
 

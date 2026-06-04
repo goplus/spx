@@ -217,12 +217,14 @@ func gdspxDispatch(this js.Value, args []js.Value) any {
 			return nil
 		}
 		arg0 := JsToGdInt(args[1])
+		RecordWebKeyState(arg0, true)
 		callbacks.OnKeyPressed(arg0)
 	} else if eventVal.Equal(jsEventOnKeyReleased) {
 		if callbacks.OnKeyReleased == nil {
 			return nil
 		}
 		arg0 := JsToGdInt(args[1])
+		RecordWebKeyState(arg0, false)
 		callbacks.OnKeyReleased(arg0)
 	} else if eventVal.Equal(jsEventOnActionPressed) {
 		if callbacks.OnActionPressed == nil {

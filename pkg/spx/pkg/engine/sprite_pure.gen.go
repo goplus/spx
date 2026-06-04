@@ -44,6 +44,9 @@ func (pself *Sprite) BatchRetrievePositions(objs Array) Array {
 	return nil
 }
 
+func (pself *Sprite) BatchUpdatePhysics(buffer []float32) {
+}
+
 func (pself *Sprite) BatchUpdateTransforms(buffer []float32) {
 }
 

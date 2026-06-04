@@ -85,6 +85,12 @@ type GDExtensionInterface struct {
 	SpxInputIsActionPressed                     GDExtensionSpxInputIsActionPressed
 	SpxInputIsActionJustPressed                 GDExtensionSpxInputIsActionJustPressed
 	SpxInputIsActionJustReleased                GDExtensionSpxInputIsActionJustReleased
+	SpxInputRegisterAction                      GDExtensionSpxInputRegisterAction
+	SpxInputGetAxisId                           GDExtensionSpxInputGetAxisId
+	SpxInputIsActionPressedId                   GDExtensionSpxInputIsActionPressedId
+	SpxInputIsActionJustPressedId               GDExtensionSpxInputIsActionJustPressedId
+	SpxInputIsActionJustReleasedId              GDExtensionSpxInputIsActionJustReleasedId
+	SpxInputWriteSnapshot                       GDExtensionSpxInputWriteSnapshot
 	SpxNavigationSetupPathFinderWithSize        GDExtensionSpxNavigationSetupPathFinderWithSize
 	SpxNavigationSetupPathFinder                GDExtensionSpxNavigationSetupPathFinder
 	SpxNavigationSetObstacle                    GDExtensionSpxNavigationSetObstacle
@@ -291,7 +297,7 @@ type GDExtensionInterface struct {
 	SpxSpriteGetPixelCollisionSamplingStep      GDExtensionSpxSpriteGetPixelCollisionSamplingStep
 	SpxSpriteBatchUpdateTransforms              GDExtensionSpxSpriteBatchUpdateTransforms
 	SpxSpriteBatchUpdateVisuals                 GDExtensionSpxSpriteBatchUpdateVisuals
-	SpxSpriteBatchRetrievePositions             GDExtensionSpxSpriteBatchRetrievePositions
+	SpxSpriteBatchUpdatePhysics                 GDExtensionSpxSpriteBatchUpdatePhysics
 	SpxTilemapOpenDrawTilesWithSize             GDExtensionSpxTilemapOpenDrawTilesWithSize
 	SpxTilemapOpenDrawTiles                     GDExtensionSpxTilemapOpenDrawTiles
 	SpxTilemapSetLayerIndex                     GDExtensionSpxTilemapSetLayerIndex
@@ -356,6 +362,7 @@ type GDExtensionInterface struct {
 	SpxUiSetRotation                            GDExtensionSpxUiSetRotation
 	SpxUiGetFlip                                GDExtensionSpxUiGetFlip
 	SpxUiSetFlip                                GDExtensionSpxUiSetFlip
+	SpxSpriteBatchRetrievePositions             GDExtensionSpxSpriteBatchRetrievePositions
 }
 
 func (x *GDExtensionInterface) resolveAPIFunctions() {
@@ -408,6 +415,12 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxInputIsActionPressed = (GDExtensionSpxInputIsActionPressed)(resolveCFunc("spx_input_is_action_pressed"))
 	x.SpxInputIsActionJustPressed = (GDExtensionSpxInputIsActionJustPressed)(resolveCFunc("spx_input_is_action_just_pressed"))
 	x.SpxInputIsActionJustReleased = (GDExtensionSpxInputIsActionJustReleased)(resolveCFunc("spx_input_is_action_just_released"))
+	x.SpxInputRegisterAction = (GDExtensionSpxInputRegisterAction)(resolveCFunc("spx_input_register_action"))
+	x.SpxInputGetAxisId = (GDExtensionSpxInputGetAxisId)(resolveCFunc("spx_input_get_axis_id"))
+	x.SpxInputIsActionPressedId = (GDExtensionSpxInputIsActionPressedId)(resolveCFunc("spx_input_is_action_pressed_id"))
+	x.SpxInputIsActionJustPressedId = (GDExtensionSpxInputIsActionJustPressedId)(resolveCFunc("spx_input_is_action_just_pressed_id"))
+	x.SpxInputIsActionJustReleasedId = (GDExtensionSpxInputIsActionJustReleasedId)(resolveCFunc("spx_input_is_action_just_released_id"))
+	x.SpxInputWriteSnapshot = (GDExtensionSpxInputWriteSnapshot)(resolveCFunc("spx_input_write_snapshot"))
 	x.SpxNavigationSetupPathFinderWithSize = (GDExtensionSpxNavigationSetupPathFinderWithSize)(resolveCFunc("spx_navigation_setup_path_finder_with_size"))
 	x.SpxNavigationSetupPathFinder = (GDExtensionSpxNavigationSetupPathFinder)(resolveCFunc("spx_navigation_setup_path_finder"))
 	x.SpxNavigationSetObstacle = (GDExtensionSpxNavigationSetObstacle)(resolveCFunc("spx_navigation_set_obstacle"))
@@ -614,7 +627,7 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxSpriteGetPixelCollisionSamplingStep = (GDExtensionSpxSpriteGetPixelCollisionSamplingStep)(resolveCFunc("spx_sprite_get_pixel_collision_sampling_step"))
 	x.SpxSpriteBatchUpdateTransforms = (GDExtensionSpxSpriteBatchUpdateTransforms)(resolveCFunc("spx_sprite_batch_update_transforms"))
 	x.SpxSpriteBatchUpdateVisuals = (GDExtensionSpxSpriteBatchUpdateVisuals)(resolveCFunc("spx_sprite_batch_update_visuals"))
-	x.SpxSpriteBatchRetrievePositions = (GDExtensionSpxSpriteBatchRetrievePositions)(resolveCFunc("spx_sprite_batch_retrieve_positions"))
+	x.SpxSpriteBatchUpdatePhysics = (GDExtensionSpxSpriteBatchUpdatePhysics)(resolveCFunc("spx_sprite_batch_update_physics"))
 	x.SpxTilemapOpenDrawTilesWithSize = (GDExtensionSpxTilemapOpenDrawTilesWithSize)(resolveCFunc("spx_tilemap_open_draw_tiles_with_size"))
 	x.SpxTilemapOpenDrawTiles = (GDExtensionSpxTilemapOpenDrawTiles)(resolveCFunc("spx_tilemap_open_draw_tiles"))
 	x.SpxTilemapSetLayerIndex = (GDExtensionSpxTilemapSetLayerIndex)(resolveCFunc("spx_tilemap_set_layer_index"))
@@ -679,4 +692,5 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxUiSetRotation = (GDExtensionSpxUiSetRotation)(resolveCFunc("spx_ui_set_rotation"))
 	x.SpxUiGetFlip = (GDExtensionSpxUiGetFlip)(resolveCFunc("spx_ui_get_flip"))
 	x.SpxUiSetFlip = (GDExtensionSpxUiSetFlip)(resolveCFunc("spx_ui_set_flip"))
+	x.SpxSpriteBatchRetrievePositions = (GDExtensionSpxSpriteBatchRetrievePositions)(resolveCFunc("spx_sprite_batch_retrieve_positions"))
 }

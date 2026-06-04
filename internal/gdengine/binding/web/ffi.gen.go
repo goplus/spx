@@ -89,6 +89,12 @@ type GDExtensionInterface struct {
 	SpxInputIsActionPressed                     js.Value
 	SpxInputIsActionJustPressed                 js.Value
 	SpxInputIsActionJustReleased                js.Value
+	SpxInputRegisterAction                      js.Value
+	SpxInputGetAxisId                           js.Value
+	SpxInputIsActionPressedId                   js.Value
+	SpxInputIsActionJustPressedId               js.Value
+	SpxInputIsActionJustReleasedId              js.Value
+	SpxInputWriteSnapshot                       js.Value
 	SpxNavigationSetupPathFinderWithSize        js.Value
 	SpxNavigationSetupPathFinder                js.Value
 	SpxNavigationSetObstacle                    js.Value
@@ -295,7 +301,7 @@ type GDExtensionInterface struct {
 	SpxSpriteGetPixelCollisionSamplingStep      js.Value
 	SpxSpriteBatchUpdateTransforms              js.Value
 	SpxSpriteBatchUpdateVisuals                 js.Value
-	SpxSpriteBatchRetrievePositions             js.Value
+	SpxSpriteBatchUpdatePhysics                 js.Value
 	SpxTilemapOpenDrawTilesWithSize             js.Value
 	SpxTilemapOpenDrawTiles                     js.Value
 	SpxTilemapSetLayerIndex                     js.Value
@@ -360,6 +366,7 @@ type GDExtensionInterface struct {
 	SpxUiSetRotation                            js.Value
 	SpxUiGetFlip                                js.Value
 	SpxUiSetFlip                                js.Value
+	SpxSpriteBatchRetrievePositions             js.Value
 }
 
 func (x *GDExtensionInterface) resolveAPIFunctions() {
@@ -412,6 +419,12 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxInputIsActionPressed = resolveJSFunc("gdspx_input_is_action_pressed")
 	x.SpxInputIsActionJustPressed = resolveJSFunc("gdspx_input_is_action_just_pressed")
 	x.SpxInputIsActionJustReleased = resolveJSFunc("gdspx_input_is_action_just_released")
+	x.SpxInputRegisterAction = resolveJSFunc("gdspx_input_register_action")
+	x.SpxInputGetAxisId = resolveJSFunc("gdspx_input_get_axis_id")
+	x.SpxInputIsActionPressedId = resolveJSFunc("gdspx_input_is_action_pressed_id")
+	x.SpxInputIsActionJustPressedId = resolveJSFunc("gdspx_input_is_action_just_pressed_id")
+	x.SpxInputIsActionJustReleasedId = resolveJSFunc("gdspx_input_is_action_just_released_id")
+	x.SpxInputWriteSnapshot = resolveJSFunc("gdspx_input_write_snapshot")
 	x.SpxNavigationSetupPathFinderWithSize = resolveJSFunc("gdspx_navigation_setup_path_finder_with_size")
 	x.SpxNavigationSetupPathFinder = resolveJSFunc("gdspx_navigation_setup_path_finder")
 	x.SpxNavigationSetObstacle = resolveJSFunc("gdspx_navigation_set_obstacle")
@@ -618,7 +631,7 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxSpriteGetPixelCollisionSamplingStep = resolveJSFunc("gdspx_sprite_get_pixel_collision_sampling_step")
 	x.SpxSpriteBatchUpdateTransforms = resolveJSFunc("gdspx_sprite_batch_update_transforms")
 	x.SpxSpriteBatchUpdateVisuals = resolveJSFunc("gdspx_sprite_batch_update_visuals")
-	x.SpxSpriteBatchRetrievePositions = resolveJSFunc("gdspx_sprite_batch_retrieve_positions")
+	x.SpxSpriteBatchUpdatePhysics = resolveJSFunc("gdspx_sprite_batch_update_physics")
 	x.SpxTilemapOpenDrawTilesWithSize = resolveJSFunc("gdspx_tilemap_open_draw_tiles_with_size")
 	x.SpxTilemapOpenDrawTiles = resolveJSFunc("gdspx_tilemap_open_draw_tiles")
 	x.SpxTilemapSetLayerIndex = resolveJSFunc("gdspx_tilemap_set_layer_index")
@@ -683,4 +696,5 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxUiSetRotation = resolveJSFunc("gdspx_ui_set_rotation")
 	x.SpxUiGetFlip = resolveJSFunc("gdspx_ui_get_flip")
 	x.SpxUiSetFlip = resolveJSFunc("gdspx_ui_set_flip")
+	x.SpxSpriteBatchRetrievePositions = resolveJSFunc("gdspx_sprite_batch_retrieve_positions")
 }

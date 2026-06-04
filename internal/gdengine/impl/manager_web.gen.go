@@ -346,44 +346,93 @@ func (pself *extMgr) SetLayerSorterMode(mode int64) {
 	API.SpxExtSetLayerSorterMode.Invoke(arg0Low, arg0High)
 }
 func (pself *inputMgr) GetGlobalMousePos() Vec2 {
-	_retValue := API.SpxInputGetGlobalMousePos.Invoke()
-	return JsToGdVec2(_retValue)
+	return WebInputMousePos(func() Vec2 {
+		_retValue := API.SpxInputGetGlobalMousePos.Invoke()
+		return JsToGdVec2(_retValue)
+	})
 }
 func (pself *inputMgr) GetKey(key int64) bool {
-	arg0Low, arg0High := JsSplitGdInt(key)
-	_retValue := API.SpxInputGetKey.Invoke(arg0Low, arg0High)
-	return JsToGdBool(_retValue)
+	return WebInputKeyState(key, func() bool {
+		arg0Low, arg0High := JsSplitGdInt(key)
+		_retValue := API.SpxInputGetKey.Invoke(arg0Low, arg0High)
+		return JsToGdBool(_retValue)
+	})
 }
 func (pself *inputMgr) GetMouseState(mouse_id int64) bool {
-	arg0Low, arg0High := JsSplitGdInt(mouse_id)
-	_retValue := API.SpxInputGetMouseState.Invoke(arg0Low, arg0High)
-	return JsToGdBool(_retValue)
+	return WebInputMouseState(mouse_id, func() bool {
+		arg0Low, arg0High := JsSplitGdInt(mouse_id)
+		_retValue := API.SpxInputGetMouseState.Invoke(arg0Low, arg0High)
+		return JsToGdBool(_retValue)
+	})
 }
 func (pself *inputMgr) GetKeyState(key int64) int64 {
-	arg0Low, arg0High := JsSplitGdInt(key)
-	_retValue := API.SpxInputGetKeyState.Invoke(arg0Low, arg0High)
-	return JsToGdInt(_retValue)
+	if WebInputKeyState(key, func() bool {
+		arg0Low, arg0High := JsSplitGdInt(key)
+		_retValue := API.SpxInputGetKeyState.Invoke(arg0Low, arg0High)
+		return JsToGdInt(_retValue) != 0
+	}) {
+		return 1
+	}
+	return 0
 }
 func (pself *inputMgr) GetAxis(neg_action string, pos_action string) float64 {
-	arg0 := JsFromGdString(neg_action)
-	arg1 := JsFromGdString(pos_action)
-	_retValue := API.SpxInputGetAxis.Invoke(arg0, arg1)
-	return JsToGdFloat(_retValue)
+	return CachedActionAxis(neg_action, pos_action, func() float64 {
+		arg0 := JsFromGdString(neg_action)
+		arg1 := JsFromGdString(pos_action)
+		_retValue := API.SpxInputGetAxis.Invoke(arg0, arg1)
+		return JsToGdFloat(_retValue)
+	})
 }
 func (pself *inputMgr) IsActionPressed(action string) bool {
-	arg0 := JsFromGdString(action)
-	_retValue := API.SpxInputIsActionPressed.Invoke(arg0)
-	return JsToGdBool(_retValue)
+	return CachedActionBool("pressed", action, func() bool {
+		arg0 := JsFromGdString(action)
+		_retValue := API.SpxInputIsActionPressed.Invoke(arg0)
+		return JsToGdBool(_retValue)
+	})
 }
 func (pself *inputMgr) IsActionJustPressed(action string) bool {
-	arg0 := JsFromGdString(action)
-	_retValue := API.SpxInputIsActionJustPressed.Invoke(arg0)
-	return JsToGdBool(_retValue)
+	return CachedActionBool("just_pressed", action, func() bool {
+		arg0 := JsFromGdString(action)
+		_retValue := API.SpxInputIsActionJustPressed.Invoke(arg0)
+		return JsToGdBool(_retValue)
+	})
 }
 func (pself *inputMgr) IsActionJustReleased(action string) bool {
+	return CachedActionBool("just_released", action, func() bool {
+		arg0 := JsFromGdString(action)
+		_retValue := API.SpxInputIsActionJustReleased.Invoke(arg0)
+		return JsToGdBool(_retValue)
+	})
+}
+func (pself *inputMgr) RegisterAction(action string) int64 {
 	arg0 := JsFromGdString(action)
-	_retValue := API.SpxInputIsActionJustReleased.Invoke(arg0)
+	_retValue := API.SpxInputRegisterAction.Invoke(arg0)
+	return JsToGdInt(_retValue)
+}
+func (pself *inputMgr) GetAxisId(neg_action_id int64, pos_action_id int64) float64 {
+	arg0Low, arg0High := JsSplitGdInt(neg_action_id)
+	arg1Low, arg1High := JsSplitGdInt(pos_action_id)
+	_retValue := API.SpxInputGetAxisId.Invoke(arg0Low, arg0High, arg1Low, arg1High)
+	return JsToGdFloat(_retValue)
+}
+func (pself *inputMgr) IsActionPressedId(action_id int64) bool {
+	arg0Low, arg0High := JsSplitGdInt(action_id)
+	_retValue := API.SpxInputIsActionPressedId.Invoke(arg0Low, arg0High)
 	return JsToGdBool(_retValue)
+}
+func (pself *inputMgr) IsActionJustPressedId(action_id int64) bool {
+	arg0Low, arg0High := JsSplitGdInt(action_id)
+	_retValue := API.SpxInputIsActionJustPressedId.Invoke(arg0Low, arg0High)
+	return JsToGdBool(_retValue)
+}
+func (pself *inputMgr) IsActionJustReleasedId(action_id int64) bool {
+	arg0Low, arg0High := JsSplitGdInt(action_id)
+	_retValue := API.SpxInputIsActionJustReleasedId.Invoke(arg0Low, arg0High)
+	return JsToGdBool(_retValue)
+}
+func (pself *inputMgr) WriteSnapshot(out []float32) {
+	arg0 := JsFromGdArray(out)
+	API.SpxInputWriteSnapshot.Invoke(arg0)
 }
 func (pself *navigationMgr) SetupPathFinderWithSize(grid_size Vec2, cell_size Vec2, with_jump bool, with_debug bool) {
 	arg0 := JsFromGdVec2(grid_size)
@@ -1456,10 +1505,9 @@ func (pself *spriteMgr) BatchUpdateVisuals(buffer []float32) {
 	arg0 := JsFromGdArray(buffer)
 	API.SpxSpriteBatchUpdateVisuals.Invoke(arg0)
 }
-func (pself *spriteMgr) BatchRetrievePositions(objs Array) Array {
-	arg0 := JsFromGdArray(objs)
-	_retValue := API.SpxSpriteBatchRetrievePositions.Invoke(arg0)
-	return JsToGdArray(_retValue)
+func (pself *spriteMgr) BatchUpdatePhysics(buffer []float32) {
+	arg0 := JsFromGdArray(buffer)
+	API.SpxSpriteBatchUpdatePhysics.Invoke(arg0)
 }
 func (pself *tilemapMgr) OpenDrawTilesWithSize(tile_size int64) {
 	arg0Low, arg0High := JsSplitGdInt(tile_size)
@@ -1778,4 +1826,9 @@ func (pself *uiMgr) SetFlip(obj Object, horizontal bool, is_flip bool) {
 	arg1 := JsFromGdBool(horizontal)
 	arg2 := JsFromGdBool(is_flip)
 	API.SpxUiSetFlip.Invoke(arg0Low, arg0High, arg1, arg2)
+}
+func (pself *spriteMgr) BatchRetrievePositions(objs Array) Array {
+	arg0 := JsFromGdArray(objs)
+	_retValue := API.SpxSpriteBatchRetrievePositions.Invoke(arg0)
+	return JsToGdArray(_retValue)
 }

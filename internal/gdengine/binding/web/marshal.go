@@ -550,6 +550,10 @@ func getFastGdArrayScratch(arrayType int32) *fastGdArrayScratch {
 }
 
 func newFastGdArrayValue(arrayType int32, count int, data []byte) js.Value {
+	if fastValue, ok := newBorrowedFastGdArrayValue(arrayType, count, data); ok {
+		return fastValue
+	}
+
 	scratch := getFastGdArrayScratch(arrayType)
 	if scratch.byteCap < len(data) || scratch.bytes.Type() == js.TypeUndefined {
 		scratch.bytes = jsUint8Array.New(len(data))
@@ -563,6 +567,32 @@ func newFastGdArrayValue(arrayType int32, count int, data []byte) js.Value {
 	scratch.wrapper.Set(fastGdArrayDataKey, scratch.bytes.Call("subarray", 0, len(data)))
 	scratch.wrapper.Set(fastGdArrayCountKey, count)
 	return scratch.wrapper
+}
+
+func newBorrowedFastGdArrayValue(arrayType int32, count int, data []byte) (js.Value, bool) {
+	borrow := js.Global().Get("GdspxBorrowFastArray")
+	if borrow.Type() != js.TypeFunction {
+		return js.Value{}, false
+	}
+
+	wrapper := borrow.Invoke(arrayType, count, len(data))
+	if wrapper.IsUndefined() || wrapper.IsNull() || wrapper.Type() != js.TypeObject {
+		return js.Value{}, false
+	}
+
+	bytes := wrapper.Get(fastGdArrayDataKey)
+	if bytes.IsUndefined() || bytes.IsNull() || bytes.Type() != js.TypeObject {
+		return js.Value{}, false
+	}
+	byteLength := bytes.Get("length")
+	if byteLength.Type() != js.TypeNumber || byteLength.Int() < len(data) {
+		return js.Value{}, false
+	}
+
+	if len(data) > 0 {
+		js.CopyBytesToJS(bytes, data)
+	}
+	return wrapper, true
 }
 
 func arrayToFastGdArrayValue(arrayPtr Array) (js.Value, bool) {
@@ -611,6 +641,10 @@ func JsToGdArray(val js.Value) Array {
 		return nil
 	}
 
+	if fastArray, ok := fastGdArrayToGo(val); ok {
+		return fastArray
+	}
+
 	length := val.Get("length").Int()
 	if length == 0 {
 		return nil
@@ -624,4 +658,66 @@ func JsToGdArray(val js.Value) Array {
 		return nil
 	}
 	return info.Data
+}
+
+func fastGdArrayToGo(val js.Value) (Array, bool) {
+	flag := val.Get(fastGdArrayFlagKey)
+	if flag.Type() != js.TypeBoolean || !flag.Bool() {
+		return nil, false
+	}
+
+	dataVal := val.Get(fastGdArrayDataKey)
+	if dataVal.IsUndefined() || dataVal.IsNull() || dataVal.Type() != js.TypeObject {
+		return nil, true
+	}
+
+	lengthVal := dataVal.Get("length")
+	if lengthVal.Type() != js.TypeNumber {
+		return nil, true
+	}
+	length := lengthVal.Int()
+	arrayTypeVal := val.Get(fastGdArrayTypeKey)
+	countVal := val.Get(fastGdArrayCountKey)
+	if arrayTypeVal.Type() != js.TypeNumber || countVal.Type() != js.TypeNumber {
+		return nil, true
+	}
+	arrayType := int32(arrayTypeVal.Int())
+	count := countVal.Int()
+	if length < 0 || count < 0 || count > maxInt32 {
+		return nil, true
+	}
+	if elemSize, ok := fixedGdArrayElemSize(arrayType); ok {
+		if count > maxInt/elemSize || length < count*elemSize {
+			return nil, true
+		}
+	}
+
+	bytes := make([]byte, length)
+	if length > 0 {
+		js.CopyBytesToGo(bytes, dataVal)
+	}
+
+	data, err := deserializeDataByType(arrayType, bytes, int32(count))
+	if err != nil {
+		return nil, true
+	}
+	return data, true
+}
+
+const (
+	maxInt   = int(^uint(0) >> 1)
+	maxInt32 = int(^uint32(0) >> 1)
+)
+
+func fixedGdArrayElemSize(arrayType int32) (int, bool) {
+	switch arrayType {
+	case GdArrayTypeInt64, GdArrayTypeGdObj:
+		return 8, true
+	case GdArrayTypeFloat:
+		return 4, true
+	case GdArrayTypeBool, GdArrayTypeByte:
+		return 1, true
+	default:
+		return 0, false
+	}
 }

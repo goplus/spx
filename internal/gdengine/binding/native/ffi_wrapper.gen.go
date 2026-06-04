@@ -150,6 +150,12 @@ type GDExtensionSpxInputGetAxis C.GDExtensionSpxInputGetAxis
 type GDExtensionSpxInputIsActionPressed C.GDExtensionSpxInputIsActionPressed
 type GDExtensionSpxInputIsActionJustPressed C.GDExtensionSpxInputIsActionJustPressed
 type GDExtensionSpxInputIsActionJustReleased C.GDExtensionSpxInputIsActionJustReleased
+type GDExtensionSpxInputRegisterAction C.GDExtensionSpxInputRegisterAction
+type GDExtensionSpxInputGetAxisId C.GDExtensionSpxInputGetAxisId
+type GDExtensionSpxInputIsActionPressedId C.GDExtensionSpxInputIsActionPressedId
+type GDExtensionSpxInputIsActionJustPressedId C.GDExtensionSpxInputIsActionJustPressedId
+type GDExtensionSpxInputIsActionJustReleasedId C.GDExtensionSpxInputIsActionJustReleasedId
+type GDExtensionSpxInputWriteSnapshot C.GDExtensionSpxInputWriteSnapshot
 type GDExtensionSpxNavigationSetupPathFinderWithSize C.GDExtensionSpxNavigationSetupPathFinderWithSize
 type GDExtensionSpxNavigationSetupPathFinder C.GDExtensionSpxNavigationSetupPathFinder
 type GDExtensionSpxNavigationSetObstacle C.GDExtensionSpxNavigationSetObstacle
@@ -356,7 +362,7 @@ type GDExtensionSpxSpriteSetPixelCollisionSamplingStep C.GDExtensionSpxSpriteSet
 type GDExtensionSpxSpriteGetPixelCollisionSamplingStep C.GDExtensionSpxSpriteGetPixelCollisionSamplingStep
 type GDExtensionSpxSpriteBatchUpdateTransforms C.GDExtensionSpxSpriteBatchUpdateTransforms
 type GDExtensionSpxSpriteBatchUpdateVisuals C.GDExtensionSpxSpriteBatchUpdateVisuals
-type GDExtensionSpxSpriteBatchRetrievePositions C.GDExtensionSpxSpriteBatchRetrievePositions
+type GDExtensionSpxSpriteBatchUpdatePhysics C.GDExtensionSpxSpriteBatchUpdatePhysics
 type GDExtensionSpxTilemapOpenDrawTilesWithSize C.GDExtensionSpxTilemapOpenDrawTilesWithSize
 type GDExtensionSpxTilemapOpenDrawTiles C.GDExtensionSpxTilemapOpenDrawTiles
 type GDExtensionSpxTilemapSetLayerIndex C.GDExtensionSpxTilemapSetLayerIndex
@@ -421,6 +427,7 @@ type GDExtensionSpxUiGetRotation C.GDExtensionSpxUiGetRotation
 type GDExtensionSpxUiSetRotation C.GDExtensionSpxUiSetRotation
 type GDExtensionSpxUiGetFlip C.GDExtensionSpxUiGetFlip
 type GDExtensionSpxUiSetFlip C.GDExtensionSpxUiSetFlip
+type GDExtensionSpxSpriteBatchRetrievePositions C.GDExtensionSpxSpriteBatchRetrievePositions
 
 // call gdextension interface functions
 func CallAudioStopAll() {
@@ -871,6 +878,69 @@ func CallInputIsActionJustReleased(
 	C.cgo_callfn_GDExtensionSpxInputIsActionJustReleased(arg0, arg1, &ret_val)
 
 	return (GdBool)(ret_val)
+}
+func CallInputRegisterAction(
+	action GdString,
+) GdInt {
+	arg0 := (C.GDExtensionSpxInputRegisterAction)(api.SpxInputRegisterAction)
+	arg1 := (C.GdString)(action)
+	var ret_val C.GdInt
+	C.cgo_callfn_GDExtensionSpxInputRegisterAction(arg0, arg1, &ret_val)
+
+	return (GdInt)(ret_val)
+}
+func CallInputGetAxisId(
+	neg_action_id GdInt,
+	pos_action_id GdInt,
+) GdFloat {
+	arg0 := (C.GDExtensionSpxInputGetAxisId)(api.SpxInputGetAxisId)
+	arg1 := (C.GdInt)(neg_action_id)
+	arg2 := (C.GdInt)(pos_action_id)
+	var ret_val C.GdFloat
+	C.cgo_callfn_GDExtensionSpxInputGetAxisId(arg0, arg1, arg2, &ret_val)
+
+	return (GdFloat)(ret_val)
+}
+func CallInputIsActionPressedId(
+	action_id GdInt,
+) GdBool {
+	arg0 := (C.GDExtensionSpxInputIsActionPressedId)(api.SpxInputIsActionPressedId)
+	arg1 := (C.GdInt)(action_id)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxInputIsActionPressedId(arg0, arg1, &ret_val)
+
+	return (GdBool)(ret_val)
+}
+func CallInputIsActionJustPressedId(
+	action_id GdInt,
+) GdBool {
+	arg0 := (C.GDExtensionSpxInputIsActionJustPressedId)(api.SpxInputIsActionJustPressedId)
+	arg1 := (C.GdInt)(action_id)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxInputIsActionJustPressedId(arg0, arg1, &ret_val)
+
+	return (GdBool)(ret_val)
+}
+func CallInputIsActionJustReleasedId(
+	action_id GdInt,
+) GdBool {
+	arg0 := (C.GDExtensionSpxInputIsActionJustReleasedId)(api.SpxInputIsActionJustReleasedId)
+	arg1 := (C.GdInt)(action_id)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxInputIsActionJustReleasedId(arg0, arg1, &ret_val)
+
+	return (GdBool)(ret_val)
+}
+func CallInputWriteSnapshot(
+	out *float32,
+	len int32,
+) {
+	arg0 := (C.GDExtensionSpxInputWriteSnapshot)(api.SpxInputWriteSnapshot)
+	arg1 := (*C.float)(out)
+	arg2 := (C.int)(len)
+
+	C.cgo_callfn_GDExtensionSpxInputWriteSnapshot(arg0, arg1, arg2)
+
 }
 func CallNavigationSetupPathFinderWithSize(
 	grid_size GdVec2,
@@ -3088,15 +3158,16 @@ func CallSpriteBatchUpdateVisuals(
 	C.cgo_callfn_GDExtensionSpxSpriteBatchUpdateVisuals(arg0, arg1, arg2)
 
 }
-func CallSpriteBatchRetrievePositions(
-	objs GdArray,
-) GdArray {
-	arg0 := (C.GDExtensionSpxSpriteBatchRetrievePositions)(api.SpxSpriteBatchRetrievePositions)
-	arg1 := (C.GdArray)(objs)
-	var ret_val C.GdArray
-	C.cgo_callfn_GDExtensionSpxSpriteBatchRetrievePositions(arg0, arg1, &ret_val)
+func CallSpriteBatchUpdatePhysics(
+	buffer_data *float32,
+	len int32,
+) {
+	arg0 := (C.GDExtensionSpxSpriteBatchUpdatePhysics)(api.SpxSpriteBatchUpdatePhysics)
+	arg1 := (*C.float)(buffer_data)
+	arg2 := (C.int)(len)
 
-	return GdArray(ret_val)
+	C.cgo_callfn_GDExtensionSpxSpriteBatchUpdatePhysics(arg0, arg1, arg2)
+
 }
 func CallTilemapOpenDrawTilesWithSize(
 	tile_size GdInt,
@@ -3758,4 +3829,14 @@ func CallUiSetFlip(
 
 	C.cgo_callfn_GDExtensionSpxUiSetFlip(arg0, arg1, arg2, arg3)
 
+}
+func CallSpriteBatchRetrievePositions(
+	objs GdArray,
+) GdArray {
+	arg0 := (C.GDExtensionSpxSpriteBatchRetrievePositions)(api.SpxSpriteBatchRetrievePositions)
+	arg1 := (C.GdArray)(objs)
+	var ret_val C.GdArray
+	C.cgo_callfn_GDExtensionSpxSpriteBatchRetrievePositions(arg0, arg1, &ret_val)
+
+	return GdArray(ret_val)
 }

@@ -107,25 +107,59 @@ func Generate(projectPath, godotPath string, ast clang.CHeaderFileAST) {
 
 func generateGdCppFile(projectPath string, templateStr string, ast clang.CHeaderFileAST, outputFileName string) error {
 	funcs := template.FuncMap{
-		"gdiVariableName":          GdiVariableName,
-		"snakeCase":                strcase.ToSnake,
-		"camelCase":                strcase.ToCamel,
-		"goReturnType":             GoReturnType,
-		"goArgumentType":           GoArgumentType,
-		"goEnumValue":              GoEnumValue,
-		"add":                      Add,
-		"sub":                      Sub,
-		"cgoCastArgument":          CgoCastArgument,
-		"cgoCastReturnType":        CgoCastReturnType,
-		"cgoCleanUpArgument":       CgoCleanUpArgument,
-		"trimPrefix":               TrimPrefix,
-		"loadProcAddressName":      LoadProcAddressName,
-		"isManagerMethod":          IsManagerMethod,
-		"getManagerName":           GetManagerName,
-		"hasNativeArrayBridgeSpec": HasNativeArrayBridgeSpec,
+		"gdiVariableName":             GdiVariableName,
+		"snakeCase":                   strcase.ToSnake,
+		"camelCase":                   strcase.ToCamel,
+		"goReturnType":                GoReturnType,
+		"goArgumentType":              GoArgumentType,
+		"goEnumValue":                 GoEnumValue,
+		"add":                         Add,
+		"sub":                         Sub,
+		"cgoCastArgument":             CgoCastArgument,
+		"cgoCastReturnType":           CgoCastReturnType,
+		"cgoCleanUpArgument":          CgoCleanUpArgument,
+		"trimPrefix":                  TrimPrefix,
+		"loadProcAddressName":         LoadProcAddressName,
+		"isManagerMethod":             IsManagerMethod,
+		"getManagerName":              GetManagerName,
+		"hasArrayTransformBridgeSpec": HasArrayTransformBridgeSpec,
+		"hasNativeArrayBridgeSpec":    HasNativeArrayBridgeSpec,
+		"getArrayTransformBridgeSpec": func(function *clang.TypedefFunction) ArrayTransformBridgeSpec {
+			spec, _ := GetArrayTransformBridgeSpec(function.Name)
+			return spec
+		},
 		"getNativeArrayBridgeSpec": func(function *clang.TypedefFunction) NativeArrayBridgeSpec {
 			spec, _ := GetNativeArrayBridgeSpec(function.Name)
 			return spec
+		},
+		"listArrayTransformBridgeSpecs": ListArrayTransformBridgeSpecs,
+		"fastArrayElemCppType": func(arrayType int32) string {
+			switch arrayType {
+			case 1:
+				return "int64_t"
+			case 2:
+				return "float"
+			case 5:
+				return "uint8_t"
+			case 6:
+				return "GdObj"
+			default:
+				panic("unsupported fast array element type")
+			}
+		},
+		"fastArrayTypeConst": func(arrayType int32) string {
+			switch arrayType {
+			case 1:
+				return "GD_ARRAY_TYPE_INT64"
+			case 2:
+				return "GD_ARRAY_TYPE_FLOAT"
+			case 5:
+				return "GD_ARRAY_TYPE_BYTE"
+			case 6:
+				return "GD_ARRAY_TYPE_GDOBJ"
+			default:
+				panic("unsupported fast array type constant")
+			}
 		},
 		"cDecl": func(typeName, name string) string {
 			typeName = strings.TrimSpace(typeName)

@@ -254,6 +254,22 @@ func (*inputMgrImpl) IsActionJustPressed(action string) bool {
 func (*inputMgrImpl) IsActionJustReleased(action string) bool {
 	return false
 }
+func (*inputMgrImpl) RegisterAction(action string) int64 {
+	return 0
+}
+func (*inputMgrImpl) GetAxisId(neg_action_id int64, pos_action_id int64) float64 {
+	return 0
+}
+func (*inputMgrImpl) IsActionPressedId(action_id int64) bool {
+	return false
+}
+func (*inputMgrImpl) IsActionJustPressedId(action_id int64) bool {
+	return false
+}
+func (*inputMgrImpl) IsActionJustReleasedId(action_id int64) bool {
+	return false
+}
+func (*inputMgrImpl) WriteSnapshot(out []float32) {}
 
 // INavigationMgr
 func (*navigationMgrImpl) SetupPathFinderWithSize(grid_size Vec2, cell_size Vec2, with_jump bool, with_debug bool) {
@@ -676,6 +692,7 @@ func (*spriteMgrImpl) GetPixelCollisionSamplingStep() int64 {
 }
 func (*spriteMgrImpl) BatchUpdateTransforms(buffer []float32) {}
 func (*spriteMgrImpl) BatchUpdateVisuals(buffer []float32)    {}
+func (*spriteMgrImpl) BatchUpdatePhysics(buffer []float32)    {}
 func (*spriteMgrImpl) BatchRetrievePositions(objs gdx.Array) gdx.Array {
 	return nil
 }

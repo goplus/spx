@@ -57,9 +57,9 @@ EMSCRIPTEN_KEEPALIVE
 void cfree(void* ptr) {
 	free(ptr);
 }
-
 {{- range $i, $f := $view.Ast.CollectGDExtensionInterfaceFunctions -}}
 {{- if isManagerMethod $f }}
+{{- if not (hasArrayTransformBridgeSpec $f) }}
 {{- if hasNativeArrayBridgeSpec $f }}
 	{{- $spec := getNativeArrayBridgeSpec $f }}
 EMSCRIPTEN_KEEPALIVE
@@ -87,6 +87,22 @@ void gd{{ loadProcAddressName $f.Name }}(
 }
 {{- end }}
 {{- end -}}
+{{- end -}}
 	{{ end }}
+{{- range $spec := listArrayTransformBridgeSpecs }}
+EMSCRIPTEN_KEEPALIVE
+void gd{{ loadProcAddressName $spec.FunctionName }}(
+	{{- range $i, $param := $spec.Params -}}
+		{{ cDecl $param.CType $param.Name }}
+		{{- if ne $i (sub (len $spec.Params) 1) -}}, {{ end -}}
+	{{- end -}}
+) {
+	{{ getManagerName $spec.FunctionName }}Mgr->{{ $spec.MethodName }}(
+		{{- range $i, $param := $spec.Params -}}
+			{{- if gt $i 0 }}, {{ end -}}{{ $param.Name }}
+		{{- end -}}
+	);
+}
+{{- end }}
 
 }

@@ -46,12 +46,13 @@ var (
 	reMethodReturn         = regexp.MustCompile(`\s*(?:SPX_API|SPX_BIND)\s+(\w+)\s+(\w+)\((.*)\);`)
 	reSingleGdArrayParam   = regexp.MustCompile(`^\s*GdArray\s+([A-Za-z_][A-Za-z0-9_]*)\s*$`)
 	reRawNativeArrayParams = regexp.MustCompile(`^\s*((?:const\s+)?[A-Za-z_][A-Za-z0-9_]*\s*\*)\s*([A-Za-z_][A-Za-z0-9_]*)\s*,\s*(int32_t|int)\s+([A-Za-z_][A-Za-z0-9_]*)\s*$`)
+	reParamDecl            = regexp.MustCompile(`^\s*(.+?[*\s])([A-Za-z_][A-Za-z0-9_]*)\s*$`)
 )
 
 func shouldSkipGeneratedMethod(methodName string) bool {
 	// Raw helpers are web-only entry points and should not leak into the shared
 	// gdextension interface consumed by native ffi/codegen.
-	return strings.HasSuffix(methodName, "_raw")
+	return strings.HasSuffix(methodName, "_raw") || isArrayTransformBridgeMethod(methodName)
 }
 
 type classMethodDecl struct {
@@ -173,6 +174,7 @@ func generateManagerHeader(input string, rawFormat bool) string {
 	// Clear the previous list of manager names
 	common.ClearKnownManagerNames()
 	common.ClearNativeArrayBridgeSpecs()
+	common.ClearArrayTransformBridgeSpecs()
 
 	baseMethods := map[string]classMethodDecl{}
 	rawMethods := map[string]classMethodDecl{}
@@ -239,6 +241,8 @@ func generateManagerHeader(input string, rawFormat bool) string {
 	}
 
 	registerNativeArrayBridgeSpecs(baseMethods, rawMethods)
+	registerArrayTransformBridgeSpecs(baseMethods, rawMethods)
+	appendSyntheticArrayTransformTypedefs(&builder, rawFormat, baseMethods)
 
 	return builder.String()
 }
@@ -309,6 +313,125 @@ func registerNativeArrayBridgeSpecs(baseMethods map[string]classMethodDecl, rawM
 	}
 }
 
+type arrayTransformOverride struct {
+	ArrayArgName     string
+	OutputCountScale int
+}
+
+var arrayTransformOverrides = map[string]arrayTransformOverride{
+	// The raw signature does not encode the return length formula, so keep the
+	// minimal transform metadata here and let codegen synthesize the high-level
+	// GdArray return bridge generically.
+	"batch_retrieve_positions": {
+		ArrayArgName:     "objs",
+		OutputCountScale: 2,
+	},
+}
+
+func isArrayTransformBridgeMethod(methodName string) bool {
+	_, ok := arrayTransformOverrides[methodName]
+	return ok
+}
+
+func registerArrayTransformBridgeSpecs(baseMethods map[string]classMethodDecl, rawMethods map[string]classMethodDecl) {
+	for key, rawMethod := range rawMethods {
+		baseMethod, hasBaseMethod := baseMethods[key]
+		baseMethodName := strings.TrimSuffix(rawMethod.MethodName, "_raw")
+		if rawMethod.ReturnType != "void" {
+			continue
+		}
+		if hasBaseMethod && baseMethod.ReturnType != "GdArray" {
+			continue
+		}
+		if _, _, _, _, _, _, _, _, ok := parseRawNativeArrayParams(rawMethod.Params); ok {
+			continue
+		}
+
+		params, ok := parseRawExportParams(rawMethod.Params)
+		if !ok || len(params) != 4 {
+			continue
+		}
+
+		override, ok := arrayTransformOverrides[rawMethod.MethodName]
+		if !ok {
+			continue
+		}
+
+		baseArgName := override.ArrayArgName
+		if hasBaseMethod {
+			baseArgName, ok = parseSingleGdArrayParam(baseMethod.Params)
+			if !ok {
+				continue
+			}
+		} else if baseArgName == "" {
+			baseArgName = highLevelArrayArgName(params[0].Name)
+		}
+
+		inputType, ok := rawArrayFastType(params[0].CType)
+		if !ok || !isRawArrayLenType(params[1].CType) {
+			continue
+		}
+		outputType, ok := rawArrayFastType(params[2].CType)
+		if !ok || !isRawArrayLenType(params[3].CType) {
+			continue
+		}
+
+		baseFunctionName := "GDExtension" + rawMethod.ClassName + strcase.ToCamel(baseMethodName)
+		common.RegisterArrayTransformBridgeSpec(common.ArrayTransformBridgeSpec{
+			FunctionName:     baseFunctionName,
+			ArrayArgName:     baseArgName,
+			MethodName:       rawMethod.MethodName,
+			Params:           params,
+			InputArrayType:   inputType,
+			OutputArrayType:  outputType,
+			OutputCountScale: override.OutputCountScale,
+		})
+	}
+}
+
+func appendSyntheticArrayTransformTypedefs(builder *strings.Builder, rawFormat bool, baseMethods map[string]classMethodDecl) {
+	existingFunctions := make(map[string]struct{}, len(baseMethods))
+	for _, baseMethod := range baseMethods {
+		functionName := "GDExtension" + baseMethod.ClassName + strcase.ToCamel(baseMethod.MethodName)
+		existingFunctions[functionName] = struct{}{}
+	}
+
+	for _, spec := range common.ListArrayTransformBridgeSpecs() {
+		if _, ok := existingFunctions[spec.FunctionName]; ok {
+			continue
+		}
+		if rawFormat {
+			builder.WriteString(fmt.Sprintf("typedef GdArray (*%s)(GdArray %s);\n", spec.FunctionName, spec.ArrayArgName))
+			continue
+		}
+		builder.WriteString(fmt.Sprintf("typedef void (*%s)(GdArray %s, GdArray *ret_value);\n", spec.FunctionName, spec.ArrayArgName))
+	}
+}
+
+func rawArrayFastType(rawType string) (int32, bool) {
+	switch strings.TrimPrefix(normalizeRawDataType(rawType), "const ") {
+	case "int64_t *":
+		return 1, true
+	case "float *", "real_t *":
+		return 2, true
+	case "uint8_t *":
+		return 5, true
+	case "GdObj *":
+		return 6, true
+	default:
+		return 0, false
+	}
+}
+
+func isRawArrayLenType(typeName string) bool {
+	switch normalizeRawDataType(typeName) {
+	case "int", "int32_t":
+		return true
+	default:
+		return false
+	}
+}
+
 func parseSingleGdArrayParam(params string) (string, bool) {
 	matches := reSingleGdArrayParam.FindStringSubmatch(params)
 	if len(matches) != 2 {
@@ -346,6 +469,28 @@ func normalizeRawDataType(rawDataType string) string {
 	rawDataType = strings.Join(strings.Fields(rawDataType), " ")
 	rawDataType = strings.ReplaceAll(rawDataType, " *", " *")
 	return rawDataType
+}
+
+func parseRawExportParams(params string) ([]common.RawExportParam, bool) {
+	params = strings.TrimSpace(params)
+	if params == "" {
+		return nil, true
+	}
+
+	parts := strings.Split(params, ",")
+	result := make([]common.RawExportParam, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		matches := reParamDecl.FindStringSubmatch(part)
+		if len(matches) != 3 {
+			return nil, false
+		}
+		result = append(result, common.RawExportParam{
+			CType: normalizeRawDataType(matches[1]),
+			Name:  matches[2],
+		})
+	}
+	return result, true
 }
 
 func highLevelArrayArgName(rawDataArgName string) string {

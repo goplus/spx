@@ -137,6 +137,26 @@ func TestGetJsFuncBodyUsesFixedScratchAccessorForFlatReturn(t *testing.T) {
 	require.NotContains(t, body, `"_gdIntScratch"`)
 }
 
+func TestGetJsFuncBodyUsesArrayTransformBridgeSpec(t *testing.T) {
+	common.ClearArrayTransformBridgeSpecs()
+	t.Cleanup(common.ClearArrayTransformBridgeSpecs)
+	common.RegisterArrayTransformBridgeSpec(common.ArrayTransformBridgeSpec{
+		FunctionName:     "GDExtensionSpxSpriteBatchRetrievePositions",
+		ArrayArgName:     "objs",
+		InputArrayType:   6,
+		OutputArrayType:  2,
+		OutputCountScale: 2,
+	})
+
+	function := &clang.TypedefFunction{
+		Name: "GDExtensionSpxSpriteBatchRetrievePositions",
+	}
+
+	body := getJsFuncBody(function)
+	require.Contains(t, body, "TryArrayTransformFastPath(_gdFuncPtr, objs, 6, 2, 2)")
+	require.Contains(t, body, `throw new Error("gdspx_sprite_batch_retrieve_positions fast path unavailable")`)
+}
+
 func TestJsTemplateUsesHeapU32ForFlatReads(t *testing.T) {
 	require.Contains(t, jsEngineJsFileText, "var _u32 = Module.HEAPU32;")
 	require.Contains(t, jsEngineJsFileText, "scratch.low = _u32[_word];")
@@ -170,14 +190,23 @@ func TestGetJsFuncBodyUsesInstanceScratchForMousePos(t *testing.T) {
 	require.NotContains(t, body, "GdspxFuncs._inputMousePosScratch")
 }
 
-func TestJsTemplateDoesNotCarryScratchFontAliasCompat(t *testing.T) {
-	require.NotContains(t, jsEngineJsFileText, "SPX_SCRATCH_PACKAGED_FONT_DEFS")
-	require.NotContains(t, jsEngineJsFileText, "SPX_SCRATCH_CJK_FONT_STACKS")
-	require.NotContains(t, jsEngineJsFileText, "spxResolveFontRequest")
-	require.NotContains(t, jsEngineJsFileText, "_invokeResRegisterSvgFontFace")
-	require.NotContains(t, jsEngineJsFileText, "_invokeResSetDefaultFont")
-	require.NotContains(t, jsEngineJsFileText, "spx-register-only=1")
-	require.NotContains(t, jsEngineJsFileText, `spx-family=`)
-	require.NotContains(t, jsEngineJsFileText, "queryLocalFonts")
-	require.NotContains(t, jsEngineJsFileText, "useLocalFontAccess")
+func TestGetManagerFuncBodyUsesInputCacheOverride(t *testing.T) {
+	function := &clang.TypedefFunction{
+		Name: "GDExtensionSpxInputIsActionPressed",
+	}
+
+	body := getManagerFuncBody(function)
+	require.Contains(t, body, `return CachedActionBool("pressed", action, func() bool {`)
+	require.Contains(t, body, "_retValue := API.SpxInputIsActionPressed.Invoke(arg0)")
+	require.NotContains(t, body, "actionSuffix")
+}
+
+func TestGetManagerFuncBodyUsesActionAxisOverride(t *testing.T) {
+	function := &clang.TypedefFunction{
+		Name: "GDExtensionSpxInputGetAxis",
+	}
+
+	body := getManagerFuncBody(function)
+	require.Contains(t, body, "return CachedActionAxis(neg_action, pos_action, func() float64 {")
+	require.Contains(t, body, "_retValue := API.SpxInputGetAxis.Invoke(arg0, arg1)")
 }

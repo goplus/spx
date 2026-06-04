@@ -51,6 +51,51 @@ static void gdextension_spx_global_register_callbacks(GDExtensionSpxCallbackInfo
 
 {{- range $i, $f := $view.Ast.CollectGDExtensionInterfaceFunctions -}}
 {{- if isManagerMethod $f }}
+{{- if hasArrayTransformBridgeSpec $f }}
+	{{- $spec := getArrayTransformBridgeSpec $f }}
+static void gdextension_{{ loadProcAddressName $f.Name }}(
+	{{- range $j, $arg := $f.Arguments -}}
+		{{ $arg.CStyleString $j }}
+		{{- if ne $j (sub (len $f.Arguments) 1) -}}, {{ end -}}
+	{{- end -}}
+	{{ if ne "void" $f.ReturnType.CStyleString -}} 
+	{{- if ne 0 (len $f.Arguments) -}}, {{ end -}}{{$f.ReturnType.CStyleString }} *ret_val
+	{{- end -}}
+) {
+	if (!{{ $spec.ArrayArgName }}) {
+		*ret_val = nullptr;
+		return;
+	}
+
+	int count = {{ $spec.ArrayArgName }}->size;
+	if (count == 0) {
+		*ret_val = nullptr;
+		return;
+	}
+	if (count > 0x7fffffff / {{ $spec.OutputCountScale }}) {
+		*ret_val = nullptr;
+		return;
+	}
+
+	int out_len = count * {{ $spec.OutputCountScale }};
+	GdArray result = SpxBaseMgr::create_array({{ fastArrayTypeConst $spec.OutputArrayType }}, out_len);
+	if (!result) {
+		*ret_val = nullptr;
+		return;
+	}
+
+	const {{ fastArrayElemCppType $spec.InputArrayType }} *input = SpxBaseMgr::get_array<{{ fastArrayElemCppType $spec.InputArrayType }}>({{ $spec.ArrayArgName }}, 0);
+	{{ fastArrayElemCppType $spec.OutputArrayType }} *out = SpxBaseMgr::get_array<{{ fastArrayElemCppType $spec.OutputArrayType }}>(result, 0);
+	if (!input || !out) {
+		SpxBaseMgr::free_array(result);
+		*ret_val = nullptr;
+		return;
+	}
+
+	{{ getManagerName $spec.FunctionName }}Mgr->{{ $spec.MethodName }}(input, count, out, out_len);
+	*ret_val = result;
+}
+{{- else }}
 static void gdextension_{{ loadProcAddressName $f.Name }}(
 	{{- range $j, $arg := $f.Arguments -}}
 		{{ $arg.CStyleString $j }}
@@ -69,6 +114,7 @@ static void gdextension_{{ loadProcAddressName $f.Name }}(
 	);
 }
 {{- end -}}
+{{ end }}
 {{ end }}
 
 void gdextension_spx_setup_interface() {
