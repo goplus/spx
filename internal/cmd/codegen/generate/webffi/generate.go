@@ -532,6 +532,11 @@ func getJsFuncBody(function *clang.TypedefFunction) string {
 			"\t}\n" +
 			"\treturn _fastRetValue"
 	}
+	if function.Name == "GDExtensionSpxInputWriteSnapshot" {
+		return "var _arg0 = RequireWasmFastArray(out, \"gdspx_input_write_snapshot\");\n" +
+			"\tvar _arg1 = out.count;\n" +
+			"\t_gdFuncPtr(_arg0, _arg1);"
+	}
 	if spec, ok := GetNativeArrayBridgeSpec(function.Name); ok {
 		if HasEffectiveReturn(function) {
 			panic(fmt.Sprintf("native-array webffi path does not support return values: %s", function.Name))

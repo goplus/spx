@@ -18,7 +18,10 @@
 
 package webffi
 
-import "syscall/js"
+import (
+	"encoding/binary"
+	"syscall/js"
+)
 
 const (
 	contactCollisionEnter = 1
@@ -28,9 +31,11 @@ const (
 	contactTriggerStay    = 5
 	contactTriggerExit    = 6
 	contactEventFields    = 5
+	contactEventBytes     = contactEventFields * 4
 )
 
 var contactEventsHandle js.Func
+var contactEventScratch []byte
 
 func registerContactEventQueue() {
 	if contactEventsHandle.Type() != js.TypeUndefined {
@@ -46,6 +51,34 @@ func gdspxContactEvents(this js.Value, args []js.Value) any {
 	}
 
 	events := args[0]
+	uint8ArrayCtor := js.Global().Get("Uint8Array")
+	if uint8ArrayCtor.Type() != js.TypeUndefined && events.InstanceOf(uint8ArrayCtor) {
+		length := events.Length()
+		if length < contactEventBytes {
+			return nil
+		}
+
+		if cap(contactEventScratch) < length {
+			contactEventScratch = make([]byte, length)
+		}
+		buf := contactEventScratch[:length]
+		js.CopyBytesToGo(buf, events)
+
+		for i := 0; i+contactEventBytes <= len(buf); i += contactEventBytes {
+			kind := int(binary.LittleEndian.Uint32(buf[i : i+4]))
+			self := gdIntFromParts(
+				binary.LittleEndian.Uint32(buf[i+4:i+8]),
+				binary.LittleEndian.Uint32(buf[i+8:i+12]),
+			)
+			other := gdIntFromParts(
+				binary.LittleEndian.Uint32(buf[i+12:i+16]),
+				binary.LittleEndian.Uint32(buf[i+16:i+20]),
+			)
+			dispatchContactEvent(kind, self, other)
+		}
+		return nil
+	}
+
 	n := events.Length()
 	for i := 0; i+contactEventFields <= n; i += contactEventFields {
 		kind := events.Index(i).Int()

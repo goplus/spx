@@ -157,6 +157,17 @@ func TestGetJsFuncBodyUsesArrayTransformBridgeSpec(t *testing.T) {
 	require.Contains(t, body, `throw new Error("gdspx_sprite_batch_retrieve_positions fast path unavailable")`)
 }
 
+func TestGetJsFuncBodyRequiresWasmArrayForInputSnapshot(t *testing.T) {
+	function := &clang.TypedefFunction{
+		Name: "GDExtensionSpxInputWriteSnapshot",
+	}
+
+	body := getJsFuncBody(function)
+	require.Contains(t, body, `RequireWasmFastArray(out, "gdspx_input_write_snapshot")`)
+	require.Contains(t, body, "var _arg1 = out.count;")
+	require.NotContains(t, body, "GetFastArrayWasmPtr(out)")
+}
+
 func TestJsTemplateUsesHeapU32ForFlatReads(t *testing.T) {
 	require.Contains(t, jsEngineJsFileText, "var _u32 = Module.HEAPU32;")
 	require.Contains(t, jsEngineJsFileText, "scratch.low = _u32[_word];")

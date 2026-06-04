@@ -68,7 +68,7 @@ static void gdextension_{{ loadProcAddressName $f.Name }}(
 	}
 
 	int count = {{ $spec.ArrayArgName }}->size;
-	if (count == 0) {
+	if (count <= 0) {
 		*ret_val = nullptr;
 		return;
 	}

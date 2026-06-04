@@ -52,6 +52,7 @@ var (
 func SyncWebInputSnapshot() {
 	inputSnap.frame++
 	clearActionCache(inputSnap.frame)
+	syncActionIDCache()
 
 	fn := js.Global().Get("GdspxInputSnapshot")
 	if fn.Type() != js.TypeFunction {
@@ -78,8 +79,8 @@ func WebInputMousePos(fallback func() Vec2) Vec2 {
 }
 
 func WebInputMouseState(id int64, fallback func() bool) bool {
-	if inputSnap.ok && id >= 0 && id < 32 {
-		return inputSnap.mouseBits&(1<<uint(id)) != 0
+	if inputSnap.ok && id >= 1 && id <= 3 {
+		return inputSnap.mouseBits&(1<<uint(id-1)) != 0
 	}
 	return fallback()
 }
@@ -106,6 +107,7 @@ func CachedActionBool(kind, action string, fallback func() bool) bool {
 	key := kind + "\x00" + action
 
 	actionMu.Lock()
+	currentFrame := actionFrame
 	if value, ok := actionBool[key]; ok {
 		actionMu.Unlock()
 		return value
@@ -118,7 +120,9 @@ func CachedActionBool(kind, action string, fallback func() bool) bool {
 	}
 
 	actionMu.Lock()
-	actionBool[key] = value
+	if actionFrame == currentFrame {
+		actionBool[key] = value
+	}
 	actionMu.Unlock()
 	return value
 }
@@ -127,6 +131,7 @@ func CachedActionAxis(neg, pos string, fallback func() float64) float64 {
 	key := neg + "\x00" + pos
 
 	actionMu.Lock()
+	currentFrame := actionFrame
 	if value, ok := actionAxis[key]; ok {
 		actionMu.Unlock()
 		return value
@@ -139,7 +144,9 @@ func CachedActionAxis(neg, pos string, fallback func() float64) float64 {
 	}
 
 	actionMu.Lock()
-	actionAxis[key] = value
+	if actionFrame == currentFrame {
+		actionAxis[key] = value
+	}
 	actionMu.Unlock()
 	return value
 }
@@ -196,10 +203,17 @@ func webActionAxis(neg, pos string) (float64, bool) {
 }
 
 func webActionID(action string) (int, bool) {
+	actionIDMu.RLock()
+	id, ok := actionIDs[action]
+	actionIDMu.RUnlock()
+	if ok {
+		return id, true
+	}
+
 	syncActionIDCache()
 
 	actionIDMu.RLock()
-	id, ok := actionIDs[action]
+	id, ok = actionIDs[action]
 	actionIDMu.RUnlock()
 	if ok {
 		return id, true
