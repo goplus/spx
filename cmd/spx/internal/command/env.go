@@ -194,7 +194,17 @@ func (cmd *CmdTool) runProjectImport() error {
 		if timeout > 0 && errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			return fmt.Errorf("godot import timed out after %s; override with %s: %w", timeout, projectImportTimeoutEnvVar, err)
 		}
-		return fmt.Errorf("godot import failed: %w", err)
+		args := execCmd.Args
+		if len(args) > 0 {
+			args = args[1:]
+		}
+		return fmt.Errorf(
+			"godot import failed (cmd=%q dir=%q args=%q): %w",
+			cmd.CmdPath,
+			cmd.ProjectDir,
+			args,
+			err,
+		)
 	}
 	return nil
 }
