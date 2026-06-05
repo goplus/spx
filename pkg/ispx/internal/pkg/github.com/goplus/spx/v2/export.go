@@ -306,6 +306,7 @@ func init() {
 			"OtherScriptsInSprite": {Typ: reflect.TypeOf(q.OtherScriptsInSprite), Value: constant.MakeInt64(int64(q.OtherScriptsInSprite))},
 			"PenBrightness":        {Typ: reflect.TypeOf(q.PenBrightness), Value: constant.MakeInt64(int64(q.PenBrightness))},
 			"PenHue":               {Typ: reflect.TypeOf(q.PenHue), Value: constant.MakeInt64(int64(q.PenHue))},
+			"PenNone":              {Typ: reflect.TypeOf(q.PenNone), Value: constant.MakeInt64(int64(q.PenNone))},
 			"PenSaturation":        {Typ: reflect.TypeOf(q.PenSaturation), Value: constant.MakeInt64(int64(q.PenSaturation))},
 			"PenTransparency":      {Typ: reflect.TypeOf(q.PenTransparency), Value: constant.MakeInt64(int64(q.PenTransparency))},
 			"PixelateEffect":       {Typ: reflect.TypeOf(q.PixelateEffect), Value: constant.MakeInt64(int64(q.PixelateEffect))},

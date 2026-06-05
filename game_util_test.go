@@ -35,9 +35,9 @@ func TestPenColorParamFromString(t *testing.T) {
 		{name: "brightness uppercase", input: "BRIGHTNESS", expected: PenBrightness},
 		{name: "transparency", input: "transparency", expected: PenTransparency},
 		{name: "transparency uppercase", input: "TRANSPARENCY", expected: PenTransparency},
-		{name: "unknown string falls back to PenHue", input: "unknown", expected: PenHue},
-		{name: "empty string falls back to PenHue", input: "", expected: PenHue},
-		{name: "numeric string falls back to PenHue", input: "123", expected: PenHue},
+		{name: "unknown string falls back to PenNone", input: "unknown", expected: PenNone},
+		{name: "empty string falls back to PenNone", input: "", expected: PenNone},
+		{name: "numeric string falls back to PenNone", input: "123", expected: PenNone},
 	}
 
 	for _, tt := range tests {

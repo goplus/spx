@@ -26,6 +26,7 @@ const (
 	PenSaturation
 	PenBrightness
 	PenTransparency
+	PenNone
 )
 
 // -----------------------------------------------------------------------------

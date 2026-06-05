@@ -20,7 +20,7 @@ import "strings"
 
 // PenColorParamFromString converts a string to its corresponding PenColorParam.
 // It accepts "color", "saturation", "brightness", and "transparency" (case-insensitive).
-// Returns PenHue if the string is not recognized.
+// Returns PenNone if the string is not recognized.
 func PenColorParamFromString(s string) PenColorParam {
 	switch strings.ToLower(s) {
 	case "color":
@@ -32,6 +32,6 @@ func PenColorParamFromString(s string) PenColorParam {
 	case "transparency":
 		return PenTransparency
 	default:
-		return PenHue
+		return PenNone
 	}
 }
