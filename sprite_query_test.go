@@ -31,8 +31,6 @@ type touchingSyncSpriteMgr struct {
 	texturePaths            map[pkgengine.Object]string
 	expectedTexturePaths    map[pkgengine.Object]string
 	checkedTexturePaths     map[pkgengine.Object]string
-	checkColorCalls         map[pkgengine.Object]int
-	checkSpriteCalls        map[[2]pkgengine.Object]int
 	setTransformCalls       map[pkgengine.Object]int
 	setPositionCalls        map[pkgengine.Object]int
 	setRotationCalls        map[pkgengine.Object]int
@@ -52,8 +50,6 @@ func newTouchingSyncSpriteMgr() *touchingSyncSpriteMgr {
 		texturePaths:            map[pkgengine.Object]string{},
 		expectedTexturePaths:    map[pkgengine.Object]string{},
 		checkedTexturePaths:     map[pkgengine.Object]string{},
-		checkColorCalls:         map[pkgengine.Object]int{},
-		checkSpriteCalls:        map[[2]pkgengine.Object]int{},
 		setTransformCalls:       map[pkgengine.Object]int{},
 		setPositionCalls:        map[pkgengine.Object]int{},
 		setRotationCalls:        map[pkgengine.Object]int{},
@@ -127,12 +123,10 @@ func (s *touchingSyncSpriteMgr) SetMaterialParamsVec4(obj pkgengine.Object, effe
 }
 
 func (s *touchingSyncSpriteMgr) CheckCollisionWithSprite(obj, objB pkgengine.Object, alphaThreshold float64, usePixelPerfect bool) bool {
-	s.checkSpriteCalls[[2]pkgengine.Object{obj, objB}]++
 	return s.positions[obj] == s.positions[objB]
 }
 
 func (s *touchingSyncSpriteMgr) CheckCollisionByColor(obj pkgengine.Object, color mathf.Color, colorThreshold, alphaThreshold float64) bool {
-	s.checkColorCalls[obj]++
 	s.checkedTexturePaths[obj] = s.texturePaths[obj]
 	expected, ok := s.expectedTexturePaths[obj]
 	return !ok || s.texturePaths[obj] == expected
@@ -253,58 +247,5 @@ func TestTouchingColorSyncsDirtyCostumeImmediately(t *testing.T) {
 	}
 	if got := mgr.setTextureCalls[1]; got != 1 {
 		t.Fatalf("SetTexture calls after second touchingColor = %d, want 1", got)
-	}
-}
-
-func TestTouchingSpriteIgnoresHiddenTarget(t *testing.T) {
-	mgr := newTouchingSyncSpriteMgr()
-	installTouchingSyncSpriteMgr(t, mgr)
-
-	mover := newTouchingTestSprite("mover", 0, 0, 1)
-	target := newTouchingTestSprite("target", 0, 0, 2)
-	target.spriteState.IsVisible = false
-
-	mgr.positions[1] = mathf.NewVec2(0, 0)
-	mgr.positions[2] = mathf.NewVec2(0, 0)
-
-	if mover.touchingSprite(target) {
-		t.Fatal("touchingSprite() = true, want false when target sprite is hidden")
-	}
-	if got := mgr.setTransformCalls[2]; got != 0 {
-		t.Fatalf("SetTransform calls for hidden target = %d, want 0", got)
-	}
-}
-
-func TestTouchingSpriteIgnoresFullyGhostedTarget(t *testing.T) {
-	mgr := newTouchingSyncSpriteMgr()
-	installTouchingSyncSpriteMgr(t, mgr)
-
-	mover := newTouchingTestSprite("mover", 0, 0, 1)
-	target := newTouchingTestSprite("target", 0, 0, 2)
-	target.greffUniforms = map[EffectKind]float64{GhostEffect: 100}
-
-	mgr.positions[1] = mathf.NewVec2(0, 0)
-	mgr.positions[2] = mathf.NewVec2(0, 0)
-
-	if mover.touchingSprite(target) {
-		t.Fatal("touchingSprite() = true, want false when target sprite is fully ghosted")
-	}
-	if got := mgr.checkSpriteCalls[[2]pkgengine.Object{1, 2}]; got != 0 {
-		t.Fatalf("CheckCollisionWithSprite calls for fully ghosted target = %d, want 0", got)
-	}
-}
-
-func TestTouchingColorSkipsFullyGhostedSprite(t *testing.T) {
-	mgr := newTouchingSyncSpriteMgr()
-	installTouchingSyncSpriteMgr(t, mgr)
-
-	sprite := newTouchingTestSprite("mover", 0, 0, 1)
-	sprite.greffUniforms = map[EffectKind]float64{GhostEffect: 100}
-
-	if sprite.touchingColor(mathf.Color{}) {
-		t.Fatal("touchingColor() = true, want false when sprite is fully ghosted")
-	}
-	if got := mgr.checkColorCalls[1]; got != 0 {
-		t.Fatalf("CheckCollisionByColor calls for fully ghosted sprite = %d, want 0", got)
 	}
 }

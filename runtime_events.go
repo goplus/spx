@@ -205,14 +205,11 @@ func (p *Game) findClickTarget(point mathf.Vec2) (coreruntime.ClickSelection[cli
 		if !ok {
 			return coreruntime.ClickSelection[clicker, *SpriteImpl]{}, false
 		}
-		if !o.Visible() {
-			return coreruntime.ClickSelection[clicker, *SpriteImpl]{}, false
-		}
-		if sprite, ok := o.(*SpriteImpl); ok && !sprite.canParticipateInCollisionQuery() {
-			return coreruntime.ClickSelection[clicker, *SpriteImpl]{}, false
-		}
 		syncSprite := o.getProxy()
-		if syncSprite == nil {
+		if syncSprite == nil || !o.Visible() {
+			return coreruntime.ClickSelection[clicker, *SpriteImpl]{}, false
+		}
+		if sprite, ok := o.(*SpriteImpl); ok && sprite.isFullyGhosted() {
 			return coreruntime.ClickSelection[clicker, *SpriteImpl]{}, false
 		}
 		if !p.engine().SpriteMgr.CheckCollisionWithPoint(syncSprite.GetId(), point, true) {

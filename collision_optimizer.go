@@ -58,7 +58,7 @@ func (p *Game) buildSpatialHashForNames(dst *SpriteImpl, nameFilter func(string)
 
 	for _, item := range p.shapeMgr.items {
 		if sp, ok := item.(*SpriteImpl); ok && sp != dst {
-			if nameFilter(sp.name) && sp.canParticipateInCollisionQuery() && sp.runtimeState.SyncSprite != nil {
+			if nameFilter(sp.name) && sp.spriteState.IsVisible && !sp.spriteState.IsDying && sp.runtimeState.SyncSprite != nil {
 				aabb := newSpriteAABB(sp)
 				if aabb != nil {
 					p.spatialHash.Insert(aabb)
@@ -101,7 +101,7 @@ func findCollisionsInSpatialHash(
 
 // findTouchingSpriteOptimized uses spatial partitioning for efficient collision detection.
 func (p *Game) findTouchingSpriteOptimized(dst *SpriteImpl, name string) *SpriteImpl {
-	if !dst.canParticipateInCollisionQuery() || dst.runtimeState.SyncSprite == nil {
+	if dst == nil || dst.runtimeState.SyncSprite == nil {
 		return nil
 	}
 
