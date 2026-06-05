@@ -94,7 +94,7 @@ func (p *SpriteImpl) touching(obj Target) bool {
 		}
 	case Sprite:
 		src := spriteOf(v)
-		if src == nil || src.spriteState.IsDying {
+		if src == nil {
 			return false
 		}
 		return src.touchingSprite(p)
@@ -102,12 +102,20 @@ func (p *SpriteImpl) touching(obj Target) bool {
 	panic("Touching: unexpected input")
 }
 
-func (p *SpriteImpl) prepareSelfCollisionQuery() bool {
-	if p.runtimeState.SyncSprite == nil {
+func (p *SpriteImpl) canParticipateInCollisionQuery() bool {
+	return p != nil && p.spriteState.IsVisible && !p.spriteState.IsDying && !p.isFullyGhosted()
+}
+
+func (p *SpriteImpl) ensureCollisionQuerySynced() bool {
+	if p == nil || p.runtimeState.SyncSprite == nil {
 		return false
 	}
 	p.ensureProxyQueryStateSynced()
 	return true
+}
+
+func (p *SpriteImpl) prepareSelfCollisionQuery() bool {
+	return p.canParticipateInCollisionQuery() && p.ensureCollisionQuerySynced()
 }
 
 func (p *SpriteImpl) touchPoint(x, y float64) bool {
@@ -138,7 +146,10 @@ func (p *SpriteImpl) touchingColors(spriteColor, targetColor mathf.Color) bool {
 }
 
 func (p *SpriteImpl) touchingSprite(dst *SpriteImpl) bool {
-	if !p.prepareSelfCollisionQuery() || !dst.prepareSelfCollisionQuery() {
+	if !p.prepareSelfCollisionQuery() {
+		return false
+	}
+	if !dst.prepareSelfCollisionQuery() {
 		return false
 	}
 	return p.engine().SpriteMgr.CheckCollisionWithSprite(p.runtimeState.SyncSprite.GetId(), dst.runtimeState.SyncSprite.GetId(), alphaThreshold, !isPhysicsEnabled())
