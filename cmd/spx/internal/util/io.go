@@ -104,10 +104,6 @@ func CopyDir(fsys fs.FS, srcDir, dstDir string, isOverride bool) error {
 				i := strings.LastIndex(dstPath, "go.mod.txt")
 				dstPath = dstPath[:i] + "go.mod"
 			}
-			if strings.HasSuffix(dstPath, ".gitignore.txt") {
-				i := strings.LastIndex(dstPath, ".gitignore.txt")
-				dstPath = dstPath[:i] + ".gitignore"
-			}
 
 			if !isOverride {
 				if _, err := os.Stat(dstPath); !os.IsNotExist(err) {

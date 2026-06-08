@@ -93,7 +93,7 @@ func printWorkflowUsage() {
 	fmt.Fprintln(osStderr, "  build-web  Build web templates and export runtime assets")
 	fmt.Fprintln(osStderr, "  install-apk  Export and install an Android APK for a project")
 	fmt.Fprintln(osStderr, "  list-demos Print tutorial demo directories with their indexes")
-	fmt.Fprintln(osStderr, "  open-template-editor  Open the embedded template project in the Godot editor")
+	fmt.Fprintln(osStderr, "  open-template-editor  Open the template project directly in the Godot editor")
 	fmt.Fprintln(osStderr, "  run-demo   Run a tutorial demo in local/native/web modes")
 	fmt.Fprintln(osStderr, "  stop-web   Stop local gdspx web server processes")
 }
@@ -259,9 +259,9 @@ func parseWorkflowOpenTemplateEditorArgs(args []string) (workflowOpenTemplateEdi
 	fs := flag.NewFlagSet("workflow open-template-editor", flag.ContinueOnError)
 	fs.SetOutput(osStderr)
 	fs.StringVar(&cfg.templateDir, "template-dir", cfg.templateDir, "template project directory to open in the editor")
-	fs.StringVar(&cfg.workspaceDir, "workspace-dir", cfg.workspaceDir, "workspace directory used to stage the template editor project")
+	fs.StringVar(&cfg.workspaceDir, "workspace-dir", cfg.workspaceDir, "deprecated compatibility flag; no longer used")
 	fs.Usage = func() {
-		fmt.Fprintln(osStderr, "Usage: buildctl workflow open-template-editor [--template-dir cmd/spx/template/project] [--workspace-dir .tmp/template-editor]")
+		fmt.Fprintln(osStderr, "Usage: buildctl workflow open-template-editor [--template-dir cmd/spx/template/project]")
 	}
 
 	if err := fs.Parse(args); err != nil {
@@ -273,9 +273,6 @@ func parseWorkflowOpenTemplateEditorArgs(args []string) (workflowOpenTemplateEdi
 	}
 	if cfg.templateDir == "" {
 		return workflowOpenTemplateEditorConfig{}, errors.New("--template-dir must not be empty")
-	}
-	if cfg.workspaceDir == "" {
-		return workflowOpenTemplateEditorConfig{}, errors.New("--workspace-dir must not be empty")
 	}
 	return cfg, nil
 }
