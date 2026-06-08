@@ -2,7 +2,7 @@
 
 ## 背景
 
-Web 导出时，SVG 里的 `<text>` 节点不能假设浏览器一定能找到目标系统字体。  
+Web 导出时，SVG 里的 `<text>` 节点不能假设浏览器一定能找到目标系统字体。
 Scratch 导出的 SVG 通常会使用一组固定的字体族名，例如 `Sans Serif`、`Marker`、`Scratch`。如果运行时没有把这些族名显式映射到项目内的字体文件，Web 平台就容易出现下面几类问题：
 
 - 文本回退到浏览器默认字体
@@ -10,7 +10,7 @@ Scratch 导出的 SVG 通常会使用一组固定的字体族名，例如 `Sans 
 - 文本宽度变化，导致排版错位
 - 不同平台渲染结果不一致
 
-当前仓库已经落地了一套可用实现：保留 `CnFont.ttf` 作为项目默认字体，同时把 `engine/fonts/scratch` 目录里的 7 个 Scratch 兼容字体注册给 SVG 渲染层。
+当前仓库已经落地了一套可用实现：默认字体路径约定为 `CnFont.ttf`，同时把 `engine/fonts/scratch` 目录里的 7 个 Scratch 兼容字体注册给 SVG 渲染层。
 
 ## 当前实现概览
 
@@ -20,8 +20,14 @@ Scratch 导出的 SVG 通常会使用一组固定的字体族名，例如 `Sans 
 
 - 路径：`res://engine/fonts/CnFont.ttf`
 - 作用：作为项目默认字体，用于普通 UI / 文本显示
-- 大小：约 `8.1 MB`
 - 模板配置位置：`cmd/spx/template/project/project.godot`
+
+需要注意的是，仓库当前只跟踪 `cmd/spx/template/project/engine/fonts/CnFont.ttf.import`，不直接提交 `CnFont.ttf` 字体文件本体。实际的 `CnFont.ttf` 通常由下面两种方式补齐：
+
+- `cmd/spx/install.sh`
+  - 如果模板目录下缺少 `CnFont.ttf`，会从发布资源下载
+- `cmd/spx/setup_font.sh`
+  - 会尝试从本机系统字体中拷贝一个可用字体到模板目录
 
 模板工程的默认配置如下：
 
@@ -111,7 +117,7 @@ var scratchSVGFontRegistrations = []SVGFontFaceRegistration{
 
 当前实现并没有完全解决 Web 平台字体包体问题：
 
-- 默认字体 `CnFont.ttf` 仍然约 `8.1 MB`
+- 默认字体文件本身仍然偏大
 - Scratch 兼容字体只是额外补齐了 SVG 的固定字体族映射
 - 如果目标是继续压缩整体下载体积，还需要单独推进中文字体子集化或按需加载方案
 

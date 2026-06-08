@@ -255,7 +255,8 @@ SPX_API void batch_update_transforms(const float *buffer_data, int len);
 - `float *` / `real_t *`
 - `int64_t *`
 - `uint8_t *`
-- `GdObj *`（部分场景）
+
+`GdObj *` 相关 fast path 目前出现在 array-transform bridge 路径里，不属于这里讨论的 direct `NativeArrayBridgeSpec` 检测范围。
 
 ### 5.4 数组转换桥接
 
