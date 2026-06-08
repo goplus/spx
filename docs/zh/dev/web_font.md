@@ -1,283 +1,184 @@
-# Web平台字体优化解决方案
+# Web 平台字体与 Scratch SVG 兼容说明
 
-## 📋 **目录**
+## 背景
 
-- [🎮 问题背景](#🎮-问题背景)
-- [⚙️ 当前实现](#⚙️-当前实现)
-- [📅 落地计划](#📅-落地计划)
-  - [阶段一](#阶段一)
-  - [阶段二](#阶段二)
-  - [阶段三](#阶段三)
-- [🛠️ 技术实现方案](#🛠️-技术实现方案)
-  - [方案1: 默认子集字体(内嵌最小集)](#方案1-默认子集字体内嵌最小集)
-  - [方案2: 本地字体访问API (实验性)](#方案2-本地字体访问api-实验性)
-  - [方案3: 动态字体加载系统](#方案3-动态字体加载系统)
-  - [方案4: 智能字体子集化(打包时候处理, 增加游戏准备时间)](#方案4-智能字体子集化打包时候处理-增加游戏准备时间)
-  - [方案5: 渐进式字体管理系统(适合具体游戏，不适合spx引擎)](#方案5-渐进式字体管理系统适合具体游戏不适合spx引擎)
+Web 导出时，SVG 里的 `<text>` 节点不能假设浏览器一定能找到目标系统字体。  
+Scratch 导出的 SVG 通常会使用一组固定的字体族名，例如 `Sans Serif`、`Marker`、`Scratch`。如果运行时没有把这些族名显式映射到项目内的字体文件，Web 平台就容易出现下面几类问题：
 
----
+- 文本回退到浏览器默认字体
+- 字体风格与 Scratch 原稿不一致
+- 文本宽度变化，导致排版错位
+- 不同平台渲染结果不一致
 
-## 🎮 **问题背景**
+当前仓库已经落地了一套可用实现：保留 `CnFont.ttf` 作为项目默认字体，同时把 `engine/fonts/scratch` 目录里的 7 个 Scratch 兼容字体注册给 SVG 渲染层。
 
-Spx引擎在Web平台导出时面临的字体问题：
+## 当前实现概览
 
-```
-Spx2 Web导出的核心问题：
-├── SVG字体渲染异常
-├── 影响加载速度
-├── 影响下载速度 
-└── 增加CDN带宽成本
-```
+当前方案分成两部分：
 
-## ⚙️ **当前实现**
-- 采用内嵌一个完整字体到游戏包中 (~8M)，作为普通字体的处理
-- SVG c++实现没有处理web平台无法找到系统字体的问题，导致无法正确渲染
+### 1. 默认 UI 字体
 
-## 📅 **落地计划**
-### 阶段一 (快速修正bug)
-- SVG c++ 内嵌一个800K中文字体，作为默认实现
+- 路径：`res://engine/fonts/CnFont.ttf`
+- 作用：作为项目默认字体，用于普通 UI / 文本显示
+- 大小：约 `8.1 MB`
+- 模板配置位置：`cmd/spx/template/project/project.godot`
 
-### 阶段二
-- 将游戏包中的字体 在初始化阶段传入SVG，共享同一份字体，减少包体
+模板工程的默认配置如下：
 
-### 阶段三
-- 采用完整策略
-```
-优先级0: 内嵌最小字体 (立即可用)
-    ↓
-优先级1: 本地字体访问API (实验性)
-    ↓
-优先级2: Web字体动态加载 (完整性)
+```ini
+[gui]
+theme/custom_font="res://engine/fonts/CnFont.ttf"
 ```
 
-## 🛠️ **技术实现方案**
+### 2. Scratch SVG 专用字体
 
-### **方案1: 默认子集字体(内嵌最小集)**
+- 路径：`res://engine/fonts/scratch`
+- 作用：为 Scratch 常见的 SVG `font-family` 提供稳定映射
+- 总大小：约 `1.1 MB`
+- 来源：[`scratch-render-fonts`](https://github.com/scratchfoundation/scratch-render-fonts)
+- 许可证：`cmd/spx/template/project/engine/fonts/scratch/LICENSE.txt`、`cmd/spx/template/project/engine/fonts/scratch/OFL.txt`
 
-**算法步骤：**
-```
-1. 预制最小字符集
-   数字字符: 0-9
-   英文字母: A-Z, a-z
-   基础符号: .,!?@#$%^&*()+-=[]{}|;':"\/<>
-   核心中文: 确定取消开始返回设置帮助关于
-   
-2. 字体文件预处理
-   选择基础字体 (如 Roboto, Noto Sans)
-   使用fonttools提取最小字符集:
-      --unicodes=U+0030-0039,U+0041-005A,U+0061-007A...
-      --output-file=minimal_fallback.woff2
-      --flavor=woff2
-   压缩优化到 < 50KB
-   
-3. 内嵌策略
-   将字体文件编码为Base64
-   直接嵌入到游戏资源中
-   作为FontFile资源加载
-   
-4. 初始化时机
-   游戏启动时立即可用
-   无需网络请求
-   所有UI组件的默认字体
-   其他字体加载失败时的最终回退
-   
-5. 覆盖范围策略
-   保证基本数字显示 (分数、时间)
-   保证基础英文界面可读
-   保证核心中文操作可理解
-   支持基本标点符号显示
-```
+这批字体文件位于模板目录 `cmd/spx/template/project/engine/fonts/scratch`，会跟随模板项目一起进入新工程。
 
-**核心优势：**
-- 极小文件体积 (< 50KB)
-- 零延迟立即可用
-- 100%可靠性保证
-- 跨语言基础支持
-- 作为所有字体方案的安全网
+## Scratch 字体映射
 
-### **方案2: 本地字体访问API (实验性)**
-本地字体加载 [浏览器兼容性](https://developer.mozilla.org/en-US/docs/Web/API/Local_Font_Access_API#browser_compatibility)
+当前内置映射如下：
 
-**算法步骤：**
-```
-1. 检测运行环境
-   IF 不是Web环境 THEN 返回失败
-   
-2. 检查浏览器API支持
-   IF 浏览器支持 queryLocalFonts API THEN
-      请求字体访问权限
-   ELSE
-      跳转到下一优先级方案
-      
-3. 权限处理
-   IF 用户授权 THEN
-      获取本地字体列表
-      解析字体信息 (字体族、样式、粗细)
-      触发字体检测完成事件
-   ELSE
-      记录权限被拒绝，使用备用方案
-      
-4. JavaScript桥接实现
-   创建回调函数处理字体检测结果
-   注册事件监听器
-   执行异步字体查询
+| Scratch `font-family` | 字体文件 | 体积 |
+| --- | --- | --- |
+| `Sans Serif` | `NotoSans-Medium.ttf` | 442 KB |
+| `Serif` | `SourceSerifPro-Regular.otf` | 217 KB |
+| `Handwriting` | `handlee-regular.ttf` | 38 KB |
+| `Marker` | `Knewave.ttf` | 44 KB |
+| `Curly` | `Griffy-Regular.ttf` | 204 KB |
+| `Pixel` | `Grand9K-Pixel.ttf` | 22 KB |
+| `Scratch` | `Scratch.ttf` | 36 KB |
+
+对应关系来自 `cmd/spx/template/project/engine/fonts/scratch/README.md`，代码侧注册定义位于 `internal/core/project/display.go`。
+
+## 运行时是怎么生效的
+
+字体注册入口在游戏构建阶段：
+
+1. `game_build.go` 的 `loadResources()` 会读取项目资源。
+2. `internal/core/project.ResolveDisplaySettings()` 返回默认字体和 Scratch SVG 字体注册表。
+3. `internal/core/project.RegisterDisplayFonts()` 执行两件事：
+   - 调用 `SetDefaultFont()` 设置默认字体 `CnFont.ttf`
+   - 逐个调用 `RegisterSvgFontFace()` 注册 Scratch 字体族
+4. Web 和 Native 平台都会走各自的 `ResMgr` 绑定，把字体信息交给底层引擎。
+
+核心注册表如下：
+
+```go
+var scratchSVGFontRegistrations = []SVGFontFaceRegistration{
+	{Path: "res://engine/fonts/scratch/NotoSans-Medium.ttf", Family: "Sans Serif"},
+	{Path: "res://engine/fonts/scratch/SourceSerifPro-Regular.otf", Family: "Serif"},
+	{Path: "res://engine/fonts/scratch/handlee-regular.ttf", Family: "Handwriting"},
+	{Path: "res://engine/fonts/scratch/Knewave.ttf", Family: "Marker"},
+	{Path: "res://engine/fonts/scratch/Griffy-Regular.ttf", Family: "Curly"},
+	{Path: "res://engine/fonts/scratch/Grand9K-Pixel.ttf", Family: "Pixel"},
+	{Path: "res://engine/fonts/scratch/Scratch.ttf", Family: "Scratch"},
+}
 ```
 
-**核心逻辑：**
-- 利用现代浏览器的本地字体访问API
-- 通过JavaScript桥接与游戏引擎通信
-- 异步获取系统可用字体列表
-- 提供权限管理和错误处理
+## 资源导入配置
 
-### **方案3: 动态字体加载系统**
+`scratch` 目录中的字体都带有对应的 `.import` 文件，当前导入参数基本一致：
 
-**算法步骤：**
-```
-1. 字体请求管理
-   初始化HTTP请求组件
-   创建字体缓存字典
-   建立加载队列机制
-   
-2. 异步字体加载流程
-   输入: 字体族名, 配置参数
-   IF 缓存中存在 THEN 直接返回
-   ELSE
-      构建字体URL (Google Fonts或自定义CDN)
-      添加到加载队列
-      开始异步下载
+- `importer="font_data_dynamic"`
+- `type="FontFile"`
+- `compress=true`
+- `allow_system_fallback=true`
 
-3. URL构建策略(可换成自定义CDN地址)
-   基础URL = "https://fonts.googleapis.com/css2"
-   添加字体族参数
-   IF 指定字重 THEN 添加weight参数
-   IF 指定子集 THEN 添加subset参数 (latin, chinese等)
-   IF 指定文本 THEN 添加text参数 (只下载需要字符集 数量(eg：3000，7000))
-   返回优化后的URL
+这意味着：
 
-4. 两阶段下载机制
-   第一阶段: 下载CSS文件
-      解析CSS内容
-      提取真实字体文件URL
-   第二阶段: 下载字体文件
-      获取二进制字体数据
-      创建字体资源对象
-      更新缓存并触发完成事件
+- 字体资源按 Godot 的动态字体资源导入
+- 导入后会进行压缩
+- 字形缺失时允许底层尝试系统字体回退
 
-5. 队列处理机制
-   维护下载队列状态
-   实现并发控制
-   处理下载失败重试
-   提供进度反馈
-```
+不过需要注意，Web 平台的核心目标仍然是“不要依赖系统字体是否存在”，所以 Scratch 专用字体注册依然是必要的。
 
-**核心特性：**
-- 智能缓存机制避免重复下载
-- 支持字体子集化减少文件大小
-- 队列管理确保下载顺序和性能
-- CSS解析获取最优字体格式
+## 这个方案解决了什么
 
-### **方案4: 智能字体子集化(打包时候处理, 增加游戏准备时间，无法适配动态输入(不适合spx2))**
+当前实现主要解决的是 Scratch SVG 字体兼容问题：
 
-**算法步骤：**
-```
-1. 项目文本分析
-   扫描所有场景文件 (.json)
-   扫描所有脚本文件 (.spx)
-   扫描数据文件 (.csv, .json)
-   扫描svg图片 (.svg)
-   
-2. 字符提取策略
-   使用正则表达式匹配:
-      text="内容"          // UI文本
-      placeholder_text="内容"  // 输入框占位符
-      hint_tooltip="内容"     // 提示文本
-   
-3. 字符统计分析
-   记录所有唯一字符
-   统计字符使用频率
-   检测主要语言类型
-   生成字符使用报告
+- 让 `Sans Serif`、`Marker`、`Scratch` 等族名在 Web 平台可用
+- 让 Scratch 风格 SVG 在不同平台更接近原始效果
+- 避免把一份大字体强行当成所有 Scratch 字体族来使用
+- 把 Scratch 兼容字体和默认 UI 字体职责拆开
 
-4. 字体子集生成
-   输入: 源字体文件路径, 必需字符列表
-   转换字符为Unicode编码
-   调用fonttools工具:
-      --unicodes=U+xxxx,U+yyyy...
-      --output-file=字体_subset.woff2
-      --flavor=woff2
-   
-5. 优化策略
-   按使用频率排序字符
-   分离核心字符集和扩展字符集
-   生成多个子集文件
-   实现渐进式字体加载
-```
+## 这个方案没有解决什么
 
-**技术要点：**
-- 静态分析项目内容确定字符需求
-- 使用外部工具(fonttools)进行字体处理
-- 生成Web优化格式(WOFF2)
-- 支持增量字体加载策略
+当前实现并没有完全解决 Web 平台字体包体问题：
 
-### **方案5: 渐进式字体管理系统(适合具体游戏，不适合spx引擎)**
+- 默认字体 `CnFont.ttf` 仍然约 `8.1 MB`
+- Scratch 兼容字体只是额外补齐了 SVG 的固定字体族映射
+- 如果目标是继续压缩整体下载体积，还需要单独推进中文字体子集化或按需加载方案
 
-**算法步骤：**
-```
-1. 字体优先级定义
-   MINIMAL: 内嵌最小字体 (立即可用)
-   CRITICAL: 核心UI字体 (按钮、菜单)
-   IMPORTANT: 内容文本字体 (对话、说明)
-   OPTIONAL: 装饰字体 (特效、标题)
-   PREMIUM: 高质量显示字体
+换句话说，这一版重点是“先保证显示正确”，不是“把所有字体体积都降到最小”。
 
-2. 系统初始化流程
-   立即加载MINIMAL级别字体
-   创建字体检测器组件
-   创建动态加载器组件
-   配置加载策略字典
-   启动字体加载序列
+## 使用和排查时的注意事项
 
-3. 加载策略配置
-   FOR 每个优先级 DO
-      设置字体候选列表
-      定义回退字体路径
-      设置最大文件大小限制
-      设置加载超时时间
-   
-   MINIMAL级别配置:
-      字体: 内嵌minimal_fallback.woff2
-      文件大小: < 50KB
-      加载时间: 立即可用
+### 1. 字体族名必须精确匹配
 
-4. 渐进式加载序列
-   第零阶段: 加载最小字体
-      立即加载内嵌字体
-      所有UI组件使用默认字体
-      
-   第一阶段: 加载关键字体
-      尝试本地字体检测
-      异步加载CRITICAL优先级字体
-      成功获取后发出系统升级信号
-   
-   第二阶段: 后台加载其他字体
-      FOR 优先级 IN [IMPORTANT, OPTIONAL, PREMIUM] DO
-         异步加载该优先级的字体
-         成功后触发字体升级事件
+这里注册的是 Scratch 约定名称，不是 CSS 通用族名。
 
-5. 带超时的字体加载
-   并行执行:
-      字体下载任务
-      超时计时器
-   竞争等待机制:
-      IF 字体先完成 THEN 返回字体
-      IF 超时先触发 THEN 使用回退字体
-      最终回退: MINIMAL级别字体
+- `Sans Serif` 是内置映射名
+- `sans-serif` 是浏览器通用字体族
 
-6. 智能字体选择
-   输入: 首选字体列表
-   FOR 字体名 IN 首选列表 DO
-      IF 缓存中存在 THEN 返回该字体
-   IF 没有匹配 THEN 返回MINIMAL字体
+这两个名字不是一回事，大小写和空格也不能随意改。
+
+### 2. 这批字体主要服务 Scratch 风格 SVG
+
+`CnFont.ttf` 仍然是项目默认字体；`scratch` 目录里的字体主要用于匹配 Scratch 导出的 SVG `font-family`，不是用来替代整个项目的中文默认字体。
+
+### 3. 新增字体时不能只拷贝文件
+
+如果后续需要增加新的 SVG 字体族，至少要同步更新下面几处：
+
+- `cmd/spx/template/project/engine/fonts/scratch`
+- `cmd/spx/template/project/engine/fonts/scratch/README.md`
+- `internal/core/project/display.go`
+- `internal/core/project/project_test.go`
+- `test/ScratchFonts/assets/backdrop.svg`
+
+## 维护建议
+
+如果要调整这套 Scratch 字体方案，建议按下面顺序操作：
+
+1. 在 `cmd/spx/template/project/engine/fonts/scratch` 中加入或替换字体文件。
+2. 确保对应 `.import` 文件存在，并保持和现有资源一致的导入参数。
+3. 更新 `internal/core/project/display.go` 中的 `scratchSVGFontRegistrations`。
+4. 更新 `cmd/spx/template/project/engine/fonts/scratch/README.md` 的映射说明。
+5. 更新 `internal/core/project/project_test.go` 里的断言。
+6. 用 `test/ScratchFonts` 示例工程做一次目检。
+7. 最后再更新本文档。
+
+## 验证方式
+
+仓库内已经有一个专门的示例工程：
+
+- 示例目录：`test/ScratchFonts`
+- 示例 SVG：`test/ScratchFonts/assets/backdrop.svg`
+
+这个示例会把 7 组 Scratch 字体族都画出来，适合在改动字体资源或映射关系后做快速回归。
+
+示例里的关键写法如下：
+
+```svg
+<text x="120" y="2" font-family="'Marker'" font-size="26">
+  The quick brown fox 012345
+</text>
 ```
 
+如果某一组字体注册失效，最直观的现象通常就是该行文字样式明显变成浏览器默认字体。
 
+## 小结
+
+当前 Web 字体方案的核心思路很简单：
+
+- `CnFont.ttf` 负责项目默认文本显示
+- `scratch` 目录负责补齐 Scratch SVG 固定字体族
+- 运行时统一由 `RegisterDisplayFonts()` 完成注册
+
+这套实现已经足够支撑 Scratch 风格 SVG 在 Web 平台的基础兼容。后续如果继续做体积优化，可以在此基础上再推进中文字体裁剪、分级加载或远程字体分发。
