@@ -57,3 +57,19 @@ func TestOpenTemplateEditorWorkflow(t *testing.T) {
 		t.Fatalf("unexpected commands: %#v", runner.commands)
 	}
 }
+
+func TestResolveTemplateEditorPathAcceptsCustomProjectDirName(t *testing.T) {
+	repoRoot := t.TempDir()
+	templateProjectDir := filepath.Join(repoRoot, "custom-template-dir")
+
+	mustMkdirAll(t, templateProjectDir)
+	mustWriteFile(t, filepath.Join(templateProjectDir, "project.godot"), []byte(`[application]`+"\n"+`config/name="spx"`+"\n"))
+
+	got, err := resolveTemplateEditorPath(templateProjectDir, repoRoot)
+	if err != nil {
+		t.Fatalf("resolveTemplateEditorPath returned error: %v", err)
+	}
+	if got != templateProjectDir {
+		t.Fatalf("resolveTemplateEditorPath = %q, want %q", got, templateProjectDir)
+	}
+}

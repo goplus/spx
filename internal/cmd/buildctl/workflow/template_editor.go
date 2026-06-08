@@ -74,8 +74,13 @@ func resolveTemplateEditorPath(templateDir, repoRoot string) (string, error) {
 		return "", fmt.Errorf("template project path is not a directory: %s", templateProjectDir)
 	}
 
-	if filepath.Base(templateProjectDir) != "project" {
-		return "", fmt.Errorf("template project directory must be named project: %s", templateProjectDir)
+	projectFilePath := filepath.Join(templateProjectDir, "project.godot")
+	projectInfo, err := os.Stat(projectFilePath)
+	if err != nil {
+		return "", fmt.Errorf("template project directory must contain project.godot: %w", err)
+	}
+	if projectInfo.IsDir() {
+		return "", fmt.Errorf("template project path contains a directory named project.godot: %s", projectFilePath)
 	}
 
 	return templateProjectDir, nil
