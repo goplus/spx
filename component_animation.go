@@ -388,6 +388,7 @@ func (a *animationComponent) getCurTweenState() *animState {
 
 // tweenParams holds pre-calculated parameters for tween animations.
 type tweenParams struct {
+	moveFrom  mathf.Vec2
 	moveDiff  mathf.Vec2
 	moveSpeed float64
 	moveDir   mathf.Vec2
@@ -420,7 +421,6 @@ func (a *animationComponent) initTweenState(name SpriteAnimationName, ani *corep
 		Name:    name,
 		Speed:   ani.Speed,
 	}
-	a.stopAnimState(a.curTweenState)
 	a.curTweenState = info
 
 	var ownedPlayback *animState
@@ -445,6 +445,7 @@ func (a *animationComponent) prepareTweenParams(ani *coreproject.AniConfig) (*tw
 			return nil, false
 		}
 
+		params.moveFrom = src
 		params.moveDiff = dst.Sub(src)
 		if ani.AniType == coreproject.AniTypeMove {
 			params.moveSpeed = params.moveDiff.Length() / duration
@@ -479,12 +480,12 @@ func (a *animationComponent) executeTweenLoop(info *animState, ani *coreproject.
 		deltaPercent := percent - prePercent
 		prePercent = percent
 
-		a.applyTweenStep(ani.AniType, deltaPercent, params)
+		a.applyTweenStep(ani.AniType, percent, deltaPercent, params)
 		engine.WaitNextFrame()
 	}
 }
 
-func (a *animationComponent) applyTweenStep(aniType coreproject.AniType, deltaPercent float64, params *tweenParams) {
+func (a *animationComponent) applyTweenStep(aniType coreproject.AniType, percent, deltaPercent float64, params *tweenParams) {
 	switch aniType {
 	case coreproject.AniTypeMove:
 		physicsMode := a.sprite.PhysicsMode()
@@ -496,8 +497,8 @@ func (a *animationComponent) applyTweenStep(aniType coreproject.AniType, deltaPe
 			a.sprite.ChangeXYpos(val.X, val.Y)
 		}
 	case coreproject.AniTypeGlide:
-		val := params.moveDiff.Mulf(deltaPercent)
-		a.sprite.ChangeXYpos(val.X, val.Y)
+		pos := params.moveFrom.Add(params.moveDiff.Mulf(percent))
+		a.sprite.SetXYpos(pos.X, pos.Y)
 	case coreproject.AniTypeTurn:
 		val := params.turnDiff * deltaPercent
 		a.sprite.ChangeHeading(val)
@@ -514,6 +515,10 @@ func (a *animationComponent) cleanupTween(info, ownedPlayback *animState, name S
 
 	a.stopAnimState(info)
 	if a.curTweenState != info {
+		if ownedPlayback != nil && a.curAnimState == ownedPlayback {
+			a.stopCurrentAnimState(ownedPlayback)
+			a.playDefaultAnimIfIdle()
+		}
 		return
 	}
 
