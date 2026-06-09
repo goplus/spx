@@ -1,0 +1,34 @@
+# Ignore everything in the template project by default.
+/*
+
+# Keep template metadata files.
+!/.gitignore
+!/export_presets.cfg
+!/gdspx.gdextension
+!/gdspx.gdextension.uid
+!/main.tscn
+!/project.godot
+!/runtime.gdextension.txt
+
+# Keep tracked placeholder/config files under hidden dirs.
+!/.builds/
+/.builds/*
+!/.builds/keep.txt
+
+!/.godot/
+/.godot/*
+!/.godot/.gdignore
+!/.godot/extension_list.cfg
+!/.godot/gdspx_web_server.py
+!/.godot/global_script_class_cache.cfg
+
+# Keep template source trees.
+!/engine/
+!/engine/**
+!/go/
+!/go/**
+
+# Re-ignore generated files inside kept trees.
+/engine/.DS_Store
+/engine/fonts/CnFont.ttf
+/go/main.go

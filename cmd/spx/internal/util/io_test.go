@@ -63,3 +63,29 @@ func TestCopyDirOverwritesExistingFileWhenOverrideEnabled(t *testing.T) {
 		t.Fatalf("project.godot = %q, want template", string(got))
 	}
 }
+
+func TestCopyDirCopiesDotGitignoreFile(t *testing.T) {
+	srcRoot := t.TempDir()
+	dstRoot := t.TempDir()
+
+	srcDir := filepath.Join(srcRoot, "template")
+	if err := os.MkdirAll(srcDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(%s) returned error: %v", srcDir, err)
+	}
+	if err := os.WriteFile(filepath.Join(srcDir, ".gitignore"), []byte("/.godot\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(template .gitignore) returned error: %v", err)
+	}
+
+	if err := CopyDir(os.DirFS(srcRoot), "template", dstRoot, true); err != nil {
+		t.Fatalf("CopyDir(..., true) returned error: %v", err)
+	}
+
+	dstPath := filepath.Join(dstRoot, ".gitignore")
+	got, err := os.ReadFile(dstPath)
+	if err != nil {
+		t.Fatalf("ReadFile(%s) returned error: %v", dstPath, err)
+	}
+	if string(got) != "/.godot\n" {
+		t.Fatalf(".gitignore = %q, want /.godot\\n", string(got))
+	}
+}

@@ -38,11 +38,8 @@ func openTemplateEditorWorkflow(cfg workflowOpenTemplateEditorConfig, runner scr
 	if cfg.templateDir == "" {
 		cfg.templateDir = defaultTemplateProjectDir
 	}
-	if cfg.workspaceDir == "" {
-		cfg.workspaceDir = defaultTemplateEditorWorkspaceDir
-	}
 
-	workspaceRoot, err := prepareTemplateEditorWorkspace(cfg, runner.repoRootDir())
+	templateProjectDir, err := resolveTemplateEditorPath(cfg.templateDir, runner.repoRootDir())
 	if err != nil {
 		return err
 	}
@@ -52,15 +49,18 @@ func openTemplateEditorWorkflow(cfg workflowOpenTemplateEditorConfig, runner scr
 		return err
 	}
 
-	fmt.Fprintf(os.Stdout, "Opening template project via workspace: %s\n", workspaceRoot)
-	if err := runner.runCommand(workspaceRoot, "spx", "build"); err != nil {
-		return err
-	}
-	return runner.runCommand(workspaceRoot, "gdspx"+version, "--path", "./project", "--editor")
+	fmt.Fprintf(os.Stdout, "Opening template project directly: %s\n", templateProjectDir)
+	return runner.runCommand(
+		runner.repoRootDir(),
+		"gdspx"+version,
+		"--path", templateProjectDir,
+		"--editor",
+		"--recovery-mode",
+	)
 }
 
-func prepareTemplateEditorWorkspace(cfg workflowOpenTemplateEditorConfig, repoRoot string) (string, error) {
-	templateProjectDir := cfg.templateDir
+func resolveTemplateEditorPath(templateDir, repoRoot string) (string, error) {
+	templateProjectDir := templateDir
 	if !filepath.IsAbs(templateProjectDir) {
 		templateProjectDir = filepath.Join(repoRoot, templateProjectDir)
 	}
@@ -74,85 +74,14 @@ func prepareTemplateEditorWorkspace(cfg workflowOpenTemplateEditorConfig, repoRo
 		return "", fmt.Errorf("template project path is not a directory: %s", templateProjectDir)
 	}
 
-	workspaceBase := cfg.workspaceDir
-	if !filepath.IsAbs(workspaceBase) {
-		workspaceBase = filepath.Join(repoRoot, workspaceBase)
-	}
-	workspaceBase = filepath.Clean(workspaceBase)
-	workspaceRoot := filepath.Join(workspaceBase, "spx")
-	workspaceProjectDir := filepath.Join(workspaceRoot, "project")
-
-	for _, dir := range []string{
-		workspaceRoot,
-		filepath.Join(workspaceProjectDir, ".builds"),
-		filepath.Join(workspaceProjectDir, ".godot"),
-		filepath.Join(workspaceProjectDir, "go"),
-	} {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return "", fmt.Errorf("create workspace directory %s: %w", dir, err)
-		}
-	}
-
-	if err := os.WriteFile(filepath.Join(workspaceRoot, "main.spx"), nil, 0o644); err != nil {
-		return "", fmt.Errorf("create workspace main.spx: %w", err)
-	}
-
-	for _, name := range []string{
-		"engine",
-		"export_presets.cfg",
-		"gdspx.gdextension",
-		"gdspx.gdextension.uid",
-		"main.tscn",
-		"project.godot",
-		"runtime.gdextension.txt",
-	} {
-		if err := ensureSymlink(filepath.Join(templateProjectDir, name), filepath.Join(workspaceProjectDir, name)); err != nil {
-			return "", err
-		}
-	}
-
-	goTemplateDir := filepath.Join(templateProjectDir, "go")
-	goEntries, err := os.ReadDir(goTemplateDir)
+	projectFilePath := filepath.Join(templateProjectDir, "project.godot")
+	projectInfo, err := os.Stat(projectFilePath)
 	if err != nil {
-		return "", fmt.Errorf("read template Go directory %s: %w", goTemplateDir, err)
+		return "", fmt.Errorf("template project directory must contain project.godot: %w", err)
 	}
-	for _, entry := range goEntries {
-		if err := ensureSymlink(filepath.Join(goTemplateDir, entry.Name()), filepath.Join(workspaceProjectDir, "go", entry.Name())); err != nil {
-			return "", err
-		}
+	if projectInfo.IsDir() {
+		return "", fmt.Errorf("template project path contains a directory named project.godot: %s", projectFilePath)
 	}
 
-	return workspaceRoot, nil
-}
-
-func ensureSymlink(targetPath, linkPath string) error {
-	if err := os.MkdirAll(filepath.Dir(linkPath), 0o755); err != nil {
-		return fmt.Errorf("create parent directory for %s: %w", linkPath, err)
-	}
-
-	info, err := os.Lstat(linkPath)
-	if err == nil {
-		if info.Mode()&os.ModeSymlink != 0 {
-			existingTarget, err := os.Readlink(linkPath)
-			if err == nil {
-				resolvedTarget := existingTarget
-				if !filepath.IsAbs(resolvedTarget) {
-					resolvedTarget = filepath.Join(filepath.Dir(linkPath), resolvedTarget)
-				}
-				if filepath.Clean(resolvedTarget) == filepath.Clean(targetPath) {
-					return nil
-				}
-			}
-		}
-		if err := os.RemoveAll(linkPath); err != nil {
-			return fmt.Errorf("remove existing path %s: %w", linkPath, err)
-		}
-	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("inspect existing path %s: %w", linkPath, err)
-	}
-
-	if err := os.Symlink(targetPath, linkPath); err != nil {
-		return fmt.Errorf("create symlink %s -> %s: %w", linkPath, targetPath, err)
-	}
-	return nil
+	return templateProjectDir, nil
 }
