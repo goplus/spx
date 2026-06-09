@@ -46,6 +46,7 @@ type animationComponent struct {
 	// Animation state (per-instance)
 	curAnimState      *animState
 	curTweenState     *animState
+	activeTweenStates []*animState
 	defaultAnimActive bool
 
 	// Animation tracking (per-instance)
@@ -103,9 +104,10 @@ func (a *animationComponent) initFromConfig(spriteCfg *coreproject.SpriteConfig)
 func (a *animationComponent) cloneFrom(src component, newSprite *SpriteImpl) component {
 	srcAnim := src.(*animationComponent)
 	newAnim := &animationComponent{
-		componentBase:   componentBase{sprite: newSprite},
-		shared:          srcAnim.shared,
-		donedAnimations: make([]string, 0),
+		componentBase:     componentBase{sprite: newSprite},
+		shared:            srcAnim.shared,
+		activeTweenStates: make([]*animState, 0),
+		donedAnimations:   make([]string, 0),
 	}
 	return newAnim
 }
@@ -113,7 +115,11 @@ func (a *animationComponent) cloneFrom(src component, newSprite *SpriteImpl) com
 // onDestroy cleanup when component is destroyed.
 func (a *animationComponent) onDestroy() {
 	a.stopAnimState(a.curAnimState)
-	a.stopAnimState(a.curTweenState)
+	for _, state := range a.activeTweenStates {
+		a.stopAnimState(state)
+	}
+	a.curTweenState = nil
+	a.activeTweenStates = nil
 	a.unRegisterOnAnimationLooped()
 	a.unRegisterOnAnimationFinished()
 }
@@ -386,13 +392,39 @@ func (a *animationComponent) getCurTweenState() *animState {
 	return a.curTweenState
 }
 
+func (a *animationComponent) registerTweenState(state *animState) {
+	a.activeTweenStates = append(a.activeTweenStates, state)
+	a.curTweenState = state
+}
+
+func (a *animationComponent) unregisterTweenState(state *animState) bool {
+	idx := -1
+	for i := len(a.activeTweenStates) - 1; i >= 0; i-- {
+		if a.activeTweenStates[i] == state {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return false
+	}
+
+	a.activeTweenStates = append(a.activeTweenStates[:idx], a.activeTweenStates[idx+1:]...)
+	if len(a.activeTweenStates) == 0 {
+		a.curTweenState = nil
+	} else {
+		a.curTweenState = a.activeTweenStates[len(a.activeTweenStates)-1]
+	}
+	return true
+}
+
 // tweenParams holds pre-calculated parameters for tween animations.
 type tweenParams struct {
-	moveFrom  mathf.Vec2
-	moveDiff  mathf.Vec2
-	moveSpeed float64
-	moveDir   mathf.Vec2
-	turnDiff  float64
+	moveFrom     mathf.Vec2
+	moveTo       mathf.Vec2
+	moveVelocity mathf.Vec2
+	turnFrom     float64
+	turnTo       float64
 }
 
 func (a *animationComponent) doTween(name SpriteAnimationName, ani *coreproject.AniConfig) {
@@ -421,7 +453,7 @@ func (a *animationComponent) initTweenState(name SpriteAnimationName, ani *corep
 		Name:    name,
 		Speed:   ani.Speed,
 	}
-	a.curTweenState = info
+	a.registerTweenState(info)
 
 	var ownedPlayback *animState
 	if a.hasAnim(name) {
@@ -446,10 +478,9 @@ func (a *animationComponent) prepareTweenParams(ani *coreproject.AniConfig) (*tw
 		}
 
 		params.moveFrom = src
-		params.moveDiff = dst.Sub(src)
+		params.moveTo = dst
 		if ani.AniType == coreproject.AniTypeMove {
-			params.moveSpeed = params.moveDiff.Length() / duration
-			params.moveDir = params.moveDiff.Normalize()
+			params.moveVelocity = dst.Sub(src).Mulf(1 / duration)
 		}
 	case coreproject.AniTypeTurn:
 		src, srcOk := tools.GetFloat(ani.From)
@@ -459,7 +490,8 @@ func (a *animationComponent) prepareTweenParams(ani *coreproject.AniConfig) (*tw
 			return nil, false
 		}
 
-		params.turnDiff = dst - src
+		params.turnFrom = src
+		params.turnTo = dst
 	}
 
 	return params, true
@@ -467,7 +499,6 @@ func (a *animationComponent) prepareTweenParams(ani *coreproject.AniConfig) (*tw
 
 func (a *animationComponent) executeTweenLoop(info *animState, ani *coreproject.AniConfig, params *tweenParams) {
 	timer := 0.0
-	prePercent := 0.0
 	duration := ani.Duration
 
 	for timer < duration {
@@ -477,32 +508,35 @@ func (a *animationComponent) executeTweenLoop(info *animState, ani *coreproject.
 
 		timer += time.DeltaTime()
 		percent := mathf.Clamp01f(timer / duration)
-		deltaPercent := percent - prePercent
-		prePercent = percent
 
-		a.applyTweenStep(ani.AniType, percent, deltaPercent, params)
+		a.applyTweenStep(ani.AniType, percent, params)
 		engine.WaitNextFrame()
 	}
 }
 
-func (a *animationComponent) applyTweenStep(aniType coreproject.AniType, percent, deltaPercent float64, params *tweenParams) {
+func (a *animationComponent) applyTweenStep(aniType coreproject.AniType, percent float64, params *tweenParams) {
 	switch aniType {
 	case coreproject.AniTypeMove:
 		physicsMode := a.sprite.PhysicsMode()
 		if isPhysicsEnabled() && physicsMode != NoPhysics && physicsMode != StaticPhysics {
-			vel := params.moveDir.Mulf(params.moveSpeed)
-			a.sprite.SetVelocity(vel.X, vel.Y)
+			a.sprite.SetVelocity(params.moveVelocity.X, params.moveVelocity.Y)
 		} else {
-			val := params.moveDiff.Mulf(deltaPercent)
-			a.sprite.ChangeXYpos(val.X, val.Y)
+			a.applyTweenPosition(percent, params)
 		}
 	case coreproject.AniTypeGlide:
-		pos := params.moveFrom.Add(params.moveDiff.Mulf(percent))
-		a.sprite.SetXYpos(pos.X, pos.Y)
+		a.applyTweenPosition(percent, params)
 	case coreproject.AniTypeTurn:
-		val := params.turnDiff * deltaPercent
-		a.sprite.ChangeHeading(val)
+		a.sprite.SetHeading(a.interpolateTweenHeading(percent, params))
 	}
+}
+
+func (a *animationComponent) applyTweenPosition(percent float64, params *tweenParams) {
+	pos := params.moveFrom.Lerp(params.moveTo, percent)
+	a.sprite.SetXYpos(pos.X, pos.Y)
+}
+
+func (a *animationComponent) interpolateTweenHeading(percent float64, params *tweenParams) float64 {
+	return mathf.Lerpf(params.turnFrom, params.turnTo, percent)
 }
 
 func (a *animationComponent) cleanupTween(info, ownedPlayback *animState, name SpriteAnimationName, ani *coreproject.AniConfig) {
@@ -514,7 +548,8 @@ func (a *animationComponent) cleanupTween(info, ownedPlayback *animState, name S
 	}
 
 	a.stopAnimState(info)
-	if a.curTweenState != info {
+	wasActive := a.unregisterTweenState(info)
+	if !wasActive {
 		if ownedPlayback != nil && a.curAnimState == ownedPlayback {
 			a.stopCurrentAnimState(ownedPlayback)
 			a.playDefaultAnimIfIdle()
@@ -522,7 +557,6 @@ func (a *animationComponent) cleanupTween(info, ownedPlayback *animState, name S
 		return
 	}
 
-	a.curTweenState = nil
 	if name == a.shared.defaultAnimation || ani.IsKeepOnStop {
 		return
 	}
