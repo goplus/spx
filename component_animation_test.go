@@ -19,6 +19,7 @@ package spx
 import (
 	"testing"
 
+	"github.com/goplus/spbase/mathf"
 	internalaudio "github.com/goplus/spx/v2/internal/audio"
 	coreproject "github.com/goplus/spx/v2/internal/core/project"
 	"github.com/goplus/spx/v2/internal/engine"
@@ -49,14 +50,30 @@ func newTestAnimationComponent() *animationComponent {
 			animBindings:      map[string]string{},
 			animationWrappers: map[SpriteAnimationName]*animationWrapper{},
 		},
-		donedAnimations: make([]string, 0),
+		activeTweenStates: make([]*animState, 0),
+		donedAnimations:   make([]string, 0),
 	}
 	sprite.components.animation = anim
 	sprite.components.sound = &soundComponent{
 		componentBase: componentBase{sprite: sprite},
 		pendingAudios: make([]string, 0),
 	}
+	sprite.components.physics = &physicsComponent{
+		componentBase: componentBase{sprite: sprite},
+		physicsMode:   NoPhysics,
+	}
 	return anim
+}
+
+func initTestMotionComponents(sprite *SpriteImpl, x, y float64) {
+	sprite.components.transform = &transformComponent{
+		componentBase: componentBase{sprite: sprite},
+		x:             x,
+		y:             y,
+	}
+	sprite.components.pen = &penComponent{
+		componentBase: componentBase{sprite: sprite},
+	}
 }
 
 type animationAudioBackend struct {
@@ -206,6 +223,7 @@ func TestCleanupTweenWithoutPlaybackKeepsActiveAnimation(t *testing.T) {
 	tween := &animState{Name: StateGlide, AniType: coreproject.AniTypeGlide}
 	anim.curAnimState = activeAnim
 	anim.curTweenState = tween
+	anim.activeTweenStates = []*animState{tween}
 
 	anim.cleanupTween(tween, nil, StateGlide, &coreproject.AniConfig{AniType: coreproject.AniTypeGlide})
 
@@ -228,6 +246,7 @@ func TestCleanupTweenWithoutPlaybackRestoresDefaultWhenIdle(t *testing.T) {
 
 	tween := &animState{Name: StateGlide, AniType: coreproject.AniTypeGlide}
 	anim.curTweenState = tween
+	anim.activeTweenStates = []*animState{tween}
 
 	anim.cleanupTween(tween, nil, StateGlide, &coreproject.AniConfig{AniType: coreproject.AniTypeGlide})
 
@@ -252,6 +271,7 @@ func TestCleanupTweenRestoresDefaultForOwnedPlayback(t *testing.T) {
 	}
 	anim.curAnimState = playback
 	anim.curTweenState = tween
+	anim.activeTweenStates = []*animState{tween}
 
 	anim.cleanupTween(tween, playback, StateGlide, &coreproject.AniConfig{AniType: coreproject.AniTypeGlide})
 
@@ -263,6 +283,120 @@ func TestCleanupTweenRestoresDefaultForOwnedPlayback(t *testing.T) {
 	}
 	if anim.sprite.costumeIndex != 0 {
 		t.Fatalf("costumeIndex = %d, want default costume 0", anim.sprite.costumeIndex)
+	}
+}
+
+func TestInitTweenStateDoesNotCancelPreviousTween(t *testing.T) {
+	anim := newTestAnimationComponent()
+	previous := &animState{Name: StateGlide, AniType: coreproject.AniTypeGlide}
+	anim.curTweenState = previous
+	anim.activeTweenStates = []*animState{previous}
+
+	next, _ := anim.initTweenState(StateGlide, &coreproject.AniConfig{
+		AniType:  coreproject.AniTypeGlide,
+		Duration: 1,
+	})
+
+	if previous.IsCanceled {
+		t.Fatal("initTweenState canceled the previous tween")
+	}
+	if anim.curTweenState != next {
+		t.Fatal("initTweenState did not track the new tween state")
+	}
+}
+
+func TestApplyTweenStepGlideUsesAbsolutePosition(t *testing.T) {
+	anim := newTestAnimationComponent()
+	anim.sprite.spriteState.IsVisible = false
+	initTestMotionComponents(anim.sprite, 100, 20)
+
+	params := &tweenParams{
+		moveFrom: mathf.NewVec2(10, 20),
+		moveTo:   mathf.NewVec2(100, 20),
+	}
+
+	anim.applyTweenStep(coreproject.AniTypeGlide, 0.5, params)
+
+	x, y := anim.sprite.getXY()
+	if x != 55 || y != 20 {
+		t.Fatalf("glide position = (%v, %v), want (55, 20)", x, y)
+	}
+}
+
+func TestApplyTweenStepMoveUsesAbsolutePosition(t *testing.T) {
+	anim := newTestAnimationComponent()
+	anim.sprite.spriteState.IsVisible = false
+	initTestMotionComponents(anim.sprite, 100, 20)
+
+	params := &tweenParams{
+		moveFrom: mathf.NewVec2(10, 20),
+		moveTo:   mathf.NewVec2(100, 20),
+	}
+
+	anim.applyTweenStep(coreproject.AniTypeMove, 0.5, params)
+
+	x, y := anim.sprite.getXY()
+	if x != 55 || y != 20 {
+		t.Fatalf("move position = (%v, %v), want (55, 20)", x, y)
+	}
+}
+
+func TestApplyTweenStepTurnUsesAbsoluteHeading(t *testing.T) {
+	anim := newTestAnimationComponent()
+	anim.sprite.spriteState.IsVisible = false
+	initTestMotionComponents(anim.sprite, 0, 0)
+	anim.sprite.components.transform.direction = 100
+
+	params := &tweenParams{
+		turnFrom: 10,
+		turnTo:   100,
+	}
+
+	anim.applyTweenStep(coreproject.AniTypeTurn, 0.5, params)
+
+	if heading := anim.sprite.Heading(); heading != 55 {
+		t.Fatalf("heading = %v, want 55", heading)
+	}
+}
+
+func TestCleanupTweenStopsStaleOwnedPlayback(t *testing.T) {
+	anim := newTestAnimationComponent()
+	anim.sprite.costumes = []*costume{newCostumeWithSize(1, 1), newCostumeWithSize(1, 1)}
+	anim.sprite.spriteState.DefaultCostumeIndex = 0
+	anim.sprite.costumeIndex = 1
+
+	playback := &animState{Name: StateGlide}
+	staleTween := &animState{Name: StateGlide, AniType: coreproject.AniTypeGlide}
+	currentTween := &animState{Name: StateGlide, AniType: coreproject.AniTypeGlide}
+	anim.curAnimState = playback
+	anim.curTweenState = currentTween
+	anim.activeTweenStates = []*animState{currentTween}
+
+	anim.cleanupTween(staleTween, playback, StateGlide, &coreproject.AniConfig{AniType: coreproject.AniTypeGlide})
+
+	if anim.curAnimState != nil {
+		t.Fatal("cleanupTween did not clear the stale playback state")
+	}
+	if anim.sprite.costumeIndex != 0 {
+		t.Fatalf("costumeIndex = %d, want default costume 0", anim.sprite.costumeIndex)
+	}
+}
+
+func TestCleanupTweenRestoresPreviousActiveTweenState(t *testing.T) {
+	anim := newTestAnimationComponent()
+	first, _ := anim.initTweenState(StateGlide, &coreproject.AniConfig{
+		AniType:  coreproject.AniTypeGlide,
+		Duration: 1,
+	})
+	second, _ := anim.initTweenState(StateGlide, &coreproject.AniConfig{
+		AniType:  coreproject.AniTypeGlide,
+		Duration: 1,
+	})
+
+	anim.cleanupTween(second, nil, StateGlide, &coreproject.AniConfig{AniType: coreproject.AniTypeGlide})
+
+	if anim.curTweenState != first {
+		t.Fatal("cleanupTween did not restore the previous active tween state")
 	}
 }
 
