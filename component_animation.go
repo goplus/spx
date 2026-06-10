@@ -547,7 +547,7 @@ func (a *animationComponent) applyTweenStep(aniType coreproject.AniType, percent
 	case coreproject.AniTypeGlide:
 		a.applyTweenPosition(percent, params)
 	case coreproject.AniTypeTurn:
-		a.sprite.SetHeading(a.interpolateTweenHeading(percent, params))
+		a.applyTweenHeading(percent, params)
 	}
 }
 
@@ -556,33 +556,43 @@ func (a *animationComponent) applyTweenPosition(percent float64, params *tweenPa
 	a.sprite.SetXYpos(pos.X, pos.Y)
 }
 
-func (a *animationComponent) interpolateTweenHeading(percent float64, params *tweenParams) float64 {
-	return mathf.Lerpf(params.turnFrom, params.turnTo, percent)
+func (a *animationComponent) applyTweenHeading(percent float64, params *tweenParams) {
+	a.sprite.SetHeading(mathf.Lerpf(params.turnFrom, params.turnTo, percent))
 }
 
 func (a *animationComponent) cleanupTween(info, ownedPlayback *animState, name SpriteAnimationName, ani *coreproject.AniConfig) {
-	if ani.AniType == coreproject.AniTypeMove {
-		physicsMode := a.sprite.PhysicsMode()
-		if isPhysicsEnabled() && physicsMode != NoPhysics && physicsMode != StaticPhysics {
-			a.sprite.SetVelocity(0, 0)
-		}
-	}
-
+	a.stopMoveTweenVelocity(ani)
 	a.stopAnimState(info)
-	wasActive := a.unregisterTweenState(info)
-	if !wasActive {
-		if ownedPlayback != nil && a.curAnimState == ownedPlayback {
-			a.stopCurrentAnimState(ownedPlayback)
+	stoppedOwnedPlayback := a.stopOwnedTweenPlaybackIfCurrent(ownedPlayback)
+
+	if !a.unregisterTweenState(info) {
+		if stoppedOwnedPlayback {
 			a.playDefaultAnimIfIdle()
 		}
 		return
 	}
 
-	if name == a.shared.defaultAnimation || ani.IsKeepOnStop {
+	if name != a.shared.defaultAnimation && !ani.IsKeepOnStop {
+		a.playDefaultAnimIfIdle()
+	}
+}
+
+func (a *animationComponent) stopMoveTweenVelocity(ani *coreproject.AniConfig) {
+	if ani.AniType != coreproject.AniTypeMove {
 		return
 	}
-	if ownedPlayback != nil && a.curAnimState == ownedPlayback {
-		a.stopCurrentAnimState(ownedPlayback)
+
+	physicsMode := a.sprite.PhysicsMode()
+	if isPhysicsEnabled() && physicsMode != NoPhysics && physicsMode != StaticPhysics {
+		a.sprite.SetVelocity(0, 0)
 	}
-	a.playDefaultAnimIfIdle()
+}
+
+func (a *animationComponent) stopOwnedTweenPlaybackIfCurrent(ownedPlayback *animState) bool {
+	if ownedPlayback == nil || a.curAnimState != ownedPlayback {
+		return false
+	}
+
+	a.stopCurrentAnimState(ownedPlayback)
+	return true
 }
