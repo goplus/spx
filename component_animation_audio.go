@@ -21,6 +21,15 @@ import (
 	"github.com/goplus/spx/v2/internal/engine"
 )
 
+// ============================================================================
+// Animation Audio
+// ============================================================================
+// This file manages animation-bound audio playback and replay state.
+
+// ============================================================================
+// Audio Playback
+// ============================================================================
+
 func (a *animationComponent) playAnimationAudio(ani *coreproject.AniConfig, state *animState) {
 	a.playOnStartAudio(ani.OnStart, state)
 	a.playOnPlayAudio(ani.OnPlay, state)
@@ -108,6 +117,10 @@ func (a *animationComponent) markOnPlayAudioRestartPending(state *animState) {
 	}
 	state.OnPlayAudioRestartPending = true
 }
+
+// ============================================================================
+// Pending Replay State
+// ============================================================================
 
 func (a *animationComponent) takePendingOnPlayAudioStates(buffer []*animState) []*animState {
 	buffer = a.takePendingOnPlayAudioState(buffer[:0], a.curAnimState)

@@ -29,7 +29,12 @@ import (
 	"github.com/goplus/spx/v2/internal/tools"
 )
 
-// sharedAnimationData contains read-only animation data shared across cloned sprites (Flyweight Pattern).
+// ============================================================================
+// Animation Component
+// ============================================================================
+// This component manages sprite frame playback and tween-driven motion state.
+
+// sharedAnimationData stores read-only animation data shared across cloned sprites.
 type sharedAnimationData struct {
 	animations        map[SpriteAnimationName]*coreproject.AniConfig
 	animBindings      map[string]string
@@ -51,6 +56,10 @@ type animationComponent struct {
 	// Animation tracking (per-instance)
 	donedAnimations []string
 }
+
+// ============================================================================
+// Lifecycle
+// ============================================================================
 
 // initialize initializes the animation component from configuration.
 func (a *animationComponent) initialize(sprite *SpriteImpl, spriteCfg *coreproject.SpriteConfig) {
@@ -110,7 +119,7 @@ func (a *animationComponent) cloneFrom(src component, newSprite *SpriteImpl) com
 	return newAnim
 }
 
-// onDestroy cleanup when component is destroyed.
+// onDestroy cleans up when the component is destroyed.
 func (a *animationComponent) onDestroy() {
 	a.stopAnimState(a.curAnimState)
 	a.stopAnimState(a.curTweenState)
@@ -131,6 +140,10 @@ func (a *animationComponent) syncSpriteForPlayback() *engine.Sprite {
 	}
 	return a.sprite.runtimeState.SyncSprite
 }
+
+// ============================================================================
+// Playback
+// ============================================================================
 
 func (a *animationComponent) registerOnAnimationLooped(f func()) {
 	if syncSprite := a.syncSprite(); syncSprite != nil {
@@ -234,6 +247,10 @@ func (a *animationComponent) doAnimation(animName SpriteAnimationName, ani *core
 	}
 	return info
 }
+
+// ============================================================================
+// Animation State
+// ============================================================================
 
 func (a *animationComponent) playDefaultAnim() {
 	animName := ""
@@ -393,6 +410,10 @@ type tweenParams struct {
 	moveDir   mathf.Vec2
 	turnDiff  float64
 }
+
+// ============================================================================
+// Tween Execution
+// ============================================================================
 
 func (a *animationComponent) doTween(name SpriteAnimationName, ani *coreproject.AniConfig) {
 	info, ownedPlayback := a.initTweenState(name, ani)

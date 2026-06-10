@@ -25,6 +25,11 @@ import (
 	engine "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
 )
 
+// ============================================================================
+// Transform Component
+// ============================================================================
+// This component manages sprite position, rotation, and scale state.
+
 const (
 	// minSpeed is the minimum allowed speed value to prevent division by zero.
 	minSpeed = 0.001
@@ -38,6 +43,10 @@ const (
 	// halfCircleDegrees represents half a rotation in degrees.
 	halfCircleDegrees = 180.0
 )
+
+// ============================================================================
+// Transform Helpers
+// ============================================================================
 
 func toRotationStyle(style string) RotationStyle {
 	switch style {
@@ -87,6 +96,10 @@ type transformComponent struct {
 	isDirty bool
 }
 
+// ============================================================================
+// Lifecycle
+// ============================================================================
+
 // initialize initializes the transform component from configuration.
 func (t *transformComponent) initialize(sprite *SpriteImpl, spriteCfg *coreproject.SpriteConfig) {
 	t.componentBase.initialize(sprite, spriteCfg)
@@ -128,6 +141,10 @@ func (t *transformComponent) markDirty() {
 func (t *transformComponent) getPivot() mathf.Vec2 {
 	return t.pivot
 }
+
+// ============================================================================
+// Position and Movement
+// ============================================================================
 
 // MoveForward moves the sprite forward by the specified step size
 // in the direction it's currently facing.
@@ -317,6 +334,10 @@ func (t *transformComponent) fixWorldRange(x, y float64) (float64, float64) {
 	return x, y
 }
 
+// ============================================================================
+// Rotation
+// ============================================================================
+
 // Heading returns the current direction the sprite is facing.
 func (t *transformComponent) Heading() Direction {
 	return t.direction
@@ -397,6 +418,10 @@ func (t *transformComponent) BounceOffEdge(area string) {
 	t.direction = normalizeDirection(newDirection)
 }
 
+// ============================================================================
+// Rotation Helpers
+// ============================================================================
+
 // applyDirection sets the sprite's direction to the normalized value.
 // Returns true if the direction was actually changed.
 func (t *transformComponent) applyDirection(dir float64) bool {
@@ -468,6 +493,10 @@ func (t *transformComponent) calculateBounceDirection(edge int, dx, dy float64) 
 	}
 	return dx, dy
 }
+
+// ============================================================================
+// Tween Helpers
+// ============================================================================
 
 // doTurnAnimation handles turn animation with fallback to direct heading change.
 // This helper eliminates code duplication between Turn and TurnTo methods.
