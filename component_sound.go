@@ -36,6 +36,10 @@ type soundComponent struct {
 	pendingAudios []string
 }
 
+// ============================================================================
+// Lifecycle
+// ============================================================================
+
 // initialize initializes the sound component from config.
 func (s *soundComponent) initialize(sprite *SpriteImpl, spriteCfg *coreproject.SpriteConfig) {
 	s.componentBase.initialize(sprite, spriteCfg)
@@ -54,7 +58,7 @@ func (s *soundComponent) cloneFrom(src component, newSprite *SpriteImpl) compone
 	}
 }
 
-// OnDestroy cleanup when component is destroyed.
+// onDestroy cleans up when the component is destroyed.
 func (s *soundComponent) onDestroy() {
 	if s.soundObj != 0 {
 		s.sprite.g.soundMgr.ReleaseSound(s.soundObj)

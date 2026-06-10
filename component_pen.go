@@ -27,7 +27,7 @@ import (
 // ============================================================================
 // Pen Component
 // ============================================================================
-// This component encapsulates all pen drawing functionality
+// This component encapsulates all pen drawing functionality.
 
 type penComponent struct {
 	componentBase
@@ -44,6 +44,10 @@ type penComponent struct {
 	penDown bool
 	penObj  *engine.Object
 }
+
+// ============================================================================
+// Lifecycle
+// ============================================================================
 
 // initialize initializes the pen component from config.
 func (p *penComponent) initialize(sprite *SpriteImpl, spriteCfg *coreproject.SpriteConfig) {
@@ -75,7 +79,7 @@ func (p *penComponent) cloneFrom(src component, newSprite *SpriteImpl) component
 	}
 }
 
-// OnDestroy cleanup when component is destroyed
+// onDestroy cleans up when the component is destroyed.
 func (p *penComponent) onDestroy() {
 	p.destroyPen()
 }

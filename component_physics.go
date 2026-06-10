@@ -27,6 +27,11 @@ import (
 	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
+// ============================================================================
+// Physics Component
+// ============================================================================
+// This component manages sprite physics state, collision, and trigger shapes.
+
 func parseLayerMaskValue(pval *int64) int64 {
 	return defaults.OrDefault(pval, 1)
 }
@@ -46,6 +51,10 @@ type physicsComponent struct {
 
 	collisionTargets map[string]bool
 }
+
+// ============================================================================
+// Lifecycle
+// ============================================================================
 
 // initialize initializes the physics component from config.
 func (p *physicsComponent) initialize(sprite *SpriteImpl, spriteCfg *coreproject.SpriteConfig) {
@@ -114,10 +123,14 @@ func (p *physicsComponent) cloneFrom(src component, newSprite *SpriteImpl) compo
 	return newPhys
 }
 
-// onDestroy cleanup when component is destroyed.
+// onDestroy cleans up when the component is destroyed.
 func (p *physicsComponent) onDestroy() {
 	// Nothing to cleanup.
 }
+
+// ============================================================================
+// Physics Control
+// ============================================================================
 
 // SetPhysicsMode sets the physics mode for the sprite.
 func (p *physicsComponent) SetPhysicsMode(mode PhysicsMode) {
@@ -223,6 +236,10 @@ func (p *physicsComponent) addCollisionTarget(target string) {
 	}
 }
 
+// ============================================================================
+// Collider Configuration
+// ============================================================================
+
 // SetColliderShape sets the collider shape type and parameters.
 func (p *physicsComponent) SetColliderShape(isTrigger bool, ctype ColliderShapeType, params []float64) error {
 	config := p.getPhysicConfig(isTrigger)
@@ -307,6 +324,10 @@ func (p *physicsComponent) applyPhysicShape(isTrigger bool) {
 		}
 	}
 }
+
+// ============================================================================
+// Proxy Sync
+// ============================================================================
 
 // initCollisionParams initializes collision parameters based on game settings.
 func (p *physicsComponent) initCollisionParams() {

@@ -19,25 +19,25 @@ package spx
 import coreproject "github.com/goplus/spx/v2/internal/core/project"
 
 // ============================================================================
-// Component System - Base Interfaces and Structures
+// Component System
 // ============================================================================
 // This file defines the component-based architecture for sprites.
 // Each component encapsulates a specific aspect of sprite functionality.
 
-// component is the base interface for all sprite components
+// component is the base interface for all sprite components.
 type component interface {
-	// initialize is called when the component is first created
-	// spriteCfg can be nil when cloning
+	// initialize is called when the component is first created.
+	// spriteCfg can be nil when cloning.
 	initialize(sprite *SpriteImpl, spriteCfg *coreproject.SpriteConfig)
 
-	// cloneFrom creates a new component instance by cloning from source
+	// cloneFrom creates a new component instance by cloning from source.
 	cloneFrom(src component, newSprite *SpriteImpl) component
 
-	// onDestroy is called when the sprite is being destroyed
+	// onDestroy is called when the sprite is being destroyed.
 	onDestroy()
 }
 
-// componentBase provides default implementations for component interface
+// componentBase provides default implementations for the component interface.
 type componentBase struct {
 	sprite *SpriteImpl
 }
@@ -50,7 +50,7 @@ func (c *componentBase) initialize(sprite *SpriteImpl, spriteCfg *coreproject.Sp
 // Component Registry
 // ============================================================================
 
-// spriteComponents holds all components attached to a sprite
+// spriteComponents holds all components attached to a sprite.
 type spriteComponents struct {
 	transform *transformComponent
 	animation *animationComponent
@@ -78,9 +78,9 @@ func (sc *spriteComponents) initComponents(sprite *SpriteImpl, spriteCfg *corepr
 	sc.sound.initialize(sprite, spriteCfg)
 }
 
-// cloneFrom creates new component instances by cloning from source components
-// This is used when cloning a sprite to ensure each sprite has independent components
-// Each component's cloneFrom method is responsible for its own cloning logic
+// cloneFrom creates new component instances by cloning from source components.
+// This is used when cloning a sprite to ensure each sprite has independent components.
+// Each component's cloneFrom method is responsible for its own cloning logic.
 func (sc *spriteComponents) cloneFrom(src *spriteComponents, newSprite *SpriteImpl) {
 	// Delegate cloning to each component
 	sc.transform = src.transform.cloneFrom(src.transform, newSprite).(*transformComponent)
@@ -92,7 +92,7 @@ func (sc *spriteComponents) cloneFrom(src *spriteComponents, newSprite *SpriteIm
 	sc.bubble = nil
 }
 
-// destroyComponents destroys all sprite components
+// destroyComponents destroys all sprite components.
 func (sc *spriteComponents) destroyComponents() {
 	if sc.transform != nil {
 		sc.transform.onDestroy()
@@ -114,32 +114,32 @@ func (sc *spriteComponents) destroyComponents() {
 	}
 }
 
-// Transform returns the transform component
+// Transform returns the transform component.
 func (sc *spriteComponents) Transform() *transformComponent {
 	return sc.transform
 }
 
-// Animation returns the animation component
+// Animation returns the animation component.
 func (sc *spriteComponents) Animation() *animationComponent {
 	return sc.animation
 }
 
-// Physics returns the physics component
+// Physics returns the physics component.
 func (sc *spriteComponents) Physics() *physicsComponent {
 	return sc.physics
 }
 
-// Pen returns the pen component
+// Pen returns the pen component.
 func (sc *spriteComponents) Pen() *penComponent {
 	return sc.pen
 }
 
-// Sound returns the sound component
+// Sound returns the sound component.
 func (sc *spriteComponents) Sound() *soundComponent {
 	return sc.sound
 }
 
-// Bubble returns the bubble component (lazy initialization)
+// Bubble returns the bubble component (lazy initialization).
 func (sc *spriteComponents) Bubble() *bubbleComponent {
 	if sc.bubble == nil {
 		sc.bubble = &bubbleComponent{}

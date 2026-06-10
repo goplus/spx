@@ -26,7 +26,7 @@ import (
 // ============================================================================
 // Bubble Component
 // ============================================================================
-// This component manages Say/Think and Quote bubbles for sprites
+// This component manages Say/Think and Quote bubbles for sprites.
 
 type bubbleComponent struct {
 	componentBase
@@ -39,6 +39,10 @@ type bubbleComponent struct {
 type bubbleShape interface {
 	destroyPanel()
 }
+
+// ============================================================================
+// Lifecycle
+// ============================================================================
 
 // initialize initializes the bubble component.
 func (b *bubbleComponent) initialize(sprite *SpriteImpl, spriteCfg *coreproject.SpriteConfig) {
@@ -59,10 +63,14 @@ func (b *bubbleComponent) cloneFrom(src component, newSprite *SpriteImpl) compon
 	return newBubble
 }
 
-// onDestroy cleanup when component is destroyed.
+// onDestroy cleans up when the component is destroyed.
 func (b *bubbleComponent) onDestroy() {
 	b.stopAll()
 }
+
+// ============================================================================
+// Bubble Control
+// ============================================================================
 
 func (b *bubbleComponent) upsertText(msg string, style int) {
 	b.mu.Lock()
@@ -144,6 +152,10 @@ func (b *bubbleComponent) stopAll() {
 	b.stopText()
 	b.stopQuote()
 }
+
+// ============================================================================
+// Internal Bubble Management
+// ============================================================================
 
 func (b *bubbleComponent) stopBubble(obj bubbleShape) {
 	obj.destroyPanel()
