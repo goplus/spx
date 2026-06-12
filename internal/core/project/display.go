@@ -40,6 +40,7 @@ type SVGFontFaceRegistration struct {
 
 var scratchSVGFontRegistrations = []SVGFontFaceRegistration{
 	{Path: "res://engine/fonts/scratch/NotoSans-Medium.ttf", Family: "Sans Serif"},
+	{Path: defaultDisplayFontPath, Family: "Sans Serif"},
 	{Path: "res://engine/fonts/scratch/SourceSerifPro-Regular.otf", Family: "Serif"},
 	{Path: "res://engine/fonts/scratch/handlee-regular.ttf", Family: "Handwriting"},
 	{Path: "res://engine/fonts/scratch/Knewave.ttf", Family: "Marker"},
