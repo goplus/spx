@@ -55,7 +55,7 @@ func (s *clickThroughSpriteMgr) CheckCollisionWithPoint(obj pkgengine.Object, po
 	return s.hits[obj]
 }
 
-func setupClickThroughSpriteMgr(t *testing.T, hits map[pkgengine.Object]bool) {
+func setupClickThroughSpriteMgr(t *testing.T, hits map[pkgengine.Object]bool) *clickThroughSpriteMgr {
 	t.Helper()
 
 	enginewrap.Init(func(call func()) {
@@ -63,10 +63,14 @@ func setupClickThroughSpriteMgr(t *testing.T, hits map[pkgengine.Object]bool) {
 	})
 
 	original := pkgengine.SpriteMgr
-	pkgengine.SpriteMgr = &clickThroughSpriteMgr{hits: hits}
+	mgr := &clickThroughSpriteMgr{
+		hits: hits,
+	}
+	pkgengine.SpriteMgr = mgr
 	t.Cleanup(func() {
 		pkgengine.SpriteMgr = original
 	})
+	return mgr
 }
 
 func newClickTestSprite(g *Game, name string, id pkgengine.Object, registerClick bool) *SpriteImpl {
