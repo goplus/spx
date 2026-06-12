@@ -74,8 +74,8 @@ func (pself *Sprite) CheckCollisionByColors(sprite_color Color, target_color Col
 	return SpriteMgr.CheckCollisionByColors(pself.Id, sprite_color, target_color, color_threshold, alpha_threshold)
 }
 
-func (pself *Sprite) CheckCollisionWithPoint(point Vec2, is_trigger bool) bool {
-	return SpriteMgr.CheckCollisionWithPoint(pself.Id, point, is_trigger)
+func (pself *Sprite) CheckCollisionWithPoint(point Vec2, is_click_query bool) bool {
+	return SpriteMgr.CheckCollisionWithPoint(pself.Id, point, is_click_query)
 }
 
 func (pself *Sprite) CheckCollisionWithSprite(obj_b Object, alpha_threshold float64, use_pixel_perfect bool) bool {

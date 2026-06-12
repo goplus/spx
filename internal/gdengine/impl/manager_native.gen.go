@@ -964,10 +964,10 @@ func (pself *spriteMgr) CheckCollision(obj Object, target Object, is_src_trigger
 	retValue := CallSpriteCheckCollision(arg0, arg1, arg2, arg3)
 	return ToBool(retValue)
 }
-func (pself *spriteMgr) CheckCollisionWithPoint(obj Object, point Vec2, is_trigger bool) bool {
+func (pself *spriteMgr) CheckCollisionWithPoint(obj Object, point Vec2, is_click_query bool) bool {
 	arg0 := ToGdObj(obj)
 	arg1 := ToGdVec2(point)
-	arg2 := ToGdBool(is_trigger)
+	arg2 := ToGdBool(is_click_query)
 	retValue := CallSpriteCheckCollisionWithPoint(arg0, arg1, arg2)
 	return ToBool(retValue)
 }

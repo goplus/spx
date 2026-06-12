@@ -226,7 +226,7 @@ type ISpriteMgr interface {
 	SetChildScale(obj Object, path string, scale Vec2)
 	GetChildScale(obj Object, path string) Vec2
 	CheckCollision(obj Object, target Object, is_src_trigger bool, is_dst_trigger bool) bool
-	CheckCollisionWithPoint(obj Object, point Vec2, is_trigger bool) bool
+	CheckCollisionWithPoint(obj Object, point Vec2, is_click_query bool) bool
 	SetDebugCollisionVisible(obj Object, visible bool)
 	IsDebugCollisionVisible(obj Object) bool
 	CreateBackdrop(path string) Object

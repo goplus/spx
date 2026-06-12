@@ -69,7 +69,7 @@ func (pself *Sprite) CheckCollisionByColors(sprite_color Color, target_color Col
 	return false
 }
 
-func (pself *Sprite) CheckCollisionWithPoint(point Vec2, is_trigger bool) bool {
+func (pself *Sprite) CheckCollisionWithPoint(point Vec2, is_click_query bool) bool {
 	return false
 }
 

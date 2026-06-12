@@ -48,10 +48,14 @@ func TestGameRunBootstrapTasksExecutesQueuedHooksOnce(t *testing.T) {
 
 type clickThroughSpriteMgr struct {
 	enginewrap.SpriteMgrImpl
-	hits map[pkgengine.Object]bool
+	hits          map[pkgengine.Object]bool
+	lastIsTrigger map[pkgengine.Object]bool
 }
 
 func (s *clickThroughSpriteMgr) CheckCollisionWithPoint(obj pkgengine.Object, point mathf.Vec2, isTrigger bool) bool {
+	if s.lastIsTrigger != nil {
+		s.lastIsTrigger[obj] = isTrigger
+	}
 	return s.hits[obj]
 }
 
@@ -64,7 +68,8 @@ func setupClickThroughSpriteMgr(t *testing.T, hits map[pkgengine.Object]bool) *c
 
 	original := pkgengine.SpriteMgr
 	mgr := &clickThroughSpriteMgr{
-		hits: hits,
+		hits:          hits,
+		lastIsTrigger: make(map[pkgengine.Object]bool),
 	}
 	pkgengine.SpriteMgr = mgr
 	t.Cleanup(func() {
@@ -163,5 +168,38 @@ func TestFindClickTargetSkipsFullyGhostedSpriteEvenWithClickHandler(t *testing.T
 	}
 	if selection.SwipeTarget != bottom {
 		t.Fatalf("swipe target = %p, want bottom %p", selection.SwipeTarget, bottom)
+	}
+}
+
+func TestTouchPointUsesScratchSensingQuery(t *testing.T) {
+	mgr := setupClickThroughSpriteMgr(t, map[pkgengine.Object]bool{
+		1: true,
+	})
+
+	var g Game
+	sprite := newClickTestSprite(&g, "probe", 1, false)
+	sprite.spriteState.IsVisible = false
+
+	if !sprite.touchPoint(12, 34) {
+		t.Fatal("expected touchPoint hit")
+	}
+	if got := mgr.lastIsTrigger[1]; got {
+		t.Fatalf("touchPoint used click query, want sensing query")
+	}
+}
+
+func TestPointHitsClickTargetUsesClickQuery(t *testing.T) {
+	mgr := setupClickThroughSpriteMgr(t, map[pkgengine.Object]bool{
+		1: true,
+	})
+
+	var g Game
+	sprite := newClickTestSprite(&g, "button", 1, true)
+
+	if !g.pointHitsClickTarget(sprite, mathf.NewVec2(0, 0)) {
+		t.Fatal("expected click hit")
+	}
+	if got := mgr.lastIsTrigger[1]; !got {
+		t.Fatalf("pointHitsClickTarget used sensing query, want click query")
 	}
 }

@@ -1025,10 +1025,10 @@ func (*spriteMgrImpl) CheckCollision(obj gdx.Object, target gdx.Object, is_src_t
 	})
 	return _ret1
 }
-func (*spriteMgrImpl) CheckCollisionWithPoint(obj gdx.Object, point Vec2, is_trigger bool) bool {
+func (*spriteMgrImpl) CheckCollisionWithPoint(obj gdx.Object, point Vec2, is_click_query bool) bool {
 	var _ret1 bool
 	callInMainThread(func() {
-		_ret1 = gdx.SpriteMgr.CheckCollisionWithPoint(obj, point, is_trigger)
+		_ret1 = gdx.SpriteMgr.CheckCollisionWithPoint(obj, point, is_click_query)
 	})
 	return _ret1
 }
