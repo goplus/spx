@@ -114,7 +114,9 @@ func (p *SpriteImpl) touchPoint(x, y float64) bool {
 	if !p.prepareSelfCollisionQuery() {
 		return false
 	}
-	return p.engine().SpriteMgr.CheckCollisionWithPoint(p.runtimeState.SyncSprite.GetId(), mathf.NewVec2(x, y), true)
+	// Scratch's sensing path ignores visible/ghost when checking whether a sprite
+	// is touching the mouse, so use the sensing branch in the engine query.
+	return p.engine().SpriteMgr.CheckCollisionWithPoint(p.runtimeState.SyncSprite.GetId(), mathf.NewVec2(x, y), false)
 }
 
 func (p *SpriteImpl) touchingColor(color mathf.Color) bool {

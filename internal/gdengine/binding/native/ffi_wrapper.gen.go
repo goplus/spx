@@ -1864,12 +1864,12 @@ func CallSpriteCheckCollision(
 func CallSpriteCheckCollisionWithPoint(
 	obj GdObj,
 	point GdVec2,
-	is_trigger GdBool,
+	is_click_query GdBool,
 ) GdBool {
 	arg0 := (C.GDExtensionSpxSpriteCheckCollisionWithPoint)(api.SpxSpriteCheckCollisionWithPoint)
 	arg1 := (C.GdObj)(obj)
 	arg2 := (C.GdVec2)(point)
-	arg3 := (C.GdBool)(is_trigger)
+	arg3 := (C.GdBool)(is_click_query)
 	var ret_val C.GdBool
 	C.cgo_callfn_GDExtensionSpxSpriteCheckCollisionWithPoint(arg0, arg1, arg2, arg3, &ret_val)
 

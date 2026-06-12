@@ -452,7 +452,7 @@ func (*spriteMgrImpl) GetChildScale(obj gdx.Object, path string) Vec2 {
 func (*spriteMgrImpl) CheckCollision(obj gdx.Object, target gdx.Object, is_src_trigger bool, is_dst_trigger bool) bool {
 	return false
 }
-func (*spriteMgrImpl) CheckCollisionWithPoint(obj gdx.Object, point Vec2, is_trigger bool) bool {
+func (*spriteMgrImpl) CheckCollisionWithPoint(obj gdx.Object, point Vec2, is_click_query bool) bool {
 	return false
 }
 func (*spriteMgrImpl) SetDebugCollisionVisible(obj gdx.Object, visible bool) {}

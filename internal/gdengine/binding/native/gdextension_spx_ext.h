@@ -372,7 +372,7 @@ typedef void (*GDExtensionSpxSpriteGetChildRotation)(GdObj obj, GdString path, G
 typedef void (*GDExtensionSpxSpriteSetChildScale)(GdObj obj, GdString path, GdVec2 scale);
 typedef void (*GDExtensionSpxSpriteGetChildScale)(GdObj obj, GdString path, GdVec2 *ret_value);
 typedef void (*GDExtensionSpxSpriteCheckCollision)(GdObj obj, GdObj target, GdBool is_src_trigger, GdBool is_dst_trigger, GdBool *ret_value);
-typedef void (*GDExtensionSpxSpriteCheckCollisionWithPoint)(GdObj obj, GdVec2 point, GdBool is_trigger, GdBool *ret_value);
+typedef void (*GDExtensionSpxSpriteCheckCollisionWithPoint)(GdObj obj, GdVec2 point, GdBool is_click_query, GdBool *ret_value);
 typedef void (*GDExtensionSpxSpriteSetDebugCollisionVisible)(GdObj obj, GdBool visible);
 typedef void (*GDExtensionSpxSpriteIsDebugCollisionVisible)(GdObj obj, GdBool *ret_value);
 typedef void (*GDExtensionSpxSpriteCreateBackdrop)(GdString path, GdObj *ret_value);

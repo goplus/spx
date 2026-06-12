@@ -886,10 +886,10 @@ func (pself *spriteMgr) CheckCollision(obj Object, target Object, is_src_trigger
 	_retValue := API.SpxSpriteCheckCollision.Invoke(arg0Low, arg0High, arg1Low, arg1High, arg2, arg3)
 	return JsToGdBool(_retValue)
 }
-func (pself *spriteMgr) CheckCollisionWithPoint(obj Object, point Vec2, is_trigger bool) bool {
+func (pself *spriteMgr) CheckCollisionWithPoint(obj Object, point Vec2, is_click_query bool) bool {
 	arg0Low, arg0High := JsSplitGdObj(obj)
 	arg1 := JsFromGdVec2(point)
-	arg2 := JsFromGdBool(is_trigger)
+	arg2 := JsFromGdBool(is_click_query)
 	_retValue := API.SpxSpriteCheckCollisionWithPoint.Invoke(arg0Low, arg0High, arg1, arg2)
 	return JsToGdBool(_retValue)
 }

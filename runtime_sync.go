@@ -225,9 +225,8 @@ func (p *SpriteImpl) ensureProxyQueryStateSynced() {
 	if p.isDestroyed() || p.runtimeState.SyncSprite == nil {
 		return
 	}
-	if p.spriteState.IsVisible {
-		p.baseObj.applyCostumeUpdate()
-	}
+	// Query paths need the latest silhouette even when the sprite is hidden.
+	p.baseObj.applyCostumeUpdate()
 	if !p.spriteState.IsDirty {
 		return
 	}

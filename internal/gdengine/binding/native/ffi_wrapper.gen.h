@@ -876,11 +876,11 @@ void cgo_callfn_GDExtensionSpxSpriteCheckCollision(const GDExtensionSpxSpriteChe
 	}
 	fn(obj, target, is_src_trigger, is_dst_trigger, ret_val);
 }
-void cgo_callfn_GDExtensionSpxSpriteCheckCollisionWithPoint(const GDExtensionSpxSpriteCheckCollisionWithPoint fn, GdObj obj, GdVec2 point, GdBool is_trigger, GdBool* ret_val) {
+void cgo_callfn_GDExtensionSpxSpriteCheckCollisionWithPoint(const GDExtensionSpxSpriteCheckCollisionWithPoint fn, GdObj obj, GdVec2 point, GdBool is_click_query, GdBool* ret_val) {
 	if (!fn) {
 		return;
 	}
-	fn(obj, point, is_trigger, ret_val);
+	fn(obj, point, is_click_query, ret_val);
 }
 void cgo_callfn_GDExtensionSpxSpriteSetDebugCollisionVisible(const GDExtensionSpxSpriteSetDebugCollisionVisible fn, GdObj obj, GdBool visible) {
 	if (!fn) {
