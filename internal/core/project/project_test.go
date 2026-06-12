@@ -242,6 +242,15 @@ func TestResolveDisplaySettings(t *testing.T) {
 	}) {
 		t.Fatalf("first font registration = %+v", got)
 	}
+	if len(settings.SVGFontFaceRegistrations) < 2 {
+		t.Fatalf("expected Sans Serif fallback registration: %+v", settings.SVGFontFaceRegistrations)
+	}
+	if got := settings.SVGFontFaceRegistrations[1]; got != (SVGFontFaceRegistration{
+		Path:   defaultDisplayFontPath,
+		Family: "Sans Serif",
+	}) {
+		t.Fatalf("second font registration = %+v", got)
+	}
 
 	settings = ResolveDisplaySettings(&ProjectConfig{})
 	if settings.WindowScale != 1 || !settings.StretchMode || settings.Debug {
