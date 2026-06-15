@@ -148,6 +148,9 @@ func toIntAny(v any) (int, bool) {
 		}
 		return 0, true
 	case string:
+		if i, err := strconv.Atoi(x); err == nil {
+			return i, true
+		}
 		if f, ok := parseNumericString(x); ok {
 			if f > float64(maxInt) || f < float64(minInt) {
 				return 0, false

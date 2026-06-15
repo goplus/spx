@@ -18,6 +18,7 @@ package spx
 
 import (
 	"fmt"
+	"strconv"
 	"testing"
 )
 
@@ -203,6 +204,46 @@ func TestToIntAnyCompoundSignString(t *testing.T) {
 			input:    "-" + fmt.Sprintf("%v", -24),
 			expected: 24,
 		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, ok := toIntAny(tt.input)
+			if !ok {
+				t.Fatalf("toIntAny(%q) ok = false, want true", tt.input)
+			}
+			if result != tt.expected {
+				t.Fatalf("toIntAny(%q) = %d, want %d", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestToIntAnyPreservesLargeIntegerStringPrecision(t *testing.T) {
+	maxInt := int(^uint(0) >> 1)
+	tests := []struct {
+		name     string
+		input    string
+		expected int
+	}{
+		{
+			name:     "max int string",
+			input:    strconv.Itoa(maxInt),
+			expected: maxInt,
+		},
+	}
+
+	if int64(maxInt) > int64(1<<53) {
+		beyondFloatExact := int64(1<<53) + 1
+		tests = append(tests, struct {
+			name     string
+			input    string
+			expected int
+		}{
+			name:     "integer above float64 exact range",
+			input:    strconv.FormatInt(beyondFloatExact, 10),
+			expected: int(beyondFloatExact),
+		})
 	}
 
 	for _, tt := range tests {
