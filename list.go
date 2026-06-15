@@ -57,16 +57,13 @@ func fromObj(v obj) any {
 	return v
 }
 
-func parseNumericString(s string) (float64, bool) {
+func normalizeNumericStringSigns(s string) (string, bool) {
 	s = strings.TrimSpace(s)
 	if s == "" {
-		return 0, false
-	}
-	if f, err := strconv.ParseFloat(s, 64); err == nil {
-		return f, true
+		return "", false
 	}
 
-	sign := 1.0
+	sign := 1
 	i := 0
 	for i < len(s) {
 		switch s[i] {
@@ -76,19 +73,55 @@ func parseNumericString(s string) (float64, bool) {
 			sign = -sign
 			i++
 		default:
-			goto parseRest
+			goto normalizeRest
 		}
 	}
 
-parseRest:
-	if i == 0 || i == len(s) {
+normalizeRest:
+	if i == len(s) {
+		return "", false
+	}
+	if i == 0 {
+		return s, true
+	}
+	if sign < 0 {
+		return "-" + s[i:], true
+	}
+	return s[i:], true
+}
+
+func parseFloatString(s string) (float64, bool) {
+	normalized, ok := normalizeNumericStringSigns(s)
+	if !ok {
 		return 0, false
 	}
-	f, err := strconv.ParseFloat(s[i:], 64)
+	f, err := strconv.ParseFloat(normalized, 64)
 	if err != nil {
 		return 0, false
 	}
-	return sign * f, true
+	return f, true
+}
+
+func parseIntString(s string) (int, bool) {
+	normalized, ok := normalizeNumericStringSigns(s)
+	if !ok {
+		return 0, false
+	}
+	if i, err := strconv.Atoi(normalized); err == nil {
+		return i, true
+	}
+
+	const maxInt = int(^uint(0) >> 1)
+	const minInt = -maxInt - 1
+
+	f, err := strconv.ParseFloat(normalized, 64)
+	if err != nil {
+		return 0, false
+	}
+	if f > float64(maxInt) || f < float64(minInt) {
+		return 0, false
+	}
+	return int(f), true
 }
 
 func toIntAny(v any) (int, bool) {
@@ -148,14 +181,8 @@ func toIntAny(v any) (int, bool) {
 		}
 		return 0, true
 	case string:
-		if i, err := strconv.Atoi(x); err == nil {
+		if i, ok := parseIntString(x); ok {
 			return i, true
-		}
-		if f, ok := parseNumericString(x); ok {
-			if f > float64(maxInt) || f < float64(minInt) {
-				return 0, false
-			}
-			return int(f), true
 		}
 	}
 	return 0, false
@@ -197,7 +224,7 @@ func toFloat64Any(v any) (float64, bool) {
 		}
 		return 0, true
 	case string:
-		if f, ok := parseNumericString(x); ok {
+		if f, ok := parseFloatString(x); ok {
 			return f, true
 		}
 	}

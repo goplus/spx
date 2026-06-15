@@ -188,6 +188,105 @@ func TestToFloat64AnyCompoundSignString(t *testing.T) {
 	}
 }
 
+func TestNormalizeNumericStringSigns(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+		shouldOk bool
+	}{
+		{
+			name:     "plain number unchanged",
+			input:    "12.5",
+			expected: "12.5",
+			shouldOk: true,
+		},
+		{
+			name:     "double minus becomes positive",
+			input:    "--7",
+			expected: "7",
+			shouldOk: true,
+		},
+		{
+			name:     "plus minus becomes negative",
+			input:    "+-12",
+			expected: "-12",
+			shouldOk: true,
+		},
+		{
+			name:     "trim surrounding spaces",
+			input:    "  --18.25  ",
+			expected: "18.25",
+			shouldOk: true,
+		},
+		{
+			name:     "signs only invalid",
+			input:    "--",
+			expected: "",
+			shouldOk: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, ok := normalizeNumericStringSigns(tt.input)
+			if ok != tt.shouldOk {
+				t.Fatalf("normalizeNumericStringSigns(%q) ok = %v, want %v", tt.input, ok, tt.shouldOk)
+			}
+			if result != tt.expected {
+				t.Fatalf("normalizeNumericStringSigns(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestParseIntString(t *testing.T) {
+	maxInt := int(^uint(0) >> 1)
+	tests := []struct {
+		name     string
+		input    string
+		expected int
+		shouldOk bool
+	}{
+		{
+			name:     "compound sign integer",
+			input:    "--7",
+			expected: 7,
+			shouldOk: true,
+		},
+		{
+			name:     "float string truncates like int conversion",
+			input:    "--7.9",
+			expected: 7,
+			shouldOk: true,
+		},
+		{
+			name:     "max int preserved",
+			input:    strconv.Itoa(maxInt),
+			expected: maxInt,
+			shouldOk: true,
+		},
+		{
+			name:     "signs only invalid",
+			input:    "--",
+			expected: 0,
+			shouldOk: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, ok := parseIntString(tt.input)
+			if ok != tt.shouldOk {
+				t.Fatalf("parseIntString(%q) ok = %v, want %v", tt.input, ok, tt.shouldOk)
+			}
+			if result != tt.expected {
+				t.Fatalf("parseIntString(%q) = %d, want %d", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
 func TestToIntAnyCompoundSignString(t *testing.T) {
 	tests := []struct {
 		name     string
