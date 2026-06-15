@@ -17,6 +17,8 @@
 package spx
 
 import (
+	"fmt"
+	"strconv"
 	"testing"
 )
 
@@ -145,6 +147,212 @@ func TestToFloat64AnyBool(t *testing.T) {
 			}
 			if result != tt.expected {
 				t.Errorf("toFloat64Any(%v) = %f, want %f", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestToFloat64AnyCompoundSignString(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected float64
+	}{
+		{
+			name:     "double minus becomes positive",
+			input:    "--5.5",
+			expected: 5.5,
+		},
+		{
+			name:     "plus minus becomes negative",
+			input:    "+-12",
+			expected: -12,
+		},
+		{
+			name:     "generated negation pattern on negative value",
+			input:    "-" + fmt.Sprintf("%v", -18.25),
+			expected: 18.25,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, ok := toFloat64Any(tt.input)
+			if !ok {
+				t.Fatalf("toFloat64Any(%q) ok = false, want true", tt.input)
+			}
+			if result != tt.expected {
+				t.Fatalf("toFloat64Any(%q) = %f, want %f", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestNormalizeNumericStringSigns(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+		shouldOk bool
+	}{
+		{
+			name:     "plain number unchanged",
+			input:    "12.5",
+			expected: "12.5",
+			shouldOk: true,
+		},
+		{
+			name:     "double minus becomes positive",
+			input:    "--7",
+			expected: "7",
+			shouldOk: true,
+		},
+		{
+			name:     "plus minus becomes negative",
+			input:    "+-12",
+			expected: "-12",
+			shouldOk: true,
+		},
+		{
+			name:     "trim surrounding spaces",
+			input:    "  --18.25  ",
+			expected: "18.25",
+			shouldOk: true,
+		},
+		{
+			name:     "signs only invalid",
+			input:    "--",
+			expected: "",
+			shouldOk: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, ok := normalizeNumericStringSigns(tt.input)
+			if ok != tt.shouldOk {
+				t.Fatalf("normalizeNumericStringSigns(%q) ok = %v, want %v", tt.input, ok, tt.shouldOk)
+			}
+			if result != tt.expected {
+				t.Fatalf("normalizeNumericStringSigns(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestParseIntString(t *testing.T) {
+	maxInt := int(^uint(0) >> 1)
+	tests := []struct {
+		name     string
+		input    string
+		expected int
+		shouldOk bool
+	}{
+		{
+			name:     "compound sign integer",
+			input:    "--7",
+			expected: 7,
+			shouldOk: true,
+		},
+		{
+			name:     "float string truncates like int conversion",
+			input:    "--7.9",
+			expected: 7,
+			shouldOk: true,
+		},
+		{
+			name:     "max int preserved",
+			input:    strconv.Itoa(maxInt),
+			expected: maxInt,
+			shouldOk: true,
+		},
+		{
+			name:     "signs only invalid",
+			input:    "--",
+			expected: 0,
+			shouldOk: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, ok := parseIntString(tt.input)
+			if ok != tt.shouldOk {
+				t.Fatalf("parseIntString(%q) ok = %v, want %v", tt.input, ok, tt.shouldOk)
+			}
+			if result != tt.expected {
+				t.Fatalf("parseIntString(%q) = %d, want %d", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestToIntAnyCompoundSignString(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected int
+	}{
+		{
+			name:     "double minus becomes positive",
+			input:    "--7",
+			expected: 7,
+		},
+		{
+			name:     "generated negation pattern on negative integer",
+			input:    "-" + fmt.Sprintf("%v", -24),
+			expected: 24,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, ok := toIntAny(tt.input)
+			if !ok {
+				t.Fatalf("toIntAny(%q) ok = false, want true", tt.input)
+			}
+			if result != tt.expected {
+				t.Fatalf("toIntAny(%q) = %d, want %d", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestToIntAnyPreservesLargeIntegerStringPrecision(t *testing.T) {
+	maxInt := int(^uint(0) >> 1)
+	tests := []struct {
+		name     string
+		input    string
+		expected int
+	}{
+		{
+			name:     "max int string",
+			input:    strconv.Itoa(maxInt),
+			expected: maxInt,
+		},
+	}
+
+	if int64(maxInt) > int64(1<<53) {
+		beyondFloatExact := int64(1<<53) + 1
+		tests = append(tests, struct {
+			name     string
+			input    string
+			expected int
+		}{
+			name:     "integer above float64 exact range",
+			input:    strconv.FormatInt(beyondFloatExact, 10),
+			expected: int(beyondFloatExact),
+		})
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, ok := toIntAny(tt.input)
+			if !ok {
+				t.Fatalf("toIntAny(%q) ok = false, want true", tt.input)
+			}
+			if result != tt.expected {
+				t.Fatalf("toIntAny(%q) = %d, want %d", tt.input, result, tt.expected)
 			}
 		})
 	}

@@ -57,6 +57,73 @@ func fromObj(v obj) any {
 	return v
 }
 
+func normalizeNumericStringSigns(s string) (string, bool) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "", false
+	}
+
+	sign := 1
+	i := 0
+	for i < len(s) {
+		switch s[i] {
+		case '+':
+			i++
+		case '-':
+			sign = -sign
+			i++
+		default:
+			goto normalizeRest
+		}
+	}
+
+normalizeRest:
+	if i == len(s) {
+		return "", false
+	}
+	if i == 0 {
+		return s, true
+	}
+	if sign < 0 {
+		return "-" + s[i:], true
+	}
+	return s[i:], true
+}
+
+func parseFloatString(s string) (float64, bool) {
+	normalized, ok := normalizeNumericStringSigns(s)
+	if !ok {
+		return 0, false
+	}
+	f, err := strconv.ParseFloat(normalized, 64)
+	if err != nil {
+		return 0, false
+	}
+	return f, true
+}
+
+func parseIntString(s string) (int, bool) {
+	normalized, ok := normalizeNumericStringSigns(s)
+	if !ok {
+		return 0, false
+	}
+	if i, err := strconv.Atoi(normalized); err == nil {
+		return i, true
+	}
+
+	const maxInt = int(^uint(0) >> 1)
+	const minInt = -maxInt - 1
+
+	f, err := strconv.ParseFloat(normalized, 64)
+	if err != nil {
+		return 0, false
+	}
+	if f > float64(maxInt) || f < float64(minInt) {
+		return 0, false
+	}
+	return int(f), true
+}
+
 func toIntAny(v any) (int, bool) {
 	if v == nil {
 		return 0, true
@@ -114,14 +181,8 @@ func toIntAny(v any) (int, bool) {
 		}
 		return 0, true
 	case string:
-		if i, err := strconv.Atoi(x); err == nil {
+		if i, ok := parseIntString(x); ok {
 			return i, true
-		}
-		if f, err := strconv.ParseFloat(x, 64); err == nil {
-			if f > float64(maxInt) || f < float64(minInt) {
-				return 0, false
-			}
-			return int(f), true
 		}
 	}
 	return 0, false
@@ -163,7 +224,7 @@ func toFloat64Any(v any) (float64, bool) {
 		}
 		return 0, true
 	case string:
-		if f, err := strconv.ParseFloat(x, 64); err == nil {
+		if f, ok := parseFloatString(x); ok {
 			return f, true
 		}
 	}
