@@ -219,6 +219,21 @@ func TestPenComponentDefaultHSVStillMaterializesPen(t *testing.T) {
 	}
 }
 
+func TestPenComponentPenNoneDoesNothing(t *testing.T) {
+	spy := setupSpyPenMgr(t)
+	sprite := newPenTestSprite()
+
+	sprite.pen().SetPenColorParam(PenNone, 50)
+	sprite.pen().ChangePenColor(PenNone, 50)
+
+	if spy.createCalls != 0 {
+		t.Fatalf("CreatePen calls = %d, want 0", spy.createCalls)
+	}
+	if spy.setColorCalls != 0 {
+		t.Fatalf("SetPenColorTo calls = %d, want 0", spy.setColorCalls)
+	}
+}
+
 func TestPenComponentPenDownUsesLogicalPosition(t *testing.T) {
 	spy := setupSpyPenMgr(t)
 	sprite := newPenTestSprite()

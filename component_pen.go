@@ -164,6 +164,8 @@ func (p *penComponent) SetPenColorParam(kind PenColorParam, value float64) {
 		p.setPenBrightness(value)
 	case PenTransparency:
 		p.setPenTransparency(value)
+	case PenNone:
+		return
 	}
 }
 
@@ -177,6 +179,8 @@ func (p *penComponent) ChangePenColor(kind PenColorParam, delta float64) {
 		p.changePenBrightness(delta)
 	case PenTransparency:
 		p.changePenTransparency(delta)
+	case PenNone:
+		return
 	}
 }
 
