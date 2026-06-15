@@ -27,7 +27,7 @@ import (
 // Rand__0 returns a random integer between from and to (inclusive).
 func Rand__0(from, to int) float64 {
 	if to < from {
-		to = from
+		from, to = to, from
 	}
 	return float64(from + rand.Intn(to-from+1))
 }
@@ -35,7 +35,7 @@ func Rand__0(from, to int) float64 {
 // Rand__1 returns a random float64 between from and to.
 func Rand__1(from, to float64) float64 {
 	if to < from {
-		to = from
+		from, to = to, from
 	}
 	return rand.Float64()*(to-from) + from
 }

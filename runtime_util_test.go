@@ -20,6 +20,28 @@ import (
 	"testing"
 )
 
+func TestRand0SwapsReversedBounds(t *testing.T) {
+	const (
+		from = 93
+		to   = -220
+	)
+
+	sawNonUpperBound := false
+	for i := 0; i < 100; i++ {
+		got := Rand__0(from, to)
+		if got < to || got > from {
+			t.Fatalf("Rand__0(%d, %d) = %v, want value in [%d, %d]", from, to, got, to, from)
+		}
+		if got != float64(from) {
+			sawNonUpperBound = true
+		}
+	}
+
+	if !sawNonUpperBound {
+		t.Fatalf("Rand__0(%d, %d) only returned the upper bound; reversed bounds should produce values across the range", from, to)
+	}
+}
+
 func TestCharAt(t *testing.T) {
 	tests := []struct {
 		name     string
