@@ -55,8 +55,54 @@ type bootstrapAwakeOrderSprite struct {
 
 type cloneAwakeOrderSprite struct {
 	SpriteImpl
-	sawAwakeInMain bool
-	onClonedFired  bool
+	sawAwakeInMain *bool
+	onClonedFired  *bool
+	clonedDone     chan struct{}
+}
+
+type cloneStatePreservingSprite struct {
+	SpriteImpl
+	cloneValue  float64
+	recordValue *float64
+	clonedDone  chan struct{}
+}
+
+type cloneFieldPayload struct {
+	label string
+	count int
+}
+
+type cloneAllFieldKindsObserved struct {
+	boolValue      bool
+	intValue       int
+	stringValue    string
+	floatValue     float64
+	valueString    string
+	listString     string
+	listLen        int
+	sliceValue     []int
+	mapValue       map[string]int
+	structValue    cloneFieldPayload
+	arrayValue     [2]string
+	pointerValue   *cloneFieldPayload
+	interfaceValue any
+}
+
+type cloneAllFieldKindsSprite struct {
+	SpriteImpl
+	boolValue      bool
+	intValue       int
+	stringValue    string
+	floatValue     float64
+	valueValue     Value
+	listValue      List
+	sliceValue     []int
+	mapValue       map[string]int
+	structValue    cloneFieldPayload
+	arrayValue     [2]string
+	pointerValue   *cloneFieldPayload
+	interfaceValue any
+	observed       *cloneAllFieldKindsObserved
 	clonedDone     chan struct{}
 }
 
@@ -88,13 +134,80 @@ func (s *cloneAwakeOrderSprite) Main() {
 	if !s.IsCloned() {
 		return
 	}
-	s.sawAwakeInMain = s.spriteState.IsAwakened
+	if s.sawAwakeInMain != nil {
+		*s.sawAwakeInMain = s.spriteState.IsAwakened
+	}
 	s.OnCloned__0(func() {
-		s.onClonedFired = true
+		if s.onClonedFired != nil {
+			*s.onClonedFired = true
+		}
 		if s.clonedDone != nil {
 			close(s.clonedDone)
 		}
 	})
+}
+
+func (s *cloneStatePreservingSprite) Main() {
+	s.cloneValue = 1
+	if !s.IsCloned() {
+		return
+	}
+	s.OnCloned__0(func() {
+		if s.recordValue != nil {
+			*s.recordValue = s.cloneValue
+		}
+		if s.clonedDone != nil {
+			close(s.clonedDone)
+		}
+	})
+}
+
+func (s *cloneAllFieldKindsSprite) Main() {
+	s.XGo_Init()
+	if !s.IsCloned() {
+		return
+	}
+	s.OnCloned__0(func() {
+		if s.observed != nil {
+			s.observed.boolValue = s.boolValue
+			s.observed.intValue = s.intValue
+			s.observed.stringValue = s.stringValue
+			s.observed.floatValue = s.floatValue
+			s.observed.valueString = s.valueValue.String()
+			s.observed.listString = s.listValue.String()
+			s.observed.listLen = s.listValue.Len()
+			s.observed.sliceValue = append([]int(nil), s.sliceValue...)
+			if s.mapValue != nil {
+				s.observed.mapValue = make(map[string]int, len(s.mapValue))
+				for key, val := range s.mapValue {
+					s.observed.mapValue[key] = val
+				}
+			}
+			s.observed.structValue = s.structValue
+			s.observed.arrayValue = s.arrayValue
+			s.observed.pointerValue = s.pointerValue
+			s.observed.interfaceValue = s.interfaceValue
+		}
+		if s.clonedDone != nil {
+			close(s.clonedDone)
+		}
+	})
+}
+
+func (s *cloneAllFieldKindsSprite) XGo_Init() *cloneAllFieldKindsSprite {
+	s.boolValue = false
+	s.intValue = 1
+	s.stringValue = "init"
+	s.floatValue = 2.5
+	s.valueValue = NewValue("init-value")
+	s.listValue.Init("init")
+	s.sliceValue = []int{9}
+	s.mapValue = map[string]int{"init": 1}
+	s.structValue = cloneFieldPayload{label: "init-struct", count: 1}
+	s.arrayValue = [2]string{"init-left", "init-right"}
+	s.pointerValue = &cloneFieldPayload{label: "init-pointer", count: 2}
+	s.interfaceValue = "init-any"
+	return s
 }
 
 func (s *spyCloneSpriteMgr) CreateBareSprite(pos mathf.Vec2) pkgengine.Object {
@@ -153,7 +266,43 @@ func newBootstrapAwakeOrderSprite(g *Game, name string) *bootstrapAwakeOrderSpri
 }
 
 func newCloneAwakeOrderSprite(g *Game, name string) *cloneAwakeOrderSprite {
+	sawAwake := false
+	onCloned := false
 	sprite := &cloneAwakeOrderSprite{
+		sawAwakeInMain: &sawAwake,
+		onClonedFired:  &onCloned,
+		clonedDone:     make(chan struct{}),
+	}
+	sprite.baseObj.initWithSize(1, 1)
+	sprite.g = g
+	sprite.name = name
+	sprite.sprite = sprite
+	sprite.scriptEventBindings.init(&g.scriptEvents, &sprite.SpriteImpl)
+	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{})
+	sprite.physics().collisionInfo.Type = physicsColliderNone
+	sprite.physics().triggerInfo.Type = physicsColliderNone
+	return sprite
+}
+
+func newCloneStatePreservingSprite(g *Game, name string, recordValue *float64) *cloneStatePreservingSprite {
+	sprite := &cloneStatePreservingSprite{
+		recordValue: recordValue,
+		clonedDone:  make(chan struct{}),
+	}
+	sprite.baseObj.initWithSize(1, 1)
+	sprite.g = g
+	sprite.name = name
+	sprite.sprite = sprite
+	sprite.scriptEventBindings.init(&g.scriptEvents, &sprite.SpriteImpl)
+	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{})
+	sprite.physics().collisionInfo.Type = physicsColliderNone
+	sprite.physics().triggerInfo.Type = physicsColliderNone
+	return sprite
+}
+
+func newCloneAllFieldKindsSprite(g *Game, name string, observed *cloneAllFieldKindsObserved) *cloneAllFieldKindsSprite {
+	sprite := &cloneAllFieldKindsSprite{
+		observed:   observed,
 		clonedDone: make(chan struct{}),
 	}
 	sprite.baseObj.initWithSize(1, 1)
@@ -403,11 +552,128 @@ func TestCloneSpriteAwakesBeforeMain(t *testing.T) {
 		t.Fatal("timed out waiting for clone onCloned handler")
 	}
 
-	if !cloned.sawAwakeInMain {
+	if cloned.sawAwakeInMain == nil || !*cloned.sawAwakeInMain {
 		t.Fatal("clone Main ran before awake")
 	}
-	if !cloned.onClonedFired {
+	if cloned.onClonedFired == nil || !*cloned.onClonedFired {
 		t.Fatal("clone onCloned did not fire after Main registration")
+	}
+}
+
+func TestCloneSpritePreservesUserStateAfterMainRegistration(t *testing.T) {
+	var game Game
+	game.initShapeMgr()
+	setupCloneSpriteMgr(t)
+
+	var recorded float64
+	source := newCloneStatePreservingSprite(&game, "SpriteA", &recorded)
+	source.cloneValue = 3
+	game.addShape(spriteOf(source))
+
+	var cloned *cloneStatePreservingSprite
+	platform.RunOnMainThread(func() {
+		doClone(source, nil, false, func(sprite *SpriteImpl) {
+			var ok bool
+			cloned, ok = sprite.sprite.(*cloneStatePreservingSprite)
+			if !ok {
+				t.Fatalf("clone sprite type = %T, want *cloneStatePreservingSprite", sprite.sprite)
+			}
+		})
+	})
+
+	if cloned == nil {
+		t.Fatal("clone callback did not capture cloned sprite")
+	}
+
+	select {
+	case <-cloned.clonedDone:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for clone onCloned handler")
+	}
+
+	if got := recorded; got != 3 {
+		t.Fatalf("clone user state = %v, want 3", got)
+	}
+}
+
+func TestCloneSpritePreservesAllTopLevelUserFields(t *testing.T) {
+	var game Game
+	game.initShapeMgr()
+	setupCloneSpriteMgr(t)
+
+	var observed cloneAllFieldKindsObserved
+	source := newCloneAllFieldKindsSprite(&game, "SpriteA", &observed)
+	payload := &cloneFieldPayload{label: "orig-pointer", count: 9}
+	source.boolValue = true
+	source.intValue = 42
+	source.stringValue = "orig"
+	source.floatValue = 3.14
+	source.valueValue = NewValue("orig-value")
+	source.listValue.Init("left", 7)
+	source.sliceValue = []int{1, 2, 3}
+	source.mapValue = map[string]int{"orig": 9}
+	source.structValue = cloneFieldPayload{label: "orig-struct", count: 5}
+	source.arrayValue = [2]string{"left", "right"}
+	source.pointerValue = payload
+	source.interfaceValue = payload
+	game.addShape(spriteOf(source))
+
+	var cloned *cloneAllFieldKindsSprite
+	platform.RunOnMainThread(func() {
+		doClone(source, nil, false, func(sprite *SpriteImpl) {
+			var ok bool
+			cloned, ok = sprite.sprite.(*cloneAllFieldKindsSprite)
+			if !ok {
+				t.Fatalf("clone sprite type = %T, want *cloneAllFieldKindsSprite", sprite.sprite)
+			}
+		})
+	})
+
+	if cloned == nil {
+		t.Fatal("clone callback did not capture cloned sprite")
+	}
+
+	select {
+	case <-cloned.clonedDone:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for clone onCloned handler")
+	}
+
+	if observed.boolValue != true {
+		t.Fatalf("boolValue = %v, want true", observed.boolValue)
+	}
+	if observed.intValue != 42 {
+		t.Fatalf("intValue = %v, want 42", observed.intValue)
+	}
+	if observed.stringValue != "orig" {
+		t.Fatalf("stringValue = %q, want %q", observed.stringValue, "orig")
+	}
+	if observed.floatValue != 3.14 {
+		t.Fatalf("floatValue = %v, want 3.14", observed.floatValue)
+	}
+	if observed.valueString != "orig-value" {
+		t.Fatalf("valueValue = %q, want %q", observed.valueString, "orig-value")
+	}
+	if observed.listLen != 2 || observed.listString != "left 7" {
+		t.Fatalf("listValue = (%d, %q), want (2, %q)", observed.listLen, observed.listString, "left 7")
+	}
+	if !reflect.DeepEqual(observed.sliceValue, []int{1, 2, 3}) {
+		t.Fatalf("sliceValue = %v, want [1 2 3]", observed.sliceValue)
+	}
+	if !reflect.DeepEqual(observed.mapValue, map[string]int{"orig": 9}) {
+		t.Fatalf("mapValue = %v, want map[orig:9]", observed.mapValue)
+	}
+	if observed.structValue != (cloneFieldPayload{label: "orig-struct", count: 5}) {
+		t.Fatalf("structValue = %+v, want %+v", observed.structValue, cloneFieldPayload{label: "orig-struct", count: 5})
+	}
+	if observed.arrayValue != [2]string{"left", "right"} {
+		t.Fatalf("arrayValue = %v, want [left right]", observed.arrayValue)
+	}
+	if observed.pointerValue != payload {
+		t.Fatalf("pointerValue = %p, want %p", observed.pointerValue, payload)
+	}
+	if observed.interfaceValue != payload {
+		t.Fatalf("interfaceValue = %#v, want %#v", observed.interfaceValue, payload)
 	}
 }
 

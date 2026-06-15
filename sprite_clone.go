@@ -19,11 +19,14 @@ package spx
 import (
 	"context"
 	"reflect"
+	"unsafe"
 
 	coreproject "github.com/goplus/spx/v2/internal/core/project"
 	"github.com/goplus/spx/v2/internal/engine"
 	spxlog "github.com/goplus/spx/v2/internal/log"
 )
+
+var spriteImplType = reflect.TypeOf(SpriteImpl{})
 
 func (p *SpriteImpl) Clone__0() {
 	p.CloneWith(nil)
@@ -62,9 +65,13 @@ func cloneSprite(out reflect.Value, outPtr Sprite, in reflect.Value, v coreproje
 	func() {
 		out.Set(in)
 		for i, n := 0, out.NumField(); i < n; i++ {
-			fld := out.Field(i).Addr()
-			if ini := fld.MethodByName("InitFrom"); ini.IsValid() {
-				ini.Call([]reflect.Value{in.Field(i).Addr()})
+			dstField := settableSpriteField(out.Field(i))
+			srcField := settableSpriteField(in.Field(i))
+			if !dstField.IsValid() || !srcField.IsValid() {
+				continue
+			}
+			if ini := dstField.Addr().MethodByName("InitFrom"); ini.IsValid() {
+				ini.Call([]reflect.Value{srcField.Addr()})
 			}
 		}
 	}()
@@ -80,9 +87,52 @@ func cloneSprite(out reflect.Value, outPtr Sprite, in reflect.Value, v coreproje
 	dest.initRuntimeProxy()
 	if v == nil {
 		dest.awake()
+		// Re-running Main re-registers clone events but also replays XGo_Init.
+		// Save top-level user fields first, then restore them without changing
+		// the existing out.Set(in) reference semantics.
+		userState := snapshotSpriteUserFields(out)
 		runMain(outPtr.Main)
+		restoreSpriteUserFields(out, userState)
 	}
 	return dest
+}
+
+func snapshotSpriteUserFields(v reflect.Value) map[int]reflect.Value {
+	out := make(map[int]reflect.Value, v.NumField())
+	for i := 0; i < v.NumField(); i++ {
+		fieldType := v.Type().Field(i).Type
+		if fieldType == spriteImplType {
+			continue
+		}
+		field := settableSpriteField(v.Field(i))
+		if !field.IsValid() {
+			continue
+		}
+		saved := reflect.New(field.Type()).Elem()
+		saved.Set(field)
+		out[i] = saved
+	}
+	return out
+}
+
+func restoreSpriteUserFields(v reflect.Value, state map[int]reflect.Value) {
+	for i, saved := range state {
+		field := settableSpriteField(v.Field(i))
+		if !field.IsValid() {
+			continue
+		}
+		field.Set(saved)
+	}
+}
+
+func settableSpriteField(field reflect.Value) reflect.Value {
+	if field.CanSet() {
+		return field
+	}
+	if !field.CanAddr() {
+		return reflect.Value{}
+	}
+	return reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem()
 }
 
 func dispatchCloneLifecycle(dest *SpriteImpl, data any, isAsync bool) {
