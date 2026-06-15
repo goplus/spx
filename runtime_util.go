@@ -89,3 +89,21 @@ func Exit__0() {
 func Exit__1(code int) {
 	engine.RequestExit(int64(code))
 }
+
+// PenColorParamFromString converts a string to its corresponding PenColorParam.
+// It accepts "color", "saturation", "brightness", and "transparency" (case-insensitive).
+// Returns PenNone if the string is not recognized.
+func PenColorParamFromString(s string) PenColorParam {
+	switch strings.ToLower(s) {
+	case "color":
+		return PenHue
+	case "saturation":
+		return PenSaturation
+	case "brightness":
+		return PenBrightness
+	case "transparency":
+		return PenTransparency
+	default:
+		return PenNone
+	}
+}
