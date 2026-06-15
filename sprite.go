@@ -141,13 +141,13 @@ const (
 	XGoo_Sprite_GlideWith    = ".GlideToTarget,.GlideToXYpos"
 	XGoo_Sprite_StepToWith   = ".StepToTarget,.StepToXYpos"
 	XGoo_Sprite_TurnToWith   = ".TurnToDir,.TurnToTarget,.TurnToXYpos"
-	XGoo_Sprite_SetLayerWith = ".SetLayerTo,.ChangeLayer"
+	XGoo_Sprite_SetLayerWith = ".SetLayerTo,.SetLayer__1"
 	XGoo_Sprite_QuoteWith    = ".QuoteMsg,.QuoteMsgEx"
 
 	XGoo_SpriteImpl_GlideWith    = ".GlideToTarget,.GlideToXYpos"
 	XGoo_SpriteImpl_StepToWith   = ".StepToTarget,.StepToXYpos"
 	XGoo_SpriteImpl_TurnToWith   = ".TurnToDir,.TurnToTarget,.TurnToXYpos"
-	XGoo_SpriteImpl_SetLayerWith = ".SetLayerTo,.ChangeLayer"
+	XGoo_SpriteImpl_SetLayerWith = ".SetLayerTo,.SetLayer__1"
 	XGoo_SpriteImpl_QuoteWith    = ".QuoteMsg,.QuoteMsgEx"
 )
 
@@ -265,7 +265,6 @@ type Sprite interface {
 	SetLayer__1(dir dirAction, delta int)
 
 	SetLayerTo(layer layerAction)
-	ChangeLayer(dir dirAction, delta int)
 
 	// Costume Methods
 	CostumeName() SpriteCostumeName
