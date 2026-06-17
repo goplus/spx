@@ -8,6 +8,9 @@ cd "$SCRIPT_DIR"
 # Pin Go toolchain version
 export GOTOOLCHAIN=go1.25.8
 
+. "$SCRIPT_DIR/../internal/macos_go_toolchain.sh"
+configure_macos_go_toolchain
+
 target_font_dir=./template/project/engine/fonts/
 mkdir -p "$target_font_dir"
 font_path=$target_font_dir/CnFont.ttf
