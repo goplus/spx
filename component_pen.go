@@ -100,12 +100,10 @@ func (p *penComponent) PenUp() {
 }
 
 func (p *penComponent) PenDown() {
-	if p.penDown && p.penObj != nil {
-		return
-	}
 	p.checkOrCreatePen()
+	x, y := p.sprite.getXY()
+	p.syncPenPosition(x, y)
 	p.penDown = true
-	p.movePen(p.sprite.getXY())
 	p.engine().PenMgr.PenDown(*p.penObj, false)
 }
 
@@ -264,7 +262,7 @@ func (p *penComponent) destroyPen() {
 }
 
 func (p *penComponent) movePen(x, y float64) {
-	if p.penObj == nil || !p.penDown {
+	if !p.penDown {
 		return
 	}
 	p.syncPenPosition(x, y)
