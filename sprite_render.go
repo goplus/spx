@@ -137,7 +137,12 @@ func (p *SpriteImpl) SetLayer__0(layer layerAction) {
 }
 
 func (p *SpriteImpl) SetLayer__1(dir dirAction, delta int) {
-	p.ChangeLayer(dir, delta)
+	switch dir {
+	case Forward:
+		p.g.goBackLayers(p, -delta)
+	case Backward:
+		p.g.goBackLayers(p, delta)
+	}
 }
 
 func (p *SpriteImpl) SetLayerTo(layer layerAction) {
@@ -146,14 +151,5 @@ func (p *SpriteImpl) SetLayerTo(layer layerAction) {
 		p.g.gotoFront(p)
 	case Back:
 		p.g.gotoBack(p)
-	}
-}
-
-func (p *SpriteImpl) ChangeLayer(dir dirAction, delta int) {
-	switch dir {
-	case Forward:
-		p.g.goBackLayers(p, -delta)
-	case Backward:
-		p.g.goBackLayers(p, delta)
 	}
 }
