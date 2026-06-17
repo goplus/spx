@@ -10,6 +10,9 @@ func TestSetLayerPublicAPI(t *testing.T) {
 	if _, ok := spriteType.MethodByName("ChangeLayer"); ok {
 		t.Fatal("Sprite should not expose ChangeLayer")
 	}
+	if _, ok := spriteType.MethodByName("SetLayer__1"); !ok {
+		t.Fatal("Sprite should keep SetLayer__1 for overload dispatch")
+	}
 
 	spriteImplType := reflect.TypeOf((*SpriteImpl)(nil))
 	if _, ok := spriteImplType.MethodByName("ChangeLayer"); ok {
