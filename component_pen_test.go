@@ -120,6 +120,22 @@ func setupSpyPenMgr(t *testing.T) *spyPenMgr {
 	return spy
 }
 
+func TestPenComponentInitializesDefaultColorComponents(t *testing.T) {
+	sprite := newPenTestSprite()
+	pen := sprite.pen()
+
+	wantColor := mathf.NewColorRGBAi(66, 133, 244, 255)
+	if !samePenColor(pen.penColor, wantColor) {
+		t.Fatalf("penColor = %v, want %v", pen.penColor, wantColor)
+	}
+
+	h, s, v := wantColor.ToHSV()
+	assertNearlyEqualPenValue(t, "penHue", pen.penHue, hueToPercent(h))
+	assertNearlyEqualPenValue(t, "penSaturation", pen.penSaturation, normalizedToPercent(s))
+	assertNearlyEqualPenValue(t, "penBrightness", pen.penBrightness, normalizedToPercent(v))
+	assertNearlyEqualPenValue(t, "penTransparency", pen.penTransparency, normalizedToPercent(wantColor.A))
+}
+
 func TestPenComponentRepeatedPenDownDrawsAtCurrentPosition(t *testing.T) {
 	spy := setupSpyPenMgr(t)
 	sprite := newPenTestSprite()
@@ -206,16 +222,31 @@ func TestPenComponentDefaultPenColorStillMaterializesPen(t *testing.T) {
 }
 
 func TestPenComponentDefaultHSVStillMaterializesPen(t *testing.T) {
-	spy := setupSpyPenMgr(t)
-	sprite := newPenTestSprite()
-
-	sprite.pen().SetPenColorParam(PenHue, sprite.pen().penHue)
-
-	if spy.createCalls != 1 {
-		t.Fatalf("CreatePen calls = %d, want 1", spy.createCalls)
+	tests := []struct {
+		name  string
+		kind  PenColorParam
+		value func(*penComponent) float64
+	}{
+		{name: "hue", kind: PenHue, value: func(p *penComponent) float64 { return p.penHue }},
+		{name: "saturation", kind: PenSaturation, value: func(p *penComponent) float64 { return p.penSaturation }},
+		{name: "brightness", kind: PenBrightness, value: func(p *penComponent) float64 { return p.penBrightness }},
+		{name: "transparency", kind: PenTransparency, value: func(p *penComponent) float64 { return p.penTransparency }},
 	}
-	if spy.setColorCalls != 1 {
-		t.Fatalf("SetPenColorTo calls = %d, want 1", spy.setColorCalls)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			spy := setupSpyPenMgr(t)
+			sprite := newPenTestSprite()
+
+			sprite.pen().SetPenColorParam(tt.kind, tt.value(sprite.pen()))
+
+			if spy.createCalls != 1 {
+				t.Fatalf("CreatePen calls = %d, want 1", spy.createCalls)
+			}
+			if spy.setColorCalls != 1 {
+				t.Fatalf("SetPenColorTo calls = %d, want 1", spy.setColorCalls)
+			}
+		})
 	}
 }
 
@@ -308,5 +339,12 @@ func TestPenComponentStampSyncsNormalRotation(t *testing.T) {
 	wantRotation := engine.DegToRad(-45)
 	if spy.lastStampRotation != wantRotation {
 		t.Fatalf("PenStampWithTransform rotation = %v, want %v", spy.lastStampRotation, wantRotation)
+	}
+}
+
+func assertNearlyEqualPenValue(t *testing.T, name string, got, want float64) {
+	t.Helper()
+	if !nearlyEqualPenValue(got, want) {
+		t.Fatalf("%s = %v, want %v", name, got, want)
 	}
 }
