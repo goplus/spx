@@ -1,6 +1,10 @@
 #!/bin/bash
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/../internal/macos_go_toolchain.sh"
+configure_macos_go_toolchain
+
 GOOS="$(go env GOOS)"
 GOARCH="$(go env GOARCH)"
 
