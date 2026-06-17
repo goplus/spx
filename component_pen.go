@@ -53,12 +53,9 @@ type penComponent struct {
 func (p *penComponent) initialize(sprite *SpriteImpl, spriteCfg *coreproject.SpriteConfig) {
 	p.componentBase.initialize(sprite, spriteCfg)
 	// Always initialize with default pen values
-	p.penColor = mathf.NewColor(66, 133, 244, 255)
+	p.penColor = mathf.NewColorRGBAi(66, 133, 244, 255)
 	p.penWidth = 1
-	p.penHue = 0.6
-	p.penSaturation = 1
-	p.penBrightness = 1
-	p.penTransparency = 0
+	p.syncPenColorComponents()
 	p.penDown = false
 	p.penObj = nil
 }
@@ -187,13 +184,7 @@ func (p *penComponent) ChangePenColor(kind PenColorParam, delta float64) {
 // ============================================================================
 
 func (p *penComponent) setPenHue(value float64) {
-	nextValue := mathf.Clamp(value, 0, 100)
-	if p.penObj != nil && nearlyEqualPenValue(p.penHue, nextValue) {
-		return
-	}
-	p.checkOrCreatePen()
-	p.penHue = nextValue
-	p.applyPenHsvProperty()
+	p.setPenHsvComponent(&p.penHue, value)
 }
 
 func (p *penComponent) changePenHue(delta float64) {
@@ -201,13 +192,7 @@ func (p *penComponent) changePenHue(delta float64) {
 }
 
 func (p *penComponent) setPenSaturation(value float64) {
-	nextValue := mathf.Clamp(value, 0, 100)
-	if p.penObj != nil && nearlyEqualPenValue(p.penSaturation, nextValue) {
-		return
-	}
-	p.checkOrCreatePen()
-	p.penSaturation = nextValue
-	p.applyPenHsvProperty()
+	p.setPenHsvComponent(&p.penSaturation, value)
 }
 
 func (p *penComponent) changePenSaturation(delta float64) {
@@ -215,13 +200,7 @@ func (p *penComponent) changePenSaturation(delta float64) {
 }
 
 func (p *penComponent) setPenBrightness(value float64) {
-	nextValue := mathf.Clamp(value, 0, 100)
-	if p.penObj != nil && nearlyEqualPenValue(p.penBrightness, nextValue) {
-		return
-	}
-	p.checkOrCreatePen()
-	p.penBrightness = nextValue
-	p.applyPenHsvProperty()
+	p.setPenHsvComponent(&p.penBrightness, value)
 }
 
 func (p *penComponent) changePenBrightness(delta float64) {
@@ -229,13 +208,7 @@ func (p *penComponent) changePenBrightness(delta float64) {
 }
 
 func (p *penComponent) setPenTransparency(value float64) {
-	nextValue := mathf.Clamp(value, 0, 100)
-	if p.penObj != nil && nearlyEqualPenValue(p.penTransparency, nextValue) {
-		return
-	}
-	p.checkOrCreatePen()
-	p.penTransparency = nextValue
-	p.applyPenHsvProperty()
+	p.setPenHsvComponent(&p.penTransparency, value)
 }
 
 func (p *penComponent) changePenTransparency(delta float64) {
@@ -283,18 +256,32 @@ func (p *penComponent) getPenStampTransform() (rotationRadians float64, scale ma
 
 func (p *penComponent) applyPenColorProperty() {
 	p.checkOrCreatePen()
+	p.syncPenColorComponents()
+	p.updatePenColor()
+}
+
+func (p *penComponent) syncPenColorComponents() {
 	h, s, v := p.penColor.ToHSV()
 	p.penHue = hueToPercent(h)
 	p.penSaturation = normalizedToPercent(s)
 	p.penBrightness = normalizedToPercent(v)
 	p.penTransparency = normalizedToPercent(p.penColor.A)
-	p.updatePenColor()
 }
 
 func (p *penComponent) applyPenHsvProperty() {
 	p.penColor = mathf.NewColorHSV(percentToHue(p.penHue), percentToNormalized(p.penSaturation), percentToNormalized(p.penBrightness))
 	p.penColor.A = percentToNormalized(p.penTransparency)
 	p.updatePenColor()
+}
+
+func (p *penComponent) setPenHsvComponent(component *float64, value float64) {
+	nextValue := mathf.Clamp(value, 0, 100)
+	if p.penObj != nil && nearlyEqualPenValue(*component, nextValue) {
+		return
+	}
+	p.checkOrCreatePen()
+	*component = nextValue
+	p.applyPenHsvProperty()
 }
 
 func (p *penComponent) updatePenColor() {
