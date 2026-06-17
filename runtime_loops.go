@@ -35,6 +35,9 @@ func (p *Game) eventLoop(me coroutine.Thread) int {
 func (p *Game) inputEventLoop(me coroutine.Thread) int {
 	return coreruntime.RunInputLoop(me, coreruntime.InputLoopConfig{
 		CurrentMousePos: func() mathf.Vec2 {
+			if x, y, ok := engine.GetMouseButtonPressSnapshot(MOUSE_BUTTON_LEFT); ok {
+				return mathf.Vec2{X: x, Y: y}
+			}
 			curMousePos := p.engine().InputMgr.GetGlobalMousePos()
 			return mathf.Vec2{X: float64(curMousePos.X), Y: float64(curMousePos.Y)}
 		},

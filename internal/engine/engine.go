@@ -165,6 +165,7 @@ func onStart() {
 
 func onUpdate(delta float64) {
 	defer CheckPanic()
+	beginMouseInputFrame()
 	profiler.BeginSample()
 	updateTime(float64(delta))
 	cacheTriggerEvents()
