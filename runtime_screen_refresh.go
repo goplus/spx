@@ -16,7 +16,12 @@
 
 package spx
 
-import "github.com/goplus/spx/v2/internal/engine"
+import (
+	"fmt"
+	"reflect"
+
+	"github.com/goplus/spx/v2/internal/engine"
+)
 
 // IsRunWithoutScreenRefresh reports whether the current coroutine is in
 // Scratch-style "run without screen refresh" mode.
@@ -41,9 +46,94 @@ func RunWithoutScreenRefresh(call func()) {
 	engine.RunWithoutScreenRefresh(call)
 }
 
-// Deprecated: use RunWithoutScreenRefresh.
-func Warp(call func()) {
-	RunWithoutScreenRefresh(call)
+// Warp calls fn with args in Scratch-style "run without screen refresh" mode.
+func Warp(fn any, args ...any) {
+	RunWithoutScreenRefresh(func() {
+		call(fn, args...)
+	})
+}
+
+func call(fn any, args ...any) {
+	if fn == nil {
+		return
+	}
+	fv := reflect.ValueOf(fn)
+	if fv.Kind() != reflect.Func {
+		panic(fmt.Sprintf("spx: warp expects a function, got %T", fn))
+	}
+	if fv.IsNil() {
+		return
+	}
+
+	ft := fv.Type()
+	if !ft.IsVariadic() && len(args) != ft.NumIn() {
+		panic(fmt.Sprintf("spx: warp argument count mismatch: got %d, want %d", len(args), ft.NumIn()))
+	}
+	if ft.IsVariadic() && len(args) < ft.NumIn()-1 {
+		panic(fmt.Sprintf("spx: warp argument count mismatch: got %d, want at least %d", len(args), ft.NumIn()-1))
+	}
+
+	useCallSlice := false
+	if ft.IsVariadic() && len(args) == ft.NumIn() {
+		variadicType := ft.In(ft.NumIn() - 1)
+		useCallSlice = canUseAs(args[len(args)-1], variadicType)
+	}
+
+	in := make([]reflect.Value, len(args))
+	for i, arg := range args {
+		argType := callArgType(ft, i, useCallSlice)
+		in[i] = callArgValue(arg, argType)
+	}
+	if useCallSlice {
+		fv.CallSlice(in)
+		return
+	}
+	fv.Call(in)
+}
+
+func callArgType(ft reflect.Type, idx int, useCallSlice bool) reflect.Type {
+	if ft.IsVariadic() && idx >= ft.NumIn()-1 {
+		variadicType := ft.In(ft.NumIn() - 1)
+		if useCallSlice && idx == ft.NumIn()-1 {
+			return variadicType
+		}
+		return variadicType.Elem()
+	}
+	return ft.In(idx)
+}
+
+func callArgValue(arg any, typ reflect.Type) reflect.Value {
+	if arg == nil {
+		if canBeNil(typ) {
+			return reflect.Zero(typ)
+		}
+		panic(fmt.Sprintf("spx: cannot use nil as %s in warp call", typ))
+	}
+	value := reflect.ValueOf(arg)
+	if value.Type().AssignableTo(typ) {
+		return value
+	}
+	if value.Type().ConvertibleTo(typ) {
+		return value.Convert(typ)
+	}
+	panic(fmt.Sprintf("spx: cannot use %s as %s in warp call", value.Type(), typ))
+}
+
+func canUseAs(arg any, typ reflect.Type) bool {
+	if arg == nil {
+		return false
+	}
+	argType := reflect.TypeOf(arg)
+	return argType.AssignableTo(typ) || argType.ConvertibleTo(typ)
+}
+
+func canBeNil(typ reflect.Type) bool {
+	switch typ.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return true
+	default:
+		return false
+	}
 }
 
 func waitNextFrameForControlFlow() {
