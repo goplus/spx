@@ -47,6 +47,9 @@ type threadImpl struct {
 	schedFrame     int64
 	schedTimestamp stime.Time
 
+	runWithoutScreenRefresh      atomic.Bool
+	runWithoutScreenRefreshStart atomic.Int64
+
 	ctx        context.Context
 	cancelFunc context.CancelFunc
 }
@@ -89,6 +92,39 @@ func (p *threadImpl) Stack() string {
 
 func (p *threadImpl) Stopped() bool {
 	return p.stopped.Load()
+}
+
+func (p *threadImpl) RunWithoutScreenRefresh() bool {
+	return p.runWithoutScreenRefresh.Load()
+}
+
+func (p *threadImpl) SetRunWithoutScreenRefresh(enabled bool) (previous bool) {
+	previous = p.runWithoutScreenRefresh.Swap(enabled)
+	if enabled != previous {
+		p.runWithoutScreenRefreshStart.Store(0)
+	}
+	return
+}
+
+func (p *threadImpl) ShouldWaitNextFrame(runWithoutScreenRefreshBudget stime.Duration) bool {
+	if !p.RunWithoutScreenRefresh() {
+		return true
+	}
+
+	now := stime.Now().UnixNano()
+	startedAt := p.runWithoutScreenRefreshStart.Load()
+	if startedAt == 0 {
+		p.runWithoutScreenRefreshStart.Store(now)
+		return false
+	}
+	if stime.Duration(now-startedAt) <= runWithoutScreenRefreshBudget {
+		return false
+	}
+
+	// Match Scratch warp behavior by forcing a yield once the time budget is up,
+	// then restarting the budget window on the next loop edge.
+	p.runWithoutScreenRefreshStart.Store(0)
+	return true
 }
 
 func (p Thread) IsSchedTimeout(ms float64) bool {

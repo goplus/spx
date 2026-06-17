@@ -18,16 +18,19 @@ package engine
 
 import (
 	"context"
+	stdtime "time"
 
 	"github.com/goplus/spx/v2/internal/coroutine"
 	"github.com/goplus/spx/v2/internal/engine/profiler"
-	"github.com/goplus/spx/v2/internal/time"
+	itime "github.com/goplus/spx/v2/internal/time"
 )
 
 var (
 	gco   *coroutine.Coroutines
 	pgame any // pointer to the current game object
 )
+
+const runWithoutScreenRefreshBudget = 500 * stdtime.Millisecond
 
 func SetGame(game any) {
 	pgame = game
@@ -74,10 +77,41 @@ func Go(tobj coroutine.ThreadObj, fn func(ctx context.Context)) {
 	})
 }
 
+func ResolveCoroutineOwner(owner any) any {
+	if owner != nil {
+		return owner
+	}
+	if IsInCoroutine() {
+		return GetCoroutineOwner()
+	}
+	return GetGame()
+}
+
+func GoWithOwner(owner any, fn func(ctx context.Context, owner any)) {
+	owner = ResolveCoroutineOwner(owner)
+	Go(owner, func(ctx context.Context) {
+		fn(ctx, owner)
+	})
+}
+
+func Execute(owner any, fn func(ctx context.Context, owner any)) {
+	if IsInCoroutine() {
+		fn(GetCurrentThreadContext(), owner)
+		return
+	}
+
+	done := make(chan struct{}, 1)
+	GoWithOwner(owner, func(ctx context.Context, owner any) {
+		defer close(done)
+		fn(ctx, owner)
+	})
+	<-done
+}
+
 func Wait(secs float64) float64 {
-	startTime := time.TimeSinceLevelLoad()
+	startTime := itime.TimeSinceLevelLoad()
 	gco.Wait(secs)
-	return time.TimeSinceLevelLoad() - startTime
+	return itime.TimeSinceLevelLoad() - startTime
 }
 
 func WaitYield() {
@@ -86,7 +120,44 @@ func WaitYield() {
 
 func WaitNextFrame() float64 {
 	gco.WaitNextFrame()
-	return time.DeltaTime()
+	return itime.DeltaTime()
+}
+
+func WaitNextFrameIfNeeded() float64 {
+	if ShouldWaitNextFrame() {
+		return WaitNextFrame()
+	}
+	return itime.DeltaTime()
+}
+
+func IsRunWithoutScreenRefresh() bool {
+	if !IsInCoroutine() {
+		return false
+	}
+	return gco.Current().RunWithoutScreenRefresh()
+}
+
+func SetRunWithoutScreenRefresh(enabled bool) (previous bool) {
+	if !IsInCoroutine() {
+		return false
+	}
+	return gco.Current().SetRunWithoutScreenRefresh(enabled)
+}
+
+func RunWithoutScreenRefresh(call func()) {
+	if call == nil {
+		return
+	}
+	previous := SetRunWithoutScreenRefresh(true)
+	defer SetRunWithoutScreenRefresh(previous)
+	call()
+}
+
+func ShouldWaitNextFrame() bool {
+	if !IsInCoroutine() {
+		return true
+	}
+	return gco.Current().ShouldWaitNextFrame(runWithoutScreenRefreshBudget)
 }
 
 func WaitMainThread(call func()) {
@@ -95,6 +166,18 @@ func WaitMainThread(call func()) {
 
 func WaitToDo(fn func()) {
 	gco.WaitToDo(fn)
+}
+
+func ExecuteNative(fn func(ctx context.Context, owner any)) {
+	ctx := GetCurrentThreadContext()
+	if !IsInCoroutine() {
+		fn(ctx, nil)
+		return
+	}
+	owner := GetCoroutineOwner()
+	WaitToDo(func() {
+		fn(ctx, owner)
+	})
 }
 
 func WaitForChan[T any](done <-chan T, data *T) {

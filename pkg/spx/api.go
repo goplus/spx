@@ -18,7 +18,6 @@ package spx
 
 import (
 	"context"
-	"sync/atomic"
 	"time"
 
 	"github.com/goplus/spx/v2/internal/engine"
@@ -76,7 +75,7 @@ func IsInCoroutine() bool {
 }
 
 // ExecuteNative executes the given function in a native Go goroutine and waits for its completion.
-// While waiting, if called from within an SPX coroutine, it yields control via WaitNextFrame to avoid blocking
+// While waiting, if called from within an SPX coroutine, it yields control to the SPX scheduler to avoid blocking
 // the SPX main thread.
 //
 // The function receives the context from the current SPX coroutine, which will be canceled when
@@ -110,23 +109,7 @@ func IsInCoroutine() bool {
 //	    // Process response...
 //	})
 func ExecuteNative(fn func(ctx context.Context, owner any)) {
-	ctx := engine.GetCurrentThreadContext()
-	// if not in spx coro, just run it
-	if !engine.IsInCoroutine() {
-		fn(ctx, nil)
-		return
-	}
-	owner := engine.GetCoroutineOwner()
-	done := &atomic.Bool{}
-	// Execute the actual logic in a go routine to avoid blocking
-	go func() {
-		defer done.Store(true)
-		fn(ctx, owner)
-	}()
-	// Wait for completion while yielding control to SPX
-	for !done.Load() {
-		WaitNextFrame()
-	}
+	engine.ExecuteNative(fn)
 }
 
 // Execute executes the given function in an SPX coroutine from the current Go goroutine context and waits for completion.
@@ -152,17 +135,16 @@ func ExecuteNative(fn func(ctx context.Context, owner any)) {
 //	    sprite.Say("Hello")
 //	})
 func Execute(owner any, fn func(ctx context.Context, owner any)) {
-	// in spx coro, just run it
-	if engine.IsInCoroutine() {
-		fn(engine.GetCurrentThreadContext(), owner)
+	if isSpxEnv() {
+		engine.Execute(owner, fn)
 		return
 	}
 
 	done := make(chan struct{}, 1)
-	Go(owner, func(ctx context.Context, owner any) {
+	go func() {
 		defer close(done)
-		fn(ctx, owner)
-	})
+		fn(context.Background(), owner)
+	}()
 	<-done
 }
 
@@ -213,16 +195,7 @@ func Execute(owner any, fn func(ctx context.Context, owner any)) {
 //	})
 func Go(owner any, fn func(ctx context.Context, owner any)) {
 	if isSpxEnv() {
-		if owner == nil {
-			if IsInCoroutine() {
-				owner = engine.GetCoroutineOwner()
-			} else {
-				owner = engine.GetGame()
-			}
-		}
-		engine.Go(owner, func(ctx context.Context) {
-			fn(ctx, owner)
-		})
+		engine.GoWithOwner(owner, fn)
 	} else {
 		go fn(context.Background(), owner)
 	}
@@ -278,7 +251,7 @@ func Wait(secs float64) float64 {
 //	}
 func WaitNextFrame() float64 {
 	if engine.IsInCoroutine() {
-		return engine.WaitNextFrame()
+		return engine.WaitNextFrameIfNeeded()
 	} else {
 		// Fallback to a regular wait
 		startTime := time.Now()
