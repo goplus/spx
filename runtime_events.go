@@ -358,7 +358,10 @@ func (p *scriptEventRegistry) doWhenSwipe(direction Direction, this threadObj) {
 }
 
 func (p *scriptEventRegistry) doWhenClick(this threadObj) {
-	p.dispatchAsync(coreevent.BucketClick, false, this, func(ev *eventSink) {
+	// Click handlers often mutate selection state that the current frame reads
+	// immediately afterwards, so start them promptly to keep input ordering
+	// closer to Scratch's behavior under rapid pointer interactions.
+	p.dispatchAsync(coreevent.BucketClick, true, this, func(ev *eventSink) {
 		coreevent.If0(isDebugEventEnabled, func() {
 			spxlog.Debug("OnClick: %s", nameOf(this))
 		})()

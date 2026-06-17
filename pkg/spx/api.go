@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/goplus/spx/v2/internal/engine"
+	gametime "github.com/goplus/spx/v2/internal/time"
 )
 
 func isSpxEnv() bool {
@@ -278,7 +279,10 @@ func Wait(secs float64) float64 {
 //	}
 func WaitNextFrame() float64 {
 	if engine.IsInCoroutine() {
-		return engine.WaitNextFrame()
+		if engine.ShouldWaitNextFrame() {
+			return engine.WaitNextFrame()
+		}
+		return gametime.DeltaTime()
 	} else {
 		// Fallback to a regular wait
 		startTime := time.Now()

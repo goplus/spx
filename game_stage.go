@@ -132,19 +132,30 @@ func (p *Game) KeyPressed(key Key) bool {
 }
 
 func (p *Game) MouseX() float64 {
-	return p.inputMgr.currentMousePos().X
+	if x, _, ok := engine.GetPollingMousePos(); ok {
+		return x
+	}
+	return p.liveMousePos().X
 }
 
 func (p *Game) MouseY() float64 {
-	return p.inputMgr.currentMousePos().Y
+	if _, y, ok := engine.GetPollingMousePos(); ok {
+		return y
+	}
+	return p.liveMousePos().Y
 }
 
 func (p *Game) MousePressed() bool {
-	return engine.AnyMouseButtonPressed()
+	return engine.AnyMouseButtonPressedForPolling()
 }
 
 func (p *Game) getMousePos() (x, y float64) {
 	return p.MouseX(), p.MouseY()
+}
+
+func (p *Game) liveMousePos() mathf.Vec2 {
+	curMousePos := p.engine().InputMgr.GetGlobalMousePos()
+	return mathf.Vec2{X: float64(curMousePos.X), Y: float64(curMousePos.Y)}
 }
 
 func (p *Game) Username() string {

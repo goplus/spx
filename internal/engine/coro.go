@@ -18,16 +18,19 @@ package engine
 
 import (
 	"context"
+	stdtime "time"
 
 	"github.com/goplus/spx/v2/internal/coroutine"
 	"github.com/goplus/spx/v2/internal/engine/profiler"
-	"github.com/goplus/spx/v2/internal/time"
+	itime "github.com/goplus/spx/v2/internal/time"
 )
 
 var (
 	gco   *coroutine.Coroutines
 	pgame any // pointer to the current game object
 )
+
+const runWithoutScreenRefreshBudget = 500 * stdtime.Millisecond
 
 func SetGame(game any) {
 	pgame = game
@@ -75,9 +78,9 @@ func Go(tobj coroutine.ThreadObj, fn func(ctx context.Context)) {
 }
 
 func Wait(secs float64) float64 {
-	startTime := time.TimeSinceLevelLoad()
+	startTime := itime.TimeSinceLevelLoad()
 	gco.Wait(secs)
-	return time.TimeSinceLevelLoad() - startTime
+	return itime.TimeSinceLevelLoad() - startTime
 }
 
 func WaitYield() {
@@ -86,7 +89,37 @@ func WaitYield() {
 
 func WaitNextFrame() float64 {
 	gco.WaitNextFrame()
-	return time.DeltaTime()
+	return itime.DeltaTime()
+}
+
+func IsRunWithoutScreenRefresh() bool {
+	if !IsInCoroutine() {
+		return false
+	}
+	return gco.Current().RunWithoutScreenRefresh()
+}
+
+func SetRunWithoutScreenRefresh(enabled bool) (previous bool) {
+	if !IsInCoroutine() {
+		return false
+	}
+	return gco.Current().SetRunWithoutScreenRefresh(enabled)
+}
+
+func RunWithoutScreenRefresh(call func()) {
+	if call == nil {
+		return
+	}
+	previous := SetRunWithoutScreenRefresh(true)
+	defer SetRunWithoutScreenRefresh(previous)
+	call()
+}
+
+func ShouldWaitNextFrame() bool {
+	if !IsInCoroutine() {
+		return true
+	}
+	return gco.Current().ShouldWaitNextFrame(runWithoutScreenRefreshBudget)
 }
 
 func WaitMainThread(call func()) {

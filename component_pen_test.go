@@ -120,7 +120,7 @@ func setupSpyPenMgr(t *testing.T) *spyPenMgr {
 	return spy
 }
 
-func TestPenComponentPenDownIsIdempotent(t *testing.T) {
+func TestPenComponentRepeatedPenDownDrawsAtCurrentPosition(t *testing.T) {
 	spy := setupSpyPenMgr(t)
 	sprite := newPenTestSprite()
 
@@ -130,11 +130,11 @@ func TestPenComponentPenDownIsIdempotent(t *testing.T) {
 	if spy.createCalls != 1 {
 		t.Fatalf("CreatePen calls = %d, want 1", spy.createCalls)
 	}
-	if spy.penDownCalls != 1 {
-		t.Fatalf("PenDown calls = %d, want 1", spy.penDownCalls)
+	if spy.penDownCalls != 2 {
+		t.Fatalf("PenDown calls = %d, want 2", spy.penDownCalls)
 	}
-	if spy.moveCalls != 1 {
-		t.Fatalf("MovePenTo calls = %d, want 1", spy.moveCalls)
+	if spy.moveCalls != 2 {
+		t.Fatalf("MovePenTo calls = %d, want 2", spy.moveCalls)
 	}
 }
 

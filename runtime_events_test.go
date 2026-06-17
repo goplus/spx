@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
+	coreevent "github.com/goplus/spx/v2/internal/core/event"
 	"github.com/goplus/spx/v2/internal/engine"
 	"github.com/goplus/spx/v2/internal/enginewrap"
 	pkgengine "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
@@ -201,5 +202,36 @@ func TestPointHitsClickTargetUsesClickQuery(t *testing.T) {
 	}
 	if got := mgr.lastIsTrigger[1]; !got {
 		t.Fatalf("pointHitsClickTarget used sensing query, want click query")
+	}
+}
+
+func TestDoWhenClickStartsHandlerPromptly(t *testing.T) {
+	var reg scriptEventRegistry
+	owner := &SpriteImpl{}
+	called := false
+	reg.manager.AddClick(coreevent.NewSink(owner, func() {
+		called = true
+	}, coreevent.MatchOwner(owner)))
+
+	prevHooks := scriptEventDispatchHooks
+	defer func() {
+		scriptEventDispatchHooks = prevHooks
+	}()
+
+	var gotStarts []bool
+	scriptEventDispatchHooks = coreevent.DispatchHooks{
+		Spawn: func(start bool, owner any, call func()) {
+			gotStarts = append(gotStarts, start)
+			call()
+		},
+	}
+
+	reg.doWhenClick(owner)
+
+	if !called {
+		t.Fatal("expected click handler to run")
+	}
+	if len(gotStarts) != 1 || !gotStarts[0] {
+		t.Fatalf("click dispatch start flags = %v, want [true]", gotStarts)
 	}
 }

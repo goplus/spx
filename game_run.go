@@ -145,25 +145,25 @@ func Sched() int {
 
 func Forever(call func()) {
 	coreruntime.Forever(call, func() {
-		engine.WaitNextFrame()
+		waitNextFrameForControlFlow()
 	})
 }
 
 func Repeat(loopCount int, call func()) {
 	coreruntime.Repeat(loopCount, call, func() {
-		engine.WaitNextFrame()
+		waitNextFrameForControlFlow()
 	})
 }
 
 func RepeatUntil(condition func() bool, call func()) {
 	coreruntime.RepeatUntil(condition, call, func() {
-		engine.WaitNextFrame()
+		waitNextFrameForControlFlow()
 	})
 }
 
 func WaitUntil(condition func() bool) {
 	coreruntime.WaitUntil(condition, func() {
-		engine.WaitNextFrame()
+		waitNextFrameForControlFlow()
 	})
 }
 
