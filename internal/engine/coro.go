@@ -77,6 +77,37 @@ func Go(tobj coroutine.ThreadObj, fn func(ctx context.Context)) {
 	})
 }
 
+func ResolveCoroutineOwner(owner any) any {
+	if owner != nil {
+		return owner
+	}
+	if IsInCoroutine() {
+		return GetCoroutineOwner()
+	}
+	return GetGame()
+}
+
+func GoWithOwner(owner any, fn func(ctx context.Context, owner any)) {
+	owner = ResolveCoroutineOwner(owner)
+	Go(owner, func(ctx context.Context) {
+		fn(ctx, owner)
+	})
+}
+
+func Execute(owner any, fn func(ctx context.Context, owner any)) {
+	if IsInCoroutine() {
+		fn(GetCurrentThreadContext(), owner)
+		return
+	}
+
+	done := make(chan struct{}, 1)
+	GoWithOwner(owner, func(ctx context.Context, owner any) {
+		defer close(done)
+		fn(ctx, owner)
+	})
+	<-done
+}
+
 func Wait(secs float64) float64 {
 	startTime := itime.TimeSinceLevelLoad()
 	gco.Wait(secs)
@@ -89,6 +120,13 @@ func WaitYield() {
 
 func WaitNextFrame() float64 {
 	gco.WaitNextFrame()
+	return itime.DeltaTime()
+}
+
+func WaitNextFrameIfNeeded() float64 {
+	if ShouldWaitNextFrame() {
+		return WaitNextFrame()
+	}
 	return itime.DeltaTime()
 }
 
@@ -128,6 +166,18 @@ func WaitMainThread(call func()) {
 
 func WaitToDo(fn func()) {
 	gco.WaitToDo(fn)
+}
+
+func ExecuteNative(fn func(ctx context.Context, owner any)) {
+	ctx := GetCurrentThreadContext()
+	if !IsInCoroutine() {
+		fn(ctx, nil)
+		return
+	}
+	owner := GetCoroutineOwner()
+	WaitToDo(func() {
+		fn(ctx, owner)
+	})
 }
 
 func WaitForChan[T any](done <-chan T, data *T) {

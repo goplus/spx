@@ -33,8 +33,7 @@ func init() {
 		Deps: map[string]string{
 			"context": "context",
 			"github.com/goplus/spx/v2/internal/engine": "engine",
-			"sync/atomic": "atomic",
-			"time":        "time",
+			"time": "time",
 		},
 		Interfaces: map[string]reflect.Type{},
 		NamedTypes: map[string]reflect.Type{},
