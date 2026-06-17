@@ -311,7 +311,8 @@ func (p *Game) objectPos(obj Target) (float64, float64) {
 		if sp := p.shapeMgr.findSprite(v); sp != nil {
 			return sp.getXY()
 		}
-		engine.Panic("objectPos: sprite not found - " + v)
+		spxlog.Error("objectPos: sprite not found - %s", v)
+		return 0, 0
 	case specialObj:
 		if v == Mouse {
 			return p.getMousePos()
@@ -325,7 +326,7 @@ func (p *Game) objectPos(obj Target) (float64, float64) {
 	case Sprite:
 		return spriteOf(v).getXY()
 	}
-	engine.Panic("objectPos: unexpected input")
+	spxlog.Error("objectPos: unexpected input: %T", obj)
 	return 0, 0
 }
 
