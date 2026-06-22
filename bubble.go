@@ -24,6 +24,13 @@ import (
 	"github.com/goplus/spx/v2/internal/ui"
 )
 
+func dialogText(msg any) string {
+	if msgStr, ok := msg.(string); ok {
+		return msgStr
+	}
+	return fmt.Sprint(msg)
+}
+
 // -------------------------------------------------------------------------------------
 // Common Bubble System - Shared functionality for Say/Think/Quote bubbles
 // -------------------------------------------------------------------------------------
@@ -134,10 +141,7 @@ func (p *SpriteImpl) newBubbleBase() bubbleBase {
 }
 
 func (p *SpriteImpl) sayOrThink(msg any, style int) {
-	msgStr, ok := msg.(string)
-	if !ok {
-		msgStr = fmt.Sprint(msg)
-	}
+	msgStr := dialogText(msg)
 	if msgStr == "" {
 		p.doStopText()
 		return

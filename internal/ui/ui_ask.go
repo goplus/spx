@@ -73,8 +73,9 @@ func (pself *UiAsk) Show(isSprite bool, question string, onCheck func(string)) {
 	// UiAsk prefab can auto scale to match window scale
 	// mgr.UiMgr.SetScale(pself.GetId(), mathf.NewVec2(windowScale, windowScale))
 	pself.OnCheck = onCheck
-	mgr.UiMgr.SetVisible(pself.askBody.GetId(), !isSprite)
-	if !isSprite {
+	showQuestion := !isSprite && question != ""
+	mgr.UiMgr.SetVisible(pself.askBody.GetId(), showQuestion)
+	if showQuestion {
 		mgr.UiMgr.SetText(pself.askLabel.GetId(), question)
 	}
 	mgr.UiMgr.SetText(pself.input.GetId(), "")
