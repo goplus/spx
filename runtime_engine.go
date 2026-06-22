@@ -65,6 +65,7 @@ func (p *Game) OnEngineUpdate(delta float64) {
 	if !p.lifecycleState.IsRunned.Load() {
 		return
 	}
+	p.soundMgr.Update()
 	if p.lifecycleState.BootstrapDone.Load() {
 		p.dispatchStartEventIfNeeded()
 	}

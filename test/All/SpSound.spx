@@ -33,12 +33,12 @@ onMsg "testSound", => {
 	assertFloat(volume(), 100, "Sprite::Volume")
 
 	// 7. Game::ChangeGraphicEffect
-	say "test change sound effect : pitch (150)"
-	changeSoundEffect SoundPitchEffect, 50 // pitch 150
+	say "test change sound effect : pitch effect (50)"
+	changeSoundEffect SoundPitchEffect, 50 // pitch effect 50
 	playAndWait "sound1"
 	// 8. Game::SetGraphicEffect
-	say "test set sound effect : pitch (150)"
-	setSoundEffect SoundPitchEffect, 50 // pitch 50
+	say "test set sound effect : pitch effect (50)"
+	setSoundEffect SoundPitchEffect, 50 // pitch effect 50
 	playAndWait "sound1"
 	// 9. Game::ClearSoundEffects
 	say "test clear sound effect : pitch (0)"
