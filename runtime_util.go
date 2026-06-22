@@ -53,6 +53,57 @@ func Contains(s, substr string) bool {
 	return strings.Contains(s, substr)
 }
 
+// Compare compares values using the same rules as Scratch's =, <, and >
+// operator blocks.
+//
+// Values are compared numerically when both sides can be interpreted as numbers;
+// otherwise they are compared as case-insensitive strings.
+func Compare(v1, v2 any) int {
+	if n1, ok1 := scratchCompareNumber(v1); ok1 {
+		if n2, ok2 := scratchCompareNumber(v2); ok2 {
+			switch {
+			case n1 < n2:
+				return -1
+			case n1 > n2:
+				return 1
+			default:
+				return 0
+			}
+		}
+	}
+
+	s1 := strings.ToLower(toString(v1))
+	s2 := strings.ToLower(toString(v2))
+	switch {
+	case s1 < s2:
+		return -1
+	case s1 > s2:
+		return 1
+	default:
+		return 0
+	}
+}
+
+// Equal reports whether two values match Scratch's = operator semantics.
+func Equal(v1, v2 any) bool {
+	return Compare(v1, v2) == 0
+}
+
+func scratchCompareNumber(v any) (float64, bool) {
+	if isScratchWhitespace(v) {
+		return 0, false
+	}
+	return toFloat64Any(v)
+}
+
+func isScratchWhitespace(v any) bool {
+	if v == nil {
+		return true
+	}
+	s, ok := fromObj(v).(string)
+	return ok && strings.TrimSpace(s) == ""
+}
+
 // DeltaTime returns the time elapsed since the previous frame.
 func DeltaTime() Seconds {
 	return itime.DeltaTime()

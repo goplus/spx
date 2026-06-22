@@ -130,8 +130,10 @@ func init() {
 		Vars: map[string]reflect.Value{},
 		Funcs: map[string]reflect.Value{
 			"CharAt":                     reflect.ValueOf(q.CharAt),
+			"Compare":                    reflect.ValueOf(q.Compare),
 			"Contains":                   reflect.ValueOf(q.Contains),
 			"DeltaTime":                  reflect.ValueOf(q.DeltaTime),
+			"Equal":                      reflect.ValueOf(q.Equal),
 			"Exit__0":                    reflect.ValueOf(q.Exit__0),
 			"Exit__1":                    reflect.ValueOf(q.Exit__1),
 			"Forever":                    reflect.ValueOf(q.Forever),
