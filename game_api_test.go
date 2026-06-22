@@ -98,8 +98,8 @@ func TestGameClearSoundEffectsResetsPanAndPitch(t *testing.T) {
 	if backend.pan != 0 {
 		t.Fatalf("pan = %v, want 0", backend.pan)
 	}
-	if backend.pitch != 0 {
-		t.Fatalf("pitch = %v, want 0", backend.pitch)
+	if backend.pitch != 1 {
+		t.Fatalf("pitch = %v, want 1", backend.pitch)
 	}
 }
 
@@ -120,8 +120,8 @@ func TestGameClearSoundEffectsAllocatesWhenUnused(t *testing.T) {
 	if backend.pan != 0 {
 		t.Fatalf("pan = %v, want 0", backend.pan)
 	}
-	if backend.pitch != 0 {
-		t.Fatalf("pitch = %v, want 0", backend.pitch)
+	if backend.pitch != 1 {
+		t.Fatalf("pitch = %v, want 1", backend.pitch)
 	}
 }
 
