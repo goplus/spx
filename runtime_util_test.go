@@ -127,6 +127,36 @@ func TestCharAt(t *testing.T) {
 	}
 }
 
+func TestCompareAndEqual(t *testing.T) {
+	tests := []struct {
+		name    string
+		v1      any
+		v2      any
+		compare int
+		equal   bool
+	}{
+		{name: "case insensitive strings", v1: "p", v2: "P", compare: 0, equal: true},
+		{name: "numeric strings", v1: "01", v2: "1", compare: 0, equal: true},
+		{name: "number and string", v1: 2, v2: "10", compare: -1, equal: false},
+		{name: "non numeric strings less", v1: "apple", v2: "Banana", compare: -1, equal: false},
+		{name: "whitespace uses string compare", v1: "", v2: "0", compare: -1, equal: false},
+		{name: "bool numeric compare", v1: true, v2: 1, compare: 0, equal: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotCompare := Compare(tt.v1, tt.v2)
+			if gotCompare != tt.compare {
+				t.Fatalf("Compare(%v, %v) = %d, want %d", tt.v1, tt.v2, gotCompare, tt.compare)
+			}
+			gotEqual := Equal(tt.v1, tt.v2)
+			if gotEqual != tt.equal {
+				t.Fatalf("Equal(%v, %v) = %v, want %v", tt.v1, tt.v2, gotEqual, tt.equal)
+			}
+		})
+	}
+}
+
 func TestPenColorParamFromString(t *testing.T) {
 	tests := []struct {
 		name     string
