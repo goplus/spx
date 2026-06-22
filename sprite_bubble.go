@@ -17,8 +17,6 @@
 package spx
 
 import (
-	"fmt"
-
 	"github.com/goplus/spx/v2/internal/ui"
 
 	spxlog "github.com/goplus/spx/v2/internal/log"
@@ -32,15 +30,8 @@ func (p *SpriteImpl) Ask(msg any) {
 	if isDebugInstrEnabled() {
 		spxlog.Debug("Ask: sprite=%s, msg=%v", p.name, msg)
 	}
-	msgStr, ok := msg.(string)
-	if !ok {
-		msgStr = fmt.Sprint(msg)
-	}
-	if msgStr == "" {
-		spxlog.Warn("Ask: message should not be empty")
-		return
-	}
-	p.Say__0(msgStr)
+	msgStr := dialogText(msg)
+	p.sayOrThink(msgStr, ui.StyleSay)
 	p.g.ask(true, msgStr, func(answer string) {
 		p.doStopText()
 	})

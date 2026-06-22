@@ -17,7 +17,6 @@
 package spx
 
 import (
-	"fmt"
 	"math/rand"
 	"reflect"
 	"time"
@@ -180,14 +179,7 @@ func (p *Game) Dayssince2000() float64 {
 // Dialog
 // -----------------------------------------------------------------------------
 func (p *Game) Ask(msg any) {
-	msgStr, ok := msg.(string)
-	if !ok {
-		msgStr = fmt.Sprint(msg)
-	}
-	if msgStr == "" {
-		spxlog.Warn("Ask: message should not be empty")
-		return
-	}
+	msgStr := dialogText(msg)
 	p.ask(false, msgStr, func(answer string) {})
 }
 
