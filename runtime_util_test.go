@@ -141,6 +141,9 @@ func TestCompareAndEqual(t *testing.T) {
 		{name: "non numeric strings less", v1: "apple", v2: "Banana", compare: -1, equal: false},
 		{name: "whitespace uses string compare", v1: "", v2: "0", compare: -1, equal: false},
 		{name: "bool numeric compare", v1: true, v2: 1, compare: 0, equal: true},
+		{name: "wrapped numeric string compares numerically", v1: NewValue("01"), v2: 1, compare: 0, equal: true},
+		{name: "wrapped numeric string on right compares numerically", v1: 1, v2: NewValue("01"), compare: 0, equal: true},
+		{name: "wrapped bool compares numerically", v1: NewValue(true), v2: 1, compare: 0, equal: true},
 	}
 
 	for _, tt := range tests {

@@ -59,8 +59,8 @@ func Contains(s, substr string) bool {
 // Values are compared numerically when both sides can be interpreted as numbers;
 // otherwise they are compared as case-insensitive strings.
 func Compare(v1, v2 any) int {
-	if n1, ok1 := scratchCompareNumber(v1); ok1 {
-		if n2, ok2 := scratchCompareNumber(v2); ok2 {
+	if n1, ok1 := toCompareNumber(v1); ok1 {
+		if n2, ok2 := toCompareNumber(v2); ok2 {
 			switch {
 			case n1 < n2:
 				return -1
@@ -89,19 +89,15 @@ func Equal(v1, v2 any) bool {
 	return Compare(v1, v2) == 0
 }
 
-func scratchCompareNumber(v any) (float64, bool) {
-	if isScratchWhitespace(v) {
+func toCompareNumber(v any) (float64, bool) {
+	v = fromObj(v)
+	if v == nil {
+		return 0, false
+	}
+	if s, ok := v.(string); ok && strings.TrimSpace(s) == "" {
 		return 0, false
 	}
 	return toFloat64Any(v)
-}
-
-func isScratchWhitespace(v any) bool {
-	if v == nil {
-		return true
-	}
-	s, ok := fromObj(v).(string)
-	return ok && strings.TrimSpace(s) == ""
 }
 
 // DeltaTime returns the time elapsed since the previous frame.
