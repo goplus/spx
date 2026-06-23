@@ -40,7 +40,8 @@ const (
 )
 
 const (
-	Gop_sched = "Sched,SchedNow"
+	Gop_sched    = "Sched,SchedNow"
+	Gop_wrapCall = "Warp"
 )
 
 var (

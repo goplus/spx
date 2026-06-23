@@ -337,6 +337,7 @@ func init() {
 		UntypedConsts: map[string]ixgo.UntypedConst{
 			"All":                          {Typ: "untyped int", Value: constant.MakeInt64(int64(q.All))},
 			"Gop_sched":                    {Typ: "untyped string", Value: constant.MakeString(string(q.Gop_sched))},
+			"Gop_wrapCall":                 {Typ: "untyped string", Value: constant.MakeString(string(q.Gop_wrapCall))},
 			"XGoPackage":                   {Typ: "untyped bool", Value: constant.MakeBool(bool(q.XGoPackage))},
 			"XGoo_SpriteImpl_GlideWith":    {Typ: "untyped string", Value: constant.MakeString(string(q.XGoo_SpriteImpl_GlideWith))},
 			"XGoo_SpriteImpl_QuoteWith":    {Typ: "untyped string", Value: constant.MakeString(string(q.XGoo_SpriteImpl_QuoteWith))},
