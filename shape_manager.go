@@ -127,8 +127,8 @@ func (s *shapeManager) addShape(child Shape) {
 	s.add(child)
 }
 
-// addClonedShape inserts a cloned shape immediately after its source.
-// This preserves rendering order and ensures clones appear behind their source.
+// addClonedShape inserts a cloned shape immediately after its source so the
+// clone renders in front of the original while preserving nearby layer order.
 func (s *shapeManager) addClonedShape(src, clone Shape) {
 	idx := s.findShapeIndex(src)
 	if idx < 0 {
@@ -137,7 +137,7 @@ func (s *shapeManager) addClonedShape(src, clone Shape) {
 		return
 	}
 
-	s.items = sliceutil.InsertAt(s.items, idx, clone)
+	s.items = sliceutil.InsertAt(s.items, idx+1, clone)
 	s.updateRenderLayers()
 }
 

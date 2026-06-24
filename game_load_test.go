@@ -560,6 +560,61 @@ func TestCloneSpriteAwakesBeforeMain(t *testing.T) {
 	}
 }
 
+func TestCloneSpriteInsertsImmediatelyAfterSource(t *testing.T) {
+	var game Game
+	game.initShapeMgr()
+	setupCloneSpriteMgr(t)
+
+	back := newCloneAwakeOrderSprite(&game, "Back")
+	source := newCloneAwakeOrderSprite(&game, "Source")
+	front := newCloneAwakeOrderSprite(&game, "Front")
+	game.addShape(spriteOf(back))
+	game.addShape(spriteOf(source))
+	game.addShape(spriteOf(front))
+
+	var cloned *cloneAwakeOrderSprite
+	platform.RunOnMainThread(func() {
+		doClone(source, nil, false, func(sprite *SpriteImpl) {
+			var ok bool
+			cloned, ok = sprite.sprite.(*cloneAwakeOrderSprite)
+			if !ok {
+				t.Fatalf("clone sprite type = %T, want *cloneAwakeOrderSprite", sprite.sprite)
+			}
+		})
+	})
+
+	if cloned == nil {
+		t.Fatal("clone callback did not capture cloned sprite")
+	}
+
+	shapes := game.getAllShapes()
+	if got := len(shapes); got != 4 {
+		t.Fatalf("shape count = %d, want 4", got)
+	}
+	if shapes[0] != spriteOf(back) {
+		t.Fatalf("shape[0] = %v, want back sprite", shapes[0])
+	}
+	if shapes[1] != spriteOf(source) {
+		t.Fatalf("shape[1] = %v, want source sprite", shapes[1])
+	}
+	if shapes[2] != spriteOf(cloned) {
+		t.Fatalf("shape[2] = %v, want cloned sprite", shapes[2])
+	}
+	if shapes[3] != spriteOf(front) {
+		t.Fatalf("shape[3] = %v, want front sprite", shapes[3])
+	}
+
+	if got, want := source.runtimeState.Layer, 2; got != want {
+		t.Fatalf("source layer = %d, want %d", got, want)
+	}
+	if got, want := cloned.runtimeState.Layer, 3; got != want {
+		t.Fatalf("clone layer = %d, want %d", got, want)
+	}
+	if got, want := front.runtimeState.Layer, 4; got != want {
+		t.Fatalf("front layer = %d, want %d", got, want)
+	}
+}
+
 func TestCloneSpritePreservesUserStateAfterMainRegistration(t *testing.T) {
 	var game Game
 	game.initShapeMgr()
