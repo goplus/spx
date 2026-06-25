@@ -59,6 +59,22 @@ func (p *SpriteImpl) ChangePenColor(kind PenColorParam, delta float64) {
 	p.pen().ChangePenColor(kind, delta)
 }
 
+func (p *SpriteImpl) SetPenHue(value float64) {
+	p.pen().setPenHue(value)
+}
+
+func (p *SpriteImpl) ChangePenHue(delta float64) {
+	p.pen().changePenHue(delta)
+}
+
+func (p *SpriteImpl) SetPenShade(value float64) {
+	p.pen().SetPenShade(value)
+}
+
+func (p *SpriteImpl) ChangePenShade(delta float64) {
+	p.pen().ChangePenShade(delta)
+}
+
 // -----------------------------------------------------------------------------
 // Size
 // -----------------------------------------------------------------------------
