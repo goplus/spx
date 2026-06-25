@@ -297,6 +297,10 @@ type Sprite interface {
 	SetPenColor__1(kind PenColorParam, value float64)
 
 	ChangePenColor(kind PenColorParam, delta float64)
+	SetPenHue(value float64)
+	ChangePenHue(delta float64)
+	SetPenShade(value float64)
+	ChangePenShade(delta float64)
 	SetPenSize(size float64)
 	ChangePenSize(delta float64)
 	Stamp()
