@@ -65,6 +65,7 @@ func (p *Game) OnEngineUpdate(delta float64) {
 	if !p.lifecycleState.IsRunned.Load() {
 		return
 	}
+	p.runFrameTasks()
 	p.soundMgr.Update()
 	if p.lifecycleState.BootstrapDone.Load() {
 		p.dispatchStartEventIfNeeded()
@@ -78,6 +79,7 @@ func (p *Game) OnEngineRender(delta float64) {
 		return
 	}
 	p.processPhysicsTriggers()
+	p.runPendingFrameCaptures()
 }
 
 func (p *Game) OnEnginePause(bool) {

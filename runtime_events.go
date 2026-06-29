@@ -90,6 +90,9 @@ func (p *scriptEventBindings) OnStart(onStart func()) {
 }
 
 func (p *scriptEventBindings) OnClick(onClick func()) {
+	if consumeFrameDecoratorContext(onClick) {
+		return
+	}
 	pthis := p.pthis
 	p.scriptEventRegistry.manager.AddClick(coreevent.NewSink(pthis, onClick, coreevent.MatchOwner(pthis)))
 }
@@ -110,6 +113,9 @@ func (p *scriptEventBindings) OnTimer(time float64, call func()) {
 }
 
 func (p *scriptEventBindings) OnKey__0(key Key, onKey func()) {
+	if consumeFrameDecoratorContext(onKey) {
+		return
+	}
 	p.scriptEventRegistry.manager.AddKeyPressed(coreevent.NewSink(
 		p.pthis,
 		coreevent.TapVoid1(onKey, coreevent.If1(isDebugEventEnabled, func(Key) {
@@ -140,6 +146,9 @@ func (p *scriptEventBindings) OnKey__1(keys []Key, onKey func(Key)) {
 }
 
 func (p *scriptEventBindings) OnKey__2(keys []Key, onKey func()) {
+	if consumeFrameDecoratorContext(onKey) {
+		return
+	}
 	p.OnKey__1(keys, coreevent.Ignore1[Key](onKey))
 }
 

@@ -106,6 +106,10 @@ type Game struct {
 	bootstrapStarted bool
 	pendingBootstrap []func()
 
+	frameTasksMu        sync.Mutex
+	frameTasks          map[int64][]frameTask
+	pendingFrameCapture []frameCapture
+
 	sprCollisionInfos       map[string]*spriteCollisionInfo
 	sprCollisionData        []*spriteCollisionData
 	isCollisionByPixel      bool
@@ -259,6 +263,7 @@ func (p *Game) reset() {
 	p.sprs = make(map[string]Sprite)
 
 	p.resetBootstrapState()
+	p.resetFrameTasks()
 	p.resetCollisionLayerState()
 	p.resetImageSizeCache()
 	p.resetEventQueueStats()

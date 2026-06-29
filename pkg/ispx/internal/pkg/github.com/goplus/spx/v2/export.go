@@ -129,6 +129,8 @@ func init() {
 		},
 		Vars: map[string]reflect.Value{},
 		Funcs: map[string]reflect.Value{
+			"Capture":                    reflect.ValueOf(q.Capture),
+			"CaptureAndCheck":            reflect.ValueOf(q.CaptureAndCheck),
 			"CharAt":                     reflect.ValueOf(q.CharAt),
 			"Compare":                    reflect.ValueOf(q.Compare),
 			"Contains":                   reflect.ValueOf(q.Contains),
@@ -137,6 +139,7 @@ func init() {
 			"Exit__0":                    reflect.ValueOf(q.Exit__0),
 			"Exit__1":                    reflect.ValueOf(q.Exit__1),
 			"Forever":                    reflect.ValueOf(q.Forever),
+			"Frame":                      reflect.ValueOf(q.Frame),
 			"GetWidget":                  reflect.ValueOf(q.GetWidget),
 			"HSB":                        reflect.ValueOf(q.HSB),
 			"HSBA":                       reflect.ValueOf(q.HSBA),
