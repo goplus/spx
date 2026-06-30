@@ -32,6 +32,9 @@ type DisplaySettings struct {
 }
 
 const defaultDisplayFontPath = "res://engine/fonts/CnFont.ttf"
+const defaultSVGFontFamily = "SPX Default"
+const symbolsSVGFontFamily = "Symbols"
+const emojiSVGFontFamily = "Emoji"
 
 type SVGFontFaceRegistration struct {
 	Path   string
@@ -40,13 +43,15 @@ type SVGFontFaceRegistration struct {
 
 var scratchSVGFontRegistrations = []SVGFontFaceRegistration{
 	{Path: "res://engine/fonts/scratch/NotoSans-Medium.ttf", Family: "Sans Serif"},
-	{Path: defaultDisplayFontPath, Family: "Sans Serif"},
 	{Path: "res://engine/fonts/scratch/SourceSerifPro-Regular.otf", Family: "Serif"},
 	{Path: "res://engine/fonts/scratch/handlee-regular.ttf", Family: "Handwriting"},
 	{Path: "res://engine/fonts/scratch/Knewave.ttf", Family: "Marker"},
 	{Path: "res://engine/fonts/scratch/Griffy-Regular.ttf", Family: "Curly"},
 	{Path: "res://engine/fonts/scratch/Grand9K-Pixel.ttf", Family: "Pixel"},
 	{Path: "res://engine/fonts/scratch/Scratch.ttf", Family: "Scratch"},
+	{Path: "res://engine/fonts/symbols/NotoSansSymbols2-Regular.ttf", Family: symbolsSVGFontFamily},
+	{Path: "res://engine/fonts/emoji/TwitterColorEmoji-SVGinOT.ttf", Family: emojiSVGFontFamily},
+	{Path: defaultDisplayFontPath, Family: defaultSVGFontFamily},
 }
 
 func ResolveDisplaySettings(proj *ProjectConfig) DisplaySettings {
@@ -77,8 +82,21 @@ func RegisterDisplayFonts(
 	if registerSVGFontFace == nil {
 		return
 	}
-	for _, font := range settings.SVGFontFaceRegistrations {
+	// lunasvg resolves one face per family name, so duplicate family registrations
+	// replace each other instead of forming a fallback chain. Keep the last
+	// registration so callers can override the built-in defaults.
+	lastIndex := make(map[string]int, len(settings.SVGFontFaceRegistrations))
+	for i, font := range settings.SVGFontFaceRegistrations {
 		if font.Path == "" || font.Family == "" {
+			continue
+		}
+		lastIndex[font.Family] = i
+	}
+	for i, font := range settings.SVGFontFaceRegistrations {
+		if font.Path == "" || font.Family == "" {
+			continue
+		}
+		if lastIndex[font.Family] != i {
 			continue
 		}
 		registerSVGFontFace(font.Path, font.Family)

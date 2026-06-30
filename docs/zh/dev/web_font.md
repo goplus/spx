@@ -10,11 +10,11 @@ Scratch 导出的 SVG 通常会使用一组固定的字体族名，例如 `Sans 
 - 文本宽度变化，导致排版错位
 - 不同平台渲染结果不一致
 
-当前仓库已经落地了一套可用实现：默认字体路径约定为 `CnFont.ttf`，同时把 `engine/fonts/scratch` 目录里的 7 个 Scratch 兼容字体注册给 SVG 渲染层。
+当前仓库已经落地了一套可用实现：默认字体路径约定为 `CnFont.ttf`，同时把 `engine/fonts/scratch` 目录里的 7 个 Scratch 兼容字体注册给 SVG 渲染层，并补充了内部的默认回退族、符号字体族与 emoji 字体族。
 
 ## 当前实现概览
 
-当前方案分成两部分：
+当前方案分成三部分：
 
 ### 1. 默认 UI 字体
 
@@ -45,6 +45,22 @@ theme/custom_font="res://engine/fonts/CnFont.ttf"
 - 许可证：`cmd/spx/template/project/engine/fonts/scratch/LICENSE.txt`、`cmd/spx/template/project/engine/fonts/scratch/OFL.txt`
 
 这批字体文件位于模板目录 `cmd/spx/template/project/engine/fonts/scratch`，会跟随模板项目一起进入新工程。
+
+### 3. SVG 内部回退族
+
+- `SPX Default`
+  - 映射到 `res://engine/fonts/CnFont.ttf`
+  - 由运行时在 SVG 文本分段时内部使用，用来承接 CJK 等不适合直接落在 Scratch 拉丁字体上的字符
+- `Symbols`
+  - 映射到 `res://engine/fonts/symbols/NotoSansSymbols2-Regular.ttf`
+  - 字体来源：Google Fonts 提供的 `Noto Sans Symbols 2`
+  - 许可证：`cmd/spx/template/project/engine/fonts/symbols/LICENSE.txt`
+  - 由运行时在 SVG 文本分段时内部使用，用来承接 `❤`、箭头、dingbats 等 BMP 符号字符，避免它们误落到 `Noto Emoji` 的线框字形
+- `Emoji`
+  - 映射到 `res://engine/fonts/emoji/TwitterColorEmoji-SVGinOT.ttf`
+  - 字体来源：[`twemoji-color-font`](https://github.com/13rac1/twemoji-color-font) 提供的 `TwitterColorEmoji-SVGinOT`
+  - 许可证：`cmd/spx/template/project/engine/fonts/emoji/LICENSE.md`、`LICENSE-CC-BY.txt`、`LICENSE-MIT.txt`
+  - 由运行时在 SVG 文本分段时内部使用，用来承接需要彩色 emoji 呈现的片段
 
 ## Scratch 字体映射
 
@@ -84,6 +100,9 @@ var scratchSVGFontRegistrations = []SVGFontFaceRegistration{
 	{Path: "res://engine/fonts/scratch/Griffy-Regular.ttf", Family: "Curly"},
 	{Path: "res://engine/fonts/scratch/Grand9K-Pixel.ttf", Family: "Pixel"},
 	{Path: "res://engine/fonts/scratch/Scratch.ttf", Family: "Scratch"},
+	{Path: "res://engine/fonts/symbols/NotoSansSymbols2-Regular.ttf", Family: "Symbols"},
+	{Path: "res://engine/fonts/emoji/TwitterColorEmoji-SVGinOT.ttf", Family: "Emoji"},
+	{Path: "res://engine/fonts/CnFont.ttf", Family: "SPX Default"},
 }
 ```
 
@@ -112,6 +131,7 @@ var scratchSVGFontRegistrations = []SVGFontFaceRegistration{
 - 让 Scratch 风格 SVG 在不同平台更接近原始效果
 - 避免把一份大字体强行当成所有 Scratch 字体族来使用
 - 把 Scratch 兼容字体和默认 UI 字体职责拆开
+- 在运行时为符号、emoji 和 CJK 等片段提供专用内部字体族，避免同名覆盖
 
 ## 这个方案没有解决什么
 
@@ -177,7 +197,7 @@ var scratchSVGFontRegistrations = []SVGFontFaceRegistration{
 </text>
 ```
 
-如果某一组字体注册失效，最直观的现象通常就是该行文字样式明显变成浏览器默认字体。
+如果某一组字体注册失效，最直观的现象通常就是该行文字样式明显变成浏览器默认字体，或混排中的符号 / emoji / CJK 片段退回成错误字形。
 
 ## 小结
 
@@ -185,6 +205,7 @@ var scratchSVGFontRegistrations = []SVGFontFaceRegistration{
 
 - `CnFont.ttf` 负责项目默认文本显示
 - `scratch` 目录负责补齐 Scratch SVG 固定字体族
+- `SPX Default`、`Symbols` 与 `Emoji` 负责运行时拆分后的内部回退片段
 - 运行时统一由 `RegisterDisplayFonts()` 完成注册
 
 这套实现已经足够支撑 Scratch 风格 SVG 在 Web 平台的基础兼容。后续如果继续做体积优化，可以在此基础上再推进中文字体裁剪、分级加载或远程字体分发。

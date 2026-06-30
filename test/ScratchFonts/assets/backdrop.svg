@@ -2,7 +2,7 @@
   <rect width="480" height="360" rx="24" fill="#f7f4ea"/>
   <rect x="16" y="16" width="448" height="328" rx="20" fill="#fffdf7" stroke="#d7d0bf" stroke-width="2"/>
   <text x="30" y="42" font-family="sans-serif" font-size="24" font-weight="700" fill="#1f2937">Scratch Font Compatibility</text>
-  <text x="30" y="62" font-family="sans-serif" font-size="12" fill="#64748b">All packaged Scratch SVG font families rendered in one demo.</text>
+  <text x="30" y="62" font-family="sans-serif" font-size="12" fill="#64748b">All packaged Scratch SVG font families rendered in one demo, including fallback runs.</text>
 
   <g transform="translate(0 84)">
     <text x="24" y="0" font-family="sans-serif" font-size="14" font-weight="700" fill="#475569">Sans Serif</text>
@@ -37,5 +37,10 @@
   <g transform="translate(0 300)">
     <text x="24" y="0" font-family="sans-serif" font-size="14" font-weight="700" fill="#475569">Scratch</text>
     <text x="120" y="2" font-family="'Scratch'" font-size="26" fill="#111827">The quick brown fox 012345</text>
+  </g>
+
+  <g transform="translate(0 336)">
+    <text x="24" y="0" font-family="sans-serif" font-size="14" font-weight="700" fill="#475569">Mixed</text>
+    <text x="120" y="2" font-family="'Sans Serif'" font-size="22" fill="#111827">Hello ❤️ 你好</text>
   </g>
 </svg>
