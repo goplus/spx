@@ -242,14 +242,35 @@ func TestResolveDisplaySettings(t *testing.T) {
 	}) {
 		t.Fatalf("first font registration = %+v", got)
 	}
-	if len(settings.SVGFontFaceRegistrations) < 2 {
-		t.Fatalf("expected Sans Serif fallback registration: %+v", settings.SVGFontFaceRegistrations)
+	foundDefaultFamily := false
+	foundSymbolsFamily := false
+	foundEmojiFamily := false
+	sansSerifCount := 0
+	for _, font := range settings.SVGFontFaceRegistrations {
+		if font.Family == "Sans Serif" {
+			sansSerifCount++
+		}
+		if font == (SVGFontFaceRegistration{Path: defaultDisplayFontPath, Family: defaultSVGFontFamily}) {
+			foundDefaultFamily = true
+		}
+		if font == (SVGFontFaceRegistration{Path: "res://engine/fonts/symbols/NotoSansSymbols2-Regular.ttf", Family: symbolsSVGFontFamily}) {
+			foundSymbolsFamily = true
+		}
+		if font == (SVGFontFaceRegistration{Path: "res://engine/fonts/emoji/TwitterColorEmoji-SVGinOT.ttf", Family: emojiSVGFontFamily}) {
+			foundEmojiFamily = true
+		}
 	}
-	if got := settings.SVGFontFaceRegistrations[1]; got != (SVGFontFaceRegistration{
-		Path:   defaultDisplayFontPath,
-		Family: "Sans Serif",
-	}) {
-		t.Fatalf("second font registration = %+v", got)
+	if sansSerifCount != 1 {
+		t.Fatalf("expected exactly one Sans Serif registration: %+v", settings.SVGFontFaceRegistrations)
+	}
+	if !foundDefaultFamily {
+		t.Fatalf("missing default SVG family registration: %+v", settings.SVGFontFaceRegistrations)
+	}
+	if !foundSymbolsFamily {
+		t.Fatalf("missing symbols SVG family registration: %+v", settings.SVGFontFaceRegistrations)
+	}
+	if !foundEmojiFamily {
+		t.Fatalf("missing emoji SVG family registration: %+v", settings.SVGFontFaceRegistrations)
 	}
 
 	settings = ResolveDisplaySettings(&ProjectConfig{})
@@ -291,6 +312,35 @@ func TestRegisterDisplayFonts(t *testing.T) {
 	}
 	if !reflect.DeepEqual(fontFaces, settings.SVGFontFaceRegistrations) {
 		t.Fatalf("registered svg font faces = %#v, want %#v", fontFaces, settings.SVGFontFaceRegistrations)
+	}
+
+	defaultFonts = nil
+	fontFaces = nil
+	settings.SVGFontFaceRegistrations = append(settings.SVGFontFaceRegistrations,
+		SVGFontFaceRegistration{Path: "res://engine/fonts/other.ttf", Family: "Sans Serif"},
+	)
+	RegisterDisplayFonts(
+		settings,
+		func(path string) {
+			defaultFonts = append(defaultFonts, path)
+		},
+		func(path, family string) {
+			fontFaces = append(fontFaces, SVGFontFaceRegistration{Path: path, Family: family})
+		},
+	)
+	sansSerifCount := 0
+	var sansSerifFont SVGFontFaceRegistration
+	for _, font := range fontFaces {
+		if font.Family == "Sans Serif" {
+			sansSerifCount++
+			sansSerifFont = font
+		}
+	}
+	if sansSerifCount != 1 {
+		t.Fatalf("duplicate family should collapse to one registration: %#v", fontFaces)
+	}
+	if want := (SVGFontFaceRegistration{Path: "res://engine/fonts/other.ttf", Family: "Sans Serif"}); sansSerifFont != want {
+		t.Fatalf("duplicate family should keep the last registration: got %#v, want %#v", sansSerifFont, want)
 	}
 }
 
