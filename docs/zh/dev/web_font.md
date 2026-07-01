@@ -10,7 +10,7 @@ Scratch 导出的 SVG 通常会使用一组固定的字体族名，例如 `Sans 
 - 文本宽度变化，导致排版错位
 - 不同平台渲染结果不一致
 
-当前仓库已经落地了一套可用实现：默认字体路径约定为 `CnFont.ttf`，同时把 `engine/fonts/scratch` 目录里的 7 个 Scratch 兼容字体注册给 SVG 渲染层，并补充了内部的默认回退族与 emoji 字体族。为控制 Web 包体，当前模板内置的 emoji 字体已经裁剪为一份偏通用的 `smileys + hearts` 子集。
+当前仓库已经落地了一套可用实现：默认字体路径约定为 `CnFont.ttf`，同时把 `engine/fonts/scratch` 目录里的 7 个 Scratch 兼容字体注册给 SVG 渲染层，并补充了内部的默认回退族与 emoji 字体族。当前模板内置的 emoji 字体已经按 Unicode `Basic_Emoji` 标准裁成一份通用输入子集。
 
 ## 当前实现概览
 
@@ -55,7 +55,8 @@ theme/custom_font="res://engine/fonts/CnFont.ttf"
   - 映射到 `res://engine/fonts/emoji/TwitterColorEmoji-SVGinOT.ttf`
   - 字体来源：[`twemoji-color-font`](https://github.com/13rac1/twemoji-color-font) 提供的 `TwitterColorEmoji-SVGinOT`
   - 许可证：`cmd/spx/template/project/engine/fonts/emoji/LICENSE.md`、`LICENSE-CC-BY.txt`、`LICENSE-MIT.txt`
-  - 模板当前默认内置约 `2.9 MB` 的子集，覆盖 `U+1F300-U+1F64F`、`U+1F90D`、`U+2764`、`U+2728`、`U+2B50` 与 `U+FE0F`
+  - 模板当前默认内置约 `6.2 MB` 的子集，对齐上游 `TwitterColorEmoji-SVGinOT 15.1.0` 所对应的 Unicode `15.1` `Basic_Emoji` 集合，包含 `❤️`
+  - 这个集合更偏向“通用输入”的标准子集；相对完整 `RGI_Emoji`，默认不额外覆盖 keycap、旗帜、tag、肤色修饰序列和 ZWJ 组合序列
   - 由运行时在 SVG 文本分段时内部使用，用来承接需要彩色 emoji 呈现的片段；运行时会按 glyph 是否存在，在 `Emoji` 与 `SPX Default` 之间做选择
 
 ## Scratch 字体映射
@@ -134,7 +135,7 @@ var scratchSVGFontRegistrations = []SVGFontFaceRegistration{
 
 - 默认字体文件本身仍然偏大
 - Scratch 兼容字体只是额外补齐了 SVG 的固定字体族映射
-- emoji 字体虽然已经裁成 `smileys + hearts` 子集，但这也意味着更偏门的 emoji 默认不会随模板一起打包
+- emoji 字体虽然已经切到 Unicode `Basic_Emoji` 标准子集，但更完整的 `RGI_Emoji` 集合仍然不会默认随模板一起打包
 - 如果目标是继续压缩整体下载体积，还需要单独推进中文字体子集化或按需加载方案
 
 换句话说，这一版重点是“先保证显示正确”，不是“把所有字体体积都降到最小”。
@@ -176,15 +177,18 @@ var scratchSVGFontRegistrations = []SVGFontFaceRegistration{
 6. 用 `test/ScratchFonts` 示例工程做一次目检。
 7. 最后再更新本文档。
 
-如果需要重新生成模板内置的 emoji 子集，可参考下面的命令：
+如果需要重新生成模板内置的 emoji 子集，建议直接复用仓库里的脚本：
 
 ```bash
-pyftsubset TwitterColorEmoji-SVGinOT.ttf \
-  --output-file=TwitterColorEmoji-SVGinOT.subset.ttf \
-  --unicodes=U+FE0F,U+1F300-1F64F,U+1F90D,U+2764,U+2728,U+2B50 \
-  --retain-gids \
-  --passthrough-tables
+python3 cmd/spx/subset_emoji_font.py \
+  --source TwitterColorEmoji-SVGinOT.ttf \
+  --output TwitterColorEmoji-SVGinOT.basic-emoji.ttf \
+  --emoji-version 15.1 \
+  --pyftsubset pyftsubset
 ```
+
+脚本会自动下载 Unicode 对应版本的 `emoji-sequences.txt`，提取 `Basic_Emoji` 集合，再调用 `pyftsubset` 生成子集。当前这份模板字体就是用该规则从 `TwitterColorEmoji-SVGinOT 15.1.0` 裁出来的；如果后续升级上游字体版本，记得同步调整 `--emoji-version`。
+如果 `pyftsubset` 在处理 `SVG in OpenType` 时提示缺少 `lxml`，先补齐对应依赖再重试。
 
 ## 验证方式
 
