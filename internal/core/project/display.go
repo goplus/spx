@@ -33,7 +33,6 @@ type DisplaySettings struct {
 
 const defaultDisplayFontPath = "res://engine/fonts/CnFont.ttf"
 const defaultSVGFontFamily = "SPX Default"
-const symbolsSVGFontFamily = "Symbols"
 const emojiSVGFontFamily = "Emoji"
 
 type SVGFontFaceRegistration struct {
@@ -49,7 +48,6 @@ var scratchSVGFontRegistrations = []SVGFontFaceRegistration{
 	{Path: "res://engine/fonts/scratch/Griffy-Regular.ttf", Family: "Curly"},
 	{Path: "res://engine/fonts/scratch/Grand9K-Pixel.ttf", Family: "Pixel"},
 	{Path: "res://engine/fonts/scratch/Scratch.ttf", Family: "Scratch"},
-	{Path: "res://engine/fonts/symbols/NotoSansSymbols2-Regular.ttf", Family: symbolsSVGFontFamily},
 	{Path: "res://engine/fonts/emoji/TwitterColorEmoji-SVGinOT.ttf", Family: emojiSVGFontFamily},
 	{Path: defaultDisplayFontPath, Family: defaultSVGFontFamily},
 }
