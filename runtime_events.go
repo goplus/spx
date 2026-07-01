@@ -172,6 +172,12 @@ func (p *scriptEventBindings) OnBackdrop__1(name BackdropName, onBackdrop func()
 }
 
 func (p *scriptEventBindings) Stop(kind StopKind) {
+	if kind == AllStop {
+		if game := activeGame(); game != nil {
+			game.resetGraphicEffectsOnStopAll()
+		}
+	}
+
 	current := gco.Current()
 	filter, abort := coreevent.ResolveStop(
 		kind,
@@ -186,6 +192,21 @@ func (p *scriptEventBindings) Stop(kind StopKind) {
 	}
 	if abort {
 		gco.Abort()
+	}
+}
+
+// Scratch clears graphic effects for the stage and every sprite when a
+// project-wide stop is triggered, including the `stop all` control block.
+func (p *Game) resetGraphicEffectsOnStopAll() {
+	p.baseObj.clearGraphicEffects()
+
+	shapes := append([]Shape(nil), p.getAllShapes()...)
+	for _, item := range shapes {
+		sprite, ok := item.(*SpriteImpl)
+		if !ok {
+			continue
+		}
+		sprite.clearGraphicEffects()
 	}
 }
 
