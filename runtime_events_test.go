@@ -203,3 +203,36 @@ func TestPointHitsClickTargetUsesClickQuery(t *testing.T) {
 		t.Fatalf("pointHitsClickTarget used sensing query, want click query")
 	}
 }
+
+func TestResetGraphicEffectsOnStopAllClearsGraphicEffects(t *testing.T) {
+	var g Game
+	g.initShapeMgr()
+	g.greffUniforms = map[EffectKind]float64{GhostEffect: 100}
+
+	left := &SpriteImpl{g: &g, name: "left"}
+	left.greffUniforms = map[EffectKind]float64{GhostEffect: 100}
+
+	right := &SpriteImpl{g: &g, name: "right"}
+	right.greffUniforms = map[EffectKind]float64{
+		GhostEffect:      50,
+		BrightnessEffect: 25,
+	}
+
+	g.addShape(left)
+	g.addShape(right)
+
+	g.resetGraphicEffectsOnStopAll()
+
+	if got := g.greffUniforms[GhostEffect]; got != 0 {
+		t.Fatalf("stage ghost effect = %v, want 0 after stop all reset", got)
+	}
+	if got := left.greffUniforms[GhostEffect]; got != 0 {
+		t.Fatalf("left ghost effect = %v, want 0 after stop all reset", got)
+	}
+	if got := right.greffUniforms[GhostEffect]; got != 0 {
+		t.Fatalf("right ghost effect = %v, want 0 after stop all reset", got)
+	}
+	if got := right.greffUniforms[BrightnessEffect]; got != 0 {
+		t.Fatalf("right brightness effect = %v, want 0 after stop all reset", got)
+	}
+}
