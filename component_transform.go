@@ -320,6 +320,9 @@ func (t *transformComponent) fixWorldRange(x, y float64) (float64, float64) {
 	if rect == nil {
 		return x, y
 	}
+	if t.sprite.g.displayState.WorldWidth <= 0 || t.sprite.g.displayState.WorldHeight <= 0 {
+		return x, y
+	}
 
 	worldLeft, worldTop, worldRight, worldBottom := t.sprite.g.worldBounds()
 
@@ -328,8 +331,8 @@ func (t *transformComponent) fixWorldRange(x, y float64) (float64, float64) {
 	bottomOffset := t.y - rect.Position.Y
 	topOffset := rect.Position.Y + rect.Size.Y - t.y
 
-	x = mathf.Clamp(x, float64(worldLeft)-rightOffset, float64(worldRight)+leftOffset)
-	y = mathf.Clamp(y, float64(worldBottom)-topOffset, float64(worldTop)+bottomOffset)
+	x = mathf.Clamp(x, float64(worldLeft)+leftOffset, float64(worldRight)-rightOffset)
+	y = mathf.Clamp(y, float64(worldBottom)+bottomOffset, float64(worldTop)-topOffset)
 
 	return x, y
 }
@@ -416,6 +419,8 @@ func (t *transformComponent) BounceOffEdge(area string) {
 
 	newDirection := engine.RadToDeg(math.Atan2(dy, dx)) + 90
 	t.direction = normalizeDirection(newDirection)
+
+	t.moveTo(t.x, t.y)
 }
 
 // ============================================================================

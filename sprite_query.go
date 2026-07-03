@@ -19,7 +19,7 @@ package spx
 import "github.com/goplus/spbase/mathf"
 
 func (p *SpriteImpl) bounds() *mathf.Rect2 {
-	if !p.spriteState.IsVisible {
+	if len(p.costumes) == 0 || p.costumeIndex < 0 || p.costumeIndex >= len(p.costumes) {
 		return nil
 	}
 
