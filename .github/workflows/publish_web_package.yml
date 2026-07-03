@@ -1,0 +1,129 @@
+name: Publish Web Package
+
+on:
+  push:
+    branches:
+      - dev
+  release:
+    types: [created, edited]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Branch name or full commit SHA to build
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: web-package-${{ github.event_name == 'workflow_dispatch' && inputs.target || github.event_name == 'release' && github.event.release.tag_name || github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Publish web package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate dispatch target
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          TARGET: ${{ inputs.target }}
+        run: |
+          if [[ "${TARGET}" =~ ^[0-9a-f]{40}$ ]]; then
+            exit 0
+          fi
+
+          if [[ "${TARGET}" == refs/* ]]; then
+            echo "[error] Dispatch target must be a branch name or full commit SHA" >&2
+            exit 1
+          fi
+
+          if ! git check-ref-format --branch "${TARGET}" >/dev/null 2>&1; then
+            echo "[error] Invalid workflow_dispatch target: ${TARGET}" >&2
+            exit 1
+          fi
+
+      - name: Check out code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.target || github.event_name == 'release' && github.event.release.tag_name || github.sha }}
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install \
+            gcc \
+            libgl1-mesa-dev \
+            libegl1-mesa-dev \
+            libgles2-mesa-dev \
+            libx11-dev \
+            xorg-dev \
+            libasound2-dev \
+            libopenal-dev \
+            binaryen \
+            brotli
+
+      - name: Set up toolchain and engine assets
+        uses: ./.github/actions/deps
+        with:
+          setup-mode: web
+          web-mode: normal
+
+      - name: Set up Node.js for npm publishing
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Compute pseudo-version
+        if: github.event_name != 'release'
+        run: |
+          SPX_VERSION="$(go run ./.github/scripts/pseudo_version.go HEAD)"
+          echo "[info] SPX version: ${SPX_VERSION}"
+          echo "SPX_VERSION=${SPX_VERSION}" >> "${GITHUB_ENV}"
+
+      - name: Compute release version
+        if: github.event_name == 'release'
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          SPX_VERSION="${RELEASE_TAG#v}"
+          echo "[info] SPX version: ${SPX_VERSION}"
+          echo "SPX_VERSION=${SPX_VERSION}" >> "${GITHUB_ENV}"
+
+      - name: Build web bundle
+        run: |
+          "$BUILDCTL" runtime export-web --mode normal
+
+      - name: Publish web package to npm
+        run: |
+          set -euo pipefail
+
+          npm_package_version="${SPX_VERSION#v}"
+          npm_dist_tag="dev"
+          if [[ "${GITHUB_EVENT_NAME}" == "release" ]]; then
+            npm_dist_tag="latest"
+            if [[ "${npm_package_version}" == *-* ]]; then
+              npm_dist_tag="next"
+            fi
+          elif git tag --points-at HEAD --list "v${npm_package_version}" | grep -qx "v${npm_package_version}"; then
+            echo "[info] v${npm_package_version} is an exact tag; leave npm publishing to the release event"
+            exit 0
+          fi
+
+          if npm view "@xgo-pkgs/spx@${npm_package_version}" version >/dev/null 2>&1; then
+            echo "[info] @xgo-pkgs/spx@${npm_package_version} already exists; skip npm publish"
+            exit 0
+          fi
+
+          ./.github/scripts/prepare_spx_web_package.sh \
+            spx_web.zip \
+            "${npm_package_version}" \
+            .npm/spx
+
+          npm publish .npm/spx --access public --tag "${npm_dist_tag}"
