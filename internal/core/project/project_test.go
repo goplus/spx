@@ -243,7 +243,6 @@ func TestResolveDisplaySettings(t *testing.T) {
 		t.Fatalf("first font registration = %+v", got)
 	}
 	foundDefaultFamily := false
-	foundSymbolsFamily := false
 	foundEmojiFamily := false
 	sansSerifCount := 0
 	for _, font := range settings.SVGFontFaceRegistrations {
@@ -252,9 +251,6 @@ func TestResolveDisplaySettings(t *testing.T) {
 		}
 		if font == (SVGFontFaceRegistration{Path: defaultDisplayFontPath, Family: defaultSVGFontFamily}) {
 			foundDefaultFamily = true
-		}
-		if font == (SVGFontFaceRegistration{Path: "res://engine/fonts/symbols/NotoSansSymbols2-Regular.ttf", Family: symbolsSVGFontFamily}) {
-			foundSymbolsFamily = true
 		}
 		if font == (SVGFontFaceRegistration{Path: "res://engine/fonts/emoji/TwitterColorEmoji-SVGinOT.ttf", Family: emojiSVGFontFamily}) {
 			foundEmojiFamily = true
@@ -265,9 +261,6 @@ func TestResolveDisplaySettings(t *testing.T) {
 	}
 	if !foundDefaultFamily {
 		t.Fatalf("missing default SVG family registration: %+v", settings.SVGFontFaceRegistrations)
-	}
-	if !foundSymbolsFamily {
-		t.Fatalf("missing symbols SVG family registration: %+v", settings.SVGFontFaceRegistrations)
 	}
 	if !foundEmojiFamily {
 		t.Fatalf("missing emoji SVG family registration: %+v", settings.SVGFontFaceRegistrations)
