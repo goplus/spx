@@ -42,6 +42,15 @@ const (
 
 	// halfCircleDegrees represents half a rotation in degrees.
 	halfCircleDegrees = 180.0
+
+	// fenceWidth matches Scratch's keepInFence margin.
+	fenceWidth = 15.0
+
+	// minVisibleSize matches Scratch's minimum rendered sprite size in pixels.
+	minVisibleSize = 5.0
+
+	// maxStageScale matches Scratch's 150% stage-coverage cap.
+	maxStageScale = 1.5
 )
 
 // ============================================================================
@@ -230,11 +239,46 @@ func (t *transformComponent) SetSize(size float64) {
 		spxlog.Warn("SetSize: sprite=%s, size=%v is negative, clamping to 0", t.sprite.name, size)
 		size = 0
 	}
+	size = t.clampSpriteScale(size)
 
 	t.sprite.runtimeState.Scale = size
 	t.sprite.runtimeState.IsCostumeDirty = true
 	t.markDirty()
 	t.sprite.updatePhysicsShapesScale()
+}
+
+// clampSpriteScale follows Scratch's sprite size limits.
+func (t *transformComponent) clampSpriteScale(size float64) float64 {
+	if len(t.sprite.costumes) == 0 || t.sprite.costumeIndex < 0 || t.sprite.costumeIndex >= len(t.sprite.costumes) {
+		return size
+	}
+
+	costumeWidth, costumeHeight := t.sprite.currentCostume().getSize()
+	if costumeWidth <= 0 || costumeHeight <= 0 {
+		return size
+	}
+
+	worldWidth, worldHeight := t.sprite.g.displayState.WorldWidth, t.sprite.g.displayState.WorldHeight
+	if worldWidth <= 0 || worldHeight <= 0 {
+		worldWidth, worldHeight = baseScreenWidth, baseScreenHeight
+	}
+
+	minScale := math.Min(
+		1.0,
+		math.Max(
+			minVisibleSize/float64(costumeWidth),
+			minVisibleSize/float64(costumeHeight),
+		),
+	)
+	maxScale := math.Min(
+		(maxStageScale*float64(worldWidth))/float64(costumeWidth),
+		(maxStageScale*float64(worldHeight))/float64(costumeHeight),
+	)
+	if maxScale < minScale {
+		maxScale = minScale
+	}
+
+	return mathf.Clamp(size, minScale, maxScale)
 }
 
 // ChangeSize changes the sprite's scale by the specified delta.
@@ -314,7 +358,8 @@ func (t *transformComponent) moveTo(x, y float64) {
 	t.markDirty()
 }
 
-// fixWorldRange clamps sprite position within world boundaries.
+// fixWorldRange mirrors Scratch's keepInFence behavior: a sprite may extend
+// beyond the stage as long as at least a small fenced slice remains visible.
 func (t *transformComponent) fixWorldRange(x, y float64) (float64, float64) {
 	rect := t.sprite.bounds()
 	if rect == nil {
@@ -325,14 +370,30 @@ func (t *transformComponent) fixWorldRange(x, y float64) (float64, float64) {
 	}
 
 	worldLeft, worldTop, worldRight, worldBottom := t.sprite.g.worldBounds()
+	dx := x - t.x
+	dy := y - t.y
+	left := rect.Position.X
+	right := rect.Position.X + rect.Size.X
+	bottom := rect.Position.Y
+	top := rect.Position.Y + rect.Size.Y
 
-	leftOffset := t.x - rect.Position.X
-	rightOffset := rect.Position.X + rect.Size.X - t.x
-	bottomOffset := t.y - rect.Position.Y
-	topOffset := rect.Position.Y + rect.Size.Y - t.y
+	fenceInset := math.Min(fenceWidth, math.Floor(math.Min(rect.Size.X, rect.Size.Y)/2))
 
-	x = mathf.Clamp(x, float64(worldLeft)+leftOffset, float64(worldRight)-rightOffset)
-	y = mathf.Clamp(y, float64(worldBottom)+bottomOffset, float64(worldTop)-topOffset)
+	minX := float64(worldLeft) + fenceInset
+	maxX := float64(worldRight) - fenceInset
+	if right+dx < minX {
+		x = t.x + (minX - right)
+	} else if left+dx > maxX {
+		x = t.x + (maxX - left)
+	}
+
+	minY := float64(worldBottom) + fenceInset
+	maxY := float64(worldTop) - fenceInset
+	if top+dy < minY {
+		y = t.y + (minY - top)
+	} else if bottom+dy > maxY {
+		y = t.y + (maxY - bottom)
+	}
 
 	return x, y
 }
