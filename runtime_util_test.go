@@ -42,6 +42,20 @@ func TestRand0SwapsReversedBounds(t *testing.T) {
 	}
 }
 
+func TestRandomSeedMakesScriptRandomDeterministic(t *testing.T) {
+	SetRandomSeed(123)
+	gotA := []float64{Rand__0(1, 10), Rand__1(0, 1), Rand__0(1, 10)}
+	SetRandomSeed(123)
+	gotB := []float64{Rand__0(1, 10), Rand__1(0, 1), Rand__0(1, 10)}
+	defer ResetRandomSeed()
+
+	for i := range gotA {
+		if gotA[i] != gotB[i] {
+			t.Fatalf("seeded random mismatch at %d: %v vs %v", i, gotA, gotB)
+		}
+	}
+}
+
 func TestCharAt(t *testing.T) {
 	tests := []struct {
 		name     string

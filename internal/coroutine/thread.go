@@ -91,6 +91,10 @@ func (p *threadImpl) Name() string {
 	return p.name
 }
 
+func (p *threadImpl) ID() int64 {
+	return p.id
+}
+
 func (p *threadImpl) Stack() string {
 	return p.stack
 }
@@ -166,6 +170,10 @@ func (p *Coroutines) CreateAndStart(start bool, obj ThreadObj, fn func(me Thread
 
 func (p *Coroutines) Current() Thread {
 	return Thread(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&p.current))))
+}
+
+func (p *Coroutines) LastThreadID() int64 {
+	return atomic.LoadInt64(&p.nextThreadID)
 }
 
 func (p *Coroutines) Abort() {

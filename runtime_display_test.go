@@ -1,7 +1,6 @@
 package spx
 
 import (
-	"math/rand"
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
@@ -34,7 +33,8 @@ func TestGameGoSetBackdropRandomChoosesDifferentBackdrop(t *testing.T) {
 		},
 	}
 
-	rand.Seed(1)
+	SetRandomSeed(1)
+	defer ResetRandomSeed()
 	if ok := game.goSetBackdrop(Random); !ok {
 		t.Fatal("goSetBackdrop(Random) = false, want true")
 	}
@@ -58,7 +58,8 @@ func TestGameGoSetBackdropRandomFloat64ChoosesDifferentBackdrop(t *testing.T) {
 		},
 	}
 
-	rand.Seed(1)
+	SetRandomSeed(1)
+	defer ResetRandomSeed()
 	if ok := game.goSetBackdrop(float64(Random)); !ok {
 		t.Fatal("goSetBackdrop(float64(Random)) = false, want true")
 	}

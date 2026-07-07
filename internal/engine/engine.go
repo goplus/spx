@@ -178,6 +178,9 @@ func onUpdate(delta float64) {
 	profiler.MeasureFunctionTime("GameRender", func() {
 		game.OnEngineRender(delta)
 	})
+	if err := RunCaptureRequests(); err != nil {
+		Panic(err)
+	}
 	profiler.EndSample()
 }
 

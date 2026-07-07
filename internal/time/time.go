@@ -27,6 +27,7 @@ var (
 	timeSinceLevelLoad     float64
 	deltaTime              float64
 	realDeltaTime          float64
+	fixedDeltaTime         float64
 	timeScale              float64
 	curFrame               int64
 	setTimeScaleCallback   func(float64)
@@ -74,6 +75,28 @@ func DeltaTime() float64 {
 	return deltaTime
 }
 
+func FixedDeltaTime() (float64, bool) {
+	return fixedDeltaTime, fixedDeltaTime > 0
+}
+
+// EffectiveLogicalDeltaTime returns the delta used by SPX logical update paths.
+// It intentionally does not apply to Godot fixed-physics callbacks, which keep
+// their engine-provided delta until deterministic physics is supported.
+func EffectiveLogicalDeltaTime(rawDelta float64) float64 {
+	if fixedDeltaTime > 0 {
+		return fixedDeltaTime
+	}
+	return rawDelta
+}
+
+func SetFixedDeltaTime(delta float64) {
+	if delta <= 0 {
+		fixedDeltaTime = 0
+		return
+	}
+	fixedDeltaTime = delta
+}
+
 func UnscaledDeltaTime() float64 {
 	return realDeltaTime
 }
@@ -100,6 +123,8 @@ func Start(setTimeScaleCB func(float64)) {
 	ResetTimer()
 }
 
+// Update records frame timing. The delta argument must already be the
+// resolved SPX logical delta for the current update path.
 func Update(delta float64, pfps float64) {
 	curTime := stdtime.Now()
 	realTimeSinceLevelLoad = curTime.Sub(startTimestamp).Seconds()
@@ -107,7 +132,7 @@ func Update(delta float64, pfps float64) {
 	lastTimestamp = curTime
 
 	deltaTime = delta
-	timeSinceLevelLoad += delta
+	timeSinceLevelLoad += deltaTime
 	curFrame += 1
 	fps = pfps
 }

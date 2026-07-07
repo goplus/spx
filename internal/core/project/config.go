@@ -21,16 +21,23 @@ import (
 )
 
 type Config struct {
-	Title              string `json:"title,omitempty"`
-	Width              int    `json:"width,omitempty"`
-	Height             int    `json:"height,omitempty"`
-	KeyDuration        int    `json:"keyDuration,omitempty"`
-	ScreenshotKey      string `json:"screenshotKey,omitempty"`
-	EventQueuePolicy   string `json:"eventQueuePolicy,omitempty"`
-	Index              any    `json:"-"`
-	DontParseFlags     bool   `json:"-"`
-	FullScreen         bool   `json:"fullScreen,omitempty"`
-	DontRunOnUnfocused bool   `json:"pauseOnUnfocused,omitempty"`
+	Title            string `json:"title,omitempty"`
+	Width            int    `json:"width,omitempty"`
+	Height           int    `json:"height,omitempty"`
+	KeyDuration      int    `json:"keyDuration,omitempty"`
+	ScreenshotKey    string `json:"screenshotKey,omitempty"`
+	EventQueuePolicy string `json:"eventQueuePolicy,omitempty"`
+	// Deterministic enables web logical-update determinism for SPX runtime time
+	// and random state. It does not currently virtualize Godot fixed-physics time.
+	Deterministic bool `json:"deterministic,omitempty"`
+	// FixedTimestep overrides the SPX logical-update delta used on web when
+	// deterministic mode is enabled. Physics fixed-update timing is unchanged.
+	FixedTimestep      float64 `json:"fixedTimestep,omitempty"`
+	RandomSeed         *int64  `json:"randomSeed,omitempty"`
+	Index              any     `json:"-"`
+	DontParseFlags     bool    `json:"-"`
+	FullScreen         bool    `json:"fullScreen,omitempty"`
+	DontRunOnUnfocused bool    `json:"pauseOnUnfocused,omitempty"`
 }
 
 type CameraConfig struct {

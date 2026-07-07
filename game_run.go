@@ -78,6 +78,8 @@ func XGot_Game_Reload(game Gamer, index any) (err error) {
 	if err = coreproject.LoadConfig(&proj, g.fs, index); err != nil {
 		return
 	}
+	g.applyStoredRuntimeConfig(&proj)
+	setupGameSystems(g, &proj)
 	gco.OnRestart()
 	err = g.loadIndex(v, &proj, generation)
 	if err != nil {

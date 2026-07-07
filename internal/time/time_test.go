@@ -27,6 +27,7 @@ func resetStateForTest() {
 	timeSinceLevelLoad = 0
 	deltaTime = 0
 	realDeltaTime = 0
+	fixedDeltaTime = 0
 	timeScale = 0
 	curFrame = 0
 	setTimeScaleCallback = nil
@@ -101,6 +102,52 @@ func TestUpdateRefreshesRealTimeState(t *testing.T) {
 	}
 	if got := Frame(); got != 1 {
 		t.Fatalf("Frame() = %v, want 1", got)
+	}
+}
+
+func TestUpdateUsesProvidedLogicalDeltaForLogicalTime(t *testing.T) {
+	resetStateForTest()
+	SetFixedDeltaTime(1.0 / 30)
+	defer SetFixedDeltaTime(0)
+
+	Update(0.5, 60)
+
+	if got := DeltaTime(); got != 0.5 {
+		t.Fatalf("DeltaTime() = %v, want 0.5", got)
+	}
+	if got := TimeSinceLevelLoad(); got != 0.5 {
+		t.Fatalf("TimeSinceLevelLoad() = %v, want 0.5", got)
+	}
+	if _, ok := FixedDeltaTime(); !ok {
+		t.Fatal("FixedDeltaTime() disabled, want enabled")
+	}
+}
+
+func TestSetFixedDeltaTimeDisablesNonPositiveValues(t *testing.T) {
+	resetStateForTest()
+	SetFixedDeltaTime(0.1)
+	SetFixedDeltaTime(0)
+
+	if got, ok := FixedDeltaTime(); ok || got != 0 {
+		t.Fatalf("FixedDeltaTime() = (%v, %v), want (0, false)", got, ok)
+	}
+}
+
+func TestEffectiveLogicalDeltaTimeUsesFixedValueWhenEnabled(t *testing.T) {
+	resetStateForTest()
+	SetFixedDeltaTime(0.1)
+	defer SetFixedDeltaTime(0)
+
+	if got := EffectiveLogicalDeltaTime(0.25); got != 0.1 {
+		t.Fatalf("EffectiveLogicalDeltaTime() = %v, want 0.1", got)
+	}
+}
+
+func TestEffectiveLogicalDeltaTimeFallsBackToRawValue(t *testing.T) {
+	resetStateForTest()
+
+	if got := EffectiveLogicalDeltaTime(0.25); got != 0.25 {
+		t.Fatalf("EffectiveLogicalDeltaTime() = %v, want 0.25", got)
 	}
 }
 

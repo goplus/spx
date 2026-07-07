@@ -61,6 +61,9 @@ type RuntimeConfig struct {
 	WindowWidth      int
 	WindowHeight     int
 	ScreenshotKey    string
+	Deterministic    bool
+	FixedTimestep    float64
+	RandomSeed       *int64
 }
 
 func ResolveRuntimeConfig(conf *Config, proj *ProjectConfig, cwd string, screenshotEnv string) RuntimeConfig {
@@ -82,6 +85,9 @@ func ResolveRuntimeConfig(conf *Config, proj *ProjectConfig, cwd string, screens
 		WindowWidth:      conf.Width,
 		WindowHeight:     conf.Height,
 		ScreenshotKey:    key,
+		Deterministic:    conf.Deterministic,
+		FixedTimestep:    conf.FixedTimestep,
+		RandomSeed:       conf.RandomSeed,
 	}
 }
 

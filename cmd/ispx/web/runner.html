@@ -252,6 +252,80 @@
 			})
 		}
 
+		function normalizeCaptureFilename(name, check) {
+			let fileName = typeof name === 'string' ? name.trim() : ''
+			if (!fileName) {
+				fileName = check ? 'capture-check.png' : 'capture.png'
+			}
+			fileName = fileName.replace(/[\\/:*?"<>|\u0000-\u001F]+/g, '_')
+			if (!/\.png$/i.test(fileName)) {
+				fileName += '.png'
+			}
+			return fileName
+		}
+
+		function notifyCaptureEvent(detail) {
+			const event = new CustomEvent('spxCaptureScreenshot', { detail })
+			window.dispatchEvent(event)
+			if (window.parent && window.parent !== window) {
+				try {
+					window.parent.dispatchEvent(new CustomEvent('spxCaptureScreenshot', { detail }))
+				} catch (error) {
+					console.warn('Failed to notify parent capture event', error)
+				}
+			}
+		}
+
+		function downloadBlob(blob, filename) {
+			const url = URL.createObjectURL(blob)
+			const anchor = document.createElement('a')
+			anchor.href = url
+			anchor.download = filename
+			document.body.appendChild(anchor)
+			anchor.click()
+			document.body.removeChild(anchor)
+			setTimeout(() => URL.revokeObjectURL(url), 0)
+		}
+
+		window.__spxCaptureScreenshot = (name, check) => {
+			if (typeof window.getScreenshot !== 'function') {
+				return { error: 'spx: getScreenshot is not configured' }
+			}
+
+			const filename = normalizeCaptureFilename(name, check)
+			if (check) {
+				console.warn('CaptureAndCheck currently uses download-only fallback on web:', filename)
+			}
+
+			window.getScreenshot().then((blob) => {
+				if (!blob) {
+					const error = `spx: failed to capture screenshot ${filename}`
+					console.error(error)
+					notifyCaptureEvent({ ok: false, error, filename, check: !!check })
+					return
+				}
+				downloadBlob(blob, filename)
+				notifyCaptureEvent({
+					ok: true,
+					filename,
+					check: !!check,
+					size: blob.size,
+					type: blob.type || 'image/png',
+				})
+			}).catch((error) => {
+				const message = error instanceof Error ? error.message : `${error}`
+				console.error('spx: capture bridge failed', error)
+				notifyCaptureEvent({
+					ok: false,
+					error: message,
+					filename,
+					check: !!check,
+				})
+			})
+
+			return { ok: true }
+		}
+
 		window.downloadRecordedVideo = (filename) => {
 			if (gameApp == null) {
 				console.error("gameApp is null, should call startGame first")
