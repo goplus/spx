@@ -92,7 +92,7 @@ func TestResetFrameRuntimeClearsPendingWork(t *testing.T) {
 	ScheduleFrame(base+1, func() {
 		ran = true
 	})
-	if err := RequestCapture("queued.png", false); err != nil {
+	if err := EnqueueCapture("queued.png", CaptureIntentSnapshot); err != nil {
 		t.Fatal(err)
 	}
 	ResetFrameRuntime()
@@ -102,39 +102,49 @@ func TestResetFrameRuntimeClearsPendingWork(t *testing.T) {
 		t.Fatal("ResetFrameRuntime did not clear pending callbacks")
 	}
 
-	SetCaptureHandler(func(name string, check bool) error {
-		t.Fatalf("ResetFrameRuntime did not clear pending capture %q", name)
+	SetCaptureHandler(func(req CaptureRequest) error {
+		t.Fatalf("ResetFrameRuntime did not clear pending capture %q", req.Name)
 		return nil
 	})
 	defer SetCaptureHandler(nil)
-	if err := RunCaptureRequests(); err != nil {
+	if err := FlushCaptures(); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestCaptureRequestQueuesForActiveGame(t *testing.T) {
-	var got []string
+	var got CaptureRequest
 	SetGame(struct{}{})
 	defer SetGame(nil)
 	ResetFrameRuntime()
 	defer ResetFrameRuntime()
-	SetCaptureHandler(func(name string, check bool) error {
-		got = append(got, name)
+	expectedFrame := CurrentFrame()
+	SetCaptureHandler(func(req CaptureRequest) error {
+		got = req
 		return nil
 	})
 	defer SetCaptureHandler(nil)
 
-	if err := RequestCapture("step_001.png", false); err != nil {
+	if err := EnqueueCapture("step_001.png", CaptureIntentSnapshot); err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 0 {
-		t.Fatalf("RequestCapture ran immediately: %v", got)
+	if got.Name != "" {
+		t.Fatalf("EnqueueCapture ran immediately: %+v", got)
 	}
 
-	if err := RunCaptureRequests(); err != nil {
+	if err := FlushCaptures(); err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 1 || got[0] != "step_001.png" {
-		t.Fatalf("RunCaptureRequests = %v, want [step_001.png]", got)
+	if got.Name != "step_001.png" {
+		t.Fatalf("capture name = %q, want step_001.png", got.Name)
+	}
+	if got.Intent != CaptureIntentSnapshot {
+		t.Fatalf("capture intent = %q, want %q", got.Intent, CaptureIntentSnapshot)
+	}
+	if got.Frame != expectedFrame {
+		t.Fatalf("capture frame = %d, want %d", got.Frame, expectedFrame)
+	}
+	if got.Sequence == 0 {
+		t.Fatal("capture sequence was not assigned")
 	}
 }

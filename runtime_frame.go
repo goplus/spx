@@ -18,6 +18,16 @@ package spx
 
 import "github.com/goplus/spx/v2/internal/engine"
 
+type CaptureIntent = engine.CaptureIntent
+
+const (
+	CaptureIntentSnapshot = engine.CaptureIntentSnapshot
+	CaptureIntentCheck    = engine.CaptureIntentCheck
+)
+
+type CaptureRequest = engine.CaptureRequest
+type CaptureRequestHandler = engine.CaptureHandler
+
 // CurrentFrame returns the current engine frame number.
 func CurrentFrame() int64 {
 	return engine.CurrentFrame()
@@ -33,47 +43,45 @@ func Frame(i int, fn func()) {
 	engine.ScheduleFrame(int64(i), fn)
 }
 
-// Capture runs fn and then invokes the configured screenshot capture backend.
+// Capture runs fn and then requests a snapshot capture at the end of the frame.
 //
 // The xgo decorator expansion passes fn as a func() error closure, which allows
 // Capture to surface errors from the decorated function before requesting the
 // screenshot.
 func Capture(name string, fn func() error) {
-	if err := runCaptureBody(fn); err != nil {
-		engine.Panic(err)
-		return
-	}
-	if err := queueCapture(name, false); err != nil {
-		engine.Panic(err)
-	}
+	requestCaptureAfter(name, CaptureIntentSnapshot, fn)
 }
 
-// CaptureAndCheck runs fn and then invokes the configured screenshot comparison
-// backend. The comparison implementation is supplied by the test harness or
-// platform bridge.
-func CaptureAndCheck(name string, fn func() error) {
-	if err := runCaptureBody(fn); err != nil {
-		engine.Panic(err)
-		return
-	}
-	if err := queueCapture(name, true); err != nil {
-		engine.Panic(err)
-	}
+// CaptureForCheck runs fn and then requests a check-oriented capture at the end
+// of the frame. The comparison implementation is supplied by the configured
+// capture host or platform bridge.
+func CaptureForCheck(name string, fn func() error) {
+	requestCaptureAfter(name, CaptureIntentCheck, fn)
 }
 
 // SetCaptureHandler installs the screenshot backend used by Capture and
-// CaptureAndCheck. Passing nil disables capture.
-func SetCaptureHandler(handler func(string, bool) error) {
+// CaptureForCheck. Passing nil disables capture.
+func SetCaptureHandler(handler CaptureRequestHandler) {
 	engine.SetCaptureHandler(handler)
 }
 
-func runCaptureBody(fn func() error) error {
+func requestCaptureAfter(name string, intent CaptureIntent, fn func() error) {
+	if err := runCaptureAction(fn); err != nil {
+		engine.Panic(err)
+		return
+	}
+	if err := enqueueCapture(name, intent); err != nil {
+		engine.Panic(err)
+	}
+}
+
+func runCaptureAction(fn func() error) error {
 	if fn == nil {
 		return nil
 	}
 	return fn()
 }
 
-func queueCapture(name string, check bool) error {
-	return engine.RequestCapture(name, check)
+func enqueueCapture(name string, intent CaptureIntent) error {
+	return engine.EnqueueCapture(name, engine.CaptureIntent(intent))
 }

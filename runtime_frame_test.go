@@ -49,9 +49,9 @@ func TestCaptureUsesConfiguredHandlerAfterBody(t *testing.T) {
 	engine.SetGame(nil)
 	engine.ResetFrameRuntime()
 	defer engine.ResetFrameRuntime()
-	SetCaptureHandler(func(name string, check bool) error {
-		got = append(got, "capture:"+name)
-		if check {
+	SetCaptureHandler(func(req CaptureRequest) error {
+		got = append(got, "capture:"+req.Name)
+		if req.IsCheck() {
 			got = append(got, "check")
 		}
 		return nil
@@ -74,24 +74,24 @@ func TestCaptureUsesConfiguredHandlerAfterBody(t *testing.T) {
 	}
 }
 
-func TestCaptureAndCheckMarksCheckMode(t *testing.T) {
+func TestCaptureForCheckMarksCheckMode(t *testing.T) {
 	var checkMode bool
 	engine.SetGame(nil)
 	engine.ResetFrameRuntime()
 	defer engine.ResetFrameRuntime()
-	SetCaptureHandler(func(name string, check bool) error {
-		if name != "step_001.png" {
-			t.Fatalf("capture name = %q, want step_001.png", name)
+	SetCaptureHandler(func(req CaptureRequest) error {
+		if req.Name != "step_001.png" {
+			t.Fatalf("capture name = %q, want step_001.png", req.Name)
 		}
-		checkMode = check
+		checkMode = req.IsCheck()
 		return nil
 	})
 	defer SetCaptureHandler(nil)
 
-	CaptureAndCheck("step_001.png", nil)
+	CaptureForCheck("step_001.png", nil)
 
 	if !checkMode {
-		t.Fatal("CaptureAndCheck did not request check mode")
+		t.Fatal("CaptureForCheck did not request check mode")
 	}
 }
 
@@ -101,8 +101,8 @@ func TestCaptureQueuesRequestForActiveGame(t *testing.T) {
 	defer engine.SetGame(nil)
 	engine.ResetFrameRuntime()
 	defer engine.ResetFrameRuntime()
-	SetCaptureHandler(func(name string, check bool) error {
-		got = append(got, name)
+	SetCaptureHandler(func(req CaptureRequest) error {
+		got = append(got, req.Name)
 		return nil
 	})
 	defer SetCaptureHandler(nil)
@@ -112,10 +112,10 @@ func TestCaptureQueuesRequestForActiveGame(t *testing.T) {
 		t.Fatalf("Capture ran immediately: %v", got)
 	}
 
-	if err := engine.RunCaptureRequests(); err != nil {
+	if err := engine.FlushCaptures(); err != nil {
 		t.Fatal(err)
 	}
 	if len(got) != 1 || got[0] != "step_001.png" {
-		t.Fatalf("runCaptureRequests = %v, want [step_001.png]", got)
+		t.Fatalf("FlushCaptures = %v, want [step_001.png]", got)
 	}
 }

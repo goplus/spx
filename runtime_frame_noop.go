@@ -19,9 +19,9 @@
 package spx
 
 func init() {
-	SetCaptureHandler(noopCaptureHandler)
+	SetCaptureHandler(ignoreCaptureRequest)
 }
 
-func noopCaptureHandler(name string, check bool) error {
+func ignoreCaptureRequest(CaptureRequest) error {
 	return nil
 }

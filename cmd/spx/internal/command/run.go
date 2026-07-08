@@ -324,6 +324,44 @@ func (cmd *CmdTool) webServerPIDPath() string {
 	return pidPath
 }
 
+type browserOpenCommand struct {
+	name string
+	args []string
+}
+
+func browserOpenCommands(goos, url string) []browserOpenCommand {
+	switch goos {
+	case "darwin":
+		return []browserOpenCommand{
+			{name: "open", args: []string{"-a", "Google Chrome", url}},
+			{name: "open", args: []string{url}},
+		}
+	case "windows":
+		return []browserOpenCommand{
+			{name: "rundll32", args: []string{"url.dll,FileProtocolHandler", url}},
+		}
+	default:
+		return []browserOpenCommand{
+			{name: "xdg-open", args: []string{url}},
+		}
+	}
+}
+
+func openURLInPreferredBrowser(url string) error {
+	var errs []string
+	for _, cmd := range browserOpenCommands(runtime.GOOS, url) {
+		if err := exec.Command(cmd.name, cmd.args...).Run(); err == nil {
+			return nil
+		} else {
+			errs = append(errs, fmt.Sprintf("%s %s: %v", cmd.name, strings.Join(cmd.args, " "), err))
+		}
+	}
+	if len(errs) == 0 {
+		return fmt.Errorf("no browser launch command available")
+	}
+	return errors.New(strings.Join(errs, "; "))
+}
+
 func (cmd *CmdTool) runWebServer() error {
 	port := cmd.ServerPort
 	if err := cmd.StopWeb(); err != nil {
@@ -342,7 +380,8 @@ func (cmd *CmdTool) runWebServer() error {
 		pythonCmd = "python3"
 	}
 
-	execCmd := exec.Command(pythonCmd, scriptPath, "-r", executeDir, "-p", fmt.Sprint(port))
+	url := fmt.Sprintf("http://127.0.0.1:%d", port)
+	execCmd := exec.Command(pythonCmd, scriptPath, "-r", executeDir, "-p", fmt.Sprint(port), "--no-browser")
 	execCmd.Stdout = os.Stdout
 	execCmd.Stderr = os.Stderr
 
@@ -368,7 +407,10 @@ func (cmd *CmdTool) runWebServer() error {
 		return fmt.Errorf("web server exited unexpectedly without an error")
 	case <-time.After(500 * time.Millisecond):
 	}
-	logInfof("Web server running at http://127.0.0.1:%d", port)
+	if err := openURLInPreferredBrowser(url); err != nil {
+		logWarnf("Failed to open browser automatically: %v", err)
+	}
+	logInfof("Web server running at %s", url)
 	return nil
 }
 

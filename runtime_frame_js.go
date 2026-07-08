@@ -23,13 +23,13 @@ import (
 	"syscall/js"
 )
 
-const jsCaptureBridgeName = "__spxCaptureScreenshot"
+const jsCaptureBridgeName = "__spxHandleCaptureRequest"
 
 func init() {
-	SetCaptureHandler(captureWithJSBridge)
+	SetCaptureHandler(dispatchCaptureToJSBridge)
 }
 
-func captureWithJSBridge(name string, check bool) (err error) {
+func dispatchCaptureToJSBridge(req CaptureRequest) (err error) {
 	fn := js.Global().Get(jsCaptureBridgeName)
 	if fn.Type() != js.TypeFunction {
 		return fmt.Errorf("spx: JS capture bridge %s is not configured", jsCaptureBridgeName)
@@ -39,10 +39,16 @@ func captureWithJSBridge(name string, check bool) (err error) {
 			err = fmt.Errorf("spx: JS capture bridge failed: %v", r)
 		}
 	}()
-	return captureBridgeResultError(fn.Invoke(name, check))
+	return parseCaptureBridgeResultError(fn.Invoke(js.ValueOf(map[string]any{
+		"name":     req.Name,
+		"intent":   string(req.Intent),
+		"frame":    req.Frame,
+		"sequence": req.Sequence,
+		"check":    req.IsCheck(),
+	})))
 }
 
-func captureBridgeResultError(result js.Value) error {
+func parseCaptureBridgeResultError(result js.Value) error {
 	switch result.Type() {
 	case js.TypeUndefined, js.TypeNull:
 		return nil

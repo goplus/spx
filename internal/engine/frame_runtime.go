@@ -30,19 +30,33 @@ type frameCallback struct {
 	fn    func()
 }
 
-type captureRequest struct {
-	name  string
-	check bool
+type CaptureIntent string
+
+const (
+	CaptureIntentSnapshot CaptureIntent = "snapshot"
+	CaptureIntentCheck    CaptureIntent = "check"
+)
+
+type CaptureRequest struct {
+	Name     string
+	Intent   CaptureIntent
+	Frame    int64
+	Sequence uint64
 }
 
-type captureHandler func(string, bool) error
+func (req CaptureRequest) IsCheck() bool {
+	return req.Intent == CaptureIntentCheck
+}
+
+type CaptureHandler func(CaptureRequest) error
 
 var frameRuntime struct {
-	mu              sync.Mutex
-	seq             uint64
-	callbacks       []frameCallback
-	captureRequests []captureRequest
-	captureHandler  captureHandler
+	mu                    sync.Mutex
+	callbackSeq           uint64
+	captureSeq            uint64
+	pendingFrameCallbacks []frameCallback
+	pendingCaptures       []CaptureRequest
+	captureHandler        CaptureHandler
 }
 
 // CurrentFrame returns the current engine frame number.
@@ -61,10 +75,10 @@ func ScheduleFrame(frame int64, fn func()) {
 	}
 
 	frameRuntime.mu.Lock()
-	frameRuntime.seq++
-	frameRuntime.callbacks = append(frameRuntime.callbacks, frameCallback{
+	frameRuntime.callbackSeq++
+	frameRuntime.pendingFrameCallbacks = append(frameRuntime.pendingFrameCallbacks, frameCallback{
 		frame: frame,
-		seq:   frameRuntime.seq,
+		seq:   frameRuntime.callbackSeq,
 		fn:    fn,
 	})
 	frameRuntime.mu.Unlock()
@@ -72,23 +86,23 @@ func ScheduleFrame(frame int64, fn func()) {
 
 // RunFrameCallbacks runs all callbacks due at or before frame.
 func RunFrameCallbacks(frame int64) {
-	callbacks := takeFrameCallbacks(frame)
+	callbacks := drainDueFrameCallbacks(frame)
 	for _, cb := range callbacks {
 		cb.fn()
 	}
 }
 
-func takeFrameCallbacks(frame int64) []frameCallback {
+func drainDueFrameCallbacks(frame int64) []frameCallback {
 	frameRuntime.mu.Lock()
 	defer frameRuntime.mu.Unlock()
 
-	if len(frameRuntime.callbacks) == 0 {
+	if len(frameRuntime.pendingFrameCallbacks) == 0 {
 		return nil
 	}
 
-	due := make([]frameCallback, 0, len(frameRuntime.callbacks))
-	future := frameRuntime.callbacks[:0]
-	for _, cb := range frameRuntime.callbacks {
+	due := make([]frameCallback, 0, len(frameRuntime.pendingFrameCallbacks))
+	future := frameRuntime.pendingFrameCallbacks[:0]
+	for _, cb := range frameRuntime.pendingFrameCallbacks {
 		if cb.frame <= frame {
 			due = append(due, cb)
 			continue
@@ -96,8 +110,8 @@ func takeFrameCallbacks(frame int64) []frameCallback {
 		future = append(future, cb)
 	}
 
-	clear(frameRuntime.callbacks[len(future):])
-	frameRuntime.callbacks = future
+	clear(frameRuntime.pendingFrameCallbacks[len(future):])
+	frameRuntime.pendingFrameCallbacks = future
 
 	sort.SliceStable(due, func(i, j int) bool {
 		if due[i].frame == due[j].frame {
@@ -108,65 +122,77 @@ func takeFrameCallbacks(frame int64) []frameCallback {
 	return due
 }
 
-// SetCaptureHandler installs the screenshot backend used by RequestCapture.
-func SetCaptureHandler(handler func(string, bool) error) {
+// SetCaptureHandler installs the screenshot backend used by EnqueueCapture.
+func SetCaptureHandler(handler CaptureHandler) {
 	frameRuntime.mu.Lock()
 	frameRuntime.captureHandler = handler
 	frameRuntime.mu.Unlock()
 }
 
-// RequestCapture queues a screenshot request for the end of the current frame.
-func RequestCapture(name string, check bool) error {
-	if GetGame() == nil {
-		return runCaptureHandler(name, check)
-	}
-
+// EnqueueCapture queues a screenshot request for the end of the current frame.
+func EnqueueCapture(name string, intent CaptureIntent) error {
 	frameRuntime.mu.Lock()
-	frameRuntime.captureRequests = append(frameRuntime.captureRequests, captureRequest{name: name, check: check})
+	req := CaptureRequest{
+		Name:     name,
+		Intent:   intent,
+		Frame:    CurrentFrame(),
+		Sequence: frameRuntime.captureSeq + 1,
+	}
+	frameRuntime.captureSeq++
+	if GetGame() == nil {
+		handler := frameRuntime.captureHandler
+		frameRuntime.mu.Unlock()
+		if handler == nil {
+			return fmt.Errorf("spx: capture backend is not configured")
+		}
+		return handler(req)
+	}
+	frameRuntime.pendingCaptures = append(frameRuntime.pendingCaptures, req)
 	frameRuntime.mu.Unlock()
 	return nil
 }
 
-// RunCaptureRequests flushes screenshot requests queued during the frame.
-func RunCaptureRequests() error {
-	requests := takeCaptureRequests()
-	for _, req := range requests {
-		if err := runCaptureHandler(req.name, req.check); err != nil {
+// FlushCaptures flushes screenshot requests queued during the frame.
+func FlushCaptures() error {
+	captures := drainPendingCaptures()
+	for _, capture := range captures {
+		if err := dispatchCapture(capture); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func takeCaptureRequests() []captureRequest {
+func drainPendingCaptures() []CaptureRequest {
 	frameRuntime.mu.Lock()
 	defer frameRuntime.mu.Unlock()
-	if len(frameRuntime.captureRequests) == 0 {
+	if len(frameRuntime.pendingCaptures) == 0 {
 		return nil
 	}
-	requests := append([]captureRequest(nil), frameRuntime.captureRequests...)
-	clear(frameRuntime.captureRequests)
-	frameRuntime.captureRequests = frameRuntime.captureRequests[:0]
-	return requests
+	captures := append([]CaptureRequest(nil), frameRuntime.pendingCaptures...)
+	clear(frameRuntime.pendingCaptures)
+	frameRuntime.pendingCaptures = frameRuntime.pendingCaptures[:0]
+	return captures
 }
 
-func runCaptureHandler(name string, check bool) error {
+func dispatchCapture(req CaptureRequest) error {
 	frameRuntime.mu.Lock()
 	handler := frameRuntime.captureHandler
 	frameRuntime.mu.Unlock()
 	if handler == nil {
 		return fmt.Errorf("spx: capture backend is not configured")
 	}
-	return handler(name, check)
+	return handler(req)
 }
 
 // ResetFrameRuntime clears frame-scoped callbacks and capture requests.
 func ResetFrameRuntime() {
 	frameRuntime.mu.Lock()
-	clear(frameRuntime.callbacks)
-	frameRuntime.callbacks = nil
-	frameRuntime.seq = 0
-	clear(frameRuntime.captureRequests)
-	frameRuntime.captureRequests = nil
+	clear(frameRuntime.pendingFrameCallbacks)
+	frameRuntime.pendingFrameCallbacks = nil
+	frameRuntime.callbackSeq = 0
+	clear(frameRuntime.pendingCaptures)
+	frameRuntime.pendingCaptures = nil
+	frameRuntime.captureSeq = 0
 	frameRuntime.mu.Unlock()
 }
