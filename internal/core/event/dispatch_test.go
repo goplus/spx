@@ -51,10 +51,11 @@ func TestDispatchAsync(t *testing.T) {
 		true,
 		"ok",
 		DispatchHooks{
-			Spawn: func(start bool, owner any, call func()) {
+			Spawn: func(start bool, owner any, call func()) DispatchTask {
 				starts = append(starts, start)
 				owners = append(owners, owner.(string))
 				call()
+				return nil
 			},
 		},
 		func(sink *Sink) {
@@ -89,11 +90,12 @@ func TestDispatchSync(t *testing.T) {
 		},
 		"ok",
 		DispatchHooks{
-			Spawn: func(start bool, owner any, call func()) {
+			Spawn: func(start bool, owner any, call func()) DispatchTask {
 				if start {
 					t.Fatal("DispatchSync should not start threads in start mode")
 				}
 				call()
+				return nil
 			},
 			Wait: func(wait func()) {
 				waited = true
@@ -107,6 +109,57 @@ func TestDispatchSync(t *testing.T) {
 
 	if !waited {
 		t.Fatal("expected wait hook to be called")
+	}
+	if want := []string{"A", "B"}; !reflect.DeepEqual(calls, want) {
+		t.Fatalf("calls = %+v, want %+v", calls, want)
+	}
+}
+
+func TestDispatchSyncPrefersJoinHook(t *testing.T) {
+	waited := false
+	var (
+		spawned []DispatchTask
+		joined  []DispatchTask
+		calls   []string
+	)
+
+	DispatchSync(
+		[]Sink{
+			{Owner: "a", Handler: "A"},
+			{Owner: "b", Handler: "B"},
+		},
+		nil,
+		DispatchHooks{
+			Spawn: func(start bool, owner any, call func()) DispatchTask {
+				if start {
+					t.Fatal("DispatchSync should not start threads in start mode")
+				}
+				task := owner.(string)
+				spawned = append(spawned, task)
+				call()
+				return task
+			},
+			Join: func(tasks []DispatchTask) {
+				joined = append(joined, tasks...)
+			},
+			Wait: func(wait func()) {
+				waited = true
+				wait()
+			},
+		},
+		func(sink *Sink) {
+			calls = append(calls, sink.Handler.(string))
+		},
+	)
+
+	if waited {
+		t.Fatal("wait hook should not be called when join hook is provided")
+	}
+	if want := []DispatchTask{"a", "b"}; !reflect.DeepEqual(spawned, want) {
+		t.Fatalf("spawned = %+v, want %+v", spawned, want)
+	}
+	if want := []DispatchTask{"a", "b"}; !reflect.DeepEqual(joined, want) {
+		t.Fatalf("joined = %+v, want %+v", joined, want)
 	}
 	if want := []string{"A", "B"}; !reflect.DeepEqual(calls, want) {
 		t.Fatalf("calls = %+v, want %+v", calls, want)
@@ -147,10 +200,11 @@ func TestManagerDispatchBucketAsync(t *testing.T) {
 	})
 
 	mgr.DispatchBucketAsync(BucketClick, true, "ok", DispatchHooks{
-		Spawn: func(start bool, owner any, call func()) {
+		Spawn: func(start bool, owner any, call func()) DispatchTask {
 			starts = append(starts, start)
 			owners = append(owners, owner.(string))
 			call()
+			return nil
 		},
 	}, func(sink *Sink) {
 		calls = append(calls, sink.Handler.(string))
@@ -175,11 +229,12 @@ func TestManagerDispatchBucketSync(t *testing.T) {
 	mgr.Add(BucketTimer, Sink{Owner: "timer", Handler: "A"})
 
 	mgr.DispatchBucketSync(BucketTimer, 1.0, DispatchHooks{
-		Spawn: func(start bool, owner any, call func()) {
+		Spawn: func(start bool, owner any, call func()) DispatchTask {
 			if start {
 				t.Fatal("DispatchBucketSync should not mark start=true")
 			}
 			call()
+			return nil
 		},
 		Wait: func(wait func()) {
 			waited = true
@@ -206,11 +261,12 @@ func TestManagerDispatchStartOnce(t *testing.T) {
 	}
 
 	hooks := DispatchHooks{
-		Spawn: func(start bool, owner any, call func()) {
+		Spawn: func(start bool, owner any, call func()) DispatchTask {
 			if start {
 				t.Fatal("DispatchStartOnce should always dispatch with start=false")
 			}
 			call()
+			return nil
 		},
 	}
 
@@ -241,11 +297,12 @@ func TestManagerDispatchBucket(t *testing.T) {
 		})
 
 		mgr.DispatchBucket(BucketIReceive, false, "ok", DispatchHooks{
-			Spawn: func(start bool, owner any, call func()) {
+			Spawn: func(start bool, owner any, call func()) DispatchTask {
 				if start {
 					t.Fatal("DispatchBucket async path should not force start=true")
 				}
 				call()
+				return nil
 			},
 			Wait: func(wait func()) {
 				waited = true
@@ -271,11 +328,12 @@ func TestManagerDispatchBucket(t *testing.T) {
 		mgr.Add(BucketBackdropChanged, Sink{Owner: "backdrop", Handler: "B"})
 
 		mgr.DispatchBucket(BucketBackdropChanged, true, "stage", DispatchHooks{
-			Spawn: func(start bool, owner any, call func()) {
+			Spawn: func(start bool, owner any, call func()) DispatchTask {
 				if start {
 					t.Fatal("DispatchBucket sync path should not force start=true")
 				}
 				call()
+				return nil
 			},
 			Wait: func(wait func()) {
 				waited = true

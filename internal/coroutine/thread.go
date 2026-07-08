@@ -52,6 +52,11 @@ type threadImpl struct {
 
 	ctx        context.Context
 	cancelFunc context.CancelFunc
+	done       chan struct{}
+
+	joinMu     sync.Mutex
+	joinDone   bool
+	joinWaiter map[Thread]struct{}
 }
 
 // Thread represents a coroutine id.
@@ -197,6 +202,47 @@ func (p *Coroutines) AbortAllAndWait(timeout stime.Duration) bool {
 	return p.waitForThreadsToStop(timeout, nil)
 }
 
+func (p *Coroutines) Join(target Thread) {
+	if target == nil {
+		return
+	}
+
+	me := p.currentCoroutineThread()
+	if me == nil {
+		<-target.done
+		return
+	}
+	if me == target {
+		return
+	}
+	if !target.addJoinWaiter(me) {
+		return
+	}
+	p.blockAndYield(me)
+}
+
+func (p *Coroutines) JoinAll(targets []Thread) {
+	if len(targets) == 0 {
+		return
+	}
+	if len(targets) == 1 {
+		p.Join(targets[0])
+		return
+	}
+
+	seen := make(map[Thread]struct{}, len(targets))
+	for _, target := range targets {
+		if target == nil {
+			continue
+		}
+		if _, exists := seen[target]; exists {
+			continue
+		}
+		seen[target] = struct{}{}
+		p.Join(target)
+	}
+}
+
 func (p *Coroutines) StopIf(filter func(th Thread) bool) {
 	p.mutex.Lock()
 	allThreads := make([]Thread, 0, len(p.allThreads))
@@ -264,6 +310,7 @@ func (p *Coroutines) newThread(obj ThreadObj) Thread {
 		id:         atomic.AddInt64(&p.nextThreadID, 1),
 		schedFrame: -1,
 		name:       resolveThreadName(obj),
+		done:       make(chan struct{}),
 	}
 	th.ctx, th.cancelFunc = context.WithCancel(context.Background())
 
@@ -273,6 +320,37 @@ func (p *Coroutines) newThread(obj ThreadObj) Thread {
 
 	th.cond = sync.NewCond(&th.mutex)
 	return th
+}
+
+func (p *threadImpl) addJoinWaiter(waiter Thread) bool {
+	if waiter == nil {
+		return false
+	}
+
+	p.joinMu.Lock()
+	defer p.joinMu.Unlock()
+	if p.joinDone {
+		return false
+	}
+	if p.joinWaiter == nil {
+		p.joinWaiter = make(map[Thread]struct{})
+	}
+	p.joinWaiter[waiter] = struct{}{}
+	return true
+}
+
+func (p *threadImpl) finishJoinWaiters() []Thread {
+	p.joinMu.Lock()
+	waiters := make([]Thread, 0, len(p.joinWaiter))
+	for waiter := range p.joinWaiter {
+		waiters = append(waiters, waiter)
+	}
+	p.joinWaiter = nil
+	p.joinDone = true
+	p.joinMu.Unlock()
+
+	close(p.done)
+	return waiters
 }
 
 func (p *Coroutines) registerThread(th Thread) {
@@ -367,6 +445,9 @@ func (p *Coroutines) runThread(th Thread, fn func(me Thread) int) {
 		p.unregisterThread(th)
 		p.setWaitState(th, waitStatusDelete)
 		th.Cancel()
+		for _, waiter := range th.finishJoinWaiters() {
+			p.markIdleAndResume(waiter)
+		}
 		p.sema.Unlock()
 		p.goroutineIDs.Delete(gid)
 		p.handleThreadPanic(th, recovered)

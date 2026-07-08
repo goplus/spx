@@ -8,6 +8,8 @@ var (
 	hasChangedBackdrop bool
 	hasReceivedMsgA    bool
 	hasReceivedMsgB    bool
+	hasSyncMsgSprite   bool
+	hasSyncMsgStage    bool
 
 	cloneNum int
 )
@@ -62,9 +64,15 @@ func waitAndTest(msg string) {
 	broadcast msg
 }
 
+onMsg "syncMsg", => {
+	wait 0.1s
+	hasSyncMsgStage = true
+}
+
 onStart => {
 	hasTestDone = true
 	waitAndTest "testControl"
+	waitAndTest "testSyncEvent"
 	waitAndTest "testEvent"
 	waitAndTest "testLook"
 	waitAndTest "testMotion"
