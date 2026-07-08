@@ -84,7 +84,9 @@ func DispatchSync(sinks []Sink, data any, hooks DispatchHooks, do func(*Sink)) {
 				tasks = append(tasks, task)
 			}
 		}
-		hooks.Join(tasks)
+		if len(tasks) > 0 {
+			hooks.Join(tasks)
+		}
 		return
 	}
 

@@ -39,6 +39,15 @@ var scriptEventDispatchHooks = coreevent.DispatchHooks{
 		})
 	},
 	Join: func(tasks []coreevent.DispatchTask) {
+		if len(tasks) == 0 {
+			return
+		}
+		if len(tasks) == 1 {
+			if th, ok := tasks[0].(coroutine.Thread); ok && th != nil {
+				gco.Join(th)
+			}
+			return
+		}
 		threads := make([]coroutine.Thread, 0, len(tasks))
 		for _, task := range tasks {
 			th, ok := task.(coroutine.Thread)

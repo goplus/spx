@@ -225,6 +225,10 @@ func (p *Coroutines) JoinAll(targets []Thread) {
 	if len(targets) == 0 {
 		return
 	}
+	if len(targets) == 1 {
+		p.Join(targets[0])
+		return
+	}
 
 	seen := make(map[Thread]struct{}, len(targets))
 	for _, target := range targets {
