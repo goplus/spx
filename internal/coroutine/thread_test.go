@@ -235,3 +235,109 @@ func TestAbortAllAndWaitFromCoroutineDoesNotStartStoppedPeer(t *testing.T) {
 	default:
 	}
 }
+
+func TestJoinResumesCallerAfterPeerCompletes(t *testing.T) {
+	co := New(nil)
+	releasePeer := make(chan struct{})
+	peerReady := make(chan Thread, 1)
+	callerDone := make(chan struct{})
+
+	peer := co.CreateAndStart(true, "peer", func(peer Thread) int {
+		peerReady <- peer
+		var signal struct{}
+		WaitForChan(co, releasePeer, &signal)
+		return 0
+	})
+
+	timer := time.NewTimer(time.Second)
+	defer timer.Stop()
+	select {
+	case <-peerReady:
+	case <-timer.C:
+		t.Fatal("peer coroutine did not start")
+	}
+
+	co.CreateAndStart(true, "caller", func(me Thread) int {
+		co.Join(peer)
+		close(callerDone)
+		return 0
+	})
+
+	select {
+	case <-callerDone:
+		t.Fatal("caller returned before peer completed")
+	default:
+	}
+
+	close(releasePeer)
+
+	timer = time.NewTimer(time.Second)
+	defer timer.Stop()
+	select {
+	case <-callerDone:
+	case <-timer.C:
+		t.Fatal("caller did not resume after peer completed")
+	}
+}
+
+func TestJoinAllWaitsForEveryPeer(t *testing.T) {
+	co := New(nil)
+	releaseA := make(chan struct{})
+	releaseB := make(chan struct{})
+	peerAReady := make(chan Thread, 1)
+	peerBReady := make(chan Thread, 1)
+	callerDone := make(chan struct{})
+
+	peerA := co.CreateAndStart(true, "peer-a", func(peer Thread) int {
+		peerAReady <- peer
+		var signal struct{}
+		WaitForChan(co, releaseA, &signal)
+		return 0
+	})
+	peerB := co.CreateAndStart(true, "peer-b", func(peer Thread) int {
+		peerBReady <- peer
+		var signal struct{}
+		WaitForChan(co, releaseB, &signal)
+		return 0
+	})
+
+	timer := time.NewTimer(time.Second)
+	defer timer.Stop()
+	select {
+	case <-peerAReady:
+	case <-timer.C:
+		t.Fatal("peer A coroutine did not start")
+	}
+
+	timer = time.NewTimer(time.Second)
+	defer timer.Stop()
+	select {
+	case <-peerBReady:
+	case <-timer.C:
+		t.Fatal("peer B coroutine did not start")
+	}
+
+	co.CreateAndStart(true, "caller", func(me Thread) int {
+		co.JoinAll([]Thread{peerA, peerB, peerA})
+		close(callerDone)
+		return 0
+	})
+
+	close(releaseA)
+
+	select {
+	case <-callerDone:
+		t.Fatal("caller returned before every peer completed")
+	default:
+	}
+
+	close(releaseB)
+
+	timer = time.NewTimer(time.Second)
+	defer timer.Stop()
+	select {
+	case <-callerDone:
+	case <-timer.C:
+		t.Fatal("caller did not resume after every peer completed")
+	}
+}

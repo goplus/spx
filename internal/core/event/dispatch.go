@@ -18,8 +18,11 @@ package event
 
 import "sync"
 
+type DispatchTask any
+
 type DispatchHooks struct {
-	Spawn func(start bool, owner any, call func())
+	Spawn func(start bool, owner any, call func()) DispatchTask
+	Join  func([]DispatchTask)
 	Wait  func(func())
 }
 
@@ -63,7 +66,6 @@ func (m *Manager) DispatchStartOnce(data any, hooks DispatchHooks, do func(*Sink
 
 func DispatchAsync(sinks []Sink, start bool, data any, hooks DispatchHooks, do func(*Sink)) {
 	for _, sink := range sinks {
-		sink := sink
 		if sink.Cond != nil && !sink.Cond(data) {
 			continue
 		}
@@ -72,9 +74,22 @@ func DispatchAsync(sinks []Sink, start bool, data any, hooks DispatchHooks, do f
 }
 
 func DispatchSync(sinks []Sink, data any, hooks DispatchHooks, do func(*Sink)) {
+	if hooks.Spawn != nil && hooks.Join != nil {
+		tasks := make([]DispatchTask, 0, len(sinks))
+		for _, sink := range sinks {
+			if sink.Cond != nil && !sink.Cond(data) {
+				continue
+			}
+			if task := dispatchSink(hooks, false, sink, do); task != nil {
+				tasks = append(tasks, task)
+			}
+		}
+		hooks.Join(tasks)
+		return
+	}
+
 	var wg sync.WaitGroup
 	for _, sink := range sinks {
-		sink := sink
 		if sink.Cond != nil && !sink.Cond(data) {
 			continue
 		}
@@ -99,12 +114,12 @@ func Dispatch(sinks []Sink, wait bool, data any, hooks DispatchHooks, do func(*S
 	DispatchAsync(sinks, false, data, hooks, do)
 }
 
-func dispatchSink(hooks DispatchHooks, start bool, sink Sink, do func(*Sink)) {
+func dispatchSink(hooks DispatchHooks, start bool, sink Sink, do func(*Sink)) DispatchTask {
 	if hooks.Spawn != nil {
-		hooks.Spawn(start, sink.Owner, func() {
+		return hooks.Spawn(start, sink.Owner, func() {
 			do(&sink)
 		})
-		return
 	}
 	do(&sink)
+	return nil
 }

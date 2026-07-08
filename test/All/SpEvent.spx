@@ -22,12 +22,29 @@ onMsg "msgB", => {
 	hasReceivedMsgB = true
 }
 
+onMsg "syncMsg", => {
+	wait 0.05s
+	hasSyncMsgSprite = true
+}
+
 onStart => {
 	hasStarted = true
 }
 
 // Not support
 // onLoudness =>{}
+
+onMsg "testSyncEvent", => {
+	onTestStart(this)
+
+	hasSyncMsgSprite = false
+	hasSyncMsgStage = false
+	broadcastAndWait "syncMsg"
+	assert(hasSyncMsgSprite, "Sprite::broadcastAndWait should wait for sprite handlers")
+	assert(hasSyncMsgStage, "Sprite::broadcastAndWait should wait for stage handlers")
+
+	hasTestDone = true
+}
 
 onMsg "testEvent", => {
 	onTestStart(this)

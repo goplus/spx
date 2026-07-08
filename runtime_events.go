@@ -32,13 +32,23 @@ const (
 )
 
 var scriptEventDispatchHooks = coreevent.DispatchHooks{
-	Spawn: func(start bool, owner any, call func()) {
-		gco.CreateAndStart(start, owner, func(coroutine.Thread) int {
+	Spawn: func(start bool, owner any, call func()) coreevent.DispatchTask {
+		return gco.CreateAndStart(start, owner, func(coroutine.Thread) int {
 			call()
 			return 0
 		})
 	},
-	Wait: engine.WaitToDo,
+	Join: func(tasks []coreevent.DispatchTask) {
+		threads := make([]coroutine.Thread, 0, len(tasks))
+		for _, task := range tasks {
+			th, ok := task.(coroutine.Thread)
+			if !ok || th == nil {
+				continue
+			}
+			threads = append(threads, th)
+		}
+		gco.JoinAll(threads)
+	},
 }
 
 // -----------------------------------------------------------------------------
