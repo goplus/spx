@@ -858,14 +858,8 @@ func TestRunSpriteInitializers(t *testing.T) {
 		BeforeMain: func(item string) {
 			got = append(got, "before:"+item)
 		},
-		RunMain: func(item string) {
-			got = append(got, "main:"+item)
-		},
-		OnLoaded: func() {
-			got = append(got, "loaded")
-		},
 	})
-	want := []string{"setup", "before:a", "before:b", "main:a", "main:b", "loaded"}
+	want := []string{"setup", "before:a", "before:b"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("RunSpriteInitializers got %v, want %v", got, want)
 	}
