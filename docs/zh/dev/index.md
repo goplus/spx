@@ -36,6 +36,7 @@
 - Makefile 命令指南
 - 引擎架构
 - 构建系统
+- [Web 端截图与固定帧接入说明](./engine/web_capture.md) - 了解外部页面如何像模板 `index.html` 一样接入截图 host、baseline/runs 保存与对比流程
 
 文档路径：`/docs/develop/engine/`
 
