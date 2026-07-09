@@ -306,11 +306,13 @@
 
 		const iframe = document.getElementById('runnerFrame');
 		let enlarged = false;
-		let captureRootHandle = null
-		let activeCaptureProject = null
-		let activeCaptureSession = null
-		let captureCompareRefreshTimer = 0
-		let capturePreviewUrls = []
+		const captureState = {
+			rootHandle: null,
+			project: null,
+			session: null,
+			refreshTimer: 0,
+			previewUrls: [],
+		}
 
 		runnerWindow = iframe.contentWindow;
 
@@ -321,8 +323,8 @@
 		}
 
 		function revokeCapturePreviewUrls() {
-			capturePreviewUrls.forEach((url) => URL.revokeObjectURL(url))
-			capturePreviewUrls = []
+			captureState.previewUrls.forEach((url) => URL.revokeObjectURL(url))
+			captureState.previewUrls = []
 		}
 
 		function setCaptureCompareEmpty(message, summary = message) {
@@ -332,11 +334,11 @@
 		}
 
 		function scheduleCaptureCompareRefresh() {
-			if (captureCompareRefreshTimer) {
-				clearTimeout(captureCompareRefreshTimer)
+			if (captureState.refreshTimer) {
+				clearTimeout(captureState.refreshTimer)
 			}
-			captureCompareRefreshTimer = window.setTimeout(() => {
-				captureCompareRefreshTimer = 0
+			captureState.refreshTimer = window.setTimeout(() => {
+				captureState.refreshTimer = 0
 				refreshCaptureCompare().catch((error) => {
 					console.error('Failed to refresh capture compare', error)
 					setCaptureCompareEmpty('Failed to read capture files. Check browser console for details.')
@@ -353,8 +355,8 @@
 				mode: 'readwrite',
 				id: 'spx-capture-root',
 			}
-			if (captureRootHandle) {
-				options.startIn = captureRootHandle
+			if (captureState.rootHandle) {
+				options.startIn = captureState.rootHandle
 				return options
 			}
 			options.startIn = 'downloads'
@@ -419,8 +421,8 @@
 		}
 
 		function resetActiveCaptureSession(project) {
-			activeCaptureProject = project
-			activeCaptureSession = {
+			captureState.project = project
+			captureState.session = {
 				projectKey: project.projectKey,
 				deterministic: project.deterministic,
 				runTimestamp: formatCaptureTimestamp(),
@@ -453,17 +455,17 @@
 		}
 
 		async function ensureCaptureTarget() {
-			if (!captureRootHandle || !activeCaptureSession) {
+			if (!captureState.rootHandle || !captureState.session) {
 				return null
 			}
-			if (!activeCaptureSession.targetPromise) {
-				activeCaptureSession.targetPromise = (async () => {
-					const snapshotsDir = await captureRootHandle.getDirectoryHandle('spx-snapshots', { create: true })
-					const projectDir = await snapshotsDir.getDirectoryHandle(activeCaptureSession.projectKey, { create: true })
-					if (!activeCaptureSession.deterministic) {
+			if (!captureState.session.targetPromise) {
+				captureState.session.targetPromise = (async () => {
+					const snapshotsDir = await captureState.rootHandle.getDirectoryHandle('spx-snapshots', { create: true })
+					const projectDir = await snapshotsDir.getDirectoryHandle(captureState.session.projectKey, { create: true })
+					if (!captureState.session.deterministic) {
 						const runsDir = await projectDir.getDirectoryHandle('runs', { create: true })
-						const runDir = await runsDir.getDirectoryHandle(activeCaptureSession.runTimestamp, { create: true })
-						return { directory: runDir, destination: `runs/${activeCaptureSession.runTimestamp}` }
+						const runDir = await runsDir.getDirectoryHandle(captureState.session.runTimestamp, { create: true })
+						return { directory: runDir, destination: `runs/${captureState.session.runTimestamp}` }
 					}
 
 					const hasBaseline = await fileExists(projectDir, '.baseline.ready')
@@ -473,11 +475,11 @@
 					}
 
 					const runsDir = await projectDir.getDirectoryHandle('runs', { create: true })
-					const runDir = await runsDir.getDirectoryHandle(activeCaptureSession.runTimestamp, { create: true })
-					return { directory: runDir, destination: `runs/${activeCaptureSession.runTimestamp}` }
+					const runDir = await runsDir.getDirectoryHandle(captureState.session.runTimestamp, { create: true })
+					return { directory: runDir, destination: `runs/${captureState.session.runTimestamp}` }
 				})()
 			}
-			return activeCaptureSession.targetPromise
+			return captureState.session.targetPromise
 		}
 
 		async function markBaselineReady(projectDir) {
@@ -485,7 +487,7 @@
 			const writer = await marker.createWritable()
 			await writer.write(JSON.stringify({
 				createdAt: new Date().toISOString(),
-				projectKey: activeCaptureSession ? activeCaptureSession.projectKey : '',
+				projectKey: captureState.session ? captureState.session.projectKey : '',
 			}, null, 2))
 			await writer.close()
 		}
@@ -517,7 +519,7 @@
 			for (const entry of entries) {
 				const file = await entry.getFile()
 				const url = URL.createObjectURL(file)
-				capturePreviewUrls.push(url)
+				captureState.previewUrls.push(url)
 				files.set(entry.name, {
 					name: entry.name,
 					file,
@@ -825,24 +827,24 @@
 		}
 
 		async function refreshCaptureCompare() {
-			if (!captureRootHandle) {
+			if (!captureState.rootHandle) {
 				setCaptureCompareEmpty('Select CaptureDir to browse baseline and run images.')
 				return
 			}
-			if (!activeCaptureProject) {
+			if (!captureState.project) {
 				setCaptureCompareEmpty('Start a project to load capture metadata.')
 				return
 			}
 
-			const snapshotsDir = await getOptionalDirectoryHandle(captureRootHandle, 'spx-snapshots')
+			const snapshotsDir = await getOptionalDirectoryHandle(captureState.rootHandle, 'spx-snapshots')
 			if (!snapshotsDir) {
-				setCaptureCompareEmpty('No spx-snapshots folder found in the selected directory.', `${activeCaptureProject.projectKey} · no snapshots yet`)
+				setCaptureCompareEmpty('No spx-snapshots folder found in the selected directory.', `${captureState.project.projectKey} · no snapshots yet`)
 				return
 			}
 
-			const projectDir = await getOptionalDirectoryHandle(snapshotsDir, activeCaptureProject.projectKey)
+			const projectDir = await getOptionalDirectoryHandle(snapshotsDir, captureState.project.projectKey)
 			if (!projectDir) {
-				setCaptureCompareEmpty(`No snapshots yet for ${activeCaptureProject.projectKey}.`, `${activeCaptureProject.projectKey} · waiting for first capture`)
+				setCaptureCompareEmpty(`No snapshots yet for ${captureState.project.projectKey}.`, `${captureState.project.projectKey} · waiting for first capture`)
 				return
 			}
 
@@ -851,10 +853,10 @@
 			let runDir = null
 
 			const runsDir = await getOptionalDirectoryHandle(projectDir, 'runs')
-			if (runsDir && activeCaptureSession) {
-				runDir = await getOptionalDirectoryHandle(runsDir, activeCaptureSession.runTimestamp)
+			if (runsDir && captureState.session) {
+				runDir = await getOptionalDirectoryHandle(runsDir, captureState.session.runTimestamp)
 				if (runDir) {
-					runLabel = `run ${activeCaptureSession.runTimestamp}`
+					runLabel = `run ${captureState.session.runTimestamp}`
 				}
 			}
 			if (!runDir) {
@@ -873,7 +875,7 @@
 				...runFiles.keys(),
 			])).sort((left, right) => left.localeCompare(right))
 			const comparisons = await buildCaptureComparisons(names, baselineFiles, runFiles)
-			renderCaptureCompare(activeCaptureProject.projectKey, runLabel, comparisons)
+			renderCaptureCompare(captureState.project.projectKey, runLabel, comparisons)
 		}
 
 		function createFileSystemCaptureHost() {
@@ -893,7 +895,7 @@
 						target.writeBaselineMarker = false
 					}
 					console.log('[spx capture saved]', {
-						projectKey: activeCaptureSession ? activeCaptureSession.projectKey : '',
+						projectKey: captureState.session ? captureState.session.projectKey : '',
 						destination: target.destination,
 						filename,
 						request,
@@ -907,7 +909,7 @@
 			if (typeof runnerWindow.spxSetCaptureHost !== 'function') {
 				return false
 			}
-			if (!captureRootHandle) {
+			if (!captureState.rootHandle) {
 				runnerWindow.spxSetCaptureHost(null)
 				return true
 			}
@@ -921,8 +923,8 @@
 				return
 			}
 			try {
-				captureRootHandle = await window.showDirectoryPicker(buildCaptureDirectoryPickerOptions())
-				const handleName = captureRootHandle && captureRootHandle.name ? captureRootHandle.name : 'selected'
+				captureState.rootHandle = await window.showDirectoryPicker(buildCaptureDirectoryPickerOptions())
+				const handleName = captureState.rootHandle && captureState.rootHandle.name ? captureState.rootHandle.name : 'selected'
 				updateCaptureStatus(`CaptureDir: ${handleName}`)
 				installCaptureHostIfReady()
 				scheduleCaptureCompareRefresh()
@@ -1051,8 +1053,8 @@
 			let unzipped = fflate.unzipSync(new Uint8Array(zipped))
 			resetActiveCaptureSession(parseCaptureProject(unzipped))
 			configureAIInteraction(unzipped)
-			if (captureRootHandle) {
-				updateCaptureStatus(`CaptureDir: ${captureRootHandle.name} -> ${activeCaptureSession.projectKey}`)
+			if (captureState.rootHandle) {
+				updateCaptureStatus(`CaptureDir: ${captureState.rootHandle.name} -> ${captureState.session.projectKey}`)
 			}
 			let files = {}
 			Object.entries(unzipped).forEach(([path, data]) => {

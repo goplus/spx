@@ -66,22 +66,18 @@ func SetCaptureHandler(handler CaptureRequestHandler) {
 }
 
 func requestCaptureAfter(name string, intent CaptureIntent, fn func() error) {
-	if err := runCaptureAction(fn); err != nil {
+	if err := runCaptureBody(fn); err != nil {
 		engine.Panic(err)
 		return
 	}
-	if err := enqueueCapture(name, intent); err != nil {
+	if err := engine.EnqueueCapture(name, intent); err != nil {
 		engine.Panic(err)
 	}
 }
 
-func runCaptureAction(fn func() error) error {
+func runCaptureBody(fn func() error) error {
 	if fn == nil {
 		return nil
 	}
 	return fn()
-}
-
-func enqueueCapture(name string, intent CaptureIntent) error {
-	return engine.EnqueueCapture(name, engine.CaptureIntent(intent))
 }

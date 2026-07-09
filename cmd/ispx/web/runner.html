@@ -234,14 +234,6 @@
 			return gameApp.getRecordedVideo()
 		}
 
-		let spxCaptureHost = null
-
-		window.spxSetCaptureHost = (host) => {
-			spxCaptureHost = host || null
-		}
-
-		window.spxGetCaptureHost = () => spxCaptureHost
-
 		// Captures the current game screen and returns its binary data as a Blob.
 		window.getScreenshot = async () => {
 			let gameCanvas = document.getElementById('game-canvas')
@@ -260,139 +252,141 @@
 			})
 		}
 
-		function normalizeCaptureFilename(name, check) {
-			let fileName = typeof name === 'string' ? name.trim() : ''
-			if (!fileName) {
-				fileName = check ? 'capture-check.png' : 'capture.png'
-			}
-			fileName = fileName.replace(/[\\/:*?"<>|\u0000-\u001F]+/g, '_')
-			if (!/\.png$/i.test(fileName)) {
-				fileName += '.png'
-			}
-			return fileName
-		}
-
-		function normalizeCaptureRequest(request) {
-			if (!request || typeof request !== 'object' || Array.isArray(request)) {
-				throw new Error('spx: capture request must be an object')
-			}
-			const check = request.check === true || request.intent === 'check'
-			const intent = check ? 'check' : 'snapshot'
-			return {
-				name: typeof request.name === 'string' ? request.name : '',
-				filename: normalizeCaptureFilename(request.name, check),
-				intent,
-				check,
-				frame: Number.isFinite(request.frame) ? request.frame : null,
-				sequence: Number.isFinite(request.sequence) ? request.sequence : null,
-			}
-		}
-
-		function notifyCaptureEvent(detail) {
-			const event = new CustomEvent('spxCaptureScreenshot', { detail })
-			window.dispatchEvent(event)
-			if (window.parent && window.parent !== window) {
-				try {
-					window.parent.dispatchEvent(new CustomEvent('spxCaptureScreenshot', { detail }))
-				} catch (error) {
-					console.warn('Failed to notify parent capture event', error)
+		const spxCaptureBridge = {
+			host: null,
+			setHost(host) {
+				this.host = host || null
+			},
+			getHost() {
+				return this.host
+			},
+			normalizeFilename(name, check) {
+				let fileName = typeof name === 'string' ? name.trim() : ''
+				if (!fileName) {
+					fileName = check ? 'capture-check.png' : 'capture.png'
 				}
-			}
-		}
-
-		function downloadBlob(blob, filename) {
-			const url = URL.createObjectURL(blob)
-			const anchor = document.createElement('a')
-			anchor.href = url
-			anchor.download = filename
-			document.body.appendChild(anchor)
-			anchor.click()
-			document.body.removeChild(anchor)
-			setTimeout(() => URL.revokeObjectURL(url), 0)
-		}
-
-		function dispatchCaptureToHost(request, blob) {
-			if (!spxCaptureHost) {
-				return { handled: false, completion: null }
-			}
-			let result = null
-			if (typeof spxCaptureHost === 'function') {
-				result = spxCaptureHost(request, blob)
-			} else if (typeof spxCaptureHost.handleCapture === 'function') {
-				result = spxCaptureHost.handleCapture(request, blob)
-			} else {
-				throw new Error('spx: capture host must be a function or expose handleCapture(request, blob)')
-			}
-			if (result && typeof result.then === 'function') {
-				return { handled: true, completion: result }
-			}
-			return { handled: true, completion: Promise.resolve(result) }
-		}
-
-		function notifyCaptureSuccess(request, blob, destination) {
-			notifyCaptureEvent({
-				ok: true,
-				name: request.name,
-				filename: request.filename,
-				intent: request.intent,
-				check: request.check,
-				frame: request.frame,
-				sequence: request.sequence,
-				destination,
-				size: blob.size,
-				type: blob.type || 'image/png',
-			})
-		}
-
-		function notifyCaptureFailure(request, error) {
-			const message = error instanceof Error ? error.message : `${error}`
-			console.error('spx: capture bridge failed', error)
-			notifyCaptureEvent({
-				ok: false,
-				error: message,
-				name: request ? request.name : '',
-				filename: request ? request.filename : '',
-				intent: request ? request.intent : 'snapshot',
-				check: request ? request.check : false,
-				frame: request ? request.frame : null,
-				sequence: request ? request.sequence : null,
-			})
-		}
-
-		window.__spxHandleCaptureRequest = (request) => {
-			if (typeof window.getScreenshot !== 'function') {
-				return { error: 'spx: getScreenshot is not configured' }
-			}
-
-			const normalizedRequest = normalizeCaptureRequest(request)
-			if (normalizedRequest.check && !spxCaptureHost) {
-				console.warn('CaptureForCheck currently uses download-only fallback on web:', normalizedRequest.filename)
-			}
-
-			window.getScreenshot().then((blob) => {
-				if (!blob) {
-					const error = new Error(`spx: failed to capture screenshot ${normalizedRequest.filename}`)
-					console.error(error)
-					notifyCaptureFailure(normalizedRequest, error)
-					return
+				fileName = fileName.replace(/[\\/:*?"<>|\u0000-\u001F]+/g, '_')
+				if (!/\.png$/i.test(fileName)) {
+					fileName += '.png'
 				}
-				const dispatch = dispatchCaptureToHost(normalizedRequest, blob)
-				if (!dispatch.handled) {
-					downloadBlob(blob, normalizedRequest.filename)
-					notifyCaptureSuccess(normalizedRequest, blob, 'download')
-					return
+				return fileName
+			},
+			normalizeRequest(request) {
+				if (!request || typeof request !== 'object' || Array.isArray(request)) {
+					throw new Error('spx: capture request must be an object')
 				}
-				dispatch.completion.then(() => {
-					notifyCaptureSuccess(normalizedRequest, blob, 'host')
-				}).catch((error) => {
-					notifyCaptureFailure(normalizedRequest, error)
+				const check = request.check === true || request.intent === 'check'
+				return {
+					name: typeof request.name === 'string' ? request.name : '',
+					filename: this.normalizeFilename(request.name, check),
+					intent: check ? 'check' : 'snapshot',
+					check,
+					frame: Number.isFinite(request.frame) ? request.frame : null,
+					sequence: Number.isFinite(request.sequence) ? request.sequence : null,
+				}
+			},
+			notify(detail) {
+				const event = new CustomEvent('spxCaptureScreenshot', { detail })
+				window.dispatchEvent(event)
+				if (window.parent && window.parent !== window) {
+					try {
+						window.parent.dispatchEvent(new CustomEvent('spxCaptureScreenshot', { detail }))
+					} catch (error) {
+						console.warn('Failed to notify parent capture event', error)
+					}
+				}
+			},
+			downloadBlob(blob, filename) {
+				const url = URL.createObjectURL(blob)
+				const anchor = document.createElement('a')
+				anchor.href = url
+				anchor.download = filename
+				document.body.appendChild(anchor)
+				anchor.click()
+				document.body.removeChild(anchor)
+				setTimeout(() => URL.revokeObjectURL(url), 0)
+			},
+			dispatchToHost(request, blob) {
+				if (!this.host) {
+					return { handled: false, completion: null }
+				}
+				let result = null
+				if (typeof this.host === 'function') {
+					result = this.host(request, blob)
+				} else if (typeof this.host.handleCapture === 'function') {
+					result = this.host.handleCapture(request, blob)
+				} else {
+					throw new Error('spx: capture host must be a function or expose handleCapture(request, blob)')
+				}
+				if (result && typeof result.then === 'function') {
+					return { handled: true, completion: result }
+				}
+				return { handled: true, completion: Promise.resolve(result) }
+			},
+			notifySuccess(request, blob, destination) {
+				this.notify({
+					ok: true,
+					name: request.name,
+					filename: request.filename,
+					intent: request.intent,
+					check: request.check,
+					frame: request.frame,
+					sequence: request.sequence,
+					destination,
+					size: blob.size,
+					type: blob.type || 'image/png',
 				})
-			}).catch((error) => {
-				notifyCaptureFailure(normalizedRequest, error)
-			})
+			},
+			notifyFailure(request, error) {
+				const message = error instanceof Error ? error.message : `${error}`
+				console.error('spx: capture bridge failed', error)
+				this.notify({
+					ok: false,
+					error: message,
+					name: request ? request.name : '',
+					filename: request ? request.filename : '',
+					intent: request ? request.intent : 'snapshot',
+					check: request ? request.check : false,
+					frame: request ? request.frame : null,
+					sequence: request ? request.sequence : null,
+				})
+			},
+			async completeCapture(request) {
+				const blob = await window.getScreenshot()
+				if (!blob) {
+					throw new Error(`spx: failed to capture screenshot ${request.filename}`)
+				}
 
-			return { ok: true, pending: true }
+				const dispatch = this.dispatchToHost(request, blob)
+				if (!dispatch.handled) {
+					this.downloadBlob(blob, request.filename)
+					this.notifySuccess(request, blob, 'download')
+					return
+				}
+
+				await dispatch.completion
+				this.notifySuccess(request, blob, 'host')
+			},
+			handleRequest(request) {
+				if (typeof window.getScreenshot !== 'function') {
+					return { error: 'spx: getScreenshot is not configured' }
+				}
+
+				const normalizedRequest = this.normalizeRequest(request)
+				if (normalizedRequest.check && !this.host) {
+					console.warn('CaptureForCheck currently uses download-only fallback on web:', normalizedRequest.filename)
+				}
+
+				this.completeCapture(normalizedRequest).catch((error) => {
+					this.notifyFailure(normalizedRequest, error)
+				})
+				return { ok: true, pending: true }
+			},
 		}
+
+		window.spxSetCaptureHost = (host) => spxCaptureBridge.setHost(host)
+		window.spxGetCaptureHost = () => spxCaptureBridge.getHost()
+		window.__spxHandleCaptureRequest = (request) => spxCaptureBridge.handleRequest(request)
 
 		window.downloadRecordedVideo = (filename) => {
 			if (gameApp == null) {
