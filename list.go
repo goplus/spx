@@ -18,7 +18,6 @@ package spx
 
 import (
 	"fmt"
-	"math/rand"
 	"reflect"
 	"strconv"
 	"strings"
@@ -299,7 +298,7 @@ func getListPos(i Pos, n int) int {
 		if n == 0 {
 			return 0
 		}
-		return int(rand.Int31n(int32(n)))
+		return int(randomInt31n(int32(n)))
 	}
 	return int(i)
 }

@@ -161,21 +161,8 @@ func (b *gameBuilder) buildAndRun() error {
 // Setup
 // -----------------------------------------------------------------------------
 func setupGameConfig(g *Game, conf *Config, proj *coreproject.ProjectConfig) {
-	cwd, _ := os.Getwd()
-	runtimeCfg := coreproject.ResolveRuntimeConfig(conf, proj, cwd, os.Getenv("SPX_SCREENSHOT_KEY"))
-
-	conf.Title = runtimeCfg.Title
-	proj.FullScreen = runtimeCfg.FullScreen
-	g.setPhysicsEnabled(runtimeCfg.PhysicsEnabled)
-	g.setEventQueuePolicy(parseEventQueuePolicy(runtimeCfg.EventQueuePolicy))
-	g.displayState.WindowHeight = runtimeCfg.WindowHeight
-	g.displayState.WindowWidth = runtimeCfg.WindowWidth
-
-	if runtimeCfg.ScreenshotKey != "" {
-		if err := os.Setenv("SPX_SCREENSHOT_KEY", runtimeCfg.ScreenshotKey); err != nil {
-			engine.Panic(err)
-		}
-	}
+	g.applyRuntimeConfig(conf, proj)
+	conf.Title = g.runtimeConfigInput.Title
 }
 
 func setupGameSystems(g *Game, proj *coreproject.ProjectConfig) {

@@ -25,6 +25,7 @@ import (
 	coreruntime "github.com/goplus/spx/v2/internal/core/runtime"
 	"github.com/goplus/spx/v2/internal/engine"
 	spxlog "github.com/goplus/spx/v2/internal/log"
+	itime "github.com/goplus/spx/v2/internal/time"
 )
 
 // -----------------------------------------------------------------------------
@@ -68,6 +69,9 @@ func (p *Game) OnEngineUpdate(delta float64) {
 	p.soundMgr.Update()
 	if p.lifecycleState.BootstrapDone.Load() {
 		p.dispatchStartEventIfNeeded()
+	}
+	if p.lifecycleState.StartDispatched.Load() {
+		engine.RunFrameCallbacks(itime.Frame())
 	}
 	p.updateSpriteProxies()
 	p.pullPhysicsPositions()

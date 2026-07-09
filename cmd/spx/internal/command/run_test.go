@@ -267,6 +267,43 @@ func TestShouldBuildWasmForCommand(t *testing.T) {
 	}
 }
 
+func TestBrowserOpenCommandsDarwinPrefersChromeThenDefault(t *testing.T) {
+	url := "http://127.0.0.1:8060"
+
+	got := browserOpenCommands("darwin", url)
+	want := []browserOpenCommand{
+		{name: "open", args: []string{"-a", "Google Chrome", url}},
+		{name: "open", args: []string{url}},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("browserOpenCommands(darwin) = %#v, want %#v", got, want)
+	}
+}
+
+func TestBrowserOpenCommandsLinuxUsesXdgOpen(t *testing.T) {
+	url := "http://127.0.0.1:8060"
+
+	got := browserOpenCommands("linux", url)
+	want := []browserOpenCommand{
+		{name: "xdg-open", args: []string{url}},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("browserOpenCommands(linux) = %#v, want %#v", got, want)
+	}
+}
+
+func TestBrowserOpenCommandsWindowsUsesRundll32(t *testing.T) {
+	url := "http://127.0.0.1:8060"
+
+	got := browserOpenCommands("windows", url)
+	want := []browserOpenCommand{
+		{name: "rundll32", args: []string{"url.dll,FileProtocolHandler", url}},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("browserOpenCommands(windows) = %#v, want %#v", got, want)
+	}
+}
+
 func TestRunInterpretedCreatesRuntimeExtensionAndCopiesSharedLibrary(t *testing.T) {
 	oldPrepareEmbeddedRuntimeAssets := prepareEmbeddedRuntimeAssets
 	prepareEmbeddedRuntimeAssets = func(string, ...string) (string, bool, error) {

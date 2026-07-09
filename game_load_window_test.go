@@ -40,3 +40,15 @@ func TestSetupWorldAndWindowClampsBackdropWindowToWorld(t *testing.T) {
 		t.Fatalf("map mode = %d, want %d", game.displayState.MapMode, coreproject.MapModeRepeat)
 	}
 }
+
+func TestRuntimeMaxFPSForProjectUsesProjectValueWithoutFixedTimestep(t *testing.T) {
+	if got := runtimeMaxFPSForProject(30, 0); got != 30 {
+		t.Fatalf("runtimeMaxFPSForProject(30) = %d, want 30", got)
+	}
+}
+
+func TestRuntimeMaxFPSForProjectUsesFixedTimestepWhenEnabled(t *testing.T) {
+	if got := runtimeMaxFPSForProject(30, 1); got != 1 {
+		t.Fatalf("runtimeMaxFPSForProject(30) = %d, want 1", got)
+	}
+}

@@ -17,7 +17,6 @@
 package spx
 
 import (
-	"math/rand"
 	"reflect"
 	"time"
 
@@ -312,7 +311,7 @@ func (p *Game) objectPos(obj Target) (float64, float64) {
 	case Pos:
 		if v == Random {
 			worldW, worldH := p.worldSize()
-			mx, my := rand.Intn(worldW), rand.Intn(worldH)
+			mx, my := randomIntn(worldW), randomIntn(worldH)
 			return float64(mx - (worldW >> 1)), float64((worldH >> 1) - my)
 		}
 	case Sprite:

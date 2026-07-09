@@ -17,7 +17,6 @@
 package spx
 
 import (
-	"math/rand"
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
@@ -28,7 +27,8 @@ func TestSpriteStepToRandomUsesRandomPositionTarget(t *testing.T) {
 	sprite.g.displayState.WorldWidth = 480
 	sprite.g.displayState.WorldHeight = 360
 
-	rand.Seed(1)
+	SetRandomSeed(1)
+	defer ResetRandomSeed()
 	sprite.StepTo__c(Random)
 
 	gotX, gotY := sprite.getXY()

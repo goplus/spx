@@ -58,6 +58,171 @@
 				left: calc(100% - 50px);
 			}
 		}
+
+		.capture-compare-panel {
+			margin: 20px 0 0;
+			padding: 16px;
+			background: linear-gradient(180deg, #1f1f1f 0%, #171717 100%);
+			border: 1px solid #4a4a4a;
+			border-radius: 12px;
+		}
+
+		.capture-compare-header {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 12px;
+			margin-bottom: 12px;
+			flex-wrap: wrap;
+		}
+
+		.capture-compare-title {
+			margin: 0;
+			font-size: 18px;
+		}
+
+		.capture-compare-summary {
+			color: #c7c7c7;
+			font-size: 13px;
+		}
+
+		.capture-compare-grid {
+			display: grid;
+			gap: 12px;
+		}
+
+		.capture-compare-empty {
+			padding: 24px;
+			border: 1px dashed #555;
+			border-radius: 10px;
+			color: #c7c7c7;
+			text-align: center;
+			background: rgba(255, 255, 255, 0.03);
+		}
+
+		.capture-compare-row {
+			display: grid;
+			grid-template-columns: minmax(220px, 320px) minmax(0, 1fr) minmax(0, 1fr);
+			gap: 12px;
+			align-items: start;
+		}
+
+		.capture-compare-file {
+			padding: 12px;
+			border-radius: 10px;
+			background: rgba(255, 255, 255, 0.04);
+			border: 1px solid rgba(255, 255, 255, 0.08);
+			word-break: break-word;
+			font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+			font-size: 12px;
+			line-height: 1.5;
+		}
+
+		.capture-compare-name {
+			font-size: 13px;
+			font-weight: 600;
+			color: #fff;
+		}
+
+		.capture-compare-score {
+			display: inline-flex;
+			align-items: center;
+			margin-top: 10px;
+			padding: 4px 8px;
+			border-radius: 999px;
+			font-size: 12px;
+			font-weight: 600;
+		}
+
+		.capture-compare-score-strong {
+			background: rgba(70, 201, 110, 0.2);
+			color: #7ef0a4;
+			border: 1px solid rgba(70, 201, 110, 0.35);
+		}
+
+		.capture-compare-score-good {
+			background: rgba(86, 172, 255, 0.18);
+			color: #9ed0ff;
+			border: 1px solid rgba(86, 172, 255, 0.35);
+		}
+
+		.capture-compare-score-warn {
+			background: rgba(255, 193, 86, 0.18);
+			color: #ffd27a;
+			border: 1px solid rgba(255, 193, 86, 0.35);
+		}
+
+		.capture-compare-score-bad {
+			background: rgba(255, 107, 107, 0.18);
+			color: #ff9b9b;
+			border: 1px solid rgba(255, 107, 107, 0.35);
+		}
+
+		.capture-compare-score-missing {
+			background: rgba(255, 255, 255, 0.08);
+			color: #d0d0d0;
+			border: 1px solid rgba(255, 255, 255, 0.12);
+		}
+
+		.capture-compare-detail {
+			margin-top: 10px;
+			color: #aaa;
+			font-size: 12px;
+			line-height: 1.5;
+		}
+
+		.capture-compare-cell {
+			padding: 12px;
+			border-radius: 10px;
+			background: rgba(255, 255, 255, 0.04);
+			border: 1px solid rgba(255, 255, 255, 0.08);
+		}
+
+		.capture-compare-label {
+			margin: 0 0 8px;
+			color: #9ed0ff;
+			font-size: 12px;
+			text-transform: uppercase;
+			letter-spacing: 0.08em;
+		}
+
+		.capture-compare-link {
+			display: block;
+			text-decoration: none;
+			color: inherit;
+		}
+
+		.capture-compare-image {
+			display: block;
+			width: 100%;
+			border-radius: 8px;
+			background: #000;
+			box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+		}
+
+		.capture-compare-meta {
+			margin-top: 8px;
+			color: #aaa;
+			font-size: 12px;
+		}
+
+		.capture-compare-missing {
+			min-height: 120px;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			border-radius: 8px;
+			border: 1px dashed #555;
+			color: #9b9b9b;
+			background: rgba(255, 255, 255, 0.02);
+			font-size: 13px;
+		}
+
+		@media (max-width: 1100px) {
+			.capture-compare-row {
+				grid-template-columns: 1fr;
+			}
+		}
 	</style>
 	<script src="fflate.js"></script>
 </head>
@@ -74,6 +239,9 @@
 	<button id="resumeGameBtn">Resume</button>
 	<button id="stepNextFrameBtn">NextFrame</button>
 	<button id="toggleSizeBtn">ToggleSize</button>
+	<button id="selectCaptureDirBtn">CaptureDir</button>
+	<button id="refreshCompareBtn">RefreshCompare</button>
+	<span id="captureStatus" style="margin-left: 8px;">CaptureDir: download fallback</span>
 
 	<progress id="progress-bar" value="0" max="1" style="display: none;"></progress>
 	<div id="tabs">
@@ -89,6 +257,15 @@
 		</div>
 	</div>
 	<iframe id="runnerFrame" src="runner.html" width="480" height="360"></iframe>
+	<div class="capture-compare-panel">
+		<div class="capture-compare-header">
+			<h2 class="capture-compare-title">Capture Compare</h2>
+			<span id="captureCompareSummary" class="capture-compare-summary">Select CaptureDir and start a deterministic demo.</span>
+		</div>
+		<div id="captureCompareGrid" class="capture-compare-grid">
+			<div class="capture-compare-empty">Select CaptureDir and start a deterministic demo.</div>
+		</div>
+	</div>
 
 	<script>
 		window.addEventListener('load', function() {
@@ -124,11 +301,641 @@
 		document.getElementById('resumeGameBtn').addEventListener('click', resumeGame);
 		document.getElementById('stepNextFrameBtn').addEventListener('click', stepNextFrame);
 		document.getElementById('toggleSizeBtn').addEventListener('click', toggleSizeFrame);
+		document.getElementById('selectCaptureDirBtn').addEventListener('click', selectCaptureDirectory);
+		document.getElementById('refreshCompareBtn').addEventListener('click', refreshCaptureCompare);
 
 		const iframe = document.getElementById('runnerFrame');
 		let enlarged = false;
+		let captureRootHandle = null
+		let activeCaptureProject = null
+		let activeCaptureSession = null
+		let captureCompareRefreshTimer = 0
+		let capturePreviewUrls = []
 
 		runnerWindow = iframe.contentWindow;
+
+		function updateCaptureStatus(message, isError = false) {
+			const status = document.getElementById('captureStatus')
+			status.textContent = message
+			status.style.color = isError ? '#ff9b9b' : '#fff'
+		}
+
+		function revokeCapturePreviewUrls() {
+			capturePreviewUrls.forEach((url) => URL.revokeObjectURL(url))
+			capturePreviewUrls = []
+		}
+
+		function setCaptureCompareEmpty(message, summary = message) {
+			revokeCapturePreviewUrls()
+			document.getElementById('captureCompareSummary').textContent = summary
+			document.getElementById('captureCompareGrid').innerHTML = `<div class="capture-compare-empty">${message}</div>`
+		}
+
+		function scheduleCaptureCompareRefresh() {
+			if (captureCompareRefreshTimer) {
+				clearTimeout(captureCompareRefreshTimer)
+			}
+			captureCompareRefreshTimer = window.setTimeout(() => {
+				captureCompareRefreshTimer = 0
+				refreshCaptureCompare().catch((error) => {
+					console.error('Failed to refresh capture compare', error)
+					setCaptureCompareEmpty('Failed to read capture files. Check browser console for details.')
+				})
+			}, 120)
+		}
+
+		function browserSupportsCaptureDirectory() {
+			return typeof window.showDirectoryPicker === 'function'
+		}
+
+		function buildCaptureDirectoryPickerOptions() {
+			const options = {
+				mode: 'readwrite',
+				id: 'spx-capture-root',
+			}
+			if (captureRootHandle) {
+				options.startIn = captureRootHandle
+				return options
+			}
+			options.startIn = 'downloads'
+			return options
+		}
+
+		function sanitizeCaptureSegment(value, fallback = 'project') {
+			let segment = typeof value === 'string' ? value.trim() : ''
+			segment = segment.replace(/[\\/:*?"<>|\u0000-\u001F]+/g, '_')
+			return segment || fallback
+		}
+
+		function formatCaptureTimestamp(date = new Date()) {
+			const pad2 = (value) => `${value}`.padStart(2, '0')
+			return `${date.getFullYear()}${pad2(date.getMonth() + 1)}${pad2(date.getDate())}-${pad2(date.getHours())}${pad2(date.getMinutes())}${pad2(date.getSeconds())}`
+		}
+
+		function padCaptureFrame(value) {
+			if (!Number.isFinite(value)) {
+				return 'frame_unknown'
+			}
+			return `frame_${String(Math.trunc(value)).padStart(4, '0')}`
+		}
+
+		function decodeZipText(unzipped, path) {
+			const entry = unzipped[path]
+			if (!entry) {
+				return ''
+			}
+			return new TextDecoder('utf-8').decode(entry)
+		}
+
+		function parseCaptureProject(unzipped) {
+			let builderMeta = null
+			let projectIndex = null
+			try {
+				const builderMetaText = decodeZipText(unzipped, 'builder-meta.json')
+				if (builderMetaText) {
+					builderMeta = JSON.parse(builderMetaText)
+				}
+			} catch (error) {
+				console.warn('Failed to parse builder-meta.json for capture host', error)
+			}
+			try {
+				const projectIndexText = decodeZipText(unzipped, 'assets/index.json')
+				if (projectIndexText) {
+					projectIndex = JSON.parse(projectIndexText)
+				}
+			} catch (error) {
+				console.warn('Failed to parse assets/index.json for capture host', error)
+			}
+			const runConfig = projectIndex && typeof projectIndex.run === 'object' ? projectIndex.run : {}
+			const fixedTimestep = Number(runConfig.fixedTimestep)
+			return {
+				projectKey: sanitizeCaptureSegment(
+					(builderMeta && builderMeta.displayName) ||
+					(projectIndex && projectIndex.name) ||
+					'project',
+				),
+				deterministic: Boolean(runConfig.deterministic) || (Number.isFinite(fixedTimestep) && fixedTimestep > 0),
+			}
+		}
+
+		function resetActiveCaptureSession(project) {
+			activeCaptureProject = project
+			activeCaptureSession = {
+				projectKey: project.projectKey,
+				deterministic: project.deterministic,
+				runTimestamp: formatCaptureTimestamp(),
+				targetPromise: null,
+			}
+			scheduleCaptureCompareRefresh()
+		}
+
+		async function fileExists(directoryHandle, filename) {
+			try {
+				await directoryHandle.getFileHandle(filename)
+				return true
+			} catch (error) {
+				if (error && error.name === 'NotFoundError') {
+					return false
+				}
+				throw error
+			}
+		}
+
+		async function getOptionalDirectoryHandle(parentHandle, name) {
+			try {
+				return await parentHandle.getDirectoryHandle(name)
+			} catch (error) {
+				if (error && error.name === 'NotFoundError') {
+					return null
+				}
+				throw error
+			}
+		}
+
+		async function ensureCaptureTarget() {
+			if (!captureRootHandle || !activeCaptureSession) {
+				return null
+			}
+			if (!activeCaptureSession.targetPromise) {
+				activeCaptureSession.targetPromise = (async () => {
+					const snapshotsDir = await captureRootHandle.getDirectoryHandle('spx-snapshots', { create: true })
+					const projectDir = await snapshotsDir.getDirectoryHandle(activeCaptureSession.projectKey, { create: true })
+					if (!activeCaptureSession.deterministic) {
+						const runsDir = await projectDir.getDirectoryHandle('runs', { create: true })
+						const runDir = await runsDir.getDirectoryHandle(activeCaptureSession.runTimestamp, { create: true })
+						return { directory: runDir, destination: `runs/${activeCaptureSession.runTimestamp}` }
+					}
+
+					const hasBaseline = await fileExists(projectDir, '.baseline.ready')
+					if (!hasBaseline) {
+						const baselineDir = await projectDir.getDirectoryHandle('baseline', { create: true })
+						return { directory: baselineDir, destination: 'baseline', projectDir, writeBaselineMarker: true }
+					}
+
+					const runsDir = await projectDir.getDirectoryHandle('runs', { create: true })
+					const runDir = await runsDir.getDirectoryHandle(activeCaptureSession.runTimestamp, { create: true })
+					return { directory: runDir, destination: `runs/${activeCaptureSession.runTimestamp}` }
+				})()
+			}
+			return activeCaptureSession.targetPromise
+		}
+
+		async function markBaselineReady(projectDir) {
+			const marker = await projectDir.getFileHandle('.baseline.ready', { create: true })
+			const writer = await marker.createWritable()
+			await writer.write(JSON.stringify({
+				createdAt: new Date().toISOString(),
+				projectKey: activeCaptureSession ? activeCaptureSession.projectKey : '',
+			}, null, 2))
+			await writer.close()
+		}
+
+		function buildCaptureFilename(request) {
+			return `${padCaptureFrame(request.frame)}_${request.intent}_${sanitizeCaptureSegment(request.name, 'capture')}.png`
+		}
+
+		function formatCaptureFileMeta(file) {
+			const sizeKB = (file.size / 1024).toFixed(1)
+			const modifiedAt = new Date(file.lastModified).toLocaleString()
+			return `${sizeKB} KB · ${modifiedAt}`
+		}
+
+		async function listCaptureFiles(directoryHandle) {
+			if (!directoryHandle) {
+				return new Map()
+			}
+			const entries = []
+			for await (const entry of directoryHandle.values()) {
+				if (entry.kind !== 'file' || !entry.name.toLowerCase().endsWith('.png')) {
+					continue
+				}
+				entries.push(entry)
+			}
+			entries.sort((left, right) => left.name.localeCompare(right.name))
+
+			const files = new Map()
+			for (const entry of entries) {
+				const file = await entry.getFile()
+				const url = URL.createObjectURL(file)
+				capturePreviewUrls.push(url)
+				files.set(entry.name, {
+					name: entry.name,
+					file,
+					url,
+					meta: formatCaptureFileMeta(file),
+				})
+			}
+			return files
+		}
+
+		async function findLatestRunDirectory(projectDir) {
+			const runsDir = await getOptionalDirectoryHandle(projectDir, 'runs')
+			if (!runsDir) {
+				return null
+			}
+			let latestRun = null
+			for await (const entry of runsDir.values()) {
+				if (entry.kind !== 'directory') {
+					continue
+				}
+				if (!latestRun || entry.name > latestRun.name) {
+					latestRun = entry
+				}
+			}
+			return latestRun
+		}
+
+		function formatCaptureSimilarityPercent(score) {
+			return `${(score * 100).toFixed(2)}%`
+		}
+
+		function getCaptureSimilarityTone(score) {
+			if (score >= 0.995) {
+				return 'capture-compare-score-strong'
+			}
+			if (score >= 0.97) {
+				return 'capture-compare-score-good'
+			}
+			if (score >= 0.9) {
+				return 'capture-compare-score-warn'
+			}
+			return 'capture-compare-score-bad'
+		}
+
+		function formatCaptureBitmapSize(width, height) {
+			return `${width}x${height}`
+		}
+
+		const captureQuickCompareSize = 128
+		const captureDetailedCompareSize = 320
+		const captureDetailedCompareThreshold = 0.985
+
+		async function loadCaptureBitmap(file) {
+			if (typeof createImageBitmap === 'function') {
+				return createImageBitmap(file)
+			}
+			return await new Promise((resolve, reject) => {
+				const url = URL.createObjectURL(file)
+				const image = new Image()
+				image.onload = () => {
+					URL.revokeObjectURL(url)
+					resolve(image)
+				}
+				image.onerror = () => {
+					URL.revokeObjectURL(url)
+					reject(new Error(`Failed to decode ${file.name}`))
+				}
+				image.src = url
+			})
+		}
+
+		function readCaptureImageData(imageSource, width, height) {
+			const canvas = document.createElement('canvas')
+			canvas.width = width
+			canvas.height = height
+			const context = canvas.getContext('2d', { willReadFrequently: true })
+			context.drawImage(imageSource, 0, 0, width, height)
+			return context.getImageData(0, 0, width, height).data
+		}
+
+		function readCaptureGrayscalePixels(imageSource, width, height) {
+			const rgbaPixels = readCaptureImageData(imageSource, width, height)
+			const grayscalePixels = new Uint8Array(rgbaPixels.length / 4)
+			for (let src = 0, dest = 0; src < rgbaPixels.length; src += 4, dest++) {
+				grayscalePixels[dest] = (
+					rgbaPixels[src] * 77 +
+					rgbaPixels[src + 1] * 150 +
+					rgbaPixels[src + 2] * 29
+				) >> 8
+			}
+			return grayscalePixels
+		}
+
+		function computeCaptureNormalizedDiff(leftPixels, rightPixels) {
+			const pixelCount = Math.min(leftPixels.length, rightPixels.length)
+			if (pixelCount === 0) {
+				return 1
+			}
+
+			let totalDiff = 0
+			for (let i = 0; i < pixelCount; i++) {
+				totalDiff += Math.abs(leftPixels[i] - rightPixels[i])
+			}
+			return totalDiff / (pixelCount * 255)
+		}
+
+		function buildCaptureCompareSize(leftBitmap, rightBitmap, limit) {
+			return {
+				width: Math.max(1, Math.min(limit, leftBitmap.width, rightBitmap.width)),
+				height: Math.max(1, Math.min(limit, leftBitmap.height, rightBitmap.height)),
+			}
+		}
+
+		function buildCaptureSimilarityResult(score, detail) {
+			return {
+				status: 'ready',
+				score,
+				badgeClass: `capture-compare-score ${getCaptureSimilarityTone(score)}`,
+				badgeText: `${formatCaptureSimilarityPercent(score)} match`,
+				detail,
+			}
+		}
+
+		async function computeCaptureSimilarity(leftRecord, rightRecord) {
+			if (!leftRecord || !rightRecord) {
+				if (leftRecord || rightRecord) {
+					return {
+						status: 'missing',
+						badgeClass: 'capture-compare-score capture-compare-score-missing',
+						badgeText: leftRecord ? 'Missing run' : 'Missing baseline',
+						detail: '',
+						score: null,
+					}
+				}
+				return {
+					status: 'missing',
+					badgeClass: 'capture-compare-score capture-compare-score-missing',
+					badgeText: 'No pair',
+					detail: '',
+					score: null,
+				}
+			}
+
+			const leftBitmap = await loadCaptureBitmap(leftRecord.file)
+			const rightBitmap = await loadCaptureBitmap(rightRecord.file)
+			try {
+				const leftSize = formatCaptureBitmapSize(leftBitmap.width, leftBitmap.height)
+				const rightSize = formatCaptureBitmapSize(rightBitmap.width, rightBitmap.height)
+				const sizeNote = leftSize === rightSize
+					? ''
+					: `Size mismatch: ${leftSize} vs ${rightSize}; `
+
+				const quickSize = buildCaptureCompareSize(leftBitmap, rightBitmap, captureQuickCompareSize)
+				const quickLeftPixels = readCaptureGrayscalePixels(leftBitmap, quickSize.width, quickSize.height)
+				const quickRightPixels = readCaptureGrayscalePixels(rightBitmap, quickSize.width, quickSize.height)
+				const quickScore = Math.max(0, 1 - computeCaptureNormalizedDiff(quickLeftPixels, quickRightPixels))
+				const quickComparedSize = formatCaptureBitmapSize(quickSize.width, quickSize.height)
+
+				if (quickScore >= captureDetailedCompareThreshold && leftSize === rightSize) {
+					return buildCaptureSimilarityResult(
+						quickScore,
+						`${sizeNote}Quick grayscale compare at ${quickComparedSize}`,
+					)
+				}
+
+				const detailedSize = buildCaptureCompareSize(leftBitmap, rightBitmap, captureDetailedCompareSize)
+				const detailedLeftPixels = readCaptureImageData(leftBitmap, detailedSize.width, detailedSize.height)
+				const detailedRightPixels = readCaptureImageData(rightBitmap, detailedSize.width, detailedSize.height)
+				const detailedScore = Math.max(0, 1 - computeCaptureNormalizedDiff(detailedLeftPixels, detailedRightPixels))
+				const detailedComparedSize = formatCaptureBitmapSize(detailedSize.width, detailedSize.height)
+
+				return buildCaptureSimilarityResult(
+					detailedScore,
+					`${sizeNote}Quick ${formatCaptureSimilarityPercent(quickScore)} at ${quickComparedSize}; refined RGBA at ${detailedComparedSize}`,
+				)
+			} catch (error) {
+				return {
+					status: 'error',
+					score: null,
+					badgeClass: 'capture-compare-score capture-compare-score-missing',
+					badgeText: 'Compare failed',
+					detail: error && error.message ? error.message : 'Unknown image compare error',
+				}
+			} finally {
+				if (typeof leftBitmap.close === 'function') {
+					leftBitmap.close()
+				}
+				if (typeof rightBitmap.close === 'function') {
+					rightBitmap.close()
+				}
+			}
+		}
+
+		async function buildCaptureComparisons(names, baselineFiles, runFiles) {
+			return await Promise.all(names.map(async (name) => ({
+				name,
+				baseline: baselineFiles.get(name),
+				run: runFiles.get(name),
+				similarity: await computeCaptureSimilarity(baselineFiles.get(name), runFiles.get(name)),
+			})))
+		}
+
+		function createCaptureCompareFileCell(name, similarity) {
+			const cell = document.createElement('div')
+			cell.className = 'capture-compare-file'
+
+			const title = document.createElement('div')
+			title.className = 'capture-compare-name'
+			title.textContent = name
+			cell.appendChild(title)
+
+			const badge = document.createElement('div')
+			badge.className = similarity.badgeClass
+			badge.textContent = similarity.badgeText
+			cell.appendChild(badge)
+
+			if (similarity.detail) {
+				const detail = document.createElement('div')
+				detail.className = 'capture-compare-detail'
+				detail.textContent = similarity.detail
+				cell.appendChild(detail)
+			}
+
+			return cell
+		}
+
+		function createCaptureCompareCell(label, imageRecord) {
+			const cell = document.createElement('div')
+			cell.className = 'capture-compare-cell'
+
+			const title = document.createElement('p')
+			title.className = 'capture-compare-label'
+			title.textContent = label
+			cell.appendChild(title)
+
+			if (!imageRecord) {
+				const missing = document.createElement('div')
+				missing.className = 'capture-compare-missing'
+				missing.textContent = 'No image'
+				cell.appendChild(missing)
+				return cell
+			}
+
+			const link = document.createElement('a')
+			link.className = 'capture-compare-link'
+			link.href = imageRecord.url
+			link.target = '_blank'
+			link.rel = 'noopener noreferrer'
+
+			const image = document.createElement('img')
+			image.className = 'capture-compare-image'
+			image.src = imageRecord.url
+			image.alt = imageRecord.name
+			image.loading = 'lazy'
+
+			link.appendChild(image)
+			cell.appendChild(link)
+
+			const meta = document.createElement('div')
+			meta.className = 'capture-compare-meta'
+			meta.textContent = imageRecord.meta
+			cell.appendChild(meta)
+
+			return cell
+		}
+
+		function renderCaptureCompare(projectKey, runLabel, comparisons) {
+			const grid = document.getElementById('captureCompareGrid')
+			const summary = document.getElementById('captureCompareSummary')
+			grid.innerHTML = ''
+
+			if (comparisons.length === 0) {
+				setCaptureCompareEmpty('No capture images found yet.', `${projectKey} · waiting for baseline or run`)
+				return
+			}
+
+			const matchedComparisons = comparisons.filter((item) => item.similarity.status === 'ready')
+			const incompleteCount = comparisons.length - matchedComparisons.length
+			const averageSimilarity = matchedComparisons.length > 0
+				? matchedComparisons.reduce((sum, item) => sum + item.similarity.score, 0) / matchedComparisons.length
+				: null
+
+			const summaryParts = [
+				`${projectKey}`,
+				`baseline vs ${runLabel}`,
+				`${comparisons.length} frame(s)`,
+			]
+			if (averageSimilarity !== null) {
+				summaryParts.push(`avg ${formatCaptureSimilarityPercent(averageSimilarity)}`)
+			}
+			if (incompleteCount > 0) {
+				summaryParts.push(`${incompleteCount} incomplete`)
+			}
+			summary.textContent = summaryParts.join(' · ')
+
+			for (const item of comparisons) {
+				const row = document.createElement('div')
+				row.className = 'capture-compare-row'
+
+				row.appendChild(createCaptureCompareFileCell(item.name, item.similarity))
+				row.appendChild(createCaptureCompareCell('Baseline', item.baseline))
+				row.appendChild(createCaptureCompareCell(runLabel, item.run))
+				grid.appendChild(row)
+			}
+		}
+
+		async function refreshCaptureCompare() {
+			if (!captureRootHandle) {
+				setCaptureCompareEmpty('Select CaptureDir to browse baseline and run images.')
+				return
+			}
+			if (!activeCaptureProject) {
+				setCaptureCompareEmpty('Start a project to load capture metadata.')
+				return
+			}
+
+			const snapshotsDir = await getOptionalDirectoryHandle(captureRootHandle, 'spx-snapshots')
+			if (!snapshotsDir) {
+				setCaptureCompareEmpty('No spx-snapshots folder found in the selected directory.', `${activeCaptureProject.projectKey} · no snapshots yet`)
+				return
+			}
+
+			const projectDir = await getOptionalDirectoryHandle(snapshotsDir, activeCaptureProject.projectKey)
+			if (!projectDir) {
+				setCaptureCompareEmpty(`No snapshots yet for ${activeCaptureProject.projectKey}.`, `${activeCaptureProject.projectKey} · waiting for first capture`)
+				return
+			}
+
+			const baselineDir = await getOptionalDirectoryHandle(projectDir, 'baseline')
+			let runLabel = 'latest run'
+			let runDir = null
+
+			const runsDir = await getOptionalDirectoryHandle(projectDir, 'runs')
+			if (runsDir && activeCaptureSession) {
+				runDir = await getOptionalDirectoryHandle(runsDir, activeCaptureSession.runTimestamp)
+				if (runDir) {
+					runLabel = `run ${activeCaptureSession.runTimestamp}`
+				}
+			}
+			if (!runDir) {
+				const latestRunDir = await findLatestRunDirectory(projectDir)
+				if (latestRunDir) {
+					runDir = latestRunDir
+					runLabel = `run ${latestRunDir.name}`
+				}
+			}
+
+			revokeCapturePreviewUrls()
+			const baselineFiles = await listCaptureFiles(baselineDir)
+			const runFiles = await listCaptureFiles(runDir)
+			const names = Array.from(new Set([
+				...baselineFiles.keys(),
+				...runFiles.keys(),
+			])).sort((left, right) => left.localeCompare(right))
+			const comparisons = await buildCaptureComparisons(names, baselineFiles, runFiles)
+			renderCaptureCompare(activeCaptureProject.projectKey, runLabel, comparisons)
+		}
+
+		function createFileSystemCaptureHost() {
+			return {
+				async handleCapture(request, blob) {
+					const target = await ensureCaptureTarget()
+					if (!target) {
+						throw new Error('Capture directory is not selected')
+					}
+					const filename = buildCaptureFilename(request)
+					const file = await target.directory.getFileHandle(filename, { create: true })
+					const writer = await file.createWritable()
+					await writer.write(blob)
+					await writer.close()
+					if (target.writeBaselineMarker && target.projectDir) {
+						await markBaselineReady(target.projectDir)
+						target.writeBaselineMarker = false
+					}
+					console.log('[spx capture saved]', {
+						projectKey: activeCaptureSession ? activeCaptureSession.projectKey : '',
+						destination: target.destination,
+						filename,
+						request,
+					})
+					scheduleCaptureCompareRefresh()
+				},
+			}
+		}
+
+		function installCaptureHostIfReady() {
+			if (typeof runnerWindow.spxSetCaptureHost !== 'function') {
+				return false
+			}
+			if (!captureRootHandle) {
+				runnerWindow.spxSetCaptureHost(null)
+				return true
+			}
+			runnerWindow.spxSetCaptureHost(createFileSystemCaptureHost())
+			return true
+		}
+
+		async function selectCaptureDirectory() {
+			if (!browserSupportsCaptureDirectory()) {
+				updateCaptureStatus('CaptureDir: browser unsupported', true)
+				return
+			}
+			try {
+				captureRootHandle = await window.showDirectoryPicker(buildCaptureDirectoryPickerOptions())
+				const handleName = captureRootHandle && captureRootHandle.name ? captureRootHandle.name : 'selected'
+				updateCaptureStatus(`CaptureDir: ${handleName}`)
+				installCaptureHostIfReady()
+				scheduleCaptureCompareRefresh()
+			} catch (error) {
+				if (error && error.name === 'AbortError') {
+					updateCaptureStatus('CaptureDir: choose Downloads/Desktop or another regular folder')
+					return
+				}
+				console.error('Failed to select capture directory', error)
+				updateCaptureStatus('CaptureDir: selection failed, avoid system folders', true)
+			}
+		}
+
 		function onProgress(value) {
 			document.getElementById('progress-bar').value = value;
 			if (value >= 1) {
@@ -140,6 +947,7 @@
 
 		async function initEngine() {
 			await runnerWindow.initEngine(null, { logLevel: LOG_LEVEL_VERBOSE })
+			installCaptureHostIfReady()
 		}
 
 		async function startNewGame() {
@@ -241,7 +1049,11 @@
 
 			let zipped = await (await (fetch(zipUrl))).arrayBuffer()
 			let unzipped = fflate.unzipSync(new Uint8Array(zipped))
+			resetActiveCaptureSession(parseCaptureProject(unzipped))
 			configureAIInteraction(unzipped)
+			if (captureRootHandle) {
+				updateCaptureStatus(`CaptureDir: ${captureRootHandle.name} -> ${activeCaptureSession.projectKey}`)
+			}
 			let files = {}
 			Object.entries(unzipped).forEach(([path, data]) => {
 				if (path.endsWith('/')) return // skip directories

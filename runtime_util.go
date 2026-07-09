@@ -17,7 +17,6 @@
 package spx
 
 import (
-	"math/rand"
 	"strings"
 
 	"github.com/goplus/spx/v2/internal/engine"
@@ -29,7 +28,7 @@ func Rand__0(from, to int) float64 {
 	if to < from {
 		from, to = to, from
 	}
-	return float64(from + rand.Intn(to-from+1))
+	return float64(from + randomIntn(to-from+1))
 }
 
 // Rand__1 returns a random float64 between from and to.
@@ -37,7 +36,7 @@ func Rand__1(from, to float64) float64 {
 	if to < from {
 		from, to = to, from
 	}
-	return rand.Float64()*(to-from) + from
+	return randomFloat64()*(to-from) + from
 }
 
 // Iround returns an integer value, while math.Round returns a float value.

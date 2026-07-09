@@ -17,8 +17,6 @@
 package spx
 
 import (
-	"math/rand"
-
 	"github.com/goplus/spbase/mathf"
 	coreproject "github.com/goplus/spx/v2/internal/core/project"
 	spxlog "github.com/goplus/spx/v2/internal/log"
@@ -58,7 +56,7 @@ func (p *Game) setRandomBackdrop() bool {
 		return true
 	}
 
-	nextIndex := rand.Intn(len(p.costumes) - 1)
+	nextIndex := randomIntn(len(p.costumes) - 1)
 	if nextIndex >= p.costumeIndex {
 		nextIndex++
 	}
