@@ -20,6 +20,8 @@ import (
 	"runtime"
 	"testing"
 	"time"
+
+	"github.com/goplus/spx/v2/internal/engine/platform"
 )
 
 type namedThreadObj struct{}
@@ -339,5 +341,56 @@ func TestJoinAllWaitsForEveryPeer(t *testing.T) {
 	case <-callerDone:
 	case <-timer.C:
 		t.Fatal("caller did not resume after every peer completed")
+	}
+}
+
+func TestCreateAndStartFromCoroutineYieldsCallerWhenStarted(t *testing.T) {
+	co := New(nil)
+	co.OnInited()
+
+	peerStarted := make(chan struct{}, 1)
+	observed := make(chan bool, 1)
+	done := make(chan struct{})
+
+	co.CreateAndStart(true, "caller", func(me Thread) int {
+		co.CreateAndStart(true, "peer", func(peer Thread) int {
+			close(peerStarted)
+			return 0
+		})
+
+		select {
+		case <-peerStarted:
+			observed <- true
+		default:
+			observed <- false
+		}
+		close(done)
+		return 0
+	})
+
+	deadline := time.Now().Add(time.Second)
+	for {
+		select {
+		case <-done:
+			select {
+			case got := <-observed:
+				if !got {
+					t.Fatal("CreateAndStart(true) returned before the eagerly started peer ran")
+				}
+			default:
+				t.Fatal("caller completed without recording eager-start observation")
+			}
+			return
+		default:
+		}
+
+		if time.Now().After(deadline) {
+			t.Fatal("caller did not finish while pumping the scheduler")
+		}
+
+		platform.RunOnMainThread(func() {
+			co.Update()
+		})
+		time.Sleep(time.Millisecond)
 	}
 }

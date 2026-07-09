@@ -163,6 +163,14 @@ func (p *Coroutines) CreateAndStart(start bool, obj ThreadObj, fn func(me Thread
 	}()
 
 	if start {
+		// When the scheduler is already active, yield the current coroutine once so
+		// eagerly started peers can begin running even on single-threaded runtimes.
+		if p.hasInited {
+			if caller := p.currentCoroutineThread(); caller != nil {
+				p.WaitYield(caller)
+				return th
+			}
+		}
 		runtime.Gosched()
 	}
 	return th

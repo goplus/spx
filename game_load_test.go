@@ -146,7 +146,8 @@ func (s *bootstrapConcurrentMainSprite) Main() {
 		}
 	}
 	if s.waitFor != nil {
-		<-s.waitFor
+		var signal struct{}
+		engine.WaitForChan(s.waitFor, &signal)
 	}
 }
 
@@ -539,6 +540,8 @@ func TestRunSpriteCallbacksAwakesAllSpritesBeforeMain(t *testing.T) {
 }
 
 func TestRunSpriteCallbacksRunsSpriteMainsConcurrently(t *testing.T) {
+	setupBootstrapScheduler(t)
+
 	var game Game
 
 	ready := make(chan struct{}, 1)
@@ -553,22 +556,7 @@ func TestRunSpriteCallbacksRunsSpriteMainsConcurrently(t *testing.T) {
 		generation,
 	)
 
-	done := make(chan struct{})
-	go func() {
-		game.runBootstrapTasksFor(generation)
-		close(done)
-	}()
-
-	select {
-	case <-done:
-	case <-time.After(200 * time.Millisecond):
-		select {
-		case ready <- struct{}{}:
-		default:
-		}
-		<-done
-		t.Fatal("runBootstrapTasksFor blocked on earlier sprite Main, want batched concurrent execution")
-	}
+	runBootstrapTasksWithScheduler(t, &game, generation)
 }
 
 func TestInitRuntimeProxyAppliesCostumeBeforeAwake(t *testing.T) {
