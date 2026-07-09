@@ -78,9 +78,11 @@ func (p *Game) OnEngineUpdate(delta float64) {
 }
 
 func (p *Game) OnEngineRender(delta float64) {
-	if !p.lifecycleState.StartDispatched.Load() {
+	if !p.lifecycleState.IsRunned.Load() {
 		return
 	}
+	// Initial sprite Main hooks can move and collide during bootstrap, so
+	// trigger pairs must be drained before the start event is dispatched.
 	p.processPhysicsTriggers()
 }
 
@@ -103,6 +105,32 @@ func (p *Game) runLoop(cfg *Config) (err error) {
 
 func runMain(call func()) {
 	coreruntime.RunMain(call, time.Now(), setSchedInMain, setMainSchedTime)
+}
+
+func (p *Game) runBootstrapSpriteMainBatch(inits []Sprite) {
+	if len(inits) == 0 {
+		return
+	}
+
+	threads := make([]coroutine.Thread, 0, len(inits))
+	for _, ini := range inits {
+		spr := spriteOf(ini)
+		if spr == nil {
+			continue
+		}
+
+		mainFn := ini.Main
+		thread := gco.CreateAndStart(false, spr.pthis, func(coroutine.Thread) int {
+			runMain(mainFn)
+			return 0
+		})
+		if thread != nil {
+			threads = append(threads, thread)
+		}
+	}
+	// Keep bootstrap Main behavior aligned with the old awake dispatch:
+	// start every initial sprite Main first, then wait for the batch.
+	gco.JoinAll(threads)
 }
 
 func (p *Game) deferBootstrap(call func()) {

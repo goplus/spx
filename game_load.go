@@ -195,6 +195,9 @@ func (p *Game) runSpriteCallbacks(inits []Sprite, proj *coreproject.ProjectConfi
 	if loader, ok := g.Addr().Interface().(interface{ OnLoaded() }); ok {
 		onLoaded = loader.OnLoaded
 	}
+	queueBootstrap := func(call func()) {
+		p.deferBootstrapFor(generation, call)
+	}
 	cameraTarget := ""
 	if proj.Camera != nil {
 		cameraTarget = proj.Camera.On
@@ -207,31 +210,21 @@ func (p *Game) runSpriteCallbacks(inits []Sprite, proj *coreproject.ProjectConfi
 	coreproject.RunSpriteInitializers(coreproject.SpriteInitConfig[Sprite]{
 		Items: inits,
 		Setup: func(items []Sprite) {
-			p.deferBootstrapFor(generation, func() {
+			queueBootstrap(func() {
 				p.setupCollisionData(items)
 			})
 		},
 		BeforeMain: func(ini Sprite) {
 			spr := spriteOf(ini)
 			if spr != nil {
-				p.deferBootstrapFor(generation, func() {
-					spr.awake()
-				})
+				queueBootstrap(spr.awake)
 			}
 		},
-		RunMain: func(ini Sprite) {
-			p.deferBootstrapFor(generation, func() {
-				runMain(ini.Main)
-			})
-		},
-		OnLoaded: func() {
-			p.deferBootstrapFor(generation, func() {
-				if onLoaded != nil {
-					onLoaded()
-				}
-			})
-		},
 	})
+	queueBootstrap(func() {
+		p.runBootstrapSpriteMainBatch(inits)
+	})
+	queueBootstrap(onLoaded)
 }
 
 // -----------------------------------------------------------------------------

@@ -23,6 +23,8 @@ import (
 
 	"github.com/goplus/spbase/mathf"
 	coreproject "github.com/goplus/spx/v2/internal/core/project"
+	"github.com/goplus/spx/v2/internal/coroutine"
+	"github.com/goplus/spx/v2/internal/engine"
 	"github.com/goplus/spx/v2/internal/engine/platform"
 	"github.com/goplus/spx/v2/internal/enginewrap"
 	pkgengine "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
@@ -51,6 +53,12 @@ type bootstrapAwakeOrderSprite struct {
 	peer         *bootstrapAwakeOrderSprite
 	sawSelfAwake bool
 	sawPeerAwake bool
+}
+
+type bootstrapConcurrentMainSprite struct {
+	SpriteImpl
+	waitFor  <-chan struct{}
+	signalTo chan<- struct{}
 }
 
 type cloneAwakeOrderSprite struct {
@@ -127,6 +135,18 @@ func (s *bootstrapAwakeOrderSprite) Main() {
 	s.sawSelfAwake = s.spriteState.IsAwakened
 	if s.peer != nil {
 		s.sawPeerAwake = s.peer.spriteState.IsAwakened
+	}
+}
+
+func (s *bootstrapConcurrentMainSprite) Main() {
+	if s.signalTo != nil {
+		select {
+		case s.signalTo <- struct{}{}:
+		default:
+		}
+	}
+	if s.waitFor != nil {
+		<-s.waitFor
 	}
 }
 
@@ -265,6 +285,16 @@ func newBootstrapAwakeOrderSprite(g *Game, name string) *bootstrapAwakeOrderSpri
 	return sprite
 }
 
+func newBootstrapConcurrentMainSprite(g *Game, name string, waitFor <-chan struct{}, signalTo chan<- struct{}) *bootstrapConcurrentMainSprite {
+	sprite := &bootstrapConcurrentMainSprite{waitFor: waitFor, signalTo: signalTo}
+	sprite.g = g
+	sprite.name = name
+	sprite.sprite = sprite
+	sprite.scriptEventBindings.init(&g.scriptEvents, &sprite.SpriteImpl)
+	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{})
+	return sprite
+}
+
 func newCloneAwakeOrderSprite(g *Game, name string) *cloneAwakeOrderSprite {
 	sawAwake := false
 	onCloned := false
@@ -328,6 +358,50 @@ func setupCloneSpriteMgr(t *testing.T) {
 	t.Cleanup(func() {
 		pkgengine.SpriteMgr = original
 	})
+}
+
+func setupBootstrapScheduler(t *testing.T) {
+	t.Helper()
+
+	co := coroutine.New(nil)
+	co.OnInited()
+
+	original := gco
+	gco = co
+	engine.SetCoroutines(co)
+	t.Cleanup(func() {
+		co.AbortAllAndWait(time.Second)
+		gco = original
+		engine.SetCoroutines(original)
+	})
+}
+
+func runBootstrapTasksWithScheduler(t *testing.T, game *Game, generation uint64) {
+	t.Helper()
+
+	done := make(chan struct{})
+	go func() {
+		game.runBootstrapTasksFor(generation)
+		close(done)
+	}()
+
+	deadline := time.Now().Add(time.Second)
+	for {
+		select {
+		case <-done:
+			return
+		default:
+		}
+
+		if time.Now().After(deadline) {
+			t.Fatal("bootstrap tasks did not finish while pumping scheduler")
+		}
+
+		platform.RunOnMainThread(func() {
+			gco.Update()
+		})
+		time.Sleep(time.Millisecond)
+	}
 }
 
 func TestRunSpriteCallbacksKeepsManualCameraFollowLast(t *testing.T) {
@@ -399,6 +473,8 @@ func TestRefreshCollisionLayersUsesCurrentTargetsFromSetupCollisionData(t *testi
 }
 
 func TestRunSpriteCallbacksRefreshesCollisionLayersRegisteredInMain(t *testing.T) {
+	setupBootstrapScheduler(t)
+
 	game := &collisionLayerOrderGame{}
 	game.initShapeMgr()
 	game.isAutoSetCollisionLayer = true
@@ -424,9 +500,7 @@ func TestRunSpriteCallbacksRefreshesCollisionLayersRegisteredInMain(t *testing.T
 			generation,
 		)
 	})
-	platform.RunOnMainThread(func() {
-		game.runBootstrapTasksFor(generation)
-	})
+	runBootstrapTasksWithScheduler(t, &game.Game, generation)
 
 	if got := game.sprCollisionInfos["SpriteA"].Mask; got != game.sprCollisionInfos["SpriteB"].Layer {
 		t.Fatalf("SpriteA collision mask = %d, want %d", got, game.sprCollisionInfos["SpriteB"].Layer)
@@ -461,6 +535,39 @@ func TestRunSpriteCallbacksAwakesAllSpritesBeforeMain(t *testing.T) {
 	}
 	if got := game.scriptEvents.manager.SnapshotAwake(); len(got) != 0 {
 		t.Fatalf("SnapshotAwake len = %d, want 0 for initial sprites", len(got))
+	}
+}
+
+func TestRunSpriteCallbacksRunsSpriteMainsConcurrently(t *testing.T) {
+	var game Game
+
+	ready := make(chan struct{}, 1)
+	spriteA := newBootstrapConcurrentMainSprite(&game, "SpriteA", ready, nil)
+	spriteB := newBootstrapConcurrentMainSprite(&game, "SpriteB", nil, ready)
+
+	generation := game.currentBootstrapGeneration()
+	game.runSpriteCallbacks(
+		[]Sprite{spriteA, spriteB},
+		&coreproject.ProjectConfig{},
+		reflect.ValueOf(&game).Elem(),
+		generation,
+	)
+
+	done := make(chan struct{})
+	go func() {
+		game.runBootstrapTasksFor(generation)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(200 * time.Millisecond):
+		select {
+		case ready <- struct{}{}:
+		default:
+		}
+		<-done
+		t.Fatal("runBootstrapTasksFor blocked on earlier sprite Main, want batched concurrent execution")
 	}
 }
 
