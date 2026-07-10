@@ -75,6 +75,7 @@ func init() {
 			"os":        "os",
 			"path":      "path",
 			"reflect":   "reflect",
+			"runtime":   "runtime",
 			"slices":    "slices",
 			"strconv":   "strconv",
 			"strings":   "strings",
