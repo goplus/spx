@@ -19,6 +19,7 @@ package spx
 import (
 	"errors"
 	"reflect"
+	"runtime"
 	"time"
 
 	coreproject "github.com/goplus/spx/v2/internal/core/project"
@@ -96,11 +97,12 @@ func XGot_Game_Reload(game Gamer, index any) (err error) {
 // Scheduling
 // -----------------------------------------------------------------------------
 func SchedNow() int {
+	now := time.Now()
 	err := coreruntime.SchedNow(
 		coreruntime.ScheduleState{
 			IsSchedInMain:   isSchedInMainState(),
 			MainSchedTime:   mainSchedTime(),
-			Now:             time.Now(),
+			Now:             now,
 			MainExecTimeout: time.Second * mainExecTimeoutSec,
 		},
 		coreruntime.SchedulerHooks{
@@ -111,6 +113,9 @@ func SchedNow() int {
 			},
 		},
 	)
+	if handleMainExecutionTimeout(err) {
+		return 0
+	}
 	if err != nil && !errors.Is(err, coreruntime.ErrLoopExecutionTimedOut) {
 		engine.Panic(err.Error())
 	}
@@ -139,10 +144,33 @@ func Sched() int {
 			},
 		},
 	)
+	if handleMainExecutionTimeout(err) {
+		return 0
+	}
 	if err != nil {
 		engine.Panic(err.Error())
 	}
 	return 0
+}
+
+func handleMainExecutionTimeout(err error) bool {
+	if !errors.Is(err, coreruntime.ErrMainExecutionTimedOut) {
+		return false
+	}
+	spxlog.Warn("%s\n%s", coreruntime.MainExecutionTimedOutMsg, debug.GetStackTrace())
+	// Demote long-running top-level Main code to regular coroutine scheduling
+	// after the first timeout so it keeps running without repeated panics.
+	setSchedInMain(false)
+	setMainSchedTime(time.Time{})
+	if engine.IsInCoroutine() {
+		me := gco.Current()
+		if me != nil {
+			gco.Sched(me)
+		}
+	} else {
+		runtime.Gosched()
+	}
+	return true
 }
 
 func Forever(call func()) {
