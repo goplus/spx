@@ -222,7 +222,7 @@ func (p *Game) runSpriteCallbacks(inits []Sprite, proj *coreproject.ProjectConfi
 		},
 	})
 	queueBootstrap(func() {
-		p.runBootstrapSpriteMainBatch(inits)
+		p.runBootstrapSpriteMainsUntilYield(inits)
 	})
 	queueBootstrap(onLoaded)
 }

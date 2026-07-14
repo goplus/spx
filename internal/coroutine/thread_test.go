@@ -344,6 +344,82 @@ func TestJoinAllWaitsForEveryPeer(t *testing.T) {
 	}
 }
 
+func TestJoinYieldedOrDoneResumesCallerAfterPeerFirstYield(t *testing.T) {
+	co := New(nil)
+	releasePeer := make(chan struct{})
+	peerReady := make(chan Thread, 1)
+	callerDone := make(chan struct{})
+
+	peer := co.CreateAndStart(true, "peer", func(peer Thread) int {
+		peerReady <- peer
+		var signal struct{}
+		WaitForChan(co, releasePeer, &signal)
+		return 0
+	})
+
+	timer := time.NewTimer(time.Second)
+	defer timer.Stop()
+	select {
+	case <-peerReady:
+	case <-timer.C:
+		t.Fatal("peer coroutine did not start")
+	}
+
+	co.CreateAndStart(true, "caller", func(me Thread) int {
+		co.JoinYieldedOrDone(peer)
+		close(callerDone)
+		return 0
+	})
+
+	timer = time.NewTimer(time.Second)
+	defer timer.Stop()
+	select {
+	case <-callerDone:
+	case <-timer.C:
+		t.Fatal("caller did not resume after peer reached its first yield")
+	}
+
+	select {
+	case <-releasePeer:
+		t.Fatal("releasePeer should remain controlled by the test")
+	default:
+	}
+	close(releasePeer)
+}
+
+func TestJoinYieldedOrDoneReturnsWhenPeerExitsWithoutYield(t *testing.T) {
+	co := New(nil)
+	peerReady := make(chan Thread, 1)
+	callerDone := make(chan struct{})
+
+	peer := co.CreateAndStart(true, "peer", func(peer Thread) int {
+		peerReady <- peer
+		return 0
+	})
+
+	timer := time.NewTimer(time.Second)
+	defer timer.Stop()
+	select {
+	case <-peerReady:
+	case <-timer.C:
+		t.Fatal("peer coroutine did not start")
+	}
+
+	co.CreateAndStart(true, "caller", func(me Thread) int {
+		co.JoinYieldedOrDone(peer)
+		close(callerDone)
+		return 0
+	})
+
+	timer = time.NewTimer(time.Second)
+	defer timer.Stop()
+	select {
+	case <-callerDone:
+	case <-timer.C:
+		t.Fatal("caller did not resume after peer returned without yielding")
+	}
+}
+
 func TestCreateAndStartFromCoroutineYieldsCallerWhenStarted(t *testing.T) {
 	co := New(nil)
 	co.OnInited()

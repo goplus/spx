@@ -156,6 +156,7 @@ func (p *Coroutines) Yield(me Thread) {
 	p.sema.Unlock()
 	// Set atomic suspended flag first
 	me.suspended.Store(true)
+	me.markYieldedOrDone()
 	// Then update the map for backward compatibility
 	p.mutex.Lock()
 	p.suspended[me] = true

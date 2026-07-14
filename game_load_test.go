@@ -55,12 +55,6 @@ type bootstrapAwakeOrderSprite struct {
 	sawPeerAwake bool
 }
 
-type bootstrapConcurrentMainSprite struct {
-	SpriteImpl
-	waitFor  <-chan struct{}
-	signalTo chan<- struct{}
-}
-
 type cloneAwakeOrderSprite struct {
 	SpriteImpl
 	sawAwakeInMain *bool
@@ -135,19 +129,6 @@ func (s *bootstrapAwakeOrderSprite) Main() {
 	s.sawSelfAwake = s.spriteState.IsAwakened
 	if s.peer != nil {
 		s.sawPeerAwake = s.peer.spriteState.IsAwakened
-	}
-}
-
-func (s *bootstrapConcurrentMainSprite) Main() {
-	if s.signalTo != nil {
-		select {
-		case s.signalTo <- struct{}{}:
-		default:
-		}
-	}
-	if s.waitFor != nil {
-		var signal struct{}
-		engine.WaitForChan(s.waitFor, &signal)
 	}
 }
 
@@ -278,16 +259,6 @@ func newCollisionLayerOrderSprite(g *Game, name string, onMain func()) *collisio
 
 func newBootstrapAwakeOrderSprite(g *Game, name string) *bootstrapAwakeOrderSprite {
 	sprite := &bootstrapAwakeOrderSprite{}
-	sprite.g = g
-	sprite.name = name
-	sprite.sprite = sprite
-	sprite.scriptEventBindings.init(&g.scriptEvents, &sprite.SpriteImpl)
-	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{})
-	return sprite
-}
-
-func newBootstrapConcurrentMainSprite(g *Game, name string, waitFor <-chan struct{}, signalTo chan<- struct{}) *bootstrapConcurrentMainSprite {
-	sprite := &bootstrapConcurrentMainSprite{waitFor: waitFor, signalTo: signalTo}
 	sprite.g = g
 	sprite.name = name
 	sprite.sprite = sprite
@@ -539,14 +510,24 @@ func TestRunSpriteCallbacksAwakesAllSpritesBeforeMain(t *testing.T) {
 	}
 }
 
-func TestRunSpriteCallbacksRunsSpriteMainsConcurrently(t *testing.T) {
+func TestRunSpriteCallbacksRunsSpriteMainsInZOrderUntilFirstYield(t *testing.T) {
 	setupBootstrapScheduler(t)
 
 	var game Game
 
-	ready := make(chan struct{}, 1)
-	spriteA := newBootstrapConcurrentMainSprite(&game, "SpriteA", ready, nil)
-	spriteB := newBootstrapConcurrentMainSprite(&game, "SpriteB", nil, ready)
+	blocked := make(chan struct{})
+	defer close(blocked)
+
+	var spriteASeenThreadCount int64
+	var spriteBSeenThreadCount int64
+	spriteA := newCollisionLayerOrderSprite(&game, "SpriteA", func() {
+		spriteASeenThreadCount = gco.LastThreadID()
+		var signal struct{}
+		engine.WaitForChan(blocked, &signal)
+	})
+	spriteB := newCollisionLayerOrderSprite(&game, "SpriteB", func() {
+		spriteBSeenThreadCount = gco.LastThreadID()
+	})
 
 	generation := game.currentBootstrapGeneration()
 	game.runSpriteCallbacks(
@@ -557,6 +538,106 @@ func TestRunSpriteCallbacksRunsSpriteMainsConcurrently(t *testing.T) {
 	)
 
 	runBootstrapTasksWithScheduler(t, &game, generation)
+
+	if spriteASeenThreadCount != 1 {
+		t.Fatalf("SpriteA saw %d created threads before its first yield, want 1", spriteASeenThreadCount)
+	}
+	if spriteBSeenThreadCount != 2 {
+		t.Fatalf("SpriteB saw %d created threads before its first yield, want 2", spriteBSeenThreadCount)
+	}
+}
+
+func TestRunBootstrapMainUntilYieldReleasesFollowingBootstrapTasks(t *testing.T) {
+	setupBootstrapScheduler(t)
+
+	var game Game
+	blocked := make(chan struct{})
+	defer close(blocked)
+
+	stageStarted := make(chan struct{})
+	stageResumed := make(chan struct{})
+	followingTaskRan := make(chan struct{})
+	generation := game.currentBootstrapGeneration()
+	game.deferBootstrapFor(generation, func() {
+		game.runBootstrapMainUntilYield(&game, func() {
+			close(stageStarted)
+			var signal struct{}
+			engine.WaitForChan(blocked, &signal)
+			close(stageResumed)
+		})
+	})
+	game.deferBootstrapFor(generation, func() {
+		close(followingTaskRan)
+	})
+
+	runBootstrapTasksWithScheduler(t, &game, generation)
+
+	select {
+	case <-stageStarted:
+	default:
+		t.Fatal("stage Main did not start")
+	}
+	select {
+	case <-followingTaskRan:
+	default:
+		t.Fatal("following bootstrap task did not run after stage Main yielded")
+	}
+	select {
+	case <-stageResumed:
+		t.Fatal("stage Main resumed before its wait was released")
+	default:
+	}
+}
+
+func TestRunSpriteCallbacksAllowsOnStartAfterMainFirstYield(t *testing.T) {
+	setupBootstrapScheduler(t)
+
+	var game Game
+	game.initRuntimeState()
+	game.events = make(chan event, eventBufferSize)
+
+	blocked := make(chan struct{})
+	defer close(blocked)
+
+	started := make(chan struct{})
+	var spriteA *collisionLayerOrderSprite
+	spriteA = newCollisionLayerOrderSprite(&game, "SpriteA", func() {
+		spriteA.OnStart(func() {
+			close(started)
+		})
+		var signal struct{}
+		engine.WaitForChan(blocked, &signal)
+	})
+	spriteB := newCollisionLayerOrderSprite(&game, "SpriteB", nil)
+
+	generation := game.currentBootstrapGeneration()
+	game.runSpriteCallbacks(
+		[]Sprite{spriteA, spriteB},
+		&coreproject.ProjectConfig{},
+		reflect.ValueOf(&game).Elem(),
+		generation,
+	)
+
+	runBootstrapTasksWithScheduler(t, &game, generation)
+
+	game.dispatchStartEventIfNeeded()
+
+	timer := time.NewTimer(time.Second)
+	defer timer.Stop()
+	var ev event
+	select {
+	case ev = <-game.events:
+	case <-timer.C:
+		t.Fatal("start event was not queued after bootstrap completed")
+	}
+
+	game.handleEvent(ev)
+
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("OnStart did not run after Main yielded once")
+	}
 }
 
 func TestInitRuntimeProxyAppliesCostumeBeforeAwake(t *testing.T) {
