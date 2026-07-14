@@ -57,6 +57,9 @@ type threadImpl struct {
 	joinMu     sync.Mutex
 	joinDone   bool
 	joinWaiter map[Thread]struct{}
+
+	yieldedOrDoneOnce sync.Once
+	yieldedOrDone     chan struct{}
 }
 
 // Thread represents a coroutine id.
@@ -259,6 +262,52 @@ func (p *Coroutines) JoinAll(targets []Thread) {
 	}
 }
 
+func (p *Coroutines) JoinYieldedOrDone(target Thread) {
+	if target == nil {
+		return
+	}
+
+	me := p.currentCoroutineThread()
+	if me == nil {
+		<-target.yieldedOrDone
+		return
+	}
+	if me == target {
+		return
+	}
+
+	select {
+	case <-target.yieldedOrDone:
+		return
+	default:
+	}
+
+	var signal struct{}
+	WaitForChan(p, target.yieldedOrDone, &signal)
+}
+
+func (p *Coroutines) JoinYieldedOrDoneAll(targets []Thread) {
+	if len(targets) == 0 {
+		return
+	}
+	if len(targets) == 1 {
+		p.JoinYieldedOrDone(targets[0])
+		return
+	}
+
+	seen := make(map[Thread]struct{}, len(targets))
+	for _, target := range targets {
+		if target == nil {
+			continue
+		}
+		if _, exists := seen[target]; exists {
+			continue
+		}
+		seen[target] = struct{}{}
+		p.JoinYieldedOrDone(target)
+	}
+}
+
 func (p *Coroutines) StopIf(filter func(th Thread) bool) {
 	p.mutex.Lock()
 	allThreads := make([]Thread, 0, len(p.allThreads))
@@ -321,12 +370,13 @@ func resolveThreadName(obj ThreadObj) string {
 
 func (p *Coroutines) newThread(obj ThreadObj) Thread {
 	th := &threadImpl{
-		Obj:        obj,
-		frame:      p.frame,
-		id:         atomic.AddInt64(&p.nextThreadID, 1),
-		schedFrame: -1,
-		name:       resolveThreadName(obj),
-		done:       make(chan struct{}),
+		Obj:           obj,
+		frame:         p.frame,
+		id:            atomic.AddInt64(&p.nextThreadID, 1),
+		schedFrame:    -1,
+		name:          resolveThreadName(obj),
+		done:          make(chan struct{}),
+		yieldedOrDone: make(chan struct{}),
 	}
 	th.ctx, th.cancelFunc = context.WithCancel(context.Background())
 
@@ -336,6 +386,12 @@ func (p *Coroutines) newThread(obj ThreadObj) Thread {
 
 	th.cond = sync.NewCond(&th.mutex)
 	return th
+}
+
+func (p *threadImpl) markYieldedOrDone() {
+	p.yieldedOrDoneOnce.Do(func() {
+		close(p.yieldedOrDone)
+	})
 }
 
 func (p *threadImpl) addJoinWaiter(waiter Thread) bool {
@@ -461,6 +517,7 @@ func (p *Coroutines) runThread(th Thread, fn func(me Thread) int) {
 		p.unregisterThread(th)
 		p.setWaitState(th, waitStatusDelete)
 		th.Cancel()
+		th.markYieldedOrDone()
 		for _, waiter := range th.finishJoinWaiters() {
 			p.markIdleAndResume(waiter)
 		}

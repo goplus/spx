@@ -39,7 +39,7 @@ func (p *Game) OnEngineStart() {
 			defer engine.CheckPanic()
 			if me, ok := p.gamer.(interface{ MainEntry() }); ok {
 				p.deferBootstrapFor(generation, func() {
-					runMain(me.MainEntry)
+					p.runBootstrapMainUntilYield(p, me.MainEntry)
 				})
 			}
 			if !p.lifecycleState.IsRunned.Load() {
@@ -107,30 +107,35 @@ func runMain(call func()) {
 	coreruntime.RunMain(call, time.Now(), setSchedInMain, setMainSchedTime)
 }
 
-func (p *Game) runBootstrapSpriteMainBatch(inits []Sprite) {
+func (p *Game) runBootstrapMainUntilYield(owner coroutine.ThreadObj, mainFn func()) {
+	if mainFn == nil {
+		return
+	}
+
+	thread := gco.CreateAndStart(false, owner, func(coroutine.Thread) int {
+		runMain(mainFn)
+		return 0
+	})
+	gco.JoinYieldedOrDone(thread)
+}
+
+func (p *Game) runBootstrapSpriteMainsUntilYield(inits []Sprite) {
 	if len(inits) == 0 {
 		return
 	}
 
-	threads := make([]coroutine.Thread, 0, len(inits))
+	// Advance initial sprite Mains in load/Z-order until each reaches its first
+	// yield (or return) before continuing bootstrap. This preserves deterministic
+	// pre-yield setup while still releasing startup once a long-running Main
+	// yields for the first time.
 	for _, ini := range inits {
 		spr := spriteOf(ini)
 		if spr == nil {
 			continue
 		}
 
-		mainFn := ini.Main
-		thread := gco.CreateAndStart(false, spr.pthis, func(coroutine.Thread) int {
-			runMain(mainFn)
-			return 0
-		})
-		if thread != nil {
-			threads = append(threads, thread)
-		}
+		p.runBootstrapMainUntilYield(spr.pthis, ini.Main)
 	}
-	// Keep bootstrap Main behavior aligned with the old awake dispatch:
-	// start every initial sprite Main first, then wait for the batch.
-	gco.JoinAll(threads)
 }
 
 func (p *Game) deferBootstrap(call func()) {
