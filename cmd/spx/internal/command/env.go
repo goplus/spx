@@ -211,7 +211,8 @@ func (cmd *CmdTool) runProjectImport() error {
 
 func (cmd *CmdTool) newProjectImportCommand() (*exec.Cmd, context.Context, time.Duration, context.CancelFunc) {
 	timeout := cmd.projectImportTimeout()
-	args := []string{"--headless", "--path", cmd.ProjectDir, "--import"}
+	// Avoid loading project GDExtensions during resource import.
+	args := []string{"--headless", "--path", cmd.ProjectDir, "--import", "--recovery-mode"}
 	if timeout <= 0 {
 		return exec.Command(cmd.CmdPath, args...), context.Background(), 0, func() {}
 	}

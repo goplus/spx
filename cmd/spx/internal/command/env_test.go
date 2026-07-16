@@ -117,6 +117,7 @@ func TestShouldReimport(t *testing.T) {
 		want        bool
 	}{
 		{name: "skips buildweb", cmdName: "buildweb", want: false},
+		{name: "reimports web template export", cmdName: "exporttemplateweb", want: true},
 		{name: "reimports exportweb when cache missing", cmdName: "exportweb", want: true},
 		{name: "skips runtime mode", cmdName: "runweb", runtimeMode: true, want: false},
 		{name: "skips pure engine mode", cmdName: "build", tags: "pure_engine", want: false},
@@ -144,6 +145,19 @@ func TestShouldReimport(t *testing.T) {
 				t.Fatalf("ShouldReimport() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestProjectImportUsesRecoveryMode(t *testing.T) {
+	t.Setenv(projectImportTimeoutEnvVar, "0")
+	cmd := CmdTool{CmdPath: "godot", ProjectDir: "/tmp/spx-project"}
+	execCmd, _, _, cancel := cmd.newProjectImportCommand()
+	defer cancel()
+
+	got := strings.Join(execCmd.Args[1:], " ")
+	want := "--headless --path /tmp/spx-project --import --recovery-mode"
+	if got != want {
+		t.Fatalf("project import args = %q, want %q", got, want)
 	}
 }
 
