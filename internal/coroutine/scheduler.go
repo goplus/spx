@@ -52,9 +52,13 @@ func (p *Coroutines) Yield(me Thread) {
 		me.suspendState = suspendStateSuspended
 		me.suspended.Store(true)
 	}
+	me.suspendMu.Unlock()
+
 	for _, waiter := range me.finishYieldWaiters() {
 		p.markRunnableAndResume(waiter)
 	}
+
+	me.suspendMu.Lock()
 	for me.suspendState == suspendStateSuspended && !p.isThreadCanceled(me) {
 		me.suspendCond.Wait()
 	}

@@ -240,6 +240,64 @@ func TestResumeBeforeYieldDoesNotBlockOrLoseWakeup(t *testing.T) {
 	}
 }
 
+func TestMutualYieldWaitersDoNotDeadlock(t *testing.T) {
+	co := New(nil)
+	a := co.newThread("a")
+	b := co.newThread("b")
+	co.registerThread(a)
+	co.registerThread(b)
+	a.yieldWaiters = map[Thread]struct{}{b: {}}
+	b.yieldWaiters = map[Thread]struct{}{a: {}}
+
+	// Keep A between releasing runMu and publishing its suspension. B can then
+	// publish its own suspension and try to wake A. Yield must not hold B's
+	// suspendMu during that wake-up, or A and B can deadlock on each other's
+	// suspendMu.
+	a.suspendMu.Lock()
+	aStarted := make(chan struct{})
+	bStarted := make(chan struct{})
+	done := make(chan struct{}, 2)
+	go func() {
+		co.runThread(a, func(me Thread) int {
+			close(aStarted)
+			co.Yield(me)
+			return 0
+		})
+		done <- struct{}{}
+	}()
+	<-aStarted
+	co.runMu.Lock()
+	co.runMu.Unlock()
+
+	go func() {
+		co.runThread(b, func(me Thread) int {
+			close(bStarted)
+			co.Yield(me)
+			return 0
+		})
+		done <- struct{}{}
+	}()
+	<-bStarted
+
+	deadline := time.Now().Add(time.Second)
+	for !b.suspended.Load() {
+		if time.Now().After(deadline) {
+			a.suspendMu.Unlock()
+			t.Fatal("B did not publish its suspended state")
+		}
+		runtime.Gosched()
+	}
+	a.suspendMu.Unlock()
+
+	for range 2 {
+		select {
+		case <-done:
+		case <-time.After(time.Second):
+			t.Fatal("mutual yield waiters deadlocked")
+		}
+	}
+}
+
 func TestSchedResumesWithoutWaitingForUpdate(t *testing.T) {
 	co := New(nil)
 	done := make(chan struct{})
