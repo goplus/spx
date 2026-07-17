@@ -17,6 +17,8 @@
 package time
 
 import (
+	"math"
+	"sync/atomic"
 	stdtime "time"
 )
 
@@ -27,9 +29,9 @@ var (
 	timeSinceLevelLoad     float64
 	deltaTime              float64
 	realDeltaTime          float64
-	fixedDeltaTime         float64
+	fixedDeltaTimeBits     atomic.Uint64
 	timeScale              float64
-	curFrame               int64
+	curFrame               atomic.Int64
 	setTimeScaleCallback   func(float64)
 	startTimestamp         stdtime.Time
 	lastTimestamp          stdtime.Time
@@ -57,7 +59,7 @@ func FPS() float64 {
 }
 
 func Frame() int64 {
-	return curFrame
+	return curFrame.Load()
 }
 
 func TimeScale() float64 {
@@ -76,6 +78,7 @@ func DeltaTime() float64 {
 }
 
 func FixedDeltaTime() (float64, bool) {
+	fixedDeltaTime := math.Float64frombits(fixedDeltaTimeBits.Load())
 	return fixedDeltaTime, fixedDeltaTime > 0
 }
 
@@ -83,6 +86,7 @@ func FixedDeltaTime() (float64, bool) {
 // It intentionally does not apply to Godot fixed-physics callbacks, which keep
 // their engine-provided delta until deterministic physics is supported.
 func EffectiveLogicalDeltaTime(rawDelta float64) float64 {
+	fixedDeltaTime := math.Float64frombits(fixedDeltaTimeBits.Load())
 	if fixedDeltaTime > 0 {
 		return fixedDeltaTime
 	}
@@ -91,10 +95,10 @@ func EffectiveLogicalDeltaTime(rawDelta float64) float64 {
 
 func SetFixedDeltaTime(delta float64) {
 	if delta <= 0 {
-		fixedDeltaTime = 0
+		fixedDeltaTimeBits.Store(0)
 		return
 	}
-	fixedDeltaTime = delta
+	fixedDeltaTimeBits.Store(math.Float64bits(delta))
 }
 
 func UnscaledDeltaTime() float64 {
@@ -115,7 +119,7 @@ func Start(setTimeScaleCB func(float64)) {
 	realTimeSinceLevelLoad, timeSinceLevelLoad = 0, 0
 	deltaTime, realDeltaTime = 0, 0
 	timeScale = 1
-	curFrame = 0
+	curFrame.Store(0)
 	fps = DefaultFPS
 
 	setTimeScaleCallback = setTimeScaleCB
@@ -133,6 +137,6 @@ func Update(delta float64, pfps float64) {
 
 	deltaTime = delta
 	timeSinceLevelLoad += deltaTime
-	curFrame += 1
+	curFrame.Add(1)
 	fps = pfps
 }

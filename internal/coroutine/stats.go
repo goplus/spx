@@ -16,31 +16,32 @@
 
 package coroutine
 
-// UpdateJobsStats stores detailed statistics of coroutine updates
+// UpdateJobsStats reports timings and job counts for one Update call. Durations
+// are expressed in milliseconds.
 type UpdateJobsStats struct {
-	InitTime       float64 // Initialization time
-	LoopTime       float64 // Main loop time
-	MoveTime       float64 // Queue move time
-	WaitTime       float64 // Wait time
-	TaskProcessing float64 // Task processing time
-	GCPauses       float64 // GC pause time
-	ExternalTime   float64 // External time (may include scheduling overhead)
-	TotalTime      float64 // Total time
-	TimeDifference float64 // Time difference
-	TaskCounts     int     // Number of tasks processed
-	WaitFrameCount int     // Number of frames waited
-	WaitMainCount  int     // Number of times waiting for the main thread
-	NextCount      int     // Number of next frame queue
-	GCCount        int     // Number of GC occurrences
-	GCStatsEnabled bool    // Whether GCCount and GCPauses were collected this update
-	LoopIterations int     // Number of loop iterations
+	InitTime       float64 // Time spent preparing the update.
+	LoopTime       float64 // Time spent in the update loop.
+	MoveTime       float64 // Time spent promoting deferred jobs.
+	WaitTime       float64 // Time spent waiting for runnable work.
+	TaskProcessing float64 // Time spent processing jobs.
+	GCPauses       float64 // GC pause time observed during the update.
+	ExternalTime   float64 // Unaccounted time, including runtime scheduling overhead.
+	TotalTime      float64 // Total update time.
+	TimeDifference float64 // Difference between total and accounted time.
+	TaskCounts     int     // Number of jobs processed.
+	WaitFrameCount int     // Number of frame-wait jobs resumed.
+	WaitMainCount  int     // Number of main-thread jobs executed.
+	NextCount      int     // Number of jobs deferred at the end of the update loop.
+	GCCount        int     // Number of GC cycles observed during the update.
+	GCStatsEnabled bool    // Whether GCCount and GCPauses were collected.
+	LoopIterations int     // Number of update-loop iterations.
 }
 
-// Global variable storing the most recent update statistics
-var lastDebugUpdateStats UpdateJobsStats
-
-// GetLastUpdateStats returns the most recent update statistics.
-// GCCount and GCPauses are meaningful only when GCStatsEnabled is true.
-func (p *Coroutines) GetLastUpdateStats() UpdateJobsStats {
-	return lastDebugUpdateStats
+// GetLastUpdateStats returns the package-wide statistics from the most recent
+// Update call. GCCount and GCPauses are meaningful only when GCStatsEnabled is
+// true.
+func (*Coroutines) GetLastUpdateStats() UpdateJobsStats {
+	return lastUpdateStats
 }
+
+var lastUpdateStats UpdateJobsStats
