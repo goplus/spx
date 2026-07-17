@@ -24,6 +24,7 @@ type node[T any] struct {
 	next  *node[T]
 }
 
+// Queue is a thread-safe double-ended queue. Its zero value is ready for use.
 type Queue[T any] struct {
 	mu    sync.Mutex
 	head  *node[T]
@@ -32,6 +33,7 @@ type Queue[T any] struct {
 	pool  sync.Pool
 }
 
+// NewQueue creates an empty queue.
 func NewQueue[T any]() *Queue[T] {
 	q := &Queue[T]{}
 	q.pool.New = func() any {
@@ -40,37 +42,12 @@ func NewQueue[T any]() *Queue[T] {
 	return q
 }
 
-func (s *Queue[T]) ensurePool() {
-	if s.pool.New == nil {
-		s.pool.New = func() any {
-			return new(node[T])
-		}
-	}
-}
-
-func (s *Queue[T]) acquireNode(value T) *node[T] {
-	s.ensurePool()
-	n := s.pool.Get().(*node[T])
-	n.value = value
-	n.prev = nil
-	n.next = nil
-	return n
-}
-
-func (s *Queue[T]) releaseNode(n *node[T]) {
-	var zero T
-	n.value = zero
-	n.prev = nil
-	n.next = nil
-	s.ensurePool()
-	s.pool.Put(n)
-}
-
-// Move all tasks from the src queue to the current queue.
-// Afterward, the src queue will be empty.
-func (s *Queue[T]) Move(src *Queue[T]) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+// Move appends every value from src to the receiving queue and leaves src
+// empty. Source and receiver must be different queues; concurrent moves between
+// the same two queues must use a consistent direction.
+func (q *Queue[T]) Move(src *Queue[T]) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
 	src.mu.Lock()
 	defer src.mu.Unlock()
 
@@ -78,102 +55,132 @@ func (s *Queue[T]) Move(src *Queue[T]) {
 		return
 	}
 
-	if s.count == 0 {
-		s.head = src.head
-		s.tail = src.tail
+	if q.count == 0 {
+		q.head = src.head
+		q.tail = src.tail
 	} else {
-		s.tail.next = src.head
-		src.head.prev = s.tail
-		s.tail = src.tail
+		q.tail.next = src.head
+		src.head.prev = q.tail
+		q.tail = src.tail
 	}
-	s.count += src.count
+	q.count += src.count
 
-	// Clear source queue
 	src.head = nil
 	src.tail = nil
 	src.count = 0
 }
 
-func (s *Queue[T]) Count() int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.count
+// Count returns the number of values in the queue.
+func (q *Queue[T]) Count() int {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	return q.count
 }
 
-func (s *Queue[T]) PushBack(value T) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+// PushBack adds value to the back of the queue.
+func (q *Queue[T]) PushBack(value T) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
 
-	newNode := s.acquireNode(value)
-	if s.count == 0 {
-		s.head = newNode
-		s.tail = newNode
+	newNode := q.acquireNode(value)
+	if q.count == 0 {
+		q.head = newNode
+		q.tail = newNode
 	} else {
-		newNode.prev = s.tail
-		s.tail.next = newNode
-		s.tail = newNode
+		newNode.prev = q.tail
+		q.tail.next = newNode
+		q.tail = newNode
 	}
-	s.count++
+	q.count++
 }
 
-func (s *Queue[T]) PushFront(value T) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+// PushFront adds value to the front of the queue.
+func (q *Queue[T]) PushFront(value T) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
 
-	newNode := s.acquireNode(value)
-	if s.count == 0 {
-		s.head = newNode
-		s.tail = newNode
+	newNode := q.acquireNode(value)
+	if q.count == 0 {
+		q.head = newNode
+		q.tail = newNode
 	} else {
-		newNode.next = s.head
-		s.head.prev = newNode
-		s.head = newNode
+		newNode.next = q.head
+		q.head.prev = newNode
+		q.head = newNode
 	}
-	s.count++
+	q.count++
 }
 
-func (s *Queue[T]) PopFront() T {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+// PopFront removes and returns the front value. It panics if the queue is empty.
+func (q *Queue[T]) PopFront() T {
+	q.mu.Lock()
+	defer q.mu.Unlock()
 
-	if s.count == 0 {
+	if q.count == 0 {
 		panic("queue is empty")
 	}
 
-	n := s.head
+	n := q.head
 	value := n.value
-	s.head = n.next
-	s.count--
+	q.head = n.next
+	q.count--
 
-	if s.count == 0 {
-		s.tail = nil
+	if q.count == 0 {
+		q.tail = nil
 	} else {
-		s.head.prev = nil
+		q.head.prev = nil
 	}
 
-	s.releaseNode(n)
+	q.releaseNode(n)
 	return value
 }
 
-func (s *Queue[T]) PopBack() T {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+// PopBack removes and returns the back value. It panics if the queue is empty.
+func (q *Queue[T]) PopBack() T {
+	q.mu.Lock()
+	defer q.mu.Unlock()
 
-	if s.count == 0 {
+	if q.count == 0 {
 		panic("queue is empty")
 	}
 
-	n := s.tail
+	n := q.tail
 	value := n.value
-	s.tail = n.prev
-	s.count--
+	q.tail = n.prev
+	q.count--
 
-	if s.count == 0 {
-		s.head = nil
+	if q.count == 0 {
+		q.head = nil
 	} else {
-		s.tail.next = nil
+		q.tail.next = nil
 	}
 
-	s.releaseNode(n)
+	q.releaseNode(n)
 	return value
+}
+
+func (q *Queue[T]) ensurePool() {
+	if q.pool.New == nil {
+		q.pool.New = func() any {
+			return new(node[T])
+		}
+	}
+}
+
+func (q *Queue[T]) acquireNode(value T) *node[T] {
+	q.ensurePool()
+	n := q.pool.Get().(*node[T])
+	n.value = value
+	n.prev = nil
+	n.next = nil
+	return n
+}
+
+func (q *Queue[T]) releaseNode(n *node[T]) {
+	var zero T
+	n.value = zero
+	n.prev = nil
+	n.next = nil
+	q.ensurePool()
+	q.pool.Put(n)
 }

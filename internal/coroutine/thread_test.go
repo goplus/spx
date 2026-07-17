@@ -37,10 +37,10 @@ func (*invalidNamedThreadObj) Name(_ string) string {
 }
 
 func canReenterCoroutineMutex(co *Coroutines) bool {
-	if !co.mutex.TryLock() {
+	if !co.threadsMu.TryLock() {
 		return false
 	}
-	co.mutex.Unlock()
+	co.threadsMu.Unlock()
 	return true
 }
 
@@ -83,9 +83,9 @@ func TestStopIfStopsActiveThread(t *testing.T) {
 		t.Fatal("coroutine did not start")
 	}
 
-	co.mutex.Lock()
+	co.threadsMu.Lock()
 	_, suspended := co.suspended[th]
-	co.mutex.Unlock()
+	co.threadsMu.Unlock()
 	if suspended {
 		t.Fatal("test precondition failed: spinning thread should not be in suspended map")
 	}

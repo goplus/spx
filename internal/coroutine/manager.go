@@ -1,0 +1,103 @@
+/*
+ * Copyright (c) 2021 The XGo Authors (xgo.dev). All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package coroutine
+
+import (
+	"errors"
+	sdebug "runtime/debug"
+	"sync"
+	"sync/atomic"
+)
+
+var (
+	// ErrCannotYieldANonrunningThread is the panic value used when a coroutine
+	// tries to yield without owning the scheduler.
+	ErrCannotYieldANonrunningThread = errors.New("can not yield a non-running thread")
+
+	// ErrAbortThread is the panic value used to stop the current coroutine.
+	ErrAbortThread = errors.New("abort thread")
+)
+
+// Coroutines coordinates thread lifecycle and cooperative scheduling.
+type Coroutines struct {
+	onPanic   func(name, stack string)
+	hasInited atomic.Bool
+	debug     bool
+
+	// runMu ensures that only one coroutine executes at a time. current is valid
+	// only while a coroutine owns runMu.
+	runMu   sync.Mutex
+	current atomic.Pointer[threadImpl]
+
+	// threadsMu protects the thread registry and suspension map.
+	threadsMu  sync.Mutex
+	suspended  map[Thread]bool
+	allThreads map[Thread]struct{}
+
+	// schedulerMu protects threadStates and the condition-variable predicate.
+	// It also makes state changes and their corresponding enqueue atomic.
+	schedulerMu   sync.Mutex
+	schedulerCond *sync.Cond
+	threadStates  map[Thread]threadState
+	currentJobs   *Queue[*WaitJob]
+	deferredJobs  *Queue[*WaitJob]
+
+	nextJobID    atomic.Int64
+	nextThreadID atomic.Int64
+
+	perfDebug   atomic.Bool
+	readGCStats func(*sdebug.GCStats)
+
+	// goroutineIDs contains the IDs of goroutines created by CreateAndStart.
+	goroutineIDs sync.Map // map[int64]struct{}
+}
+
+// New creates a coroutine manager. onPanic is called when a coroutine exits
+// with an unhandled panic other than ErrAbortThread.
+func New(onPanic func(name, stack string)) *Coroutines {
+	p := &Coroutines{
+		onPanic:      onPanic,
+		suspended:    make(map[Thread]bool),
+		allThreads:   make(map[Thread]struct{}),
+		threadStates: make(map[Thread]threadState),
+		currentJobs:  NewQueue[*WaitJob](),
+		deferredJobs: NewQueue[*WaitJob](),
+		readGCStats:  sdebug.ReadGCStats,
+	}
+	p.schedulerCond = sync.NewCond(&p.schedulerMu)
+	return p
+}
+
+// OnRestart marks the scheduler as not yet initialized.
+func (p *Coroutines) OnRestart() {
+	p.hasInited.Store(false)
+}
+
+// OnInited marks the scheduler as initialized.
+func (p *Coroutines) OnInited() {
+	p.hasInited.Store(true)
+}
+
+// SetPerfDebug enables or disables GC statistics collection during Update.
+func (p *Coroutines) SetPerfDebug(enabled bool) {
+	p.perfDebug.Store(enabled)
+}
+
+// IsAbortThreadError reports whether err is the coroutine abort sentinel.
+func IsAbortThreadError(err any) bool {
+	return err == ErrAbortThread
+}

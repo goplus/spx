@@ -19,6 +19,7 @@ package coroutine
 import (
 	"runtime"
 	sdebug "runtime/debug"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -32,7 +33,7 @@ func TestUpdateReadsGCStatsOnlyWhenPerfDebugEnabled(t *testing.T) {
 	originalReadGCStats := co.readGCStats
 	t.Cleanup(func() {
 		co.readGCStats = originalReadGCStats
-		lastDebugUpdateStats = UpdateJobsStats{}
+		lastUpdateStats = UpdateJobsStats{}
 	})
 
 	var calls int
@@ -90,9 +91,9 @@ func TestWaitForChanReceivesValue(t *testing.T) {
 
 	deadline := time.Now().Add(time.Second)
 	for {
-		co.waitMutex.Lock()
-		waitingCount := len(co.waiting)
-		co.waitMutex.Unlock()
+		co.schedulerMu.Lock()
+		waitingCount := len(co.threadStates)
+		co.schedulerMu.Unlock()
 		if waitingCount > 0 {
 			break
 		}
@@ -125,10 +126,10 @@ func TestWaitForChanDoesNotKeepReceiverAfterCancel(t *testing.T) {
 
 	deadline := time.Now().Add(time.Second)
 	for {
-		co.waitMutex.Lock()
-		waiting := co.waiting[th]
-		co.waitMutex.Unlock()
-		if waiting {
+		co.schedulerMu.Lock()
+		state := co.threadStates[th]
+		co.schedulerMu.Unlock()
+		if state == threadBlocked {
 			break
 		}
 		if time.Now().After(deadline) {
@@ -156,6 +157,149 @@ func TestWaitForChanDoesNotKeepReceiverAfterCancel(t *testing.T) {
 		}
 		if time.Now().After(deadline) {
 			t.Fatal("channel receiver should eventually exit after cancel")
+		}
+	}
+}
+
+func TestYieldClearsCurrentWhileCoroutineIsSuspended(t *testing.T) {
+	co := New(nil)
+	started := make(chan struct{})
+	done := make(chan struct{})
+
+	th := co.Create("worker", func(me Thread) int {
+		close(started)
+		co.Yield(me)
+		close(done)
+		return 0
+	})
+
+	<-started
+	deadline := time.Now().Add(time.Second)
+	for !th.suspended.Load() {
+		if time.Now().After(deadline) {
+			t.Fatal("coroutine did not suspend")
+		}
+		runtime.Gosched()
+	}
+	if current := co.Current(); current != nil {
+		t.Fatalf("Current while every coroutine is suspended = %v, want nil", current)
+	}
+
+	co.Resume(th)
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("coroutine did not finish after resume")
+	}
+}
+
+func TestSchedResumesWithoutWaitingForUpdate(t *testing.T) {
+	co := New(nil)
+	done := make(chan struct{})
+	co.Create("worker", func(me Thread) int {
+		co.Sched(me)
+		close(done)
+		return 0
+	})
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("Sched waited for an Update pass")
+	}
+}
+
+func TestUpdateDrainsRepeatedWaitYieldWithoutLosingRunnableState(t *testing.T) {
+	const (
+		runs   = 20
+		yields = 100
+	)
+	for run := 0; run < runs; run++ {
+		co := New(nil)
+		co.OnInited()
+		done := make(chan struct{})
+		th := co.Create("worker", func(me Thread) int {
+			for range yields {
+				co.WaitYield(me)
+			}
+			close(done)
+			return 0
+		})
+
+		deadline := time.Now().Add(time.Second)
+		for !th.suspended.Load() {
+			if time.Now().After(deadline) {
+				t.Fatalf("run %d: coroutine did not reach its first yield", run)
+			}
+			runtime.Gosched()
+		}
+		co.Update()
+		select {
+		case <-done:
+		default:
+			t.Fatalf("run %d: Update returned before all %d cooperative yields completed", run, yields)
+		}
+	}
+}
+
+func TestUpdateWaitsForCoroutineSpawnedByCurrentTask(t *testing.T) {
+	previousProcs := runtime.GOMAXPROCS(1)
+	t.Cleanup(func() { runtime.GOMAXPROCS(previousProcs) })
+
+	const runs = 100
+	for run := 0; run < runs; run++ {
+		co := New(nil)
+		co.OnInited()
+		var ran atomic.Bool
+
+		co.enqueueJob(&WaitJob{
+			Type: waitTypeMainThread,
+			Call: func() {
+				co.Create("spawned", func(me Thread) int {
+					ran.Store(true)
+					return 0
+				})
+			},
+		})
+
+		co.Update()
+		if !ran.Load() {
+			t.Fatalf("run %d: Update returned before the spawned coroutine ran", run)
+		}
+	}
+}
+
+func TestUpdateWaitsForJoinWaiterResumedByCompletingThread(t *testing.T) {
+	previousProcs := runtime.GOMAXPROCS(4)
+	t.Cleanup(func() { runtime.GOMAXPROCS(previousProcs) })
+
+	const runs = 100
+	for run := 0; run < runs; run++ {
+		co := New(nil)
+		co.OnInited()
+		var waiterRan atomic.Bool
+
+		co.enqueueJob(&WaitJob{
+			Type: waitTypeMainThread,
+			Call: func() {
+				co.Create("controller", func(controller Thread) int {
+					var target Thread
+					co.Create("waiter", func(waiter Thread) int {
+						co.Join(target)
+						waiterRan.Store(true)
+						return 0
+					})
+					target = co.Create("target", func(target Thread) int {
+						return 0
+					})
+					return 0
+				})
+			},
+		})
+
+		co.Update()
+		if !waiterRan.Load() {
+			t.Fatalf("run %d: Update returned before the Join waiter resumed", run)
 		}
 	}
 }

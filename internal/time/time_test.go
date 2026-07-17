@@ -18,6 +18,7 @@ package time
 
 import (
 	"math"
+	"sync"
 	"testing"
 	stdtime "time"
 )
@@ -27,9 +28,9 @@ func resetStateForTest() {
 	timeSinceLevelLoad = 0
 	deltaTime = 0
 	realDeltaTime = 0
-	fixedDeltaTime = 0
+	fixedDeltaTimeBits.Store(0)
 	timeScale = 0
-	curFrame = 0
+	curFrame.Store(0)
 	setTimeScaleCallback = nil
 	startTimestamp = stdtime.Time{}
 	lastTimestamp = stdtime.Time{}
@@ -46,7 +47,7 @@ func TestStartInitializesTimeState(t *testing.T) {
 	deltaTime = 7
 	realDeltaTime = 6
 	timeScale = 5
-	curFrame = 4
+	curFrame.Store(4)
 	fps = 3
 	timerBaseTime = 1
 	timestamps = []int64{100, 200}
@@ -105,6 +106,19 @@ func TestUpdateRefreshesRealTimeState(t *testing.T) {
 	}
 }
 
+func TestOnReloadKeepsEngineFrame(t *testing.T) {
+	resetStateForTest()
+	Start(nil)
+	Update(0.1, 60)
+	before := Frame()
+
+	OnReload()
+
+	if got := Frame(); got != before {
+		t.Fatalf("Frame() after OnReload = %d, want unchanged %d", got, before)
+	}
+}
+
 func TestUpdateUsesProvidedLogicalDeltaForLogicalTime(t *testing.T) {
 	resetStateForTest()
 	SetFixedDeltaTime(1.0 / 30)
@@ -149,6 +163,29 @@ func TestEffectiveLogicalDeltaTimeFallsBackToRawValue(t *testing.T) {
 	if got := EffectiveLogicalDeltaTime(0.25); got != 0.25 {
 		t.Fatalf("EffectiveLogicalDeltaTime() = %v, want 0.25", got)
 	}
+}
+
+func TestFixedDeltaTimeSupportsConcurrentSessionChanges(t *testing.T) {
+	resetStateForTest()
+	var wg sync.WaitGroup
+	for range 4 {
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			for i := 0; i < 1000; i++ {
+				SetFixedDeltaTime(1.0 / 30)
+				SetFixedDeltaTime(0)
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			for i := 0; i < 1000; i++ {
+				_, _ = FixedDeltaTime()
+				_ = EffectiveLogicalDeltaTime(0.25)
+			}
+		}()
+	}
+	wg.Wait()
 }
 
 func TestTimerTracksTimeRelativeToReset(t *testing.T) {
