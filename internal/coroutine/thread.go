@@ -30,6 +30,14 @@ import (
 // implementing Name() also provide the thread's diagnostic name.
 type ThreadObj any
 
+type suspendState uint8
+
+const (
+	suspendStateRunning suspendState = iota
+	suspendStateSuspended
+	suspendStateSignaled
+)
+
 type threadImpl struct {
 	Obj ThreadObj
 
@@ -37,10 +45,11 @@ type threadImpl struct {
 	name  string
 	stack string
 
-	stopped     atomic.Bool
-	suspended   atomic.Bool
-	suspendMu   sync.Mutex
-	suspendCond *sync.Cond
+	stopped      atomic.Bool
+	suspended    atomic.Bool
+	suspendMu    sync.Mutex
+	suspendCond  *sync.Cond
+	suspendState suspendState
 
 	ctx        context.Context
 	cancelFunc context.CancelFunc

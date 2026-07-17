@@ -16,8 +16,6 @@
 
 package coroutine
 
-import "runtime"
-
 type threadState uint8
 
 const (
@@ -45,18 +43,24 @@ func (p *Coroutines) Yield(me Thread) {
 	p.setCurrent(nil)
 	p.runMu.Unlock()
 
-	// Publish suspension before the handshake to preserve early wake-ups.
-	me.suspended.Store(true)
+	// Publish suspension before notifying yield waiters. Resume may have
+	// arrived before this point; consume that signal instead of blocking.
+	me.suspendMu.Lock()
+	if me.suspendState == suspendStateSignaled {
+		me.suspendState = suspendStateRunning
+	} else {
+		me.suspendState = suspendStateSuspended
+		me.suspended.Store(true)
+	}
 	for _, waiter := range me.finishYieldWaiters() {
 		p.markRunnableAndResume(waiter)
 	}
-	p.threadsMu.Lock()
-	p.suspended[me] = true
-	p.threadsMu.Unlock()
-
-	me.suspendMu.Lock()
-	for me.suspended.Load() && !p.isThreadCanceled(me) {
+	for me.suspendState == suspendStateSuspended && !p.isThreadCanceled(me) {
 		me.suspendCond.Wait()
+	}
+	if me.suspendState == suspendStateSuspended {
+		me.suspendState = suspendStateRunning
+		me.suspended.Store(false)
 	}
 	me.suspendMu.Unlock()
 
@@ -68,29 +72,22 @@ func (p *Coroutines) Yield(me Thread) {
 	}
 }
 
-// Resume waits for me to publish its suspended state, then wakes it. It returns
-// early if me is canceled before that state is published.
+// Resume wakes me if it is suspended. If Yield has not published suspension
+// yet, Resume records a signal for that Yield to consume without blocking.
 func (p *Coroutines) Resume(me Thread) {
-	for {
-		resumed := false
-		p.threadsMu.Lock()
-		if p.suspended[me] {
-			p.suspended[me] = false
-			resumed = true
-		}
-		p.threadsMu.Unlock()
+	me.suspendMu.Lock()
+	defer me.suspendMu.Unlock()
+	if p.isThreadCanceled(me) {
+		return
+	}
 
-		if resumed {
-			me.suspended.Store(false)
-			me.suspendMu.Lock()
-			me.suspendCond.Signal()
-			me.suspendMu.Unlock()
-			return
-		}
-		if p.isThreadCanceled(me) {
-			return
-		}
-		runtime.Gosched()
+	switch me.suspendState {
+	case suspendStateSuspended:
+		me.suspendState = suspendStateRunning
+		me.suspended.Store(false)
+		me.suspendCond.Signal()
+	case suspendStateRunning:
+		me.suspendState = suspendStateSignaled
 	}
 }
 

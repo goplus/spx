@@ -33,7 +33,6 @@ func TestUpdateReadsGCStatsOnlyWhenPerfDebugEnabled(t *testing.T) {
 	originalReadGCStats := co.readGCStats
 	t.Cleanup(func() {
 		co.readGCStats = originalReadGCStats
-		lastUpdateStats = UpdateJobsStats{}
 	})
 
 	var calls int
@@ -56,6 +55,19 @@ func TestUpdateReadsGCStatsOnlyWhenPerfDebugEnabled(t *testing.T) {
 	}
 	if !co.GetLastUpdateStats().GCStatsEnabled {
 		t.Fatal("expected GC stats to be marked enabled when perf debug is on")
+	}
+}
+
+func TestLastUpdateStatsAreScopedToManager(t *testing.T) {
+	first := New(nil)
+	first.OnInited()
+	first.SetPerfDebug(true)
+	first.readGCStats = func(*sdebug.GCStats) {}
+	first.Update()
+
+	second := New(nil)
+	if second.GetLastUpdateStats().GCStatsEnabled {
+		t.Fatal("a new manager inherited update statistics from another manager")
 	}
 }
 
@@ -190,6 +202,41 @@ func TestYieldClearsCurrentWhileCoroutineIsSuspended(t *testing.T) {
 	case <-done:
 	case <-time.After(time.Second):
 		t.Fatal("coroutine did not finish after resume")
+	}
+}
+
+func TestResumeBeforeYieldDoesNotBlockOrLoseWakeup(t *testing.T) {
+	co := New(nil)
+	started := make(chan struct{})
+	proceed := make(chan struct{})
+	done := make(chan struct{})
+
+	th := co.Create("worker", func(me Thread) int {
+		close(started)
+		<-proceed
+		co.Yield(me)
+		close(done)
+		return 0
+	})
+	<-started
+
+	resumeDone := make(chan struct{})
+	go func() {
+		co.Resume(th)
+		close(resumeDone)
+	}()
+	select {
+	case <-resumeDone:
+	case <-time.After(time.Second):
+		close(proceed)
+		t.Fatal("Resume blocked while waiting for Yield to publish suspension")
+	}
+	close(proceed)
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("Yield did not consume the earlier Resume signal")
 	}
 }
 

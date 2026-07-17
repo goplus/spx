@@ -30,7 +30,7 @@ var (
 	deltaTime              float64
 	realDeltaTime          float64
 	fixedDeltaTimeBits     atomic.Uint64
-	timeScale              float64
+	timeScaleBits          atomic.Uint64
 	curFrame               atomic.Int64
 	setTimeScaleCallback   func(float64)
 	startTimestamp         stdtime.Time
@@ -63,14 +63,14 @@ func Frame() int64 {
 }
 
 func TimeScale() float64 {
-	return timeScale
+	return math.Float64frombits(timeScaleBits.Load())
 }
 
 func SetTimeScale(value float64) {
 	if setTimeScaleCallback != nil {
 		setTimeScaleCallback(value)
 	}
-	timeScale = value
+	timeScaleBits.Store(math.Float64bits(value))
 }
 
 func DeltaTime() float64 {
@@ -118,7 +118,7 @@ func Start(setTimeScaleCB func(float64)) {
 
 	realTimeSinceLevelLoad, timeSinceLevelLoad = 0, 0
 	deltaTime, realDeltaTime = 0, 0
-	timeScale = 1
+	timeScaleBits.Store(math.Float64bits(1))
 	curFrame.Store(0)
 	fps = DefaultFPS
 

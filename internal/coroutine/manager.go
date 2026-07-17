@@ -43,9 +43,8 @@ type Coroutines struct {
 	runMu   sync.Mutex
 	current atomic.Pointer[threadImpl]
 
-	// threadsMu protects the thread registry and suspension map.
+	// threadsMu protects the thread registry.
 	threadsMu  sync.Mutex
-	suspended  map[Thread]bool
 	allThreads map[Thread]struct{}
 
 	// schedulerMu protects threadStates and the condition-variable predicate.
@@ -59,8 +58,10 @@ type Coroutines struct {
 	nextJobID    atomic.Int64
 	nextThreadID atomic.Int64
 
-	perfDebug   atomic.Bool
-	readGCStats func(*sdebug.GCStats)
+	perfDebug       atomic.Bool
+	readGCStats     func(*sdebug.GCStats)
+	statsMu         sync.RWMutex
+	lastUpdateStats UpdateJobsStats
 
 	// goroutineIDs contains the IDs of goroutines created by CreateAndStart.
 	goroutineIDs sync.Map // map[int64]struct{}
@@ -71,7 +72,6 @@ type Coroutines struct {
 func New(onPanic func(name, stack string)) *Coroutines {
 	p := &Coroutines{
 		onPanic:      onPanic,
-		suspended:    make(map[Thread]bool),
 		allThreads:   make(map[Thread]struct{}),
 		threadStates: make(map[Thread]threadState),
 		currentJobs:  NewQueue[*WaitJob](),
