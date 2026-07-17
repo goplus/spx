@@ -37,11 +37,12 @@ type UpdateJobsStats struct {
 	LoopIterations int     // Number of update-loop iterations.
 }
 
-// GetLastUpdateStats returns the package-wide statistics from the most recent
+// GetLastUpdateStats returns this manager's statistics from its most recent
 // Update call. GCCount and GCPauses are meaningful only when GCStatsEnabled is
 // true.
-func (*Coroutines) GetLastUpdateStats() UpdateJobsStats {
-	return lastUpdateStats
+func (p *Coroutines) GetLastUpdateStats() UpdateJobsStats {
+	p.statsMu.RLock()
+	stats := p.lastUpdateStats
+	p.statsMu.RUnlock()
+	return stats
 }
-
-var lastUpdateStats UpdateJobsStats

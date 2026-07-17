@@ -83,11 +83,11 @@ func TestStopIfStopsActiveThread(t *testing.T) {
 		t.Fatal("coroutine did not start")
 	}
 
-	co.threadsMu.Lock()
-	_, suspended := co.suspended[th]
-	co.threadsMu.Unlock()
-	if suspended {
-		t.Fatal("test precondition failed: spinning thread should not be in suspended map")
+	th.suspendMu.Lock()
+	suspendState := th.suspendState
+	th.suspendMu.Unlock()
+	if suspendState == suspendStateSuspended {
+		t.Fatal("test precondition failed: spinning thread should not be suspended")
 	}
 
 	co.StopIf(func(candidate Thread) bool {

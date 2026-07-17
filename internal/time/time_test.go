@@ -29,7 +29,7 @@ func resetStateForTest() {
 	deltaTime = 0
 	realDeltaTime = 0
 	fixedDeltaTimeBits.Store(0)
-	timeScale = 0
+	timeScaleBits.Store(0)
 	curFrame.Store(0)
 	setTimeScaleCallback = nil
 	startTimestamp = stdtime.Time{}
@@ -46,7 +46,7 @@ func TestStartInitializesTimeState(t *testing.T) {
 	timeSinceLevelLoad = 8
 	deltaTime = 7
 	realDeltaTime = 6
-	timeScale = 5
+	timeScaleBits.Store(math.Float64bits(5))
 	curFrame.Store(4)
 	fps = 3
 	timerBaseTime = 1
@@ -182,6 +182,27 @@ func TestFixedDeltaTimeSupportsConcurrentSessionChanges(t *testing.T) {
 			for i := 0; i < 1000; i++ {
 				_, _ = FixedDeltaTime()
 				_ = EffectiveLogicalDeltaTime(0.25)
+			}
+		}()
+	}
+	wg.Wait()
+}
+
+func TestTimeScaleSupportsConcurrentAccess(t *testing.T) {
+	resetStateForTest()
+	var wg sync.WaitGroup
+	for range 4 {
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			for i := 0; i < 1000; i++ {
+				SetTimeScale(float64(i))
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			for i := 0; i < 1000; i++ {
+				_ = TimeScale()
 			}
 		}()
 	}

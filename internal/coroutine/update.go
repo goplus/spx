@@ -39,7 +39,9 @@ func (p *Coroutines) Update() {
 	stats.GCStatsEnabled = gcStatsBefore != nil
 	p.runUpdateLoop(&stats, &state)
 	p.finishUpdate(&stats, start, gcStatsBefore)
-	lastUpdateStats = stats
+	p.statsMu.Lock()
+	p.lastUpdateStats = stats
+	p.statsMu.Unlock()
 }
 
 func (p *Coroutines) readGCStatsBeforeUpdate() *sdebug.GCStats {

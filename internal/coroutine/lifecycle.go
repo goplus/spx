@@ -180,7 +180,6 @@ func (p *Coroutines) registerThread(th Thread) {
 
 func (p *Coroutines) unregisterThread(th Thread) {
 	p.threadsMu.Lock()
-	delete(p.suspended, th)
 	delete(p.allThreads, th)
 	p.threadsMu.Unlock()
 }
