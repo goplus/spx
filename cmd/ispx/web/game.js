@@ -127,6 +127,7 @@ class GameApp {
         this.workerMessageManager = new globalThis.WorkerMessageManager();
 
         this.stopGameTask = 0;  
+        this.gameLifecycle = null;
         this.logVerbose("EnginePackMode: ", EnginePackMode)
 
         /**
@@ -166,13 +167,32 @@ class GameApp {
         return this.startTask(() => this.initGame(files))
     }
 
-    async StartGame() {
-        return this.startTask(() => this.startGame())
+    async StartGame(options = {}) {
+        const inputSession = options && typeof options.then === 'function'
+            ? Promise.resolve(options).then((resolved) => this.normalizeStartGameInput(resolved))
+            : this.normalizeStartGameInput(options)
+        return this.startTask(async () => this.startGame(await inputSession))
+    }
+
+    normalizeStartGameInput(options) {
+        if (options == null) options = {}
+        if (typeof options !== 'object' || Array.isArray(options)) {
+            throw new TypeError('StartGame options must be an object')
+        }
+        return this.normalizeInputSession(options.input)
     }
 
     async ResetGame() {
         this.stopGameTask++;
-        return this.startTask(() => this.resetGame())
+        return this.startTask(() => this.stopGame(false))
+    }
+
+    async StopGame(beforeStop = null) {
+        if (beforeStop != null && typeof beforeStop !== 'function') {
+            throw new TypeError('beforeStop must be a function')
+        }
+        this.stopGameTask++;
+        return this.startTask(() => this.stopGame(true, beforeStop))
     }
 
     async initEngine() {
@@ -300,7 +320,7 @@ class GameApp {
         }
     }
 
-    async startGame() {
+    async startGame(inputSession) {
         if (this.stopGameTask > 0) {
             this.logVerbose("stopGame is called before runing game");
             return;
@@ -309,7 +329,13 @@ class GameApp {
         let curGame = this.game;
         profiler.mark('RunGame Start');
         await profiler.profile('restart', () => this.restart());
-        await profiler.profile('onRunAfterStart', () => this.onRunAfterStart(curGame));
+        const lifecycle = this.beginGameLifecycle(inputSession)
+        try {
+            await profiler.profile('onRunAfterStart', () => this.onRunAfterStart(curGame, inputSession));
+        } catch (error) {
+            this.completeGameLifecycle(undefined, lifecycle)
+            throw error
+        }
         this.gameCanvas.focus();
         profiler.mark('RunGame Done');
         profiler.measure('RunGame Start', 'RunGame Done');
@@ -332,25 +358,88 @@ class GameApp {
     } 
 
     onGodotExit(code) {
+        this.completeGameLifecycle(code)
         this.game = null
         if (this.config.handleGodotExit != null) {
             this.config.handleGodotExit(code);
         }
  
     }
-    async resetGame() {
+    async stopGame(finishInputRecording, beforeStop = null) {
         this.stopGameTask--
-        if (this.game == null) {
+        const lifecycle = this.gameLifecycle
+        if (this.game == null || lifecycle == null || lifecycle.completed) {
             this.logVerbose("No Game Is Running")
-            return
+            return { inputReplay: lifecycle?.inputReplay ?? null, stopped: false }
         }
 
-        window.ispx_stop()
+        let inputReplay = null
+        let inputReplayError = null
+        if (finishInputRecording && this.normalMode && lifecycle.inputSession?.mode === 'record') {
+            try {
+                inputReplay = this.finishInputRecording()
+                lifecycle.inputReplay = inputReplay
+            } catch (error) {
+                inputReplayError = error
+            }
+        }
+
+        let stopError = inputReplayError
+        if (beforeStop != null && inputReplayError == null) {
+            try {
+                await beforeStop({ inputReplay })
+            } catch (error) {
+                stopError = error
+            }
+        }
+
+        const result = window.ispx_stop()
+        if (result instanceof Error) {
+            if (stopError == null) stopError = result
+        } else {
+            try {
+                await lifecycle.exit
+            } catch (error) {
+                if (stopError == null) stopError = error
+            }
+        }
 
         if(this.recordingOnGameStart && this.autoDownloadRecordedVideo){
             let fileName = `spx_${new Date().getTime()}.webm`;
             this.downloadRecordedVideo(fileName)
-        } 
+        }
+        if (stopError != null) throw stopError
+        return { inputReplay, stopped: true }
+    }
+
+    beginGameLifecycle(inputSession) {
+        if (this.gameLifecycle != null && !this.gameLifecycle.completed) {
+            throw new Error('A game is already running')
+        }
+        let resolveExit
+        const lifecycle = {
+            completed: false,
+            inputSession,
+            inputReplay: null,
+            exit: new Promise((resolve) => {
+                resolveExit = resolve
+            }),
+            resolveExit: null,
+        }
+        lifecycle.resolveExit = resolveExit
+        this.gameLifecycle = lifecycle
+        return lifecycle
+    }
+
+    completeGameLifecycle(code, lifecycle = this.gameLifecycle) {
+        if (lifecycle == null || lifecycle.completed) return false
+        lifecycle.completed = true
+        lifecycle.resolveExit(code)
+        return true
+    }
+
+    onRuntimeReset(code) {
+        this.completeGameLifecycle(code)
     }
 
     restart() {
@@ -361,10 +450,17 @@ class GameApp {
     }
 
     pause() {
+        if (this.game == null || this.game.rtenv == null) return
         let funPtr = this.game.rtenv["_gdspx_ext_pause"]
         if(funPtr != null){
             funPtr()
         }
+    }
+
+    isPaused() {
+        if (this.game == null || this.game.rtenv == null) return false
+        const funPtr = this.game.rtenv["_gdspx_ext_is_paused"]
+        return funPtr != null && !!funPtr()
     }
 
     resume() {
@@ -395,6 +491,134 @@ class GameApp {
 
     callWorkerFunction(funcName, ...args) {
         this.workerMessageManager.callWorkerFunction(funcName, ...args)
+    }
+
+    ensureInputReplaySupported() {
+        if (!this.normalMode) {
+            throw new Error('Input recording and replay are only supported in normal Web mode')
+        }
+    }
+
+    callInputReplayFunction(funcName, ...args) {
+        this.ensureInputReplaySupported()
+        const fn = window[funcName]
+        if (typeof fn !== 'function') {
+            throw new Error(`${funcName} is not available`)
+        }
+        const result = fn(...args)
+        if (result instanceof Error) throw result
+        return result
+    }
+
+    normalizeInputSession(input) {
+        if (input == null) return null
+        this.ensureInputReplaySupported()
+        if (typeof input !== 'object' || Array.isArray(input)) {
+            throw new TypeError('input session must be an object')
+        }
+        if (input.mode === 'record') {
+            // Keep the low-level fallback for hosts that instantiate GameApp directly.
+            // The runner facade supplies its configured value before reaching this layer.
+            const fps = input.fps == null ? 30 : input.fps
+            if (!Number.isFinite(fps) || fps <= 0) {
+                throw new RangeError('input recording FPS must be greater than zero')
+            }
+            return { mode: 'record', fps, captureKey: this.normalizeCaptureKey(input.captureKey) }
+        }
+        if (input.mode === 'replay') {
+            if (input.data == null) {
+                throw new TypeError('input replay data is required')
+            }
+            const objectTag = Object.prototype.toString.call(input.data)
+            let data
+            if (ArrayBuffer.isView(input.data)) {
+                data = new Uint8Array(input.data.buffer, input.data.byteOffset, input.data.byteLength).slice()
+            } else if (objectTag === '[object ArrayBuffer]') {
+                data = input.data.slice(0)
+            } else if (typeof input.data === 'string') {
+                data = input.data
+            } else {
+                throw new TypeError('input replay data must be a string, ArrayBuffer, or Uint8Array')
+            }
+            return { mode: 'replay', data, captureKey: this.normalizeCaptureKey(input.captureKey) }
+        }
+        throw new Error(`Unsupported input session mode: ${input.mode}`)
+    }
+
+    normalizeCaptureKey(value) {
+        if (value == null) return null
+        if (typeof value !== 'string' || value.length === 0) {
+            throw new TypeError('input session captureKey must be a non-empty key name string')
+        }
+        return value
+    }
+
+    finishInputRecording() {
+        return this.callInputReplayFunction('ispx_input_recording_finish')
+    }
+
+    getInputSessionStatus() {
+        return this.callInputReplayFunction('ispx_input_session_status')
+    }
+
+    async waitInputSessionStarted(input, timeoutMs = 30000) {
+        if (input == null) return
+        const startedAt = Date.now()
+        while (true) {
+            const status = this.getInputSessionStatus()
+            if (status.phase === 'running' || status.phase === 'finishing' || status.phase === 'completed') {
+                return status
+            }
+            if (status.phase === 'aborted') {
+                throw new Error(status.error || 'input session was aborted during startup')
+            }
+            if (status.mode === 'idle') {
+                throw new Error('input session was not attached to the game')
+            }
+            if (Date.now() - startedAt >= timeoutMs) {
+                throw new Error(`timed out waiting for input session startup after ${timeoutMs}ms`)
+            }
+            await new Promise((resolve) => setTimeout(resolve, 10))
+        }
+    }
+
+    async waitInputSessionCompleted(options = {}) {
+        this.ensureInputReplaySupported()
+        if (options == null) options = {}
+        if (typeof options !== 'object' || Array.isArray(options)) {
+            throw new TypeError('wait options must be an object')
+        }
+        const pollIntervalMs = options.pollIntervalMs == null ? 50 : options.pollIntervalMs
+        const timeoutMs = options.timeoutMs == null ? 0 : options.timeoutMs
+        if (!Number.isFinite(pollIntervalMs) || pollIntervalMs < 0) {
+            throw new RangeError('pollIntervalMs must be a non-negative number')
+        }
+        if (!Number.isFinite(timeoutMs) || timeoutMs < 0) {
+            throw new RangeError('timeoutMs must be a non-negative number')
+        }
+
+        const startedAt = Date.now()
+        while (true) {
+            if (options.signal && options.signal.aborted) {
+                throw options.signal.reason || new DOMException('The operation was aborted', 'AbortError')
+            }
+
+            const status = this.getInputSessionStatus()
+            const completed = status.completed === true || status.phase === 'completed'
+            if (completed) {
+                return status
+            }
+            if (status.phase === 'aborted') {
+                throw new Error(status.error || 'input replay was aborted')
+            }
+            if (status.mode !== 'replay' && status.mode !== 'replaying') {
+                throw new Error(`input replay is not running: ${status.mode}`)
+            }
+            if (timeoutMs > 0 && Date.now() - startedAt >= timeoutMs) {
+                throw new Error(`timed out waiting for input replay after ${timeoutMs}ms`)
+            }
+            await new Promise((resolve) => setTimeout(resolve, pollIntervalMs))
+        }
     }
 
     bindDirectCallbackBridge() {
@@ -515,7 +739,7 @@ class GameApp {
         }
     }
 
-    async onRunAfterStart(game) {
+    async onRunAfterStart(game, inputSession) {
         if (this.minigameMode) {
             FFI = self;
             await this.runLogicWasm()
@@ -528,8 +752,9 @@ class GameApp {
             // register global functions
             Module = game.rtenv;
             FFI = self;
-            const res = window.ispx_start();
+            const res = window.ispx_start(inputSession);
             if (res instanceof Error) throw res;
+            await this.waitInputSessionStarted(inputSession)
         }
     }
 
