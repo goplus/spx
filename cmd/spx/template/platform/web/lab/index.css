@@ -63,6 +63,16 @@ button:focus-visible {
 	border-color: #46a476;
 }
 
+.toolbar .toolbar-mode-action {
+	background: #315d83;
+	border-color: #417ba9;
+}
+
+.toolbar .toolbar-mode-action:hover:not(:disabled) {
+	background: #396d99;
+	border-color: #5793c2;
+}
+
 .toolbar-group {
 	display: flex;
 	flex-direction: column;
@@ -78,7 +88,7 @@ button:focus-visible {
 }
 
 .toolbar-session-controls {
-	flex: 1 1 480px;
+	flex: 1 1 680px;
 }
 
 .toolbar-group-label {

@@ -1,45 +1,211 @@
-window.addEventListener('load', function() {
-	animateBox();
-	initEngine()
-});
+const LAB_CONFIG = Object.freeze({
+	projects: Object.freeze({
+		primary: '/game.zip',
+	}),
+	replay: Object.freeze({
+		baselineFilename: 'input-replay.json',
+		statusPollIntervalMs: 100,
+	}),
+	capture: Object.freeze({
+		refreshDelayMs: 120,
+	}),
+})
 
-function animateBox() {
-	const box = document.querySelector('.animation-box');
-	if (!box) return;
-	const style = window.getComputedStyle(box);
-	if (style.animationName !== 'none') return;
-	let position = 0;
-	let direction = 1;
-	setInterval(() => {
-		if (position >= 250) direction = -1;
-		if (position <= 0) direction = 1;
+const INPUT_MODES = Object.freeze({
+	normal: Object.freeze({ label: 'Normal', captureMode: 'auto' }),
+	record: Object.freeze({ label: 'Record', captureMode: 'baseline' }),
+	replay: Object.freeze({ label: 'Replay', captureMode: 'run' }),
+})
+const INPUT_MODE_ORDER = Object.freeze(['normal', 'record', 'replay'])
 
-		position += direction * 2;
-		box.style.left = position + 'px';
-	}, 20);
+const LOG_LEVEL_VERBOSE = 0
+const captureKeyParam = new URLSearchParams(window.location.search).get('captureKey')
+
+const runtimeState = {
+	phase: 'initializing',
+	inputMode: 'normal',
+	activeRun: null,
+	stopPromise: null,
+	message: '',
+	isError: false,
 }
 
-let runnerWindow = {}
-document.getElementById('startGameBtn').addEventListener('click', startGame);
-document.getElementById('stopGameBtn').addEventListener('click', stopGame);
-document.getElementById('pauseGameBtn').addEventListener('click', pauseGame);
-document.getElementById('resumeGameBtn').addEventListener('click', resumeGame);
-document.getElementById('stepNextFrameBtn').addEventListener('click', stepNextFrame);
-document.getElementById('toggleSizeBtn').addEventListener('click', toggleSizeFrame);
-document.getElementById('selectCaptureDirBtn').addEventListener('click', selectCaptureDirectory);
-document.getElementById('refreshCompareBtn').addEventListener('click', refreshCaptureCompare);
+const ui = {
+	startGame: document.getElementById('startGameBtn'),
+	stopGame: document.getElementById('stopGameBtn'),
+	inputMode: document.getElementById('inputModeBtn'),
+	inputModeStatus: document.getElementById('inputModeStatus'),
+	captureDirectory: document.getElementById('selectCaptureDirBtn'),
+	runner: document.getElementById('runnerFrame'),
+}
 
-const iframe = document.getElementById('runnerFrame');
-let enlarged = false;
+const runnerWindow = ui.runner.contentWindow
+let enlarged = false
+let replayStatusPollTimer = 0
+let replayStatusPollVersion = 0
+
+window.addEventListener('load', () => {
+	animateBox()
+	runUIAction('initialize engine', initializeRuntime)
+})
+
+ui.startGame.addEventListener('click', () => runUIAction('start game', () => startGame(createSelectedStartOptions())))
+ui.stopGame.addEventListener('click', () => runUIAction('stop game', stopGame))
+ui.inputMode.addEventListener('click', selectNextInputMode)
+document.getElementById('pauseGameBtn').addEventListener('click', () => runUIAction('pause game', pauseGame))
+document.getElementById('resumeGameBtn').addEventListener('click', () => runUIAction('resume game', resumeGame))
+document.getElementById('stepNextFrameBtn').addEventListener('click', () => runUIAction('step frame', stepNextFrame))
+document.getElementById('toggleSizeBtn').addEventListener('click', () => runUIAction('resize game', toggleSizeFrame))
+document.getElementById('selectCaptureDirBtn').addEventListener('click', () => runUIAction('select capture directory', selectCaptureDirectory))
+document.getElementById('refreshCompareBtn').addEventListener('click', () => runUIAction('refresh capture comparison', refreshCaptureCompare))
+
+function runUIAction(name, action) {
+	void Promise.resolve().then(action).catch((error) => {
+		console.error(`Failed to ${name}`, error)
+	})
+}
+
+function createSelectedStartOptions() {
+	return {
+		input: runnerWindow.spxCreateInputSession(runtimeState.inputMode),
+	}
+}
+
+function selectNextInputMode() {
+	if (runtimeState.phase !== 'stopped') return
+	const modes = INPUT_MODE_ORDER
+	const nextIndex = (modes.indexOf(runtimeState.inputMode) + 1) % modes.length
+	runtimeState.inputMode = modes[nextIndex]
+	runtimeState.message = ''
+	runtimeState.isError = false
+	renderRuntimeControls()
+}
+
+function setRuntimeStatus(message, isError = false) {
+	runtimeState.message = message
+	runtimeState.isError = isError
+	renderRuntimeControls()
+}
+
+function stopReplayStatusPolling() {
+	replayStatusPollVersion++
+	if (replayStatusPollTimer) {
+		window.clearTimeout(replayStatusPollTimer)
+		replayStatusPollTimer = 0
+	}
+}
+
+function formatReplayStatus(status) {
+	const currentTick = Number.isInteger(status.currentTick) && status.currentTick >= 0
+		? status.currentTick
+		: null
+	const frameCount = Number.isInteger(status.frameCount) && status.frameCount >= 0
+		? status.frameCount
+		: 0
+	const lastTick = frameCount > 0 ? frameCount - 1 : null
+	const progress = lastTick === null
+		? (currentTick === null ? '—' : `${currentTick}`)
+		: `${currentTick === null ? '—' : currentTick} / ${lastTick}`
+	const completed = status.completed === true || status.phase === 'completed'
+	return `${completed ? 'Replay complete' : 'Replay'} · tick ${progress}`
+}
+
+function startReplayStatusPolling(run) {
+	stopReplayStatusPolling()
+	if (!run || run.mode !== 'replay') return
+
+	const version = replayStatusPollVersion
+	const poll = async () => {
+		replayStatusPollTimer = 0
+		if (version !== replayStatusPollVersion || runtimeState.activeRun !== run || runtimeState.phase !== 'running') return
+		try {
+			const status = await runnerWindow.getInputSessionStatus()
+			if (version !== replayStatusPollVersion || runtimeState.activeRun !== run || runtimeState.phase !== 'running') return
+			if (status.phase === 'aborted') {
+				setRuntimeStatus(`Replay aborted: ${status.error || 'unknown error'}`, true)
+				return
+			}
+			setRuntimeStatus(formatReplayStatus(status))
+			if (status.completed === true || status.phase === 'completed') return
+		} catch (error) {
+			console.warn('Failed to read replay tick status', error)
+			return
+		}
+		if (version === replayStatusPollVersion && runtimeState.activeRun === run && runtimeState.phase === 'running') {
+			replayStatusPollTimer = window.setTimeout(poll, LAB_CONFIG.replay.statusPollIntervalMs)
+		}
+	}
+	void poll()
+}
+
+function renderRuntimeControls() {
+	const mode = INPUT_MODES[runtimeState.inputMode]
+	const isStopped = runtimeState.phase === 'stopped'
+	ui.inputMode.textContent = mode.label
+	ui.inputMode.setAttribute('aria-label', `Input mode: ${mode.label}. Click to switch mode.`)
+	ui.inputMode.disabled = !isStopped
+	ui.startGame.disabled = !isStopped
+	ui.stopGame.disabled = runtimeState.phase !== 'running'
+	ui.captureDirectory.disabled = !isStopped
+	ui.inputModeStatus.textContent = runtimeState.message
+	ui.inputModeStatus.hidden = !runtimeState.message
+	ui.inputModeStatus.style.color = runtimeState.isError ? '#ff9b9b' : '#fff'
+}
+
+renderRuntimeControls()
+
+async function initializeRuntime() {
+	try {
+		configureRunner()
+		await initEngine()
+		runtimeState.phase = 'stopped'
+		runtimeState.message = ''
+		runtimeState.isError = false
+		renderRuntimeControls()
+	} catch (error) {
+		runtimeState.phase = 'failed'
+		setRuntimeStatus(`Engine initialization failed: ${error && error.message ? error.message : error}`, true)
+		throw error
+	}
+}
+
+function configureRunner() {
+	const overrides = {}
+	if (captureKeyParam !== null) {
+		const captureKey = !captureKeyParam || /^(off|none)$/i.test(captureKeyParam) ? null : captureKeyParam
+		overrides.input = {
+			record: { captureKey },
+			replay: { captureKey },
+		}
+	}
+	const config = runnerWindow.spxConfigureRunner(overrides)
+	runtimeState.inputMode = config.input.defaultMode
+}
+
+function animateBox() {
+	const box = document.querySelector('.animation-box')
+	if (!box) return
+	const style = window.getComputedStyle(box)
+	if (style.animationName !== 'none') return
+	let position = 0
+	let direction = 1
+	setInterval(() => {
+		if (position >= 250) direction = -1
+		if (position <= 0) direction = 1
+		position += direction * 2
+		box.style.left = `${position}px`
+	}, 20)
+}
+
 const captureState = {
 	rootHandle: null,
 	project: null,
 	session: null,
+	sessionCounter: 0,
 	refreshTimer: 0,
 	previewUrls: [],
 }
-
-runnerWindow = iframe.contentWindow;
+const inputReplayBaselineFilename = LAB_CONFIG.replay.baselineFilename
 
 function updateCaptureStatus(message, isError = false) {
 	const status = document.getElementById('captureStatus')
@@ -68,7 +234,7 @@ function scheduleCaptureCompareRefresh() {
 			console.error('Failed to refresh capture compare', error)
 			setCaptureCompareEmpty('Failed to read capture files. Check browser console for details.')
 		})
-	}, 120)
+	}, LAB_CONFIG.capture.refreshDelayMs)
 }
 
 function browserSupportsCaptureDirectory() {
@@ -96,7 +262,8 @@ function sanitizeCaptureSegment(value, fallback = 'project') {
 
 function formatCaptureTimestamp(date = new Date()) {
 	const pad2 = (value) => `${value}`.padStart(2, '0')
-	return `${date.getFullYear()}${pad2(date.getMonth() + 1)}${pad2(date.getDate())}-${pad2(date.getHours())}${pad2(date.getMinutes())}${pad2(date.getSeconds())}`
+	const milliseconds = `${date.getMilliseconds()}`.padStart(3, '0')
+	return `${date.getFullYear()}${pad2(date.getMonth() + 1)}${pad2(date.getDate())}-${pad2(date.getHours())}${pad2(date.getMinutes())}${pad2(date.getSeconds())}-${milliseconds}`
 }
 
 function decodeZipText(unzipped, path) {
@@ -126,36 +293,66 @@ function parseCaptureProject(unzipped) {
 	} catch (error) {
 		console.warn('Failed to parse assets/index.json for capture host', error)
 	}
-	const runConfig = projectIndex && typeof projectIndex.run === 'object' ? projectIndex.run : {}
-	const fixedTimestep = Number(runConfig.fixedTimestep)
 	return {
 		projectKey: sanitizeCaptureSegment(
 			(builderMeta && builderMeta.displayName) ||
 			(projectIndex && projectIndex.name) ||
 			'project',
 		),
-		deterministic: Boolean(runConfig.deterministic) || (Number.isFinite(fixedTimestep) && fixedTimestep > 0),
 	}
 }
 
-function resetActiveCaptureSession(project) {
+function beginCaptureSession(project, captureMode = 'auto') {
+	captureState.sessionCounter++
+	const runTimestamp = formatCaptureTimestamp()
+	const context = Object.freeze({
+		id: `${runTimestamp}-${captureState.sessionCounter}`,
+		projectKey: project.projectKey,
+		captureMode,
+		runTimestamp,
+	})
 	captureState.project = project
 	captureState.session = {
-		projectKey: project.projectKey,
-		deterministic: project.deterministic,
-		runTimestamp: formatCaptureTimestamp(),
-		targetPromise: null,
+		...context,
+		context,
+		hosts: new Set(),
+		canPublishBaselineMarker: Boolean(captureState.rootHandle),
+		requiresInputReplay: captureMode === 'baseline',
+		inputReplaySaved: captureMode !== 'baseline',
+		captureTargetRootHandle: null,
+		captureTargetPromise: null,
+		finalizePromise: null,
 	}
 	scheduleCaptureCompareRefresh()
 }
 
-async function fileExists(directoryHandle, filename) {
+async function readBaselineMarker(projectDir) {
 	try {
-		await directoryHandle.getFileHandle(filename)
-		return true
+		const markerHandle = await projectDir.getFileHandle('.baseline.ready')
+		const markerFile = await markerHandle.getFile()
+		const marker = JSON.parse(await markerFile.text())
+		const files = marker && marker.files
+		const hasInputReplay = marker && marker.inputReplay === inputReplayBaselineFilename
+		const hasValidFiles = Array.isArray(files) &&
+			files.length === marker.captureCount &&
+			files.every((name) => typeof name === 'string' && name.toLowerCase().endsWith('.png')) &&
+			new Set(files).size === files.length
+		if (!marker || !Number.isInteger(marker.captureCount) || marker.captureCount <= 0 || !hasValidFiles || !hasInputReplay) {
+			return null
+		}
+		const baselineDir = await projectDir.getDirectoryHandle('baseline')
+		await baselineDir.getFileHandle(marker.inputReplay)
+		for (const filename of marker.files) {
+			await baselineDir.getFileHandle(filename)
+		}
+		return marker
 	} catch (error) {
 		if (error && error.name === 'NotFoundError') {
-			return false
+			return null
+		}
+		if (error instanceof SyntaxError) {
+			console.warn('Ignoring incomplete baseline marker', error)
+			return null
 		}
 		throw error
 	}
@@ -172,42 +369,149 @@ async function getOptionalDirectoryHandle(parentHandle, name) {
 	}
 }
 
-async function ensureCaptureTarget() {
-	if (!captureState.rootHandle || !captureState.session) {
-		return null
+async function clearCaptureDirectory(directoryHandle) {
+	const entries = []
+	for await (const entry of directoryHandle.values()) {
+		entries.push(entry)
 	}
-	if (!captureState.session.targetPromise) {
-		captureState.session.targetPromise = (async () => {
-			const snapshotsDir = await captureState.rootHandle.getDirectoryHandle('spx-snapshots', { create: true })
-			const projectDir = await snapshotsDir.getDirectoryHandle(captureState.session.projectKey, { create: true })
-			if (!captureState.session.deterministic) {
-				const runsDir = await projectDir.getDirectoryHandle('runs', { create: true })
-				const runDir = await runsDir.getDirectoryHandle(captureState.session.runTimestamp, { create: true })
-				return { directory: runDir, destination: `runs/${captureState.session.runTimestamp}` }
-			}
-
-			const hasBaseline = await fileExists(projectDir, '.baseline.ready')
-			if (!hasBaseline) {
-				const baselineDir = await projectDir.getDirectoryHandle('baseline', { create: true })
-				return { directory: baselineDir, destination: 'baseline', projectDir, writeBaselineMarker: true }
-			}
-
-			const runsDir = await projectDir.getDirectoryHandle('runs', { create: true })
-			const runDir = await runsDir.getDirectoryHandle(captureState.session.runTimestamp, { create: true })
-			return { directory: runDir, destination: `runs/${captureState.session.runTimestamp}` }
-		})()
+	for (const entry of entries) {
+		await directoryHandle.removeEntry(entry.name, { recursive: entry.kind === 'directory' })
 	}
-	return captureState.session.targetPromise
 }
 
-async function markBaselineReady(projectDir) {
-	const marker = await projectDir.getFileHandle('.baseline.ready', { create: true })
-	const writer = await marker.createWritable()
-	await writer.write(JSON.stringify({
-		createdAt: new Date().toISOString(),
-		projectKey: captureState.session ? captureState.session.projectKey : '',
-	}, null, 2))
+async function removeBaselineReadyMarker(projectDir) {
+	try {
+		await projectDir.removeEntry('.baseline.ready')
+	} catch (error) {
+		if (!error || error.name !== 'NotFoundError') {
+			throw error
+		}
+	}
+}
+
+async function prepareCaptureTarget(rootHandle, session) {
+	const snapshotsDir = await rootHandle.getDirectoryHandle('spx-snapshots', { create: true })
+	const projectDir = await snapshotsDir.getDirectoryHandle(session.projectKey, { create: true })
+	if (session.captureMode === 'baseline') {
+		// Invalidate the previous baseline before deleting any of its files.
+		// This runs when the session starts, even if it produces no captures.
+		await removeBaselineReadyMarker(projectDir)
+		const baselineDir = await projectDir.getDirectoryHandle('baseline', { create: true })
+		await clearCaptureDirectory(baselineDir)
+		return { directory: baselineDir, destination: 'baseline', projectDir, isBaseline: true }
+	}
+	const runsDir = await projectDir.getDirectoryHandle('runs', { create: true })
+	const runDir = await runsDir.getDirectoryHandle(session.runTimestamp, { create: true })
+	return { directory: runDir, destination: `runs/${session.runTimestamp}`, projectDir, isBaseline: false }
+}
+
+async function prepareBaselineCaptureTarget(rootHandle, session) {
+	if (!rootHandle || !session || session.captureMode !== 'baseline') {
+		return null
+	}
+	if (session.captureTargetRootHandle === rootHandle && session.captureTargetPromise) {
+		return session.captureTargetPromise
+	}
+
+	const targetPromise = prepareCaptureTarget(rootHandle, session.context)
+	session.captureTargetRootHandle = rootHandle
+	session.captureTargetPromise = targetPromise
+	try {
+		return await targetPromise
+	} catch (error) {
+		session.canPublishBaselineMarker = false
+		if (session.captureTargetPromise === targetPromise) {
+			session.captureTargetRootHandle = null
+			session.captureTargetPromise = null
+		}
+		throw error
+	}
+}
+
+function requireInputReplayCaptureDirectory() {
+	if (!captureState.rootHandle) {
+		throw new Error('choose a capture folder before recording or replaying input')
+	}
+}
+
+async function saveInputReplayBaseline(replayBlob, session) {
+	requireInputReplayCaptureDirectory()
+	if (!session) {
+		throw new Error('missing capture session for input recording')
+	}
+	if (!replayBlob || typeof replayBlob.size !== 'number' || replayBlob.size === 0 || typeof replayBlob.text !== 'function') {
+		throw new Error('input recording did not return replay data')
+	}
+	try {
+		JSON.parse(await replayBlob.text())
+	} catch (error) {
+		throw new Error(`input recording returned invalid JSON: ${error && error.message ? error.message : error}`)
+	}
+	const target = await prepareBaselineCaptureTarget(captureState.rootHandle, session)
+	if (!target || !target.isBaseline) {
+		throw new Error('input recording has no baseline capture target')
+	}
+	const file = await target.directory.getFileHandle(inputReplayBaselineFilename, { create: true })
+	const writer = await file.createWritable()
+	await writer.write(replayBlob)
 	await writer.close()
+}
+
+async function loadInputReplayBaseline(project) {
+	requireInputReplayCaptureDirectory()
+	if (!project || !project.projectKey) {
+		throw new Error('missing project metadata for input replay')
+	}
+	const snapshotsDir = await getOptionalDirectoryHandle(captureState.rootHandle, 'spx-snapshots')
+	const projectDir = snapshotsDir && await getOptionalDirectoryHandle(snapshotsDir, project.projectKey)
+	const baselineDir = projectDir && await getOptionalDirectoryHandle(projectDir, 'baseline')
+	if (!baselineDir) {
+		throw new Error(`no input baseline found for ${project.projectKey}; choose Record mode, Start, then Stop`)
+	}
+	try {
+		const file = await baselineDir.getFileHandle(inputReplayBaselineFilename)
+		return { data: await file.getFile(), name: `${project.projectKey}/baseline/${inputReplayBaselineFilename}` }
+	} catch (error) {
+		if (error && error.name === 'NotFoundError') {
+			throw new Error(`no recorded input found for ${project.projectKey}; choose Record mode, Start, then Stop`)
+		}
+		throw error
+	}
+}
+
+function createCaptureTargetResolver(rootHandle, session, preparedTargetPromise = null) {
+	let targetPromise = preparedTargetPromise
+	return () => {
+		if (!targetPromise) {
+			targetPromise = prepareCaptureTarget(rootHandle, session)
+		}
+		return targetPromise
+	}
+}
+
+async function markBaselineReady(projectDir, session, summary) {
+	try {
+		const marker = await projectDir.getFileHandle('.baseline.ready', { create: true })
+		const writer = await marker.createWritable()
+		await writer.write(JSON.stringify({
+			completedAt: new Date().toISOString(),
+			projectKey: session.projectKey,
+			sessionId: session.id,
+			inputReplay: inputReplayBaselineFilename,
+			captureCount: summary.succeeded,
+			files: summary.files.slice().sort((left, right) => left.localeCompare(right)),
+		}, null, 2))
+		await writer.close()
+	} catch (error) {
+		try {
+			await projectDir.removeEntry('.baseline.ready')
+		} catch (removeError) {
+			if (!removeError || removeError.name !== 'NotFoundError') {
+				console.warn('Failed to remove incomplete baseline marker', removeError)
+			}
+		}
+		throw error
+	}
 }
 
 function buildCaptureFilename(request) {
@@ -566,7 +870,8 @@ async function refreshCaptureCompare() {
 		return
 	}
 
-	const baselineDir = await getOptionalDirectoryHandle(projectDir, 'baseline')
+	const baselineMarker = await readBaselineMarker(projectDir)
+	const baselineDir = baselineMarker ? await getOptionalDirectoryHandle(projectDir, 'baseline') : null
 	let runLabel = 'latest run'
 	let runDir = null
 
@@ -596,55 +901,159 @@ async function refreshCaptureCompare() {
 	renderCaptureCompare(captureState.project.projectKey, runLabel, comparisons)
 }
 
-function createFileSystemCaptureHost() {
+function createFileSystemCaptureHost(rootHandle, session, preparedTargetPromise = null) {
+	const resolveTarget = createCaptureTargetResolver(rootHandle, session, preparedTargetPromise)
+	const summary = {
+		attempted: 0,
+		succeeded: 0,
+		failed: 0,
+	}
+	const capturedFiles = new Set()
+	const handledRequests = new WeakSet()
+	let finalized = false
+	let finalizePromise = null
+
 	return {
+		getSummary() {
+			return {
+				attempted: summary.attempted,
+				succeeded: summary.succeeded,
+				failed: summary.failed,
+				files: Array.from(capturedFiles),
+			}
+		},
 		async handleCapture(request, blob) {
-			const target = await ensureCaptureTarget()
-			if (!target) {
-				throw new Error('Capture directory is not selected')
+			if (finalized) {
+				throw new Error(`Capture session ${session.id} is already finalized`)
 			}
-			const filename = buildCaptureFilename(request)
-			const file = await target.directory.getFileHandle(filename, { create: true })
-			const writer = await file.createWritable()
-			await writer.write(blob)
-			await writer.close()
-			if (target.writeBaselineMarker && target.projectDir) {
-				await markBaselineReady(target.projectDir)
-				target.writeBaselineMarker = false
+
+			handledRequests.add(request)
+			summary.attempted++
+			try {
+				const target = await resolveTarget()
+				const filename = buildCaptureFilename(request)
+				if (capturedFiles.has(filename)) {
+					throw new Error(`Duplicate capture filename in session ${session.id}: ${filename}`)
+				}
+				const file = await target.directory.getFileHandle(filename, { create: true })
+				const writer = await file.createWritable()
+				await writer.write(blob)
+				await writer.close()
+				summary.succeeded++
+				capturedFiles.add(filename)
+				console.log('[spx capture saved]', {
+					projectKey: session.projectKey,
+					sessionId: session.id,
+					destination: target.destination,
+					filename,
+					request,
+				})
+				scheduleCaptureCompareRefresh()
+			} catch (error) {
+				summary.failed++
+				throw error
 			}
-			console.log('[spx capture saved]', {
-				projectKey: captureState.session ? captureState.session.projectKey : '',
-				destination: target.destination,
-				filename,
-				request,
-			})
-			scheduleCaptureCompareRefresh()
+		},
+		handleCaptureFailure(request) {
+			if (handledRequests.has(request)) {
+				return
+			}
+			handledRequests.add(request)
+			summary.attempted++
+			summary.failed++
+		},
+		completeSession(allowBaselineReady) {
+			if (finalizePromise) {
+				return finalizePromise
+			}
+			finalized = true
+			finalizePromise = (async () => {
+				const completedSummary = this.getSummary()
+				if (!allowBaselineReady || completedSummary.attempted === 0 || completedSummary.failed > 0 || completedSummary.succeeded !== completedSummary.attempted) {
+					return { baselineReady: false, ...completedSummary }
+				}
+				const target = await resolveTarget()
+				if (!target.isBaseline) {
+					return { baselineReady: false, ...completedSummary }
+				}
+				await markBaselineReady(target.projectDir, session, completedSummary)
+				return { baselineReady: true, ...completedSummary }
+			})()
+			return finalizePromise
 		},
 	}
 }
 
-function installCaptureHostIfReady() {
+async function finalizeCaptureSession(session, allowBaselineReady = true) {
+	if (!session) {
+		return
+	}
+	if (session.finalizePromise) {
+		return session.finalizePromise
+	}
+
+	session.finalizePromise = (async () => {
+		const currentHost = typeof runnerWindow.spxGetCaptureHost === 'function' ? runnerWindow.spxGetCaptureHost() : null
+		if (currentHost && session.hosts.has(currentHost) && typeof runnerWindow.spxSetCaptureHost === 'function') {
+			runnerWindow.spxSetCaptureHost(null)
+		}
+		if (typeof runnerWindow.spxFlushCaptureQueue === 'function') {
+			await runnerWindow.spxFlushCaptureQueue()
+		}
+		const hosts = Array.from(session.hosts)
+		const activeHosts = hosts.filter((host) => host.getSummary().attempted > 0)
+		const replayCommitted = !session.requiresInputReplay || session.inputReplaySaved
+		const allSucceeded = allowBaselineReady && replayCommitted && session.canPublishBaselineMarker && activeHosts.length === 1 && activeHosts.every((host) => {
+			const hostSummary = host.getSummary()
+			return hostSummary.failed === 0 && hostSummary.succeeded === hostSummary.attempted
+		})
+		const results = []
+		for (const host of hosts) {
+			results.push(await host.completeSession(allSucceeded && host === activeHosts[0]))
+		}
+		scheduleCaptureCompareRefresh()
+		return results
+	})()
+	return session.finalizePromise
+}
+
+function finalizeActiveCaptureSession() {
+	return finalizeCaptureSession(captureState.session, true)
+}
+
+function syncCaptureHost() {
 	if (typeof runnerWindow.spxSetCaptureHost !== 'function') {
 		return false
 	}
-	if (!captureState.rootHandle) {
+	if (!captureState.rootHandle || !captureState.session || captureState.session.finalizePromise) {
 		runnerWindow.spxSetCaptureHost(null)
 		return true
 	}
-	runnerWindow.spxSetCaptureHost(createFileSystemCaptureHost())
+	const session = captureState.session
+	const preparedTargetPromise = session.captureTargetRootHandle === captureState.rootHandle
+		? session.captureTargetPromise
+		: null
+	const host = createFileSystemCaptureHost(captureState.rootHandle, session.context, preparedTargetPromise)
+	session.hosts.add(host)
+	runnerWindow.spxSetCaptureHost(host)
 	return true
 }
 
 async function selectCaptureDirectory() {
+	if (runtimeState.phase !== 'stopped') {
+		updateCaptureStatus('Output · Stop the game before changing folders', true)
+		return
+	}
 	if (!browserSupportsCaptureDirectory()) {
 		updateCaptureStatus('Output · Folder access unavailable', true)
 		return
 	}
 	try {
-		captureState.rootHandle = await window.showDirectoryPicker(buildCaptureDirectoryPickerOptions())
+		const rootHandle = await window.showDirectoryPicker(buildCaptureDirectoryPickerOptions())
+		captureState.rootHandle = rootHandle
 		const handleName = captureState.rootHandle && captureState.rootHandle.name ? captureState.rootHandle.name : 'selected'
 		updateCaptureStatus(`Output · ${handleName}`)
-		installCaptureHostIfReady()
+		syncCaptureHost()
 		scheduleCaptureCompareRefresh()
 	} catch (error) {
 		if (error && error.name === 'AbortError') {
@@ -657,100 +1066,287 @@ async function selectCaptureDirectory() {
 }
 
 function onProgress(value) {
-	document.getElementById('progress-bar').value = value;
-	if (value >= 1) {
-		document.getElementById('tab-game').style.display = 'block';
-		document.getElementById('tab-loader').style.display = 'none';
-	}
-	document.getElementById('progress-bar').style.display = value >= 1 ? 'none' : 'block';
+	const complete = value >= 1
+	const progress = document.getElementById('progress-bar')
+	progress.value = value
+	progress.hidden = complete
+	document.getElementById('tab-game').hidden = !complete
+	document.getElementById('tab-loader').hidden = complete
 }
 
 async function initEngine() {
 	await runnerWindow.initEngine(null, { logLevel: LOG_LEVEL_VERBOSE })
-	installCaptureHostIfReady()
+	bindRunnerLifecycleEvents()
+	syncCaptureHost()
 }
 
-async function startGame() {
-	await startProject('/game.zip')
-}
+let runnerLifecycleEventsBound = false
 
-async function stopGame() {
-	await runnerWindow.stopGame()
-}
-
-async function pauseGame() {
-	if (runnerWindow.pauseGame) {
-		runnerWindow.pauseGame();
-	} else {
-		console.warn("Pause function not available");
-	}
-}
-
-async function resumeGame() {
-	if (runnerWindow.resumeGame) {
-		runnerWindow.resumeGame();
-	} else {
-		console.warn("Resume function not available");
-	}
-}
-
-async function stepNextFrame() {
-	if (runnerWindow.stepNextFrame) {
-		runnerWindow.stepNextFrame();
-	} else {
-		console.warn("StepNextFrame function not available");
-	}
-}
-async function toggleSizeFrame() {
-	const SMALL_SIZE = { width: 480, height: 360 };
-	const LARGE_SIZE = { width: 960, height: 720 };
-
-	const size = enlarged ? SMALL_SIZE : LARGE_SIZE;
-	iframe.width = size.width;
-	iframe.height = size.height;
-	enlarged = !enlarged;
-}
-const LOG_LEVEL_VERBOSE = 0
-let stopGameFlag = true
-
-async function startProject(zipUrl) {
-	if(stopGameFlag === false){
-		console.error("game is running.")
-		return
-	}
+function bindRunnerLifecycleEvents() {
+	if (runnerLifecycleEventsBound) return
+	runnerLifecycleEventsBound = true
 
 	runnerWindow.addEventListener('onProgress', (event) => {
 		onProgress(event.detail.progress)
 	})
-	runnerWindow.onGameError(function (msg) {
-		console.error("onGameError", msg)
+	runnerWindow.onGameError((msg) => {
+		console.error('onGameError', msg)
+		if (captureState.session) {
+			captureState.session.canPublishBaselineMarker = false
+		}
 	})
-	runnerWindow.onGameExit(function (code) {
-		stopGameFlag = true
-		console.error("onGameExit", code)
+	runnerWindow.onGameExit((code) => {
+		console.error('onGameExit', code)
+		handleGameTermination(false, code)
 	})
-	runnerWindow.onEngineCrash(function (code) {
-		stopGameFlag = true
-		console.error("onEngineCrash", code)
+	runnerWindow.onEngineCrash((code) => {
+		console.error('onEngineCrash', code)
+		handleGameTermination(true, code)
 	})
+}
 
+async function startGame(startOptions = {}) {
+	await startProject(LAB_CONFIG.projects.primary, startOptions)
+}
+
+function normalizeStartOptions(startOptions) {
+	if (!startOptions || typeof startOptions !== 'object' || Array.isArray(startOptions)) {
+		throw new TypeError('startGame options must be an object')
+	}
+	const inputOptions = Object.prototype.hasOwnProperty.call(startOptions, 'input')
+		? startOptions.input
+		: undefined
+	if (inputOptions === null) return { ...startOptions, input: null }
+	if (inputOptions === undefined) {
+		return { ...startOptions, input: runnerWindow.spxCreateInputSession() }
+	}
+	if (typeof inputOptions !== 'object' || Array.isArray(inputOptions)) {
+		throw new TypeError('startGame input options must be an object')
+	}
+	return {
+		...startOptions,
+		input: runnerWindow.spxCreateInputSession(inputOptions.mode, inputOptions),
+	}
+}
+
+async function createLaunchPlan(startOptions, project) {
+	const options = normalizeStartOptions(startOptions)
+	const input = options.input
+	const modeName = input ? input.mode : 'normal'
+	const mode = INPUT_MODES[modeName]
+	if (!mode) throw new Error(`Unsupported input mode: ${modeName}`)
+	if (modeName === 'normal') {
+		return { mode: modeName, captureMode: mode.captureMode, runnerOptions: { ...options, input: null } }
+	}
+
+	requireInputReplayCaptureDirectory()
+	if (modeName === 'record') {
+		return {
+			mode: modeName,
+			captureMode: mode.captureMode,
+			runnerOptions: options,
+		}
+	}
+
+	const replay = input.data == null ? await loadInputReplayBaseline(project) : { data: input.data, name: 'provided replay' }
+	return {
+		mode: modeName,
+		captureMode: mode.captureMode,
+		replayName: replay.name,
+		runnerOptions: {
+			...options,
+			input: { mode: 'replay', data: replay.data, captureKey: input.captureKey },
+		},
+	}
+}
+
+async function stopGame() {
+	if (runtimeState.phase === 'stopped') return { inputReplay: null, stopped: false }
+	if (runtimeState.phase === 'starting') {
+		console.warn('Game startup is still in progress')
+		return { inputReplay: null, stopped: false }
+	}
+	if (runtimeState.stopPromise) return runtimeState.stopPromise
+
+	const run = runtimeState.activeRun
+	if (!run) {
+		stopReplayStatusPolling()
+		runtimeState.phase = 'stopped'
+		renderRuntimeControls()
+		return { inputReplay: null, stopped: false }
+	}
+	stopReplayStatusPolling()
+	runtimeState.phase = 'stopping'
+	setRuntimeStatus(`Stopping ${run.mode} game...`)
+	runtimeState.stopPromise = (async () => {
+		try {
+			const result = await runnerWindow.stopGame()
+			if (run.mode === 'record') {
+				await saveInputReplayBaseline(result && result.inputReplay, run.captureSession)
+				run.captureSession.inputReplaySaved = true
+			}
+			await finalizeCaptureSession(run.captureSession, true)
+			const suffix = run.mode === 'record' ? ' · input baseline saved' : ''
+			setRuntimeStatus(`${INPUT_MODES[run.mode].label} game stopped${suffix}`)
+			return result
+		} catch (error) {
+			if (run.captureSession) run.captureSession.canPublishBaselineMarker = false
+			try {
+				await finalizeCaptureSession(run.captureSession, false)
+			} catch (finalizeError) {
+				console.error('Failed to finalize capture session after stop error', finalizeError)
+			}
+			setRuntimeStatus(`Stop failed: ${error && error.message ? error.message : error}`, true)
+			throw error
+		} finally {
+			runtimeState.phase = 'stopped'
+			runtimeState.activeRun = null
+			runtimeState.stopPromise = null
+			renderRuntimeControls()
+		}
+	})()
+	return runtimeState.stopPromise
+}
+
+function pauseGame() {
+	if (runnerWindow.pauseGame) {
+		runnerWindow.pauseGame()
+	} else {
+		console.warn('Pause function not available')
+	}
+}
+
+function resumeGame() {
+	if (runnerWindow.resumeGame) {
+		runnerWindow.resumeGame()
+	} else {
+		console.warn('Resume function not available')
+	}
+}
+
+function stepNextFrame() {
+	if (runnerWindow.stepNextFrame) {
+		runnerWindow.stepNextFrame()
+	} else {
+		console.warn('StepNextFrame function not available')
+	}
+}
+
+function toggleSizeFrame() {
+	const smallSize = { width: 480, height: 360 }
+	const largeSize = { width: 960, height: 720 }
+	const size = enlarged ? smallSize : largeSize
+	ui.runner.width = size.width
+	ui.runner.height = size.height
+	enlarged = !enlarged
+}
+
+function handleGameTermination(crashed, code) {
+	stopReplayStatusPolling()
+	const run = runtimeState.activeRun
+	if (!run) {
+		runtimeState.phase = 'stopped'
+		renderRuntimeControls()
+		return
+	}
+	if (runtimeState.phase === 'stopping') {
+		if (crashed) run.captureSession.canPublishBaselineMarker = false
+		return
+	}
+
+	runtimeState.phase = 'stopped'
+	runtimeState.activeRun = null
+	const recordingWasDiscarded = run.mode === 'record'
+	if (crashed || recordingWasDiscarded) {
+		run.captureSession.canPublishBaselineMarker = false
+	}
+	finalizeCaptureSession(run.captureSession, !crashed && !recordingWasDiscarded).catch((error) => {
+		console.error(`Failed to finalize capture session ${run.captureSession.id}`, error)
+	})
+	if (recordingWasDiscarded) {
+		setRuntimeStatus('Record game ended without Stop; input baseline was discarded', true)
+	} else {
+		const reason = crashed ? `crashed (${code})` : 'ended'
+		setRuntimeStatus(`${INPUT_MODES[run.mode].label} game ${reason}`, crashed)
+	}
+}
+
+async function loadProjectArchive(zipUrl) {
+	const response = await fetch(zipUrl)
+	if (!response.ok) {
+		throw new Error(`failed to load game package: ${response.status}`)
+	}
+	const zipped = await response.arrayBuffer()
+	return fflate.unzipSync(new Uint8Array(zipped))
+}
+
+async function startProject(zipUrl, startOptions = {}) {
+	if (runtimeState.phase !== 'stopped') {
+		console.error('game is running')
+		return
+	}
+
+	stopReplayStatusPolling()
+	runtimeState.phase = 'starting'
+	setRuntimeStatus('Starting game...')
+	let run = null
+	try {
+		await finalizeActiveCaptureSession()
+		const unzipped = await loadProjectArchive(zipUrl)
+		const project = parseCaptureProject(unzipped)
+		const launch = await createLaunchPlan(startOptions, project)
+		beginCaptureSession(project, launch.captureMode)
+		run = {
+			mode: launch.mode,
+			replayName: launch.replayName || '',
+			captureSession: captureState.session,
+		}
+		runtimeState.activeRun = run
+		await startProjectSession(unzipped, launch.runnerOptions, run.captureSession)
+		if (runtimeState.activeRun === run && runtimeState.phase === 'starting') {
+			runtimeState.phase = 'running'
+			const input = launch.runnerOptions.input
+			const captureHint = input && input.captureKey ? ` · screenshot ${input.captureKey}` : ''
+			const replayHint = run.replayName ? ` ${run.replayName}` : ''
+			setRuntimeStatus(`Running: ${run.mode}${replayHint}${captureHint}`)
+			startReplayStatusPolling(run)
+		}
+	} catch (error) {
+		stopReplayStatusPolling()
+		if (run && run.captureSession) {
+			run.captureSession.canPublishBaselineMarker = false
+			try {
+				await finalizeCaptureSession(run.captureSession, false)
+			} catch (finalizeError) {
+				console.error('Failed to finalize capture session after start error', finalizeError)
+			}
+		}
+		runtimeState.phase = 'stopped'
+		runtimeState.activeRun = null
+		setRuntimeStatus(`Start failed: ${error && error.message ? error.message : error}`, true)
+		throw error
+	} finally {
+		renderRuntimeControls()
+	}
+}
+
+async function startProjectSession(unzipped, startOptions, captureSession) {
 	runnerWindow.spxIsForceDebugLog = true
-
-	let zipped = await (await (fetch(zipUrl))).arrayBuffer()
-	let unzipped = fflate.unzipSync(new Uint8Array(zipped))
-	resetActiveCaptureSession(parseCaptureProject(unzipped))
+	await prepareBaselineCaptureTarget(captureState.rootHandle, captureSession)
+	syncCaptureHost()
 	configureAIInteraction(unzipped)
 	if (captureState.rootHandle) {
-		updateCaptureStatus(`Output · ${captureState.rootHandle.name} / ${captureState.session.projectKey}`)
+		updateCaptureStatus(`Output · ${captureState.rootHandle.name} / ${captureSession.projectKey}`)
 	}
-	let files = {}
-	Object.entries(unzipped).forEach(([path, data]) => {
-		if (path.endsWith('/')) return // skip directories
-		files[path] = { lastModified: Date.now(), content: data.buffer }
-	})
+
+	const files = {}
+	for (const [path, data] of Object.entries(unzipped)) {
+		if (!path.endsWith('/')) {
+			files[path] = { lastModified: Date.now(), content: data.buffer }
+		}
+	}
 	await runnerWindow.initGame(files)
-	await runnerWindow.startGame()
-	stopGameFlag = false
+	await runnerWindow.startGame(startOptions)
 }
 
 function resolveAIEndpointParam(value) {

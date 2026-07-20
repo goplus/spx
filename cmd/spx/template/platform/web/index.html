@@ -16,11 +16,13 @@
 				<button id="stopGameBtn">Stop</button>
 			</div>
 		</div>
-		<div class="toolbar-group toolbar-session-controls" role="group" aria-label="Capture controls">
-			<span class="toolbar-group-label">Capture</span>
+		<div class="toolbar-group toolbar-session-controls" role="group" aria-label="Input and capture controls">
+			<span class="toolbar-group-label">Input &amp; Capture</span>
 			<div class="toolbar-group-body">
+				<button id="inputModeBtn" class="toolbar-mode-action" title="Switch input mode">Normal</button>
 				<button id="selectCaptureDirBtn">Choose Folder</button>
 				<button id="refreshCompareBtn">Refresh</button>
+				<span id="inputModeStatus" class="toolbar-status" hidden></span>
 				<span id="captureStatus" class="toolbar-status">Output · Downloads</span>
 			</div>
 		</div>
@@ -49,10 +51,10 @@
 	<section class="capture-compare-panel">
 		<div class="capture-compare-header">
 			<h2 class="capture-compare-title">Snapshot Comparison</h2>
-			<span id="captureCompareSummary" class="capture-compare-summary">Choose a capture folder, then start.</span>
+			<span id="captureCompareSummary" class="capture-compare-summary">Choose a capture folder and input mode, then start.</span>
 		</div>
 		<div id="captureCompareGrid" class="capture-compare-grid">
-			<div class="capture-compare-empty">Choose a capture folder, then start.</div>
+			<div class="capture-compare-empty">Choose a capture folder and input mode, then start.</div>
 		</div>
 	</section>
 

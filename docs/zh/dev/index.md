@@ -8,13 +8,13 @@
 
 如果您是 SPX 的使用者，您可能对以下文档更感兴趣：
 
-- [命令行工具 (spx) 使用指南](./game/cmd-spx.zh.md) - 学习如何使用 SPX 命令行工具创建、运行和导出项目
+- [命令行工具 (spx) 使用指南](./game/cmd_spx.md) - 学习如何使用 SPX 命令行工具创建、运行和导出项目
 
 ### SPX 开发者
 
 如果您是 SPX 的开发者或贡献者，您可能对以下文档更感兴趣：
 
-- [Makefile 命令指南](./engine/cmd-make.zh.md) - 学习如何使用项目中的 Makefile 命令进行开发和构建
+- [Makefile 命令指南](./engine/cmd_make.md) - 学习如何使用项目中的 Makefile 命令进行开发和构建
 
 ## 文档分类
 
@@ -37,6 +37,7 @@
 - 引擎架构
 - 构建系统
 - [Web 端截图与固定帧接入说明](./engine/web_capture.md) - 了解外部页面如何像模板 `index.html` 一样接入截图 host、baseline/runs 保存与对比流程
+- [输入录制与回放说明](./engine/input_replay.md) - 了解 Web host 固定 FPS 输入录制、逐 tick 回放与截图测试配合方式
 
 文档路径：`/docs/develop/engine/`
 
@@ -45,13 +46,13 @@
 ### 对于 SPX 使用者
 
 1. 使用 `make init` 初始化用户环境
-2. 首先阅读 [命令行工具 (spx) 使用指南](./game/cmd-spx.zh.md) 了解基本命令
+2. 首先阅读 [命令行工具 (spx) 使用指南](./game/cmd_spx.md) 了解基本命令
 3. 使用 `spx init` 创建新项目
 4. 使用 `spx rune` 在编辑器运行时模式下运行项目
 
 ### 对于 SPX 开发者
 
-1. 首先阅读 [Makefile 命令指南](./engine/cmd-make.zh.md) 了解构建系统
+1. 首先阅读 [Makefile 命令指南](./engine/cmd_make.md) 了解构建系统
 2. 使用 `make initdev` 初始化开发环境
 3. 使用 `make cmd` 安装 SPX 命令行工具
 
