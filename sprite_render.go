@@ -87,6 +87,13 @@ func (p *SpriteImpl) ResolveCostumeIndex(costume string) int {
 	if err != nil {
 		return -1
 	}
+	if idx >= 0 && idx <= len(p.costumes) {
+		return idx - 1
+	}
+	if len(p.costumes) == 0 {
+		return idx - 1
+	}
+	idx %= len(p.costumes)
 	return idx - 1
 }
 
