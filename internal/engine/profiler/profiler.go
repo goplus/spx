@@ -45,11 +45,18 @@ var (
 
 func Calcfps() float64 {
 	curTime := time.RealTimeSinceStart()
+	curFrame := time.Frame()
+	if curFrame < debugLastFrame {
+		// A new engine time session restarts the public frame counter. Rebase
+		// profiling so the first interval cannot report negative FPS.
+		debugLastFrame = curFrame
+		debugLastTime = curTime
+	}
 	timeDiff := curTime - debugLastTime
-	frameDiff := time.Frame() - debugLastFrame
+	frameDiff := curFrame - debugLastFrame
 	if timeDiff > 0.5 {
 		fps = float64(frameDiff) / timeDiff
-		debugLastFrame = time.Frame()
+		debugLastFrame = curFrame
 		debugLastTime = curTime
 	}
 	return fps

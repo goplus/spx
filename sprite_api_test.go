@@ -29,3 +29,14 @@ func TestSetLayerPublicAPI(t *testing.T) {
 		t.Fatalf("XGoo_SpriteImpl_SetLayerWith = %q, want %q", XGoo_SpriteImpl_SetLayerWith, ".SetLayerTo,.SetLayer__1")
 	}
 }
+
+func TestAbortIfCurrentCoroutineOutsideCoroutine(t *testing.T) {
+	if current := gco.Current(); current != nil {
+		t.Fatalf("unexpected active coroutine before test: %v", current)
+	}
+
+	// Engine-driven destruction can run between coroutine turns. The scheduler
+	// deliberately clears Current at that boundary, so this path must be a no-op
+	// instead of dereferencing a stale or nil thread.
+	(&SpriteImpl{}).abortIfCurrentCoroutine()
+}

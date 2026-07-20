@@ -49,6 +49,10 @@ type eventLeftButtonUp struct {
 	Pos mathf.Vec2
 }
 
+type eventMouseMove struct {
+	Pos mathf.Vec2
+}
+
 type eventTimer struct {
 	Time float64
 }

@@ -51,7 +51,6 @@ func (p *Game) applyResolvedRuntimeConfig(runtimeCfg coreproject.RuntimeConfig, 
 	proj.FullScreen = runtimeCfg.FullScreen
 	p.setPhysicsEnabled(runtimeCfg.PhysicsEnabled)
 	p.setEventQueuePolicy(parseEventQueuePolicy(runtimeCfg.EventQueuePolicy))
-	p.applyDeterministicConfig(runtimeCfg)
 	p.displayState.WindowHeight = runtimeCfg.WindowHeight
 	p.displayState.WindowWidth = runtimeCfg.WindowWidth
 

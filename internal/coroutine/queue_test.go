@@ -48,3 +48,21 @@ func TestQueueSupportsZeroValueWithPooling(t *testing.T) {
 		t.Fatalf("PopBack = %d, want 9", got)
 	}
 }
+
+func TestQueueMoveToSelfIsNoOp(t *testing.T) {
+	q := NewQueue[int]()
+	q.PushBack(1)
+	q.PushBack(2)
+
+	q.Move(q)
+
+	if got := q.Count(); got != 2 {
+		t.Fatalf("Count after self move = %d, want 2", got)
+	}
+	if got := q.PopFront(); got != 1 {
+		t.Fatalf("first PopFront after self move = %d, want 1", got)
+	}
+	if got := q.PopFront(); got != 2 {
+		t.Fatalf("second PopFront after self move = %d, want 2", got)
+	}
+}

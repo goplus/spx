@@ -25,6 +25,7 @@ import (
 	coreruntime "github.com/goplus/spx/v2/internal/core/runtime"
 	"github.com/goplus/spx/v2/internal/engine"
 	spxlog "github.com/goplus/spx/v2/internal/log"
+	itime "github.com/goplus/spx/v2/internal/time"
 )
 
 // -----------------------------------------------------------------------------
@@ -55,6 +56,8 @@ func (p *Game) OnEngineStart() {
 }
 
 func (p *Game) OnEngineDestroy() {
+	p.lifecycleState.IsRunned.Store(false)
+	p.abortInputSession("game destroyed")
 }
 
 func (p *Game) OnEngineReset() {
@@ -65,29 +68,52 @@ func (p *Game) OnEngineUpdate(delta float64) {
 	if !p.lifecycleState.IsRunned.Load() {
 		return
 	}
+	// Recording and playback consume exactly one input tick per engine update.
+	// Idle games retain the long-lived input coroutine and its original dispatch
+	// path.
+	if session := p.currentInputSession(); session != nil {
+		if !session.beginFrame() {
+			return
+		}
+		p.inputMgr.processInputSessionTick(session, itime.DeltaTime())
+	}
 	p.soundMgr.Update()
-	if p.lifecycleState.BootstrapDone.Load() {
-		p.dispatchStartEventIfNeeded()
-	}
-	if p.lifecycleState.StartDispatched.Load() {
-		engine.RunFrameCallbacks()
-	}
+	p.runScriptFramePhase()
 	p.updateSpriteProxies()
 	p.pullPhysicsPositions()
+}
+
+// runScriptFramePhase dispatches either the initial start event or due frame callbacks.
+func (p *Game) runScriptFramePhase() {
+	if p.lifecycleState.BootstrapDone.Load() && !p.lifecycleState.StartDispatched.Load() {
+		p.dispatchStartEventIfNeeded()
+		return
+	}
+	engine.RunFrameCallbacks()
 }
 
 func (p *Game) OnEngineRender(delta float64) {
 	if !p.lifecycleState.IsRunned.Load() {
 		return
 	}
-	// Coroutine callbacks may mutate visual state after the regular update-side
-	// proxy sync. Flush those mutations before dispatching a queued snapshot.
-	if engine.HasPendingCaptures() {
+	// Coroutines run between OnEngineUpdate and OnEngineRender. If one requested
+	// a capture after changing visual state, flush those proxy changes now so the
+	// end-of-frame screenshot observes the capture body rather than the previous
+	// update's scene.
+	if engine.HasPendingCaptures() || p.inputSessionFrameCompletionPending() {
 		p.syncPostCoroutineVisuals()
 	}
 	// Initial sprite Main hooks can move and collide during bootstrap, so
 	// trigger pairs must be drained before the start event is dispatched.
 	p.processPhysicsTriggers()
+}
+
+// OnEngineFrameEnd runs after the current update's coroutine work, render-side
+// proxy synchronization, and capture dispatch have completed. Replays pause at
+// this boundary so their final effective input frame is fully observable before
+// any later update can run.
+func (p *Game) OnEngineFrameEnd() {
+	p.finishInputSessionFrame()
 }
 
 func (p *Game) OnEnginePause(bool) {

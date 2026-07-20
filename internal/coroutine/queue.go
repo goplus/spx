@@ -42,10 +42,12 @@ func NewQueue[T any]() *Queue[T] {
 	return q
 }
 
-// Move appends every value from src to the receiving queue and leaves src
-// empty. Source and receiver must be different queues; concurrent moves between
-// the same two queues must use a consistent direction.
+// Move appends every value from src to the receiving queue and empties src.
+// Concurrent moves between two queues must use a consistent direction.
 func (q *Queue[T]) Move(src *Queue[T]) {
+	if q == src {
+		return
+	}
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	src.mu.Lock()

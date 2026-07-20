@@ -86,6 +86,32 @@ func TestBootstrapCaptureUsesEngineFrameMetadata(t *testing.T) {
 	if got.Name != "bootstrap" || got.Frame != frame {
 		t.Fatalf("bootstrap capture = %+v, want engine frame %d", got, frame)
 	}
+	if got.InputTick != nil {
+		t.Fatalf("bootstrap capture input tick = %v, want nil", *got.InputTick)
+	}
+}
+
+func TestCaptureCanCarryInputTickMetadata(t *testing.T) {
+	SetGame(nil)
+	ResetFrameRuntime()
+	defer ResetFrameRuntime()
+
+	var got CaptureRequest
+	SetCaptureHandler(func(req CaptureRequest) error {
+		got = req
+		return nil
+	})
+	defer SetCaptureHandler(nil)
+
+	if err := EnqueueCaptureAtInputTick("tick", 0); err != nil {
+		t.Fatal(err)
+	}
+	if got.InputTick == nil || *got.InputTick != 0 {
+		t.Fatalf("capture input tick = %v, want 0", got.InputTick)
+	}
+	if got.Frame != CurrentFrame() {
+		t.Fatalf("capture engine frame = %d, want %d", got.Frame, CurrentFrame())
+	}
 }
 
 func TestFrameCallbackRunsInCapturedCoroutineAndMayYield(t *testing.T) {
@@ -432,6 +458,9 @@ func TestCaptureRequestQueuesForActiveGame(t *testing.T) {
 	}
 	if got.Frame != expectedFrame {
 		t.Fatalf("capture frame = %d, want %d", got.Frame, expectedFrame)
+	}
+	if got.InputTick != nil {
+		t.Fatalf("capture input tick = %v, want nil", *got.InputTick)
 	}
 	if got.Sequence == 0 {
 		t.Fatal("capture sequence was not assigned")

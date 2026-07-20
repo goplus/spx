@@ -164,8 +164,8 @@ type inputManager struct {
 func (p *inputManager) init(g *Game) {
 	p.mousePos = mathf.Vec2{}
 	p.g = g
-	p.clickGate.Init(mouseClickInterval)
-	p.swipe.Init()
+	p.clickGate.InitWithClock(mouseClickInterval, g.inputClock)
+	p.swipe.InitWithClock(g.inputClock)
 }
 
 func (p *inputManager) currentMousePos() mathf.Vec2 {

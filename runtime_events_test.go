@@ -19,12 +19,100 @@ package spx
 import (
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/goplus/spbase/mathf"
+	"github.com/goplus/spx/v2/internal/coroutine"
 	"github.com/goplus/spx/v2/internal/engine"
 	"github.com/goplus/spx/v2/internal/enginewrap"
+	itime "github.com/goplus/spx/v2/internal/time"
 	pkgengine "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
 )
+
+func TestStartHandlersRegisterAbsoluteEngineFrames(t *testing.T) {
+	co := coroutine.New(nil)
+	co.OnInited()
+	original := gco
+	gco = co
+	engine.SetCoroutines(co)
+	t.Cleanup(func() {
+		co.AbortAllAndWait(time.Second)
+		gco = original
+		engine.SetCoroutines(original)
+	})
+
+	var game Game
+	game.scriptEventBindings.init(&game.scriptEvents, &game)
+	engine.SetGame(&game)
+	defer engine.SetGame(nil)
+	engine.ResetFrameRuntime()
+	defer engine.ResetFrameRuntime()
+
+	var callbacks []string
+	base := itime.Frame()
+	game.OnStart(func() {
+		AtFrame(base+1, func() { callbacks = append(callbacks, "first") })
+		engine.WaitYield()
+	})
+	game.OnStart(func() {
+		AtFrame(base+1, func() { callbacks = append(callbacks, "second") })
+	})
+
+	game.handleEvent(&eventStart{})
+	co.Update()
+	if !game.lifecycleState.StartDispatched.Load() {
+		t.Fatal("start event was not marked dispatched")
+	}
+
+	itime.Update(0, 0)
+	engine.RunFrameCallbacks()
+	co.Update()
+	want := []string{"first", "second"}
+	if !reflect.DeepEqual(callbacks, want) {
+		t.Fatalf("frame callbacks = %v, want %v", callbacks, want)
+	}
+}
+
+func TestOnStartReachesCoroutineBoundaryBeforePostBootstrapFrames(t *testing.T) {
+	co := coroutine.New(nil)
+	co.OnInited()
+	original := gco
+	gco = co
+	engine.SetCoroutines(co)
+	t.Cleanup(func() {
+		co.AbortAllAndWait(time.Second)
+		gco = original
+		engine.SetCoroutines(original)
+	})
+
+	var game Game
+	game.scriptEventBindings.init(&game.scriptEvents, &game)
+	game.lifecycleState.BootstrapDone.Store(true)
+	engine.SetGame(&game)
+	defer engine.SetGame(nil)
+	engine.ResetFrameRuntime()
+	defer engine.ResetFrameRuntime()
+
+	var phases []string
+	base := itime.Frame()
+	AtFrame(base+1, func() {
+		phases = append(phases, "frame")
+		engine.WaitYield()
+	})
+	game.OnStart(func() {
+		phases = append(phases, "start")
+	})
+
+	itime.Update(0, 0)
+	game.runScriptFramePhase()
+	co.Update()
+	game.runScriptFramePhase()
+	co.Update()
+
+	if want := []string{"start", "frame"}; !reflect.DeepEqual(phases, want) {
+		t.Fatalf("frame/start phases = %v, want %v", phases, want)
+	}
+}
 
 func TestGameRunBootstrapTasksExecutesQueuedHooksOnce(t *testing.T) {
 	var g Game

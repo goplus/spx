@@ -88,6 +88,198 @@ func TestSnapshotUsesConfiguredHandlerAfterBody(t *testing.T) {
 	}
 }
 
+func TestSnapshotUsesCurrentInputReplayTick(t *testing.T) {
+	resetInputSessionState()
+	engine.SetGame(nil)
+	engine.ResetFrameRuntime()
+	t.Cleanup(func() {
+		resetInputSessionState()
+		engine.ResetFrameRuntime()
+	})
+
+	var got []engine.CaptureRequest
+	engine.SetCaptureHandler(func(req engine.CaptureRequest) error {
+		got = append(got, req)
+		return nil
+	})
+	t.Cleanup(func() { engine.SetCaptureHandler(nil) })
+
+	if _, err := PrepareInputRecording(30); err != nil {
+		t.Fatal(err)
+	}
+	game := &Game{}
+	engine.SetGame(game)
+	if err := game.attachPreparedInputSession(); err != nil {
+		t.Fatal(err)
+	}
+	Snapshot("before-tick", nil)
+	if err := engine.FlushCaptures(); err != nil {
+		t.Fatal(err)
+	}
+	if got[0].InputTick != nil {
+		t.Fatalf("capture before tick zero has input tick %d", *got[0].InputTick)
+	}
+
+	resolved, err := consumeInputTick(InputReplayState{}, nil, 1.0/30.0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resolved.frame.Frame != 0 {
+		t.Fatalf("resolved input tick = %d, want 0", resolved.frame.Frame)
+	}
+	Snapshot("tick-zero", nil)
+	if err := engine.FlushCaptures(); err != nil {
+		t.Fatal(err)
+	}
+	if got[1].InputTick == nil || *got[1].InputTick != 0 {
+		t.Fatalf("capture input tick = %v, want 0", got[1].InputTick)
+	}
+}
+
+func TestSnapshotUsesSyntheticTickZeroForEmptyReplay(t *testing.T) {
+	resetInputSessionState()
+	engine.SetGame(nil)
+	engine.ResetFrameRuntime()
+	t.Cleanup(func() {
+		resetInputSessionState()
+		engine.SetGame(nil)
+		engine.ResetFrameRuntime()
+		engine.SetCaptureHandler(nil)
+	})
+
+	var got engine.CaptureRequest
+	engine.SetCaptureHandler(func(req engine.CaptureRequest) error {
+		got = req
+		return nil
+	})
+	if _, err := PrepareInputReplay(validRuntimeReplay()); err != nil {
+		t.Fatal(err)
+	}
+	game := &Game{}
+	engine.SetGame(game)
+	if err := game.attachPreparedInputSession(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := consumeInputTick(InputReplayState{}, nil, 0); err != nil {
+		t.Fatal(err)
+	}
+	Snapshot("empty-replay", nil)
+	if err := engine.FlushCaptures(); err != nil {
+		t.Fatal(err)
+	}
+	if got.InputTick == nil || *got.InputTick != 0 {
+		t.Fatalf("empty replay capture input tick = %v, want 0", got.InputTick)
+	}
+}
+
+func TestInputSessionCaptureKeyRequestsSnapshots(t *testing.T) {
+	resetInputSessionState()
+	engine.SetGame(nil)
+	engine.ResetFrameRuntime()
+	t.Cleanup(func() {
+		resetInputSessionState()
+		engine.SetGame(nil)
+		engine.ResetFrameRuntime()
+		engine.SetCaptureHandler(nil)
+	})
+
+	var got []engine.CaptureRequest
+	engine.SetCaptureHandler(func(req engine.CaptureRequest) error {
+		got = append(got, req)
+		return nil
+	})
+	if _, err := PrepareInputRecording(30, InputSessionOptions{CaptureKey: KeyP}); err != nil {
+		t.Fatal(err)
+	}
+	game := &Game{}
+	engine.SetGame(game)
+	if err := game.attachPreparedInputSession(); err != nil {
+		t.Fatal(err)
+	}
+	session := game.currentInputSession()
+	recordedTick, err := consumeInputTick(
+		InputReplayState{KeysDown: []int64{int64(KeyP)}},
+		[]InputReplayKeyEvent{{Key: int64(KeyP), Pressed: true}},
+		1.0/30.0,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	session.captureConfiguredKeyPresses(recordedTick.frame.KeyEvents)
+	replay, err := FinishInputRecording()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	game.abortInputSession("recording ended")
+	game.resetBootstrapState()
+	if _, err := PrepareInputReplay(replay, InputSessionOptions{CaptureKey: KeyP}); err != nil {
+		t.Fatal(err)
+	}
+	if err := game.attachPreparedInputSession(); err != nil {
+		t.Fatal(err)
+	}
+	session = game.currentInputSession()
+	replayedTick, err := consumeInputTick(InputReplayState{}, nil, 1.0/30.0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	session.captureConfiguredKeyPresses(replayedTick.frame.KeyEvents)
+	if err := engine.FlushCaptures(); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("configured capture requests = %+v", got)
+	}
+	for i, request := range got {
+		if request.InputTick == nil || *request.InputTick != 0 {
+			t.Fatalf("configured capture %d input tick = %v, want 0", i, request.InputTick)
+		}
+	}
+}
+
+func TestSnapshotDoesNotInheritInputTickAcrossGameReset(t *testing.T) {
+	resetInputSessionState()
+	engine.SetGame(nil)
+	engine.ResetFrameRuntime()
+	t.Cleanup(func() {
+		resetInputSessionState()
+		engine.SetGame(nil)
+		engine.ResetFrameRuntime()
+		engine.SetCaptureHandler(nil)
+	})
+
+	var got []engine.CaptureRequest
+	engine.SetCaptureHandler(func(req engine.CaptureRequest) error {
+		got = append(got, req)
+		return nil
+	})
+	if _, err := PrepareInputRecording(30); err != nil {
+		t.Fatal(err)
+	}
+	game := &Game{}
+	engine.SetGame(game)
+	if err := game.attachPreparedInputSession(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := consumeInputTick(InputReplayState{}, nil, 1.0/30.0); err != nil {
+		t.Fatal(err)
+	}
+	Snapshot("old-game", nil)
+	game.abortInputSession("game reset")
+	Snapshot("new-game", nil)
+	if err := engine.FlushCaptures(); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(got) != 2 || got[0].InputTick == nil || *got[0].InputTick != 0 {
+		t.Fatalf("old-game capture = %+v", got)
+	}
+	if got[1].InputTick != nil {
+		t.Fatalf("new Game inherited input tick %d", *got[1].InputTick)
+	}
+}
+
 func TestSnapshotQueuesRequestForActiveGame(t *testing.T) {
 	var got []string
 	engine.SetGame(struct{}{})

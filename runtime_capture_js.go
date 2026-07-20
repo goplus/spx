@@ -36,15 +36,20 @@ func dispatchCaptureToJSBridge(req engine.CaptureRequest) (err error) {
 	if fn.Type() != js.TypeFunction {
 		return fmt.Errorf("spx: JS capture bridge %s is not configured", jsCaptureBridgeName)
 	}
+	var inputTick any
+	if req.InputTick != nil {
+		inputTick = *req.InputTick
+	}
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("spx: JS capture bridge failed: %v", r)
 		}
 	}()
 	return parseCaptureBridgeResultError(fn.Invoke(js.ValueOf(map[string]any{
-		"name":     req.Name,
-		"frame":    req.Frame,
-		"sequence": req.Sequence,
+		"name":      req.Name,
+		"inputTick": inputTick,
+		"frame":     req.Frame,
+		"sequence":  req.Sequence,
 	})))
 }
 

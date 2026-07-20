@@ -93,20 +93,12 @@ type TriggerEvent struct {
 	Src *Sprite
 	Dst *Sprite
 }
-type KeyEvent struct {
-	Id        int64
-	IsPressed bool
-}
 
 var (
 	game              IGame
 	triggerEventsTemp []TriggerEvent
 	triggerEvents     []TriggerEvent
 	triggerMutex      sync.Mutex
-
-	keyEventsTemp []KeyEvent
-	keyEvents     []KeyEvent
-	keyMutex      sync.Mutex
 
 	logicMutex sync.Mutex
 )
@@ -123,6 +115,7 @@ type IGame interface {
 	OnEngineStart()
 	OnEngineUpdate(delta float64)
 	OnEngineRender(delta float64)
+	OnEngineFrameEnd()
 	OnEngineDestroy()
 	OnEngineReset()
 	OnEnginePause(isPaused bool)
@@ -151,11 +144,9 @@ func OnGameStarted() {
 // Engine callbacks.
 func onStart() {
 	defer CheckPanic()
-	resetMouseButtonStates()
+	resetInputState()
 	triggerEventsTemp = make([]TriggerEvent, 0)
 	triggerEvents = make([]TriggerEvent, 0)
-	keyEventsTemp = make([]KeyEvent, 0)
-	keyEvents = make([]KeyEvent, 0)
 
 	time.Start(func(scale float64) {
 		platformMgr.SetTimeScale(scale)
@@ -166,9 +157,11 @@ func onStart() {
 func onUpdate(delta float64) {
 	defer CheckPanic()
 	profiler.BeginSample()
-	updateTime(float64(delta))
+	defer profiler.EndSample()
+	updateTime(delta)
 	cacheTriggerEvents()
 	cacheKeyEvents()
+	cacheMouseEvents()
 	profiler.MeasureFunctionTime("GameUpdate", func() {
 		game.OnEngineUpdate(delta)
 	})
@@ -180,8 +173,9 @@ func onUpdate(delta float64) {
 	})
 	if err := FlushCaptures(); err != nil {
 		Panic(err)
+		return
 	}
-	profiler.EndSample()
+	game.OnEngineFrameEnd()
 }
 
 func onDestroy() {
@@ -195,22 +189,6 @@ func onPaused(isPaused bool) {
 func onReset() {
 	game.OnEngineReset()
 	gde.Unlink()
-}
-
-func onKeyPressed(id int64) {
-	keyEventsTemp = append(keyEventsTemp, KeyEvent{Id: id, IsPressed: true})
-}
-
-func onKeyReleased(id int64) {
-	keyEventsTemp = append(keyEventsTemp, KeyEvent{Id: id, IsPressed: false})
-}
-
-func onMousePressed(id int64) {
-	setMouseButtonPressed(id, true)
-}
-
-func onMouseReleased(id int64) {
-	setMouseButtonPressed(id, false)
 }
 
 func updateTime(delta float64) {
@@ -229,21 +207,6 @@ func GetTriggerEvents(lst []TriggerEvent) []TriggerEvent {
 	lst = append(lst, triggerEvents...)
 	triggerEvents = triggerEvents[:0]
 	triggerMutex.Unlock()
-	return lst
-}
-
-func cacheKeyEvents() {
-	keyMutex.Lock()
-	keyEvents = append(keyEvents, keyEventsTemp...)
-	keyMutex.Unlock()
-	keyEventsTemp = keyEventsTemp[:0]
-}
-
-func GetKeyEvents(lst []KeyEvent) []KeyEvent {
-	keyMutex.Lock()
-	lst = append(lst, keyEvents...)
-	keyEvents = keyEvents[:0]
-	keyMutex.Unlock()
 	return lst
 }
 

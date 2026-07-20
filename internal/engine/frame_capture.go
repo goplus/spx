@@ -40,10 +40,11 @@ func (q *captureQueue) setHandler(handler CaptureRequestHandler) {
 
 func (q *captureQueue) submit(
 	name string,
+	inputTick *int64,
 	enqueue bool,
 ) (CaptureRequest, CaptureRequestHandler) {
 	q.mu.Lock()
-	request := q.newRequestLocked(name)
+	request := q.newRequestLocked(name, inputTick)
 	if enqueue {
 		q.requests = append(q.requests, request)
 		q.mu.Unlock()
@@ -76,12 +77,18 @@ func (q *captureQueue) takeAll() []CaptureRequest {
 	return requests
 }
 
-func (q *captureQueue) newRequestLocked(name string) CaptureRequest {
+func (q *captureQueue) newRequestLocked(name string, inputTick *int64) CaptureRequest {
 	q.sequence++
+	var tick *int64
+	if inputTick != nil {
+		value := *inputTick
+		tick = &value
+	}
 	return CaptureRequest{
-		Name:     name,
-		Frame:    itime.Frame(),
-		Sequence: q.sequence,
+		Name:      name,
+		InputTick: tick,
+		Frame:     itime.Frame(),
+		Sequence:  q.sequence,
 	}
 }
 

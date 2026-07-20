@@ -82,15 +82,14 @@ type Game struct {
 	scriptEventBindings
 	fs spxfs.Dir
 
-	lifecycleState          corestate.GameLifecycleState
-	displayState            corestate.GameDisplayState
-	dialogState             corestate.GameDialogState
-	debugState              corestate.GameDebugState
-	gameRuntimeState        corestate.GameRuntimeState
-	pathfindingState        corestate.GamePathfindingState
-	audioState              corestate.GameAudioState
-	runtimeConfigInput      Config
-	configuredFixedTimestep float64
+	lifecycleState     corestate.GameLifecycleState
+	displayState       corestate.GameDisplayState
+	dialogState        corestate.GameDialogState
+	debugState         corestate.GameDebugState
+	gameRuntimeState   corestate.GameRuntimeState
+	pathfindingState   corestate.GamePathfindingState
+	audioState         corestate.GameAudioState
+	runtimeConfigInput Config
 
 	Camera Camera
 	camera *cameraImpl
@@ -114,10 +113,15 @@ type Game struct {
 
 	engineMgr engineManagers
 
-	inputMgr   inputManager
-	soundMgr   audio.Manager
-	shapeMgr   shapeManager
-	tilemapMgr gameTilemapMgr
+	inputMgr       inputManager
+	inputSessionMu sync.RWMutex
+	inputSession   *inputSession
+	inputTerminal  InputSessionStatus
+	hasInputTerm   bool
+	inputClaimed   bool
+	soundMgr       audio.Manager
+	shapeMgr       shapeManager
+	tilemapMgr     gameTilemapMgr
 
 	syncBuffer    *engine.SpriteSyncBuffer
 	triggerEvents []engine.TriggerEvent
@@ -261,6 +265,7 @@ func (p *Game) reset() {
 
 	p.resetBootstrapState()
 	engine.ResetFrameRuntime()
+	p.abortInputSession("game reset")
 	p.resetCollisionLayerState()
 	p.resetImageSizeCache()
 	p.resetEventQueueStats()
@@ -272,6 +277,9 @@ func (p *Game) reset() {
 func (p *Game) initGame(sprites []Sprite) *Game {
 	engine.SetGame(p)
 	engine.ResetFrameRuntime()
+	if err := p.attachPreparedInputSession(); err != nil {
+		engine.Panic(err)
+	}
 	p.initShapeMgr()
 	p.initRuntimeState()
 	p.scriptEventBindings.init(&p.scriptEvents, p)

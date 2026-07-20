@@ -57,6 +57,9 @@ func XGot_Game_Reload(game Gamer, index any) (err error) {
 	g := instance(v)
 	g.reset()
 	generation := g.currentBootstrapGeneration()
+	if err = g.attachPreparedInputSession(); err != nil {
+		return err
+	}
 	engine.ClearAllSprites()
 
 	g.events = make(chan event, eventBufferSize)

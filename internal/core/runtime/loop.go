@@ -37,6 +37,7 @@ type InputFrame struct {
 	LastMousePos             mathf.Vec2
 	LastLeftButtonPressed    bool
 	CurrentLeftButtonPressed bool
+	MouseEvents              []engine.MouseEvent
 	KeyEvents                []engine.KeyEvent
 	MouseMovementThreshold   float64
 }
@@ -50,8 +51,22 @@ type InputFrameHooks struct {
 }
 
 func ProcessInputFrame(frame InputFrame, hooks InputFrameHooks) (mathf.Vec2, bool) {
-	if frame.CurrentLeftButtonPressed != frame.LastLeftButtonPressed {
-		if frame.LastLeftButtonPressed {
+	leftPressed := frame.LastLeftButtonPressed
+	for _, event := range frame.MouseEvents {
+		if event.Id != 1 || event.IsPressed == leftPressed {
+			continue
+		}
+		if event.IsPressed {
+			hooks.FireLeftButtonDown(frame.Point)
+		} else {
+			hooks.FireLeftButtonUp(frame.Point)
+		}
+		leftPressed = event.IsPressed
+	}
+	// Old replay files contain only held-state snapshots. This reconciliation
+	// also guards against a platform that reports a state change without an edge.
+	if frame.CurrentLeftButtonPressed != leftPressed {
+		if leftPressed {
 			hooks.FireLeftButtonUp(frame.Point)
 		} else {
 			hooks.FireLeftButtonDown(frame.Point)
@@ -77,6 +92,8 @@ func ProcessInputFrame(frame InputFrame, hooks InputFrameHooks) (mathf.Vec2, boo
 }
 
 type InputLoopConfig struct {
+	BeginFrame             func() bool
+	EndFrame               func()
 	CurrentMousePos        func() mathf.Vec2
 	IsLeftButtonPressed    func() bool
 	FireLeftButtonDown     func(mathf.Vec2)
@@ -88,24 +105,51 @@ type InputLoopConfig struct {
 	MouseMovementThreshold float64
 }
 
+type inputLoopState struct {
+	lastLeftButtonPressed bool
+	lastMousePos          mathf.Vec2
+	keyEvents             []engine.KeyEvent
+	wasSuspended          bool
+}
+
 func RunInputLoop(me coroutine.Thread, cfg InputLoopConfig) int {
-	lastLeftButtonPressed := false
-	lastMousePos := mathf.Vec2{}
-	keyEvents := make([]engine.KeyEvent, 0)
+	state := inputLoopState{keyEvents: make([]engine.KeyEvent, 0)}
 
 	for {
-		point := cfg.CurrentMousePos()
-		// Keep the cached mouse position in sync with the engine every frame,
-		// so callers don't need a second engine-side mouse query elsewhere.
-		cfg.SetMousePos(point)
-		keyEvents = cfg.GetKeyEvents(keyEvents)
-		lastMousePos, lastLeftButtonPressed = ProcessInputFrame(
+		if cfg.BeginFrame != nil && !cfg.BeginFrame() {
+			state.wasSuspended = true
+			engine.WaitNextFrame()
+			continue
+		}
+		runInputLoopFrame(cfg, &state)
+		engine.WaitNextFrame()
+	}
+}
+
+func runInputLoopFrame(cfg InputLoopConfig, state *inputLoopState) {
+	if cfg.EndFrame != nil {
+		defer cfg.EndFrame()
+	}
+	point := cfg.CurrentMousePos()
+	// Keep the cached mouse position in sync with the engine every frame,
+	// so callers don't need a second engine-side mouse query elsewhere.
+	cfg.SetMousePos(point)
+	state.keyEvents = cfg.GetKeyEvents(state.keyEvents)
+	currentLeftButtonPressed := cfg.IsLeftButtonPressed()
+	if state.wasSuspended {
+		// The suspended consumer owns all edges. Resume from the current held
+		// state without manufacturing events at the handoff boundary.
+		state.lastMousePos = point
+		state.lastLeftButtonPressed = currentLeftButtonPressed
+		state.wasSuspended = false
+	} else {
+		state.lastMousePos, state.lastLeftButtonPressed = ProcessInputFrame(
 			InputFrame{
 				Point:                    point,
-				LastMousePos:             lastMousePos,
-				LastLeftButtonPressed:    lastLeftButtonPressed,
-				CurrentLeftButtonPressed: cfg.IsLeftButtonPressed(),
-				KeyEvents:                keyEvents,
+				LastMousePos:             state.lastMousePos,
+				LastLeftButtonPressed:    state.lastLeftButtonPressed,
+				CurrentLeftButtonPressed: currentLeftButtonPressed,
+				KeyEvents:                state.keyEvents,
 				MouseMovementThreshold:   cfg.MouseMovementThreshold,
 			},
 			InputFrameHooks{
@@ -116,9 +160,8 @@ func RunInputLoop(me coroutine.Thread, cfg InputLoopConfig) int {
 				OnKeyPressed:       cfg.OnKeyPressed,
 			},
 		)
-		keyEvents = keyEvents[:0]
-		engine.WaitNextFrame()
 	}
+	state.keyEvents = state.keyEvents[:0]
 }
 
 type LogicFrameConfig[T any] struct {
@@ -186,7 +229,13 @@ func InitLoops(
 	inputLoop func(coroutine.Thread) int,
 	logicLoop func(coroutine.Thread) int,
 ) {
-	create("eventLoop", eventLoop)
-	create("inputEventLoop", inputLoop)
-	create("logicLoop", logicLoop)
+	if eventLoop != nil {
+		create("eventLoop", eventLoop)
+	}
+	if inputLoop != nil {
+		create("inputEventLoop", inputLoop)
+	}
+	if logicLoop != nil {
+		create("logicLoop", logicLoop)
+	}
 }

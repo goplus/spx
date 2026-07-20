@@ -24,6 +24,7 @@ import (
 	"syscall/js"
 	_ "unsafe"
 
+	spx "github.com/goplus/spx/v2"
 	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
@@ -39,6 +40,8 @@ func init() {
 	js.Global().Set("ispx_build", jsFuncOfWithError(ispxBuild))
 	js.Global().Set("ispx_start", jsFuncOfWithError(ispxStart))
 	js.Global().Set("ispx_stop", jsFuncOfWithError(ispxStop))
+	js.Global().Set("ispx_input_recording_finish", jsFuncOfWithError(ispxInputRecordingFinish))
+	js.Global().Set("ispx_input_session_status", jsFuncOfWithError(ispxInputSessionStatus))
 }
 
 // defaultIXGoContextLookup is the default [ixgo.Context.Lookup] when none is
@@ -73,7 +76,12 @@ func ispxBuild(this js.Value, args []js.Value) any {
 // ispxStart starts the interpreter asynchronously. It calls [Run] in a
 // goroutine and reports any errors to JavaScript via [reportRuntimeError].
 func ispxStart(this js.Value, args []js.Value) any {
+	preparation, err := prepareHostInputSession(args)
+	if err != nil {
+		return err
+	}
 	go func() {
+		defer cancelPreparedHostInputSession(preparation)
 		defer func() {
 			if r := recover(); r != nil {
 				reportRuntimeError(fmt.Errorf("interpreter exited with panic: %v", r))
@@ -87,6 +95,114 @@ func ispxStart(this js.Value, args []js.Value) any {
 		}
 	}()
 	return nil
+}
+
+func prepareHostInputSession(args []js.Value) (spx.InputSessionPreparation, error) {
+	if len(args) == 0 || args[0].Type() == js.TypeUndefined || args[0].Type() == js.TypeNull {
+		return spx.InputSessionPreparation{}, nil
+	}
+	input := args[0]
+	if !isPlainJSObject(input) {
+		return spx.InputSessionPreparation{}, errors.New("input session must be an object")
+	}
+	mode := input.Get("mode")
+	if mode.Type() != js.TypeString {
+		return spx.InputSessionPreparation{}, errors.New("input session mode must be a string")
+	}
+	options, err := hostInputSessionOptions(input)
+	if err != nil {
+		return spx.InputSessionPreparation{}, err
+	}
+	switch mode.String() {
+	case "record":
+		fps := float64(defaultHostInputRecordingFPS)
+		value := input.Get("fps")
+		if value.Type() != js.TypeUndefined && value.Type() != js.TypeNull {
+			if value.Type() != js.TypeNumber {
+				return spx.InputSessionPreparation{}, errors.New("input recording FPS must be a number")
+			}
+			fps = value.Float()
+		}
+		return prepareHostInputRecording(fps, options)
+	case "replay":
+		value := input.Get("data")
+		if value.Type() == js.TypeUndefined || value.Type() == js.TypeNull {
+			return spx.InputSessionPreparation{}, errors.New("missing input replay data")
+		}
+		data, err := copyJSReplayData(value)
+		if err != nil {
+			return spx.InputSessionPreparation{}, err
+		}
+		return prepareHostInputReplay(data, options)
+	default:
+		return spx.InputSessionPreparation{}, fmt.Errorf("unsupported input session mode %q", mode.String())
+	}
+}
+
+func hostInputSessionOptions(input js.Value) (spx.InputSessionOptions, error) {
+	value := input.Get("captureKey")
+	if value.Type() == js.TypeUndefined || value.Type() == js.TypeNull {
+		return spx.InputSessionOptions{}, nil
+	}
+	if value.Type() != js.TypeString {
+		return spx.InputSessionOptions{}, errors.New("input session captureKey must be a key name string")
+	}
+	key := spx.KeyFromString(value.String())
+	if key == spx.KeyMax || key == spx.KeyAny {
+		return spx.InputSessionOptions{}, fmt.Errorf("unsupported input session captureKey %q", value.String())
+	}
+	return spx.InputSessionOptions{CaptureKey: key}, nil
+}
+
+func ispxInputRecordingFinish(this js.Value, args []js.Value) any {
+	data, err := finishHostInputRecording()
+	if err != nil {
+		return err
+	}
+	return copyBytesToJS(data)
+}
+
+func ispxInputSessionStatus(this js.Value, args []js.Value) any {
+	status := getHostInputSessionStatus()
+	result := jsTypeObject.New()
+	result.Set("mode", status.Mode)
+	result.Set("phase", status.Phase)
+	result.Set("completed", status.Completed)
+	result.Set("exhausted", status.Exhausted)
+	result.Set("currentTick", nil)
+	if status.HasCurrentTick {
+		result.Set("currentTick", float64(status.CurrentTick))
+	}
+	result.Set("nextFrame", float64(status.NextFrame))
+	result.Set("frameCount", status.FrameCount)
+	if status.Error != "" {
+		result.Set("error", status.Error)
+	}
+	return result
+}
+
+func copyJSReplayData(value js.Value) ([]byte, error) {
+	switch {
+	case value.Type() == js.TypeString:
+		return []byte(value.String()), nil
+	case value.InstanceOf(jsTypeUint8Array):
+		data := make([]byte, value.Get("byteLength").Int())
+		js.CopyBytesToGo(data, value)
+		return data, nil
+	case value.InstanceOf(jsTypeArrayBuffer):
+		bytes := jsTypeUint8Array.New(value)
+		data := make([]byte, bytes.Get("byteLength").Int())
+		js.CopyBytesToGo(data, bytes)
+		return data, nil
+	default:
+		return nil, errors.New("expected string, Uint8Array, or ArrayBuffer")
+	}
+}
+
+func copyBytesToJS(data []byte) js.Value {
+	result := jsTypeUint8Array.New(len(data))
+	js.CopyBytesToJS(result, data)
+	return result
 }
 
 // ispxStop stops the interpreter asynchronously. It calls [Shutdown] in a

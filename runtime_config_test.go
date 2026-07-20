@@ -22,25 +22,19 @@ import (
 	"testing"
 
 	coreproject "github.com/goplus/spx/v2/internal/core/project"
-	itime "github.com/goplus/spx/v2/internal/time"
 )
 
 func TestApplyStoredRuntimeConfigReusesResolvedInput(t *testing.T) {
 	t.Setenv("SPX_SCREENSHOT_KEY", "")
 
-	seed := int64(42)
 	conf := Config{
 		Width:            640,
 		Height:           480,
 		FullScreen:       true,
 		EventQueuePolicy: "block",
-		Deterministic:    true,
-		RandomSeed:       &seed,
 	}
 
 	var game Game
-	defer itime.SetFixedDeltaTime(0)
-	defer ResetRandomSeed()
 
 	proj := coreproject.ProjectConfig{}
 	game.applyRuntimeConfig(&conf, &proj)
@@ -60,8 +54,6 @@ func TestApplyStoredRuntimeConfigReusesResolvedInput(t *testing.T) {
 		t.Fatalf("window size = %dx%d, want 640x480", game.displayState.WindowWidth, game.displayState.WindowHeight)
 	}
 
-	gotA := []float64{Rand__0(1, 10), Rand__1(0, 1)}
-
 	proj = coreproject.ProjectConfig{}
 	game.applyStoredRuntimeConfig(&proj)
 	if !proj.FullScreen {
@@ -71,10 +63,4 @@ func TestApplyStoredRuntimeConfigReusesResolvedInput(t *testing.T) {
 		t.Fatalf("reapplied window size = %dx%d, want 640x480", game.displayState.WindowWidth, game.displayState.WindowHeight)
 	}
 
-	gotB := []float64{Rand__0(1, 10), Rand__1(0, 1)}
-	for i := range gotA {
-		if gotA[i] != gotB[i] {
-			t.Fatalf("stored runtime config did not reset deterministic random at %d: %v vs %v", i, gotA, gotB)
-		}
-	}
 }

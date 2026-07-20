@@ -101,8 +101,9 @@ func onEngineStart() {
 
 func onEngineUpdate(delta float64) {
 	onMainThread(func() {
-		// Logical update callbacks share SPX's resolved delta so deterministic
-		// web mode keeps scripts, timers, tweens, and engine-facing updates aligned.
+		// Logical update callbacks share SPX's fixed delta while an input replay
+		// session is active, keeping scripts, timers, tweens, and engine-facing
+		// updates aligned.
 		delta = itime.EffectiveLogicalDeltaTime(delta)
 		for _, mgr := range mgrs {
 			mgr.OnUpdate(delta)
@@ -125,7 +126,7 @@ func onEngineUpdate(delta float64) {
 func onEngineFixedUpdate(delta float64) {
 	onMainThread(func() {
 		// Fixed-update callbacks intentionally keep Godot's raw physics delta.
-		// Deterministic mode currently virtualizes only SPX logical update time.
+		// Input replay virtualizes only SPX logical update time.
 		for _, mgr := range mgrs {
 			mgr.OnFixedUpdate(delta)
 		}

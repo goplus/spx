@@ -17,7 +17,9 @@
 package runtime
 
 import (
+	"math"
 	"testing"
+	"time"
 
 	"github.com/goplus/spbase/mathf"
 )
@@ -95,5 +97,30 @@ func TestSwipeStateFinishClearsTargetWhenSwipeFails(t *testing.T) {
 
 	if state.target != "" {
 		t.Fatalf("state.target = %q, want cleared", state.target)
+	}
+}
+
+func TestSwipeStateInitWithClockControlsTimeAndResetsState(t *testing.T) {
+	now := time.Unix(0, 0)
+	var state SwipeState[string]
+	state.InitWithClock(func() time.Time { return now })
+	state.Begin(mathf.Vec2{}, "sprite")
+	now = now.Add(100 * time.Millisecond)
+
+	var got SwipeEvent[string]
+	state.Finish(mathf.Vec2{X: 100}, SwipeHooks[string]{
+		Debug: func(ev SwipeEvent[string]) { got = ev },
+	})
+	if got.Target != "sprite" || got.Direction != 90 || math.Abs(got.Velocity-1000) > 1e-9 {
+		t.Fatalf("swipe event = %+v, want target sprite, direction 90, velocity 1000", got)
+	}
+
+	state.Begin(mathf.Vec2{}, "stale")
+	state.InitWithClock(nil)
+	if state.target != "" {
+		t.Fatalf("state.target = %q, want cleared after reinitialization", state.target)
+	}
+	if state.recognizer.IsTracking() {
+		t.Fatal("expected reinitialization to stop tracking")
 	}
 }
