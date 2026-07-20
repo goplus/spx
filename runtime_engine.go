@@ -25,7 +25,6 @@ import (
 	coreruntime "github.com/goplus/spx/v2/internal/core/runtime"
 	"github.com/goplus/spx/v2/internal/engine"
 	spxlog "github.com/goplus/spx/v2/internal/log"
-	itime "github.com/goplus/spx/v2/internal/time"
 )
 
 // -----------------------------------------------------------------------------
@@ -71,7 +70,7 @@ func (p *Game) OnEngineUpdate(delta float64) {
 		p.dispatchStartEventIfNeeded()
 	}
 	if p.lifecycleState.StartDispatched.Load() {
-		engine.RunFrameCallbacks(itime.Frame())
+		engine.RunFrameCallbacks()
 	}
 	p.updateSpriteProxies()
 	p.pullPhysicsPositions()
@@ -80,6 +79,11 @@ func (p *Game) OnEngineUpdate(delta float64) {
 func (p *Game) OnEngineRender(delta float64) {
 	if !p.lifecycleState.IsRunned.Load() {
 		return
+	}
+	// Coroutine callbacks may mutate visual state after the regular update-side
+	// proxy sync. Flush those mutations before dispatching a queued snapshot.
+	if engine.HasPendingCaptures() {
+		p.syncPostCoroutineVisuals()
 	}
 	// Initial sprite Main hooks can move and collide during bootstrap, so
 	// trigger pairs must be drained before the start event is dispatched.

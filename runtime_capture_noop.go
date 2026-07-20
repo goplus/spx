@@ -18,10 +18,12 @@
 
 package spx
 
+import "github.com/goplus/spx/v2/internal/engine"
+
 func init() {
-	SetCaptureHandler(ignoreCaptureRequest)
+	engine.SetCaptureHandler(ignoreCaptureRequest)
 }
 
-func ignoreCaptureRequest(CaptureRequest) error {
+func ignoreCaptureRequest(engine.CaptureRequest) error {
 	return nil
 }

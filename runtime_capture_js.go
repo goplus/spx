@@ -21,15 +21,17 @@ package spx
 import (
 	"fmt"
 	"syscall/js"
+
+	"github.com/goplus/spx/v2/internal/engine"
 )
 
 const jsCaptureBridgeName = "__spxHandleCaptureRequest"
 
 func init() {
-	SetCaptureHandler(dispatchCaptureToJSBridge)
+	engine.SetCaptureHandler(dispatchCaptureToJSBridge)
 }
 
-func dispatchCaptureToJSBridge(req CaptureRequest) (err error) {
+func dispatchCaptureToJSBridge(req engine.CaptureRequest) (err error) {
 	fn := js.Global().Get(jsCaptureBridgeName)
 	if fn.Type() != js.TypeFunction {
 		return fmt.Errorf("spx: JS capture bridge %s is not configured", jsCaptureBridgeName)
@@ -41,10 +43,8 @@ func dispatchCaptureToJSBridge(req CaptureRequest) (err error) {
 	}()
 	return parseCaptureBridgeResultError(fn.Invoke(js.ValueOf(map[string]any{
 		"name":     req.Name,
-		"intent":   string(req.Intent),
 		"frame":    req.Frame,
 		"sequence": req.Sequence,
-		"check":    req.IsCheck(),
 	})))
 }
 

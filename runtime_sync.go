@@ -39,6 +39,16 @@ func (p *Game) updateSpriteProxies() {
 	p.camera.onUpdate()
 	activeShapes := p.shapeMgr.getTempShapes()
 	p.shapeMgr.flushActivate(activeShapes)
+	p.flushSpriteProxyChanges(activeShapes)
+}
+
+// syncPostCoroutineVisuals flushes visual changes without advancing frame logic.
+func (p *Game) syncPostCoroutineVisuals() {
+	p.camera.onUpdate()
+	p.flushSpriteProxyChanges(p.shapeMgr.getTempShapes())
+}
+
+func (p *Game) flushSpriteProxyChanges(activeShapes []Shape) {
 	p.syncBuffer.Clear()
 	p.shapeMgr.collectProxyUpdates(activeShapes, p.syncBuffer)
 	p.shapeMgr.flushDestroy(p.syncBuffer)

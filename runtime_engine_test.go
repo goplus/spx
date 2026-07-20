@@ -1,0 +1,94 @@
+/*
+ * Copyright (c) 2021 The XGo Authors (xgo.dev). All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package spx
+
+import (
+	"testing"
+
+	"github.com/goplus/spx/v2/internal/engine"
+	"github.com/goplus/spx/v2/internal/enginewrap"
+	pkgengine "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
+)
+
+type captureFlushTestShape struct {
+	updates int
+}
+
+func (s *captureFlushTestShape) onUpdate(float64) {
+	s.updates++
+}
+
+type captureFlushSpriteMgr struct {
+	enginewrap.SpriteMgrImpl
+	batches [][]float32
+}
+
+func (m *captureFlushSpriteMgr) BatchUpdateTransforms(buffer []float32) {
+	m.batches = append(m.batches, append([]float32(nil), buffer...))
+}
+
+func TestOnEngineRenderFlushesSpriteProxiesWhenCaptureIsPending(t *testing.T) {
+	enginewrap.Init(func(call func()) { call() })
+	originalSpriteMgr := pkgengine.SpriteMgr
+	spriteMgr := &captureFlushSpriteMgr{}
+	pkgengine.SpriteMgr = spriteMgr
+	t.Cleanup(func() { pkgengine.SpriteMgr = originalSpriteMgr })
+
+	var game Game
+	game.lifecycleState.IsRunned.Store(true)
+	game.camera = &cameraImpl{g: &game}
+	game.initShapeMgr()
+	game.syncBuffer = engine.NewSpriteSyncBuffer(1)
+
+	shape := &captureFlushTestShape{}
+	game.addShape(shape)
+	destroyed := &SpriteImpl{}
+	destroyed.runtimeState.SyncSprite = &engine.Sprite{}
+	game.shapeMgr.remove(destroyed)
+
+	engine.SetGame(&game)
+	defer engine.SetGame(nil)
+	engine.ResetFrameRuntime()
+	defer engine.ResetFrameRuntime()
+	engine.SetCaptureHandler(func(engine.CaptureRequest) error { return nil })
+	defer engine.SetCaptureHandler(nil)
+
+	game.OnEngineRender(0)
+	if shape.updates != 0 {
+		t.Fatalf("shape updates without capture = %d, want 0", shape.updates)
+	}
+	if destroyed.runtimeState.SyncSprite == nil {
+		t.Fatal("pending sprite destroy flushed without capture")
+	}
+
+	if err := engine.EnqueueCapture("after-coroutine"); err != nil {
+		t.Fatal(err)
+	}
+	game.OnEngineRender(0)
+	if shape.updates != 0 {
+		t.Fatalf("capture-only proxy flush advanced shape logic %d times, want 0", shape.updates)
+	}
+	if destroyed.runtimeState.SyncSprite != nil {
+		t.Fatal("pending sprite destroy was not included in capture-only proxy flush")
+	}
+	if len(spriteMgr.batches) != 1 {
+		t.Fatalf("capture-only proxy batches = %d, want 1", len(spriteMgr.batches))
+	}
+	if err := engine.FlushCaptures(); err != nil {
+		t.Fatal(err)
+	}
+}
