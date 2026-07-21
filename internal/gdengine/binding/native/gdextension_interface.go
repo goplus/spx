@@ -450,7 +450,7 @@ func func_on_sprite_destroyed(id C.GDExtensionInt) {
 //export func_on_action_pressed
 func func_on_action_pressed(actionName C.GdString) {
 	name := ToString(GdString(actionName))
-	if callbacks.OnSpriteReady != nil {
+	if callbacks.OnActionPressed != nil {
 		callbacks.OnActionPressed(name)
 	}
 }
