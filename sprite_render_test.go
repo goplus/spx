@@ -70,3 +70,36 @@ func TestSpriteSetCostumeValidNameUpdatesState(t *testing.T) {
 		t.Fatal("IsCostumeDirty = false, want true")
 	}
 }
+
+func TestResolveCostumeIndex(t *testing.T) {
+	sprite := newTestRenderSprite()
+
+	tests := []struct {
+		name    string
+		costume string
+		want    int
+	}{
+		{name: "name", costume: "run", want: 1},
+		{name: "zero", costume: "0", want: -1},
+		{name: "in range", costume: "2", want: 1},
+		{name: "wrap", costume: "3", want: 0},
+		{name: "wrap to zero", costume: "4", want: 1},
+		{name: "invalid", costume: "missing", want: -1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := sprite.ResolveCostumeIndex(tt.costume); got != tt.want {
+				t.Fatalf("ResolveCostumeIndex(%q) = %d, want %d", tt.costume, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestResolveCostumeIndexWithNoCostumes(t *testing.T) {
+	sprite := &SpriteImpl{}
+
+	if got := sprite.ResolveCostumeIndex("3"); got != 2 {
+		t.Fatalf("ResolveCostumeIndex(%q) = %d, want %d", "3", got, 2)
+	}
+}
