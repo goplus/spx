@@ -194,6 +194,7 @@ func GenerateJsEngineJsFile(projectPath, godotPath string, ast clang.CHeaderFile
 	if err != nil {
 		return err
 	}
+	output := trimTrailingWhitespace(b.Bytes())
 
 	headerFileName := filepath.Join(godotPath, "platform", "web", "js", "engine", "gdspx.js")
 	err = os.MkdirAll(filepath.Dir(headerFileName), os.ModePerm)
@@ -206,8 +207,16 @@ func GenerateJsEngineJsFile(projectPath, godotPath string, ast clang.CHeaderFile
 	}
 	defer f.Close()
 
-	_, err = f.Write(b.Bytes())
+	_, err = f.Write(output)
 	return err
+}
+
+func trimTrailingWhitespace(src []byte) []byte {
+	lines := bytes.Split(src, []byte("\n"))
+	for i, line := range lines {
+		lines[i] = bytes.TrimRight(line, " \t")
+	}
+	return bytes.Join(lines, []byte("\n"))
 }
 
 func getManagerFuncName(function *clang.TypedefFunction) string {

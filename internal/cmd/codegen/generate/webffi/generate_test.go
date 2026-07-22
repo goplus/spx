@@ -17,12 +17,33 @@
 package webffi
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/goplus/spx/v2/internal/cmd/codegen/gdextensionparser/clang"
 	"github.com/goplus/spx/v2/internal/cmd/codegen/generate/common"
 	"github.com/stretchr/testify/require"
 )
+
+func TestGenerateJsEngineJsFileTrimsTrailingWhitespace(t *testing.T) {
+	function := &clang.TypedefFunction{
+		Name:       "GDExtensionSpxTestDoThing",
+		ReturnType: clang.PrimativeType{Name: "void"},
+	}
+	ast := clang.CHeaderFileAST{
+		Expr: []clang.Expr{{Function: function}},
+	}
+	godotPath := t.TempDir()
+
+	require.NoError(t, GenerateJsEngineJsFile("", godotPath, ast))
+	body, err := os.ReadFile(filepath.Join(godotPath, "platform", "web", "js", "engine", "gdspx.js"))
+	require.NoError(t, err)
+	for _, line := range strings.Split(string(body), "\n") {
+		require.Equal(t, strings.TrimRight(line, " \t"), line)
+	}
+}
 
 func TestGetJsFuncArgsFlattensGdObj(t *testing.T) {
 	function := &clang.TypedefFunction{
