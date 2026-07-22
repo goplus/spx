@@ -70,6 +70,145 @@ func (d localDir) Close() error {
 	return nil
 }
 
+func (d localDir) ReadDir(name string) ([]spxfs.DirEntry, error) {
+	entries, err := os.ReadDir(filepath.Join(d.base, filepath.FromSlash(name)))
+	if err != nil {
+		return nil, err
+	}
+	result := make([]spxfs.DirEntry, 0, len(entries))
+	for _, entry := range entries {
+		result = append(result, spxfs.DirEntry{Name: entry.Name(), IsDir: entry.IsDir()})
+	}
+	return result, nil
+}
+
+func TestLoadProjectFontsFromSourceDirectory(t *testing.T) {
+	dir := t.TempDir()
+	writeProjectFile(t, dir, "index.json", `{"fontPreferences":"basic chinese, Scratch, default"}`)
+	writeProjectFile(t, dir, "fonts/Scratch/index.json", `{"faces":[{"path":"Scratch.ttf"}]}`)
+	writeProjectFile(t, dir, "fonts/Scratch/Scratch.ttf", "scratch-font")
+	writeProjectFile(t, dir, "fonts/Basic Chinese/index.json", `{"faces":[{"path":"basic.ttf"}]}`)
+	writeProjectFile(t, dir, "fonts/Basic Chinese/basic.ttf", "basic-font")
+
+	loaded, err := LoadBuilderProject(localDir{base: dir}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantFamilies := []ProjectFontFamily{
+		{Name: "Basic Chinese", Path: "fonts/Basic Chinese/basic.ttf"},
+		{Name: "Scratch", Path: "fonts/Scratch/Scratch.ttf"},
+	}
+	if !reflect.DeepEqual(loaded.Fonts.Families, wantFamilies) {
+		t.Fatalf("families = %#v, want %#v", loaded.Fonts.Families, wantFamilies)
+	}
+	wantPreferences := []string{"Basic Chinese", "Scratch", "default"}
+	if !reflect.DeepEqual(loaded.Fonts.Preferences, wantPreferences) {
+		t.Fatalf("preferences = %#v, want %#v", loaded.Fonts.Preferences, wantPreferences)
+	}
+}
+
+func TestOpenBuilderResourcesUsesPackedFontsCatalog(t *testing.T) {
+	dir := t.TempDir()
+	writeProjectFile(t, dir, "index.json", `{"fontPreferences":"Source"}`)
+	writeProjectFile(t, dir, "index_pack.json", `{
+		"fontPreferences":"Packed, default",
+		"fonts":{"Packed":{"faces":[{"path":"packed.ttf"}]}}
+	}`)
+	writeProjectFile(t, dir, "fonts/Packed/packed.ttf", "packed-font")
+	writeProjectFile(t, dir, "fonts/Source/index.json", `{"faces":[{"path":"source.ttf"}]}`)
+	writeProjectFile(t, dir, "fonts/Source/source.ttf", "source-font")
+
+	opened, err := OpenBuilderResources(localDir{base: dir}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer opened.FS.Close()
+	wantFamilies := []ProjectFontFamily{{Name: "Packed", Path: "fonts/Packed/packed.ttf"}}
+	if !reflect.DeepEqual(opened.Fonts.Families, wantFamilies) {
+		t.Fatalf("families = %#v, want packed catalog %#v", opened.Fonts.Families, wantFamilies)
+	}
+	if want := []string{"Packed", "default"}; !reflect.DeepEqual(opened.Fonts.Preferences, want) {
+		t.Fatalf("preferences = %#v, want %#v", opened.Fonts.Preferences, want)
+	}
+}
+
+func TestOpenBuilderResourcesScansFontsWhenPackedCatalogMissing(t *testing.T) {
+	dir := t.TempDir()
+	writeProjectFile(t, dir, "index.json", `{"fontPreferences":"Source"}`)
+	writeProjectFile(t, dir, "index_pack.json", `{"zorder":[]}`)
+	writeProjectFile(t, dir, "fonts/Source/index.json", `{"faces":[{"path":"source.ttf"}]}`)
+	writeProjectFile(t, dir, "fonts/Source/source.ttf", "source-font")
+
+	opened, err := OpenBuilderResources(localDir{base: dir}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer opened.FS.Close()
+	want := []ProjectFontFamily{{Name: "Source", Path: "fonts/Source/source.ttf"}}
+	if !reflect.DeepEqual(opened.Fonts.Families, want) {
+		t.Fatalf("families = %#v, want source scan %#v", opened.Fonts.Families, want)
+	}
+}
+
+func TestLoadProjectFontsValidation(t *testing.T) {
+	t.Run("reserved family", func(t *testing.T) {
+		dir := t.TempDir()
+		writeProjectFile(t, dir, "fonts/DEFAULT/index.json", `{"faces":[{"path":"font.ttf"}]}`)
+		writeProjectFile(t, dir, "fonts/DEFAULT/font.ttf", "font")
+		_, err := LoadProjectFonts(localDir{base: dir}, nil)
+		if err == nil || !strings.Contains(err.Error(), "reserved") {
+			t.Fatalf("error = %v, want reserved family error", err)
+		}
+	})
+
+	t.Run("escaping face", func(t *testing.T) {
+		dir := t.TempDir()
+		writeProjectFile(t, dir, "fonts/Unsafe/index.json", `{"faces":[{"path":"../font.ttf"}]}`)
+		_, err := LoadProjectFonts(localDir{base: dir}, nil)
+		if err == nil || !strings.Contains(err.Error(), "escapes") {
+			t.Fatalf("error = %v, want escaping face error", err)
+		}
+	})
+
+	t.Run("case folded duplicate", func(t *testing.T) {
+		dir := t.TempDir()
+		writeProjectFile(t, dir, "index_pack.json", `{
+			"fonts": {
+				"Latin": {"faces":[{"path":"font.ttf"}]},
+				"latin": {"faces":[{"path":"font.ttf"}]}
+			}
+		}`)
+		writeProjectFile(t, dir, "fonts/Latin/font.ttf", "font")
+		_, err := OpenBuilderResources(localDir{base: dir}, nil)
+		if err == nil || !strings.Contains(err.Error(), "ASCII case folding") {
+			t.Fatalf("error = %v, want case-folded duplicate error", err)
+		}
+	})
+
+	t.Run("exactly one face", func(t *testing.T) {
+		dir := t.TempDir()
+		writeProjectFile(t, dir, "fonts/Empty/index.json", `{"faces":[]}`)
+		_, err := LoadProjectFonts(localDir{base: dir}, nil)
+		if err == nil || !strings.Contains(err.Error(), "exactly one face") {
+			t.Fatalf("error = %v, want face count error", err)
+		}
+	})
+}
+
+func TestParseAndResolveFontPreferences(t *testing.T) {
+	value := ` Scratch, "Basic Chinese", 'Emoji',, unknown, scratch `
+	if want := []string{"Scratch", "Basic Chinese", "Emoji", "", "unknown", "scratch"}; !reflect.DeepEqual(ParseFontPreferences(value), want) {
+		t.Fatalf("ParseFontPreferences() = %#v, want %#v", ParseFontPreferences(value), want)
+	}
+	families := []ProjectFontFamily{{Name: "Scratch"}, {Name: "Basic Chinese"}, {Name: "Emoji"}}
+	if want := []string{"Scratch", "Basic Chinese", "Emoji"}; !reflect.DeepEqual(ResolveFontPreferences(&value, families), want) {
+		t.Fatalf("ResolveFontPreferences() = %#v, want %#v", ResolveFontPreferences(&value, families), want)
+	}
+	if want := []string{"default"}; !reflect.DeepEqual(ResolveFontPreferences(nil, families), want) {
+		t.Fatalf("nil preferences = %#v, want %#v", ResolveFontPreferences(nil, families), want)
+	}
+}
+
 func TestAssetDirFromResource(t *testing.T) {
 	if got, ok := AssetDirFromResource("assets"); !ok || got != "assets" {
 		t.Fatalf("string asset dir = %q, %v", got, ok)
@@ -233,48 +372,13 @@ func TestResolveDisplaySettings(t *testing.T) {
 	if settings.DefaultFontPath != "res://engine/fonts/CnFont.ttf" {
 		t.Fatalf("default font path = %q", settings.DefaultFontPath)
 	}
-	if len(settings.SVGFontFaceRegistrations) == 0 {
-		t.Fatalf("expected scratch font registrations: %+v", settings)
-	}
-	if got := settings.SVGFontFaceRegistrations[0]; got != (SVGFontFaceRegistration{
-		Path:   "res://engine/fonts/scratch/NotoSans-Medium.ttf",
-		Family: "Sans Serif",
-	}) {
-		t.Fatalf("first font registration = %+v", got)
-	}
-	foundDefaultFamily := false
-	foundEmojiFamily := false
-	sansSerifCount := 0
-	for _, font := range settings.SVGFontFaceRegistrations {
-		if font.Family == "Sans Serif" {
-			sansSerifCount++
-		}
-		if font == (SVGFontFaceRegistration{Path: defaultDisplayFontPath, Family: defaultSVGFontFamily}) {
-			foundDefaultFamily = true
-		}
-		if font == (SVGFontFaceRegistration{Path: "res://engine/fonts/emoji/TwitterColorEmoji-SVGinOT.ttf", Family: emojiSVGFontFamily}) {
-			foundEmojiFamily = true
-		}
-	}
-	if sansSerifCount != 1 {
-		t.Fatalf("expected exactly one Sans Serif registration: %+v", settings.SVGFontFaceRegistrations)
-	}
-	if !foundDefaultFamily {
-		t.Fatalf("missing default SVG family registration: %+v", settings.SVGFontFaceRegistrations)
-	}
-	if !foundEmojiFamily {
-		t.Fatalf("missing emoji SVG family registration: %+v", settings.SVGFontFaceRegistrations)
+	if len(settings.FontFaceRegistrations) != 0 {
+		t.Fatalf("built-in font registrations = %+v, want none", settings.FontFaceRegistrations)
 	}
 
 	settings = ResolveDisplaySettings(&ProjectConfig{})
 	if settings.WindowScale != 1 || !settings.StretchMode || settings.Debug {
 		t.Fatalf("unexpected default settings: %+v", settings)
-	}
-
-	settings.SVGFontFaceRegistrations[0].Path = "mutated"
-	fresh := ResolveDisplaySettings(&ProjectConfig{})
-	if fresh.SVGFontFaceRegistrations[0].Path == "mutated" {
-		t.Fatal("font registrations should be copied per call")
 	}
 
 	nilSettings := ResolveDisplaySettings(nil)
@@ -288,52 +392,54 @@ func TestResolveDisplaySettings(t *testing.T) {
 
 func TestRegisterDisplayFonts(t *testing.T) {
 	settings := ResolveDisplaySettings(&ProjectConfig{})
+	settings.FontFaceRegistrations = []FontFaceRegistration{
+		{Path: "asset://fonts/Latin/font.ttf", Family: "Latin"},
+		{Path: "asset://fonts/Chinese/font.ttf", Family: "Chinese"},
+	}
 	var defaultFonts []string
-	var fontFaces []SVGFontFaceRegistration
+	var fontFaces []FontFaceRegistration
+	var preferences []string
 	RegisterDisplayFonts(
 		settings,
 		func(path string) {
 			defaultFonts = append(defaultFonts, path)
 		},
 		func(path, family string) {
-			fontFaces = append(fontFaces, SVGFontFaceRegistration{Path: path, Family: family})
+			fontFaces = append(fontFaces, FontFaceRegistration{Path: path, Family: family})
 		},
+		func(value string) { preferences = append(preferences, value) },
 	)
 
 	if !reflect.DeepEqual(defaultFonts, []string{settings.DefaultFontPath}) {
 		t.Fatalf("default fonts = %#v, want %#v", defaultFonts, []string{settings.DefaultFontPath})
 	}
-	if !reflect.DeepEqual(fontFaces, settings.SVGFontFaceRegistrations) {
-		t.Fatalf("registered svg font faces = %#v, want %#v", fontFaces, settings.SVGFontFaceRegistrations)
+	if !reflect.DeepEqual(fontFaces, settings.FontFaceRegistrations) {
+		t.Fatalf("registered font faces = %#v, want %#v", fontFaces, settings.FontFaceRegistrations)
+	}
+	if !reflect.DeepEqual(preferences, []string{"default"}) {
+		t.Fatalf("preferences = %#v, want default", preferences)
 	}
 
-	defaultFonts = nil
-	fontFaces = nil
-	settings.SVGFontFaceRegistrations = append(settings.SVGFontFaceRegistrations,
-		SVGFontFaceRegistration{Path: "res://engine/fonts/other.ttf", Family: "Sans Serif"},
-	)
-	RegisterDisplayFonts(
-		settings,
-		func(path string) {
-			defaultFonts = append(defaultFonts, path)
+}
+
+func TestAddProjectFonts(t *testing.T) {
+	settings := ResolveDisplaySettings(&ProjectConfig{})
+	AddProjectFonts(&settings, ProjectFonts{
+		Families: []ProjectFontFamily{
+			{Name: "Scratch", Path: "fonts/Scratch/font.ttf"},
+			{Name: "Chinese", Path: "fonts/Chinese/font.ttf"},
 		},
-		func(path, family string) {
-			fontFaces = append(fontFaces, SVGFontFaceRegistration{Path: path, Family: family})
-		},
-	)
-	sansSerifCount := 0
-	var sansSerifFont SVGFontFaceRegistration
-	for _, font := range fontFaces {
-		if font.Family == "Sans Serif" {
-			sansSerifCount++
-			sansSerifFont = font
-		}
+		Preferences: []string{"Scratch", "Chinese", "default"},
+	}, func(path string) string { return "asset://" + path })
+
+	if got := settings.FontFaceRegistrations; !reflect.DeepEqual(got, []FontFaceRegistration{
+		{Family: "Scratch", Path: "asset://fonts/Scratch/font.ttf"},
+		{Family: "Chinese", Path: "asset://fonts/Chinese/font.ttf"},
+	}) {
+		t.Fatalf("project registrations = %#v", got)
 	}
-	if sansSerifCount != 1 {
-		t.Fatalf("duplicate family should collapse to one registration: %#v", fontFaces)
-	}
-	if want := (SVGFontFaceRegistration{Path: "res://engine/fonts/other.ttf", Family: "Sans Serif"}); sansSerifFont != want {
-		t.Fatalf("duplicate family should keep the last registration: got %#v, want %#v", sansSerifFont, want)
+	if want := []string{"Scratch", "Chinese", "default"}; !reflect.DeepEqual(settings.FontPreferences, want) {
+		t.Fatalf("preferences = %#v, want %#v", settings.FontPreferences, want)
 	}
 }
 

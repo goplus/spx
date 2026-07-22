@@ -18,8 +18,11 @@ package ispx
 
 import (
 	"io"
+	"reflect"
 	"testing"
 	"testing/fstest"
+
+	spxfs "github.com/goplus/spx/v2/fs"
 )
 
 func TestNewSpxDir(t *testing.T) {
@@ -85,5 +88,34 @@ func TestSpxDirClose(t *testing.T) {
 	spxDir := dir.(*spxDir)
 	if err := spxDir.Close(); err != nil {
 		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestSpxDirResourceCapabilities(t *testing.T) {
+	fsys := fstest.MapFS{
+		"assets/fonts/Pixel/index.json": &fstest.MapFile{Data: []byte(`{}`)},
+		"assets/fonts/Serif/index.json": &fstest.MapFile{Data: []byte(`{}`)},
+		"assets/index.json":             &fstest.MapFile{Data: []byte(`{}`)},
+	}
+	dir := newSpxDir(fsys, "assets")
+
+	gdDir, ok := dir.(spxfs.GdDir)
+	if !ok {
+		t.Fatalf("%T does not implement GdDir", dir)
+	}
+	if got := gdDir.GetPath(); got != "assets" {
+		t.Fatalf("GetPath() = %q, want assets", got)
+	}
+	reader, ok := dir.(spxfs.ReadDirer)
+	if !ok {
+		t.Fatalf("%T does not implement ReadDirer", dir)
+	}
+	entries, err := reader.ReadDir("fonts")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []spxfs.DirEntry{{Name: "Pixel", IsDir: true}, {Name: "Serif", IsDir: true}}
+	if !reflect.DeepEqual(entries, want) {
+		t.Fatalf("entries = %#v, want %#v", entries, want)
 	}
 }

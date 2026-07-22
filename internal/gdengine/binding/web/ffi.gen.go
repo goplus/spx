@@ -158,10 +158,12 @@ type GDExtensionInterface struct {
 	SpxResGetImageSize                          js.Value
 	SpxResReadAllText                           js.Value
 	SpxResHasFile                               js.Value
+	SpxResListDirectories                       js.Value
 	SpxResReloadTexture                         js.Value
 	SpxResFreeStr                               js.Value
 	SpxResSetDefaultFont                        js.Value
-	SpxResRegisterSvgFontFace                   js.Value
+	SpxResRegisterFontFace                      js.Value
+	SpxResSetFontPreferences                    js.Value
 	SpxSceneChangeSceneToFile                   js.Value
 	SpxSceneDestroyAllSprites                   js.Value
 	SpxSceneReloadCurrentScene                  js.Value
@@ -488,10 +490,12 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxResGetImageSize = resolveJSFunc("gdspx_res_get_image_size")
 	x.SpxResReadAllText = resolveJSFunc("gdspx_res_read_all_text")
 	x.SpxResHasFile = resolveJSFunc("gdspx_res_has_file")
+	x.SpxResListDirectories = resolveJSFunc("gdspx_res_list_directories")
 	x.SpxResReloadTexture = resolveJSFunc("gdspx_res_reload_texture")
 	x.SpxResFreeStr = resolveJSFunc("gdspx_res_free_str")
 	x.SpxResSetDefaultFont = resolveJSFunc("gdspx_res_set_default_font")
-	x.SpxResRegisterSvgFontFace = resolveJSFunc("gdspx_res_register_svg_font_face")
+	x.SpxResRegisterFontFace = resolveJSFunc("gdspx_res_register_font_face")
+	x.SpxResSetFontPreferences = resolveJSFunc("gdspx_res_set_font_preferences")
 	x.SpxSceneChangeSceneToFile = resolveJSFunc("gdspx_scene_change_scene_to_file")
 	x.SpxSceneDestroyAllSprites = resolveJSFunc("gdspx_scene_destroy_all_sprites")
 	x.SpxSceneReloadCurrentScene = resolveJSFunc("gdspx_scene_reload_current_scene")

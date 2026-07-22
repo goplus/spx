@@ -720,6 +720,12 @@ void cgo_callfn_GDExtensionSpxResHasFile(const GDExtensionSpxResHasFile fn, GdSt
 	}
 	fn(p_path, ret_val);
 }
+void cgo_callfn_GDExtensionSpxResListDirectories(const GDExtensionSpxResListDirectories fn, GdString p_path, GdString* ret_val) {
+	if (!fn) {
+		return;
+	}
+	fn(p_path, ret_val);
+}
 void cgo_callfn_GDExtensionSpxResReloadTexture(const GDExtensionSpxResReloadTexture fn, GdString path) {
 	if (!fn) {
 		return;
@@ -738,11 +744,17 @@ void cgo_callfn_GDExtensionSpxResSetDefaultFont(const GDExtensionSpxResSetDefaul
 	}
 	fn(font_path);
 }
-void cgo_callfn_GDExtensionSpxResRegisterSvgFontFace(const GDExtensionSpxResRegisterSvgFontFace fn, GdString font_path, GdString family) {
+void cgo_callfn_GDExtensionSpxResRegisterFontFace(const GDExtensionSpxResRegisterFontFace fn, GdString font_path, GdString family) {
 	if (!fn) {
 		return;
 	}
 	fn(font_path, family);
+}
+void cgo_callfn_GDExtensionSpxResSetFontPreferences(const GDExtensionSpxResSetFontPreferences fn, GdString preferences) {
+	if (!fn) {
+		return;
+	}
+	fn(preferences);
 }
 void cgo_callfn_GDExtensionSpxSceneChangeSceneToFile(const GDExtensionSpxSceneChangeSceneToFile fn, GdString path) {
 	if (!fn) {
