@@ -1,8 +1,7 @@
 import "fmt"
 import "math"
 
-var a, b float64
-var result float64
+var a, b, result float64
 
 onMsg "testOperator", => {
 	onTestStart(this)

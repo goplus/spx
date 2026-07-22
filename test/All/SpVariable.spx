@@ -1,10 +1,12 @@
 import "fmt"
 import "math"
 
-var intTest int
-var float64Test float64
-var content string
-var boolTest bool
+var (
+	intTest     int
+	float64Test float64
+	content     string
+	boolTest    bool
+)
 
 onMsg "testVariable", => {
 	onTestStart(this)

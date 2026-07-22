@@ -1,11 +1,13 @@
 import "fmt"
 import "math"
 
-var color1, color2, color3, color4, color5, color6 Color
-var x, y float64
-var hitItem, touching bool
-var parent any
-var width, height float64
+var (
+	color1, color2, color3, color4, color5, color6 Color
+	x, y                                         float64
+	hitItem, touching                            bool
+	parent                                       any
+	width, height                                float64
+)
 
 onMsg "testUnique", => {
 	onTestStart(this)

@@ -1,4 +1,4 @@
-xgo 1.7.1
+xgo 1.7.5
 
 project main.spx Game github.com/goplus/spx/v2 math
 
