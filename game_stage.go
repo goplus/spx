@@ -26,6 +26,7 @@ import (
 	spxlog "github.com/goplus/spx/v2/internal/log"
 	itime "github.com/goplus/spx/v2/internal/time"
 	"github.com/goplus/spx/v2/internal/ui"
+	spxapi "github.com/goplus/spx/v2/pkg/spx"
 )
 
 // -----------------------------------------------------------------------------
@@ -146,7 +147,7 @@ func (p *Game) getMousePos() (x, y float64) {
 }
 
 func (p *Game) Username() string {
-	return ""
+	return spxapi.Username()
 }
 
 func (p *Game) WaitNextFrame() Seconds {
