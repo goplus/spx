@@ -24,7 +24,7 @@ import (
 	"github.com/goplus/spx/v2/internal/engine"
 )
 
-func TestRunWithoutScreenRefreshSkipsControlFlowFrameWaits(t *testing.T) {
+func TestWarpSkipsControlFlowFrameWaits(t *testing.T) {
 	co := coroutine.New(nil)
 	original := gco
 	gco = co
@@ -46,7 +46,7 @@ func TestRunWithoutScreenRefreshSkipsControlFlowFrameWaits(t *testing.T) {
 		flagDuring := false
 		repeatCalls := 0
 		condCalls := 0
-		RunWithoutScreenRefresh(func() {
+		Warp(func() {
 			flagDuring = IsRunWithoutScreenRefresh()
 			Repeat(3, func() {
 				repeatCalls++
@@ -87,7 +87,7 @@ func TestRunWithoutScreenRefreshSkipsControlFlowFrameWaits(t *testing.T) {
 	}
 }
 
-func TestRunWithoutScreenRefreshRestoresPreviousState(t *testing.T) {
+func TestWarpRestoresPreviousState(t *testing.T) {
 	co := coroutine.New(nil)
 	original := gco
 	gco = co
@@ -111,7 +111,7 @@ func TestRunWithoutScreenRefreshRestoresPreviousState(t *testing.T) {
 		outerDuring := IsRunWithoutScreenRefresh()
 
 		callDuring := false
-		RunWithoutScreenRefresh(func() {
+		Warp(func() {
 			callDuring = IsRunWithoutScreenRefresh()
 		})
 
@@ -145,63 +145,5 @@ func TestRunWithoutScreenRefreshRestoresPreviousState(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("run-without-screen-refresh state should restore without blocking")
-	}
-}
-
-func TestWarpCallsFunctionWithArgs(t *testing.T) {
-	co := coroutine.New(nil)
-	original := gco
-	gco = co
-	engine.SetCoroutines(co)
-	t.Cleanup(func() {
-		gco = original
-		engine.SetCoroutines(original)
-	})
-
-	type result struct {
-		noArgDuring bool
-		argDuring   bool
-		convDuring  bool
-		gotInt      int
-		gotString   string
-		gotFloat    float64
-		flagAfter   bool
-	}
-
-	done := make(chan result, 1)
-	th := co.CreateAndStart(true, "warp", func(me coroutine.Thread) int {
-		var got result
-		Warp(func() {
-			got.noArgDuring = IsRunWithoutScreenRefresh()
-		})
-		Warp(func(n int, text string) {
-			got.argDuring = IsRunWithoutScreenRefresh()
-			got.gotInt = n
-			got.gotString = text
-		}, 7, "ok")
-		Warp(func(n float64) {
-			got.convDuring = IsRunWithoutScreenRefresh()
-			got.gotFloat = n
-		}, 3)
-		got.flagAfter = IsRunWithoutScreenRefresh()
-		done <- got
-		return 0
-	})
-	t.Cleanup(func() {
-		co.StopIf(func(candidate coroutine.Thread) bool {
-			return candidate == th
-		})
-	})
-
-	select {
-	case got := <-done:
-		if !got.noArgDuring || !got.argDuring || !got.convDuring || got.flagAfter {
-			t.Fatalf("flag state = noArg:%v arg:%v conv:%v after:%v, want true/true/true/false", got.noArgDuring, got.argDuring, got.convDuring, got.flagAfter)
-		}
-		if got.gotInt != 7 || got.gotString != "ok" || got.gotFloat != 3 {
-			t.Fatalf("warp args = (%d, %q, %v), want (7, %q, 3)", got.gotInt, got.gotString, got.gotFloat, "ok")
-		}
-	case <-time.After(time.Second):
-		t.Fatal("warp call should finish without blocking")
 	}
 }

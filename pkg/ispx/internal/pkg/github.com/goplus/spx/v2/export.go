@@ -178,7 +178,6 @@ func init() {
 			"Repeat":                     reflect.ValueOf(q.Repeat),
 			"RepeatUntil":                reflect.ValueOf(q.RepeatUntil),
 			"ResetRandomSeed":            reflect.ValueOf(q.ResetRandomSeed),
-			"RunWithoutScreenRefresh":    reflect.ValueOf(q.RunWithoutScreenRefresh),
 			"Sched":                      reflect.ValueOf(q.Sched),
 			"SchedNow":                   reflect.ValueOf(q.SchedNow),
 			"SetDebug":                   reflect.ValueOf(q.SetDebug),
