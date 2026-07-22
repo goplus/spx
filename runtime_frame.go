@@ -18,66 +18,27 @@ package spx
 
 import "github.com/goplus/spx/v2/internal/engine"
 
-type CaptureIntent = engine.CaptureIntent
-
-const (
-	CaptureIntentSnapshot = engine.CaptureIntentSnapshot
-	CaptureIntentCheck    = engine.CaptureIntentCheck
-)
-
-type CaptureRequest = engine.CaptureRequest
-type CaptureRequestHandler = engine.CaptureHandler
-
-// CurrentFrame returns the current engine frame number.
+// CurrentFrame returns the absolute frame number of the current engine
+// session. The counter starts at zero before project loading, advances once per
+// engine update, and is not reset when the game reloads.
 func CurrentFrame() int64 {
 	return engine.CurrentFrame()
 }
 
-// Frame schedules fn to run once when the engine reaches frame i.
+// AtFrame schedules fn to run once when CurrentFrame reaches frame while a game
+// is active. The target is an absolute frame number, not a delay; if it has
+// already been reached, fn starts running immediately. Without an active game,
+// fn runs synchronously regardless of frame.
 //
-// It is primarily intended as an XGo decorator for deterministic E2E scripts:
+// With an active game, the callback runs in a coroutine owned by the object
+// that registered it, so it may use wait/yield APIs safely.
 //
-//	@frame(10)
+// It can be used as an XGo decorator. Decorator registration still uses the
+// absolute engine-session frame, so loading may have already consumed a small
+// target such as 10:
+//
+//	@atFrame(10)
 //	func Step() { ... }
-func Frame(i int, fn func()) {
-	engine.ScheduleFrame(int64(i), fn)
-}
-
-// Capture runs fn and then requests a snapshot capture at the end of the frame.
-//
-// The xgo decorator expansion passes fn as a func() error closure, which allows
-// Capture to surface errors from the decorated function before requesting the
-// screenshot.
-func Capture(name string, fn func() error) {
-	requestCaptureAfter(name, CaptureIntentSnapshot, fn)
-}
-
-// CaptureForCheck runs fn and then requests a check-oriented capture at the end
-// of the frame. The comparison implementation is supplied by the configured
-// capture host or platform bridge.
-func CaptureForCheck(name string, fn func() error) {
-	requestCaptureAfter(name, CaptureIntentCheck, fn)
-}
-
-// SetCaptureHandler installs the screenshot backend used by Capture and
-// CaptureForCheck. Passing nil disables capture.
-func SetCaptureHandler(handler CaptureRequestHandler) {
-	engine.SetCaptureHandler(handler)
-}
-
-func requestCaptureAfter(name string, intent CaptureIntent, fn func() error) {
-	if err := runCaptureBody(fn); err != nil {
-		engine.Panic(err)
-		return
-	}
-	if err := engine.EnqueueCapture(name, intent); err != nil {
-		engine.Panic(err)
-	}
-}
-
-func runCaptureBody(fn func() error) error {
-	if fn == nil {
-		return nil
-	}
-	return fn()
+func AtFrame(frame int64, fn func()) {
+	engine.ScheduleFrame(frame, fn)
 }

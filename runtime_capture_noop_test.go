@@ -29,9 +29,9 @@ func TestCaptureDefaultsToNoopHandlerOnNative(t *testing.T) {
 	engine.ResetFrameRuntime()
 	defer engine.ResetFrameRuntime()
 
-	SetCaptureHandler(ignoreCaptureRequest)
+	engine.SetCaptureHandler(ignoreCaptureRequest)
 
-	if err := engine.EnqueueCapture("step_001.png", CaptureIntentSnapshot); err != nil {
+	if err := engine.EnqueueCapture("step_001.png"); err != nil {
 		t.Fatalf("enqueueCapture returned error on native platform: %v", err)
 	}
 }

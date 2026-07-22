@@ -1,137 +1,158 @@
 # Web 端截图与固定帧接入说明
 
-本文档说明外部页面如何像 [`cmd/spx/template/platform/web/index.html`](../../../../cmd/spx/template/platform/web/index.html) 一样，接入 SPX 的固定帧截图能力。
+本文档说明如何在 SPX 中声明固定帧截图，并在 Web 页面中保存、比较或上报截图。仓库内的测试模板将页面结构、行为和样式分别放在 [`index.html`](../../../../cmd/spx/template/platform/web/index.html)、[`lab/index.js`](../../../../cmd/spx/template/platform/web/lab/index.js) 和 [`lab/index.css`](../../../../cmd/spx/template/platform/web/lab/index.css)。
 
 适用场景：
 
-- 在 Web 端做 deterministic demo 回归截图
-- 在自定义 `index.html` 中接管截图保存、对比、上报
-- 在某一帧触发截图，而不是手动点击按钮截图
+- 在指定 engine frame 触发回归截图
+- 在自定义页面中接管截图保存或上传
+- 维护 baseline，并与后续 run 做相似度比较
 
 ## 1. SPX 侧能力
 
-SPX 运行时对外暴露了这几个入口，定义在 [`runtime_frame.go`](../../../../runtime_frame.go)：
+运行时提供三个公开入口：
 
-- `spx.Frame(i, fn)`：在第 `i` 帧执行一次回调
-- `spx.Capture(name, fn)`：在当前帧末尾请求一次截图
-- `spx.CaptureForCheck(name, fn)`：在当前帧末尾请求一次“用于对比”的截图
-- `spx.SetCaptureHandler(handler)`：安装截图后端，通常由平台桥接层处理
+- `spx.CurrentFrame()`：返回当前 engine session 的绝对帧号
+- `spx.AtFrame(frame, fn)`：在绝对帧 `frame` 执行一次回调，`frame` 类型为 `int64`
+- `spx.Snapshot(name, fn)`：先执行 `fn`，成功后在当前 engine frame 末尾请求截图
 
-一个最小例子：
+最小示例：
 
 ```go
-spx.Frame(60, func() {
-	spx.Capture("frame_060", nil)
-})
-
-spx.Frame(120, func() {
-	spx.CaptureForCheck("frame_120", nil)
+base := spx.CurrentFrame()
+spx.AtFrame(base+60, func() {
+	spx.Snapshot("title", nil)
 })
 ```
 
-`Capture` / `CaptureForCheck` 的 `fn` 会先执行，成功后才排入截图请求。这样可以把“操作”和“截图”写在同一个步骤里。
+`Snapshot` 的 `fn` 是 XGo decorator 展开后传入的函数 body，也可以在直接调用时传入 `nil`。如果 body 返回错误，运行时会报告错误且不会请求截图。
 
-### 后续装饰器简化
+截图请求在活跃 Game 中排到本帧末尾；没有活跃 Game 时立即交给平台 handler。脚本只声明截图点位，图片保存为 baseline、run，还是直接上传，由平台和上层页面决定。
 
-当前这套能力已经可以直接使用，但写法还是显式调用 `spx.Frame(...)` / `spx.Capture(...)` / `spx.CaptureForCheck(...)`。
+## 2. 固定帧语义
 
-后续如果 xgo 的装饰器能力可用（见 `goplus/xgo#2797`），那么同样的逻辑可以进一步简化成直接写在 XGo/SPX 源码里的装饰器风格。
+`AtFrame` 使用 engine session 的绝对帧，而不是相对 Game `OnStart` 或 bootstrap 的帧数。异步资源加载也会推进帧号，因此通常应先读取 `CurrentFrame()` 再计算目标帧。
 
-也就是说，上面的当前写法：
+具体语义如下：
+
+- engine `onStart` 创建新的 time session，并把帧号置为 `0`
+- 每次 engine update 推进一次帧号，包括加载和 bootstrap 阶段
+- Game reload 不重置帧号，但会清除未执行的回调和截图请求
+- 注册时已经到期的目标会立即进入可调度状态
+- 回调运行在注册对象所属的 SPX coroutine 中，可以安全使用会 yield 的 wait/animate API
+- 同一目标帧按注册顺序启动；yield 后回到普通 coroutine 调度
+- coroutine body 在常规 update-side 同步之后修改视觉状态时，运行时会在截图前补做一次视觉同步
+
+例如：
 
 ```go
-spx.Frame(60, func() {
-	spx.Capture("frame_060", nil)
-})
-
-spx.Frame(120, func() {
-	spx.CaptureForCheck("frame_120", nil)
+base := spx.CurrentFrame()
+spx.AtFrame(base+30, func() {
+	spx.Snapshot("after_move", func() error {
+		// 在这里修改可见状态；成功返回后才请求截图。
+		return nil
+	})
 })
 ```
 
-后续原则上可以写成类似下面的声明式形式：
+### XGo decorator 形式
+
+显式调用已经可以直接使用。XGo decorator 支持相应展开后，也可以写成：
 
 ```go
-@frame(60)
-@capture("frame_060")
-func CaptureBaseline() {
+@atFrame(60)
+@snapshot("title")
+func SnapshotTitle() {
 }
-
-@frame(120)
-@captureForCheck("frame_120")
-func CaptureCheck() {
-}
 ```
 
-这样测试脚本会更接近 issue #1652 想要的“在引擎内部声明式地按帧触发截图”的目标。
+decorator 的 frame 仍是绝对 engine-session frame；小目标可能在加载期间已经到期。
 
-需要注意：
+## 3. Web capture bridge
 
-- 目前仓库中稳定可用的是显式函数调用方式，文档后续示例只是说明未来可简化的方向
-- 最终装饰器名字和展开细节，仍以 xgo 对装饰器能力的实际支持为准
+[`capture.js`](../../../../cmd/ispx/web/capture.js) 负责截图请求的归一化、采图排队和 host 投递；[`runner.html`](../../../../cmd/ispx/web/runner.html) 负责连接 Canvas 与公开接口。
 
-## 2. Web 端桥接点
-
-Web 运行时会把截图请求桥接到 [`cmd/ispx/web/runner.html`](../../../../cmd/ispx/web/runner.html)。
-
-外部页面真正需要关心的接口只有两个：
+上层页面通常只需要三个接口：
 
 - `runnerWindow.spxSetCaptureHost(host)`
 - `runnerWindow.spxGetCaptureHost()`
+- `await runnerWindow.spxFlushCaptureQueue()`
 
-其中 `host` 可以是：
+`host` 可以是函数：
 
-- 一个函数：`async function (request, blob) {}`
-- 一个对象：`{ async handleCapture(request, blob) {} }`
+```js
+async function (request, blob) {}
+```
 
-如果没有安装 host，Web 端会退化为浏览器下载 PNG。
-
-## 3. CaptureRequest 格式
-
-传给 host 的 `request` 结构如下：
+也可以是对象：
 
 ```js
 {
-  name: "frame_060",
-  filename: "frame_060.png",
-  intent: "snapshot", // 或 "check"
-  check: false,       // intent === "check" 时为 true
-  frame: 60,
+  async handleCapture(request, blob) {},
+  handleCaptureFailure(request, error) {}
+}
+```
+
+没有安装 host 时，runner 会回退为浏览器下载 PNG。请求按 sequence 串行交付；同一 engine frame 的多个请求共享一份经过 render fence 的 Canvas 截图。
+
+停止 Game、替换 host 或提交 baseline 前，应等待 `spxFlushCaptureQueue()`。官方 runner 的 `stopGame()` 已在 reset 前后执行 flush。
+
+## 4. Request 与文件名
+
+传给 Web host 的 request 结构如下：
+
+```js
+{
+  name: "title",
+  filename: "frame_0062_0001_title.png",
+  frame: 62,
   sequence: 1
 }
 ```
 
 字段含义：
 
-- `name`：SPX 脚本传入的名字
-- `filename`：runner 归一化后的文件名，保证是 `.png`
-- `intent`：`snapshot` 或 `check`
-- `check`：`intent === "check"` 的布尔别名
-- `frame`：截图请求对应的逻辑帧号
-- `sequence`：当前运行期内的截图序号
+- `name`：`Snapshot` 传入的可选名字
+- `filename`：runner 生成并清理过的稳定 PNG 文件名
+- `frame`：请求对应的 engine-session frame
+- `sequence`：当前 engine session 内的截图序号
 
-## 4. 最小接入方式
+命名规则：
 
-如果你有自己的 `index.html`，最简单的接法如下：
+```text
+frame_<frame>_<sequence>[_<name>].png
+```
+
+数字至少补齐四位。空名字不会生成占位后缀，例如 `frame_0062_0001.png`；显式名字生成 `frame_0062_0001_title.png`。文件名中的非法字符会替换为 `_`。
+
+## 5. 最小页面接入
 
 ```html
 <iframe id="runnerFrame" src="runner.html"></iframe>
 <script>
-  const runnerWindow = document.getElementById('runnerFrame').contentWindow
+  const runnerFrame = document.getElementById('runnerFrame')
+  const runnerWindow = runnerFrame.contentWindow
+
+  function waitForRunnerReady() {
+    if (typeof runnerWindow.spxSetCaptureHost === 'function') {
+      return Promise.resolve()
+    }
+    return new Promise((resolve) => {
+      runnerWindow.addEventListener('runnerReady', resolve, { once: true })
+    })
+  }
 
   async function installCaptureHost() {
+    await waitForRunnerReady()
     runnerWindow.spxSetCaptureHost({
       async handleCapture(request, blob) {
-        console.log('capture request', request)
-
-        // 这里可以上传、保存到浏览器文件系统、或者做自定义对比
         const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = request.filename
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
+        const anchor = document.createElement('a')
+        anchor.href = url
+        anchor.download = request.filename
+        document.body.appendChild(anchor)
+        anchor.click()
+        anchor.remove()
         URL.revokeObjectURL(url)
       },
     })
@@ -141,67 +162,30 @@ Web 运行时会把截图请求桥接到 [`cmd/ispx/web/runner.html`](../../../.
 </script>
 ```
 
-这个例子只是把 runner 默认下载逻辑搬到了外部页面。真正有用的做法通常是：
+自定义 host 可以直接使用 `request.filename`，也可以根据 `frame`、`sequence` 和 `name` 自行组织存储路径。
 
-- 自己控制保存目录
-- 按 `request.frame` 和 `request.intent` 命名
-- 把 baseline 和 runs 分开
-- 在 host 中直接做相似度对比
+## 6. 测试模板的 baseline / runs
 
-## 5. 像模板页那样保存 baseline / runs
+模板页提供以下 capture 控件：
 
-仓库里的模板页在 [`cmd/spx/template/platform/web/index.html`](../../../../cmd/spx/template/platform/web/index.html) 中做了一个完整参考实现，核心思路是：
+- `Start` / `Stop`：统一的 Game 生命周期
+- `Choose Folder`：选择浏览器文件系统目录
+- `Refresh`：重新读取 baseline 和最新 run
+- `Snapshot Comparison`：并排显示图片并计算相似度
 
-1. 页面启动项目时，从 zip 中读取：
-   - `builder-meta.json`
-   - `assets/index.json`
-2. 用 `displayName` 或项目名作为目录名
-3. 如果项目是 deterministic 运行：
-   - 第一次保存到 `spx-snapshots/<project>/baseline/`
-   - 后续保存到 `spx-snapshots/<project>/runs/<timestamp>/`
-4. 如果不是 deterministic：
-   - 直接保存到 `runs/<timestamp>/`
-
-模板页判断 deterministic 的依据是：
-
-- `assets/index.json` 中 `run.deterministic == true`
-- 或 `run.fixedTimestep > 0`
-
-## 6. 外部页面推荐实现步骤
-
-如果你想复制模板页思路，建议按下面的顺序实现：
-
-1. 启动项目前先拿到项目元信息
-2. 选择一个截图根目录
-3. 调用 `runnerWindow.spxSetCaptureHost(...)`
-4. 在 host 里按 `request.frame`、`request.intent`、`request.name` 生成文件名
-5. deterministic 项目先写 baseline，再写 runs
-6. 如果要做回归测试，再把 baseline 与当前 run 做对比
-
-一个更实用的命名方式：
+启动项目时，页面从 zip 中读取 `builder-meta.json` 与 `assets/index.json`，并用项目名创建：
 
 ```text
-frame_0060_snapshot_title.png
-frame_0120_check_enemy_wave.png
+spx-snapshots/<project>/
 ```
 
-## 7. 模板页额外提供了什么
+如果 `assets/index.json` 的 `run.deterministic` 为 `true`，或 `run.fixedTimestep` 大于 `0`，第一组截图写入 `baseline/`，后续启动写入 `runs/<timestamp>/`。普通项目直接写入新的 run 目录。
 
-当前模板页除了保存截图，还额外做了这些事情：
+比较流程先对缩略灰度图做快速比较，接近一致时再用较大 RGBA 图细化分数。字体、GPU 和浏览器渲染可能造成少量像素差异，回归判断应使用合理阈值。
 
-- `CaptureDir` 按钮：选择浏览器文件系统目录
-- `RefreshCompare` 按钮：重新读取 baseline / runs
-- `Capture Compare` 面板：并排展示 baseline 与当前 run
-- 相似度计算：先缩略灰度快速比较，再按需做更细的 RGBA 比较
+## 7. Capture 事件
 
-如果你只是要“接入能力”，这些都不是必须的；真正必须的只有：
-
-- 在 SPX 里调用 `Frame` / `Capture` / `CaptureForCheck`
-- 在外部页面安装 `spxSetCaptureHost`
-
-## 8. 与 runner 的事件协作
-
-`runner.html` 在截图完成或失败时还会派发 `spxCaptureScreenshot` 事件。你如果不想直接通过 host 做逻辑，也可以监听这个事件：
+runner 在成功或失败后派发 `spxCaptureScreenshot`：
 
 ```js
 window.addEventListener('spxCaptureScreenshot', (event) => {
@@ -209,30 +193,32 @@ window.addEventListener('spxCaptureScreenshot', (event) => {
 })
 ```
 
-事件里会包含：
+事件包含：
 
 - `ok`
 - `name`
 - `filename`
-- `intent`
-- `check`
 - `frame`
 - `sequence`
-- `destination`
-- `size`
-- `type`
+- 成功时的 `destination`、`size`、`type`
 - 失败时的 `error`
 
-## 9. 注意事项
+## 8. 注意事项
 
-- 当前模板依赖浏览器文件系统目录选择能力；如果浏览器不支持，就只能退回下载模式
-- `CaptureForCheck` 只是表达“这张图是拿来比对的”，真正怎么比对由外部 host 决定
-- 当前 deterministic 语义主要统一的是 SPX logical update delta，不包含 Godot fixed physics delta
-- 如果项目逻辑依赖物理 fixed-update，截图一致性仍可能受影响
+- File System Access API 不可用时，runner 仍可回退到浏览器下载
+- `Snapshot` 只声明点位，不决定 baseline/run 分类或比较策略
+- 切换项目、停止 Game 或替换 host 前应先 flush capture queue
+- 网络、文件 I/O、字体与 GPU 渲染不会被固定帧机制虚拟化
+- 项目若依赖 Godot fixed physics delta，仅固定 SPX engine frame 并不能保证像素完全一致
 
-## 10. 参考文件
+## 9. 参考文件
 
 - [`runtime_frame.go`](../../../../runtime_frame.go)
-- [`runtime_frame_js.go`](../../../../runtime_frame_js.go)
+- [`runtime_snapshot.go`](../../../../runtime_snapshot.go)
+- [`runtime_capture_js.go`](../../../../runtime_capture_js.go)
+- [`internal/engine/frame.go`](../../../../internal/engine/frame.go)
+- [`cmd/ispx/web/capture.js`](../../../../cmd/ispx/web/capture.js)
 - [`cmd/ispx/web/runner.html`](../../../../cmd/ispx/web/runner.html)
 - [`cmd/spx/template/platform/web/index.html`](../../../../cmd/spx/template/platform/web/index.html)
+- [`cmd/spx/template/platform/web/lab/index.js`](../../../../cmd/spx/template/platform/web/lab/index.js)
+- [`cmd/spx/template/platform/web/lab/index.css`](../../../../cmd/spx/template/platform/web/lab/index.css)

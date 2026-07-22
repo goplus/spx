@@ -18,11 +18,26 @@ package spx
 
 import (
 	"testing"
+	"time"
 
+	"github.com/goplus/spx/v2/internal/coroutine"
 	"github.com/goplus/spx/v2/internal/engine"
+	"github.com/goplus/spx/v2/internal/engine/platform"
+	itime "github.com/goplus/spx/v2/internal/time"
 )
 
-func TestFrameSchedulesCallbackForActiveGame(t *testing.T) {
+func TestAtFrameSchedulesCallbackForActiveGame(t *testing.T) {
+	co := coroutine.New(nil)
+	co.OnInited()
+	original := gco
+	gco = co
+	engine.SetCoroutines(co)
+	t.Cleanup(func() {
+		co.AbortAllAndWait(time.Second)
+		gco = original
+		engine.SetCoroutines(original)
+	})
+
 	ran := false
 	engine.SetGame(struct{}{})
 	defer engine.SetGame(nil)
@@ -30,86 +45,64 @@ func TestFrameSchedulesCallbackForActiveGame(t *testing.T) {
 	defer engine.ResetFrameRuntime()
 	base := engine.CurrentFrame()
 
-	Frame(int(base+1), func() {
+	AtFrame(base+1, func() {
 		ran = true
 	})
 	if ran {
-		t.Fatal("Frame ran callback before target frame")
+		t.Fatal("AtFrame ran callback before target frame")
 	}
 
-	engine.RunFrameCallbacks(base + 1)
+	itime.Update(0, 0)
+	engine.RunFrameCallbacks()
+	co.Update()
 
 	if !ran {
-		t.Fatal("Frame did not run callback at target frame")
+		t.Fatal("AtFrame did not run callback at target frame")
 	}
 }
 
-func TestCaptureUsesConfiguredHandlerAfterBody(t *testing.T) {
+func TestSnapshotUsesConfiguredHandlerAfterBody(t *testing.T) {
 	var got []string
 	engine.SetGame(nil)
 	engine.ResetFrameRuntime()
 	defer engine.ResetFrameRuntime()
-	SetCaptureHandler(func(req CaptureRequest) error {
+	engine.SetCaptureHandler(func(req engine.CaptureRequest) error {
 		got = append(got, "capture:"+req.Name)
-		if req.IsCheck() {
-			got = append(got, "check")
-		}
 		return nil
 	})
-	defer SetCaptureHandler(nil)
+	defer engine.SetCaptureHandler(nil)
 
-	Capture("step_001.png", func() error {
+	Snapshot("step_001.png", func() error {
 		got = append(got, "body")
 		return nil
 	})
 
 	want := []string{"body", "capture:step_001.png"}
 	if len(got) != len(want) {
-		t.Fatalf("Capture order = %v, want %v", got, want)
+		t.Fatalf("Snapshot order = %v, want %v", got, want)
 	}
 	for i := range want {
 		if got[i] != want[i] {
-			t.Fatalf("Capture order = %v, want %v", got, want)
+			t.Fatalf("Snapshot order = %v, want %v", got, want)
 		}
 	}
 }
 
-func TestCaptureForCheckMarksCheckMode(t *testing.T) {
-	var checkMode bool
-	engine.SetGame(nil)
-	engine.ResetFrameRuntime()
-	defer engine.ResetFrameRuntime()
-	SetCaptureHandler(func(req CaptureRequest) error {
-		if req.Name != "step_001.png" {
-			t.Fatalf("capture name = %q, want step_001.png", req.Name)
-		}
-		checkMode = req.IsCheck()
-		return nil
-	})
-	defer SetCaptureHandler(nil)
-
-	CaptureForCheck("step_001.png", nil)
-
-	if !checkMode {
-		t.Fatal("CaptureForCheck did not request check mode")
-	}
-}
-
-func TestCaptureQueuesRequestForActiveGame(t *testing.T) {
+func TestSnapshotQueuesRequestForActiveGame(t *testing.T) {
 	var got []string
 	engine.SetGame(struct{}{})
 	defer engine.SetGame(nil)
 	engine.ResetFrameRuntime()
 	defer engine.ResetFrameRuntime()
-	SetCaptureHandler(func(req CaptureRequest) error {
+	engine.SetCaptureHandler(func(req engine.CaptureRequest) error {
 		got = append(got, req.Name)
 		return nil
 	})
-	defer SetCaptureHandler(nil)
+	defer engine.SetCaptureHandler(nil)
 
-	Capture("step_001.png", nil)
+	Snapshot("step_001.png", nil)
 	if len(got) != 0 {
-		t.Fatalf("Capture ran immediately: %v", got)
+		t.Fatalf("Snapshot ran immediately: %v", got)
 	}
 
 	if err := engine.FlushCaptures(); err != nil {
@@ -117,5 +110,103 @@ func TestCaptureQueuesRequestForActiveGame(t *testing.T) {
 	}
 	if len(got) != 1 || got[0] != "step_001.png" {
 		t.Fatalf("FlushCaptures = %v, want [step_001.png]", got)
+	}
+}
+
+func TestSnapshotBodyMayYieldInsideFrameCallback(t *testing.T) {
+	co := coroutine.New(nil)
+	co.OnInited()
+	original := gco
+	gco = co
+	engine.SetCoroutines(co)
+	t.Cleanup(func() {
+		co.AbortAllAndWait(time.Second)
+		gco = original
+		engine.SetCoroutines(original)
+	})
+
+	engine.SetGame(struct{}{})
+	defer engine.SetGame(nil)
+	engine.ResetFrameRuntime()
+	defer engine.ResetFrameRuntime()
+	base := itime.Frame()
+
+	bodyStarted := false
+	bodyCompleted := false
+	var captured []engine.CaptureRequest
+	engine.SetCaptureHandler(func(req engine.CaptureRequest) error {
+		captured = append(captured, req)
+		return nil
+	})
+	defer engine.SetCaptureHandler(nil)
+
+	AtFrame(base+1, func() {
+		Snapshot("yielded.png", func() error {
+			bodyStarted = true
+			engine.WaitYield()
+			bodyCompleted = true
+			return nil
+		})
+	})
+	itime.Update(0, 0)
+	engine.RunFrameCallbacks()
+
+	co.Update()
+	if !bodyStarted {
+		t.Fatal("capture body did not start on its target frame")
+	}
+	if !bodyCompleted {
+		t.Fatal("capture body did not resume from yield during scheduler update")
+	}
+	if !engine.HasPendingCaptures() {
+		t.Fatal("capture was not queued after its body completed")
+	}
+	if err := engine.FlushCaptures(); err != nil {
+		t.Fatal(err)
+	}
+	if len(captured) != 1 || captured[0].Name != "yielded.png" || captured[0].Frame != base+1 {
+		t.Fatalf("captured requests = %+v, want yielded.png at frame %d", captured, base+1)
+	}
+}
+
+func TestAtFrameCallbackCanWaitForMainThread(t *testing.T) {
+	co := coroutine.New(nil)
+	co.OnInited()
+	original := gco
+	gco = co
+	engine.SetCoroutines(co)
+	t.Cleanup(func() {
+		co.AbortAllAndWait(time.Second)
+		gco = original
+		engine.SetCoroutines(original)
+	})
+
+	engine.SetGame(struct{}{})
+	defer engine.SetGame(nil)
+	engine.ResetFrameRuntime()
+	defer engine.ResetFrameRuntime()
+	base := itime.Frame()
+
+	mainThreadCallRan := false
+	AtFrame(base+1, func() {
+		engine.WaitMainThread(func() {
+			mainThreadCallRan = true
+		})
+	})
+	itime.Update(0, 0)
+	engine.RunFrameCallbacks()
+
+	updateDone := make(chan struct{})
+	go func() {
+		platform.RunOnMainThread(co.Update)
+		close(updateDone)
+	}()
+	select {
+	case <-updateDone:
+	case <-time.After(time.Second):
+		t.Fatal("AtFrame callback deadlocked while waiting for the main thread")
+	}
+	if !mainThreadCallRan {
+		t.Fatal("AtFrame callback did not complete its main-thread call")
 	}
 }

@@ -112,6 +112,9 @@ func (cmd *CmdTool) ExportMiniprogram() error {
 		return err
 	}
 	util.CopyDir(cmd.PlatformFS, "template/platform/web"+webMiniprogramMode, cmd.WebDir, true)
+	if err := os.RemoveAll(filepath.Join(cmd.WebDir, "lab")); err != nil {
+		return fmt.Errorf("failed to remove web lab assets: %w", err)
+	}
 	return nil
 }
 
