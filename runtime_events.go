@@ -336,12 +336,26 @@ func (p *Game) handleEvent(ev event) {
 		p.doWhenLeftButtonUp(e)
 	case *eventLeftButtonDown:
 		p.doWhenLeftButtonDown(e)
+	case *eventMouseMove:
+		p.inputMgr.onMouseMove(e.Pos)
 	case *eventKeyDown:
 		// Note: key-up callbacks are not part of the current event sink API.
 		p.scriptEvents.doWhenKeyPressed(e.Key)
 	case *eventStart:
-		p.scriptEvents.doWhenStart()
-		p.lifecycleState.StartDispatched.Store(true)
+		runStartPhase := func() {
+			p.scriptEvents.doWhenStart()
+			p.lifecycleState.StartDispatched.Store(true)
+		}
+		if gco != nil && !gco.IsInCoroutine() {
+			// Keep OnStart handlers in one coroutine phase and advance them in
+			// registration order to their first yield.
+			gco.CreateAndStart(false, p, func(coroutine.Thread) int {
+				runStartPhase()
+				return 0
+			})
+		} else {
+			runStartPhase()
+		}
 	case *eventTimer:
 		p.scriptEvents.doWhenTimer(e.Time)
 	}
@@ -360,12 +374,34 @@ func (p *Game) fireEvent(ev event) {
 // Event Dispatch
 // -----------------------------------------------------------------------------
 func (p *scriptEventRegistry) doWhenStart() {
-	p.dispatchStartOnce(nil, func(ev *eventSink) {
-		coreevent.If0(isDebugEventEnabled, func() {
-			spxlog.Debug("OnStart: %s", nameOf(ev.Owner))
-		})()
-		ev.Handler.(func())()
-	})
+	sinks := p.manager.SnapshotStartOnce()
+	if len(sinks) == 0 {
+		return
+	}
+	run := func() {
+		for i := range sinks {
+			ev := &sinks[i]
+			if ev.Cond != nil && !ev.Cond(nil) {
+				continue
+			}
+			thread := gco.CreateAndStart(false, ev.Owner, func(coroutine.Thread) int {
+				coreevent.If0(isDebugEventEnabled, func() {
+					spxlog.Debug("OnStart: %s", nameOf(ev.Owner))
+				})()
+				ev.Handler.(func())()
+				return 0
+			})
+			gco.JoinYieldedOrDone(thread)
+		}
+	}
+	if gco != nil && !gco.IsInCoroutine() {
+		gco.CreateAndStart(false, engine.GetGame(), func(coroutine.Thread) int {
+			run()
+			return 0
+		})
+		return
+	}
+	run()
 }
 
 func (p *scriptEventRegistry) doWhenAwake(this threadObj) {
@@ -446,8 +482,4 @@ func (p *scriptEventRegistry) dispatchSync(bucket coreevent.Bucket, data any, do
 
 func (p *scriptEventRegistry) dispatch(bucket coreevent.Bucket, wait bool, data any, do func(*eventSink)) {
 	p.manager.DispatchBucket(bucket, wait, data, scriptEventDispatchHooks, do)
-}
-
-func (p *scriptEventRegistry) dispatchStartOnce(data any, do func(*eventSink)) {
-	p.manager.DispatchStartOnce(data, scriptEventDispatchHooks, do)
 }

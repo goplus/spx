@@ -25,7 +25,10 @@ import (
 
 // CaptureRequest identifies one end-of-frame screenshot.
 type CaptureRequest struct {
-	Name     string
+	Name string
+	// InputTick is nil until recording or replay consumes its first tick.
+	InputTick *int64
+	// Frame is render metadata independent of InputTick.
 	Frame    int64
 	Sequence uint64
 }
@@ -62,7 +65,14 @@ func SetCaptureHandler(handler CaptureRequestHandler) {
 
 // EnqueueCapture queues a screenshot request for the end of the current frame.
 func EnqueueCapture(name string) error {
-	return frameRuntime.submitCapture(name, GetGame() != nil)
+	return frameRuntime.submitCapture(name, nil, GetGame() != nil)
+}
+
+// EnqueueCaptureAtInputTick queues a screenshot request associated with an
+// input recording/replay tick while retaining the current engine frame as
+// diagnostic metadata.
+func EnqueueCaptureAtInputTick(name string, inputTick int64) error {
+	return frameRuntime.submitCapture(name, &inputTick, GetGame() != nil)
 }
 
 // HasPendingCaptures reports whether capture requests are queued.
@@ -101,9 +111,9 @@ func (rt *frameRuntimeState) scheduleCallback(frame int64, fn func()) {
 	}
 }
 
-func (rt *frameRuntimeState) submitCapture(name string, enqueue bool) error {
+func (rt *frameRuntimeState) submitCapture(name string, inputTick *int64, enqueue bool) error {
 	rt.lifecycle.RLock()
-	request, handler := rt.captures.submit(name, enqueue)
+	request, handler := rt.captures.submit(name, inputTick, enqueue)
 	rt.lifecycle.RUnlock()
 	if enqueue {
 		return nil

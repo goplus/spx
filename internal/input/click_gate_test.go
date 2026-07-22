@@ -23,10 +23,8 @@ import (
 
 func TestClickGateAllowHonorsIntervalPerObject(t *testing.T) {
 	now := time.Unix(0, 0)
-	gate := ClickGate{
-		now: func() time.Time { return now },
-	}
-	gate.Init(50 * time.Millisecond)
+	var gate ClickGate
+	gate.InitWithClock(50*time.Millisecond, func() time.Time { return now })
 
 	if !gate.Allow(1) {
 		t.Fatal("expected first click to be allowed")
@@ -48,10 +46,8 @@ func TestClickGateAllowHonorsIntervalPerObject(t *testing.T) {
 
 func TestClickGatePrunesExpiredEntriesAndRemove(t *testing.T) {
 	now := time.Unix(0, 0)
-	gate := ClickGate{
-		now: func() time.Time { return now },
-	}
-	gate.Init(50 * time.Millisecond)
+	var gate ClickGate
+	gate.InitWithClock(50*time.Millisecond, func() time.Time { return now })
 
 	if !gate.Allow(1) {
 		t.Fatal("expected first click to be allowed")
@@ -67,5 +63,25 @@ func TestClickGatePrunesExpiredEntriesAndRemove(t *testing.T) {
 	gate.Remove(2)
 	if len(gate.lastClickMs) != 0 {
 		t.Fatalf("lastClickMs len = %d, want 0 after remove", len(gate.lastClickMs))
+	}
+}
+
+func TestClickGateInitWithClockResetsStateAndNilUsesDefault(t *testing.T) {
+	now := time.Unix(0, 0)
+	var gate ClickGate
+	gate.InitWithClock(50*time.Millisecond, func() time.Time { return now })
+	if !gate.Allow(1) {
+		t.Fatal("expected first click to be allowed")
+	}
+
+	gate.InitWithClock(100*time.Millisecond, nil)
+	if gate.minIntervalMs != 100 {
+		t.Fatalf("minIntervalMs = %d, want 100", gate.minIntervalMs)
+	}
+	if len(gate.lastClickMs) != 0 {
+		t.Fatalf("lastClickMs len = %d, want 0 after reinitialization", len(gate.lastClickMs))
+	}
+	if gate.now == nil {
+		t.Fatal("nil clock was not replaced with the default clock")
 	}
 }

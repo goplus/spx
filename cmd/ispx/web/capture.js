@@ -1,7 +1,7 @@
 "use strict";
 
 // Coordinates canvas screenshots with the host that persists or downloads them.
-// Game lifecycle concerns intentionally live outside this file.
+// Game lifecycle and input replay concerns intentionally live outside this file.
 function createCaptureBridge(captureScreenshot) {
 	if (typeof captureScreenshot !== 'function') {
 		throw new TypeError('captureScreenshot must be a function')
@@ -30,14 +30,14 @@ function createCaptureBridge(captureScreenshot) {
 		let captureName = typeof request.name === 'string' ? request.name.trim() : ''
 		captureName = captureName.replace(/[\\/:*?"<>|\u0000-\u001F]+/g, '_').replace(/\.png$/i, '')
 
-		const frame = Number.isFinite(request.frame)
-			? String(Math.trunc(request.frame)).padStart(4, '0')
-			: 'unknown'
+		const timeline = request.inputTick === null
+			? `frame_${Number.isFinite(request.frame) ? String(Math.trunc(request.frame)).padStart(4, '0') : 'unknown'}`
+			: String(Math.trunc(request.inputTick)).padStart(4, '0')
 		const sequence = Number.isFinite(request.sequence)
 			? String(Math.trunc(request.sequence)).padStart(4, '0')
 			: 'unknown'
 		const nameSuffix = captureName ? `_${captureName}` : ''
-		return `frame_${frame}_${sequence}${nameSuffix}.png`
+		return `${timeline}_${sequence}${nameSuffix}.png`
 	}
 
 	function normalizeRequest(request) {
@@ -46,6 +46,7 @@ function createCaptureBridge(captureScreenshot) {
 		}
 		const normalized = {
 			name: typeof request.name === 'string' ? request.name : '',
+			inputTick: Number.isFinite(request.inputTick) && request.inputTick >= 0 ? Math.trunc(request.inputTick) : null,
 			frame: Number.isFinite(request.frame) ? request.frame : null,
 			sequence: Number.isFinite(request.sequence) ? request.sequence : null,
 		}
@@ -85,10 +86,11 @@ function createCaptureBridge(captureScreenshot) {
 	}
 
 	function emitSuccess(request, blob, destination) {
-			emit({
+		emit({
 			ok: true,
 			name: request.name,
 			filename: request.filename,
+			inputTick: request.inputTick,
 			frame: request.frame,
 			sequence: request.sequence,
 			destination,
@@ -105,6 +107,7 @@ function createCaptureBridge(captureScreenshot) {
 			error: message,
 			name: request ? request.name : '',
 			filename: request ? request.filename : '',
+			inputTick: request ? request.inputTick : null,
 			frame: request ? request.frame : null,
 			sequence: request ? request.sequence : null,
 		})

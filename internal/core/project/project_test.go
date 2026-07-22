@@ -701,14 +701,10 @@ func TestOpenBuilderResourcesFailsOnInvalidPackedConfig(t *testing.T) {
 }
 
 func TestResolveRuntimeConfig(t *testing.T) {
-	seed := int64(42)
 	conf := &Config{
 		Width:            640,
 		Height:           480,
 		EventQueuePolicy: "block",
-		Deterministic:    true,
-		FixedTimestep:    0.25,
-		RandomSeed:       &seed,
 	}
 	proj := &ProjectConfig{FullScreen: true, Physics: true}
 	runtime := ResolveRuntimeConfig(conf, proj, "/tmp/demo", "env-key")
@@ -723,9 +719,6 @@ func TestResolveRuntimeConfig(t *testing.T) {
 	}
 	if runtime.ScreenshotKey != "env-key" {
 		t.Fatalf("runtime.ScreenshotKey = %q, want env-key", runtime.ScreenshotKey)
-	}
-	if !runtime.Deterministic || runtime.FixedTimestep != 0.25 || runtime.RandomSeed == nil || *runtime.RandomSeed != seed {
-		t.Fatalf("unexpected deterministic runtime config: %+v", runtime)
 	}
 }
 

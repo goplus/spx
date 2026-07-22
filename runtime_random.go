@@ -30,28 +30,28 @@ const (
 )
 
 type randomState struct {
-	mu            sync.Mutex
-	scope         randomScope
-	seed          int64
-	global        *rand.Rand
-	coroutineBase int64
-	coroutines    map[int64]*rand.Rand
+	mu               sync.Mutex
+	scope            randomScope
+	baseSeed         int64
+	sharedStream     *rand.Rand
+	coroutineIDBase  int64
+	coroutineStreams map[int64]*rand.Rand
 }
 
-var scriptRandom = newRandomState()
-
-// SetRandomSeed resets SPX's script-level random source to a deterministic seed.
+// SetRandomSeed resets the shared script random source with seed.
 func SetRandomSeed(seed int64) {
 	scriptRandom.setSeed(seed, randomScopeShared)
 }
 
-func setDeterministicRandomSeed(seed int64) {
-	scriptRandom.setSeed(seed, randomScopePerCoroutine)
-}
-
-// ResetRandomSeed resets SPX's script-level random source to a non-deterministic seed.
+// ResetRandomSeed resets the shared script random source with a time-based seed.
 func ResetRandomSeed() {
 	SetRandomSeed(time.Now().UnixNano())
+}
+
+var scriptRandom = newRandomState()
+
+func setDeterministicRandomSeed(seed int64) {
+	scriptRandom.setSeed(seed, randomScopePerCoroutine)
 }
 
 func randomIntn(n int) int {
@@ -68,24 +68,23 @@ func randomFloat64() float64 {
 
 func newRandomState() *randomState {
 	return &randomState{
-		global:     newRandomSource(time.Now().UnixNano()),
-		coroutines: make(map[int64]*rand.Rand),
+		sharedStream:     newRandomStream(time.Now().UnixNano()),
+		coroutineStreams: make(map[int64]*rand.Rand),
 	}
 }
 
-func newRandomSource(seed int64) *rand.Rand {
+func newRandomStream(seed int64) *rand.Rand {
 	return rand.New(rand.NewSource(seed))
 }
 
 func (r *randomState) setSeed(seed int64, scope randomScope) {
 	r.mu.Lock()
-	r.seed = seed
+	r.baseSeed = seed
 	r.scope = scope
-	r.global = newRandomSource(seed)
-	// Capture the current coroutine high-water mark so a deterministic reload
-	// in the same process keeps newly created coroutine streams stable.
-	r.coroutineBase = lastCoroutineRandomID()
-	clear(r.coroutines)
+	r.sharedStream = newRandomStream(seed)
+	// Rebase stream IDs for deterministic sessions in the same process.
+	r.coroutineIDBase = lastAllocatedCoroutineID()
+	clear(r.coroutineStreams)
 	r.mu.Unlock()
 }
 
@@ -112,31 +111,31 @@ func (r *randomState) float64() float64 {
 
 func (r *randomState) streamLocked() *rand.Rand {
 	if r.scope != randomScopePerCoroutine {
-		return r.global
+		return r.sharedStream
 	}
 
 	streamID, ok := r.currentCoroutineStreamIDLocked()
 	if !ok {
-		return r.global
+		return r.sharedStream
 	}
-	if src, exists := r.coroutines[streamID]; exists {
-		return src
+	if stream, exists := r.coroutineStreams[streamID]; exists {
+		return stream
 	}
 
-	src := newRandomSource(mixRandomSeed(r.seed, streamID))
-	r.coroutines[streamID] = src
-	return src
+	stream := newRandomStream(mixRandomSeed(r.baseSeed, streamID))
+	r.coroutineStreams[streamID] = stream
+	return stream
 }
 
 func (r *randomState) currentCoroutineStreamIDLocked() (int64, bool) {
-	id := currentCoroutineRandomID()
+	id := currentCoroutineID()
 	if id <= 0 {
 		return 0, false
 	}
-	return id - r.coroutineBase, true
+	return id - r.coroutineIDBase, true
 }
 
-func currentCoroutineRandomID() int64 {
+func currentCoroutineID() int64 {
 	if gco == nil {
 		return 0
 	}
@@ -149,7 +148,7 @@ func currentCoroutineRandomID() int64 {
 	return 0
 }
 
-func lastCoroutineRandomID() int64 {
+func lastAllocatedCoroutineID() int64 {
 	if gco == nil {
 		return 0
 	}

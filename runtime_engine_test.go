@@ -37,6 +37,20 @@ type captureFlushSpriteMgr struct {
 	batches [][]float32
 }
 
+type replayPauseTestExtMgr struct {
+	pauses int
+}
+
+func (*replayPauseTestExtMgr) RequestExit(int64)        {}
+func (*replayPauseTestExtMgr) RequestReset(int64)       {}
+func (*replayPauseTestExtMgr) RequestRestart()          {}
+func (*replayPauseTestExtMgr) OnRuntimePanic(string)    {}
+func (m *replayPauseTestExtMgr) Pause()                 { m.pauses++ }
+func (*replayPauseTestExtMgr) Resume()                  {}
+func (*replayPauseTestExtMgr) IsPaused() bool           { return false }
+func (*replayPauseTestExtMgr) NextFrame()               {}
+func (*replayPauseTestExtMgr) SetLayerSorterMode(int64) {}
+
 func (m *captureFlushSpriteMgr) BatchUpdateTransforms(buffer []float32) {
 	m.batches = append(m.batches, append([]float32(nil), buffer...))
 }
@@ -90,5 +104,66 @@ func TestOnEngineRenderFlushesSpriteProxiesWhenCaptureIsPending(t *testing.T) {
 	}
 	if err := engine.FlushCaptures(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestOnEngineRenderFlushesSpriteProxiesBeforeReplayEOFPause(t *testing.T) {
+	resetInputSessionState()
+	engine.SetGame(nil)
+	t.Cleanup(resetInputSessionState)
+	enginewrap.Init(func(call func()) { call() })
+	originalSpriteMgr := pkgengine.SpriteMgr
+	spriteMgr := &captureFlushSpriteMgr{}
+	pkgengine.SpriteMgr = spriteMgr
+	t.Cleanup(func() { pkgengine.SpriteMgr = originalSpriteMgr })
+
+	var game Game
+	game.camera = &cameraImpl{g: &game}
+	game.initShapeMgr()
+	game.syncBuffer = engine.NewSpriteSyncBuffer(1)
+	shape := &captureFlushTestShape{}
+	game.addShape(shape)
+	destroyed := &SpriteImpl{}
+	destroyed.runtimeState.SyncSprite = &engine.Sprite{}
+	game.shapeMgr.remove(destroyed)
+	if _, err := PrepareInputReplay(validRuntimeReplay(InputReplayFrame{Frame: 0, State: InputReplayState{}})); err != nil {
+		t.Fatal(err)
+	}
+
+	engine.SetGame(&game)
+	defer engine.SetGame(nil)
+	if err := game.attachPreparedInputSession(); err != nil {
+		t.Fatal(err)
+	}
+	session := game.currentInputSession()
+	if _, err := session.consumeSampledInputTick(1, func() (InputReplayState, []InputReplayMouseEvent, []InputReplayKeyEvent) {
+		return InputReplayState{}, nil, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	game.lifecycleState.IsRunned.Store(true)
+	game.OnEngineRender(0)
+
+	if shape.updates != 0 {
+		t.Fatalf("EOF-only proxy flush advanced shape logic %d times, want 0", shape.updates)
+	}
+	if destroyed.runtimeState.SyncSprite != nil {
+		t.Fatal("pending sprite destroy was not flushed before EOF pause")
+	}
+	if len(spriteMgr.batches) != 1 {
+		t.Fatalf("EOF-only proxy batches = %d, want 1", len(spriteMgr.batches))
+	}
+
+	originalExtMgr := pkgengine.ExtMgr
+	extMgr := &replayPauseTestExtMgr{}
+	pkgengine.ExtMgr = extMgr
+	t.Cleanup(func() { pkgengine.ExtMgr = originalExtMgr })
+	game.OnEngineFrameEnd()
+	game.OnEngineFrameEnd()
+	if extMgr.pauses != 1 {
+		t.Fatalf("EOF frame-end pauses = %d, want one", extMgr.pauses)
+	}
+	if status := session.status(); status.Phase != InputSessionPhaseCompleted || !status.Completed {
+		t.Fatalf("EOF session status = %+v", status)
 	}
 }

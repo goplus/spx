@@ -18,7 +18,6 @@ package spx
 
 import (
 	"fmt"
-	"math"
 	"reflect"
 	"unsafe"
 
@@ -129,7 +128,7 @@ func (p *Game) setupPlatformAndCamera(proj *coreproject.ProjectConfig) {
 	}
 	p.displayState.WindowScale = layout.WindowScale
 	platformMgr.SetWindowSize(layout.WindowWidth, layout.WindowHeight, true)
-	platformMgr.SetMaxFps(runtimeMaxFPSForProject(int64(proj.MaxFPS), p.configuredFixedTimestep))
+	platformMgr.SetMaxFps(int64(proj.MaxFPS))
 	platformMgr.SetStretchMode(p.displayState.StretchMode)
 
 	p.camera = &cameraImpl{}
@@ -148,16 +147,6 @@ func (p *Game) setupPlatformAndCamera(proj *coreproject.ProjectConfig) {
 
 	p.runtimeState.SyncSprite = engine.NewBackdropProxy(p, p.getCostumePath(), p.getCostumeRenderScale())
 	p.setupBackdrop()
-}
-
-func runtimeMaxFPSForProject(projectMaxFPS int64, fixedTimestep float64) int64 {
-	if fixedTimestep > 0 {
-		fps := int64(math.Round(1 / fixedTimestep))
-		if fps > 0 {
-			return fps
-		}
-	}
-	return projectMaxFPS
 }
 
 // -----------------------------------------------------------------------------

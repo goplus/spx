@@ -127,19 +127,19 @@ func (p *Game) ClearGraphicEffects() {
 // Input and Timing
 // -----------------------------------------------------------------------------
 func (p *Game) KeyPressed(key Key) bool {
-	return p.engine().InputMgr.GetKey(int64(key))
+	return p.inputMgr.effectiveKeyPressed(key)
 }
 
 func (p *Game) MouseX() float64 {
-	return p.inputMgr.currentMousePos().X
+	return p.inputMgr.effectiveMousePos().X
 }
 
 func (p *Game) MouseY() float64 {
-	return p.inputMgr.currentMousePos().Y
+	return p.inputMgr.effectiveMousePos().Y
 }
 
 func (p *Game) MousePressed() bool {
-	return engine.AnyMouseButtonPressed()
+	return p.inputMgr.effectiveMousePressed()
 }
 
 func (p *Game) getMousePos() (x, y float64) {

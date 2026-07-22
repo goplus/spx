@@ -18,10 +18,12 @@ package runtime
 
 import (
 	"math"
+	"reflect"
 	"testing"
 	"time"
 
 	"github.com/goplus/spbase/mathf"
+	"github.com/goplus/spx/v2/internal/coroutine"
 	"github.com/goplus/spx/v2/internal/engine"
 )
 
@@ -67,6 +69,73 @@ func TestProcessInputFrame(t *testing.T) {
 	}
 	if !lastPressed {
 		t.Fatal("expected left button state to update")
+	}
+}
+
+func TestProcessInputFramePreservesPressAndReleaseWithinOneTick(t *testing.T) {
+	var edges []string
+	_, pressed := ProcessInputFrame(
+		InputFrame{
+			Point:                    mathf.Vec2{X: 7, Y: 8},
+			LastLeftButtonPressed:    false,
+			CurrentLeftButtonPressed: false,
+			MouseEvents: []engine.MouseEvent{
+				{Id: 1, IsPressed: true},
+				{Id: 1, IsPressed: false},
+			},
+		},
+		InputFrameHooks{
+			FireLeftButtonDown: func(mathf.Vec2) { edges = append(edges, "down") },
+			FireLeftButtonUp:   func(mathf.Vec2) { edges = append(edges, "up") },
+			SetMousePos:        func(mathf.Vec2) {},
+			OnMouseMove:        func(mathf.Vec2) {},
+			OnKeyPressed:       func(int64) {},
+		},
+	)
+	if !reflect.DeepEqual(edges, []string{"down", "up"}) {
+		t.Fatalf("mouse edges = %v, want [down up]", edges)
+	}
+	if pressed {
+		t.Fatal("short click left button remained pressed")
+	}
+}
+
+func TestRunInputLoopFrameEndsBoundaryAfterPanic(t *testing.T) {
+	ended := false
+	func() {
+		defer func() {
+			if recovered := recover(); recovered == nil {
+				t.Fatal("runInputLoopFrame did not panic")
+			}
+		}()
+		runInputLoopFrame(InputLoopConfig{
+			EndFrame: func() { ended = true },
+			CurrentMousePos: func() mathf.Vec2 {
+				panic("input hook failed")
+			},
+		}, &inputLoopState{})
+	}()
+	if !ended {
+		t.Fatal("input frame boundary was not ended after panic")
+	}
+}
+
+func TestInitLoopsSkipsDisabledLoop(t *testing.T) {
+	var names []string
+	noop := func(coroutine.Thread) int { return 0 }
+	InitLoops(
+		func(obj coroutine.ThreadObj, fn func(coroutine.Thread) int) coroutine.Thread {
+			names = append(names, obj.(string))
+			return nil
+		},
+		noop,
+		nil,
+		noop,
+	)
+
+	want := []string{"eventLoop", "logicLoop"}
+	if !reflect.DeepEqual(names, want) {
+		t.Fatalf("created loops = %v, want %v", names, want)
 	}
 }
 

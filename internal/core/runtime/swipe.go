@@ -18,6 +18,7 @@ package runtime
 
 import (
 	"sync"
+	"time"
 
 	"github.com/goplus/spbase/mathf"
 	inputstate "github.com/goplus/spx/v2/internal/input"
@@ -43,9 +44,15 @@ type SwipeHooks[T comparable] struct {
 }
 
 func (s *SwipeState[T]) Init() {
+	s.InitWithClock(nil)
+}
+
+// InitWithClock resets the swipe state with a caller-provided clock.
+// A nil clock falls back to the system clock.
+func (s *SwipeState[T]) InitWithClock(now func() time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.recognizer.Init()
+	s.recognizer.InitWithClock(now)
 	s.target = zeroValue[T]()
 }
 

@@ -46,9 +46,11 @@
 	<script src="worker.message.manager.js"></script>
 	<script src="engine.js"></script>
 	<script src="game.js"></script>
+	<script src="input-session.js"></script>
 	<script src="capture.js"></script>
 	<script>
 		"use strict";
+
 		let gameApp = null
 		let isShowEditor = false
 		const captureBridge = createCaptureBridge(() => window.getScreenshot())
@@ -94,6 +96,9 @@
 		let onEngineCrash = null;
 		const MAX_RESTART_ATTEMPTS = 3;
 		async function restartEngineAfterCrash(reason, code) {
+			if (gameApp != null) {
+				gameApp.onRuntimeReset(code)
+			}
 			if (restartAttempts >= MAX_RESTART_ATTEMPTS) {
 				console.error("Max restart attempts reached.  Please reload manually.");
 				if (onEngineCrash != null) {
@@ -139,6 +144,9 @@
 		}
 
 		window.gdspx_on_runtime_reset = async (code) => {
+			if (gameApp != null) {
+				gameApp.onRuntimeReset(code)
+			}
 			if (onGameExit != null) {
 				onGameExit(code)
 			}
@@ -203,38 +211,6 @@
 			if (gameApp == null) throw new Error("gameApp is null, should call initEngine first")
 			await gameApp.InitGame(files)
 		}
-		
-		window.startGame = async () => {
-			if (gameApp == null) throw new Error("gameApp is null, should call initEngine first")
-			await gameApp.StartGame();
-		}
-
-		// Starts recording the game canvas content as video
-		window.startRecording = () => {
-			if (gameApp == null) {
-				console.error("gameApp is null, should call startGame first")
-				return
-			}
-			gameApp.startRecording()
-		}
-		
-		// Stops the current recording session and returns the result as a Blob.
-		window.stopRecording = async () => {
-			if (gameApp == null) {
-				console.error("gameApp is null, should call startGame first")
-				return
-			}
-			return await gameApp.stopRecording()
-		}
-
-		// Returns the recorded video as a Blob.
-		window.getRecordedVideo = () => {
-			if (gameApp == null) {
-				console.error("gameApp is null, should call startGame first")
-				return null
-			}
-			return gameApp.getRecordedVideo()
-		}
 
 		async function captureScreenshot() {
 			const gameCanvas = document.getElementById('game-canvas')
@@ -260,6 +236,59 @@
 			return captureBridge.handleRequest(request)
 		}
 
+		window.startGame = async (options = {}) => {
+			if (gameApp == null) throw new Error("gameApp is null, should call initEngine first")
+			await gameApp.StartGame(spxInputSession.normalizeStartOptions(options));
+		}
+
+		window.getInputSessionStatus = async () => {
+			if (gameApp == null) return { mode: 'idle', completed: false, currentTick: null, nextFrame: 0, frameCount: 0 }
+			return gameApp.getInputSessionStatus()
+		}
+
+		window.waitInputSessionCompleted = async (options = {}) => {
+			if (gameApp == null) throw new Error("gameApp is null, should call initEngine first")
+			const status = await gameApp.waitInputSessionCompleted(options)
+			await captureBridge.flush()
+			return status
+		}
+
+		window.stopGame = async () => {
+			if (gameApp == null) {
+				throw new Error("gameApp is null, should call startGame first")
+			}
+			const result = await gameApp.StopGame(() => captureBridge.flush());
+			await captureBridge.flush()
+			return {
+				...result,
+				inputReplay: spxInputSession.replayBlob(result.inputReplay),
+			}
+		}
+
+		window.startRecording = () => {
+			if (gameApp == null) {
+				console.error("gameApp is null, should call startGame first")
+				return
+			}
+			gameApp.startRecording()
+		}
+
+		window.stopRecording = async () => {
+			if (gameApp == null) {
+				console.error("gameApp is null, should call startGame first")
+				return
+			}
+			return gameApp.stopRecording()
+		}
+
+		window.getRecordedVideo = () => {
+			if (gameApp == null) {
+				console.error("gameApp is null, should call startGame first")
+				return null
+			}
+			return gameApp.getRecordedVideo()
+		}
+
 		window.downloadRecordedVideo = (filename) => {
 			if (gameApp == null) {
 				console.error("gameApp is null, should call startGame first")
@@ -268,22 +297,16 @@
 			gameApp.downloadRecordedVideo(filename)
 		}
 
-		window.stopGame = async () => {
-			if (gameApp == null) {
-				console.error("gameApp is null, should call startGame first")
-				return
-			}
-			await captureBridge.flush()
-			await gameApp.ResetGame()
-			await captureBridge.flush()
-		}
-
 		window.pauseGame = () => {
 			if (gameApp == null) {
 				console.error("gameApp is null, should call startGame first")
 				return
 			}
 			gameApp.pause();
+		}
+
+		window.isGamePaused = () => {
+			return gameApp != null && gameApp.isPaused();
 		}
 
 		window.resumeGame = () => {

@@ -621,17 +621,9 @@ func TestRunSpriteCallbacksAllowsOnStartAfterMainFirstYield(t *testing.T) {
 	runBootstrapTasksWithScheduler(t, &game, generation)
 
 	game.dispatchStartEventIfNeeded()
-
-	timer := time.NewTimer(time.Second)
-	defer timer.Stop()
-	var ev event
-	select {
-	case ev = <-game.events:
-	case <-timer.C:
-		t.Fatal("start event was not queued after bootstrap completed")
-	}
-
-	game.handleEvent(ev)
+	platform.RunOnMainThread(func() {
+		gco.Update()
+	})
 
 	select {
 	case <-started:

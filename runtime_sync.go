@@ -23,13 +23,13 @@ import (
 	spxlog "github.com/goplus/spx/v2/internal/log"
 )
 
-// -----------------------------------------------------------------------------
-// Game Sync Pipeline
-// -----------------------------------------------------------------------------
 // dispatchStartEventIfNeeded fires the start event once after bootstrap completes.
 func (p *Game) dispatchStartEventIfNeeded() {
 	coreruntime.SyncOnce(&p.lifecycleState.StartFlag, func() {
-		p.fireEvent(&eventStart{})
+		// Handle start directly in the engine update phase. Routing it through the
+		// generic event channel can let its helper goroutine resume only after the
+		// coroutine update has already decided it is idle.
+		p.handleEvent(&eventStart{})
 	})
 }
 

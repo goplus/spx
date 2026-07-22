@@ -47,13 +47,24 @@ type SwipeRecognizer struct {
 }
 
 func (sr *SwipeRecognizer) Init() {
+	sr.InitWithClock(nil)
+}
+
+// InitWithClock initializes the recognizer with a caller-provided clock.
+// A nil clock falls back to the system clock.
+func (sr *SwipeRecognizer) InitWithClock(now func() time.Time) {
+	if now == nil {
+		now = time.Now
+	}
 	sr.timeToSwipe = 0.5
 	sr.enableTimeLimit = true
 	sr.minimumDistance = 50.0
 	sr.maximumDistance = 500.0
-	if sr.now == nil {
-		sr.now = time.Now
-	}
+	sr.isTracking = false
+	sr.startTime = time.Time{}
+	sr.startPoint = mathf.Vec2{}
+	sr.endPoint = mathf.Vec2{}
+	sr.now = now
 }
 
 func (sr *SwipeRecognizer) StartTracking(startPos mathf.Vec2) {

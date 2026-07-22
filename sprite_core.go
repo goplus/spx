@@ -184,7 +184,7 @@ func (p *SpriteImpl) teardown() {
 }
 
 func (p *SpriteImpl) abortIfCurrentCoroutine() {
-	if p == gco.Current().Obj {
+	if current := gco.Current(); current != nil && p == current.Obj {
 		gco.Abort()
 	}
 }
