@@ -146,7 +146,7 @@ func (p *Game) getMousePos() (x, y float64) {
 }
 
 func (p *Game) Username() string {
-	return ""
+	return Username()
 }
 
 func (p *Game) WaitNextFrame() Seconds {

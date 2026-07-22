@@ -125,10 +125,18 @@ func TestGameClearSoundEffectsAllocatesWhenUnused(t *testing.T) {
 	}
 }
 
-func TestGameUsernameReturnsEmptyString(t *testing.T) {
+func TestUsernameReturnsConfiguredUser(t *testing.T) {
+	previousUser := User
+	defer func() { User = previousUser }()
+
+	User = "scratch-user"
+	if got := Username(); got != "scratch-user" {
+		t.Fatalf("Username = %q, want %q", got, "scratch-user")
+	}
+
 	var g Game
-	if got := g.Username(); got != "" {
-		t.Fatalf("Username = %q, want empty string", got)
+	if got := g.Username(); got != "scratch-user" {
+		t.Fatalf("Game.Username = %q, want %q", got, "scratch-user")
 	}
 }
 
