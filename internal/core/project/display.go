@@ -34,7 +34,10 @@ type DisplaySettings struct {
 	FontPreferences       []string
 }
 
-const defaultDisplayFontPath = "res://engine/fonts/CnFont.ttf"
+// defaultDisplayFontPath selects SPX's small bundled Latin font. Keeping
+// this separate from project font paths makes the reserved default family
+// independent of project-provided CJK fonts.
+const defaultDisplayFontPath = "res://engine/fonts/default.ttf"
 
 type FontFaceRegistration struct {
 	Path   string

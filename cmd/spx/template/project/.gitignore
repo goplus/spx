@@ -30,5 +30,4 @@
 
 # Re-ignore generated files inside kept trees.
 /engine/.DS_Store
-/engine/fonts/CnFont.ttf
 /go/main.go

@@ -369,7 +369,7 @@ func TestResolveDisplaySettings(t *testing.T) {
 	if settings.WindowScale != 2 || settings.StretchMode || !settings.Debug {
 		t.Fatalf("unexpected settings: %+v", settings)
 	}
-	if settings.DefaultFontPath != "res://engine/fonts/CnFont.ttf" {
+	if settings.DefaultFontPath != "res://engine/fonts/default.ttf" {
 		t.Fatalf("default font path = %q", settings.DefaultFontPath)
 	}
 	if len(settings.FontFaceRegistrations) != 0 {

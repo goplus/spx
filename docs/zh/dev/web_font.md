@@ -38,7 +38,7 @@ Family 的 `index.json` 格式如下：
 }
 ```
 
-`default` 是唯一的内置 family 名称，对应 `res://engine/fonts/CnFont.ttf`。它是保留名，不能在 `assets/fonts/default` 中重新声明。未配置 `fontPreferences` 时等价于只使用 `default`。
+`default` 是唯一的内置 family 名称，对应 SPX 模板中的拉丁字体 `res://engine/fonts/default.ttf`。它是保留名，不能在 `assets/fonts/default` 中重新声明，也不保证中文、Emoji 或 Scratch 字形。未配置 `fontPreferences` 时等价于只使用 `default`。
 
 ## 加载与校验
 
@@ -76,7 +76,7 @@ fallback 按 extended grapheme cluster 选择字体：
 4. 同一个 cluster 不会被拆给多个字体；所有候选都不支持时只绘制一个 missing-glyph box。
 5. cluster 内的 SVG `x/y/dx/dy/rotate` 使用 cluster 起点，避免定位属性再次拆分 cluster。
 
-彩色字体不依赖特殊 Family 名称。选中的 Face 如果为 shaped glyph 提供 OpenType-SVG 数据，LunaSVG 会直接栅格化该内嵌 SVG；例如项目 Family `Heart Emoji` 不需要改名为 `Emoji`。
+彩色字体不依赖特殊 Family 名称。选中的 Face 如果为 shaped glyph 提供 OpenType-SVG 数据，LunaSVG 会直接栅格化该内嵌 SVG；例如项目 Family `Color Emoji` 不需要改名为 `Emoji`。
 
 每个候选 Face 都会先用 Godot 构建中已有的 HarfBuzz 对完整 cluster 做 GSUB/GPOS shaping，再检查结果里是否存在 `.notdef`。因此 `e + combining acute` 可以组合成字体已有的 `é` glyph，`👩‍💻` 等 ZWJ 序列也可以命中字体的连字 glyph；fallback 选择、advance 计算和绘制始终复用同一组 glyph ID 与 position。
 
@@ -93,7 +93,9 @@ SPX reset 会把字体视为项目级状态并完整清理：
 
 ## 默认字体
 
-`res://engine/fonts/CnFont.ttf` 仍用于项目默认 UI 和 `default` family。模板仓库只跟踪对应 `.import` 文件；字体本体由安装流程下载，或由 `cmd/spx/setup_font.sh` 从本机字体生成。
+`default` family 和项目默认 UI 使用 SPX 模板自带的 `default.ttf`，不再携带完整 `CnFont.ttf`。`default.ttf` 是从 Source Han Sans CN Medium 1.000 的 `CnFont.ttf` 裁出的拉丁向子集，保留拉丁字母、数字、常用标点和必要控制/替代字符。字体与随附的 `default.LICENSE.txt` 均使用上游 1.000 版本的 Apache License 2.0。
+
+中文字体必须像其他项目字体一样放入 Font Collection。例如 `test/ProjectFonts` 的 `basic-chinese.ttf` 也来自同一份 `CnFont.ttf`，保留汉字、CJK 部首/笔画、中文标点、全角标点和兼容字形，排除拉丁字形。它在 `fontPreferences` 中显式声明为 `basic-chinese`，使中文覆盖不再是 `default` 的隐式能力。
 
 运行时创建的 FontFile 会设置 `allow_system_fallback=false`，所以项目最终显示不依赖本机字体环境。
 
@@ -101,10 +103,10 @@ SPX reset 会把字体视为项目级状态并完整清理：
 
 `test/ProjectFonts` 是完整的项目字体示例：
 
-- 每个 Scratch family 都位于自己的 `assets/fonts/<Family>` 目录。
-- `Heart Emoji` 作为项目 Family 携带完整的 Twitter Color Emoji 字体，提供 `❤️` 等 emoji 字形。
+- 每个 Scratch family 和汉字子集 `basic-chinese` 都位于自己的 `assets/fonts/<Family>` 目录。
+- `Color Emoji` 作为项目 Family 携带完整的 Twitter Color Emoji 字体，提供 `❤️` 等 emoji 字形。
 - SVG 显式 family 只解析项目声明，不依赖 runtime 内置映射。
-- `Pixel, Heart Emoji, default` 展示多级全局回退。
+- `Pixel, Color Emoji, basic-chinese, default` 展示多级全局回退。
 - emoji、中文、combining mark、variation selector 和 ZWJ 序列覆盖 cluster fallback。
 - 不提供 `index_pack.json`，覆盖 source 模式目录扫描。
 
@@ -117,5 +119,5 @@ spx rune --path test/ProjectFonts
 ## 当前限制
 
 - 每个 Family 暂时只支持一个 Face，尚未按 weight/style 选择多个 Face。
-- 默认 `CnFont.ttf` 体积仍然较大，中文子集化或按需加载需要单独推进。
+- `basic-chinese` 保留较完整的汉字覆盖，因此仍会显著增加项目体积。
 - emoji 必须由项目显式携带；运行时不再提供隐藏的 emoji family。
