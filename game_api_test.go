@@ -22,6 +22,7 @@ import (
 
 	internalaudio "github.com/goplus/spx/v2/internal/audio"
 	internalengine "github.com/goplus/spx/v2/internal/engine"
+	spxapi "github.com/goplus/spx/v2/pkg/spx"
 )
 
 type fakeAudioBackend struct {
@@ -125,10 +126,15 @@ func TestGameClearSoundEffectsAllocatesWhenUnused(t *testing.T) {
 	}
 }
 
-func TestGameUsernameReturnsEmptyString(t *testing.T) {
+func TestGameUsernameReturnsConfiguredUsername(t *testing.T) {
+	previous := spxapi.Username()
+	t.Cleanup(func() { spxapi.SetUsername(previous) })
+
+	spxapi.SetUsername("scratch-user")
+
 	var g Game
-	if got := g.Username(); got != "" {
-		t.Fatalf("Username = %q, want empty string", got)
+	if got := g.Username(); got != "scratch-user" {
+		t.Fatalf("Game.Username() = %q, want %q", got, "scratch-user")
 	}
 }
 

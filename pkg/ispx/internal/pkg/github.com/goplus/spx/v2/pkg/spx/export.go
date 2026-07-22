@@ -33,7 +33,8 @@ func init() {
 		Deps: map[string]string{
 			"context": "context",
 			"github.com/goplus/spx/v2/internal/engine": "engine",
-			"time": "time",
+			"sync/atomic": "atomic",
+			"time":        "time",
 		},
 		Interfaces: map[string]reflect.Type{},
 		NamedTypes: map[string]reflect.Type{},
@@ -45,6 +46,8 @@ func init() {
 			"Go":                 reflect.ValueOf(q.Go),
 			"IsAbortThreadError": reflect.ValueOf(q.IsAbortThreadError),
 			"IsInCoroutine":      reflect.ValueOf(q.IsInCoroutine),
+			"SetUsername":        reflect.ValueOf(q.SetUsername),
+			"Username":           reflect.ValueOf(q.Username),
 			"Wait":               reflect.ValueOf(q.Wait),
 			"WaitNextFrame":      reflect.ValueOf(q.WaitNextFrame),
 		},
