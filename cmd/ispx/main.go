@@ -20,9 +20,8 @@ package main
 
 import "github.com/goplus/spx/v3/pkg/ispx"
 
-// This command validates the current SPX Web runtime. Builder AI remains under
-// internal/ispxai for generation and package tests, but is not linked into this
-// binary while its upstream module still depends on SPX v2.
+// This command validates the current SPX Web runtime. Builder AI integration is
+// temporarily disabled until its upstream module moves to SPX v3.
 func main() {
 	if err := ispx.Init(nil); err != nil {
 		panic(err)
