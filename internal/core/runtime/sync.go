@@ -21,7 +21,7 @@ import (
 	"sync"
 
 	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v2/internal/engine"
+	"github.com/goplus/spx/v3/internal/engine"
 )
 
 func SyncOnce(start *sync.Once, fire func()) {

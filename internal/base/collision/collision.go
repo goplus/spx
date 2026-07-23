@@ -16,7 +16,7 @@
 
 package collision
 
-import spxlog "github.com/goplus/spx/v2/internal/log"
+import spxlog "github.com/goplus/spx/v3/internal/log"
 
 const (
 	ColliderNone    int64 = 0x00

@@ -23,7 +23,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/goplus/spx/v2/internal/release"
+	"github.com/goplus/spx/v3/internal/release"
 )
 
 func TestParseRuntimeExportPackArgsDefault(t *testing.T) {

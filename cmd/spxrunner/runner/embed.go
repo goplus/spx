@@ -35,8 +35,8 @@ package runner
 import (
 	_ "embed"
 
-	"github.com/goplus/spx/v2/internal/release"
-	"github.com/goplus/spx/v2/internal/scaffold"
+	"github.com/goplus/spx/v3/internal/release"
+	"github.com/goplus/spx/v3/internal/scaffold"
 )
 
 // Sync files from repository before building.

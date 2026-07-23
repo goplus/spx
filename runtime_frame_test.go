@@ -20,10 +20,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/goplus/spx/v2/internal/coroutine"
-	"github.com/goplus/spx/v2/internal/engine"
-	"github.com/goplus/spx/v2/internal/engine/platform"
-	itime "github.com/goplus/spx/v2/internal/time"
+	"github.com/goplus/spx/v3/internal/coroutine"
+	"github.com/goplus/spx/v3/internal/engine"
+	"github.com/goplus/spx/v3/internal/engine/platform"
+	itime "github.com/goplus/spx/v3/internal/time"
 )
 
 func TestAtFrameSchedulesCallbackForActiveGame(t *testing.T) {

@@ -19,7 +19,7 @@ package engine
 import (
 	"sync/atomic"
 
-	"github.com/goplus/spx/v2/internal/enginewrap"
+	"github.com/goplus/spx/v3/internal/enginewrap"
 )
 
 var (

@@ -19,8 +19,8 @@ package spx
 import (
 	"os"
 
-	coreproject "github.com/goplus/spx/v2/internal/core/project"
-	"github.com/goplus/spx/v2/internal/engine"
+	coreproject "github.com/goplus/spx/v3/internal/core/project"
+	"github.com/goplus/spx/v3/internal/engine"
 )
 
 func (p *Game) applyRuntimeConfig(conf *Config, proj *coreproject.ProjectConfig) {

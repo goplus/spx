@@ -3,7 +3,7 @@ package spx
 import (
 	"testing"
 
-	"github.com/goplus/spx/v2/internal/engine"
+	"github.com/goplus/spx/v3/internal/engine"
 )
 
 func TestBaseObjGetCostumeAssetPath(t *testing.T) {

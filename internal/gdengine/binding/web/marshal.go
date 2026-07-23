@@ -27,8 +27,8 @@ import (
 	"unsafe"
 
 	. "github.com/goplus/spbase/mathf"
-	spxlog "github.com/goplus/spx/v2/internal/log"
-	. "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
+	spxlog "github.com/goplus/spx/v3/internal/log"
+	. "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
 const (

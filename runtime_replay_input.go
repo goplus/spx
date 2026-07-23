@@ -20,9 +20,9 @@ import (
 	"sort"
 
 	"github.com/goplus/spbase/mathf"
-	coreruntime "github.com/goplus/spx/v2/internal/core/runtime"
-	"github.com/goplus/spx/v2/internal/coroutine"
-	"github.com/goplus/spx/v2/internal/engine"
+	coreruntime "github.com/goplus/spx/v3/internal/core/runtime"
+	"github.com/goplus/spx/v3/internal/coroutine"
+	"github.com/goplus/spx/v3/internal/engine"
 )
 
 // inputSessionInput is the session-local adapter state needed to dispatch

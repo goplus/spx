@@ -18,9 +18,9 @@ package spx
 
 import (
 	"github.com/goplus/spbase/mathf"
-	coreruntime "github.com/goplus/spx/v2/internal/core/runtime"
-	"github.com/goplus/spx/v2/internal/engine"
-	spxlog "github.com/goplus/spx/v2/internal/log"
+	coreruntime "github.com/goplus/spx/v3/internal/core/runtime"
+	"github.com/goplus/spx/v3/internal/engine"
+	spxlog "github.com/goplus/spx/v3/internal/log"
 )
 
 // dispatchStartEventIfNeeded fires the start event once after bootstrap completes.

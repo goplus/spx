@@ -22,8 +22,8 @@ package engine
 import (
 	"encoding/json"
 
-	"github.com/goplus/spx/v2/internal/engine/platform"
-	spxlog "github.com/goplus/spx/v2/internal/log"
+	"github.com/goplus/spx/v3/internal/engine/platform"
+	spxlog "github.com/goplus/spx/v3/internal/log"
 )
 
 func SetAssetDir(dir string) {

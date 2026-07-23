@@ -18,31 +18,12 @@
 
 package main
 
-import (
-	"github.com/goplus/ixgo"
-	"github.com/goplus/ixgo/xgobuild"
-	"github.com/goplus/mod/modfile"
-	"github.com/goplus/spx/v2/cmd/ispx/internal/ispxai"
-	"github.com/goplus/spx/v2/pkg/ispx"
-)
+import "github.com/goplus/spx/v3/pkg/ispx"
 
-func init() {
-	// The web interpreter exposes Builder AI as a command-scoped auto-import.
-	xgobuild.RegisterProject(&modfile.Project{
-		Ext:      ".spx",
-		Class:    "Game",
-		Works:    []*modfile.Class{{Ext: ".spx", Class: "SpriteImpl", Embedded: true}},
-		PkgPaths: []string{"github.com/goplus/spx/v2", "math"},
-		Import:   []*modfile.Import{{Name: "ai", Path: ispxai.ModulePath}},
-	})
-}
-
+// This command validates the current SPX Web runtime. Builder AI integration is
+// temporarily disabled until its upstream module moves to SPX v3.
 func main() {
-	ixgoCtx := ixgo.NewContext(ixgo.SupportMultipleInterp)
-	if err := ispxai.RegisterPatch(ixgoCtx); err != nil {
-		panic(err)
-	}
-	if err := ispx.Init(ixgoCtx); err != nil {
+	if err := ispx.Init(nil); err != nil {
 		panic(err)
 	}
 	select {}

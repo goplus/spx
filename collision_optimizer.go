@@ -16,7 +16,7 @@
 
 package spx
 
-import "github.com/goplus/spx/v2/internal/base/collision"
+import "github.com/goplus/spx/v3/internal/base/collision"
 
 // ======================== Collision Optimization System ========================
 // This file implements spatial partitioning and AABB (Axis-Aligned Bounding Box)

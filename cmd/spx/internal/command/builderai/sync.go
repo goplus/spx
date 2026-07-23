@@ -21,6 +21,5 @@ import _ "embed"
 // Sync Builder AI project templates and versions from repository sources.
 //
 //go:generate cp ../../../../../gox.mod gox.mod
-//go:generate go run ./genversion -source ../../../../../cmd/ispx/go.mod -output version_gen.go
 //go:embed gox.mod
 var defaultGoxModTemplate string

@@ -16,7 +16,7 @@
 
 package spx
 
-import coreevent "github.com/goplus/spx/v2/internal/core/event"
+import coreevent "github.com/goplus/spx/v3/internal/core/event"
 
 // -----------------------------------------------------------------------------
 // Queue State

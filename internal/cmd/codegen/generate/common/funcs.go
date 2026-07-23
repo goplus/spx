@@ -28,9 +28,9 @@ import (
 	"text/template"
 	"unicode"
 
-	"github.com/goplus/spx/v2/internal/cmd/codegen/gdextensionparser/clang"
-	"github.com/goplus/spx/v2/internal/cmd/codegen/internal/licenseheader"
-	spxlog "github.com/goplus/spx/v2/internal/cmd/codegen/internal/log"
+	"github.com/goplus/spx/v3/internal/cmd/codegen/gdextensionparser/clang"
+	"github.com/goplus/spx/v3/internal/cmd/codegen/internal/licenseheader"
+	spxlog "github.com/goplus/spx/v3/internal/cmd/codegen/internal/log"
 
 	"github.com/iancoleman/strcase"
 )

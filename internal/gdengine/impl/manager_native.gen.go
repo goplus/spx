@@ -38,8 +38,8 @@ import "C"
 import (
 	"fmt"
 	. "github.com/goplus/spbase/mathf"
-	. "github.com/goplus/spx/v2/internal/gdengine/binding/native"
-	. "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
+	. "github.com/goplus/spx/v3/internal/gdengine/binding/native"
+	. "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 	"reflect"
 	"unsafe"
 )

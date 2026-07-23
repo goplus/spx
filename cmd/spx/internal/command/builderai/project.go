@@ -24,14 +24,14 @@ import (
 
 	"golang.org/x/mod/modfile"
 
-	"github.com/goplus/spx/v2/internal/scaffold"
+	"github.com/goplus/spx/v3/internal/scaffold"
 )
 
 const (
 	ModulePath         = "github.com/goplus/builder/tools/ai"
 	DescriptionFile    = "builder-ai-description.md"
 	DescriptionFileRaw = "builder-ai-description"
-	spxModulePath      = "github.com/goplus/spx/v2"
+	spxModulePath      = "github.com/goplus/spx/v3"
 )
 
 type ProjectOptions struct {

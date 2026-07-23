@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/goplus/spbase/mathf"
-	engine "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
+	engine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
 type SwipeResult struct {

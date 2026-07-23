@@ -35,8 +35,8 @@ import (
 	"reflect"
 
 	. "github.com/goplus/spbase/mathf"
-	. "github.com/goplus/spx/v2/internal/gdengine/binding/web"
-	. "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
+	. "github.com/goplus/spx/v3/internal/gdengine/binding/web"
+	. "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
 func BindMgr(mgrs []IManager) {

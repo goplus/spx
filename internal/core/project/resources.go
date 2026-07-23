@@ -24,9 +24,9 @@ import (
 	"strings"
 	"syscall"
 
-	spxfs "github.com/goplus/spx/v2/fs"
-	"github.com/goplus/spx/v2/internal/engine"
-	spxlog "github.com/goplus/spx/v2/internal/log"
+	spxfs "github.com/goplus/spx/v3/fs"
+	"github.com/goplus/spx/v3/internal/engine"
+	spxlog "github.com/goplus/spx/v3/internal/log"
 )
 
 func AssetDirFromResource(resource any) (string, bool) {

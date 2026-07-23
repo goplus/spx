@@ -24,7 +24,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/goplus/spx/v2/cmd/spx/internal/util"
+	"github.com/goplus/spx/v3/cmd/spx/internal/util"
 )
 
 // ExportBuild runs a platform export with the current Godot project.

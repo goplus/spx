@@ -23,8 +23,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/goplus/spx/v2/internal/engine"
-	itime "github.com/goplus/spx/v2/internal/time"
+	"github.com/goplus/spx/v3/internal/engine"
+	itime "github.com/goplus/spx/v3/internal/time"
 )
 
 func resetInputSessionTest(t *testing.T) {

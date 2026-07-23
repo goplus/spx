@@ -20,12 +20,12 @@ import (
 	"time"
 
 	"github.com/goplus/spbase/mathf"
-	coreevent "github.com/goplus/spx/v2/internal/core/event"
-	coreruntime "github.com/goplus/spx/v2/internal/core/runtime"
-	inputstate "github.com/goplus/spx/v2/internal/input"
-	inkey "github.com/goplus/spx/v2/internal/input/keycode"
-	spxlog "github.com/goplus/spx/v2/internal/log"
-	engine "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
+	coreevent "github.com/goplus/spx/v3/internal/core/event"
+	coreruntime "github.com/goplus/spx/v3/internal/core/runtime"
+	inputstate "github.com/goplus/spx/v3/internal/input"
+	inkey "github.com/goplus/spx/v3/internal/input/keycode"
+	spxlog "github.com/goplus/spx/v3/internal/log"
+	engine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
 // Keyboard key constants

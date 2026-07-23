@@ -21,8 +21,8 @@ import (
 	"fmt"
 
 	"github.com/goplus/spbase/mathf"
-	assetutil "github.com/goplus/spx/v2/internal/assets"
-	"github.com/goplus/spx/v2/internal/engine"
+	assetutil "github.com/goplus/spx/v3/internal/assets"
+	"github.com/goplus/spx/v3/internal/engine"
 )
 
 type Config struct {

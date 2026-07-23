@@ -30,7 +30,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/goplus/spx/v2/internal/release"
+	"github.com/goplus/spx/v3/internal/release"
 )
 
 type engineDownloadEnv struct {

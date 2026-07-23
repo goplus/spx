@@ -17,9 +17,9 @@
 package spx
 
 import (
-	coreevent "github.com/goplus/spx/v2/internal/core/event"
-	coreproject "github.com/goplus/spx/v2/internal/core/project"
-	"github.com/goplus/spx/v2/internal/engine"
+	coreevent "github.com/goplus/spx/v3/internal/core/event"
+	coreproject "github.com/goplus/spx/v3/internal/core/project"
+	"github.com/goplus/spx/v3/internal/engine"
 )
 
 // Config configures game startup and runtime behavior.

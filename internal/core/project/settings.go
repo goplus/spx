@@ -19,9 +19,9 @@ package project
 import (
 	"path/filepath"
 
-	spxfs "github.com/goplus/spx/v2/fs"
-	"github.com/goplus/spx/v2/internal/base/collision"
-	"github.com/goplus/spx/v2/internal/base/defaults"
+	spxfs "github.com/goplus/spx/v3/fs"
+	"github.com/goplus/spx/v3/internal/base/collision"
+	"github.com/goplus/spx/v3/internal/base/defaults"
 )
 
 const (

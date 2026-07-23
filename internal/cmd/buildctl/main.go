@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/goplus/spx/v2/internal/cmd/buildctl/shared"
+	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 )
 
 func main() {

@@ -23,9 +23,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/goplus/spx/v2/internal/cmd/buildctl/engine"
-	"github.com/goplus/spx/v2/internal/cmd/buildctl/runtimecmd"
-	"github.com/goplus/spx/v2/internal/cmd/buildctl/shared"
+	"github.com/goplus/spx/v3/internal/cmd/buildctl/engine"
+	"github.com/goplus/spx/v3/internal/cmd/buildctl/runtimecmd"
+	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 )
 
 type prepareConfig struct {

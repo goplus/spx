@@ -16,7 +16,7 @@
 
 package ispx
 
-import spx "github.com/goplus/spx/v2"
+import spx "github.com/goplus/spx/v3"
 
 const defaultHostInputRecordingFPS = 30
 

@@ -31,8 +31,8 @@ import (
 	"strings"
 	"time"
 
-	builderai "github.com/goplus/spx/v2/cmd/spx/internal/command/builderai"
-	"github.com/goplus/spx/v2/cmd/spx/internal/util"
+	builderai "github.com/goplus/spx/v3/cmd/spx/internal/command/builderai"
+	"github.com/goplus/spx/v3/cmd/spx/internal/util"
 )
 
 const envName = "gdspx"
@@ -40,7 +40,7 @@ const projectImportTimeoutEnvVar = "SPX_GODOT_IMPORT_TIMEOUT"
 const defaultProjectImportTimeout = 10 * time.Minute
 
 var projectNameReplacer = strings.NewReplacer("_", "", " ", "", "\"", "", "\n", "", "\r", "")
-var spxModuleReplaceLinePattern = regexp.MustCompile(`^(\s*)(replace\s+)?github\.com/goplus/spx/v2\s*=>\s*(\S+)(\s*//.*)?$`)
+var spxModuleReplaceLinePattern = regexp.MustCompile(`^(\s*)(replace\s+)?github\.com/goplus/spx/v3\s*=>\s*(\S+)(\s*//.*)?$`)
 
 type envVar struct {
 	key   string
@@ -108,7 +108,7 @@ func (cmd *CmdTool) PrepareEnv(fsRelDir, dstDir string) {
 	tempFile, _ := filepath.Abs(path.Join(cmd.TargetDir, "xgo_autogen.go"))
 	tmp := `
 package main
-import "github.com/goplus/spx/v2"
+import "github.com/goplus/spx/v3"
 func main() {print(&spx.Game{})}
 `
 	os.WriteFile(tempFile, []byte(tmp), 0644)
@@ -547,7 +547,7 @@ func (cmd *CmdTool) adaptGoMod() {
 // ensureSpxModuleReplace idempotently upserts the local spx replace directive,
 // repairing stale single-line or block entries while preserving newline style.
 func ensureSpxModuleReplace(content, relPath string) string {
-	const replaceLine = "github.com/goplus/spx/v2 => "
+	const replaceLine = "github.com/goplus/spx/v3 => "
 
 	wantLine := replaceLine + relPath
 	lines := strings.Split(content, "\n")
@@ -657,7 +657,7 @@ func isLocalSpxRepoRoot(dir string) bool {
 	if err != nil {
 		return false
 	}
-	if !hasGoModuleDeclaration(string(content), "github.com/goplus/spx/v2") {
+	if !hasGoModuleDeclaration(string(content), "github.com/goplus/spx/v3") {
 		return false
 	}
 	return util.IsFileExist(filepath.Join(dir, "cmd", "spx", "install.sh"))

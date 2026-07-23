@@ -18,8 +18,8 @@ package spx
 
 import (
 	"github.com/goplus/spbase/mathf"
-	coreproject "github.com/goplus/spx/v2/internal/core/project"
-	spxlog "github.com/goplus/spx/v2/internal/log"
+	coreproject "github.com/goplus/spx/v3/internal/core/project"
+	spxlog "github.com/goplus/spx/v3/internal/log"
 )
 
 // -----------------------------------------------------------------------------

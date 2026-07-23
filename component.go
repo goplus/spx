@@ -16,7 +16,7 @@
 
 package spx
 
-import coreproject "github.com/goplus/spx/v2/internal/core/project"
+import coreproject "github.com/goplus/spx/v3/internal/core/project"
 
 // ============================================================================
 // Component System

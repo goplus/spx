@@ -32,7 +32,7 @@
 
 package runner
 
-import "github.com/goplus/spx/v2/internal/release"
+import "github.com/goplus/spx/v3/internal/release"
 
 const (
 	RuntimeURLBase      = release.RuntimeURLBase

@@ -27,8 +27,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/goplus/spx/v2/internal/base/fileutil"
-	"github.com/goplus/spx/v2/internal/release"
+	"github.com/goplus/spx/v3/internal/base/fileutil"
+	"github.com/goplus/spx/v3/internal/release"
 )
 
 var fileDownloadHTTPClient = &http.Client{Timeout: 30 * time.Minute}

@@ -19,8 +19,8 @@ package engine
 import (
 	"testing"
 
-	itime "github.com/goplus/spx/v2/internal/time"
-	gdx "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
+	itime "github.com/goplus/spx/v3/internal/time"
+	gdx "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
 func resetRuntimeDeltaTestState() {

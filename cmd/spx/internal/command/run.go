@@ -29,9 +29,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/goplus/spx/v2/cmd/spx/internal/runtimeasset"
-	"github.com/goplus/spx/v2/cmd/spx/internal/util"
-	"github.com/goplus/spx/v2/internal/scaffold"
+	"github.com/goplus/spx/v3/cmd/spx/internal/runtimeasset"
+	"github.com/goplus/spx/v3/cmd/spx/internal/util"
+	"github.com/goplus/spx/v3/internal/scaffold"
 )
 
 var prepareEmbeddedRuntimeAssets = runtimeasset.Prepare

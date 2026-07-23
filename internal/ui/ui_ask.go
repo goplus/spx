@@ -17,8 +17,8 @@
 package ui
 
 import (
-	"github.com/goplus/spx/v2/internal/engine"
-	gdx "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
+	"github.com/goplus/spx/v3/internal/engine"
+	gdx "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
 type UiAsk struct {

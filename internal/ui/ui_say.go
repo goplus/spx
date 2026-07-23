@@ -21,8 +21,8 @@ import (
 	"strings"
 
 	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v2/internal/engine"
-	"github.com/goplus/spx/v2/internal/text"
+	"github.com/goplus/spx/v3/internal/engine"
+	"github.com/goplus/spx/v3/internal/text"
 )
 
 // Constants for say message layout

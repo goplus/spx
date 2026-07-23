@@ -30,8 +30,8 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/goplus/spx/v2/internal/enginewrap"
-	. "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
+	"github.com/goplus/spx/v3/internal/enginewrap"
+	. "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
 func BindMgr(mgrs []IManager) {

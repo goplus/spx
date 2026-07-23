@@ -21,7 +21,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	coreproject "github.com/goplus/spx/v2/internal/core/project"
+	coreproject "github.com/goplus/spx/v3/internal/core/project"
 )
 
 func TestApplyStoredRuntimeConfigReusesResolvedInput(t *testing.T) {

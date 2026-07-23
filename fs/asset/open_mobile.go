@@ -22,7 +22,7 @@ package asset
 import (
 	"io"
 
-	"github.com/goplus/spx/v2/fs"
+	"github.com/goplus/spx/v3/fs"
 	"golang.org/x/mobile/asset"
 )
 

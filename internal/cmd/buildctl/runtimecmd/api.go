@@ -16,7 +16,7 @@
 
 package runtimecmd
 
-import "github.com/goplus/spx/v2/internal/cmd/buildctl/shared"
+import "github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 
 type ExportWebConfig struct {
 	Mode string

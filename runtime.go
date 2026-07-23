@@ -18,9 +18,9 @@ package spx
 
 import (
 	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v2/internal/coroutine"
-	"github.com/goplus/spx/v2/internal/engine"
-	"github.com/goplus/spx/v2/internal/enginewrap"
+	"github.com/goplus/spx/v3/internal/coroutine"
+	"github.com/goplus/spx/v3/internal/engine"
+	"github.com/goplus/spx/v3/internal/enginewrap"
 )
 
 // -----------------------------------------------------------------------------

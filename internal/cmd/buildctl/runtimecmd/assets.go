@@ -22,7 +22,7 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/goplus/spx/v2/internal/release"
+	"github.com/goplus/spx/v3/internal/release"
 )
 
 const runtimeIndexJSON = `{"map":{"width":480,"height":360}}`

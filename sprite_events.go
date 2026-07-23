@@ -19,7 +19,7 @@ package spx
 import (
 	"slices"
 
-	coreevent "github.com/goplus/spx/v2/internal/core/event"
+	coreevent "github.com/goplus/spx/v3/internal/core/event"
 )
 
 func (p *SpriteImpl) OnCloned__0(onCloned func()) {

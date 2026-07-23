@@ -22,12 +22,12 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/goplus/spx/v2/internal/cmd/codegen/gdextensionparser"
-	"github.com/goplus/spx/v2/internal/cmd/codegen/gdextensionparser/clang"
-	"github.com/goplus/spx/v2/internal/cmd/codegen/generate/ffi"
-	"github.com/goplus/spx/v2/internal/cmd/codegen/generate/gdext"
-	"github.com/goplus/spx/v2/internal/cmd/codegen/generate/webffi"
-	spxlog "github.com/goplus/spx/v2/internal/cmd/codegen/internal/log"
+	"github.com/goplus/spx/v3/internal/cmd/codegen/gdextensionparser"
+	"github.com/goplus/spx/v3/internal/cmd/codegen/gdextensionparser/clang"
+	"github.com/goplus/spx/v3/internal/cmd/codegen/generate/ffi"
+	"github.com/goplus/spx/v3/internal/cmd/codegen/generate/gdext"
+	"github.com/goplus/spx/v3/internal/cmd/codegen/generate/webffi"
+	spxlog "github.com/goplus/spx/v3/internal/cmd/codegen/internal/log"
 )
 
 var (

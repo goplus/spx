@@ -25,10 +25,10 @@ import (
 	"github.com/goplus/ixgo/xgobuild"
 	"github.com/goplus/mod/modfile"
 	_ "github.com/goplus/reflectx/icall/icall2048"
-	_ "github.com/goplus/spx/v2"
-	spxfs "github.com/goplus/spx/v2/fs"
-	"github.com/goplus/spx/v2/internal/engine"
-	"github.com/goplus/spx/v2/pkg/ispx/internal/memfs"
+	_ "github.com/goplus/spx/v3"
+	spxfs "github.com/goplus/spx/v3/fs"
+	"github.com/goplus/spx/v3/internal/engine"
+	"github.com/goplus/spx/v3/pkg/ispx/internal/memfs"
 )
 
 func init() {
@@ -37,7 +37,7 @@ func init() {
 		Ext:      ".spx",
 		Class:    "Game",
 		Works:    []*modfile.Class{{Ext: ".spx", Class: "SpriteImpl", Embedded: true}},
-		PkgPaths: []string{"github.com/goplus/spx/v2", "math"},
+		PkgPaths: []string{"github.com/goplus/spx/v3", "math"},
 	})
 }
 
@@ -61,7 +61,7 @@ var defaultPackagesToImport = []string{
 	"sync",
 	"sync/atomic",
 	"time",
-	"github.com/goplus/spx/v2",
+	"github.com/goplus/spx/v3",
 	"github.com/qiniu/x/osx",
 	"github.com/qiniu/x/stringslice",
 	"github.com/qiniu/x/stringutil",
@@ -98,10 +98,10 @@ func Init(ctx *ixgo.Context) error {
 	// Register patch for spx to support functions with generic type like [spx.XGot_Game_XGox_GetWidget].
 	//
 	// See https://github.com/goplus/builder/issues/765#issuecomment-2313915805.
-	if err := ctx.RegisterPatch("github.com/goplus/spx/v2", `
+	if err := ctx.RegisterPatch("github.com/goplus/spx/v3", `
 package spx
 
-import . "github.com/goplus/spx/v2"
+import . "github.com/goplus/spx/v3"
 
 func XGot_Game_XGox_GetWidget[T any](sg ShapeGetter, name WidgetName) *T {
 	widget, ok := GetWidget(sg, name).(any).(*T)

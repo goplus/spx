@@ -24,7 +24,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/goplus/spx/v2/cmd/spxrunner/runner"
+	"github.com/goplus/spx/v3/cmd/spxrunner/runner"
 )
 
 func main() {
@@ -36,7 +36,7 @@ func main() {
 	maximized := flag.Bool("maximized", false, "Start maximized")
 	alwaysOnTop := flag.Bool("always-on-top", false, "Keep window always on top")
 	debug := flag.Bool("debug", false, "Enable debug mode")
-	version := flag.String("version", "", "SPX version to use (e.g., 'v2.0.0', 'latest')")
+	version := flag.String("version", "", "SPX version to use (e.g., 'v3.0.0', 'latest')")
 
 	projectPath := "."
 	if len(os.Args) > 1 && (len(os.Args[1]) == 0 || os.Args[1][0] != '-') {

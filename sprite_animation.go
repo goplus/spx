@@ -19,10 +19,10 @@ package spx
 import (
 	"sync"
 
-	intani "github.com/goplus/spx/v2/internal/animation"
-	coreproject "github.com/goplus/spx/v2/internal/core/project"
-	"github.com/goplus/spx/v2/internal/engine"
-	spxlog "github.com/goplus/spx/v2/internal/log"
+	intani "github.com/goplus/spx/v3/internal/animation"
+	coreproject "github.com/goplus/spx/v3/internal/core/project"
+	"github.com/goplus/spx/v3/internal/engine"
+	spxlog "github.com/goplus/spx/v3/internal/log"
 )
 
 // -----------------------------------------------------------------------------

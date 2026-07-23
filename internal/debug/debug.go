@@ -23,7 +23,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/goplus/spx/v2/internal/log"
+	"github.com/goplus/spx/v3/internal/log"
 )
 
 const (

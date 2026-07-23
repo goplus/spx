@@ -19,7 +19,7 @@
 package spx
 
 import (
-	q "github.com/goplus/spx/v2/pkg/spx"
+	q "github.com/goplus/spx/v3/pkg/spx"
 
 	"reflect"
 
@@ -29,10 +29,10 @@ import (
 func init() {
 	ixgo.RegisterPackage(&ixgo.Package{
 		Name: "spx",
-		Path: "github.com/goplus/spx/v2/pkg/spx",
+		Path: "github.com/goplus/spx/v3/pkg/spx",
 		Deps: map[string]string{
 			"context": "context",
-			"github.com/goplus/spx/v2/internal/engine": "engine",
+			"github.com/goplus/spx/v3/internal/engine": "engine",
 			"sync/atomic": "atomic",
 			"time":        "time",
 		},

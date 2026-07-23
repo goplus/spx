@@ -20,11 +20,11 @@ import (
 	"path"
 
 	"github.com/goplus/spbase/mathf"
-	spxfs "github.com/goplus/spx/v2/fs"
-	"github.com/goplus/spx/v2/internal/base/collision"
-	"github.com/goplus/spx/v2/internal/engine"
-	spxlog "github.com/goplus/spx/v2/internal/log"
-	tm "github.com/goplus/spx/v2/internal/tilemap"
+	spxfs "github.com/goplus/spx/v3/fs"
+	"github.com/goplus/spx/v3/internal/base/collision"
+	"github.com/goplus/spx/v3/internal/engine"
+	spxlog "github.com/goplus/spx/v3/internal/log"
+	tm "github.com/goplus/spx/v3/internal/tilemap"
 )
 
 // -----------------------------------------------------------------------------

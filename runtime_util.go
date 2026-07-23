@@ -19,8 +19,8 @@ package spx
 import (
 	"strings"
 
-	"github.com/goplus/spx/v2/internal/engine"
-	itime "github.com/goplus/spx/v2/internal/time"
+	"github.com/goplus/spx/v3/internal/engine"
+	itime "github.com/goplus/spx/v3/internal/time"
 )
 
 // Rand__0 returns a random integer between from and to (inclusive).

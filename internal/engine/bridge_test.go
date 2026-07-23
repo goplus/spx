@@ -19,7 +19,7 @@ package engine
 import (
 	"testing"
 
-	"github.com/goplus/spx/v2/internal/enginewrap"
+	"github.com/goplus/spx/v3/internal/enginewrap"
 )
 
 func TestManagersDefaultsAndInjection(t *testing.T) {

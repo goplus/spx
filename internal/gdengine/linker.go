@@ -19,10 +19,10 @@ package gdengine
 //lint:file-ignore ST1001 Godot linker glue intentionally dot-imports engine API types.
 
 import (
-	"github.com/goplus/spx/v2/internal/gdengine/binding/facade"
-	engineimpl "github.com/goplus/spx/v2/internal/gdengine/impl"
-	. "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
-	gdspx "github.com/goplus/spx/v2/pkg/spx/pkg/gdspx"
+	"github.com/goplus/spx/v3/internal/gdengine/binding/facade"
+	engineimpl "github.com/goplus/spx/v3/internal/gdengine/impl"
+	. "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
+	gdspx "github.com/goplus/spx/v3/pkg/spx/pkg/gdspx"
 )
 
 var (

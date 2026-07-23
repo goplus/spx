@@ -19,10 +19,10 @@ package gdengine
 //lint:file-ignore ST1001 Godot callback glue intentionally dot-imports engine API types.
 
 import (
-	"github.com/goplus/spx/v2/internal/engine/platform"
-	spxlog "github.com/goplus/spx/v2/internal/log"
-	itime "github.com/goplus/spx/v2/internal/time"
-	. "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
+	"github.com/goplus/spx/v3/internal/engine/platform"
+	spxlog "github.com/goplus/spx/v3/internal/log"
+	itime "github.com/goplus/spx/v3/internal/time"
+	. "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
 func onMainThread(call func()) {

@@ -20,7 +20,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/goplus/spx/v2/internal/cmd/codegen/generate/common"
+	"github.com/goplus/spx/v3/internal/cmd/codegen/generate/common"
 	"github.com/stretchr/testify/require"
 )
 

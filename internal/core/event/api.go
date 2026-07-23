@@ -16,7 +16,7 @@
 
 package event
 
-import engine "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
+import engine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 
 type Key = engine.KeyCode
 type Direction = float64

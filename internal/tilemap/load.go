@@ -20,8 +20,8 @@ import (
 	"path"
 	"strings"
 
-	spxfs "github.com/goplus/spx/v2/fs"
-	coreproject "github.com/goplus/spx/v2/internal/core/project"
+	spxfs "github.com/goplus/spx/v3/fs"
+	coreproject "github.com/goplus/spx/v3/internal/core/project"
 )
 
 type DecoratorJSON struct {

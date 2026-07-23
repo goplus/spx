@@ -21,9 +21,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	coreevent "github.com/goplus/spx/v2/internal/core/event"
-	"github.com/goplus/spx/v2/internal/engine"
-	"github.com/goplus/spx/v2/internal/ui"
+	coreevent "github.com/goplus/spx/v3/internal/core/event"
+	"github.com/goplus/spx/v3/internal/engine"
+	"github.com/goplus/spx/v3/internal/ui"
 )
 
 type GameLifecycleState struct {

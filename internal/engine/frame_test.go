@@ -22,8 +22,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/goplus/spx/v2/internal/coroutine"
-	itime "github.com/goplus/spx/v2/internal/time"
+	"github.com/goplus/spx/v3/internal/coroutine"
+	itime "github.com/goplus/spx/v3/internal/time"
 )
 
 func advanceEngineFrameTo(t *testing.T, target int64) {

@@ -23,9 +23,9 @@ import (
 	"os"
 	"slices"
 
-	"github.com/goplus/spx/v2/internal/cmd/buildctl/engine"
-	"github.com/goplus/spx/v2/internal/cmd/buildctl/shared"
-	toolpkg "github.com/goplus/spx/v2/internal/cmd/buildctl/tool"
+	"github.com/goplus/spx/v3/internal/cmd/buildctl/engine"
+	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
+	toolpkg "github.com/goplus/spx/v3/internal/cmd/buildctl/tool"
 )
 
 type envExportShellConfig struct {

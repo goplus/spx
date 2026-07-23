@@ -16,7 +16,7 @@
 
 package spx
 
-import "github.com/goplus/spx/v2/internal/engine"
+import "github.com/goplus/spx/v3/internal/engine"
 
 // CurrentFrame returns the absolute frame number of the current engine
 // session. The counter starts at zero before project loading, advances once per

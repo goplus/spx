@@ -16,7 +16,7 @@
 
 package runtime
 
-import "github.com/goplus/spx/v2/internal/engine/platform"
+import "github.com/goplus/spx/v3/internal/engine/platform"
 
 // These wrappers keep the main-thread marker API available in the runtime
 // package while delegating to the shared platform-level implementation used by

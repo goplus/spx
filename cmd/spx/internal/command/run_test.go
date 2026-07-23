@@ -27,7 +27,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/goplus/spx/v2/internal/scaffold"
+	"github.com/goplus/spx/v3/internal/scaffold"
 )
 
 func TestRunWebCommandRunsExportBeforeServer(t *testing.T) {
@@ -135,7 +135,7 @@ func writeLocalSpxRepoMarker(t *testing.T, root string) {
 	if err := os.MkdirAll(filepath.Join(root, "cmd", "spx"), 0755); err != nil {
 		t.Fatalf("mkdir cmd/spx: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module github.com/goplus/spx/v2\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module github.com/goplus/spx/v3\n"), 0644); err != nil {
 		t.Fatalf("write go.mod: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(root, "cmd", "spx", "install.sh"), []byte("#!/bin/bash\n"), 0755); err != nil {
@@ -190,7 +190,7 @@ func TestFindSpxRootIgnoresProjectsThatOnlyReferenceSpx(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/demo\n"), 0644); err != nil {
 		t.Fatalf("write go.mod: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "gox.mod"), []byte("project main.spx Game github.com/goplus/spx/v2 math\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "gox.mod"), []byte("project main.spx Game github.com/goplus/spx/v3 math\n"), 0644); err != nil {
 		t.Fatalf("write gox.mod: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(root, "cmd", "spx", "install.sh"), []byte("#!/bin/bash\n"), 0755); err != nil {

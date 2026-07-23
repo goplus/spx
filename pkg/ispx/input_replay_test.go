@@ -20,7 +20,7 @@ import (
 	"math"
 	"testing"
 
-	spx "github.com/goplus/spx/v2"
+	spx "github.com/goplus/spx/v3"
 )
 
 func TestHostInputRecordingBridgePreparesNextGame(t *testing.T) {

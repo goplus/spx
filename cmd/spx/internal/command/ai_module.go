@@ -16,7 +16,7 @@
 
 package command
 
-import builderai "github.com/goplus/spx/v2/cmd/spx/internal/command/builderai"
+import builderai "github.com/goplus/spx/v3/cmd/spx/internal/command/builderai"
 
 func (cmd *CmdTool) ensureBuilderAIModuleFiles(projectRoot string) error {
 	return builderai.EnsureProjectFiles(projectRoot, builderai.ProjectOptions{

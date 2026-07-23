@@ -22,12 +22,12 @@ import (
 	"runtime"
 	"time"
 
-	coreproject "github.com/goplus/spx/v2/internal/core/project"
-	coreruntime "github.com/goplus/spx/v2/internal/core/runtime"
-	"github.com/goplus/spx/v2/internal/coroutine"
-	"github.com/goplus/spx/v2/internal/debug"
-	"github.com/goplus/spx/v2/internal/engine"
-	spxlog "github.com/goplus/spx/v2/internal/log"
+	coreproject "github.com/goplus/spx/v3/internal/core/project"
+	coreruntime "github.com/goplus/spx/v3/internal/core/runtime"
+	"github.com/goplus/spx/v3/internal/coroutine"
+	"github.com/goplus/spx/v3/internal/debug"
+	"github.com/goplus/spx/v3/internal/engine"
+	spxlog "github.com/goplus/spx/v3/internal/log"
 )
 
 // -----------------------------------------------------------------------------

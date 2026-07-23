@@ -19,35 +19,35 @@ package release
 import "testing"
 
 func TestReleaseMetaForSPXVersionMapped(t *testing.T) {
-	meta := ReleaseMetaForSPXVersion("v2.0.0")
-	if meta.Runtime.Version != "2.2.0" {
-		t.Fatalf("runtime version = %q, want %q", meta.Runtime.Version, "2.2.0")
+	meta := ReleaseMetaForSPXVersion("v3.0.0")
+	if meta.Runtime.Version != "2.2.6" {
+		t.Fatalf("runtime version = %q, want %q", meta.Runtime.Version, "2.2.6")
 	}
-	if got := meta.RuntimeAssetDownloadURL(RuntimeAssetZipName); got != SpxReleaseURLBase+"v2.0.0/"+RuntimeAssetZipName {
-		t.Fatalf("runtime asset download url = %q, want %q", got, SpxReleaseURLBase+"v2.0.0/"+RuntimeAssetZipName)
+	if got := meta.RuntimeAssetDownloadURL(RuntimeAssetZipName); got != SpxReleaseURLBase+"v3.0.0/"+RuntimeAssetZipName {
+		t.Fatalf("runtime asset download url = %q, want %q", got, SpxReleaseURLBase+"v3.0.0/"+RuntimeAssetZipName)
 	}
 }
 
 func TestReleaseMetaForRuntimeVersionMapped(t *testing.T) {
-	meta := ReleaseMetaForRuntimeVersion("2.2.0")
-	if meta.SPXVersion != "v2.0.0" {
-		t.Fatalf("spx version = %q, want %q", meta.SPXVersion, "v2.0.0")
+	meta := ReleaseMetaForRuntimeVersion("2.2.6")
+	if meta.SPXVersion != "v3.0.0" {
+		t.Fatalf("spx version = %q, want %q", meta.SPXVersion, "v3.0.0")
 	}
-	if got := meta.RuntimeAssetDownloadURL(RuntimeAssetZipName); got != SpxReleaseURLBase+"v2.0.0/"+RuntimeAssetZipName {
-		t.Fatalf("runtime asset download url = %q, want %q", got, SpxReleaseURLBase+"v2.0.0/"+RuntimeAssetZipName)
+	if got := meta.RuntimeAssetDownloadURL(RuntimeAssetZipName); got != SpxReleaseURLBase+"v3.0.0/"+RuntimeAssetZipName {
+		t.Fatalf("runtime asset download url = %q, want %q", got, SpxReleaseURLBase+"v3.0.0/"+RuntimeAssetZipName)
 	}
 }
 
 func TestDefaultReleaseMetaUsesLatestSPXVersionForRuntimeAssets(t *testing.T) {
 	meta := DefaultReleaseMeta()
-	if meta.SPXVersion != "v2.0.4" {
-		t.Fatalf("spx version = %q, want %q", meta.SPXVersion, "v2.0.4")
+	if meta.SPXVersion != "v3.0.0" {
+		t.Fatalf("spx version = %q, want %q", meta.SPXVersion, "v3.0.0")
 	}
-	if meta.Runtime.Version != "2.2.4" {
-		t.Fatalf("runtime version = %q, want %q", meta.Runtime.Version, "2.2.4")
+	if meta.Runtime.Version != "2.2.6" {
+		t.Fatalf("runtime version = %q, want %q", meta.Runtime.Version, "2.2.6")
 	}
-	if got := meta.RuntimeAssetDownloadURL(RuntimeAssetZipName); got != SpxReleaseURLBase+"v2.0.4/"+RuntimeAssetZipName {
-		t.Fatalf("runtime asset download url = %q, want %q", got, SpxReleaseURLBase+"v2.0.4/"+RuntimeAssetZipName)
+	if got := meta.RuntimeAssetDownloadURL(RuntimeAssetZipName); got != SpxReleaseURLBase+"v3.0.0/"+RuntimeAssetZipName {
+		t.Fatalf("runtime asset download url = %q, want %q", got, SpxReleaseURLBase+"v3.0.0/"+RuntimeAssetZipName)
 	}
 }
 

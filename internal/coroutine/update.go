@@ -20,8 +20,8 @@ import (
 	sdebug "runtime/debug"
 	stime "time"
 
-	"github.com/goplus/spx/v2/internal/log"
-	"github.com/goplus/spx/v2/internal/time"
+	"github.com/goplus/spx/v3/internal/log"
+	"github.com/goplus/spx/v3/internal/time"
 )
 
 type updateState struct {

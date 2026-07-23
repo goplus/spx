@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/goplus/spx/v2/internal/scaffold"
+	"github.com/goplus/spx/v3/internal/scaffold"
 )
 
 func main() {

@@ -20,7 +20,7 @@ import (
 	"math"
 	"testing"
 
-	coreproject "github.com/goplus/spx/v2/internal/core/project"
+	coreproject "github.com/goplus/spx/v3/internal/core/project"
 )
 
 func newTestTransformSprite(x, y float64) *SpriteImpl {

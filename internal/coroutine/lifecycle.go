@@ -23,7 +23,7 @@ import (
 	"sync"
 	stime "time"
 
-	"github.com/goplus/spx/v2/internal/debug"
+	"github.com/goplus/spx/v3/internal/debug"
 	"github.com/petermattis/goid"
 )
 

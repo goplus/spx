@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	builderai "github.com/goplus/spx/v2/cmd/spx/internal/command/builderai"
+	builderai "github.com/goplus/spx/v3/cmd/spx/internal/command/builderai"
 )
 
 func TestAdaptGoModAddsLocalReplaceForGeneratedGoMod(t *testing.T) {
@@ -46,7 +46,7 @@ func TestAdaptGoModRepairsStaleLocalReplacePath(t *testing.T) {
 	targetDir := setupAdaptGoModFixture(t)
 
 	goModPath := filepath.Join(targetDir, "go.mod")
-	content := "module github.com/goplus/spxdemo\n\ngo 1.25.0\n\nreplace github.com/goplus/spx/v2 => ../../..\n"
+	content := "module github.com/goplus/spxdemo\n\ngo 1.25.0\n\nreplace github.com/goplus/spx/v3 => ../../..\n"
 	if err := os.WriteFile(goModPath, []byte(content), 0o644); err != nil {
 		t.Fatalf("WriteFile(go.mod) returned error: %v", err)
 	}
@@ -61,17 +61,17 @@ func TestAdaptGoModRepairsStaleLocalReplacePath(t *testing.T) {
 }
 
 func TestEnsureSpxModuleReplaceRepairsIndentedReplaceBlock(t *testing.T) {
-	content := "module github.com/goplus/spxdemo\n\ngo 1.25.0\n\nreplace (\n\tgithub.com/goplus/spx/v2 => ../../..\n)\n"
+	content := "module github.com/goplus/spxdemo\n\ngo 1.25.0\n\nreplace (\n\tgithub.com/goplus/spx/v3 => ../../..\n)\n"
 
 	updated := ensureSpxModuleReplace(content, "../..")
 
 	if strings.Contains(updated, "../../..") {
 		t.Fatalf("updated content = %q, stale replace path still present", updated)
 	}
-	if !strings.Contains(updated, "\tgithub.com/goplus/spx/v2 => ../..") {
+	if !strings.Contains(updated, "\tgithub.com/goplus/spx/v3 => ../..") {
 		t.Fatalf("updated content = %q, want repaired indented replace path ../..", updated)
 	}
-	if count := strings.Count(updated, "github.com/goplus/spx/v2 =>"); count != 1 {
+	if count := strings.Count(updated, "github.com/goplus/spx/v3 =>"); count != 1 {
 		t.Fatalf("updated content has %d replace directives, want 1", count)
 	}
 }
@@ -80,7 +80,7 @@ func TestEnsureSpxModuleReplacePreservesTrailingBlankLinesAndCRLF(t *testing.T) 
 	content := "module github.com/goplus/spxdemo\r\n\r\ngo 1.25.0\r\n\r\n"
 
 	updated := ensureSpxModuleReplace(content, "../..")
-	want := content + "replace github.com/goplus/spx/v2 => ../..\r\n"
+	want := content + "replace github.com/goplus/spx/v3 => ../..\r\n"
 	if updated != want {
 		t.Fatalf("updated content = %q, want %q", updated, want)
 	}
