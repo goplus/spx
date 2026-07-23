@@ -20,9 +20,9 @@ import (
 	"fmt"
 	stdtime "time"
 
-	"github.com/goplus/spx/v2/internal/engine/profiler"
-	itime "github.com/goplus/spx/v2/internal/time"
-	"github.com/goplus/spx/v2/internal/ui"
+	"github.com/goplus/spx/v3/internal/engine/profiler"
+	itime "github.com/goplus/spx/v3/internal/time"
+	"github.com/goplus/spx/v3/internal/ui"
 )
 
 func (p *Game) showDebugPanel() {

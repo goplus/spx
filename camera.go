@@ -18,8 +18,8 @@ package spx
 
 import (
 	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v2/internal/engine"
-	spxlog "github.com/goplus/spx/v2/internal/log"
+	"github.com/goplus/spx/v3/internal/engine"
+	spxlog "github.com/goplus/spx/v3/internal/log"
 )
 
 type side int

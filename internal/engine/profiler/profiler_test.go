@@ -19,7 +19,7 @@ package profiler
 import (
 	"testing"
 
-	itime "github.com/goplus/spx/v2/internal/time"
+	itime "github.com/goplus/spx/v3/internal/time"
 )
 
 func TestCalcfpsRebasesAfterEngineTimeRestart(t *testing.T) {

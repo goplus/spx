@@ -21,14 +21,14 @@ import (
 	"sync"
 	stime "time"
 
-	"github.com/goplus/spx/v2/internal/engine/platform"
-	"github.com/goplus/spx/v2/internal/engine/profiler"
-	"github.com/goplus/spx/v2/internal/enginewrap"
-	gde "github.com/goplus/spx/v2/internal/gdengine"
-	spxlog "github.com/goplus/spx/v2/internal/log"
-	"github.com/goplus/spx/v2/internal/time"
+	"github.com/goplus/spx/v3/internal/engine/platform"
+	"github.com/goplus/spx/v3/internal/engine/profiler"
+	"github.com/goplus/spx/v3/internal/enginewrap"
+	gde "github.com/goplus/spx/v3/internal/gdengine"
+	spxlog "github.com/goplus/spx/v3/internal/log"
+	"github.com/goplus/spx/v3/internal/time"
 
-	gdx "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
+	gdx "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
 // Shared engine managers.

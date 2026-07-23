@@ -23,7 +23,7 @@ import (
 	"sync/atomic"
 	stime "time"
 
-	"github.com/goplus/spx/v2/internal/time"
+	"github.com/goplus/spx/v3/internal/time"
 )
 
 // ThreadObj is the owner associated with a Thread. String values and owners

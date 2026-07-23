@@ -22,10 +22,10 @@ import (
 	"os"
 	"reflect"
 
-	spxfs "github.com/goplus/spx/v2/fs"
-	coreproject "github.com/goplus/spx/v2/internal/core/project"
-	"github.com/goplus/spx/v2/internal/engine"
-	spxlog "github.com/goplus/spx/v2/internal/log"
+	spxfs "github.com/goplus/spx/v3/fs"
+	coreproject "github.com/goplus/spx/v3/internal/core/project"
+	"github.com/goplus/spx/v3/internal/engine"
+	spxlog "github.com/goplus/spx/v3/internal/log"
 )
 
 type gameBuilder struct {

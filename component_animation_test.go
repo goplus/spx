@@ -20,9 +20,9 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
-	internalaudio "github.com/goplus/spx/v2/internal/audio"
-	coreproject "github.com/goplus/spx/v2/internal/core/project"
-	"github.com/goplus/spx/v2/internal/engine"
+	internalaudio "github.com/goplus/spx/v3/internal/audio"
+	coreproject "github.com/goplus/spx/v3/internal/core/project"
+	"github.com/goplus/spx/v3/internal/engine"
 )
 
 func lastOnPlayPlaybackID(state *animState) int64 {

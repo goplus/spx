@@ -90,7 +90,7 @@ import (
 	"unsafe"
 
 	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v2/pkg/spx/pkg/engine"
+	"github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
 type Uint64T C.uint64_t

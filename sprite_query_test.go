@@ -20,9 +20,9 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
-	internalengine "github.com/goplus/spx/v2/internal/engine"
-	"github.com/goplus/spx/v2/internal/enginewrap"
-	pkgengine "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
+	internalengine "github.com/goplus/spx/v3/internal/engine"
+	"github.com/goplus/spx/v3/internal/enginewrap"
+	pkgengine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
 type touchingSyncSpriteMgr struct {

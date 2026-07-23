@@ -22,8 +22,8 @@ import (
 	"github.com/goplus/ixgo"
 	"github.com/goplus/ixgo/xgobuild"
 	"github.com/goplus/mod/modfile"
-	"github.com/goplus/spx/v2/cmd/ispx/internal/ispxai"
-	"github.com/goplus/spx/v2/pkg/ispx"
+	"github.com/goplus/spx/v3/cmd/ispx/internal/ispxai"
+	"github.com/goplus/spx/v3/pkg/ispx"
 )
 
 func init() {
@@ -32,7 +32,7 @@ func init() {
 		Ext:      ".spx",
 		Class:    "Game",
 		Works:    []*modfile.Class{{Ext: ".spx", Class: "SpriteImpl", Embedded: true}},
-		PkgPaths: []string{"github.com/goplus/spx/v2", "math"},
+		PkgPaths: []string{"github.com/goplus/spx/v3", "math"},
 		Import:   []*modfile.Import{{Name: "ai", Path: ispxai.ModulePath}},
 	})
 }

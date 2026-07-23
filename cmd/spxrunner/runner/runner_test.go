@@ -28,12 +28,12 @@ func TestEnsureGoModUsesExplicitVersionFromFixedTemplate(t *testing.T) {
 
 go 1.25.0
 
-require github.com/goplus/spx/v2 v0.0.0-test //xgo:class
+require github.com/goplus/spx/v3 v0.0.0-test //xgo:class
 `)
 }
 
 func TestEnsureGoModUsesExplicitVersionFromCRLFTemplate(t *testing.T) {
-	testEnsureGoModUsesExplicitVersion(t, "module github.com/goplus/spxdemo\r\n\r\ngo 1.25.0\r\n\r\nrequire github.com/goplus/spx/v2 v0.0.0-test //xgo:class\r\n")
+	testEnsureGoModUsesExplicitVersion(t, "module github.com/goplus/spxdemo\r\n\r\ngo 1.25.0\r\n\r\nrequire github.com/goplus/spx/v3 v0.0.0-test //xgo:class\r\n")
 }
 
 func testEnsureGoModUsesExplicitVersion(t *testing.T, template string) {

@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/goplus/spx/v2/internal/coroutine"
+	"github.com/goplus/spx/v3/internal/coroutine"
 )
 
 func TestAbortCoroutinesForWebResetFromCoroutineDoesNotWaitForPeers(t *testing.T) {

@@ -19,7 +19,7 @@
 package engine
 
 import (
-	q "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
+	q "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 
 	"go/constant"
 	"reflect"
@@ -30,11 +30,11 @@ import (
 func init() {
 	ixgo.RegisterPackage(&ixgo.Package{
 		Name: "engine",
-		Path: "github.com/goplus/spx/v2/pkg/spx/pkg/engine",
+		Path: "github.com/goplus/spx/v3/pkg/spx/pkg/engine",
 		Deps: map[string]string{
 			"github.com/goplus/spbase/mathf":                  "mathf",
-			"github.com/goplus/spx/v2/internal/input/keycode": "keycode",
-			"github.com/goplus/spx/v2/internal/log":           "log",
+			"github.com/goplus/spx/v3/internal/input/keycode": "keycode",
+			"github.com/goplus/spx/v3/internal/log":           "log",
 			"math":                                            "math",
 			"reflect":                                         "reflect",
 			"runtime/debug":                                   "debug",

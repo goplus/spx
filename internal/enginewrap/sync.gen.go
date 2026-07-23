@@ -30,7 +30,7 @@ package enginewrap
 
 import (
 	. "github.com/goplus/spbase/mathf"
-	gdx "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
+	gdx "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
 /* // copy these code to dst file

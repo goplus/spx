@@ -21,7 +21,7 @@ import (
 	"strings"
 
 	"github.com/goplus/spbase/mathf"
-	coreproject "github.com/goplus/spx/v2/internal/core/project"
+	coreproject "github.com/goplus/spx/v3/internal/core/project"
 )
 
 type measureShape struct {

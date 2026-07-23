@@ -18,9 +18,9 @@ package spx
 
 import (
 	"github.com/goplus/spbase/mathf"
-	assetutil "github.com/goplus/spx/v2/internal/assets"
-	coreproject "github.com/goplus/spx/v2/internal/core/project"
-	"github.com/goplus/spx/v2/internal/engine"
+	assetutil "github.com/goplus/spx/v3/internal/assets"
+	coreproject "github.com/goplus/spx/v3/internal/core/project"
+	"github.com/goplus/spx/v3/internal/engine"
 )
 
 // costumeSetImage represents metadata for a costume set image.

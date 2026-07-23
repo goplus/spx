@@ -19,7 +19,7 @@ package ffi
 import (
 	"unsafe"
 
-	"github.com/goplus/spx/v2/pkg/spx/pkg/engine"
+	"github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 import "C"
 

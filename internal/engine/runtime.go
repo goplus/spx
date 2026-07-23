@@ -20,8 +20,8 @@ import (
 	"reflect"
 
 	"github.com/goplus/spbase/mathf"
-	spxlog "github.com/goplus/spx/v2/internal/log"
-	gdx "github.com/goplus/spx/v2/pkg/spx/pkg/engine"
+	spxlog "github.com/goplus/spx/v3/internal/log"
+	gdx "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
 type runtimeState struct {

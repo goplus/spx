@@ -26,8 +26,8 @@ import (
 	"path"
 	"strings"
 
-	spxfs "github.com/goplus/spx/v2/fs"
-	"github.com/goplus/spx/v2/internal/engine"
+	spxfs "github.com/goplus/spx/v3/fs"
+	"github.com/goplus/spx/v3/internal/engine"
 )
 
 const packedIndexJSON = "index_pack.json"

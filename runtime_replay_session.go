@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/goplus/spx/v2/internal/engine"
-	inputstate "github.com/goplus/spx/v2/internal/input"
+	"github.com/goplus/spx/v3/internal/engine"
+	inputstate "github.com/goplus/spx/v3/internal/input"
 )
 
 const defaultInputSessionRandomSeed int64 = 1

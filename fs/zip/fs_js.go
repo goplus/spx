@@ -24,7 +24,7 @@ import (
 	"net/http"
 	"syscall"
 
-	"github.com/goplus/spx/v2/fs"
+	"github.com/goplus/spx/v3/fs"
 )
 
 // A FS represents a zip filesystem.

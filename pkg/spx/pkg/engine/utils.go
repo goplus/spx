@@ -19,7 +19,7 @@ package engine
 import (
 	"runtime/debug"
 
-	spxlog "github.com/goplus/spx/v2/internal/log"
+	spxlog "github.com/goplus/spx/v3/internal/log"
 )
 
 func PrintStack() {

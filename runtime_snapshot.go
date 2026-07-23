@@ -16,7 +16,7 @@
 
 package spx
 
-import "github.com/goplus/spx/v2/internal/engine"
+import "github.com/goplus/spx/v3/internal/engine"
 
 // Snapshot runs fn and, if it succeeds, queues a screenshot for the end of the
 // current engine frame. Without an active game, the request is dispatched

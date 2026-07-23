@@ -20,9 +20,9 @@ import (
 	"context"
 	stdtime "time"
 
-	"github.com/goplus/spx/v2/internal/coroutine"
-	"github.com/goplus/spx/v2/internal/engine/profiler"
-	itime "github.com/goplus/spx/v2/internal/time"
+	"github.com/goplus/spx/v3/internal/coroutine"
+	"github.com/goplus/spx/v3/internal/engine/profiler"
+	itime "github.com/goplus/spx/v3/internal/time"
 )
 
 var (

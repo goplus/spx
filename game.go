@@ -21,18 +21,18 @@ import (
 	"sync"
 	"time"
 
-	spxfs "github.com/goplus/spx/v2/fs"
-	_ "github.com/goplus/spx/v2/fs/asset"
-	_ "github.com/goplus/spx/v2/fs/zip"
+	spxfs "github.com/goplus/spx/v3/fs"
+	_ "github.com/goplus/spx/v3/fs/asset"
+	_ "github.com/goplus/spx/v3/fs/zip"
 
-	"github.com/goplus/spx/v2/internal/audio"
-	"github.com/goplus/spx/v2/internal/base/collision"
-	corestate "github.com/goplus/spx/v2/internal/core/state"
-	"github.com/goplus/spx/v2/internal/coroutine"
-	"github.com/goplus/spx/v2/internal/engine"
-	spxlog "github.com/goplus/spx/v2/internal/log"
-	itime "github.com/goplus/spx/v2/internal/time"
-	"github.com/goplus/spx/v2/internal/ui"
+	"github.com/goplus/spx/v3/internal/audio"
+	"github.com/goplus/spx/v3/internal/base/collision"
+	corestate "github.com/goplus/spx/v3/internal/core/state"
+	"github.com/goplus/spx/v3/internal/coroutine"
+	"github.com/goplus/spx/v3/internal/engine"
+	spxlog "github.com/goplus/spx/v3/internal/log"
+	itime "github.com/goplus/spx/v3/internal/time"
+	"github.com/goplus/spx/v3/internal/ui"
 )
 
 const (

@@ -20,9 +20,9 @@ import (
 	"testing"
 	"time"
 
-	internalaudio "github.com/goplus/spx/v2/internal/audio"
-	internalengine "github.com/goplus/spx/v2/internal/engine"
-	spxapi "github.com/goplus/spx/v2/pkg/spx"
+	internalaudio "github.com/goplus/spx/v3/internal/audio"
+	internalengine "github.com/goplus/spx/v3/internal/engine"
+	spxapi "github.com/goplus/spx/v3/pkg/spx"
 )
 
 type fakeAudioBackend struct {

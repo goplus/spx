@@ -19,7 +19,7 @@ package asset
 import (
 	"io"
 
-	"github.com/goplus/spx/v2/fs"
+	"github.com/goplus/spx/v3/fs"
 )
 
 type FS struct {

@@ -16,7 +16,7 @@
 
 package spx
 
-import "github.com/goplus/spx/v2/internal/engine"
+import "github.com/goplus/spx/v3/internal/engine"
 
 // IsRunWithoutScreenRefresh reports whether the current coroutine is in
 // Scratch-style "run without screen refresh" mode.

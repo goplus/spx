@@ -22,10 +22,10 @@ import (
 	"syscall"
 
 	"github.com/goplus/spbase/mathf"
-	coreproject "github.com/goplus/spx/v2/internal/core/project"
-	spxlog "github.com/goplus/spx/v2/internal/log"
-	"github.com/goplus/spx/v2/internal/tools"
-	"github.com/goplus/spx/v2/internal/ui"
+	coreproject "github.com/goplus/spx/v3/internal/core/project"
+	spxlog "github.com/goplus/spx/v3/internal/log"
+	"github.com/goplus/spx/v3/internal/tools"
+	"github.com/goplus/spx/v3/internal/ui"
 )
 
 // -----------------------------------------------------------------------------

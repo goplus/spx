@@ -20,7 +20,7 @@ import (
 	"errors"
 	"sync"
 
-	itime "github.com/goplus/spx/v2/internal/time"
+	itime "github.com/goplus/spx/v3/internal/time"
 )
 
 // CaptureRequest identifies one end-of-frame screenshot.

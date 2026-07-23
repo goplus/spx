@@ -26,8 +26,8 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
-	spxfs "github.com/goplus/spx/v2/fs"
-	_ "github.com/goplus/spx/v2/fs/asset"
+	spxfs "github.com/goplus/spx/v3/fs"
+	_ "github.com/goplus/spx/v3/fs/asset"
 )
 
 type fakeGdDir struct {

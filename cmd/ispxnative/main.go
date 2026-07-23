@@ -24,7 +24,7 @@ import (
 	"path/filepath"
 	_ "unsafe"
 
-	"github.com/goplus/spx/v2/pkg/ispx"
+	"github.com/goplus/spx/v3/pkg/ispx"
 )
 
 func main() {

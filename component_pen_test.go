@@ -4,9 +4,9 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
-	coreproject "github.com/goplus/spx/v2/internal/core/project"
-	"github.com/goplus/spx/v2/internal/enginewrap"
-	"github.com/goplus/spx/v2/pkg/spx/pkg/engine"
+	coreproject "github.com/goplus/spx/v3/internal/core/project"
+	"github.com/goplus/spx/v3/internal/enginewrap"
+	"github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
 type spyPenMgr struct {

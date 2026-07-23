@@ -22,7 +22,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/goplus/spx/v2/internal/base/licenseheader"
+	"github.com/goplus/spx/v3/internal/base/licenseheader"
 )
 
 func main() {

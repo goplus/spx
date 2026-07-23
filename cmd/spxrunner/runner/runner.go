@@ -45,8 +45,8 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/goplus/spx/v2/internal/base/fileutil"
-	"github.com/goplus/spx/v2/internal/scaffold"
+	"github.com/goplus/spx/v3/internal/base/fileutil"
+	"github.com/goplus/spx/v3/internal/scaffold"
 )
 
 // RuntimeOptions holds runtime configuration options
@@ -80,7 +80,7 @@ type Runner struct {
 	GOARCH string
 
 	// Runner version (same as spx since runner is a subpackage of spx)
-	RunnerVersion string // Runner version (e.g., "latest", "v2.0.0")
+	RunnerVersion string // Runner version (e.g., "latest", "v3.0.0")
 	ReleaseMeta   ReleaseMeta
 }
 
@@ -453,8 +453,8 @@ func (r *Runner) ensureGoxMod() error {
 	return nil
 }
 
-// SpxModule is the SPX v2 module path
-const SpxModule = "github.com/goplus/spx/v2"
+// SpxModule is the SPX v3 module path.
+const SpxModule = "github.com/goplus/spx/v3"
 
 func applyRunnerVersionToGoModTemplate(content, version string) string {
 	if version == "" || version == "latest" {

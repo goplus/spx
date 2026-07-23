@@ -17,10 +17,10 @@
 package spx
 
 import (
-	"github.com/goplus/spx/v2/internal/base/sliceutil"
-	"github.com/goplus/spx/v2/internal/engine"
-	spxlog "github.com/goplus/spx/v2/internal/log"
-	itime "github.com/goplus/spx/v2/internal/time"
+	"github.com/goplus/spx/v3/internal/base/sliceutil"
+	"github.com/goplus/spx/v3/internal/engine"
+	spxlog "github.com/goplus/spx/v3/internal/log"
+	itime "github.com/goplus/spx/v3/internal/time"
 )
 
 // shapeManager manages the lifecycle of all runtime shapes.

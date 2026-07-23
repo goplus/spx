@@ -25,7 +25,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/goplus/spx/v2/internal/base/fileutil"
+	"github.com/goplus/spx/v3/internal/base/fileutil"
 )
 
 var errFileFound = errors.New("file found")

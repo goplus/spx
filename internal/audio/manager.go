@@ -19,7 +19,7 @@ package audio
 import (
 	"math"
 
-	"github.com/goplus/spx/v2/internal/engine"
+	"github.com/goplus/spx/v3/internal/engine"
 )
 
 const scratchPitchStepsPerOctave = 120

@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/goplus/spx/v2/internal/engine/platform"
+	"github.com/goplus/spx/v3/internal/engine/platform"
 )
 
 func TestUpdateReadsGCStatsOnlyWhenPerfDebugEnabled(t *testing.T) {

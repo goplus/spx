@@ -23,7 +23,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/goplus/spx/v2/internal/release"
+	"github.com/goplus/spx/v3/internal/release"
 )
 
 func TestParseEngineDownloadArgsDefault(t *testing.T) {

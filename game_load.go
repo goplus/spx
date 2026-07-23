@@ -21,11 +21,11 @@ import (
 	"reflect"
 	"unsafe"
 
-	coreproject "github.com/goplus/spx/v2/internal/core/project"
-	"github.com/goplus/spx/v2/internal/engine"
-	"github.com/goplus/spx/v2/internal/engine/platform"
-	spxlog "github.com/goplus/spx/v2/internal/log"
-	"github.com/goplus/spx/v2/internal/ui"
+	coreproject "github.com/goplus/spx/v3/internal/core/project"
+	"github.com/goplus/spx/v3/internal/engine"
+	"github.com/goplus/spx/v3/internal/engine/platform"
+	spxlog "github.com/goplus/spx/v3/internal/log"
+	"github.com/goplus/spx/v3/internal/ui"
 )
 
 func (p *Game) loadSprite(sprite Sprite, name string, gamer reflect.Value) error {

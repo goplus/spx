@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Release tag (for example, v2.0.1)'
+        description: 'Release tag (for example, v3.0.0)'
         required: true
-        default: 'v2.0.1'
+        default: 'v3.0.0'
       platforms:
         description: 'Platforms to build (comma-separated: all,runtime-assets,web,macos,windows,linux)'
         required: true

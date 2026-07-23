@@ -20,12 +20,12 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/goplus/spx/v2/internal/cmd/buildctl/dockercmd"
-	"github.com/goplus/spx/v2/internal/cmd/buildctl/engine"
-	"github.com/goplus/spx/v2/internal/cmd/buildctl/runtimecmd"
-	"github.com/goplus/spx/v2/internal/cmd/buildctl/shared"
-	toolpkg "github.com/goplus/spx/v2/internal/cmd/buildctl/tool"
-	"github.com/goplus/spx/v2/internal/cmd/buildctl/workflow"
+	"github.com/goplus/spx/v3/internal/cmd/buildctl/dockercmd"
+	"github.com/goplus/spx/v3/internal/cmd/buildctl/engine"
+	"github.com/goplus/spx/v3/internal/cmd/buildctl/runtimecmd"
+	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
+	toolpkg "github.com/goplus/spx/v3/internal/cmd/buildctl/tool"
+	"github.com/goplus/spx/v3/internal/cmd/buildctl/workflow"
 )
 
 func run(args []string) error {

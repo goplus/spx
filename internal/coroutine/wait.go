@@ -17,8 +17,8 @@
 package coroutine
 
 import (
-	"github.com/goplus/spx/v2/internal/engine/platform"
-	"github.com/goplus/spx/v2/internal/time"
+	"github.com/goplus/spx/v3/internal/engine/platform"
+	"github.com/goplus/spx/v3/internal/time"
 )
 
 const (
