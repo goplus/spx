@@ -6,6 +6,8 @@ github.com/goccy/go-yaml v1.19.2 h1:PmFC1S6h8ljIz6gMRBopkjP1TVT7xuwrButHID66PoM=
 github.com/goccy/go-yaml v1.19.2/go.mod h1:XBurs7gK8ATbW4ZPGKgcbrY1Br56PdM69F7LkFRi1kA=
 github.com/google/go-cmp v0.6.0 h1:ofyhxvXcZhMsU5ulbFiLKl/XBFqE1GSq7atu8tAmTRI=
 github.com/google/go-cmp v0.6.0/go.mod h1:17dUlkBOakJ0+DkrSSNjCkIjxS6bF9zb3elmeNGIjoY=
+github.com/goplus/builder/tools/ai v0.0.0-20260507022922-937aacf1cd16 h1:kV12xuUANwfdT5Cz6sHoFFnmASjet5YogDbH+p6kMkE=
+github.com/goplus/builder/tools/ai v0.0.0-20260507022922-937aacf1cd16/go.mod h1:33K6CkdlqvGcnfhp1Q6w75jZ2aPFTWXqJmG/6JwR8/g=
 github.com/goplus/gogen v1.23.5 h1:76w3zmAHI+ECI7bPr0enUd0du9+t1IYyXmp43CbIpSs=
 github.com/goplus/gogen v1.23.5/go.mod h1:Y7ulYW3wonQ3d9er00b0uGFEV/IUZa6okWJZh892ACQ=
 github.com/goplus/ixgo v1.1.1 h1:fwrz6xRxdBd0TVsi/ySMtooolH6gvGpL6PVNPLFu84Q=
@@ -16,6 +18,8 @@ github.com/goplus/reflectx v1.7.2 h1:NXpQ7SzEQKaTdivP3HsHpfLJQC3avhvyYg9ziyR8jPU
 github.com/goplus/reflectx v1.7.2/go.mod h1:EXX8KSPTmnb2W1PfyVkDC0Qwet0lYX2h2/S06Vhwrhw=
 github.com/goplus/spbase v0.1.0 h1:JNZ0D/65DerYyv9/9IfrXHZZbd0WNK0jHiVvgCtZhwY=
 github.com/goplus/spbase v0.1.0/go.mod h1:brnD3OJnHtipqob2IsJ3/QzGBf+eOnqXNnHGKpv1irQ=
+github.com/goplus/spx/v2 v2.0.4 h1:4hyCM5XH3DMRjFeoTxCndrqcFZTeCWHkEicyp7wYTSs=
+github.com/goplus/spx/v2 v2.0.4/go.mod h1:mF2kCvUNw97ku2PYHMEwbCENv24b5EwnlXOLiVMRbHM=
 github.com/goplus/xgo v1.7.5 h1:biSNkiyWe3e+YmOmDRSs1Z6K4RLkLpzN6mTp1WbryAw=
 github.com/goplus/xgo v1.7.5/go.mod h1:TRIPQ1bRVkq1x0+Ve/gWGS+qcb3ACPIZHNcmuiKzYkE=
 github.com/petermattis/goid v0.0.0-20250721140440-ea1c0173183e h1:D0bJD+4O3G4izvrQUmzCL80zazlN7EwJ0PPDhpJWC/I=

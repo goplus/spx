@@ -30,6 +30,11 @@ jobs:
           go generate ./cmd/spx/internal/command/...
           go generate ./pkg/ispx/...
 
+      - name: Run go generate for cmd/ispx
+        shell: bash
+        working-directory: cmd/ispx
+        run: go generate ./...
+
       - name: Ensure working tree is clean
         run: git diff --exit-code
 
