@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       version:
-        description: 'Release version without the leading v (for example, 2.0.1)'
+        description: 'SPX v3 release version without the leading v (for example, 3.0.0)'
         required: true
         type: string
       release_tag:

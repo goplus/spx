@@ -2,7 +2,7 @@ name: Prepare standalone release
 description: Update the shared go.mod template for a standalone release build, reinstall spx, and expose the rebuilt binary path.
 inputs:
   version:
-    description: 'Release version without the leading v (for example, 2.0.1)'
+    description: 'SPX v3 release version without the leading v (for example, 3.0.0)'
     required: true
 outputs:
   spx-bin:
@@ -17,11 +17,18 @@ runs:
     - name: Update template version and install spx
       id: prepare-standalone-release
       shell: bash
+      env:
+        RELEASE_VERSION: ${{ inputs.version }}
       run: |
         set -euo pipefail
         source ./.github/actions/lib/release_platform.sh
 
-        VERSION="v${{ inputs.version }}"
+        if [[ ! "$RELEASE_VERSION" =~ ^3\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]]; then
+          log_error "Invalid SPX v3 release version: $RELEASE_VERSION (expected 3.x.y without a leading v)"
+          exit 1
+        fi
+
+        VERSION="v$RELEASE_VERSION"
         FILE="internal/scaffold/go.mod.template"
 
         if [ ! -f "$FILE" ]; then
