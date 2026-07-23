@@ -84,7 +84,7 @@ func (d localDir) ReadDir(name string) ([]spxfs.DirEntry, error) {
 
 func TestLoadProjectFontsFromSourceDirectory(t *testing.T) {
 	dir := t.TempDir()
-	writeProjectFile(t, dir, "index.json", `{"fontPreferences":"basic chinese, Scratch, default"}`)
+	writeProjectFile(t, dir, "index.json", `{"fontPreferences":["basic chinese", "Scratch", "default"]}`)
 	writeProjectFile(t, dir, "fonts/Scratch/index.json", `{"faces":[{"path":"Scratch.ttf"}]}`)
 	writeProjectFile(t, dir, "fonts/Scratch/Scratch.ttf", "scratch-font")
 	writeProjectFile(t, dir, "fonts/Basic Chinese/index.json", `{"faces":[{"path":"basic.ttf"}]}`)
@@ -109,9 +109,9 @@ func TestLoadProjectFontsFromSourceDirectory(t *testing.T) {
 
 func TestOpenBuilderResourcesUsesPackedFontsCatalog(t *testing.T) {
 	dir := t.TempDir()
-	writeProjectFile(t, dir, "index.json", `{"fontPreferences":"Source"}`)
+	writeProjectFile(t, dir, "index.json", `{"fontPreferences":["Source"]}`)
 	writeProjectFile(t, dir, "index_pack.json", `{
-		"fontPreferences":"Packed, default",
+		"fontPreferences":["Packed", "default"],
 		"fonts":{"Packed":{"faces":[{"path":"packed.ttf"}]}}
 	}`)
 	writeProjectFile(t, dir, "fonts/Packed/packed.ttf", "packed-font")
@@ -134,7 +134,7 @@ func TestOpenBuilderResourcesUsesPackedFontsCatalog(t *testing.T) {
 
 func TestOpenBuilderResourcesScansFontsWhenPackedCatalogMissing(t *testing.T) {
 	dir := t.TempDir()
-	writeProjectFile(t, dir, "index.json", `{"fontPreferences":"Source"}`)
+	writeProjectFile(t, dir, "index.json", `{"fontPreferences":["Source"]}`)
 	writeProjectFile(t, dir, "index_pack.json", `{"zorder":[]}`)
 	writeProjectFile(t, dir, "fonts/Source/index.json", `{"faces":[{"path":"source.ttf"}]}`)
 	writeProjectFile(t, dir, "fonts/Source/source.ttf", "source-font")
@@ -195,17 +195,23 @@ func TestLoadProjectFontsValidation(t *testing.T) {
 	})
 }
 
-func TestParseAndResolveFontPreferences(t *testing.T) {
-	value := ` Scratch, "Basic Chinese", 'Emoji',, unknown, scratch `
-	if want := []string{"Scratch", "Basic Chinese", "Emoji", "", "unknown", "scratch"}; !reflect.DeepEqual(ParseFontPreferences(value), want) {
-		t.Fatalf("ParseFontPreferences() = %#v, want %#v", ParseFontPreferences(value), want)
-	}
+func TestResolveFontPreferences(t *testing.T) {
+	value := []string{"Scratch", "basic chinese", "Emoji", "default"}
 	families := []ProjectFontFamily{{Name: "Scratch"}, {Name: "Basic Chinese"}, {Name: "Emoji"}}
-	if want := []string{"Scratch", "Basic Chinese", "Emoji"}; !reflect.DeepEqual(ResolveFontPreferences(&value, families), want) {
-		t.Fatalf("ResolveFontPreferences() = %#v, want %#v", ResolveFontPreferences(&value, families), want)
+	got, err := ResolveFontPreferences(value, families)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if want := []string{"default"}; !reflect.DeepEqual(ResolveFontPreferences(nil, families), want) {
-		t.Fatalf("nil preferences = %#v, want %#v", ResolveFontPreferences(nil, families), want)
+	if want := []string{"Scratch", "Basic Chinese", "Emoji", "default"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("ResolveFontPreferences() = %#v, want %#v", got, want)
+	}
+	if got, err := ResolveFontPreferences(nil, families); err != nil || !reflect.DeepEqual(got, []string{"default"}) {
+		t.Fatalf("nil preferences = %#v, %v; want default", got, err)
+	}
+	for _, value := range [][]string{{""}, {"unknown"}, {"Scratch", "scratch"}} {
+		if _, err := ResolveFontPreferences(value, families); err == nil {
+			t.Fatalf("ResolveFontPreferences(%#v) succeeded, want validation error", value)
+		}
 	}
 }
 
@@ -407,7 +413,7 @@ func TestRegisterDisplayFonts(t *testing.T) {
 		func(path, family string) {
 			fontFaces = append(fontFaces, FontFaceRegistration{Path: path, Family: family})
 		},
-		func(value string) { preferences = append(preferences, value) },
+		func(value any) { preferences = append(preferences, value.([]string)...) },
 	)
 
 	if !reflect.DeepEqual(defaultFonts, []string{settings.DefaultFontPath}) {
@@ -417,7 +423,7 @@ func TestRegisterDisplayFonts(t *testing.T) {
 		t.Fatalf("registered font faces = %#v, want %#v", fontFaces, settings.FontFaceRegistrations)
 	}
 	if !reflect.DeepEqual(preferences, []string{"default"}) {
-		t.Fatalf("preferences = %#v, want default", preferences)
+		t.Fatalf("preferences = %#v, want default array", preferences)
 	}
 
 }

@@ -1,4 +1,4 @@
-# Web 平台项目字体与 SVG cluster fallback
+# 项目字体与 SVG cluster fallback
 
 ## 设计目标
 
@@ -34,7 +34,7 @@ Family 的 `index.json` 格式如下：
 
 ```json
 {
-  "fontPreferences": "Pixel, \"Basic Chinese\", default"
+  "fontPreferences": ["Pixel", "Basic Chinese", "default"]
 }
 ```
 
@@ -46,9 +46,9 @@ Family 的 `index.json` 格式如下：
 
 1. `index_pack.json` 包含 `fonts` 字段时，以 packed catalog 为准，不扫描目录。
 2. 没有 `index_pack.json` 或 packed index 缺少 `fonts` 字段时，枚举 `assets/fonts/` 的直接子目录。
-3. Family Name 按 ASCII 大小写折叠后必须唯一，不能包含逗号、引号、路径分隔符、控制字符或首尾空白。
+3. Family Name 按 ASCII 大小写折叠后必须唯一，不能为 `default`（任意 ASCII 大小写），且必须是一个目录路径段。
 4. Face 路径必须是 Family 目录内的相对 POSIX 路径，不能为空，也不能通过 `..` 逃逸。
-5. `fontPreferences` 中未知的 Family 会被忽略，剩余 Family 按声明顺序组成回退链。
+5. `fontPreferences` 的每项必须是一个非空且可用的 Family 名称；名称按 ASCII 大小写折叠后不能重复。
 
 项目字体与声音资源使用相同的内容路径和打包流程。内部字体随项目资源打包，配置引用的外部字体也会被 pack 收集。
 
@@ -66,7 +66,7 @@ Godot 侧只在 `SpxResMgr` 中用 `SPX_API` 声明接口；Go、Native、Web br
 
 ## SVG family 与 cluster fallback
 
-SVG 显式声明的 `font-family` 优先于项目全局 `fontPreferences`。显式列表里的未知名称会被跳过；如果没有可用候选，不会继续使用全局列表或系统字体。没有显式 family 时才使用项目全局顺序。
+SVG 显式声明的 `font-family` 优先于项目全局 `fontPreferences`。只会使用有效的自定义 CSS family；generic family 和 system-font keyword 不属于项目 family。显式列表里的未知名称会被跳过；如果没有可用候选，不会继续使用全局列表或系统字体。没有显式 family 时才使用项目全局顺序。若项目 family 与 CSS keyword 冲突（包括 `default`），SVG 中必须引用为带引号的字符串。
 
 fallback 按 extended grapheme cluster 选择字体：
 

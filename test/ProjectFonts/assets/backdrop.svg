@@ -1,17 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="480" height="360" viewBox="0 0 480 360">
   <rect width="480" height="360" rx="24" fill="#f7f4ea"/>
   <rect x="16" y="16" width="448" height="328" rx="20" fill="#fffdf7" stroke="#d7d0bf" stroke-width="2"/>
-  <text x="28" y="41" font-family="default" font-size="22" font-weight="700" fill="#1f2937">Project Font Collection</text>
-  <text x="28" y="60" font-family="default" font-size="11" fill="#64748b">Explicit families + global preferences + cluster fallback</text>
+  <text x="28" y="41" font-family="'default'" font-size="22" font-weight="700" fill="#1f2937">Project Font Collection</text>
+  <text x="28" y="60" font-family="'default'" font-size="11" fill="#64748b">Explicit families + global preferences + cluster fallback</text>
 
-  <text x="28" y="91" font-family="default" font-size="12" font-weight="700" fill="#475569">Sans Serif</text>
-  <text x="28" y="120" font-family="default" font-size="12" font-weight="700" fill="#475569">Serif</text>
-  <text x="28" y="149" font-family="default" font-size="12" font-weight="700" fill="#475569">Handwriting</text>
-  <text x="28" y="178" font-family="default" font-size="12" font-weight="700" fill="#475569">Marker</text>
-  <text x="250" y="91" font-family="default" font-size="12" font-weight="700" fill="#475569">Curly</text>
-  <text x="250" y="120" font-family="default" font-size="12" font-weight="700" fill="#475569">Pixel</text>
-  <text x="250" y="149" font-family="default" font-size="12" font-weight="700" fill="#475569">Scratch</text>
-  <text x="250" y="178" font-family="default" font-size="12" font-weight="700" fill="#475569">Emoji</text>
+  <text x="28" y="91" font-family="'default'" font-size="12" font-weight="700" fill="#475569">Sans Serif</text>
+  <text x="28" y="120" font-family="'default'" font-size="12" font-weight="700" fill="#475569">Serif</text>
+  <text x="28" y="149" font-family="'default'" font-size="12" font-weight="700" fill="#475569">Handwriting</text>
+  <text x="28" y="178" font-family="'default'" font-size="12" font-weight="700" fill="#475569">Marker</text>
+  <text x="250" y="91" font-family="'default'" font-size="12" font-weight="700" fill="#475569">Curly</text>
+  <text x="250" y="120" font-family="'default'" font-size="12" font-weight="700" fill="#475569">Pixel</text>
+  <text x="250" y="149" font-family="'default'" font-size="12" font-weight="700" fill="#475569">Scratch</text>
+  <text x="250" y="178" font-family="'default'" font-size="12" font-weight="700" fill="#475569">Emoji</text>
 
   <g font-size="18" fill="#111827">
     <text x="115" y="92" font-family="'Sans Serif'">Quick 0123</text>
@@ -25,18 +25,18 @@
   </g>
 
   <rect x="24" y="193" width="208" height="79" rx="11" fill="#eef8fa" stroke="#d4e9ed"/>
-  <text x="34" y="211" font-family="default" font-size="10" font-weight="700" fill="#316b75">Global fallback</text>
-  <text x="34" y="225" font-family="default" font-size="8" fill="#64748b">Pixel &gt; Color Emoji &gt; basic-chinese &gt; default</text>
+  <text x="34" y="211" font-family="'default'" font-size="10" font-weight="700" fill="#316b75">Global fallback</text>
+  <text x="34" y="225" font-family="'default'" font-size="8" fill="#64748b">Pixel &gt; Color Emoji &gt; basic-chinese &gt; default</text>
   <text x="34" y="258" font-size="25" fill="#126e82">ABC ❤️ 中文</text>
 
   <rect x="240" y="193" width="216" height="79" rx="11" fill="#fff7ed" stroke="#f0ddc5"/>
-  <text x="250" y="211" font-family="default" font-size="10" font-weight="700" fill="#9a5b18">SVG explicit overrides global</text>
+  <text x="250" y="211" font-family="'default'" font-size="10" font-weight="700" fill="#9a5b18">SVG explicit overrides global</text>
   <text x="250" y="239" font-family='Scratch, "basic-chinese"' font-size="21" fill="#b45309">Hello七牛</text>
-  <text x="250" y="260" font-family="default" font-size="9" fill="#7c6f64">No available font:</text>
+  <text x="250" y="260" font-family="'default'" font-size="9" fill="#7c6f64">No available font:</text>
   <text x="391" y="261" font-family="'Missing Family'" font-size="18" fill="#b91c1c">A</text>
 
   <rect x="24" y="278" width="432" height="61" rx="11" fill="#faf5ff" stroke="#eadcf3"/>
-  <text x="34" y="295" font-family="default" font-size="10" font-weight="700" fill="#6b4b7a">Extended grapheme clusters stay atomic</text>
-  <text x="246" y="295" font-family="default" font-size="8" fill="#7c6f8a">variation selector · combining mark · ZWJ sequence</text>
+  <text x="34" y="295" font-family="'default'" font-size="10" font-weight="700" fill="#6b4b7a">Extended grapheme clusters stay atomic</text>
+  <text x="246" y="295" font-family="'default'" font-size="8" fill="#7c6f8a">variation selector · combining mark · ZWJ sequence</text>
   <text x="34" y="328" font-size="23" fill="#7b3f8c">A❤️B  Cafe&#x0301;  👩‍💻</text>
 </svg>

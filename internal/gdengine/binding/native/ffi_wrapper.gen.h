@@ -750,7 +750,7 @@ void cgo_callfn_GDExtensionSpxResRegisterFontFace(const GDExtensionSpxResRegiste
 	}
 	fn(font_path, family);
 }
-void cgo_callfn_GDExtensionSpxResSetFontPreferences(const GDExtensionSpxResSetFontPreferences fn, GdString preferences) {
+void cgo_callfn_GDExtensionSpxResSetFontPreferences(const GDExtensionSpxResSetFontPreferences fn, GdArray preferences) {
 	if (!fn) {
 		return;
 	}

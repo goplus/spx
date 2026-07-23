@@ -413,7 +413,7 @@ func (*resMgrImpl) ReloadTexture(path string)                        {}
 func (*resMgrImpl) FreeStr(str string)                               {}
 func (*resMgrImpl) SetDefaultFont(font_path string)                  {}
 func (*resMgrImpl) RegisterFontFace(font_path string, family string) {}
-func (*resMgrImpl) SetFontPreferences(preferences string)            {}
+func (*resMgrImpl) SetFontPreferences(preferences gdx.Array)         {}
 
 // ISceneMgr
 func (*sceneMgrImpl) ChangeSceneToFile(path string) {}

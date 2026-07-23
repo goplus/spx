@@ -19,7 +19,6 @@ package project
 import (
 	"math"
 	"slices"
-	"strings"
 
 	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v3/internal/base/defaults"
@@ -83,7 +82,7 @@ func RegisterDisplayFonts(
 	settings DisplaySettings,
 	setDefaultFont func(string),
 	registerFontFace func(string, string),
-	setFontPreferences func(string),
+	setFontPreferences func(any),
 ) {
 	if setDefaultFont != nil && settings.DefaultFontPath != "" {
 		setDefaultFont(settings.DefaultFontPath)
@@ -97,7 +96,7 @@ func RegisterDisplayFonts(
 		}
 	}
 	if setFontPreferences != nil {
-		setFontPreferences(strings.Join(settings.FontPreferences, ","))
+		setFontPreferences(settings.FontPreferences)
 	}
 }
 

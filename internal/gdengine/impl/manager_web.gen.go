@@ -768,8 +768,8 @@ func (pself *resMgr) RegisterFontFace(font_path string, family string) {
 	arg1 := JsFromGdString(family)
 	API.SpxResRegisterFontFace.Invoke(arg0, arg1)
 }
-func (pself *resMgr) SetFontPreferences(preferences string) {
-	arg0 := JsFromGdString(preferences)
+func (pself *resMgr) SetFontPreferences(preferences Array) {
+	arg0 := JsFromGdArray(preferences)
 	API.SpxResSetFontPreferences.Invoke(arg0)
 }
 func (pself *sceneMgr) ChangeSceneToFile(path string) {

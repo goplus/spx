@@ -902,7 +902,7 @@ func (*resMgrImpl) RegisterFontFace(font_path string, family string) {
 		gdx.ResMgr.RegisterFontFace(font_path, family)
 	})
 }
-func (*resMgrImpl) SetFontPreferences(preferences string) {
+func (*resMgrImpl) SetFontPreferences(preferences gdx.Array) {
 	callInMainThread(func() {
 		gdx.ResMgr.SetFontPreferences(preferences)
 	})

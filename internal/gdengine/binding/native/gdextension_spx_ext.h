@@ -349,7 +349,7 @@ typedef void (*GDExtensionSpxResReloadTexture)(GdString path);
 typedef void (*GDExtensionSpxResFreeStr)(GdString str);
 typedef void (*GDExtensionSpxResSetDefaultFont)(GdString font_path);
 typedef void (*GDExtensionSpxResRegisterFontFace)(GdString font_path, GdString family);
-typedef void (*GDExtensionSpxResSetFontPreferences)(GdString preferences);
+typedef void (*GDExtensionSpxResSetFontPreferences)(GdArray preferences);
 // SpxScene
 typedef void (*GDExtensionSpxSceneChangeSceneToFile)(GdString path);
 typedef void (*GDExtensionSpxSceneDestroyAllSprites)();

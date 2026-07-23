@@ -46,7 +46,7 @@ type projectFontCatalog interface {
 	projectFontFamilyNames() (names []string, available bool)
 }
 
-func LoadProjectFonts(fs spxfs.Dir, preferences *string) (ProjectFonts, error) {
+func LoadProjectFonts(fs spxfs.Dir, preferences []string) (ProjectFonts, error) {
 	names, catalogAvailable := projectFontFamilyNamesFromCatalog(fs)
 	if !catalogAvailable {
 		var err error
@@ -87,10 +87,11 @@ func LoadProjectFonts(fs spxfs.Dir, preferences *string) (ProjectFonts, error) {
 		families = append(families, ProjectFontFamily{Name: name, Path: facePath})
 	}
 
-	return ProjectFonts{
-		Families:    families,
-		Preferences: ResolveFontPreferences(preferences, families),
-	}, nil
+	resolvedPreferences, err := ResolveFontPreferences(preferences, families)
+	if err != nil {
+		return ProjectFonts{}, err
+	}
+	return ProjectFonts{Families: families, Preferences: resolvedPreferences}, nil
 }
 
 func verifyFontFace(fs spxfs.Dir, facePath string) error {
@@ -175,11 +176,11 @@ func sortFontFamilyNames(names []string) {
 }
 
 func validateFontFamilyName(name string) (string, error) {
-	if name == "" || strings.TrimSpace(name) != name {
-		return "", fmt.Errorf("font family name %q must be non-empty and have no leading or trailing whitespace", name)
+	if name == "" {
+		return "", fmt.Errorf("font family name must be non-empty")
 	}
-	if strings.ContainsAny(name, ",\"'\\/") {
-		return "", fmt.Errorf("font family name %q contains a forbidden character", name)
+	if strings.ContainsAny(name, "\\/") {
+		return "", fmt.Errorf("font family name %q must be one path segment", name)
 	}
 	for _, r := range name {
 		if r < 0x20 || r == 0x7f {
@@ -211,43 +212,33 @@ func resolveFontFacePath(baseDir, relativePath string) (string, error) {
 	return resolved, nil
 }
 
-func ParseFontPreferences(value string) []string {
-	parts := strings.Split(value, ",")
-	for i, part := range parts {
-		name := strings.TrimSpace(part)
-		if len(name) >= 2 && ((name[0] == '"' && name[len(name)-1] == '"') || (name[0] == '\'' && name[len(name)-1] == '\'')) {
-			name = name[1 : len(name)-1]
-		}
-		parts[i] = name
-	}
-	return parts
-}
-
-func ResolveFontPreferences(value *string, families []ProjectFontFamily) []string {
+func ResolveFontPreferences(value []string, families []ProjectFontFamily) ([]string, error) {
 	if value == nil {
-		return []string{defaultFontFamilyName}
+		return []string{defaultFontFamilyName}, nil
 	}
 	available := make(map[string]string, len(families)+1)
 	available[defaultFontFamilyName] = defaultFontFamilyName
 	for _, family := range families {
 		available[asciiFold(family.Name)] = family.Name
 	}
-	parsed := ParseFontPreferences(*value)
-	resolved := make([]string, 0, len(parsed))
-	seen := make(map[string]struct{}, len(parsed))
-	for _, name := range parsed {
+	resolved := make([]string, 0, len(value))
+	seen := make(map[string]struct{}, len(value))
+	for _, name := range value {
+		if name == "" {
+			return nil, errors.New("font preference must be non-empty")
+		}
 		folded := asciiFold(name)
 		canonical, ok := available[folded]
 		if !ok {
-			continue
+			return nil, fmt.Errorf("font preference %q is not an available font family", name)
 		}
 		if _, ok := seen[folded]; ok {
-			continue
+			return nil, fmt.Errorf("font preference %q is duplicated after ASCII case folding", name)
 		}
 		seen[folded] = struct{}{}
 		resolved = append(resolved, canonical)
 	}
-	return resolved
+	return resolved, nil
 }
 
 func asciiFold(value string) string {

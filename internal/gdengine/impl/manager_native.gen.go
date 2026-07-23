@@ -819,10 +819,15 @@ func (pself *resMgr) RegisterFontFace(font_path string, family string) {
 	defer C.free(unsafe.Pointer(arg1Str))
 	CallResRegisterFontFace(arg0, arg1)
 }
-func (pself *resMgr) SetFontPreferences(preferences string) {
-	arg0Str := C.CString(preferences)
-	arg0 := (GdString)(arg0Str)
-	defer C.free(unsafe.Pointer(arg0Str))
+func (pself *resMgr) SetFontPreferences(preferences Array) {
+	arg0Info := ToGdArrayInfo(preferences)
+	if arg0Info != nil {
+		defer arg0Info.Free()
+	}
+	arg0 := GdArray(nil)
+	if arg0Info != nil {
+		arg0 = arg0Info.Raw()
+	}
 	CallResSetFontPreferences(arg0)
 }
 func (pself *sceneMgr) ChangeSceneToFile(path string) {

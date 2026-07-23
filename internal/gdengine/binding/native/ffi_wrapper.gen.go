@@ -1622,10 +1622,10 @@ func CallResRegisterFontFace(
 
 }
 func CallResSetFontPreferences(
-	preferences GdString,
+	preferences GdArray,
 ) {
 	arg0 := (C.GDExtensionSpxResSetFontPreferences)(api.SpxResSetFontPreferences)
-	arg1 := (C.GdString)(preferences)
+	arg1 := (C.GdArray)(preferences)
 
 	C.cgo_callfn_GDExtensionSpxResSetFontPreferences(arg0, arg1)
 

@@ -199,7 +199,7 @@ type IResMgr interface {
 	FreeStr(str string)
 	SetDefaultFont(font_path string)
 	RegisterFontFace(font_path string, family string)
-	SetFontPreferences(preferences string)
+	SetFontPreferences(preferences Array)
 }
 
 type ISceneMgr interface {
