@@ -405,15 +405,23 @@ func TestRegisterDisplayFonts(t *testing.T) {
 	var defaultFonts []string
 	var fontFaces []FontFaceRegistration
 	var preferences []string
+	var calls []string
 	RegisterDisplayFonts(
 		settings,
-		func(path string) {
-			defaultFonts = append(defaultFonts, path)
+		DisplayFontRegistrar{
+			SetDefaultFont: func(path string) {
+				defaultFonts = append(defaultFonts, path)
+				calls = append(calls, "default")
+			},
+			RegisterFontFace: func(path, family string) {
+				fontFaces = append(fontFaces, FontFaceRegistration{Path: path, Family: family})
+				calls = append(calls, "face:"+family)
+			},
+			SetFontPreferences: func(value []string) {
+				preferences = append(preferences, value...)
+				calls = append(calls, "preferences")
+			},
 		},
-		func(path, family string) {
-			fontFaces = append(fontFaces, FontFaceRegistration{Path: path, Family: family})
-		},
-		func(value any) { preferences = append(preferences, value.([]string)...) },
 	)
 
 	if !reflect.DeepEqual(defaultFonts, []string{settings.DefaultFontPath}) {
@@ -425,7 +433,9 @@ func TestRegisterDisplayFonts(t *testing.T) {
 	if !reflect.DeepEqual(preferences, []string{"default"}) {
 		t.Fatalf("preferences = %#v, want default array", preferences)
 	}
-
+	if want := []string{"default", "face:Latin", "face:Chinese", "preferences"}; !reflect.DeepEqual(calls, want) {
+		t.Fatalf("font registration calls = %#v, want %#v", calls, want)
+	}
 }
 
 func TestAddProjectFonts(t *testing.T) {

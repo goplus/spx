@@ -43,6 +43,15 @@ type FontFaceRegistration struct {
 	Family string
 }
 
+// DisplayFontRegistrar is the engine-facing boundary for applying resolved
+// display font settings. Its typed preference callback keeps project settings
+// independent from the generated engine bridge's generic array parameter.
+type DisplayFontRegistrar struct {
+	SetDefaultFont     func(string)
+	RegisterFontFace   func(string, string)
+	SetFontPreferences func([]string)
+}
+
 func ResolveDisplaySettings(proj *ProjectConfig) DisplaySettings {
 	if proj == nil {
 		proj = &ProjectConfig{}
@@ -78,25 +87,20 @@ func AddProjectFonts(settings *DisplaySettings, fonts ProjectFonts, resolvePath 
 	}
 }
 
-func RegisterDisplayFonts(
-	settings DisplaySettings,
-	setDefaultFont func(string),
-	registerFontFace func(string, string),
-	setFontPreferences func(any),
-) {
-	if setDefaultFont != nil && settings.DefaultFontPath != "" {
-		setDefaultFont(settings.DefaultFontPath)
+func RegisterDisplayFonts(settings DisplaySettings, registrar DisplayFontRegistrar) {
+	if registrar.SetDefaultFont != nil && settings.DefaultFontPath != "" {
+		registrar.SetDefaultFont(settings.DefaultFontPath)
 	}
-	if registerFontFace != nil {
+	if registrar.RegisterFontFace != nil {
 		for _, font := range settings.FontFaceRegistrations {
 			if font.Path == "" || font.Family == "" {
 				continue
 			}
-			registerFontFace(font.Path, font.Family)
+			registrar.RegisterFontFace(font.Path, font.Family)
 		}
 	}
-	if setFontPreferences != nil {
-		setFontPreferences(settings.FontPreferences)
+	if registrar.SetFontPreferences != nil {
+		registrar.SetFontPreferences(settings.FontPreferences)
 	}
 }
 

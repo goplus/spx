@@ -42,18 +42,34 @@ type ProjectFonts struct {
 	Preferences []string
 }
 
+type FontFaceConfig struct {
+	Path string `json:"path"`
+}
+
+type FontFamilyConfig struct {
+	Faces []FontFaceConfig `json:"faces"`
+}
+
 type projectFontCatalog interface {
 	projectFontFamilyNames() (names []string, available bool)
 }
 
 func LoadProjectFonts(fs spxfs.Dir, preferences []string) (ProjectFonts, error) {
-	names, catalogAvailable := projectFontFamilyNamesFromCatalog(fs)
-	if !catalogAvailable {
-		var err error
-		names, err = scanProjectFontFamilyNames(fs)
-		if err != nil {
-			return ProjectFonts{}, err
-		}
+	families, err := loadProjectFontFamilies(fs)
+	if err != nil {
+		return ProjectFonts{}, err
+	}
+	resolvedPreferences, err := ResolveFontPreferences(preferences, families)
+	if err != nil {
+		return ProjectFonts{}, err
+	}
+	return ProjectFonts{Families: families, Preferences: resolvedPreferences}, nil
+}
+
+func loadProjectFontFamilies(fs spxfs.Dir) ([]ProjectFontFamily, error) {
+	names, err := projectFontFamilyNames(fs)
+	if err != nil {
+		return nil, err
 	}
 
 	families := make([]ProjectFontFamily, 0, len(names))
@@ -61,37 +77,47 @@ func LoadProjectFonts(fs spxfs.Dir, preferences []string) (ProjectFonts, error) 
 	for _, name := range names {
 		folded, err := validateFontFamilyName(name)
 		if err != nil {
-			return ProjectFonts{}, err
+			return nil, err
 		}
 		if previous, ok := seen[folded]; ok {
-			return ProjectFonts{}, fmt.Errorf("font family %q conflicts with %q after ASCII case folding", name, previous)
+			return nil, fmt.Errorf("font family %q conflicts with %q after ASCII case folding", name, previous)
 		}
 		seen[folded] = name
 
-		baseDir := path.Join(fontsDir, name)
-		var config FontFamilyConfig
-		if err := LoadJSON(&config, fs, path.Join(baseDir, "index.json")); err != nil {
-			return ProjectFonts{}, fmt.Errorf("load font family %q: %w", name, err)
-		}
-		if len(config.Faces) != 1 {
-			return ProjectFonts{}, fmt.Errorf("font family %q must contain exactly one face, got %d", name, len(config.Faces))
-		}
-
-		facePath, err := resolveFontFacePath(baseDir, config.Faces[0].Path)
+		family, err := loadProjectFontFamily(fs, name)
 		if err != nil {
-			return ProjectFonts{}, fmt.Errorf("font family %q: %w", name, err)
+			return nil, err
 		}
-		if err := verifyFontFace(fs, facePath); err != nil {
-			return ProjectFonts{}, fmt.Errorf("open font face %q for family %q: %w", facePath, name, err)
-		}
-		families = append(families, ProjectFontFamily{Name: name, Path: facePath})
+		families = append(families, family)
+	}
+	return families, nil
+}
+
+func loadProjectFontFamily(fs spxfs.Dir, name string) (ProjectFontFamily, error) {
+	baseDir := path.Join(fontsDir, name)
+	var config FontFamilyConfig
+	if err := LoadJSON(&config, fs, path.Join(baseDir, "index.json")); err != nil {
+		return ProjectFontFamily{}, fmt.Errorf("load font family %q: %w", name, err)
+	}
+	if len(config.Faces) != 1 {
+		return ProjectFontFamily{}, fmt.Errorf("font family %q must contain exactly one face, got %d", name, len(config.Faces))
 	}
 
-	resolvedPreferences, err := ResolveFontPreferences(preferences, families)
+	facePath, err := resolveFontFacePath(baseDir, config.Faces[0].Path)
 	if err != nil {
-		return ProjectFonts{}, err
+		return ProjectFontFamily{}, fmt.Errorf("font family %q: %w", name, err)
 	}
-	return ProjectFonts{Families: families, Preferences: resolvedPreferences}, nil
+	if err := verifyFontFace(fs, facePath); err != nil {
+		return ProjectFontFamily{}, fmt.Errorf("open font face %q for family %q: %w", facePath, name, err)
+	}
+	return ProjectFontFamily{Name: name, Path: facePath}, nil
+}
+
+func projectFontFamilyNames(fs spxfs.Dir) ([]string, error) {
+	if names, available := projectFontFamilyNamesFromCatalog(fs); available {
+		return names, nil
+	}
+	return scanProjectFontFamilyNames(fs)
 }
 
 func verifyFontFace(fs spxfs.Dir, facePath string) error {

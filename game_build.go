@@ -79,7 +79,13 @@ func (b *gameBuilder) loadResources() *gameBuilder {
 	resMgr := b.game.engine().ResMgr
 	display := coreproject.ResolveDisplaySettings(&b.proj)
 	coreproject.AddProjectFonts(&display, opened.Fonts, engine.ToAssetPath)
-	coreproject.RegisterDisplayFonts(display, resMgr.SetDefaultFont, resMgr.RegisterFontFace, resMgr.SetFontPreferences)
+	coreproject.RegisterDisplayFonts(display, coreproject.DisplayFontRegistrar{
+		SetDefaultFont:   resMgr.SetDefaultFont,
+		RegisterFontFace: resMgr.RegisterFontFace,
+		SetFontPreferences: func(preferences []string) {
+			resMgr.SetFontPreferences(preferences)
+		},
+	})
 	return b
 }
 

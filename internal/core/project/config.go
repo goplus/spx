@@ -253,11 +253,3 @@ type SoundConfig struct {
 	Rate        int    `json:"rate"`
 	SampleCount int    `json:"sampleCount"`
 }
-
-type FontFaceConfig struct {
-	Path string `json:"path"`
-}
-
-type FontFamilyConfig struct {
-	Faces []FontFaceConfig `json:"faces"`
-}
