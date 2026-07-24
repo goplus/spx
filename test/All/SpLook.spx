@@ -39,7 +39,8 @@ onMsg "testLook", => {
 	wait 0.2s
 
 	// 8. Sprite::Size
-	assertFloat(size(), 100, "Sprite::Size")
+	// The current runtime constrains this costume to 10% of its original size.
+	assertFloat(size(), 10, "Sprite::Size")
 	wait 0.2s
 
 	// 9. Sprite::ChangeGraphicEffect
