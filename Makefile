@@ -212,7 +212,7 @@ generate-runtime: ## Generate runtime registration code
 clean-projects: ## Delete generated artifacts (.temp/, project/, .gdspx_web_server*.pid, go.mod, go.sum, gox.mod) from tutorial/test projects
 	@find -P tutorial test \( \
 		-type d \( -name '.temp' -o -name 'project' \) -prune -print -o \
-		-type f \( -name '.gdspx_web_server*.pid' -o -name 'go.mod' -o -name 'go.sum' -o -name 'gox.mod' \) -print \
+		-type f \( -name '.gdspx_web_server*.pid' -o -name 'go.mod' -o -name 'go.sum' -o -name 'gox.mod' -o -name 'xgo_autogen.go' \) -print \
 	\) | sort | while IFS= read -r path; do \
 		rm -rf "$$path" || exit 1; \
 		echo "removed $$path"; \
