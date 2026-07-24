@@ -2,4 +2,4 @@
 
 package builderai
 
-const Version = "v0.0.0-20260507022922-937aacf1cd16"
+const Version = "v0.0.0-20260724041336-c23d9b241e6b"

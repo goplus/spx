@@ -14,13 +14,34 @@
  * limitations under the License.
  */
 
-package builderai
+package ispxai
 
-import _ "embed"
+import (
+	"fmt"
 
-// Sync Builder AI project templates and versions from repository sources.
-//
-//go:generate cp ../../../../../gox.mod gox.mod
-//go:generate go run ./genversion -source ../../../../../cmd/ispx/go.mod -output version_gen.go
-//go:embed gox.mod
-var defaultGoxModTemplate string
+	"github.com/goplus/ixgo"
+)
+
+const ModulePath = "github.com/goplus/builder/tools/ai"
+
+const patchSource = `
+package ai
+
+import . %q
+
+func XGot_Player_XGox_OnCmd[T any](p *Player, handler func(cmd T) error) {
+	var cmd T
+	PlayerOnCmd_(p, cmd, handler)
+}
+
+func XGot_Player_XGox_OnCmd__0[T any](p *Player, handler func(cmd T) error) {
+	XGot_Player_XGox_OnCmd(p, handler)
+}
+`
+
+func RegisterPatch(ctx *ixgo.Context) error {
+	if err := ctx.RegisterPatch(ModulePath, fmt.Sprintf(patchSource, ModulePath)); err != nil {
+		return fmt.Errorf("failed to register ai patch: %w", err)
+	}
+	return nil
+}
