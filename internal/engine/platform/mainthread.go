@@ -20,7 +20,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/petermattis/goid"
+	"github.com/visualfc/gid"
 )
 
 var mainThreadDepth sync.Map // map[int64]*atomic.Int32
@@ -31,7 +31,7 @@ var mainThreadDepthPool = sync.Pool{
 }
 
 func currentMainThreadDepth() *atomic.Int32 {
-	gid := goid.Get()
+	gid := gid.Get()
 	if depth, ok := mainThreadDepth.Load(gid); ok {
 		return depth.(*atomic.Int32)
 	}
@@ -50,7 +50,7 @@ func EnterMainThread() {
 }
 
 func ExitMainThread() {
-	gid := goid.Get()
+	gid := gid.Get()
 	depth, ok := mainThreadDepth.Load(gid)
 	if !ok {
 		return
@@ -65,7 +65,7 @@ func ExitMainThread() {
 }
 
 func IsMainThread() bool {
-	depth, ok := mainThreadDepth.Load(goid.Get())
+	depth, ok := mainThreadDepth.Load(gid.Get())
 	if !ok {
 		return false
 	}
