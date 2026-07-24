@@ -22,7 +22,7 @@ import (
 	"testing"
 	"testing/fstest"
 
-	spxfs "github.com/goplus/spx/v2/fs"
+	spxfs "github.com/goplus/spx/v3/fs"
 )
 
 func TestNewSpxDir(t *testing.T) {
