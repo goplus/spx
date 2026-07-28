@@ -17,6 +17,7 @@
 package spx
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -79,13 +80,20 @@ func (b *gameBuilder) loadResources() *gameBuilder {
 	resMgr := b.game.engine().ResMgr
 	display := coreproject.ResolveDisplaySettings(&b.proj)
 	coreproject.AddProjectFonts(&display, opened.Fonts, engine.ToAssetPath)
-	coreproject.RegisterDisplayFonts(display, coreproject.DisplayFontRegistrar{
-		SetDefaultFont:   resMgr.SetDefaultFont,
-		RegisterFontFace: resMgr.RegisterFontFace,
-		SetFontPreferences: func(preferences []string) {
-			resMgr.SetFontPreferences(preferences)
-		},
-	})
+	if err := coreproject.ApplyDisplayFonts(display, func(config coreproject.ResolvedFontConfig) error {
+		paths := make([]string, len(config.Faces))
+		families := make([]string, len(config.Faces))
+		for i, face := range config.Faces {
+			paths[i] = face.Path
+			families[i] = face.Family
+		}
+		if message := resMgr.ApplyProjectFonts(config.DefaultPath, paths, families, config.Preferences); message != "" {
+			return errors.New(message)
+		}
+		return nil
+	}); err != nil {
+		b.err = fmt.Errorf("apply project fonts: %w", err)
+	}
 	return b
 }
 

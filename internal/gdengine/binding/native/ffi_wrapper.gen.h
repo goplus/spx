@@ -738,6 +738,12 @@ void cgo_callfn_GDExtensionSpxResFreeStr(const GDExtensionSpxResFreeStr fn, GdSt
 	}
 	fn(str);
 }
+void cgo_callfn_GDExtensionSpxResApplyProjectFonts(const GDExtensionSpxResApplyProjectFonts fn, GdString default_font_path, GdArray font_paths, GdArray font_families, GdArray preferences, GdString* ret_val) {
+	if (!fn) {
+		return;
+	}
+	fn(default_font_path, font_paths, font_families, preferences, ret_val);
+}
 void cgo_callfn_GDExtensionSpxResSetDefaultFont(const GDExtensionSpxResSetDefaultFont fn, GdString font_path) {
 	if (!fn) {
 		return;

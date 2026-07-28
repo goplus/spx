@@ -40,6 +40,12 @@ Family 的 `index.json` 格式如下：
 
 `default` 是唯一的内置 family 名称，对应 SPX 模板中的拉丁字体 `res://engine/fonts/default.ttf`。它是保留名，不能在 `assets/fonts/default` 中重新声明，也不保证中文、Emoji 或 Scratch 字形。未配置 `fontPreferences` 时等价于只使用 `default`。
 
+`fontPreferences` 的输入语义由上层 builder 配置决定，SPX 只消费配置，不负责把这份 JSON 再序列化：
+
+- 字段缺失或为 `null`：使用默认值 `["default"]`。
+- 显式 `[]`：不使用任何全局字体；不会自动补回 `default`。
+- 显式 `["default"]`：只使用模板默认字体。
+
 ## 加载与校验
 
 加载规则如下：
@@ -58,27 +64,33 @@ Family 的 `index.json` 格式如下：
 
 1. `game_build.go` 打开项目资源。
 2. `internal/core/project.LoadProjectFonts()` 从 packed catalog 或 `assets/fonts/` 加载 Font Collection。
-3. `ResolveDisplaySettings()` 设置窗口参数和 `default` 字体，不注入任何兼容 family。
-4. `AddProjectFonts()` 加入项目声明的 Family 和 preference。
-5. `RegisterDisplayFonts()` 设置默认字体、注册项目 Face，并把 preference 同时交给普通 Godot 文本和 LunaSVG。
+3. `ResolveDisplaySettings()` 和 `AddProjectFonts()` 生成完整的字体计划，不注入任何兼容 family。
+4. SPX 通过一次 `ApplyProjectFonts()` 调用把默认字体、所有项目 Face 和 preference 交给 Godot。
+5. Godot 先校验数组、字体数据、Family 和 preference；全部成功后才同时发布普通文本 fallback chain、ThemeDB 默认字体和 LunaSVG registry。任一步失败都保留上一份完整配置。
 
 Godot 侧只在 `SpxResMgr` 中用 `SPX_API` 声明接口；Go、Native、Web bridge 都通过 `make generate` 生成，不手工维护生成文件。
+
+Native bridge 会区分 nil slice 与显式空 slice，并在旧 Godot 模板缺少原子字体接口时返回明确错误，不会调用空函数指针。Web bridge 使用同一份生成接口。
 
 ## SVG family 与 cluster fallback
 
 SVG 显式声明的 `font-family` 优先于项目全局 `fontPreferences`。只会使用有效的自定义 CSS family；generic family 和 system-font keyword 不属于项目 family。显式列表里的未知名称会被跳过；如果没有可用候选，不会继续使用全局列表或系统字体。没有显式 family 时才使用项目全局顺序。若项目 family 与 CSS keyword 冲突（包括 `default`），SVG 中必须引用为带引号的字符串。
 
-fallback 按 extended grapheme cluster 选择字体：
+fallback 按 extended grapheme cluster 选择字体，但 shaping 不按 cluster 拆开：
 
 1. Godot TextServer 返回 UTF-32 character-break 边界。
-2. LunaSVG 保留 combining mark、variation selector、emoji modifier、regional indicator 和 ZWJ 序列的完整 cluster。
-3. 对每个 cluster 按 Family 顺序选择第一个覆盖完整 cluster 的 Face。
-4. 同一个 cluster 不会被拆给多个字体；所有候选都不支持时只绘制一个 missing-glyph box。
-5. cluster 内的 SVG `x/y/dx/dy/rotate` 使用 cluster 起点，避免定位属性再次拆分 cluster。
+2. LunaSVG 以宿主返回的 EGC 边界为主，并用本地 UAX #29 子集守住最低原子性；宿主缺少完整 Unicode break iterator 时也不会拆开 combining mark、variation selector、emoji modifier、regional indicator 或 ZWJ 序列。
+3. 文本先按 bidi visual run、script、language、style 和 SVG positioning 边界切分 shaping run，并显式把 direction、script、`xml:lang`/`lang` 传给 HarfBuzz。
+4. 每个候选 Face 先对完整 shaping run 执行 HarfBuzz；根据返回的 cluster map，把含 `.notdef` 的 EGC 标为该字体不支持。
+5. 对每个 EGC 按 Family 顺序选择第一个完整支持它的 Face，再把连续使用同一 Face 的 EGC 合并并重新 shape，从而保留 joining、ligature、kerning 和 GSUB/GPOS 上下文。
+6. 同一个 EGC 不会被拆给多个字体；所有候选都不支持时只绘制一个 missing-glyph box。glyph cluster 始终映射回原始 UTF-32 offset。
+7. cluster 内的 SVG `x/y/dx/dy/rotate` 使用 cluster 起点，避免定位属性再次拆分 cluster。
 
 彩色字体不依赖特殊 Family 名称。选中的 Face 如果为 shaped glyph 提供 OpenType-SVG 数据，LunaSVG 会直接栅格化该内嵌 SVG；例如项目 Family `Color Emoji` 不需要改名为 `Emoji`。
 
-每个候选 Face 都会先用 Godot 构建中已有的 HarfBuzz 对完整 cluster 做 GSUB/GPOS shaping，再检查结果里是否存在 `.notdef`。因此 `e + combining acute` 可以组合成字体已有的 `é` glyph，`👩‍💻` 等 ZWJ 序列也可以命中字体的连字 glyph；fallback 选择、advance 计算和绘制始终复用同一组 glyph ID 与 position。
+因此 `e + combining acute` 可以组合成字体已有的 `é` glyph，`👩‍💻` 等 ZWJ 序列可以命中连字 glyph；阿拉伯 joining、Indic/东南亚上下文形态、希伯来文方向、拉丁 kerning 和跨 EGC substitution 不会因为 fallback 的原子单位而被逐 cluster shaping 破坏。
+
+LunaSVG registry 保存一份不可变字体数据快照。各渲染线程按 generation 安装完整快照；某个 Face 注册失败时不会把线程推进到半完成 generation，下次渲染会重试。registry 切换会同时清理 HarfBuzz face cache 和已栅格化的 OpenType-SVG glyph cache。
 
 ## reset 行为
 
@@ -108,6 +120,7 @@ SPX reset 会把字体视为项目级状态并完整清理：
 - SVG 显式 family 只解析项目声明，不依赖 runtime 内置映射。
 - `Pixel, Color Emoji, basic-chinese, default` 展示多级全局回退。
 - emoji、中文、combining mark、variation selector 和 ZWJ 序列覆盖 cluster fallback。
+- `SPX 123 | سلام | 456 END` 以逻辑顺序保存，正确视觉顺序为 `SPX 123 | 456 | سلام END`，覆盖 ICU Unicode BiDi visual run、阿拉伯连接形和跨 Family fallback。
 - 不提供 `index_pack.json`，覆盖 source 模式目录扫描。
 
 运行：

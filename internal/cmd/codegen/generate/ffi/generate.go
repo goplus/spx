@@ -341,6 +341,12 @@ func getManagerFuncBody(function *clang.TypedefFunction) string {
 	sb := strings.Builder{}
 	prefixTab := "\t"
 	params := []string{}
+	if function.Name == "GDExtensionSpxResApplyProjectFonts" {
+		sb.WriteString(prefixTab)
+		sb.WriteString("if !HasResApplyProjectFonts() {\n")
+		sb.WriteString(prefixTab + "\treturn \"loaded Godot engine does not support atomic project fonts\"\n")
+		sb.WriteString(prefixTab + "}\n")
+	}
 	args := EffectiveArguments(function)
 	hasSyntheticReturn := function.ReturnType.Name == "void" && HasEffectiveReturn(function)
 	// convert arguments
