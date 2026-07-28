@@ -12,7 +12,7 @@ require (
 	github.com/goplus/xgo v1.7.5
 	github.com/petermattis/goid v0.0.0-20250721140440-ea1c0173183e
 	golang.org/x/mobile v0.0.0-20220518205345-8578da9835fd
-	golang.org/x/mod v0.32.0
+	golang.org/x/mod v0.38.0
 )
 
 require (
@@ -23,5 +23,5 @@ require (
 	github.com/visualfc/gid v0.3.1 // indirect
 	github.com/visualfc/xtype v0.3.2 // indirect
 	golang.org/x/image v0.23.0 // indirect
-	golang.org/x/tools v0.41.0 // indirect
+	golang.org/x/tools v0.47.0 // indirect
 )
