@@ -154,10 +154,12 @@ type GDExtensionInterface struct {
 	SpxResGetImageSize                          GDExtensionSpxResGetImageSize
 	SpxResReadAllText                           GDExtensionSpxResReadAllText
 	SpxResHasFile                               GDExtensionSpxResHasFile
+	SpxResListDirectories                       GDExtensionSpxResListDirectories
 	SpxResReloadTexture                         GDExtensionSpxResReloadTexture
 	SpxResFreeStr                               GDExtensionSpxResFreeStr
 	SpxResSetDefaultFont                        GDExtensionSpxResSetDefaultFont
-	SpxResRegisterSvgFontFace                   GDExtensionSpxResRegisterSvgFontFace
+	SpxResRegisterFontFace                      GDExtensionSpxResRegisterFontFace
+	SpxResSetFontPreferences                    GDExtensionSpxResSetFontPreferences
 	SpxSceneChangeSceneToFile                   GDExtensionSpxSceneChangeSceneToFile
 	SpxSceneDestroyAllSprites                   GDExtensionSpxSceneDestroyAllSprites
 	SpxSceneReloadCurrentScene                  GDExtensionSpxSceneReloadCurrentScene
@@ -484,10 +486,12 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxResGetImageSize = (GDExtensionSpxResGetImageSize)(resolveCFunc("spx_res_get_image_size"))
 	x.SpxResReadAllText = (GDExtensionSpxResReadAllText)(resolveCFunc("spx_res_read_all_text"))
 	x.SpxResHasFile = (GDExtensionSpxResHasFile)(resolveCFunc("spx_res_has_file"))
+	x.SpxResListDirectories = (GDExtensionSpxResListDirectories)(resolveCFunc("spx_res_list_directories"))
 	x.SpxResReloadTexture = (GDExtensionSpxResReloadTexture)(resolveCFunc("spx_res_reload_texture"))
 	x.SpxResFreeStr = (GDExtensionSpxResFreeStr)(resolveCFunc("spx_res_free_str"))
 	x.SpxResSetDefaultFont = (GDExtensionSpxResSetDefaultFont)(resolveCFunc("spx_res_set_default_font"))
-	x.SpxResRegisterSvgFontFace = (GDExtensionSpxResRegisterSvgFontFace)(resolveCFunc("spx_res_register_svg_font_face"))
+	x.SpxResRegisterFontFace = (GDExtensionSpxResRegisterFontFace)(resolveCFunc("spx_res_register_font_face"))
+	x.SpxResSetFontPreferences = (GDExtensionSpxResSetFontPreferences)(resolveCFunc("spx_res_set_font_preferences"))
 	x.SpxSceneChangeSceneToFile = (GDExtensionSpxSceneChangeSceneToFile)(resolveCFunc("spx_scene_change_scene_to_file"))
 	x.SpxSceneDestroyAllSprites = (GDExtensionSpxSceneDestroyAllSprites)(resolveCFunc("spx_scene_destroy_all_sprites"))
 	x.SpxSceneReloadCurrentScene = (GDExtensionSpxSceneReloadCurrentScene)(resolveCFunc("spx_scene_reload_current_scene"))

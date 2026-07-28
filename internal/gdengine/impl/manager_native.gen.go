@@ -785,6 +785,13 @@ func (pself *resMgr) HasFile(p_path string) bool {
 	retValue := CallResHasFile(arg0)
 	return ToBool(retValue)
 }
+func (pself *resMgr) ListDirectories(p_path string) string {
+	arg0Str := C.CString(p_path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	retValue := CallResListDirectories(arg0)
+	return ToString(retValue)
+}
 func (pself *resMgr) ReloadTexture(path string) {
 	arg0Str := C.CString(path)
 	arg0 := (GdString)(arg0Str)
@@ -803,14 +810,25 @@ func (pself *resMgr) SetDefaultFont(font_path string) {
 	defer C.free(unsafe.Pointer(arg0Str))
 	CallResSetDefaultFont(arg0)
 }
-func (pself *resMgr) RegisterSvgFontFace(font_path string, family string) {
+func (pself *resMgr) RegisterFontFace(font_path string, family string) {
 	arg0Str := C.CString(font_path)
 	arg0 := (GdString)(arg0Str)
 	defer C.free(unsafe.Pointer(arg0Str))
 	arg1Str := C.CString(family)
 	arg1 := (GdString)(arg1Str)
 	defer C.free(unsafe.Pointer(arg1Str))
-	CallResRegisterSvgFontFace(arg0, arg1)
+	CallResRegisterFontFace(arg0, arg1)
+}
+func (pself *resMgr) SetFontPreferences(preferences Array) {
+	arg0Info := ToGdArrayInfo(preferences)
+	if arg0Info != nil {
+		defer arg0Info.Free()
+	}
+	arg0 := GdArray(nil)
+	if arg0Info != nil {
+		arg0 = arg0Info.Raw()
+	}
+	CallResSetFontPreferences(arg0)
 }
 func (pself *sceneMgr) ChangeSceneToFile(path string) {
 	arg0Str := C.CString(path)

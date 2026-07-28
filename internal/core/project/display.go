@@ -18,38 +18,38 @@ package project
 
 import (
 	"math"
+	"slices"
 
 	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v3/internal/base/defaults"
 )
 
 type DisplaySettings struct {
-	WindowScale              float64
-	StretchMode              bool
-	Debug                    bool
-	DefaultFontPath          string
-	SVGFontFaceRegistrations []SVGFontFaceRegistration
+	WindowScale           float64
+	StretchMode           bool
+	Debug                 bool
+	DefaultFontPath       string
+	FontFaceRegistrations []FontFaceRegistration
+	FontPreferences       []string
 }
 
-const defaultDisplayFontPath = "res://engine/fonts/CnFont.ttf"
-const defaultSVGFontFamily = "SPX Default"
-const emojiSVGFontFamily = "Emoji"
+// defaultDisplayFontPath selects SPX's small bundled Latin font. Keeping
+// this separate from project font paths makes the reserved default family
+// independent of project-provided CJK fonts.
+const defaultDisplayFontPath = "res://engine/fonts/default.ttf"
 
-type SVGFontFaceRegistration struct {
+type FontFaceRegistration struct {
 	Path   string
 	Family string
 }
 
-var scratchSVGFontRegistrations = []SVGFontFaceRegistration{
-	{Path: "res://engine/fonts/scratch/NotoSans-Medium.ttf", Family: "Sans Serif"},
-	{Path: "res://engine/fonts/scratch/SourceSerifPro-Regular.otf", Family: "Serif"},
-	{Path: "res://engine/fonts/scratch/handlee-regular.ttf", Family: "Handwriting"},
-	{Path: "res://engine/fonts/scratch/Knewave.ttf", Family: "Marker"},
-	{Path: "res://engine/fonts/scratch/Griffy-Regular.ttf", Family: "Curly"},
-	{Path: "res://engine/fonts/scratch/Grand9K-Pixel.ttf", Family: "Pixel"},
-	{Path: "res://engine/fonts/scratch/Scratch.ttf", Family: "Scratch"},
-	{Path: "res://engine/fonts/emoji/TwitterColorEmoji-SVGinOT.ttf", Family: emojiSVGFontFamily},
-	{Path: defaultDisplayFontPath, Family: defaultSVGFontFamily},
+// DisplayFontRegistrar is the engine-facing boundary for applying resolved
+// display font settings. Its typed preference callback keeps project settings
+// independent from the generated engine bridge's generic array parameter.
+type DisplayFontRegistrar struct {
+	SetDefaultFont     func(string)
+	RegisterFontFace   func(string, string)
+	SetFontPreferences func([]string)
 }
 
 func ResolveDisplaySettings(proj *ProjectConfig) DisplaySettings {
@@ -61,43 +61,46 @@ func ResolveDisplaySettings(proj *ProjectConfig) DisplaySettings {
 		windowScale = proj.WindowScale
 	}
 	return DisplaySettings{
-		WindowScale:              windowScale,
-		StretchMode:              proj.StretchMode == nil || *proj.StretchMode,
-		Debug:                    proj.Debug,
-		DefaultFontPath:          defaultDisplayFontPath,
-		SVGFontFaceRegistrations: append([]SVGFontFaceRegistration(nil), scratchSVGFontRegistrations...),
+		WindowScale:     windowScale,
+		StretchMode:     proj.StretchMode == nil || *proj.StretchMode,
+		Debug:           proj.Debug,
+		DefaultFontPath: defaultDisplayFontPath,
+		FontPreferences: []string{defaultFontFamilyName},
 	}
 }
 
-func RegisterDisplayFonts(
-	settings DisplaySettings,
-	setDefaultFont func(string),
-	registerSVGFontFace func(string, string),
-) {
-	if setDefaultFont != nil && settings.DefaultFontPath != "" {
-		setDefaultFont(settings.DefaultFontPath)
-	}
-	if registerSVGFontFace == nil {
+func AddProjectFonts(settings *DisplaySettings, fonts ProjectFonts, resolvePath func(string) string) {
+	if settings == nil {
 		return
 	}
-	// lunasvg resolves one face per family name, so duplicate family registrations
-	// replace each other instead of forming a fallback chain. Keep the last
-	// registration so callers can override the built-in defaults.
-	lastIndex := make(map[string]int, len(settings.SVGFontFaceRegistrations))
-	for i, font := range settings.SVGFontFaceRegistrations {
-		if font.Path == "" || font.Family == "" {
-			continue
+	settings.FontPreferences = append([]string(nil), fonts.Preferences...)
+	settings.FontFaceRegistrations = slices.Grow(settings.FontFaceRegistrations, len(fonts.Families))
+	for _, family := range fonts.Families {
+		fontPath := family.Path
+		if resolvePath != nil {
+			fontPath = resolvePath(fontPath)
 		}
-		lastIndex[font.Family] = i
+		settings.FontFaceRegistrations = append(settings.FontFaceRegistrations, FontFaceRegistration{
+			Path:   fontPath,
+			Family: family.Name,
+		})
 	}
-	for i, font := range settings.SVGFontFaceRegistrations {
-		if font.Path == "" || font.Family == "" {
-			continue
+}
+
+func RegisterDisplayFonts(settings DisplaySettings, registrar DisplayFontRegistrar) {
+	if registrar.SetDefaultFont != nil && settings.DefaultFontPath != "" {
+		registrar.SetDefaultFont(settings.DefaultFontPath)
+	}
+	if registrar.RegisterFontFace != nil {
+		for _, font := range settings.FontFaceRegistrations {
+			if font.Path == "" || font.Family == "" {
+				continue
+			}
+			registrar.RegisterFontFace(font.Path, font.Family)
 		}
-		if lastIndex[font.Family] != i {
-			continue
-		}
-		registerSVGFontFace(font.Path, font.Family)
+	}
+	if registrar.SetFontPreferences != nil {
+		registrar.SetFontPreferences(settings.FontPreferences)
 	}
 }
 

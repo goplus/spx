@@ -74,6 +74,9 @@ type ProjectConfig struct {
 	Run           *Config           `json:"run"`
 	Debug         bool              `json:"debug"`
 	Bgm           string            `json:"bgm"`
+	// FontPreferences is nil when the project does not declare a preference,
+	// which is distinct from an explicitly empty preference list.
+	FontPreferences []string `json:"fontPreferences,omitempty"`
 
 	StretchMode *bool   `json:"stretchMode"`
 	WindowScale float64 `json:"windowScale"`

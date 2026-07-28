@@ -25,8 +25,15 @@ import (
 
 func TestSConsScriptIncludesCommonArgs(t *testing.T) {
 	script := sconsScript([]string{"platform=android target=template_debug arch=arm32"})
-	if !strings.Contains(script, "scons optimize=size") {
-		t.Fatalf("expected common args in script: %s", script)
+	for _, arg := range []string{
+		"scons optimize=size",
+		"module_text_server_adv_enabled=true",
+		"module_text_server_fb_enabled=false",
+		"builtin_harfbuzz=true",
+	} {
+		if !strings.Contains(script, arg) {
+			t.Fatalf("expected %q in script: %s", arg, script)
+		}
 	}
 	if !strings.Contains(script, "platform=android target=template_debug arch=arm32") {
 		t.Fatalf("expected command args in script: %s", script)

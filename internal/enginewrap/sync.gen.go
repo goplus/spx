@@ -875,6 +875,13 @@ func (*resMgrImpl) HasFile(p_path string) bool {
 	})
 	return _ret1
 }
+func (*resMgrImpl) ListDirectories(p_path string) string {
+	var _ret1 string
+	callInMainThread(func() {
+		_ret1 = gdx.ResMgr.ListDirectories(p_path)
+	})
+	return _ret1
+}
 func (*resMgrImpl) ReloadTexture(path string) {
 	callInMainThread(func() {
 		gdx.ResMgr.ReloadTexture(path)
@@ -890,9 +897,14 @@ func (*resMgrImpl) SetDefaultFont(font_path string) {
 		gdx.ResMgr.SetDefaultFont(font_path)
 	})
 }
-func (*resMgrImpl) RegisterSvgFontFace(font_path string, family string) {
+func (*resMgrImpl) RegisterFontFace(font_path string, family string) {
 	callInMainThread(func() {
-		gdx.ResMgr.RegisterSvgFontFace(font_path, family)
+		gdx.ResMgr.RegisterFontFace(font_path, family)
+	})
+}
+func (*resMgrImpl) SetFontPreferences(preferences gdx.Array) {
+	callInMainThread(func() {
+		gdx.ResMgr.SetFontPreferences(preferences)
 	})
 }
 
