@@ -72,7 +72,7 @@ Family 的 `index.json` 格式如下：
 
 Godot 侧只在 `SpxResMgr` 中用 `SPX_API` 声明接口；Go、Native、Web bridge 都通过 `make generate` 生成，不手工维护生成文件。
 
-Native bridge 会区分 nil slice 与显式空 slice，并在旧 Godot 模板缺少原子字体接口时返回明确错误，不会调用空函数指针。Web bridge 使用同一份生成接口。
+Native bridge 会区分 nil slice 与显式空 slice。Web bridge 使用同一份生成接口。
 
 ## SVG family 与 cluster fallback
 
