@@ -804,6 +804,40 @@ func (pself *resMgr) FreeStr(str string) {
 	defer C.free(unsafe.Pointer(arg0Str))
 	CallResFreeStr(arg0)
 }
+func (pself *resMgr) ApplyProjectFonts(default_font_path string, font_paths Array, font_families Array, preferences Array) string {
+	if !HasResApplyProjectFonts() {
+		return "loaded Godot engine does not support atomic project fonts"
+	}
+	arg0Str := C.CString(default_font_path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	arg1Info := ToGdArrayInfo(font_paths)
+	if arg1Info != nil {
+		defer arg1Info.Free()
+	}
+	arg1 := GdArray(nil)
+	if arg1Info != nil {
+		arg1 = arg1Info.Raw()
+	}
+	arg2Info := ToGdArrayInfo(font_families)
+	if arg2Info != nil {
+		defer arg2Info.Free()
+	}
+	arg2 := GdArray(nil)
+	if arg2Info != nil {
+		arg2 = arg2Info.Raw()
+	}
+	arg3Info := ToGdArrayInfo(preferences)
+	if arg3Info != nil {
+		defer arg3Info.Free()
+	}
+	arg3 := GdArray(nil)
+	if arg3Info != nil {
+		arg3 = arg3Info.Raw()
+	}
+	retValue := CallResApplyProjectFonts(arg0, arg1, arg2, arg3)
+	return ToString(retValue)
+}
 func (pself *resMgr) SetDefaultFont(font_path string) {
 	arg0Str := C.CString(font_path)
 	arg0 := (GdString)(arg0Str)

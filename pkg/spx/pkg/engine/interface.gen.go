@@ -197,6 +197,7 @@ type IResMgr interface {
 	ListDirectories(p_path string) string
 	ReloadTexture(path string)
 	FreeStr(str string)
+	ApplyProjectFonts(default_font_path string, font_paths Array, font_families Array, preferences Array) string
 	SetDefaultFont(font_path string)
 	RegisterFontFace(font_path string, family string)
 	SetFontPreferences(preferences Array)

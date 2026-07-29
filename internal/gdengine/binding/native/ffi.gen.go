@@ -157,6 +157,7 @@ type GDExtensionInterface struct {
 	SpxResListDirectories                       GDExtensionSpxResListDirectories
 	SpxResReloadTexture                         GDExtensionSpxResReloadTexture
 	SpxResFreeStr                               GDExtensionSpxResFreeStr
+	SpxResApplyProjectFonts                     GDExtensionSpxResApplyProjectFonts
 	SpxResSetDefaultFont                        GDExtensionSpxResSetDefaultFont
 	SpxResRegisterFontFace                      GDExtensionSpxResRegisterFontFace
 	SpxResSetFontPreferences                    GDExtensionSpxResSetFontPreferences
@@ -489,6 +490,7 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxResListDirectories = (GDExtensionSpxResListDirectories)(resolveCFunc("spx_res_list_directories"))
 	x.SpxResReloadTexture = (GDExtensionSpxResReloadTexture)(resolveCFunc("spx_res_reload_texture"))
 	x.SpxResFreeStr = (GDExtensionSpxResFreeStr)(resolveCFunc("spx_res_free_str"))
+	x.SpxResApplyProjectFonts = (GDExtensionSpxResApplyProjectFonts)(resolveCFunc("spx_res_apply_project_fonts"))
 	x.SpxResSetDefaultFont = (GDExtensionSpxResSetDefaultFont)(resolveCFunc("spx_res_set_default_font"))
 	x.SpxResRegisterFontFace = (GDExtensionSpxResRegisterFontFace)(resolveCFunc("spx_res_register_font_face"))
 	x.SpxResSetFontPreferences = (GDExtensionSpxResSetFontPreferences)(resolveCFunc("spx_res_set_font_preferences"))

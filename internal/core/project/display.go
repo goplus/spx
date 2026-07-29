@@ -17,6 +17,7 @@
 package project
 
 import (
+	"errors"
 	"math"
 	"slices"
 
@@ -25,12 +26,10 @@ import (
 )
 
 type DisplaySettings struct {
-	WindowScale           float64
-	StretchMode           bool
-	Debug                 bool
-	DefaultFontPath       string
-	FontFaceRegistrations []FontFaceRegistration
-	FontPreferences       []string
+	WindowScale float64
+	StretchMode bool
+	Debug       bool
+	Fonts       ResolvedFontConfig
 }
 
 // defaultDisplayFontPath selects SPX's small bundled Latin font. Keeping
@@ -43,14 +42,16 @@ type FontFaceRegistration struct {
 	Family string
 }
 
-// DisplayFontRegistrar is the engine-facing boundary for applying resolved
-// display font settings. Its typed preference callback keeps project settings
-// independent from the generated engine bridge's generic array parameter.
-type DisplayFontRegistrar struct {
-	SetDefaultFont     func(string)
-	RegisterFontFace   func(string, string)
-	SetFontPreferences func([]string)
+// ResolvedFontConfig is the complete, validated project font plan. It crosses
+// the engine boundary in one call so the engine can validate and commit it
+// atomically instead of exposing default-only or partially registered states.
+type ResolvedFontConfig struct {
+	DefaultPath string
+	Faces       []FontFaceRegistration
+	Preferences []string
 }
+
+type ProjectFontApplier func(ResolvedFontConfig) error
 
 func ResolveDisplaySettings(proj *ProjectConfig) DisplaySettings {
 	if proj == nil {
@@ -61,11 +62,13 @@ func ResolveDisplaySettings(proj *ProjectConfig) DisplaySettings {
 		windowScale = proj.WindowScale
 	}
 	return DisplaySettings{
-		WindowScale:     windowScale,
-		StretchMode:     proj.StretchMode == nil || *proj.StretchMode,
-		Debug:           proj.Debug,
-		DefaultFontPath: defaultDisplayFontPath,
-		FontPreferences: []string{defaultFontFamilyName},
+		WindowScale: windowScale,
+		StretchMode: proj.StretchMode == nil || *proj.StretchMode,
+		Debug:       proj.Debug,
+		Fonts: ResolvedFontConfig{
+			DefaultPath: defaultDisplayFontPath,
+			Preferences: []string{defaultFontFamilyName},
+		},
 	}
 }
 
@@ -73,35 +76,34 @@ func AddProjectFonts(settings *DisplaySettings, fonts ProjectFonts, resolvePath 
 	if settings == nil {
 		return
 	}
-	settings.FontPreferences = append([]string(nil), fonts.Preferences...)
-	settings.FontFaceRegistrations = slices.Grow(settings.FontFaceRegistrations, len(fonts.Families))
+	settings.Fonts.Preferences = slices.Clone(fonts.Preferences)
+	faceCount := 0
 	for _, family := range fonts.Families {
-		fontPath := family.Path
-		if resolvePath != nil {
-			fontPath = resolvePath(fontPath)
+		faceCount += len(family.Faces)
+	}
+	settings.Fonts.Faces = slices.Grow(settings.Fonts.Faces, faceCount)
+	for _, family := range fonts.Families {
+		for _, face := range family.Faces {
+			fontPath := face.Path
+			if resolvePath != nil {
+				fontPath = resolvePath(fontPath)
+			}
+			settings.Fonts.Faces = append(settings.Fonts.Faces, FontFaceRegistration{
+				Path:   fontPath,
+				Family: family.Name,
+			})
 		}
-		settings.FontFaceRegistrations = append(settings.FontFaceRegistrations, FontFaceRegistration{
-			Path:   fontPath,
-			Family: family.Name,
-		})
 	}
 }
 
-func RegisterDisplayFonts(settings DisplaySettings, registrar DisplayFontRegistrar) {
-	if registrar.SetDefaultFont != nil && settings.DefaultFontPath != "" {
-		registrar.SetDefaultFont(settings.DefaultFontPath)
+func ApplyDisplayFonts(settings DisplaySettings, apply ProjectFontApplier) error {
+	if apply == nil {
+		return errors.New("project font applier is nil")
 	}
-	if registrar.RegisterFontFace != nil {
-		for _, font := range settings.FontFaceRegistrations {
-			if font.Path == "" || font.Family == "" {
-				continue
-			}
-			registrar.RegisterFontFace(font.Path, font.Family)
-		}
-	}
-	if registrar.SetFontPreferences != nil {
-		registrar.SetFontPreferences(settings.FontPreferences)
-	}
+	config := settings.Fonts
+	config.Faces = slices.Clone(config.Faces)
+	config.Preferences = slices.Clone(config.Preferences)
+	return apply(config)
 }
 
 func ResolveMapConfig(cfg MapConfig, hasTilemap bool, defaultWidth, defaultHeight int) MapConfig {

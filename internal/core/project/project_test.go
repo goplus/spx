@@ -17,6 +17,7 @@
 package project
 
 import (
+	"errors"
 	"flag"
 	"io"
 	"os"
@@ -95,8 +96,8 @@ func TestLoadProjectFontsFromSourceDirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantFamilies := []ProjectFontFamily{
-		{Name: "Basic Chinese", Path: "fonts/Basic Chinese/basic.ttf"},
-		{Name: "Scratch", Path: "fonts/Scratch/Scratch.ttf"},
+		{Name: "Basic Chinese", Faces: []ProjectFontFace{{Path: "fonts/Basic Chinese/basic.ttf"}}},
+		{Name: "Scratch", Faces: []ProjectFontFace{{Path: "fonts/Scratch/Scratch.ttf"}}},
 	}
 	if !reflect.DeepEqual(loaded.Fonts.Families, wantFamilies) {
 		t.Fatalf("families = %#v, want %#v", loaded.Fonts.Families, wantFamilies)
@@ -123,7 +124,7 @@ func TestOpenBuilderResourcesUsesPackedFontsCatalog(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer opened.FS.Close()
-	wantFamilies := []ProjectFontFamily{{Name: "Packed", Path: "fonts/Packed/packed.ttf"}}
+	wantFamilies := []ProjectFontFamily{{Name: "Packed", Faces: []ProjectFontFace{{Path: "fonts/Packed/packed.ttf"}}}}
 	if !reflect.DeepEqual(opened.Fonts.Families, wantFamilies) {
 		t.Fatalf("families = %#v, want packed catalog %#v", opened.Fonts.Families, wantFamilies)
 	}
@@ -144,7 +145,7 @@ func TestOpenBuilderResourcesScansFontsWhenPackedCatalogMissing(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer opened.FS.Close()
-	want := []ProjectFontFamily{{Name: "Source", Path: "fonts/Source/source.ttf"}}
+	want := []ProjectFontFamily{{Name: "Source", Faces: []ProjectFontFace{{Path: "fonts/Source/source.ttf"}}}}
 	if !reflect.DeepEqual(opened.Fonts.Families, want) {
 		t.Fatalf("families = %#v, want source scan %#v", opened.Fonts.Families, want)
 	}
@@ -207,6 +208,9 @@ func TestResolveFontPreferences(t *testing.T) {
 	}
 	if got, err := ResolveFontPreferences(nil, families); err != nil || !reflect.DeepEqual(got, []string{"default"}) {
 		t.Fatalf("nil preferences = %#v, %v; want default", got, err)
+	}
+	if got, err := ResolveFontPreferences([]string{}, families); err != nil || len(got) != 0 || got == nil {
+		t.Fatalf("empty preferences = %#v, %v; want explicit empty slice", got, err)
 	}
 	for _, value := range [][]string{{""}, {"unknown"}, {"Scratch", "scratch"}} {
 		if _, err := ResolveFontPreferences(value, families); err == nil {
@@ -375,11 +379,11 @@ func TestResolveDisplaySettings(t *testing.T) {
 	if settings.WindowScale != 2 || settings.StretchMode || !settings.Debug {
 		t.Fatalf("unexpected settings: %+v", settings)
 	}
-	if settings.DefaultFontPath != "res://engine/fonts/default.ttf" {
-		t.Fatalf("default font path = %q", settings.DefaultFontPath)
+	if settings.Fonts.DefaultPath != "res://engine/fonts/default.ttf" {
+		t.Fatalf("default font path = %q", settings.Fonts.DefaultPath)
 	}
-	if len(settings.FontFaceRegistrations) != 0 {
-		t.Fatalf("built-in font registrations = %+v, want none", settings.FontFaceRegistrations)
+	if len(settings.Fonts.Faces) != 0 {
+		t.Fatalf("built-in font registrations = %+v, want none", settings.Fonts.Faces)
 	}
 
 	settings = ResolveDisplaySettings(&ProjectConfig{})
@@ -391,50 +395,49 @@ func TestResolveDisplaySettings(t *testing.T) {
 	if nilSettings.WindowScale != 1 || !nilSettings.StretchMode || nilSettings.Debug {
 		t.Fatalf("unexpected nil settings defaults: %+v", nilSettings)
 	}
-	if nilSettings.DefaultFontPath != defaultDisplayFontPath {
-		t.Fatalf("nil default font path = %q", nilSettings.DefaultFontPath)
+	if nilSettings.Fonts.DefaultPath != defaultDisplayFontPath {
+		t.Fatalf("nil default font path = %q", nilSettings.Fonts.DefaultPath)
 	}
 }
 
-func TestRegisterDisplayFonts(t *testing.T) {
+func TestApplyDisplayFonts(t *testing.T) {
 	settings := ResolveDisplaySettings(&ProjectConfig{})
-	settings.FontFaceRegistrations = []FontFaceRegistration{
+	settings.Fonts.Faces = []FontFaceRegistration{
 		{Path: "asset://fonts/Latin/font.ttf", Family: "Latin"},
 		{Path: "asset://fonts/Chinese/font.ttf", Family: "Chinese"},
 	}
-	var defaultFonts []string
-	var fontFaces []FontFaceRegistration
-	var preferences []string
-	var calls []string
-	RegisterDisplayFonts(
-		settings,
-		DisplayFontRegistrar{
-			SetDefaultFont: func(path string) {
-				defaultFonts = append(defaultFonts, path)
-				calls = append(calls, "default")
-			},
-			RegisterFontFace: func(path, family string) {
-				fontFaces = append(fontFaces, FontFaceRegistration{Path: path, Family: family})
-				calls = append(calls, "face:"+family)
-			},
-			SetFontPreferences: func(value []string) {
-				preferences = append(preferences, value...)
-				calls = append(calls, "preferences")
-			},
-		},
-	)
+	var applied ResolvedFontConfig
+	if err := ApplyDisplayFonts(settings, func(config ResolvedFontConfig) error {
+		applied = config
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(applied, settings.Fonts) {
+		t.Fatalf("applied font config = %#v, want %#v", applied, settings.Fonts)
+	}
 
-	if !reflect.DeepEqual(defaultFonts, []string{settings.DefaultFontPath}) {
-		t.Fatalf("default fonts = %#v, want %#v", defaultFonts, []string{settings.DefaultFontPath})
+	applied.Faces[0].Path = "mutated"
+	applied.Preferences[0] = "mutated"
+	if settings.Fonts.Faces[0].Path == "mutated" || settings.Fonts.Preferences[0] == "mutated" {
+		t.Fatal("ApplyDisplayFonts passed mutable settings slices to the engine boundary")
 	}
-	if !reflect.DeepEqual(fontFaces, settings.FontFaceRegistrations) {
-		t.Fatalf("registered font faces = %#v, want %#v", fontFaces, settings.FontFaceRegistrations)
+	if err := ApplyDisplayFonts(settings, nil); err == nil {
+		t.Fatal("ApplyDisplayFonts(nil) succeeded")
 	}
-	if !reflect.DeepEqual(preferences, []string{"default"}) {
-		t.Fatalf("preferences = %#v, want default array", preferences)
+	wantErr := errors.New("engine rejected project fonts")
+	if err := ApplyDisplayFonts(settings, func(ResolvedFontConfig) error { return wantErr }); !errors.Is(err, wantErr) {
+		t.Fatalf("ApplyDisplayFonts error = %v, want %v", err, wantErr)
 	}
-	if want := []string{"default", "face:Latin", "face:Chinese", "preferences"}; !reflect.DeepEqual(calls, want) {
-		t.Fatalf("font registration calls = %#v, want %#v", calls, want)
+
+	settings.Fonts.Preferences = []string{}
+	if err := ApplyDisplayFonts(settings, func(config ResolvedFontConfig) error {
+		if config.Preferences == nil {
+			t.Fatal("explicit empty preferences became nil at the engine boundary")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -442,20 +445,20 @@ func TestAddProjectFonts(t *testing.T) {
 	settings := ResolveDisplaySettings(&ProjectConfig{})
 	AddProjectFonts(&settings, ProjectFonts{
 		Families: []ProjectFontFamily{
-			{Name: "Scratch", Path: "fonts/Scratch/font.ttf"},
-			{Name: "Chinese", Path: "fonts/Chinese/font.ttf"},
+			{Name: "Scratch", Faces: []ProjectFontFace{{Path: "fonts/Scratch/font.ttf"}}},
+			{Name: "Chinese", Faces: []ProjectFontFace{{Path: "fonts/Chinese/font.ttf"}}},
 		},
 		Preferences: []string{"Scratch", "Chinese", "default"},
 	}, func(path string) string { return "asset://" + path })
 
-	if got := settings.FontFaceRegistrations; !reflect.DeepEqual(got, []FontFaceRegistration{
+	if got := settings.Fonts.Faces; !reflect.DeepEqual(got, []FontFaceRegistration{
 		{Family: "Scratch", Path: "asset://fonts/Scratch/font.ttf"},
 		{Family: "Chinese", Path: "asset://fonts/Chinese/font.ttf"},
 	}) {
 		t.Fatalf("project registrations = %#v", got)
 	}
-	if want := []string{"Scratch", "Chinese", "default"}; !reflect.DeepEqual(settings.FontPreferences, want) {
-		t.Fatalf("preferences = %#v, want %#v", settings.FontPreferences, want)
+	if want := []string{"Scratch", "Chinese", "default"}; !reflect.DeepEqual(settings.Fonts.Preferences, want) {
+		t.Fatalf("preferences = %#v, want %#v", settings.Fonts.Preferences, want)
 	}
 }
 

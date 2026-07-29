@@ -409,8 +409,11 @@ func (*resMgrImpl) HasFile(p_path string) bool {
 func (*resMgrImpl) ListDirectories(p_path string) string {
 	return ""
 }
-func (*resMgrImpl) ReloadTexture(path string)                        {}
-func (*resMgrImpl) FreeStr(str string)                               {}
+func (*resMgrImpl) ReloadTexture(path string) {}
+func (*resMgrImpl) FreeStr(str string)        {}
+func (*resMgrImpl) ApplyProjectFonts(default_font_path string, font_paths gdx.Array, font_families gdx.Array, preferences gdx.Array) string {
+	return ""
+}
 func (*resMgrImpl) SetDefaultFont(font_path string)                  {}
 func (*resMgrImpl) RegisterFontFace(font_path string, family string) {}
 func (*resMgrImpl) SetFontPreferences(preferences gdx.Array)         {}

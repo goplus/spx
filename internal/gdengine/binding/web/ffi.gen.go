@@ -161,6 +161,7 @@ type GDExtensionInterface struct {
 	SpxResListDirectories                       js.Value
 	SpxResReloadTexture                         js.Value
 	SpxResFreeStr                               js.Value
+	SpxResApplyProjectFonts                     js.Value
 	SpxResSetDefaultFont                        js.Value
 	SpxResRegisterFontFace                      js.Value
 	SpxResSetFontPreferences                    js.Value
@@ -493,6 +494,7 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxResListDirectories = resolveJSFunc("gdspx_res_list_directories")
 	x.SpxResReloadTexture = resolveJSFunc("gdspx_res_reload_texture")
 	x.SpxResFreeStr = resolveJSFunc("gdspx_res_free_str")
+	x.SpxResApplyProjectFonts = resolveJSFunc("gdspx_res_apply_project_fonts")
 	x.SpxResSetDefaultFont = resolveJSFunc("gdspx_res_set_default_font")
 	x.SpxResRegisterFontFace = resolveJSFunc("gdspx_res_register_font_face")
 	x.SpxResSetFontPreferences = resolveJSFunc("gdspx_res_set_font_preferences")

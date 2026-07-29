@@ -33,7 +33,15 @@ const fontsDir = "fonts"
 const defaultFontFamilyName = "default"
 
 type ProjectFontFamily struct {
-	Name string
+	Name  string
+	Faces []ProjectFontFace
+}
+
+// ProjectFontFace keeps a resolved face as a first-class value even while the
+// project format only permits one regular face per family. Future face
+// selection metadata can be added here without flattening the family model
+// again throughout the runtime and engine bridge.
+type ProjectFontFace struct {
 	Path string
 }
 
@@ -110,7 +118,7 @@ func loadProjectFontFamily(fs spxfs.Dir, name string) (ProjectFontFamily, error)
 	if err := verifyFontFace(fs, facePath); err != nil {
 		return ProjectFontFamily{}, fmt.Errorf("open font face %q for family %q: %w", facePath, name, err)
 	}
-	return ProjectFontFamily{Name: name, Path: facePath}, nil
+	return ProjectFontFamily{Name: name, Faces: []ProjectFontFace{{Path: facePath}}}, nil
 }
 
 func projectFontFamilyNames(fs spxfs.Dir) ([]string, error) {

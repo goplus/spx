@@ -759,6 +759,14 @@ func (pself *resMgr) FreeStr(str string) {
 	arg0 := JsFromGdString(str)
 	API.SpxResFreeStr.Invoke(arg0)
 }
+func (pself *resMgr) ApplyProjectFonts(default_font_path string, font_paths Array, font_families Array, preferences Array) string {
+	arg0 := JsFromGdString(default_font_path)
+	arg1 := JsFromGdArray(font_paths)
+	arg2 := JsFromGdArray(font_families)
+	arg3 := JsFromGdArray(preferences)
+	_retValue := API.SpxResApplyProjectFonts.Invoke(arg0, arg1, arg2, arg3)
+	return JsToGdString(_retValue)
+}
 func (pself *resMgr) SetDefaultFont(font_path string) {
 	arg0 := JsFromGdString(font_path)
 	API.SpxResSetDefaultFont.Invoke(arg0)

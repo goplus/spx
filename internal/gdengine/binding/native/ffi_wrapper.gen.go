@@ -222,6 +222,7 @@ type GDExtensionSpxResHasFile C.GDExtensionSpxResHasFile
 type GDExtensionSpxResListDirectories C.GDExtensionSpxResListDirectories
 type GDExtensionSpxResReloadTexture C.GDExtensionSpxResReloadTexture
 type GDExtensionSpxResFreeStr C.GDExtensionSpxResFreeStr
+type GDExtensionSpxResApplyProjectFonts C.GDExtensionSpxResApplyProjectFonts
 type GDExtensionSpxResSetDefaultFont C.GDExtensionSpxResSetDefaultFont
 type GDExtensionSpxResRegisterFontFace C.GDExtensionSpxResRegisterFontFace
 type GDExtensionSpxResSetFontPreferences C.GDExtensionSpxResSetFontPreferences
@@ -1600,6 +1601,22 @@ func CallResFreeStr(
 
 	C.cgo_callfn_GDExtensionSpxResFreeStr(arg0, arg1)
 
+}
+func CallResApplyProjectFonts(
+	default_font_path GdString,
+	font_paths GdArray,
+	font_families GdArray,
+	preferences GdArray,
+) GdString {
+	arg0 := (C.GDExtensionSpxResApplyProjectFonts)(api.SpxResApplyProjectFonts)
+	arg1 := (C.GdString)(default_font_path)
+	arg2 := (C.GdArray)(font_paths)
+	arg3 := (C.GdArray)(font_families)
+	arg4 := (C.GdArray)(preferences)
+	var ret_val C.GdString
+	C.cgo_callfn_GDExtensionSpxResApplyProjectFonts(arg0, arg1, arg2, arg3, arg4, &ret_val)
+
+	return (GdString)(ret_val)
 }
 func CallResSetDefaultFont(
 	font_path GdString,
