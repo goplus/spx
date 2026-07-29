@@ -126,7 +126,8 @@ SPX reset 会把字体视为项目级状态并完整清理：
 运行：
 
 ```bash
-spx rune --path test/ProjectFonts
+spx runnative --path test/ProjectFonts
+spx runweb --path test/ProjectFonts
 ```
 
 ## 当前限制
