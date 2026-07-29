@@ -17,7 +17,6 @@
 package project
 
 import (
-	"errors"
 	"flag"
 	"io"
 	"os"
@@ -379,12 +378,6 @@ func TestResolveDisplaySettings(t *testing.T) {
 	if settings.WindowScale != 2 || settings.StretchMode || !settings.Debug {
 		t.Fatalf("unexpected settings: %+v", settings)
 	}
-	if settings.Fonts.DefaultPath != "res://engine/fonts/default.ttf" {
-		t.Fatalf("default font path = %q", settings.Fonts.DefaultPath)
-	}
-	if len(settings.Fonts.Faces) != 0 {
-		t.Fatalf("built-in font registrations = %+v, want none", settings.Fonts.Faces)
-	}
 
 	settings = ResolveDisplaySettings(&ProjectConfig{})
 	if settings.WindowScale != 1 || !settings.StretchMode || settings.Debug {
@@ -395,70 +388,45 @@ func TestResolveDisplaySettings(t *testing.T) {
 	if nilSettings.WindowScale != 1 || !nilSettings.StretchMode || nilSettings.Debug {
 		t.Fatalf("unexpected nil settings defaults: %+v", nilSettings)
 	}
-	if nilSettings.Fonts.DefaultPath != defaultDisplayFontPath {
-		t.Fatalf("nil default font path = %q", nilSettings.Fonts.DefaultPath)
-	}
 }
 
-func TestApplyDisplayFonts(t *testing.T) {
-	settings := ResolveDisplaySettings(&ProjectConfig{})
-	settings.Fonts.Faces = []FontFaceRegistration{
-		{Path: "asset://fonts/Latin/font.ttf", Family: "Latin"},
-		{Path: "asset://fonts/Chinese/font.ttf", Family: "Chinese"},
-	}
-	var applied ResolvedFontConfig
-	if err := ApplyDisplayFonts(settings, func(config ResolvedFontConfig) error {
-		applied = config
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(applied, settings.Fonts) {
-		t.Fatalf("applied font config = %#v, want %#v", applied, settings.Fonts)
-	}
-
-	applied.Faces[0].Path = "mutated"
-	applied.Preferences[0] = "mutated"
-	if settings.Fonts.Faces[0].Path == "mutated" || settings.Fonts.Preferences[0] == "mutated" {
-		t.Fatal("ApplyDisplayFonts passed mutable settings slices to the engine boundary")
-	}
-	if err := ApplyDisplayFonts(settings, nil); err == nil {
-		t.Fatal("ApplyDisplayFonts(nil) succeeded")
-	}
-	wantErr := errors.New("engine rejected project fonts")
-	if err := ApplyDisplayFonts(settings, func(ResolvedFontConfig) error { return wantErr }); !errors.Is(err, wantErr) {
-		t.Fatalf("ApplyDisplayFonts error = %v, want %v", err, wantErr)
-	}
-
-	settings.Fonts.Preferences = []string{}
-	if err := ApplyDisplayFonts(settings, func(config ResolvedFontConfig) error {
-		if config.Preferences == nil {
-			t.Fatal("explicit empty preferences became nil at the engine boundary")
-		}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestAddProjectFonts(t *testing.T) {
-	settings := ResolveDisplaySettings(&ProjectConfig{})
-	AddProjectFonts(&settings, ProjectFonts{
+func TestResolveRuntimeFontPlan(t *testing.T) {
+	fonts := ProjectFonts{
 		Families: []ProjectFontFamily{
 			{Name: "Scratch", Faces: []ProjectFontFace{{Path: "fonts/Scratch/font.ttf"}}},
 			{Name: "Chinese", Faces: []ProjectFontFace{{Path: "fonts/Chinese/font.ttf"}}},
 		},
 		Preferences: []string{"Scratch", "Chinese", "default"},
-	}, func(path string) string { return "asset://" + path })
+	}
+	plan := ResolveRuntimeFontPlan(fonts, func(path string) string { return "asset://" + path })
 
-	if got := settings.Fonts.Faces; !reflect.DeepEqual(got, []FontFaceRegistration{
+	if plan.DefaultPath != "res://engine/fonts/default.ttf" {
+		t.Fatalf("default font path = %q", plan.DefaultPath)
+	}
+	if got := plan.Faces; !reflect.DeepEqual(got, []RuntimeFontFace{
 		{Family: "Scratch", Path: "asset://fonts/Scratch/font.ttf"},
 		{Family: "Chinese", Path: "asset://fonts/Chinese/font.ttf"},
 	}) {
 		t.Fatalf("project registrations = %#v", got)
 	}
-	if want := []string{"Scratch", "Chinese", "default"}; !reflect.DeepEqual(settings.Fonts.Preferences, want) {
-		t.Fatalf("preferences = %#v, want %#v", settings.Fonts.Preferences, want)
+	if !reflect.DeepEqual(plan.Preferences, fonts.Preferences) {
+		t.Fatalf("preferences = %#v, want %#v", plan.Preferences, fonts.Preferences)
+	}
+
+	clone := plan.Clone()
+	clone.Faces[0].Path = "mutated"
+	clone.Preferences[0] = "mutated"
+	if plan.Faces[0].Path == "mutated" || plan.Preferences[0] == "mutated" {
+		t.Fatal("RuntimeFontPlan.Clone shared mutable slices")
+	}
+
+	empty := ResolveRuntimeFontPlan(ProjectFonts{Preferences: []string{}}, nil)
+	if empty.Preferences == nil || empty.Clone().Preferences == nil {
+		t.Fatal("explicit empty preferences became nil")
+	}
+	missing := ResolveRuntimeFontPlan(ProjectFonts{}, nil)
+	if missing.Preferences != nil || missing.Clone().Preferences != nil {
+		t.Fatal("nil preferences became explicitly empty")
 	}
 }
 

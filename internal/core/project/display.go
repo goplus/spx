@@ -17,9 +17,7 @@
 package project
 
 import (
-	"errors"
 	"math"
-	"slices"
 
 	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v3/internal/base/defaults"
@@ -29,29 +27,7 @@ type DisplaySettings struct {
 	WindowScale float64
 	StretchMode bool
 	Debug       bool
-	Fonts       ResolvedFontConfig
 }
-
-// defaultDisplayFontPath selects SPX's small bundled Latin font. Keeping
-// this separate from project font paths makes the reserved default family
-// independent of project-provided CJK fonts.
-const defaultDisplayFontPath = "res://engine/fonts/default.ttf"
-
-type FontFaceRegistration struct {
-	Path   string
-	Family string
-}
-
-// ResolvedFontConfig is the complete, validated project font plan. It crosses
-// the engine boundary in one call so the engine can validate and commit it
-// atomically instead of exposing default-only or partially registered states.
-type ResolvedFontConfig struct {
-	DefaultPath string
-	Faces       []FontFaceRegistration
-	Preferences []string
-}
-
-type ProjectFontApplier func(ResolvedFontConfig) error
 
 func ResolveDisplaySettings(proj *ProjectConfig) DisplaySettings {
 	if proj == nil {
@@ -65,45 +41,7 @@ func ResolveDisplaySettings(proj *ProjectConfig) DisplaySettings {
 		WindowScale: windowScale,
 		StretchMode: proj.StretchMode == nil || *proj.StretchMode,
 		Debug:       proj.Debug,
-		Fonts: ResolvedFontConfig{
-			DefaultPath: defaultDisplayFontPath,
-			Preferences: []string{defaultFontFamilyName},
-		},
 	}
-}
-
-func AddProjectFonts(settings *DisplaySettings, fonts ProjectFonts, resolvePath func(string) string) {
-	if settings == nil {
-		return
-	}
-	settings.Fonts.Preferences = slices.Clone(fonts.Preferences)
-	faceCount := 0
-	for _, family := range fonts.Families {
-		faceCount += len(family.Faces)
-	}
-	settings.Fonts.Faces = slices.Grow(settings.Fonts.Faces, faceCount)
-	for _, family := range fonts.Families {
-		for _, face := range family.Faces {
-			fontPath := face.Path
-			if resolvePath != nil {
-				fontPath = resolvePath(fontPath)
-			}
-			settings.Fonts.Faces = append(settings.Fonts.Faces, FontFaceRegistration{
-				Path:   fontPath,
-				Family: family.Name,
-			})
-		}
-	}
-}
-
-func ApplyDisplayFonts(settings DisplaySettings, apply ProjectFontApplier) error {
-	if apply == nil {
-		return errors.New("project font applier is nil")
-	}
-	config := settings.Fonts
-	config.Faces = slices.Clone(config.Faces)
-	config.Preferences = slices.Clone(config.Preferences)
-	return apply(config)
 }
 
 func ResolveMapConfig(cfg MapConfig, hasTilemap bool, defaultWidth, defaultHeight int) MapConfig {
