@@ -64,9 +64,11 @@ Family 的 `index.json` 格式如下：
 
 1. `game_build.go` 打开项目资源。
 2. `internal/core/project.LoadProjectFonts()` 从 packed catalog 或 `assets/fonts/` 加载 Font Collection。
-3. `ResolveDisplaySettings()` 和 `AddProjectFonts()` 生成完整的字体计划，不注入任何兼容 family。
-4. SPX 通过一次 `ApplyProjectFonts()` 调用把默认字体、所有项目 Face 和 preference 交给 Godot。
-5. Godot 先校验数组、字体数据、Family 和 preference；全部成功后才同时发布普通文本 fallback chain、ThemeDB 默认字体和 LunaSVG registry。任一步失败都保留上一份完整配置。
+3. `ResolveRuntimeFontPlan()` 把加载结果解析成独立的运行时字体计划，包括默认字体、所有项目 Face 和 preference，不注入任何兼容 family。
+4. `applyRuntimeFontPlan()` 展平字体计划，并通过一次 `ApplyProjectFonts()` 调用交给 Godot。
+5. Godot 按 `decode -> validate -> prepare -> commit` 四个阶段处理；全部成功后才同时发布普通文本 fallback chain、ThemeDB 默认字体和 LunaSVG registry。任一步失败都保留上一份完整配置。
+
+`ResolveDisplaySettings()` 只负责窗口和显示配置，不再参与字体计划生成。
 
 Godot 侧只在 `SpxResMgr` 中用 `SPX_API` 声明接口；Go、Native、Web bridge 都通过 `make generate` 生成，不手工维护生成文件。
 
