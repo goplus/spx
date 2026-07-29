@@ -118,9 +118,9 @@ SPX reset 会把字体视为项目级状态并完整清理：
 - 每个 Scratch family 和汉字子集 `basic-chinese` 都位于自己的 `assets/fonts/<Family>` 目录。
 - `Color Emoji` 作为项目 Family 携带完整的 Twitter Color Emoji 字体，提供 `❤️` 等 emoji 字形。
 - SVG 显式 family 只解析项目声明，不依赖 runtime 内置映射。
-- `Pixel, Color Emoji, basic-chinese, default` 展示多级全局回退。
+- `Pixel, Color Emoji, Arabic, basic-chinese, default` 展示多级全局回退。
 - emoji、中文、combining mark、variation selector 和 ZWJ 序列覆盖 cluster fallback。
-- `SPX 123 | سلام | 456 END` 以逻辑顺序保存，正确视觉顺序为 `SPX 123 | 456 | سلام END`，覆盖 ICU Unicode BiDi visual run、阿拉伯连接形和跨 Family fallback。
+- 混排文本以逻辑字符序列 `SPX 123 | \u0633\u0644\u0627\u0645 | 456 END` 保存；渲染后 `456` visual run 位于连接后的阿拉伯文 run 之前，覆盖 ICU Unicode BiDi、阿拉伯连接形和跨 Family fallback。
 - 不提供 `index_pack.json`，覆盖 source 模式目录扫描。
 
 运行：
