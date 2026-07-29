@@ -856,48 +856,53 @@ func ToArray(arrayInfo GdArray) any {
 	}
 }
 
-func createGdArrayFromInt64s(ints []int64) *ArrayInfoImpl {
-	if ints == nil {
+func allocateGdArrayInfo(arrayType int64, size int, isNil bool) *ArrayInfoImpl {
+	if isNil {
 		return &ArrayInfoImpl{gdArray: nil, needsFree: false}
 	}
-	arrayInfo := C.createArrayInfo(C.int(ArrayTypeInt64), C.int(len(ints)))
+	arrayInfo := C.createArrayInfo(C.int(arrayType), C.int(size))
 	if arrayInfo == nil {
 		return nil
 	}
+	return &ArrayInfoImpl{gdArray: arrayInfo, needsFree: true}
+}
+
+func createGdArrayFromInt64s(ints []int64) *ArrayInfoImpl {
+	info := allocateGdArrayInfo(ArrayTypeInt64, len(ints), ints == nil)
+	if info == nil || info.gdArray == nil {
+		return info
+	}
+	arrayInfo := info.gdArray
 	if len(ints) > 0 {
 		cIntSlice := (*[1 << 27]C.int64_t)(unsafe.Pointer(arrayInfo.data))[:len(ints):len(ints)]
 		for i, v := range ints {
 			cIntSlice[i] = C.int64_t(v)
 		}
 	}
-	return &ArrayInfoImpl{gdArray: arrayInfo, needsFree: true}
+	return info
 }
 
 func createGdArrayFromFloats(floats []float32) *ArrayInfoImpl {
-	if floats == nil {
-		return &ArrayInfoImpl{gdArray: nil, needsFree: false}
+	info := allocateGdArrayInfo(ArrayTypeFloat, len(floats), floats == nil)
+	if info == nil || info.gdArray == nil {
+		return info
 	}
-	arrayInfo := C.createArrayInfo(C.int(ArrayTypeFloat), C.int(len(floats)))
-	if arrayInfo == nil {
-		return nil
-	}
+	arrayInfo := info.gdArray
 	if len(floats) > 0 {
 		cFloatSlice := (*[1 << 27]C.float)(unsafe.Pointer(arrayInfo.data))[:len(floats):len(floats)]
 		for i, v := range floats {
 			cFloatSlice[i] = C.float(v)
 		}
 	}
-	return &ArrayInfoImpl{gdArray: arrayInfo, needsFree: true}
+	return info
 }
 
 func createGdArrayFromBools(bools []bool) *ArrayInfoImpl {
-	if bools == nil {
-		return &ArrayInfoImpl{gdArray: nil, needsFree: false}
+	info := allocateGdArrayInfo(ArrayTypeBool, len(bools), bools == nil)
+	if info == nil || info.gdArray == nil {
+		return info
 	}
-	arrayInfo := C.createArrayInfo(C.int(ArrayTypeBool), C.int(len(bools)))
-	if arrayInfo == nil {
-		return nil
-	}
+	arrayInfo := info.gdArray
 	if len(bools) > 0 {
 		cBoolSlice := (*[1 << 27]C.uint8_t)(unsafe.Pointer(arrayInfo.data))[:len(bools):len(bools)]
 		for i, v := range bools {
@@ -908,51 +913,45 @@ func createGdArrayFromBools(bools []bool) *ArrayInfoImpl {
 			}
 		}
 	}
-	return &ArrayInfoImpl{gdArray: arrayInfo, needsFree: true}
+	return info
 }
 
 func createGdArrayFromBytes(bytes []byte) *ArrayInfoImpl {
-	if bytes == nil {
-		return &ArrayInfoImpl{gdArray: nil, needsFree: false}
+	info := allocateGdArrayInfo(ArrayTypeByte, len(bytes), bytes == nil)
+	if info == nil || info.gdArray == nil {
+		return info
 	}
-	arrayInfo := C.createArrayInfo(C.int(ArrayTypeByte), C.int(len(bytes)))
-	if arrayInfo == nil {
-		return nil
-	}
+	arrayInfo := info.gdArray
 	if len(bytes) > 0 {
 		cByteSlice := (*[1 << 27]C.uchar)(unsafe.Pointer(arrayInfo.data))[:len(bytes):len(bytes)]
 		for i, v := range bytes {
 			cByteSlice[i] = C.uchar(v)
 		}
 	}
-	return &ArrayInfoImpl{gdArray: arrayInfo, needsFree: true}
+	return info
 }
 
 func createGdArrayFromObjects(objects []GdObj) *ArrayInfoImpl {
-	if objects == nil {
-		return &ArrayInfoImpl{gdArray: nil, needsFree: false}
+	info := allocateGdArrayInfo(ArrayTypeGdObj, len(objects), objects == nil)
+	if info == nil || info.gdArray == nil {
+		return info
 	}
-	arrayInfo := C.createArrayInfo(C.int(ArrayTypeGdObj), C.int(len(objects)))
-	if arrayInfo == nil {
-		return nil
-	}
+	arrayInfo := info.gdArray
 	if len(objects) > 0 {
 		cObjSlice := (*[1 << 27]C.GdObj)(unsafe.Pointer(arrayInfo.data))[:len(objects):len(objects)]
 		for i, v := range objects {
 			cObjSlice[i] = C.GdObj(v)
 		}
 	}
-	return &ArrayInfoImpl{gdArray: arrayInfo, needsFree: true}
+	return info
 }
 
 func createGdArrayFromStrings(strings []string) *ArrayInfoImpl {
-	if strings == nil {
-		return &ArrayInfoImpl{gdArray: nil, needsFree: false}
+	info := allocateGdArrayInfo(ArrayTypeString, len(strings), strings == nil)
+	if info == nil || info.gdArray == nil {
+		return info
 	}
-	arrayInfo := C.createArrayInfo(C.int(ArrayTypeString), C.int(len(strings)))
-	if arrayInfo == nil {
-		return nil
-	}
+	arrayInfo := info.gdArray
 	if len(strings) > 0 {
 		cStrSlice := (*[1 << 27]*C.char)(unsafe.Pointer(arrayInfo.data))[:len(strings):len(strings)]
 		for i, v := range strings {
@@ -960,5 +959,5 @@ func createGdArrayFromStrings(strings []string) *ArrayInfoImpl {
 			cStrSlice[i] = cStr
 		}
 	}
-	return &ArrayInfoImpl{gdArray: arrayInfo, needsFree: true}
+	return info
 }

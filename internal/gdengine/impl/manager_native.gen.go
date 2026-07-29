@@ -805,9 +805,6 @@ func (pself *resMgr) FreeStr(str string) {
 	CallResFreeStr(arg0)
 }
 func (pself *resMgr) ApplyProjectFonts(default_font_path string, font_paths Array, font_families Array, preferences Array) string {
-	if !HasResApplyProjectFonts() {
-		return "loaded Godot engine does not support atomic project fonts"
-	}
 	arg0Str := C.CString(default_font_path)
 	arg0 := (GdString)(arg0Str)
 	defer C.free(unsafe.Pointer(arg0Str))
