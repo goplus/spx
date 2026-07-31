@@ -72,6 +72,7 @@ func (p *SpriteImpl) setCostume(costume any) {
 		return
 	}
 	p.spriteState.DefaultCostumeIndex = p.costumeIndex
+	p.markAutoPhysicsShapesDirty()
 	p.markProxyDirty()
 }
 

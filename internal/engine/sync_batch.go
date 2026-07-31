@@ -20,21 +20,21 @@ import "math"
 
 const (
 	// Batch sync constants
-	SyncFieldsPerSprite     = 9  // id, x, y, rotation, scaleX, scaleY, offsetX, offsetY, visibility
+	SyncFieldsPerSprite     = 9  // id, x, y, rotation, scaleX, scaleY, renderOffsetX, renderOffsetY, visibility
 	DefaultDeleteBufferSize = 16 // initial capacity for sprite deletion buffer
 )
 
 // SpriteSyncData represents the data to sync for a single sprite
 type SpriteSyncData struct {
-	SpriteID int64
-	X        float32
-	Y        float32
-	Rotation float32
-	ScaleX   float32
-	ScaleY   float32
-	OffsetX  float32
-	OffsetY  float32
-	Visible  float32 // 0 or 1
+	SpriteID      int64
+	X             float32
+	Y             float32
+	Rotation      float32
+	ScaleX        float32
+	ScaleY        float32
+	RenderOffsetX float32 // local SPX position of RenderRoot
+	RenderOffsetY float32 // local SPX position of RenderRoot
+	Visible       float32 // 0 or 1
 }
 
 // SpriteSyncBuffer collects sync data for batch processing
@@ -55,22 +55,22 @@ func NewSpriteSyncBuffer(capacity int) *SpriteSyncBuffer {
 }
 
 // Add appends a sprite's sync data to the buffer
-func (b *SpriteSyncBuffer) Add(id int64, x, y, rotation, scaleX, scaleY, offsetX, offsetY float64, visible bool) {
+func (b *SpriteSyncBuffer) Add(id int64, x, y, rotation, scaleX, scaleY, renderOffsetX, renderOffsetY float64, visible bool) {
 	vis := float32(0.0)
 	if visible {
 		vis = float32(1.0)
 	}
 
 	b.data = append(b.data, SpriteSyncData{
-		SpriteID: id,
-		X:        float32(x),
-		Y:        float32(y),
-		Rotation: float32(rotation),
-		ScaleX:   float32(scaleX),
-		ScaleY:   float32(scaleY),
-		OffsetX:  float32(offsetX),
-		OffsetY:  float32(offsetY),
-		Visible:  vis,
+		SpriteID:      id,
+		X:             float32(x),
+		Y:             float32(y),
+		Rotation:      float32(rotation),
+		ScaleX:        float32(scaleX),
+		ScaleY:        float32(scaleY),
+		RenderOffsetX: float32(renderOffsetX),
+		RenderOffsetY: float32(renderOffsetY),
+		Visible:       vis,
 	})
 }
 
@@ -132,8 +132,8 @@ func (b *SpriteSyncBuffer) Serialize() []float32 {
 		result[idx+3] = sprite.Rotation
 		result[idx+4] = sprite.ScaleX
 		result[idx+5] = sprite.ScaleY
-		result[idx+6] = sprite.OffsetX
-		result[idx+7] = sprite.OffsetY
+		result[idx+6] = sprite.RenderOffsetX
+		result[idx+7] = sprite.RenderOffsetY
 		result[idx+8] = sprite.Visible
 		idx += SyncFieldsPerSprite
 	}
