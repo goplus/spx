@@ -100,7 +100,7 @@ func prepareEngineBuildEnvironment(repoRoot, requestedPlatform string) (buildEnv
 	}
 
 	commandEnv := currentEnvMap()
-	if runtime.GOOS == "darwin" {
+	if runtime.GOOS == "darwin" && buildEnv.Platform == "ios" {
 		fmt.Fprintf(os.Stdout, "Installing macOS Vulkan SDK...\n")
 		if err := runStreamingCommand(buildEnv.EngineDir, filepath.Join("misc", "scripts", "install_vulkan_sdk_macos.sh")); err != nil {
 			return buildEnvironment{}, nil, err
