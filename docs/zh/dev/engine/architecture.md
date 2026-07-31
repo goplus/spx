@@ -6,6 +6,7 @@
 3. 上层业务逻辑在 Go 进行实现
 4. Go 和 C++ 的交互代码，主要通过 `make generate-bindings` 自动生成；完整代码生成流程可使用 `make generate`，详见 [code_generator.md](./code_generator.md)
 5. 用户逻辑使用 xgo 进行实现，在运行时会先编译成 Go，再按目标平台编译为动态库或 WebAssembly，或者解释执行
+6. 坐标空间和 Go/Godot 转换边界详见 [coordinate_system.md](./coordinate_system.md)
 
 ### 1. PC 平台
 0. 依赖的是 cgo

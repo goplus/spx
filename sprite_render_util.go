@@ -17,6 +17,8 @@
 package spx
 
 import (
+	"math"
+
 	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v3/internal/engine"
 )
@@ -26,31 +28,26 @@ func getRenderOffset(p *SpriteImpl) (float64, float64) {
 }
 
 func getCostumeRenderOffset(c *costume, pivot mathf.Vec2, scaleX, scaleY float64) (float64, float64) {
-	w, h := c.getSize()
-	centerX := c.center.X / float64(c.bitmapResolution)
-	centerY := c.center.Y / float64(c.bitmapResolution)
-
-	x := -(centerX+pivot.X)*scaleX + float64(w)/2*scaleX
-	y := (centerY-pivot.Y)*scaleY - float64(h)/2*scaleY
-	return x, y
-}
-
-func (p *SpriteImpl) getXYWithRenderOffset() (x, y float64) {
-	x, y = p.getXY()
-	ox, oy := getRenderOffset(p)
-	return x + ox, y + oy
+	anchor := c.renderAnchorInSPX().Add(pivot)
+	return -anchor.X * scaleX, -anchor.Y * scaleY
 }
 
 func applyRenderOffset(p *SpriteImpl, cx, cy *float64) {
-	x, y := getRenderOffset(p)
+	x, y := getWorldRenderOffset(p)
 	*cx += x
 	*cy += y
 }
 
-func revertRenderOffset(p *SpriteImpl, cx, cy *float64) {
+// getWorldRenderOffset applies the sprite root's flip and rotation to the
+// local render offset. Godot performs the same transform through RenderRoot.
+func getWorldRenderOffset(p *SpriteImpl) (float64, float64) {
 	x, y := getRenderOffset(p)
-	*cx -= x
-	*cy -= y
+	rotation, scaleX, scaleY := getRenderRotationAndScale(p)
+	x *= scaleX
+	y *= scaleY
+
+	sin, cos := math.Sincos(-engine.DegToRad(rotation))
+	return x*cos - y*sin, x*sin + y*cos
 }
 
 func getRenderRotationAndScale(p *SpriteImpl) (rotation, scaleX, scaleY float64) {

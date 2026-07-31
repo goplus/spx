@@ -53,10 +53,9 @@ func (*platformMgrImpl) SetRunnableOnUnfocused(flag bool) {
 }
 
 func (c *cameraMgrImpl) GetPosition() Vec2 {
-	pos := c.GetCameraPosition()
-	return NewVec2(pos.X, -pos.Y)
+	return c.GetCameraPosition()
 }
 
 func (c *cameraMgrImpl) SetPosition(position Vec2) {
-	c.SetCameraPosition(NewVec2(position.X, -position.Y))
+	c.SetCameraPosition(position)
 }

@@ -23,7 +23,7 @@ func (p *SpriteImpl) bounds() *mathf.Rect2 {
 		return nil
 	}
 
-	x, y := p.getXYWithRenderOffset()
+	x, y := p.getXY()
 	w, h := p.adjustPositionAndGetDimensions(&x, &y)
 
 	return &mathf.Rect2{
@@ -36,6 +36,7 @@ func (p *SpriteImpl) adjustPositionAndGetDimensions(x, y *float64) (width, heigh
 	triggerInfo := p.physics().getTriggerInfo()
 
 	if triggerInfo.Type == physicsColliderNone {
+		applyRenderOffset(p, x, y)
 		wi, hi := p.costumes[p.costumeIndex].getSize()
 		return float64(wi) * p.runtimeState.Scale, float64(hi) * p.runtimeState.Scale
 	}
@@ -44,6 +45,9 @@ func (p *SpriteImpl) adjustPositionAndGetDimensions(x, y *float64) (width, heigh
 		center, size := getCostumeBoundByAlpha(p, false)
 		triggerInfo.Pivot = center
 		triggerInfo.Params = []float64{size.X, size.Y}
+	}
+	if triggerInfo.Type == physicsColliderAuto {
+		applyRenderOffset(p, x, y)
 	}
 
 	*x += triggerInfo.Pivot.X * p.runtimeState.Scale

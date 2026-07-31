@@ -162,6 +162,16 @@ func (c *costume) getSize() (int, int) {
 	return c.width / c.bitmapResolution, c.height / c.bitmapResolution
 }
 
+// renderAnchorInSPX converts the costume center from top-left, Y-down asset
+// coordinates into a local SPX anchor relative to the geometric image center.
+func (c *costume) renderAnchorInSPX() mathf.Vec2 {
+	resolution := float64(c.bitmapResolution)
+	return mathf.NewVec2(
+		(c.center.X-float64(c.width)/2)/resolution,
+		(float64(c.height)/2-c.center.Y)/resolution,
+	)
+}
+
 // isAtlas returns true if this costume is part of an atlas/set.
 func (c *costume) isAtlas() bool {
 	return c.setIndex >= 0

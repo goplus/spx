@@ -65,12 +65,11 @@ func toPhysicsMode(mode string) PhysicsMode {
 
 // physicConfig common structure for physics configuration.
 type physicConfig struct {
-	Mask        int64             // collision/trigger mask
-	Layer       int64             // collision/trigger layer
-	Type        ColliderShapeType // collider/trigger type
-	Pivot       mathf.Vec2        // pivot position
-	Params      []float64         // shape parameters
-	PivotOffset mathf.Vec2        // pivot offset for render offset adjustment
+	Mask   int64             // collision/trigger mask
+	Layer  int64             // collision/trigger layer
+	Type   ColliderShapeType // collider/trigger type
+	Pivot  mathf.Vec2        // pivot position
+	Params []float64         // shape parameters
 }
 
 func (cfg *physicConfig) String() string {
@@ -82,7 +81,6 @@ func (cfg *physicConfig) copyFrom(src *physicConfig) {
 	cfg.Layer = src.Layer
 	cfg.Type = src.Type
 	cfg.Pivot = src.Pivot
-	cfg.PivotOffset = src.PivotOffset
 	cfg.Params = make([]float64, len(src.Params))
 	copy(cfg.Params, src.Params)
 }
@@ -165,12 +163,6 @@ func (cfg *physicConfig) syncToProxy(syncProxy *engine.Sprite, isTrigger bool, s
 
 // syncShape synchronizes shape to engine proxy.
 func (cfg *physicConfig) syncShape(syncProxy *engine.Sprite, isTrigger bool, sprite *SpriteImpl) {
-	scale := sprite.runtimeState.Scale
-	if cfg.Type != physicsColliderNone && cfg.Type != physicsColliderAuto {
-		center := mathf.NewVec2(0, 0)
-		applyRenderOffset(sprite, &center.X, &center.Y)
-		cfg.PivotOffset = center.Divf(scale)
-	}
 	if cfg.Type == physicsColliderAuto {
 		pivot, autoSize := syncGetCostumeBoundByAlpha(sprite)
 		if isTrigger {
@@ -180,12 +172,13 @@ func (cfg *physicConfig) syncShape(syncProxy *engine.Sprite, isTrigger bool, spr
 		cfg.Pivot = pivot
 		cfg.Params = []float64{autoSize.X, autoSize.Y}
 	}
-	cfg.applyShape(syncProxy, isTrigger, scale)
+	cfg.applyShape(syncProxy, isTrigger, sprite)
 }
 
-func (cfg *physicConfig) applyShape(syncProxy *engine.Sprite, isTrigger bool, scale float64) {
-	pivot := cfg.Pivot.Sub(cfg.PivotOffset)
-	pivot = pivot.Mulf(scale)
+func (cfg *physicConfig) applyShape(syncProxy *engine.Sprite, isTrigger bool, sprite *SpriteImpl) {
+	pivot := cfg.shapePivot(sprite)
+	scale := sprite.runtimeState.Scale
+
 	switch cfg.Type {
 	case physicsColliderCircle:
 		syncProxy.SetColliderEnabled(isTrigger, true)
@@ -212,11 +205,58 @@ func (cfg *physicConfig) applyShape(syncProxy *engine.Sprite, isTrigger bool, sc
 	}
 }
 
+func (cfg *physicConfig) shapePivot(sprite *SpriteImpl) mathf.Vec2 {
+	pivot := cfg.Pivot.Mulf(sprite.runtimeState.Scale)
+	if cfg.Type == physicsColliderAuto {
+		offsetX, offsetY := getRenderOffset(sprite)
+		pivot = pivot.Add(mathf.NewVec2(offsetX, offsetY))
+	}
+	return pivot
+}
+
+// syncAutoShapeAfterCostumeChange refreshes the alpha bounds and render offset
+// of an initialized auto shape. Explicit shapes intentionally stay fixed in the
+// logical sprite root's coordinate system.
+func (cfg *physicConfig) syncAutoShapeAfterCostumeChange(syncProxy *engine.Sprite, isTrigger bool, sprite *SpriteImpl) {
+	if cfg.Type != physicsColliderAuto || len(cfg.Params) < 2 {
+		return
+	}
+	cfg.syncShape(syncProxy, isTrigger, sprite)
+}
+
+func (p *physicsComponent) markAutoShapesDirty() {
+	p.autoShapesDirty = true
+}
+
+func (p *physicsComponent) syncAutoShapesAfterCostumeChange(syncProxy *engine.Sprite) {
+	if !p.autoShapesDirty || syncProxy == nil {
+		return
+	}
+	p.triggerInfo.syncAutoShapeAfterCostumeChange(syncProxy, true, p.sprite)
+	p.collisionInfo.syncAutoShapeAfterCostumeChange(syncProxy, false, p.sprite)
+	p.autoShapesDirty = false
+}
+
+func (p *SpriteImpl) markAutoPhysicsShapesDirty() {
+	if physics := p.physics(); physics != nil {
+		physics.markAutoShapesDirty()
+	}
+}
+
+func (p *SpriteImpl) syncAutoPhysicsShapesAfterCostumeChange() {
+	if physics := p.physics(); physics != nil {
+		physics.syncAutoShapesAfterCostumeChange(p.runtimeState.SyncSprite)
+	}
+}
+
 // updatePhysicsShapesScale updates collision and trigger shapes when sprite scale changes.
 func (p *SpriteImpl) updatePhysicsShapesScale() {
+	if p.runtimeState.SyncSprite == nil {
+		return
+	}
 	physics := p.physics()
-	physics.getTriggerInfo().applyShape(p.runtimeState.SyncSprite, true, p.runtimeState.Scale)
-	physics.getCollisionInfo().applyShape(p.runtimeState.SyncSprite, false, p.runtimeState.Scale)
+	physics.getTriggerInfo().applyShape(p.runtimeState.SyncSprite, true, p)
+	physics.getCollisionInfo().applyShape(p.runtimeState.SyncSprite, false, p)
 }
 
 func (p *SpriteImpl) SetPhysicsMode(mode PhysicsMode) {

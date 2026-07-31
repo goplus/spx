@@ -43,11 +43,12 @@ type physicsComponent struct {
 	triggerInfo   physicConfig
 	collisionInfo physicConfig
 
-	physicsMode PhysicsMode
-	mass        float64
-	friction    float64
-	airDrag     float64
-	gravity     float64
+	physicsMode     PhysicsMode
+	mass            float64
+	friction        float64
+	airDrag         float64
+	gravity         float64
+	autoShapesDirty bool
 
 	collisionTargets map[string]bool
 }
@@ -298,31 +299,10 @@ func (p *physicsComponent) getPhysicConfig(isTrigger bool) *physicConfig {
 
 func (p *physicsComponent) applyPhysicShape(isTrigger bool) {
 	config := p.getPhysicConfig(isTrigger)
-	ctype := config.Type
-	params := config.Params
-
 	if p.sprite.runtimeState.SyncSprite == nil {
 		return
 	}
-
-	switch ctype {
-	case RectCollider:
-		if len(params) >= 2 {
-			p.sprite.runtimeState.SyncSprite.SetColliderShapeRect(isTrigger, config.Pivot, mathf.NewVec2(params[0], params[1]))
-		}
-	case CircleCollider:
-		if len(params) >= 1 {
-			p.sprite.runtimeState.SyncSprite.SetColliderShapeCircle(isTrigger, config.Pivot, params[0])
-		}
-	case CapsuleCollider:
-		if len(params) >= 2 {
-			p.sprite.runtimeState.SyncSprite.SetColliderShapeCapsule(isTrigger, config.Pivot, mathf.NewVec2(params[0]*2, params[1]))
-		}
-	case PolygonCollider:
-		if len(params) >= 6 {
-			p.sprite.runtimeState.SyncSprite.SetColliderShapePolygon(isTrigger, config.Pivot, params)
-		}
-	}
+	config.applyShape(p.sprite.runtimeState.SyncSprite, isTrigger, p.sprite)
 }
 
 // ============================================================================
@@ -351,4 +331,5 @@ func (p *physicsComponent) applyPhysicsProxyConfig(syncProxy *engine.Sprite) {
 	p.triggerInfo.syncToProxy(syncProxy, true, p.sprite)
 	syncProxy.SetGravityScale(p.gravity)
 	syncProxy.SetPhysicsMode(p.physicsMode)
+	p.autoShapesDirty = false
 }
