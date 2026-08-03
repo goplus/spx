@@ -1,0 +1,4 @@
+onStart => {
+	println "CoordinateSystem demo ready"
+	println "Space: costume center | arrows: move | R/F/N: rotate/flip/reset | P: +Y pen | S: stamp | C: reset | E: erase"
+}

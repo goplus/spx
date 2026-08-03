@@ -1,0 +1,143 @@
+import "fmt"
+import "math"
+
+const coordinateStep = 40.0
+
+var (
+	expectedX = 0.0
+	expectedY = 100.0
+	flipped   bool
+)
+
+func syncLogicalRoot() {
+	RootMarker.SetXYpos xpos, ypos
+}
+
+func acceptLogicalPosition() {
+	// Motion can be clamped by the stage fence. Use the resulting logical SPX
+	// position as the baseline for later costume/rotation invariants.
+	expectedX, expectedY = xpos, ypos
+}
+
+func verifyLogicalPosition(action string) {
+	if math.Abs(xpos-expectedX) > 0.001 || math.Abs(ypos-expectedY) > 0.001 {
+		msg := fmt.Sprintf("FAIL %s: got (%.1f, %.1f), want (%.1f, %.1f)", action, xpos, ypos, expectedX, expectedY)
+		println msg
+		say msg
+		return
+	}
+	println fmt.Sprintf("PASS %s: logical SPX position = (%.1f, %.1f)", action, xpos, ypos)
+}
+
+func reportState(action string) {
+	verifyLogicalPosition action
+	syncLogicalRoot
+	say fmt.Sprintf("%s\nanchor=%s\nSPX=(%.0f, %.0f)", action, costumeName, xpos, ypos)
+}
+
+func resetCoordinateDemo() {
+	expectedX, expectedY = 0, 100
+	setXYpos expectedX, expectedY
+	setRotationStyle Normal
+	setHeading 90
+	setCostume 0
+	flipped = false
+	reportState "reset"
+}
+
+onStart => {
+	setPenSize 4
+	setPenColor HSB(52, 80, 90)
+	resetCoordinateDemo
+
+	// Exercise each asset-space center once. Only RenderRoot should move.
+	for i := 0; i < 3; i++ {
+		setCostume i
+		reportState "startup center conversion"
+		wait 0.8s
+	}
+	setCostume 0
+	reportState "ready"
+}
+
+onClick => {
+	setCostume Next
+	reportState "click: next costume center"
+}
+
+onKey KeySpace, => {
+	setCostume Next
+	reportState "next costume center"
+}
+
+onKey KeyUp, => {
+	changeYpos coordinateStep
+	acceptLogicalPosition
+	reportState "move +Y"
+}
+
+onKey KeyDown, => {
+	changeYpos -coordinateStep
+	acceptLogicalPosition
+	reportState "move -Y"
+}
+
+onKey KeyLeft, => {
+	changeXpos -coordinateStep
+	acceptLogicalPosition
+	reportState "move -X"
+}
+
+onKey KeyRight, => {
+	changeXpos coordinateStep
+	acceptLogicalPosition
+	reportState "move +X"
+}
+
+onKey KeyR, => {
+	setRotationStyle Normal
+	turn 30
+	reportState "rotate around logical root"
+}
+
+onKey KeyF, => {
+	setRotationStyle LeftRight
+	if flipped {
+		setHeading 90
+	} else {
+		setHeading -90
+	}
+	flipped = !flipped
+	reportState "flip around logical root"
+}
+
+onKey KeyN, => {
+	setRotationStyle Normal
+	setHeading 90
+	flipped = false
+	reportState "normal rotation"
+}
+
+onKey KeyP, => {
+	penDown
+	changeYpos 80
+	penUp
+	acceptLogicalPosition
+	reportState "pen moved +Y"
+}
+
+onKey KeyS, => {
+	stamp
+	changeXpos 140
+	acceptLogicalPosition
+	reportState "stamp then move +X"
+}
+
+onKey KeyC, => {
+	resetCoordinateDemo
+}
+
+onKey KeyE, => {
+	eraseAll
+	reportState "erase pen and stamps"
+}

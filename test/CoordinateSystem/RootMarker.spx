@@ -1,0 +1,2 @@
+// The marker is a separate sprite at Subject's logical SPX position. It must
+// not inherit Subject's costume render offset, rotation, or horizontal flip.

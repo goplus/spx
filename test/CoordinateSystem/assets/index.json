@@ -1,0 +1,28 @@
+{
+  "run": {
+    "title": "SPX Coordinate System",
+    "width": 640,
+    "height": 480
+  },
+  "backdrops": [
+    {
+      "name": "coordinate-grid",
+      "path": "coordinate-grid.svg"
+    }
+  ],
+  "backdropIndex": 0,
+  "zorder": [
+    {
+      "type": "sprite",
+      "target": "Subject",
+      "x": 0,
+      "y": 100
+    },
+    {
+      "type": "sprite",
+      "target": "RootMarker",
+      "x": 0,
+      "y": 100
+    }
+  ]
+}
