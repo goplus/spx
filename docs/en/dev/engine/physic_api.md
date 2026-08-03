@@ -13,7 +13,30 @@ The design is organized into four groups:
 3. spatial queries and contacts;
 4. tile-map operations.
 
-The current implementation is authoritative; some items in this design may represent planned phases rather than shipped API.
+The current implementation is authoritative; some items in this design may represent planned phases rather than shipped API. The examples below are design notes, not a compile-tested Go API reference.
+
+The current sprite-level signatures are:
+
+```go
+type PhysicsMode = int64
+type ColliderShapeType = int64
+
+func (p *SpriteImpl) SetPhysicsMode(mode PhysicsMode)
+func (p *SpriteImpl) PhysicsMode() PhysicsMode
+func (p *SpriteImpl) Velocity() (velocityX, velocityY float64)
+func (p *SpriteImpl) SetVelocity(velocityX, velocityY float64)
+func (p *SpriteImpl) Gravity() float64
+func (p *SpriteImpl) SetGravity(gravity float64)
+func (p *SpriteImpl) AddImpulse(impulseX, impulseY float64)
+func (p *SpriteImpl) IsOnFloor() bool
+
+func (p *SpriteImpl) SetColliderShape(isTrigger bool, ctype ColliderShapeType, params []float64) error
+func (p *SpriteImpl) ColliderShape(isTrigger bool) (ColliderShapeType, []float64)
+func (p *SpriteImpl) SetColliderPivot(isTrigger bool, offsetX, offsetY float64)
+func (p *SpriteImpl) ColliderPivot(isTrigger bool) (offsetX, offsetY float64)
+```
+
+The `isTrigger` parameter distinguishes body colliders from trigger shapes, and the getter is `ColliderShape` (singular). XGo overloads may be exposed as multiple generated Go methods; default-argument syntax in a design example is not valid Go syntax.
 
 ## Delivery plan
 

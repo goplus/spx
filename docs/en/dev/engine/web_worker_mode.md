@@ -1,8 +1,10 @@
 # SPX Web Worker Mode
 
+The shipped `worker` mode uses Emscripten `PROXY_TO_PTHREAD`; the Dedicated Worker + OffscreenCanvas section is an evaluated design alternative, not the current `spx` export path. Use `spx runwebworker` or `spx exportwebworker` for the supported entry points. This mode is not process-level memory or error isolation and normally requires `SharedArrayBuffer` plus cross-origin isolation.
+
 ## Requirements
 
-Worker mode keeps expensive engine and runtime work away from the browser main thread while preserving input, rendering, audio, lifecycle, and host integration. It addresses main-thread stalls and environments where long-running WASM execution would make the page unresponsive.
+Worker mode moves the engine main loop through the pthread proxy so expensive runtime work is less likely to block the browser main thread. Proxy calls can still affect page responsiveness, and actual performance depends on the host and bridge traffic.
 
 ## Approaches evaluated
 
@@ -19,22 +21,22 @@ The alternative explicitly starts the runtime in a worker, transfers an `Offscre
 ### Components
 
 - Main thread: DOM, page lifecycle, browser UI, and APIs restricted to the main thread.
-- Worker: Go WASM runtime, engine execution, and worker-safe rendering.
+- pthread worker: Go WASM runtime, engine execution, and worker-side work under Emscripten's proxy bridge.
 - Message manager: request/response and event routing.
-- Canvas bridge: transfers or proxies rendering state.
+- Canvas bridge: proxies main-thread browser operations; an OffscreenCanvas transfer belongs to the alternative design.
 - Input bridge: normalizes browser events into SPX input snapshots.
 
 ### Initialization
 
-1. The host creates a worker and the target canvas.
-2. If supported, it transfers the canvas with `transferControlToOffscreen`.
-3. The host sends runtime URLs, launch configuration, viewport, and environment data.
-4. The worker loads JavaScript glue, Go WASM, and the engine.
+1. The host launches the worker-mode template and creates the target canvas.
+2. Emscripten starts the engine main loop through `PROXY_TO_PTHREAD`.
+3. The host sends runtime URLs, launch configuration, viewport, and environment data through the generated bridge.
+4. The worker-side runtime loads JavaScript glue, Go WASM, and the engine.
 5. The runtime reports readiness before the game is launched.
 
 ### Runtime data flow
 
-Main-thread input is normalized and forwarded to the worker. The worker advances SPX and Godot, renders to the offscreen canvas, and emits lifecycle, error, capture, audio, and host-operation messages. Responses carry correlation identifiers when operations are asynchronous.
+Main-thread input is normalized and forwarded to the worker. The worker advances SPX and Godot through the pthread/proxy bridge and emits lifecycle, error, capture, audio, and host-operation messages. Responses carry correlation identifiers when operations are asynchronous.
 
 ## Communication paths
 
@@ -58,7 +60,7 @@ Prevent browser defaults only where the game owns the interaction. Handle blur/f
 
 ## Rendering
 
-Worker rendering requires `OffscreenCanvas` and a compatible WebGL context. Detect WebGL2 first and report a clear failure or supported fallback. Canvas size changes must update both display dimensions and backing-buffer dimensions.
+The current proxy-to-pthread path must use the repository's worker template and its canvas bridge. The alternative OffscreenCanvas design requires `OffscreenCanvas` and a compatible WebGL context; detect WebGL2 first and report a clear failure or supported fallback. Canvas size changes must update both display dimensions and backing-buffer dimensions.
 
 Example Emscripten builds must use the repository build workflow rather than an ad hoc command so SPX-specific flags remain consistent:
 

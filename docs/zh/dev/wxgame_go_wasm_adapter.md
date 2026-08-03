@@ -1,183 +1,50 @@
-# 微信小程序 Go WASM 兼容性解决方案
+# 微信小游戏 Go WASM 兼容层
 
-## 问题概述
+## 适用范围
 
-在微信小程序环境中运行 Go WebAssembly (WASM) 时，会遇到类型兼容性错误：
+本文描述当前 SPX 小游戏导出流程中的 Go WASM 启动兼容层。它针对微信小游戏的 `WXWebAssembly` 与 Go `wasm_exec.js` 之间的类型检查差异，不是通用的 WebAssembly 适配方案。
 
-```
-Error: Go.run: WebAssembly.Instance expected
-```
+## 当前导出流程
 
-尽管 WASM 实例功能正常，但 Go 运行时拒绝接受微信小程序创建的 WebAssembly.Instance 对象。
+1. `spx exportminigame` 使用当前 Go 环境的 `$(go env GOROOT)/lib/wasm/wasm_exec.js`，将它复制到生成目录的 `go.wasm.exec.js`。仓库中没有固定的 `js/wasm_exec.js` 文件。
+2. 小游戏适配器 [`cmd/spx/template/platform/webminigame/js/adpter.js`](../../../cmd/spx/template/platform/webminigame/js/adpter.js) 将 `GameGlobal.WebAssembly` 指向微信提供的 `WXWebAssembly`。
+3. 页面运行代码 [`cmd/ispx/web/game.js`](../../../cmd/ispx/web/game.js) 通过 `WebAssembly.instantiate(url, go.importObject)` 加载 Go wasm，然后创建兼容 facade 并交给 `go.run`。
 
-## 问题根本原因
+## 为什么需要 facade
 
-### 1. 微信小程序的 WebAssembly 实现差异
-
-**标准浏览器环境**：
-```javascript
-globalThis.WebAssembly = {
-  Instance: WebAssembly.Instance,        // 标准构造函数
-  instantiate: WebAssembly.instantiate   // 标准实例化函数
-}
-```
-
-**微信小程序环境**：
-```javascript
-globalThis.WebAssembly = {
-  Instance: WXWebAssembly.Instance,      // 微信定制版本
-  instantiate: WXWebAssembly.instantiate // 微信定制版本
-}
-```
-
-**关键差异**：
-- 微信小程序使用了自己的 `WXWebAssembly` 实现
-- `WXWebAssembly.instantiate` 只支持文件路径，不支持 ArrayBuffer
-- 创建的实例对象虽然功能正常，但**类型身份不被 Go 运行时认可**
-
-### 2. Go 运行时的严格类型检查
-
-Go 运行时在 `go_wasm_exec.js` 中进行严格的类型检查：
+某些 Go 运行时会检查：
 
 ```javascript
-// Go 运行时源码（简化）
-if (!(instance instanceof WebAssembly.Instance)) {
-  throw new Error("Go.run: WebAssembly.Instance expected");
-}
+instance instanceof WebAssembly.Instance
 ```
 
-**问题表现**：
-```javascript
-// 微信小程序创建的实例
-console.log("instance instanceof WebAssembly.Instance:", false)  // ❌ 失败
-console.log("instance.exports:", {mem: Memory(600), run: ƒ, ...}) // ✅ 功能正常
-```
-
-### 3. 原型链和构造函数问题
-
-**微信小程序实例的原型链**：
-```
-微信实例 → WXWebAssembly.Instance.prototype → Object.prototype
-```
-
-**Go 期望的原型链**：
-```
-标准实例 → WebAssembly.Instance.prototype → Object.prototype
-```
-
-## 失败的解决方案尝试
-
-### 方法1：修改原型链
-```javascript
-Object.setPrototypeOf(instance, WebAssembly.Instance.prototype);
-instance.constructor = WebAssembly.Instance;
-```
-**❌ 失败原因**：`instanceof` 检查仍然基于原始的构造函数
-
-### 方法2：代理对象
-```javascript
-const proxy = new Proxy(instance, {
-  get(target, prop) {
-    if (prop === 'constructor') return WebAssembly.Instance;
-    return target[prop];
-  }
-});
-```
-**❌ 失败原因**：
-- 错误：`WebAssembly.Instance.exports(): Receiver is not a WebAssembly.Instance`
-- `exports` 是 getter 属性，会检查调用者（receiver）的真实类型
-
-## 成功的解决方案
-
-### 方法3：创建真正的 WebAssembly.Instance
+微信返回的实例可能来自 `WXWebAssembly.Instance`，因此不能通过这个检查。当前实现保留微信实例的 `exports`，并创建一个拥有标准 `WebAssembly.Instance.prototype` 的 JavaScript 对象：
 
 ```javascript
-// 在微信小程序环境中加载 WASM
 const wasmResult = await WebAssembly.instantiate(url, go.importObject);
-
-// 创建与 Go 运行时兼容的 WebAssembly.Instance 对象
 const compatibleInstance = Object.create(WebAssembly.Instance.prototype);
 compatibleInstance.exports = wasmResult.instance.exports;
-Object.defineProperty(compatibleInstance, 'constructor', {
+Object.defineProperty(compatibleInstance, "constructor", {
   value: WebAssembly.Instance,
   writable: false,
   enumerable: false,
-  configurable: true
+  configurable: true,
 });
-
-// 运行 Go WASM
 await go.run(compatibleInstance);
 ```
 
-### 为什么这样有效
+## 重要限制
 
-1. **正确的原型链**：`compatibleInstance` 真正继承自 `WebAssembly.Instance.prototype`
-2. **通过 instanceof 检查**：`compatibleInstance instanceof WebAssembly.Instance === true`
-3. **绕过 exports getter 限制**：直接赋值而不是通过 getter 访问
-4. **保持功能完整性**：所有 WASM 功能（内存、函数等）都正常工作
+- `compatibleInstance` **不是原生的 `WebAssembly.Instance`**，只是当前 Go 运行时所需的兼容 facade。它没有原生实例的内部槽位，也不能据此推断所有 WebAssembly API 都可用。
+- 该实现依赖当前 Go `wasm_exec.js` 只通过 `instance.exports` 访问实例。升级 Go 或更换小游戏运行时后，必须重新验证 `instanceof`、内存访问和导出函数调用。
+- `exports` 必须来自刚刚实例化的真实微信实例，不要手动伪造导出对象，也不要用 `Proxy` 替代 facade。
+- 如果兼容层失败，应先保留导出的 `go.wasm.exec.js` 和运行时版本，再在对应版本的导出产物上定位问题；不要修改不存在的仓库路径。
 
-## 技术原理
+## 验证清单
 
-这个问题的本质是**对象身份认证**问题：
+在微信开发者工具和真机上分别验证：
 
-```javascript
-// 问题：身份不匹配
-微信实例.constructor !== WebAssembly.Instance
-微信实例.__proto__ !== WebAssembly.Instance.prototype  
-
-// 解决方案：创建正确身份的对象
-兼容实例.constructor === WebAssembly.Instance  ✅
-兼容实例.__proto__ === WebAssembly.Instance.prototype  ✅
-兼容实例.exports === 原始实例.exports  ✅（功能保持）
-```
-
-### 类比说明
-
-这就像是**"身份证问题"**：
-- 微信小程序给了你一个有效的护照（功能正常）
-- 但 Go 运行时要求的是身份证（特定类型）
-- 我们的解决方案是**用身份证的格式重新制作一个证件，但保留原护照的所有信息**
-
-## 完整的实现代码
-
-```javascript
-// loader.js 中的关键部分
-async function loadGoWASM() {
-  // load wasm
-  let url = config.assetURLs["ispx.wasm"];
-  const go = new Go();
-  
-  // 在微信小程序环境中加载 WASM
-  const wasmResult = await WebAssembly.instantiate(url, go.importObject);
-  
-  // 创建与 Go 运行时兼容的 WebAssembly.Instance 对象
-  const compatibleInstance = Object.create(WebAssembly.Instance.prototype);
-  compatibleInstance.exports = wasmResult.instance.exports;
-  Object.defineProperty(compatibleInstance, 'constructor', {
-    value: WebAssembly.Instance,
-    writable: false,
-    enumerable: false,
-    configurable: true
-  });
-  
-  // 运行 Go WASM
-  await go.run(compatibleInstance);
-}
-```
-
-## 适用场景
-
-这种模式在以下场景中很常见：
-- **跨平台兼容性**：不同 JavaScript 运行时有自己的对象实现
-- **运行时环境差异**：小程序、Node.js、浏览器等环境的 API 差异
-- **第三方库集成**：当库对对象类型有严格要求时
-
-## 注意事项
-
-1. **性能影响**：创建兼容对象有轻微的性能开销，但在 WASM 初始化场景中可以忽略
-2. **维护性**：这是一个 workaround，需要关注微信小程序和 Go 运行时的更新
-3. **测试覆盖**：确保在微信小程序环境中充分测试 WASM 功能
-
-## 总结
-
-通过创建一个具有正确原型链和构造函数的兼容对象，我们成功解决了微信小程序中 Go WASM 的类型兼容性问题。这个解决方案既保持了原有的功能完整性，又满足了 Go 运行时的类型要求。
+1. `go.run` 不再报告 `WebAssembly.Instance expected`。
+2. `instance.exports.mem`、`getsp` 和 Go 导出的业务函数均可调用。
+3. 页面退出、panic 和重新启动流程仍能触发 SPX 的错误回调。
+4. 升级 Go、微信基础库或 SPX 模板后重新执行以上检查。

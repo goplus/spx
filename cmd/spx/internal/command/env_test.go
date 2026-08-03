@@ -42,6 +42,32 @@ func TestAdaptGoModAddsLocalReplaceForGeneratedGoMod(t *testing.T) {
 	}
 }
 
+func TestClearBuildRemovesArtifactsOnly(t *testing.T) {
+	projectDir := t.TempDir()
+	buildDir := filepath.Join(projectDir, ".builds")
+	if err := os.MkdirAll(buildDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(%s) returned error: %v", buildDir, err)
+	}
+	if err := os.WriteFile(filepath.Join(buildDir, "artifact"), []byte("build"), 0o644); err != nil {
+		t.Fatalf("WriteFile(build artifact) returned error: %v", err)
+	}
+	projectFile := filepath.Join(projectDir, "project.gd")
+	if err := os.WriteFile(projectFile, []byte("project"), 0o644); err != nil {
+		t.Fatalf("WriteFile(project file) returned error: %v", err)
+	}
+
+	cmd := CmdTool{ProjectDir: projectDir}
+	if err := cmd.ClearBuild(); err != nil {
+		t.Fatalf("ClearBuild() returned error: %v", err)
+	}
+	if _, err := os.Stat(buildDir); !os.IsNotExist(err) {
+		t.Fatalf("build directory still exists or returned unexpected error: %v", err)
+	}
+	if _, err := os.Stat(projectFile); err != nil {
+		t.Fatalf("project file was removed: %v", err)
+	}
+}
+
 func TestAdaptGoModRepairsStaleLocalReplacePath(t *testing.T) {
 	targetDir := setupAdaptGoModFixture(t)
 

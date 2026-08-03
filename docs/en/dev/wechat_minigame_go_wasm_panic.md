@@ -27,6 +27,8 @@ const text = decodeUTF8(bytes);
 
 `decodeUTF8` should use a verified host `TextDecoder` when available and a standards-compatible fallback otherwise. The fallback must handle multibyte UTF-8 and replacement behavior correctly.
 
+The exporter copies the Go runtime from `$(go env GOROOT)/lib/wasm/wasm_exec.js` to the generated `go.wasm.exec.js` (and the mini-game merger later folds it into `js/engine.js`). There is no repository-level `js/wasm_exec.js` at a fixed line number. Go strings carry an explicit byte length: validate the complete `[address, address + length)` range, do not stop at NUL, and do not swallow malformed-memory errors as an empty string.
+
 ## Implementation
 
 Keep the change in the mini-game runtime adapter or its platform-specific `wasm_exec.js`. Document the upstream Go version on which it is based so upgrades can re-evaluate the patch instead of silently carrying an obsolete copy.

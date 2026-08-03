@@ -4,6 +4,8 @@
 
 SPX Web exports combine the Go WASM runtime, a Godot/Emscripten build, JavaScript glue, and host-page assets. Prepare, build, and export with the same mode to avoid mismatched artifacts.
 
+The build planner currently uses `threads=no` and `proxy_to_pthread=no` for `normal`, `minigame`, and `miniprogram`. Only `worker` enables pthreads and `proxy_to_pthread`.
+
 ## `normal`
 
 The standard browser mode. Use it unless a target platform requires another mode.
@@ -16,11 +18,11 @@ make export-web MODE=normal
 
 ## `worker`
 
-Runs the engine workload in a Web Worker and uses worker-compatible canvas and messaging bridges. Browser APIs that require the main thread must be proxied deliberately. See [Web Worker mode](web_worker_mode.md).
+Runs the engine workload through Emscripten `PROXY_TO_PTHREAD` and uses worker-compatible canvas and messaging bridges. Browser APIs that require the main thread must be proxied deliberately. This is not process-level memory or error isolation. Threaded deployment generally requires `SharedArrayBuffer` and cross-origin isolation. See [Web Worker mode](web_worker_mode.md).
 
 ## `minigame`
 
-Targets mini-game environments whose JavaScript and WebAssembly implementations differ from a normal browser. The export includes compatibility adapters and platform packaging.
+Targets mini-game environments whose JavaScript and WebAssembly implementations differ from a normal browser. The export includes compatibility adapters and platform packaging. The Go launcher facade is a compatibility workaround, not a native `WebAssembly.Instance`; see [the mini-game adapter guide](../wxgame_go_wasm_adapter.md).
 
 ## `miniprogram`
 

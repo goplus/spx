@@ -8,7 +8,7 @@ spx help
 spx version
 ```
 
-Most project commands accept `--path <directory>` and default to the current directory.
+Most project commands accept `--path <directory>` and default to the current directory. The command list follows `cmd/spx/internal/command/args.go` and the command execution switch. `runm` and `exportbot` are accepted for compatibility but currently have no execution implementation.
 
 ## Command groups
 
@@ -20,8 +20,8 @@ Most project commands accept `--path <directory>` and default to the current dir
 | `version` | Display the SPX version. |
 | `init [directory]` | Create an SPX project. |
 | `editor` | Open a project in editor mode. |
-| `clear` | Clear generated project data. |
-| `clearbuild` | Clear build artifacts. |
+| `clear` | Delete the generated project directory and temporary generated files. This is destructive. |
+| `clearbuild` | Delete the project's `.builds` directory while preserving project files. |
 
 ### Development
 
@@ -32,7 +32,7 @@ Most project commands accept `--path <directory>` and default to the current dir
 | `runnative` | Run with the native desktop runtime. |
 | `rune` | Import assets and run with the editor runtime. |
 | `export` | Export a desktop package. |
-| `runm` | Run multiplayer mode. |
+| `runm` | Not implemented; currently performs no multiplayer work. |
 
 ### Web development
 
@@ -54,7 +54,7 @@ Most project commands accept `--path <directory>` and default to the current dir
 | `exportios` | Export an iOS package. |
 | `exportminigame` | Export a mini-game package. |
 | `exportminiprogram` | Export a mini-program package. |
-| `exportbot` | Export a bot package. |
+| `exportbot` | Not implemented; currently produces no bot package. |
 | `buildtinygo` | Build a TinyGo static library for the selected board. |
 
 ## Command details
@@ -90,11 +90,7 @@ The host must have the matching desktop export template/runtime assets.
 
 ### Multiplayer
 
-```sh
-spx runm
-spx runm --onlys
-spx runm --onlyc --serveraddr 127.0.0.1:8080
-```
+`runm` is currently retained as a parsed command name but does not start a server or client. The `--onlys`, `--onlyc`, and `--serveraddr` flags do not enable multiplayer until the command is implemented.
 
 ### Web
 
@@ -135,13 +131,20 @@ spx exportminiprogram
 | --- | --- |
 | `--path` | Project directory. |
 | `--serveraddr` | Multiplayer server address. |
+| `--controller` | Controller type name. |
 | `--servermode` | Build server mode. |
 | `--headless` | Run without a display. |
-| `--tags` | Go/XGo build tags. |
+| `--arch` | Target CPU architecture. |
+| `--onlys` | Multiplayer server-only mode (not usable while `runm` is unimplemented). |
+| `--onlyc` | Multiplayer client-only mode (not usable while `runm` is unimplemented). |
+| `--tags` | Go/XGo build tags; default is empty. |
+| `--target` | TinyGo target board; default is `esp32`. |
 | `--nomap` | Disable map-related output where supported. |
 | `--install` | Install after export where supported. |
 | `--debugweb` | Enable the Web debug service. |
 | `--fullscreen` | Export in full-screen mode. |
+| `--build` | Mini-game build mode: `normal` or `fast`; default is `normal`. |
+| `--mode` | Web build mode: `none`, `worker`, or `minigame`; default is `none`. |
 | `--movie` | Enable movie recording mode. |
 | `--goenv` | Use a portable Go environment directory. |
 | `-v` | Print verbose diagnostics. |

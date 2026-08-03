@@ -4,7 +4,7 @@ This engine-facing copy summarizes the platform fix described in [the full devel
 
 Mini-game environments may lack a browser-compatible `TextDecoder`. Go runtime calls then fail or corrupt text when JavaScript decodes a wrong memory range or uses an incomplete polyfill.
 
-Always create a `Uint8Array` with the exact WASM address and length, then decode it with a verified UTF-8 implementation:
+The exporter copies the Go runtime into `go.wasm.exec.js`; do not edit a nonexistent fixed `js/wasm_exec.js` path. Always create a `Uint8Array` with the exact WASM address and length, validate the complete memory range, then decode it with a verified UTF-8 implementation:
 
 ```js
 const bytes = new Uint8Array(memory.buffer, address, length);

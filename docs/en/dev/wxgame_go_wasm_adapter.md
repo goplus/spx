@@ -28,24 +28,28 @@ JavaScript prototype manipulation does not change an object's underlying host id
 
 A `Proxy` can forward properties and exports but does not supply required WebAssembly internal slots or constructor identity. Strict runtime checks still fail.
 
-## Working approach
+## Current SPX workaround
 
-Normalize the platform result at the adapter boundary and return the exact standard result shape expected by the bundled Go runtime. Where the platform API provides a genuine underlying module/instance, preserve those objects instead of wrapping them with ordinary JavaScript objects. Patch only the platform copy of `wasm_exec.js` or its adapter; do not change normal Web behavior.
-
-Conceptually:
+The current SPX mini-game path loads the module with the platform `WebAssembly.instantiate`, then creates a JavaScript compatibility facade for the Go launcher's `instanceof` check:
 
 ```js
-async function instantiateForGo(bytes, imports) {
-  const result = await platformInstantiate(bytes, imports);
-  return normalizeInstantiateResult(result);
-}
+const wasmResult = await WebAssembly.instantiate(url, go.importObject);
+const compatibleInstance = Object.create(WebAssembly.Instance.prototype);
+compatibleInstance.exports = wasmResult.instance.exports;
+Object.defineProperty(compatibleInstance, "constructor", {
+  value: WebAssembly.Instance,
+  writable: false,
+  enumerable: false,
+  configurable: true,
+});
+await go.run(compatibleInstance);
 ```
 
-`normalizeInstantiateResult` must verify the supported platform shapes and return `{ module, instance }` with a genuine instance. It must fail explicitly for an unknown shape.
+This facade is **not a native `WebAssembly.Instance`**. It only works because the current bundled Go runtime reads the copied `exports` object and does not require native instance internal slots after the type check. Do not describe it as a genuine instance, and revalidate it whenever the Go runtime or mini-game host changes. Patch only the platform export path; do not change normal Web behavior.
 
 ## Why it works
 
-The adapter translates between two host contracts before Go observes the result. Go receives the same object shape and native identity it expects, while SPX keeps mini-game-specific behavior out of shared runtime code.
+The adapter translates between two host contracts before Go observes the result. Go receives a compatible JavaScript shape, while SPX keeps mini-game-specific behavior out of shared runtime code. The facade cannot emulate missing WebAssembly features or native internal slots.
 
 ## Applicability
 
@@ -53,6 +57,7 @@ Use this pattern for non-browser hosts that provide real WebAssembly execution b
 
 ## Notes
 
+- The exporter copies `$(go env GOROOT)/lib/wasm/wasm_exec.js` to `go.wasm.exec.js`; there is no fixed `js/wasm_exec.js` source file in this repository.
 - Keep the adapter synchronized with the Go version shipped by SPX.
 - Test both compiled modules and raw bytes if both inputs are supported.
 - Preserve instantiate errors and stack information.
