@@ -1,11 +1,36 @@
-# Spx物理API设计
+# Spx 物理 API 设计草案（历史文档）
+
+> **重要：本文不是当前 API 参考。** 本页最初用于讨论物理 API 设计，后续保留了大量未落地的接口和伪代码；其中的 Go 默认参数写法（例如 `layer int64 = 0`）本身也不是合法 Go 语法。使用当前实现时，请以 [`sprite_physics.go`](../../../../sprite_physics.go) 和 [`sprite.go`](../../../../sprite.go) 中的导出方法为准。
+
+当前实现的关键签名如下；注意碰撞器和触发器通过 `isTrigger` 参数区分，方法名是 `ColliderShape`（单数），不是本文后面的历史草案名称：
+
+```go
+type PhysicsMode = int64
+type ColliderShapeType = int64
+
+func (p *SpriteImpl) SetPhysicsMode(mode PhysicsMode)
+func (p *SpriteImpl) PhysicsMode() PhysicsMode
+func (p *SpriteImpl) Velocity() (velocityX, velocityY float64)
+func (p *SpriteImpl) SetVelocity(velocityX, velocityY float64)
+func (p *SpriteImpl) Gravity() float64
+func (p *SpriteImpl) SetGravity(gravity float64)
+func (p *SpriteImpl) AddImpulse(impulseX, impulseY float64)
+func (p *SpriteImpl) IsOnFloor() bool
+
+func (p *SpriteImpl) SetColliderShape(isTrigger bool, ctype ColliderShapeType, params []float64) error
+func (p *SpriteImpl) ColliderShape(isTrigger bool) (ColliderShapeType, []float64)
+func (p *SpriteImpl) SetColliderPivot(isTrigger bool, offsetX, offsetY float64)
+func (p *SpriteImpl) ColliderPivot(isTrigger bool) (offsetX, offsetY float64)
+```
+
+`Raycast`、`IntersectRect`、`IntersectCircle` 和 Tilemap 方法也已在运行时实现，但它们的重载由 XGo 生成，不能把本文的默认参数示例直接当作 Go 代码编译。
 
 ## 设计理念
 
 采用CodeMonkey风格的极简API设计，只保留最核心的8个方法，覆盖80%的游戏物理需求。简洁、直观、易用。
 
 
-## 完整API概览
+## 完整 API 概览（历史设计，非当前 API）
 
 ```go
 // PhysicsMode 物理模式
@@ -169,7 +194,7 @@ func (p *Game) GetTile(posX, posY float64, layer int64 = 0) string
 3. 如果物理模式没有开启，所有精灵默认PhysicsMode = NoPhysics ,无物理效果，和scratch 保持一致
 4. 全局有个重力系数的配置globalGravity，SetGravity的值，其实会受到这个值的影响， eg: globalGravity = 9.8 , SetGravity(2.0), 则实际重力为 9.8 * 2.0 = 19.6
 
-## 核心API定义
+## 核心 API 定义（历史设计示例，非当前 API）
 
 ### 1. 物理控制接口（4个核心方法）
 

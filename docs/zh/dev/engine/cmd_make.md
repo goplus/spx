@@ -195,7 +195,7 @@ make runweb DEMO_INDEX=2 PORT=8080
 
 | 命令 | 说明 |
 | --- | --- |
-| `make format` | 运行 `go fmt ./...` |
+| `make format` | 分别在仓库根目录和 `cmd/ispx` 目录运行 `go fmt ./...` |
 | `make generate` | 执行代码生成并格式化；可用 `GODOT_SRC` 覆盖源码目录 |
 
 ## 推荐流程

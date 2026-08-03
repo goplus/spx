@@ -262,6 +262,15 @@ func (cmd *CmdTool) Clear() error {
 	return nil
 }
 
+// ClearBuild removes build artifacts while preserving the generated project.
+func (cmd *CmdTool) ClearBuild() error {
+	buildDir := filepath.Join(cmd.ProjectDir, ".builds")
+	if err := os.RemoveAll(buildDir); err != nil {
+		return fmt.Errorf("failed to remove build directory: %w", err)
+	}
+	return nil
+}
+
 func resolveTargetPlatform() (string, string, error) {
 	goos := runtime.GOOS
 	if value := os.Getenv("GOOS"); value != "" {

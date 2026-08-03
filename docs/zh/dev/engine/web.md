@@ -1,33 +1,33 @@
 ### web 平台模式实现注意事项
 
-#### 0.web 平台注意事项：
-- 如果使用了 cgo， 将无法生成 wasm, 所以web相关代码，需要进行条件编译绕开cgo
-- go 生成的wasm，默认不能和c++的wasm 直接拼接，需要使用js 进行缝合拼接 
+#### 0. Web 平台注意事项
+
+- 如果使用了 cgo，将无法生成 wasm；Web 相关代码需要通过条件编译绕开 cgo。
+- Go 生成的 wasm 默认不能和 C++ 的 wasm 直接拼接，需要使用 JavaScript 胶水代码进行组合。
+- 当前模式配置由 `internal/cmd/buildctl/engine/build_shell.go` 统一决定：`normal`、`minigame` 和 `miniprogram` 使用单线程，`worker` 使用 pthread。
 
 #### 1. 普通模式(normal)
-1. 多线程
-2. 需要注意web平台go相关的特别处理即可
+1. 单线程（`threads=no`、`proxy_to_pthread=no`）。
+2. 需要注意 Web 平台 Go 相关的特别处理。
 
 #### 2. 独立Worker模式(worker)
-1. 多线程 + proxy_to_pthread
-2. 通信机制需要借由 postMessage 实现，需要在 emcc 生成的 js 代码中插入额外的代码进行处理
-  （这属于emcc内部实现，更改emcc版本的时候注意需要进行兼容实现）
-3. js的worker 不是其他语言的线程，不同worker之间不能共享全局变量，需要通过 postMessage 进行传递，且postMessage 不能传递指针
-4. 因为worker的沙盒属性，所以go 必须和引擎在同一个worker中，不能跨worker，否则无法用js 进行缝合，
-   需要在恰当的时机进行go wasm的初始化，以及go wasm, js, c++ wasm 之间的交互问题需要特别注意
+1. 多线程 + `proxy_to_pthread`。
+2. 通信机制借由 `postMessage` 实现，Emscripten 生成的 JavaScript 需要额外兼容代码；升级 Emscripten 时必须重新验证。
+3. 不同 Worker 不能直接共享普通 JavaScript 全局变量，也不能直接传递 Go/C++ 指针；应传递可序列化值或明确的 transferable buffer。
+4. Go 运行时与引擎需要在同一套 Worker/pthread 桥接中初始化。该模式不是完整的进程级沙箱，资源、内存和错误仍可能通过宿主桥接影响页面。
+5. 浏览器通常要求跨源隔离（`Cross-Origin-Opener-Policy` / `Cross-Origin-Embedder-Policy`）才能使用 `SharedArrayBuffer`，部署页面时需要同时满足浏览器和服务器配置要求。
 
 #### 3. 小游戏模式(minigame)
-1. 必须单线程，因为微信小游戏限制 (godot4.2.2 版本不支持，需要升级到godot4.3或更加后面的版本)
-2. 包体大小需要进行限制，最大30M,所以 wasm 需要进行brotli压缩
-3. 音频需要特殊处理, godot 当前版本音频解决方案依赖于 AudioWorklet，微信小游戏不支持，需要进行替换
-4. go wasm 解析需要进行适配，(需要对go官方wasm_exec.js进行修改适配)
-5. 文件系统需要进行适配
-6. wasm 加载机制需要进行适配, 注意 WebAssembly 不是原生类型，是wx.WebAssembly类型，是要绕开
+1. 单线程；当前构建配置对小游戏使用 `threads=no`。如果使用旧的 Godot 4.2.2 构建，应先确认小游戏导出兼容性；仓库当前内置版本为 Godot 4.4.1。
+2. 微信平台的包体限制可能调整，不能把 30M 当作永久规则。导出流程在压缩模式下会将 wasm 压缩为 Brotli；可用 `-build=fast` 跳过压缩以加快本地调试。
+3. 音频需要特殊处理；Godot Web 音频驱动同时包含 AudioWorklet 和 ScriptProcessor 路径，小游戏适配层需要提供兼容的音频上下文，最终使用哪条路径取决于目标运行时能力。
+4. Go wasm 启动需要兼容层。导出文件中的 `go.wasm.exec.js` 来自当前 Go 环境，不是仓库内固定的 `js/wasm_exec.js`。
+5. 文件系统和 wasm 加载机制需要通过小游戏适配层处理。适配层把 `GameGlobal.WebAssembly` 指向 `WXWebAssembly`；Go 启动代码使用一个仅用于通过当前运行时类型检查的兼容 facade，并非原生 `WebAssembly.Instance`。详见[小游戏 Go WASM 兼容层](./web_minigame_go_wasm_adapter.md)。
 
 #### 4. 小程序模式(miniprogram)
-1. 单线程 || 多线程 都可以，目前用的是单线程
-2. 借用 web-view 进行实现(个人开发者版本无这个功能)
-2. 因为微信小程序的限制， 消息传递机制 需要特别处理
+1. 当前构建配置使用单线程；构建规划器也支持显式的 worker 模式，但小程序模板不能据此推断为可用。
+2. 借用 web-view 实现（是否可用取决于微信账号和平台限制）。
+3. 因为微信小程序的限制，消息传递机制需要特别处理：
  - 小程序 -> web-view 需要通过 url参数 进行传递
  - web-view -> 小程序 需要通过 postMessage 进行传递（但是只能在特定时机生效）
 
@@ -44,8 +44,6 @@
 - `webworker` 是独立Worker模式
 - `webminigame` 是小游戏模式
 - `webminiprogram` 是小程序模式
-
-
 
 
 

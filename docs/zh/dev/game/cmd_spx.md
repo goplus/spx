@@ -8,6 +8,8 @@
 spx <命令> [参数]
 ```
 
+本文中的命令清单以 `cmd/spx/internal/command/args.go` 和命令执行逻辑为准。`runm` 和 `exportbot` 目前虽然会被命令行解析器接受，但没有实际执行逻辑，下面会单独标注为“未实现”。
+
 ## 命令分类
 
 SPX 命令工具提供以下几类命令：
@@ -20,19 +22,20 @@ SPX 命令工具提供以下几类命令：
 | `version` | 显示版本信息 |
 | `init` | 在当前目录或指定目录创建 SPX 项目 |
 | `editor` | 在编辑器模式下打开当前项目 |
-| `clear` | 清理项目 |
-| `clearbuild` | 清理构建产物 |
+| `clear` | 删除生成的项目目录和临时生成文件（破坏性操作） |
+| `clearbuild` | 删除 `.builds` 构建产物并保留项目文件 |
 
 ### 开发命令
 
 | 命令 | 描述 |
 | --- | --- |
 | `build` | 构建动态库 |
+| `buildtinygo` | 使用 TinyGo 为 ESP32 构建静态库 |
 | `run` | 以解释器模式运行当前项目 |
 | `runnative` | 以原生 PC 运行时运行当前项目 |
 | `rune` | 在编辑器模式下运行当前项目 |
 | `export` | 导出 PC 包（macOS、Windows、Linux） |
-| `runm` | 在多人模式下运行项目 |
+| `runm` | 未实现；当前不会启动多人模式 |
 
 ### Web 开发命令
 
@@ -40,11 +43,11 @@ SPX 命令工具提供以下几类命令：
 | --- | --- |
 | `buildweb` | 构建 WebAssembly (WASM) |
 | `runweb` | 启动 Web 服务器运行项目 |
+| `runwebworker` | 启动 Web Worker 版本 |
 | `exportweb` | 导出 Web 包 |
+| `exportwebworker` | 导出 Web Worker 包 |
+| `exporttemplateweb` | 导出 Web 模板包 |
 | `stopweb` | 停止 Web 服务器 |
-| `runwebeditor` | 在 Web 编辑器模式下运行项目 |
-| `exportwebeditor` | 导出 Web 编辑器包 |
-| `exportwebruntime` | 导出 Web 运行时包 |
 
 ### 移动端与机器人开发命令
 
@@ -53,6 +56,10 @@ SPX 命令工具提供以下几类命令：
 | `exportbot` | 导出机器人包 |
 | `exportapk` | 导出 Android APK |
 | `exportios` | 导出 iOS 包 |
+| `exportminigame` | 导出微信小游戏包 |
+| `exportminiprogram` | 导出微信小程序包 |
+
+`exportbot` 当前与 `runm` 一样只被解析器保留，尚未实现导出逻辑。
 
 ## 命令详细说明
 
@@ -96,7 +103,7 @@ spx editor
 
 #### `clear`
 
-清理项目，删除临时文件和构建产物。
+清理生成内容。此命令会删除 `<path>/project` 整个生成项目目录，以及 `<path>/.temp`、`<path>/go.sum` 和 `<path>/xgo_autogen.go`；不会只删除构建产物。执行前请确认这些文件不包含需要保留的本地修改，并先做好备份。
 
 ```bash
 spx clear
@@ -104,7 +111,7 @@ spx clear
 
 #### `clearbuild`
 
-清理构建产物，但保留项目文件。
+删除当前生成项目目录下的 `.builds` 构建产物，并保留项目文件及源代码。
 
 ```bash
 spx clearbuild
@@ -122,6 +129,14 @@ spx build
 
 # 服务器模式构建
 spx build --servermode
+```
+
+#### `buildtinygo`
+
+使用 TinyGo 为 ESP32 构建静态库。该命令主要用于嵌入式目标，不是普通桌面项目的构建步骤。
+
+```bash
+spx buildtinygo
 ```
 
 #### `run`
@@ -171,20 +186,11 @@ spx export
 
 #### `runm`
 
-在多人模式下运行项目，支持联机功能。
+当前命令解析器保留了 `runm` 名称，但没有多人模式执行逻辑，执行不会启动服务器或客户端。`--onlys`、`--onlyc` 和 `--serveraddr` 只是已注册的通用参数，不能使该命令获得多人模式功能。
 
 ```bash
 # 运行多人模式
-spx runm
-
-# 仅启动服务器
-spx runm --onlys
-
-# 仅启动客户端
-spx runm --onlyc
-
-# 指定服务器地址
-spx runm --serveraddr 127.0.0.1:8080
+spx runm  # 当前未实现，不建议用于实际运行
 ```
 
 ### Web 开发命令
@@ -209,6 +215,14 @@ spx runweb
 spx runweb --debugweb
 ```
 
+#### `runwebworker`
+
+构建并启动 Web Worker 版本。浏览器部署通常需要满足 `SharedArrayBuffer` 的跨源隔离要求，具体限制见[Web Worker 文档](../engine/web_worker_mode.md)。
+
+```bash
+spx runwebworker
+```
+
 #### `exportweb`
 
 导出项目的 Web 包，可以部署到服务器。
@@ -225,38 +239,30 @@ spx exportweb
 spx stopweb
 ```
 
-#### `runwebeditor`
+#### `exportwebworker`
 
-在 Web 编辑器模式下运行项目，支持在浏览器中进行开发。
+导出 Web Worker 包。
 
 ```bash
-spx runwebeditor
+spx exportwebworker
 ```
 
-#### `exportwebeditor`
+#### `exporttemplateweb`
 
-导出项目的 Web 编辑器包。
-
-```bash
-spx exportwebeditor
-```
-
-#### `exportwebruntime`
-
-导出项目的 Web 运行时包。
+导出 Web 模板包，用于检查或复用引擎模板。
 
 ```bash
-spx exportwebruntime
+spx exporttemplateweb
 ```
 
 ### 移动端与机器人开发命令
 
 #### `exportbot`
 
-导出机器人包，用于自动化和机器人应用。
+当前命令解析器保留了 `exportbot` 名称，但没有机器人导出逻辑，执行不会生成机器人包。
 
 ```bash
-spx exportbot
+spx exportbot  # 当前未实现，不建议使用
 ```
 
 #### `exportapk`
@@ -279,6 +285,23 @@ spx exportapk --install
 spx exportios
 ```
 
+#### `exportminigame`
+
+导出微信小游戏包。默认构建模式会压缩 wasm；使用 `-build=fast` 可跳过压缩以加快本地调试。
+
+```bash
+spx exportminigame
+spx exportminigame -build=fast
+```
+
+#### `exportminiprogram`
+
+导出微信小程序包。
+
+```bash
+spx exportminiprogram
+```
+
 ## 通用参数
 
 SPX 命令工具支持以下通用参数，可以与各种命令组合使用：
@@ -286,11 +309,24 @@ SPX 命令工具支持以下通用参数，可以与各种命令组合使用：
 | 参数 | 描述 |
 | --- | --- |
 | `--path <路径>` | 指定项目路径，默认为当前目录 |
-| `--serveraddr <地址>` | 指定服务器地址，用于网络功能 |
+| `--serveraddr <地址>` | 指定服务器地址 |
+| `--controller <名称>` | 指定控制器类型名称 |
+| `--servermode` | 服务器模式 |
 | `--headless` | 无界面模式，适用于服务器环境 |
 | `--arch <架构>` | 指定 CPU 架构 |
-| `--tags <标签>` | 指定构建标签，默认为 simulation |
+| `--onlys` | 多人模式仅启动服务器（当前 `runm` 未实现） |
+| `--onlyc` | 多人模式仅启动客户端（当前 `runm` 未实现） |
+| `--tags <标签>` | 指定 Go 构建标签，默认值为空 |
+| `--target <目标>` | 指定 TinyGo 目标板，默认 `esp32` |
+| `--nomap` | 无地图模式 |
+| `--install` | 导出后安装（当前主要用于 Android） |
+| `--debugweb` | 开启 Web 调试服务 |
 | `--fullscreen` | 全屏模式 |
+| `--build <模式>` | 小游戏构建模式：`normal` 或 `fast`，默认 `normal` |
+| `--mode <模式>` | Web 构建模式：`none`、`worker` 或 `minigame`，默认 `none` |
+| `--movie` | 录制运行画面 |
+| `--goenv <目录>` | 指定便携 Go 环境目录 |
+| `-v` | 输出详细日志 |
 
 ## 使用示例
 
