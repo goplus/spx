@@ -16,7 +16,8 @@ Expected behavior:
    center is interpreted in the same source-image pixel coordinate space.
 3. `R` rotates around the logical root. `F` flips left/right around the same
    root. `N` restores normal rotation.
-4. `P` draws a cyan pen segment in SPX `+Y`, so the segment must go upward.
+4. `P` draws a pen segment in SPX `+Y`, so the segment must go upward. The pen
+   uses the selected costume's anchor color: orange, purple, or green.
 5. `S` stamps the current rendered costume and then moves the live sprite to
    the right. The stamp must remain exactly where the rendered costume was.
 6. Arrow keys move both the logical root and its rendering together. `C`
