@@ -31,7 +31,7 @@ jobs:
       run_linux: ${{ steps.set-platforms.outputs.run_linux }}
     steps:
       - name: Check out code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           submodules: recursive
 

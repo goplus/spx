@@ -25,7 +25,7 @@ jobs:
             runs_on: macos-15
     steps:
       - name: Check out code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up toolchain and engine assets
         uses: ./.github/actions/deps

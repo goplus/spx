@@ -25,7 +25,7 @@ jobs:
             zip_file: spx_web_miniprogram.zip
     steps:
       - name: Check out code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
