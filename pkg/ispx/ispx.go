@@ -22,6 +22,7 @@ import (
 	"sync"
 
 	"github.com/goplus/ixgo"
+	"github.com/goplus/ixgo/transform"
 	"github.com/goplus/ixgo/xgobuild"
 	"github.com/goplus/mod/modfile"
 	_ "github.com/goplus/reflectx/icall/icall2048"
@@ -42,11 +43,28 @@ func init() {
 }
 
 var (
-	mu         sync.Mutex
-	ixgoCtx    *ixgo.Context
-	ixgoInterp *ixgo.Interp
-	runDone    chan struct{}
+	mu          sync.Mutex
+	ixgoCtx     *ixgo.Context
+	ixgoInterp  *ixgo.Interp
+	runDone     chan struct{}
+	optimizeSSA bool
 )
+
+// initOptions controls optional interpreter initialization behavior.
+type initOptions struct {
+	optimizeSSA bool
+}
+
+// InitOption configures interpreter initialization.
+type InitOption func(*initOptions)
+
+// WithSSAOptimization enables ixgo's default SSA transformation pipeline before
+// creating the interpreter.
+func WithSSAOptimization() InitOption {
+	return func(options *initOptions) {
+		options.optimizeSSA = true
+	}
+}
 
 // defaultPackagesToImport is the list of packages that are always imported by ispx.
 var defaultPackagesToImport = []string{
@@ -75,12 +93,17 @@ var defaultPackagesToImport = []string{
 // If ctx is nil, a default [ixgo.Context] will be created.
 //
 // If ctx.Lookup is nil, a default lookup function will be set.
-func Init(ctx *ixgo.Context) error {
+func Init(ctx *ixgo.Context, options ...InitOption) error {
 	mu.Lock()
 	defer mu.Unlock()
 
 	if ixgoCtx != nil {
 		panic("ispx: already initialized")
+	}
+
+	var opts initOptions
+	for _, option := range options {
+		option(&opts)
 	}
 
 	if ctx == nil {
@@ -115,6 +138,7 @@ func XGot_Game_XGox_GetWidget[T any](sg ShapeGetter, name WidgetName) *T {
 	}
 
 	ixgoCtx = ctx
+	optimizeSSA = opts.optimizeSSA
 	return nil
 }
 
@@ -155,6 +179,11 @@ func BuildFS(fsys fs.FS) error {
 	pkg, err := ixgoCtx.LoadFile("main.go", source)
 	if err != nil {
 		return fmt.Errorf("failed to load XGo source: %w", err)
+	}
+	if optimizeSSA {
+		if err := transform.Transform(pkg); err != nil {
+			return fmt.Errorf("failed to transform SSA: %w", err)
+		}
 	}
 
 	interp, err := ixgoCtx.NewInterp(pkg)
