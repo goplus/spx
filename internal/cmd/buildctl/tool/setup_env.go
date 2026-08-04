@@ -31,7 +31,7 @@ import (
 )
 
 const (
-	requiredSConsVersion = "4.7.0"
+	requiredSConsVersion = "4.8.1"
 	requiredJDKMajor     = 17
 	requiredEMSDKVersion = "3.1.62"
 )
@@ -103,17 +103,55 @@ func parseToolSetupEMSDKArgs(args []string) (toolSetupEMSDKConfig, error) {
 }
 
 func setupSCons() error {
+	_, err := ensureSCons()
+	return err
+}
+
+func ensureSCons() (string, error) {
 	python, err := detectPythonCommand()
 	if err != nil {
-		return err
+		return "", err
 	}
 	if err := buildEnvRunStreaming("", python, "-c", "import sys; print(sys.version)"); err != nil {
-		return err
+		return "", err
 	}
-	if err := buildEnvRunStreaming("", python, "-m", "pip", "install", "scons=="+requiredSConsVersion, "--break-system-packages"); err != nil {
-		return err
+
+	repoRoot, err := findRepoRoot()
+	if err != nil {
+		return "", err
 	}
-	return buildEnvRunStreaming("", "scons", "--version")
+	venvDir := filepath.Join(repoRoot, ".bin", "scons-"+requiredSConsVersion)
+	venvPython, sconsCommand := sconsEnvironmentCommands(venvDir)
+	if fileExists(venvPython) && fileExists(sconsCommand) {
+		output, versionErr := BuildEnvRunOutputWithDir("", os.Environ(), venvPython, "-c", "import SCons; print(SCons.__version__)")
+		if versionErr == nil && strings.TrimSpace(string(output)) == requiredSConsVersion {
+			if err := buildEnvRunStreaming("", sconsCommand, "--version"); err != nil {
+				return "", err
+			}
+			return sconsCommand, nil
+		}
+	}
+
+	if err := os.MkdirAll(filepath.Dir(venvDir), 0o755); err != nil {
+		return "", err
+	}
+	if err := buildEnvRunStreaming("", python, "-m", "venv", venvDir); err != nil {
+		return "", err
+	}
+	if err := buildEnvRunStreaming("", venvPython, "-m", "pip", "install", "scons=="+requiredSConsVersion); err != nil {
+		return "", err
+	}
+	if err := buildEnvRunStreaming("", sconsCommand, "--version"); err != nil {
+		return "", err
+	}
+	return sconsCommand, nil
+}
+
+func sconsEnvironmentCommands(venvDir string) (pythonCommand, sconsCommand string) {
+	if runtime.GOOS == "windows" {
+		return filepath.Join(venvDir, "Scripts", "python.exe"), filepath.Join(venvDir, "Scripts", "scons.exe")
+	}
+	return filepath.Join(venvDir, "bin", "python"), filepath.Join(venvDir, "bin", "scons")
 }
 
 func setupJDK() error {

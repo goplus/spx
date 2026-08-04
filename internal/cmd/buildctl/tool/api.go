@@ -105,6 +105,10 @@ func SetupSCons() error {
 	return setupSCons()
 }
 
+func EnsureSCons() (string, error) {
+	return ensureSCons()
+}
+
 func SetupJDK() error {
 	return setupJDK()
 }

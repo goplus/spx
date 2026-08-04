@@ -40,6 +40,13 @@ func TestSConsScriptIncludesCommonArgs(t *testing.T) {
 	}
 }
 
+func TestSConsScriptQuotesCommandPath(t *testing.T) {
+	script := sconsScriptWithCommand("/tmp/spx tools/scons", []string{"platform=ios target=template_debug"})
+	if !strings.HasPrefix(script, "'/tmp/spx tools/scons' optimize=size") {
+		t.Fatalf("sconsScriptWithCommand did not quote command path: %q", script)
+	}
+}
+
 func TestMergeStringMapsOverridesExisting(t *testing.T) {
 	merged := mergeStringMaps(
 		map[string]string{"PATH": "/usr/bin", "A": "1"},
