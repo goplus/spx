@@ -13,6 +13,24 @@ func syncLogicalRoot() {
 	RootMarker.SetXYpos xpos, ypos
 }
 
+func syncAnchorPenColor() {
+	// Match the pen to the colored anchor in the selected costume.
+	if costumeName == "asset-20-20" {
+		setPenColor HSB(6, 91, 97) // #f97316
+		return
+	}
+	if costumeName == "asset-100-60" {
+		setPenColor HSB(39, 83, 77) // #22c55e
+		return
+	}
+	setPenColor HSB(73, 64, 96) // #8b5cf6
+}
+
+func selectNextCostume() {
+	setCostume Next
+	syncAnchorPenColor
+}
+
 func acceptLogicalPosition() {
 	// Motion can be clamped by the stage fence. Use the resulting logical SPX
 	// position as the baseline for later costume/rotation invariants.
@@ -41,32 +59,34 @@ func resetCoordinateDemo() {
 	setRotationStyle Normal
 	setHeading 90
 	setCostume 0
+	syncAnchorPenColor
 	flipped = false
 	reportState "reset"
 }
 
 onStart => {
 	setPenSize 4
-	setPenColor HSB(52, 80, 90)
 	resetCoordinateDemo
 
 	// Exercise each asset-space center once. Only RenderRoot should move.
 	for i := 0; i < 3; i++ {
 		setCostume i
+		syncAnchorPenColor
 		reportState "startup center conversion"
 		wait 0.8s
 	}
 	setCostume 0
+	syncAnchorPenColor
 	reportState "ready"
 }
 
 onClick => {
-	setCostume Next
+	selectNextCostume
 	reportState "click: next costume center"
 }
 
 onKey KeySpace, => {
-	setCostume Next
+	selectNextCostume
 	reportState "next costume center"
 }
 
