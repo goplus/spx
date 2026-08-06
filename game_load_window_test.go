@@ -1,9 +1,12 @@
 package spx
 
 import (
+	"reflect"
 	"testing"
 
+	"github.com/goplus/spbase/mathf"
 	coreproject "github.com/goplus/spx/v3/internal/core/project"
+	internalengine "github.com/goplus/spx/v3/internal/engine"
 )
 
 func TestSetupWorldAndWindowClampsBackdropWindowToWorld(t *testing.T) {
@@ -38,5 +41,34 @@ func TestSetupWorldAndWindowClampsBackdropWindowToWorld(t *testing.T) {
 	}
 	if game.displayState.MapMode != coreproject.MapModeRepeat {
 		t.Fatalf("map mode = %d, want %d", game.displayState.MapMode, coreproject.MapModeRepeat)
+	}
+}
+
+func TestSyncPenCanvasToWorldUsesLogicalStageSize(t *testing.T) {
+	spy := setupSpyPenMgr(t)
+	game := &Game{}
+	game.displayState.WorldWidth = 640
+	game.displayState.WorldHeight = 480
+	game.displayState.WindowWidth = 480
+	game.displayState.WindowHeight = 360
+
+	game.syncPenCanvasToWorld()
+
+	if spy.canvasCalls != 1 || spy.canvasWidth != 640 || spy.canvasHeight != 480 {
+		t.Fatalf("pen canvas calls/size = %d/%dx%d, want 1/640x480", spy.canvasCalls, spy.canvasWidth, spy.canvasHeight)
+	}
+}
+
+func TestSyncPenCanvasToWorldFlushesPendingCommandsFirst(t *testing.T) {
+	spy := setupSpyPenMgr(t)
+	game := &Game{penSyncBuffer: internalengine.NewPenSyncBuffer(1)}
+	game.displayState.WorldWidth = 640
+	game.displayState.WorldHeight = 480
+	game.queuePenMove(1, mathf.NewVec2(10, 20))
+
+	game.syncPenCanvasToWorld()
+
+	if want := []string{"batch", "canvas"}; !reflect.DeepEqual(spy.events, want) {
+		t.Fatalf("events = %v, want %v", spy.events, want)
 	}
 }

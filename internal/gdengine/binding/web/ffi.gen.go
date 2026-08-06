@@ -100,6 +100,7 @@ type GDExtensionInterface struct {
 	SpxNavigationSetObstacle                    js.Value
 	SpxNavigationFindPath                       js.Value
 	SpxPenDestroyAllPens                        js.Value
+	SpxPenSetCanvasSize                         js.Value
 	SpxPenCreatePen                             js.Value
 	SpxPenDestroyPen                            js.Value
 	SpxPenBatchUpdateCommands                   js.Value
@@ -434,6 +435,7 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxNavigationSetObstacle = resolveJSFunc("gdspx_navigation_set_obstacle")
 	x.SpxNavigationFindPath = resolveJSFunc("gdspx_navigation_find_path")
 	x.SpxPenDestroyAllPens = resolveJSFunc("gdspx_pen_destroy_all_pens")
+	x.SpxPenSetCanvasSize = resolveJSFunc("gdspx_pen_set_canvas_size")
 	x.SpxPenCreatePen = resolveJSFunc("gdspx_pen_create_pen")
 	x.SpxPenDestroyPen = resolveJSFunc("gdspx_pen_destroy_pen")
 	x.SpxPenBatchUpdateCommands = resolveJSFunc("gdspx_pen_batch_update_commands")

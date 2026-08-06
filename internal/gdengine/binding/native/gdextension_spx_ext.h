@@ -283,6 +283,7 @@ typedef void (*GDExtensionSpxNavigationSetObstacle)(GdObj obj, GdBool enabled);
 typedef void (*GDExtensionSpxNavigationFindPath)(GdVec2 p_from, GdVec2 p_to, GdBool with_jump, GdArray *ret_value);
 // SpxPen
 typedef void (*GDExtensionSpxPenDestroyAllPens)();
+typedef void (*GDExtensionSpxPenSetCanvasSize)(GdInt width, GdInt height);
 typedef void (*GDExtensionSpxPenCreatePen)(GdObj *ret_value);
 typedef void (*GDExtensionSpxPenDestroyPen)(GdObj obj);
 typedef void (*GDExtensionSpxPenBatchUpdateCommands)(const float *buffer_data, int len);

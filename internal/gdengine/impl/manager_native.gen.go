@@ -468,6 +468,11 @@ func (pself *navigationMgr) FindPath(p_from Vec2, p_to Vec2, with_jump bool) Arr
 func (pself *penMgr) DestroyAllPens() {
 	CallPenDestroyAllPens()
 }
+func (pself *penMgr) SetCanvasSize(width int64, height int64) {
+	arg0 := ToGdInt(width)
+	arg1 := ToGdInt(height)
+	CallPenSetCanvasSize(arg0, arg1)
+}
 func (pself *penMgr) CreatePen() Object {
 	retValue := CallPenCreatePen()
 	return ToObject(retValue)

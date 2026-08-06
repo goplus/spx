@@ -372,6 +372,12 @@ void cgo_callfn_GDExtensionSpxPenDestroyAllPens(const GDExtensionSpxPenDestroyAl
 	}
 	fn();
 }
+void cgo_callfn_GDExtensionSpxPenSetCanvasSize(const GDExtensionSpxPenSetCanvasSize fn, GdInt width, GdInt height) {
+	if (!fn) {
+		return;
+	}
+	fn(width, height);
+}
 void cgo_callfn_GDExtensionSpxPenCreatePen(const GDExtensionSpxPenCreatePen fn, GdObj* ret_val) {
 	if (!fn) {
 		return;

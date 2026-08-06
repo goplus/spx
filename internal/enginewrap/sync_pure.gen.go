@@ -281,7 +281,8 @@ func (*navigationMgrImpl) FindPath(p_from Vec2, p_to Vec2, with_jump bool) gdx.A
 }
 
 // IPenMgr
-func (*penMgrImpl) DestroyAllPens() {}
+func (*penMgrImpl) DestroyAllPens()                         {}
+func (*penMgrImpl) SetCanvasSize(width int64, height int64) {}
 func (*penMgrImpl) CreatePen() gdx.Object {
 	return 0
 }

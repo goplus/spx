@@ -127,6 +127,7 @@ type INavigationMgr interface {
 
 type IPenMgr interface {
 	DestroyAllPens()
+	SetCanvasSize(width int64, height int64)
 	CreatePen() Object
 	DestroyPen(obj Object)
 	BatchUpdateCommands(buffer []float32)
