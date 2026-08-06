@@ -194,10 +194,13 @@ type IResMgr interface {
 	GetImageSize(p_path string) Vec2
 	ReadAllText(p_path string) string
 	HasFile(p_path string) bool
+	ListDirectories(p_path string) string
 	ReloadTexture(path string)
 	FreeStr(str string)
+	ApplyProjectFonts(default_font_path string, font_paths Array, font_families Array, preferences Array) string
 	SetDefaultFont(font_path string)
-	RegisterSvgFontFace(font_path string, family string)
+	RegisterFontFace(font_path string, family string)
+	SetFontPreferences(preferences Array)
 }
 
 type ISceneMgr interface {

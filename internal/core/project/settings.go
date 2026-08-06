@@ -32,6 +32,7 @@ const (
 type LoadedBuilderProject struct {
 	Config  Config
 	Project ProjectConfig
+	Fonts   ProjectFonts
 }
 
 func LoadBuilderProject(fs spxfs.Dir, gameConf *Config) (LoadedBuilderProject, error) {
@@ -46,6 +47,11 @@ func LoadBuilderProject(fs spxfs.Dir, gameConf *Config) (LoadedBuilderProject, e
 		return LoadedBuilderProject{}, err
 	}
 	normalizeProjectConfigPaths(&loaded.Project)
+	fonts, err := LoadProjectFonts(fs, loaded.Project.FontPreferences)
+	if err != nil {
+		return LoadedBuilderProject{}, err
+	}
+	loaded.Fonts = fonts
 
 	if gameConf == nil && loaded.Project.Run != nil {
 		loaded.Config = *loaded.Project.Run

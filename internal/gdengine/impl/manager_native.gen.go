@@ -785,6 +785,13 @@ func (pself *resMgr) HasFile(p_path string) bool {
 	retValue := CallResHasFile(arg0)
 	return ToBool(retValue)
 }
+func (pself *resMgr) ListDirectories(p_path string) string {
+	arg0Str := C.CString(p_path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	retValue := CallResListDirectories(arg0)
+	return ToString(retValue)
+}
 func (pself *resMgr) ReloadTexture(path string) {
 	arg0Str := C.CString(path)
 	arg0 := (GdString)(arg0Str)
@@ -797,20 +804,62 @@ func (pself *resMgr) FreeStr(str string) {
 	defer C.free(unsafe.Pointer(arg0Str))
 	CallResFreeStr(arg0)
 }
+func (pself *resMgr) ApplyProjectFonts(default_font_path string, font_paths Array, font_families Array, preferences Array) string {
+	arg0Str := C.CString(default_font_path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	arg1Info := ToGdArrayInfo(font_paths)
+	if arg1Info != nil {
+		defer arg1Info.Free()
+	}
+	arg1 := GdArray(nil)
+	if arg1Info != nil {
+		arg1 = arg1Info.Raw()
+	}
+	arg2Info := ToGdArrayInfo(font_families)
+	if arg2Info != nil {
+		defer arg2Info.Free()
+	}
+	arg2 := GdArray(nil)
+	if arg2Info != nil {
+		arg2 = arg2Info.Raw()
+	}
+	arg3Info := ToGdArrayInfo(preferences)
+	if arg3Info != nil {
+		defer arg3Info.Free()
+	}
+	arg3 := GdArray(nil)
+	if arg3Info != nil {
+		arg3 = arg3Info.Raw()
+	}
+	retValue := CallResApplyProjectFonts(arg0, arg1, arg2, arg3)
+	return ToString(retValue)
+}
 func (pself *resMgr) SetDefaultFont(font_path string) {
 	arg0Str := C.CString(font_path)
 	arg0 := (GdString)(arg0Str)
 	defer C.free(unsafe.Pointer(arg0Str))
 	CallResSetDefaultFont(arg0)
 }
-func (pself *resMgr) RegisterSvgFontFace(font_path string, family string) {
+func (pself *resMgr) RegisterFontFace(font_path string, family string) {
 	arg0Str := C.CString(font_path)
 	arg0 := (GdString)(arg0Str)
 	defer C.free(unsafe.Pointer(arg0Str))
 	arg1Str := C.CString(family)
 	arg1 := (GdString)(arg1Str)
 	defer C.free(unsafe.Pointer(arg1Str))
-	CallResRegisterSvgFontFace(arg0, arg1)
+	CallResRegisterFontFace(arg0, arg1)
+}
+func (pself *resMgr) SetFontPreferences(preferences Array) {
+	arg0Info := ToGdArrayInfo(preferences)
+	if arg0Info != nil {
+		defer arg0Info.Free()
+	}
+	arg0 := GdArray(nil)
+	if arg0Info != nil {
+		arg0 = arg0Info.Raw()
+	}
+	CallResSetFontPreferences(arg0)
 }
 func (pself *sceneMgr) ChangeSceneToFile(path string) {
 	arg0Str := C.CString(path)

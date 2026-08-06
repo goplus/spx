@@ -1,0 +1,10 @@
+{
+  "backdrops": [
+    {
+      "name": "backdrop",
+      "path": "backdrop.svg"
+    }
+  ],
+  "fontPreferences": ["Pixel", "Color Emoji", "Arabic", "basic-chinese", "default"],
+  "zorder": []
+}

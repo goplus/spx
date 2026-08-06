@@ -37,14 +37,34 @@ func newSpxDir(fsys fs.FS, prefix string) spxfs.Dir {
 
 // Open implements [spxfs.Dir].
 func (d *spxDir) Open(file string) (io.ReadCloser, error) {
-	name := file
-	if d.prefix != "" {
-		name = path.Join(d.prefix, file)
-	}
-	return d.fsys.Open(name)
+	return d.fsys.Open(d.resolve(file))
 }
 
 // Close implements [spxfs.Dir].
 func (d *spxDir) Close() error {
 	return nil
+}
+
+// ReadDir implements [spxfs.ReadDirer]. The web interpreter only receives
+// source and JSON files, but their paths are sufficient to discover resource
+// collection directories such as assets/fonts/*.
+func (d *spxDir) ReadDir(name string) ([]spxfs.DirEntry, error) {
+	entries, err := fs.ReadDir(d.fsys, d.resolve(name))
+	if err != nil {
+		return nil, err
+	}
+	return spxfs.DirEntriesFromFS(entries), nil
+}
+
+// GetPath implements [spxfs.GdDir]. Binary assets are intentionally omitted
+// from the interpreter filesystem and are loaded by Godot from this path.
+func (d *spxDir) GetPath() string {
+	return d.prefix
+}
+
+func (d *spxDir) resolve(name string) string {
+	if d.prefix == "" {
+		return name
+	}
+	return path.Join(d.prefix, name)
 }

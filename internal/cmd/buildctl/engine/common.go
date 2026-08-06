@@ -61,7 +61,7 @@ func runStreamingCommand(workdir, name string, args ...string) error {
 
 var buildEnvRunStreaming = shared.RunStreamingCommand
 
-func setupSCons() error                                    { return toolpkg.SetupSCons() }
+func ensureSCons() (string, error)                         { return toolpkg.EnsureSCons() }
 func setupJDK() error                                      { return toolpkg.SetupJDK() }
 func setupEMSDK() error                                    { return toolpkg.SetupEMSDK() }
 func resolveJDKShellExports() (map[string]string, error)   { return toolpkg.ResolveJDKShellExports() }

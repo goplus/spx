@@ -219,10 +219,13 @@ type GDExtensionSpxResGetBoundFromAlpha C.GDExtensionSpxResGetBoundFromAlpha
 type GDExtensionSpxResGetImageSize C.GDExtensionSpxResGetImageSize
 type GDExtensionSpxResReadAllText C.GDExtensionSpxResReadAllText
 type GDExtensionSpxResHasFile C.GDExtensionSpxResHasFile
+type GDExtensionSpxResListDirectories C.GDExtensionSpxResListDirectories
 type GDExtensionSpxResReloadTexture C.GDExtensionSpxResReloadTexture
 type GDExtensionSpxResFreeStr C.GDExtensionSpxResFreeStr
+type GDExtensionSpxResApplyProjectFonts C.GDExtensionSpxResApplyProjectFonts
 type GDExtensionSpxResSetDefaultFont C.GDExtensionSpxResSetDefaultFont
-type GDExtensionSpxResRegisterSvgFontFace C.GDExtensionSpxResRegisterSvgFontFace
+type GDExtensionSpxResRegisterFontFace C.GDExtensionSpxResRegisterFontFace
+type GDExtensionSpxResSetFontPreferences C.GDExtensionSpxResSetFontPreferences
 type GDExtensionSpxSceneChangeSceneToFile C.GDExtensionSpxSceneChangeSceneToFile
 type GDExtensionSpxSceneDestroyAllSprites C.GDExtensionSpxSceneDestroyAllSprites
 type GDExtensionSpxSceneReloadCurrentScene C.GDExtensionSpxSceneReloadCurrentScene
@@ -1571,6 +1574,16 @@ func CallResHasFile(
 
 	return (GdBool)(ret_val)
 }
+func CallResListDirectories(
+	p_path GdString,
+) GdString {
+	arg0 := (C.GDExtensionSpxResListDirectories)(api.SpxResListDirectories)
+	arg1 := (C.GdString)(p_path)
+	var ret_val C.GdString
+	C.cgo_callfn_GDExtensionSpxResListDirectories(arg0, arg1, &ret_val)
+
+	return (GdString)(ret_val)
+}
 func CallResReloadTexture(
 	path GdString,
 ) {
@@ -1589,6 +1602,22 @@ func CallResFreeStr(
 	C.cgo_callfn_GDExtensionSpxResFreeStr(arg0, arg1)
 
 }
+func CallResApplyProjectFonts(
+	default_font_path GdString,
+	font_paths GdArray,
+	font_families GdArray,
+	preferences GdArray,
+) GdString {
+	arg0 := (C.GDExtensionSpxResApplyProjectFonts)(api.SpxResApplyProjectFonts)
+	arg1 := (C.GdString)(default_font_path)
+	arg2 := (C.GdArray)(font_paths)
+	arg3 := (C.GdArray)(font_families)
+	arg4 := (C.GdArray)(preferences)
+	var ret_val C.GdString
+	C.cgo_callfn_GDExtensionSpxResApplyProjectFonts(arg0, arg1, arg2, arg3, arg4, &ret_val)
+
+	return (GdString)(ret_val)
+}
 func CallResSetDefaultFont(
 	font_path GdString,
 ) {
@@ -1598,15 +1627,24 @@ func CallResSetDefaultFont(
 	C.cgo_callfn_GDExtensionSpxResSetDefaultFont(arg0, arg1)
 
 }
-func CallResRegisterSvgFontFace(
+func CallResRegisterFontFace(
 	font_path GdString,
 	family GdString,
 ) {
-	arg0 := (C.GDExtensionSpxResRegisterSvgFontFace)(api.SpxResRegisterSvgFontFace)
+	arg0 := (C.GDExtensionSpxResRegisterFontFace)(api.SpxResRegisterFontFace)
 	arg1 := (C.GdString)(font_path)
 	arg2 := (C.GdString)(family)
 
-	C.cgo_callfn_GDExtensionSpxResRegisterSvgFontFace(arg0, arg1, arg2)
+	C.cgo_callfn_GDExtensionSpxResRegisterFontFace(arg0, arg1, arg2)
+
+}
+func CallResSetFontPreferences(
+	preferences GdArray,
+) {
+	arg0 := (C.GDExtensionSpxResSetFontPreferences)(api.SpxResSetFontPreferences)
+	arg1 := (C.GdArray)(preferences)
+
+	C.cgo_callfn_GDExtensionSpxResSetFontPreferences(arg0, arg1)
 
 }
 func CallSceneChangeSceneToFile(

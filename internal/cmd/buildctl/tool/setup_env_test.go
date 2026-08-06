@@ -30,6 +30,20 @@ func TestParseToolSetupSConsArgsDefault(t *testing.T) {
 	}
 }
 
+func TestSConsEnvironmentCommands(t *testing.T) {
+	venvDir := filepath.Join("tmp", "scons-4.8.1")
+	pythonCommand, sconsCommand := sconsEnvironmentCommands(venvDir)
+	if runtime.GOOS == "windows" {
+		if pythonCommand != filepath.Join(venvDir, "Scripts", "python.exe") || sconsCommand != filepath.Join(venvDir, "Scripts", "scons.exe") {
+			t.Fatalf("unexpected Windows SCons environment commands: %q, %q", pythonCommand, sconsCommand)
+		}
+		return
+	}
+	if pythonCommand != filepath.Join(venvDir, "bin", "python") || sconsCommand != filepath.Join(venvDir, "bin", "scons") {
+		t.Fatalf("unexpected SCons environment commands: %q, %q", pythonCommand, sconsCommand)
+	}
+}
+
 func TestParseToolSetupJDKArgsDefault(t *testing.T) {
 	if _, err := parseToolSetupJDKArgs(nil); err != nil {
 		t.Fatalf("parseToolSetupJDKArgs returned error: %v", err)

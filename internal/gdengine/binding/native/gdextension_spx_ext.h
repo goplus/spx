@@ -344,10 +344,13 @@ typedef void (*GDExtensionSpxResGetBoundFromAlpha)(GdString p_path, GdRect2 *ret
 typedef void (*GDExtensionSpxResGetImageSize)(GdString p_path, GdVec2 *ret_value);
 typedef void (*GDExtensionSpxResReadAllText)(GdString p_path, GdString *ret_value);
 typedef void (*GDExtensionSpxResHasFile)(GdString p_path, GdBool *ret_value);
+typedef void (*GDExtensionSpxResListDirectories)(GdString p_path, GdString *ret_value);
 typedef void (*GDExtensionSpxResReloadTexture)(GdString path);
 typedef void (*GDExtensionSpxResFreeStr)(GdString str);
+typedef void (*GDExtensionSpxResApplyProjectFonts)(GdString default_font_path, GdArray font_paths, GdArray font_families, GdArray preferences, GdString *ret_value);
 typedef void (*GDExtensionSpxResSetDefaultFont)(GdString font_path);
-typedef void (*GDExtensionSpxResRegisterSvgFontFace)(GdString font_path, GdString family);
+typedef void (*GDExtensionSpxResRegisterFontFace)(GdString font_path, GdString family);
+typedef void (*GDExtensionSpxResSetFontPreferences)(GdArray preferences);
 // SpxScene
 typedef void (*GDExtensionSpxSceneChangeSceneToFile)(GdString path);
 typedef void (*GDExtensionSpxSceneDestroyAllSprites)();

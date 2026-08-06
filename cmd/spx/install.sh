@@ -11,18 +11,6 @@ export GOTOOLCHAIN=go1.25.8
 . "$SCRIPT_DIR/../internal/macos_go_toolchain.sh"
 configure_macos_go_toolchain
 
-target_font_dir=./template/project/engine/fonts/
-mkdir -p "$target_font_dir"
-font_path=$target_font_dir/CnFont.ttf
-if [ ! -f "$font_path" ]; then
-    curl -L https://github.com/goplus/godot/releases/download/spx2.0.14/CnFont.ttf -o "$font_path"
-fi
-
-if [ ! -f "$font_path" ]; then
-    echo "Cannot find or download font. Please check your network: $font_path"
-    exit 1
-fi
-
 appname=$(cat appname.txt)
 os_name="${OS:-}"
 GOPATH="$(go env GOPATH)"

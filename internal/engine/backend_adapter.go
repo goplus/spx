@@ -78,6 +78,10 @@ func HasFile(path string) bool {
 	return Managers().ResMgr.HasFile(path)
 }
 
+func ListDirectories(path string) string {
+	return Managers().ResMgr.ListDirectories(path)
+}
+
 func SetDebugMode(isDebug bool) {
 	Managers().PlatformMgr.SetDebugMode(isDebug)
 }

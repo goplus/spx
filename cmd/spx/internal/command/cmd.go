@@ -170,6 +170,11 @@ func (cmd *CmdTool) handleSpecialCommands() bool {
 			logErrorf("Clearing project: %v", err)
 		}
 		return true
+	case "clearbuild":
+		if err := cmd.ClearBuild(); err != nil {
+			logErrorf("Clearing build artifacts: %v", err)
+		}
+		return true
 	case "stopweb":
 		if err := cmd.StopWeb(); err != nil {
 			logErrorf("Stopping web server: %v", err)

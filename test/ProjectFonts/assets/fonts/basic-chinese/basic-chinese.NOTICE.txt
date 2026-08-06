@@ -1,0 +1,10 @@
+basic-chinese.ttf is a modified glyph subset of Source Han Sans CN Medium 1.000.
+
+Original font copyright (c) 2014 Adobe Systems Incorporated.
+Source: https://github.com/goplus/godot/releases/download/spx2.0.14/CnFont.ttf
+Upstream source: https://github.com/adobe-fonts/source-han-sans/tree/1.000
+
+Modification: retained Han ideographs, CJK radicals and strokes, Chinese and
+fullwidth punctuation, and compatibility ideographs; removed Latin glyphs.
+
+Licensed under the Apache License, Version 2.0. See basic-chinese.LICENSE.txt.

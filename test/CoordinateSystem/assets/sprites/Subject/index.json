@@ -1,0 +1,42 @@
+{
+  "costumes": [
+    {
+      "bitmapResolution": 1,
+      "imageWidth": 120,
+      "imageHeight": 80,
+      "name": "geometric-center",
+      "path": "subject.svg",
+      "faceRight": 0,
+      "x": 60,
+      "y": 40
+    },
+    {
+      "bitmapResolution": 1,
+      "imageWidth": 120,
+      "imageHeight": 80,
+      "name": "asset-20-20",
+      "path": "subject.svg",
+      "faceRight": 0,
+      "x": 20,
+      "y": 20
+    },
+    {
+      "bitmapResolution": 1,
+      "imageWidth": 120,
+      "imageHeight": 80,
+      "name": "asset-100-60",
+      "path": "subject.svg",
+      "faceRight": 0,
+      "x": 100,
+      "y": 60
+    }
+  ],
+  "costumeIndex": 0,
+  "heading": 90,
+  "isDraggable": false,
+  "rotationStyle": "normal",
+  "size": 1,
+  "visible": true,
+  "x": 0,
+  "y": 100
+}

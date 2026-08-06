@@ -40,3 +40,15 @@ func openAsset(path string) (io.ReadSeekCloser, error) {
 	}
 	return os.Open(filepath.Join("..", filePath))
 }
+
+func (f *FS) ReadDir(name string) ([]fs.DirEntry, error) {
+	dirPath := filepath.FromSlash(f.base + name)
+	entries, err := os.ReadDir(dirPath)
+	if err != nil {
+		entries, err = os.ReadDir(filepath.Join("..", dirPath))
+		if err != nil {
+			return nil, err
+		}
+	}
+	return fs.DirEntriesFromFS(entries), nil
+}

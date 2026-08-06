@@ -77,8 +77,10 @@ func (b *gameBuilder) loadResources() *gameBuilder {
 	b.proj = opened.Project
 
 	resMgr := b.game.engine().ResMgr
-	display := coreproject.ResolveDisplaySettings(&b.proj)
-	coreproject.RegisterDisplayFonts(display, resMgr.SetDefaultFont, resMgr.RegisterSvgFontFace)
+	fontPlan := coreproject.ResolveRuntimeFontPlan(opened.Fonts, engine.ToAssetPath)
+	if err := applyRuntimeFontPlan(&resMgr, fontPlan); err != nil {
+		b.err = fmt.Errorf("apply project fonts: %w", err)
+	}
 	return b
 }
 

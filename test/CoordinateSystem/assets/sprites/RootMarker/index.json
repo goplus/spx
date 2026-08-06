@@ -1,0 +1,21 @@
+{
+  "costumes": [
+    {
+      "bitmapResolution": 1,
+      "imageWidth": 24,
+      "imageHeight": 24,
+      "name": "logical-root",
+      "path": "root-marker.svg",
+      "x": 12,
+      "y": 12
+    }
+  ],
+  "costumeIndex": 0,
+  "heading": 90,
+  "isDraggable": false,
+  "rotationStyle": "none",
+  "size": 1,
+  "visible": true,
+  "x": 0,
+  "y": 100
+}

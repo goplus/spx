@@ -746,6 +746,11 @@ func (pself *resMgr) HasFile(p_path string) bool {
 	_retValue := API.SpxResHasFile.Invoke(arg0)
 	return JsToGdBool(_retValue)
 }
+func (pself *resMgr) ListDirectories(p_path string) string {
+	arg0 := JsFromGdString(p_path)
+	_retValue := API.SpxResListDirectories.Invoke(arg0)
+	return JsToGdString(_retValue)
+}
 func (pself *resMgr) ReloadTexture(path string) {
 	arg0 := JsFromGdString(path)
 	API.SpxResReloadTexture.Invoke(arg0)
@@ -754,14 +759,26 @@ func (pself *resMgr) FreeStr(str string) {
 	arg0 := JsFromGdString(str)
 	API.SpxResFreeStr.Invoke(arg0)
 }
+func (pself *resMgr) ApplyProjectFonts(default_font_path string, font_paths Array, font_families Array, preferences Array) string {
+	arg0 := JsFromGdString(default_font_path)
+	arg1 := JsFromGdArray(font_paths)
+	arg2 := JsFromGdArray(font_families)
+	arg3 := JsFromGdArray(preferences)
+	_retValue := API.SpxResApplyProjectFonts.Invoke(arg0, arg1, arg2, arg3)
+	return JsToGdString(_retValue)
+}
 func (pself *resMgr) SetDefaultFont(font_path string) {
 	arg0 := JsFromGdString(font_path)
 	API.SpxResSetDefaultFont.Invoke(arg0)
 }
-func (pself *resMgr) RegisterSvgFontFace(font_path string, family string) {
+func (pself *resMgr) RegisterFontFace(font_path string, family string) {
 	arg0 := JsFromGdString(font_path)
 	arg1 := JsFromGdString(family)
-	API.SpxResRegisterSvgFontFace.Invoke(arg0, arg1)
+	API.SpxResRegisterFontFace.Invoke(arg0, arg1)
+}
+func (pself *resMgr) SetFontPreferences(preferences Array) {
+	arg0 := JsFromGdArray(preferences)
+	API.SpxResSetFontPreferences.Invoke(arg0)
 }
 func (pself *sceneMgr) ChangeSceneToFile(path string) {
 	arg0 := JsFromGdString(path)

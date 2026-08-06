@@ -19,6 +19,7 @@ package fs
 import (
 	"errors"
 	"io"
+	iofs "io/fs"
 	"strings"
 )
 
@@ -27,6 +28,29 @@ import (
 type Dir interface {
 	Open(file string) (io.ReadCloser, error)
 	Close() error
+}
+
+// DirEntry describes a direct child returned by ReadDirer.
+type DirEntry struct {
+	Name  string
+	IsDir bool
+}
+
+// ReadDirer is an optional capability for resource directories that can list
+// direct children. Callers must continue to work with Dir implementations that
+// only support opening known paths.
+type ReadDirer interface {
+	ReadDir(dir string) ([]DirEntry, error)
+}
+
+// DirEntriesFromFS converts standard library directory entries while
+// preserving their order.
+func DirEntriesFromFS(entries []iofs.DirEntry) []DirEntry {
+	result := make([]DirEntry, len(entries))
+	for i, entry := range entries {
+		result[i] = DirEntry{Name: entry.Name(), IsDir: entry.IsDir()}
+	}
+	return result
 }
 
 type GdDir interface {

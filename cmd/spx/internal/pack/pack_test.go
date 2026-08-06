@@ -175,11 +175,20 @@ func TestPackProjectIncludesExternalAssetsFromPackedConfigFallback(t *testing.T)
   },
   "sounds":{
     "Bell":{"path":"../../../../shared/audio/ring.wav"}
+  },
+  "fonts":{
+    "Custom":{"faces":[{"path":"../../../../shared/fonts/custom.ttf"}]}
   }
 }`)
 	writeTestFile(t, filepath.Join(tmpDir, "shared", "bg.jpg"), "bg")
 	writeTestFile(t, filepath.Join(tmpDir, "shared", "hero.png"), "hero")
 	writeTestFile(t, filepath.Join(tmpDir, "shared", "audio", "ring.wav"), "ring")
+	writeTestFile(t, filepath.Join(tmpDir, "shared", "fonts", "custom.ttf"), "font")
+	// A packed fonts catalog is authoritative; a stale source-only family must
+	// not make packing fail or add an undeclared external font.
+	writeTestFile(t, filepath.Join(projectDir, "assets", "fonts", "Stale", "index.json"), `{
+  "faces":[{"path":"../../../../shared/fonts/missing.ttf"}]
+}`)
 
 	zipPath := filepath.Join(tmpDir, "game.zip")
 	if err := PackProject(projectDir, zipPath); err != nil {
@@ -190,6 +199,7 @@ func TestPackProjectIncludesExternalAssetsFromPackedConfigFallback(t *testing.T)
 	assertZipEntryContent(t, snapshot, "shared/bg.jpg", "bg")
 	assertZipEntryContent(t, snapshot, "shared/hero.png", "hero")
 	assertZipEntryContent(t, snapshot, "shared/audio/ring.wav", "ring")
+	assertZipEntryContent(t, snapshot, "shared/fonts/custom.ttf", "font")
 }
 
 func TestPackProjectIncludesExternalAssetsFromSourceRootWhenPackedRootMissing(t *testing.T) {
@@ -213,9 +223,13 @@ func TestPackProjectIncludesExternalAssetsFromSourceRootWhenPackedRootMissing(t 
   },
   "zorder":["Hero"]
 }`)
+	writeTestFile(t, filepath.Join(projectDir, "assets", "fonts", "Source", "index.json"), `{
+  "faces":[{"path":"../../../../shared/fonts/source.ttf"}]
+}`)
 	writeTestFile(t, filepath.Join(tmpDir, "shared", "bg.jpg"), "bg")
 	writeTestFile(t, filepath.Join(tmpDir, "shared", "audio", "theme.mp3"), "theme")
 	writeTestFile(t, filepath.Join(tmpDir, "shared", "hero.png"), "hero")
+	writeTestFile(t, filepath.Join(tmpDir, "shared", "fonts", "source.ttf"), "source-font")
 
 	zipPath := filepath.Join(tmpDir, "game.zip")
 	if err := PackProject(projectDir, zipPath); err != nil {
@@ -226,6 +240,7 @@ func TestPackProjectIncludesExternalAssetsFromSourceRootWhenPackedRootMissing(t 
 	assertZipEntryContent(t, snapshot, "shared/bg.jpg", "bg")
 	assertZipEntryContent(t, snapshot, "shared/audio/theme.mp3", "theme")
 	assertZipEntryContent(t, snapshot, "shared/hero.png", "hero")
+	assertZipEntryContent(t, snapshot, "shared/fonts/source.ttf", "source-font")
 }
 
 type zipSnapshot struct {

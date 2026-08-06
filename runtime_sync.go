@@ -177,7 +177,7 @@ func (p *SpriteImpl) ensureProxyInitialized() {
 	if p.runtimeState.SyncSprite != nil || p.isDestroyed() {
 		return
 	}
-	p.runtimeState.SyncSprite = engine.BridgeNewBareSprite(p, mathf.NewVec2(p.getXYWithRenderOffset()))
+	p.runtimeState.SyncSprite = engine.BridgeNewBareSprite(p, mathf.NewVec2(p.getXY()))
 	p.applyPhysicsProxyConfig()
 	p.runtimeState.SyncSprite.SetVisible(p.spriteState.IsVisible)
 	p.runtimeState.SyncSprite.Name = p.name
@@ -227,7 +227,6 @@ func (p *SpriteImpl) shouldPullPhysicsPosition() bool {
 }
 
 func (p *SpriteImpl) applyPhysicsPosition(x, y float64) {
-	revertRenderOffset(p, &x, &y)
 	p.transform().setXY(x, y)
 }
 
@@ -237,6 +236,7 @@ func (p *SpriteImpl) ensureProxyQueryStateSynced() {
 	}
 	// Query paths need the latest silhouette even when the sprite is hidden.
 	p.baseObj.applyCostumeUpdate()
+	p.syncAutoPhysicsShapesAfterCostumeChange()
 	if !p.spriteState.IsDirty {
 		return
 	}
@@ -245,15 +245,15 @@ func (p *SpriteImpl) ensureProxyQueryStateSynced() {
 	}
 
 	x, y := p.getXY()
-	offsetX, offsetY := getRenderOffset(p)
+	renderOffsetX, renderOffsetY := getRenderOffset(p)
 	rot, scaleX, scaleY := getRenderRotationAndScale(p)
 
 	p.runtimeState.SyncSprite.SetTransform(
-		mathf.NewVec2(x+offsetX, y+offsetY),
+		mathf.NewVec2(x, y),
 		engine.DegToRad(rot),
 		mathf.NewVec2(scaleX, scaleY),
 		p.spriteState.IsVisible,
-		mathf.NewVec2(offsetX, offsetY),
+		mathf.NewVec2(renderOffsetX, renderOffsetY),
 	)
 	p.spriteState.ProxySyncVersion = p.spriteState.DirtyVersion
 }
@@ -265,6 +265,7 @@ func (p *SpriteImpl) collectProxyUpdate(buffer *engine.SpriteSyncBuffer) {
 	if p.spriteState.IsVisible {
 		p.baseObj.applyCostumeUpdate()
 	}
+	p.syncAutoPhysicsShapesAfterCostumeChange()
 	if !p.spriteState.IsDirty {
 		return
 	}
@@ -276,14 +277,14 @@ func (p *SpriteImpl) collectProxyUpdate(buffer *engine.SpriteSyncBuffer) {
 
 func (p *SpriteImpl) appendTransformUpdate(buffer *engine.SpriteSyncBuffer) {
 	x, y := p.getXY()
-	offsetX, offsetY := getRenderOffset(p)
+	renderOffsetX, renderOffsetY := getRenderOffset(p)
 	rot, scaleX, scaleY := getRenderRotationAndScale(p)
 	buffer.Add(
 		int64(p.runtimeState.SyncSprite.Id),
-		x+offsetX, y+offsetY,
+		x, y,
 		engine.DegToRad(rot),
 		scaleX, scaleY,
-		offsetX, offsetY,
+		renderOffsetX, renderOffsetY,
 		p.spriteState.IsVisible,
 	)
 	p.spriteState.ProxySyncVersion = p.spriteState.DirtyVersion

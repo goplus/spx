@@ -378,7 +378,7 @@ func TestPenComponentCloneMoveMaterializesPenTrail(t *testing.T) {
 	if spy.moveCalls != 2 {
 		t.Fatalf("MovePenTo calls = %d, want 2", spy.moveCalls)
 	}
-	want := mathf.NewVec2(20, -40)
+	want := mathf.NewVec2(20, 40)
 	if spy.lastMove != want {
 		t.Fatalf("MovePenTo position = %v, want %v", spy.lastMove, want)
 	}
@@ -391,7 +391,7 @@ func TestPenComponentPenDownUsesLogicalPosition(t *testing.T) {
 
 	sprite.pen().PenDown()
 
-	want := mathf.NewVec2(50, -60)
+	want := mathf.NewVec2(50, 60)
 	if spy.lastMove != want {
 		t.Fatalf("MovePenTo position = %v, want %v", spy.lastMove, want)
 	}
@@ -404,7 +404,7 @@ func TestPenComponentStampUsesRenderedPosition(t *testing.T) {
 
 	sprite.pen().Stamp()
 
-	want := mathf.NewVec2(87, -36)
+	want := mathf.NewVec2(74, 97)
 	if spy.stampWithCalls != 1 {
 		t.Fatalf("PenStampWithTransform calls = %d, want 1", spy.stampWithCalls)
 	}
@@ -438,6 +438,10 @@ func TestPenComponentStampSyncsRenderedTransform(t *testing.T) {
 	wantScale := mathf.NewVec2(-2, 2)
 	if spy.lastStampScale != wantScale {
 		t.Fatalf("PenStampWithTransform scale = %v, want %v", spy.lastStampScale, wantScale)
+	}
+	wantPosition := mathf.NewVec2(-24, 12)
+	if spy.lastStampPosition != wantPosition {
+		t.Fatalf("PenStampWithTransform position = %v, want %v", spy.lastStampPosition, wantPosition)
 	}
 
 	wantTexturePath := sprite.getCostumeAssetPath()

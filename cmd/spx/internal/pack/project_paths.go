@@ -48,9 +48,11 @@ type assetPathRef struct {
 }
 
 type packedAssetIndex struct {
-	Project coreproject.ProjectConfig
-	Sprites map[string]coreproject.SpriteConfig
-	Sounds  map[string]coreproject.SoundConfig
+	Project  coreproject.ProjectConfig
+	Sprites  map[string]coreproject.SpriteConfig
+	Sounds   map[string]coreproject.SoundConfig
+	Fonts    map[string]coreproject.FontFamilyConfig
+	HasFonts bool
 }
 
 // collectExternalAssetPaths matches runtime asset lookup.
@@ -138,6 +140,7 @@ func collectAssetPathRefs(assetRoot string) ([]assetPathRef, error) {
 		"sprites",
 		packed.Sprites,
 		appendSpriteAssetRefs,
+		true,
 	)
 	if err != nil {
 		return nil, err
@@ -149,11 +152,24 @@ func collectAssetPathRefs(assetRoot string) ([]assetPathRef, error) {
 		"sounds",
 		packed.Sounds,
 		appendSoundAssetRefs,
+		true,
 	)
 	if err != nil {
 		return nil, err
 	}
 	refs = append(refs, soundRefs...)
+
+	fontRefs, err := collectIndexedAssetRefs(
+		assetRoot,
+		"fonts",
+		packed.Fonts,
+		appendFontAssetRefs,
+		!hasPacked || !packed.HasFonts,
+	)
+	if err != nil {
+		return nil, err
+	}
+	refs = append(refs, fontRefs...)
 
 	return refs, nil
 }
@@ -163,11 +179,16 @@ func collectIndexedAssetRefs[T any](
 	category string,
 	packed map[string]T,
 	appendRefs func([]assetPathRef, string, T) []assetPathRef,
+	scanSource bool,
 ) ([]assetPathRef, error) {
 	var refs []assetPathRef
 
 	for name, conf := range packed {
 		refs = appendRefs(refs, path.Join(category, name), conf)
+	}
+
+	if !scanSource {
+		return refs, nil
 	}
 
 	configPaths, err := filepath.Glob(filepath.Join(assetRoot, category, "*", "index.json"))
@@ -225,6 +246,13 @@ func appendSoundAssetRefs(refs []assetPathRef, configDir string, conf coreprojec
 	return appendAssetPathRef(refs, configDir, conf.Path)
 }
 
+func appendFontAssetRefs(refs []assetPathRef, configDir string, conf coreproject.FontFamilyConfig) []assetPathRef {
+	for _, face := range conf.Faces {
+		refs = appendAssetPathRef(refs, configDir, face.Path)
+	}
+	return refs
+}
+
 func readPackedAssetIndex(assetRoot string) (packedAssetIndex, bool, error) {
 	packedPath := filepath.Join(assetRoot, packedIndexName)
 	if _, err := os.Stat(packedPath); err != nil {
@@ -256,6 +284,11 @@ func readPackedAssetIndex(assetRoot string) (packedAssetIndex, bool, error) {
 	packed.Sounds = make(map[string]coreproject.SoundConfig)
 	if err := decodePackedAssetObjects(root["sounds"], packed.Sounds); err != nil {
 		return packedAssetIndex{}, false, fmt.Errorf("parse %s sounds: %w", packedPath, err)
+	}
+	packed.Fonts = make(map[string]coreproject.FontFamilyConfig)
+	_, packed.HasFonts = root["fonts"]
+	if err := decodePackedAssetObjects(root["fonts"], packed.Fonts); err != nil {
+		return packedAssetIndex{}, false, fmt.Errorf("parse %s fonts: %w", packedPath, err)
 	}
 	return packed, true, nil
 }

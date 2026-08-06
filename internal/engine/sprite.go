@@ -79,11 +79,10 @@ func (pself *Sprite) UnRegisterOnAnimationFinished() {
 }
 
 // --------------------------------------------------------------------------
-// Override coordinate system-related functions to accommodate the
-// difference between SPX and Godot coordinate systems (Y-axis inverted)
+// Collider convenience methods. Coordinate conversion belongs to the Godot
+// module boundary; these methods keep all values in SPX coordinates.
 
 func (pself *Sprite) SetColliderShapeRect(isTrigger bool, center Vec2, size Vec2) {
-	center.Y = -center.Y
 	if isTrigger {
 		pself.Sprite.SetTriggerRect(center, size)
 	} else {
@@ -92,7 +91,6 @@ func (pself *Sprite) SetColliderShapeRect(isTrigger bool, center Vec2, size Vec2
 }
 
 func (pself *Sprite) SetColliderShapeCircle(isTrigger bool, center Vec2, radius float64) {
-	center.Y = -center.Y
 	if isTrigger {
 		pself.Sprite.SetTriggerCircle(center, radius)
 	} else {
@@ -101,7 +99,6 @@ func (pself *Sprite) SetColliderShapeCircle(isTrigger bool, center Vec2, radius 
 }
 
 func (pself *Sprite) SetColliderShapeCapsule(isTrigger bool, center Vec2, size Vec2) {
-	center.Y = -center.Y
 	if isTrigger {
 		pself.Sprite.SetTriggerCapsule(center, size)
 	} else {
@@ -110,7 +107,6 @@ func (pself *Sprite) SetColliderShapeCapsule(isTrigger bool, center Vec2, size V
 }
 
 func (pself *Sprite) SetColliderShapePolygon(isTrigger bool, center Vec2, points []float64) {
-	center.Y = -center.Y
 	points32 := F64Tof32(points)
 	if isTrigger {
 		pself.Sprite.SetTriggerPolygon(center, points32)

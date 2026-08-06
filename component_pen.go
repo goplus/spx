@@ -116,7 +116,7 @@ func (p *penComponent) Stamp() {
 	p.engine().PenMgr.PenStampWithTransform(
 		*p.penObj,
 		p.sprite.getCostumeAssetPath(),
-		mathf.NewVec2(x, -y),
+		mathf.NewVec2(x, y),
 		rotationRadians,
 		scale,
 	)
@@ -290,7 +290,7 @@ func (p *penComponent) syncPenPosition(x, y float64) {
 	if p.penObj == nil {
 		return
 	}
-	p.engine().PenMgr.MovePenTo(*p.penObj, mathf.NewVec2(x, -y))
+	p.engine().PenMgr.MovePenTo(*p.penObj, mathf.NewVec2(x, y))
 }
 
 func (p *penComponent) getPenStampTransform() (rotationRadians float64, scale mathf.Vec2) {

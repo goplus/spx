@@ -1,96 +1,63 @@
-# Go WASM 微信小程序字符串解码修复
+# Go WASM 微信小游戏字符串解码排查
 
-## 问题描述
+## 适用范围
 
-在微信小程序真机环境中运行 Go WASM 时出现以下错误：
+本文记录微信小游戏真机上可能出现的 `syscall/js` 字符串解码问题。它是排查指南，不代表所有微信基础库或 Go 版本都会复现该问题。
 
+## 先确认实际文件
+
+仓库中没有 `js/wasm_exec.js`。导出流程会从当前 Go 环境读取：
+
+```text
+$(go env GOROOT)/lib/wasm/wasm_exec.js
 ```
+
+并复制为：
+
+```text
+<project>/project/.builds/web/go.wasm.exec.js
+```
+
+小游戏导出随后会把它合并到生成目录的 `js/engine.js`。因此不要按照固定行号修改仓库文件；必须先保存 Go 版本、SPX 版本和实际生成文件，再针对该版本验证补丁。
+
+## 典型症状
+
+```text
 panic: syscall/js: call of Value.Get on undefined
-
-goroutine 1 [running]:
-syscall/js.Value.Get({{}, 0x0, 0x0}, {0x2707f, 0x9})
-    /usr/local/go/src/syscall/js/js.go:296 +0xc
-syscall.init()
-    /usr/local/go/src/syscall/fs_js.go:20 +0xd
 ```
 
-**环境差异：**
-- 模拟器：正常运行
-- 真机：运行时错误
+如果属性名被错误解码为空字符串，`js.Global().Get("fs")` 等调用可能访问到错误对象。应先用最小项目在开发者工具和真机分别复现，并确认问题来自字符串解码，而不是适配器没有初始化 `fs`、`process` 或 `console`。
 
-## 根本原因
+## `loadString` 修改原则
 
-微信真机环境使用 QuickJS 引擎，其 `TextDecoder` 无法正确解码 WASM 内存中的字符串数据，导致：
-- Go 代码：`js.Global().Get("fs")`
-- 实际传递：属性名被解码为空字符串 `""`
-- 结果：`globalObject[""]` 返回 `undefined`
+Go 的字符串由指针和显式长度组成，不以 NUL 作为结束标记。任何针对生成 `go.wasm.exec.js` 的补丁都必须：
 
-## 解决方案
+1. 同时检查 `saddr >= 0`、`len >= 0` 和 `saddr + len <= buffer.byteLength`，避免越界构造 `TypedArray`。
+2. 严格使用传入长度，保留合法的嵌入式 NUL 字节。
+3. 使用经过目标运行时验证的 UTF-8 解码器；不能用逐字节 ASCII 拼接代替 UTF-8，也不能把错误静默转换成空字符串或 `?`。
+4. 解码失败时抛出带地址和长度的错误，保留原始异常，便于定位内存或 ABI 问题。
 
-修改 `js/wasm_exec.js` 中的 `loadString` 函数，使用手动字符串解码替代 TextDecoder：
+安全的边界检查结构可以写成：
 
-### 原版代码（有问题）：
 ```javascript
 const loadString = (addr) => {
-    const saddr = getInt64(addr + 0);
-    const len = getInt64(addr + 8);
-    return decoder.decode(new DataView(this._inst.exports.mem.buffer, saddr, len));
-}
+  const saddr = Number(getInt64(addr + 0));
+  const len = Number(getInt64(addr + 8));
+  const buffer = this._inst.exports.mem.buffer;
+
+  if (!Number.isSafeInteger(saddr) || !Number.isSafeInteger(len) ||
+      saddr < 0 || len < 0 || saddr > buffer.byteLength - len) {
+    throw new RangeError(`invalid Go string range: ${saddr}+${len}`);
+  }
+  return decoder.decode(new Uint8Array(buffer, saddr, len));
+};
 ```
 
-### 修复版代码：
-```javascript
-const loadString = (addr) => {
-    const saddr = getInt64(addr + 0);
-    const len = getInt64(addr + 8);
-    
-    if (len === 0) return "";
-    if (saddr < 0 || saddr >= this._inst.exports.mem.buffer.byteLength) return "";
-    
-    try {
-        // 🔧 QuickJS 环境修复：优先使用手动解码
-        const bytes = new Uint8Array(this._inst.exports.mem.buffer, saddr, len);
-        
-        // 快速 ASCII 检查和解码
-        let result = "";
-        for (let i = 0; i < bytes.length; i++) {
-            const byte = bytes[i];
-            if (byte === 0) break; // null 终止符
-            if (byte < 128) {
-                result += String.fromCharCode(byte);
-            } else {
-                // 遇到非ASCII字符时回退到TextDecoder
-                try {
-                    const remaining = bytes.slice(i);
-                    result += decoder.decode(remaining);
-                    break;
-                } catch (e2) {
-                    result += "?";
-                }
-            }
-        }
-        return result;
-    } catch (e) {
-        return "";
-    }
-}
-```
+这段代码只解决内存范围和长度语义，不能保证微信运行时的 `TextDecoder` 实现没有缺陷。如果真机仍然复现，应针对当前微信基础库提供并测试 UTF-8 解码器，再将补丁固化到导出流程，而不是手工修改某个临时目录中的文件。
 
-## 实施方法
+## 验证清单
 
-1. 打开 `js/wasm_exec.js` 文件
-2. 找到 `loadString` 函数（约160行左右）
-3. 将原版代码替换为修复版代码
-4. 测试 Go WASM 在真机环境中是否正常运行
-
-## 验证结果
-
-修复后，Go 代码能够正确访问：
-- ✅ `js.Global().Get("fs")` 
-- ✅ `js.Global().Get("process")`
-- ✅ `js.Global().Get("console")`
-- ✅ 不再出现 panic 错误
-
----
-
-**核心原理：** 使用 `String.fromCharCode()` 直接处理 ASCII 字符，避免 QuickJS 环境中 TextDecoder 的兼容性问题。 
+- `js.Global().Get("fs")`、`process`、`console` 等属性名能正确解码。
+- 包含中文、四字节 Unicode 和嵌入式 NUL 的字符串不会被截断。
+- 越界地址会报告错误，而不是返回空字符串继续运行。
+- Go 版本、微信基础库和 `go.wasm.exec.js` 变更后重新执行真机测试。

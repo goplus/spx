@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480" viewBox="0 0 640 480">
+  <rect width="640" height="480" fill="#f8fafc"/>
+  <g stroke="#dbe4ee" stroke-width="1">
+    <path d="M40 0V480M80 0V480M120 0V480M160 0V480M200 0V480M240 0V480M280 0V480M360 0V480M400 0V480M440 0V480M480 0V480M520 0V480M560 0V480M600 0V480"/>
+    <path d="M0 40H640M0 80H640M0 120H640M0 160H640M0 200H640M0 280H640M0 320H640M0 360H640M0 400H640M0 440H640"/>
+  </g>
+
+  <g stroke="#334155" stroke-width="2">
+    <path d="M24 240H616"/>
+    <path d="M320 456V24"/>
+  </g>
+  <g fill="#334155">
+    <path d="M616 240l-12-6v12z"/>
+    <path d="M320 24l-6 12h12z"/>
+  </g>
+
+  <g font-family="'default'" fill="#334155">
+    <text x="588" y="228" font-size="15" font-weight="700">+X</text>
+    <text x="331" y="35" font-size="15" font-weight="700">+Y</text>
+    <text x="331" y="462" font-size="13">-Y</text>
+    <text x="326" y="258" font-size="12">SPX (0, 0)</text>
+    <text x="331" y="132" font-size="12" fill="#64748b">start: (0, 100)</text>
+  </g>
+
+  <g transform="translate(18 16)" font-family="'default'">
+    <rect width="274" height="92" rx="10" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="12" y="21" font-size="13" font-weight="700" fill="#0f172a">Coordinate regression controls</text>
+    <text x="12" y="40" font-size="11" fill="#475569">Space/click: center · Arrows: logical position</text>
+    <text x="12" y="57" font-size="11" fill="#475569">R/F/N: rotate/flip/normal · P: pen +Y</text>
+    <text x="12" y="74" font-size="11" fill="#475569">S: stamp+move · C: reset · E: erase</text>
+  </g>
+
+  <g transform="translate(420 16)" font-family="'default'">
+    <rect width="202" height="92" rx="10" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="12" y="21" font-size="13" font-weight="700" fill="#0f172a">Costume center</text>
+    <circle cx="17" cy="40" r="5" fill="#8b5cf6"/><text x="29" y="44" font-size="11" fill="#475569">geometric (60, 40)</text>
+    <circle cx="17" cy="58" r="5" fill="#f97316"/><text x="29" y="62" font-size="11" fill="#475569">asset (20, 20)</text>
+    <circle cx="17" cy="76" r="5" fill="#22c55e"/><text x="29" y="80" font-size="11" fill="#475569">asset (100, 60)</text>
+  </g>
+
+  <circle cx="320" cy="140" r="15" fill="none" stroke="#94a3b8" stroke-width="2" stroke-dasharray="4 3"/>
+</svg>
