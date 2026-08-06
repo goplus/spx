@@ -17,16 +17,23 @@
 package main
 
 import (
+	"bufio"
+	"fmt"
 	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/goplus/spx/v3/internal/base/licenseheader"
 )
 
 func main() {
-	args := os.Args[1:]
+	args, err := expandDirectCallsFile(os.Args[1:])
+	if err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, err)
+		os.Exit(2)
+	}
 	cmd := exec.Command("go", append([]string{"tool", "qexp"}, args...)...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -47,6 +54,92 @@ func main() {
 		_, _ = os.Stderr.WriteString(err.Error() + "\n")
 		os.Exit(1)
 	}
+}
+
+func expandDirectCallsFile(args []string) ([]string, error) {
+	const fileFlag = "-directcalls-file"
+	fileIndex := -1
+	filePath := ""
+	separateValue := false
+	directCalls := false
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--" {
+			break
+		}
+		switch {
+		case arg == fileFlag:
+			if fileIndex >= 0 {
+				return nil, fmt.Errorf("%s may only be specified once", fileFlag)
+			}
+			if i+1 >= len(args) {
+				return nil, fmt.Errorf("%s requires a path", fileFlag)
+			}
+			fileIndex = i
+			filePath = args[i+1]
+			separateValue = true
+			i++
+		case strings.HasPrefix(arg, fileFlag+"="):
+			if fileIndex >= 0 {
+				return nil, fmt.Errorf("%s may only be specified once", fileFlag)
+			}
+			fileIndex = i
+			filePath = strings.TrimPrefix(arg, fileFlag+"=")
+		case arg == "-directcalls":
+			directCalls = true
+			if i+1 < len(args) {
+				i++
+			}
+		case strings.HasPrefix(arg, "-directcalls="):
+			directCalls = true
+		}
+	}
+	if fileIndex < 0 {
+		return args, nil
+	}
+	if directCalls {
+		return nil, fmt.Errorf("%s cannot be combined with -directcalls", fileFlag)
+	}
+	if filePath == "" {
+		return nil, fmt.Errorf("%s requires a path", fileFlag)
+	}
+	selectors, err := readDirectCallSelectors(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("%s %q: %w", fileFlag, filePath, err)
+	}
+
+	ret := append([]string(nil), args...)
+	if separateValue {
+		ret[fileIndex] = "-directcalls"
+		ret[fileIndex+1] = selectors
+	} else {
+		ret[fileIndex] = "-directcalls=" + selectors
+	}
+	return ret, nil
+}
+
+func readDirectCallSelectors(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	var selectors []string
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line, _, _ := strings.Cut(scanner.Text(), "#")
+		if selector := strings.TrimSpace(line); selector != "" {
+			selectors = append(selectors, selector)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return "", err
+	}
+	if len(selectors) == 0 {
+		return "", fmt.Errorf("contains no selectors")
+	}
+	return strings.Join(selectors, ","), nil
 }
 
 func addHeadersInDir(root string) error {

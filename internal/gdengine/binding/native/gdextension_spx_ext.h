@@ -285,6 +285,7 @@ typedef void (*GDExtensionSpxNavigationFindPath)(GdVec2 p_from, GdVec2 p_to, GdB
 typedef void (*GDExtensionSpxPenDestroyAllPens)();
 typedef void (*GDExtensionSpxPenCreatePen)(GdObj *ret_value);
 typedef void (*GDExtensionSpxPenDestroyPen)(GdObj obj);
+typedef void (*GDExtensionSpxPenBatchUpdateCommands)(const float *buffer_data, int len);
 typedef void (*GDExtensionSpxPenPenStamp)(GdObj obj);
 typedef void (*GDExtensionSpxPenMovePenTo)(GdObj obj, GdVec2 position);
 typedef void (*GDExtensionSpxPenPenDown)(GdObj obj, GdBool move_by_mouse);

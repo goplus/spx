@@ -98,6 +98,7 @@ type GDExtensionInterface struct {
 	SpxPenDestroyAllPens                        GDExtensionSpxPenDestroyAllPens
 	SpxPenCreatePen                             GDExtensionSpxPenCreatePen
 	SpxPenDestroyPen                            GDExtensionSpxPenDestroyPen
+	SpxPenBatchUpdateCommands                   GDExtensionSpxPenBatchUpdateCommands
 	SpxPenPenStamp                              GDExtensionSpxPenPenStamp
 	SpxPenMovePenTo                             GDExtensionSpxPenMovePenTo
 	SpxPenPenDown                               GDExtensionSpxPenPenDown
@@ -431,6 +432,7 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxPenDestroyAllPens = (GDExtensionSpxPenDestroyAllPens)(resolveCFunc("spx_pen_destroy_all_pens"))
 	x.SpxPenCreatePen = (GDExtensionSpxPenCreatePen)(resolveCFunc("spx_pen_create_pen"))
 	x.SpxPenDestroyPen = (GDExtensionSpxPenDestroyPen)(resolveCFunc("spx_pen_destroy_pen"))
+	x.SpxPenBatchUpdateCommands = (GDExtensionSpxPenBatchUpdateCommands)(resolveCFunc("spx_pen_batch_update_commands"))
 	x.SpxPenPenStamp = (GDExtensionSpxPenPenStamp)(resolveCFunc("spx_pen_pen_stamp"))
 	x.SpxPenMovePenTo = (GDExtensionSpxPenMovePenTo)(resolveCFunc("spx_pen_move_pen_to"))
 	x.SpxPenPenDown = (GDExtensionSpxPenPenDown)(resolveCFunc("spx_pen_pen_down"))

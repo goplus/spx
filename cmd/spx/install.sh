@@ -190,6 +190,9 @@ echo "Building ispx..."
 if [ "$install_web" -eq 1 ]; then
     ( cd ../ispx && GOFLAGS="-buildvcs=false" ./build.sh )
     cp ../ispx/ispx.wasm "$gopath_bin_dir/"
+    # A non-optimized build must not leave a compressed artifact from an older
+    # runtime behind. Optimized workflows recreate it after installation.
+    rm -f "$gopath_bin_dir/ispx.wasm.br"
 
     install_web_runtime
 fi

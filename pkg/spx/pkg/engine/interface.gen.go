@@ -129,6 +129,7 @@ type IPenMgr interface {
 	DestroyAllPens()
 	CreatePen() Object
 	DestroyPen(obj Object)
+	BatchUpdateCommands(buffer []float32)
 	PenStamp(obj Object)
 	MovePenTo(obj Object, position Vec2)
 	PenDown(obj Object, move_by_mouse bool)

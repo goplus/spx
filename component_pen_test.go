@@ -22,6 +22,9 @@ type spyPenMgr struct {
 	lastStampTexturePath string
 	lastStampRotation    float64
 	lastStampScale       mathf.Vec2
+	batchCalls           int
+	batches              [][]float32
+	events               []string
 }
 
 type penTestSprite struct {
@@ -30,14 +33,18 @@ type penTestSprite struct {
 
 func (*penTestSprite) Main() {}
 
-func (s *spyPenMgr) DestroyAllPens() {}
+func (s *spyPenMgr) DestroyAllPens() {
+	s.events = append(s.events, "erase")
+}
 
 func (s *spyPenMgr) CreatePen() engine.Object {
 	s.createCalls++
 	return engine.Object(s.createCalls)
 }
 
-func (s *spyPenMgr) DestroyPen(obj engine.Object) {}
+func (s *spyPenMgr) DestroyPen(obj engine.Object) {
+	s.events = append(s.events, "destroy")
+}
 
 func (s *spyPenMgr) PenStamp(obj engine.Object) {}
 
@@ -72,10 +79,17 @@ func (s *spyPenMgr) SetPenStampTexture(obj engine.Object, texturePath string) {}
 
 func (s *spyPenMgr) PenStampWithTransform(obj engine.Object, texturePath string, position mathf.Vec2, rotationRadians float64, scale mathf.Vec2) {
 	s.stampWithCalls++
+	s.events = append(s.events, "stamp")
 	s.lastStampTexturePath = texturePath
 	s.lastStampPosition = position
 	s.lastStampRotation = rotationRadians
 	s.lastStampScale = scale
+}
+
+func (s *spyPenMgr) BatchUpdateCommands(buffer []float32) {
+	s.batchCalls++
+	s.batches = append(s.batches, append([]float32(nil), buffer...))
+	s.events = append(s.events, "batch")
 }
 
 func newPenTestSprite() *penTestSprite {
@@ -151,6 +165,12 @@ func TestPenComponentRepeatedPenDownDrawsAtCurrentPosition(t *testing.T) {
 	}
 	if spy.moveCalls != 2 {
 		t.Fatalf("MovePenTo calls = %d, want 2", spy.moveCalls)
+	}
+	if spy.setSizeCalls != 1 {
+		t.Fatalf("SetPenSizeTo calls = %d, want 1", spy.setSizeCalls)
+	}
+	if spy.setColorCalls != 1 {
+		t.Fatalf("SetPenColorTo calls = %d, want 1", spy.setColorCalls)
 	}
 }
 

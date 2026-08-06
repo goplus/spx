@@ -72,6 +72,7 @@ const (
 	mainExecTimeoutSec          = 3
 	mouseMovementThreshold      = 1.0
 	initialSpriteSyncBufferSize = 100
+	initialPenSyncBufferSize    = 256
 	baseScreenWidth             = 480
 	baseScreenHeight            = 360
 )
@@ -124,6 +125,7 @@ type Game struct {
 	tilemapMgr     gameTilemapMgr
 
 	syncBuffer    *engine.SpriteSyncBuffer
+	penSyncBuffer *engine.PenSyncBuffer
 	triggerEvents []engine.TriggerEvent
 	spatialHash   *collision.SpatialHash[*SpriteImpl]
 }
@@ -290,6 +292,7 @@ func (p *Game) initGame(sprites []Sprite) *Game {
 	p.sounds = make(map[string]sound)
 	p.typs = make(map[string]reflect.Type)
 	p.syncBuffer = engine.NewSpriteSyncBuffer(initialSpriteSyncBufferSize)
+	p.penSyncBuffer = engine.NewPenSyncBuffer(initialPenSyncBufferSize)
 	for _, spr := range sprites {
 		tySpr := reflect.TypeOf(spr).Elem()
 		p.typs[tySpr.Name()] = tySpr

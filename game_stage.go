@@ -77,7 +77,7 @@ func (p *Game) SetWindowSize(width int64, height int64) {
 }
 
 func (p *Game) EraseAll() {
-	p.engine().PenMgr.DestroyAllPens()
+	p.penCommandBarrier(p.engine().PenMgr.DestroyAllPens)
 }
 
 // -----------------------------------------------------------------------------

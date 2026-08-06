@@ -120,6 +120,8 @@ class GameApp {
         this.minigameMode = EnginePackMode == "minigame"
         this.miniprogramMode = EnginePackMode == "miniprogram"
         this.normalMode = !this.workerMode && !this.minigameMode && !this.miniprogramMode
+        this.logicWasmInstance = null
+        this.go = null
 
         profiler.enabled = this.useProfiler;
 
@@ -803,6 +805,7 @@ class GameApp {
         this.bindDirectCallbackBridge();
         this.go.run(this.logicWasmInstance);
     }
+
 }
 
 // export GameApp to global

@@ -384,6 +384,12 @@ void cgo_callfn_GDExtensionSpxPenDestroyPen(const GDExtensionSpxPenDestroyPen fn
 	}
 	fn(obj);
 }
+void cgo_callfn_GDExtensionSpxPenBatchUpdateCommands(const GDExtensionSpxPenBatchUpdateCommands fn, const float *buffer_data, int len) {
+	if (!fn) {
+		return;
+	}
+	fn(buffer_data, len);
+}
 void cgo_callfn_GDExtensionSpxPenPenStamp(const GDExtensionSpxPenPenStamp fn, GdObj obj) {
 	if (!fn) {
 		return;

@@ -16,7 +16,6 @@ require (
 	github.com/goplus/reflectx v1.7.4 // indirect
 	github.com/goplus/spbase v0.1.0 // indirect
 	github.com/goplus/xgo v1.7.5 // indirect
-	github.com/petermattis/goid v0.0.0-20250721140440-ea1c0173183e // indirect
 	github.com/qiniu/x v1.18.0 // indirect
 	github.com/timandy/routine v1.1.6 // indirect
 	github.com/visualfc/funcval v0.1.5 // indirect
