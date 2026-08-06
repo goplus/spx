@@ -24,7 +24,7 @@ import (
 	stime "time"
 
 	"github.com/goplus/spx/v3/internal/debug"
-	"github.com/petermattis/goid"
+	"github.com/visualfc/gid"
 )
 
 type threadNamer interface {
@@ -102,7 +102,7 @@ func (p *Coroutines) StopIf(filter func(th Thread) bool) {
 
 // IsInCoroutine reports whether the caller is running in this manager.
 func (p *Coroutines) IsInCoroutine() bool {
-	_, exists := p.goroutineIDs.Load(goid.Get())
+	_, exists := p.goroutineIDs.Load(gid.Get())
 	return exists
 }
 
@@ -242,7 +242,7 @@ func (p *Coroutines) waitForThreadsToStop(timeout stime.Duration, skip Thread) b
 }
 
 func (p *Coroutines) runThread(th Thread, fn func(me Thread) int) {
-	gid := goid.Get()
+	gid := gid.Get()
 	p.goroutineIDs.Store(gid, struct{}{})
 	p.runMu.Lock()
 	p.setCurrent(th)
@@ -256,7 +256,7 @@ func (p *Coroutines) runThread(th Thread, fn func(me Thread) int) {
 	fn(th)
 }
 
-func (p *Coroutines) finishThread(th Thread, gid int64, recovered any) {
+func (p *Coroutines) finishThread(th Thread, gid uint64, recovered any) {
 	for _, waiter := range th.finishYieldWaiters() {
 		p.markRunnableAndResume(waiter)
 	}

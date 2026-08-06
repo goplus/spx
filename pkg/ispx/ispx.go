@@ -25,7 +25,6 @@ import (
 	"github.com/goplus/ixgo/transform"
 	"github.com/goplus/ixgo/xgobuild"
 	"github.com/goplus/mod/modfile"
-	_ "github.com/goplus/reflectx/icall/icall2048"
 	_ "github.com/goplus/spx/v3"
 	spxfs "github.com/goplus/spx/v3/fs"
 	"github.com/goplus/spx/v3/internal/engine"
