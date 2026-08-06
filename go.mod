@@ -5,9 +5,9 @@ go 1.25.0
 tool github.com/goplus/ixgo/cmd/qexp
 
 require (
-	github.com/goplus/ixgo v1.1.2
+	github.com/goplus/ixgo v1.1.3
 	github.com/goplus/mod v0.21.1
-	github.com/goplus/reflectx v1.7.4
+	github.com/goplus/reflectx v1.7.5
 	github.com/goplus/spbase v0.1.0
 	github.com/goplus/xgo v1.7.5
 	github.com/visualfc/gid v0.3.2

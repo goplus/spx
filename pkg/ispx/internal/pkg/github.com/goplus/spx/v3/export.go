@@ -21,12 +21,12 @@ package spx
 import (
 	q "github.com/goplus/spx/v3"
 
+	"github.com/goplus/ixgo"
 	"github.com/goplus/ixgo/alias"
+	engine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 	"go/constant"
 	"go/token"
 	"reflect"
-
-	"github.com/goplus/ixgo"
 )
 
 func init() {
@@ -547,4 +547,441 @@ func init() {
 			},
 		},
 	})
+	ixgo.RegisterDirectCalls("github.com/goplus/spx/v3", map[string]ixgo.DirectCallBinding{
+		"(*Game).KeyPressed":           {Target: reflect.ValueOf((*q.Game).KeyPressed), Adapter: method_ptr_Game_KeyPressed},
+		"(*Game).MousePressed":         {Target: reflect.ValueOf((*q.Game).MousePressed), Adapter: method_ptr_Game_MousePressed},
+		"(*Game).MouseX":               {Target: reflect.ValueOf((*q.Game).MouseX), Adapter: method_ptr_Game_MouseX},
+		"(*Game).MouseY":               {Target: reflect.ValueOf((*q.Game).MouseY), Adapter: method_ptr_Game_MouseY},
+		"(*Game).ResetTimer":           {Target: reflect.ValueOf((*q.Game).ResetTimer), Adapter: method_ptr_Game_ResetTimer},
+		"(*Game).Timer":                {Target: reflect.ValueOf((*q.Game).Timer), Adapter: method_ptr_Game_Timer},
+		"(*List).Append":               {Target: reflect.ValueOf((*q.List).Append), Adapter: method_ptr_List_Append},
+		"(*List).At":                   {Target: reflect.ValueOf((*q.List).At), Adapter: method_ptr_List_At},
+		"(*List).Clear":                {Target: reflect.ValueOf((*q.List).Clear), Adapter: method_ptr_List_Clear},
+		"(*List).Contains":             {Target: reflect.ValueOf((*q.List).Contains), Adapter: method_ptr_List_Contains},
+		"(*List).Delete":               {Target: reflect.ValueOf((*q.List).Delete), Adapter: method_ptr_List_Delete},
+		"(*List).IndexOf":              {Target: reflect.ValueOf((*q.List).IndexOf), Adapter: method_ptr_List_IndexOf},
+		"(*List).InitFrom":             {Target: reflect.ValueOf((*q.List).InitFrom), Adapter: method_ptr_List_InitFrom},
+		"(*List).Insert":               {Target: reflect.ValueOf((*q.List).Insert), Adapter: method_ptr_List_Insert},
+		"(*List).Len":                  {Target: reflect.ValueOf((*q.List).Len), Adapter: method_ptr_List_Len},
+		"(*List).Set":                  {Target: reflect.ValueOf((*q.List).Set), Adapter: method_ptr_List_Set},
+		"(*List).String":               {Target: reflect.ValueOf((*q.List).String), Adapter: method_ptr_List_String},
+		"(*SpriteImpl).ChangeHeading":  {Target: reflect.ValueOf((*q.SpriteImpl).ChangeHeading), Adapter: method_ptr_SpriteImpl_ChangeHeading},
+		"(*SpriteImpl).ChangePenSize":  {Target: reflect.ValueOf((*q.SpriteImpl).ChangePenSize), Adapter: method_ptr_SpriteImpl_ChangePenSize},
+		"(*SpriteImpl).ChangeXYpos":    {Target: reflect.ValueOf((*q.SpriteImpl).ChangeXYpos), Adapter: method_ptr_SpriteImpl_ChangeXYpos},
+		"(*SpriteImpl).ChangeXpos":     {Target: reflect.ValueOf((*q.SpriteImpl).ChangeXpos), Adapter: method_ptr_SpriteImpl_ChangeXpos},
+		"(*SpriteImpl).ChangeYpos":     {Target: reflect.ValueOf((*q.SpriteImpl).ChangeYpos), Adapter: method_ptr_SpriteImpl_ChangeYpos},
+		"(*SpriteImpl).CostumeIndex":   {Target: reflect.ValueOf((*q.SpriteImpl).CostumeIndex), Adapter: method_ptr_SpriteImpl_CostumeIndex},
+		"(*SpriteImpl).Heading":        {Target: reflect.ValueOf((*q.SpriteImpl).Heading), Adapter: method_ptr_SpriteImpl_Heading},
+		"(*SpriteImpl).Hide":           {Target: reflect.ValueOf((*q.SpriteImpl).Hide), Adapter: method_ptr_SpriteImpl_Hide},
+		"(*SpriteImpl).Move__0":        {Target: reflect.ValueOf((*q.SpriteImpl).Move__0), Adapter: method_ptr_SpriteImpl_Move__0},
+		"(*SpriteImpl).Move__1":        {Target: reflect.ValueOf((*q.SpriteImpl).Move__1), Adapter: method_ptr_SpriteImpl_Move__1},
+		"(*SpriteImpl).PenDown":        {Target: reflect.ValueOf((*q.SpriteImpl).PenDown), Adapter: method_ptr_SpriteImpl_PenDown},
+		"(*SpriteImpl).PenUp":          {Target: reflect.ValueOf((*q.SpriteImpl).PenUp), Adapter: method_ptr_SpriteImpl_PenUp},
+		"(*SpriteImpl).SetCostume__0":  {Target: reflect.ValueOf((*q.SpriteImpl).SetCostume__0), Adapter: method_ptr_SpriteImpl_SetCostume__0},
+		"(*SpriteImpl).SetCostume__1":  {Target: reflect.ValueOf((*q.SpriteImpl).SetCostume__1), Adapter: method_ptr_SpriteImpl_SetCostume__1},
+		"(*SpriteImpl).SetCostume__2":  {Target: reflect.ValueOf((*q.SpriteImpl).SetCostume__2), Adapter: method_ptr_SpriteImpl_SetCostume__2},
+		"(*SpriteImpl).SetHeading":     {Target: reflect.ValueOf((*q.SpriteImpl).SetHeading), Adapter: method_ptr_SpriteImpl_SetHeading},
+		"(*SpriteImpl).SetPenColor__0": {Target: reflect.ValueOf((*q.SpriteImpl).SetPenColor__0), Adapter: method_ptr_SpriteImpl_SetPenColor__0},
+		"(*SpriteImpl).SetPenColor__1": {Target: reflect.ValueOf((*q.SpriteImpl).SetPenColor__1), Adapter: method_ptr_SpriteImpl_SetPenColor__1},
+		"(*SpriteImpl).SetPenSize":     {Target: reflect.ValueOf((*q.SpriteImpl).SetPenSize), Adapter: method_ptr_SpriteImpl_SetPenSize},
+		"(*SpriteImpl).SetXYpos":       {Target: reflect.ValueOf((*q.SpriteImpl).SetXYpos), Adapter: method_ptr_SpriteImpl_SetXYpos},
+		"(*SpriteImpl).SetXpos":        {Target: reflect.ValueOf((*q.SpriteImpl).SetXpos), Adapter: method_ptr_SpriteImpl_SetXpos},
+		"(*SpriteImpl).SetYpos":        {Target: reflect.ValueOf((*q.SpriteImpl).SetYpos), Adapter: method_ptr_SpriteImpl_SetYpos},
+		"(*SpriteImpl).Show":           {Target: reflect.ValueOf((*q.SpriteImpl).Show), Adapter: method_ptr_SpriteImpl_Show},
+		"(*SpriteImpl).Visible":        {Target: reflect.ValueOf((*q.SpriteImpl).Visible), Adapter: method_ptr_SpriteImpl_Visible},
+		"(*SpriteImpl).Xpos":           {Target: reflect.ValueOf((*q.SpriteImpl).Xpos), Adapter: method_ptr_SpriteImpl_Xpos},
+		"(*SpriteImpl).Ypos":           {Target: reflect.ValueOf((*q.SpriteImpl).Ypos), Adapter: method_ptr_SpriteImpl_Ypos},
+		"(*Value).Equal":               {Target: reflect.ValueOf((*q.Value).Equal), Adapter: method_ptr_Value_Equal},
+		"(*Value).Float":               {Target: reflect.ValueOf((*q.Value).Float), Adapter: method_ptr_Value_Float},
+		"(*Value).Int":                 {Target: reflect.ValueOf((*q.Value).Int), Adapter: method_ptr_Value_Int},
+		"(*Value).Set":                 {Target: reflect.ValueOf((*q.Value).Set), Adapter: method_ptr_Value_Set},
+		"(*Value).String":              {Target: reflect.ValueOf((*q.Value).String), Adapter: method_ptr_Value_String},
+		"AtFrame":                      {Target: reflect.ValueOf(q.AtFrame), Adapter: func_AtFrame},
+		"CharAt":                       {Target: reflect.ValueOf(q.CharAt), Adapter: func_CharAt},
+		"Compare":                      {Target: reflect.ValueOf(q.Compare), Adapter: func_Compare},
+		"Contains":                     {Target: reflect.ValueOf(q.Contains), Adapter: func_Contains},
+		"CurrentFrame":                 {Target: reflect.ValueOf(q.CurrentFrame), Adapter: func_CurrentFrame},
+		"DeltaTime":                    {Target: reflect.ValueOf(q.DeltaTime), Adapter: func_DeltaTime},
+		"Equal":                        {Target: reflect.ValueOf(q.Equal), Adapter: func_Equal},
+		"Exit__0":                      {Target: reflect.ValueOf(q.Exit__0), Adapter: func_Exit__0},
+		"Exit__1":                      {Target: reflect.ValueOf(q.Exit__1), Adapter: func_Exit__1},
+		"Forever":                      {Target: reflect.ValueOf(q.Forever), Adapter: func_Forever},
+		"GetInputSessionStatus":        {Target: reflect.ValueOf(q.GetInputSessionStatus), Adapter: func_GetInputSessionStatus},
+		"GetWidget":                    {Target: reflect.ValueOf(q.GetWidget), Adapter: func_GetWidget},
+		"HSB":                          {Target: reflect.ValueOf(q.HSB), Adapter: func_HSB},
+		"HSBA":                         {Target: reflect.ValueOf(q.HSBA), Adapter: func_HSBA},
+		"Iround":                       {Target: reflect.ValueOf(q.Iround), Adapter: func_Iround},
+		"IsRunWithoutScreenRefresh":    {Target: reflect.ValueOf(q.IsRunWithoutScreenRefresh), Adapter: func_IsRunWithoutScreenRefresh},
+		"KeyFromString":                {Target: reflect.ValueOf(q.KeyFromString), Adapter: func_KeyFromString},
+		"NewColor":                     {Target: reflect.ValueOf(q.NewColor), Adapter: func_NewColor},
+		"NewValue":                     {Target: reflect.ValueOf(q.NewValue), Adapter: func_NewValue},
+		"PenColorParamFromString":      {Target: reflect.ValueOf(q.PenColorParamFromString), Adapter: func_PenColorParamFromString},
+		"Rand__0":                      {Target: reflect.ValueOf(q.Rand__0), Adapter: func_Rand__0},
+		"Rand__1":                      {Target: reflect.ValueOf(q.Rand__1), Adapter: func_Rand__1},
+		"Repeat":                       {Target: reflect.ValueOf(q.Repeat), Adapter: func_Repeat},
+		"RepeatUntil":                  {Target: reflect.ValueOf(q.RepeatUntil), Adapter: func_RepeatUntil},
+		"ResetRandomSeed":              {Target: reflect.ValueOf(q.ResetRandomSeed), Adapter: func_ResetRandomSeed},
+		"Sched":                        {Target: reflect.ValueOf(q.Sched), Adapter: func_Sched},
+		"SchedNow":                     {Target: reflect.ValueOf(q.SchedNow), Adapter: func_SchedNow},
+		"SetRandomSeed":                {Target: reflect.ValueOf(q.SetRandomSeed), Adapter: func_SetRandomSeed},
+		"SetRunWithoutScreenRefresh":   {Target: reflect.ValueOf(q.SetRunWithoutScreenRefresh), Adapter: func_SetRunWithoutScreenRefresh},
+		"Snapshot":                     {Target: reflect.ValueOf(q.Snapshot), Adapter: func_Snapshot},
+		"TimeSinceLevelLoad":           {Target: reflect.ValueOf(q.TimeSinceLevelLoad), Adapter: func_TimeSinceLevelLoad},
+		"Value.Equal":                  {Target: reflect.ValueOf(q.Value.Equal), Adapter: method_Value_Equal},
+		"Value.Float":                  {Target: reflect.ValueOf(q.Value.Float), Adapter: method_Value_Float},
+		"Value.Int":                    {Target: reflect.ValueOf(q.Value.Int), Adapter: method_Value_Int},
+		"Value.String":                 {Target: reflect.ValueOf(q.Value.String), Adapter: method_Value_String},
+		"WaitUntil":                    {Target: reflect.ValueOf(q.WaitUntil), Adapter: func_WaitUntil},
+		"Warp":                         {Target: reflect.ValueOf(q.Warp), Adapter: func_Warp},
+		"XGot_Game_Main":               {Target: reflect.ValueOf(q.XGot_Game_Main), Adapter: func_XGot_Game_Main},
+		"XGot_Game_Reload":             {Target: reflect.ValueOf(q.XGot_Game_Reload), Adapter: func_XGot_Game_Reload},
+	})
+}
+
+func func_AtFrame(ctx ixgo.DirectCallContext) {
+	q.AtFrame(ixgo.DirectCallArg[int64](ctx, 0), ixgo.DirectCallArg[func()](ctx, 1))
+}
+
+func func_CharAt(ctx ixgo.DirectCallContext) {
+	ctx.SetResult(q.CharAt(ixgo.DirectCallArg[string](ctx, 0), ixgo.DirectCallArg[int](ctx, 1)))
+}
+
+func func_Compare(ctx ixgo.DirectCallContext) {
+	ctx.SetResult(q.Compare(ixgo.DirectCallArg[any](ctx, 0), ixgo.DirectCallArg[any](ctx, 1)))
+}
+
+func func_Contains(ctx ixgo.DirectCallContext) {
+	ctx.SetResult(q.Contains(ixgo.DirectCallArg[string](ctx, 0), ixgo.DirectCallArg[string](ctx, 1)))
+}
+
+func func_CurrentFrame(ctx ixgo.DirectCallContext) {
+	ctx.SetResult(q.CurrentFrame())
+}
+
+func func_DeltaTime(ctx ixgo.DirectCallContext) {
+	ctx.SetResult(q.DeltaTime())
+}
+
+func func_Equal(ctx ixgo.DirectCallContext) {
+	ctx.SetResult(q.Equal(ixgo.DirectCallArg[any](ctx, 0), ixgo.DirectCallArg[any](ctx, 1)))
+}
+
+func func_Exit__0(ctx ixgo.DirectCallContext) {
+	q.Exit__0()
+}
+
+func func_Exit__1(ctx ixgo.DirectCallContext) {
+	q.Exit__1(ixgo.DirectCallArg[int](ctx, 0))
+}
+
+func func_Forever(ctx ixgo.DirectCallContext) {
+	q.Forever(ixgo.DirectCallArg[func()](ctx, 0))
+}
+
+func method_ptr_Game_KeyPressed(ctx ixgo.DirectCallContext) {
+	ctx.SetResult((*q.Game).KeyPressed(ixgo.DirectCallArg[*q.Game](ctx, 0), ixgo.DirectCallArg[engine.KeyCode](ctx, 1)))
+}
+
+func method_ptr_Game_MousePressed(ctx ixgo.DirectCallContext) {
+	ctx.SetResult((*q.Game).MousePressed(ixgo.DirectCallArg[*q.Game](ctx, 0)))
+}
+
+func method_ptr_Game_MouseX(ctx ixgo.DirectCallContext) {
+	ctx.SetResult((*q.Game).MouseX(ixgo.DirectCallArg[*q.Game](ctx, 0)))
+}
+
+func method_ptr_Game_MouseY(ctx ixgo.DirectCallContext) {
+	ctx.SetResult((*q.Game).MouseY(ixgo.DirectCallArg[*q.Game](ctx, 0)))
+}
+
+func method_ptr_Game_ResetTimer(ctx ixgo.DirectCallContext) {
+	(*q.Game).ResetTimer(ixgo.DirectCallArg[*q.Game](ctx, 0))
+}
+
+func method_ptr_Game_Timer(ctx ixgo.DirectCallContext) {
+	ctx.SetResult((*q.Game).Timer(ixgo.DirectCallArg[*q.Game](ctx, 0)))
+}
+
+func func_GetInputSessionStatus(ctx ixgo.DirectCallContext) {
+	ctx.SetResult(q.GetInputSessionStatus())
+}
+
+func func_GetWidget(ctx ixgo.DirectCallContext) {
+	ctx.SetResult(q.GetWidget(ixgo.DirectCallArg[q.ShapeGetter](ctx, 0), ixgo.DirectCallArg[string](ctx, 1)))
+}
+
+func func_HSB(ctx ixgo.DirectCallContext) {
+	ctx.SetResult(q.HSB(ixgo.DirectCallArg[float64](ctx, 0), ixgo.DirectCallArg[float64](ctx, 1), ixgo.DirectCallArg[float64](ctx, 2)))
+}
+
+func func_HSBA(ctx ixgo.DirectCallContext) {
+	ctx.SetResult(q.HSBA(ixgo.DirectCallArg[float64](ctx, 0), ixgo.DirectCallArg[float64](ctx, 1), ixgo.DirectCallArg[float64](ctx, 2), ixgo.DirectCallArg[float64](ctx, 3)))
+}
+
+func func_Iround(ctx ixgo.DirectCallContext) {
+	ctx.SetResult(q.Iround(ixgo.DirectCallArg[float64](ctx, 0)))
+}
+
+func func_IsRunWithoutScreenRefresh(ctx ixgo.DirectCallContext) {
+	ctx.SetResult(q.IsRunWithoutScreenRefresh())
+}
+
+func func_KeyFromString(ctx ixgo.DirectCallContext) {
+	ctx.SetResult(q.KeyFromString(ixgo.DirectCallArg[string](ctx, 0)))
+}
+
+func method_ptr_List_Append(ctx ixgo.DirectCallContext) {
+	(*q.List).Append(ixgo.DirectCallArg[*q.List](ctx, 0), ixgo.DirectCallArg[any](ctx, 1))
+}
+
+func method_ptr_List_At(ctx ixgo.DirectCallContext) {
+	ctx.SetResult((*q.List).At(ixgo.DirectCallArg[*q.List](ctx, 0), ixgo.DirectCallArg[int](ctx, 1)))
+}
+
+func method_ptr_List_Clear(ctx ixgo.DirectCallContext) {
+	(*q.List).Clear(ixgo.DirectCallArg[*q.List](ctx, 0))
+}
+
+func method_ptr_List_Contains(ctx ixgo.DirectCallContext) {
+	ctx.SetResult((*q.List).Contains(ixgo.DirectCallArg[*q.List](ctx, 0), ixgo.DirectCallArg[any](ctx, 1)))
+}
+
+func method_ptr_List_Delete(ctx ixgo.DirectCallContext) {
+	(*q.List).Delete(ixgo.DirectCallArg[*q.List](ctx, 0), ixgo.DirectCallArg[int](ctx, 1))
+}
+
+func method_ptr_List_IndexOf(ctx ixgo.DirectCallContext) {
+	ctx.SetResult((*q.List).IndexOf(ixgo.DirectCallArg[*q.List](ctx, 0), ixgo.DirectCallArg[any](ctx, 1)))
+}
+
+func method_ptr_List_InitFrom(ctx ixgo.DirectCallContext) {
+	(*q.List).InitFrom(ixgo.DirectCallArg[*q.List](ctx, 0), ixgo.DirectCallArg[*q.List](ctx, 1))
+}
+
+func method_ptr_List_Insert(ctx ixgo.DirectCallContext) {
+	(*q.List).Insert(ixgo.DirectCallArg[*q.List](ctx, 0), ixgo.DirectCallArg[int](ctx, 1), ixgo.DirectCallArg[any](ctx, 2))
+}
+
+func method_ptr_List_Len(ctx ixgo.DirectCallContext) {
+	ctx.SetResult((*q.List).Len(ixgo.DirectCallArg[*q.List](ctx, 0)))
+}
+
+func method_ptr_List_Set(ctx ixgo.DirectCallContext) {
+	(*q.List).Set(ixgo.DirectCallArg[*q.List](ctx, 0), ixgo.DirectCallArg[int](ctx, 1), ixgo.DirectCallArg[any](ctx, 2))
+}
+
+func method_ptr_List_String(ctx ixgo.DirectCallContext) {
+	ctx.SetResult((*q.List).String(ixgo.DirectCallArg[*q.List](ctx, 0)))
+}
+
+func func_NewColor(ctx ixgo.DirectCallContext) {
+	ctx.SetResult(q.NewColor(ixgo.DirectCallArg[any](ctx, 0)))
+}
+
+func func_NewValue(ctx ixgo.DirectCallContext) {
+	ctx.SetResult(q.NewValue(ixgo.DirectCallArg[any](ctx, 0)))
+}
+
+func func_PenColorParamFromString(ctx ixgo.DirectCallContext) {
+	ctx.SetResult(q.PenColorParamFromString(ixgo.DirectCallArg[string](ctx, 0)))
+}
+
+func func_Rand__0(ctx ixgo.DirectCallContext) {
+	ctx.SetResult(q.Rand__0(ixgo.DirectCallArg[int](ctx, 0), ixgo.DirectCallArg[int](ctx, 1)))
+}
+
+func func_Rand__1(ctx ixgo.DirectCallContext) {
+	ctx.SetResult(q.Rand__1(ixgo.DirectCallArg[float64](ctx, 0), ixgo.DirectCallArg[float64](ctx, 1)))
+}
+
+func func_Repeat(ctx ixgo.DirectCallContext) {
+	q.Repeat(ixgo.DirectCallArg[int](ctx, 0), ixgo.DirectCallArg[func()](ctx, 1))
+}
+
+func func_RepeatUntil(ctx ixgo.DirectCallContext) {
+	q.RepeatUntil(ixgo.DirectCallArg[func() bool](ctx, 0), ixgo.DirectCallArg[func()](ctx, 1))
+}
+
+func func_ResetRandomSeed(ctx ixgo.DirectCallContext) {
+	q.ResetRandomSeed()
+}
+
+func func_Sched(ctx ixgo.DirectCallContext) {
+	ctx.SetResult(q.Sched())
+}
+
+func func_SchedNow(ctx ixgo.DirectCallContext) {
+	ctx.SetResult(q.SchedNow())
+}
+
+func func_SetRandomSeed(ctx ixgo.DirectCallContext) {
+	q.SetRandomSeed(ixgo.DirectCallArg[int64](ctx, 0))
+}
+
+func func_SetRunWithoutScreenRefresh(ctx ixgo.DirectCallContext) {
+	ctx.SetResult(q.SetRunWithoutScreenRefresh(ixgo.DirectCallArg[bool](ctx, 0)))
+}
+
+func func_Snapshot(ctx ixgo.DirectCallContext) {
+	q.Snapshot(ixgo.DirectCallArg[string](ctx, 0), ixgo.DirectCallArg[func() error](ctx, 1))
+}
+
+func method_ptr_SpriteImpl_ChangeHeading(ctx ixgo.DirectCallContext) {
+	(*q.SpriteImpl).ChangeHeading(ixgo.DirectCallArg[*q.SpriteImpl](ctx, 0), ixgo.DirectCallArg[float64](ctx, 1))
+}
+
+func method_ptr_SpriteImpl_ChangePenSize(ctx ixgo.DirectCallContext) {
+	(*q.SpriteImpl).ChangePenSize(ixgo.DirectCallArg[*q.SpriteImpl](ctx, 0), ixgo.DirectCallArg[float64](ctx, 1))
+}
+
+func method_ptr_SpriteImpl_ChangeXYpos(ctx ixgo.DirectCallContext) {
+	(*q.SpriteImpl).ChangeXYpos(ixgo.DirectCallArg[*q.SpriteImpl](ctx, 0), ixgo.DirectCallArg[float64](ctx, 1), ixgo.DirectCallArg[float64](ctx, 2))
+}
+
+func method_ptr_SpriteImpl_ChangeXpos(ctx ixgo.DirectCallContext) {
+	(*q.SpriteImpl).ChangeXpos(ixgo.DirectCallArg[*q.SpriteImpl](ctx, 0), ixgo.DirectCallArg[float64](ctx, 1))
+}
+
+func method_ptr_SpriteImpl_ChangeYpos(ctx ixgo.DirectCallContext) {
+	(*q.SpriteImpl).ChangeYpos(ixgo.DirectCallArg[*q.SpriteImpl](ctx, 0), ixgo.DirectCallArg[float64](ctx, 1))
+}
+
+func method_ptr_SpriteImpl_CostumeIndex(ctx ixgo.DirectCallContext) {
+	ctx.SetResult((*q.SpriteImpl).CostumeIndex(ixgo.DirectCallArg[*q.SpriteImpl](ctx, 0)))
+}
+
+func method_ptr_SpriteImpl_Heading(ctx ixgo.DirectCallContext) {
+	ctx.SetResult((*q.SpriteImpl).Heading(ixgo.DirectCallArg[*q.SpriteImpl](ctx, 0)))
+}
+
+func method_ptr_SpriteImpl_Hide(ctx ixgo.DirectCallContext) {
+	(*q.SpriteImpl).Hide(ixgo.DirectCallArg[*q.SpriteImpl](ctx, 0))
+}
+
+func method_ptr_SpriteImpl_Move__0(ctx ixgo.DirectCallContext) {
+	(*q.SpriteImpl).Move__0(ixgo.DirectCallArg[*q.SpriteImpl](ctx, 0), ixgo.DirectCallArg[float64](ctx, 1))
+}
+
+func method_ptr_SpriteImpl_Move__1(ctx ixgo.DirectCallContext) {
+	(*q.SpriteImpl).Move__1(ixgo.DirectCallArg[*q.SpriteImpl](ctx, 0), ixgo.DirectCallArg[int](ctx, 1))
+}
+
+func method_ptr_SpriteImpl_PenDown(ctx ixgo.DirectCallContext) {
+	(*q.SpriteImpl).PenDown(ixgo.DirectCallArg[*q.SpriteImpl](ctx, 0))
+}
+
+func method_ptr_SpriteImpl_PenUp(ctx ixgo.DirectCallContext) {
+	(*q.SpriteImpl).PenUp(ixgo.DirectCallArg[*q.SpriteImpl](ctx, 0))
+}
+
+func method_ptr_SpriteImpl_SetCostume__0(ctx ixgo.DirectCallContext) {
+	(*q.SpriteImpl).SetCostume__0(ixgo.DirectCallArg[*q.SpriteImpl](ctx, 0), ixgo.DirectCallArg[string](ctx, 1))
+}
+
+func method_ptr_SpriteImpl_SetCostume__1(ctx ixgo.DirectCallContext) {
+	(*q.SpriteImpl).SetCostume__1(ixgo.DirectCallArg[*q.SpriteImpl](ctx, 0), ixgo.DirectCallArg[float64](ctx, 1))
+}
+
+func method_ptr_SpriteImpl_SetCostume__2(ctx ixgo.DirectCallContext) {
+	(*q.SpriteImpl).SetCostume__2(ixgo.DirectCallArg[*q.SpriteImpl](ctx, 0), ixgo.DirectCallArg[int](ctx, 1))
+}
+
+func method_ptr_SpriteImpl_SetHeading(ctx ixgo.DirectCallContext) {
+	(*q.SpriteImpl).SetHeading(ixgo.DirectCallArg[*q.SpriteImpl](ctx, 0), ixgo.DirectCallArg[float64](ctx, 1))
+}
+
+func method_ptr_SpriteImpl_SetPenColor__0(ctx ixgo.DirectCallContext) {
+	(*q.SpriteImpl).SetPenColor__0(ixgo.DirectCallArg[*q.SpriteImpl](ctx, 0), ixgo.DirectCallArg[q.Color](ctx, 1))
+}
+
+func method_ptr_SpriteImpl_SetPenColor__1(ctx ixgo.DirectCallContext) {
+	(*q.SpriteImpl).SetPenColor__1(ixgo.DirectCallArg[*q.SpriteImpl](ctx, 0), ixgo.DirectCallArg[q.PenColorParam](ctx, 1), ixgo.DirectCallArg[float64](ctx, 2))
+}
+
+func method_ptr_SpriteImpl_SetPenSize(ctx ixgo.DirectCallContext) {
+	(*q.SpriteImpl).SetPenSize(ixgo.DirectCallArg[*q.SpriteImpl](ctx, 0), ixgo.DirectCallArg[float64](ctx, 1))
+}
+
+func method_ptr_SpriteImpl_SetXYpos(ctx ixgo.DirectCallContext) {
+	(*q.SpriteImpl).SetXYpos(ixgo.DirectCallArg[*q.SpriteImpl](ctx, 0), ixgo.DirectCallArg[float64](ctx, 1), ixgo.DirectCallArg[float64](ctx, 2))
+}
+
+func method_ptr_SpriteImpl_SetXpos(ctx ixgo.DirectCallContext) {
+	(*q.SpriteImpl).SetXpos(ixgo.DirectCallArg[*q.SpriteImpl](ctx, 0), ixgo.DirectCallArg[float64](ctx, 1))
+}
+
+func method_ptr_SpriteImpl_SetYpos(ctx ixgo.DirectCallContext) {
+	(*q.SpriteImpl).SetYpos(ixgo.DirectCallArg[*q.SpriteImpl](ctx, 0), ixgo.DirectCallArg[float64](ctx, 1))
+}
+
+func method_ptr_SpriteImpl_Show(ctx ixgo.DirectCallContext) {
+	(*q.SpriteImpl).Show(ixgo.DirectCallArg[*q.SpriteImpl](ctx, 0))
+}
+
+func method_ptr_SpriteImpl_Visible(ctx ixgo.DirectCallContext) {
+	ctx.SetResult((*q.SpriteImpl).Visible(ixgo.DirectCallArg[*q.SpriteImpl](ctx, 0)))
+}
+
+func method_ptr_SpriteImpl_Xpos(ctx ixgo.DirectCallContext) {
+	ctx.SetResult((*q.SpriteImpl).Xpos(ixgo.DirectCallArg[*q.SpriteImpl](ctx, 0)))
+}
+
+func method_ptr_SpriteImpl_Ypos(ctx ixgo.DirectCallContext) {
+	ctx.SetResult((*q.SpriteImpl).Ypos(ixgo.DirectCallArg[*q.SpriteImpl](ctx, 0)))
+}
+
+func func_TimeSinceLevelLoad(ctx ixgo.DirectCallContext) {
+	ctx.SetResult(q.TimeSinceLevelLoad())
+}
+
+func method_Value_Equal(ctx ixgo.DirectCallContext) {
+	ctx.SetResult(q.Value.Equal(ixgo.DirectCallArg[q.Value](ctx, 0), ixgo.DirectCallArg[any](ctx, 1)))
+}
+
+func method_ptr_Value_Equal(ctx ixgo.DirectCallContext) {
+	ctx.SetResult((*q.Value).Equal(ixgo.DirectCallArg[*q.Value](ctx, 0), ixgo.DirectCallArg[any](ctx, 1)))
+}
+
+func method_Value_Float(ctx ixgo.DirectCallContext) {
+	ctx.SetResult(q.Value.Float(ixgo.DirectCallArg[q.Value](ctx, 0)))
+}
+
+func method_ptr_Value_Float(ctx ixgo.DirectCallContext) {
+	ctx.SetResult((*q.Value).Float(ixgo.DirectCallArg[*q.Value](ctx, 0)))
+}
+
+func method_Value_Int(ctx ixgo.DirectCallContext) {
+	ctx.SetResult(q.Value.Int(ixgo.DirectCallArg[q.Value](ctx, 0)))
+}
+
+func method_ptr_Value_Int(ctx ixgo.DirectCallContext) {
+	ctx.SetResult((*q.Value).Int(ixgo.DirectCallArg[*q.Value](ctx, 0)))
+}
+
+func method_ptr_Value_Set(ctx ixgo.DirectCallContext) {
+	(*q.Value).Set(ixgo.DirectCallArg[*q.Value](ctx, 0), ixgo.DirectCallArg[any](ctx, 1))
+}
+
+func method_Value_String(ctx ixgo.DirectCallContext) {
+	ctx.SetResult(q.Value.String(ixgo.DirectCallArg[q.Value](ctx, 0)))
+}
+
+func method_ptr_Value_String(ctx ixgo.DirectCallContext) {
+	ctx.SetResult((*q.Value).String(ixgo.DirectCallArg[*q.Value](ctx, 0)))
+}
+
+func func_WaitUntil(ctx ixgo.DirectCallContext) {
+	q.WaitUntil(ixgo.DirectCallArg[func() bool](ctx, 0))
+}
+
+func func_Warp(ctx ixgo.DirectCallContext) {
+	q.Warp(ixgo.DirectCallArg[func()](ctx, 0))
+}
+
+func func_XGot_Game_Main(ctx ixgo.DirectCallContext) {
+	q.XGot_Game_Main(ixgo.DirectCallArg[q.Gamer](ctx, 0), ixgo.DirectCallArg[[]q.Sprite](ctx, 1)...)
+}
+
+func func_XGot_Game_Reload(ctx ixgo.DirectCallContext) {
+	ctx.SetResult(q.XGot_Game_Reload(ixgo.DirectCallArg[q.Gamer](ctx, 0), ixgo.DirectCallArg[any](ctx, 1)))
 }
