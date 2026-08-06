@@ -476,6 +476,14 @@ func (pself *penMgr) DestroyPen(obj Object) {
 	arg0 := ToGdObj(obj)
 	CallPenDestroyPen(arg0)
 }
+func (pself *penMgr) BatchUpdateCommands(buffer []float32) {
+	var arg0 *float32
+	if len(buffer) > 0 {
+		arg0 = &buffer[0]
+	}
+	arg1 := int32(len(buffer))
+	CallPenBatchUpdateCommands(arg0, arg1)
+}
 func (pself *penMgr) PenStamp(obj Object) {
 	arg0 := ToGdObj(obj)
 	CallPenPenStamp(arg0)

@@ -257,7 +257,9 @@ func (cmd *CmdTool) patchWebWorkerEngine(insertCode string) error {
 }
 
 func (cmd *CmdTool) exportWebCommon(mode string) error {
-	cmd.Clear()
+	if err := cmd.Clear(); err != nil {
+		return err
+	}
 	templateDir := filepath.Join(cmd.GoBinPath, "gdspxrt"+cmd.Version+"_web"+mode)
 	if !util.IsFileExist(templateDir) {
 		return errors.New("web dir file not found: " + templateDir)
@@ -292,14 +294,25 @@ func (cmd *CmdTool) exportWebCommon(mode string) error {
 	if err := pack.PackProject(cmd.TargetDir, filepath.Join(cmd.WebDir, "game.zip")); err != nil {
 		return err
 	}
-	wasmPath, wasmBrPath := cmd.getWasmPaths()
-	if err := util.CopyFile(wasmPath, filepath.Join(cmd.WebDir, "ispx.wasm")); err != nil {
-		return fmt.Errorf("failed to copy ispx wasm from %s: %w", wasmPath, err)
+	return cmd.writeWebLogicAssets()
+}
+
+func (cmd *CmdTool) writeWebLogicAssets() error {
+	wasmDstPath := filepath.Join(cmd.WebDir, "ispx.wasm")
+	wasmPath := filepath.Join(cmd.GoBinPath, "ispx.wasm")
+	wasmBrPath := wasmPath + ".br"
+	if !util.IsFileExist(wasmBrPath) {
+		wasmBrPath = ""
+	}
+	if err := util.CopyFile(wasmPath, wasmDstPath); err != nil {
+		return fmt.Errorf("failed to copy interpreter wasm from %s: %w", wasmPath, err)
 	}
 	if wasmBrPath != "" {
-		if err := util.CopyFile(wasmBrPath, filepath.Join(cmd.WebDir, "ispx.wasm.br")); err != nil {
+		if err := util.CopyFile(wasmBrPath, wasmDstPath+".br"); err != nil {
 			return fmt.Errorf("failed to copy compressed ispx wasm from %s: %w", wasmBrPath, err)
 		}
+	} else if err := os.Remove(wasmDstPath + ".br"); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to remove stale compressed wasm at %s: %w", wasmDstPath+".br", err)
 	}
 	return nil
 }

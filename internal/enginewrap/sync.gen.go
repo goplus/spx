@@ -533,6 +533,11 @@ func (*penMgrImpl) DestroyPen(obj gdx.Object) {
 		gdx.PenMgr.DestroyPen(obj)
 	})
 }
+func (*penMgrImpl) BatchUpdateCommands(buffer []float32) {
+	callInMainThread(func() {
+		gdx.PenMgr.BatchUpdateCommands(buffer)
+	})
+}
 func (*penMgrImpl) PenStamp(obj gdx.Object) {
 	callInMainThread(func() {
 		gdx.PenMgr.PenStamp(obj)

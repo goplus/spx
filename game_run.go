@@ -177,27 +177,19 @@ func handleMainExecutionTimeout(err error) bool {
 }
 
 func Forever(call func()) {
-	coreruntime.Forever(call, func() {
-		waitNextFrameForControlFlow()
-	})
+	coreruntime.Forever(call, engine.NewControlFlowWaiter())
 }
 
 func Repeat(loopCount int, call func()) {
-	coreruntime.Repeat(loopCount, call, func() {
-		waitNextFrameForControlFlow()
-	})
+	coreruntime.Repeat(loopCount, call, engine.NewControlFlowWaiter())
 }
 
 func RepeatUntil(condition func() bool, call func()) {
-	coreruntime.RepeatUntil(condition, call, func() {
-		waitNextFrameForControlFlow()
-	})
+	coreruntime.RepeatUntil(condition, call, engine.NewControlFlowWaiter())
 }
 
 func WaitUntil(condition func() bool) {
-	coreruntime.WaitUntil(condition, func() {
-		waitNextFrameForControlFlow()
-	})
+	coreruntime.WaitUntil(condition, engine.NewControlFlowWaiter())
 }
 
 func init() {

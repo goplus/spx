@@ -46,6 +46,7 @@ func (p *Game) OnEngineStart() {
 				builder := newGameBuilder(p.gamer, "assets", generation)
 				if err := builder.buildAndRun(); err != nil {
 					engine.Panic(err)
+					return
 				}
 			}
 			engine.OnGameStarted()
@@ -57,6 +58,7 @@ func (p *Game) OnEngineStart() {
 
 func (p *Game) OnEngineDestroy() {
 	p.lifecycleState.IsRunned.Store(false)
+	p.discardPenCommands()
 	p.abortInputSession("game destroyed")
 }
 
@@ -93,6 +95,7 @@ func (p *Game) runScriptFramePhase() {
 }
 
 func (p *Game) OnEngineRender(delta float64) {
+	defer p.flushPenCommands()
 	if !p.lifecycleState.IsRunned.Load() {
 		return
 	}

@@ -44,9 +44,3 @@ func SetRunWithoutScreenRefresh(enabled bool) (previous bool) {
 func Warp(call func()) {
 	engine.RunWithoutScreenRefresh(call)
 }
-
-func waitNextFrameForControlFlow() {
-	if engine.ShouldWaitNextFrame() {
-		engine.WaitNextFrame()
-	}
-}

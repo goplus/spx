@@ -468,6 +468,10 @@ func (pself *penMgr) DestroyPen(obj Object) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
 	API.SpxPenDestroyPen.Invoke(arg0Low, arg0High)
 }
+func (pself *penMgr) BatchUpdateCommands(buffer []float32) {
+	arg0 := JsFromGdArray(buffer)
+	API.SpxPenBatchUpdateCommands.Invoke(arg0)
+}
 func (pself *penMgr) PenStamp(obj Object) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
 	API.SpxPenPenStamp.Invoke(arg0Low, arg0High)

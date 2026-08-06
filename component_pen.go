@@ -96,16 +96,19 @@ func (p *penComponent) PenUp() {
 	if p.penObj == nil {
 		return
 	}
-	p.engine().PenMgr.PenUp(*p.penObj)
+	p.sprite.g.queuePenUp(*p.penObj)
 }
 
 func (p *penComponent) PenDown() {
-	p.checkOrCreatePen()
-	p.syncPenAppearance()
+	wasDown := p.penDown
+	created := p.checkOrCreatePen()
+	if !wasDown || created {
+		p.syncPenAppearance()
+	}
 	x, y := p.sprite.getXY()
 	p.syncPenPosition(x, y)
 	p.penDown = true
-	p.engine().PenMgr.PenDown(*p.penObj, false)
+	p.sprite.g.queuePenDown(*p.penObj, false)
 }
 
 func (p *penComponent) Stamp() {
@@ -113,13 +116,17 @@ func (p *penComponent) Stamp() {
 	x, y := p.sprite.getXY()
 	applyRenderOffset(p.sprite, &x, &y)
 	rotationRadians, scale := p.getPenStampTransform()
-	p.engine().PenMgr.PenStampWithTransform(
-		*p.penObj,
-		p.sprite.getCostumeAssetPath(),
-		mathf.NewVec2(x, y),
-		rotationRadians,
-		scale,
-	)
+	obj := *p.penObj
+	texturePath := p.sprite.getCostumeAssetPath()
+	p.sprite.g.penCommandBarrier(func() {
+		p.engine().PenMgr.PenStampWithTransform(
+			obj,
+			texturePath,
+			mathf.NewVec2(x, y),
+			rotationRadians,
+			scale,
+		)
+	})
 }
 
 // ============================================================================
@@ -132,7 +139,7 @@ func (p *penComponent) SetPenSize(size float64) {
 	}
 	p.ensureClonePenReady()
 	p.penWidth = size
-	p.engine().PenMgr.SetPenSizeTo(*p.penObj, size)
+	p.sprite.g.queuePenSize(*p.penObj, size)
 }
 
 func (p *penComponent) ChangePenSize(delta float64) {
@@ -273,7 +280,10 @@ func (p *penComponent) checkOrCreatePen() bool {
 
 func (p *penComponent) destroyPen() {
 	if p.penObj != nil {
-		p.engine().PenMgr.DestroyPen(*p.penObj)
+		obj := *p.penObj
+		p.sprite.g.penCommandBarrier(func() {
+			p.engine().PenMgr.DestroyPen(obj)
+		})
 		p.penObj = nil
 	}
 }
@@ -290,7 +300,7 @@ func (p *penComponent) syncPenPosition(x, y float64) {
 	if p.penObj == nil {
 		return
 	}
-	p.engine().PenMgr.MovePenTo(*p.penObj, mathf.NewVec2(x, y))
+	p.sprite.g.queuePenMove(*p.penObj, mathf.NewVec2(x, y))
 }
 
 func (p *penComponent) getPenStampTransform() (rotationRadians float64, scale mathf.Vec2) {
@@ -337,8 +347,8 @@ func (p *penComponent) setPenHsvComponent(component *float64, value float64) {
 }
 
 func (p *penComponent) syncPenAppearance() {
-	p.engine().PenMgr.SetPenSizeTo(*p.penObj, p.penWidth)
-	p.engine().PenMgr.SetPenColorTo(*p.penObj, p.penColor)
+	p.sprite.g.queuePenSize(*p.penObj, p.penWidth)
+	p.sprite.g.queuePenColor(*p.penObj, p.penColor)
 }
 
 func (p *penComponent) ensureClonePenReady() {
@@ -349,7 +359,7 @@ func (p *penComponent) ensureClonePenReady() {
 	p.syncPenAppearance()
 	x, y := p.sprite.getXY()
 	p.syncPenPosition(x, y)
-	p.engine().PenMgr.PenDown(*p.penObj, false)
+	p.sprite.g.queuePenDown(*p.penObj, false)
 }
 
 func (p *penComponent) syncLegacyPenStateFromColor() {
@@ -366,7 +376,7 @@ func (p *penComponent) updateLegacyPenState(state scratchLegacyPenState, resetTr
 }
 
 func (p *penComponent) updatePenColor() {
-	p.engine().PenMgr.SetPenColorTo(*p.penObj, p.penColor)
+	p.sprite.g.queuePenColor(*p.penObj, p.penColor)
 }
 
 func hueToPercent(hue float64) float64 {

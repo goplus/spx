@@ -163,6 +163,7 @@ type GDExtensionSpxNavigationFindPath C.GDExtensionSpxNavigationFindPath
 type GDExtensionSpxPenDestroyAllPens C.GDExtensionSpxPenDestroyAllPens
 type GDExtensionSpxPenCreatePen C.GDExtensionSpxPenCreatePen
 type GDExtensionSpxPenDestroyPen C.GDExtensionSpxPenDestroyPen
+type GDExtensionSpxPenBatchUpdateCommands C.GDExtensionSpxPenBatchUpdateCommands
 type GDExtensionSpxPenPenStamp C.GDExtensionSpxPenPenStamp
 type GDExtensionSpxPenMovePenTo C.GDExtensionSpxPenMovePenTo
 type GDExtensionSpxPenPenDown C.GDExtensionSpxPenPenDown
@@ -1012,6 +1013,17 @@ func CallPenDestroyPen(
 	arg1 := (C.GdObj)(obj)
 
 	C.cgo_callfn_GDExtensionSpxPenDestroyPen(arg0, arg1)
+
+}
+func CallPenBatchUpdateCommands(
+	buffer_data *float32,
+	len int32,
+) {
+	arg0 := (C.GDExtensionSpxPenBatchUpdateCommands)(api.SpxPenBatchUpdateCommands)
+	arg1 := (*C.float)(buffer_data)
+	arg2 := (C.int)(len)
+
+	C.cgo_callfn_GDExtensionSpxPenBatchUpdateCommands(arg0, arg1, arg2)
 
 }
 func CallPenPenStamp(

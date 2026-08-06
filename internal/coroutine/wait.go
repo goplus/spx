@@ -51,7 +51,13 @@ func (p *Coroutines) Wait(t float64) {
 // WaitNextFrame suspends the current coroutine until the scheduler frame
 // advances.
 func (p *Coroutines) WaitNextFrame() {
-	me := p.Current()
+	p.WaitNextFrameFor(p.Current())
+}
+
+// WaitNextFrameFor suspends me until the scheduler frame advances. Callers
+// that capture an exact managed thread can reuse it without resolving the
+// current goroutine identity at every generated loop edge.
+func (p *Coroutines) WaitNextFrameFor(me Thread) {
 	frame := time.Frame()
 	job := p.newResumeWaitJob(me, waitTypeFrame)
 	job.Frame = frame
