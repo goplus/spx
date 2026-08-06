@@ -6,14 +6,14 @@ tool github.com/goplus/ixgo/cmd/qexp
 
 require (
 	github.com/goplus/builder/tools/ai v0.0.0-20260724041336-c23d9b241e6b
-	github.com/goplus/ixgo v1.1.2
+	github.com/goplus/ixgo v1.1.3
 	github.com/goplus/mod v0.21.1
 	github.com/goplus/spx/v3 v3.0.0
 )
 
 require (
 	github.com/goplus/gogen v1.23.5 // indirect
-	github.com/goplus/reflectx v1.7.4 // indirect
+	github.com/goplus/reflectx v1.7.5 // indirect
 	github.com/goplus/spbase v0.1.0 // indirect
 	github.com/goplus/xgo v1.7.5 // indirect
 	github.com/qiniu/x v1.18.0 // indirect

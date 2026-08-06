@@ -1,0 +1,44 @@
+# Unlisted calls keep using ixgo's cached reflective fallback.
+
+# All supported package functions; this compact group includes XGo lowering helpers.
+*
+
+# Lightweight container and value operations commonly used in script loops.
+List.*
+Value.*
+
+# Per-frame game input and timing operations.
+Game.KeyPressed
+Game.MousePressed
+Game.MouseX
+Game.MouseY
+Game.ResetTimer
+Game.Timer
+
+# Common sprite movement, appearance, and pen operations.
+SpriteImpl.ChangeHeading
+SpriteImpl.ChangePenSize
+SpriteImpl.ChangeXYpos
+SpriteImpl.ChangeXpos
+SpriteImpl.ChangeYpos
+SpriteImpl.CostumeIndex
+SpriteImpl.Heading
+SpriteImpl.Hide
+SpriteImpl.Move__0
+SpriteImpl.Move__1
+SpriteImpl.PenDown
+SpriteImpl.PenUp
+SpriteImpl.SetCostume__0
+SpriteImpl.SetCostume__1
+SpriteImpl.SetCostume__2
+SpriteImpl.SetHeading
+SpriteImpl.SetPenColor__0
+SpriteImpl.SetPenColor__1
+SpriteImpl.SetPenSize
+SpriteImpl.SetXYpos
+SpriteImpl.SetXpos
+SpriteImpl.SetYpos
+SpriteImpl.Show
+SpriteImpl.Visible
+SpriteImpl.Xpos
+SpriteImpl.Ypos
