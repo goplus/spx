@@ -56,6 +56,7 @@ var releaseVersionMappings = []releaseVersionMapping{
 	{"v2.0.3", "2.2.3"},
 	{"v2.0.4", "2.2.4"},
 	{"v3.0.0", "2.2.6"},
+	{"v3.1.0", "2.3.0"},
 }
 
 func newReleaseMeta(mapping releaseVersionMapping) ReleaseMeta {
