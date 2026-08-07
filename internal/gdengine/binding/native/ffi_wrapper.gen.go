@@ -161,6 +161,7 @@ type GDExtensionSpxNavigationSetupPathFinder C.GDExtensionSpxNavigationSetupPath
 type GDExtensionSpxNavigationSetObstacle C.GDExtensionSpxNavigationSetObstacle
 type GDExtensionSpxNavigationFindPath C.GDExtensionSpxNavigationFindPath
 type GDExtensionSpxPenDestroyAllPens C.GDExtensionSpxPenDestroyAllPens
+type GDExtensionSpxPenSetCanvasSize C.GDExtensionSpxPenSetCanvasSize
 type GDExtensionSpxPenCreatePen C.GDExtensionSpxPenCreatePen
 type GDExtensionSpxPenDestroyPen C.GDExtensionSpxPenDestroyPen
 type GDExtensionSpxPenBatchUpdateCommands C.GDExtensionSpxPenBatchUpdateCommands
@@ -999,6 +1000,17 @@ func CallPenDestroyAllPens() {
 	arg0 := (C.GDExtensionSpxPenDestroyAllPens)(api.SpxPenDestroyAllPens)
 
 	C.cgo_callfn_GDExtensionSpxPenDestroyAllPens(arg0)
+}
+func CallPenSetCanvasSize(
+	width GdInt,
+	height GdInt,
+) {
+	arg0 := (C.GDExtensionSpxPenSetCanvasSize)(api.SpxPenSetCanvasSize)
+	arg1 := (C.GdInt)(width)
+	arg2 := (C.GdInt)(height)
+
+	C.cgo_callfn_GDExtensionSpxPenSetCanvasSize(arg0, arg1, arg2)
+
 }
 func CallPenCreatePen() GdObj {
 	arg0 := (C.GDExtensionSpxPenCreatePen)(api.SpxPenCreatePen)

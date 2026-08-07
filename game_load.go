@@ -149,6 +149,21 @@ func (p *Game) setupPlatformAndCamera(proj *coreproject.ProjectConfig) {
 	p.setupBackdrop()
 }
 
+func (p *Game) syncPenCanvasToWorld() {
+	width := int64(p.displayState.WorldWidth)
+	height := int64(p.displayState.WorldHeight)
+	p.penCommandBarrier(func() {
+		p.engine().PenMgr.SetCanvasSize(width, height)
+	})
+}
+
+func (p *Game) applyStageGeometry() {
+	if p.camera != nil {
+		p.camera.setLimits()
+	}
+	p.syncPenCanvasToWorld()
+}
+
 // -----------------------------------------------------------------------------
 // Sprite Setup
 // -----------------------------------------------------------------------------
@@ -220,11 +235,16 @@ func (p *Game) runSpriteCallbacks(inits []Sprite, proj *coreproject.ProjectConfi
 // Stage Items
 // -----------------------------------------------------------------------------
 func (p *Game) setupAudioAndTilemap(proj *coreproject.ProjectConfig) {
-	p.tilemapMgr.parseTilemap()
+	p.applyTilemap()
 	p.audioState.SoundObj = p.soundMgr.AllocSound()
 	if proj.Bgm != "" {
 		p.Play__1(proj.Bgm, true)
 	}
+}
+
+func (p *Game) applyTilemap() {
+	p.tilemapMgr.parseTilemap()
+	p.applyStageGeometry()
 }
 
 func (p *Game) endLoad(g reflect.Value, proj *coreproject.ProjectConfig, generation uint64) (err error) {

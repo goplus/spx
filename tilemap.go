@@ -231,7 +231,7 @@ func (p *Game) GetTile__1(x, y float64, layerIndex int64) string {
 func (p *Game) LoadTilemap(mapDir string) {
 	p.tilemapMgr.unloadMap()
 	p.tilemapMgr.loadMap(mapDir)
-	p.tilemapMgr.parseTilemap()
+	p.applyTilemap()
 }
 
 // UnloadTilemap unloads the currently loaded tilemap and cleans up resources.

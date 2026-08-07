@@ -460,6 +460,11 @@ func (pself *navigationMgr) FindPath(p_from Vec2, p_to Vec2, with_jump bool) Arr
 func (pself *penMgr) DestroyAllPens() {
 	API.SpxPenDestroyAllPens.Invoke()
 }
+func (pself *penMgr) SetCanvasSize(width int64, height int64) {
+	arg0Low, arg0High := JsSplitGdInt(width)
+	arg1Low, arg1High := JsSplitGdInt(height)
+	API.SpxPenSetCanvasSize.Invoke(arg0Low, arg0High, arg1Low, arg1High)
+}
 func (pself *penMgr) CreatePen() Object {
 	_retValue := API.SpxPenCreatePen.Invoke()
 	return JsToGdObject(_retValue)

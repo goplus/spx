@@ -96,6 +96,7 @@ type GDExtensionInterface struct {
 	SpxNavigationSetObstacle                    GDExtensionSpxNavigationSetObstacle
 	SpxNavigationFindPath                       GDExtensionSpxNavigationFindPath
 	SpxPenDestroyAllPens                        GDExtensionSpxPenDestroyAllPens
+	SpxPenSetCanvasSize                         GDExtensionSpxPenSetCanvasSize
 	SpxPenCreatePen                             GDExtensionSpxPenCreatePen
 	SpxPenDestroyPen                            GDExtensionSpxPenDestroyPen
 	SpxPenBatchUpdateCommands                   GDExtensionSpxPenBatchUpdateCommands
@@ -430,6 +431,7 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxNavigationSetObstacle = (GDExtensionSpxNavigationSetObstacle)(resolveCFunc("spx_navigation_set_obstacle"))
 	x.SpxNavigationFindPath = (GDExtensionSpxNavigationFindPath)(resolveCFunc("spx_navigation_find_path"))
 	x.SpxPenDestroyAllPens = (GDExtensionSpxPenDestroyAllPens)(resolveCFunc("spx_pen_destroy_all_pens"))
+	x.SpxPenSetCanvasSize = (GDExtensionSpxPenSetCanvasSize)(resolveCFunc("spx_pen_set_canvas_size"))
 	x.SpxPenCreatePen = (GDExtensionSpxPenCreatePen)(resolveCFunc("spx_pen_create_pen"))
 	x.SpxPenDestroyPen = (GDExtensionSpxPenDestroyPen)(resolveCFunc("spx_pen_destroy_pen"))
 	x.SpxPenBatchUpdateCommands = (GDExtensionSpxPenBatchUpdateCommands)(resolveCFunc("spx_pen_batch_update_commands"))

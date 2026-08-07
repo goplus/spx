@@ -521,6 +521,11 @@ func (*penMgrImpl) DestroyAllPens() {
 		gdx.PenMgr.DestroyAllPens()
 	})
 }
+func (*penMgrImpl) SetCanvasSize(width int64, height int64) {
+	callInMainThread(func() {
+		gdx.PenMgr.SetCanvasSize(width, height)
+	})
+}
 func (*penMgrImpl) CreatePen() gdx.Object {
 	var _ret1 gdx.Object
 	callInMainThread(func() {

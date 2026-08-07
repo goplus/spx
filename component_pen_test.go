@@ -10,6 +10,9 @@ import (
 )
 
 type spyPenMgr struct {
+	canvasWidth          int64
+	canvasHeight         int64
+	canvasCalls          int
 	createCalls          int
 	moveCalls            int
 	penDownCalls         int
@@ -35,6 +38,13 @@ func (*penTestSprite) Main() {}
 
 func (s *spyPenMgr) DestroyAllPens() {
 	s.events = append(s.events, "erase")
+}
+
+func (s *spyPenMgr) SetCanvasSize(width, height int64) {
+	s.canvasCalls++
+	s.canvasWidth = width
+	s.canvasHeight = height
+	s.events = append(s.events, "canvas")
 }
 
 func (s *spyPenMgr) CreatePen() engine.Object {
