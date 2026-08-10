@@ -2,8 +2,12 @@ name: Prepare standalone release
 description: Update the shared go.mod template for a standalone release build, reinstall spx, and expose the rebuilt binary path.
 inputs:
   version:
-    description: 'SPX v3 release version without the leading v (for example, 3.0.0)'
+    description: 'SPX v3 release version without the leading v (for example, 3.1.0)'
     required: true
+  engine-asset-dir:
+    description: 'Optional directory containing engine artifacts from the current workflow run'
+    required: false
+    default: ''
 outputs:
   spx-bin:
     description: 'Path to the rebuilt spx binary'
@@ -19,6 +23,7 @@ runs:
       shell: bash
       env:
         RELEASE_VERSION: ${{ inputs.version }}
+        ENGINE_ASSET_DIR: ${{ inputs.engine-asset-dir }}
       run: |
         set -euo pipefail
         source ./.github/actions/lib/release_platform.sh
@@ -53,7 +58,13 @@ runs:
         log_success "Updated $FILE with version $VERSION"
 
         log_info "Preparing runtime assets and reinstalling spx"
-        "$BUILDCTL" prepare --setup-mode runtime
+        setup_args=(host)
+        if [ -n "$ENGINE_ASSET_DIR" ]; then
+          setup_args+=(--asset-dir "$ENGINE_ASSET_DIR")
+        else
+          setup_args+=(--published-runtime)
+        fi
+        "$BUILDCTL" setup "${setup_args[@]}"
 
         GOEXE="$(go_env_goexe)"
         SPX_BIN_PATH="$(go_env_spx_path "$GOEXE")"

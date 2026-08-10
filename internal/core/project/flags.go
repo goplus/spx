@@ -39,7 +39,6 @@ func ParseCommandLineFlags(fs *flag.FlagSet, args []string, conf *Config) (Comma
 	fs.String("serveraddr", "", "server address")
 	fs.Bool("nomap", false, "server mode")
 	fs.Bool("debugweb", false, "server mode")
-	fs.String("gdextpath", "", "godot extension path")
 	fs.String("write-movie", "", "movie mode")
 
 	fs.String("path", "", "gdspx project path")

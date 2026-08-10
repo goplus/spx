@@ -65,7 +65,7 @@ The current proxy-to-pthread path must use the repository's worker template and 
 Example Emscripten builds must use the repository build workflow rather than an ad hoc command so SPX-specific flags remain consistent:
 
 ```sh
-make prepare-web MODE=worker
+make setup-web MODE=worker
 make build-web MODE=worker
 make runwebworker DEMO_INDEX=2
 ```

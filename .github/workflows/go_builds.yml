@@ -18,13 +18,10 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v6
 
-      - name: Setup Go
-        uses: actions/setup-go@v6
+      - name: Set up locked Go and XGo
+        uses: ./.github/actions/deps
         with:
-          go-version: 1.25.x
-          cache-dependency-path: |
-            go.sum
-            cmd/ispx/go.sum
+          setup-mode: none
 
       - name: Download Go modules
         shell: bash

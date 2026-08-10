@@ -11,7 +11,7 @@ The build planner currently uses `threads=no` and `proxy_to_pthread=no` for `nor
 The standard browser mode. Use it unless a target platform requires another mode.
 
 ```sh
-make prepare-web MODE=normal
+make setup-web MODE=normal
 make build-web MODE=normal
 make export-web MODE=normal
 ```

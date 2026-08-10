@@ -25,11 +25,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
-)
 
-const (
-	androidNDKVersion = "23.2.8568313"
-	androidNDKRelease = "r23c"
+	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 )
 
 type toolSetupNDKConfig struct {
@@ -48,7 +45,7 @@ type androidNDKEnv struct {
 }
 
 var androidNDKResolveEnv = resolveAndroidNDKEnv
-var androidNDKFetcher = fetchURLToFile
+var androidNDKFetcher = shared.FetchURLToFile
 
 func parseToolSetupNDKArgs(args []string) (toolSetupNDKConfig, error) {
 	cfg := toolSetupNDKConfig{}
@@ -84,7 +81,7 @@ func setupAndroidNDK(cfg toolSetupNDKConfig) error {
 		return err
 	}
 
-	if fileExists(env.ndkRoot) {
+	if shared.FileExists(env.ndkRoot) {
 		fmt.Fprintf(os.Stdout, "Android NDK %s is already installed at %s\n", androidNDKVersion, env.ndkRoot)
 		return nil
 	}
@@ -116,7 +113,7 @@ func setupAndroidNDK(cfg toolSetupNDKConfig) error {
 	if err := os.MkdirAll(extractDir, 0o755); err != nil {
 		return err
 	}
-	if err := extractZip(archivePath, extractDir); err != nil {
+	if err := shared.ExtractZip(archivePath, extractDir); err != nil {
 		return err
 	}
 
@@ -124,7 +121,7 @@ func setupAndroidNDK(cfg toolSetupNDKConfig) error {
 	if err != nil {
 		return err
 	}
-	if err := copyDir(ndkSource, env.ndkRoot); err != nil {
+	if err := shared.CopyDir(ndkSource, env.ndkRoot); err != nil {
 		return err
 	}
 
@@ -143,6 +140,10 @@ func setupAndroidNDK(cfg toolSetupNDKConfig) error {
 
 func resolveAndroidNDKEnv() (androidNDKEnv, error) {
 	home, err := os.UserHomeDir()
+	if err != nil {
+		return androidNDKEnv{}, err
+	}
+	androidNDKRelease, err := androidNDKReleaseForVersion(androidNDKVersion)
 	if err != nil {
 		return androidNDKEnv{}, err
 	}
@@ -190,14 +191,14 @@ func resolveAndroidNDKEnv() (androidNDKEnv, error) {
 
 func resolveNDKArchivePath(cfg toolSetupNDKConfig, env androidNDKEnv, tempDir string) (string, error) {
 	if cfg.manualInstall {
-		if !fileExists(cfg.ndkPath) {
+		if !shared.FileExists(cfg.ndkPath) {
 			return "", fmt.Errorf("ndk archive does not exist: %s", cfg.ndkPath)
 		}
 		return cfg.ndkPath, nil
 	}
 
 	cachedArchive := filepath.Join(env.cacheDir, env.archiveName)
-	if fileExists(cachedArchive) {
+	if shared.FileExists(cachedArchive) {
 		return cachedArchive, nil
 	}
 
@@ -226,7 +227,7 @@ func resolveNDKArchivePath(cfg toolSetupNDKConfig, env androidNDKEnv, tempDir st
 }
 
 func persistNDKArchive(src, dst string) (string, error) {
-	if err := copyFile(src, dst); err != nil {
+	if err := shared.CopyFile(src, dst); err != nil {
 		return "", err
 	}
 	return dst, nil
@@ -262,7 +263,7 @@ func updateNDKShellConfig(env androidNDKEnv) error {
 	}
 
 	current, _ := os.ReadFile(env.shellConfig)
-	exportLine := "export ANDROID_NDK_ROOT=" + shellQuote(env.ndkRoot)
+	exportLine := "export ANDROID_NDK_ROOT=" + shared.ShellQuote(env.ndkRoot)
 	if strings.Contains(string(current), exportLine) {
 		return nil
 	}
@@ -276,7 +277,7 @@ func updateNDKShellConfig(env androidNDKEnv) error {
 	}
 	defer file.Close()
 
-	block := fmt.Sprintf("\n# Android NDK environment variables - added by buildctl\nexport ANDROID_SDK_ROOT=%s\nexport ANDROID_NDK_ROOT=%s\nexport PATH=\"$ANDROID_NDK_ROOT:$PATH\"\n", shellQuote(env.sdkRoot), shellQuote(env.ndkRoot))
+	block := fmt.Sprintf("\n# Android NDK environment variables - added by buildctl\nexport ANDROID_SDK_ROOT=%s\nexport ANDROID_NDK_ROOT=%s\nexport PATH=\"$ANDROID_NDK_ROOT:$PATH\"\n", shared.ShellQuote(env.sdkRoot), shared.ShellQuote(env.ndkRoot))
 	_, err = file.WriteString(block)
 	return err
 }
@@ -288,7 +289,7 @@ func detectShellConfigFile(home string) string {
 		return filepath.Join(home, ".zshrc")
 	case "bash":
 		bashProfile := filepath.Join(home, ".bash_profile")
-		if fileExists(bashProfile) {
+		if shared.FileExists(bashProfile) {
 			return bashProfile
 		}
 		return filepath.Join(home, ".bashrc")

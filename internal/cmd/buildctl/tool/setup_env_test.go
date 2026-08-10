@@ -24,12 +24,6 @@ import (
 	"testing"
 )
 
-func TestParseToolSetupSConsArgsDefault(t *testing.T) {
-	if _, err := parseToolSetupSConsArgs(nil); err != nil {
-		t.Fatalf("parseToolSetupSConsArgs returned error: %v", err)
-	}
-}
-
 func TestSConsEnvironmentCommands(t *testing.T) {
 	venvDir := filepath.Join("tmp", "scons-4.8.1")
 	pythonCommand, sconsCommand := sconsEnvironmentCommands(venvDir)
@@ -41,18 +35,6 @@ func TestSConsEnvironmentCommands(t *testing.T) {
 	}
 	if pythonCommand != filepath.Join(venvDir, "bin", "python") || sconsCommand != filepath.Join(venvDir, "bin", "scons") {
 		t.Fatalf("unexpected SCons environment commands: %q, %q", pythonCommand, sconsCommand)
-	}
-}
-
-func TestParseToolSetupJDKArgsDefault(t *testing.T) {
-	if _, err := parseToolSetupJDKArgs(nil); err != nil {
-		t.Fatalf("parseToolSetupJDKArgs returned error: %v", err)
-	}
-}
-
-func TestParseToolSetupEMSDKArgsDefault(t *testing.T) {
-	if _, err := parseToolSetupEMSDKArgs(nil); err != nil {
-		t.Fatalf("parseToolSetupEMSDKArgs returned error: %v", err)
 	}
 }
 
@@ -143,14 +125,14 @@ func TestResolveEMSDKVerificationEnvironmentAddsConfigAndCache(t *testing.T) {
 		t.Fatalf("WriteFile returned error: %v", err)
 	}
 
-	oldResolve := ResolveEMSDKShellExportsFn
-	ResolveEMSDKShellExportsFn = func() (map[string]string, error) {
+	oldResolve := resolveEMSDKShellExportsFn
+	resolveEMSDKShellExportsFn = func() (map[string]string, error) {
 		return map[string]string{
 			"PATH": filepath.Join(repoDir, "upstream", "emscripten") + string(filepath.ListSeparator) + os.Getenv("PATH"),
 		}, nil
 	}
 	defer func() {
-		ResolveEMSDKShellExportsFn = oldResolve
+		resolveEMSDKShellExportsFn = oldResolve
 	}()
 
 	env, emppPath, err := resolveEMSDKVerificationEnvironment(emsdkEnvironment{
@@ -185,21 +167,21 @@ func TestVerifyEMSDKRunsVersionCheckOnce(t *testing.T) {
 		t.Fatalf("WriteFile returned error: %v", err)
 	}
 
-	oldResolve := ResolveEMSDKShellExportsFn
-	oldRunOutput := BuildEnvRunOutputWithDir
+	oldResolve := resolveEMSDKShellExportsFn
+	oldRunOutput := buildEnvRunOutputWithDir
 	defer func() {
-		ResolveEMSDKShellExportsFn = oldResolve
-		BuildEnvRunOutputWithDir = oldRunOutput
+		resolveEMSDKShellExportsFn = oldResolve
+		buildEnvRunOutputWithDir = oldRunOutput
 	}()
 
-	ResolveEMSDKShellExportsFn = func() (map[string]string, error) {
+	resolveEMSDKShellExportsFn = func() (map[string]string, error) {
 		return map[string]string{
 			"PATH": filepath.Join(repoDir, "upstream", "emscripten") + string(filepath.ListSeparator) + os.Getenv("PATH"),
 		}, nil
 	}
 
 	calls := 0
-	BuildEnvRunOutputWithDir = func(workdir string, env []string, name string, args ...string) ([]byte, error) {
+	buildEnvRunOutputWithDir = func(workdir string, env []string, name string, args ...string) ([]byte, error) {
 		calls++
 		return []byte("em++ 1.0\n"), nil
 	}

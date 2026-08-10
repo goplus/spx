@@ -17,12 +17,14 @@
 package main
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 	toolpkg "github.com/goplus/spx/v3/internal/cmd/buildctl/tool"
+	"github.com/goplus/spx/v3/internal/release"
 )
 
 func TestParseEnvExportShellArgsDefault(t *testing.T) {
@@ -56,21 +58,47 @@ func TestResolveBuildEnvironmentUsesGodotSrcOverride(t *testing.T) {
 	if env.GodotSrc != wantEngineDir {
 		t.Fatalf("unexpected godot src: got %s want %s", env.GodotSrc, wantEngineDir)
 	}
+	wantModuleSource := filepath.Join(repoRoot, "godot_modules", "spx")
+	if env.SPXModuleSrc != wantModuleSource {
+		t.Fatalf("unexpected SPX module source: got %s want %s", env.SPXModuleSrc, wantModuleSource)
+	}
+}
+
+func TestResolveBuildEnvironmentUsesSPXModuleSourceOverride(t *testing.T) {
+	repoRoot := t.TempDir()
+	t.Setenv("GOPATH", filepath.Join(repoRoot, "gopath"))
+	t.Setenv("HOME", repoRoot)
+	t.Setenv("APPDATA", filepath.Join(repoRoot, "AppData"))
+	t.Setenv("SPX_MODULE_SRC", filepath.Join("external", "spx"))
+
+	env, err := shared.ResolveBuildEnvironment(repoRoot, "")
+	if err != nil {
+		t.Fatalf("ResolveBuildEnvironment returned error: %v", err)
+	}
+
+	want := filepath.Join(repoRoot, "external", "spx")
+	if env.SPXModuleSrc != want {
+		t.Fatalf("unexpected SPX module source: got %s want %s", env.SPXModuleSrc, want)
+	}
 }
 
 func TestBuildEnvironmentShellExports(t *testing.T) {
 	version := mustDefaultRuntimeVersion(t)
+	runtimeLock := release.DefaultRuntimeLock()
 	env := shared.BuildEnvironment{
-		ProjectDir:    "/repo",
-		EngineDir:     "/repo/godot src",
-		GodotSrc:      "/repo/godot src",
-		EngineVersion: shared.EngineBuildVersion,
-		GoPath:        "/tmp/go path",
-		Version:       version,
-		EngineGitTag:  "spx" + version,
-		TemplateDir:   "/tmp/templates",
-		Platform:      "linux",
-		Arch:          "x86_64",
+		ProjectDir:      "/repo",
+		EngineDir:       "/repo/godot src",
+		GodotSrc:        "/repo/godot src",
+		SPXModuleSrc:    "/repo/custom modules/spx",
+		EngineVersion:   runtimeLock.Godot.Version,
+		GoPath:          "/tmp/go path",
+		Version:         version,
+		GodotRepository: runtimeLock.Godot.Repository,
+		GodotRef:        runtimeLock.Godot.Ref,
+		GodotCommit:     runtimeLock.Godot.Commit,
+		TemplateDir:     "/tmp/templates",
+		Platform:        "linux",
+		Arch:            "x86_64",
 	}
 
 	out := env.ShellExports()
@@ -78,10 +106,13 @@ func TestBuildEnvironmentShellExports(t *testing.T) {
 		"export PROJ_DIR=",
 		"export ENGINE_DIR=",
 		"export GODOT_SRC=",
+		"export SPX_MODULE_SRC=",
 		"export ENGINE_VERSION=",
 		"export GOPATH=",
 		"export VERSION=",
-		"export ENGINE_GIT_TAG=",
+		"export GODOT_REPOSITORY=",
+		"export GODOT_REF=",
+		"export GODOT_COMMIT=",
 		"export TEMPLATE_DIR=",
 		"export PLATFORM=",
 		"export ARCH=",
@@ -128,26 +159,35 @@ func TestEnsureEngineSourceRunsCloneWhenMissing(t *testing.T) {
 	t.Setenv("APPDATA", filepath.Join(repoRoot, "AppData"))
 	t.Setenv("GODOT_SRC", "./custom-godot")
 
-	var gotName string
-	var gotArgs []string
+	type invocation struct {
+		name string
+		args []string
+	}
+	var calls []invocation
 	err := shared.EnsureEngineSource(repoRoot, func(name string, args ...string) error {
-		gotName = name
-		gotArgs = append([]string(nil), args...)
+		calls = append(calls, invocation{name: name, args: append([]string(nil), args...)})
 		return nil
 	})
 	if err != nil {
 		t.Fatalf("EnsureEngineSource returned error: %v", err)
 	}
-	if gotName != "git" {
-		t.Fatalf("command = %s, want git", gotName)
+	if len(calls) != 5 {
+		t.Fatalf("command count = %d, want 5: %#v", len(calls), calls)
 	}
 	wantDst := filepath.Join(repoRoot, "custom-godot")
-	if gotArgs[len(gotArgs)-1] != wantDst {
-		t.Fatalf("clone dst = %s, want %s", gotArgs[len(gotArgs)-1], wantDst)
+	stagingDir := calls[0].args[1]
+	if calls[0].name != "git" || calls[0].args[2] != "init" || filepath.Dir(stagingDir) != repoRoot {
+		t.Fatalf("init call = %#v, want sibling staging directory for %s", calls[0], wantDst)
+	}
+	if got := calls[4].args; len(got) < 2 || got[len(got)-2] != "--detach" {
+		t.Fatalf("checkout call = %#v, want detached checkout", calls[4])
+	}
+	if info, err := os.Stat(wantDst); err != nil || !info.IsDir() {
+		t.Fatalf("committed engine directory = %v, %v", info, err)
 	}
 }
 
-func TestEnsureEngineSourceSkipsCloneWhenPresent(t *testing.T) {
+func TestEnsureEngineSourceRejectsUnpinnedExistingDirectory(t *testing.T) {
 	repoRoot := t.TempDir()
 	t.Setenv("GOPATH", filepath.Join(repoRoot, "gopath"))
 	t.Setenv("HOME", repoRoot)
@@ -160,11 +200,14 @@ func TestEnsureEngineSourceSkipsCloneWhenPresent(t *testing.T) {
 		called = true
 		return nil
 	})
-	if err != nil {
-		t.Fatalf("EnsureEngineSource returned error: %v", err)
+	if err == nil {
+		t.Fatal("EnsureEngineSource should reject an existing directory that is not the pinned Git checkout")
+	}
+	if !strings.Contains(err.Error(), "inspect existing Godot source") {
+		t.Fatalf("EnsureEngineSource error = %v, want source inspection error", err)
 	}
 	if called {
-		t.Fatal("git clone should not be called when engine dir already exists")
+		t.Fatal("clone callback should not run for an existing engine directory")
 	}
 }
 

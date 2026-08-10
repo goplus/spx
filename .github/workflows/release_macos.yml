@@ -1,12 +1,17 @@
-name: Release macOS Package
+name: Package macOS
 
 on:
   workflow_call:
     inputs:
       version:
-        description: 'SPX v3 release version without the leading v (for example, 3.0.0)'
+        description: 'SPX v3 release version without the leading v (for example, 3.1.0)'
         required: true
         type: string
+      engine_artifacts:
+        description: 'Use Godot engine artifacts produced by the current workflow run'
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: ci-${{github.actor}}-${{github.head_ref || github.run_number}}-${{github.ref}}-release-macos
@@ -20,12 +25,36 @@ jobs:
       matrix:
         include:
           - arch_name: x64
+            runtime_arch: x86_64
             runs_on: macos-15-intel
           - arch_name: arm64
+            runtime_arch: arm64
             runs_on: macos-15
     steps:
       - name: Check out code
         uses: actions/checkout@v6
+
+      - name: Download current-run engine artifacts
+        if: inputs.engine_artifacts
+        uses: actions/download-artifact@v7
+        with:
+          pattern: runtime-*macos-${{ matrix.runtime_arch }}
+          path: runtime-assets
+          merge-multiple: true
+
+      - name: Download current-run universal macOS template
+        if: inputs.engine_artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: runtime-macos-universal
+          path: runtime-assets
+
+      - name: Download current-run runtime pack
+        if: inputs.engine_artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: runtime-spx-assets
+          path: runtime-assets
 
       - name: Set up toolchain and engine assets
         uses: ./.github/actions/deps
@@ -37,19 +66,13 @@ jobs:
         uses: ./.github/actions/prepare-standalone-release
         with:
           version: ${{ inputs.version }}
+          engine-asset-dir: ${{ inputs.engine_artifacts && 'runtime-assets' || '' }}
 
       - name: Package standalone release
         uses: ./.github/actions/package-standalone-release
         with:
           package-file: spx-standalone-darwin-${{ matrix.arch_name }}.zip
           spx-bin: ${{ steps.prepare_standalone_release.outputs.spx-bin }}
-
-      - name: Upload standalone release artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: spx-standalone-darwin-${{ matrix.arch_name }}
-          path: spx-standalone-darwin-${{ matrix.arch_name }}.zip
-          retention-days: 14
 
       - name: Verify standalone release package
         uses: ./.github/actions/verify-release
@@ -58,11 +81,9 @@ jobs:
           platform: darwin
           package-arch: ${{ matrix.arch_name }}
 
-      - name: Publish standalone release asset
-        if: github.event_name == 'release'
-        uses: softprops/action-gh-release@v3
+      - name: Upload standalone release artifact
+        uses: actions/upload-artifact@v7
         with:
-          files: spx-standalone-darwin-${{ matrix.arch_name }}.zip
-          tag_name: ${{ github.event.release.tag_name }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: spx-standalone-darwin-${{ matrix.arch_name }}
+          path: spx-standalone-darwin-${{ matrix.arch_name }}.zip
+          retention-days: 14

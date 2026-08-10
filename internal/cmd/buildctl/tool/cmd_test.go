@@ -22,6 +22,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 )
 
 func TestParseToolSetupNDKArgsDefault(t *testing.T) {
@@ -39,7 +41,7 @@ func TestParseToolInstallArgsDefault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parseToolInstallArgs returned error: %v", err)
 	}
-	if cfg.web || cfg.opt || cfg.noEmbedRuntime {
+	if cfg.Web || cfg.NoEmbedRuntime {
 		t.Fatalf("unexpected tool install flags: %#v", cfg)
 	}
 }
@@ -49,7 +51,7 @@ func TestParseToolInstallArgsNoEmbedRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parseToolInstallArgs returned error: %v", err)
 	}
-	if !cfg.noEmbedRuntime || cfg.web || cfg.opt {
+	if !cfg.NoEmbedRuntime || cfg.Web {
 		t.Fatalf("unexpected tool install flags: %#v", cfg)
 	}
 }
@@ -79,7 +81,7 @@ func TestSetupAndroidNDKManualInstall(t *testing.T) {
 	}
 
 	ndkRoot := filepath.Join(os.Getenv("ANDROID_SDK_ROOT"), "ndk", androidNDKVersion)
-	if !fileExists(filepath.Join(ndkRoot, "source.properties")) {
+	if !shared.FileExists(filepath.Join(ndkRoot, "source.properties")) {
 		t.Fatalf("expected source.properties under %s", ndkRoot)
 	}
 
@@ -110,10 +112,10 @@ func TestUpdateNDKShellConfigQuotesPaths(t *testing.T) {
 		t.Fatalf("ReadFile(%s) returned error: %v", shellConfig, err)
 	}
 	got := string(content)
-	if !strings.Contains(got, "export ANDROID_SDK_ROOT="+shellQuote(env.sdkRoot)) {
+	if !strings.Contains(got, "export ANDROID_SDK_ROOT="+shared.ShellQuote(env.sdkRoot)) {
 		t.Fatalf("expected quoted ANDROID_SDK_ROOT export in shell config: %s", got)
 	}
-	if !strings.Contains(got, "export ANDROID_NDK_ROOT="+shellQuote(env.ndkRoot)) {
+	if !strings.Contains(got, "export ANDROID_NDK_ROOT="+shared.ShellQuote(env.ndkRoot)) {
 		t.Fatalf("expected quoted ANDROID_NDK_ROOT export in shell config: %s", got)
 	}
 	if !strings.Contains(got, "export PATH=\"$ANDROID_NDK_ROOT:$PATH\"") {

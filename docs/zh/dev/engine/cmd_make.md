@@ -1,226 +1,152 @@
 # SPX 构建命令指南
 
-这份文档描述当前仓库里真实存在的构建入口，其中 `buildctl` 是主编排入口，`make` 主要作为兼容和快捷命令层。
+仓库根目录的 `Makefile` 是稳定、面向使用者的构建入口。它会按需构建并调用仓库内的 `./.bin/buildctl`，日常开发应从 `make` 命令开始。
 
-为了减少重复的 `go run` 启动开销，可以先执行一次 `make buildctl` 生成 `./.bin/buildctl`。之后 `make` 和兼容 shell wrapper 会优先复用这个本地二进制；如果源码有更新，launcher 也会自动重新构建。
-
-## 构建分层
-
-SPX 现在的构建入口分成三层：
-
-- `Makefile`
-  对外提供短命令和兼容入口。
-- `internal/cmd/buildctl`
-  负责核心编排、参数校验和步骤顺序，当前已承接 `env`、`prepare`、`tool install/setup-ndk`、`engine download/build`、`runtime build/export`、`workflow build/demo`。
-- `internal/cmd/buildctl/*.sh`
-  只保留少量兼容壳和便捷入口，例如 `buildctl.sh`、docker 相关脚本。
-
-如果只是使用仓库，优先调用 `make` 目标；如果要做自动化、CI 或重构构建链，优先调用 `buildctl`，不要自己拼 shell 流程。
-
-已经删除的 legacy shell 入口：
-
-- `internal/tools/bootstrap/prepare.sh`
-- `internal/tools/build_engine.sh`
-- `internal/tools/build_game.sh`
-- `internal/tools/engine/build.sh`
-- `internal/tools/common/setup_ndk.sh`
-- `internal/tools/common/setup_env.sh`
-- `internal/tools/engine/download.sh`
-- `internal/tools/make_util.sh`
-- `internal/tools/runtime/export_pack.sh`
-- `internal/tools/runtime/export_web.sh`
-- `internal/tools/runtime/web_template.sh`
-- `internal/tools/runtime/compress_wasm.sh`
-- `internal/tools/run.sh`
-
-自动化入口示例：
-
-```bash
-go run ./internal/cmd/buildctl prepare --setup-mode runtime
-go run ./internal/cmd/buildctl env export-shell
-go run ./internal/cmd/buildctl tool install --web
-go run ./internal/cmd/buildctl tool setup-ndk --manual-install --ndk-path /path/to/android-ndk-r23c-darwin.zip
-go run ./internal/cmd/buildctl engine download --runtime
-go run ./internal/cmd/buildctl engine build --target template --platform web --mode worker
-go run ./internal/cmd/buildctl runtime build-wasm --opt
-go run ./internal/cmd/buildctl runtime export-web --mode worker
-go run ./internal/cmd/buildctl workflow build-dev
-go run ./internal/cmd/buildctl workflow install-apk --project-dir tutorial/00-Hello
-go run ./internal/cmd/buildctl workflow run-demo --demo-index 1 --mode web
-```
+`buildctl` 是 Makefile、CI 和构建系统调试使用的底层编排入口。本文保留它的维护者用法，但不把它作为普通使用者的主流程。
 
 ## 快速开始
 
-```bash
-# 预编译本地 buildctl 二进制
+准备预编译的本机编辑器和 runtime 资产，然后运行 demo：
+
+```sh
+make setup
+make list-demos
+make run DEMO_INDEX=2
+```
+
+为指定 runtime 模式准备 Web 资产：
+
+```sh
+make setup-web MODE=normal
+make runweb DEMO_INDEX=2
+```
+
+修改引擎或 SPX 模块时，从源码构建完整开发环境：
+
+```sh
+GODOT_SRC=/absolute/path/to/godot make dev MODE=normal
+```
+
+使用 `make help` 查看主要命令，使用 `make help-advanced` 查看底层目标。`make buildctl` 是可选步骤；普通 Make 目标会自动构建缓存的二进制。
+
+## 主要命令
+
+| 命令 | 说明 |
+| --- | --- |
+| `make setup` | 准备本机编辑器和 native runtime 资产。 |
+| `make setup-web MODE=...` | 为一种 runtime 模式准备 Web 资产。 |
+| `make dev MODE=...` | 从源码构建完整的本地开发环境。 |
+| `make doctor` | 校验最终解析出的 lock、工具链、模块 profile 和 Godot checkout。 |
+| `make build-editor` | 从源码构建本机 editor。 |
+| `make build-desktop` | 从源码构建本机 desktop template 和 runtime pack。 |
+| `make build-web MODE=...` | 从源码构建 Web template 和匹配的 runtime。 |
+| `make build-android` | 从源码构建 Android template。 |
+| `make build-ios` | 从源码构建 iOS template。 |
+
+预编译并锁定的资产能够满足需求时，使用 `setup` 和 `setup-web`。修改 Godot、`godot_modules/spx`、生成的 bindings 或平台构建行为时，使用 `dev` 或某个专用的 `build-*` 目标。
+
+## 构建参数
+
+| 参数 | 默认值 | 使用范围 |
+| --- | --- | --- |
+| `GODOT_SRC` | `./godot` | `dev` 和引擎 `build-*` 目标使用的 Godot 源码 checkout。 |
+| `SPX_MODULE_SRC` | `./godot_modules/spx` | 引擎构建和 `make generate` 使用的外置 SPX Godot 模块。 |
+| `MODE` | `normal` | Web 环境准备、构建、导出，以及 `dev` 中的 Web 构建。 |
+| `DEMO_INDEX` | `3` | demo 命令选择的 tutorial 索引。 |
+| `PORT` | `8106` | Web demo 命令使用的端口。 |
+
+`MODE` 可选 `normal`、`worker`、`minigame` 和 `miniprogram`。同一套 Web 环境的准备、构建、运行和导出应保持相同模式，避免 template 与 runtime 不匹配。
+
+`GODOT_SRC` 和 `SPX_MODULE_SRC` 都支持绝对路径或相对路径；相对路径从 SPX 仓库根目录解析。使用仓库外的 Godot checkout 时，建议为 `GODOT_SRC` 传绝对路径。通常应保持 `SPX_MODULE_SRC` 的默认值，让仓库自有的外置模块及其构建 profile 成为唯一模块来源。
+
+只准备预编译资产的命令不需要 `GODOT_SRC`；只有从源码编译引擎目标时才会使用它。
+
+## 版本和 profile 来源
+
+runtime 发布版本只有一个来源：`internal/release/runtime.lock.json` 保存 `runtime_version`，不重复保存 release tag。发布工具按 `runtime-v<runtime_version>` 推导 tag，例如 `runtime-v2.4.0`。
+
+本地 `buildctl` 会从这份 lock 读取全部锁定工具版本，并把锁定的 Go toolchain 传给子构建脚本；SPX CI 也统一从同一位置安装 Go 和 XGo，workflow 不再另设版本默认值。NDK 安装器所需的 `r23c` 一类别名只是由完整 revision 校验得到的适配值，未知映射会直接失败，不能反过来成为版本来源。Godot 的 SCons 功能参数使用另一份唯一来源：`godot_modules/spx/spx_scons_profile.json`。共享的引擎功能开关应在该 profile 中修改，不要在 Makefile 或各平台 CI workflow 中重复配置。
+
+Godot 引擎制品与 SPX runtime pack 使用不同的构建身份：
+
+- Godot 引擎制品由锁定的 Godot commit、`godot_modules/spx` tree（包含 SCons profile）、引擎工具链和平台动态参数决定。修改 `buildctl`、release 元数据或文档不会让 Godot 编译缓存失效。
+- `spx-runtime-assets.zip` 是独立的 SPX runtime pack，由 `cmd/spx`、项目模板、SPX Go runtime 和 `runtime export-pack` 路径生成；这些变化可能需要重新生成 pack，但不是 Godot 引擎源码变化。
+
+当前 runtime tag 原子地发布这两类资产，因此任一类产物发生变化都应提升 `runtime_version`；不过未变化的 Godot 引擎输入仍会命中独立的编译缓存，不会因为版本号或 release 编排变化而整套重编。
+
+## 常用流程
+
+### 使用预编译资产进行本地 SPX 开发
+
+```sh
+make setup
+make install
+spx run --path tutorial/00-Hello
+```
+
+### Web 开发
+
+```sh
+make setup-web MODE=worker
+make runwebworker DEMO_INDEX=2
+```
+
+### 引擎和模块开发
+
+```sh
+GODOT_SRC=/absolute/path/to/godot \
+SPX_MODULE_SRC=./godot_modules/spx \
+make dev MODE=normal
+```
+
+如果只需要构建某个平台，可将 `dev` 换成 `build-editor`、`build-desktop`、`build-web MODE=...`、`build-android` 或 `build-ios`。
+
+## 直接使用 buildctl
+
+直接调用 `buildctl` 主要用于 CI、构建系统维护和编排层调试。手动调用前先构建缓存的可执行文件：
+
+```sh
 make buildctl
 
-# 查看所有可用命令
-make help
+./.bin/buildctl setup host --published-runtime
+./.bin/buildctl setup web --mode worker
+./.bin/buildctl setup full --mode normal
+./.bin/buildctl doctor
 
-# 查看 buildctl 子命令
-./.bin/buildctl help
-
-# 准备本机 host 资产
-make prepare-host
-
-# 构建完整本地开发环境
-make build-dev MODE=normal
-
-# 准备 Web 导出资产
-make prepare-web MODE=normal
-
-# 同时准备 host + Web 导出资产
-make prepare-full MODE=worker
+./.bin/buildctl build dev --mode normal
+./.bin/buildctl build editor
+./.bin/buildctl build desktop
+./.bin/buildctl build web --mode worker
+./.bin/buildctl build android
+./.bin/buildctl build ios
 ```
 
-## 常用参数
+Makefile 会把 `setup`、`setup-web`、`dev` 和 `build-*` 映射到这些命令，并统一补充默认值；其中 `make setup` 明确选择已发布并经 manifest 校验的 runtime pack。除非 CI 任务需要直接执行某个编排步骤，否则优先使用 Make 目标。
 
-| 参数 | 默认值 | 说明 |
-| --- | --- | --- |
-| `GODOT_SRC` | `./godot` | Godot 源码目录；仅 `build-dev`、`build-editor`、`build-desktop`、`build-web`、`build-android`、`build-ios`、`generate` 使用 |
-| `MODE` | `normal` | Web 模式，可选 `normal`、`worker`、`minigame`、`miniprogram` |
-| `WEB` | `0` | `make install` 是否追加 `--web`，可选 `1/true/TRUE/yes/YES/on/ON` 或 `0/false/FALSE/no/NO/off/OFF` |
-| `PLATFORM` | 当前宿主平台 | `download-engine` 使用的平台名 |
-| `DEMO_INDEX` | `3` | `tutorial/*` 演示索引 |
-| `APK_PROJECT_DIR` | `tutorial/00-Hello` | `install-apk` 使用的项目目录 |
-| `PORT` | `8106` | `runweb` 和 `runwebworker` 使用的端口 |
-| `MOVIE` | `false` | 运行 demo 时是否启用录制模式 |
+## 运行和导出命令
 
-## buildctl 总览
-
-当前已经稳定的 `buildctl` 分组：
-
-| 分组 | 示例 |
-| --- | --- |
-| `env` | `go run ./internal/cmd/buildctl env export-shell` |
-| `prepare` | `go run ./internal/cmd/buildctl prepare --setup-mode runtime` |
-| `tool` | `go run ./internal/cmd/buildctl tool install --web` / `go run ./internal/cmd/buildctl tool setup-ndk` |
-| `engine` | `go run ./internal/cmd/buildctl engine build --target template --platform android` |
-| `runtime` | `go run ./internal/cmd/buildctl runtime export-web --mode worker` |
-| `workflow` | `go run ./internal/cmd/buildctl workflow run-demo --demo-index 1 --mode web` / `go run ./internal/cmd/buildctl workflow install-apk --project-dir tutorial/00-Hello` |
-
-## 设置命令
-
-| 命令 | 说明 |
-| --- | --- |
-| `make prepare-host` | 安装 `spx`，下载当前平台 editor、runtime template 和 `gdspxrt.pck` |
-| `make build-dev [MODE=...]` | 一次性构建带指定 Web mode runtime 的 `spx` 工具链、当前平台 editor/template、runtime pck 和 Web template |
-| `make prepare-web MODE=...` | 安装 Web 导出所需工具链，下载指定模式的 Web template/runtime，并补齐 `exporttemplateweb` 依赖的 host editor |
-| `make prepare-full [MODE=...]` | 一次性准备 host editor/runtime 资产和指定 Web mode 的导出资产 |
-| `make install [WEB=1]` | 安装 `spx` 命令；`WEB=1` 时会透传为 `buildctl tool install --web` |
-| `make download` | 下载当前平台 runtime 所需的 editor/template/pck 资产 |
-| `make download-engine PLATFORM=... [MODE=...]` | 下载指定平台的引擎模板或 editor 资产 |
-
-示例：
-
-```bash
-make install
-make install WEB=1
-make download-engine PLATFORM=android
-make download-engine PLATFORM=web MODE=worker
-```
-
-## 构建命令
-
-以下构建命令会读取 `GODOT_SRC`，默认值为 `./godot`；此外 `make generate` 也会读取这个变量。其他 `make` 目标会忽略这个变量。
-
-| 命令 | 说明 |
-| --- | --- |
-| `make build-editor` | 构建当前平台 editor，并安装到 `GOPATH/bin` |
-| `make build-desktop` | 构建当前平台 desktop template，并导出 runtime pck |
-| `make build-web [MODE=...]` | 构建指定模式的 Web template，并导出对应 Web runtime |
-| `make build-wasm` | 构建 WebAssembly 版本的 `ispx` |
-| `make build-wasm-opt` | 构建优化版 `ispx.wasm`，并执行 brotli 压缩 |
-| `make build-android` | 构建 Android template |
-| `make build-ios` | 构建 iOS template |
-| `make install-apk [APK_PROJECT_DIR=...]` | 导出并安装 Android APK 到设备 |
-
-示例：
-
-```bash
-make build-editor
-make build-web MODE=worker
-make build-android
-make install-apk APK_PROJECT_DIR=tutorial/00-Hello
-```
-
-## 导出命令
-
-| 命令 | 说明 |
-| --- | --- |
-| `make export-pack` | 导出 runtime assets zip `spx-runtime-assets.zip` 到 `GOPATH/bin` |
-| `make export-web [MODE=...]` | 导出 Web bundle，输出 zip 到仓库根目录 |
-
-`make export-web` 的输出文件：
-
-| 模式 | 输出文件 |
-| --- | --- |
-| `normal` | `spx_web.zip` |
-| `worker` | `spx_web_worker.zip` |
-| `minigame` | `spx_web_minigame.zip` |
-| `miniprogram` | `spx_web_miniprogram.zip` |
-
-示例：
-
-```bash
-make export-web
-make export-web MODE=worker
-```
-
-## 运行命令
-
-| 命令 | 说明 |
-| --- | --- |
-| `make list-demos` | 打印 `tutorial/*` 的索引 |
-| `make editor DEMO_INDEX=N` | 打开指定 demo 的编辑器模式 |
-| `make run DEMO_INDEX=N` | 以解释器运行模式启动指定 demo（对应 `spx run`） |
-| `make runnative DEMO_INDEX=N` | 以原生运行时启动指定 demo（对应 `spx runnative`） |
-| `make rune DEMO_INDEX=N` | 以编辑器运行时模式启动指定 demo（对应 `spx rune`） |
-| `make runweb DEMO_INDEX=N` | 构建 wasm 后启动指定 demo 的 Web 版本 |
-| `make runwebworker DEMO_INDEX=N` | 构建 wasm 后启动指定 demo 的 Web Worker 版本 |
-| `make stop` | 停止本地 Web server 进程 |
-
-示例：
-
-```bash
+```sh
 make list-demos
-make run DEMO_INDEX=1
-make runnative DEMO_INDEX=1
-make rune DEMO_INDEX=1
-make runweb DEMO_INDEX=2 PORT=8080
+make editor DEMO_INDEX=2
+make run DEMO_INDEX=2
+make runnative DEMO_INDEX=2
+make rune DEMO_INDEX=2
+make runweb DEMO_INDEX=2 PORT=8106
+make runwebworker DEMO_INDEX=2 PORT=8106
+
+make export-pack
+make export-web MODE=normal
+make install-apk APK_PROJECT_DIR=tutorial/00-Hello
+make stop
 ```
 
-## 其他命令
+## 生成和维护
 
-| 命令 | 说明 |
-| --- | --- |
-| `make format` | 分别在仓库根目录和 `cmd/ispx` 目录运行 `go fmt ./...` |
-| `make generate` | 执行代码生成并格式化；可用 `GODOT_SRC` 覆盖源码目录 |
+`make generate` 会重新生成 native/Web bindings、runtime 注册代码并执行格式化。它会读写 `SPX_MODULE_SRC` 指定的外置模块；不要直接修改生成文件。
 
-## 推荐流程
-
-### 本地开发
-
-```bash
-	make build-dev MODE=normal
-	make run DEMO_INDEX=1
-	make runnative DEMO_INDEX=1
-	make runweb DEMO_INDEX=1
+```sh
+make generate
+make format
 ```
 
-### 仅准备 Web 导出环境
-
-```bash
-	make prepare-web MODE=worker
-	make export-web MODE=worker
-```
-
-### CI 中下载预编译资产
-
-```bash
-make install
-make download
-make download-engine PLATFORM=android
-make export-web MODE=minigame
-```
+`make clean-projects` 和 `make clean-assets` 会删除生成或安装的数据，执行前请检查各目标的清理范围。

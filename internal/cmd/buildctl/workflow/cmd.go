@@ -22,13 +22,22 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/goplus/spx/v3/internal/cmd/buildctl/engine"
+	"github.com/goplus/spx/v3/internal/cmd/buildctl/runtimecmd"
+	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
+	toolpkg "github.com/goplus/spx/v3/internal/cmd/buildctl/tool"
 )
 
-type workflowRunner interface {
-	scriptRunner
-	runCommand(workdir string, name string, args ...string) error
-	listDemoDirs() ([]string, error)
-	stopWebServers() error
+var osStderr = os.Stderr
+
+var errUsage = shared.ErrUsage
+
+var workflowBuildEngine = engine.BuildEngine
+
+type BuildConfig struct {
+	Target string
+	Mode   string
 }
 
 type workflowBuildWebConfig struct {
@@ -53,17 +62,13 @@ type workflowInstallAPKConfig struct {
 
 var defaultInstallAPKProjectDir = filepath.Join("tutorial", "00-Hello")
 
-func runWorkflow(args []string) error {
+func Run(args []string) error {
 	if len(args) == 0 {
 		printWorkflowUsage()
 		return errUsage
 	}
 
 	switch args[0] {
-	case "build-web":
-		return runWorkflowBuildWeb(args[1:])
-	case "build-dev":
-		return runWorkflowBuildDev(args[1:])
 	case "install-apk":
 		return runWorkflowInstallAPK(args[1:])
 	case "list-demos":
@@ -72,8 +77,6 @@ func runWorkflow(args []string) error {
 		return runWorkflowOpenTemplateEditor(args[1:])
 	case "run-demo":
 		return runWorkflowRunDemo(args[1:])
-	case "setup-dev":
-		return runWorkflowBuildDev(args[1:])
 	case "stop-web":
 		return runWorkflowStopWeb(args[1:])
 	case "help", "-h", "--help":
@@ -86,75 +89,14 @@ func runWorkflow(args []string) error {
 }
 
 func printWorkflowUsage() {
-	fmt.Fprintln(osStderr, "Usage: buildctl workflow <build-dev|build-web|install-apk|list-demos|open-template-editor|run-demo|stop-web> [options]")
+	fmt.Fprintln(osStderr, "Usage: buildctl workflow <install-apk|list-demos|open-template-editor|run-demo|stop-web> [options]")
 	fmt.Fprintln(osStderr)
 	fmt.Fprintln(osStderr, "Commands:")
-	fmt.Fprintln(osStderr, "  build-dev  Run the full local development build workflow")
-	fmt.Fprintln(osStderr, "  build-web  Build web templates and export runtime assets")
 	fmt.Fprintln(osStderr, "  install-apk  Export and install an Android APK for a project")
 	fmt.Fprintln(osStderr, "  list-demos Print tutorial demo directories with their indexes")
 	fmt.Fprintln(osStderr, "  open-template-editor  Open the template project directly in the Godot editor")
 	fmt.Fprintln(osStderr, "  run-demo   Run a tutorial demo in local/native/web modes")
 	fmt.Fprintln(osStderr, "  stop-web   Stop local gdspx web server processes")
-}
-
-func runWorkflowBuildWeb(args []string) error {
-	cfg, err := parseWorkflowBuildWebArgs(args)
-	if err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			return nil
-		}
-		return err
-	}
-
-	repoRoot, err := findRepoRoot()
-	if err != nil {
-		return err
-	}
-
-	runner := commandRunner{repoRoot: repoRoot}
-	return buildWebWorkflow(cfg, runner)
-}
-
-func parseWorkflowBuildWebArgs(args []string) (workflowBuildWebConfig, error) {
-	cfg := workflowBuildWebConfig{mode: "normal"}
-
-	fs := flag.NewFlagSet("workflow build-web", flag.ContinueOnError)
-	fs.SetOutput(osStderr)
-	fs.StringVar(&cfg.mode, "mode", cfg.mode, "web mode: normal, worker, minigame, or miniprogram")
-	fs.Usage = func() {
-		fmt.Fprintln(osStderr, "Usage: buildctl workflow build-web [--mode normal|worker|minigame|miniprogram]")
-	}
-
-	if err := fs.Parse(args); err != nil {
-		return workflowBuildWebConfig{}, err
-	}
-	if fs.NArg() != 0 {
-		fs.Usage()
-		return workflowBuildWebConfig{}, errUsage
-	}
-	if err := validateWebMode(cfg.mode); err != nil {
-		return workflowBuildWebConfig{}, err
-	}
-	return cfg, nil
-}
-
-func runWorkflowBuildDev(args []string) error {
-	cfg, err := parseWorkflowBuildDevArgs(args)
-	if err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			return nil
-		}
-		return err
-	}
-
-	repoRoot, err := findRepoRoot()
-	if err != nil {
-		return err
-	}
-
-	runner := commandRunner{repoRoot: repoRoot}
-	return buildDevWorkflow(cfg, runner)
 }
 
 func runWorkflowInstallAPK(args []string) error {
@@ -166,29 +108,29 @@ func runWorkflowInstallAPK(args []string) error {
 		return err
 	}
 
-	repoRoot, err := findRepoRoot()
+	repoRoot, err := shared.FindRepoRoot()
 	if err != nil {
 		return err
 	}
 
-	runner := commandRunner{repoRoot: repoRoot}
+	runner := shared.CommandRunner{RepoRoot: repoRoot}
 	return installAPKWorkflow(cfg, runner)
 }
 
 func runWorkflowListDemos(args []string) error {
-	if err := parseWorkflowListDemosArgs(args); err != nil {
+	if err := shared.ParseNoArgs("workflow list-demos", "Usage: buildctl workflow list-demos", args, osStderr); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
 		}
 		return err
 	}
 
-	repoRoot, err := findRepoRoot()
+	repoRoot, err := shared.FindRepoRoot()
 	if err != nil {
 		return err
 	}
 
-	runner := commandRunner{repoRoot: repoRoot}
+	runner := shared.CommandRunner{RepoRoot: repoRoot}
 	return listDemosWorkflow(runner)
 }
 
@@ -201,30 +143,13 @@ func runWorkflowOpenTemplateEditor(args []string) error {
 		return err
 	}
 
-	repoRoot, err := findRepoRoot()
+	repoRoot, err := shared.FindRepoRoot()
 	if err != nil {
 		return err
 	}
 
-	runner := commandRunner{repoRoot: repoRoot}
+	runner := shared.CommandRunner{RepoRoot: repoRoot}
 	return openTemplateEditorWorkflow(cfg, runner)
-}
-
-func parseWorkflowListDemosArgs(args []string) error {
-	fs := flag.NewFlagSet("workflow list-demos", flag.ContinueOnError)
-	fs.SetOutput(osStderr)
-	fs.Usage = func() {
-		fmt.Fprintln(osStderr, "Usage: buildctl workflow list-demos")
-	}
-
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	if fs.NArg() != 0 {
-		fs.Usage()
-		return errUsage
-	}
-	return nil
 }
 
 func parseWorkflowInstallAPKArgs(args []string) (workflowInstallAPKConfig, error) {
@@ -252,14 +177,12 @@ func parseWorkflowInstallAPKArgs(args []string) (workflowInstallAPKConfig, error
 
 func parseWorkflowOpenTemplateEditorArgs(args []string) (workflowOpenTemplateEditorConfig, error) {
 	cfg := workflowOpenTemplateEditorConfig{
-		templateDir:  defaultTemplateProjectDir,
-		workspaceDir: defaultTemplateEditorWorkspaceDir,
+		templateDir: defaultTemplateProjectDir,
 	}
 
 	fs := flag.NewFlagSet("workflow open-template-editor", flag.ContinueOnError)
 	fs.SetOutput(osStderr)
 	fs.StringVar(&cfg.templateDir, "template-dir", cfg.templateDir, "template project directory to open in the editor")
-	fs.StringVar(&cfg.workspaceDir, "workspace-dir", cfg.workspaceDir, "deprecated compatibility flag; no longer used")
 	fs.Usage = func() {
 		fmt.Fprintln(osStderr, "Usage: buildctl workflow open-template-editor [--template-dir cmd/spx/template/project]")
 	}
@@ -286,12 +209,12 @@ func runWorkflowRunDemo(args []string) error {
 		return err
 	}
 
-	repoRoot, err := findRepoRoot()
+	repoRoot, err := shared.FindRepoRoot()
 	if err != nil {
 		return err
 	}
 
-	runner := commandRunner{repoRoot: repoRoot}
+	runner := shared.CommandRunner{RepoRoot: repoRoot}
 	return runDemoWorkflow(cfg, runner)
 }
 
@@ -334,88 +257,77 @@ func parseWorkflowRunDemoArgs(args []string) (workflowRunDemoConfig, error) {
 }
 
 func runWorkflowStopWeb(args []string) error {
-	if err := parseWorkflowStopWebArgs(args); err != nil {
+	if err := shared.ParseNoArgs("workflow stop-web", "Usage: buildctl workflow stop-web", args, osStderr); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
 		}
 		return err
 	}
 
-	repoRoot, err := findRepoRoot()
+	repoRoot, err := shared.FindRepoRoot()
 	if err != nil {
 		return err
 	}
 
-	runner := commandRunner{repoRoot: repoRoot}
+	runner := shared.CommandRunner{RepoRoot: repoRoot}
 	return stopWebWorkflow(runner)
 }
 
-func parseWorkflowStopWebArgs(args []string) error {
-	fs := flag.NewFlagSet("workflow stop-web", flag.ContinueOnError)
-	fs.SetOutput(osStderr)
-	fs.Usage = func() {
-		fmt.Fprintln(osStderr, "Usage: buildctl workflow stop-web")
+func Build(cfg BuildConfig, runner shared.ScriptRunner) error {
+	switch cfg.Target {
+	case "dev":
+		return buildDevWorkflow(workflowBuildDevConfig{webMode: cfg.Mode}, runner)
+	case "editor":
+		if err := toolpkg.InstallTools(toolpkg.InstallConfig{}, runner); err != nil {
+			return err
+		}
+		return workflowBuildEngine(engine.BuildConfig{Target: "editor"}, runner.RepoRootDir())
+	case "desktop":
+		if err := toolpkg.InstallTools(toolpkg.InstallConfig{}, runner); err != nil {
+			return err
+		}
+		if err := workflowBuildEngine(engine.BuildConfig{Target: "template"}, runner.RepoRootDir()); err != nil {
+			return err
+		}
+		return runtimecmd.ExportPackRuntime(runner)
+	case "web":
+		return buildWebWorkflow(workflowBuildWebConfig{mode: cfg.Mode}, runner)
+	case "android", "ios":
+		if err := toolpkg.InstallTools(toolpkg.InstallConfig{}, runner); err != nil {
+			return err
+		}
+		return workflowBuildEngine(engine.BuildConfig{Target: "template", Platform: cfg.Target}, runner.RepoRootDir())
+	default:
+		return fmt.Errorf("unsupported build target: %s", cfg.Target)
 	}
-
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	if fs.NArg() != 0 {
-		fs.Usage()
-		return errUsage
-	}
-	return nil
 }
 
-func parseWorkflowBuildDevArgs(args []string) (workflowBuildDevConfig, error) {
-	cfg := workflowBuildDevConfig{webMode: "normal"}
-
-	fs := flag.NewFlagSet("workflow build-dev", flag.ContinueOnError)
-	fs.SetOutput(osStderr)
-	fs.StringVar(&cfg.webMode, "web-mode", cfg.webMode, "web mode for the final web engine build step")
-	fs.Usage = func() {
-		fmt.Fprintln(osStderr, "Usage: buildctl workflow build-dev [--web-mode normal|worker|minigame|miniprogram]")
-	}
-
-	if err := fs.Parse(args); err != nil {
-		return workflowBuildDevConfig{}, err
-	}
-	if fs.NArg() != 0 {
-		fs.Usage()
-		return workflowBuildDevConfig{}, errUsage
-	}
-	if err := validateWebMode(cfg.webMode); err != nil {
-		return workflowBuildDevConfig{}, err
-	}
-	return cfg, nil
-}
-
-func buildWebWorkflow(cfg workflowBuildWebConfig, runner scriptRunner) error {
+func buildWebWorkflow(cfg workflowBuildWebConfig, runner shared.ScriptRunner) error {
 	if !cfg.skipToolInstall {
-		if err := installTools(toolInstallConfig{}, runner); err != nil {
+		if err := toolpkg.InstallTools(toolpkg.InstallConfig{}, runner); err != nil {
 			return err
 		}
 	}
-	if err := runEngineBuildWorkflow(runner, engineBuildConfig{
-		target:   "template",
-		platform: "web",
-		mode:     cfg.mode,
-	}); err != nil {
+	if err := workflowBuildEngine(engine.BuildConfig{
+		Target:   "template",
+		Platform: "web",
+		Mode:     cfg.mode,
+	}, runner.RepoRootDir()); err != nil {
 		return err
 	}
-	return exportWebTemplateRuntime(cfg.mode, runner)
+	return runtimecmd.ExportWebTemplateRuntime(cfg.mode, runner)
 }
 
-func buildHostRuntimeWorkflow(runner scriptRunner) error {
-	if err := runEngineBuildWorkflow(runner, engineBuildConfig{target: "template"}); err != nil {
+func buildHostRuntimeWorkflow(runner shared.ScriptRunner) error {
+	if err := workflowBuildEngine(engine.BuildConfig{Target: "template"}, runner.RepoRootDir()); err != nil {
 		return err
 	}
-	return exportPackRuntime(runner)
+	return runtimecmd.ExportPackRuntime(runner)
 }
 
-func buildDevWorkflow(cfg workflowBuildDevConfig, runner scriptRunner) error {
+func buildDevWorkflow(cfg workflowBuildDevConfig, runner shared.ScriptRunner) error {
 	printWorkflowStep(1, 4, "Build host editor")
-	if err := runEngineBuildWorkflow(runner, engineBuildConfig{target: "editor"}); err != nil {
+	if err := workflowBuildEngine(engine.BuildConfig{Target: "editor"}, runner.RepoRootDir()); err != nil {
 		return err
 	}
 
@@ -430,7 +342,7 @@ func buildDevWorkflow(cfg workflowBuildDevConfig, runner scriptRunner) error {
 	}
 
 	printWorkflowStep(4, 4, "Install spx toolchain and web runtime")
-	if err := installTools(toolInstallConfig{web: true}, runner); err != nil {
+	if err := toolpkg.InstallTools(toolpkg.InstallConfig{Web: true}, runner); err != nil {
 		return err
 	}
 
@@ -438,8 +350,8 @@ func buildDevWorkflow(cfg workflowBuildDevConfig, runner scriptRunner) error {
 	return nil
 }
 
-func listDemosWorkflow(runner workflowRunner) error {
-	demos, err := runner.listDemoDirs()
+func listDemosWorkflow(runner shared.WorkflowRunner) error {
+	demos, err := runner.ListDemoDirs()
 	if err != nil {
 		return err
 	}
@@ -449,8 +361,8 @@ func listDemosWorkflow(runner workflowRunner) error {
 	return nil
 }
 
-func runDemoWorkflow(cfg workflowRunDemoConfig, runner workflowRunner) error {
-	demos, err := runner.listDemoDirs()
+func runDemoWorkflow(cfg workflowRunDemoConfig, runner shared.WorkflowRunner) error {
+	demos, err := runner.ListDemoDirs()
 	if err != nil {
 		return err
 	}
@@ -464,49 +376,49 @@ func runDemoWorkflow(cfg workflowRunDemoConfig, runner workflowRunner) error {
 	switch cfg.mode {
 	case "editor":
 		fmt.Fprintf(os.Stdout, "Opening editor for demo #%d: %s\n", cfg.demoIndex, demo)
-		return runner.runCommand(demo, "spx", "editor", movieArg)
+		return runner.RunCommand(demo, "spx", "editor", movieArg)
 	case "run":
 		fmt.Fprintf(os.Stdout, "Running demo #%d: %s\n", cfg.demoIndex, demo)
-		return runner.runCommand(demo, "spx", "run", movieArg)
+		return runner.RunCommand(demo, "spx", "run", movieArg)
 	case "runnative":
 		fmt.Fprintf(os.Stdout, "Running native demo #%d: %s\n", cfg.demoIndex, demo)
-		return runner.runCommand(demo, "spx", "runnative", movieArg)
+		return runner.RunCommand(demo, "spx", "runnative", movieArg)
 	case "rune":
 		fmt.Fprintf(os.Stdout, "Running editor demo #%d: %s\n", cfg.demoIndex, demo)
-		return runner.runCommand(demo, "spx", "rune", movieArg)
+		return runner.RunCommand(demo, "spx", "rune", movieArg)
 	case "web":
 		fmt.Fprintf(os.Stdout, "Running web demo #%d: %s\n", cfg.demoIndex, demo)
-		if err := buildWasmRuntime(runtimeBuildWasmConfig{}, runner); err != nil {
+		if err := runtimecmd.BuildWasmRuntime(runtimecmd.BuildWasmConfig{}, runner); err != nil {
 			return err
 		}
-		return runner.runCommand(demo, "spx", "runweb", fmt.Sprintf("-serveraddr=:%d", cfg.port))
+		return runner.RunCommand(demo, "spx", "runweb", fmt.Sprintf("-serveraddr=:%d", cfg.port))
 	case "web-worker":
 		fmt.Fprintf(os.Stdout, "Running web worker mode: demo #%d: %s\n", cfg.demoIndex, demo)
-		if err := buildWasmRuntime(runtimeBuildWasmConfig{}, runner); err != nil {
+		if err := runtimecmd.BuildWasmRuntime(runtimecmd.BuildWasmConfig{}, runner); err != nil {
 			return err
 		}
-		return runner.runCommand(demo, "spx", "runwebworker", fmt.Sprintf("-serveraddr=:%d", cfg.port))
+		return runner.RunCommand(demo, "spx", "runwebworker", fmt.Sprintf("-serveraddr=:%d", cfg.port))
 	default:
 		return fmt.Errorf("unsupported demo mode: %s", cfg.mode)
 	}
 }
 
-func stopWebWorkflow(runner workflowRunner) error {
+func stopWebWorkflow(runner shared.WorkflowRunner) error {
 	fmt.Fprintln(os.Stdout, "Stopping running processes...")
-	if err := runner.stopWebServers(); err != nil {
+	if err := runner.StopWebServers(); err != nil {
 		return err
 	}
 	fmt.Fprintln(os.Stdout, "Processes stopped.")
 	return nil
 }
 
-func installAPKWorkflow(cfg workflowInstallAPKConfig, runner workflowRunner) error {
+func installAPKWorkflow(cfg workflowInstallAPKConfig, runner shared.WorkflowRunner) error {
 	projectDir := cfg.projectDir
 	if projectDir == "" {
 		projectDir = defaultInstallAPKProjectDir
 	}
 	if !filepath.IsAbs(projectDir) {
-		projectDir = filepath.Join(runner.repoRootDir(), projectDir)
+		projectDir = filepath.Join(runner.RepoRootDir(), projectDir)
 	}
 	projectDir = filepath.Clean(projectDir)
 
@@ -518,18 +430,7 @@ func installAPKWorkflow(cfg workflowInstallAPKConfig, runner workflowRunner) err
 		return fmt.Errorf("project directory is not a directory: %s", projectDir)
 	}
 
-	return runner.runCommand(filepath.Join("cmd", "spx"), "go", "run", ".", "exportapk", "--install", "--path", projectDir)
-}
-
-func runEngineBuildWorkflow(runner scriptRunner, cfg engineBuildConfig) error {
-	args := []string{"./internal/cmd/buildctl/buildctl.sh", "engine", "build", "--target", cfg.target}
-	if cfg.platform != "" {
-		args = append(args, "--platform", cfg.platform)
-	}
-	if cfg.mode != "" {
-		args = append(args, "--mode", cfg.mode)
-	}
-	return runner.runCommand(".", "bash", args...)
+	return runner.RunCommand(filepath.Join("cmd", "spx"), "go", "run", ".", "exportapk", "--install", "--path", projectDir)
 }
 
 func printWorkflowStep(step, total int, label string) {

@@ -5,8 +5,8 @@ The generator keeps the Go SPX API, native Godot bindings, Web bridge, and engin
 ## 1. Common commands
 
 ```sh
-GODOT_SRC=/absolute/path/to/godot make generate-bindings
-GODOT_SRC=/absolute/path/to/godot make generate
+make generate-bindings
+make generate
 ```
 
 `generate-bindings` updates binding output only. `generate` also updates runtime registration and formats Go code.
@@ -19,7 +19,7 @@ GODOT_SRC=/absolute/path/to/godot make generate
 4. Render native Go, engine-facing, C++, Web JavaScript, and worker templates.
 5. Format generated files and compile the affected targets.
 
-The main generator lives under `internal/cmd/codegen`. `GODOT_SRC` points it at the matching SPX Godot fork.
+The main generator lives under `internal/cmd/codegen`. Its SPX Godot module input and output live at `godot_modules/spx`, independently of the Godot checkout. Set `SPX_MODULE_SRC` to override that module location; relative values resolve from the SPX repository root.
 
 ## 3. Inputs and outputs
 
@@ -27,7 +27,7 @@ The main generator lives under `internal/cmd/codegen`. `GODOT_SRC` points it at 
 
 - public and engine-facing declarations under `pkg/spx` and `pkg/spx/pkg/engine`;
 - generator source and templates under `internal/cmd/codegen`;
-- SPX module headers and integration files in the Godot source tree.
+- SPX module headers and integration files under `godot_modules/spx`.
 
 ### Outputs
 
@@ -69,14 +69,14 @@ Unsupported array types require generated conversion code. Prefer conversion at 
 1. Add or update the authoritative declaration.
 2. Add engine implementation where required.
 3. Update generator type rules or templates only if the signature is new.
-4. Run `make generate` with the correct `GODOT_SRC`.
-5. Review changes in both SPX and Godot worktrees.
+4. Run `make generate` with the repository-owned module, or set `SPX_MODULE_SRC` explicitly.
+5. Review changes in the SPX worktree.
 6. Compile native and/or Web targets affected by the interface.
 7. Add a behavioral test at the public API level.
 
 ## 7. Troubleshooting
 
-If a method is missing, confirm that its declaration is exported and discovered. If it is absent from the parsed model, inspect AST collection and build constraints. If Godot output is unchanged, verify `GODOT_SRC`. If only Web fails, compare the generated ABI signature, JavaScript marshalling, and worker wrapper with the native path.
+If a method is missing, confirm that its declaration is exported and discovered. If it is absent from the parsed model, inspect AST collection and build constraints. If module output is unchanged, verify `SPX_MODULE_SRC`. If only Web fails, compare the generated ABI signature, JavaScript marshalling, and worker wrapper with the native path.
 
 Stale generated files often indicate that generation ran against a different Godot checkout or with the wrong Web mode. Regenerate before debugging hand-written callers.
 

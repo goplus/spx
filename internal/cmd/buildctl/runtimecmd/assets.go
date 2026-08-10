@@ -22,10 +22,17 @@ import (
 	"path/filepath"
 	"sort"
 
+	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
+	toolpkg "github.com/goplus/spx/v3/internal/cmd/buildctl/tool"
 	"github.com/goplus/spx/v3/internal/release"
 )
 
 const runtimeIndexJSON = `{"map":{"width":480,"height":360}}`
+
+// runtimeWorkspaceProjectName is the stable project name seen by cmd/spx and
+// embedded in the exported Godot pack. The parent directory remains unique so
+// concurrent exports do not share state.
+const runtimeWorkspaceProjectName = "spx-runtime"
 
 type runtimeWorkspace struct {
 	repoRoot   string
@@ -35,8 +42,8 @@ type runtimeWorkspace struct {
 	outputPack string
 }
 
-func exportPackRuntime(runner scriptRunner) error {
-	workspace, cleanup, err := prepareRuntimeWorkspace(runner.repoRootDir(), true)
+func ExportPackRuntime(runner shared.ScriptRunner) error {
+	workspace, cleanup, err := prepareRuntimeWorkspace(runner.RepoRootDir(), true)
 	if err != nil {
 		return err
 	}
@@ -50,24 +57,24 @@ func exportPackRuntime(runner scriptRunner) error {
 	if err != nil {
 		return err
 	}
-	if err := copyFile(exportedPack, workspace.outputPack); err != nil {
+	if err := shared.CopyFile(exportedPack, workspace.outputPack); err != nil {
 		return err
 	}
 
 	runtimeExtension := filepath.Join(workspace.goBinDir, "runtime.gdextension")
-	if !fileExists(runtimeExtension) {
+	if !shared.FileExists(runtimeExtension) {
 		return fmt.Errorf("runtime extension not found at %s", runtimeExtension)
 	}
 
 	dstZip := filepath.Join(workspace.goBinDir, release.RuntimeAssetZipName)
-	return writeNamedZip(dstZip, map[string]string{
+	return shared.WriteNamedZip(dstZip, map[string]string{
 		"gdspxrt.pck":         workspace.outputPack,
 		"runtime.gdextension": runtimeExtension,
 	})
 }
 
-func exportWebRuntime(cfg runtimeExportWebConfig, runner scriptRunner) error {
-	if err := installTools(toolInstallConfig{web: true, opt: true, noEmbedRuntime: true}, runner); err != nil {
+func exportWebRuntime(cfg runtimeExportWebConfig, runner shared.ScriptRunner) error {
+	if err := toolpkg.InstallTools(toolpkg.InstallConfig{Web: true, NoEmbedRuntime: true}, runner); err != nil {
 		return err
 	}
 
@@ -80,7 +87,7 @@ func exportWebRuntime(cfg runtimeExportWebConfig, runner scriptRunner) error {
 		return err
 	}
 
-	workspace, cleanup, err := prepareRuntimeWorkspace(runner.repoRootDir(), false)
+	workspace, cleanup, err := prepareRuntimeWorkspace(runner.RepoRootDir(), false)
 	if err != nil {
 		return err
 	}
@@ -90,15 +97,15 @@ func exportWebRuntime(cfg runtimeExportWebConfig, runner scriptRunner) error {
 		return err
 	}
 
-	return zipDirectory(filepath.Join(workspace.workDir, "project", ".builds", "web"), filepath.Join(workspace.repoRoot, outputZip))
+	return shared.ZipDirectory(filepath.Join(workspace.workDir, "project", ".builds", "web"), filepath.Join(workspace.repoRoot, outputZip))
 }
 
-func exportWebTemplateRuntime(mode string, runner scriptRunner) error {
-	if err := validateWebMode(mode); err != nil {
+func ExportWebTemplateRuntime(mode string, runner shared.ScriptRunner) error {
+	if err := shared.ValidateWebMode(mode); err != nil {
 		return err
 	}
 
-	workspace, cleanup, err := prepareRuntimeWorkspace(runner.repoRootDir(), true)
+	workspace, cleanup, err := prepareRuntimeWorkspace(runner.RepoRootDir(), true)
 	if err != nil {
 		return err
 	}
@@ -113,13 +120,13 @@ func exportWebTemplateRuntime(mode string, runner scriptRunner) error {
 	if err := os.RemoveAll(dstDir); err != nil {
 		return err
 	}
-	if err := copyDir(srcDir, dstDir); err != nil {
+	if err := shared.CopyDir(srcDir, dstDir); err != nil {
 		return err
 	}
 
 	enginePack := filepath.Join(dstDir, "engine.pck")
 	engineZip := filepath.Join(dstDir, "engine.zip")
-	if !fileExists(enginePack) {
+	if !shared.FileExists(enginePack) {
 		return fmt.Errorf("web runtime engine pack not found at %s", enginePack)
 	}
 	if err := os.Rename(enginePack, engineZip); err != nil {
@@ -135,19 +142,19 @@ func exportWebTemplateRuntime(mode string, runner scriptRunner) error {
 	return os.WriteFile(engineJS, append([]byte(prefix), content...), 0o644)
 }
 
-func runRepoSPXCommand(runner scriptRunner, projectDir string, args ...string) error {
+func runRepoSPXCommand(runner shared.ScriptRunner, projectDir string, args ...string) error {
 	commandArgs := []string{"run", "./cmd/spx"}
 	commandArgs = append(commandArgs, args...)
 	commandArgs = append(commandArgs, "--path", projectDir)
-	return runner.runCommand(runner.repoRootDir(), "go", commandArgs...)
+	return runner.RunCommand(runner.RepoRootDir(), "go", commandArgs...)
 }
 
 func prepareRuntimeWorkspace(repoRoot string, includeRuntimeExtension bool) (runtimeWorkspace, func(), error) {
-	version, err := defaultRuntimeVersion()
+	version, err := shared.DefaultRuntimeVersion()
 	if err != nil {
 		return runtimeWorkspace{}, nil, err
 	}
-	goPath, err := ensureGoPath()
+	goPath, err := shared.EnsureGoPath()
 	if err != nil {
 		return runtimeWorkspace{}, nil, err
 	}
@@ -156,8 +163,22 @@ func prepareRuntimeWorkspace(repoRoot string, includeRuntimeExtension bool) (run
 	if err := os.MkdirAll(tempRoot, 0o755); err != nil {
 		return runtimeWorkspace{}, nil, err
 	}
-	workDir, err := os.MkdirTemp(tempRoot, "runtime-*")
+	workspaceRoot, err := os.MkdirTemp(tempRoot, "runtime-workspace-*")
 	if err != nil {
+		return runtimeWorkspace{}, nil, err
+	}
+	cleanup := func() {
+		_ = os.RemoveAll(workspaceRoot)
+	}
+	complete := false
+	defer func() {
+		if !complete {
+			cleanup()
+		}
+	}()
+
+	workDir := filepath.Join(workspaceRoot, runtimeWorkspaceProjectName)
+	if err := os.MkdirAll(workDir, 0o755); err != nil {
 		return runtimeWorkspace{}, nil, err
 	}
 	if err := os.MkdirAll(filepath.Join(workDir, "assets"), 0o755); err != nil {
@@ -179,14 +200,12 @@ func prepareRuntimeWorkspace(repoRoot string, includeRuntimeExtension bool) (run
 	if includeRuntimeExtension {
 		src := filepath.Join(repoRoot, "cmd", "spx", "template", "project", "runtime.gdextension.txt")
 		dst := filepath.Join(goPath, "bin", "runtime.gdextension")
-		if err := copyFile(src, dst); err != nil {
+		if err := shared.CopyFile(src, dst); err != nil {
 			return runtimeWorkspace{}, nil, err
 		}
 	}
 
-	cleanup := func() {
-		_ = os.RemoveAll(workDir)
-	}
+	complete = true
 	return runtimeWorkspace{
 		repoRoot:   repoRoot,
 		workDir:    workDir,
@@ -197,7 +216,7 @@ func prepareRuntimeWorkspace(repoRoot string, includeRuntimeExtension bool) (run
 }
 
 func webModeOutputZip(mode string) (string, error) {
-	if err := validateWebMode(mode); err != nil {
+	if err := shared.ValidateWebMode(mode); err != nil {
 		return "", err
 	}
 	switch mode {
@@ -215,7 +234,7 @@ func webModeOutputZip(mode string) (string, error) {
 }
 
 func webModeSPXCommand(mode string) (string, error) {
-	if err := validateWebMode(mode); err != nil {
+	if err := shared.ValidateWebMode(mode); err != nil {
 		return "", err
 	}
 	switch mode {
@@ -234,7 +253,7 @@ func webModeSPXCommand(mode string) (string, error) {
 
 func findExportedPack(workDir string) (string, error) {
 	pcPack := filepath.Join(workDir, "project", ".builds", "pc", "gdexport.pck")
-	if fileExists(pcPack) {
+	if shared.FileExists(pcPack) {
 		return pcPack, nil
 	}
 

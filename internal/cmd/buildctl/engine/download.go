@@ -25,33 +25,59 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 	"github.com/goplus/spx/v3/internal/release"
 )
 
 type engineDownloadEnv struct {
-	repoRoot    string
-	version     string
-	platform    string
-	arch        string
-	goBinDir    string
-	templateDir string
-	cacheDir    string
-	urlPrefix   string
+	repoRoot              string
+	version               string
+	platform              string
+	arch                  string
+	goBinDir              string
+	templateDir           string
+	cacheDir              string
+	urlPrefix             string
+	runtimeAssetURLPrefix string
+	runtimePackAsset      string
+	assetDir              string
+	verifyManifest        bool
+	allowMissingManifest  bool
+	manifest              *release.RuntimeManifest
 }
 
-var EngineDownloadFetcher = fetchURLToFile
-var EngineDownloadResolveEnv = resolveEngineDownloadEnv
-var EngineDownloadHTTPClient = &http.Client{Timeout: 30 * time.Minute}
+var engineDownloadFetcher = fetchURLToFile
+var engineDownloadResolveEnv = resolveEngineDownloadEnv
+var engineDownloadHTTPClient = &http.Client{Timeout: 30 * time.Minute}
 
 func downloadEngineAssets(cfg engineDownloadConfig, repoRoot string) error {
-	env, err := EngineDownloadResolveEnv(repoRoot, cfg.platform)
+	env, err := engineDownloadResolveEnv(repoRoot, cfg.platform)
 	if err != nil {
 		return err
+	}
+	if cfg.assetDir != "" {
+		env.assetDir = cfg.assetDir
+		if !filepath.IsAbs(env.assetDir) {
+			env.assetDir = filepath.Join(repoRoot, env.assetDir)
+		}
+		env.assetDir = filepath.Clean(env.assetDir)
+		info, err := os.Stat(env.assetDir)
+		if err != nil {
+			return fmt.Errorf("open engine asset directory: %w", err)
+		}
+		if !info.IsDir() {
+			return fmt.Errorf("engine asset path is not a directory: %s", env.assetDir)
+		}
+		env.allowMissingManifest = cfg.sameRunArtifacts
+	}
+	if env.verifyManifest {
+		if err := loadEngineAssetManifest(&env); err != nil {
+			return err
+		}
 	}
 
 	if cfg.runtime {
@@ -62,7 +88,7 @@ func downloadEngineAssets(cfg engineDownloadConfig, repoRoot string) error {
 			return nil
 		}
 		if err := downloadRuntimePack(env); err != nil {
-			fmt.Fprintf(osStderr, "Warning: failed to download runtime asset bundle: %v\n", err)
+			return fmt.Errorf("download runtime asset bundle: %w", err)
 		}
 		return nil
 	}
@@ -71,20 +97,27 @@ func downloadEngineAssets(cfg engineDownloadConfig, repoRoot string) error {
 }
 
 func resolveEngineDownloadEnv(repoRoot, platform string) (engineDownloadEnv, error) {
-	buildEnv, err := resolveBuildEnvironment(repoRoot, platform)
+	buildEnv, err := shared.ResolveBuildEnvironment(repoRoot, platform)
 	if err != nil {
 		return engineDownloadEnv{}, err
 	}
+	lock := release.DefaultRuntimeLock()
+	if buildEnv.Version != lock.RuntimeVersion {
+		return engineDownloadEnv{}, fmt.Errorf("resolved runtime version %q does not match runtime lock %q", buildEnv.Version, lock.RuntimeVersion)
+	}
 
 	env := engineDownloadEnv{
-		repoRoot:    buildEnv.RepoRoot,
-		version:     buildEnv.Version,
-		platform:    buildEnv.Platform,
-		arch:        buildEnv.Arch,
-		goBinDir:    filepath.Join(buildEnv.GoPath, "bin"),
-		templateDir: buildEnv.TemplateDir,
-		cacheDir:    filepath.Join(repoRoot, "internal", "cmd", "buildctl", "bin"),
-		urlPrefix:   fmt.Sprintf("https://github.com/goplus/godot/releases/download/spx%s/", buildEnv.Version),
+		repoRoot:              buildEnv.RepoRoot,
+		version:               buildEnv.Version,
+		platform:              buildEnv.Platform,
+		arch:                  buildEnv.Arch,
+		goBinDir:              filepath.Join(buildEnv.GoPath, "bin"),
+		templateDir:           buildEnv.TemplateDir,
+		cacheDir:              filepath.Join(repoRoot, "internal", "cmd", "buildctl", "bin"),
+		urlPrefix:             lock.RuntimeAssetDownloadURL(""),
+		runtimeAssetURLPrefix: lock.RuntimeAssetDownloadURL(""),
+		runtimePackAsset:      release.RuntimeAssetZipName,
+		verifyManifest:        true,
 	}
 
 	if err := os.MkdirAll(env.goBinDir, 0o755); err != nil {
@@ -126,12 +159,17 @@ func downloadPlatformAssets(env engineDownloadEnv, mode string, editor bool) err
 
 func downloadRuntimePack(env engineDownloadEnv) error {
 	versionedPack := filepath.Join(env.goBinDir, fmt.Sprintf("gdspxrt%s.pck", env.version))
-	defaultPack := filepath.Join(env.goBinDir, "gdspxrt.pck")
-	meta := release.ReleaseMetaForRuntimeVersion(env.version)
-	zipName := release.RuntimeAssetZipName
-	url := meta.RuntimeAssetDownloadURL(zipName)
+	zipName := env.runtimePackAsset
+	if zipName == "" {
+		zipName = release.RuntimeAssetZipName
+	}
+	urlPrefix := env.runtimeAssetURLPrefix
+	if urlPrefix == "" {
+		urlPrefix = env.urlPrefix
+	}
+	url := urlPrefix + zipName
 	zipPath := filepath.Join(env.cacheDir, zipName)
-	if err := EngineDownloadFetcher(url, zipPath); err != nil {
+	if err := fetchEngineAsset(env, zipName, url, zipPath); err != nil {
 		return err
 	}
 	defer os.Remove(zipPath)
@@ -145,24 +183,35 @@ func downloadRuntimePack(env engineDownloadEnv) error {
 	if err := extractZip(zipPath, extractDir); err != nil {
 		return err
 	}
-
 	entries, err := os.ReadDir(extractDir)
 	if err != nil {
 		return err
 	}
+	destinations := map[string]string{
+		"gdspxrt.pck":         versionedPack,
+		"runtime.gdextension": filepath.Join(env.goBinDir, "runtime.gdextension"),
+	}
+	seen := make(map[string]struct{}, len(destinations))
 	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
+		_, ok := destinations[entry.Name()]
+		if !ok || entry.IsDir() {
+			return fmt.Errorf("runtime asset bundle contains unsupported entry %q", entry.Name())
 		}
 		src := filepath.Join(extractDir, entry.Name())
-		dst := filepath.Join(env.goBinDir, entry.Name())
-		if err := copyFile(src, dst); err != nil {
+		if info, err := os.Stat(src); err != nil {
 			return err
+		} else if !info.Mode().IsRegular() {
+			return fmt.Errorf("runtime asset bundle entry %q is not a regular file", entry.Name())
+		}
+		seen[entry.Name()] = struct{}{}
+	}
+	for name := range destinations {
+		if _, ok := seen[name]; !ok {
+			return fmt.Errorf("runtime asset bundle is missing %s", name)
 		}
 	}
-
-	if fileExists(defaultPack) {
-		if err := replaceDownloadedFile(defaultPack, versionedPack); err != nil {
+	for _, name := range []string{"runtime.gdextension", "gdspxrt.pck"} {
+		if err := copyEngineAssetAtomically(filepath.Join(extractDir, name), destinations[name]); err != nil {
 			return err
 		}
 	}
@@ -172,7 +221,7 @@ func downloadRuntimePack(env engineDownloadEnv) error {
 func downloadAndroidAssets(env engineDownloadEnv) error {
 	url := env.urlPrefix + "android.zip"
 	zipPath := filepath.Join(env.cacheDir, "android.zip")
-	if err := EngineDownloadFetcher(url, zipPath); err != nil {
+	if err := fetchEngineAsset(env, "android.zip", url, zipPath); err != nil {
 		return err
 	}
 	defer os.Remove(zipPath)
@@ -187,19 +236,28 @@ func downloadAndroidAssets(env engineDownloadEnv) error {
 		return err
 	}
 
-	for _, name := range []string{"android_debug.apk", "android_release.apk", "android_source.zip"} {
+	requiredFiles := []string{"android_debug.apk", "android_release.apk", "android_source.zip"}
+	for _, name := range requiredFiles {
 		src := filepath.Join(extractDir, name)
-		if fileExists(src) {
-			if err := copyFile(src, filepath.Join(env.templateDir, name)); err != nil {
-				return err
-			}
+		info, err := os.Stat(src)
+		if err != nil {
+			return fmt.Errorf("Android asset bundle is missing %s: %w", name, err)
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("Android asset bundle entry %s is not a regular file", name)
+		}
+	}
+	for _, name := range requiredFiles {
+		src := filepath.Join(extractDir, name)
+		if err := copyEngineAssetAtomically(src, filepath.Join(env.templateDir, name)); err != nil {
+			return err
 		}
 	}
 	return nil
 }
 
 func downloadIOSAssets(env engineDownloadEnv) error {
-	return EngineDownloadFetcher(env.urlPrefix+"ios.zip", filepath.Join(env.templateDir, "ios.zip"))
+	return fetchEngineAsset(env, "ios.zip", env.urlPrefix+"ios.zip", filepath.Join(env.templateDir, "ios.zip"))
 }
 
 func downloadWebAssets(env engineDownloadEnv, mode string) error {
@@ -213,7 +271,7 @@ func downloadWebAssets(env engineDownloadEnv, mode string) error {
 	}
 	cachedZip := filepath.Join(env.goBinDir, cachedName)
 	if shouldDownloadPreparedAsset(cachedZip) {
-		if err := EngineDownloadFetcher(env.urlPrefix+templateName, cachedZip); err != nil {
+		if err := fetchEngineAsset(env, templateName, env.urlPrefix+templateName, cachedZip); err != nil {
 			return err
 		}
 	}
@@ -256,49 +314,55 @@ func downloadDesktopAssets(env engineDownloadEnv, editor bool) error {
 	}
 
 	zipName := fmt.Sprintf("%s-%s.zip", env.platform, env.arch)
-	binaryName := fmt.Sprintf("godot.%s.template_release.%s%s", platformName, env.arch, postfix)
+	releaseBinaryName := fmt.Sprintf("godot.%s.template_release.%s%s", platformName, env.arch, postfix)
 	templateBinary := filepath.Join(env.goBinDir, fmt.Sprintf("gdspxrt%s%s", env.version, postfix))
-	if shouldDownloadPreparedAsset(templateBinary) {
-		if err := downloadBinaryFromZip(env, zipName, binaryName, templateBinary); err != nil {
-			return err
-		}
-	}
 
 	switch env.platform {
 	case "linux":
-		for _, name := range []string{
-			"linux_debug.arm32",
-			"linux_debug.arm64",
-			"linux_debug.x86_32",
-			"linux_debug.x86_64",
-			"linux_release.arm32",
-			"linux_release.arm64",
-			"linux_release.x86_32",
-			"linux_release.x86_64",
-		} {
-			if err := linkOrCopyFile(templateBinary, filepath.Join(env.templateDir, name)); err != nil {
+		debugBinary := filepath.Join(env.goBinDir, fmt.Sprintf("gdspxrtdbg%s", env.version))
+		if shouldDownloadPreparedAsset(templateBinary) || shouldDownloadPreparedAsset(debugBinary) {
+			if err := downloadBinariesFromZip(env, zipName, []binaryInstall{
+				{releaseBinaryName, templateBinary},
+				{fmt.Sprintf("godot.%s.template_debug.%s", platformName, env.arch), debugBinary},
+			}); err != nil {
 				return err
 			}
 		}
+		if err := linkOrCopyFile(debugBinary, filepath.Join(env.templateDir, "linux_debug."+env.arch)); err != nil {
+			return err
+		}
+		if err := linkOrCopyFile(templateBinary, filepath.Join(env.templateDir, "linux_release."+env.arch)); err != nil {
+			return err
+		}
 	case "windows":
-		for _, name := range []string{
-			"windows_debug_x86_32_console.exe",
-			"windows_debug_x86_32.exe",
-			"windows_debug_x86_64_console.exe",
-			"windows_debug_x86_64.exe",
-			"windows_release_x86_32_console.exe",
-			"windows_release_x86_32.exe",
-			"windows_release_x86_64_console.exe",
-			"windows_release_x86_64.exe",
-		} {
+		debugBinary := filepath.Join(env.goBinDir, fmt.Sprintf("gdspxrtdbg%s.exe", env.version))
+		if shouldDownloadPreparedAsset(templateBinary) || shouldDownloadPreparedAsset(debugBinary) {
+			if err := downloadBinariesFromZip(env, zipName, []binaryInstall{
+				{releaseBinaryName, templateBinary},
+				{fmt.Sprintf("godot.%s.template_debug.%s%s", platformName, env.arch, postfix), debugBinary},
+			}); err != nil {
+				return err
+			}
+		}
+		for _, name := range []string{"windows_debug_" + env.arch + ".exe", "windows_debug_" + env.arch + "_console.exe"} {
+			if err := linkOrCopyFile(debugBinary, filepath.Join(env.templateDir, name)); err != nil {
+				return err
+			}
+		}
+		for _, name := range []string{"windows_release_" + env.arch + ".exe", "windows_release_" + env.arch + "_console.exe"} {
 			if err := linkOrCopyFile(templateBinary, filepath.Join(env.templateDir, name)); err != nil {
 				return err
 			}
 		}
 	case "macos":
+		if shouldDownloadPreparedAsset(templateBinary) {
+			if err := downloadBinaryFromZip(env, zipName, releaseBinaryName, templateBinary); err != nil {
+				return err
+			}
+		}
 		macosZip := filepath.Join(env.templateDir, "macos.zip")
 		if shouldDownloadPreparedAsset(macosZip) {
-			if err := EngineDownloadFetcher(env.urlPrefix+"macos.zip", macosZip); err != nil {
+			if err := fetchEngineAsset(env, "macos.zip", env.urlPrefix+"macos.zip", macosZip); err != nil {
 				return err
 			}
 		}
@@ -308,7 +372,7 @@ func downloadDesktopAssets(env engineDownloadEnv, editor bool) error {
 }
 
 func shouldDownloadPreparedAsset(path string) bool {
-	return shouldRefreshPreparedAssets() || !fileExists(path)
+	return shouldRefreshPreparedAssets() || !shared.FileExists(path)
 }
 
 func shouldRefreshPreparedAssets() bool {
@@ -343,8 +407,17 @@ func flagValueEnabled(value string) bool {
 }
 
 func downloadBinaryFromZip(env engineDownloadEnv, zipName, assetName, dst string) error {
+	return downloadBinariesFromZip(env, zipName, []binaryInstall{{assetName, dst}})
+}
+
+type binaryInstall struct {
+	assetName string
+	dst       string
+}
+
+func downloadBinariesFromZip(env engineDownloadEnv, zipName string, installs []binaryInstall) error {
 	zipPath := filepath.Join(env.cacheDir, zipName)
-	if err := EngineDownloadFetcher(env.urlPrefix+zipName, zipPath); err != nil {
+	if err := fetchEngineAsset(env, zipName, env.urlPrefix+zipName, zipPath); err != nil {
 		return err
 	}
 	defer os.Remove(zipPath)
@@ -358,7 +431,172 @@ func downloadBinaryFromZip(env engineDownloadEnv, zipName, assetName, dst string
 	if err := extractZip(zipPath, extractDir); err != nil {
 		return err
 	}
-	return copyFile(filepath.Join(extractDir, assetName), dst)
+	for _, install := range installs {
+		info, err := os.Stat(filepath.Join(extractDir, install.assetName))
+		if err != nil {
+			return fmt.Errorf("engine archive %s is missing %s: %w", zipName, install.assetName, err)
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("engine archive entry %s is not a regular file", install.assetName)
+		}
+	}
+	for _, install := range installs {
+		if err := copyEngineAssetAtomically(filepath.Join(extractDir, install.assetName), install.dst); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func fetchEngineAsset(env engineDownloadEnv, name, url, dst string) error {
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(dst), filepath.Base(dst)+".verified-*")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Remove(tmpPath); err != nil {
+		return err
+	}
+	defer os.Remove(tmpPath)
+
+	if env.assetDir == "" {
+		if err := engineDownloadFetcher(url, tmpPath); err != nil {
+			return err
+		}
+	} else {
+		src, err := findLocalEngineAsset(env.assetDir, name)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(os.Stdout, "Installing local engine asset %s -> %s\n", src, dst)
+		if err := copyEngineAssetAtomically(src, tmpPath); err != nil {
+			return err
+		}
+	}
+
+	if env.manifest != nil {
+		if err := env.manifest.VerifyAsset(name, tmpPath); err != nil {
+			return err
+		}
+	}
+	return replaceDownloadedFile(tmpPath, dst)
+}
+
+func loadEngineAssetManifest(env *engineDownloadEnv) error {
+	lock, err := release.RuntimeLockForVersion(env.version)
+	if err != nil {
+		return fmt.Errorf("resolve runtime lock for %s: %w", env.version, err)
+	}
+	manifestPath := filepath.Join(env.cacheDir, lock.Manifest)
+	if env.assetDir == "" {
+		if err := engineDownloadFetcher(env.urlPrefix+lock.Manifest, manifestPath); err != nil {
+			return fmt.Errorf("download runtime manifest: %w", err)
+		}
+		defer os.Remove(manifestPath)
+	} else {
+		src, err := findLocalEngineAsset(env.assetDir, lock.Manifest)
+		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) && env.allowMissingManifest {
+				fmt.Fprintf(os.Stdout, "Runtime manifest is not present in same-run artifacts; final release assembly will verify them.\n")
+				return nil
+			}
+			return err
+		}
+		manifestPath = src
+	}
+
+	manifest, err := release.LoadRuntimeManifest(manifestPath)
+	if err != nil {
+		return err
+	}
+	if err := manifest.ValidateForLock(lock); err != nil {
+		return err
+	}
+	env.manifest = &manifest
+	return nil
+}
+
+func findLocalEngineAsset(assetDir, name string) (string, error) {
+	if filepath.Base(name) != name || name == "." || name == ".." {
+		return "", fmt.Errorf("invalid engine asset name: %q", name)
+	}
+
+	direct := filepath.Join(assetDir, name)
+	if info, err := os.Stat(direct); err == nil && info.Mode().IsRegular() {
+		return direct, nil
+	}
+
+	var matches []string
+	err := filepath.WalkDir(assetDir, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.Type().IsRegular() && entry.Name() == name {
+			matches = append(matches, path)
+		}
+		return nil
+	})
+	if err != nil {
+		return "", fmt.Errorf("scan engine asset directory: %w", err)
+	}
+	switch len(matches) {
+	case 0:
+		return "", fmt.Errorf("engine asset %q not found under %s: %w", name, assetDir, fs.ErrNotExist)
+	case 1:
+		return matches[0], nil
+	default:
+		return "", fmt.Errorf("engine asset %q is ambiguous under %s: %v", name, assetDir, matches)
+	}
+}
+
+func copyEngineAssetAtomically(src, dst string) (err error) {
+	input, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer input.Close()
+	info, err := input.Stat()
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("engine asset is not a regular file: %s", src)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+	output, err := os.CreateTemp(filepath.Dir(dst), filepath.Base(dst)+".tmp-*")
+	if err != nil {
+		return err
+	}
+	tmpPath := output.Name()
+	defer func() {
+		if output != nil {
+			_ = output.Close()
+		}
+		if err != nil {
+			_ = os.Remove(tmpPath)
+		}
+	}()
+
+	if _, err := io.Copy(output, input); err != nil {
+		return err
+	}
+	if err := output.Chmod(info.Mode().Perm()); err != nil {
+		return err
+	}
+	if err := output.Close(); err != nil {
+		return err
+	}
+	output = nil
+	return replaceDownloadedFile(tmpPath, dst)
 }
 
 func extractZip(srcZip, dstDir string) error {
@@ -426,7 +664,7 @@ func extractZipFile(file *zip.File, dst string) error {
 func fetchURLToFile(url, dst string) (err error) {
 	fmt.Fprintf(os.Stdout, "Downloading %s -> %s\n", url, dst)
 
-	resp, err := EngineDownloadHTTPClient.Get(url)
+	resp, err := engineDownloadHTTPClient.Get(url)
 	if err != nil {
 		return err
 	}
@@ -494,14 +732,6 @@ func fetchURLToFile(url, dst string) (err error) {
 }
 
 func replaceDownloadedFile(src, dst string) error {
-	if err := os.Rename(src, dst); err == nil {
-		return nil
-	} else if runtime.GOOS != "windows" || !fileExists(dst) {
-		return err
-	}
-	if err := os.Remove(dst); err != nil {
-		return err
-	}
 	return os.Rename(src, dst)
 }
 
@@ -520,7 +750,7 @@ func linkOrCopyFile(src, dst string) error {
 	} else if !errors.Is(err, fs.ErrExist) && !isLinkFallbackError(err) {
 		return err
 	}
-	return copyFile(src, dst)
+	return shared.CopyFile(src, dst)
 }
 
 func removeIfExists(path string) error {
@@ -570,7 +800,7 @@ func formatDownloadSize(size int64) string {
 }
 
 func webModeReleaseTemplateName(mode string) (string, error) {
-	if err := validateWebMode(mode); err != nil {
+	if err := shared.ValidateWebMode(mode); err != nil {
 		return "", err
 	}
 	switch mode {
@@ -588,7 +818,7 @@ func webModeReleaseTemplateName(mode string) (string, error) {
 }
 
 func webModeCachedTemplatePath(version, mode string) (string, error) {
-	if err := validateWebMode(mode); err != nil {
+	if err := shared.ValidateWebMode(mode); err != nil {
 		return "", err
 	}
 	if mode == "normal" {

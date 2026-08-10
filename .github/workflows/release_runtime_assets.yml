@@ -1,16 +1,7 @@
-name: Release Runtime Assets
+name: Build Runtime Assets
 
 on:
   workflow_call:
-    inputs:
-      version:
-        description: 'SPX v3 release version without the leading v (for example, 3.0.0)'
-        required: true
-        type: string
-      release_tag:
-        description: 'Release tag with leading v when publishing release assets'
-        required: false
-        type: string
 
 concurrency:
   group: ci-${{github.actor}}-${{github.head_ref || github.run_number}}-${{github.ref}}-release-runtime-assets
@@ -18,11 +9,18 @@ concurrency:
 
 jobs:
   runtime-assets:
-    name: Release runtime assets
-    runs-on: ubuntu-latest
+    name: Build runtime assets
+    runs-on: ubuntu-22.04
     steps:
       - name: Check out code
         uses: actions/checkout@v6
+
+      - name: Download current-run engine artifacts
+        uses: actions/download-artifact@v7
+        with:
+          pattern: runtime-*linux-x86_64
+          path: runtime-assets
+          merge-multiple: true
 
       - name: Install Linux dependencies
         run: sudo apt-get update && sudo apt-get install gcc libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libx11-dev xorg-dev libasound2-dev libopenal-dev zip
@@ -34,7 +32,12 @@ jobs:
 
       - name: Prepare host export assets
         run: |
-          "$BUILDCTL" engine download --runtime --skip-runtime-pack
+          set -euo pipefail
+          "$BUILDCTL" engine download \
+            --runtime \
+            --skip-runtime-pack \
+            --asset-dir runtime-assets \
+            --same-run-artifacts
 
       - name: Build runtime asset bundle
         id: build_runtime_assets
@@ -54,18 +57,12 @@ jobs:
           echo "[info] Built runtime asset bundle: $ASSET_ZIP"
           echo "asset-zip=$ASSET_ZIP" >> "$GITHUB_OUTPUT"
 
+      - name: Verify runtime asset bundle
+        run: unzip -t "${{ steps.build_runtime_assets.outputs.asset-zip }}"
+
       - name: Upload runtime asset bundle
         uses: actions/upload-artifact@v7
         with:
-          name: spx-runtime-assets-${{ inputs.version }}
+          name: runtime-spx-assets
           path: ${{ steps.build_runtime_assets.outputs.asset-zip }}
           retention-days: 14
-
-      - name: Publish runtime asset bundle
-        if: inputs.release_tag != ''
-        uses: softprops/action-gh-release@v3
-        with:
-          files: ${{ steps.build_runtime_assets.outputs.asset-zip }}
-          tag_name: ${{ inputs.release_tag }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

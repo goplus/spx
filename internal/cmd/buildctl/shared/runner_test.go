@@ -22,6 +22,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/goplus/spx/v3/internal/release"
 )
 
 func TestCommandRunnerRunCommandUsesGoPathBin(t *testing.T) {
@@ -42,13 +44,39 @@ func TestCommandRunnerRunCommandUsesGoPathBin(t *testing.T) {
 	}
 	t.Setenv("OUT_PATH", outPath)
 
-	runner := commandRunner{repoRoot: root}
-	if err := runner.runCommand(".", "fakecmd"); err != nil {
+	runner := CommandRunner{RepoRoot: root}
+	if err := runner.RunCommand(".", "fakecmd"); err != nil {
 		t.Fatalf("runCommand returned error: %v", err)
 	}
 
 	if !fileExists(outPath) {
 		t.Fatalf("expected fake command output at %s", outPath)
+	}
+}
+
+func TestCommandRunnerRunScriptUsesLockedGoToolchain(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("GOPATH", filepath.Join(root, "gopath"))
+
+	outputPath := filepath.Join(root, "toolchain.txt")
+	scriptPath := filepath.Join(root, "capture-toolchain.sh")
+	script := "#!/bin/bash\nset -euo pipefail\nprintf '%s' \"$GOTOOLCHAIN\" > \"$OUTPUT_PATH\"\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+	t.Setenv("OUTPUT_PATH", outputPath)
+
+	runner := CommandRunner{RepoRoot: root}
+	if err := runner.RunScript(filepath.Base(scriptPath)); err != nil {
+		t.Fatalf("runScript returned error: %v", err)
+	}
+	got, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("ReadFile returned error: %v", err)
+	}
+	want := "go" + release.DefaultRuntimeLock().Toolchain.Go
+	if string(got) != want {
+		t.Fatalf("script GOTOOLCHAIN = %q, want %q", got, want)
 	}
 }
 
@@ -74,6 +102,9 @@ func TestBuildctlCommandEnvPrependsGoBinDirs(t *testing.T) {
 		if pathDirs[i] != want {
 			t.Fatalf("PATH dirs = %v, want prefix %v", pathDirs, wantDirs)
 		}
+	}
+	if got, want := env["GOTOOLCHAIN"], "go"+release.DefaultRuntimeLock().Toolchain.Go; got != want {
+		t.Fatalf("GOTOOLCHAIN = %q, want %q", got, want)
 	}
 }
 
@@ -122,8 +153,8 @@ func TestCommandRunnerRunCommandReturnsEnvironmentError(t *testing.T) {
 	t.Setenv("GOPATH", "")
 	t.Setenv("PATH", "")
 
-	runner := commandRunner{repoRoot: root}
-	err := runner.runCommand(".", "fakecmd")
+	runner := CommandRunner{RepoRoot: root}
+	err := runner.RunCommand(".", "fakecmd")
 	if err == nil {
 		t.Fatal("expected runCommand to fail when command environment cannot be resolved")
 	}
@@ -136,8 +167,8 @@ func TestCommandRunnerRunCommandReturnsResolvePathError(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("GOPATH", filepath.Join(root, "gopath"))
 
-	runner := commandRunner{repoRoot: root}
-	err := runner.runCommand(".", "missingcmd")
+	runner := CommandRunner{RepoRoot: root}
+	err := runner.RunCommand(".", "missingcmd")
 	if err == nil {
 		t.Fatal("expected runCommand to fail when the command cannot be found")
 	}

@@ -17,33 +17,105 @@
 package engine
 
 import (
+	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
 
-func TestSConsScriptIncludesCommonArgs(t *testing.T) {
-	script := sconsScript([]string{"platform=android target=template_debug arch=arm32"})
+func TestBuildEngineRejectsInvalidProfileBeforePreparingEnvironment(t *testing.T) {
+	repoRoot := t.TempDir()
+	moduleSource := filepath.Join(repoRoot, "godot_modules", "spx")
+	mustWriteFile(t, filepath.Join(moduleSource, "spx_scons_profile.json"), []byte(`{"schema":`))
+	t.Setenv("SPX_MODULE_SRC", moduleSource)
+
+	prepareCalled := false
+	prepareErr := errors.New("expensive build preparation must not run")
+	err := buildEngineWithEnvironmentPreparer(
+		BuildConfig{Target: "template", Platform: "linux"},
+		repoRoot,
+		func(string, string) (buildEnvironment, map[string]string, string, error) {
+			prepareCalled = true
+			return buildEnvironment{}, nil, "", prepareErr
+		},
+	)
+	if err == nil || !strings.Contains(err.Error(), "parse SCons profile") {
+		t.Fatalf("buildEngineWithEnvironmentPreparer error = %v, want profile parse error", err)
+	}
+	if errors.Is(err, prepareErr) || prepareCalled {
+		t.Fatal("build preparation ran before the SCons profile was validated")
+	}
+}
+
+func TestSConsBuildScriptIncludesProfileAndCustomModule(t *testing.T) {
+	moduleSource := filepath.Join("C:/SPX Modules", "spx")
+	script := sconsBuildScript(
+		"/tmp/spx tools/scons",
+		[]string{"optimize=size", "module_text_server_adv_enabled=true"},
+		moduleSource,
+		[]string{"platform=android target=template_debug arch=arm32"},
+	)
 	for _, arg := range []string{
-		"scons optimize=size",
-		"module_text_server_adv_enabled=true",
-		"module_text_server_fb_enabled=false",
-		"builtin_harfbuzz=true",
+		"'/tmp/spx tools/scons'",
+		"'optimize=size'",
+		"'module_text_server_adv_enabled=true'",
+		"'custom_modules=" + moduleSource + "'",
 	} {
 		if !strings.Contains(script, arg) {
 			t.Fatalf("expected %q in script: %s", arg, script)
 		}
 	}
-	if !strings.Contains(script, "platform=android target=template_debug arch=arm32") {
+	if !strings.Contains(script, "'platform=android' 'target=template_debug' 'arch=arm32'") {
 		t.Fatalf("expected command args in script: %s", script)
 	}
 }
 
 func TestSConsScriptQuotesCommandPath(t *testing.T) {
 	script := sconsScriptWithCommand("/tmp/spx tools/scons", []string{"platform=ios target=template_debug"})
-	if !strings.HasPrefix(script, "'/tmp/spx tools/scons' optimize=size") {
+	if script != "'/tmp/spx tools/scons' 'platform=ios' 'target=template_debug'" {
 		t.Fatalf("sconsScriptWithCommand did not quote command path: %q", script)
+	}
+}
+
+func TestSConsBuildArgsKeepsCustomModuleAsOneArgument(t *testing.T) {
+	moduleSource := filepath.Join("C:/SPX Modules", "module's source")
+	got := sconsBuildArgs(
+		[]string{"platform=windows", "target=template_release"},
+		[]string{"optimize=size", "module_spx_enabled=true"},
+		moduleSource,
+	)
+	want := []string{
+		"optimize=size",
+		"module_spx_enabled=true",
+		"platform=windows",
+		"target=template_release",
+		"custom_modules=" + moduleSource,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("sconsBuildArgs = %#v, want %#v", got, want)
+	}
+}
+
+func TestShellJoinRoundTrip(t *testing.T) {
+	bash, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("bash is unavailable")
+	}
+	want := []string{
+		"platform=windows",
+		"custom_modules=C:/SPX Modules/module's $(not-executed)",
+	}
+	script := "set -- " + shellJoin(want) + `; printf '%s\n' "$@"`
+	output, err := exec.Command(bash, "-c", script).Output()
+	if err != nil {
+		t.Fatalf("shell round trip returned error: %v", err)
+	}
+	got := strings.Split(strings.TrimSuffix(string(output), "\n"), "\n")
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("shell round trip = %#v, want %#v", got, want)
 	}
 }
 

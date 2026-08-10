@@ -21,19 +21,19 @@ make generate
 它们在 `Makefile` 中的定义如下：
 
 - `make generate-bindings`
-  - 执行 `cd ./internal/cmd/codegen && GODOT_SRC="$(GODOT_SRC)" go run .`
+  - 执行 `cd ./internal/cmd/codegen && SPX_MODULE_SRC="$(SPX_MODULE_SRC)" go run .`
   - 只生成绑定相关代码
 - `make generate`
   - 先执行 `generate-bindings`
   - 再执行 `generate-runtime`
   - 最后执行 `format`
 
-如果没有显式传入 `GODOT_SRC`，生成器默认把 Godot 源码目录视为仓库下的 `./godot`。
+如果没有显式传入 `SPX_MODULE_SRC`，生成器默认读写仓库下的 `./godot_modules/spx`。相对覆盖路径从 SPX 仓库根目录解析。
 
 推荐用法：
 
 ```bash
-GODOT_SRC=/path/to/godot make generate-bindings
+SPX_MODULE_SRC=/path/to/spx-module make generate-bindings
 ```
 
 ## 2. 整体链路
@@ -42,7 +42,7 @@ GODOT_SRC=/path/to/godot make generate-bindings
 
 ```mermaid
 graph TD
-    A[godot/modules/spx/spx*mgr.h] --> B[合并 public 接口]
+    A[godot_modules/spx/spx*mgr.h] --> B[合并 public 接口]
     B --> C[生成 gdextension_spx_ext.h 原始头]
     C --> D[预处理 include / 宏]
     D --> E[Clang 解析 AST]
@@ -67,9 +67,9 @@ graph TD
 
 ### 3.1 输入源
 
-真正的接口来源是 Godot 源码目录下的 manager 头文件：
+真正的接口来源是 SPX 仓库自有模块中的 manager 头文件：
 
-- `$(GODOT_SRC)/modules/spx/spx*mgr.h`
+- `$(SPX_MODULE_SRC)/spx*mgr.h`
 
 当前生成器只会扫描：
 
@@ -133,10 +133,10 @@ graph TD
 
 #### Godot C++ / Web JS 注入文件
 
-- `godot/modules/spx/gdextension_spx_ext.h`
-- `godot/modules/spx/gdextension_spx_ext.cpp`
-- `godot/platform/web/godot_js_spx.cpp`
-- `godot/platform/web/js/engine/gdspx.js`
+- `godot_modules/spx/gdextension_spx_ext.h`
+- `godot_modules/spx/gdextension_spx_ext.cpp`
+- `godot_modules/spx/web/godot_js_spx.cpp`
+- `godot_modules/spx/web/js/engine/gdspx.js`
 
 #### Web Worker 包装文件
 
@@ -150,7 +150,7 @@ graph TD
 
 负责串起整条生成链路：
 
-- 计算默认 `GODOT_SRC`
+- 计算默认 `SPX_MODULE_SRC`
 - 触发 header 生成
 - 触发 AST 解析
 - 分别调度 `ffi`、`webffi`、`gdext`
@@ -277,7 +277,7 @@ SPX_API void batch_update_transforms(const float *buffer_data, int len);
 
 推荐按下面顺序操作：
 
-1. 在 `$(GODOT_SRC)/modules/spx/spx*_mgr.h` 中新增方法声明。
+1. 在 `$(SPX_MODULE_SRC)/spx*_mgr.h` 中新增方法声明。
 2. 确保它位于 `public:` 区域，并带上 `SPX_API` 或 `SPX_BIND`。
 3. 如果需要高性能数组桥接：
    - 加一组 `_raw` 方法
@@ -309,15 +309,15 @@ SPX_API void batch_update_transforms(const float *buffer_data, int len);
 
 如果这两个文件里都没有，问题通常出在 header 合并或预处理阶段。
 
-### 7.3 Godot 侧文件没有更新
+### 7.3 SPX 模块侧文件没有更新
 
 优先检查：
 
-- `GODOT_SRC` 是否指向正确的 Godot 源码目录
-- `$(GODOT_SRC)/modules/spx` 是否存在
-- `$(GODOT_SRC)/platform/web/js/engine` 是否存在
+- `SPX_MODULE_SRC` 是否指向正确的 SPX 模块目录
+- `$(SPX_MODULE_SRC)` 是否存在
+- `$(SPX_MODULE_SRC)/web/js/engine` 是否可写
 
-从代码逻辑看，如果 `modules/spx` 目录不存在，`gdext.GenerateHeader(...)` 和 `gdext.Generate(...)` 会给出 warning 并跳过 Godot C++ 侧更新。
+从代码逻辑看，如果 `SPX_MODULE_SRC` 目录不存在，`gdext.GenerateHeader(...)` 和 `gdext.Generate(...)` 会给出 warning 并跳过 Godot C++ 侧更新。
 
 ### 7.4 Web fast path 异常
 
@@ -341,10 +341,10 @@ SPX_API void batch_update_transforms(const float *buffer_data, int len);
 - `*.gen.go`
 - `*.gen.h`
 - `cmd/spx/template/platform/webworker/worker.wrap.gen.js`
-- `godot/platform/web/js/engine/gdspx.js`
-- `godot/platform/web/godot_js_spx.cpp`
-- `godot/modules/spx/gdextension_spx_ext.h`
-- `godot/modules/spx/gdextension_spx_ext.cpp`
+- `godot_modules/spx/web/js/engine/gdspx.js`
+- `godot_modules/spx/web/godot_js_spx.cpp`
+- `godot_modules/spx/gdextension_spx_ext.h`
+- `godot_modules/spx/gdextension_spx_ext.cpp`
 
 需要改行为时，优先改这些位置：
 

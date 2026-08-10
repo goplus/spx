@@ -63,48 +63,35 @@ var (
 	syncPureApiText string
 )
 
-func Generate(projectPath string, ast clang.CHeaderFileAST) {
-	err := GenerateGDExtensionWrapperHeaderFile(projectPath, ast)
-	if err != nil {
-		panic(err)
+func Generate(projectPath string, ast clang.CHeaderFileAST) error {
+	generators := []struct {
+		name string
+		fn   func(string, clang.CHeaderFileAST) error
+	}{
+		{"GDExtension wrapper header", GenerateGDExtensionWrapperHeaderFile},
+		{"GDExtension wrapper Go source", GenerateGDExtensionWrapperGoFile},
+		{"GDExtension interface", GenerateGDExtensionInterfaceGoFile},
+		{"manager wrapper", GenerateManagerWrapperGoFile},
+		{"manager interface", GenerateManagerInterfaceGoFile},
+		{"synchronized API", GenerateSyncApiGoFile},
+		{"pure synchronized API", GenerateSyncPureGoFile},
 	}
-	err = GenerateGDExtensionWrapperGoFile(projectPath, ast)
-	if err != nil {
-		panic(err)
-	}
-	err = GenerateGDExtensionInterfaceGoFile(projectPath, ast)
-	if err != nil {
-		panic(err)
-	}
-	err = GenerateManagerWrapperGoFile(projectPath, ast)
-	if err != nil {
-		panic(err)
-	}
-	err = GenerateManagerInterfaceGoFile(projectPath, ast)
-	if err != nil {
-		panic(err)
-	}
-	err = GenerateSyncApiGoFile(projectPath, ast)
-	if err != nil {
-		panic(err)
+	for _, generator := range generators {
+		if err := generator.fn(projectPath, ast); err != nil {
+			return fmt.Errorf("generate %s: %w", generator.name, err)
+		}
 	}
 
-	err = GenerateSyncPureGoFile(projectPath, ast)
-	if err != nil {
-		panic(err)
-	}
-	/**/
 	clsNames := []string{"Sprite"} // add other classes if needed, Audio, Camera, Input, etc
 	for _, clsName := range clsNames {
-		err = GenerateManagerImplGoFile(projectPath, ast, clsName)
-		if err != nil {
-			panic(err)
+		if err := GenerateManagerImplGoFile(projectPath, ast, clsName); err != nil {
+			return fmt.Errorf("generate %s manager implementation: %w", clsName, err)
 		}
-		err = GenerateManagerImplPureGoFile(projectPath, ast, clsName)
-		if err != nil {
-			panic(err)
+		if err := GenerateManagerImplPureGoFile(projectPath, ast, clsName); err != nil {
+			return fmt.Errorf("generate pure %s manager implementation: %w", clsName, err)
 		}
 	}
+	return nil
 }
 
 func GenerateGDExtensionWrapperHeaderFile(projectPath string, ast clang.CHeaderFileAST) error {

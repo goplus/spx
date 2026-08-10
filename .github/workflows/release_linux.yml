@@ -1,12 +1,17 @@
-name: Release Linux Package
+name: Package Linux
 
 on:
   workflow_call:
     inputs:
       version:
-        description: 'SPX v3 release version without the leading v (for example, 3.0.0)'
+        description: 'SPX v3 release version without the leading v (for example, 3.1.0)'
         required: true
         type: string
+      engine_artifacts:
+        description: 'Use Godot engine artifacts produced by the current workflow run'
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: ci-${{github.actor}}-${{github.head_ref || github.run_number}}-${{github.ref}}-release-linux
@@ -19,6 +24,21 @@ jobs:
     steps:
       - name: Check out code
         uses: actions/checkout@v6
+
+      - name: Download current-run engine artifacts
+        if: inputs.engine_artifacts
+        uses: actions/download-artifact@v7
+        with:
+          pattern: runtime-*linux-x86_64
+          path: runtime-assets
+          merge-multiple: true
+
+      - name: Download current-run runtime pack
+        if: inputs.engine_artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: runtime-spx-assets
+          path: runtime-assets
 
       - name: Install Linux dependencies
         run: sudo apt-get update && sudo apt-get install gcc libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libx11-dev xorg-dev libasound2-dev libopenal-dev zip
@@ -33,19 +53,13 @@ jobs:
         uses: ./.github/actions/prepare-standalone-release
         with:
           version: ${{ inputs.version }}
+          engine-asset-dir: ${{ inputs.engine_artifacts && 'runtime-assets' || '' }}
 
       - name: Package standalone release
         uses: ./.github/actions/package-standalone-release
         with:
           package-file: spx-standalone-linux-x64.zip
           spx-bin: ${{ steps.prepare_standalone_release.outputs.spx-bin }}
-
-      - name: Upload standalone release artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: spx-standalone-linux-x64
-          path: spx-standalone-linux-x64.zip
-          retention-days: 14
 
       - name: Verify standalone release package
         uses: ./.github/actions/verify-release
@@ -54,11 +68,9 @@ jobs:
           platform: linux
           package-arch: x64
 
-      - name: Publish standalone release asset
-        if: github.event_name == 'release'
-        uses: softprops/action-gh-release@v3
+      - name: Upload standalone release artifact
+        uses: actions/upload-artifact@v7
         with:
-          files: spx-standalone-linux-x64.zip
-          tag_name: ${{ github.event.release.tag_name }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: spx-standalone-linux-x64
+          path: spx-standalone-linux-x64.zip
+          retention-days: 14

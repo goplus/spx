@@ -1,0 +1,44 @@
+{
+  "schema": 1,
+  "runtime_version": "2.4.0",
+  "runtime_abi": 2,
+  "release_repository": "goplus/spx",
+  "manifest": "runtime-manifest.json",
+  "required_assets": [
+    "android.zip",
+    "editor-linux-x86_64.zip",
+    "editor-macos-arm64.zip",
+    "editor-macos-x86_64.zip",
+    "editor-web.zip",
+    "editor-windows-x86_64.zip",
+    "ios.zip",
+    "linux-x86_64.zip",
+    "macos-arm64.zip",
+    "macos-x86_64.zip",
+    "macos.zip",
+    "spx-runtime-assets.zip",
+    "web-minigame.zip",
+    "web-miniprogram.zip",
+    "web-threads.zip",
+    "web-worker.zip",
+    "web.zip",
+    "windows-x86_64.zip"
+  ],
+  "godot": {
+    "repository": "https://github.com/goplus/godot.git",
+    "ref": "refactor/external-spx-module-rewrite",
+    "commit": "a24bff63996bc8f017ab17559beb5c96d2981753",
+    "version": "4.4.1.stable"
+  },
+  "module": {
+    "path": "godot_modules/spx"
+  },
+  "toolchain": {
+    "go": "1.25.8",
+    "xgo": "1.7.5",
+    "scons": "4.8.1",
+    "emsdk": "3.1.62",
+    "android_ndk": "23.2.8568313",
+    "jdk": "17"
+  }
+}

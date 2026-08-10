@@ -24,12 +24,12 @@ import (
 )
 
 func TestParseEnvExportEngineBuildShellArgsWebDefaultMode(t *testing.T) {
-	cfg, err := parseEnvExportEngineBuildShellArgs([]string{"--target", "template", "--platform", "web"})
+	cfg, err := ParseEnvExportEngineBuildShellArgs([]string{"--target", "template", "--platform", "web"})
 	if err != nil {
 		t.Fatalf("parseEnvExportEngineBuildShellArgs returned error: %v", err)
 	}
-	if cfg.mode != "normal" {
-		t.Fatalf("expected normal mode, got %s", cfg.mode)
+	if cfg.Mode != "normal" {
+		t.Fatalf("expected normal mode, got %s", cfg.Mode)
 	}
 }
 
@@ -40,10 +40,10 @@ func TestResolveEngineBuildShellPlanWebWorker(t *testing.T) {
 	t.Setenv("APPDATA", filepath.Join(repoRoot, "AppData"))
 	version := mustDefaultRuntimeVersion(t)
 
-	plan, err := resolveEngineBuildShellPlan(repoRoot, envExportEngineBuildShellConfig{
-		target:   "template",
-		platform: "web",
-		mode:     "worker",
+	plan, err := ResolveEngineBuildShellPlan(repoRoot, BuildConfig{
+		Target:   "template",
+		Platform: "web",
+		Mode:     "worker",
 	})
 	if err != nil {
 		t.Fatalf("resolveEngineBuildShellPlan returned error: %v", err)
@@ -70,10 +70,10 @@ func TestResolveEngineBuildShellPlanWebNormal(t *testing.T) {
 	t.Setenv("APPDATA", filepath.Join(repoRoot, "AppData"))
 	version := mustDefaultRuntimeVersion(t)
 
-	plan, err := resolveEngineBuildShellPlan(repoRoot, envExportEngineBuildShellConfig{
-		target:   "template",
-		platform: "web",
-		mode:     "normal",
+	plan, err := ResolveEngineBuildShellPlan(repoRoot, BuildConfig{
+		Target:   "template",
+		Platform: "web",
+		Mode:     "normal",
 	})
 	if err != nil {
 		t.Fatalf("resolveEngineBuildShellPlan returned error: %v", err)
@@ -99,10 +99,10 @@ func TestResolveEngineBuildShellPlanWebMiniGame(t *testing.T) {
 	t.Setenv("HOME", repoRoot)
 	t.Setenv("APPDATA", filepath.Join(repoRoot, "AppData"))
 
-	plan, err := resolveEngineBuildShellPlan(repoRoot, envExportEngineBuildShellConfig{
-		target:   "template",
-		platform: "web",
-		mode:     "minigame",
+	plan, err := ResolveEngineBuildShellPlan(repoRoot, BuildConfig{
+		Target:   "template",
+		Platform: "web",
+		Mode:     "minigame",
 	})
 	if err != nil {
 		t.Fatalf("resolveEngineBuildShellPlan returned error: %v", err)
@@ -125,9 +125,9 @@ func TestResolveEngineBuildShellPlanIOSMatrix(t *testing.T) {
 	t.Setenv("HOME", repoRoot)
 	t.Setenv("APPDATA", filepath.Join(repoRoot, "AppData"))
 
-	plan, err := resolveEngineBuildShellPlan(repoRoot, envExportEngineBuildShellConfig{
-		target:   "template",
-		platform: "ios",
+	plan, err := ResolveEngineBuildShellPlan(repoRoot, BuildConfig{
+		Target:   "template",
+		Platform: "ios",
 	})
 	if err != nil {
 		t.Fatalf("resolveEngineBuildShellPlan returned error: %v", err)
@@ -136,11 +136,16 @@ func TestResolveEngineBuildShellPlanIOSMatrix(t *testing.T) {
 	if len(plan.TemplateSConsCommands) != 6 {
 		t.Fatalf("ios template command count = %d, want 6", len(plan.TemplateSConsCommands))
 	}
-	if got := plan.TemplateSConsCommands[0]; got != "platform=ios vulkan=True target=template_debug ios_simulator=yes arch=arm64" {
+	if got := plan.TemplateSConsCommands[0]; got != "platform=ios target=template_debug ios_simulator=yes arch=arm64" {
 		t.Fatalf("unexpected first ios command: %s", got)
 	}
-	if got := plan.TemplateSConsCommands[5]; got != "platform=ios vulkan=True target=template_release ios_simulator=no generate_bundle=yes" {
+	if got := plan.TemplateSConsCommands[5]; got != "platform=ios target=template_release ios_simulator=no generate_bundle=yes" {
 		t.Fatalf("unexpected last ios command: %s", got)
+	}
+	for _, command := range plan.TemplateSConsCommands {
+		if strings.Contains(strings.ToLower(command), "vulkan=") {
+			t.Fatalf("iOS command must inherit vulkan=false from the shared profile: %s", command)
+		}
 	}
 }
 
@@ -150,9 +155,9 @@ func TestResolveEngineBuildShellPlanAndroidMatrix(t *testing.T) {
 	t.Setenv("HOME", repoRoot)
 	t.Setenv("APPDATA", filepath.Join(repoRoot, "AppData"))
 
-	plan, err := resolveEngineBuildShellPlan(repoRoot, envExportEngineBuildShellConfig{
-		target:   "template",
-		platform: "android",
+	plan, err := ResolveEngineBuildShellPlan(repoRoot, BuildConfig{
+		Target:   "template",
+		Platform: "android",
 	})
 	if err != nil {
 		t.Fatalf("resolveEngineBuildShellPlan returned error: %v", err)
@@ -176,7 +181,7 @@ func TestResolveEngineBuildShellPlanEditorUsesHostArtifactNames(t *testing.T) {
 	t.Setenv("APPDATA", filepath.Join(repoRoot, "AppData"))
 	version := mustDefaultRuntimeVersion(t)
 
-	plan, err := resolveEngineBuildShellPlan(repoRoot, envExportEngineBuildShellConfig{target: "editor"})
+	plan, err := ResolveEngineBuildShellPlan(repoRoot, BuildConfig{Target: "editor"})
 	if err != nil {
 		t.Fatalf("resolveEngineBuildShellPlan returned error: %v", err)
 	}

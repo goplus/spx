@@ -24,7 +24,13 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"time"
 )
+
+// ZIP's portable DOS timestamp range starts in 1980. Using that epoch and
+// canonical regular/executable modes keeps archives independent of workspace
+// mtimes and the process umask.
+var normalizedZipModTime = time.Date(1980, time.January, 1, 0, 0, 0, 0, time.UTC)
 
 // CopyFile streams a file from src to dst, creating dst's parent directory and preserving file mode.
 func CopyFile(src, dst string) (err error) {
@@ -198,12 +204,12 @@ func addFileToZip(writer *zip.Writer, src, name string) error {
 	if info.IsDir() {
 		return fmt.Errorf("fileutil.addFileToZip: %s is a directory", src)
 	}
-	header, err := zip.FileInfoHeader(info)
-	if err != nil {
-		return err
+	header := &zip.FileHeader{
+		Name:   name,
+		Method: zip.Deflate,
 	}
-	header.Name = name
-	header.Method = zip.Deflate
+	header.SetModTime(normalizedZipModTime)
+	header.SetMode(normalizedZipMode(info.Mode()))
 
 	entry, err := writer.CreateHeader(header)
 	if err != nil {
@@ -218,4 +224,11 @@ func addFileToZip(writer *zip.Writer, src, name string) error {
 		return err
 	}
 	return input.Close()
+}
+
+func normalizedZipMode(mode fs.FileMode) fs.FileMode {
+	if mode.Perm()&0o111 != 0 {
+		return 0o755
+	}
+	return 0o644
 }

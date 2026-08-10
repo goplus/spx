@@ -28,6 +28,12 @@ import (
 	"github.com/goplus/spx/v3/internal/cmd/buildctl/workflow"
 )
 
+var (
+	rootRunSetup  = runSetup
+	rootRunBuild  = runBuild
+	rootRunDoctor = runDoctor
+)
+
 func run(args []string) error {
 	if len(args) == 0 {
 		printRootUsage()
@@ -35,10 +41,14 @@ func run(args []string) error {
 	}
 
 	switch args[0] {
+	case "setup":
+		return rootRunSetup(args[1:])
+	case "build":
+		return rootRunBuild(args[1:])
+	case "doctor":
+		return rootRunDoctor(args[1:])
 	case "env":
 		return runEnv(args[1:])
-	case "prepare":
-		return runPrepare(args[1:])
 	case "tool":
 		return toolpkg.Run(args[1:])
 	case "engine":
@@ -62,11 +72,13 @@ func printRootUsage() {
 	fmt.Fprintln(os.Stderr, "Usage: buildctl <command> [options]")
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Commands:")
+	fmt.Fprintln(os.Stderr, "  setup      Prepare host, Web, or full development assets")
+	fmt.Fprintln(os.Stderr, "  build      Build a complete developer-facing target")
+	fmt.Fprintln(os.Stderr, "  doctor     Validate and print the resolved build configuration")
 	fmt.Fprintln(os.Stderr, "  env        Print shared build environment values")
-	fmt.Fprintln(os.Stderr, "  prepare    Install tools and prepare runtime/web assets")
 	fmt.Fprintln(os.Stderr, "  tool       Install build tooling")
-	fmt.Fprintln(os.Stderr, "  engine     Download and build engine assets")
+	fmt.Fprintln(os.Stderr, "  engine     Download engine assets and manage the build lock")
 	fmt.Fprintln(os.Stderr, "  runtime    Export runtime artifacts")
-	fmt.Fprintln(os.Stderr, "  docker     Run legacy container-based build workflows")
+	fmt.Fprintln(os.Stderr, "  docker     Run unsupported legacy container workflows (independent toolchain)")
 	fmt.Fprintln(os.Stderr, "  workflow   Run higher-level local build workflows")
 }

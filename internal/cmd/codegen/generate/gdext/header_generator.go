@@ -38,7 +38,7 @@ var (
 	reCommaSpace = regexp.MustCompile(`,\s*`)
 
 	// For mergeManagerHeader function
-	reClassDefinition = regexp.MustCompile(`class\s+(\w+)\s*:\s*(?:public\s+)?(?:SpxBaseMgr|SpxObjectMgr<\w+>)\s*{`)
+	reClassDefinition = regexp.MustCompile(`class\s+(\w+)\s*:\s*(?:public\s+)?(?:SpxBaseMgr|SpxObjectMgr<\w+>)(?:\s*,\s*[^\{]+)?\s*\{`)
 
 	// For generateManagerHeader function. Only methods explicitly marked with
 	// SPX_API or SPX_BIND become part of the cross-language ABI.
@@ -62,24 +62,23 @@ type classMethodDecl struct {
 	Params     string
 }
 
-func generateSpxExtHeader(dir, outputFile string, isRawFormat bool) {
-	mergedStr := mergeManagerHeader(dir)
+func generateSpxExtHeader(dir, outputFile string, isRawFormat bool) error {
+	mergedStr, err := mergeManagerHeader(dir)
+	if err != nil {
+		return err
+	}
 	mergedHeaderFuncStr := generateManagerHeader(mergedStr, isRawFormat)
 	finalHeader := strings.Replace(gdSpxExtH, "###MANAGER_FUNC_DEFINE", mergedHeaderFuncStr, -1)
-	// Write the final header file
-	f, err := os.Create(outputFile)
-	if err != nil {
-		panic(err)
+	if err := os.WriteFile(outputFile, []byte(finalHeader), 0o644); err != nil {
+		return fmt.Errorf("write generated SPX extension header: %w", err)
 	}
-	f.Write([]byte(finalHeader))
-	f.Close()
+	return nil
 }
 
-func mergeManagerHeader(dir string) string {
+func mergeManagerHeader(dir string) (string, error) {
 	files, err := filepath.Glob(filepath.Join(dir, "spx*mgr.h"))
 	if err != nil {
-		spxlog.Error("Error finding files: %v", err)
-		return ""
+		return "", fmt.Errorf("find SPX manager headers: %w", err)
 	}
 
 	var builder strings.Builder
@@ -93,10 +92,8 @@ func mergeManagerHeader(dir string) string {
 
 		f, err := os.Open(file)
 		if err != nil {
-			spxlog.Error("Error opening file: %v", err)
-			continue
+			return "", fmt.Errorf("open SPX manager header %q: %w", file, err)
 		}
-		defer f.Close()
 
 		var buffer bytes.Buffer
 		scanner := bufio.NewScanner(f)
@@ -143,12 +140,17 @@ func mergeManagerHeader(dir string) string {
 			builder.WriteString("\n};\n\n")
 		}
 
-		if err := scanner.Err(); err != nil {
-			spxlog.Error("Error reading file: %v", err)
+		scanErr := scanner.Err()
+		closeErr := f.Close()
+		if scanErr != nil {
+			return "", fmt.Errorf("read SPX manager header %q: %w", file, scanErr)
+		}
+		if closeErr != nil {
+			return "", fmt.Errorf("close SPX manager header %q: %w", file, closeErr)
 		}
 	}
 
-	return builder.String()
+	return builder.String(), nil
 }
 
 // normalizeParams ensures proper spacing in parameter lists

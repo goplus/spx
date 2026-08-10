@@ -19,8 +19,8 @@ package common
 import (
 	"bytes"
 	"fmt"
+	"go/format"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -772,19 +772,18 @@ func GenerateFile(funcs template.FuncMap, name string, text string, data any, ds
 	isGoFile := filepath.Ext(dstPath) == ".go"
 	if isGoFile {
 		output = licenseheader.AddToGoSource(output)
+		output, err = format.Source(output)
+		if err != nil {
+			return fmt.Errorf("format generated Go file %q: %w", dstPath, err)
+		}
 	}
 
 	dir := filepath.Dir(dstPath)
-	os.MkdirAll(dir, os.ModePerm)
-	f, err := os.Create(dstPath)
-	if err != nil {
-		return err
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("create generated file directory %q: %w", dir, err)
 	}
-	f.Write(output)
-	f.Close()
-	if isGoFile {
-		exec.Command("go", "fmt", dstPath).Run()
-		exec.Command("goimports", "-w", dstPath).Run()
+	if err := os.WriteFile(dstPath, output, 0o644); err != nil {
+		return fmt.Errorf("write generated file %q: %w", dstPath, err)
 	}
 	spxlog.Info("Generated file: %s", dstPath)
 	return nil

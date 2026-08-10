@@ -1,12 +1,13 @@
-name: Release Web Bundle
+name: Build Web Bundles
 
 on:
   workflow_call:
     inputs:
-      version:
-        description: 'SPX v3 release version without the leading v (for example, 3.0.0)'
-        required: true
-        type: string
+      engine_artifacts:
+        description: 'Use Godot engine artifacts produced by the current workflow run'
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: ci-${{github.actor}}-${{github.head_ref || github.run_number}}-${{github.ref}}-release-web
@@ -14,7 +15,7 @@ concurrency:
 
 jobs:
   web-build:
-    name: Release web bundle (${{ matrix.mode }})
+    name: Build web bundle (${{ matrix.mode }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -22,22 +23,40 @@ jobs:
           - mode: normal
             zip_file: spx_web.zip
             artifact_name: web-release
+            runtime_artifact: runtime-web
             display_name: Web Release
           - mode: worker
             zip_file: spx_web_worker.zip
             artifact_name: web-worker-release
+            runtime_artifact: runtime-web-worker
             display_name: Web Worker Release
           - mode: minigame
             zip_file: spx_web_minigame.zip
             artifact_name: web-minigame-release
+            runtime_artifact: runtime-web-minigame
             display_name: Web Minigame Release
           - mode: miniprogram
             zip_file: spx_web_miniprogram.zip
             artifact_name: web-miniprogram-release
+            runtime_artifact: runtime-web-miniprogram
             display_name: Web Miniprogram Release
     steps:
       - name: Check out code
         uses: actions/checkout@v6
+
+      - name: Download current-run host editor
+        if: inputs.engine_artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: runtime-editor-linux-x86_64
+          path: runtime-assets
+
+      - name: Download current-run Web template
+        if: inputs.engine_artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ matrix.runtime_artifact }}
+          path: runtime-assets
 
       - name: Install Linux dependencies
         run: sudo apt-get update && sudo apt-get install gcc libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libx11-dev xorg-dev libasound2-dev libopenal-dev binaryen brotli
@@ -48,6 +67,7 @@ jobs:
         with:
           setup-mode: web
           web-mode: ${{ matrix.mode }}
+          engine-asset-dir: ${{ inputs.engine_artifacts && 'runtime-assets' || '' }}
 
       - name: Build release bundle
         env:
@@ -60,18 +80,12 @@ jobs:
           fi
           echo "[ok] Release bundle built: ${{ matrix.zip_file }}"
 
+      - name: Verify release bundle
+        run: unzip -t "${{ matrix.zip_file }}"
+
       - name: Upload release artifact
         uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact_name }}
           path: ${{ matrix.zip_file }}
           retention-days: 14
-
-      - name: Publish release asset
-        if: github.event_name == 'release'
-        uses: softprops/action-gh-release@v3
-        with:
-          files: ${{ matrix.zip_file }}
-          tag_name: ${{ github.event.release.tag_name }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

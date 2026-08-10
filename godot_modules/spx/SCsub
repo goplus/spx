@@ -1,0 +1,129 @@
+#!/usr/bin/env python
+from misc.utility.scons_hints import *
+
+Import("env")
+Import("env_modules")
+
+env_spx = env_modules.Clone()
+env_spx.Prepend(CPPPATH=["#thirdparty/minimp3"])
+
+# Keep every SPX-owned path relative to the custom module source directory.
+# A leading "#" would resolve against the Godot checkout instead.
+module_dir = env.Dir(".").srcnode()
+
+# LunaSVG is an SPX-private rasterizer. Godot's SVG module keeps using its
+# upstream ThorVG implementation.
+lunasvg_dir = module_dir.Dir("thirdparty/lunasvg")
+lunasvg_sources = [
+    "source/graphics.cpp",
+    "source/lunasvg.cpp",
+    "source/plutovg-blend.c",
+    "source/plutovg-canvas.c",
+    "source/plutovg-font.c",
+    "source/plutovg-ft-math.c",
+    "source/plutovg-ft-raster.c",
+    "source/plutovg-ft-stroker.c",
+    "source/plutovg-matrix.c",
+    "source/plutovg-paint.c",
+    "source/plutovg-path.c",
+    "source/plutovg-rasterize.c",
+    "source/plutovg-surface.c",
+    "source/svgelement.cpp",
+    "source/svggeometryelement.cpp",
+    "source/svglayoutstate.cpp",
+    "source/svgpaintelement.cpp",
+    "source/svgparser.cpp",
+    "source/svgproperty.cpp",
+    "source/svgrenderstate.cpp",
+    "source/svgtextelement.cpp",
+    "source/embedded_cnfont.cpp",
+]
+lunasvg_sources = [lunasvg_dir.File(source) for source in lunasvg_sources]
+
+env_spx.Prepend(CPPPATH=[lunasvg_dir.Dir("include")])
+env_spx.Append(
+    CPPDEFINES=[
+        "LUNASVG_ENABLE_EMBEDDED_FONTS",
+        "PLUTOVG_BUILD",
+        "PLUTOVG_BUILD_STATIC",
+        "LUNASVG_BUILD",
+        "LUNASVG_BUILD_STATIC",
+    ]
+)
+
+# LunaSVG shares the advanced text server's HarfBuzz and ICU implementations.
+if "text_server_adv" in env.module_list:
+    if env["builtin_harfbuzz"]:
+        env_spx.Prepend(CPPPATH=["#thirdparty/harfbuzz/src"])
+    if env["builtin_icu4c"]:
+        env_spx.Prepend(CPPPATH=["#thirdparty/icu4c/common/", "#thirdparty/icu4c/i18n/"])
+        env_spx.Append(
+            CXXFLAGS=[
+                "-DU_STATIC_IMPLEMENTATION",
+                "-DU_HAVE_LIB_SUFFIX=1",
+                "-DU_LIB_SUFFIX_C_NAME=_godot",
+            ]
+        )
+    env_spx.Append(CPPDEFINES=["LUNASVG_ENABLE_HARFBUZZ", "LUNASVG_ENABLE_ICU_BIDI"])
+
+# Module tests are compiled from tests/test_main.cpp with the root environment.
+if env["tests"]:
+    env.Prepend(CPPPATH=[lunasvg_dir.Dir("include")])
+    env.Append(CPPDEFINES=["LUNASVG_BUILD_STATIC", "PLUTOVG_BUILD_STATIC"])
+
+lunasvg_obj = []
+env_spx_thirdparty = env_spx.Clone()
+env_spx_thirdparty.disable_warnings()
+env_spx_thirdparty.add_source_files(lunasvg_obj, lunasvg_sources)
+env.modules_sources += lunasvg_obj
+
+# Godot module source files.
+spx_module_obj = []
+env_spx.add_source_files(spx_module_obj, "*.cpp")
+env.modules_sources += spx_module_obj
+env.Depends(spx_module_obj, lunasvg_obj)
+
+Export("env", "env_spx")
+SConscript("recorder/SCsub")
+
+if env["platform"] == "web":
+    # Web bridge entry points are referenced by JavaScript by name, so they
+    # must be linked into the main Web program rather than hidden in the
+    # module archive (where the linker cannot see a native reference).
+    spx_web_sources = []
+    env_spx.add_source_files(spx_web_sources, "web/*.cpp")
+    env.Append(WEB_NATIVE_SOURCES=spx_web_sources)
+    # Replace Godot's Web sources as complete ordered groups. Keeping the
+    # override data here lets platform/web stay independent of SPX.
+    env.Replace(
+        WEB_ENGINE_CORE_SOURCES=[
+            module_dir.File("web/js/engine/preloader.js"),
+            module_dir.File("web/js/engine/config.js"),
+            module_dir.File("web/js/engine/engine.js"),
+        ],
+        WEB_ENGINE_EXTERNS=[
+            module_dir.File("web/js/engine/gdspx.externs.js"),
+        ],
+        WEB_JS_LIBRARIES=[
+            module_dir.File("web/js/libs/library_godot_audio.js"),
+            module_dir.File("web/js/libs/library_godot_recorder.js"),
+            module_dir.File("web/js/libs/library_godot_display.js"),
+            env.File("#platform/web/js/libs/library_godot_fetch.js"),
+            env.File("#platform/web/js/libs/library_godot_webmidi.js"),
+            env.File("#platform/web/js/libs/library_godot_os.js"),
+            module_dir.File("web/js/libs/library_godot_runtime.js"),
+            module_dir.File("web/js/libs/library_godot_input.js"),
+            env.File("#platform/web/js/libs/library_godot_webgl2.js"),
+            module_dir.File("web/js/libs/library_godot_gdspx.js"),
+        ],
+        WEB_WORKLET_SOURCES=[
+            module_dir.File("web/js/libs/audio.worklet.js"),
+            module_dir.File("web/js/libs/audio.position.worklet.js"),
+        ],
+    )
+    env.Append(
+        WEB_ENGINE_SOURCES=[
+            module_dir.File("web/js/engine/gdspx.js"),
+            module_dir.File("web/js/engine/gdspx.util.js"),
+        ]
+    )

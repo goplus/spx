@@ -94,7 +94,7 @@ func runEnvExportEngineBuildShell(args []string) error {
 }
 
 func runEnvExportJDKShell(args []string) error {
-	if err := parseEnvExportSimpleArgs("env export-jdk-shell", "Usage: buildctl env export-jdk-shell", args); err != nil {
+	if err := parseEnvNoArgs("env export-jdk-shell", args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
 		}
@@ -113,7 +113,7 @@ func runEnvExportJDKShell(args []string) error {
 }
 
 func runEnvExportEMSDKShell(args []string) error {
-	if err := parseEnvExportSimpleArgs("env export-emsdk-shell", "Usage: buildctl env export-emsdk-shell", args); err != nil {
+	if err := parseEnvNoArgs("env export-emsdk-shell", args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
 		}
@@ -134,20 +134,8 @@ func runEnvExportEMSDKShell(args []string) error {
 	return nil
 }
 
-func parseEnvExportSimpleArgs(name, usage string, args []string) error {
-	fs := flag.NewFlagSet(name, flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-	fs.Usage = func() {
-		fmt.Fprintln(os.Stderr, usage)
-	}
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	if fs.NArg() != 0 {
-		fs.Usage()
-		return shared.ErrUsage
-	}
-	return nil
+func parseEnvNoArgs(name string, args []string) error {
+	return shared.ParseNoArgs(name, "Usage: buildctl "+name, args, os.Stderr)
 }
 
 func runEnvExportShell(args []string) error {
@@ -195,7 +183,7 @@ func parseEnvExportShellArgs(args []string) (envExportShellConfig, error) {
 }
 
 func runEnvEnsureEngineSource(args []string) error {
-	if err := parseEnvEnsureEngineSourceArgs(args); err != nil {
+	if err := parseEnvNoArgs("env ensure-engine-source", args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
 		}
@@ -211,25 +199,8 @@ func runEnvEnsureEngineSource(args []string) error {
 	})
 }
 
-func parseEnvEnsureEngineSourceArgs(args []string) error {
-	fs := flag.NewFlagSet("env ensure-engine-source", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-	fs.Usage = func() {
-		fmt.Fprintln(os.Stderr, "Usage: buildctl env ensure-engine-source")
-	}
-
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	if fs.NArg() != 0 {
-		fs.Usage()
-		return shared.ErrUsage
-	}
-	return nil
-}
-
 func runEnvExportMacOSVulkanShell(args []string) error {
-	if err := parseEnvExportMacOSVulkanShellArgs(args); err != nil {
+	if err := parseEnvNoArgs("env export-macos-vulkan-shell", args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
 		}
@@ -245,22 +216,5 @@ func runEnvExportMacOSVulkanShell(args []string) error {
 		return err
 	}
 	fmt.Fprint(os.Stdout, shared.MacOSVulkanSDKShellExports(sdkRoot))
-	return nil
-}
-
-func parseEnvExportMacOSVulkanShellArgs(args []string) error {
-	fs := flag.NewFlagSet("env export-macos-vulkan-shell", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-	fs.Usage = func() {
-		fmt.Fprintln(os.Stderr, "Usage: buildctl env export-macos-vulkan-shell")
-	}
-
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	if fs.NArg() != 0 {
-		fs.Usage()
-		return shared.ErrUsage
-	}
 	return nil
 }

@@ -1,30 +1,81 @@
 name: Set up Go, XGo, and engine assets
 description: Set up the toolchain, build local buildctl, and prepare engine assets.
 inputs:
-  go-version:
-    description: 'Go version to install'
-    required: false
-    default: '1.25.8'
-  xgo-version:
-    description: 'XGo version to install'
-    required: false
-    default: '1.7.5'
   setup-mode:
-    description: 'Asset preparation mode: none, runtime, web, or full'
+    description: 'Asset preparation target: none, host, web, or full'
     required: false
-    default: 'runtime'
+    default: 'host'
   web-mode:
     description: 'Web runtime mode to prepare when setup-mode is web or full'
     required: false
     default: 'normal'
+  engine-asset-dir:
+    description: 'Optional directory containing engine artifacts from the current workflow run'
+    required: false
+    default: ''
+  require-android-ndk-alias:
+    description: 'Fail unless the locked Android NDK has a validated setup-ndk alias'
+    required: false
+    default: 'false'
+outputs:
+  go-version:
+    description: 'Go version locked by internal/release/runtime.lock.json'
+    value: ${{ steps.toolchain.outputs.go-version }}
+  xgo-version:
+    description: 'XGo version locked by internal/release/runtime.lock.json'
+    value: ${{ steps.toolchain.outputs.xgo-version }}
+  jdk-version:
+    description: 'JDK major version locked by internal/release/runtime.lock.json'
+    value: ${{ steps.toolchain.outputs.jdk-version }}
+  android-ndk-version:
+    description: 'Full Android NDK revision locked by internal/release/runtime.lock.json'
+    value: ${{ steps.toolchain.outputs.android-ndk-version }}
+  android-ndk-installer-alias:
+    description: 'Android NDK release alias accepted by nttld/setup-ndk (for example, r23c)'
+    value: ${{ steps.toolchain.outputs.android-ndk-installer-alias }}
 runs:
   using: "composite"
   steps:
+    - name: Resolve locked toolchain versions
+      id: toolchain
+      shell: bash
+      env:
+        REQUIRE_ANDROID_NDK_ALIAS: ${{ inputs.require-android-ndk-alias }}
+      run: |
+        set -euo pipefail
+
+        if command -v python3 >/dev/null 2>&1; then
+          python_command=python3
+        elif command -v python >/dev/null 2>&1; then
+          python_command=python
+        else
+          echo "[error] Python 3 is required to read internal/release/runtime.lock.json" >&2
+          exit 1
+        fi
+
+        contract_args=(
+          toolchain
+          --lock internal/release/runtime.lock.json
+          --github-output "$GITHUB_OUTPUT"
+        )
+        case "$REQUIRE_ANDROID_NDK_ALIAS" in
+          true)
+            contract_args+=(--require-android-ndk-alias)
+            ;;
+          false)
+            ;;
+          *)
+            echo "[error] require-android-ndk-alias must be true or false, got: $REQUIRE_ANDROID_NDK_ALIAS" >&2
+            exit 1
+            ;;
+        esac
+        "$python_command" .github/scripts/runtime_build_contract.py "${contract_args[@]}"
+
     - name: Set up Go and XGo
       uses: goplus/setup-xgo@v1
       with:
-        go-version: ${{ inputs.go-version }}
-        xgo-version: ${{ inputs.xgo-version }}
+        go-version: ${{ steps.toolchain.outputs.go-version }}
+        xgo-version: ${{ steps.toolchain.outputs.xgo-version }}
 
     - name: Build local buildctl
       uses: ./.github/actions/setup-buildctl
@@ -34,7 +85,29 @@ runs:
       env:
         SETUP_MODE: ${{ inputs.setup-mode }}
         WEB_MODE: ${{ inputs.web-mode }}
+        ENGINE_ASSET_DIR: ${{ inputs.engine-asset-dir }}
       run: |
         set -euo pipefail
 
-        "$BUILDCTL" prepare --setup-mode "$SETUP_MODE" --web-mode "$WEB_MODE"
+        case "$SETUP_MODE" in
+          none)
+            exit 0
+            ;;
+          host)
+            setup_args=(host)
+            ;;
+          web)
+            setup_args=(web --mode "$WEB_MODE")
+            ;;
+          full)
+            setup_args=(full --mode "$WEB_MODE")
+            ;;
+          *)
+            echo "[error] Unsupported setup mode: $SETUP_MODE" >&2
+            exit 1
+            ;;
+        esac
+        if [ -n "$ENGINE_ASSET_DIR" ]; then
+          setup_args+=(--asset-dir "$ENGINE_ASSET_DIR")
+        fi
+        "$BUILDCTL" setup "${setup_args[@]}"

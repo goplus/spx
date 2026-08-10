@@ -22,6 +22,7 @@ package gdext
 import (
 	"bytes"
 	_ "embed"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -30,8 +31,6 @@ import (
 
 	"github.com/goplus/spx/v3/internal/cmd/codegen/gdextensionparser/clang"
 	. "github.com/goplus/spx/v3/internal/cmd/codegen/generate/common"
-	spxlog "github.com/goplus/spx/v3/internal/cmd/codegen/internal/log"
-
 	"github.com/iancoleman/strcase"
 )
 
@@ -66,43 +65,43 @@ func fileCopy(src, dst string) error {
 
 	return dstFile.Sync()
 }
-func GenerateHeader(projectPath, godotPath string) {
-	dir := filepath.Join(godotPath, "modules", "spx")
-	_, err := os.Stat(dir)
-	if os.IsNotExist(err) {
-		spxlog.Warn("Directory does not exist: %s", dir)
-		return
-	}
+func GenerateHeader(projectPath, spxModulePath string) error {
 	outputFile := filepath.Join(projectPath, NativeRelDir, "gdextension_spx_ext.h")
-	generateSpxExtHeader(dir, outputFile, true)
+	return generateSpxExtHeader(spxModulePath, outputFile, true)
 }
-func Generate(projectPath, godotPath string, ast clang.CHeaderFileAST) {
-	dir := filepath.Join(godotPath, "modules", "spx")
-	_, err := os.Stat(dir)
-	if os.IsNotExist(err) {
-		spxlog.Warn("Directory does not exist: %s", dir)
-		return
-	}
-	err = generateGdCppFile(projectPath, gdSpxExtCpp, ast, "gdextension_spx_ext.cpp")
-	if err != nil {
-		panic(err)
+
+func Generate(projectPath, spxModulePath string, ast clang.CHeaderFileAST) error {
+	if err := generateGdCppFile(projectPath, gdSpxExtCpp, ast, "gdextension_spx_ext.cpp"); err != nil {
+		return err
 	}
 	outputFile := filepath.Join(projectPath, NativeRelDir, "gdextension_spx_ext.cpp")
-	fileCopy(outputFile, filepath.Join(dir, "gdextension_spx_ext.cpp"))
-	os.Remove(outputFile)
+	if err := fileCopy(outputFile, filepath.Join(spxModulePath, "gdextension_spx_ext.cpp")); err != nil {
+		return fmt.Errorf("copy gdextension_spx_ext.cpp: %w", err)
+	}
+	if err := os.Remove(outputFile); err != nil {
+		return fmt.Errorf("remove temporary gdextension_spx_ext.cpp: %w", err)
+	}
 
 	// use the new format header
 	outputFile = filepath.Join(projectPath, NativeRelDir, "gdextension_spx_ext.h")
-	generateSpxExtHeader(dir, outputFile, false)
-	fileCopy(outputFile, filepath.Join(dir, "gdextension_spx_ext.h"))
+	if err := generateSpxExtHeader(spxModulePath, outputFile, false); err != nil {
+		return err
+	}
+	if err := fileCopy(outputFile, filepath.Join(spxModulePath, "gdextension_spx_ext.h")); err != nil {
+		return fmt.Errorf("copy gdextension_spx_ext.h: %w", err)
+	}
 
-	err = generateGdCppFile(projectPath, gdJsSpxCpp, ast, "godot_js_spx.cpp")
-	if err != nil {
-		panic(err)
+	if err := generateGdCppFile(projectPath, gdJsSpxCpp, ast, "godot_js_spx.cpp"); err != nil {
+		return err
 	}
 	outputFile = filepath.Join(projectPath, NativeRelDir, "godot_js_spx.cpp")
-	fileCopy(outputFile, filepath.Join(godotPath, "platform", "web", "godot_js_spx.cpp"))
-	os.Remove(outputFile)
+	if err := fileCopy(outputFile, filepath.Join(spxModulePath, "web", "godot_js_spx.cpp")); err != nil {
+		return fmt.Errorf("copy godot_js_spx.cpp: %w", err)
+	}
+	if err := os.Remove(outputFile); err != nil {
+		return fmt.Errorf("remove temporary godot_js_spx.cpp: %w", err)
+	}
+	return nil
 }
 
 func generateGdCppFile(projectPath string, templateStr string, ast clang.CHeaderFileAST, outputFileName string) error {
@@ -184,8 +183,8 @@ func generateGdCppFile(projectPath string, templateStr string, ast clang.CHeader
 	}
 
 	headerFileName := filepath.Join(projectPath, NativeRelDir, outputFileName)
-	f, err := os.Create(headerFileName)
-	f.Write(b.Bytes())
-	f.Close()
-	return err
+	if err := os.WriteFile(headerFileName, b.Bytes(), 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", outputFileName, err)
+	}
+	return nil
 }

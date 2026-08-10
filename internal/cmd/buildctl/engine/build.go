@@ -20,59 +20,50 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
+
+	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
+	toolpkg "github.com/goplus/spx/v3/internal/cmd/buildctl/tool"
 )
 
-var engineCommonArgs = []string{
-	"optimize=size",
-	"use_volk=no",
-	"deprecated=no",
-	"minizip=yes",
-	"openxr=false",
-	"vulkan=false",
-	"graphite=false",
-	"disable_3d_physics=true",
-	"module_msdfgen_enabled=false",
-	"module_text_server_adv_enabled=true",
-	"module_text_server_fb_enabled=false",
-	"builtin_harfbuzz=true",
-	"modules_enabled_by_default=true",
-	"module_gdscript_enabled=true",
-	"module_freetype_enabled=true",
-	"module_minimp3_enabled=true",
-	"module_svg_enabled=true",
-	"module_jpg_enabled=true",
-	"module_ogg_enabled=true",
-	"module_regex_enabled=true",
-	"module_zip_enabled=true",
-	"module_godot_physics_2d_enabled=true",
+type buildEnvironment = shared.BuildEnvironment
+
+var buildEnvRunStreaming = shared.RunStreamingCommand
+
+func BuildEngine(cfg BuildConfig, repoRoot string) error {
+	return buildEngineWithEnvironmentPreparer(cfg, repoRoot, prepareEngineBuildEnvironment)
 }
 
-var engineExtraOptArgs = []string{"disable_3d=true"}
-
-func buildEngine(cfg engineBuildConfig, repoRoot string) error {
-	if cfg.target == "editor" && cfg.platform == "web" {
-		cfg.target = "template"
+func buildEngineWithEnvironmentPreparer(cfg BuildConfig, repoRoot string, prepare func(string, string) (buildEnvironment, map[string]string, string, error)) error {
+	if cfg.Target == "editor" && cfg.Platform == "web" {
+		cfg.Target = "template"
 	}
 
-	buildEnv, commandEnv, sconsCommand, err := prepareEngineBuildEnvironment(repoRoot, cfg.platform)
+	spxModuleSource, err := shared.ResolveSPXModuleSource(repoRoot)
 	if err != nil {
 		return err
 	}
-	plan, err := resolveEngineBuildShellPlan(repoRoot, envExportEngineBuildShellConfig(cfg))
+	profile, err := loadSConsProfile(spxModuleSource)
+	if err != nil {
+		return err
+	}
+	buildEnv, commandEnv, sconsCommand, err := prepare(repoRoot, cfg.Platform)
+	if err != nil {
+		return err
+	}
+	plan, err := ResolveEngineBuildShellPlan(repoRoot, cfg)
 	if err != nil {
 		return err
 	}
 
-	switch cfg.target {
+	switch cfg.Target {
 	case "editor":
-		return buildEngineEditor(buildEnv, commandEnv, sconsCommand, plan)
+		return buildEngineEditor(buildEnv, commandEnv, sconsCommand, profile.EditorReleaseArgs(), plan)
 	case "template":
-		return buildEngineTemplate(buildEnv, commandEnv, sconsCommand, plan)
+		return buildEngineTemplate(buildEnv, commandEnv, sconsCommand, profile.TemplateReleaseArgs(), plan)
 	default:
-		return fmt.Errorf("unsupported build target: %s", cfg.target)
+		return fmt.Errorf("unsupported build target: %s", cfg.Target)
 	}
 }
 
@@ -80,7 +71,7 @@ func prepareEngineBuildEnvironment(repoRoot, requestedPlatform string) (buildEnv
 	runOptionalStreamingCommand("", "xgo", "version")
 	runOptionalStreamingCommand("", "go", "version")
 
-	buildEnv, err := resolveBuildEnvironment(repoRoot, requestedPlatform)
+	buildEnv, err := shared.ResolveBuildEnvironment(repoRoot, requestedPlatform)
 	if err != nil {
 		return buildEnvironment{}, nil, "", err
 	}
@@ -90,37 +81,17 @@ func prepareEngineBuildEnvironment(repoRoot, requestedPlatform string) (buildEnv
 
 	printBuildEnvironmentSummary(buildEnv)
 
-	sconsCommand, err := ensureSCons()
+	sconsCommand, err := toolpkg.EnsureSCons()
 	if err != nil {
 		return buildEnvironment{}, nil, "", err
 	}
-	if err := ensureEngineSource(repoRoot, func(name string, args ...string) error {
+	if err := shared.EnsureEngineSource(repoRoot, func(name string, args ...string) error {
 		return buildEnvRunStreaming("", name, args...)
 	}); err != nil {
 		return buildEnvironment{}, nil, "", err
 	}
 
-	commandEnv := currentEnvMap()
-	if runtime.GOOS == "darwin" && buildEnv.Platform == "ios" {
-		fmt.Fprintf(os.Stdout, "Installing macOS Vulkan SDK...\n")
-		if err := runStreamingCommand(buildEnv.EngineDir, filepath.Join("misc", "scripts", "install_vulkan_sdk_macos.sh")); err != nil {
-			return buildEnvironment{}, nil, "", err
-		}
-		if homeDir, err := os.UserHomeDir(); err == nil {
-			if sdkRoot, err := resolveMacOSVulkanSDKRoot(homeDir, os.Getenv("VULKAN_SDK")); err == nil {
-				commandEnv["VULKAN_SDK"] = sdkRoot
-				commandEnv["PATH"] = prependToPath(commandEnv["PATH"], filepath.Join(sdkRoot, "bin"))
-				fmt.Fprintf(os.Stdout, "Using macOS Vulkan SDK from %s\n", sdkRoot)
-				if _, err := runCommandOutputWithEnv("", envMapToSlice(commandEnv), "vulkaninfo", "--summary"); err != nil {
-					fmt.Fprintf(os.Stdout, "Warning: vulkaninfo check failed. Continuing with the configured Vulkan SDK.\n")
-				}
-			} else {
-				fmt.Fprintf(os.Stdout, "Warning: vulkaninfo was not found after Vulkan SDK setup. Continuing anyway.\n")
-			}
-		}
-	}
-
-	return buildEnv, commandEnv, sconsCommand, nil
+	return buildEnv, shared.CurrentEnvMap(), sconsCommand, nil
 }
 
 func printBuildEnvironmentSummary(buildEnv buildEnvironment) {
@@ -133,47 +104,50 @@ func printBuildEnvironmentSummary(buildEnv buildEnvironment) {
 	fmt.Fprintf(os.Stdout, "Platform: %s\n", buildEnv.Platform)
 	fmt.Fprintf(os.Stdout, "Architecture: %s\n", buildEnv.Arch)
 	fmt.Fprintf(os.Stdout, "Destination directory: %s\n", buildEnv.TemplateDir)
-	fmt.Fprintf(os.Stdout, "Source tag: %s\n", buildEnv.EngineGitTag)
+	fmt.Fprintf(os.Stdout, "Godot source: %s@%s (%s)\n", buildEnv.GodotRepository, buildEnv.GodotCommit, buildEnv.GodotRef)
+	fmt.Fprintf(os.Stdout, "SPX module source: %s\n", buildEnv.SPXModuleSrc)
 }
 
-func buildEngineEditor(buildEnv buildEnvironment, commandEnv map[string]string, sconsCommand string, plan engineBuildShellPlan) error {
-	fmt.Fprintf(os.Stdout, "scons target=editor dev_build=yes %s\n", strings.Join(engineCommonArgs, " "))
-	args := append([]string{"target=editor", "dev_build=yes"}, engineCommonArgs...)
+func buildEngineEditor(buildEnv buildEnvironment, commandEnv map[string]string, sconsCommand string, profileArgs []string, plan BuildShellPlan) error {
+	args := sconsBuildArgs([]string{"target=editor", "dev_build=yes"}, profileArgs, buildEnv.SPXModuleSrc)
 	if plan.EditorUseVSProj {
 		args = append(args, "vsproj=yes")
 	}
+	fmt.Fprintf(os.Stdout, "scons %s\n", shellJoin(args))
 	if err := runLockedEngineCommandWithEnv(buildEnv.EngineDir, commandEnv, sconsCommand, args...); err != nil {
 		return err
 	}
 
 	fmt.Fprintf(os.Stdout, "Destination binary path: %s\n", plan.EditorDestination)
-	return copyFile(filepath.Join(buildEnv.EngineDir, plan.EditorSource), plan.EditorDestination)
+	return shared.CopyFile(filepath.Join(buildEnv.EngineDir, plan.EditorSource), plan.EditorDestination)
 }
 
-func buildEngineTemplate(buildEnv buildEnvironment, commandEnv map[string]string, sconsCommand string, plan engineBuildShellPlan) error {
+func buildEngineTemplate(buildEnv buildEnvironment, commandEnv map[string]string, sconsCommand string, profileArgs []string, plan BuildShellPlan) error {
 	fmt.Fprintf(os.Stdout, "Output directory: %s\n", buildEnv.TemplateDir)
 	fmt.Fprintf(os.Stdout, "Destination binary path: %s\n", filepath.Join(buildEnv.GoPath, "bin", "gdspxrt"+buildEnv.Version))
 
 	switch plan.Platform {
 	case "linux", "windows", "macos":
-		args := append([]string{"platform=" + plan.TemplateSConsPlatform, "target=template_release"}, engineCommonArgs...)
+		args := sconsBuildArgs([]string{"platform=" + plan.TemplateSConsPlatform, "target=template_release"}, profileArgs, buildEnv.SPXModuleSrc)
 		if err := runLockedEngineCommandWithEnv(buildEnv.EngineDir, commandEnv, sconsCommand, args...); err != nil {
 			return err
 		}
-		return copyFile(filepath.Join(buildEnv.EngineDir, plan.TemplateSource), plan.TemplateDestination)
+		return shared.CopyFile(filepath.Join(buildEnv.EngineDir, plan.TemplateSource), plan.TemplateDestination)
 	case "ios":
-		if err := runLockedEngineScriptWithEnv(buildEnv.EngineDir, commandEnv, sconsScriptWithCommand(sconsCommand, plan.TemplateSConsCommands)); err != nil {
+		if err := runLockedEngineScriptWithEnv(buildEnv.EngineDir, commandEnv, sconsBuildScript(sconsCommand, profileArgs, buildEnv.SPXModuleSrc, plan.TemplateSConsCommands)); err != nil {
 			return err
 		}
-		return copyFile(filepath.Join(buildEnv.EngineDir, "bin", "godot_ios.zip"), filepath.Join(buildEnv.TemplateDir, "ios.zip"))
+		return shared.CopyFile(filepath.Join(buildEnv.EngineDir, "bin", "godot_ios.zip"), filepath.Join(buildEnv.TemplateDir, "ios.zip"))
 	case "android":
-		if err := setupJDK(); err != nil {
+		if err := toolpkg.SetupJDK(); err != nil {
 			return err
 		}
-		if jdkExports, err := resolveJDKShellExports(); err == nil {
-			commandEnv = mergeStringMaps(commandEnv, jdkExports)
+		jdkExports, err := toolpkg.ResolveJDKShellExports()
+		if err != nil {
+			return fmt.Errorf("resolve JDK build environment: %w", err)
 		}
-		if err := runLockedEngineScriptWithEnv(buildEnv.EngineDir, commandEnv, sconsScriptWithCommand(sconsCommand, plan.TemplateSConsCommands)); err != nil {
+		commandEnv = mergeStringMaps(commandEnv, jdkExports)
+		if err := runLockedEngineScriptWithEnv(buildEnv.EngineDir, commandEnv, sconsBuildScript(sconsCommand, profileArgs, buildEnv.SPXModuleSrc, plan.TemplateSConsCommands)); err != nil {
 			return err
 		}
 		if len(plan.TemplatePostCommands) > 0 {
@@ -184,22 +158,23 @@ func buildEngineTemplate(buildEnv buildEnvironment, commandEnv map[string]string
 		if err := copyGlobMatches(filepath.Join(buildEnv.EngineDir, "bin", "android*.apk"), buildEnv.TemplateDir); err != nil {
 			return err
 		}
-		return copyFile(filepath.Join(buildEnv.EngineDir, "bin", "android_source.zip"), filepath.Join(buildEnv.TemplateDir, "android_source.zip"))
+		return shared.CopyFile(filepath.Join(buildEnv.EngineDir, "bin", "android_source.zip"), filepath.Join(buildEnv.TemplateDir, "android_source.zip"))
 	case "web":
-		if err := setupEMSDK(); err != nil {
+		if err := toolpkg.SetupEMSDK(); err != nil {
 			return err
 		}
-		if emsdkExports, err := resolveEMSDKShellExports(); err == nil {
-			commandEnv = mergeStringMaps(commandEnv, emsdkExports)
+		emsdkExports, err := toolpkg.ResolveEMSDKShellExports()
+		if err != nil {
+			return fmt.Errorf("resolve Emscripten build environment: %w", err)
 		}
+		commandEnv = mergeStringMaps(commandEnv, emsdkExports)
 		webArgs := []string{"platform=web", "target=template_release"}
-		webArgs = append(webArgs, engineCommonArgs...)
-		webArgs = append(webArgs, engineExtraOptArgs...)
 		webArgs = append(webArgs, "threads="+plan.WebThreads)
 		if plan.WebProxyToPThread {
 			webArgs = append(webArgs, "proxy_to_pthread=true")
 		}
-		fmt.Fprintf(os.Stdout, "scons %s\n", strings.Join(webArgs, " "))
+		webArgs = sconsBuildArgs(webArgs, profileArgs, buildEnv.SPXModuleSrc)
+		fmt.Fprintf(os.Stdout, "scons %s\n", shellJoin(webArgs))
 		if err := runLockedEngineCommandWithEnv(buildEnv.EngineDir, commandEnv, sconsCommand, webArgs...); err != nil {
 			return err
 		}
@@ -207,7 +182,7 @@ func buildEngineTemplate(buildEnv buildEnvironment, commandEnv map[string]string
 		if err := waitForNonEmptyFile(srcZip, 5*time.Second); err != nil {
 			return err
 		}
-		if err := copyFile(srcZip, plan.WebCachedTemplateZip); err != nil {
+		if err := shared.CopyFile(srcZip, plan.WebCachedTemplateZip); err != nil {
 			return err
 		}
 		return populateWebTemplateCopies(srcZip, buildEnv.TemplateDir)
@@ -221,18 +196,40 @@ func sconsScript(commands []string) string {
 }
 
 func sconsScriptWithCommand(sconsCommand string, commands []string) string {
+	return sconsBuildScript(sconsCommand, nil, "", commands)
+}
+
+func sconsBuildScript(sconsCommand string, profileArgs []string, spxModuleSource string, commands []string) string {
 	lines := make([]string, 0, len(commands))
-	commandPrefix := sconsCommand
-	if sconsCommand != "scons" {
-		commandPrefix = shellQuote(sconsCommand)
-	}
 	for _, command := range commands {
 		if strings.TrimSpace(command) == "" {
 			continue
 		}
-		lines = append(lines, commandPrefix+" "+strings.Join(append(append([]string{}, engineCommonArgs...), strings.Fields(command)...), " "))
+		args := sconsBuildArgs(strings.Fields(command), profileArgs, spxModuleSource)
+		lines = append(lines, shellJoin(append([]string{sconsCommand}, args...)))
 	}
 	return strings.Join(lines, "\n")
+}
+
+func sconsBuildArgs(dynamicArgs, profileArgs []string, spxModuleSource string) []string {
+	args := make([]string, 0, len(dynamicArgs)+len(profileArgs)+1)
+	// Apply the shared profile first and the explicit build axes second. SCons
+	// keeps the last value for a repeated key, so this order makes any
+	// platform/target override deliberate and consistent across local builds.
+	args = append(args, profileArgs...)
+	args = append(args, dynamicArgs...)
+	if spxModuleSource != "" {
+		args = append(args, "custom_modules="+spxModuleSource)
+	}
+	return args
+}
+
+func shellJoin(args []string) string {
+	quoted := make([]string, len(args))
+	for index, arg := range args {
+		quoted[index] = shared.ShellQuote(arg)
+	}
+	return strings.Join(quoted, " ")
 }
 
 func runLockedEngineCommandWithEnv(workdir string, env map[string]string, name string, args ...string) error {
@@ -272,7 +269,7 @@ func copyGlobMatches(pattern, dstDir string) error {
 		return err
 	}
 	for _, match := range matches {
-		if err := copyFile(match, filepath.Join(dstDir, filepath.Base(match))); err != nil {
+		if err := shared.CopyFile(match, filepath.Join(dstDir, filepath.Base(match))); err != nil {
 			return err
 		}
 	}
@@ -302,7 +299,7 @@ func populateWebTemplateCopies(srcZip, templateDir string) error {
 		"web_release.zip",
 	}
 	for _, name := range names {
-		if err := copyFile(srcZip, filepath.Join(templateDir, name)); err != nil {
+		if err := shared.CopyFile(srcZip, filepath.Join(templateDir, name)); err != nil {
 			return err
 		}
 	}

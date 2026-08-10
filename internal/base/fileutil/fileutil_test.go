@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
 )
 
 func TestCopyFileCreatesParentAndPreservesMode(t *testing.T) {
@@ -126,6 +127,91 @@ func TestWriteNamedZipUsesSortedNamesAndContent(t *testing.T) {
 	}
 	if !reflect.DeepEqual(entries, want) {
 		t.Fatalf("zip entries = %#v, want %#v", entries, want)
+	}
+}
+
+func TestWriteNamedZipNormalizesMetadata(t *testing.T) {
+	tempDir := t.TempDir()
+	regular := filepath.Join(tempDir, "regular.txt")
+	executable := filepath.Join(tempDir, "executable.sh")
+	if err := os.WriteFile(regular, []byte("regular"), 0o600); err != nil {
+		t.Fatalf("WriteFile(%s) returned error: %v", regular, err)
+	}
+	if err := os.WriteFile(executable, []byte("executable"), 0o700); err != nil {
+		t.Fatalf("WriteFile(%s) returned error: %v", executable, err)
+	}
+	firstTime := time.Date(2001, time.February, 3, 4, 5, 6, 0, time.UTC)
+	if err := os.Chtimes(regular, firstTime, firstTime); err != nil {
+		t.Fatalf("Chtimes(%s) returned error: %v", regular, err)
+	}
+	if err := os.Chtimes(executable, firstTime, firstTime); err != nil {
+		t.Fatalf("Chtimes(%s) returned error: %v", executable, err)
+	}
+
+	firstZip := filepath.Join(tempDir, "first.zip")
+	files := map[string]string{
+		"b.sh":  executable,
+		"a.txt": regular,
+	}
+	if err := WriteNamedZip(firstZip, files); err != nil {
+		t.Fatalf("WriteNamedZip(%s) returned error: %v", firstZip, err)
+	}
+
+	secondTime := time.Date(2037, time.August, 9, 10, 11, 12, 0, time.UTC)
+	if err := os.Chmod(regular, 0o666); err != nil {
+		t.Fatalf("Chmod(%s) returned error: %v", regular, err)
+	}
+	if err := os.Chmod(executable, 0o777); err != nil {
+		t.Fatalf("Chmod(%s) returned error: %v", executable, err)
+	}
+	if err := os.Chtimes(regular, secondTime, secondTime); err != nil {
+		t.Fatalf("Chtimes(%s) returned error: %v", regular, err)
+	}
+	if err := os.Chtimes(executable, secondTime, secondTime); err != nil {
+		t.Fatalf("Chtimes(%s) returned error: %v", executable, err)
+	}
+
+	secondZip := filepath.Join(tempDir, "second.zip")
+	if err := WriteNamedZip(secondZip, files); err != nil {
+		t.Fatalf("WriteNamedZip(%s) returned error: %v", secondZip, err)
+	}
+	firstData, err := os.ReadFile(firstZip)
+	if err != nil {
+		t.Fatalf("ReadFile(%s) returned error: %v", firstZip, err)
+	}
+	secondData, err := os.ReadFile(secondZip)
+	if err != nil {
+		t.Fatalf("ReadFile(%s) returned error: %v", secondZip, err)
+	}
+	if !reflect.DeepEqual(firstData, secondData) {
+		t.Fatal("WriteNamedZip output changed after source metadata changed")
+	}
+
+	reader, err := zip.OpenReader(secondZip)
+	if err != nil {
+		t.Fatalf("OpenReader(%s) returned error: %v", secondZip, err)
+	}
+	defer reader.Close()
+	if len(reader.File) != 2 {
+		t.Fatalf("zip entry count = %d, want 2", len(reader.File))
+	}
+	want := []struct {
+		name string
+		mode os.FileMode
+	}{
+		{name: "a.txt", mode: 0o644},
+		{name: "b.sh", mode: 0o755},
+	}
+	for index, file := range reader.File {
+		if file.Name != want[index].name {
+			t.Fatalf("zip entry %d name = %q, want %q", index, file.Name, want[index].name)
+		}
+		if got := file.Mode().Perm(); got != want[index].mode {
+			t.Fatalf("zip entry %q mode = %v, want %v", file.Name, got, want[index].mode)
+		}
+		if !file.Modified.Equal(normalizedZipModTime) {
+			t.Fatalf("zip entry %q timestamp = %s, want %s", file.Name, file.Modified, normalizedZipModTime)
+		}
 	}
 }
 

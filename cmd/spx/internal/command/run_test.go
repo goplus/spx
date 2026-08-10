@@ -351,6 +351,14 @@ func TestRunInterpretedCreatesRuntimeExtensionAndCopiesSharedLibrary(t *testing.
 	if string(gotExtension) != scaffold.RuntimeGDExtension() {
 		t.Fatalf("runtime.gdextension contents mismatch")
 	}
+	extensionListPath := filepath.Join(runtimeTempDir, ".godot", "extension_list.cfg")
+	gotExtensionList, err := os.ReadFile(extensionListPath)
+	if err != nil {
+		t.Fatalf("read extension_list.cfg: %v", err)
+	}
+	if string(gotExtensionList) != scaffold.RuntimeExtensionList() {
+		t.Fatalf("extension_list.cfg contents mismatch")
+	}
 
 	copiedLibPath := filepath.Join(runtimeTempDir, libName)
 	if !fileExists(copiedLibPath) {
@@ -365,8 +373,8 @@ func TestRunInterpretedCreatesRuntimeExtensionAndCopiesSharedLibrary(t *testing.
 	if !strings.Contains(logContent, "--path\n"+runtimeTempDir+"\n") {
 		t.Fatalf("runtime log = %q, want --path followed by %s", logContent, runtimeTempDir)
 	}
-	if !strings.Contains(logContent, "--gdextpath\n"+extensionPath+"\n") {
-		t.Fatalf("runtime log = %q, want --gdextpath followed by %s", logContent, extensionPath)
+	if strings.Contains(logContent, "--gdextpath") {
+		t.Fatalf("runtime log = %q, custom --gdextpath should not be used", logContent)
 	}
 }
 

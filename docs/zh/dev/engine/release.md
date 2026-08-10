@@ -1,0 +1,73 @@
+# SPX 与 Godot runtime 发布流程
+
+SPX 发布与 Godot runtime 使用两套版本，并由同一受控流程按显式映射配对。当前发布声明可用以下命令查看：
+
+```sh
+go run ./.github/scripts/runtime_version.go --json
+```
+
+只需要单值的脚本仍可使用 `--spx-version`、`--runtime-tag`，或默认的 runtime version 输出。发布 CI 使用 `--github-output` 一次描述已校验的 lock 与 release mapping，不再通过多次 JSON 查询重复拼装。
+
+外置模块首个原子版本为 SPX `v3.2.0`、runtime `2.4.0`（tag `runtime-v2.4.0`）、runtime ABI `2`。历史 `v3.1.0 -> Godot spx2.3.0` 映射保持 legacy，不得移动或重新解释旧 tag。
+
+## 发布身份边界
+
+| 身份/产物 | 内容或复用输入 |
+| --- | --- |
+| Godot engine/editor/template | Godot commit、`godot_modules/spx` tree（含 SCons profile）、引擎工具链、平台参数 |
+| `spx-runtime-assets.zip` | SPX runtime pack source、固定的 pack build recipe、生成 pack 所用的锁定 Godot 引擎 |
+| 完整 runtime release | canonical `runtime.lock.json` SHA、module tree、pack source、build recipe、全部资产 checksum |
+| SPX 产品包 | SPX release commit、选定的原子 runtime、各平台打包流程 |
+
+SPX 与 Godot Actions 都调用所选 SPX commit 中的 `.github/scripts/runtime_build_contract.py` 校验 lock 与 SCons profile。引擎 cache 的工具链摘要按平台收敛：native 只包含 SCons，Web 额外包含 EMSDK，Android 额外包含 JDK 与 NDK。未知的 NDK installer alias 只会阻断 Android 构建，不会误伤其他平台。
+
+manifest 分别记录 `module_tree`、`runtime_pack_source_sha256` 和 `build_recipe_sha256`。完整 lock SHA 也是 runtime release 的复用契约，因此 ABI、required assets、repository/manifest、Godot ref/version/commit、module path 或任一工具链字段变化都会拒绝复用旧 runtime。Godot SCons cache 使用更窄的独立身份；只改版本号、release 元数据、资产清单或文档不会重新编译 Godot，但可能要求新的 runtime release 身份。文档本身不进入这两类 runtime digest。
+
+## 冻结顺序
+
+1. 先合并 Godot 改动并取得最终 commit。当前 SPX lock 精确固定 Godot SHA；如果 Godot PR 使用 merge 或 squash 产生新 SHA，必须回写 `internal/release/runtime.lock.json`。
+2. 同步 `.github/workflows/release.yml` 中 reusable Godot workflow 的完整 SHA。workflow 会校验它与 lock 完全一致。
+3. 将 lock 的 `godot.ref` 改为不会随功能分支清理而消失的持久分支或 tag；Godot commit 决定实际引擎源码，但 ref 同样属于 canonical lock，必须在生成 manifest 前冻结。
+4. 在 `goplus/spx` 的发布分支冻结 SPX candidate commit。确认 `currentSPXVersion` 通过 `spxRuntimeMappings` 指向与 lock 一致的 runtime definition，并保持历史 definitions/mappings 不变；首个 runtime 按下文自举通过后再合并。
+
+不要从 fork 发布。`publish-runtime` 与 `publish-release` 操作只允许在 lock 的 `release_repository`（当前为 `goplus/spx`）执行。
+
+## 发布前验证
+
+```sh
+GODOT_SRC=/absolute/path/to/final-godot make doctor
+go list ./... | grep -v '/internal/webffi' | xargs go test
+git diff --check
+```
+
+此外至少完成以下验证：
+
+- 使用 lock 的最终 Godot SHA，以 `tests=yes` 编译并执行 Godot callback/module 测试。
+- native editor 与 runtime demo smoke；Web normal、worker、minigame、miniprogram 模式 smoke。
+- 录屏 live/offline、音频、SVG/复杂字体回归；Android/iOS 真机 smoke。
+- Windows 发布要求 ANGLE 时，确认 ANGLE 下载失败会使构建失败，而不是静默降级。
+
+## 首个 runtime 的三阶段自举
+
+`runtime-v2.4.0` 尚未公开时，普通平台 CI 无法下载它。为避免“CI 等 runtime、runtime 又等合并”的循环，在 `goplus/spx` 的冻结发布分支上执行：
+
+| `operation` | 结果 | `platforms` |
+| --- | --- | --- |
+| `dry-run` | 构建并校验，但不发布 | 通常为 `all` |
+| `publish-runtime` | 只发布不可变的 `runtime-v*` 资产 | 忽略 |
+| `publish-release` | 发布 runtime、SPX 产品与 npm | 必须为 `all` |
+
+`release_tag` 必须精确等于所选 commit 声明的 SPX tag。这里的产品 `platforms=all` 仅指 Web、macOS、Windows、Linux 包；Android/iOS 属于完整 runtime 资产矩阵和真机 smoke，不是 SPX 产品 target。
+
+1. 先使用 `release_tag=v3.2.0`、`platforms=all`、`operation=dry-run`。下载并检查所有 runtime/product artifacts，完成安装与 demo smoke。
+2. 对同一个 commit 设置 `operation=publish-runtime`。没有可复用版本时，该模式会构建、校验并公开全部 runtime 资产，但跳过 SPX 产品包、SPX release 和 npm。
+3. 让普通平台 CI 改用已公开 runtime 并全部通过；合并时不得改变 module/pack/recipe 身份输入。随后在最终 SPX commit 上使用 `platforms=all`、`operation=publish-release`，流程会验证并复用同一 runtime，再发布 SPX 产品与 npm。
+
+runtime manifest、`SHA256SUMS` 和 lock 的 required asset 集合必须完全一致；已公开 tag 的来源或资产不同会直接失败，不能覆盖。未公开的 runtime/SPX draft tag 必须指向当前 `GITHUB_SHA`；已公开 runtime 可来自前一阶段的 candidate commit，但只有完整复用契约一致时才能用于最终 SPX commit。SPX tag 始终指向最终 commit。如果合并修改了任一 runtime 身份输入，最终运行会拒绝复用，此时必须重新冻结并提升 `runtime_version`。
+
+## 后续版本维护
+
+- 仅 SPX 产品变化且 runtime 两类产物均未变化时，提升 SPX 版本，并新增一条指向既有 runtime 的显式原子映射。
+- Godot/module/toolchain 或 runtime pack 输出变化时，提升 `runtime_version`，并为新的 SPX 版本新增显式原子映射。
+- 每个原子 runtime definition 都必须有不可变的 `internal/release/runtime_locks/<runtime-version>.json` 快照；校验历史 manifest 时读取对应快照，不能读取更新后的默认 lock。
+- 发布新 runtime 前，新增该版本快照，并保持它的 canonical JSON 与 `runtime.lock.json` 完全一致；package 初始化、drift 与 catalog 测试会共同校验当前映射。runtime 一旦公开，其快照永久冻结。准备下一版时修改默认 lock 并新增另一份匹配快照，绝不能重写已发布快照。

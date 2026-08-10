@@ -24,22 +24,18 @@ import (
 	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 )
 
-const (
-	defaultTemplateProjectDir         = "cmd/spx/template/project"
-	defaultTemplateEditorWorkspaceDir = ".tmp/template-editor"
-)
+const defaultTemplateProjectDir = "cmd/spx/template/project"
 
 type workflowOpenTemplateEditorConfig struct {
-	templateDir  string
-	workspaceDir string
+	templateDir string
 }
 
-func openTemplateEditorWorkflow(cfg workflowOpenTemplateEditorConfig, runner scriptRunner) error {
+func openTemplateEditorWorkflow(cfg workflowOpenTemplateEditorConfig, runner shared.ScriptRunner) error {
 	if cfg.templateDir == "" {
 		cfg.templateDir = defaultTemplateProjectDir
 	}
 
-	templateProjectDir, err := resolveTemplateEditorPath(cfg.templateDir, runner.repoRootDir())
+	templateProjectDir, err := resolveTemplateEditorPath(cfg.templateDir, runner.RepoRootDir())
 	if err != nil {
 		return err
 	}
@@ -50,8 +46,8 @@ func openTemplateEditorWorkflow(cfg workflowOpenTemplateEditorConfig, runner scr
 	}
 
 	fmt.Fprintf(os.Stdout, "Opening template project directly: %s\n", templateProjectDir)
-	return runner.runCommand(
-		runner.repoRootDir(),
+	return runner.RunCommand(
+		runner.RepoRootDir(),
 		"gdspx"+version,
 		"--path", templateProjectDir,
 		"--editor",

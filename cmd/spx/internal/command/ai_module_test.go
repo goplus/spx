@@ -52,8 +52,8 @@ require github.com/goplus/spx/v3 v3.0.0-test //xgo:class
 	if !strings.Contains(goxMod, `import "`+builderai.ModulePath+`"`) {
 		t.Fatalf("gox.mod should import builder ai, got:\n%s", goxMod)
 	}
-	if !strings.Contains(goxMod, "runner github.com/goplus/spx/v3/cmd/spxrunner") {
-		t.Fatalf("gox.mod should be based on the embedded root template, got:\n%s", goxMod)
+	if strings.Contains(goxMod, "\nrunner ") {
+		t.Fatalf("gox.mod should not declare a legacy runner, got:\n%s", goxMod)
 	}
 
 	goMod := readTestFile(t, filepath.Join(projectRoot, "go.mod"))

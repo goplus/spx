@@ -20,22 +20,26 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"os"
+	"path/filepath"
+
+	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 )
 
+var osStderr = os.Stderr
+
+var errUsage = shared.ErrUsage
+
 type engineDownloadConfig struct {
-	runtime         bool
-	skipRuntimePack bool
-	platform        string
-	mode            string
+	runtime          bool
+	skipRuntimePack  bool
+	platform         string
+	mode             string
+	assetDir         string
+	sameRunArtifacts bool
 }
 
-type engineBuildConfig struct {
-	target   string
-	platform string
-	mode     string
-}
-
-func runEngine(args []string) error {
+func Run(args []string) error {
 	if len(args) == 0 {
 		printEngineUsage()
 		return errUsage
@@ -44,8 +48,6 @@ func runEngine(args []string) error {
 	switch args[0] {
 	case "download":
 		return runEngineDownload(args[1:])
-	case "build":
-		return runEngineBuild(args[1:])
 	case "exec":
 		return runEngineExec(args[1:])
 	case "help", "-h", "--help":
@@ -58,11 +60,10 @@ func runEngine(args []string) error {
 }
 
 func printEngineUsage() {
-	fmt.Fprintln(osStderr, "Usage: buildctl engine <download|build|exec> [options]")
+	fmt.Fprintln(osStderr, "Usage: buildctl engine <download|exec> [options]")
 	fmt.Fprintln(osStderr)
 	fmt.Fprintln(osStderr, "Commands:")
 	fmt.Fprintln(osStderr, "  download   Download runtime or platform engine assets")
-	fmt.Fprintln(osStderr, "  build      Build engine editor or templates")
 	fmt.Fprintln(osStderr, "  exec       Execute a command under the engine build lock")
 }
 
@@ -75,7 +76,7 @@ func runEngineDownload(args []string) error {
 		return err
 	}
 
-	repoRoot, err := findRepoRoot()
+	repoRoot, err := shared.FindRepoRoot()
 	if err != nil {
 		return err
 	}
@@ -92,8 +93,10 @@ func parseEngineDownloadArgs(args []string) (engineDownloadConfig, error) {
 	fs.BoolVar(&cfg.skipRuntimePack, "skip-runtime-pack", false, "skip downloading the published runtime asset bundle")
 	fs.StringVar(&cfg.platform, "platform", "", "download templates for android, ios, web, linux, windows, or macos")
 	fs.StringVar(&cfg.mode, "mode", "", "web mode: normal, worker, minigame, or miniprogram")
+	fs.StringVar(&cfg.assetDir, "asset-dir", "", "read release assets from a local directory instead of GitHub")
+	fs.BoolVar(&cfg.sameRunArtifacts, "same-run-artifacts", false, "allow a local current-workflow artifact directory without a final runtime manifest")
 	fs.Usage = func() {
-		fmt.Fprintln(osStderr, "Usage: buildctl engine download [--runtime] [--skip-runtime-pack] [--platform android|ios|web|linux|windows|macos] [--mode normal|worker|minigame|miniprogram]")
+		fmt.Fprintln(osStderr, "Usage: buildctl engine download [--runtime] [--skip-runtime-pack] [--platform android|ios|web|linux|windows|macos] [--mode normal|worker|minigame|miniprogram] [--asset-dir path] [--same-run-artifacts]")
 	}
 
 	if err := fs.Parse(args); err != nil {
@@ -110,6 +113,12 @@ func parseEngineDownloadArgs(args []string) (engineDownloadConfig, error) {
 }
 
 func (cfg *engineDownloadConfig) validate() error {
+	if cfg.assetDir != "" {
+		cfg.assetDir = filepath.Clean(cfg.assetDir)
+	}
+	if cfg.sameRunArtifacts && cfg.assetDir == "" {
+		return errors.New("--same-run-artifacts requires --asset-dir")
+	}
 	if cfg.skipRuntimePack && !cfg.runtime {
 		return errors.New("--skip-runtime-pack requires --runtime")
 	}
@@ -119,7 +128,7 @@ func (cfg *engineDownloadConfig) validate() error {
 	if cfg.runtime && cfg.mode != "" {
 		return errors.New("--runtime cannot be combined with --mode")
 	}
-	if err := validateOptionalPlatform(cfg.platform); err != nil {
+	if err := shared.ValidateOptionalPlatform(cfg.platform); err != nil {
 		return err
 	}
 	if cfg.platform == "web" && cfg.mode == "" {
@@ -129,71 +138,7 @@ func (cfg *engineDownloadConfig) validate() error {
 		if cfg.platform != "web" {
 			return errors.New("--mode requires --platform web")
 		}
-		if err := validateWebMode(cfg.mode); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func runEngineBuild(args []string) error {
-	cfg, err := parseEngineBuildArgs(args)
-	if err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			return nil
-		}
-		return err
-	}
-
-	repoRoot, err := findRepoRoot()
-	if err != nil {
-		return err
-	}
-	return buildEngine(cfg, repoRoot)
-}
-
-func parseEngineBuildArgs(args []string) (engineBuildConfig, error) {
-	cfg := engineBuildConfig{}
-
-	fs := flag.NewFlagSet("engine build", flag.ContinueOnError)
-	fs.SetOutput(osStderr)
-	fs.StringVar(&cfg.target, "target", "", "engine build target: editor or template")
-	fs.StringVar(&cfg.platform, "platform", "", "build platform: android, ios, web, linux, windows, or macos")
-	fs.StringVar(&cfg.mode, "mode", "", "web mode: normal, worker, minigame, or miniprogram")
-	fs.Usage = func() {
-		fmt.Fprintln(osStderr, "Usage: buildctl engine build --target editor|template [--platform android|ios|web|linux|windows|macos] [--mode normal|worker|minigame|miniprogram]")
-	}
-
-	if err := fs.Parse(args); err != nil {
-		return engineBuildConfig{}, err
-	}
-	if fs.NArg() != 0 {
-		fs.Usage()
-		return engineBuildConfig{}, errUsage
-	}
-	if err := cfg.validate(); err != nil {
-		return engineBuildConfig{}, err
-	}
-	return cfg, nil
-}
-
-func (cfg *engineBuildConfig) validate() error {
-	switch cfg.target {
-	case "editor", "template":
-	default:
-		return fmt.Errorf("unsupported build target: %s", cfg.target)
-	}
-	if err := validateOptionalPlatform(cfg.platform); err != nil {
-		return err
-	}
-	if cfg.platform == "web" && cfg.mode == "" {
-		cfg.mode = "normal"
-	}
-	if cfg.mode != "" {
-		if cfg.platform != "web" {
-			return errors.New("--mode requires --platform web")
-		}
-		if err := validateWebMode(cfg.mode); err != nil {
+		if err := shared.ValidateWebMode(cfg.mode); err != nil {
 			return err
 		}
 	}

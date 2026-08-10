@@ -27,27 +27,30 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/goplus/spx/v3/internal/release"
 )
 
-type commandRunner struct {
-	repoRoot string
-}
-
-func (r commandRunner) runScript(relativePath string, args ...string) error {
-	scriptPath := filepath.Join(r.repoRoot, relativePath)
+func (r CommandRunner) RunScript(relativePath string, args ...string) error {
+	scriptPath := filepath.Join(r.RepoRoot, relativePath)
 	cmdArgs := append([]string{scriptPath}, args...)
+	env, err := buildctlCommandEnv()
+	if err != nil {
+		return fmt.Errorf("resolve script environment: %w", err)
+	}
 	cmd := exec.Command("bash", cmdArgs...)
-	cmd.Dir = r.repoRoot
+	cmd.Dir = r.RepoRoot
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
+	cmd.Env = envMapToSlice(env)
 	return cmd.Run()
 }
 
-func (r commandRunner) runCommand(workdir string, name string, args ...string) error {
+func (r CommandRunner) RunCommand(workdir string, name string, args ...string) error {
 	dir := workdir
 	if !filepath.IsAbs(dir) {
-		dir = filepath.Join(r.repoRoot, workdir)
+		dir = filepath.Join(r.RepoRoot, workdir)
 	}
 
 	env, err := buildctlCommandEnv()
@@ -68,8 +71,8 @@ func (r commandRunner) runCommand(workdir string, name string, args ...string) e
 	return cmd.Run()
 }
 
-func (r commandRunner) listDemoDirs() ([]string, error) {
-	entries, err := os.ReadDir(filepath.Join(r.repoRoot, "tutorial"))
+func (r CommandRunner) ListDemoDirs() ([]string, error) {
+	entries, err := os.ReadDir(filepath.Join(r.RepoRoot, "tutorial"))
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +87,7 @@ func (r commandRunner) listDemoDirs() ([]string, error) {
 	return demos, nil
 }
 
-func (r commandRunner) stopWebServers() error {
+func (r CommandRunner) StopWebServers() error {
 	if runtime.GOOS == "windows" || os.Getenv("OS") == "Windows_NT" {
 		_ = exec.Command("taskkill", "/F", "/FI", "IMAGENAME eq python.exe").Run()
 		_ = exec.Command("taskkill", "/F", "/FI", "IMAGENAME eq python3.exe").Run()
@@ -126,6 +129,7 @@ func buildctlCommandEnv() (map[string]string, error) {
 		pathDirs = append(pathDirs, filepath.Join(goRoot, "bin"))
 	}
 	setPathEnv(env, prependToPath(pathEnvValue(env), pathDirs...))
+	env["GOTOOLCHAIN"] = "go" + release.DefaultRuntimeLock().Toolchain.Go
 	return env, nil
 }
 

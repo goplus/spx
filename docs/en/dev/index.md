@@ -15,6 +15,7 @@ This directory contains development documentation for SPX users and engine contr
 
 - [Architecture](engine/architecture.md)
 - [Build commands](engine/cmd_make.md)
+- [SPX and Godot runtime release flow](engine/release.md)
 - [Binding code generation](engine/code_generator.md)
 - [Coordinate systems and the Godot boundary](engine/coordinate_system.md)
 - [Physics API design](engine/physic_api.md)
@@ -36,19 +37,25 @@ This directory contains development documentation for SPX users and engine contr
 For normal SPX development:
 
 ```sh
-make buildctl
-make prepare-host
+make setup
 make list-demos
 make run DEMO_INDEX=2
 ```
 
-For a complete local engine and Web development environment:
+For Web development with prebuilt assets:
 
 ```sh
-GODOT_SRC=/absolute/path/to/godot make build-dev MODE=normal
+make setup-web MODE=normal
+make runweb DEMO_INDEX=2
 ```
 
-Run `make help` for the current command list. The Makefile and implementation are authoritative when a design note describes future work.
+For a complete local engine and Web development environment built from source:
+
+```sh
+GODOT_SRC=/absolute/path/to/godot make dev MODE=normal
+```
+
+Run `make help` for the primary command list. Asset preparation and source builds use the single `setup`, `setup-web`, and `dev` entry points.
 
 ## Contributing
 

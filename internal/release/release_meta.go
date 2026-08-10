@@ -17,21 +17,36 @@
 // Package release provides shared SPX/runtime release metadata.
 package release
 
+import "fmt"
+
 const (
-	// RuntimeURLBase is the base URL for downloading runtime executables.
-	// Format: https://github.com/goplus/godot/releases/download/spx{runtimeVersion}/{platform}-{arch}.zip
-	RuntimeURLBase = "https://github.com/goplus/godot/releases/download/"
-
-	// SpxReleaseURLBase is the base URL for downloading SPX release assets.
-	// Format: https://github.com/goplus/spx/releases/download/{spxTag}/{assetName}
-	SpxReleaseURLBase = "https://github.com/goplus/spx/releases/download/"
-
 	// RuntimeTag is the filename prefix for the runtime binary/pck files.
 	RuntimeTag = "gdspxrt"
 
-	// RuntimeAssetZipName is the fixed runtime asset bundle name published under each SPX release tag.
+	// RuntimeAssetZipName is the standard runtime pack name. SPX v2.0.0 used
+	// an older versioned filename, which is retained in its release metadata.
 	RuntimeAssetZipName = "spx-runtime-assets.zip"
+
+	// currentSPXVersion selects the SPX release declared by this source tree.
+	// Runtime build identity comes from runtime.lock.json, not from this selector.
+	currentSPXVersion = "v3.2.0"
+
+	legacyEngineRepository  = "goplus/godot"
+	legacyRuntimeRepository = "goplus/spx"
 )
+
+// AssetRelease identifies a GitHub release that owns a set of assets.
+// Repository uses the owner/name form and Tag is the exact Git tag.
+type AssetRelease struct {
+	Repository   string
+	Tag          string
+	ManifestName string
+}
+
+// DownloadURL returns the GitHub release download URL for assetName.
+func (r AssetRelease) DownloadURL(assetName string) string {
+	return "https://github.com/" + r.Repository + "/releases/download/" + r.Tag + "/" + assetName
+}
 
 // ReleaseMeta captures the selected SPX/runtime asset mapping.
 type ReleaseMeta struct {
@@ -39,81 +54,195 @@ type ReleaseMeta struct {
 	Runtime    RuntimeRelease
 }
 
-// RuntimeRelease describes the Godot runtime bundle used by SPX.
+// RuntimeRelease describes the runtime bundle used by SPX. Legacy releases
+// keep engine binaries and the runtime pack in separate GitHub releases. The
+// current atomic release stores both roles together and publishes a manifest.
 type RuntimeRelease struct {
-	Version string
+	Version          string
+	EngineAssets     AssetRelease
+	RuntimeAssets    AssetRelease
+	RuntimePackAsset string
 }
 
-type releaseVersionMapping struct {
+type spxRuntimeMapping struct {
 	spxVersion     string
 	runtimeVersion string
 }
 
-var releaseVersionMappings = []releaseVersionMapping{
-	{"v2.0.0", "2.2.0"},
-	{"v2.0.1", "2.2.1"},
-	{"v2.0.2", "2.2.2"},
-	{"v2.0.3", "2.2.3"},
-	{"v2.0.4", "2.2.4"},
-	{"v3.0.0", "2.2.6"},
-	{"v3.1.0", "2.3.0"},
+// Runtime releases are defined once, independently from the SPX versions that
+// consume them. This lets later SPX releases reuse an identical runtime without
+// redefining or silently replacing the runtime's asset locations.
+var runtimeReleaseDefinitions = []RuntimeRelease{
+	newLegacyRuntimeRelease("2.2.0", "v2.0.0", "gdspxrt.pck.2.2.0.zip"),
+	newLegacyRuntimeRelease("2.2.1", "v2.0.1", RuntimeAssetZipName),
+	newLegacyRuntimeRelease("2.2.2", "v2.0.2", RuntimeAssetZipName),
+	newLegacyRuntimeRelease("2.2.3", "v2.0.3", RuntimeAssetZipName),
+	newLegacyRuntimeRelease("2.2.4", "v2.0.4", RuntimeAssetZipName),
+	newLegacyRuntimeRelease("2.2.6", "v3.0.0", RuntimeAssetZipName),
+	newLegacyRuntimeRelease("2.3.0", "v3.1.0", RuntimeAssetZipName),
+	newAtomicRuntimeRelease("2.4.0", "goplus/spx", "runtime-manifest.json"),
 }
 
-func newReleaseMeta(mapping releaseVersionMapping) ReleaseMeta {
-	return ReleaseMeta{
-		SPXVersion: mapping.spxVersion,
-		Runtime: RuntimeRelease{
-			Version: mapping.runtimeVersion,
+var spxRuntimeMappings = []spxRuntimeMapping{
+	{spxVersion: "v2.0.0", runtimeVersion: "2.2.0"},
+	{spxVersion: "v2.0.1", runtimeVersion: "2.2.1"},
+	{spxVersion: "v2.0.2", runtimeVersion: "2.2.2"},
+	{spxVersion: "v2.0.3", runtimeVersion: "2.2.3"},
+	{spxVersion: "v2.0.4", runtimeVersion: "2.2.4"},
+	{spxVersion: "v3.0.0", runtimeVersion: "2.2.6"},
+	{spxVersion: "v3.1.0", runtimeVersion: "2.3.0"},
+	{spxVersion: "v3.2.0", runtimeVersion: "2.4.0"},
+}
+
+func newLegacyRuntimeRelease(runtimeVersion, runtimeAssetTag, runtimePackName string) RuntimeRelease {
+	return RuntimeRelease{
+		Version: runtimeVersion,
+		EngineAssets: AssetRelease{
+			Repository: legacyEngineRepository,
+			Tag:        "spx" + runtimeVersion,
 		},
+		RuntimeAssets: AssetRelease{
+			Repository: legacyRuntimeRepository,
+			Tag:        runtimeAssetTag,
+		},
+		RuntimePackAsset: runtimePackName,
 	}
 }
 
-var releaseMetaBySPXVersion = func() map[string]ReleaseMeta {
-	result := make(map[string]ReleaseMeta, len(releaseVersionMappings))
-	for _, item := range releaseVersionMappings {
-		result[item.spxVersion] = newReleaseMeta(item)
+func newAtomicRuntimeRelease(runtimeVersion, repository, manifestName string) RuntimeRelease {
+	assets := AssetRelease{
+		Repository:   repository,
+		Tag:          "runtime-v" + runtimeVersion,
+		ManifestName: manifestName,
 	}
-	return result
-}()
-
-var releaseMetaByRuntimeVersion = func() map[string]ReleaseMeta {
-	result := make(map[string]ReleaseMeta, len(releaseVersionMappings))
-	for _, item := range releaseVersionMappings {
-		result[item.runtimeVersion] = newReleaseMeta(item)
+	return RuntimeRelease{
+		Version:          runtimeVersion,
+		EngineAssets:     assets,
+		RuntimeAssets:    assets,
+		RuntimePackAsset: RuntimeAssetZipName,
 	}
-	return result
-}()
+}
 
-// DefaultReleaseMeta returns the latest known released metadata.
+type releaseCatalog struct {
+	runtimeByVersion    map[string]RuntimeRelease
+	runtimeVersionBySPX map[string]string
+	primarySPXByRuntime map[string]string
+}
+
+func newReleaseCatalog(runtimeReleases []RuntimeRelease, mappings []spxRuntimeMapping) (releaseCatalog, error) {
+	catalog := releaseCatalog{
+		runtimeByVersion:    make(map[string]RuntimeRelease, len(runtimeReleases)),
+		runtimeVersionBySPX: make(map[string]string, len(mappings)),
+		primarySPXByRuntime: make(map[string]string, len(runtimeReleases)),
+	}
+	for _, runtimeRelease := range runtimeReleases {
+		if runtimeRelease.Version == "" {
+			return releaseCatalog{}, fmt.Errorf("release: runtime release version must not be empty")
+		}
+		if _, exists := catalog.runtimeByVersion[runtimeRelease.Version]; exists {
+			return releaseCatalog{}, fmt.Errorf("release: duplicate runtime release %q", runtimeRelease.Version)
+		}
+		catalog.runtimeByVersion[runtimeRelease.Version] = runtimeRelease
+	}
+	for _, mapping := range mappings {
+		if mapping.spxVersion == "" {
+			return releaseCatalog{}, fmt.Errorf("release: SPX version must not be empty")
+		}
+		if _, exists := catalog.runtimeVersionBySPX[mapping.spxVersion]; exists {
+			return releaseCatalog{}, fmt.Errorf("release: duplicate SPX release %q", mapping.spxVersion)
+		}
+		if _, exists := catalog.runtimeByVersion[mapping.runtimeVersion]; !exists {
+			return releaseCatalog{}, fmt.Errorf("release: SPX release %q references unknown runtime %q", mapping.spxVersion, mapping.runtimeVersion)
+		}
+		catalog.runtimeVersionBySPX[mapping.spxVersion] = mapping.runtimeVersion
+		if _, exists := catalog.primarySPXByRuntime[mapping.runtimeVersion]; !exists {
+			catalog.primarySPXByRuntime[mapping.runtimeVersion] = mapping.spxVersion
+		}
+	}
+	for runtimeVersion := range catalog.runtimeByVersion {
+		if _, exists := catalog.primarySPXByRuntime[runtimeVersion]; !exists {
+			return releaseCatalog{}, fmt.Errorf("release: runtime %q has no SPX release mapping", runtimeVersion)
+		}
+	}
+	return catalog, nil
+}
+
+func mustNewReleaseCatalog(runtimeReleases []RuntimeRelease, mappings []spxRuntimeMapping) releaseCatalog {
+	catalog, err := newReleaseCatalog(runtimeReleases, mappings)
+	if err != nil {
+		panic(err)
+	}
+	return catalog
+}
+
+func (c releaseCatalog) resolveSPXVersion(spxVersion string) (ReleaseMeta, bool) {
+	runtimeVersion, ok := c.runtimeVersionBySPX[spxVersion]
+	if !ok {
+		return ReleaseMeta{}, false
+	}
+	return ReleaseMeta{SPXVersion: spxVersion, Runtime: c.runtimeByVersion[runtimeVersion]}, true
+}
+
+func (c releaseCatalog) resolveRuntimeVersion(runtimeVersion string) (ReleaseMeta, bool) {
+	runtimeRelease, ok := c.runtimeByVersion[runtimeVersion]
+	if !ok {
+		return ReleaseMeta{}, false
+	}
+	// A runtime can serve multiple SPX releases. Keep the first declared SPX
+	// mapping as the stable compatibility value for this legacy reverse API.
+	return ReleaseMeta{SPXVersion: c.primarySPXByRuntime[runtimeVersion], Runtime: runtimeRelease}, true
+}
+
+var defaultReleaseCatalog = mustNewReleaseCatalog(runtimeReleaseDefinitions, spxRuntimeMappings)
+
+// DefaultReleaseMeta returns the current configured SPX/runtime mapping.
 func DefaultReleaseMeta() ReleaseMeta {
-	if len(releaseVersionMappings) == 0 {
-		panic("release: releaseVersionMappings is empty")
+	meta, ok := defaultReleaseCatalog.resolveSPXVersion(currentSPXVersion)
+	if !ok {
+		panic("release: current SPX version is not mapped")
 	}
-	item := releaseVersionMappings[len(releaseVersionMappings)-1]
-	return newReleaseMeta(item)
+	lock := DefaultRuntimeLock()
+	wantAssets := AssetRelease{
+		Repository:   lock.ReleaseRepository,
+		Tag:          lock.RuntimeReleaseTag(),
+		ManifestName: lock.Manifest,
+	}
+	wantRuntime := RuntimeRelease{
+		Version:          lock.RuntimeVersion,
+		EngineAssets:     wantAssets,
+		RuntimeAssets:    wantAssets,
+		RuntimePackAsset: RuntimeAssetZipName,
+	}
+	if meta.Runtime != wantRuntime {
+		panic("release: current release mapping does not match runtime.lock.json")
+	}
+	return meta
 }
 
-// CurrentReleaseMeta is kept as a compatibility alias for the default release metadata.
-func CurrentReleaseMeta() ReleaseMeta {
-	return DefaultReleaseMeta()
+// ResolveReleaseMetaForSPXVersion resolves published runtime metadata for an
+// SPX version. "latest" is an explicit alias for the latest known release.
+func ResolveReleaseMetaForSPXVersion(spxVersion string) (ReleaseMeta, error) {
+	if spxVersion == "latest" {
+		return DefaultReleaseMeta(), nil
+	}
+	if meta, ok := defaultReleaseCatalog.resolveSPXVersion(spxVersion); ok {
+		return meta, nil
+	}
+	return ReleaseMeta{}, fmt.Errorf("release: unknown SPX version %q", spxVersion)
 }
 
-// ReleaseMetaForSPXVersion resolves runtime/pck metadata for an SPX module version.
-// Unknown versions fall back to the latest known runtime assets.
-func ReleaseMetaForSPXVersion(spxVersion string) ReleaseMeta {
-	if meta, ok := releaseMetaBySPXVersion[spxVersion]; ok {
-		return meta
+// ResolveReleaseMetaForRuntimeVersion resolves published runtime metadata for
+// a runtime version. "latest" is an explicit alias for the current release.
+// If several SPX releases share an exact runtime, SPXVersion is the first
+// declared mapping so appending a new SPX release cannot rewrite old metadata.
+func ResolveReleaseMetaForRuntimeVersion(runtimeVersion string) (ReleaseMeta, error) {
+	if runtimeVersion == "latest" {
+		return DefaultReleaseMeta(), nil
 	}
-	return DefaultReleaseMeta()
-}
-
-// ReleaseMetaForRuntimeVersion resolves runtime/pck metadata for a runtime version.
-// Unknown versions fall back to the latest known runtime assets.
-func ReleaseMetaForRuntimeVersion(runtimeVersion string) ReleaseMeta {
-	if meta, ok := releaseMetaByRuntimeVersion[runtimeVersion]; ok {
-		return meta
+	if meta, ok := defaultReleaseCatalog.resolveRuntimeVersion(runtimeVersion); ok {
+		return meta, nil
 	}
-	return DefaultReleaseMeta()
+	return ReleaseMeta{}, fmt.Errorf("release: unknown runtime version %q", runtimeVersion)
 }
 
 // RuntimeBinaryTag returns the runtime executable/pck base filename.
@@ -123,10 +252,32 @@ func (m ReleaseMeta) RuntimeBinaryTag() string {
 
 // RuntimeDownloadURL returns the runtime archive URL for the given zip asset name.
 func (m ReleaseMeta) RuntimeDownloadURL(zipName string) string {
-	return RuntimeURLBase + "spx" + m.Runtime.Version + "/" + zipName
+	return m.Runtime.EngineAssets.DownloadURL(zipName)
 }
 
 // RuntimeAssetDownloadURL returns the packaged runtime asset bundle URL for the given zip asset name.
 func (m ReleaseMeta) RuntimeAssetDownloadURL(zipName string) string {
-	return SpxReleaseURLBase + m.SPXVersion + "/" + zipName
+	return m.Runtime.RuntimeAssets.DownloadURL(zipName)
+}
+
+// RuntimePackAssetName returns the exact runtime pack filename published for
+// this SPX version. SPX v2.0.0 predates RuntimeAssetZipName.
+func (m ReleaseMeta) RuntimePackAssetName() string {
+	return m.Runtime.RuntimePackAsset
+}
+
+// RequiresRuntimeManifest reports whether this mapping uses the current atomic
+// runtime release contract. Legacy releases intentionally have no manifest.
+func (m ReleaseMeta) RequiresRuntimeManifest() bool {
+	return m.Runtime.RuntimeAssets.ManifestName != ""
+}
+
+// RuntimeManifestDownloadURL returns the manifest URL for the selected atomic
+// runtime release, or an empty string for a legacy release.
+func (m ReleaseMeta) RuntimeManifestDownloadURL() string {
+	if !m.RequiresRuntimeManifest() {
+		return ""
+	}
+	assets := m.Runtime.RuntimeAssets
+	return assets.DownloadURL(assets.ManifestName)
 }

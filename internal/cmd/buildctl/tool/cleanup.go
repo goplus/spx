@@ -21,16 +21,18 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+
+	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 )
 
 func cleanInstalledAssets() error {
-	goPath, err := ensureGoPath()
+	goPath, err := shared.EnsureGoPath()
 	if err != nil {
 		return err
 	}
 
 	binDir := filepath.Join(goPath, "bin")
-	if !fileExists(binDir) {
+	if !shared.FileExists(binDir) {
 		fmt.Fprintf(os.Stdout, "No GOPATH bin directory found at %s\n", binDir)
 		return nil
 	}

@@ -31,6 +31,14 @@ xgo_autogen*.go
 /godot/
 /.gdspx_web_server*.pid
 
+# SCons writes custom-module object files next to their sources.
+/godot_modules/**/*.o
+/godot_modules/**/*.os
+/godot_modules/**/*.ox
+/godot_modules/**/*.obj
+/godot_modules/**/__pycache__/
+/godot_modules/**/*.pyc
+
 # Tutorial/test generated outputs
 tutorial/**/.temp/
 tutorial/**/project/

@@ -366,7 +366,7 @@ func (cmd *CmdTool) mergeJSFiles(jsDir string, isCompressed bool) (err error) {
 
 	writer := bufio.NewWriter(output)
 
-	compressionFlag := fmt.Sprintf("var FFI = null;\nconst isWasmCompressed = %t;\n\n", isCompressed)
+	compressionFlag := fmt.Sprintf("globalThis['FFI'] = null;\nconst isWasmCompressed = %t;\n\n", isCompressed)
 	if _, err := writer.WriteString(compressionFlag); err != nil {
 		return err
 	}

@@ -113,7 +113,7 @@ function tryRunGoWasm() {
           self[key] = spxfuncs[key].bind(spxfuncs);
       }
   });
-  self.Module = Module;
+  self['Module'] = Module;
 
   if (self.goBridge && self.goBridge.isReady) {
     try {
@@ -137,12 +137,12 @@ async function initExtensionWasm() {
   }
   const workerId = Module['workerID'] || 'main';
   const threadInfo = typeof importScripts !== 'undefined' ? 'Worker' : 'MainThread';
-  FFI = null
+  globalThis['FFI'] = null
 
   try {
     // Load Go WASM module
     await loadGoWasmModule();
-    FFI = Module["FFI"];
+    globalThis['FFI'] = Module["FFI"];
     tryRunGoWasm()
     return true;
   } catch (error) {
@@ -178,7 +178,7 @@ function handleCallResponse(data) {
 
 // Expose functions to global scope for godot.editor.js to call
 if (typeof self !== 'undefined') {
-  self.initExtensionWasm = initExtensionWasm;
+  self['initExtensionWasm'] = initExtensionWasm;
 }
 
 

@@ -20,6 +20,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 )
 
 type recordedCall struct {
@@ -40,7 +42,7 @@ type recordingRunner struct {
 	commandHook func(workdir string, name string, args ...string) error
 }
 
-func (r *recordingRunner) runScript(relativePath string, args ...string) error {
+func (r *recordingRunner) RunScript(relativePath string, args ...string) error {
 	r.calls = append(r.calls, recordedCall{
 		script: relativePath,
 		args:   append([]string(nil), args...),
@@ -48,7 +50,7 @@ func (r *recordingRunner) runScript(relativePath string, args ...string) error {
 	return nil
 }
 
-func (r *recordingRunner) runCommand(workdir string, name string, args ...string) error {
+func (r *recordingRunner) RunCommand(workdir string, name string, args ...string) error {
 	dir := workdir
 	if r.repoRoot != "" && !filepath.IsAbs(dir) {
 		dir = filepath.Join(r.repoRoot, dir)
@@ -64,7 +66,7 @@ func (r *recordingRunner) runCommand(workdir string, name string, args ...string
 	return nil
 }
 
-func (r *recordingRunner) repoRootDir() string {
+func (r *recordingRunner) RepoRootDir() string {
 	if r.repoRoot == "" {
 		return "."
 	}
@@ -164,7 +166,7 @@ func mustWriteFile(t *testing.T, path string, data []byte) {
 func mustDefaultRuntimeVersion(t *testing.T) string {
 	t.Helper()
 
-	version, err := defaultRuntimeVersion()
+	version, err := shared.DefaultRuntimeVersion()
 	if err != nil {
 		t.Fatal(err)
 	}

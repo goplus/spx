@@ -4,8 +4,22 @@ on:
   push:
     branches:
       - dev
-  release:
-    types: [created, edited]
+  workflow_call:
+    inputs:
+      target:
+        description: Full SPX commit SHA to publish
+        required: true
+        type: string
+      release_version:
+        description: Release version without the leading v; empty publishes a development version
+        required: false
+        default: ''
+        type: string
+      release_artifact:
+        description: Current-run Actions artifact containing the already verified spx_web.zip
+        required: false
+        default: ''
+        type: string
   workflow_dispatch:
     inputs:
       target:
@@ -18,7 +32,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: web-package-${{ github.event_name == 'workflow_dispatch' && inputs.target || github.event_name == 'release' && github.event.release.tag_name || github.sha }}
+  group: web-package-${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && inputs.target || github.sha }}
   cancel-in-progress: false
 
 jobs:
@@ -27,7 +41,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Validate dispatch target
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call'
         env:
           TARGET: ${{ inputs.target }}
         run: |
@@ -50,10 +64,17 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.target || github.event_name == 'release' && github.event.release.tag_name || github.sha }}
+          ref: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && inputs.target || github.sha }}
+
+      - name: Download verified release Web bundle
+        if: inputs.release_artifact != ''
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ inputs.release_artifact }}
+          path: .
 
       - name: Install Linux dependencies
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && inputs.release_artifact == ''
         run: |
           sudo apt-get update
           sudo apt-get install \
@@ -69,6 +90,7 @@ jobs:
             brotli
 
       - name: Set up toolchain and engine assets
+        if: inputs.release_artifact == ''
         uses: ./.github/actions/deps
         with:
           setup-mode: web
@@ -81,43 +103,41 @@ jobs:
           registry-url: https://registry.npmjs.org
 
       - name: Compute pseudo-version
-        if: github.event_name != 'release'
+        if: inputs.release_version == ''
         run: |
           SPX_VERSION="$(go run ./.github/scripts/pseudo_version.go HEAD)"
           echo "[info] SPX version: ${SPX_VERSION}"
           echo "SPX_VERSION=${SPX_VERSION}" >> "${GITHUB_ENV}"
 
       - name: Compute release version
-        if: github.event_name == 'release'
+        if: inputs.release_version != ''
         env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_VERSION: ${{ inputs.release_version }}
         run: |
-          SPX_VERSION="${RELEASE_TAG#v}"
+          SPX_VERSION="${RELEASE_VERSION#v}"
           echo "[info] SPX version: ${SPX_VERSION}"
           echo "SPX_VERSION=${SPX_VERSION}" >> "${GITHUB_ENV}"
 
       - name: Build web bundle
+        if: inputs.release_artifact == ''
         run: |
           "$BUILDCTL" runtime export-web --mode normal
 
       - name: Publish web package to npm
+        env:
+          IS_RELEASE: ${{ inputs.release_version != '' }}
         run: |
           set -euo pipefail
 
           npm_package_version="${SPX_VERSION#v}"
           npm_dist_tag="dev"
-          if [[ "${GITHUB_EVENT_NAME}" == "release" ]]; then
+          if [[ "${IS_RELEASE}" == "true" ]]; then
             npm_dist_tag="latest"
             if [[ "${npm_package_version}" == *-* ]]; then
               npm_dist_tag="next"
             fi
           elif git tag --points-at HEAD --list "v${npm_package_version}" | grep -qx "v${npm_package_version}"; then
-            echo "[info] v${npm_package_version} is an exact tag; leave npm publishing to the release event"
-            exit 0
-          fi
-
-          if npm view "@xgo-pkgs/spx@${npm_package_version}" version >/dev/null 2>&1; then
-            echo "[info] @xgo-pkgs/spx@${npm_package_version} already exists; skip npm publish"
+            echo "[info] v${npm_package_version} is an exact tag; leave npm publishing to the unified release workflow"
             exit 0
           fi
 
@@ -126,4 +146,20 @@ jobs:
             "${npm_package_version}" \
             .npm/spx
 
-          npm publish .npm/spx --access public --tag "${npm_dist_tag}"
+          mkdir -p .npm/packages
+          pack_json="$(npm pack .npm/spx --json --pack-destination .npm/packages)"
+          package_filename="$(jq -r '.[0].filename' <<< "$pack_json")"
+          local_integrity="$(jq -r '.[0].integrity' <<< "$pack_json")"
+          package_path=".npm/packages/${package_filename}"
+
+          if npm view "@xgo-pkgs/spx@${npm_package_version}" version >/dev/null 2>&1; then
+            remote_integrity="$(npm view "@xgo-pkgs/spx@${npm_package_version}" dist.integrity)"
+            if [ "$remote_integrity" != "$local_integrity" ]; then
+              echo "[error] Existing npm package integrity $remote_integrity does not match $local_integrity" >&2
+              exit 1
+            fi
+            echo "[info] Identical @xgo-pkgs/spx@${npm_package_version} already exists"
+            exit 0
+          fi
+
+          npm publish "$package_path" --access public --tag "${npm_dist_tag}"

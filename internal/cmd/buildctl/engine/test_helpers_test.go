@@ -20,10 +20,16 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 )
 
 type runtimeFixture struct {
 	repoRoot string
+}
+
+func fileExists(path string) bool {
+	return shared.FileExists(path)
 }
 
 func newRuntimeFixtureRunner(t *testing.T) *runtimeFixture {
@@ -38,7 +44,7 @@ func newRuntimeFixtureRunner(t *testing.T) *runtimeFixture {
 func mustDefaultRuntimeVersion(t *testing.T) string {
 	t.Helper()
 
-	version, err := defaultRuntimeVersion()
+	version, err := shared.DefaultRuntimeVersion()
 	if err != nil {
 		t.Fatal(err)
 	}
