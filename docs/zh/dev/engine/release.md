@@ -25,20 +25,28 @@ manifest 分别记录 `module_tree`、`runtime_pack_source_sha256` 和 `build_re
 
 ## 冻结顺序
 
-1. 先合并 Godot 改动并取得最终 commit。merge 或 squash 可能改变 SHA，最终 commit 产生后不要继续保留 PR head pin。
-2. 将该 commit 与持久 branch/tag（例如 `spx4.4.1`）一起固定。以下单次操作会校验并同时重写 canonical `runtime.lock.json` 与 current snapshot；更新已有 snapshot 时必须显式确认该 runtime 尚未发布：
+1. 先选定精确的 Godot candidate commit，以及最终承载它的持久 branch/tag（例如 `spx4.4.1`）。在该 commit 进入 canonical ref 之前，只允许为尚未发布的 runtime 固定它并执行 exact-SHA dry-run：
 
    ```sh
    make pin-godot \
      GODOT_SHA=<40-character-sha> \
      GODOT_REF=spx4.4.1 \
-     UNPUBLISHED_RUNTIME=1
+     UNPUBLISHED_RUNTIME=1 \
+     GODOT_PREMERGE_CANDIDATE=1
    python3 .github/scripts/runtime_lock_snapshot.py --check
    ```
 
-   新 runtime version 尚无 snapshot 时省略 `UNPUBLISHED_RUNTIME=1`。它明确表示当前 snapshot 仍可安全覆盖；runtime 一旦公开就绝不能再设置。commit 决定精确的引擎源码，ref 让 shallow fetch 可以取得该 commit；两者都属于 canonical lock。
-3. 在 `.github/workflows/release.yml` 中独立使用完整 SHA 固定 reusable workflow 的实现。`uses: ...@SHA` 选择的是 workflow 代码，不是 Godot 源码，不要求与 `godot.commit` 相等。
-4. 在 `goplus/spx` 的发布分支冻结 SPX candidate commit。确认 `currentSPXVersion` 通过 `spxRuntimeMappings` 指向与 lock 一致的 runtime definition，并保持历史 definitions/mappings 不变；首个 runtime 按下文自举通过后再合并。
+   新 runtime version 尚无 snapshot 时省略 `UNPUBLISHED_RUNTIME=1`。它表示当前 snapshot 仍可安全覆盖；runtime 一旦公开就绝不能再设置。`GODOT_PREMERGE_CANDIDATE=1` 的权限更窄：只允许 pin 操作记录尚未进入 `godot.ref` 的 commit，不能削弱 release verifier，也不能授权发布。
+2. 在 `.github/workflows/release.yml` 中独立使用完整 SHA 固定 reusable workflow 的实现。`uses: ...@SHA` 选择的是 workflow 代码，不是 Godot 源码，不要求与 `godot.commit` 相等，也不受 source ancestry 规则约束。
+3. 在 `goplus/spx` 的发布分支冻结 SPX candidate commit。确认 `currentSPXVersion` 通过 `spxRuntimeMappings` 指向与 lock 一致的 runtime definition，并保持历史 definitions/mappings 不变。执行 release `dry-run`；它会构建 lock 中精确的 Godot commit，并在 workflow summary 标出 ancestry 结果。只有 verifier 已确认可获取、以 canonical ref tip 为祖先但尚未被该 ref 包含的 commit，才会标记为 candidate-only；无关 commit、ref 无法解析或比较失败会直接阻断 dry-run。
+4. 将该 Godot commit 原样 merge 或提升到 `godot.ref`，然后校验发布边界：
+
+   ```sh
+   python3 .github/scripts/runtime_lock_snapshot.py --verify-godot-ancestry
+   ```
+
+   普通 merge 会保留 candidate 的祖先关系；squash 或 rebase 会改变源码身份，此时必须重新固定最终 commit 并重跑 dry-run，不能发布旧 candidate SHA。
+5. ancestry verifier 成功后才能发布新的 runtime。resolver 判定必须构建 runtime 时，两种 publish 操作都会先在 release setup 中运行同一个严格 verifier，再启动 Godot/runtime 构建；长构建结束后，`publish-runtime` 还会在创建或上传 release 前立即复验。已经完整校验的公开 runtime 属于不可变复用，不要求其历史 source ref 永久存在。
 
 不要从 fork 发布。`publish-runtime` 与 `publish-release` 操作只允许在 lock 的 `release_repository`（当前为 `goplus/spx`）执行。
 
@@ -47,6 +55,7 @@ manifest 分别记录 `module_tree`、`runtime_pack_source_sha256` 和 `build_re
 ```sh
 GODOT_SRC=/absolute/path/to/final-godot make doctor
 python3 .github/scripts/runtime_lock_snapshot.py --check
+python3 .github/scripts/runtime_lock_snapshot.py --verify-godot-ancestry
 go list ./... | grep -v '/internal/webffi' | xargs go test
 git diff --check
 ```
@@ -68,18 +77,20 @@ git diff --check
 
 这个切换同时避免发布循环与 runtime 重复构建。普通 CI 不构建完整 release runtime；只有 release workflow 执行该构建。release assemble 在复用或发布前仍会下载全部资产，并校验 `SHA256SUMS` 与 manifest 中每个文件的 checksum。
 
+canonical-ref ancestry 规则刻意只用于 release。普通 runner 与 module-integration workflow 可以测试 lock 中精确的 candidate SHA，不要求它已经进入 `godot.ref`。不存在可复用的公开 runtime 时，release setup 会调用共享 verifier：只有 verifier 已确认 exact commit 可从 canonical repo 获取、canonical ref tip 是该 commit 的祖先且反向尚不成立时，`dry-run` 才能以 pre-merge candidate 继续，并在 workflow summary 明确标记 candidate-only；两种 publish 操作都必须先证明 ancestry 才会开始构建。ref 查询失败、ref 歧义、网络异常或比较失败会阻断所有 release 操作，不能伪装成 candidate 结果。新 runtime 构建结束后，publish job 还会在发布前立即复验。如果 resolver 已完整校验不可变的公开 runtime，summary 会标记 source ancestry 无需检查，release 不再依赖历史 ref。
+
 三阶段自举仍在 `goplus/spx` 的冻结发布分支上执行：
 
 | `operation` | 结果 | `platforms` |
 | --- | --- | --- |
-| `dry-run` | 构建并校验，但不发布 | 通常为 `all` |
+| `dry-run` | 构建并校验精确的锁定 candidate，但不发布；报告 canonical-ref ancestry | 通常为 `all` |
 | `publish-runtime` | 只发布不可变的 `runtime-v*` 资产 | 忽略 |
 | `publish-release` | 发布 runtime、SPX 产品与 npm | 必须为 `all` |
 
 `release_tag` 必须精确等于所选 commit 声明的 SPX tag。这里的产品 `platforms=all` 仅指 Web、macOS、Windows、Linux 包；Android/iOS 属于完整 runtime 资产矩阵和真机 smoke，不是 SPX 产品 target。
 
-1. 先使用 `release_tag=v3.2.0`、`platforms=all`、`operation=dry-run`。下载并检查所有 runtime/product artifacts，完成安装与 demo smoke。
-2. 对同一个 commit 设置 `operation=publish-runtime`。没有可复用版本时，该模式会构建、校验并公开全部 runtime 资产，但跳过 SPX 产品包、SPX release 和 npm。
+1. 先对 lock 中精确的 Godot candidate 使用 `release_tag=v3.2.0`、`platforms=all`、`operation=dry-run`。检查 workflow summary：pre-merge candidate 在此阶段可以继续，但会明确标记为尚不可发布。下载并检查所有 runtime/product artifacts，完成安装与 demo smoke。
+2. 将该 Godot commit 原样提升到 canonical `godot.ref` 并通过严格 ancestry verifier，再对同一个 SPX commit 设置 `operation=publish-runtime`。没有可复用版本时，该模式会构建、校验并公开全部 runtime 资产，但跳过 SPX 产品包、SPX release 和 npm。
 3. 让普通 CI 自动切换到已公开 runtime 路径，并通过 Web normal 产品 smoke；合并时不得改变 module/pack/recipe 身份输入。随后在最终 SPX commit 上使用 `platforms=all`、`operation=publish-release`，流程会验证并复用同一 runtime，再发布 SPX 产品与 npm。
 
 runtime manifest、`SHA256SUMS` 和 lock 的 required asset 集合必须完全一致；已公开 tag 的来源或资产不同会直接失败，不能覆盖。未公开的 runtime/SPX draft tag 必须指向当前 `GITHUB_SHA`；已公开 runtime 可来自前一阶段的 candidate commit，但只有完整复用契约一致时才能用于最终 SPX commit。SPX tag 始终指向最终 commit。如果合并修改了任一 runtime 身份输入，最终运行会拒绝复用，此时必须重新冻结并提升 `runtime_version`。

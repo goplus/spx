@@ -27,6 +27,7 @@ WEB     ?= 0
 GODOT_SHA ?=
 GODOT_REF ?= spx4.4.1
 UNPUBLISHED_RUNTIME ?= 0
+GODOT_PREMERGE_CANDIDATE ?= 0
 WEB_MODE = $(or $(strip $(MODE)),normal)
 VALID_INSTALL_WEB_TRUE_VALUES := 1 true TRUE yes YES on ON
 VALID_INSTALL_WEB_FALSE_VALUES := 0 false FALSE no NO off OFF
@@ -46,6 +47,7 @@ validate-pin-godot:
 	@test -n "$(strip $(GODOT_SHA))" || { echo 'GODOT_SHA is required. Usage: make pin-godot GODOT_SHA=<full-sha> [GODOT_REF=spx4.4.1]' >&2; exit 2; }
 	@test -n "$(strip $(GODOT_REF))" || { echo 'GODOT_REF must not be empty.' >&2; exit 2; }
 	@test "$(UNPUBLISHED_RUNTIME)" = 0 || test "$(UNPUBLISHED_RUNTIME)" = 1 || { echo 'UNPUBLISHED_RUNTIME must be 0 or 1.' >&2; exit 2; }
+	@test "$(GODOT_PREMERGE_CANDIDATE)" = 0 || test "$(GODOT_PREMERGE_CANDIDATE)" = 1 || { echo 'GODOT_PREMERGE_CANDIDATE must be 0 or 1.' >&2; exit 2; }
 
 download-engine: validate-download-engine
 
@@ -60,8 +62,10 @@ $(BUILDCTL_BIN): $(BUILDCTL_SOURCES)
 # ============================================
 buildctl: $(BUILDCTL_BIN) ## Build cached buildctl binary at ./.bin/buildctl
 
-pin-godot: validate-pin-godot ## Pin Godot for the current unpublished runtime and synchronize its lock snapshot
-	python3 .github/scripts/runtime_lock_snapshot.py --pin-godot --godot-commit "$(GODOT_SHA)" --godot-ref "$(GODOT_REF)" $(if $(filter 1,$(UNPUBLISHED_RUNTIME)),--allow-unpublished-update,)
+pin-godot: validate-pin-godot ## Verify and pin Godot for the current unpublished runtime
+	python3 .github/scripts/runtime_lock_snapshot.py --pin-godot \
+		--godot-commit "$(GODOT_SHA)" \
+		--godot-ref "$(GODOT_REF)"$(if $(filter 1,$(UNPUBLISHED_RUNTIME)), --allow-unpublished-update,)$(if $(filter 1,$(GODOT_PREMERGE_CANDIDATE)), --allow-premerge-candidate,)
 
 help: ## Show common commands
 	@echo "Common Make Commands:"
@@ -89,6 +93,7 @@ help-advanced: ## Show all commands, including low-level targets
 	@echo "  WEB defaults to 0; truthy values enable web tooling/runtime for 'make install'."
 	@echo "  PLATFORM is required by download-engine."
 	@echo "  UNPUBLISHED_RUNTIME=1 explicitly permits pin-godot to replace the current snapshot."
+	@echo "  GODOT_PREMERGE_CANDIDATE=1 permits only a verified candidate-only pin; never use it for publication."
 	@echo ""
 	@echo "Demo targets via index:"
 	@i=1; \

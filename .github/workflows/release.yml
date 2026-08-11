@@ -108,6 +108,83 @@ jobs:
             --revision HEAD \
             --github-output "$GITHUB_OUTPUT"
 
+      - name: Verify locked Godot source ancestry
+        id: godot-ancestry
+        if: steps.runtime.outputs.reuse_runtime != 'true'
+        shell: bash
+        env:
+          OPERATION_INPUT: ${{ inputs.operation }}
+        run: |
+          set -euo pipefail
+
+          ancestry_args=(
+            --verify-godot-ancestry
+            --lock internal/release/runtime.lock.json
+            --github-output "$GITHUB_OUTPUT"
+          )
+          if [ "$OPERATION_INPUT" = dry-run ]; then
+            ancestry_args+=(--allow-premerge-candidate)
+          fi
+          python3 .github/scripts/runtime_lock_snapshot.py "${ancestry_args[@]}"
+
+      - name: Summarize locked Godot source ancestry
+        if: always() && steps.runtime.outcome == 'success'
+        shell: bash
+        env:
+          ANCESTRY_STATUS: ${{ steps.godot-ancestry.outputs.godot_ancestry_status }}
+          GODOT_COMMIT: ${{ steps.release.outputs.godot_commit }}
+          GODOT_REPOSITORY: ${{ steps.release.outputs.godot_repository }}
+          GODOT_REF: ${{ steps.godot-ancestry.outputs.godot_ref }}
+          GODOT_REF_COMMIT: ${{ steps.godot-ancestry.outputs.godot_ref_commit }}
+          OPERATION_INPUT: ${{ inputs.operation }}
+          REUSE_RUNTIME: ${{ steps.runtime.outputs.reuse_runtime }}
+          RUNTIME_REASON: ${{ steps.runtime.outputs.runtime_reason }}
+        run: |
+          set -euo pipefail
+
+          summary_valid=true
+          if [ "$REUSE_RUNTIME" = true ]; then
+            ancestry_status="not required — $RUNTIME_REASON"
+            ref_commit="not checked (immutable runtime reuse)"
+          else
+            case "$ANCESTRY_STATUS" in
+              ancestor)
+                ancestry_status="verified ancestor — source build is eligible for publication"
+                ;;
+              premerge)
+                ancestry_status="pre-merge candidate — dry-run only; publication is blocked"
+                ;;
+              *)
+                ancestry_status="verification failed — see the ancestry step log"
+                summary_valid=false
+                ;;
+            esac
+            ref_commit="${GODOT_REF_COMMIT:-not resolved}"
+            if [ -z "$GODOT_REF" ] || [ -z "$GODOT_REF_COMMIT" ]; then
+              ancestry_status="verification failed — verifier returned incomplete identity outputs"
+              summary_valid=false
+            fi
+          fi
+          if [ -z "$GODOT_REF" ]; then
+            GODOT_REF="$(jq -r '.godot.ref' internal/release/runtime.lock.json)"
+          fi
+
+          {
+            echo "### Godot source ancestry"
+            echo
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            printf '| Operation | `%s` |\n' "$OPERATION_INPUT"
+            printf '| Locked candidate | `%s` |\n' "$GODOT_COMMIT"
+            printf '| Godot repository | `%s` |\n' "$GODOT_REPOSITORY"
+            printf '| Canonical ref | `%s` |\n' "$GODOT_REF"
+            printf '| Canonical ref commit | `%s` |\n' "$ref_commit"
+            printf '| Ancestry policy | %s |\n' "$ancestry_status"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$summary_valid" != true ]; then
+            exit 1
+          fi
+
       - name: Validate immutable publish targets
         if: inputs.operation != 'dry-run'
         shell: bash
@@ -534,6 +611,23 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Check out release source for the publish guard
+        if: needs.setup.outputs.reuse_runtime != 'true'
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Revalidate locked Godot ancestry before publishing
+        if: needs.setup.outputs.reuse_runtime != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/runtime_lock_snapshot.py \
+            --verify-godot-ancestry \
+            --lock internal/release/runtime.lock.json
+
       - name: Download assembled runtime release
         uses: actions/download-artifact@v7
         with:

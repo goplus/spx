@@ -25,20 +25,28 @@ The manifest records `module_tree`, `runtime_pack_source_sha256`, and `build_rec
 
 ## Freeze order
 
-1. Merge the Godot changes first and record the final commit. A merge or squash can change the SHA, so do not keep a PR-head pin after the final commit is available.
-2. Pin that commit together with a durable branch or tag, such as `spx4.4.1`. This single operation validates and rewrites canonical `runtime.lock.json` plus its current snapshot; updating an existing snapshot requires an explicit unpublished-runtime acknowledgement:
+1. Select the exact Godot candidate commit and the durable branch or tag that will own it, such as `spx4.4.1`. Before that commit reaches the canonical ref, an unpublished runtime may pin it for an exact-SHA dry-run only:
 
    ```sh
    make pin-godot \
      GODOT_SHA=<40-character-sha> \
      GODOT_REF=spx4.4.1 \
-     UNPUBLISHED_RUNTIME=1
+     UNPUBLISHED_RUNTIME=1 \
+     GODOT_PREMERGE_CANDIDATE=1
    python3 .github/scripts/runtime_lock_snapshot.py --check
    ```
 
-   Omit `UNPUBLISHED_RUNTIME=1` when the new runtime version has no snapshot yet. It is an explicit acknowledgement that replacing the current snapshot is safe; never set it after that runtime is public. The commit determines the exact engine source, while the ref makes that commit reachable to shallow fetches; both are part of the canonical lock.
-3. Independently pin the reusable-workflow implementation with a full SHA in `.github/workflows/release.yml`. That `uses: ...@SHA` selects workflow code; it does not select the Godot source tree and does not need to equal `godot.commit`.
-4. Freeze the SPX candidate commit on a release branch in `goplus/spx`. Confirm that `currentSPXVersion` resolves through `spxRuntimeMappings` to the runtime definition matching the lock, and that historical definitions and mappings are unchanged; merge only after the bootstrap below succeeds.
+   Omit `UNPUBLISHED_RUNTIME=1` when the new runtime version has no snapshot yet. It acknowledges that replacing the current snapshot is safe; never set it after that runtime is public. `GODOT_PREMERGE_CANDIDATE=1` is narrower: it permits only the pin operation to record a commit that has not reached `godot.ref`. It cannot weaken the release verifier or authorize publication.
+2. Independently pin the reusable-workflow implementation with a full SHA in `.github/workflows/release.yml`. That `uses: ...@SHA` selects workflow code; it does not select the Godot source tree, does not need to equal `godot.commit`, and is outside the source-ancestry rule.
+3. Freeze the SPX candidate commit on a release branch in `goplus/spx`. Confirm that `currentSPXVersion` resolves through `spxRuntimeMappings` to the runtime definition matching the lock, and that historical definitions and mappings are unchanged. Run the release `dry-run`; it builds the exact locked Godot commit and marks the ancestry result in the workflow summary. A fetchable commit proven to descend from the canonical ref, but not yet be contained by it, is labeled candidate-only and cannot be published; an unrelated commit, unresolved ref, or comparison failure stops the dry-run.
+4. Merge or otherwise promote that exact Godot commit into `godot.ref`, then verify the publication boundary:
+
+   ```sh
+   python3 .github/scripts/runtime_lock_snapshot.py --verify-godot-ancestry
+   ```
+
+   A normal merge preserves the candidate as an ancestor. A squash or rebase changes the source identity; repin the resulting commit and repeat the dry-run instead of publishing the old candidate SHA.
+5. Only after the ancestry verifier succeeds may a new runtime be published. When the resolver says the runtime must be built, both publish operations execute the same strict verifier in release setup before the Godot/runtime build, and `publish-runtime` verifies it again after the long build immediately before creating or uploading the release. A fully verified public runtime is immutable reuse and does not depend on its historical source ref remaining available.
 
 Never publish from a fork. The `publish-runtime` and `publish-release` operations are allowed only in the lock's `release_repository`, currently `goplus/spx`.
 
@@ -47,6 +55,7 @@ Never publish from a fork. The `publish-runtime` and `publish-release` operation
 ```sh
 GODOT_SRC=/absolute/path/to/final-godot make doctor
 python3 .github/scripts/runtime_lock_snapshot.py --check
+python3 .github/scripts/runtime_lock_snapshot.py --verify-godot-ancestry
 go list ./... | grep -v '/internal/webffi' | xargs go test
 git diff --check
 ```
@@ -68,18 +77,20 @@ Ordinary CI resolves the locked runtime release before starting a runtime consum
 
 This switch avoids both the publication circular dependency and duplicate runtime builds. Ordinary CI never builds a complete release runtime; only the release workflow does that. The release assembly still downloads every asset and verifies `SHA256SUMS` plus every manifest checksum before reuse or publication.
 
+The canonical-ref ancestry rule is deliberately release-only. Ordinary runner and module-integration workflows may test an exact locked candidate SHA without requiring that it has already reached `godot.ref`. When no reusable public runtime exists, release setup runs the shared verifier: `dry-run` may continue only after the verifier positively classifies a fetchable exact commit as a pre-merge candidate, and records that state in the workflow summary; both publish operations require verified ancestry before building. Ref lookup, ambiguity, network, and comparison failures fail every release operation rather than being treated as a candidate result. A publish job that built a new runtime checks ancestry again immediately before publication. If the resolver has already verified an immutable public runtime, source ancestry is reported as not required and the release no longer depends on the historical ref.
+
 Use a frozen release branch in `goplus/spx` for the bootstrap operations:
 
 | `operation` | Result | `platforms` |
 | --- | --- | --- |
-| `dry-run` | Build and verify without publishing | Usually `all` |
+| `dry-run` | Build and verify the exact locked candidate without publishing; report canonical-ref ancestry | Usually `all` |
 | `publish-runtime` | Publish only the immutable `runtime-v*` bundle | Ignored |
 | `publish-release` | Publish runtime, SPX products, and npm | Must be `all` |
 
 `release_tag` must exactly equal the SPX tag declared by the selected commit. Product `platforms=all` means Web, macOS, Windows, and Linux packages; Android and iOS belong to the complete runtime asset matrix and device smoke tests, not the SPX product targets.
 
-1. Run `release_tag=v3.2.0`, `platforms=all`, and `operation=dry-run`. Download and inspect every runtime/product artifact, then complete install and demo smoke tests.
-2. Rerun the same commit with `operation=publish-runtime`. If no reusable runtime exists, this mode builds, verifies, and publishes the complete runtime asset set while skipping SPX products, the SPX release, and npm.
+1. Run `release_tag=v3.2.0`, `platforms=all`, and `operation=dry-run` against the exact locked Godot candidate. Check the workflow summary: a pre-merge candidate is allowed here but is explicitly marked as not publication-ready. Download and inspect every runtime/product artifact, then complete install and demo smoke tests.
+2. Promote that exact Godot commit into the canonical `godot.ref` and run the strict ancestry verifier. Rerun the same SPX commit with `operation=publish-runtime`. If no reusable runtime exists, this mode builds, verifies, and publishes the complete runtime asset set while skipping SPX products, the SPX release, and npm.
 3. Let ordinary CI automatically switch to the public-runtime path and pass the Web normal product smoke. Merge without changing any module/pack/recipe identity input, then run the final SPX commit with `platforms=all` and `operation=publish-release`. The workflow verifies and reuses that runtime before publishing SPX products and npm.
 
 The runtime manifest, `SHA256SUMS`, and the lock's required asset set must match exactly. A public tag with different provenance or assets fails rather than being overwritten. An unpublished runtime/SPX draft tag must target the current `GITHUB_SHA`; a public runtime may target the candidate commit from the previous stage, but only an identical full reuse contract allows the final SPX commit to consume it. The SPX tag always targets the final commit. If the merge changes any runtime identity input, the final run rejects reuse; freeze again and bump `runtime_version` instead.

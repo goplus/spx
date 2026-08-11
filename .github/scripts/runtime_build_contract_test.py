@@ -5,9 +5,11 @@ import contextlib
 import hashlib
 import io
 import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import runtime_build_contract as contract
 import runtime_lock_snapshot as lock_snapshot
@@ -15,6 +17,21 @@ import runtime_lock_snapshot as lock_snapshot
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LOCK_PATH = REPO_ROOT / "internal" / "release" / "runtime.lock.json"
+
+
+def accept_godot_ancestry(
+    repository,
+    godot_ref,
+    godot_commit,
+    allow_premerge_candidate=False,
+):
+    del repository, allow_premerge_candidate
+    full_ref = godot_ref if godot_ref.startswith("refs/") else f"refs/heads/{godot_ref}"
+    return {
+        "status": "ancestor",
+        "ref": full_ref,
+        "ref_commit": godot_commit,
+    }
 
 
 class RuntimeBuildContractTest(unittest.TestCase):
@@ -364,14 +381,16 @@ class RuntimeBuildContractTest(unittest.TestCase):
             self.assertEqual(lock_path.read_bytes(), original_lock)
             self.assertEqual(snapshot_path.read_bytes(), original_lock)
 
-            updated_path, changed = lock_snapshot.pin_godot(
+            updated_path, changed, ancestry = lock_snapshot.pin_godot(
                 lock_path,
                 snapshot_directory,
                 "b" * 40,
                 "spx4.4.1-next",
                 allow_unpublished_update=True,
+                ancestry_verifier=accept_godot_ancestry,
             )
             self.assertTrue(changed)
+            self.assertEqual(ancestry["status"], "ancestor")
             updated_lock = contract.load_runtime_lock(lock_path)
             self.assertEqual(updated_lock["godot"]["commit"], "b" * 40)
             self.assertEqual(updated_lock["godot"]["ref"], "spx4.4.1-next")
@@ -388,14 +407,16 @@ class RuntimeBuildContractTest(unittest.TestCase):
             historical_path = snapshot_directory / "1.0.0.json"
             historical_path.write_bytes(b"historical\n")
 
-            snapshot_path, changed = lock_snapshot.pin_godot(
+            snapshot_path, changed, ancestry = lock_snapshot.pin_godot(
                 lock_path,
                 snapshot_directory,
                 "c" * 40,
                 "spx4.4.1-next",
+                ancestry_verifier=accept_godot_ancestry,
             )
 
             self.assertTrue(changed)
+            self.assertEqual(ancestry["status"], "ancestor")
             self.assertEqual(snapshot_path.read_bytes(), lock_path.read_bytes())
             self.assertEqual(historical_path.read_bytes(), b"historical\n")
 
@@ -420,6 +441,271 @@ class RuntimeBuildContractTest(unittest.TestCase):
                 )
             self.assertEqual(lock_path.read_bytes(), original_lock)
             self.assertEqual(snapshot_path.read_bytes(), original_lock)
+
+    def test_pin_godot_verifies_before_writing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            lock_path = root / "runtime.lock.json"
+            lock_path.write_bytes(LOCK_PATH.read_bytes())
+            snapshot_directory = root / "runtime_locks"
+            snapshot_directory.mkdir()
+            original_lock = lock_path.read_bytes()
+            calls = []
+
+            def reject_ancestry(repository, godot_ref, godot_commit, **options):
+                calls.append((repository, godot_ref, godot_commit, options))
+                raise lock_snapshot.SnapshotError("remote unavailable")
+
+            with self.assertRaisesRegex(lock_snapshot.SnapshotError, "remote unavailable"):
+                lock_snapshot.pin_godot(
+                    lock_path,
+                    snapshot_directory,
+                    "d" * 40,
+                    "spx4.4.1-next",
+                    ancestry_verifier=reject_ancestry,
+                )
+
+            self.assertEqual(
+                calls,
+                [
+                    (
+                        lock_snapshot.EXPECTED_GODOT_REPOSITORY,
+                        "spx4.4.1-next",
+                        "d" * 40,
+                        {"allow_premerge_candidate": False},
+                    )
+                ],
+            )
+            self.assertEqual(lock_path.read_bytes(), original_lock)
+            self.assertFalse(
+                (snapshot_directory / f"{self.lock['runtime_version']}.json").exists()
+            )
+
+    def test_pin_godot_passes_explicit_premerge_policy(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            lock_path = root / "runtime.lock.json"
+            lock_path.write_bytes(LOCK_PATH.read_bytes())
+            snapshot_directory = root / "runtime_locks"
+            snapshot_directory.mkdir()
+
+            def confirm_premerge(repository, godot_ref, godot_commit, **options):
+                self.assertEqual(repository, lock_snapshot.EXPECTED_GODOT_REPOSITORY)
+                self.assertTrue(options["allow_premerge_candidate"])
+                return {
+                    "status": "premerge",
+                    "ref": f"refs/heads/{godot_ref}",
+                    "ref_commit": self.lock["godot"]["commit"],
+                }
+
+            snapshot_path, changed, ancestry = lock_snapshot.pin_godot(
+                lock_path,
+                snapshot_directory,
+                "e" * 40,
+                "spx4.4.1-next",
+                allow_premerge_candidate=True,
+                ancestry_verifier=confirm_premerge,
+            )
+
+            self.assertTrue(changed)
+            self.assertEqual(ancestry["status"], "premerge")
+            self.assertEqual(snapshot_path.read_bytes(), lock_path.read_bytes())
+
+    def test_godot_ancestry_rejects_untrusted_lock_repository(self):
+        with tempfile.TemporaryDirectory() as directory:
+            lock = copy.deepcopy(self.lock)
+            lock["godot"]["repository"] = "https://github.com/example/godot.git"
+            lock_path = Path(directory) / "runtime.lock.json"
+            lock_path.write_bytes(lock_snapshot.canonical_runtime_lock(lock))
+            verifier = mock.Mock()
+
+            with self.assertRaisesRegex(
+                lock_snapshot.SnapshotError,
+                "not the trusted canonical repository",
+            ):
+                lock_snapshot.verify_locked_godot_ancestry(
+                    lock_path,
+                    ancestry_verifier=verifier,
+                )
+
+            verifier.assert_not_called()
+
+    def test_godot_ancestry_cli_emits_structured_outputs(self):
+        result = {
+            "status": "premerge",
+            "ref": "refs/heads/spx4.4.1",
+            "ref_commit": "a" * 40,
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            output_path = Path(directory) / "output"
+            with mock.patch.object(
+                lock_snapshot,
+                "verify_locked_godot_ancestry",
+                return_value=result,
+            ) as verifier, contextlib.redirect_stdout(io.StringIO()) as stdout:
+                return_code = lock_snapshot.main(
+                    [
+                        "--verify-godot-ancestry",
+                        "--lock",
+                        str(LOCK_PATH),
+                        "--allow-premerge-candidate",
+                        "--github-output",
+                        str(output_path),
+                    ]
+                )
+
+            self.assertEqual(return_code, 0)
+            verifier.assert_called_once_with(LOCK_PATH, True)
+            self.assertIn("publication is blocked", stdout.getvalue())
+            self.assertEqual(
+                output_path.read_text(encoding="utf-8"),
+                "godot_ancestry_status=premerge\n"
+                "godot_ref=refs/heads/spx4.4.1\n"
+                f"godot_ref_commit={'a' * 40}\n",
+            )
+
+    def test_godot_ancestry_cli_rejects_candidate_flag_for_check(self):
+        with contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit) as raised:
+                lock_snapshot.main(["--check", "--allow-premerge-candidate"])
+        self.assertEqual(raised.exception.code, 2)
+
+    def run_git(self, cwd, *arguments):
+        result = subprocess.run(
+            ["git", *arguments],
+            cwd=cwd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            self.fail(
+                f"git {' '.join(arguments)} failed ({result.returncode}): "
+                f"{result.stderr.strip() or result.stdout.strip()}"
+            )
+        return result.stdout.strip()
+
+    def create_godot_remote(self, root):
+        work = Path(root) / "work"
+        remote = Path(root) / "remote.git"
+        work.mkdir()
+        self.run_git(work, "init", "--quiet", "--initial-branch=stable")
+        self.run_git(work, "config", "user.name", "SPX Test")
+        self.run_git(work, "config", "user.email", "spx-test@example.com")
+
+        source = work / "source.txt"
+        source.write_text("ancestor\n", encoding="utf-8")
+        self.run_git(work, "add", "source.txt")
+        self.run_git(work, "commit", "--quiet", "-m", "ancestor")
+        ancestor = self.run_git(work, "rev-parse", "HEAD")
+
+        source.write_text("stable\n", encoding="utf-8")
+        self.run_git(work, "commit", "--quiet", "-am", "stable")
+        stable = self.run_git(work, "rev-parse", "HEAD")
+        self.run_git(work, "tag", "-a", "stable-tag", "-m", "stable tag", stable)
+
+        self.run_git(work, "checkout", "--quiet", "-b", "candidate", stable)
+        source.write_text("candidate\n", encoding="utf-8")
+        self.run_git(work, "commit", "--quiet", "-am", "candidate")
+        candidate = self.run_git(work, "rev-parse", "HEAD")
+
+        self.run_git(work, "checkout", "--quiet", "-b", "divergent", ancestor)
+        source.write_text("divergent\n", encoding="utf-8")
+        self.run_git(work, "commit", "--quiet", "-am", "divergent")
+        divergent = self.run_git(work, "rev-parse", "HEAD")
+
+        self.run_git(root, "init", "--bare", "--quiet", remote)
+        self.run_git(remote, "config", "uploadpack.allowFilter", "true")
+        self.run_git(remote, "config", "uploadpack.allowAnySHA1InWant", "true")
+        self.run_git(work, "remote", "add", "origin", str(remote))
+        self.run_git(
+            work,
+            "push",
+            "--quiet",
+            "origin",
+            "refs/heads/stable",
+            "refs/heads/candidate",
+            "refs/heads/divergent",
+            "refs/tags/stable-tag",
+        )
+        return work, remote, ancestor, stable, candidate, divergent
+
+    def test_godot_ancestry_uses_exact_bounded_remote_ref_history(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            work, remote, ancestor, stable, candidate, divergent = self.create_godot_remote(root)
+
+            result = lock_snapshot.verify_godot_ancestry(remote, "stable", ancestor)
+            self.assertEqual(
+                result,
+                {
+                    "status": "ancestor",
+                    "ref": "refs/heads/stable",
+                    "ref_commit": stable,
+                },
+            )
+
+            tag_result = lock_snapshot.verify_godot_ancestry(
+                remote,
+                "refs/tags/stable-tag",
+                ancestor,
+            )
+            self.assertEqual(tag_result["status"], "ancestor")
+            self.assertEqual(tag_result["ref_commit"], stable)
+
+            with self.assertRaisesRegex(lock_snapshot.SnapshotError, "not an ancestor"):
+                lock_snapshot.verify_godot_ancestry(remote, "stable", candidate)
+            premerge = lock_snapshot.verify_godot_ancestry(
+                remote,
+                "stable",
+                candidate,
+                allow_premerge_candidate=True,
+            )
+            self.assertEqual(premerge["status"], "premerge")
+            self.assertEqual(premerge["ref_commit"], stable)
+
+            with self.assertRaisesRegex(lock_snapshot.SnapshotError, "ancestry is unknown"):
+                lock_snapshot.verify_godot_ancestry(
+                    remote,
+                    "stable",
+                    divergent,
+                    allow_premerge_candidate=True,
+                )
+
+            with self.assertRaises(lock_snapshot.SnapshotError):
+                lock_snapshot.verify_godot_ancestry(
+                    remote,
+                    "stable",
+                    "f" * 40,
+                    allow_premerge_candidate=True,
+                )
+
+            self.run_git(work, "tag", "stable", stable)
+            self.run_git(work, "push", "--quiet", "origin", "refs/tags/stable")
+            with self.assertRaisesRegex(lock_snapshot.SnapshotError, "ambiguous"):
+                lock_snapshot.verify_godot_ancestry(remote, "stable", stable)
+
+            full_ref_result = lock_snapshot.verify_godot_ancestry(
+                remote,
+                "refs/heads/stable",
+                stable,
+            )
+            self.assertEqual(full_ref_result["status"], "ancestor")
+
+    def test_godot_ref_rejects_unsafe_or_unsupported_namespaces(self):
+        runner = lock_snapshot.GitRunner()
+        for godot_ref in (
+            "refs/pull/1/head",
+            "refs/remotes/origin/stable",
+            "refs/heads/stable:refs/heads/injected",
+            "stable*",
+            "stable^",
+            "-upload-pack=evil",
+        ):
+            with self.subTest(godot_ref=godot_ref):
+                with self.assertRaises(lock_snapshot.SnapshotError):
+                    lock_snapshot.remote_ref_candidates(godot_ref, runner)
 
 
 if __name__ == "__main__":
