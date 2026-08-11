@@ -78,12 +78,15 @@ jobs:
   module-checks:
     name: Build and test current SPX module
     needs: contract
-    # This immutable SHA supplies only the reusable orchestration. The called
-    # workflow checks out and builds the separate Godot SHA from runtime.lock.
-    uses: goplus/godot/.github/workflows/spx_module_checks.yml@f6f79ac64e963e4823dcb0e729b30d732bd401bb
+    # release_builds.yml already exists on the upstream base branch, so it can
+    # bootstrap the new nested checks from this immutable workflow SHA. The
+    # Godot source remains the separate runtime.lock commit passed below.
+    uses: goplus/godot/.github/workflows/release_builds.yml@28651faabe3084beb2bab50d69171ff144eb53eb
     with:
       runtime_version: ${{ needs.contract.outputs.runtime_version }}
       runtime_abi: ${{ needs.contract.outputs.runtime_abi }}
+      platforms: none
+      module_checks: true
       godot_repository: ${{ needs.contract.outputs.godot_repository }}
       godot_ref: ${{ needs.contract.outputs.godot_commit }}
       spx_repository: ${{ github.repository }}
