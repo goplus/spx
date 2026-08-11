@@ -10,6 +10,8 @@ log.txt
 
 # Tool cache
 /.gocache/
+__pycache__/
+*.py[cod]
 
 # Builds
 /go.work
@@ -36,8 +38,6 @@ xgo_autogen*.go
 /godot_modules/**/*.os
 /godot_modules/**/*.ox
 /godot_modules/**/*.obj
-/godot_modules/**/__pycache__/
-/godot_modules/**/*.pyc
 
 # Tutorial/test generated outputs
 tutorial/**/.temp/
