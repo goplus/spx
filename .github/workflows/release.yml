@@ -308,7 +308,7 @@ jobs:
     # Before the Godot PR lands, pin its immutable workflow implementation
     # through the source fork. The Godot source remains the independent,
     # canonical runtime.lock input passed through godot_ref below.
-    uses: joeykchen/godot/.github/workflows/release_builds.yml@e107b062d43156153e1ed9e00445467c3ad39e72
+    uses: joeykchen/godot/.github/workflows/release_builds.yml@407ca6093cc33b4ce7a3cc99218580bf6a580091
     with:
       runtime_version: ${{ needs.setup.outputs.runtime_version }}
       runtime_abi: ${{ needs.setup.outputs.runtime_abi }}

@@ -27,7 +27,7 @@
   "godot": {
     "repository": "https://github.com/goplus/godot.git",
     "ref": "spx4.4.1",
-    "commit": "e107b062d43156153e1ed9e00445467c3ad39e72",
+    "commit": "407ca6093cc33b4ce7a3cc99218580bf6a580091",
     "version": "4.4.1.stable"
   },
   "module": {
