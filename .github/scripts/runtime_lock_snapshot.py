@@ -205,8 +205,8 @@ def confirmed_premerge_result(
     if not allow_premerge_candidate:
         raise SnapshotError(
             f"Godot commit {godot_commit} exists in {repository} but is not an ancestor of "
-            f"{full_ref} ({target_commit}); use --allow-premerge-candidate only for explicit "
-            "candidate/dry-run validation, never publication"
+            f"{full_ref} ({target_commit}); an explicit pre-merge candidate policy is allowed "
+            "only for candidate/dry-run validation, never publication"
         )
     return {
         "status": "premerge",
@@ -392,12 +392,12 @@ def check_snapshot(lock_path=DEFAULT_LOCK_PATH, snapshot_directory=DEFAULT_SNAPS
         snapshot = snapshot_path.read_bytes()
     except FileNotFoundError as error:
         raise SnapshotError(
-            f"current runtime lock snapshot is missing: {snapshot_path}; run this command with --sync"
+            f"current runtime lock snapshot is missing: {snapshot_path}; run this command with sync"
         ) from error
     if snapshot != canonical:
         raise SnapshotError(
             f"current runtime lock snapshot differs from {lock_path}: {snapshot_path}; "
-            "if this runtime is still unpublished, rerun with --sync --allow-unpublished-update"
+            "if this runtime is still unpublished, rerun with sync --unpublished"
         )
     return snapshot_path
 
@@ -472,7 +472,7 @@ def sync_snapshot(
     if existing is not None and not allow_unpublished_update:
         raise SnapshotError(
             f"refusing to replace existing snapshot {snapshot_path}; published snapshots are immutable. "
-            "Use --allow-unpublished-update only after confirming runtime-v"
+            "Use sync --unpublished only after confirming runtime-v"
             f"{lock['runtime_version']} is not public"
         )
     write_file_atomically(snapshot_path, canonical)
@@ -483,7 +483,7 @@ def pin_godot(
     lock_path,
     snapshot_directory,
     godot_commit,
-    godot_ref,
+    godot_ref=None,
     allow_unpublished_update=False,
     allow_premerge_candidate=False,
     ancestry_verifier=verify_godot_ancestry,
@@ -492,7 +492,8 @@ def pin_godot(
     lock, _ = load_canonical_lock(lock_path)
     updated_lock = copy.deepcopy(lock)
     updated_lock["godot"]["commit"] = godot_commit
-    updated_lock["godot"]["ref"] = godot_ref
+    if godot_ref is not None:
+        updated_lock["godot"]["ref"] = godot_ref
     contract.validate_runtime_lock(updated_lock)
     repository = require_expected_godot_repository(updated_lock)
     canonical = canonical_runtime_lock(updated_lock)
@@ -505,13 +506,13 @@ def pin_godot(
     if existing_snapshot not in (None, canonical) and not allow_unpublished_update:
         raise SnapshotError(
             f"refusing to replace existing snapshot {snapshot_path}; published snapshots are immutable. "
-            "Use --allow-unpublished-update only after confirming runtime-v"
+            "Use pin-godot COMMIT --unpublished (or --premerge) only after confirming runtime-v"
             f"{updated_lock['runtime_version']} is not public"
         )
 
     ancestry = ancestry_verifier(
         repository,
-        godot_ref,
+        updated_lock["godot"]["ref"],
         godot_commit,
         allow_premerge_candidate=allow_premerge_candidate,
     )
@@ -525,82 +526,108 @@ def pin_godot(
     return snapshot_path, bool(updates), ancestry
 
 
-def build_parser():
-    parser = argparse.ArgumentParser(description=__doc__)
-    mode = parser.add_mutually_exclusive_group(required=True)
-    mode.add_argument("--check", action="store_true", help="verify that the current snapshot exactly matches the lock")
-    mode.add_argument("--sync", action="store_true", help="create or explicitly refresh the current snapshot")
-    mode.add_argument(
-        "--pin-godot",
-        action="store_true",
-        help="update the current lock's Godot commit/ref and synchronize its snapshot as one operation",
+def add_lock_argument(parser):
+    parser.add_argument(
+        "--lock",
+        default=DEFAULT_LOCK_PATH,
+        type=Path,
+        help="path to runtime.lock.json",
     )
-    mode.add_argument(
-        "--verify-godot-ancestry",
-        action="store_true",
-        help="verify that the locked Godot commit is reachable from its exact canonical branch or tag",
-    )
-    parser.add_argument("--lock", default=DEFAULT_LOCK_PATH, type=Path, help="path to runtime.lock.json")
+
+
+def add_snapshot_directory_argument(parser):
     parser.add_argument(
         "--snapshot-directory",
         default=DEFAULT_SNAPSHOT_DIRECTORY,
         type=Path,
         help="directory containing versioned runtime lock snapshots",
     )
-    parser.add_argument(
-        "--allow-unpublished-update",
-        action="store_true",
-        help="allow --sync or --pin-godot to replace the current snapshot after confirming it is unpublished",
+
+
+def build_parser():
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest="command", required=True)
+
+    check = commands.add_parser(
+        "check",
+        help="verify that the current snapshot exactly matches the lock",
     )
-    parser.add_argument(
+    add_lock_argument(check)
+    add_snapshot_directory_argument(check)
+
+    sync = commands.add_parser(
+        "sync",
+        help="create the current snapshot",
+    )
+    add_lock_argument(sync)
+    add_snapshot_directory_argument(sync)
+    sync.add_argument(
+        "--unpublished",
+        action="store_true",
+        help="replace an existing snapshot after confirming that runtime is unpublished",
+    )
+
+    pin = commands.add_parser(
+        "pin-godot",
+        help="atomically verify and pin Godot in the current lock and snapshot",
+    )
+    pin.add_argument("godot_commit", metavar="COMMIT", help="full lowercase Godot source commit")
+    pin.add_argument(
+        "--ref",
+        dest="godot_ref",
+        help="durable Godot branch or tag (default: retain the current lock ref)",
+    )
+    pin_policy = pin.add_mutually_exclusive_group()
+    pin_policy.add_argument(
+        "--unpublished",
+        action="store_true",
+        help="replace an existing unpublished snapshot; the commit must already be in the ref",
+    )
+    pin_policy.add_argument(
+        "--premerge",
+        action="store_true",
+        help="allow a verified pre-merge candidate while replacing an unpublished snapshot; publication remains blocked",
+    )
+    add_lock_argument(pin)
+    add_snapshot_directory_argument(pin)
+
+    verify = commands.add_parser(
+        "verify-godot",
+        help="verify that the locked Godot commit is reachable from its canonical ref",
+    )
+    add_lock_argument(verify)
+    verify.add_argument(
         "--allow-premerge-candidate",
         action="store_true",
         help=(
-            "allow an exact commit proven to descend from the declared ref only for an explicit candidate/dry-run; "
+            "accept a verified pre-merge candidate for dry-run validation; "
             "never use this for publication"
         ),
     )
-    parser.add_argument(
+    verify.add_argument(
         "--github-output",
         type=Path,
-        help="append structured Godot ancestry outputs for --verify-godot-ancestry",
+        help="append structured Godot ancestry outputs",
     )
-    parser.add_argument("--godot-commit", help="full lowercase Godot source commit for --pin-godot")
-    parser.add_argument("--godot-ref", help="durable Godot branch or tag for --pin-godot")
     return parser
 
 
 def main(argv=None):
     parser = build_parser()
     args = parser.parse_args(argv)
-    if args.allow_unpublished_update and not (args.sync or args.pin_godot):
-        parser.error("--allow-unpublished-update requires --sync or --pin-godot")
-    if args.allow_premerge_candidate and not (
-        args.verify_godot_ancestry or args.pin_godot
-    ):
-        parser.error(
-            "--allow-premerge-candidate requires --verify-godot-ancestry or --pin-godot"
-        )
-    if args.github_output and not args.verify_godot_ancestry:
-        parser.error("--github-output requires --verify-godot-ancestry")
-    if args.pin_godot:
-        if not args.godot_commit or not args.godot_ref:
-            parser.error("--pin-godot requires --godot-commit and --godot-ref")
-    elif args.godot_commit or args.godot_ref:
-        parser.error("--godot-commit and --godot-ref require --pin-godot")
     try:
-        if args.check:
+        if args.command == "check":
             snapshot_path = check_snapshot(args.lock, args.snapshot_directory)
             print(f"[ok] Current runtime lock snapshot matches: {snapshot_path}")
-        elif args.sync:
+        elif args.command == "sync":
             snapshot_path, changed = sync_snapshot(
                 args.lock,
                 args.snapshot_directory,
-                args.allow_unpublished_update,
+                args.unpublished,
             )
             action = "Updated" if changed else "Already current"
             print(f"[ok] {action}: {snapshot_path}")
-        elif args.verify_godot_ancestry:
+        elif args.command == "verify-godot":
             ancestry = verify_locked_godot_ancestry(
                 args.lock,
                 args.allow_premerge_candidate,
@@ -609,18 +636,21 @@ def main(argv=None):
             report_godot_ancestry(ancestry, godot_commit)
             if args.github_output:
                 write_godot_ancestry_outputs(args.github_output, ancestry)
-        else:
+        elif args.command == "pin-godot":
+            allow_unpublished_update = args.unpublished or args.premerge
             snapshot_path, changed, ancestry = pin_godot(
                 args.lock,
                 args.snapshot_directory,
                 args.godot_commit,
                 args.godot_ref,
-                args.allow_unpublished_update,
-                args.allow_premerge_candidate,
+                allow_unpublished_update,
+                args.premerge,
             )
             action = "Pinned Godot source and synchronized" if changed else "Godot source already pinned"
             print(f"[ok] {action}: {snapshot_path}")
             report_godot_ancestry(ancestry, args.godot_commit)
+        else:  # pragma: no cover - argparse restricts command names.
+            raise AssertionError(f"unhandled command: {args.command}")
     except (contract.ContractError, SnapshotError, OSError) as error:
         print(f"[error] Invalid runtime lock snapshot: {error}", file=sys.stderr)
         return 1

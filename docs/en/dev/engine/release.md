@@ -28,24 +28,20 @@ The manifest records `module_tree`, `runtime_pack_source_sha256`, and `build_rec
 1. Select the exact Godot candidate commit and the durable branch or tag that will own it, such as `spx4.4.1`. Before that commit reaches the canonical ref, an unpublished runtime may pin it for an exact-SHA dry-run only:
 
    ```sh
-   make pin-godot \
-     GODOT_SHA=<40-character-sha> \
-     GODOT_REF=spx4.4.1 \
-     UNPUBLISHED_RUNTIME=1 \
-     GODOT_PREMERGE_CANDIDATE=1
-   python3 .github/scripts/runtime_lock_snapshot.py --check
+   make pin-godot-candidate GODOT_SHA=<40-character-sha>
+   python3 .github/scripts/runtime_lock_snapshot.py check
    ```
 
-   Omit `UNPUBLISHED_RUNTIME=1` when the new runtime version has no snapshot yet. It acknowledges that replacing the current snapshot is safe; never set it after that runtime is public. `GODOT_PREMERGE_CANDIDATE=1` is narrower: it permits only the pin operation to record a commit that has not reached `godot.ref`. It cannot weaken the release verifier or authorize publication.
+   The command retains the current lock ref; provide `GODOT_REF=<branch-or-tag>` only when changing it. `pin-godot-candidate` explicitly asserts that the current runtime is unpublished, permits replacing its snapshot, and allows a remotely verified pre-merge candidate. It cannot weaken the release verifier or authorize publication, and must never be used after that runtime is public. The equivalent low-level command is `python3 .github/scripts/runtime_lock_snapshot.py pin-godot <sha> --premerge`.
 2. Independently pin the reusable-workflow implementation with a full SHA in `.github/workflows/release.yml`. That `uses: ...@SHA` selects workflow code; it does not select the Godot source tree, does not need to equal `godot.commit`, and is outside the source-ancestry rule.
 3. Freeze the SPX candidate commit on a release branch in `goplus/spx`. Confirm that `currentSPXVersion` resolves through `spxRuntimeMappings` to the runtime definition matching the lock, and that historical definitions and mappings are unchanged. Run the release `dry-run`; it builds the exact locked Godot commit and marks the ancestry result in the workflow summary. A fetchable commit proven to descend from the canonical ref, but not yet be contained by it, is labeled candidate-only and cannot be published; an unrelated commit, unresolved ref, or comparison failure stops the dry-run.
 4. Merge or otherwise promote that exact Godot commit into `godot.ref`, then verify the publication boundary:
 
    ```sh
-   python3 .github/scripts/runtime_lock_snapshot.py --verify-godot-ancestry
+   python3 .github/scripts/runtime_lock_snapshot.py verify-godot
    ```
 
-   A normal merge preserves the candidate as an ancestor. A squash or rebase changes the source identity; repin the resulting commit and repeat the dry-run instead of publishing the old candidate SHA.
+   A normal merge preserves the candidate as an ancestor. A squash or rebase changes the source identity; run `make pin-godot-unpublished GODOT_SHA=<resulting-sha>` and repeat the dry-run instead of publishing the old candidate SHA.
 5. Only after the ancestry verifier succeeds may a new runtime be published. When the resolver says the runtime must be built, both publish operations execute the same strict verifier in release setup before the Godot/runtime build, and `publish-runtime` verifies it again after the long build immediately before creating or uploading the release. A fully verified public runtime is immutable reuse and does not depend on its historical source ref remaining available.
 
 Never publish from a fork. The `publish-runtime` and `publish-release` operations are allowed only in the lock's `release_repository`, currently `goplus/spx`.
@@ -54,8 +50,8 @@ Never publish from a fork. The `publish-runtime` and `publish-release` operation
 
 ```sh
 GODOT_SRC=/absolute/path/to/final-godot make doctor
-python3 .github/scripts/runtime_lock_snapshot.py --check
-python3 .github/scripts/runtime_lock_snapshot.py --verify-godot-ancestry
+python3 .github/scripts/runtime_lock_snapshot.py check
+python3 .github/scripts/runtime_lock_snapshot.py verify-godot
 go list ./... | grep -v '/internal/webffi' | xargs go test
 git diff --check
 ```
@@ -100,5 +96,5 @@ The runtime manifest, `SHA256SUMS`, and the lock's required asset set must match
 - If only SPX products change and both runtime artifact classes remain identical, bump SPX and add an explicit atomic mapping to the existing runtime.
 - If Godot/module/toolchain inputs or runtime pack output changes, bump `runtime_version` and add an explicit atomic mapping for the new SPX version.
 - Every atomic runtime definition must have an immutable lock snapshot at `internal/release/runtime_locks/<runtime-version>.json`. Consumers use that snapshot, rather than the newer default lock, when validating a historical manifest.
-- For a new version, `python3 .github/scripts/runtime_lock_snapshot.py --sync` creates the missing snapshot. Prefer `--pin-godot --godot-commit ... --godot-ref ...` when changing the Godot pin so the canonical lock and snapshot move together. While that current runtime is confirmed unpublished, add `--allow-unpublished-update` to refresh an existing snapshot. Both modes derive the filename from the current lock and never touch other versions.
-- Once a runtime is public, freeze its snapshot permanently. Never use `--allow-unpublished-update` for a public tag; bump `runtime_version`, update the release mapping, and create a new snapshot instead. Release setup runs `--check`, and package initialization plus drift/catalog tests enforce the current mapping.
+- For a new version, `python3 .github/scripts/runtime_lock_snapshot.py sync` creates the missing snapshot. Use `make pin-godot GODOT_SHA=<sha>` for a strict pin, `make pin-godot-unpublished GODOT_SHA=<sha>` to replace an unpublished snapshot after the commit reaches the lock ref, or `make pin-godot-candidate GODOT_SHA=<sha>` for a verified pre-merge dry-run candidate. All three retain the current lock ref unless `GODOT_REF=...` is supplied, derive the snapshot filename from the current lock, and never touch other historical versions.
+- Once a runtime is public, freeze its snapshot permanently. Never use `sync --unpublished`, `pin-godot-unpublished`, or `pin-godot-candidate` for a public tag; bump `runtime_version`, update the release mapping, and create a new snapshot instead. Release setup runs `check`, and package initialization plus drift/catalog tests enforce the current mapping.

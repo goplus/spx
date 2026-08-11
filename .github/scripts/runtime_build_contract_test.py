@@ -420,6 +420,37 @@ class RuntimeBuildContractTest(unittest.TestCase):
             self.assertEqual(snapshot_path.read_bytes(), lock_path.read_bytes())
             self.assertEqual(historical_path.read_bytes(), b"historical\n")
 
+    def test_pin_godot_retains_the_current_ref_when_omitted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            lock_path = root / "runtime.lock.json"
+            lock_path.write_bytes(LOCK_PATH.read_bytes())
+            snapshot_directory = root / "runtime_locks"
+            snapshot_directory.mkdir()
+            seen_refs = []
+
+            def capture_ref(repository, godot_ref, godot_commit, **options):
+                del repository, godot_commit, options
+                seen_refs.append(godot_ref)
+                return {
+                    "status": "ancestor",
+                    "ref": f"refs/heads/{godot_ref}",
+                    "ref_commit": "f" * 40,
+                }
+
+            lock_snapshot.pin_godot(
+                lock_path,
+                snapshot_directory,
+                "f" * 40,
+                ancestry_verifier=capture_ref,
+            )
+
+            self.assertEqual(seen_refs, [self.lock["godot"]["ref"]])
+            self.assertEqual(
+                contract.load_runtime_lock(lock_path)["godot"]["ref"],
+                self.lock["godot"]["ref"],
+            )
+
     def test_pin_godot_rejects_invalid_inputs_without_writing(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -511,6 +542,54 @@ class RuntimeBuildContractTest(unittest.TestCase):
             self.assertEqual(ancestry["status"], "premerge")
             self.assertEqual(snapshot_path.read_bytes(), lock_path.read_bytes())
 
+    def test_pin_godot_cli_maps_concise_policies(self):
+        ancestry = {
+            "status": "ancestor",
+            "ref": "refs/heads/spx4.4.1",
+            "ref_commit": "f" * 40,
+        }
+        cases = (
+            ((), False, False),
+            (("--unpublished",), True, False),
+            (("--premerge",), True, True),
+        )
+        for flags, allow_unpublished, allow_premerge in cases:
+            with self.subTest(flags=flags), mock.patch.object(
+                lock_snapshot,
+                "pin_godot",
+                return_value=(Path("snapshot.json"), True, ancestry),
+            ) as pin, contextlib.redirect_stdout(io.StringIO()):
+                return_code = lock_snapshot.main(
+                    [
+                        "pin-godot",
+                        "f" * 40,
+                        *flags,
+                        "--lock",
+                        str(LOCK_PATH),
+                    ]
+                )
+
+            self.assertEqual(return_code, 0)
+            pin.assert_called_once_with(
+                LOCK_PATH,
+                lock_snapshot.DEFAULT_SNAPSHOT_DIRECTORY,
+                "f" * 40,
+                None,
+                allow_unpublished,
+                allow_premerge,
+            )
+
+    def test_pin_godot_cli_requires_commit_and_exclusive_policy(self):
+        invalid_commands = (
+            ["pin-godot"],
+            ["pin-godot", "f" * 40, "--unpublished", "--premerge"],
+        )
+        for command in invalid_commands:
+            with self.subTest(command=command), contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit) as raised:
+                    lock_snapshot.main(command)
+            self.assertEqual(raised.exception.code, 2)
+
     def test_godot_ancestry_rejects_untrusted_lock_repository(self):
         with tempfile.TemporaryDirectory() as directory:
             lock = copy.deepcopy(self.lock)
@@ -545,7 +624,7 @@ class RuntimeBuildContractTest(unittest.TestCase):
             ) as verifier, contextlib.redirect_stdout(io.StringIO()) as stdout:
                 return_code = lock_snapshot.main(
                     [
-                        "--verify-godot-ancestry",
+                        "verify-godot",
                         "--lock",
                         str(LOCK_PATH),
                         "--allow-premerge-candidate",
@@ -567,7 +646,7 @@ class RuntimeBuildContractTest(unittest.TestCase):
     def test_godot_ancestry_cli_rejects_candidate_flag_for_check(self):
         with contextlib.redirect_stderr(io.StringIO()):
             with self.assertRaises(SystemExit) as raised:
-                lock_snapshot.main(["--check", "--allow-premerge-candidate"])
+                lock_snapshot.main(["check", "--allow-premerge-candidate"])
         self.assertEqual(raised.exception.code, 2)
 
     def run_git(self, cwd, *arguments):

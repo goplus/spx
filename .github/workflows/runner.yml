@@ -30,7 +30,7 @@ jobs:
           persist-credentials: false
 
       - name: Validate current runtime lock snapshot
-        run: python3 .github/scripts/runtime_lock_snapshot.py --check
+        run: python3 .github/scripts/runtime_lock_snapshot.py check
 
       - name: Set up locked Go and XGo
         uses: ./.github/actions/deps

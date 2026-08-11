@@ -55,7 +55,7 @@ jobs:
 
       - name: Validate current runtime lock snapshot
         shell: bash
-        run: python3 .github/scripts/runtime_lock_snapshot.py --check
+        run: python3 .github/scripts/runtime_lock_snapshot.py check
 
       - name: Set up locked Go and XGo
         uses: ./.github/actions/deps
@@ -118,7 +118,7 @@ jobs:
           set -euo pipefail
 
           ancestry_args=(
-            --verify-godot-ancestry
+            verify-godot
             --lock internal/release/runtime.lock.json
             --github-output "$GITHUB_OUTPUT"
           )
@@ -626,7 +626,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 .github/scripts/runtime_lock_snapshot.py \
-            --verify-godot-ancestry \
+            verify-godot \
             --lock internal/release/runtime.lock.json
 
       - name: Download assembled runtime release

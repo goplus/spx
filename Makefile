@@ -16,7 +16,7 @@ BUILDCTL_CMD := $(BUILDCTL_BIN)
 BUILDCTL_TARGETS := setup setup-web dev doctor list-demos install clean-assets download download-engine build-editor build-desktop build-web build-wasm build-wasm-opt build-android build-ios install-apk editor template-editor run runnative rune runweb runwebworker export-pack export-web stop
 PRIMARY_HELP_TARGETS := setup setup-web dev doctor build-editor build-desktop build-web build-android build-ios list-demos editor template-editor run runnative rune runweb runwebworker format generate help-advanced
 
-.PHONY: $(BUILDCTL_TARGETS) help help-advanced buildctl format generate generate-bindings generate-runtime pin-godot clean-projects validate-download-engine validate-install-web validate-pin-godot
+.PHONY: $(BUILDCTL_TARGETS) help help-advanced buildctl format generate generate-bindings generate-runtime pin-godot pin-godot-unpublished pin-godot-candidate clean-projects validate-download-engine validate-install-web validate-pin-godot
 
 DEMO_INDEX ?= 3
 APK_PROJECT_DIR ?= tutorial/00-Hello
@@ -25,9 +25,7 @@ PORT    ?= 8106
 MOVIE   ?= false
 WEB     ?= 0
 GODOT_SHA ?=
-GODOT_REF ?= spx4.4.1
-UNPUBLISHED_RUNTIME ?= 0
-GODOT_PREMERGE_CANDIDATE ?= 0
+GODOT_REF ?=
 WEB_MODE = $(or $(strip $(MODE)),normal)
 VALID_INSTALL_WEB_TRUE_VALUES := 1 true TRUE yes YES on ON
 VALID_INSTALL_WEB_FALSE_VALUES := 0 false FALSE no NO off OFF
@@ -44,10 +42,9 @@ validate-install-web:
 	$(call validate-install-web)
 
 validate-pin-godot:
-	@test -n "$(strip $(GODOT_SHA))" || { echo 'GODOT_SHA is required. Usage: make pin-godot GODOT_SHA=<full-sha> [GODOT_REF=spx4.4.1]' >&2; exit 2; }
-	@test -n "$(strip $(GODOT_REF))" || { echo 'GODOT_REF must not be empty.' >&2; exit 2; }
-	@test "$(UNPUBLISHED_RUNTIME)" = 0 || test "$(UNPUBLISHED_RUNTIME)" = 1 || { echo 'UNPUBLISHED_RUNTIME must be 0 or 1.' >&2; exit 2; }
-	@test "$(GODOT_PREMERGE_CANDIDATE)" = 0 || test "$(GODOT_PREMERGE_CANDIDATE)" = 1 || { echo 'GODOT_PREMERGE_CANDIDATE must be 0 or 1.' >&2; exit 2; }
+	@test -n "$(strip $(GODOT_SHA))" || { echo 'GODOT_SHA is required. Usage: make pin-godot[-unpublished|-candidate] GODOT_SHA=<full-sha> [GODOT_REF=<branch-or-tag>]' >&2; exit 2; }
+	@test -z "$(strip $(UNPUBLISHED_RUNTIME))" || { echo 'UNPUBLISHED_RUNTIME was replaced by the pin-godot-unpublished target.' >&2; exit 2; }
+	@test -z "$(strip $(GODOT_PREMERGE_CANDIDATE))" || { echo 'GODOT_PREMERGE_CANDIDATE was replaced by the pin-godot-candidate target.' >&2; exit 2; }
 
 download-engine: validate-download-engine
 
@@ -62,10 +59,17 @@ $(BUILDCTL_BIN): $(BUILDCTL_SOURCES)
 # ============================================
 buildctl: $(BUILDCTL_BIN) ## Build cached buildctl binary at ./.bin/buildctl
 
-pin-godot: validate-pin-godot ## Verify and pin Godot for the current unpublished runtime
-	python3 .github/scripts/runtime_lock_snapshot.py --pin-godot \
-		--godot-commit "$(GODOT_SHA)" \
-		--godot-ref "$(GODOT_REF)"$(if $(filter 1,$(UNPUBLISHED_RUNTIME)), --allow-unpublished-update,)$(if $(filter 1,$(GODOT_PREMERGE_CANDIDATE)), --allow-premerge-candidate,)
+pin-godot: override PIN_GODOT_POLICY :=
+pin-godot-unpublished: override PIN_GODOT_POLICY := --unpublished
+pin-godot-candidate: override PIN_GODOT_POLICY := --premerge
+pin-godot pin-godot-unpublished pin-godot-candidate: validate-pin-godot
+	python3 .github/scripts/runtime_lock_snapshot.py pin-godot "$(GODOT_SHA)"$(if $(strip $(GODOT_REF)), --ref "$(GODOT_REF)")$(if $(PIN_GODOT_POLICY), $(PIN_GODOT_POLICY))
+
+pin-godot: ## Strictly pin a Godot commit already contained by the current lock ref
+
+pin-godot-unpublished: ## Replace an unpublished snapshot with a commit already contained by the lock ref
+
+pin-godot-candidate: ## Allow a verified pre-merge candidate for dry-run validation only
 
 help: ## Show common commands
 	@echo "Common Make Commands:"
@@ -92,8 +96,13 @@ help-advanced: ## Show all commands, including low-level targets
 	@echo "  MODE defaults to normal for Web-related targets."
 	@echo "  WEB defaults to 0; truthy values enable web tooling/runtime for 'make install'."
 	@echo "  PLATFORM is required by download-engine."
-	@echo "  UNPUBLISHED_RUNTIME=1 explicitly permits pin-godot to replace the current snapshot."
-	@echo "  GODOT_PREMERGE_CANDIDATE=1 permits only a verified candidate-only pin; never use it for publication."
+	@echo "  GODOT_REF is optional for pin-godot targets; omitting it retains the current lock ref."
+	@echo "  Use pin-godot-unpublished only after confirming that the current snapshot is unpublished."
+	@echo "  pin-godot-candidate permits verified candidate-only pinning; never use it for publication."
+	@echo "  Examples:"
+	@echo "    make pin-godot GODOT_SHA=<40-sha>"
+	@echo "    make pin-godot-unpublished GODOT_SHA=<40-sha>"
+	@echo "    make pin-godot-candidate GODOT_SHA=<40-sha>"
 	@echo ""
 	@echo "Demo targets via index:"
 	@i=1; \
