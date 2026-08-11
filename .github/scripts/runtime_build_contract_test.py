@@ -10,6 +10,7 @@ import unittest
 from pathlib import Path
 
 import runtime_build_contract as contract
+import runtime_lock_snapshot as lock_snapshot
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -39,6 +40,17 @@ class RuntimeBuildContractTest(unittest.TestCase):
                 "jdk-version": "17",
             },
         )
+
+    def test_describe_lock_outputs_checkout_and_toolchain_identity(self):
+        outputs = contract.describe_lock(self.lock)
+        self.assertEqual(outputs["runtime-version"], self.lock["runtime_version"])
+        self.assertEqual(outputs["runtime-abi"], str(self.lock["runtime_abi"]))
+        self.assertEqual(outputs["godot-repository"], "goplus/godot")
+        self.assertEqual(outputs["godot-ref"], self.lock["godot"]["ref"])
+        self.assertEqual(outputs["godot-commit"], self.lock["godot"]["commit"])
+        self.assertEqual(outputs["module-relative-path"], self.lock["module"]["path"])
+        self.assertEqual(outputs["scons-version"], self.lock["toolchain"]["scons"])
+        self.assertEqual(outputs["emsdk-version"], self.lock["toolchain"]["emsdk"])
 
     def test_engine_toolchain_digest_is_scoped(self):
         outputs = contract.resolve_toolchain(self.lock, toolchain_scope="android")
@@ -107,6 +119,12 @@ class RuntimeBuildContractTest(unittest.TestCase):
     def test_module_path_rejects_repository_root(self):
         with self.assertRaisesRegex(contract.ContractError, "normalized relative path"):
             contract.validate_module_path(".")
+
+    def test_module_path_rejects_empty_and_git_revision_injection(self):
+        for module_path in ("", "../spx", "godot_modules/spx:refs/heads/main", "godot_modules/spx^{tree}"):
+            with self.subTest(module_path=module_path):
+                with self.assertRaises(contract.ContractError):
+                    contract.validate_module_path(module_path)
 
     def test_profile_outputs_merge_common_flags(self):
         profile = {
@@ -228,6 +246,28 @@ class RuntimeBuildContractTest(unittest.TestCase):
             self.assertIn("no validated setup-ndk alias", stderr.getvalue())
             self.assertFalse(error_output.exists())
 
+    def test_describe_cli_emits_lock_identity(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output_path = Path(directory) / "output"
+            self.assertEqual(
+                contract.main(
+                    [
+                        "describe",
+                        "--lock",
+                        str(LOCK_PATH),
+                        "--github-output",
+                        str(output_path),
+                    ]
+                ),
+                0,
+            )
+            output = output_path.read_text(encoding="utf-8")
+            self.assertIn(f"runtime-version={self.lock['runtime_version']}\n", output)
+            self.assertIn(f"runtime-abi={self.lock['runtime_abi']}\n", output)
+            self.assertIn("godot-repository=goplus/godot\n", output)
+            self.assertIn(f"godot-commit={self.lock['godot']['commit']}\n", output)
+            self.assertIn(f"module-relative-path={self.lock['module']['path']}\n", output)
+
     def test_source_cli_emits_scoped_digest_and_module_path(self):
         with tempfile.TemporaryDirectory() as directory:
             output_path = Path(directory) / "output"
@@ -256,6 +296,130 @@ class RuntimeBuildContractTest(unittest.TestCase):
             output = output_path.read_text(encoding="utf-8")
             self.assertIn("module-relative-path=godot_modules/spx\n", output)
             self.assertRegex(output, r"(?m)^engine-toolchain-sha256=[0-9a-f]{64}$")
+
+    def test_current_runtime_lock_snapshot_is_canonical(self):
+        lock = contract.load_runtime_lock(LOCK_PATH)
+        self.assertEqual(LOCK_PATH.read_bytes(), lock_snapshot.canonical_runtime_lock(lock))
+
+    def test_snapshot_sync_only_writes_the_current_version(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            lock_path = root / "runtime.lock.json"
+            lock_path.write_bytes(LOCK_PATH.read_bytes())
+            snapshot_directory = root / "runtime_locks"
+            snapshot_directory.mkdir()
+            historical_path = snapshot_directory / "1.0.0.json"
+            historical_path.write_bytes(b"historical\n")
+
+            snapshot_path, changed = lock_snapshot.sync_snapshot(lock_path, snapshot_directory)
+
+            self.assertTrue(changed)
+            self.assertEqual(snapshot_path.name, f"{self.lock['runtime_version']}.json")
+            self.assertEqual(snapshot_path.read_bytes(), lock_path.read_bytes())
+            self.assertEqual(historical_path.read_bytes(), b"historical\n")
+            self.assertEqual(lock_snapshot.check_snapshot(lock_path, snapshot_directory), snapshot_path)
+
+    def test_snapshot_sync_requires_explicit_unpublished_update(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            lock_path = root / "runtime.lock.json"
+            lock_path.write_bytes(LOCK_PATH.read_bytes())
+            snapshot_directory = root / "runtime_locks"
+            snapshot_directory.mkdir()
+            snapshot_path = snapshot_directory / f"{self.lock['runtime_version']}.json"
+            snapshot_path.write_bytes(b"existing published bytes\n")
+
+            with self.assertRaisesRegex(lock_snapshot.SnapshotError, "refusing to replace"):
+                lock_snapshot.sync_snapshot(lock_path, snapshot_directory)
+            self.assertEqual(snapshot_path.read_bytes(), b"existing published bytes\n")
+
+            updated_path, changed = lock_snapshot.sync_snapshot(
+                lock_path,
+                snapshot_directory,
+                allow_unpublished_update=True,
+            )
+            self.assertTrue(changed)
+            self.assertEqual(updated_path.read_bytes(), lock_path.read_bytes())
+
+    def test_pin_godot_updates_lock_and_current_snapshot_together(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            lock_path = root / "runtime.lock.json"
+            lock_path.write_bytes(LOCK_PATH.read_bytes())
+            snapshot_directory = root / "runtime_locks"
+            snapshot_directory.mkdir()
+            snapshot_path = snapshot_directory / f"{self.lock['runtime_version']}.json"
+            snapshot_path.write_bytes(LOCK_PATH.read_bytes())
+            historical_path = snapshot_directory / "1.0.0.json"
+            historical_path.write_bytes(b"historical\n")
+            original_lock = lock_path.read_bytes()
+
+            with self.assertRaisesRegex(lock_snapshot.SnapshotError, "refusing to replace"):
+                lock_snapshot.pin_godot(
+                    lock_path,
+                    snapshot_directory,
+                    "b" * 40,
+                    "spx4.4.1-next",
+                )
+            self.assertEqual(lock_path.read_bytes(), original_lock)
+            self.assertEqual(snapshot_path.read_bytes(), original_lock)
+
+            updated_path, changed = lock_snapshot.pin_godot(
+                lock_path,
+                snapshot_directory,
+                "b" * 40,
+                "spx4.4.1-next",
+                allow_unpublished_update=True,
+            )
+            self.assertTrue(changed)
+            updated_lock = contract.load_runtime_lock(lock_path)
+            self.assertEqual(updated_lock["godot"]["commit"], "b" * 40)
+            self.assertEqual(updated_lock["godot"]["ref"], "spx4.4.1-next")
+            self.assertEqual(updated_path.read_bytes(), lock_path.read_bytes())
+            self.assertEqual(historical_path.read_bytes(), b"historical\n")
+
+    def test_pin_godot_creates_a_missing_current_snapshot_without_override(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            lock_path = root / "runtime.lock.json"
+            lock_path.write_bytes(LOCK_PATH.read_bytes())
+            snapshot_directory = root / "runtime_locks"
+            snapshot_directory.mkdir()
+            historical_path = snapshot_directory / "1.0.0.json"
+            historical_path.write_bytes(b"historical\n")
+
+            snapshot_path, changed = lock_snapshot.pin_godot(
+                lock_path,
+                snapshot_directory,
+                "c" * 40,
+                "spx4.4.1-next",
+            )
+
+            self.assertTrue(changed)
+            self.assertEqual(snapshot_path.read_bytes(), lock_path.read_bytes())
+            self.assertEqual(historical_path.read_bytes(), b"historical\n")
+
+    def test_pin_godot_rejects_invalid_inputs_without_writing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            lock_path = root / "runtime.lock.json"
+            lock_path.write_bytes(LOCK_PATH.read_bytes())
+            snapshot_directory = root / "runtime_locks"
+            snapshot_directory.mkdir()
+            snapshot_path = snapshot_directory / f"{self.lock['runtime_version']}.json"
+            snapshot_path.write_bytes(LOCK_PATH.read_bytes())
+            original_lock = lock_path.read_bytes()
+
+            with self.assertRaises(contract.ContractError):
+                lock_snapshot.pin_godot(
+                    lock_path,
+                    snapshot_directory,
+                    "not-a-commit",
+                    "spx4.4.1\nrefs/heads/injected",
+                    allow_unpublished_update=True,
+                )
+            self.assertEqual(lock_path.read_bytes(), original_lock)
+            self.assertEqual(snapshot_path.read_bytes(), original_lock)
 
 
 if __name__ == "__main__":

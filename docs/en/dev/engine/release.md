@@ -25,9 +25,19 @@ The manifest records `module_tree`, `runtime_pack_source_sha256`, and `build_rec
 
 ## Freeze order
 
-1. Merge the Godot changes first and record the final commit. The SPX lock pins an exact Godot SHA; if a merge or squash changes it, update `internal/release/runtime.lock.json`.
-2. Update the full reusable-workflow SHA in `.github/workflows/release.yml`. The workflow verifies that it exactly matches the lock.
-3. Change `godot.ref` to a durable branch or tag that will not disappear with a feature-branch cleanup. The commit determines the actual engine source, but the ref is also part of the canonical lock and must be frozen before generating a manifest.
+1. Merge the Godot changes first and record the final commit. A merge or squash can change the SHA, so do not keep a PR-head pin after the final commit is available.
+2. Pin that commit together with a durable branch or tag, such as `spx4.4.1`. This single operation validates and rewrites canonical `runtime.lock.json` plus its current snapshot; updating an existing snapshot requires an explicit unpublished-runtime acknowledgement:
+
+   ```sh
+   make pin-godot \
+     GODOT_SHA=<40-character-sha> \
+     GODOT_REF=spx4.4.1 \
+     UNPUBLISHED_RUNTIME=1
+   python3 .github/scripts/runtime_lock_snapshot.py --check
+   ```
+
+   Omit `UNPUBLISHED_RUNTIME=1` when the new runtime version has no snapshot yet. It is an explicit acknowledgement that replacing the current snapshot is safe; never set it after that runtime is public. The commit determines the exact engine source, while the ref makes that commit reachable to shallow fetches; both are part of the canonical lock.
+3. Independently pin the reusable-workflow implementation with a full SHA in `.github/workflows/release.yml`. That `uses: ...@SHA` selects workflow code; it does not select the Godot source tree and does not need to equal `godot.commit`.
 4. Freeze the SPX candidate commit on a release branch in `goplus/spx`. Confirm that `currentSPXVersion` resolves through `spxRuntimeMappings` to the runtime definition matching the lock, and that historical definitions and mappings are unchanged; merge only after the bootstrap below succeeds.
 
 Never publish from a fork. The `publish-runtime` and `publish-release` operations are allowed only in the lock's `release_repository`, currently `goplus/spx`.
@@ -36,6 +46,7 @@ Never publish from a fork. The `publish-runtime` and `publish-release` operation
 
 ```sh
 GODOT_SRC=/absolute/path/to/final-godot make doctor
+python3 .github/scripts/runtime_lock_snapshot.py --check
 go list ./... | grep -v '/internal/webffi' | xargs go test
 git diff --check
 ```
@@ -70,4 +81,5 @@ The runtime manifest, `SHA256SUMS`, and the lock's required asset set must match
 - If only SPX products change and both runtime artifact classes remain identical, bump SPX and add an explicit atomic mapping to the existing runtime.
 - If Godot/module/toolchain inputs or runtime pack output changes, bump `runtime_version` and add an explicit atomic mapping for the new SPX version.
 - Every atomic runtime definition must have an immutable lock snapshot at `internal/release/runtime_locks/<runtime-version>.json`. Consumers use that snapshot, rather than the newer default lock, when validating a historical manifest.
-- Before publishing a new runtime, add its snapshot and keep its canonical JSON identical to `runtime.lock.json`; package initialization plus the drift and catalog tests enforce the current mapping. Once that runtime is public, freeze its snapshot permanently. Start the next runtime by changing the default lock and adding a new matching snapshot—never rewrite a published snapshot.
+- For a new version, `python3 .github/scripts/runtime_lock_snapshot.py --sync` creates the missing snapshot. Prefer `--pin-godot --godot-commit ... --godot-ref ...` when changing the Godot pin so the canonical lock and snapshot move together. While that current runtime is confirmed unpublished, add `--allow-unpublished-update` to refresh an existing snapshot. Both modes derive the filename from the current lock and never touch other versions.
+- Once a runtime is public, freeze its snapshot permanently. Never use `--allow-unpublished-update` for a public tag; bump `runtime_version`, update the release mapping, and create a new snapshot instead. Release setup runs `--check`, and package initialization plus drift/catalog tests enforce the current mapping.

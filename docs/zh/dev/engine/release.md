@@ -25,9 +25,19 @@ manifest 分别记录 `module_tree`、`runtime_pack_source_sha256` 和 `build_re
 
 ## 冻结顺序
 
-1. 先合并 Godot 改动并取得最终 commit。当前 SPX lock 精确固定 Godot SHA；如果 Godot PR 使用 merge 或 squash 产生新 SHA，必须回写 `internal/release/runtime.lock.json`。
-2. 同步 `.github/workflows/release.yml` 中 reusable Godot workflow 的完整 SHA。workflow 会校验它与 lock 完全一致。
-3. 将 lock 的 `godot.ref` 改为不会随功能分支清理而消失的持久分支或 tag；Godot commit 决定实际引擎源码，但 ref 同样属于 canonical lock，必须在生成 manifest 前冻结。
+1. 先合并 Godot 改动并取得最终 commit。merge 或 squash 可能改变 SHA，最终 commit 产生后不要继续保留 PR head pin。
+2. 将该 commit 与持久 branch/tag（例如 `spx4.4.1`）一起固定。以下单次操作会校验并同时重写 canonical `runtime.lock.json` 与 current snapshot；更新已有 snapshot 时必须显式确认该 runtime 尚未发布：
+
+   ```sh
+   make pin-godot \
+     GODOT_SHA=<40-character-sha> \
+     GODOT_REF=spx4.4.1 \
+     UNPUBLISHED_RUNTIME=1
+   python3 .github/scripts/runtime_lock_snapshot.py --check
+   ```
+
+   新 runtime version 尚无 snapshot 时省略 `UNPUBLISHED_RUNTIME=1`。它明确表示当前 snapshot 仍可安全覆盖；runtime 一旦公开就绝不能再设置。commit 决定精确的引擎源码，ref 让 shallow fetch 可以取得该 commit；两者都属于 canonical lock。
+3. 在 `.github/workflows/release.yml` 中独立使用完整 SHA 固定 reusable workflow 的实现。`uses: ...@SHA` 选择的是 workflow 代码，不是 Godot 源码，不要求与 `godot.commit` 相等。
 4. 在 `goplus/spx` 的发布分支冻结 SPX candidate commit。确认 `currentSPXVersion` 通过 `spxRuntimeMappings` 指向与 lock 一致的 runtime definition，并保持历史 definitions/mappings 不变；首个 runtime 按下文自举通过后再合并。
 
 不要从 fork 发布。`publish-runtime` 与 `publish-release` 操作只允许在 lock 的 `release_repository`（当前为 `goplus/spx`）执行。
@@ -36,6 +46,7 @@ manifest 分别记录 `module_tree`、`runtime_pack_source_sha256` 和 `build_re
 
 ```sh
 GODOT_SRC=/absolute/path/to/final-godot make doctor
+python3 .github/scripts/runtime_lock_snapshot.py --check
 go list ./... | grep -v '/internal/webffi' | xargs go test
 git diff --check
 ```
@@ -70,4 +81,5 @@ runtime manifest、`SHA256SUMS` 和 lock 的 required asset 集合必须完全�
 - 仅 SPX 产品变化且 runtime 两类产物均未变化时，提升 SPX 版本，并新增一条指向既有 runtime 的显式原子映射。
 - Godot/module/toolchain 或 runtime pack 输出变化时，提升 `runtime_version`，并为新的 SPX 版本新增显式原子映射。
 - 每个原子 runtime definition 都必须有不可变的 `internal/release/runtime_locks/<runtime-version>.json` 快照；校验历史 manifest 时读取对应快照，不能读取更新后的默认 lock。
-- 发布新 runtime 前，新增该版本快照，并保持它的 canonical JSON 与 `runtime.lock.json` 完全一致；package 初始化、drift 与 catalog 测试会共同校验当前映射。runtime 一旦公开，其快照永久冻结。准备下一版时修改默认 lock 并新增另一份匹配快照，绝不能重写已发布快照。
+- 新版本可运行 `python3 .github/scripts/runtime_lock_snapshot.py --sync` 创建缺失的 snapshot。修改 Godot pin 时优先使用 `--pin-godot --godot-commit ... --godot-ref ...`，让 canonical lock 与 snapshot 一次同步。确认 current runtime 尚未发布后，加 `--allow-unpublished-update` 可刷新已有 snapshot；两种模式都只根据 current lock 推导目标文件名，不会触碰其他历史版本。
+- runtime 一旦公开，其 snapshot 永久冻结。公开 tag 绝不能使用 `--allow-unpublished-update`；必须提升 `runtime_version`、更新 release mapping，并创建新 snapshot。release setup 会运行 `--check`，package 初始化、drift 与 catalog 测试也会共同校验 current mapping。

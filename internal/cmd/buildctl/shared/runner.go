@@ -119,7 +119,10 @@ func (r CommandRunner) StopWebServers() error {
 }
 
 func buildctlCommandEnv() (map[string]string, error) {
-	env := currentEnvMap()
+	env, err := currentBuildEnv()
+	if err != nil {
+		return nil, err
+	}
 	goPath, err := ensureGoPath()
 	if err != nil {
 		return nil, err
@@ -130,6 +133,14 @@ func buildctlCommandEnv() (map[string]string, error) {
 	}
 	setPathEnv(env, prependToPath(pathEnvValue(env), pathDirs...))
 	env["GOTOOLCHAIN"] = "go" + release.DefaultRuntimeLock().Toolchain.Go
+	return env, nil
+}
+
+func currentBuildEnv() (map[string]string, error) {
+	env := currentEnvMap()
+	if err := configureCurrentMacOSGoToolchainEnv(env); err != nil {
+		return nil, fmt.Errorf("configure macOS Go toolchain: %w", err)
+	}
 	return env, nil
 }
 

@@ -90,8 +90,8 @@ func ValidateOptionalPlatform(platform string) error {
 	return validateOptionalPlatform(platform)
 }
 
-func CurrentEnvMap() map[string]string {
-	return currentEnvMap()
+func CurrentBuildEnv() (map[string]string, error) {
+	return currentBuildEnv()
 }
 
 func EnvMapToSlice(env map[string]string) []string {

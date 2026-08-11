@@ -39,10 +39,10 @@ func TestDefaultRuntimeLock(t *testing.T) {
 	if lock.ReleaseRepository != "goplus/spx" || lock.Manifest != "runtime-manifest.json" {
 		t.Fatalf("unexpected release target: %#v", lock)
 	}
-	if lock.Godot.Repository != "https://github.com/goplus/godot.git" || lock.Godot.Ref != "refactor/external-spx-module-rewrite" {
+	if lock.Godot.Repository != "https://github.com/goplus/godot.git" || lock.Godot.Ref != "spx4.4.1" {
 		t.Fatalf("unexpected Godot source: %#v", lock.Godot)
 	}
-	if lock.Godot.Commit != "a24bff63996bc8f017ab17559beb5c96d2981753" || lock.Godot.Version != "4.4.1.stable" {
+	if lock.Godot.Version != "4.4.1.stable" {
 		t.Fatalf("unexpected Godot pin: %#v", lock.Godot)
 	}
 	if lock.Module.Path != "godot_modules/spx" {
@@ -173,7 +173,9 @@ func TestRuntimeLockValidation(t *testing.T) {
 		{"Godot version whitespace", func(lock *RuntimeLock) { lock.Godot.Version = "4.4.1 " }},
 		{"Godot version internal whitespace", func(lock *RuntimeLock) { lock.Godot.Version = "4.4.1 stable" }},
 		{"absolute module", func(lock *RuntimeLock) { lock.Module.Path = "/tmp/spx" }},
+		{"empty module", func(lock *RuntimeLock) { lock.Module.Path = "" }},
 		{"module traversal", func(lock *RuntimeLock) { lock.Module.Path = "modules/../spx" }},
+		{"module revision injection", func(lock *RuntimeLock) { lock.Module.Path = "godot_modules/spx:refs/heads/main" }},
 		{"module backslash", func(lock *RuntimeLock) { lock.Module.Path = `godot_modules\spx` }},
 		{"module whitespace", func(lock *RuntimeLock) { lock.Module.Path = "godot modules/spx" }},
 		{"module unicode", func(lock *RuntimeLock) { lock.Module.Path = "godot_modules/模块" }},

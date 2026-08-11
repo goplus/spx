@@ -26,7 +26,7 @@
   ],
   "godot": {
     "repository": "https://github.com/goplus/godot.git",
-    "ref": "refactor/external-spx-module-rewrite",
+    "ref": "spx4.4.1",
     "commit": "a24bff63996bc8f017ab17559beb5c96d2981753",
     "version": "4.4.1.stable"
   },

@@ -40,6 +40,7 @@ type releaseDescription struct {
 	ReleaseRepository string `json:"release_repository"`
 	GodotRepository   string `json:"godot_repository"`
 	GodotCommit       string `json:"godot_commit"`
+	ModulePath        string `json:"module_path"`
 }
 
 type githubOutput struct {
@@ -120,6 +121,7 @@ func describeRelease() (releaseDescription, error) {
 		ReleaseRepository: lock.ReleaseRepository,
 		GodotRepository:   godotRepository,
 		GodotCommit:       lock.Godot.Commit,
+		ModulePath:        lock.Module.Path,
 	}, nil
 }
 
@@ -146,19 +148,25 @@ func (d releaseDescription) githubOutputs() []githubOutput {
 		{name: "release_repository", value: d.ReleaseRepository},
 		{name: "godot_repository", value: d.GodotRepository},
 		{name: "godot_commit", value: d.GodotCommit},
+		{name: "module_path", value: d.ModulePath},
 	}
 }
 
 func writeGitHubOutput(path string, outputs []githubOutput) error {
+	for _, output := range outputs {
+		if output.value == "" {
+			return fmt.Errorf("GitHub output %q must not be empty", output.name)
+		}
+		if strings.ContainsAny(output.value, "\r\n") {
+			return fmt.Errorf("GitHub output %q must be a single line", output.name)
+		}
+	}
 	file, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0o600)
 	if err != nil {
 		return fmt.Errorf("open GitHub output: %w", err)
 	}
 	defer file.Close()
 	for _, output := range outputs {
-		if strings.ContainsAny(output.value, "\r\n") {
-			return fmt.Errorf("GitHub output %q must be a single line", output.name)
-		}
 		if _, err := fmt.Fprintf(file, "%s=%s\n", output.name, output.value); err != nil {
 			return fmt.Errorf("write GitHub output: %w", err)
 		}

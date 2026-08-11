@@ -190,7 +190,10 @@ def normalize_github_repository(value, label):
 
 
 def load_runtime_lock(path):
-    lock = load_json(path, "runtime lock")
+    return validate_runtime_lock(load_json(path, "runtime lock"))
+
+
+def validate_runtime_lock(lock):
     require_exact_fields(lock, LOCK_FIELDS, "runtime lock")
     if type(lock["schema"]) is not int or lock["schema"] != 1:
         raise ContractError("runtime lock schema must be the integer 1")
@@ -269,6 +272,22 @@ def resolve_toolchain(lock, require_android_ndk_alias=False, toolchain_scope=Non
         domain, fields = ENGINE_TOOLCHAIN_SCOPES[toolchain_scope]
         payload = domain + "\n" + "".join(f"{field}={toolchain[field]}\n" for field in fields)
         outputs["engine-toolchain-sha256"] = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    return outputs
+
+
+def describe_lock(lock):
+    outputs = {
+        "runtime-version": lock["runtime_version"],
+        "runtime-abi": str(lock["runtime_abi"]),
+        "release-repository": lock["release_repository"],
+        "runtime-manifest": lock["manifest"],
+        "godot-repository": normalize_github_repository(lock["godot"]["repository"], "godot.repository"),
+        "godot-ref": lock["godot"]["ref"],
+        "godot-commit": lock["godot"]["commit"],
+        "godot-version": lock["godot"]["version"],
+        "module-relative-path": lock["module"]["path"],
+    }
+    outputs.update(resolve_toolchain(lock))
     return outputs
 
 
@@ -354,6 +373,10 @@ def run_toolchain(args):
     write_github_outputs(args.github_output, outputs)
 
 
+def run_describe(args):
+    write_github_outputs(args.github_output, describe_lock(load_runtime_lock(args.lock)))
+
+
 def run_source(args):
     lock = load_runtime_lock(args.lock)
     module_path = validate_source(
@@ -392,6 +415,10 @@ def build_parser():
     toolchain = subparsers.add_parser("toolchain", help="emit locked toolchain versions")
     add_output_arguments(toolchain, include_lock=True, include_ndk=True)
     toolchain.set_defaults(handler=run_toolchain)
+
+    describe = subparsers.add_parser("describe", help="emit immutable checkout and toolchain inputs from the lock")
+    add_output_arguments(describe, include_lock=True)
+    describe.set_defaults(handler=run_describe)
 
     source = subparsers.add_parser("source", help="validate Godot source identity and emit lock-derived inputs")
     add_output_arguments(source, include_lock=True, include_ndk=True)

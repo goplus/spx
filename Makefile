@@ -7,15 +7,16 @@ export GODOT_SRC
 export SPX_MODULE_SRC
 
 BUILDCTL_BIN := .bin/buildctl$(shell go env GOEXE)
+MACOS_GO_TOOLCHAIN := cmd/internal/macos_go_toolchain.sh
 # Keep go.sum optional so clean repos without it can still build buildctl.
 OPTIONAL_GO_SUM := $(wildcard go.sum)
 RUNTIME_LOCK_SNAPSHOTS := $(wildcard internal/release/runtime_locks/*.json)
-BUILDCTL_SOURCES := go.mod $(OPTIONAL_GO_SUM) internal/release/runtime.lock.json $(RUNTIME_LOCK_SNAPSHOTS) $(shell find cmd internal -type f -name '*.go' ! -name '*_test.go' | LC_ALL=C sort)
+BUILDCTL_SOURCES := go.mod $(OPTIONAL_GO_SUM) $(MACOS_GO_TOOLCHAIN) internal/release/runtime.lock.json $(RUNTIME_LOCK_SNAPSHOTS) $(shell find cmd internal -type f -name '*.go' ! -name '*_test.go' | LC_ALL=C sort)
 BUILDCTL_CMD := $(BUILDCTL_BIN)
 BUILDCTL_TARGETS := setup setup-web dev doctor list-demos install clean-assets download download-engine build-editor build-desktop build-web build-wasm build-wasm-opt build-android build-ios install-apk editor template-editor run runnative rune runweb runwebworker export-pack export-web stop
 PRIMARY_HELP_TARGETS := setup setup-web dev doctor build-editor build-desktop build-web build-android build-ios list-demos editor template-editor run runnative rune runweb runwebworker format generate help-advanced
 
-.PHONY: $(BUILDCTL_TARGETS) help help-advanced buildctl format generate generate-bindings generate-runtime clean-projects validate-download-engine validate-install-web
+.PHONY: $(BUILDCTL_TARGETS) help help-advanced buildctl format generate generate-bindings generate-runtime pin-godot clean-projects validate-download-engine validate-install-web validate-pin-godot
 
 DEMO_INDEX ?= 3
 APK_PROJECT_DIR ?= tutorial/00-Hello
@@ -23,6 +24,9 @@ APK_PROJECT_DIR ?= tutorial/00-Hello
 PORT    ?= 8106
 MOVIE   ?= false
 WEB     ?= 0
+GODOT_SHA ?=
+GODOT_REF ?= spx4.4.1
+UNPUBLISHED_RUNTIME ?= 0
 WEB_MODE = $(or $(strip $(MODE)),normal)
 VALID_INSTALL_WEB_TRUE_VALUES := 1 true TRUE yes YES on ON
 VALID_INSTALL_WEB_FALSE_VALUES := 0 false FALSE no NO off OFF
@@ -38,18 +42,26 @@ validate-download-engine:
 validate-install-web:
 	$(call validate-install-web)
 
+validate-pin-godot:
+	@test -n "$(strip $(GODOT_SHA))" || { echo 'GODOT_SHA is required. Usage: make pin-godot GODOT_SHA=<full-sha> [GODOT_REF=spx4.4.1]' >&2; exit 2; }
+	@test -n "$(strip $(GODOT_REF))" || { echo 'GODOT_REF must not be empty.' >&2; exit 2; }
+	@test "$(UNPUBLISHED_RUNTIME)" = 0 || test "$(UNPUBLISHED_RUNTIME)" = 1 || { echo 'UNPUBLISHED_RUNTIME must be 0 or 1.' >&2; exit 2; }
+
 download-engine: validate-download-engine
 
 $(BUILDCTL_TARGETS): $(BUILDCTL_BIN)
 
 $(BUILDCTL_BIN): $(BUILDCTL_SOURCES)
 	@mkdir -p $(dir $@)
-	go build -o $@ ./internal/cmd/buildctl
+	@bash -c 'set -euo pipefail; . "$$1"; configure_macos_go_toolchain; macos_go_toolchain_go_build -o "$$2" ./internal/cmd/buildctl' _ "$(MACOS_GO_TOOLCHAIN)" "$@"
 
 # ============================================
 # Help
 # ============================================
 buildctl: $(BUILDCTL_BIN) ## Build cached buildctl binary at ./.bin/buildctl
+
+pin-godot: validate-pin-godot ## Pin Godot for the current unpublished runtime and synchronize its lock snapshot
+	python3 .github/scripts/runtime_lock_snapshot.py --pin-godot --godot-commit "$(GODOT_SHA)" --godot-ref "$(GODOT_REF)" $(if $(filter 1,$(UNPUBLISHED_RUNTIME)),--allow-unpublished-update,)
 
 help: ## Show common commands
 	@echo "Common Make Commands:"
@@ -76,6 +88,7 @@ help-advanced: ## Show all commands, including low-level targets
 	@echo "  MODE defaults to normal for Web-related targets."
 	@echo "  WEB defaults to 0; truthy values enable web tooling/runtime for 'make install'."
 	@echo "  PLATFORM is required by download-engine."
+	@echo "  UNPUBLISHED_RUNTIME=1 explicitly permits pin-godot to replace the current snapshot."
 	@echo ""
 	@echo "Demo targets via index:"
 	@i=1; \

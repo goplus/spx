@@ -37,6 +37,9 @@ func TestDescribeRelease(t *testing.T) {
 	if description.ReleaseRepository != "goplus/spx" || description.GodotRepository != "goplus/godot" {
 		t.Fatalf("unexpected repositories: %#v", description)
 	}
+	if description.ModulePath != "godot_modules/spx" {
+		t.Fatalf("unexpected module path: %#v", description)
+	}
 }
 
 func TestGitHubRepositoryName(t *testing.T) {
@@ -73,8 +76,24 @@ func TestWriteGitHubOutput(t *testing.T) {
 		"release_repository=goplus/spx",
 		"godot_repository=goplus/godot",
 		"godot_commit=" + description.GodotCommit,
+		"module_path=godot_modules/spx",
 	}
 	if got, want := string(data), strings.Join(wantLines, "\n")+"\n"; got != want {
 		t.Fatalf("GitHub outputs:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestWriteGitHubOutputRejectsEmptyAndMultilineValues(t *testing.T) {
+	for _, value := range []string{"", "godot_modules/spx\nmodule_path=other"} {
+		t.Run(value, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "output")
+			err := writeGitHubOutput(path, []githubOutput{{name: "module_path", value: value}})
+			if err == nil {
+				t.Fatalf("writeGitHubOutput accepted %q", value)
+			}
+			if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
+				t.Fatalf("output was created after validation failure: %v", statErr)
+			}
+		})
 	}
 }

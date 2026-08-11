@@ -91,7 +91,11 @@ func prepareEngineBuildEnvironment(repoRoot, requestedPlatform string) (buildEnv
 		return buildEnvironment{}, nil, "", err
 	}
 
-	return buildEnv, shared.CurrentEnvMap(), sconsCommand, nil
+	commandEnv, err := shared.CurrentBuildEnv()
+	if err != nil {
+		return buildEnvironment{}, nil, "", err
+	}
+	return buildEnv, commandEnv, sconsCommand, nil
 }
 
 func printBuildEnvironmentSummary(buildEnv buildEnvironment) {
