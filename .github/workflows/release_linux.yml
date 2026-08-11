@@ -3,10 +3,6 @@ name: Package Linux
 on:
   workflow_call:
     inputs:
-      version:
-        description: 'SPX v3 release version without the leading v (for example, 3.1.0)'
-        required: true
-        type: string
       engine_artifacts:
         description: 'Use Godot engine artifacts produced by the current workflow run'
         required: false
@@ -52,7 +48,6 @@ jobs:
         id: prepare_standalone_release
         uses: ./.github/actions/prepare-standalone-release
         with:
-          version: ${{ inputs.version }}
           engine-asset-dir: ${{ inputs.engine_artifacts && 'runtime-assets' || '' }}
 
       - name: Package standalone release

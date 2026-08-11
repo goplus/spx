@@ -122,7 +122,7 @@ func TestReleaseCatalogRejectsDuplicateRuntimeRelease(t *testing.T) {
 
 func TestAtomicRuntimeReleasesHaveMatchingLockSnapshots(t *testing.T) {
 	atomicVersions := make(map[string]struct{})
-	for _, runtimeRelease := range runtimeReleaseDefinitions {
+	for _, runtimeRelease := range allRuntimeReleaseDefinitions() {
 		if runtimeRelease.EngineAssets.ManifestName == "" && runtimeRelease.RuntimeAssets.ManifestName == "" {
 			continue
 		}
@@ -230,12 +230,12 @@ func TestLatestReleaseAliasesResolveCurrentAtomicRelease(t *testing.T) {
 		t.Fatalf("latest runtime metadata = %#v, want %#v", meta, want)
 	}
 
-	meta, err = ResolveReleaseMetaForSPXVersion("v3.2.0")
+	meta, err = ResolveReleaseMetaForSPXVersion(currentSPXVersion)
 	if err != nil {
-		t.Fatalf("resolve SPX version v3.2.0: %v", err)
+		t.Fatalf("resolve current SPX version %s: %v", currentSPXVersion, err)
 	}
 	if meta != want {
-		t.Fatalf("v3.2.0 metadata = %#v, want %#v", meta, want)
+		t.Fatalf("current SPX metadata = %#v, want %#v", meta, want)
 	}
 	runtimeVersion := DefaultRuntimeLock().RuntimeVersion
 	meta, err = ResolveReleaseMetaForRuntimeVersion(runtimeVersion)

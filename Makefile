@@ -16,7 +16,7 @@ BUILDCTL_CMD := $(BUILDCTL_BIN)
 BUILDCTL_TARGETS := setup setup-web dev doctor list-demos install clean-assets download download-engine build-editor build-desktop build-web build-wasm build-wasm-opt build-android build-ios install-apk editor template-editor run runnative rune runweb runwebworker export-pack export-web stop
 PRIMARY_HELP_TARGETS := setup setup-web dev doctor build-editor build-desktop build-web build-android build-ios list-demos editor template-editor run runnative rune runweb runwebworker format generate help-advanced
 
-.PHONY: $(BUILDCTL_TARGETS) help help-advanced buildctl format generate generate-bindings generate-runtime pin-godot pin-godot-unpublished pin-godot-candidate clean-projects validate-download-engine validate-install-web validate-pin-godot
+.PHONY: $(BUILDCTL_TARGETS) help help-advanced buildctl format generate generate-bindings generate-runtime bump-release pin-godot pin-godot-unpublished pin-godot-candidate clean-projects validate-download-engine validate-install-web validate-bump-release validate-pin-godot
 
 DEMO_INDEX ?= 3
 APK_PROJECT_DIR ?= tutorial/00-Hello
@@ -26,6 +26,9 @@ MOVIE   ?= false
 WEB     ?= 0
 GODOT_SHA ?=
 GODOT_REF ?=
+SPX_VERSION ?=
+RUNTIME_VERSION ?=
+RUNTIME_ABI ?=
 WEB_MODE = $(or $(strip $(MODE)),normal)
 VALID_INSTALL_WEB_TRUE_VALUES := 1 true TRUE yes YES on ON
 VALID_INSTALL_WEB_FALSE_VALUES := 0 false FALSE no NO off OFF
@@ -46,6 +49,10 @@ validate-pin-godot:
 	@test -z "$(strip $(UNPUBLISHED_RUNTIME))" || { echo 'UNPUBLISHED_RUNTIME was replaced by the pin-godot-unpublished target.' >&2; exit 2; }
 	@test -z "$(strip $(GODOT_PREMERGE_CANDIDATE))" || { echo 'GODOT_PREMERGE_CANDIDATE was replaced by the pin-godot-candidate target.' >&2; exit 2; }
 
+validate-bump-release:
+	@test -n "$(strip $(SPX_VERSION))" || { echo 'SPX_VERSION is required. Usage: make bump-release SPX_VERSION=v3.x.y RUNTIME_VERSION=x.y.z [RUNTIME_ABI=N]' >&2; exit 2; }
+	@test -n "$(strip $(RUNTIME_VERSION))" || { echo 'RUNTIME_VERSION is required. Usage: make bump-release SPX_VERSION=v3.x.y RUNTIME_VERSION=x.y.z [RUNTIME_ABI=N]' >&2; exit 2; }
+
 download-engine: validate-download-engine
 
 $(BUILDCTL_TARGETS): $(BUILDCTL_BIN)
@@ -58,6 +65,10 @@ $(BUILDCTL_BIN): $(BUILDCTL_SOURCES)
 # Help
 # ============================================
 buildctl: $(BUILDCTL_BIN) ## Build cached buildctl binary at ./.bin/buildctl
+
+bump-release: validate-bump-release ## Advance SPX and create a paired immutable runtime snapshot
+	python3 .github/scripts/release_bump.py "$(SPX_VERSION)" "$(RUNTIME_VERSION)"$(if $(strip $(RUNTIME_ABI)), --runtime-abi "$(RUNTIME_ABI)")
+	git diff --check
 
 pin-godot: override PIN_GODOT_POLICY :=
 pin-godot-unpublished: override PIN_GODOT_POLICY := --unpublished
@@ -97,9 +108,12 @@ help-advanced: ## Show all commands, including low-level targets
 	@echo "  WEB defaults to 0; truthy values enable web tooling/runtime for 'make install'."
 	@echo "  PLATFORM is required by download-engine."
 	@echo "  GODOT_REF is optional for pin-godot targets; omitting it retains the current lock ref."
+	@echo "  bump-release requires authenticated gh access; current tags must be public and target tags unused."
 	@echo "  Use pin-godot-unpublished only after confirming that the current snapshot is unpublished."
 	@echo "  pin-godot-candidate permits verified candidate-only pinning; never use it for publication."
 	@echo "  Examples:"
+	@echo "    make bump-release SPX_VERSION=v3.3.0 RUNTIME_VERSION=2.5.0"
+	@echo "    make bump-release SPX_VERSION=v3.4.0 RUNTIME_VERSION=3.0.0 RUNTIME_ABI=3"
 	@echo "    make pin-godot GODOT_SHA=<40-sha>"
 	@echo "    make pin-godot-unpublished GODOT_SHA=<40-sha>"
 	@echo "    make pin-godot-candidate GODOT_SHA=<40-sha>"

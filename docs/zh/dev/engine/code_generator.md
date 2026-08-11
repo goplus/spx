@@ -21,7 +21,7 @@ make generate
 它们在 `Makefile` 中的定义如下：
 
 - `make generate-bindings`
-  - 执行 `cd ./internal/cmd/codegen && SPX_MODULE_SRC="$(SPX_MODULE_SRC)" go run .`
+  - 执行 `cd ./internal/cmd/codegen && go run .`（`SPX_MODULE_SRC` 由顶层 Make 环境统一导出）
   - 只生成绑定相关代码
 - `make generate`
   - 先执行 `generate-bindings`
@@ -29,6 +29,8 @@ make generate
   - 最后执行 `format`
 
 如果没有显式传入 `SPX_MODULE_SRC`，生成器默认读写仓库下的 `./godot_modules/spx`。相对覆盖路径从 SPX 仓库根目录解析。
+
+生成器自身是一个 nested Go module，并通过本地 `replace` 指回仓库根目录。因此其中的 `github.com/goplus/spx/v3 v3.0.0` 只是 `go run` 所需的最小合法 v3 module 版本，不是发布版本声明，SPX 发版时不要跟随提升。
 
 推荐用法：
 

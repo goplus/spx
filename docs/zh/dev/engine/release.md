@@ -34,7 +34,7 @@ manifest 分别记录 `module_tree`、`runtime_pack_source_sha256` 和 `build_re
 
    该命令默认保留 lock 当前的 ref；只有切换持久 branch/tag 时才传 `GODOT_REF=<branch-or-tag>`。`pin-godot-candidate` 由操作者明确声明 current runtime 尚未发布、允许替换其 snapshot，并允许使用远端已验证的 pre-merge candidate；它不能削弱 release verifier 或授权发布，runtime 公开后绝不能再使用。等价的底层命令是 `python3 .github/scripts/runtime_lock_snapshot.py pin-godot <sha> --premerge`。
 2. 在 `.github/workflows/release.yml` 中独立使用完整 SHA 固定 reusable workflow 的实现。`uses: ...@SHA` 选择的是 workflow 代码，不是 Godot 源码，不要求与 `godot.commit` 相等，也不受 source ancestry 规则约束。
-3. 在 `goplus/spx` 的发布分支冻结 SPX candidate commit。确认 `currentSPXVersion` 通过 `spxRuntimeMappings` 指向与 lock 一致的 runtime definition，并保持历史 definitions/mappings 不变。执行 release `dry-run`；它会构建 lock 中精确的 Godot commit，并在 workflow summary 标出 ancestry 结果。只有 verifier 已确认可获取、以 canonical ref tip 为祖先但尚未被该 ref 包含的 commit，才会标记为 candidate-only；无关 commit、ref 无法解析或比较失败会直接阻断 dry-run。
+3. 在 `goplus/spx` 的发布分支冻结 SPX candidate commit。确认 `currentSPXVersion` 通过 current lock 解析，并保持历史 mapping 与 snapshot 不变；atomic runtime definition 由这些 snapshot 自动派生，不再手写重复。执行 release `dry-run`；它会构建 lock 中精确的 Godot commit，并在 workflow summary 标出 ancestry 结果。只有 verifier 已确认可获取、以 canonical ref tip 为祖先但尚未被该 ref 包含的 commit，才会标记为 candidate-only；无关 commit、ref 无法解析或比较失败会直接阻断 dry-run。
 4. 将该 Godot commit 原样 merge 或提升到 `godot.ref`，然后校验发布边界：
 
    ```sh
@@ -85,7 +85,7 @@ canonical-ref ancestry 规则刻意只用于 release。普通 runner 与 module-
 
 `release_tag` 必须精确等于所选 commit 声明的 SPX tag。这里的产品 `platforms=all` 仅指 Web、macOS、Windows、Linux 包；Android/iOS 属于完整 runtime 资产矩阵和真机 smoke，不是 SPX 产品 target。
 
-1. 先对 lock 中精确的 Godot candidate 使用 `release_tag=v3.2.0`、`platforms=all`、`operation=dry-run`。检查 workflow summary：pre-merge candidate 在此阶段可以继续，但会明确标记为尚不可发布。下载并检查所有 runtime/product artifacts，完成安装与 demo smoke。
+1. 先对 lock 中精确的 Godot candidate 使用 `release_tag=<当前声明的-SPX-tag>`、`platforms=all`、`operation=dry-run`。检查 workflow summary：pre-merge candidate 在此阶段可以继续，但会明确标记为尚不可发布。下载并检查所有 runtime/product artifacts，完成安装与 demo smoke。
 2. 将该 Godot commit 原样提升到 canonical `godot.ref` 并通过严格 ancestry verifier，再对同一个 SPX commit 设置 `operation=publish-runtime`。没有可复用版本时，该模式会构建、校验并公开全部 runtime 资产，但跳过 SPX 产品包、SPX release 和 npm。
 3. 让普通 CI 自动切换到已公开 runtime 路径，并通过 Web normal 产品 smoke；合并时不得改变 module/pack/recipe 身份输入。随后在最终 SPX commit 上使用 `platforms=all`、`operation=publish-release`，流程会验证并复用同一 runtime，再发布 SPX 产品与 npm。
 
@@ -93,8 +93,15 @@ runtime manifest、`SHA256SUMS` 和 lock 的 required asset 集合必须完全�
 
 ## 后续版本维护
 
-- 仅 SPX 产品变化且 runtime 两类产物均未变化时，提升 SPX 版本，并新增一条指向既有 runtime 的显式原子映射。
-- Godot/module/toolchain 或 runtime pack 输出变化时，提升 `runtime_version`，并为新的 SPX 版本新增显式原子映射。
+- 仅 SPX 产品变化且 runtime 两类产物均未变化时，可以用 SPX-only mapping 保留 current runtime，但必须先由 release dry-run 证明公开 runtime 的完整 provenance 可复用；`bump-release` 不会在本地擅自做这个复用决定。
+- Godot、`godot_modules/spx`、toolchain 或 runtime pack 输出变化时，用一个事务同时提升两套身份：
+
+  ```sh
+  make bump-release SPX_VERSION=v3.x.y RUNTIME_VERSION=x.y.z
+  ```
+
+  只有 runtime ABI 本身变化时才额外传 `RUNTIME_ABI=N`。该命令会先通过已认证的 `gh` API 只读检查确认两项 current release 已公开、两项目标 release/tag 均未占用，再归档上一条 SPX mapping、推进 current lock、创建新的不可变 snapshot，并执行 release metadata 测试；它不会发布，也不会修改 Godot pin。current pair 仍是未发布 candidate 时，应继续使用原版本，不能把它归档成发布历史。
 - 每个原子 runtime definition 都必须有不可变的 `internal/release/runtime_locks/<runtime-version>.json` 快照；校验历史 manifest 时读取对应快照，不能读取更新后的默认 lock。
-- 新版本可运行 `python3 .github/scripts/runtime_lock_snapshot.py sync` 创建缺失的 snapshot。严格固定使用 `make pin-godot GODOT_SHA=<sha>`；commit 已进入 lock ref 且需要替换未发布 snapshot 时使用 `make pin-godot-unpublished GODOT_SHA=<sha>`；合并前 dry-run candidate 使用 `make pin-godot-candidate GODOT_SHA=<sha>`。三者默认保留当前 lock ref，只有传入 `GODOT_REF=...` 才会切换，并且只根据 current lock 推导 snapshot 文件名，不会触碰其他历史版本。
-- runtime 一旦公开，其 snapshot 永久冻结。公开 tag 绝不能使用 `sync --unpublished`、`pin-godot-unpublished` 或 `pin-godot-candidate`；必须提升 `runtime_version`、更新 release mapping，并创建新 snapshot。release setup 会运行 `check`，package 初始化、drift 与 catalog 测试也会共同校验 current mapping。
+- 新 runtime version 创建后，严格固定使用 `make pin-godot GODOT_SHA=<sha>`；commit 已进入 lock ref 且需要替换未发布 snapshot 时使用 `make pin-godot-unpublished GODOT_SHA=<sha>`；合并前 dry-run candidate 使用 `make pin-godot-candidate GODOT_SHA=<sha>`。三者默认保留 current lock ref，只有传入 `GODOT_REF=...` 才会切换，并且只根据 current lock 推导 snapshot 文件名，不会触碰其他历史版本。
+- 项目 `go.mod` scaffold 会自动渲染当前声明的 SPX 版本。`internal/cmd/codegen/go.mod` 中的 `v3.0.0` 只是本地 `replace` 所需的 major-version floor，发布时不要修改这两个文件。
+- runtime 一旦公开，其 snapshot 永久冻结。公开 tag 绝不能使用 `sync --unpublished`、`pin-godot-unpublished` 或 `pin-godot-candidate`；必须通过 `make bump-release` 使用新的 runtime version。release setup 会运行 `check`，package 初始化、drift 与 catalog 测试也会共同校验 current mapping。

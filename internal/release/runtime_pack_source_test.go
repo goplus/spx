@@ -69,6 +69,9 @@ func TestRuntimePackSourcePathSeparatesEngineAndOrchestration(t *testing.T) {
 		{"godot_modules/spx/register_types.cpp", false},
 		{"internal/release/runtime_pack_source.go", false},
 		{"internal/release/runtime_manifest.go", false},
+		// The release tag only renders project scaffolding. export-pack uses the
+		// repository module and is intentionally independent from this selector.
+		{"internal/release/current_spx_version.go", false},
 		{"internal/cmd/buildctl/simple_cmd.go", false},
 		{"internal/cmd/buildctl/runtimecmd/assets.go", false},
 		{"docs/zh/dev/engine/cmd_make.md", false},

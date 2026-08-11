@@ -21,6 +21,8 @@ make generate
 
 The main generator lives under `internal/cmd/codegen`. Its SPX Godot module input and output live at `godot_modules/spx`, independently of the Godot checkout. Set `SPX_MODULE_SRC` to override that module location; relative values resolve from the SPX repository root.
 
+The generator is a nested Go module with a local `replace` back to the repository root. Its `github.com/goplus/spx/v3 v3.0.0` requirement is therefore only the minimum valid v3 module version used to bootstrap `go run`; it is not a release-version declaration and must not be bumped with SPX releases.
+
 ## 3. Inputs and outputs
 
 ### Inputs

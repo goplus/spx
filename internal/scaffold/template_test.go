@@ -24,8 +24,12 @@ import (
 )
 
 func TestGoModUsesDefaultSPXRelease(t *testing.T) {
+	got := GoMod()
 	want := "require github.com/goplus/spx/v3 " + release.DefaultReleaseMeta().SPXVersion + " //xgo:class"
-	if !strings.Contains(GoMod(), want) {
-		t.Fatalf("go.mod template does not contain %q:\n%s", want, GoMod())
+	if !strings.Contains(got, want) {
+		t.Fatalf("go.mod template does not contain %q:\n%s", want, got)
+	}
+	if strings.Contains(got, spxVersionPlaceholder) {
+		t.Fatalf("go.mod template still contains %q:\n%s", spxVersionPlaceholder, got)
 	}
 }

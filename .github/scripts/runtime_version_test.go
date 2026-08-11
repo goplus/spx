@@ -19,8 +19,11 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/goplus/spx/v3/internal/release"
 )
 
 func TestDescribeRelease(t *testing.T) {
@@ -28,16 +31,18 @@ func TestDescribeRelease(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if description.ReleaseTag != "v3.2.0" || description.Version != "3.2.0" {
+	meta := release.DefaultReleaseMeta()
+	lock := release.DefaultRuntimeLock()
+	if description.ReleaseTag != meta.SPXVersion || description.Version != strings.TrimPrefix(meta.SPXVersion, "v") {
 		t.Fatalf("unexpected SPX release: %#v", description)
 	}
-	if description.RuntimeVersion != "2.4.0" || description.RuntimeABI != 2 || description.RuntimeTag != "runtime-v2.4.0" || description.RuntimeManifest != "runtime-manifest.json" {
+	if description.RuntimeVersion != lock.RuntimeVersion || description.RuntimeABI != lock.RuntimeABI || description.RuntimeTag != lock.RuntimeReleaseTag() || description.RuntimeManifest != lock.Manifest {
 		t.Fatalf("unexpected runtime release: %#v", description)
 	}
-	if description.ReleaseRepository != "goplus/spx" || description.GodotRepository != "goplus/godot" {
+	if description.ReleaseRepository != lock.ReleaseRepository || description.GodotRepository != "goplus/godot" {
 		t.Fatalf("unexpected repositories: %#v", description)
 	}
-	if description.ModulePath != "godot_modules/spx" {
+	if description.ModulePath != lock.Module.Path {
 		t.Fatalf("unexpected module path: %#v", description)
 	}
 }
@@ -67,16 +72,16 @@ func TestWriteGitHubOutput(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantLines := []string{
-		"release_tag=v3.2.0",
-		"version=3.2.0",
-		"runtime_version=2.4.0",
-		"runtime_abi=2",
-		"runtime_tag=runtime-v2.4.0",
-		"runtime_manifest=runtime-manifest.json",
-		"release_repository=goplus/spx",
-		"godot_repository=goplus/godot",
+		"release_tag=" + description.ReleaseTag,
+		"version=" + description.Version,
+		"runtime_version=" + description.RuntimeVersion,
+		"runtime_abi=" + strconv.Itoa(description.RuntimeABI),
+		"runtime_tag=" + description.RuntimeTag,
+		"runtime_manifest=" + description.RuntimeManifest,
+		"release_repository=" + description.ReleaseRepository,
+		"godot_repository=" + description.GodotRepository,
 		"godot_commit=" + description.GodotCommit,
-		"module_path=godot_modules/spx",
+		"module_path=" + description.ModulePath,
 	}
 	if got, want := string(data), strings.Join(wantLines, "\n")+"\n"; got != want {
 		t.Fatalf("GitHub outputs:\n%s\nwant:\n%s", got, want)

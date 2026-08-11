@@ -17,7 +17,10 @@
 // Package release provides shared SPX/runtime release metadata.
 package release
 
-import "fmt"
+import (
+	"fmt"
+	"sort"
+)
 
 const (
 	// RuntimeTag is the filename prefix for the runtime binary/pck files.
@@ -26,10 +29,6 @@ const (
 	// RuntimeAssetZipName is the standard runtime pack name. SPX v2.0.0 used
 	// an older versioned filename, which is retained in its release metadata.
 	RuntimeAssetZipName = "spx-runtime-assets.zip"
-
-	// currentSPXVersion selects the SPX release declared by this source tree.
-	// Runtime build identity comes from runtime.lock.json, not from this selector.
-	currentSPXVersion = "v3.2.0"
 
 	legacyEngineRepository  = "goplus/godot"
 	legacyRuntimeRepository = "goplus/spx"
@@ -69,10 +68,11 @@ type spxRuntimeMapping struct {
 	runtimeVersion string
 }
 
-// Runtime releases are defined once, independently from the SPX versions that
-// consume them. This lets later SPX releases reuse an identical runtime without
-// redefining or silently replacing the runtime's asset locations.
-var runtimeReleaseDefinitions = []RuntimeRelease{
+// Legacy releases predate immutable runtime lock snapshots and therefore keep
+// their historical split asset locations here. Atomic releases are derived
+// from versioned snapshots below, so their repository/tag/manifest cannot
+// drift from the provenance used to verify them.
+var legacyRuntimeReleaseDefinitions = []RuntimeRelease{
 	newLegacyRuntimeRelease("2.2.0", "v2.0.0", "gdspxrt.pck.2.2.0.zip"),
 	newLegacyRuntimeRelease("2.2.1", "v2.0.1", RuntimeAssetZipName),
 	newLegacyRuntimeRelease("2.2.2", "v2.0.2", RuntimeAssetZipName),
@@ -80,10 +80,12 @@ var runtimeReleaseDefinitions = []RuntimeRelease{
 	newLegacyRuntimeRelease("2.2.4", "v2.0.4", RuntimeAssetZipName),
 	newLegacyRuntimeRelease("2.2.6", "v3.0.0", RuntimeAssetZipName),
 	newLegacyRuntimeRelease("2.3.0", "v3.1.0", RuntimeAssetZipName),
-	newAtomicRuntimeRelease("2.4.0", "goplus/spx", "runtime-manifest.json"),
 }
 
-var spxRuntimeMappings = []spxRuntimeMapping{
+// Historical mappings are immutable compatibility data. The current mapping
+// is derived from currentSPXVersion and runtime.lock.json, so a release bump
+// cannot update one side without the other.
+var historicalSPXRuntimeMappings = []spxRuntimeMapping{
 	{spxVersion: "v2.0.0", runtimeVersion: "2.2.0"},
 	{spxVersion: "v2.0.1", runtimeVersion: "2.2.1"},
 	{spxVersion: "v2.0.2", runtimeVersion: "2.2.2"},
@@ -91,7 +93,28 @@ var spxRuntimeMappings = []spxRuntimeMapping{
 	{spxVersion: "v2.0.4", runtimeVersion: "2.2.4"},
 	{spxVersion: "v3.0.0", runtimeVersion: "2.2.6"},
 	{spxVersion: "v3.1.0", runtimeVersion: "2.3.0"},
-	{spxVersion: "v3.2.0", runtimeVersion: "2.4.0"},
+}
+
+func allRuntimeReleaseDefinitions() []RuntimeRelease {
+	releases := append([]RuntimeRelease(nil), legacyRuntimeReleaseDefinitions...)
+	versions := make([]string, 0, len(runtimeLocksByVersion))
+	for version := range runtimeLocksByVersion {
+		versions = append(versions, version)
+	}
+	sort.Strings(versions)
+	for _, version := range versions {
+		lock := runtimeLocksByVersion[version]
+		releases = append(releases, newAtomicRuntimeRelease(version, lock.ReleaseRepository, lock.Manifest))
+	}
+	return releases
+}
+
+func allSPXRuntimeMappings() []spxRuntimeMapping {
+	mappings := append([]spxRuntimeMapping(nil), historicalSPXRuntimeMappings...)
+	return append(mappings, spxRuntimeMapping{
+		spxVersion:     currentSPXVersion,
+		runtimeVersion: DefaultRuntimeLock().RuntimeVersion,
+	})
 }
 
 func newLegacyRuntimeRelease(runtimeVersion, runtimeAssetTag, runtimePackName string) RuntimeRelease {
@@ -193,7 +216,7 @@ func (c releaseCatalog) resolveRuntimeVersion(runtimeVersion string) (ReleaseMet
 	return ReleaseMeta{SPXVersion: c.primarySPXByRuntime[runtimeVersion], Runtime: runtimeRelease}, true
 }
 
-var defaultReleaseCatalog = mustNewReleaseCatalog(runtimeReleaseDefinitions, spxRuntimeMappings)
+var defaultReleaseCatalog = mustNewReleaseCatalog(allRuntimeReleaseDefinitions(), allSPXRuntimeMappings())
 
 // DefaultReleaseMeta returns the current configured SPX/runtime mapping.
 func DefaultReleaseMeta() ReleaseMeta {

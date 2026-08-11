@@ -364,7 +364,6 @@ jobs:
     if: needs.setup.outputs.run_macos == 'true'
     uses: ./.github/workflows/release_macos.yml
     with:
-      version: ${{ needs.setup.outputs.version }}
       engine_artifacts: ${{ needs.setup.outputs.reuse_runtime != 'true' }}
 
   windows-build:
@@ -373,7 +372,6 @@ jobs:
     if: needs.setup.outputs.run_windows == 'true'
     uses: ./.github/workflows/release_windows.yml
     with:
-      version: ${{ needs.setup.outputs.version }}
       engine_artifacts: ${{ needs.setup.outputs.reuse_runtime != 'true' }}
 
   linux-build:
@@ -382,7 +380,6 @@ jobs:
     if: needs.setup.outputs.run_linux == 'true'
     uses: ./.github/workflows/release_linux.yml
     with:
-      version: ${{ needs.setup.outputs.version }}
       engine_artifacts: ${{ needs.setup.outputs.reuse_runtime != 'true' }}
 
   assemble:

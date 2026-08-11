@@ -63,7 +63,9 @@ Valid `MODE` values are `normal`, `worker`, `minigame`, and `miniprogram`. Keep 
 
 ## Version and profile sources
 
-Release metadata has one runtime version source: `internal/release/runtime.lock.json` stores `runtime_version` without duplicating a release tag. Release tooling derives the tag as `runtime-v<runtime_version>`, for example `runtime-v2.4.0`.
+Release metadata has one current SPX version source, `internal/release/current_spx_version.go`, and one current runtime source, `internal/release/runtime.lock.json`. Runtime tags are derived as `runtime-v<runtime_version>` rather than stored independently. Project scaffolding renders the current SPX version automatically, and atomic runtime definitions are derived from immutable lock snapshots.
+
+If Godot, `godot_modules/spx`, the toolchain, or runtime-pack output changes, use `make bump-release SPX_VERSION=v3.x.y RUNTIME_VERSION=x.y.z`; add `RUNTIME_ABI=N` only for an ABI change. The command intentionally requires a new runtime version. Reusing a public runtime for an SPX-only release remains a separate, provenance-verified release decision.
 
 Local `buildctl` setup reads every pinned tool version from this lock and passes the locked Go toolchain to child build scripts. SPX CI installs Go and XGo from the same location without separate workflow defaults. Installer aliases such as NDK `r23c` are validated adapters derived from the full revision; an unknown mapping fails closed and never becomes a second version source. Godot SCons functional options have a different single source: `godot_modules/spx/spx_scons_profile.json`. Change shared engine feature flags in that profile instead of duplicating them in the Makefile or platform CI workflows.
 

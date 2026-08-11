@@ -63,7 +63,9 @@ GODOT_SRC=/absolute/path/to/godot make dev MODE=normal
 
 ## 版本和 profile 来源
 
-runtime 发布版本只有一个来源：`internal/release/runtime.lock.json` 保存 `runtime_version`，不重复保存 release tag。发布工具按 `runtime-v<runtime_version>` 推导 tag，例如 `runtime-v2.4.0`。
+当前 SPX 版本的唯一来源是 `internal/release/current_spx_version.go`，当前 runtime 的唯一来源是 `internal/release/runtime.lock.json`；runtime tag 统一按 `runtime-v<runtime_version>` 推导，不再独立保存。项目 scaffold 会自动渲染 current SPX 版本，atomic runtime definition 则由不可变 lock snapshot 自动派生。
+
+Godot、`godot_modules/spx`、toolchain 或 runtime pack 输出变化时，使用 `make bump-release SPX_VERSION=v3.x.y RUNTIME_VERSION=x.y.z`；仅 ABI 变化时才额外传 `RUNTIME_ABI=N`。该命令刻意要求新的 runtime version；SPX-only release 复用公开 runtime 属于另一条必须校验 provenance 的发布决策。
 
 本地 `buildctl` 会从这份 lock 读取全部锁定工具版本，并把锁定的 Go toolchain 传给子构建脚本；SPX CI 也统一从同一位置安装 Go 和 XGo，workflow 不再另设版本默认值。NDK 安装器所需的 `r23c` 一类别名只是由完整 revision 校验得到的适配值，未知映射会直接失败，不能反过来成为版本来源。Godot 的 SCons 功能参数使用另一份唯一来源：`godot_modules/spx/spx_scons_profile.json`。共享的引擎功能开关应在该 profile 中修改，不要在 Makefile 或各平台 CI workflow 中重复配置。
 

@@ -34,7 +34,7 @@ The manifest records `module_tree`, `runtime_pack_source_sha256`, and `build_rec
 
    The command retains the current lock ref; provide `GODOT_REF=<branch-or-tag>` only when changing it. `pin-godot-candidate` explicitly asserts that the current runtime is unpublished, permits replacing its snapshot, and allows a remotely verified pre-merge candidate. It cannot weaken the release verifier or authorize publication, and must never be used after that runtime is public. The equivalent low-level command is `python3 .github/scripts/runtime_lock_snapshot.py pin-godot <sha> --premerge`.
 2. Independently pin the reusable-workflow implementation with a full SHA in `.github/workflows/release.yml`. That `uses: ...@SHA` selects workflow code; it does not select the Godot source tree, does not need to equal `godot.commit`, and is outside the source-ancestry rule.
-3. Freeze the SPX candidate commit on a release branch in `goplus/spx`. Confirm that `currentSPXVersion` resolves through `spxRuntimeMappings` to the runtime definition matching the lock, and that historical definitions and mappings are unchanged. Run the release `dry-run`; it builds the exact locked Godot commit and marks the ancestry result in the workflow summary. A fetchable commit proven to descend from the canonical ref, but not yet be contained by it, is labeled candidate-only and cannot be published; an unrelated commit, unresolved ref, or comparison failure stops the dry-run.
+3. Freeze the SPX candidate commit on a release branch in `goplus/spx`. Confirm that `currentSPXVersion` resolves through the current lock while historical mappings and snapshots remain unchanged. Atomic runtime definitions are derived from those snapshots rather than repeated by hand. Run the release `dry-run`; it builds the exact locked Godot commit and marks the ancestry result in the workflow summary. A fetchable commit proven to descend from the canonical ref, but not yet be contained by it, is labeled candidate-only and cannot be published; an unrelated commit, unresolved ref, or comparison failure stops the dry-run.
 4. Merge or otherwise promote that exact Godot commit into `godot.ref`, then verify the publication boundary:
 
    ```sh
@@ -85,7 +85,7 @@ Use a frozen release branch in `goplus/spx` for the bootstrap operations:
 
 `release_tag` must exactly equal the SPX tag declared by the selected commit. Product `platforms=all` means Web, macOS, Windows, and Linux packages; Android and iOS belong to the complete runtime asset matrix and device smoke tests, not the SPX product targets.
 
-1. Run `release_tag=v3.2.0`, `platforms=all`, and `operation=dry-run` against the exact locked Godot candidate. Check the workflow summary: a pre-merge candidate is allowed here but is explicitly marked as not publication-ready. Download and inspect every runtime/product artifact, then complete install and demo smoke tests.
+1. Run `release_tag=<declared-SPX-tag>`, `platforms=all`, and `operation=dry-run` against the exact locked Godot candidate. Check the workflow summary: a pre-merge candidate is allowed here but is explicitly marked as not publication-ready. Download and inspect every runtime/product artifact, then complete install and demo smoke tests.
 2. Promote that exact Godot commit into the canonical `godot.ref` and run the strict ancestry verifier. Rerun the same SPX commit with `operation=publish-runtime`. If no reusable runtime exists, this mode builds, verifies, and publishes the complete runtime asset set while skipping SPX products, the SPX release, and npm.
 3. Let ordinary CI automatically switch to the public-runtime path and pass the Web normal product smoke. Merge without changing any module/pack/recipe identity input, then run the final SPX commit with `platforms=all` and `operation=publish-release`. The workflow verifies and reuses that runtime before publishing SPX products and npm.
 
@@ -93,8 +93,15 @@ The runtime manifest, `SHA256SUMS`, and the lock's required asset set must match
 
 ## Maintaining later versions
 
-- If only SPX products change and both runtime artifact classes remain identical, bump SPX and add an explicit atomic mapping to the existing runtime.
-- If Godot/module/toolchain inputs or runtime pack output changes, bump `runtime_version` and add an explicit atomic mapping for the new SPX version.
+- If only SPX products change and both runtime artifact classes remain identical, an SPX-only mapping may retain the current runtime, but the release dry-run must first prove that the public runtime's complete provenance is reusable. `bump-release` deliberately does not make this reuse decision locally.
+- If Godot, `godot_modules/spx`, toolchain inputs, or runtime pack output changes, advance both identities in one transaction:
+
+  ```sh
+  make bump-release SPX_VERSION=v3.x.y RUNTIME_VERSION=x.y.z
+  ```
+
+  Add `RUNTIME_ABI=N` only when the runtime ABI itself changes. The command uses authenticated `gh` API reads to require both current releases to be public and both target release/tag names to be unused before it writes. It then archives the previous SPX mapping, advances the current lock, creates the new immutable snapshot, and runs the release-metadata tests. It never publishes and never changes the Godot pin. If the current pair is still an unpublished candidate, keep those versions instead of archiving them as release history.
 - Every atomic runtime definition must have an immutable lock snapshot at `internal/release/runtime_locks/<runtime-version>.json`. Consumers use that snapshot, rather than the newer default lock, when validating a historical manifest.
-- For a new version, `python3 .github/scripts/runtime_lock_snapshot.py sync` creates the missing snapshot. Use `make pin-godot GODOT_SHA=<sha>` for a strict pin, `make pin-godot-unpublished GODOT_SHA=<sha>` to replace an unpublished snapshot after the commit reaches the lock ref, or `make pin-godot-candidate GODOT_SHA=<sha>` for a verified pre-merge dry-run candidate. All three retain the current lock ref unless `GODOT_REF=...` is supplied, derive the snapshot filename from the current lock, and never touch other historical versions.
-- Once a runtime is public, freeze its snapshot permanently. Never use `sync --unpublished`, `pin-godot-unpublished`, or `pin-godot-candidate` for a public tag; bump `runtime_version`, update the release mapping, and create a new snapshot instead. Release setup runs `check`, and package initialization plus drift/catalog tests enforce the current mapping.
+- After creating a new runtime version, use `make pin-godot GODOT_SHA=<sha>` for a strict pin, `make pin-godot-unpublished GODOT_SHA=<sha>` to replace its unpublished snapshot after the commit reaches the lock ref, or `make pin-godot-candidate GODOT_SHA=<sha>` for a verified pre-merge dry-run candidate. All three retain the current lock ref unless `GODOT_REF=...` is supplied, derive the snapshot filename from the current lock, and never touch other historical versions.
+- The project `go.mod` scaffold renders the declared SPX version automatically. The `v3.0.0` requirement in `internal/cmd/codegen/go.mod` is only the major-version floor for its local `replace`; do not bump either file during a release.
+- Once a runtime is public, freeze its snapshot permanently. Never use `sync --unpublished`, `pin-godot-unpublished`, or `pin-godot-candidate` for a public tag; use `make bump-release` with a new runtime version instead. Release setup runs `check`, and package initialization plus drift/catalog tests enforce the current mapping.

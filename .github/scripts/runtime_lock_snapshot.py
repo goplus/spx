@@ -424,8 +424,8 @@ def write_file_atomically(path, data):
             pass
 
 
-def write_files_transactionally(updates):
-    """Atomically replace each file and roll earlier replacements back on error."""
+def write_files_transactionally(updates, validate=None):
+    """Atomically replace files and roll all replacements back on error."""
     originals = []
     for path, _ in updates:
         path = Path(path)
@@ -439,7 +439,11 @@ def write_files_transactionally(updates):
         for path, data in updates:
             write_file_atomically(path, data)
             applied += 1
-    except OSError as error:
+        if validate is not None:
+            validate()
+    # A maintainer interrupt during post-write validation must not leave the
+    # lock, selector, mapping, and snapshot at different release identities.
+    except BaseException as error:
         rollback_errors = []
         for path, original in reversed(originals[:applied]):
             try:
@@ -451,7 +455,7 @@ def write_files_transactionally(updates):
                 rollback_errors.append(f"{path}: {rollback_error}")
         if rollback_errors:
             raise SnapshotError(
-                f"runtime lock pin failed ({error}) and rollback was incomplete: {', '.join(rollback_errors)}"
+                f"transactional update failed ({error}) and rollback was incomplete: {', '.join(rollback_errors)}"
             ) from error
         raise
 

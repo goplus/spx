@@ -30,19 +30,19 @@ func TestDefaultRuntimeLock(t *testing.T) {
 	if err := lock.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	if lock.RuntimeVersion != "2.4.0" || lock.RuntimeReleaseTag() != "runtime-v2.4.0" || lock.RuntimeABI != 2 {
+	if lock.RuntimeVersion == "" || lock.RuntimeReleaseTag() != "runtime-v"+lock.RuntimeVersion || lock.RuntimeABI <= 0 {
 		t.Fatalf("unexpected runtime identity: %#v", lock)
 	}
-	if got, want := lock.RuntimeAssetDownloadURL("linux-x86_64.zip"), "https://github.com/goplus/spx/releases/download/runtime-v2.4.0/linux-x86_64.zip"; got != want {
+	if got, want := lock.RuntimeAssetDownloadURL("linux-x86_64.zip"), "https://github.com/"+lock.ReleaseRepository+"/releases/download/"+lock.RuntimeReleaseTag()+"/linux-x86_64.zip"; got != want {
 		t.Fatalf("runtime asset URL = %q, want %q", got, want)
 	}
 	if lock.ReleaseRepository != "goplus/spx" || lock.Manifest != "runtime-manifest.json" {
 		t.Fatalf("unexpected release target: %#v", lock)
 	}
-	if lock.Godot.Repository != "https://github.com/goplus/godot.git" || lock.Godot.Ref != "spx4.4.1" {
+	if lock.Godot.Repository != "https://github.com/goplus/godot.git" || lock.Godot.Ref == "" {
 		t.Fatalf("unexpected Godot source: %#v", lock.Godot)
 	}
-	if lock.Godot.Version != "4.4.1.stable" {
+	if lock.Godot.Version == "" {
 		t.Fatalf("unexpected Godot pin: %#v", lock.Godot)
 	}
 	if lock.Module.Path != "godot_modules/spx" {
