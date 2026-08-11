@@ -70,12 +70,10 @@ jobs:
     # Before the Godot PR lands, GitHub Actions resolves the immutable workflow
     # commit through its source fork. Godot source identity is still supplied
     # independently from the canonical runtime.lock repository below.
-    uses: joeykchen/godot/.github/workflows/release_builds.yml@407ca6093cc33b4ce7a3cc99218580bf6a580091
+    uses: joeykchen/godot/.github/workflows/spx_module_checks.yml@407ca6093cc33b4ce7a3cc99218580bf6a580091
     with:
       runtime_version: ${{ needs.contract.outputs.runtime_version }}
       runtime_abi: ${{ needs.contract.outputs.runtime_abi }}
-      platforms: none
-      module_checks: true
       godot_repository: ${{ needs.contract.outputs.godot_repository }}
       godot_ref: ${{ needs.contract.outputs.godot_commit }}
       spx_repository: ${{ github.repository }}
