@@ -81,7 +81,7 @@ jobs:
     # Before the Godot PR lands, GitHub Actions can resolve its workflow SHA
     # only through the PR fork. This is immutable orchestration with read-only
     # permissions; Godot source remains the official runtime.lock commit below.
-    uses: joeykchen/godot/.github/workflows/release_builds.yml@28651faabe3084beb2bab50d69171ff144eb53eb
+    uses: joeykchen/godot/.github/workflows/release_builds.yml@7d280236071883db231ce4edaba2156414a723ef
     with:
       runtime_version: ${{ needs.contract.outputs.runtime_version }}
       runtime_abi: ${{ needs.contract.outputs.runtime_abi }}
