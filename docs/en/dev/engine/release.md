@@ -58,9 +58,17 @@ Also complete at least these checks:
 - Regress live/offline capture, audio, SVG/complex fonts, and perform Android/iOS device smoke tests.
 - If Windows releases require ANGLE, ensure an ANGLE download failure fails the build instead of silently downgrading it.
 
-## Three-stage bootstrap for a new runtime
+## Runtime-aware CI and three-stage bootstrap
 
-Before `runtime-v2.4.0` is public, ordinary platform CI cannot download it. Avoid the circular dependency between CI and publication by using a frozen release branch in `goplus/spx`:
+Ordinary CI resolves the locked runtime release before starting a runtime consumer. The resolver reads release metadata and the manifest only; it validates the exact asset-name set, lock, module tree, runtime-pack source digest, and build-recipe digest without downloading every runtime asset.
+
+- If the runtime is absent or still a draft, CI skips the published Web product smoke and instead builds the current SPX module with the locked Godot source, runs the Linux SPX tests, and performs the Web worker compile smoke.
+- If the runtime is public and matches the current identity, the next CI run skips that source integration rebuild and requires the Web normal product smoke against the published assets.
+- A public release with a missing manifest, a different asset set/provenance, or a GitHub API error is neither state: resolution fails closed and the CI gate fails.
+
+This switch avoids both the publication circular dependency and duplicate runtime builds. Ordinary CI never builds a complete release runtime; only the release workflow does that. The release assembly still downloads every asset and verifies `SHA256SUMS` plus every manifest checksum before reuse or publication.
+
+Use a frozen release branch in `goplus/spx` for the bootstrap operations:
 
 | `operation` | Result | `platforms` |
 | --- | --- | --- |
@@ -72,7 +80,7 @@ Before `runtime-v2.4.0` is public, ordinary platform CI cannot download it. Avoi
 
 1. Run `release_tag=v3.2.0`, `platforms=all`, and `operation=dry-run`. Download and inspect every runtime/product artifact, then complete install and demo smoke tests.
 2. Rerun the same commit with `operation=publish-runtime`. If no reusable runtime exists, this mode builds, verifies, and publishes the complete runtime asset set while skipping SPX products, the SPX release, and npm.
-3. Let ordinary platform CI consume the public runtime and pass. Merge without changing any module/pack/recipe identity input, then run the final SPX commit with `platforms=all` and `operation=publish-release`. The workflow verifies and reuses that runtime before publishing SPX products and npm.
+3. Let ordinary CI automatically switch to the public-runtime path and pass the Web normal product smoke. Merge without changing any module/pack/recipe identity input, then run the final SPX commit with `platforms=all` and `operation=publish-release`. The workflow verifies and reuses that runtime before publishing SPX products and npm.
 
 The runtime manifest, `SHA256SUMS`, and the lock's required asset set must match exactly. A public tag with different provenance or assets fails rather than being overwritten. An unpublished runtime/SPX draft tag must target the current `GITHUB_SHA`; a public runtime may target the candidate commit from the previous stage, but only an identical full reuse contract allows the final SPX commit to consume it. The SPX tag always targets the final commit. If the merge changes any runtime identity input, the final run rejects reuse; freeze again and bump `runtime_version` instead.
 

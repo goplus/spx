@@ -1,18 +1,7 @@
 name: SPX Module Integration
 
 on:
-  push:
-    paths:
-      - godot_modules/spx/**
-      - internal/release/runtime.lock.json
-      - .github/scripts/runtime_build_contract.py
-      - .github/workflows/spx_module_integration.yml
-  pull_request:
-    paths:
-      - godot_modules/spx/**
-      - internal/release/runtime.lock.json
-      - .github/scripts/runtime_build_contract.py
-      - .github/workflows/spx_module_integration.yml
+  workflow_call:
   workflow_dispatch:
 
 permissions:

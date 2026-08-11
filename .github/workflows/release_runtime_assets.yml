@@ -30,6 +30,9 @@ jobs:
         with:
           setup-mode: none
 
+      - name: Build local buildctl
+        uses: ./.github/actions/setup-buildctl
+
       - name: Prepare host export assets
         run: |
           set -euo pipefail

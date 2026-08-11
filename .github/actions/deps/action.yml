@@ -1,5 +1,5 @@
 name: Set up Go, XGo, and engine assets
-description: Set up the toolchain, build local buildctl, and prepare engine assets.
+description: Set up the toolchain and, when requested, build buildctl and prepare engine assets.
 inputs:
   setup-mode:
     description: 'Asset preparation target: none, host, web, or full'
@@ -78,9 +78,11 @@ runs:
         xgo-version: ${{ steps.toolchain.outputs.xgo-version }}
 
     - name: Build local buildctl
+      if: inputs.setup-mode != 'none'
       uses: ./.github/actions/setup-buildctl
 
     - name: Prepare engine assets
+      if: inputs.setup-mode != 'none'
       shell: bash
       env:
         SETUP_MODE: ${{ inputs.setup-mode }}
@@ -90,9 +92,6 @@ runs:
         set -euo pipefail
 
         case "$SETUP_MODE" in
-          none)
-            exit 0
-            ;;
           host)
             setup_args=(host)
             ;;

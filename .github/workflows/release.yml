@@ -93,67 +93,20 @@ jobs:
             echo "[error] Publishing is locked to $RELEASE_REPOSITORY, not $CURRENT_REPOSITORY" >&2
             exit 1
           fi
-      - name: Resolve locked runtime bundle
+      # Resolution is intentionally metadata-only. The assemble job downloads
+      # and checksum-verifies every published asset before reuse.
+      - name: Resolve locked runtime release
         id: runtime
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          RUNTIME_TAG: ${{ steps.release.outputs.runtime_tag }}
-          RUNTIME_MANIFEST: ${{ steps.release.outputs.runtime_manifest }}
-          REPOSITORY: ${{ steps.release.outputs.release_repository }}
-          MODULE_PATH: ${{ steps.release.outputs.module_path }}
         run: |
           set -euo pipefail
-
-          echo "reuse_runtime=false" >> "$GITHUB_OUTPUT"
-          if ! release_json="$(gh release view "$RUNTIME_TAG" --repo "$REPOSITORY" --json isDraft 2>/dev/null)"; then
-            echo "[info] Runtime $RUNTIME_TAG is not published; build it from the lock"
-            exit 0
-          fi
-          if [ "$(jq -r .isDraft <<< "$release_json")" = true ]; then
-            echo "[info] Runtime $RUNTIME_TAG is still a draft; rebuild it before publication"
-            exit 0
-          fi
-
-          mkdir -p existing-runtime
-          gh release download "$RUNTIME_TAG" \
-            --repo "$REPOSITORY" \
-            --pattern "$RUNTIME_MANIFEST" \
-            --dir existing-runtime
-          go run ./.github/scripts/runtime_asset_manifest.go \
+          go run ./.github/scripts/runtime_resolution.go \
             --lock internal/release/runtime.lock.json \
-            --verify-manifest "existing-runtime/$RUNTIME_MANIFEST"
-
-          if [ -z "$MODULE_PATH" ]; then
-            echo "[error] Locked SPX module path must not be empty" >&2
-            exit 1
-          fi
-          current_module_tree="$(git rev-parse "HEAD:${MODULE_PATH}")"
-          published_module_tree="$(jq -r '.provenance.module_tree' "existing-runtime/$RUNTIME_MANIFEST")"
-          if [ "$published_module_tree" != "$current_module_tree" ]; then
-            echo "[error] $RUNTIME_TAG was built from module tree $published_module_tree, but this commit uses $current_module_tree" >&2
-            echo "[error] Bump runtime_version before publishing this SPX release" >&2
-            exit 1
-          fi
-
-          current_runtime_pack_source_sha256="$(go run ./.github/scripts/runtime_pack_source_digest.go HEAD)"
-          published_runtime_pack_source_sha256="$(jq -er '.provenance.runtime_pack_source_sha256' "existing-runtime/$RUNTIME_MANIFEST")"
-          if [ "$published_runtime_pack_source_sha256" != "$current_runtime_pack_source_sha256" ]; then
-            echo "[error] $RUNTIME_TAG was built from SPX runtime pack sources $published_runtime_pack_source_sha256, but this commit requires $current_runtime_pack_source_sha256" >&2
-            echo "[error] Bump runtime_version before publishing this SPX release" >&2
-            exit 1
-          fi
-
-          current_build_recipe_sha256="$(go run ./.github/scripts/runtime_build_recipe_digest.go HEAD)"
-          published_build_recipe_sha256="$(jq -er '.provenance.build_recipe_sha256' "existing-runtime/$RUNTIME_MANIFEST")"
-          if [ "$published_build_recipe_sha256" != "$current_build_recipe_sha256" ]; then
-            echo "[error] $RUNTIME_TAG was built with recipe $published_build_recipe_sha256, but this commit requires $current_build_recipe_sha256" >&2
-            echo "[error] Bump runtime_version before publishing this SPX release" >&2
-            exit 1
-          fi
-
-          echo "[info] Reuse verified immutable runtime $RUNTIME_TAG"
-          echo "reuse_runtime=true" >> "$GITHUB_OUTPUT"
+            --repo-root . \
+            --revision HEAD \
+            --github-output "$GITHUB_OUTPUT"
 
       - name: Validate immutable publish targets
         if: inputs.operation != 'dry-run'

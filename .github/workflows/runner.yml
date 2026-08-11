@@ -1,6 +1,9 @@
 name: 🔗 GHA
 on: [push, pull_request, merge_group]
 
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{github.actor}}-${{github.head_ref || github.run_number}}-${{github.ref}}-runner
   cancel-in-progress: true
@@ -14,85 +17,124 @@ jobs:
     name: Go builds
     uses: ./.github/workflows/go_builds.yml
 
-  android-build:
-    needs: static-checks
-    name: Build Android APK
-    uses: ./.github/workflows/build_android.yml
+  runtime-resolution:
+    name: Resolve published runtime
+    runs-on: ubuntu-22.04
+    outputs:
+      runtime_state: ${{ steps.runtime.outputs.runtime_state }}
+      runtime_reason: ${{ steps.runtime.outputs.runtime_reason }}
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
-  ios-build:
-    needs: static-checks
-    name: Build iOS IPA
-    uses: ./.github/workflows/build_ios.yml
+      - name: Validate current runtime lock snapshot
+        run: python3 .github/scripts/runtime_lock_snapshot.py --check
+
+      - name: Set up locked Go and XGo
+        uses: ./.github/actions/deps
+        with:
+          setup-mode: none
+
+      - name: Resolve runtime release
+        id: runtime
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          go run ./.github/scripts/runtime_resolution.go \
+            --lock internal/release/runtime.lock.json \
+            --repo-root . \
+            --revision HEAD \
+            --github-output "$GITHUB_OUTPUT"
+
+      - name: Report runtime CI policy
+        env:
+          RUNTIME_REASON: ${{ steps.runtime.outputs.runtime_reason }}
+          RUNTIME_STATE: ${{ steps.runtime.outputs.runtime_state }}
+        run: |
+          {
+            echo "### Runtime CI policy"
+            echo
+            echo "- State: \`$RUNTIME_STATE\`"
+            echo "- Reason: $RUNTIME_REASON"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  spx-module-integration:
+    name: Current SPX module integration
+    needs: [static-checks, runtime-resolution]
+    if: >-
+      ${{
+        needs.static-checks.result == 'success' &&
+        needs.runtime-resolution.result == 'success' &&
+        needs.runtime-resolution.outputs.runtime_state == 'missing'
+      }}
+    uses: ./.github/workflows/spx_module_integration.yml
 
   web-build:
-    needs: static-checks
-    name: Build web bundle
+    name: Published Web runtime smoke
+    needs: [static-checks, runtime-resolution]
+    if: >-
+      ${{
+        needs.static-checks.result == 'success' &&
+        needs.runtime-resolution.result == 'success' &&
+        needs.runtime-resolution.outputs.runtime_state == 'ready'
+      }}
     uses: ./.github/workflows/build_web.yml
-
-  linux-build:
-    needs: static-checks
-    name: Build Linux
-    uses: ./.github/workflows/build_linux.yml
-
-  macos-build:
-    needs: static-checks
-    name: Build macOS
-    uses: ./.github/workflows/build_macos.yml
-
-  windows-build:
-    needs: static-checks
-    name: Build Windows
-    uses: ./.github/workflows/build_windows.yml
 
   ci-gate:
     if: always()
     needs:
       - static-checks
       - go-builds
-      - android-build
-      - ios-build
+      - runtime-resolution
+      - spx-module-integration
       - web-build
-      - linux-build
-      - macos-build
-      - windows-build
     name: CI gate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
-      - name: Verify all required jobs passed
+      - name: Verify required CI path passed
         env:
           STATIC_CHECKS_RESULT: ${{ needs.static-checks.result }}
           GO_BUILDS_RESULT: ${{ needs.go-builds.result }}
-          ANDROID_BUILD_RESULT: ${{ needs.android-build.result }}
-          IOS_BUILD_RESULT: ${{ needs.ios-build.result }}
+          RUNTIME_RESOLUTION_RESULT: ${{ needs.runtime-resolution.result }}
+          RUNTIME_STATE: ${{ needs.runtime-resolution.outputs.runtime_state }}
+          RUNTIME_REASON: ${{ needs.runtime-resolution.outputs.runtime_reason }}
+          MODULE_INTEGRATION_RESULT: ${{ needs.spx-module-integration.result }}
           WEB_BUILD_RESULT: ${{ needs.web-build.result }}
-          LINUX_BUILD_RESULT: ${{ needs.linux-build.result }}
-          MACOS_BUILD_RESULT: ${{ needs.macos-build.result }}
-          WINDOWS_BUILD_RESULT: ${{ needs.windows-build.result }}
         run: |
           set -euo pipefail
 
-          for item in \
-            "static-checks:$STATIC_CHECKS_RESULT" \
-            "go-builds:$GO_BUILDS_RESULT" \
-            "android-build:$ANDROID_BUILD_RESULT" \
-            "ios-build:$IOS_BUILD_RESULT" \
-            "web-build:$WEB_BUILD_RESULT" \
-            "linux-build:$LINUX_BUILD_RESULT" \
-            "macos-build:$MACOS_BUILD_RESULT" \
-            "windows-build:$WINDOWS_BUILD_RESULT"
-          do
-            job_name="${item%%:*}"
-            job_result="${item#*:}"
-
-            if [ "$job_result" != "success" ]; then
-              echo "[error] Required job failed: $job_name ($job_result)" >&2
+          require_result() {
+            local job_name="$1"
+            local actual="$2"
+            local expected="$3"
+            if [ "$actual" != "$expected" ]; then
+              echo "[error] $job_name result is $actual, want $expected" >&2
               exit 1
             fi
-          done
+          }
 
-          echo "[ok] All required CI jobs passed"
+          require_result static-checks "$STATIC_CHECKS_RESULT" success
+          require_result go-builds "$GO_BUILDS_RESULT" success
+          require_result runtime-resolution "$RUNTIME_RESOLUTION_RESULT" success
 
-  # Third stage: Run auxiliary tests using build artifacts from previous jobs.
+          case "$RUNTIME_STATE" in
+            ready)
+              require_result spx-module-integration "$MODULE_INTEGRATION_RESULT" skipped
+              require_result web-build "$WEB_BUILD_RESULT" success
+              echo "[ok] Published runtime verified; Web normal smoke passed"
+              ;;
+            missing)
+              require_result spx-module-integration "$MODULE_INTEGRATION_RESULT" success
+              require_result web-build "$WEB_BUILD_RESULT" skipped
+              echo "[ok] Runtime is unpublished; current SPX module integration passed"
+              ;;
+            *)
+              echo "[error] Unknown runtime state: ${RUNTIME_STATE:-<empty>}" >&2
+              exit 1
+              ;;
+          esac
 
-  # Can be turned off for PRs that intentionally break compat with godot-cpp,
-  # until both the upstream PR and the matching godot-cpp changes are merged.
+          echo "[info] Runtime resolution: $RUNTIME_REASON"

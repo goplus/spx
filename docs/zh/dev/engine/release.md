@@ -58,9 +58,17 @@ git diff --check
 - 录屏 live/offline、音频、SVG/复杂字体回归；Android/iOS 真机 smoke。
 - Windows 发布要求 ANGLE 时，确认 ANGLE 下载失败会使构建失败，而不是静默降级。
 
-## 首个 runtime 的三阶段自举
+## runtime 感知的 CI 与三阶段自举
 
-`runtime-v2.4.0` 尚未公开时，普通平台 CI 无法下载它。为避免“CI 等 runtime、runtime 又等合并”的循环，在 `goplus/spx` 的冻结发布分支上执行：
+普通 CI 会在启动 runtime consumer 前解析 lock 对应的 runtime release。resolver 只读取 release metadata 与 manifest，不下载全部 runtime 资产；它会校验精确的资产名集合、lock、module tree、runtime-pack source digest 与 build-recipe digest。
+
+- runtime 不存在或仍为 draft 时，CI 跳过基于已发布 runtime 的 Web 产品 smoke，改为把当前 SPX module 放入 lock 的 Godot source，执行 Linux SPX tests 与 Web worker compile smoke。
+- runtime 已公开且与当前身份完全一致时，下一次 CI 会跳过 source integration 重编译，强制执行使用已发布资产的 Web normal 产品 smoke。
+- 已公开 release 缺 manifest、资产集合或 provenance 不一致，以及 GitHub API 异常，都不属于前两种状态；resolver 与 CI gate 会 fail closed。
+
+这个切换同时避免发布循环与 runtime 重复构建。普通 CI 不构建完整 release runtime；只有 release workflow 执行该构建。release assemble 在复用或发布前仍会下载全部资产，并校验 `SHA256SUMS` 与 manifest 中每个文件的 checksum。
+
+三阶段自举仍在 `goplus/spx` 的冻结发布分支上执行：
 
 | `operation` | 结果 | `platforms` |
 | --- | --- | --- |
@@ -72,7 +80,7 @@ git diff --check
 
 1. 先使用 `release_tag=v3.2.0`、`platforms=all`、`operation=dry-run`。下载并检查所有 runtime/product artifacts，完成安装与 demo smoke。
 2. 对同一个 commit 设置 `operation=publish-runtime`。没有可复用版本时，该模式会构建、校验并公开全部 runtime 资产，但跳过 SPX 产品包、SPX release 和 npm。
-3. 让普通平台 CI 改用已公开 runtime 并全部通过；合并时不得改变 module/pack/recipe 身份输入。随后在最终 SPX commit 上使用 `platforms=all`、`operation=publish-release`，流程会验证并复用同一 runtime，再发布 SPX 产品与 npm。
+3. 让普通 CI 自动切换到已公开 runtime 路径，并通过 Web normal 产品 smoke；合并时不得改变 module/pack/recipe 身份输入。随后在最终 SPX commit 上使用 `platforms=all`、`operation=publish-release`，流程会验证并复用同一 runtime，再发布 SPX 产品与 npm。
 
 runtime manifest、`SHA256SUMS` 和 lock 的 required asset 集合必须完全一致；已公开 tag 的来源或资产不同会直接失败，不能覆盖。未公开的 runtime/SPX draft tag 必须指向当前 `GITHUB_SHA`；已公开 runtime 可来自前一阶段的 candidate commit，但只有完整复用契约一致时才能用于最终 SPX commit。SPX tag 始终指向最终 commit。如果合并修改了任一 runtime 身份输入，最终运行会拒绝复用，此时必须重新冻结并提升 `runtime_version`。
 

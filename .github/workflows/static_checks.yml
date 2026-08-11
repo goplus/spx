@@ -43,6 +43,7 @@ jobs:
         shell: bash
         run: |
           go test -v .github/scripts/runtime_asset_manifest.go .github/scripts/runtime_asset_manifest_test.go
+          go test -v .github/scripts/runtime_resolution.go .github/scripts/runtime_resolution_test.go
           go test -v .github/scripts/runtime_version.go .github/scripts/runtime_version_test.go
           PYTHONDONTWRITEBYTECODE=1 python3 .github/scripts/runtime_build_contract_test.py
           go run .github/scripts/runtime_pack_source_digest.go HEAD >/dev/null
