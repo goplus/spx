@@ -37,12 +37,13 @@ jobs:
         java-version: ${{ steps.deps.outputs.jdk-version }}
 
     - name: Set up locked Android NDK
-      uses: nttld/setup-ndk@v1
+      uses: nttld/setup-ndk@ed92fe6cadad69be94a966a7ee3271275e62f779 # v1.6.0
       id: setup-ndk
+      # setup-ndk's persistent cache can restore compiler symlinks that still
+      # point at a previous runner's tool cache. Keep the installation fresh.
       with:
         ndk-version: ${{ steps.deps.outputs.android-ndk-installer-alias }}
         add-to-path: true
-        local-cache: true
 
     - name: Export ANDROID_NDK_ROOT
       run: echo "ANDROID_NDK_ROOT=${{ steps.setup-ndk.outputs.ndk-path }}" >> "$GITHUB_ENV"
@@ -72,8 +73,10 @@ jobs:
         fi
 
         CLANG_PATH="$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
+        CLANGXX_PATH="$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++"
         ANDROID_CLANG_PATH="$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang"
-        for tool in "$CLANG_PATH" "$ANDROID_CLANG_PATH"; do
+        ANDROID_CLANGXX_PATH="$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang++"
+        for tool in "$CLANG_PATH" "$CLANGXX_PATH" "$ANDROID_CLANG_PATH" "$ANDROID_CLANGXX_PATH"; do
           if [ ! -x "$tool" ]; then
             echo "[error] Required Android NDK compiler is missing or not executable: $tool" >&2
             exit 1
