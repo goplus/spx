@@ -101,7 +101,7 @@ void SpxUiMgr::on_spx_ui_clicked(GdObj p_gid, ObjectID p_binding_id) {
 }
 
 void SpxUiMgr::on_spx_ui_destroyed(GdObj p_gid, ObjectID p_binding_id) {
-	if (!Spx::initialed) {
+	if (!Spx::is_initialized()) {
 		return;
 	}
 

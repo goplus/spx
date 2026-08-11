@@ -85,22 +85,29 @@ func ParseEnvExportEngineBuildShellArgs(args []string) (BuildConfig, error) {
 }
 
 func ResolveEngineBuildShellPlan(repoRoot string, cfg BuildConfig) (BuildShellPlan, error) {
-	env, err := shared.ResolveBuildEnvironment(repoRoot, "")
+	env, err := shared.ResolveBuildEnvironment(repoRoot, cfg.Platform)
 	if err != nil {
 		return BuildShellPlan{}, err
 	}
+	return resolveEngineBuildShellPlan(env, cfg)
+}
 
+func resolveEngineBuildShellPlan(env buildEnvironment, cfg BuildConfig) (BuildShellPlan, error) {
 	effectivePlatform := cfg.Platform
 	if effectivePlatform == "" {
 		effectivePlatform = env.Platform
 	}
+	effectiveTarget := cfg.Target
+	if effectiveTarget == "editor" && effectivePlatform == "web" {
+		effectiveTarget = "template"
+	}
 
 	plan := BuildShellPlan{
-		Target:   cfg.Target,
+		Target:   effectiveTarget,
 		Platform: effectivePlatform,
 	}
 
-	switch cfg.Target {
+	switch effectiveTarget {
 	case "editor":
 		editorSource, editorDestination, editorUseVSProj, err := resolveEditorBuildPaths(env)
 		if err != nil {
@@ -137,6 +144,8 @@ func ResolveEngineBuildShellPlan(repoRoot string, cfg BuildConfig) (BuildShellPl
 			plan.TemplatePostDir = filepath.Join("platform", "android", "java")
 			plan.TemplatePostCommands = []string{"./gradlew generateGodotTemplates"}
 		}
+	default:
+		return BuildShellPlan{}, fmt.Errorf("unsupported build target: %s", effectiveTarget)
 	}
 
 	return plan, nil

@@ -52,13 +52,15 @@ func TestParseDockerBuildEngineArgsDefault(t *testing.T) {
 }
 
 func TestBuildPodmanSConsArgsAvoidsShellConcatenation(t *testing.T) {
-	profileArgs := []string{"optimize=size", "module_spx_enabled=true", "debug_symbols=false"}
-	sconsArgs := buildDockerSConsArgs(
-		"windows",
-		[]string{"target=template_release", "arch=x86_64"},
-		profileArgs,
-		podmanSPXModulePath,
-	)
+	sconsArgs := []string{
+		"optimize=size",
+		"module_spx_enabled=true",
+		"debug_symbols=false",
+		"platform=windows",
+		"target=template_release",
+		"arch=x86_64",
+		"custom_modules=" + podmanSPXModulePath,
+	}
 	got := buildPodmanSConsArgs("/tmp/godot", "/tmp/custom modules/spx", "windows", sconsArgs, true)
 	want := []string{
 		"run",
@@ -79,18 +81,5 @@ func TestBuildPodmanSConsArgsAvoidsShellConcatenation(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("buildPodmanSConsArgs = %#v, want %#v", got, want)
-	}
-}
-
-func TestBuildDockerSConsArgsDoesNotInjectModuleFlags(t *testing.T) {
-	got := buildDockerSConsArgs("linux", []string{"target=template_debug"}, []string{"optimize=size"}, "/tmp/spx")
-	want := []string{
-		"optimize=size",
-		"platform=linux",
-		"target=template_debug",
-		"custom_modules=/tmp/spx",
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("buildDockerSConsArgs = %#v, want %#v", got, want)
 	}
 }

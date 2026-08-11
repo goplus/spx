@@ -43,16 +43,16 @@ private:
 	RBMap<GdInt, AudioStreamPlayer2D *> aid_audios;
 	List<AudioStreamPlayer2D *> audios;
 	List<AudioStreamPlayer2D *> loop_audios;
-	Node *root;
-	GdObj id;
+	Node *root = nullptr;
+	GdObj id = 0;
 
-	int bus_id;
 	StringName bus_name;
+	bool owns_dedicated_bus = false;
 
 	GdFloat cur_pitch = 1.0;
 
 private:
-	void on_bus_dirty();
+	bool ensure_dedicated_bus();
 	AudioStreamPlayer2D *_get_aid_audio(GdInt aid);
 
 public:

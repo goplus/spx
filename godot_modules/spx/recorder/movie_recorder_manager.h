@@ -31,13 +31,6 @@ public:
 	static void initialize();
 	static void shutdown();
 
-	// Compatibility entry points retained for module callers.
-	static void onInit();
-	static void onStart();
-	static void onUpdate();
-	static void onCleanup();
-	static void set_fixed_fps(int p_fps);
-
 	static Error start_recording(const RecordingConfig &p_config);
 	static Error stop_recording();
 	static Error pause_recording();
@@ -62,7 +55,6 @@ private:
 	static uint32_t default_fps;
 	static uint64_t recording_start_time;
 	static uint64_t callback_registration;
-	static bool initialized;
 	static bool command_line_recording;
 
 	static Error _begin(const Size2i &p_movie_size, uint32_t p_fps, const String &p_path, bool p_command_line);

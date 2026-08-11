@@ -32,23 +32,41 @@
 #define SPX_CALLBACK_PROXY_H
 
 #include "scene/main/node.h"
+
 #include <functional>
+#include <utility>
 
 class SpxCallbackProxy : public Node {
 	GDCLASS(SpxCallbackProxy, Node);
 
-public:
 	std::function<void()> callback;
 
 	void on_timeout() {
-		if (callback) {
-			callback();
+		// This proxy is only connected to one-shot timers. Drop captures before
+		// invoking user code so teardown and re-entrant scheduling cannot retain
+		// stale engine state.
+		std::function<void()> pending = std::exchange(callback, {});
+		if (pending) {
+			pending();
 		}
 	}
 
 protected:
 	static void _bind_methods() {
 		ClassDB::bind_method(D_METHOD("_on_timeout"), &SpxCallbackProxy::on_timeout);
+	}
+
+public:
+	void set_callback(std::function<void()> p_callback) {
+		callback = std::move(p_callback);
+	}
+
+	void clear_callback() {
+		callback = {};
+	}
+
+	bool has_callback() const {
+		return bool(callback);
 	}
 };
 

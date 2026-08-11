@@ -80,6 +80,7 @@ func TestRuntimePackSourcePathSeparatesEngineAndOrchestration(t *testing.T) {
 		{"internal/scaffold/gdextension.go", true},
 		{"pkg/ispx/runner.go", false},
 		{"pkg/spx/pkg/engine/engine.go", true},
+		{"tools/godot/addons/spx_tilemap_exporter/export_cli.gd", false},
 	}
 	for _, test := range tests {
 		if got := isRuntimePackSourcePath(test.path); got != test.want {

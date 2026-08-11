@@ -38,21 +38,13 @@ var (
 	genExtensionAPI bool
 	packagePath     string
 	spxModulePath   string
-	godotSourcePath string
 	parsedASTPath   string
 	buildConfig     string
 )
 
-var requiredSPXModuleFiles = []string{
-	"SCsub",
-	"config.py",
+var requiredCodegenModuleFiles = []string{
 	"gdextension_interface.h",
 	"spx_ext_mgr.h",
-}
-
-var requiredGodotSourceFiles = []string{
-	"SConstruct",
-	"version.py",
 }
 
 func init() {
@@ -71,7 +63,6 @@ func init() {
 	packagePath = absPath
 	repoRoot := filepath.Clean(filepath.Join(absPath, "../../.."))
 	spxModulePath = resolveSPXModuleSource(repoRoot, os.Getenv("SPX_MODULE_SRC"))
-	godotSourcePath = resolveOptionalSource(repoRoot, os.Getenv("GODOT_SRC"))
 	parsedASTPath = "_debug_parsed_ast.json"
 	buildConfig = defaultBuildConfig
 }
@@ -83,7 +74,7 @@ func resolveSPXModuleSource(repoRoot, override string) string {
 
 	moduleSource := strings.TrimSpace(override)
 	if moduleSource == "" {
-		moduleSource = filepath.Join(repoRoot, release.DefaultRuntimeLock().Module.Path)
+		moduleSource = filepath.Join(repoRoot, filepath.FromSlash(release.DefaultRuntimeLock().Module.Path))
 	} else if !filepath.IsAbs(moduleSource) {
 		moduleSource = filepath.Join(repoRoot, moduleSource)
 	}
@@ -93,36 +84,15 @@ func resolveSPXModuleSource(repoRoot, override string) string {
 	return filepath.Clean(moduleSource)
 }
 
-func resolveOptionalSource(repoRoot, override string) string {
-	source := strings.TrimSpace(override)
-	if source == "" {
-		return ""
-	}
-	if !filepath.IsAbs(source) {
-		source = filepath.Join(repoRoot, source)
-	}
-	if absSource, err := filepath.Abs(source); err == nil {
-		source = absSource
-	}
-	return filepath.Clean(source)
-}
-
-func validateDirectory(name, path string) error {
-	info, err := os.Stat(path)
+func validateCodegenInputs(spxModuleSource string) error {
+	info, err := os.Stat(spxModuleSource)
 	if err != nil {
-		return fmt.Errorf("%s %q: %w", name, path, err)
+		return fmt.Errorf("SPX_MODULE_SRC %q: %w", spxModuleSource, err)
 	}
 	if !info.IsDir() {
-		return fmt.Errorf("%s %q is not a directory", name, path)
+		return fmt.Errorf("SPX_MODULE_SRC %q is not a directory", spxModuleSource)
 	}
-	return nil
-}
-
-func validateCodegenInputs(spxModuleSource, godotSource string) error {
-	if err := validateDirectory("SPX_MODULE_SRC", spxModuleSource); err != nil {
-		return err
-	}
-	for _, name := range requiredSPXModuleFiles {
+	for _, name := range requiredCodegenModuleFiles {
 		path := filepath.Join(spxModuleSource, name)
 		info, err := os.Stat(path)
 		if err != nil {
@@ -132,34 +102,12 @@ func validateCodegenInputs(spxModuleSource, godotSource string) error {
 			return fmt.Errorf("SPX module file %q is not a regular file", path)
 		}
 	}
-	managerHeaders, err := filepath.Glob(filepath.Join(spxModuleSource, "spx*mgr.h"))
-	if err != nil {
-		return fmt.Errorf("find SPX manager headers: %w", err)
-	}
-	if len(managerHeaders) == 0 {
-		return fmt.Errorf("SPX module %q has no spx*mgr.h manager header", spxModuleSource)
-	}
-	if godotSource != "" {
-		if err := validateDirectory("GODOT_SRC", godotSource); err != nil {
-			return err
-		}
-		for _, name := range requiredGodotSourceFiles {
-			path := filepath.Join(godotSource, name)
-			info, err := os.Stat(path)
-			if err != nil {
-				return fmt.Errorf("Godot source file %q: %w", path, err)
-			}
-			if !info.Mode().IsRegular() {
-				return fmt.Errorf("Godot source file %q is not a regular file", path)
-			}
-		}
-	}
 	return nil
 }
 
 func generateCode() error {
 	// Validate every external input before generators can create or replace files.
-	if err := validateCodegenInputs(spxModulePath, godotSourcePath); err != nil {
+	if err := validateCodegenInputs(spxModulePath); err != nil {
 		return err
 	}
 
@@ -170,9 +118,6 @@ func generateCode() error {
 	if verbose {
 		spxlog.Info(`build configuration "%s" selected`, buildConfig)
 		spxlog.Info(`SPX module source "%s" selected`, spxModulePath)
-		if godotSourcePath != "" {
-			spxlog.Info(`Godot source "%s" selected`, godotSourcePath)
-		}
 	}
 	// generte c++ ext header file
 	if genClangAPI {

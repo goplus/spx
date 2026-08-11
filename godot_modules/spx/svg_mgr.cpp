@@ -9,21 +9,25 @@
 #include "spx_res_mgr.h"
 
 SvgManager *SvgManager::get_singleton() {
-	if (!singleton) {
+	if (singleton == nullptr) {
 		singleton = memnew(SvgManager);
 	}
 	return singleton;
 }
 
-SvgManager::SvgManager() {
-	singleton = this;
+void SvgManager::destroy_singleton() {
+	if (singleton == nullptr) {
+		return;
+	}
+
+	SvgManager *manager = singleton;
+	singleton = nullptr;
+	memdelete(manager);
 }
 
-SvgManager::~SvgManager() {
-	svg_image_cache.clear();
-	svg_animation_cache.clear();
-	singleton = nullptr;
-}
+SvgManager::SvgManager() = default;
+
+SvgManager::~SvgManager() = default;
 
 bool SvgManager::is_svg_file(const String &path) const {
 	return path.to_lower().ends_with(".svg");
@@ -65,7 +69,8 @@ Ref<SpriteFrames> SvgManager::get_svg_animation(const String &base_anim_key, int
 
 bool SvgManager::is_svg_animation(const String &base_anim_key) {
 	ERR_FAIL_COND_V_MSG(!Thread::is_main_thread(), false, "SVG animation caches may only be accessed on the main thread.");
-	return is_svg_animation_registry[base_anim_key];
+	const bool *registered = is_svg_animation_registry.getptr(base_anim_key);
+	return registered != nullptr && *registered;
 }
 
 void SvgManager::mark_svg_animation(const String &base_anim_key, bool is_svg_animation) {
@@ -174,18 +179,13 @@ Ref<ImageTexture> SvgManager::_load_image(const String &path /*engine path*/, in
 	}
 
 	auto msg = "[SvgManager] Failed to load SVG image: " + path + " at scale " + String::num(scale);
-	if (Spx::debug_mode) {
+	if (Spx::is_debug_mode()) {
 		print_error(msg);
 	} else {
 		print_line(msg);
 	}
 
 	return Ref<ImageTexture>();
-}
-
-void SvgManager::destroy() {
-	reset();
-	singleton = nullptr;
 }
 
 void SvgManager::reset(bool p_clear_project_caches) {

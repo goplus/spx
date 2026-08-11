@@ -49,47 +49,46 @@ var orchestrationSConsKeys = map[string]struct{}{
 	"vsproj":           {},
 }
 
-// SConsProfile is the shared, ordered set of SCons arguments used to build an
-// external SPX module. Variant methods return a fresh slice so callers can add
-// build-specific arguments without mutating the profile.
-type SConsProfile struct {
+// sconsProfile is the module-owned, ordered set of SCons arguments used to
+// build an external SPX module.
+type sconsProfile struct {
 	Schema          int
 	Common          []string
 	EditorRelease   []string
 	TemplateRelease []string
 }
 
-func LoadSConsProfile(spxModuleSource string) (SConsProfile, error) {
+func loadSConsProfile(spxModuleSource string) (sconsProfile, error) {
 	path := filepath.Join(spxModuleSource, SConsProfileFilename)
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return SConsProfile{}, fmt.Errorf("read SCons profile %s: %w", path, err)
+		return sconsProfile{}, fmt.Errorf("read SCons profile %s: %w", path, err)
 	}
-	profile, err := ParseSConsProfile(data)
+	profile, err := parseSConsProfile(data)
 	if err != nil {
-		return SConsProfile{}, fmt.Errorf("parse SCons profile %s: %w", path, err)
+		return sconsProfile{}, fmt.Errorf("parse SCons profile %s: %w", path, err)
 	}
 	return profile, nil
 }
 
-func ParseSConsProfile(data []byte) (SConsProfile, error) {
+func parseSConsProfile(data []byte) (sconsProfile, error) {
 	fields, err := decodeSConsProfileFields(data)
 	if err != nil {
-		return SConsProfile{}, err
+		return sconsProfile{}, err
 	}
 
 	for _, name := range []string{"schema", "common", "editor_release", "template_release"} {
 		if _, ok := fields[name]; !ok {
-			return SConsProfile{}, fmt.Errorf("missing SCons profile field %q", name)
+			return sconsProfile{}, fmt.Errorf("missing SCons profile field %q", name)
 		}
 	}
 
-	var profile SConsProfile
+	var profile sconsProfile
 	if err := json.Unmarshal(fields["schema"], &profile.Schema); err != nil {
-		return SConsProfile{}, fmt.Errorf("invalid SCons profile schema: %w", err)
+		return sconsProfile{}, fmt.Errorf("invalid SCons profile schema: %w", err)
 	}
 	if profile.Schema != sconsProfileSchema {
-		return SConsProfile{}, fmt.Errorf("unsupported SCons profile schema %d, want %d", profile.Schema, sconsProfileSchema)
+		return sconsProfile{}, fmt.Errorf("unsupported SCons profile schema %d, want %d", profile.Schema, sconsProfileSchema)
 	}
 
 	groups := []struct {
@@ -103,14 +102,14 @@ func ParseSConsProfile(data []byte) (SConsProfile, error) {
 	keysByGroup := make(map[string]map[string]struct{}, len(groups))
 	for _, group := range groups {
 		if bytes.Equal(bytes.TrimSpace(fields[group.name]), []byte("null")) {
-			return SConsProfile{}, fmt.Errorf("SCons profile field %q must be an array", group.name)
+			return sconsProfile{}, fmt.Errorf("SCons profile field %q must be an array", group.name)
 		}
 		if err := json.Unmarshal(fields[group.name], group.dst); err != nil {
-			return SConsProfile{}, fmt.Errorf("invalid SCons profile field %q: %w", group.name, err)
+			return sconsProfile{}, fmt.Errorf("invalid SCons profile field %q: %w", group.name, err)
 		}
 		keys, err := validateSConsProfileArgs(group.name, *group.dst)
 		if err != nil {
-			return SConsProfile{}, err
+			return sconsProfile{}, err
 		}
 		keysByGroup[group.name] = keys
 	}
@@ -118,7 +117,7 @@ func ParseSConsProfile(data []byte) (SConsProfile, error) {
 	for _, targetGroup := range []string{"editor_release", "template_release"} {
 		for key := range keysByGroup[targetGroup] {
 			if _, duplicate := keysByGroup["common"][key]; duplicate {
-				return SConsProfile{}, fmt.Errorf("duplicate SCons key %q across %q and %q", key, "common", targetGroup)
+				return sconsProfile{}, fmt.Errorf("duplicate SCons key %q across %q and %q", key, "common", targetGroup)
 			}
 		}
 	}
@@ -218,26 +217,16 @@ func validSConsKey(key string) bool {
 	return true
 }
 
-func (profile SConsProfile) CommonArgs() []string {
-	return concatSConsArgs(profile.Common)
-}
-
-func (profile SConsProfile) EditorReleaseArgs() []string {
-	return concatSConsArgs(profile.Common, profile.EditorRelease)
-}
-
-func (profile SConsProfile) TemplateReleaseArgs() []string {
-	return concatSConsArgs(profile.Common, profile.TemplateRelease)
-}
-
-func concatSConsArgs(groups ...[]string) []string {
-	length := 0
-	for _, group := range groups {
+func composeSConsBuildArgs(moduleSource string, buildArgs []string, profileGroups ...[]string) []string {
+	length := len(buildArgs) + 1
+	for _, group := range profileGroups {
 		length += len(group)
 	}
 	args := make([]string, 0, length)
-	for _, group := range groups {
+	for _, group := range profileGroups {
 		args = append(args, group...)
 	}
+	args = append(args, buildArgs...)
+	args = append(args, "custom_modules="+moduleSource)
 	return args
 }

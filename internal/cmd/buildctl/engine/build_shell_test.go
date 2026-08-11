@@ -63,6 +63,41 @@ func TestResolveEngineBuildShellPlanWebWorker(t *testing.T) {
 	}
 }
 
+func TestResolveEngineBuildShellPlanTreatsWebEditorAsTemplate(t *testing.T) {
+	repoRoot := t.TempDir()
+	t.Setenv("GOPATH", filepath.Join(repoRoot, "gopath"))
+	t.Setenv("HOME", repoRoot)
+	t.Setenv("APPDATA", filepath.Join(repoRoot, "AppData"))
+
+	plan, err := ResolveEngineBuildShellPlan(repoRoot, BuildConfig{
+		Target:   "editor",
+		Platform: "web",
+		Mode:     "normal",
+	})
+	if err != nil {
+		t.Fatalf("resolve Web editor build plan: %v", err)
+	}
+	if plan.Target != "template" || plan.WebThreads != "no" {
+		t.Fatalf("Web editor build plan = %#v, want normal template plan", plan)
+	}
+}
+
+func TestResolveEngineBuildShellPlanTreatsEnvironmentWebEditorAsTemplate(t *testing.T) {
+	repoRoot := t.TempDir()
+	t.Setenv("GOPATH", filepath.Join(repoRoot, "gopath"))
+	t.Setenv("HOME", repoRoot)
+	t.Setenv("APPDATA", filepath.Join(repoRoot, "AppData"))
+	t.Setenv("PLATFORM", "web")
+
+	plan, err := ResolveEngineBuildShellPlan(repoRoot, BuildConfig{Target: "editor"})
+	if err != nil {
+		t.Fatalf("resolve environment-selected Web editor build plan: %v", err)
+	}
+	if plan.Target != "template" || plan.Platform != "web" || plan.WebThreads != "no" {
+		t.Fatalf("environment-selected Web editor build plan = %#v, want normal Web template plan", plan)
+	}
+}
+
 func TestResolveEngineBuildShellPlanWebNormal(t *testing.T) {
 	repoRoot := t.TempDir()
 	t.Setenv("GOPATH", filepath.Join(repoRoot, "gopath"))

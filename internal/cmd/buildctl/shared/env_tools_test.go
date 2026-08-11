@@ -29,12 +29,7 @@ import (
 
 func TestEnsureEngineSourceChecksOutLockedCommit(t *testing.T) {
 	repoRoot := t.TempDir()
-	t.Setenv("GOPATH", filepath.Join(repoRoot, "gopath"))
 	t.Setenv("GODOT_SRC", filepath.Join(repoRoot, "godot-source"))
-	t.Setenv("SPX_MODULE_SRC", filepath.Join(repoRoot, "godot_modules", "spx"))
-	if err := os.MkdirAll(filepath.Join(repoRoot, "godot_modules", "spx"), 0o755); err != nil {
-		t.Fatal(err)
-	}
 
 	type invocation struct {
 		name string
@@ -71,12 +66,7 @@ func TestEnsureEngineSourceChecksOutLockedCommit(t *testing.T) {
 
 func TestEnsureEngineSourceDeepensLockedRefWhenCommitFetchFails(t *testing.T) {
 	repoRoot := t.TempDir()
-	t.Setenv("GOPATH", filepath.Join(repoRoot, "gopath"))
 	t.Setenv("GODOT_SRC", filepath.Join(repoRoot, "godot-source"))
-	t.Setenv("SPX_MODULE_SRC", filepath.Join(repoRoot, "godot_modules", "spx"))
-	if err := os.MkdirAll(filepath.Join(repoRoot, "godot_modules", "spx"), 0o755); err != nil {
-		t.Fatal(err)
-	}
 
 	lock := release.DefaultRuntimeLock()
 	var got [][]string
@@ -102,12 +92,7 @@ func TestEnsureEngineSourceDeepensLockedRefWhenCommitFetchFails(t *testing.T) {
 func TestEnsureEngineSourceCleansFailedClone(t *testing.T) {
 	repoRoot := t.TempDir()
 	engineDir := filepath.Join(repoRoot, "godot-source")
-	t.Setenv("GOPATH", filepath.Join(repoRoot, "gopath"))
 	t.Setenv("GODOT_SRC", engineDir)
-	t.Setenv("SPX_MODULE_SRC", filepath.Join(repoRoot, "godot_modules", "spx"))
-	if err := os.MkdirAll(filepath.Join(repoRoot, "godot_modules", "spx"), 0o755); err != nil {
-		t.Fatal(err)
-	}
 
 	wantErr := errors.New("fetch failed")
 	err := ensureEngineSource(repoRoot, func(_ string, args ...string) error {

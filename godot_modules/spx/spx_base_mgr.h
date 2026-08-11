@@ -74,7 +74,7 @@ public:
 	static T *get_array(GdArray array, int64_t index);
 
 protected:
-	Node *owner;
+	Node *owner = nullptr;
 	virtual Node *create_owner_node();
 
 protected:

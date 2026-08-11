@@ -157,7 +157,7 @@ void SpxPlatformMgr::set_debug_mode(GdBool enable) {
 }
 
 GdBool SpxPlatformMgr::is_debug_mode() {
-	return Spx::debug_mode;
+	return Spx::is_debug_mode();
 }
 
 void SpxPlatformMgr::set_time_scale(GdFloat time_scale) {

@@ -24,11 +24,15 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 )
 
 func TestBuildEngineRejectsInvalidProfileBeforePreparingEnvironment(t *testing.T) {
 	repoRoot := t.TempDir()
 	moduleSource := filepath.Join(repoRoot, "godot_modules", "spx")
+	mustWriteFile(t, filepath.Join(moduleSource, "SCsub"), []byte("# fixture\n"))
+	mustWriteFile(t, filepath.Join(moduleSource, "config.py"), []byte("# fixture\n"))
 	mustWriteFile(t, filepath.Join(moduleSource, "spx_scons_profile.json"), []byte(`{"schema":`))
 	t.Setenv("SPX_MODULE_SRC", moduleSource)
 
@@ -37,9 +41,9 @@ func TestBuildEngineRejectsInvalidProfileBeforePreparingEnvironment(t *testing.T
 	err := buildEngineWithEnvironmentPreparer(
 		BuildConfig{Target: "template", Platform: "linux"},
 		repoRoot,
-		func(string, string) (buildEnvironment, map[string]string, string, error) {
+		func(buildEnvironment) (map[string]string, string, error) {
 			prepareCalled = true
-			return buildEnvironment{}, nil, "", prepareErr
+			return nil, "", prepareErr
 		},
 	)
 	if err == nil || !strings.Contains(err.Error(), "parse SCons profile") {
@@ -51,17 +55,22 @@ func TestBuildEngineRejectsInvalidProfileBeforePreparingEnvironment(t *testing.T
 }
 
 func TestSConsBuildScriptIncludesProfileAndCustomModule(t *testing.T) {
-	moduleSource := filepath.Join("C:/SPX Modules", "spx")
-	script := sconsBuildScript(
+	module, moduleSource := loadEngineTestSPXModule(t, `{
+  "schema": 1,
+  "common": ["optimize=size", "module_text_server_adv_enabled=true"],
+  "editor_release": [],
+  "template_release": ["debug_symbols=false"]
+}`)
+	script := templateSConsBuildScript(
 		"/tmp/spx tools/scons",
-		[]string{"optimize=size", "module_text_server_adv_enabled=true"},
-		moduleSource,
+		module,
 		[]string{"platform=android target=template_debug arch=arm32"},
 	)
 	for _, arg := range []string{
 		"'/tmp/spx tools/scons'",
 		"'optimize=size'",
 		"'module_text_server_adv_enabled=true'",
+		"'debug_symbols=false'",
 		"'custom_modules=" + moduleSource + "'",
 	} {
 		if !strings.Contains(script, arg) {
@@ -74,29 +83,30 @@ func TestSConsBuildScriptIncludesProfileAndCustomModule(t *testing.T) {
 }
 
 func TestSConsScriptQuotesCommandPath(t *testing.T) {
-	script := sconsScriptWithCommand("/tmp/spx tools/scons", []string{"platform=ios target=template_debug"})
-	if script != "'/tmp/spx tools/scons' 'platform=ios' 'target=template_debug'" {
-		t.Fatalf("sconsScriptWithCommand did not quote command path: %q", script)
+	module, moduleSource := loadEngineTestSPXModule(t, `{
+  "schema": 1,
+  "common": [],
+  "editor_release": [],
+  "template_release": []
+}`)
+	script := templateSConsBuildScript("/tmp/spx tools/scons", module, []string{"platform=ios target=template_debug"})
+	want := "'/tmp/spx tools/scons' 'platform=ios' 'target=template_debug' 'custom_modules=" + moduleSource + "'"
+	if script != want {
+		t.Fatalf("templateSConsBuildScript did not quote command path: %q", script)
 	}
 }
 
-func TestSConsBuildArgsKeepsCustomModuleAsOneArgument(t *testing.T) {
-	moduleSource := filepath.Join("C:/SPX Modules", "module's source")
-	got := sconsBuildArgs(
-		[]string{"platform=windows", "target=template_release"},
-		[]string{"optimize=size", "module_spx_enabled=true"},
-		moduleSource,
-	)
-	want := []string{
-		"optimize=size",
-		"module_spx_enabled=true",
-		"platform=windows",
-		"target=template_release",
-		"custom_modules=" + moduleSource,
+func loadEngineTestSPXModule(t *testing.T, profile string) (shared.SPXModule, string) {
+	t.Helper()
+	moduleSource := filepath.Join(t.TempDir(), "SPX Modules", "spx")
+	mustWriteFile(t, filepath.Join(moduleSource, "SCsub"), []byte("# fixture\n"))
+	mustWriteFile(t, filepath.Join(moduleSource, "config.py"), []byte("# fixture\n"))
+	mustWriteFile(t, filepath.Join(moduleSource, shared.SConsProfileFilename), []byte(profile))
+	module, err := shared.LoadSPXModule(moduleSource)
+	if err != nil {
+		t.Fatalf("LoadSPXModule returned error: %v", err)
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("sconsBuildArgs = %#v, want %#v", got, want)
-	}
+	return module, moduleSource
 }
 
 func TestShellJoinRoundTrip(t *testing.T) {

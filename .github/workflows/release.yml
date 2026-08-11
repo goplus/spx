@@ -307,7 +307,7 @@ jobs:
     if: needs.setup.outputs.reuse_runtime != 'true'
     # This pins the reusable-workflow implementation. The Godot source commit
     # is an independent runtime input passed through godot_ref below.
-    uses: goplus/godot/.github/workflows/release_builds.yml@a24bff63996bc8f017ab17559beb5c96d2981753
+    uses: goplus/godot/.github/workflows/release_builds.yml@e107b062d43156153e1ed9e00445467c3ad39e72
     with:
       runtime_version: ${{ needs.setup.outputs.runtime_version }}
       runtime_abi: ${{ needs.setup.outputs.runtime_abi }}

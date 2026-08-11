@@ -24,31 +24,34 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/goplus/spx/v3/internal/release"
 )
 
 func ensureEngineSource(repoRoot string, run func(name string, args ...string) error) error {
-	env, err := resolveBuildEnvironment(repoRoot, "")
+	engineDir, err := resolveGodotSrc(repoRoot)
 	if err != nil {
 		return err
 	}
-	if fileExists(env.EngineDir) {
-		head, err := gitHead(env.EngineDir)
+	lock := release.DefaultRuntimeLock()
+	if fileExists(engineDir) {
+		head, err := gitHead(engineDir)
 		if err != nil {
-			return fmt.Errorf("inspect existing Godot source %s: %w", env.EngineDir, err)
+			return fmt.Errorf("inspect existing Godot source %s: %w", engineDir, err)
 		}
-		if head != env.GodotCommit {
-			return fmt.Errorf("Godot source %s is at %s, but runtime.lock.json requires %s; update GODOT_SRC or the runtime lock", env.EngineDir, head, env.GodotCommit)
+		if head != lock.Godot.Commit {
+			return fmt.Errorf("Godot source %s is at %s, but runtime.lock.json requires %s; update GODOT_SRC or the runtime lock", engineDir, head, lock.Godot.Commit)
 		}
-		fmt.Fprintf(os.Stdout, "Using pinned Godot source: %s (%s)\n", env.EngineDir, head)
+		fmt.Fprintf(os.Stdout, "Using pinned Godot source: %s (%s)\n", engineDir, head)
 		return nil
 	}
 
-	fmt.Fprintf(os.Stdout, "Godot directory not found. Cloning to %s...\n", env.EngineDir)
-	engineParent := filepath.Dir(env.EngineDir)
+	fmt.Fprintf(os.Stdout, "Godot directory not found. Cloning to %s...\n", engineDir)
+	engineParent := filepath.Dir(engineDir)
 	if err := os.MkdirAll(engineParent, 0o755); err != nil {
 		return err
 	}
-	stagingDir, err := os.MkdirTemp(engineParent, "."+filepath.Base(env.EngineDir)+".clone-*")
+	stagingDir, err := os.MkdirTemp(engineParent, "."+filepath.Base(engineDir)+".clone-*")
 	if err != nil {
 		return err
 	}
@@ -61,28 +64,28 @@ func ensureEngineSource(repoRoot string, run func(name string, args ...string) e
 	if err := run("git", "-C", stagingDir, "init"); err != nil {
 		return err
 	}
-	if err := run("git", "-C", stagingDir, "remote", "add", "origin", env.GodotRepository); err != nil {
+	if err := run("git", "-C", stagingDir, "remote", "add", "origin", lock.Godot.Repository); err != nil {
 		return err
 	}
-	if err := run("git", "-C", stagingDir, "fetch", "--filter=blob:none", "--depth", "1", "origin", env.GodotRef); err != nil {
+	if err := run("git", "-C", stagingDir, "fetch", "--filter=blob:none", "--depth", "1", "origin", lock.Godot.Ref); err != nil {
 		return err
 	}
-	if err := run("git", "-C", stagingDir, "fetch", "--filter=blob:none", "--depth", "1", "origin", env.GodotCommit); err != nil {
+	if err := run("git", "-C", stagingDir, "fetch", "--filter=blob:none", "--depth", "1", "origin", lock.Godot.Commit); err != nil {
 		// Some Git servers reject direct fetches of unadvertised commit IDs.
 		// The lock also carries a reachable ref so the pinned commit can still
 		// be obtained by deepening that ref without checking out a moving tip.
-		if fallbackErr := run("git", "-C", stagingDir, "fetch", "--filter=blob:none", "--unshallow", "origin", env.GodotRef); fallbackErr != nil {
-			return fmt.Errorf("fetch pinned Godot commit %s: %w (ref fallback failed: %v)", env.GodotCommit, err, fallbackErr)
+		if fallbackErr := run("git", "-C", stagingDir, "fetch", "--filter=blob:none", "--unshallow", "origin", lock.Godot.Ref); fallbackErr != nil {
+			return fmt.Errorf("fetch pinned Godot commit %s: %w (ref fallback failed: %v)", lock.Godot.Commit, err, fallbackErr)
 		}
 	}
-	if err := run("git", "-C", stagingDir, "checkout", "--detach", env.GodotCommit); err != nil {
+	if err := run("git", "-C", stagingDir, "checkout", "--detach", lock.Godot.Commit); err != nil {
 		return err
 	}
-	if err := os.Rename(stagingDir, env.EngineDir); err != nil {
+	if err := os.Rename(stagingDir, engineDir); err != nil {
 		return err
 	}
 	committed = true
-	fmt.Fprintf(os.Stdout, "Checked out pinned Godot commit %s\n", env.GodotCommit)
+	fmt.Fprintf(os.Stdout, "Checked out pinned Godot commit %s\n", lock.Godot.Commit)
 	return nil
 }
 

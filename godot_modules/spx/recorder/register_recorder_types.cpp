@@ -36,8 +36,6 @@ void initialize_spx_recorder_core() {
 	GLOBAL_DEF("movie_writer/obs_enable_post_merge", true);
 	GLOBAL_DEF("movie_writer/obs_keep_intermediate_files", false);
 	GLOBAL_DEF("movie_writer/obs_ffmpeg_path", "ffmpeg");
-
-	MovieRecorderManager::initialize();
 }
 
 void uninitialize_spx_recorder_core() {
@@ -52,10 +50,13 @@ void initialize_spx_recorder_servers() {
 	writer_obs = memnew(ObsStyleMovieWriter);
 	MovieWriter::add_writer(writer_obs);
 #endif
+	MovieRecorderManager::initialize();
 }
 
 void uninitialize_spx_recorder_servers() {
-	MovieRecorderManager::onCleanup();
+	// Stop recording and detach main-loop callbacks before deleting the writer
+	// selected by those callbacks. Core teardown calls shutdown again safely.
+	MovieRecorderManager::shutdown();
 #ifdef WEB_ENABLED
 	memdelete(writer_webm);
 	writer_webm = nullptr;

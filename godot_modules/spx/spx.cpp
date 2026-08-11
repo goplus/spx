@@ -75,18 +75,18 @@ void _spx_main_loop_destroy(void *) {
 }
 
 inline bool _is_spx_engine_ready() {
-	return Spx::initialed && SpxEngine::has_initialed();
-}
-
-inline void _clear_pending_requests() {
-	Spx::restart_requested.clear();
-	Spx::reset_requested.clear();
-	Spx::reset_exit_code.set(0);
-	Spx::pause_requested.clear();
-	Spx::resume_requested.clear();
-	Spx::next_frame_requested.clear();
+	return Spx::is_initialized() && SpxEngine::is_initialized();
 }
 } // namespace
+
+void Spx::_clear_pending_requests() {
+	restart_requested.clear();
+	reset_requested.clear();
+	reset_exit_code.set(0);
+	pause_requested.clear();
+	resume_requested.clear();
+	next_frame_requested.clear();
+}
 
 void Spx::register_extension_functions() {
 	if (extension_functions_registered) {
@@ -101,7 +101,9 @@ void Spx::register_extension_functions() {
 }
 
 void Spx::unregister_extension_functions() {
-	extension_functions_registered = false;
+	// Godot's GDExtension interface registry is process-scoped and has no
+	// matching removal API. Keep this guard set so a module reinitialization
+	// cannot try to insert the same SPX function names a second time.
 }
 
 void Spx::register_main_loop_callbacks() {
@@ -144,13 +146,12 @@ void Spx::register_types() {
 	ClassDB::register_class<SpxCallbackProxy>();
 }
 
-void Spx::on_start(void *p_tree) {
-	initialed = true;
-	_clear_pending_requests();
-	if (!SpxEngine::has_initialed()) {
+void Spx::on_start(MainLoop *p_main_loop) {
+	if (initialized || !SpxEngine::is_initialized()) {
 		return;
 	}
-	auto tree = (SceneTree *)p_tree;
+
+	SceneTree *tree = Object::cast_to<SceneTree>(p_main_loop);
 	if (tree == nullptr) {
 		return;
 	}
@@ -159,10 +160,12 @@ void Spx::on_start(void *p_tree) {
 		return;
 	}
 
+	_clear_pending_requests();
 	SpxEngineNode *new_node = memnew(SpxEngineNode);
 	new_node->set_name("SpxEngineNode");
 	root->add_child(new_node);
 	SPX_ENGINE->set_root_node(tree, new_node);
+	initialized = true;
 	SPX_ENGINE->on_awake();
 }
 
@@ -217,13 +220,14 @@ void Spx::on_update(double delta) {
 }
 
 void Spx::on_destroy() {
-	if (!_is_spx_engine_ready()) {
-		return;
-	}
-
-	SPX_ENGINE->on_destroy();
-	initialed = false;
+	// Runtime callbacks invoked during shutdown must observe SPX as unavailable;
+	// otherwise they can re-enter ordinary APIs while managers are tearing down.
+	initialized = false;
 	_clear_pending_requests();
+
+	if (SpxEngine::is_initialized()) {
+		SpxEngine::shutdown();
+	}
 }
 
 void Spx::reset(int exit_code) {

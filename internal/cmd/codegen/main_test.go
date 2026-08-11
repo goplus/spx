@@ -29,7 +29,7 @@ func TestResolveSPXModuleSourceDefaultsToRepositoryModule(t *testing.T) {
 	repoRoot := t.TempDir()
 
 	got := resolveSPXModuleSource(repoRoot, "")
-	want := filepath.Join(repoRoot, release.DefaultRuntimeLock().Module.Path)
+	want := filepath.Join(repoRoot, filepath.FromSlash(release.DefaultRuntimeLock().Module.Path))
 	if got != want {
 		t.Fatalf("module source = %s, want %s", got, want)
 	}
@@ -55,19 +55,6 @@ func TestResolveSPXModuleSourcePreservesAbsoluteOverride(t *testing.T) {
 	}
 }
 
-func TestResolveOptionalSource(t *testing.T) {
-	repoRoot := t.TempDir()
-	if got := resolveOptionalSource(repoRoot, "  "); got != "" {
-		t.Fatalf("empty optional source = %q, want empty", got)
-	}
-
-	got := resolveOptionalSource(repoRoot, filepath.Join("custom", "godot"))
-	want := filepath.Join(repoRoot, "custom", "godot")
-	if got != want {
-		t.Fatalf("optional source = %s, want %s", got, want)
-	}
-}
-
 func writeCodegenFixtureFile(t *testing.T, dir, name string) {
 	t.Helper()
 	if err := os.WriteFile(filepath.Join(dir, name), []byte("fixture\n"), 0o600); err != nil {
@@ -78,62 +65,28 @@ func writeCodegenFixtureFile(t *testing.T, dir, name string) {
 func newValidSPXModuleFixture(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	for _, name := range requiredSPXModuleFiles {
+	for _, name := range requiredCodegenModuleFiles {
 		writeCodegenFixtureFile(t, dir, name)
 	}
 	return dir
 }
 
-func newValidGodotSourceFixture(t *testing.T) string {
-	t.Helper()
-	dir := t.TempDir()
-	for _, name := range requiredGodotSourceFiles {
-		writeCodegenFixtureFile(t, dir, name)
-	}
-	return dir
-}
-
-func TestValidateCodegenInputs(t *testing.T) {
+func TestValidateCodegenInputsOnlyRequiresGeneratorSources(t *testing.T) {
 	moduleSource := newValidSPXModuleFixture(t)
-	godotSource := newValidGodotSourceFixture(t)
-	if err := validateCodegenInputs(moduleSource, godotSource); err != nil {
+	if err := validateCodegenInputs(moduleSource); err != nil {
 		t.Fatalf("validateCodegenInputs() error = %v", err)
-	}
-	if err := validateCodegenInputs(moduleSource, ""); err != nil {
-		t.Fatalf("validateCodegenInputs() with no GODOT_SRC error = %v", err)
-	}
-}
-
-func TestValidateCodegenInputsRejectsMissingGodotFiles(t *testing.T) {
-	moduleSource := newValidSPXModuleFixture(t)
-	for _, missing := range requiredGodotSourceFiles {
-		t.Run(missing, func(t *testing.T) {
-			dir := t.TempDir()
-			for _, name := range requiredGodotSourceFiles {
-				if name != missing {
-					writeCodegenFixtureFile(t, dir, name)
-				}
-			}
-
-			err := validateCodegenInputs(moduleSource, dir)
-			if err == nil || !strings.Contains(err.Error(), missing) {
-				t.Fatalf("validateCodegenInputs() error = %v, want missing %s", err, missing)
-			}
-		})
 	}
 }
 
 func TestValidateCodegenInputsRejectsMissingModuleFiles(t *testing.T) {
-	for _, missing := range requiredSPXModuleFiles {
+	for _, missing := range requiredCodegenModuleFiles {
 		t.Run(missing, func(t *testing.T) {
-			dir := t.TempDir()
-			for _, name := range requiredSPXModuleFiles {
-				if name != missing {
-					writeCodegenFixtureFile(t, dir, name)
-				}
+			dir := newValidSPXModuleFixture(t)
+			if err := os.Remove(filepath.Join(dir, missing)); err != nil {
+				t.Fatal(err)
 			}
 
-			err := validateCodegenInputs(dir, "")
+			err := validateCodegenInputs(dir)
 			if err == nil || !strings.Contains(err.Error(), missing) {
 				t.Fatalf("validateCodegenInputs() error = %v, want missing %s", err, missing)
 			}
@@ -144,25 +97,17 @@ func TestValidateCodegenInputsRejectsMissingModuleFiles(t *testing.T) {
 func TestValidateCodegenInputsRejectsInvalidDirectories(t *testing.T) {
 	moduleFile := filepath.Join(t.TempDir(), "module-file")
 	writeCodegenFixtureFile(t, filepath.Dir(moduleFile), filepath.Base(moduleFile))
-	if err := validateCodegenInputs(moduleFile, ""); err == nil || !strings.Contains(err.Error(), "not a directory") {
+	if err := validateCodegenInputs(moduleFile); err == nil || !strings.Contains(err.Error(), "not a directory") {
 		t.Fatalf("module file error = %v, want not a directory", err)
-	}
-
-	moduleSource := newValidSPXModuleFixture(t)
-	missingGodotSource := filepath.Join(t.TempDir(), "missing-godot")
-	if err := validateCodegenInputs(moduleSource, missingGodotSource); err == nil || !strings.Contains(err.Error(), "GODOT_SRC") {
-		t.Fatalf("missing GODOT_SRC error = %v, want GODOT_SRC error", err)
 	}
 }
 
 func TestGenerateCodeValidatesBeforeWriting(t *testing.T) {
 	oldPackagePath := packagePath
 	oldSPXModulePath := spxModulePath
-	oldGodotSourcePath := godotSourcePath
 	t.Cleanup(func() {
 		packagePath = oldPackagePath
 		spxModulePath = oldSPXModulePath
-		godotSourcePath = oldGodotSourcePath
 	})
 
 	packagePath = t.TempDir()
@@ -177,7 +122,6 @@ func TestGenerateCodeValidatesBeforeWriting(t *testing.T) {
 		t.Fatal(err)
 	}
 	spxModulePath = filepath.Join(t.TempDir(), "missing-module")
-	godotSourcePath = ""
 	if err := generateCode(); err == nil {
 		t.Fatal("generateCode() error = nil, want invalid input error")
 	}

@@ -32,13 +32,15 @@
 #define SPX_H
 #include "core/templates/safe_refcount.h"
 
-class Spx {
-	static inline bool extension_functions_registered = false;
+class MainLoop;
+class TestSpxInternalsAccessor;
 
-public:
-	static inline bool initialed;
-	static inline bool debug_mode;
-	static inline bool unzip_game_date_on_start;
+class Spx {
+	friend class TestSpxInternalsAccessor;
+
+	static inline bool extension_functions_registered = false;
+	static inline bool initialized = false;
+	static inline bool debug_mode = false;
 	static inline SafeFlag restart_requested{ false };
 	static inline SafeFlag reset_requested{ false };
 	static inline SafeNumeric<int> reset_exit_code{ 0 };
@@ -46,16 +48,20 @@ public:
 	static inline SafeFlag resume_requested{ false };
 	static inline SafeFlag next_frame_requested{ false };
 
+	static void _clear_pending_requests();
+
 public:
 	static void register_extension_functions();
 	static void unregister_extension_functions();
 	static void register_main_loop_callbacks();
 	static void unregister_main_loop_callbacks();
 	static bool has_main_loop_callbacks_registered();
+	static bool is_initialized() { return initialized; }
+	static bool is_debug_mode() { return debug_mode; }
 	static void set_debug_mode(bool enable);
 
 	static void register_types();
-	static void on_start(void *p_tree);
+	static void on_start(MainLoop *p_main_loop);
 	static void on_fixed_update(double delta);
 	static void on_update(double delta);
 	static void on_destroy();

@@ -9,6 +9,7 @@
 class SvgManager {
 public:
 	static SvgManager *get_singleton();
+	static void destroy_singleton();
 
 	SvgManager();
 	~SvgManager();
@@ -34,7 +35,6 @@ public:
 	int calculate_svg_scale(Vector2 required_scale);
 	int calculate_svg_scale(float required_scale);
 
-	void destroy();
 	void reset(bool p_clear_project_caches = true);
 	void update_caches(const Vector<String> &files);
 

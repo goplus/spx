@@ -35,67 +35,59 @@ func BuildEngine(cfg BuildConfig, repoRoot string) error {
 	return buildEngineWithEnvironmentPreparer(cfg, repoRoot, prepareEngineBuildEnvironment)
 }
 
-func buildEngineWithEnvironmentPreparer(cfg BuildConfig, repoRoot string, prepare func(string, string) (buildEnvironment, map[string]string, string, error)) error {
-	if cfg.Target == "editor" && cfg.Platform == "web" {
-		cfg.Target = "template"
-	}
-
-	spxModuleSource, err := shared.ResolveSPXModuleSource(repoRoot)
+func buildEngineWithEnvironmentPreparer(cfg BuildConfig, repoRoot string, prepare func(buildEnvironment) (map[string]string, string, error)) error {
+	buildEnv, err := shared.ResolveBuildEnvironment(repoRoot, cfg.Platform)
 	if err != nil {
 		return err
 	}
-	profile, err := loadSConsProfile(spxModuleSource)
+	module, err := shared.LoadSPXModule(buildEnv.SPXModuleSrc)
 	if err != nil {
 		return err
 	}
-	buildEnv, commandEnv, sconsCommand, err := prepare(repoRoot, cfg.Platform)
+	plan, err := resolveEngineBuildShellPlan(buildEnv, cfg)
 	if err != nil {
 		return err
 	}
-	plan, err := ResolveEngineBuildShellPlan(repoRoot, cfg)
+	commandEnv, sconsCommand, err := prepare(buildEnv)
 	if err != nil {
 		return err
 	}
 
-	switch cfg.Target {
+	switch plan.Target {
 	case "editor":
-		return buildEngineEditor(buildEnv, commandEnv, sconsCommand, profile.EditorReleaseArgs(), plan)
+		return buildEngineEditor(buildEnv, commandEnv, sconsCommand, module, plan)
 	case "template":
-		return buildEngineTemplate(buildEnv, commandEnv, sconsCommand, profile.TemplateReleaseArgs(), plan)
+		return buildEngineTemplate(buildEnv, commandEnv, sconsCommand, module, plan)
 	default:
-		return fmt.Errorf("unsupported build target: %s", cfg.Target)
+		return fmt.Errorf("unsupported build target: %s", plan.Target)
 	}
 }
 
-func prepareEngineBuildEnvironment(repoRoot, requestedPlatform string) (buildEnvironment, map[string]string, string, error) {
+func prepareEngineBuildEnvironment(buildEnv buildEnvironment) (map[string]string, string, error) {
 	runOptionalStreamingCommand("", "xgo", "version")
 	runOptionalStreamingCommand("", "go", "version")
 
-	buildEnv, err := shared.ResolveBuildEnvironment(repoRoot, requestedPlatform)
-	if err != nil {
-		return buildEnvironment{}, nil, "", err
-	}
 	if err := os.MkdirAll(buildEnv.TemplateDir, 0o755); err != nil {
-		return buildEnvironment{}, nil, "", err
+		return nil, "", err
 	}
 
 	printBuildEnvironmentSummary(buildEnv)
 
 	sconsCommand, err := toolpkg.EnsureSCons()
 	if err != nil {
-		return buildEnvironment{}, nil, "", err
+		return nil, "", err
 	}
-	if err := shared.EnsureEngineSource(repoRoot, func(name string, args ...string) error {
+	if err := shared.EnsureEngineSource(buildEnv.RepoRoot, func(name string, args ...string) error {
 		return buildEnvRunStreaming("", name, args...)
 	}); err != nil {
-		return buildEnvironment{}, nil, "", err
+		return nil, "", err
 	}
 
 	commandEnv, err := shared.CurrentBuildEnv()
 	if err != nil {
-		return buildEnvironment{}, nil, "", err
+		return nil, "", err
 	}
-	return buildEnv, commandEnv, sconsCommand, nil
+	return commandEnv, sconsCommand, nil
 }
 
 func printBuildEnvironmentSummary(buildEnv buildEnvironment) {
@@ -112,11 +104,12 @@ func printBuildEnvironmentSummary(buildEnv buildEnvironment) {
 	fmt.Fprintf(os.Stdout, "SPX module source: %s\n", buildEnv.SPXModuleSrc)
 }
 
-func buildEngineEditor(buildEnv buildEnvironment, commandEnv map[string]string, sconsCommand string, profileArgs []string, plan BuildShellPlan) error {
-	args := sconsBuildArgs([]string{"target=editor", "dev_build=yes"}, profileArgs, buildEnv.SPXModuleSrc)
+func buildEngineEditor(buildEnv buildEnvironment, commandEnv map[string]string, sconsCommand string, module shared.SPXModule, plan BuildShellPlan) error {
+	buildArgs := []string{"target=editor", "dev_build=yes"}
 	if plan.EditorUseVSProj {
-		args = append(args, "vsproj=yes")
+		buildArgs = append(buildArgs, "vsproj=yes")
 	}
+	args := module.EditorBuildArgs(buildArgs...)
 	fmt.Fprintf(os.Stdout, "scons %s\n", shellJoin(args))
 	if err := runLockedEngineCommandWithEnv(buildEnv.EngineDir, commandEnv, sconsCommand, args...); err != nil {
 		return err
@@ -126,19 +119,19 @@ func buildEngineEditor(buildEnv buildEnvironment, commandEnv map[string]string, 
 	return shared.CopyFile(filepath.Join(buildEnv.EngineDir, plan.EditorSource), plan.EditorDestination)
 }
 
-func buildEngineTemplate(buildEnv buildEnvironment, commandEnv map[string]string, sconsCommand string, profileArgs []string, plan BuildShellPlan) error {
+func buildEngineTemplate(buildEnv buildEnvironment, commandEnv map[string]string, sconsCommand string, module shared.SPXModule, plan BuildShellPlan) error {
 	fmt.Fprintf(os.Stdout, "Output directory: %s\n", buildEnv.TemplateDir)
 	fmt.Fprintf(os.Stdout, "Destination binary path: %s\n", filepath.Join(buildEnv.GoPath, "bin", "gdspxrt"+buildEnv.Version))
 
 	switch plan.Platform {
 	case "linux", "windows", "macos":
-		args := sconsBuildArgs([]string{"platform=" + plan.TemplateSConsPlatform, "target=template_release"}, profileArgs, buildEnv.SPXModuleSrc)
+		args := module.TemplateBuildArgs("platform="+plan.TemplateSConsPlatform, "target=template_release")
 		if err := runLockedEngineCommandWithEnv(buildEnv.EngineDir, commandEnv, sconsCommand, args...); err != nil {
 			return err
 		}
 		return shared.CopyFile(filepath.Join(buildEnv.EngineDir, plan.TemplateSource), plan.TemplateDestination)
 	case "ios":
-		if err := runLockedEngineScriptWithEnv(buildEnv.EngineDir, commandEnv, sconsBuildScript(sconsCommand, profileArgs, buildEnv.SPXModuleSrc, plan.TemplateSConsCommands)); err != nil {
+		if err := runLockedEngineScriptWithEnv(buildEnv.EngineDir, commandEnv, templateSConsBuildScript(sconsCommand, module, plan.TemplateSConsCommands)); err != nil {
 			return err
 		}
 		return shared.CopyFile(filepath.Join(buildEnv.EngineDir, "bin", "godot_ios.zip"), filepath.Join(buildEnv.TemplateDir, "ios.zip"))
@@ -151,7 +144,7 @@ func buildEngineTemplate(buildEnv buildEnvironment, commandEnv map[string]string
 			return fmt.Errorf("resolve JDK build environment: %w", err)
 		}
 		commandEnv = mergeStringMaps(commandEnv, jdkExports)
-		if err := runLockedEngineScriptWithEnv(buildEnv.EngineDir, commandEnv, sconsBuildScript(sconsCommand, profileArgs, buildEnv.SPXModuleSrc, plan.TemplateSConsCommands)); err != nil {
+		if err := runLockedEngineScriptWithEnv(buildEnv.EngineDir, commandEnv, templateSConsBuildScript(sconsCommand, module, plan.TemplateSConsCommands)); err != nil {
 			return err
 		}
 		if len(plan.TemplatePostCommands) > 0 {
@@ -177,7 +170,7 @@ func buildEngineTemplate(buildEnv buildEnvironment, commandEnv map[string]string
 		if plan.WebProxyToPThread {
 			webArgs = append(webArgs, "proxy_to_pthread=true")
 		}
-		webArgs = sconsBuildArgs(webArgs, profileArgs, buildEnv.SPXModuleSrc)
+		webArgs = module.TemplateBuildArgs(webArgs...)
 		fmt.Fprintf(os.Stdout, "scons %s\n", shellJoin(webArgs))
 		if err := runLockedEngineCommandWithEnv(buildEnv.EngineDir, commandEnv, sconsCommand, webArgs...); err != nil {
 			return err
@@ -195,37 +188,16 @@ func buildEngineTemplate(buildEnv buildEnvironment, commandEnv map[string]string
 	}
 }
 
-func sconsScript(commands []string) string {
-	return sconsScriptWithCommand("scons", commands)
-}
-
-func sconsScriptWithCommand(sconsCommand string, commands []string) string {
-	return sconsBuildScript(sconsCommand, nil, "", commands)
-}
-
-func sconsBuildScript(sconsCommand string, profileArgs []string, spxModuleSource string, commands []string) string {
+func templateSConsBuildScript(sconsCommand string, module shared.SPXModule, commands []string) string {
 	lines := make([]string, 0, len(commands))
 	for _, command := range commands {
 		if strings.TrimSpace(command) == "" {
 			continue
 		}
-		args := sconsBuildArgs(strings.Fields(command), profileArgs, spxModuleSource)
+		args := module.TemplateBuildArgs(strings.Fields(command)...)
 		lines = append(lines, shellJoin(append([]string{sconsCommand}, args...)))
 	}
 	return strings.Join(lines, "\n")
-}
-
-func sconsBuildArgs(dynamicArgs, profileArgs []string, spxModuleSource string) []string {
-	args := make([]string, 0, len(dynamicArgs)+len(profileArgs)+1)
-	// Apply the shared profile first and the explicit build axes second. SCons
-	// keeps the last value for a repeated key, so this order makes any
-	// platform/target override deliberate and consistent across local builds.
-	args = append(args, profileArgs...)
-	args = append(args, dynamicArgs...)
-	if spxModuleSource != "" {
-		args = append(args, "custom_modules="+spxModuleSource)
-	}
-	return args
 }
 
 func shellJoin(args []string) string {

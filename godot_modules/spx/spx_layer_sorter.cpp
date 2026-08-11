@@ -66,7 +66,7 @@ void SpxLayerSorter::update(const Vector<ISortableSprite *> &sortables) {
 
 	_apply_z_index_merged();
 
-	if (Spx::debug_mode && !drawer) {
+	if (Spx::is_debug_mode() && !drawer) {
 		_create_drawer();
 	}
 
@@ -263,7 +263,7 @@ void SpxLayerSorter::_apply_z_index_merged() {
 }
 
 void SpxLayerSorter::_create_drawer() {
-	if (Spx::debug_mode && !drawer) {
+	if (Spx::is_debug_mode() && !drawer) {
 		Node *root = nullptr;
 		if (SpxEngine::get_singleton()) {
 			root = SpxEngine::get_singleton()->get_spx_root();

@@ -50,8 +50,8 @@ AudioStreamPlayer2D *SpxAudio::_get_aid_audio(GdInt aid) {
 void SpxAudio::on_create(GdInt id, Node *root) {
 	this->root = root;
 	this->id = id;
-	bus_id = SpxAudioBusPool::BUS_SFX;
 	bus_name = SpxAudioBusPool::STR_BUS_SFX;
+	owns_dedicated_bus = false;
 }
 
 void SpxAudio::stop_all() {
@@ -105,9 +105,11 @@ void SpxAudio::on_update(float delta) {
 void SpxAudio::on_reset(int reset_code) {
 	stop_all();
 	// free the bus
-	if (bus_id != SpxAudioBusPool::BUS_SFX) {
-		audioPool->free(bus_id);
+	if (owns_dedicated_bus) {
+		audioPool->free(bus_name);
 	}
+	bus_name = SpxAudioBusPool::STR_BUS_SFX;
+	owns_dedicated_bus = false;
 }
 
 void SpxAudio::play(GdInt aid, GdString path, Node *owner, GdFloat attenuation, GdFloat max_distance) {
@@ -203,27 +205,35 @@ GdFloat SpxAudio::get_pitch() {
 }
 
 void SpxAudio::set_pan(GdFloat pan) {
-	on_bus_dirty();
-	audioPool->set_pan(bus_id, pan);
+	if (!ensure_dedicated_bus()) {
+		return;
+	}
+	audioPool->set_pan(bus_name, pan);
 }
 
 GdFloat SpxAudio::get_pan() {
-	return audioPool->get_pan(bus_id);
+	return audioPool->get_pan(bus_name);
 }
 
 void SpxAudio::set_volume(GdFloat volume) {
-	on_bus_dirty();
-	audioPool->set_volume(bus_id, volume);
+	if (!ensure_dedicated_bus()) {
+		return;
+	}
+	audioPool->set_volume(bus_name, volume);
 }
 
 GdFloat SpxAudio::get_volume() {
-	return audioPool->get_volume(bus_id);
+	return audioPool->get_volume(bus_name);
 }
 
-void SpxAudio::on_bus_dirty() {
-	if (bus_id == SpxAudioBusPool::BUS_SFX) {
-		bus_id = audioPool->alloc();
-		bus_name = audioPool->get_bus_name(bus_id);
+bool SpxAudio::ensure_dedicated_bus() {
+	if (!owns_dedicated_bus) {
+		const StringName allocated_bus = audioPool->alloc();
+		if (allocated_bus.is_empty()) {
+			return false;
+		}
+		bus_name = allocated_bus;
+		owns_dedicated_bus = true;
 
 		for (auto item = audios.front(); item;) {
 			item->get()->set_bus(bus_name);
@@ -235,4 +245,5 @@ void SpxAudio::on_bus_dirty() {
 			item = item->next();
 		}
 	}
+	return true;
 }

@@ -141,7 +141,7 @@ void SpxCollisionDebugOverlay::_notification(int p_what) {
 	switch (p_what) {
 		case NOTIFICATION_ENTER_TREE:
 		case NOTIFICATION_PROCESS:
-			_sync_visibility(Spx::debug_mode);
+			_sync_visibility(Spx::is_debug_mode());
 			break;
 		case NOTIFICATION_DRAW:
 			_draw_debug_shape();
@@ -184,7 +184,7 @@ void SpxCollisionDebugOverlay::set_debug_color(const Color &p_color) {
 
 void SpxCollisionDebugOverlay::set_requested_visible(bool p_visible) {
 	requested_visible = p_visible;
-	_sync_visibility(Spx::debug_mode);
+	_sync_visibility(Spx::is_debug_mode());
 }
 
 SpxCollisionDebugOverlay::SpxCollisionDebugOverlay() {

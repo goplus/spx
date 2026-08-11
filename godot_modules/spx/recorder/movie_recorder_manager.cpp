@@ -18,11 +18,10 @@ Size2i MovieRecorderManager::default_movie_size;
 uint32_t MovieRecorderManager::default_fps = 60;
 uint64_t MovieRecorderManager::recording_start_time = 0;
 uint64_t MovieRecorderManager::callback_registration = MainLoopPhaseCallbackBus::INVALID_REGISTRATION_ID;
-bool MovieRecorderManager::initialized = false;
 bool MovieRecorderManager::command_line_recording = false;
 
 void MovieRecorderManager::initialize() {
-	if (initialized) {
+	if (callback_registration != MainLoopPhaseCallbackBus::INVALID_REGISTRATION_ID) {
 		return;
 	}
 
@@ -34,7 +33,6 @@ void MovieRecorderManager::initialize() {
 	callbacks.movie_end = _movie_end;
 	callbacks.destroy = _destroy;
 	callback_registration = get_main_loop_phase_callback_bus().register_callbacks(callbacks);
-	initialized = callback_registration != MainLoopPhaseCallbackBus::INVALID_REGISTRATION_ID;
 }
 
 void MovieRecorderManager::shutdown() {
@@ -43,31 +41,6 @@ void MovieRecorderManager::shutdown() {
 		get_main_loop_phase_callback_bus().unregister_callbacks(callback_registration);
 		callback_registration = MainLoopPhaseCallbackBus::INVALID_REGISTRATION_ID;
 	}
-	initialized = false;
-}
-
-void MovieRecorderManager::onInit() {
-	initialize();
-}
-
-void MovieRecorderManager::onStart() {
-	if (state == NONE && !current_config.output_path.is_empty()) {
-		_begin(default_movie_size, current_config.video_fps, current_config.output_path, false);
-	}
-}
-
-void MovieRecorderManager::onUpdate() {
-	if (state == STARTED && instance != nullptr) {
-		instance->add_realtime_frame();
-	}
-}
-
-void MovieRecorderManager::onCleanup() {
-	_finish();
-}
-
-void MovieRecorderManager::set_fixed_fps(int p_fps) {
-	default_fps = p_fps > 0 ? uint32_t(p_fps) : 60;
 }
 
 Error MovieRecorderManager::_begin(const Size2i &p_movie_size, uint32_t p_fps, const String &p_path, bool p_command_line) {
@@ -154,7 +127,7 @@ bool MovieRecorderManager::is_recording() {
 }
 
 bool MovieRecorderManager::is_initialized() {
-	return initialized;
+	return callback_registration != MainLoopPhaseCallbackBus::INVALID_REGISTRATION_ID;
 }
 
 bool MovieRecorderManager::has_active_instance() {
@@ -182,12 +155,14 @@ bool MovieRecorderManager::_movie_requires_live_audio(void *p_userdata, const St
 
 Error MovieRecorderManager::_movie_begin(void *p_userdata, const Size2i &p_movie_size, uint32_t p_fps, const String &p_movie_path) {
 	default_movie_size = p_movie_size;
-	set_fixed_fps(p_fps);
+	default_fps = p_fps > 0 ? p_fps : 60;
 	return _begin(p_movie_size, default_fps, p_movie_path, true);
 }
 
 void MovieRecorderManager::_movie_frame(void *p_userdata) {
-	onUpdate();
+	if (state == STARTED && instance != nullptr) {
+		instance->add_realtime_frame();
+	}
 }
 
 void MovieRecorderManager::_movie_end(void *p_userdata) {

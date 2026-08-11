@@ -35,7 +35,6 @@
 #include "gdextension_spx_ext.h"
 #include "spx_base_mgr.h"
 
-#include <cstdint>
 class SceneTree;
 class Window;
 class Node;
@@ -58,22 +57,26 @@ class SpxPenMgr;
 class SpxTilemapMgr;
 class SpxTilemapparserMgr;
 class SpxCallbackProxy;
+class TestSpxEngineInternalsAccessor;
 
 typedef void (*GDExtensionSpxGlobalRuntimePanicCallback)(GdString msg);
 typedef void (*GDExtensionSpxGlobalRuntimeExitCallback)(GdInt code);
 typedef void (*GDExtensionSpxGlobalRuntimeResetCallback)(GdInt code);
 
-class SpxEngine : SpxBaseMgr {
+class SpxEngine : public SpxBaseMgr {
+	friend class TestSpxEngineInternalsAccessor;
+
 	static inline SpxEngine *singleton = nullptr;
 
 public:
 	static SpxEngine *get_singleton() { return singleton; }
-	static bool has_initialed() { return singleton != nullptr; }
+	static bool is_initialized() { return singleton != nullptr; }
 	static void register_callbacks(GDExtensionSpxCallbackInfoPtr callback);
+	static void shutdown();
 	static void register_runtime_panic_callbacks(GDExtensionSpxGlobalRuntimePanicCallback callback);
 	static void register_runtime_exit_callbacks(GDExtensionSpxGlobalRuntimeExitCallback callback);
 	static void register_runtime_reset_callbacks(GDExtensionSpxGlobalRuntimeResetCallback callback);
-	virtual ~SpxEngine() = default;
+	~SpxEngine() override = default;
 
 private:
 	Vector<SpxBaseMgr *> mgrs;
@@ -149,9 +152,11 @@ private:
 
 	Ref<SceneTreeTimer> reset_timer;
 	Callable on_timeout_callable;
-	const double RESET_PAUSE_DELAY_SEC = 5.0f;
+	static constexpr double RESET_PAUSE_DELAY_SEC = 5.0;
 	bool should_delay_runtime_reset = false;
 
+	bool managers_awake = false;
+	bool shutting_down = false;
 	bool has_exit = false;
 	bool is_spx_reset = true;
 	bool is_spx_paused = false;

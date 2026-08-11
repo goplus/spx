@@ -217,7 +217,7 @@ generate: ## Generate all code
 	$(MAKE) format
 
 generate-bindings: ## Generate Godot/GDExtension binding code
-	cd ./internal/cmd/codegen && SPX_MODULE_SRC="$(SPX_MODULE_SRC)" go run .
+	cd ./internal/cmd/codegen && go run .
 
 generate-runtime: ## Generate runtime registration code
 	go generate ./pkg/ispx/...

@@ -92,38 +92,38 @@ if env["platform"] == "web":
     # module archive (where the linker cannot see a native reference).
     spx_web_sources = []
     env_spx.add_source_files(spx_web_sources, "web/*.cpp")
-    env.Append(WEB_NATIVE_SOURCES=spx_web_sources)
-    # Replace Godot's Web sources as complete ordered groups. Keeping the
-    # override data here lets platform/web stay independent of SPX.
+
+    web_engine_dir = module_dir.Dir("web/js/engine")
+    web_library_dir = module_dir.Dir("web/js/libs")
+    # Godot owns the ordered default groups; SPX declares only the files it
+    # replaces or adds. This prevents an upstream default from disappearing
+    # merely because the module has not copied its name into this SCsub yet.
     env.Replace(
-        WEB_ENGINE_CORE_SOURCES=[
-            module_dir.File("web/js/engine/preloader.js"),
-            module_dir.File("web/js/engine/config.js"),
-            module_dir.File("web/js/engine/engine.js"),
-        ],
-        WEB_ENGINE_EXTERNS=[
-            module_dir.File("web/js/engine/gdspx.externs.js"),
-        ],
-        WEB_JS_LIBRARIES=[
-            module_dir.File("web/js/libs/library_godot_audio.js"),
-            module_dir.File("web/js/libs/library_godot_recorder.js"),
-            module_dir.File("web/js/libs/library_godot_display.js"),
-            env.File("#platform/web/js/libs/library_godot_fetch.js"),
-            env.File("#platform/web/js/libs/library_godot_webmidi.js"),
-            env.File("#platform/web/js/libs/library_godot_os.js"),
-            module_dir.File("web/js/libs/library_godot_runtime.js"),
-            module_dir.File("web/js/libs/library_godot_input.js"),
-            env.File("#platform/web/js/libs/library_godot_webgl2.js"),
-            module_dir.File("web/js/libs/library_godot_gdspx.js"),
-        ],
-        WEB_WORKLET_SOURCES=[
-            module_dir.File("web/js/libs/audio.worklet.js"),
-            module_dir.File("web/js/libs/audio.position.worklet.js"),
-        ],
+        WEB_JS_LIBRARY_OVERRIDES={
+            "library_godot_audio.js": web_library_dir.File("library_godot_audio.js"),
+            "library_godot_display.js": web_library_dir.File("library_godot_display.js"),
+            "library_godot_runtime.js": web_library_dir.File("library_godot_runtime.js"),
+            "library_godot_input.js": web_library_dir.File("library_godot_input.js"),
+        },
+        WEB_ENGINE_SOURCE_OVERRIDES={
+            "preloader.js": web_engine_dir.File("preloader.js"),
+            "config.js": web_engine_dir.File("config.js"),
+            "engine.js": web_engine_dir.File("engine.js"),
+        },
+        WEB_WORKLET_SOURCE_OVERRIDES={
+            "audio.worklet.js": web_library_dir.File("audio.worklet.js"),
+            "audio.position.worklet.js": web_library_dir.File("audio.position.worklet.js"),
+        },
     )
     env.Append(
-        WEB_ENGINE_SOURCES=[
-            module_dir.File("web/js/engine/gdspx.js"),
-            module_dir.File("web/js/engine/gdspx.util.js"),
-        ]
+        WEB_NATIVE_SOURCES_APPEND=spx_web_sources,
+        WEB_JS_LIBRARIES_APPEND=[
+            web_library_dir.File("library_godot_recorder.js"),
+            web_library_dir.File("library_godot_gdspx.js"),
+        ],
+        WEB_ENGINE_EXTERNS_APPEND=[web_engine_dir.File("gdspx.externs.js")],
+        WEB_ENGINE_SOURCES_APPEND=[
+            web_engine_dir.File("gdspx.js"),
+            web_engine_dir.File("gdspx.util.js"),
+        ],
     )

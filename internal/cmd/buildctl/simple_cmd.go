@@ -207,13 +207,8 @@ func inspectBuildConfiguration(repoRoot string, output io.Writer) error {
 		return err
 	}
 
-	for _, name := range []string{"SCsub", "config.py", shared.SConsProfileFilename} {
-		path := filepath.Join(env.SPXModuleSrc, name)
-		if !shared.FileExists(path) {
-			return fmt.Errorf("SPX module is incomplete: missing %s", path)
-		}
-	}
-	if _, err := shared.LoadSConsProfile(env.SPXModuleSrc); err != nil {
+	module, err := shared.LoadSPXModule(env.SPXModuleSrc)
+	if err != nil {
 		return err
 	}
 
@@ -235,8 +230,8 @@ func inspectBuildConfiguration(repoRoot string, output io.Writer) error {
 	fmt.Fprintf(output, "Runtime: %s (Godot %s)\n", env.Version, env.EngineVersion)
 	fmt.Fprintf(output, "Runtime lock: %s (%s)\n", lockPath, embeddedDigest)
 	fmt.Fprintf(output, "Godot source: %s (%s)\n", env.EngineDir, engineStatus)
-	fmt.Fprintf(output, "SPX module: %s\n", env.SPXModuleSrc)
-	fmt.Fprintf(output, "SCons profile: %s (valid)\n", filepath.Join(env.SPXModuleSrc, shared.SConsProfileFilename))
+	fmt.Fprintf(output, "SPX module: %s\n", module.Source())
+	fmt.Fprintf(output, "SCons profile: %s (valid)\n", filepath.Join(module.Source(), shared.SConsProfileFilename))
 	fmt.Fprintf(output, "Toolchain: go=%s xgo=%s scons=%s emsdk=%s android_ndk=%s jdk=%s\n",
 		lock.Toolchain.Go,
 		lock.Toolchain.XGo,

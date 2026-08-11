@@ -30,9 +30,9 @@
 #ifndef TEST_SPX_COLLISION_DEBUG_OVERLAY_H
 #define TEST_SPX_COLLISION_DEBUG_OVERLAY_H
 
-#include "core/config/engine.h"
 #include "../spx.h"
 #include "../spx_collision_debug_overlay.h"
+#include "core/config/engine.h"
 #include "scene/2d/physics/collision_shape_2d.h"
 #include "scene/main/scene_tree.h"
 #include "scene/main/window.h"
@@ -98,7 +98,7 @@ TEST_CASE("[SceneTree][SPX] Collision debug overlay honors requested and debug-m
 }
 
 TEST_CASE("[SceneTree][SPX] Collision debug mode updates overlays already in the tree") {
-	const bool previous_debug_mode = Spx::debug_mode;
+	const bool previous_debug_mode = Spx::is_debug_mode();
 	CollisionShape2D *target = memnew(CollisionShape2D);
 	SpxCollisionDebugOverlay *overlay = spx_ensure_collision_debug_overlay(target, Color(0, 0, 1, 0.2), true);
 	REQUIRE(overlay != nullptr);

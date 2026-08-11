@@ -133,7 +133,7 @@ void SpxSprite::_bind_methods() {
 }
 
 void SpxSprite::on_destroy_call() {
-	if (!Spx::initialed) {
+	if (!Spx::is_initialized()) {
 		return;
 	}
 
@@ -289,7 +289,7 @@ String SpxSprite::get_spx_type_name() {
 }
 
 void SpxSprite::_on_area_entered(Node *p_node) {
-	if (!Spx::initialed || is_backdrop) {
+	if (!Spx::is_initialized() || is_backdrop) {
 		return;
 	}
 
@@ -301,7 +301,7 @@ void SpxSprite::_on_area_entered(Node *p_node) {
 }
 
 void SpxSprite::_on_area_exited(Node *p_node) {
-	if (!Spx::initialed || is_backdrop) {
+	if (!Spx::is_initialized() || is_backdrop) {
 		return;
 	}
 
@@ -317,7 +317,7 @@ void SpxSprite::set_block_signals(bool p_block) {
 }
 
 void SpxSprite::_on_sprite_frames_set_changed() {
-	if (!Spx::initialed) {
+	if (!Spx::is_initialized()) {
 		return;
 	}
 
@@ -325,7 +325,7 @@ void SpxSprite::_on_sprite_frames_set_changed() {
 }
 
 void SpxSprite::_on_sprite_animation_changed() {
-	if (!Spx::initialed) {
+	if (!Spx::is_initialized()) {
 		return;
 	}
 
@@ -333,7 +333,7 @@ void SpxSprite::_on_sprite_animation_changed() {
 }
 
 void SpxSprite::_on_sprite_frame_changed() {
-	if (!Spx::initialed) {
+	if (!Spx::is_initialized()) {
 		return;
 	}
 
@@ -343,7 +343,7 @@ void SpxSprite::_on_sprite_frame_changed() {
 }
 
 void SpxSprite::_on_sprite_animation_looped() {
-	if (!Spx::initialed) {
+	if (!Spx::is_initialized()) {
 		return;
 	}
 
@@ -351,7 +351,7 @@ void SpxSprite::_on_sprite_animation_looped() {
 }
 
 void SpxSprite::_on_sprite_animation_finished() {
-	if (!Spx::initialed) {
+	if (!Spx::is_initialized()) {
 		return;
 	}
 
@@ -359,13 +359,13 @@ void SpxSprite::_on_sprite_animation_finished() {
 }
 
 void SpxSprite::_on_sprite_vfx_finished() {
-	if (!Spx::initialed) {
+	if (!Spx::is_initialized()) {
 		return;
 	}
 }
 
 void SpxSprite::_on_sprite_screen_exited() {
-	if (!Spx::initialed) {
+	if (!Spx::is_initialized()) {
 		return;
 	}
 
@@ -373,7 +373,7 @@ void SpxSprite::_on_sprite_screen_exited() {
 }
 
 void SpxSprite::_on_sprite_screen_entered() {
-	if (!Spx::initialed) {
+	if (!Spx::is_initialized()) {
 		return;
 	}
 

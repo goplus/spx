@@ -25,6 +25,10 @@ void initialize_spx_module(ModuleInitializationLevel p_level) {
 void uninitialize_spx_module(ModuleInitializationLevel p_level) {
 	if (p_level == MODULE_INITIALIZATION_LEVEL_SCENE) {
 		Spx::unregister_main_loop_callbacks();
+		// Normally the main-loop destroy phase owns this cleanup. Keep module
+		// teardown as an idempotent fallback for startup failures and tests that
+		// never enter a SceneTree.
+		Spx::on_destroy();
 	} else if (p_level == MODULE_INITIALIZATION_LEVEL_SERVERS) {
 		uninitialize_spx_recorder_servers();
 	} else if (p_level == MODULE_INITIALIZATION_LEVEL_CORE) {

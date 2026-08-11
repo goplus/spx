@@ -30,7 +30,8 @@
 
 #include "spx_base_mgr.h"
 
-#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 
 #include "scene/2d/node_2d.h"
 #include "scene/main/window.h"
@@ -52,6 +53,9 @@ void SpxBaseMgr::free_return_cstr(GdString str_ptr) {
 GdString SpxBaseMgr::to_return_cstr(const String &ret_val) {
 	auto cstr = ret_val.utf8();
 	char *result = (char *)malloc(cstr.size() + 1);
+	if (result == nullptr) {
+		return nullptr;
+	}
 	strcpy(result, cstr.get_data());
 	return result;
 }
@@ -150,8 +154,11 @@ GdArray SpxBaseMgr::create_array(int32_t type, int32_t size) {
 		return nullptr;
 	}
 
-	array->data = malloc(size * element_size);
-	if (!array->data && size > 0) {
+	// String arrays are released slot-by-slot. Zero initialization guarantees
+	// partially populated arrays never attempt to free indeterminate pointers;
+	// calloc also rejects a size multiplication overflow.
+	array->data = calloc(static_cast<size_t>(size), element_size);
+	if (!array->data) {
 		free(array);
 		return nullptr;
 	}

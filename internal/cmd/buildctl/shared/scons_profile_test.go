@@ -14,18 +14,16 @@
  * limitations under the License.
  */
 
-package engine
+package shared
 
 import (
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
-
-	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 )
 
-func TestParseSConsProfilePreservesOrderedArguments(t *testing.T) {
+func TestSPXModuleBuildArgsPreserveContractOrder(t *testing.T) {
 	profile, err := parseSConsProfile([]byte(`{
   "schema": 1,
   "common": ["optimize=size", "vulkan=false"],
@@ -36,13 +34,41 @@ func TestParseSConsProfilePreservesOrderedArguments(t *testing.T) {
 		t.Fatalf("parseSConsProfile returned error: %v", err)
 	}
 
-	if got, want := profile.EditorReleaseArgs(), []string{"optimize=size", "vulkan=false", "debug_symbols=true"}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("editor release args = %#v, want %#v", got, want)
+	moduleSource := filepath.Join("C:", "SPX Modules", "spx")
+	module := SPXModule{source: moduleSource, profile: profile}
+	if got, want := module.EditorBuildArgs("target=editor"), []string{
+		"optimize=size",
+		"vulkan=false",
+		"debug_symbols=true",
+		"target=editor",
+		"custom_modules=" + moduleSource,
+	}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("editor build args = %#v, want %#v", got, want)
 	}
-	if got, want := profile.TemplateReleaseArgs(), []string{"optimize=size", "vulkan=false", "debug_symbols=false", "disable_3d=true"}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("template release args = %#v, want %#v", got, want)
+	if got, want := module.TemplateBuildArgs("platform=web", "target=template_release"), []string{
+		"optimize=size",
+		"vulkan=false",
+		"debug_symbols=false",
+		"disable_3d=true",
+		"platform=web",
+		"target=template_release",
+		"custom_modules=" + moduleSource,
+	}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("template build args = %#v, want %#v", got, want)
 	}
-	editorArgs := profile.EditorReleaseArgs()
+	if got, want := module.TemplateBuildArgsAt("/root/spx-module", "platform=linux", "target=template_release"), []string{
+		"optimize=size",
+		"vulkan=false",
+		"debug_symbols=false",
+		"disable_3d=true",
+		"platform=linux",
+		"target=template_release",
+		"custom_modules=/root/spx-module",
+	}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("mounted template build args = %#v, want %#v", got, want)
+	}
+
+	editorArgs := module.EditorBuildArgs("target=editor")
 	editorArgs[0] = "changed=yes"
 	if got := profile.Common[0]; got != "optimize=size" {
 		t.Fatalf("merged editor args mutated the profile: %q", got)
@@ -89,9 +115,9 @@ func TestParseSConsProfileRejectsInvalidInput(t *testing.T) {
 }
 
 func TestRepositorySConsProfile(t *testing.T) {
-	repoRoot, err := shared.FindRepoRoot()
+	repoRoot, err := FindRepoRoot()
 	if err != nil {
-		t.Fatalf("findRepoRoot returned error: %v", err)
+		t.Fatalf("FindRepoRoot returned error: %v", err)
 	}
 	profile, err := loadSConsProfile(filepath.Join(repoRoot, "godot_modules", "spx"))
 	if err != nil {

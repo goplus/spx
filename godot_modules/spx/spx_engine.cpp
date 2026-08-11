@@ -30,8 +30,6 @@
 
 #include "spx_engine.h"
 
-#include "core/config/project_settings.h"
-#include "core/extension/gdextension.h"
 #include "core/os/memory.h"
 #include "core/os/thread.h"
 #include "scene/gui/texture_rect.h"
@@ -39,7 +37,6 @@
 #include "scene/main/scene_tree.h"
 #include "scene/main/window.h"
 #include "servers/display_server.h"
-#include "servers/rendering_server.h"
 
 #include "gdextension_spx_ext.h"
 #include "spx_audio_mgr.h"
@@ -58,7 +55,7 @@
 #include "spx_tilemap_mgr.h"
 #include "spx_tilemapparser_mgr.h"
 #include "spx_ui_mgr.h"
-
+#include "svg_mgr.h"
 
 void SpxEngine::register_runtime_panic_callbacks(GDExtensionSpxGlobalRuntimePanicCallback callback) {
 	_register_runtime_callback(&SpxEngine::on_runtime_panic, callback, __func__);
@@ -121,16 +118,27 @@ static SpxCallbackInfo get_default_spx_callbacks() {
 
 void SpxEngine::register_callbacks(GDExtensionSpxCallbackInfoPtr callback_ptr) {
 	if (singleton != nullptr) {
-		print_error("SpxEngine::register_callbacks failed, already initialed! ");
+		print_error("SpxEngine::register_callbacks failed, already initialized!");
 		return;
 	}
-	singleton = new SpxEngine();
-	singleton->mgrs.clear();
+	singleton = memnew(SpxEngine);
 	singleton->_initialize_managers();
 	singleton->callbacks = (callback_ptr != nullptr) ? *(SpxCallbackInfo *)callback_ptr : get_default_spx_callbacks();
 	singleton->global_id = 1;
 	singleton->is_spx_paused = false;
 	singleton->should_execute_single_frame = false;
+}
+
+void SpxEngine::shutdown() {
+	if (singleton == nullptr || singleton->shutting_down) {
+		return;
+	}
+
+	SpxEngine *engine = singleton;
+	engine->shutting_down = true;
+	engine->on_destroy();
+	singleton = nullptr;
+	memdelete(engine);
 }
 
 SpxCallbackInfo *SpxEngine::get_callbacks() {
@@ -157,9 +165,9 @@ Window *SpxEngine::get_root() {
 }
 
 void SpxEngine::set_root_node(SceneTree *p_tree, Node *p_node) {
-	this->tree = p_tree;
+	tree = p_tree;
 	spx_root = p_node;
-	if (!delay_proxy) {
+	if (tree != nullptr && tree->get_root() != nullptr && delay_proxy == nullptr) {
 		delay_proxy = memnew(SpxCallbackProxy);
 		tree->get_root()->add_child(delay_proxy);
 		on_timeout_callable = Callable(delay_proxy, "_on_timeout");
@@ -167,10 +175,11 @@ void SpxEngine::set_root_node(SceneTree *p_tree, Node *p_node) {
 }
 
 void SpxEngine::on_awake() {
-	if (has_exit) {
+	if (has_exit || managers_awake) {
 		return;
 	}
 
+	managers_awake = true;
 	_notify_managers_awake();
 	_notify_managers_start();
 
@@ -233,23 +242,36 @@ void SpxEngine::on_update(float delta) {
 }
 
 void SpxEngine::on_destroy() {
-	_notify_managers_destroy();
+	_disconnect_reset_timer();
+	clear_frozen_frame();
 
-	if (!has_exit) {
+	const bool was_awake = managers_awake;
+	if (was_awake) {
+		_notify_managers_destroy();
+		managers_awake = false;
+	}
+
+	if (was_awake && !has_exit) {
 		if (callbacks.func_on_engine_destroy) {
 			callbacks.func_on_engine_destroy();
 		}
 	}
 
 	if (delay_proxy) {
+		delay_proxy->clear_callback();
 		delay_proxy->queue_free();
 		delay_proxy = nullptr;
 	}
+	on_timeout_callable = Callable();
 
 	callbacks = get_default_spx_callbacks();
-	svgMgr->destroy();
+	on_runtime_panic = nullptr;
+	on_runtime_exit = nullptr;
+	on_runtime_reset = nullptr;
+	SvgManager::destroy_singleton();
 	_destroy_all_managers();
-	singleton = nullptr;
+	tree = nullptr;
+	spx_root = nullptr;
 }
 
 void SpxEngine::on_exit(int exit_code) {
@@ -411,15 +433,19 @@ void SpxEngine::_invoke_runtime_reset_delayed(int reset_code) {
 
 	_disconnect_reset_timer();
 	reset_timer = tree->create_timer(RESET_PAUSE_DELAY_SEC);
-	delay_proxy->callback = [this, reset_code]() {
+	delay_proxy->set_callback([this, reset_code]() {
 		_invoke_runtime_reset(reset_code);
-	};
+	});
 	reset_timer->connect("timeout", on_timeout_callable);
 }
 
 void SpxEngine::_disconnect_reset_timer() {
-	if (!reset_timer.is_null() && reset_timer.is_valid() && reset_timer->has_connections("timeout")) {
+	if (reset_timer.is_valid() && reset_timer->is_connected("timeout", on_timeout_callable)) {
 		reset_timer->disconnect("timeout", on_timeout_callable);
+	}
+	reset_timer.unref();
+	if (delay_proxy != nullptr) {
+		delay_proxy->clear_callback();
 	}
 }
 

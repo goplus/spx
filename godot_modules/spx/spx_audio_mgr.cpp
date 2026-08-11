@@ -65,8 +65,8 @@ void SpxAudioMgr::on_reset(int reset_code) {
 		MutexLock aid_lock(aid_mutex);
 		aid_audios.clear();
 	}
-	SpxAudioBusPool::reset();
 	_reset_all(reset_code);
+	SpxAudioBusPool::reset();
 }
 
 void SpxAudioMgr::on_destroy() {
@@ -75,6 +75,7 @@ void SpxAudioMgr::on_destroy() {
 		aid_audios.clear();
 	}
 	_destroy_all();
+	SpxAudioBusPool::shutdown();
 	SpxBaseMgr::on_destroy();
 }
 
