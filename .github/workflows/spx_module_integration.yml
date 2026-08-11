@@ -78,10 +78,10 @@ jobs:
   module-checks:
     name: Build and test current SPX module
     needs: contract
-    # release_builds.yml already exists on the upstream base branch, so it can
-    # bootstrap the new nested checks from this immutable workflow SHA. The
-    # Godot source remains the separate runtime.lock commit passed below.
-    uses: goplus/godot/.github/workflows/release_builds.yml@28651faabe3084beb2bab50d69171ff144eb53eb
+    # Before the Godot PR lands, GitHub Actions can resolve its workflow SHA
+    # only through the PR fork. This is immutable orchestration with read-only
+    # permissions; Godot source remains the official runtime.lock commit below.
+    uses: joeykchen/godot/.github/workflows/release_builds.yml@28651faabe3084beb2bab50d69171ff144eb53eb
     with:
       runtime_version: ${{ needs.contract.outputs.runtime_version }}
       runtime_abi: ${{ needs.contract.outputs.runtime_abi }}
