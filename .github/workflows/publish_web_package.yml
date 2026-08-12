@@ -74,7 +74,7 @@ jobs:
           path: .
 
       - name: Install Linux dependencies
-        if: runner.os == 'Linux' && inputs.release_artifact == ''
+        if: inputs.release_artifact == ''
         run: |
           sudo apt-get update
           sudo apt-get install \

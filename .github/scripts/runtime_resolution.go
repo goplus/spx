@@ -322,7 +322,6 @@ func writeRuntimeResolutionOutputs(path string, resolution runtimeResolution) er
 		return fmt.Errorf("open GitHub output: %w", err)
 	}
 	defer file.Close()
-	reuseRuntime := resolution.State == runtimeStateReady
-	_, err = fmt.Fprintf(file, "runtime_state=%s\nruntime_reason=%s\nreuse_runtime=%t\n", resolution.State, resolution.Reason, reuseRuntime)
+	_, err = fmt.Fprintf(file, "runtime_state=%s\nruntime_reason=%s\n", resolution.State, resolution.Reason)
 	return err
 }

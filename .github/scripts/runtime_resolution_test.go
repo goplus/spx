@@ -162,13 +162,12 @@ func TestResolveRuntimeRejectsMissingManifestOnPublicRelease(t *testing.T) {
 
 func TestWriteRuntimeResolutionOutputs(t *testing.T) {
 	tests := []struct {
-		name            string
-		state           string
-		reason          string
-		reuseRuntimeOut string
+		name   string
+		state  string
+		reason string
 	}{
-		{name: "ready", state: runtimeStateReady, reason: "verified runtime-v1.2.3", reuseRuntimeOut: "true"},
-		{name: "missing", state: runtimeStateMissing, reason: "runtime-v1.2.3 is not published", reuseRuntimeOut: "false"},
+		{name: "ready", state: runtimeStateReady, reason: "verified runtime-v1.2.3"},
+		{name: "missing", state: runtimeStateMissing, reason: "runtime-v1.2.3 is not published"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -181,7 +180,7 @@ func TestWriteRuntimeResolutionOutputs(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			for _, line := range []string{"runtime_state=" + test.state, "runtime_reason=" + test.reason, "reuse_runtime=" + test.reuseRuntimeOut} {
+			for _, line := range []string{"runtime_state=" + test.state, "runtime_reason=" + test.reason} {
 				if !strings.Contains(string(data), line+"\n") {
 					t.Fatalf("GitHub output %q does not contain %q", data, line)
 				}

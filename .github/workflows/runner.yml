@@ -64,23 +64,15 @@ jobs:
   spx-module-integration:
     name: Current SPX module integration
     needs: [static-checks, runtime-resolution]
-    if: >-
-      ${{
-        needs.static-checks.result == 'success' &&
-        needs.runtime-resolution.result == 'success' &&
-        needs.runtime-resolution.outputs.runtime_state == 'missing'
-      }}
+    # Job conditions implicitly require every dependency to succeed; this only
+    # selects the runtime path.
+    if: needs.runtime-resolution.outputs.runtime_state == 'missing'
     uses: ./.github/workflows/spx_module_integration.yml
 
   web-build:
     name: Published Web runtime smoke
     needs: [static-checks, runtime-resolution]
-    if: >-
-      ${{
-        needs.static-checks.result == 'success' &&
-        needs.runtime-resolution.result == 'success' &&
-        needs.runtime-resolution.outputs.runtime_state == 'ready'
-      }}
+    if: needs.runtime-resolution.outputs.runtime_state == 'ready'
     uses: ./.github/workflows/build_web.yml
 
   ci-gate:

@@ -44,7 +44,7 @@ jobs:
       godot_repository: ${{ steps.release.outputs.godot_repository }}
       godot_commit: ${{ steps.release.outputs.godot_commit }}
       module_path: ${{ steps.release.outputs.module_path }}
-      reuse_runtime: ${{ steps.runtime.outputs.reuse_runtime }}
+      runtime_state: ${{ steps.runtime.outputs.runtime_state }}
       run_web: ${{ steps.platforms.outputs.run_web }}
       run_macos: ${{ steps.platforms.outputs.run_macos }}
       run_windows: ${{ steps.platforms.outputs.run_windows }}
@@ -110,7 +110,7 @@ jobs:
 
       - name: Verify locked Godot source ancestry
         id: godot-ancestry
-        if: steps.runtime.outputs.reuse_runtime != 'true'
+        if: steps.runtime.outputs.runtime_state == 'missing'
         shell: bash
         env:
           OPERATION_INPUT: ${{ inputs.operation }}
@@ -137,13 +137,13 @@ jobs:
           GODOT_REF: ${{ steps.godot-ancestry.outputs.godot_ref }}
           GODOT_REF_COMMIT: ${{ steps.godot-ancestry.outputs.godot_ref_commit }}
           OPERATION_INPUT: ${{ inputs.operation }}
-          REUSE_RUNTIME: ${{ steps.runtime.outputs.reuse_runtime }}
+          RUNTIME_STATE: ${{ steps.runtime.outputs.runtime_state }}
           RUNTIME_REASON: ${{ steps.runtime.outputs.runtime_reason }}
         run: |
           set -euo pipefail
 
           summary_valid=true
-          if [ "$REUSE_RUNTIME" = true ]; then
+          if [ "$RUNTIME_STATE" = ready ]; then
             ancestry_status="not required — $RUNTIME_REASON"
             ref_commit="not checked (immutable runtime reuse)"
           else
@@ -304,11 +304,11 @@ jobs:
   godot-runtime-build:
     name: Build locked Godot runtime
     needs: [setup, static-checks]
-    if: needs.setup.outputs.reuse_runtime != 'true'
+    if: needs.setup.outputs.runtime_state == 'missing'
     # Before the Godot PR lands, pin its immutable workflow implementation
     # through the source fork. The Godot source remains the independent,
     # canonical runtime.lock input passed through godot_ref below.
-    uses: joeykchen/godot/.github/workflows/release_builds.yml@97518c0da47584f5838ed23dd9a79a0d64201788
+    uses: joeykchen/godot/.github/workflows/release_builds.yml@c469defe3ee7a5d0cdc3227dd49d3415c8315a29
     with:
       runtime_version: ${{ needs.setup.outputs.runtime_version }}
       runtime_abi: ${{ needs.setup.outputs.runtime_abi }}
@@ -320,8 +320,7 @@ jobs:
 
   runtime-assets-build:
     name: Build runtime pack
-    needs: [setup, static-checks, godot-runtime-build]
-    if: needs.setup.outputs.reuse_runtime != 'true'
+    needs: godot-runtime-build
     uses: ./.github/workflows/release_runtime_assets.yml
 
   runtime-ready:
@@ -333,18 +332,18 @@ jobs:
         needs.setup.result == 'success' &&
         needs.static-checks.result == 'success' &&
         (
-          (needs.setup.outputs.reuse_runtime == 'true' && needs.godot-runtime-build.result == 'skipped' && needs.runtime-assets-build.result == 'skipped') ||
-          (needs.setup.outputs.reuse_runtime != 'true' && needs.godot-runtime-build.result == 'success' && needs.runtime-assets-build.result == 'success')
+          (needs.setup.outputs.runtime_state == 'ready' && needs.godot-runtime-build.result == 'skipped' && needs.runtime-assets-build.result == 'skipped') ||
+          (needs.setup.outputs.runtime_state == 'missing' && needs.godot-runtime-build.result == 'success' && needs.runtime-assets-build.result == 'success')
         )
       }}
     runs-on: ubuntu-22.04
     steps:
       - name: Confirm runtime bundle source
         env:
-          REUSE_RUNTIME: ${{ needs.setup.outputs.reuse_runtime }}
+          RUNTIME_STATE: ${{ needs.setup.outputs.runtime_state }}
           RUNTIME_TAG: ${{ needs.setup.outputs.runtime_tag }}
         run: |
-          if [ "$REUSE_RUNTIME" = true ]; then
+          if [ "$RUNTIME_STATE" = ready ]; then
             echo "[info] Products will consume published $RUNTIME_TAG"
           else
             echo "[info] Products will consume current-run runtime artifacts"
@@ -352,41 +351,40 @@ jobs:
 
   web-build:
     name: Build Web packages
-    needs: [setup, static-checks, runtime-ready]
+    needs: [setup, runtime-ready]
     if: needs.setup.outputs.run_web == 'true'
     uses: ./.github/workflows/release_web.yml
     with:
-      engine_artifacts: ${{ needs.setup.outputs.reuse_runtime != 'true' }}
+      engine_artifacts: ${{ needs.setup.outputs.runtime_state == 'missing' }}
 
   macos-build:
     name: Package macOS
-    needs: [setup, static-checks, runtime-ready]
+    needs: [setup, runtime-ready]
     if: needs.setup.outputs.run_macos == 'true'
     uses: ./.github/workflows/release_macos.yml
     with:
-      engine_artifacts: ${{ needs.setup.outputs.reuse_runtime != 'true' }}
+      engine_artifacts: ${{ needs.setup.outputs.runtime_state == 'missing' }}
 
   windows-build:
     name: Package Windows
-    needs: [setup, static-checks, runtime-ready]
+    needs: [setup, runtime-ready]
     if: needs.setup.outputs.run_windows == 'true'
     uses: ./.github/workflows/release_windows.yml
     with:
-      engine_artifacts: ${{ needs.setup.outputs.reuse_runtime != 'true' }}
+      engine_artifacts: ${{ needs.setup.outputs.runtime_state == 'missing' }}
 
   linux-build:
     name: Package Linux
-    needs: [setup, static-checks, runtime-ready]
+    needs: [setup, runtime-ready]
     if: needs.setup.outputs.run_linux == 'true'
     uses: ./.github/workflows/release_linux.yml
     with:
-      engine_artifacts: ${{ needs.setup.outputs.reuse_runtime != 'true' }}
+      engine_artifacts: ${{ needs.setup.outputs.runtime_state == 'missing' }}
 
   assemble:
     name: Assemble and verify releases
     needs:
       - setup
-      - static-checks
       - runtime-ready
       - web-build
       - macos-build
@@ -396,7 +394,6 @@ jobs:
       ${{
         always() &&
         needs.setup.result == 'success' &&
-        needs.static-checks.result == 'success' &&
         needs.runtime-ready.result == 'success' &&
         (needs.setup.outputs.run_web != 'true' || needs.web-build.result == 'success') &&
         (needs.setup.outputs.run_macos != 'true' || needs.macos-build.result == 'success') &&
@@ -404,8 +401,6 @@ jobs:
         (needs.setup.outputs.run_linux != 'true' || needs.linux-build.result == 'success')
       }}
     runs-on: ubuntu-22.04
-    outputs:
-      product_count: ${{ steps.assemble.outputs.product_count }}
     steps:
       - name: Check out code
         uses: actions/checkout@v6
@@ -418,7 +413,7 @@ jobs:
           setup-mode: none
 
       - name: Download all build artifacts
-        if: needs.setup.outputs.reuse_runtime != 'true' || inputs.operation != 'publish-runtime'
+        if: needs.setup.outputs.runtime_state == 'missing' || inputs.operation != 'publish-runtime'
         uses: actions/download-artifact@v7
         with:
           path: artifacts
@@ -429,7 +424,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ needs.setup.outputs.release_repository }}
-          REUSE_RUNTIME: ${{ needs.setup.outputs.reuse_runtime }}
+          RUNTIME_STATE: ${{ needs.setup.outputs.runtime_state }}
           RUNTIME_TAG: ${{ needs.setup.outputs.runtime_tag }}
           RUNTIME_MANIFEST: ${{ needs.setup.outputs.runtime_manifest }}
           MODULE_PATH: ${{ needs.setup.outputs.module_path }}
@@ -455,13 +450,13 @@ jobs:
             files[$name]="$path"
           done < <(find artifacts -type f -print0 | sort -z)
 
-          if [ "${#files[@]}" -eq 0 ] && [ "$REUSE_RUNTIME" != true ]; then
+          if [ "${#files[@]}" -eq 0 ] && [ "$RUNTIME_STATE" = missing ]; then
             echo "[error] No build artifacts were downloaded" >&2
             exit 1
           fi
 
           mapfile -t required_assets < <(jq -r '.required_assets[]' internal/release/runtime.lock.json)
-          if [ "$REUSE_RUNTIME" = true ]; then
+          if [ "$RUNTIME_STATE" = ready ]; then
             gh release download "$RUNTIME_TAG" --repo "$REPOSITORY" --dir dist/runtime
             (cd dist/runtime && sha256sum -c SHA256SUMS)
             go run ./.github/scripts/runtime_asset_manifest.go \
@@ -515,7 +510,7 @@ jobs:
           product_count="${#expected_products[@]}"
           echo "product_count=$product_count" >> "$GITHUB_OUTPUT"
 
-          if [ "$REUSE_RUNTIME" != true ]; then
+          if [ "$RUNTIME_STATE" = missing ]; then
             spx_commit="$(git rev-parse HEAD)"
             if [ -z "$MODULE_PATH" ]; then
               echo "[error] Locked SPX module path must not be empty" >&2
@@ -610,7 +605,7 @@ jobs:
       contents: write
     steps:
       - name: Check out release source for the publish guard
-        if: needs.setup.outputs.reuse_runtime != 'true'
+        if: needs.setup.outputs.runtime_state == 'missing'
         uses: actions/checkout@v6
         with:
           ref: ${{ github.sha }}
@@ -618,7 +613,7 @@ jobs:
           persist-credentials: false
 
       - name: Revalidate locked Godot ancestry before publishing
-        if: needs.setup.outputs.reuse_runtime != 'true'
+        if: needs.setup.outputs.runtime_state == 'missing'
         shell: bash
         run: |
           set -euo pipefail

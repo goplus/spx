@@ -24,22 +24,18 @@ jobs:
             zip_file: spx_web.zip
             artifact_name: web-release
             runtime_artifact: runtime-web
-            display_name: Web Release
           - mode: worker
             zip_file: spx_web_worker.zip
             artifact_name: web-worker-release
             runtime_artifact: runtime-web-worker
-            display_name: Web Worker Release
           - mode: minigame
             zip_file: spx_web_minigame.zip
             artifact_name: web-minigame-release
             runtime_artifact: runtime-web-minigame
-            display_name: Web Minigame Release
           - mode: miniprogram
             zip_file: spx_web_miniprogram.zip
             artifact_name: web-miniprogram-release
             runtime_artifact: runtime-web-miniprogram
-            display_name: Web Miniprogram Release
     steps:
       - name: Check out code
         uses: actions/checkout@v6
@@ -60,7 +56,6 @@ jobs:
 
       - name: Install Linux dependencies
         run: sudo apt-get update && sudo apt-get install gcc libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libx11-dev xorg-dev libasound2-dev libopenal-dev binaryen brotli
-        if: ${{ runner.os == 'Linux' }}
 
       - name: Set up toolchain and engine assets
         uses: ./.github/actions/deps
