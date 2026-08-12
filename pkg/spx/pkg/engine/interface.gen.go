@@ -179,6 +179,7 @@ type IPlatformMgr interface {
 	IsWindowFullscreen() bool
 	SetDebugMode(enable bool)
 	IsDebugMode() bool
+	IsMainThread() bool
 	GetTimeScale() float64
 	SetTimeScale(time_scale float64)
 	GetMaxFps() int64

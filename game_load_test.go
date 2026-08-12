@@ -25,7 +25,6 @@ import (
 	coreproject "github.com/goplus/spx/v3/internal/core/project"
 	"github.com/goplus/spx/v3/internal/coroutine"
 	"github.com/goplus/spx/v3/internal/engine"
-	"github.com/goplus/spx/v3/internal/engine/platform"
 	"github.com/goplus/spx/v3/internal/enginewrap"
 	pkgengine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
@@ -369,9 +368,7 @@ func runBootstrapTasksWithScheduler(t *testing.T, game *Game, generation uint64)
 			t.Fatal("bootstrap tasks did not finish while pumping scheduler")
 		}
 
-		platform.RunOnMainThread(func() {
-			gco.Update()
-		})
+		gco.Update()
 		time.Sleep(time.Millisecond)
 	}
 }
@@ -423,18 +420,14 @@ func TestRefreshCollisionLayersUsesCurrentTargetsFromSetupCollisionData(t *testi
 	spriteB.physics().addCollisionTarget("SpriteA")
 
 	generation := game.currentBootstrapGeneration()
-	platform.RunOnMainThread(func() {
-		game.runSpriteCallbacks(
-			[]Sprite{spriteA, spriteB},
-			&coreproject.ProjectConfig{},
-			reflect.ValueOf(game).Elem(),
-			generation,
-		)
-	})
-	platform.RunOnMainThread(func() {
-		game.runBootstrapTasksFor(generation)
-		game.refreshCollisionLayers()
-	})
+	game.runSpriteCallbacks(
+		[]Sprite{spriteA, spriteB},
+		&coreproject.ProjectConfig{},
+		reflect.ValueOf(game).Elem(),
+		generation,
+	)
+	game.runBootstrapTasksFor(generation)
+	game.refreshCollisionLayers()
 
 	if got := game.sprCollisionInfos["SpriteA"].Mask; got != 0 {
 		t.Fatalf("SpriteA collision mask = %d, want 0", got)
@@ -464,14 +457,12 @@ func TestRunSpriteCallbacksRefreshesCollisionLayersRegisteredInMain(t *testing.T
 	game.addShape(spriteOf(spriteB))
 
 	generation := game.currentBootstrapGeneration()
-	platform.RunOnMainThread(func() {
-		game.runSpriteCallbacks(
-			[]Sprite{spriteA, spriteB},
-			&coreproject.ProjectConfig{},
-			reflect.ValueOf(game).Elem(),
-			generation,
-		)
-	})
+	game.runSpriteCallbacks(
+		[]Sprite{spriteA, spriteB},
+		&coreproject.ProjectConfig{},
+		reflect.ValueOf(game).Elem(),
+		generation,
+	)
 	runBootstrapTasksWithScheduler(t, &game.Game, generation)
 
 	if got := game.sprCollisionInfos["SpriteA"].Mask; got != game.sprCollisionInfos["SpriteB"].Layer {
@@ -621,9 +612,7 @@ func TestRunSpriteCallbacksAllowsOnStartAfterMainFirstYield(t *testing.T) {
 	runBootstrapTasksWithScheduler(t, &game, generation)
 
 	game.dispatchStartEventIfNeeded()
-	platform.RunOnMainThread(func() {
-		gco.Update()
-	})
+	gco.Update()
 
 	select {
 	case <-started:
@@ -639,9 +628,7 @@ func TestInitRuntimeProxyAppliesCostumeBeforeAwake(t *testing.T) {
 	sprite := newCloneAwakeOrderSprite(&game, "SpriteA")
 	sprite.spriteState.IsVisible = true
 
-	platform.RunOnMainThread(func() {
-		sprite.initRuntimeProxy()
-	})
+	sprite.initRuntimeProxy()
 
 	if sprite.runtimeState.SyncSprite == nil {
 		t.Fatal("SyncSprite = nil, want initialized proxy")
@@ -667,9 +654,7 @@ func TestApplySpritePropsBeforeInitRuntimeProxy(t *testing.T) {
 	}
 
 	var dest *SpriteImpl
-	platform.RunOnMainThread(func() {
-		dest, _ = applySprite(out, source, shape)
-	})
+	dest, _ = applySprite(out, source, shape)
 
 	if dest == nil {
 		t.Fatal("applySprite returned nil sprite")
@@ -700,14 +685,12 @@ func TestCloneSpriteAwakesBeforeMain(t *testing.T) {
 	game.addShape(spriteOf(source))
 
 	var cloned *cloneAwakeOrderSprite
-	platform.RunOnMainThread(func() {
-		doClone(source, nil, false, func(sprite *SpriteImpl) {
-			var ok bool
-			cloned, ok = sprite.sprite.(*cloneAwakeOrderSprite)
-			if !ok {
-				t.Fatalf("clone sprite type = %T, want *cloneAwakeOrderSprite", sprite.sprite)
-			}
-		})
+	doClone(source, nil, false, func(sprite *SpriteImpl) {
+		var ok bool
+		cloned, ok = sprite.sprite.(*cloneAwakeOrderSprite)
+		if !ok {
+			t.Fatalf("clone sprite type = %T, want *cloneAwakeOrderSprite", sprite.sprite)
+		}
 	})
 
 	if cloned == nil {
@@ -741,14 +724,12 @@ func TestCloneSpriteInsertsImmediatelyAfterSource(t *testing.T) {
 	game.addShape(spriteOf(front))
 
 	var cloned *cloneAwakeOrderSprite
-	platform.RunOnMainThread(func() {
-		doClone(source, nil, false, func(sprite *SpriteImpl) {
-			var ok bool
-			cloned, ok = sprite.sprite.(*cloneAwakeOrderSprite)
-			if !ok {
-				t.Fatalf("clone sprite type = %T, want *cloneAwakeOrderSprite", sprite.sprite)
-			}
-		})
+	doClone(source, nil, false, func(sprite *SpriteImpl) {
+		var ok bool
+		cloned, ok = sprite.sprite.(*cloneAwakeOrderSprite)
+		if !ok {
+			t.Fatalf("clone sprite type = %T, want *cloneAwakeOrderSprite", sprite.sprite)
+		}
 	})
 
 	if cloned == nil {
@@ -794,14 +775,12 @@ func TestCloneSpritePreservesUserStateAfterMainRegistration(t *testing.T) {
 	game.addShape(spriteOf(source))
 
 	var cloned *cloneStatePreservingSprite
-	platform.RunOnMainThread(func() {
-		doClone(source, nil, false, func(sprite *SpriteImpl) {
-			var ok bool
-			cloned, ok = sprite.sprite.(*cloneStatePreservingSprite)
-			if !ok {
-				t.Fatalf("clone sprite type = %T, want *cloneStatePreservingSprite", sprite.sprite)
-			}
-		})
+	doClone(source, nil, false, func(sprite *SpriteImpl) {
+		var ok bool
+		cloned, ok = sprite.sprite.(*cloneStatePreservingSprite)
+		if !ok {
+			t.Fatalf("clone sprite type = %T, want *cloneStatePreservingSprite", sprite.sprite)
+		}
 	})
 
 	if cloned == nil {
@@ -842,14 +821,12 @@ func TestCloneSpritePreservesAllTopLevelUserFields(t *testing.T) {
 	game.addShape(spriteOf(source))
 
 	var cloned *cloneAllFieldKindsSprite
-	platform.RunOnMainThread(func() {
-		doClone(source, nil, false, func(sprite *SpriteImpl) {
-			var ok bool
-			cloned, ok = sprite.sprite.(*cloneAllFieldKindsSprite)
-			if !ok {
-				t.Fatalf("clone sprite type = %T, want *cloneAllFieldKindsSprite", sprite.sprite)
-			}
-		})
+	doClone(source, nil, false, func(sprite *SpriteImpl) {
+		var ok bool
+		cloned, ok = sprite.sprite.(*cloneAllFieldKindsSprite)
+		if !ok {
+			t.Fatalf("clone sprite type = %T, want *cloneAllFieldKindsSprite", sprite.sprite)
+		}
 	})
 
 	if cloned == nil {
@@ -913,11 +890,9 @@ func TestClonedSpriteCollisionTargetRegistrationDoesNotRefreshCollisionLayers(t 
 	cloneA := newCollisionLayerOrderSprite(&game.Game, "SpriteA", nil)
 	cloneA.spriteState.Cloned = true
 
-	platform.RunOnMainThread(func() {
-		game.setupCollisionData([]Sprite{spriteA, spriteB})
-		spriteA.physics().collisionTargets["SpriteB"] = true
-		cloneA.physics().addCollisionTarget("SpriteB")
-	})
+	game.setupCollisionData([]Sprite{spriteA, spriteB})
+	spriteA.physics().collisionTargets["SpriteB"] = true
+	cloneA.physics().addCollisionTarget("SpriteB")
 
 	if got := game.sprCollisionInfos["SpriteA"].Mask; got != 0 {
 		t.Fatalf("SpriteA collision mask = %d, want 0", got)

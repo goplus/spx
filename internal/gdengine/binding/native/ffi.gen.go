@@ -142,6 +142,7 @@ type GDExtensionInterface struct {
 	SpxPlatformIsWindowFullscreen               GDExtensionSpxPlatformIsWindowFullscreen
 	SpxPlatformSetDebugMode                     GDExtensionSpxPlatformSetDebugMode
 	SpxPlatformIsDebugMode                      GDExtensionSpxPlatformIsDebugMode
+	SpxPlatformIsMainThread                     GDExtensionSpxPlatformIsMainThread
 	SpxPlatformGetTimeScale                     GDExtensionSpxPlatformGetTimeScale
 	SpxPlatformSetTimeScale                     GDExtensionSpxPlatformSetTimeScale
 	SpxPlatformGetMaxFps                        GDExtensionSpxPlatformGetMaxFps
@@ -477,6 +478,7 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxPlatformIsWindowFullscreen = (GDExtensionSpxPlatformIsWindowFullscreen)(resolveCFunc("spx_platform_is_window_fullscreen"))
 	x.SpxPlatformSetDebugMode = (GDExtensionSpxPlatformSetDebugMode)(resolveCFunc("spx_platform_set_debug_mode"))
 	x.SpxPlatformIsDebugMode = (GDExtensionSpxPlatformIsDebugMode)(resolveCFunc("spx_platform_is_debug_mode"))
+	x.SpxPlatformIsMainThread = (GDExtensionSpxPlatformIsMainThread)(resolveCFunc("spx_platform_is_main_thread"))
 	x.SpxPlatformGetTimeScale = (GDExtensionSpxPlatformGetTimeScale)(resolveCFunc("spx_platform_get_time_scale"))
 	x.SpxPlatformSetTimeScale = (GDExtensionSpxPlatformSetTimeScale)(resolveCFunc("spx_platform_set_time_scale"))
 	x.SpxPlatformGetMaxFps = (GDExtensionSpxPlatformGetMaxFps)(resolveCFunc("spx_platform_get_max_fps"))

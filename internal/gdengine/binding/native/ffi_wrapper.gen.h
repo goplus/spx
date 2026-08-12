@@ -648,6 +648,12 @@ void cgo_callfn_GDExtensionSpxPlatformIsDebugMode(const GDExtensionSpxPlatformIs
 	}
 	fn(ret_val);
 }
+void cgo_callfn_GDExtensionSpxPlatformIsMainThread(const GDExtensionSpxPlatformIsMainThread fn, GdBool* ret_val) {
+	if (!fn) {
+		return;
+	}
+	fn(ret_val);
+}
 void cgo_callfn_GDExtensionSpxPlatformGetTimeScale(const GDExtensionSpxPlatformGetTimeScale fn, GdFloat* ret_val) {
 	if (!fn) {
 		return;

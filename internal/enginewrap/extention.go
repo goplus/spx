@@ -30,10 +30,24 @@ func Init(call func(f func())) {
 }
 
 func callInMainThread(call func()) {
+	CallInMainThread(call)
+}
+
+// CallInMainThread runs call synchronously on the engine main thread.
+func CallInMainThread(call func()) {
 	if mainCallback == nil {
 		panic("enginewrap: Init must be called before using manager methods off the main thread")
 	}
 	mainCallback(call)
+}
+
+// CallInMainThreadValue runs call synchronously on the engine main thread and
+// returns its result.
+func CallInMainThreadValue[T any](call func() T) (result T) {
+	CallInMainThread(func() {
+		result = call()
+	})
+	return
 }
 
 const (

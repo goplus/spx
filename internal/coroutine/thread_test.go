@@ -20,8 +20,6 @@ import (
 	"runtime"
 	"testing"
 	"time"
-
-	"github.com/goplus/spx/v3/internal/engine/platform"
 )
 
 type namedThreadObj struct{}
@@ -464,9 +462,7 @@ func TestCreateAndStartFromCoroutineYieldsCallerWhenStarted(t *testing.T) {
 			t.Fatal("caller did not finish while pumping the scheduler")
 		}
 
-		platform.RunOnMainThread(func() {
-			co.Update()
-		})
+		co.Update()
 		time.Sleep(time.Millisecond)
 	}
 }

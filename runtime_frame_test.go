@@ -22,7 +22,6 @@ import (
 
 	"github.com/goplus/spx/v3/internal/coroutine"
 	"github.com/goplus/spx/v3/internal/engine"
-	"github.com/goplus/spx/v3/internal/engine/platform"
 	itime "github.com/goplus/spx/v3/internal/time"
 )
 
@@ -390,7 +389,7 @@ func TestAtFrameCallbackCanWaitForMainThread(t *testing.T) {
 
 	updateDone := make(chan struct{})
 	go func() {
-		platform.RunOnMainThread(co.Update)
+		co.Update()
 		close(updateDone)
 	}()
 	select {

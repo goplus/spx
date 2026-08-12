@@ -690,6 +690,10 @@ func (pself *platformMgr) IsDebugMode() bool {
 	_retValue := API.SpxPlatformIsDebugMode.Invoke()
 	return JsToGdBool(_retValue)
 }
+func (pself *platformMgr) IsMainThread() bool {
+	_retValue := API.SpxPlatformIsMainThread.Invoke()
+	return JsToGdBool(_retValue)
+}
 func (pself *platformMgr) GetTimeScale() float64 {
 	_retValue := API.SpxPlatformGetTimeScale.Invoke()
 	return JsToGdFloat(_retValue)

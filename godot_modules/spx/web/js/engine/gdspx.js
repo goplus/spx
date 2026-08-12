@@ -1059,6 +1059,14 @@ gdspx_platform_is_debug_mode() {
 	FreeGdBool(_retValue);
 	return _finalRetValue
 }
+gdspx_platform_is_main_thread() {
+	var _gdFuncPtr = Module['_gdspx_platform_is_main_thread'];
+	var _retValue = AllocGdBool();
+	_gdFuncPtr(_retValue);
+	var _finalRetValue = ToJsBool(_retValue);
+	FreeGdBool(_retValue);
+	return _finalRetValue
+}
 gdspx_platform_get_time_scale() {
 	var _gdFuncPtr = Module['_gdspx_platform_get_time_scale'];
 	var _retValue = AllocGdFloat();
@@ -3493,6 +3501,7 @@ GdspxFuncs.prototype['gdspx_platform_set_window_fullscreen'] = GdspxFuncs.protot
 GdspxFuncs.prototype['gdspx_platform_is_window_fullscreen'] = GdspxFuncs.prototype.gdspx_platform_is_window_fullscreen;
 GdspxFuncs.prototype['gdspx_platform_set_debug_mode'] = GdspxFuncs.prototype.gdspx_platform_set_debug_mode;
 GdspxFuncs.prototype['gdspx_platform_is_debug_mode'] = GdspxFuncs.prototype.gdspx_platform_is_debug_mode;
+GdspxFuncs.prototype['gdspx_platform_is_main_thread'] = GdspxFuncs.prototype.gdspx_platform_is_main_thread;
 GdspxFuncs.prototype['gdspx_platform_get_time_scale'] = GdspxFuncs.prototype.gdspx_platform_get_time_scale;
 GdspxFuncs.prototype['gdspx_platform_set_time_scale'] = GdspxFuncs.prototype.gdspx_platform_set_time_scale;
 GdspxFuncs.prototype['gdspx_platform_get_max_fps'] = GdspxFuncs.prototype.gdspx_platform_get_max_fps;

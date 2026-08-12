@@ -483,6 +483,10 @@ static void gdextension_spx_platform_is_debug_mode(GdBool *ret_val) {
 	*ret_val = platformMgr->is_debug_mode();
 }
 
+static void gdextension_spx_platform_is_main_thread(GdBool *ret_val) {
+	*ret_val = platformMgr->is_main_thread();
+}
+
 static void gdextension_spx_platform_get_time_scale(GdFloat *ret_val) {
 	*ret_val = platformMgr->get_time_scale();
 }
@@ -1527,6 +1531,7 @@ void gdextension_spx_setup_interface() {
 	REGISTER_SPX_INTERFACE_FUNC(spx_platform_is_window_fullscreen);
 	REGISTER_SPX_INTERFACE_FUNC(spx_platform_set_debug_mode);
 	REGISTER_SPX_INTERFACE_FUNC(spx_platform_is_debug_mode);
+	REGISTER_SPX_INTERFACE_FUNC(spx_platform_is_main_thread);
 	REGISTER_SPX_INTERFACE_FUNC(spx_platform_get_time_scale);
 	REGISTER_SPX_INTERFACE_FUNC(spx_platform_set_time_scale);
 	REGISTER_SPX_INTERFACE_FUNC(spx_platform_get_max_fps);
