@@ -67,7 +67,7 @@ Also complete at least these checks:
 
 Ordinary CI resolves the locked runtime release before starting a runtime consumer. The resolver reads release metadata and the manifest only; it validates the exact asset-name set, lock, module tree, runtime-pack source digest, and build-recipe digest without downloading every runtime asset.
 
-- If the runtime is absent or still a draft, CI skips the published Web product smoke and instead builds the current SPX module with the locked Godot source, runs the Linux SPX tests, and performs the Web worker compile smoke.
+- If the runtime is absent or still a draft, CI skips the published Web product smoke and instead builds the current SPX module with the locked Godot source, runs the Linux SPX tests, and performs the Web normal compile smoke.
 - If the runtime is public and matches the current identity, the next CI run skips that source integration rebuild and requires the Web normal product smoke against the published assets.
 - A public release with a missing manifest, a different asset set/provenance, or a GitHub API error is neither state: resolution fails closed and the CI gate fails.
 
