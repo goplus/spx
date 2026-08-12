@@ -82,6 +82,28 @@ func TestValueBoolToFloat(t *testing.T) {
 	}
 }
 
+func TestValueConversionFailureReturnsZero(t *testing.T) {
+	tests := []struct {
+		name  string
+		value Value
+	}{
+		{name: "invalid string", value: NewValue("not a number")},
+		{name: "unsupported type", value: NewValue([]int{1})},
+		{name: "zero value", value: Value{}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.value.Int(); got != 0 {
+				t.Errorf("Value.Int() = %d, want 0", got)
+			}
+			if got := tt.value.Float(); got != 0 {
+				t.Errorf("Value.Float() = %f, want 0", got)
+			}
+		})
+	}
+}
+
 // TestToIntAnyBool tests toIntAny function with bool values
 func TestToIntAnyBool(t *testing.T) {
 	tests := []struct {
