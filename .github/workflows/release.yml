@@ -305,10 +305,9 @@ jobs:
     name: Build locked Godot runtime
     needs: [setup, static-checks]
     if: needs.setup.outputs.runtime_state == 'missing'
-    # Before the Godot PR lands, pin its immutable workflow implementation
-    # through the source fork. The Godot source remains the independent,
-    # canonical runtime.lock input passed through godot_ref below.
-    uses: joeykchen/godot/.github/workflows/release_builds.yml@c469defe3ee7a5d0cdc3227dd49d3415c8315a29
+    # Pin the canonical workflow implementation independently from the Godot
+    # source identity supplied by runtime.lock through godot_ref below.
+    uses: goplus/godot/.github/workflows/release_builds.yml@ea6a59c35d5521f2a7a389449fd420fd7211a6bf
     with:
       runtime_version: ${{ needs.setup.outputs.runtime_version }}
       runtime_abi: ${{ needs.setup.outputs.runtime_abi }}

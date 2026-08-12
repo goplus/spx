@@ -67,10 +67,9 @@ jobs:
   module-checks:
     name: Build and test current SPX module
     needs: contract
-    # Before the Godot PR lands, GitHub Actions resolves the immutable workflow
-    # commit through its source fork. Godot source identity is still supplied
-    # independently from the canonical runtime.lock repository below.
-    uses: joeykchen/godot/.github/workflows/spx_module_checks.yml@c469defe3ee7a5d0cdc3227dd49d3415c8315a29
+    # Pin the canonical workflow implementation independently from the Godot
+    # source identity supplied by runtime.lock below.
+    uses: goplus/godot/.github/workflows/spx_module_checks.yml@ea6a59c35d5521f2a7a389449fd420fd7211a6bf
     with:
       runtime_version: ${{ needs.contract.outputs.runtime_version }}
       runtime_abi: ${{ needs.contract.outputs.runtime_abi }}
