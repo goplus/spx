@@ -1,9 +1,6 @@
 name: Publish Web Package
 
 on:
-  push:
-    branches:
-      - dev
   workflow_call:
     inputs:
       target:
