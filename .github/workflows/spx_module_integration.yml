@@ -69,7 +69,7 @@ jobs:
     needs: contract
     # Pin the canonical workflow implementation independently from the Godot
     # source identity supplied by runtime.lock below.
-    uses: goplus/godot/.github/workflows/spx_module_checks.yml@ea6a59c35d5521f2a7a389449fd420fd7211a6bf
+    uses: goplus/godot/.github/workflows/spx_module_checks.yml@ab8a457bac6363b22bb45bb31a047f5844ec1673
     with:
       runtime_version: ${{ needs.contract.outputs.runtime_version }}
       runtime_abi: ${{ needs.contract.outputs.runtime_abi }}

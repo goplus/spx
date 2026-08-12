@@ -67,7 +67,7 @@ git diff --check
 
 普通 CI 会在启动 runtime consumer 前解析 lock 对应的 runtime release。resolver 只读取 release metadata 与 manifest，不下载全部 runtime 资产；它会校验精确的资产名集合、lock、module tree、runtime-pack source digest 与 build-recipe digest。
 
-- runtime 不存在或仍为 draft 时，CI 跳过基于已发布 runtime 的 Web 产品 smoke，改为把当前 SPX module 放入 lock 的 Godot source，执行 Linux SPX tests 与 Web worker compile smoke。
+- runtime 不存在或仍为 draft 时，CI 跳过基于已发布 runtime 的 Web 产品 smoke，改为把当前 SPX module 放入 lock 的 Godot source，执行 Linux SPX tests 与 Web normal compile smoke。
 - runtime 已公开且与当前身份完全一致时，下一次 CI 会跳过 source integration 重编译，强制执行使用已发布资产的 Web normal 产品 smoke。
 - 已公开 release 缺 manifest、资产集合或 provenance 不一致，以及 GitHub API 异常，都不属于前两种状态；resolver 与 CI gate 会 fail closed。
 
