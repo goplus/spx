@@ -91,6 +91,7 @@ func (p *Game) runScriptFramePhase() {
 		p.dispatchStartEventIfNeeded()
 		return
 	}
+	p.scriptEvents.doWhenCond()
 	engine.RunFrameCallbacks()
 }
 

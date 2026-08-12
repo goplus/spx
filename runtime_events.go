@@ -118,13 +118,11 @@ func (p *scriptEventBindings) OnCond(condition func() bool, onCond func()) {
 	if condition == nil || onCond == nil {
 		return
 	}
-	gco.CreateAndStart(true, p.pthis, func(me coroutine.Thread) int {
-		for !condition() {
-			gco.WaitNextFrameFor(me)
-		}
-		onCond()
-		return 0
-	})
+	p.scriptEventRegistry.manager.AddCond(coreevent.NewSink(
+		p.pthis,
+		onCond,
+		func(any) bool { return condition() },
+	))
 }
 
 func (p *scriptEventBindings) OnAnyKey(onKey func(key Key)) {
@@ -431,6 +429,16 @@ func (p *scriptEventRegistry) doWhenTimer(time float64) {
 	p.dispatchAsync(coreevent.BucketTimer, false, time, func(ev *eventSink) {
 		ev.Handler.(func(float64))(time)
 	})
+}
+
+func (p *scriptEventRegistry) doWhenCond() {
+	for _, sink := range p.manager.TakeTriggeredCond() {
+		ev := sink
+		gco.CreateAndStart(false, ev.Owner, func(coroutine.Thread) int {
+			ev.Handler.(func())()
+			return 0
+		})
+	}
 }
 
 func (p *scriptEventRegistry) doWhenKeyPressed(key Key) {

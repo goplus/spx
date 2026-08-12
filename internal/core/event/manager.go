@@ -24,6 +24,7 @@ type Sink struct {
 	Owner   any
 	Cond    func(any) bool
 	Handler any
+	id      uint64
 }
 
 type Bucket int
@@ -41,6 +42,7 @@ const (
 	BucketTouchEnd
 	BucketClick
 	BucketTimer
+	BucketCond
 
 	bucketCount
 )
@@ -53,6 +55,7 @@ type Manager struct {
 	buckets [bucketCount][]Sink
 
 	startFired bool
+	nextSinkID uint64
 }
 
 func appendSinkCopy(sinks []Sink, sink Sink) []Sink {
@@ -120,6 +123,8 @@ func deleteOwnerCopy(sinks []Sink, owner any) []Sink {
 func (m *Manager) Add(bucket Bucket, sink Sink) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.nextSinkID++
+	sink.id = m.nextSinkID
 	m.buckets[bucket] = appendSinkCopy(m.buckets[bucket], sink)
 }
 
@@ -179,6 +184,40 @@ func (m *Manager) AddClick(sink Sink) {
 
 func (m *Manager) AddTimer(sink Sink) {
 	m.Add(BucketTimer, sink)
+}
+
+func (m *Manager) AddCond(sink Sink) {
+	m.Add(BucketCond, sink)
+}
+
+// TakeTriggeredCond returns and removes condition sinks whose conditions are
+// currently true. Conditions are evaluated without holding the manager lock.
+func (m *Manager) TakeTriggeredCond() []Sink {
+	candidates := m.Snapshot(BucketCond)
+	triggeredIDs := make(map[uint64]struct{})
+	for _, sink := range candidates {
+		if sink.Cond != nil && sink.Cond(nil) {
+			triggeredIDs[sink.id] = struct{}{}
+		}
+	}
+	if len(triggeredIDs) == 0 {
+		return nil
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	sinks := m.buckets[BucketCond]
+	triggered := make([]Sink, 0, len(triggeredIDs))
+	remaining := make([]Sink, 0, len(sinks)-len(triggeredIDs))
+	for _, sink := range sinks {
+		if _, ok := triggeredIDs[sink.id]; ok {
+			triggered = append(triggered, sink)
+		} else {
+			remaining = append(remaining, sink)
+		}
+	}
+	m.buckets[BucketCond] = remaining
+	return triggered
 }
 
 func (m *Manager) Snapshot(bucket Bucket) []Sink {
@@ -244,4 +283,8 @@ func (m *Manager) SnapshotClick() []Sink {
 
 func (m *Manager) SnapshotTimer() []Sink {
 	return m.Snapshot(BucketTimer)
+}
+
+func (m *Manager) SnapshotCond() []Sink {
+	return m.Snapshot(BucketCond)
 }

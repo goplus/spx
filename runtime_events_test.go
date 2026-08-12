@@ -48,18 +48,19 @@ func TestOnCondWaitsUntilConditionBecomesTrue(t *testing.T) {
 	calls := 0
 	game.OnCond(condition.Load, func() { calls++ })
 
+	game.scriptEvents.doWhenCond()
 	co.Update()
 	if calls != 0 {
 		t.Fatalf("calls before condition = %d, want 0", calls)
 	}
 	condition.Store(true)
-	itime.Update(0, 0)
+	game.scriptEvents.doWhenCond()
 	co.Update()
 	if calls != 1 {
 		t.Fatalf("calls after condition = %d, want 1", calls)
 	}
 
-	itime.Update(0, 0)
+	game.scriptEvents.doWhenCond()
 	co.Update()
 	if calls != 1 {
 		t.Fatalf("calls after completion = %d, want 1", calls)
