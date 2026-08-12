@@ -18,6 +18,7 @@ package spx
 
 import (
 	"reflect"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -28,6 +29,42 @@ import (
 	itime "github.com/goplus/spx/v3/internal/time"
 	pkgengine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
+
+func TestOnCondWaitsUntilConditionBecomesTrue(t *testing.T) {
+	co := coroutine.New(nil)
+	co.OnInited()
+	original := gco
+	gco = co
+	engine.SetCoroutines(co)
+	t.Cleanup(func() {
+		co.AbortAllAndWait(time.Second)
+		gco = original
+		engine.SetCoroutines(original)
+	})
+
+	var game Game
+	game.scriptEventBindings.init(&game.scriptEvents, &game)
+	var condition atomic.Bool
+	calls := 0
+	game.OnCond(condition.Load, func() { calls++ })
+
+	co.Update()
+	if calls != 0 {
+		t.Fatalf("calls before condition = %d, want 0", calls)
+	}
+	condition.Store(true)
+	itime.Update(0, 0)
+	co.Update()
+	if calls != 1 {
+		t.Fatalf("calls after condition = %d, want 1", calls)
+	}
+
+	itime.Update(0, 0)
+	co.Update()
+	if calls != 1 {
+		t.Fatalf("calls after completion = %d, want 1", calls)
+	}
+}
 
 func TestStartHandlersRegisterAbsoluteEngineFrames(t *testing.T) {
 	co := coroutine.New(nil)

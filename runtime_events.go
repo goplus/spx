@@ -113,6 +113,20 @@ func (p *scriptEventBindings) OnClick(onClick func()) {
 	p.scriptEventRegistry.manager.AddClick(coreevent.NewSink(pthis, onClick, coreevent.MatchOwner(pthis)))
 }
 
+// OnCond runs onCond once after condition becomes true.
+func (p *scriptEventBindings) OnCond(condition func() bool, onCond func()) {
+	if condition == nil || onCond == nil {
+		return
+	}
+	gco.CreateAndStart(true, p.pthis, func(me coroutine.Thread) int {
+		for !condition() {
+			gco.WaitNextFrameFor(me)
+		}
+		onCond()
+		return 0
+	})
+}
+
 func (p *scriptEventBindings) OnAnyKey(onKey func(key Key)) {
 	p.scriptEventRegistry.manager.AddKeyPressed(coreevent.NewSink(p.pthis, onKey))
 }
