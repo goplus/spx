@@ -398,14 +398,21 @@ void gdspx_free_cstr(const char* str) {
 
 EMSCRIPTEN_KEEPALIVE
 int32_t gdspx_get_string_len(GdString* ptr) {
-    auto length = strlen((*(const char **)ptr));
-    return length;
+    const char *str = *(const char **)ptr;
+    if (str == nullptr) {
+        return 0;
+    }
+    return strlen(str);
 }
 
 EMSCRIPTEN_KEEPALIVE
 void gdspx_free_string(GdString* p_gdstr) {
-    if (p_gdstr == nullptr || *p_gdstr == nullptr) {
-        print_line("gdspx_free_string: null pointer or null internal string");
+    if (p_gdstr == nullptr) {
+        return;
+    }
+
+    if (*p_gdstr == nullptr) {
+        stringPool.release(p_gdstr);
         return;
     }
 
