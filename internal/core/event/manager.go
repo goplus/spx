@@ -56,6 +56,7 @@ type Manager struct {
 
 	startFired bool
 	nextSinkID uint64
+	condStates map[uint64]bool
 }
 
 func appendSinkCopy(sinks []Sink, sink Sink) []Sink {
@@ -80,6 +81,7 @@ func (m *Manager) Reset() {
 		m.buckets[i] = nil
 	}
 	m.startFired = false
+	m.condStates = nil
 }
 
 func (m *Manager) DeleteOwner(owner any) {
@@ -87,6 +89,11 @@ func (m *Manager) DeleteOwner(owner any) {
 	defer m.mu.Unlock()
 
 	for i := range m.buckets {
+		for _, sink := range m.buckets[i] {
+			if sink.Owner == owner {
+				delete(m.condStates, sink.id)
+			}
+		}
 		m.buckets[i] = deleteOwnerCopy(m.buckets[i], owner)
 	}
 }
@@ -190,33 +197,36 @@ func (m *Manager) AddCond(sink Sink) {
 	m.Add(BucketCond, sink)
 }
 
-// TakeTriggeredCond returns and removes condition sinks whose conditions are
-// currently true. Conditions are evaluated without holding the manager lock.
+// TakeTriggeredCond returns condition sinks on their false-to-true transition.
+// Conditions are evaluated without holding the manager lock. Sinks remain
+// registered and are rearmed after their condition becomes false again.
 func (m *Manager) TakeTriggeredCond() []Sink {
 	candidates := m.Snapshot(BucketCond)
-	triggeredIDs := make(map[uint64]struct{})
+	states := make(map[uint64]bool, len(candidates))
 	for _, sink := range candidates {
-		if sink.Cond != nil && sink.Cond(nil) {
-			triggeredIDs[sink.id] = struct{}{}
-		}
+		states[sink.id] = sink.Cond != nil && sink.Cond(nil)
 	}
-	if len(triggeredIDs) == 0 {
+	if len(states) == 0 {
 		return nil
 	}
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	sinks := m.buckets[BucketCond]
-	triggered := make([]Sink, 0, len(triggeredIDs))
-	remaining := make([]Sink, 0, len(sinks)-len(triggeredIDs))
-	for _, sink := range sinks {
-		if _, ok := triggeredIDs[sink.id]; ok {
-			triggered = append(triggered, sink)
-		} else {
-			remaining = append(remaining, sink)
-		}
+	if m.condStates == nil {
+		m.condStates = make(map[uint64]bool, len(sinks))
 	}
-	m.buckets[BucketCond] = remaining
+	var triggered []Sink
+	for _, sink := range sinks {
+		active, ok := states[sink.id]
+		if !ok {
+			continue
+		}
+		if active && !m.condStates[sink.id] {
+			triggered = append(triggered, sink)
+		}
+		m.condStates[sink.id] = active
+	}
 	return triggered
 }
 

@@ -78,8 +78,8 @@ func TestManagerTakeTriggeredCond(t *testing.T) {
 	if len(triggered) != 1 || triggered[0].Owner != "ready" {
 		t.Fatalf("first triggered = %#v, want ready", triggered)
 	}
-	if got := mgr.SnapshotCond(); len(got) != 1 || got[0].Owner != "waiting" {
-		t.Fatalf("remaining = %#v, want waiting", got)
+	if got := mgr.SnapshotCond(); len(got) != 2 {
+		t.Fatalf("registered conditions = %d, want 2", len(got))
 	}
 
 	ready = true
@@ -88,7 +88,15 @@ func TestManagerTakeTriggeredCond(t *testing.T) {
 		t.Fatalf("second triggered = %#v, want waiting", triggered)
 	}
 	if got := mgr.TakeTriggeredCond(); len(got) != 0 {
-		t.Fatalf("condition triggered more than once: %#v", got)
+		t.Fatalf("true condition retriggered without falling edge: %#v", got)
+	}
+
+	ready = false
+	mgr.TakeTriggeredCond()
+	ready = true
+	triggered = mgr.TakeTriggeredCond()
+	if len(triggered) != 1 || triggered[0].Owner != "waiting" {
+		t.Fatalf("retriggered = %#v, want waiting", triggered)
 	}
 }
 
