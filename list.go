@@ -18,7 +18,6 @@ package spx
 
 import (
 	"fmt"
-	"reflect"
 	"strconv"
 	"strings"
 
@@ -246,18 +245,12 @@ func (p Value) String() string {
 }
 
 func (p Value) Int() int {
-	i, ok := toIntAny(p.data)
-	if !ok {
-		engine.Panic("spx.Value.Int() conversion failed for type:", reflect.TypeOf(p.data))
-	}
+	i, _ := toIntAny(p.data)
 	return i
 }
 
 func (p Value) Float() float64 {
-	f, ok := toFloat64Any(p.data)
-	if !ok {
-		engine.Panic("spx.Value.Float() conversion failed for type:", reflect.TypeOf(p.data))
-	}
+	f, _ := toFloat64Any(p.data)
 	return f
 }
 
