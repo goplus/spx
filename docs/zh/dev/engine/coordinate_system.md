@@ -69,7 +69,7 @@ SpxSprite (CharacterBody2D)       # 逻辑位置、旋转、朝向和物理根
 
 ### 1.4 Godot 画布坐标
 
-Godot 2D 世界坐标的 Y 轴向下。SPX 与 Godot 的向量转换统一位于仓库中的 `godot/modules/spx/spx_coordinate.h`：
+Godot 2D 世界坐标的 Y 轴向下。SPX 与 Godot 的向量转换统一位于仓库中的 `godot_modules/spx/spx_coordinate.h`：
 
 ```text
 spxToGodot(x, y) = (x, -y)

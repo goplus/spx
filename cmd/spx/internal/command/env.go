@@ -740,7 +740,7 @@ func (cmd *CmdTool) getIspxWebDir() (string, error) {
 	ispxWebDir := path.Join(cmd.GoBinPath, "ispx")
 	if _, err := os.Stat(ispxWebDir); os.IsNotExist(err) {
 		return "", fmt.Errorf("ispx web runtime not found at %s; "+
-			"run 'go run ./internal/cmd/buildctl tool install --web' to install", ispxWebDir)
+			"run 'make setup-web MODE=normal' from the SPX repository to install it", ispxWebDir)
 	}
 	return ispxWebDir, nil
 }

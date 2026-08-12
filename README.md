@@ -8,32 +8,36 @@ spx - A Scratch Compatible 2D Game Engine
 
 ## How to build
 
-How to run games powered by XGo spx engine?
+Install Git, Make, Go, and the XGo CLI. Keep `$GOPATH/bin` on `PATH`; Windows
+users should run the commands below from Git Bash and install
+[`mingw-w64`](https://www.mingw-w64.org/). The authoritative Go, XGo, SCons,
+EMSDK, NDK, and JDK versions live in
+[`internal/release/runtime.lock.json`](internal/release/runtime.lock.json).
+`buildctl` selects the locked Go toolchain and installs build-only tools such
+as SCons when they are needed.
 
-* Install go (version >= 1.25.0)
-* Install python (version >= 3.8)
-* Install scons (version == 4.8.1) (for engine development, optional)
-* Install make
-* Install [`mingw-w64`](https://www.mingw-w64.org/) (Windows only)
-* Add the Go environment's bin directory to the system PATH.
+```sh
+git clone https://github.com/goplus/spx.git
+cd spx
+
+# Download the locked published host runtime and install the spx command.
+make setup
+make doctor
+
+# Discover and run repository demos.
+make list-demos
+make run DEMO_INDEX=1
 ```
-    export PATH=$PATH:$GOPATH/bin
+
+Use `make help` for the supported entry points. To build the editor and all
+runtime assets from local Godot source instead of downloading them:
+
+```sh
+GODOT_SRC=/absolute/path/to/godot make dev MODE=normal
 ```
-* Download XGo and build it. See https://github.com/goplus/xgo#how-to-build.
-* Download spx and build it.
-	```sh
-	# please use Git Bash to run the following commands in windows platform
-	git clone https://github.com/goplus/spx.git
-	cd spx
-	git checkout dev
-	# prepare all required host and web assets, use `make prepare-full` instead.
-	make prepare-host
-	# run the demo
-	spx run -path tutorial/00-Hello
-	```
-* Build a game and run.
-  * cd `game-root-dir`
-  * xgo run .
+
+To run an existing game directly, change to its root directory and run
+`xgo run .`.
 
 
 ## Games powered by spx

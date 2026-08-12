@@ -28,6 +28,12 @@ func TestGDExtensionTemplatesMatchProjectFiles(t *testing.T) {
 	assertTemplateFile(t, filepath.Join(repoRoot, "cmd", "spx", "template", "project", "gdspx.gdextension"), ProjectGDExtension())
 }
 
+func TestRuntimeExtensionListUsesStandardProjectEntry(t *testing.T) {
+	if got, want := RuntimeExtensionList(), "res://runtime.gdextension\n"; got != want {
+		t.Fatalf("RuntimeExtensionList() = %q, want %q", got, want)
+	}
+}
+
 func assertTemplateFile(t *testing.T, path, want string) {
 	t.Helper()
 	got, err := os.ReadFile(path)

@@ -20,6 +20,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 )
 
 func TestCleanInstalledAssetsRemovesKnownArtifactsOnly(t *testing.T) {
@@ -74,12 +76,12 @@ func TestCleanInstalledAssetsRemovesKnownArtifactsOnly(t *testing.T) {
 		"gdspxrt" + version + ".pck",
 		"gdspxrt" + version + "_webnormal",
 	} {
-		if fileExists(filepath.Join(binDir, rel)) {
+		if shared.FileExists(filepath.Join(binDir, rel)) {
 			t.Fatalf("expected %s to be removed", rel)
 		}
 	}
 
-	if !fileExists(keep) {
+	if !shared.FileExists(keep) {
 		t.Fatalf("expected unrelated file to remain: %s", keep)
 	}
 }

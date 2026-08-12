@@ -23,14 +23,16 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 )
 
 func compressWasmArtifacts() error {
-	version, err := defaultRuntimeVersion()
+	version, err := shared.DefaultRuntimeVersion()
 	if err != nil {
 		return err
 	}
-	goPath, err := ensureGoPath()
+	goPath, err := shared.EnsureGoPath()
 	if err != nil {
 		return err
 	}
@@ -57,7 +59,7 @@ func resolveRuntimeWebDir(goBinDir, version string) (string, error) {
 		filepath.Join(goBinDir, fmt.Sprintf("gdspxrt%s_web", version)),
 	}
 	for _, candidate := range candidates {
-		if fileExists(filepath.Join(candidate, "engine.wasm")) {
+		if shared.FileExists(filepath.Join(candidate, "engine.wasm")) {
 			return candidate, nil
 		}
 	}
@@ -91,7 +93,7 @@ func ensureBrotliAvailable() error {
 
 func installBrotliLinux() error {
 	switch {
-	case fileExists("/etc/os-release"):
+	case shared.FileExists("/etc/os-release"):
 		content, err := os.ReadFile("/etc/os-release")
 		if err != nil {
 			return err
@@ -130,7 +132,7 @@ func compressWithBrotli(inputFile, outputFile string) error {
 	if inputFile == "" || outputFile == "" {
 		return fmt.Errorf("compressWithBrotli requires input and output file parameters")
 	}
-	if !fileExists(inputFile) {
+	if !shared.FileExists(inputFile) {
 		return fmt.Errorf("input file %s does not exist", inputFile)
 	}
 	if err := os.RemoveAll(outputFile); err != nil {

@@ -1,6 +1,8 @@
 ARG img_version
 FROM godot-fedora:${img_version}
 
+# Legacy/unsupported image: this historical NDK pin is intentionally isolated
+# from the runtime.lock.json-driven buildctl build path.
 ENV ANDROID_SDK_ROOT=/root/sdk
 ENV ANDROID_NDK_VERSION=23.2.8568313
 ENV ANDROID_NDK_ROOT=${ANDROID_SDK_ROOT}/ndk/${ANDROID_NDK_VERSION}

@@ -5,9 +5,6 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# Pin Go toolchain version
-export GOTOOLCHAIN=go1.25.8
-
 . "$SCRIPT_DIR/../internal/macos_go_toolchain.sh"
 configure_macos_go_toolchain
 
@@ -28,8 +25,6 @@ for arg in "$@"; do
             ;;
         --no-embed-runtime)
             embed_runtime=0
-            ;;
-        --opt)
             ;;
         *)
             echo "Warning: ignoring unknown install.sh flag: $arg"
@@ -102,8 +97,6 @@ resolve_runtime_asset_names() {
 }
 
 ensure_runtime_assets_for_embedding() {
-    resolve_runtime_asset_names
-
     if [ -f "$gopath_bin_dir/$runtime_name" ] && [ -f "$gopath_bin_dir/$runtime_pack" ]; then
         return 0
     fi
@@ -119,7 +112,6 @@ build_ispxnative() {
 copy_ispxnative_runtime_lib() {
     local destination_dir="$1"
 
-    resolve_runtime_asset_names
     mkdir -p "$destination_dir"
     require_file "../ispxnative/$runtime_lib_name" "runtime shared library"
     cp "../ispxnative/$runtime_lib_name" "$destination_dir/"
@@ -133,11 +125,8 @@ write_runtime_asset_manifest() {
 }
 
 stage_embedded_runtime_assets() {
-    resolve_runtime_asset_names
-
     require_file "$gopath_bin_dir/$runtime_name" "runtime executable"
     require_file "$gopath_bin_dir/$runtime_pack" "runtime pack"
-    require_file "../ispxnative/$runtime_lib_name" "runtime shared library"
 
     cleanup_embedded_runtime_assets
     cp "$gopath_bin_dir/$runtime_name" "$runtime_asset_dir/"
@@ -163,7 +152,14 @@ install_web_runtime() {
     echo "Installed ispx web runtime to $gopath_bin_dir/ispx/"
 }
 
+resolve_runtime_asset_names
 if is_truthy "$embed_runtime"; then
+    embed_runtime=1
+else
+    embed_runtime=0
+fi
+
+if [ "$embed_runtime" -eq 1 ]; then
     cleanup_embedded_runtime_assets
     trap cleanup_embedded_runtime_assets EXIT
     ensure_runtime_assets_for_embedding
@@ -171,7 +167,7 @@ fi
 
 build_ispxnative
 
-if is_truthy "$embed_runtime"; then
+if [ "$embed_runtime" -eq 1 ]; then
     stage_embedded_runtime_assets
 fi
 

@@ -16,12 +16,22 @@
 
 package scaffold
 
-import _ "embed"
+import (
+	_ "embed"
+	"strings"
+
+	"github.com/goplus/spx/v3/internal/release"
+)
 
 //go:embed go.mod.template
 var goMod string
 
+const spxVersionPlaceholder = "{{SPX_VERSION}}"
+
 // GoMod returns the shared go.mod template used by project creation flows.
 func GoMod() string {
-	return goMod
+	if strings.Count(goMod, spxVersionPlaceholder) != 1 {
+		panic("scaffold: go.mod template must contain exactly one SPX version placeholder")
+	}
+	return strings.Replace(goMod, spxVersionPlaceholder, release.DefaultReleaseMeta().SPXVersion, 1)
 }

@@ -52,18 +52,32 @@ func TestParseDockerBuildEngineArgsDefault(t *testing.T) {
 }
 
 func TestBuildPodmanSConsArgsAvoidsShellConcatenation(t *testing.T) {
-	got := buildPodmanSConsArgs("/tmp/godot", "windows", []string{"target=template_release", "arch=x86_64"}, true)
+	sconsArgs := []string{
+		"optimize=size",
+		"module_spx_enabled=true",
+		"debug_symbols=false",
+		"platform=windows",
+		"target=template_release",
+		"arch=x86_64",
+		"custom_modules=" + podmanSPXModulePath,
+	}
+	got := buildPodmanSConsArgs("/tmp/godot", "/tmp/custom modules/spx", "windows", sconsArgs, true)
 	want := []string{
 		"run",
 		"--rm",
 		"-it",
 		"-w", "/root/godot",
 		"-v", "/tmp/godot:/root/godot:z",
-		"godot-windows:" + DockerImageVersion,
+		"-v", "/tmp/custom modules/spx:/root/spx-module:z",
+		"godot-windows:" + dockerImageVersion,
 		"scons",
+		"optimize=size",
+		"module_spx_enabled=true",
+		"debug_symbols=false",
 		"platform=windows",
 		"target=template_release",
 		"arch=x86_64",
+		"custom_modules=/root/spx-module",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("buildPodmanSConsArgs = %#v, want %#v", got, want)

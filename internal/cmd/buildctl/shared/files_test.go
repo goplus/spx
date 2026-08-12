@@ -24,7 +24,19 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/goplus/spx/v3/internal/release"
 )
+
+func TestDefaultRuntimeVersionUsesRuntimeLock(t *testing.T) {
+	got, err := defaultRuntimeVersion()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := release.DefaultRuntimeLock().RuntimeVersion; got != want {
+		t.Fatalf("default runtime version = %q, want locked version %q", got, want)
+	}
+}
 
 func TestFetchURLToFileLeavesDestinationUntouchedOnInterruptedDownload(t *testing.T) {
 	tempDir := t.TempDir()

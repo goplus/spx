@@ -9,28 +9,20 @@
 {{ $view := . -}}
 class GdspxFuncs {
 constructor() {
-	this._inputMousePosScratch = null;
-	this._gdIntScratch = null;
-	this._gdObjScratch = null;
+	this._inputMousePosScratch = { 'x': 0, 'y': 0 };
+	this._gdIntScratch = { 'low': 0, 'high': 0 };
+	this._gdObjScratch = { 'low': 0, 'high': 0 };
 }
 
 // NOTE: flattened JS-facing params use (low, high), but the wasm helpers
 // `_gdspx_new_int` / `_gdspx_new_obj` follow the C ABI and expect (high, low).
 
 _getGdIntScratch() {
-	var _scratch = this._gdIntScratch;
-	if (_scratch == null) {
-		_scratch = this._gdIntScratch = { low: 0, high: 0 };
-	}
-	return _scratch;
+	return this._gdIntScratch;
 }
 
 _getGdObjScratch() {
-	var _scratch = this._gdObjScratch;
-	if (_scratch == null) {
-		_scratch = this._gdObjScratch = { low: 0, high: 0 };
-	}
-	return _scratch;
+	return this._gdObjScratch;
 }
 
 /**
@@ -40,10 +32,10 @@ _getGdObjScratch() {
  * immediately.
  */
 _readGdIntLike(ptr, scratch) {
-	var _u32 = Module.HEAPU32;
+	var _u32 = Module['HEAPU32'];
 	var _word = ptr >> 2;
-	scratch.low = _u32[_word];
-	scratch.high = _u32[_word + 1];
+	scratch['low'] = _u32[_word];
+	scratch['high'] = _u32[_word + 1];
 	return scratch;
 }
 
@@ -56,8 +48,13 @@ gd{{ loadProcAddressName $f.Name }}(
 		{{- if ne $j (sub (len $args) 1) -}}, {{- end -}}
 	{{ end -}}
 ) {
-	var _gdFuncPtr = Module._gd{{ loadProcAddressName $f.Name }}; 
+	var _gdFuncPtr = Module['_gd{{ loadProcAddressName $f.Name }}'];
 	{{ getJsFuncBody $f }}
 }
 {{- end -}}
 }
+
+{{- range $i, $f := $view.CollectGDExtensionInterfaceFunctions }}
+GdspxFuncs.prototype['gd{{ loadProcAddressName $f.Name }}'] = GdspxFuncs.prototype.gd{{ loadProcAddressName $f.Name }};
+{{- end }}
+globalThis['GdspxFuncs'] = GdspxFuncs;

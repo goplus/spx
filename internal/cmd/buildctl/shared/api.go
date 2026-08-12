@@ -38,24 +38,8 @@ type CommandRunner struct {
 	RepoRoot string
 }
 
-func (r CommandRunner) RunScript(relativePath string, args ...string) error {
-	return commandRunner{repoRoot: r.RepoRoot}.runScript(relativePath, args...)
-}
-
-func (r CommandRunner) RunCommand(workdir string, name string, args ...string) error {
-	return commandRunner{repoRoot: r.RepoRoot}.runCommand(workdir, name, args...)
-}
-
 func (r CommandRunner) RepoRootDir() string {
 	return r.RepoRoot
-}
-
-func (r CommandRunner) ListDemoDirs() ([]string, error) {
-	return commandRunner{repoRoot: r.RepoRoot}.listDemoDirs()
-}
-
-func (r CommandRunner) StopWebServers() error {
-	return commandRunner{repoRoot: r.RepoRoot}.stopWebServers()
 }
 
 func FindRepoRoot() (string, error) {
@@ -72,6 +56,10 @@ func DirExists(path string) bool {
 
 func ResolveBuildEnvironment(repoRoot string, requestedPlatform string) (BuildEnvironment, error) {
 	return resolveBuildEnvironment(repoRoot, requestedPlatform)
+}
+
+func ResolveSPXModuleSource(repoRoot string) (string, error) {
+	return resolveSPXModuleSource(repoRoot)
 }
 
 func (env BuildEnvironment) ShellExports() string {
@@ -94,10 +82,6 @@ func MacOSVulkanSDKShellExports(sdkRoot string) string {
 	return macOSVulkanSDKShellExports(sdkRoot)
 }
 
-func ValidateSetupMode(mode string) error {
-	return validateSetupMode(mode)
-}
-
 func ValidateWebMode(mode string) error {
 	return validateWebMode(mode)
 }
@@ -106,36 +90,20 @@ func ValidateOptionalPlatform(platform string) error {
 	return validateOptionalPlatform(platform)
 }
 
-func CurrentEnvMap() map[string]string {
-	return currentEnvMap()
+func CurrentBuildEnv() (map[string]string, error) {
+	return currentBuildEnv()
 }
 
 func EnvMapToSlice(env map[string]string) []string {
 	return envMapToSlice(env)
 }
 
-func PrependToPath(pathValue string, dirs ...string) string {
-	return prependToPath(pathValue, dirs...)
-}
-
 func RunCommandOutput(name string, args ...string) ([]byte, error) {
 	return runCommandOutput(name, args...)
 }
 
-func RunCommandOutputWithEnv(workdir string, env []string, name string, args ...string) ([]byte, error) {
-	return runCommandOutputWithEnv(workdir, env, name, args...)
-}
-
 func RunStreamingCommand(workdir, name string, args ...string) error {
 	return runStreamingCommand(workdir, name, args...)
-}
-
-func BuildctlCommandEnv() (map[string]string, error) {
-	return buildctlCommandEnv()
-}
-
-func ResolveCommandPath(name string, env map[string]string) (string, error) {
-	return resolveCommandPath(name, env)
 }
 
 func EnsureGoPath() (string, error) {

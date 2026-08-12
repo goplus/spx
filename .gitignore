@@ -10,6 +10,8 @@ log.txt
 
 # Tool cache
 /.gocache/
+__pycache__/
+*.py[cod]
 
 # Builds
 /go.work
@@ -30,6 +32,12 @@ xgo_autogen*.go
 /.bin/
 /godot/
 /.gdspx_web_server*.pid
+
+# SCons writes custom-module object files next to their sources.
+/godot_modules/**/*.o
+/godot_modules/**/*.os
+/godot_modules/**/*.ox
+/godot_modules/**/*.obj
 
 # Tutorial/test generated outputs
 tutorial/**/.temp/

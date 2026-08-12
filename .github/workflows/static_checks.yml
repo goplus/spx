@@ -11,13 +11,10 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v6
 
-      - name: Setup Go
-        uses: actions/setup-go@v6
+      - name: Set up locked Go and XGo
+        uses: ./.github/actions/deps
         with:
-          go-version: 1.25.x
-          cache-dependency-path: |
-            go.sum
-            cmd/ispx/go.sum
+          setup-mode: none
 
       - name: Download Go modules
         shell: bash
@@ -25,11 +22,8 @@ jobs:
           go mod download
           cd cmd/ispx && go mod download
 
-      - name: Check out Godot source
-        run: git clone --depth 1 --branch spx4.4.1 https://github.com/goplus/godot.git godot
-
       - name: Run binding code generation
-        run: cd internal/cmd/codegen && GODOT_SRC="$GITHUB_WORKSPACE/godot" go run .
+        run: cd internal/cmd/codegen && SPX_MODULE_SRC="$GITHUB_WORKSPACE/godot_modules/spx" go run .
 
       - name: Run go generate for runtime packages
         shell: bash
@@ -48,5 +42,12 @@ jobs:
       - name: Test Go code
         shell: bash
         run: |
+          go test -v .github/scripts/runtime_asset_manifest.go .github/scripts/runtime_asset_manifest_test.go
+          go test -v .github/scripts/runtime_resolution.go .github/scripts/runtime_resolution_test.go
+          go test -v .github/scripts/runtime_version.go .github/scripts/runtime_version_test.go
+          PYTHONDONTWRITEBYTECODE=1 python3 .github/scripts/runtime_build_contract_test.py
+          PYTHONDONTWRITEBYTECODE=1 python3 .github/scripts/release_bump_test.py
+          go run .github/scripts/runtime_pack_source_digest.go HEAD >/dev/null
+          go run .github/scripts/runtime_build_recipe_digest.go HEAD >/dev/null
           go test -v $(go list ./... | grep -v /internal/webffi)
           cd cmd/ispx && go test -v ./...

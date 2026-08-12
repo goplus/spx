@@ -1,168 +1,752 @@
 name: Release
 
 on:
-  release:
-    types: [created, edited]
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Release tag (for example, v3.0.0)'
+        description: 'SPX release tag declared by this commit (for example, v3.x.y)'
         required: true
-        default: 'v3.0.0'
+        type: string
       platforms:
-        description: 'Platforms to build (comma-separated: all,runtime-assets,web,macos,windows,linux)'
+        description: 'SPX packages: all or comma-separated web,macos,windows,linux; ignored by publish-runtime'
         required: true
         default: 'all'
+        type: string
+      operation:
+        description: 'Validate artifacts, publish only runtime-v*, or publish the complete SPX release'
+        required: true
+        default: 'dry-run'
+        type: choice
+        options:
+          - dry-run
+          - publish-runtime
+          - publish-release
+
+permissions:
+  contents: read
+
 concurrency:
-  group: ci-${{github.actor}}-${{github.head_ref || github.run_number}}-${{github.ref}}-release
-  cancel-in-progress: true
+  group: spx-release
+  cancel-in-progress: false
 
 jobs:
   setup:
-    name: Prepare release inputs
+    name: Validate locked release inputs
     runs-on: ubuntu-22.04
     outputs:
-      release_tag: ${{ steps.set-version.outputs.release_tag }}
-      version: ${{ steps.set-version.outputs.version }}
-      run_runtime_assets: ${{ steps.set-platforms.outputs.run_runtime_assets }}
-      run_web: ${{ steps.set-platforms.outputs.run_web }}
-      run_macos: ${{ steps.set-platforms.outputs.run_macos }}
-      run_windows: ${{ steps.set-platforms.outputs.run_windows }}
-      run_linux: ${{ steps.set-platforms.outputs.run_linux }}
+      release_tag: ${{ steps.release.outputs.release_tag }}
+      version: ${{ steps.release.outputs.version }}
+      runtime_version: ${{ steps.release.outputs.runtime_version }}
+      runtime_abi: ${{ steps.release.outputs.runtime_abi }}
+      runtime_tag: ${{ steps.release.outputs.runtime_tag }}
+      runtime_manifest: ${{ steps.release.outputs.runtime_manifest }}
+      release_repository: ${{ steps.release.outputs.release_repository }}
+      godot_repository: ${{ steps.release.outputs.godot_repository }}
+      godot_commit: ${{ steps.release.outputs.godot_commit }}
+      module_path: ${{ steps.release.outputs.module_path }}
+      runtime_state: ${{ steps.runtime.outputs.runtime_state }}
+      run_web: ${{ steps.platforms.outputs.run_web }}
+      run_macos: ${{ steps.platforms.outputs.run_macos }}
+      run_windows: ${{ steps.platforms.outputs.run_windows }}
+      run_linux: ${{ steps.platforms.outputs.run_linux }}
     steps:
       - name: Check out code
         uses: actions/checkout@v6
+
+      - name: Validate current runtime lock snapshot
+        shell: bash
+        run: python3 .github/scripts/runtime_lock_snapshot.py check
+
+      - name: Set up locked Go and XGo
+        uses: ./.github/actions/deps
         with:
-          submodules: recursive
+          setup-mode: none
 
-      - name: Resolve release version
-        id: set-version
-        env:
-          RELEASE_TAG_INPUT: ${{ github.event.inputs.release_tag }}
-        run: |
-          if [ "${{ github.event_name }}" == "release" ]; then
-            RELEASE_TAG="${{ github.event.release.tag_name }}"
-            VERSION="$RELEASE_TAG"
-          else
-            RELEASE_TAG=""
-            VERSION="$RELEASE_TAG_INPUT"
-          fi
-          VERSION="${VERSION#v}"  # Remove 'v' prefix (if present)
-          echo "[info] Version: $VERSION"
-          echo "release_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+      - name: Describe release and runtime lock
+        id: release
+        shell: bash
+        run: go run ./.github/scripts/runtime_version.go --github-output "$GITHUB_OUTPUT"
 
-      - name: Resolve target platforms
-        id: set-platforms
+      - name: Validate release inputs
+        shell: bash
         env:
-          PLATFORMS_INPUT: ${{ github.event.inputs.platforms }}
+          CURRENT_REPOSITORY: ${{ github.repository }}
+          OPERATION_INPUT: ${{ inputs.operation }}
+          RELEASE_TAG_INPUT: ${{ inputs.release_tag }}
+          EXPECTED_RELEASE_TAG: ${{ steps.release.outputs.release_tag }}
+          RELEASE_REPOSITORY: ${{ steps.release.outputs.release_repository }}
         run: |
           set -euo pipefail
 
-          if [ "${{ github.event_name }}" = "release" ]; then
-            RAW_PLATFORMS="all"
-          else
-            RAW_PLATFORMS="$PLATFORMS_INPUT"
+          if [ "$RELEASE_TAG_INPUT" != "$EXPECTED_RELEASE_TAG" ]; then
+            echo "[error] This commit declares $EXPECTED_RELEASE_TAG, not $RELEASE_TAG_INPUT" >&2
+            exit 1
           fi
-
-          PLATFORMS=$(printf '%s' "$RAW_PLATFORMS" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
-          if [ -z "$PLATFORMS" ]; then
-            PLATFORMS="all"
-          fi
-
-          case ",$PLATFORMS," in
-            *,all,*)
-              PLATFORMS="runtime-assets,web,macos,windows,linux"
+          case "$OPERATION_INPUT" in
+            dry-run|publish-runtime|publish-release) ;;
+            *)
+              echo "[error] Unsupported release operation: $OPERATION_INPUT" >&2
+              exit 1
               ;;
           esac
+          if [ "$OPERATION_INPUT" != dry-run ] && [ "$CURRENT_REPOSITORY" != "$RELEASE_REPOSITORY" ]; then
+            echo "[error] Publishing is locked to $RELEASE_REPOSITORY, not $CURRENT_REPOSITORY" >&2
+            exit 1
+          fi
+      # Resolution is intentionally metadata-only. The assemble job downloads
+      # and checksum-verifies every published asset before reuse.
+      - name: Resolve locked runtime release
+        id: runtime
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          go run ./.github/scripts/runtime_resolution.go \
+            --lock internal/release/runtime.lock.json \
+            --repo-root . \
+            --revision HEAD \
+            --github-output "$GITHUB_OUTPUT"
 
-          IFS=',' read -r -a PLATFORM_ITEMS <<< "$PLATFORMS"
-          RUN_RUNTIME_ASSETS=false
-          RUN_WEB=false
-          RUN_MACOS=false
-          RUN_WINDOWS=false
-          RUN_LINUX=false
+      - name: Verify locked Godot source ancestry
+        id: godot-ancestry
+        if: steps.runtime.outputs.runtime_state == 'missing'
+        shell: bash
+        env:
+          OPERATION_INPUT: ${{ inputs.operation }}
+        run: |
+          set -euo pipefail
 
-          for PLATFORM in "${PLATFORM_ITEMS[@]}"; do
-            case "$PLATFORM" in
-              runtime-assets)
-                RUN_RUNTIME_ASSETS=true
+          ancestry_args=(
+            verify-godot
+            --lock internal/release/runtime.lock.json
+            --github-output "$GITHUB_OUTPUT"
+          )
+          if [ "$OPERATION_INPUT" = dry-run ]; then
+            ancestry_args+=(--allow-premerge-candidate)
+          fi
+          python3 .github/scripts/runtime_lock_snapshot.py "${ancestry_args[@]}"
+
+      - name: Summarize locked Godot source ancestry
+        if: always() && steps.runtime.outcome == 'success'
+        shell: bash
+        env:
+          ANCESTRY_STATUS: ${{ steps.godot-ancestry.outputs.godot_ancestry_status }}
+          GODOT_COMMIT: ${{ steps.release.outputs.godot_commit }}
+          GODOT_REPOSITORY: ${{ steps.release.outputs.godot_repository }}
+          GODOT_REF: ${{ steps.godot-ancestry.outputs.godot_ref }}
+          GODOT_REF_COMMIT: ${{ steps.godot-ancestry.outputs.godot_ref_commit }}
+          OPERATION_INPUT: ${{ inputs.operation }}
+          RUNTIME_STATE: ${{ steps.runtime.outputs.runtime_state }}
+          RUNTIME_REASON: ${{ steps.runtime.outputs.runtime_reason }}
+        run: |
+          set -euo pipefail
+
+          summary_valid=true
+          if [ "$RUNTIME_STATE" = ready ]; then
+            ancestry_status="not required — $RUNTIME_REASON"
+            ref_commit="not checked (immutable runtime reuse)"
+          else
+            case "$ANCESTRY_STATUS" in
+              ancestor)
+                ancestry_status="verified ancestor — source build is eligible for publication"
                 ;;
-              web)
-                RUN_WEB=true
-                ;;
-              macos)
-                RUN_MACOS=true
-                ;;
-              windows)
-                RUN_WINDOWS=true
-                ;;
-              linux)
-                RUN_LINUX=true
-                ;;
-              "")
+              premerge)
+                ancestry_status="pre-merge candidate — dry-run only; publication is blocked"
                 ;;
               *)
-                echo "[error] Unsupported platform: $PLATFORM" >&2
+                ancestry_status="verification failed — see the ancestry step log"
+                summary_valid=false
+                ;;
+            esac
+            ref_commit="${GODOT_REF_COMMIT:-not resolved}"
+            if [ -z "$GODOT_REF" ] || [ -z "$GODOT_REF_COMMIT" ]; then
+              ancestry_status="verification failed — verifier returned incomplete identity outputs"
+              summary_valid=false
+            fi
+          fi
+          if [ -z "$GODOT_REF" ]; then
+            GODOT_REF="$(jq -r '.godot.ref' internal/release/runtime.lock.json)"
+          fi
+
+          {
+            echo "### Godot source ancestry"
+            echo
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            printf '| Operation | `%s` |\n' "$OPERATION_INPUT"
+            printf '| Locked candidate | `%s` |\n' "$GODOT_COMMIT"
+            printf '| Godot repository | `%s` |\n' "$GODOT_REPOSITORY"
+            printf '| Canonical ref | `%s` |\n' "$GODOT_REF"
+            printf '| Canonical ref commit | `%s` |\n' "$ref_commit"
+            printf '| Ancestry policy | %s |\n' "$ancestry_status"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$summary_valid" != true ]; then
+            exit 1
+          fi
+
+      - name: Validate immutable publish targets
+        if: inputs.operation != 'dry-run'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.release_tag }}
+          RUNTIME_TAG: ${{ steps.release.outputs.runtime_tag }}
+          RUNTIME_MANIFEST: ${{ steps.release.outputs.runtime_manifest }}
+          REPOSITORY: ${{ steps.release.outputs.release_repository }}
+          OPERATION: ${{ inputs.operation }}
+        run: |
+          set -euo pipefail
+
+          gh api "repos/$REPOSITORY" --silent
+
+          validate_target() {
+            local tag="$1"
+            local marker="$2"
+            local label="$3"
+            local allow_public_reuse="$4"
+            local is_draft
+            local release_json
+            local target_commit
+
+            if release_json="$(gh release view "$tag" --repo "$REPOSITORY" --json isDraft,assets 2>/dev/null)"; then
+              is_draft="$(jq -r .isDraft <<< "$release_json")"
+              if [ "$allow_public_reuse" != true ] || [ "$is_draft" = true ]; then
+                target_commit="$(gh api "repos/$REPOSITORY/commits/$tag" --jq .sha)"
+                if [ "$target_commit" != "$GITHUB_SHA" ]; then
+                  echo "[error] $label tag $tag points to $target_commit, not this commit $GITHUB_SHA" >&2
+                  exit 1
+                fi
+              fi
+              if [ "$is_draft" != true ] && \
+                ! jq -e --arg marker "$marker" 'any(.assets[]; .name == $marker)' <<< "$release_json" >/dev/null; then
+                echo "[error] $label tag $tag is an older release without $marker; bump the declared release version" >&2
+                exit 1
+              fi
+              return
+            fi
+
+            if git ls-remote --exit-code --tags "https://github.com/$REPOSITORY.git" "refs/tags/$tag" >/dev/null 2>&1; then
+              echo "[error] $label tag $tag already exists without a resumable release" >&2
+              exit 1
+            fi
+          }
+
+          validate_target "$RUNTIME_TAG" "$RUNTIME_MANIFEST" Runtime true
+          if [ "$OPERATION" = publish-release ]; then
+            validate_target "$RELEASE_TAG" SHA256SUMS SPX false
+          fi
+
+      - name: Resolve SPX package targets
+        id: platforms
+        shell: bash
+        env:
+          PLATFORMS_INPUT: ${{ inputs.platforms }}
+          OPERATION_INPUT: ${{ inputs.operation }}
+        run: |
+          set -euo pipefail
+
+          if [ "$OPERATION_INPUT" = publish-runtime ]; then
+            echo "run_web=false" >> "$GITHUB_OUTPUT"
+            echo "run_macos=false" >> "$GITHUB_OUTPUT"
+            echo "run_windows=false" >> "$GITHUB_OUTPUT"
+            echo "run_linux=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          platforms="$(printf '%s' "$PLATFORMS_INPUT" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+          if [ -z "$platforms" ]; then
+            echo "[error] Platforms must not be empty" >&2
+            exit 1
+          fi
+          if [ "$OPERATION_INPUT" = publish-release ] && [ "$platforms" != all ]; then
+            echo "[error] Publishing requires platforms=all" >&2
+            exit 1
+          fi
+          if [ "$platforms" = all ]; then
+            platforms="web,macos,windows,linux"
+          fi
+
+          run_web=false
+          run_macos=false
+          run_windows=false
+          run_linux=false
+          declare -A seen=()
+          IFS=',' read -r -a items <<< "$platforms"
+          for platform in "${items[@]}"; do
+            if [ -n "${seen[$platform]:-}" ]; then
+              echo "[error] Duplicate platform: $platform" >&2
+              exit 1
+            fi
+            seen[$platform]=1
+            case "$platform" in
+              web) run_web=true ;;
+              macos) run_macos=true ;;
+              windows) run_windows=true ;;
+              linux) run_linux=true ;;
+              *)
+                echo "[error] Unsupported platform: $platform" >&2
                 exit 1
                 ;;
             esac
           done
 
-          if [ "$RUN_RUNTIME_ASSETS" = false ] && [ "$RUN_WEB" = false ] && [ "$RUN_MACOS" = false ] && [ "$RUN_WINDOWS" = false ] && [ "$RUN_LINUX" = false ]; then
-            echo "[error] No valid platforms resolved from: $RAW_PLATFORMS" >&2
-            exit 1
-          fi
-
-          echo "[info] Platforms: $PLATFORMS"
-          echo "run_runtime_assets=$RUN_RUNTIME_ASSETS" >> $GITHUB_OUTPUT
-          echo "run_web=$RUN_WEB" >> $GITHUB_OUTPUT
-          echo "run_macos=$RUN_MACOS" >> $GITHUB_OUTPUT
-          echo "run_windows=$RUN_WINDOWS" >> $GITHUB_OUTPUT
-          echo "run_linux=$RUN_LINUX" >> $GITHUB_OUTPUT
+          echo "run_web=$run_web" >> "$GITHUB_OUTPUT"
+          echo "run_macos=$run_macos" >> "$GITHUB_OUTPUT"
+          echo "run_windows=$run_windows" >> "$GITHUB_OUTPUT"
+          echo "run_linux=$run_linux" >> "$GITHUB_OUTPUT"
 
   static-checks:
     name: Static checks
     needs: setup
     uses: ./.github/workflows/static_checks.yml
 
-  runtime-assets-build:
-    name: Release runtime assets
+  godot-runtime-build:
+    name: Build locked Godot runtime
     needs: [setup, static-checks]
-    if: needs.setup.outputs.run_runtime_assets == 'true'
-    uses: ./.github/workflows/release_runtime_assets.yml
+    if: needs.setup.outputs.runtime_state == 'missing'
+    # Pin the canonical workflow implementation independently from the Godot
+    # source identity supplied by runtime.lock through godot_ref below.
+    uses: goplus/godot/.github/workflows/release_builds.yml@ea6a59c35d5521f2a7a389449fd420fd7211a6bf
     with:
-      release_tag: ${{ needs.setup.outputs.release_tag }}
-      version: ${{ needs.setup.outputs.version }}
+      runtime_version: ${{ needs.setup.outputs.runtime_version }}
+      runtime_abi: ${{ needs.setup.outputs.runtime_abi }}
+      platforms: all
+      godot_repository: ${{ needs.setup.outputs.godot_repository }}
+      godot_ref: ${{ needs.setup.outputs.godot_commit }}
+      spx_repository: ${{ github.repository }}
+      spx_ref: ${{ github.sha }}
+
+  runtime-assets-build:
+    name: Build runtime pack
+    needs: godot-runtime-build
+    uses: ./.github/workflows/release_runtime_assets.yml
+
+  runtime-ready:
+    name: Resolve runtime artifacts
+    needs: [setup, static-checks, godot-runtime-build, runtime-assets-build]
+    if: >-
+      ${{
+        always() &&
+        needs.setup.result == 'success' &&
+        needs.static-checks.result == 'success' &&
+        (
+          (needs.setup.outputs.runtime_state == 'ready' && needs.godot-runtime-build.result == 'skipped' && needs.runtime-assets-build.result == 'skipped') ||
+          (needs.setup.outputs.runtime_state == 'missing' && needs.godot-runtime-build.result == 'success' && needs.runtime-assets-build.result == 'success')
+        )
+      }}
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Confirm runtime bundle source
+        env:
+          RUNTIME_STATE: ${{ needs.setup.outputs.runtime_state }}
+          RUNTIME_TAG: ${{ needs.setup.outputs.runtime_tag }}
+        run: |
+          if [ "$RUNTIME_STATE" = ready ]; then
+            echo "[info] Products will consume published $RUNTIME_TAG"
+          else
+            echo "[info] Products will consume current-run runtime artifacts"
+          fi
 
   web-build:
-    name: Release web bundle
-    needs: [setup, static-checks]
+    name: Build Web packages
+    needs: [setup, runtime-ready]
     if: needs.setup.outputs.run_web == 'true'
     uses: ./.github/workflows/release_web.yml
     with:
-      version: ${{ needs.setup.outputs.version }}
+      engine_artifacts: ${{ needs.setup.outputs.runtime_state == 'missing' }}
 
   macos-build:
-    name: Release macOS package
-    needs: [setup, static-checks]
+    name: Package macOS
+    needs: [setup, runtime-ready]
     if: needs.setup.outputs.run_macos == 'true'
     uses: ./.github/workflows/release_macos.yml
     with:
-      version: ${{ needs.setup.outputs.version }}
+      engine_artifacts: ${{ needs.setup.outputs.runtime_state == 'missing' }}
 
   windows-build:
-    name: Release Windows package
-    needs: [setup, static-checks]
+    name: Package Windows
+    needs: [setup, runtime-ready]
     if: needs.setup.outputs.run_windows == 'true'
     uses: ./.github/workflows/release_windows.yml
     with:
-      version: ${{ needs.setup.outputs.version }}
+      engine_artifacts: ${{ needs.setup.outputs.runtime_state == 'missing' }}
 
   linux-build:
-    name: Release Linux package
-    needs: [setup, static-checks]
+    name: Package Linux
+    needs: [setup, runtime-ready]
     if: needs.setup.outputs.run_linux == 'true'
     uses: ./.github/workflows/release_linux.yml
     with:
-      version: ${{ needs.setup.outputs.version }}
+      engine_artifacts: ${{ needs.setup.outputs.runtime_state == 'missing' }}
+
+  assemble:
+    name: Assemble and verify releases
+    needs:
+      - setup
+      - runtime-ready
+      - web-build
+      - macos-build
+      - windows-build
+      - linux-build
+    if: >-
+      ${{
+        always() &&
+        needs.setup.result == 'success' &&
+        needs.runtime-ready.result == 'success' &&
+        (needs.setup.outputs.run_web != 'true' || needs.web-build.result == 'success') &&
+        (needs.setup.outputs.run_macos != 'true' || needs.macos-build.result == 'success') &&
+        (needs.setup.outputs.run_windows != 'true' || needs.windows-build.result == 'success') &&
+        (needs.setup.outputs.run_linux != 'true' || needs.linux-build.result == 'success')
+      }}
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Set up locked Go and XGo
+        uses: ./.github/actions/deps
+        with:
+          setup-mode: none
+
+      - name: Download all build artifacts
+        if: needs.setup.outputs.runtime_state == 'missing' || inputs.operation != 'publish-runtime'
+        uses: actions/download-artifact@v7
+        with:
+          path: artifacts
+
+      - name: Assemble immutable asset sets
+        id: assemble
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ needs.setup.outputs.release_repository }}
+          RUNTIME_STATE: ${{ needs.setup.outputs.runtime_state }}
+          RUNTIME_TAG: ${{ needs.setup.outputs.runtime_tag }}
+          RUNTIME_MANIFEST: ${{ needs.setup.outputs.runtime_manifest }}
+          MODULE_PATH: ${{ needs.setup.outputs.module_path }}
+          RUN_WEB: ${{ needs.setup.outputs.run_web }}
+          RUN_MACOS: ${{ needs.setup.outputs.run_macos }}
+          RUN_WINDOWS: ${{ needs.setup.outputs.run_windows }}
+          RUN_LINUX: ${{ needs.setup.outputs.run_linux }}
+        run: |
+          set -euo pipefail
+
+          mkdir -p artifacts dist/runtime dist/product
+          declare -A files=()
+          while IFS= read -r -d '' path; do
+            name="$(basename "$path")"
+            if [ -n "${files[$name]:-}" ]; then
+              echo "[error] Duplicate asset name $name: ${files[$name]} and $path" >&2
+              exit 1
+            fi
+            if [ ! -s "$path" ]; then
+              echo "[error] Empty asset: $path" >&2
+              exit 1
+            fi
+            files[$name]="$path"
+          done < <(find artifacts -type f -print0 | sort -z)
+
+          if [ "${#files[@]}" -eq 0 ] && [ "$RUNTIME_STATE" = missing ]; then
+            echo "[error] No build artifacts were downloaded" >&2
+            exit 1
+          fi
+
+          mapfile -t required_assets < <(jq -r '.required_assets[]' internal/release/runtime.lock.json)
+          if [ "$RUNTIME_STATE" = ready ]; then
+            gh release download "$RUNTIME_TAG" --repo "$REPOSITORY" --dir dist/runtime
+            (cd dist/runtime && sha256sum -c SHA256SUMS)
+            go run ./.github/scripts/runtime_asset_manifest.go \
+              --lock internal/release/runtime.lock.json \
+              --verify-manifest "dist/runtime/$RUNTIME_MANIFEST" \
+              --asset-directory dist/runtime
+            for name in "${required_assets[@]}"; do
+              if [ ! -s "dist/runtime/$name" ]; then
+                echo "[error] Published $RUNTIME_TAG is missing locked asset: $name" >&2
+                exit 1
+              fi
+            done
+          else
+            for name in "${required_assets[@]}"; do
+              path="${files[$name]:-}"
+              if [ -z "$path" ]; then
+                echo "[error] Missing locked runtime asset: $name" >&2
+                exit 1
+              fi
+              cp "$path" "dist/runtime/$name"
+              unset 'files[$name]'
+            done
+          fi
+
+          expected_products=()
+          if [ "$RUN_WEB" = true ]; then
+            expected_products+=(spx_web.zip spx_web_worker.zip spx_web_minigame.zip spx_web_miniprogram.zip)
+          fi
+          if [ "$RUN_MACOS" = true ]; then
+            expected_products+=(spx-standalone-darwin-x64.zip spx-standalone-darwin-arm64.zip)
+          fi
+          if [ "$RUN_WINDOWS" = true ]; then
+            expected_products+=(spx-standalone-windows-x64.zip)
+          fi
+          if [ "$RUN_LINUX" = true ]; then
+            expected_products+=(spx-standalone-linux-x64.zip)
+          fi
+          for name in "${expected_products[@]}"; do
+            path="${files[$name]:-}"
+            if [ -z "$path" ]; then
+              echo "[error] Missing selected SPX product asset: $name" >&2
+              exit 1
+            fi
+            cp "$path" "dist/product/$name"
+            unset 'files[$name]'
+          done
+          if [ "${#files[@]}" -ne 0 ]; then
+            printf '[error] Unexpected build artifact: %s\n' "${!files[@]}" >&2
+            exit 1
+          fi
+          product_count="${#expected_products[@]}"
+          echo "product_count=$product_count" >> "$GITHUB_OUTPUT"
+
+          if [ "$RUNTIME_STATE" = missing ]; then
+            spx_commit="$(git rev-parse HEAD)"
+            if [ -z "$MODULE_PATH" ]; then
+              echo "[error] Locked SPX module path must not be empty" >&2
+              exit 1
+            fi
+            module_tree="$(git rev-parse "HEAD:${MODULE_PATH}")"
+            runtime_pack_source_sha256="$(go run ./.github/scripts/runtime_pack_source_digest.go HEAD)"
+            build_recipe_sha256="$(go run ./.github/scripts/runtime_build_recipe_digest.go HEAD)"
+
+            manifest_args=()
+            for name in "${required_assets[@]}"; do
+              manifest_args+=(--asset "$name=dist/runtime/$name")
+            done
+            go run ./.github/scripts/runtime_asset_manifest.go \
+              --lock internal/release/runtime.lock.json \
+              --output "dist/runtime/$RUNTIME_MANIFEST" \
+              --checksums dist/runtime/SHA256SUMS \
+              --spx-commit "$spx_commit" \
+              --module-tree "$module_tree" \
+              --runtime-pack-source-sha256 "$runtime_pack_source_sha256" \
+              --build-recipe-sha256 "$build_recipe_sha256" \
+              "${manifest_args[@]}"
+
+            (
+              cd dist/runtime
+              sha256sum "$RUNTIME_MANIFEST" >> SHA256SUMS
+              sort -k2 -o SHA256SUMS SHA256SUMS
+            )
+            go run ./.github/scripts/runtime_asset_manifest.go \
+              --lock internal/release/runtime.lock.json \
+              --verify-manifest "dist/runtime/$RUNTIME_MANIFEST" \
+              --asset-directory dist/runtime
+          fi
+
+          declare -A expected_runtime_files=()
+          expected_runtime_files["$RUNTIME_MANIFEST"]=1
+          expected_runtime_files[SHA256SUMS]=1
+          for name in "${required_assets[@]}"; do
+            expected_runtime_files["$name"]=1
+          done
+          while IFS= read -r -d '' path; do
+            name="$(basename "$path")"
+            if [ -z "${expected_runtime_files[$name]:-}" ]; then
+              echo "[error] Unexpected runtime release asset: $name" >&2
+              exit 1
+            fi
+            unset 'expected_runtime_files[$name]'
+          done < <(find dist/runtime -mindepth 1 -maxdepth 1 -type f -print0 | sort -z)
+          if [ "${#expected_runtime_files[@]}" -ne 0 ]; then
+            printf '[error] Runtime release asset is missing: %s\n' "${!expected_runtime_files[@]}" >&2
+            exit 1
+          fi
+
+          if [ "$product_count" -gt 0 ]; then
+            (
+              cd dist/product
+              find . -maxdepth 1 -type f ! -name SHA256SUMS -print0 |
+                sort -z |
+                xargs -0 sha256sum |
+                sed 's#  \./#  #' > SHA256SUMS
+            )
+          fi
+
+          echo "[info] Runtime release assets:"
+          find dist/runtime -maxdepth 1 -type f -printf '%f\n' | sort
+          echo "[info] SPX product assets:"
+          find dist/product -maxdepth 1 -type f -printf '%f\n' | sort
+
+      - name: Upload assembled runtime release
+        uses: actions/upload-artifact@v7
+        with:
+          name: spx-runtime-release-${{ needs.setup.outputs.runtime_version }}
+          path: dist/runtime
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload assembled SPX release
+        if: steps.assemble.outputs.product_count != '0'
+        uses: actions/upload-artifact@v7
+        with:
+          name: spx-product-release-${{ needs.setup.outputs.version }}
+          path: dist/product
+          if-no-files-found: error
+          retention-days: 14
+
+  publish-runtime:
+    name: Publish runtime release
+    needs: [setup, assemble]
+    if: inputs.operation != 'dry-run' && needs.assemble.result == 'success'
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - name: Check out release source for the publish guard
+        if: needs.setup.outputs.runtime_state == 'missing'
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Revalidate locked Godot ancestry before publishing
+        if: needs.setup.outputs.runtime_state == 'missing'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/runtime_lock_snapshot.py \
+            verify-godot \
+            --lock internal/release/runtime.lock.json
+
+      - name: Download assembled runtime release
+        uses: actions/download-artifact@v7
+        with:
+          name: spx-runtime-release-${{ needs.setup.outputs.runtime_version }}
+          path: dist
+
+      - name: Publish immutable runtime release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.setup.outputs.runtime_tag }}
+          RUNTIME_VERSION: ${{ needs.setup.outputs.runtime_version }}
+          RUNTIME_MANIFEST: ${{ needs.setup.outputs.runtime_manifest }}
+          REPOSITORY: ${{ needs.setup.outputs.release_repository }}
+        run: |
+          set -euo pipefail
+
+          if gh release view "$RELEASE_TAG" --repo "$REPOSITORY" >/dev/null 2>&1; then
+            is_draft="$(gh release view "$RELEASE_TAG" --repo "$REPOSITORY" --json isDraft --jq .isDraft)"
+            if [ "$is_draft" != true ]; then
+              mkdir -p published
+              gh release download "$RELEASE_TAG" --repo "$REPOSITORY" --dir published
+              (cd published && sha256sum -c SHA256SUMS)
+              find dist -maxdepth 1 -type f -printf '%f\n' | sort > published/local-assets.txt
+              gh release view "$RELEASE_TAG" --repo "$REPOSITORY" --json assets --jq '.assets[].name' | sort > published/remote-assets.txt
+              if cmp -s "dist/$RUNTIME_MANIFEST" "published/$RUNTIME_MANIFEST" && \
+                cmp -s dist/SHA256SUMS published/SHA256SUMS && \
+                cmp -s published/local-assets.txt published/remote-assets.txt; then
+                echo "[info] Identical immutable runtime release already exists: $RELEASE_TAG"
+                exit 0
+              fi
+              echo "[error] Runtime tag $RELEASE_TAG already exists with different provenance" >&2
+              exit 1
+            fi
+            while IFS= read -r name; do
+              [ -z "$name" ] || gh release delete-asset "$RELEASE_TAG" "$name" --repo "$REPOSITORY" --yes
+            done < <(gh release view "$RELEASE_TAG" --repo "$REPOSITORY" --json assets --jq '.assets[].name')
+          else
+            gh release create "$RELEASE_TAG" \
+              --repo "$REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "SPX Runtime $RUNTIME_VERSION" \
+              --notes "Content-verifiable SPX runtime assets. See $RUNTIME_MANIFEST for source and toolchain provenance." \
+              --draft
+          fi
+
+          gh release upload "$RELEASE_TAG" dist/* --repo "$REPOSITORY"
+          gh release edit "$RELEASE_TAG" --repo "$REPOSITORY" --draft=false
+
+  publish-spx:
+    name: Prepare SPX release draft
+    needs: [setup, assemble, publish-runtime]
+    if: inputs.operation == 'publish-release' && needs.publish-runtime.result == 'success'
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download assembled SPX release
+        uses: actions/download-artifact@v7
+        with:
+          name: spx-product-release-${{ needs.setup.outputs.version }}
+          path: dist
+
+      - name: Prepare SPX release draft
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.setup.outputs.release_tag }}
+          REPOSITORY: ${{ needs.setup.outputs.release_repository }}
+        run: |
+          set -euo pipefail
+
+          if gh release view "$RELEASE_TAG" --repo "$REPOSITORY" >/dev/null 2>&1; then
+            is_draft="$(gh release view "$RELEASE_TAG" --repo "$REPOSITORY" --json isDraft --jq .isDraft)"
+            if [ "$is_draft" != true ]; then
+              mkdir -p published
+              gh release download "$RELEASE_TAG" --repo "$REPOSITORY" --dir published
+              (cd published && sha256sum -c SHA256SUMS)
+              find dist -maxdepth 1 -type f -printf '%f\n' | sort > published/local-assets.txt
+              gh release view "$RELEASE_TAG" --repo "$REPOSITORY" --json assets --jq '.assets[].name' | sort > published/remote-assets.txt
+              if cmp -s dist/SHA256SUMS published/SHA256SUMS && \
+                cmp -s published/local-assets.txt published/remote-assets.txt; then
+                echo "[info] Identical SPX release already exists: $RELEASE_TAG"
+                exit 0
+              fi
+              echo "[error] SPX tag $RELEASE_TAG already exists with different assets" >&2
+              exit 1
+            fi
+            while IFS= read -r name; do
+              [ -z "$name" ] || gh release delete-asset "$RELEASE_TAG" "$name" --repo "$REPOSITORY" --yes
+            done < <(gh release view "$RELEASE_TAG" --repo "$REPOSITORY" --json assets --jq '.assets[].name')
+          else
+            gh release create "$RELEASE_TAG" \
+              --repo "$REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "$RELEASE_TAG" \
+              --generate-notes \
+              --draft
+          fi
+
+          gh release upload "$RELEASE_TAG" dist/* --repo "$REPOSITORY"
+
+  publish-web-package:
+    name: Publish npm package
+    needs: [setup, publish-spx]
+    if: inputs.operation == 'publish-release' && needs.publish-spx.result == 'success'
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/publish_web_package.yml
+    with:
+      target: ${{ github.sha }}
+      release_version: ${{ needs.setup.outputs.version }}
+      release_artifact: web-release
+
+  finalize-spx:
+    name: Finalize SPX release
+    needs: [setup, publish-spx, publish-web-package]
+    if: inputs.operation == 'publish-release' && needs.publish-spx.result == 'success' && needs.publish-web-package.result == 'success'
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - name: Publish completed SPX release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.setup.outputs.release_tag }}
+          REPOSITORY: ${{ needs.setup.outputs.release_repository }}
+        run: gh release edit "$RELEASE_TAG" --repo "$REPOSITORY" --draft=false

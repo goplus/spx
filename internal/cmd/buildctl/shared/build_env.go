@@ -22,25 +22,29 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/goplus/spx/v3/internal/release"
 )
 
-const EngineBuildVersion = "4.4.1.stable"
-
 type buildEnvironment struct {
-	RepoRoot      string
-	ProjectDir    string
-	EngineDir     string
-	GodotSrc      string
-	GoPath        string
-	Version       string
-	EngineGitTag  string
-	EngineVersion string
-	TemplateDir   string
-	Platform      string
-	Arch          string
+	RepoRoot        string
+	ProjectDir      string
+	EngineDir       string
+	GodotSrc        string
+	SPXModuleSrc    string
+	GoPath          string
+	Version         string
+	GodotRepository string
+	GodotRef        string
+	GodotCommit     string
+	EngineVersion   string
+	TemplateDir     string
+	Platform        string
+	Arch            string
 }
 
 func resolveBuildEnvironment(repoRoot string, requestedPlatform string) (buildEnvironment, error) {
+	runtimeLock := release.DefaultRuntimeLock()
 	version, err := defaultRuntimeVersion()
 	if err != nil {
 		return buildEnvironment{}, err
@@ -53,7 +57,11 @@ func resolveBuildEnvironment(repoRoot string, requestedPlatform string) (buildEn
 	if err != nil {
 		return buildEnvironment{}, err
 	}
-	templateDir, err := detectGodotTemplateDir()
+	spxModuleSrc, err := resolveSPXModuleSource(repoRoot)
+	if err != nil {
+		return buildEnvironment{}, err
+	}
+	templateDir, err := detectGodotTemplateDir(runtimeLock.Godot.Version)
 	if err != nil {
 		return buildEnvironment{}, err
 	}
@@ -77,17 +85,20 @@ func resolveBuildEnvironment(repoRoot string, requestedPlatform string) (buildEn
 	}
 
 	return buildEnvironment{
-		RepoRoot:      repoRoot,
-		ProjectDir:    repoRoot,
-		EngineDir:     engineDir,
-		GodotSrc:      engineDir,
-		GoPath:        goPath,
-		Version:       version,
-		EngineGitTag:  "spx" + version,
-		EngineVersion: EngineBuildVersion,
-		TemplateDir:   templateDir,
-		Platform:      platform,
-		Arch:          arch,
+		RepoRoot:        repoRoot,
+		ProjectDir:      repoRoot,
+		EngineDir:       engineDir,
+		GodotSrc:        engineDir,
+		SPXModuleSrc:    spxModuleSrc,
+		GoPath:          goPath,
+		Version:         version,
+		GodotRepository: runtimeLock.Godot.Repository,
+		GodotRef:        runtimeLock.Godot.Ref,
+		GodotCommit:     runtimeLock.Godot.Commit,
+		EngineVersion:   runtimeLock.Godot.Version,
+		TemplateDir:     templateDir,
+		Platform:        platform,
+		Arch:            arch,
 	}, nil
 }
 
@@ -130,7 +141,7 @@ func detectBuildArch() (string, error) {
 	}
 }
 
-func detectGodotTemplateDir() (string, error) {
+func detectGodotTemplateDir(engineVersion string) (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
@@ -138,15 +149,15 @@ func detectGodotTemplateDir() (string, error) {
 
 	switch runtime.GOOS {
 	case "linux":
-		return filepath.Join(home, ".local", "share", "godot", "export_templates", EngineBuildVersion), nil
+		return filepath.Join(home, ".local", "share", "godot", "export_templates", engineVersion), nil
 	case "darwin":
-		return filepath.Join(home, "Library", "Application Support", "Godot", "export_templates", EngineBuildVersion), nil
+		return filepath.Join(home, "Library", "Application Support", "Godot", "export_templates", engineVersion), nil
 	case "windows":
 		appData := os.Getenv("APPDATA")
 		if appData == "" {
 			return "", fmt.Errorf("missing APPDATA")
 		}
-		return filepath.Join(appData, "Godot", "export_templates", EngineBuildVersion), nil
+		return filepath.Join(appData, "Godot", "export_templates", engineVersion), nil
 	default:
 		return "", fmt.Errorf("unsupported host OS: %s", runtime.GOOS)
 	}
@@ -157,10 +168,13 @@ func (env buildEnvironment) shellExports() string {
 		"export PROJ_DIR=" + shellQuote(env.ProjectDir),
 		"export ENGINE_DIR=" + shellQuote(env.EngineDir),
 		"export GODOT_SRC=" + shellQuote(env.GodotSrc),
+		"export SPX_MODULE_SRC=" + shellQuote(env.SPXModuleSrc),
 		"export ENGINE_VERSION=" + shellQuote(env.EngineVersion),
 		"export GOPATH=" + shellQuote(env.GoPath),
 		"export VERSION=" + shellQuote(env.Version),
-		"export ENGINE_GIT_TAG=" + shellQuote(env.EngineGitTag),
+		"export GODOT_REPOSITORY=" + shellQuote(env.GodotRepository),
+		"export GODOT_REF=" + shellQuote(env.GodotRef),
+		"export GODOT_COMMIT=" + shellQuote(env.GodotCommit),
 		"export TEMPLATE_DIR=" + shellQuote(env.TemplateDir),
 		"export PLATFORM=" + shellQuote(env.Platform),
 		"export ARCH=" + shellQuote(env.Arch),

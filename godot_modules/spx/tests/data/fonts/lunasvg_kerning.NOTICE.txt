@@ -1,0 +1,10 @@
+lunasvg_kerning.ttf is a further glyph subset of the SPX template
+default.ttf, which is a modified glyph subset of Source Han Sans CN Medium
+1.000.
+
+Original font copyright (c) 2014 Adobe Systems Incorporated.
+Source: https://github.com/goplus/godot/releases/download/spx2.0.14/CnFont.ttf
+Upstream source: https://github.com/adobe-fonts/source-han-sans/tree/1.000
+
+Licensed under the Apache License, Version 2.0. See
+lunasvg_kerning.LICENSE.txt.

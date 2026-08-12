@@ -17,12 +17,30 @@
 package gdext
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/goplus/spx/v3/internal/cmd/codegen/generate/common"
 	"github.com/stretchr/testify/require"
 )
+
+func TestMergeManagerHeaderSupportsAdditionalBaseClasses(t *testing.T) {
+	dir := t.TempDir()
+	header := strings.TrimSpace(`
+class SpxUiMgr : public SpxBaseMgr, private SpxUiBindingListener {
+public:
+	SPX_API GdObj bind_node(GdObj obj, GdString rel_path);
+};
+`)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_ui_mgr.h"), []byte(header), 0o600))
+
+	merged, err := mergeManagerHeader(dir)
+	require.NoError(t, err)
+	require.Contains(t, merged, "class SpxUiMgr")
+	require.Contains(t, generateManagerHeader(merged, false), "GDExtensionSpxUiBindNode")
+}
 
 func TestGenerateManagerHeaderSkipsRawMethods(t *testing.T) {
 	input := strings.TrimSpace(`
@@ -50,6 +68,12 @@ public:
 	require.Equal(t, "[]float32", spec.GoArgType)
 	require.EqualValues(t, 2, spec.FastArrayType)
 	require.Equal(t, "GDExtensionSpxSpriteBatchUpdateTransformsRaw", spec.RawFunctionName)
+}
+
+func TestGodotJsTemplateUsesModuleRelativeIncludes(t *testing.T) {
+	require.Contains(t, gdJsSpxCpp, `#include "../gdextension_spx_ext.h"`)
+	require.Contains(t, gdJsSpxCpp, `#include "../spx_engine.h"`)
+	require.NotContains(t, gdJsSpxCpp, `#include "modules/spx/`)
 }
 
 func TestGenerateManagerHeaderRegistersDirectNativeArrayBridge(t *testing.T) {

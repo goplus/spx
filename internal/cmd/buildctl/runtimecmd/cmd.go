@@ -20,17 +20,25 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"os"
+
+	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
+	toolpkg "github.com/goplus/spx/v3/internal/cmd/buildctl/tool"
 )
+
+var osStderr = os.Stderr
+
+var errUsage = shared.ErrUsage
 
 type runtimeExportWebConfig struct {
 	mode string
 }
 
-type runtimeBuildWasmConfig struct {
-	opt bool
+type BuildWasmConfig struct {
+	Opt bool
 }
 
-func runRuntime(args []string) error {
+func Run(args []string) error {
 	if len(args) == 0 {
 		printRuntimeUsage()
 		return errUsage
@@ -76,37 +84,37 @@ func runRuntimeBuildWasm(args []string) error {
 		return err
 	}
 
-	repoRoot, err := findRepoRoot()
+	repoRoot, err := shared.FindRepoRoot()
 	if err != nil {
 		return err
 	}
 
-	runner := commandRunner{repoRoot: repoRoot}
-	return buildWasmRuntime(cfg, runner)
+	runner := shared.CommandRunner{RepoRoot: repoRoot}
+	return BuildWasmRuntime(cfg, runner)
 }
 
-func parseRuntimeBuildWasmArgs(args []string) (runtimeBuildWasmConfig, error) {
-	cfg := runtimeBuildWasmConfig{}
+func parseRuntimeBuildWasmArgs(args []string) (BuildWasmConfig, error) {
+	cfg := BuildWasmConfig{}
 
 	fs := flag.NewFlagSet("runtime build-wasm", flag.ContinueOnError)
 	fs.SetOutput(osStderr)
-	fs.BoolVar(&cfg.opt, "opt", false, "compress wasm artifacts with brotli after building")
+	fs.BoolVar(&cfg.Opt, "opt", false, "compress wasm artifacts with brotli after building")
 	fs.Usage = func() {
 		fmt.Fprintln(osStderr, "Usage: buildctl runtime build-wasm [--opt]")
 	}
 
 	if err := fs.Parse(args); err != nil {
-		return runtimeBuildWasmConfig{}, err
+		return BuildWasmConfig{}, err
 	}
 	if fs.NArg() != 0 {
 		fs.Usage()
-		return runtimeBuildWasmConfig{}, errUsage
+		return BuildWasmConfig{}, errUsage
 	}
 	return cfg, nil
 }
 
 func runRuntimeCompressWasm(args []string) error {
-	if err := parseRuntimeCompressWasmArgs(args); err != nil {
+	if err := shared.ParseNoArgs("runtime compress-wasm", "Usage: buildctl runtime compress-wasm", args, osStderr); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
 		}
@@ -115,55 +123,21 @@ func runRuntimeCompressWasm(args []string) error {
 	return compressWasmArtifacts()
 }
 
-func parseRuntimeCompressWasmArgs(args []string) error {
-	fs := flag.NewFlagSet("runtime compress-wasm", flag.ContinueOnError)
-	fs.SetOutput(osStderr)
-	fs.Usage = func() {
-		fmt.Fprintln(osStderr, "Usage: buildctl runtime compress-wasm")
-	}
-
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	if fs.NArg() != 0 {
-		fs.Usage()
-		return errUsage
-	}
-	return nil
-}
-
 func runRuntimeExportPack(args []string) error {
-	if err := parseRuntimeExportPackArgs(args); err != nil {
+	if err := shared.ParseNoArgs("runtime export-pack", "Usage: buildctl runtime export-pack", args, osStderr); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
 		}
 		return err
 	}
 
-	repoRoot, err := findRepoRoot()
+	repoRoot, err := shared.FindRepoRoot()
 	if err != nil {
 		return err
 	}
 
-	runner := commandRunner{repoRoot: repoRoot}
-	return exportPackRuntime(runner)
-}
-
-func parseRuntimeExportPackArgs(args []string) error {
-	fs := flag.NewFlagSet("runtime export-pack", flag.ContinueOnError)
-	fs.SetOutput(osStderr)
-	fs.Usage = func() {
-		fmt.Fprintln(osStderr, "Usage: buildctl runtime export-pack")
-	}
-
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	if fs.NArg() != 0 {
-		fs.Usage()
-		return errUsage
-	}
-	return nil
+	runner := shared.CommandRunner{RepoRoot: repoRoot}
+	return ExportPackRuntime(runner)
 }
 
 func runRuntimeExportWeb(args []string) error {
@@ -175,12 +149,12 @@ func runRuntimeExportWeb(args []string) error {
 		return err
 	}
 
-	repoRoot, err := findRepoRoot()
+	repoRoot, err := shared.FindRepoRoot()
 	if err != nil {
 		return err
 	}
 
-	runner := commandRunner{repoRoot: repoRoot}
+	runner := shared.CommandRunner{RepoRoot: repoRoot}
 	return exportWebRuntime(cfg, runner)
 }
 
@@ -193,13 +167,13 @@ func runRuntimeExportWebTemplate(args []string) error {
 		return err
 	}
 
-	repoRoot, err := findRepoRoot()
+	repoRoot, err := shared.FindRepoRoot()
 	if err != nil {
 		return err
 	}
 
-	runner := commandRunner{repoRoot: repoRoot}
-	return exportWebTemplateRuntime(cfg.mode, runner)
+	runner := shared.CommandRunner{RepoRoot: repoRoot}
+	return ExportWebTemplateRuntime(cfg.mode, runner)
 }
 
 func parseRuntimeExportWebArgs(args []string) (runtimeExportWebConfig, error) {
@@ -219,8 +193,18 @@ func parseRuntimeExportWebArgs(args []string) (runtimeExportWebConfig, error) {
 		fs.Usage()
 		return runtimeExportWebConfig{}, errUsage
 	}
-	if err := validateWebMode(cfg.mode); err != nil {
+	if err := shared.ValidateWebMode(cfg.mode); err != nil {
 		return runtimeExportWebConfig{}, err
 	}
 	return cfg, nil
+}
+
+func BuildWasmRuntime(cfg BuildWasmConfig, runner shared.ScriptRunner) error {
+	if err := toolpkg.InstallTools(toolpkg.InstallConfig{Web: true, NoEmbedRuntime: true}, runner); err != nil {
+		return err
+	}
+	if !cfg.Opt {
+		return nil
+	}
+	return compressWasmArtifacts()
 }

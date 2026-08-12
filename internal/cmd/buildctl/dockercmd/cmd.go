@@ -20,6 +20,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"os"
+
+	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 )
 
 type dockerBuildImagesConfig struct {
@@ -30,10 +33,10 @@ type dockerBuildEngineConfig struct {
 	godotSrc string
 }
 
-func runDocker(args []string) error {
+func Run(args []string) error {
 	if len(args) == 0 {
 		printDockerUsage()
-		return errUsage
+		return shared.ErrUsage
 	}
 
 	switch args[0] {
@@ -51,11 +54,14 @@ func runDocker(args []string) error {
 }
 
 func printDockerUsage() {
-	fmt.Fprintln(osStderr, "Usage: buildctl docker <build-images|build-engine> [options]")
-	fmt.Fprintln(osStderr)
-	fmt.Fprintln(osStderr, "Commands:")
-	fmt.Fprintln(osStderr, "  build-images  Build the podman base/linux Godot container images")
-	fmt.Fprintln(osStderr, "  build-engine  Run the legacy podman/native Godot build matrix")
+	fmt.Fprintln(os.Stderr, "Usage: buildctl docker <build-images|build-engine> [options]")
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, "Legacy: these unsupported container workflows use an independent historical toolchain;")
+	fmt.Fprintln(os.Stderr, "        current builds use buildctl build and runtime.lock.json instead.")
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, "Commands:")
+	fmt.Fprintln(os.Stderr, "  build-images  Build the legacy podman base/linux container images")
+	fmt.Fprintln(os.Stderr, "  build-engine  Run the legacy podman/native Godot build matrix")
 }
 
 func runDockerBuildImagesCommand(args []string) error {
@@ -73,10 +79,10 @@ func parseDockerBuildImagesArgs(args []string) (dockerBuildImagesConfig, error) 
 	cfg := dockerBuildImagesConfig{}
 
 	fs := flag.NewFlagSet("docker build-images", flag.ContinueOnError)
-	fs.SetOutput(osStderr)
+	fs.SetOutput(os.Stderr)
 	fs.StringVar(&cfg.proxyURL, "proxy-url", "", "proxy URL used for podman image builds")
 	fs.Usage = func() {
-		fmt.Fprintln(osStderr, "Usage: buildctl docker build-images --proxy-url <url>")
+		fmt.Fprintln(os.Stderr, "Usage: buildctl docker build-images --proxy-url <url>")
 	}
 	if err := fs.Parse(args); err != nil {
 		return dockerBuildImagesConfig{}, err
@@ -85,7 +91,7 @@ func parseDockerBuildImagesArgs(args []string) (dockerBuildImagesConfig, error) 
 		cfg.proxyURL = fs.Arg(0)
 	} else if fs.NArg() != 0 {
 		fs.Usage()
-		return dockerBuildImagesConfig{}, errUsage
+		return dockerBuildImagesConfig{}, shared.ErrUsage
 	}
 	if cfg.proxyURL == "" {
 		return dockerBuildImagesConfig{}, errors.New("proxy URL is required")
@@ -108,17 +114,17 @@ func parseDockerBuildEngineArgs(args []string) (dockerBuildEngineConfig, error) 
 	cfg := dockerBuildEngineConfig{}
 
 	fs := flag.NewFlagSet("docker build-engine", flag.ContinueOnError)
-	fs.SetOutput(osStderr)
+	fs.SetOutput(os.Stderr)
 	fs.StringVar(&cfg.godotSrc, "godot-src", "", "path to the Godot source tree (defaults to GODOT_SRC or ./godot)")
 	fs.Usage = func() {
-		fmt.Fprintln(osStderr, "Usage: buildctl docker build-engine [--godot-src /abs/path/to/godot]")
+		fmt.Fprintln(os.Stderr, "Usage: buildctl docker build-engine [--godot-src /abs/path/to/godot]")
 	}
 	if err := fs.Parse(args); err != nil {
 		return dockerBuildEngineConfig{}, err
 	}
 	if fs.NArg() != 0 {
 		fs.Usage()
-		return dockerBuildEngineConfig{}, errUsage
+		return dockerBuildEngineConfig{}, shared.ErrUsage
 	}
 	return cfg, nil
 }

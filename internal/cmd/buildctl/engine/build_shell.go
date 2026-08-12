@@ -21,15 +21,11 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+
+	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 )
 
-type envExportEngineBuildShellConfig struct {
-	target   string
-	platform string
-	mode     string
-}
-
-type engineBuildShellPlan struct {
+type BuildShellPlan struct {
 	Target                string
 	Platform              string
 	EditorSource          string
@@ -47,68 +43,75 @@ type engineBuildShellPlan struct {
 	WebCachedTemplateZip  string
 }
 
-func parseEnvExportEngineBuildShellArgs(args []string) (envExportEngineBuildShellConfig, error) {
-	cfg := envExportEngineBuildShellConfig{}
+func ParseEnvExportEngineBuildShellArgs(args []string) (BuildConfig, error) {
+	cfg := BuildConfig{}
 
 	fs := flag.NewFlagSet("env export-engine-build-shell", flag.ContinueOnError)
 	fs.SetOutput(osStderr)
-	fs.StringVar(&cfg.target, "target", "", "engine build target: editor or template")
-	fs.StringVar(&cfg.platform, "platform", "", "build platform: android, ios, web, linux, windows, or macos")
-	fs.StringVar(&cfg.mode, "mode", "", "web mode: normal, worker, minigame, or miniprogram")
+	fs.StringVar(&cfg.Target, "target", "", "engine build target: editor or template")
+	fs.StringVar(&cfg.Platform, "platform", "", "build platform: android, ios, web, linux, windows, or macos")
+	fs.StringVar(&cfg.Mode, "mode", "", "web mode: normal, worker, minigame, or miniprogram")
 	fs.Usage = func() {
 		fmt.Fprintln(osStderr, "Usage: buildctl env export-engine-build-shell --target editor|template [--platform android|ios|web|linux|windows|macos] [--mode normal|worker|minigame|miniprogram]")
 	}
 
 	if err := fs.Parse(args); err != nil {
-		return envExportEngineBuildShellConfig{}, err
+		return BuildConfig{}, err
 	}
 	if fs.NArg() != 0 {
 		fs.Usage()
-		return envExportEngineBuildShellConfig{}, errUsage
+		return BuildConfig{}, errUsage
 	}
-	switch cfg.target {
+	switch cfg.Target {
 	case "editor", "template":
 	default:
-		return envExportEngineBuildShellConfig{}, fmt.Errorf("unsupported build target: %s", cfg.target)
+		return BuildConfig{}, fmt.Errorf("unsupported build target: %s", cfg.Target)
 	}
-	if err := validateOptionalPlatform(cfg.platform); err != nil {
-		return envExportEngineBuildShellConfig{}, err
+	if err := shared.ValidateOptionalPlatform(cfg.Platform); err != nil {
+		return BuildConfig{}, err
 	}
-	if cfg.platform == "web" && cfg.mode == "" {
-		cfg.mode = "normal"
+	if cfg.Platform == "web" && cfg.Mode == "" {
+		cfg.Mode = "normal"
 	}
-	if cfg.mode != "" {
-		if cfg.platform != "web" {
-			return envExportEngineBuildShellConfig{}, fmt.Errorf("--mode requires --platform web")
+	if cfg.Mode != "" {
+		if cfg.Platform != "web" {
+			return BuildConfig{}, fmt.Errorf("--mode requires --platform web")
 		}
-		if err := validateWebMode(cfg.mode); err != nil {
-			return envExportEngineBuildShellConfig{}, err
+		if err := shared.ValidateWebMode(cfg.Mode); err != nil {
+			return BuildConfig{}, err
 		}
 	}
 	return cfg, nil
 }
 
-func resolveEngineBuildShellPlan(repoRoot string, cfg envExportEngineBuildShellConfig) (engineBuildShellPlan, error) {
-	env, err := resolveBuildEnvironment(repoRoot, "")
+func ResolveEngineBuildShellPlan(repoRoot string, cfg BuildConfig) (BuildShellPlan, error) {
+	env, err := shared.ResolveBuildEnvironment(repoRoot, cfg.Platform)
 	if err != nil {
-		return engineBuildShellPlan{}, err
+		return BuildShellPlan{}, err
 	}
+	return resolveEngineBuildShellPlan(env, cfg)
+}
 
-	effectivePlatform := cfg.platform
+func resolveEngineBuildShellPlan(env buildEnvironment, cfg BuildConfig) (BuildShellPlan, error) {
+	effectivePlatform := cfg.Platform
 	if effectivePlatform == "" {
 		effectivePlatform = env.Platform
 	}
+	effectiveTarget := cfg.Target
+	if effectiveTarget == "editor" && effectivePlatform == "web" {
+		effectiveTarget = "template"
+	}
 
-	plan := engineBuildShellPlan{
-		Target:   cfg.target,
+	plan := BuildShellPlan{
+		Target:   effectiveTarget,
 		Platform: effectivePlatform,
 	}
 
-	switch cfg.target {
+	switch effectiveTarget {
 	case "editor":
 		editorSource, editorDestination, editorUseVSProj, err := resolveEditorBuildPaths(env)
 		if err != nil {
-			return engineBuildShellPlan{}, err
+			return BuildShellPlan{}, err
 		}
 		plan.EditorSource = editorSource
 		plan.EditorDestination = editorDestination
@@ -117,16 +120,16 @@ func resolveEngineBuildShellPlan(repoRoot string, cfg envExportEngineBuildShellC
 		if isDesktopPlatform(effectivePlatform) {
 			sconsPlatform, templateSource, templateDestination, err := resolveDesktopTemplateBuildPaths(env, effectivePlatform)
 			if err != nil {
-				return engineBuildShellPlan{}, err
+				return BuildShellPlan{}, err
 			}
 			plan.TemplateSConsPlatform = sconsPlatform
 			plan.TemplateSource = templateSource
 			plan.TemplateDestination = templateDestination
 		}
 		if effectivePlatform == "web" {
-			webThreads, webProxy, webThreadSuffix, err := resolveWebTemplateBuildConfig(cfg.mode)
+			webThreads, webProxy, webThreadSuffix, err := resolveWebTemplateBuildConfig(cfg.Mode)
 			if err != nil {
-				return engineBuildShellPlan{}, err
+				return BuildShellPlan{}, err
 			}
 			plan.WebThreads = webThreads
 			plan.WebProxyToPThread = webProxy
@@ -141,6 +144,8 @@ func resolveEngineBuildShellPlan(repoRoot string, cfg envExportEngineBuildShellC
 			plan.TemplatePostDir = filepath.Join("platform", "android", "java")
 			plan.TemplatePostCommands = []string{"./gradlew generateGodotTemplates"}
 		}
+	default:
+		return BuildShellPlan{}, fmt.Errorf("unsupported build target: %s", effectiveTarget)
 	}
 
 	return plan, nil
@@ -194,7 +199,7 @@ func resolveWebTemplateBuildConfig(mode string) (threads string, proxyToPThread 
 	if mode == "" {
 		mode = "normal"
 	}
-	if err := validateWebMode(mode); err != nil {
+	if err := shared.ValidateWebMode(mode); err != nil {
 		return "", false, "", err
 	}
 	switch mode {
@@ -207,15 +212,15 @@ func resolveWebTemplateBuildConfig(mode string) (threads string, proxyToPThread 
 	}
 }
 
-func (plan engineBuildShellPlan) shellExports() string {
+func (plan BuildShellPlan) ShellExports() string {
 	lines := []string{
-		"export ENGINE_BUILD_TARGET=" + shellQuote(plan.Target),
-		"export ENGINE_BUILD_PLATFORM=" + shellQuote(plan.Platform),
+		"export ENGINE_BUILD_TARGET=" + shared.ShellQuote(plan.Target),
+		"export ENGINE_BUILD_PLATFORM=" + shared.ShellQuote(plan.Platform),
 	}
 	if plan.EditorSource != "" {
 		lines = append(lines,
-			"export ENGINE_BUILD_EDITOR_SOURCE="+shellQuote(plan.EditorSource),
-			"export ENGINE_BUILD_EDITOR_DESTINATION="+shellQuote(plan.EditorDestination),
+			"export ENGINE_BUILD_EDITOR_SOURCE="+shared.ShellQuote(plan.EditorSource),
+			"export ENGINE_BUILD_EDITOR_DESTINATION="+shared.ShellQuote(plan.EditorDestination),
 		)
 		if plan.EditorUseVSProj {
 			lines = append(lines, "export ENGINE_BUILD_EDITOR_USE_VSPROJ='true'")
@@ -225,21 +230,21 @@ func (plan engineBuildShellPlan) shellExports() string {
 	}
 	if plan.TemplateSConsPlatform != "" {
 		lines = append(lines,
-			"export ENGINE_BUILD_TEMPLATE_SCONS_PLATFORM="+shellQuote(plan.TemplateSConsPlatform),
-			"export ENGINE_BUILD_TEMPLATE_SOURCE="+shellQuote(plan.TemplateSource),
-			"export ENGINE_BUILD_TEMPLATE_DESTINATION="+shellQuote(plan.TemplateDestination),
+			"export ENGINE_BUILD_TEMPLATE_SCONS_PLATFORM="+shared.ShellQuote(plan.TemplateSConsPlatform),
+			"export ENGINE_BUILD_TEMPLATE_SOURCE="+shared.ShellQuote(plan.TemplateSource),
+			"export ENGINE_BUILD_TEMPLATE_DESTINATION="+shared.ShellQuote(plan.TemplateDestination),
 		)
 	}
 	lines = appendIndexedShellExports(lines, "ENGINE_BUILD_TEMPLATE_SCONS_COMMAND", plan.TemplateSConsCommands)
 	if plan.TemplatePostDir != "" {
-		lines = append(lines, "export ENGINE_BUILD_TEMPLATE_POST_DIR="+shellQuote(plan.TemplatePostDir))
+		lines = append(lines, "export ENGINE_BUILD_TEMPLATE_POST_DIR="+shared.ShellQuote(plan.TemplatePostDir))
 	}
 	lines = appendIndexedShellExports(lines, "ENGINE_BUILD_TEMPLATE_POST_COMMAND", plan.TemplatePostCommands)
 	if plan.WebThreads != "" {
 		lines = append(lines,
-			"export ENGINE_BUILD_WEB_THREADS="+shellQuote(plan.WebThreads),
-			"export ENGINE_BUILD_WEB_THREAD_SUFFIX="+shellQuote(plan.WebThreadSuffix),
-			"export ENGINE_BUILD_WEB_CACHED_TEMPLATE_ZIP="+shellQuote(plan.WebCachedTemplateZip),
+			"export ENGINE_BUILD_WEB_THREADS="+shared.ShellQuote(plan.WebThreads),
+			"export ENGINE_BUILD_WEB_THREAD_SUFFIX="+shared.ShellQuote(plan.WebThreadSuffix),
+			"export ENGINE_BUILD_WEB_CACHED_TEMPLATE_ZIP="+shared.ShellQuote(plan.WebCachedTemplateZip),
 		)
 		if plan.WebProxyToPThread {
 			lines = append(lines, "export ENGINE_BUILD_WEB_PROXY_TO_PTHREAD='true'")
@@ -253,7 +258,7 @@ func (plan engineBuildShellPlan) shellExports() string {
 func appendIndexedShellExports(lines []string, prefix string, values []string) []string {
 	lines = append(lines, fmt.Sprintf("export %s_COUNT='%d'", prefix, len(values)))
 	for i, value := range values {
-		lines = append(lines, fmt.Sprintf("export %s_%d=%s", prefix, i+1, shellQuote(value)))
+		lines = append(lines, fmt.Sprintf("export %s_%d=%s", prefix, i+1, shared.ShellQuote(value)))
 	}
 	return lines
 }
@@ -269,12 +274,12 @@ func isDesktopPlatform(platform string) bool {
 
 func iosTemplateBuildCommands() []string {
 	return []string{
-		"platform=ios vulkan=True target=template_debug ios_simulator=yes arch=arm64",
-		"platform=ios vulkan=True target=template_debug ios_simulator=yes arch=x86_64",
-		"platform=ios vulkan=True target=template_release ios_simulator=yes arch=arm64",
-		"platform=ios vulkan=True target=template_release ios_simulator=yes arch=x86_64 generate_bundle=yes",
-		"platform=ios vulkan=True target=template_debug ios_simulator=no",
-		"platform=ios vulkan=True target=template_release ios_simulator=no generate_bundle=yes",
+		"platform=ios target=template_debug ios_simulator=yes arch=arm64",
+		"platform=ios target=template_debug ios_simulator=yes arch=x86_64",
+		"platform=ios target=template_release ios_simulator=yes arch=arm64",
+		"platform=ios target=template_release ios_simulator=yes arch=x86_64 generate_bundle=yes",
+		"platform=ios target=template_debug ios_simulator=no",
+		"platform=ios target=template_release ios_simulator=no generate_bundle=yes",
 	}
 }
 

@@ -1,0 +1,6 @@
+#!/usr/bin/env python
+
+Import("env")
+Import("env_spx")
+
+env_spx.add_source_files(env.modules_sources, "*.cpp")

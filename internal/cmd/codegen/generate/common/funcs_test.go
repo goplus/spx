@@ -17,11 +17,35 @@
 package common
 
 import (
+	"go/format"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/goplus/spx/v3/internal/cmd/codegen/gdextensionparser/clang"
 	"github.com/stretchr/testify/require"
 )
+
+func TestGenerateFileFormatsGoSource(t *testing.T) {
+	dst := filepath.Join(t.TempDir(), "generated.go")
+	templateText := "package generated\n\nfunc Answer( )int { return 42 }\n"
+	require.NoError(t, GenerateFile(nil, "generated.go", templateText, nil, dst))
+
+	got, err := os.ReadFile(dst)
+	require.NoError(t, err)
+	formatted, err := format.Source(got)
+	require.NoError(t, err)
+	require.Equal(t, got, formatted)
+	require.Contains(t, string(got), "func Answer() int")
+}
+
+func TestGenerateFileRejectsInvalidGoBeforeWriting(t *testing.T) {
+	dst := filepath.Join(t.TempDir(), "nested", "generated.go")
+	err := GenerateFile(nil, "generated.go", "package generated\nfunc {", nil, dst)
+	require.ErrorContains(t, err, "format generated Go file")
+	_, statErr := os.Stat(dst)
+	require.ErrorIs(t, statErr, os.ErrNotExist)
+}
 
 func TestEffectiveRawReturnTypeWithPrimitiveRetValue(t *testing.T) {
 	function := &clang.TypedefFunction{

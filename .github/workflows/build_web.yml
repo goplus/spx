@@ -10,25 +10,12 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    name: Build web bundle (${{ matrix.mode }})
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - mode: normal
-            zip_file: spx_web.zip
-          - mode: worker
-            zip_file: spx_web_worker.zip
-          - mode: minigame
-            zip_file: spx_web_minigame.zip
-          - mode: miniprogram
-            zip_file: spx_web_miniprogram.zip
+    name: Build web bundle (normal)
     steps:
       - name: Check out code
         uses: actions/checkout@v6
 
       - name: Install Linux dependencies
-        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install \
@@ -47,20 +34,18 @@ jobs:
         uses: ./.github/actions/deps
         with:
           setup-mode: web
-          web-mode: ${{ matrix.mode }}
+          web-mode: normal
 
       - name: Export web bundle
-        env:
-          MATRIX_MODE: ${{ matrix.mode }}
         run: |
-          "$BUILDCTL" runtime export-web --mode "$MATRIX_MODE"
+          "$BUILDCTL" runtime export-web --mode normal
 
       - name: Verify bundle artifact
         run: |
-          if [ ! -f "${{ matrix.zip_file }}" ]; then
-            echo "[error] Bundle artifact not found: ${{ matrix.zip_file }}" >&2
+          if [ ! -f spx_web.zip ]; then
+            echo "[error] Bundle artifact not found: spx_web.zip" >&2
             exit 1
           fi
 
-          echo "[ok] Bundle artifact found: ${{ matrix.zip_file }}"
-          ls -lh "${{ matrix.zip_file }}"
+          echo "[ok] Bundle artifact found: spx_web.zip"
+          ls -lh spx_web.zip

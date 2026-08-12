@@ -20,15 +20,21 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"os"
+
+	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 )
 
-type toolInstallConfig struct {
-	web            bool
-	opt            bool
-	noEmbedRuntime bool
+var osStderr = os.Stderr
+
+var errUsage = shared.ErrUsage
+
+type InstallConfig struct {
+	Web            bool
+	NoEmbedRuntime bool
 }
 
-func runTool(args []string) error {
+func Run(args []string) error {
 	if len(args) == 0 {
 		printToolUsage()
 		return errUsage
@@ -63,35 +69,19 @@ func printToolUsage() {
 	fmt.Fprintln(osStderr, "  clean-assets Remove installed SPX/Godot runtime assets from GOPATH/bin")
 	fmt.Fprintln(osStderr, "  install     Build and install spx tooling with embedded runtime by default")
 	fmt.Fprintln(osStderr, "  setup-emsdk Install or activate the pinned Emscripten SDK")
-	fmt.Fprintln(osStderr, "  setup-jdk   Install or verify JDK 17")
+	fmt.Fprintln(osStderr, "  setup-jdk   Install or verify the runtime-lock JDK")
 	fmt.Fprintln(osStderr, "  setup-ndk   Download and install Android NDK")
 	fmt.Fprintln(osStderr, "  setup-scons Install the pinned SCons version")
 }
 
 func runToolCleanAssets(args []string) error {
-	if err := parseToolCleanAssetsArgs(args); err != nil {
+	if err := shared.ParseNoArgs("tool clean-assets", "Usage: buildctl tool clean-assets", args, osStderr); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
 		}
 		return err
 	}
 	return cleanInstalledAssets()
-}
-
-func parseToolCleanAssetsArgs(args []string) error {
-	fs := flag.NewFlagSet("tool clean-assets", flag.ContinueOnError)
-	fs.SetOutput(osStderr)
-	fs.Usage = func() {
-		fmt.Fprintln(osStderr, "Usage: buildctl tool clean-assets")
-	}
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	if fs.NArg() != 0 {
-		fs.Usage()
-		return errUsage
-	}
-	return nil
 }
 
 func runToolInstall(args []string) error {
@@ -103,36 +93,32 @@ func runToolInstall(args []string) error {
 		return err
 	}
 
-	repoRoot, err := findRepoRoot()
+	repoRoot, err := shared.FindRepoRoot()
 	if err != nil {
 		return err
 	}
 
-	runner := commandRunner{repoRoot: repoRoot}
-	return installTools(cfg, runner)
+	runner := shared.CommandRunner{RepoRoot: repoRoot}
+	return InstallTools(cfg, runner)
 }
 
-func parseToolInstallArgs(args []string) (toolInstallConfig, error) {
-	cfg := toolInstallConfig{}
+func parseToolInstallArgs(args []string) (InstallConfig, error) {
+	cfg := InstallConfig{}
 
 	fs := flag.NewFlagSet("tool install", flag.ContinueOnError)
 	fs.SetOutput(osStderr)
-	fs.BoolVar(&cfg.web, "web", false, "build web tooling and install ispx web runtime")
-	fs.BoolVar(&cfg.opt, "opt", false, "pass through the optional optimized web install mode")
-	fs.BoolVar(&cfg.noEmbedRuntime, "no-embed-runtime", false, "build spx without embedded desktop runtime assets")
+	fs.BoolVar(&cfg.Web, "web", false, "build web tooling and install ispx web runtime")
+	fs.BoolVar(&cfg.NoEmbedRuntime, "no-embed-runtime", false, "build spx without embedded desktop runtime assets")
 	fs.Usage = func() {
-		fmt.Fprintln(osStderr, "Usage: buildctl tool install [--web] [--opt] [--no-embed-runtime]")
+		fmt.Fprintln(osStderr, "Usage: buildctl tool install [--web] [--no-embed-runtime]")
 	}
 
 	if err := fs.Parse(args); err != nil {
-		return toolInstallConfig{}, err
+		return InstallConfig{}, err
 	}
 	if fs.NArg() != 0 {
 		fs.Usage()
-		return toolInstallConfig{}, errUsage
-	}
-	if cfg.opt && !cfg.web {
-		return toolInstallConfig{}, errors.New("--opt requires --web")
+		return InstallConfig{}, errUsage
 	}
 	return cfg, nil
 }
@@ -149,7 +135,7 @@ func runToolSetupNDK(args []string) error {
 }
 
 func runToolSetupSCons(args []string) error {
-	if _, err := parseToolSetupSConsArgs(args); err != nil {
+	if err := shared.ParseNoArgs("tool setup-scons", "Usage: buildctl tool setup-scons", args, osStderr); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
 		}
@@ -159,21 +145,32 @@ func runToolSetupSCons(args []string) error {
 }
 
 func runToolSetupJDK(args []string) error {
-	if _, err := parseToolSetupJDKArgs(args); err != nil {
+	if err := shared.ParseNoArgs("tool setup-jdk", "Usage: buildctl tool setup-jdk", args, osStderr); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
 		}
 		return err
 	}
-	return setupJDK()
+	return SetupJDK()
 }
 
 func runToolSetupEMSDK(args []string) error {
-	if _, err := parseToolSetupEMSDKArgs(args); err != nil {
+	if err := shared.ParseNoArgs("tool setup-emsdk", "Usage: buildctl tool setup-emsdk", args, osStderr); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
 		}
 		return err
 	}
-	return setupEMSDK()
+	return SetupEMSDK()
+}
+
+func InstallTools(cfg InstallConfig, runner shared.ScriptRunner) error {
+	var args []string
+	if cfg.Web {
+		args = append(args, "--web")
+	}
+	if cfg.NoEmbedRuntime {
+		args = append(args, "--no-embed-runtime")
+	}
+	return runner.RunScript("cmd/spx/install.sh", args...)
 }

@@ -16,15 +16,26 @@
 
 package shared
 
-import "fmt"
+import (
+	"flag"
+	"fmt"
+	"io"
+)
 
-func validateSetupMode(mode string) error {
-	switch mode {
-	case "none", "runtime", "web", "full":
-		return nil
-	default:
-		return fmt.Errorf("unsupported setup-mode: %s", mode)
+func ParseNoArgs(name, usage string, args []string, output io.Writer) error {
+	fs := flag.NewFlagSet(name, flag.ContinueOnError)
+	fs.SetOutput(output)
+	fs.Usage = func() {
+		fmt.Fprintln(output, usage)
 	}
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 0 {
+		fs.Usage()
+		return ErrUsage
+	}
+	return nil
 }
 
 func validateWebMode(mode string) error {

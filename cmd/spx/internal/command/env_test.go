@@ -26,19 +26,18 @@ import (
 	builderai "github.com/goplus/spx/v3/cmd/spx/internal/command/builderai"
 )
 
-func TestAdaptGoModAddsLocalReplaceForGeneratedGoMod(t *testing.T) {
+func TestAdaptGoModSkipsScaffoldInsideLocalSPXRepository(t *testing.T) {
 	targetDir := setupAdaptGoModFixture(t)
 
 	cmd := CmdTool{
 		TargetDir:     targetDir,
 		TargetAbsDir:  targetDir,
-		GoModTemplate: "module github.com/goplus/spxdemo\n\ngo 1.25.0\n",
+		GoModTemplate: "this scaffold must not be written",
 	}
 	cmd.adaptGoMod()
 
-	_, err := os.ReadFile(filepath.Join(targetDir, "go.mod"))
-	if err == nil {
-		t.Fatalf("ReadFile(go.mod) returned error: %v", err)
+	if _, err := os.Stat(filepath.Join(targetDir, "go.mod")); !os.IsNotExist(err) {
+		t.Fatalf("local SPX workspace unexpectedly created a scaffold go.mod: %v", err)
 	}
 }
 

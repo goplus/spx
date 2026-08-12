@@ -23,12 +23,17 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 )
 
-const DockerImageVersion = "4.x-f36"
+const dockerImageVersion = "4.x-f36"
+
+const podmanSPXModulePath = "/root/spx-module"
 
 func runDockerBuildImages(cfg dockerBuildImagesConfig) error {
-	repoRoot, err := findRepoRoot()
+	printLegacyDockerWarning()
+	repoRoot, err := shared.FindRepoRoot()
 	if err != nil {
 		return err
 	}
@@ -49,7 +54,7 @@ func runDockerBuildImages(cfg dockerBuildImagesConfig) error {
 		"build",
 		"--build-arg", "HTTP_PROXY=" + cfg.proxyURL,
 		"--build-arg", "HTTPS_PROXY=" + cfg.proxyURL,
-		"-t", "godot-fedora:" + DockerImageVersion,
+		"-t", "godot-fedora:" + dockerImageVersion,
 		"-f", "Dockerfile.base",
 		".",
 	}
@@ -64,9 +69,9 @@ func runDockerBuildImages(cfg dockerBuildImagesConfig) error {
 		"build",
 		"--build-arg", "HTTP_PROXY=" + cfg.proxyURL,
 		"--build-arg", "HTTPS_PROXY=" + cfg.proxyURL,
-		"--build-arg", "img_version=" + DockerImageVersion,
+		"--build-arg", "img_version=" + dockerImageVersion,
 		"-v", filesRoot + ":/root/files:z",
-		"-t", "godot-linux:" + DockerImageVersion,
+		"-t", "godot-linux:" + dockerImageVersion,
 		"-f", "Dockerfile.linux",
 		".",
 	}
@@ -77,7 +82,8 @@ func runDockerBuildImages(cfg dockerBuildImagesConfig) error {
 }
 
 func runDockerBuildEngine(cfg dockerBuildEngineConfig) error {
-	repoRoot, err := findRepoRoot()
+	printLegacyDockerWarning()
+	repoRoot, err := shared.FindRepoRoot()
 	if err != nil {
 		return err
 	}
@@ -91,6 +97,12 @@ func runDockerBuildEngine(cfg dockerBuildEngineConfig) error {
 	if err != nil {
 		return err
 	}
+	// Debug and release export templates share the module's template profile;
+	// target remains an orchestration-owned argument on each build.
+	module, err := shared.ResolveSPXModule(repoRoot)
+	if err != nil {
+		return err
+	}
 
 	logsDir := filepath.Join(repoRoot, "logs")
 	if err := os.MkdirAll(logsDir, 0o755); err != nil {
@@ -99,6 +111,7 @@ func runDockerBuildEngine(cfg dockerBuildEngineConfig) error {
 
 	fmt.Fprintln(os.Stdout, "Starting multi-platform Godot builds...")
 	fmt.Fprintf(os.Stdout, "Godot source path: %s\n", godotPath)
+	fmt.Fprintf(os.Stdout, "SPX module source path: %s\n", module.Source())
 	fmt.Fprintln(os.Stdout, "----------------------------------------")
 
 	iosEnv := []string{
@@ -106,57 +119,57 @@ func runDockerBuildEngine(cfg dockerBuildEngineConfig) error {
 		"IOS_TOOLCHAIN_PATH='/root/ioscross/arm64'",
 		"ios_triple='arm-apple-darwin11-'",
 	}
-	if err := runPodmanSConsBuild(podmanPath, logsDir, godotPath, "ios", append([]string{"target=template_debug", "ios_simulator=no"}, iosEnv...)...); err != nil {
+	if err := runPodmanSConsBuild(podmanPath, logsDir, godotPath, module, "ios", append([]string{"target=template_debug", "ios_simulator=no"}, iosEnv...)...); err != nil {
 		return err
 	}
-	if err := runPodmanSConsBuild(podmanPath, logsDir, godotPath, "ios", append([]string{"target=template_release", "ios_simulator=no", "generate_bundle=yes"}, iosEnv...)...); err != nil {
+	if err := runPodmanSConsBuild(podmanPath, logsDir, godotPath, module, "ios", append([]string{"target=template_release", "ios_simulator=no", "generate_bundle=yes"}, iosEnv...)...); err != nil {
 		return err
 	}
-	if err := runPodmanSConsBuild(podmanPath, logsDir, godotPath, "ios", append([]string{"target=template_debug", "ios_simulator=yes", "arch=arm64", "generate_bundle=yes"}, iosEnv...)...); err != nil {
+	if err := runPodmanSConsBuild(podmanPath, logsDir, godotPath, module, "ios", append([]string{"target=template_debug", "ios_simulator=yes", "arch=arm64", "generate_bundle=yes"}, iosEnv...)...); err != nil {
 		return err
 	}
 
-	if err := runLoggedCommand(godotPath, filepath.Join(logsDir, "godot_android_debug_arm32.log"), nil, "scons", "platform=android", "target=template_debug", "arch=arm32"); err != nil {
+	if err := runLoggedCommand(godotPath, filepath.Join(logsDir, "godot_android_debug_arm32.log"), nil, "scons", module.TemplateBuildArgs("platform=android", "target=template_debug", "arch=arm32")...); err != nil {
 		return err
 	}
-	if err := runLoggedCommand(godotPath, filepath.Join(logsDir, "godot_android_debug_arm64.log"), nil, "scons", "platform=android", "target=template_debug", "arch=arm64"); err != nil {
+	if err := runLoggedCommand(godotPath, filepath.Join(logsDir, "godot_android_debug_arm64.log"), nil, "scons", module.TemplateBuildArgs("platform=android", "target=template_debug", "arch=arm64")...); err != nil {
 		return err
 	}
 	if err := runLoggedCommand(filepath.Join(godotPath, "platform", "android", "java"), filepath.Join(logsDir, "godot_android_gradle_debug.log"), nil, "./gradlew", "generateGodotTemplates"); err != nil {
 		return err
 	}
 
-	if err := runPodmanSConsBuild(podmanPath, logsDir, godotPath, "osx", "osxcross_sdk=darwin23", "arch=arm64", "vulkan=false", "target=template_release"); err != nil {
+	if err := runPodmanSConsBuild(podmanPath, logsDir, godotPath, module, "osx", "osxcross_sdk=darwin23", "arch=arm64", "target=template_release"); err != nil {
 		return err
 	}
 
 	if err := runLoggedCommand(godotPath, filepath.Join(logsDir, "godot_web_init.log"), nil, "./tools/init_web.sh"); err != nil {
 		return err
 	}
-	if err := runPodmanSConsBuild(podmanPath, logsDir, godotPath, "android", "target=template_release", "arch=arm32"); err != nil {
+	if err := runPodmanSConsBuild(podmanPath, logsDir, godotPath, module, "android", "target=template_release", "arch=arm32"); err != nil {
 		return err
 	}
-	if err := runPodmanSConsBuild(podmanPath, logsDir, godotPath, "android", "target=template_release", "arch=arm64"); err != nil {
+	if err := runPodmanSConsBuild(podmanPath, logsDir, godotPath, module, "android", "target=template_release", "arch=arm64"); err != nil {
 		return err
 	}
 	if err := runLoggedCommand(filepath.Join(godotPath, "platform", "android", "java"), filepath.Join(logsDir, "godot_android_gradle_release.log"), nil, "./gradlew", "generateGodotTemplates"); err != nil {
 		return err
 	}
 
-	if err := runLoggedCommand(godotPath, filepath.Join(logsDir, "godot_linux.log"), nil, "scons", "platform=linux", "target=template_release"); err != nil {
+	if err := runLoggedCommand(godotPath, filepath.Join(logsDir, "godot_linux.log"), nil, "scons", module.TemplateBuildArgs("platform=linux", "target=template_release")...); err != nil {
 		return err
 	}
 
-	if err := runPodmanSConsBuild(podmanPath, logsDir, godotPath, "windows", "target=template_debug", "arch=x86_32"); err != nil {
+	if err := runPodmanSConsBuild(podmanPath, logsDir, godotPath, module, "windows", "target=template_debug", "arch=x86_32"); err != nil {
 		return err
 	}
-	if err := runPodmanSConsBuild(podmanPath, logsDir, godotPath, "windows", "target=template_release", "arch=x86_32"); err != nil {
+	if err := runPodmanSConsBuild(podmanPath, logsDir, godotPath, module, "windows", "target=template_release", "arch=x86_32"); err != nil {
 		return err
 	}
-	if err := runPodmanSConsBuild(podmanPath, logsDir, godotPath, "windows", "target=template_debug", "arch=x86_64"); err != nil {
+	if err := runPodmanSConsBuild(podmanPath, logsDir, godotPath, module, "windows", "target=template_debug", "arch=x86_64"); err != nil {
 		return err
 	}
-	if err := runPodmanSConsBuild(podmanPath, logsDir, godotPath, "windows", "target=template_release", "arch=x86_64"); err != nil {
+	if err := runPodmanSConsBuild(podmanPath, logsDir, godotPath, module, "windows", "target=template_release", "arch=x86_64"); err != nil {
 		return err
 	}
 
@@ -180,20 +193,22 @@ func resolveDockerGodotPath(repoRoot, explicit string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if !fileExists(resolved) {
+	if !shared.FileExists(resolved) {
 		return "", fmt.Errorf("godot source directory does not exist: %s", resolved)
 	}
 	return resolved, nil
 }
 
-func runPodmanSConsBuild(podmanPath, logsDir, godotPath, platform string, sconsArgs ...string) error {
+func runPodmanSConsBuild(podmanPath, logsDir, godotPath string, module shared.SPXModule, platform string, sconsArgs ...string) error {
 	fmt.Fprintf(os.Stdout, "Building for platform: %s\n", platform)
-	fmt.Fprintf(os.Stdout, "Using image version: %s\n", DockerImageVersion)
+	fmt.Fprintf(os.Stdout, "Using image version: %s\n", dockerImageVersion)
 	fmt.Fprintf(os.Stdout, "Godot source path: %s\n", godotPath)
-	fmt.Fprintf(os.Stdout, "SCons arguments: %s\n", strings.Join(sconsArgs, " "))
+	dynamicArgs := append([]string{"platform=" + platform}, sconsArgs...)
+	effectiveSConsArgs := module.TemplateBuildArgsAt(podmanSPXModulePath, dynamicArgs...)
+	fmt.Fprintf(os.Stdout, "SCons arguments: %s\n", strings.Join(effectiveSConsArgs, " "))
 	fmt.Fprintln(os.Stdout, "----------------------------------------")
 
-	args := buildPodmanSConsArgs(godotPath, platform, sconsArgs, stdinHasTTY())
+	args := buildPodmanSConsArgs(godotPath, module.Source(), platform, effectiveSConsArgs, stdinHasTTY())
 	logPath := filepath.Join(logsDir, fmt.Sprintf("godot_%s.log", platform))
 	if err := runLoggedCommand("", logPath, nil, podmanPath, args...); err != nil {
 		return fmt.Errorf("build failed for platform %s: %w", platform, err)
@@ -204,7 +219,7 @@ func runPodmanSConsBuild(podmanPath, logsDir, godotPath, platform string, sconsA
 	return nil
 }
 
-func buildPodmanSConsArgs(godotPath, platform string, sconsArgs []string, useTTY bool) []string {
+func buildPodmanSConsArgs(godotPath, spxModulePath, platform string, sconsArgs []string, useTTY bool) []string {
 	args := []string{"run", "--rm"}
 	if useTTY {
 		args = append(args, "-it")
@@ -212,8 +227,9 @@ func buildPodmanSConsArgs(godotPath, platform string, sconsArgs []string, useTTY
 	args = append(args,
 		"-w", "/root/godot",
 		"-v", godotPath+":/root/godot:z",
-		fmt.Sprintf("godot-%s:%s", platform, DockerImageVersion),
-		"scons", "platform="+platform,
+		"-v", spxModulePath+":"+podmanSPXModulePath+":z",
+		fmt.Sprintf("godot-%s:%s", platform, dockerImageVersion),
+		"scons",
 	)
 	return append(args, sconsArgs...)
 }
@@ -250,4 +266,8 @@ func stdinHasTTY() bool {
 		return false
 	}
 	return info.Mode()&os.ModeCharDevice != 0
+}
+
+func printLegacyDockerWarning() {
+	fmt.Fprintln(os.Stderr, "Warning: buildctl docker is a legacy, unsupported workflow with toolchain pins independent of runtime.lock.json.")
 }

@@ -31,7 +31,7 @@ var Module = null
  * Immutable global wrappers dispatch through this shared registry so rebinding
  * a GameApp updates handlers without replacing worker globals.
  */
-const DIRECT_CALLBACK_HANDLER_SLOTS = globalThis.__spxDirectCallbackHandlerSlots || (globalThis.__spxDirectCallbackHandlerSlots = Object.create(null))
+const DIRECT_CALLBACK_HANDLER_SLOTS = globalThis['__spxDirectCallbackHandlerSlots'] || (globalThis['__spxDirectCallbackHandlerSlots'] = Object.create(null))
 const DIRECT_CALLBACK_BRIDGE_STATE = globalThis.__spxDirectCallbackBridgeState || (globalThis.__spxDirectCallbackBridgeState = {
     handlers: DIRECT_CALLBACK_HANDLER_SLOTS,
 })
@@ -96,7 +96,6 @@ class GameApp {
         this.editor = null;
         this.game = null;
         this.packName = 'engine.zip';
-        this.projectDataName = 'game.zip';
         this.persistentPath = 'engine';
         this.logLevel = config.logLevel;
         this.useProfiler = this.logLevel == LOG_LEVEL_VERBOSE;
@@ -207,7 +206,6 @@ class GameApp {
 
         let args = [
             '--main-pack', this.persistentPath + "/" + this.packName,
-            '--main-project-data', this.persistentPath + "/" + this.projectDataName,
         ];
         if (this.recordingOnGameStart) {
             args.push('--write-movie', this.persistentPath + "/" + "movie.avi");
@@ -722,12 +720,12 @@ class GameApp {
         if (this.minigameMode) {
             GameGlobal.engine = this.game;
             godotSdk.set_engine(this.game);
-            self.initExtensionWasm = function () { }
+            self['initExtensionWasm'] = function () { }
         } else {
             if (!this.workerMode) {
                 await profiler.profile('loadLogicWasm', () => this.loadLogicWasm());
                 await profiler.profile('runLogicWasm', () => this.runLogicWasm());
-                self.initExtensionWasm = function () { }
+                self['initExtensionWasm'] = function () { }
             }
         }
     }
@@ -743,7 +741,7 @@ class GameApp {
 
     async onRunAfterStart(game, inputSession) {
         if (this.minigameMode) {
-            FFI = self;
+            globalThis['FFI'] = self;
             await this.runLogicWasm()
         }
         if (this.workerMode) {
@@ -753,7 +751,7 @@ class GameApp {
         } else {
             // register global functions
             Module = game.rtenv;
-            FFI = self;
+            globalThis['FFI'] = self;
             const res = window.ispx_start(inputSession);
             if (res instanceof Error) throw res;
             await this.waitInputSessionStarted(inputSession)

@@ -17,6 +17,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -28,6 +29,7 @@ import (
 	"github.com/goplus/spx/v3/internal/cmd/codegen/generate/gdext"
 	"github.com/goplus/spx/v3/internal/cmd/codegen/generate/webffi"
 	spxlog "github.com/goplus/spx/v3/internal/cmd/codegen/internal/log"
+	"github.com/goplus/spx/v3/internal/release"
 )
 
 var (
@@ -35,10 +37,15 @@ var (
 	genClangAPI     bool
 	genExtensionAPI bool
 	packagePath     string
-	godotPath       string
+	spxModulePath   string
 	parsedASTPath   string
 	buildConfig     string
 )
+
+var requiredCodegenModuleFiles = []string{
+	"gdextension_interface.h",
+	"spx_ext_mgr.h",
+}
 
 func init() {
 	absPath, _ := filepath.Abs(".")
@@ -54,49 +61,94 @@ func init() {
 	genClangAPI = true
 	genExtensionAPI = false
 	packagePath = absPath
-	godotPath = filepath.Clean(filepath.Join(absPath, "../../../godot"))
-	if envPath := os.Getenv("GODOT_SRC"); envPath != "" {
-		if absEnvPath, err := filepath.Abs(envPath); err == nil {
-			godotPath = absEnvPath
-		} else {
-			godotPath = envPath
-		}
-	}
+	repoRoot := filepath.Clean(filepath.Join(absPath, "../../.."))
+	spxModulePath = resolveSPXModuleSource(repoRoot, os.Getenv("SPX_MODULE_SRC"))
 	parsedASTPath = "_debug_parsed_ast.json"
 	buildConfig = defaultBuildConfig
 }
 
+func resolveSPXModuleSource(repoRoot, override string) string {
+	if absRepoRoot, err := filepath.Abs(repoRoot); err == nil {
+		repoRoot = absRepoRoot
+	}
+
+	moduleSource := strings.TrimSpace(override)
+	if moduleSource == "" {
+		moduleSource = filepath.Join(repoRoot, filepath.FromSlash(release.DefaultRuntimeLock().Module.Path))
+	} else if !filepath.IsAbs(moduleSource) {
+		moduleSource = filepath.Join(repoRoot, moduleSource)
+	}
+	if absModuleSource, err := filepath.Abs(moduleSource); err == nil {
+		moduleSource = absModuleSource
+	}
+	return filepath.Clean(moduleSource)
+}
+
+func validateCodegenInputs(spxModuleSource string) error {
+	info, err := os.Stat(spxModuleSource)
+	if err != nil {
+		return fmt.Errorf("SPX_MODULE_SRC %q: %w", spxModuleSource, err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("SPX_MODULE_SRC %q is not a directory", spxModuleSource)
+	}
+	for _, name := range requiredCodegenModuleFiles {
+		path := filepath.Join(spxModuleSource, name)
+		info, err := os.Stat(path)
+		if err != nil {
+			return fmt.Errorf("SPX module file %q: %w", path, err)
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("SPX module file %q is not a regular file", path)
+		}
+	}
+	return nil
+}
+
 func generateCode() error {
+	// Validate every external input before generators can create or replace files.
+	if err := validateCodegenInputs(spxModulePath); err != nil {
+		return err
+	}
+
 	var (
 		ast clang.CHeaderFileAST
 		err error
 	)
 	if verbose {
 		spxlog.Info(`build configuration "%s" selected`, buildConfig)
-		spxlog.Info(`godot source "%s" selected`, godotPath)
+		spxlog.Info(`SPX module source "%s" selected`, spxModulePath)
 	}
 	// generte c++ ext header file
 	if genClangAPI {
 		if verbose {
 			spxlog.Info("Generating gdextension godot ext functions...")
 		}
-		gdext.GenerateHeader(packagePath, godotPath)
+		if err := gdext.GenerateHeader(packagePath, spxModulePath); err != nil {
+			return fmt.Errorf("generate GDExtension header: %w", err)
+		}
 	}
 
 	// generate go wrap code
 	if genClangAPI {
 		ast, err = gdextensionparser.GenerateGDExtensionInterfaceAST(packagePath, parsedASTPath)
 		if err != nil {
-			panic(err)
+			return fmt.Errorf("parse GDExtension interface: %w", err)
 		}
 	}
 	if genClangAPI {
 		if verbose {
 			spxlog.Info("Generating gdextension C wrapper functions...")
 		}
-		ffi.Generate(packagePath, ast)
-		webffi.Generate(packagePath, godotPath, ast)
-		gdext.Generate(packagePath, godotPath, ast)
+		if err := ffi.Generate(packagePath, ast); err != nil {
+			return fmt.Errorf("generate native bindings: %w", err)
+		}
+		if err := webffi.Generate(packagePath, spxModulePath, ast); err != nil {
+			return fmt.Errorf("generate Web bindings: %w", err)
+		}
+		if err := gdext.Generate(packagePath, spxModulePath, ast); err != nil {
+			return fmt.Errorf("generate GDExtension sources: %w", err)
+		}
 	}
 
 	if verbose {
@@ -106,5 +158,8 @@ func generateCode() error {
 }
 
 func main() {
-	generateCode()
+	if err := generateCode(); err != nil {
+		fmt.Fprintf(os.Stderr, "codegen: %v\n", err)
+		os.Exit(1)
+	}
 }

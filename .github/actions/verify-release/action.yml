@@ -121,11 +121,29 @@ runs:
         prepare_test_project() {
           local verify_test_root_dir="$1"
           local test_project_dir="$2"
+          local spx_source_dir
+          local spx_version
 
           log_section "Prepare test project"
           mkdir -p "$verify_test_root_dir"
           cp -R test/CI "$verify_test_root_dir/"
           reset_test_project_state "$test_project_dir"
+
+          spx_version="$(go run ./.github/scripts/runtime_version.go --spx-version)"
+          spx_source_dir="$WORKSPACE_DIR"
+          if command -v cygpath >/dev/null 2>&1; then
+            spx_source_dir="$(cygpath -m "$spx_source_dir")"
+          fi
+          cat > "$test_project_dir/go.mod" <<EOF
+        module github.com/goplus/spx-release-smoke-test
+
+        go 1.25.0
+
+        require github.com/goplus/spx/v3 $spx_version //xgo:class
+
+        replace github.com/goplus/spx/v3 => $spx_source_dir
+        EOF
+          log_info "Smoke test uses local SPX source for unpublished $spx_version"
           log_success "Test project prepared: $test_project_dir"
         }
 

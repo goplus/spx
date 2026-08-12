@@ -8,6 +8,9 @@ runs:
       run: |
         set -euo pipefail
 
+        source ./cmd/internal/macos_go_toolchain.sh
+        configure_macos_go_toolchain
+
         if [ -n "${BUILDCTL:-}" ] && [ -x "$BUILDCTL" ]; then
           exit 0
         fi
@@ -15,5 +18,5 @@ runs:
         buildctl_path="$(pwd)/.bin/buildctl$(go env GOEXE)"
 
         mkdir -p ./.bin
-        go build -o "$buildctl_path" ./internal/cmd/buildctl
+        macos_go_toolchain_go_build -o "$buildctl_path" ./internal/cmd/buildctl
         echo "BUILDCTL=$buildctl_path" >> "$GITHUB_ENV"

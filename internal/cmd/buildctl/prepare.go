@@ -17,10 +17,7 @@
 package main
 
 import (
-	"errors"
-	"flag"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/goplus/spx/v3/internal/cmd/buildctl/engine"
@@ -28,96 +25,55 @@ import (
 	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 )
 
-type prepareConfig struct {
-	setupMode string
-	webMode   string
+type setupConfig struct {
+	target           string
+	mode             string
+	assetDir         string
+	publishedRuntime bool
 }
 
-func runPrepare(args []string) error {
-	cfg, err := parsePrepareArgs(args)
-	if err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			return nil
-		}
-		return err
-	}
+var (
+	downloadEngineAssets   = engine.DownloadEngineAssets
+	prepareHostEditorAsset = engine.PrepareHostEditorAsset
+)
 
-	repoRoot, err := shared.FindRepoRoot()
-	if err != nil {
-		return err
-	}
-
-	runner := shared.CommandRunner{RepoRoot: repoRoot}
-	return prepareAssets(cfg, runner)
-}
-
-func parsePrepareArgs(args []string) (prepareConfig, error) {
-	cfg := prepareConfig{
-		setupMode: "runtime",
-		webMode:   "normal",
-	}
-
-	fs := flag.NewFlagSet("prepare", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-	fs.StringVar(&cfg.setupMode, "setup-mode", cfg.setupMode, "setup mode: runtime, web, or full")
-	fs.StringVar(&cfg.webMode, "web-mode", cfg.webMode, "web mode: normal, worker, minigame, or miniprogram")
-
-	fs.Usage = func() {
-		fmt.Fprintln(os.Stderr, "Usage: buildctl prepare [--setup-mode none|runtime|web|full] [--web-mode normal|worker|minigame|miniprogram]")
-	}
-
-	if err := fs.Parse(args); err != nil {
-		return prepareConfig{}, err
-	}
-	if fs.NArg() != 0 {
-		fs.Usage()
-		return prepareConfig{}, shared.ErrUsage
-	}
-
-	if err := cfg.validate(); err != nil {
-		return prepareConfig{}, err
-	}
-
-	return cfg, nil
-}
-
-func (cfg prepareConfig) validate() error {
-	if err := shared.ValidateSetupMode(cfg.setupMode); err != nil {
-		return err
-	}
-	if err := shared.ValidateWebMode(cfg.webMode); err != nil {
-		return err
-	}
-	return nil
-}
-
-func prepareAssets(cfg prepareConfig, runner shared.ScriptRunner) error {
-	switch cfg.setupMode {
-	case "none":
-		return nil
-	case "runtime":
-		if err := prepareRuntimeAssets(runner); err != nil {
+func setupAssets(cfg setupConfig, runner shared.ScriptRunner) error {
+	switch cfg.target {
+	case "host":
+		if err := prepareRuntimeAssets(runner, cfg.assetDir, cfg.publishedRuntime); err != nil {
 			return err
 		}
 		return runner.RunScript(filepath.Join("cmd", "spx", "install.sh"))
 	case "web":
-		if err := prepareHostEditorAsset(runner.RepoRootDir()); err != nil {
+		if err := prepareHostEditorAsset(runner.RepoRootDir(), cfg.assetDir); err != nil {
 			return err
 		}
-		return prepareWebAssets(cfg.webMode, runner, false)
+		return prepareWebAssets(cfg.mode, runner, false, cfg.assetDir)
 	case "full":
-		if err := prepareRuntimeAssets(runner); err != nil {
+		if err := prepareRuntimeAssets(runner, cfg.assetDir, cfg.publishedRuntime); err != nil {
 			return err
 		}
-		return prepareWebAssets(cfg.webMode, runner, true)
+		return prepareWebAssets(cfg.mode, runner, true, cfg.assetDir)
 	default:
-		return fmt.Errorf("unsupported setup-mode: %s", cfg.setupMode)
+		return fmt.Errorf("unsupported setup target: %s", cfg.target)
 	}
 }
 
-func prepareRuntimeAssets(runner shared.ScriptRunner) error {
-	if err := engine.DownloadEngineAssets(engine.DownloadConfig{Runtime: true, SkipRuntimePack: true}, runner.RepoRootDir()); err != nil {
+func prepareRuntimeAssets(runner shared.ScriptRunner, assetDir string, publishedRuntime bool) error {
+	// A same-run release directory contains the canonical runtime pack built by
+	// release_runtime_assets.yml. Install that exact pack so every standalone
+	// product consumes the bytes that will be published in runtime-v*.
+	useLockedRuntimePack := assetDir != "" || publishedRuntime
+	if err := downloadEngineAssets(engine.DownloadConfig{
+		Runtime:          true,
+		SkipRuntimePack:  !useLockedRuntimePack,
+		AssetDir:         assetDir,
+		SameRunArtifacts: assetDir != "",
+	}, runner.RepoRootDir()); err != nil {
 		return err
+	}
+	if useLockedRuntimePack {
+		return nil
 	}
 	return ensureRuntimePack(runner)
 }
@@ -138,12 +94,8 @@ func ensureRuntimePack(runner shared.ScriptRunner) error {
 	return runtimecmd.ExportPackRuntime(runner)
 }
 
-func prepareHostEditorAsset(repoRoot string) error {
-	return engine.PrepareHostEditorAsset(repoRoot)
-}
-
-func prepareWebAssets(webMode string, runner shared.ScriptRunner, embedRuntime bool) error {
-	if err := engine.DownloadEngineAssets(engine.DownloadConfig{Platform: "web", Mode: webMode}, runner.RepoRootDir()); err != nil {
+func prepareWebAssets(webMode string, runner shared.ScriptRunner, embedRuntime bool, assetDir string) error {
+	if err := downloadEngineAssets(engine.DownloadConfig{Platform: "web", Mode: webMode, AssetDir: assetDir, SameRunArtifacts: assetDir != ""}, runner.RepoRootDir()); err != nil {
 		return err
 	}
 	args := []string{"--web"}

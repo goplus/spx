@@ -28,6 +28,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 )
 
 type engineExecConfig struct {
@@ -38,8 +40,8 @@ type engineExecConfig struct {
 }
 
 var (
-	EngineBuildLockPollInterval   = time.Second
-	EngineBuildLockAcquireTimeout = 30 * time.Minute
+	engineBuildLockPollInterval   = time.Second
+	engineBuildLockAcquireTimeout = 30 * time.Minute
 )
 
 func runEngineExec(args []string) error {
@@ -51,7 +53,7 @@ func runEngineExec(args []string) error {
 		return err
 	}
 
-	repoRoot, err := findRepoRoot()
+	repoRoot, err := shared.FindRepoRoot()
 	if err != nil {
 		return err
 	}
@@ -125,7 +127,7 @@ func withEngineBuildLock(lockDir string, fn func() error) error {
 }
 
 func acquireEngineBuildLock(lockDir string) error {
-	deadline := time.Now().Add(EngineBuildLockAcquireTimeout)
+	deadline := time.Now().Add(engineBuildLockAcquireTimeout)
 	waitLogged := false
 	for {
 		if err := os.Mkdir(lockDir, 0o755); err == nil {
@@ -156,9 +158,9 @@ func acquireEngineBuildLock(lockDir string) error {
 		}
 		remaining := time.Until(deadline)
 		if remaining <= 0 {
-			return fmt.Errorf("timed out waiting for build lock %s after %s", lockDir, EngineBuildLockAcquireTimeout)
+			return fmt.Errorf("timed out waiting for build lock %s after %s", lockDir, engineBuildLockAcquireTimeout)
 		}
-		sleepDuration := EngineBuildLockPollInterval
+		sleepDuration := engineBuildLockPollInterval
 		if remaining < sleepDuration {
 			sleepDuration = remaining
 		}
@@ -227,7 +229,7 @@ func runTrackedEngineCommandWithEnv(workdir string, env map[string]string, name 
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
 	if len(env) != 0 {
-		cmd.Env = envMapToSlice(env)
+		cmd.Env = shared.EnvMapToSlice(env)
 	}
 	configureTrackedCommand(cmd)
 

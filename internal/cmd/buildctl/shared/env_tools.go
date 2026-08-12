@@ -19,27 +19,82 @@ package shared
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/goplus/spx/v3/internal/release"
 )
 
 func ensureEngineSource(repoRoot string, run func(name string, args ...string) error) error {
-	env, err := resolveBuildEnvironment(repoRoot, "")
+	engineDir, err := resolveGodotSrc(repoRoot)
 	if err != nil {
 		return err
 	}
-	if fileExists(env.EngineDir) {
-		fmt.Fprintf(os.Stdout, "Godot directory already exists: %s\n", env.EngineDir)
+	lock := release.DefaultRuntimeLock()
+	if fileExists(engineDir) {
+		head, err := gitHead(engineDir)
+		if err != nil {
+			return fmt.Errorf("inspect existing Godot source %s: %w", engineDir, err)
+		}
+		if head != lock.Godot.Commit {
+			return fmt.Errorf("Godot source %s is at %s, but runtime.lock.json requires %s; update GODOT_SRC or the runtime lock", engineDir, head, lock.Godot.Commit)
+		}
+		fmt.Fprintf(os.Stdout, "Using pinned Godot source: %s (%s)\n", engineDir, head)
 		return nil
 	}
 
-	fmt.Fprintf(os.Stdout, "Godot directory not found. Cloning to %s...\n", env.EngineDir)
-	if err := os.MkdirAll(filepath.Dir(env.EngineDir), 0o755); err != nil {
+	fmt.Fprintf(os.Stdout, "Godot directory not found. Cloning to %s...\n", engineDir)
+	engineParent := filepath.Dir(engineDir)
+	if err := os.MkdirAll(engineParent, 0o755); err != nil {
 		return err
 	}
-	return run("git", "clone", "--depth", "1", "--branch", env.EngineGitTag, "https://github.com/goplus/godot.git", env.EngineDir)
+	stagingDir, err := os.MkdirTemp(engineParent, "."+filepath.Base(engineDir)+".clone-*")
+	if err != nil {
+		return err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = os.RemoveAll(stagingDir)
+		}
+	}()
+	if err := run("git", "-C", stagingDir, "init"); err != nil {
+		return err
+	}
+	if err := run("git", "-C", stagingDir, "remote", "add", "origin", lock.Godot.Repository); err != nil {
+		return err
+	}
+	if err := run("git", "-C", stagingDir, "fetch", "--filter=blob:none", "--depth", "1", "origin", lock.Godot.Ref); err != nil {
+		return err
+	}
+	if err := run("git", "-C", stagingDir, "fetch", "--filter=blob:none", "--depth", "1", "origin", lock.Godot.Commit); err != nil {
+		// Some Git servers reject direct fetches of unadvertised commit IDs.
+		// The lock also carries a reachable ref so the pinned commit can still
+		// be obtained by deepening that ref without checking out a moving tip.
+		if fallbackErr := run("git", "-C", stagingDir, "fetch", "--filter=blob:none", "--unshallow", "origin", lock.Godot.Ref); fallbackErr != nil {
+			return fmt.Errorf("fetch pinned Godot commit %s: %w (ref fallback failed: %v)", lock.Godot.Commit, err, fallbackErr)
+		}
+	}
+	if err := run("git", "-C", stagingDir, "checkout", "--detach", lock.Godot.Commit); err != nil {
+		return err
+	}
+	if err := os.Rename(stagingDir, engineDir); err != nil {
+		return err
+	}
+	committed = true
+	fmt.Fprintf(os.Stdout, "Checked out pinned Godot commit %s\n", lock.Godot.Commit)
+	return nil
+}
+
+func gitHead(dir string) (string, error) {
+	output, err := exec.Command("git", "-C", dir, "rev-parse", "HEAD").Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(output)), nil
 }
 
 func resolveMacOSVulkanSDKRoot(homeDir string, envSDK string) (string, error) {

@@ -15,6 +15,7 @@
 如果您是 SPX 的开发者或贡献者，您可能对以下文档更感兴趣：
 
 - [Makefile 命令指南](./engine/cmd_make.md) - 学习如何使用项目中的 Makefile 命令进行开发和构建
+- [SPX 与 Godot runtime 发布流程](./engine/release.md) - 了解版本身份、冻结顺序、验证矩阵和三阶段 runtime 自举
 
 ## 文档分类
 
@@ -36,6 +37,7 @@
 引擎开发文档主要面向 SPX 引擎的开发者和贡献者，包括：
 
 - Makefile 命令指南
+- SPX 与 Godot runtime 发布流程
 - 引擎架构
 - 构建系统
 - [Web 端截图与固定帧接入说明](./engine/web_capture.md) - 了解外部页面如何像模板 `index.html` 一样接入截图 host、baseline/runs 保存与对比流程
@@ -55,16 +57,32 @@
 
 ### 对于 SPX 使用者
 
-1. 使用 `make init` 初始化用户环境
-2. 首先阅读 [命令行工具 (spx) 使用指南](./game/cmd_spx.md) 了解基本命令
-3. 使用 `spx init` 创建新项目
-4. 使用 `spx rune` 在编辑器运行时模式下运行项目
+准备预编译的本机 editor 和 runtime 资产，然后运行 demo：
+
+```sh
+make setup
+make list-demos
+make run DEMO_INDEX=2
+```
+
+使用 Web 预编译资产时：
+
+```sh
+make setup-web MODE=normal
+make runweb DEMO_INDEX=2
+```
+
+项目命令的详细用法参见 [命令行工具 (spx) 使用指南](./game/cmd_spx.md)。
 
 ### 对于 SPX 开发者
 
-1. 首先阅读 [Makefile 命令指南](./engine/cmd_make.md) 了解构建系统
-2. 使用 `make initdev` 初始化开发环境
-3. 使用 `make cmd` 安装 SPX 命令行工具
+修改 Godot 或 SPX 外置模块时，从源码构建完整的本地开发环境：
+
+```sh
+GODOT_SRC=/absolute/path/to/godot make dev MODE=normal
+```
+
+详细参数和专用平台目标参见 [Makefile 命令指南](./engine/cmd_make.md)。资产准备和源码构建统一使用 `setup`、`setup-web` 和 `dev` 入口。
 
 ## 参与贡献
 

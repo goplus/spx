@@ -21,6 +21,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/goplus/spx/v3/internal/release"
@@ -44,7 +45,7 @@ func TestParseEngineDownloadArgsDefault(t *testing.T) {
 }
 
 func TestParseEngineDownloadArgsRuntimeSkipsPack(t *testing.T) {
-	cfg, err := parseEngineDownloadArgs([]string{"--runtime", "--skip-runtime-pack"})
+	cfg, err := parseEngineDownloadArgs([]string{"--runtime", "--skip-runtime-pack", "--asset-dir", "artifacts/runtime", "--same-run-artifacts"})
 	if err != nil {
 		t.Fatalf("parseEngineDownloadArgs returned error: %v", err)
 	}
@@ -55,6 +56,12 @@ func TestParseEngineDownloadArgsRuntimeSkipsPack(t *testing.T) {
 	if !cfg.skipRuntimePack {
 		t.Fatal("skipRuntimePack should be true")
 	}
+	if cfg.assetDir != filepath.Clean("artifacts/runtime") {
+		t.Fatalf("assetDir = %q, want %q", cfg.assetDir, filepath.Clean("artifacts/runtime"))
+	}
+	if !cfg.sameRunArtifacts {
+		t.Fatal("sameRunArtifacts should be true")
+	}
 }
 
 func TestParseEngineDownloadArgsRejectsSkipPackWithoutRuntime(t *testing.T) {
@@ -63,21 +70,16 @@ func TestParseEngineDownloadArgsRejectsSkipPackWithoutRuntime(t *testing.T) {
 	}
 }
 
+func TestParseEngineDownloadArgsRejectsSameRunWithoutAssetDir(t *testing.T) {
+	if _, err := parseEngineDownloadArgs([]string{"--same-run-artifacts"}); err == nil {
+		t.Fatal("expected --same-run-artifacts without --asset-dir to fail")
+	}
+}
+
 func TestParseEngineDownloadArgsWebDefaultMode(t *testing.T) {
 	cfg, err := parseEngineDownloadArgs([]string{"--platform", "web"})
 	if err != nil {
 		t.Fatalf("parseEngineDownloadArgs returned error: %v", err)
-	}
-
-	if cfg.mode != "normal" {
-		t.Fatalf("expected normal mode, got %s", cfg.mode)
-	}
-}
-
-func TestParseEngineBuildArgsWebDefaultMode(t *testing.T) {
-	cfg, err := parseEngineBuildArgs([]string{"--target", "template", "--platform", "web"})
-	if err != nil {
-		t.Fatalf("parseEngineBuildArgs returned error: %v", err)
 	}
 
 	if cfg.mode != "normal" {
@@ -114,14 +116,14 @@ func TestDownloadEngineAssetsRuntimeSkipsPack(t *testing.T) {
 	installFakeEngineDownload(t, runner.repoRoot, "linux", "x86_64")
 	version := mustDefaultRuntimeVersion(t)
 
-	oldFetcher := EngineDownloadFetcher
-	EngineDownloadFetcher = func(url, dst string) error {
+	oldFetcher := engineDownloadFetcher
+	engineDownloadFetcher = func(url, dst string) error {
 		if filepath.Base(url) == release.RuntimeAssetZipName {
 			return errors.New("runtime pack should not be downloaded")
 		}
 		return oldFetcher(url, dst)
 	}
-	t.Cleanup(func() { EngineDownloadFetcher = oldFetcher })
+	t.Cleanup(func() { engineDownloadFetcher = oldFetcher })
 
 	if err := downloadEngineAssets(engineDownloadConfig{runtime: true, skipRuntimePack: true}, runner.repoRoot); err != nil {
 		t.Fatalf("downloadEngineAssets returned error: %v", err)
@@ -148,6 +150,7 @@ func TestDownloadEngineAssetsRuntimeRefreshesPackLocally(t *testing.T) {
 	gopathBin := filepath.Join(os.Getenv("GOPATH"), "bin")
 	editorPath := filepath.Join(gopathBin, "gdspx"+version)
 	templatePath := filepath.Join(gopathBin, "gdspxrt"+version)
+	debugTemplatePath := filepath.Join(gopathBin, "gdspxrtdbg"+version)
 	packPath := filepath.Join(gopathBin, "gdspxrt"+version+".pck")
 	templateFanout := filepath.Join(runner.repoRoot, "templates", "linux_release.x86_64")
 
@@ -160,17 +163,20 @@ func TestDownloadEngineAssetsRuntimeRefreshesPackLocally(t *testing.T) {
 	if err := os.WriteFile(templatePath, []byte("local-template"), 0o755); err != nil {
 		t.Fatalf("WriteFile(%s) returned error: %v", templatePath, err)
 	}
+	if err := os.WriteFile(debugTemplatePath, []byte("local-debug-template"), 0o755); err != nil {
+		t.Fatalf("WriteFile(%s) returned error: %v", debugTemplatePath, err)
+	}
 	if err := os.WriteFile(packPath, []byte("local-pack"), 0o644); err != nil {
 		t.Fatalf("WriteFile(%s) returned error: %v", packPath, err)
 	}
 
 	downloads := 0
-	oldFetcher := EngineDownloadFetcher
-	EngineDownloadFetcher = func(url, dst string) error {
+	oldFetcher := engineDownloadFetcher
+	engineDownloadFetcher = func(url, dst string) error {
 		downloads++
 		return oldFetcher(url, dst)
 	}
-	t.Cleanup(func() { EngineDownloadFetcher = oldFetcher })
+	t.Cleanup(func() { engineDownloadFetcher = oldFetcher })
 
 	if err := downloadEngineAssets(engineDownloadConfig{runtime: true}, runner.repoRoot); err != nil {
 		t.Fatalf("downloadEngineAssets returned error: %v", err)
@@ -216,6 +222,103 @@ func TestDownloadEngineAssetsWeb(t *testing.T) {
 	}
 	if !fileExists(filepath.Join(runner.repoRoot, "templates", "web_release.zip")) {
 		t.Fatalf("expected web template copy to exist")
+	}
+}
+
+func TestDownloadEngineAssetsUsesLocalArtifactDirectory(t *testing.T) {
+	runner := newRuntimeFixtureRunner(t)
+	assetDir := filepath.Join(runner.repoRoot, "workflow-artifacts")
+	version := mustDefaultRuntimeVersion(t)
+	t.Setenv("GITHUB_ACTIONS", "true")
+
+	oldResolve := engineDownloadResolveEnv
+	engineDownloadResolveEnv = func(repoRootArg, platform string) (engineDownloadEnv, error) {
+		return engineDownloadEnv{
+			repoRoot:       repoRootArg,
+			version:        version,
+			platform:       "linux",
+			arch:           "x86_64",
+			goBinDir:       filepath.Join(os.Getenv("GOPATH"), "bin"),
+			templateDir:    filepath.Join(repoRootArg, "templates"),
+			cacheDir:       filepath.Join(repoRootArg, "cache"),
+			urlPrefix:      "https://example.invalid/",
+			verifyManifest: true,
+		}, nil
+	}
+	t.Cleanup(func() { engineDownloadResolveEnv = oldResolve })
+
+	if err := writeZipFixture(filepath.Join(assetDir, "nested", "linux-x86_64.zip"), map[string]string{
+		"godot.linuxbsd.template_release.x86_64": "local-template",
+		"godot.linuxbsd.template_debug.x86_64":   "local-debug-template",
+	}); err != nil {
+		t.Fatalf("write template fixture: %v", err)
+	}
+	if err := writeZipFixture(filepath.Join(assetDir, "nested", "editor-linux-x86_64.zip"), map[string]string{
+		"godot.linuxbsd.editor.x86_64": "local-editor",
+	}); err != nil {
+		t.Fatalf("write editor fixture: %v", err)
+	}
+
+	oldFetcher := engineDownloadFetcher
+	engineDownloadFetcher = func(url, dst string) error {
+		return errors.New("network fetch should not be used with --asset-dir")
+	}
+	t.Cleanup(func() { engineDownloadFetcher = oldFetcher })
+
+	if err := downloadEngineAssets(engineDownloadConfig{runtime: true, skipRuntimePack: true, assetDir: assetDir, sameRunArtifacts: true}, runner.repoRoot); err != nil {
+		t.Fatalf("downloadEngineAssets returned error: %v", err)
+	}
+
+	gopathBin := filepath.Join(os.Getenv("GOPATH"), "bin")
+	if content, err := os.ReadFile(filepath.Join(gopathBin, "gdspxrt"+version)); err != nil {
+		t.Fatalf("read installed template: %v", err)
+	} else if string(content) != "local-template" {
+		t.Fatalf("template content = %q, want local-template", content)
+	}
+	if content, err := os.ReadFile(filepath.Join(gopathBin, "gdspx"+version)); err != nil {
+		t.Fatalf("read installed editor: %v", err)
+	} else if string(content) != "local-editor" {
+		t.Fatalf("editor content = %q, want local-editor", content)
+	}
+}
+
+func TestFindLocalEngineAssetRejectsDuplicateNames(t *testing.T) {
+	assetDir := t.TempDir()
+	for _, subdir := range []string{"one", "two"} {
+		path := filepath.Join(assetDir, subdir, "web.zip")
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("MkdirAll returned error: %v", err)
+		}
+		if err := os.WriteFile(path, []byte(subdir), 0o644); err != nil {
+			t.Fatalf("WriteFile returned error: %v", err)
+		}
+	}
+
+	if _, err := findLocalEngineAsset(assetDir, "web.zip"); err == nil {
+		t.Fatal("expected duplicate local assets to be rejected")
+	} else if !strings.Contains(err.Error(), "ambiguous") {
+		t.Fatalf("findLocalEngineAsset error = %v, want ambiguity error", err)
+	}
+}
+
+func TestLoadEngineAssetManifestRequiresExplicitSameRunTrust(t *testing.T) {
+	root := t.TempDir()
+	env := engineDownloadEnv{
+		assetDir: filepath.Join(root, "artifacts"),
+		cacheDir: filepath.Join(root, "cache"),
+		version:  release.DefaultRuntimeLock().RuntimeVersion,
+	}
+	for _, dir := range []string{env.assetDir, env.cacheDir} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := loadEngineAssetManifest(&env); err == nil {
+		t.Fatal("local assets without a manifest should be rejected by default")
+	}
+	env.allowMissingManifest = true
+	if err := loadEngineAssetManifest(&env); err != nil {
+		t.Fatalf("same-run artifacts should defer verification to final assembly: %v", err)
 	}
 }
 
@@ -276,12 +379,15 @@ func TestDownloadEngineAssetsRuntimeOverwritesStaleDesktopBinariesInGitHubAction
 	}
 }
 
-func TestDownloadRuntimePackUsesRequestedRuntimeVersionMeta(t *testing.T) {
+func TestDownloadRuntimePackUsesAtomicRuntimeRelease(t *testing.T) {
 	root := t.TempDir()
+	meta := release.DefaultReleaseMeta()
 	env := engineDownloadEnv{
-		version:  "2.2.0",
-		goBinDir: filepath.Join(root, "bin"),
-		cacheDir: filepath.Join(root, "cache"),
+		version:               meta.Runtime.Version,
+		goBinDir:              filepath.Join(root, "bin"),
+		cacheDir:              filepath.Join(root, "cache"),
+		runtimeAssetURLPrefix: meta.Runtime.RuntimeAssets.DownloadURL(""),
+		runtimePackAsset:      meta.RuntimePackAssetName(),
 	}
 	if err := os.MkdirAll(env.goBinDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll(%s) returned error: %v", env.goBinDir, err)
@@ -291,25 +397,146 @@ func TestDownloadRuntimePackUsesRequestedRuntimeVersionMeta(t *testing.T) {
 	}
 
 	var gotURL string
-	oldFetcher := EngineDownloadFetcher
-	EngineDownloadFetcher = func(url, dst string) error {
+	oldFetcher := engineDownloadFetcher
+	engineDownloadFetcher = func(url, dst string) error {
 		gotURL = url
 		return writeZipFixture(dst, map[string]string{
-			"gdspxrt.pck": "runtime-pck",
+			"gdspxrt.pck":         "runtime-pck",
+			"runtime.gdextension": "runtime-extension",
 		})
 	}
-	t.Cleanup(func() { EngineDownloadFetcher = oldFetcher })
+	t.Cleanup(func() { engineDownloadFetcher = oldFetcher })
 
 	if err := downloadRuntimePack(env); err != nil {
 		t.Fatalf("downloadRuntimePack returned error: %v", err)
 	}
 
-	wantURL := release.SpxReleaseURLBase + "v2.0.0/" + release.RuntimeAssetZipName
+	wantURL := meta.RuntimeAssetDownloadURL(release.RuntimeAssetZipName)
 	if gotURL != wantURL {
 		t.Fatalf("download url = %q, want %q", gotURL, wantURL)
 	}
-	if !fileExists(filepath.Join(env.goBinDir, "gdspxrt2.2.0.pck")) {
+	if !fileExists(filepath.Join(env.goBinDir, "gdspxrt"+meta.Runtime.Version+".pck")) {
 		t.Fatalf("expected versioned runtime pck to exist")
+	}
+}
+
+func TestDownloadRuntimePackUsesLegacyReleaseLocation(t *testing.T) {
+	root := t.TempDir()
+	meta, err := release.ResolveReleaseMetaForSPXVersion("v2.0.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	env := engineDownloadEnv{
+		version:               meta.Runtime.Version,
+		goBinDir:              filepath.Join(root, "bin"),
+		cacheDir:              filepath.Join(root, "cache"),
+		urlPrefix:             meta.Runtime.EngineAssets.DownloadURL(""),
+		runtimeAssetURLPrefix: meta.Runtime.RuntimeAssets.DownloadURL(""),
+		runtimePackAsset:      meta.RuntimePackAssetName(),
+	}
+	for _, dir := range []string{env.goBinDir, env.cacheDir} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	var gotURL string
+	oldFetcher := engineDownloadFetcher
+	engineDownloadFetcher = func(url, dst string) error {
+		gotURL = url
+		return writeZipFixture(dst, map[string]string{
+			"gdspxrt.pck":         "legacy-runtime-pck",
+			"runtime.gdextension": "legacy-runtime-extension",
+		})
+	}
+	t.Cleanup(func() { engineDownloadFetcher = oldFetcher })
+
+	if err := downloadRuntimePack(env); err != nil {
+		t.Fatalf("downloadRuntimePack returned error: %v", err)
+	}
+	wantURL := meta.RuntimeAssetDownloadURL(meta.RuntimePackAssetName())
+	if gotURL != wantURL {
+		t.Fatalf("download URL = %q, want %q", gotURL, wantURL)
+	}
+	if content, err := os.ReadFile(filepath.Join(env.goBinDir, "gdspxrt"+meta.Runtime.Version+".pck")); err != nil {
+		t.Fatal(err)
+	} else if string(content) != "legacy-runtime-pck" {
+		t.Fatalf("legacy runtime pck = %q", content)
+	}
+}
+
+func TestDownloadRuntimePackRejectsMissingPCK(t *testing.T) {
+	root := t.TempDir()
+	env := engineDownloadEnv{
+		version:   mustDefaultRuntimeVersion(t),
+		goBinDir:  filepath.Join(root, "bin"),
+		cacheDir:  filepath.Join(root, "cache"),
+		urlPrefix: "https://example.invalid/",
+	}
+	for _, dir := range []string{env.goBinDir, env.cacheDir} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	versionedPack := filepath.Join(env.goBinDir, "gdspxrt"+env.version+".pck")
+	if err := os.WriteFile(versionedPack, []byte("stable"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	oldFetcher := engineDownloadFetcher
+	engineDownloadFetcher = func(_, dst string) error {
+		return writeZipFixture(dst, map[string]string{"runtime.gdextension": "incomplete"})
+	}
+	t.Cleanup(func() { engineDownloadFetcher = oldFetcher })
+
+	err := downloadRuntimePack(env)
+	if err == nil || !strings.Contains(err.Error(), "missing gdspxrt.pck") {
+		t.Fatalf("downloadRuntimePack error = %v, want missing pck error", err)
+	}
+	if data, err := os.ReadFile(versionedPack); err != nil {
+		t.Fatal(err)
+	} else if string(data) != "stable" {
+		t.Fatalf("incomplete runtime pack changed installed pck to %q", data)
+	}
+}
+
+func TestDownloadAndroidAssetsRequiresCompleteBundle(t *testing.T) {
+	root := t.TempDir()
+	env := engineDownloadEnv{
+		templateDir: filepath.Join(root, "templates"),
+		cacheDir:    filepath.Join(root, "cache"),
+		urlPrefix:   "https://example.invalid/",
+	}
+	for _, dir := range []string{env.templateDir, env.cacheDir} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, name := range []string{"android_debug.apk", "android_release.apk", "android_source.zip"} {
+		if err := os.WriteFile(filepath.Join(env.templateDir, name), []byte("stable:"+name), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	oldFetcher := engineDownloadFetcher
+	engineDownloadFetcher = func(_, dst string) error {
+		return writeZipFixture(dst, map[string]string{
+			"android_debug.apk":   "debug",
+			"android_release.apk": "release",
+		})
+	}
+	t.Cleanup(func() { engineDownloadFetcher = oldFetcher })
+
+	err := downloadAndroidAssets(env)
+	if err == nil || !strings.Contains(err.Error(), "missing android_source.zip") {
+		t.Fatalf("downloadAndroidAssets error = %v, want missing source archive error", err)
+	}
+	for _, name := range []string{"android_debug.apk", "android_release.apk", "android_source.zip"} {
+		data, readErr := os.ReadFile(filepath.Join(env.templateDir, name))
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		if string(data) != "stable:"+name {
+			t.Fatalf("incomplete Android bundle changed %s to %q", name, data)
+		}
 	}
 }
 
@@ -329,12 +556,12 @@ func TestDownloadEngineAssetsWebSkipsExistingCachedTemplateLocally(t *testing.T)
 	}
 
 	downloads := 0
-	oldFetcher := EngineDownloadFetcher
-	EngineDownloadFetcher = func(url, dst string) error {
+	oldFetcher := engineDownloadFetcher
+	engineDownloadFetcher = func(url, dst string) error {
 		downloads++
 		return oldFetcher(url, dst)
 	}
-	t.Cleanup(func() { EngineDownloadFetcher = oldFetcher })
+	t.Cleanup(func() { engineDownloadFetcher = oldFetcher })
 
 	if err := downloadEngineAssets(engineDownloadConfig{platform: "web", mode: "worker"}, runner.repoRoot); err != nil {
 		t.Fatalf("downloadEngineAssets returned error: %v", err)
@@ -354,28 +581,29 @@ func TestDownloadEngineAssetsWebSkipsExistingCachedTemplateLocally(t *testing.T)
 func installFakeEngineDownload(t *testing.T, repoRoot, defaultPlatform, arch string) {
 	t.Helper()
 
-	restoreResolve := SetEngineDownloadResolveEnv(func(repoRootArg, platform string) (DownloadEnv, error) {
+	oldResolve := engineDownloadResolveEnv
+	engineDownloadResolveEnv = func(repoRootArg, platform string) (engineDownloadEnv, error) {
 		if platform == "" {
 			platform = defaultPlatform
 		}
 		version := mustDefaultRuntimeVersion(t)
-		return DownloadEnv{
-			RepoRoot:    repoRootArg,
-			Version:     version,
-			Platform:    platform,
-			Arch:        arch,
-			GoBinDir:    filepath.Join(os.Getenv("GOPATH"), "bin"),
-			TemplateDir: filepath.Join(repoRootArg, "templates"),
-			CacheDir:    filepath.Join(repoRootArg, "cache"),
-			URLPrefix:   "https://example.invalid/",
+		return engineDownloadEnv{
+			repoRoot:    repoRootArg,
+			version:     version,
+			platform:    platform,
+			arch:        arch,
+			goBinDir:    filepath.Join(os.Getenv("GOPATH"), "bin"),
+			templateDir: filepath.Join(repoRootArg, "templates"),
+			cacheDir:    filepath.Join(repoRootArg, "cache"),
+			urlPrefix:   "https://example.invalid/",
 		}, nil
-	})
-	oldFetch := EngineDownloadFetcher
-	EngineDownloadFetcher = fakeEngineDownloadFetcher
+	}
+	oldFetch := engineDownloadFetcher
+	engineDownloadFetcher = fakeEngineDownloadFetcher
 
 	t.Cleanup(func() {
-		restoreResolve()
-		EngineDownloadFetcher = oldFetch
+		engineDownloadResolveEnv = oldResolve
+		engineDownloadFetcher = oldFetch
 	})
 }
 
@@ -387,6 +615,7 @@ func fakeEngineDownloadFetcher(url, dst string) error {
 	case "linux-x86_64.zip":
 		return writeZipFixture(dst, map[string]string{
 			"godot.linuxbsd.template_release.x86_64": "linux-template",
+			"godot.linuxbsd.template_debug.x86_64":   "linux-debug-template",
 		})
 	case "editor-linux-x86_64.zip":
 		return writeZipFixture(dst, map[string]string{
@@ -410,7 +639,8 @@ func fakeEngineDownloadFetcher(url, dst string) error {
 		})
 	case runtimePackZip:
 		return writeZipFixture(dst, map[string]string{
-			"gdspxrt.pck": "runtime-pck",
+			"gdspxrt.pck":         "runtime-pck",
+			"runtime.gdextension": "runtime-extension",
 		})
 	default:
 		return errors.New("unexpected download URL: " + url)

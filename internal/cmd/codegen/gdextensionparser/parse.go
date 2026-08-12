@@ -140,16 +140,11 @@ func generateGDExtensionInterfaceAST(b, projectPath, astOutputFilename string) (
 	if astOutputFilename != "" {
 		b, err := json.Marshal(ast)
 		if err != nil {
-			panic(err)
+			return clang.CHeaderFileAST{}, fmt.Errorf("marshal parsed AST: %w", err)
 		}
-		f, err := os.Create(astOutputFilename)
-		if err != nil {
-			panic(err)
+		if err := os.WriteFile(astOutputFilename, b, 0o644); err != nil {
+			return clang.CHeaderFileAST{}, fmt.Errorf("write parsed AST %q: %w", astOutputFilename, err)
 		}
-		defer f.Close()
-		w := bufio.NewWriter(f)
-		w.Write(b)
-		w.Flush()
 	}
 
 	return ast, nil

@@ -151,4 +151,4 @@ spx exportminiprogram
 
 ## Troubleshooting
 
-If a native command cannot find the engine, run `make prepare-host` from the SPX repository or install the correct release assets. For Web failures, prepare the same Web mode used by the command. For Android/iOS errors, first verify the platform SDK and engine template independently. Run with `-v` to expose invoked tools and artifact paths.
+If a native command cannot find the engine, run `make setup` from the SPX repository or install the correct release assets. For Web failures, prepare the same Web mode used by the command. For Android/iOS errors, first verify the platform SDK and engine template independently. Run with `-v` to expose invoked tools and artifact paths.

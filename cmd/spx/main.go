@@ -49,7 +49,7 @@ func main() {
 	// Initialize with provided values
 	cmd.ProjectFS = projectFS
 	cmd.PlatformFS = platformFS
-	cmd.Version = release.DefaultReleaseMeta().Runtime.Version
+	cmd.Version = release.DefaultRuntimeLock().RuntimeVersion
 	cmd.GoModTemplate = scaffold.GoMod()
 
 	// Initialize the Args field if not already initialized

@@ -1,0 +1,488 @@
+/**
+ * Projects exported for the Web expose the :js:class:`Engine` class to the JavaScript environment, that allows
+ * fine control over the engine's start-up process.
+ *
+ * This API is built in an asynchronous manner and requires basic understanding
+ * of `Promises <https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Using_promises>`__.
+ *
+ * @module Engine
+ * @header Web export JavaScript reference
+ */
+
+/* -------------------------
+   TimeProfiler utility class
+   ------------------------- */
+class TimeProfiler {
+	static mark(label) {
+		if (!TimeProfiler['enabled']) return;
+		try {
+			TimeProfiler['marks'][label] = performance.now();
+		} catch (e) {
+			// ignore
+		}
+	}
+	static measure(startLabel, endLabel) {
+		if (!TimeProfiler['enabled']) return;
+		const s = TimeProfiler['marks'][startLabel];
+		const e = TimeProfiler['marks'][endLabel];
+		if (s != null && e != null) {
+			const cost = (e - s).toFixed(2);
+			console.log(`[Perf] ${startLabel} → ${endLabel}: ${cost} ms`);
+			return cost;
+		}
+		return null;
+	}
+    static async profile(label, fn) {
+        if (!TimeProfiler['enabled']) return await fn();
+        const start = performance.now();
+        try {
+            const result = await fn();
+            const end = performance.now();
+            console.log(`[Perf] ${label}: ${(end - start).toFixed(2)} ms`);
+            return result;
+        } catch (err) {
+            const end = performance.now();
+            console.warn(`[Perf] ${label} failed after ${(end - start).toFixed(2)} ms`);
+            throw err;
+        }
+    }
+	static summary(labels, note = '') {
+		if (!TimeProfiler['enabled']) return;
+		console.log(`==== Perf(${note}) Summary ====`);
+		for (let i = 0; i + 1 < labels.length; i++) {
+			const a = labels[i], b = labels[i + 1];
+			TimeProfiler.measure(a, b);
+		}
+		console.log("======================");
+	}
+}
+
+TimeProfiler['enabled'] = false;
+TimeProfiler['marks'] = {};
+TimeProfiler['mark'] = TimeProfiler.mark;
+TimeProfiler['measure'] = TimeProfiler.measure;
+TimeProfiler['profile'] = TimeProfiler.profile;
+TimeProfiler['summary'] = TimeProfiler.summary;
+
+const globalScope = typeof window !== 'undefined' ? window :
+                    typeof self !== 'undefined' ? self :
+                    globalThis;
+
+globalScope['profiler'] = TimeProfiler;
+
+const Engine = (function () {
+	const preloader = new Preloader();
+
+	let loadPromise = null;
+	let loadPath = '';
+	let initPromise = null;
+
+	/**
+	 * @classdesc The ``Engine`` class provides methods for loading and starting exported projects on the Web. For default export
+	 * settings, this is already part of the exported HTML page. To understand practical use of the ``Engine`` class,
+	 * see :ref:`Custom HTML page for Web export <doc_customizing_html5_shell>`.
+	 *
+	 * @description Create a new Engine instance with the given configuration.
+	 *
+	 * @global
+	 * @constructor
+	 * @param {EngineConfig} initConfig The initial config for this instance.
+	 */
+	function Engine(initConfig) { // eslint-disable-line no-shadow
+		this.config = new InternalConfig(initConfig);
+		this.rtenv = null;
+	}
+
+	/**
+	 * Load the engine from the specified base path.
+	 *
+	 * @param {string} basePath Base path of the engine to load.
+	 * @param {number=} [size=0] The file size if known.
+	 * @returns {Promise} A Promise that resolves once the engine is loaded.
+	 *
+	 * @function Engine.load
+	 */
+	Engine.load = function (basePath, size) {
+		if (loadPromise == null) {
+			loadPath = basePath;
+			loadPromise = preloader.loadPromise(`${loadPath}.wasm`, size, true);
+			requestAnimationFrame(preloader.animateProgress);
+		}
+		return loadPromise;
+	};
+
+	/**
+	 * Unload the engine to free memory.
+	 *
+	 * This method will be called automatically depending on the configuration. See :js:attr:`unloadAfterInit`.
+	 *
+	 * @function Engine.unload
+	 */
+	Engine.unload = function () {
+		loadPromise = null;
+	};
+
+	/**
+	 * Safe Engine constructor, creates a new prototype for every new instance to avoid prototype pollution.
+	 * @ignore
+	 * @constructor
+	 */
+	function SafeEngine(initConfig) {
+		const proto = /** @lends Engine.prototype */ {
+			/**
+			 * Initialize the engine instance. Optionally, pass the base path to the engine to load it,
+			 * if it hasn't been loaded yet. See :js:meth:`Engine.load`.
+			 *
+			 * @return {Promise} A ``Promise`` that resolves once the engine is loaded and initialized.
+			 */
+			init: function () {
+				if(initPromise != null){
+					return Promise.resolve();
+				}
+				loadPath = this.config.executable;
+				if(typeof miniEngine !== 'undefined' && miniEngine){
+					loadPath = "js/"+loadPath;
+				}
+				const me = this;
+				function doInit() {
+					// Care! Promise chaining is bogus with old emscripten versions.
+					// This caused a regression with the Mono build (which uses an older emscripten version).
+					// Make sure to test that when refactoring.
+					return new Promise(function (resolve, reject) {
+						// Now proceed with Godot and other logic
+						let gdmodule = me.config.getModuleConfig(loadPath, me.config.wasmEngine);
+						Godot(gdmodule).then(function (module) {
+							globalScope['Module'] = module;
+							const paths = me.config.persistentPaths;
+							// ---- WASM Crash Hook ----
+							module['onAbort'] = function (msg) {
+								console.error("[Godot WASM Crashed] ", msg);
+								window.dispatchEvent(new CustomEvent("godot-wasm-crash", {
+									detail: msg
+								}));
+							};
+							if (typeof miniEngine === 'undefined' || !miniEngine){
+								module['initFS'](paths).then(function (err) {
+									me.rtenv = module;
+									if (me.config.unloadAfterInit) {
+										Engine.unload();
+									}
+									resolve();
+								});
+							}else{
+								me.rtenv = module;
+								resolve();
+							}
+						});
+					});
+				}
+				preloader.setProgressFunc(this.config.onProgress);
+				initPromise = doInit();
+				return initPromise;
+			},
+
+			/**
+			 * Load a file so it is available in the instance's file system once it runs. Must be called **before** starting the
+			 * instance.
+			 *
+			 * If not provided, the ``path`` is derived from the URL of the loaded file.
+			 *
+			 * @param {string|ArrayBuffer} file The file to preload.
+			 *
+			 * If a ``string`` the file will be loaded from that path.
+			 *
+			 * If an ``ArrayBuffer`` or a view on one, the buffer will used as the content of the file.
+			 *
+			 * @param {string=} path Path by which the file will be accessible. Required, if ``file`` is not a string.
+			 *
+			 * @returns {Promise} A Promise that resolves once the file is loaded.
+			 */
+			preloadFile: function (file, path) {
+				return preloader.preload(file, path, this.config.fileSizes[file]);
+			},
+			getPThread:function () {
+				return this.rtenv['getPThread']()
+			},
+			unpackEngineData:async function (dir, pckName, pckData) {
+				let datas = []
+				if ( pckName != "" ){
+					datas.push({ "path": pckName, "data": pckData })
+				}
+				// write project data to file
+				let files = []
+				this.rtenv['deleteDirFS'](dir);
+				for (let info of datas) {
+					files.push(info.path)
+					this.rtenv['copyToFS'](dir + "/" + info.path, info.data);
+				}
+				this.rtenv['updateGameDatas'](dir, files);
+			},
+
+			updateAssetsData: async function (dir, assetList) {
+				try {
+					const updatedPaths = [];
+
+					for (const { name, data } of assetList) {
+						const assetPath = `${dir}/${name}`;
+						this.rtenv['copyToFS'](assetPath, data);
+						updatedPaths.push(name);
+					}
+
+					this.rtenv['updateGameDatas'](dir, updatedPaths);
+
+				} catch (e) {
+					console.error(`[GodotFS] updateAssetsData failed: ${e.message}`);
+				}
+			},
+
+			deleteAssetsData: async function (dir, assetNames) {
+				try {
+					const deletedPaths = [];
+
+					for (const name of assetNames) {
+						const assetPath = `${dir}/${name}`;
+						this.rtenv['deleteDirRecursive'](assetPath);
+						deletedPaths.push(name);
+					}
+
+					this.rtenv['updateGameDatas'](dir, deletedPaths);
+
+				} catch (e) {
+					console.error(`[GodotFS] deleteAssetsData failed: ${e.message}`);
+				}
+			},
+
+			downloadRecordedVideo: function (fileName) {
+				if (this.rtenv == null) {
+					throw new Error('Engine must be inited before downloading web recorder');
+				}
+				if (this.rtenv['downloadRecordedVideo']) {
+					return this.rtenv['downloadRecordedVideo'](fileName);
+				} else {
+					return Promise.reject(new Error('Web recorder is not supported by this engine version. '
+						+ 'Enable "Web Recorder" for your export preset and/or build your custom template with "web_recorder_enabled=yes".'));
+				}
+			},
+
+			getRecordedVideoBlob: function () {
+				if (this.rtenv == null) {
+					throw new Error('Engine must be inited before getting web recorder');
+				}
+				if (this.rtenv['getRecordedVideoBlob']) {
+					return this.rtenv['getRecordedVideoBlob']();
+				} else {
+					return Promise.reject(new Error('Web recorder is not supported by this engine version. '
+						+ 'Enable "Web Recorder" for your export preset and/or build your custom template with "web_recorder_enabled=yes".'));
+				}
+			},
+
+			/**
+			 * Start the engine instance using the given override configuration (if any).
+			 * :js:meth:`startGame <Engine.prototype.startGame>` can be used in typical cases instead.
+			 *
+			 * This will initialize the instance if it is not initialized. For manual initialization, see :js:meth:`init <Engine.prototype.init>`.
+			 * The engine must be loaded beforehand.
+			 *
+			 * Fails if a canvas cannot be found on the page, or not specified in the configuration.
+			 *
+			 * @param {EngineConfig} override An optional configuration override.
+			 * @return {Promise} Promise that resolves once the engine started.
+			 */
+			start: function (override) {
+				this.config.update(override);
+				const me = this;
+
+				return me.init().then(function () {
+					if (!me.rtenv) {
+						return Promise.reject(new Error('The engine must be initialized before it can be started'));
+					}
+
+					me.rtenv['setRecorderCanvas'](me.config.canvas);
+
+					initPromise = null
+					let config = {};
+					try {
+						config = me.config.getGodotConfig(function () {
+							me.rtenv = null;
+						});
+					} catch (e) {
+						return Promise.reject(e);
+					}
+					// Godot configuration.
+					me.rtenv['initConfig'](config);
+
+					// Preload GDExtension libraries.
+					if (me.config.gdextensionLibs.length > 0 && !me.rtenv['loadDynamicLibrary']) {
+						return Promise.reject(new Error('GDExtension libraries are not supported by this engine version. '
+							+ 'Enable "Extensions Support" for your export preset and/or build your custom template with "dlink_enabled=yes".'));
+					}
+					let libs = [];
+					me.config.gdextensionLibs.forEach(function (lib) {
+						// gdspx is special, it must be loaded before the others.
+						if(lib.startsWith('gdspx')) {
+							console.log('Loading gdspx dynamic library:', lib);
+							return
+						}
+						libs.push(me.rtenv['loadDynamicLibrary'](lib, { 'loadAsync': true }));
+					});
+					function executeMainLogic() {
+						return new Promise(function (resolve, reject) {
+							preloader.preloadedFiles.forEach(function (file) {
+								me.rtenv['copyToFS'](file.path, file.buffer);
+							});
+							preloader.preloadedFiles.length = 0; // Clear memory
+							me.rtenv['callMain'](me.config.args);
+							initPromise = null;
+							me.installServiceWorker();
+							resolve();
+						});
+					}
+					return executeMainLogic();
+
+				});
+			},
+
+			/**
+			 * Start the game instance using the given configuration override (if any).
+			 *
+			 * This will initialize the instance if it is not initialized. For manual initialization, see :js:meth:`init <Engine.prototype.init>`.
+			 *
+			 * This will load the engine if it is not loaded, and preload the main pck.
+			 *
+			 * This method expects the initial config (or the override) to have both the :js:attr:`executable` and :js:attr:`mainPack`
+			 * properties set (normally done by the editor during export).
+			 *
+			 * @param {EngineConfig} override An optional configuration override.
+			 * @return {Promise} Promise that resolves once the game started.
+			 */
+			startGame: function (override) {
+				this.config.update(override);
+				// Add main-pack argument.
+				const exe = this.config.executable;
+				const pack = this.config.mainPack || `${exe}.pck`;
+				this.config.args = ['--main-pack', pack].concat(this.config.args);
+				// Start and init with execName as loadPath if not inited.
+				const me = this;
+				return Promise.all([
+					this.init(exe),
+					this.preloadFile(pack, pack),
+				]).then(function () {
+					return me.start.apply(me);
+				});
+			},
+
+			/**
+			 * Create a file at the specified ``path`` with the passed as ``buffer`` in the instance's file system.
+			 *
+			 * @param {string} path The location where the file will be created.
+			 * @param {ArrayBuffer} buffer The content of the file.
+			 */
+			copyToFS: function (path, buffer) {
+				if (this.rtenv == null) {
+					throw new Error('Engine must be inited before copying files');
+				}
+				this.rtenv['copyToFS'](path, buffer);
+			},
+
+            copyFSToAdapter: function (adapter) {
+                if (this.rtenv == null) {
+                    throw new Error('Engine must be inited before copying files');
+                }
+                const me = this;
+                var promises = [];
+                this.config.persistentPaths.forEach(function (path) {
+                    promises.push(me.rtenv['copyToAdapter'](path, adapter));
+                });
+                return Promise.all(promises);
+            },
+
+			getAudioContext: function () {
+				if (this.rtenv == null) {
+					throw new Error('Engine must be inited before getting audio context');
+				}
+				return this.rtenv['getAudioContext']();
+			},
+
+			/**
+			 * Request that the current instance quit.
+			 *
+			 * This is akin the user pressing the close button in the window manager, and will
+			 * have no effect if the engine has crashed, or is stuck in a loop.
+			 *
+			 */
+			requestQuit: function () {
+				if (this.rtenv) {
+					this.rtenv['request_quit']();
+				}
+			},
+
+			/**
+			 * Request that the current instance reset.
+			 *
+			 * This will restart the engine as if it was just started.
+			 *
+			 */
+			requestReset: function () {
+				if (this.rtenv) {
+					this.rtenv['request_reset']();
+				}
+			},
+
+			/**
+			 * Install the progressive-web app service worker.
+			 * @returns {Promise} The service worker registration promise.
+			 */
+			installServiceWorker: function () {
+				if (this.config.serviceWorker && 'serviceWorker' in navigator) {
+					try {
+						return navigator.serviceWorker.register(this.config.serviceWorker);
+					} catch (e) {
+						return Promise.reject(e);
+					}
+				}
+				return Promise.resolve();
+			},
+		};
+
+		Engine.prototype = proto;
+		// Closure compiler exported instance methods.
+		Engine.prototype['init'] = Engine.prototype.init;
+		Engine.prototype['preloadFile'] = Engine.prototype.preloadFile;
+		Engine.prototype['getPThread'] = Engine.prototype.getPThread;
+		Engine.prototype['unpackEngineData'] = Engine.prototype.unpackEngineData;
+		Engine.prototype['updateAssetsData'] = Engine.prototype.updateAssetsData;
+		Engine.prototype['deleteAssetsData'] = Engine.prototype.deleteAssetsData;
+		Engine.prototype['downloadRecordedVideo'] = Engine.prototype.downloadRecordedVideo;
+		Engine.prototype['getRecordedVideoBlob'] = Engine.prototype.getRecordedVideoBlob;
+		Engine.prototype['start'] = Engine.prototype.start;
+		Engine.prototype['startGame'] = Engine.prototype.startGame;
+		Engine.prototype['copyToFS'] = Engine.prototype.copyToFS;
+		Engine.prototype['copyFSToAdapter'] = Engine.prototype.copyFSToAdapter;
+		Engine.prototype['getAudioContext'] = Engine.prototype.getAudioContext;
+		Engine.prototype['requestQuit'] = Engine.prototype.requestQuit;
+		Engine.prototype['requestReset'] = Engine.prototype.requestReset;
+		Engine.prototype['installServiceWorker'] = Engine.prototype.installServiceWorker;
+		// Also expose static methods as instance methods
+		Engine.prototype['load'] = Engine.load;
+		Engine.prototype['unload'] = Engine.unload;
+		return new Engine(initConfig);
+	}
+
+	// Closure compiler exported static methods.
+	SafeEngine['load'] = Engine.load;
+	SafeEngine['unload'] = Engine.unload;
+
+	// Feature-detection utilities.
+	SafeEngine['isWebGLAvailable'] = Features.isWebGLAvailable;
+	SafeEngine['isFetchAvailable'] = Features.isFetchAvailable;
+	SafeEngine['isSecureContext'] = Features.isSecureContext;
+	SafeEngine['isCrossOriginIsolated'] = Features.isCrossOriginIsolated;
+	SafeEngine['isSharedArrayBufferAvailable'] = Features.isSharedArrayBufferAvailable;
+	SafeEngine['isAudioWorkletAvailable'] = Features.isAudioWorkletAvailable;
+	SafeEngine['getMissingFeatures'] = Features.getMissingFeatures;
+
+	return SafeEngine;
+}());
+if (typeof window !== 'undefined') {
+	window['Engine'] = Engine;
+}

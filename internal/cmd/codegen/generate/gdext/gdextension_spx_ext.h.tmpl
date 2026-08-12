@@ -87,17 +87,6 @@ typedef struct {
 typedef void *GDExtensionSpxCallbackInfoPtr;
 typedef void (*GDExtensionSpxGlobalRegisterCallbacks)(GDExtensionSpxCallbackInfoPtr callback_ptr);
 
-// string
-typedef void (*GDExtensionSpxStringNewWithLatin1Chars)(GDExtensionUninitializedStringPtr r_dest, const char *p_contents);
-typedef void (*GDExtensionSpxStringNewWithUtf8Chars)(GDExtensionUninitializedStringPtr r_dest, const char *p_contents);
-typedef void (*GDExtensionSpxStringNewWithLatin1CharsAndLen)(GDExtensionUninitializedStringPtr r_dest, const char *p_contents, GdInt p_size);
-typedef void (*GDExtensionSpxStringNewWithUtf8CharsAndLen)(GDExtensionUninitializedStringPtr r_dest, const char *p_contents, GdInt p_size);
-typedef GdInt (*GDExtensionSpxStringToLatin1Chars)(GDExtensionConstStringPtr p_self, char *r_text, GdInt p_max_write_length);
-typedef GdInt (*GDExtensionSpxStringToUtf8Chars)(GDExtensionConstStringPtr p_self, char *r_text, GdInt p_max_write_length);
-// variant
-typedef GDExtensionPtrConstructor (*GDExtensionSpxVariantGetPtrConstructor)(GDExtensionVariantType p_type, int32_t p_constructor);
-typedef GDExtensionPtrDestructor (*GDExtensionSpxVariantGetPtrDestructor)(GDExtensionVariantType p_type);
-
 // callback
 typedef void (*GDExtensionSpxCallbackOnEngineStart)();
 typedef void (*GDExtensionSpxCallbackOnEngineUpdate)(GdFloat delta);
@@ -211,7 +200,7 @@ typedef struct {
 	GDExtensionSpxCallbackOnUiToggle func_on_ui_toggle;
 	GDExtensionSpxCallbackOnUiTextChanged func_on_ui_text_changed;
 
-	
+
 } SpxCallbackInfo;
 
 

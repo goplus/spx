@@ -32,9 +32,6 @@ func TestParseWorkflowOpenTemplateEditorArgsDefault(t *testing.T) {
 	if cfg.templateDir != defaultTemplateProjectDir {
 		t.Fatalf("unexpected templateDir: %q", cfg.templateDir)
 	}
-	if cfg.workspaceDir != defaultTemplateEditorWorkspaceDir {
-		t.Fatalf("unexpected workspaceDir: %q", cfg.workspaceDir)
-	}
 }
 
 func TestOpenTemplateEditorWorkflow(t *testing.T) {
@@ -51,7 +48,7 @@ func TestOpenTemplateEditorWorkflow(t *testing.T) {
 	}
 
 	expectedCommands := []recordedCommand{
-		{dir: repoRoot, name: "gdspx" + release.DefaultReleaseMeta().Runtime.Version, args: []string{"--path", templateProjectDir, "--editor", "--recovery-mode"}},
+		{dir: repoRoot, name: "gdspx" + release.DefaultRuntimeLock().RuntimeVersion, args: []string{"--path", templateProjectDir, "--editor", "--recovery-mode"}},
 	}
 	if !reflect.DeepEqual(runner.commands, expectedCommands) {
 		t.Fatalf("unexpected commands: %#v", runner.commands)

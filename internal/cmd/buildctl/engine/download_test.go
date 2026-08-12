@@ -97,8 +97,9 @@ func TestFetchURLToFileLeavesDestinationUntouchedOnInterruptedDownload(t *testin
 }
 
 func TestFetchURLToFileHonorsHTTPClientTimeout(t *testing.T) {
-	restoreClient := SetEngineDownloadHTTPClient(&http.Client{Timeout: 20 * time.Millisecond})
-	defer restoreClient()
+	oldClient := engineDownloadHTTPClient
+	engineDownloadHTTPClient = &http.Client{Timeout: 20 * time.Millisecond}
+	defer func() { engineDownloadHTTPClient = oldClient }()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(100 * time.Millisecond)

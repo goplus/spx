@@ -96,13 +96,13 @@ func TestAcquireEngineBuildLockTimesOut(t *testing.T) {
 	mustMkdirAll(t, lockDir)
 	mustWriteFile(t, filepath.Join(lockDir, "pid"), []byte(strconv.Itoa(os.Getpid())))
 
-	oldPollInterval := EngineBuildLockPollInterval
-	oldTimeout := EngineBuildLockAcquireTimeout
-	EngineBuildLockPollInterval = 5 * time.Millisecond
-	EngineBuildLockAcquireTimeout = 20 * time.Millisecond
+	oldPollInterval := engineBuildLockPollInterval
+	oldTimeout := engineBuildLockAcquireTimeout
+	engineBuildLockPollInterval = 5 * time.Millisecond
+	engineBuildLockAcquireTimeout = 20 * time.Millisecond
 	defer func() {
-		EngineBuildLockPollInterval = oldPollInterval
-		EngineBuildLockAcquireTimeout = oldTimeout
+		engineBuildLockPollInterval = oldPollInterval
+		engineBuildLockAcquireTimeout = oldTimeout
 	}()
 
 	err := acquireEngineBuildLock(lockDir)

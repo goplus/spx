@@ -56,27 +56,23 @@ var (
 	workerWrapJsFileText string
 )
 
-func Generate(projectPath, godotPath string, ast clang.CHeaderFileAST) {
-	err := GenerateCallbackGoFile(projectPath, ast)
-	if err != nil {
-		panic(err)
+func Generate(projectPath, spxModulePath string, ast clang.CHeaderFileAST) error {
+	generators := []struct {
+		name string
+		fn   func() error
+	}{
+		{"callback Go source", func() error { return GenerateCallbackGoFile(projectPath, ast) }},
+		{"GDExtension interface", func() error { return GenerateGDExtensionInterfaceGoFile(projectPath, ast) }},
+		{"manager wrapper", func() error { return GenerateManagerWrapperGoFile(projectPath, ast) }},
+		{"JavaScript engine bridge", func() error { return GenerateJsEngineJsFile(projectPath, spxModulePath, ast) }},
+		{"Web worker wrapper", func() error { return GenerateWorkerWrapJsFile(projectPath, ast) }},
 	}
-	err = GenerateGDExtensionInterfaceGoFile(projectPath, ast)
-	if err != nil {
-		panic(err)
+	for _, generator := range generators {
+		if err := generator.fn(); err != nil {
+			return fmt.Errorf("generate %s: %w", generator.name, err)
+		}
 	}
-	err = GenerateManagerWrapperGoFile(projectPath, ast)
-	if err != nil {
-		panic(err)
-	}
-	err = GenerateJsEngineJsFile(projectPath, godotPath, ast)
-	if err != nil {
-		panic(err)
-	}
-	err = GenerateWorkerWrapJsFile(projectPath, ast)
-	if err != nil {
-		panic(err)
-	}
+	return nil
 }
 
 func GenerateCallbackGoFile(projectPath string, ast clang.CHeaderFileAST) error {
@@ -163,7 +159,7 @@ func GenerateManagerWrapperGoFile(projectPath string, ast clang.CHeaderFileAST) 
 		filepath.Join(projectPath, GdengineImplRelDir, "manager_web.gen.go"))
 }
 
-func GenerateJsEngineJsFile(projectPath, godotPath string, ast clang.CHeaderFileAST) error {
+func GenerateJsEngineJsFile(projectPath, spxModulePath string, ast clang.CHeaderFileAST) error {
 	funcs := template.FuncMap{
 		"gdiVariableName":     GdiVariableName,
 		"snakeCase":           strcase.ToSnake,
@@ -196,7 +192,7 @@ func GenerateJsEngineJsFile(projectPath, godotPath string, ast clang.CHeaderFile
 	}
 	output := trimTrailingWhitespace(b.Bytes())
 
-	headerFileName := filepath.Join(godotPath, "platform", "web", "js", "engine", "gdspx.js")
+	headerFileName := filepath.Join(spxModulePath, "web", "js", "engine", "gdspx.js")
 	err = os.MkdirAll(filepath.Dir(headerFileName), os.ModePerm)
 	if err != nil {
 		return err
@@ -501,9 +497,9 @@ func isFlatJsGdIntLikeType(typeName string) bool {
 func flatJsCtor(typeName string) string {
 	switch typeName {
 	case "GdInt":
-		return "Module._gdspx_new_int"
+		return "Module['_gdspx_new_int']"
 	case "GdObj":
-		return "Module._gdspx_new_obj"
+		return "Module['_gdspx_new_obj']"
 	default:
 		panic(fmt.Sprintf("unsupported flat js gdint-like type: %s", typeName))
 	}
@@ -543,7 +539,7 @@ func getJsFuncBody(function *clang.TypedefFunction) string {
 	}
 	if function.Name == "GDExtensionSpxInputWriteSnapshot" {
 		return "var _arg0 = RequireWasmFastArray(out, \"gdspx_input_write_snapshot\");\n" +
-			"\tvar _arg1 = out.count;\n" +
+			"\tvar _arg1 = out['count'];\n" +
 			"\t_gdFuncPtr(_arg0, _arg1);"
 	}
 	if spec, ok := GetNativeArrayBridgeSpec(function.Name); ok {
@@ -552,20 +548,17 @@ func getJsFuncBody(function *clang.TypedefFunction) string {
 		}
 		argName := spec.BaseArgName
 		return "var _arg0 = GetFastArrayWasmPtr(" + argName + ");\n" +
-			"\tvar _arg1 = " + argName + ".count;\n" +
+			"\tvar _arg1 = " + argName + "['count'];\n" +
 			"\t_gdFuncPtr(_arg0, _arg1);"
 	}
 	if function.Name == "GDExtensionSpxInputGetGlobalMousePos" {
 		return "var _retValue = AllocGdVec2();\n" +
 			"\t_gdFuncPtr(_retValue);\n" +
 			"\tvar _scratch = this._inputMousePosScratch;\n" +
-			"\tif (_scratch == null) {\n" +
-			"\t\t_scratch = this._inputMousePosScratch = { x: 0, y: 0 };\n" +
-			"\t}\n" +
 			"\tvar _floatIndex = _retValue / 4;\n" +
-			"\tvar _heap = Module.HEAPF32;\n" +
-			"\t_scratch.x = _heap[_floatIndex];\n" +
-			"\t_scratch.y = _heap[_floatIndex + 1];\n" +
+			"\tvar _heap = Module['HEAPF32'];\n" +
+			"\t_scratch['x'] = _heap[_floatIndex];\n" +
+			"\t_scratch['y'] = _heap[_floatIndex + 1];\n" +
 			"\tFreeGdVec2(_retValue);\n" +
 			"\treturn _scratch"
 	}

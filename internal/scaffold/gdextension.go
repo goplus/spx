@@ -55,9 +55,17 @@ var (
 	projectGDExtension = renderGDExtension("res://lib/", joinGDExtensionLibraries(desktopGDExtensionLibraries, projectOnlyGDExtensionLibraries))
 )
 
+const runtimeExtensionList = "res://runtime.gdextension\n"
+
 // RuntimeGDExtension returns the default runtime.gdextension template used by desktop runtime.
 func RuntimeGDExtension() string {
 	return runtimeGDExtension
+}
+
+// RuntimeExtensionList returns the standard Godot extension list used by the
+// temporary desktop runtime project.
+func RuntimeExtensionList() string {
+	return runtimeExtensionList
 }
 
 // ProjectGDExtension returns the project gdspx.gdextension template copied by project creation flows.

@@ -3,4 +3,4 @@ module github.com/goplus/spxdemo
 
 go 1.25.0
 
-require github.com/goplus/spx/v3 v3.0.0 //xgo:class
+require github.com/goplus/spx/v3 {{SPX_VERSION}} //xgo:class

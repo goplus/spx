@@ -19,7 +19,6 @@ package tool
 import (
 	"bytes"
 	"errors"
-	"flag"
 	"fmt"
 	"os"
 	"os/exec"
@@ -28,19 +27,9 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 )
-
-const (
-	requiredSConsVersion = "4.8.1"
-	requiredJDKMajor     = 17
-	requiredEMSDKVersion = "3.1.62"
-)
-
-type toolSetupSConsConfig struct{}
-
-type toolSetupJDKConfig struct{}
-
-type toolSetupEMSDKConfig struct{}
 
 type emsdkEnvironment struct {
 	rootDir string
@@ -49,65 +38,17 @@ type emsdkEnvironment struct {
 
 var (
 	buildEnvLookPath           = exec.LookPath
-	buildEnvRunStreaming       = runStreamingCommand
-	BuildEnvRunOutputWithDir   = runCommandOutputWithEnv
-	ResolveEMSDKShellExportsFn = resolveEMSDKShellExports
+	buildEnvRunStreaming       = shared.RunStreamingCommand
+	buildEnvRunOutputWithDir   = runCommandOutputWithEnv
+	resolveEMSDKShellExportsFn = ResolveEMSDKShellExports
 )
 
-func parseToolSetupSConsArgs(args []string) (toolSetupSConsConfig, error) {
-	fs := flag.NewFlagSet("tool setup-scons", flag.ContinueOnError)
-	fs.SetOutput(osStderr)
-	fs.Usage = func() {
-		fmt.Fprintln(osStderr, "Usage: buildctl tool setup-scons")
-	}
-	if err := fs.Parse(args); err != nil {
-		return toolSetupSConsConfig{}, err
-	}
-	if fs.NArg() != 0 {
-		fs.Usage()
-		return toolSetupSConsConfig{}, errUsage
-	}
-	return toolSetupSConsConfig{}, nil
-}
-
-func parseToolSetupJDKArgs(args []string) (toolSetupJDKConfig, error) {
-	fs := flag.NewFlagSet("tool setup-jdk", flag.ContinueOnError)
-	fs.SetOutput(osStderr)
-	fs.Usage = func() {
-		fmt.Fprintln(osStderr, "Usage: buildctl tool setup-jdk")
-	}
-	if err := fs.Parse(args); err != nil {
-		return toolSetupJDKConfig{}, err
-	}
-	if fs.NArg() != 0 {
-		fs.Usage()
-		return toolSetupJDKConfig{}, errUsage
-	}
-	return toolSetupJDKConfig{}, nil
-}
-
-func parseToolSetupEMSDKArgs(args []string) (toolSetupEMSDKConfig, error) {
-	fs := flag.NewFlagSet("tool setup-emsdk", flag.ContinueOnError)
-	fs.SetOutput(osStderr)
-	fs.Usage = func() {
-		fmt.Fprintln(osStderr, "Usage: buildctl tool setup-emsdk")
-	}
-	if err := fs.Parse(args); err != nil {
-		return toolSetupEMSDKConfig{}, err
-	}
-	if fs.NArg() != 0 {
-		fs.Usage()
-		return toolSetupEMSDKConfig{}, errUsage
-	}
-	return toolSetupEMSDKConfig{}, nil
-}
-
 func setupSCons() error {
-	_, err := ensureSCons()
+	_, err := EnsureSCons()
 	return err
 }
 
-func ensureSCons() (string, error) {
+func EnsureSCons() (string, error) {
 	python, err := detectPythonCommand()
 	if err != nil {
 		return "", err
@@ -116,14 +57,14 @@ func ensureSCons() (string, error) {
 		return "", err
 	}
 
-	repoRoot, err := findRepoRoot()
+	repoRoot, err := shared.FindRepoRoot()
 	if err != nil {
 		return "", err
 	}
 	venvDir := filepath.Join(repoRoot, ".bin", "scons-"+requiredSConsVersion)
 	venvPython, sconsCommand := sconsEnvironmentCommands(venvDir)
-	if fileExists(venvPython) && fileExists(sconsCommand) {
-		output, versionErr := BuildEnvRunOutputWithDir("", os.Environ(), venvPython, "-c", "import SCons; print(SCons.__version__)")
+	if shared.FileExists(venvPython) && shared.FileExists(sconsCommand) {
+		output, versionErr := buildEnvRunOutputWithDir("", os.Environ(), venvPython, "-c", "import SCons; print(SCons.__version__)")
 		if versionErr == nil && strings.TrimSpace(string(output)) == requiredSConsVersion {
 			if err := buildEnvRunStreaming("", sconsCommand, "--version"); err != nil {
 				return "", err
@@ -154,7 +95,7 @@ func sconsEnvironmentCommands(venvDir string) (pythonCommand, sconsCommand strin
 	return filepath.Join(venvDir, "bin", "python"), filepath.Join(venvDir, "bin", "scons")
 }
 
-func setupJDK() error {
+func SetupJDK() error {
 	env, err := resolveJDKShellEnvironment()
 	if err != nil {
 		return err
@@ -168,9 +109,9 @@ func setupJDK() error {
 	switch runtime.GOOS {
 	case "darwin":
 		if _, err := buildEnvLookPath("brew"); err != nil {
-			return errors.New("homebrew not found; install Homebrew first or install JDK 17 manually")
+			return fmt.Errorf("homebrew not found; install Homebrew first or install JDK %d manually", requiredJDKMajor)
 		}
-		if err := buildEnvRunStreaming("", "brew", "install", "openjdk@17"); err != nil {
+		if err := buildEnvRunStreaming("", "brew", "install", fmt.Sprintf("openjdk@%d", requiredJDKMajor)); err != nil {
 			return err
 		}
 	case "linux":
@@ -178,22 +119,22 @@ func setupJDK() error {
 			if err := buildEnvRunStreaming("", "sudo", "apt-get", "update"); err != nil {
 				return err
 			}
-			if err := buildEnvRunStreaming("", "sudo", "apt-get", "install", "-y", "openjdk-17-jdk"); err != nil {
+			if err := buildEnvRunStreaming("", "sudo", "apt-get", "install", "-y", fmt.Sprintf("openjdk-%d-jdk", requiredJDKMajor)); err != nil {
 				return err
 			}
 		} else if _, err := buildEnvLookPath("dnf"); err == nil {
-			if err := buildEnvRunStreaming("", "sudo", "dnf", "install", "-y", "java-17-openjdk-devel"); err != nil {
+			if err := buildEnvRunStreaming("", "sudo", "dnf", "install", "-y", fmt.Sprintf("java-%d-openjdk-devel", requiredJDKMajor)); err != nil {
 				return err
 			}
 		} else if _, err := buildEnvLookPath("yum"); err == nil {
-			if err := buildEnvRunStreaming("", "sudo", "yum", "install", "-y", "java-17-openjdk-devel"); err != nil {
+			if err := buildEnvRunStreaming("", "sudo", "yum", "install", "-y", fmt.Sprintf("java-%d-openjdk-devel", requiredJDKMajor)); err != nil {
 				return err
 			}
 		} else {
-			return errors.New("unsupported Linux distribution. Please install JDK 17 manually")
+			return fmt.Errorf("unsupported Linux distribution; install JDK %d manually", requiredJDKMajor)
 		}
 	case "windows":
-		return errors.New("on Windows, please install JDK 17 manually and ensure JAVA_HOME is set")
+		return fmt.Errorf("on Windows, install JDK %d manually and ensure JAVA_HOME is set", requiredJDKMajor)
 	default:
 		return fmt.Errorf("unsupported OS for JDK setup: %s", runtime.GOOS)
 	}
@@ -206,10 +147,10 @@ func setupJDK() error {
 		fmt.Fprintf(os.Stdout, "JDK %d installed successfully.\n", requiredJDKMajor)
 		return nil
 	}
-	return errors.New("failed to install JDK 17. Please install it manually")
+	return fmt.Errorf("failed to install JDK %d; install it manually", requiredJDKMajor)
 }
 
-func setupEMSDK() error {
+func SetupEMSDK() error {
 	env, err := resolveEMSDKEnvironment()
 	if err != nil {
 		return err
@@ -220,7 +161,7 @@ func setupEMSDK() error {
 		return err
 	}
 
-	if !fileExists(env.repoDir) {
+	if !shared.FileExists(env.repoDir) {
 		fmt.Fprintln(os.Stdout, "EMSDK not found in the global location. Installing...")
 		if err := buildEnvRunStreaming(env.rootDir, "git", "clone", "https://github.com/emscripten-core/emsdk.git"); err != nil {
 			return err
@@ -258,7 +199,7 @@ func verifyEMSDK(env emsdkEnvironment) error {
 	if err != nil {
 		return err
 	}
-	output, err := BuildEnvRunOutputWithDir("", envMapToSlice(verifyEnv), emppPath, "--version")
+	output, err := buildEnvRunOutputWithDir("", envMapToSlice(verifyEnv), emppPath, "--version")
 	if err != nil {
 		return fmt.Errorf("failed to set up emsdk. Please check the installation: %w", err)
 	}
@@ -268,7 +209,7 @@ func verifyEMSDK(env emsdkEnvironment) error {
 }
 
 func resolveEMSDKVerificationEnvironment(env emsdkEnvironment) (map[string]string, string, error) {
-	exports, err := ResolveEMSDKShellExportsFn()
+	exports, err := resolveEMSDKShellExportsFn()
 	if err != nil {
 		return nil, "", err
 	}
@@ -289,7 +230,7 @@ func resolveEMSDKVerificationEnvironment(env emsdkEnvironment) (map[string]strin
 	}
 
 	emppPath := filepath.Join(env.repoDir, "upstream", "emscripten", emscriptenCPPExecutableName())
-	if !fileExists(emppPath) {
+	if !shared.FileExists(emppPath) {
 		return nil, "", fmt.Errorf("em++ not found at %s", emppPath)
 	}
 	return merged, emppPath, nil
@@ -397,7 +338,7 @@ func parseJavaMajorVersion(output string) (int, bool) {
 	return 0, false
 }
 
-func resolveJDKShellExports() (map[string]string, error) {
+func ResolveJDKShellExports() (map[string]string, error) {
 	env, err := resolveJDKShellEnvironment()
 	if err != nil {
 		return nil, err
@@ -446,7 +387,7 @@ func detectEMSDKVersion(env emsdkEnvironment) (string, bool) {
 	return fields[2], true
 }
 
-func resolveEMSDKShellExports() (map[string]string, error) {
+func ResolveEMSDKShellExports() (map[string]string, error) {
 	env, err := resolveEMSDKEnvironment()
 	if err != nil {
 		return nil, err

@@ -23,21 +23,16 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 	"github.com/goplus/spx/v3/internal/release"
 )
-
-func TestParseRuntimeExportPackArgsDefault(t *testing.T) {
-	if err := parseRuntimeExportPackArgs(nil); err != nil {
-		t.Fatalf("parseRuntimeExportPackArgs returned error: %v", err)
-	}
-}
 
 func TestParseRuntimeBuildWasmArgsDefault(t *testing.T) {
 	cfg, err := parseRuntimeBuildWasmArgs(nil)
 	if err != nil {
 		t.Fatalf("parseRuntimeBuildWasmArgs returned error: %v", err)
 	}
-	if cfg.opt {
+	if cfg.Opt {
 		t.Fatal("opt should default to false")
 	}
 }
@@ -45,7 +40,7 @@ func TestParseRuntimeBuildWasmArgsDefault(t *testing.T) {
 func TestRuntimeBuildWasmSequence(t *testing.T) {
 	runner := &recordingRunner{}
 
-	if err := buildWasmRuntime(runtimeBuildWasmConfig{}, runner); err != nil {
+	if err := BuildWasmRuntime(BuildWasmConfig{}, runner); err != nil {
 		t.Fatalf("buildWasmRuntime returned error: %v", err)
 	}
 
@@ -65,20 +60,20 @@ func TestRuntimeBuildWasmOptSequence(t *testing.T) {
 	mustWriteFile(t, filepath.Join(gopathBin, "ispx.wasm"), []byte("wasm"))
 	mustWriteFile(t, filepath.Join(gopathBin, "gdspxrt"+version+"_webnormal", "engine.wasm"), []byte("engine"))
 
-	if err := buildWasmRuntime(runtimeBuildWasmConfig{opt: true}, runner); err != nil {
+	if err := BuildWasmRuntime(BuildWasmConfig{Opt: true}, runner); err != nil {
 		t.Fatalf("buildWasmRuntime returned error: %v", err)
 	}
 
 	expected := []recordedCall{
-		{script: "cmd/spx/install.sh", args: []string{"--web", "--opt", "--no-embed-runtime"}},
+		{script: "cmd/spx/install.sh", args: []string{"--web", "--no-embed-runtime"}},
 	}
 	if !reflect.DeepEqual(runner.calls, expected) {
 		t.Fatalf("unexpected calls: %#v", runner.calls)
 	}
-	if !fileExists(filepath.Join(gopathBin, "ispx.wasm.br")) {
+	if !shared.FileExists(filepath.Join(gopathBin, "ispx.wasm.br")) {
 		t.Fatalf("expected compressed ispx.wasm.br to exist")
 	}
-	if !fileExists(filepath.Join(gopathBin, "gdspxrt"+version+"_webnormal", "engine.wasm.br")) {
+	if !shared.FileExists(filepath.Join(gopathBin, "gdspxrt"+version+"_webnormal", "engine.wasm.br")) {
 		t.Fatalf("expected compressed engine.wasm.br to exist")
 	}
 }
@@ -102,7 +97,7 @@ func TestRuntimeExportWebSequence(t *testing.T) {
 	}
 
 	expectedCalls := []recordedCall{
-		{script: "cmd/spx/install.sh", args: []string{"--web", "--opt", "--no-embed-runtime"}},
+		{script: "cmd/spx/install.sh", args: []string{"--web", "--no-embed-runtime"}},
 	}
 	if !reflect.DeepEqual(runner.calls, expectedCalls) {
 		t.Fatalf("unexpected calls: %#v", runner.calls)
@@ -110,7 +105,7 @@ func TestRuntimeExportWebSequence(t *testing.T) {
 
 	assertSingleRuntimeWorkspaceCommand(t, runner, "spx", []string{"exportwebworker"})
 
-	if !fileExists(filepath.Join(runner.repoRoot, "spx_web_worker.zip")) {
+	if !shared.FileExists(filepath.Join(runner.repoRoot, "spx_web_worker.zip")) {
 		t.Fatalf("expected export zip to exist")
 	}
 }
@@ -119,17 +114,17 @@ func TestRuntimeExportPackSequence(t *testing.T) {
 	runner := newRuntimeFixtureRunner(t)
 	version := mustDefaultRuntimeVersion(t)
 
-	if err := exportPackRuntime(runner); err != nil {
+	if err := ExportPackRuntime(runner); err != nil {
 		t.Fatalf("exportPackRuntime returned error: %v", err)
 	}
 
 	assertSingleRuntimeWorkspaceCommand(t, runner, "spx", []string{"export"})
 
 	gopathBin := filepath.Join(os.Getenv("GOPATH"), "bin")
-	if !fileExists(filepath.Join(gopathBin, "gdspxrt"+version+".pck")) {
+	if !shared.FileExists(filepath.Join(gopathBin, "gdspxrt"+version+".pck")) {
 		t.Fatalf("expected exported pck to exist")
 	}
-	if !fileExists(filepath.Join(gopathBin, release.RuntimeAssetZipName)) {
+	if !shared.FileExists(filepath.Join(gopathBin, release.RuntimeAssetZipName)) {
 		t.Fatalf("expected exported zip to exist")
 	}
 }
@@ -148,10 +143,10 @@ func TestCompressWasmArtifactsLegacyWebDirFallback(t *testing.T) {
 	if err := compressWasmArtifacts(); err != nil {
 		t.Fatalf("compressWasmArtifacts returned error: %v", err)
 	}
-	if !fileExists(filepath.Join(gopathBin, "ispx.wasm.br")) {
+	if !shared.FileExists(filepath.Join(gopathBin, "ispx.wasm.br")) {
 		t.Fatalf("expected compressed ispx.wasm.br to exist")
 	}
-	if !fileExists(filepath.Join(gopathBin, "gdspxrt"+version+"_web", "engine.wasm.br")) {
+	if !shared.FileExists(filepath.Join(gopathBin, "gdspxrt"+version+"_web", "engine.wasm.br")) {
 		t.Fatalf("expected compressed engine.wasm.br to exist in legacy dir")
 	}
 }
@@ -186,8 +181,11 @@ func assertSingleRuntimeWorkspaceCommand(t *testing.T, runner *recordingRunner, 
 	if !ok || !reflect.DeepEqual(spxArgs, args) {
 		t.Fatalf("unexpected command: %#v", got)
 	}
-	prefix := filepath.Join(runner.repoRoot, ".tmp", "runtime-")
+	prefix := filepath.Join(runner.repoRoot, ".tmp", "runtime-workspace-")
 	if !strings.HasPrefix(projectDir, prefix) {
 		t.Fatalf("unexpected runtime workspace dir: %s", projectDir)
+	}
+	if got := filepath.Base(projectDir); got != runtimeWorkspaceProjectName {
+		t.Fatalf("runtime workspace project name = %q, want %q", got, runtimeWorkspaceProjectName)
 	}
 }

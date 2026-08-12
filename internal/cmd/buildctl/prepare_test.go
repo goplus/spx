@@ -17,9 +17,6 @@
 package main
 
 import (
-	"archive/zip"
-	"errors"
-	"flag"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -28,7 +25,6 @@ import (
 
 	enginepkg "github.com/goplus/spx/v3/internal/cmd/buildctl/engine"
 	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
-	"github.com/goplus/spx/v3/internal/release"
 )
 
 type recordedCall struct {
@@ -170,35 +166,14 @@ func mustWriteFile(t *testing.T, path string, data []byte) {
 	}
 }
 
-func TestParsePrepareArgsDefaults(t *testing.T) {
-	cfg, err := parsePrepareArgs(nil)
-	if err != nil {
-		t.Fatalf("parsePrepareArgs returned error: %v", err)
-	}
-
-	if cfg.setupMode != "runtime" {
-		t.Fatalf("unexpected setupMode: %s", cfg.setupMode)
-	}
-	if cfg.webMode != "normal" {
-		t.Fatalf("unexpected webMode: %s", cfg.webMode)
-	}
-}
-
-func TestParsePrepareArgsHelp(t *testing.T) {
-	_, err := parsePrepareArgs([]string{"--help"})
-	if !errors.Is(err, flag.ErrHelp) {
-		t.Fatalf("expected flag.ErrHelp, got %v", err)
-	}
-}
-
-func TestPrepareAssetsRuntime(t *testing.T) {
+func TestSetupAssetsHost(t *testing.T) {
 	runner := newRuntimeFixtureRunner(t)
-	installFakeEngineDownload(t, runner.repoRoot, "linux", "x86_64")
-	cfg := prepareConfig{setupMode: "runtime", webMode: "normal"}
+	installFakeEngineDownload(t)
+	cfg := setupConfig{target: "host"}
 	version := mustDefaultRuntimeVersion(t)
 
-	if err := prepareAssets(cfg, runner); err != nil {
-		t.Fatalf("prepareAssets returned error: %v", err)
+	if err := setupAssets(cfg, runner); err != nil {
+		t.Fatalf("setupAssets returned error: %v", err)
 	}
 
 	expected := []recordedCall{
@@ -220,30 +195,59 @@ func TestPrepareAssetsRuntime(t *testing.T) {
 	}
 }
 
-func TestPrepareAssetsNone(t *testing.T) {
+func TestSetupAssetsHostUsesSameRunPack(t *testing.T) {
 	runner := newRuntimeFixtureRunner(t)
-	cfg := prepareConfig{setupMode: "none", webMode: "normal"}
+	installFakeEngineDownload(t)
+	assetDir := filepath.Join(runner.repoRoot, "runtime-assets")
+	cfg := setupConfig{target: "host", assetDir: assetDir}
+	version := mustDefaultRuntimeVersion(t)
 
-	if err := prepareAssets(cfg, runner); err != nil {
-		t.Fatalf("prepareAssets returned error: %v", err)
-	}
-
-	if len(runner.calls) != 0 {
-		t.Fatalf("unexpected script calls: %#v", runner.calls)
+	if err := setupAssets(cfg, runner); err != nil {
+		t.Fatalf("setupAssets returned error: %v", err)
 	}
 	if len(runner.commands) != 0 {
-		t.Fatalf("unexpected commands: %#v", runner.commands)
+		t.Fatalf("same-run pack should avoid rebuilding runtime assets: %#v", runner.commands)
+	}
+	packPath := filepath.Join(os.Getenv("GOPATH"), "bin", "gdspxrt"+version+".pck")
+	pack, err := os.ReadFile(packPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(pack) != "same-run-runtime-pack" {
+		t.Fatalf("runtime pack = %q", pack)
 	}
 }
 
-func TestPrepareAssetsWeb(t *testing.T) {
+func TestSetupAssetsHostUsesPublishedPack(t *testing.T) {
 	runner := newRuntimeFixtureRunner(t)
-	installFakeEngineDownload(t, runner.repoRoot, "linux", "x86_64")
-	cfg := prepareConfig{setupMode: "web", webMode: "worker"}
+	installFakeEngineDownload(t)
+	cfg := setupConfig{target: "host", publishedRuntime: true}
 	version := mustDefaultRuntimeVersion(t)
 
-	if err := prepareAssets(cfg, runner); err != nil {
-		t.Fatalf("prepareAssets returned error: %v", err)
+	if err := setupAssets(cfg, runner); err != nil {
+		t.Fatalf("setupAssets returned error: %v", err)
+	}
+	if len(runner.commands) != 0 {
+		t.Fatalf("published pack should avoid rebuilding runtime assets: %#v", runner.commands)
+	}
+	packPath := filepath.Join(os.Getenv("GOPATH"), "bin", "gdspxrt"+version+".pck")
+	pack, err := os.ReadFile(packPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(pack) != "runtime-pck" {
+		t.Fatalf("runtime pack = %q", pack)
+	}
+}
+
+func TestSetupAssetsWeb(t *testing.T) {
+	runner := newRuntimeFixtureRunner(t)
+	installFakeEngineDownload(t)
+	cfg := setupConfig{target: "web", mode: "worker"}
+	version := mustDefaultRuntimeVersion(t)
+
+	if err := setupAssets(cfg, runner); err != nil {
+		t.Fatalf("setupAssets returned error: %v", err)
 	}
 
 	expectedCalls := []recordedCall{{script: "cmd/spx/install.sh", args: []string{"--web", "--no-embed-runtime"}}}
@@ -267,13 +271,13 @@ func TestPrepareAssetsWeb(t *testing.T) {
 	}
 }
 
-func TestPrepareAssetsFull(t *testing.T) {
+func TestSetupAssetsFull(t *testing.T) {
 	runner := newRuntimeFixtureRunner(t)
-	installFakeEngineDownload(t, runner.repoRoot, "linux", "x86_64")
-	cfg := prepareConfig{setupMode: "full", webMode: "minigame"}
+	installFakeEngineDownload(t)
+	cfg := setupConfig{target: "full", mode: "minigame"}
 
-	if err := prepareAssets(cfg, runner); err != nil {
-		t.Fatalf("prepareAssets returned error: %v", err)
+	if err := setupAssets(cfg, runner); err != nil {
+		t.Fatalf("setupAssets returned error: %v", err)
 	}
 
 	expectedCalls := []recordedCall{{script: "cmd/spx/install.sh", args: []string{"--web"}}}
@@ -287,94 +291,54 @@ func TestPrepareAssetsFull(t *testing.T) {
 	})
 }
 
-func installFakeEngineDownload(t *testing.T, repoRoot, defaultPlatform, arch string) {
+func installFakeEngineDownload(t *testing.T) {
 	t.Helper()
 
-	restoreResolve := enginepkg.SetEngineDownloadResolveEnv(func(repoRootArg, platform string) (enginepkg.DownloadEnv, error) {
-		if platform == "" {
-			platform = defaultPlatform
-		}
+	oldDownload := downloadEngineAssets
+	oldPrepareEditor := prepareHostEditorAsset
+	downloadEngineAssets = func(cfg enginepkg.DownloadConfig, repoRoot string) error {
 		version := mustDefaultRuntimeVersion(t)
-		return enginepkg.DownloadEnv{
-			RepoRoot:    repoRootArg,
-			Version:     version,
-			Platform:    platform,
-			Arch:        arch,
-			GoBinDir:    filepath.Join(os.Getenv("GOPATH"), "bin"),
-			TemplateDir: filepath.Join(repoRootArg, "templates"),
-			CacheDir:    filepath.Join(repoRootArg, "cache"),
-			URLPrefix:   "https://example.invalid/",
-		}, nil
-	})
-	oldFetch := enginepkg.EngineDownloadFetcher
-	enginepkg.EngineDownloadFetcher = fakeEngineDownloadFetcher
+		goBinDir := filepath.Join(os.Getenv("GOPATH"), "bin")
+		if err := os.MkdirAll(goBinDir, 0o755); err != nil {
+			return err
+		}
+		if cfg.Runtime {
+			if err := os.WriteFile(filepath.Join(goBinDir, "gdspx"+version), []byte("editor"), 0o755); err != nil {
+				return err
+			}
+			if err := os.WriteFile(filepath.Join(goBinDir, "gdspxrt"+version), []byte("runtime"), 0o755); err != nil {
+				return err
+			}
+			if !cfg.SkipRuntimePack {
+				content := "runtime-pck"
+				if cfg.AssetDir != "" {
+					content = "same-run-runtime-pack"
+				}
+				return os.WriteFile(filepath.Join(goBinDir, "gdspxrt"+version+".pck"), []byte(content), 0o644)
+			}
+		}
+		if cfg.Platform == "web" {
+			templateDir := filepath.Join(repoRoot, "templates")
+			if err := os.MkdirAll(templateDir, 0o755); err != nil {
+				return err
+			}
+			return os.WriteFile(filepath.Join(templateDir, "web_release.zip"), []byte(cfg.Mode), 0o644)
+		}
+		return nil
+	}
+	prepareHostEditorAsset = func(repoRoot, assetDir string) error {
+		version := mustDefaultRuntimeVersion(t)
+		goBinDir := filepath.Join(os.Getenv("GOPATH"), "bin")
+		if err := os.MkdirAll(goBinDir, 0o755); err != nil {
+			return err
+		}
+		return os.WriteFile(filepath.Join(goBinDir, "gdspx"+version), []byte("editor"), 0o755)
+	}
 
 	t.Cleanup(func() {
-		restoreResolve()
-		enginepkg.EngineDownloadFetcher = oldFetch
+		downloadEngineAssets = oldDownload
+		prepareHostEditorAsset = oldPrepareEditor
 	})
-}
-
-func fakeEngineDownloadFetcher(url, dst string) error {
-	base := filepath.Base(url)
-	runtimePackZip := release.RuntimeAssetZipName
-
-	switch base {
-	case "linux-x86_64.zip":
-		return writeZipFixture(dst, map[string]string{
-			"godot.linuxbsd.template_release.x86_64": "linux-template",
-		})
-	case "editor-linux-x86_64.zip":
-		return writeZipFixture(dst, map[string]string{
-			"godot.linuxbsd.editor.x86_64": "linux-editor",
-		})
-	case "web-worker.zip":
-		return writeZipFixture(dst, map[string]string{
-			"web-template.bin": "worker-web-template",
-		})
-	case "web.zip":
-		return writeZipFixture(dst, map[string]string{
-			"web-template.bin": "normal-web-template",
-		})
-	case "web-minigame.zip":
-		return writeZipFixture(dst, map[string]string{
-			"web-template.bin": "minigame-web-template",
-		})
-	case "web-miniprogram.zip":
-		return writeZipFixture(dst, map[string]string{
-			"web-template.bin": "miniprogram-web-template",
-		})
-	case runtimePackZip:
-		return writeZipFixture(dst, map[string]string{
-			"gdspxrt.pck": "runtime-pck",
-		})
-	default:
-		return errors.New("unexpected download URL: " + url)
-	}
-}
-
-func writeZipFixture(dst string, files map[string]string) error {
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-		return err
-	}
-
-	file, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	writer := zip.NewWriter(file)
-	for name, content := range files {
-		entry, err := writer.Create(name)
-		if err != nil {
-			return err
-		}
-		if _, err := entry.Write([]byte(content)); err != nil {
-			return err
-		}
-	}
-	return writer.Close()
 }
 
 func assertRuntimeWorkspaceCommands(t *testing.T, got []recordedCommand, repoRoot string, want []recordedCommand) {

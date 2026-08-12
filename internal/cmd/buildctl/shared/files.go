@@ -50,11 +50,7 @@ func ensureGoPath() (string, error) {
 }
 
 func defaultRuntimeVersion() (string, error) {
-	version := release.DefaultReleaseMeta().Runtime.Version
-	if version == "" {
-		return "", fmt.Errorf("release: Runtime.Version is empty")
-	}
-	return version, nil
+	return release.DefaultRuntimeLock().RuntimeVersion, nil
 }
 
 func copyFile(src, dst string) (err error) {

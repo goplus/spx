@@ -11,7 +11,7 @@ jobs:
 
   build:
     name: Build Android APK
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 60
 
     steps:
@@ -24,62 +24,71 @@ jobs:
       run: sudo apt-get update && sudo apt-get install gcc libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libx11-dev xorg-dev libasound2-dev libopenal-dev
       if: ${{ runner.os == 'Linux' }}
 
-    - name: Set up Java 17
+    - name: Set up toolchain and engine assets
+      id: deps
+      uses: ./.github/actions/deps
+      with:
+        require-android-ndk-alias: 'true'
+
+    - name: Set up locked Java
       uses: actions/setup-java@v5
       with:
         distribution: temurin
-        java-version: 17
+        java-version: ${{ steps.deps.outputs.jdk-version }}
 
-    - name: Set up Android NDK
-      uses: nttld/setup-ndk@v1
+    - name: Set up locked Android NDK
+      uses: nttld/setup-ndk@ed92fe6cadad69be94a966a7ee3271275e62f779 # v1.6.0
       id: setup-ndk
+      # setup-ndk's persistent cache can restore compiler symlinks that still
+      # point at a previous runner's tool cache. Keep the installation fresh.
       with:
-        ndk-version: r23c
+        ndk-version: ${{ steps.deps.outputs.android-ndk-installer-alias }}
         add-to-path: true
-        local-cache: true
-
-    - name: Set up toolchain and engine assets
-      uses: ./.github/actions/deps
 
     - name: Export ANDROID_NDK_ROOT
       run: echo "ANDROID_NDK_ROOT=${{ steps.setup-ndk.outputs.ndk-path }}" >> "$GITHUB_ENV"
 
-    - name: Verify and fix Android NDK installation
+    - name: Verify locked Android NDK installation
+      shell: bash
+      env:
+        LOCKED_ANDROID_NDK_VERSION: ${{ steps.deps.outputs.android-ndk-version }}
       run: |
+        set -euo pipefail
+
         echo "[info] Android NDK root: $ANDROID_NDK_ROOT"
-        echo "[info] Checking for clang binary"
-        CLANG_PATH="$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
-        
-        if [ ! -f "$CLANG_PATH" ]; then
-          echo "[warn] Clang binary not found; installing NDK r23c manually"
-          
-          # Create temporary directory
-          TMP_DIR=$(mktemp -d)
-          cd "$TMP_DIR"
-          
-          # Download NDK
-          wget -q https://dl.google.com/android/repository/android-ndk-r23c-linux.zip
-          
-          # Extract to a temp location
-          unzip -q android-ndk-r23c-linux.zip
-          
-          # Move to the expected location
-          rm -rf "$ANDROID_NDK_ROOT"
-          mv android-ndk-r23c "$ANDROID_NDK_ROOT"
-          
-          # Cleanup
-          cd -
-          rm -rf "$TMP_DIR"
-          
-          echo "[ok] NDK r23c installed"
-        else
-          echo "[ok] Clang binary found: $CLANG_PATH"
+        if [ -z "${ANDROID_NDK_ROOT:-}" ] || [ ! -d "$ANDROID_NDK_ROOT" ]; then
+          echo "[error] Android NDK root is missing: ${ANDROID_NDK_ROOT:-<unset>}" >&2
+          exit 1
         fi
-        
-        # Verify installation
-        echo "[info] Verifying NDK installation"
-        ls -la "$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" || echo "[error] Clang still not found" >&2
-        ls -la "$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang" || echo "[error] Android clang wrapper not found" >&2
+
+        SOURCE_PROPERTIES="$ANDROID_NDK_ROOT/source.properties"
+        if [ ! -f "$SOURCE_PROPERTIES" ]; then
+          echo "[error] Android NDK source.properties not found: $SOURCE_PROPERTIES" >&2
+          exit 1
+        fi
+        INSTALLED_ANDROID_NDK_VERSION="$(sed -nE 's/^[[:space:]]*Pkg\.Revision[[:space:]]*=[[:space:]]*([^[:space:]]+)[[:space:]]*$/\1/p' "$SOURCE_PROPERTIES")"
+        if [ "$INSTALLED_ANDROID_NDK_VERSION" != "$LOCKED_ANDROID_NDK_VERSION" ]; then
+          echo "[error] Android NDK revision is $INSTALLED_ANDROID_NDK_VERSION, lock requires $LOCKED_ANDROID_NDK_VERSION" >&2
+          exit 1
+        fi
+
+        CLANG_PATH="$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
+        CLANGXX_PATH="$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++"
+        ANDROID_CLANG_PATH="$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang"
+        ANDROID_CLANGXX_PATH="$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang++"
+        for tool in "$CLANG_PATH" "$CLANGXX_PATH" "$ANDROID_CLANG_PATH" "$ANDROID_CLANGXX_PATH"; do
+          if [ ! -x "$tool" ]; then
+            echo "[error] Required Android NDK compiler is missing or not executable: $tool" >&2
+            exit 1
+          fi
+          "$tool" --version
+        done
+
+        if ! "$CLANG_PATH" --version | grep -F "Android" >/dev/null; then
+          echo "[error] NDK clang does not identify itself as an Android toolchain: $CLANG_PATH" >&2
+          exit 1
+        fi
+        echo "[ok] Android NDK $INSTALLED_ANDROID_NDK_VERSION matches runtime.lock.json"
 
     - name: Download Android export templates
       run: |

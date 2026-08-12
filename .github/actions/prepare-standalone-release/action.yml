@@ -1,9 +1,10 @@
 name: Prepare standalone release
-description: Update the shared go.mod template for a standalone release build, reinstall spx, and expose the rebuilt binary path.
+description: Prepare runtime assets, reinstall spx, and expose the rebuilt binary path.
 inputs:
-  version:
-    description: 'SPX v3 release version without the leading v (for example, 3.0.0)'
-    required: true
+  engine-asset-dir:
+    description: 'Optional directory containing engine artifacts from the current workflow run'
+    required: false
+    default: ''
 outputs:
   spx-bin:
     description: 'Path to the rebuilt spx binary'
@@ -14,46 +15,26 @@ runs:
     - name: Build local buildctl
       uses: ./.github/actions/setup-buildctl
 
-    - name: Update template version and install spx
+    - name: Prepare runtime assets and install spx
       id: prepare-standalone-release
       shell: bash
       env:
-        RELEASE_VERSION: ${{ inputs.version }}
+        ENGINE_ASSET_DIR: ${{ inputs.engine-asset-dir }}
       run: |
         set -euo pipefail
         source ./.github/actions/lib/release_platform.sh
 
-        if [[ ! "$RELEASE_VERSION" =~ ^3\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]]; then
-          log_error "Invalid SPX v3 release version: $RELEASE_VERSION (expected 3.x.y without a leading v)"
-          exit 1
-        fi
-
-        VERSION="v$RELEASE_VERSION"
-        FILE="internal/scaffold/go.mod.template"
-
-        if [ ! -f "$FILE" ]; then
-          log_error "Template file not found: $FILE"
-          exit 1
-        fi
-
         log_section "Prepare standalone release"
         log_info "Workspace: $(pwd)"
-        log_info "Version: $VERSION"
-        log_info "Template: $FILE"
-
-        log_section "Template before replacement"
-        cat "$FILE"
-
-        # Create backup and replace version
-        sed -i.bak -E "s|(require github.com/goplus/spx/v3) v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)? (//xgo:class)|\1 $VERSION \3|" "$FILE"
-        rm -f "$FILE.bak"
-
-        log_section "Template after replacement"
-        cat "$FILE"
-        log_success "Updated $FILE with version $VERSION"
 
         log_info "Preparing runtime assets and reinstalling spx"
-        "$BUILDCTL" prepare --setup-mode runtime
+        setup_args=(host)
+        if [ -n "$ENGINE_ASSET_DIR" ]; then
+          setup_args+=(--asset-dir "$ENGINE_ASSET_DIR")
+        else
+          setup_args+=(--published-runtime)
+        fi
+        "$BUILDCTL" setup "${setup_args[@]}"
 
         GOEXE="$(go_env_goexe)"
         SPX_BIN_PATH="$(go_env_spx_path "$GOEXE")"

@@ -42,11 +42,18 @@ func (cmd *CmdTool) Run(arg string) (err error) {
 
 func (cmd *CmdTool) RunPackMode(pargs ...string) error {
 	dllPath := path.Join(cmd.RuntimeTempDir, filepath.Base(cmd.LibPath))
-	util.CopyFile(cmd.LibPath, dllPath)
+	if err := util.CopyFile(cmd.LibPath, dllPath); err != nil {
+		return err
+	}
 	extensionPath := path.Join(cmd.RuntimeTempDir, "runtime.gdextension")
-	util.CopyFile(path.Join(cmd.ProjectDir, "runtime.gdextension.txt"), extensionPath)
+	if err := util.CopyFile(path.Join(cmd.ProjectDir, "runtime.gdextension.txt"), extensionPath); err != nil {
+		return err
+	}
+	if err := prepareRuntimeExtensionList(cmd.RuntimeTempDir); err != nil {
+		return err
+	}
 
-	args := cmd.buildRuntimeArgs(pargs, cmd.RuntimeTempDir, extensionPath)
+	args := cmd.buildRuntimeArgs(pargs, cmd.RuntimeTempDir)
 	return util.RunCommandInDir(cmd.RuntimeTempDir, cmd.RuntimeCmdPath, args...)
 }
 
@@ -130,17 +137,16 @@ func (cmd *CmdTool) RunInterpreted(pargs ...string) error {
 	}
 	cmd.RuntimeCmdPath = runtimePath
 
-	extensionPath, err := cmd.prepareInterpretedRuntimeDir(libPath)
-	if err != nil {
+	if err := cmd.prepareInterpretedRuntimeDir(libPath); err != nil {
 		return err
 	}
 
-	args := cmd.buildRuntimeArgs(pargs, cmd.RuntimeTempDir, extensionPath)
+	args := cmd.buildRuntimeArgs(pargs, cmd.RuntimeTempDir)
 	return util.RunCommandInDir(cmd.RuntimeTempDir, runtimePath, args...)
 }
 
 // buildRuntimeArgs builds gdspxrt args.
-func (cmd *CmdTool) buildRuntimeArgs(inputArgs []string, tempDir, extPath string, extraArgs ...string) []string {
+func (cmd *CmdTool) buildRuntimeArgs(inputArgs []string, tempDir string, extraArgs ...string) []string {
 	args := []string{}
 	for i := 0; i < len(inputArgs); i++ {
 		if inputArgs[i] == "--path" {
@@ -150,7 +156,6 @@ func (cmd *CmdTool) buildRuntimeArgs(inputArgs []string, tempDir, extPath string
 		args = append(args, inputArgs[i])
 	}
 	args = append(args, "--path", tempDir)
-	args = append(args, "--gdextpath", extPath)
 	args = append(args, extraArgs...)
 	args = append(args, "--no-header")
 	return args
@@ -250,23 +255,35 @@ func runtimePackPath(runtimePath string) string {
 	return filepath.Join(filepath.Dir(runtimePath), runtimePackFileName(filepath.Base(runtimePath)))
 }
 
-func (cmd *CmdTool) prepareInterpretedRuntimeDir(libPath string) (string, error) {
+func (cmd *CmdTool) prepareInterpretedRuntimeDir(libPath string) error {
 	if err := os.MkdirAll(cmd.RuntimeTempDir, 0o755); err != nil {
-		return "", fmt.Errorf("failed to create runtime temp dir %s: %w", cmd.RuntimeTempDir, err)
+		return fmt.Errorf("failed to create runtime temp dir %s: %w", cmd.RuntimeTempDir, err)
 	}
 
 	// Place the shared library next to runtime.gdextension so Godot can resolve it
 	// without depending on a pre-installed runtime.gdextension file.
 	dstLibPath := filepath.Join(cmd.RuntimeTempDir, filepath.Base(libPath))
 	if err := util.CopyFile(libPath, dstLibPath); err != nil {
-		return "", fmt.Errorf("failed to copy shared library %s to %s: %w", libPath, dstLibPath, err)
+		return fmt.Errorf("failed to copy shared library %s to %s: %w", libPath, dstLibPath, err)
 	}
 
 	extensionPath := filepath.Join(cmd.RuntimeTempDir, "runtime.gdextension")
 	if err := os.WriteFile(extensionPath, []byte(scaffold.RuntimeGDExtension()), 0o644); err != nil {
-		return "", fmt.Errorf("failed to write runtime.gdextension: %w", err)
+		return fmt.Errorf("failed to write runtime.gdextension: %w", err)
 	}
-	return extensionPath, nil
+	return prepareRuntimeExtensionList(cmd.RuntimeTempDir)
+}
+
+func prepareRuntimeExtensionList(runtimeDir string) error {
+	projectDataDir := filepath.Join(runtimeDir, ".godot")
+	if err := os.MkdirAll(projectDataDir, 0o755); err != nil {
+		return fmt.Errorf("failed to create runtime project data directory: %w", err)
+	}
+	listPath := filepath.Join(projectDataDir, "extension_list.cfg")
+	if err := os.WriteFile(listPath, []byte(scaffold.RuntimeExtensionList()), 0o644); err != nil {
+		return fmt.Errorf("failed to write runtime extension list: %w", err)
+	}
+	return nil
 }
 
 // runWebCommand exports before serving.
