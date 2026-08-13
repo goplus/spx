@@ -56,7 +56,7 @@ private:
 	AudioStreamPlayer2D *_get_aid_audio(GdInt aid);
 
 public:
-	void on_create(GdInt id, Node *root);
+	void on_create(GdInt p_id, Node *p_root);
 	void on_destroy();
 	void on_update(float delta);
 	void on_reset(int reset_code);

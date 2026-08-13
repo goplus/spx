@@ -267,7 +267,7 @@ public:
  */
 #define SPX_AUDIO_GUARD_VOID(aid, context_name)                                  \
 	SpxObjectGuard<AudioStreamPlayer2D, SpxAudio> audio(aid, context_name, this, \
-			[](SpxAudio *mgr, GdInt id) { return mgr->_get_aid_audio(id); });    \
+			[](SpxAudio *mgr, GdInt audio_id) { return mgr->_get_aid_audio(audio_id); }); \
 	if (!audio)                                                                  \
 		return;
 
@@ -284,7 +284,7 @@ public:
  */
 #define SPX_AUDIO_GUARD_RETURN(aid, context_name, return_val)                    \
 	SpxObjectGuard<AudioStreamPlayer2D, SpxAudio> audio(aid, context_name, this, \
-			[](SpxAudio *mgr, GdInt id) { return mgr->_get_aid_audio(id); });    \
+			[](SpxAudio *mgr, GdInt audio_id) { return mgr->_get_aid_audio(audio_id); }); \
 	if (!audio)                                                                  \
 		return return_val;
 

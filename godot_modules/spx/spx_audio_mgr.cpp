@@ -171,15 +171,15 @@ GdInt SpxAudioMgr::play(GdObj obj, GdString path) {
 }
 
 GdInt SpxAudioMgr::play_with_attenuation(GdObj obj, GdString path, GdObj owner_id, GdFloat attenuation, GdFloat max_distance) {
-	Node *owner = nullptr;
+	Node *audio_owner = nullptr;
 	if (owner_id == -1) {
-		owner = static_cast<Node *>(cameraMgr->get_camera());
+		audio_owner = static_cast<Node *>(cameraMgr->get_camera());
 	} else {
-		owner = static_cast<Node *>(spriteMgr->get_sprite(owner_id));
+		audio_owner = static_cast<Node *>(spriteMgr->get_sprite(owner_id));
 	}
 
-	if (owner == nullptr) {
-		owner = static_cast<Node *>(root);
+	if (audio_owner == nullptr) {
+		audio_owner = static_cast<Node *>(root);
 	}
 
 	SpxAudio *audio = get_object(obj);
@@ -195,7 +195,7 @@ GdInt SpxAudioMgr::play_with_attenuation(GdObj obj, GdString path, GdObj owner_i
 		aid_audios[aid] = audio;
 	}
 
-	audio->play(aid, path, owner, attenuation, max_distance);
+	audio->play(aid, path, audio_owner, attenuation, max_distance);
 	return aid;
 }
 

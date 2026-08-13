@@ -132,25 +132,25 @@ void SpxSprite::_physics_process(double p_delta) {
 }
 
 void SpxSprite::_handle_dynamic_physics(double p_delta) {
-	Vector2 velocity = get_velocity();
+	Vector2 current_velocity = get_velocity();
 
 	if (use_gravity && !is_on_floor()) {
-		velocity.y += _gravity * p_delta * gravity_scale * SpxPhysicsDefine::get_global_gravity();
+		current_velocity.y += _gravity * p_delta * gravity_scale * SpxPhysicsDefine::get_global_gravity();
 	}
 
 	float safe_mass = Math::is_zero_approx(mass_value) ? 1.0f : mass_value;
-	velocity += applied_forces * p_delta / safe_mass;
-	velocity += external_forces * p_delta;
+	current_velocity += applied_forces * p_delta / safe_mass;
+	current_velocity += external_forces * p_delta;
 
 	if (drag_value > 0.0f) {
-		velocity = velocity.move_toward(Vector2(), drag_value * velocity.length() * p_delta * SpxPhysicsDefine::get_global_air_drag());
+		current_velocity = current_velocity.move_toward(Vector2(), drag_value * current_velocity.length() * p_delta * SpxPhysicsDefine::get_global_air_drag());
 	}
 
-	if (is_on_floor() && Math::abs(velocity.x) > 0.0f) {
-		velocity.x = Math::move_toward(double(velocity.x), 0.0, p_delta * friction_value * SpxPhysicsDefine::get_global_friction());
+	if (is_on_floor() && Math::abs(current_velocity.x) > 0.0f) {
+		current_velocity.x = Math::move_toward(double(current_velocity.x), 0.0, p_delta * friction_value * SpxPhysicsDefine::get_global_friction());
 	}
 
-	set_velocity(velocity);
+	set_velocity(current_velocity);
 	applied_forces = Vector2();
 }
 
@@ -164,9 +164,9 @@ void SpxSprite::_handle_static_physics(double /* p_delta */) {
 }
 
 void SpxSprite::_handle_no_physics(double p_delta) {
-	Vector2 velocity = get_velocity();
-	if (velocity != Vector2()) {
-		set_global_position(get_global_position() + velocity * p_delta);
+	Vector2 current_velocity = get_velocity();
+	if (current_velocity != Vector2()) {
+		set_global_position(get_global_position() + current_velocity * p_delta);
 	}
 
 	external_forces = Vector2();

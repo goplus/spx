@@ -42,9 +42,9 @@ GdObj SpxPen::get_id() {
 	return id;
 }
 
-void SpxPen::on_create(GdInt id, Node *root) {
-	this->id = id;
-	surface = static_cast<SpxPenSurface *>(root);
+void SpxPen::on_create(GdInt p_id, Node *p_root) {
+	id = p_id;
+	surface = static_cast<SpxPenSurface *>(p_root);
 	is_pen_down = false;
 	has_last_draw_pos = false;
 	needs_start_cap = true;

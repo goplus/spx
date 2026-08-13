@@ -53,12 +53,12 @@ public:
 	TriggerPair() :
 			id1(0), id2(0) {}
 
-	TriggerPair(GdObj id1, GdObj id2) {
-		this->id1 = id1;
-		this->id2 = id2;
-		if (id1 > id2) {
-			this->id1 = id2;
-			this->id2 = id1;
+	TriggerPair(GdObj p_id1, GdObj p_id2) {
+		id1 = p_id1;
+		id2 = p_id2;
+		if (p_id1 > p_id2) {
+			id1 = p_id2;
+			id2 = p_id1;
 		}
 	}
 	bool operator<(const TriggerPair &p_other) const {

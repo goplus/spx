@@ -47,9 +47,9 @@ AudioStreamPlayer2D *SpxAudio::_get_aid_audio(GdInt aid) {
 	return nullptr;
 }
 
-void SpxAudio::on_create(GdInt id, Node *root) {
-	this->root = root;
-	this->id = id;
+void SpxAudio::on_create(GdInt p_id, Node *p_root) {
+	root = p_root;
+	id = p_id;
 	bus_name = SpxAudioBusPool::STR_BUS_SFX;
 	owns_dedicated_bus = false;
 }
