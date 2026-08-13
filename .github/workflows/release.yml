@@ -327,7 +327,7 @@ jobs:
     needs: [setup, static-checks, godot-runtime-build, runtime-assets-build]
     if: >-
       ${{
-        always() &&
+        !cancelled() &&
         needs.setup.result == 'success' &&
         needs.static-checks.result == 'success' &&
         (
@@ -351,7 +351,7 @@ jobs:
   web-build:
     name: Build Web packages
     needs: [setup, runtime-ready]
-    if: needs.setup.outputs.run_web == 'true'
+    if: ${{ !cancelled() && needs.runtime-ready.result == 'success' && needs.setup.outputs.run_web == 'true' }}
     uses: ./.github/workflows/release_web.yml
     with:
       engine_artifacts: ${{ needs.setup.outputs.runtime_state == 'missing' }}
@@ -359,7 +359,7 @@ jobs:
   macos-build:
     name: Package macOS
     needs: [setup, runtime-ready]
-    if: needs.setup.outputs.run_macos == 'true'
+    if: ${{ !cancelled() && needs.runtime-ready.result == 'success' && needs.setup.outputs.run_macos == 'true' }}
     uses: ./.github/workflows/release_macos.yml
     with:
       engine_artifacts: ${{ needs.setup.outputs.runtime_state == 'missing' }}
@@ -367,7 +367,7 @@ jobs:
   windows-build:
     name: Package Windows
     needs: [setup, runtime-ready]
-    if: needs.setup.outputs.run_windows == 'true'
+    if: ${{ !cancelled() && needs.runtime-ready.result == 'success' && needs.setup.outputs.run_windows == 'true' }}
     uses: ./.github/workflows/release_windows.yml
     with:
       engine_artifacts: ${{ needs.setup.outputs.runtime_state == 'missing' }}
@@ -375,7 +375,7 @@ jobs:
   linux-build:
     name: Package Linux
     needs: [setup, runtime-ready]
-    if: needs.setup.outputs.run_linux == 'true'
+    if: ${{ !cancelled() && needs.runtime-ready.result == 'success' && needs.setup.outputs.run_linux == 'true' }}
     uses: ./.github/workflows/release_linux.yml
     with:
       engine_artifacts: ${{ needs.setup.outputs.runtime_state == 'missing' }}
@@ -391,7 +391,7 @@ jobs:
       - linux-build
     if: >-
       ${{
-        always() &&
+        !cancelled() &&
         needs.setup.result == 'success' &&
         needs.runtime-ready.result == 'success' &&
         (needs.setup.outputs.run_web != 'true' || needs.web-build.result == 'success') &&
@@ -598,7 +598,7 @@ jobs:
   publish-runtime:
     name: Publish runtime release
     needs: [setup, assemble]
-    if: inputs.operation != 'dry-run' && needs.assemble.result == 'success'
+    if: ${{ !cancelled() && inputs.operation != 'dry-run' && needs.assemble.result == 'success' }}
     runs-on: ubuntu-22.04
     permissions:
       contents: write
@@ -672,7 +672,7 @@ jobs:
   publish-spx:
     name: Prepare SPX release draft
     needs: [setup, assemble, publish-runtime]
-    if: inputs.operation == 'publish-release' && needs.publish-runtime.result == 'success'
+    if: ${{ !cancelled() && inputs.operation == 'publish-release' && needs.publish-runtime.result == 'success' }}
     runs-on: ubuntu-22.04
     permissions:
       contents: write
@@ -725,7 +725,7 @@ jobs:
   publish-web-package:
     name: Publish npm package
     needs: [setup, publish-spx]
-    if: inputs.operation == 'publish-release' && needs.publish-spx.result == 'success'
+    if: ${{ !cancelled() && inputs.operation == 'publish-release' && needs.publish-spx.result == 'success' }}
     permissions:
       contents: read
       id-token: write
@@ -738,7 +738,7 @@ jobs:
   finalize-spx:
     name: Finalize SPX release
     needs: [setup, publish-spx, publish-web-package]
-    if: inputs.operation == 'publish-release' && needs.publish-spx.result == 'success' && needs.publish-web-package.result == 'success'
+    if: ${{ !cancelled() && inputs.operation == 'publish-release' && needs.publish-web-package.result == 'success' }}
     runs-on: ubuntu-22.04
     permissions:
       contents: write
@@ -750,3 +750,46 @@ jobs:
           RELEASE_TAG: ${{ needs.setup.outputs.release_tag }}
           REPOSITORY: ${{ needs.setup.outputs.release_repository }}
         run: gh release edit "$RELEASE_TAG" --repo "$REPOSITORY" --draft=false
+
+  release-gate:
+    name: Verify release operation completed
+    needs:
+      - setup
+      - assemble
+      - publish-runtime
+      - publish-spx
+      - publish-web-package
+      - finalize-spx
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Require the selected operation's terminal jobs
+        shell: bash
+        env:
+          OPERATION: ${{ inputs.operation }}
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          set -euo pipefail
+
+          required=(setup assemble)
+          case "$OPERATION" in
+            dry-run)
+              ;;
+            publish-runtime)
+              required+=(publish-runtime)
+              ;;
+            publish-release)
+              required+=(publish-runtime publish-spx publish-web-package finalize-spx)
+              ;;
+            *)
+              echo "[error] Unsupported release operation: $OPERATION" >&2
+              exit 1
+              ;;
+          esac
+          for job in "${required[@]}"; do
+            result="$(jq -r --arg job "$job" '.[$job].result // "missing"' <<<"$NEEDS_JSON")"
+            if [ "$result" != success ]; then
+              echo "[error] Required job did not succeed: $job ($result)" >&2
+              exit 1
+            fi
+          done
