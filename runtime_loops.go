@@ -81,6 +81,15 @@ func (p *Game) logicLoop(me coroutine.Thread) int {
 		FireTimer: func(targetTimer float64) {
 			p.fireEvent(&eventTimer{Time: targetTimer})
 		},
+		PollConditions: p.pollConditions,
 		ShowDebugPanel: p.showDebugPanel,
 	})
+}
+
+func (p *Game) pollConditions() {
+	// Startup code and OnStart handlers reach their first yield before this opens.
+	if !p.lifecycleState.StartDispatched.Load() {
+		return
+	}
+	p.scriptEvents.doWhenCondition()
 }

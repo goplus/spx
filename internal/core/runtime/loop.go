@@ -172,6 +172,7 @@ type LogicFrameConfig[T any] struct {
 	FlushCompletedAnimations func(T, []string) []string
 	NextTimer                func() (float64, bool)
 	FireTimer                func(float64)
+	PollConditions           func()
 }
 
 func ProcessLogicFrame[T any](cfg LogicFrameConfig[T]) ([]string, []string) {
@@ -192,6 +193,9 @@ func ProcessLogicFrame[T any](cfg LogicFrameConfig[T]) ([]string, []string) {
 		}
 		cfg.FireTimer(targetTimer)
 	}
+	if cfg.PollConditions != nil {
+		cfg.PollConditions()
+	}
 	return tempAudios, tempAnimations
 }
 
@@ -201,6 +205,7 @@ type LogicLoopConfig[T any] struct {
 	FlushCompletedAnimations func(T, []string) []string
 	NextTimer                func() (float64, bool)
 	FireTimer                func(float64)
+	PollConditions           func()
 	ShowDebugPanel           func()
 }
 
@@ -217,6 +222,7 @@ func RunLogicLoop[T any](me coroutine.Thread, cfg LogicLoopConfig[T]) int {
 			FlushCompletedAnimations: cfg.FlushCompletedAnimations,
 			NextTimer:                cfg.NextTimer,
 			FireTimer:                cfg.FireTimer,
+			PollConditions:           cfg.PollConditions,
 		})
 		engine.WaitNextFrame()
 		cfg.ShowDebugPanel()

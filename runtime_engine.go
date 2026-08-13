@@ -198,9 +198,11 @@ func (p *Game) resetBootstrapState() {
 	p.bootstrapMu.Lock()
 	p.bootstrapGen++
 	p.bootstrapStarted = false
+	p.startScheduled = false
 	p.pendingBootstrap = nil
-	p.bootstrapMu.Unlock()
 	p.lifecycleState.BootstrapDone.Store(false)
+	p.lifecycleState.StartDispatched.Store(false)
+	p.bootstrapMu.Unlock()
 }
 
 func (p *Game) runBootstrapTasks() {
@@ -243,6 +245,45 @@ func (p *Game) isBootstrapGenerationCurrent(generation uint64) bool {
 	return generation == p.bootstrapGen
 }
 
+func (p *Game) markBootstrapDoneFor(generation uint64) bool {
+	p.bootstrapMu.Lock()
+	defer p.bootstrapMu.Unlock()
+	if generation != p.bootstrapGen {
+		return false
+	}
+	p.lifecycleState.BootstrapDone.Store(true)
+	return true
+}
+
+func (p *Game) scheduleStartEvent() *eventStart {
+	p.bootstrapMu.Lock()
+	defer p.bootstrapMu.Unlock()
+	if !p.lifecycleState.BootstrapDone.Load() || p.lifecycleState.StartDispatched.Load() || p.startScheduled {
+		return nil
+	}
+	p.startScheduled = true
+	return &eventStart{generation: p.bootstrapGen}
+}
+
+func (p *Game) takeStartSinksFor(generation uint64) ([]eventSink, bool) {
+	p.bootstrapMu.Lock()
+	defer p.bootstrapMu.Unlock()
+	if generation != p.bootstrapGen {
+		return nil, false
+	}
+	return p.scriptEvents.manager.SnapshotStartOnce(), true
+}
+
+func (p *Game) markStartDispatchedFor(generation uint64) bool {
+	p.bootstrapMu.Lock()
+	defer p.bootstrapMu.Unlock()
+	if generation != p.bootstrapGen {
+		return false
+	}
+	p.lifecycleState.StartDispatched.Store(true)
+	return true
+}
+
 func (p *Game) claimBootstrapPhaseFor(generation uint64) (hasTasks, ok bool) {
 	p.bootstrapMu.Lock()
 	defer p.bootstrapMu.Unlock()
@@ -260,16 +301,13 @@ func (p *Game) startBootstrapPhaseFor(generation uint64) {
 			return
 		}
 		if !hasTasks {
-			p.lifecycleState.BootstrapDone.Store(true)
+			p.markBootstrapDoneFor(generation)
 			return
 		}
 
-		p.lifecycleState.BootstrapDone.Store(false)
 		gco.CreateAndStart(false, p, func(coroutine.Thread) int {
 			p.runBootstrapTasksFor(generation)
-			if p.isBootstrapGenerationCurrent(generation) {
-				p.lifecycleState.BootstrapDone.Store(true)
-			}
+			p.markBootstrapDoneFor(generation)
 			return 0
 		})
 	})

@@ -27,7 +27,6 @@ import (
 )
 
 type GameLifecycleState struct {
-	StartFlag       sync.Once
 	RunOnce         sync.Once
 	OncePathFinder  sync.Once
 	BootstrapDone   atomic.Bool

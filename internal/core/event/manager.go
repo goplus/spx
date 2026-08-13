@@ -41,6 +41,7 @@ const (
 	BucketTouchEnd
 	BucketClick
 	BucketTimer
+	BucketCondition
 
 	bucketCount
 )
@@ -181,6 +182,10 @@ func (m *Manager) AddTimer(sink Sink) {
 	m.Add(BucketTimer, sink)
 }
 
+func (m *Manager) AddCondition(sink Sink) {
+	m.Add(BucketCondition, sink)
+}
+
 func (m *Manager) Snapshot(bucket Bucket) []Sink {
 	m.mu.RLock()
 	out := readOnlySnapshot(m.buckets[bucket])
@@ -244,4 +249,8 @@ func (m *Manager) SnapshotClick() []Sink {
 
 func (m *Manager) SnapshotTimer() []Sink {
 	return m.Snapshot(BucketTimer)
+}
+
+func (m *Manager) SnapshotCondition() []Sink {
+	return m.Snapshot(BucketCondition)
 }

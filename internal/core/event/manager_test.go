@@ -22,6 +22,7 @@ func TestManagerReset(t *testing.T) {
 	var mgr Manager
 	mgr.Add(BucketStart, Sink{Owner: "game", Handler: func() {}})
 	mgr.Add(BucketTimer, Sink{Owner: "sprite", Handler: func() {}})
+	mgr.Add(BucketCondition, Sink{Owner: "sprite", Handler: func() {}})
 
 	mgr.Reset()
 
@@ -31,6 +32,9 @@ func TestManagerReset(t *testing.T) {
 	if got := mgr.Snapshot(BucketTimer); len(got) != 0 {
 		t.Fatalf("BucketTimer len = %d, want 0", len(got))
 	}
+	if got := mgr.Snapshot(BucketCondition); len(got) != 0 {
+		t.Fatalf("BucketCondition len = %d, want 0", len(got))
+	}
 }
 
 func TestManagerDeleteOwner(t *testing.T) {
@@ -38,6 +42,7 @@ func TestManagerDeleteOwner(t *testing.T) {
 	mgr.Add(BucketStart, Sink{Owner: "keep", Handler: func() {}})
 	mgr.Add(BucketClick, Sink{Owner: "drop", Handler: func() {}})
 	mgr.Add(BucketTimer, Sink{Owner: "drop", Handler: func() {}})
+	mgr.Add(BucketCondition, Sink{Owner: "drop", Handler: func() {}})
 
 	mgr.DeleteOwner("drop")
 
@@ -49,6 +54,9 @@ func TestManagerDeleteOwner(t *testing.T) {
 	}
 	if got := mgr.Snapshot(BucketTimer); len(got) != 0 {
 		t.Fatalf("BucketTimer len = %d, want 0", len(got))
+	}
+	if got := mgr.Snapshot(BucketCondition); len(got) != 0 {
+		t.Fatalf("BucketCondition len = %d, want 0", len(got))
 	}
 }
 
@@ -110,12 +118,16 @@ func TestManagerConvenienceMethods(t *testing.T) {
 	var mgr Manager
 	mgr.AddClick(Sink{Owner: "click", Handler: func() {}})
 	mgr.AddTimer(Sink{Owner: "timer", Handler: func() {}})
+	mgr.AddCondition(Sink{Owner: "condition", Handler: func() {}})
 
 	if got := mgr.SnapshotClick(); len(got) != 1 || got[0].Owner != "click" {
 		t.Fatalf("SnapshotClick = %+v, want click sink", got)
 	}
 	if got := mgr.SnapshotTimer(); len(got) != 1 || got[0].Owner != "timer" {
 		t.Fatalf("SnapshotTimer = %+v, want timer sink", got)
+	}
+	if got := mgr.SnapshotCondition(); len(got) != 1 || got[0].Owner != "condition" {
+		t.Fatalf("SnapshotCondition = %+v, want condition sink", got)
 	}
 }
 
