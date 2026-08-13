@@ -53,14 +53,14 @@ Error SpxUiBinding::_connect_pressed_first(Control *p_control) {
 
 	const StringName pressed_signal = SNAME("pressed");
 	const Callable binding_callable = callable_mp(this, &SpxUiBinding::_on_pressed);
-	List<Object::Connection> connections;
-	button->get_signal_connection_list(pressed_signal, &connections);
+	List<Object::Connection> signal_connections;
+	button->get_signal_connection_list(pressed_signal, &signal_connections);
 
 	// BaseButton used to invoke the SPX callback immediately before emitting
 	// "pressed". Preserve that observable ordering when moving the callback to
 	// a standard signal, including for connections restored from PackedScene.
 	Vector<PreservedConnection> preserved;
-	for (const Object::Connection &connection : connections) {
+	for (const Object::Connection &connection : signal_connections) {
 		PreservedConnection item;
 		item.callable = connection.callable;
 		item.flags = connection.flags;

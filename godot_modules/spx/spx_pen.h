@@ -70,7 +70,7 @@ private:
 	Ref<Texture2D> _resolve_stamp_texture(const String &texture_path);
 
 public:
-	void on_create(GdInt id, Node *root);
+	void on_create(GdInt p_id, Node *p_root);
 	void on_destroy();
 	void on_update(float delta);
 	void on_reset(int reset_code);
