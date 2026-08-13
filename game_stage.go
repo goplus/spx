@@ -208,6 +208,15 @@ func (p *Game) ask(isSprite bool, question string, callback func(string)) {
 }
 
 // -----------------------------------------------------------------------------
+// Target
+// -----------------------------------------------------------------------------
+// GetTarget returns the implementation of the first active, non-cloned sprite
+// with the specified name. It returns nil if no matching sprite exists.
+func (p *Game) GetTarget(target string) *SpriteImpl {
+	return p.findSprite(target)
+}
+
+// -----------------------------------------------------------------------------
 // Property
 // -----------------------------------------------------------------------------
 type PropertyName = string
