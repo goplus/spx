@@ -113,6 +113,19 @@ func (p *scriptEventBindings) OnClick(onClick func()) {
 	p.scriptEventRegistry.manager.AddClick(coreevent.NewSink(pthis, onClick, coreevent.MatchOwner(pthis)))
 }
 
+// OnCond runs the handler on each false-to-true transition.
+// condition is polled after startup and must be fast and non-blocking.
+func (p *scriptEventBindings) OnCond(condition func() bool, onCondition func()) {
+	if condition == nil || onCondition == nil {
+		return
+	}
+	p.scriptEventRegistry.manager.AddCondition(coreevent.NewSink(
+		p.pthis,
+		onCondition,
+		coreevent.MatchRisingEdge(condition),
+	))
+}
+
 func (p *scriptEventBindings) OnAnyKey(onKey func(key Key)) {
 	p.scriptEventRegistry.manager.AddKeyPressed(coreevent.NewSink(p.pthis, onKey))
 }
@@ -343,8 +356,12 @@ func (p *Game) handleEvent(ev event) {
 		p.scriptEvents.doWhenKeyPressed(e.Key)
 	case *eventStart:
 		runStartPhase := func() {
-			p.scriptEvents.doWhenStart()
-			p.lifecycleState.StartDispatched.Store(true)
+			sinks, ok := p.takeStartSinksFor(e.generation)
+			if !ok {
+				return
+			}
+			p.scriptEvents.doWhenStart(sinks)
+			p.markStartDispatchedFor(e.generation)
 		}
 		if gco != nil && !gco.IsInCoroutine() {
 			// Keep OnStart handlers in one coroutine phase and advance them in
@@ -373,8 +390,7 @@ func (p *Game) fireEvent(ev event) {
 // -----------------------------------------------------------------------------
 // Event Dispatch
 // -----------------------------------------------------------------------------
-func (p *scriptEventRegistry) doWhenStart() {
-	sinks := p.manager.SnapshotStartOnce()
+func (p *scriptEventRegistry) doWhenStart(sinks []eventSink) {
 	if len(sinks) == 0 {
 		return
 	}
@@ -416,6 +432,15 @@ func (p *scriptEventRegistry) doWhenAwake(this threadObj) {
 func (p *scriptEventRegistry) doWhenTimer(time float64) {
 	p.dispatchAsync(coreevent.BucketTimer, false, time, func(ev *eventSink) {
 		ev.Handler.(func(float64))(time)
+	})
+}
+
+func (p *scriptEventRegistry) doWhenCondition() {
+	p.dispatchAsync(coreevent.BucketCondition, false, nil, func(ev *eventSink) {
+		coreevent.If0(isDebugEventEnabled, func() {
+			spxlog.Debug("OnCond: %s", nameOf(ev.Owner))
+		})()
+		ev.Handler.(func())()
 	})
 }
 

@@ -43,3 +43,38 @@ func TestSinkMatchers(t *testing.T) {
 		t.Fatal("MatchApproxFloat mismatch")
 	}
 }
+
+func TestMatchRisingEdge(t *testing.T) {
+	values := []bool{false, false, true, true, false, true}
+	index := 0
+	edge := MatchRisingEdge(func() bool {
+		value := values[index]
+		index++
+		return value
+	})
+
+	var fired []int
+	for i := range values {
+		if edge(nil) {
+			fired = append(fired, i)
+		}
+	}
+
+	want := []int{2, 5}
+	if len(fired) != len(want) || fired[0] != want[0] || fired[1] != want[1] {
+		t.Fatalf("fired = %v, want %v", fired, want)
+	}
+	if index != len(values) {
+		t.Fatalf("test evaluated %d times, want %d", index, len(values))
+	}
+}
+
+func TestMatchRisingEdgeInitiallyTrue(t *testing.T) {
+	edge := MatchRisingEdge(func() bool { return true })
+	if !edge(nil) {
+		t.Fatal("initial true condition did not fire")
+	}
+	if edge(nil) {
+		t.Fatal("condition fired again while remaining true")
+	}
+}

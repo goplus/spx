@@ -106,6 +106,7 @@ type Game struct {
 	bootstrapMu             sync.Mutex
 	bootstrapGen            uint64
 	bootstrapStarted        bool
+	startScheduled          bool
 	pendingBootstrap        []func()
 	sprCollisionInfos       map[string]*spriteCollisionInfo
 	sprCollisionData        []*spriteCollisionData
@@ -247,6 +248,7 @@ func (p *Game) getSpriteProtoByName(name string, g reflect.Value) Sprite {
 
 func (p *Game) reset() {
 	p.lifecycleState.IsRunned.Store(false)
+	p.resetBootstrapState()
 
 	p.releaseGameAudio()
 	p.EraseAll()
@@ -259,13 +261,10 @@ func (p *Game) reset() {
 
 	p.Stop(AllOtherScripts)
 
-	p.lifecycleState.StartFlag = sync.Once{}
 	p.lifecycleState.RunOnce = sync.Once{}
 	p.lifecycleState.OncePathFinder = sync.Once{}
-	p.lifecycleState.StartDispatched.Store(false)
 	p.sprs = make(map[string]Sprite)
 
-	p.resetBootstrapState()
 	engine.ResetFrameRuntime()
 	p.abortInputSession("game reset")
 	p.resetCollisionLayerState()

@@ -25,12 +25,9 @@ import (
 
 // dispatchStartEventIfNeeded fires the start event once after bootstrap completes.
 func (p *Game) dispatchStartEventIfNeeded() {
-	coreruntime.SyncOnce(&p.lifecycleState.StartFlag, func() {
-		// Handle start directly in the engine update phase. Routing it through the
-		// generic event channel can let its helper goroutine resume only after the
-		// coroutine update has already decided it is idle.
-		p.handleEvent(&eventStart{})
-	})
+	if ev := p.scheduleStartEvent(); ev != nil {
+		p.handleEvent(ev)
+	}
 }
 
 // updateSpriteProxies activates pending shapes, batches dirty sprite proxy changes,

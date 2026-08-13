@@ -67,3 +67,15 @@ func MatchApproxFloat(want, tolerance float64) func(any) bool {
 		return ok && math.Abs(got-want) < tolerance
 	}
 }
+
+// MatchRisingEdge reports whether condition changed from false to true.
+// The initial state is false, and condition is evaluated once per invocation.
+func MatchRisingEdge(condition func() bool) func(any) bool {
+	wasTrue := false
+	return func(any) bool {
+		isTrue := condition()
+		fire := isTrue && !wasTrue
+		wasTrue = isTrue
+		return fire
+	}
+}

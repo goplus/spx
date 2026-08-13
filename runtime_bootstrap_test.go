@@ -109,3 +109,22 @@ func TestGameRunBootstrapTasksStopsDrainingAfterReset(t *testing.T) {
 		}
 	}
 }
+
+func TestGameBootstrapCompletionIgnoresStaleGeneration(t *testing.T) {
+	var game Game
+	stale := game.currentBootstrapGeneration()
+
+	game.lifecycleState.BootstrapDone.Store(true)
+	game.lifecycleState.StartDispatched.Store(true)
+	game.resetBootstrapState()
+
+	if game.markBootstrapDoneFor(stale) {
+		t.Fatal("stale bootstrap generation was marked done")
+	}
+	if game.markStartDispatchedFor(stale) {
+		t.Fatal("stale bootstrap generation was marked started")
+	}
+	if game.lifecycleState.BootstrapDone.Load() || game.lifecycleState.StartDispatched.Load() {
+		t.Fatal("stale generation reopened lifecycle gates")
+	}
+}

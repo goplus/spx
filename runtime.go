@@ -35,7 +35,9 @@ type event any
 // -----------------------------------------------------------------------------
 // Event Payloads
 // -----------------------------------------------------------------------------
-type eventStart struct{}
+type eventStart struct {
+	generation uint64
+}
 
 type eventKeyDown struct {
 	Key Key

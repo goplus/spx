@@ -611,6 +611,7 @@ func TestRunSpriteCallbacksAllowsOnStartAfterMainFirstYield(t *testing.T) {
 
 	runBootstrapTasksWithScheduler(t, &game, generation)
 
+	game.markBootstrapDoneFor(generation)
 	game.dispatchStartEventIfNeeded()
 	gco.Update()
 

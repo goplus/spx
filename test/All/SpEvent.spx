@@ -1,6 +1,28 @@
+import "fmt"
+
 var (
-	hasStarted bool
+	hasStarted        bool
+	score             = 0
+	scoreReachedCount int
 )
+
+func triggerScoreCondition(expectedCount int) {
+	score = 0
+	for score < 3 {
+		score++
+		waitNextFrame
+	}
+	for scoreReachedCount < expectedCount {
+		waitNextFrame
+	}
+	assert(scoreReachedCount == expectedCount,
+		"Sprite::OnCond trigger count = %d, want %d", scoreReachedCount, expectedCount)
+}
+
+onCond score >= 3, => {
+	scoreReachedCount++
+	say fmt.Sprintf("Condition trigger count: %d", scoreReachedCount)
+}
 
 onKey KeyY, => {
 	hasInputKey = true
@@ -50,7 +72,7 @@ onMsg "testEvent", => {
 	onTestStart(this)
 
 	// 1. Sprite::onKey
-	say "Please presse key 'y' "
+	say "Please press key 'y'"
 	for !hasInputKey {
 		waitNextFrame
 	}
@@ -62,9 +84,16 @@ onMsg "testEvent", => {
 	}
 	say ""
 
-	// 3. Sprite::onStart
+	// 3. Sprite::onStart, onCond
 	wait 0.1s
 	assert(hasStarted, "Sprite::OnStart")
+
+	triggerScoreCondition 1
+	wait 1
+	assert(scoreReachedCount == 1, "Sprite::OnCond should not repeat while true")
+
+	triggerScoreCondition 2
+	wait 1
 
 	// 4. Sprite::onBackdrop
 	setBackdrop "backdrop2"
