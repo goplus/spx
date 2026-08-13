@@ -25,6 +25,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/goplus/spx/v3/internal/release"
 )
 
 func TestExtractZipRejectsPathTraversal(t *testing.T) {
@@ -114,6 +116,50 @@ func TestFetchURLToFileHonorsHTTPClientTimeout(t *testing.T) {
 	}
 	if !strings.Contains(strings.ToLower(err.Error()), "timeout") && !strings.Contains(strings.ToLower(err.Error()), "deadline") {
 		t.Fatalf("fetchURLToFile error = %v, want timeout/deadline error", err)
+	}
+}
+
+func TestLoadEngineAssetManifestExplainsUnavailableRuntime(t *testing.T) {
+	server := httptest.NewServer(http.NotFoundHandler())
+	defer server.Close()
+
+	env := engineDownloadEnv{
+		version:   release.DefaultRuntimeLock().RuntimeVersion,
+		cacheDir:  t.TempDir(),
+		urlPrefix: server.URL + "/",
+	}
+	err := loadEngineAssetManifest(&env)
+	if err == nil {
+		t.Fatal("expected missing runtime manifest to fail")
+	}
+	want := "locked runtime " + release.DefaultRuntimeLock().RuntimeReleaseTag() + " is unavailable: runtime-manifest.json returned 404 Not Found\n" +
+		"Published-asset setup requires a complete runtime release.\n" +
+		"Publish the locked runtime, or build from source with \"make dev MODE=normal\"."
+	if err.Error() != want {
+		t.Fatalf("loadEngineAssetManifest error = %q, want %q", err, want)
+	}
+}
+
+func TestLoadEngineAssetManifestKeepsNonNotFoundFailuresClosed(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "temporary failure", http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+
+	env := engineDownloadEnv{
+		version:   release.DefaultRuntimeLock().RuntimeVersion,
+		cacheDir:  t.TempDir(),
+		urlPrefix: server.URL + "/",
+	}
+	err := loadEngineAssetManifest(&env)
+	if err == nil {
+		t.Fatal("expected runtime manifest server failure")
+	}
+	if !strings.Contains(err.Error(), "download runtime manifest") || !strings.Contains(err.Error(), "503 Service Unavailable") {
+		t.Fatalf("loadEngineAssetManifest error = %q, want original server failure", err)
+	}
+	if strings.Contains(err.Error(), "make dev") {
+		t.Fatalf("server failure must not be classified as an unavailable release: %q", err)
 	}
 }
 
