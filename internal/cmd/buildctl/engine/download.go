@@ -54,6 +54,16 @@ var engineDownloadFetcher = fetchURLToFile
 var engineDownloadResolveEnv = resolveEngineDownloadEnv
 var engineDownloadHTTPClient = &http.Client{Timeout: 30 * time.Minute}
 
+type downloadHTTPStatusError struct {
+	url        string
+	statusCode int
+	status     string
+}
+
+func (err *downloadHTTPStatusError) Error() string {
+	return fmt.Sprintf("download %s failed: %s", err.url, err.status)
+}
+
 func downloadEngineAssets(cfg engineDownloadConfig, repoRoot string) error {
 	env, err := engineDownloadResolveEnv(repoRoot, cfg.platform)
 	if err != nil {
@@ -496,6 +506,15 @@ func loadEngineAssetManifest(env *engineDownloadEnv) error {
 	manifestPath := filepath.Join(env.cacheDir, lock.Manifest)
 	if env.assetDir == "" {
 		if err := engineDownloadFetcher(env.urlPrefix+lock.Manifest, manifestPath); err != nil {
+			var statusErr *downloadHTTPStatusError
+			if errors.As(err, &statusErr) && statusErr.statusCode == http.StatusNotFound {
+				return fmt.Errorf(
+					"locked runtime %s is unavailable: %s returned %s\n"+
+						"Published-asset setup requires a complete runtime release.\n"+
+						"Publish the locked runtime, or build from source with %q.",
+					lock.RuntimeReleaseTag(), lock.Manifest, statusErr.status, "make dev MODE=normal",
+				)
+			}
 			return fmt.Errorf("download runtime manifest: %w", err)
 		}
 		defer os.Remove(manifestPath)
@@ -671,7 +690,11 @@ func fetchURLToFile(url, dst string) (err error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("download %s failed: %s", url, resp.Status)
+		return &downloadHTTPStatusError{
+			url:        url,
+			statusCode: resp.StatusCode,
+			status:     resp.Status,
+		}
 	}
 
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
