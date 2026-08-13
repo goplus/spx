@@ -109,6 +109,9 @@ type platformMgr struct {
 	baseMgr
 	enginewrap.PlatformMgrImpl
 }
+
+func (*platformMgr) IsMainThread() bool { return true }
+
 type resMgr struct {
 	baseMgr
 	enginewrap.ResMgrImpl

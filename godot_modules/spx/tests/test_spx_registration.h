@@ -30,16 +30,65 @@
 #ifndef TEST_SPX_REGISTRATION_H
 #define TEST_SPX_REGISTRATION_H
 
+#include "../gdextension_spx_ext.h"
+#include "../spx_engine.h"
 #include "core/extension/gdextension.h"
+#include "core/os/thread.h"
 #include "tests/test_macros.h"
 
 namespace TestSpxRegistration {
 
+struct SpxEngineShutdownGuard {
+	~SpxEngineShutdownGuard() {
+		SpxEngine::shutdown();
+	}
+};
+
 TEST_CASE("[SPX] Module initialization registers extension interface functions") {
 	CHECK_NE(GDExtension::get_interface_function("spx_global_register_callbacks"), nullptr);
+	CHECK_NE(GDExtension::get_interface_function("spx_platform_is_main_thread"), nullptr);
 	CHECK_NE(GDExtension::get_interface_function("spx_sprite_batch_update_visuals"), nullptr);
 	CHECK_NE(GDExtension::get_interface_function("spx_pen_set_canvas_size"), nullptr);
 	CHECK_NE(GDExtension::get_interface_function("spx_pen_batch_update_commands"), nullptr);
+}
+
+#ifdef THREADS_ENABLED
+struct MainThreadProbe {
+	GDExtensionSpxPlatformIsMainThread check = nullptr;
+	GdBool result = true;
+
+	static void run(void *p_data) {
+		MainThreadProbe *probe = static_cast<MainThreadProbe *>(p_data);
+		probe->check(&probe->result);
+	}
+};
+#endif
+
+TEST_CASE("[SPX] Platform main-thread query follows Godot thread state") {
+	SpxEngineShutdownGuard shutdown_guard;
+	REQUIRE_FALSE(SpxEngine::is_initialized());
+	SpxEngine::register_callbacks(nullptr);
+	REQUIRE(SpxEngine::is_initialized());
+
+	auto check = reinterpret_cast<GDExtensionSpxPlatformIsMainThread>(GDExtension::get_interface_function("spx_platform_is_main_thread"));
+	REQUIRE_NE(check, nullptr);
+
+	GdBool main_result = false;
+	check(&main_result);
+	CHECK(main_result);
+
+#ifdef THREADS_ENABLED
+	MainThreadProbe probe;
+	probe.check = check;
+	Thread worker;
+	const Thread::ID worker_id = worker.start(&MainThreadProbe::run, &probe);
+	if (worker.is_started()) {
+		worker.wait_to_finish();
+	}
+
+	REQUIRE_NE(worker_id, Thread::UNASSIGNED_ID);
+	CHECK_FALSE(probe.result);
+#endif
 }
 
 } // namespace TestSpxRegistration

@@ -31,6 +31,7 @@
 #include "spx_platform_mgr.h"
 
 #include "core/config/engine.h"
+#include "core/os/thread.h"
 #include "scene/main/window.h"
 
 #include "spx.h"
@@ -158,6 +159,10 @@ void SpxPlatformMgr::set_debug_mode(GdBool enable) {
 
 GdBool SpxPlatformMgr::is_debug_mode() {
 	return Spx::is_debug_mode();
+}
+
+GdBool SpxPlatformMgr::is_main_thread() {
+	return Thread::is_main_thread();
 }
 
 void SpxPlatformMgr::set_time_scale(GdFloat time_scale) {

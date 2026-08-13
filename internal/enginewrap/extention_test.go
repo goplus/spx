@@ -20,7 +20,7 @@ import (
 	"testing"
 )
 
-func TestCallInMainThreadRequiresInitOffMainThread(t *testing.T) {
+func TestCallInMainThreadRequiresInit(t *testing.T) {
 	originalCallback := mainCallback
 	t.Cleanup(func() {
 		mainCallback = originalCallback
@@ -34,5 +34,26 @@ func TestCallInMainThreadRequiresInitOffMainThread(t *testing.T) {
 		}
 	}()
 
-	callInMainThread(func() {})
+	CallInMainThread(func() {})
+}
+
+func TestCallInMainThreadValue(t *testing.T) {
+	originalCallback := mainCallback
+	t.Cleanup(func() {
+		mainCallback = originalCallback
+	})
+
+	calls := 0
+	Init(func(call func()) {
+		calls++
+		call()
+	})
+
+	value := CallInMainThreadValue(func() int { return 42 })
+	if value != 42 {
+		t.Fatalf("value = %d, want 42", value)
+	}
+	if calls != 1 {
+		t.Fatalf("main-thread callback calls = %d, want 1", calls)
+	}
 }

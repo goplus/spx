@@ -65,10 +65,9 @@ func (p *Coroutines) WaitNextFrameFor(me Thread) {
 }
 
 // WaitMainThread runs call on the main thread. It runs call immediately when
-// already on the main thread or on the web platform.
+// the current platform can call the engine directly.
 func (p *Coroutines) WaitMainThread(call func()) {
-	if platform.IsWeb() || platform.IsMainThread() {
-		call()
+	if platform.TryCallEngineDirectly(call) {
 		return
 	}
 

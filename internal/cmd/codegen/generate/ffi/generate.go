@@ -330,6 +330,15 @@ func getManagerFuncBody(function *clang.TypedefFunction) string {
 	params := []string{}
 	args := EffectiveArguments(function)
 	hasSyntheticReturn := function.ReturnType.Name == "void" && HasEffectiveReturn(function)
+	dispatchToMainThread := function.Name != "GDExtensionSpxPlatformIsMainThread"
+	if dispatchToMainThread {
+		if HasEffectiveReturn(function) {
+			sb.WriteString("\treturn enginewrap.CallInMainThreadValue(func() " + EffectiveGoReturnType(function) + " {\n")
+		} else {
+			sb.WriteString("\tenginewrap.CallInMainThread(func() {\n")
+		}
+		prefixTab += "\t"
+	}
 	// convert arguments
 	for i, arg := range args {
 		if ShouldSkipHighLevelArgument(function, arg) {
@@ -361,7 +370,7 @@ func getManagerFuncBody(function *clang.TypedefFunction) string {
 			sb.WriteString(")")
 			sb.WriteString("\n" + prefixTab)
 			sb.WriteString(argName + " := " + "(GdString)(" + argName + "Str) \n")
-			sb.WriteString("\tdefer " + "C.free(unsafe.Pointer(" + argName + "Str))")
+			sb.WriteString(prefixTab + "defer " + "C.free(unsafe.Pointer(" + argName + "Str))")
 		case "GdArray":
 			sb.WriteString(argName + "Info := ")
 			sb.WriteString("ToGdArrayInfo(")
@@ -422,6 +431,9 @@ func getManagerFuncBody(function *clang.TypedefFunction) string {
 		sb.WriteString("return ")
 		typeName := EffectiveGoReturnType(function)
 		sb.WriteString("To" + strcase.ToCamel(typeName) + "(retValue)")
+	}
+	if dispatchToMainThread {
+		sb.WriteString("\n\t})")
 	}
 	return sb.String()
 }

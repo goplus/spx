@@ -199,6 +199,7 @@ type GDExtensionSpxPlatformSetWindowFullscreen C.GDExtensionSpxPlatformSetWindow
 type GDExtensionSpxPlatformIsWindowFullscreen C.GDExtensionSpxPlatformIsWindowFullscreen
 type GDExtensionSpxPlatformSetDebugMode C.GDExtensionSpxPlatformSetDebugMode
 type GDExtensionSpxPlatformIsDebugMode C.GDExtensionSpxPlatformIsDebugMode
+type GDExtensionSpxPlatformIsMainThread C.GDExtensionSpxPlatformIsMainThread
 type GDExtensionSpxPlatformGetTimeScale C.GDExtensionSpxPlatformGetTimeScale
 type GDExtensionSpxPlatformSetTimeScale C.GDExtensionSpxPlatformSetTimeScale
 type GDExtensionSpxPlatformGetMaxFps C.GDExtensionSpxPlatformGetMaxFps
@@ -1461,6 +1462,12 @@ func CallPlatformIsDebugMode() GdBool {
 	arg0 := (C.GDExtensionSpxPlatformIsDebugMode)(api.SpxPlatformIsDebugMode)
 	var ret_val C.GdBool
 	C.cgo_callfn_GDExtensionSpxPlatformIsDebugMode(arg0, &ret_val)
+	return (GdBool)(ret_val)
+}
+func CallPlatformIsMainThread() GdBool {
+	arg0 := (C.GDExtensionSpxPlatformIsMainThread)(api.SpxPlatformIsMainThread)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxPlatformIsMainThread(arg0, &ret_val)
 	return (GdBool)(ret_val)
 }
 func CallPlatformGetTimeScale() GdFloat {

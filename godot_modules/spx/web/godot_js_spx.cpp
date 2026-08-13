@@ -504,6 +504,10 @@ void gdspx_platform_is_debug_mode(GdBool *ret_val) {
 	*ret_val = platformMgr->is_debug_mode();
 }
 EMSCRIPTEN_KEEPALIVE
+void gdspx_platform_is_main_thread(GdBool *ret_val) {
+	*ret_val = platformMgr->is_main_thread();
+}
+EMSCRIPTEN_KEEPALIVE
 void gdspx_platform_get_time_scale(GdFloat *ret_val) {
 	*ret_val = platformMgr->get_time_scale();
 }

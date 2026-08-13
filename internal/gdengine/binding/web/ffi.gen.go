@@ -146,6 +146,7 @@ type GDExtensionInterface struct {
 	SpxPlatformIsWindowFullscreen               js.Value
 	SpxPlatformSetDebugMode                     js.Value
 	SpxPlatformIsDebugMode                      js.Value
+	SpxPlatformIsMainThread                     js.Value
 	SpxPlatformGetTimeScale                     js.Value
 	SpxPlatformSetTimeScale                     js.Value
 	SpxPlatformGetMaxFps                        js.Value
@@ -481,6 +482,7 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxPlatformIsWindowFullscreen = resolveJSFunc("gdspx_platform_is_window_fullscreen")
 	x.SpxPlatformSetDebugMode = resolveJSFunc("gdspx_platform_set_debug_mode")
 	x.SpxPlatformIsDebugMode = resolveJSFunc("gdspx_platform_is_debug_mode")
+	x.SpxPlatformIsMainThread = resolveJSFunc("gdspx_platform_is_main_thread")
 	x.SpxPlatformGetTimeScale = resolveJSFunc("gdspx_platform_get_time_scale")
 	x.SpxPlatformSetTimeScale = resolveJSFunc("gdspx_platform_set_time_scale")
 	x.SpxPlatformGetMaxFps = resolveJSFunc("gdspx_platform_get_max_fps")

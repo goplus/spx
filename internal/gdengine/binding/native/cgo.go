@@ -56,6 +56,9 @@ func gdspx_init(lookupFunc uintptr, classes, configuration unsafe.Pointer) uint8
 
 	builtinAPI.resolveAPIFunctions()
 	api.resolveAPIFunctions()
+	if api.SpxPlatformIsMainThread == nil {
+		panic("gdengine: spx_platform_is_main_thread is unavailable")
+	}
 	init := (*initialization)(configuration)
 	*init = initialization{}
 	init.minimum_initialization_level = initializationLevel(GDExtensionInitializationLevelScene)

@@ -373,6 +373,9 @@ func (*platformMgrImpl) SetDebugMode(enable bool) {}
 func (*platformMgrImpl) IsDebugMode() bool {
 	return false
 }
+func (*platformMgrImpl) IsMainThread() bool {
+	return false
+}
 func (*platformMgrImpl) GetTimeScale() float64 {
 	return 0
 }

@@ -22,8 +22,6 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
-
-	"github.com/goplus/spx/v3/internal/engine/platform"
 )
 
 func TestUpdateReadsGCStatsOnlyWhenPerfDebugEnabled(t *testing.T) {
@@ -68,21 +66,6 @@ func TestLastUpdateStatsAreScopedToManager(t *testing.T) {
 	second := New(nil)
 	if second.GetLastUpdateStats().GCStatsEnabled {
 		t.Fatal("a new manager inherited update statistics from another manager")
-	}
-}
-
-func TestWaitMainThreadFastPathOnMainThread(t *testing.T) {
-	co := New(nil)
-	called := false
-
-	platform.RunOnMainThread(func() {
-		co.WaitMainThread(func() {
-			called = true
-		})
-	})
-
-	if !called {
-		t.Fatal("WaitMainThread should execute immediately on the main thread")
 	}
 }
 

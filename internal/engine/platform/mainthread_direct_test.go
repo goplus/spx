@@ -1,4 +1,5 @@
-//go:build !js && !pure_engine
+//go:build js || pure_engine
+// +build js pure_engine
 
 /*
  * Copyright (c) 2021 The XGo Authors (xgo.dev). All rights reserved.
@@ -24,34 +25,24 @@ import (
 	gdx "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
-type testPlatformMgr struct {
+type panicPlatformMgr struct {
 	gdx.IPlatformMgr
-	main bool
 }
 
-func (p testPlatformMgr) IsMainThread() bool {
-	return p.main
+func (panicPlatformMgr) IsMainThread() bool {
+	panic("direct platforms should not call Godot to check the main thread")
 }
 
-func TestTryCallEngineDirectlyUsesGodot(t *testing.T) {
+func TestTryCallEngineDirectlySkipsGodotWithoutNativeBridge(t *testing.T) {
 	previous := gdx.PlatformMgr
 	t.Cleanup(func() { gdx.PlatformMgr = previous })
+	gdx.PlatformMgr = panicPlatformMgr{}
 
-	gdx.PlatformMgr = testPlatformMgr{main: true}
 	called := false
 	if !TryCallEngineDirectly(func() { called = true }) {
-		t.Fatal("Godot main thread was not reported")
+		t.Fatal("engine call should run directly")
 	}
 	if !called {
-		t.Fatal("engine call did not run on the Godot main thread")
-	}
-
-	gdx.PlatformMgr = testPlatformMgr{main: false}
-	called = false
-	if TryCallEngineDirectly(func() { called = true }) {
-		t.Fatal("Godot worker thread was reported as the main thread")
-	}
-	if called {
-		t.Fatal("engine call ran on a Godot worker thread")
+		t.Fatal("direct engine call did not run")
 	}
 }

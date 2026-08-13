@@ -795,6 +795,13 @@ func (*platformMgrImpl) IsDebugMode() bool {
 	})
 	return _ret1
 }
+func (*platformMgrImpl) IsMainThread() bool {
+	var _ret1 bool
+	callInMainThread(func() {
+		_ret1 = gdx.PlatformMgr.IsMainThread()
+	})
+	return _ret1
+}
 func (*platformMgrImpl) GetTimeScale() float64 {
 	var _ret1 float64
 	callInMainThread(func() {

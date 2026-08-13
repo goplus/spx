@@ -63,6 +63,7 @@ public:
 	SPX_API GdBool is_window_fullscreen();
 	SPX_API void set_debug_mode(GdBool enable);
 	SPX_API GdBool is_debug_mode();
+	SPX_API GdBool is_main_thread();
 
 	SPX_API GdFloat get_time_scale();
 	SPX_API void set_time_scale(GdFloat time_scale);
