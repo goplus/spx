@@ -36,6 +36,21 @@ type targetPropertyActor struct {
 	Power float64
 }
 
+type targetLookupSprite struct {
+	SpriteImpl
+}
+
+func (*targetLookupSprite) Main() {}
+
+func newTargetLookupSprite(g *Game, name string, cloned bool) *targetLookupSprite {
+	sprite := &targetLookupSprite{}
+	sprite.g = g
+	sprite.name = name
+	sprite.sprite = sprite
+	sprite.spriteState.Cloned = cloned
+	return sprite
+}
+
 func (a *targetPropertyActor) Health() float64 {
 	return a.Power
 }
@@ -148,6 +163,43 @@ func TestGameDayssince2000(t *testing.T) {
 
 	if got < lower || got > upper {
 		t.Fatalf("Dayssince2000 = %v, want in [%v, %v]", got, lower, upper)
+	}
+}
+
+func TestGameGetTargetReturnsNamedSprite(t *testing.T) {
+	var game Game
+	clone := newTargetLookupSprite(&game, "Hero", true)
+	target := newTargetLookupSprite(&game, "Hero", false)
+	game.addShape(&clone.SpriteImpl)
+	game.addShape(&target.SpriteImpl)
+
+	if got := game.GetTarget("Hero"); got != &target.SpriteImpl {
+		t.Fatalf("GetTarget(%q) = %v, want %v", "Hero", got, &target.SpriteImpl)
+	}
+}
+
+func TestGameGetTargetReturnsNilWithoutMatch(t *testing.T) {
+	var game Game
+	game.addShape(&newTargetLookupSprite(&game, "Hero", true).SpriteImpl)
+
+	for _, target := range []string{"", "Missing", "hero"} {
+		if got := game.GetTarget(target); got != nil {
+			t.Errorf("GetTarget(%q) = %v, want nil", target, got)
+		}
+	}
+}
+
+func TestGameGetTargetReturnsNilAfterTargetIsRemoved(t *testing.T) {
+	var game Game
+	target := newTargetLookupSprite(&game, "Hero", false)
+	clone := newTargetLookupSprite(&game, "Hero", true)
+	game.addShape(&target.SpriteImpl)
+	game.addShape(&clone.SpriteImpl)
+
+	game.removeShape(&target.SpriteImpl)
+
+	if got := game.GetTarget("Hero"); got != nil {
+		t.Fatalf("GetTarget(%q) after target removal = %v, want nil", "Hero", got)
 	}
 }
 

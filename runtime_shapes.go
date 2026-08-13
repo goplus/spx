@@ -42,12 +42,6 @@ func (p *Game) findSprite(name SpriteName) *SpriteImpl {
 	return p.shapeMgr.findSprite(name)
 }
 
-// GetTarget returns the implementation of the first active, non-cloned sprite
-// with the specified name. It returns nil if no matching sprite exists.
-func (p *Game) GetTarget(target string) *SpriteImpl {
-	return p.findSprite(target)
-}
-
 func (p *Game) getAllShapes() []Shape {
 	return p.shapeMgr.all()
 }
