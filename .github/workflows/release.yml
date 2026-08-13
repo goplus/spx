@@ -307,7 +307,7 @@ jobs:
     if: needs.setup.outputs.runtime_state == 'missing'
     # Pin the canonical workflow implementation independently from the Godot
     # source identity supplied by runtime.lock through godot_ref below.
-    uses: goplus/godot/.github/workflows/release_builds.yml@ab8a457bac6363b22bb45bb31a047f5844ec1673
+    uses: goplus/godot/.github/workflows/release_builds.yml@32e5a3f324e766a4ec6722ea6a046e48400e88be
     with:
       runtime_version: ${{ needs.setup.outputs.runtime_version }}
       runtime_abi: ${{ needs.setup.outputs.runtime_abi }}
