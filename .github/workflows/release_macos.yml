@@ -59,18 +59,18 @@ jobs:
 
       - name: Prepare standalone release
         id: prepare_standalone_release
-        uses: ./.github/actions/prepare-standalone-release
+        uses: ./.github/actions/standalone/prepare
         with:
           engine-asset-dir: ${{ inputs.engine_artifacts && 'runtime-assets' || '' }}
 
       - name: Package standalone release
-        uses: ./.github/actions/package-standalone-release
+        uses: ./.github/actions/standalone/package
         with:
           package-file: spx-standalone-darwin-${{ matrix.arch_name }}.zip
           spx-bin: ${{ steps.prepare_standalone_release.outputs.spx-bin }}
 
       - name: Verify standalone release package
-        uses: ./.github/actions/verify-release
+        uses: ./.github/actions/standalone/verify
         with:
           package-file: spx-standalone-darwin-${{ matrix.arch_name }}.zip
           platform: darwin

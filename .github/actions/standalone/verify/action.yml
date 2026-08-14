@@ -23,7 +23,7 @@ runs:
         RUNNER_ARCH_CONTEXT: ${{ runner.arch }}
       run: |
         set -euo pipefail
-        source ./.github/actions/lib/release_platform.sh
+        source ./.github/actions/standalone/lib/platform.sh
 
         reset_test_project_state() {
           local project_dir="$1"

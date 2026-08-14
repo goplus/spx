@@ -519,8 +519,8 @@ jobs:
               exit 1
             fi
             module_tree="$(git rev-parse "HEAD:${MODULE_PATH}")"
-            runtime_pack_source_sha256="$(go run ./.github/scripts/runtime_pack_source_digest.go HEAD)"
-            build_recipe_sha256="$(go run ./.github/scripts/runtime_build_recipe_digest.go HEAD)"
+            runtime_pack_source_sha256="$(go run ./.github/scripts/runtime_digest.go pack-source HEAD)"
+            build_recipe_sha256="$(go run ./.github/scripts/runtime_digest.go build-recipe HEAD)"
 
             manifest_args=()
             for name in "${required_assets[@]}"; do
