@@ -4,16 +4,17 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'SPX release tag declared by this commit (for example, v3.x.y)'
-        required: true
+        description: 'SPX release tag declared by this commit; required except for publish-dev-npm'
+        required: false
+        default: ''
         type: string
       platforms:
-        description: 'SPX packages: all or comma-separated web,macos,windows,linux; ignored by publish-runtime'
+        description: 'SPX packages: all or comma-separated web,macos,windows,linux; ignored by publish-runtime and publish-dev-npm'
         required: true
         default: 'all'
         type: string
       operation:
-        description: 'Validate artifacts, publish only runtime-v*, or publish the complete SPX release'
+        description: 'Validate or publish a release, or publish a development npm package'
         required: true
         default: 'dry-run'
         type: choice
@@ -21,6 +22,7 @@ on:
           - dry-run
           - publish-runtime
           - publish-release
+          - publish-dev-npm
 
 permissions:
   contents: read
@@ -32,6 +34,7 @@ concurrency:
 jobs:
   setup:
     name: Validate locked release inputs
+    if: ${{ inputs.operation != 'publish-dev-npm' }}
     runs-on: ubuntu-22.04
     outputs:
       release_tag: ${{ steps.release.outputs.release_tag }}
@@ -735,6 +738,50 @@ jobs:
       release_version: ${{ needs.setup.outputs.version }}
       release_artifact: web-release
 
+  dev-npm-guard:
+    name: Validate development npm target
+    if: ${{ inputs.operation == 'publish-dev-npm' }}
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out publication target
+        uses: actions/checkout@v6
+
+      - name: Require the canonical dev branch
+        shell: bash
+        env:
+          CURRENT_REF: ${{ github.ref }}
+          CURRENT_REPOSITORY: ${{ github.repository }}
+          RELEASE_TAG_INPUT: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+
+          expected_repository="$(jq -er .release_repository internal/release/runtime.lock.json)"
+          if [ "$CURRENT_REPOSITORY" != "$expected_repository" ]; then
+            echo "[error] Development npm publishing is locked to $expected_repository, not $CURRENT_REPOSITORY" >&2
+            exit 1
+          fi
+          if [ "$CURRENT_REF" != refs/heads/dev ]; then
+            echo "[error] Development npm publishing requires refs/heads/dev, not $CURRENT_REF" >&2
+            exit 1
+          fi
+          if [ -n "$RELEASE_TAG_INPUT" ]; then
+            echo "[error] release_tag must be empty for publish-dev-npm" >&2
+            exit 1
+          fi
+
+  publish-dev-web-package:
+    name: Publish development npm package
+    needs: dev-npm-guard
+    if: ${{ !cancelled() && inputs.operation == 'publish-dev-npm' && needs.dev-npm-guard.result == 'success' }}
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/publish_web_package.yml
+    with:
+      target: ${{ github.sha }}
+      release_version: ''
+      release_artifact: ''
+
   finalize-spx:
     name: Finalize SPX release
     needs: [setup, publish-spx, publish-web-package]
@@ -760,6 +807,8 @@ jobs:
       - publish-spx
       - publish-web-package
       - finalize-spx
+      - dev-npm-guard
+      - publish-dev-web-package
     if: ${{ !cancelled() }}
     runs-on: ubuntu-22.04
     steps:
@@ -771,15 +820,19 @@ jobs:
         run: |
           set -euo pipefail
 
-          required=(setup assemble)
+          required=()
           case "$OPERATION" in
             dry-run)
+              required+=(setup assemble)
               ;;
             publish-runtime)
-              required+=(publish-runtime)
+              required+=(setup assemble publish-runtime)
               ;;
             publish-release)
-              required+=(publish-runtime publish-spx publish-web-package finalize-spx)
+              required+=(setup assemble publish-runtime publish-spx publish-web-package finalize-spx)
+              ;;
+            publish-dev-npm)
+              required+=(dev-npm-guard publish-dev-web-package)
               ;;
             *)
               echo "[error] Unsupported release operation: $OPERATION" >&2
