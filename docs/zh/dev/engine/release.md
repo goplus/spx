@@ -91,6 +91,21 @@ canonical-ref ancestry 规则刻意只用于 release。普通 runner 与 module-
 
 runtime manifest、`SHA256SUMS` 和 lock 的 required asset 集合必须完全一致；已公开 tag 的来源或资产不同会直接失败，不能覆盖。未公开的 runtime/SPX draft tag 必须指向当前 `GITHUB_SHA`；已公开 runtime 可来自前一阶段的 candidate commit，但只有完整复用契约一致时才能用于最终 SPX commit。SPX tag 始终指向最终 commit。如果合并修改了任一 runtime 身份输入，最终运行会拒绝复用，此时必须重新冻结并提升 `runtime_version`。
 
+## 开发版 npm 包
+
+`publish-dev-npm` 是独立的按需操作，不属于上述三阶段正式发版。它只允许从 canonical `goplus/spx` 的 `dev` 分支触发；`release_tag` 必须留空，`platforms` 会被忽略：
+
+```sh
+gh workflow run release.yml \
+  --repo goplus/spx \
+  --ref dev \
+  -f operation=publish-dev-npm
+```
+
+该操作固定使用 dispatch 捕获的精确 commit SHA，构建 Web normal 包，计算 pseudo-version，并发布到 npm `dev` dist-tag。它不会构建 release runtime、平台产品包或创建 GitHub Release；Web 构建仍会下载 lock 对应的公开 runtime，因此该 runtime release 必须已经公开且完整，否则依赖准备会失败。如果目标 SHA 恰好已有正式 `v3.*` tag，则会 fail closed。开发版 npm 与正式发布共用 `spx-release` 并发组，避免不同 SHA 或正式/开发发布同时竞争 dist-tag。
+
+不要恢复 `dev` 每次 push 自动发布。显式操作可以避免 runtime lock 已推进但对应 runtime 尚未公开时反复失败，也避免为每次合入产生不可撤销的 npm 版本。npm Trusted Publisher 应固定为 organization `goplus`、repository `spx`、workflow filename `release.yml`，environment 留空；正式版与开发版都通过该顶层 workflow 的 OIDC 身份发布。`publish_web_package.yml` 只是 reusable workflow，不应单独触发。
+
 ## 后续版本维护
 
 - 仅 SPX 产品变化且 runtime 两类产物均未变化时，可以用 SPX-only mapping 保留 current runtime，但必须先由 release dry-run 证明公开 runtime 的完整 provenance 可复用；`bump-release` 不会在本地擅自做这个复用决定。

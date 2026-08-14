@@ -91,6 +91,21 @@ Use a frozen release branch in `goplus/spx` for the bootstrap operations:
 
 The runtime manifest, `SHA256SUMS`, and the lock's required asset set must match exactly. A public tag with different provenance or assets fails rather than being overwritten. An unpublished runtime/SPX draft tag must target the current `GITHUB_SHA`; a public runtime may target the candidate commit from the previous stage, but only an identical full reuse contract allows the final SPX commit to consume it. The SPX tag always targets the final commit. If the merge changes any runtime identity input, the final run rejects reuse; freeze again and bump `runtime_version` instead.
 
+## Development npm package
+
+`publish-dev-npm` is an independent on-demand operation, not a fourth stage of the production release. It is restricted to the canonical `goplus/spx` `dev` branch; leave `release_tag` empty and note that `platforms` is ignored:
+
+```sh
+gh workflow run release.yml \
+  --repo goplus/spx \
+  --ref dev \
+  -f operation=publish-dev-npm
+```
+
+The operation pins the exact commit SHA captured by the dispatch, builds the Web normal bundle, computes a pseudo-version, and publishes it under the npm `dev` dist-tag. It does not build the release runtime or platform products and does not create a GitHub Release. The Web build still downloads the public runtime selected by the lock, so that runtime release must already be public and complete; otherwise dependency setup fails. A target SHA carrying an exact production `v3.*` tag fails closed. Development npm publication shares the `spx-release` concurrency group with production releases so different SHAs and production/development publication cannot race over dist-tags.
+
+Do not restore publication on every push to `dev`. Explicit publication avoids repeated failures while a newly advanced runtime lock has no public runtime and avoids creating an irreversible npm version for every merge. Configure the npm Trusted Publisher with organization `goplus`, repository `spx`, workflow filename `release.yml`, and no environment. Production and development packages then use the same top-level OIDC identity. `publish_web_package.yml` is reusable-only and must not be dispatched directly.
+
 ## Maintaining later versions
 
 - If only SPX products change and both runtime artifact classes remain identical, an SPX-only mapping may retain the current runtime, but the release dry-run must first prove that the public runtime's complete provenance is reusable. `bump-release` deliberately does not make this reuse decision locally.

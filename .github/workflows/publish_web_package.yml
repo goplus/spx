@@ -17,19 +17,13 @@ on:
         required: false
         default: ''
         type: string
-  workflow_dispatch:
-    inputs:
-      target:
-        description: Branch name or full commit SHA to build
-        required: true
-        type: string
 
 permissions:
   contents: read
   id-token: write
 
 concurrency:
-  group: web-package-${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && inputs.target || github.sha }}
+  group: web-package-${{ inputs.target }}
   cancel-in-progress: false
 
 jobs:
@@ -37,22 +31,19 @@ jobs:
     name: Publish web package
     runs-on: ubuntu-latest
     steps:
-      - name: Validate dispatch target
-        if: github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call'
+      - name: Validate publication target
         env:
+          RELEASE_ARTIFACT: ${{ inputs.release_artifact }}
+          RELEASE_VERSION: ${{ inputs.release_version }}
           TARGET: ${{ inputs.target }}
         run: |
-          if [[ "${TARGET}" =~ ^[0-9a-f]{40}$ ]]; then
-            exit 0
-          fi
-
-          if [[ "${TARGET}" == refs/* ]]; then
-            echo "[error] Dispatch target must be a branch name or full commit SHA" >&2
+          if [[ ! "${TARGET}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "[error] Publication target must be a full lowercase commit SHA, not ${TARGET}" >&2
             exit 1
           fi
-
-          if ! git check-ref-format --branch "${TARGET}" >/dev/null 2>&1; then
-            echo "[error] Invalid workflow_dispatch target: ${TARGET}" >&2
+          if { [ -z "$RELEASE_VERSION" ] && [ -n "$RELEASE_ARTIFACT" ]; } || \
+            { [ -n "$RELEASE_VERSION" ] && [ -z "$RELEASE_ARTIFACT" ]; }; then
+            echo "[error] release_version and release_artifact must both be empty or both be set" >&2
             exit 1
           fi
 
@@ -61,7 +52,28 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
-          ref: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && inputs.target || github.sha }}
+          persist-credentials: false
+          ref: ${{ inputs.target }}
+
+      - name: Verify checked-out publication source
+        env:
+          IS_DEVELOPMENT: ${{ inputs.release_version == '' }}
+          TARGET: ${{ inputs.target }}
+        run: |
+          set -euo pipefail
+
+          current_sha="$(git rev-parse HEAD)"
+          if [ "$current_sha" != "$TARGET" ]; then
+            echo "[error] Checked out $current_sha instead of publication target $TARGET" >&2
+            exit 1
+          fi
+          if [ "$IS_DEVELOPMENT" = true ]; then
+            release_tag="$(git tag --points-at HEAD --list 'v3.*' | sed -n '1p')"
+            if [ -n "$release_tag" ]; then
+              echo "[error] Refusing to publish development npm from exact release tag $release_tag" >&2
+              exit 1
+            fi
+          fi
 
       - name: Download verified release Web bundle
         if: inputs.release_artifact != ''
@@ -133,9 +145,6 @@ jobs:
             if [[ "${npm_package_version}" == *-* ]]; then
               npm_dist_tag="next"
             fi
-          elif git tag --points-at HEAD --list "v${npm_package_version}" | grep -qx "v${npm_package_version}"; then
-            echo "[info] v${npm_package_version} is an exact tag; leave npm publishing to the unified release workflow"
-            exit 0
           fi
 
           ./.github/scripts/prepare_spx_web_package.sh \
@@ -153,6 +162,11 @@ jobs:
             remote_integrity="$(npm view "@xgo-pkgs/spx@${npm_package_version}" dist.integrity)"
             if [ "$remote_integrity" != "$local_integrity" ]; then
               echo "[error] Existing npm package integrity $remote_integrity does not match $local_integrity" >&2
+              exit 1
+            fi
+            remote_dist_tag="$(npm view @xgo-pkgs/spx dist-tags --json | jq -r --arg tag "$npm_dist_tag" '.[$tag] // ""')"
+            if [ "$remote_dist_tag" != "$npm_package_version" ]; then
+              echo "[error] Existing npm package is not selected by dist-tag $npm_dist_tag (found $remote_dist_tag)" >&2
               exit 1
             fi
             echo "[info] Identical @xgo-pkgs/spx@${npm_package_version} already exists"
