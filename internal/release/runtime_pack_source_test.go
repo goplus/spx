@@ -99,7 +99,9 @@ func TestRuntimeBuildRecipePathSeparatesRecipeFromSources(t *testing.T) {
 		path string
 		want bool
 	}{
-		{".github/actions/deps/action.yml", true},
+		{".github/actions/deps/action.yml", false},
+		{".github/actions/setup-buildctl/action.yml", true},
+		{".github/scripts/build_runtime_pack.sh", true},
 		{".github/scripts/runtime_build_contract.py", true},
 		{".github/scripts/runtime_build_contract_test.py", false},
 		{".github/scripts/runtime_lock_snapshot.py", false},
@@ -108,7 +110,7 @@ func TestRuntimeBuildRecipePathSeparatesRecipeFromSources(t *testing.T) {
 		{".github/scripts/runtime_asset_manifest.go", false},
 		{".github/scripts/runtime_build_recipe_digest.go", false},
 		{".github/scripts/runtime_pack_source_digest.go", false},
-		{".github/workflows/release_runtime_assets.yml", true},
+		{".github/workflows/release_runtime_assets.yml", false},
 		{".github/workflows/release.yml", false},
 		{"internal/cmd/buildctl/main.go", true},
 		{"internal/cmd/buildctl/simple_cmd.go", false},
@@ -123,6 +125,7 @@ func TestRuntimeBuildRecipePathSeparatesRecipeFromSources(t *testing.T) {
 		{"internal/cmd/buildctl/engine/common.go", false},
 		{"internal/cmd/buildctl/engine/download.go", true},
 		{"internal/cmd/buildctl/engine/build.go", false},
+		{"internal/release/runtime_asset.go", true},
 		{"internal/release/runtime.lock.json", false},
 		{"internal/release/runtime_lock.go", true},
 		{"internal/release/runtime_manifest.go", true},
@@ -178,16 +181,39 @@ func TestRuntimeBuildRecipeFilesExist(t *testing.T) {
 	}
 }
 
+func TestRuntimePackWorkflowDelegatesSemanticBuild(t *testing.T) {
+	t.Parallel()
+
+	_, testFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("cannot locate runtime_pack_source_test.go")
+	}
+	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(testFile), "../.."))
+	workflow, err := os.ReadFile(filepath.Join(repoRoot, ".github/workflows/release_runtime_assets.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	workflowText := string(workflow)
+	if !strings.Contains(workflowText, "bash .github/scripts/build_runtime_pack.sh") {
+		t.Fatal("runtime asset workflow does not call the semantic pack builder")
+	}
+	for _, duplicatedCommand := range []string{"\"$BUILDCTL\" engine download", "\"$BUILDCTL\" runtime export-pack"} {
+		if strings.Contains(workflowText, duplicatedCommand) {
+			t.Fatalf("runtime asset workflow duplicates semantic command %q", duplicatedCommand)
+		}
+	}
+}
+
 func TestRuntimeBuildRecipeIgnoresReleaseMappings(t *testing.T) {
 	t.Parallel()
 
-	const workflowEntry = "100644 blob 1111111111111111111111111111111111111111\t.github/workflows/release_runtime_assets.yml"
+	const recipeEntry = "100644 blob 1111111111111111111111111111111111111111\t.github/scripts/build_runtime_pack.sh"
 	before := []byte(strings.Join([]string{
-		workflowEntry,
+		recipeEntry,
 		"100644 blob 2222222222222222222222222222222222222222\tinternal/release/release_meta.go",
 	}, "\x00") + "\x00")
 	after := []byte(strings.Join([]string{
-		workflowEntry,
+		recipeEntry,
 		"100644 blob 3333333333333333333333333333333333333333\tinternal/release/release_meta.go",
 	}, "\x00") + "\x00")
 
@@ -201,6 +227,34 @@ func TestRuntimeBuildRecipeIgnoresReleaseMappings(t *testing.T) {
 	}
 	if beforeDigest != afterDigest {
 		t.Fatalf("release mapping changed runtime build recipe: %s != %s", beforeDigest, afterDigest)
+	}
+}
+
+func TestRuntimeBuildRecipeIgnoresCITransport(t *testing.T) {
+	t.Parallel()
+
+	semanticEntry := "100644 blob 1111111111111111111111111111111111111111\t.github/scripts/build_runtime_pack.sh"
+	before := []byte(strings.Join([]string{
+		semanticEntry,
+		"100644 blob 2222222222222222222222222222222222222222\t.github/actions/deps/action.yml",
+		"100644 blob 3333333333333333333333333333333333333333\t.github/workflows/release_runtime_assets.yml",
+	}, "\x00") + "\x00")
+	after := []byte(strings.Join([]string{
+		semanticEntry,
+		"100644 blob 4444444444444444444444444444444444444444\t.github/actions/deps/action.yml",
+		"100644 blob 5555555555555555555555555555555555555555\t.github/workflows/release_runtime_assets.yml",
+	}, "\x00") + "\x00")
+
+	beforeDigest, err := runtimeBuildRecipeTreeSHA256(before)
+	if err != nil {
+		t.Fatal(err)
+	}
+	afterDigest, err := runtimeBuildRecipeTreeSHA256(after)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if beforeDigest != afterDigest {
+		t.Fatalf("CI transport changed runtime build recipe: %s != %s", beforeDigest, afterDigest)
 	}
 }
 

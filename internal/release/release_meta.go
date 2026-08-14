@@ -23,13 +23,6 @@ import (
 )
 
 const (
-	// RuntimeTag is the filename prefix for the runtime binary/pck files.
-	RuntimeTag = "gdspxrt"
-
-	// RuntimeAssetZipName is the standard runtime pack name. SPX v2.0.0 used
-	// an older versioned filename, which is retained in its release metadata.
-	RuntimeAssetZipName = "spx-runtime-assets.zip"
-
 	legacyEngineRepository  = "goplus/godot"
 	legacyRuntimeRepository = "goplus/spx"
 )

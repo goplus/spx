@@ -108,6 +108,78 @@ func TestResolveRuntimeRejectsPublishedProvenanceConflict(t *testing.T) {
 	}
 }
 
+func TestRuntimeBuildRecipeCompatibilityIsExact(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name            string
+		runtimeVersion  string
+		manifestDigest  string
+		publishedDigest string
+		currentDigest   string
+		want            bool
+	}{
+		{
+			name:            "future identical recipe",
+			runtimeVersion:  "9.9.9",
+			manifestDigest:  "unused",
+			publishedDigest: "same",
+			currentDigest:   "same",
+			want:            true,
+		},
+		{
+			name:            "v2.4 migration",
+			runtimeVersion:  legacyRuntimeVersion,
+			manifestDigest:  legacyRuntimeManifestSHA256,
+			publishedDigest: legacyRuntimeRecipeSHA256,
+			currentDigest:   semanticRuntimeRecipeSHA256,
+			want:            true,
+		},
+		{
+			name:            "v2.4 cannot bypass manifest root",
+			runtimeVersion:  legacyRuntimeVersion,
+			manifestDigest:  strings.Repeat("0", 64),
+			publishedDigest: semanticRuntimeRecipeSHA256,
+			currentDigest:   semanticRuntimeRecipeSHA256,
+		},
+		{
+			name:            "different manifest",
+			runtimeVersion:  legacyRuntimeVersion,
+			manifestDigest:  strings.Repeat("0", 64),
+			publishedDigest: legacyRuntimeRecipeSHA256,
+			currentDigest:   semanticRuntimeRecipeSHA256,
+		},
+		{
+			name:            "different semantic recipe",
+			runtimeVersion:  legacyRuntimeVersion,
+			manifestDigest:  legacyRuntimeManifestSHA256,
+			publishedDigest: legacyRuntimeRecipeSHA256,
+			currentDigest:   strings.Repeat("0", 64),
+		},
+		{
+			name:            "different runtime",
+			runtimeVersion:  "2.4.1",
+			manifestDigest:  legacyRuntimeManifestSHA256,
+			publishedDigest: legacyRuntimeRecipeSHA256,
+			currentDigest:   semanticRuntimeRecipeSHA256,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			got := runtimeBuildRecipeCompatible(
+				test.runtimeVersion,
+				test.manifestDigest,
+				test.publishedDigest,
+				test.currentDigest,
+			)
+			if got != test.want {
+				t.Fatalf("runtimeBuildRecipeCompatible() = %t, want %t", got, test.want)
+			}
+		})
+	}
+}
+
 func TestResolveRuntimeRejectsIncompletePublishedAssetSet(t *testing.T) {
 	fixture := newRuntimeResolutionFixture(t)
 	server, _ := fixture.server(t, http.StatusOK, false, fixture.manifest, func(assets *[]gitHubAsset) {
@@ -198,9 +270,20 @@ type runtimeResolutionFixture struct {
 func newRuntimeResolutionFixture(t *testing.T) runtimeResolutionFixture {
 	t.Helper()
 	repoRoot := gitOutput(t, ".", "rev-parse", "--show-toplevel")
-	lockPath := filepath.Join(repoRoot, "internal", "release", "runtime.lock.json")
-	lock, err := loadRuntimeResolutionLock(lockPath)
+	currentLockPath := filepath.Join(repoRoot, "internal", "release", "runtime.lock.json")
+	lock, err := loadRuntimeResolutionLock(currentLockPath)
 	if err != nil {
+		t.Fatal(err)
+	}
+	// Resolver fixtures exercise the normal exact-digest path. The published
+	// v2.4.0 identity is reserved for the explicit immutable migration tests.
+	lock.RuntimeVersion = "9.9.9"
+	lockData, err := lock.JSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+	lockPath := filepath.Join(t.TempDir(), "runtime.lock.json")
+	if err := os.WriteFile(lockPath, lockData, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	moduleTree := gitOutput(t, repoRoot, "rev-parse", "--verify", "HEAD:"+lock.Module.Path)
