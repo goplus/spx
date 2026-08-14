@@ -53,7 +53,7 @@ func runtimeBuildRecipeTreeSHA256(tree []byte) (string, error) {
 }
 
 var runtimeBuildRecipeFiles = map[string]struct{}{
-	".github/scripts/build_runtime_pack.sh":              {},
+	".github/scripts/runtime/build_pack.sh":              {},
 	".github/scripts/runtime_build_contract.py":          {},
 	"cmd/internal/macos_go_toolchain.sh":                 {},
 	"internal/cmd/buildctl/main.go":                      {},

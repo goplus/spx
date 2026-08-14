@@ -3,7 +3,7 @@
 SPX and the Godot runtime use separate versions and are paired by one controlled workflow through explicit mappings. Inspect the declaration with:
 
 ```sh
-go run ./.github/scripts/runtime_version.go --json
+go run ./.github/scripts/runtime/version.go --json
 ```
 
 The same tool supports `--spx-version`, `--runtime-tag`, and the default runtime-version-only output for scripts that need one value. Release CI uses `--github-output` so the validated lock and release mapping are described once rather than reconstructed with separate JSON queries.
@@ -23,7 +23,7 @@ SPX and Godot Actions both invoke `.github/scripts/runtime_build_contract.py` fr
 
 The manifest records `module_tree`, `runtime_pack_source_sha256`, and `build_recipe_sha256` independently. The full lock SHA is also part of the runtime-release reuse contract, so changing the ABI, required assets, repository/manifest, Godot ref/version/commit, module path, or any toolchain field rejects reuse. Godot SCons caches use a narrower identity: changing only a version, release metadata, an asset list, or documentation does not recompile Godot, although it may require a new runtime-release identity. Documentation itself is outside both runtime digests.
 
-The pack build recipe covers only `.github/scripts/build_runtime_pack.sh` and the buildctl implementation that can affect the output. Workflow layout and external checkout/upload/download Action versions are CI transport and stay outside this digest, so Dependabot updates to those Actions do not require a runtime bump. Changes to the pack script or relevant buildctl code still reject reuse of the old runtime.
+The pack build recipe covers only `.github/scripts/runtime/build_pack.sh` and the buildctl implementation that can affect the output. Workflow layout and external checkout/upload/download Action versions are CI transport and stay outside this digest, so Dependabot updates to those Actions do not require a runtime bump. Changes to the pack script or relevant buildctl code still reject reuse of the old runtime.
 
 ## Freeze order
 

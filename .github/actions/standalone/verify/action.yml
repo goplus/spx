@@ -23,7 +23,7 @@ runs:
         RUNNER_ARCH_CONTEXT: ${{ runner.arch }}
       run: |
         set -euo pipefail
-        source ./.github/actions/lib/release_platform.sh
+        source ./.github/actions/standalone/lib/platform.sh
 
         reset_test_project_state() {
           local project_dir="$1"
@@ -129,7 +129,7 @@ runs:
           cp -R test/CI "$verify_test_root_dir/"
           reset_test_project_state "$test_project_dir"
 
-          spx_version="$(go run ./.github/scripts/runtime_version.go --spx-version)"
+          spx_version="$(go run ./.github/scripts/runtime/version.go --spx-version)"
           spx_source_dir="$WORKSPACE_DIR"
           if command -v cygpath >/dev/null 2>&1; then
             spx_source_dir="$(cygpath -m "$spx_source_dir")"

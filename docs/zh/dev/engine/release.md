@@ -3,7 +3,7 @@
 SPX 发布与 Godot runtime 使用两套版本，并由同一受控流程按显式映射配对。当前发布声明可用以下命令查看：
 
 ```sh
-go run ./.github/scripts/runtime_version.go --json
+go run ./.github/scripts/runtime/version.go --json
 ```
 
 只需要单值的脚本仍可使用 `--spx-version`、`--runtime-tag`，或默认的 runtime version 输出。发布 CI 使用 `--github-output` 一次描述已校验的 lock 与 release mapping，不再通过多次 JSON 查询重复拼装。
@@ -23,7 +23,7 @@ SPX 与 Godot Actions 都调用所选 SPX commit 中的 `.github/scripts/runtime
 
 manifest 分别记录 `module_tree`、`runtime_pack_source_sha256` 和 `build_recipe_sha256`。完整 lock SHA 也是 runtime release 的复用契约，因此 ABI、required assets、repository/manifest、Godot ref/version/commit、module path 或任一工具链字段变化都会拒绝复用旧 runtime。Godot SCons cache 使用更窄的独立身份；只改版本号、release 元数据、资产清单或文档不会重新编译 Godot，但可能要求新的 runtime release 身份。文档本身不进入这两类 runtime digest。
 
-pack build recipe 只覆盖 `.github/scripts/build_runtime_pack.sh` 与实际参与生成产物的 buildctl 实现。workflow 排版、checkout/upload/download 等外部 Action 版本属于 CI 运输层，不进入该摘要；Dependabot 升级这些 Action 不需要提升 runtime 版本。修改 pack 脚本或相关 buildctl 代码仍会严格拒绝复用旧 runtime。
+pack build recipe 只覆盖 `.github/scripts/runtime/build_pack.sh` 与实际参与生成产物的 buildctl 实现。workflow 排版、checkout/upload/download 等外部 Action 版本属于 CI 运输层，不进入该摘要；Dependabot 升级这些 Action 不需要提升 runtime 版本。修改 pack 脚本或相关 buildctl 代码仍会严格拒绝复用旧 runtime。
 
 ## 冻结顺序
 

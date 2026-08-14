@@ -114,7 +114,7 @@ jobs:
       - name: Compute pseudo-version
         if: inputs.release_version == ''
         run: |
-          SPX_VERSION="$(go run ./.github/scripts/pseudo_version.go HEAD)"
+          SPX_VERSION="$(go run ./.github/scripts/npm/pseudo_version.go HEAD)"
           echo "[info] SPX version: ${SPX_VERSION}"
           echo "SPX_VERSION=${SPX_VERSION}" >> "${GITHUB_ENV}"
 
@@ -147,7 +147,7 @@ jobs:
             fi
           fi
 
-          ./.github/scripts/prepare_spx_web_package.sh \
+          ./.github/scripts/npm/prepare_package.sh \
             spx_web.zip \
             "${npm_package_version}" \
             .npm/spx

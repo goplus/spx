@@ -3,7 +3,7 @@
 set -euo pipefail
 
 if [ "$#" -ne 2 ]; then
-  echo "usage: build_runtime_pack.sh <engine-asset-directory> <output-zip>" >&2
+  echo "usage: build_pack.sh <engine-asset-directory> <output-zip>" >&2
   exit 2
 fi
 

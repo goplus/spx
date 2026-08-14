@@ -17,7 +17,7 @@ runs:
         SPX_BIN: ${{ inputs.spx-bin }}
       run: |
         set -euo pipefail
-        source ./.github/actions/lib/release_platform.sh
+        source ./.github/actions/standalone/lib/platform.sh
 
         if [ -z "$SPX_BIN" ]; then
           log_error "SPX binary input is empty"

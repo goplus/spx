@@ -22,7 +22,7 @@ runs:
         ENGINE_ASSET_DIR: ${{ inputs.engine-asset-dir }}
       run: |
         set -euo pipefail
-        source ./.github/actions/lib/release_platform.sh
+        source ./.github/actions/standalone/lib/platform.sh
 
         log_section "Prepare standalone release"
         log_info "Workspace: $(pwd)"
