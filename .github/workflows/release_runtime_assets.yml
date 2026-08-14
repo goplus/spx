@@ -33,39 +33,16 @@ jobs:
       - name: Build local buildctl
         uses: ./.github/actions/setup-buildctl
 
-      - name: Prepare host export assets
-        run: |
-          set -euo pipefail
-          "$BUILDCTL" engine download \
-            --runtime \
-            --skip-runtime-pack \
-            --asset-dir runtime-assets \
-            --same-run-artifacts
-
       - name: Build runtime asset bundle
-        id: build_runtime_assets
         run: |
-          set -euo pipefail
-
-          "$BUILDCTL" runtime export-pack
-
-          GOPATH_DIR="$(go env GOPATH | tr -d '\r\n')"
-          ASSET_ZIP="${GOPATH_DIR}/bin/spx-runtime-assets.zip"
-
-          if [ ! -f "$ASSET_ZIP" ]; then
-            echo "[error] Runtime asset bundle not found: $ASSET_ZIP" >&2
-            exit 1
-          fi
-
-          echo "[info] Built runtime asset bundle: $ASSET_ZIP"
-          echo "asset-zip=$ASSET_ZIP" >> "$GITHUB_OUTPUT"
-
-      - name: Verify runtime asset bundle
-        run: unzip -t "${{ steps.build_runtime_assets.outputs.asset-zip }}"
+          bash .github/scripts/build_runtime_pack.sh \
+            runtime-assets \
+            dist/spx-runtime-assets.zip
 
       - name: Upload runtime asset bundle
         uses: actions/upload-artifact@v7
         with:
           name: runtime-spx-assets
-          path: ${{ steps.build_runtime_assets.outputs.asset-zip }}
+          path: dist/spx-runtime-assets.zip
+          if-no-files-found: error
           retention-days: 14

@@ -41,10 +41,9 @@ func runtimePackSourceTreeSHA256(tree []byte) (string, error) {
 	return selectedTreeSHA256(tree, "runtime pack source", isRuntimePackSourcePath)
 }
 
-// RuntimeBuildRecipeSHA256 returns a stable digest of the tracked release and
-// buildctl inputs that orchestrate runtime pack generation. Recipe inputs are
-// kept separate from RuntimePackSourceSHA256 and from the Godot module tree so
-// changing orchestration cannot masquerade as an engine source change.
+// RuntimeBuildRecipeSHA256 returns a stable digest of the implementation that
+// can change runtime-pack bytes. CI transport details such as workflow layout
+// and external Action versions are deliberately excluded.
 func RuntimeBuildRecipeSHA256(repoRoot, revision string) (string, error) {
 	return trackedTreeSHA256(repoRoot, revision, "runtime build recipe", isRuntimeBuildRecipePath)
 }
@@ -54,8 +53,8 @@ func runtimeBuildRecipeTreeSHA256(tree []byte) (string, error) {
 }
 
 var runtimeBuildRecipeFiles = map[string]struct{}{
+	".github/scripts/build_runtime_pack.sh":              {},
 	".github/scripts/runtime_build_contract.py":          {},
-	".github/workflows/release_runtime_assets.yml":       {},
 	"cmd/internal/macos_go_toolchain.sh":                 {},
 	"internal/cmd/buildctl/main.go":                      {},
 	"internal/cmd/buildctl/root.go":                      {},
@@ -71,12 +70,12 @@ var runtimeBuildRecipeFiles = map[string]struct{}{
 	"internal/cmd/buildctl/shared/repo.go":               {},
 	"internal/cmd/buildctl/shared/runner.go":             {},
 	"internal/cmd/buildctl/shared/validate.go":           {},
+	"internal/release/runtime_asset.go":                  {},
 	"internal/release/runtime_lock.go":                   {},
 	"internal/release/runtime_manifest.go":               {},
 }
 
 var runtimeBuildRecipePrefixes = []string{
-	".github/actions/deps/",
 	".github/actions/setup-buildctl/",
 	"internal/base/fileutil/",
 }

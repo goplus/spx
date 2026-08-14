@@ -23,6 +23,8 @@ SPX and Godot Actions both invoke `.github/scripts/runtime_build_contract.py` fr
 
 The manifest records `module_tree`, `runtime_pack_source_sha256`, and `build_recipe_sha256` independently. The full lock SHA is also part of the runtime-release reuse contract, so changing the ABI, required assets, repository/manifest, Godot ref/version/commit, module path, or any toolchain field rejects reuse. Godot SCons caches use a narrower identity: changing only a version, release metadata, an asset list, or documentation does not recompile Godot, although it may require a new runtime-release identity. Documentation itself is outside both runtime digests.
 
+The pack build recipe covers only `.github/scripts/build_runtime_pack.sh` and the buildctl implementation that can affect the output. Workflow layout and external checkout/upload/download Action versions are CI transport and stay outside this digest, so Dependabot updates to those Actions do not require a runtime bump. Changes to the pack script or relevant buildctl code still reject reuse of the old runtime.
+
 ## Freeze order
 
 1. Select the exact Godot candidate commit and the durable branch or tag that will own it, such as `spx4.4.1`. Before that commit reaches the canonical ref, an unpublished runtime may pin it for an exact-SHA dry-run only:
