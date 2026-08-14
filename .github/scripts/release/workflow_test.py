@@ -9,9 +9,10 @@ import unittest
 from pathlib import Path
 
 
-WORKFLOW_PATH = Path(__file__).resolve().parents[1] / "workflows" / "release.yml"
+WORKFLOW_PATH = Path(__file__).resolve().parents[2] / "workflows" / "release.yml"
+ASSEMBLE_SCRIPT_PATH = Path(__file__).resolve().parent / "assemble.sh"
 WEB_PACKAGE_WORKFLOW_PATH = (
-    Path(__file__).resolve().parents[1] / "workflows" / "publish_web_package.yml"
+    Path(__file__).resolve().parents[2] / "workflows" / "publish_web_package.yml"
 )
 
 
@@ -169,6 +170,17 @@ class ReleaseWorkflowTest(unittest.TestCase):
                 self.assertEqual(job_needs(self.jobs[job]), needs[job])
                 self.assertEqual(job_condition(self.jobs[job]), expected)
 
+    def test_assemble_implementation_is_kept_out_of_the_workflow_dag(self):
+        block = self.jobs["assemble"]
+        self.assertIn(
+            "        run: bash .github/scripts/release/assemble.sh",
+            block,
+        )
+        script = ASSEMBLE_SCRIPT_PATH.read_text(encoding="utf-8")
+        self.assertIn('echo "product_count=$product_count" >> "$GITHUB_OUTPUT"', script)
+        self.assertIn("dist/runtime", script)
+        self.assertIn("dist/product", script)
+
     def test_publish_dev_uses_exact_sha_and_oidc(self):
         block = self.jobs["publish-dev-web-package"]
         self.assertIn("    uses: ./.github/workflows/publish_web_package.yml", block)
@@ -313,9 +325,9 @@ class ReleaseWorkflowTest(unittest.TestCase):
         publish = step_script(block, "Publish web package to npm")
         with tempfile.TemporaryDirectory() as workspace:
             workspace_path = Path(workspace)
-            scripts_path = workspace_path / ".github" / "scripts"
-            scripts_path.mkdir(parents=True)
-            prepare = scripts_path / "prepare_spx_web_package.sh"
+            npm_scripts_path = workspace_path / ".github" / "scripts" / "npm"
+            npm_scripts_path.mkdir(parents=True)
+            prepare = npm_scripts_path / "prepare_package.sh"
             prepare.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
             prepare.chmod(0o755)
 

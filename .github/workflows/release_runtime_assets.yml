@@ -35,7 +35,7 @@ jobs:
 
       - name: Build runtime asset bundle
         run: |
-          bash .github/scripts/build_runtime_pack.sh \
+          bash .github/scripts/runtime/build_pack.sh \
             runtime-assets \
             dist/spx-runtime-assets.zip
 

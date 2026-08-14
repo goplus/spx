@@ -71,7 +71,7 @@ require_file() {
 resolve_runtime_asset_names() {
     local goexe libext
 
-    runtime_version="$(GOFLAGS="-buildvcs=false" go run ../../.github/scripts/runtime_version.go | tr -d '\r\n')"
+    runtime_version="$(GOFLAGS="-buildvcs=false" go run ../../.github/scripts/runtime/version.go | tr -d '\r\n')"
     runtime_goos="$(go env GOOS | tr -d '\r\n')"
     runtime_goarch="$(go env GOARCH | tr -d '\r\n')"
     goexe="$(go env GOEXE | tr -d '\r\n')"
@@ -118,7 +118,7 @@ copy_ispxnative_runtime_lib() {
 }
 
 write_runtime_asset_manifest() {
-    GOFLAGS="-buildvcs=false" go run ../../.github/scripts/runtime_asset_manifest.go \
+    GOFLAGS="-buildvcs=false" go run ../../.github/scripts/runtime/manifest.go \
         "$runtime_name=$gopath_bin_dir/$runtime_name" \
         "$runtime_pack=$gopath_bin_dir/$runtime_pack" \
         "$runtime_lib_name=../ispxnative/$runtime_lib_name" > "$runtime_asset_manifest"

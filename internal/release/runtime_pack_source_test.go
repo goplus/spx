@@ -101,14 +101,15 @@ func TestRuntimeBuildRecipePathSeparatesRecipeFromSources(t *testing.T) {
 	}{
 		{".github/actions/deps/action.yml", false},
 		{".github/actions/setup-buildctl/action.yml", true},
-		{".github/scripts/build_runtime_pack.sh", true},
+		{".github/scripts/runtime/build_pack.sh", true},
 		{".github/scripts/runtime_build_contract.py", true},
 		{".github/scripts/runtime_build_contract_test.py", false},
 		{".github/scripts/runtime_lock_snapshot.py", false},
 		{"cmd/internal/macos_go_toolchain.sh", true},
 		{"internal/cmd/buildctl/shared/macos_go_toolchain.go", true},
-		{".github/scripts/runtime_asset_manifest.go", false},
-		{".github/scripts/runtime_digest.go", false},
+		{".github/scripts/release/assemble.sh", false},
+		{".github/scripts/runtime/manifest.go", false},
+		{".github/scripts/runtime/digest.go", false},
 		{".github/workflows/release_runtime_assets.yml", false},
 		{".github/workflows/release.yml", false},
 		{"internal/cmd/buildctl/main.go", true},
@@ -193,7 +194,7 @@ func TestRuntimePackWorkflowDelegatesSemanticBuild(t *testing.T) {
 		t.Fatal(err)
 	}
 	workflowText := string(workflow)
-	if !strings.Contains(workflowText, "bash .github/scripts/build_runtime_pack.sh") {
+	if !strings.Contains(workflowText, "bash .github/scripts/runtime/build_pack.sh") {
 		t.Fatal("runtime asset workflow does not call the semantic pack builder")
 	}
 	for _, duplicatedCommand := range []string{"\"$BUILDCTL\" engine download", "\"$BUILDCTL\" runtime export-pack"} {
@@ -206,7 +207,7 @@ func TestRuntimePackWorkflowDelegatesSemanticBuild(t *testing.T) {
 func TestRuntimeBuildRecipeIgnoresReleaseMappings(t *testing.T) {
 	t.Parallel()
 
-	const recipeEntry = "100644 blob 1111111111111111111111111111111111111111\t.github/scripts/build_runtime_pack.sh"
+	const recipeEntry = "100644 blob 1111111111111111111111111111111111111111\t.github/scripts/runtime/build_pack.sh"
 	before := []byte(strings.Join([]string{
 		recipeEntry,
 		"100644 blob 2222222222222222222222222222222222222222\tinternal/release/release_meta.go",
@@ -232,7 +233,7 @@ func TestRuntimeBuildRecipeIgnoresReleaseMappings(t *testing.T) {
 func TestRuntimeBuildRecipeIgnoresCITransport(t *testing.T) {
 	t.Parallel()
 
-	semanticEntry := "100644 blob 1111111111111111111111111111111111111111\t.github/scripts/build_runtime_pack.sh"
+	semanticEntry := "100644 blob 1111111111111111111111111111111111111111\t.github/scripts/runtime/build_pack.sh"
 	before := []byte(strings.Join([]string{
 		semanticEntry,
 		"100644 blob 2222222222222222222222222222222222222222\t.github/actions/deps/action.yml",

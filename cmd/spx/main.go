@@ -25,7 +25,7 @@ import (
 	"github.com/goplus/spx/v3/internal/scaffold"
 )
 
-//go:generate go run ../../.github/scripts/write_runtime_gdextension_templates.go
+//go:generate go run ../../.github/scripts/codegen/runtime_gdextension_templates.go
 
 var (
 	//go:embed template/platform/*

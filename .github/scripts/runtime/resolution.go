@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -24,11 +23,6 @@ const (
 	runtimeStateReady   = "ready"
 	runtimeStateMissing = "missing"
 	maxGitHubBodySize   = 8 << 20
-
-	legacyRuntimeVersion        = "2.4.0"
-	legacyRuntimeManifestSHA256 = "c52c6d7c6986e4d5226f845fc1e6b89a29b361464abe36baba1128b266b66ae0"
-	legacyRuntimeRecipeSHA256   = "730b4b5f3ceac73d9ddf29d852b3e8a68f245feb7d0acbcffa7e2c4321b736b3"
-	semanticRuntimeRecipeSHA256 = "d6b43b2ad86d0b856c5ad0a7acfbe37486989a3f3e0664299c7a5c00034e643c"
 )
 
 type runtimeResolutionConfig struct {
@@ -150,7 +144,6 @@ func resolveRuntime(ctx context.Context, config runtimeResolutionConfig) (runtim
 	if status != http.StatusOK {
 		return runtimeResolution{}, runtimeConflict(tag, "download manifest: HTTP %d %s", status, http.StatusText(status))
 	}
-	manifestDigest := fmt.Sprintf("%x", sha256.Sum256(body))
 	manifest, err := release.ParseRuntimeManifest(body)
 	if err != nil {
 		return runtimeResolution{}, runtimeConflict(tag, "parse manifest: %v", err)
@@ -158,7 +151,7 @@ func resolveRuntime(ctx context.Context, config runtimeResolutionConfig) (runtim
 	if err := manifest.ValidateForLock(lock); err != nil {
 		return runtimeResolution{}, runtimeConflict(tag, "%v", err)
 	}
-	if err := verifyCurrentRuntimeProvenance(config, lock, manifest, manifestDigest); err != nil {
+	if err := verifyCurrentRuntimeProvenance(config, lock, manifest); err != nil {
 		return runtimeResolution{}, runtimeConflict(tag, "%v", err)
 	}
 
@@ -268,7 +261,7 @@ func verifyPublishedAssetNames(lock release.RuntimeLock, assets []gitHubAsset) (
 	return manifestURL, nil
 }
 
-func verifyCurrentRuntimeProvenance(config runtimeResolutionConfig, lock release.RuntimeLock, manifest release.RuntimeManifest, manifestDigest string) error {
+func verifyCurrentRuntimeProvenance(config runtimeResolutionConfig, lock release.RuntimeLock, manifest release.RuntimeManifest) error {
 	repoRoot := filepath.Clean(config.RepoRoot)
 	revision := strings.TrimSpace(config.Revision)
 	if revision == "" {
@@ -293,24 +286,10 @@ func verifyCurrentRuntimeProvenance(config runtimeResolutionConfig, lock release
 	if err != nil {
 		return err
 	}
-	if !runtimeBuildRecipeCompatible(lock.RuntimeVersion, manifestDigest, manifest.Provenance.BuildRecipeSHA256, buildRecipeDigest) {
+	if manifest.Provenance.BuildRecipeSHA256 != buildRecipeDigest {
 		return fmt.Errorf("runtime build recipe digest = %s, current %s requires %s; bump runtime_version", manifest.Provenance.BuildRecipeSHA256, revision, buildRecipeDigest)
 	}
 	return nil
-}
-
-// runtimeBuildRecipeCompatible contains the one-time migration bridge for the
-// already-published runtime-v2.4.0 manifest. That manifest used a recipe hash
-// which included CI transport files. The replacement hash covers only the
-// extracted pack builder and semantic buildctl inputs. Every field is exact so
-// a later semantic change still requires a new runtime version.
-func runtimeBuildRecipeCompatible(runtimeVersion, manifestDigest, publishedDigest, currentDigest string) bool {
-	if runtimeVersion == legacyRuntimeVersion {
-		return manifestDigest == legacyRuntimeManifestSHA256 &&
-			publishedDigest == legacyRuntimeRecipeSHA256 &&
-			currentDigest == semanticRuntimeRecipeSHA256
-	}
-	return publishedDigest == currentDigest
 }
 
 func gitRevision(repoRoot, revision string) (string, error) {
