@@ -112,9 +112,12 @@ void SpxAudio::on_reset(int reset_code) {
 	owns_dedicated_bus = false;
 }
 
-void SpxAudio::play(GdInt aid, GdString path, Node *owner, GdFloat attenuation, GdFloat max_distance) {
+bool SpxAudio::play(GdInt aid, GdString path, Node *owner, GdFloat attenuation, GdFloat max_distance) {
 	auto path_str = SpxStr(path);
 	Ref<AudioStream> stream = resMgr->load_audio(path_str);
+	if (stream.is_null()) {
+		return false;
+	}
 	auto audio = memnew(AudioStreamPlayer2D);
 	if (owner != nullptr) {
 		owner->add_child(audio);
@@ -130,6 +133,11 @@ void SpxAudio::play(GdInt aid, GdString path, Node *owner, GdFloat attenuation, 
 	audio->set_pitch_scale(get_pitch());
 	audios.push_back(audio);
 	aid_audios[aid] = audio;
+	return true;
+}
+
+bool SpxAudio::has_audio(GdInt aid) const {
+	return aid_audios.has(aid);
 }
 
 GdBool SpxAudio::is_playing(GdInt aid) {
