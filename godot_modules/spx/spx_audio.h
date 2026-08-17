@@ -70,7 +70,8 @@ public:
 	void set_volume(GdFloat volume);
 	GdFloat get_volume();
 
-	void play(GdInt aid, GdString path, Node *owner = nullptr, GdFloat attenuation = 1.0f, GdFloat max_distance = 2000.0f);
+	bool play(GdInt aid, GdString path, Node *owner = nullptr, GdFloat attenuation = 1.0f, GdFloat max_distance = 2000.0f);
+	bool has_audio(GdInt aid) const;
 	void pause(GdInt aid);
 	void resume(GdInt aid);
 	void stop(GdInt aid);

@@ -58,6 +58,19 @@ void SpxAudioMgr::on_awake() {
 void SpxAudioMgr::on_update(float delta) {
 	SpxBaseMgr::on_update(delta);
 	_update_all(delta);
+
+	// SpxAudio removes finished players during its update. Mirror that cleanup in
+	// the manager so subsequent queries do not resolve a stale aid to the owner.
+	MutexLock aid_lock(aid_mutex);
+	Vector<GdInt> finished_aids;
+	for (const auto &[aid, audio] : aid_audios) {
+		if (audio == nullptr || !audio->has_audio(aid)) {
+			finished_aids.push_back(aid);
+		}
+	}
+	for (const GdInt &aid : finished_aids) {
+		aid_audios.erase(aid);
+	}
 }
 
 void SpxAudioMgr::on_reset(int reset_code) {
@@ -192,10 +205,14 @@ GdInt SpxAudioMgr::play_with_attenuation(GdObj obj, GdString path, GdObj owner_i
 	{
 		MutexLock aid_lock(aid_mutex);
 		aid = ++g_audio_id;
+	}
+	if (!audio->play(aid, path, audio_owner, attenuation, max_distance)) {
+		return 0;
+	}
+	{
+		MutexLock aid_lock(aid_mutex);
 		aid_audios[aid] = audio;
 	}
-
-	audio->play(aid, path, audio_owner, attenuation, max_distance);
 	return aid;
 }
 
@@ -206,6 +223,11 @@ GdBool SpxAudioMgr::is_playing(GdInt aid) {
 		audio = _get_aid_audio(aid);
 	}
 	if (audio == nullptr) {
+		return false;
+	}
+	if (!audio->has_audio(aid)) {
+		MutexLock aid_lock(aid_mutex);
+		aid_audios.erase(aid);
 		return false;
 	}
 	return audio->is_playing(aid);
