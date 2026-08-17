@@ -24,10 +24,14 @@ func assert(val bool, msg string, args ...interface{}) {
 	}
 }
 
-func assertFloat(val float64, expect float64, msg string, args ...interface{}) {
-	if math.Abs(val-expect) > 0.001 {
+func assertFloatWithErr(val float64, expect float64, err float64, msg string, args ...interface{}) {
+	if math.Abs(val-expect) > err {
 		doPanic(fmt.Sprintf("Value (%v) not equal to %v :: ", val, expect) + fmt.Sprintf(msg, args...))
 	}
+}
+
+func assertFloat(val float64, expect float64, msg string, args ...interface{}) {
+	assertFloatWithErr(val, expect, 0.001, msg, args...)
 }
 
 func assertPosWithErr(p Sprite, x, y float64, err float64, msg string, args ...interface{}) {

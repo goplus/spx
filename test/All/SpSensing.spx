@@ -107,11 +107,11 @@ onMsg "testSensing", => {
 	setXYpos 100, 200
 	// 8. Game::MouseX
 	mouseX := mouseX
-	assertPosWithErr(this, mouseX, 0, sensingMouseErr, "Game::MouseX")
+	assertFloatWithErr(mouseX, 0, sensingMouseErr, "Game::MouseX")
 
 	// 9. Game::MouseY
 	mouseY := mouseY
-	assertPosWithErr(this, mouseY, 0, sensingMouseErr, "Game::MouseY")
+	assertFloatWithErr(mouseY, 0, sensingMouseErr, "Game::MouseY")
 
 	// 10. Game::Timer
 	assert(timer > 1, "Game::Timer")
