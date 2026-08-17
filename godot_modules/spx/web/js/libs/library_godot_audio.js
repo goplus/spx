@@ -988,8 +988,13 @@ class Bus {
 			return;
 		}
 		const buses = GodotAudio.buses.filter((_, i) => i !== fromIndex);
-		// Inserts at index.
-		buses.splice(toIndex - 1, 0, movedBus);
+		if (toIndex === -1) {
+			buses.push(movedBus);
+		} else if (toIndex < fromIndex) {
+			buses.splice(toIndex, 0, movedBus);
+		} else {
+			buses.splice(toIndex - 1, 0, movedBus);
+		}
 		GodotAudio.buses = buses;
 	}
 
@@ -1000,7 +1005,10 @@ class Bus {
 	 */
 	static addAt(index) {
 		const newBus = GodotAudio.Bus.create();
-		if (index !== newBus.getId()) {
+		// AudioServer uses -1 for append. The new bus is already appended by
+		// create(), so moving it with a negative splice index would reorder the
+		// registry and desynchronize every subsequent C++/JavaScript bus index.
+		if (index !== -1 && index !== newBus.getId()) {
 			GodotAudio.Bus.move(newBus.getId(), index);
 		}
 	}
