@@ -297,5 +297,7 @@ func TestRepositoryWebBridgeKeepsCrossCompilationABIStable(t *testing.T) {
 	require.Contains(t, audioLibrary, "positionWorker['onMessage']")
 	require.Contains(t, audioLibrary, "'inputLength': input.length")
 	require.Contains(t, audioLibrary, "event['type']")
+	require.Contains(t, audioLibrary, "if (index !== -1 && index !== newBus.getId())")
+	require.Contains(t, audioLibrary, "if (toIndex === -1) {\n\t\t\tbuses.push(movedBus);")
 	require.NotContains(t, audioLibrary, "positionWorker.onMessage")
 }
