@@ -63,12 +63,6 @@ type CmdTool struct {
 	RuntimeCmdPath string
 
 	GoModTemplate string
-
-	// Portable Go.
-	GoEnvDir    string
-	GoRoot      string
-	GoPath      string
-	CustomGoEnv bool
 }
 
 // RunCmd runs the CLI.
@@ -118,13 +112,6 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 
 	if cmd.handleSpecialCommands() {
 		return nil
-	}
-
-	if cmd.Args.GoEnv != nil && *cmd.Args.GoEnv != "" {
-		if err := cmd.setupPortableGoEnv(); err != nil {
-			logErrorf("Setting up portable Go environment: %v", err)
-			return fmt.Errorf("failed to setup portable Go environment: %w", err)
-		}
 	}
 
 	if isInterpretedRunCommand(cmd.Args.CmdName) {

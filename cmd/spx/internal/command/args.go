@@ -43,7 +43,6 @@ type ExtraArgs struct {
 	Build           *string
 	Mode            *string
 	Movie           *bool
-	GoEnv           *string
 	Verbose         *bool
 }
 
@@ -168,7 +167,6 @@ Examples:
     #CMDNAME init ./test/demo01           # Create a project at path ./test/demo01
     #CMDNAME run --path ./myproject       # Run project in interpreted mode
     #CMDNAME runnative --path ./myproject # Run project with the native PC runtime
-	#CMDNAME run --goenv=/path/to/goenv   # Run interpreted mode with a portable Go environment
     #CMDNAME build --servermode           # Build in server mode
     #CMDNAME runweb --debugweb            # Run web server with debug service
     #CMDNAME buildtinygo                  # Build TinyGo static library for ESP32
@@ -204,7 +202,6 @@ func (cmd *CmdTool) initializeFlags() *bool {
 	cmd.Args.Build = f.String("build", "normal", "build mode: normal or fast")
 	cmd.Args.Mode = f.String("mode", "none", "mode: none, worker, minigame")
 	cmd.Args.Movie = f.Bool("movie", false, "record movie mode")
-	cmd.Args.GoEnv = f.String("goenv", "", "portable Go environment directory")
 	cmd.Args.Verbose = f.Bool("v", false, "print verbose information")
 	return help
 }
@@ -217,7 +214,9 @@ func (cmd *CmdTool) parseCommandLineArgs(help *bool, ext ...string) error {
 	}
 
 	cmd.Args.CmdName = os.Args[1]
-	flag.CommandLine.Parse(os.Args[2:])
+	if err := flag.CommandLine.Parse(os.Args[2:]); err != nil {
+		return err
+	}
 
 	if *help {
 		cmd.ShowHelpInfo()

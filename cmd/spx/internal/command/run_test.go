@@ -17,7 +17,6 @@
 package command
 
 import (
-	"embed"
 	"errors"
 	"fmt"
 	"os"
@@ -464,59 +463,6 @@ func TestResolveInterpretedRuntimeAssetsFallsBackToExternalWhenEmbeddedUnavailab
 	}
 	if libPath != libPathWant {
 		t.Fatalf("shared library path = %s, want %s", libPath, libPathWant)
-	}
-}
-
-func TestRunCmdRunHonorsPortableGoEnv(t *testing.T) {
-	oldPrepareEmbeddedRuntimeAssets := prepareEmbeddedRuntimeAssets
-	prepareEmbeddedRuntimeAssets = func(string, ...string) (string, bool, error) {
-		return "", false, nil
-	}
-	t.Cleanup(func() {
-		prepareEmbeddedRuntimeAssets = oldPrepareEmbeddedRuntimeAssets
-	})
-
-	targetDir := t.TempDir()
-	goEnvDir := filepath.Join(t.TempDir(), "goenv")
-	goBinPath := filepath.Join(goEnvDir, "go", "bin")
-	goRootBinPath := filepath.Join(goEnvDir, "gotoolchain", "go", "bin")
-	logPath := filepath.Join(t.TempDir(), "runtime.log")
-	version := "9.9.9-test"
-
-	if err := os.MkdirAll(goBinPath, 0o755); err != nil {
-		t.Fatalf("mkdir go/bin: %v", err)
-	}
-	if err := os.MkdirAll(goRootBinPath, 0o755); err != nil {
-		t.Fatalf("mkdir gotoolchain/go/bin: %v", err)
-	}
-	writeTestRuntimeExecutable(t, filepath.Join(goRootBinPath, goBinaryName(runtime.GOOS)), filepath.Join(t.TempDir(), "go.log"))
-
-	runtimeName := "gdspxrt" + version + executableSuffix(runtime.GOOS)
-	writeTestRuntimeExecutable(t, filepath.Join(goBinPath, runtimeName), logPath)
-	if err := os.WriteFile(filepath.Join(goBinPath, runtimePackFileName(runtimeName)), []byte("runtime pack"), 0o644); err != nil {
-		t.Fatalf("write runtime pack: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(goBinPath, libraryFileName(envName, runtime.GOOS, runtime.GOARCH)), []byte("shared library"), 0o755); err != nil {
-		t.Fatalf("write shared library: %v", err)
-	}
-
-	rawArgs := os.Args
-	t.Cleanup(func() {
-		os.Args = rawArgs
-	})
-	os.Args = []string{"spx", "run", "--goenv", goEnvDir, "--path", targetDir}
-
-	cmd := CmdTool{}
-	if err := cmd.RunCmd("spx", "spx", version, embed.FS{}, "", "project"); err != nil {
-		t.Fatalf("RunCmd returned error: %v", err)
-	}
-
-	gotLog, err := os.ReadFile(logPath)
-	if err != nil {
-		t.Fatalf("read runtime log: %v", err)
-	}
-	if !strings.Contains(string(gotLog), filepath.Join(targetDir, ".temp")) {
-		t.Fatalf("runtime log = %q, want runtime temp dir under %s", string(gotLog), targetDir)
 	}
 }
 
