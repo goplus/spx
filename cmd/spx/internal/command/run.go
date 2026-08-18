@@ -18,6 +18,7 @@ package command
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -31,6 +32,7 @@ import (
 
 	"github.com/goplus/spx/v3/cmd/spx/internal/runtimeasset"
 	"github.com/goplus/spx/v3/cmd/spx/internal/util"
+	"github.com/goplus/spx/v3/internal/interpruntime"
 	"github.com/goplus/spx/v3/internal/scaffold"
 )
 
@@ -137,12 +139,30 @@ func (cmd *CmdTool) RunInterpreted(pargs ...string) error {
 	}
 	cmd.RuntimeCmdPath = runtimePath
 
-	if err := cmd.prepareInterpretedRuntimeDir(libPath); err != nil {
+	roots, err := cmd.interpretedRoots()
+	if err != nil {
 		return err
 	}
-
-	args := cmd.buildRuntimeArgs(pargs, cmd.RuntimeTempDir)
-	return util.RunCommandInDir(cmd.RuntimeTempDir, runtimePath, args...)
+	if err := interpruntime.PrepareSession(interpruntime.SessionConfig{Roots: roots, BridgePath: libPath}); err != nil {
+		return err
+	}
+	engineCmd, err := interpruntime.PrepareCommand(context.Background(), interpruntime.CommandConfig{
+		Roots:      roots,
+		Executable: runtimePath,
+		Args:       pargs,
+		Env:        os.Environ(),
+		Stdin:      os.Stdin,
+		Stdout:     os.Stdout,
+		Stderr:     os.Stderr,
+		PathPolicy: interpruntime.ReplacePath,
+	})
+	if err != nil {
+		return err
+	}
+	if err := engineCmd.Run(); err != nil {
+		return fmt.Errorf("interpreted Engine failed: %w", err)
+	}
+	return nil
 }
 
 // buildRuntimeArgs builds gdspxrt args.
@@ -255,23 +275,35 @@ func runtimePackPath(runtimePath string) string {
 	return filepath.Join(filepath.Dir(runtimePath), runtimePackFileName(filepath.Base(runtimePath)))
 }
 
-func (cmd *CmdTool) prepareInterpretedRuntimeDir(libPath string) error {
-	if err := os.MkdirAll(cmd.RuntimeTempDir, 0o755); err != nil {
-		return fmt.Errorf("failed to create runtime temp dir %s: %w", cmd.RuntimeTempDir, err)
+func (cmd *CmdTool) interpretedRoots() (interpruntime.Roots, error) {
+	projectDir := cmd.TargetAbsDir
+	if projectDir == "" && cmd.TargetDir != "" {
+		var err error
+		projectDir, err = filepath.Abs(cmd.TargetDir)
+		if err != nil {
+			return interpruntime.Roots{}, fmt.Errorf("resolve interpreted project directory: %w", err)
+		}
 	}
-
-	// Place the shared library next to runtime.gdextension so Godot can resolve it
-	// without depending on a pre-installed runtime.gdextension file.
-	dstLibPath := filepath.Join(cmd.RuntimeTempDir, filepath.Base(libPath))
-	if err := util.CopyFile(libPath, dstLibPath); err != nil {
-		return fmt.Errorf("failed to copy shared library %s to %s: %w", libPath, dstLibPath, err)
+	if projectDir == "" {
+		return interpruntime.Roots{}, fmt.Errorf("interpreted project directory is not configured")
 	}
-
-	extensionPath := filepath.Join(cmd.RuntimeTempDir, "runtime.gdextension")
-	if err := os.WriteFile(extensionPath, []byte(scaffold.RuntimeGDExtension()), 0o644); err != nil {
-		return fmt.Errorf("failed to write runtime.gdextension: %w", err)
+	projectDir = filepath.Clean(projectDir)
+	sessionDir := cmd.RuntimeTempDir
+	if sessionDir == "" {
+		sessionDir = filepath.Join(projectDir, ".temp")
 	}
-	return prepareRuntimeExtensionList(cmd.RuntimeTempDir)
+	if !filepath.IsAbs(sessionDir) {
+		var err error
+		sessionDir, err = filepath.Abs(sessionDir)
+		if err != nil {
+			return interpruntime.Roots{}, fmt.Errorf("resolve interpreted session directory: %w", err)
+		}
+	}
+	return interpruntime.Roots{
+		ProjectDir: projectDir,
+		AssetDir:   filepath.Join(projectDir, "assets"),
+		SessionDir: filepath.Clean(sessionDir),
+	}, nil
 }
 
 func prepareRuntimeExtensionList(runtimeDir string) error {

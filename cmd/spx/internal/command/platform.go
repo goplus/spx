@@ -15,10 +15,6 @@ func executableSuffix(goos string) string {
 	return ""
 }
 
-func goBinaryName(goos string) string {
-	return "go" + executableSuffix(goos)
-}
-
 func sharedLibrarySuffix(goos string) string {
 	switch goos {
 	case goosWindows:

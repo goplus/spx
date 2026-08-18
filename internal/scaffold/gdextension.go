@@ -51,15 +51,27 @@ var projectOnlyGDExtensionLibraries = []gdExtensionLibrary{
 }
 
 var (
-	runtimeGDExtension = renderGDExtension("", desktopGDExtensionLibraries)
-	projectGDExtension = renderGDExtension("res://lib/", joinGDExtensionLibraries(desktopGDExtensionLibraries, projectOnlyGDExtensionLibraries))
+	runtimeGDExtension        = renderGDExtension("", desktopGDExtensionLibraries)
+	sessionRuntimeGDExtension = renderGDExtension("res://", desktopGDExtensionLibraries)
+	projectGDExtension        = renderGDExtension("res://lib/", joinGDExtensionLibraries(desktopGDExtensionLibraries, projectOnlyGDExtensionLibraries))
 )
 
-const runtimeExtensionList = "res://runtime.gdextension\n"
+const (
+	runtimeExtensionList = "res://runtime.gdextension\n"
+	sessionExtensionList = "res://gdspx.gdextension\n"
+)
 
 // RuntimeGDExtension returns the default runtime.gdextension template used by desktop runtime.
 func RuntimeGDExtension() string {
 	return runtimeGDExtension
+}
+
+// SessionRuntimeGDExtension returns the isolated-session template. Its
+// libraries are explicitly rooted at res:// so Godot loads the bridge copied
+// into SessionDir instead of resolving a same-named library beside the Engine
+// executable.
+func SessionRuntimeGDExtension() string {
+	return sessionRuntimeGDExtension
 }
 
 // RuntimeExtensionList returns the standard Godot extension list used by the
@@ -67,6 +79,11 @@ func RuntimeGDExtension() string {
 func RuntimeExtensionList() string {
 	return runtimeExtensionList
 }
+
+// SessionExtensionList selects the project-shaped extension descriptor used
+// by an isolated interpreted session. Runtime PCKs already contain this path;
+// the session-local descriptor overrides it with the verified bridge copy.
+func SessionExtensionList() string { return sessionExtensionList }
 
 // ProjectGDExtension returns the project gdspx.gdextension template copied by project creation flows.
 func ProjectGDExtension() string {

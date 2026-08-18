@@ -146,7 +146,24 @@ func Build(files map[string][]byte) error {
 	return BuildFS(memfs.New(files))
 }
 
-// BuildFS builds the spx code from the provided file system into the interpreter.
+// ConfigureFilesystemRoots sets the independent physical project and asset
+// roots used by a native interpreted session. Both paths must be absolute and
+// clean. The Engine session root is owned by the process launching Godot and is
+// intentionally not inferred here. It must be called before Init; changing the
+// process-wide Engine path state after interpreter initialization is rejected.
+func ConfigureFilesystemRoots(projectDir, assetDir string) error {
+	mu.Lock()
+	defer mu.Unlock()
+	if ixgoCtx != nil {
+		return fmt.Errorf("ispx: filesystem roots must be configured before Init")
+	}
+	return engine.SetFilesystemRoots(projectDir, assetDir)
+}
+
+// BuildFS builds the spx code from the provided file system into the
+// interpreter. The file system is borrowed: callers must keep it usable while
+// the Engine may still load project configuration. A successful later BuildFS
+// call replaces the registered project file system. BuildFS never closes fsys.
 func BuildFS(fsys fs.FS) error {
 	// Stop the game if running.
 	if err := Shutdown(); err != nil {
@@ -165,10 +182,6 @@ func BuildFS(fsys fs.FS) error {
 		ixgoInterp.UnsafeRelease()
 		ixgoInterp = nil
 	}
-
-	spxfs.RegisterSchema("", func(path string) (spxfs.Dir, error) {
-		return newSpxDir(fsys, path), nil
-	})
 
 	source, err := xgobuild.BuildFSDir(ixgoCtx, newXGoParserFS(fsys), ".")
 	if err != nil {
@@ -190,6 +203,12 @@ func BuildFS(fsys fs.FS) error {
 		return fmt.Errorf("failed to create interp: %w", err)
 	}
 
+	// Project resources are loaded lazily from Engine callbacks, so publish
+	// the new schema only after every fallible build step has succeeded. A
+	// failed rebuild must not replace a previously working resource source.
+	spxfs.RegisterSchema("", func(path string) (spxfs.Dir, error) {
+		return newSpxDir(fsys, path), nil
+	})
 	ixgoInterp = interp
 	return nil
 }

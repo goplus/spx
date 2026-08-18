@@ -16,34 +16,11 @@
 
 package engine
 
-import "testing"
-
-func TestProjectConfigPath(t *testing.T) {
-	tests := []struct {
-		name   string
-		prefix string
-		want   string
-	}{
-		{
-			name:   "desktop prefix",
-			prefix: defaultAssetPathPrefix,
-			want:   "../.config",
-		},
-		{
-			name:   "web prefix",
-			prefix: "",
-			want:   ".config",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := projectConfigPath(tt.prefix); got != tt.want {
-				t.Fatalf("projectConfigPath(%q) = %q, want %q", tt.prefix, got, tt.want)
-			}
-		})
-	}
-}
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestBuildFilesystemAssetPath(t *testing.T) {
 	original := assetPaths
@@ -51,7 +28,7 @@ func TestBuildFilesystemAssetPath(t *testing.T) {
 		assetPaths = original
 	})
 
-	assetPaths.root = "../assets/"
+	assetPaths = assetPathState{root: "../assets/", projectRoot: ".."}
 
 	tests := []struct {
 		name string
@@ -69,20 +46,29 @@ func TestBuildFilesystemAssetPath(t *testing.T) {
 			want: "../assets/image.png",
 		},
 		{
-			name: "allow shared external resource",
-			path: "../../res/image.png",
-			want: "../../res/image.png",
+			name: "allow resource elsewhere in project",
+			path: "../res/image.png",
+			want: "../res/image.png",
+		},
+		{
+			name: "allow canonical project resource URI",
+			path: "res://res/image.png",
+			want: "../res/image.png",
+		},
+		{
+			name: "reject historical shared asset outside project",
+			path: "../../shared-assets/image.png",
+			want: "",
 		},
 		{
 			name: "reject parent traversal",
 			path: "../../../../etc/passwd",
 			want: "",
 		},
-		{
-			name: "reject sibling directory with same prefix",
-			path: "../assets_backup/image.png",
-			want: "",
-		},
+		{name: "reject file URI", path: "file:///tmp/image.png", want: ""},
+		{name: "reject malformed res URI", path: "res:res/image.png", want: ""},
+		{name: "reject Windows path", path: `C:\outside\image.png`, want: ""},
+		{name: "reject UNC path", path: `\\server\share\image.png`, want: ""},
 	}
 
 	for _, tt := range tests {
@@ -94,71 +80,116 @@ func TestBuildFilesystemAssetPath(t *testing.T) {
 	}
 }
 
-func TestRewriteExtAssetPath(t *testing.T) {
+func TestExplicitFilesystemRoots(t *testing.T) {
 	original := assetPaths
 	t.Cleanup(func() {
 		assetPaths = original
 	})
 
-	assetPaths.prefix = defaultAssetPathPrefix
-	assetPaths.extAssetDir = "custom_asset"
-
+	projectDir := t.TempDir()
+	assetDir := filepath.Join(projectDir, "assets")
+	if err := os.Mkdir(assetDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(assetDir, "sprites"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(assetDir, "sprites", "cat.svg"), []byte("svg"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(projectDir, "res"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(projectDir, "res", "image.png"), []byte("png"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetFilesystemRoots(projectDir, assetDir); err != nil {
+		t.Fatal(err)
+	}
+	externalFile := filepath.Join(t.TempDir(), "outside.png")
+	if err := os.WriteFile(externalFile, []byte("outside"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	symlinkPath := filepath.Join(assetDir, "escape.png")
+	symlinkAvailable := os.Symlink(externalFile, symlinkPath) == nil
+	symlinkDir := filepath.Join(assetDir, "linked")
+	symlinkDirAvailable := os.Symlink(filepath.Dir(externalFile), symlinkDir) == nil
 	tests := []struct {
 		name string
 		path string
 		want string
 	}{
 		{
-			name: "rewrite root extasset path",
-			path: "../custom_asset/image.png",
-			want: "../extasset/image.png",
+			name: "asset",
+			path: "sprites/cat.svg",
+			want: filepath.Join(assetDir, "sprites", "cat.svg"),
 		},
 		{
-			name: "rewrite nested parent traversal",
+			name: "resource elsewhere in project",
+			path: "../res/image.png",
+			want: filepath.Join(projectDir, "res", "image.png"),
+		},
+		{
+			name: "project resource URI",
+			path: "res://res/image.png",
+			want: filepath.Join(projectDir, "res", "image.png"),
+		},
+		{
+			name: "reject extasset outside project",
 			path: "../../custom_asset/image.png",
-			want: "../extasset/image.png",
-		},
-		{
-			name: "skip extasset path without parent traversal",
-			path: "custom_asset/image.png",
 			want: "",
 		},
 		{
-			name: "skip normal asset path",
-			path: "../assets/image.png",
+			name: "reject legacy shared compatibility root",
+			path: "../../shared/image.png",
 			want: "",
 		},
 		{
-			name: "skip substring match",
-			path: "../custom_asset_backup/image.png",
+			name: "reject traversal",
+			path: "../../../etc/passwd",
 			want: "",
 		},
 		{
-			name: "skip nested extasset directory",
-			path: "../subdir/custom_asset/image.png",
+			name: "reject absolute",
+			path: filepath.Join(projectDir, "secret"),
+			want: "",
+		},
+		{
+			name: "reject symlink outside project",
+			path: "escape.png",
+			want: "",
+		},
+		{
+			name: "reject intermediate symlink outside project",
+			path: "linked/outside.png",
 			want: "",
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := rewriteExtAssetPath(tt.path); got != tt.want {
-				t.Fatalf("rewriteExtAssetPath(%q) = %q, want %q", tt.path, got, tt.want)
+			if tt.path == "escape.png" && !symlinkAvailable {
+				t.Skip("symlink unavailable")
+			}
+			if tt.path == "linked/outside.png" && !symlinkDirAvailable {
+				t.Skip("symlink unavailable")
+			}
+			if got := buildFilesystemAssetPath(tt.path); got != normalizeSlashes(filepath.Clean(tt.want)) && !(got == "" && tt.want == "") {
+				t.Fatalf("buildFilesystemAssetPath(%q) = %q, want %q", tt.path, got, tt.want)
 			}
 		})
 	}
 }
 
-func TestRewriteExtAssetPathWithoutExtAssetDir(t *testing.T) {
-	original := assetPaths
-	t.Cleanup(func() {
-		assetPaths = original
-	})
+func TestSetFilesystemRootsRejectsImplicitPaths(t *testing.T) {
+	if err := SetFilesystemRoots(".", "assets"); err == nil {
+		t.Fatal("SetFilesystemRoots accepted relative paths")
+	}
+}
 
-	assetPaths.prefix = defaultAssetPathPrefix
-	assetPaths.extAssetDir = ""
-
-	if got := rewriteExtAssetPath("../anything/image.png"); got != "" {
-		t.Fatalf("rewriteExtAssetPath with empty extAssetDir = %q, want empty string", got)
+func TestSetFilesystemRootsRejectsAssetOutsideProject(t *testing.T) {
+	projectDir := t.TempDir()
+	assetDir := t.TempDir()
+	if err := SetFilesystemRoots(projectDir, assetDir); err == nil {
+		t.Fatal("SetFilesystemRoots accepted AssetDir outside ProjectDir")
 	}
 }

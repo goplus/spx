@@ -20,39 +20,39 @@
 package engine
 
 import (
-	"encoding/json"
+	"path/filepath"
 
 	"github.com/goplus/spx/v3/internal/engine/platform"
-	spxlog "github.com/goplus/spx/v3/internal/log"
 )
 
 func SetAssetDir(dir string) {
 	resMgr.SetLoadMode(true)
+	if assetPaths.explicitFSRoots {
+		return
+	}
+	setLegacyFilesystemAssetDir(dir)
+}
 
+func setLegacyFilesystemAssetDir(dir string) {
 	prefix := defaultAssetPathPrefix
 	if platform.IsWeb() {
 		prefix = ""
 	}
 
-	setExtAssetDir(readExtAssetDirFromProjectConfig(prefix))
 	setAssetRoot(prefix, dir)
+	assetPaths.enforceCanonical = !platform.IsWeb()
+	assetPaths.canonicalProjectRoot = ""
+	if assetPaths.enforceCanonical {
+		projectRoot, err := filepath.Abs(filepath.FromSlash(assetPaths.projectRoot))
+		if err == nil {
+			projectRoot, err = filepath.EvalSymlinks(projectRoot)
+		}
+		if err == nil {
+			assetPaths.canonicalProjectRoot = cleanFilesystemPath(projectRoot)
+		}
+	}
 }
 
 func ToAssetPath(relPath string) string {
 	return buildFilesystemAssetPath(relPath)
-}
-
-func readExtAssetDirFromProjectConfig(prefix string) string {
-	configPath := projectConfigPath(prefix)
-	if !resMgr.HasFile(configPath) {
-		return ""
-	}
-
-	configJSON := resMgr.ReadAllText(configPath)
-	var config assetProjectConfig
-	if err := json.Unmarshal([]byte(configJSON), &config); err != nil {
-		spxlog.Warn("SetAssetDir: failed to parse %s: %v", configPath, err)
-		return ""
-	}
-	return config.ExtAsset
 }

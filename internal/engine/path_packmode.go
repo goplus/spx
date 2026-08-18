@@ -19,12 +19,38 @@
 
 package engine
 
+import (
+	"path"
+	"strings"
+)
+
 func SetAssetDir(dir string) {
 	resMgr.SetLoadMode(false)
-	setExtAssetDir("")
 	setAssetRoot(packmodeAssetPrefix, dir)
 }
 
 func ToAssetPath(relPath string) string {
-	return normalizeSlashes(assetPaths.root + relPath)
+	if strings.Contains(relPath, "\\") {
+		return ""
+	}
+	relPath = normalizeSlashes(relPath)
+	if relPath == "" || strings.HasPrefix(relPath, "/") {
+		return ""
+	}
+	if strings.HasPrefix(relPath, packmodeAssetPrefix) {
+		return projectResourcePath(strings.TrimPrefix(relPath, packmodeAssetPrefix))
+	}
+	if strings.Contains(relPath, ":") {
+		return ""
+	}
+	root := strings.TrimPrefix(assetPaths.root, packmodeAssetPrefix)
+	return projectResourcePath(path.Join(root, relPath))
+}
+
+func projectResourcePath(name string) string {
+	name = path.Clean(name)
+	if name == "." || name == ".." || strings.HasPrefix(name, "../") || path.IsAbs(name) || strings.Contains(name, ":") {
+		return ""
+	}
+	return packmodeAssetPrefix + name
 }

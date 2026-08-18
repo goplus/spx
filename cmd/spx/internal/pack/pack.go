@@ -18,6 +18,7 @@ package pack
 
 import (
 	"archive/zip"
+	"fmt"
 	"io"
 	"os"
 	"path"
@@ -27,16 +28,26 @@ import (
 	"time"
 
 	"github.com/goplus/spx/v3/cmd/spx/internal/util"
+	"github.com/goplus/spx/v3/internal/projectassets"
+	"github.com/goplus/spx/v3/internal/projectpolicy"
 )
 
 type DirInfos struct {
 	path string
 	info os.FileInfo
-	// zipPath overrides the zip entry path.
-	zipPath string
 }
 
 func PackProject(baseFolder string, dstZipPath string) error {
+	if err := projectpolicy.ValidateConfig(baseFolder); err != nil {
+		return err
+	}
+	if _, err := projectassets.Resolve(projectassets.Config{
+		ProjectDir: baseFolder,
+		PackDir:    "assets",
+		PackIndex:  "index.json",
+	}); err != nil {
+		return err
+	}
 	paths := []DirInfos{}
 	if util.IsFileExist(dstZipPath) {
 		if err := os.Remove(dstZipPath); err != nil {
@@ -66,6 +77,12 @@ func PackProject(baseFolder string, dstZipPath string) error {
 		if err != nil {
 			return err
 		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("project entry %s must not be a symlink", path)
+		}
+		if !info.IsDir() && !info.Mode().IsRegular() {
+			return fmt.Errorf("project entry %s must be a regular file or directory", path)
+		}
 		rel, err := filepath.Rel(baseFolder, path)
 		if err != nil {
 			return err
@@ -92,17 +109,6 @@ func PackProject(baseFolder string, dstZipPath string) error {
 		return closeZip(err)
 	}
 
-	existingZipPaths := make(map[string]struct{}, len(paths))
-	for _, dirInfo := range paths {
-		existingZipPaths[zipEntryName(baseFolder, dirInfo)] = struct{}{}
-	}
-
-	extraPaths, err := collectExternalAssetPaths(baseFolder, existingZipPaths)
-	if err != nil {
-		return closeZip(err)
-	}
-	paths = append(paths, extraPaths...)
-
 	return closeZip(PackZip(zipWriter, baseFolder, paths))
 }
 
@@ -119,9 +125,15 @@ func PackZip(zipWriter *zip.Writer, baseFolder string, paths []DirInfos) error {
 		return 0
 	})
 	for _, dirInfo := range paths {
-		path := dirInfo.path
-		path = strings.ReplaceAll(path, "\\", "/")
+		filePath := dirInfo.path
 		info := dirInfo.info
+		current, err := os.Lstat(filePath)
+		if err != nil {
+			return fmt.Errorf("inspect project entry %s before packing: %w", filePath, err)
+		}
+		if current.Mode()&os.ModeSymlink != 0 || (!current.IsDir() && !current.Mode().IsRegular()) || !os.SameFile(info, current) {
+			return fmt.Errorf("project entry %s changed after collection", filePath)
+		}
 		header, err := zip.FileInfoHeader(info)
 		if err != nil {
 			return err
@@ -141,9 +153,19 @@ func PackZip(zipWriter *zip.Writer, baseFolder string, paths []DirInfos) error {
 			continue
 		}
 
-		fileToZip, err := os.Open(path)
+		fileToZip, err := os.Open(filePath)
 		if err != nil {
 			return err
+		}
+		opened, err := fileToZip.Stat()
+		if err != nil {
+			fileToZip.Close()
+			return fmt.Errorf("stat opened project entry %s: %w", filePath, err)
+		}
+		current, err = os.Lstat(filePath)
+		if err != nil || !opened.Mode().IsRegular() || current.Mode()&os.ModeSymlink != 0 || !os.SameFile(info, opened) || !os.SameFile(opened, current) {
+			fileToZip.Close()
+			return fmt.Errorf("project entry %s changed while opening", filePath)
 		}
 
 		writer, err := zipWriter.CreateHeader(header)
@@ -151,16 +173,27 @@ func PackZip(zipWriter *zip.Writer, baseFolder string, paths []DirInfos) error {
 			fileToZip.Close()
 			return err
 		}
-		_, copyErr := io.Copy(writer, fileToZip)
+		copied, copyErr := io.Copy(writer, fileToZip)
+		afterOpened, statErr := fileToZip.Stat()
+		afterPath, lstatErr := os.Lstat(filePath)
 		closeErr := fileToZip.Close()
 		if copyErr != nil {
 			return copyErr
+		}
+		if statErr != nil || lstatErr != nil || afterPath.Mode()&os.ModeSymlink != 0 ||
+			!os.SameFile(opened, afterOpened) || !os.SameFile(afterOpened, afterPath) ||
+			copied != opened.Size() || !sameStableFileMetadata(opened, afterOpened) {
+			return fmt.Errorf("project entry %s changed while packing", filePath)
 		}
 		if closeErr != nil {
 			return closeErr
 		}
 	}
 	return nil
+}
+
+func sameStableFileMetadata(before, after os.FileInfo) bool {
+	return before.Mode() == after.Mode() && before.Size() == after.Size() && before.ModTime() == after.ModTime()
 }
 
 func PackDirFiles(zipName string, targetDir string, directories, files []string) error {
@@ -198,10 +231,6 @@ func PackDirFiles(zipName string, targetDir string, directories, files []string)
 }
 
 func zipEntryName(baseFolder string, dirInfo DirInfos) string {
-	if dirInfo.zipPath != "" {
-		return strings.TrimPrefix(normalizeZipPath(dirInfo.zipPath), "/")
-	}
-
 	baseFolder = normalizeZipPath(baseFolder)
 	name := strings.TrimPrefix(normalizeZipPath(dirInfo.path), baseFolder)
 	return strings.TrimPrefix(name, "/")

@@ -18,99 +18,38 @@ package pack
 
 import (
 	"archive/zip"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
 
-func TestPackProjectIncludesSharedExternalAssets(t *testing.T) {
-	tmpDir := t.TempDir()
-	projectDir := filepath.Join(tmpDir, "All")
-	if err := os.MkdirAll(filepath.Join(projectDir, "assets", "sprites", "SpMotion"), 0755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(filepath.Join(tmpDir, "res"), 0755); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := os.WriteFile(filepath.Join(projectDir, "assets", "index.json"), []byte(`{"map":{"width":480,"height":360}}`), 0644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(projectDir, "assets", "sprites", "SpMotion", "index.json"), []byte(`{
-  "costumeSet": {
-    "faceRight": 180,
-    "path": "../../../../res/monkey.png",
-    "nx": 96
-  }
-}`), 0644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(tmpDir, "res", "monkey.png"), []byte("png"), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	zipPath := filepath.Join(tmpDir, "game.zip")
-	if err := PackProject(projectDir, zipPath); err != nil {
-		t.Fatal(err)
-	}
-
-	snapshot := readZipSnapshot(t, zipPath)
-	if snapshot.counts["res/monkey.png"] != 1 {
-		t.Fatalf("res/monkey.png count = %d, want 1", snapshot.counts["res/monkey.png"])
-	}
-	if snapshot.contents["res/monkey.png"] != "png" {
-		t.Fatalf("res/monkey.png content = %q, want %q", snapshot.contents["res/monkey.png"], "png")
-	}
-	for name := range snapshot.counts {
-		if strings.HasPrefix(name, "../") {
-			t.Fatalf("unexpected zip entry %q", name)
-		}
-	}
-}
-
-func TestPackProjectCoversExternalAssetVariants(t *testing.T) {
+func TestPackProjectIncludesResourcesWithinProject(t *testing.T) {
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "Game")
-	escapeDir := filepath.Join(filepath.Dir(tmpDir), filepath.Base(tmpDir)+"-escape")
-	t.Cleanup(func() {
-		_ = os.RemoveAll(escapeDir)
-	})
-
-	writeTestFile(t, filepath.Join(projectDir, ".config"), `{"extasset":"custom_asset"}`)
-	writeTestFile(t, filepath.Join(projectDir, "assets", "index.json"), fmt.Sprintf(`{
-  "backdrops": [
-    {"path":"../../shared/bg.png"},
-    {"path":"../../../%s/ignored.png"}
-  ],
-  "bgm":"../../shared/audio/theme.mp3",
-  "tilemapPath":"../../shared/maps/map.json",
+	writeTestFile(t, filepath.Join(projectDir, "assets", "index.json"), `{
+  "backdrops":[{"path":"res://res/bg.png"}],
+  "bgm":"../res/audio/theme.mp3",
+  "tilemapPath":"../res/maps/map.json",
   "map":{"width":480,"height":360}
-}`, filepath.Base(escapeDir)))
+}`)
 	writeTestFile(t, filepath.Join(projectDir, "assets", "sprites", "Hero", "index.json"), `{
-  "costumes":[
-    {"path":"../../../../custom_asset/shared.png"}
-  ],
-  "costumeSet":{
-    "faceRight":180,
-    "path":"../../../../custom_asset/hero.png",
-    "nx":96
-  }
+  "costumeSet":{"faceRight":180,"path":"../../../res/hero.png","nx":96}
 }`)
 	writeTestFile(t, filepath.Join(projectDir, "assets", "sounds", "Bell", "index.json"), `{
-  "path":"../../../../shared/audio/ring.wav"
+  "path":"../../../res/audio/ring.wav"
 }`)
-	writeTestFile(t, filepath.Join(projectDir, "extasset", "shared.png"), "local")
-
-	writeTestFile(t, filepath.Join(tmpDir, "shared", "bg.png"), "bg")
-	writeTestFile(t, filepath.Join(tmpDir, "shared", "audio", "theme.mp3"), "theme")
-	writeTestFile(t, filepath.Join(tmpDir, "shared", "audio", "ring.wav"), "ring")
-	writeTestFile(t, filepath.Join(tmpDir, "shared", "maps", "map.json"), "{}")
-	writeTestFile(t, filepath.Join(tmpDir, "custom_asset", "hero.png"), "hero")
-	writeTestFile(t, filepath.Join(tmpDir, "custom_asset", "shared.png"), "external-duplicate")
-	writeTestFile(t, filepath.Join(escapeDir, "ignored.png"), "ignored")
+	writeTestFile(t, filepath.Join(projectDir, "assets", "fonts", "Custom", "index.json"), `{
+  "faces":[{"path":"../../../res/fonts/custom.ttf"}]
+}`)
+	writeTestFile(t, filepath.Join(projectDir, "res", "bg.png"), "bg")
+	writeTestFile(t, filepath.Join(projectDir, "res", "hero.png"), "hero")
+	writeTestFile(t, filepath.Join(projectDir, "res", "audio", "theme.mp3"), "theme")
+	writeTestFile(t, filepath.Join(projectDir, "res", "audio", "ring.wav"), "ring")
+	writeTestFile(t, filepath.Join(projectDir, "res", "maps", "map.json"), "{}")
+	writeTestFile(t, filepath.Join(projectDir, "res", "fonts", "custom.ttf"), "font")
 
 	zipPath := filepath.Join(tmpDir, "game.zip")
 	if err := PackProject(projectDir, zipPath); err != nil {
@@ -118,18 +57,17 @@ func TestPackProjectCoversExternalAssetVariants(t *testing.T) {
 	}
 
 	snapshot := readZipSnapshot(t, zipPath)
-	assertZipEntryContent(t, snapshot, "shared/bg.png", "bg")
-	assertZipEntryContent(t, snapshot, "shared/audio/theme.mp3", "theme")
-	assertZipEntryContent(t, snapshot, "shared/audio/ring.wav", "ring")
-	assertZipEntryContent(t, snapshot, "shared/maps/map.json", "{}")
-	assertZipEntryContent(t, snapshot, "extasset/hero.png", "hero")
-	assertZipEntryContent(t, snapshot, "extasset/shared.png", "local")
-
-	if snapshot.counts["extasset/shared.png"] != 1 {
-		t.Fatalf("extasset/shared.png count = %d, want 1", snapshot.counts["extasset/shared.png"])
-	}
-	if _, exists := snapshot.counts[filepath.Base(escapeDir)+"/ignored.png"]; exists {
-		t.Fatalf("unexpected escaped asset %q in zip", filepath.Base(escapeDir)+"/ignored.png")
+	for name, want := range map[string]string{
+		"res/bg.png":           "bg",
+		"res/hero.png":         "hero",
+		"res/audio/theme.mp3":  "theme",
+		"res/audio/ring.wav":   "ring",
+		"res/maps/map.json":    "{}",
+		"res/fonts/custom.ttf": "font",
+	} {
+		if got := snapshot.contents[name]; strings.TrimSpace(got) != strings.TrimSpace(want) {
+			t.Fatalf("%s content = %q, want %q", name, got, want)
+		}
 	}
 	for name := range snapshot.counts {
 		if strings.HasPrefix(name, "../") {
@@ -138,26 +76,97 @@ func TestPackProjectCoversExternalAssetVariants(t *testing.T) {
 	}
 }
 
-func TestPackProjectFailsOnMissingExternalAsset(t *testing.T) {
+func TestPackProjectRejectsResourceOutsideProject(t *testing.T) {
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "Game")
-
 	writeTestFile(t, filepath.Join(projectDir, "assets", "index.json"), `{
-  "backdrops":[{"path":"../../shared/missing.png"}],
+  "backdrops":[{"path":"../../shared/bg.png"}],
   "map":{"width":480,"height":360}
 }`)
+	writeTestFile(t, filepath.Join(tmpDir, "shared", "bg.png"), "bg")
 
 	zipPath := filepath.Join(tmpDir, "game.zip")
 	err := PackProject(projectDir, zipPath)
-	if err == nil {
-		t.Fatal("PackProject() error = nil, want missing external asset error")
+	if err == nil || !strings.Contains(err.Error(), "outside project directory") {
+		t.Fatalf("PackProject() error = %v, want outside-project rejection", err)
 	}
-	if !strings.Contains(err.Error(), "missing.png") {
-		t.Fatalf("PackProject() error = %q, want mention of missing.png", err)
+	if _, statErr := os.Stat(zipPath); !os.IsNotExist(statErr) {
+		t.Fatalf("output created after rejected project: stat error %v", statErr)
 	}
 }
 
-func TestPackProjectIncludesExternalAssetsFromPackedConfigFallback(t *testing.T) {
+func TestPackProjectRejectsNonPortableResPaths(t *testing.T) {
+	for _, resourcePath := range []string{
+		"res://C:/outside.png",
+		"res:///etc/passwd",
+		`res://\\server\share\outside.png`,
+		"res:outside.png",
+		"res:/outside.png",
+		`res:\outside.png`,
+	} {
+		t.Run(strings.NewReplacer("/", "_", "\\", "_").Replace(resourcePath), func(t *testing.T) {
+			projectDir := filepath.Join(t.TempDir(), "Game")
+			writeTestFile(t, filepath.Join(projectDir, "assets", "index.json"), `{
+  "backdrops":[{"path":`+strconv.Quote(resourcePath)+`}],
+  "map":{"width":480,"height":360}
+}`)
+
+			err := PackProject(projectDir, filepath.Join(t.TempDir(), "game.zip"))
+			if err == nil {
+				t.Fatalf("PackProject accepted non-portable resource path %q", resourcePath)
+			}
+		})
+	}
+}
+
+func TestPackProjectRejectsResourceThroughSymlinkOutsideProject(t *testing.T) {
+	tmpDir := t.TempDir()
+	projectDir := filepath.Join(tmpDir, "Game")
+	externalDir := filepath.Join(tmpDir, "external")
+	writeTestFile(t, filepath.Join(projectDir, "assets", "index.json"), `{
+  "backdrops":[{"path":"../linked/bg.png"}],
+  "map":{"width":480,"height":360}
+}`)
+	writeTestFile(t, filepath.Join(externalDir, "bg.png"), "bg")
+	if err := os.Symlink(externalDir, filepath.Join(projectDir, "linked")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	err := PackProject(projectDir, filepath.Join(tmpDir, "game.zip"))
+	if err == nil || !strings.Contains(err.Error(), "non-symlink") {
+		t.Fatalf("PackProject() error = %v, want no-follow rejection", err)
+	}
+}
+
+func TestPackProjectAcceptsPackedOnlyConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	projectDir := filepath.Join(tmpDir, "Game")
+	writeTestFile(t, filepath.Join(projectDir, "main.spx"), "onStart => {}")
+	writeTestFile(t, filepath.Join(projectDir, "assets", "index_pack.json"), `{"zorder":[]}`)
+
+	zipPath := filepath.Join(tmpDir, "game.zip")
+	if err := PackProject(projectDir, zipPath); err != nil {
+		t.Fatal(err)
+	}
+	if got := readZipSnapshot(t, zipPath).counts["assets/index_pack.json"]; got != 1 {
+		t.Fatalf("assets/index_pack.json count = %d, want 1", got)
+	}
+}
+
+func TestPackProjectRejectsExtAssetConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	projectDir := filepath.Join(tmpDir, "Game")
+	writeTestFile(t, filepath.Join(projectDir, ".config"), `{"extasset":"custom_asset"}`)
+	writeTestFile(t, filepath.Join(projectDir, "assets", "index.json"), `{"map":{"width":480,"height":360}}`)
+
+	zipPath := filepath.Join(tmpDir, "game.zip")
+	err := PackProject(projectDir, zipPath)
+	if err == nil || !strings.Contains(err.Error(), "unsupported extasset") {
+		t.Fatalf("PackProject() error = %v, want extasset rejection", err)
+	}
+}
+
+func TestPackProjectRejectsExternalAssetFromPackedConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "Game")
 
@@ -176,33 +185,16 @@ func TestPackProjectIncludesExternalAssetsFromPackedConfigFallback(t *testing.T)
   "sounds":{
     "Bell":{"path":"../../../../shared/audio/ring.wav"}
   },
-  "fonts":{
-    "Custom":{"faces":[{"path":"../../../../shared/fonts/custom.ttf"}]}
-  }
-}`)
-	writeTestFile(t, filepath.Join(tmpDir, "shared", "bg.jpg"), "bg")
-	writeTestFile(t, filepath.Join(tmpDir, "shared", "hero.png"), "hero")
-	writeTestFile(t, filepath.Join(tmpDir, "shared", "audio", "ring.wav"), "ring")
-	writeTestFile(t, filepath.Join(tmpDir, "shared", "fonts", "custom.ttf"), "font")
-	// A packed fonts catalog is authoritative; a stale source-only family must
-	// not make packing fail or add an undeclared external font.
-	writeTestFile(t, filepath.Join(projectDir, "assets", "fonts", "Stale", "index.json"), `{
-  "faces":[{"path":"../../../../shared/fonts/missing.ttf"}]
+  "fonts":{"Custom":{"faces":[{"path":"../../../../shared/fonts/custom.ttf"}]}}
 }`)
 
 	zipPath := filepath.Join(tmpDir, "game.zip")
-	if err := PackProject(projectDir, zipPath); err != nil {
-		t.Fatal(err)
+	if err := PackProject(projectDir, zipPath); err == nil || !strings.Contains(err.Error(), "outside project directory") {
+		t.Fatalf("PackProject() error = %v, want packed external-resource rejection", err)
 	}
-
-	snapshot := readZipSnapshot(t, zipPath)
-	assertZipEntryContent(t, snapshot, "shared/bg.jpg", "bg")
-	assertZipEntryContent(t, snapshot, "shared/hero.png", "hero")
-	assertZipEntryContent(t, snapshot, "shared/audio/ring.wav", "ring")
-	assertZipEntryContent(t, snapshot, "shared/fonts/custom.ttf", "font")
 }
 
-func TestPackProjectIncludesExternalAssetsFromSourceRootWhenPackedRootMissing(t *testing.T) {
+func TestPackProjectRejectsExternalAssetFromSourceRootWhenPackedRootMissing(t *testing.T) {
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "Game")
 
@@ -226,21 +218,36 @@ func TestPackProjectIncludesExternalAssetsFromSourceRootWhenPackedRootMissing(t 
 	writeTestFile(t, filepath.Join(projectDir, "assets", "fonts", "Source", "index.json"), `{
   "faces":[{"path":"../../../../shared/fonts/source.ttf"}]
 }`)
-	writeTestFile(t, filepath.Join(tmpDir, "shared", "bg.jpg"), "bg")
-	writeTestFile(t, filepath.Join(tmpDir, "shared", "audio", "theme.mp3"), "theme")
-	writeTestFile(t, filepath.Join(tmpDir, "shared", "hero.png"), "hero")
-	writeTestFile(t, filepath.Join(tmpDir, "shared", "fonts", "source.ttf"), "source-font")
-
 	zipPath := filepath.Join(tmpDir, "game.zip")
-	if err := PackProject(projectDir, zipPath); err != nil {
+	if err := PackProject(projectDir, zipPath); err == nil || !strings.Contains(err.Error(), "outside project directory") {
+		t.Fatalf("PackProject() error = %v, want source external-resource rejection", err)
+	}
+}
+
+func TestPackZipRejectsFileReplacedAfterCollection(t *testing.T) {
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "asset.txt")
+	writeTestFile(t, filePath, "inside")
+	info, err := os.Lstat(filePath)
+	if err != nil {
 		t.Fatal(err)
 	}
+	externalPath := filepath.Join(t.TempDir(), "external.txt")
+	writeTestFile(t, externalPath, "outside")
+	if err := os.Remove(filePath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(externalPath, filePath); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
 
-	snapshot := readZipSnapshot(t, zipPath)
-	assertZipEntryContent(t, snapshot, "shared/bg.jpg", "bg")
-	assertZipEntryContent(t, snapshot, "shared/audio/theme.mp3", "theme")
-	assertZipEntryContent(t, snapshot, "shared/hero.png", "hero")
-	assertZipEntryContent(t, snapshot, "shared/fonts/source.ttf", "source-font")
+	var output strings.Builder
+	zipWriter := zip.NewWriter(&output)
+	err = PackZip(zipWriter, tmpDir, []DirInfos{{path: filePath, info: info}})
+	_ = zipWriter.Close()
+	if err == nil || !strings.Contains(err.Error(), "changed after collection") {
+		t.Fatalf("PackZip() error = %v, want replaced-file rejection", err)
+	}
 }
 
 type zipSnapshot struct {
@@ -291,17 +298,6 @@ func readZipFile(file *zip.File) (string, error) {
 		return "", closeErr
 	}
 	return string(data), nil
-}
-
-func assertZipEntryContent(t *testing.T, snapshot zipSnapshot, name, want string) {
-	t.Helper()
-
-	if snapshot.counts[name] != 1 {
-		t.Fatalf("%s count = %d, want 1", name, snapshot.counts[name])
-	}
-	if got := snapshot.contents[name]; got != want {
-		t.Fatalf("%s content = %q, want %q", name, got, want)
-	}
 }
 
 func writeTestFile(t *testing.T, filePath string, content string) {

@@ -2,7 +2,7 @@
   "costumes": [
     {
       "name": "backdrop1",
-      "path": "../../shared-assets/lake.jpg"
+      "path": "shared-assets/lake.jpg"
     }
   ],
   "costumeIndex": 0,

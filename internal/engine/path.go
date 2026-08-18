@@ -17,49 +17,89 @@
 package engine
 
 import (
+	"fmt"
+	"os"
+	pathpkg "path"
 	"path/filepath"
-	"slices"
 	"strings"
 
-	spxlog "github.com/goplus/spx/v3/internal/log"
+	spxfs "github.com/goplus/spx/v3/fs"
 )
 
 const (
 	defaultAssetPathPrefix = "../"
 	packmodeAssetPrefix    = "res://"
 	defaultAssetDirName    = "assets"
-	projectConfigFile      = ".config"
-	engineExtAssetPath     = "extasset"
 )
 
 type assetPathState struct {
-	prefix      string
-	root        string
-	extAssetDir string
+	root                 string
+	projectRoot          string
+	canonicalProjectRoot string
+	explicitFSRoots      bool
+	enforceCanonical     bool
 }
 
 var (
 	assetPaths = assetPathState{
-		prefix: defaultAssetPathPrefix,
-		root:   defaultAssetPathPrefix + defaultAssetDirName + "/",
+		root:        defaultAssetPathPrefix + defaultAssetDirName + "/",
+		projectRoot: cleanFilesystemPath(defaultAssetPathPrefix),
 	}
 )
 
-type assetProjectConfig struct {
-	ExtAsset string `json:"extasset"`
+// SetFilesystemRoots configures the physical project and asset roots used by
+// interpreted desktop sessions. It only updates path state; the Engine resource
+// manager is configured later, after the GDExtension has linked its callbacks.
+func SetFilesystemRoots(projectDir, assetDir string) error {
+	projectRoot, err := validateFilesystemRoot("project", projectDir)
+	if err != nil {
+		return err
+	}
+	assetRoot, err := validateFilesystemRoot("asset", assetDir)
+	if err != nil {
+		return err
+	}
+	canonicalProjectRoot, err := filepath.EvalSymlinks(filepath.FromSlash(projectRoot))
+	if err != nil {
+		return fmt.Errorf("engine: canonicalize project root %q: %w", projectDir, err)
+	}
+	canonicalAssetRoot, err := filepath.EvalSymlinks(filepath.FromSlash(assetRoot))
+	if err != nil {
+		return fmt.Errorf("engine: canonicalize asset root %q: %w", assetDir, err)
+	}
+	if !isWithinRoot(cleanFilesystemPath(canonicalAssetRoot), cleanFilesystemPath(canonicalProjectRoot)) {
+		return fmt.Errorf("engine: asset root %q must be within project root %q", assetDir, projectDir)
+	}
+	assetPaths = assetPathState{
+		root:                 joinAssetRoot("", assetRoot),
+		projectRoot:          projectRoot,
+		canonicalProjectRoot: cleanFilesystemPath(canonicalProjectRoot),
+		explicitFSRoots:      true,
+		enforceCanonical:     true,
+	}
+	return nil
 }
 
-func projectConfigPath(prefix string) string {
-	return normalizeSlashes(prefix + projectConfigFile)
+func validateFilesystemRoot(name, root string) (string, error) {
+	if root == "" {
+		return "", fmt.Errorf("engine: %s root is empty", name)
+	}
+	if !filepath.IsAbs(root) {
+		return "", fmt.Errorf("engine: %s root %q is not absolute", name, root)
+	}
+	if clean := filepath.Clean(root); clean != root {
+		return "", fmt.Errorf("engine: %s root %q is not clean (want %q)", name, root, clean)
+	}
+	return cleanFilesystemPath(root), nil
 }
 
 func setAssetRoot(prefix, dir string) {
-	assetPaths.prefix = prefix
 	assetPaths.root = joinAssetRoot(prefix, defaultAssetDir(dir))
-}
-
-func setExtAssetDir(dir string) {
-	assetPaths.extAssetDir = dir
+	if prefix == packmodeAssetPrefix {
+		assetPaths.projectRoot = packmodeAssetPrefix
+	} else {
+		assetPaths.projectRoot = cleanFilesystemPath(prefix)
+	}
 }
 
 func defaultAssetDir(dir string) string {
@@ -82,59 +122,63 @@ func cleanFilesystemPath(path string) string {
 }
 
 func buildFilesystemAssetPath(relPath string) string {
-	if replacedPath := rewriteExtAssetPath(relPath); replacedPath != "" {
-		return replacedPath
-	}
-
-	root := cleanFilesystemPath(assetPaths.root)
-	path := cleanFilesystemPath(filepath.Join(root, relPath))
-	if isWithinRoot(path, root) {
-		return path
-	}
-	// Preserve legacy projects that referenced a shared sibling resource directory
-	// with "../../...". The compatibility root is still bounded to two parent levels
-	// above the configured asset root, so paths outside that legacy scope stay rejected.
-	if leadingParentCount(relPath) >= 2 && isWithinCompatibilityRoot(path, root) {
-		return path
-	}
-	return ""
-}
-
-func rewriteExtAssetPath(relPath string) string {
-	if assetPaths.extAssetDir == "" {
+	base, name, ok := filesystemAssetReference(relPath)
+	if !ok {
 		return ""
 	}
 
-	path := cleanFilesystemPath(relPath)
-	segments := strings.Split(path, "/")
-	leadingParents := 0
-	for i, segment := range segments {
-		if segment == "" {
-			continue
-		}
-		if segment == ".." {
-			leadingParents++
-			continue
-		}
-		if segment != assetPaths.extAssetDir {
-			if containsPathSegment(segments[i+1:], assetPaths.extAssetDir) {
-				spxlog.Warn("ToAssetPath: extassetDir must be in the root directory: %s", relPath)
-			}
-			if leadingParents == 0 {
-				return ""
-			}
-			return ""
-		}
-		if leadingParents == 0 {
-			return ""
-		}
-
-		suffix := filepath.Join(segments[i+1:]...)
-		newPath := assetPaths.prefix + filepath.Join(engineExtAssetPath, suffix)
-		return normalizeSlashes(newPath)
+	projectRoot := cleanFilesystemPath(assetPaths.projectRoot)
+	base = cleanFilesystemPath(base)
+	if projectRoot == "" || projectRoot == "." && filepath.IsAbs(filepath.FromSlash(base)) {
+		return ""
 	}
+	resolvedPath := cleanFilesystemPath(filepath.Join(filepath.FromSlash(base), filepath.FromSlash(name)))
+	if !isWithinRoot(resolvedPath, projectRoot) {
+		return ""
+	}
+	if assetPaths.enforceCanonical {
+		if assetPaths.canonicalProjectRoot == "" {
+			return ""
+		}
+		info, err := os.Lstat(filepath.FromSlash(resolvedPath))
+		if err != nil || info.Mode()&os.ModeSymlink != 0 {
+			return ""
+		}
+		canonicalPath, err := filepath.EvalSymlinks(filepath.FromSlash(resolvedPath))
+		if err != nil || !isWithinRoot(cleanFilesystemPath(canonicalPath), assetPaths.canonicalProjectRoot) {
+			return ""
+		}
+	}
+	return resolvedPath
+}
 
-	return ""
+func filesystemAssetReference(reference string) (base, name string, ok bool) {
+	if reference == "" {
+		return "", "", false
+	}
+	schema, file := spxfs.SplitSchema(reference)
+	switch schema {
+	case "":
+		base, name = assetPaths.root, file
+	case "res":
+		if !strings.HasPrefix(reference, packmodeAssetPrefix) {
+			return "", "", false
+		}
+		base, name = assetPaths.projectRoot, file
+	default:
+		return "", "", false
+	}
+	if !isPortableRelativeResourcePath(name) {
+		return "", "", false
+	}
+	return base, name, true
+}
+
+func isPortableRelativeResourcePath(name string) bool {
+	if name == "" || strings.ContainsAny(name, "\\:\x00") {
+		return false
+	}
+	return !pathpkg.IsAbs(name) && !filepath.IsAbs(filepath.FromSlash(name))
 }
 
 func isWithinRoot(path, root string) bool {
@@ -144,25 +188,4 @@ func isWithinRoot(path, root string) bool {
 	}
 	rel = normalizeSlashes(rel)
 	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, "../"))
-}
-
-func isWithinCompatibilityRoot(path, assetRoot string) bool {
-	root := cleanFilesystemPath(filepath.Join(assetRoot, "../.."))
-	return isWithinRoot(path, root)
-}
-
-func leadingParentCount(relPath string) int {
-	normalized := cleanFilesystemPath(relPath)
-	count := 0
-	for segment := range strings.SplitSeq(normalized, "/") {
-		if segment != ".." {
-			break
-		}
-		count++
-	}
-	return count
-}
-
-func containsPathSegment(segments []string, target string) bool {
-	return slices.Contains(segments, target)
 }
