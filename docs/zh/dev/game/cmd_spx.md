@@ -325,7 +325,6 @@ SPX 命令工具支持以下通用参数，可以与各种命令组合使用：
 | `--build <模式>` | 小游戏构建模式：`normal` 或 `fast`，默认 `normal` |
 | `--mode <模式>` | Web 构建模式：`none`、`worker` 或 `minigame`，默认 `none` |
 | `--movie` | 录制运行画面 |
-| `--goenv <目录>` | 指定便携 Go 环境目录 |
 | `-v` | 输出详细日志 |
 
 ## 使用示例

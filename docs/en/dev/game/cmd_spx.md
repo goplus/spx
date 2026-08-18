@@ -146,7 +146,6 @@ spx exportminiprogram
 | `--build` | Mini-game build mode: `normal` or `fast`; default is `normal`. |
 | `--mode` | Web build mode: `none`, `worker`, or `minigame`; default is `none`. |
 | `--movie` | Enable movie recording mode. |
-| `--goenv` | Use a portable Go environment directory. |
 | `-v` | Print verbose diagnostics. |
 
 ## Troubleshooting

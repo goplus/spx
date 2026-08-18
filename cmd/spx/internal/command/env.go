@@ -42,18 +42,6 @@ const defaultProjectImportTimeout = 10 * time.Minute
 var projectNameReplacer = strings.NewReplacer("_", "", " ", "", "\"", "", "\n", "", "\r", "")
 var spxModuleReplaceLinePattern = regexp.MustCompile(`^(\s*)(replace\s+)?github\.com/goplus/spx/v3\s*=>\s*(\S+)(\s*//.*)?$`)
 
-type envVar struct {
-	key   string
-	value string
-}
-
-type portableGoPaths struct {
-	goRootBinPath string
-	goBinaryPath  string
-	goCacheDir    string
-	goModCacheDir string
-}
-
 // CheckEnv validates the target directory.
 func (cmd *CmdTool) CheckEnv() error {
 	dir, err := filepath.Abs(cmd.TargetDir)
@@ -295,7 +283,7 @@ func (cmd *CmdTool) setupEnginePaths() error {
 		return nil
 	}
 
-	binPostfix, cmdPath, err := resolveAppPath(cmd.GoBinPath, envName, cmd.Version, cmd.CustomGoEnv)
+	binPostfix, cmdPath, err := resolveAppPath(cmd.GoBinPath, envName, cmd.Version)
 	if err != nil {
 		return fmt.Errorf("%s requires engine to be installed as a binary at %s: %w", envName, cmd.GoBinPath, err)
 	}
@@ -366,124 +354,6 @@ func (cmd *CmdTool) updateProjectName() error {
 
 func (cmd *CmdTool) usesPureEngine() bool {
 	return cmd.Args.Tags != nil && strings.Contains(*cmd.Args.Tags, "pure_engine")
-}
-
-// setupPortableGoEnv configures a portable Go toolchain.
-func (cmd *CmdTool) setupPortableGoEnv() error {
-	goPaths, err := cmd.resolvePortableGoEnvPaths()
-	if err != nil {
-		return err
-	}
-
-	if err := cmd.applyPortableGoEnv(goPaths); err != nil {
-		return err
-	}
-
-	printPortableGoEnv(cmd, goPaths)
-	return nil
-}
-
-func (cmd *CmdTool) resolvePortableGoEnvPaths() (portableGoPaths, error) {
-	goEnvDir, err := filepath.Abs(*cmd.Args.GoEnv)
-	if err != nil {
-		return portableGoPaths{}, fmt.Errorf("invalid goenv path: %w", err)
-	}
-
-	cmd.GoEnvDir = goEnvDir
-	cmd.CustomGoEnv = true
-
-	if _, err := os.Stat(goEnvDir); os.IsNotExist(err) {
-		return portableGoPaths{}, fmt.Errorf("goenv directory does not exist: %s", goEnvDir)
-	}
-
-	cmd.GoRoot = path.Join(goEnvDir, "gotoolchain", "go")
-	cmd.GoPath = filepath.Join(goEnvDir, "go")
-	if _, err := os.Stat(cmd.GoRoot); os.IsNotExist(err) {
-		//lint:ignore ST1005 This is a user-facing setup hint with complete sentences.
-		return portableGoPaths{}, fmt.Errorf("portable Go toolchain not found at the expected path: %s\n\nThis is expected to be provided by the SPX release package. If you are setting this up manually, please ensure the Go toolchain is extracted to '%s/gotoolchain/go'.", cmd.GoRoot, goEnvDir)
-	}
-
-	cmd.GoBinPath, err = filepath.Abs(filepath.Join(cmd.GoPath, "bin"))
-	if err != nil {
-		return portableGoPaths{}, fmt.Errorf("failed to resolve Go bin path: %w", err)
-	}
-	if _, err := os.Stat(cmd.GoBinPath); os.IsNotExist(err) {
-		return portableGoPaths{}, fmt.Errorf("go bin directory not found: %s", cmd.GoBinPath)
-	}
-
-	goPaths := portableGoPaths{
-		goRootBinPath: filepath.Join(cmd.GoRoot, "bin"),
-		goCacheDir:    filepath.Join(goEnvDir, ".cache", "build"),
-		goModCacheDir: filepath.Join(goEnvDir, ".cache", "mod"),
-	}
-	if _, err := os.Stat(goPaths.goRootBinPath); os.IsNotExist(err) {
-		return portableGoPaths{}, fmt.Errorf("go bin directory not found: %s", goPaths.goRootBinPath)
-	}
-
-	goPaths.goBinaryPath = goBinaryPath(goPaths.goRootBinPath)
-	if _, err := os.Stat(goPaths.goBinaryPath); os.IsNotExist(err) {
-		return portableGoPaths{}, fmt.Errorf("go executable not found: %s", goPaths.goBinaryPath)
-	}
-
-	if err := os.MkdirAll(goPaths.goCacheDir, 0o755); err != nil {
-		return portableGoPaths{}, fmt.Errorf("failed to create Go build cache directory: %w", err)
-	}
-	if err := os.MkdirAll(goPaths.goModCacheDir, 0o755); err != nil {
-		return portableGoPaths{}, fmt.Errorf("failed to create Go module cache directory: %w", err)
-	}
-
-	return goPaths, nil
-}
-
-func (cmd *CmdTool) applyPortableGoEnv(goPaths portableGoPaths) error {
-	pathEntries := []string{cmd.GoBinPath, goPaths.goRootBinPath}
-	if pathValue := os.Getenv("PATH"); pathValue != "" {
-		pathEntries = append(pathEntries, pathValue)
-	}
-	if err := setEnvVars(
-		envVar{key: "GOROOT", value: cmd.GoRoot},
-		envVar{key: "GOPATH", value: cmd.GoPath},
-		envVar{key: "GOTOOLCHAIN", value: ""},
-		envVar{key: "GOCACHE", value: goPaths.goCacheDir},
-		envVar{key: "GOMODCACHE", value: goPaths.goModCacheDir},
-		envVar{key: "PATH", value: strings.Join(pathEntries, string(os.PathListSeparator))},
-	); err != nil {
-		return err
-	}
-	return nil
-}
-
-func printPortableGoEnv(cmd *CmdTool, goPaths portableGoPaths) {
-	const portableGoEnvFormat = "" +
-		"using portable Go environment:\n" +
-		"  GOROOT: %s\n" +
-		"  GOPATH: %s\n" +
-		"  GoBinPath: %s (for gdspx, gdspxrt, etc.)\n" +
-		"  Go binary: %s\n" +
-		"  GOCACHE: %s\n" +
-		"  GOMODCACHE: %s\n"
-
-	fmt.Printf(portableGoEnvFormat,
-		cmd.GoRoot,
-		cmd.GoPath,
-		cmd.GoBinPath,
-		goPaths.goBinaryPath,
-		goPaths.goCacheDir,
-		goPaths.goModCacheDir,
-	)
-}
-
-func goBinaryPath(goRootBinPath string) string {
-	return filepath.Join(goRootBinPath, goBinaryName(runtime.GOOS))
-}
-
-func setEnvVars(vars ...envVar) error {
-	for _, env := range vars {
-		if err := os.Setenv(env.key, env.value); err != nil {
-			return fmt.Errorf("set %s: %w", env.key, err)
-		}
-	}
-	return nil
 }
 
 // setupPaths resolves paths.
@@ -684,7 +554,7 @@ func hasGoModuleDeclaration(content, modulePath string) bool {
 	return false
 }
 
-func resolveAppPath(gobinDir, tag, version string, customGoEnv bool) (string, string, error) {
+func resolveAppPath(gobinDir, tag, version string) (string, string, error) {
 	binPostfix := executableSuffix(runtime.GOOS)
 
 	tagName := tag + version
@@ -698,13 +568,9 @@ func resolveAppPath(gobinDir, tag, version string, customGoEnv bool) (string, st
 
 	cmdPath := path.Join(gobinDir, dstFileName)
 	info, err := os.Stat(cmdPath)
-	if os.IsNotExist(err) {
-		if customGoEnv {
-			return binPostfix, cmdPath, nil
-		}
-	} else if err != nil {
+	if err != nil && !os.IsNotExist(err) {
 		return binPostfix, "", err
-	} else if info.Mode()&0o111 == 0 {
+	} else if err == nil && info.Mode()&0o111 == 0 {
 		if err := os.Chmod(cmdPath, 0o755); err != nil {
 			return binPostfix, cmdPath, err
 		}
