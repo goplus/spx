@@ -18,7 +18,11 @@ package main
 
 import (
 	"bufio"
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"go/token"
+	"go/types"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -26,6 +30,7 @@ import (
 	"strings"
 
 	"github.com/goplus/spx/v3/internal/base/licenseheader"
+	"golang.org/x/tools/go/gcexportdata"
 )
 
 func main() {
@@ -49,6 +54,10 @@ func main() {
 	outdir, ok := flagValue(args, "-outdir")
 	if !ok || outdir == "" {
 		return
+	}
+	if err := canonicalizeTypesInDir(outdir); err != nil {
+		_, _ = os.Stderr.WriteString(err.Error() + "\n")
+		os.Exit(1)
 	}
 	if err := addHeadersInDir(outdir); err != nil {
 		_, _ = os.Stderr.WriteString(err.Error() + "\n")
@@ -152,6 +161,129 @@ func addHeadersInDir(root string) error {
 		}
 		return licenseheader.AddToGoFile(path)
 	})
+}
+
+type sourceRoots struct {
+	moduleRoot  string
+	goRoot      string
+	moduleCache string
+}
+
+func canonicalizeTypesInDir(root string) error {
+	var files []string
+	if err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() && filepath.Ext(path) == ".types" {
+			files = append(files, path)
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	if len(files) == 0 {
+		return nil
+	}
+
+	roots, err := loadSourceRoots()
+	if err != nil {
+		return err
+	}
+	for _, file := range files {
+		rel, err := filepath.Rel(root, filepath.Dir(file))
+		if err != nil {
+			return err
+		}
+		if err := canonicalizeTypesFile(file, filepath.ToSlash(rel), roots); err != nil {
+			return fmt.Errorf("canonicalize %s: %w", file, err)
+		}
+	}
+	return nil
+}
+
+func loadSourceRoots() (sourceRoots, error) {
+	cmd := exec.Command("go", "env", "-json", "GOMOD", "GOROOT", "GOMODCACHE")
+	data, err := cmd.Output()
+	if err != nil {
+		return sourceRoots{}, fmt.Errorf("load Go source roots: %w", err)
+	}
+	var env struct {
+		GoMod      string `json:"GOMOD"`
+		GoRoot     string `json:"GOROOT"`
+		GoModCache string `json:"GOMODCACHE"`
+	}
+	if err := json.Unmarshal(data, &env); err != nil {
+		return sourceRoots{}, fmt.Errorf("decode Go source roots: %w", err)
+	}
+	return sourceRoots{
+		moduleRoot:  filepath.Dir(env.GoMod),
+		goRoot:      env.GoRoot,
+		moduleCache: env.GoModCache,
+	}, nil
+}
+
+func canonicalizeTypesFile(filename, pkgPath string, roots sourceRoots) error {
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return err
+	}
+	data, err = canonicalizeTypesData(data, pkgPath, roots)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filename, data, 0o666)
+}
+
+func canonicalizeTypesData(data []byte, pkgPath string, roots sourceRoots) ([]byte, error) {
+	fset := token.NewFileSet()
+	pkg, err := gcexportdata.Read(bytes.NewReader(data), fset, make(map[string]*types.Package), pkgPath)
+	if err != nil {
+		return nil, err
+	}
+
+	canonicalFset := token.NewFileSet()
+	fset.Iterate(func(file *token.File) bool {
+		canonicalFile := canonicalFset.AddFile(canonicalSourcePath(file.Name(), roots), file.Base(), file.Size())
+		canonicalFile.SetLines(file.Lines())
+		return true
+	})
+
+	var buf bytes.Buffer
+	if err := gcexportdata.Write(&buf, canonicalFset, pkg); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func canonicalSourcePath(filename string, roots sourceRoots) string {
+	for _, candidate := range []struct {
+		root   string
+		prefix string
+	}{
+		{roots.moduleRoot, "$MODULE"},
+		{roots.goRoot, "$GOROOT"},
+		{roots.moduleCache, "$GOMODCACHE"},
+	} {
+		if rel, ok := relativeTo(candidate.root, filename); ok {
+			return candidate.prefix + "/" + filepath.ToSlash(rel)
+		}
+	}
+	if filepath.IsAbs(filename) {
+		return "$ABS/" + filepath.Base(filename)
+	}
+	return filepath.ToSlash(filename)
+}
+
+func relativeTo(root, filename string) (string, bool) {
+	if root == "" || filename == "" {
+		return "", false
+	}
+	rel, err := filepath.Rel(root, filename)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", false
+	}
+	return rel, true
 }
 
 func flagValue(args []string, name string) (string, bool) {
