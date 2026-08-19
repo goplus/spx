@@ -48,7 +48,7 @@ jobs:
           fi
 
       - name: Check out code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -77,7 +77,7 @@ jobs:
 
       - name: Download verified release Web bundle
         if: inputs.release_artifact != ''
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${{ inputs.release_artifact }}
           path: .
@@ -107,7 +107,7 @@ jobs:
           web-mode: normal
 
       - name: Set up Node.js for npm publishing
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org

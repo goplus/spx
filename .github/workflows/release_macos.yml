@@ -28,11 +28,11 @@ jobs:
             runs_on: macos-15
     steps:
       - name: Check out code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Download current-run engine artifacts
         if: inputs.engine_artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           pattern: runtime-*macos-${{ matrix.runtime_arch }}
           path: runtime-assets
@@ -40,14 +40,14 @@ jobs:
 
       - name: Download current-run universal macOS template
         if: inputs.engine_artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: runtime-macos-universal
           path: runtime-assets
 
       - name: Download current-run runtime pack
         if: inputs.engine_artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: runtime-spx-assets
           path: runtime-assets
