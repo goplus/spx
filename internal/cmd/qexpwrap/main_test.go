@@ -17,11 +17,16 @@
 package main
 
 import (
+	"bytes"
+	"go/token"
+	"go/types"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+
+	"golang.org/x/tools/go/gcexportdata"
 )
 
 func TestExpandDirectCallsFile(t *testing.T) {
@@ -107,4 +112,70 @@ func TestExpandDirectCallsFileRejectsInvalidConfiguration(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCanonicalizeTypesDataRemovesMachineSpecificPaths(t *testing.T) {
+	rootA := filepath.Join(t.TempDir(), "checkout-a")
+	rootB := filepath.Join(t.TempDir(), "checkout-b")
+	dataA := exportTestTypes(t, filepath.Join(rootA, "source.go"))
+	dataB := exportTestTypes(t, filepath.Join(rootB, "source.go"))
+
+	canonicalA, err := canonicalizeTypesData(dataA, "example.com/pkg", sourceRoots{moduleRoot: rootA})
+	if err != nil {
+		t.Fatal(err)
+	}
+	canonicalB, err := canonicalizeTypesData(dataB, "example.com/pkg", sourceRoots{moduleRoot: rootB})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(canonicalA, canonicalB) {
+		t.Fatal("canonical type data differs across checkout paths")
+	}
+
+	fset := token.NewFileSet()
+	pkg, err := gcexportdata.Read(bytes.NewReader(canonicalA), fset, make(map[string]*types.Package), "example.com/pkg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := fset.Position(pkg.Scope().Lookup("Number").Pos()).Filename
+	if want := "$MODULE/source.go"; got != want {
+		t.Fatalf("source filename = %q; want %q", got, want)
+	}
+}
+
+func TestCanonicalSourcePath(t *testing.T) {
+	base := t.TempDir()
+	roots := sourceRoots{
+		moduleRoot:  filepath.Join(base, "work", "spx"),
+		goRoot:      filepath.Join(base, "go"),
+		moduleCache: filepath.Join(base, "module-cache"),
+	}
+	tests := map[string]string{
+		filepath.Join(roots.moduleRoot, "game.go"):                        "$MODULE/game.go",
+		filepath.Join(roots.goRoot, "src", "sync", "mutex.go"):            "$GOROOT/src/sync/mutex.go",
+		filepath.Join(roots.moduleCache, "example.com", "mod@v1", "a.go"): "$GOMODCACHE/example.com/mod@v1/a.go",
+		filepath.Join(base, "unrecognized", "source.go"):                  "$ABS/source.go",
+		filepath.Join("relative", "generated", "source.go"):               "relative/generated/source.go",
+	}
+	for filename, want := range tests {
+		if got := canonicalSourcePath(filename, roots); got != want {
+			t.Errorf("canonicalSourcePath(%q) = %q; want %q", filename, got, want)
+		}
+	}
+}
+
+func exportTestTypes(t *testing.T, filename string) []byte {
+	t.Helper()
+	fset := token.NewFileSet()
+	file := fset.AddFile(filename, -1, len("package pkg\n"))
+	file.SetLinesForContent([]byte("package pkg\n"))
+	pkg := types.NewPackage("example.com/pkg", "pkg")
+	pkg.Scope().Insert(types.NewTypeName(file.Pos(0), pkg, "Number", types.Typ[types.Int]))
+	pkg.MarkComplete()
+
+	var buf bytes.Buffer
+	if err := gcexportdata.Write(&buf, fset, pkg); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
 }

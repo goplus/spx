@@ -15,6 +15,8 @@ BUILDCTL_SOURCES := go.mod $(OPTIONAL_GO_SUM) $(MACOS_GO_TOOLCHAIN) internal/rel
 BUILDCTL_CMD := $(BUILDCTL_BIN)
 BUILDCTL_TARGETS := setup setup-web dev doctor list-demos install clean-assets download download-engine build-editor build-desktop build-web build-wasm build-wasm-opt build-android build-ios install-apk editor template-editor run runnative rune runweb runwebworker export-pack export-web stop
 PRIMARY_HELP_TARGETS := setup setup-web dev doctor build-editor build-desktop build-web build-android build-ios list-demos editor template-editor run runnative rune runweb runwebworker format generate help-advanced
+LOCKED_GO_VERSION = $(shell python3 -c 'import json; print(json.load(open("internal/release/runtime.lock.json"))["toolchain"]["go"])')
+LOCKED_GO = env GOTOOLCHAIN=go$(LOCKED_GO_VERSION) go
 
 .PHONY: $(BUILDCTL_TARGETS) help help-advanced buildctl format generate generate-bindings generate-runtime bump-release pin-godot pin-godot-unpublished pin-godot-candidate clean-projects validate-download-engine validate-install-web validate-bump-release validate-pin-godot
 
@@ -231,8 +233,8 @@ stop: ## Stop running processes
 # Utility Commands
 # ============================================
 format: ## Format Go code
-	go fmt ./...
-	cd ./cmd/ispx && go fmt ./...
+	$(LOCKED_GO) fmt ./...
+	cd ./cmd/ispx && $(LOCKED_GO) fmt ./...
 
 generate: ## Generate all code
 	$(MAKE) generate-bindings
@@ -240,12 +242,12 @@ generate: ## Generate all code
 	$(MAKE) format
 
 generate-bindings: ## Generate Godot/GDExtension binding code
-	cd ./internal/cmd/codegen && go run .
+	cd ./internal/cmd/codegen && $(LOCKED_GO) run .
 
 generate-runtime: ## Generate runtime registration code
-	go generate ./pkg/ispx/...
-	go generate ./cmd/spx/internal/command/...
-	cd ./cmd/ispx && go generate ./...
+	$(LOCKED_GO) generate ./pkg/ispx/...
+	$(LOCKED_GO) generate ./cmd/spx/internal/command/...
+	cd ./cmd/ispx && $(LOCKED_GO) generate ./...
 
 clean-projects: ## Delete generated artifacts (.temp/, project/, .gdspx_web_server*.pid, go.mod, go.sum, gox.mod) from tutorial/test projects
 	@find -P tutorial test \( \
