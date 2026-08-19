@@ -1,0 +1,87 @@
+name: Install Linux dependencies
+description: Install APT packages with bounded retries and hard timeouts
+
+inputs:
+  packages:
+    description: Whitespace-separated APT package names
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Install APT packages
+      shell: bash
+      env:
+        APT_PACKAGES: ${{ inputs.packages }}
+      run: |
+        set -Eeuo pipefail
+
+        mapfile -t packages < <(
+          printf '%s\n' "$APT_PACKAGES" |
+            tr '[:space:]' '\n' |
+            sed '/^$/d'
+        )
+
+        if ((${#packages[@]} == 0)); then
+          echo "::error::No APT packages were provided"
+          exit 2
+        fi
+
+        retry() {
+          local attempts="$1"
+          local delay_seconds="$2"
+          local description="$3"
+          shift 3
+
+          local attempt
+          local rc=0
+
+          for ((attempt = 1; attempt <= attempts; attempt++)); do
+            echo "[info] ${description}: attempt ${attempt}/${attempts}"
+
+            if "$@"; then
+              return 0
+            else
+              rc=$?
+            fi
+
+            if ((attempt == attempts)); then
+              echo "::error::${description} failed after ${attempts} attempts (exit ${rc})"
+              return "$rc"
+            fi
+
+            echo "::warning::${description} failed with exit ${rc}; retrying in ${delay_seconds} seconds"
+            sleep "$delay_seconds"
+          done
+        }
+
+        apt_acquire_options=(
+          -o Acquire::Retries=3
+          -o Acquire::http::Timeout=30
+          -o Acquire::https::Timeout=30
+        )
+
+        update_package_index() {
+          sudo timeout \
+            --signal=TERM \
+            --kill-after=15s \
+            120s \
+            apt-get "${apt_acquire_options[@]}" update
+        }
+
+        install_packages() {
+          sudo env DEBIAN_FRONTEND=noninteractive \
+            timeout \
+              --signal=TERM \
+              --kill-after=15s \
+              300s \
+              apt-get \
+                "${apt_acquire_options[@]}" \
+                -o DPkg::Lock::Timeout=60 \
+                install \
+                --yes \
+                "${packages[@]}"
+        }
+
+        retry 2 10 "APT package index update" update_package_index
+        retry 2 10 "APT dependency installation" install_packages
