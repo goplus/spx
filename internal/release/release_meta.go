@@ -88,6 +88,7 @@ var historicalSPXRuntimeMappings = []spxRuntimeMapping{
 	{spxVersion: "v3.1.0", runtimeVersion: "2.3.0"},
 	{spxVersion: "v3.2.0", runtimeVersion: "2.4.0"},
 	{spxVersion: "v3.2.1", runtimeVersion: "2.4.1"},
+	{spxVersion: "v3.2.2", runtimeVersion: "2.4.2"},
 }
 
 func allRuntimeReleaseDefinitions() []RuntimeRelease {

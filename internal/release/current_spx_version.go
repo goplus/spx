@@ -18,4 +18,4 @@ package release
 
 // currentSPXVersion is the single source of truth for the SPX release declared
 // by this source tree. Runtime identity remains independent in runtime.lock.json.
-const currentSPXVersion = "v3.2.2"
+const currentSPXVersion = "v3.2.3"
