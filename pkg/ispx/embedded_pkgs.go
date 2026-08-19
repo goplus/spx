@@ -16,7 +16,7 @@
 
 package ispx
 
-//go:generate go run ../../internal/cmd/qexpwrap -outdir internal/pkg -directcalls-file direct_calls.txt github.com/goplus/spx/v3
+//go:generate go run ../../internal/cmd/qexpwrap -types -outdir internal/pkg -directcalls-file direct_calls.txt github.com/goplus/spx/v3
 //go:generate go run ../../internal/cmd/qexpwrap -outdir internal/pkg github.com/goplus/spx/v3/pkg/spx/pkg/engine
 //go:generate go run ../../internal/cmd/qexpwrap -outdir internal/pkg github.com/goplus/spx/v3/pkg/spx
 

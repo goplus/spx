@@ -184,12 +184,13 @@ func Repeat(loopCount int, call func()) {
 	coreruntime.Repeat(loopCount, call, engine.NewControlFlowWaiter())
 }
 
-func RepeatUntil(condition func() bool, call func()) {
-	coreruntime.RepeatUntil(condition, call, engine.NewControlFlowWaiter())
+// The __xgo_autoclosure_ prefix preserves XGo's command-style condition syntax.
+func RepeatUntil(__xgo_autoclosure_condition func() bool, call func()) {
+	coreruntime.RepeatUntil(__xgo_autoclosure_condition, call, engine.NewControlFlowWaiter())
 }
 
-func WaitUntil(condition func() bool) {
-	coreruntime.WaitUntil(condition, engine.NewControlFlowWaiter())
+func WaitUntil(__xgo_autoclosure_condition func() bool) {
+	coreruntime.WaitUntil(__xgo_autoclosure_condition, engine.NewControlFlowWaiter())
 }
 
 func init() {

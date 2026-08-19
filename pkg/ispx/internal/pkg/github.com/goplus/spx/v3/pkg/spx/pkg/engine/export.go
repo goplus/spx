@@ -21,9 +21,10 @@ package engine
 import (
 	q "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 
-	"github.com/goplus/ixgo"
 	"go/constant"
 	"reflect"
+
+	"github.com/goplus/ixgo"
 )
 
 func init() {
