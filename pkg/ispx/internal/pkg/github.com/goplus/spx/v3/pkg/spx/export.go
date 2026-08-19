@@ -21,8 +21,9 @@ package spx
 import (
 	q "github.com/goplus/spx/v3/pkg/spx"
 
-	"github.com/goplus/ixgo"
 	"reflect"
+
+	"github.com/goplus/ixgo"
 )
 
 func init() {

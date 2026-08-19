@@ -106,7 +106,7 @@ func Init(ctx *ixgo.Context, options ...InitOption) error {
 	}
 
 	if ctx == nil {
-		ctx = ixgo.NewContext(ixgo.SupportMultipleInterp | xgobuild.StaticLoad)
+		ctx = ixgo.NewContext(ixgo.SupportMultipleInterp | ixgo.EnableCachedReg | xgobuild.StaticLoad)
 	}
 	if ctx.Lookup == nil {
 		ctx.Lookup = defaultIXGoContextLookup

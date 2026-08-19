@@ -21,9 +21,10 @@ package ai
 import (
 	q "github.com/goplus/builder/tools/ai"
 
-	"github.com/goplus/ixgo"
 	"go/constant"
 	"reflect"
+
+	"github.com/goplus/ixgo"
 )
 
 func init() {

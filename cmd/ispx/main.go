@@ -38,7 +38,7 @@ func init() {
 }
 
 func main() {
-	ixgoCtx := ixgo.NewContext(ixgo.SupportMultipleInterp)
+	ixgoCtx := ixgo.NewContext(ixgo.SupportMultipleInterp | ixgo.EnableCachedReg)
 	if err := ispxai.RegisterPatch(ixgoCtx); err != nil {
 		panic(err)
 	}
