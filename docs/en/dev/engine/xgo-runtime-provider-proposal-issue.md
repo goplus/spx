@@ -55,7 +55,7 @@ framework gox.mod ---- runtime v1 <provider-package>
 XGo resolver
   - resolve target
   - resolve class metadata and provenance
-  - validate minimum XGo version
+  - validate the declaring module's XGo requirement
   - build provider
         |
         | runtime protocol v1
@@ -102,14 +102,17 @@ runtime <protocol> <provider-import-path>
 - a known but malformed `runtime` directive is an error in both strict and lax parsing;
 - the provider module version is not written to `gox.mod`; it is determined uniquely by the application's effective Go graph.
 
-The four version identities are independent:
+The five version and capability dimensions are independent and are combined only for compatibility checks:
 
 | Identity | Meaning | Source of truth |
 | --- | --- | --- |
 | Provider protocol `v1` | Version of the invocation contract between XGo and the provider | `runtime` directive |
-| XGo `1.8.0` | Minimum tool capability required to understand and dispatch `runtime v1` | declaring `gox.mod` |
+| Runtime-provider v1 capability baseline | Earliest XGo version that understands and dispatches `runtime v1`, currently `1.8.0` | XGo protocol implementation and compatibility policy |
+| Declaring module's XGo requirement | Minimum XGo version needed by that framework release for its metadata or tool features | `xgo` directive in the declaring `gox.mod`/`gop.mod` |
 | SPX version/source | Code identity of the provider and bridge | application's effective Go graph |
 | Engine Runtime/ABI | Engine, PCK, and interface compatibility | SPX runtime lock and release manifest |
+
+The `runtime v1` and `xgo` directives do not redefine each other. If a later SPX release raises `xgo` to `1.9.0`, only that SPX release requires XGo 1.9.0 features. The v1 protocol baseline remains 1.8.0, while the effective minimum for that SPX project is `max(1.8.0, 1.9.0) = 1.9.0`; this must not be described as “runtime v1 requires XGo 1.9.0.”
 
 Therefore, an XGo `1.7.5` recorded in the runtime lock only identifies the toolchain used to build that Engine Runtime; it does not mean that XGo `1.7.5` supports runtime providers.
 
@@ -129,7 +132,7 @@ Resolved metadata carries all of the following:
 
 - the module provenance that declared the project/runtime;
 - the canonical path and SHA-256 of the declaring `gox.mod`/`gop.mod`;
-- the minimum XGo version declared by that metadata;
+- the declaring module's XGo version requirement;
 - the path and content digest of the target modfile.
 
 When importing resolved class metadata, XGo validates the target modfile snapshot. Before execution, the provider revalidates the declaration, module source, and every other path it actually uses, but does not reinterpret the metadata. This prevents metadata and the provider from coming from different versions, and prevents critical files from being replaced after discovery.
@@ -185,7 +188,7 @@ Before building the provider, XGo verifies that:
 - the package is `main`;
 - the package is inside the effective module that declared the runtime;
 - the package's selected/replacement/source identity exactly matches the metadata;
-- the current XGo satisfies the minimum version declared by the metadata;
+- the current XGo satisfies the declaring module's `xgo` version requirement;
 - `GOOS/GOARCH` match the host, so the provider cannot be used for cross-compilation.
 
 The provider is built in a private temporary directory under the same graph policy, while preserving the caller's CGO selection. The provider inherits the standard streams. Each process has one command boundary that owns host signals; inner supervisors consume cancellation, including the original signal as its cause, and clean up the entire child process tree without subscribing to the same signals again. Once cancellation has been observed, a child that exits successfully during shutdown does not turn the request into success. On Unix, the normal exit code or original signal is preserved. On Windows, a Job Object manages the process tree and interrupts are represented as exit codes. Runtime-provider v1 rejects every nested runtime dispatch, including dispatch to a different provider.

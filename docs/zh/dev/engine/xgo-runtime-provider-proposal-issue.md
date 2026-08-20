@@ -55,7 +55,7 @@ framework gox.mod ---- runtime v1 <provider-package>
 XGo resolver
   - 解析 target
   - 解析 class metadata 与来源
-  - 校验最低 XGo 版本
+  - 校验声明模块的 XGo 版本要求
   - 构建 provider
         |
         | runtime protocol v1
@@ -102,14 +102,17 @@ runtime <protocol> <provider-import-path>
 - 已知但格式错误的 `runtime` 在 strict/lax 解析中都报错；
 - provider module version 不写入 `gox.mod`，由应用的有效 Go graph 唯一决定。
 
-四种版本身份相互独立：
+五个版本与能力维度各自独立，只在兼容性检查时组合：
 
 | 身份 | 含义 | 真相来源 |
 | --- | --- | --- |
 | Provider protocol `v1` | XGo 与 provider 的调用契约代际 | `runtime` directive |
-| XGo `1.8.0` | 理解并调度 `runtime v1` 所需的最低工具能力 | declaring `gox.mod` |
+| Runtime-provider v1 能力基线 | 首个理解并调度 `runtime v1` 的 XGo 版本，当前为 `1.8.0` | XGo 协议实现与兼容策略 |
+| 声明模块的 XGo 要求 | 该 framework 版本使用 metadata 或工具特性所需的最低 XGo 版本 | declaring `gox.mod`/`gop.mod` 的 `xgo` directive |
 | SPX version/source | provider 与 bridge 的代码身份 | 应用有效 Go graph |
 | Engine Runtime/ABI | Engine、PCK 与接口兼容性 | SPX runtime lock 与 release manifest |
+
+`runtime v1` 与 `xgo` directive 不会互相改写。例如后续 SPX 将 `xgo` 提升为 `1.9.0`，只表示该 SPX 版本需要 XGo 1.9.0 的能力；v1 协议基线仍是 1.8.0，而该 SPX 项目的有效下限是 `max(1.8.0, 1.9.0) = 1.9.0`，不能反述为“runtime v1 最低要求 XGo 1.9.0”。
 
 因此，runtime lock 中记录的 XGo `1.7.5` 只表示该 Engine Runtime 的构建工具链；它不表示 XGo `1.7.5` 具备 runtime-provider 能力。
 
@@ -129,7 +132,7 @@ resolved metadata 同时携带：
 
 - 声明 project/runtime 的 module provenance；
 - declaring `gox.mod`/`gop.mod` 的 canonical path 与 SHA-256；
-- declaring metadata 中的最低 XGo 版本；
+- declaring module 的 XGo 版本要求；
 - target modfile 的 path 与内容摘要。
 
 XGo 在导入 resolved class metadata 时校验 target modfile snapshot；provider 在执行前重新校验 declaration、module source 和其他实际使用的路径，但不重新解释 metadata。这样既避免 metadata/provider 来自不同版本，也避免 discovery 后关键文件被替换。
@@ -185,7 +188,7 @@ XGo 在构建 provider 前确认：
 - package 是 `main`；
 - package 位于声明 runtime 的有效 module 内；
 - package 的 selected/replacement/source identity 与 metadata 完全一致；
-- 当前 XGo 满足 declaring metadata 的最低版本；
+- 当前 XGo 满足 declaring module 的 `xgo` 版本要求；
 - `GOOS/GOARCH` 等于 host，不允许借 provider 做交叉构建。
 
 provider 构建在私有临时目录完成，沿用同一 graph policy，并保留调用环境的 CGO 选择。provider 进程继承标准流。每个进程只有一个 command boundary 持有宿主信号；内层 supervisor 只消费 cancellation（包含作为 cause 传入的原始信号），不再重复订阅相同信号，并负责清理整个子进程树。一旦观察到 cancellation，即使子进程在关闭期间以 0 退出，也不能把请求报告为成功。Unix 保留正常退出码或原始信号，Windows 使用 Job Object 管理进程树并将中断表示为退出码。runtime-provider v1 拒绝任意嵌套 runtime dispatch，包括转入另一个 provider。
