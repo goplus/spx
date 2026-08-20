@@ -51,3 +51,27 @@ waitUntil n > 1
 		t.Fatalf("waitUntil condition was not compiled as a closure:\n%s", source)
 	}
 }
+
+func TestBuildOnCondCondition(t *testing.T) {
+	ctx := ixgo.NewContext(xgobuild.StaticLoad)
+	for _, pkg := range defaultPackagesToImport {
+		if _, err := ctx.Loader.Import(pkg); err != nil {
+			t.Fatalf("import %q: %v", pkg, err)
+		}
+	}
+
+	source, err := xgobuild.BuildFSDir(ctx, newXGoParserFS(fstest.MapFS{
+		"main.spx": {Data: []byte("")},
+		"NiuXiaoQi.spx": {Data: []byte(`score := 0
+onCond score > 3, => {
+	say "hello", 1
+}
+`)},
+	}), ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(source), "OnCond(func() bool") {
+		t.Fatalf("onCond condition was not compiled as a closure:\n%s", source)
+	}
+}

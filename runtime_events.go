@@ -115,14 +115,14 @@ func (p *scriptEventBindings) OnClick(onClick func()) {
 
 // OnCond runs the handler on each false-to-true transition.
 // condition is polled after startup and must be fast and non-blocking.
-func (p *scriptEventBindings) OnCond(condition func() bool, onCondition func()) {
-	if condition == nil || onCondition == nil {
+func (p *scriptEventBindings) OnCond(__xgo_autoclosure_condition func() bool, onCondition func()) {
+	if __xgo_autoclosure_condition == nil || onCondition == nil {
 		return
 	}
 	p.scriptEventRegistry.manager.AddCondition(coreevent.NewSink(
 		p.pthis,
 		onCondition,
-		coreevent.MatchRisingEdge(condition),
+		coreevent.MatchRisingEdge(__xgo_autoclosure_condition),
 	))
 }
 
