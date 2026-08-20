@@ -122,3 +122,23 @@ macos_go_toolchain_go_build() {
         command go build "$@"
     )
 }
+
+macos_go_toolchain_run_go() {
+    if [ "$#" -lt 1 ]; then
+        _macos_go_toolchain_error "usage: $0 <go-toolchain> [go-arguments...]"
+        return 2
+    fi
+
+    local go_toolchain="$1"
+    shift
+    configure_macos_go_toolchain || return 1
+    export GOTOOLCHAIN="$go_toolchain"
+    exec go "$@"
+}
+
+# When executed directly, this script is the macOS-only Make wrapper for the
+# locked Go toolchain. When sourced, it only defines the helpers above.
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+    set -euo pipefail
+    macos_go_toolchain_run_go "$@"
+fi

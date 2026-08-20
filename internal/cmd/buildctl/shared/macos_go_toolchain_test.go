@@ -343,6 +343,76 @@ printf 'CGO_LDFLAGS=%s\n' "$CGO_LDFLAGS"
 	}
 }
 
+func TestMacOSGoToolchainScriptRunsLockedGo(t *testing.T) {
+	bash, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("bash is not available")
+	}
+
+	root := t.TempDir()
+	binDir := filepath.Join(root, "bin")
+	currentSDK := filepath.Join(root, "MacOSX SDK.sdk")
+	clang := filepath.Join(binDir, "clang")
+	clangXX := filepath.Join(binDir, "clang++")
+	for _, directory := range []string{binDir, currentSDK} {
+		if err := os.MkdirAll(directory, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeExecutable(t, clang, "#!/bin/bash\nexit 0\n")
+	writeExecutable(t, clangXX, "#!/bin/bash\nexit 0\n")
+	writeExecutable(t, filepath.Join(binDir, "go"), `#!/bin/bash
+if [ "$*" = "env GOHOSTOS" ]; then
+  printf 'darwin\n'
+  exit 0
+fi
+printf 'GOTOOLCHAIN=%s\n' "$GOTOOLCHAIN"
+printf 'SDKROOT=%s\n' "$SDKROOT"
+printf 'CC=%s\n' "$CC"
+printf 'CXX=%s\n' "$CXX"
+printf 'ARG_COUNT=%s\n' "$#"
+index=0
+for arg in "$@"; do
+  printf 'ARG_%s=%s\n' "$index" "$arg"
+  index=$((index + 1))
+done
+`)
+	writeExecutable(t, filepath.Join(binDir, "xcrun"), `#!/bin/bash
+case "$*" in
+  "--sdk macosx --show-sdk-path") printf '%s\n' "$FAKE_SDK" ;;
+  "--sdk macosx --find clang") printf '%s\n' "$FAKE_CLANG" ;;
+  "--sdk macosx --find clang++") printf '%s\n' "$FAKE_CLANGXX" ;;
+  *) echo "unexpected xcrun arguments: $*" >&2; exit 1 ;;
+esac
+`)
+
+	cmd := exec.Command(bash, macOSGoToolchainScriptPath(t), "go1.25.8", "generate", "./path with spaces/...")
+	cmd.Env = []string{
+		"PATH=" + binDir + string(os.PathListSeparator) + "/usr/bin" + string(os.PathListSeparator) + "/bin",
+		"FAKE_SDK=" + currentSDK,
+		"FAKE_CLANG=" + clang,
+		"FAKE_CLANGXX=" + clangXX,
+	}
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("run locked Go through shell toolchain: %v\n%s", err, output)
+	}
+	values := parseKeyValueLines(t, string(output))
+	for key, want := range map[string]string{
+		"GOTOOLCHAIN": "go1.25.8",
+		"SDKROOT":     currentSDK,
+		"CC":          clang,
+		"CXX":         clangXX,
+		"ARG_COUNT":   "2",
+		"ARG_0":       "generate",
+		"ARG_1":       "./path with spaces/...",
+	} {
+		if got := values[key]; got != want {
+			t.Errorf("%s = %q, want %q", key, got, want)
+		}
+	}
+}
+
 func TestConfigureMacOSGoToolchainShellNonDarwinIsNoop(t *testing.T) {
 	bash, err := exec.LookPath("bash")
 	if err != nil {
