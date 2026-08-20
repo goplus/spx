@@ -28,7 +28,7 @@ type IEventSinks interface {
 	OnBackdrop__0(onBackdrop func(name BackdropName))
 	OnBackdrop__1(name BackdropName, onBackdrop func())
 	OnClick(onClick func())
-	OnCond(condition func() bool, onCondition func())
+	OnCond(__xgo_autoclosure_condition func() bool, onCondition func())
 	OnKey__0(key Key, onKey func())
 	OnKey__1(keys []Key, onKey func(Key))
 	OnKey__2(keys []Key, onKey func())

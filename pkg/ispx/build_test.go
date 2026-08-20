@@ -25,7 +25,7 @@ import (
 	"github.com/goplus/ixgo/xgobuild"
 )
 
-func TestBuildRepeatUntilCondition(t *testing.T) {
+func TestBuildAutoClosureConditions(t *testing.T) {
 	ctx := ixgo.NewContext(xgobuild.StaticLoad)
 	for _, pkg := range defaultPackagesToImport {
 		if _, err := ctx.Loader.Import(pkg); err != nil {
@@ -40,6 +40,11 @@ repeatUntil n > 0, => {
 }
 waitUntil n > 1
 `)},
+		"SpEvent.spx": {Data: []byte(`var score int
+onCond score >= 3, => {
+	score++
+}
+`)},
 	}), ".")
 	if err != nil {
 		t.Fatal(err)
@@ -49,5 +54,8 @@ waitUntil n > 1
 	}
 	if !strings.Contains(string(source), "spx.WaitUntil(func() bool") {
 		t.Fatalf("waitUntil condition was not compiled as a closure:\n%s", source)
+	}
+	if !strings.Contains(string(source), ".OnCond(func() bool") {
+		t.Fatalf("onCond condition was not compiled as a closure:\n%s", source)
 	}
 }
