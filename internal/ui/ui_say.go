@@ -79,51 +79,50 @@ func (s *UiSay) OnStart() {
 		vbox:  engine.BridgeBindUI[UiNode](s.GetId(), "VRThink"),
 		label: engine.BridgeBindUI[UiNode](s.GetId(), "VRThink/BG/MC/Label"),
 	}
+
+	// Think nodes are visible by default in UiSay.tscn. Keep every variant
+	// hidden until the first layout is applied so a newly-created bubble cannot
+	// briefly render both clouds at the scene origin.
+	mgr.UiMgr.SetVisible(s.left.vbox.GetId(), false)
+	mgr.UiMgr.SetVisible(s.right.vbox.GetId(), false)
+	mgr.UiMgr.SetVisible(s.leftThink.vbox.GetId(), false)
+	mgr.UiMgr.SetVisible(s.rightThink.vbox.GetId(), false)
 }
 
 // SetText sets the text content and position for the say/think bubble
 func (s *UiSay) SetText(winSize mathf.Vec2, pos mathf.Vec2, size mathf.Vec2, msg string, style int) {
-	position := s.calculatePosition(winSize, pos, size, msg)
-	isLeft := position.X <= 0
-	isThink := style == StyleThink
-	scale := s.calculateScale(winSize, isThink)
-	nodes := s.selectNodes(isLeft, isThink)
-	formattedMsg := s.formatMessage(msg)
+	content := NewSayBubbleContent(msg, style)
+	layout := NewSayBubbleLayoutContext(winSize).NewLayout(0, pos, size, content)
+	s.SetTextLayout(layout)
+}
 
-	s.updateVisibility(isLeft, isThink)
-	s.updateUI(position, scale, nodes.label.GetId(), formattedMsg)
+// SetTextLayout applies a layout resolved together with the other active bubbles.
+func (s *UiSay) SetTextLayout(layout SayBubbleLayout) {
+	isThink := layout.content.style == StyleThink
+	nodes := s.selectNodes(layout.isLeft, isThink)
+
+	s.updateVisibility(layout.isLeft, isThink)
+	s.updateUI(layout.position, layout.renderScale, nodes.label.GetId(), layout.content.formattedMessage)
 }
 
 // calculateScale computes the uniform scale based on window size
 func (s *UiSay) calculateScale(winSize mathf.Vec2, isThink bool) mathf.Vec2 {
-	specialScale := 1.0
-	if isThink {
-		specialScale = thinkScale
-	}
 	baseSize := mathf.NewVec2(float64(baseScreenWidth), float64(baseScreenHeight))
-	scaleVec := winSize.Div(baseSize)
-
-	// Choose the smaller scale to maintain aspect ratio
-	uniformScale := math.Min(scaleVec.X, scaleVec.Y)
-
-	zoom := mgr.CameraMgr.GetCameraZoom()
-	windowScaleVec := engine.UniformVec2(engine.WindowScale())
-
-	return zoom.Div(windowScaleVec).Mulf(uniformScale * specialScale)
-}
-
-// calculatePosition computes the UI position based on sprite position and size
-func (s *UiSay) calculatePosition(winSize mathf.Vec2, pos mathf.Vec2, size mathf.Vec2, msg string) mathf.Vec2 {
-	pos = engine.BridgeWorldToView(pos)
-	position := mathf.NewVec2(pos.X, pos.Y+size.Y/2)
-	if clampUIPositionInScreen {
-		position = s.clampPosition(position, winSize, msg)
-	}
-	return position
+	return calculateSayRenderScale(
+		winSize,
+		baseSize,
+		mgr.CameraMgr.GetCameraZoom(),
+		engine.WindowScale(),
+		isThink,
+	)
 }
 
 // clampPosition ensures the UI bubble stays within screen boundaries
 func (s *UiSay) clampPosition(position mathf.Vec2, winSize mathf.Vec2, msg string) mathf.Vec2 {
+	return clampSayPosition(position, winSize, msg)
+}
+
+func clampSayPosition(position mathf.Vec2, winSize mathf.Vec2, msg string) mathf.Vec2 {
 	lineCount := strings.Count(msg, "\n")
 	uiHeight := sayMsgDefaultHeight + float64(lineCount)*sayMsgLineHeight
 
@@ -150,6 +149,10 @@ func (s *UiSay) selectNodes(isLeft bool, isThink bool) sayNodes {
 
 // formatMessage formats the message with line breaks if needed
 func (s *UiSay) formatMessage(msg string) string {
+	return formatSayMessage(msg)
+}
+
+func formatSayMessage(msg string) string {
 	if strings.ContainsRune(msg, '\n') {
 		return msg
 	}

@@ -82,10 +82,14 @@ func (b *bubbleComponent) upsertText(msg string, style int) {
 			msg:        msg,
 			style:      style,
 			panel:      ui.NewUiSay(),
+			content:    ui.NewSayBubbleContent(msg, style),
 		}
 		b.textObj = textObj
 		created = true
 	} else {
+		if textObj.msg != msg || textObj.style != style {
+			textObj.content = ui.NewSayBubbleContent(msg, style)
+		}
 		textObj.msg = msg
 		textObj.style = style
 		textObj.markDirty()

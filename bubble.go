@@ -79,6 +79,10 @@ type textBubble struct {
 	msg        string
 	style      int // styleSay, styleThink
 	panel      *ui.UiSay
+	layoutID   uint64
+	content    ui.SayBubbleContent
+	layout     ui.SayBubbleLayout
+	hasLayout  bool
 }
 
 func (pself *textBubble) destroyPanel() {
@@ -100,8 +104,22 @@ func (pself *textBubble) refresh() {
 	if pself.panel == nil {
 		return
 	}
+	if pself.hasLayout {
+		pself.panel.SetTextLayout(pself.layout)
+		return
+	}
+	winSize := pself.sprite.g.getWindowSize()
 	center, size := pself.getBounds()
-	pself.panel.SetText(pself.sprite.g.getWindowSize(), center, size, pself.msg, pself.style)
+	pself.panel.SetText(winSize, center, size, pself.msg, pself.style)
+}
+
+func (pself *textBubble) setLayout(layout ui.SayBubbleLayout) {
+	renderChanged := !pself.hasLayout || !pself.layout.Equal(layout)
+	pself.layout = layout
+	pself.hasLayout = true
+	if renderChanged {
+		pself.markDirty()
+	}
 }
 
 type quoterBubble struct {
