@@ -253,7 +253,7 @@ func (t *transformComponent) clampSpriteScale(size float64) float64 {
 		return size
 	}
 
-	costumeWidth, costumeHeight := t.sprite.currentCostume().getSize()
+	costumeWidth, costumeHeight := t.sprite.currentCostume().getSizeF()
 	if costumeWidth <= 0 || costumeHeight <= 0 {
 		return size
 	}
@@ -266,13 +266,13 @@ func (t *transformComponent) clampSpriteScale(size float64) float64 {
 	minScale := math.Min(
 		1.0,
 		math.Max(
-			minVisibleSize/float64(costumeWidth),
-			minVisibleSize/float64(costumeHeight),
+			minVisibleSize/costumeWidth,
+			minVisibleSize/costumeHeight,
 		),
 	)
 	maxScale := math.Min(
-		(maxStageScale*float64(worldWidth))/float64(costumeWidth),
-		(maxStageScale*float64(worldHeight))/float64(costumeHeight),
+		(maxStageScale*float64(worldWidth))/costumeWidth,
+		(maxStageScale*float64(worldHeight))/costumeHeight,
 	)
 	if maxScale < minScale {
 		maxScale = minScale
@@ -361,7 +361,7 @@ func (t *transformComponent) moveTo(x, y float64) {
 // fixWorldRange mirrors Scratch's keepInFence behavior: a sprite may extend
 // beyond the stage as long as at least a small fenced slice remains visible.
 func (t *transformComponent) fixWorldRange(x, y float64) (float64, float64) {
-	rect := t.sprite.bounds()
+	rect := t.sprite.fenceBounds()
 	if rect == nil {
 		return x, y
 	}
@@ -382,17 +382,18 @@ func (t *transformComponent) fixWorldRange(x, y float64) (float64, float64) {
 	minX := float64(worldLeft) + fenceInset
 	maxX := float64(worldRight) - fenceInset
 	if right+dx < minX {
-		x = t.x + (minX - right)
+		// Scratch snaps a fenced coordinate inward to an integer.
+		x = math.Ceil(t.x + (minX - right))
 	} else if left+dx > maxX {
-		x = t.x + (maxX - left)
+		x = math.Floor(t.x + (maxX - left))
 	}
 
 	minY := float64(worldBottom) + fenceInset
 	maxY := float64(worldTop) - fenceInset
 	if top+dy < minY {
-		y = t.y + (minY - top)
+		y = math.Ceil(t.y + (minY - top))
 	} else if bottom+dy > maxY {
-		y = t.y + (maxY - bottom)
+		y = math.Floor(t.y + (maxY - bottom))
 	}
 
 	return x, y

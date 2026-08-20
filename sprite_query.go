@@ -16,7 +16,11 @@
 
 package spx
 
-import "github.com/goplus/spbase/mathf"
+import (
+	"math"
+
+	"github.com/goplus/spbase/mathf"
+)
 
 func (p *SpriteImpl) bounds() *mathf.Rect2 {
 	if len(p.costumes) == 0 || p.costumeIndex < 0 || p.costumeIndex >= len(p.costumes) {
@@ -32,13 +36,41 @@ func (p *SpriteImpl) bounds() *mathf.Rect2 {
 	}
 }
 
+// fenceBounds returns the axis-aligned bounds of the rendered costume. Scratch
+// fences drawables by their full skin bounds, independent of collision shapes.
+func (p *SpriteImpl) fenceBounds() *mathf.Rect2 {
+	if len(p.costumes) == 0 || p.costumeIndex < 0 || p.costumeIndex >= len(p.costumes) {
+		return nil
+	}
+
+	costume := p.currentCostume()
+	width, height := costume.getSizeF()
+	width *= p.runtimeState.Scale
+	height *= p.runtimeState.Scale
+
+	centerX, centerY := p.getXY()
+	offsetX, offsetY := getWorldRenderOffset(p)
+	centerX += offsetX
+	centerY += offsetY
+
+	rotation, _, _ := getRenderRotationAndScale(p)
+	sin, cos := math.Sincos(toRadian(rotation))
+	aabbWidth := math.Abs(cos)*width + math.Abs(sin)*height
+	aabbHeight := math.Abs(sin)*width + math.Abs(cos)*height
+
+	return &mathf.Rect2{
+		Position: mathf.NewVec2(centerX-aabbWidth/2, centerY-aabbHeight/2),
+		Size:     mathf.NewVec2(aabbWidth, aabbHeight),
+	}
+}
+
 func (p *SpriteImpl) adjustPositionAndGetDimensions(x, y *float64) (width, height float64) {
 	triggerInfo := p.physics().getTriggerInfo()
 
 	if triggerInfo.Type == physicsColliderNone {
 		applyRenderOffset(p, x, y)
-		wi, hi := p.costumes[p.costumeIndex].getSize()
-		return float64(wi) * p.runtimeState.Scale, float64(hi) * p.runtimeState.Scale
+		width, height := p.costumes[p.costumeIndex].getSizeF()
+		return width * p.runtimeState.Scale, height * p.runtimeState.Scale
 	}
 
 	if triggerInfo.Type == physicsColliderAuto && p.runtimeState.SyncSprite == nil {

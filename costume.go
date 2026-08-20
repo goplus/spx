@@ -162,6 +162,13 @@ func (c *costume) getSize() (int, int) {
 	return c.width / c.bitmapResolution, c.height / c.bitmapResolution
 }
 
+// getSizeF returns the exact logical costume size without truncating partial
+// pixels introduced by bitmap resolution scaling.
+func (c *costume) getSizeF() (float64, float64) {
+	resolution := float64(c.bitmapResolution)
+	return float64(c.width) / resolution, float64(c.height) / resolution
+}
+
 // renderAnchorInSPX converts the costume center from top-left, Y-down asset
 // coordinates into a local SPX anchor relative to the geometric image center.
 func (c *costume) renderAnchorInSPX() mathf.Vec2 {
