@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package xgoruntime
+package xgodriver
 
 import (
 	"archive/zip"
@@ -85,28 +85,28 @@ func TestVerifyBuildInfoOrigin(t *testing.T) {
 	}{
 		{
 			name: "workspace main",
-			info: &runtimedebug.BuildInfo{Main: runtimedebug.Module{Path: "example.com/provider", Version: "(devel)"}},
-			want: ModuleOrigin{Selected: ModuleRef{Path: "example.com/provider"}, Main: true}, ok: true,
+			info: &runtimedebug.BuildInfo{Main: runtimedebug.Module{Path: "example.com/driver", Version: "(devel)"}},
+			want: ModuleOrigin{Selected: ModuleRef{Path: "example.com/driver"}, Main: true}, ok: true,
 		},
 		{
 			name: "versioned dependency replacement",
 			info: &runtimedebug.BuildInfo{Deps: []*runtimedebug.Module{{
-				Path: "example.com/provider", Version: "v1.2.3",
+				Path: "example.com/driver", Version: "v1.2.3",
 				Replace: &runtimedebug.Module{Path: "example.com/fork", Version: "v1.4.0"},
 			}}},
 			want: ModuleOrigin{
-				Selected: ModuleRef{Path: "example.com/provider", Version: "v1.2.3"},
+				Selected: ModuleRef{Path: "example.com/driver", Version: "v1.2.3"},
 				Replace:  &ModuleRef{Path: "example.com/fork", Version: "v1.4.0"},
 			}, ok: true,
 		},
 		{
 			name: "relative local dependency replacement",
 			info: &runtimedebug.BuildInfo{Deps: []*runtimedebug.Module{{
-				Path: "example.com/provider", Version: "v1.2.3",
+				Path: "example.com/driver", Version: "v1.2.3",
 				Replace: &runtimedebug.Module{Path: "../framework"},
 			}}},
 			want: ModuleOrigin{
-				Selected: ModuleRef{Path: "example.com/provider", Version: "v1.2.3"},
+				Selected: ModuleRef{Path: "example.com/driver", Version: "v1.2.3"},
 				Replace:  &ModuleRef{Path: localReplacement, Dir: localReplacement},
 			},
 			replacementPath: "../framework", ok: true,
@@ -114,11 +114,11 @@ func TestVerifyBuildInfoOrigin(t *testing.T) {
 		{
 			name: "relative local dependency replacement devel version",
 			info: &runtimedebug.BuildInfo{Deps: []*runtimedebug.Module{{
-				Path: "example.com/provider", Version: "v1.2.3",
+				Path: "example.com/driver", Version: "v1.2.3",
 				Replace: &runtimedebug.Module{Path: "../framework", Version: "(devel)"},
 			}}},
 			want: ModuleOrigin{
-				Selected: ModuleRef{Path: "example.com/provider", Version: "v1.2.3"},
+				Selected: ModuleRef{Path: "example.com/driver", Version: "v1.2.3"},
 				Replace:  &ModuleRef{Path: localReplacement, Dir: localReplacement},
 			},
 			replacementPath: "../framework", ok: true,
@@ -126,28 +126,28 @@ func TestVerifyBuildInfoOrigin(t *testing.T) {
 		{
 			name: "relative local replacement drift",
 			info: &runtimedebug.BuildInfo{Deps: []*runtimedebug.Module{{
-				Path: "example.com/provider", Version: "v1.2.3",
+				Path: "example.com/driver", Version: "v1.2.3",
 				Replace: &runtimedebug.Module{Path: "../framework"},
 			}}},
 			want: ModuleOrigin{
-				Selected: ModuleRef{Path: "example.com/provider", Version: "v1.2.3"},
+				Selected: ModuleRef{Path: "example.com/driver", Version: "v1.2.3"},
 				Replace:  &ModuleRef{Path: localReplacement, Dir: localReplacement},
 			},
 			replacementPath: "./framework",
 		},
 		{
 			name: "selected version drift",
-			info: &runtimedebug.BuildInfo{Main: runtimedebug.Module{Path: "example.com/provider", Version: "v1.2.4"}},
-			want: ModuleOrigin{Selected: ModuleRef{Path: "example.com/provider", Version: "v1.2.3"}},
+			info: &runtimedebug.BuildInfo{Main: runtimedebug.Module{Path: "example.com/driver", Version: "v1.2.4"}},
+			want: ModuleOrigin{Selected: ModuleRef{Path: "example.com/driver", Version: "v1.2.3"}},
 		},
 		{
 			name: "replacement drift",
 			info: &runtimedebug.BuildInfo{Main: runtimedebug.Module{
-				Path: "example.com/provider", Version: "v1.2.3",
+				Path: "example.com/driver", Version: "v1.2.3",
 				Replace: &runtimedebug.Module{Path: "example.com/other", Version: "v1.4.0"},
 			}},
 			want: ModuleOrigin{
-				Selected: ModuleRef{Path: "example.com/provider", Version: "v1.2.3"},
+				Selected: ModuleRef{Path: "example.com/driver", Version: "v1.2.3"},
 				Replace:  &ModuleRef{Path: "example.com/fork", Version: "v1.4.0"},
 			},
 		},
@@ -172,9 +172,9 @@ func TestVerifyBuildInfoOriginWithRealLocalReplacement(t *testing.T) {
 	}
 	app := filepath.Join(root, "app")
 	framework := filepath.Join(root, "framework")
-	mustWriteRuntimeTestFile(t, filepath.Join(framework, "go.mod"), "module example.test/framework\n\ngo 1.25\n", 0o600)
-	mustWriteRuntimeTestFile(t, filepath.Join(framework, "framework.go"), "package framework\n", 0o600)
-	mustWriteRuntimeTestFile(t, filepath.Join(app, "go.mod"), `module example.test/app
+	mustWriteDriverTestFile(t, filepath.Join(framework, "go.mod"), "module example.test/framework\n\ngo 1.25\n", 0o600)
+	mustWriteDriverTestFile(t, filepath.Join(framework, "framework.go"), "package framework\n", 0o600)
+	mustWriteDriverTestFile(t, filepath.Join(app, "go.mod"), `module example.test/app
 
 go 1.25
 
@@ -182,7 +182,7 @@ require example.test/framework v1.2.3
 
 replace example.test/framework => ../framework
 `, 0o600)
-	mustWriteRuntimeTestFile(t, filepath.Join(app, "main.go"), "package main\nimport _ \"example.test/framework\"\nfunc main() {}\n", 0o600)
+	mustWriteDriverTestFile(t, filepath.Join(app, "main.go"), "package main\nimport _ \"example.test/framework\"\nfunc main() {}\n", 0o600)
 
 	artifact := filepath.Join(root, "app.bin")
 	build := exec.Command("go", "build", "-buildvcs=false", "-o", artifact, ".")
@@ -206,9 +206,9 @@ replace example.test/framework => ../framework
 
 func TestSourceBridgeBuildArgsPreserveGraphAndBuildPolicy(t *testing.T) {
 	cfg := Config{
-		GraphFlags:     []string{"-mod=readonly"},
-		BuildFlags:     []string{"-trimpath=true", "-buildvcs=false", "-v=true", "-work=true"},
-		ProviderOrigin: ModuleOrigin{Selected: ModuleRef{Path: "example.com/provider"}, Main: true},
+		GraphFlags:   []string{"-mod=readonly"},
+		BuildFlags:   []string{"-trimpath=true", "-buildvcs=false", "-v=true", "-work=true"},
+		DriverOrigin: ModuleOrigin{Selected: ModuleRef{Path: "example.com/driver"}, Main: true},
 	}
 	base := []string{"build", "-mod=readonly", "-trimpath", "-buildvcs=false", "-v", "-work", "-buildmode=c-shared"}
 	for _, test := range []struct {
@@ -224,7 +224,7 @@ func TestSourceBridgeBuildArgsPreserveGraphAndBuildPolicy(t *testing.T) {
 			if test.linkerFlag {
 				want = append(want, "-ldflags=-extldflags=-Wl,--allow-multiple-definition")
 			}
-			want = append(want, "-o", "/tmp/bridge", "example.com/provider/cmd/ispxnative")
+			want = append(want, "-o", "/tmp/bridge", "example.com/driver/cmd/ispxnative")
 			got := sourceBridgeBuildArgsForGOOS(cfg, "/tmp/bridge", test.goos)
 			if !reflect.DeepEqual(got, want) {
 				t.Fatalf("sourceBridgeBuildArgsForGOOS() = %#v, want %#v", got, want)
@@ -233,7 +233,7 @@ func TestSourceBridgeBuildArgsPreserveGraphAndBuildPolicy(t *testing.T) {
 	}
 }
 
-func TestVerifyProviderPackageUsesGraphWorkDir(t *testing.T) {
+func TestVerifyDriverPackageUsesGraphWorkDir(t *testing.T) {
 	if testing.Short() {
 		t.Skip("invokes the host Go command")
 	}
@@ -244,7 +244,7 @@ func TestVerifyProviderPackageUsesGraphWorkDir(t *testing.T) {
 	app := filepath.Join(root, "app")
 	framework := filepath.Join(root, "framework")
 	project := filepath.Join(framework, "example")
-	mustWriteRuntimeTestFile(t, filepath.Join(app, "go.mod"), `module example.test/app
+	mustWriteDriverTestFile(t, filepath.Join(app, "go.mod"), `module example.test/app
 
 go 1.25
 
@@ -252,8 +252,8 @@ require example.test/framework v1.2.3 //xgo:class
 
 replace example.test/framework => ../framework
 `, 0o600)
-	mustWriteRuntimeTestFile(t, filepath.Join(framework, "go.mod"), "module example.test/framework\n\ngo 1.25\n", 0o600)
-	mustWriteRuntimeTestFile(t, filepath.Join(framework, "cmd", "provider", "main.go"), "package main\nfunc main() {}\n", 0o600)
+	mustWriteDriverTestFile(t, filepath.Join(framework, "go.mod"), "module example.test/framework\n\ngo 1.25\n", 0o600)
+	mustWriteDriverTestFile(t, filepath.Join(framework, "cmd", "driver", "main.go"), "package main\nfunc main() {}\n", 0o600)
 	if err := os.MkdirAll(project, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -270,22 +270,22 @@ replace example.test/framework => ../framework
 		t.Fatal(err)
 	}
 	cfg := Config{
-		ProjectDir:      project,
-		GraphWorkDir:    app,
-		GoCommand:       goCommand,
-		GoWork:          "off",
-		ProviderPackage: "example.test/framework/cmd/provider",
-		ProviderOrigin: ModuleOrigin{
+		ProjectDir:    project,
+		GraphWorkDir:  app,
+		GoCommand:     goCommand,
+		GoWork:        "off",
+		DriverPackage: "example.test/framework/cmd/driver",
+		DriverOrigin: ModuleOrigin{
 			Selected: ModuleRef{Path: "example.test/framework", Version: "v1.2.3"},
 			Replace:  &ModuleRef{Path: framework, Dir: framework, GoMod: filepath.Join(framework, "go.mod")},
 		},
 	}
-	if err := verifyProviderPackage(context.Background(), cfg, os.Environ()); err != nil {
-		t.Fatalf("provider validation with caller graph work dir: %v", err)
+	if err := verifyDriverPackage(context.Background(), cfg, os.Environ()); err != nil {
+		t.Fatalf("driver validation with caller graph work dir: %v", err)
 	}
 	cfg.GraphWorkDir = project
-	if err := verifyProviderPackage(context.Background(), cfg, os.Environ()); err == nil {
-		t.Fatal("provider validation unexpectedly preserved the caller graph from the dependency project directory")
+	if err := verifyDriverPackage(context.Background(), cfg, os.Environ()); err == nil {
+		t.Fatal("driver validation unexpectedly preserved the caller graph from the dependency project directory")
 	}
 }
 
@@ -360,9 +360,9 @@ func TestPrepareProjectBundleConfigUsesCapturedConfigBytes(t *testing.T) {
 	projectFile := filepath.Join(projectDir, "main.spx")
 	configPath := filepath.Join(projectDir, ".config")
 	validated := []byte(`{"name":"validated"}`)
-	mustWriteRuntimeTestFile(t, projectFile, "onStart => {}\n", 0o600)
-	mustWriteRuntimeTestFile(t, configPath, string(validated), 0o600)
-	mustWriteRuntimeTestFile(t, filepath.Join(projectDir, "assets", "index.json"), "{}\n", 0o600)
+	mustWriteDriverTestFile(t, projectFile, "onStart => {}\n", 0o600)
+	mustWriteDriverTestFile(t, configPath, string(validated), 0o600)
+	mustWriteDriverTestFile(t, filepath.Join(projectDir, "assets", "index.json"), "{}\n", 0o600)
 	snapshot, err := projectpolicy.SnapshotPortableConfig(projectDir)
 	if err != nil {
 		t.Fatal(err)
@@ -418,9 +418,9 @@ func TestPrepareProjectBundleConfigRejectsConfigDrift(t *testing.T) {
 	projectDir := t.TempDir()
 	projectFile := filepath.Join(projectDir, "main.spx")
 	configPath := filepath.Join(projectDir, ".config")
-	mustWriteRuntimeTestFile(t, projectFile, "onStart => {}\n", 0o600)
-	mustWriteRuntimeTestFile(t, configPath, `{"name":"validated"}`, 0o600)
-	mustWriteRuntimeTestFile(t, filepath.Join(projectDir, "assets", "index.json"), "{}\n", 0o600)
+	mustWriteDriverTestFile(t, projectFile, "onStart => {}\n", 0o600)
+	mustWriteDriverTestFile(t, configPath, `{"name":"validated"}`, 0o600)
+	mustWriteDriverTestFile(t, filepath.Join(projectDir, "assets", "index.json"), "{}\n", 0o600)
 	snapshot, err := projectpolicy.SnapshotPortableConfig(projectDir)
 	if err != nil {
 		t.Fatal(err)

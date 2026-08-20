@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package xgoruntime
+package xgodriver
 
 import (
 	"crypto/sha256"

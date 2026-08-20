@@ -27,9 +27,9 @@ func TestCommandErrorMessageAddsOnePrefix(t *testing.T) {
 		err  error
 		want string
 	}{
-		{name: "unprefixed", err: errors.New("failed"), want: "xgoruntime: failed"},
-		{name: "prefixed", err: errors.New("xgoruntime: failed"), want: "xgoruntime: failed"},
-		{name: "repeated", err: errors.New("xgoruntime: xgoruntime: failed"), want: "xgoruntime: failed"},
+		{name: "unprefixed", err: errors.New("failed"), want: "xgodriver: failed"},
+		{name: "prefixed", err: errors.New("xgodriver: failed"), want: "xgodriver: failed"},
+		{name: "repeated", err: errors.New("xgodriver: xgodriver: failed"), want: "xgodriver: failed"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			if got := commandErrorMessage(test.err); got != test.want {

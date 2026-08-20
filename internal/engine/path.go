@@ -63,7 +63,7 @@ func SetFilesystemRoots(projectDir, assetDir string) error {
 }
 
 // SetLegacyFilesystemRoots enables the bounded external-resource behavior used
-// by existing SPX commands. Portable runtime-provider sessions must use
+// by existing SPX commands. Portable project-driver sessions must use
 // SetFilesystemRoots so project data cannot select this compatibility policy.
 func SetLegacyFilesystemRoots(projectDir, assetDir string) error {
 	return setFilesystemRoots(projectDir, assetDir, true)

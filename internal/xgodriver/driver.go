@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package xgoruntime
+package xgodriver
 
 import (
 	"bytes"
@@ -41,9 +41,9 @@ import (
 	"github.com/goplus/spx/v3/x/xgolauncher"
 )
 
-const activeEnvironment = "SPX_XGO_RUNTIME_ACTIVE"
+const activeEnvironment = "SPX_XGO_DRIVER_ACTIVE"
 
-// IO contains the inherited provider streams and environment. A nil stream is
+// IO contains the inherited driver streams and environment. A nil stream is
 // passed through to the Engine/Go command in the same way as os/exec.
 type IO struct {
 	Stdin  io.Reader
@@ -52,12 +52,12 @@ type IO struct {
 	Env    []string
 }
 
-// Execute performs one already-parsed provider request without exiting the
+// Execute performs one already-parsed driver request without exiting the
 // process. Command entry points translate the returned status through
 // xgolauncher.Exit after all cleanup has completed.
 func Execute(ctx context.Context, cfg Config, streams IO) (xgolauncher.ProcessStatus, error) {
 	if ctx == nil {
-		return xgolauncher.ProcessStatus{}, errors.New("xgoruntime: nil context")
+		return xgolauncher.ProcessStatus{}, errors.New("xgodriver: nil context")
 	}
 	if err := validateSPXRequest(cfg); err != nil {
 		return xgolauncher.ProcessStatus{}, err
@@ -66,20 +66,20 @@ func Execute(ctx context.Context, cfg Config, streams IO) (xgolauncher.ProcessSt
 		return xgolauncher.ProcessStatus{}, err
 	}
 	if hasEnvironment(streams.Env, activeEnvironment) {
-		return xgolauncher.ProcessStatus{}, errors.New("xgoruntime: recursive runtime-provider invocation rejected")
+		return xgolauncher.ProcessStatus{}, errors.New("xgodriver: recursive project-driver invocation rejected")
 	}
 	configSnapshot, err := projectpolicy.SnapshotPortableConfig(cfg.ProjectDir)
 	if err != nil {
-		return xgolauncher.ProcessStatus{}, fmt.Errorf("xgoruntime: %w", err)
+		return xgolauncher.ProcessStatus{}, fmt.Errorf("xgodriver: %w", err)
 	}
 	if err := VerifyDeclaration(cfg.Declaration); err != nil {
 		return xgolauncher.ProcessStatus{}, err
 	}
-	if err := verifyProviderPackage(ctx, cfg, streams.Env); err != nil {
+	if err := verifyDriverPackage(ctx, cfg, streams.Env); err != nil {
 		return xgolauncher.ProcessStatus{}, err
 	}
-	if !sourceMode(cfg.ProviderOrigin) {
-		return xgolauncher.ProcessStatus{}, fmt.Errorf("xgoruntime: published bridge mode is unavailable for %s@%s; use a main/workspace module or local replace until immutable bridge manifests are published", cfg.ProviderOrigin.Selected.Path, cfg.ProviderOrigin.Selected.Version)
+	if !sourceMode(cfg.DriverOrigin) {
+		return xgolauncher.ProcessStatus{}, fmt.Errorf("xgodriver: published bridge mode is unavailable for %s@%s; use a main/workspace module or local replace until immutable bridge manifests are published", cfg.DriverOrigin.Selected.Path, cfg.DriverOrigin.Selected.Version)
 	}
 	assets, err := resolveLocalAssets(ctx, cfg, streams)
 	if err != nil {
@@ -97,19 +97,19 @@ func Execute(ctx context.Context, cfg Config, streams IO) (xgolauncher.ProcessSt
 		}
 		return xgolauncher.ProcessStatus{}, nil
 	default:
-		return xgolauncher.ProcessStatus{}, fmt.Errorf("xgoruntime: unsupported action %q", cfg.Action)
+		return xgolauncher.ProcessStatus{}, fmt.Errorf("xgodriver: unsupported action %q", cfg.Action)
 	}
 }
 
-// validateSPXRequest applies provider-domain requirements after the generic
+// validateSPXRequest applies driver-domain requirements after the generic
 // XGo protocol has been parsed. Pack metadata is optional on the wire because
-// other runtime providers may not use it; SPX requires it to define AssetDir.
+// other project drivers may not use it; SPX requires it to define AssetDir.
 func validateSPXRequest(cfg Config) error {
 	if cfg.Project.PackDirectory == "" || cfg.Project.PackIndexFile == "" {
-		return errors.New("xgoruntime: SPX provider requires pack metadata")
+		return errors.New("xgodriver: SPX driver requires pack metadata")
 	}
 	if cfg.Project.PackDirectory == "." {
-		return errors.New("xgoruntime: SPX provider requires a dedicated pack directory below the project root")
+		return errors.New("xgodriver: SPX driver requires a dedicated pack directory below the project root")
 	}
 	return nil
 }
@@ -171,9 +171,9 @@ func buildSourceBridge(ctx context.Context, cfg Config, bridgeName string, strea
 	if err := cfg.validateGraphInputs(); err != nil {
 		return "", nil, err
 	}
-	workDir, err := os.MkdirTemp("", "spx-provider-bridge-")
+	workDir, err := os.MkdirTemp("", "spx-driver-bridge-")
 	if err != nil {
-		return "", nil, fmt.Errorf("xgoruntime: create source bridge work directory: %w", err)
+		return "", nil, fmt.Errorf("xgodriver: create source bridge work directory: %w", err)
 	}
 	keepWork := hasBuildFlag(cfg.BuildFlags, "work")
 	cleanup := func() { _ = os.RemoveAll(workDir) }
@@ -193,15 +193,15 @@ func buildSourceBridge(ctx context.Context, cfg Config, bridgeName string, strea
 	command.Stderr = streams.Stderr
 	if err := command.Run(); err != nil {
 		cleanup()
-		return "", nil, fmt.Errorf("xgoruntime: build source interpreter bridge: %w", err)
+		return "", nil, fmt.Errorf("xgodriver: build source interpreter bridge: %w", err)
 	}
 	if err := validatePinnedFile("source interpreter bridge", bridgePath); err != nil {
 		cleanup()
 		return "", nil, err
 	}
-	if err := verifyBuiltProviderOrigin(ctx, bridgePath, cfg.ProviderOrigin, cfg, streams.Env); err != nil {
+	if err := verifyBuiltDriverOrigin(ctx, bridgePath, cfg.DriverOrigin, cfg, streams.Env); err != nil {
 		cleanup()
-		return "", nil, fmt.Errorf("xgoruntime: verify source interpreter bridge provenance: %w", err)
+		return "", nil, fmt.Errorf("xgodriver: verify source interpreter bridge provenance: %w", err)
 	}
 	return bridgePath, cleanup, nil
 }
@@ -217,7 +217,7 @@ func sourceBridgeBuildArgsForGOOS(cfg Config, bridgePath, goos string) []string 
 	if goos == "windows" {
 		args = append(args, "-ldflags=-extldflags=-Wl,--allow-multiple-definition")
 	}
-	return append(args, "-o", bridgePath, cfg.ProviderOrigin.Selected.Path+"/cmd/ispxnative")
+	return append(args, "-o", bridgePath, cfg.DriverOrigin.Selected.Path+"/cmd/ispxnative")
 }
 
 func bridgeFileName(goos, goarch string) (string, error) {
@@ -230,15 +230,15 @@ func bridgeFileName(goos, goarch string) (string, error) {
 	case "windows":
 		extension = ".dll"
 	default:
-		return "", fmt.Errorf("xgoruntime: host platform %s/%s is not supported", goos, goarch)
+		return "", fmt.Errorf("xgodriver: host platform %s/%s is not supported", goos, goarch)
 	}
 	return "gdspx-" + goos + "-" + goarch + extension, nil
 }
 
 func runProject(ctx context.Context, cfg Config, assets localAssets, configSnapshot projectpolicy.PortableConfigSnapshot, streams IO) (xgolauncher.ProcessStatus, error) {
-	sessionDir, err := os.MkdirTemp("", "spx-provider-run-")
+	sessionDir, err := os.MkdirTemp("", "spx-driver-run-")
 	if err != nil {
-		return xgolauncher.ProcessStatus{}, fmt.Errorf("xgoruntime: create run session: %w", err)
+		return xgolauncher.ProcessStatus{}, fmt.Errorf("xgodriver: create run session: %w", err)
 	}
 	keepWork := hasBuildFlag(cfg.BuildFlags, "work")
 	if keepWork {
@@ -258,7 +258,7 @@ func runProject(ctx context.Context, cfg Config, assets localAssets, configSnaps
 		SessionDir: sessionDir,
 	}
 	if err := interpruntime.PrepareSession(interpruntime.SessionConfig{Roots: roots, BridgePath: assets.BridgePath}); err != nil {
-		return xgolauncher.ProcessStatus{}, fmt.Errorf("xgoruntime: prepare interpreted session: %w", err)
+		return xgolauncher.ProcessStatus{}, fmt.Errorf("xgodriver: prepare interpreted session: %w", err)
 	}
 	command, err := interpruntime.PrepareCommand(ctx, interpruntime.CommandConfig{
 		Roots: roots, Executable: assets.EnginePath, Args: cfg.ApplicationArgs,
@@ -267,7 +267,7 @@ func runProject(ctx context.Context, cfg Config, assets localAssets, configSnaps
 		PathPolicy: interpruntime.RejectPath,
 	})
 	if err != nil {
-		return xgolauncher.ProcessStatus{}, fmt.Errorf("xgoruntime: prepare Engine: %w", err)
+		return xgolauncher.ProcessStatus{}, fmt.Errorf("xgodriver: prepare Engine: %w", err)
 	}
 	command.Env = append(command.Env,
 		interpruntime.PortableConfigDirEnv+"="+configDir,
@@ -275,28 +275,28 @@ func runProject(ctx context.Context, cfg Config, assets localAssets, configSnaps
 	)
 	status, err := processsupervisor.Run(ctx, command)
 	if err != nil {
-		return xgolauncher.ProcessStatus{}, fmt.Errorf("xgoruntime: run Engine: %w", err)
+		return xgolauncher.ProcessStatus{}, fmt.Errorf("xgodriver: run Engine: %w", err)
 	}
 	return xgolauncher.ProcessStatus{Code: status.Code, Signal: status.Signal}, nil
 }
 
 func materializePortableConfigSnapshot(sessionDir, projectDir string, snapshot projectpolicy.PortableConfigSnapshot) (string, string, error) {
 	if err := snapshot.Verify(projectDir); err != nil {
-		return "", "", fmt.Errorf("xgoruntime: %w", err)
+		return "", "", fmt.Errorf("xgodriver: %w", err)
 	}
 	identity, err := snapshot.Identity()
 	if err != nil {
-		return "", "", fmt.Errorf("xgoruntime: identify portable config: %w", err)
+		return "", "", fmt.Errorf("xgodriver: identify portable config: %w", err)
 	}
 	configDir := filepath.Join(sessionDir, "portable-config")
 	if err := os.Mkdir(configDir, 0o700); err != nil {
-		return "", "", fmt.Errorf("xgoruntime: create portable config directory: %w", err)
+		return "", "", fmt.Errorf("xgodriver: create portable config directory: %w", err)
 	}
 	if snapshot.Present() {
 		configPath := filepath.Join(configDir, ".config")
 		file, err := os.OpenFile(configPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 		if err != nil {
-			return "", "", fmt.Errorf("xgoruntime: create portable config: %w", err)
+			return "", "", fmt.Errorf("xgodriver: create portable config: %w", err)
 		}
 		data := snapshot.Bytes()
 		written, writeErr := file.Write(data)
@@ -305,10 +305,10 @@ func materializePortableConfigSnapshot(sessionDir, projectDir string, snapshot p
 		}
 		closeErr := file.Close()
 		if writeErr != nil {
-			return "", "", fmt.Errorf("xgoruntime: write portable config: %w", writeErr)
+			return "", "", fmt.Errorf("xgodriver: write portable config: %w", writeErr)
 		}
 		if closeErr != nil {
-			return "", "", fmt.Errorf("xgoruntime: close portable config: %w", closeErr)
+			return "", "", fmt.Errorf("xgodriver: close portable config: %w", closeErr)
 		}
 	}
 	return configDir, identity, nil
@@ -333,7 +333,7 @@ func prepareProjectBundleConfig(cfg Config, configSnapshot projectpolicy.Portabl
 		return projectbundle.Config{}, err
 	}
 	if err := configSnapshot.Verify(cfg.ProjectDir); err != nil {
-		return projectbundle.Config{}, fmt.Errorf("xgoruntime: %w", err)
+		return projectbundle.Config{}, fmt.Errorf("xgodriver: %w", err)
 	}
 	return projectbundle.Config{
 		ProjectDir: cfg.ProjectDir, ProjectFiles: projectFiles, IncludeConfig: configSnapshot.Present(),
@@ -346,27 +346,27 @@ func writeLauncherPayload(workDir string, dst io.Writer, cfg Config, assets loca
 	projectPath := filepath.Join(workDir, "project.zip")
 	projectFile, err := os.OpenFile(projectPath, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
-		return "", "", fmt.Errorf("xgoruntime: create project archive: %w", err)
+		return "", "", fmt.Errorf("xgodriver: create project archive: %w", err)
 	}
 	defer func() {
 		if closeErr := projectFile.Close(); err == nil && closeErr != nil {
-			payloadDigest, manifestDigest, err = "", "", fmt.Errorf("xgoruntime: close project archive: %w", closeErr)
+			payloadDigest, manifestDigest, err = "", "", fmt.Errorf("xgodriver: close project archive: %w", closeErr)
 		}
 	}()
 	projectDigest, err := projectbundle.WriteArchive(projectFile, projectConfig)
 	if err != nil {
-		return "", "", fmt.Errorf("xgoruntime: collect project: %w", err)
+		return "", "", fmt.Errorf("xgodriver: collect project: %w", err)
 	}
 	if err := projectFile.Sync(); err != nil {
-		return "", "", fmt.Errorf("xgoruntime: sync project archive: %w", err)
+		return "", "", fmt.Errorf("xgodriver: sync project archive: %w", err)
 	}
 	projectInfo, err := projectFile.Stat()
 	if err != nil {
-		return "", "", fmt.Errorf("xgoruntime: stat project archive: %w", err)
+		return "", "", fmt.Errorf("xgodriver: stat project archive: %w", err)
 	}
 	projectBundle, err := runtimepayload.ComponentBundleReaderAt(projectFile, projectInfo.Size(), runtimebundle.NamespaceProject)
 	if err != nil {
-		return "", "", fmt.Errorf("xgoruntime: verify generated project bundle: %w", err)
+		return "", "", fmt.Errorf("xgodriver: verify generated project bundle: %w", err)
 	}
 
 	engine, err := openPinnedFile("Engine", assets.EnginePath)
@@ -375,7 +375,7 @@ func writeLauncherPayload(workDir string, dst io.Writer, cfg Config, assets loca
 	}
 	defer func() {
 		if closeErr := engine.file.Close(); err == nil && closeErr != nil {
-			payloadDigest, manifestDigest, err = "", "", fmt.Errorf("xgoruntime: close Engine: %w", closeErr)
+			payloadDigest, manifestDigest, err = "", "", fmt.Errorf("xgodriver: close Engine: %w", closeErr)
 		}
 	}()
 	pack, err := openPinnedFile("runtime PCK", assets.PackPath)
@@ -384,7 +384,7 @@ func writeLauncherPayload(workDir string, dst io.Writer, cfg Config, assets loca
 	}
 	defer func() {
 		if closeErr := pack.file.Close(); err == nil && closeErr != nil {
-			payloadDigest, manifestDigest, err = "", "", fmt.Errorf("xgoruntime: close runtime PCK: %w", closeErr)
+			payloadDigest, manifestDigest, err = "", "", fmt.Errorf("xgodriver: close runtime PCK: %w", closeErr)
 		}
 	}()
 	bridge, err := openPinnedFile("interpreter bridge", assets.BridgePath)
@@ -393,7 +393,7 @@ func writeLauncherPayload(workDir string, dst io.Writer, cfg Config, assets loca
 	}
 	defer func() {
 		if closeErr := bridge.file.Close(); err == nil && closeErr != nil {
-			payloadDigest, manifestDigest, err = "", "", fmt.Errorf("xgoruntime: close interpreter bridge: %w", closeErr)
+			payloadDigest, manifestDigest, err = "", "", fmt.Errorf("xgodriver: close interpreter bridge: %w", closeErr)
 		}
 	}()
 
@@ -403,7 +403,7 @@ func writeLauncherPayload(workDir string, dst io.Writer, cfg Config, assets loca
 	}
 	bridgeDigest, err := digestFileSource(bridge.source(""))
 	if err != nil {
-		return "", "", fmt.Errorf("xgoruntime: hash interpreter bridge: %w", err)
+		return "", "", fmt.Errorf("xgodriver: hash interpreter bridge: %w", err)
 	}
 	engineManifest, err := json.Marshal(struct {
 		Schema                string `json:"schema"`
@@ -428,7 +428,7 @@ func writeLauncherPayload(workDir string, dst io.Writer, cfg Config, assets loca
 		EngineInterfaceDigest string `json:"engine_interface_digest"`
 		BridgeSHA256          string `json:"bridge_sha256"`
 	}{
-		Schema: "spx-local-bridge/v1", Mode: "source", SPXSource: cfg.ProviderOrigin.Effective().Path,
+		Schema: "spx-local-bridge/v1", Mode: "source", SPXSource: cfg.DriverOrigin.Effective().Path,
 		EngineInterfaceDigest: interfaceDigest, BridgeSHA256: bridgeDigest,
 	})
 	if err != nil {
@@ -445,10 +445,10 @@ func writeLauncherPayload(workDir string, dst io.Writer, cfg Config, assets loca
 	}
 	engineBundle, err := runtimepayload.ComponentBundleSources(engineSources, runtimebundle.NamespaceEngine)
 	if err != nil {
-		return "", "", fmt.Errorf("xgoruntime: identify Engine bundle: %w", err)
+		return "", "", fmt.Errorf("xgodriver: identify Engine bundle: %w", err)
 	}
 	if !bundleEntryHasDigest(engineBundle, engineName, engineDigest) || !bundleEntryHasDigest(engineBundle, packName, packDigest) {
-		return "", "", errors.New("xgoruntime: Engine or runtime PCK changed while identifying payload")
+		return "", "", errors.New("xgodriver: Engine or runtime PCK changed while identifying payload")
 	}
 	bridgeSources := []runtimepayload.FileSource{
 		byteSource("bridge-manifest.json", 0o644, bridgeManifest),
@@ -456,10 +456,10 @@ func writeLauncherPayload(workDir string, dst io.Writer, cfg Config, assets loca
 	}
 	bridgeBundle, err := runtimepayload.ComponentBundleSources(bridgeSources, runtimebundle.NamespaceBridge)
 	if err != nil {
-		return "", "", fmt.Errorf("xgoruntime: identify bridge bundle: %w", err)
+		return "", "", fmt.Errorf("xgodriver: identify bridge bundle: %w", err)
 	}
 	if !bundleEntryHasDigest(bridgeBundle, bridgeName, bridgeDigest) {
-		return "", "", errors.New("xgoruntime: interpreter bridge changed while identifying payload")
+		return "", "", errors.New("xgodriver: interpreter bridge changed while identifying payload")
 	}
 
 	payloadSources := []runtimepayload.FileSource{
@@ -472,9 +472,9 @@ func writeLauncherPayload(workDir string, dst io.Writer, cfg Config, assets loca
 	}
 	payloadDigest, manifestDigest, err = runtimepayload.BuildTo(dst, runtimepayload.BuildConfig{
 		SPX: runtimepayload.SourceIdentity{
-			SelectedPath: cfg.ProviderOrigin.Selected.Path, SelectedVersion: cfg.ProviderOrigin.Selected.Version,
-			EffectivePath: cfg.ProviderOrigin.Effective().Path, EffectiveVersion: cfg.ProviderOrigin.Effective().Version,
-			Main: cfg.ProviderOrigin.Main, SourceMode: true,
+			SelectedPath: cfg.DriverOrigin.Selected.Path, SelectedVersion: cfg.DriverOrigin.Selected.Version,
+			EffectivePath: cfg.DriverOrigin.Effective().Path, EffectiveVersion: cfg.DriverOrigin.Effective().Version,
+			Main: cfg.DriverOrigin.Main, SourceMode: true,
 		},
 		Target: runtimepayload.Target{GOOS: runtime.GOOS, GOARCH: runtime.GOARCH},
 		Engine: runtimepayload.Engine{
@@ -489,7 +489,7 @@ func writeLauncherPayload(workDir string, dst io.Writer, cfg Config, assets loca
 		},
 	}, payloadSources)
 	if err != nil {
-		return "", "", fmt.Errorf("xgoruntime: build embedded payload: %w", err)
+		return "", "", fmt.Errorf("xgodriver: build embedded payload: %w", err)
 	}
 	for _, source := range []*pinnedFile{engine, pack, bridge} {
 		if err := source.verify(); err != nil {
@@ -497,7 +497,7 @@ func writeLauncherPayload(workDir string, dst io.Writer, cfg Config, assets loca
 		}
 	}
 	if traceEnabled(cfg.BuildFlags) && streams.Stderr != nil {
-		_, _ = fmt.Fprintf(streams.Stderr, "xgoruntime: project=%s payload=%s engine=%s bridge=%s\n", projectDigest, payloadDigest, engineBundle.Digest, bridgeBundle.Digest)
+		_, _ = fmt.Fprintf(streams.Stderr, "xgodriver: project=%s payload=%s engine=%s bridge=%s\n", projectDigest, payloadDigest, engineBundle.Digest, bridgeBundle.Digest)
 	}
 	return payloadDigest, manifestDigest, nil
 }
@@ -584,11 +584,11 @@ func localEngineSourceDigests(engine, pack runtimepayload.FileSource) (interface
 	packHasher := sha256.New()
 	_, _ = interfaceHasher.Write([]byte("spx-local-engine-interface/v1\x00"))
 	if err := copyFileSource(io.MultiWriter(interfaceHasher, engineHasher), engine); err != nil {
-		return "", "", "", fmt.Errorf("xgoruntime: hash Engine: %w", err)
+		return "", "", "", fmt.Errorf("xgodriver: hash Engine: %w", err)
 	}
 	_, _ = interfaceHasher.Write([]byte{0})
 	if err := copyFileSource(io.MultiWriter(interfaceHasher, packHasher), pack); err != nil {
-		return "", "", "", fmt.Errorf("xgoruntime: hash runtime PCK: %w", err)
+		return "", "", "", fmt.Errorf("xgodriver: hash runtime PCK: %w", err)
 	}
 	return hex.EncodeToString(interfaceHasher.Sum(nil)), hex.EncodeToString(engineHasher.Sum(nil)), hex.EncodeToString(packHasher.Sum(nil)), nil
 }

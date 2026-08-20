@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package xgoruntime
+package xgodriver
 
 import (
 	"os"
@@ -56,11 +56,11 @@ func TestParseRun(t *testing.T) {
 	if cfg.Output != "" || cfg.FinalOutput != "" {
 		t.Fatalf("run outputs = %q/%q, want empty", cfg.Output, cfg.FinalOutput)
 	}
-	if cfg.ProviderOrigin.Replace != nil {
-		t.Fatalf("Replace = %#v, want nil", cfg.ProviderOrigin.Replace)
+	if cfg.DriverOrigin.Replace != nil {
+		t.Fatalf("Replace = %#v, want nil", cfg.DriverOrigin.Replace)
 	}
-	if cfg.ProviderOrigin.Selected.Dir == "" || cfg.ProviderOrigin.Selected.GoMod == "" {
-		t.Fatalf("selected source is incomplete: %#v", cfg.ProviderOrigin.Selected)
+	if cfg.DriverOrigin.Selected.Dir == "" || cfg.DriverOrigin.Selected.GoMod == "" {
+		t.Fatalf("selected source is incomplete: %#v", cfg.DriverOrigin.Selected)
 	}
 }
 
@@ -69,9 +69,9 @@ func TestParseBuildWithReplacement(t *testing.T) {
 	args = removeOptions(args, "selected-dir", "selected-gomod")
 	root := filepath.Dir(optionValue(args, "project-dir"))
 	localSPX := filepath.Join(root, "local-spx")
-	mustWriteRuntimeTestFile(t, filepath.Join(localSPX, "go.mod"), "module github.com/goplus/spx/v3\n", 0o600)
-	mustWriteRuntimeTestFile(t, filepath.Join(localSPX, "gox.mod"), "xgo 1.8\n", 0o600)
-	mustWriteRuntimeTestFile(t, filepath.Join(root, "alternate.mod"), "module example.com/alternate\n", 0o600)
+	mustWriteDriverTestFile(t, filepath.Join(localSPX, "go.mod"), "module github.com/goplus/spx/v3\n", 0o600)
+	mustWriteDriverTestFile(t, filepath.Join(localSPX, "gox.mod"), "xgo 1.8\n", 0o600)
+	mustWriteDriverTestFile(t, filepath.Join(root, "alternate.mod"), "module example.com/alternate\n", 0o600)
 	args = replaceOption(args, "declaration-file", filepath.Join(root, "local-spx", "gox.mod"))
 	args = append(args,
 		"--replace-path="+localSPX,
@@ -88,16 +88,16 @@ func TestParseBuildWithReplacement(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse() error: %v", err)
 	}
-	if cfg.ProviderOrigin.Replace == nil {
+	if cfg.DriverOrigin.Replace == nil {
 		t.Fatal("Replace = nil, want local replacement")
 	}
-	if got, want := cfg.ProviderOrigin.Selected.Version, "v3.2.0"; got != want {
+	if got, want := cfg.DriverOrigin.Selected.Version, "v3.2.0"; got != want {
 		t.Fatalf("selected version = %q, want %q", got, want)
 	}
-	if cfg.ProviderOrigin.Selected.Dir != "" || cfg.ProviderOrigin.Selected.GoMod != "" {
-		t.Fatalf("selected source leaked into replacement origin: %#v", cfg.ProviderOrigin.Selected)
+	if cfg.DriverOrigin.Selected.Dir != "" || cfg.DriverOrigin.Selected.GoMod != "" {
+		t.Fatalf("selected source leaked into replacement origin: %#v", cfg.DriverOrigin.Selected)
 	}
-	if got, want := cfg.ProviderOrigin.Effective().Path, localSPX; got != want {
+	if got, want := cfg.DriverOrigin.Effective().Path, localSPX; got != want {
 		t.Fatalf("effective path = %q, want %q", got, want)
 	}
 	wantGraph := []string{"-modfile=" + filepath.Join(root, "alternate.mod")}
@@ -112,8 +112,8 @@ func TestParseAcceptsOfficialSplitModuleCacheGoMod(t *testing.T) {
 	cacheRoot := filepath.Join(root, "gomodcache")
 	moduleDir := filepath.Join(cacheRoot, filepath.FromSlash("github.com/goplus/spx/v3@v3.2.0"))
 	cacheGoMod := filepath.Join(cacheRoot, filepath.FromSlash("cache/download/github.com/goplus/spx/v3/@v/v3.2.0.mod"))
-	mustWriteRuntimeTestFile(t, filepath.Join(moduleDir, "gox.mod"), "xgo 1.8\n", 0o600)
-	mustWriteRuntimeTestFile(t, cacheGoMod, "module github.com/goplus/spx/v3\n", 0o600)
+	mustWriteDriverTestFile(t, filepath.Join(moduleDir, "gox.mod"), "xgo 1.8\n", 0o600)
+	mustWriteDriverTestFile(t, cacheGoMod, "module github.com/goplus/spx/v3\n", 0o600)
 	args = replaceOption(args, "selected-dir", moduleDir)
 	args = replaceOption(args, "selected-gomod", cacheGoMod)
 	args = replaceOption(args, "declaration-file", filepath.Join(moduleDir, "gox.mod"))
@@ -128,8 +128,8 @@ func TestParseRejectsNonMatchingSplitModuleCacheGoMod(t *testing.T) {
 	cacheRoot := filepath.Join(root, "gomodcache")
 	moduleDir := filepath.Join(cacheRoot, filepath.FromSlash("github.com/goplus/spx/v3@v3.2.0"))
 	cacheGoMod := filepath.Join(cacheRoot, filepath.FromSlash("cache/download/github.com/goplus/spx/v3/@v/v3.2.0.mod"))
-	mustWriteRuntimeTestFile(t, filepath.Join(moduleDir, "gox.mod"), "xgo 1.8\n", 0o600)
-	mustWriteRuntimeTestFile(t, cacheGoMod, "module github.com/example/not-spx\n", 0o600)
+	mustWriteDriverTestFile(t, filepath.Join(moduleDir, "gox.mod"), "xgo 1.8\n", 0o600)
+	mustWriteDriverTestFile(t, cacheGoMod, "module github.com/example/not-spx\n", 0o600)
 	args = replaceOption(args, "selected-dir", moduleDir)
 	args = replaceOption(args, "selected-gomod", cacheGoMod)
 	args = replaceOption(args, "declaration-file", filepath.Join(moduleDir, "gox.mod"))
@@ -167,8 +167,8 @@ func TestParseRejectsOverlayBeforeExecution(t *testing.T) {
 	projectDir := optionValue(args, "project-dir")
 	root := filepath.Dir(projectDir)
 	overlay := filepath.Join(root, "overlay.json")
-	mustWriteRuntimeTestFile(t, overlay, "{}\n", 0o600)
-	mustWriteRuntimeTestFile(t, filepath.Join(projectDir, ".config"), `{"extasset":"../shared"}`, 0o600)
+	mustWriteDriverTestFile(t, overlay, "{}\n", 0o600)
+	mustWriteDriverTestFile(t, filepath.Join(projectDir, ".config"), `{"extasset":"../shared"}`, 0o600)
 	if err := os.RemoveAll(filepath.Join(projectDir, filepath.FromSlash(optionValue(args, "pack-dir")))); err != nil {
 		t.Fatal(err)
 	}
@@ -178,10 +178,10 @@ func TestParseRejectsOverlayBeforeExecution(t *testing.T) {
 	}
 }
 
-func TestParseRejectsExtAssetOnlyForPortableProvider(t *testing.T) {
+func TestParseRejectsExtAssetOnlyForPortableDriver(t *testing.T) {
 	args := validArgs(t, ActionRun)
 	projectDir := optionValue(args, "project-dir")
-	mustWriteRuntimeTestFile(t, filepath.Join(projectDir, ".config"), `{"extasset":"custom_asset"}`, 0o600)
+	mustWriteDriverTestFile(t, filepath.Join(projectDir, ".config"), `{"extasset":"custom_asset"}`, 0o600)
 	if _, err := Parse(append(args, "--")); err == nil || !strings.Contains(err.Error(), "unsupported extasset") {
 		t.Fatalf("Parse() extasset error = %v, want portable-policy rejection", err)
 	}
@@ -201,7 +201,7 @@ func TestParseRunAcceptsPackedOnlyProject(t *testing.T) {
 	if err := os.Remove(filepath.Join(packDir, optionValue(args, "pack-index"))); err != nil {
 		t.Fatal(err)
 	}
-	mustWriteRuntimeTestFile(t, filepath.Join(packDir, "index_pack.json"), `{"zorder":[]}`, 0o600)
+	mustWriteDriverTestFile(t, filepath.Join(packDir, "index_pack.json"), `{"zorder":[]}`, 0o600)
 	if _, err := Parse(append(args, "--")); err != nil {
 		t.Fatalf("Parse() packed-only error: %v", err)
 	}
@@ -214,9 +214,9 @@ func TestParseRejectsInvalidArgv(t *testing.T) {
 		want string
 	}{
 		{"missing protocol", func(*testing.T) []string { return nil }, "requires preamble and action"},
-		{"unknown protocol", func(t *testing.T) []string {
+		{"legacy runtime preamble", func(t *testing.T) []string {
 			args := validArgs(t, ActionRun)
-			args[0] = "xgo-runtime-v9"
+			args[0] = "xgo-runtime-v1"
 			return append(args, "--")
 		}, "unsupported preamble"},
 		{"unknown action", func(t *testing.T) []string {
@@ -315,9 +315,9 @@ func TestParseRejectsInvalidArgv(t *testing.T) {
 		{"invalid selected module path", func(t *testing.T) []string {
 			return append(replaceOption(validArgs(t, ActionRun), "selected-path", "github.com/goplus/spx/v3@latest"), "--")
 		}, "invalid module path"},
-		{"invalid provider import path", func(t *testing.T) []string {
-			return append(replaceOption(validArgs(t, ActionRun), "provider-package", "github.com/goplus/spx/v3/cmd/xgoruntime@latest"), "--")
-		}, "invalid provider package"},
+		{"invalid driver import path", func(t *testing.T) []string {
+			return append(replaceOption(validArgs(t, ActionRun), "driver-package", "github.com/goplus/spx/v3/cmd/xgodriver@latest"), "--")
+		}, "invalid driver package"},
 		{"same build outputs", func(t *testing.T) []string {
 			args := validArgs(t, ActionBuild)
 			root := filepath.Dir(optionValue(args, "project-dir"))
@@ -344,19 +344,19 @@ func validArgs(t *testing.T, action Action) []string {
 	}
 	projectDir := filepath.Join(root, "project")
 	selectedDir := filepath.Join(root, "spx")
-	mustWriteRuntimeTestFile(t, filepath.Join(projectDir, "main.spx"), "onStart => {}\n", 0o600)
-	mustWriteRuntimeTestFile(t, filepath.Join(projectDir, "assets", "index.json"), "{}\n", 0o600)
-	mustWriteRuntimeTestFile(t, filepath.Join(selectedDir, "go.mod"), "module github.com/goplus/spx/v3\n", 0o600)
-	mustWriteRuntimeTestFile(t, filepath.Join(selectedDir, "gox.mod"), "xgo 1.8\n", 0o600)
+	mustWriteDriverTestFile(t, filepath.Join(projectDir, "main.spx"), "onStart => {}\n", 0o600)
+	mustWriteDriverTestFile(t, filepath.Join(projectDir, "assets", "index.json"), "{}\n", 0o600)
+	mustWriteDriverTestFile(t, filepath.Join(selectedDir, "go.mod"), "module github.com/goplus/spx/v3\n", 0o600)
+	mustWriteDriverTestFile(t, filepath.Join(selectedDir, "gox.mod"), "xgo 1.8\n", 0o600)
 	goCommand := filepath.Join(root, "bin", "go")
-	mustWriteRuntimeTestFile(t, goCommand, "#!/bin/sh\n", 0o700)
+	mustWriteDriverTestFile(t, goCommand, "#!/bin/sh\n", 0o700)
 	args := []string{
 		ProtocolV1,
 		string(action),
 		"--project-dir=" + projectDir,
 		"--project-file=" + filepath.Join(projectDir, "main.spx"),
 		"--module-root=" + root,
-		"--provider-package=github.com/goplus/spx/v3/cmd/xgoruntime",
+		"--driver-package=github.com/goplus/spx/v3/cmd/xgodriver",
 		"--selected-path=github.com/goplus/spx/v3",
 		"--selected-version=v3.2.0",
 		"--origin-main=false",
@@ -375,7 +375,7 @@ func validArgs(t *testing.T, action Action) []string {
 	return args
 }
 
-func mustWriteRuntimeTestFile(t *testing.T, name, content string, mode os.FileMode) {
+func mustWriteDriverTestFile(t *testing.T, name, content string, mode os.FileMode) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(name), 0o700); err != nil {
 		t.Fatal(err)

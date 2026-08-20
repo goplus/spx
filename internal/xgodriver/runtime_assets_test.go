@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package xgoruntime
+package xgodriver
 
 import (
 	"archive/zip"
@@ -187,7 +187,7 @@ func runtimeAssetTestDependencies(fetch func(context.Context, string, io.Writer)
 }
 
 func runtimeAssetTestConfig(sourceDir string) Config {
-	return Config{ProviderOrigin: ModuleOrigin{
+	return Config{DriverOrigin: ModuleOrigin{
 		Selected: ModuleRef{Path: "github.com/goplus/spx/v3"},
 		Replace:  &ModuleRef{Path: "github.com/goplus/spx/v3", Dir: sourceDir},
 	}}
@@ -207,7 +207,7 @@ func TestAcquireRuntimeAssetsFromPublishedReleaseWithoutGOPATHInstall(t *testing
 		t.Fatal(err)
 	}
 	// These files deliberately look like the legacy source-mode assets. The
-	// release provider must ignore them, even when their names match the
+	// release driver must ignore them, even when their names match the
 	// locked runtime version.
 	if err := os.WriteFile(filepath.Join(gopathBin, fixture.spec.RuntimeName), []byte("old-or-replaced-engine"), 0o700); err != nil {
 		t.Fatal(err)
@@ -251,8 +251,8 @@ func TestResolveLocalAssetsSourceModeIgnoresLegacyGOPATHAssets(t *testing.T) {
 		t.Fatal(err)
 	}
 	modulePath := "example.test/spx"
-	mustWriteRuntimeTestFile(t, filepath.Join(moduleRoot, "go.mod"), "module "+modulePath+"\n\ngo 1.25\n", 0o600)
-	mustWriteRuntimeTestFile(t, filepath.Join(moduleRoot, "cmd", "ispxnative", "main.go"), "package main\nfunc main() {}\n", 0o600)
+	mustWriteDriverTestFile(t, filepath.Join(moduleRoot, "go.mod"), "module "+modulePath+"\n\ngo 1.25\n", 0o600)
+	mustWriteDriverTestFile(t, filepath.Join(moduleRoot, "cmd", "ispxnative", "main.go"), "package main\nfunc main() {}\n", 0o600)
 	goCommand, err := exec.LookPath("go")
 	if err != nil {
 		t.Fatal(err)
@@ -283,7 +283,7 @@ func TestResolveLocalAssetsSourceModeIgnoresLegacyGOPATHAssets(t *testing.T) {
 	calls := 0
 	var stderr bytes.Buffer
 	assets, err := resolveLocalAssetsWith(context.Background(), Config{
-		ProviderOrigin: ModuleOrigin{
+		DriverOrigin: ModuleOrigin{
 			Main:     true,
 			Selected: ModuleRef{Path: modulePath, Dir: moduleRoot, GoMod: filepath.Join(moduleRoot, "go.mod")},
 		},

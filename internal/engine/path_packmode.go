@@ -26,7 +26,7 @@ import (
 
 func SetAssetDir(dir string) {
 	resMgr.SetLoadMode(false)
-	// Packmode is the legacy archive/export path. Portable runtime-provider
+	// Packmode is the legacy archive/export path. Portable project-driver
 	// bundles do not build this mode; their native session uses strict roots.
 	setAssetRoot(packmodeAssetPrefix, dir)
 	assetPaths.explicitFSRoots = false

@@ -157,7 +157,7 @@ func ConfigureFilesystemRoots(projectDir, assetDir string) error {
 
 // ConfigureLegacyFilesystemRoots selects the compatibility policy used by
 // existing interpreted/native commands. It retains bounded legacy external
-// asset references; portable runtime-provider sessions must use
+// asset references; portable project-driver sessions must use
 // ConfigureFilesystemRoots instead.
 func ConfigureLegacyFilesystemRoots(projectDir, assetDir string) error {
 	return configureFilesystemRoots(projectDir, assetDir, true)

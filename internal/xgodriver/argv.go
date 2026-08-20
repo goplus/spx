@@ -14,9 +14,8 @@
  * limitations under the License.
  */
 
-// Package xgoruntime contains the private SPX implementation behind the
-// provider-neutral runtimeprotocol boundary.
-package xgoruntime
+// Package xgodriver contains SPX's private project-driver implementation.
+package xgodriver
 
 import (
 	"fmt"
@@ -25,24 +24,24 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/goplus/mod/runtimeprotocol"
+	"github.com/goplus/mod/driverprotocol"
 	"github.com/goplus/mod/xgomod"
 	"github.com/goplus/spx/v3/internal/projectassets"
 	"github.com/goplus/spx/v3/internal/projectpolicy"
 )
 
-const ProtocolV1 = runtimeprotocol.PreambleV1
+const ProtocolV1 = driverprotocol.PreambleV1
 
-type Action = runtimeprotocol.Action
+type Action = driverprotocol.Action
 
 const (
-	ActionRun   = runtimeprotocol.ActionRun
-	ActionBuild = runtimeprotocol.ActionBuild
+	ActionRun   = driverprotocol.ActionRun
+	ActionBuild = driverprotocol.ActionBuild
 )
 
 // ModuleRef and ModuleOrigin are the graph identities produced by XGo. Keep
-// the provider boundary on the shared xgomod types so graph validation and
-// source identity cannot drift between the dispatcher and provider.
+// the driver boundary on the shared xgomod types so graph validation and
+// source identity cannot drift between the dispatcher and driver.
 type ModuleRef = xgomod.ModuleRef
 type ModuleOrigin = xgomod.ResolvedModule
 
@@ -53,16 +52,16 @@ type ProjectSnapshot struct {
 	PackIndexFile string
 }
 
-// Config is SPX's domain view of a shared runtimeprotocol.Request. Keeping the
+// Config is SPX's domain view of a shared driverprotocol.Request. Keeping the
 // conversion here prevents transport parsing from acquiring SPX policy while
-// the rest of the provider can use domain-oriented field names.
+// the rest of the driver can use domain-oriented field names.
 type Config struct {
 	Action          Action
 	ProjectDir      string
 	ProjectFile     string
 	ModuleRoot      string
-	ProviderPackage string
-	ProviderOrigin  ModuleOrigin
+	DriverPackage   string
+	DriverOrigin    ModuleOrigin
 	Declaration     xgomod.FileIdentity
 	Project         ProjectSnapshot
 	GoCommand       string
@@ -75,21 +74,21 @@ type Config struct {
 	ApplicationArgs []string
 }
 
-// Parse delegates the complete argv contract to the provider-neutral codec,
+// Parse delegates the complete argv contract to the driver-neutral codec,
 // then verifies the live identities and SPX project assets it references.
 func Parse(args []string) (Config, error) {
-	request, err := runtimeprotocol.Parse(args)
+	request, err := driverprotocol.Parse(args)
 	if err != nil {
 		return Config{}, err
 	}
 	cfg := Config{
-		Action:          request.Action,
-		ProjectDir:      request.Project.Dir,
-		ProjectFile:     request.Project.File,
-		ModuleRoot:      request.Project.ModuleRoot,
-		ProviderPackage: request.ProviderPackage,
-		ProviderOrigin:  request.ProviderOrigin,
-		Declaration:     request.Declaration,
+		Action:        request.Action,
+		ProjectDir:    request.Project.Dir,
+		ProjectFile:   request.Project.File,
+		ModuleRoot:    request.Project.ModuleRoot,
+		DriverPackage: request.DriverPackage,
+		DriverOrigin:  request.DriverOrigin,
+		Declaration:   request.Declaration,
 		Project: ProjectSnapshot{
 			Extension:     request.Project.Extension,
 			FullExtension: request.Project.FullExtension,
@@ -115,7 +114,7 @@ func Parse(args []string) (Config, error) {
 	return cfg, nil
 }
 
-// validateLive is the provider half of the identity contract. The shared
+// validateLive is the driver half of the identity contract. The shared
 // codec intentionally performs no I/O; SPX pins canonical filesystem objects
 // and resolves its project asset graph before executing untrusted argv.
 func (p Config) validateLive() error {
@@ -133,19 +132,19 @@ func (p Config) validateLive() error {
 			return err
 		}
 	}
-	if err := p.ProviderOrigin.Validate(); err != nil {
-		return fmt.Errorf("runtime provider origin: %w", err)
+	if err := p.DriverOrigin.Validate(); err != nil {
+		return fmt.Errorf("project driver origin: %w", err)
 	}
-	effective := p.ProviderOrigin.Effective()
+	effective := p.DriverOrigin.Effective()
 	if !pathWithin(effective.Dir, p.Declaration.Path) {
-		return fmt.Errorf("runtime provider declaring gox.mod must be within the effective module dir")
+		return fmt.Errorf("project driver declaring gox.mod must be within the effective module dir")
 	}
 	if err := p.validateGraphInputs(); err != nil {
 		return err
 	}
 	if p.Project.PackDirectory != "" {
 		if err := projectpolicy.ValidatePortableConfig(p.ProjectDir); err != nil {
-			return fmt.Errorf("runtime provider: %w", err)
+			return fmt.Errorf("project driver: %w", err)
 		}
 		packRoot := filepath.Join(p.ProjectDir, filepath.FromSlash(p.Project.PackDirectory))
 		if err := validateCanonicalExistingPath("pack-dir", packRoot, true); err != nil {
@@ -156,7 +155,7 @@ func (p Config) validateLive() error {
 			PackDir:    p.Project.PackDirectory,
 			PackIndex:  p.Project.PackIndexFile,
 		}); err != nil {
-			return fmt.Errorf("runtime provider project assets: %w", err)
+			return fmt.Errorf("project driver assets: %w", err)
 		}
 	}
 	return nil
@@ -177,11 +176,11 @@ func (p Config) validateGraphInputs() error {
 	for _, flag := range p.GraphFlags {
 		name, value, ok := strings.Cut(strings.TrimPrefix(flag, "-"), "=")
 		if !ok {
-			return fmt.Errorf("runtime provider graph flag is not canonical: %q", flag)
+			return fmt.Errorf("project driver graph flag is not canonical: %q", flag)
 		}
 		switch name {
 		case "overlay":
-			return fmt.Errorf("runtime provider does not support -overlay because the project snapshot uses physical filesystem contents")
+			return fmt.Errorf("project driver does not support -overlay because the project snapshot uses physical filesystem contents")
 		case "modfile":
 			if err := validateCanonicalExistingPath("graph-flag-"+name, value, false); err != nil {
 				return err
@@ -198,28 +197,28 @@ func (p Config) validateGraphInputs() error {
 func validateCanonicalExistingPath(name, value string, directory bool) error {
 	before, err := os.Lstat(value)
 	if err != nil {
-		return fmt.Errorf("runtime provider path --%s cannot be inspected: %w", name, err)
+		return fmt.Errorf("project driver path --%s cannot be inspected: %w", name, err)
 	}
 	if before.Mode()&os.ModeSymlink != 0 {
-		return fmt.Errorf("runtime provider path --%s must not be a symlink: %q", name, value)
+		return fmt.Errorf("project driver path --%s must not be a symlink: %q", name, value)
 	}
 	resolved, err := filepath.EvalSymlinks(value)
 	if err != nil {
-		return fmt.Errorf("runtime provider path --%s cannot be canonicalized: %w", name, err)
+		return fmt.Errorf("project driver path --%s cannot be canonicalized: %w", name, err)
 	}
 	resolved = filepath.Clean(resolved)
 	if resolved != value {
-		return fmt.Errorf("runtime provider path --%s is not canonical: %q resolves to %q", name, value, resolved)
+		return fmt.Errorf("project driver path --%s is not canonical: %q resolves to %q", name, value, resolved)
 	}
 	if directory {
 		if !before.IsDir() {
-			return fmt.Errorf("runtime provider path --%s is not a directory: %q", name, value)
+			return fmt.Errorf("project driver path --%s is not a directory: %q", name, value)
 		}
 	} else if !before.Mode().IsRegular() {
-		return fmt.Errorf("runtime provider path --%s is not a regular file: %q", name, value)
+		return fmt.Errorf("project driver path --%s is not a regular file: %q", name, value)
 	}
 	if name == "go-command" && runtime.GOOS != "windows" && before.Mode().Perm()&0o111 == 0 {
-		return fmt.Errorf("runtime provider path --go-command is not executable: %q", value)
+		return fmt.Errorf("project driver path --go-command is not executable: %q", value)
 	}
 	return nil
 }

@@ -78,7 +78,7 @@ func loadPortableConfigOverlay(env []string, roots interpruntime.Roots) (*portab
 }
 
 // openPortableConfigRoot pins the session directory before opening the
-// provider-owned config directory. The lexical containment check above keeps
+// driver-owned config directory. The lexical containment check above keeps
 // diagnostics clear; the root handle makes a replacement race unable to
 // redirect reads outside the session tree.
 func openPortableConfigRoot(sessionDir, configDir string) (*os.Root, error) {

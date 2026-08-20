@@ -58,8 +58,8 @@ type packedAssetIndex struct {
 }
 
 // validateLegacyPackInputs keeps the pack command's legacy input contract
-// independent from the portable runtime-provider policy. In particular,
-// .config may contain extasset here; the provider's portable policy is not
+// independent from the portable project-driver policy. In particular,
+// .config may contain extasset here; the driver's portable policy is not
 // applicable to an archive that deliberately preserves external resources.
 func validateLegacyPackInputs(baseFolder string) error {
 	rootInfo, err := os.Lstat(baseFolder)

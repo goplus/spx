@@ -171,7 +171,7 @@ func ExtractZipReader(reader io.ReaderAt, size int64, dst string, options ...Ver
 	return archive.bundle, nil
 }
 
-// SafeExtractZip is the descriptive alias used by provider code.
+// SafeExtractZip is the descriptive alias used by driver code.
 func SafeExtractZip(zipPath, dst string, options ...VerifyOptions) (Bundle, error) {
 	return ExtractZip(zipPath, dst, options...)
 }

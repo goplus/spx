@@ -52,14 +52,14 @@ exit 42
 	cacheRoot := filepath.Join(t.TempDir(), "cache")
 	var stdout, stderr bytes.Buffer
 	status, err := run(context.Background(), payload, payloadDigest, manifestDigest,
-		[]string{"xgo-runtime-v1", "", "a b", "--"}, nil, &stdout, &stderr, cacheRoot)
+		[]string{"xgo-driver-v1", "", "a b", "--"}, nil, &stdout, &stderr, cacheRoot)
 	if err != nil {
 		t.Fatalf("run error = %v, stdout = %q, stderr = %q", err, stdout.String(), stderr.String())
 	}
 	if status != (ProcessStatus{Code: 42}) {
 		t.Fatalf("status = %+v, stdout = %q, stderr = %q", status, stdout.String(), stderr.String())
 	}
-	if got := stdout.String(); !strings.Contains(got, "ARGV=<xgo-runtime-v1><><a b><-->") || !strings.Contains(got, "FAKE_ENGINE_OK") {
+	if got := stdout.String(); !strings.Contains(got, "ARGV=<xgo-driver-v1><><a b><-->") || !strings.Contains(got, "FAKE_ENGINE_OK") {
 		t.Fatalf("stdout = %q", got)
 	}
 	if stderr.Len() != 0 {

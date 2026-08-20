@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package xgoruntime
+package xgodriver
 
 import (
 	"context"
@@ -78,10 +78,10 @@ func acquireRuntimeAssets(ctx context.Context, cfg Config, streams IO, lock rele
 
 func acquireRuntimeAssetsWith(ctx context.Context, cfg Config, streams IO, lock release.RuntimeLock, dependencies runtimeAssetDependencies) (localAssets, error) {
 	if ctx == nil {
-		return localAssets{}, errors.New("xgoruntime: nil context")
+		return localAssets{}, errors.New("xgodriver: nil context")
 	}
 	if dependencies.fetch == nil || dependencies.cacheRoot == nil || dependencies.manifestPin == nil {
-		return localAssets{}, errors.New("xgoruntime: incomplete runtime acquisition dependencies")
+		return localAssets{}, errors.New("xgodriver: incomplete runtime acquisition dependencies")
 	}
 	spec, err := release.HostRuntimeSpecFor(lock, runtime.GOOS, runtime.GOARCH)
 	if err != nil {
@@ -112,13 +112,13 @@ func acquireRuntimeAssetsWith(ctx context.Context, cfg Config, streams IO, lock 
 func resolveRuntimeCacheRoot(env []string, defaultRoot func() string) (string, error) {
 	value, found, duplicate := environmentValue(env, runtimeCacheEnv)
 	if duplicate {
-		return "", fmt.Errorf("xgoruntime: duplicate %s", runtimeCacheEnv)
+		return "", fmt.Errorf("xgodriver: duplicate %s", runtimeCacheEnv)
 	}
 	if !found || value == "" {
 		value = filepath.Clean(defaultRoot())
 	}
 	if !filepath.IsAbs(value) || filepath.Clean(value) != value {
-		return "", fmt.Errorf("xgoruntime: %s must be an absolute clean path", runtimeCacheEnv)
+		return "", fmt.Errorf("xgodriver: %s must be an absolute clean path", runtimeCacheEnv)
 	}
 	return value, nil
 }
@@ -126,7 +126,7 @@ func resolveRuntimeCacheRoot(env []string, defaultRoot func() string) (string, e
 func runtimeOffline(env []string) (bool, error) {
 	value, found, duplicate := environmentValue(env, runtimeOfflineEnv)
 	if duplicate {
-		return false, fmt.Errorf("xgoruntime: duplicate %s", runtimeOfflineEnv)
+		return false, fmt.Errorf("xgodriver: duplicate %s", runtimeOfflineEnv)
 	}
 	if !found || strings.TrimSpace(value) == "" {
 		return false, nil
@@ -137,7 +137,7 @@ func runtimeOffline(env []string) (bool, error) {
 	case "0", "false", "no", "off":
 		return false, nil
 	default:
-		return false, fmt.Errorf("xgoruntime: invalid %s value %q", runtimeOfflineEnv, value)
+		return false, fmt.Errorf("xgodriver: invalid %s value %q", runtimeOfflineEnv, value)
 	}
 }
 
@@ -158,35 +158,35 @@ func environmentValue(env []string, key string) (value string, found, duplicate 
 func findLocalRuntimeManifest(cfg Config, env []string, lock release.RuntimeLock, spec release.HostRuntimeSpec) (localRuntimeSource, bool, error) {
 	path, explicit, duplicate := environmentValue(env, runtimeLocalManifestEnv)
 	if duplicate {
-		return localRuntimeSource{}, false, fmt.Errorf("xgoruntime: duplicate %s", runtimeLocalManifestEnv)
+		return localRuntimeSource{}, false, fmt.Errorf("xgodriver: duplicate %s", runtimeLocalManifestEnv)
 	}
 	if !explicit {
-		candidate, pathErr := release.LocalRuntimeManifestPath(cfg.ProviderOrigin.Effective().Dir, lock, spec.GOOS, spec.GOARCH)
+		candidate, pathErr := release.LocalRuntimeManifestPath(cfg.DriverOrigin.Effective().Dir, lock, spec.GOOS, spec.GOARCH)
 		if pathErr != nil {
 			return localRuntimeSource{}, false, pathErr
 		}
 		if info, err := os.Lstat(candidate); err == nil {
 			if !isRegularNonSymlink(info) {
-				return localRuntimeSource{}, false, fmt.Errorf("xgoruntime: discovered local runtime manifest is not a regular non-symlink file: %s", candidate)
+				return localRuntimeSource{}, false, fmt.Errorf("xgodriver: discovered local runtime manifest is not a regular non-symlink file: %s", candidate)
 			}
 			path = candidate
 			explicit = true
 		} else if !os.IsNotExist(err) {
-			return localRuntimeSource{}, false, fmt.Errorf("xgoruntime: inspect local runtime manifest: %w", err)
+			return localRuntimeSource{}, false, fmt.Errorf("xgodriver: inspect local runtime manifest: %w", err)
 		}
 	}
 	if !explicit {
 		return localRuntimeSource{}, false, nil
 	}
 	if !filepath.IsAbs(path) || filepath.Clean(path) != path {
-		return localRuntimeSource{}, false, fmt.Errorf("xgoruntime: %s must be an absolute clean path", runtimeLocalManifestEnv)
+		return localRuntimeSource{}, false, fmt.Errorf("xgodriver: %s must be an absolute clean path", runtimeLocalManifestEnv)
 	}
 	info, err := os.Lstat(path)
 	if err != nil {
-		return localRuntimeSource{}, false, fmt.Errorf("xgoruntime: inspect local runtime manifest %q: %w", path, err)
+		return localRuntimeSource{}, false, fmt.Errorf("xgodriver: inspect local runtime manifest %q: %w", path, err)
 	}
 	if !isRegularNonSymlink(info) {
-		return localRuntimeSource{}, false, fmt.Errorf("xgoruntime: local runtime manifest %q is not a regular non-symlink file", path)
+		return localRuntimeSource{}, false, fmt.Errorf("xgodriver: local runtime manifest %q is not a regular non-symlink file", path)
 	}
 	data, err := readRegularFile(path)
 	if err != nil {
@@ -209,26 +209,26 @@ func findLocalRuntimeManifest(cfg Config, env []string, lock release.RuntimeLock
 func resolvePublishedRuntime(ctx context.Context, cacheRoot string, lock release.RuntimeLock, spec release.HostRuntimeSpec, env []string, offline bool, dependencies runtimeAssetDependencies) (runtimeAssetSource, error) {
 	pin, err := dependencies.manifestPin(lock)
 	if err != nil {
-		return runtimeAssetSource{}, fmt.Errorf("xgoruntime: resolve runtime manifest pin: %w", err)
+		return runtimeAssetSource{}, fmt.Errorf("xgodriver: resolve runtime manifest pin: %w", err)
 	}
 	if err := pin.ValidateForLock(lock); err != nil {
 		return runtimeAssetSource{}, err
 	}
 	assetDir, assetDirSet, duplicate := environmentValue(env, runtimeAssetDirEnv)
 	if duplicate {
-		return runtimeAssetSource{}, fmt.Errorf("xgoruntime: duplicate %s", runtimeAssetDirEnv)
+		return runtimeAssetSource{}, fmt.Errorf("xgodriver: duplicate %s", runtimeAssetDirEnv)
 	}
 	if assetDirSet {
 		if assetDir == "" {
-			return runtimeAssetSource{}, fmt.Errorf("xgoruntime: %s must not be empty", runtimeAssetDirEnv)
+			return runtimeAssetSource{}, fmt.Errorf("xgodriver: %s must not be empty", runtimeAssetDirEnv)
 		}
 		if !filepath.IsAbs(assetDir) || filepath.Clean(assetDir) != assetDir {
-			return runtimeAssetSource{}, fmt.Errorf("xgoruntime: %s must be an absolute clean path", runtimeAssetDirEnv)
+			return runtimeAssetSource{}, fmt.Errorf("xgodriver: %s must be an absolute clean path", runtimeAssetDirEnv)
 		}
 		manifestPath := filepath.Join(assetDir, lock.Manifest)
 		data, err := readRegularFile(manifestPath)
 		if err != nil {
-			return runtimeAssetSource{}, fmt.Errorf("xgoruntime: read local release manifest: %w", err)
+			return runtimeAssetSource{}, fmt.Errorf("xgodriver: read local release manifest: %w", err)
 		}
 		return parseRuntimeAssetSource(lock, pin, data, assetDir, dependencies.fetch)
 	}
@@ -240,15 +240,15 @@ func resolvePublishedRuntime(ctx context.Context, cacheRoot string, lock release
 		MaxSize: maxRuntimeManifestSize, Offline: offline, Fetch: dependencies.fetch,
 	})
 	if err != nil {
-		return runtimeAssetSource{}, fmt.Errorf("xgoruntime: acquire runtime manifest for %s/%s: %w", spec.GOOS, spec.GOARCH, err)
+		return runtimeAssetSource{}, fmt.Errorf("xgodriver: acquire runtime manifest for %s/%s: %w", spec.GOOS, spec.GOARCH, err)
 	}
 	data, err := readRuntimeMetadata(manifestFile, manifestFile.Path)
 	closeErr := manifestFile.Close()
 	if err != nil {
-		return runtimeAssetSource{}, fmt.Errorf("xgoruntime: read acquired runtime manifest: %w", err)
+		return runtimeAssetSource{}, fmt.Errorf("xgodriver: read acquired runtime manifest: %w", err)
 	}
 	if closeErr != nil {
-		return runtimeAssetSource{}, fmt.Errorf("xgoruntime: close acquired runtime manifest: %w", closeErr)
+		return runtimeAssetSource{}, fmt.Errorf("xgodriver: close acquired runtime manifest: %w", closeErr)
 	}
 	return parseRuntimeAssetSource(lock, pin, data, "", dependencies.fetch)
 }
@@ -275,7 +275,7 @@ func acquireReleaseAsset(ctx context.Context, root string, asset release.Runtime
 	name := asset.SHA256 + "-" + asset.Name
 	if localDir != "" {
 		if !filepath.IsAbs(localDir) || filepath.Clean(localDir) != localDir {
-			return nil, fmt.Errorf("xgoruntime: %s must be an absolute clean path", runtimeAssetDirEnv)
+			return nil, fmt.Errorf("xgodriver: %s must be an absolute clean path", runtimeAssetDirEnv)
 		}
 		src := filepath.Join(localDir, asset.Name)
 		return runtimebundle.AcquireFile(ctx, root, runtimebundle.FetchSpec{
@@ -294,10 +294,10 @@ func acquireReleaseAsset(ctx context.Context, root string, asset release.Runtime
 
 func verifyRuntimeManifestPin(pin release.RuntimeManifestPin, data []byte) error {
 	if int64(len(data)) != pin.Size {
-		return fmt.Errorf("xgoruntime: runtime manifest size = %d, want pinned %d", len(data), pin.Size)
+		return fmt.Errorf("xgodriver: runtime manifest size = %d, want pinned %d", len(data), pin.Size)
 	}
 	if digest := digestBytes(data); digest != pin.SHA256 {
-		return fmt.Errorf("xgoruntime: runtime manifest SHA-256 = %s, want pinned %s", digest, pin.SHA256)
+		return fmt.Errorf("xgodriver: runtime manifest SHA-256 = %s, want pinned %s", digest, pin.SHA256)
 	}
 	return nil
 }

@@ -15,7 +15,7 @@
  */
 
 // Package runtimepayload implements the canonical, self-contained payload
-// embedded in an XGo SPX launcher. It is internal because the provider argv,
+// embedded in an XGo SPX launcher. It is internal because the driver argv,
 // payload layout, and cache manifests are implementation details of SPX.
 package runtimepayload
 
@@ -40,7 +40,7 @@ import (
 
 const (
 	SchemaV1       = "spx-runtime-payload/v1"
-	ProtocolV1     = "xgo-runtime-v1"
+	ProtocolV1     = "xgo-driver-v1"
 	ManifestPath   = "META-INF/spx-runtime-v1.json"
 	ProjectZipPath = "project/project.zip"
 )
@@ -975,7 +975,7 @@ func componentBundleFromEntries(entries []runtimebundle.Entry, prefix string, na
 }
 
 // CanonicalComponentZIP builds an archive whose runtimebundle identity is
-// stable across hosts. It is used by the provider before payload assembly.
+// stable across hosts. It is used by the driver before payload assembly.
 func CanonicalComponentZIP(files []File) ([]byte, error) { return canonicalZIP(files) }
 
 func canonicalZIP(files []File) ([]byte, error) {

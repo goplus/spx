@@ -15,7 +15,7 @@
  */
 
 // Package xgolauncher runs a self-contained SPX payload embedded by the XGo
-// runtime provider. Run is a library boundary and never changes global cwd,
+// project driver. Run is a library boundary and never changes global cwd,
 // calls os.Exit, or downloads data. Exit is the single application boundary.
 package xgolauncher
 

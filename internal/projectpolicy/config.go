@@ -77,7 +77,7 @@ func (s PortableConfigSnapshot) Identity() (string, error) {
 }
 
 // ValidatePortableConfig rejects configuration that cannot be captured in a
-// self-contained runtime-provider project snapshot. A missing .config is
+// self-contained project snapshot for the driver. A missing .config is
 // valid; when present it must be a stable regular non-symlink file.
 func ValidatePortableConfig(projectDir string) error {
 	_, err := SnapshotPortableConfig(projectDir)

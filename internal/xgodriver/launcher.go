@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package xgoruntime
+package xgodriver
 
 import (
 	"bytes"
@@ -84,8 +84,8 @@ func verifyLauncherPackage(ctx context.Context, cfg Config, baseEnv []string) er
 	return verifyPackageOrigin(ctx, cfg, baseEnv, "github.com/goplus/spx/v3/x/xgolauncher", "launcher")
 }
 
-func verifyProviderPackage(ctx context.Context, cfg Config, baseEnv []string) error {
-	return verifyPackageOrigin(ctx, cfg, baseEnv, cfg.ProviderPackage, "provider")
+func verifyDriverPackage(ctx context.Context, cfg Config, baseEnv []string) error {
+	return verifyPackageOrigin(ctx, cfg, baseEnv, cfg.DriverPackage, "driver")
 }
 
 func verifyPackageOrigin(ctx context.Context, cfg Config, baseEnv []string, importPath, label string) error {
@@ -94,7 +94,7 @@ func verifyPackageOrigin(ctx context.Context, cfg Config, baseEnv []string, impo
 	}
 	for _, flag := range cfg.GraphFlags {
 		if flag == "-mod=vendor" {
-			return fmt.Errorf("xgoruntime: runtime provider does not support vendor mode; use -mod=readonly or -mod=mod")
+			return fmt.Errorf("xgodriver: project driver does not support vendor mode; use -mod=readonly or -mod=mod")
 		}
 	}
 	args := append([]string{"list"}, cfg.GraphFlags...)
@@ -104,21 +104,21 @@ func verifyPackageOrigin(ctx context.Context, cfg Config, baseEnv []string, impo
 	command.Env = hostGoEnv(cfg, baseEnv)
 	output, err := command.Output()
 	if err != nil {
-		return fmt.Errorf("xgoruntime: validate %s package: %w", label, err)
+		return fmt.Errorf("xgodriver: validate %s package: %w", label, err)
 	}
 	var listed listedPackage
 	if err := json.Unmarshal(output, &listed); err != nil {
-		return fmt.Errorf("xgoruntime: decode %s package identity: %w", label, err)
+		return fmt.Errorf("xgodriver: decode %s package identity: %w", label, err)
 	}
 	if listed.ImportPath != importPath || listed.Module == nil {
-		return fmt.Errorf("xgoruntime: %s package resolved to unexpected identity %q", label, listed.ImportPath)
+		return fmt.Errorf("xgodriver: %s package resolved to unexpected identity %q", label, listed.ImportPath)
 	}
 	got, err := normalizeListedOrigin(listed.Module)
 	if err != nil {
-		return fmt.Errorf("xgoruntime: invalid %s package origin: %w", label, err)
+		return fmt.Errorf("xgodriver: invalid %s package origin: %w", label, err)
 	}
-	if !sameModuleOrigin(got, cfg.ProviderOrigin) {
-		return fmt.Errorf("xgoruntime: %s package origin does not match resolved provider provenance", label)
+	if !sameModuleOrigin(got, cfg.DriverOrigin) {
+		return fmt.Errorf("xgodriver: %s package origin does not match resolved driver provenance", label)
 	}
 	return nil
 }
@@ -166,13 +166,13 @@ func compileLauncher(ctx context.Context, cfg Config, streams IO, buildPayload p
 		return err
 	}
 	if info, err := os.Lstat(cfg.Output); err == nil {
-		return fmt.Errorf("xgoruntime: staging output %q already exists with mode %s", cfg.Output, info.Mode())
+		return fmt.Errorf("xgodriver: staging output %q already exists with mode %s", cfg.Output, info.Mode())
 	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("xgoruntime: inspect staging output %q: %w", cfg.Output, err)
+		return fmt.Errorf("xgodriver: inspect staging output %q: %w", cfg.Output, err)
 	}
-	workDir, err := os.MkdirTemp("", "spx-provider-build-")
+	workDir, err := os.MkdirTemp("", "spx-driver-build-")
 	if err != nil {
-		return fmt.Errorf("xgoruntime: create launcher work directory: %w", err)
+		return fmt.Errorf("xgodriver: create launcher work directory: %w", err)
 	}
 	keepWork := hasBuildFlag(cfg.BuildFlags, "work")
 	if keepWork {
@@ -185,11 +185,11 @@ func compileLauncher(ctx context.Context, cfg Config, streams IO, buildPayload p
 	payloadPath := filepath.Join(workDir, "payload.spxpkg")
 	mainPath := filepath.Join(workDir, "main.go")
 	if buildPayload == nil {
-		return fmt.Errorf("xgoruntime: nil payload builder")
+		return fmt.Errorf("xgodriver: nil payload builder")
 	}
 	payloadFile, err := os.OpenFile(payloadPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
-		return fmt.Errorf("xgoruntime: create generated payload: %w", err)
+		return fmt.Errorf("xgodriver: create generated payload: %w", err)
 	}
 	payloadDigest, manifestDigest, buildErr := buildPayload(workDir, payloadFile)
 	if buildErr == nil {
@@ -199,10 +199,10 @@ func compileLauncher(ctx context.Context, cfg Config, streams IO, buildPayload p
 		buildErr = closeErr
 	}
 	if buildErr != nil {
-		return fmt.Errorf("xgoruntime: write generated payload: %w", buildErr)
+		return fmt.Errorf("xgodriver: write generated payload: %w", buildErr)
 	}
 	if err := os.WriteFile(mainPath, renderGeneratedLauncher(payloadDigest, manifestDigest), 0o600); err != nil {
-		return fmt.Errorf("xgoruntime: write generated launcher: %w", err)
+		return fmt.Errorf("xgodriver: write generated launcher: %w", err)
 	}
 
 	args := append([]string{"build"}, cfg.GraphFlags...)
@@ -215,13 +215,13 @@ func compileLauncher(ctx context.Context, cfg Config, streams IO, buildPayload p
 	command.Stdout = streams.Stdout
 	command.Stderr = streams.Stderr
 	if err := command.Run(); err != nil {
-		return fmt.Errorf("xgoruntime: build generated launcher: %w", err)
+		return fmt.Errorf("xgodriver: build generated launcher: %w", err)
 	}
 	if err := validateHostExecutable(cfg.Output); err != nil {
 		return err
 	}
-	if err := verifyBuiltProviderOrigin(ctx, cfg.Output, cfg.ProviderOrigin, cfg, streams.Env); err != nil {
-		return fmt.Errorf("xgoruntime: verify generated launcher provenance: %w", err)
+	if err := verifyBuiltDriverOrigin(ctx, cfg.Output, cfg.DriverOrigin, cfg, streams.Env); err != nil {
+		return fmt.Errorf("xgodriver: verify generated launcher provenance: %w", err)
 	}
 	if runtime.GOOS == "darwin" {
 		if err := signDarwinLauncher(ctx, cfg.Output, streams); err != nil {
@@ -231,7 +231,7 @@ func compileLauncher(ctx context.Context, cfg Config, streams IO, buildPayload p
 	return validateHostExecutable(cfg.Output)
 }
 
-func verifyBuiltProviderOrigin(ctx context.Context, name string, want ModuleOrigin, cfg Config, baseEnv []string) error {
+func verifyBuiltDriverOrigin(ctx context.Context, name string, want ModuleOrigin, cfg Config, baseEnv []string) error {
 	info, err := buildinfo.ReadFile(name)
 	if err != nil {
 		return err
@@ -257,21 +257,21 @@ func effectiveLocalReplacementPath(ctx context.Context, cfg Config, baseEnv []st
 	command.Env = hostGoEnv(cfg, baseEnv)
 	output, err := command.Output()
 	if err != nil {
-		return "", fmt.Errorf("xgoruntime: resolve effective module for build provenance: %w", err)
+		return "", fmt.Errorf("xgodriver: resolve effective module for build provenance: %w", err)
 	}
 	var listed listedModule
 	if err := json.Unmarshal(output, &listed); err != nil {
-		return "", fmt.Errorf("xgoruntime: decode effective module for build provenance: %w", err)
+		return "", fmt.Errorf("xgodriver: decode effective module for build provenance: %w", err)
 	}
 	got, err := normalizeListedOrigin(&listed)
 	if err != nil {
-		return "", fmt.Errorf("xgoruntime: invalid effective module for build provenance: %w", err)
+		return "", fmt.Errorf("xgodriver: invalid effective module for build provenance: %w", err)
 	}
 	if !sameModuleOrigin(got, want) {
-		return "", fmt.Errorf("xgoruntime: effective module does not match resolved provider provenance")
+		return "", fmt.Errorf("xgodriver: effective module does not match resolved driver provenance")
 	}
 	if listed.Replace == nil || listed.Replace.Version != "" || listed.Replace.Path == "" {
-		return "", fmt.Errorf("xgoruntime: effective module is missing its local replacement path")
+		return "", fmt.Errorf("xgodriver: effective module is missing its local replacement path")
 	}
 	return listed.Replace.Path, nil
 }
@@ -360,19 +360,19 @@ func normalizedGoBuildFlags(flags []string) []string {
 func validateHostExecutable(name string) error {
 	info, err := os.Lstat(name)
 	if err != nil {
-		return fmt.Errorf("xgoruntime: inspect launcher output %q: %w", name, err)
+		return fmt.Errorf("xgodriver: inspect launcher output %q: %w", name, err)
 	}
 	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() || info.Size() == 0 {
-		return fmt.Errorf("xgoruntime: launcher output %q is not a non-empty regular non-symlink file", name)
+		return fmt.Errorf("xgodriver: launcher output %q is not a non-empty regular non-symlink file", name)
 	}
 	file, err := os.Open(name)
 	if err != nil {
-		return fmt.Errorf("xgoruntime: open launcher output: %w", err)
+		return fmt.Errorf("xgodriver: open launcher output: %w", err)
 	}
 	defer file.Close()
 	var magic [4]byte
 	if _, err := file.Read(magic[:]); err != nil {
-		return fmt.Errorf("xgoruntime: read launcher output header: %w", err)
+		return fmt.Errorf("xgodriver: read launcher output header: %w", err)
 	}
 	valid := false
 	switch runtime.GOOS {
@@ -384,7 +384,7 @@ func validateHostExecutable(name string) error {
 		valid = magic[0] == 'M' && magic[1] == 'Z'
 	}
 	if !valid {
-		return fmt.Errorf("xgoruntime: launcher output %q is not a host %s executable", name, runtime.GOOS)
+		return fmt.Errorf("xgodriver: launcher output %q is not a host %s executable", name, runtime.GOOS)
 	}
 	return nil
 }
@@ -393,12 +393,12 @@ func signDarwinLauncher(ctx context.Context, output string, streams IO) error {
 	sign := exec.CommandContext(ctx, "/usr/bin/codesign", "--force", "--sign", "-", output)
 	sign.Stdout, sign.Stderr = streams.Stdout, streams.Stderr
 	if err := sign.Run(); err != nil {
-		return fmt.Errorf("xgoruntime: ad-hoc sign launcher: %w", err)
+		return fmt.Errorf("xgodriver: ad-hoc sign launcher: %w", err)
 	}
 	verify := exec.CommandContext(ctx, "/usr/bin/codesign", "--verify", "--strict", output)
 	verify.Stdout, verify.Stderr = streams.Stdout, streams.Stderr
 	if err := verify.Run(); err != nil {
-		return fmt.Errorf("xgoruntime: verify launcher signature: %w", err)
+		return fmt.Errorf("xgodriver: verify launcher signature: %w", err)
 	}
 	return nil
 }

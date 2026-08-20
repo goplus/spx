@@ -14,40 +14,43 @@
  * limitations under the License.
  */
 
-package xgoruntime
-
-import "testing"
-
-func TestGeneratedLauncherGolden(t *testing.T) {
-	const want = `package main
+// Command xgodriver implements the SPX side of XGo project driver v1.
+package main
 
 import (
 	"context"
-	_ "embed"
 	"fmt"
 	"os"
+	"strings"
 
+	"github.com/goplus/spx/v3/internal/xgodriver"
 	"github.com/goplus/spx/v3/x/xgolauncher"
 )
 
-//go:embed payload.spxpkg
-var payload []byte
-
-const payloadSHA256 = "payload-digest"
-const manifestSHA256 = "manifest-digest"
-
 func main() {
 	status, err := xgolauncher.RunCommand(context.Background(), func(ctx context.Context) (xgolauncher.ProcessStatus, error) {
-		return xgolauncher.RunContext(ctx, payload, payloadSHA256, manifestSHA256, os.Args[1:], os.Stdin, os.Stdout, os.Stderr)
+		cfg, err := xgodriver.Parse(os.Args[1:])
+		if err != nil {
+			return xgolauncher.ProcessStatus{Code: 2}, err
+		}
+		return xgodriver.Execute(ctx, cfg, xgodriver.IO{
+			Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr, Env: os.Environ(),
+		})
 	})
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "xgolauncher: %v\n", err)
-		status = xgolauncher.ProcessStatus{Code: 1}
+		_, _ = fmt.Fprintln(os.Stderr, commandErrorMessage(err))
+		if status.Success() {
+			status = xgolauncher.ProcessStatus{Code: 1}
+		}
 	}
 	xgolauncher.Exit(status)
 }
-`
-	if got := string(renderGeneratedLauncher("payload-digest", "manifest-digest")); got != want {
-		t.Fatalf("generated launcher changed:\n%s", got)
+
+func commandErrorMessage(err error) string {
+	const prefix = "xgodriver: "
+	message := err.Error()
+	for strings.HasPrefix(message, prefix) {
+		message = strings.TrimPrefix(message, prefix)
 	}
+	return prefix + message
 }

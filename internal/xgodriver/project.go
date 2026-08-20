@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package xgoruntime
+package xgodriver
 
 import (
 	"fmt"
@@ -29,7 +29,7 @@ import (
 func collectProjectAllowlist(cfg Config) ([]string, error) {
 	entries, err := os.ReadDir(cfg.ProjectDir)
 	if err != nil {
-		return nil, fmt.Errorf("xgoruntime: read project directory: %w", err)
+		return nil, fmt.Errorf("xgodriver: read project directory: %w", err)
 	}
 	extension := cfg.Project.Extension
 	if extension != "" && !strings.HasPrefix(extension, ".") {
@@ -42,15 +42,15 @@ func collectProjectAllowlist(cfg Config) ([]string, error) {
 		}
 		info, err := entry.Info()
 		if err != nil {
-			return nil, fmt.Errorf("xgoruntime: inspect project source %q: %w", entry.Name(), err)
+			return nil, fmt.Errorf("xgodriver: inspect project source %q: %w", entry.Name(), err)
 		}
 		if entry.Type()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-			return nil, fmt.Errorf("xgoruntime: project source %q is not a regular non-symlink file", entry.Name())
+			return nil, fmt.Errorf("xgodriver: project source %q is not a regular non-symlink file", entry.Name())
 		}
 		projectFiles = append(projectFiles, entry.Name())
 	}
 	if len(projectFiles) == 0 {
-		return nil, fmt.Errorf("xgoruntime: project has no top-level %s source files", extension)
+		return nil, fmt.Errorf("xgodriver: project has no top-level %s source files", extension)
 	}
 	projectBase := filepath.Base(cfg.ProjectFile)
 	foundProject := false
@@ -61,7 +61,7 @@ func collectProjectAllowlist(cfg Config) ([]string, error) {
 		}
 	}
 	if !foundProject {
-		return nil, fmt.Errorf("xgoruntime: project file %q is not in the source allowlist", projectBase)
+		return nil, fmt.Errorf("xgodriver: project file %q is not in the source allowlist", projectBase)
 	}
 
 	external, err := collectReferencedProjectFiles(cfg)
@@ -85,7 +85,7 @@ func collectReferencedProjectFiles(cfg Config) ([]string, error) {
 		PackIndex:  cfg.Project.PackIndexFile,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("xgoruntime: collect typed project resources: %w", err)
+		return nil, fmt.Errorf("xgodriver: collect typed project resources: %w", err)
 	}
 	return referenced, nil
 }

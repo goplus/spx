@@ -321,7 +321,7 @@ type CommandConfig struct {
 }
 
 // PathPolicy controls how pre-existing Engine --path options are handled.
-// RejectPath is the provider-safe default. ReplacePath exists only for the
+// RejectPath is the driver-safe default. ReplacePath exists only for the
 // legacy spx adapter, whose own --path flag selects ProjectDir.
 type PathPolicy uint8
 

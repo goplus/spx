@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package xgoruntime
+package xgodriver
 
 import (
 	"archive/zip"
@@ -74,11 +74,11 @@ type runtimeBundleOrigin struct {
 func materializePublishedRuntime(ctx context.Context, cacheRoot string, lock release.RuntimeLock, spec release.HostRuntimeSpec, source runtimeAssetSource, offline bool) (localAssets, error) {
 	engineAsset, ok := source.manifest.Asset(spec.ArchiveName)
 	if !ok {
-		return localAssets{}, fmt.Errorf("xgoruntime: runtime manifest has no host asset %q", spec.ArchiveName)
+		return localAssets{}, fmt.Errorf("xgodriver: runtime manifest has no host asset %q", spec.ArchiveName)
 	}
 	packAsset, ok := source.manifest.Asset(release.RuntimeAssetZipName)
 	if !ok {
-		return localAssets{}, fmt.Errorf("xgoruntime: runtime manifest has no runtime pack asset %q", release.RuntimeAssetZipName)
+		return localAssets{}, fmt.Errorf("xgodriver: runtime manifest has no runtime pack asset %q", release.RuntimeAssetZipName)
 	}
 	assetRoot := filepath.Join(cacheRoot, "release-assets", source.manifest.LockSHA256)
 	assetDir := source.manifestDir
@@ -115,11 +115,11 @@ func materializeRuntimeBundle(ctx context.Context, cacheRoot string, lock releas
 	local := input.archives == nil
 	if !local {
 		if input.archives.engine == nil || input.archives.pack == nil {
-			return localAssets{}, errors.New("xgoruntime: incomplete published runtime archive handles")
+			return localAssets{}, errors.New("xgodriver: incomplete published runtime archive handles")
 		}
 		workDir, err := os.MkdirTemp("", "spx-runtime-source-")
 		if err != nil {
-			return localAssets{}, fmt.Errorf("xgoruntime: create runtime extraction directory: %w", err)
+			return localAssets{}, fmt.Errorf("xgodriver: create runtime extraction directory: %w", err)
 		}
 		defer os.RemoveAll(workDir)
 		hostDir := filepath.Join(workDir, "host")
@@ -132,19 +132,19 @@ func materializeRuntimeBundle(ctx context.Context, cacheRoot string, lock releas
 		}
 		engineInfo, err := input.archives.engine.Stat()
 		if err != nil {
-			return localAssets{}, fmt.Errorf("xgoruntime: stat acquired Engine archive: %w", err)
+			return localAssets{}, fmt.Errorf("xgodriver: stat acquired Engine archive: %w", err)
 		}
 		packInfo, err := input.archives.pack.Stat()
 		if err != nil {
-			return localAssets{}, fmt.Errorf("xgoruntime: stat acquired runtime pack archive: %w", err)
+			return localAssets{}, fmt.Errorf("xgodriver: stat acquired runtime pack archive: %w", err)
 		}
 		engineBundle, err := runtimebundle.ExtractZipReader(input.archives.engine, engineInfo.Size(), hostDir)
 		if err != nil {
-			return localAssets{}, fmt.Errorf("xgoruntime: verify Engine archive: %w", err)
+			return localAssets{}, fmt.Errorf("xgodriver: verify Engine archive: %w", err)
 		}
 		packBundle, err := runtimebundle.ExtractZipReader(input.archives.pack, packInfo.Size(), packDir)
 		if err != nil {
-			return localAssets{}, fmt.Errorf("xgoruntime: verify runtime pack archive: %w", err)
+			return localAssets{}, fmt.Errorf("xgodriver: verify runtime pack archive: %w", err)
 		}
 		input.enginePath = filepath.Join(hostDir, filepath.FromSlash(spec.BinaryName))
 		input.packPath = filepath.Join(packDir, filepath.FromSlash("gdspxrt.pck"))
@@ -158,14 +158,14 @@ func materializeRuntimeBundle(ctx context.Context, cacheRoot string, lock releas
 
 	engineSize, engineSHA, err := hashRuntimeFile(input.enginePath)
 	if err != nil {
-		return localAssets{}, fmt.Errorf("xgoruntime: hash Engine: %w", err)
+		return localAssets{}, fmt.Errorf("xgodriver: hash Engine: %w", err)
 	}
 	packSize, packSHA, err := hashRuntimeFile(input.packPath)
 	if err != nil {
-		return localAssets{}, fmt.Errorf("xgoruntime: hash runtime PCK: %w", err)
+		return localAssets{}, fmt.Errorf("xgodriver: hash runtime PCK: %w", err)
 	}
 	if local && (engineSize != input.engineSize || engineSHA != input.engineSHA256 || packSize != input.packSize || packSHA != input.packSHA256) {
-		return localAssets{}, errors.New("xgoruntime: local runtime changed after manifest verification")
+		return localAssets{}, errors.New("xgodriver: local runtime changed after manifest verification")
 	}
 	lockSHA, err := lock.SHA256()
 	if err != nil {
@@ -200,7 +200,7 @@ func materializeRuntimeBundle(ctx context.Context, cacheRoot string, lock releas
 	}
 	bundleWork, err := os.MkdirTemp("", "spx-engine-bundle-")
 	if err != nil {
-		return localAssets{}, fmt.Errorf("xgoruntime: create Engine bundle directory: %w", err)
+		return localAssets{}, fmt.Errorf("xgodriver: create Engine bundle directory: %w", err)
 	}
 	defer os.RemoveAll(bundleWork)
 	bundleZip := filepath.Join(bundleWork, "engine.bundle.zip")
@@ -209,7 +209,7 @@ func materializeRuntimeBundle(ctx context.Context, cacheRoot string, lock releas
 	}
 	materialized, err := runtimebundle.NewCache(cacheRoot).Materialize(ctx, runtimebundle.NamespaceEngine, bundleZip, &bundle)
 	if err != nil {
-		return localAssets{}, fmt.Errorf("xgoruntime: materialize verified Engine bundle: %w", err)
+		return localAssets{}, fmt.Errorf("xgodriver: materialize verified Engine bundle: %w", err)
 	}
 	materializedEnginePath := filepath.Join(materialized.Path, spec.RuntimeName)
 	materializedPackPath := filepath.Join(materialized.Path, spec.PackName)
@@ -246,7 +246,7 @@ func validateRuntimeEntry(path, name string, bundle runtimebundle.Bundle) error 
 			return nil
 		}
 	}
-	return fmt.Errorf("xgoruntime: runtime archive is missing %s", name)
+	return fmt.Errorf("xgodriver: runtime archive is missing %s", name)
 }
 
 func isRegularNonSymlink(info os.FileInfo) bool {
@@ -256,10 +256,10 @@ func isRegularNonSymlink(info os.FileInfo) bool {
 func validateRuntimeFile(path, label string) error {
 	info, err := os.Lstat(path)
 	if err != nil {
-		return fmt.Errorf("xgoruntime: %s unavailable at %s: %w", label, path, err)
+		return fmt.Errorf("xgodriver: %s unavailable at %s: %w", label, path, err)
 	}
 	if !isRegularNonSymlink(info) {
-		return fmt.Errorf("xgoruntime: %s %q is not a regular non-symlink file", label, path)
+		return fmt.Errorf("xgodriver: %s %q is not a regular non-symlink file", label, path)
 	}
 	return nil
 }

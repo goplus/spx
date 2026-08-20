@@ -33,8 +33,8 @@ import (
 )
 
 // SchemaV1 is the manifest schema implemented by this package. It is kept
-// separate from the provider protocol version: a bundle can be consumed by
-// more than one provider protocol generation.
+// separate from the driver protocol version: a bundle can be consumed by
+// more than one driver protocol generation.
 const SchemaV1 = "runtimebundle/v1"
 
 const (

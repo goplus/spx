@@ -160,7 +160,7 @@ func RootsFromEnv(env []string) (Roots, error) {
 
 // Environment returns base with all ambient runtime path variables removed
 // and one validated value for each root appended. The portable config
-// variables are reserved for a provider to append only after command
+// variables are reserved for a driver to append only after command
 // preparation.
 func (r Roots) Environment(base []string) ([]string, error) {
 	if err := r.Validate(); err != nil {
@@ -183,14 +183,14 @@ func (r Roots) Environment(base []string) ([]string, error) {
 	), nil
 }
 
-// PortableConfigDirFromEnv returns the optional provider-owned portable
+// PortableConfigDirFromEnv returns the optional driver-owned portable
 // configuration directory. Duplicate variables are rejected consistently with
 // RootsFromEnv, including case-insensitive duplicates on Windows.
 func PortableConfigDirFromEnv(env []string) (string, bool, error) {
 	return portableConfigValueFromEnv(env, PortableConfigDirEnv)
 }
 
-// PortableConfigIdentityFromEnv returns the optional provider-owned config
+// PortableConfigIdentityFromEnv returns the optional driver-owned config
 // presence/content identity.
 func PortableConfigIdentityFromEnv(env []string) (string, bool, error) {
 	return portableConfigValueFromEnv(env, PortableConfigIdentityEnv)
