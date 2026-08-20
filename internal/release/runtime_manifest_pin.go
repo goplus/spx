@@ -29,10 +29,7 @@ import (
 
 const RuntimeManifestPinSchema = 1
 
-// RuntimeManifestPin authenticates the release manifest which, in turn,
-// authenticates every runtime asset. It is kept separate from RuntimeLock so
-// adding a post-build release digest does not change the lock identity stored
-// inside an already-published manifest.
+// RuntimeManifestPin pins a release manifest independently of RuntimeLock.
 type RuntimeManifestPin struct {
 	Schema         int    `json:"schema"`
 	RuntimeVersion string `json:"runtime_version"`
@@ -90,9 +87,8 @@ func (p RuntimeManifestPin) ValidateForLock(lock RuntimeLock) error {
 	return nil
 }
 
-// RuntimeManifestPinForLock returns the immutable release-manifest identity
-// paired with lock. Missing pins fail closed instead of accepting a manifest
-// which merely claims to match the lock.
+// RuntimeManifestPinForLock returns the pinned manifest identity for lock.
+// Missing pins fail closed.
 func RuntimeManifestPinForLock(lock RuntimeLock) (RuntimeManifestPin, error) {
 	if err := lock.Validate(); err != nil {
 		return RuntimeManifestPin{}, err

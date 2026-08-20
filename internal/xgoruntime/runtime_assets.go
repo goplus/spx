@@ -17,11 +17,9 @@
 package xgoruntime
 
 import (
-	"archive/zip"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -67,42 +65,13 @@ type runtimeAssetSource struct {
 	fetch          runtimebundle.FetchFunc
 }
 
-type publishedRuntimeArchives struct {
-	engine *runtimebundle.AcquiredFile
-	pack   *runtimebundle.AcquiredFile
-}
-
 type localRuntimeSource struct {
 	manifest  release.LocalRuntimeManifest
 	directory string
 	bytes     []byte
 }
 
-type runtimeBundleOrigin struct {
-	Schema              string `json:"schema"`
-	Mode                string `json:"mode"`
-	RuntimeVersion      string `json:"runtime_version"`
-	RuntimeABI          int    `json:"runtime_abi"`
-	LockSHA256          string `json:"lock_sha256"`
-	ManifestSHA256      string `json:"manifest_sha256"`
-	GOOS                string `json:"goos"`
-	GOARCH              string `json:"goarch"`
-	EngineArchive       string `json:"engine_archive,omitempty"`
-	EngineArchiveSHA256 string `json:"engine_archive_sha256,omitempty"`
-	PackArchive         string `json:"pack_archive,omitempty"`
-	PackArchiveSHA256   string `json:"pack_archive_sha256,omitempty"`
-	EngineName          string `json:"engine_name"`
-	EngineSize          int64  `json:"engine_size"`
-	EngineSHA256        string `json:"engine_sha256"`
-	PackName            string `json:"pack_name"`
-	PackSize            int64  `json:"pack_size"`
-	PackSHA256          string `json:"pack_sha256"`
-}
-
-// acquireRuntimeAssets obtains one verified Engine/PCK pair. Published assets
-// are downloaded from the immutable runtime release; local assets are accepted
-// only through an explicit, digest-bearing local manifest. GOPATH is not a
-// source of truth for either path.
+// acquireRuntimeAssets obtains one verified Engine/PCK pair.
 func acquireRuntimeAssets(ctx context.Context, cfg Config, streams IO, lock release.RuntimeLock) (localAssets, error) {
 	return acquireRuntimeAssetsWith(ctx, cfg, streams, lock, defaultRuntimeAssetDependencies())
 }
@@ -261,17 +230,7 @@ func resolvePublishedRuntime(ctx context.Context, cacheRoot string, lock release
 		if err != nil {
 			return runtimeAssetSource{}, fmt.Errorf("xgoruntime: read local release manifest: %w", err)
 		}
-		if err := verifyRuntimeManifestPin(pin, data); err != nil {
-			return runtimeAssetSource{}, err
-		}
-		manifest, err := release.ParseRuntimeManifest(data)
-		if err != nil {
-			return runtimeAssetSource{}, err
-		}
-		if err := manifest.ValidateForLock(lock); err != nil {
-			return runtimeAssetSource{}, err
-		}
-		return runtimeAssetSource{manifest: manifest, manifestSHA256: pin.SHA256, manifestDir: assetDir, fetch: dependencies.fetch}, nil
+		return parseRuntimeAssetSource(lock, pin, data, assetDir, dependencies.fetch)
 	}
 	manifestURL := lock.RuntimeAssetDownloadURL(lock.Manifest)
 	manifestRoot := filepath.Join(cacheRoot, "release-manifests")
@@ -291,6 +250,10 @@ func resolvePublishedRuntime(ctx context.Context, cacheRoot string, lock release
 	if closeErr != nil {
 		return runtimeAssetSource{}, fmt.Errorf("xgoruntime: close acquired runtime manifest: %w", closeErr)
 	}
+	return parseRuntimeAssetSource(lock, pin, data, "", dependencies.fetch)
+}
+
+func parseRuntimeAssetSource(lock release.RuntimeLock, pin release.RuntimeManifestPin, data []byte, manifestDir string, fetch runtimebundle.FetchFunc) (runtimeAssetSource, error) {
 	if err := verifyRuntimeManifestPin(pin, data); err != nil {
 		return runtimeAssetSource{}, err
 	}
@@ -301,32 +264,7 @@ func resolvePublishedRuntime(ctx context.Context, cacheRoot string, lock release
 	if err := manifest.ValidateForLock(lock); err != nil {
 		return runtimeAssetSource{}, err
 	}
-	return runtimeAssetSource{manifest: manifest, manifestSHA256: pin.SHA256, fetch: dependencies.fetch}, nil
-}
-
-func materializePublishedRuntime(ctx context.Context, cacheRoot string, lock release.RuntimeLock, spec release.HostRuntimeSpec, source runtimeAssetSource, offline bool) (localAssets, error) {
-	engineAsset, ok := source.manifest.Asset(spec.ArchiveName)
-	if !ok {
-		return localAssets{}, fmt.Errorf("xgoruntime: runtime manifest has no host asset %q", spec.ArchiveName)
-	}
-	packAsset, ok := source.manifest.Asset(release.RuntimeAssetZipName)
-	if !ok {
-		return localAssets{}, fmt.Errorf("xgoruntime: runtime manifest has no runtime pack asset %q", release.RuntimeAssetZipName)
-	}
-	assetRoot := filepath.Join(cacheRoot, "release-assets", source.manifest.LockSHA256)
-	assetDir := source.manifestDir
-	engineFile, err := acquireReleaseAsset(ctx, assetRoot, engineAsset, source.manifestURL(spec.ArchiveName), assetDir, offline, source.fetch)
-	if err != nil {
-		return localAssets{}, err
-	}
-	defer engineFile.Close()
-	packFile, err := acquireReleaseAsset(ctx, assetRoot, packAsset, source.manifestURL(release.RuntimeAssetZipName), assetDir, offline, source.fetch)
-	if err != nil {
-		return localAssets{}, err
-	}
-	defer packFile.Close()
-	archives := &publishedRuntimeArchives{engine: engineFile, pack: packFile}
-	return materializeEngineFromArchives(ctx, cacheRoot, lock, spec, source.manifestSHA256, "", "", archives, 0, "", 0, "", source.manifest)
+	return runtimeAssetSource{manifest: manifest, manifestSHA256: pin.SHA256, manifestDir: manifestDir, fetch: fetch}, nil
 }
 
 func (s runtimeAssetSource) manifestURL(name string) string {
@@ -377,286 +315,6 @@ func copyLocalRuntimeAsset(ctx context.Context, path string, dst io.Writer) erro
 		return err
 	}
 	return file.verify()
-}
-
-func materializeLocalRuntime(ctx context.Context, cacheRoot string, lock release.RuntimeLock, spec release.HostRuntimeSpec, source localRuntimeSource) (localAssets, error) {
-	return materializeEngineFromArchives(ctx, cacheRoot, lock, spec, digestBytes(source.bytes), filepath.Join(source.directory, source.manifest.Engine.Name), filepath.Join(source.directory, source.manifest.Pack.Name), nil, source.manifest.Engine.Size, source.manifest.Engine.SHA256, source.manifest.Pack.Size, source.manifest.Pack.SHA256, release.RuntimeManifest{})
-}
-
-func materializeEngineFromArchives(ctx context.Context, cacheRoot string, lock release.RuntimeLock, spec release.HostRuntimeSpec, manifestSHA, enginePath, packPath string, published *publishedRuntimeArchives, localEngineSize int64, localEngineSHA string, localPackSize int64, localPackSHA string, releaseManifest release.RuntimeManifest) (localAssets, error) {
-	var engineBundle, packBundle runtimebundle.Bundle
-	var workDir string
-	local := published == nil
-	if !local {
-		if published.engine == nil || published.pack == nil {
-			return localAssets{}, errors.New("xgoruntime: incomplete published runtime archive handles")
-		}
-		var err error
-		workDir, err = os.MkdirTemp("", "spx-runtime-source-")
-		if err != nil {
-			return localAssets{}, fmt.Errorf("xgoruntime: create runtime extraction directory: %w", err)
-		}
-		defer os.RemoveAll(workDir)
-		hostDir := filepath.Join(workDir, "host")
-		packDir := filepath.Join(workDir, "pack")
-		if err := os.MkdirAll(hostDir, 0o700); err != nil {
-			return localAssets{}, err
-		}
-		if err := os.MkdirAll(packDir, 0o700); err != nil {
-			return localAssets{}, err
-		}
-		engineInfo, err := published.engine.Stat()
-		if err != nil {
-			return localAssets{}, fmt.Errorf("xgoruntime: stat acquired Engine archive: %w", err)
-		}
-		packInfo, err := published.pack.Stat()
-		if err != nil {
-			return localAssets{}, fmt.Errorf("xgoruntime: stat acquired runtime pack archive: %w", err)
-		}
-		engineBundle, err = runtimebundle.ExtractZipReader(published.engine, engineInfo.Size(), hostDir)
-		if err != nil {
-			return localAssets{}, fmt.Errorf("xgoruntime: verify Engine archive: %w", err)
-		}
-		packBundle, err = runtimebundle.ExtractZipReader(published.pack, packInfo.Size(), packDir)
-		if err != nil {
-			return localAssets{}, fmt.Errorf("xgoruntime: verify runtime pack archive: %w", err)
-		}
-		enginePath = filepath.Join(hostDir, filepath.FromSlash(spec.BinaryName))
-		packPath = filepath.Join(packDir, filepath.FromSlash("gdspxrt.pck"))
-		if err := validateRuntimeEntry(enginePath, spec.BinaryName, engineBundle); err != nil {
-			return localAssets{}, err
-		}
-		if err := validateRuntimeEntry(packPath, "gdspxrt.pck", packBundle); err != nil {
-			return localAssets{}, err
-		}
-	}
-
-	engineSize, engineSHA, err := hashRuntimeFile(enginePath)
-	if err != nil {
-		return localAssets{}, fmt.Errorf("xgoruntime: hash Engine: %w", err)
-	}
-	packSize, packSHA, err := hashRuntimeFile(packPath)
-	if err != nil {
-		return localAssets{}, fmt.Errorf("xgoruntime: hash runtime PCK: %w", err)
-	}
-	if local && (engineSize != localEngineSize || engineSHA != localEngineSHA || packSize != localPackSize || packSHA != localPackSHA) {
-		return localAssets{}, errors.New("xgoruntime: local runtime changed after manifest verification")
-	}
-	lockSHA, err := lock.SHA256()
-	if err != nil {
-		return localAssets{}, err
-	}
-	origin := runtimeBundleOrigin{
-		Schema: "spx-runtime-acquisition/v1", Mode: "published", RuntimeVersion: lock.RuntimeVersion,
-		RuntimeABI: lock.RuntimeABI, LockSHA256: lockSHA, ManifestSHA256: manifestSHA,
-		GOOS: spec.GOOS, GOARCH: spec.GOARCH, EngineName: spec.RuntimeName,
-		EngineSize: engineSize, EngineSHA256: engineSHA, PackName: spec.PackName,
-		PackSize: packSize, PackSHA256: packSHA,
-	}
-	if local {
-		origin.Mode = "local"
-	} else {
-		origin.EngineArchive = spec.ArchiveName
-		if asset, ok := releaseManifest.Asset(spec.ArchiveName); ok {
-			origin.EngineArchiveSHA256 = asset.SHA256
-		}
-		origin.PackArchive = release.RuntimeAssetZipName
-		if asset, ok := releaseManifest.Asset(release.RuntimeAssetZipName); ok {
-			origin.PackArchiveSHA256 = asset.SHA256
-		}
-	}
-	originBytes, err := json.Marshal(origin)
-	if err != nil {
-		return localAssets{}, err
-	}
-	bundle, err := expectedEngineBundle(originBytes, spec, engineSize, engineSHA, packSize, packSHA)
-	if err != nil {
-		return localAssets{}, err
-	}
-	bundleWork, err := os.MkdirTemp("", "spx-engine-bundle-")
-	if err != nil {
-		return localAssets{}, fmt.Errorf("xgoruntime: create Engine bundle directory: %w", err)
-	}
-	defer os.RemoveAll(bundleWork)
-	bundleZip := filepath.Join(bundleWork, "engine.bundle.zip")
-	if err := writeEngineBundle(bundleZip, originBytes, spec.RuntimeName, spec.PackName, enginePath, packPath); err != nil {
-		return localAssets{}, err
-	}
-	materialized, err := runtimebundle.NewCache(cacheRoot).Materialize(ctx, runtimebundle.NamespaceEngine, bundleZip, &bundle)
-	if err != nil {
-		return localAssets{}, fmt.Errorf("xgoruntime: materialize verified Engine bundle: %w", err)
-	}
-	enginePath = filepath.Join(materialized.Path, spec.RuntimeName)
-	packPath = filepath.Join(materialized.Path, spec.PackName)
-	if err := validateRuntimeFile(enginePath, "Engine"); err != nil {
-		_ = materialized.Close()
-		return localAssets{}, err
-	}
-	if err := validateRuntimeFile(packPath, "runtime PCK"); err != nil {
-		_ = materialized.Close()
-		return localAssets{}, err
-	}
-	return localAssets{EnginePath: enginePath, PackPath: packPath, Lock: lock, Cleanup: func() { _ = materialized.Close() }}, nil
-}
-
-func expectedEngineBundle(origin []byte, spec release.HostRuntimeSpec, engineSize int64, engineSHA string, packSize int64, packSHA string) (runtimebundle.Bundle, error) {
-	bundle := runtimebundle.Bundle{
-		Schema:    runtimebundle.SchemaV1,
-		Namespace: runtimebundle.NamespaceEngine,
-		Entries: []runtimebundle.Entry{
-			{Name: "runtime-manifest.json", Mode: 0o600, Size: int64(len(origin)), SHA256: digestBytes(origin)},
-			{Name: spec.RuntimeName, Mode: 0o700, Size: engineSize, SHA256: engineSHA},
-			{Name: spec.PackName, Mode: 0o600, Size: packSize, SHA256: packSHA},
-		},
-	}
-	return bundle.WithDigest()
-}
-
-func validateRuntimeEntry(path, name string, bundle runtimebundle.Bundle) error {
-	if err := validateRuntimeFile(path, name); err != nil {
-		return err
-	}
-	for _, entry := range bundle.Entries {
-		if entry.Name == filepath.ToSlash(name) {
-			return nil
-		}
-	}
-	return fmt.Errorf("xgoruntime: runtime archive is missing %s", name)
-}
-
-func isRegularNonSymlink(info os.FileInfo) bool {
-	return info != nil && info.Mode()&os.ModeSymlink == 0 && info.Mode().IsRegular()
-}
-
-func validateRuntimeFile(path, label string) error {
-	info, err := os.Lstat(path)
-	if err != nil {
-		return fmt.Errorf("xgoruntime: %s unavailable at %s: %w", label, path, err)
-	}
-	if !isRegularNonSymlink(info) {
-		return fmt.Errorf("xgoruntime: %s %q is not a regular non-symlink file", label, path)
-	}
-	return nil
-}
-
-func withPinnedFile(name, path string, fn func(*pinnedFile) error) error {
-	file, err := openPinnedFile(name, path)
-	if err != nil {
-		return err
-	}
-	operationErr := fn(file)
-	if operationErr == nil {
-		operationErr = file.verify()
-	}
-	closeErr := file.file.Close()
-	if operationErr != nil {
-		return operationErr
-	}
-	return closeErr
-}
-
-func hashRuntimeFile(path string) (int64, string, error) {
-	var size int64
-	var digest string
-	err := withPinnedFile("runtime file", path, func(file *pinnedFile) error {
-		hasher := sha256.New()
-		var copyErr error
-		size, copyErr = io.Copy(hasher, file.file)
-		if copyErr != nil {
-			return copyErr
-		}
-		if size != file.info.Size() {
-			return errors.New("file changed while reading")
-		}
-		digest = hex.EncodeToString(hasher.Sum(nil))
-		return nil
-	})
-	if err != nil {
-		return 0, "", err
-	}
-	return size, digest, nil
-}
-
-func writeEngineBundle(path string, origin []byte, engineName, packName, enginePath, packPath string) (err error) {
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".engine-bundle-*")
-	if err != nil {
-		return err
-	}
-	tmpPath := tmp.Name()
-	defer func() {
-		_ = os.Remove(tmpPath)
-	}()
-	zw := zip.NewWriter(tmp)
-	addBytes := func(name string, mode os.FileMode, data []byte) error {
-		header := &zip.FileHeader{Name: name, Method: zip.Store}
-		header.SetMode(mode)
-		writer, err := zw.CreateHeader(header)
-		if err != nil {
-			return err
-		}
-		_, err = writer.Write(data)
-		return err
-	}
-	if err := addBytes("runtime-manifest.json", 0o600, origin); err != nil {
-		_ = zw.Close()
-		_ = tmp.Close()
-		return err
-	}
-	if err := addFileToZip(zw, engineName, enginePath, 0o700); err != nil {
-		_ = zw.Close()
-		_ = tmp.Close()
-		return fmt.Errorf("add Engine to bundle: %w", err)
-	}
-	if err := addFileToZip(zw, packName, packPath, 0o600); err != nil {
-		_ = zw.Close()
-		_ = tmp.Close()
-		return fmt.Errorf("add runtime PCK to bundle: %w", err)
-	}
-	if err := zw.Close(); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return replaceRuntimeFile(tmpPath, path, 0o600)
-}
-
-func addFileToZip(zw *zip.Writer, name, path string, mode os.FileMode) error {
-	header := &zip.FileHeader{Name: name, Method: zip.Store}
-	header.SetMode(mode)
-	writer, err := zw.CreateHeader(header)
-	if err != nil {
-		return err
-	}
-	file, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	_, err = io.Copy(writer, file)
-	return err
-}
-
-func replaceRuntimeFile(src, dst string, mode os.FileMode) error {
-	if info, err := os.Lstat(dst); err == nil {
-		if !isRegularNonSymlink(info) {
-			return fmt.Errorf("destination %q is not a regular non-symlink file", dst)
-		}
-	} else if !os.IsNotExist(err) {
-		return err
-	}
-	if err := os.Rename(src, dst); err != nil {
-		return err
-	}
-	if runtime.GOOS != "windows" {
-		return os.Chmod(dst, mode)
-	}
-	return nil
 }
 
 func readRegularFile(path string) ([]byte, error) {

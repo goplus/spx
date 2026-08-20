@@ -1,6 +1,6 @@
 # [Proposal] XGo Project Runtime Provider v1 与 SPX 运行时集成
 
-> 状态：source mode 已在三仓 workspace 实现；published mode 与协调发布待完成
+> 状态：source mode 和 published Engine/PCK 获取已实现；published bridge mode 与协调发布仍待完成
 >
 > 范围：`goplus/mod`、`goplus/xgo`、`goplus/spx`
 
@@ -10,7 +10,7 @@
 
 XGo 只实现通用的发现、身份校验、进程管理和输出事务，不包含 SPX、Godot、Engine、PCK 或资源格式特判。SPX provider 负责解释执行、运行时资源、项目打包和自包含 launcher。
 
-当前实现完成了 main module、workspace module 和 local replace 的 source mode。Engine/PCK 可以复用经过 manifest 与 SHA-256 校验的发布物；bridge 必须从有效 graph 中的 SPX 源码构建。纯版本依赖的 published mode 还需要补齐不可变 bridge manifest 的消费与发布链。
+当前实现完成了 main module、workspace module 和 local replace 的 source mode。runtime `2.4.3` 的 Engine/PCK 从代码内 pin 的 release manifest 获取，并校验大小与 SHA-256；bridge 仍必须从有效 graph 中的 SPX 源码构建。纯版本依赖的 SPX 还需要不可变 bridge manifest 与协调发布链。
 
 ## 问题与目标
 
@@ -209,7 +209,9 @@ provider 每次以 host `CGO_ENABLED=1` 从该有效源码构建 interpreter bri
 Engine/PCK 有两个可信来源：
 
 1. local runtime manifest：显式或从 SPX source tree 发现，包含 runtime/ABI/platform 和每个文件的 SHA-256；
-2. published runtime release：使用代码内 pin 固定 release manifest，再按 manifest 获取对应平台的 Engine 与 PCK。
+2. published runtime release：使用 `2.4.3` 的代码内 pin 固定 release manifest，再按 manifest 获取对应平台的 Engine 与 PCK。
+
+manifest pin 与 lock 一起内嵌。缺少 pin、大小或摘要不匹配、lock 不匹配时，在使用任何 runtime 资源前 fail closed。
 
 `$GOPATH/bin` 不参与资源发现。文件名、存在性或大小都不能作为 runtime 身份。无本地产物时，干净 checkout 可以下载并校验已发布 Engine/PCK，无需预先执行 install workflow；offline mode 只允许命中完整且校验通过的缓存。
 
@@ -276,14 +278,14 @@ launcher 的全部资源来自内嵌 payload，因此第一次运行即使 cache
 - 不支持 `xgo test`、Web、Android、iOS 和 `GOOS/GOARCH` 交叉构建；
 - 不支持 runtime vendor mode、overlay、多个 runtime target 或任意 Go build flag；
 - SPX 要求独立的 project pack directory；
-- published SPX module mode 尚未启用，仓库外仅指定已发布 SPX 版本不会进入当前 provider；
+- published SPX bridge mode 尚未启用，仓库外仅指定已发布 SPX 版本不会进入当前 provider；
 - launcher 包含项目源码与资源，不提供源码保密；
 - launcher 体积主要由 Engine/PCK/bridge 决定，不承诺整个 executable bit-for-bit reproducible；
 - XGo 的公开 `tool.RunDir/BuildDir/InstallDir` API 维持原语义；runtime dispatch 当前是 CLI 能力。
 
 ## 发布顺序
 
-正式启用 published mode 需要一次协调发布：
+正式启用 published bridge mode 需要一次协调发布：
 
 1. 发布包含 runtime metadata、provenance 和 protocol codec 的 `goplus/mod`；
 2. XGo 依赖该版本并发布包含 runtime-provider 能力的版本；

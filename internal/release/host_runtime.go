@@ -21,9 +21,7 @@ import (
 	"slices"
 )
 
-// HostRuntimeSpec describes the runtime files needed to execute a project on
-// one host. BinaryName is the member name inside ArchiveName; the other names
-// are the files materialized into the host runtime directory.
+// HostRuntimeSpec describes one host runtime archive and its output names.
 type HostRuntimeSpec struct {
 	GOOS        string
 	GOARCH      string
@@ -34,9 +32,7 @@ type HostRuntimeSpec struct {
 	PackName    string
 }
 
-// HostRuntimeSpecFor resolves the release asset and runtime filenames for a
-// host. The lock is checked before deriving any names, and the host archive
-// must be explicitly included in RequiredAssets.
+// HostRuntimeSpecFor resolves host runtime names after validating the lock.
 func HostRuntimeSpecFor(lock RuntimeLock, goos, goarch string) (HostRuntimeSpec, error) {
 	if err := lock.Validate(); err != nil {
 		return HostRuntimeSpec{}, err

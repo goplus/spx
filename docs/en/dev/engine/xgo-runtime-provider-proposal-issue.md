@@ -1,6 +1,6 @@
 # [Proposal] XGo Project Runtime Provider v1 and SPX Runtime Integration
 
-> Status: source mode is implemented across the three-repository workspace; published mode and coordinated release are still pending
+> Status: source mode and published Engine/PCK acquisition are implemented; published bridge mode and coordinated release remain pending
 >
 > Scope: `goplus/mod`, `goplus/xgo`, `goplus/spx`
 
@@ -10,7 +10,7 @@ This proposal introduces a framework-owned, project-scoped, versioned runtime pr
 
 XGo implements only generic discovery, identity validation, process management, and output transactions. It contains no SPX, Godot, Engine, PCK, or resource-format special cases. The SPX provider owns interpreted execution, runtime assets, project packaging, and the self-contained launcher.
 
-The current implementation covers source mode for the main module, workspace modules, and local replacements. Engine/PCK can reuse release artifacts validated by a manifest and SHA-256; the bridge must be built from SPX source in the effective graph. Published mode for versioned dependencies still requires support for consuming immutable bridge manifests and the corresponding publication pipeline.
+The current implementation covers source mode for the main module, workspace modules, and local replacements. Runtime `2.4.3` Engine/PCK assets are acquired from a pinned release manifest and checked by size and SHA-256; the bridge is still built from SPX source in the effective graph. Versioned SPX dependencies still require immutable bridge manifests and the coordinated publication pipeline.
 
 ## Problem and goals
 
@@ -209,7 +209,9 @@ For each request, the provider builds the interpreter bridge from that effective
 Engine/PCK assets have two trusted sources:
 
 1. local runtime manifest: explicit or discovered from the SPX source tree, containing runtime/ABI/platform and the SHA-256 of every file;
-2. published runtime release: a code-level pin selects a fixed release manifest, from which the matching platform Engine and PCK are acquired.
+2. published runtime release: the `2.4.3` code pin selects a fixed release manifest, from which the matching platform Engine and PCK are acquired.
+
+The manifest pin is embedded with the lock. A missing pin, size mismatch, digest mismatch, or lock mismatch fails closed before any runtime asset is used.
 
 `$GOPATH/bin` is not used for resource discovery. A file name, existence check, or file size does not establish runtime identity. When local artifacts are absent, a clean checkout can download and verify the published Engine/PCK without running an install workflow first; offline mode permits only a complete cache hit whose verification succeeds.
 
@@ -276,14 +278,14 @@ All boundaries follow these rules:
 - `xgo test`, Web, Android, iOS, and `GOOS/GOARCH` cross-compilation are unsupported;
 - runtime vendor mode, overlays, multiple runtime targets, and arbitrary Go build flags are unsupported;
 - SPX requires a separate project pack directory;
-- published SPX module mode is not enabled yet; outside an SPX checkout, specifying only a published SPX version does not activate the current provider;
+- published SPX bridge mode is not enabled yet; outside an SPX checkout, specifying only a published SPX version does not activate the current provider;
 - the launcher contains project source and resources and does not provide source confidentiality;
 - launcher size is dominated by Engine/PCK/bridge, and the complete executable is not guaranteed to be bit-for-bit reproducible;
 - XGo's public `tool.RunDir/BuildDir/InstallDir` APIs retain their existing semantics; runtime dispatch is currently a CLI capability.
 
 ## Release order
 
-Fully enabling published mode requires one coordinated release:
+Fully enabling published bridge mode requires one coordinated release:
 
 1. Publish `goplus/mod` with runtime metadata, provenance, and the protocol codec;
 2. Update XGo to depend on that version, then publish a version containing runtime-provider support;
