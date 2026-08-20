@@ -17,6 +17,7 @@
 package spx
 
 import (
+	"math"
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
@@ -123,7 +124,8 @@ func (s *touchingSyncSpriteMgr) SetMaterialParamsVec4(obj pkgengine.Object, effe
 }
 
 func (s *touchingSyncSpriteMgr) CheckCollisionWithSprite(obj, objB pkgengine.Object, alphaThreshold float64, usePixelPerfect bool) bool {
-	return s.positions[obj] == s.positions[objB]
+	a, b := s.positions[obj], s.positions[objB]
+	return math.Abs(a.X-b.X) < 1e-9 && math.Abs(a.Y-b.Y) < 1e-9
 }
 
 func (s *touchingSyncSpriteMgr) CheckCollisionByColor(obj pkgengine.Object, color mathf.Color, colorThreshold, alphaThreshold float64) bool {
