@@ -25,7 +25,7 @@ jobs:
       runtime_reason: ${{ steps.runtime.outputs.runtime_reason }}
     steps:
       - name: Check out code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 

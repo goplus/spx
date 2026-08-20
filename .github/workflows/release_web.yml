@@ -38,18 +38,18 @@ jobs:
             runtime_artifact: runtime-web-miniprogram
     steps:
       - name: Check out code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Download current-run host editor
         if: inputs.engine_artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: runtime-editor-linux-x86_64
           path: runtime-assets
 
       - name: Download current-run Web template
         if: inputs.engine_artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${{ matrix.runtime_artifact }}
           path: runtime-assets
