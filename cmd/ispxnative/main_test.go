@@ -23,6 +23,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+
+	"github.com/goplus/spx/v3/internal/interpruntime"
 )
 
 func TestValidateAssetIndex(t *testing.T) {
@@ -64,6 +66,37 @@ func TestValidateAssetIndexAcceptsPackedOnly(t *testing.T) {
 	}
 }
 
+func TestConfigureFilesystemRootsSelectsExplicitPolicy(t *testing.T) {
+	previousPortable := configurePortableFilesystemRoots
+	previousLegacy := configureLegacyFilesystemRoots
+	t.Cleanup(func() {
+		configurePortableFilesystemRoots = previousPortable
+		configureLegacyFilesystemRoots = previousLegacy
+	})
+	var selected string
+	configurePortableFilesystemRoots = func(projectDir, assetDir string) error {
+		selected = "portable"
+		return nil
+	}
+	configureLegacyFilesystemRoots = func(projectDir, assetDir string) error {
+		selected = "legacy"
+		return nil
+	}
+	roots := interpruntime.Roots{ProjectDir: "/project", AssetDir: "/project/assets"}
+	if err := configureFilesystemRoots(roots, nil); err != nil {
+		t.Fatal(err)
+	}
+	if selected != "legacy" {
+		t.Fatalf("absent portable overlay selected %q, want legacy", selected)
+	}
+	if err := configureFilesystemRoots(roots, &portableConfigOverlay{}); err != nil {
+		t.Fatal(err)
+	}
+	if selected != "portable" {
+		t.Fatalf("present portable overlay selected %q, want portable", selected)
+	}
+}
+
 func TestPinnedProjectRootRejectsEscapingSymlink(t *testing.T) {
 	projectDir := t.TempDir()
 	externalDir := t.TempDir()
@@ -95,7 +128,7 @@ func TestBuildPinnedProjectKeepsFilesystemAliveForDeferredResourceLoads(t *testi
 	}
 
 	var runtimeFS fs.FS
-	if err := buildPinnedProject(projectDir, func(fsys fs.FS) error {
+	if err := buildPinnedProject(projectDir, nil, func(fsys fs.FS) error {
 		runtimeFS = fsys
 		return nil
 	}); err != nil {
@@ -116,7 +149,7 @@ func TestBuildPinnedProjectClosesFilesystemOnBuildFailure(t *testing.T) {
 
 	wantErr := errors.New("build failed")
 	var failedFS fs.FS
-	err := buildPinnedProject(projectDir, func(fsys fs.FS) error {
+	err := buildPinnedProject(projectDir, nil, func(fsys fs.FS) error {
 		failedFS = fsys
 		return wantErr
 	})

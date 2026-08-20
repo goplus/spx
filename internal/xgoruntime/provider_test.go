@@ -17,18 +17,23 @@
 package xgoruntime
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
 	"crypto/sha256"
 	"debug/buildinfo"
 	"encoding/hex"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
 	runtimedebug "runtime/debug"
+	"strings"
 	"testing"
 
+	"github.com/goplus/spx/v3/internal/projectbundle"
+	"github.com/goplus/spx/v3/internal/projectpolicy"
 	"github.com/goplus/spx/v3/internal/runtimepayload"
 )
 
@@ -201,11 +206,11 @@ replace example.test/framework => ../framework
 
 func TestSourceBridgeBuildArgsPreserveGraphAndBuildPolicy(t *testing.T) {
 	cfg := Config{
-		GraphFlags:     []string{"-mod=readonly", "-overlay=/tmp/overlay.json"},
+		GraphFlags:     []string{"-mod=readonly"},
 		BuildFlags:     []string{"-trimpath=true", "-buildvcs=false", "-v=true", "-work=true"},
 		ProviderOrigin: ModuleOrigin{Selected: ModuleRef{Path: "example.com/provider"}, Main: true},
 	}
-	base := []string{"build", "-mod=readonly", "-overlay=/tmp/overlay.json", "-trimpath", "-buildvcs=false", "-v", "-work", "-buildmode=c-shared"}
+	base := []string{"build", "-mod=readonly", "-trimpath", "-buildvcs=false", "-v", "-work", "-buildmode=c-shared"}
 	for _, test := range []struct {
 		goos       string
 		linkerFlag bool
@@ -293,6 +298,145 @@ func TestValidateSPXRequestRequiresPackMetadata(t *testing.T) {
 		PackIndexFile: "index.json",
 	}}); err != nil {
 		t.Fatalf("complete SPX pack metadata was rejected: %v", err)
+	}
+}
+
+func TestMaterializePortableConfigSnapshotRejectsReplacement(t *testing.T) {
+	projectDir := t.TempDir()
+	configPath := filepath.Join(projectDir, ".config")
+	validated := []byte(`{"name":"validated"}`)
+	if err := os.WriteFile(configPath, validated, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := projectpolicy.SnapshotPortableConfig(projectDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(configPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configPath, validated, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err = materializePortableConfigSnapshot(t.TempDir(), projectDir, snapshot)
+	if err == nil || !strings.Contains(err.Error(), "changed after validation") {
+		t.Fatalf("materializePortableConfigSnapshot() error = %v, want replacement rejection", err)
+	}
+}
+
+func TestMaterializePortableConfigSnapshotWritesCapturedBytes(t *testing.T) {
+	projectDir := t.TempDir()
+	validated := []byte(`{"name":"validated"}`)
+	if err := os.WriteFile(filepath.Join(projectDir, ".config"), validated, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := projectpolicy.SnapshotPortableConfig(projectDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	configDir, identity, err := materializePortableConfigSnapshot(t.TempDir(), projectDir, snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantIdentity, err := snapshot.Identity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if identity != wantIdentity {
+		t.Fatalf("materialized identity = %q, want %q", identity, wantIdentity)
+	}
+	got, err := os.ReadFile(filepath.Join(configDir, ".config"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, validated) {
+		t.Fatalf("materialized .config = %q, want %q", got, validated)
+	}
+}
+
+func TestPrepareProjectBundleConfigUsesCapturedConfigBytes(t *testing.T) {
+	projectDir := t.TempDir()
+	projectFile := filepath.Join(projectDir, "main.spx")
+	configPath := filepath.Join(projectDir, ".config")
+	validated := []byte(`{"name":"validated"}`)
+	mustWriteRuntimeTestFile(t, projectFile, "onStart => {}\n", 0o600)
+	mustWriteRuntimeTestFile(t, configPath, string(validated), 0o600)
+	mustWriteRuntimeTestFile(t, filepath.Join(projectDir, "assets", "index.json"), "{}\n", 0o600)
+	snapshot, err := projectpolicy.SnapshotPortableConfig(projectDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := Config{
+		ProjectDir:  projectDir,
+		ProjectFile: projectFile,
+		Project: ProjectSnapshot{
+			Extension: ".spx", PackDirectory: "assets", PackIndexFile: "index.json",
+		},
+	}
+	bundleConfig, err := prepareProjectBundleConfig(cfg, snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configPath, []byte(`{"name":"live-replacement"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var archive bytes.Buffer
+	if _, err := projectbundle.WriteArchive(&archive, bundleConfig); err != nil {
+		t.Fatal(err)
+	}
+	reader, err := zip.NewReader(bytes.NewReader(archive.Bytes()), int64(archive.Len()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range reader.File {
+		if file.Name != ".config" {
+			continue
+		}
+		config, err := file.Open()
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, readErr := io.ReadAll(config)
+		closeErr := config.Close()
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		if closeErr != nil {
+			t.Fatal(closeErr)
+		}
+		if !bytes.Equal(got, validated) {
+			t.Fatalf("bundled .config = %q, want captured bytes %q", got, validated)
+		}
+		return
+	}
+	t.Fatal("project bundle is missing .config")
+}
+
+func TestPrepareProjectBundleConfigRejectsConfigDrift(t *testing.T) {
+	projectDir := t.TempDir()
+	projectFile := filepath.Join(projectDir, "main.spx")
+	configPath := filepath.Join(projectDir, ".config")
+	mustWriteRuntimeTestFile(t, projectFile, "onStart => {}\n", 0o600)
+	mustWriteRuntimeTestFile(t, configPath, `{"name":"validated"}`, 0o600)
+	mustWriteRuntimeTestFile(t, filepath.Join(projectDir, "assets", "index.json"), "{}\n", 0o600)
+	snapshot, err := projectpolicy.SnapshotPortableConfig(projectDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configPath, []byte(`{"name":"replacement"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err = prepareProjectBundleConfig(Config{
+		ProjectDir:  projectDir,
+		ProjectFile: projectFile,
+		Project: ProjectSnapshot{
+			Extension: ".spx", PackDirectory: "assets", PackIndexFile: "index.json",
+		},
+	}, snapshot)
+	if err == nil || !strings.Contains(err.Error(), "changed after validation") {
+		t.Fatalf("prepareProjectBundleConfig() drift error = %v", err)
 	}
 }
 

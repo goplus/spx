@@ -26,8 +26,10 @@ func TestPackmodeAssetPathStaysWithinProject(t *testing.T) {
 		assetPaths = original
 	})
 	assetPaths = assetPathState{
-		root:        joinAssetRoot(packmodeAssetPrefix, "assets"),
-		projectRoot: packmodeAssetPrefix,
+		root:                joinAssetRoot(packmodeAssetPrefix, "assets"),
+		projectRoot:         packmodeAssetPrefix,
+		extAssetDir:         "custom_asset",
+		legacyCompatibility: true,
 	}
 
 	for _, test := range []struct {
@@ -38,7 +40,8 @@ func TestPackmodeAssetPathStaysWithinProject(t *testing.T) {
 		{name: "asset", path: "sprites/cat.svg", want: "res://assets/sprites/cat.svg"},
 		{name: "project resource", path: "../res/image.png", want: "res://res/image.png"},
 		{name: "project URI", path: "res://media/image.png", want: "res://media/image.png"},
-		{name: "shared asset outside project", path: "../../shared/image.png", want: ""},
+		{name: "shared legacy asset", path: "../../shared/image.png", want: "res://shared/image.png"},
+		{name: "extasset legacy asset", path: "../../custom_asset/image.png", want: "res://extasset/image.png"},
 		{name: "escaping project URI", path: "res://../outside/image.png", want: ""},
 		{name: "Windows absolute project URI", path: "res://C:/outside/image.png", want: ""},
 		{name: "triple slash project URI", path: "res:///etc/passwd", want: ""},

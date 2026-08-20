@@ -23,6 +23,8 @@ package processsupervisor
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os"
 	"os/exec"
 )
 
@@ -34,12 +36,46 @@ type Status struct {
 	Signal int
 }
 
+// SignalCause carries a signal intercepted by the outer command boundary
+// through context cancellation. On Unix, Run consumes this cause when stopping
+// a child group instead of subscribing to process-wide signals itself.
+type SignalCause struct {
+	Signal os.Signal
+}
+
+func (c *SignalCause) Error() string {
+	if c == nil || c.Signal == nil {
+		return "processsupervisor: canceled by signal"
+	}
+	return fmt.Sprintf("processsupervisor: canceled by signal %s", c.Signal)
+}
+
+func signalFromContext(ctx context.Context) (os.Signal, bool) {
+	var cause *SignalCause
+	if !errors.As(context.Cause(ctx), &cause) || cause == nil || cause.Signal == nil {
+		return nil, false
+	}
+	return cause.Signal, true
+}
+
+func cancellationError(ctx context.Context, observed bool) error {
+	if !observed && ctx.Err() == nil {
+		return nil
+	}
+	if cause := context.Cause(ctx); cause != nil {
+		return cause
+	}
+	return context.Canceled
+}
+
 // Success reports whether the child exited normally with status zero.
 func (s Status) Success() bool { return s.Signal == 0 && s.Code == 0 }
 
 // Run starts and waits for cmd. Preparation/start failures and wait failures
 // are returned as errors. A child exit (including a non-zero exit code or a
-// signal termination) is represented by Status and is not an error.
+// signal termination) is represented by Status and is not an error. On Unix,
+// host applications own signal subscription and may cancel ctx with
+// SignalCause.
 func Run(ctx context.Context, cmd *exec.Cmd) (Status, error) {
 	if ctx == nil {
 		return Status{}, errors.New("processsupervisor: nil context")

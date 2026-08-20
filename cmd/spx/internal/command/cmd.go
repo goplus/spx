@@ -26,7 +26,6 @@ import (
 	"strings"
 
 	"github.com/goplus/spx/v3/cmd/spx/internal/util"
-	"github.com/goplus/spx/v3/internal/projectpolicy"
 )
 
 const PcExportName = "gdexport"
@@ -110,10 +109,6 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 			logErrorf("Setting up interpreted paths: %v", err)
 			return err
 		}
-		if err = projectpolicy.ValidateConfig(cmd.TargetAbsDir); err != nil {
-			logErrorf("Validating project resources: %v", err)
-			return err
-		}
 		err = cmd.handleInterpretedRunCommand()
 		if err != nil {
 			logErrorf("Executing interpreted run command: %v", err)
@@ -130,11 +125,6 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 	if cmd.handleSpecialCommands() {
 		return nil
 	}
-	if err = projectpolicy.ValidateConfig(cmd.TargetAbsDir); err != nil {
-		logErrorf("Validating project resources: %v", err)
-		return err
-	}
-
 	if isRuntimeModeCommand(cmd.Args.CmdName) {
 		cmd.RuntimeMode = true
 	}

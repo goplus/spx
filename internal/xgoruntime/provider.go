@@ -34,6 +34,7 @@ import (
 	"github.com/goplus/spx/v3/internal/interpruntime"
 	"github.com/goplus/spx/v3/internal/processsupervisor"
 	"github.com/goplus/spx/v3/internal/projectbundle"
+	"github.com/goplus/spx/v3/internal/projectpolicy"
 	"github.com/goplus/spx/v3/internal/release"
 	"github.com/goplus/spx/v3/internal/runtimebundle"
 	"github.com/goplus/spx/v3/internal/runtimepayload"
@@ -67,6 +68,10 @@ func Execute(ctx context.Context, cfg Config, streams IO) (xgolauncher.ProcessSt
 	if hasEnvironment(streams.Env, activeEnvironment) {
 		return xgolauncher.ProcessStatus{}, errors.New("xgoruntime: recursive runtime-provider invocation rejected")
 	}
+	configSnapshot, err := projectpolicy.SnapshotPortableConfig(cfg.ProjectDir)
+	if err != nil {
+		return xgolauncher.ProcessStatus{}, fmt.Errorf("xgoruntime: %w", err)
+	}
 	if err := VerifyDeclaration(cfg.Declaration); err != nil {
 		return xgolauncher.ProcessStatus{}, err
 	}
@@ -85,9 +90,9 @@ func Execute(ctx context.Context, cfg Config, streams IO) (xgolauncher.ProcessSt
 	}
 	switch cfg.Action {
 	case ActionRun:
-		return runProject(ctx, cfg, assets, streams)
+		return runProject(ctx, cfg, assets, configSnapshot, streams)
 	case ActionBuild:
-		if err := buildLauncher(ctx, cfg, assets, streams); err != nil {
+		if err := buildLauncher(ctx, cfg, assets, configSnapshot, streams); err != nil {
 			return xgolauncher.ProcessStatus{}, err
 		}
 		return xgolauncher.ProcessStatus{}, nil
@@ -230,7 +235,7 @@ func bridgeFileName(goos, goarch string) (string, error) {
 	return "gdspx-" + goos + "-" + goarch + extension, nil
 }
 
-func runProject(ctx context.Context, cfg Config, assets localAssets, streams IO) (xgolauncher.ProcessStatus, error) {
+func runProject(ctx context.Context, cfg Config, assets localAssets, configSnapshot projectpolicy.PortableConfigSnapshot, streams IO) (xgolauncher.ProcessStatus, error) {
 	sessionDir, err := os.MkdirTemp("", "spx-provider-run-")
 	if err != nil {
 		return xgolauncher.ProcessStatus{}, fmt.Errorf("xgoruntime: create run session: %w", err)
@@ -242,6 +247,10 @@ func runProject(ctx context.Context, cfg Config, assets localAssets, streams IO)
 		}
 	} else {
 		defer os.RemoveAll(sessionDir)
+	}
+	configDir, configIdentity, err := materializePortableConfigSnapshot(sessionDir, cfg.ProjectDir, configSnapshot)
+	if err != nil {
+		return xgolauncher.ProcessStatus{}, err
 	}
 	roots := interpruntime.Roots{
 		ProjectDir: cfg.ProjectDir,
@@ -260,6 +269,10 @@ func runProject(ctx context.Context, cfg Config, assets localAssets, streams IO)
 	if err != nil {
 		return xgolauncher.ProcessStatus{}, fmt.Errorf("xgoruntime: prepare Engine: %w", err)
 	}
+	command.Env = append(command.Env,
+		interpruntime.PortableConfigDirEnv+"="+configDir,
+		interpruntime.PortableConfigIdentityEnv+"="+configIdentity,
+	)
 	status, err := processsupervisor.Run(ctx, command)
 	if err != nil {
 		return xgolauncher.ProcessStatus{}, fmt.Errorf("xgoruntime: run Engine: %w", err)
@@ -267,21 +280,66 @@ func runProject(ctx context.Context, cfg Config, assets localAssets, streams IO)
 	return xgolauncher.ProcessStatus{Code: status.Code, Signal: status.Signal}, nil
 }
 
-func buildLauncher(ctx context.Context, cfg Config, assets localAssets, streams IO) error {
+func materializePortableConfigSnapshot(sessionDir, projectDir string, snapshot projectpolicy.PortableConfigSnapshot) (string, string, error) {
+	if err := snapshot.Verify(projectDir); err != nil {
+		return "", "", fmt.Errorf("xgoruntime: %w", err)
+	}
+	identity, err := snapshot.Identity()
+	if err != nil {
+		return "", "", fmt.Errorf("xgoruntime: identify portable config: %w", err)
+	}
+	configDir := filepath.Join(sessionDir, "portable-config")
+	if err := os.Mkdir(configDir, 0o700); err != nil {
+		return "", "", fmt.Errorf("xgoruntime: create portable config directory: %w", err)
+	}
+	if snapshot.Present() {
+		configPath := filepath.Join(configDir, ".config")
+		file, err := os.OpenFile(configPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		if err != nil {
+			return "", "", fmt.Errorf("xgoruntime: create portable config: %w", err)
+		}
+		data := snapshot.Bytes()
+		written, writeErr := file.Write(data)
+		if writeErr == nil && written != len(data) {
+			writeErr = io.ErrShortWrite
+		}
+		closeErr := file.Close()
+		if writeErr != nil {
+			return "", "", fmt.Errorf("xgoruntime: write portable config: %w", writeErr)
+		}
+		if closeErr != nil {
+			return "", "", fmt.Errorf("xgoruntime: close portable config: %w", closeErr)
+		}
+	}
+	return configDir, identity, nil
+}
+
+func buildLauncher(ctx context.Context, cfg Config, assets localAssets, configSnapshot projectpolicy.PortableConfigSnapshot, streams IO) error {
 	if err := verifyLauncherPackage(ctx, cfg, streams.Env); err != nil {
 		return err
 	}
-	projectFiles, includeConfig, err := collectProjectAllowlist(cfg)
+	projectConfig, err := prepareProjectBundleConfig(cfg, configSnapshot)
 	if err != nil {
 		return err
-	}
-	projectConfig := projectbundle.Config{
-		ProjectDir: cfg.ProjectDir, ProjectFiles: projectFiles, IncludeConfig: includeConfig,
-		PackDir: cfg.Project.PackDirectory, Output: cfg.Output, FinalOutput: cfg.FinalOutput,
 	}
 	return compileLauncher(ctx, cfg, streams, func(workDir string, dst io.Writer) (string, string, error) {
 		return writeLauncherPayload(workDir, dst, cfg, assets, projectConfig, streams)
 	})
+}
+
+func prepareProjectBundleConfig(cfg Config, configSnapshot projectpolicy.PortableConfigSnapshot) (projectbundle.Config, error) {
+	projectFiles, err := collectProjectAllowlist(cfg)
+	if err != nil {
+		return projectbundle.Config{}, err
+	}
+	if err := configSnapshot.Verify(cfg.ProjectDir); err != nil {
+		return projectbundle.Config{}, fmt.Errorf("xgoruntime: %w", err)
+	}
+	return projectbundle.Config{
+		ProjectDir: cfg.ProjectDir, ProjectFiles: projectFiles, IncludeConfig: configSnapshot.Present(),
+		ConfigBytes: configSnapshot.Bytes(),
+		PackDir:     cfg.Project.PackDirectory, Output: cfg.Output, FinalOutput: cfg.FinalOutput,
+	}, nil
 }
 
 func writeLauncherPayload(workDir string, dst io.Writer, cfg Config, assets localAssets, projectConfig projectbundle.Config, streams IO) (payloadDigest, manifestDigest string, err error) {

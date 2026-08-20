@@ -21,7 +21,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
 )
@@ -76,7 +75,55 @@ func TestPackProjectIncludesResourcesWithinProject(t *testing.T) {
 	}
 }
 
-func TestPackProjectRejectsResourceOutsideProject(t *testing.T) {
+func TestPackProjectRejectsMissingAssetIndex(t *testing.T) {
+	tmpDir := t.TempDir()
+	projectDir := filepath.Join(tmpDir, "Game")
+	writeTestFile(t, filepath.Join(projectDir, "main.spx"), "onStart => {}")
+	if err := os.MkdirAll(filepath.Join(projectDir, "assets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	zipPath := filepath.Join(tmpDir, "game.zip")
+	err := PackProject(projectDir, zipPath)
+	if err == nil || !strings.Contains(err.Error(), "contains neither") {
+		t.Fatalf("PackProject() error = %v, want missing-index rejection", err)
+	}
+	if _, statErr := os.Stat(zipPath); !os.IsNotExist(statErr) {
+		t.Fatalf("output created after missing-index rejection: stat error %v", statErr)
+	}
+}
+
+func TestPackProjectRejectsMalformedAssetIndex(t *testing.T) {
+	tmpDir := t.TempDir()
+	projectDir := filepath.Join(tmpDir, "Game")
+	writeTestFile(t, filepath.Join(projectDir, "assets", "index.json"), "{not-json")
+
+	zipPath := filepath.Join(tmpDir, "game.zip")
+	err := PackProject(projectDir, zipPath)
+	if err == nil || !strings.Contains(err.Error(), "validate asset indexes") {
+		t.Fatalf("PackProject() error = %v, want malformed-index rejection", err)
+	}
+	if _, statErr := os.Stat(zipPath); !os.IsNotExist(statErr) {
+		t.Fatalf("output created after malformed-index rejection: stat error %v", statErr)
+	}
+}
+
+func TestPackProjectRejectsMalformedConfigWithoutAssets(t *testing.T) {
+	tmpDir := t.TempDir()
+	projectDir := filepath.Join(tmpDir, "Game")
+	writeTestFile(t, filepath.Join(projectDir, ".config"), "{not-json")
+
+	zipPath := filepath.Join(tmpDir, "game.zip")
+	err := PackProject(projectDir, zipPath)
+	if err == nil || !strings.Contains(err.Error(), "parse project config") {
+		t.Fatalf("PackProject() error = %v, want malformed-config rejection", err)
+	}
+	if _, statErr := os.Stat(zipPath); !os.IsNotExist(statErr) {
+		t.Fatalf("output created after malformed-config rejection: stat error %v", statErr)
+	}
+}
+
+func TestPackProjectIncludesLegacySharedResource(t *testing.T) {
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "Game")
 	writeTestFile(t, filepath.Join(projectDir, "assets", "index.json"), `{
@@ -86,36 +133,11 @@ func TestPackProjectRejectsResourceOutsideProject(t *testing.T) {
 	writeTestFile(t, filepath.Join(tmpDir, "shared", "bg.png"), "bg")
 
 	zipPath := filepath.Join(tmpDir, "game.zip")
-	err := PackProject(projectDir, zipPath)
-	if err == nil || !strings.Contains(err.Error(), "outside project directory") {
-		t.Fatalf("PackProject() error = %v, want outside-project rejection", err)
+	if err := PackProject(projectDir, zipPath); err != nil {
+		t.Fatal(err)
 	}
-	if _, statErr := os.Stat(zipPath); !os.IsNotExist(statErr) {
-		t.Fatalf("output created after rejected project: stat error %v", statErr)
-	}
-}
-
-func TestPackProjectRejectsNonPortableResPaths(t *testing.T) {
-	for _, resourcePath := range []string{
-		"res://C:/outside.png",
-		"res:///etc/passwd",
-		`res://\\server\share\outside.png`,
-		"res:outside.png",
-		"res:/outside.png",
-		`res:\outside.png`,
-	} {
-		t.Run(strings.NewReplacer("/", "_", "\\", "_").Replace(resourcePath), func(t *testing.T) {
-			projectDir := filepath.Join(t.TempDir(), "Game")
-			writeTestFile(t, filepath.Join(projectDir, "assets", "index.json"), `{
-  "backdrops":[{"path":`+strconv.Quote(resourcePath)+`}],
-  "map":{"width":480,"height":360}
-}`)
-
-			err := PackProject(projectDir, filepath.Join(t.TempDir(), "game.zip"))
-			if err == nil {
-				t.Fatalf("PackProject accepted non-portable resource path %q", resourcePath)
-			}
-		})
+	if got := readZipSnapshot(t, zipPath).contents["shared/bg.png"]; got != "bg" {
+		t.Fatalf("shared/bg.png content = %q, want bg", got)
 	}
 }
 
@@ -133,7 +155,7 @@ func TestPackProjectRejectsResourceThroughSymlinkOutsideProject(t *testing.T) {
 	}
 
 	err := PackProject(projectDir, filepath.Join(tmpDir, "game.zip"))
-	if err == nil || !strings.Contains(err.Error(), "non-symlink") {
+	if err == nil || !strings.Contains(err.Error(), "symlink") {
 		t.Fatalf("PackProject() error = %v, want no-follow rejection", err)
 	}
 }
@@ -153,20 +175,26 @@ func TestPackProjectAcceptsPackedOnlyConfig(t *testing.T) {
 	}
 }
 
-func TestPackProjectRejectsExtAssetConfig(t *testing.T) {
+func TestPackProjectIncludesLegacyExtAssetConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "Game")
 	writeTestFile(t, filepath.Join(projectDir, ".config"), `{"extasset":"custom_asset"}`)
-	writeTestFile(t, filepath.Join(projectDir, "assets", "index.json"), `{"map":{"width":480,"height":360}}`)
+	writeTestFile(t, filepath.Join(projectDir, "assets", "index.json"), `{
+  "backdrops":[{"path":"../../custom_asset/bg.png"}],
+  "map":{"width":480,"height":360}
+}`)
+	writeTestFile(t, filepath.Join(tmpDir, "custom_asset", "bg.png"), "external-bg")
 
 	zipPath := filepath.Join(tmpDir, "game.zip")
-	err := PackProject(projectDir, zipPath)
-	if err == nil || !strings.Contains(err.Error(), "unsupported extasset") {
-		t.Fatalf("PackProject() error = %v, want extasset rejection", err)
+	if err := PackProject(projectDir, zipPath); err != nil {
+		t.Fatal(err)
+	}
+	if got := readZipSnapshot(t, zipPath).contents["extasset/bg.png"]; got != "external-bg" {
+		t.Fatalf("extasset/bg.png content = %q, want external-bg", got)
 	}
 }
 
-func TestPackProjectRejectsExternalAssetFromPackedConfig(t *testing.T) {
+func TestPackProjectIncludesExternalAssetFromPackedConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "Game")
 
@@ -187,14 +215,29 @@ func TestPackProjectRejectsExternalAssetFromPackedConfig(t *testing.T) {
   },
   "fonts":{"Custom":{"faces":[{"path":"../../../../shared/fonts/custom.ttf"}]}}
 }`)
+	writeTestFile(t, filepath.Join(tmpDir, "shared", "bg.jpg"), "bg")
+	writeTestFile(t, filepath.Join(tmpDir, "shared", "hero.png"), "hero")
+	writeTestFile(t, filepath.Join(tmpDir, "shared", "audio", "ring.wav"), "ring")
+	writeTestFile(t, filepath.Join(tmpDir, "shared", "fonts", "custom.ttf"), "font")
 
 	zipPath := filepath.Join(tmpDir, "game.zip")
-	if err := PackProject(projectDir, zipPath); err == nil || !strings.Contains(err.Error(), "outside project directory") {
-		t.Fatalf("PackProject() error = %v, want packed external-resource rejection", err)
+	if err := PackProject(projectDir, zipPath); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := readZipSnapshot(t, zipPath)
+	for name, want := range map[string]string{
+		"shared/bg.jpg":           "bg",
+		"shared/hero.png":         "hero",
+		"shared/audio/ring.wav":   "ring",
+		"shared/fonts/custom.ttf": "font",
+	} {
+		if got := snapshot.contents[name]; got != want {
+			t.Fatalf("%s content = %q, want %q", name, got, want)
+		}
 	}
 }
 
-func TestPackProjectRejectsExternalAssetFromSourceRootWhenPackedRootMissing(t *testing.T) {
+func TestPackProjectIncludesExternalAssetFromSourceRootWhenPackedRootMissing(t *testing.T) {
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "Game")
 
@@ -218,9 +261,24 @@ func TestPackProjectRejectsExternalAssetFromSourceRootWhenPackedRootMissing(t *t
 	writeTestFile(t, filepath.Join(projectDir, "assets", "fonts", "Source", "index.json"), `{
   "faces":[{"path":"../../../../shared/fonts/source.ttf"}]
 }`)
+	writeTestFile(t, filepath.Join(tmpDir, "shared", "bg.jpg"), "bg")
+	writeTestFile(t, filepath.Join(tmpDir, "shared", "audio", "theme.mp3"), "theme")
+	writeTestFile(t, filepath.Join(tmpDir, "shared", "hero.png"), "hero")
+	writeTestFile(t, filepath.Join(tmpDir, "shared", "fonts", "source.ttf"), "source-font")
 	zipPath := filepath.Join(tmpDir, "game.zip")
-	if err := PackProject(projectDir, zipPath); err == nil || !strings.Contains(err.Error(), "outside project directory") {
-		t.Fatalf("PackProject() error = %v, want source external-resource rejection", err)
+	if err := PackProject(projectDir, zipPath); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := readZipSnapshot(t, zipPath)
+	for name, want := range map[string]string{
+		"shared/bg.jpg":           "bg",
+		"shared/audio/theme.mp3":  "theme",
+		"shared/hero.png":         "hero",
+		"shared/fonts/source.ttf": "source-font",
+	} {
+		if got := snapshot.contents[name]; got != want {
+			t.Fatalf("%s content = %q, want %q", name, got, want)
+		}
 	}
 }
 
@@ -247,6 +305,56 @@ func TestPackZipRejectsFileReplacedAfterCollection(t *testing.T) {
 	_ = zipWriter.Close()
 	if err == nil || !strings.Contains(err.Error(), "changed after collection") {
 		t.Fatalf("PackZip() error = %v, want replaced-file rejection", err)
+	}
+}
+
+func TestPackZipRejectsExternalParentReplacedByOutsideSymlink(t *testing.T) {
+	tmpDir := t.TempDir()
+	projectDir := filepath.Join(tmpDir, "Game")
+	writeTestFile(t, filepath.Join(projectDir, "assets", "index.json"), `{
+  "backdrops":[{"path":"../../shared/bg.png"}],
+  "map":{"width":480,"height":360}
+}`)
+	sharedDir := filepath.Join(tmpDir, "shared")
+	writeTestFile(t, filepath.Join(sharedDir, "bg.png"), "inside")
+
+	extraPaths, err := collectExternalAssetPaths(projectDir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closePackRoots(extraPaths)
+	if len(extraPaths) != 1 {
+		t.Fatalf("collected %d external paths, want 1", len(extraPaths))
+	}
+
+	outsideDir := filepath.Join(t.TempDir(), "shared")
+	if err := os.Rename(sharedDir, outsideDir); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outsideDir, sharedDir); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	zipPath := filepath.Join(tmpDir, "game.zip")
+	zipFile, err := os.Create(zipPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	zipWriter := zip.NewWriter(zipFile)
+	packErr := PackZip(zipWriter, projectDir, extraPaths)
+	closeZipErr := zipWriter.Close()
+	closeFileErr := zipFile.Close()
+	if packErr == nil {
+		t.Fatalf("PackZip() succeeded after external parent escaped root")
+	}
+	if closeZipErr != nil {
+		t.Fatal(closeZipErr)
+	}
+	if closeFileErr != nil {
+		t.Fatal(closeFileErr)
+	}
+	if snapshot := readZipSnapshot(t, zipPath); snapshot.counts["shared/bg.png"] != 0 {
+		t.Fatalf("escaped external asset was packed: %+v", snapshot.contents)
 	}
 }
 

@@ -23,7 +23,6 @@ import (
 	"errors"
 	"os"
 	"os/exec"
-	"os/signal"
 	"syscall"
 	"time"
 )
@@ -66,13 +65,6 @@ func run(ctx context.Context, cmd *exec.Cmd) (Status, error) {
 	// leader os/exec fallback, so supervisor semantics remain authoritative.
 	cmd.WaitDelay = 2 * unixShutdownGrace
 
-	signals := make(chan os.Signal, 8)
-	// Install before Start so a lifecycle signal cannot terminate the wrapper
-	// between preparation and child creation. Stop restores the caller's signal
-	// behavior on every return; repeated signals remain queued and forwarded.
-	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGQUIT)
-	defer signal.Stop(signals)
-
 	if err := cmd.Start(); err != nil {
 		return Status{}, err
 	}
@@ -93,12 +85,19 @@ func run(ctx context.Context, cmd *exec.Cmd) (Status, error) {
 	var killTimer *time.Timer
 	var killTimerC <-chan time.Time
 	var shutdownErr error
+	var cancellationObserved bool
 	beginShutdown := func() {
 		if !shutdownDeadline.IsZero() {
 			return
 		}
 		shutdownDeadline = time.Now().Add(unixShutdownGrace)
-		if err := signalProcessGroup(pgid, syscall.SIGTERM); err != nil {
+		shutdownSignal := syscall.SIGTERM
+		if signal, ok := signalFromContext(ctx); ok {
+			if unixSignal, ok := signal.(syscall.Signal); ok {
+				shutdownSignal = unixSignal
+			}
+		}
+		if err := signalProcessGroup(pgid, shutdownSignal); err != nil {
 			shutdownErr = errors.Join(shutdownErr, err)
 		}
 		killTimer = time.NewTimer(unixShutdownGrace)
@@ -119,6 +118,9 @@ func run(ctx context.Context, cmd *exec.Cmd) (Status, error) {
 				return Status{}, err
 			}
 			if result.err == nil {
+				if err := cancellationError(ctx, cancellationObserved); err != nil {
+					return Status{}, err
+				}
 				return Status{}, nil
 			}
 			var exitError *exec.ExitError
@@ -126,14 +128,12 @@ func run(ctx context.Context, cmd *exec.Cmd) (Status, error) {
 				return Status{}, result.err
 			}
 			return statusFromProcessState(result.state), nil
-		case sig := <-signals:
-			// Preserve the user's signal exactly. ESRCH means the wait result is
-			// already racing us and is intentionally not promoted to an error.
-			_ = signalProcessGroup(pgid, sig.(syscall.Signal))
 		case <-cancelRequests:
+			cancellationObserved = true
 			beginShutdown()
 		case <-ctxDone:
 			ctxDone = nil
+			cancellationObserved = true
 			beginShutdown()
 		case <-killTimerC:
 			killTimerC = nil

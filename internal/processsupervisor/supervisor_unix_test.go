@@ -46,16 +46,18 @@ func TestRunSeparatesPreparationErrorFromChildExit(t *testing.T) {
 	}
 }
 
-func TestRunForwardsSignalToChildGroup(t *testing.T) {
+func TestRunForwardsSignalCauseToChildGroup(t *testing.T) {
 	marker := filepath.Join(t.TempDir(), "started")
-	command := exec.Command(os.Args[0], "-test.run=^TestProcessSupervisorHelper$", "--")
+	ctx, cancel := context.WithCancelCause(context.Background())
+	defer cancel(nil)
+	command := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestProcessSupervisorHelper$", "--")
 	command.Env = append(os.Environ(), "SPX_PROCESS_SUPERVISOR_HELPER=wait", "SPX_PROCESS_SUPERVISOR_MARKER="+marker)
 	result := make(chan struct {
 		status Status
 		err    error
 	}, 1)
 	go func() {
-		status, err := Run(context.Background(), command)
+		status, err := Run(ctx, command)
 		result <- struct {
 			status Status
 			err    error
@@ -71,16 +73,46 @@ func TestRunForwardsSignalToChildGroup(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	if err := syscall.Kill(os.Getpid(), syscall.SIGTERM); err != nil {
-		t.Fatal(err)
-	}
+	cancel(&SignalCause{Signal: syscall.SIGINT})
 	select {
 	case result := <-result:
-		if result.err != nil || result.status != (Status{Signal: int(syscall.SIGTERM)}) {
-			t.Fatalf("forwarded signal result = (%+v, %v), want SIGTERM and nil error", result.status, result.err)
+		if result.err != nil || result.status != (Status{Signal: int(syscall.SIGINT)}) {
+			t.Fatalf("forwarded signal result = (%+v, %v), want SIGINT and nil error", result.status, result.err)
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("supervisor did not finish after forwarded signal")
+	}
+}
+
+func TestRunReturnsCancellationAfterGracefulExit(t *testing.T) {
+	marker := filepath.Join(t.TempDir(), "started")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	command := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestProcessSupervisorHelper$", "--")
+	command.Env = append(os.Environ(),
+		"SPX_PROCESS_SUPERVISOR_HELPER=graceful-exit",
+		"SPX_PROCESS_SUPERVISOR_MARKER="+marker,
+	)
+	result := make(chan struct {
+		status Status
+		err    error
+	}, 1)
+	go func() {
+		status, err := Run(ctx, command)
+		result <- struct {
+			status Status
+			err    error
+		}{status: status, err: err}
+	}()
+	waitForFile(t, marker)
+	cancel()
+	select {
+	case result := <-result:
+		if result.err == nil || !errors.Is(result.err, context.Canceled) || result.status != (Status{}) {
+			t.Fatalf("graceful cancellation result = (%+v, %v), want context.Canceled and zero status", result.status, result.err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("supervisor did not finish after graceful cancellation")
 	}
 }
 
@@ -147,6 +179,8 @@ func TestProcessSupervisorHelper(t *testing.T) {
 		for {
 			time.Sleep(time.Second)
 		}
+	case "graceful-exit":
+		runGracefulExitHelper()
 	case "ignore-term":
 		runIgnoringTermHelper()
 	case "spawn-grandchild":
@@ -160,6 +194,20 @@ func TestProcessSupervisorHelper(t *testing.T) {
 		}
 		os.Exit(0)
 	}
+}
+
+func runGracefulExitHelper() {
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGTERM)
+	marker := os.Getenv("SPX_PROCESS_SUPERVISOR_MARKER")
+	if marker == "" || os.WriteFile(marker, []byte("started"), 0o600) != nil {
+		os.Exit(74)
+	}
+	<-signals
+	// Bypass os.Exit's race-detector finalization. Under -race, that finalizer
+	// can exceed the supervisor's intentionally short grace period and turn a
+	// graceful helper into a synthetic SIGKILL.
+	syscall.Exit(0)
 }
 
 func runIgnoringTermHelper() {

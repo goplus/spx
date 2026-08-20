@@ -28,6 +28,7 @@ import (
 	"github.com/goplus/mod/runtimeprotocol"
 	"github.com/goplus/mod/xgomod"
 	"github.com/goplus/spx/v3/internal/projectassets"
+	"github.com/goplus/spx/v3/internal/projectpolicy"
 )
 
 const ProtocolV1 = runtimeprotocol.PreambleV1
@@ -139,7 +140,13 @@ func (p Config) validateLive() error {
 	if !pathWithin(effective.Dir, p.Declaration.Path) {
 		return fmt.Errorf("runtime provider declaring gox.mod must be within the effective module dir")
 	}
+	if err := p.validateGraphInputs(); err != nil {
+		return err
+	}
 	if p.Project.PackDirectory != "" {
+		if err := projectpolicy.ValidatePortableConfig(p.ProjectDir); err != nil {
+			return fmt.Errorf("runtime provider: %w", err)
+		}
 		packRoot := filepath.Join(p.ProjectDir, filepath.FromSlash(p.Project.PackDirectory))
 		if err := validateCanonicalExistingPath("pack-dir", packRoot, true); err != nil {
 			return err
@@ -152,7 +159,7 @@ func (p Config) validateLive() error {
 			return fmt.Errorf("runtime provider project assets: %w", err)
 		}
 	}
-	return p.validateGraphInputs()
+	return nil
 }
 
 func (p Config) validateGraphInputs() error {
@@ -173,7 +180,9 @@ func (p Config) validateGraphInputs() error {
 			return fmt.Errorf("runtime provider graph flag is not canonical: %q", flag)
 		}
 		switch name {
-		case "modfile", "overlay":
+		case "overlay":
+			return fmt.Errorf("runtime provider does not support -overlay because the project snapshot uses physical filesystem contents")
+		case "modfile":
 			if err := validateCanonicalExistingPath("graph-flag-"+name, value, false); err != nil {
 				return err
 			}

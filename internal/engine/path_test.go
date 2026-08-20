@@ -180,6 +180,48 @@ func TestExplicitFilesystemRoots(t *testing.T) {
 	}
 }
 
+func TestLegacyFilesystemRootsRetainBoundedExternalAssets(t *testing.T) {
+	original := assetPaths
+	t.Cleanup(func() {
+		assetPaths = original
+	})
+
+	root := t.TempDir()
+	projectDir := filepath.Join(root, "project")
+	assetDir := filepath.Join(projectDir, "assets")
+	for _, dir := range []string{assetDir, filepath.Join(root, "custom_asset"), filepath.Join(root, "shared")} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(projectDir, ".config"), []byte(`{"extasset":"custom_asset"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"custom_asset/image.png", "shared/image.png"} {
+		if err := os.WriteFile(filepath.Join(root, name), []byte(name), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := SetLegacyFilesystemRoots(projectDir, assetDir); err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name string
+		path string
+		want string
+	}{
+		{name: "extasset", path: "../../custom_asset/image.png", want: filepath.Join(root, "custom_asset", "image.png")},
+		{name: "shared", path: "../../shared/image.png", want: filepath.Join(root, "shared", "image.png")},
+		{name: "escape", path: "../../../outside/image.png", want: ""},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := buildFilesystemAssetPath(test.path); got != normalizeSlashes(filepath.Clean(test.want)) && !(got == "" && test.want == "") {
+				t.Fatalf("buildFilesystemAssetPath(%q) = %q, want %q", test.path, got, test.want)
+			}
+		})
+	}
+}
+
 func TestSetFilesystemRootsRejectsImplicitPaths(t *testing.T) {
 	if err := SetFilesystemRoots(".", "assets"); err == nil {
 		t.Fatal("SetFilesystemRoots accepted relative paths")

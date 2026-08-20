@@ -121,7 +121,7 @@ XGo 使用标准 Go toolchain 得到有效 build list，并把 logical selection
 - `Replace` 表示实际读取的替代来源；
 - `Effective` 表示最终用于读取 metadata 和构建 provider 的源码身份。
 
-同一 graph policy 必须贯穿 metadata discovery、provider 校验和 provider build，包括 `GOWORK`、`-mod`、`-modfile` 与 `-overlay`。不能从原始 `go.mod` 手算依赖，也不能在 provider 侧重新解析出另一张 graph。
+同一份受支持 graph policy 必须贯穿 metadata discovery、provider 校验和 provider build，包括 `GOWORK`、`-mod` 与 `-modfile`。不能从原始 `go.mod` 手算依赖，也不能在 provider 侧重新解析出另一张 graph。如果调用方的 `GOFLAGS`/`GOWORK` 无法形成唯一可信的 graph policy，discovery 必须在分类前失败，不能构造替代 graph 或回退到 legacy 路径。runtime-provider v1 尚未定义 overlay-aware 的项目快照，因此 `-overlay` 只在 target 已确认属于 runtime project 后明确拒绝；普通项目继续保持 legacy 行为。
 
 class module 的顺序和身份来自应用实际生效的 modfile 中的 `//xgo:class` 标记。只有 target 所属 main/workspace module，或被应用显式标记的 class dependency，能够提供 runtime。
 
@@ -134,7 +134,7 @@ resolved metadata 同时携带：
 
 XGo 在导入 resolved class metadata 时校验 target modfile snapshot；provider 在执行前重新校验 declaration、module source 和其他实际使用的路径，但不重新解释 metadata。这样既避免 metadata/provider 来自不同版本，也避免 discovery 后关键文件被替换。
 
-当前 vendor mode 无法提供等价的 module provenance。未匹配 runtime 的 vendor 项目继续走旧路径；确认匹配 runtime 后则明确报不支持。
+当前 vendor mode 无法提供等价的 module provenance。active module 没有外部 class marker 时，XGo 仍可只依靠该 module 自身的 metadata 分类：非 runtime target 继续走旧路径，匹配 runtime 后明确报不支持。如果实际生效的 modfile 含外部 class marker，v1 会在分类前 fail closed，因为标准 Go vendor 数据可能省略依赖的 `gox.mod`/`gop.mod`；改读 live replacement 又会破坏 vendor snapshot identity。若要让这类 graph 的 legacy 行为继续兼容，后续必须由 XGo 自有 vendor manifest 固化完整 metadata 身份与摘要。
 
 ## Target 发现与分发
 
@@ -147,7 +147,7 @@ runtime discovery 位于 target 解析之后、所有 Dir/PkgPath/Files 分支�
 | import/package path | 支持；基于调用方有效 graph 定位 |
 | 多文件 target | runtime 项目拒绝 |
 | `...` pattern | runtime 项目拒绝 |
-| `pkg@version` | 拒绝；版本只能来自当前 graph |
+| `pkg@version` | 普通目标继续走 legacy；确认匹配 runtime 后拒绝；版本只能来自当前 graph |
 
 一个目录必须恰好对应一个 project file。没有 class project 或 project 未声明 runtime 时返回 `NotHandled`；只有这个结果允许 XGo 调用旧实现。graph、metadata、协议、provider build 或 provider execution 的任何其他错误都直接返回用户。
 
@@ -173,7 +173,7 @@ XGo 当前只向 runtime provider 传递以下策略：
 
 | 类型 | 支持范围 |
 | --- | --- |
-| Graph | `-mod=mod|readonly`、`-modfile`、`-overlay`；`-mod=vendor` 只用于给出明确的不支持错误 |
+| Graph | `-mod=mod|readonly`、`-modfile`；`-overlay` 只在 runtime match 后用于给出明确的不支持错误；`-mod=vendor` 只允许基于 active module 做保守 discovery，runtime match 或外部 class metadata 无法确定时明确拒绝 |
 | Build | `-v`、`-x`、`-work`、`-trimpath=true`、`-buildvcs=false` |
 
 其他 flag 只在 target 已确认属于 runtime project 后报错，避免改变普通项目的既有行为。
@@ -188,7 +188,7 @@ XGo 在构建 provider 前确认：
 - 当前 XGo 满足 declaring metadata 的最低版本；
 - `GOOS/GOARCH` 等于 host，不允许借 provider 做交叉构建。
 
-provider 构建在私有临时目录完成，沿用同一 graph policy，并保留调用环境的 CGO 选择。provider 进程继承标准流；XGo 转发取消与平台信号并清理整个子进程树。Unix 保留正常退出码或原始信号，Windows 使用 Job Object 管理进程树并将中断表示为退出码。递归进入同一 runtime provider 会被拒绝。
+provider 构建在私有临时目录完成，沿用同一 graph policy，并保留调用环境的 CGO 选择。provider 进程继承标准流。每个进程只有一个 command boundary 持有宿主信号；内层 supervisor 只消费 cancellation（包含作为 cause 传入的原始信号），不再重复订阅相同信号，并负责清理整个子进程树。一旦观察到 cancellation，即使子进程在关闭期间以 0 退出，也不能把请求报告为成功。Unix 保留正常退出码或原始信号，Windows 使用 Job Object 管理进程树并将中断表示为退出码。runtime-provider v1 拒绝任意嵌套 runtime dispatch，包括转入另一个 provider。
 
 `XGO_RUNTIME=off` 是显式禁用开关，但语义是“报错并停止”，不是回退到 GenGo。
 
@@ -199,6 +199,10 @@ SPX provider 当前接受以下源码身份：
 - 应用本身是 SPX main module；
 - SPX 位于当前 workspace；
 - SPX 通过无版本的 local replace 引入。
+
+portable provider snapshot 只包含 project root 内的文件，因此会明确拒绝 legacy `extasset` 配置。该限制只属于 runtime-provider 路径；SPX 现有的 run、native、export 与 pack 命令继续保持 legacy 外部资源行为。
+
+`.config` 合约绑定到实际消费的字节。provider 快照其不存在/存在状态与 SHA-256，在交接前重新校验原路径，之后 run/build 只接收已捕获字节，不再重新打开项目副本。
 
 provider 每次以 host `CGO_ENABLED=1` 从该有效源码构建 interpreter bridge，并校验构建产物仍来自同一 module identity；编译可复用 Go build cache，但 bridge 文件本身不做持久缓存。普通版本依赖、pseudo-version 和 versioned replace 当前均拒绝 published bridge mode；仅有可下载的 Engine/PCK 不能证明 bridge 与该 SPX 版本及 Engine interface 匹配。
 
@@ -234,7 +238,7 @@ project bundle 采用 allowlist，而不是遍历整个仓库：只收集顶层�
 
 Darwin payload 在 link 前已经固定，link 后执行 ad-hoc signing；签名后不再追加或修改 executable。该签名保证 Mach-O 完整性，不代表 Developer ID 或 notarization。
 
-provider 只能写 XGo 分配的私有 staging path。返回成功后，XGo 验证产物是非空、非 symlink 的 host executable，再以同文件系统原子操作替换最终输出。失败时已有目标必须保持不变。`install` 使用相同事务，只改变最终目录。
+provider 只能写 XGo 分配的私有 staging path。返回成功后，XGo 验证产物是非空、非 symlink 的 host executable，再通过同文件系统替换提交最终输出；在该提交点之前，provider 失败不会改变已有目标。原子可见性与已有目标替换只在 host platform/filesystem 提供保证的范围内成立；Windows 的真实替换及 crash/recovery 行为仍需 host CI 验证。`install` 使用相同事务，只改变最终目录。
 
 构建后的 launcher 不需要 Go、XGo、SPX 或网络。它先校验 payload 及 host platform，再从内嵌数据物化 Engine、bridge 和 project，最后在全新 session 中运行。
 
@@ -247,7 +251,7 @@ provider 只能写 XGo 分配的私有 staging path。返回成功后，XGo 验�
 - 不同内容即使文件名相同也不会共用；
 - provider 与 source bridge 每次写入新的临时产物，但编译过程自然复用 Go build cache；XGo 不维护另一套持久 provider binary cache。
 
-下载文件和已物化目录在 cache hit 时都会重新校验 manifest、类型、大小和 SHA-256。同大小篡改不会被接受；损坏 entry 在独占锁下修复。首次物化使用 sibling temp、完整校验和原子 rename，多进程通过 shared/exclusive lease 避免观察 partial state 或删除正在使用的 entry。
+下载文件和已物化目录在 cache hit 时都会重新校验 manifest、类型、大小和 SHA-256。同大小篡改不会被接受；损坏 entry 在独占锁下修复。首次物化使用 sibling temp、完整校验和同文件系统 rename；原子发布只在 host platform/filesystem 提供保证的范围内依赖，Windows 的真实 publish/repair 与 crash-recovery 场景仍需 host CI 验证。多进程通过 shared/exclusive lease 避免观察 partial state 或删除正在使用的 entry。
 
 launcher 的全部资源来自内嵌 payload，因此第一次运行即使 cache 为空也不会下载。当前不自动执行配额回收；后续 GC 必须继续服从 lease，不能删除正在运行的组件。
 
@@ -270,7 +274,7 @@ launcher 的全部资源来自内嵌 payload，因此第一次运行即使 cache
 - XGo `1.8.0` 是 runtime-provider 能力基线；更早版本不受支持，也不能依赖旧 parser 给出可靠升级提示；
 - 只支持 host desktop：Darwin amd64/arm64、Linux amd64、Windows amd64；
 - 不支持 `xgo test`、Web、Android、iOS 和 `GOOS/GOARCH` 交叉构建；
-- 不支持 runtime vendor mode、多个 runtime target 或任意 Go build flag；
+- 不支持 runtime vendor mode、overlay、多个 runtime target 或任意 Go build flag；
 - SPX 要求独立的 project pack directory；
 - published SPX module mode 尚未启用，仓库外仅指定已发布 SPX 版本不会进入当前 provider；
 - launcher 包含项目源码与资源，不提供源码保密；
@@ -295,7 +299,7 @@ launcher 的全部资源来自内嵌 payload，因此第一次运行即使 cache
 - runtime project 的 directory、单文件和 package target 在 discovery 后不执行 GenGo；
 - workspace/local replace 的 metadata、provider 与 bridge 始终来自同一有效 graph；
 - 干净 SPX checkout 无需 `$GOPATH/bin` 预装资源即可 run/build；
-- cache miss、cache hit、offline、并发、kill-recovery 和同大小篡改均有测试；
+- cache miss、cache hit、offline、并发、kill-recovery 和同大小篡改由平台无关测试覆盖；Windows host CI 另行验证真实 publish/replace 与 crash-recovery 行为；
 - run 完整保留 argv、stdin/stdout/stderr 与平台退出语义，Unix 复现信号、Windows 中断返回 130，并且不修改项目；
 - build/install 失败不破坏已有输出；
 - launcher 在空 cache、无工具链、无网络环境完成首次运行；

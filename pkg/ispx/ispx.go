@@ -152,10 +152,25 @@ func Build(files map[string][]byte) error {
 // intentionally not inferred here. It must be called before Init; changing the
 // process-wide Engine path state after interpreter initialization is rejected.
 func ConfigureFilesystemRoots(projectDir, assetDir string) error {
+	return configureFilesystemRoots(projectDir, assetDir, false)
+}
+
+// ConfigureLegacyFilesystemRoots selects the compatibility policy used by
+// existing interpreted/native commands. It retains bounded legacy external
+// asset references; portable runtime-provider sessions must use
+// ConfigureFilesystemRoots instead.
+func ConfigureLegacyFilesystemRoots(projectDir, assetDir string) error {
+	return configureFilesystemRoots(projectDir, assetDir, true)
+}
+
+func configureFilesystemRoots(projectDir, assetDir string, legacy bool) error {
 	mu.Lock()
 	defer mu.Unlock()
 	if ixgoCtx != nil {
 		return fmt.Errorf("ispx: filesystem roots must be configured before Init")
+	}
+	if legacy {
+		return engine.SetLegacyFilesystemRoots(projectDir, assetDir)
 	}
 	return engine.SetFilesystemRoots(projectDir, assetDir)
 }

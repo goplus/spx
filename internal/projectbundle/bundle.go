@@ -70,13 +70,16 @@ var (
 // ProjectFiles must include every referenced project resource outside PackDir.
 // PackDir is optional; when set, all of its regular files are included with
 // PackDir retained as their archive prefix. IncludeConfig explicitly includes
-// ProjectDir/.config. Output and FinalOutput are not written by this package;
-// they are checked to ensure a compiler output cannot be recursively collected
-// from PackDir.
+// ProjectDir/.config. When ConfigBytes is non-nil, those bytes are included
+// instead of reopening ProjectDir/.config; a non-nil empty slice represents an
+// empty file. Output and FinalOutput are not written by this package; they are
+// checked to ensure a compiler output cannot be recursively collected from
+// PackDir.
 type Config struct {
 	ProjectDir    string
 	ProjectFiles  []string
 	IncludeConfig bool
+	ConfigBytes   []byte
 	PackDir       string
 	Output        string
 	FinalOutput   string
@@ -179,7 +182,13 @@ func Collect(cfg Config) (*Bundle, error) {
 		}
 	}
 	if cfg.IncludeConfig {
-		if err := collector.addFile(projectRoot, ".config", ".config"); err != nil {
+		var err error
+		if cfg.ConfigBytes != nil {
+			err = collector.addData(".config", cfg.ConfigBytes)
+		} else {
+			err = collector.addFile(projectRoot, ".config", ".config")
+		}
+		if err != nil {
 			return nil, err
 		}
 	}
@@ -371,6 +380,33 @@ func (c *collector) addFile(root *safeDir, sourcePath, archiveName string) error
 	}
 	c.total += int64(len(data))
 	c.entries = append(c.entries, collectedEntry{name: archiveName, data: data})
+	return nil
+}
+
+func (c *collector) addData(archiveName string, data []byte) error {
+	archiveName, err := validateRelativePath(archiveName, "archive entry")
+	if err != nil {
+		return err
+	}
+	if err := c.reserveName(archiveName); err != nil {
+		return err
+	}
+	if len(c.entries) >= c.limits.maxEntries {
+		return fmt.Errorf("%w: more than %d entries", ErrLimit, c.limits.maxEntries)
+	}
+	size := int64(len(data))
+	if size > c.limits.maxFileBytes {
+		return fmt.Errorf("%w: source %q exceeds %d bytes", ErrLimit, archiveName, c.limits.maxFileBytes)
+	}
+	if size > c.limits.maxTotalBytes-c.total {
+		return fmt.Errorf("%w: total input exceeds %d bytes", ErrLimit, c.limits.maxTotalBytes)
+	}
+	contents := append([]byte(nil), data...)
+	if data != nil && contents == nil {
+		contents = []byte{}
+	}
+	c.total += size
+	c.entries = append(c.entries, collectedEntry{name: archiveName, data: contents})
 	return nil
 }
 

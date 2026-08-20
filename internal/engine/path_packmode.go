@@ -26,7 +26,12 @@ import (
 
 func SetAssetDir(dir string) {
 	resMgr.SetLoadMode(false)
+	// Packmode is the legacy archive/export path. Portable runtime-provider
+	// bundles do not build this mode; their native session uses strict roots.
 	setAssetRoot(packmodeAssetPrefix, dir)
+	assetPaths.explicitFSRoots = false
+	assetPaths.legacyCompatibility = true
+	assetPaths.extAssetDir = readExtAssetDirFromProjectConfig(packmodeAssetPrefix)
 }
 
 func ToAssetPath(relPath string) string {
@@ -43,8 +48,26 @@ func ToAssetPath(relPath string) string {
 	if strings.Contains(relPath, ":") {
 		return ""
 	}
+	if suffix, ok := extAssetSuffix(relPath); ok {
+		return projectResourcePath(path.Join(engineExtAssetPath, suffix))
+	}
+	if suffix, ok := packmodeCompatibilitySuffix(relPath); ok {
+		return projectResourcePath(suffix)
+	}
 	root := strings.TrimPrefix(assetPaths.root, packmodeAssetPrefix)
 	return projectResourcePath(path.Join(root, relPath))
+}
+
+func packmodeCompatibilitySuffix(relPath string) (string, bool) {
+	clean := path.Clean(relPath)
+	if !strings.HasPrefix(clean, "../../") {
+		return "", false
+	}
+	suffix := strings.TrimPrefix(clean, "../../")
+	if suffix == "" || suffix == clean {
+		return "", false
+	}
+	return suffix, true
 }
 
 func projectResourcePath(name string) string {

@@ -72,7 +72,6 @@ func TestParseBuildWithReplacement(t *testing.T) {
 	mustWriteRuntimeTestFile(t, filepath.Join(localSPX, "go.mod"), "module github.com/goplus/spx/v3\n", 0o600)
 	mustWriteRuntimeTestFile(t, filepath.Join(localSPX, "gox.mod"), "xgo 1.8\n", 0o600)
 	mustWriteRuntimeTestFile(t, filepath.Join(root, "alternate.mod"), "module example.com/alternate\n", 0o600)
-	mustWriteRuntimeTestFile(t, filepath.Join(root, "overlay.json"), "{}\n", 0o600)
 	args = replaceOption(args, "declaration-file", filepath.Join(root, "local-spx", "gox.mod"))
 	args = append(args,
 		"--replace-path="+localSPX,
@@ -80,7 +79,6 @@ func TestParseBuildWithReplacement(t *testing.T) {
 		"--replace-dir="+filepath.Join(root, "local-spx"),
 		"--replace-gomod="+filepath.Join(root, "local-spx", "go.mod"),
 		"--graph-flag=-modfile="+filepath.Join(root, "alternate.mod"),
-		"--graph-flag=-overlay="+filepath.Join(root, "overlay.json"),
 		"--build-flag=-x=true",
 		"--output="+filepath.Join(root, "out", "game"),
 		"--final-output="+filepath.Join(root, "bin", "game"),
@@ -102,7 +100,7 @@ func TestParseBuildWithReplacement(t *testing.T) {
 	if got, want := cfg.ProviderOrigin.Effective().Path, localSPX; got != want {
 		t.Fatalf("effective path = %q, want %q", got, want)
 	}
-	wantGraph := []string{"-modfile=" + filepath.Join(root, "alternate.mod"), "-overlay=" + filepath.Join(root, "overlay.json")}
+	wantGraph := []string{"-modfile=" + filepath.Join(root, "alternate.mod")}
 	if !reflect.DeepEqual(cfg.GraphFlags, wantGraph) {
 		t.Fatalf("GraphFlags = %#v, want %#v", cfg.GraphFlags, wantGraph)
 	}
@@ -152,7 +150,7 @@ func TestParseRunRejectsMissingPackDirectory(t *testing.T) {
 }
 
 func TestParseRejectsMissingGraphInput(t *testing.T) {
-	for _, name := range []string{"modfile", "overlay"} {
+	for _, name := range []string{"modfile"} {
 		t.Run(name, func(t *testing.T) {
 			args := validArgs(t, ActionRun)
 			missing := filepath.Join(filepath.Dir(optionValue(args, "project-dir")), "missing-"+name)
@@ -161,6 +159,31 @@ func TestParseRejectsMissingGraphInput(t *testing.T) {
 				t.Fatalf("Parse() missing %s error = %v", name, err)
 			}
 		})
+	}
+}
+
+func TestParseRejectsOverlayBeforeExecution(t *testing.T) {
+	args := validArgs(t, ActionRun)
+	projectDir := optionValue(args, "project-dir")
+	root := filepath.Dir(projectDir)
+	overlay := filepath.Join(root, "overlay.json")
+	mustWriteRuntimeTestFile(t, overlay, "{}\n", 0o600)
+	mustWriteRuntimeTestFile(t, filepath.Join(projectDir, ".config"), `{"extasset":"../shared"}`, 0o600)
+	if err := os.RemoveAll(filepath.Join(projectDir, filepath.FromSlash(optionValue(args, "pack-dir")))); err != nil {
+		t.Fatal(err)
+	}
+	args = append(args, "--graph-flag=-overlay="+overlay, "--")
+	if _, err := Parse(args); err == nil || !strings.Contains(err.Error(), "does not support -overlay") {
+		t.Fatalf("Parse() overlay error = %v, want explicit unsupported error", err)
+	}
+}
+
+func TestParseRejectsExtAssetOnlyForPortableProvider(t *testing.T) {
+	args := validArgs(t, ActionRun)
+	projectDir := optionValue(args, "project-dir")
+	mustWriteRuntimeTestFile(t, filepath.Join(projectDir, ".config"), `{"extasset":"custom_asset"}`, 0o600)
+	if _, err := Parse(append(args, "--")); err == nil || !strings.Contains(err.Error(), "unsupported extasset") {
+		t.Fatalf("Parse() extasset error = %v, want portable-policy rejection", err)
 	}
 }
 

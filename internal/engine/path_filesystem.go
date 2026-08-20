@@ -28,9 +28,20 @@ import (
 func SetAssetDir(dir string) {
 	resMgr.SetLoadMode(true)
 	if assetPaths.explicitFSRoots {
+		if assetPaths.legacyCompatibility {
+			assetPaths.extAssetDir = readExtAssetDirFromFilesystem(assetPaths.projectRoot, true)
+		}
 		return
 	}
 	setLegacyFilesystemAssetDir(dir)
+	// Reading the project config uses the Engine resource manager. Keep that
+	// call at the public Engine boundary so path-state tests can configure the
+	// legacy filesystem roots without initializing enginewrap.
+	prefix := defaultAssetPathPrefix
+	if platform.IsWeb() {
+		prefix = ""
+	}
+	assetPaths.extAssetDir = readExtAssetDirFromProjectConfig(prefix)
 }
 
 func setLegacyFilesystemAssetDir(dir string) {
@@ -40,6 +51,11 @@ func setLegacyFilesystemAssetDir(dir string) {
 	}
 
 	setAssetRoot(prefix, dir)
+	assetPaths.explicitFSRoots = false
+	assetPaths.legacyCompatibility = true
+	assetPaths.compatibilityRoot = cleanFilesystemPath(filepath.Join(filepath.FromSlash(assetPaths.root), "..", ".."))
+	assetPaths.canonicalCompatibilityRoot = ""
+	assetPaths.extAssetDir = ""
 	assetPaths.enforceCanonical = !platform.IsWeb()
 	assetPaths.canonicalProjectRoot = ""
 	if assetPaths.enforceCanonical {
@@ -49,6 +65,10 @@ func setLegacyFilesystemAssetDir(dir string) {
 		}
 		if err == nil {
 			assetPaths.canonicalProjectRoot = cleanFilesystemPath(projectRoot)
+		}
+		compatibilityRoot, compatErr := filepath.EvalSymlinks(filepath.FromSlash(assetPaths.compatibilityRoot))
+		if compatErr == nil {
+			assetPaths.canonicalCompatibilityRoot = cleanFilesystemPath(compatibilityRoot)
 		}
 	}
 }

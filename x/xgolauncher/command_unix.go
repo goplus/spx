@@ -24,11 +24,13 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+
+	"github.com/goplus/spx/v3/internal/processsupervisor"
 )
 
 func runCommand(parent context.Context, run func(context.Context) (ProcessStatus, error)) (ProcessStatus, error) {
-	ctx, cancel := context.WithCancel(parent)
-	defer cancel()
+	ctx, cancel := context.WithCancelCause(parent)
+	defer cancel(nil)
 	signals := make(chan os.Signal, 8)
 	done := make(chan struct{})
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGQUIT)
@@ -50,7 +52,7 @@ func runCommand(parent context.Context, run func(context.Context) (ProcessStatus
 				mu.Lock()
 				if received == 0 {
 					received = unixSignal
-					cancel()
+					cancel(&processsupervisor.SignalCause{Signal: unixSignal})
 				}
 				mu.Unlock()
 			case <-done:

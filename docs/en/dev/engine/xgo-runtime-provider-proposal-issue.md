@@ -121,7 +121,7 @@ XGo uses the standard Go toolchain to obtain the effective build list and stores
 - `Replace` is the source actually read;
 - `Effective` is the final source identity used to read metadata and build the provider.
 
-The same graph policy must flow through metadata discovery, provider validation, and provider build, including `GOWORK`, `-mod`, `-modfile`, and `-overlay`. Dependencies must not be calculated by hand from the original `go.mod`, and the provider must not independently resolve a different graph.
+The same supported graph policy must flow through metadata discovery, provider validation, and provider build, including `GOWORK`, `-mod`, and `-modfile`. Dependencies must not be calculated by hand from the original `go.mod`, and the provider must not independently resolve a different graph. If the caller's `GOFLAGS`/`GOWORK` cannot produce one trustworthy graph policy, discovery fails before classification; it must not construct a substitute graph or fall back to the legacy path. Runtime-provider v1 does not define an overlay-aware project snapshot, so `-overlay` is rejected only after a target is confirmed as a runtime project; ordinary projects retain their legacy behavior.
 
 The order and identity of class modules come from the `//xgo:class` markers in the application's effective modfile. Only the main or workspace module containing the target, or a class dependency explicitly marked by the application, can provide a runtime.
 
@@ -134,7 +134,7 @@ Resolved metadata carries all of the following:
 
 When importing resolved class metadata, XGo validates the target modfile snapshot. Before execution, the provider revalidates the declaration, module source, and every other path it actually uses, but does not reinterpret the metadata. This prevents metadata and the provider from coming from different versions, and prevents critical files from being replaced after discovery.
 
-Vendor mode currently cannot provide equivalent module provenance. Vendor projects without a runtime continue through the legacy path; once a runtime match is confirmed, the request fails explicitly as unsupported.
+Vendor mode currently cannot provide equivalent module provenance. When the active module has no external class markers, XGo can still classify the target from that module's own metadata: a non-runtime target continues through the legacy path, while a runtime match fails explicitly as unsupported. If the effective modfile contains an external class marker, v1 fails closed before classification because standard Go vendor data may omit the dependency's `gox.mod`/`gop.mod`; consulting a live replacement would violate vendor snapshot identity. Preserving legacy behavior for those graphs requires a future XGo-owned vendor manifest with complete metadata identities and digests.
 
 ## Target discovery and dispatch
 
@@ -147,7 +147,7 @@ Runtime discovery occurs after target resolution and before any Dir/PkgPath/File
 | import/package path | Supported; locate it from the caller's effective graph |
 | multi-file target | Rejected for runtime projects |
 | `...` pattern | Rejected for runtime projects |
-| `pkg@version` | Rejected; versions can come only from the current graph |
+| `pkg@version` | Legacy targets remain unhandled; runtime matches are rejected after classification; versions can come only from the current graph |
 
 A directory must correspond to exactly one project file. If no class project exists, or if the project does not declare a runtime, discovery returns `NotHandled`; only that result allows XGo to call the legacy implementation. Any other graph, metadata, protocol, provider-build, or provider-execution error is returned directly to the user.
 
@@ -173,7 +173,7 @@ XGo currently passes only these policies to the runtime provider:
 
 | Type | Supported range |
 | --- | --- |
-| Graph | `-mod=mod|readonly`, `-modfile`, `-overlay`; `-mod=vendor` is used only to produce an explicit unsupported error |
+| Graph | `-mod=mod|readonly`, `-modfile`; `-overlay` is used only to produce an explicit unsupported error after a runtime match; `-mod=vendor` permits conservative discovery from the active module only and rejects runtime matches or indeterminate external class metadata |
 | Build | `-v`, `-x`, `-work`, `-trimpath=true`, `-buildvcs=false` |
 
 Other flags are reported only after the target has been confirmed as a runtime project, so ordinary projects retain their existing behavior.
@@ -188,7 +188,7 @@ Before building the provider, XGo verifies that:
 - the current XGo satisfies the minimum version declared by the metadata;
 - `GOOS/GOARCH` match the host, so the provider cannot be used for cross-compilation.
 
-The provider is built in a private temporary directory under the same graph policy, while preserving the caller's CGO selection. The provider inherits the standard streams; XGo forwards cancellation and platform signals and cleans up the entire child process tree. On Unix, the normal exit code or original signal is preserved. On Windows, a Job Object manages the process tree and interrupts are represented as exit codes. Recursive entry into the same runtime provider is rejected.
+The provider is built in a private temporary directory under the same graph policy, while preserving the caller's CGO selection. The provider inherits the standard streams. Each process has one command boundary that owns host signals; inner supervisors consume cancellation, including the original signal as its cause, and clean up the entire child process tree without subscribing to the same signals again. Once cancellation has been observed, a child that exits successfully during shutdown does not turn the request into success. On Unix, the normal exit code or original signal is preserved. On Windows, a Job Object manages the process tree and interrupts are represented as exit codes. Runtime-provider v1 rejects every nested runtime dispatch, including dispatch to a different provider.
 
 `XGO_RUNTIME=off` is an explicit disable switch, but its semantics are "report an error and stop", not "fall back to GenGo".
 
@@ -199,6 +199,10 @@ The SPX provider currently accepts these source identities:
 - the application itself is the SPX main module;
 - SPX is in the current workspace;
 - SPX is introduced through an unversioned local replacement.
+
+The portable provider snapshot contains only project-rooted files. It therefore rejects legacy `extasset` configuration explicitly. This restriction is scoped to the runtime-provider path; existing SPX run, native, export, and pack commands retain their legacy external-asset behavior.
+
+The `.config` contract is bound to the bytes actually consumed. The provider snapshots its absence or presence and SHA-256, revalidates the original path before handoff, and then supplies run/build only the captured bytes instead of reopening the project copy.
 
 For each request, the provider builds the interpreter bridge from that effective source with host `CGO_ENABLED=1`, and verifies that the build output still comes from the same module identity. Go build cache reuse is allowed, but the bridge file itself is not persistently cached. Regular versioned dependencies, pseudo-versions, and versioned replacements are currently rejected in published mode; downloadable Engine/PCK assets alone cannot prove that the bridge matches the SPX version and Engine interface.
 
@@ -234,7 +238,7 @@ The generated launcher depends on SPX's public launcher package because generate
 
 The Darwin payload is finalized before linking; the linked executable is then ad-hoc signed and is not appended to or modified afterward. This signing guarantees Mach-O integrity, not Developer ID signing or notarization.
 
-The provider may write only to the private staging path allocated by XGo. On success, XGo verifies that the artifact is a non-empty, non-symlink host executable, then atomically replaces the final output on the same filesystem. On failure, an existing target must remain unchanged. `install` uses the same transaction and changes only the final directory.
+The provider may write only to the private staging path allocated by XGo. On success, XGo verifies that the artifact is a non-empty, non-symlink host executable, then commits the final output with a same-filesystem replacement. Before that commit point, provider failure leaves an existing target unchanged. Atomic visibility and replacement of an existing target are guaranteed only to the extent provided by the host platform and filesystem; real Windows replacement and crash/recovery behavior remains a host-CI requirement. `install` uses the same transaction and changes only the final directory.
 
 The built launcher does not require Go, XGo, SPX, or a network connection. It first validates the payload and host platform, then materializes the embedded Engine, bridge, and project, and finally runs them in a new session.
 
@@ -247,7 +251,7 @@ The component materialization cache is addressed by `namespace + full digest`; E
 - different content is never shared even when file names are identical;
 - a fresh temporary provider binary and source bridge are produced each time, while compilation naturally reuses the Go build cache; XGo does not maintain another persistent provider-binary cache.
 
-Downloaded files and materialized directories are revalidated on every cache hit against the manifest, type, size, and SHA-256. Tampering that preserves file size is rejected; a damaged entry is repaired under an exclusive lock. First materialization uses a sibling temporary path, complete verification, and atomic rename. Shared/exclusive leases prevent concurrent processes from observing partial state or deleting an entry that is in use.
+Downloaded files and materialized directories are revalidated on every cache hit against the manifest, type, size, and SHA-256. Tampering that preserves file size is rejected; a damaged entry is repaired under an exclusive lock. First materialization uses a sibling temporary path, complete verification, and a same-filesystem rename. Atomic publication is relied on only within the guarantees of the host platform and filesystem; real Windows publish/repair and crash-recovery scenarios remain host-CI requirements. Shared/exclusive leases prevent concurrent processes from observing partial state or deleting an entry that is in use.
 
 All launcher resources come from the embedded payload, so the first run does not download anything even when the cache is empty. Automatic quota reclamation is not currently implemented; any future GC must continue to honor leases and must not delete components in use by a running process.
 
@@ -270,7 +274,7 @@ All boundaries follow these rules:
 - XGo `1.8.0` is the runtime-provider capability baseline; earlier versions are unsupported and cannot rely on the old parser to provide a reliable upgrade hint;
 - host desktop only: Darwin amd64/arm64, Linux amd64, and Windows amd64;
 - `xgo test`, Web, Android, iOS, and `GOOS/GOARCH` cross-compilation are unsupported;
-- runtime vendor mode, multiple runtime targets, and arbitrary Go build flags are unsupported;
+- runtime vendor mode, overlays, multiple runtime targets, and arbitrary Go build flags are unsupported;
 - SPX requires a separate project pack directory;
 - published SPX module mode is not enabled yet; outside an SPX checkout, specifying only a published SPX version does not activate the current provider;
 - the launcher contains project source and resources and does not provide source confidentiality;
@@ -295,7 +299,7 @@ Until step 3 is complete, SPX must fail explicitly for published module identiti
 - directory, single-file, and package targets for runtime projects do not execute GenGo after discovery;
 - metadata, provider, and bridge for workspace and local-replacement projects always come from the same effective graph;
 - a clean SPX checkout can run and build without preinstalled resources in `$GOPATH/bin`;
-- cache miss, cache hit, offline, concurrency, kill-recovery, and same-size tampering are all covered by tests;
+- cache miss, cache hit, offline, concurrency, kill-recovery, and same-size tampering are covered by platform-neutral tests; Windows host CI additionally exercises real publish/replace and crash-recovery behavior;
 - run fully preserves argv, stdin/stdout/stderr, and platform exit semantics; Unix signals are reproduced, Windows interrupts return 130, and the project is not modified;
 - build/install failures do not corrupt an existing output;
 - the launcher completes its first run with an empty cache, no toolchain, and no network;

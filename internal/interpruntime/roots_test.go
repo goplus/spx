@@ -89,6 +89,8 @@ func TestEnvironmentReplacesAmbientRoots(t *testing.T) {
 		ProjectDirEnv + "=/attacker/project",
 		AssetDirEnv + "=/attacker/assets",
 		SessionDirEnv + "=/attacker/session",
+		PortableConfigDirEnv + "=/attacker/config",
+		PortableConfigIdentityEnv + "=sha256:attacker",
 		"UNCHANGED=value",
 	}
 	got, err := roots.Environment(base)
@@ -104,6 +106,49 @@ func TestEnvironmentReplacesAmbientRoots(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("Environment() = %#v, want %#v", got, want)
+	}
+}
+
+func TestPortableConfigDirFromEnv(t *testing.T) {
+	if value, found, err := PortableConfigDirFromEnv([]string{"KEEP=value"}); err != nil || found || value != "" {
+		t.Fatalf("PortableConfigDirFromEnv() = %q, %v, %v, want absent", value, found, err)
+	}
+	if value, found, err := PortableConfigDirFromEnv([]string{PortableConfigDirEnv + "=/trusted"}); err != nil || !found || value != "/trusted" {
+		t.Fatalf("PortableConfigDirFromEnv() = %q, %v, %v", value, found, err)
+	}
+	_, _, err := PortableConfigDirFromEnv([]string{
+		PortableConfigDirEnv + "=/first",
+		PortableConfigDirEnv + "=/second",
+	})
+	if err == nil || !strings.Contains(err.Error(), "duplicate") {
+		t.Fatalf("PortableConfigDirFromEnv() duplicate error = %v", err)
+	}
+}
+
+func TestPortableConfigIdentityFromEnv(t *testing.T) {
+	value := "sha256:0123456789abcdef"
+	got, found, err := PortableConfigIdentityFromEnv([]string{PortableConfigIdentityEnv + "=" + value})
+	if err != nil || !found || got != value {
+		t.Fatalf("PortableConfigIdentityFromEnv() = %q, %v, %v", got, found, err)
+	}
+	_, _, err = PortableConfigIdentityFromEnv([]string{
+		PortableConfigIdentityEnv + "=first",
+		PortableConfigIdentityEnv + "=second",
+	})
+	if err == nil || !strings.Contains(err.Error(), "duplicate") {
+		t.Fatalf("PortableConfigIdentityFromEnv() duplicate error = %v", err)
+	}
+}
+
+func TestPortableConfigEnvironmentKeysAreCaseInsensitiveOnWindows(t *testing.T) {
+	for _, key := range []string{PortableConfigDirEnv, PortableConfigIdentityEnv} {
+		lower := strings.ToLower(key)
+		if canonical, ok := rootEnvKeyForGOOS(lower, "windows"); !ok || canonical != key {
+			t.Fatalf("rootEnvKeyForGOOS(%q, windows) = %q, %v", lower, canonical, ok)
+		}
+		if _, ok := rootEnvKeyForGOOS(lower, "linux"); ok {
+			t.Fatalf("rootEnvKeyForGOOS(%q, linux) accepted case variant", lower)
+		}
 	}
 }
 

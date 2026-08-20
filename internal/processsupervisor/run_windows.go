@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"os/signal"
 	"syscall"
 	"time"
 	"unsafe"
@@ -80,9 +79,6 @@ func run(ctx context.Context, cmd *exec.Cmd) (Status, error) {
 	}
 	cmd.WaitDelay = windowsWaitDelay
 
-	signals := make(chan os.Signal, 4)
-	signal.Notify(signals, os.Interrupt)
-	defer signal.Stop(signals)
 	if err := cmd.Start(); err != nil {
 		return Status{}, err
 	}
@@ -113,6 +109,10 @@ func run(ctx context.Context, cmd *exec.Cmd) (Status, error) {
 	if err != nil {
 		return abort(fmt.Errorf("processsupervisor: open suspended Windows child thread: %w", err))
 	}
+	if ctx.Err() != nil {
+		_ = windows.CloseHandle(thread)
+		return abort(cancellationError(ctx, true))
+	}
 	resumeErr := resumeWindowsThread(thread)
 	closeThreadErr := windows.CloseHandle(thread)
 	if resumeErr != nil {
@@ -132,6 +132,7 @@ func run(ctx context.Context, cmd *exec.Cmd) (Status, error) {
 		wait <- waitResult{state: cmd.ProcessState, err: err}
 	}()
 	ctxDone := ctx.Done()
+	var cancellationObserved bool
 	for {
 		select {
 		case result := <-wait:
@@ -143,6 +144,9 @@ func run(ctx context.Context, cmd *exec.Cmd) (Status, error) {
 			}
 			jobOpen = false
 			if result.err == nil {
+				if err := cancellationError(ctx, cancellationObserved); err != nil {
+					return Status{}, err
+				}
 				return Status{}, nil
 			}
 			var exitError *exec.ExitError
@@ -150,17 +154,12 @@ func run(ctx context.Context, cmd *exec.Cmd) (Status, error) {
 				return Status{}, result.err
 			}
 			return statusFromProcessState(result.state), nil
-		case <-signals:
-			// CTRL_BREAK is the closest console-level equivalent to forwarding
-			// an interrupt. If unavailable, terminate the complete job. Windows
-			// status still reports an exit code, never a fabricated POSIX signal.
-			if err := windows.GenerateConsoleCtrlEvent(windows.CTRL_BREAK_EVENT, uint32(cmd.Process.Pid)); err != nil {
-				_ = windows.TerminateJobObject(job, 1)
-			}
 		case <-cancelRequests:
+			cancellationObserved = true
 			_ = windows.TerminateJobObject(job, 1)
 		case <-ctxDone:
 			ctxDone = nil
+			cancellationObserved = true
 			_ = windows.TerminateJobObject(job, 1)
 		}
 	}

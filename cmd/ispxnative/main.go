@@ -28,7 +28,6 @@ import (
 	_ "unsafe"
 
 	"github.com/goplus/spx/v3/internal/interpruntime"
-	"github.com/goplus/spx/v3/internal/projectpolicy"
 	"github.com/goplus/spx/v3/pkg/ispx"
 )
 
@@ -55,20 +54,21 @@ func run(env []string) (int, error) {
 	if err != nil {
 		return 1, err
 	}
-	if err := projectpolicy.ValidateConfig(roots.ProjectDir); err != nil {
-		return 1, err
-	}
 	if err := validateAssetIndex(roots.AssetDir); err != nil {
 		return 1, err
 	}
-	if err := ispx.ConfigureFilesystemRoots(roots.ProjectDir, roots.AssetDir); err != nil {
+	configOverlay, err := loadPortableConfigOverlay(env, roots)
+	if err != nil {
+		return 1, err
+	}
+	if err := configureFilesystemRoots(roots, configOverlay); err != nil {
 		return 1, fmt.Errorf("configure filesystem roots: %w", err)
 	}
 	if err := ispx.Init(nil); err != nil {
 		return 1, fmt.Errorf("initialize interpreter: %w", err)
 	}
 
-	if err := buildPinnedProject(roots.ProjectDir, ispx.BuildFS); err != nil {
+	if err := buildPinnedProject(roots.ProjectDir, configOverlay, ispx.BuildFS); err != nil {
 		return 1, fmt.Errorf("build project: %w", err)
 	}
 
@@ -79,17 +79,35 @@ func run(env []string) (int, error) {
 	return exitCode, nil
 }
 
+// These variables keep the policy decision explicit and make the command
+// boundary testable without initializing the process-wide interpreter.
+var (
+	configurePortableFilesystemRoots = ispx.ConfigureFilesystemRoots
+	configureLegacyFilesystemRoots   = ispx.ConfigureLegacyFilesystemRoots
+)
+
+func configureFilesystemRoots(roots interpruntime.Roots, configOverlay *portableConfigOverlay) error {
+	if configOverlay == nil {
+		return configureLegacyFilesystemRoots(roots.ProjectDir, roots.AssetDir)
+	}
+	return configurePortableFilesystemRoots(roots.ProjectDir, roots.AssetDir)
+}
+
 // buildPinnedProject retains the project root for the host-process lifetime on
 // success. BuildFS borrows the filesystem because project configuration is
 // loaded asynchronously after the interpreted entry point returns. Retaining
 // the actual Root makes that lifetime explicit instead of relying on a closure
 // and its finalizer to keep the descriptor open.
-func buildPinnedProject(projectDir string, build func(fs.FS) error) error {
+func buildPinnedProject(projectDir string, configOverlay *portableConfigOverlay, build func(fs.FS) error) error {
 	projectRoot, err := openPinnedProjectRoot(projectDir)
 	if err != nil {
 		return err
 	}
-	if err := build(projectRoot.FS()); err != nil {
+	projectFS := fs.FS(projectRoot.FS())
+	if configOverlay != nil {
+		projectFS = newPortableConfigFS(projectFS, configOverlay)
+	}
+	if err := build(projectFS); err != nil {
 		projectRoot.Close()
 		return err
 	}

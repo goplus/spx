@@ -158,6 +158,37 @@ func TestArchiveCanonicalAndDeterministic(t *testing.T) {
 	assertBundleTestFile(t, finalOutput, "keep-final")
 }
 
+func TestCollectUsesImmutableConfigBytes(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		data []byte
+	}{
+		{name: "content", data: []byte(`{"name":"validated"}`)},
+		{name: "empty", data: []byte{}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			projectDir := t.TempDir()
+			writeBundleTestFile(t, filepath.Join(projectDir, ".config"), `{"extasset":"live"}`, 0o600)
+
+			bundle, err := Collect(Config{
+				ProjectDir: projectDir, IncludeConfig: true, ConfigBytes: tt.data,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := bundle.entries; len(got) != 1 || got[0].name != ".config" || !bytes.Equal(got[0].data, tt.data) {
+				t.Fatalf("collected entries = %#v, want immutable .config %q", got, tt.data)
+			}
+			if len(tt.data) != 0 {
+				tt.data[0] ^= 0xff
+				if bytes.Equal(bundle.entries[0].data, tt.data) {
+					t.Fatal("bundle retained caller-owned config storage")
+				}
+			}
+		})
+	}
+}
+
 func TestCollectRejectsInvalidRelativePaths(t *testing.T) {
 	projectDir := t.TempDir()
 	writeBundleTestFile(t, filepath.Join(projectDir, "file.txt"), "file", 0o600)
