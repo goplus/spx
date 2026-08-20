@@ -21,6 +21,7 @@ import (
 	"github.com/goplus/spx/v3/internal/engine"
 	spxlog "github.com/goplus/spx/v3/internal/log"
 	itime "github.com/goplus/spx/v3/internal/time"
+	"github.com/goplus/spx/v3/internal/ui"
 )
 
 // shapeManager manages the lifecycle of all runtime shapes.
@@ -30,9 +31,13 @@ import (
 //   - render layer grouping
 //   - minimizing per-frame allocations
 type shapeManager struct {
-	items        []Shape
-	tempItems    []Shape
-	destroyItems []Shape
+	items                  []Shape
+	tempItems              []Shape
+	destroyItems           []Shape
+	textBubbles            []*textBubble
+	activeTextBubbles      []*textBubble
+	sayLayouts             []ui.SayBubbleLayout
+	nextTextBubbleLayoutID uint64
 }
 
 // init prepares internal buffers while preserving existing allocations when possible.
@@ -52,6 +57,13 @@ func (s *shapeManager) init() {
 	} else {
 		s.destroyItems = s.destroyItems[:0]
 	}
+	clear(s.textBubbles)
+	s.textBubbles = s.textBubbles[:0]
+	clear(s.activeTextBubbles)
+	s.activeTextBubbles = s.activeTextBubbles[:0]
+	clear(s.sayLayouts)
+	s.sayLayouts = s.sayLayouts[:0]
+	s.nextTextBubbleLayoutID = 0
 }
 
 // reset clears all internal state while keeping allocated memory.
@@ -63,6 +75,7 @@ func (s *shapeManager) reset() {
 
 // flushActivate updates all active non-sprite shapes for the current frame.
 func (s *shapeManager) flushActivate(items []Shape) {
+	s.layoutTextBubbles(items)
 	if len(items) == 0 {
 		return
 	}
@@ -85,6 +98,79 @@ func (s *shapeManager) flushActivate(items []Shape) {
 				updater.onUpdate(delta)
 			}
 		}
+	}
+}
+
+func (s *shapeManager) layoutTextBubbles(items []Shape) {
+	clear(s.textBubbles)
+	s.textBubbles = s.textBubbles[:0]
+	clear(s.sayLayouts)
+	s.sayLayouts = s.sayLayouts[:0]
+
+	for _, item := range items {
+		bubble, ok := item.(*textBubble)
+		if !ok || bubble.panel == nil || !bubble.sprite.Visible() {
+			continue
+		}
+		s.textBubbles = append(s.textBubbles, bubble)
+	}
+
+	sortTextBubblesByLayoutID(s.textBubbles)
+	topologyChanged := len(s.textBubbles) != len(s.activeTextBubbles)
+	if !topologyChanged {
+		for i, bubble := range s.textBubbles {
+			if bubble != s.activeTextBubbles[i] {
+				topologyChanged = true
+				break
+			}
+		}
+	}
+	if topologyChanged {
+		clear(s.activeTextBubbles)
+		s.activeTextBubbles = append(s.activeTextBubbles[:0], s.textBubbles...)
+	}
+	if len(s.textBubbles) == 0 {
+		return
+	}
+
+	winSize := s.textBubbles[0].sprite.g.getWindowSize()
+	context := ui.NewSayBubbleLayoutContext(winSize)
+	needsResolve := topologyChanged
+	for _, bubble := range s.textBubbles {
+		center, size := bubble.getBounds()
+		layout := context.NewLayout(bubble.layoutID, center, size, bubble.content)
+		if bubble.hasLayout {
+			layout = layout.WithPreviousDirection(bubble.layout)
+			if !bubble.layout.SameInput(layout) {
+				needsResolve = true
+			}
+		} else {
+			needsResolve = true
+		}
+		s.sayLayouts = append(s.sayLayouts, layout)
+	}
+	if !needsResolve {
+		return
+	}
+
+	ui.ResolveSayBubbleLayouts(s.sayLayouts)
+	for i, bubble := range s.textBubbles {
+		bubble.setLayout(s.sayLayouts[i])
+	}
+}
+
+func sortTextBubblesByLayoutID(bubbles []*textBubble) {
+	// Bubble counts are normally tiny and already ordered. Insertion sort keeps
+	// the unchanged-frame path allocation-free while making activation order
+	// irrelevant to layout.
+	for i := 1; i < len(bubbles); i++ {
+		bubble := bubbles[i]
+		j := i
+		for j > 0 && bubbles[j-1].layoutID > bubble.layoutID {
+			bubbles[j] = bubbles[j-1]
+			j--
+		}
+		bubbles[j] = bubble
 	}
 }
 
@@ -114,6 +200,13 @@ func (s *shapeManager) flushDestroy(buffer *engine.SpriteSyncBuffer) {
 
 // add adds a shape immediately to the active list.
 func (s *shapeManager) add(shape Shape) {
+	if bubble, ok := shape.(*textBubble); ok && bubble.layoutID == 0 {
+		s.nextTextBubbleLayoutID++
+		if s.nextTextBubbleLayoutID == 0 {
+			s.nextTextBubbleLayoutID++
+		}
+		bubble.layoutID = s.nextTextBubbleLayoutID
+	}
 	s.items = append(s.items, shape)
 }
 
