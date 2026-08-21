@@ -16,22 +16,10 @@
 
 package shared
 
-import "errors"
-
-var ErrUsage = errors.New("usage")
-
-type BuildEnvironment = buildEnvironment
-
-type ScriptRunner interface {
-	RunScript(relativePath string, args ...string) error
-	RunCommand(workdir string, name string, args ...string) error
-	RepoRootDir() string
+func RunCommandOutput(name string, args ...string) ([]byte, error) {
+	return runCommandOutput(name, args...)
 }
 
-type CommandRunner struct {
-	RepoRoot string
-}
-
-func (r CommandRunner) RepoRootDir() string {
-	return r.RepoRoot
+func RunStreamingCommand(workdir, name string, args ...string) error {
+	return runStreamingCommand(workdir, name, args...)
 }

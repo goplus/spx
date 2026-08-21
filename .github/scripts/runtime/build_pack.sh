@@ -19,12 +19,8 @@ if [ ! -d "$engine_asset_directory" ]; then
   exit 1
 fi
 
-"$BUILDCTL" engine download \
-  --runtime \
-  --skip-runtime-pack \
-  --asset-dir "$engine_asset_directory" \
-  --same-run-artifacts
-"$BUILDCTL" runtime export-pack
+"$BUILDCTL" runtime export-pack \
+  --engine-asset-dir "$engine_asset_directory"
 
 gopath="$(go env GOPATH | tr -d '\r\n')"
 gopath="${gopath%%:*}"

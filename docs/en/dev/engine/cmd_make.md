@@ -72,7 +72,7 @@ Local `buildctl` setup reads every pinned tool version from this lock and passes
 Godot engine artifacts and the SPX runtime pack have separate build identities:
 
 - Godot engine artifacts are determined by the pinned Godot commit, the `godot_modules/spx` tree (including its SCons profile), the engine toolchain, and platform-specific axes. Changes to `buildctl`, release metadata, or documentation do not invalidate the Godot compilation cache.
-- `spx-runtime-assets.zip` is a separate SPX runtime pack generated from `cmd/spx`, the project templates, the SPX Go runtime, and the `runtime export-pack` path. Those changes can require regenerating the pack, but they are not Godot engine source changes.
+- `spx-runtime-assets.zip` is a separate SPX runtime pack generated from the desktop export command, project template, SPX Go runtime, and the byte-producing `runtime export-pack` path. Independent run, launcher, Web/mobile export, and release-orchestration changes do not invalidate it.
 
 The current runtime tag publishes both asset classes atomically, so a change to either output still requires a `runtime_version` bump. Unchanged Godot engine inputs nevertheless retain their independent compilation cache and are not rebuilt merely because a version or release-orchestration file changed.
 

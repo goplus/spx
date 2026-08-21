@@ -14,29 +14,57 @@
  * limitations under the License.
  */
 
-package shared
+package engine
 
 import (
 	"archive/zip"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
-
-	"github.com/goplus/spx/v3/internal/base/fileutil"
 )
 
-var fileDownloadHTTPClient = &http.Client{Timeout: 30 * time.Minute}
-
-func copyDir(src, dst string) error {
-	return fileutil.CopyDir(src, dst)
+type binaryInstall struct {
+	assetName string
+	dst       string
 }
 
-func zipDirectory(srcDir, dstZip string) (err error) {
-	return fileutil.ZipDirectory(srcDir, dstZip)
+func downloadBinaryFromZip(env engineDownloadEnv, zipName, assetName, dst string) error {
+	return downloadBinariesFromZip(env, zipName, []binaryInstall{{assetName, dst}})
+}
+
+func downloadBinariesFromZip(env engineDownloadEnv, zipName string, installs []binaryInstall) error {
+	zipPath := filepath.Join(env.cacheDir, zipName)
+	if err := fetchEngineAsset(env, zipName, env.urlPrefix+zipName, zipPath); err != nil {
+		return err
+	}
+	defer os.Remove(zipPath)
+
+	extractDir, err := os.MkdirTemp(env.cacheDir, "engine-zip-*")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(extractDir)
+
+	if err := extractZip(zipPath, extractDir); err != nil {
+		return err
+	}
+	for _, install := range installs {
+		info, err := os.Stat(filepath.Join(extractDir, install.assetName))
+		if err != nil {
+			return fmt.Errorf("engine archive %s is missing %s: %w", zipName, install.assetName, err)
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("engine archive entry %s is not a regular file", install.assetName)
+		}
+	}
+	for _, install := range installs {
+		if err := copyEngineAssetAtomically(filepath.Join(extractDir, install.assetName), install.dst); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func extractZip(srcZip, dstDir string) error {
@@ -71,12 +99,12 @@ func resolveZipExtractPath(dstDir, name string) (string, error) {
 	cleanBase := filepath.Clean(dstDir)
 	targetPath := filepath.Clean(filepath.Join(cleanBase, name))
 	basePrefix := cleanBase
-	if !strings.HasSuffix(basePrefix, string(os.PathSeparator)) {
-		basePrefix += string(os.PathSeparator)
+	if !strings.HasSuffix(basePrefix, string(filepath.Separator)) {
+		basePrefix += string(filepath.Separator)
 	}
 	targetPrefix := targetPath
-	if !strings.HasSuffix(targetPrefix, string(os.PathSeparator)) {
-		targetPrefix += string(os.PathSeparator)
+	if !strings.HasSuffix(targetPrefix, string(filepath.Separator)) {
+		targetPrefix += string(filepath.Separator)
 	}
 	if targetPath != cleanBase && !strings.HasPrefix(targetPrefix, basePrefix) {
 		return "", fmt.Errorf("illegal path in archive entry: %s", name)
@@ -84,70 +112,19 @@ func resolveZipExtractPath(dstDir, name string) (string, error) {
 	return targetPath, nil
 }
 
-func extractZipFile(file *zip.File, dst string) (err error) {
+func extractZipFile(file *zip.File, dst string) error {
 	reader, err := file.Open()
 	if err != nil {
 		return err
 	}
-	defer func() {
-		if cerr := reader.Close(); cerr != nil && err == nil {
-			err = cerr
-		}
-	}()
+	defer reader.Close()
 
 	output, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, file.Mode())
 	if err != nil {
 		return err
 	}
-	defer func() {
-		if cerr := output.Close(); cerr != nil && err == nil {
-			err = cerr
-		}
-	}()
+	defer output.Close()
 
 	_, err = io.Copy(output, reader)
 	return err
-}
-
-func fetchURLToFile(url, dst string) (err error) {
-	resp, err := fileDownloadHTTPClient.Get(url)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if cerr := resp.Body.Close(); cerr != nil && err == nil {
-			err = cerr
-		}
-	}()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("download %s failed: %s", url, resp.Status)
-	}
-
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-		return err
-	}
-	file, err := os.CreateTemp(filepath.Dir(dst), filepath.Base(dst)+".tmp-*")
-	if err != nil {
-		return err
-	}
-	tmpPath := file.Name()
-	defer func() {
-		if file != nil {
-			_ = file.Close()
-		}
-		if err != nil {
-			_ = os.Remove(tmpPath)
-		}
-	}()
-
-	if _, err := io.Copy(file, resp.Body); err != nil {
-		return err
-	}
-	if err := file.Close(); err != nil {
-		return err
-	}
-	file = nil
-
-	return os.Rename(tmpPath, dst)
 }

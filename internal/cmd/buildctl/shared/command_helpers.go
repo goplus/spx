@@ -16,22 +16,31 @@
 
 package shared
 
-import "errors"
+import (
+	"os"
+	"os/exec"
+)
 
-var ErrUsage = errors.New("usage")
-
-type BuildEnvironment = buildEnvironment
-
-type ScriptRunner interface {
-	RunScript(relativePath string, args ...string) error
-	RunCommand(workdir string, name string, args ...string) error
-	RepoRootDir() string
+func runCommandOutput(name string, args ...string) ([]byte, error) {
+	return runCommandOutputWithEnv("", os.Environ(), name, args...)
 }
 
-type CommandRunner struct {
-	RepoRoot string
+func runCommandOutputWithEnv(workdir string, env []string, name string, args ...string) ([]byte, error) {
+	cmd := exec.Command(name, args...)
+	cmd.Env = env
+	if workdir != "" {
+		cmd.Dir = workdir
+	}
+	return cmd.CombinedOutput()
 }
 
-func (r CommandRunner) RepoRootDir() string {
-	return r.RepoRoot
+func runStreamingCommand(workdir, name string, args ...string) error {
+	cmd := exec.Command(name, args...)
+	if workdir != "" {
+		cmd.Dir = workdir
+	}
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+	return cmd.Run()
 }

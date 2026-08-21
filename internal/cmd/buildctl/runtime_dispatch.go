@@ -14,24 +14,13 @@
  * limitations under the License.
  */
 
-package shared
+package main
 
-import "errors"
+import "github.com/goplus/spx/v3/internal/cmd/buildctl/runtimecmd"
 
-var ErrUsage = errors.New("usage")
-
-type BuildEnvironment = buildEnvironment
-
-type ScriptRunner interface {
-	RunScript(relativePath string, args ...string) error
-	RunCommand(workdir string, name string, args ...string) error
-	RepoRootDir() string
-}
-
-type CommandRunner struct {
-	RepoRoot string
-}
-
-func (r CommandRunner) RepoRootDir() string {
-	return r.RepoRoot
+func run(args []string) error {
+	if len(args) != 0 && args[0] == "runtime" {
+		return runtimecmd.Run(args[1:])
+	}
+	return runOtherRootCommand(args)
 }

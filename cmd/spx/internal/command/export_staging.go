@@ -22,7 +22,24 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/goplus/spx/v3/cmd/spx/internal/util"
 )
+
+func (cmd *CmdTool) prepareExport() error {
+	if cmd.TargetAbsDir == "" {
+		return fmt.Errorf("stage project-local resources: logical project directory is empty")
+	}
+	source := filepath.Join(cmd.TargetAbsDir, "assets")
+	destination := filepath.Join(cmd.ProjectDir, "assets")
+	if err := validateExportStage(source, destination); err != nil {
+		return err
+	}
+	if err := util.CopyDir2(source, destination); err != nil {
+		return fmt.Errorf("stage project-local resources from %s: %w", source, err)
+	}
+	return nil
+}
 
 func validateExportStage(source, destination string) error {
 	info, err := os.Lstat(source)
