@@ -44,6 +44,7 @@ type ExtraArgs struct {
 	Mode            *string
 	Movie           *bool
 	Verbose         *bool
+	Output          *string
 }
 
 func (e *ExtraArgs) String() []string {
@@ -83,7 +84,7 @@ func (cmd *CmdTool) CheckCmd(ext ...string) bool {
 	cmds := []string{
 		"help", "version", "editor",
 		"init", "clear", "clearbuild",
-		"build", "buildtinygo", "rune", "export",
+		"build", "buildtinygo", "rune", "export", "buildlauncher",
 		"runweb", "buildweb", "exportweb", "stopweb", "runwebworker",
 		"runm", "exportbot", "exportapk", "exportios",
 		"run", "runnative", "exporttemplateweb", "exportminigame", "exportminiprogram", "exportwebworker",
@@ -135,6 +136,7 @@ Available commands:
 
     Development & Building:
     - build           # Build the dynamic library
+    - buildlauncher   # Build a launcher without Godot or an XGo driver
     - buildtinygo     # Build static library using TinyGo for ESP32
     - run             # Run the current project in interpreted mode
     - runnative       # Run the current project with the native PC runtime
@@ -170,6 +172,7 @@ Examples:
     #CMDNAME build --servermode           # Build in server mode
     #CMDNAME runweb --debugweb            # Run web server with debug service
     #CMDNAME buildtinygo                  # Build TinyGo static library for ESP32
+    #CMDNAME buildlauncher --path ./game # Build ./game/.builds/game
     #CMDNAME exportminigame -build=fast   # Export minigame without compression (faster)
     #CMDNAME runnative -tags=pure_engine  # Run in pure engine mode
     #CMDNAME export --fullscreen          # Export with fullscreen mode
@@ -203,6 +206,7 @@ func (cmd *CmdTool) initializeFlags() *bool {
 	cmd.Args.Mode = f.String("mode", "none", "mode: none, worker, minigame")
 	cmd.Args.Movie = f.Bool("movie", false, "record movie mode")
 	cmd.Args.Verbose = f.Bool("v", false, "print verbose information")
+	cmd.Args.Output = f.String("o", "", "launcher output path (buildlauncher)")
 	return help
 }
 
