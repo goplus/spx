@@ -19,6 +19,7 @@ package scaffold
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -31,6 +32,22 @@ func TestGDExtensionTemplatesMatchProjectFiles(t *testing.T) {
 func TestRuntimeExtensionListUsesStandardProjectEntry(t *testing.T) {
 	if got, want := RuntimeExtensionList(), "res://runtime.gdextension\n"; got != want {
 		t.Fatalf("RuntimeExtensionList() = %q, want %q", got, want)
+	}
+}
+
+func TestSessionExtensionListUsesPackedProjectEntry(t *testing.T) {
+	if got, want := SessionExtensionList(), "res://gdspx.gdextension\n"; got != want {
+		t.Fatalf("SessionExtensionList() = %q, want %q", got, want)
+	}
+}
+
+func TestSessionRuntimeGDExtensionPinsLibrariesToSession(t *testing.T) {
+	got := SessionRuntimeGDExtension()
+	if !strings.Contains(got, `"res://gdspx-darwin-amd64.dylib"`) {
+		t.Fatalf("SessionRuntimeGDExtension() does not use res:// libraries:\n%s", got)
+	}
+	if strings.Contains(RuntimeGDExtension(), `"res://gdspx-darwin-amd64.dylib"`) {
+		t.Fatal("legacy RuntimeGDExtension unexpectedly changed")
 	}
 }
 

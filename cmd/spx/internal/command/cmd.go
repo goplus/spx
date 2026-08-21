@@ -103,6 +103,18 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 		}
 		return err
 	}
+	if isInterpretedRunCommand(cmd.Args.CmdName) {
+		err = cmd.setupInterpretedPaths(dstRelDir)
+		if err != nil {
+			logErrorf("Setting up interpreted paths: %v", err)
+			return err
+		}
+		err = cmd.handleInterpretedRunCommand()
+		if err != nil {
+			logErrorf("Executing interpreted run command: %v", err)
+		}
+		return err
+	}
 
 	err = cmd.setupPaths(dstRelDir)
 	if err != nil {
@@ -113,15 +125,6 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 	if cmd.handleSpecialCommands() {
 		return nil
 	}
-
-	if isInterpretedRunCommand(cmd.Args.CmdName) {
-		err = cmd.handleInterpretedRunCommand()
-		if err != nil {
-			logErrorf("Executing interpreted run command: %v", err)
-		}
-		return err
-	}
-
 	if isRuntimeModeCommand(cmd.Args.CmdName) {
 		cmd.RuntimeMode = true
 	}
@@ -144,6 +147,21 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 	}
 
 	return cmd.executeCommand()
+}
+
+// setupInterpretedPaths resolves the source and session roots without changing
+// the process working directory. Other legacy commands continue to use
+// setupPaths until their generated-project assumptions are migrated.
+func (cmd *CmdTool) setupInterpretedPaths(dstRelDir string) error {
+	targetDir, err := filepath.Abs(*cmd.Args.Path)
+	if err != nil {
+		return fmt.Errorf("failed to resolve target directory: %w", err)
+	}
+	cmd.TargetAbsDir = filepath.Clean(targetDir)
+	cmd.TargetDir = cmd.TargetAbsDir
+	cmd.Args.Path = &cmd.TargetDir
+	cmd.ProjectDir = filepath.Join(cmd.TargetAbsDir, dstRelDir)
+	return nil
 }
 
 // handleSpecialCommands handles commands without setup.

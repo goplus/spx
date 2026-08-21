@@ -19,12 +19,60 @@
 
 package engine
 
+import (
+	"path"
+	"strings"
+)
+
 func SetAssetDir(dir string) {
 	resMgr.SetLoadMode(false)
-	setExtAssetDir("")
+	// Packmode keeps the legacy archive and export policy.
 	setAssetRoot(packmodeAssetPrefix, dir)
+	assetPaths.explicitFSRoots = false
+	assetPaths.legacyCompatibility = true
+	assetPaths.extAssetDir = readExtAssetDirFromProjectConfig(packmodeAssetPrefix)
 }
 
 func ToAssetPath(relPath string) string {
-	return normalizeSlashes(assetPaths.root + relPath)
+	if strings.Contains(relPath, "\\") {
+		return ""
+	}
+	relPath = normalizeSlashes(relPath)
+	if relPath == "" || strings.HasPrefix(relPath, "/") {
+		return ""
+	}
+	if strings.HasPrefix(relPath, packmodeAssetPrefix) {
+		return projectResourcePath(strings.TrimPrefix(relPath, packmodeAssetPrefix))
+	}
+	if strings.Contains(relPath, ":") {
+		return ""
+	}
+	if suffix, ok := extAssetSuffix(relPath); ok {
+		return projectResourcePath(path.Join(engineExtAssetPath, suffix))
+	}
+	if suffix, ok := packmodeCompatibilitySuffix(relPath); ok {
+		return projectResourcePath(suffix)
+	}
+	root := strings.TrimPrefix(assetPaths.root, packmodeAssetPrefix)
+	return projectResourcePath(path.Join(root, relPath))
+}
+
+func packmodeCompatibilitySuffix(relPath string) (string, bool) {
+	clean := path.Clean(relPath)
+	if !strings.HasPrefix(clean, "../../") {
+		return "", false
+	}
+	suffix := strings.TrimPrefix(clean, "../../")
+	if suffix == "" || suffix == clean {
+		return "", false
+	}
+	return suffix, true
+}
+
+func projectResourcePath(name string) string {
+	name = path.Clean(name)
+	if name == "." || name == ".." || strings.HasPrefix(name, "../") || path.IsAbs(name) || strings.Contains(name, ":") {
+		return ""
+	}
+	return packmodeAssetPrefix + name
 }

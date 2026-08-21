@@ -146,7 +146,31 @@ func Build(files map[string][]byte) error {
 	return BuildFS(memfs.New(files))
 }
 
-// BuildFS builds the spx code from the provided file system into the interpreter.
+// ConfigureFilesystemRoots sets strict project and asset roots before Init.
+func ConfigureFilesystemRoots(projectDir, assetDir string) error {
+	return configureFilesystemRoots(projectDir, assetDir, false)
+}
+
+// ConfigureLegacyFilesystemRoots retains bounded external asset references
+// used by existing interpreted and native commands.
+func ConfigureLegacyFilesystemRoots(projectDir, assetDir string) error {
+	return configureFilesystemRoots(projectDir, assetDir, true)
+}
+
+func configureFilesystemRoots(projectDir, assetDir string, legacy bool) error {
+	mu.Lock()
+	defer mu.Unlock()
+	if ixgoCtx != nil {
+		return fmt.Errorf("ispx: filesystem roots must be configured before Init")
+	}
+	if legacy {
+		return engine.SetLegacyFilesystemRoots(projectDir, assetDir)
+	}
+	return engine.SetFilesystemRoots(projectDir, assetDir)
+}
+
+// BuildFS builds from a borrowed file system that must remain usable while the
+// Engine can load project resources.
 func BuildFS(fsys fs.FS) error {
 	// Stop the game if running.
 	if err := Shutdown(); err != nil {
@@ -165,10 +189,6 @@ func BuildFS(fsys fs.FS) error {
 		ixgoInterp.UnsafeRelease()
 		ixgoInterp = nil
 	}
-
-	spxfs.RegisterSchema("", func(path string) (spxfs.Dir, error) {
-		return newSpxDir(fsys, path), nil
-	})
 
 	source, err := xgobuild.BuildFSDir(ixgoCtx, newXGoParserFS(fsys), ".")
 	if err != nil {
@@ -190,6 +210,12 @@ func BuildFS(fsys fs.FS) error {
 		return fmt.Errorf("failed to create interp: %w", err)
 	}
 
+	// Project resources are loaded lazily from Engine callbacks, so publish
+	// the new schema only after every fallible build step has succeeded. A
+	// failed rebuild must not replace a previously working resource source.
+	spxfs.RegisterSchema("", func(path string) (spxfs.Dir, error) {
+		return newSpxDir(fsys, path), nil
+	})
 	ixgoInterp = interp
 	return nil
 }
