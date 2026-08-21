@@ -95,7 +95,7 @@ func TestBuildPinnedProjectKeepsFilesystemAliveForDeferredResourceLoads(t *testi
 	}
 
 	var runtimeFS fs.FS
-	if err := buildPinnedProject(projectDir, func(fsys fs.FS) error {
+	if err := buildPinnedProject(projectDir, nil, func(fsys fs.FS) error {
 		runtimeFS = fsys
 		return nil
 	}); err != nil {
@@ -116,7 +116,7 @@ func TestBuildPinnedProjectClosesFilesystemOnBuildFailure(t *testing.T) {
 
 	wantErr := errors.New("build failed")
 	var failedFS fs.FS
-	err := buildPinnedProject(projectDir, func(fsys fs.FS) error {
+	err := buildPinnedProject(projectDir, nil, func(fsys fs.FS) error {
 		failedFS = fsys
 		return wantErr
 	})

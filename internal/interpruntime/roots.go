@@ -27,9 +27,11 @@ import (
 )
 
 const (
-	ProjectDirEnv = "SPX_PROJECT_DIR"
-	AssetDirEnv   = "SPX_ASSET_DIR"
-	SessionDirEnv = "SPX_SESSION_DIR"
+	ProjectDirEnv             = "SPX_PROJECT_DIR"
+	AssetDirEnv               = "SPX_ASSET_DIR"
+	SessionDirEnv             = "SPX_SESSION_DIR"
+	PortableConfigDirEnv      = "SPX_PORTABLE_CONFIG_DIR"
+	PortableConfigIdentityEnv = "SPX_PORTABLE_CONFIG_IDENTITY"
 )
 
 // Roots identifies the independent source, asset, and Engine session roots.
@@ -152,8 +154,7 @@ func RootsFromEnv(env []string) (Roots, error) {
 	return r, nil
 }
 
-// Environment returns base with all ambient root variables removed and one
-// validated value for each root appended.
+// Environment replaces ambient runtime paths with validated roots.
 func (r Roots) Environment(base []string) ([]string, error) {
 	if err := r.Validate(); err != nil {
 		return nil, err
@@ -175,9 +176,39 @@ func (r Roots) Environment(base []string) ([]string, error) {
 	), nil
 }
 
+// PortableConfigFromEnv returns the optional driver-owned config directory and
+// its presence/content identity. Both variables must be present together.
+func PortableConfigFromEnv(env []string) (directory, identity string, found bool, err error) {
+	values := make(map[string]string, 2)
+	for _, entry := range env {
+		key, candidate, ok := strings.Cut(entry, "=")
+		if !ok {
+			continue
+		}
+		canonical, ok := rootEnvKey(key)
+		if !ok || (canonical != PortableConfigDirEnv && canonical != PortableConfigIdentityEnv) {
+			continue
+		}
+		if _, duplicate := values[canonical]; duplicate {
+			return "", "", false, fmt.Errorf("interpruntime: duplicate environment variable %s", canonical)
+		}
+		values[canonical] = candidate
+	}
+	directory, dirFound := values[PortableConfigDirEnv]
+	identity, identityFound := values[PortableConfigIdentityEnv]
+	if dirFound != identityFound {
+		return "", "", false, fmt.Errorf("interpruntime: portable config environment is incomplete")
+	}
+	return directory, identity, dirFound, nil
+}
+
 func rootEnvKey(key string) (string, bool) {
-	for _, canonical := range []string{ProjectDirEnv, AssetDirEnv, SessionDirEnv} {
-		if key == canonical || (runtime.GOOS == "windows" && strings.EqualFold(key, canonical)) {
+	return rootEnvKeyForGOOS(key, runtime.GOOS)
+}
+
+func rootEnvKeyForGOOS(key, goos string) (string, bool) {
+	for _, canonical := range []string{ProjectDirEnv, AssetDirEnv, SessionDirEnv, PortableConfigDirEnv, PortableConfigIdentityEnv} {
+		if key == canonical || (goos == "windows" && strings.EqualFold(key, canonical)) {
 			return canonical, true
 		}
 	}
