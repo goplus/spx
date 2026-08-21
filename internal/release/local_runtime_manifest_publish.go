@@ -26,7 +26,7 @@ import (
 )
 
 func writeLocalRuntimeManifest(path string, manifest LocalRuntimeManifest) error {
-	data, err := manifest.json()
+	data, err := manifest.JSON()
 	if err != nil {
 		return err
 	}

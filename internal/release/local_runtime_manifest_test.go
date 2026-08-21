@@ -105,6 +105,39 @@ func TestLocalRuntimeManifestWriteAndVerify(t *testing.T) {
 	}
 }
 
+func TestLocalRuntimeManifestSourceValidationUsesVersion(t *testing.T) {
+	lock := DefaultRuntimeLock()
+	spec, err := HostRuntimeSpecFor(lock, runtime.GOOS, runtime.GOARCH)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	enginePath := filepath.Join(root, spec.RuntimeName)
+	packPath := filepath.Join(root, spec.PackName)
+	if err := os.WriteFile(enginePath, []byte("engine"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(packPath, []byte("pack"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := NewLocalRuntimeManifest(lock, runtime.GOOS, runtime.GOARCH, enginePath, packPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest.RuntimeABI++
+	manifest.LockSHA256 = strings.Repeat("0", 64)
+	if err := manifest.ValidateForVersion(lock, runtime.GOOS, runtime.GOARCH); err != nil {
+		t.Fatalf("source-mode version validation: %v", err)
+	}
+	if err := manifest.ValidateForLock(lock, runtime.GOOS, runtime.GOARCH); err == nil {
+		t.Fatal("strict validation accepted stale local metadata")
+	}
+	manifest.RuntimeVersion = "9.9.9"
+	if err := manifest.ValidateForVersion(lock, runtime.GOOS, runtime.GOARCH); err == nil {
+		t.Fatal("source-mode validation accepted a different runtime version")
+	}
+}
+
 func TestNewLocalRuntimeManifestRejectsSymlink(t *testing.T) {
 	lock := DefaultRuntimeLock()
 	spec, err := HostRuntimeSpecFor(lock, runtime.GOOS, runtime.GOARCH)

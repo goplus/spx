@@ -25,6 +25,11 @@ The command freezes `GOWORK` and `GOFLAGS` for the invocation and verifies the
 module selection and graph metadata before and after both Go builds. The built
 bridge and payload are content-digested.
 
-Runtime assets are resolved by the same local-manifest, source-checkout, and
-pinned-release/cache policy used by the packaging service. Set
-`SPX_RUNTIME_OFFLINE=1` to prevent network access.
+An explicit `SPX_RUNTIME_LOCAL_MANIFEST` or `SPX_RUNTIME_ASSET_DIR` takes
+priority and fails closed. Otherwise, the command uses the verified release
+cache and download first. When the selected SPX module is a source checkout,
+an unpublished runtime or failed acquisition falls back to the exact-version
+Engine and PCK in the first `GOPATH/bin`. Both files must be regular,
+non-symlink files and are hashed again before packaging. If they are missing,
+run `make dev` in the SPX checkout; `buildlauncher` never starts a Godot build.
+Set `SPX_RUNTIME_OFFLINE=1` to skip network access and use cache/local fallback.

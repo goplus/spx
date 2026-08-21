@@ -17,6 +17,7 @@
 package release
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -69,7 +70,7 @@ func TestRuntimeManifestPinValidation(t *testing.T) {
 func TestRuntimeManifestPinForLockRejectsUnpinnedRuntime(t *testing.T) {
 	lock := DefaultRuntimeLock()
 	lock.RuntimeVersion = "9.9.9"
-	if _, err := RuntimeManifestPinForLock(lock); err == nil || !strings.Contains(err.Error(), "no runtime manifest pin") {
+	if _, err := RuntimeManifestPinForLock(lock); err == nil || !errors.Is(err, ErrRuntimeManifestPinNotFound) || !strings.Contains(err.Error(), "no runtime manifest pin") {
 		t.Fatalf("RuntimeManifestPinForLock error = %v", err)
 	}
 }

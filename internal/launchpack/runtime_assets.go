@@ -41,6 +41,7 @@ type runtimeAssetDependencies struct {
 	fetch       runtimebundle.FetchFunc
 	cacheRoot   func() string
 	manifestPin func(release.RuntimeLock) (release.RuntimeManifestPin, error)
+	goBin       func(context.Context, Config, []string) (string, error)
 }
 
 func defaultRuntimeAssetDependencies() runtimeAssetDependencies {
@@ -48,6 +49,7 @@ func defaultRuntimeAssetDependencies() runtimeAssetDependencies {
 		fetch:       fetchRuntimeURL,
 		cacheRoot:   runtimebundle.DefaultCacheRoot,
 		manifestPin: release.RuntimeManifestPinForLock,
+		goBin:       resolveGoBin,
 	}
 }
 
@@ -59,9 +61,10 @@ type runtimeAssetSource struct {
 }
 
 type localRuntimeSource struct {
-	manifest  release.LocalRuntimeManifest
-	directory string
-	bytes     []byte
+	manifest   release.LocalRuntimeManifest
+	bytes      []byte
+	enginePath string
+	packPath   string
 }
 
 // acquireRuntimeAssets obtains one verified Engine/PCK pair.
@@ -72,6 +75,9 @@ func acquireRuntimeAssets(ctx context.Context, cfg Config, streams IO, lock rele
 func acquireRuntimeAssetsWith(ctx context.Context, cfg Config, streams IO, lock release.RuntimeLock, dependencies runtimeAssetDependencies) (Assets, error) {
 	if ctx == nil {
 		return Assets{}, errors.New("launchpack: nil context")
+	}
+	if err := ctx.Err(); err != nil {
+		return Assets{}, err
 	}
 	if dependencies.fetch == nil || dependencies.cacheRoot == nil || dependencies.manifestPin == nil {
 		return Assets{}, errors.New("launchpack: incomplete runtime acquisition dependencies")
@@ -95,17 +101,40 @@ func acquireRuntimeAssetsWith(ctx context.Context, cfg Config, streams IO, lock 
 	}
 	offline = offline || cfg.RuntimeOffline
 
-	if local, found, err := findLocalRuntimeManifest(cfg, env, lock, spec); err != nil {
+	if local, found, err := findExplicitLocalRuntimeManifest(env, lock, spec); err != nil {
 		return Assets{}, err
 	} else if found {
 		return materializeLocalRuntime(ctx, cacheRoot, lock, spec, local)
 	}
 
-	source, err := resolvePublishedRuntime(ctx, cacheRoot, lock, spec, env, offline, dependencies)
+	_, assetDirSet, duplicate := environmentValue(env, runtimeAssetDirEnv)
+	if duplicate {
+		return Assets{}, fmt.Errorf("launchpack: duplicate %s", runtimeAssetDirEnv)
+	}
+	pin, err := dependencies.manifestPin(lock)
 	if err != nil {
+		publishedErr := fmt.Errorf("launchpack: resolve runtime manifest pin: %w", err)
+		if !assetDirSet && cfg.Source.SourceMode && errors.Is(err, release.ErrRuntimeManifestPinNotFound) {
+			return acquireSourceRuntime(ctx, cfg, env, cacheRoot, lock, spec, dependencies, publishedErr)
+		}
+		return Assets{}, publishedErr
+	}
+	if err := pin.ValidateForLock(lock); err != nil {
 		return Assets{}, err
 	}
-	return materializePublishedRuntime(ctx, cacheRoot, lock, spec, source, offline)
+
+	source, err := resolvePublishedRuntime(ctx, cacheRoot, lock, spec, pin, env, offline, dependencies)
+	if err == nil {
+		var assets Assets
+		assets, err = materializePublishedRuntime(ctx, cacheRoot, lock, spec, source, offline)
+		if err == nil {
+			return assets, nil
+		}
+	}
+	if assetDirSet || !cfg.Source.SourceMode {
+		return Assets{}, err
+	}
+	return acquireSourceRuntime(ctx, cfg, env, cacheRoot, lock, spec, dependencies, err)
 }
 
 func resolveRuntimeCacheRoot(env []string, defaultRoot func() string) (string, error) {
@@ -179,37 +208,34 @@ func runtimeEnvironment(cfg Config, base []string) []string {
 	return env
 }
 
-func findLocalRuntimeManifest(cfg Config, env []string, lock release.RuntimeLock, spec release.HostRuntimeSpec) (localRuntimeSource, bool, error) {
-	path, explicit, duplicate := environmentValue(env, runtimeLocalManifestEnv)
+func findExplicitLocalRuntimeManifest(env []string, lock release.RuntimeLock, spec release.HostRuntimeSpec) (localRuntimeSource, bool, error) {
+	path, found, duplicate := environmentValue(env, runtimeLocalManifestEnv)
 	if duplicate {
 		return localRuntimeSource{}, false, fmt.Errorf("launchpack: duplicate %s", runtimeLocalManifestEnv)
 	}
-	if !explicit {
-		if _, assetDirSet, duplicate := environmentValue(env, runtimeAssetDirEnv); duplicate {
-			return localRuntimeSource{}, false, fmt.Errorf("launchpack: duplicate %s", runtimeAssetDirEnv)
-		} else if assetDirSet {
-			return localRuntimeSource{}, false, nil
-		}
-		if cfg.RuntimeSourceRoot == "" {
-			return localRuntimeSource{}, false, nil
-		}
-		candidate, pathErr := release.LocalRuntimeManifestPath(cfg.RuntimeSourceRoot, lock, spec.GOOS, spec.GOARCH)
-		if pathErr != nil {
-			return localRuntimeSource{}, false, pathErr
-		}
-		if info, err := os.Lstat(candidate); err == nil {
-			if !isRegularNonSymlink(info) {
-				return localRuntimeSource{}, false, fmt.Errorf("launchpack: discovered local runtime manifest is not a regular non-symlink file: %s", candidate)
-			}
-			path = candidate
-			explicit = true
-		} else if !os.IsNotExist(err) {
-			return localRuntimeSource{}, false, fmt.Errorf("launchpack: inspect local runtime manifest: %w", err)
-		}
-	}
-	if !explicit {
+	if !found {
 		return localRuntimeSource{}, false, nil
 	}
+	return readLocalRuntimeManifest(path, lock, spec, true)
+}
+
+func findSourceLocalRuntimeManifest(root string, lock release.RuntimeLock, spec release.HostRuntimeSpec) (localRuntimeSource, bool, error) {
+	path, err := release.LocalRuntimeManifestPath(root, lock, spec.GOOS, spec.GOARCH)
+	if err != nil {
+		return localRuntimeSource{}, false, err
+	}
+	if info, err := os.Lstat(path); err != nil {
+		if os.IsNotExist(err) {
+			return localRuntimeSource{}, false, nil
+		}
+		return localRuntimeSource{}, false, fmt.Errorf("launchpack: inspect local runtime manifest: %w", err)
+	} else if !isRegularNonSymlink(info) {
+		return localRuntimeSource{}, false, fmt.Errorf("launchpack: discovered local runtime manifest is not a regular non-symlink file: %s", path)
+	}
+	return readLocalRuntimeManifest(path, lock, spec, false)
+}
+
+func readLocalRuntimeManifest(path string, lock release.RuntimeLock, spec release.HostRuntimeSpec, strict bool) (localRuntimeSource, bool, error) {
 	if !filepath.IsAbs(path) || filepath.Clean(path) != path {
 		return localRuntimeSource{}, false, fmt.Errorf("launchpack: %s must be an absolute clean path", runtimeLocalManifestEnv)
 	}
@@ -228,12 +254,20 @@ func findLocalRuntimeManifest(cfg Config, env []string, lock release.RuntimeLock
 	if err != nil {
 		return localRuntimeSource{}, false, err
 	}
-	if err := manifest.ValidateForLock(lock, spec.GOOS, spec.GOARCH); err != nil {
+	validate := manifest.ValidateForVersion
+	if strict {
+		validate = manifest.ValidateForLock
+	}
+	if err := validate(lock, spec.GOOS, spec.GOARCH); err != nil {
 		return localRuntimeSource{}, false, err
 	}
 	directory := filepath.Dir(path)
 	if err := manifest.VerifyFiles(directory); err != nil {
 		return localRuntimeSource{}, false, err
 	}
-	return localRuntimeSource{manifest: manifest, directory: directory, bytes: data}, true, nil
+	return localRuntimeSource{
+		manifest: manifest, bytes: data,
+		enginePath: filepath.Join(directory, manifest.Engine.Name),
+		packPath:   filepath.Join(directory, manifest.Pack.Name),
+	}, true, nil
 }
