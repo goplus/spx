@@ -43,6 +43,10 @@ func (cmd *CmdTool) Run(arg string) (err error) {
 }
 
 func (cmd *CmdTool) RunPackMode(pargs ...string) error {
+	roots, err := cmd.interpretedRoots()
+	if err != nil {
+		return err
+	}
 	dllPath := path.Join(cmd.RuntimeTempDir, filepath.Base(cmd.LibPath))
 	if err := util.CopyFile(cmd.LibPath, dllPath); err != nil {
 		return err
@@ -55,8 +59,17 @@ func (cmd *CmdTool) RunPackMode(pargs ...string) error {
 		return err
 	}
 
-	args := cmd.buildRuntimeArgs(pargs, cmd.RuntimeTempDir)
-	return util.RunCommandInDir(cmd.RuntimeTempDir, cmd.RuntimeCmdPath, args...)
+	engineCmd, err := interpruntime.PrepareCommand(context.Background(), interpruntime.CommandConfig{
+		Roots: roots, Executable: cmd.RuntimeCmdPath, Args: pargs, Env: os.Environ(),
+		Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr, PathPolicy: interpruntime.ReplacePath,
+	})
+	if err != nil {
+		return err
+	}
+	if err := engineCmd.Run(); err != nil {
+		return fmt.Errorf("native Engine failed: %w", err)
+	}
+	return nil
 }
 
 func (cmd *CmdTool) RunWeb() error {
@@ -163,22 +176,6 @@ func (cmd *CmdTool) RunInterpreted(pargs ...string) error {
 		return fmt.Errorf("interpreted Engine failed: %w", err)
 	}
 	return nil
-}
-
-// buildRuntimeArgs builds gdspxrt args.
-func (cmd *CmdTool) buildRuntimeArgs(inputArgs []string, tempDir string, extraArgs ...string) []string {
-	args := []string{}
-	for i := 0; i < len(inputArgs); i++ {
-		if inputArgs[i] == "--path" {
-			i++
-			continue
-		}
-		args = append(args, inputArgs[i])
-	}
-	args = append(args, "--path", tempDir)
-	args = append(args, extraArgs...)
-	args = append(args, "--no-header")
-	return args
 }
 
 func (cmd *CmdTool) runtimeSearchDirs() []string {

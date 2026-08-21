@@ -26,6 +26,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/goplus/spx/v3/internal/interpruntime"
 	"github.com/goplus/spx/v3/internal/scaffold"
 )
 
@@ -327,6 +328,55 @@ func TestSetupInterpretedPathsKeepsWorkingDirectory(t *testing.T) {
 	}
 	if cmd.ProjectDir != filepath.Join(projectDir, "project") {
 		t.Fatalf("Engine project dir = %q", cmd.ProjectDir)
+	}
+}
+
+func TestRunPackModeUsesSessionEnvironment(t *testing.T) {
+	projectDir := t.TempDir()
+	mustWriteAssetIndex(t, projectDir)
+	sessionDir := filepath.Join(projectDir, ".temp")
+	generatedDir := filepath.Join(projectDir, "project")
+	for _, dir := range []string{sessionDir, generatedDir} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(generatedDir, "runtime.gdextension.txt"), []byte("extension"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	logPath := filepath.Join(t.TempDir(), "runtime.log")
+	runtimePath := filepath.Join(t.TempDir(), "runtime"+executableSuffix(runtime.GOOS))
+	writeTestRuntimeExecutable(t, runtimePath, logPath)
+	libPath := filepath.Join(generatedDir, libraryFileName(envName, runtime.GOOS, runtime.GOARCH))
+	if err := os.WriteFile(libPath, []byte("bridge"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{interpruntime.ProjectDirEnv, interpruntime.AssetDirEnv, interpruntime.SessionDirEnv} {
+		t.Setenv(key, "/stale")
+	}
+
+	cmd := CmdTool{
+		TargetAbsDir: projectDir, ProjectDir: generatedDir, RuntimeTempDir: sessionDir,
+		RuntimeCmdPath: runtimePath, LibPath: libPath,
+	}
+	if err := cmd.RunPackMode("--path", "ignored"); err != nil {
+		t.Fatalf("RunPackMode returned error: %v", err)
+	}
+
+	log, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"--path\n" + sessionDir,
+		"SPX_PROJECT_DIR=" + projectDir,
+		"SPX_ASSET_DIR=" + filepath.Join(projectDir, "assets"),
+		"SPX_SESSION_DIR=" + sessionDir,
+	} {
+		if !strings.Contains(string(log), want+"\n") {
+			t.Fatalf("runtime log = %q, want %q", log, want)
+		}
 	}
 }
 
