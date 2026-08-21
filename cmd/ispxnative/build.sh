@@ -19,7 +19,7 @@ case "${GOOS}" in
 esac
 
 LDFLAGS=""
-if [[ "${GOOS}" != "darwin" ]]; then
+if [[ "${GOOS}" == "windows" ]]; then
     LDFLAGS="-extldflags=-Wl,--allow-multiple-definition"
 fi
 
