@@ -54,6 +54,8 @@ type CmdTool struct {
 	LibPath    string
 	BinPostfix string
 
+	launcherBuilder launcherBuilder
+
 	// CLI args.
 	Args ExtraArgs
 
@@ -94,6 +96,16 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 	}
 	if cmd.Args.Verbose != nil && *cmd.Args.Verbose {
 		enableDebugLogging()
+	}
+	if cmd.Args.CmdName == "buildlauncher" {
+		if *help {
+			return nil
+		}
+		if err := cmd.runBuildLauncher(); err != nil {
+			logErrorf("Building launcher: %v", err)
+			return err
+		}
+		return nil
 	}
 
 	if cmd.Args.CmdName == "init" {
