@@ -303,7 +303,34 @@ func TestBrowserOpenCommandsWindowsUsesRundll32(t *testing.T) {
 	}
 }
 
-func TestRunInterpretedCreatesRuntimeExtensionAndCopiesSharedLibrary(t *testing.T) {
+func TestSetupInterpretedPathsKeepsWorkingDirectory(t *testing.T) {
+	before, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	projectDir := t.TempDir()
+	pathArg := projectDir
+	cmd := CmdTool{Args: ExtraArgs{Path: &pathArg}}
+
+	if err := cmd.setupInterpretedPaths("project"); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after != before {
+		t.Fatalf("working directory changed from %q to %q", before, after)
+	}
+	if cmd.TargetAbsDir != projectDir || cmd.TargetDir != projectDir {
+		t.Fatalf("project root = (%q, %q), want %q", cmd.TargetAbsDir, cmd.TargetDir, projectDir)
+	}
+	if cmd.ProjectDir != filepath.Join(projectDir, "project") {
+		t.Fatalf("Engine project dir = %q", cmd.ProjectDir)
+	}
+}
+
+func TestRunInterpretedCreatesIsolatedSessionAndCopiesSharedLibrary(t *testing.T) {
 	oldPrepareEmbeddedRuntimeAssets := prepareEmbeddedRuntimeAssets
 	prepareEmbeddedRuntimeAssets = func(string, ...string) (string, bool, error) {
 		return "", false, nil
@@ -313,7 +340,9 @@ func TestRunInterpretedCreatesRuntimeExtensionAndCopiesSharedLibrary(t *testing.
 	})
 
 	goBinPath := t.TempDir()
-	runtimeTempDir := t.TempDir()
+	projectDir := t.TempDir()
+	mustWriteAssetIndex(t, projectDir)
+	runtimeTempDir := filepath.Join(projectDir, ".temp")
 	logPath := filepath.Join(t.TempDir(), "runtime.log")
 	version := "9.9.9-test"
 
@@ -331,6 +360,7 @@ func TestRunInterpretedCreatesRuntimeExtensionAndCopiesSharedLibrary(t *testing.
 	cmd := CmdTool{
 		GoBinPath:      goBinPath,
 		RuntimeTempDir: runtimeTempDir,
+		TargetAbsDir:   projectDir,
 		Version:        version,
 	}
 	cmd.BinPostfix = executableSuffix(runtime.GOOS)
@@ -347,19 +377,27 @@ func TestRunInterpretedCreatesRuntimeExtensionAndCopiesSharedLibrary(t *testing.
 	if err != nil {
 		t.Fatalf("read runtime.gdextension: %v", err)
 	}
-	if string(gotExtension) != scaffold.RuntimeGDExtension() {
+	if string(gotExtension) != scaffold.SessionRuntimeGDExtension() {
 		t.Fatalf("runtime.gdextension contents mismatch")
+	}
+	projectExtensionPath := filepath.Join(runtimeTempDir, "gdspx.gdextension")
+	gotProjectExtension, err := os.ReadFile(projectExtensionPath)
+	if err != nil {
+		t.Fatalf("read gdspx.gdextension: %v", err)
+	}
+	if string(gotProjectExtension) != scaffold.ProjectGDExtension() {
+		t.Fatalf("gdspx.gdextension contents mismatch")
 	}
 	extensionListPath := filepath.Join(runtimeTempDir, ".godot", "extension_list.cfg")
 	gotExtensionList, err := os.ReadFile(extensionListPath)
 	if err != nil {
 		t.Fatalf("read extension_list.cfg: %v", err)
 	}
-	if string(gotExtensionList) != scaffold.RuntimeExtensionList() {
+	if string(gotExtensionList) != scaffold.SessionExtensionList() {
 		t.Fatalf("extension_list.cfg contents mismatch")
 	}
 
-	copiedLibPath := filepath.Join(runtimeTempDir, libName)
+	copiedLibPath := filepath.Join(runtimeTempDir, "lib", libName)
 	if !fileExists(copiedLibPath) {
 		t.Fatalf("shared library not copied to %s", copiedLibPath)
 	}
@@ -374,6 +412,15 @@ func TestRunInterpretedCreatesRuntimeExtensionAndCopiesSharedLibrary(t *testing.
 	}
 	if strings.Contains(logContent, "--gdextpath") {
 		t.Fatalf("runtime log = %q, custom --gdextpath should not be used", logContent)
+	}
+	for _, want := range []string{
+		"SPX_PROJECT_DIR=" + projectDir,
+		"SPX_ASSET_DIR=" + filepath.Join(projectDir, "assets"),
+		"SPX_SESSION_DIR=" + runtimeTempDir,
+	} {
+		if !strings.Contains(logContent, want+"\n") {
+			t.Fatalf("runtime log = %q, want %q", logContent, want)
+		}
 	}
 }
 
@@ -463,6 +510,17 @@ func TestResolveInterpretedRuntimeAssetsFallsBackToExternalWhenEmbeddedUnavailab
 	}
 	if libPath != libPathWant {
 		t.Fatalf("shared library path = %s, want %s", libPath, libPathWant)
+	}
+}
+
+func mustWriteAssetIndex(t *testing.T, projectDir string) {
+	t.Helper()
+	assetDir := filepath.Join(projectDir, "assets")
+	if err := os.MkdirAll(assetDir, 0o755); err != nil {
+		t.Fatalf("mkdir assets: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(assetDir, "index.json"), []byte("{}\n"), 0o644); err != nil {
+		t.Fatalf("write assets/index.json: %v", err)
 	}
 }
 
@@ -602,9 +660,9 @@ func writeTestRuntimeExecutable(t *testing.T, path string, logPath string) {
 
 	var script string
 	if runtime.GOOS == "windows" {
-		script = fmt.Sprintf("@echo off\r\ncd > %q\r\nfor %%%%a in (%%*) do @echo %%%%a>>%q\r\n", logPath, logPath)
+		script = fmt.Sprintf("@echo off\r\ncd > %q\r\nfor %%%%a in (%%*) do @echo %%%%a>>%q\r\necho SPX_PROJECT_DIR=%%SPX_PROJECT_DIR%%>>%q\r\necho SPX_ASSET_DIR=%%SPX_ASSET_DIR%%>>%q\r\necho SPX_SESSION_DIR=%%SPX_SESSION_DIR%%>>%q\r\n", logPath, logPath, logPath, logPath, logPath)
 	} else {
-		script = fmt.Sprintf("#!/bin/sh\npwd > %q\nprintf '%%s\\n' \"$@\" >> %q\n", logPath, logPath)
+		script = fmt.Sprintf("#!/bin/sh\npwd > %q\nprintf '%%s\\n' \"$@\" >> %q\nprintf 'SPX_PROJECT_DIR=%%s\\nSPX_ASSET_DIR=%%s\\nSPX_SESSION_DIR=%%s\\n' \"$SPX_PROJECT_DIR\" \"$SPX_ASSET_DIR\" \"$SPX_SESSION_DIR\" >> %q\n", logPath, logPath, logPath)
 	}
 	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
 		t.Fatalf("write runtime executable: %v", err)
