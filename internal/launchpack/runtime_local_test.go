@@ -18,11 +18,13 @@ package launchpack
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/goplus/spx/v3/internal/release"
@@ -95,6 +97,155 @@ func TestRuntimeEnvironmentConfigOverridesProcess(t *testing.T) {
 	if !found || duplicate || value != "/config-cache" {
 		t.Fatalf("%s = %q, found %v, duplicate %v", runtimeCacheEnv, value, found, duplicate)
 	}
+}
+
+func TestAcquireRuntimeAssetsRejectsInvalidExplicitManifestWithoutFetch(t *testing.T) {
+	manifestPath := filepath.Join(t.TempDir(), "engine-manifest.json")
+	if err := os.WriteFile(manifestPath, []byte(`{"schema":"spx-local-engine/v1"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	fetch := func(context.Context, string, io.Writer) error {
+		calls++
+		return errors.New("invalid local manifest must not fetch")
+	}
+	cacheRoot := t.TempDir()
+	_, err := acquireRuntimeAssetsWith(context.Background(), Config{RuntimeCacheRoot: cacheRoot, RuntimeManifestPath: manifestPath}, IO{Env: []string{runtimeCacheEnv + "=" + cacheRoot}}, release.DefaultRuntimeLock(), localRuntimeTestDependencies(cacheRoot, fetch))
+	if err == nil {
+		t.Fatal("invalid explicit local manifest was accepted")
+	}
+	if calls != 0 {
+		t.Fatalf("fetch count = %d, want 0", calls)
+	}
+}
+
+func TestAcquireRuntimeAssetsRejectsTamperedLocalRuntimeFilesWithoutFetch(t *testing.T) {
+	lock := release.DefaultRuntimeLock()
+	spec, err := release.HostRuntimeSpecFor(lock, runtime.GOOS, runtime.GOARCH)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	manifestPath := publishLocalRuntimeTest(t, root, filepath.Join(root, "engine-manifest.json"), spec, "local-engine", "local-pack")
+	cacheRoot := filepath.Join(root, "cache")
+	calls := 0
+	fetch := func(context.Context, string, io.Writer) error {
+		calls++
+		return errors.New("local manifest must not fetch")
+	}
+	cfg := Config{RuntimeManifestPath: manifestPath, RuntimeCacheRoot: cacheRoot}
+	env := IO{Env: []string{}}
+	dependencies := localRuntimeTestDependencies(cacheRoot, fetch)
+	assets, err := acquireRuntimeAssetsWith(context.Background(), cfg, env, lock, dependencies)
+	if err != nil {
+		t.Fatalf("valid local runtime acquisition: %v", err)
+	}
+	assets.Cleanup()
+	if calls != 0 {
+		t.Fatalf("initial fetch count = %d, want 0", calls)
+	}
+
+	manifest, err := release.ParseLocalRuntimeManifest(mustReadLaunchpackTestFile(t, manifestPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{manifest.Engine.Name, manifest.Pack.Name} {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(root, name)
+			original := mustReadLaunchpackTestFile(t, path)
+			info, err := os.Stat(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(path, []byte("tampered"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := acquireRuntimeAssetsWith(context.Background(), cfg, env, lock, dependencies); err == nil {
+				t.Fatalf("tampered local runtime asset %q was accepted", name)
+			}
+			if calls != 0 {
+				t.Fatalf("fetch count = %d, want 0", calls)
+			}
+			if err := os.WriteFile(path, original, info.Mode().Perm()); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestAcquireRuntimeAssetsAutoDiscoveredManifestIdentityMismatchFailsClosed(t *testing.T) {
+	lock := release.DefaultRuntimeLock()
+	spec, err := release.HostRuntimeSpecFor(lock, runtime.GOOS, runtime.GOARCH)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sourceRoot := t.TempDir()
+	buildRoot := t.TempDir()
+	enginePath := filepath.Join(buildRoot, spec.RuntimeName)
+	packPath := filepath.Join(buildRoot, spec.PackName)
+	if err := os.WriteFile(enginePath, []byte("auto-local-engine"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(packPath, []byte("auto-local-pack"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := release.NewLocalRuntimeManifest(lock, runtime.GOOS, runtime.GOARCH, enginePath, packPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifestPath, err := release.LocalRuntimeManifestPath(sourceRoot, lock, runtime.GOOS, runtime.GOARCH)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := release.PublishLocalRuntimeManifest(manifestPath, manifest, enginePath, packPath); err != nil {
+		t.Fatal(err)
+	}
+
+	cacheRoot := filepath.Join(sourceRoot, "cache")
+	calls := 0
+	fetch := func(context.Context, string, io.Writer) error {
+		calls++
+		return errors.New("auto-discovered local manifest must not fetch")
+	}
+	cfg := Config{RuntimeSourceRoot: sourceRoot, RuntimeCacheRoot: cacheRoot}
+	env := IO{Env: []string{}}
+	dependencies := localRuntimeTestDependencies(cacheRoot, fetch)
+	assets, err := acquireRuntimeAssetsWith(context.Background(), cfg, env, lock, dependencies)
+	if err != nil {
+		t.Fatalf("valid auto-discovered local runtime: %v", err)
+	}
+	assets.Cleanup()
+
+	manifest.LockSHA256 = strings.Repeat("0", 64)
+	data, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(manifestPath, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := acquireRuntimeAssetsWith(context.Background(), cfg, env, lock, dependencies); err == nil {
+		t.Fatal("identity-mismatched auto-discovered manifest fell back to published runtime")
+	}
+	if calls != 0 {
+		t.Fatalf("fetch count = %d, want 0", calls)
+	}
+}
+
+func localRuntimeTestDependencies(cacheRoot string, fetch func(context.Context, string, io.Writer) error) runtimeAssetDependencies {
+	dependencies := defaultRuntimeAssetDependencies()
+	dependencies.fetch = fetch
+	dependencies.cacheRoot = func() string { return cacheRoot }
+	return dependencies
+}
+
+func mustReadLaunchpackTestFile(t *testing.T, path string) []byte {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
 }
 
 func publishLocalRuntimeTest(t *testing.T, root, manifestPath string, spec release.HostRuntimeSpec, engine, pack string) string {
