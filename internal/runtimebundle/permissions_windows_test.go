@@ -19,9 +19,11 @@
 package runtimebundle
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"golang.org/x/sys/windows"
@@ -51,6 +53,20 @@ func TestWindowsPrivateDACLIsAppliedAtCreation(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	key := filepath.Join(child, strings.Repeat("d", 64))
+	lease, err := (CrossProcessLockProvider{}).AcquireExclusive(context.Background(), key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := lease.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyPrivateDACL(key + ".lock"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(key + ".lock"); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestVerifyPrivateSecurityDescriptorUsesBinarySIDs(t *testing.T) {
