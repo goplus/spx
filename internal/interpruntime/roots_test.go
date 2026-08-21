@@ -89,6 +89,8 @@ func TestEnvironmentReplacesAmbientRoots(t *testing.T) {
 		ProjectDirEnv + "=/attacker/project",
 		AssetDirEnv + "=/attacker/assets",
 		SessionDirEnv + "=/attacker/session",
+		PortableConfigDirEnv + "=/attacker/config",
+		PortableConfigIdentityEnv + "=sha256:attacker",
 		"UNCHANGED=value",
 	}
 	got, err := roots.Environment(base)
@@ -104,6 +106,40 @@ func TestEnvironmentReplacesAmbientRoots(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("Environment() = %#v, want %#v", got, want)
+	}
+}
+
+func TestPortableConfigFromEnv(t *testing.T) {
+	if directory, identity, found, err := PortableConfigFromEnv([]string{"KEEP=value"}); err != nil || found || directory != "" || identity != "" {
+		t.Fatalf("PortableConfigFromEnv() = %q, %q, %v, %v, want absent", directory, identity, found, err)
+	}
+	directory, identity, found, err := PortableConfigFromEnv([]string{
+		PortableConfigDirEnv + "=/trusted",
+		PortableConfigIdentityEnv + "=sha256:0123456789abcdef",
+	})
+	if err != nil || !found || directory != "/trusted" || identity != "sha256:0123456789abcdef" {
+		t.Fatalf("PortableConfigFromEnv() = %q, %q, %v, %v", directory, identity, found, err)
+	}
+	for _, env := range [][]string{
+		{PortableConfigDirEnv + "=/first", PortableConfigDirEnv + "=/second", PortableConfigIdentityEnv + "=absent"},
+		{PortableConfigDirEnv + "=/trusted"},
+	} {
+		_, _, _, err := PortableConfigFromEnv(env)
+		if err == nil {
+			t.Fatalf("PortableConfigFromEnv(%v) accepted invalid environment", env)
+		}
+	}
+}
+
+func TestPortableConfigEnvironmentKeysAreCaseInsensitiveOnWindows(t *testing.T) {
+	for _, key := range []string{PortableConfigDirEnv, PortableConfigIdentityEnv} {
+		lower := strings.ToLower(key)
+		if canonical, ok := rootEnvKeyForGOOS(lower, "windows"); !ok || canonical != key {
+			t.Fatalf("rootEnvKeyForGOOS(%q, windows) = %q, %v", lower, canonical, ok)
+		}
+		if _, ok := rootEnvKeyForGOOS(lower, "linux"); ok {
+			t.Fatalf("rootEnvKeyForGOOS(%q, linux) accepted case variant", lower)
+		}
 	}
 }
 
