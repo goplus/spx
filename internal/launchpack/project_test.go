@@ -51,6 +51,19 @@ func TestProjectBundleIncludesAllTopLevelSourcesAndPack(t *testing.T) {
 	}
 }
 
+func TestProjectBundleRejectsNestedProjectFile(t *testing.T) {
+	projectDir := t.TempDir()
+	writeProjectTestFile(t, filepath.Join(projectDir, "main.spx"), "main")
+	writeProjectTestFile(t, filepath.Join(projectDir, "nested", "main.spx"), "nested")
+	cfg := Config{
+		ProjectDir: projectDir, ProjectFile: filepath.Join(projectDir, "nested", "main.spx"),
+		ProjectExt: ".spx", PackDir: "assets", PackIndex: "index.json",
+	}
+	if _, err := collectProjectAllowlist(cfg); err == nil {
+		t.Fatal("collectProjectAllowlist accepted a nested project file")
+	}
+}
+
 func writeProjectTestFile(t *testing.T, path, content string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

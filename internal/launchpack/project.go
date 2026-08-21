@@ -54,7 +54,10 @@ func collectProjectAllowlist(cfg Config) ([]string, error) {
 	if len(projectFiles) == 0 {
 		return nil, fmt.Errorf("launchpack: project has no top-level %s source files", extension)
 	}
-	projectBase := filepath.Base(cfg.ProjectFile)
+	projectBase, err := topLevelProjectName(cfg.ProjectDir, cfg.ProjectFile)
+	if err != nil {
+		return nil, err
+	}
 	foundProject := false
 	for _, name := range projectFiles {
 		if name == projectBase {
@@ -74,6 +77,22 @@ func collectProjectAllowlist(cfg Config) ([]string, error) {
 	sort.Strings(projectFiles)
 	projectFiles = compactStrings(projectFiles)
 	return projectFiles, nil
+}
+
+func topLevelProjectName(projectDir, projectFile string) (string, error) {
+	root, err := filepath.Abs(projectDir)
+	if err != nil {
+		return "", fmt.Errorf("launchpack: resolve project directory: %w", err)
+	}
+	file, err := filepath.Abs(projectFile)
+	if err != nil {
+		return "", fmt.Errorf("launchpack: resolve project file: %w", err)
+	}
+	rel, err := filepath.Rel(root, file)
+	if err != nil || rel == "." || filepath.Dir(rel) != "." {
+		return "", fmt.Errorf("launchpack: project file %q is not at the project root", projectFile)
+	}
+	return rel, nil
 }
 
 func prepareProjectBundleConfig(cfg Config, snapshot projectpolicy.PortableConfigSnapshot) (projectbundle.Config, error) {
