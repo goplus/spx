@@ -17,7 +17,6 @@
 package pack
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path"
@@ -25,55 +24,48 @@ import (
 	"strings"
 
 	spxfs "github.com/goplus/spx/v3/fs"
-	coreproject "github.com/goplus/spx/v3/internal/core/project"
 )
 
 const (
-	projectConfigName = ".config"
-	packedIndexName   = "index_pack.json"
-	// engineExtAssetDir is the extasset zip root.
-	engineExtAssetDir = "extasset"
-	// sharedAssetEscapeDepth is the minimum "../" depth.
+	projectConfigName      = ".config"
+	packDirName            = "assets"
+	sourceIndexName        = "index.json"
+	packedIndexName        = "index_pack.json"
+	engineExtAssetDir      = "extasset"
 	sharedAssetEscapeDepth = 2
 )
-
-type assetProjectConfig struct {
-	// ExtAsset is the external asset directory.
-	ExtAsset string `json:"extasset"`
-}
 
 type assetPathRef struct {
 	configDir string
 	path      string
 }
 
-type packedAssetIndex struct {
-	Project  coreproject.ProjectConfig
-	Sprites  map[string]coreproject.SpriteConfig
-	Sounds   map[string]coreproject.SoundConfig
-	Fonts    map[string]coreproject.FontFamilyConfig
-	HasFonts bool
-}
-
-// collectExternalAssetPaths matches runtime asset lookup.
-func collectExternalAssetPaths(baseFolder string, existingZipPaths map[string]struct{}) ([]DirInfos, error) {
-	assetRoot := filepath.Join(baseFolder, "assets")
-	info, err := os.Stat(assetRoot)
-	if os.IsNotExist(err) || (err == nil && !info.IsDir()) {
+func collectExternalAssetPathsWithConfig(baseFolder string, existingZipPaths map[string]struct{}, configuredExtAssetDir *string) (extraPaths []dirInfo, err error) {
+	assetRoot := filepath.Join(baseFolder, packDirName)
+	info, err := os.Lstat(assetRoot)
+	if os.IsNotExist(err) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		return nil, fmt.Errorf("projectassets: PackDir %q must be a real directory", packDirName)
+	}
 
 	refs, err := collectAssetPathRefs(assetRoot)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("projectassets: validate asset indexes: %w", err)
 	}
-
-	extAssetDir, err := readExtAssetDir(baseFolder)
-	if err != nil {
-		return nil, err
+	extAssetDir := ""
+	if configuredExtAssetDir != nil {
+		extAssetDir = *configuredExtAssetDir
+	} else {
+		extAssetDir, err = readExtAssetDir(baseFolder)
+		if err != nil {
+			configPath := filepath.Join(baseFolder, projectConfigName)
+			return nil, fmt.Errorf("projectpolicy: parse project config %q: %w", configPath, err)
+		}
 	}
 
 	seen := make(map[string]struct{}, len(existingZipPaths))
@@ -83,8 +75,13 @@ func collectExternalAssetPaths(baseFolder string, existingZipPaths map[string]st
 
 	assetRoot = cleanFilesystemPath(assetRoot)
 	compatibilityRoot := sharedAssetCompatibilityRoot(assetRoot)
+	var externalRoot *os.Root
+	defer func() {
+		if err != nil && externalRoot != nil {
+			_ = externalRoot.Close()
+		}
+	}()
 
-	var extraPaths []DirInfos
 	for _, ref := range refs {
 		normalized := normalizeConfigPath(ref.configDir, ref.path)
 		sourcePath, zipPath, ok := resolveExternalAssetPath(assetRoot, compatibilityRoot, extAssetDir, normalized)
@@ -95,263 +92,58 @@ func collectExternalAssetPaths(baseFolder string, existingZipPaths map[string]st
 			continue
 		}
 
-		info, err := os.Stat(sourcePath)
+		if externalRoot == nil {
+			externalRoot, err = openPackRoot(compatibilityRoot)
+			if err != nil {
+				return nil, err
+			}
+		}
+		info, rootPath, err := inspectExternalAssetPath(externalRoot, compatibilityRoot, sourcePath)
 		if err != nil {
 			return nil, fmt.Errorf("stat external asset %s referenced by %q: %w", sourcePath, normalized, err)
 		}
-		if info.IsDir() {
-			return nil, fmt.Errorf("external asset %s referenced by %q is a directory", sourcePath, normalized)
-		}
 
 		seen[zipPath] = struct{}{}
-		extraPaths = append(extraPaths, DirInfos{path: sourcePath, info: info, zipPath: zipPath})
+		extraPaths = append(extraPaths, dirInfo{
+			path: sourcePath, info: info, zipPath: zipPath,
+			root: externalRoot, rootPath: rootPath,
+		})
 	}
-
 	return extraPaths, nil
 }
 
-func collectAssetPathRefs(assetRoot string) ([]assetPathRef, error) {
-	var refs []assetPathRef
-
-	packed, hasPacked, err := readPackedAssetIndex(assetRoot)
+func inspectExternalAssetPath(root *os.Root, rootPath, name string) (os.FileInfo, string, error) {
+	rel, err := filepath.Rel(rootPath, name)
 	if err != nil {
-		return nil, err
+		return nil, "", err
+	}
+	rel = filepath.Clean(rel)
+	if rel == "." || rel == ".." || filepath.IsAbs(rel) || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return nil, "", fmt.Errorf("path is outside the compatibility root")
 	}
 
-	if hasPacked {
-		refs = appendProjectAssetRefs(refs, packed.Project)
-	} else {
-		projectConfigPath := filepath.Join(assetRoot, "index.json")
-		if _, err := os.Stat(projectConfigPath); err != nil {
-			if !os.IsNotExist(err) {
-				return nil, fmt.Errorf("stat %s: %w", projectConfigPath, err)
-			}
-		} else {
-			var conf coreproject.ProjectConfig
-			if err := readJSONFile(projectConfigPath, &conf); err != nil {
-				return nil, fmt.Errorf("parse %s: %w", projectConfigPath, err)
-			}
-			refs = appendProjectAssetRefs(refs, conf)
+	parts := strings.Split(rel, string(filepath.Separator))
+	for i := range parts {
+		candidate := filepath.Join(parts[:i+1]...)
+		info, err := root.Lstat(candidate)
+		if err != nil {
+			return nil, "", err
 		}
-	}
-
-	spriteRefs, err := collectIndexedAssetRefs(
-		assetRoot,
-		"sprites",
-		packed.Sprites,
-		appendSpriteAssetRefs,
-		true,
-	)
-	if err != nil {
-		return nil, err
-	}
-	refs = append(refs, spriteRefs...)
-
-	soundRefs, err := collectIndexedAssetRefs(
-		assetRoot,
-		"sounds",
-		packed.Sounds,
-		appendSoundAssetRefs,
-		true,
-	)
-	if err != nil {
-		return nil, err
-	}
-	refs = append(refs, soundRefs...)
-
-	fontRefs, err := collectIndexedAssetRefs(
-		assetRoot,
-		"fonts",
-		packed.Fonts,
-		appendFontAssetRefs,
-		!hasPacked || !packed.HasFonts,
-	)
-	if err != nil {
-		return nil, err
-	}
-	refs = append(refs, fontRefs...)
-
-	return refs, nil
-}
-
-func collectIndexedAssetRefs[T any](
-	assetRoot string,
-	category string,
-	packed map[string]T,
-	appendRefs func([]assetPathRef, string, T) []assetPathRef,
-	scanSource bool,
-) ([]assetPathRef, error) {
-	var refs []assetPathRef
-
-	for name, conf := range packed {
-		refs = appendRefs(refs, path.Join(category, name), conf)
-	}
-
-	if !scanSource {
-		return refs, nil
-	}
-
-	configPaths, err := filepath.Glob(filepath.Join(assetRoot, category, "*", "index.json"))
-	if err != nil {
-		return nil, err
-	}
-	for _, configPath := range configPaths {
-		name := filepath.Base(filepath.Dir(configPath))
-		if _, exists := packed[name]; exists {
+		if info.Mode()&os.ModeSymlink != 0 {
+			return nil, "", fmt.Errorf("must be a regular non-symlink path (symlink at %q)", candidate)
+		}
+		if i < len(parts)-1 {
+			if !info.IsDir() {
+				return nil, "", fmt.Errorf("path component %q is not a directory", candidate)
+			}
 			continue
 		}
-
-		configDir, err := relConfigDir(assetRoot, filepath.Dir(configPath))
-		if err != nil {
-			return nil, err
+		if !info.Mode().IsRegular() {
+			return nil, "", fmt.Errorf("must be a regular non-symlink file")
 		}
-
-		var conf T
-		if err := readJSONFile(configPath, &conf); err != nil {
-			return nil, fmt.Errorf("parse %s: %w", configPath, err)
-		}
-		refs = appendRefs(refs, configDir, conf)
+		return info, rel, nil
 	}
-
-	return refs, nil
-}
-
-func appendProjectAssetRefs(refs []assetPathRef, conf coreproject.ProjectConfig) []assetPathRef {
-	for _, backdrop := range conf.Backdrops {
-		if backdrop != nil {
-			refs = appendAssetPathRef(refs, "", backdrop.Path)
-		}
-	}
-	refs = appendAssetPathRef(refs, "", conf.Bgm)
-	refs = appendAssetPathRef(refs, "", conf.TilemapPath)
-	return refs
-}
-
-func appendSpriteAssetRefs(refs []assetPathRef, configDir string, conf coreproject.SpriteConfig) []assetPathRef {
-	for _, costume := range conf.Costumes {
-		if costume != nil {
-			refs = appendAssetPathRef(refs, configDir, costume.Path)
-		}
-	}
-	if conf.CostumeSet != nil && conf.CostumeSet.Path != "" {
-		refs = appendAssetPathRef(refs, configDir, conf.CostumeSet.Path)
-	}
-	if conf.CostumeMPSet != nil && conf.CostumeMPSet.Path != "" {
-		refs = appendAssetPathRef(refs, configDir, conf.CostumeMPSet.Path)
-	}
-	return refs
-}
-
-func appendSoundAssetRefs(refs []assetPathRef, configDir string, conf coreproject.SoundConfig) []assetPathRef {
-	return appendAssetPathRef(refs, configDir, conf.Path)
-}
-
-func appendFontAssetRefs(refs []assetPathRef, configDir string, conf coreproject.FontFamilyConfig) []assetPathRef {
-	for _, face := range conf.Faces {
-		refs = appendAssetPathRef(refs, configDir, face.Path)
-	}
-	return refs
-}
-
-func readPackedAssetIndex(assetRoot string) (packedAssetIndex, bool, error) {
-	packedPath := filepath.Join(assetRoot, packedIndexName)
-	if _, err := os.Stat(packedPath); err != nil {
-		if os.IsNotExist(err) {
-			return packedAssetIndex{}, false, nil
-		}
-		return packedAssetIndex{}, false, fmt.Errorf("stat %s: %w", packedPath, err)
-	}
-
-	var root map[string]json.RawMessage
-	if err := readJSONFile(packedPath, &root); err != nil {
-		return packedAssetIndex{}, false, fmt.Errorf("parse %s: %w", packedPath, err)
-	}
-
-	sourceRoot, err := readSourceAssetIndexRoot(assetRoot)
-	if err != nil {
-		return packedAssetIndex{}, false, err
-	}
-	mergedRoot := mergePackedRootSections(root, sourceRoot)
-
-	var packed packedAssetIndex
-	if err := decodePackedAssetSection(mergedRoot, &packed.Project); err != nil {
-		return packedAssetIndex{}, false, fmt.Errorf("parse %s root: %w", packedPath, err)
-	}
-	packed.Sprites = make(map[string]coreproject.SpriteConfig)
-	if err := decodePackedAssetObjects(root["sprites"], packed.Sprites); err != nil {
-		return packedAssetIndex{}, false, fmt.Errorf("parse %s sprites: %w", packedPath, err)
-	}
-	packed.Sounds = make(map[string]coreproject.SoundConfig)
-	if err := decodePackedAssetObjects(root["sounds"], packed.Sounds); err != nil {
-		return packedAssetIndex{}, false, fmt.Errorf("parse %s sounds: %w", packedPath, err)
-	}
-	packed.Fonts = make(map[string]coreproject.FontFamilyConfig)
-	_, packed.HasFonts = root["fonts"]
-	if err := decodePackedAssetObjects(root["fonts"], packed.Fonts); err != nil {
-		return packedAssetIndex{}, false, fmt.Errorf("parse %s fonts: %w", packedPath, err)
-	}
-	return packed, true, nil
-}
-
-func readSourceAssetIndexRoot(assetRoot string) (map[string]json.RawMessage, error) {
-	projectConfigPath := filepath.Join(assetRoot, "index.json")
-	if _, err := os.Stat(projectConfigPath); err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("stat %s: %w", projectConfigPath, err)
-	}
-
-	var root map[string]json.RawMessage
-	if err := readJSONFile(projectConfigPath, &root); err != nil {
-		return nil, fmt.Errorf("parse %s: %w", projectConfigPath, err)
-	}
-	return root, nil
-}
-
-func mergePackedRootSections(packedRoot map[string]json.RawMessage, sourceRoot map[string]json.RawMessage) map[string]json.RawMessage {
-	if len(sourceRoot) == 0 {
-		return packedRoot
-	}
-
-	merged := make(map[string]json.RawMessage, len(sourceRoot)+len(packedRoot))
-	for key, value := range sourceRoot {
-		merged[key] = value
-	}
-	for key, value := range packedRoot {
-		merged[key] = value
-	}
-	return merged
-}
-
-func decodePackedAssetSection(root map[string]json.RawMessage, dest *coreproject.ProjectConfig) error {
-	if len(root) == 0 {
-		return nil
-	}
-	raw, err := json.Marshal(root)
-	if err != nil {
-		return err
-	}
-	return json.Unmarshal(raw, dest)
-}
-
-func decodePackedAssetObjects[T any](raw json.RawMessage, dest map[string]T) error {
-	if len(raw) == 0 || string(raw) == "null" {
-		return nil
-	}
-
-	entries := make(map[string]json.RawMessage)
-	if err := json.Unmarshal(raw, &entries); err != nil {
-		return err
-	}
-	for name, entry := range entries {
-		var conf T
-		if err := json.Unmarshal(entry, &conf); err != nil {
-			return fmt.Errorf("%s: %w", name, err)
-		}
-		dest[name] = conf
-	}
-	return nil
+	return nil, "", fmt.Errorf("empty external asset path")
 }
 
 func appendAssetPathRef(refs []assetPathRef, configDir, relPath string) []assetPathRef {
@@ -361,7 +153,6 @@ func appendAssetPathRef(refs []assetPathRef, configDir, relPath string) []assetP
 	return append(refs, assetPathRef{configDir: configDir, path: relPath})
 }
 
-// resolveExternalAssetPath resolves external assets for packing.
 func resolveExternalAssetPath(assetRoot, compatibilityRoot, extAssetDir, relPath string) (string, string, bool) {
 	if relPath == "" || strings.HasPrefix(relPath, "/") {
 		return "", "", false
@@ -381,7 +172,6 @@ func resolveExternalAssetPath(assetRoot, compatibilityRoot, extAssetDir, relPath
 	if isWithinRoot(sourcePath, assetRoot) {
 		return "", "", false
 	}
-	// Allow legacy shared assets outside assets/.
 	if leadingParentCount(relPath) < sharedAssetEscapeDepth || !isWithinRoot(sourcePath, compatibilityRoot) {
 		return "", "", false
 	}
@@ -397,7 +187,6 @@ func resolveExternalAssetPath(assetRoot, compatibilityRoot, extAssetDir, relPath
 	return sourcePath, zipPath, true
 }
 
-// rewriteExtAssetZipPath rewrites extasset paths for the zip.
 func rewriteExtAssetZipPath(relPath, extAssetDir string) string {
 	if extAssetDir == "" {
 		return ""
@@ -406,45 +195,19 @@ func rewriteExtAssetZipPath(relPath, extAssetDir string) string {
 	segments := strings.Split(cleanFilesystemPath(relPath), "/")
 	leadingParents := 0
 	for i, segment := range segments {
-		if segment == "" {
+		switch {
+		case segment == "":
 			continue
-		}
-		if segment == ".." {
+		case segment == "..":
 			leadingParents++
-			continue
-		}
-		if segment != extAssetDir || leadingParents == 0 {
+		case segment != extAssetDir || leadingParents == 0:
 			return ""
+		default:
+			suffix := filepath.Join(segments[i+1:]...)
+			return normalizeZipPath(filepath.Join(engineExtAssetDir, suffix))
 		}
-
-		suffix := filepath.Join(segments[i+1:]...)
-		return normalizeZipPath(filepath.Join(engineExtAssetDir, suffix))
 	}
-
 	return ""
-}
-
-func readExtAssetDir(baseFolder string) (string, error) {
-	configPath := filepath.Join(baseFolder, projectConfigName)
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		return "", nil
-	} else if err != nil {
-		return "", err
-	}
-
-	var conf assetProjectConfig
-	if err := readJSONFile(configPath, &conf); err != nil {
-		return "", fmt.Errorf("parse %s: %w", configPath, err)
-	}
-	return conf.ExtAsset, nil
-}
-
-func readJSONFile(filePath string, v any) error {
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return err
-	}
-	return json.Unmarshal(data, v)
 }
 
 func relConfigDir(assetRoot, configDir string) (string, error) {
@@ -469,16 +232,16 @@ func normalizeConfigPath(configDir, relPath string) string {
 	return path.Clean(path.Join(configDir, relPath))
 }
 
-func cleanFilesystemPath(path string) string {
-	return normalizeZipPath(filepath.Clean(path))
+func cleanFilesystemPath(name string) string {
+	return normalizeZipPath(filepath.Clean(name))
 }
 
 func sharedAssetCompatibilityRoot(assetRoot string) string {
 	return cleanFilesystemPath(filepath.Join(assetRoot, "..", ".."))
 }
 
-func isWithinRoot(path, root string) bool {
-	rel, err := filepath.Rel(root, path)
+func isWithinRoot(name, root string) bool {
+	rel, err := filepath.Rel(root, name)
 	if err != nil {
 		return false
 	}
@@ -496,4 +259,8 @@ func leadingParentCount(relPath string) int {
 		count++
 	}
 	return count
+}
+
+func normalizeZipPath(name string) string {
+	return strings.ReplaceAll(name, "\\", "/")
 }

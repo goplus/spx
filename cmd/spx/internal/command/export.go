@@ -54,7 +54,17 @@ func (cmd *CmdTool) Export() error {
 }
 
 func (cmd *CmdTool) prepareExport() error {
-	projectDir, _ := filepath.Abs(cmd.ProjectDir)
-	util.CopyDir2(filepath.Join(projectDir, "..", "assets"), filepath.Join(cmd.ProjectDir, "assets"))
+	if cmd.TargetAbsDir == "" {
+		return fmt.Errorf("stage project-local resources: logical project directory is empty")
+	}
+	sourceProjectDir := cmd.TargetAbsDir
+	sourceAssetDir := filepath.Join(sourceProjectDir, "assets")
+	destinationAssetDir := filepath.Join(cmd.ProjectDir, "assets")
+	if err := validateExportStage(sourceAssetDir, destinationAssetDir); err != nil {
+		return err
+	}
+	if err := util.CopyDir2(sourceAssetDir, destinationAssetDir); err != nil {
+		return fmt.Errorf("stage project-local resources from %s: %w", sourceAssetDir, err)
+	}
 	return nil
 }
