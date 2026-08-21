@@ -17,7 +17,6 @@
 package release
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -28,6 +27,8 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"github.com/goplus/spx/v3/internal/strictjson"
 )
 
 const (
@@ -115,16 +116,8 @@ func GenerateRuntimeManifest(lock RuntimeLock, provenance RuntimeProvenance, inp
 // ParseRuntimeManifest decodes and structurally validates a manifest. Use
 // ValidateForLock as well when consuming a release for a known lock.
 func ParseRuntimeManifest(data []byte) (RuntimeManifest, error) {
-	if err := rejectDuplicateJSONKeys(data); err != nil {
-		return RuntimeManifest{}, fmt.Errorf("decode runtime manifest: %w", err)
-	}
 	var manifest RuntimeManifest
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&manifest); err != nil {
-		return RuntimeManifest{}, fmt.Errorf("decode runtime manifest: %w", err)
-	}
-	if err := requireJSONEOF(decoder); err != nil {
+	if err := strictjson.Decode(data, &manifest); err != nil {
 		return RuntimeManifest{}, fmt.Errorf("decode runtime manifest: %w", err)
 	}
 	if err := manifest.Validate(); err != nil {

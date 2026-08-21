@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -113,6 +114,12 @@ func TestRuntimeExportWebSequence(t *testing.T) {
 func TestRuntimeExportPackSequence(t *testing.T) {
 	runner := newRuntimeFixtureRunner(t)
 	version := mustDefaultRuntimeVersion(t)
+	spec, err := release.HostRuntimeSpecFor(release.DefaultRuntimeLock(), runtime.GOOS, runtime.GOARCH)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gopathBin := filepath.Join(os.Getenv("GOPATH"), "bin")
+	mustWriteFile(t, filepath.Join(gopathBin, spec.RuntimeName), []byte("runtime-engine"))
 
 	if err := ExportPackRuntime(runner); err != nil {
 		t.Fatalf("exportPackRuntime returned error: %v", err)
@@ -120,12 +127,32 @@ func TestRuntimeExportPackSequence(t *testing.T) {
 
 	assertSingleRuntimeWorkspaceCommand(t, runner, "spx", []string{"export"})
 
-	gopathBin := filepath.Join(os.Getenv("GOPATH"), "bin")
 	if !shared.FileExists(filepath.Join(gopathBin, "gdspxrt"+version+".pck")) {
 		t.Fatalf("expected exported pck to exist")
 	}
 	if !shared.FileExists(filepath.Join(gopathBin, release.RuntimeAssetZipName)) {
 		t.Fatalf("expected exported zip to exist")
+	}
+	manifestPath := filepath.Join(runner.repoRoot, ".spx", "runtime", version, spec.GOOS+"-"+spec.GOARCH, "engine-manifest.json")
+	manifestData, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("read local runtime manifest: %v", err)
+	}
+	manifest, err := release.ParseLocalRuntimeManifest(manifestData)
+	if err != nil {
+		t.Fatalf("parse local runtime manifest: %v", err)
+	}
+	if err := manifest.ValidateForLock(release.DefaultRuntimeLock(), spec.GOOS, spec.GOARCH); err != nil {
+		t.Fatal(err)
+	}
+	manifestDir := filepath.Dir(manifestPath)
+	if err := manifest.VerifyFiles(manifestDir); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{manifest.Engine.Name, manifest.Pack.Name} {
+		if !shared.FileExists(filepath.Join(manifestDir, name)) {
+			t.Fatalf("expected published local runtime file %s beside manifest", name)
+		}
 	}
 }
 
