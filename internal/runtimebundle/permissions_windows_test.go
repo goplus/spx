@@ -21,6 +21,7 @@ package runtimebundle
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -65,6 +66,30 @@ func TestWindowsPrivateDACLIsAppliedAtCreation(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(key + ".lock"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestAcquireCreatesProtectedWindowsCache(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "acquire-cache")
+	path, err := acquirePath(context.Background(), root, FetchSpec{
+		Name: "manifest.json", URL: "https://example.invalid/manifest.json",
+		Size: 2, SHA256: testDigest("{}"),
+		Fetch: func(_ context.Context, _ string, dst io.Writer) error {
+			_, err := io.WriteString(dst, "{}")
+			return err
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyProtectedPrivateDACL(root); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyPrivateDACL(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyPrivateDACL(path + ".lock"); err != nil {
 		t.Fatal(err)
 	}
 }
