@@ -32,14 +32,7 @@ import (
 
 var runtimeHTTPClient = &http.Client{Timeout: 30 * time.Minute}
 
-func resolvePublishedRuntime(ctx context.Context, cacheRoot string, lock release.RuntimeLock, spec release.HostRuntimeSpec, env []string, offline bool, dependencies runtimeAssetDependencies) (runtimeAssetSource, error) {
-	pin, err := dependencies.manifestPin(lock)
-	if err != nil {
-		return runtimeAssetSource{}, fmt.Errorf("launchpack: resolve runtime manifest pin: %w", err)
-	}
-	if err := pin.ValidateForLock(lock); err != nil {
-		return runtimeAssetSource{}, err
-	}
+func resolvePublishedRuntime(ctx context.Context, cacheRoot string, lock release.RuntimeLock, spec release.HostRuntimeSpec, pin release.RuntimeManifestPin, env []string, offline bool, dependencies runtimeAssetDependencies) (runtimeAssetSource, error) {
 	assetDir, assetDirSet, duplicate := environmentValue(env, runtimeAssetDirEnv)
 	if duplicate {
 		return runtimeAssetSource{}, fmt.Errorf("launchpack: duplicate %s", runtimeAssetDirEnv)

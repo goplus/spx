@@ -102,7 +102,7 @@ func validateLocalRuntimeFile(label string, file LocalRuntimeFile) error {
 	return nil
 }
 
-// ValidateForLock verifies the local manifest's runtime and target identity.
+// ValidateForLock verifies the local manifest against the complete lock.
 func (m LocalRuntimeManifest) ValidateForLock(lock RuntimeLock, goos, goarch string) error {
 	if err := lock.Validate(); err != nil {
 		return err
@@ -120,6 +120,24 @@ func (m LocalRuntimeManifest) ValidateForLock(lock RuntimeLock, goos, goarch str
 	if m.LockSHA256 != lockSHA {
 		return fmt.Errorf("release: local runtime lock SHA-256 %q does not match %q", m.LockSHA256, lockSHA)
 	}
+	return m.validateVersionAndTarget(lock, goos, goarch)
+}
+
+// ValidateForVersion verifies a source-mode runtime by version and target.
+func (m LocalRuntimeManifest) ValidateForVersion(lock RuntimeLock, goos, goarch string) error {
+	if err := lock.Validate(); err != nil {
+		return err
+	}
+	if err := m.Validate(); err != nil {
+		return err
+	}
+	if m.RuntimeVersion != lock.RuntimeVersion {
+		return fmt.Errorf("release: local runtime version %q does not match %q", m.RuntimeVersion, lock.RuntimeVersion)
+	}
+	return m.validateVersionAndTarget(lock, goos, goarch)
+}
+
+func (m LocalRuntimeManifest) validateVersionAndTarget(lock RuntimeLock, goos, goarch string) error {
 	if m.GOOS != goos || m.GOARCH != goarch {
 		return fmt.Errorf("release: local runtime target %s/%s does not match host %s/%s", m.GOOS, m.GOARCH, goos, goarch)
 	}
@@ -133,7 +151,8 @@ func (m LocalRuntimeManifest) ValidateForLock(lock RuntimeLock, goos, goarch str
 	return nil
 }
 
-func (m LocalRuntimeManifest) json() ([]byte, error) {
+// JSON returns the canonical local manifest representation.
+func (m LocalRuntimeManifest) JSON() ([]byte, error) {
 	if err := m.Validate(); err != nil {
 		return nil, err
 	}

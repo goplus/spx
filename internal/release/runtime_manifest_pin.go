@@ -19,6 +19,7 @@ package release
 import (
 	"crypto/sha256"
 	"embed"
+	"errors"
 	"fmt"
 	"io/fs"
 	"path"
@@ -28,6 +29,9 @@ import (
 )
 
 const runtimeManifestPinSchema = 1
+
+// ErrRuntimeManifestPinNotFound marks an unpublished runtime version.
+var ErrRuntimeManifestPinNotFound = errors.New("release: runtime manifest pin not found")
 
 // RuntimeManifestPin pins a release manifest independently of RuntimeLock.
 type RuntimeManifestPin struct {
@@ -96,7 +100,7 @@ func RuntimeManifestPinForLock(lock RuntimeLock) (RuntimeManifestPin, error) {
 	}
 	pin, ok := runtimeManifestPins[lock.RuntimeVersion]
 	if !ok {
-		return RuntimeManifestPin{}, fmt.Errorf("release: no runtime manifest pin for version %q", lock.RuntimeVersion)
+		return RuntimeManifestPin{}, fmt.Errorf("%w: no runtime manifest pin for version %q", ErrRuntimeManifestPinNotFound, lock.RuntimeVersion)
 	}
 	if err := pin.ValidateForLock(lock); err != nil {
 		return RuntimeManifestPin{}, err

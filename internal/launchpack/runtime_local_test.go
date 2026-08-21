@@ -24,7 +24,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"testing"
 
 	"github.com/goplus/spx/v3/internal/release"
@@ -73,6 +72,7 @@ func TestAcquireRuntimeAssetsPrefersExplicitLocalManifest(t *testing.T) {
 	}
 
 	cfg.RuntimeManifestPath = ""
+	cfg.Source.SourceMode = true
 	assets, err = acquireRuntimeAssetsWith(context.Background(), cfg, IO{Env: []string{"SPX_RUNTIME_OFFLINE=1"}}, lock, runtimeAssetDependencies{
 		fetch:     func(context.Context, string, io.Writer) error { return errors.New("network must not be used") },
 		cacheRoot: func() string { return filepath.Join(root, "cache-source") }, manifestPin: release.RuntimeManifestPinForLock,
@@ -110,7 +110,13 @@ func TestAcquireRuntimeAssetsRejectsInvalidExplicitManifestWithoutFetch(t *testi
 		return errors.New("invalid local manifest must not fetch")
 	}
 	cacheRoot := t.TempDir()
-	_, err := acquireRuntimeAssetsWith(context.Background(), Config{RuntimeCacheRoot: cacheRoot, RuntimeManifestPath: manifestPath}, IO{Env: []string{runtimeCacheEnv + "=" + cacheRoot}}, release.DefaultRuntimeLock(), localRuntimeTestDependencies(cacheRoot, fetch))
+	dependencies := localRuntimeTestDependencies(cacheRoot, fetch)
+	dependencies.goBin = func(context.Context, Config, []string) (string, error) {
+		calls++
+		return t.TempDir(), nil
+	}
+	cfg := Config{RuntimeCacheRoot: cacheRoot, RuntimeManifestPath: manifestPath, Source: SourceIdentity{SourceMode: true}}
+	_, err := acquireRuntimeAssetsWith(context.Background(), cfg, IO{Env: []string{runtimeCacheEnv + "=" + cacheRoot}}, release.DefaultRuntimeLock(), dependencies)
 	if err == nil {
 		t.Fatal("invalid explicit local manifest was accepted")
 	}
@@ -207,7 +213,7 @@ func TestAcquireRuntimeAssetsAutoDiscoveredManifestIdentityMismatchFailsClosed(t
 		calls++
 		return errors.New("auto-discovered local manifest must not fetch")
 	}
-	cfg := Config{RuntimeSourceRoot: sourceRoot, RuntimeCacheRoot: cacheRoot}
+	cfg := Config{RuntimeSourceRoot: sourceRoot, RuntimeCacheRoot: cacheRoot, Source: SourceIdentity{SourceMode: true}}
 	env := IO{Env: []string{}}
 	dependencies := localRuntimeTestDependencies(cacheRoot, fetch)
 	assets, err := acquireRuntimeAssetsWith(context.Background(), cfg, env, lock, dependencies)
@@ -216,7 +222,7 @@ func TestAcquireRuntimeAssetsAutoDiscoveredManifestIdentityMismatchFailsClosed(t
 	}
 	assets.Cleanup()
 
-	manifest.LockSHA256 = strings.Repeat("0", 64)
+	manifest.RuntimeVersion = "9.9.9"
 	data, err := json.Marshal(manifest)
 	if err != nil {
 		t.Fatal(err)

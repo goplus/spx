@@ -97,8 +97,8 @@ func materializePublishedRuntime(ctx context.Context, cacheRoot string, lock rel
 func materializeLocalRuntime(ctx context.Context, cacheRoot string, lock release.RuntimeLock, spec release.HostRuntimeSpec, source localRuntimeSource) (Assets, error) {
 	return materializeRuntimeBundle(ctx, cacheRoot, lock, spec, runtimeMaterializationInput{
 		manifestSHA256: digestBytes(source.bytes),
-		enginePath:     filepath.Join(source.directory, source.manifest.Engine.Name),
-		packPath:       filepath.Join(source.directory, source.manifest.Pack.Name),
+		enginePath:     source.enginePath,
+		packPath:       source.packPath,
 		engineSize:     source.manifest.Engine.Size,
 		engineSHA256:   source.manifest.Engine.SHA256,
 		packSize:       source.manifest.Pack.Size,
