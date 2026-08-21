@@ -14,24 +14,21 @@
  * limitations under the License.
  */
 
-package shared
+package runtimecmd
 
-import "errors"
+import (
+	"os"
 
-var ErrUsage = errors.New("usage")
+	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
+)
 
-type BuildEnvironment = buildEnvironment
+var osStderr = os.Stderr
 
-type ScriptRunner interface {
-	RunScript(relativePath string, args ...string) error
-	RunCommand(workdir string, name string, args ...string) error
-	RepoRootDir() string
-}
+var errUsage = shared.ErrUsage
 
-type CommandRunner struct {
-	RepoRoot string
-}
-
-func (r CommandRunner) RepoRootDir() string {
-	return r.RepoRoot
+func Run(args []string) error {
+	if len(args) != 0 && args[0] == "export-pack" {
+		return runRuntimeExportPack(args[1:])
+	}
+	return runOtherRuntimeCommand(args)
 }

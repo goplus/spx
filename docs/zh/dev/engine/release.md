@@ -23,7 +23,7 @@ SPX 与 Godot Actions 都调用所选 SPX commit 中的 `.github/scripts/runtime
 
 manifest 分别记录 `module_tree`、`runtime_pack_source_sha256` 和 `build_recipe_sha256`。完整 lock SHA 也是 runtime release 的复用契约，因此 ABI、required assets、repository/manifest、Godot ref/version/commit、module path 或任一工具链字段变化都会拒绝复用旧 runtime。Godot SCons cache 使用更窄的独立身份；只改版本号、release 元数据、资产清单或文档不会重新编译 Godot，但可能要求新的 runtime release 身份。文档本身不进入这两类 runtime digest。
 
-pack build recipe 只覆盖 `.github/scripts/runtime/build_pack.sh` 与实际参与生成产物的 buildctl 实现。workflow 排版、checkout/upload/download 等外部 Action 版本属于 CI 运输层，不进入该摘要；Dependabot 升级这些 Action 不需要提升 runtime 版本。修改 pack 脚本或相关 buildctl 代码仍会严格拒绝复用旧 runtime。
+module tree 仍严格覆盖完整的 `godot_modules/spx` tree。pack-source 摘要只跟踪 desktop `runtime export-pack` 的输入，并按固定的 Linux/amd64、CGO、无额外 tag 的 pack 构建目标解析 Go build constraints；`export_presets.cfg` 只投影 Linux preset，`gdspx.gdextension` 等实际进入 PCK 的文件仍完整计算。独立的 `run`、`buildlauncher`、Web/mobile exporter、平台模板和 release 编排不进入摘要。build-recipe 摘要只跟踪专用的本地 Linux 引擎准备与 export-pack 路径；其他平台分发、远程下载、本地 manifest 发布和 CI 运输层也不进入摘要。任一已选输入变化时仍会拒绝复用旧 runtime。
 
 ## 冻结顺序
 

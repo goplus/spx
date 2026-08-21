@@ -16,10 +16,6 @@
 
 package engine
 
-import (
-	"path/filepath"
-)
-
 type DownloadConfig struct {
 	Runtime          bool
 	SkipRuntimePack  bool
@@ -49,12 +45,9 @@ func PrepareHostEditorAsset(repoRoot, assetDir string) error {
 		return err
 	}
 	if assetDir != "" {
-		env.assetDir = assetDir
-		if !filepath.IsAbs(env.assetDir) {
-			env.assetDir = filepath.Join(repoRoot, env.assetDir)
+		if err := setLocalAssetDir(&env, repoRoot, assetDir, true); err != nil {
+			return err
 		}
-		env.assetDir = filepath.Clean(env.assetDir)
-		env.allowMissingManifest = true
 	}
 	if env.verifyManifest {
 		if err := loadEngineAssetManifest(&env); err != nil {

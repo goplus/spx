@@ -22,7 +22,6 @@ import (
 
 	"github.com/goplus/spx/v3/internal/cmd/buildctl/dockercmd"
 	"github.com/goplus/spx/v3/internal/cmd/buildctl/engine"
-	"github.com/goplus/spx/v3/internal/cmd/buildctl/runtimecmd"
 	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 	toolpkg "github.com/goplus/spx/v3/internal/cmd/buildctl/tool"
 	"github.com/goplus/spx/v3/internal/cmd/buildctl/workflow"
@@ -34,7 +33,7 @@ var (
 	rootRunDoctor = runDoctor
 )
 
-func run(args []string) error {
+func runOtherRootCommand(args []string) error {
 	if len(args) == 0 {
 		printRootUsage()
 		return shared.ErrUsage
@@ -53,8 +52,6 @@ func run(args []string) error {
 		return toolpkg.Run(args[1:])
 	case "engine":
 		return engine.Run(args[1:])
-	case "runtime":
-		return runtimecmd.Run(args[1:])
 	case "docker":
 		return dockercmd.Run(args[1:])
 	case "workflow":

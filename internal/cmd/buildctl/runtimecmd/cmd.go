@@ -20,15 +20,10 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"os"
 
 	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 	toolpkg "github.com/goplus/spx/v3/internal/cmd/buildctl/tool"
 )
-
-var osStderr = os.Stderr
-
-var errUsage = shared.ErrUsage
 
 type runtimeExportWebConfig struct {
 	mode string
@@ -38,7 +33,7 @@ type BuildWasmConfig struct {
 	Opt bool
 }
 
-func Run(args []string) error {
+func runOtherRuntimeCommand(args []string) error {
 	if len(args) == 0 {
 		printRuntimeUsage()
 		return errUsage
@@ -51,8 +46,6 @@ func Run(args []string) error {
 		return runRuntimeCompressWasm(args[1:])
 	case "export-web-template":
 		return runRuntimeExportWebTemplate(args[1:])
-	case "export-pack":
-		return runRuntimeExportPack(args[1:])
 	case "export-web":
 		return runRuntimeExportWeb(args[1:])
 	case "help", "-h", "--help":
@@ -121,23 +114,6 @@ func runRuntimeCompressWasm(args []string) error {
 		return err
 	}
 	return compressWasmArtifacts()
-}
-
-func runRuntimeExportPack(args []string) error {
-	if err := shared.ParseNoArgs("runtime export-pack", "Usage: buildctl runtime export-pack", args, osStderr); err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			return nil
-		}
-		return err
-	}
-
-	repoRoot, err := shared.FindRepoRoot()
-	if err != nil {
-		return err
-	}
-
-	runner := shared.CommandRunner{RepoRoot: repoRoot}
-	return ExportPackRuntime(runner)
 }
 
 func runRuntimeExportWeb(args []string) error {

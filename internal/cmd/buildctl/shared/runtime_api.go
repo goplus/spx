@@ -16,22 +16,30 @@
 
 package shared
 
-import "errors"
-
-var ErrUsage = errors.New("usage")
-
-type BuildEnvironment = buildEnvironment
-
-type ScriptRunner interface {
-	RunScript(relativePath string, args ...string) error
-	RunCommand(workdir string, name string, args ...string) error
-	RepoRootDir() string
+func ResolveBuildEnvironment(repoRoot string, requestedPlatform string) (BuildEnvironment, error) {
+	return resolveBuildEnvironment(repoRoot, requestedPlatform)
 }
 
-type CommandRunner struct {
-	RepoRoot string
+func FindRepoRoot() (string, error) {
+	return findRepoRoot()
 }
 
-func (r CommandRunner) RepoRootDir() string {
-	return r.RepoRoot
+func FileExists(path string) bool {
+	return fileExists(path)
+}
+
+func EnsureGoPath() (string, error) {
+	return ensureGoPath()
+}
+
+func DefaultRuntimeVersion() (string, error) {
+	return defaultRuntimeVersion()
+}
+
+func CopyFile(src, dst string) error {
+	return copyFile(src, dst)
+}
+
+func WriteNamedZip(dst string, namedFiles map[string]string) error {
+	return writeNamedZip(dst, namedFiles)
 }

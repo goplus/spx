@@ -50,6 +50,16 @@ func TestExtractZipRejectsPathTraversal(t *testing.T) {
 	}
 }
 
+func TestDownloadLinuxAssetsRequiresLinuxPlatform(t *testing.T) {
+	for _, env := range []engineDownloadEnv{{platform: "darwin", arch: linuxRuntimePackArch}} {
+		if err := downloadLinuxAssets(env, false); err == nil {
+			t.Fatalf("downloadLinuxAssets accepted %s", env.platform)
+		} else if !strings.Contains(err.Error(), "Linux runtime assets require platform linux") {
+			t.Fatalf("downloadLinuxAssets error = %v", err)
+		}
+	}
+}
+
 func TestFetchURLToFileLeavesDestinationUntouchedOnInterruptedDownload(t *testing.T) {
 	tempDir := t.TempDir()
 	dst := filepath.Join(tempDir, "asset.zip")

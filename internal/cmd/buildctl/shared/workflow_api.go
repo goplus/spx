@@ -16,22 +16,8 @@
 
 package shared
 
-import "errors"
-
-var ErrUsage = errors.New("usage")
-
-type BuildEnvironment = buildEnvironment
-
-type ScriptRunner interface {
-	RunScript(relativePath string, args ...string) error
-	RunCommand(workdir string, name string, args ...string) error
-	RepoRootDir() string
-}
-
-type CommandRunner struct {
-	RepoRoot string
-}
-
-func (r CommandRunner) RepoRootDir() string {
-	return r.RepoRoot
+type WorkflowRunner interface {
+	ScriptRunner
+	ListDemoDirs() ([]string, error)
+	StopWebServers() error
 }

@@ -38,6 +38,24 @@ func TestParseRuntimeBuildWasmArgsDefault(t *testing.T) {
 	}
 }
 
+func TestParseRuntimeExportPackArgs(t *testing.T) {
+	cfg, err := parseRuntimeExportPackArgs(nil)
+	if err != nil {
+		t.Fatalf("parseRuntimeExportPackArgs returned error: %v", err)
+	}
+	if cfg.engineAssetDir != "" {
+		t.Fatalf("default engine asset directory = %q", cfg.engineAssetDir)
+	}
+
+	cfg, err = parseRuntimeExportPackArgs([]string{"--engine-asset-dir", "runtime-assets"})
+	if err != nil {
+		t.Fatalf("parseRuntimeExportPackArgs returned error: %v", err)
+	}
+	if cfg.engineAssetDir != "runtime-assets" {
+		t.Fatalf("engine asset directory = %q", cfg.engineAssetDir)
+	}
+}
+
 func TestRuntimeBuildWasmSequence(t *testing.T) {
 	runner := &recordingRunner{}
 
