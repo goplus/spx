@@ -11,7 +11,8 @@ MACOS_GO_TOOLCHAIN := cmd/internal/macos_go_toolchain.sh
 # Keep go.sum optional so clean repos without it can still build buildctl.
 OPTIONAL_GO_SUM := $(wildcard go.sum)
 RUNTIME_LOCK_SNAPSHOTS := $(wildcard internal/release/runtime_locks/*.json)
-BUILDCTL_SOURCES := go.mod $(OPTIONAL_GO_SUM) $(MACOS_GO_TOOLCHAIN) internal/release/runtime.lock.json $(RUNTIME_LOCK_SNAPSHOTS) $(shell find cmd internal -type f -name '*.go' ! -name '*_test.go' | LC_ALL=C sort)
+RUNTIME_MANIFEST_PINS := $(wildcard internal/release/runtime_manifest_pins/*.json)
+BUILDCTL_SOURCES := go.mod $(OPTIONAL_GO_SUM) $(MACOS_GO_TOOLCHAIN) internal/release/runtime.lock.json $(RUNTIME_LOCK_SNAPSHOTS) $(RUNTIME_MANIFEST_PINS) $(shell find cmd internal -type f -name '*.go' ! -name '*_test.go' | LC_ALL=C sort)
 BUILDCTL_CMD := $(BUILDCTL_BIN)
 BUILDCTL_TARGETS := setup setup-web dev doctor list-demos install clean-assets download download-engine build-editor build-desktop build-web build-wasm build-wasm-opt build-android build-ios install-apk editor template-editor run runnative rune runweb runwebworker export-pack export-web stop
 PRIMARY_HELP_TARGETS := setup setup-web dev doctor build-editor build-desktop build-web build-android build-ios list-demos editor template-editor run runnative rune runweb runwebworker format generate help-advanced

@@ -28,6 +28,7 @@ xgo_autogen*.go
 # Root outputs
 /.temp/
 /.tmp/
+/.spx/
 /bin/
 /.bin/
 /godot/
