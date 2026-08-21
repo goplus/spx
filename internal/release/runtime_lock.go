@@ -24,13 +24,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"path"
 	"regexp"
 	"slices"
 	"strings"
 	"unicode"
+
+	"github.com/goplus/spx/v3/internal/strictjson"
 )
 
 const RuntimeLockSchema = 1
@@ -184,16 +185,8 @@ func cloneRuntimeLock(lock RuntimeLock) RuntimeLock {
 // ParseRuntimeLock decodes and validates a runtime lock. Unknown JSON fields
 // are rejected so misspelled release inputs cannot silently change a build.
 func ParseRuntimeLock(data []byte) (RuntimeLock, error) {
-	if err := rejectDuplicateJSONKeys(data); err != nil {
-		return RuntimeLock{}, fmt.Errorf("decode runtime lock: %w", err)
-	}
 	var lock RuntimeLock
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&lock); err != nil {
-		return RuntimeLock{}, fmt.Errorf("decode runtime lock: %w", err)
-	}
-	if err := requireJSONEOF(decoder); err != nil {
+	if err := strictjson.Decode(data, &lock); err != nil {
 		return RuntimeLock{}, fmt.Errorf("decode runtime lock: %w", err)
 	}
 	if err := lock.Validate(); err != nil {
@@ -301,88 +294,6 @@ func (l RuntimeLock) SHA256() (string, error) {
 	}
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:]), nil
-}
-
-func requireJSONEOF(decoder *json.Decoder) error {
-	var extra any
-	if err := decoder.Decode(&extra); err == io.EOF {
-		return nil
-	} else if err != nil {
-		return err
-	}
-	return errors.New("multiple JSON values")
-}
-
-// rejectDuplicateJSONKeys walks one JSON value before typed decoding so all
-// consumers reject ambiguous objects consistently. encoding/json otherwise
-// accepts duplicate keys and silently keeps the last value.
-func rejectDuplicateJSONKeys(data []byte) error {
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.UseNumber()
-	if err := consumeUniqueJSONValue(decoder, "$"); err != nil {
-		return err
-	}
-	if err := requireJSONEOF(decoder); err != nil {
-		return err
-	}
-	return nil
-}
-
-func consumeUniqueJSONValue(decoder *json.Decoder, location string) error {
-	token, err := decoder.Token()
-	if err != nil {
-		return err
-	}
-	delim, ok := token.(json.Delim)
-	if !ok {
-		return nil
-	}
-	switch delim {
-	case '{':
-		seen := make(map[string]struct{})
-		for decoder.More() {
-			keyToken, err := decoder.Token()
-			if err != nil {
-				return err
-			}
-			key, ok := keyToken.(string)
-			if !ok {
-				return fmt.Errorf("object key at %s is not a string", location)
-			}
-			if _, exists := seen[key]; exists {
-				return fmt.Errorf("duplicate JSON key %q at %s", key, location)
-			}
-			seen[key] = struct{}{}
-			if err := consumeUniqueJSONValue(decoder, location+"."+key); err != nil {
-				return err
-			}
-		}
-		end, err := decoder.Token()
-		if err != nil {
-			return err
-		}
-		if end != json.Delim('}') {
-			return fmt.Errorf("invalid object terminator at %s", location)
-		}
-	case '[':
-		index := 0
-		for decoder.More() {
-			if err := consumeUniqueJSONValue(decoder, fmt.Sprintf("%s[%d]", location, index)); err != nil {
-				return err
-			}
-			index++
-		}
-		end, err := decoder.Token()
-		if err != nil {
-			return err
-		}
-		if end != json.Delim(']') {
-			return fmt.Errorf("invalid array terminator at %s", location)
-		}
-	default:
-		return fmt.Errorf("invalid JSON delimiter %q at %s", delim, location)
-	}
-	return nil
 }
 
 func validateBaseName(kind, name string) error {

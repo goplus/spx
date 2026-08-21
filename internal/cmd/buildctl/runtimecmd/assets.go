@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 
 	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
@@ -67,10 +68,46 @@ func ExportPackRuntime(runner shared.ScriptRunner) error {
 	}
 
 	dstZip := filepath.Join(workspace.goBinDir, release.RuntimeAssetZipName)
-	return shared.WriteNamedZip(dstZip, map[string]string{
+	if err := shared.WriteNamedZip(dstZip, map[string]string{
 		"gdspxrt.pck":         workspace.outputPack,
 		"runtime.gdextension": runtimeExtension,
-	})
+	}); err != nil {
+		return err
+	}
+	return writeLocalRuntimeManifestIfComplete(workspace.repoRoot, workspace.goBinDir)
+}
+
+// writeLocalRuntimeManifestIfComplete publishes the explicit source-mode
+// runtime declaration after the Engine and PCK have both been produced. A
+// standalone export-pack may legitimately run before the Engine build, so it
+// leaves no incomplete manifest in that case.
+func writeLocalRuntimeManifestIfComplete(repoRoot, goBinDir string) error {
+	lock := release.DefaultRuntimeLock()
+	spec, err := release.HostRuntimeSpecFor(lock, runtime.GOOS, runtime.GOARCH)
+	if err != nil {
+		return err
+	}
+	enginePath := filepath.Join(goBinDir, spec.RuntimeName)
+	if _, err := os.Lstat(enginePath); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("inspect local runtime Engine: %w", err)
+	}
+	packPath := filepath.Join(goBinDir, spec.PackName)
+	manifest, err := release.NewLocalRuntimeManifest(lock, spec.GOOS, spec.GOARCH, enginePath, packPath)
+	if err != nil {
+		return err
+	}
+	manifestPath, err := release.LocalRuntimeManifestPath(repoRoot, lock, spec.GOOS, spec.GOARCH)
+	if err != nil {
+		return err
+	}
+	if err := release.PublishLocalRuntimeManifest(manifestPath, manifest, enginePath, packPath); err != nil {
+		return err
+	}
+	fmt.Fprintf(os.Stdout, "Local runtime manifest: %s\n", manifestPath)
+	return nil
 }
 
 func exportWebRuntime(cfg runtimeExportWebConfig, runner shared.ScriptRunner) error {
