@@ -2,7 +2,7 @@
   "costumeSet": {
     "bitmapResolution": 2,
     "faceRight": 180,
-    "path": "../../../../shared-assets/monkey.png",
+    "path": "../../shared-assets/monkey.png",
     "nx": 96
   },
   "costumeIndex": 0,

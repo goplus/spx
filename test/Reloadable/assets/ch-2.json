@@ -2,7 +2,7 @@
   "backdrops": [
     {
       "name": "backdrop1",
-      "path": "../../Dinosaur/assets/6.png"
+      "path": "6.png"
     }
   ],
   "backdropIndex": 0,

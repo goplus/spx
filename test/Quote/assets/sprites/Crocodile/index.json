@@ -1,7 +1,7 @@
 {
   "costumeSet": {
     "faceRight": 180,
-    "path": "../../../../shared-assets/crocodile.png",
+    "path": "../../shared-assets/crocodile.png",
     "nx": 5,
     "items": [
       {
