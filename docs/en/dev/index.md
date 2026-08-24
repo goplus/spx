@@ -8,6 +8,7 @@ This directory contains development documentation for SPX users and engine contr
 
 - [SPX command-line guide](game/cmd_spx.md)
 - [Animation-bound audio](game/animation_audio.md)
+- [Static WebP image assets](image_assets.md)
 - [Project fonts and SVG cluster fallback](project_fonts.md)
 - [WeChat Mini Game support](wechat_minigame.md)
 

@@ -1,6 +1,6 @@
 onStart => {
 	say "SPX CI test"
-	wait 0.1
+	animateAndWait "webpSmoke"
 	println "SPX_CI_TEST_OK"
 	exit 0
 }

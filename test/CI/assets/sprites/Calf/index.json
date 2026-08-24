@@ -2,12 +2,25 @@
   "costumes": [
     {
       "name": "calf-0",
-      "path": "1.png",
+      "path": "1.webp",
+      "x": 55,
+      "y": 50
+    },
+    {
+      "name": "calf-1",
+      "path": "2.webp",
       "x": 55,
       "y": 50
     }
   ],
   "costumeIndex": 0,
+  "fAnimations": {
+    "webpSmoke": {
+      "frameFps": 30,
+      "frameFrom": 0,
+      "frameTo": 1
+    }
+  },
   "heading": 90,
   "isDraggable": false,
   "rotationStyle": "normal",

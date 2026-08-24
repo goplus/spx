@@ -130,8 +130,10 @@ func TestRepositorySConsProfile(t *testing.T) {
 		"module_text_server_fb_enabled=false",
 		"module_godot_physics_3d_enabled=false",
 		"builtin_harfbuzz=true",
+		"builtin_libwebp=true",
 		"custom_modules_recursive=false",
 		"module_spx_enabled=true",
+		"module_webp_enabled=true",
 	} {
 		if !strings.Contains(common, required) {
 			t.Fatalf("repository SCons profile is missing %q", required)

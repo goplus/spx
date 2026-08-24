@@ -25,6 +25,7 @@
 
 - 命令行工具使用指南
 - [动画绑定音频说明](./game/animation_audio.md) - 了解 `onStart` / `onPlay` 的生命周期和动画停止时的音频行为
+- [静态 WebP 图片素材](./image_assets.md) - 了解 WebP 序列帧、透明通道和编码建议
 - [项目字体配置](./project_fonts.md) - 了解项目字体目录和字体元数据规则
 - [微信小游戏旧版说明](./wechat_minigame.md) - 了解历史方案及当前文档入口
 - [微信小游戏 Go WASM 兼容层](./wxgame_go_wasm_adapter.md) - 了解当前小游戏 Go WASM 启动兼容层
