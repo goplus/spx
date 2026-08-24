@@ -275,6 +275,11 @@ class GameApp {
         /** @type FilesMeta */
         const filesMeta = {};
         Object.entries(files).forEach(([path, { lastModified, content }]) => {
+            // ZIP readers expose directory entries with a trailing slash. They
+            // are not files and cannot be written to the engine filesystem.
+            if (path.endsWith('/')) {
+                return;
+            }
             filesMeta[path] = { lastModified };
             const savedFileMeta = savedFilesMeta[path];
             if (savedFileMeta != null && savedFileMeta.lastModified === lastModified) {
