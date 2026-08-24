@@ -75,6 +75,37 @@ func TestPackProjectIncludesResourcesWithinProject(t *testing.T) {
 	}
 }
 
+func TestPackProjectIncludesWebPSequenceFrames(t *testing.T) {
+	tmpDir := t.TempDir()
+	projectDir := filepath.Join(tmpDir, "Game")
+	writeTestFile(t, filepath.Join(projectDir, "assets", "index.json"), `{
+  "zorder":["Hero"]
+}`)
+	writeTestFile(t, filepath.Join(projectDir, "assets", "sprites", "Hero", "index.json"), `{
+  "costumes":[
+    {"name":"frame-0","path":"frame-0.webp"},
+    {"name":"frame-1","path":"frame-1.webp"}
+  ]
+}`)
+	writeTestFile(t, filepath.Join(projectDir, "assets", "sprites", "Hero", "frame-0.webp"), "webp-frame-0")
+	writeTestFile(t, filepath.Join(projectDir, "assets", "sprites", "Hero", "frame-1.webp"), "webp-frame-1")
+
+	zipPath := filepath.Join(tmpDir, "game.zip")
+	if err := PackProject(projectDir, zipPath); err != nil {
+		t.Fatal(err)
+	}
+
+	snapshot := readZipSnapshot(t, zipPath)
+	for name, want := range map[string]string{
+		"assets/sprites/Hero/frame-0.webp": "webp-frame-0",
+		"assets/sprites/Hero/frame-1.webp": "webp-frame-1",
+	} {
+		if got := snapshot.contents[name]; got != want {
+			t.Fatalf("%s content = %q, want %q", name, got, want)
+		}
+	}
+}
+
 func TestPackProjectRejectsMissingAssetIndex(t *testing.T) {
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "Game")

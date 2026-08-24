@@ -88,6 +88,36 @@ static String apply_fonts(SpxResMgr &p_res_mgr, const String &p_default_path, Gd
 	return apply_fonts_raw(p_res_mgr, p_default_path, p_paths.ptr(), p_families.ptr(), p_preferences.ptr());
 }
 
+TEST_CASE("[SceneTree][SPX] Direct texture loader preserves WebP frame size and alpha") {
+	SpxResMgr res_mgr;
+	res_mgr.set_load_mode(true);
+	const String frame_path = TestUtils::get_data_path("images/icon.webp");
+
+	const Ref<Texture2D> texture = res_mgr.load_texture(frame_path, true);
+	REQUIRE(texture.is_valid());
+	CHECK(texture->get_size() == Vector2(256, 256));
+
+	const Ref<Image> image = texture->get_image();
+	REQUIRE(image.is_valid());
+	CHECK(image->get_size() == Vector2i(256, 256));
+	CHECK(image->get_format() == Image::FORMAT_RGBA8);
+
+	bool has_transparent_pixel = false;
+	bool has_opaque_pixel = false;
+	for (int y = 0; y < image->get_height() && (!has_transparent_pixel || !has_opaque_pixel); y++) {
+		for (int x = 0; x < image->get_width(); x++) {
+			const float alpha = image->get_pixel(x, y).a;
+			has_transparent_pixel = has_transparent_pixel || alpha == 0.0f;
+			has_opaque_pixel = has_opaque_pixel || alpha == 1.0f;
+		}
+	}
+	CHECK(has_transparent_pixel);
+	CHECK(has_opaque_pixel);
+
+	const Ref<Texture2D> cached = res_mgr.load_texture(frame_path, true);
+	CHECK(cached == texture);
+}
+
 TEST_CASE("[SceneTree][SPX] Project theme font helper updates default and fallback fonts") {
 	ProjectFontStateReset reset;
 	Ref<FontFile> project_font;

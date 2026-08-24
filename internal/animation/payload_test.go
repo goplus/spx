@@ -35,7 +35,7 @@ func TestBuildPayloadJSONNormal(t *testing.T) {
 		Config{FrameFrom: 0, FrameTo: 1},
 		[]FrameSource{
 			{
-				Path:             "sprites/cat/a.png",
+				Path:             "sprites/cat/a.webp",
 				BitmapResolution: 2,
 				Center:           mathf.NewVec2(8, 12),
 				ImageSize:        mathf.NewVec2(20, 30),
@@ -69,8 +69,11 @@ func TestBuildPayloadJSONNormal(t *testing.T) {
 	if len(payload.Frames) != 2 {
 		t.Fatalf("len(Frames) = %d, want 2", len(payload.Frames))
 	}
-	if payload.Frames[0]["path"] != engine.ToAssetPath("sprites/cat/a.png") {
-		t.Fatalf("frame[0].path = %v, want %q", payload.Frames[0]["path"], engine.ToAssetPath("sprites/cat/a.png"))
+	if payload.Frames[0]["path"] != engine.ToAssetPath("sprites/cat/a.webp") {
+		t.Fatalf("frame[0].path = %v, want %q", payload.Frames[0]["path"], engine.ToAssetPath("sprites/cat/a.webp"))
+	}
+	if payload.Frames[1]["path"] != engine.ToAssetPath("sprites/cat/b.png") {
+		t.Fatalf("frame[1].path = %v, want %q", payload.Frames[1]["path"], engine.ToAssetPath("sprites/cat/b.png"))
 	}
 	if payload.Frames[0]["bitmap"] != float64(2) {
 		t.Fatalf("frame[0].bitmap = %v, want 2", payload.Frames[0]["bitmap"])
