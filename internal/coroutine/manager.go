@@ -21,6 +21,7 @@ import (
 	sdebug "runtime/debug"
 	"sync"
 	"sync/atomic"
+	stime "time"
 )
 
 var (
@@ -43,6 +44,13 @@ type Coroutines struct {
 	runMu   sync.Mutex
 	current atomic.Pointer[threadImpl]
 
+	// shutdownMu serializes fatal shutdowns. creationMu protects stopping and
+	// makes thread registration atomic with respect to shutdown transitions.
+	// Lock order is shutdownMu, runMu, then creationMu.
+	shutdownMu sync.Mutex
+	creationMu sync.RWMutex
+	stopping   bool
+
 	// threadsMu protects the thread registry.
 	threadsMu  sync.Mutex
 	allThreads map[Thread]struct{}
@@ -58,10 +66,11 @@ type Coroutines struct {
 	nextJobID    atomic.Int64
 	nextThreadID atomic.Int64
 
-	perfDebug       atomic.Bool
-	readGCStats     func(*sdebug.GCStats)
-	statsMu         sync.RWMutex
-	lastUpdateStats UpdateJobsStats
+	perfDebug         atomic.Bool
+	readGCStats       func(*sdebug.GCStats)
+	updateWatchdogNow func() stime.Time
+	statsMu           sync.RWMutex
+	lastUpdateStats   UpdateJobsStats
 
 	// goroutineIDs contains the IDs of goroutines created by CreateAndStart.
 	goroutineIDs sync.Map // map[int64]struct{}
@@ -71,12 +80,13 @@ type Coroutines struct {
 // with an unhandled panic other than ErrAbortThread.
 func New(onPanic func(name, stack string)) *Coroutines {
 	p := &Coroutines{
-		onPanic:      onPanic,
-		allThreads:   make(map[Thread]struct{}),
-		threadStates: make(map[Thread]threadState),
-		currentJobs:  NewQueue[*WaitJob](),
-		deferredJobs: NewQueue[*WaitJob](),
-		readGCStats:  sdebug.ReadGCStats,
+		onPanic:           onPanic,
+		allThreads:        make(map[Thread]struct{}),
+		threadStates:      make(map[Thread]threadState),
+		currentJobs:       NewQueue[*WaitJob](),
+		deferredJobs:      NewQueue[*WaitJob](),
+		readGCStats:       sdebug.ReadGCStats,
+		updateWatchdogNow: stime.Now,
 	}
 	p.schedulerCond = sync.NewCond(&p.schedulerMu)
 	return p

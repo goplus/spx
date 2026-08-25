@@ -21,14 +21,25 @@ import (
 	stime "time"
 
 	"github.com/goplus/spx/v3/internal/log"
-	"github.com/goplus/spx/v3/internal/time"
+	itime "github.com/goplus/spx/v3/internal/time"
 )
 
 type updateState struct {
-	frame         int64
-	levelTime     float64
-	watchdogStart float64
+	frame            int64
+	levelTime        float64
+	watchdogDeadline stime.Time
 }
+
+type updateAction uint8
+
+const (
+	updateProcessJob updateAction = iota
+	updateRetry
+	updateComplete
+	updateAwaitInitialization
+
+	updateWatchdogTimeout = stime.Second
+)
 
 // Update processes queued wait jobs and resumes eligible coroutines.
 func (p *Coroutines) Update() {
@@ -56,9 +67,9 @@ func (p *Coroutines) readGCStatsBeforeUpdate() *sdebug.GCStats {
 func (p *Coroutines) beginUpdate() (UpdateJobsStats, updateState) {
 	start := stime.Now()
 	state := updateState{
-		frame:         time.Frame(),
-		levelTime:     time.TimeSinceLevelLoad(),
-		watchdogStart: time.RealTimeSinceStart(),
+		frame:            itime.Frame(),
+		levelTime:        itime.TimeSinceLevelLoad(),
+		watchdogDeadline: p.updateWatchdogNow().Add(updateWatchdogTimeout),
 	}
 	return UpdateJobsStats{InitTime: elapsedMillis(start)}, state
 }
@@ -66,20 +77,25 @@ func (p *Coroutines) beginUpdate() (UpdateJobsStats, updateState) {
 func (p *Coroutines) runUpdateLoop(stats *UpdateJobsStats, state *updateState) {
 	start := stime.Now()
 	iterations := 0
+
+updateLoop:
 	for {
 		iterations++
-		done, retry := p.waitForWork(stats)
-		if done {
-			break
-		}
-		if retry {
+		switch p.nextUpdateAction(stats) {
+		case updateComplete:
+			break updateLoop
+		case updateAwaitInitialization:
+			state.watchdogDeadline = p.updateWatchdogNow().Add(updateWatchdogTimeout)
 			continue
+		case updateProcessJob:
+			p.processNextWaitJob(state, stats)
+		case updateRetry:
 		}
 
-		p.processNextWaitJob(state, stats)
-		if time.RealTimeSinceStart()-state.watchdogStart > 1 {
-			log.Warn("engine update exceeded 1 second - please review your code (waitMainCount=%d)", stats.WaitMainCount)
-			break
+		if !p.updateWatchdogNow().Before(state.watchdogDeadline) {
+			log.Warn("engine update exceeded 1 second - stopping runaway scripts (waitMainCount=%d)", stats.WaitMainCount)
+			p.stopRunawayThreads()
+			break updateLoop
 		}
 	}
 
@@ -88,30 +104,58 @@ func (p *Coroutines) runUpdateLoop(stats *UpdateJobsStats, state *updateState) {
 	p.promoteDeferredJobs(stats)
 }
 
-func (p *Coroutines) waitForWork(stats *UpdateJobsStats) (done, retry bool) {
+func (p *Coroutines) stopRunawayThreads() {
+	// This remains cooperative: an active thread must release runMu first.
+	p.shutdownMu.Lock()
+	defer p.shutdownMu.Unlock()
+
+	p.runMu.Lock()
+	p.creationMu.Lock()
+	p.stopping = true
+	p.AbortAll()
+	p.creationMu.Unlock()
+	p.runMu.Unlock()
+
+	for {
+		p.waitForThreadsToStop(0, nil)
+
+		// Close the race between observing an empty registry and a concurrent
+		// registration. Creations during shutdown are registered as canceled.
+		p.creationMu.Lock()
+		if !p.hasThreadsOtherThan(nil) {
+			p.stopping = false
+			p.creationMu.Unlock()
+			return
+		}
+		p.creationMu.Unlock()
+	}
+}
+
+func (p *Coroutines) nextUpdateAction(stats *UpdateJobsStats) updateAction {
 	if !p.hasInited.Load() {
 		if p.currentJobs.Count() == 0 {
 			start := stime.Now()
-			time.Sleep(0.05)
+			itime.Sleep(0.05)
 			stats.WaitTime += elapsedMillis(start)
-			return false, true
+			return updateAwaitInitialization
 		}
-		return false, false
+		return updateProcessJob
 	}
 
 	start := stime.Now()
+	action := updateProcessJob
 	p.schedulerMu.Lock()
 	if p.currentJobs.Count() == 0 {
 		if p.runnableThreadCountLocked() == 0 {
-			done = true
+			action = updateComplete
 		} else {
 			p.schedulerCond.Wait()
-			retry = true
+			action = updateRetry
 		}
 	}
 	p.schedulerMu.Unlock()
 	stats.WaitTime += elapsedMillis(start)
-	return done, retry
+	return action
 }
 
 func (p *Coroutines) processNextWaitJob(state *updateState, stats *UpdateJobsStats) {
@@ -123,6 +167,10 @@ func (p *Coroutines) processNextWaitJob(state *updateState, stats *UpdateJobsSta
 }
 
 func (p *Coroutines) processWaitJob(state *updateState, stats *UpdateJobsStats, job *WaitJob) {
+	if job.Th != nil && p.isThreadCanceled(job.Th) {
+		return
+	}
+
 	switch job.Type {
 	case waitTypeFrame:
 		if job.Frame >= state.frame {

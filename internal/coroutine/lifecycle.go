@@ -41,7 +41,12 @@ func (p *Coroutines) Create(obj ThreadObj, fn func(me Thread) int) Thread {
 // method returns.
 func (p *Coroutines) CreateAndStart(start bool, obj ThreadObj, fn func(me Thread) int) Thread {
 	th := p.newThread(obj)
+	p.creationMu.RLock()
 	p.registerThread(th)
+	if p.stopping {
+		stopThreadIfRunning(th)
+	}
+	p.creationMu.RUnlock()
 	go p.runThread(th, fn)
 
 	if start {
