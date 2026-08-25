@@ -105,7 +105,14 @@ func (p *Coroutines) setCurrent(th Thread) {
 }
 
 func (p *Coroutines) markRunnableAndResume(th Thread) {
-	p.setThreadState(th, threadRunnable)
+	p.schedulerMu.Lock()
+	if p.isThreadCanceled(th) {
+		p.schedulerMu.Unlock()
+		return
+	}
+	p.setThreadStateLocked(th, threadRunnable)
+	p.schedulerCond.Signal()
+	p.schedulerMu.Unlock()
 	p.Resume(th)
 }
 

@@ -21,6 +21,7 @@ package coroutine
 
 import (
 	"runtime"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -101,5 +102,108 @@ func TestWaitMainThreadQueuesFromWorker(t *testing.T) {
 	case <-returned:
 	case <-time.After(time.Second):
 		t.Fatal("WaitMainThread did not return after Update")
+	}
+}
+
+func TestWaitMainThreadWorkerDoesNotBorrowActiveCoroutine(t *testing.T) {
+	setMainThreadForTest(t, false)
+	co := New(nil)
+	co.OnInited()
+
+	active := make(chan struct{})
+	releaseActive := make(chan struct{})
+	co.Create("active", func(Thread) int {
+		close(active)
+		<-releaseActive
+		return 0
+	})
+	t.Cleanup(func() {
+		select {
+		case <-releaseActive:
+		default:
+			close(releaseActive)
+		}
+		if !co.AbortAllAndWait(time.Second) {
+			t.Error("coroutines did not stop during cleanup")
+		}
+	})
+	select {
+	case <-active:
+	case <-time.After(time.Second):
+		t.Fatal("active coroutine did not start")
+	}
+
+	executed := make(chan struct{})
+	returned := make(chan any, 1)
+	go func() {
+		defer func() { returned <- recover() }()
+		co.WaitMainThread(func() { close(executed) })
+	}()
+
+	deadline := time.Now().Add(time.Second)
+	for co.currentJobs.Count() == 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("WaitMainThread did not enqueue worker call")
+		}
+		runtime.Gosched()
+	}
+
+	close(releaseActive)
+	if !co.waitForThreadsToStop(time.Second, nil) {
+		t.Fatal("active coroutine did not complete")
+	}
+	co.Update()
+
+	select {
+	case recovered := <-returned:
+		if recovered != nil {
+			t.Fatalf("external WaitMainThread panicked with %v", recovered)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("external WaitMainThread did not return")
+	}
+	select {
+	case <-executed:
+	default:
+		t.Fatal("external main-thread callback did not run")
+	}
+}
+
+func TestWaitMainThreadCanceledCoroutineDropsQueuedCall(t *testing.T) {
+	setMainThreadForTest(t, false)
+	co := New(nil)
+	co.OnInited()
+	t.Cleanup(func() {
+		if !co.AbortAllAndWait(time.Second) {
+			t.Error("coroutines did not stop during cleanup")
+		}
+	})
+
+	var callbackRan atomic.Bool
+	var continued atomic.Bool
+	co.Create("worker", func(Thread) int {
+		co.WaitMainThread(func() { callbackRan.Store(true) })
+		continued.Store(true)
+		return 0
+	})
+
+	deadline := time.Now().Add(time.Second)
+	for co.currentJobs.Count() == 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("managed WaitMainThread did not enqueue its call")
+		}
+		runtime.Gosched()
+	}
+
+	co.AbortAll()
+	co.Update()
+	if !co.waitForThreadsToStop(time.Second, nil) {
+		t.Fatal("canceled coroutine did not stop")
+	}
+	if callbackRan.Load() {
+		t.Fatal("main-thread callback ran after its coroutine was canceled")
+	}
+	if continued.Load() {
+		t.Fatal("canceled coroutine continued after WaitMainThread")
 	}
 }

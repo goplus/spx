@@ -48,6 +48,17 @@ func setupRuntimeEventScheduler(t *testing.T) *coroutine.Coroutines {
 	return co
 }
 
+func setupRuntimeEventGame(t *testing.T) (*coroutine.Coroutines, *Game) {
+	t.Helper()
+
+	co := setupRuntimeEventScheduler(t)
+	game := new(Game)
+	game.scriptEventBindings.init(&game.scriptEvents, game)
+	engine.SetGame(game)
+	t.Cleanup(func() { engine.SetGame(nil) })
+	return co, game
+}
+
 func updateRuntimeEventSchedulerUntil(t *testing.T, co *coroutine.Coroutines, done func() bool) {
 	t.Helper()
 	deadline := time.Now().Add(time.Second)
@@ -371,6 +382,125 @@ func TestOnStartCompletionDoesNotCrossReset(t *testing.T) {
 	updateRuntimeEventSchedulerUntil(t, co, game.lifecycleState.StartDispatched.Load)
 	if calls != 1 {
 		t.Fatalf("new lifecycle start calls = %d, want 1", calls)
+	}
+}
+
+func TestNestedAsyncBroadcastDefersReceiverBatchToNextFrame(t *testing.T) {
+	co, game := setupRuntimeEventGame(t)
+
+	var calls []string
+	game.OnMsg__1("outer", func() {
+		calls = append(calls, "outer")
+		game.Broadcast__0("inner")
+	})
+	game.OnMsg__1("inner", func() {
+		calls = append(calls, "inner-1")
+	})
+	game.OnMsg__1("inner", func() {
+		calls = append(calls, "inner-2")
+	})
+
+	game.Broadcast__0("outer")
+	co.Update()
+	if want := []string{"outer"}; !reflect.DeepEqual(calls, want) {
+		t.Fatalf("calls in initial frame = %v, want %v", calls, want)
+	}
+
+	itime.Update(0, 0)
+	co.Update()
+	if len(calls) != 3 || calls[0] != "outer" {
+		t.Fatalf("calls after next frame = %v, want outer followed by both inner handlers", calls)
+	}
+	if got := map[string]int{calls[1]: 1, calls[2]: 1}; got["inner-1"] != 1 || got["inner-2"] != 1 {
+		t.Fatalf("nested receiver batch = %v, want inner-1 and inner-2", calls[1:])
+	}
+}
+
+func TestNestedAsyncBroadcastCycleAdvancesOneMessagePerFrame(t *testing.T) {
+	co, game := setupRuntimeEventGame(t)
+
+	var calls []string
+	game.OnMsg__1("a", func() {
+		calls = append(calls, "a")
+		if len(calls) < 4 {
+			game.Broadcast__0("b")
+		}
+	})
+	game.OnMsg__1("b", func() {
+		calls = append(calls, "b")
+		if len(calls) < 4 {
+			game.Broadcast__0("a")
+		}
+	})
+
+	game.Broadcast__0("a")
+	for frame, want := range [][]string{
+		{"a"},
+		{"a", "b"},
+		{"a", "b", "a"},
+		{"a", "b", "a", "b"},
+	} {
+		if frame > 0 {
+			itime.Update(0, 0)
+		}
+		co.Update()
+		if !reflect.DeepEqual(calls, want) {
+			t.Fatalf("calls after frame %d = %v, want %v", frame, calls, want)
+		}
+	}
+}
+
+func TestAsyncBroadcastAfterFrameWaitRunsWithoutAnotherDelay(t *testing.T) {
+	co, game := setupRuntimeEventGame(t)
+
+	var calls []string
+	game.OnMsg__1("outer", func() {
+		calls = append(calls, "outer-before-wait")
+		engine.WaitNextFrame()
+		calls = append(calls, "outer-after-wait")
+		game.Broadcast__0("inner")
+	})
+	game.OnMsg__1("inner", func() {
+		calls = append(calls, "inner")
+	})
+
+	game.Broadcast__0("outer")
+	co.Update()
+	if want := []string{"outer-before-wait"}; !reflect.DeepEqual(calls, want) {
+		t.Fatalf("calls in initial frame = %v, want %v", calls, want)
+	}
+
+	itime.Update(0, 0)
+	co.Update()
+	if want := []string{"outer-before-wait", "outer-after-wait", "inner"}; !reflect.DeepEqual(calls, want) {
+		t.Fatalf("calls after handler resumed = %v, want %v", calls, want)
+	}
+}
+
+func TestNestedBroadcastAndWaitCompletesInCurrentFrame(t *testing.T) {
+	co, game := setupRuntimeEventGame(t)
+
+	var calls []string
+	game.OnMsg__1("outer", func() {
+		calls = append(calls, "outer-before")
+		game.BroadcastAndWait__0("inner")
+		calls = append(calls, "outer-after")
+	})
+	game.OnMsg__1("inner", func() {
+		calls = append(calls, "inner")
+	})
+
+	game.Broadcast__0("outer")
+	co.Update()
+	want := []string{"outer-before", "inner", "outer-after"}
+	if !reflect.DeepEqual(calls, want) {
+		t.Fatalf("synchronous nested broadcast calls = %v, want %v", calls, want)
+	}
+
+	itime.Update(0, 0)
+	co.Update()
+	if !reflect.DeepEqual(calls, want) {
+		t.Fatalf("synchronous broadcast left deferred handlers: calls = %v, want %v", calls, want)
 	}
 }
 

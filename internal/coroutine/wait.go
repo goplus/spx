@@ -73,7 +73,7 @@ func (p *Coroutines) WaitMainThread(call func()) {
 
 	jobID := p.nextWaitJobID()
 	done := make(chan struct{}, 1)
-	me := p.Current()
+	me := p.currentCoroutineThread()
 	job := &WaitJob{
 		Th:   me,
 		Id:   jobID,

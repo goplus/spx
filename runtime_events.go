@@ -17,6 +17,8 @@
 package spx
 
 import (
+	"sync"
+
 	"github.com/goplus/spbase/mathf"
 	coreevent "github.com/goplus/spx/v3/internal/core/event"
 	coreruntime "github.com/goplus/spx/v3/internal/core/runtime"
@@ -31,12 +33,16 @@ const (
 	clickTimerStage  = 0
 )
 
+func spawnScriptEvent(start bool, owner any, call func(coroutine.Thread)) coreevent.DispatchTask {
+	return gco.CreateAndStart(start, owner, func(thread coroutine.Thread) int {
+		call(thread)
+		return 0
+	})
+}
+
 var scriptEventDispatchHooks = coreevent.DispatchHooks{
 	Spawn: func(start bool, owner any, call func()) coreevent.DispatchTask {
-		return gco.CreateAndStart(start, owner, func(coroutine.Thread) int {
-			call()
-			return 0
-		})
+		return spawnScriptEvent(start, owner, func(coroutine.Thread) { call() })
 	},
 	Join: func(tasks []coreevent.DispatchTask) {
 		if len(tasks) == 0 {
@@ -71,7 +77,8 @@ type scriptEventBindings struct {
 }
 
 type scriptEventRegistry struct {
-	manager coreevent.Manager
+	manager              coreevent.Manager
+	messageHandlerFrames sync.Map // map[coroutine.Thread]int64
 }
 
 func (p *scriptEventBindings) init(registry *scriptEventRegistry, this threadObj) {
@@ -486,9 +493,39 @@ func (p *scriptEventRegistry) doWhenCloned(this threadObj, data any) {
 }
 
 func (p *scriptEventRegistry) doWhenIReceive(msg string, data any, wait bool) {
-	p.dispatch(coreevent.BucketIReceive, wait, msg, func(ev *eventSink) {
+	deferToNextFrame := p.shouldDeferMessageReceivers(wait)
+	p.manager.DispatchBucket(coreevent.BucketIReceive, wait, msg, p.messageDispatchHooks(deferToNextFrame), func(ev *eventSink) {
 		ev.Handler.(func(string, any))(msg, data)
 	})
+}
+
+// Defer only broadcasts made in the frame where their handler began. A
+// handler that already yielded has established its own frame boundary.
+func (p *scriptEventRegistry) shouldDeferMessageReceivers(wait bool) bool {
+	if wait || gco == nil || !gco.IsInCoroutine() {
+		return false
+	}
+	thread := gco.Current()
+	if thread == nil {
+		return false
+	}
+	handlerFrame, ok := p.messageHandlerFrames.Load(thread)
+	return ok && handlerFrame == itime.Frame()
+}
+
+func (p *scriptEventRegistry) messageDispatchHooks(deferToNextFrame bool) coreevent.DispatchHooks {
+	hooks := scriptEventDispatchHooks
+	hooks.Spawn = func(start bool, owner any, call func()) coreevent.DispatchTask {
+		return spawnScriptEvent(start, owner, func(thread coroutine.Thread) {
+			if deferToNextFrame {
+				engine.WaitNextFrame()
+			}
+			p.messageHandlerFrames.Store(thread, itime.Frame())
+			defer p.messageHandlerFrames.Delete(thread)
+			call()
+		})
+	}
+	return hooks
 }
 
 func (p *scriptEventRegistry) doWhenBackdropChanged(name BackdropName, wait bool) {
