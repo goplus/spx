@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"slices"
 	"sort"
 	"strings"
 
@@ -149,10 +150,8 @@ func verifyFontFace(fs spxfs.Dir, facePath string) error {
 }
 
 func verifyFontFaceInEngine(assetDir, facePath string) error {
-	for _, candidate := range configAssetPaths(assetDir, facePath) {
-		if engine.HasFile(candidate) {
-			return nil
-		}
+	if slices.ContainsFunc(configAssetPaths(assetDir, facePath), engine.HasFile) {
+		return nil
 	}
 	return os.ErrNotExist
 }
@@ -212,14 +211,6 @@ func sortFontFamilyNames(names []string) {
 func validateFontFamilyName(name string) (string, error) {
 	if name == "" {
 		return "", fmt.Errorf("font family name must be non-empty")
-	}
-	if strings.ContainsAny(name, "\\/") {
-		return "", fmt.Errorf("font family name %q must be one path segment", name)
-	}
-	for _, r := range name {
-		if r < 0x20 || r == 0x7f {
-			return "", fmt.Errorf("font family name %q contains a control character", name)
-		}
 	}
 	folded := asciiFold(name)
 	if folded == defaultFontFamilyName {
