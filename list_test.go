@@ -49,6 +49,43 @@ func TestScratchStyleListEquality(t *testing.T) {
 	}
 }
 
+func TestListSetOutOfBoundsIsNoOp(t *testing.T) {
+	tests := []struct {
+		name  string
+		index Pos
+	}{
+		{name: "invalid", index: Invalid},
+		{name: "all", index: All},
+		{name: "other negative", index: -100},
+		{name: "past end", index: 3},
+		{name: "far past end", index: 100},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			list := NewList(1, 2, 3)
+			list.Set(tt.index, 99)
+			if got := list.String(); got != "123" {
+				t.Fatalf("List.Set(%d, 99) changed list to %q, want %q", tt.index, got, "123")
+			}
+		})
+	}
+
+	empty := NewList()
+	empty.Set(Last, 99)
+	if empty.Len() != 0 {
+		t.Fatalf("List.Set(Last, 99) changed an empty list, length = %d", empty.Len())
+	}
+}
+
+func TestListSetLast(t *testing.T) {
+	list := NewList(1, 2, 3)
+	list.Set(Last, 9)
+	if got := list.String(); got != "129" {
+		t.Fatalf("List.Set(Last, 9) produced %q, want %q", got, "129")
+	}
+}
+
 func TestValueEqualUsesScratchSemantics(t *testing.T) {
 	if !NewValue(1).Equal(1.0) {
 		t.Fatal("Value.Equal should treat integer and float values equally")
