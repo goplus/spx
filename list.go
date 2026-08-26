@@ -237,7 +237,7 @@ type Value struct {
 }
 
 func (p Value) Equal(v obj) bool {
-	return p.data == fromObj(v)
+	return Equal(p.data, v)
 }
 
 func (p Value) String() string {
@@ -315,9 +315,8 @@ func (p *List) String() string {
 
 // Contains returns true if the list contains the element v.
 func (p *List) Contains(v obj) bool {
-	val := fromObj(v)
 	for _, item := range p.data {
-		if item == val {
+		if Equal(item, v) {
 			return true
 		}
 	}
@@ -391,9 +390,8 @@ func (p *List) At(i Pos) Value {
 // IndexOf returns the zero-based position of the first occurrence of v in the list.
 // Returns Invalid (-1) if v is not found.
 func (p *List) IndexOf(v obj) Pos {
-	val := fromObj(v)
 	for i, item := range p.data {
-		if item == val {
+		if Equal(item, v) {
 			return Pos(i)
 		}
 	}
