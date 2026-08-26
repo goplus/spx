@@ -272,7 +272,7 @@ func (p *penComponent) checkOrCreatePen() bool {
 	if p.penObj == nil {
 		obj := p.engine().PenMgr.CreatePen()
 		p.penObj = &obj
-		p.penTransparency = normalizedToPercent(p.penColor.A)
+		p.penTransparency = alphaToTransparency(p.penColor.A)
 		return true
 	}
 	return false
@@ -320,12 +320,12 @@ func (p *penComponent) syncPenColorComponents() {
 	p.penHue = hueToPercent(h)
 	p.penSaturation = normalizedToPercent(s)
 	p.penBrightness = normalizedToPercent(v)
-	p.penTransparency = normalizedToPercent(p.penColor.A)
+	p.penTransparency = alphaToTransparency(p.penColor.A)
 }
 
 func (p *penComponent) applyPenHsvProperty() {
 	p.penColor = mathf.NewColorHSV(percentToHue(p.penHue), percentToNormalized(p.penSaturation), percentToNormalized(p.penBrightness))
-	p.penColor.A = percentToNormalized(p.penTransparency)
+	p.penColor.A = transparencyToAlpha(p.penTransparency)
 	p.updatePenColor()
 }
 
@@ -395,6 +395,14 @@ func percentToNormalized(percent float64) float64 {
 	return percent / 100
 }
 
+func alphaToTransparency(alpha float64) float64 {
+	return normalizedToPercent(1 - alpha)
+}
+
+func transparencyToAlpha(transparency float64) float64 {
+	return 1 - percentToNormalized(transparency)
+}
+
 // scratchLegacyPenState models Scratch 2's pen hue/shade pair, which is
 // distinct from the HSV pen color params exposed elsewhere in the engine.
 type scratchLegacyPenState struct {
@@ -439,7 +447,7 @@ func makeScratchLegacyPenColor(hue, shade, transparency float64) mathf.Color {
 	} else {
 		baseColor = baseColor.Lerp(mathf.ColorWhite(), (normalizedShade-50)/60)
 	}
-	baseColor.A = percentToNormalized(transparency)
+	baseColor.A = transparencyToAlpha(transparency)
 	return baseColor
 }
 
