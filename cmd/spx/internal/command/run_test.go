@@ -341,9 +341,6 @@ func TestRunPackModeUsesSessionEnvironment(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := os.WriteFile(filepath.Join(generatedDir, "runtime.gdextension.txt"), []byte("extension"), 0o644); err != nil {
-		t.Fatal(err)
-	}
 
 	logPath := filepath.Join(t.TempDir(), "runtime.log")
 	runtimePath := filepath.Join(t.TempDir(), "runtime"+executableSuffix(runtime.GOOS))
@@ -376,6 +373,21 @@ func TestRunPackModeUsesSessionEnvironment(t *testing.T) {
 	} {
 		if !strings.Contains(string(log), want+"\n") {
 			t.Fatalf("runtime log = %q, want %q", log, want)
+		}
+	}
+
+	for file, want := range map[string]string{
+		filepath.Join(sessionDir, "runtime.gdextension"):          scaffold.SessionRuntimeGDExtension(),
+		filepath.Join(sessionDir, "gdspx.gdextension"):            scaffold.ProjectGDExtension(),
+		filepath.Join(sessionDir, ".godot", "extension_list.cfg"): scaffold.SessionExtensionList(),
+		filepath.Join(sessionDir, "lib", filepath.Base(libPath)):  "bridge",
+	} {
+		got, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatalf("read %s: %v", file, err)
+		}
+		if string(got) != want {
+			t.Fatalf("%s = %q, want %q", file, got, want)
 		}
 	}
 }
