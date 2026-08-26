@@ -85,9 +85,13 @@ Error SpxImageLoaderSVG::create_image_from_utf8_buffer(Ref<Image> p_image, const
 
 	uint32_t width = document->width();
 	uint32_t height = document->height();
-	// check the invalid svg file
+	// Treat Scratch's zero-sized costumes as transparent images.
 	if (width == 0 || height == 0) {
-		return ERR_INVALID_DATA;
+		PackedByteArray transparent_pixel;
+		transparent_pixel.resize(4);
+		transparent_pixel.fill(0);
+		p_image->set_data(1, 1, false, Image::FORMAT_RGBA8, transparent_pixel);
+		return OK;
 	}
 
 	const double scaled_width = (double)width * p_scale;

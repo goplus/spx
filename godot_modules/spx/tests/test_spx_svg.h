@@ -66,6 +66,16 @@ TEST_CASE("[SPX] SVG loading keeps unpremultiplied RGBA data") {
 	CHECK(pixel.a == doctest::Approx(0.5f).epsilon(0.05f));
 }
 
+TEST_CASE("[SPX] SVG loading turns a zero-sized costume into a transparent texture") {
+	Ref<Image> image = memnew(Image());
+	const String svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"0\" height=\"0\" viewBox=\"0 0 0 0\"><g fill=\"none\"/></svg>";
+
+	CHECK(SpxImageLoaderSVG::create_image_from_string(image, svg, 1.0f, false, HashMap<Color, Color>()) == OK);
+	CHECK(image->get_width() == 1);
+	CHECK(image->get_height() == 1);
+	CHECK(image->get_pixel(0, 0).a == 0.0f);
+}
+
 TEST_CASE("[SPX] SVG loading rejects oversized rasterization") {
 	Ref<Image> image = memnew(Image());
 	const String svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20000\" height=\"20000\"><rect width=\"20000\" height=\"20000\" fill=\"#000\"/></svg>";
