@@ -36,6 +36,7 @@ xgo_autogen*.go
 
 # SCons writes custom-module object files next to their sources.
 /godot_modules/**/*.o
+/godot_modules/**/*.o.tmp
 /godot_modules/**/*.os
 /godot_modules/**/*.ox
 /godot_modules/**/*.obj
