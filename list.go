@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-
-	"github.com/goplus/spx/v3/internal/engine"
 )
 
 // -----------------------------------------------------------------------------
@@ -333,12 +331,8 @@ func (p *List) Set(i Pos, v obj) {
 	n := len(p.data)
 	if i < 0 {
 		i = Pos(getListPos(i, n))
-		if i < 0 {
-			engine.Panic("Set failed: invalid index -", i)
-			return
-		}
 	}
-	if int(i) < n {
+	if i >= 0 && int(i) < n {
 		p.data[i] = fromObj(v)
 	}
 }
