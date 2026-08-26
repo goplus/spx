@@ -181,7 +181,11 @@ func buildFilesystemAssetPath(relPath string) string {
 		if err != nil || info.Mode()&os.ModeSymlink != 0 {
 			return ""
 		}
-		canonicalPath, err := filepath.EvalSymlinks(filepath.FromSlash(resolvedPath))
+		absolutePath, err := filepath.Abs(filepath.FromSlash(resolvedPath))
+		if err != nil {
+			return ""
+		}
+		canonicalPath, err := filepath.EvalSymlinks(absolutePath)
 		if err != nil || !isWithinRoot(cleanFilesystemPath(canonicalPath), canonicalRoot) {
 			return ""
 		}

@@ -33,7 +33,6 @@ import (
 	"github.com/goplus/spx/v3/cmd/spx/internal/runtimeasset"
 	"github.com/goplus/spx/v3/cmd/spx/internal/util"
 	"github.com/goplus/spx/v3/internal/interpruntime"
-	"github.com/goplus/spx/v3/internal/scaffold"
 )
 
 var prepareEmbeddedRuntimeAssets = runtimeasset.Prepare
@@ -47,15 +46,9 @@ func (cmd *CmdTool) RunPackMode(pargs ...string) error {
 	if err != nil {
 		return err
 	}
-	dllPath := path.Join(cmd.RuntimeTempDir, filepath.Base(cmd.LibPath))
-	if err := util.CopyFile(cmd.LibPath, dllPath); err != nil {
-		return err
-	}
-	extensionPath := path.Join(cmd.RuntimeTempDir, "runtime.gdextension")
-	if err := util.CopyFile(path.Join(cmd.ProjectDir, "runtime.gdextension.txt"), extensionPath); err != nil {
-		return err
-	}
-	if err := prepareRuntimeExtensionList(cmd.RuntimeTempDir); err != nil {
+	if err := interpruntime.PrepareSession(interpruntime.SessionConfig{
+		Roots: roots, BridgePath: cmd.LibPath,
+	}); err != nil {
 		return err
 	}
 
@@ -301,18 +294,6 @@ func (cmd *CmdTool) interpretedRoots() (interpruntime.Roots, error) {
 		AssetDir:   filepath.Join(projectDir, "assets"),
 		SessionDir: filepath.Clean(sessionDir),
 	}, nil
-}
-
-func prepareRuntimeExtensionList(runtimeDir string) error {
-	projectDataDir := filepath.Join(runtimeDir, ".godot")
-	if err := os.MkdirAll(projectDataDir, 0o755); err != nil {
-		return fmt.Errorf("failed to create runtime project data directory: %w", err)
-	}
-	listPath := filepath.Join(projectDataDir, "extension_list.cfg")
-	if err := os.WriteFile(listPath, []byte(scaffold.RuntimeExtensionList()), 0o644); err != nil {
-		return fmt.Errorf("failed to write runtime extension list: %w", err)
-	}
-	return nil
 }
 
 // runWebCommand exports before serving.

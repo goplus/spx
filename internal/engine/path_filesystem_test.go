@@ -24,7 +24,7 @@ import (
 	"testing"
 )
 
-func TestLegacyFilesystemRootsRejectSymlinkEscape(t *testing.T) {
+func TestLegacyFilesystemRootsResolveAssetsWithoutSymlinkEscape(t *testing.T) {
 	original := assetPaths
 	t.Cleanup(func() {
 		assetPaths = original
@@ -39,6 +39,10 @@ func TestLegacyFilesystemRootsRejectSymlinkEscape(t *testing.T) {
 	if err := os.Mkdir(sessionDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	assetPath := filepath.Join(assetDir, "inside.png")
+	if err := os.WriteFile(assetPath, []byte("inside"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	externalDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(externalDir, "outside.png"), []byte("outside"), 0o644); err != nil {
 		t.Fatal(err)
@@ -48,6 +52,9 @@ func TestLegacyFilesystemRootsRejectSymlinkEscape(t *testing.T) {
 	}
 	t.Chdir(sessionDir)
 	setLegacyFilesystemAssetDir("assets")
+	if got, want := buildFilesystemAssetPath("inside.png"), filepath.Join("..", "assets", "inside.png"); got != want {
+		t.Fatalf("buildFilesystemAssetPath() = %q, want %q", got, want)
+	}
 	if got := buildFilesystemAssetPath("linked/outside.png"); got != "" {
 		t.Fatalf("buildFilesystemAssetPath() followed legacy symlink escape: %q", got)
 	}

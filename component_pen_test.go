@@ -157,7 +157,57 @@ func TestPenComponentInitializesDefaultColorComponents(t *testing.T) {
 	assertNearlyEqualPenValue(t, "penHue", pen.penHue, hueToPercent(h))
 	assertNearlyEqualPenValue(t, "penSaturation", pen.penSaturation, normalizedToPercent(s))
 	assertNearlyEqualPenValue(t, "penBrightness", pen.penBrightness, normalizedToPercent(v))
-	assertNearlyEqualPenValue(t, "penTransparency", pen.penTransparency, normalizedToPercent(wantColor.A))
+	assertNearlyEqualPenValue(t, "penTransparency", pen.penTransparency, alphaToTransparency(wantColor.A))
+}
+
+func TestPenComponentUsesScratchTransparencySemantics(t *testing.T) {
+	tests := []struct {
+		name      string
+		value     float64
+		wantAlpha float64
+	}{
+		{name: "opaque", value: 0, wantAlpha: 1},
+		{name: "half transparent", value: 50, wantAlpha: 0.5},
+		{name: "fully transparent", value: 100, wantAlpha: 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			setupSpyPenMgr(t)
+			sprite := newPenTestSprite()
+
+			sprite.pen().SetPenColorParam(PenTransparency, tt.value)
+
+			assertNearlyEqualPenValue(t, "penTransparency", sprite.pen().penTransparency, tt.value)
+			assertNearlyEqualPenValue(t, "alpha", sprite.pen().penColor.A, tt.wantAlpha)
+		})
+	}
+}
+
+func TestPenComponentDynamicTransparencyChangeUsesScratchSemantics(t *testing.T) {
+	setupSpyPenMgr(t)
+	sprite := newPenTestSprite()
+	kind := PenColorParamFromString("transparency")
+
+	sprite.pen().SetPenColorParam(kind, 25)
+	sprite.pen().ChangePenColor(kind, 25)
+
+	assertNearlyEqualPenValue(t, "penTransparency", sprite.pen().penTransparency, 50)
+	assertNearlyEqualPenValue(t, "alpha", sprite.pen().penColor.A, 0.5)
+
+	sprite.pen().ChangePenColor(kind, 100)
+	assertNearlyEqualPenValue(t, "clamped penTransparency", sprite.pen().penTransparency, 100)
+	assertNearlyEqualPenValue(t, "clamped alpha", sprite.pen().penColor.A, 0)
+}
+
+func TestPenComponentSetPenColorSyncsScratchTransparency(t *testing.T) {
+	setupSpyPenMgr(t)
+	sprite := newPenTestSprite()
+
+	sprite.pen().SetPenColor(HSBA(20, 80, 90, 25))
+
+	assertNearlyEqualPenValue(t, "penTransparency", sprite.pen().penTransparency, 75)
+	assertNearlyEqualPenValue(t, "alpha", sprite.pen().penColor.A, 0.25)
 }
 
 func TestPenComponentRepeatedPenDownDrawsAtCurrentPosition(t *testing.T) {
