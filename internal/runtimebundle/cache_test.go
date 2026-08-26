@@ -277,6 +277,105 @@ func TestNewCacheUsesCrossProcessLockAndNilProviderFailsClosed(t *testing.T) {
 	}
 }
 
+func TestCacheLookupReturnsOnlyVerifiedHits(t *testing.T) {
+	zipPath := writeTestZip(t, testZipEntry{name: "bridge", data: "bridge"})
+	bundle, err := VerifyZip(zipPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bundle.Namespace = NamespaceDriver
+	bundle, err = bundle.WithDigest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cache := NewCache(t.TempDir())
+	if hit, ok, err := cache.Lookup(context.Background(), NamespaceDriver, &bundle); err != nil || ok || hit != nil {
+		t.Fatalf("empty cache lookup = %#v, %t, %v", hit, ok, err)
+	}
+	materialized, err := cache.Materialize(context.Background(), NamespaceDriver, zipPath, &bundle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := materialized.Close(); err != nil {
+		t.Fatal(err)
+	}
+	hit, ok, err := cache.Lookup(context.Background(), NamespaceDriver, &bundle)
+	if err != nil || !ok || hit == nil || hit.Path != materialized.Path {
+		t.Fatalf("materialized lookup = %#v, %t, %v", hit, ok, err)
+	}
+	if err := hit.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCacheMaterializeBindsArchiveDigest(t *testing.T) {
+	firstZip := writeTestZip(t,
+		testZipEntry{name: "engine", mode: 0o700, data: "engine"},
+		testZipEntry{name: "bridge", mode: 0o700, data: "bridge"},
+	)
+	secondZip := writeTestZip(t,
+		testZipEntry{name: "bridge", mode: 0o700, data: "bridge"},
+		testZipEntry{name: "engine", mode: 0o700, data: "engine"},
+	)
+	firstData, err := os.ReadFile(firstZip)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondData, err := os.ReadFile(secondZip)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := VerifyZip(firstZip)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first.Namespace = NamespaceDriver
+	first.ArchiveSHA256 = testDigest(string(firstData))
+	first, err = first.WithDigest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := VerifyZip(secondZip)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second.Namespace = NamespaceDriver
+	second.ArchiveSHA256 = testDigest(string(secondData))
+	second, err = second.WithDigest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.ArchiveSHA256 == second.ArchiveSHA256 || first.Digest == second.Digest {
+		t.Fatalf("archive-bound identities did not diverge: %#v / %#v", first, second)
+	}
+
+	cache := NewCache(t.TempDir())
+	firstHit, err := cache.Materialize(context.Background(), NamespaceDriver, firstZip, &first)
+	if err != nil {
+		t.Fatalf("materialize first archive: %v", err)
+	}
+	defer firstHit.Close()
+	secondHit, err := cache.Materialize(context.Background(), NamespaceDriver, secondZip, &second)
+	if err != nil {
+		t.Fatalf("materialize second archive: %v", err)
+	}
+	defer secondHit.Close()
+	if firstHit.Path == secondHit.Path {
+		t.Fatalf("different archive digests reused cache target %q", firstHit.Path)
+	}
+	storedData, err := os.ReadFile(filepath.Join(firstHit.Path, cacheManifestName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored, err := ParseManifest(storedData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.ArchiveSHA256 != first.ArchiveSHA256 {
+		t.Fatalf("stored archive digest = %q, want %q", stored.ArchiveSHA256, first.ArchiveSHA256)
+	}
+}
+
 func TestRuntimeBundleProcessHelper(t *testing.T) {
 	if os.Getenv("RUNTIMEBUNDLE_HELPER") == "" {
 		return

@@ -28,6 +28,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/goplus/spx/v3/internal/envutil"
 	"github.com/goplus/spx/v3/internal/release"
 )
 
@@ -178,7 +179,7 @@ func TestSourceRuntimePassesAcquisitionEnvironmentToGoBin(t *testing.T) {
 		return fmt.Errorf("%w: unpublished runtime", errReleaseUnavailable)
 	})
 	dependencies.goBin = func(_ context.Context, _ Config, env []string) (string, error) {
-		value, found, duplicate := environmentValue(env, "GOPATH")
+		value, found, duplicate := envutil.Lookup(env, "GOPATH")
 		if !found || duplicate || value != "/frozen-gopath" {
 			return "", errors.New("acquisition environment was not forwarded")
 		}

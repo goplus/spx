@@ -151,7 +151,7 @@ func TestRuntimeExportPackSequence(t *testing.T) {
 	if !shared.FileExists(filepath.Join(gopathBin, release.RuntimeAssetZipName)) {
 		t.Fatalf("expected exported zip to exist")
 	}
-	manifestPath := filepath.Join(runner.repoRoot, ".spx", "runtime", version, spec.GOOS+"-"+spec.GOARCH, "engine-manifest.json")
+	manifestPath := filepath.Join(runner.repoRoot, ".spx", "runtime", version, spec.GOOS+"-"+spec.GOARCH, release.EngineSourceManifestName)
 	manifestData, err := os.ReadFile(manifestPath)
 	if err != nil {
 		t.Fatalf("read local runtime manifest: %v", err)

@@ -31,6 +31,9 @@ import (
 )
 
 func TestBuildLauncherEndToEnd(t *testing.T) {
+	type bridgeContextKey struct{}
+	ctx := context.WithValue(context.Background(), bridgeContextKey{}, true)
+
 	goCommand, err := exec.LookPath("go")
 	if err != nil {
 		t.Skip(err)
@@ -71,7 +74,8 @@ func TestBuildLauncherEndToEnd(t *testing.T) {
 
 	var buildLog bytes.Buffer
 	graphChecks := 0
-	result, err := BuildLauncher(context.Background(), Config{
+	bridgeChecks := 0
+	result, err := BuildLauncher(ctx, Config{
 		ProjectDir: projectDir, ProjectFile: projectFile, ProjectExt: ".spx",
 		PackDir: "assets", PackIndex: "index.json", PortableConfig: snapshot,
 		RuntimeManifestPath: manifest, RuntimeCacheRoot: filepath.Join(moduleRoot, "cache"),
@@ -84,12 +88,19 @@ func TestBuildLauncherEndToEnd(t *testing.T) {
 			graphChecks++
 			return nil
 		},
+		VerifyBridge: func(ctx context.Context, _ string) error {
+			bridgeChecks++
+			if ctx.Value(bridgeContextKey{}) != true {
+				t.Error("source bridge verifier did not receive the operation context")
+			}
+			return nil
+		},
 		IO: IO{Stdout: &buildLog, Stderr: &buildLog, Env: os.Environ()},
 	})
 	if err != nil {
 		t.Fatalf("%v\n%s", err, buildLog.String())
 	}
-	if result.Output != output || len(result.PayloadSHA256) != 64 || len(result.ManifestSHA256) != 64 || graphChecks != 4 {
+	if result.Output != output || len(result.PayloadSHA256) != 64 || len(result.ManifestSHA256) != 64 || graphChecks != 4 || bridgeChecks != 1 {
 		t.Fatalf("result = %#v", result)
 	}
 }

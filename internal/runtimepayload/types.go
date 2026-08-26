@@ -28,10 +28,11 @@ import (
 )
 
 const (
-	SchemaV1       = "spx-runtime-payload/v1"
-	ProtocolV1     = "xgo-driver-v1"
-	ManifestPath   = "META-INF/spx-runtime-v1.json"
-	ProjectZipPath = "project/project.zip"
+	SchemaV1                    = "spx-runtime-payload/v1"
+	ProtocolV1                  = "xgo-driver-v1"
+	ManifestPath                = "META-INF/spx-runtime-v1.json"
+	EngineComponentManifestName = "engine-component-manifest.json"
+	ProjectZipPath              = "project/project.zip"
 )
 
 var canonicalTime = time.Date(1980, time.January, 1, 0, 0, 0, 0, time.UTC)

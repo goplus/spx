@@ -81,7 +81,7 @@ func (cmd *CmdTool) runBuildLauncher() error {
 	config := launchpack.Config{
 		ProjectDir: project.dir, ProjectFile: project.file, ProjectExt: project.extension,
 		PackDir: project.packDir, PackIndex: project.packIndex, PortableConfig: snapshot,
-		RuntimeSourceRoot: source.root, RuntimeIdentity: launchpack.RuntimeIdentity{GOOS: runtime.GOOS, GOARCH: runtime.GOARCH},
+		RuntimeIdentity: launchpack.RuntimeIdentity{GOOS: runtime.GOOS, GOARCH: runtime.GOARCH},
 		Source: launchpack.SourceIdentity{
 			SelectedPath: spxModulePath, SelectedVersion: source.selectedVersion,
 			EffectivePath: source.effectivePath, EffectiveVersion: source.effectiveVersion,
@@ -89,8 +89,12 @@ func (cmd *CmdTool) runBuildLauncher() error {
 		},
 		GoCommand: source.goCommand, WorkDir: source.workDir, GoWork: source.goWork,
 		GraphFlags: source.graphFlags, BuildFlags: buildLauncherBuildFlags(cmd.Args), Output: stage,
-		BridgePackage: spxModulePath + "/cmd/ispxnative", VerifyGraph: source.verifyGraph,
-		IO: launchpack.IO{Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr, Env: source.env},
+		VerifyGraph: source.verifyGraph,
+		IO:          launchpack.IO{Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr, Env: source.env},
+	}
+	if source.sourceMode {
+		config.RuntimeSourceRoot = source.root
+		config.BridgePackage = spxModulePath + "/cmd/ispxnative"
 	}
 	builder := cmd.launcherBuilder
 	if builder == nil {

@@ -30,11 +30,13 @@ import (
 	"github.com/goplus/spx/v3/internal/runtimebundle"
 )
 
-func expectedEngineBundle(origin []byte, spec release.HostRuntimeSpec, engineSize int64, engineSHA string, packSize int64, packSHA string) (runtimebundle.Bundle, error) {
+const engineAcquisitionManifestName = "engine-acquisition-manifest.json"
+
+func expectedEngineBundle(acquisitionManifest []byte, spec release.HostRuntimeSpec, engineSize int64, engineSHA string, packSize int64, packSHA string) (runtimebundle.Bundle, error) {
 	bundle := runtimebundle.Bundle{
 		Schema: runtimebundle.SchemaV1, Namespace: runtimebundle.NamespaceEngine,
 		Entries: []runtimebundle.Entry{
-			{Name: "runtime-manifest.json", Mode: 0o600, Size: int64(len(origin)), SHA256: digestBytes(origin)},
+			{Name: engineAcquisitionManifestName, Mode: 0o600, Size: int64(len(acquisitionManifest)), SHA256: digestBytes(acquisitionManifest)},
 			{Name: spec.RuntimeName, Mode: 0o700, Size: engineSize, SHA256: engineSHA},
 			{Name: spec.PackName, Mode: 0o600, Size: packSize, SHA256: packSHA},
 		},
@@ -107,7 +109,7 @@ func hashRuntimeFile(path string) (int64, string, error) {
 	return size, digest, nil
 }
 
-func writeEngineBundle(path string, origin []byte, engineName, packName, enginePath, packPath string) (err error) {
+func writeEngineBundle(path string, acquisitionManifest []byte, engineName, packName, enginePath, packPath string) (err error) {
 	tmp, err := os.CreateTemp(filepath.Dir(path), ".spx-launchpack-engine-*")
 	if err != nil {
 		return err
@@ -125,7 +127,7 @@ func writeEngineBundle(path string, origin []byte, engineName, packName, engineP
 		_, err = writer.Write(data)
 		return err
 	}
-	if err := addBytes("runtime-manifest.json", 0o600, origin); err != nil {
+	if err := addBytes(engineAcquisitionManifestName, 0o600, acquisitionManifest); err != nil {
 		_ = zw.Close()
 		_ = tmp.Close()
 		return err

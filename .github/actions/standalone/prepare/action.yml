@@ -1,5 +1,5 @@
 name: Prepare standalone release
-description: Prepare runtime assets, reinstall spx, and expose the rebuilt binary path.
+description: Prepare runtime assets and expose rebuilt SPX component paths.
 inputs:
   engine-asset-dir:
     description: 'Optional directory containing engine artifacts from the current workflow run'
@@ -9,6 +9,15 @@ outputs:
   spx-bin:
     description: 'Path to the rebuilt spx binary'
     value: ${{ steps.prepare-standalone-release.outputs.spx-bin }}
+  engine-path:
+    description: 'Path to the verified host Engine'
+    value: ${{ steps.prepare-standalone-release.outputs.engine-path }}
+  pack-path:
+    description: 'Path to the verified runtime PCK'
+    value: ${{ steps.prepare-standalone-release.outputs.pack-path }}
+  bridge-path:
+    description: 'Path to the rebuilt interpreter bridge'
+    value: ${{ steps.prepare-standalone-release.outputs.bridge-path }}
 runs:
   using: "composite"
   steps:
@@ -37,10 +46,28 @@ runs:
         "$BUILDCTL" setup "${setup_args[@]}"
 
         GOEXE="$(go_env_goexe)"
+        GOOS="$(go env GOOS | tr -d '\r')"
+        GOARCH="$(go env GOARCH | tr -d '\r')"
+        RUNTIME_VERSION="$(go run ./.github/scripts/runtime/version.go | tr -d '\r\n')"
+        GO_BIN_DIR="$(go_env_bin_dir "$GOEXE")"
         SPX_BIN_PATH="$(go_env_spx_path "$GOEXE")"
-        if [ ! -f "$SPX_BIN_PATH" ]; then
-          log_error "Rebuilt SPX binary not found: $SPX_BIN_PATH"
-          exit 1
-        fi
+        ENGINE_PATH="$GO_BIN_DIR/gdspxrt${RUNTIME_VERSION}${GOEXE}"
+        PACK_PATH="$GO_BIN_DIR/gdspxrt${RUNTIME_VERSION}.pck"
+        case "$GOOS" in
+          darwin) BRIDGE_EXT=dylib ;;
+          linux) BRIDGE_EXT=so ;;
+          windows) BRIDGE_EXT=dll ;;
+          *) log_error "Unsupported driver platform: $GOOS/$GOARCH"; exit 1 ;;
+        esac
+        BRIDGE_PATH="$GO_BIN_DIR/gdspx-${GOOS}-${GOARCH}.${BRIDGE_EXT}"
+        for asset in "$SPX_BIN_PATH" "$ENGINE_PATH" "$PACK_PATH" "$BRIDGE_PATH"; do
+          if [ ! -f "$asset" ]; then
+            log_error "Prepared release asset not found: $asset"
+            exit 1
+          fi
+        done
         echo "spx-bin=$SPX_BIN_PATH" >> "$GITHUB_OUTPUT"
+        echo "engine-path=$ENGINE_PATH" >> "$GITHUB_OUTPUT"
+        echo "pack-path=$PACK_PATH" >> "$GITHUB_OUTPUT"
+        echo "bridge-path=$BRIDGE_PATH" >> "$GITHUB_OUTPUT"
         log_success "Rebuilt spx binary: $SPX_BIN_PATH"

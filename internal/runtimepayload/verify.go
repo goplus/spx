@@ -179,7 +179,7 @@ func parseManifest(data []byte) (Manifest, error) {
 
 func (v *Verified) validateComponents() error {
 	required := []string{
-		"engine/runtime-manifest.json",
+		"engine/" + EngineComponentManifestName,
 		"engine/" + v.Manifest.Engine.Executable,
 		"engine/" + v.Manifest.Engine.Pack,
 		"bridge/bridge-manifest.json",

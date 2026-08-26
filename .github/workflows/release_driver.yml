@@ -1,0 +1,102 @@
+name: Build project driver assets
+
+on:
+  workflow_call:
+    inputs:
+      spx_version:
+        description: 'SPX release version declared by this commit (v<semver>)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  setup:
+    name: Validate driver build inputs
+    runs-on: ubuntu-22.04
+    outputs:
+      spx_version: ${{ steps.release.outputs.release_tag }}
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v7
+
+      - name: Set up locked Go and XGo
+        uses: ./.github/actions/deps
+        with:
+          setup-mode: none
+
+      - name: Describe release
+        id: release
+        shell: bash
+        run: go run ./.github/scripts/runtime/version.go --github-output "$GITHUB_OUTPUT"
+
+      - name: Validate SPX release
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.spx_version }}
+          EXPECTED_VERSION: ${{ steps.release.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          if [ "$INPUT_VERSION" != "$EXPECTED_VERSION" ]; then
+            echo "[error] This commit declares $EXPECTED_VERSION, not $INPUT_VERSION" >&2
+            exit 1
+          fi
+
+  driver:
+    name: Driver ${{ matrix.goos }}/${{ matrix.goarch }}
+    needs: setup
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {goos: darwin, goarch: amd64, runner: macos-15-intel}
+          - {goos: darwin, goarch: arm64, runner: macos-15}
+          - {goos: linux, goarch: amd64, runner: ubuntu-22.04}
+          - {goos: windows, goarch: amd64, runner: windows-latest}
+    uses: ./.github/workflows/release_driver_platform.yml
+    with:
+      goos: ${{ matrix.goos }}
+      goarch: ${{ matrix.goarch }}
+      runner: ${{ matrix.runner }}
+
+  assemble:
+    name: Assemble driver assets
+    needs: [setup, driver]
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v7
+
+      - name: Set up locked Go and XGo
+        uses: ./.github/actions/deps
+        with:
+          setup-mode: none
+
+      - name: Download platform driver artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: spx-driver-*
+          path: dist/input
+
+      - name: Assemble and verify driver assets
+        shell: bash
+        env:
+          SPX_VERSION: ${{ needs.setup.outputs.spx_version }}
+        run: |
+          set -euo pipefail
+          mapfile -t descriptors < <(find dist/input -type f -name driver-bundle.json -print | sort)
+          args=(assemble --spx-version "$SPX_VERSION" --manifest dist/driver/driver-manifest.json)
+          for descriptor in "${descriptors[@]}"; do
+            args+=(--descriptor "$descriptor")
+          done
+          mkdir -p dist/driver
+          go run ./.github/scripts/driverbundle "${args[@]}"
+
+      - name: Upload driver assets
+        uses: actions/upload-artifact@v7
+        with:
+          name: spx-driver-assets-${{ needs.setup.outputs.spx_version }}
+          path: dist/driver
+          if-no-files-found: error
+          retention-days: 14

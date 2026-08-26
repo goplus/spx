@@ -1,0 +1,87 @@
+name: Package project driver
+
+on:
+  workflow_call:
+    inputs:
+      goos:
+        description: Target GOOS
+        required: true
+        type: string
+      goarch:
+        description: Target GOARCH
+        required: true
+        type: string
+      runner:
+        description: Native runner label
+        required: true
+        type: string
+
+concurrency:
+  group: driver-${{ inputs.goos }}-${{ inputs.goarch }}-${{ github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    name: Driver ${{ inputs.goos }}/${{ inputs.goarch }}
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v7
+
+      - name: Install Linux dependencies
+        if: inputs.goos == 'linux'
+        uses: ./.github/actions/install-linux-dependencies
+        timeout-minutes: 20
+        with:
+          packages: |
+            gcc
+            libgl1-mesa-dev
+            libegl1-mesa-dev
+            libgles2-mesa-dev
+            libx11-dev
+            xorg-dev
+            libasound2-dev
+            libopenal-dev
+            zip
+
+      - name: Set up Windows packaging tools
+        if: inputs.goos == 'windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          update: true
+          install: >-
+            base-devel
+            mingw-w64-x86_64-toolchain
+            zip
+            unzip
+            bash
+
+      - name: Set up locked toolchain
+        uses: ./.github/actions/deps
+        with:
+          setup-mode: none
+
+      - name: Prepare standalone runtime and bridge
+        id: prepare
+        uses: ./.github/actions/standalone/prepare
+
+      - name: Package and verify driver bundle
+        uses: ./.github/actions/driver-bundle
+        with:
+          engine: ${{ steps.prepare.outputs.engine-path }}
+          pack: ${{ steps.prepare.outputs.pack-path }}
+          bridge: ${{ steps.prepare.outputs.bridge-path }}
+          output: spx-driver-${{ inputs.goos }}-${{ inputs.goarch }}.zip
+          descriptor: driver-bundle.json
+          goos: ${{ inputs.goos }}
+          goarch: ${{ inputs.goarch }}
+
+      - name: Upload driver bundle inputs
+        uses: actions/upload-artifact@v7
+        with:
+          name: spx-driver-${{ inputs.goos }}-${{ inputs.goarch }}
+          path: |
+            spx-driver-${{ inputs.goos }}-${{ inputs.goarch }}.zip
+            driver-bundle.json
+          if-no-files-found: error
+          retention-days: 14

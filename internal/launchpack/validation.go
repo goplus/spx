@@ -26,12 +26,11 @@ import (
 )
 
 func (c Config) validate() error {
-	for name, value := range map[string]string{
-		"project-dir": c.ProjectDir, "project-file": c.ProjectFile,
-		"output": c.Output,
+	for _, item := range []struct{ name, value string }{
+		{"project-dir", c.ProjectDir}, {"project-file", c.ProjectFile}, {"output", c.Output},
 	} {
-		if value == "" {
-			return fmt.Errorf("launchpack: %s is required", name)
+		if item.value == "" {
+			return fmt.Errorf("launchpack: %s is required", item.name)
 		}
 	}
 	if err := regularPath("project-dir", c.ProjectDir, true); err != nil {
@@ -68,13 +67,34 @@ func (c Config) validate() error {
 	if c.Output == c.ProjectDir || pathWithin(packRoot, c.Output) {
 		return fmt.Errorf("launchpack: output must not be inside the pack directory")
 	}
-	if c.BridgePackage == "" {
-		return fmt.Errorf("launchpack: bridge package is required")
+	if c.Source.SourceMode {
+		if c.BridgePackage == "" {
+			return fmt.Errorf("launchpack: bridge package is required")
+		}
+	} else {
+		if err := validatePublishedSource(c.Source); err != nil {
+			return err
+		}
+		if c.BridgePackage != "" {
+			return fmt.Errorf("launchpack: published mode must not configure a bridge package")
+		}
+		if c.RuntimeSourceRoot != "" {
+			return fmt.Errorf("launchpack: published mode must not configure a runtime source root")
+		}
 	}
 	if c.RuntimeSourceRoot != "" {
 		if err := regularPath("runtime-source-root", c.RuntimeSourceRoot, true); err != nil {
 			return err
 		}
+	}
+	if c.DriverAssetDir != "" && (!filepath.IsAbs(c.DriverAssetDir) || filepath.Clean(c.DriverAssetDir) != c.DriverAssetDir) {
+		return fmt.Errorf("launchpack: driver asset directory must be an absolute clean path")
+	}
+	if !c.Source.SourceMode && c.RuntimeAssetDir != "" {
+		return fmt.Errorf("launchpack: published mode must not configure a runtime asset directory")
+	}
+	if !c.Source.SourceMode && c.RuntimeManifestPath != "" {
+		return fmt.Errorf("launchpack: published mode must not configure a runtime manifest")
 	}
 	return nil
 }

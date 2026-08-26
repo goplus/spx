@@ -65,7 +65,7 @@ git diff --check
 - 录屏 live/offline、音频、SVG/复杂字体回归；Android/iOS 真机 smoke。
 - Windows 发布要求 ANGLE 时，确认 ANGLE 下载失败会使构建失败，而不是静默降级。
 
-## runtime 感知的 CI 与三阶段自举
+## runtime 感知的 CI 与 runtime→driver→SPX 发布自举
 
 普通 CI 会在启动 runtime consumer 前解析 lock 对应的 runtime release。resolver 只读取 release metadata 与 manifest，不下载全部 runtime 资产；它会确认 tag 为 `runtime-v<所选版本>`、manifest 的 `runtime_version` 等于 lock 选择的版本，并校验 required asset 名称集合。
 
@@ -77,25 +77,25 @@ git diff --check
 
 canonical-ref ancestry 规则刻意只用于构建和发布新的 runtime。普通 runner 与 module-integration workflow 可以测试 lock 中精确的 candidate SHA，不要求它已经进入 `godot.ref`。解析时不存在相同版本的公开 runtime，release setup 才会调用共享 verifier：只有 verifier 已确认 exact commit 可从 canonical repo 获取、canonical ref tip 是该 commit 的祖先且反向尚不成立时，`dry-run` 才能以 pre-merge candidate 继续，并在 workflow summary 明确标记 candidate-only；publish 操作必须先证明 ancestry 才会开始新的 runtime 构建。ref 查询失败、ref 歧义、网络异常或比较失败会阻断新 runtime 发布。若 resolver 找到相同 runtime version 的公开 release 且 manifest 版本匹配，summary 会标记 source ancestry 无需检查。
 
-三阶段自举仍在 `goplus/spx` 的冻结发布分支上执行：
+正式自举仍在 `goplus/spx` 的冻结发布分支上执行：
 
 | `operation` | 结果 | `platforms` |
 | --- | --- | --- |
 | `dry-run` | 构建并校验精确的锁定 candidate，但不发布；报告 canonical-ref ancestry | 通常为 `all` |
 | `publish-runtime` | 只发布不可变的 `runtime-v*` 资产 | 忽略 |
-| `publish-release` | 发布 runtime、SPX 产品与 npm | 必须为 `all` |
+| `publish-release` | 在一次运行中发布或复用 runtime，构建 driver 资产，并发布 SPX/npm | 必须为 `all` |
 
 `release_tag` 必须精确等于所选 commit 声明的 SPX tag。这里的产品 `platforms=all` 仅指 Web、macOS、Windows、Linux 包；Android/iOS 属于完整 runtime 资产矩阵和真机 smoke，不是 SPX 产品 target。
 
 1. 先对 lock 中精确的 Godot candidate 使用 `release_tag=<当前声明的-SPX-tag>`、`platforms=all`、`operation=dry-run`。检查 workflow summary：pre-merge candidate 在此阶段可以继续，但会明确标记为尚不可发布。下载并检查所有 runtime/product artifacts，完成安装与 demo smoke。
 2. 将该 Godot commit 原样提升到 canonical `godot.ref` 并通过严格 ancestry verifier，再对同一个 SPX commit 设置 `operation=publish-runtime`。没有可复用版本时，该模式会构建、校验并公开全部 runtime 资产，但跳过 SPX 产品包、SPX release 和 npm。
-3. 让普通 CI 自动切换到已公开 runtime 路径，并通过 Web normal 产品 smoke。若合并导致 runtime 内容不兼容，先提升 `runtime_version`；否则在最终 SPX commit 上使用 `platforms=all`、`operation=publish-release`，流程会验证并复用同一 runtime，再发布 SPX 产品与 npm。
+3. 让普通 CI 自动切换到已公开 runtime 路径，并通过 Web normal 产品 smoke。若合并导致 runtime 内容不兼容，先提升 `runtime_version`；否则在最终 SPX commit 上使用 `platforms=all`、`operation=publish-release`。流程会验证并复用同一 runtime，调用 reusable driver workflow 构建并校验 driver manifest 与四个平台 ZIP，将这些文件和产品资产合并进同一个 `v<SPX-tag>` draft，然后发布 SPX 产品与 npm，最后公开这一个 SPX Release。driver manifest 的 `spx_version` 必须等于选定的 SPX version，`runtime_version` 必须等于 current lock 选择的版本。仅升级 SPX 时会复用不变的 runtime，同时为新的 SPX version 发布对应 driver。
 
-runtime manifest、`SHA256SUMS` 和 required asset 集合必须内部自洽。runtime 复用比较 `runtime_version`，不会把已发布 manifest 或 checksum 文件与后续 candidate build 做逐字节比较；checksum 只保证下载内容完整，不形成第二套兼容性身份。未公开的 runtime/SPX draft tag 必须指向当前 `GITHUB_SHA`，相同版本的公开 runtime 则可来自前一阶段的 candidate commit。SPX tag 始终指向最终 commit。若 runtime 内容发生不兼容变化，必须先提升 `runtime_version`，不能覆盖或静默重新解释已有 tag。
+runtime manifest、`SHA256SUMS` 和 required asset 集合必须内部自洽；driver manifest 与每个平台 ZIP 也必须通过名称、host、entry、大小和 SHA-256 校验。runtime 复用比较 `runtime_version`，不会把已发布 manifest 或 checksum 文件与后续 candidate build 做逐字节比较；driver 资产比较 `spx_version` 与 `runtime_version`。checksum 与 ZIP 校验只保证下载内容完整，不形成第二套兼容性身份。未公开的 runtime/SPX draft tag 必须指向当前 `GITHUB_SHA`，相同版本的公开 runtime 则可来自前一阶段的 candidate commit。driver 文件只是 SPX draft 中的资产，不拥有第二个 Release 或 tag。SPX tag 始终指向最终 commit。若 runtime 内容发生不兼容变化，必须先提升 `runtime_version`，不能覆盖或静默重新解释已有 tag。
 
 ## 开发版 npm 包
 
-`publish-dev-npm` 是独立的按需操作，不属于上述三阶段正式发版。它只允许从 canonical `goplus/spx` 的 `dev` 分支触发；`release_tag` 必须留空，`platforms` 会被忽略：
+`publish-dev-npm` 是独立的按需操作，不属于正式发布流程。它只允许从 canonical `goplus/spx` 的 `dev` 分支触发；`release_tag` 必须留空，`platforms` 会被忽略：
 
 ```sh
 gh workflow run release.yml \
@@ -110,7 +110,7 @@ gh workflow run release.yml \
 
 ## 后续版本维护
 
-- 仅 SPX 产品变化且 runtime 版本不变时，可以用 SPX-only mapping 保留 current runtime；发布流程会按 runtime version 复用公开资产。
+- 仅 SPX 产品变化且 runtime 版本不变时，可以用 SPX-only mapping 保留 current runtime；发布流程会按 runtime version 复用公开资产，并为新的 SPX version 发布对应 driver。
 - Godot、`godot_modules/spx`、toolchain 或 runtime pack 输出变化时，用一个事务同时提升两套身份：
 
   ```sh

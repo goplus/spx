@@ -136,7 +136,7 @@ func TestExitReproducesSignal(t *testing.T) {
 func launcherTestPayload(t *testing.T, engineScript string) ([]byte, string, string, runtimepayload.Manifest) {
 	t.Helper()
 	engineFiles := []launcherTestFile{
-		{Name: "runtime-manifest.json", Mode: 0o644, Data: []byte(`{"schema":"test-engine/v1"}`)},
+		{Name: runtimepayload.EngineComponentManifestName, Mode: 0o644, Data: []byte(`{"schema":"test-engine/v1"}`)},
 		{Name: "engine", Mode: 0o755, Data: []byte(engineScript)},
 		{Name: "engine.pck", Mode: 0o644, Data: []byte("pack")},
 	}
@@ -169,7 +169,7 @@ func launcherTestPayload(t *testing.T, engineScript string) ([]byte, string, str
 		},
 	}
 	sources := launcherTestSources(
-		launcherTestFile{Name: "engine/runtime-manifest.json", Mode: 0o644, Data: engineFiles[0].Data},
+		launcherTestFile{Name: "engine/" + runtimepayload.EngineComponentManifestName, Mode: 0o644, Data: engineFiles[0].Data},
 		launcherTestFile{Name: "engine/engine", Mode: 0o755, Data: engineFiles[1].Data},
 		launcherTestFile{Name: "engine/engine.pck", Mode: 0o644, Data: engineFiles[2].Data},
 		launcherTestFile{Name: "bridge/bridge-manifest.json", Mode: 0o644, Data: bridgeFiles[0].Data},

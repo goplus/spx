@@ -301,6 +301,9 @@ func verifyReaderAt(reader io.ReaderAt, size int64, options VerifyOptions) (veri
 		want.Digest = ""
 		if want.Namespace != "" {
 			bundle.Namespace = want.Namespace
+		}
+		bundle.ArchiveSHA256 = want.ArchiveSHA256
+		if want.Namespace != "" || want.ArchiveSHA256 != "" {
 			bundle, err = bundle.WithDigest()
 			if err != nil {
 				return verifiedArchive{}, err

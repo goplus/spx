@@ -27,6 +27,7 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/goplus/spx/v3/internal/envutil"
 	"github.com/goplus/spx/v3/internal/release"
 )
 
@@ -50,7 +51,7 @@ func TestAcquireRuntimeAssetsPrefersExplicitLocalManifest(t *testing.T) {
 		t.Fatal(err)
 	}
 	publishLocalRuntimeTest(t, sourceRoot, sourceManifest, spec, "source-engine", "source-pack")
-	explicitManifest := publishLocalRuntimeTest(t, explicitRoot, filepath.Join(explicitRoot, "engine-manifest.json"), spec, "explicit-engine", "explicit-pack")
+	explicitManifest := publishLocalRuntimeTest(t, explicitRoot, filepath.Join(explicitRoot, release.EngineSourceManifestName), spec, "explicit-engine", "explicit-pack")
 
 	cfg := Config{
 		RuntimeSourceRoot: sourceRoot, RuntimeManifestPath: explicitManifest,
@@ -94,14 +95,14 @@ func TestAcquireRuntimeAssetsPrefersExplicitLocalManifest(t *testing.T) {
 func TestRuntimeEnvironmentConfigOverridesProcess(t *testing.T) {
 	t.Setenv(runtimeCacheEnv, "/process-cache")
 	env := runtimeEnvironment(Config{RuntimeCacheRoot: "/config-cache"}, nil)
-	value, found, duplicate := environmentValue(env, runtimeCacheEnv)
+	value, found, duplicate := envutil.Lookup(env, runtimeCacheEnv)
 	if !found || duplicate || value != "/config-cache" {
 		t.Fatalf("%s = %q, found %v, duplicate %v", runtimeCacheEnv, value, found, duplicate)
 	}
 }
 
 func TestAcquireRuntimeAssetsRejectsInvalidExplicitManifestWithoutFetch(t *testing.T) {
-	manifestPath := filepath.Join(t.TempDir(), "engine-manifest.json")
+	manifestPath := filepath.Join(t.TempDir(), release.EngineSourceManifestName)
 	if err := os.WriteFile(manifestPath, []byte(`{"schema":"spx-local-engine/v1"}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +134,7 @@ func TestAcquireRuntimeAssetsRejectsTamperedLocalRuntimeFilesWithoutFetch(t *tes
 		t.Fatal(err)
 	}
 	root := t.TempDir()
-	manifestPath := publishLocalRuntimeTest(t, root, filepath.Join(root, "engine-manifest.json"), spec, "local-engine", "local-pack")
+	manifestPath := publishLocalRuntimeTest(t, root, filepath.Join(root, release.EngineSourceManifestName), spec, "local-engine", "local-pack")
 	cacheRoot := filepath.Join(root, "cache")
 	calls := 0
 	fetch := func(context.Context, string, io.Writer) error {

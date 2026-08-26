@@ -240,6 +240,24 @@ func TestSetupAssetsHostUsesPublishedPack(t *testing.T) {
 	}
 }
 
+func TestPublishedRuntimeUsesLockedPack(t *testing.T) {
+	runner := newRuntimeFixtureRunner(t)
+	oldDownload := downloadEngineAssets
+	var got enginepkg.DownloadConfig
+	downloadEngineAssets = func(cfg enginepkg.DownloadConfig, _ string) error {
+		got = cfg
+		return nil
+	}
+	t.Cleanup(func() { downloadEngineAssets = oldDownload })
+
+	if err := prepareRuntimeAssets(runner, "", true); err != nil {
+		t.Fatal(err)
+	}
+	if !got.Runtime || got.SkipRuntimePack {
+		t.Fatalf("published runtime download config = %#v", got)
+	}
+}
+
 func TestSetupAssetsWeb(t *testing.T) {
 	runner := newRuntimeFixtureRunner(t)
 	installFakeEngineDownload(t)
