@@ -22,6 +22,42 @@ import (
 	"testing"
 )
 
+func TestScratchStyleListEquality(t *testing.T) {
+	list := NewList(1, "02", "Apple")
+
+	tests := []struct {
+		name     string
+		value    any
+		contains bool
+		index    Pos
+	}{
+		{name: "integer and float", value: 1.0, contains: true, index: 0},
+		{name: "numeric strings", value: 2, contains: true, index: 1},
+		{name: "case insensitive strings", value: "apple", contains: true, index: 2},
+		{name: "missing value", value: "banana", contains: false, index: Invalid},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := list.Contains(tt.value); got != tt.contains {
+				t.Errorf("List.Contains(%v) = %v, want %v", tt.value, got, tt.contains)
+			}
+			if got := list.IndexOf(tt.value); got != tt.index {
+				t.Errorf("List.IndexOf(%v) = %v, want %v", tt.value, got, tt.index)
+			}
+		})
+	}
+}
+
+func TestValueEqualUsesScratchSemantics(t *testing.T) {
+	if !NewValue(1).Equal(1.0) {
+		t.Fatal("Value.Equal should treat integer and float values equally")
+	}
+	if !NewValue("Apple").Equal("apple") {
+		t.Fatal("Value.Equal should compare strings case-insensitively")
+	}
+}
+
 // TestValueBoolToInt tests bool to int conversion in Value.Int()
 func TestValueBoolToInt(t *testing.T) {
 	tests := []struct {
