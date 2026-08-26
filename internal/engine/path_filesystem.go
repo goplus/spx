@@ -66,9 +66,12 @@ func setLegacyFilesystemAssetDir(dir string) {
 		if err == nil {
 			assetPaths.canonicalProjectRoot = cleanFilesystemPath(projectRoot)
 		}
-		compatibilityRoot, compatErr := filepath.EvalSymlinks(filepath.FromSlash(assetPaths.compatibilityRoot))
+		compatibilityRootPath, compatErr := filepath.Abs(filepath.FromSlash(assetPaths.compatibilityRoot))
 		if compatErr == nil {
-			assetPaths.canonicalCompatibilityRoot = cleanFilesystemPath(compatibilityRoot)
+			compatibilityRootPath, compatErr = filepath.EvalSymlinks(compatibilityRootPath)
+		}
+		if compatErr == nil {
+			assetPaths.canonicalCompatibilityRoot = cleanFilesystemPath(compatibilityRootPath)
 		}
 	}
 }
