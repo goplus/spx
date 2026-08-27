@@ -26,34 +26,101 @@ import (
 
 type UiMonitor struct {
 	UiNode
-	bgAll          *UiNode
-	valueOnly      *UiNode
-	labelName      *UiNode
-	labelBg        *UiNode
-	labelValue     *UiNode
-	labelValueOnly *UiNode
+	views  [monitorAppearanceCount]monitorView
+	active MonitorAppearance
 }
 type UpdateFunc func(float64)
 
+type MonitorAppearance uint8
+
+const (
+	MonitorAppearanceDefault MonitorAppearance = iota
+	MonitorAppearanceDefaultLarge
+	MonitorAppearanceScratch
+	MonitorAppearanceScratchLarge
+	monitorAppearanceCount
+)
+
+type monitorView struct {
+	root        *UiNode
+	label       *UiNode
+	value       *UiNode
+	colorTarget *UiNode
+}
+
+type monitorViewSpec struct {
+	root        string
+	label       string
+	value       string
+	colorTarget string
+}
+
+var monitorViewSpecs = [monitorAppearanceCount]monitorViewSpec{
+	MonitorAppearanceDefault: {
+		root:  "BG",
+		label: "BG/H/LabelName",
+		value: "BG/H/C/H/LabelValue",
+	},
+	MonitorAppearanceDefaultLarge: {
+		root:  "ValueOnly",
+		value: "ValueOnly/LabelValue",
+	},
+	MonitorAppearanceScratch: {
+		root:        "ScratchBG",
+		label:       "ScratchBG/H/LabelMargin/LabelName",
+		value:       "ScratchBG/H/ValueMargin/C/LabelValue",
+		colorTarget: "ScratchBG/H/ValueMargin/C",
+	},
+	MonitorAppearanceScratchLarge: {
+		root:        "ScratchValueOnly",
+		value:       "ScratchValueOnly/C/LabelValue",
+		colorTarget: "ScratchValueOnly/C",
+	},
+}
+
+type monitorRenderSink interface {
+	SetVisible(engine.Object, bool)
+	SetText(engine.Object, string)
+	SetColor(engine.Object, Color)
+}
+
+func (p MonitorAppearance) IsScratch() bool {
+	return p == MonitorAppearanceScratch || p == MonitorAppearanceScratchLarge
+}
+
+func normalizeMonitorAppearance(appearance MonitorAppearance) MonitorAppearance {
+	if appearance >= monitorAppearanceCount {
+		return MonitorAppearanceDefault
+	}
+	return appearance
+}
+
 func NewUiMonitor() *UiMonitor {
-	panel := engine.NewUiNode[UiMonitor]()
-	return panel
+	return engine.NewUiNode[UiMonitor]()
 }
 
 // !!Warning: this method is called from the engine callback context
 func (pself *UiMonitor) OnStart() {
-	pself.bgAll = engine.BridgeBindUI[UiNode](pself.GetId(), "BG")
-	pself.labelName = engine.BridgeBindUI[UiNode](pself.GetId(), "BG/H/LabelName")
-	pself.labelBg = engine.BridgeBindUI[UiNode](pself.GetId(), "BG/H/C")
-	pself.labelValue = engine.BridgeBindUI[UiNode](pself.GetId(), "BG/H/C/H/LabelValue")
-
-	pself.valueOnly = engine.BridgeBindUI[UiNode](pself.GetId(), "ValueOnly")
-	pself.labelValueOnly = engine.BridgeBindUI[UiNode](pself.GetId(), "ValueOnly/LabelValue")
-
+	pself.bindViews(func(path string) *UiNode {
+		return engine.BridgeBindUI[UiNode](pself.GetId(), path)
+	})
 }
-func (pself *UiMonitor) ShowAll(isOn bool) {
-	mgr.UiMgr.SetVisible(pself.bgAll.GetId(), isOn)
-	mgr.UiMgr.SetVisible(pself.valueOnly.GetId(), !isOn)
+
+func (pself *UiMonitor) bindViews(bind func(string) *UiNode) {
+	for i, spec := range monitorViewSpecs {
+		view := monitorView{
+			root:  bind(spec.root),
+			value: bind(spec.value),
+		}
+		if spec.label != "" {
+			view.label = bind(spec.label)
+		}
+		if spec.colorTarget != "" {
+			view.colorTarget = bind(spec.colorTarget)
+		}
+		pself.views[i] = view
+	}
+	pself.active = monitorAppearanceCount
 }
 
 func (pself *UiMonitor) SetVisible(isOn bool) {
@@ -68,12 +135,25 @@ func (pself *UiMonitor) UpdatePos(wpos Vec2) {
 	mgr.UiMgr.SetGlobalPosition(pself.GetId(), ViewToUI(wpos))
 }
 
-func (pself *UiMonitor) UpdateText(name, value string) {
-	mgr.UiMgr.SetText(pself.labelName.GetId(), name)
-	mgr.UiMgr.SetText(pself.labelValue.GetId(), value)
-	mgr.UiMgr.SetText(pself.labelValueOnly.GetId(), value)
+func (pself *UiMonitor) Render(appearance MonitorAppearance, name, value string, color Color) {
+	pself.render(&mgr.UiMgr, appearance, name, value, color)
 }
-func (pself *UiMonitor) UpdateColor(color Color) {
-	mgr.UiMgr.SetColor(pself.labelBg.GetId(), color)
-	mgr.UiMgr.SetColor(pself.valueOnly.GetId(), color)
+
+func (pself *UiMonitor) render(sink monitorRenderSink, appearance MonitorAppearance, name, value string, color Color) {
+	appearance = normalizeMonitorAppearance(appearance)
+	if pself.active != appearance {
+		for i, view := range pself.views {
+			sink.SetVisible(view.root.GetId(), MonitorAppearance(i) == appearance)
+		}
+		pself.active = appearance
+	}
+
+	view := pself.views[appearance]
+	if view.label != nil {
+		sink.SetText(view.label.GetId(), name)
+	}
+	sink.SetText(view.value.GetId(), value)
+	if view.colorTarget != nil {
+		sink.SetColor(view.colorTarget.GetId(), color)
+	}
 }

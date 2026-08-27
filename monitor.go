@@ -34,6 +34,9 @@ import (
 const (
 	getVarPrefix           = "getVar:"
 	monitorUpdateIntervalS = 0.2
+	monitorModeDefault     = 1
+	monitorModeLarge       = 2
+	monitorStyleScratch    = "scratch"
 )
 
 // -----------------------------------------------------------------------------
@@ -46,7 +49,7 @@ type Monitor struct {
 	target      string
 	val         string
 	eval        func() string
-	mode        int
+	appearance  ui.MonitorAppearance
 	color       mathf.Color
 	pos         mathf.Vec2
 	label       string
@@ -85,10 +88,14 @@ func newMonitor(g reflect.Value, v coreproject.StageShape) (*Monitor, error) {
 	if eval == nil {
 		return nil, syscall.ENOENT
 	}
-	mode := int(v["mode"].(float64))
+	appearance := parseMonitorAppearance(v)
 	color, err := mathf.NewColorAny(coreproject.ShapeValue(v, "color"))
 	if err != nil {
-		color = mathf.NewColorRGBAi(0x28, 0x9c, 0xfc, 0xff)
+		if appearance.IsScratch() {
+			color = mathf.NewColorRGBAi(0xff, 0x8c, 0x1a, 0xff)
+		} else {
+			color = mathf.NewColorRGBAi(0x28, 0x9c, 0xfc, 0xff)
+		}
 	}
 	label := v["label"].(string)
 	x := v["x"].(float64)
@@ -98,11 +105,27 @@ func newMonitor(g reflect.Value, v coreproject.StageShape) (*Monitor, error) {
 	panel := ui.NewUiMonitor()
 	monitor := &Monitor{
 		target: target, val: val, eval: eval, name: name, size: size,
-		visible: visible, mode: mode, color: color, pos: mathf.NewVec2(x, y), label: label, panel: panel,
+		visible: visible, appearance: appearance, color: color,
+		pos: mathf.NewVec2(x, y), label: label, panel: panel,
 		isDirty: true, // Initial dirty state to ensure first render.
 	}
 
 	return monitor, nil
+}
+
+func parseMonitorAppearance(v coreproject.StageShape) ui.MonitorAppearance {
+	mode := int(v["mode"].(float64))
+	style, _ := coreproject.ShapeValue(v, "style", "default").(string)
+	if style == monitorStyleScratch {
+		if mode == monitorModeLarge {
+			return ui.MonitorAppearanceScratchLarge
+		}
+		return ui.MonitorAppearanceScratch
+	}
+	if mode == monitorModeDefault {
+		return ui.MonitorAppearanceDefault
+	}
+	return ui.MonitorAppearanceDefaultLarge
 }
 
 func (pself *Monitor) onUpdate(delta float64) {
@@ -116,16 +139,16 @@ func (pself *Monitor) onUpdate(delta float64) {
 		pself.updateTimer = 0
 	}
 
-	pself.panel.SetVisible(pself.visible)
 	if !pself.visible {
+		pself.panel.SetVisible(false)
 		pself.setDirtyFlag(false)
 		return
 	}
 	val := pself.eval()
-	pself.panel.ShowAll(pself.mode == 1)
+	pself.panel.Render(pself.appearance, pself.label, val, pself.color)
 	pself.panel.UpdateScale(pself.size)
 	pself.panel.UpdatePos(pself.pos)
-	pself.panel.UpdateText(pself.label, val)
+	pself.panel.SetVisible(true)
 	pself.setDirtyFlag(false)
 }
 
