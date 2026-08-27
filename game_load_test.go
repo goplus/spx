@@ -109,7 +109,8 @@ type cloneAllFieldKindsSprite struct {
 
 type spyCloneSpriteMgr struct {
 	enginewrap.SpriteMgrImpl
-	nextID pkgengine.Object
+	nextID   pkgengine.Object
+	zIndexes map[pkgengine.Object]int64
 }
 
 func (s *cameraFollowOverrideSprite) Main() {
@@ -220,6 +221,10 @@ func (s *spyCloneSpriteMgr) SetTypeName(obj pkgengine.Object, typeName string) {
 
 func (s *spyCloneSpriteMgr) SetVisible(obj pkgengine.Object, visible bool) {}
 
+func (s *spyCloneSpriteMgr) SetZIndex(obj pkgengine.Object, z int64) {
+	s.zIndexes[obj] = z
+}
+
 func (s *spyCloneSpriteMgr) SetTriggerLayer(obj pkgengine.Object, layer int64) {}
 
 func (s *spyCloneSpriteMgr) SetTriggerMask(obj pkgengine.Object, mask int64) {}
@@ -317,7 +322,7 @@ func newCloneAllFieldKindsSprite(g *Game, name string, observed *cloneAllFieldKi
 	return sprite
 }
 
-func setupCloneSpriteMgr(t *testing.T) {
+func setupCloneSpriteMgr(t *testing.T) *spyCloneSpriteMgr {
 	t.Helper()
 
 	enginewrap.Init(func(call func()) {
@@ -325,10 +330,12 @@ func setupCloneSpriteMgr(t *testing.T) {
 	})
 
 	original := pkgengine.SpriteMgr
-	pkgengine.SpriteMgr = &spyCloneSpriteMgr{}
+	mgr := &spyCloneSpriteMgr{zIndexes: make(map[pkgengine.Object]int64)}
+	pkgengine.SpriteMgr = mgr
 	t.Cleanup(func() {
 		pkgengine.SpriteMgr = original
 	})
+	return mgr
 }
 
 func setupBootstrapScheduler(t *testing.T) {
@@ -538,6 +545,36 @@ func TestRunSpriteCallbacksRunsSpriteMainsInZOrderUntilFirstYield(t *testing.T) 
 	}
 }
 
+func TestLoadAndInitSpritesReservesLayerZeroForPen(t *testing.T) {
+	const penCanvasLayer = 0
+
+	var game Game
+	game.initShapeMgr()
+
+	back := newCollisionLayerOrderSprite(&game, "Back", nil)
+	front := newCollisionLayerOrderSprite(&game, "Front", nil)
+	game.sprs = map[string]Sprite{
+		"Back":  back,
+		"Front": front,
+	}
+
+	inits := game.loadAndInitSprites(reflect.Value{}, &coreproject.ProjectConfig{
+		Zorder: []any{"Back", "Front"},
+	})
+	if got, want := len(inits), 2; got != want {
+		t.Fatalf("initialized sprite count = %d, want %d", got, want)
+	}
+	if got, want := back.runtimeState.Layer, penCanvasLayer+1; got != want {
+		t.Fatalf("back layer = %d, want %d", got, want)
+	}
+	if got, want := front.runtimeState.Layer, penCanvasLayer+2; got != want {
+		t.Fatalf("front layer = %d, want %d", got, want)
+	}
+	if !back.runtimeState.IsLayerDirty || !front.runtimeState.IsLayerDirty {
+		t.Fatal("loaded sprite layers must be marked dirty for engine synchronization")
+	}
+}
+
 func TestRunBootstrapMainUntilYieldReleasesFollowingBootstrapTasks(t *testing.T) {
 	setupBootstrapScheduler(t)
 
@@ -712,7 +749,7 @@ func TestCloneSpriteAwakesBeforeMain(t *testing.T) {
 	}
 }
 
-func TestCloneSpriteInsertsImmediatelyAfterSource(t *testing.T) {
+func TestCloneSpriteInsertsImmediatelyBehindSource(t *testing.T) {
 	var game Game
 	game.initShapeMgr()
 	setupCloneSpriteMgr(t)
@@ -744,24 +781,149 @@ func TestCloneSpriteInsertsImmediatelyAfterSource(t *testing.T) {
 	if shapes[0] != spriteOf(back) {
 		t.Fatalf("shape[0] = %v, want back sprite", shapes[0])
 	}
-	if shapes[1] != spriteOf(source) {
-		t.Fatalf("shape[1] = %v, want source sprite", shapes[1])
+	if shapes[1] != spriteOf(cloned) {
+		t.Fatalf("shape[1] = %v, want cloned sprite", shapes[1])
 	}
-	if shapes[2] != spriteOf(cloned) {
-		t.Fatalf("shape[2] = %v, want cloned sprite", shapes[2])
+	if shapes[2] != spriteOf(source) {
+		t.Fatalf("shape[2] = %v, want source sprite", shapes[2])
 	}
 	if shapes[3] != spriteOf(front) {
 		t.Fatalf("shape[3] = %v, want front sprite", shapes[3])
 	}
 
-	if got, want := source.runtimeState.Layer, 2; got != want {
+	if got, want := source.runtimeState.Layer, 3; got != want {
 		t.Fatalf("source layer = %d, want %d", got, want)
 	}
-	if got, want := cloned.runtimeState.Layer, 3; got != want {
+	if got, want := cloned.runtimeState.Layer, 2; got != want {
 		t.Fatalf("clone layer = %d, want %d", got, want)
 	}
 	if got, want := front.runtimeState.Layer, 4; got != want {
 		t.Fatalf("front layer = %d, want %d", got, want)
+	}
+}
+
+func TestCloneSpriteSynchronizesCopiedLayerToFreshProxy(t *testing.T) {
+	var game Game
+	game.initShapeMgr()
+	mgr := setupCloneSpriteMgr(t)
+
+	source := newCloneAwakeOrderSprite(&game, "Source")
+	source.sawAwakeInMain = nil
+	source.onClonedFired = nil
+	source.clonedDone = nil
+	source.runtimeState.Layer = firstSpriteLayer + 6
+	source.runtimeState.IsLayerDirty = false
+	game.addShape(spriteOf(source))
+
+	var cloned *SpriteImpl
+	doClone(source, nil, false, func(sprite *SpriteImpl) {
+		cloned = sprite
+	})
+	if cloned == nil || cloned.runtimeState.SyncSprite == nil {
+		t.Fatal("clone proxy was not initialized")
+	}
+
+	cloneID := cloned.runtimeState.SyncSprite.GetId()
+	if got, want := mgr.zIndexes[cloneID], int64(firstSpriteLayer+6); got != want {
+		t.Fatalf("fresh clone proxy z-index = %d, want copied layer %d", got, want)
+	}
+}
+
+func TestRepeatedClonesStackNewestBehindSourceAndInFrontOfOlderClone(t *testing.T) {
+	var game Game
+	game.initShapeMgr()
+	setupCloneSpriteMgr(t)
+
+	source := newCloneAwakeOrderSprite(&game, "Source")
+	source.sawAwakeInMain = nil
+	source.onClonedFired = nil
+	source.clonedDone = nil
+	game.addShape(spriteOf(source))
+
+	clones := make([]*SpriteImpl, 0, 2)
+	for range 2 {
+		doClone(source, nil, false, func(sprite *SpriteImpl) {
+			clones = append(clones, sprite)
+		})
+	}
+
+	shapes := game.getAllShapes()
+	if got, want := len(shapes), 3; got != want {
+		t.Fatalf("shape count = %d, want %d", got, want)
+	}
+	if shapes[0] != clones[0] {
+		t.Fatalf("shape[0] = %v, want oldest clone", shapes[0])
+	}
+	if shapes[1] != clones[1] {
+		t.Fatalf("shape[1] = %v, want newest clone", shapes[1])
+	}
+	if shapes[2] != spriteOf(source) {
+		t.Fatalf("shape[2] = %v, want source sprite", shapes[2])
+	}
+	if got, want := source.runtimeState.Layer, firstSpriteLayer+2; got != want {
+		t.Fatalf("source layer = %d, want %d", got, want)
+	}
+	if got, want := clones[0].runtimeState.Layer, firstSpriteLayer; got != want {
+		t.Fatalf("oldest clone layer = %d, want %d", got, want)
+	}
+	if got, want := clones[1].runtimeState.Layer, firstSpriteLayer+1; got != want {
+		t.Fatalf("newest clone layer = %d, want %d", got, want)
+	}
+}
+
+func TestCloneOfCloneInsertsImmediatelyBehindItsParent(t *testing.T) {
+	var game Game
+	game.initShapeMgr()
+	setupCloneSpriteMgr(t)
+
+	source := newCloneAwakeOrderSprite(&game, "Source")
+	source.sawAwakeInMain = nil
+	source.onClonedFired = nil
+	source.clonedDone = nil
+	game.addShape(spriteOf(source))
+
+	var first, second *SpriteImpl
+	doClone(source, nil, false, func(sprite *SpriteImpl) {
+		first = sprite
+	})
+	doClone(first.sprite, nil, false, func(sprite *SpriteImpl) {
+		second = sprite
+	})
+
+	shapes := game.getAllShapes()
+	if len(shapes) != 3 || shapes[0] != second || shapes[1] != first || shapes[2] != spriteOf(source) {
+		t.Fatalf("clone-of-clone order = %v, want second clone, first clone, source", shapes)
+	}
+}
+
+func TestCloneInsertionUsesSourceCurrentLayer(t *testing.T) {
+	var game Game
+	game.initShapeMgr()
+	setupCloneSpriteMgr(t)
+
+	source := newCloneAwakeOrderSprite(&game, "Source")
+	source.sawAwakeInMain = nil
+	source.onClonedFired = nil
+	source.clonedDone = nil
+	other := newCloneAwakeOrderSprite(&game, "Other")
+	game.addShape(spriteOf(source))
+
+	clones := make([]*SpriteImpl, 0, 3)
+	for range 2 {
+		doClone(source, nil, false, func(sprite *SpriteImpl) {
+			clones = append(clones, sprite)
+		})
+	}
+	game.addShape(spriteOf(other))
+	game.shapeMgr.goBackLayers(spriteOf(other), 1)
+	doClone(source, nil, false, func(sprite *SpriteImpl) {
+		clones = append(clones, sprite)
+	})
+
+	shapes := game.getAllShapes()
+	want := []Shape{clones[0], clones[1], spriteOf(other), clones[2], spriteOf(source)}
+	if !reflect.DeepEqual(shapes, want) {
+		t.Fatalf("clone order after source layer move = %v, want %v", shapes, want)
 	}
 }
 
