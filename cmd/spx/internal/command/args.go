@@ -84,7 +84,7 @@ func (cmd *CmdTool) CheckCmd(ext ...string) bool {
 	cmds := []string{
 		"help", "version", "editor",
 		"init", "clear", "clearbuild",
-		"build", "buildtinygo", "rune", "export", "buildlauncher",
+		"build", "buildtinygo", "rune", "export", "exportpack", "buildlauncher",
 		"runweb", "buildweb", "exportweb", "stopweb", "runwebworker",
 		"runm", "exportbot", "exportapk", "exportios",
 		"run", "runnative", "exporttemplateweb", "exportminigame", "exportminiprogram", "exportwebworker",

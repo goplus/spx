@@ -21,7 +21,6 @@ import (
 	"flag"
 	"fmt"
 	"path/filepath"
-	"sort"
 
 	"github.com/goplus/spx/v3/internal/cmd/buildctl/engine"
 	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
@@ -83,7 +82,7 @@ func exportPackRuntime(cfg runtimeExportPackConfig, runner shared.ScriptRunner) 
 	}
 	defer cleanup()
 
-	if err := runRepoSPXCommand(runner, workspace.workDir, "export"); err != nil {
+	if err := runRepoSPXCommand(runner, workspace.workDir, "exportpack"); err != nil {
 		return err
 	}
 	exportedPack, err := findExportedPack(workspace.workDir)
@@ -108,18 +107,9 @@ func exportPackRuntime(cfg runtimeExportPackConfig, runner shared.ScriptRunner) 
 }
 
 func findExportedPack(workDir string) (string, error) {
-	pcDir := filepath.Join(workDir, "project", ".builds", "pc")
-	pcPack := filepath.Join(pcDir, "gdexport.pck")
+	pcPack := filepath.Join(workDir, "project", ".builds", "pc", "gdexport.pck")
 	if shared.FileExists(pcPack) {
 		return pcPack, nil
 	}
-	appResources, err := filepath.Glob(filepath.Join(pcDir, "gdexport.app", "Contents", "Resources", "*.pck"))
-	if err != nil {
-		return "", err
-	}
-	sort.Strings(appResources)
-	if len(appResources) != 0 {
-		return appResources[0], nil
-	}
-	return "", fmt.Errorf("exported runtime pack not found in %s", workDir)
+	return "", fmt.Errorf("exported runtime pack not found at %s", pcPack)
 }

@@ -19,8 +19,53 @@ package command
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
+
+func TestExportPackDarwinUsesPackOnlyExport(t *testing.T) {
+	projectDir := t.TempDir()
+	cmd := &CmdTool{ProjectDir: projectDir, CmdPath: "godot"}
+
+	var gotDir, gotName string
+	var gotArgs []string
+	err := cmd.exportPack(goosDarwin, func(dir, name string, args ...string) error {
+		gotDir = dir
+		gotName = name
+		gotArgs = append([]string(nil), args...)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("exportPack() error = %v", err)
+	}
+
+	targetPath := filepath.Join(projectDir, ".builds", "pc", "gdexport.pck")
+	wantArgs := []string{
+		"--headless", "--quit", "--path", projectDir,
+		"--export-pack", "Mac", targetPath,
+	}
+	if gotDir != projectDir || gotName != "godot" || !reflect.DeepEqual(gotArgs, wantArgs) {
+		t.Fatalf("export command = (%q, %q, %#v), want (%q, %q, %#v)", gotDir, gotName, gotArgs, projectDir, "godot", wantArgs)
+	}
+	if info, err := os.Stat(filepath.Dir(targetPath)); err != nil || !info.IsDir() {
+		t.Fatalf("pack output directory was not created: %v", err)
+	}
+}
+
+func TestExportPackRejectsUnsupportedPlatformBeforeRunning(t *testing.T) {
+	called := false
+	cmd := &CmdTool{ProjectDir: t.TempDir(), CmdPath: "godot"}
+	err := cmd.exportPack("plan9", func(string, string, ...string) error {
+		called = true
+		return nil
+	})
+	if err == nil {
+		t.Fatal("exportPack() accepted an unsupported platform")
+	}
+	if called {
+		t.Fatal("export command ran for an unsupported platform")
+	}
+}
 
 func TestPrepareExportStagesAssetsFromLogicalProject(t *testing.T) {
 	sourceProjectDir := filepath.Join(t.TempDir(), "game")

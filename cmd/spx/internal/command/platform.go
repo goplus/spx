@@ -30,15 +30,29 @@ func libraryFileName(prefix, goos, goarch string) string {
 	return fmt.Sprintf("%s-%s-%s%s", prefix, goos, goarch, sharedLibrarySuffix(goos))
 }
 
-func resolveDesktopExportTarget(goos, basePath string) (targetPath, platformName string, err error) {
+func desktopExportPlatformName(goos string) (string, error) {
 	switch goos {
 	case goosWindows:
-		return basePath + ".exe", "Win", nil
+		return "Win", nil
 	case goosDarwin:
-		return basePath + ".app", "Mac", nil
+		return "Mac", nil
 	case goosLinux:
-		return basePath, "Linux", nil
+		return "Linux", nil
 	default:
-		return "", "", fmt.Errorf("unsupported operating system: %s", goos)
+		return "", fmt.Errorf("unsupported operating system: %s", goos)
 	}
+}
+
+func resolveDesktopExportTarget(goos, basePath string) (targetPath, platformName string, err error) {
+	platformName, err = desktopExportPlatformName(goos)
+	if err != nil {
+		return "", "", err
+	}
+	if goos == goosWindows {
+		return basePath + ".exe", platformName, nil
+	}
+	if goos == goosDarwin {
+		return basePath + ".app", platformName, nil
+	}
+	return basePath, platformName, nil
 }

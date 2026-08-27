@@ -99,7 +99,7 @@ func simulateRuntimeCommandOutputs(workdir string, name string, args ...string) 
 	}
 
 	switch spxArgs[0] {
-	case "export":
+	case "exportpack":
 		dst := filepath.Join(projectDir, "project", ".builds", "pc", "gdexport.pck")
 		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 			return err
@@ -184,7 +184,7 @@ func TestSetupAssetsHost(t *testing.T) {
 	}
 
 	assertRuntimeWorkspaceCommands(t, runner.commands, runner.repoRoot, []recordedCommand{
-		{name: "spx", args: []string{"export"}},
+		{name: "spx", args: []string{"exportpack"}},
 	})
 
 	if !shared.FileExists(filepath.Join(os.Getenv("GOPATH"), "bin", "gdspx"+version)) {
@@ -286,7 +286,7 @@ func TestSetupAssetsFull(t *testing.T) {
 	}
 
 	assertRuntimeWorkspaceCommands(t, runner.commands, runner.repoRoot, []recordedCommand{
-		{name: "spx", args: []string{"export"}},
+		{name: "spx", args: []string{"exportpack"}},
 		{name: "spx", args: []string{"exporttemplateweb"}},
 	})
 }

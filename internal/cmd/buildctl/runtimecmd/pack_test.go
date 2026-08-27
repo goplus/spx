@@ -48,22 +48,19 @@ func TestExportPackRuntimePreparesExplicitEngineAssets(t *testing.T) {
 func TestFindExportedPack(t *testing.T) {
 	root := t.TempDir()
 	pcDir := filepath.Join(root, "project", ".builds", "pc")
-	appDir := filepath.Join(pcDir, "gdexport.app", "Contents", "Resources")
-	mustWriteFile(t, filepath.Join(appDir, "z.pck"), nil)
-	mustWriteFile(t, filepath.Join(appDir, "a.pck"), nil)
-
-	got, err := findExportedPack(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if want := filepath.Join(appDir, "a.pck"); got != want {
-		t.Fatalf("findExportedPack() = %q, want %q", got, want)
-	}
-
 	direct := filepath.Join(pcDir, "gdexport.pck")
 	mustWriteFile(t, direct, nil)
 	if got, err := findExportedPack(root); err != nil || got != direct {
 		t.Fatalf("findExportedPack() = %q, %v; want %q, nil", got, err, direct)
+	}
+}
+
+func TestFindExportedPackRejectsLegacyAppOutput(t *testing.T) {
+	root := t.TempDir()
+	legacy := filepath.Join(root, "project", ".builds", "pc", "gdexport.app", "Contents", "Resources", "gdexport.pck")
+	mustWriteFile(t, legacy, nil)
+	if _, err := findExportedPack(root); err == nil {
+		t.Fatal("findExportedPack accepted a full macOS app export")
 	}
 }
 
