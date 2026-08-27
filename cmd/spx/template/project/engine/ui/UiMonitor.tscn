@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3 uid="uid://bsaqlmdsvus4d"]
+[gd_scene load_steps=11 format=3 uid="uid://bsaqlmdsvus4d"]
 
 [ext_resource type="Texture2D" uid="uid://dtaph1d474hyg" path="res://engine/textures/monitor/frame_name.png" id="1_y7j7f"]
 [ext_resource type="Texture2D" uid="uid://d1544egog82vl" path="res://engine/textures/monitor/frame_value.png" id="2_rbnwe"]
@@ -23,17 +23,60 @@ modulate_color = Color(0.996078, 1, 1, 1)
 
 [sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_sbh8w"]
 
-[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_c6mp2"]
-load_path = "res://.godot/imported/frame_value.png-2feb44c5f368df083422a7a9d1d0a102.ctex"
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_scratch_default"]
+content_margin_left = 9.0
+content_margin_top = 9.0
+content_margin_right = 9.0
+content_margin_bottom = 9.0
+bg_color = Color(0.898039, 0.941176, 1, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.764706, 0.8, 0.85098, 1)
+corner_radius_top_left = 9
+corner_radius_top_right = 9
+corner_radius_bottom_right = 9
+corner_radius_bottom_left = 9
 
-[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_h4u5r"]
-texture = SubResource("CompressedTexture2D_c6mp2")
-texture_margin_left = 16.0
-texture_margin_top = 3.0
-texture_margin_right = 16.0
-texture_margin_bottom = 3.0
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_scratch_value"]
+content_margin_left = 4.0
+content_margin_right = 4.0
+bg_color = Color(1, 1, 1, 1)
+corner_radius_top_left = 9
+corner_radius_top_right = 9
+corner_radius_bottom_right = 9
+corner_radius_bottom_left = 9
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_scratch_large_outer"]
+content_margin_left = 2.0
+content_margin_top = 2.0
+content_margin_right = 2.0
+content_margin_bottom = 2.0
+bg_color = Color(0.898039, 0.941176, 1, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.764706, 0.8, 0.85098, 1)
+corner_radius_top_left = 9
+corner_radius_top_right = 9
+corner_radius_bottom_right = 9
+corner_radius_bottom_left = 9
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_scratch_large_value"]
+content_margin_left = 9.0
+content_margin_top = 0.0
+content_margin_right = 9.0
+content_margin_bottom = 0.0
+bg_color = Color(1, 1, 1, 1)
+corner_radius_top_left = 9
+corner_radius_top_right = 9
+corner_radius_bottom_right = 9
+corner_radius_bottom_left = 9
 
 [node name="Monitor" type="Control"]
+visible = false
 layout_mode = 3
 anchors_preset = 0
 
@@ -95,21 +138,86 @@ text_direction = 1
 
 [node name="ValueOnly" type="PanelContainer" parent="."]
 visible = false
+custom_minimum_size = Vector2(111, 54)
 layout_mode = 1
 offset_right = 100.0
 offset_bottom = 42.0
 scale = Vector2(0.45, 0.45)
 size_flags_stretch_ratio = 0.0
-theme_override_styles/panel = SubResource("StyleBoxTexture_h4u5r")
-
-[node name="H" type="HBoxContainer" parent="ValueOnly"]
-visible = false
-layout_direction = 1
-layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxTexture_5mp4r")
 
 [node name="LabelValue" type="Label" parent="ValueOnly"]
 custom_minimum_size = Vector2(1, 0)
 layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 36
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ScratchBG" type="PanelContainer" parent="."]
+visible = false
+layout_mode = 1
+offset_right = 100.0
+offset_bottom = 44.0
+scale = Vector2(0.45, 0.45)
+theme_override_styles/panel = SubResource("StyleBoxFlat_scratch_default")
+
+[node name="H" type="HBoxContainer" parent="ScratchBG"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="LabelMargin" type="MarginContainer" parent="ScratchBG/H"]
+layout_mode = 2
+theme_override_constants/margin_left = 11
+theme_override_constants/margin_right = 11
+
+[node name="LabelName" type="Label" parent="ScratchBG/H/LabelMargin"]
+custom_minimum_size = Vector2(1, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.341176, 0.368627, 0.458824, 1)
+theme_override_colors/font_outline_color = Color(0.341176, 0.368627, 0.458824, 1)
+theme_override_constants/outline_size = 1
 theme_override_font_sizes/font_size = 26
+text = "score"
+vertical_alignment = 1
+
+[node name="ValueMargin" type="MarginContainer" parent="ScratchBG/H"]
+layout_mode = 2
+theme_override_constants/margin_left = 11
+theme_override_constants/margin_right = 11
+
+[node name="C" type="PanelContainer" parent="ScratchBG/H/ValueMargin"]
+custom_minimum_size = Vector2(89, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_scratch_value")
+
+[node name="LabelValue" type="Label" parent="ScratchBG/H/ValueMargin/C"]
+custom_minimum_size = Vector2(1, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 26
+text = "0"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ScratchValueOnly" type="PanelContainer" parent="."]
+visible = false
+layout_mode = 1
+offset_right = 100.0
+offset_bottom = 42.0
+scale = Vector2(0.45, 0.45)
+theme_override_styles/panel = SubResource("StyleBoxFlat_scratch_large_outer")
+
+[node name="C" type="PanelContainer" parent="ScratchValueOnly"]
+custom_minimum_size = Vector2(107, 50)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_scratch_large_value")
+
+[node name="LabelValue" type="Label" parent="ScratchValueOnly/C"]
+custom_minimum_size = Vector2(1, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 36
+text = "0"
 horizontal_alignment = 1
 vertical_alignment = 1

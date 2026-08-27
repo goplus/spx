@@ -24,6 +24,10 @@ import (
 	"github.com/goplus/spx/v3/internal/ui"
 )
 
+// The Godot runtime renders the shared pen canvas at layer zero. Managed
+// sprites start at one so they always render above it; the backdrop stays at -1.
+const firstSpriteLayer = 1
+
 // shapeManager manages the lifecycle of all runtime shapes.
 // It is responsible for:
 //   - activation (delayed add)
@@ -220,8 +224,9 @@ func (s *shapeManager) addShape(child Shape) {
 	s.add(child)
 }
 
-// addClonedShape inserts a cloned shape immediately after its source so the
-// clone renders in front of the original while preserving nearby layer order.
+// addClonedShape inserts a clone immediately behind the target it copied. This
+// matches Scratch: repeated clones of one target are ordered oldest to newest,
+// with the original target still in front of all of them.
 func (s *shapeManager) addClonedShape(src, clone Shape) {
 	idx := s.findShapeIndex(src)
 	if idx < 0 {
@@ -230,7 +235,7 @@ func (s *shapeManager) addClonedShape(src, clone Shape) {
 		return
 	}
 
-	s.items = sliceutil.InsertAt(s.items, idx+1, clone)
+	s.items = sliceutil.InsertAt(s.items, idx, clone)
 	s.updateRenderLayers()
 }
 
@@ -290,11 +295,11 @@ func (s *shapeManager) updateRenderLayers() {
 		return
 	}
 
-	layer := 0
+	layer := firstSpriteLayer
 	for _, item := range s.items {
 		if sp, ok := item.(*SpriteImpl); ok {
-			layer++
 			sp.setLayer(layer)
+			layer++
 		}
 	}
 }
