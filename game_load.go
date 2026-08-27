@@ -174,7 +174,7 @@ func (p *Game) loadAndInitSprites(g reflect.Value, proj *coreproject.ProjectConf
 		func(layer int, name string) error {
 			sp := p.getSpriteProtoByName(name, g)
 			spr := spriteOf(sp)
-			spr.setLayer(layer)
+			spr.setLayer(layer + firstSpriteLayer)
 			p.addShape(spr)
 			inits = append(inits, sp)
 			return nil

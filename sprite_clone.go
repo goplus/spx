@@ -77,6 +77,9 @@ func cloneSprite(out reflect.Value, outPtr Sprite, in reflect.Value, v coreproje
 	}()
 	dest.sprite = outPtr
 	dest.runtimeState.IsCostumeDirty = true
+	// The clone gets a fresh engine proxy, so its copied layer must be pushed
+	// even when it is numerically unchanged from the source layer.
+	dest.runtimeState.IsLayerDirty = true
 
 	src := spriteOf(in.Addr().Interface().(Sprite))
 	dest.components.cloneFrom(&src.components, dest)
