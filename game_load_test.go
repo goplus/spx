@@ -42,6 +42,12 @@ type collisionLayerOrderGame struct {
 	Game
 }
 
+type stageLayerOrderGame struct {
+	Game
+	Middle *collisionLayerOrderSprite
+	Group  []*collisionLayerOrderSprite
+}
+
 type collisionLayerOrderSprite struct {
 	SpriteImpl
 	onMain func()
@@ -572,6 +578,69 @@ func TestLoadAndInitSpritesReservesLayerZeroForPen(t *testing.T) {
 	}
 	if !back.runtimeState.IsLayerDirty || !front.runtimeState.IsLayerDirty {
 		t.Fatal("loaded sprite layers must be marked dirty for engine synchronization")
+	}
+}
+
+func TestLoadAndInitSpritesAssignsContiguousLayersToExpandedStageSprites(t *testing.T) {
+	setupCloneSpriteMgr(t)
+
+	var game stageLayerOrderGame
+	game.initShapeMgr()
+
+	back := newCollisionLayerOrderSprite(&game.Game, "Back", nil)
+	front := newCollisionLayerOrderSprite(&game.Game, "Front", nil)
+	game.Middle = newCollisionLayerOrderSprite(&game.Game, "Middle", nil)
+	groupProto := newCollisionLayerOrderSprite(&game.Game, "collisionLayerOrderSprite", nil)
+	groupProto.baseObj.initWithSize(1, 1)
+	groupProto.physics().collisionInfo.Type = physicsColliderNone
+	groupProto.physics().triggerInfo.Type = physicsColliderNone
+	game.sprs = map[string]Sprite{
+		"Back":                      back,
+		"Front":                     front,
+		"collisionLayerOrderSprite": groupProto,
+	}
+
+	inits := game.loadAndInitSprites(reflect.ValueOf(&game).Elem(), &coreproject.ProjectConfig{
+		Zorder: []any{
+			"Back",
+			coreproject.StageShape{
+				"type":   "sprites",
+				"target": "Group",
+				"items": []any{
+					coreproject.StageShape{"x": float64(-10)},
+					coreproject.StageShape{"x": float64(10)},
+				},
+			},
+			coreproject.StageShape{"type": "sprite", "target": "Middle"},
+			"Front",
+		},
+	})
+
+	if got, want := len(inits), 5; got != want {
+		t.Fatalf("initialized sprite count = %d, want %d", got, want)
+	}
+	if got, want := len(game.Group), 2; got != want {
+		t.Fatalf("expanded group size = %d, want %d", got, want)
+	}
+
+	wantOrder := []Shape{
+		spriteOf(back),
+		spriteOf(game.Group[0]),
+		spriteOf(game.Group[1]),
+		spriteOf(game.Middle),
+		spriteOf(front),
+	}
+	if got := game.getAllShapes(); !reflect.DeepEqual(got, wantOrder) {
+		t.Fatalf("loaded shape order = %v, want %v", got, wantOrder)
+	}
+	for i, shape := range wantOrder {
+		spr := shape.(*SpriteImpl)
+		if got, want := spr.runtimeState.Layer, firstSpriteLayer+i; got != want {
+			t.Fatalf("sprite %d layer = %d, want %d", i, got, want)
+		}
+		if !spr.runtimeState.IsLayerDirty {
+			t.Fatalf("sprite %d layer must be marked dirty for engine synchronization", i)
+		}
 	}
 }
 

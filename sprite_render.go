@@ -17,6 +17,7 @@
 package spx
 
 import (
+	"math"
 	"strconv"
 
 	spxlog "github.com/goplus/spx/v3/internal/log"
@@ -147,7 +148,13 @@ func (p *SpriteImpl) SetLayer__0(layer layerAction) {
 func (p *SpriteImpl) SetLayer__1(dir dirAction, delta int) {
 	switch dir {
 	case Forward:
-		p.g.goBackLayers(p, -delta)
+		// Saturate math.MinInt before negation to preserve Scratch's negative-input direction reversal.
+		if delta == math.MinInt {
+			delta = math.MaxInt
+		} else {
+			delta = -delta
+		}
+		p.g.goBackLayers(p, delta)
 	case Backward:
 		p.g.goBackLayers(p, delta)
 	}
