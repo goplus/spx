@@ -142,7 +142,7 @@ func TestBuildHostRuntimeWorkflow(t *testing.T) {
 	}
 
 	expectedCommands := []recordedCommand{
-		{name: "spx", args: []string{"export"}},
+		{name: "spx", args: []string{"exportpack"}},
 	}
 	assertWorkflowRuntimeWorkspaceCommands(t, runner.commands, runner.repoRoot, expectedCommands)
 	assertWorkflowEngineBuilds(t, *engineBuilds, []recordedEngineBuild{{
@@ -167,7 +167,7 @@ func TestBuildDevWorkflow(t *testing.T) {
 	}
 
 	expectedCommands := []recordedCommand{
-		{name: "spx", args: []string{"export"}},
+		{name: "spx", args: []string{"exportpack"}},
 		{name: "spx", args: []string{"exporttemplateweb"}},
 	}
 	assertWorkflowRuntimeWorkspaceCommands(t, runner.commands, runner.repoRoot, expectedCommands)
@@ -191,7 +191,7 @@ func TestBuildTargets(t *testing.T) {
 			config:    BuildConfig{Target: "dev", Mode: "minigame"},
 			wantCalls: []recordedCall{{script: "cmd/spx/install.sh", args: []string{"--web"}}},
 			wantCommands: []recordedCommand{
-				{name: "spx", args: []string{"export"}},
+				{name: "spx", args: []string{"exportpack"}},
 				{name: "spx", args: []string{"exporttemplateweb"}},
 			},
 			wantBuilds: []engine.BuildConfig{
@@ -211,7 +211,7 @@ func TestBuildTargets(t *testing.T) {
 			config:    BuildConfig{Target: "desktop"},
 			wantCalls: []recordedCall{{script: "cmd/spx/install.sh"}},
 			wantCommands: []recordedCommand{
-				{name: "spx", args: []string{"export"}},
+				{name: "spx", args: []string{"exportpack"}},
 			},
 			wantBuilds: []engine.BuildConfig{{Target: "template"}},
 		},

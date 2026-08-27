@@ -223,7 +223,7 @@ func (cmd *CmdTool) handleBuildPhase() error {
 	case "buildtinygo":
 		logDebugf("Running TinyGo library build")
 		return cmd.BuildTinyGoLib()
-	case "editor", "rune", "export", "build", "runnative":
+	case "editor", "rune", "export", "exportpack", "build", "runnative":
 		logDebugf("Checking DLL build conditions")
 		if cmd.Args.Tags == nil || !strings.Contains(*cmd.Args.Tags, "pure_engine") {
 			logDebugf("Running DLL build")
@@ -260,6 +260,8 @@ func (cmd *CmdTool) handleExecutionPhase() error {
 		return cmd.RunWebWorker()
 	case "export":
 		return cmd.Export()
+	case "exportpack":
+		return cmd.ExportPack()
 	case "exporttemplateweb":
 		return cmd.ExportTemplateWeb()
 	case "exportweb":

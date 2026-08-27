@@ -96,7 +96,7 @@ func simulateRuntimeCommandOutputs(workdir string, name string, args ...string) 
 	}
 
 	switch spxArgs[0] {
-	case "export":
+	case "exportpack":
 		dst := filepath.Join(projectDir, "project", ".builds", "pc", "gdexport.pck")
 		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 			return err

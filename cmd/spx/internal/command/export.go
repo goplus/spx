@@ -52,3 +52,23 @@ func (cmd *CmdTool) Export() error {
 	}
 	return util.RunCommandInDir(cmd.ProjectDir, cmd.CmdPath, "--headless", "--quit", "--path", cmd.ProjectDir, "--export-debug", platformName, targetPath)
 }
+
+// ExportPack exports only the project data used by the desktop runtime. It
+// deliberately avoids a full platform export, which requires export templates.
+func (cmd *CmdTool) ExportPack() error {
+	return cmd.exportPack(runtime.GOOS, util.RunCommandInDir)
+}
+
+func (cmd *CmdTool) exportPack(goos string, run func(string, string, ...string) error) error {
+	platformName, err := desktopExportPlatformName(goos)
+	if err != nil {
+		return err
+	}
+
+	targetDir := filepath.Join(cmd.ProjectDir, ".builds", "pc")
+	targetPath := filepath.Join(targetDir, PcExportName+".pck")
+	if err := os.MkdirAll(targetDir, 0o755); err != nil {
+		return fmt.Errorf("failed to create export directory: %w", err)
+	}
+	return run(cmd.ProjectDir, cmd.CmdPath, "--headless", "--quit", "--path", cmd.ProjectDir, "--export-pack", platformName, targetPath)
+}

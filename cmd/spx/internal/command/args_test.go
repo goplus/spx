@@ -40,3 +40,10 @@ func TestParseCommandLineArgsRejectsRemovedGoEnv(t *testing.T) {
 		t.Fatal("legacy --goenv flag was accepted")
 	}
 }
+
+func TestCheckCmdAcceptsInternalExportPack(t *testing.T) {
+	cmd := &CmdTool{Args: ExtraArgs{CmdName: "exportpack"}}
+	if !cmd.CheckCmd() {
+		t.Fatal("internal exportpack command was rejected")
+	}
+}

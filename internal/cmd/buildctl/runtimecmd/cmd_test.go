@@ -143,7 +143,7 @@ func TestRuntimeExportPackSequence(t *testing.T) {
 		t.Fatalf("exportPackRuntime returned error: %v", err)
 	}
 
-	assertSingleRuntimeWorkspaceCommand(t, runner, "spx", []string{"export"})
+	assertSingleRuntimeWorkspaceCommand(t, runner, "spx", []string{"exportpack"})
 
 	if !shared.FileExists(filepath.Join(gopathBin, "gdspxrt"+version+".pck")) {
 		t.Fatalf("expected exported pck to exist")
