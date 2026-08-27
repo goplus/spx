@@ -13,39 +13,54 @@
       "y": 0
     },{
       "type": "monitor",
-      "name": "monitor-1",
+      "name": "default-implicit",
       "size": 1.0,
       "target": "Monkey",
       "val": "getVar:clicked",
       "color": 15629590,
       "label": "clicked",
       "mode": 1,
-      "x": 5,
-      "y": 5,
+      "x": -235,
+      "y": 175,
       "visible": true
     },{
       "type": "monitor",
-      "name": "monitor-2",
-      "size": 1.0,
-      "target": "Monkey",
-      "val": "getVar:ups",
-      "color": "orange",
-      "label": "ups",
-      "mode": 1,
-      "x": 125,
-      "y": 5,
-      "visible": true
-    },{
-      "type": "monitor",
-      "name": "monitor-3",
+      "name": "default-large",
       "size": 1.0,
       "target": "",
       "val": "getVar:downs",
       "color": "#ff7f50",
       "label": "downs",
       "mode": 2,
-      "x": 5,
-      "y": 50,
+      "style": "default",
+      "x": -115,
+      "y": 175,
+      "visible": true
+    },{
+      "type": "monitor",
+      "name": "scratch-default",
+      "size": 1.0,
+      "target": "Monkey",
+      "val": "getVar:clicked",
+      "color": 16747546,
+      "label": "clicked",
+      "mode": 1,
+      "style": "scratch",
+      "x": -235,
+      "y": 140,
+      "visible": true
+    },{
+      "type": "monitor",
+      "name": "scratch-large",
+      "size": 1.0,
+      "target": "",
+      "val": "getVar:downs",
+      "color": 16747546,
+      "label": "downs",
+      "mode": 2,
+      "style": "scratch",
+      "x": -115,
+      "y": 140,
       "visible": true
     }
 

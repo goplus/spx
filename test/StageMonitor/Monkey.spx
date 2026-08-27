@@ -1,11 +1,7 @@
 var (
-	clicked, ups int
+	clicked int
 )
 
 onClick => {
 	clicked++
-}
-
-onKey KeyUp, => {
-	ups++
 }
