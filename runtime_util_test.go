@@ -17,6 +17,7 @@
 package spx
 
 import (
+	"math"
 	"testing"
 )
 
@@ -39,6 +40,33 @@ func TestRand0SwapsReversedBounds(t *testing.T) {
 
 	if !sawNonUpperBound {
 		t.Fatalf("Rand__0(%d, %d) only returned the upper bound; reversed bounds should produce values across the range", from, to)
+	}
+}
+
+func TestFloorMod(t *testing.T) {
+	tests := []struct {
+		name              string
+		dividend, divisor float64
+		want              float64
+	}{
+		{name: "positive operands", dividend: 7, divisor: 5, want: 2},
+		{name: "negative dividend", dividend: -7, divisor: 5, want: 3},
+		{name: "negative divisor", dividend: 7, divisor: -5, want: -3},
+		{name: "negative operands", dividend: -7, divisor: -5, want: -2},
+		{name: "exact division", dividend: -10, divisor: 5, want: 0},
+		{name: "fractional operands", dividend: -2.5, divisor: 2, want: 1.5},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := FloorMod(tt.dividend, tt.divisor); got != tt.want {
+				t.Fatalf("FloorMod(%v, %v) = %v, want %v", tt.dividend, tt.divisor, got, tt.want)
+			}
+		})
+	}
+
+	if got := FloorMod(1, 0); !math.IsNaN(got) {
+		t.Fatalf("FloorMod(1, 0) = %v, want NaN", got)
 	}
 }
 

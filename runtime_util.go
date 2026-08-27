@@ -17,6 +17,7 @@
 package spx
 
 import (
+	"math"
 	"strings"
 
 	"github.com/goplus/spx/v3/internal/engine"
@@ -45,6 +46,18 @@ func Iround(v float64) int {
 		return int(v + 0.5)
 	}
 	return int(v - 0.5)
+}
+
+// FloorMod returns the remainder of dividend divided by divisor using
+// floored-division semantics. Unlike math.Mod, a non-zero result has the same
+// sign as divisor. This matches Scratch's mod operator:
+// https://github.com/scratchfoundation/scratch-vm/blob/3070e30241c391254d94f3a98129f9e96b902631/src/blocks/scratch3_operators.js#L118-L125
+func FloorMod(dividend, divisor float64) float64 {
+	result := math.Mod(dividend, divisor)
+	if result/divisor < 0 {
+		result += divisor
+	}
+	return result
 }
 
 // Contains reports whether substr is within s.

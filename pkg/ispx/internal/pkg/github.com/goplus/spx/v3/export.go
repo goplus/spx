@@ -165,6 +165,7 @@ func init() {
 			"Exit__1":                    reflect.ValueOf(q.Exit__1),
 			"FinishInputRecording":       reflect.ValueOf(q.FinishInputRecording),
 			"FinishInputRecordingJSON":   reflect.ValueOf(q.FinishInputRecordingJSON),
+			"FloorMod":                   reflect.ValueOf(q.FloorMod),
 			"Forever":                    reflect.ValueOf(q.Forever),
 			"GetInputSessionStatus":      reflect.ValueOf(q.GetInputSessionStatus),
 			"GetWidget":                  reflect.ValueOf(q.GetWidget),
@@ -616,6 +617,7 @@ func init() {
 		"Equal":                        func_Equal,
 		"Exit__0":                      func_Exit__0,
 		"Exit__1":                      func_Exit__1,
+		"FloorMod":                     func_FloorMod,
 		"Forever":                      func_Forever,
 		"GetInputSessionStatus":        func_GetInputSessionStatus,
 		"GetWidget":                    func_GetWidget,
@@ -679,6 +681,10 @@ func func_Exit__0(ctx ixgo.DirectCallContext) {
 
 func func_Exit__1(ctx ixgo.DirectCallContext) {
 	q.Exit__1(ixgo.DirectCallArg[int](ctx, 0))
+}
+
+func func_FloorMod(ctx ixgo.DirectCallContext) {
+	ctx.SetResult(q.FloorMod(ixgo.DirectCallArg[float64](ctx, 0), ixgo.DirectCallArg[float64](ctx, 1)))
 }
 
 func func_Forever(ctx ixgo.DirectCallContext) {
