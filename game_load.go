@@ -191,6 +191,8 @@ func (p *Game) loadAndInitSprites(g reflect.Value, proj *coreproject.ProjectConf
 	if err != nil {
 		engine.Panic(err)
 	}
+	// Rebuild expanded z-order entries into contiguous sprite layers above the shared pen canvas.
+	p.shapeMgr.updateRenderLayers()
 	return inits
 }
 

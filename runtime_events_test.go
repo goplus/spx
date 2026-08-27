@@ -537,6 +537,8 @@ func (s *clickThroughSpriteMgr) CheckCollisionWithPoint(obj pkgengine.Object, po
 	return s.hits[obj]
 }
 
+func (s *clickThroughSpriteMgr) SetZIndex(obj pkgengine.Object, z int64) {}
+
 func setupClickThroughSpriteMgr(t *testing.T, hits map[pkgengine.Object]bool) *clickThroughSpriteMgr {
 	t.Helper()
 
@@ -619,6 +621,30 @@ func TestFindClickTargetKeepsTopmostClickableSprite(t *testing.T) {
 	}
 	if selection.SwipeTarget != top {
 		t.Fatalf("swipe target = %p, want top %p", selection.SwipeTarget, top)
+	}
+}
+
+func TestFindClickTargetFollowsChangedSpriteLayerOrder(t *testing.T) {
+	setupClickThroughSpriteMgr(t, map[pkgengine.Object]bool{
+		1: true,
+		2: true,
+	})
+
+	var g Game
+	g.initShapeMgr()
+
+	bottom := newClickTestSprite(&g, "bottom", 1, true)
+	top := newClickTestSprite(&g, "top", 2, true)
+	g.addShape(bottom)
+	g.addShape(top)
+	top.SetLayerTo(Back)
+
+	selection, ok := g.findClickTarget(mathf.NewVec2(0, 0))
+	if !ok {
+		t.Fatal("expected click target")
+	}
+	if selection.Target != bottom {
+		t.Fatalf("target = %p, want reordered top sprite %p", selection.Target, bottom)
 	}
 }
 
