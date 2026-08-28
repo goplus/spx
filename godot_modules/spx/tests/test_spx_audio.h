@@ -1,5 +1,5 @@
-﻿/**************************************************************************/
-/*  spx_audio.h                                                       */
+/**************************************************************************/
+/*  test_spx_audio.h                                                      */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,64 +28,39 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifndef SPX_AUDIO_H
-#define SPX_AUDIO_H
+#ifndef TEST_SPX_AUDIO_H
+#define TEST_SPX_AUDIO_H
 
-#include "core/string/string_name.h"
-#include "core/templates/list.h"
-#include "core/templates/rb_map.h"
-#include "gdextension_spx_ext.h"
+#include "../spx_audio.h"
+#include "scene/2d/audio_stream_player_2d.h"
+#include "servers/audio_server.h"
+#include "tests/test_macros.h"
 
-class AudioStreamPlayer2D;
-class Node;
-class TestSpxAudioInternalsAccessor;
-class SpxAudio {
-	friend class TestSpxAudioInternalsAccessor;
-
-private:
-	RBMap<GdInt, AudioStreamPlayer2D *> aid_audios;
-	List<AudioStreamPlayer2D *> audios;
-	List<AudioStreamPlayer2D *> loop_audios;
-	Node *root = nullptr;
-	GdObj id = 0;
-
-	StringName bus_name;
-	bool owns_dedicated_bus = false;
-
-	GdFloat cur_pitch = 1.0;
-
-private:
-	static AudioStreamPlayer2D *_create_player();
-	bool ensure_dedicated_bus();
-	AudioStreamPlayer2D *_get_aid_audio(GdInt aid);
-
+class TestSpxAudioInternalsAccessor {
 public:
-	void on_create(GdInt p_id, Node *p_root);
-	void on_destroy();
-	void on_update(float delta);
-	void on_reset(int reset_code);
-
-public:
-	void stop_all();
-	void set_pitch(GdFloat pitch);
-	GdFloat get_pitch();
-	void set_pan(GdFloat pan);
-	GdFloat get_pan();
-	void set_volume(GdFloat volume);
-	GdFloat get_volume();
-
-	bool play(GdInt aid, GdString path, Node *owner = nullptr, GdFloat attenuation = 1.0f, GdFloat max_distance = 2000.0f);
-	bool has_audio(GdInt aid) const;
-	void pause(GdInt aid);
-	void resume(GdInt aid);
-	void stop(GdInt aid);
-	GdBool restart(GdInt aid);
-	void set_loop(GdInt aid, GdBool loop);
-	GdBool get_loop(GdInt aid);
-
-	GdFloat get_timer(GdInt aid);
-	void set_timer(GdInt aid, GdFloat time);
-	GdBool is_playing(GdInt aid);
+	static AudioStreamPlayer2D *create_player() {
+		return SpxAudio::_create_player();
+	}
 };
 
-#endif // SPX_AUDIO_H
+namespace TestSpxAudio {
+
+TEST_CASE("[Audio][SceneTree][SPX] Audio players use stream playback") {
+	const int dummy_driver = AudioDriverManager::get_driver_count() - 1;
+	REQUIRE(dummy_driver >= 0);
+	AudioDriverManager::initialize(dummy_driver);
+	AudioServer *audio_server = memnew(AudioServer);
+	audio_server->init();
+
+	AudioStreamPlayer2D *player = TestSpxAudioInternalsAccessor::create_player();
+	REQUIRE(player != nullptr);
+	CHECK_EQ(player->get_playback_type(), AudioServer::PLAYBACK_TYPE_STREAM);
+	memdelete(player);
+
+	audio_server->finish();
+	memdelete(audio_server);
+}
+
+} // namespace TestSpxAudio
+
+#endif // TEST_SPX_AUDIO_H
