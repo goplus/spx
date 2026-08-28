@@ -136,13 +136,13 @@ func (f *fakeBackend) StopAll() {
 	f.playing = make(map[int64]bool)
 }
 
-func TestManagerPlayPauseResumeStop(t *testing.T) {
+func TestManagerRepeatedPlayStopsPreviousPlayback(t *testing.T) {
 	backend := &fakeBackend{}
 	var mgr Manager
 	mgr.Init(backend)
 
 	id1 := mgr.Play(1, "sounds/a.wav", false, false, 9, 0, 100)
-	id2 := mgr.Play(1, "sounds/a.wav", true, false, 9, 12, 100)
+	id2 := mgr.Play(2, "sounds/a.wav", true, false, 9, 12, 100)
 
 	if id1 != 1 || id2 != 2 {
 		t.Fatalf("Play ids = %d, %d; want 1, 2", id1, id2)
@@ -156,20 +156,51 @@ func TestManagerPlayPauseResumeStop(t *testing.T) {
 	if backend.plays[1].owner != 9 {
 		t.Fatalf("owner with attenuation = %d, want 9", backend.plays[1].owner)
 	}
+	if len(backend.stops) != 1 || backend.stops[0] != id1 {
+		t.Fatalf("Stop calls after replay = %+v, want [%d]", backend.stops, id1)
+	}
+	if backend.playing[id1] || !backend.playing[id2] {
+		t.Fatalf("playing states after replay = first:%v second:%v, want false/true", backend.playing[id1], backend.playing[id2])
+	}
+	if ids := mgr.path2ids["sounds/a.wav"]; len(ids) != 1 || ids[0] != id2 {
+		t.Fatalf("path2ids = %+v, want only latest playback %d", ids, id2)
+	}
 
 	mgr.Pause("sounds/a.wav")
 	mgr.Resume("sounds/a.wav")
 	mgr.Stop("sounds/a.wav")
 
-	if len(backend.pauses) != 2 || len(backend.resumes) != 2 || len(backend.stops) != 2 {
-		t.Fatalf("pause/resume/stop lens = %d/%d/%d, want 2/2/2", len(backend.pauses), len(backend.resumes), len(backend.stops))
+	if len(backend.pauses) != 1 || backend.pauses[0] != id2 {
+		t.Fatalf("Pause calls = %+v, want [%d]", backend.pauses, id2)
+	}
+	if len(backend.resumes) != 1 || backend.resumes[0] != id2 {
+		t.Fatalf("Resume calls = %+v, want [%d]", backend.resumes, id2)
+	}
+	if len(backend.stops) != 2 || backend.stops[1] != id2 {
+		t.Fatalf("Stop calls = %+v, want [%d %d]", backend.stops, id1, id2)
 	}
 	if len(backend.loops) != 1 || backend.loops[0].id != 2 {
 		t.Fatalf("SetLoop calls = %+v, want loop only on latest id", backend.loops)
 	}
 }
 
-func TestManagerPlayPrunesFinishedIDs(t *testing.T) {
+func TestManagerDifferentSoundsCanPlayTogether(t *testing.T) {
+	backend := &fakeBackend{}
+	var mgr Manager
+	mgr.Init(backend)
+
+	first := mgr.Play(1, "sounds/a.wav", false, false, 0, 0, 0)
+	second := mgr.Play(1, "sounds/b.wav", false, false, 0, 0, 0)
+
+	if len(backend.stops) != 0 {
+		t.Fatalf("Stop calls = %+v, want none for different sounds", backend.stops)
+	}
+	if !backend.playing[first] || !backend.playing[second] {
+		t.Fatalf("playing states = first:%v second:%v, want true/true", backend.playing[first], backend.playing[second])
+	}
+}
+
+func TestManagerRepeatedPlayReplacesFinishedPlayback(t *testing.T) {
 	backend := &fakeBackend{}
 	var mgr Manager
 	mgr.Init(backend)
@@ -194,16 +225,19 @@ func TestManagerStopIDOnlyStopsRequestedPlayback(t *testing.T) {
 	mgr.Init(backend)
 
 	first := mgr.Play(1, "sounds/a.wav", true, false, 0, 0, 0)
-	second := mgr.Play(1, "sounds/a.wav", true, false, 0, 0, 0)
+	second := mgr.Play(1, "sounds/b.wav", true, false, 0, 0, 0)
 
 	mgr.StopID(first)
-	mgr.Pause("sounds/a.wav")
+	mgr.Pause("sounds/b.wav")
 
 	if len(backend.stops) != 1 || backend.stops[0] != first {
 		t.Fatalf("Stop calls = %+v, want [%d]", backend.stops, first)
 	}
-	if len(mgr.path2ids["sounds/a.wav"]) != 1 || mgr.path2ids["sounds/a.wav"][0] != second {
-		t.Fatalf("path2ids = %+v, want only second playback %d", mgr.path2ids["sounds/a.wav"], second)
+	if _, ok := mgr.path2ids["sounds/a.wav"]; ok {
+		t.Fatalf("path2ids still contains stopped playback %d", first)
+	}
+	if len(mgr.path2ids["sounds/b.wav"]) != 1 || mgr.path2ids["sounds/b.wav"][0] != second {
+		t.Fatalf("path2ids = %+v, want playback %d", mgr.path2ids["sounds/b.wav"], second)
 	}
 	if len(backend.pauses) != 1 || backend.pauses[0] != second {
 		t.Fatalf("Pause calls = %+v, want [%d]", backend.pauses, second)

@@ -162,14 +162,15 @@ func (m *Manager) Play(
 		owner = 0
 	}
 
-	ids := m.pruneDeadIDs(path)
+	// Scratch keeps one player per sound. Replaying the same sound stops its
+	// current playback before starting it again instead of mixing both plays.
+	m.Stop(path)
 	curID := m.backend.PlayWithAttenuation(soundObj, engine.ToAssetPath(path), owner, attenuation, maxDistance)
 	if curID == 0 {
 		return 0
 	}
 	m.trackPlayback(curID, path, soundObj, isLoop)
-	ids = append(ids, curID)
-	m.path2ids[path] = ids
+	m.path2ids[path] = []int64{curID}
 	if isLoop {
 		m.backend.SetLoop(curID, true)
 	} else if isWait {
