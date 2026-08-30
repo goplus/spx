@@ -77,6 +77,22 @@ func TestWorldRenderOffsetAppliesRootFlipAndRotation(t *testing.T) {
 	}
 }
 
+func TestLegacyLeftRightRotationStyleFlipsNegativeHeading(t *testing.T) {
+	sprite := &SpriteImpl{g: &Game{}}
+	sprite.components.initComponents(sprite, &coreproject.SpriteConfig{
+		Heading:       -9,
+		RotationStyle: "leftRight",
+		FAnimations:   map[SpriteAnimationName]*coreproject.AniConfig{},
+		AnimBindings:  map[string]string{},
+	})
+	sprite.costumes = []*costume{{bitmapResolution: 1}}
+
+	rotation, scaleX, scaleY := getRenderRotationAndScale(sprite)
+	if rotation != 0 || scaleX != -1 || scaleY != 1 {
+		t.Fatalf("legacy leftRight transform = (%v, %v, %v), want (0, -1, 1)", rotation, scaleX, scaleY)
+	}
+}
+
 func TestPhysicsShapePivotSeparatesAutoAndExplicitShapes(t *testing.T) {
 	sprite := newRenderOffsetTestSprite()
 	sprite.runtimeState.Scale = 2
