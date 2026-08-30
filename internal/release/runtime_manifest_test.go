@@ -154,6 +154,42 @@ func TestRuntimeManifestValidateForLockRejectsExtraAsset(t *testing.T) {
 	}
 }
 
+func TestRuntimeManifestValidateForVersionIgnoresBuildMetadata(t *testing.T) {
+	lock, provenance, inputs, _ := runtimeManifestFixture(t)
+	manifest, err := GenerateRuntimeManifest(lock, provenance, inputs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest.RuntimeABI++
+	manifest.ReleaseRepository = "example/runtime"
+	manifest.LockSHA256 = strings.Repeat("0", 64)
+	manifest.Provenance.SPXCommit = strings.Repeat("1", 40)
+	manifest.Provenance.GodotCommit = strings.Repeat("2", 40)
+	manifest.Provenance.ModuleTree = strings.Repeat("3", 40)
+	manifest.Provenance.RuntimePackSourceSHA256 = strings.Repeat("4", 64)
+	manifest.Provenance.BuildRecipeSHA256 = strings.Repeat("5", 64)
+	manifest.Provenance.Toolchain = ToolchainLock{
+		Go: "9.9.9", XGo: "9.9.9", SCons: "9.9.9", EMSDK: "9.9.9", AndroidNDK: "r99", JDK: "99",
+	}
+	if err := manifest.ValidateForVersion(lock.RuntimeVersion); err != nil {
+		t.Fatalf("version-compatible manifest rejected stale build metadata: %v", err)
+	}
+	if err := manifest.ValidateRequiredAssets(lock.RequiredAssets); err != nil {
+		t.Fatalf("required asset set rejected: %v", err)
+	}
+}
+
+func TestRuntimeManifestValidateForVersionRejectsMismatch(t *testing.T) {
+	lock, provenance, inputs, _ := runtimeManifestFixture(t)
+	manifest, err := GenerateRuntimeManifest(lock, provenance, inputs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := manifest.ValidateForVersion("9.9.9"); err == nil || !strings.Contains(err.Error(), "does not match") {
+		t.Fatalf("version mismatch error = %v", err)
+	}
+}
+
 func TestRuntimeManifestValidation(t *testing.T) {
 	lock, provenance, inputs, _ := runtimeManifestFixture(t)
 	original, err := GenerateRuntimeManifest(lock, provenance, inputs)

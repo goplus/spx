@@ -63,8 +63,8 @@ type spxRuntimeMapping struct {
 
 // Legacy releases predate immutable runtime lock snapshots and therefore keep
 // their historical split asset locations here. Atomic releases are derived
-// from versioned snapshots below, so their repository/tag/manifest cannot
-// drift from the provenance used to verify them.
+// from versioned snapshots below, so their repository/tag/manifest stay tied
+// to the selected runtime version.
 var legacyRuntimeReleaseDefinitions = []RuntimeRelease{
 	newLegacyRuntimeRelease("2.2.0", "v2.0.0", "gdspxrt.pck.2.2.0.zip"),
 	newLegacyRuntimeRelease("2.2.1", "v2.0.1", RuntimeAssetZipName),

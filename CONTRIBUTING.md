@@ -225,9 +225,9 @@ and state which commit or branch was used for integration testing. Keep
 `GODOT_SRC` pointed at the intended Godot checkout and do not copy the external
 SPX module into the Godot tree.
 
-Do not change runtime pins or release metadata merely to make local testing
-work. Those files define published, cross-repository provenance and should only
-change as part of an intentional runtime or release update.
+Do not change runtime lock snapshots or release metadata merely to make local
+testing work. Those files define published cross-repository build inputs and
+should change only as part of an intentional runtime or release update.
 
 ## Communicating with maintainers
 

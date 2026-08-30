@@ -27,7 +27,7 @@ import (
 
 // AcquireRuntimeAssets resolves and materializes one verified Engine/PCK pair.
 // Explicit local settings take priority. Source checkouts may use an exact
-// GOPATH/bin runtime when the pinned release is unavailable.
+// GOPATH/bin runtime when the selected versioned release is unavailable.
 func AcquireRuntimeAssets(ctx context.Context, cfg Config) (Assets, error) {
 	lock, err := runtimeLock(cfg)
 	if err != nil {

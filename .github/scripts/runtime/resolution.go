@@ -10,8 +10,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
-	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -27,8 +25,6 @@ const (
 
 type runtimeResolutionConfig struct {
 	LockPath     string
-	RepoRoot     string
-	Revision     string
 	GitHubAPIURL string
 	GitHubToken  string
 	HTTPClient   *http.Client
@@ -64,8 +60,6 @@ func runRuntimeResolution(args []string) error {
 	config := runtimeResolutionConfig{}
 	var githubOutput string
 	fs.StringVar(&config.LockPath, "lock", "internal/release/runtime.lock.json", "runtime lock JSON")
-	fs.StringVar(&config.RepoRoot, "repo-root", ".", "SPX repository root")
-	fs.StringVar(&config.Revision, "revision", "HEAD", "SPX revision to verify")
 	fs.StringVar(&config.GitHubAPIURL, "github-api-url", "https://api.github.com", "GitHub API base URL")
 	fs.StringVar(&githubOutput, "github-output", "", "optional GitHub step output file")
 	fs.Usage = func() {
@@ -144,15 +138,8 @@ func resolveRuntime(ctx context.Context, config runtimeResolutionConfig) (runtim
 	if status != http.StatusOK {
 		return runtimeResolution{}, runtimeConflict(tag, "download manifest: HTTP %d %s", status, http.StatusText(status))
 	}
-	manifest, err := release.ParseRuntimeManifest(body)
-	if err != nil {
+	if _, err := release.ParseRuntimeManifestForRelease(body, lock.RuntimeVersion, lock.RequiredAssets); err != nil {
 		return runtimeResolution{}, runtimeConflict(tag, "parse manifest: %v", err)
-	}
-	if err := manifest.ValidateForLock(lock); err != nil {
-		return runtimeResolution{}, runtimeConflict(tag, "%v", err)
-	}
-	if err := verifyCurrentRuntimeProvenance(config, lock, manifest); err != nil {
-		return runtimeResolution{}, runtimeConflict(tag, "%v", err)
 	}
 
 	result.State = runtimeStateReady
@@ -261,53 +248,8 @@ func verifyPublishedAssetNames(lock release.RuntimeLock, assets []gitHubAsset) (
 	return manifestURL, nil
 }
 
-func verifyCurrentRuntimeProvenance(config runtimeResolutionConfig, lock release.RuntimeLock, manifest release.RuntimeManifest) error {
-	repoRoot := filepath.Clean(config.RepoRoot)
-	revision := strings.TrimSpace(config.Revision)
-	if revision == "" {
-		return errors.New("SPX revision must not be empty")
-	}
-
-	moduleTree, err := gitRevision(repoRoot, revision+":"+lock.Module.Path)
-	if err != nil {
-		return fmt.Errorf("resolve current module tree: %w", err)
-	}
-	if manifest.Provenance.ModuleTree != moduleTree {
-		return fmt.Errorf("module tree = %s, current %s requires %s; bump runtime_version", manifest.Provenance.ModuleTree, revision, moduleTree)
-	}
-	runtimePackDigest, err := release.RuntimePackSourceSHA256(repoRoot, revision)
-	if err != nil {
-		return err
-	}
-	if manifest.Provenance.RuntimePackSourceSHA256 != runtimePackDigest {
-		return fmt.Errorf("runtime pack source digest = %s, current %s requires %s; bump runtime_version", manifest.Provenance.RuntimePackSourceSHA256, revision, runtimePackDigest)
-	}
-	buildRecipeDigest, err := release.RuntimeBuildRecipeSHA256(repoRoot, revision)
-	if err != nil {
-		return err
-	}
-	if manifest.Provenance.BuildRecipeSHA256 != buildRecipeDigest {
-		return fmt.Errorf("runtime build recipe digest = %s, current %s requires %s; bump runtime_version", manifest.Provenance.BuildRecipeSHA256, revision, buildRecipeDigest)
-	}
-	return nil
-}
-
-func gitRevision(repoRoot, revision string) (string, error) {
-	command := exec.Command("git", "-C", repoRoot, "rev-parse", "--verify", revision)
-	output, err := command.Output()
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			if detail := strings.TrimSpace(string(exitErr.Stderr)); detail != "" {
-				return "", errors.New(detail)
-			}
-		}
-		return "", err
-	}
-	return strings.TrimSpace(string(output)), nil
-}
-
 func runtimeConflict(tag, format string, args ...any) error {
-	return fmt.Errorf("runtime %s conflicts with the current runtime identity: %s", tag, fmt.Sprintf(format, args...))
+	return fmt.Errorf("runtime %s is not reusable: %s", tag, fmt.Sprintf(format, args...))
 }
 
 func writeRuntimeResolutionOutputs(path string, resolution runtimeResolution) error {

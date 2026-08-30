@@ -113,14 +113,30 @@ func GenerateRuntimeManifest(lock RuntimeLock, provenance RuntimeProvenance, inp
 	return manifest, nil
 }
 
-// ParseRuntimeManifest decodes and structurally validates a manifest. Use
-// ValidateForLock as well when consuming a release for a known lock.
+// ParseRuntimeManifest decodes and structurally validates a manifest.
 func ParseRuntimeManifest(data []byte) (RuntimeManifest, error) {
 	var manifest RuntimeManifest
 	if err := strictjson.Decode(data, &manifest); err != nil {
 		return RuntimeManifest{}, fmt.Errorf("decode runtime manifest: %w", err)
 	}
 	if err := manifest.Validate(); err != nil {
+		return RuntimeManifest{}, err
+	}
+	return manifest, nil
+}
+
+// ParseRuntimeManifestForRelease decodes a manifest and binds it to the
+// selected runtime version and required release asset set without repeating
+// structural validation.
+func ParseRuntimeManifestForRelease(data []byte, runtimeVersion string, requiredAssets []string) (RuntimeManifest, error) {
+	manifest, err := ParseRuntimeManifest(data)
+	if err != nil {
+		return RuntimeManifest{}, err
+	}
+	if err := manifest.validateForVersion(runtimeVersion); err != nil {
+		return RuntimeManifest{}, err
+	}
+	if err := manifest.validateRequiredAssets(requiredAssets); err != nil {
 		return RuntimeManifest{}, err
 	}
 	return manifest, nil
@@ -192,8 +208,58 @@ func (m RuntimeManifest) Validate() error {
 	return nil
 }
 
-// ValidateForLock verifies runtime identity, lock digest, pinned provenance,
-// toolchain versions, and the presence of every required asset.
+// ValidateForVersion checks a structurally valid manifest against the only
+// compatibility identity used by release consumers: the runtime version.
+func (m RuntimeManifest) ValidateForVersion(runtimeVersion string) error {
+	if err := m.Validate(); err != nil {
+		return err
+	}
+	return m.validateForVersion(runtimeVersion)
+}
+
+func (m RuntimeManifest) validateForVersion(runtimeVersion string) error {
+	if !runtimeVersionPattern.MatchString(runtimeVersion) {
+		return fmt.Errorf("release: invalid expected runtime version %q", runtimeVersion)
+	}
+	if m.RuntimeVersion != runtimeVersion {
+		return fmt.Errorf("release: runtime manifest version %q does not match %q", m.RuntimeVersion, runtimeVersion)
+	}
+	return nil
+}
+
+// ValidateRequiredAssets checks that the manifest contains exactly the named
+// release assets. Content size and SHA-256 validation remains part of Validate.
+func (m RuntimeManifest) ValidateRequiredAssets(requiredAssets []string) error {
+	if err := m.Validate(); err != nil {
+		return err
+	}
+	return m.validateRequiredAssets(requiredAssets)
+}
+
+func (m RuntimeManifest) validateRequiredAssets(requiredAssets []string) error {
+	required := make(map[string]struct{}, len(requiredAssets))
+	for _, name := range requiredAssets {
+		if err := validateBaseName("required runtime asset", name); err != nil {
+			return err
+		}
+		if _, exists := required[name]; exists {
+			return fmt.Errorf("release: duplicate required runtime asset %q", name)
+		}
+		required[name] = struct{}{}
+	}
+	if len(m.Assets) != len(required) {
+		return fmt.Errorf("release: runtime manifest has %d assets, release requires exactly %d", len(m.Assets), len(required))
+	}
+	for _, asset := range m.Assets {
+		if _, ok := required[asset.Name]; !ok {
+			return fmt.Errorf("release: runtime asset %q is not required", asset.Name)
+		}
+	}
+	return nil
+}
+
+// ValidateForLock is producer-side validation for metadata generated from one
+// exact build lock. Published consumers use ParseRuntimeManifestForRelease.
 func (m RuntimeManifest) ValidateForLock(lock RuntimeLock) error {
 	if err := lock.Validate(); err != nil {
 		return err
@@ -201,11 +267,14 @@ func (m RuntimeManifest) ValidateForLock(lock RuntimeLock) error {
 	if err := m.Validate(); err != nil {
 		return err
 	}
+	if err := m.validateForVersion(lock.RuntimeVersion); err != nil {
+		return err
+	}
 	lockSHA256, err := lock.SHA256()
 	if err != nil {
 		return err
 	}
-	if m.RuntimeVersion != lock.RuntimeVersion || m.RuntimeABI != lock.RuntimeABI {
+	if m.RuntimeABI != lock.RuntimeABI {
 		return fmt.Errorf("release: runtime manifest identity does not match lock")
 	}
 	if m.ReleaseRepository != lock.ReleaseRepository {
@@ -221,26 +290,7 @@ func (m RuntimeManifest) ValidateForLock(lock RuntimeLock) error {
 		return errors.New("release: manifest toolchain does not match lock")
 	}
 
-	required := make(map[string]struct{}, len(lock.RequiredAssets))
-	for _, name := range lock.RequiredAssets {
-		required[name] = struct{}{}
-	}
-	if len(m.Assets) != len(required) {
-		return fmt.Errorf("release: runtime manifest has %d assets, lock requires exactly %d", len(m.Assets), len(required))
-	}
-	present := make(map[string]struct{}, len(m.Assets))
-	for _, asset := range m.Assets {
-		if _, ok := required[asset.Name]; !ok {
-			return fmt.Errorf("release: runtime asset %q is not declared by the lock", asset.Name)
-		}
-		present[asset.Name] = struct{}{}
-	}
-	for _, required := range lock.RequiredAssets {
-		if _, ok := present[required]; !ok {
-			return fmt.Errorf("release: required runtime asset %q is missing", required)
-		}
-	}
-	return nil
+	return m.validateRequiredAssets(lock.RequiredAssets)
 }
 
 // JSON returns the canonical, human-readable representation of a manifest.
