@@ -17,6 +17,7 @@
 package spx
 
 import (
+	"slices"
 	"sync"
 
 	"github.com/goplus/spbase/mathf"
@@ -33,42 +34,7 @@ const (
 	clickTimerStage  = 0
 )
 
-func spawnScriptEvent(start bool, owner any, call func(coroutine.Thread)) coreevent.DispatchTask {
-	return gco.CreateAndStart(start, owner, func(thread coroutine.Thread) int {
-		call(thread)
-		return 0
-	})
-}
-
-var scriptEventDispatchHooks = coreevent.DispatchHooks{
-	Spawn: func(start bool, owner any, call func()) coreevent.DispatchTask {
-		return spawnScriptEvent(start, owner, func(coroutine.Thread) { call() })
-	},
-	Join: func(tasks []coreevent.DispatchTask) {
-		if len(tasks) == 0 {
-			return
-		}
-		if len(tasks) == 1 {
-			if th, ok := tasks[0].(coroutine.Thread); ok && th != nil {
-				gco.Join(th)
-			}
-			return
-		}
-		threads := make([]coroutine.Thread, 0, len(tasks))
-		for _, task := range tasks {
-			th, ok := task.(coroutine.Thread)
-			if !ok || th == nil {
-				continue
-			}
-			threads = append(threads, th)
-		}
-		gco.JoinAll(threads)
-	},
-}
-
-// -----------------------------------------------------------------------------
 // Event Bindings
-// -----------------------------------------------------------------------------
 type eventSink = coreevent.Sink
 
 type scriptEventBindings struct {
@@ -134,7 +100,7 @@ func (p *scriptEventBindings) OnCond(__xgo_autoclosure_condition func() bool, on
 }
 
 func (p *scriptEventBindings) OnAnyKey(onKey func(key Key)) {
-	p.scriptEventRegistry.manager.AddKeyPressed(coreevent.NewSink(p.pthis, onKey))
+	p.scriptEventRegistry.manager.AddAnyKeyPressed(coreevent.NewSink(p.pthis, onKey))
 }
 
 func (p *scriptEventBindings) OnTimer(time float64, call func()) {
@@ -249,9 +215,7 @@ func (p *Game) resetGraphicEffectsOnStopAll() {
 	}
 }
 
-// -----------------------------------------------------------------------------
 // Click Dispatch
-// -----------------------------------------------------------------------------
 type clicker interface {
 	threadObj
 	doWhenClick(this threadObj)
@@ -321,9 +285,7 @@ func (p *Game) doWhenLeftButtonDown(ev *eventLeftButtonDown) {
 	})
 }
 
-// -----------------------------------------------------------------------------
 // Message Broadcast
-// -----------------------------------------------------------------------------
 func (p *Game) Broadcast__0(msg MsgName) {
 	p.doBroadcast(msg, nil, false)
 }
@@ -347,9 +309,7 @@ func (p *Game) doBroadcast(msg MsgName, data any, wait bool) {
 	p.scriptEvents.doWhenIReceive(msg, data, wait)
 }
 
-// -----------------------------------------------------------------------------
 // Event Routing
-// -----------------------------------------------------------------------------
 func (p *Game) handleEvent(ev event) {
 	switch e := ev.(type) {
 	case *eventLeftButtonUp:
@@ -372,7 +332,7 @@ func (p *Game) handleEvent(ev event) {
 		}
 		if gco != nil && !gco.IsInCoroutine() {
 			// Keep OnStart handlers in one coroutine phase and advance them in
-			// registration order to their first yield.
+			// Scratch target order to their first yield.
 			gco.CreateAndStart(false, p, func(coroutine.Thread) int {
 				runStartPhase()
 				return 0
@@ -394,108 +354,130 @@ func (p *Game) fireEvent(ev event) {
 	}
 }
 
-// -----------------------------------------------------------------------------
 // Event Dispatch
-// -----------------------------------------------------------------------------
 func (p *scriptEventRegistry) doWhenStart(sinks []eventSink) {
-	if len(sinks) == 0 {
-		return
-	}
-	run := func() {
-		for i := range sinks {
-			ev := &sinks[i]
-			if ev.Cond != nil && !ev.Cond(nil) {
-				continue
-			}
-			thread := gco.CreateAndStart(false, ev.Owner, func(coroutine.Thread) int {
-				coreevent.If0(isDebugEventEnabled, func() {
-					spxlog.Debug("OnStart: %s", nameOf(ev.Owner))
-				})()
-				ev.Handler.(func())()
-				return 0
-			})
-			gco.JoinYieldedOrDone(thread)
-		}
-	}
-	if gco != nil && !gco.IsInCoroutine() {
-		gco.CreateAndStart(false, engine.GetGame(), func(coroutine.Thread) int {
-			run()
-			return 0
-		})
-		return
-	}
-	run()
+	p.dispatchSinks(sinksInScratchTargetOrder(activeGame(), sinks), scriptEventDispatch{
+		mode: coroutine.BatchWaitFirstSlice,
+		run: func(_ coroutine.Thread, ev *eventSink) {
+			coreevent.If0(isDebugEventEnabled, func() {
+				spxlog.Debug("OnStart: %s", nameOf(ev.Owner))
+			})()
+			ev.Handler.(func())()
+		},
+	})
 }
 
 func (p *scriptEventRegistry) doWhenAwake(this threadObj) {
-	p.dispatchSync(coreevent.BucketAwake, this, func(ev *eventSink) {
-		coreevent.If0(isDebugEventEnabled, func() {
-			spxlog.Debug("OnAwake: %s", nameOf(ev.Owner))
-		})()
-		ev.Handler.(func())()
+	p.dispatchGlobal(coreevent.BucketAwake, scriptEventDispatch{
+		mode:      coroutine.BatchWaitDone,
+		matchData: this,
+		run: func(_ coroutine.Thread, ev *eventSink) {
+			coreevent.If0(isDebugEventEnabled, func() {
+				spxlog.Debug("OnAwake: %s", nameOf(ev.Owner))
+			})()
+			ev.Handler.(func())()
+		},
 	})
 }
 
 func (p *scriptEventRegistry) doWhenTimer(time float64) {
-	p.dispatchAsync(coreevent.BucketTimer, false, time, func(ev *eventSink) {
-		ev.Handler.(func(float64))(time)
+	p.dispatchGlobal(coreevent.BucketTimer, scriptEventDispatch{
+		mode:      coroutine.BatchAsync,
+		matchData: time,
+		run: func(_ coroutine.Thread, ev *eventSink) {
+			ev.Handler.(func(float64))(time)
+		},
 	})
 }
 
 func (p *scriptEventRegistry) doWhenCondition() {
-	p.dispatchAsync(coreevent.BucketCondition, false, nil, func(ev *eventSink) {
-		coreevent.If0(isDebugEventEnabled, func() {
-			spxlog.Debug("OnCond: %s", nameOf(ev.Owner))
-		})()
-		ev.Handler.(func())()
+	p.dispatchGlobal(coreevent.BucketCondition, scriptEventDispatch{
+		mode: coroutine.BatchAsync,
+		run: func(_ coroutine.Thread, ev *eventSink) {
+			coreevent.If0(isDebugEventEnabled, func() {
+				spxlog.Debug("OnCond: %s", nameOf(ev.Owner))
+			})()
+			ev.Handler.(func())()
+		},
 	})
 }
 
 func (p *scriptEventRegistry) doWhenKeyPressed(key Key) {
-	p.dispatchAsync(coreevent.BucketKeyPressed, false, key, func(ev *eventSink) {
-		ev.Handler.(func(Key))(key)
+	specific := p.globalSinks(coreevent.BucketKeyPressed)
+	anyKey := p.globalSinks(coreevent.BucketAnyKeyPressed)
+	p.dispatchSinks(slices.Concat(specific, anyKey), scriptEventDispatch{
+		mode:      coroutine.BatchAsync,
+		matchData: key,
+		run: func(_ coroutine.Thread, ev *eventSink) {
+			ev.Handler.(func(Key))(key)
+		},
 	})
 }
 
 func (p *scriptEventRegistry) doWhenSwipe(direction Direction, this threadObj) {
-	p.dispatchAsync(coreevent.BucketSwipe, false, direction, func(ev *eventSink) {
-		if ev.Owner == this {
+	p.dispatchTarget(coreevent.BucketSwipe, this, scriptEventDispatch{
+		mode:      coroutine.BatchAsync,
+		matchData: direction,
+		run: func(_ coroutine.Thread, ev *eventSink) {
 			ev.Handler.(func(Direction))(direction)
-		}
+		},
 	})
 }
 
 func (p *scriptEventRegistry) doWhenClick(this threadObj) {
-	p.dispatchAsync(coreevent.BucketClick, false, this, func(ev *eventSink) {
-		coreevent.If0(isDebugEventEnabled, func() {
-			spxlog.Debug("OnClick: %s", nameOf(this))
-		})()
-		ev.Handler.(func())()
+	p.dispatchTarget(coreevent.BucketClick, this, scriptEventDispatch{
+		mode:      coroutine.BatchAsync,
+		matchData: this,
+		run: func(_ coroutine.Thread, ev *eventSink) {
+			coreevent.If0(isDebugEventEnabled, func() {
+				spxlog.Debug("OnClick: %s", nameOf(this))
+			})()
+			ev.Handler.(func())()
+		},
 	})
 }
 
 func (p *scriptEventRegistry) doWhenTouchStart(this threadObj, obj *SpriteImpl) {
-	p.dispatchAsync(coreevent.BucketTouchStart, false, this, func(ev *eventSink) {
-		coreevent.If0(isDebugEventEnabled, func() {
-			spxlog.Debug("OnTouchStart: %s, %s", nameOf(this), obj.name)
-		})()
-		ev.Handler.(func(Sprite))(obj.sprite)
+	p.dispatchTarget(coreevent.BucketTouchStart, this, scriptEventDispatch{
+		mode:      coroutine.BatchAsync,
+		matchData: this,
+		run: func(_ coroutine.Thread, ev *eventSink) {
+			coreevent.If0(isDebugEventEnabled, func() {
+				spxlog.Debug("OnTouchStart: %s, %s", nameOf(this), obj.name)
+			})()
+			ev.Handler.(func(Sprite))(obj.sprite)
+		},
 	})
 }
 
 func (p *scriptEventRegistry) doWhenCloned(this threadObj, data any) {
-	p.dispatchAsync(coreevent.BucketCloned, true, this, func(ev *eventSink) {
-		coreevent.If0(isDebugEventEnabled, func() {
-			spxlog.Debug("OnCloned: %s", nameOf(this))
-		})()
-		ev.Handler.(func(any))(data)
+	p.dispatchTarget(coreevent.BucketCloned, this, scriptEventDispatch{
+		mode:      coroutine.BatchWaitFirstSlice,
+		matchData: this,
+		run: func(_ coroutine.Thread, ev *eventSink) {
+			coreevent.If0(isDebugEventEnabled, func() {
+				spxlog.Debug("OnCloned: %s", nameOf(this))
+			})()
+			ev.Handler.(func(any))(data)
+		},
 	})
 }
 
 func (p *scriptEventRegistry) doWhenIReceive(msg string, data any, wait bool) {
 	deferToNextFrame := p.shouldDeferMessageReceivers(wait)
-	p.manager.DispatchBucket(coreevent.BucketIReceive, wait, msg, p.messageDispatchHooks(deferToNextFrame), func(ev *eventSink) {
-		ev.Handler.(func(string, any))(msg, data)
+	p.dispatchGlobal(coreevent.BucketIReceive, scriptEventDispatch{
+		mode:      eventBatchMode(wait),
+		matchData: msg,
+		before: func(coroutine.Thread) {
+			if deferToNextFrame {
+				engine.WaitNextFrame()
+			}
+		},
+		run: func(thread coroutine.Thread, ev *eventSink) {
+			p.messageHandlerFrames.Store(thread, itime.Frame())
+			defer p.messageHandlerFrames.Delete(thread)
+			ev.Handler.(func(string, any))(msg, data)
+		},
 	})
 }
 
@@ -513,35 +495,12 @@ func (p *scriptEventRegistry) shouldDeferMessageReceivers(wait bool) bool {
 	return ok && handlerFrame == itime.Frame()
 }
 
-func (p *scriptEventRegistry) messageDispatchHooks(deferToNextFrame bool) coreevent.DispatchHooks {
-	hooks := scriptEventDispatchHooks
-	hooks.Spawn = func(start bool, owner any, call func()) coreevent.DispatchTask {
-		return spawnScriptEvent(start, owner, func(thread coroutine.Thread) {
-			if deferToNextFrame {
-				engine.WaitNextFrame()
-			}
-			p.messageHandlerFrames.Store(thread, itime.Frame())
-			defer p.messageHandlerFrames.Delete(thread)
-			call()
-		})
-	}
-	return hooks
-}
-
 func (p *scriptEventRegistry) doWhenBackdropChanged(name BackdropName, wait bool) {
-	p.dispatch(coreevent.BucketBackdropChanged, wait, name, func(ev *eventSink) {
-		ev.Handler.(func(BackdropName))(name)
+	p.dispatchGlobal(coreevent.BucketBackdropChanged, scriptEventDispatch{
+		mode:      eventBatchMode(wait),
+		matchData: name,
+		run: func(_ coroutine.Thread, ev *eventSink) {
+			ev.Handler.(func(BackdropName))(name)
+		},
 	})
-}
-
-func (p *scriptEventRegistry) dispatchAsync(bucket coreevent.Bucket, start bool, data any, do func(*eventSink)) {
-	p.manager.DispatchBucketAsync(bucket, start, data, scriptEventDispatchHooks, do)
-}
-
-func (p *scriptEventRegistry) dispatchSync(bucket coreevent.Bucket, data any, do func(*eventSink)) {
-	p.manager.DispatchBucketSync(bucket, data, scriptEventDispatchHooks, do)
-}
-
-func (p *scriptEventRegistry) dispatch(bucket coreevent.Bucket, wait bool, data any, do func(*eventSink)) {
-	p.manager.DispatchBucket(bucket, wait, data, scriptEventDispatchHooks, do)
 }
