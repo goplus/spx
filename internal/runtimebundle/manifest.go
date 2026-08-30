@@ -102,11 +102,12 @@ const (
 	NamespaceEngine  Namespace = "engine"
 	NamespaceBridge  Namespace = "bridge"
 	NamespaceProject Namespace = "project"
+	NamespaceDriver  Namespace = "driver"
 )
 
 func (n Namespace) valid() bool {
 	switch n {
-	case NamespaceEngine, NamespaceBridge, NamespaceProject:
+	case NamespaceEngine, NamespaceBridge, NamespaceProject, NamespaceDriver:
 		return true
 	default:
 		return false
