@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -32,7 +33,9 @@ import (
 
 var runtimeHTTPClient = &http.Client{Timeout: 30 * time.Minute}
 
-func resolvePublishedRuntime(ctx context.Context, cacheRoot string, lock release.RuntimeLock, spec release.HostRuntimeSpec, pin release.RuntimeManifestPin, env []string, offline bool, dependencies runtimeAssetDependencies) (runtimeAssetSource, error) {
+var errReleaseUnavailable = errors.New("launchpack: release unavailable")
+
+func resolvePublishedRuntime(ctx context.Context, cacheRoot string, lock release.RuntimeLock, env []string, offline bool, dependencies runtimeAssetDependencies) (runtimeAssetSource, error) {
 	assetDir, assetDirSet, duplicate := environmentValue(env, runtimeAssetDirEnv)
 	if duplicate {
 		return runtimeAssetSource{}, fmt.Errorf("launchpack: duplicate %s", runtimeAssetDirEnv)
@@ -44,49 +47,30 @@ func resolvePublishedRuntime(ctx context.Context, cacheRoot string, lock release
 		if !filepath.IsAbs(assetDir) || filepath.Clean(assetDir) != assetDir {
 			return runtimeAssetSource{}, fmt.Errorf("launchpack: %s must be an absolute clean path", runtimeAssetDirEnv)
 		}
-		data, err := readRegularFile(filepath.Join(assetDir, lock.Manifest))
-		if err != nil {
-			return runtimeAssetSource{}, fmt.Errorf("launchpack: read local release manifest: %w", err)
-		}
-		return parseRuntimeAssetSource(lock, pin, data, assetDir, dependencies.fetch)
 	}
-	manifestURL := lock.RuntimeAssetDownloadURL(lock.Manifest)
-	manifestRoot := filepath.Join(cacheRoot, "release-manifests")
-	manifestName := pin.SHA256 + "-" + pin.Name
-	manifestFile, err := runtimebundle.AcquireFile(ctx, manifestRoot, runtimebundle.FetchSpec{
-		Name: manifestName, URL: manifestURL, Size: pin.Size, SHA256: pin.SHA256,
-		Offline: offline, Fetch: dependencies.fetch,
+	manifest, data, err := acquireVersionedReleaseManifest(ctx, versionedReleaseManifestSpec{
+		CacheRoot: cacheRoot,
+		Namespace: "runtime",
+		Version:   lock.RuntimeVersion,
+		Name:      lock.Manifest,
+		URL:       lock.RuntimeAssetDownloadURL(lock.Manifest),
+		MirrorDir: assetDir,
+		Offline:   offline,
+		MaxSize:   maxRuntimeManifestSize,
+		Fetch:     dependencies.fetch,
+	}, func(data []byte) (release.RuntimeManifest, error) {
+		return release.ParseRuntimeManifestForRelease(data, lock.RuntimeVersion, lock.RequiredAssets)
+	}, func(manifest release.RuntimeManifest) string {
+		return manifest.RuntimeVersion
 	})
 	if err != nil {
-		return runtimeAssetSource{}, fmt.Errorf("launchpack: acquire runtime manifest for %s/%s: %w", spec.GOOS, spec.GOARCH, err)
+		return runtimeAssetSource{}, fmt.Errorf("launchpack: acquire runtime release manifest: %w", err)
 	}
-	data, readErr := readRuntimeMetadata(manifestFile, manifestName)
-	closeErr := manifestFile.Close()
-	if readErr != nil {
-		return runtimeAssetSource{}, fmt.Errorf("launchpack: read acquired runtime manifest: %w", readErr)
+	manifestDir := ""
+	if assetDirSet {
+		manifestDir = assetDir
 	}
-	if closeErr != nil {
-		return runtimeAssetSource{}, fmt.Errorf("launchpack: close acquired runtime manifest: %w", closeErr)
-	}
-	return parseRuntimeAssetSource(lock, pin, data, "", dependencies.fetch)
-}
-
-func parseRuntimeAssetSource(lock release.RuntimeLock, pin release.RuntimeManifestPin, data []byte, manifestDir string, fetch runtimebundle.FetchFunc) (runtimeAssetSource, error) {
-	if err := verifyRuntimeManifestPin(pin, data); err != nil {
-		return runtimeAssetSource{}, err
-	}
-	manifest, err := release.ParseRuntimeManifest(data)
-	if err != nil {
-		return runtimeAssetSource{}, err
-	}
-	if err := manifest.ValidateForLock(lock); err != nil {
-		return runtimeAssetSource{}, err
-	}
-	return runtimeAssetSource{manifest: manifest, manifestSHA256: pin.SHA256, manifestDir: manifestDir, fetch: fetch}, nil
-}
-
-func (s runtimeAssetSource) manifestURL(name string) string {
-	return "https://github.com/" + s.manifest.ReleaseRepository + "/releases/download/runtime-v" + s.manifest.RuntimeVersion + "/" + name
+	return runtimeAssetSource{manifest: manifest, manifestSHA256: digestBytes(data), manifestDir: manifestDir, fetch: dependencies.fetch}, nil
 }
 
 func acquireReleaseAsset(ctx context.Context, root string, asset release.RuntimeAsset, url, localDir string, offline bool, fetch runtimebundle.FetchFunc) (*runtimebundle.AcquiredFile, error) {
@@ -105,16 +89,6 @@ func acquireReleaseAsset(ctx context.Context, root string, asset release.Runtime
 		Name: name, URL: url, Size: asset.Size, SHA256: asset.SHA256,
 		Offline: offline, Fetch: fetch,
 	})
-}
-
-func verifyRuntimeManifestPin(pin release.RuntimeManifestPin, data []byte) error {
-	if int64(len(data)) != pin.Size {
-		return fmt.Errorf("launchpack: runtime manifest size = %d, want pinned %d", len(data), pin.Size)
-	}
-	if digest := digestBytes(data); digest != pin.SHA256 {
-		return fmt.Errorf("launchpack: runtime manifest SHA-256 = %s, want pinned %s", digest, pin.SHA256)
-	}
-	return nil
 }
 
 func copyLocalRuntimeAsset(ctx context.Context, path string, dst io.Writer) error {
@@ -165,12 +139,39 @@ func fetchRuntimeURL(ctx context.Context, url string, dst io.Writer) error {
 	}
 	response, err := runtimeHTTPClient.Do(request)
 	if err != nil {
-		return err
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return ctxErr
+		}
+		return fmt.Errorf("%w: GET %s: %w", errReleaseUnavailable, url, err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf("GET %s returned %s", url, response.Status)
+		return fmt.Errorf("%w: GET %s returned %s", errReleaseUnavailable, url, response.Status)
 	}
-	_, err = io.Copy(dst, response.Body)
-	return err
+	tracked := &writeErrorTracker{writer: dst}
+	if _, err := io.Copy(tracked, response.Body); err != nil {
+		if tracked.err != nil {
+			return tracked.err
+		}
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return ctxErr
+		}
+		return fmt.Errorf("%w: read %s: %w", errReleaseUnavailable, url, err)
+	}
+	return nil
+}
+
+type writeErrorTracker struct {
+	writer io.Writer
+	err    error
+}
+
+func (w *writeErrorTracker) Write(data []byte) (int, error) {
+	n, err := w.writer.Write(data)
+	if err != nil {
+		w.err = err
+	} else if n != len(data) {
+		w.err = io.ErrShortWrite
+	}
+	return n, err
 }

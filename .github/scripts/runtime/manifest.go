@@ -101,15 +101,18 @@ func runReleaseManifest(args []string) error {
 		if len(specs) != 0 || checksumsPath != "" || spxCommit != "" || moduleTree != "" || runtimePackSourceHash != "" || buildRecipeHash != "" {
 			return errors.New("generation flags cannot be combined with --verify-manifest")
 		}
-		manifest, err := release.LoadRuntimeManifest(verifyManifest)
+		data, err := os.ReadFile(verifyManifest)
+		if err != nil {
+			return fmt.Errorf("read runtime manifest: %w", err)
+		}
+		manifest, err := release.ParseRuntimeManifestForRelease(data, lock.RuntimeVersion, lock.RequiredAssets)
 		if err != nil {
 			return err
 		}
-		if err := manifest.ValidateForLock(lock); err != nil {
-			return err
-		}
 		if assetDirectory != "" {
-			return manifest.VerifyFiles(assetDirectory)
+			if err := manifest.VerifyFiles(assetDirectory); err != nil {
+				return err
+			}
 		}
 		return nil
 	}

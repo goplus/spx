@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -57,7 +58,7 @@ func TestAcquireRuntimeAssetsPrefersExplicitLocalManifest(t *testing.T) {
 	}
 	assets, err := acquireRuntimeAssetsWith(context.Background(), cfg, IO{Env: []string{"SPX_RUNTIME_OFFLINE=1"}}, lock, runtimeAssetDependencies{
 		fetch:     func(context.Context, string, io.Writer) error { return errors.New("network must not be used") },
-		cacheRoot: func() string { return cfg.RuntimeCacheRoot }, manifestPin: release.RuntimeManifestPinForLock,
+		cacheRoot: func() string { return cfg.RuntimeCacheRoot },
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -75,7 +76,7 @@ func TestAcquireRuntimeAssetsPrefersExplicitLocalManifest(t *testing.T) {
 	cfg.Source.SourceMode = true
 	assets, err = acquireRuntimeAssetsWith(context.Background(), cfg, IO{Env: []string{"SPX_RUNTIME_OFFLINE=1"}}, lock, runtimeAssetDependencies{
 		fetch:     func(context.Context, string, io.Writer) error { return errors.New("network must not be used") },
-		cacheRoot: func() string { return filepath.Join(root, "cache-source") }, manifestPin: release.RuntimeManifestPinForLock,
+		cacheRoot: func() string { return filepath.Join(root, "cache-source") },
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -211,7 +212,7 @@ func TestAcquireRuntimeAssetsAutoDiscoveredManifestIdentityMismatchFailsClosed(t
 	calls := 0
 	fetch := func(context.Context, string, io.Writer) error {
 		calls++
-		return errors.New("auto-discovered local manifest must not fetch")
+		return fmt.Errorf("%w: unpublished runtime", errReleaseUnavailable)
 	}
 	cfg := Config{RuntimeSourceRoot: sourceRoot, RuntimeCacheRoot: cacheRoot, Source: SourceIdentity{SourceMode: true}}
 	env := IO{Env: []string{}}
@@ -233,8 +234,8 @@ func TestAcquireRuntimeAssetsAutoDiscoveredManifestIdentityMismatchFailsClosed(t
 	if _, err := acquireRuntimeAssetsWith(context.Background(), cfg, env, lock, dependencies); err == nil {
 		t.Fatal("identity-mismatched auto-discovered manifest fell back to published runtime")
 	}
-	if calls != 0 {
-		t.Fatalf("fetch count = %d, want 0", calls)
+	if calls != 2 {
+		t.Fatalf("fetch count = %d, want 2", calls)
 	}
 }
 

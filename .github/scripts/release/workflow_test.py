@@ -176,10 +176,46 @@ class ReleaseWorkflowTest(unittest.TestCase):
             "        run: bash .github/scripts/release/assemble.sh",
             block,
         )
+        self.assertIn(
+            "if: needs.setup.outputs.runtime_state == 'missing' || inputs.operation == 'dry-run'",
+            block,
+        )
         script = ASSEMBLE_SCRIPT_PATH.read_text(encoding="utf-8")
         self.assertIn('echo "product_count=$product_count" >> "$GITHUB_OUTPUT"', script)
         self.assertIn("dist/runtime", script)
         self.assertIn("dist/product", script)
+
+    def test_runtime_publish_reuses_the_selected_version(self):
+        block = self.jobs["publish-runtime"]
+        script = step_script(block, "Publish immutable runtime release")
+
+        self.assertIn("    name: Publish or reuse runtime release", block)
+        self.assertIn(
+            "      - name: Check out release source for the publish guard\n"
+            "        if: needs.setup.outputs.runtime_state == 'missing'",
+            block,
+        )
+        self.assertIn(
+            "      - name: Download assembled runtime release\n"
+            "        if: needs.setup.outputs.runtime_state == 'missing'",
+            block,
+        )
+        self.assertIn(
+            "          RUNTIME_STATE: ${{ needs.setup.outputs.runtime_state }}",
+            block,
+        )
+        self.assertIn('if [ "$RUNTIME_STATE" = ready ]; then', script)
+        self.assertIn("Reusing verified public runtime release", script)
+        self.assertLess(
+            script.index('if [ "$RUNTIME_STATE" = ready ]; then'),
+            script.index('gh release view "$RELEASE_TAG"'),
+        )
+        self.assertIn('--verify-manifest "published/$RUNTIME_MANIFEST"', script)
+        self.assertIn('--asset-directory published', script)
+        self.assertIn("sha256sum -c SHA256SUMS", script)
+        self.assertIn("diff -u", script)
+        self.assertIn("Reusing public runtime release for $RUNTIME_VERSION", script)
+        self.assertNotIn('cmp -s "dist/$RUNTIME_MANIFEST"', script)
 
     def test_publish_dev_uses_exact_sha_and_oidc(self):
         block = self.jobs["publish-dev-web-package"]

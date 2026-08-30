@@ -75,14 +75,14 @@ func materializePublishedRuntime(ctx context.Context, cacheRoot string, lock rel
 	if !ok {
 		return Assets{}, fmt.Errorf("launchpack: runtime manifest has no runtime pack asset %q", release.RuntimeAssetZipName)
 	}
-	assetRoot := filepath.Join(cacheRoot, "release-assets", source.manifest.LockSHA256)
+	assetRoot := filepath.Join(cacheRoot, "release-assets", "runtime", lock.RuntimeVersion)
 	assetDir := source.manifestDir
-	engineFile, err := acquireReleaseAsset(ctx, assetRoot, engineAsset, source.manifestURL(spec.ArchiveName), assetDir, offline, source.fetch)
+	engineFile, err := acquireReleaseAsset(ctx, assetRoot, engineAsset, lock.RuntimeAssetDownloadURL(spec.ArchiveName), assetDir, offline, source.fetch)
 	if err != nil {
 		return Assets{}, err
 	}
 	defer engineFile.Close()
-	packFile, err := acquireReleaseAsset(ctx, assetRoot, packAsset, source.manifestURL(release.RuntimeAssetZipName), assetDir, offline, source.fetch)
+	packFile, err := acquireReleaseAsset(ctx, assetRoot, packAsset, lock.RuntimeAssetDownloadURL(release.RuntimeAssetZipName), assetDir, offline, source.fetch)
 	if err != nil {
 		return Assets{}, err
 	}

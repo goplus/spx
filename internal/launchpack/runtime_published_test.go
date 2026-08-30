@@ -27,10 +27,12 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/goplus/spx/v3/internal/release"
+	"github.com/goplus/spx/v3/internal/runtimebundle"
 )
 
 type publishedRuntimeFixture struct {
@@ -161,15 +163,6 @@ func (f publishedRuntimeFixture) fetcher(replacements map[string][]byte, calls *
 func (f publishedRuntimeFixture) dependencies(cacheRoot string, fetch func(context.Context, string, io.Writer) error) runtimeAssetDependencies {
 	return runtimeAssetDependencies{
 		fetch: fetch, cacheRoot: func() string { return cacheRoot },
-		manifestPin: func(lock release.RuntimeLock) (release.RuntimeManifestPin, error) {
-			if lock.RuntimeVersion != f.lock.RuntimeVersion || lock.Manifest != f.lock.Manifest {
-				return release.RuntimeManifestPin{}, errors.New("fixture lock mismatch")
-			}
-			return release.RuntimeManifestPin{
-				Schema: 1, RuntimeVersion: lock.RuntimeVersion,
-				Name: lock.Manifest, Size: int64(len(f.manifestData)), SHA256: digestBytes(f.manifestData),
-			}, nil
-		},
 	}
 }
 
@@ -194,6 +187,40 @@ func TestAcquireRuntimeAssetsFromPublishedRelease(t *testing.T) {
 	}
 	if got, err := os.ReadFile(assets.PackPath); err != nil || string(got) != "fixture-pack" {
 		t.Fatalf("materialized pack = %q, err=%v", got, err)
+	}
+}
+
+func TestAcquireRuntimeAssetsDerivesURLsFromSelectedRuntimeVersion(t *testing.T) {
+	fixture := newPublishedRuntimeFixture(t)
+	fixture.manifest.ReleaseRepository = "example/runtime"
+	fixture.manifest.LockSHA256 = strings.Repeat("0", 64)
+	var err error
+	fixture.manifestData, err = fixture.manifest.JSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cacheRoot := t.TempDir()
+	var urls []string
+	calls := 0
+	fetchFixture := fixture.fetcher(nil, &calls)
+	fetch := func(ctx context.Context, url string, dst io.Writer) error {
+		urls = append(urls, url)
+		return fetchFixture(ctx, url, dst)
+	}
+	assets, err := acquireRuntimeAssetsWith(context.Background(), publishedRuntimeConfig(cacheRoot), IO{Env: []string{}}, fixture.lock, fixture.dependencies(cacheRoot, fetch))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer assets.Cleanup()
+
+	want := []string{
+		fixture.lock.RuntimeAssetDownloadURL(fixture.lock.Manifest),
+		fixture.lock.RuntimeAssetDownloadURL(fixture.spec.ArchiveName),
+		fixture.lock.RuntimeAssetDownloadURL(release.RuntimeAssetZipName),
+	}
+	if !slices.Equal(urls, want) {
+		t.Fatalf("runtime release URLs = %v, want %v", urls, want)
 	}
 }
 
@@ -233,7 +260,7 @@ func TestAcquireRuntimeAssetsOfflineRejectsCorruptCachedReleaseData(t *testing.T
 		{
 			name: "manifest",
 			path: func(_ *testing.T, fixture publishedRuntimeFixture, cacheRoot string) string {
-				return filepath.Join(cacheRoot, "release-manifests", digestBytes(fixture.manifestData)+"-"+fixture.lock.Manifest)
+				return filepath.Join(cacheRoot, "release-manifests", "runtime", fixture.lock.RuntimeVersion, fixture.lock.Manifest)
 			},
 		},
 		{
@@ -243,7 +270,7 @@ func TestAcquireRuntimeAssetsOfflineRejectsCorruptCachedReleaseData(t *testing.T
 				if !ok {
 					t.Fatal("fixture manifest has no host Engine asset")
 				}
-				return filepath.Join(cacheRoot, "release-assets", fixture.manifest.LockSHA256, asset.SHA256+"-"+asset.Name)
+				return filepath.Join(cacheRoot, "release-assets", "runtime", fixture.lock.RuntimeVersion, asset.SHA256+"-"+asset.Name)
 			},
 		},
 		{
@@ -253,7 +280,7 @@ func TestAcquireRuntimeAssetsOfflineRejectsCorruptCachedReleaseData(t *testing.T
 				if !ok {
 					t.Fatal("fixture manifest has no runtime pack asset")
 				}
-				return filepath.Join(cacheRoot, "release-assets", fixture.manifest.LockSHA256, asset.SHA256+"-"+asset.Name)
+				return filepath.Join(cacheRoot, "release-assets", "runtime", fixture.lock.RuntimeVersion, asset.SHA256+"-"+asset.Name)
 			},
 		},
 	}
@@ -337,7 +364,7 @@ func TestAcquireRuntimeAssetsRejectsOuterDigestMismatchAndRetries(t *testing.T) 
 	if !ok {
 		t.Fatal("fixture manifest has no host Engine asset")
 	}
-	if _, err := os.Stat(filepath.Join(cacheRoot, "release-assets", fixture.manifest.LockSHA256, engineAsset.SHA256+"-"+engineAsset.Name)); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(cacheRoot, "release-assets", "runtime", fixture.lock.RuntimeVersion, engineAsset.SHA256+"-"+engineAsset.Name)); !os.IsNotExist(err) {
 		t.Fatalf("digest-mismatched archive was published, stat error = %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(cacheRoot, "engine")); !os.IsNotExist(err) {
@@ -354,11 +381,15 @@ func TestAcquireRuntimeAssetsRejectsOuterDigestMismatchAndRetries(t *testing.T) 
 	}
 }
 
-func TestAcquireRuntimeAssetsRejectsManifestOutsidePin(t *testing.T) {
+func TestAcquireRuntimeAssetsRejectsAssetOutsideVersionedManifest(t *testing.T) {
 	fixture := newPublishedRuntimeFixture(t)
 	forged := fixture.manifest
 	forged.Assets = append([]release.RuntimeAsset(nil), forged.Assets...)
-	forged.Assets[0].SHA256 = strings.Repeat("0", 64)
+	for i := range forged.Assets {
+		if forged.Assets[i].Name == fixture.spec.ArchiveName {
+			forged.Assets[i].SHA256 = strings.Repeat("0", 64)
+		}
+	}
 	data, err := forged.JSON()
 	if err != nil {
 		t.Fatal(err)
@@ -366,10 +397,10 @@ func TestAcquireRuntimeAssetsRejectsManifestOutsidePin(t *testing.T) {
 	calls := 0
 	dependencies := fixture.dependencies(t.TempDir(), fixture.fetcher(map[string][]byte{fixture.lock.Manifest: data}, &calls))
 	_, err = acquireRuntimeAssetsWith(context.Background(), publishedRuntimeConfig(t.TempDir()), IO{}, fixture.lock, dependencies)
-	if err == nil || !strings.Contains(err.Error(), "SHA-256") {
-		t.Fatalf("unpinned manifest error = %v", err)
+	if !errors.Is(err, runtimebundle.ErrDigestMismatch) {
+		t.Fatalf("versioned manifest asset error = %v, want ErrDigestMismatch", err)
 	}
-	if calls != 1 {
-		t.Fatalf("fetch count = %d, want only the rejected manifest", calls)
+	if calls != 2 {
+		t.Fatalf("fetch count = %d, want manifest and rejected asset", calls)
 	}
 }

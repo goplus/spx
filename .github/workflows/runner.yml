@@ -45,8 +45,6 @@ jobs:
           set -euo pipefail
           go run ./.github/scripts/runtime/resolution.go \
             --lock internal/release/runtime.lock.json \
-            --repo-root . \
-            --revision HEAD \
             --github-output "$GITHUB_OUTPUT"
 
       - name: Report runtime CI policy

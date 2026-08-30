@@ -19,12 +19,15 @@ package launchpack
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/goplus/spx/v3/internal/release"
+	"github.com/goplus/spx/v3/internal/runtimebundle"
 )
 
 func TestSourceRuntimePrefersPublishedAssets(t *testing.T) {
@@ -55,7 +58,7 @@ func TestSourceRuntimeFallsBackAfterPublishedFetchFailure(t *testing.T) {
 	fetchCalls, binCalls := 0, 0
 	dependencies := fixture.dependencies(cacheRoot, func(context.Context, string, io.Writer) error {
 		fetchCalls++
-		return errors.New("network unavailable")
+		return fmt.Errorf("%w: network unavailable", errReleaseUnavailable)
 	})
 	dependencies.goBin = func(context.Context, Config, []string) (string, error) {
 		binCalls++
@@ -79,6 +82,61 @@ func TestSourceRuntimeFallsBackAfterPublishedFetchFailure(t *testing.T) {
 	}
 }
 
+func TestSourceRuntimeRejectsPublishedIntegrityFailure(t *testing.T) {
+	fixture := newPublishedRuntimeFixture(t)
+	badArchive := append([]byte(nil), fixture.assets[fixture.spec.ArchiveName]...)
+	badArchive[len(badArchive)/2] ^= 1
+	for _, test := range []struct {
+		name         string
+		replacements map[string][]byte
+		digestError  bool
+	}{
+		{name: "manifest", replacements: map[string][]byte{fixture.lock.Manifest: []byte("tampered manifest")}},
+		{name: "archive", replacements: map[string][]byte{fixture.spec.ArchiveName: badArchive}, digestError: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			cacheRoot := t.TempDir()
+			bin := writeInstalledRuntimeTest(t, fixture.spec, "local-engine", "local-pack")
+			calls, binCalls := 0, 0
+			dependencies := fixture.dependencies(cacheRoot, fixture.fetcher(test.replacements, &calls))
+			dependencies.goBin = func(context.Context, Config, []string) (string, error) {
+				binCalls++
+				return bin, nil
+			}
+			_, err := acquireRuntimeAssetsWith(context.Background(), sourceRuntimeConfig(t.TempDir(), cacheRoot), IO{Env: []string{}}, fixture.lock, dependencies)
+			if test.digestError && !errors.Is(err, runtimebundle.ErrDigestMismatch) {
+				t.Fatalf("archive integrity failure = %v, want ErrDigestMismatch", err)
+			}
+			if !test.digestError && (err == nil || !strings.Contains(err.Error(), "decode runtime manifest")) {
+				t.Fatalf("malformed manifest error = %v", err)
+			}
+			if binCalls != 0 {
+				t.Fatalf("Go-bin calls = %d, want 0", binCalls)
+			}
+		})
+	}
+}
+
+func TestSourceRuntimeRejectsMalformedPublishedManifest(t *testing.T) {
+	fixture := newPublishedRuntimeFixture(t)
+	malformed := append(append([]byte(nil), fixture.manifestData...), 'x')
+	cacheRoot := t.TempDir()
+	bin := writeInstalledRuntimeTest(t, fixture.spec, "local-engine", "local-pack")
+	calls, binCalls := 0, 0
+	dependencies := fixture.dependencies(cacheRoot, fixture.fetcher(map[string][]byte{fixture.lock.Manifest: malformed}, &calls))
+	dependencies.goBin = func(context.Context, Config, []string) (string, error) {
+		binCalls++
+		return bin, nil
+	}
+	_, err := acquireRuntimeAssetsWith(context.Background(), sourceRuntimeConfig(t.TempDir(), cacheRoot), IO{Env: []string{}}, fixture.lock, dependencies)
+	if err == nil || errors.Is(err, errReleaseUnavailable) {
+		t.Fatalf("malformed manifest error = %v", err)
+	}
+	if binCalls != 0 {
+		t.Fatalf("Go-bin calls = %d, want 0", binCalls)
+	}
+}
+
 func TestPublishedFetchFailureDoesNotFallbackOutsideSourceMode(t *testing.T) {
 	fixture := newPublishedRuntimeFixture(t)
 	cacheRoot := t.TempDir()
@@ -99,7 +157,7 @@ func TestPublishedFetchFailureDoesNotFallbackOutsideSourceMode(t *testing.T) {
 	}
 }
 
-func TestUnpublishedSourceRuntimeUsesGoBinWithoutFetch(t *testing.T) {
+func TestUnpublishedSourceRuntimeFallsBackAfterManifestMiss(t *testing.T) {
 	lock := release.DefaultRuntimeLock()
 	spec, err := release.HostRuntimeSpecFor(lock, runtime.GOOS, runtime.GOARCH)
 	if err != nil {
@@ -110,7 +168,7 @@ func TestUnpublishedSourceRuntimeUsesGoBinWithoutFetch(t *testing.T) {
 	fetchCalls, binCalls := 0, 0
 	dependencies := localRuntimeTestDependencies(cacheRoot, func(context.Context, string, io.Writer) error {
 		fetchCalls++
-		return errors.New("unpublished runtime must not fetch")
+		return fmt.Errorf("%w: unpublished runtime", errReleaseUnavailable)
 	})
 	dependencies.goBin = func(context.Context, Config, []string) (string, error) {
 		binCalls++
@@ -122,8 +180,8 @@ func TestUnpublishedSourceRuntimeUsesGoBinWithoutFetch(t *testing.T) {
 	}
 	defer assets.Cleanup()
 	assertRuntimeFile(t, assets.PackPath, "dev-pack")
-	if fetchCalls != 0 || binCalls != 1 {
-		t.Fatalf("fetch calls = %d, Go-bin calls = %d; want 0, 1", fetchCalls, binCalls)
+	if fetchCalls != 1 || binCalls != 1 {
+		t.Fatalf("fetch calls = %d, Go-bin calls = %d; want 1, 1", fetchCalls, binCalls)
 	}
 }
 
@@ -169,48 +227,25 @@ func TestExplicitReleaseDirectoryFailureDoesNotUseGoBin(t *testing.T) {
 	}
 }
 
-func TestManifestPinErrorsDoNotUseGoBin(t *testing.T) {
+func TestRuntimeManifestVersionMismatchDoesNotUseGoBin(t *testing.T) {
 	fixture := newPublishedRuntimeFixture(t)
-	for _, test := range []struct {
-		name   string
-		mutate func(runtimeAssetDependencies) runtimeAssetDependencies
-	}{
-		{
-			name: "resolution",
-			mutate: func(dependencies runtimeAssetDependencies) runtimeAssetDependencies {
-				dependencies.manifestPin = func(release.RuntimeLock) (release.RuntimeManifestPin, error) {
-					return release.RuntimeManifestPin{}, errors.New("corrupt embedded pin")
-				}
-				return dependencies
-			},
-		},
-		{
-			name: "validation",
-			mutate: func(dependencies runtimeAssetDependencies) runtimeAssetDependencies {
-				valid := dependencies.manifestPin
-				dependencies.manifestPin = func(lock release.RuntimeLock) (release.RuntimeManifestPin, error) {
-					pin, err := valid(lock)
-					pin.RuntimeVersion = "9.9.9"
-					return pin, err
-				}
-				return dependencies
-			},
-		},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			cacheRoot := t.TempDir()
-			dependencies := test.mutate(fixture.dependencies(cacheRoot, fixture.fetcher(nil, new(int))))
-			binCalls := 0
-			dependencies.goBin = func(context.Context, Config, []string) (string, error) {
-				binCalls++
-				return t.TempDir(), nil
-			}
-			if _, err := acquireRuntimeAssetsWith(context.Background(), sourceRuntimeConfig(t.TempDir(), cacheRoot), IO{Env: []string{}}, fixture.lock, dependencies); err == nil {
-				t.Fatal("manifest pin error was accepted")
-			}
-			if binCalls != 0 {
-				t.Fatalf("Go-bin calls = %d, want 0", binCalls)
-			}
-		})
+	wrongVersion := fixture.manifest
+	wrongVersion.RuntimeVersion = "9.9.9"
+	data, err := wrongVersion.JSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cacheRoot := t.TempDir()
+	dependencies := fixture.dependencies(cacheRoot, fixture.fetcher(map[string][]byte{fixture.lock.Manifest: data}, new(int)))
+	binCalls := 0
+	dependencies.goBin = func(context.Context, Config, []string) (string, error) {
+		binCalls++
+		return t.TempDir(), nil
+	}
+	if _, err := acquireRuntimeAssetsWith(context.Background(), sourceRuntimeConfig(t.TempDir(), cacheRoot), IO{Env: []string{}}, fixture.lock, dependencies); err == nil || !strings.Contains(err.Error(), "does not match") {
+		t.Fatalf("runtime manifest version mismatch = %v", err)
+	}
+	if binCalls != 0 {
+		t.Fatalf("Go-bin calls = %d, want 0", binCalls)
 	}
 }

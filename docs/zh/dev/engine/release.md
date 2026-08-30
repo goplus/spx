@@ -10,20 +10,20 @@ go run ./.github/scripts/runtime/version.go --json
 
 外置模块首个原子版本为 SPX `v3.2.0`、runtime `2.4.0`（tag `runtime-v2.4.0`）、runtime ABI `2`。历史 `v3.1.0 -> Godot spx2.3.0` 映射保持 legacy，不得移动或重新解释旧 tag。
 
-## 发布身份边界
+## 发布版本与完整性边界
 
-| 身份/产物 | 内容或复用输入 |
+| 产物 | 构建或校验输入 |
 | --- | --- |
 | Godot engine/editor/template | Godot commit、`godot_modules/spx` tree（含 SCons profile）、引擎工具链、平台参数 |
 | `spx-runtime-assets.zip` | SPX runtime pack source、固定的 pack build recipe、生成 pack 所用的锁定 Godot 引擎 |
-| 完整 runtime release | canonical `runtime.lock.json` SHA、module tree、pack source、build recipe、全部资产 checksum |
+| 完整 runtime release | `runtime-v<runtime_version>`、同版本 manifest、required asset 集合与全部资产 checksum |
 | SPX 产品包 | SPX release commit、选定的原子 runtime、各平台打包流程 |
 
 SPX 与 Godot Actions 都调用所选 SPX commit 中的 `.github/scripts/runtime_build_contract.py` 校验 lock 与 SCons profile。引擎 cache 的工具链摘要按平台收敛：native 只包含 SCons，Web 额外包含 EMSDK，Android 额外包含 JDK 与 NDK。未知的 NDK installer alias 只会阻断 Android 构建，不会误伤其他平台。
 
-manifest 分别记录 `module_tree`、`runtime_pack_source_sha256` 和 `build_recipe_sha256`。完整 lock SHA 也是 runtime release 的复用契约，因此 ABI、required assets、repository/manifest、Godot ref/version/commit、module path 或任一工具链字段变化都会拒绝复用旧 runtime。Godot SCons cache 使用更窄的独立身份；只改版本号、release 元数据、资产清单或文档不会重新编译 Godot，但可能要求新的 runtime release 身份。文档本身不进入这两类 runtime digest。
+manifest 记录 `module_tree`、`runtime_pack_source_sha256` 和 `build_recipe_sha256`，用于追踪构建来源和诊断问题；这些字段不参与已发布 runtime 的复用判定。复用只要求 release tag 为 `runtime-v<所选版本>`，且 manifest 的 `runtime_version` 等于 lock 选择的版本。若源码、ABI、工具链或资产契约发生了不兼容变化，发布者必须先提升 `runtime_version`。Godot SCons cache 使用独立的构建输入摘要；文档不进入 runtime 或 cache digest。
 
-module tree 仍严格覆盖完整的 `godot_modules/spx` tree。pack-source 摘要只跟踪专用 pack-only 命令 `spx exportpack` 的输入，并按固定的 Linux/amd64、CGO、无额外 tag 的 pack 构建目标解析 Go build constraints；`export_presets.cfg` 只投影 Linux preset，`gdspx.gdextension` 等实际进入 PCK 的文件仍完整计算。pack-only 路径直接写出 PCK，不依赖平台导出模板。独立的 `run`、`buildlauncher`、Web/mobile exporter、平台模板和 release 编排不进入摘要。build-recipe 摘要只跟踪专用的本地 Linux 引擎准备与 export-pack 路径；其他平台分发、远程下载、本地 manifest 发布和 CI 运输层也不进入摘要。任一已选输入变化时仍会拒绝复用旧 runtime。
+module tree 仍严格覆盖完整的 `godot_modules/spx` tree。pack-source 摘要只跟踪专用 pack-only 命令 `spx exportpack` 的输入，并按固定的 Linux/amd64、CGO、无额外 tag 的 pack 构建目标解析 Go build constraints；`export_presets.cfg` 只投影 Linux preset，`gdspx.gdextension` 等实际进入 PCK 的文件仍完整计算。pack-only 路径直接写出 PCK，不依赖平台导出模板。独立的 `run`、`buildlauncher`、Web/mobile exporter、平台模板和 release 编排不进入摘要。build-recipe 摘要只跟踪专用的本地 Linux 引擎准备与 export-pack 路径；其他平台分发、远程下载、本地 manifest 发布和 CI 运输层也不进入摘要。这些摘要帮助定位构建差异，但不会替代显式版本升级。
 
 ## 冻结顺序
 
@@ -44,7 +44,7 @@ module tree 仍严格覆盖完整的 `godot_modules/spx` tree。pack-source 摘�
    ```
 
    普通 merge 会保留 candidate 的祖先关系；squash 或 rebase 会改变源码身份，此时运行 `make pin-godot-unpublished GODOT_SHA=<resulting-sha>` 固定最终 commit 并重跑 dry-run，不能发布旧 candidate SHA。
-5. ancestry verifier 成功后才能发布新的 runtime。resolver 判定必须构建 runtime 时，两种 publish 操作都会先在 release setup 中运行同一个严格 verifier，再启动 Godot/runtime 构建；长构建结束后，`publish-runtime` 还会在创建或上传 release 前立即复验。已经完整校验的公开 runtime 属于不可变复用，不要求其历史 source ref 永久存在。
+5. ancestry verifier 成功后才能发布新的 runtime。仅当所选 `runtime-v<runtime_version>` 尚未公开时，发布流程才会在构建前运行 verifier，并在创建或上传 release 前立即复验。相同 runtime version 的公开 release 可直接复用，不要求其历史 source ref 永久存在。
 
 不要从 fork 发布。`publish-runtime` 与 `publish-release` 操作只允许在 lock 的 `release_repository`（当前为 `goplus/spx`）执行。
 
@@ -67,15 +67,15 @@ git diff --check
 
 ## runtime 感知的 CI 与三阶段自举
 
-普通 CI 会在启动 runtime consumer 前解析 lock 对应的 runtime release。resolver 只读取 release metadata 与 manifest，不下载全部 runtime 资产；它会校验精确的资产名集合、lock、module tree、runtime-pack source digest 与 build-recipe digest。
+普通 CI 会在启动 runtime consumer 前解析 lock 对应的 runtime release。resolver 只读取 release metadata 与 manifest，不下载全部 runtime 资产；它会确认 tag 为 `runtime-v<所选版本>`、manifest 的 `runtime_version` 等于 lock 选择的版本，并校验 required asset 名称集合。
 
 - runtime 不存在或仍为 draft 时，CI 跳过基于已发布 runtime 的 Web 产品 smoke，改为把当前 SPX module 放入 lock 的 Godot source，执行 Linux SPX tests 与 Web normal compile smoke。
-- runtime 已公开且与当前身份完全一致时，下一次 CI 会跳过 source integration 重编译，强制执行使用已发布资产的 Web normal 产品 smoke。
-- 已公开 release 缺 manifest、资产集合或 provenance 不一致，以及 GitHub API 异常，都不属于前两种状态；resolver 与 CI gate 会 fail closed。
+- runtime 已公开且版本一致时，下一次 CI 会跳过 source integration 重编译，强制执行使用已发布资产的 Web normal 产品 smoke。
+- 已公开 release 缺 manifest、版本不一致、资产集合不完整或 GitHub API 异常，都不属于前两种状态；resolver 与 CI gate 会 fail closed。
 
 这个切换同时避免发布循环与 runtime 重复构建。普通 CI 不构建完整 release runtime；只有 release workflow 执行该构建。release assemble 在复用或发布前仍会下载全部资产，并校验 `SHA256SUMS` 与 manifest 中每个文件的 checksum。
 
-canonical-ref ancestry 规则刻意只用于 release。普通 runner 与 module-integration workflow 可以测试 lock 中精确的 candidate SHA，不要求它已经进入 `godot.ref`。不存在可复用的公开 runtime 时，release setup 会调用共享 verifier：只有 verifier 已确认 exact commit 可从 canonical repo 获取、canonical ref tip 是该 commit 的祖先且反向尚不成立时，`dry-run` 才能以 pre-merge candidate 继续，并在 workflow summary 明确标记 candidate-only；两种 publish 操作都必须先证明 ancestry 才会开始构建。ref 查询失败、ref 歧义、网络异常或比较失败会阻断所有 release 操作，不能伪装成 candidate 结果。新 runtime 构建结束后，publish job 还会在发布前立即复验。如果 resolver 已完整校验不可变的公开 runtime，summary 会标记 source ancestry 无需检查，release 不再依赖历史 ref。
+canonical-ref ancestry 规则刻意只用于构建和发布新的 runtime。普通 runner 与 module-integration workflow 可以测试 lock 中精确的 candidate SHA，不要求它已经进入 `godot.ref`。解析时不存在相同版本的公开 runtime，release setup 才会调用共享 verifier：只有 verifier 已确认 exact commit 可从 canonical repo 获取、canonical ref tip 是该 commit 的祖先且反向尚不成立时，`dry-run` 才能以 pre-merge candidate 继续，并在 workflow summary 明确标记 candidate-only；publish 操作必须先证明 ancestry 才会开始新的 runtime 构建。ref 查询失败、ref 歧义、网络异常或比较失败会阻断新 runtime 发布。若 resolver 找到相同 runtime version 的公开 release 且 manifest 版本匹配，summary 会标记 source ancestry 无需检查。
 
 三阶段自举仍在 `goplus/spx` 的冻结发布分支上执行：
 
@@ -89,9 +89,9 @@ canonical-ref ancestry 规则刻意只用于 release。普通 runner 与 module-
 
 1. 先对 lock 中精确的 Godot candidate 使用 `release_tag=<当前声明的-SPX-tag>`、`platforms=all`、`operation=dry-run`。检查 workflow summary：pre-merge candidate 在此阶段可以继续，但会明确标记为尚不可发布。下载并检查所有 runtime/product artifacts，完成安装与 demo smoke。
 2. 将该 Godot commit 原样提升到 canonical `godot.ref` 并通过严格 ancestry verifier，再对同一个 SPX commit 设置 `operation=publish-runtime`。没有可复用版本时，该模式会构建、校验并公开全部 runtime 资产，但跳过 SPX 产品包、SPX release 和 npm。
-3. 让普通 CI 自动切换到已公开 runtime 路径，并通过 Web normal 产品 smoke；合并时不得改变 module/pack/recipe 身份输入。随后在最终 SPX commit 上使用 `platforms=all`、`operation=publish-release`，流程会验证并复用同一 runtime，再发布 SPX 产品与 npm。
+3. 让普通 CI 自动切换到已公开 runtime 路径，并通过 Web normal 产品 smoke。若合并导致 runtime 内容不兼容，先提升 `runtime_version`；否则在最终 SPX commit 上使用 `platforms=all`、`operation=publish-release`，流程会验证并复用同一 runtime，再发布 SPX 产品与 npm。
 
-runtime manifest、`SHA256SUMS` 和 lock 的 required asset 集合必须完全一致；已公开 tag 的来源或资产不同会直接失败，不能覆盖。未公开的 runtime/SPX draft tag 必须指向当前 `GITHUB_SHA`；已公开 runtime 可来自前一阶段的 candidate commit，但只有完整复用契约一致时才能用于最终 SPX commit。SPX tag 始终指向最终 commit。如果合并修改了任一 runtime 身份输入，最终运行会拒绝复用，此时必须重新冻结并提升 `runtime_version`。
+runtime manifest、`SHA256SUMS` 和 required asset 集合必须内部自洽。runtime 复用比较 `runtime_version`，不会把已发布 manifest 或 checksum 文件与后续 candidate build 做逐字节比较；checksum 只保证下载内容完整，不形成第二套兼容性身份。未公开的 runtime/SPX draft tag 必须指向当前 `GITHUB_SHA`，相同版本的公开 runtime 则可来自前一阶段的 candidate commit。SPX tag 始终指向最终 commit。若 runtime 内容发生不兼容变化，必须先提升 `runtime_version`，不能覆盖或静默重新解释已有 tag。
 
 ## 开发版 npm 包
 
@@ -110,7 +110,7 @@ gh workflow run release.yml \
 
 ## 后续版本维护
 
-- 仅 SPX 产品变化且 runtime 两类产物均未变化时，可以用 SPX-only mapping 保留 current runtime，但必须先由 release dry-run 证明公开 runtime 的完整 provenance 可复用；`bump-release` 不会在本地擅自做这个复用决定。
+- 仅 SPX 产品变化且 runtime 版本不变时，可以用 SPX-only mapping 保留 current runtime；发布流程会按 runtime version 复用公开资产。
 - Godot、`godot_modules/spx`、toolchain 或 runtime pack 输出变化时，用一个事务同时提升两套身份：
 
   ```sh
@@ -118,7 +118,7 @@ gh workflow run release.yml \
   ```
 
   只有 runtime ABI 本身变化时才额外传 `RUNTIME_ABI=N`。该命令会先通过已认证的 `gh` API 只读检查确认两项 current release 已公开、两项目标 release/tag 均未占用，再归档上一条 SPX mapping、推进 current lock、创建新的不可变 snapshot，并执行 release metadata 测试；它不会发布，也不会修改 Godot pin。current pair 仍是未发布 candidate 时，应继续使用原版本，不能把它归档成发布历史。
-- 每个原子 runtime definition 都必须有不可变的 `internal/release/runtime_locks/<runtime-version>.json` 快照；校验历史 manifest 时读取对应快照，不能读取更新后的默认 lock。
+- 每个原子 runtime definition 都必须有不可变的 `internal/release/runtime_locks/<runtime-version>.json` 快照；历史版本根据该快照恢复构建配置、平台资产名称和 SPX/runtime 映射，不能读取更新后的默认 lock。
 - 新 runtime version 创建后，严格固定使用 `make pin-godot GODOT_SHA=<sha>`；commit 已进入 lock ref 且需要替换未发布 snapshot 时使用 `make pin-godot-unpublished GODOT_SHA=<sha>`；合并前 dry-run candidate 使用 `make pin-godot-candidate GODOT_SHA=<sha>`。三者默认保留 current lock ref，只有传入 `GODOT_REF=...` 才会切换，并且只根据 current lock 推导 snapshot 文件名，不会触碰其他历史版本。
 - 项目 `go.mod` scaffold 会自动渲染当前声明的 SPX 版本。`internal/cmd/codegen/go.mod` 中的 `v3.0.0` 只是本地 `replace` 所需的 major-version floor，发布时不要修改这两个文件。
 - runtime 一旦公开，其 snapshot 永久冻结。公开 tag 绝不能使用 `sync --unpublished`、`pin-godot-unpublished` 或 `pin-godot-candidate`；必须通过 `make bump-release` 使用新的 runtime version。release setup 会运行 `check`，package 初始化、drift 与 catalog 测试也会共同校验 current mapping。

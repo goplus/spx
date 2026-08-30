@@ -38,18 +38,16 @@ const (
 )
 
 type runtimeAssetDependencies struct {
-	fetch       runtimebundle.FetchFunc
-	cacheRoot   func() string
-	manifestPin func(release.RuntimeLock) (release.RuntimeManifestPin, error)
-	goBin       func(context.Context, Config, []string) (string, error)
+	fetch     runtimebundle.FetchFunc
+	cacheRoot func() string
+	goBin     func(context.Context, Config, []string) (string, error)
 }
 
 func defaultRuntimeAssetDependencies() runtimeAssetDependencies {
 	return runtimeAssetDependencies{
-		fetch:       fetchRuntimeURL,
-		cacheRoot:   runtimebundle.DefaultCacheRoot,
-		manifestPin: release.RuntimeManifestPinForLock,
-		goBin:       resolveGoBin,
+		fetch:     fetchRuntimeURL,
+		cacheRoot: runtimebundle.DefaultCacheRoot,
+		goBin:     resolveGoBin,
 	}
 }
 
@@ -79,7 +77,7 @@ func acquireRuntimeAssetsWith(ctx context.Context, cfg Config, streams IO, lock 
 	if err := ctx.Err(); err != nil {
 		return Assets{}, err
 	}
-	if dependencies.fetch == nil || dependencies.cacheRoot == nil || dependencies.manifestPin == nil {
+	if dependencies.fetch == nil || dependencies.cacheRoot == nil {
 		return Assets{}, errors.New("launchpack: incomplete runtime acquisition dependencies")
 	}
 	env := runtimeEnvironment(cfg, streams.Env)
@@ -111,19 +109,7 @@ func acquireRuntimeAssetsWith(ctx context.Context, cfg Config, streams IO, lock 
 	if duplicate {
 		return Assets{}, fmt.Errorf("launchpack: duplicate %s", runtimeAssetDirEnv)
 	}
-	pin, err := dependencies.manifestPin(lock)
-	if err != nil {
-		publishedErr := fmt.Errorf("launchpack: resolve runtime manifest pin: %w", err)
-		if !assetDirSet && cfg.Source.SourceMode && errors.Is(err, release.ErrRuntimeManifestPinNotFound) {
-			return acquireSourceRuntime(ctx, cfg, env, cacheRoot, lock, spec, dependencies, publishedErr)
-		}
-		return Assets{}, publishedErr
-	}
-	if err := pin.ValidateForLock(lock); err != nil {
-		return Assets{}, err
-	}
-
-	source, err := resolvePublishedRuntime(ctx, cacheRoot, lock, spec, pin, env, offline, dependencies)
+	source, err := resolvePublishedRuntime(ctx, cacheRoot, lock, env, offline, dependencies)
 	if err == nil {
 		var assets Assets
 		assets, err = materializePublishedRuntime(ctx, cacheRoot, lock, spec, source, offline)
@@ -134,7 +120,17 @@ func acquireRuntimeAssetsWith(ctx context.Context, cfg Config, streams IO, lock 
 	if assetDirSet || !cfg.Source.SourceMode {
 		return Assets{}, err
 	}
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return Assets{}, ctxErr
+	}
+	if !runtimeReleaseUnavailable(err) {
+		return Assets{}, err
+	}
 	return acquireSourceRuntime(ctx, cfg, env, cacheRoot, lock, spec, dependencies, err)
+}
+
+func runtimeReleaseUnavailable(err error) bool {
+	return errors.Is(err, errReleaseUnavailable) || errors.Is(err, runtimebundle.ErrOfflineCacheMiss)
 }
 
 func resolveRuntimeCacheRoot(env []string, defaultRoot func() string) (string, error) {

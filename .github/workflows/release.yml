@@ -107,8 +107,6 @@ jobs:
           set -euo pipefail
           go run ./.github/scripts/runtime/resolution.go \
             --lock internal/release/runtime.lock.json \
-            --repo-root . \
-            --revision HEAD \
             --github-output "$GITHUB_OUTPUT"
 
       - name: Verify locked Godot source ancestry
@@ -437,6 +435,7 @@ jobs:
         run: bash .github/scripts/release/assemble.sh
 
       - name: Upload assembled runtime release
+        if: needs.setup.outputs.runtime_state == 'missing' || inputs.operation == 'dry-run'
         uses: actions/upload-artifact@v7
         with:
           name: spx-runtime-release-${{ needs.setup.outputs.runtime_version }}
@@ -454,7 +453,7 @@ jobs:
           retention-days: 14
 
   publish-runtime:
-    name: Publish runtime release
+    name: Publish or reuse runtime release
     needs: [setup, assemble]
     if: ${{ !cancelled() && inputs.operation != 'dry-run' && needs.assemble.result == 'success' }}
     runs-on: ubuntu-22.04
@@ -479,6 +478,7 @@ jobs:
             --lock internal/release/runtime.lock.json
 
       - name: Download assembled runtime release
+        if: needs.setup.outputs.runtime_state == 'missing'
         uses: actions/download-artifact@v8
         with:
           name: spx-runtime-release-${{ needs.setup.outputs.runtime_version }}
@@ -491,9 +491,19 @@ jobs:
           RELEASE_TAG: ${{ needs.setup.outputs.runtime_tag }}
           RUNTIME_VERSION: ${{ needs.setup.outputs.runtime_version }}
           RUNTIME_MANIFEST: ${{ needs.setup.outputs.runtime_manifest }}
+          RUNTIME_STATE: ${{ needs.setup.outputs.runtime_state }}
           REPOSITORY: ${{ needs.setup.outputs.release_repository }}
         run: |
           set -euo pipefail
+
+          if [ "$RUNTIME_STATE" = ready ]; then
+            echo "[info] Reusing verified public runtime release: $RELEASE_TAG"
+            exit 0
+          fi
+          if [ "$RUNTIME_STATE" != missing ]; then
+            echo "[error] Invalid runtime release state: $RUNTIME_STATE" >&2
+            exit 1
+          fi
 
           if gh release view "$RELEASE_TAG" --repo "$REPOSITORY" >/dev/null 2>&1; then
             is_draft="$(gh release view "$RELEASE_TAG" --repo "$REPOSITORY" --json isDraft --jq .isDraft)"
@@ -501,16 +511,18 @@ jobs:
               mkdir -p published
               gh release download "$RELEASE_TAG" --repo "$REPOSITORY" --dir published
               (cd published && sha256sum -c SHA256SUMS)
-              find dist -maxdepth 1 -type f -printf '%f\n' | sort > published/local-assets.txt
-              gh release view "$RELEASE_TAG" --repo "$REPOSITORY" --json assets --jq '.assets[].name' | sort > published/remote-assets.txt
-              if cmp -s "dist/$RUNTIME_MANIFEST" "published/$RUNTIME_MANIFEST" && \
-                cmp -s dist/SHA256SUMS published/SHA256SUMS && \
-                cmp -s published/local-assets.txt published/remote-assets.txt; then
-                echo "[info] Identical immutable runtime release already exists: $RELEASE_TAG"
-                exit 0
+              if ! diff -u \
+                <(find dist -maxdepth 1 -type f -printf '%f\n' | sort) \
+                <(gh release view "$RELEASE_TAG" --repo "$REPOSITORY" --json assets --jq '.assets[].name' | sort); then
+                echo "[error] Runtime tag $RELEASE_TAG has an unexpected asset set" >&2
+                exit 1
               fi
-              echo "[error] Runtime tag $RELEASE_TAG already exists with different provenance" >&2
-              exit 1
+              go run ./.github/scripts/runtime/manifest.go \
+                --lock internal/release/runtime.lock.json \
+                --verify-manifest "published/$RUNTIME_MANIFEST" \
+                --asset-directory published
+              echo "[info] Reusing public runtime release for $RUNTIME_VERSION"
+              exit 0
             fi
             while IFS= read -r name; do
               [ -z "$name" ] || gh release delete-asset "$RELEASE_TAG" "$name" --repo "$REPOSITORY" --yes
@@ -520,7 +532,7 @@ jobs:
               --repo "$REPOSITORY" \
               --target "$GITHUB_SHA" \
               --title "SPX Runtime $RUNTIME_VERSION" \
-              --notes "Content-verifiable SPX runtime assets. See $RUNTIME_MANIFEST for source and toolchain provenance." \
+              --notes "Versioned SPX runtime assets. See $RUNTIME_MANIFEST for checksums." \
               --draft
           fi
 

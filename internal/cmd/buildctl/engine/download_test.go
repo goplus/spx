@@ -173,6 +173,44 @@ func TestLoadEngineAssetManifestKeepsNonNotFoundFailuresClosed(t *testing.T) {
 	}
 }
 
+func TestLoadEngineAssetManifestAcceptsSameVersionBuildMetadata(t *testing.T) {
+	lock := release.DefaultRuntimeLock()
+	assets := make([]release.RuntimeAsset, 0, len(lock.RequiredAssets))
+	for _, name := range lock.RequiredAssets {
+		assets = append(assets, release.RuntimeAsset{Name: name, Size: 1, SHA256: strings.Repeat("0", 64)})
+	}
+	manifest := release.RuntimeManifest{
+		Schema:            release.RuntimeManifestSchema,
+		RuntimeVersion:    lock.RuntimeVersion,
+		RuntimeABI:        lock.RuntimeABI + 1,
+		ReleaseRepository: "example/runtime",
+		LockSHA256:        strings.Repeat("1", 64),
+		Provenance: release.RuntimeProvenance{
+			SPXCommit: strings.Repeat("2", 40), GodotCommit: strings.Repeat("3", 40), ModuleTree: strings.Repeat("4", 40),
+			RuntimePackSourceSHA256: strings.Repeat("5", 64), BuildRecipeSHA256: strings.Repeat("6", 64), Toolchain: lock.Toolchain,
+		},
+		Assets: assets,
+	}
+	data, err := manifest.JSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(data)
+	}))
+	defer server.Close()
+
+	env := engineDownloadEnv{
+		version: lock.RuntimeVersion, cacheDir: t.TempDir(), urlPrefix: server.URL + "/",
+	}
+	if err := loadEngineAssetManifest(&env); err != nil {
+		t.Fatalf("same-version manifest rejected stale build metadata: %v", err)
+	}
+	if env.manifest == nil || env.manifest.ReleaseRepository != "example/runtime" {
+		t.Fatalf("loaded manifest = %#v", env.manifest)
+	}
+}
+
 func TestLinkOrCopyFilePrefersHardLinkWhenAvailable(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("hard link behavior varies on Windows")

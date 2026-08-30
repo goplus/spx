@@ -10,20 +10,20 @@ The same tool supports `--spx-version`, `--runtime-tag`, and the default runtime
 
 The first atomic external-module release is SPX `v3.2.0`, runtime `2.4.0` (tag `runtime-v2.4.0`), and runtime ABI `2`. The historical `v3.1.0 -> Godot spx2.3.0` mapping remains legacy; never move or reinterpret an existing tag.
 
-## Release identity boundaries
+## Release version and integrity boundaries
 
-| Identity/artifact | Content or reuse inputs |
+| Artifact | Build or verification inputs |
 | --- | --- |
 | Godot engine/editor/templates | Godot commit, `godot_modules/spx` tree (including the SCons profile), engine toolchain, and platform axes |
-| `spx-runtime-assets.zip` | SPX runtime pack sources, the pinned pack build recipe, and the locked Godot engine used to export the pack |
-| Complete runtime release | Canonical `runtime.lock.json` SHA, module tree, pack source, build recipe, and every asset checksum |
+| `spx-runtime-assets.zip` | SPX runtime pack sources, the fixed pack build recipe, and the locked Godot engine used to export the pack |
+| Complete runtime release | `runtime-v<runtime_version>`, a same-version manifest, the required asset set, and every asset checksum |
 | SPX product packages | SPX release commit, selected atomic runtime, and platform packaging flow |
 
 SPX and Godot Actions both invoke `.github/scripts/runtime_build_contract.py` from the selected SPX commit to validate the lock and SCons profile. Engine cache toolchain digests are platform-scoped: native uses SCons, Web adds EMSDK, and Android adds JDK plus the NDK. An unknown NDK installer alias fails only an Android build; it does not block unrelated platforms.
 
-The manifest records `module_tree`, `runtime_pack_source_sha256`, and `build_recipe_sha256` independently. The full lock SHA is also part of the runtime-release reuse contract, so changing the ABI, required assets, repository/manifest, Godot ref/version/commit, module path, or any toolchain field rejects reuse. Godot SCons caches use a narrower identity: changing only a version, release metadata, an asset list, or documentation does not recompile Godot, although it may require a new runtime-release identity. Documentation itself is outside both runtime digests.
+The manifest records `module_tree`, `runtime_pack_source_sha256`, and `build_recipe_sha256` for build traceability and diagnostics; those fields do not decide whether a published runtime can be reused. Reuse requires the tag `runtime-v<selected-version>` and a manifest whose `runtime_version` equals the version selected by the lock. If source, ABI, toolchain, or asset-contract changes make an artifact incompatible, the publisher must bump `runtime_version` first. Godot SCons caches use their own build-input digests, and documentation is outside both runtime and cache digests.
 
-The module tree remains a strict digest of the complete `godot_modules/spx` tree. The pack-source digest is narrower: it follows the dedicated pack-only `spx exportpack` inputs and evaluates Go build constraints for the fixed Linux/amd64 CGO pack builder with no extra tags. It projects `export_presets.cfg` to the Linux preset, while hashing packaged files such as `gdspx.gdextension` in full. The pack-only path writes the PCK directly and does not require a platform export template. Independent commands such as `run`, `buildlauncher`, Web/mobile exporters, platform templates, and release orchestration stay outside it. The build-recipe digest follows the dedicated local Linux engine preparation and export-pack path; other platform dispatch, remote transport, local-manifest publication, and CI transport stay outside it. Changes to any selected input still reject reuse of the old runtime.
+The module tree remains a strict digest of the complete `godot_modules/spx` tree. The pack-source digest is narrower: it follows the dedicated pack-only `spx exportpack` inputs and evaluates Go build constraints for the fixed Linux/amd64 CGO pack builder with no extra tags. It projects `export_presets.cfg` to the Linux preset, while hashing packaged files such as `gdspx.gdextension` in full. The pack-only path writes the PCK directly and does not require a platform export template. Independent commands such as `run`, `buildlauncher`, Web/mobile exporters, platform templates, and release orchestration stay outside it. The build-recipe digest follows the dedicated local Linux engine preparation and export-pack path; other platform dispatch, remote transport, local-manifest publication, and CI transport stay outside it. These digests help diagnose build differences but do not replace an explicit version bump.
 
 ## Freeze order
 
@@ -44,7 +44,7 @@ The module tree remains a strict digest of the complete `godot_modules/spx` tree
    ```
 
    A normal merge preserves the candidate as an ancestor. A squash or rebase changes the source identity; run `make pin-godot-unpublished GODOT_SHA=<resulting-sha>` and repeat the dry-run instead of publishing the old candidate SHA.
-5. Only after the ancestry verifier succeeds may a new runtime be published. When the resolver says the runtime must be built, both publish operations execute the same strict verifier in release setup before the Godot/runtime build, and `publish-runtime` verifies it again after the long build immediately before creating or uploading the release. A fully verified public runtime is immutable reuse and does not depend on its historical source ref remaining available.
+5. Only after the ancestry verifier succeeds may a new runtime be published. The release flow runs the verifier before building only when the selected `runtime-v<runtime_version>` is not yet public, and repeats it immediately before creating or uploading that release. A public release with the same runtime version can be reused without its historical source ref remaining available.
 
 Never publish from a fork. The `publish-runtime` and `publish-release` operations are allowed only in the lock's `release_repository`, currently `goplus/spx`.
 
@@ -67,15 +67,15 @@ Also complete at least these checks:
 
 ## Runtime-aware CI and three-stage bootstrap
 
-Ordinary CI resolves the locked runtime release before starting a runtime consumer. The resolver reads release metadata and the manifest only; it validates the exact asset-name set, lock, module tree, runtime-pack source digest, and build-recipe digest without downloading every runtime asset.
+Ordinary CI resolves the locked runtime release before starting a runtime consumer. The resolver reads release metadata and the manifest only; without downloading every runtime asset, it confirms the tag is `runtime-v<selected-version>`, checks that the manifest's `runtime_version` equals the version selected by the lock, and validates the required asset-name set.
 
 - If the runtime is absent or still a draft, CI skips the published Web product smoke and instead builds the current SPX module with the locked Godot source, runs the Linux SPX tests, and performs the Web normal compile smoke.
-- If the runtime is public and matches the current identity, the next CI run skips that source integration rebuild and requires the Web normal product smoke against the published assets.
-- A public release with a missing manifest, a different asset set/provenance, or a GitHub API error is neither state: resolution fails closed and the CI gate fails.
+- If the runtime is public and its version matches, the next CI run skips that source integration rebuild and requires the Web normal product smoke against the published assets.
+- A public release with a missing manifest, a version mismatch, an incomplete asset set, or a GitHub API error is neither state: resolution fails closed and the CI gate fails.
 
 This switch avoids both the publication circular dependency and duplicate runtime builds. Ordinary CI never builds a complete release runtime; only the release workflow does that. The release assembly still downloads every asset and verifies `SHA256SUMS` plus every manifest checksum before reuse or publication.
 
-The canonical-ref ancestry rule is deliberately release-only. Ordinary runner and module-integration workflows may test an exact locked candidate SHA without requiring that it has already reached `godot.ref`. When no reusable public runtime exists, release setup runs the shared verifier: `dry-run` may continue only after the verifier positively classifies a fetchable exact commit as a pre-merge candidate, and records that state in the workflow summary; both publish operations require verified ancestry before building. Ref lookup, ambiguity, network, and comparison failures fail every release operation rather than being treated as a candidate result. A publish job that built a new runtime checks ancestry again immediately before publication. If the resolver has already verified an immutable public runtime, source ancestry is reported as not required and the release no longer depends on the historical ref.
+The canonical-ref ancestry rule applies only when building and publishing a new runtime. Ordinary runner and module-integration workflows may test an exact locked candidate SHA without requiring that it has already reached `godot.ref`. When no public runtime with the selected version exists at resolution time, release setup runs the shared verifier: `dry-run` may continue only after the verifier positively classifies a fetchable exact commit as a pre-merge candidate and records that state in the workflow summary; publication requires verified ancestry before the new runtime build starts. Ref lookup, ambiguity, network, and comparison failures block the new runtime publication. If the resolver finds a public release with the same runtime version and an agreeing manifest, source ancestry is reported as not required.
 
 Use a frozen release branch in `goplus/spx` for the bootstrap operations:
 
@@ -89,9 +89,9 @@ Use a frozen release branch in `goplus/spx` for the bootstrap operations:
 
 1. Run `release_tag=<declared-SPX-tag>`, `platforms=all`, and `operation=dry-run` against the exact locked Godot candidate. Check the workflow summary: a pre-merge candidate is allowed here but is explicitly marked as not publication-ready. Download and inspect every runtime/product artifact, then complete install and demo smoke tests.
 2. Promote that exact Godot commit into the canonical `godot.ref` and run the strict ancestry verifier. Rerun the same SPX commit with `operation=publish-runtime`. If no reusable runtime exists, this mode builds, verifies, and publishes the complete runtime asset set while skipping SPX products, the SPX release, and npm.
-3. Let ordinary CI automatically switch to the public-runtime path and pass the Web normal product smoke. Merge without changing any module/pack/recipe identity input, then run the final SPX commit with `platforms=all` and `operation=publish-release`. The workflow verifies and reuses that runtime before publishing SPX products and npm.
+3. Let ordinary CI automatically switch to the public-runtime path and pass the Web normal product smoke. If the merge makes runtime content incompatible, bump `runtime_version`; otherwise run the final SPX commit with `platforms=all` and `operation=publish-release`. The workflow verifies and reuses that runtime before publishing SPX products and npm.
 
-The runtime manifest, `SHA256SUMS`, and the lock's required asset set must match exactly. A public tag with different provenance or assets fails rather than being overwritten. An unpublished runtime/SPX draft tag must target the current `GITHUB_SHA`; a public runtime may target the candidate commit from the previous stage, but only an identical full reuse contract allows the final SPX commit to consume it. The SPX tag always targets the final commit. If the merge changes any runtime identity input, the final run rejects reuse; freeze again and bump `runtime_version` instead.
+The runtime manifest, `SHA256SUMS`, and the required asset set must be internally consistent. Runtime reuse compares `runtime_version`; it does not compare the published manifest or checksum files byte-for-byte with a later candidate build. Checksums protect downloaded content without creating a second compatibility identity. An unpublished runtime/SPX draft tag must target the current `GITHUB_SHA`, while a public same-version runtime may target the candidate commit from the previous stage. The SPX tag always targets the final commit. If runtime content changes incompatibly, bump `runtime_version` instead of replacing or silently reinterpreting an existing tag.
 
 ## Development npm package
 
@@ -110,7 +110,7 @@ Do not restore publication on every push to `dev`. Explicit publication avoids r
 
 ## Maintaining later versions
 
-- If only SPX products change and both runtime artifact classes remain identical, an SPX-only mapping may retain the current runtime, but the release dry-run must first prove that the public runtime's complete provenance is reusable. `bump-release` deliberately does not make this reuse decision locally.
+- If only SPX products change and the runtime version stays unchanged, an SPX-only mapping may retain the current runtime; the release flow reuses its public assets by runtime version.
 - If Godot, `godot_modules/spx`, toolchain inputs, or runtime pack output changes, advance both identities in one transaction:
 
   ```sh
@@ -118,7 +118,7 @@ Do not restore publication on every push to `dev`. Explicit publication avoids r
   ```
 
   Add `RUNTIME_ABI=N` only when the runtime ABI itself changes. The command uses authenticated `gh` API reads to require both current releases to be public and both target release/tag names to be unused before it writes. It then archives the previous SPX mapping, advances the current lock, creates the new immutable snapshot, and runs the release-metadata tests. It never publishes and never changes the Godot pin. If the current pair is still an unpublished candidate, keep those versions instead of archiving them as release history.
-- Every atomic runtime definition must have an immutable lock snapshot at `internal/release/runtime_locks/<runtime-version>.json`. Consumers use that snapshot, rather than the newer default lock, when validating a historical manifest.
+- Every atomic runtime definition must have an immutable lock snapshot at `internal/release/runtime_locks/<runtime-version>.json`. Historical versions use that snapshot to recover build configuration, platform asset names, and the SPX/runtime mapping rather than consulting the newer default lock.
 - After creating a new runtime version, use `make pin-godot GODOT_SHA=<sha>` for a strict pin, `make pin-godot-unpublished GODOT_SHA=<sha>` to replace its unpublished snapshot after the commit reaches the lock ref, or `make pin-godot-candidate GODOT_SHA=<sha>` for a verified pre-merge dry-run candidate. All three retain the current lock ref unless `GODOT_REF=...` is supplied, derive the snapshot filename from the current lock, and never touch other historical versions.
 - The project `go.mod` scaffold renders the declared SPX version automatically. The `v3.0.0` requirement in `internal/cmd/codegen/go.mod` is only the major-version floor for its local `replace`; do not bump either file during a release.
 - Once a runtime is public, freeze its snapshot permanently. Never use `sync --unpublished`, `pin-godot-unpublished`, or `pin-godot-candidate` for a public tag; use `make bump-release` with a new runtime version instead. Release setup runs `check`, and package initialization plus drift/catalog tests enforce the current mapping.

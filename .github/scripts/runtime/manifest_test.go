@@ -56,8 +56,19 @@ func TestRunReleaseManifestGenerateAndVerify(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("verify generated manifest: %v", err)
 	}
+	manifest, err := release.LoadRuntimeManifest(manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest.RuntimeABI++
+	manifest.ReleaseRepository = "example/runtime"
+	manifest.LockSHA256 = strings.Repeat("0", 64)
+	manifest.Provenance.GodotCommit = strings.Repeat("5", 40)
+	if err := release.WriteRuntimeManifest(manifestPath, manifest); err != nil {
+		t.Fatal(err)
+	}
 	if err := runReleaseManifest([]string{"--verify-manifest", manifestPath}); err != nil {
-		t.Fatalf("validate generated manifest metadata: %v", err)
+		t.Fatalf("validate same-version manifest with different build metadata: %v", err)
 	}
 
 	corruptPath := filepath.Join(dir, lock.RequiredAssets[0])

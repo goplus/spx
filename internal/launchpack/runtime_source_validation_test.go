@@ -19,6 +19,7 @@ package launchpack
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -76,7 +77,7 @@ func TestSourceRuntimeRejectsInvalidInstalledPair(t *testing.T) {
 			test.setup(t, bin)
 			cacheRoot := t.TempDir()
 			dependencies := localRuntimeTestDependencies(cacheRoot, func(context.Context, string, io.Writer) error {
-				return errors.New("fetch must not run")
+				return fmt.Errorf("%w: unpublished runtime", errReleaseUnavailable)
 			})
 			dependencies.goBin = func(context.Context, Config, []string) (string, error) { return bin, nil }
 			_, err := acquireRuntimeAssetsWith(context.Background(), sourceRuntimeConfig(t.TempDir(), cacheRoot), IO{Env: []string{}}, lock, dependencies)
@@ -140,7 +141,7 @@ func TestSourceManifestUsesVersionValidationButExplicitStaysStrict(t *testing.T)
 	}
 	cacheRoot := t.TempDir()
 	dependencies := localRuntimeTestDependencies(cacheRoot, func(context.Context, string, io.Writer) error {
-		return errors.New("unpublished runtime must not fetch")
+		return fmt.Errorf("%w: unpublished runtime", errReleaseUnavailable)
 	})
 	binCalls := 0
 	dependencies.goBin = func(context.Context, Config, []string) (string, error) {
@@ -174,7 +175,7 @@ func TestSourceRuntimePassesAcquisitionEnvironmentToGoBin(t *testing.T) {
 	bin := writeInstalledRuntimeTest(t, spec, "engine", "pack")
 	cacheRoot := t.TempDir()
 	dependencies := localRuntimeTestDependencies(cacheRoot, func(context.Context, string, io.Writer) error {
-		return errors.New("fetch must not run")
+		return fmt.Errorf("%w: unpublished runtime", errReleaseUnavailable)
 	})
 	dependencies.goBin = func(_ context.Context, _ Config, env []string) (string, error) {
 		value, found, duplicate := environmentValue(env, "GOPATH")
@@ -238,14 +239,14 @@ func TestSourceRuntimeMissingFilesSuggestsMakeDev(t *testing.T) {
 	lock := release.DefaultRuntimeLock()
 	cacheRoot := t.TempDir()
 	dependencies := localRuntimeTestDependencies(cacheRoot, func(context.Context, string, io.Writer) error {
-		return errors.New("fetch must not run")
+		return fmt.Errorf("%w: missing release", errReleaseUnavailable)
 	})
 	dependencies.goBin = func(context.Context, Config, []string) (string, error) { return t.TempDir(), nil }
 	_, err := acquireRuntimeAssetsWith(context.Background(), sourceRuntimeConfig(t.TempDir(), cacheRoot), IO{Env: []string{}}, lock, dependencies)
 	if err == nil || !strings.Contains(err.Error(), "make dev") || !strings.Contains(err.Error(), "gdspxrt"+lock.RuntimeVersion) {
 		t.Fatalf("missing local runtime error = %v", err)
 	}
-	if !errors.Is(err, release.ErrRuntimeManifestPinNotFound) {
+	if !errors.Is(err, errReleaseUnavailable) {
 		t.Fatalf("missing local runtime lost published cause: %v", err)
 	}
 }

@@ -119,11 +119,12 @@ func loadEngineAssetManifest(env *engineDownloadEnv) error {
 		manifestPath = src
 	}
 
-	manifest, err := release.LoadRuntimeManifest(manifestPath)
+	data, err := os.ReadFile(manifestPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("read runtime manifest: %w", err)
 	}
-	if err := manifest.ValidateForLock(lock); err != nil {
+	manifest, err := release.ParseRuntimeManifestForRelease(data, lock.RuntimeVersion, lock.RequiredAssets)
+	if err != nil {
 		return err
 	}
 	env.manifest = &manifest

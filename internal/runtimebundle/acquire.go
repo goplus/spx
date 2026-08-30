@@ -32,6 +32,9 @@ import (
 
 var errAcquireSizeLimit = errors.New("runtimebundle: acquired asset exceeds size limit")
 
+// ErrOfflineCacheMiss reports that offline acquisition has no cached file.
+var ErrOfflineCacheMiss = errors.New("runtimebundle: offline cache miss")
+
 // FetchFunc writes one URL response to dst and must honor ctx.
 type FetchFunc func(ctx context.Context, url string, dst io.Writer) error
 
@@ -169,7 +172,7 @@ func acquirePath(ctx context.Context, root string, spec FetchSpec) (string, erro
 		return "", fmt.Errorf("runtimebundle: inspect cached asset %q: %w", path, err)
 	}
 	if spec.Offline {
-		return "", fmt.Errorf("runtimebundle: offline cache miss for %q (URL: %s)", spec.Name, spec.URL)
+		return "", fmt.Errorf("%w for %q (URL: %s)", ErrOfflineCacheMiss, spec.Name, spec.URL)
 	}
 	if spec.Fetch == nil {
 		return "", fmt.Errorf("runtimebundle: no fetcher for %q", spec.Name)

@@ -157,6 +157,9 @@ func TestAcquireOfflineMissDoesNotFetch(t *testing.T) {
 	if err == nil {
 		t.Fatal("offline cache miss unexpectedly succeeded")
 	}
+	if !errors.Is(err, ErrOfflineCacheMiss) {
+		t.Fatalf("offline cache miss error = %v, want ErrOfflineCacheMiss", err)
+	}
 	if fetches.Load() != 0 {
 		t.Fatalf("fetch count = %d, want 0", fetches.Load())
 	}
@@ -223,6 +226,9 @@ func TestAcquireOfflineInvalidCacheDoesNotFetch(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("offline invalid cache unexpectedly succeeded")
+	}
+	if errors.Is(err, ErrOfflineCacheMiss) {
+		t.Fatalf("offline invalid cache error = %v, must not be a cache miss", err)
 	}
 	if fetches.Load() != 0 {
 		t.Fatalf("fetch count = %d, want 0", fetches.Load())
