@@ -1,0 +1,58 @@
+name: Package and verify driver bundle
+description: Build a deterministic Engine/PCK/bridge driver ZIP and verify it.
+inputs:
+  engine:
+    description: Path to the canonical Engine input
+    required: true
+  pack:
+    description: Path to the canonical runtime PCK input
+    required: true
+  bridge:
+    description: Path to the canonical interpreter bridge input
+    required: true
+  output:
+    description: Output driver ZIP path
+    required: true
+  descriptor:
+    description: Output driver descriptor JSON path
+    required: true
+  goos:
+    description: Target GOOS
+    required: true
+  goarch:
+    description: Target GOARCH
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Package driver bundle
+      shell: bash
+      env:
+        ENGINE_PATH: ${{ inputs.engine }}
+        PACK_PATH: ${{ inputs.pack }}
+        BRIDGE_PATH: ${{ inputs.bridge }}
+        OUTPUT_PATH: ${{ inputs.output }}
+        DESCRIPTOR_PATH: ${{ inputs.descriptor }}
+        TARGET_GOOS: ${{ inputs.goos }}
+        TARGET_GOARCH: ${{ inputs.goarch }}
+      run: |
+        set -euo pipefail
+        go run ./.github/scripts/driverbundle package \
+          --engine "$ENGINE_PATH" \
+          --pack "$PACK_PATH" \
+          --bridge "$BRIDGE_PATH" \
+          --output "$OUTPUT_PATH" \
+          --descriptor "$DESCRIPTOR_PATH" \
+          --goos "$TARGET_GOOS" \
+          --goarch "$TARGET_GOARCH"
+
+    - name: Verify driver bundle
+      shell: bash
+      env:
+        OUTPUT_PATH: ${{ inputs.output }}
+        DESCRIPTOR_PATH: ${{ inputs.descriptor }}
+      run: |
+        set -euo pipefail
+        go run ./.github/scripts/driverbundle verify \
+          --output "$OUTPUT_PATH" \
+          --descriptor "$DESCRIPTOR_PATH"
