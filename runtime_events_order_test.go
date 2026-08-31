@@ -184,14 +184,14 @@ func TestScratchGlobalBroadcastIncludesCloneAtItsCurrentLayer(t *testing.T) {
 	requireScratchEventOrder(t, &log, []string{"front", "source", "clone", "back", "stage"})
 }
 
-func TestScratchKeySpecificHandlersRunBeforeAnyKeyHandlers(t *testing.T) {
+func TestScratchKeySpecificHandlersRunBeforeKeyAnyHandlers(t *testing.T) {
 	co, game, back, front := setupScratchEventOrderGame(t)
 	var log scratchEventOrderLog
 
 	register := func(events *scriptEventBindings, name string) {
-		// Register "any" first to ensure dispatch uses Scratch's two event
+		// Register KeyAny first to ensure dispatch uses Scratch's two event
 		// phases rather than the flat sink registration order.
-		events.OnAnyKey(func(Key) { log.add(name + "-any") })
+		events.OnKey__0(KeyAny, func() { log.add(name + "-any") })
 		events.OnKey__0(KeySpace, func() { log.add(name + "-specific") })
 	}
 	register(&game.scriptEventBindings, "stage")
@@ -208,6 +208,40 @@ func TestScratchKeySpecificHandlersRunBeforeAnyKeyHandlers(t *testing.T) {
 		"back-any",
 		"stage-any",
 	})
+
+	log.reset()
+	game.handleEvent(&eventKeyDown{Key: KeyA})
+	waitForScratchEventOrderEntries(t, co, &log, 3)
+	requireScratchEventOrder(t, &log, []string{"front-any", "back-any", "stage-any"})
+}
+
+func TestScratchKeyListHandlersRouteKeyAnyToAnyPhase(t *testing.T) {
+	co, game := setupRuntimeEventGame(t)
+	var log scratchEventOrderLog
+
+	game.OnKey__1([]Key{KeyAny, KeySpace, KeyAny}, func(key Key) {
+		switch key {
+		case KeySpace:
+			log.add("with-key-space")
+		case KeyA:
+			log.add("with-key-a")
+		default:
+			log.add("with-key-unexpected")
+		}
+	})
+	game.OnKey__2([]Key{KeySpace, KeyAny}, func() { log.add("without-key") })
+	game.OnKey__1([]Key{KeySpace, KeySpace}, func(Key) { log.add("specific") })
+	game.OnKey__1(nil, func(Key) { log.add("nil") })
+	game.OnKey__2([]Key{}, func() { log.add("empty") })
+
+	game.handleEvent(&eventKeyDown{Key: KeySpace})
+	waitForScratchEventOrderEntries(t, co, &log, 3)
+	requireScratchEventOrder(t, &log, []string{"specific", "with-key-space", "without-key"})
+
+	log.reset()
+	game.handleEvent(&eventKeyDown{Key: KeyA})
+	waitForScratchEventOrderEntries(t, co, &log, 2)
+	requireScratchEventOrder(t, &log, []string{"with-key-a", "without-key"})
 }
 
 func TestScratchAsyncBroadcastCallerContinuesBeforeOrderedReceiverBatch(t *testing.T) {
