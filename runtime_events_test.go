@@ -138,6 +138,74 @@ func TestOnStartReachesCoroutineBoundaryBeforePostBootstrapFrames(t *testing.T) 
 	}
 }
 
+func TestOnStartUsesScratchTargetOrder(t *testing.T) {
+	co, game := setupRuntimeEventGame(t)
+	game.initShapeMgr()
+
+	newSprite := func(name string) *SpriteImpl {
+		sprite := &SpriteImpl{name: name, g: game}
+		sprite.scriptEventBindings.init(&game.scriptEvents, sprite)
+		return sprite
+	}
+
+	laser := newSprite("Laser")
+	transition := newSprite("Transition")
+	levels := newSprite("Levels")
+	game.addShape(laser)
+	game.addShape(transition)
+	game.addShape(levels)
+	transition.spriteState.IsVisible = true
+
+	level := 7.0
+	var order []string
+	laser.OnStart(func() {
+		order = append(order, "laser-stop-check")
+		if level == 7 {
+			laser.Stop(AllStop)
+		}
+	})
+	laser.OnStart(func() {
+		order = append(order, "laser-hide")
+	})
+	transition.OnStart(func() {
+		order = append(order, "transition-hide")
+		transition.Hide()
+	})
+	levels.OnStart(func() {
+		order = append(order, "levels-init")
+		level = 1
+	})
+
+	game.handleEvent(&eventStart{generation: game.currentBootstrapGeneration()})
+	co.Update()
+
+	want := []string{"levels-init", "transition-hide", "laser-stop-check", "laser-hide"}
+	if !reflect.DeepEqual(order, want) {
+		t.Fatalf("OnStart order = %v, want %v", order, want)
+	}
+	if level != 1 || transition.Visible() {
+		t.Fatalf("startup state = level %v, transition visible %v, want 1/false", level, transition.Visible())
+	}
+	if !game.lifecycleState.StartDispatched.Load() {
+		t.Fatal("start event was not marked dispatched")
+	}
+}
+
+func TestAwakeNilDispatchesEveryOwner(t *testing.T) {
+	_, game := setupRuntimeEventGame(t)
+	sprite := &SpriteImpl{name: "sprite", g: game}
+	sprite.scriptEventBindings.init(&game.scriptEvents, sprite)
+	var calls []string
+
+	game.scriptEventBindings.onAwake(func() { calls = append(calls, "stage") })
+	sprite.scriptEventBindings.onAwake(func() { calls = append(calls, "sprite") })
+	game.scriptEvents.doWhenAwake(nil)
+
+	if want := []string{"sprite", "stage"}; !reflect.DeepEqual(calls, want) {
+		t.Fatalf("Awake(nil) calls = %v, want %v", calls, want)
+	}
+}
+
 func TestOnCondRisingEdgeAndOwnerIsolation(t *testing.T) {
 	co := setupRuntimeEventScheduler(t)
 

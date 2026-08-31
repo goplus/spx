@@ -117,11 +117,15 @@ func TestManagerSnapshotAppendDoesNotMutateBucket(t *testing.T) {
 func TestManagerConvenienceMethods(t *testing.T) {
 	var mgr Manager
 	mgr.AddClick(Sink{Owner: "click", Handler: func() {}})
+	mgr.AddAnyKeyPressed(Sink{Owner: "any-key", Handler: func() {}})
 	mgr.AddTimer(Sink{Owner: "timer", Handler: func() {}})
 	mgr.AddCondition(Sink{Owner: "condition", Handler: func() {}})
 
 	if got := mgr.SnapshotClick(); len(got) != 1 || got[0].Owner != "click" {
 		t.Fatalf("SnapshotClick = %+v, want click sink", got)
+	}
+	if got := mgr.SnapshotAnyKeyPressed(); len(got) != 1 || got[0].Owner != "any-key" {
+		t.Fatalf("SnapshotAnyKeyPressed = %+v, want any-key sink", got)
 	}
 	if got := mgr.SnapshotTimer(); len(got) != 1 || got[0].Owner != "timer" {
 		t.Fatalf("SnapshotTimer = %+v, want timer sink", got)

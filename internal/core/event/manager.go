@@ -32,6 +32,7 @@ const (
 	BucketStart Bucket = iota
 	BucketAwake
 	BucketKeyPressed
+	BucketAnyKeyPressed
 	BucketSwipe
 	BucketIReceive
 	BucketBackdropChanged
@@ -46,9 +47,8 @@ const (
 	bucketCount
 )
 
-// Manager groups event sinks by Bucket and tracks the one-time BucketStart lifecycle.
-// DispatchBucketAsync, DispatchBucketSync, DispatchBucket, and DispatchStartOnce
-// treat a nil receiver as a no-op.
+// Manager groups sinks by Bucket and tracks the one-time start lifecycle.
+// Its dispatch methods treat a nil receiver as a no-op.
 type Manager struct {
 	mu      sync.RWMutex
 	buckets [bucketCount][]Sink
@@ -146,6 +146,10 @@ func (m *Manager) AddKeyPressed(sink Sink) {
 	m.Add(BucketKeyPressed, sink)
 }
 
+func (m *Manager) AddAnyKeyPressed(sink Sink) {
+	m.Add(BucketAnyKeyPressed, sink)
+}
+
 func (m *Manager) AddSwipe(sink Sink) {
 	m.Add(BucketSwipe, sink)
 }
@@ -213,6 +217,10 @@ func (m *Manager) SnapshotAwake() []Sink {
 
 func (m *Manager) SnapshotKeyPressed() []Sink {
 	return m.Snapshot(BucketKeyPressed)
+}
+
+func (m *Manager) SnapshotAnyKeyPressed() []Sink {
+	return m.Snapshot(BucketAnyKeyPressed)
 }
 
 func (m *Manager) SnapshotSwipe() []Sink {
