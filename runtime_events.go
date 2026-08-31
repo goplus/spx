@@ -99,8 +99,22 @@ func (p *scriptEventBindings) OnCond(__xgo_autoclosure_condition func() bool, on
 	))
 }
 
+func (p *scriptEventBindings) registerKeyHandler(keys []Key, handler func(Key)) {
+	if len(keys) == 0 {
+		return
+	}
+	keys = slices.Clone(keys)
+	sink := coreevent.NewSink(p.pthis, handler)
+	if slices.Contains(keys, KeyAny) {
+		p.scriptEventRegistry.manager.AddAnyKeyPressed(sink)
+		return
+	}
+	sink.Cond = coreevent.MatchAnyOf(keys)
+	p.scriptEventRegistry.manager.AddKeyPressed(sink)
+}
+
 func (p *scriptEventBindings) OnAnyKey(onKey func(key Key)) {
-	p.scriptEventRegistry.manager.AddAnyKeyPressed(coreevent.NewSink(p.pthis, onKey))
+	p.registerKeyHandler([]Key{KeyAny}, onKey)
 }
 
 func (p *scriptEventBindings) OnTimer(time float64, call func()) {
@@ -115,13 +129,10 @@ func (p *scriptEventBindings) OnTimer(time float64, call func()) {
 }
 
 func (p *scriptEventBindings) OnKey__0(key Key, onKey func()) {
-	p.scriptEventRegistry.manager.AddKeyPressed(coreevent.NewSink(
-		p.pthis,
-		coreevent.TapVoid1(onKey, coreevent.If1(isDebugEventEnabled, func(Key) {
-			spxlog.Debug("OnKey: %v, %s", key, nameOf(p.pthis))
-		})),
-		coreevent.MatchValue(key),
-	))
+	handler := coreevent.TapVoid1(onKey, coreevent.If1(isDebugEventEnabled, func(Key) {
+		spxlog.Debug("OnKey: %v, %s", key, nameOf(p.pthis))
+	}))
+	p.registerKeyHandler([]Key{key}, handler)
 }
 
 func (p *scriptEventBindings) OnSwipe__0(direction Direction, onSwipe func()) {
@@ -135,13 +146,10 @@ func (p *scriptEventBindings) OnSwipe__0(direction Direction, onSwipe func()) {
 }
 
 func (p *scriptEventBindings) OnKey__1(keys []Key, onKey func(Key)) {
-	p.scriptEventRegistry.manager.AddKeyPressed(coreevent.NewSink(
-		p.pthis,
-		coreevent.Tap1(onKey, coreevent.If1(isDebugEventEnabled, func(key Key) {
-			spxlog.Debug("OnKey: %v, %s", keys, nameOf(p.pthis))
-		})),
-		coreevent.MatchAnyOf(keys),
-	))
+	handler := coreevent.Tap1(onKey, coreevent.If1(isDebugEventEnabled, func(key Key) {
+		spxlog.Debug("OnKey: %v, %s", keys, nameOf(p.pthis))
+	}))
+	p.registerKeyHandler(keys, handler)
 }
 
 func (p *scriptEventBindings) OnKey__2(keys []Key, onKey func()) {
