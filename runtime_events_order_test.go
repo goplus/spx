@@ -136,6 +136,58 @@ func TestScratchGlobalBroadcastRunsFrontToBackThenStageToFirstYield(t *testing.T
 	})
 }
 
+func TestScratchOnStartStopAllDrainsSnapshotOnly(t *testing.T) {
+	co, game, back, front := setupScratchEventOrderGame(t)
+	var log scratchEventOrderLog
+
+	front.OnStart(func() {
+		log.add("front-before-yield")
+		engine.WaitNextFrame()
+		log.add("front-after-yield")
+	})
+	front.OnStart(func() {
+		log.add("front-stop")
+		front.Stop(AllStop)
+		log.add("front-after-stop")
+	})
+	back.OnStart(func() {
+		log.add("back-before-yield")
+		engine.WaitNextFrame()
+		log.add("back-after-yield")
+	})
+	game.OnStart(func() {
+		log.add("stage-start")
+		game.Broadcast__0("after-stop")
+	})
+	game.OnMsg__1("after-stop", func() {
+		log.add("message-before-yield")
+		engine.WaitNextFrame()
+		log.add("message-after-yield")
+	})
+
+	game.handleEvent(&eventStart{generation: game.currentBootstrapGeneration()})
+	updateRuntimeEventSchedulerUntil(t, co, game.lifecycleState.StartDispatched.Load)
+	waitForScratchEventOrderEntries(t, co, &log, 5)
+	requireScratchEventOrder(t, &log, []string{
+		"front-before-yield",
+		"front-stop",
+		"back-before-yield",
+		"stage-start",
+		"message-before-yield",
+	})
+
+	itime.Update(0, 0)
+	waitForScratchEventOrderEntries(t, co, &log, 6)
+	requireScratchEventOrder(t, &log, []string{
+		"front-before-yield",
+		"front-stop",
+		"back-before-yield",
+		"stage-start",
+		"message-before-yield",
+		"message-after-yield",
+	})
+}
+
 func TestScratchGlobalBroadcastTracksDynamicLayerOrder(t *testing.T) {
 	co, game, back, front := setupScratchEventOrderGame(t)
 	var log scratchEventOrderLog

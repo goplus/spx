@@ -28,13 +28,14 @@ const (
 
 // BatchTask describes one member of an ordered coroutine batch.
 type BatchTask struct {
-	Owner  ThreadObj
-	Before func(Thread)
-	Run    func(Thread)
+	Owner        ThreadObj
+	OnRegistered func(Thread)
+	Before       func(Thread)
+	Run          func(Thread)
 }
 
-// StartBatch registers all tasks, then admits Run in slice order.
-// Before runs pre-admission; wait modes require a managed caller.
+// StartBatch registers tasks before admitting Run in order; wait modes require a managed caller.
+// OnRegistered is synchronous and must not block on this batch.
 func (p *Coroutines) StartBatch(tasks []BatchTask, mode BatchMode) []Thread {
 	if mode != BatchAsync && mode != BatchWaitFirstSlice && mode != BatchWaitDone {
 		panic("coroutine: invalid batch mode")
@@ -57,6 +58,9 @@ func (p *Coroutines) StartBatch(tasks []BatchTask, mode BatchMode) []Thread {
 			task.Run(thread)
 			return 0
 		})
+		if task.OnRegistered != nil {
+			task.OnRegistered(threads[i])
+		}
 	}
 
 	relayBatchProgress(threads, progress[1:])

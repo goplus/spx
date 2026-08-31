@@ -38,6 +38,9 @@ func (p *Coroutines) Yield(me Thread) {
 	if p.Current() != me {
 		panic(ErrCannotYieldANonrunningThread)
 	}
+	if me.stopAtNextYield.Swap(false) {
+		stopThreadIfRunning(me)
+	}
 
 	// Clear current before releasing the execution lock.
 	p.setCurrent(nil)
@@ -74,6 +77,15 @@ func (p *Coroutines) Yield(me Thread) {
 	if me.stopped.Load() {
 		panic(ErrAbortThread)
 	}
+}
+
+// StopAtNextYield cancels me when it next yields to the scheduler.
+// It must be called by the currently running managed coroutine.
+func (p *Coroutines) StopAtNextYield(me Thread) {
+	if p.currentCoroutineThread() != me {
+		panic(ErrCannotYieldANonrunningThread)
+	}
+	me.stopAtNextYield.Store(true)
 }
 
 // Resume wakes me if it is suspended. If Yield has not published suspension

@@ -51,24 +51,30 @@ func TestStartBatchWaitsForOrderedFirstSlices(t *testing.T) {
 	releaseFirst := make(chan struct{})
 	callerDone := make(chan struct{})
 	var (
-		order      []string
-		registered int
-		threads    []Thread
+		order            []string
+		registered       int
+		createdBeforeRun int
+		created          int
+		threads          []Thread
 	)
+	onRegistered := func(Thread) { created++ }
 
 	caller := co.Create("caller", func(Thread) int {
 		threads = co.StartBatch([]BatchTask{
 			{
-				Owner: "first",
+				Owner:        "first",
+				OnRegistered: onRegistered,
 				Run: func(Thread) {
 					registered = len(co.snapshotThreads())
+					createdBeforeRun = created
 					order = append(order, "first")
 					var signal struct{}
 					WaitForChan(co, releaseFirst, &signal)
 				},
 			},
 			{
-				Owner: "second",
+				Owner:        "second",
+				OnRegistered: onRegistered,
 				Run: func(Thread) {
 					order = append(order, "second")
 				},
@@ -89,6 +95,9 @@ func TestStartBatchWaitsForOrderedFirstSlices(t *testing.T) {
 	}
 	if registered != 3 {
 		t.Fatalf("threads registered before first Run = %d, want 3", registered)
+	}
+	if createdBeforeRun != 2 {
+		t.Fatalf("OnRegistered calls before first Run = %d, want 2", createdBeforeRun)
 	}
 
 	close(releaseFirst)

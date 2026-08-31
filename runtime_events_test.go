@@ -428,6 +428,8 @@ func TestOnStartCompletionDoesNotCrossReset(t *testing.T) {
 		close(entered)
 		<-release
 	})
+	staleCalls := 0
+	game.OnStart(func() { staleCalls++ })
 
 	game.handleEvent(&eventStart{generation: game.currentBootstrapGeneration()})
 	select {
@@ -442,6 +444,9 @@ func TestOnStartCompletionDoesNotCrossReset(t *testing.T) {
 	co.Update()
 	if game.lifecycleState.StartDispatched.Load() {
 		t.Fatal("stale OnStart completion reopened the start gate")
+	}
+	if staleCalls != 0 {
+		t.Fatalf("stale pending OnStart calls = %d, want 0", staleCalls)
 	}
 
 	calls := 0

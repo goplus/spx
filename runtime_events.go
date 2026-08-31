@@ -19,6 +19,7 @@ package spx
 import (
 	"slices"
 	"sync"
+	"sync/atomic"
 
 	"github.com/goplus/spbase/mathf"
 	coreevent "github.com/goplus/spx/v3/internal/core/event"
@@ -45,7 +46,11 @@ type scriptEventBindings struct {
 type scriptEventRegistry struct {
 	manager              coreevent.Manager
 	messageHandlerFrames sync.Map // map[coroutine.Thread]int64
+	stopAllEpoch         atomic.Uint64
+	pendingStartThreads  sync.Map // map[coroutine.Thread]struct{}
 }
+
+type startEventDispatcher struct{}
 
 func (p *scriptEventBindings) init(registry *scriptEventRegistry, this threadObj) {
 	p.scriptEventRegistry = registry
@@ -186,6 +191,7 @@ func (p *scriptEventBindings) OnBackdrop__1(name BackdropName, onBackdrop func()
 
 func (p *scriptEventBindings) Stop(kind StopKind) {
 	if kind == AllStop {
+		p.scriptEventRegistry.stopAllEpoch.Add(1)
 		if game := activeGame(); game != nil {
 			game.resetGraphicEffectsOnStopAll()
 		}
@@ -200,7 +206,10 @@ func (p *scriptEventBindings) Stop(kind StopKind) {
 	)
 	if filter != nil {
 		gco.StopIf(func(th coroutine.Thread) bool {
-			return filter(th.Obj, th == current)
+			if !filter(th.Obj, th == current) {
+				return false
+			}
+			return kind != AllStop || !p.scriptEventRegistry.isPendingStartThread(th)
 		})
 	}
 	if abort {
@@ -335,18 +344,21 @@ func (p *Game) handleEvent(ev event) {
 			if !ok {
 				return
 			}
-			p.scriptEvents.doWhenStart(sinks)
+			p.scriptEvents.doWhenStart(sinks, func() bool {
+				return p.isBootstrapGenerationCurrent(e.generation)
+			})
 			p.markStartDispatchedFor(e.generation)
 		}
-		if gco != nil && !gco.IsInCoroutine() {
-			// Keep OnStart handlers in one coroutine phase and advance them in
-			// Scratch target order to their first yield.
-			gco.CreateAndStart(false, p, func(coroutine.Thread) int {
-				runStartPhase()
-				return 0
-			})
-		} else {
+		if gco == nil {
 			runStartPhase()
+			break
+		}
+		dispatcher := gco.Create(startEventDispatcher{}, func(coroutine.Thread) int {
+			runStartPhase()
+			return 0
+		})
+		if gco.IsInCoroutine() {
+			gco.Join(dispatcher)
 		}
 	case *eventTimer:
 		p.scriptEvents.doWhenTimer(e.Time)
@@ -363,9 +375,10 @@ func (p *Game) fireEvent(ev event) {
 }
 
 // Event Dispatch
-func (p *scriptEventRegistry) doWhenStart(sinks []eventSink) {
-	p.dispatchSinks(sinksInScratchTargetOrder(activeGame(), sinks), scriptEventDispatch{
-		mode: coroutine.BatchWaitFirstSlice,
+func (p *scriptEventRegistry) doWhenStart(sinks []eventSink, shouldRun func() bool) {
+	p.dispatchStartSinks(sinksInScratchTargetOrder(activeGame(), sinks), scriptEventDispatch{
+		mode:      coroutine.BatchWaitFirstSlice,
+		shouldRun: shouldRun,
 		run: func(_ coroutine.Thread, ev *eventSink) {
 			coreevent.If0(isDebugEventEnabled, func() {
 				spxlog.Debug("OnStart: %s", nameOf(ev.Owner))

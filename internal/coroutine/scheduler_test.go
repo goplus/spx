@@ -189,6 +189,42 @@ func TestYieldClearsCurrentWhileCoroutineIsSuspended(t *testing.T) {
 	}
 }
 
+func TestStopAtNextYieldStopsBeforeResume(t *testing.T) {
+	co := New(nil)
+	co.OnInited()
+	var resumed atomic.Bool
+
+	thread := co.Create("worker", func(me Thread) int {
+		co.StopAtNextYield(me)
+		co.WaitYield(me)
+		resumed.Store(true)
+		return 0
+	})
+
+	co.JoinYieldedOrDone(thread)
+	if !thread.Stopped() {
+		t.Fatal("yield boundary was published before the coroutine was stopped")
+	}
+	select {
+	case <-thread.done:
+	case <-time.After(time.Second):
+		t.Fatal("coroutine did not stop at its next yield")
+	}
+	co.Update()
+	if resumed.Load() {
+		t.Fatal("coroutine resumed after its stop-at-yield boundary")
+	}
+
+	completed := co.Create("no-yield", func(me Thread) int {
+		co.StopAtNextYield(me)
+		return 0
+	})
+	co.Join(completed)
+	if completed.Stopped() {
+		t.Fatal("coroutine was stopped without reaching a yield boundary")
+	}
+}
+
 func TestResumeBeforeYieldDoesNotBlockOrLoseWakeup(t *testing.T) {
 	co := New(nil)
 	started := make(chan struct{})

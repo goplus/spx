@@ -60,6 +60,7 @@ type threadImpl struct {
 
 	runWithoutScreenRefresh      atomic.Bool
 	runWithoutScreenRefreshStart atomic.Int64
+	stopAtNextYield              atomic.Bool
 
 	waitersMu   sync.Mutex
 	joinDone    bool
