@@ -280,6 +280,9 @@ func (p *Game) pointHitsClickTarget(target clicker, point mathf.Vec2) bool {
 
 	sprite, ok := target.(*SpriteImpl)
 	if ok {
+		if sprite.spriteState.IsProxyPublicationPending {
+			return false
+		}
 		sprite.ensureProxyQueryStateSynced()
 		if sprite.isFullyGhosted() {
 			return false
@@ -503,17 +506,25 @@ func (p *scriptEventRegistry) doWhenTouchStart(this threadObj, obj *SpriteImpl) 
 	})
 }
 
-func (p *scriptEventRegistry) doWhenCloned(this threadObj, data any) {
+func (p *scriptEventRegistry) doWhenCloned(
+	this threadObj,
+	data any,
+	shouldRun func() bool,
+) bool {
+	var started atomic.Bool
 	p.dispatchTarget(coreevent.BucketCloned, this, scriptEventDispatch{
 		mode:      coroutine.BatchWaitFirstSlice,
 		matchData: this,
+		shouldRun: shouldRun,
 		run: func(_ coroutine.Thread, ev *eventSink) {
+			started.Store(true)
 			coreevent.If0(isDebugEventEnabled, func() {
 				spxlog.Debug("OnCloned: %s", nameOf(this))
 			})()
 			ev.Handler.(func(any))(data)
 		},
 	})
+	return started.Load()
 }
 
 func (p *scriptEventRegistry) doWhenIReceive(msg string, data any, wait bool) {

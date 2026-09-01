@@ -43,14 +43,32 @@ type physicsComponent struct {
 	triggerInfo   physicConfig
 	collisionInfo physicConfig
 
-	physicsMode     PhysicsMode
-	mass            float64
-	friction        float64
-	airDrag         float64
-	gravity         float64
-	autoShapesDirty bool
+	physicsMode            PhysicsMode
+	collisionEnabled       bool
+	triggerEnabled         bool
+	pendingVelocity        mathf.Vec2
+	pendingPhysicsCommands []pendingPhysicsCommand
+	mass                   float64
+	friction               float64
+	airDrag                float64
+	gravity                float64
+	autoShapesDirty        bool
 
 	collisionTargets map[string]bool
+}
+
+type pendingPhysicsCommandKind uint8
+
+const (
+	pendingPhysicsSetMode pendingPhysicsCommandKind = iota
+	pendingPhysicsSetVelocity
+	pendingPhysicsAddImpulse
+)
+
+type pendingPhysicsCommand struct {
+	kind pendingPhysicsCommandKind
+	mode PhysicsMode
+	vec  mathf.Vec2
 }
 
 // ============================================================================
@@ -64,6 +82,8 @@ func (p *physicsComponent) initialize(sprite *SpriteImpl, spriteCfg *coreproject
 	p.initTriggerConfig(sprite, spriteCfg)
 
 	p.physicsMode = toPhysicsMode(spriteCfg.PhysicsMode)
+	p.collisionEnabled = p.collisionInfo.Type != physicsColliderNone
+	p.triggerEnabled = p.triggerInfo.Type != physicsColliderNone
 	p.airDrag = defaults.OrDefault(spriteCfg.AirDrag, 1)
 	p.gravity = defaults.OrDefault(spriteCfg.Gravity, 1)
 	p.friction = defaults.OrDefault(spriteCfg.Friction, 1)
@@ -113,6 +133,8 @@ func (p *physicsComponent) cloneFrom(src component, newSprite *SpriteImpl) compo
 	newPhys := &physicsComponent{
 		componentBase:    componentBase{sprite: newSprite},
 		physicsMode:      srcPhysics.physicsMode,
+		collisionEnabled: srcPhysics.collisionEnabled,
+		triggerEnabled:   srcPhysics.triggerEnabled,
 		mass:             srcPhysics.mass,
 		friction:         srcPhysics.friction,
 		airDrag:          srcPhysics.airDrag,
@@ -136,7 +158,20 @@ func (p *physicsComponent) onDestroy() {
 // SetPhysicsMode sets the physics mode for the sprite.
 func (p *physicsComponent) SetPhysicsMode(mode PhysicsMode) {
 	p.physicsMode = mode
-	p.engine().SpriteMgr.SetPhysicsMode(p.sprite.getSpriteId(), int64(mode))
+	if p.sprite.spriteState.IsProxyPublicationPending {
+		p.pendingPhysicsCommands = append(p.pendingPhysicsCommands, pendingPhysicsCommand{
+			kind: pendingPhysicsSetMode,
+			mode: mode,
+		})
+		// Godot synchronously clears velocity whenever NoPhysics is selected.
+		if mode == NoPhysics {
+			p.pendingVelocity = mathf.Vec2{}
+		}
+		return
+	}
+	if syncProxy := p.sprite.runtimeState.SyncSprite; syncProxy != nil {
+		syncProxy.SetPhysicsMode(mode)
+	}
 }
 
 // GetPhysicsMode returns the current physics mode.
@@ -146,18 +181,38 @@ func (p *physicsComponent) GetPhysicsMode() PhysicsMode {
 
 // GetVelocity returns the current velocity in X and Y directions.
 func (p *physicsComponent) GetVelocity() (velocityX, velocityY float64) {
+	if p.sprite.spriteState.IsProxyPublicationPending {
+		return p.pendingVelocity.X, p.pendingVelocity.Y
+	}
 	vel := p.engine().SpriteMgr.GetVelocity(p.sprite.getSpriteId())
 	return vel.X, vel.Y
 }
 
 // SetVelocity sets the velocity in X and Y directions.
 func (p *physicsComponent) SetVelocity(velocityX, velocityY float64) {
-	p.engine().SpriteMgr.SetVelocity(p.sprite.getSpriteId(), mathf.NewVec2(velocityX, velocityY))
+	velocity := mathf.NewVec2(velocityX, velocityY)
+	if p.sprite.spriteState.IsProxyPublicationPending {
+		p.pendingVelocity = velocity
+		p.pendingPhysicsCommands = append(p.pendingPhysicsCommands, pendingPhysicsCommand{
+			kind: pendingPhysicsSetVelocity,
+			vec:  velocity,
+		})
+		return
+	}
+	p.engine().SpriteMgr.SetVelocity(p.sprite.getSpriteId(), velocity)
 }
 
 // AddImpulse applies an impulse force to the sprite.
 func (p *physicsComponent) AddImpulse(impulseX, impulseY float64) {
-	p.engine().SpriteMgr.AddImpulse(p.sprite.getSpriteId(), mathf.NewVec2(impulseX, impulseY))
+	impulse := mathf.NewVec2(impulseX, impulseY)
+	if p.sprite.spriteState.IsProxyPublicationPending {
+		p.pendingPhysicsCommands = append(p.pendingPhysicsCommands, pendingPhysicsCommand{
+			kind: pendingPhysicsAddImpulse,
+			vec:  impulse,
+		})
+		return
+	}
+	p.engine().SpriteMgr.AddImpulse(p.sprite.getSpriteId(), impulse)
 }
 
 // IsOnFloor checks if the sprite is on the floor.
@@ -184,7 +239,10 @@ func (p *physicsComponent) SetCollisionMask(mask int64) {
 }
 
 func (p *physicsComponent) SetCollisionEnabled(enabled bool) {
-	p.sprite.runtimeState.SyncSprite.SetCollisionEnabled(enabled)
+	p.collisionEnabled = enabled
+	if syncProxy := p.sprite.runtimeState.SyncSprite; syncProxy != nil {
+		syncProxy.SetCollisionEnabled(p.effectiveColliderEnabled(false))
+	}
 }
 
 func (p *physicsComponent) GetCollisionLayer() int64 {
@@ -196,11 +254,14 @@ func (p *physicsComponent) GetCollisionMask() int64 {
 }
 
 func (p *physicsComponent) IsCollisionEnabled() bool {
-	return p.sprite.runtimeState.SyncSprite.IsCollisionEnabled()
+	return p.desiredColliderEnabled(false)
 }
 
 func (p *physicsComponent) SetTriggerEnabled(trigger bool) {
-	p.sprite.runtimeState.SyncSprite.SetTriggerEnabled(trigger)
+	p.triggerEnabled = trigger
+	if syncProxy := p.sprite.runtimeState.SyncSprite; syncProxy != nil {
+		syncProxy.SetTriggerEnabled(p.effectiveColliderEnabled(true))
+	}
 }
 
 func (p *physicsComponent) SetTriggerLayer(layer int64) {
@@ -220,7 +281,7 @@ func (p *physicsComponent) GetTriggerMask() int64 {
 }
 
 func (p *physicsComponent) IsTriggerEnabled() bool {
-	return p.sprite.runtimeState.SyncSprite.IsTriggerEnabled()
+	return p.desiredColliderEnabled(true)
 }
 
 func (p *physicsComponent) getCollisionTargets() map[string]bool {
@@ -258,6 +319,7 @@ func (p *physicsComponent) SetColliderShape(isTrigger bool, ctype ColliderShapeT
 		return fmt.Errorf("invalid shape parameters for type %d", ctype)
 	}
 
+	p.setColliderEnabledState(isTrigger, ctype != physicsColliderNone)
 	p.applyPhysicShape(isTrigger)
 	return nil
 }
@@ -302,7 +364,55 @@ func (p *physicsComponent) applyPhysicShape(isTrigger bool) {
 	if p.sprite.runtimeState.SyncSprite == nil {
 		return
 	}
-	config.applyShape(p.sprite.runtimeState.SyncSprite, isTrigger, p.sprite)
+	config.applyShape(
+		p.sprite.runtimeState.SyncSprite,
+		isTrigger,
+		p.sprite,
+		p.effectiveColliderEnabled(isTrigger),
+	)
+}
+
+func (p *physicsComponent) setColliderEnabledState(isTrigger, enabled bool) {
+	if isTrigger {
+		p.triggerEnabled = enabled
+		return
+	}
+	p.collisionEnabled = enabled
+}
+
+func (p *physicsComponent) desiredColliderEnabled(isTrigger bool) bool {
+	if isTrigger {
+		return p.triggerEnabled
+	}
+	return p.collisionEnabled
+}
+
+func (p *physicsComponent) activatableColliderEnabled(isTrigger bool) bool {
+	return p.getPhysicConfig(isTrigger).Type != physicsColliderNone &&
+		p.desiredColliderEnabled(isTrigger)
+}
+
+func (p *physicsComponent) effectiveColliderEnabled(isTrigger bool) bool {
+	return !p.sprite.spriteState.IsProxyPublicationPending &&
+		p.activatableColliderEnabled(isTrigger)
+}
+
+func (p *physicsComponent) effectivePhysicsMode() PhysicsMode {
+	if p.sprite.spriteState.IsProxyPublicationPending {
+		return NoPhysics
+	}
+	return p.physicsMode
+}
+
+// beginPendingProxyPhysics starts a logical command stream for a fresh clone.
+// Replaying it at commit preserves native call ordering without allowing the
+// unpublished proxy to move or collide in the meantime.
+func (p *physicsComponent) beginPendingProxyPhysics() {
+	p.pendingVelocity = mathf.Vec2{}
+	p.pendingPhysicsCommands = append(
+		p.pendingPhysicsCommands[:0],
+		pendingPhysicsCommand{kind: pendingPhysicsSetMode, mode: p.physicsMode},
+	)
 }
 
 // ============================================================================
@@ -327,9 +437,37 @@ func (p *physicsComponent) initCollisionParams() {
 // applyPhysicsProxyConfig applies initial physics configuration to the engine sprite proxy.
 func (p *physicsComponent) applyPhysicsProxyConfig(syncProxy *engine.Sprite) {
 	p.initCollisionParams()
-	p.collisionInfo.syncToProxy(syncProxy, false, p.sprite)
-	p.triggerInfo.syncToProxy(syncProxy, true, p.sprite)
+	p.collisionInfo.syncToProxy(
+		syncProxy, false, p.sprite, p.effectiveColliderEnabled(false),
+	)
+	p.triggerInfo.syncToProxy(
+		syncProxy, true, p.sprite, p.effectiveColliderEnabled(true),
+	)
 	syncProxy.SetGravityScale(p.gravity)
-	syncProxy.SetPhysicsMode(p.physicsMode)
+	syncProxy.SetPhysicsMode(p.effectivePhysicsMode())
 	p.autoShapesDirty = false
+}
+
+// publishPendingProxyPhysics activates the final physics configuration. The
+// caller owns the clone publication barrier and must compensate this work if
+// the surrounding transaction does not commit.
+func (p *physicsComponent) publishPendingProxyPhysics(syncProxy *engine.Sprite) {
+	commands := p.pendingPhysicsCommands
+	p.pendingVelocity = mathf.Vec2{}
+	p.pendingPhysicsCommands = nil
+
+	syncProxy.SetCollisionEnabled(p.activatableColliderEnabled(false))
+	syncProxy.SetTriggerEnabled(p.activatableColliderEnabled(true))
+	// Keep the body out of the physics world until both shapes are ready, then
+	// replay the exact mode/velocity/impulse order observed by clone user code.
+	for _, command := range commands {
+		switch command.kind {
+		case pendingPhysicsSetMode:
+			syncProxy.SetPhysicsMode(command.mode)
+		case pendingPhysicsSetVelocity:
+			syncProxy.SetVelocity(command.vec)
+		case pendingPhysicsAddImpulse:
+			syncProxy.AddImpulse(command.vec)
+		}
+	}
 }

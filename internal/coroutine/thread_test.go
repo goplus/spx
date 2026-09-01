@@ -262,6 +262,94 @@ func TestAbortAllAndWaitFromCoroutineDoesNotStartStoppedPeer(t *testing.T) {
 	}
 }
 
+func TestCreateWithFinalizerRunsBeforeCanceledThreadUnregisters(t *testing.T) {
+	co := New(nil)
+	co.OnInited()
+	active := make(chan struct{})
+	release := make(chan struct{})
+	co.Create("blocker", func(Thread) int {
+		close(active)
+		<-release
+		return 0
+	})
+	waitForThreadSignal(t, active, "blocking coroutine did not start")
+
+	bodyRan := false
+	finalized := make(chan struct{})
+	target := co.CreateWithFinalizer(
+		"target",
+		func(Thread) int {
+			bodyRan = true
+			return 0
+		},
+		func() { close(finalized) },
+	)
+	co.Stop(target)
+	close(release)
+	if !co.AbortAllAndWait(time.Second) {
+		t.Fatal("coroutines did not stop")
+	}
+	select {
+	case <-finalized:
+	default:
+		t.Fatal("AbortAllAndWait returned before the finalizer")
+	}
+	if bodyRan {
+		t.Fatal("canceled coroutine body ran before its finalizer")
+	}
+}
+
+func TestCreateChildWithFinalizerRejectsAbortAllBeforeRegistration(t *testing.T) {
+	co := New(nil)
+	co.OnInited()
+	parentStarted := make(chan struct{})
+	releaseParent := make(chan struct{})
+	parent := co.Create("parent", func(Thread) int {
+		close(parentStarted)
+		<-releaseParent
+		return 0
+	})
+	waitForThreadSignal(t, parentStarted, "parent coroutine did not start")
+
+	expectedEpoch := co.AbortEpoch()
+	registrationStarted := make(chan struct{})
+	result := make(chan Thread, 1)
+	var bodyRan, finalizerRan bool
+	co.creationMu.Lock()
+	go func() {
+		close(registrationStarted)
+		result <- co.CreateChildWithFinalizer(
+			parent,
+			expectedEpoch,
+			"child",
+			func(Thread) int {
+				bodyRan = true
+				return 0
+			},
+			func() { finalizerRan = true },
+		)
+	}()
+	waitForThreadSignal(t, registrationStarted, "child registration did not start")
+	co.abortAllLocked()
+	co.creationMu.Unlock()
+
+	select {
+	case child := <-result:
+		if child != nil {
+			t.Fatal("child registered after AbortAll won the registration barrier")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("guarded child registration did not return")
+	}
+	close(releaseParent)
+	if !co.waitForThreadsToStop(time.Second, nil) {
+		t.Fatal("canceled parent did not stop")
+	}
+	if bodyRan || finalizerRan {
+		t.Fatalf("rejected child ran body/finalizer: body=%v finalizer=%v", bodyRan, finalizerRan)
+	}
+}
+
 func TestJoinResumesCallerAfterPeerCompletes(t *testing.T) {
 	co := New(nil)
 	releasePeer := make(chan struct{})

@@ -18,8 +18,10 @@ package spx
 
 import (
 	"math"
+	"slices"
 
 	"github.com/goplus/spbase/mathf"
+	"github.com/goplus/spx/v3/internal/engine"
 )
 
 func (p *SpriteImpl) bounds() *mathf.Rect2 {
@@ -130,7 +132,7 @@ func (p *SpriteImpl) touching(obj Target) bool {
 		}
 	case Sprite:
 		src := spriteOf(v)
-		if src == nil || src.spriteState.IsDying {
+		if src == nil || src.spriteState.IsDying || src.spriteState.IsProxyPublicationPending {
 			return false
 		}
 		return src.touchingSprite(p)
@@ -179,7 +181,61 @@ func (p *SpriteImpl) touchingSprite(dst *SpriteImpl) bool {
 	if !p.prepareSelfCollisionQuery() || !dst.prepareSelfCollisionQuery() {
 		return false
 	}
-	return p.engine().SpriteMgr.CheckCollisionWithSprite(p.runtimeState.SyncSprite.GetId(), dst.runtimeState.SyncSprite.GetId(), alphaThreshold, !isPhysicsEnabled())
+	usePixelPerfect := !isPhysicsEnabled()
+	if !p.spriteState.IsProxyPublicationPending &&
+		!dst.spriteState.IsProxyPublicationPending {
+		return p.engine().SpriteMgr.CheckCollisionWithSprite(
+			p.runtimeState.SyncSprite.GetId(),
+			dst.runtimeState.SyncSprite.GetId(),
+			alphaThreshold,
+			usePixelPerfect,
+		)
+	}
+
+	// Godot's sprite-to-sprite sensing API rejects hidden nodes. A pending clone
+	// is intentionally hidden from rendering, but Scratch still lets its clone
+	// hat sense the inherited visible costume. Temporarily expose only the
+	// native visibility bit inside one main-thread callback; no render or physics
+	// step can observe it, and the publication gate remains set throughout.
+	for _, sprite := range []*SpriteImpl{p, dst} {
+		if sprite.spriteState.IsProxyPublicationPending && !sprite.spriteState.IsVisible {
+			return false
+		}
+	}
+	var touching bool
+	engine.WaitMainThread(func() {
+		shown := make([]*SpriteImpl, 0, 2)
+		defer func() {
+			failure := recover()
+			var cleanupFailure any
+			for i := len(shown) - 1; i >= 0; i-- {
+				hideFailure := captureProxyCallPanic(func() {
+					shown[i].runtimeState.SyncSprite.SetVisible(false)
+				})
+				if cleanupFailure == nil {
+					cleanupFailure = hideFailure
+				}
+			}
+			if failure != nil {
+				panic(failure)
+			}
+			if cleanupFailure != nil {
+				panic(cleanupFailure)
+			}
+		}()
+		for _, sprite := range []*SpriteImpl{p, dst} {
+			if !sprite.spriteState.IsProxyPublicationPending ||
+				slices.Contains(shown, sprite) {
+				continue
+			}
+			shown = append(shown, sprite)
+			sprite.runtimeState.SyncSprite.SetVisible(true)
+		}
+		touching = p.runtimeState.SyncSprite.CheckCollisionWithSprite(
+			dst.runtimeState.SyncSprite.GetId(), alphaThreshold, usePixelPerfect,
+		)
+	})
+	return touching
 }
 
 func (p *SpriteImpl) checkTouchingScreen(where int, area string) (touching int) {

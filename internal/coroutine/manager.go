@@ -62,9 +62,11 @@ type Coroutines struct {
 	threadStates  map[Thread]threadState
 	currentJobs   *Queue[*WaitJob]
 	deferredJobs  *Queue[*WaitJob]
+	jobConsumerMu sync.Mutex
 
 	nextJobID    atomic.Int64
 	nextThreadID atomic.Int64
+	abortEpoch   atomic.Uint64
 
 	perfDebug         atomic.Bool
 	readGCStats       func(*sdebug.GCStats)

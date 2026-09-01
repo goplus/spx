@@ -55,3 +55,16 @@ func TestTryCallEngineDirectlyUsesGodot(t *testing.T) {
 		t.Fatal("engine call ran on a Godot worker thread")
 	}
 }
+
+func TestTryCallEngineDirectlyWithoutPlatformManager(t *testing.T) {
+	previous := gdx.PlatformMgr
+	t.Cleanup(func() { gdx.PlatformMgr = previous })
+	gdx.PlatformMgr = nil
+	called := false
+	if TryCallEngineDirectly(func() { called = true }) {
+		t.Fatal("missing platform manager was reported as the main thread")
+	}
+	if called {
+		t.Fatal("engine call ran without a platform manager")
+	}
+}

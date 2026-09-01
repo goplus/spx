@@ -44,7 +44,7 @@ type bubbleBase struct {
 
 // checkNeedsUpdate checks if the bubble needs to be refreshed.
 func (b *bubbleBase) checkNeedsUpdate() bool {
-	if !b.sprite.Visible() {
+	if !b.sprite.effectiveProxyVisibility() {
 		return false
 	}
 	return b.isDirty || b.sprite.spriteState.IsDirty || b.camera.isDirty

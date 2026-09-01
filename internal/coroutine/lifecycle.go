@@ -24,6 +24,7 @@ import (
 	stime "time"
 
 	"github.com/goplus/spx/v3/internal/debug"
+	"github.com/goplus/spx/v3/internal/engine/platform"
 	"github.com/visualfc/gid"
 )
 
@@ -33,15 +34,72 @@ type threadNamer interface {
 
 // Create creates a coroutine without explicitly yielding execution to it.
 func (p *Coroutines) Create(obj ThreadObj, fn func(me Thread) int) Thread {
-	return p.CreateAndStart(false, obj, fn)
+	return p.createAndStart(false, obj, fn, nil, nil)
 }
 
 // CreateAndStart creates a coroutine. start controls eager scheduling: when it
 // is true, the new coroutine gets an immediate opportunity to run before this
 // method returns.
 func (p *Coroutines) CreateAndStart(start bool, obj ThreadObj, fn func(me Thread) int) Thread {
-	th := p.newThread(obj)
+	return p.createAndStart(start, obj, fn, nil, nil)
+}
+
+// CreateWithFinalizer creates a coroutine whose finalizer runs before the
+// thread is unregistered, including when cancellation wins before fn starts.
+// The finalizer is serialized with scripts and is detached from the finished
+// thread's cancellation context, so it may perform synchronous main-thread
+// cleanup. It must not wait for other coroutines to make progress.
+func (p *Coroutines) CreateWithFinalizer(
+	obj ThreadObj,
+	fn func(me Thread) int,
+	finalizer func(),
+) Thread {
+	return p.createAndStart(false, obj, fn, finalizer, nil)
+}
+
+// CreateChildWithFinalizer atomically validates a parent against AbortAll and
+// registers its child. A nil result means cancellation won before handoff.
+// expectedAbortEpoch must have been captured from AbortEpoch by the parent
+// operation that owns the child lifecycle.
+func (p *Coroutines) CreateChildWithFinalizer(
+	parent Thread,
+	expectedAbortEpoch uint64,
+	obj ThreadObj,
+	fn func(me Thread) int,
+	finalizer func(),
+) Thread {
+	return p.createAndStart(false, obj, fn, finalizer, func() bool {
+		return p.abortEpoch.Load() == expectedAbortEpoch &&
+			!p.isThreadCanceled(parent)
+	})
+}
+
+// AdmitChildHandoff atomically validates an inline child operation against
+// AbortAll. It is the registration-free counterpart of
+// CreateChildWithFinalizer: cancellation and handoff are ordered by
+// creationMu, but the caller does not hold the barrier while running call.
+func (p *Coroutines) AdmitChildHandoff(parent Thread, expectedAbortEpoch uint64) bool {
 	p.creationMu.RLock()
+	admitted := p.abortEpoch.Load() == expectedAbortEpoch &&
+		!p.isThreadCanceled(parent)
+	p.creationMu.RUnlock()
+	return admitted
+}
+
+func (p *Coroutines) createAndStart(
+	start bool,
+	obj ThreadObj,
+	fn func(me Thread) int,
+	finalizer func(),
+	admit func() bool,
+) Thread {
+	th := p.newThread(obj)
+	th.onFinished = finalizer
+	p.creationMu.RLock()
+	if admit != nil && !admit() {
+		p.creationMu.RUnlock()
+		return nil
+	}
 	p.registerThread(th)
 	if p.stopping {
 		stopThreadIfRunning(th)
@@ -74,9 +132,24 @@ func (p *Coroutines) Abort() {
 
 // AbortAll requests cancellation of every registered coroutine.
 func (p *Coroutines) AbortAll() {
+	p.creationMu.Lock()
+	p.abortAllLocked()
+	p.creationMu.Unlock()
+}
+
+// abortAllLocked requires creationMu to be write-locked, making the epoch,
+// registry snapshot, and cancellation indivisible from guarded registration.
+func (p *Coroutines) abortAllLocked() {
+	p.abortEpoch.Add(1)
 	for _, th := range p.snapshotThreads() {
 		stopThreadIfRunning(th)
 	}
+}
+
+// AbortEpoch returns a token that changes whenever AbortAll is requested.
+// Work created from a canceled script can use it to reject late handoff.
+func (p *Coroutines) AbortEpoch() uint64 {
+	return p.abortEpoch.Load()
 }
 
 // AbortAllAndWait aborts all registered coroutines and waits for every thread
@@ -84,10 +157,14 @@ func (p *Coroutines) AbortAll() {
 func (p *Coroutines) AbortAllAndWait(timeout stime.Duration) bool {
 	caller := p.currentCoroutineThread()
 	p.AbortAll()
-	if caller != nil {
-		return p.waitForThreadsToStopFromCoroutine(timeout, caller)
+	serviceMainThread, unlockOSThread := lockCurrentMainThread()
+	if unlockOSThread != nil {
+		defer unlockOSThread()
 	}
-	return p.waitForThreadsToStop(timeout, nil)
+	if caller != nil {
+		return p.waitForThreadsToStopFromCoroutine(timeout, caller, serviceMainThread)
+	}
+	return p.waitForThreadsToStopWithMainThreadJobs(timeout, nil, serviceMainThread)
 }
 
 // StopIf requests cancellation of every thread accepted by filter. Filters are
@@ -116,6 +193,36 @@ func (p *Coroutines) Stop(thread Thread) {
 func (p *Coroutines) IsInCoroutine() bool {
 	_, exists := p.goroutineIDs.Load(gid.Get())
 	return exists
+}
+
+// RunSynchronizedCleanup runs call while excluding scripts and without
+// inheriting the caller's coroutine cancellation. A managed caller already
+// owns runMu; an external caller acquires it. Cleanup callbacks must not wait
+// for another coroutine to make progress and must not nest this method.
+func (p *Coroutines) RunSynchronizedCleanup(call func()) {
+	if call == nil {
+		return
+	}
+	gID := gid.Get()
+	if _, managed := p.goroutineIDs.Load(gID); managed {
+		p.runWithoutThreadContext(p.Current(), gID, call)
+		return
+	}
+	serviceMainThread, unlockOSThread := lockCurrentMainThread()
+	if unlockOSThread != nil {
+		defer unlockOSThread()
+	}
+	if serviceMainThread {
+		for !p.runMu.TryLock() {
+			if !p.runQueuedMainThreadJobs() {
+				runtime.Gosched()
+			}
+		}
+	} else {
+		p.runMu.Lock()
+	}
+	defer p.runMu.Unlock()
+	call()
 }
 
 func stopThreadIfRunning(th Thread) {
@@ -217,17 +324,29 @@ func (p *Coroutines) hasThreadsOtherThan(skip Thread) bool {
 	return false
 }
 
-func (p *Coroutines) waitForThreadsToStopFromCoroutine(timeout stime.Duration, caller Thread) bool {
+func (p *Coroutines) waitForThreadsToStopFromCoroutine(
+	timeout stime.Duration,
+	caller Thread,
+	serviceMainThread bool,
+) bool {
 	// Release runMu so canceled peers can unregister.
 	p.setCurrent(nil)
 	p.runMu.Unlock()
-	completed := p.waitForThreadsToStop(timeout, caller)
+	completed := p.waitForThreadsToStopWithMainThreadJobs(timeout, caller, serviceMainThread)
 	p.runMu.Lock()
 	p.setCurrent(caller)
 	return completed
 }
 
 func (p *Coroutines) waitForThreadsToStop(timeout stime.Duration, skip Thread) bool {
+	return p.waitForThreadsToStopWithMainThreadJobs(timeout, skip, false)
+}
+
+func (p *Coroutines) waitForThreadsToStopWithMainThreadJobs(
+	timeout stime.Duration,
+	skip Thread,
+	serviceMainThread bool,
+) bool {
 	hasTimeout := timeout > 0
 	deadline := stime.Time{}
 	if hasTimeout {
@@ -237,6 +356,9 @@ func (p *Coroutines) waitForThreadsToStop(timeout stime.Duration, skip Thread) b
 	for {
 		if !p.hasThreadsOtherThan(skip) {
 			return true
+		}
+		if serviceMainThread && p.runQueuedMainThreadJobs() {
+			continue
 		}
 
 		sleepFor := 10 * stime.Millisecond
@@ -251,6 +373,41 @@ func (p *Coroutines) waitForThreadsToStop(timeout stime.Duration, skip Thread) b
 		}
 		stime.Sleep(sleepFor)
 	}
+}
+
+// runQueuedMainThreadJobs services main-thread callbacks while a shutdown
+// barrier waits for finalizers. Other scheduler jobs retain their order and
+// remain queued; no canceled script is resumed from this path.
+func (p *Coroutines) runQueuedMainThreadJobs() bool {
+	p.jobConsumerMu.Lock()
+	defer p.jobConsumerMu.Unlock()
+	count := p.currentJobs.Count()
+	ran := false
+	for range count {
+		job := p.currentJobs.PopFront()
+		if job.Type != waitTypeMainThread {
+			p.currentJobs.PushBack(job)
+			continue
+		}
+		if platform.TryCallEngineDirectly(job.Call) {
+			ran = true
+		} else {
+			p.currentJobs.PushBack(job)
+		}
+	}
+	return ran
+}
+
+// lockCurrentMainThread pins the caller across a shutdown wait. The native
+// platform check and every serviced engine callback must observe the same OS
+// thread.
+func lockCurrentMainThread() (isMain bool, unlock func()) {
+	runtime.LockOSThread()
+	if platform.TryCallEngineDirectly(func() {}) {
+		return true, runtime.UnlockOSThread
+	}
+	runtime.UnlockOSThread()
+	return false, nil
 }
 
 func (p *Coroutines) runThread(th Thread, fn func(me Thread) int) {
@@ -269,6 +426,7 @@ func (p *Coroutines) runThread(th Thread, fn func(me Thread) int) {
 }
 
 func (p *Coroutines) finishThread(th Thread, gid uint64, recovered any) {
+	finalizerPanic := p.runThreadFinalizer(th, gid)
 	for _, waiter := range th.finishYieldWaiters() {
 		p.markRunnableAndResume(waiter)
 	}
@@ -283,7 +441,34 @@ func (p *Coroutines) finishThread(th Thread, gid uint64, recovered any) {
 	p.unregisterThread(th)
 	p.runMu.Unlock()
 	p.goroutineIDs.Delete(gid)
+	if (recovered == nil || recovered == ErrAbortThread) && finalizerPanic != nil {
+		recovered = finalizerPanic
+	}
 	p.handleThreadPanic(th, recovered)
+}
+
+// runThreadFinalizer temporarily removes the finished thread from coroutine
+// identity while retaining runMu. This keeps cleanup serialized with scripts
+// without inheriting a canceled context in WaitMainThread calls.
+func (p *Coroutines) runThreadFinalizer(th Thread, gid uint64) (recovered any) {
+	if th.onFinished == nil {
+		return nil
+	}
+	defer func() {
+		recovered = recover()
+	}()
+	p.runWithoutThreadContext(th, gid, th.onFinished)
+	return nil
+}
+
+func (p *Coroutines) runWithoutThreadContext(th Thread, gid uint64, call func()) {
+	p.setCurrent(nil)
+	p.goroutineIDs.Delete(gid)
+	defer func() {
+		p.goroutineIDs.Store(gid, struct{}{})
+		p.setCurrent(th)
+	}()
+	call()
 }
 
 func (p *Coroutines) handleThreadPanic(th Thread, recovered any) {

@@ -29,6 +29,9 @@ import (
 // thread. Pinning the goroutine makes the check and the engine call atomic with
 // respect to Go's OS-thread scheduling.
 func TryCallEngineDirectly(call func()) bool {
+	if gdx.PlatformMgr == nil {
+		return false
+	}
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 

@@ -17,6 +17,8 @@
 package coroutine
 
 import (
+	"sync/atomic"
+
 	"github.com/goplus/spx/v3/internal/engine/platform"
 	"github.com/goplus/spx/v3/internal/time"
 )
@@ -26,6 +28,13 @@ const (
 	waitTypeTime
 	waitTypeMainThread
 	waitTypeYield
+)
+
+const (
+	mainThreadCallPending uint32 = iota
+	mainThreadCallRunning
+	mainThreadCallDone
+	mainThreadCallCanceled
 )
 
 // WaitJob describes work consumed by Update.
@@ -67,34 +76,77 @@ func (p *Coroutines) WaitNextFrameFor(me Thread) {
 // WaitMainThread runs call on the main thread. It runs call immediately when
 // the current platform can call the engine directly.
 func (p *Coroutines) WaitMainThread(call func()) {
-	if platform.TryCallEngineDirectly(call) {
-		return
-	}
-
-	jobID := p.nextWaitJobID()
-	done := make(chan struct{}, 1)
 	me := p.currentCoroutineThread()
-	job := &WaitJob{
-		Th:   me,
-		Id:   jobID,
-		Type: waitTypeMainThread,
-		Call: func() {
-			if p.isThreadCanceled(me) {
-				return
-			}
-			call()
-			done <- struct{}{}
-		},
-	}
-	p.enqueuePriorityJob(job)
-
 	if me == nil {
+		if platform.TryCallEngineDirectly(call) {
+			return
+		}
+		done := make(chan struct{})
+		p.enqueuePriorityJob(&WaitJob{
+			Id:   p.nextWaitJobID(),
+			Type: waitTypeMainThread,
+			Call: func() {
+				defer close(done)
+				call()
+			},
+		})
 		<-done
 		return
 	}
+
+	done := make(chan struct{})
+	var state atomic.Uint32
+	admittedCall := func() {
+		// Direct and queued calls use the same admission protocol. Cancellation
+		// and admission share suspendMu; whichever obtains it first wins.
+		me.suspendMu.Lock()
+		if p.isThreadCanceled(me) {
+			canceled := state.CompareAndSwap(mainThreadCallPending, mainThreadCallCanceled)
+			me.suspendMu.Unlock()
+			// If the queued callback observes cancellation first, it owns the
+			// terminal transition and must wake the waiter. The running path owns
+			// the only other close, so the channel is closed exactly once.
+			if canceled {
+				close(done)
+			}
+			return
+		}
+		if !state.CompareAndSwap(mainThreadCallPending, mainThreadCallRunning) {
+			me.suspendMu.Unlock()
+			return
+		}
+		me.suspendMu.Unlock()
+		defer func() {
+			state.Store(mainThreadCallDone)
+			close(done)
+		}()
+		call()
+	}
+
+	if platform.TryCallEngineDirectly(admittedCall) {
+		if state.Load() != mainThreadCallDone || p.isThreadCanceled(me) {
+			panic(ErrAbortThread)
+		}
+		return
+	}
+
+	p.enqueuePriorityJob(&WaitJob{
+		Th:   me,
+		Id:   p.nextWaitJobID(),
+		Type: waitTypeMainThread,
+		Call: admittedCall,
+	})
 	select {
 	case <-done:
+		if p.isThreadCanceled(me) {
+			panic(ErrAbortThread)
+		}
 	case <-me.Context().Done():
+		if !state.CompareAndSwap(mainThreadCallPending, mainThreadCallCanceled) {
+			// Once admitted, a main-thread callback must finish before the
+			// coroutine unwinds and runs teardown against the same state.
+			<-done
+		}
 		panic(ErrAbortThread)
 	}
 }

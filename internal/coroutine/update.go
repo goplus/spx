@@ -106,18 +106,22 @@ updateLoop:
 
 func (p *Coroutines) stopRunawayThreads() {
 	// This remains cooperative: an active thread must release runMu first.
+	serviceMainThread, unlockOSThread := lockCurrentMainThread()
+	if unlockOSThread != nil {
+		defer unlockOSThread()
+	}
 	p.shutdownMu.Lock()
 	defer p.shutdownMu.Unlock()
 
 	p.runMu.Lock()
 	p.creationMu.Lock()
 	p.stopping = true
-	p.AbortAll()
+	p.abortAllLocked()
 	p.creationMu.Unlock()
 	p.runMu.Unlock()
 
 	for {
-		p.waitForThreadsToStop(0, nil)
+		p.waitForThreadsToStopWithMainThreadJobs(0, nil, serviceMainThread)
 
 		// Close the race between observing an empty registry and a concurrent
 		// registration. Creations during shutdown are registered as canceled.
@@ -159,6 +163,11 @@ func (p *Coroutines) nextUpdateAction(stats *UpdateJobsStats) updateAction {
 }
 
 func (p *Coroutines) processNextWaitJob(state *updateState, stats *UpdateJobsStats) {
+	p.jobConsumerMu.Lock()
+	defer p.jobConsumerMu.Unlock()
+	if p.currentJobs.Count() == 0 {
+		return
+	}
 	start := stime.Now()
 	job := p.currentJobs.PopFront()
 	stats.TaskCounts++

@@ -17,12 +17,12 @@
 package spx
 
 import (
-	"context"
 	"reflect"
+	"sync/atomic"
 	"unsafe"
 
 	coreproject "github.com/goplus/spx/v3/internal/core/project"
-	"github.com/goplus/spx/v3/internal/engine"
+	"github.com/goplus/spx/v3/internal/coroutine"
 	spxlog "github.com/goplus/spx/v3/internal/log"
 )
 
@@ -45,6 +45,12 @@ func doClone(sprite Sprite, data any, isAsync bool, onCloned func(sprite *Sprite
 	if sprite == nil {
 		spxlog.Panicf("DoClone: sprite is nil")
 	}
+	creator := currentCloneCreator()
+	if cloneCreatorCanceled(creator) {
+		// A canceled script must not create a fresh lifecycle that escapes the
+		// AbortAll snapshot it already belongs to.
+		gco.Abort()
+	}
 	src := spriteOf(sprite)
 	if isDebugInstrEnabled() {
 		spxlog.Debug("Clone: %s", src.name)
@@ -52,15 +58,137 @@ func doClone(sprite Sprite, data any, isAsync bool, onCloned func(sprite *Sprite
 	in := reflect.ValueOf(sprite).Elem()
 	v := reflect.New(in.Type())
 	out, outPtr := v.Elem(), v.Interface().(Sprite)
-	dest := cloneSprite(out, outPtr, in, nil)
-	src.g.addClonedShape(src, dest)
+	dest := copySprite(out, outPtr, in, nil)
+	creation := &cloneCreation{
+		dest:         dest,
+		generation:   src.g.currentBootstrapGeneration(),
+		stopAllEpoch: src.scriptEventRegistry.stopAllEpoch.Load(),
+	}
+	if gco != nil {
+		creation.abortEpoch = gco.AbortEpoch()
+	}
+	handedOff := false
+	defer func() {
+		if !handedOff {
+			creation.rollback()
+		}
+	}()
+
+	dest.initCloneRuntimeProxy()
+	dest.awake()
+	// Main installs the clone's event handlers. Keep the clone outside the
+	// active shape list until that internal initialization has completed.
+	initializeClone(out, outPtr)
+	if dest.isDestroyed() {
+		abortCanceledCloneHandoff(creation, creator)
+		return
+	}
+	abortCanceledCloneHandoff(creation, creator)
+	if !creation.isCurrent() {
+		return
+	}
+	if !src.g.shapeMgr.tryAddClonedShape(src, dest) {
+		spxlog.Debug("AddClonedShape: cloning a deleted sprite")
+		if gco != nil {
+			gco.Abort()
+		}
+		return
+	}
+	creation.inserted = true
 	if onCloned != nil {
 		onCloned(dest)
 	}
-	dispatchCloneLifecycle(dest, data, isAsync)
+	if dest.isDestroyed() {
+		creation.completeWithoutPublication()
+		handedOff = true
+		abortCanceledCloneHandoff(creation, creator)
+		return
+	}
+	abortCanceledCloneHandoff(creation, creator)
+	if !creation.isCurrent() {
+		return
+	}
+
+	if !dest.spriteState.HasOnCloned {
+		// Without a clone hat there is no user-code slice to wait for. Finalize
+		// inline so a nested clone block does not introduce a scheduler yield.
+		if gco != nil && !gco.AdmitChildHandoff(creator, creation.abortEpoch) {
+			abortCanceledCloneHandoff(creation, creator)
+			return
+		}
+		handedOff = true
+		func() {
+			defer creation.rollback()
+			runCloneLifecycle(creation, data, creator)
+		}()
+		abortCanceledCloneHandoff(creation, creator)
+		return
+	}
+	lifecycle := gco.CreateChildWithFinalizer(
+		creator,
+		creation.abortEpoch,
+		cloneLifecycleOwner{sprite: dest},
+		func(me coroutine.Thread) int {
+			runCloneLifecycle(creation, data, me)
+			return 0
+		},
+		creation.rollbackFromFinalizer,
+	)
+	if lifecycle == nil {
+		abortCanceledCloneHandoff(creation, creator)
+		return
+	}
+	handedOff = true
+	if !isAsync {
+		gco.Join(lifecycle)
+	}
+}
+
+func currentCloneCreator() coroutine.Thread {
+	if gco == nil || !gco.IsInCoroutine() {
+		return nil
+	}
+	return gco.Current()
+}
+
+func cloneCreatorCanceled(creator coroutine.Thread) bool {
+	if creator == nil {
+		return false
+	}
+	if creator.Stopped() {
+		return true
+	}
+	select {
+	case <-creator.Context().Done():
+		return true
+	default:
+		return false
+	}
+}
+
+func abortCanceledCloneHandoff(creation *cloneCreation, creator coroutine.Thread) {
+	if creator == nil {
+		return
+	}
+	if cloneCreatorCanceled(creator) ||
+		(gco != nil && gco.AbortEpoch() != creation.abortEpoch) {
+		gco.Abort()
+	}
 }
 
 func cloneSprite(out reflect.Value, outPtr Sprite, in reflect.Value, v coreproject.StageShape) *SpriteImpl {
+	dest := copySprite(out, outPtr, in, v)
+	if v == nil {
+		dest.initCloneRuntimeProxy()
+		dest.awake()
+		initializeClone(out, outPtr)
+	} else {
+		dest.initRuntimeProxy()
+	}
+	return dest
+}
+
+func copySprite(out reflect.Value, outPtr Sprite, in reflect.Value, v coreproject.StageShape) *SpriteImpl {
 	dest := spriteOf(outPtr)
 	func() {
 		out.Set(in)
@@ -87,17 +215,16 @@ func cloneSprite(out reflect.Value, outPtr Sprite, in reflect.Value, v coreproje
 	if v != nil {
 		applySpriteProps(dest, v)
 	}
-	dest.initRuntimeProxy()
-	if v == nil {
-		dest.awake()
-		// Re-running Main re-registers clone events but also replays XGo_Init.
-		// Save top-level user fields first, then restore them without changing
-		// the existing out.Set(in) reference semantics.
-		userState := snapshotSpriteUserFields(out)
-		runMain(outPtr.Main)
-		restoreSpriteUserFields(out, userState)
-	}
 	return dest
+}
+
+func initializeClone(out reflect.Value, outPtr Sprite) {
+	// Re-running Main re-registers clone events but also replays XGo_Init.
+	// Save top-level user fields first, then restore them without changing
+	// the existing out.Set(in) reference semantics.
+	userState := snapshotSpriteUserFields(out)
+	runMain(outPtr.Main)
+	restoreSpriteUserFields(out, userState)
 }
 
 func snapshotSpriteUserFields(v reflect.Value) map[int]reflect.Value {
@@ -138,19 +265,151 @@ func settableSpriteField(field reflect.Value) reflect.Value {
 	return reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem()
 }
 
-func dispatchCloneLifecycle(dest *SpriteImpl, data any, isAsync bool) {
-	dispatch := func() {
-		if dest.spriteState.HasOnCloned {
-			dest.doWhenCloned(dest, data)
-		}
-	}
-	if isAsync {
-		engine.Go(dest.pthis, func(context.Context) {
-			dispatch()
-		})
+type cloneLifecycleOwner struct {
+	sprite *SpriteImpl
+}
+
+func (p cloneLifecycleOwner) Name() string {
+	return "clone lifecycle: " + p.sprite.name
+}
+
+type cloneCreation struct {
+	dest         *SpriteImpl
+	generation   uint64
+	stopAllEpoch uint64
+	abortEpoch   uint64
+	inserted     bool
+	state        atomic.Uint32
+}
+
+type cloneCreationState uint32
+
+const (
+	cloneCreationPending cloneCreationState = iota
+	cloneCreationPublished
+	cloneCreationCompletedWithoutPublication
+	cloneCreationRolledBack
+)
+
+func (p *cloneCreation) isCurrent() bool {
+	dest := p.dest
+	return p.canCommit() &&
+		dest.scriptEventRegistry.stopAllEpoch.Load() == p.stopAllEpoch &&
+		(gco == nil || gco.AbortEpoch() == p.abortEpoch)
+}
+
+// canCommit checks structural state that remains relevant after a queued
+// main-thread callback has won admission against lifecycle cancellation.
+func (p *cloneCreation) canCommit() bool {
+	dest := p.dest
+	return cloneCreationState(p.state.Load()) == cloneCreationPending &&
+		dest.g.isBootstrapGenerationCurrent(p.generation) &&
+		!dest.isDestroyed()
+}
+
+func (p *cloneCreation) rollback() {
+	if gco == nil {
+		p.rollbackSynchronized()
 		return
 	}
-	dispatch()
+	gco.RunSynchronizedCleanup(p.rollbackSynchronized)
+}
+
+func (p *cloneCreation) rollbackFromFinalizer() {
+	// Coroutine finalizers already run inside an uncancelable execution barrier.
+	p.rollbackSynchronized()
+}
+
+func (p *cloneCreation) rollbackSynchronized() {
+	if !p.state.CompareAndSwap(
+		uint32(cloneCreationPending), uint32(cloneCreationRolledBack),
+	) {
+		return
+	}
+	rollbackCloneCreation(p.dest, p.inserted, p.generation)
+}
+
+func (p *cloneCreation) completeWithoutPublication() {
+	p.state.CompareAndSwap(
+		uint32(cloneCreationPending), uint32(cloneCreationCompletedWithoutPublication),
+	)
+}
+
+func (p *cloneCreation) tryPublish() bool {
+	return p.state.CompareAndSwap(
+		uint32(cloneCreationPending), uint32(cloneCreationPublished),
+	)
+}
+
+func runCloneLifecycle(creation *cloneCreation, data any, lifecycle coroutine.Thread) {
+	dest := creation.dest
+
+	if lifecycle != nil {
+		select {
+		case <-lifecycle.Context().Done():
+			return
+		default:
+		}
+	}
+	// Stop All may run after the clone was inserted but before this detached
+	// lifecycle gets the scheduler. Never start handlers from a stale epoch:
+	// they would be absent from StopIf's snapshot and could escape the stop.
+	if !creation.isCurrent() || dest.g.shapeMgr.findShapeIndex(dest) < 0 ||
+		dest.runtimeState.SyncSprite == nil || !dest.spriteState.IsProxyPublicationPending {
+		return
+	}
+	if dest.spriteState.HasOnCloned {
+		if !dest.doWhenCloned(dest, data, func() bool {
+			if lifecycle != nil {
+				select {
+				case <-lifecycle.Context().Done():
+					return false
+				default:
+				}
+			}
+			return creation.isCurrent() &&
+				dest.g.shapeMgr.findShapeIndex(dest) >= 0 &&
+				dest.runtimeState.SyncSprite != nil &&
+				dest.spriteState.IsProxyPublicationPending
+		}) {
+			return
+		}
+	}
+	if dest.isDestroyed() {
+		creation.completeWithoutPublication()
+		return
+	}
+	if !creation.isCurrent() ||
+		!dest.publishCloneRuntimeProxy(creation) {
+		return
+	}
+}
+
+func rollbackCloneCreation(dest *SpriteImpl, inserted bool, generation uint64) {
+	cleanup := func() {
+		dest.setDying()
+		if !dest.g.isBootstrapGenerationCurrent(generation) {
+			// Reset may clear the shared registry before a still-running clone
+			// Main registers its handlers. Remove that stale owner explicitly;
+			// engine/component teardown belongs to the discarded generation.
+			dest.doDeleteClone()
+			dest.runtimeState.SyncSprite = nil
+			dest.markDestroyed()
+			return
+		}
+
+		if !dest.isDestroyed() {
+			dest.destroyWithoutCurrentAbort()
+		} else {
+			// Main may delete itself and then continue registering handlers.
+			dest.doDeleteClone()
+		}
+		if !inserted && dest.runtimeState.SyncSprite != nil {
+			// Normal teardown only queues proxies belonging to active shapes.
+			dest.g.shapeMgr.remove(dest)
+		}
+	}
+	cleanup()
 }
 
 func applySpriteProps(dest *SpriteImpl, v coreproject.StageShape) {

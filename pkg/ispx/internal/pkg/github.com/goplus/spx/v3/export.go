@@ -43,7 +43,6 @@ func init() {
 		Name: "spx",
 		Path: "github.com/goplus/spx/v3",
 		Deps: map[string]string{
-			"context":                           "context",
 			"errors":                            "errors",
 			"flag":                              "flag",
 			"fmt":                               "fmt",

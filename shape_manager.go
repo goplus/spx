@@ -113,7 +113,7 @@ func (s *shapeManager) layoutTextBubbles(items []Shape) {
 
 	for _, item := range items {
 		bubble, ok := item.(*textBubble)
-		if !ok || bubble.panel == nil || !bubble.sprite.Visible() {
+		if !ok || bubble.panel == nil || !bubble.sprite.effectiveProxyVisibility() {
 			continue
 		}
 		s.textBubbles = append(s.textBubbles, bubble)
@@ -228,15 +228,22 @@ func (s *shapeManager) addShape(child Shape) {
 // matches Scratch: repeated clones of one target are ordered oldest to newest,
 // with the original target still in front of all of them.
 func (s *shapeManager) addClonedShape(src, clone Shape) {
+	if s.tryAddClonedShape(src, clone) {
+		return
+	}
+	spxlog.Debug("AddClonedShape: cloning a deleted sprite")
+	gco.Abort()
+}
+
+func (s *shapeManager) tryAddClonedShape(src, clone Shape) bool {
 	idx := s.findShapeIndex(src)
 	if idx < 0 {
-		spxlog.Debug("AddClonedShape: cloning a deleted sprite")
-		gco.Abort()
-		return
+		return false
 	}
 
 	s.items = sliceutil.InsertAt(s.items, idx, clone)
 	s.updateRenderLayers()
+	return true
 }
 
 // removeShape removes a shape from the active list and schedules it for destruction.
@@ -291,6 +298,10 @@ func (s *shapeManager) goBackLayers(spr *SpriteImpl, n int) {
 
 // updateRenderLayers updates the layer index for all sprites.
 func (s *shapeManager) updateRenderLayers() {
+	s.updateRenderLayersIncludingPending(nil)
+}
+
+func (s *shapeManager) updateRenderLayersIncludingPending(include *SpriteImpl) {
 	if engine.HasLayerSortMethod() {
 		return
 	}
@@ -298,8 +309,25 @@ func (s *shapeManager) updateRenderLayers() {
 	layer := firstSpriteLayer
 	for _, item := range s.items {
 		if sp, ok := item.(*SpriteImpl); ok {
+			// A clone does not occupy a visible layer until its first initialization
+			// slice commits. This prevents rollback from transiently moving already
+			// published peers in the engine.
+			if sp.spriteState.IsProxyPublicationPending && sp != include {
+				continue
+			}
 			sp.setLayer(layer)
 			layer++
+		}
+	}
+}
+
+// syncDirtySpriteLayers applies all layer changes as one publication barrier.
+// Clone initialization can move multiple sprites even when only the clone is
+// about to become visible.
+func (s *shapeManager) syncDirtySpriteLayers() {
+	for _, item := range s.items {
+		if sprite, ok := item.(*SpriteImpl); ok && !sprite.isDestroyed() {
+			sprite.baseObj.applyLayerUpdate()
 		}
 	}
 }

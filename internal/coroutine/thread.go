@@ -69,6 +69,10 @@ type threadImpl struct {
 	yieldedOrDoneOnce sync.Once
 	yieldedOrDone     chan struct{}
 	yieldWaiters      map[Thread]struct{}
+
+	// onFinished runs while this thread still owns the scheduler execution
+	// barrier, but outside its (possibly canceled) coroutine context.
+	onFinished func()
 }
 
 // Thread represents a coroutine.

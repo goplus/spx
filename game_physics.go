@@ -55,6 +55,7 @@ func (p *Game) Raycast__2(fromX, fromY, toX, toY float64, ignoreSprites []Sprite
 	from := mathf.NewVec2(fromX, fromY)
 	to := mathf.NewVec2(toX, toY)
 	var ignoreSpritesIds []int64
+	ignoredSpriteIds := make(map[int64]struct{}, len(ignoreSprites))
 	if len(ignoreSprites) > 0 {
 		ignoreSpritesIds = make([]int64, 0, len(ignoreSprites))
 		for _, item := range ignoreSprites {
@@ -63,25 +64,46 @@ func (p *Game) Raycast__2(fromX, fromY, toX, toY float64, ignoreSprites []Sprite
 			}
 			impl := spriteOf(item)
 			if impl != nil {
-				ignoreSpritesIds = append(ignoreSpritesIds, impl.getSpriteId())
+				id := impl.getSpriteId()
+				if _, exists := ignoredSpriteIds[id]; !exists {
+					ignoreSpritesIds = append(ignoreSpritesIds, id)
+					ignoredSpriteIds[id] = struct{}{}
+				}
 			}
 		}
 	}
-	result := p.raycast(from, to, ignoreSpritesIds, -1)
-	if result == nil {
-		return false, nil, 0, 0
-	}
-	var target Sprite = nil
-	if result.Hited {
-		sprite := engine.GetSprite(result.SpriteId)
-		if sprite != nil {
-			impl := sprite.Target.(*SpriteImpl)
-			if impl != nil {
-				target = impl.sprite
-			}
+	for {
+		result := p.raycast(from, to, ignoreSpritesIds, -1)
+		if result == nil {
+			return false, nil, 0, 0
 		}
+		if !result.Hited {
+			return false, nil, result.PosX, result.PosY
+		}
+
+		proxy := engine.GetSprite(result.SpriteId)
+		if proxy == nil {
+			return true, nil, result.PosX, result.PosY
+		}
+		impl, ok := proxy.Target.(*SpriteImpl)
+		if !ok || impl == nil {
+			spxlog.Warn("Raycast object is not a Sprite: %v", result.SpriteId)
+			return true, nil, result.PosX, result.PosY
+		}
+		if !impl.spriteState.IsProxyPublicationPending {
+			return true, impl.sprite, result.PosX, result.PosY
+		}
+
+		// A clone under initialization already has an engine proxy, but it is not
+		// part of the published world yet. Ignore that proxy and continue the same
+		// ray so a published sprite behind it can still be selected.
+		if _, exists := ignoredSpriteIds[result.SpriteId]; exists {
+			spxlog.Warn("Raycast returned ignored pending Sprite: %v", result.SpriteId)
+			return false, nil, 0, 0
+		}
+		ignoredSpriteIds[result.SpriteId] = struct{}{}
+		ignoreSpritesIds = append(ignoreSpritesIds, result.SpriteId)
 	}
-	return result.Hited, target, result.PosX, result.PosY
 }
 
 // -----------------------------------------------------------------------------
@@ -267,8 +289,11 @@ func (p *Game) checkCollision(ary any) []Sprite {
 	for _, item := range spriteIdAry {
 		sprite := engine.GetSprite(item)
 		if sprite != nil {
-			impl := sprite.Target.(*SpriteImpl)
-			if impl != nil {
+			impl, ok := sprite.Target.(*SpriteImpl)
+			if ok && impl != nil {
+				if impl.spriteState.IsProxyPublicationPending {
+					continue
+				}
 				sprites = append(sprites, impl.sprite)
 			} else {
 				spxlog.Warn("Collision object is not a Sprite: %v", item)

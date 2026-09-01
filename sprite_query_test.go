@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
+	coreproject "github.com/goplus/spx/v3/internal/core/project"
 	internalengine "github.com/goplus/spx/v3/internal/engine"
 	"github.com/goplus/spx/v3/internal/enginewrap"
 	pkgengine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
@@ -29,6 +30,7 @@ import (
 type touchingSyncSpriteMgr struct {
 	enginewrap.SpriteMgrImpl
 	positions               map[pkgengine.Object]mathf.Vec2
+	visible                 map[pkgengine.Object]bool
 	texturePaths            map[pkgengine.Object]string
 	expectedTexturePaths    map[pkgengine.Object]string
 	checkedTexturePaths     map[pkgengine.Object]string
@@ -43,11 +45,15 @@ type touchingSyncSpriteMgr struct {
 	setRenderScaleCalls     map[pkgengine.Object]int
 	setTextureDirectCalls   map[pkgengine.Object]int
 	setTextureAtlasPathByID map[pkgengine.Object]string
+	collisionChecks         int
+	panicVisibleTrue        any
+	panicVisibleFalse       any
 }
 
 func newTouchingSyncSpriteMgr() *touchingSyncSpriteMgr {
 	return &touchingSyncSpriteMgr{
 		positions:               map[pkgengine.Object]mathf.Vec2{},
+		visible:                 map[pkgengine.Object]bool{},
 		texturePaths:            map[pkgengine.Object]string{},
 		expectedTexturePaths:    map[pkgengine.Object]string{},
 		checkedTexturePaths:     map[pkgengine.Object]string{},
@@ -74,6 +80,7 @@ func (s *touchingSyncSpriteMgr) SetTransform(
 	pivot mathf.Vec2,
 ) {
 	s.positions[obj] = pos
+	s.visible[obj] = visible
 	s.setTransformCalls[obj]++
 }
 
@@ -95,7 +102,18 @@ func (s *touchingSyncSpriteMgr) SetPivot(obj pkgengine.Object, pivot mathf.Vec2)
 }
 
 func (s *touchingSyncSpriteMgr) SetVisible(obj pkgengine.Object, visible bool) {
+	s.visible[obj] = visible
 	s.setVisibleCalls[obj]++
+	if visible && s.panicVisibleTrue != nil {
+		panicValue := s.panicVisibleTrue
+		s.panicVisibleTrue = nil
+		panic(panicValue)
+	}
+	if !visible && s.panicVisibleFalse != nil {
+		panicValue := s.panicVisibleFalse
+		s.panicVisibleFalse = nil
+		panic(panicValue)
+	}
 }
 
 func (s *touchingSyncSpriteMgr) SetTexture(obj pkgengine.Object, path string) {
@@ -124,6 +142,10 @@ func (s *touchingSyncSpriteMgr) SetMaterialParamsVec4(obj pkgengine.Object, effe
 }
 
 func (s *touchingSyncSpriteMgr) CheckCollisionWithSprite(obj, objB pkgengine.Object, alphaThreshold float64, usePixelPerfect bool) bool {
+	s.collisionChecks++
+	if !s.visible[obj] || !s.visible[objB] {
+		return false
+	}
 	a, b := s.positions[obj], s.positions[objB]
 	return math.Abs(a.X-b.X) < 1e-9 && math.Abs(a.Y-b.Y) < 1e-9
 }
@@ -158,7 +180,103 @@ func newTouchingTestSprite(name string, x, y float64, id pkgengine.Object) *Spri
 	sprite.spriteState.IsVisible = true
 	sprite.runtimeState.SyncSprite = &internalengine.Sprite{}
 	sprite.runtimeState.SyncSprite.SetId(id)
+	if mgr, ok := pkgengine.SpriteMgr.(*touchingSyncSpriteMgr); ok {
+		mgr.visible[id] = true
+	}
 	return sprite
+}
+
+type touchingPendingTargetSprite struct {
+	SpriteImpl
+}
+
+func (*touchingPendingTargetSprite) Main() {}
+
+func newTouchingPendingTargetSprite(name string, x, y float64, id pkgengine.Object) *touchingPendingTargetSprite {
+	sprite := &touchingPendingTargetSprite{}
+	sprite.g = &Game{}
+	sprite.name = name
+	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{
+		X:             x,
+		Y:             y,
+		RotationStyle: "normal",
+		FAnimations:   map[SpriteAnimationName]*coreproject.AniConfig{},
+		AnimBindings:  map[string]string{},
+	})
+	sprite.g.displayState.WorldWidth = 480
+	sprite.g.displayState.WorldHeight = 360
+	sprite.baseObj.initWithSize(1, 1)
+	sprite.runtimeState.Scale = 1
+	sprite.spriteState.IsVisible = true
+	sprite.runtimeState.SyncSprite = &internalengine.Sprite{}
+	sprite.runtimeState.SyncSprite.SetId(id)
+	sprite.sprite = sprite
+	return sprite
+}
+
+func TestTouchingSpriteRejectsPendingTargetButAllowsPendingReceiver(t *testing.T) {
+	mgr := newTouchingSyncSpriteMgr()
+	installTouchingSyncSpriteMgr(t, mgr)
+
+	receiver := newTouchingTestSprite("receiver", 0, 0, 1)
+	target := newTouchingPendingTargetSprite("target", 0, 0, 2)
+	mgr.positions[1] = mathf.NewVec2(0, 0)
+	mgr.positions[2] = mathf.NewVec2(0, 0)
+	mgr.visible[1] = true
+	mgr.visible[2] = false
+
+	target.spriteState.IsProxyPublicationPending = true
+	if receiver.Touching__0(target) {
+		t.Fatal("Touching__0(pending target) = true, want false")
+	}
+	if mgr.collisionChecks != 0 {
+		t.Fatalf("collision checks for pending target = %d, want 0", mgr.collisionChecks)
+	}
+
+	target.spriteState.IsProxyPublicationPending = false
+	receiver.spriteState.IsProxyPublicationPending = true
+	mgr.visible[1] = false
+	mgr.visible[2] = true
+	visibilityCallsBeforeSensing := mgr.setVisibleCalls[1]
+	if !receiver.Touching__0(target) {
+		t.Fatal("Touching__0(published target) = false for pending receiver, want true")
+	}
+	if mgr.collisionChecks != 1 {
+		t.Fatalf("collision checks after published target = %d, want 1", mgr.collisionChecks)
+	}
+	if mgr.visible[1] {
+		t.Fatal("pending receiver remained natively visible after sensing")
+	}
+	if got := mgr.setVisibleCalls[1] - visibilityCallsBeforeSensing; got != 2 {
+		t.Fatalf("pending receiver sensing visibility calls = %d, want temporary show+hide", got)
+	}
+}
+
+func TestPendingReceiverSensingShowPanicRestoresHiddenProxy(t *testing.T) {
+	mgr := newTouchingSyncSpriteMgr()
+	installTouchingSyncSpriteMgr(t, mgr)
+
+	receiver := newTouchingTestSprite("receiver", 0, 0, 1)
+	target := newTouchingPendingTargetSprite("target", 0, 0, 2)
+	receiver.spriteState.IsProxyPublicationPending = true
+	target.spriteState.IsProxyPublicationPending = false
+	mgr.positions[1] = mathf.NewVec2(0, 0)
+	mgr.positions[2] = mathf.NewVec2(0, 0)
+	mgr.visible[1] = false
+	mgr.visible[2] = true
+	mgr.panicVisibleTrue = "temporary sensing show failed"
+
+	var recovered any
+	func() {
+		defer func() { recovered = recover() }()
+		receiver.Touching__0(target)
+	}()
+	if recovered != "temporary sensing show failed" {
+		t.Fatalf("sensing panic = %v, want original show failure", recovered)
+	}
+	if mgr.visible[1] {
+		t.Fatal("pending receiver remained visible after a partial show failure")
+	}
 }
 
 func TestTouchingSpriteSyncsDirtyTransformImmediately(t *testing.T) {

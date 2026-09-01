@@ -17,16 +17,17 @@
 package state
 
 type SpriteRuntimeState struct {
-	IsVisible           bool
-	Cloned              bool
-	IsDying             bool
-	IsDirty             bool
-	DirtyVersion        uint64
-	ProxySyncVersion    uint64
-	IsAwakened          bool
-	HasOnCloned         bool
-	HasOnTouchStart     bool
-	HasOnTouching       bool
-	HasOnTouchEnd       bool
-	DefaultCostumeIndex int
+	IsVisible                 bool
+	Cloned                    bool
+	IsDying                   bool
+	IsDirty                   bool
+	DirtyVersion              uint64
+	ProxySyncVersion          uint64
+	IsProxyPublicationPending bool
+	IsAwakened                bool
+	HasOnCloned               bool
+	HasOnTouchStart           bool
+	HasOnTouching             bool
+	HasOnTouchEnd             bool
+	DefaultCostumeIndex       int
 }

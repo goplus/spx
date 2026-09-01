@@ -106,6 +106,7 @@ func (p *SpriteImpl) InitFrom(src *SpriteImpl) {
 
 	p.spriteState.DirtyVersion = 0
 	p.spriteState.ProxySyncVersion = 0
+	p.spriteState.IsProxyPublicationPending = false
 	p.spriteState.HasOnCloned = false
 	p.spriteState.HasOnTouchStart = false
 	p.spriteState.HasOnTouching = false
@@ -146,13 +147,19 @@ func (p *SpriteImpl) Die() {
 }
 
 func (p *SpriteImpl) Destroy() {
+	p.destroyWithoutCurrentAbort()
+	p.abortIfCurrentCoroutine()
+}
+
+// destroyWithoutCurrentAbort performs complete sprite teardown for lifecycle
+// owners that are known not to be the sprite's own script thread.
+func (p *SpriteImpl) destroyWithoutCurrentAbort() {
 	if isDebugInstrEnabled() {
 		spxlog.Debug("Destroy: %s", p.name)
 	}
 	p.teardown()
 	p.Stop(ThisSprite)
 	p.markDestroyed()
-	p.abortIfCurrentCoroutine()
 }
 
 func (p *SpriteImpl) DeleteThisClone() {

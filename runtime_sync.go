@@ -104,7 +104,8 @@ func (p *Game) processPhysicsTriggers() {
 }
 
 func isSpriteTouchable(sprite *SpriteImpl) bool {
-	return sprite.spriteState.IsVisible && !sprite.spriteState.IsDying
+	return sprite.spriteState.IsVisible && !sprite.spriteState.IsDying &&
+		!sprite.spriteState.IsProxyPublicationPending
 }
 
 // -----------------------------------------------------------------------------
@@ -119,14 +120,12 @@ func (p *baseObj) scheduleCostumeUpdate() {
 
 // applyCostumeUpdate pushes pending costume and layer changes to the proxy.
 func (p *baseObj) applyCostumeUpdate() {
-	syncSprite := p.runtimeState.SyncSprite
-	if p.runtimeState.IsLayerDirty {
-		if !engine.HasLayerSortMethod() {
-			syncSprite.SetZIndex(int64(p.runtimeState.Layer))
-		}
-		p.runtimeState.IsLayerDirty = false
-	}
+	p.applyLayerUpdate()
 	if !p.runtimeState.IsCostumeDirty {
+		return
+	}
+	syncSprite := p.runtimeState.SyncSprite
+	if syncSprite == nil {
 		return
 	}
 	p.runtimeState.IsCostumeDirty = false
@@ -141,6 +140,16 @@ func (p *baseObj) applyCostumeUpdate() {
 	syncSprite.UpdateTexture(path, renderScale, !p.runtimeState.IsAnimating)
 }
 
+func (p *baseObj) applyLayerUpdate() {
+	if !p.runtimeState.IsLayerDirty || p.runtimeState.SyncSprite == nil {
+		return
+	}
+	if !engine.HasLayerSortMethod() {
+		p.runtimeState.SyncSprite.SetZIndex(int64(p.runtimeState.Layer))
+	}
+	p.runtimeState.IsLayerDirty = false
+}
+
 func (p *baseObj) applyAtlasUVRemap() {
 	uvRemap := p.getCostumeAtlasUvRemap()
 	val := mathf.NewVec4(uvRemap.Position.X, uvRemap.Position.Y, uvRemap.Size.X, uvRemap.Size.Y)
@@ -151,6 +160,15 @@ func (p *baseObj) applyAtlasUVRemap() {
 // Sprite Proxy Lifecycle
 // -----------------------------------------------------------------------------
 func (p *SpriteImpl) initRuntimeProxy() {
+	p.spriteState.IsProxyPublicationPending = false
+	p.rebuildRuntimeProxy(true)
+}
+
+// initCloneRuntimeProxy creates a fully configured proxy without exposing it.
+// Scratch runs a clone's initialization hat before the clone can be rendered.
+func (p *SpriteImpl) initCloneRuntimeProxy() {
+	p.spriteState.IsProxyPublicationPending = true
+	p.physics().beginPendingProxyPhysics()
 	p.rebuildRuntimeProxy(true)
 }
 
@@ -176,13 +194,117 @@ func (p *SpriteImpl) ensureProxyInitialized() {
 	}
 	p.runtimeState.SyncSprite = engine.BridgeNewBareSprite(p, mathf.NewVec2(p.getXY()))
 	p.applyPhysicsProxyConfig()
-	p.runtimeState.SyncSprite.SetVisible(p.spriteState.IsVisible)
+	p.runtimeState.SyncSprite.SetVisible(p.effectiveProxyVisibility())
 	p.runtimeState.SyncSprite.Name = p.name
 	p.runtimeState.SyncSprite.SetTypeName(p.name)
 	p.applyGraphicEffects(true)
 	p.animation().registerOnAnimationLooped(p.handleAnimationLooped)
 	p.animation().registerOnAnimationFinished(p.handleAnimationFinished)
 	p.markProxyDirty()
+}
+
+func (p *SpriteImpl) effectiveProxyVisibility() bool {
+	return !p.spriteState.IsProxyPublicationPending && p.spriteState.IsVisible
+}
+
+// publishCloneRuntimeProxy applies initialization changes made by onCloned and
+// publishes the clone only if its creation transaction commits. Main-thread
+// callback admission is atomic with lifecycle cancellation, so rollback cannot
+// run concurrently with this publication barrier.
+func (p *SpriteImpl) publishCloneRuntimeProxy(creation *cloneCreation) bool {
+	published := false
+	engine.WaitMainThread(func() {
+		// WaitMainThread callback admission is the cancellation linearization
+		// point. Epochs were validated before enqueueing; after admission only
+		// structural invalidation may reject the transaction. A later lifecycle
+		// cancellation waits for this callback and loses to commit.
+		if !creation.canCommit() || p.g.shapeMgr.findShapeIndex(p) < 0 ||
+			p.runtimeState.SyncSprite == nil || !p.spriteState.IsProxyPublicationPending {
+			return
+		}
+
+		// Finish all clone-local, fallible bridge work while the clone is hidden.
+		// This includes its final costume, physics shape, and transform.
+		p.ensureProxyQueryStateSynced()
+
+		layersStaged := false
+		physicsStaged := false
+		defer func() {
+			failure := recover()
+			if !published && (layersStaged || physicsStaged) {
+				// Restore the published layer topology before rollback removes the
+				// pending clone. Each bridge action is isolated so one cleanup panic
+				// cannot prevent the remaining compensation; preserve the original
+				// panic when publication itself failed.
+				if layersStaged {
+					p.g.shapeMgr.updateRenderLayers()
+				}
+				physicsModeFailure := captureProxyCallPanic(func() {
+					p.runtimeState.SyncSprite.SetPhysicsMode(NoPhysics)
+				})
+				collisionFailure := captureProxyCallPanic(func() {
+					p.runtimeState.SyncSprite.SetCollisionEnabled(false)
+				})
+				triggerFailure := captureProxyCallPanic(func() {
+					p.runtimeState.SyncSprite.SetTriggerEnabled(false)
+				})
+				hideFailure := captureProxyCallPanic(func() {
+					p.syncProxyTransform(false)
+				})
+				var layerFailure any
+				if layersStaged {
+					layerFailure = captureProxyCallPanic(func() {
+						p.g.shapeMgr.syncDirtySpriteLayers()
+					})
+				}
+				if failure == nil {
+					for _, cleanupFailure := range []any{
+						physicsModeFailure,
+						collisionFailure,
+						triggerFailure,
+						hideFailure,
+						layerFailure,
+					} {
+						if cleanupFailure != nil {
+							failure = cleanupFailure
+							break
+						}
+					}
+				}
+			}
+			if failure != nil {
+				panic(failure)
+			}
+		}()
+
+		// Only layer staging can mutate already-published peers. Keep it at the
+		// commit tail and compensate it on every pre-commit exit or panic.
+		layersStaged = true
+		p.g.shapeMgr.updateRenderLayersIncludingPending(p)
+		p.g.shapeMgr.syncDirtySpriteLayers()
+
+		// Native physics and visibility form the final publication tail. No
+		// physics step can interleave main-thread bridge calls, so a proxy is
+		// either fully isolated or fully configured when the transaction CAS
+		// makes it observable to the runtime.
+		physicsStaged = true
+		p.physics().publishPendingProxyPhysics(p.runtimeState.SyncSprite)
+		p.syncProxyTransform(p.spriteState.IsVisible)
+		if !creation.tryPublish() {
+			return
+		}
+		p.spriteState.IsProxyPublicationPending = false
+		published = true
+	})
+	return published
+}
+
+func captureProxyCallPanic(call func()) (recovered any) {
+	defer func() {
+		recovered = recover()
+	}()
+	call()
+	return nil
 }
 
 // handleAnimationFinished records completed animation events from the proxy.
@@ -220,7 +342,8 @@ func (p *SpriteImpl) applyPhysicsProxyConfig() {
 }
 
 func (p *SpriteImpl) shouldPullPhysicsPosition() bool {
-	return p.runtimeState.SyncSprite != nil && p.PhysicsMode() != NoPhysics
+	return p.runtimeState.SyncSprite != nil &&
+		!p.spriteState.IsProxyPublicationPending && p.PhysicsMode() != NoPhysics
 }
 
 func (p *SpriteImpl) applyPhysicsPosition(x, y float64) {
@@ -241,15 +364,18 @@ func (p *SpriteImpl) ensureProxyQueryStateSynced() {
 		return
 	}
 
+	p.syncProxyTransform(p.effectiveProxyVisibility())
+}
+
+func (p *SpriteImpl) syncProxyTransform(visible bool) {
 	x, y := p.getXY()
 	renderOffsetX, renderOffsetY := getRenderOffset(p)
 	rot, scaleX, scaleY := getRenderRotationAndScale(p)
-
 	p.runtimeState.SyncSprite.SetTransform(
 		mathf.NewVec2(x, y),
 		engine.DegToRad(rot),
 		mathf.NewVec2(scaleX, scaleY),
-		p.spriteState.IsVisible,
+		visible,
 		mathf.NewVec2(renderOffsetX, renderOffsetY),
 	)
 	p.spriteState.ProxySyncVersion = p.spriteState.DirtyVersion
@@ -282,7 +408,7 @@ func (p *SpriteImpl) appendTransformUpdate(buffer *engine.SpriteSyncBuffer) {
 		engine.DegToRad(rot),
 		scaleX, scaleY,
 		renderOffsetX, renderOffsetY,
-		p.spriteState.IsVisible,
+		p.effectiveProxyVisibility(),
 	)
 	p.spriteState.ProxySyncVersion = p.spriteState.DirtyVersion
 }
