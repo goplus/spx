@@ -105,6 +105,13 @@ func (p *Coroutines) StopIf(filter func(th Thread) bool) {
 	}
 }
 
+// Stop cancels thread; nil and repeated calls are safe.
+func (p *Coroutines) Stop(thread Thread) {
+	if thread != nil {
+		stopThreadIfRunning(thread)
+	}
+}
+
 // IsInCoroutine reports whether the caller is running in this manager.
 func (p *Coroutines) IsInCoroutine() bool {
 	_, exists := p.goroutineIDs.Load(gid.Get())

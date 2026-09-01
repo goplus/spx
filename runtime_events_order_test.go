@@ -19,6 +19,7 @@ package spx
 import (
 	"reflect"
 	"runtime"
+	"slices"
 	"sync"
 	"testing"
 
@@ -88,6 +89,12 @@ func waitForScratchEventOrderEntries(t *testing.T, co *coroutine.Coroutines, log
 	})
 }
 
+func advanceScratchEventFrame(t *testing.T, co *coroutine.Coroutines, log *scratchEventOrderLog, count int) {
+	t.Helper()
+	itime.Update(0, 0)
+	waitForScratchEventOrderEntries(t, co, log, count)
+}
+
 func requireScratchEventOrder(t *testing.T, log *scratchEventOrderLog, want []string) {
 	t.Helper()
 	if got := log.snapshot(); !reflect.DeepEqual(got, want) {
@@ -125,8 +132,7 @@ func TestScratchGlobalBroadcastRunsFrontToBackThenStageToFirstYield(t *testing.T
 		"stage",
 	})
 
-	itime.Update(0, 0)
-	waitForScratchEventOrderEntries(t, co, &log, 5)
+	advanceScratchEventFrame(t, co, &log, 5)
 	requireScratchEventOrder(t, &log, []string{
 		"front-1-before-yield",
 		"front-2",
@@ -176,8 +182,7 @@ func TestScratchOnStartStopAllDrainsSnapshotOnly(t *testing.T) {
 		"message-before-yield",
 	})
 
-	itime.Update(0, 0)
-	waitForScratchEventOrderEntries(t, co, &log, 6)
+	advanceScratchEventFrame(t, co, &log, 6)
 	requireScratchEventOrder(t, &log, []string{
 		"front-before-yield",
 		"front-stop",
@@ -332,6 +337,117 @@ func TestScratchAsyncBroadcastCallerContinuesBeforeOrderedReceiverBatch(t *testi
 	co.Update()
 }
 
+func TestScratchBroadcastRestartsRunningReceiversIndependently(t *testing.T) {
+	co, game := setupRuntimeEventGame(t)
+	engine.ResetFrameRuntime()
+	t.Cleanup(engine.ResetFrameRuntime)
+
+	var log scratchEventOrderLog
+	register := func(name string) {
+		game.OnMsg__1("restart", func() {
+			log.add(name + "-start")
+			engine.WaitNextFrame()
+			log.add(name + "-finish")
+		})
+	}
+	register("first")
+	register("second")
+
+	game.Broadcast__0("restart")
+	waitForScratchEventOrderEntries(t, co, &log, 2)
+	requireScratchEventOrder(t, &log, []string{"first-start", "second-start"})
+
+	// Scratch restarts a receiver instead of overlapping it.
+	game.Broadcast__0("restart")
+	waitForScratchEventOrderEntries(t, co, &log, 4)
+	requireScratchEventOrder(t, &log, []string{
+		"first-start",
+		"second-start",
+		"first-start",
+		"second-start",
+	})
+
+	advanceScratchEventFrame(t, co, &log, 6)
+	got := log.snapshot()
+	if len(got) != 6 {
+		t.Fatalf("event order = %v, want four starts and two finishes", got)
+	}
+	if wantStarts := []string{
+		"first-start",
+		"second-start",
+		"first-start",
+		"second-start",
+	}; !reflect.DeepEqual(got[:4], wantStarts) {
+		t.Fatalf("event starts = %v, want %v", got[:4], wantStarts)
+	}
+	finishes := slices.Clone(got[4:])
+	slices.Sort(finishes)
+	if wantFinishes := []string{"first-finish", "second-finish"}; !reflect.DeepEqual(finishes, wantFinishes) {
+		t.Fatalf("event finishes = %v, want %v", finishes, wantFinishes)
+	}
+}
+
+func TestScratchSameSliceBroadcastKeepsLatestPendingReceiver(t *testing.T) {
+	co, game := setupRuntimeEventGame(t)
+	var log scratchEventOrderLog
+
+	game.OnMsg__1("restart-pending", func() {
+		log.add("receiver")
+	})
+	co.CreateAndStart(false, game, func(coroutine.Thread) int {
+		log.add("caller-before")
+		game.Broadcast__0("restart-pending")
+		game.Broadcast__0("restart-pending")
+		log.add("caller-after")
+		return 0
+	})
+
+	waitForScratchEventOrderEntries(t, co, &log, 3)
+	requireScratchEventOrder(t, &log, []string{
+		"caller-before",
+		"caller-after",
+		"receiver",
+	})
+}
+
+func TestScratchBroadcastAndWaitJoinsRestartedReceiver(t *testing.T) {
+	co, game := setupRuntimeEventGame(t)
+	engine.ResetFrameRuntime()
+	t.Cleanup(engine.ResetFrameRuntime)
+
+	var log scratchEventOrderLog
+	game.OnMsg__1("restart-and-wait", func() {
+		log.add("receiver-start")
+		engine.WaitNextFrame()
+		log.add("receiver-finish")
+	})
+
+	game.Broadcast__0("restart-and-wait")
+	waitForScratchEventOrderEntries(t, co, &log, 1)
+
+	co.CreateAndStart(false, game, func(coroutine.Thread) int {
+		log.add("waiter-before")
+		game.BroadcastAndWait__0("restart-and-wait")
+		log.add("waiter-after")
+		return 0
+	})
+	waitForScratchEventOrderEntries(t, co, &log, 3)
+	requireScratchEventOrder(t, &log, []string{
+		"receiver-start",
+		"waiter-before",
+		"receiver-start",
+	})
+
+	advanceScratchEventFrame(t, co, &log, 5)
+	requireScratchEventOrder(t, &log, []string{
+		"receiver-start",
+		"waiter-before",
+		"receiver-start",
+		"receiver-finish",
+		"waiter-after",
+	})
+}
+
 func TestScratchBroadcastStopAllPreventsLaterReceivers(t *testing.T) {
 	co, game, back, front := setupScratchEventOrderGame(t)
 	var log scratchEventOrderLog
@@ -416,8 +532,7 @@ func TestScratchNestedAsyncBroadcastKeepsOrderAfterFrameDeferral(t *testing.T) {
 		return co.GetLastUpdateStats().NextCount >= 3
 	})
 
-	itime.Update(0, 0)
-	waitForScratchEventOrderEntries(t, co, &log, 5)
+	advanceScratchEventFrame(t, co, &log, 5)
 	requireScratchEventOrder(t, &log, []string{
 		"outer-before",
 		"outer-after",

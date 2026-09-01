@@ -28,18 +28,29 @@ type scriptEventDispatch struct {
 	mode      coroutine.BatchMode
 	matchData any
 	before    func(coroutine.Thread)
+	lifecycle func(coroutine.Thread, *eventSink) func()
 	shouldRun func() bool
 	run       func(coroutine.Thread, *eventSink)
 }
 
 func (p scriptEventDispatch) task(sink eventSink) coroutine.BatchTask {
-	return coroutine.BatchTask{
+	var cleanup func()
+	task := coroutine.BatchTask{
 		Owner:  sink.Owner,
 		Before: p.before,
 		Run: func(thread coroutine.Thread) {
+			if cleanup != nil {
+				defer cleanup()
+			}
 			p.invoke(thread, &sink)
 		},
 	}
+	if p.lifecycle != nil {
+		task.OnRegistered = func(thread coroutine.Thread) {
+			cleanup = p.lifecycle(thread, &sink)
+		}
+	}
+	return task
 }
 
 func (p scriptEventDispatch) invoke(thread coroutine.Thread, sink *eventSink) {

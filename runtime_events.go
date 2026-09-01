@@ -50,6 +50,31 @@ type scriptEventRegistry struct {
 	pendingStartThreads  sync.Map // map[coroutine.Thread]struct{}
 }
 
+// messageEventHandler tracks one broadcast script's active thread.
+type messageEventHandler struct {
+	mu     sync.Mutex
+	active coroutine.Thread
+	run    func(string, any)
+}
+
+func (p *messageEventHandler) start(thread coroutine.Thread) func() {
+	p.mu.Lock()
+	previous := p.active
+	p.active = thread
+	p.mu.Unlock()
+
+	if previous != nil && previous != thread {
+		gco.Stop(previous)
+	}
+	return func() {
+		p.mu.Lock()
+		if p.active == thread {
+			p.active = nil
+		}
+		p.mu.Unlock()
+	}
+}
+
 type startEventDispatcher struct{}
 
 func (p *scriptEventBindings) init(registry *scriptEventRegistry, this threadObj) {
@@ -161,18 +186,25 @@ func (p *scriptEventBindings) OnKey__2(keys []Key, onKey func()) {
 	p.OnKey__1(keys, coreevent.Ignore1[Key](onKey))
 }
 
+func (p *scriptEventBindings) registerMessageHandler(handler func(string, any), cond ...func(any) bool) {
+	p.scriptEventRegistry.manager.AddIReceive(coreevent.NewSink(
+		p.pthis,
+		&messageEventHandler{run: handler},
+		cond...,
+	))
+}
+
 func (p *scriptEventBindings) OnMsg__0(onMsg func(msg MsgName, data any)) {
-	p.scriptEventRegistry.manager.AddIReceive(coreevent.NewSink(p.pthis, onMsg))
+	p.registerMessageHandler(onMsg)
 }
 
 func (p *scriptEventBindings) OnMsg__1(msg MsgName, onMsg func()) {
-	p.scriptEventRegistry.manager.AddIReceive(coreevent.NewSink(
-		p.pthis,
+	p.registerMessageHandler(
 		coreevent.TapVoid2(onMsg, coreevent.If2(isDebugEventEnabled, func(msg string, data any) {
 			spxlog.Debug("OnMsg: %s, %s", msg, nameOf(p.pthis))
 		})),
 		coreevent.MatchValue(msg),
-	))
+	)
 }
 
 func (p *scriptEventBindings) OnBackdrop__0(onBackdrop func(name BackdropName)) {
@@ -489,6 +521,9 @@ func (p *scriptEventRegistry) doWhenIReceive(msg string, data any, wait bool) {
 	p.dispatchGlobal(coreevent.BucketIReceive, scriptEventDispatch{
 		mode:      eventBatchMode(wait),
 		matchData: msg,
+		lifecycle: func(thread coroutine.Thread, ev *eventSink) func() {
+			return ev.Handler.(*messageEventHandler).start(thread)
+		},
 		before: func(coroutine.Thread) {
 			if deferToNextFrame {
 				engine.WaitNextFrame()
@@ -497,7 +532,7 @@ func (p *scriptEventRegistry) doWhenIReceive(msg string, data any, wait bool) {
 		run: func(thread coroutine.Thread, ev *eventSink) {
 			p.messageHandlerFrames.Store(thread, itime.Frame())
 			defer p.messageHandlerFrames.Delete(thread)
-			ev.Handler.(func(string, any))(msg, data)
+			ev.Handler.(*messageEventHandler).run(msg, data)
 		},
 	})
 }
