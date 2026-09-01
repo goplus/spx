@@ -101,6 +101,32 @@ func TestStopIfStopsActiveThread(t *testing.T) {
 	}
 }
 
+func waitForThreadSignal(t *testing.T, signal <-chan struct{}, failure string) {
+	t.Helper()
+	timer := time.NewTimer(time.Second)
+	defer timer.Stop()
+	select {
+	case <-signal:
+	case <-timer.C:
+		t.Fatal(failure)
+	}
+}
+
+func TestStopIsIdempotentForSuspendedThread(t *testing.T) {
+	co := New(nil)
+	thread := co.Create("worker", func(me Thread) int {
+		co.Yield(me)
+		return 0
+	})
+	waitForThreadSignal(t, thread.yieldedOrDone, "coroutine did not suspend")
+
+	co.Stop(thread)
+	co.Stop(thread)
+	co.Stop(nil)
+	waitForThreadSignal(t, thread.done, "suspended coroutine did not stop")
+	co.Stop(thread)
+}
+
 func TestStopIfEvaluatesFilterWithoutHoldingMutex(t *testing.T) {
 	co := New(nil)
 	started := make(chan Thread, 1)
