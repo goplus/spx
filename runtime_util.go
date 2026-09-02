@@ -60,9 +60,10 @@ func FloorMod(dividend, divisor float64) float64 {
 	return result
 }
 
-// Contains reports whether substr is within s.
+// Contains reports whether substr is within s using Scratch's
+// case-insensitive string matching semantics.
 func Contains(s, substr string) bool {
-	return strings.Contains(s, substr)
+	return strings.Contains(strings.ToLower(s), strings.ToLower(substr))
 }
 
 // Compare compares values using the same rules as Scratch's =, <, and >

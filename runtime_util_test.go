@@ -70,6 +70,29 @@ func TestFloorMod(t *testing.T) {
 	}
 }
 
+func TestContainsUsesScratchCaseInsensitiveSemantics(t *testing.T) {
+	tests := []struct {
+		name      string
+		s         string
+		substr    string
+		contained bool
+	}{
+		{name: "exact match", s: "Hello world", substr: "world", contained: true},
+		{name: "different case", s: "Hello World", substr: "hello world", contained: true},
+		{name: "mixed case substring", s: "Scratch", substr: "RaTc", contained: true},
+		{name: "missing substring", s: "Scratch", substr: "sprite", contained: false},
+		{name: "empty substring", s: "Scratch", substr: "", contained: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := Contains(tt.s, tt.substr); got != tt.contained {
+				t.Fatalf("Contains(%q, %q) = %v, want %v", tt.s, tt.substr, got, tt.contained)
+			}
+		})
+	}
+}
+
 func TestRandomSeedMakesScriptRandomDeterministic(t *testing.T) {
 	SetRandomSeed(123)
 	gotA := []float64{Rand__0(1, 10), Rand__1(0, 1), Rand__0(1, 10)}
