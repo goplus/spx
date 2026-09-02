@@ -104,7 +104,7 @@ const (
 )
 
 const (
-	colorThreshold = 0.1
+	colorThreshold = 0.01
 	alphaThreshold = 0.05
 )
 
