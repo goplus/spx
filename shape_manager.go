@@ -26,9 +26,12 @@ import (
 	"github.com/goplus/spx/v3/internal/ui"
 )
 
-// The Godot runtime renders the shared pen canvas at layer zero. Managed
-// sprites start at one so they always render above it; the backdrop stays at -1.
-const firstSpriteLayer = 1
+// Scratch renders the shared pen canvas above the backdrop and below every
+// managed sprite. Keep the pen layer explicit so sprite ordering cannot reuse it.
+const (
+	penLayer         = 0
+	firstSpriteLayer = penLayer + 1
+)
 
 // shapeManager manages the lifecycle of all runtime shapes.
 // It is responsible for:
