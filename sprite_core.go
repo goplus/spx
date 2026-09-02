@@ -32,10 +32,10 @@ type SpriteImpl struct {
 
 	sprite      Sprite
 	spriteState corestate.SpriteRuntimeState
-	// proxyPublication points to clone-local state that is only accessed
-	// atomically. The pointer itself remains stable after clone construction so
-	// reflective cloning never copies an atomic value while it is in use.
-	proxyPublication *uint32
+	// proxyPublication points to fresh clone-local state. The pointer itself
+	// remains stable after clone construction so reflective cloning never copies
+	// publication state while it is in use.
+	proxyPublication *cloneProxyPublication
 	name             string
 	components       spriteComponents
 

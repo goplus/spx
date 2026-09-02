@@ -18,8 +18,10 @@ package spx
 
 import (
 	"math"
+	"sync/atomic"
 
 	"github.com/goplus/spbase/mathf"
+	"github.com/goplus/spx/v3/internal/engine"
 )
 
 func (p *SpriteImpl) bounds() *mathf.Rect2 {
@@ -179,7 +181,99 @@ func (p *SpriteImpl) touchingSprite(dst *SpriteImpl) bool {
 	if !p.prepareSelfCollisionQuery() || !dst.prepareSelfCollisionQuery() {
 		return false
 	}
-	return p.engine().SpriteMgr.CheckCollisionWithSprite(p.runtimeState.SyncSprite.GetId(), dst.runtimeState.SyncSprite.GetId(), alphaThreshold, !isPhysicsEnabled())
+	usePixelPerfect := !isPhysicsEnabled()
+	if !p.isCloneProxyPublicationBlocked() && !dst.isCloneProxyPublicationBlocked() {
+		return p.engine().SpriteMgr.CheckCollisionWithSprite(
+			p.runtimeState.SyncSprite.GetId(),
+			dst.runtimeState.SyncSprite.GetId(),
+			alphaThreshold,
+			usePixelPerfect,
+		)
+	}
+	for _, sprite := range []*SpriteImpl{p, dst} {
+		if sprite.isCloneProxyPublicationBlocked() && !sprite.spriteState.IsVisible {
+			return false
+		}
+	}
+
+	var touching bool
+	engine.WaitMainThread(func() {
+		withPendingCloneSensingVisibility([]*SpriteImpl{p, dst}, func() {
+			touching = p.runtimeState.SyncSprite.CheckCollisionWithSprite(
+				dst.runtimeState.SyncSprite.GetId(),
+				alphaThreshold,
+				usePixelPerfect,
+			)
+		})
+	})
+	return touching
+}
+
+type pendingCloneSensingVisibilityLease struct {
+	sprite      *SpriteImpl
+	publication *cloneProxyPublication
+	proxy       *engine.Sprite
+}
+
+// withPendingCloneSensingVisibility makes logical visibility queryable without
+// making a pending clone renderable. The native visibility bit is leased only
+// inside one main-thread callback, so rendering and physics cannot interleave
+// the temporary exposure.
+func withPendingCloneSensingVisibility(sprites []*SpriteImpl, call func()) {
+	leases := make([]pendingCloneSensingVisibilityLease, 0, len(sprites))
+	defer func() {
+		failure := recover()
+		var cleanupFailure any
+		for i := len(leases) - 1; i >= 0; i-- {
+			if recovered := capturePendingCloneSensingPanic(func() {
+				releasePendingCloneSensingVisibility(leases[i])
+			}); cleanupFailure == nil {
+				cleanupFailure = recovered
+			}
+		}
+		if failure != nil {
+			panic(failure)
+		}
+		if cleanupFailure != nil {
+			panic(cleanupFailure)
+		}
+	}()
+
+	for _, sprite := range sprites {
+		publication := sprite.proxyPublication
+		proxy := sprite.runtimeState.SyncSprite
+		if publication == nil || proxy == nil ||
+			atomic.LoadUint32(&publication.state) == cloneProxyPublished {
+			continue
+		}
+		publication.sensingVisibilityLeases++
+		leases = append(leases, pendingCloneSensingVisibilityLease{
+			sprite: sprite, publication: publication, proxy: proxy,
+		})
+		if publication.sensingVisibilityLeases == 1 {
+			proxy.SetVisible(true)
+		}
+	}
+	call()
+}
+
+func releasePendingCloneSensingVisibility(lease pendingCloneSensingVisibilityLease) {
+	publication := lease.publication
+	publication.sensingVisibilityLeases--
+	if publication.sensingVisibilityLeases < 0 {
+		panic("spx: negative pending clone sensing visibility lease count")
+	}
+	if publication.sensingVisibilityLeases == 0 {
+		lease.proxy.SetVisible(lease.sprite.effectiveProxyVisibility())
+	}
+}
+
+func capturePendingCloneSensingPanic(call func()) (recovered any) {
+	defer func() {
+		recovered = recover()
+	}()
+	call()
+	return nil
 }
 
 func (p *SpriteImpl) checkTouchingScreen(where int, area string) (touching int) {
