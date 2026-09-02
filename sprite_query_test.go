@@ -341,6 +341,9 @@ func TestPendingCloneSensingVisibilityLeaseIsReentrant(t *testing.T) {
 	var nestedTouching bool
 	var hiddenBeforeOuterQueryReturned bool
 	mgr.onCollision = func() {
+		// Exercise the nested query-sync path: SetTransform must retain the
+		// visibility owned by the outer lease.
+		receiver.markProxyDirty()
 		nestedTouching = receiver.Touching__0(target)
 		hiddenBeforeOuterQueryReturned = !mgr.visible[1]
 	}
@@ -387,7 +390,7 @@ func TestPendingCloneSensingShowPanicRestoresLease(t *testing.T) {
 	if mgr.visible[1] {
 		t.Fatal("pending clone remained visible after partial show failure")
 	}
-	if got := receiver.proxyPublication.sensingVisibilityLeases; got != 0 {
+	if got := receiver.proxyPublication.sensingVisibilityLeases.Load(); got != 0 {
 		t.Fatalf("visibility leases after show failure = %d, want 0", got)
 	}
 	if !receiver.Touching__0(target) {
@@ -422,7 +425,7 @@ func TestPendingCloneSensingQueryPanicPreservesFailureAndRestoresVisibility(t *t
 	if mgr.panicVisibleFalse != nil {
 		t.Fatal("query failure skipped visibility restoration")
 	}
-	if got := receiver.proxyPublication.sensingVisibilityLeases; got != 0 {
+	if got := receiver.proxyPublication.sensingVisibilityLeases.Load(); got != 0 {
 		t.Fatalf("visibility leases after query failure = %d, want 0", got)
 	}
 }

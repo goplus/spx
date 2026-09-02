@@ -161,8 +161,9 @@ const (
 type cloneProxyPublication struct {
 	state uint32
 	// sensingVisibilityLeases is confined to the engine main thread. A count
-	// keeps temporary sensing visibility correct under nested bridge calls.
-	sensingVisibilityLeases int
+	// keeps temporary sensing visibility correct under nested bridge calls. It
+	// is atomic because generic proxy-sync paths may read effective visibility.
+	sensingVisibilityLeases atomic.Int32
 }
 
 func (p *SpriteImpl) beginCloneProxyPublication() {
@@ -222,7 +223,14 @@ func (p *SpriteImpl) ensureProxyInitialized() {
 }
 
 func (p *SpriteImpl) effectiveProxyVisibility() bool {
-	return p.spriteState.IsVisible && !p.isCloneProxyPublicationBlocked()
+	if !p.spriteState.IsVisible {
+		return false
+	}
+	publication := p.proxyPublication
+	if publication == nil || atomic.LoadUint32(&publication.state) == cloneProxyPublished {
+		return true
+	}
+	return publication.sensingVisibilityLeases.Load() > 0
 }
 
 // finishCloneInitialization makes the clone eligible for the next proxy batch.

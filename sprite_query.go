@@ -246,11 +246,11 @@ func withPendingCloneSensingVisibility(sprites []*SpriteImpl, call func()) {
 			atomic.LoadUint32(&publication.state) == cloneProxyPublished {
 			continue
 		}
-		publication.sensingVisibilityLeases++
+		leaseCount := publication.sensingVisibilityLeases.Add(1)
 		leases = append(leases, pendingCloneSensingVisibilityLease{
 			sprite: sprite, publication: publication, proxy: proxy,
 		})
-		if publication.sensingVisibilityLeases == 1 {
+		if leaseCount == 1 {
 			proxy.SetVisible(true)
 		}
 	}
@@ -259,11 +259,11 @@ func withPendingCloneSensingVisibility(sprites []*SpriteImpl, call func()) {
 
 func releasePendingCloneSensingVisibility(lease pendingCloneSensingVisibilityLease) {
 	publication := lease.publication
-	publication.sensingVisibilityLeases--
-	if publication.sensingVisibilityLeases < 0 {
+	leaseCount := publication.sensingVisibilityLeases.Add(-1)
+	if leaseCount < 0 {
 		panic("spx: negative pending clone sensing visibility lease count")
 	}
-	if publication.sensingVisibilityLeases == 0 {
+	if leaseCount == 0 {
 		lease.proxy.SetVisible(lease.sprite.effectiveProxyVisibility())
 	}
 }
