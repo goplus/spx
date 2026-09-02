@@ -97,9 +97,36 @@ func Compare(v1, v2 any) int {
 	}
 }
 
+const (
+	compareAbsTolerance = 1e-9
+	compareRelTolerance = 1e-9
+)
+
 // Equal reports whether two values match Scratch's = operator semantics.
+// Numeric values use a small absolute and relative tolerance to absorb
+// floating-point rounding errors. Compare remains exact for ordering.
 func Equal(v1, v2 any) bool {
+	if n1, ok1 := toCompareNumber(v1); ok1 {
+		if n2, ok2 := toCompareNumber(v2); ok2 {
+			return nearlyEqual(n1, n2)
+		}
+	}
 	return Compare(v1, v2) == 0
+}
+
+func nearlyEqual(a, b float64) bool {
+	if a == b {
+		return true
+	}
+	if math.IsInf(a, 0) || math.IsInf(b, 0) {
+		return false
+	}
+	diff := math.Abs(a - b)
+	if diff <= compareAbsTolerance {
+		return true
+	}
+	largest := math.Max(math.Abs(a), math.Abs(b))
+	return diff <= largest*compareRelTolerance
 }
 
 func toCompareNumber(v any) (float64, bool) {

@@ -225,6 +225,46 @@ func TestCompareAndEqual(t *testing.T) {
 	}
 }
 
+func TestEqualUsesToleranceOnlyForNumericEquality(t *testing.T) {
+	tests := []struct {
+		name  string
+		v1    any
+		v2    any
+		equal bool
+	}{
+		{name: "rounding error", v1: 116.00000000000001, v2: 116.0, equal: true},
+		{name: "numeric string rounding error", v1: "116.00000000000001", v2: 116.0, equal: true},
+		{name: "near zero", v1: 0.0, v2: 1e-12, equal: true},
+		{name: "relative tolerance at large magnitude", v1: 1e12, v2: 1e12 + 100, equal: true},
+		{name: "different integers", v1: 116.0, v2: 117.0, equal: false},
+		{name: "meaningful fractional difference", v1: 116.0, v2: 116.5, equal: false},
+		{name: "same positive infinity", v1: math.Inf(1), v2: math.Inf(1), equal: true},
+		{name: "opposite infinities", v1: math.Inf(1), v2: math.Inf(-1), equal: false},
+		{name: "finite and infinity", v1: 1.0, v2: math.Inf(1), equal: false},
+		{name: "NaN", v1: math.NaN(), v2: math.NaN(), equal: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := Equal(tt.v1, tt.v2); got != tt.equal {
+				t.Fatalf("Equal(%v, %v) = %v, want %v", tt.v1, tt.v2, got, tt.equal)
+			}
+		})
+	}
+
+	accumulated := 1.0
+	for range 8 {
+		accumulated += 0.02
+	}
+	if got := accumulated * 100; !Equal(got, 116) {
+		t.Fatalf("Equal(%v, 116) = false after repeated floating-point addition", got)
+	}
+
+	if got := Compare(116.00000000000001, 116.0); got != 1 {
+		t.Fatalf("Compare should remain exact: got %d, want 1", got)
+	}
+}
+
 func TestPenColorParamFromString(t *testing.T) {
 	tests := []struct {
 		name     string
