@@ -40,11 +40,16 @@ func (p *Coroutines) Create(obj ThreadObj, fn func(me Thread) int) Thread {
 // is true, the new coroutine gets an immediate opportunity to run before this
 // method returns.
 func (p *Coroutines) CreateAndStart(start bool, obj ThreadObj, fn func(me Thread) int) Thread {
+	admissionEpoch := p.abortEpoch.Load()
+	parent := p.currentCoroutineThread()
 	th := p.newThread(obj)
 	p.creationMu.RLock()
-	p.registerThread(th)
-	if p.stopping {
+	rejected := p.stopping || admissionEpoch&1 != 0 ||
+		p.abortEpoch.Load() != admissionEpoch || p.isThreadCanceled(parent)
+	if rejected {
 		stopThreadIfRunning(th)
+	} else {
+		p.registerThread(th)
 	}
 	p.creationMu.RUnlock()
 	go p.runThread(th, fn)
@@ -74,6 +79,20 @@ func (p *Coroutines) Abort() {
 
 // AbortAll requests cancellation of every registered coroutine.
 func (p *Coroutines) AbortAll() {
+	p.creationMu.Lock()
+	// A long-running shutdown barrier already rejects every registration. Keep
+	// its odd epoch stable while allowing repeated cancellation snapshots.
+	if !p.stopping {
+		p.abortEpoch.Add(1)
+	}
+	p.abortAllLocked()
+	if !p.stopping {
+		p.abortEpoch.Add(1)
+	}
+	p.creationMu.Unlock()
+}
+
+func (p *Coroutines) abortAllLocked() {
 	for _, th := range p.snapshotThreads() {
 		stopThreadIfRunning(th)
 	}
@@ -83,11 +102,53 @@ func (p *Coroutines) AbortAll() {
 // other than the caller to stop. A non-positive timeout waits indefinitely.
 func (p *Coroutines) AbortAllAndWait(timeout stime.Duration) bool {
 	caller := p.currentCoroutineThread()
-	p.AbortAll()
 	if caller != nil {
+		p.AbortAll()
 		return p.waitForThreadsToStopFromCoroutine(timeout, caller)
 	}
-	return p.waitForThreadsToStop(timeout, nil)
+	return p.RunAfterAbortAll(timeout, nil)
+}
+
+// RunAfterAbortAll closes coroutine admission, aborts and drains every
+// registered thread, then runs call while admission remains closed. It must be
+// called outside a managed coroutine. If the timeout expires, call is not run.
+// The callback must not create a coroutine through this manager because the
+// admission lock remains held until it returns.
+func (p *Coroutines) RunAfterAbortAll(timeout stime.Duration, call func()) bool {
+	if p.currentCoroutineThread() != nil {
+		panic("coroutine: RunAfterAbortAll called from a managed coroutine")
+	}
+	p.shutdownMu.Lock()
+	defer p.shutdownMu.Unlock()
+
+	p.creationMu.Lock()
+	p.beginStoppingLocked()
+	p.creationMu.Unlock()
+	completed := p.waitForThreadsToStop(timeout, nil)
+
+	p.creationMu.Lock()
+	defer func() {
+		p.endStoppingLocked()
+		p.creationMu.Unlock()
+	}()
+	if !completed || p.hasThreadsOtherThan(nil) {
+		return false
+	}
+	if call != nil {
+		call()
+	}
+	return true
+}
+
+func (p *Coroutines) beginStoppingLocked() {
+	p.stopping = true
+	p.abortEpoch.Add(1)
+	p.abortAllLocked()
+}
+
+func (p *Coroutines) endStoppingLocked() {
+	p.abortEpoch.Add(1)
+	p.stopping = false
 }
 
 // StopIf requests cancellation of every thread accepted by filter. Filters are

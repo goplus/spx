@@ -17,29 +17,35 @@
 package engine
 
 import (
+	"runtime"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/goplus/spx/v3/internal/coroutine"
+	gdx "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
-func TestAbortCoroutinesForWebResetFromCoroutineDoesNotWaitForPeers(t *testing.T) {
+type resetWorkerPlatform struct {
+	gdx.IPlatformMgr
+}
+
+func (resetWorkerPlatform) IsMainThread() bool { return false }
+
+func TestRequestResetAfterCoroutinesStopWaitsForManagedCaller(t *testing.T) {
 	co := coroutine.New(nil)
+	co.OnInited()
 	original := gco
 	SetCoroutines(co)
 	t.Cleanup(func() {
 		SetCoroutines(original)
 	})
+	originalPlatform := gdx.PlatformMgr
+	gdx.PlatformMgr = resetWorkerPlatform{}
+	t.Cleanup(func() { gdx.PlatformMgr = originalPlatform })
 
-	type resetState struct {
-		completed    bool
-		abortCurrent bool
-	}
-
-	result := make(chan resetState, 1)
 	peerYielding := make(chan struct{})
 	peerDone := make(chan struct{})
-
 	co.CreateAndStart(true, "peer", func(peer coroutine.Thread) int {
 		defer close(peerDone)
 		close(peerYielding)
@@ -55,31 +61,93 @@ func TestAbortCoroutinesForWebResetFromCoroutineDoesNotWaitForPeers(t *testing.T
 		t.Fatal("peer coroutine did not reach yield")
 	}
 
+	callerDone := make(chan struct{})
+	resetCalled := make(chan struct{})
+	result := make(chan bool, 1)
+	var resetBeforeDrain atomic.Bool
 	co.CreateAndStart(true, "caller", func(me coroutine.Thread) int {
-		completed, abortCurrent := abortCoroutinesForWebReset(time.Hour)
-		result <- resetState{completed: completed, abortCurrent: abortCurrent}
+		defer close(callerDone)
+		go func() {
+			result <- requestResetAfterCoroutinesStop(co, time.Second, func() {
+				select {
+				case <-callerDone:
+				default:
+					resetBeforeDrain.Store(true)
+				}
+				select {
+				case <-peerDone:
+				default:
+					resetBeforeDrain.Store(true)
+				}
+				close(resetCalled)
+			})
+		}()
+		co.Abort()
 		return 0
 	})
 
-	timer = time.NewTimer(time.Second)
-	defer timer.Stop()
+	deadline := time.Now().Add(time.Second)
+	for {
+		select {
+		case completed := <-result:
+			if !completed {
+				t.Fatal("coroutine reset barrier timed out")
+			}
+			if resetBeforeDrain.Load() {
+				t.Fatal("engine reset ran before managed callers drained")
+			}
+			select {
+			case <-resetCalled:
+			default:
+				t.Fatal("reset barrier completed without requesting reset")
+			}
+			return
+		default:
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("reset barrier did not reach its main-thread callback")
+		}
+		co.Update()
+		runtime.Gosched()
+	}
+}
+
+func TestRequestResetAfterCoroutinesStopSkipsResetOnTimeout(t *testing.T) {
+	co := coroutine.New(nil)
+	co.OnInited()
+	original := gco
+	SetCoroutines(co)
+	t.Cleanup(func() { SetCoroutines(original) })
+
+	started := make(chan struct{})
+	release := make(chan struct{})
+	thread := co.CreateAndStart(true, "blocked", func(coroutine.Thread) int {
+		close(started)
+		<-release
+		return 0
+	})
 	select {
-	case got := <-result:
-		if got.completed {
-			t.Fatal("web reset should not wait for peers from a coroutine")
-		}
-		if !got.abortCurrent {
-			t.Fatal("web reset should request current coroutine abort")
-		}
-	case <-timer.C:
-		t.Fatal("web reset waited for a peer coroutine")
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("blocking coroutine did not start")
 	}
 
-	timer = time.NewTimer(time.Second)
-	defer timer.Stop()
+	var resetCalled atomic.Bool
+	if requestResetAfterCoroutinesStop(co, 20*time.Millisecond, func() {
+		resetCalled.Store(true)
+	}) {
+		t.Fatal("reset barrier reported success with a blocked coroutine")
+	}
+	if resetCalled.Load() {
+		t.Fatal("engine reset was requested after shutdown timed out")
+	}
+	close(release)
 	select {
-	case <-peerDone:
-	case <-timer.C:
-		t.Fatal("peer coroutine did not exit after caller returned")
+	case <-thread.Context().Done():
+	case <-time.After(time.Second):
+		t.Fatal("blocked coroutine was not canceled")
+	}
+	if !co.AbortAllAndWait(time.Second) {
+		t.Fatal("blocking coroutine did not finish after release")
 	}
 }
