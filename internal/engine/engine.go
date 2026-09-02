@@ -272,26 +272,30 @@ func Panicf(format string, args ...any) {
 // abortCoroutinesAndReset aborts coroutines and resets the engine.
 // Used on web, where the process cannot exit.
 func abortCoroutinesAndReset(exitCode int64) {
-	completed, abortCurrent := abortCoroutinesForWebReset(2 * stime.Second)
-	if abortCurrent {
-		spxlog.Debug("Requested coroutine aborts from current coroutine. Requesting engine reset.")
-	} else {
-		spxlog.Debug("AbortAllAndWait completed: %v. Requesting engine reset.", completed)
+	requestReset := func() {
+		extMgr.RequestReset(exitCode)
 	}
-	extMgr.RequestReset(exitCode)
-	if abortCurrent {
+	if gco.IsInCoroutine() {
+		// RequestReset synchronously calls back into Game.reset on the Web main
+		// thread. Coordinate it outside the managed caller so that caller also
+		// unregisters before reset clears shared runtime state.
+		go requestResetAfterCoroutinesStop(2*stime.Second, requestReset)
 		gco.Abort()
+		return
 	}
+	requestResetAfterCoroutinesStop(2*stime.Second, requestReset)
 }
 
-func abortCoroutinesForWebReset(timeout stime.Duration) (completed bool, abortCurrent bool) {
-	if gco.IsInCoroutine() {
-		// Web exit must request reset immediately. Waiting here can let game code
-		// keep running before the reset is requested.
-		gco.AbortAll()
-		return false, true
+func requestResetAfterCoroutinesStop(timeout stime.Duration, requestReset func()) bool {
+	completed := gco.RunAfterAbortAll(timeout, func() {
+		WaitMainThread(requestReset)
+	})
+	if !completed {
+		spxlog.Error("Coroutine shutdown timed out; engine reset was not requested.")
+		return false
 	}
-	return gco.AbortAllAndWait(timeout), false
+	spxlog.Debug("Coroutine shutdown completed. Engine reset requested.")
+	return true
 }
 
 func RequestExit(exitCode int64) {

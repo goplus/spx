@@ -65,6 +65,10 @@ type Coroutines struct {
 
 	nextJobID    atomic.Int64
 	nextThreadID atomic.Int64
+	// abortEpoch is even outside an abort registration barrier and odd while
+	// one is active. Create captures it before admission so a registration that
+	// overlaps AbortAll cannot escape the abort snapshot.
+	abortEpoch atomic.Uint64
 
 	perfDebug         atomic.Bool
 	readGCStats       func(*sdebug.GCStats)

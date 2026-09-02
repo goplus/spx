@@ -18,6 +18,7 @@ package coroutine
 
 import (
 	"runtime"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -259,6 +260,170 @@ func TestAbortAllAndWaitFromCoroutineDoesNotStartStoppedPeer(t *testing.T) {
 	case <-peerRan:
 		t.Fatal("stopped peer coroutine should not run")
 	default:
+	}
+}
+
+func TestAbortAllRejectsChildCreatedByCanceledOwner(t *testing.T) {
+	co := New(nil)
+	co.OnInited()
+	childResult := make(chan Thread, 1)
+	var childRan atomic.Bool
+
+	co.CreateAndStart(true, "parent", func(Thread) int {
+		co.AbortAll()
+		childResult <- co.Create("late-child", func(Thread) int {
+			childRan.Store(true)
+			return 0
+		})
+		return 0
+	})
+
+	var child Thread
+	select {
+	case child = <-childResult:
+	case <-time.After(time.Second):
+		t.Fatal("canceled owner did not finish child registration")
+	}
+	if !child.Stopped() {
+		t.Fatal("child created by a canceled owner was admitted")
+	}
+	if !co.waitForThreadsToStop(time.Second, nil) {
+		t.Fatal("canceled owner and rejected child did not stop")
+	}
+	if childRan.Load() {
+		t.Fatal("child created by a canceled owner ran user code")
+	}
+}
+
+func TestAbortAllAndWaitOrdersInFlightRegistration(t *testing.T) {
+	co := New(nil)
+	co.OnInited()
+	co.creationMu.Lock()
+	registrationStarted := make(chan struct{})
+	created := make(chan Thread, 1)
+	go func() {
+		close(registrationStarted)
+		created <- co.Create("in-flight", func(Thread) int { return 0 })
+	}()
+	select {
+	case <-registrationStarted:
+	case <-time.After(time.Second):
+		co.creationMu.Unlock()
+		t.Fatal("registration did not start")
+	}
+
+	abortDone := make(chan bool, 1)
+	go func() {
+		abortDone <- co.AbortAllAndWait(time.Second)
+	}()
+	select {
+	case <-abortDone:
+		co.creationMu.Unlock()
+		t.Fatal("abort barrier returned while an earlier registration was in flight")
+	case <-time.After(20 * time.Millisecond):
+	}
+	co.creationMu.Unlock()
+
+	select {
+	case completed := <-abortDone:
+		if !completed {
+			t.Fatal("abort barrier timed out after registration was released")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("abort barrier did not finish")
+	}
+	var thread Thread
+	select {
+	case thread = <-created:
+	case <-time.After(time.Second):
+		t.Fatal("in-flight registration did not return")
+	}
+	select {
+	case <-thread.done:
+	case <-time.After(time.Second):
+		t.Fatal("in-flight thread remained after the abort barrier")
+	}
+}
+
+func TestAbortAllAndWaitRejectsCreationDuringBarrier(t *testing.T) {
+	co := New(nil)
+	co.OnInited()
+	blocker := co.newThread("barrier-blocker")
+	co.registerThread(blocker)
+
+	abortDone := make(chan bool, 1)
+	go func() {
+		abortDone <- co.AbortAllAndWait(time.Second)
+	}()
+	deadline := time.Now().Add(time.Second)
+	for !blocker.Stopped() {
+		if time.Now().After(deadline) {
+			co.removeThreadState(blocker)
+			co.unregisterThread(blocker)
+			t.Fatal("abort barrier did not start")
+		}
+		runtime.Gosched()
+	}
+
+	var childRan atomic.Bool
+	child := co.Create("during-barrier", func(Thread) int {
+		childRan.Store(true)
+		return 0
+	})
+	if !child.Stopped() {
+		t.Fatal("thread created during abort barrier was admitted")
+	}
+	co.removeThreadState(blocker)
+	co.unregisterThread(blocker)
+
+	select {
+	case completed := <-abortDone:
+		if !completed {
+			t.Fatal("abort barrier timed out")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("abort barrier did not finish after the blocker was removed")
+	}
+	select {
+	case <-child.done:
+	case <-time.After(time.Second):
+		t.Fatal("rejected thread did not finish")
+	}
+	if childRan.Load() {
+		t.Fatal("thread created during abort barrier ran user code")
+	}
+}
+
+func TestRunAfterAbortAllTimeoutReopensAdmission(t *testing.T) {
+	co := New(nil)
+	co.OnInited()
+	blocker := co.newThread("barrier-blocker")
+	co.registerThread(blocker)
+
+	var callbackRan atomic.Bool
+	if co.RunAfterAbortAll(20*time.Millisecond, func() {
+		callbackRan.Store(true)
+	}) {
+		t.Fatal("abort barrier reported success with a registered blocker")
+	}
+	if callbackRan.Load() {
+		t.Fatal("abort barrier ran callback after timing out")
+	}
+
+	co.removeThreadState(blocker)
+	co.unregisterThread(blocker)
+	var nextRan atomic.Bool
+	next := co.CreateAndStart(true, "after-timeout", func(Thread) int {
+		nextRan.Store(true)
+		return 0
+	})
+	select {
+	case <-next.done:
+	case <-time.After(time.Second):
+		t.Fatal("creation remained blocked after abort barrier timed out")
+	}
+	if !nextRan.Load() {
+		t.Fatal("creation was rejected after abort barrier timed out")
 	}
 }
 
