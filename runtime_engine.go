@@ -99,11 +99,11 @@ func (p *Game) OnEngineRender(delta float64) {
 	if !p.lifecycleState.IsRunned.Load() {
 		return
 	}
-	// Coroutines run between OnEngineUpdate and OnEngineRender. If one requested
-	// a capture after changing visual state, flush those proxy changes now so the
-	// end-of-frame screenshot observes the capture body rather than the previous
-	// update's scene.
-	if engine.HasPendingCaptures() || p.inputSessionFrameCompletionPending() {
+	// Coroutines run between OnEngineUpdate and OnEngineRender. Flush again when
+	// a clone finished its first slice or a capture/replay needs post-coroutine
+	// visual state, without advancing ordinary shape logic a second time.
+	if p.shapeMgr.takeCloneProxyPublications() || engine.HasPendingCaptures() ||
+		p.inputSessionFrameCompletionPending() {
 		p.syncPostCoroutineVisuals()
 	}
 	// Initial sprite Main hooks can move and collide during bootstrap, so

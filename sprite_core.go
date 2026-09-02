@@ -32,8 +32,12 @@ type SpriteImpl struct {
 
 	sprite      Sprite
 	spriteState corestate.SpriteRuntimeState
-	name        string
-	components  spriteComponents
+	// proxyPublication points to clone-local state that is only accessed
+	// atomically. The pointer itself remains stable after clone construction so
+	// reflective cloning never copies an atomic value while it is in use.
+	proxyPublication *uint32
+	name             string
+	components       spriteComponents
 
 	g     *Game
 	gamer reflect.Value
@@ -106,6 +110,7 @@ func (p *SpriteImpl) InitFrom(src *SpriteImpl) {
 
 	p.spriteState.DirtyVersion = 0
 	p.spriteState.ProxySyncVersion = 0
+	p.proxyPublication = nil
 	p.spriteState.HasOnCloned = false
 	p.spriteState.HasOnTouchStart = false
 	p.spriteState.HasOnTouching = false
