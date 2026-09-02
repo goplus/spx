@@ -195,6 +195,15 @@ func (cfg *physicConfig) applyShape(syncProxy *engine.Sprite, isTrigger bool, sp
 		if len(cfg.Params) >= 2 {
 			syncProxy.SetColliderShapeCapsule(isTrigger, pivot, mathf.NewVec2(cfg.Params[0]*scale*2, cfg.Params[1]*scale))
 		}
+	case physicsColliderPolygon:
+		syncProxy.SetColliderEnabled(isTrigger, true)
+		if len(cfg.Params) >= 6 && len(cfg.Params)%2 == 0 {
+			points := make([]float64, len(cfg.Params))
+			for i, coordinate := range cfg.Params {
+				points[i] = coordinate * scale
+			}
+			syncProxy.SetColliderShapePolygon(isTrigger, pivot, points)
+		}
 	case physicsColliderAuto:
 		syncProxy.SetColliderEnabled(isTrigger, true)
 		if len(cfg.Params) >= 2 {
