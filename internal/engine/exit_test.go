@@ -68,7 +68,7 @@ func TestRequestResetAfterCoroutinesStopWaitsForManagedCaller(t *testing.T) {
 	co.CreateAndStart(true, "caller", func(me coroutine.Thread) int {
 		defer close(callerDone)
 		go func() {
-			result <- requestResetAfterCoroutinesStop(time.Second, func() {
+			result <- requestResetAfterCoroutinesStop(co, time.Second, func() {
 				select {
 				case <-callerDone:
 				default:
@@ -133,7 +133,7 @@ func TestRequestResetAfterCoroutinesStopSkipsResetOnTimeout(t *testing.T) {
 	}
 
 	var resetCalled atomic.Bool
-	if requestResetAfterCoroutinesStop(20*time.Millisecond, func() {
+	if requestResetAfterCoroutinesStop(co, 20*time.Millisecond, func() {
 		resetCalled.Store(true)
 	}) {
 		t.Fatal("reset barrier reported success with a blocked coroutine")
