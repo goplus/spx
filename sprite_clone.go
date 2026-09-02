@@ -17,12 +17,10 @@
 package spx
 
 import (
-	"context"
 	"reflect"
 	"unsafe"
 
 	coreproject "github.com/goplus/spx/v3/internal/core/project"
-	"github.com/goplus/spx/v3/internal/engine"
 	spxlog "github.com/goplus/spx/v3/internal/log"
 )
 
@@ -37,11 +35,11 @@ func (p *SpriteImpl) Clone__1(data any) {
 }
 
 func (p *SpriteImpl) CloneWith(__xgo_optional_data any) {
-	doClone(p.sprite, __xgo_optional_data, false, nil)
+	doClone(p.sprite, __xgo_optional_data, nil)
 }
 
 // TODO(xsw): use classfile clone mechanism instead of reflection.
-func doClone(sprite Sprite, data any, isAsync bool, onCloned func(sprite *SpriteImpl)) {
+func doClone(sprite Sprite, data any, onCloned func(sprite *SpriteImpl)) {
 	if sprite == nil {
 		spxlog.Panicf("DoClone: sprite is nil")
 	}
@@ -57,7 +55,7 @@ func doClone(sprite Sprite, data any, isAsync bool, onCloned func(sprite *Sprite
 	if onCloned != nil {
 		onCloned(dest)
 	}
-	dispatchCloneLifecycle(dest, data, isAsync)
+	dispatchCloneLifecycle(dest, data)
 }
 
 func cloneSprite(out reflect.Value, outPtr Sprite, in reflect.Value, v coreproject.StageShape) *SpriteImpl {
@@ -86,6 +84,10 @@ func cloneSprite(out reflect.Value, outPtr Sprite, in reflect.Value, v coreproje
 
 	if v != nil {
 		applySpriteProps(dest, v)
+	} else {
+		// The native proxy must stay hidden until the clone's initialization
+		// handlers have completed their first execution slice.
+		dest.beginCloneProxyPublication()
 	}
 	dest.initRuntimeProxy()
 	if v == nil {
@@ -138,19 +140,11 @@ func settableSpriteField(field reflect.Value) reflect.Value {
 	return reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem()
 }
 
-func dispatchCloneLifecycle(dest *SpriteImpl, data any, isAsync bool) {
-	dispatch := func() {
-		if dest.spriteState.HasOnCloned {
-			dest.doWhenCloned(dest, data)
-		}
+func dispatchCloneLifecycle(dest *SpriteImpl, data any) {
+	defer dest.finishCloneInitialization()
+	if dest.spriteState.HasOnCloned {
+		dest.doWhenCloned(dest, data)
 	}
-	if isAsync {
-		engine.Go(dest.pthis, func(context.Context) {
-			dispatch()
-		})
-		return
-	}
-	dispatch()
 }
 
 func applySpriteProps(dest *SpriteImpl, v coreproject.StageShape) {

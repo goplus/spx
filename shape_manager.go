@@ -17,6 +17,8 @@
 package spx
 
 import (
+	"sync/atomic"
+
 	"github.com/goplus/spx/v3/internal/base/sliceutil"
 	"github.com/goplus/spx/v3/internal/engine"
 	spxlog "github.com/goplus/spx/v3/internal/log"
@@ -35,17 +37,19 @@ const firstSpriteLayer = 1
 //   - render layer grouping
 //   - minimizing per-frame allocations
 type shapeManager struct {
-	items                  []Shape
-	tempItems              []Shape
-	destroyItems           []Shape
-	textBubbles            []*textBubble
-	activeTextBubbles      []*textBubble
-	sayLayouts             []ui.SayBubbleLayout
-	nextTextBubbleLayoutID uint64
+	items                    []Shape
+	tempItems                []Shape
+	destroyItems             []Shape
+	textBubbles              []*textBubble
+	activeTextBubbles        []*textBubble
+	sayLayouts               []ui.SayBubbleLayout
+	nextTextBubbleLayoutID   uint64
+	pendingClonePublications atomic.Bool
 }
 
 // init prepares internal buffers while preserving existing allocations when possible.
 func (s *shapeManager) init() {
+	s.pendingClonePublications.Store(false)
 	if s.items == nil {
 		s.items = make([]Shape, 0, 64)
 	} else {
@@ -68,6 +72,14 @@ func (s *shapeManager) init() {
 	clear(s.sayLayouts)
 	s.sayLayouts = s.sayLayouts[:0]
 	s.nextTextBubbleLayoutID = 0
+}
+
+func (s *shapeManager) markCloneProxyPublicationReady() {
+	s.pendingClonePublications.Store(true)
+}
+
+func (s *shapeManager) takeCloneProxyPublications() bool {
+	return s.pendingClonePublications.Swap(false)
 }
 
 // reset clears all internal state while keeping allocated memory.

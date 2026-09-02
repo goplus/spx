@@ -55,6 +55,33 @@ func (m *captureFlushSpriteMgr) BatchUpdateTransforms(buffer []float32) {
 	m.batches = append(m.batches, append([]float32(nil), buffer...))
 }
 
+func TestOnEngineRenderFlushesReadyClonePublications(t *testing.T) {
+	enginewrap.Init(func(call func()) { call() })
+	originalSpriteMgr := pkgengine.SpriteMgr
+	spriteMgr := &captureFlushSpriteMgr{}
+	pkgengine.SpriteMgr = spriteMgr
+	t.Cleanup(func() { pkgengine.SpriteMgr = originalSpriteMgr })
+
+	var game Game
+	game.lifecycleState.IsRunned.Store(true)
+	game.camera = &cameraImpl{g: &game}
+	game.initShapeMgr()
+	game.syncBuffer = engine.NewSpriteSyncBuffer(1)
+	destroyed := &SpriteImpl{}
+	destroyed.runtimeState.SyncSprite = &engine.Sprite{}
+	game.shapeMgr.remove(destroyed)
+	game.shapeMgr.markCloneProxyPublicationReady()
+
+	game.OnEngineRender(0)
+
+	if destroyed.runtimeState.SyncSprite != nil {
+		t.Fatal("ready clone publication did not trigger the post-coroutine proxy flush")
+	}
+	if len(spriteMgr.batches) != 1 {
+		t.Fatalf("ready clone publication batches = %d, want 1", len(spriteMgr.batches))
+	}
+}
+
 func TestOnEngineRenderFlushesSpriteProxiesWhenCaptureIsPending(t *testing.T) {
 	enginewrap.Init(func(call func()) { call() })
 	originalSpriteMgr := pkgengine.SpriteMgr

@@ -17,6 +17,8 @@
 package spx
 
 import (
+	"sync/atomic"
+
 	"github.com/goplus/spbase/mathf"
 	coreruntime "github.com/goplus/spx/v3/internal/core/runtime"
 	"github.com/goplus/spx/v3/internal/engine"
@@ -150,6 +152,33 @@ func (p *baseObj) applyAtlasUVRemap() {
 // -----------------------------------------------------------------------------
 // Sprite Proxy Lifecycle
 // -----------------------------------------------------------------------------
+const (
+	cloneProxyPublished uint32 = iota
+	cloneProxyPending
+	cloneProxyReady
+)
+
+func (p *SpriteImpl) beginCloneProxyPublication() {
+	state := new(uint32)
+	atomic.StoreUint32(state, cloneProxyPending)
+	p.proxyPublication = state
+}
+
+func (p *SpriteImpl) cloneProxyPublicationState() uint32 {
+	if p.proxyPublication == nil {
+		return cloneProxyPublished
+	}
+	return atomic.LoadUint32(p.proxyPublication)
+}
+
+func (p *SpriteImpl) isCloneProxyPublicationBlocked() bool {
+	return p.cloneProxyPublicationState() != cloneProxyPublished
+}
+
+func (p *SpriteImpl) isCloneProxyPublicationReady() bool {
+	return p.cloneProxyPublicationState() == cloneProxyReady
+}
+
 func (p *SpriteImpl) initRuntimeProxy() {
 	p.rebuildRuntimeProxy(true)
 }
@@ -176,13 +205,28 @@ func (p *SpriteImpl) ensureProxyInitialized() {
 	}
 	p.runtimeState.SyncSprite = engine.BridgeNewBareSprite(p, mathf.NewVec2(p.getXY()))
 	p.applyPhysicsProxyConfig()
-	p.runtimeState.SyncSprite.SetVisible(p.spriteState.IsVisible)
+	p.runtimeState.SyncSprite.SetVisible(p.effectiveProxyVisibility())
 	p.runtimeState.SyncSprite.Name = p.name
 	p.runtimeState.SyncSprite.SetTypeName(p.name)
 	p.applyGraphicEffects(true)
 	p.animation().registerOnAnimationLooped(p.handleAnimationLooped)
 	p.animation().registerOnAnimationFinished(p.handleAnimationFinished)
 	p.markProxyDirty()
+}
+
+func (p *SpriteImpl) effectiveProxyVisibility() bool {
+	return p.spriteState.IsVisible && !p.isCloneProxyPublicationBlocked()
+}
+
+// finishCloneInitialization makes the clone eligible for the next proxy batch.
+// The batch applies costume and layer changes before it submits visibility, so
+// no render can observe the inherited initialization state or stale peer layers.
+func (p *SpriteImpl) finishCloneInitialization() {
+	if p.isDestroyed() || p.proxyPublication == nil ||
+		!atomic.CompareAndSwapUint32(p.proxyPublication, cloneProxyPending, cloneProxyReady) {
+		return
+	}
+	p.g.shapeMgr.markCloneProxyPublicationReady()
 }
 
 // handleAnimationFinished records completed animation events from the proxy.
@@ -249,7 +293,7 @@ func (p *SpriteImpl) ensureProxyQueryStateSynced() {
 		mathf.NewVec2(x, y),
 		engine.DegToRad(rot),
 		mathf.NewVec2(scaleX, scaleY),
-		p.spriteState.IsVisible,
+		p.effectiveProxyVisibility(),
 		mathf.NewVec2(renderOffsetX, renderOffsetY),
 	)
 	p.spriteState.ProxySyncVersion = p.spriteState.DirtyVersion
@@ -259,10 +303,18 @@ func (p *SpriteImpl) collectProxyUpdate(buffer *engine.SpriteSyncBuffer) {
 	if p.isDestroyed() || p.runtimeState.SyncSprite == nil {
 		return
 	}
-	if p.spriteState.IsVisible {
+	publishingClone := p.cloneProxyPublicationState() == cloneProxyReady
+	if p.spriteState.IsVisible || publishingClone {
 		p.baseObj.applyCostumeUpdate()
 	}
 	p.syncAutoPhysicsShapesAfterCostumeChange()
+	if publishingClone {
+		atomic.CompareAndSwapUint32(p.proxyPublication, cloneProxyReady, cloneProxyPublished)
+		// Query synchronization may already have written the latest logical
+		// transform while keeping it hidden. Force a new batch entry after the
+		// gate opens so visibility cannot be skipped by version coalescing.
+		p.markProxyDirty()
+	}
 	if !p.spriteState.IsDirty {
 		return
 	}
@@ -282,7 +334,7 @@ func (p *SpriteImpl) appendTransformUpdate(buffer *engine.SpriteSyncBuffer) {
 		engine.DegToRad(rot),
 		scaleX, scaleY,
 		renderOffsetX, renderOffsetY,
-		p.spriteState.IsVisible,
+		p.effectiveProxyVisibility(),
 	)
 	p.spriteState.ProxySyncVersion = p.spriteState.DirtyVersion
 }

@@ -18,6 +18,8 @@ package spx
 
 import (
 	"reflect"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -113,10 +115,30 @@ type cloneAllFieldKindsSprite struct {
 	clonedDone     chan struct{}
 }
 
+type cloneProxyInitSprite struct {
+	SpriteImpl
+	finalCostume     SpriteCostumeName
+	hideOnCloned     bool
+	deleteOnCloned   bool
+	registerCloned   bool
+	stopOthers       bool
+	waitOnCloned     <-chan struct{}
+	onClonedReturned chan<- struct{}
+}
+
+type cloneProxyOperation struct {
+	kind    string
+	object  pkgengine.Object
+	path    string
+	visible bool
+}
+
 type spyCloneSpriteMgr struct {
 	enginewrap.SpriteMgrImpl
-	nextID   pkgengine.Object
-	zIndexes map[pkgengine.Object]int64
+	mu         sync.Mutex
+	nextID     pkgengine.Object
+	zIndexes   map[pkgengine.Object]int64
+	operations []cloneProxyOperation
 }
 
 func (s *cameraFollowOverrideSprite) Main() {
@@ -218,17 +240,109 @@ func (s *cloneAllFieldKindsSprite) XGo_Init() *cloneAllFieldKindsSprite {
 	return s
 }
 
+func (s *cloneProxyInitSprite) Main() {
+	if !s.IsCloned() || !s.registerCloned {
+		return
+	}
+	s.OnCloned__0(func() {
+		// Query synchronization is allowed during initialization, but it must
+		// not bypass the clone's render-visibility gate.
+		s.ensureProxyQueryStateSynced()
+		s.SetCostume__0(s.finalCostume)
+		if s.hideOnCloned {
+			s.Hide()
+		}
+		if s.deleteOnCloned {
+			s.DeleteThisClone()
+			return
+		}
+		if s.stopOthers {
+			s.Stop(AllOtherScripts)
+			return
+		}
+		if s.waitOnCloned != nil {
+			var signal struct{}
+			engine.WaitForChan(s.waitOnCloned, &signal)
+			if s.onClonedReturned != nil {
+				close(s.onClonedReturned)
+			}
+		}
+	})
+}
+
 func (s *spyCloneSpriteMgr) CreateBareSprite(pos mathf.Vec2) pkgengine.Object {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.nextID++
 	return s.nextID
 }
 
 func (s *spyCloneSpriteMgr) SetTypeName(obj pkgengine.Object, typeName string) {}
 
-func (s *spyCloneSpriteMgr) SetVisible(obj pkgengine.Object, visible bool) {}
+func (s *spyCloneSpriteMgr) SetVisible(obj pkgengine.Object, visible bool) {
+	s.record(cloneProxyOperation{kind: "visible", object: obj, visible: visible})
+}
+
+func (s *spyCloneSpriteMgr) SetTexture(obj pkgengine.Object, path string) {
+	s.record(cloneProxyOperation{kind: "texture", object: obj, path: path})
+}
+
+func (s *spyCloneSpriteMgr) SetRenderScale(obj pkgengine.Object, scale mathf.Vec2) {}
+
+func (s *spyCloneSpriteMgr) SetMaterialShader(obj pkgengine.Object, path string) {}
+
+func (s *spyCloneSpriteMgr) SetMaterialParams(
+	obj pkgengine.Object, effect string, amount float64,
+) {
+}
+
+func (s *spyCloneSpriteMgr) SetTransform(
+	obj pkgengine.Object, pos mathf.Vec2, rot float64, scale mathf.Vec2, visible bool, pivot mathf.Vec2,
+) {
+	s.record(cloneProxyOperation{kind: "transform", object: obj, visible: visible})
+}
+
+func (s *spyCloneSpriteMgr) BatchUpdateTransforms(buffer []float32) {
+	if len(buffer) < 2 {
+		return
+	}
+	updateCount := int(buffer[0])
+	idx := 2
+	for range updateCount {
+		if idx+engine.SyncFieldsPerSprite > len(buffer) {
+			return
+		}
+		s.record(cloneProxyOperation{
+			kind:    "transform",
+			object:  pkgengine.Object(int64(buffer[idx])),
+			visible: buffer[idx+engine.SyncFieldsPerSprite-1] != 0,
+		})
+		idx += engine.SyncFieldsPerSprite
+	}
+}
 
 func (s *spyCloneSpriteMgr) SetZIndex(obj pkgengine.Object, z int64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.zIndexes[obj] = z
+}
+
+func (s *spyCloneSpriteMgr) record(op cloneProxyOperation) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.operations = append(s.operations, op)
+}
+
+func (s *spyCloneSpriteMgr) recordedOperations() []cloneProxyOperation {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]cloneProxyOperation(nil), s.operations...)
+}
+
+func (s *spyCloneSpriteMgr) zIndex(obj pkgengine.Object) int64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.zIndexes[obj]
 }
 
 func (s *spyCloneSpriteMgr) SetTriggerLayer(obj pkgengine.Object, layer int64) {}
@@ -328,6 +442,30 @@ func newCloneAllFieldKindsSprite(g *Game, name string, observed *cloneAllFieldKi
 	return sprite
 }
 
+func newCloneProxyInitSprite(g *Game, registerCloned, hideOnCloned bool) *cloneProxyInitSprite {
+	sprite := &cloneProxyInitSprite{
+		finalCostume:   "final",
+		hideOnCloned:   hideOnCloned,
+		registerCloned: registerCloned,
+	}
+	placeholder := newCostumeWithSize(1, 1)
+	placeholder.name, placeholder.path = "placeholder", "placeholder.png"
+	final := newCostumeWithSize(1, 1)
+	final.name, final.path = "final", "final.png"
+	sprite.costumes = []*costume{placeholder, final}
+	sprite.costumeIndex = 0
+	sprite.runtimeState.Scale = 1
+	sprite.spriteState.IsVisible = true
+	sprite.g = g
+	sprite.name = "Score"
+	sprite.sprite = sprite
+	sprite.scriptEventBindings.init(&g.scriptEvents, &sprite.SpriteImpl)
+	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{})
+	sprite.physics().collisionInfo.Type = physicsColliderNone
+	sprite.physics().triggerInfo.Type = physicsColliderNone
+	return sprite
+}
+
 func setupCloneSpriteMgr(t *testing.T) *spyCloneSpriteMgr {
 	t.Helper()
 
@@ -342,6 +480,17 @@ func setupCloneSpriteMgr(t *testing.T) *spyCloneSpriteMgr {
 		pkgengine.SpriteMgr = original
 	})
 	return mgr
+}
+
+func flushCloneProxyUpdates(game *Game) {
+	game.shapeMgr.takeCloneProxyPublications()
+	if game.syncBuffer == nil {
+		game.syncBuffer = engine.NewSpriteSyncBuffer(initialSpriteSyncBufferSize)
+	}
+	game.syncBuffer.Clear()
+	game.shapeMgr.collectProxyUpdates(game.shapeMgr.getTempShapes(), game.syncBuffer)
+	game.shapeMgr.flushDestroy(game.syncBuffer)
+	game.flushSyncBuffer()
 }
 
 func setupBootstrapScheduler(t *testing.T) {
@@ -747,7 +896,7 @@ func TestInitRuntimeProxyAppliesCostumeBeforeAwake(t *testing.T) {
 
 func TestApplySpritePropsBeforeInitRuntimeProxy(t *testing.T) {
 	var game Game
-	setupCloneSpriteMgr(t)
+	mgr := setupCloneSpriteMgr(t)
 
 	source := newCloneAwakeOrderSprite(&game, "SpriteA")
 	source.costumes = []*costume{newCostumeWithSize(1, 1), newCostumeWithSize(1, 1)}
@@ -778,8 +927,292 @@ func TestApplySpritePropsBeforeInitRuntimeProxy(t *testing.T) {
 	if dest.spriteState.IsVisible {
 		t.Fatal("IsVisible = true, want false from stage shape override")
 	}
+	for _, op := range mgr.recordedOperations() {
+		if (op.kind == "visible" || op.kind == "transform") && op.visible {
+			t.Fatalf("hidden stage sprite was exposed during initialization; operations = %#v", mgr.recordedOperations())
+		}
+	}
 	if dest.runtimeState.Scale != 2 {
 		t.Fatalf("Scale = %v, want 2", dest.runtimeState.Scale)
+	}
+}
+
+func TestCloneProxyStaysHiddenUntilOnClonedFirstSlice(t *testing.T) {
+	setupRuntimeEventScheduler(t)
+	var game Game
+	game.initShapeMgr()
+	originalGame := engine.GetGame()
+	engine.SetGame(&game)
+	t.Cleanup(func() { engine.SetGame(originalGame) })
+	mgr := setupCloneSpriteMgr(t)
+	source := newCloneProxyInitSprite(&game, true, false)
+	release := make(chan struct{})
+	defer close(release)
+	handlerReturned := make(chan struct{})
+	source.waitOnCloned = release
+	source.onClonedReturned = handlerReturned
+	game.addShape(spriteOf(source))
+
+	var clone *SpriteImpl
+	doClone(source, nil, func(sprite *SpriteImpl) {
+		clone = sprite
+	})
+
+	select {
+	case <-handlerReturned:
+		t.Fatal("clone publication waited for the entire onCloned handler")
+	default:
+	}
+	if clone == nil || !clone.isCloneProxyPublicationBlocked() ||
+		!clone.isCloneProxyPublicationReady() {
+		t.Fatal("clone did not reach the first-slice publication barrier")
+	}
+	for _, op := range mgr.recordedOperations() {
+		if (op.kind == "visible" || op.kind == "transform") && op.visible {
+			t.Fatalf("clone was exposed before the publication batch; operations = %#v", mgr.recordedOperations())
+		}
+	}
+
+	flushCloneProxyUpdates(&game)
+	if clone.isCloneProxyPublicationBlocked() {
+		t.Fatal("clone publication gate was not committed by the proxy batch")
+	}
+
+	operations := mgr.recordedOperations()
+	finalCostume := -1
+	firstVisible := -1
+	for i, op := range operations {
+		if op.kind == "texture" && strings.HasSuffix(op.path, "final.png") {
+			finalCostume = i
+		}
+		if (op.kind == "visible" || op.kind == "transform") && op.visible && firstVisible < 0 {
+			firstVisible = i
+		}
+	}
+	if finalCostume < 0 {
+		t.Fatalf("final costume was not applied; operations = %#v", operations)
+	}
+	if firstVisible < 0 {
+		t.Fatalf("clone was not published visible; operations = %#v", operations)
+	}
+	if firstVisible <= finalCostume {
+		t.Fatalf("clone became visible before final costume; operations = %#v", operations)
+	}
+}
+
+func TestCloneDeletedDuringFirstSliceIsNeverPublished(t *testing.T) {
+	setupRuntimeEventScheduler(t)
+	var game Game
+	game.initShapeMgr()
+	originalGame := engine.GetGame()
+	engine.SetGame(&game)
+	t.Cleanup(func() { engine.SetGame(originalGame) })
+	mgr := setupCloneSpriteMgr(t)
+	source := newCloneProxyInitSprite(&game, true, false)
+	source.deleteOnCloned = true
+	game.addShape(spriteOf(source))
+
+	var clone *SpriteImpl
+	doClone(source, nil, func(sprite *SpriteImpl) {
+		clone = sprite
+	})
+
+	if clone == nil || !clone.isDestroyed() {
+		t.Fatal("clone deleted during onCloned was not destroyed")
+	}
+	for _, op := range mgr.recordedOperations() {
+		if (op.kind == "visible" || op.kind == "transform") && op.visible {
+			t.Fatalf("deleted clone was exposed; operations = %#v", mgr.recordedOperations())
+		}
+	}
+}
+
+func TestCloneStopDuringFirstSliceStillReachesPublicationBatch(t *testing.T) {
+	co := setupRuntimeEventScheduler(t)
+	var game Game
+	game.initShapeMgr()
+	originalGame := engine.GetGame()
+	engine.SetGame(&game)
+	t.Cleanup(func() { engine.SetGame(originalGame) })
+	mgr := setupCloneSpriteMgr(t)
+	source := newCloneProxyInitSprite(&game, true, false)
+	source.stopOthers = true
+	game.addShape(spriteOf(source))
+
+	creatorDone := make(chan struct{})
+	var clone *SpriteImpl
+	co.Create(source, func(coroutine.Thread) int {
+		defer close(creatorDone)
+		doClone(source, nil, func(sprite *SpriteImpl) {
+			clone = sprite
+		})
+
+		return 0
+	})
+	updateRuntimeEventSchedulerUntil(t, co, func() bool {
+		select {
+		case <-creatorDone:
+			return true
+		default:
+			return false
+		}
+	})
+
+	if clone == nil || game.shapeMgr.findShapeIndex(clone) < 0 {
+		t.Fatal("canceled creator lost its initialized clone")
+	}
+	if !clone.isCloneProxyPublicationBlocked() ||
+		!clone.isCloneProxyPublicationReady() {
+		t.Fatal("canceled creator stranded clone before the publication batch")
+	}
+	for _, op := range mgr.recordedOperations() {
+		if (op.kind == "visible" || op.kind == "transform") && op.visible {
+			t.Fatalf("clone was exposed before cancellation-safe publication; operations = %#v", mgr.recordedOperations())
+		}
+	}
+
+	flushCloneProxyUpdates(&game)
+	if clone.isCloneProxyPublicationBlocked() {
+		t.Fatal("publication batch did not finish canceled creator's clone")
+	}
+}
+
+func TestCloneProxyPublishesFinalVisibility(t *testing.T) {
+	for _, test := range []struct {
+		name         string
+		hideOnCloned bool
+		wantVisible  bool
+	}{
+		{name: "shown", wantVisible: true},
+		{name: "hidden", hideOnCloned: true, wantVisible: false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var game Game
+			game.initShapeMgr()
+			mgr := setupCloneSpriteMgr(t)
+			source := newCloneProxyInitSprite(&game, true, test.hideOnCloned)
+			game.addShape(spriteOf(source))
+
+			doClone(source, nil, nil)
+			flushCloneProxyUpdates(&game)
+
+			operations := mgr.recordedOperations()
+			var published *cloneProxyOperation
+			for i := range operations {
+				if operations[i].kind == "transform" {
+					published = &operations[i]
+				}
+			}
+			if published == nil {
+				t.Fatalf("clone visibility was not published; operations = %#v", operations)
+			}
+			if published.visible != test.wantVisible {
+				t.Fatalf("published visibility = %v, want %v; operations = %#v", published.visible, test.wantVisible, operations)
+			}
+			if !test.wantVisible {
+				for _, op := range operations {
+					if (op.kind == "visible" || op.kind == "transform") && op.visible {
+						t.Fatalf("hidden clone was exposed; operations = %#v", operations)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestCloneProxyWithoutOnClonedIsReadyImmediately(t *testing.T) {
+	var game Game
+	game.initShapeMgr()
+	mgr := setupCloneSpriteMgr(t)
+	source := newCloneProxyInitSprite(&game, false, false)
+	game.addShape(spriteOf(source))
+
+	var clone *SpriteImpl
+	doClone(source, nil, func(sprite *SpriteImpl) {
+		clone = sprite
+	})
+
+	if clone == nil {
+		t.Fatal("clone callback did not capture cloned sprite")
+	}
+	if !clone.isCloneProxyPublicationBlocked() ||
+		!clone.isCloneProxyPublicationReady() {
+		t.Fatal("clone without onCloned handler was not immediately ready")
+	}
+	flushCloneProxyUpdates(&game)
+	if clone.isCloneProxyPublicationBlocked() {
+		t.Fatal("clone without onCloned handler was not published by the proxy batch")
+	}
+	operations := mgr.recordedOperations()
+	if len(operations) == 0 || !operations[len(operations)-1].visible {
+		t.Fatalf("clone without onCloned handler was not published; operations = %#v", operations)
+	}
+}
+
+func TestPendingCloneProxySyncWritesStayHidden(t *testing.T) {
+	var game Game
+	game.initShapeMgr()
+	mgr := setupCloneSpriteMgr(t)
+	source := newCloneProxyInitSprite(&game, true, false)
+	game.addShape(spriteOf(source))
+
+	in := reflect.ValueOf(source).Elem()
+	v := reflect.New(in.Type())
+	out, outPtr := v.Elem(), v.Interface().(Sprite)
+	clone := cloneSprite(out, outPtr, in, nil)
+	game.addClonedShape(spriteOf(source), clone)
+
+	clone.ensureProxyQueryStateSynced()
+	for _, op := range mgr.recordedOperations() {
+		if (op.kind == "visible" || op.kind == "transform") && op.visible {
+			t.Fatalf("query sync exposed pending clone; operations = %#v", mgr.recordedOperations())
+		}
+	}
+
+	clone.markProxyDirty()
+	buffer := engine.NewSpriteSyncBuffer(1)
+	clone.collectProxyUpdate(buffer)
+	serialized := buffer.Serialize()
+	if len(serialized) != 2+engine.SyncFieldsPerSprite {
+		t.Fatalf("serialized sync length = %d, want %d", len(serialized), 2+engine.SyncFieldsPerSprite)
+	}
+	if got := serialized[len(serialized)-1]; got != 0 {
+		t.Fatalf("pending clone batch visibility = %v, want 0", got)
+	}
+}
+
+func TestCloneProxyPublicationReadyCanRaceProxyCollection(t *testing.T) {
+	var game Game
+	game.initShapeMgr()
+	setupCloneSpriteMgr(t)
+
+	for range 100 {
+		clone := newCloneProxyInitSprite(&game, false, false)
+		clone.beginCloneProxyPublication()
+		clone.initRuntimeProxy()
+		buffer := engine.NewSpriteSyncBuffer(1)
+		start := make(chan struct{})
+		var workers sync.WaitGroup
+		workers.Add(2)
+		go func() {
+			defer workers.Done()
+			<-start
+			clone.finishCloneInitialization()
+		}()
+		go func() {
+			defer workers.Done()
+			<-start
+			clone.collectProxyUpdate(buffer)
+		}()
+		close(start)
+		workers.Wait()
+
+		// Collection is allowed to win before READY. A later ordinary update
+		// must observe the atomic transition and complete publication safely.
+		clone.collectProxyUpdate(buffer)
+		if clone.isCloneProxyPublicationBlocked() {
+			t.Fatal("ready clone remained blocked after proxy collection")
+		}
 	}
 }
 
@@ -792,7 +1225,7 @@ func TestCloneSpriteAwakesBeforeMain(t *testing.T) {
 	game.addShape(spriteOf(source))
 
 	var cloned *cloneAwakeOrderSprite
-	doClone(source, nil, false, func(sprite *SpriteImpl) {
+	doClone(source, nil, func(sprite *SpriteImpl) {
 		var ok bool
 		cloned, ok = sprite.sprite.(*cloneAwakeOrderSprite)
 		if !ok {
@@ -831,7 +1264,7 @@ func TestCloneSpriteInsertsImmediatelyBehindSource(t *testing.T) {
 	game.addShape(spriteOf(front))
 
 	var cloned *cloneAwakeOrderSprite
-	doClone(source, nil, false, func(sprite *SpriteImpl) {
+	doClone(source, nil, func(sprite *SpriteImpl) {
 		var ok bool
 		cloned, ok = sprite.sprite.(*cloneAwakeOrderSprite)
 		if !ok {
@@ -871,7 +1304,7 @@ func TestCloneSpriteInsertsImmediatelyBehindSource(t *testing.T) {
 	}
 }
 
-func TestCloneSpriteSynchronizesCopiedLayerToFreshProxy(t *testing.T) {
+func TestCloneSpriteSynchronizesFinalLayerBeforePublication(t *testing.T) {
 	var game Game
 	game.initShapeMgr()
 	mgr := setupCloneSpriteMgr(t)
@@ -880,21 +1313,29 @@ func TestCloneSpriteSynchronizesCopiedLayerToFreshProxy(t *testing.T) {
 	source.sawAwakeInMain = nil
 	source.onClonedFired = nil
 	source.clonedDone = nil
+	source.spriteState.IsVisible = true
 	source.runtimeState.Layer = firstSpriteLayer + 6
-	source.runtimeState.IsLayerDirty = false
+	source.runtimeState.IsLayerDirty = true
+	source.initRuntimeProxy()
+	sourceID := source.runtimeState.SyncSprite.GetId()
 	game.addShape(spriteOf(source))
 
 	var cloned *SpriteImpl
-	doClone(source, nil, false, func(sprite *SpriteImpl) {
+	doClone(source, nil, func(sprite *SpriteImpl) {
 		cloned = sprite
 	})
+
 	if cloned == nil || cloned.runtimeState.SyncSprite == nil {
 		t.Fatal("clone proxy was not initialized")
 	}
+	flushCloneProxyUpdates(&game)
 
 	cloneID := cloned.runtimeState.SyncSprite.GetId()
-	if got, want := mgr.zIndexes[cloneID], int64(firstSpriteLayer+6); got != want {
-		t.Fatalf("fresh clone proxy z-index = %d, want copied layer %d", got, want)
+	if got, want := mgr.zIndex(cloneID), int64(firstSpriteLayer); got != want {
+		t.Fatalf("published clone proxy z-index = %d, want final layer %d", got, want)
+	}
+	if got, want := mgr.zIndex(sourceID), int64(firstSpriteLayer+1); got != want {
+		t.Fatalf("source proxy z-index = %d, want shifted layer %d", got, want)
 	}
 }
 
@@ -911,7 +1352,7 @@ func TestRepeatedClonesStackNewestBehindSourceAndInFrontOfOlderClone(t *testing.
 
 	clones := make([]*SpriteImpl, 0, 2)
 	for range 2 {
-		doClone(source, nil, false, func(sprite *SpriteImpl) {
+		doClone(source, nil, func(sprite *SpriteImpl) {
 			clones = append(clones, sprite)
 		})
 	}
@@ -952,12 +1393,18 @@ func TestCloneOfCloneInsertsImmediatelyBehindItsParent(t *testing.T) {
 	game.addShape(spriteOf(source))
 
 	var first, second *SpriteImpl
-	doClone(source, nil, false, func(sprite *SpriteImpl) {
+	doClone(source, nil, func(sprite *SpriteImpl) {
 		first = sprite
 	})
-	doClone(first.sprite, nil, false, func(sprite *SpriteImpl) {
+	doClone(first.sprite, nil, func(sprite *SpriteImpl) {
 		second = sprite
 	})
+	if first.proxyPublication == nil || second.proxyPublication == nil {
+		t.Fatal("clone publication state was not initialized")
+	}
+	if first.proxyPublication == second.proxyPublication {
+		t.Fatal("clone-of-clone shared publication state with its parent")
+	}
 
 	shapes := game.getAllShapes()
 	if len(shapes) != 3 || shapes[0] != second || shapes[1] != first || shapes[2] != spriteOf(source) {
@@ -979,13 +1426,13 @@ func TestCloneInsertionUsesSourceCurrentLayer(t *testing.T) {
 
 	clones := make([]*SpriteImpl, 0, 3)
 	for range 2 {
-		doClone(source, nil, false, func(sprite *SpriteImpl) {
+		doClone(source, nil, func(sprite *SpriteImpl) {
 			clones = append(clones, sprite)
 		})
 	}
 	game.addShape(spriteOf(other))
 	game.shapeMgr.goBackLayers(spriteOf(other), 1)
-	doClone(source, nil, false, func(sprite *SpriteImpl) {
+	doClone(source, nil, func(sprite *SpriteImpl) {
 		clones = append(clones, sprite)
 	})
 
@@ -1007,7 +1454,7 @@ func TestCloneSpritePreservesUserStateAfterMainRegistration(t *testing.T) {
 	game.addShape(spriteOf(source))
 
 	var cloned *cloneStatePreservingSprite
-	doClone(source, nil, false, func(sprite *SpriteImpl) {
+	doClone(source, nil, func(sprite *SpriteImpl) {
 		var ok bool
 		cloned, ok = sprite.sprite.(*cloneStatePreservingSprite)
 		if !ok {
@@ -1053,7 +1500,7 @@ func TestCloneSpritePreservesAllTopLevelUserFields(t *testing.T) {
 	game.addShape(spriteOf(source))
 
 	var cloned *cloneAllFieldKindsSprite
-	doClone(source, nil, false, func(sprite *SpriteImpl) {
+	doClone(source, nil, func(sprite *SpriteImpl) {
 		var ok bool
 		cloned, ok = sprite.sprite.(*cloneAllFieldKindsSprite)
 		if !ok {
