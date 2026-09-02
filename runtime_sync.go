@@ -158,17 +158,25 @@ const (
 	cloneProxyReady
 )
 
+type cloneProxyPublication struct {
+	state uint32
+	// sensingVisibilityLeases is confined to the engine main thread. A count
+	// keeps temporary sensing visibility correct under nested bridge calls. It
+	// is atomic because generic proxy-sync paths may read effective visibility.
+	sensingVisibilityLeases atomic.Int32
+}
+
 func (p *SpriteImpl) beginCloneProxyPublication() {
-	state := new(uint32)
-	atomic.StoreUint32(state, cloneProxyPending)
-	p.proxyPublication = state
+	publication := &cloneProxyPublication{}
+	atomic.StoreUint32(&publication.state, cloneProxyPending)
+	p.proxyPublication = publication
 }
 
 func (p *SpriteImpl) cloneProxyPublicationState() uint32 {
 	if p.proxyPublication == nil {
 		return cloneProxyPublished
 	}
-	return atomic.LoadUint32(p.proxyPublication)
+	return atomic.LoadUint32(&p.proxyPublication.state)
 }
 
 func (p *SpriteImpl) isCloneProxyPublicationBlocked() bool {
@@ -215,7 +223,14 @@ func (p *SpriteImpl) ensureProxyInitialized() {
 }
 
 func (p *SpriteImpl) effectiveProxyVisibility() bool {
-	return p.spriteState.IsVisible && !p.isCloneProxyPublicationBlocked()
+	if !p.spriteState.IsVisible {
+		return false
+	}
+	publication := p.proxyPublication
+	if publication == nil || atomic.LoadUint32(&publication.state) == cloneProxyPublished {
+		return true
+	}
+	return publication.sensingVisibilityLeases.Load() > 0
 }
 
 // finishCloneInitialization makes the clone eligible for the next proxy batch.
@@ -223,7 +238,7 @@ func (p *SpriteImpl) effectiveProxyVisibility() bool {
 // no render can observe the inherited initialization state or stale peer layers.
 func (p *SpriteImpl) finishCloneInitialization() {
 	if p.isDestroyed() || p.proxyPublication == nil ||
-		!atomic.CompareAndSwapUint32(p.proxyPublication, cloneProxyPending, cloneProxyReady) {
+		!atomic.CompareAndSwapUint32(&p.proxyPublication.state, cloneProxyPending, cloneProxyReady) {
 		return
 	}
 	p.g.shapeMgr.markCloneProxyPublicationReady()
@@ -309,7 +324,7 @@ func (p *SpriteImpl) collectProxyUpdate(buffer *engine.SpriteSyncBuffer) {
 	}
 	p.syncAutoPhysicsShapesAfterCostumeChange()
 	if publishingClone {
-		atomic.CompareAndSwapUint32(p.proxyPublication, cloneProxyReady, cloneProxyPublished)
+		atomic.CompareAndSwapUint32(&p.proxyPublication.state, cloneProxyReady, cloneProxyPublished)
 		// Query synchronization may already have written the latest logical
 		// transform while keeping it hidden. Force a new batch entry after the
 		// gate opens so visibility cannot be skipped by version coalescing.
