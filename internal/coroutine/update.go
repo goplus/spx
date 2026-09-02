@@ -111,8 +111,7 @@ func (p *Coroutines) stopRunawayThreads() {
 
 	p.runMu.Lock()
 	p.creationMu.Lock()
-	p.stopping = true
-	p.AbortAll()
+	p.beginStoppingLocked()
 	p.creationMu.Unlock()
 	p.runMu.Unlock()
 
@@ -120,10 +119,10 @@ func (p *Coroutines) stopRunawayThreads() {
 		p.waitForThreadsToStop(0, nil)
 
 		// Close the race between observing an empty registry and a concurrent
-		// registration. Creations during shutdown are registered as canceled.
+		// registration. Creations during shutdown are rejected as canceled.
 		p.creationMu.Lock()
 		if !p.hasThreadsOtherThan(nil) {
-			p.stopping = false
+			p.endStoppingLocked()
 			p.creationMu.Unlock()
 			return
 		}
