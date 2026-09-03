@@ -191,6 +191,12 @@ void SpxPenSurface::_bind_methods() {
 void SpxPenSurface::initialize(const Size2i &p_size) {
 	ERR_FAIL_COND(render_target != nullptr);
 
+	// Scratch keeps pen pixels between the backdrop and all managed sprites.
+	// Use an absolute layer so the result does not depend on the scene-tree
+	// insertion order or a future parent z-index change.
+	set_z_as_relative(false);
+	set_z_index(0);
+
 	canvas_size = Size2i(MAX(1, p_size.x), MAX(1, p_size.y));
 
 	render_target = memnew(SubViewport);
