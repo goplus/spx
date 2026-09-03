@@ -191,6 +191,7 @@ func init() {
 			"SetRandomSeed":              reflect.ValueOf(q.SetRandomSeed),
 			"SetRunWithoutScreenRefresh": reflect.ValueOf(q.SetRunWithoutScreenRefresh),
 			"Snapshot":                   reflect.ValueOf(q.Snapshot),
+			"StopThisScript":             reflect.ValueOf(q.StopThisScript),
 			"TimeSinceLevelLoad":         reflect.ValueOf(q.TimeSinceLevelLoad),
 			"WaitUntil":                  reflect.ValueOf(q.WaitUntil),
 			"Warp":                       reflect.ValueOf(q.Warp),
@@ -639,6 +640,7 @@ func init() {
 		"SetRandomSeed":                func_SetRandomSeed,
 		"SetRunWithoutScreenRefresh":   func_SetRunWithoutScreenRefresh,
 		"Snapshot":                     func_Snapshot,
+		"StopThisScript":               func_StopThisScript,
 		"TimeSinceLevelLoad":           func_TimeSinceLevelLoad,
 		"WaitUntil":                    func_WaitUntil,
 		"Warp":                         func_Warp,
@@ -941,6 +943,10 @@ func method_ptr_SpriteImpl_Xpos(ctx ixgo.DirectCallContext) {
 
 func method_ptr_SpriteImpl_Ypos(ctx ixgo.DirectCallContext) {
 	ctx.SetResult((*q.SpriteImpl).Ypos(ixgo.DirectCallArg[*q.SpriteImpl](ctx, 0)))
+}
+
+func func_StopThisScript(ctx ixgo.DirectCallContext) {
+	q.StopThisScript(ixgo.DirectCallArg[func()](ctx, 0))
 }
 
 func func_TimeSinceLevelLoad(ctx ixgo.DirectCallContext) {

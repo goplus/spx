@@ -31,6 +31,9 @@ var (
 
 	// ErrAbortThread is the panic value used to stop the current coroutine.
 	ErrAbortThread = errors.New("abort thread")
+
+	// ErrStopThisScript signals Scratch-style termination to a procedure boundary.
+	ErrStopThisScript = errors.New("stop this script")
 )
 
 // Coroutines coordinates thread lifecycle and cooperative scheduling.
@@ -116,4 +119,9 @@ func (p *Coroutines) SetPerfDebug(enabled bool) {
 // IsAbortThreadError reports whether err is the coroutine abort sentinel.
 func IsAbortThreadError(err any) bool {
 	return err == ErrAbortThread
+}
+
+// IsStopThisScriptError reports whether err is the stop-this-script sentinel.
+func IsStopThisScriptError(err any) bool {
+	return err == ErrStopThisScript
 }

@@ -153,6 +153,26 @@ func RunWithoutScreenRefresh(call func()) {
 	call()
 }
 
+// RunStopThisScript consumes stop-this-script signals at a procedure boundary.
+func RunStopThisScript(call func()) {
+	if call == nil {
+		return
+	}
+
+	panicked := true
+	defer func() {
+		recovered := recover()
+		if !panicked {
+			return
+		}
+		if !coroutine.IsStopThisScriptError(recovered) {
+			panic(recovered)
+		}
+	}()
+	call()
+	panicked = false
+}
+
 func ShouldWaitNextFrame() bool {
 	if !IsInCoroutine() {
 		return true

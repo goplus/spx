@@ -77,6 +77,11 @@ func (p *Coroutines) Abort() {
 	panic(ErrAbortThread)
 }
 
+// AbortThisScript stops at the nearest procedure or event boundary.
+func (p *Coroutines) AbortThisScript() {
+	panic(ErrStopThisScript)
+}
+
 // AbortAll requests cancellation of every registered coroutine.
 func (p *Coroutines) AbortAll() {
 	p.creationMu.Lock()
@@ -355,7 +360,7 @@ func (p *Coroutines) finishThread(th Thread, gid uint64, recovered any) {
 }
 
 func (p *Coroutines) handleThreadPanic(th Thread, recovered any) {
-	if recovered == nil || recovered == ErrAbortThread {
+	if recovered == nil || recovered == ErrAbortThread || recovered == ErrStopThisScript {
 		return
 	}
 	if p.onPanic != nil {
