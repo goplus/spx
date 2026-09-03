@@ -235,3 +235,37 @@ func TestWaitMainThreadPropagatesCallbackPanic(t *testing.T) {
 		t.Fatal("WaitMainThread caller remained blocked after callback panic")
 	}
 }
+
+func TestWaitMainThreadPropagatesNilCallbackPanic(t *testing.T) {
+	t.Setenv("GODEBUG", "panicnil=1")
+	setMainThreadForTest(t, false)
+	co := New(nil)
+	co.OnInited()
+	returned := make(chan bool, 1)
+	go func() {
+		panicked := true
+		defer func() {
+			_ = recover()
+			returned <- panicked
+		}()
+		co.WaitMainThread(func() { panic(nil) })
+		panicked = false
+	}()
+
+	deadline := time.Now().Add(time.Second)
+	for co.currentJobs.Count() == 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("WaitMainThread did not enqueue worker call")
+		}
+		runtime.Gosched()
+	}
+	co.Update()
+	select {
+	case panicked := <-returned:
+		if !panicked {
+			t.Fatal("WaitMainThread returned normally after a nil callback panic")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("WaitMainThread caller remained blocked after nil callback panic")
+	}
+}

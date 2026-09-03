@@ -40,13 +40,16 @@ type WaitJob struct {
 
 type taskResult struct {
 	panicValue any
+	panicked   bool
 }
 
 func runTask(fn func()) (result taskResult) {
+	result.panicked = true
 	defer func() {
 		result.panicValue = recover()
 	}()
 	fn()
+	result.panicked = false
 	return result
 }
 
@@ -109,14 +112,14 @@ func (p *Coroutines) WaitMainThread(call func()) {
 
 	if me == nil {
 		result := <-done
-		if result.panicValue != nil {
+		if result.panicked {
 			panic(result.panicValue)
 		}
 		return
 	}
 	select {
 	case result := <-done:
-		if result.panicValue != nil {
+		if result.panicked {
 			panic(result.panicValue)
 		}
 	case <-me.Context().Done():
@@ -143,7 +146,7 @@ func (p *Coroutines) WaitToDo(fn func()) {
 	}()
 	p.Yield(me)
 	result := <-results
-	if result.panicValue != nil {
+	if result.panicked {
 		panic(result.panicValue)
 	}
 }
