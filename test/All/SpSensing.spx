@@ -38,8 +38,9 @@ func waitForKeyPress(key Key, prompt, success string) {
 }
 
 func waitForMouseClick(prompt, success string) {
+	clickedRed = false
 	say prompt
-	for !mousePressed {
+	for !clickedRed {
 		waitNextFrame
 	}
 	say success
@@ -102,16 +103,18 @@ onMsg "testSensing", => {
 
 	// 7. Game::MousePressed
 	waitForMouseClick("please click the red sprite", "mouse clicked")
+	clickedMouseX := mouseX
+	clickedMouseY := mouseY
 
 	Red.SetXYpos 0, 0
 	setXYpos 100, 200
 	// 8. Game::MouseX
 	mouseX := mouseX
-	assertFloatWithErr(mouseX, 0, sensingMouseErr, "Game::MouseX")
+	assertFloatWithErr(mouseX, clickedMouseX, sensingMouseErr, "Game::MouseX")
 
 	// 9. Game::MouseY
 	mouseY := mouseY
-	assertFloatWithErr(mouseY, 0, sensingMouseErr, "Game::MouseY")
+	assertFloatWithErr(mouseY, clickedMouseY, sensingMouseErr, "Game::MouseY")
 
 	// 10. Game::Timer
 	assert(timer > 1, "Game::Timer")
