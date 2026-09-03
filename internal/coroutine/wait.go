@@ -38,6 +38,21 @@ type WaitJob struct {
 	Frame int64   // Scheduler frame recorded for a frame job.
 }
 
+type taskResult struct {
+	panicValue any
+	panicked   bool
+}
+
+func runTask(fn func()) (result taskResult) {
+	result.panicked = true
+	defer func() {
+		result.panicValue = recover()
+	}()
+	fn()
+	result.panicked = false
+	return result
+}
+
 // Wait suspends the current coroutine for the given amount of level time, in
 // seconds.
 func (p *Coroutines) Wait(t float64) {
@@ -78,28 +93,35 @@ func (p *Coroutines) WaitMainThread(call func()) {
 	}
 
 	jobID := p.nextWaitJobID()
-	done := make(chan struct{}, 1)
+	done := make(chan taskResult, 1)
 	me := p.currentCoroutineThread()
 	job := &WaitJob{
 		Th:   me,
 		Id:   jobID,
 		Type: waitTypeMainThread,
 		Call: func() {
+			result := taskResult{}
+			defer func() { done <- result }()
 			if p.isThreadCanceled(me) {
 				return
 			}
-			call()
-			done <- struct{}{}
+			result = runTask(call)
 		},
 	}
 	p.enqueuePriorityJob(job)
 
 	if me == nil {
-		<-done
+		result := <-done
+		if result.panicked {
+			panic(result.panicValue)
+		}
 		return
 	}
 	select {
-	case <-done:
+	case result := <-done:
+		if result.panicked {
+			panic(result.panicValue)
+		}
 	case <-me.Context().Done():
 		panic(ErrAbortThread)
 	}
@@ -113,12 +135,20 @@ func (p *Coroutines) WaitToDo(fn func()) {
 		fn()
 		return
 	}
+	results := make(chan taskResult, 1)
 	p.setThreadState(me, threadBlocked)
 	go func() {
-		fn()
+		result := runTask(fn)
+		// Publish the result before waking the waiter. The buffered channel also
+		// lets a canceled waiter finish without leaking this worker goroutine.
+		results <- result
 		p.markRunnableAndResume(me)
 	}()
 	p.Yield(me)
+	result := <-results
+	if result.panicked {
+		panic(result.panicValue)
+	}
 }
 
 // WaitYield suspends me until an Update pass processes its yield job.
