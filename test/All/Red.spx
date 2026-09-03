@@ -2,6 +2,10 @@ onStart => {
 	say "Hi"
 }
 
+onClick => {
+	clickedRed = true
+}
+
 onKey KeyUp, => {
 	Camera.changeXYpos 0, 10
 }

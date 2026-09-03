@@ -10,6 +10,7 @@ var (
 	hasReceivedMsgB    bool
 	hasSyncMsgSprite   bool
 	hasSyncMsgStage    bool
+	clickedRed         bool
 
 	cloneNum int
 )
