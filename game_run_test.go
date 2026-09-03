@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/goplus/spx/v3/internal/coroutine"
 	"github.com/goplus/spx/v3/internal/engine"
 )
 
@@ -65,4 +66,40 @@ func TestSchedWarnsInsteadOfPanickingOnMainExecutionTimeout(t *testing.T) {
 	if !mainSchedTime().IsZero() {
 		t.Fatalf("mainSchedTime = %v, want zero after timed-out Main demotion", mainSchedTime())
 	}
+}
+
+func TestSchedNowExternalCallerDoesNotDriveActiveCoroutine(t *testing.T) {
+	co, game := setupRuntimeEventGame(t)
+	started := make(chan struct{})
+	release := make(chan struct{})
+	thread := co.Create(game, func(coroutine.Thread) int {
+		close(started)
+		<-release
+		return 0
+	})
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("active coroutine did not start")
+	}
+
+	result := make(chan any, 1)
+	go func() {
+		defer func() { result <- recover() }()
+		SchedNow()
+	}()
+	select {
+	case recovered := <-result:
+		if recovered != nil {
+			t.Fatalf("external SchedNow panicked: %v", recovered)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("external SchedNow did not return")
+	}
+	if thread.Stopped() {
+		t.Fatal("external SchedNow stopped the active coroutine")
+	}
+
+	close(release)
+	co.Join(thread)
 }

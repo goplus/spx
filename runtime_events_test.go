@@ -59,6 +59,29 @@ func setupRuntimeEventGame(t *testing.T) (*coroutine.Coroutines, *Game) {
 	return co, game
 }
 
+func TestStopFromExternalCallerDoesNotExcludeActiveCoroutine(t *testing.T) {
+	co, game := setupRuntimeEventGame(t)
+	started := make(chan struct{})
+	release := make(chan struct{})
+	thread := co.Create(game, func(coroutine.Thread) int {
+		close(started)
+		<-release
+		return 0
+	})
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("active coroutine did not start")
+	}
+
+	game.Stop(AllOtherScripts)
+	if !thread.Stopped() {
+		t.Fatal("external Stop(AllOtherScripts) did not stop active coroutine")
+	}
+	close(release)
+	co.Join(thread)
+}
+
 func updateRuntimeEventSchedulerUntil(t *testing.T, co *coroutine.Coroutines, done func() bool) {
 	t.Helper()
 	deadline := time.Now().Add(time.Second)

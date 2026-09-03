@@ -3,6 +3,9 @@ package spx
 import (
 	"reflect"
 	"testing"
+	"time"
+
+	"github.com/goplus/spx/v3/internal/coroutine"
 )
 
 func TestSetLayerPublicAPI(t *testing.T) {
@@ -39,4 +42,30 @@ func TestAbortIfCurrentCoroutineOutsideCoroutine(t *testing.T) {
 	// deliberately clears Current at that boundary, so this path must be a no-op
 	// instead of dereferencing a stale or nil thread.
 	(&SpriteImpl{}).abortIfCurrentCoroutine()
+}
+
+func TestAbortIfCurrentCoroutineExternalCallerDoesNotAbortActiveThread(t *testing.T) {
+	co := setupRuntimeEventScheduler(t)
+	sprite := &SpriteImpl{}
+	started := make(chan struct{})
+	release := make(chan struct{})
+	thread := co.Create(sprite, func(coroutine.Thread) int {
+		close(started)
+		<-release
+		return 0
+	})
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("active coroutine did not start")
+	}
+
+	// This is an engine-side call from outside the managed coroutine. It must
+	// not mistake the scheduler's Current value for the caller's coroutine.
+	sprite.abortIfCurrentCoroutine()
+	if thread.Stopped() {
+		t.Fatal("external caller unexpectedly aborted the active coroutine")
+	}
+	close(release)
+	co.Join(thread)
 }
