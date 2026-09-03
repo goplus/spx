@@ -180,16 +180,19 @@ func onUpdate(delta float64) {
 }
 
 func onDestroy() {
+	defer CheckPanic()
 	game.OnEngineDestroy()
 }
 
 func onPaused(isPaused bool) {
+	defer CheckPanic()
 	game.OnEnginePause(isPaused)
 }
 
 func onReset() {
+	defer CheckPanic()
+	defer gde.Unlink()
 	game.OnEngineReset()
-	gde.Unlink()
 }
 
 func updateTime(delta float64) {
