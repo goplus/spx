@@ -41,7 +41,10 @@ type WaitJob struct {
 // Wait suspends the current coroutine for the given amount of level time, in
 // seconds.
 func (p *Coroutines) Wait(t float64) {
-	me := p.Current()
+	me := p.callerThread()
+	if me == nil {
+		return
+	}
 	deadline := time.TimeSinceLevelLoad() + t
 	job := p.newResumeWaitJob(me, waitTypeTime)
 	job.Time = deadline
@@ -51,13 +54,16 @@ func (p *Coroutines) Wait(t float64) {
 // WaitNextFrame suspends the current coroutine until the scheduler frame
 // advances.
 func (p *Coroutines) WaitNextFrame() {
-	p.WaitNextFrameFor(p.Current())
+	p.WaitNextFrameFor(p.callerThread())
 }
 
 // WaitNextFrameFor suspends me until the scheduler frame advances. Callers
 // that capture an exact managed thread can reuse it without resolving the
 // current goroutine identity at every generated loop edge.
 func (p *Coroutines) WaitNextFrameFor(me Thread) {
+	if me == nil || p.callerThread() != me {
+		panic(ErrCannotYieldANonrunningThread)
+	}
 	frame := time.Frame()
 	job := p.newResumeWaitJob(me, waitTypeFrame)
 	job.Frame = frame
@@ -102,7 +108,11 @@ func (p *Coroutines) WaitMainThread(call func()) {
 // WaitToDo runs fn in a separate goroutine and suspends the current coroutine
 // until fn returns.
 func (p *Coroutines) WaitToDo(fn func()) {
-	me := p.Current()
+	me := p.callerThread()
+	if me == nil {
+		fn()
+		return
+	}
 	p.setThreadState(me, threadBlocked)
 	go func() {
 		fn()
@@ -119,7 +129,7 @@ func (p *Coroutines) WaitYield(me Thread) {
 // WaitForChan receives one value from ch. Inside a coroutine it yields while
 // waiting; otherwise it blocks the caller directly.
 func WaitForChan[T any](p *Coroutines, ch <-chan T, data *T) {
-	me := p.Current()
+	me := p.callerThread()
 	if me == nil {
 		*data = <-ch
 		return

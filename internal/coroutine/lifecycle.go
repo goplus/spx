@@ -175,8 +175,7 @@ func (p *Coroutines) Stop(thread Thread) {
 
 // IsInCoroutine reports whether the caller is running in this manager.
 func (p *Coroutines) IsInCoroutine() bool {
-	_, exists := p.goroutineIDs.Load(gid.Get())
-	return exists
+	return p.callerThread() != nil
 }
 
 func stopThreadIfRunning(th Thread) {
@@ -202,10 +201,18 @@ func stopThreadLocked(th Thread) {
 }
 
 func (p *Coroutines) currentCoroutineThread() Thread {
-	if !p.IsInCoroutine() {
+	return p.callerThread()
+}
+
+// callerThread returns the coroutine owned by the calling goroutine. Current
+// is intentionally not used here: it describes scheduler state, not caller
+// identity, and may refer to a different goroutine's coroutine.
+func (p *Coroutines) callerThread() Thread {
+	value, ok := p.goroutineThreads.Load(gid.Get())
+	if !ok {
 		return nil
 	}
-	return p.Current()
+	return value.(Thread)
 }
 
 func (p *Coroutines) newThread(obj ThreadObj) Thread {
@@ -316,7 +323,7 @@ func (p *Coroutines) waitForThreadsToStop(timeout stime.Duration, skip Thread) b
 
 func (p *Coroutines) runThread(th Thread, fn func(me Thread) int) {
 	gid := gid.Get()
-	p.goroutineIDs.Store(gid, struct{}{})
+	p.goroutineThreads.Store(gid, th)
 	p.runMu.Lock()
 	p.setCurrent(th)
 	defer func() {
@@ -343,7 +350,7 @@ func (p *Coroutines) finishThread(th Thread, gid uint64, recovered any) {
 	p.setCurrent(nil)
 	p.unregisterThread(th)
 	p.runMu.Unlock()
-	p.goroutineIDs.Delete(gid)
+	p.goroutineThreads.Delete(gid)
 	p.handleThreadPanic(th, recovered)
 }
 

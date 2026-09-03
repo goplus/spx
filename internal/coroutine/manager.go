@@ -76,8 +76,10 @@ type Coroutines struct {
 	statsMu           sync.RWMutex
 	lastUpdateStats   UpdateJobsStats
 
-	// goroutineIDs contains the IDs of goroutines created by CreateAndStart.
-	goroutineIDs sync.Map // map[int64]struct{}
+	// goroutineThreads maps each managed goroutine to the exact coroutine it
+	// executes. A scheduler-wide Current value is not sufficient to identify
+	// the caller because external goroutines can observe it concurrently.
+	goroutineThreads sync.Map // map[uint64]Thread
 }
 
 // New creates a coroutine manager. onPanic is called when a coroutine exits

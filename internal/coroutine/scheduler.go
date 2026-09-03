@@ -35,7 +35,7 @@ func (p *Coroutines) Sched(me Thread) {
 // Yield suspends me until it is resumed or canceled. It panics if me is not the
 // current coroutine.
 func (p *Coroutines) Yield(me Thread) {
-	if p.Current() != me {
+	if me == nil || p.callerThread() != me || p.Current() != me {
 		panic(ErrCannotYieldANonrunningThread)
 	}
 	if me.stopAtNextYield.Swap(false) {
