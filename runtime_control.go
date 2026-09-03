@@ -18,29 +18,22 @@ package spx
 
 import "github.com/goplus/spx/v3/internal/engine"
 
-// IsRunWithoutScreenRefresh reports whether the current coroutine is in
-// Scratch-style "run without screen refresh" mode.
+// IsRunWithoutScreenRefresh reports whether the current coroutine is in warp mode.
 func IsRunWithoutScreenRefresh() bool {
 	return engine.IsRunWithoutScreenRefresh()
 }
 
-// SetRunWithoutScreenRefresh enables or disables Scratch-style
-// "run without screen refresh" mode for the current coroutine.
-//
-// Prefer Warp for scoped execution.
-//
-// It returns the previous value so callers can restore nested state with:
-// `prev := spx.SetRunWithoutScreenRefresh(true); defer spx.SetRunWithoutScreenRefresh(prev)`.
+// SetRunWithoutScreenRefresh changes warp mode and returns its previous value.
 func SetRunWithoutScreenRefresh(enabled bool) (previous bool) {
 	return engine.SetRunWithoutScreenRefresh(enabled)
 }
 
-// Warp runs call in Scratch-style "run without screen refresh" mode and
-// restores the previous mode when call returns. It can be used as an XGo
-// decorator:
-//
-//	@warp
-//	func Update() { ... }
+// Warp runs call in warp mode and restores the previous mode afterward.
 func Warp(call func()) {
 	engine.RunWithoutScreenRefresh(call)
+}
+
+// StopThisScript catches a stop-this-script signal at a custom procedure boundary.
+func StopThisScript(call func()) {
+	engine.RunStopThisScript(call)
 }

@@ -248,6 +248,11 @@ func (p *scriptEventBindings) Stop(kind StopKind) {
 		})
 	}
 	if abort {
+		if kind == ThisScript {
+			// A procedure boundary catches this signal; otherwise it ends the event.
+			gco.AbortThisScript()
+			return
+		}
 		gco.Abort()
 	}
 }

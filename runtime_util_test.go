@@ -225,6 +225,17 @@ func TestCompareAndEqual(t *testing.T) {
 	}
 }
 
+func TestOutOfRangeListItemDoesNotEqualZero(t *testing.T) {
+	list := NewList(1)
+	item := list.At(17)
+	if got := item.String(); got != "" {
+		t.Fatalf("out-of-range item string = %q, want empty", got)
+	}
+	if Equal(item, 0) {
+		t.Fatal("out-of-range item unexpectedly equals zero")
+	}
+}
+
 func TestEqualUsesToleranceOnlyForNumericEquality(t *testing.T) {
 	tests := []struct {
 		name  string
