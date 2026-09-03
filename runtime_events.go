@@ -229,7 +229,10 @@ func (p *scriptEventBindings) Stop(kind StopKind) {
 		}
 	}
 
-	current := gco.Current()
+	var current coroutine.Thread
+	if gco.IsInCoroutine() {
+		current = gco.Current()
+	}
 	filter, abort := coreevent.ResolveStop(
 		kind,
 		p.pthis,
