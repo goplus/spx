@@ -55,7 +55,12 @@ func XGot_Game_Main(game Gamer, sprites ...Sprite) {
 func XGot_Game_Reload(game Gamer, index any) (err error) {
 	v := reflect.ValueOf(game).Elem()
 	g := instance(v)
-	g.reset()
+	if gco.IsInCoroutine() {
+		return errors.New("game reload cannot be called from an active coroutine")
+	}
+	if !gco.RunAfterAbortAll(2*time.Second, g.reset) {
+		return errors.New("game reload aborted: existing coroutines did not stop")
+	}
 	generation := g.currentBootstrapGeneration()
 	if err = g.attachPreparedInputSession(); err != nil {
 		return err
