@@ -207,3 +207,31 @@ func TestWaitMainThreadCanceledCoroutineDropsQueuedCall(t *testing.T) {
 		t.Fatal("canceled coroutine continued after WaitMainThread")
 	}
 }
+
+func TestWaitMainThreadPropagatesCallbackPanic(t *testing.T) {
+	setMainThreadForTest(t, false)
+	co := New(nil)
+	co.OnInited()
+	returned := make(chan any, 1)
+	go func() {
+		defer func() { returned <- recover() }()
+		co.WaitMainThread(func() { panic("main-thread failure") })
+	}()
+
+	deadline := time.Now().Add(time.Second)
+	for co.currentJobs.Count() == 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("WaitMainThread did not enqueue worker call")
+		}
+		runtime.Gosched()
+	}
+	co.Update()
+	select {
+	case recovered := <-returned:
+		if recovered != "main-thread failure" {
+			t.Fatalf("panic = %v, want callback panic", recovered)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("WaitMainThread caller remained blocked after callback panic")
+	}
+}
