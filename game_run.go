@@ -110,8 +110,10 @@ func SchedNow() int {
 		},
 		coreruntime.SchedulerHooks{
 			SchedCurrent: func() {
-				if me := gco.Current(); me != nil {
-					gco.Sched(me)
+				if gco.IsInCoroutine() {
+					if me := gco.Current(); me != nil {
+						gco.Sched(me)
+					}
 				}
 			},
 		},
@@ -136,8 +138,10 @@ func Sched() int {
 		schedTimeoutMs,
 		coreruntime.SchedulerHooks{
 			IsSchedTimeout: func(ms float64) bool {
-				if me := gco.Current(); me != nil {
-					return me.IsSchedTimeout(ms)
+				if gco.IsInCoroutine() {
+					if me := gco.Current(); me != nil {
+						return me.IsSchedTimeout(ms)
+					}
 				}
 				return false
 			},
