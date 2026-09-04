@@ -23,38 +23,29 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"sort"
 	"strings"
 	"sync/atomic"
 )
 
-// The limits protect callers that open ZIPs supplied by projects or remote
-// servers. They bound both metadata processing and the amount of data a
-// successful entry read can produce.
+// Limits bound ZIP metadata and decompression work.
 const (
-	// MaxZipArchiveBytes is the maximum compressed ZIP byte length accepted.
+	// MaxZipArchiveBytes limits compressed input.
 	MaxZipArchiveBytes int64 = 512 << 20
-	// MaxZipCentralDirectoryBytes bounds central-directory metadata parsed by
-	// archive/zip before its Reader is returned.
+	// MaxZipCentralDirectoryBytes limits central-directory metadata.
 	MaxZipCentralDirectoryBytes int64 = 64 << 20
-	// MaxZipEntries is the maximum number of central-directory entries.
+	// MaxZipEntries limits central-directory entries.
 	MaxZipEntries = 10_000
-	// MaxZipEntrySize is the maximum uncompressed size of one regular entry.
+	// MaxZipEntrySize limits one uncompressed entry.
 	MaxZipEntrySize int64 = 512 << 20
-	// MaxZipTotalSize is the maximum sum of uncompressed regular entries.
+	// MaxZipTotalSize limits total uncompressed data.
 	MaxZipTotalSize int64 = 4 << 30
-	// MaxZipCompressionRatio is the maximum declared uncompressed/compressed
-	// ratio for a non-empty regular entry.
+	// MaxZipCompressionRatio limits declared expansion.
 	MaxZipCompressionRatio uint64 = 200
 )
 
-var (
-	// ErrArchiveLimit identifies an archive rejected because it could require
-	// excessive metadata, decompression, or CPU work.
-	ErrArchiveLimit = errors.New("zip: archive limit exceeded")
-	// ErrZipArchiveLimit is an explicit package-qualified alias for callers
-	// that want to distinguish this limit from other ZIP errors.
-	ErrZipArchiveLimit = ErrArchiveLimit
-)
+// ErrArchiveLimit identifies excessive ZIP work.
+var ErrArchiveLimit = errors.New("zip: archive limit exceeded")
 
 type resolvedZipLimits struct {
 	maxArchiveBytes     int64
@@ -66,19 +57,18 @@ type resolvedZipLimits struct {
 }
 
 func defaultZipLimits() resolvedZipLimits {
-	return normalizeZipLimits(resolvedZipLimits{
+	return resolvedZipLimits{
 		maxArchiveBytes:     MaxZipArchiveBytes,
 		maxCentralDirBytes:  MaxZipCentralDirectoryBytes,
 		maxEntries:          MaxZipEntries,
 		maxEntrySize:        MaxZipEntrySize,
 		maxTotalSize:        MaxZipTotalSize,
 		maxCompressionRatio: MaxZipCompressionRatio,
-	})
+	}
 }
 
 func normalizeZipLimits(limits resolvedZipLimits) resolvedZipLimits {
-	// A test hook must not make the production path accidentally unbounded.
-	// Falling back to defaults also keeps a zero value useful in tests.
+	// Keep test overrides bounded when fields are omitted.
 	if limits.maxArchiveBytes <= 0 {
 		limits.maxArchiveBytes = MaxZipArchiveBytes
 	}
@@ -103,8 +93,7 @@ func normalizeZipLimits(limits resolvedZipLimits) resolvedZipLimits {
 	return limits
 }
 
-// The override is used only by package tests. An atomic pointer keeps tests
-// that exercise concurrent readers race-free while production uses constants.
+// Package tests override limits concurrently.
 var zipTestLimits atomic.Pointer[resolvedZipLimits]
 
 func currentZipLimits() resolvedZipLimits {
@@ -136,18 +125,14 @@ const (
 )
 
 type zipDirectoryInfo struct {
-	// endOffset is the absolute offset used by archive/zip to derive the
-	// archive base (classic EOCD or ZIP64 EOCD, respectively).
-	endOffset int64
-	// eocdOffset is always the absolute offset of the classic EOCD record.
+	endOffset  int64
 	eocdOffset int64
 	offset     uint64
 	size       uint64
 	entries    uint64
 }
 
-// preflightZipArchive bounds archive/zip's central-directory work before
-// zip.NewReader is allowed to allocate one File and its metadata per entry.
+// preflightZipArchive bounds work before zip.NewReader allocates entries.
 func preflightZipArchive(reader io.ReaderAt, size int64) error {
 	return preflightZipArchiveWithLimits(reader, size, currentZipLimits())
 }
@@ -185,28 +170,11 @@ func preflightZipArchiveWithLimits(reader io.ReaderAt, size int64, limits resolv
 		return fmt.Errorf("zip: invalid central directory offset: %w", zip.ErrFormat)
 	}
 	baseOffset := start - centralOffset
-	// Match archive/zip's compatibility handling for archives whose directory
-	// offset is absolute despite a non-zero computed base offset. The header
-	// predicate mirrors archive/zip's parser so both readers select the same
-	// physical directory.
-	if baseOffset > 0 && completeZipDirectoryHeaderAt(reader, size, centralOffset) > 0 {
-		start = centralOffset
+	// Header parsing differs across Go releases; reject an alternate base.
+	if baseOffset > 0 && hasZipDirectoryHeader(reader, size, centralOffset) {
+		return fmt.Errorf("zip: ambiguous central directory offset: %w", zip.ErrFormat)
 	}
-	centralEnd := start + centralSize
-	if centralEnd < start || centralEnd > size || centralEnd > directory.endOffset {
-		return fmt.Errorf("zip: invalid central directory bounds: %w", zip.ErrFormat)
-	}
-	if err := scanZipCentralDirectory(reader, size, start, centralEnd, directory.entries, limits); err != nil {
-		return err
-	}
-	// archive/zip reads directory headers until the first invalid signature,
-	// even when a compatibility base offset makes the declared byte range end
-	// before the end record. Reject an immediately following header so it
-	// cannot make archive/zip allocate entries that the bounded scan missed.
-	if centralEnd < directory.endOffset && completeZipDirectoryHeaderAt(reader, size, centralEnd) > 0 {
-		return fmt.Errorf("zip: central directory extends beyond its declared size: %w", zip.ErrFormat)
-	}
-	return nil
+	return scanZipCentralDirectory(reader, size, start, directory.endOffset, directory.entries, limits)
 }
 
 func readZipDirectoryInfo(reader io.ReaderAt, size int64, limits resolvedZipLimits) (zipDirectoryInfo, error) {
@@ -233,9 +201,7 @@ func readZipDirectoryInfo(reader io.ReaderAt, size int64, limits resolvedZipLimi
 		if commentEnd > size {
 			return zipDirectoryInfo{}, fmt.Errorf("zip: invalid comment length: %w", zip.ErrFormat)
 		}
-		// archive/zip selects this first non-truncated candidate. Reject the
-		// archive instead of searching for an earlier EOCD that would make the
-		// preflight and archive/zip inspect different central directories.
+		// Do not let preflight and archive/zip select different end records.
 		if commentEnd != size {
 			return zipDirectoryInfo{}, fmt.Errorf("zip: trailing data after end record: %w", zip.ErrFormat)
 		}
@@ -261,17 +227,17 @@ func readZipDirectoryInfo(reader io.ReaderAt, size int64, limits resolvedZipLimi
 		size:       uint64(directorySize),
 		entries:    uint64(entries),
 	}
-	// archive/zip treats these boundary values as a ZIP64 probe, then falls
-	// back to the classic EOCD values when no locator is present. In
-	// particular, 0xffff is a valid value for the 32-bit directory-size field.
-	mayHaveZip64 := entries == math.MaxUint16 || directorySize == math.MaxUint16 ||
-		directorySize == math.MaxUint32 || directoryOffset == math.MaxUint32
-	if mayHaveZip64 {
+	standardZip64 := entries == math.MaxUint16 || directorySize == math.MaxUint32 || directoryOffset == math.MaxUint32
+	// Go 1.25 also probes 0xffff directory sizes; later releases do not.
+	if standardZip64 || directorySize == math.MaxUint16 {
 		zip64Info, found, err := readZip64DirectoryInfo(reader, size, info, limits)
 		if err != nil {
 			return zipDirectoryInfo{}, err
 		}
 		if found {
+			if !standardZip64 {
+				return zipDirectoryInfo{}, fmt.Errorf("zip: ambiguous ZIP64 directory size: %w", zip.ErrFormat)
+			}
 			return zip64Info, nil
 		}
 	}
@@ -347,11 +313,16 @@ func readZip64EndAt(reader io.ReaderAt, size, locatorOffset int64, offset uint64
 	return recordOffset, record, true
 }
 
-func completeZipDirectoryHeaderAt(reader io.ReaderAt, size, offset int64) int64 {
-	return completeZipDirectoryHeaderWithin(reader, size, offset, size)
+func hasZipDirectoryHeader(reader io.ReaderAt, size, offset int64) bool {
+	if offset < 0 || offset > size-4 {
+		return false
+	}
+	var signature [4]byte
+	_, err := reader.ReadAt(signature[:], offset)
+	return err == nil && binary.LittleEndian.Uint32(signature[:]) == zipDirectoryHeaderSignature
 }
 
-func completeZipDirectoryHeaderWithin(reader io.ReaderAt, archiveSize, offset, end int64) int64 {
+func zipDirectoryEntryLen(reader io.ReaderAt, archiveSize, offset, end int64) int64 {
 	if offset < 0 || end < offset || end > archiveSize || offset > end-zipDirectoryHeaderLen {
 		return 0
 	}
@@ -369,57 +340,6 @@ func completeZipDirectoryHeaderWithin(reader io.ReaderAt, archiveSize, offset, e
 	if entryLen > end-offset {
 		return 0
 	}
-
-	needUncompressedSize := binary.LittleEndian.Uint32(header[24:28]) == math.MaxUint32
-	needCompressedSize := binary.LittleEndian.Uint32(header[20:24]) == math.MaxUint32
-	needHeaderOffset := binary.LittleEndian.Uint32(header[42:46]) == math.MaxUint32
-	if !needUncompressedSize && !needCompressedSize && !needHeaderOffset {
-		return entryLen
-	}
-	extra := make([]byte, int(extraLen))
-	if extraLen > 0 {
-		if _, err := reader.ReadAt(extra, offset+zipDirectoryHeaderLen+filenameLen); err != nil {
-			return 0
-		}
-	}
-	for len(extra) >= 4 {
-		tag := binary.LittleEndian.Uint16(extra[0:2])
-		fieldLen := int(binary.LittleEndian.Uint16(extra[2:4]))
-		extra = extra[4:]
-		if len(extra) < fieldLen {
-			break
-		}
-		field := extra[:fieldLen]
-		extra = extra[fieldLen:]
-		if tag != 0x0001 {
-			continue
-		}
-		if needUncompressedSize {
-			if len(field) < 8 {
-				return 0
-			}
-			field = field[8:]
-			needUncompressedSize = false
-		}
-		if needCompressedSize {
-			if len(field) < 8 {
-				return 0
-			}
-			field = field[8:]
-			needCompressedSize = false
-		}
-		if needHeaderOffset {
-			if len(field) < 8 {
-				return 0
-			}
-			needHeaderOffset = false
-		}
-	}
-	// archive/zip tolerates a missing ZIP64 uncompressed size for historical
-	// compatibility, but requires compressed size and local-header offset.
-	if needCompressedSize || needHeaderOffset {
-		return 0
-	}
 	return entryLen
 }
 
@@ -431,7 +351,7 @@ func scanZipCentralDirectory(reader io.ReaderAt, size, start, end int64, declare
 	var metadataBytes int64
 	var entries uint64
 	for offset < end {
-		entryLen := completeZipDirectoryHeaderWithin(reader, size, offset, end)
+		entryLen := zipDirectoryEntryLen(reader, size, offset, end)
 		if entryLen == 0 {
 			return fmt.Errorf("zip: invalid central directory entry: %w", zip.ErrFormat)
 		}
@@ -454,28 +374,7 @@ func scanZipCentralDirectory(reader io.ReaderAt, size, start, end int64, declare
 	return nil
 }
 
-func readZipArchiveBody(reader io.Reader, contentLength int64) ([]byte, error) {
-	if reader == nil {
-		return nil, fmt.Errorf("zip: HTTP response has no body")
-	}
-	limit := currentZipLimits().maxArchiveBytes
-	if contentLength > limit {
-		return nil, fmt.Errorf("%w: response length %d exceeds limit %d", ErrArchiveLimit, contentLength, limit)
-	}
-	body, err := io.ReadAll(io.LimitReader(reader, zipLimitWithSentinel(limit)))
-	if err != nil {
-		return nil, err
-	}
-	if int64(len(body)) > limit {
-		return nil, fmt.Errorf("%w: response exceeds limit %d", ErrArchiveLimit, limit)
-	}
-	return body, nil
-}
-
-// validateZipReader checks central-directory declarations before an archive
-// is returned to a caller. archive/zip intentionally leaves expansion limits
-// to its users, so UncompressedSize64 and the compression ratio must be
-// checked here.
+// validateZipReader bounds declared expansion work.
 func validateZipReader(reader *zip.Reader) error {
 	if reader == nil {
 		return fmt.Errorf("%w: nil ZIP reader", ErrArchiveLimit)
@@ -485,12 +384,23 @@ func validateZipReader(reader *zip.Reader) error {
 		return fmt.Errorf("%w: %d entries exceeds limit %d", ErrArchiveLimit, len(reader.File), limits.maxEntries)
 	}
 
-	var total uint64
+	paths := make([]zipPath, 0, len(reader.File))
+	var compressedTotal, total uint64
 	for _, file := range reader.File {
 		if err := validateZipFile(file, limits); err != nil {
 			return err
 		}
-		if file == nil || isZipDirectory(file) {
+		path, err := newZipPath(file)
+		if err != nil {
+			return err
+		}
+		paths = append(paths, path)
+		compressed := file.CompressedSize64
+		if compressed > uint64(limits.maxArchiveBytes) || compressedTotal > uint64(limits.maxArchiveBytes)-compressed {
+			return fmt.Errorf("%w: total compressed size exceeds limit %d", ErrArchiveLimit, limits.maxArchiveBytes)
+		}
+		compressedTotal += compressed
+		if isZipDirectory(file) {
 			continue
 		}
 		size := file.UncompressedSize64
@@ -498,6 +408,66 @@ func validateZipReader(reader *zip.Reader) error {
 			return fmt.Errorf("%w: total uncompressed size exceeds limit %d", ErrArchiveLimit, limits.maxTotalSize)
 		}
 		total += size
+	}
+	return validateZipPaths(paths)
+}
+
+type zipPath struct {
+	name      string
+	directory bool
+}
+
+func newZipPath(file *zip.File) (zipPath, error) {
+	directory := isZipDirectory(file)
+	name := file.Name
+	if directory {
+		name = strings.TrimSuffix(name, "/")
+	}
+	if !validZipPath(name) {
+		return zipPath{}, fmt.Errorf("zip: invalid entry name %q: %w", file.Name, zip.ErrFormat)
+	}
+	return zipPath{name: name, directory: directory}, nil
+}
+
+func validZipPath(name string) bool {
+	if name == "" || name[0] == '/' || name[len(name)-1] == '/' || strings.ContainsRune(name, '\\') || hasZipDrivePrefix(name) {
+		return false
+	}
+	for {
+		part := name
+		if slash := strings.IndexByte(name, '/'); slash >= 0 {
+			part, name = name[:slash], name[slash+1:]
+		} else {
+			name = ""
+		}
+		if part == "" || part == "." || part == ".." {
+			return false
+		}
+		if name == "" {
+			return true
+		}
+	}
+}
+
+func hasZipDrivePrefix(name string) bool {
+	return len(name) >= 2 && name[1] == ':' &&
+		(name[0] >= 'A' && name[0] <= 'Z' || name[0] >= 'a' && name[0] <= 'z')
+}
+
+func validateZipPaths(paths []zipPath) error {
+	sort.Slice(paths, func(i, j int) bool { return paths[i].name < paths[j].name })
+	for i, path := range paths {
+		if i > 0 && paths[i-1].name == path.name {
+			return fmt.Errorf("zip: duplicate entry %q: %w", path.name, zip.ErrFormat)
+		}
+		if path.directory {
+			continue
+		}
+		prefix := path.name + "/"
+		child := sort.Search(len(paths), func(i int) bool { return paths[i].name >= prefix })
+		if child < len(paths) && strings.HasPrefix(paths[child].name, prefix) {
+			return fmt.Errorf("zip: file entry %q is a parent path: %w", path.name, zip.ErrFormat)
+		}
 	}
 	return nil
 }
@@ -507,10 +477,7 @@ func validateZipFile(file *zip.File, limits resolvedZipLimits) error {
 		return fmt.Errorf("%w: nil ZIP entry", ErrArchiveLimit)
 	}
 	if isZipDirectory(file) {
-		// A directory has no logical payload. archive/zip permits a non-zero
-		// compressed size for some producer quirks, so do not apply a ratio to
-		// that storage data. A non-zero uncompressed declaration is still
-		// rejected because it would bypass the archive's total-size accounting.
+		// Some writers give empty directories non-zero compressed storage.
 		if file.UncompressedSize64 != 0 {
 			return fmt.Errorf("%w: directory entry %q has non-zero uncompressed size %d", ErrArchiveLimit, file.Name, file.UncompressedSize64)
 		}
@@ -536,19 +503,12 @@ func checkZipCompressionRatio(file *zip.File, maxRatio uint64) error {
 	}
 	compressed := file.CompressedSize64
 	if compressed == 0 || maxRatio == 0 || compressed > math.MaxUint64/maxRatio || file.UncompressedSize64 > compressed*maxRatio {
-		name := "<unknown>"
-		if file != nil {
-			name = file.Name
-		}
-		return fmt.Errorf("%w: entry %q compression ratio exceeds %d:1", ErrArchiveLimit, name, maxRatio)
+		return fmt.Errorf("%w: entry %q compression ratio exceeds %d:1", ErrArchiveLimit, file.Name, maxRatio)
 	}
 	return nil
 }
 
-// openZipEntry validates a single entry again at read time and caps the
-// decompressor's output with a one-byte sentinel. The sentinel ensures an
-// entry whose header understates its output cannot silently terminate at the
-// configured limit without letting archive/zip verify its checksum.
+// openZipEntry caps output at the entry's declared size plus one sentinel byte.
 func openZipEntry(file *zip.File) (io.ReadCloser, error) {
 	limits := currentZipLimits()
 	if err := validateZipFile(file, limits); err != nil {
@@ -558,10 +518,11 @@ func openZipEntry(file *zip.File) (io.ReadCloser, error) {
 	if err != nil {
 		return nil, err
 	}
+	max := int64(file.UncompressedSize64)
 	return &zipLimitedReadCloser{
 		ReadCloser: reader,
-		remaining:  zipLimitWithSentinel(limits.maxEntrySize),
-		max:        limits.maxEntrySize,
+		remaining:  zipLimitWithSentinel(max),
+		max:        max,
 		name:       file.Name,
 	}, nil
 }
@@ -603,8 +564,7 @@ func (r *zipLimitedReadCloser) Read(p []byte) (int, error) {
 	r.read += int64(n)
 	if int64(n) > allowed {
 		r.limitErr = fmt.Errorf("%w: entry %q uncompressed output exceeds limit %d", ErrArchiveLimit, r.name, r.max)
-		// The extra byte was consumed only as a sentinel. Do not expose it to
-		// callers, even though the underlying reader returned it in p.
+		// Do not expose the sentinel byte.
 		return int(allowed), r.limitErr
 	}
 	return n, err

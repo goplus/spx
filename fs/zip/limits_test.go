@@ -92,6 +92,17 @@ func TestOpenRejectsExcessiveTotalZipSize(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsRepeatedCompressedWork(t *testing.T) {
+	useZipTestLimits(t, func(limits *resolvedZipLimits) { limits.maxArchiveBytes = 7 })
+	reader := &archivezip.Reader{File: []*archivezip.File{
+		{FileHeader: archivezip.FileHeader{Name: "one", CompressedSize64: 4}},
+		{FileHeader: archivezip.FileHeader{Name: "two", CompressedSize64: 4}},
+	}}
+	if err := validateZipReader(reader); !errors.Is(err, ErrArchiveLimit) {
+		t.Fatalf("validateZipReader error = %v, want ErrArchiveLimit", err)
+	}
+}
+
 func TestOpenRejectsExcessiveZipCompressionRatio(t *testing.T) {
 	path := makeLimitZip(t, limitZipEntry{
 		name:   "repetitive",
@@ -123,6 +134,62 @@ func TestOpenRejectsNonEmptyDirectoryDeclaration(t *testing.T) {
 	}
 }
 
+func TestOpenRejectsAmbiguousZipPaths(t *testing.T) {
+	tests := []struct {
+		name    string
+		entries []limitZipEntry
+	}{
+		{"duplicate", []limitZipEntry{{name: "a"}, {name: "a"}}},
+		{"duplicate directory", []limitZipEntry{{name: "a/"}, {name: "a/"}}},
+		{"file then directory", []limitZipEntry{{name: "a"}, {name: "a/"}}},
+		{"directory then file", []limitZipEntry{{name: "a/"}, {name: "a"}}},
+		{"file before child", []limitZipEntry{{name: "a"}, {name: "a-b"}, {name: "a/b"}}},
+		{"file after child", []limitZipEntry{{name: "a/b/c"}, {name: "a/b"}}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := Open(makeLimitZip(t, test.entries...))
+			if !errors.Is(err, archivezip.ErrFormat) {
+				t.Fatalf("Open error = %v, want archive/zip format error", err)
+			}
+		})
+	}
+}
+
+func TestOpenRejectsInvalidZipPaths(t *testing.T) {
+	for _, name := range []string{"", "/a", `a\b`, "a//b", "a/./b", "a/../b", "../a", "C:/a", ".", "a//"} {
+		t.Run(name, func(t *testing.T) {
+			_, err := Open(makeLimitZip(t, limitZipEntry{name: name}))
+			if !errors.Is(err, archivezip.ErrFormat) && !errors.Is(err, archivezip.ErrInsecurePath) {
+				t.Fatalf("Open error = %v, want invalid path error", err)
+			}
+		})
+	}
+}
+
+func TestOpenAcceptsUnambiguousZipPaths(t *testing.T) {
+	tests := []struct {
+		name    string
+		entries []limitZipEntry
+	}{
+		{"directory before child", []limitZipEntry{{name: "a/"}, {name: "a/b", data: "b"}}},
+		{"directory after child", []limitZipEntry{{name: "a/b", data: "b"}, {name: "a/"}}},
+		{"adjacent prefix", []limitZipEntry{{name: "a"}, {name: "ab/c"}}},
+		{"deep path", []limitZipEntry{{name: strings.Repeat("a/", 32_000) + "z"}}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			dir, err := Open(makeLimitZip(t, test.entries...))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := dir.Close(); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
 func TestOpenAndReadZipAtLimits(t *testing.T) {
 	path := makeLimitZip(t, limitZipEntry{name: "exact", data: "1234", method: archivezip.Store})
 	useZipTestLimits(t, func(limits *resolvedZipLimits) {
@@ -150,7 +217,7 @@ func TestOpenAndReadZipAtLimits(t *testing.T) {
 	}
 }
 
-func TestOpenReadRejectsEntryThatGrowsPastLimit(t *testing.T) {
+func TestOpenReadRejectsEntryThatExceedsDeclaration(t *testing.T) {
 	path := makeLimitZip(t, limitZipEntry{name: "grow", data: "123456", method: archivezip.Store})
 	reader, err := archivezip.OpenReader(path)
 	if err != nil {
@@ -160,16 +227,19 @@ func TestOpenReadRejectsEntryThatGrowsPastLimit(t *testing.T) {
 	// Mutating the exported header simulates an archive whose declaration was
 	// tampered with after parsing. The wrapper must still fail closed.
 	reader.File[0].UncompressedSize64 = 4
-	useZipTestLimits(t, func(limits *resolvedZipLimits) { limits.maxEntrySize = 4 })
+	useZipTestLimits(t, func(limits *resolvedZipLimits) { limits.maxEntrySize = 10 })
 	zipFS := &FS{Reader: &reader.Reader}
 	entry, err := zipFS.Open("grow")
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, readErr := io.ReadAll(entry)
+	data, readErr := io.ReadAll(entry)
 	_ = entry.Close()
 	if readErr == nil {
-		t.Fatal("reading tampered entry succeeded, want error")
+		t.Fatal("reading tampered entry succeeded")
+	}
+	if len(data) > 4 {
+		t.Fatalf("read %d bytes, want at most declared size", len(data))
 	}
 }
 
@@ -224,7 +294,7 @@ func TestPreflightAcceptsZip64OffsetsWithSmallEntryCount(t *testing.T) {
 	}
 }
 
-func TestPreflightAcceptsZip64DirectorySizeSentinel(t *testing.T) {
+func TestPreflightRejectsAmbiguousZip64DirectorySize(t *testing.T) {
 	data := makeLimitZip64Offsets(t, makeLimitZipBytes(t, limitZipEntry{name: "one", data: "1", method: archivezip.Store}))
 	eocd := findLimitZipEnd(t, data)
 	locator := eocd - zipDirectory64LocLen
@@ -236,11 +306,21 @@ func TestPreflightAcceptsZip64DirectorySizeSentinel(t *testing.T) {
 	binary.LittleEndian.PutUint32(data[eocd+12:eocd+16], math.MaxUint16)
 	binary.LittleEndian.PutUint32(data[eocd+16:eocd+20], uint32(centralOffset))
 
+	if err := preflightZipArchive(bytes.NewReader(data), int64(len(data))); !errors.Is(err, archivezip.ErrFormat) {
+		t.Fatalf("ambiguous directory-size error = %v, want archive/zip format error", err)
+	}
+}
+
+func TestPreflightAcceptsStandardZip64WithFFFFDirectorySize(t *testing.T) {
+	data := makeLimitZip64Offsets(t, makeLimitZipBytes(t, limitZipEntry{name: "one", data: "1", method: archivezip.Store}))
+	eocd := findLimitZipEnd(t, data)
+	binary.LittleEndian.PutUint32(data[eocd+12:eocd+16], math.MaxUint16)
+
 	if err := preflightZipArchive(bytes.NewReader(data), int64(len(data))); err != nil {
-		t.Fatalf("ZIP64 directory-size sentinel rejected: %v", err)
+		t.Fatalf("standard ZIP64 probe rejected: %v", err)
 	}
 	if _, err := archivezip.NewReader(bytes.NewReader(data), int64(len(data))); err != nil {
-		t.Fatalf("archive/zip rejected ZIP64 directory-size sentinel: %v", err)
+		t.Fatalf("archive/zip rejected standard ZIP64 probe: %v", err)
 	}
 }
 
@@ -273,17 +353,6 @@ func TestPreflightAcceptsClassicDirectorySizeFFFF(t *testing.T) {
 	}
 	if _, err := archivezip.NewReader(bytes.NewReader(data), int64(len(data))); err != nil {
 		t.Fatalf("archive/zip rejected classic directory size 0xffff: %v", err)
-	}
-}
-
-func TestReadZipArchiveBodyRejectsOversize(t *testing.T) {
-	useZipTestLimits(t, func(limits *resolvedZipLimits) { limits.maxArchiveBytes = 4 })
-
-	if _, err := readZipArchiveBody(strings.NewReader("12345"), -1); !errors.Is(err, ErrArchiveLimit) {
-		t.Fatalf("streamed body error = %v, want ErrArchiveLimit", err)
-	}
-	if _, err := readZipArchiveBody(strings.NewReader(""), 5); !errors.Is(err, ErrArchiveLimit) {
-		t.Fatalf("declared body error = %v, want ErrArchiveLimit", err)
 	}
 }
 
@@ -382,7 +451,7 @@ func TestPreflightRejectsGapBeforeZip64Locator(t *testing.T) {
 	}
 }
 
-func TestPreflightMatchesArchiveZipBaseOffsetProbe(t *testing.T) {
+func TestPreflightRejectsAmbiguousBaseOffset(t *testing.T) {
 	data := makeLimitZipBytes(t,
 		limitZipEntry{name: "one", data: "1", method: archivezip.Store},
 		limitZipEntry{name: "two", data: "2", method: archivezip.Store},
@@ -400,13 +469,8 @@ func TestPreflightMatchesArchiveZipBaseOffsetProbe(t *testing.T) {
 	end = findLimitZipEnd(t, data)
 	binary.LittleEndian.PutUint16(data[end+8:end+10], 1)
 	binary.LittleEndian.PutUint16(data[end+10:end+12], 1)
-	useZipTestLimits(t, func(limits *resolvedZipLimits) { limits.maxEntries = 2 })
-
-	if completeZipDirectoryHeaderAt(bytes.NewReader(data), int64(len(data)), int64(centralOffset)) != 0 {
-		t.Fatal("invalid ZIP64 decoy accepted as a complete directory header")
-	}
-	if err := preflightZipArchive(bytes.NewReader(data), int64(len(data))); !errors.Is(err, ErrArchiveLimit) {
-		t.Fatalf("base-offset decoy error = %v, want ErrArchiveLimit", err)
+	if err := preflightZipArchive(bytes.NewReader(data), int64(len(data))); !errors.Is(err, archivezip.ErrFormat) {
+		t.Fatalf("base-offset decoy error = %v, want archive/zip format error", err)
 	}
 }
 
@@ -437,7 +501,7 @@ func TestScanCentralDirectoryHonorsDeclaredEnd(t *testing.T) {
 	centralOffset := int(binary.LittleEndian.Uint32(data[end+16 : end+20]))
 	centralSize := int(binary.LittleEndian.Uint32(data[end+12 : end+16]))
 	central := data[centralOffset : centralOffset+centralSize]
-	firstLen := completeZipDirectoryHeaderAt(bytes.NewReader(central), int64(len(central)), 0)
+	firstLen := zipDirectoryEntryLen(bytes.NewReader(central), int64(len(central)), 0, int64(len(central)))
 	if firstLen == 0 {
 		t.Fatal("first central-directory header missing")
 	}

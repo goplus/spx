@@ -30,8 +30,8 @@ import (
 )
 
 const (
-	// MaxRemoteZipBytes limits downloaded archive data.
-	MaxRemoteZipBytes int64 = 512 << 20
+	// MaxRemoteZipBytes is kept for compatibility.
+	MaxRemoteZipBytes int64 = MaxZipArchiveBytes
 )
 
 var (
