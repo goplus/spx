@@ -82,7 +82,7 @@ func XGot_Game_Reload(game Gamer, index any) (err error) {
 	g.applyStoredRuntimeConfig(proj)
 	setupGameSystems(g, proj)
 	gco.OnRestart()
-	err = g.loadIndex(v, proj, generation)
+	err = g.loadIndexWithSpriteLoader(v, proj, generation, plan.spriteLoader(g))
 	if err != nil {
 		return
 	}

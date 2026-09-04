@@ -25,9 +25,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/goplus/spbase/mathf"
 	coreproject "github.com/goplus/spx/v3/internal/core/project"
 	"github.com/goplus/spx/v3/internal/coroutine"
 	"github.com/goplus/spx/v3/internal/engine"
+	"github.com/goplus/spx/v3/internal/ui"
+	pkgengine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
 type reloadConfigFS map[string]string
@@ -53,6 +56,90 @@ type reloadPreflightSprite struct {
 }
 
 func (*reloadPreflightSprite) Main() {}
+
+type reloadCommitGame struct {
+	Game
+	Empty []*reloadCommitSprite
+}
+
+type reloadCommitSprite struct {
+	SpriteImpl
+	*reloadCommitGame
+}
+
+func (*reloadCommitSprite) Main() {}
+
+type reloadCommitSpriteMgr struct {
+	*spyCloneSpriteMgr
+}
+
+func (m *reloadCommitSpriteMgr) CreateBackdrop(string) pkgengine.Object {
+	return m.CreateBareSprite(mathf.Vec2{})
+}
+
+func (*reloadCommitSpriteMgr) DestroySprite(pkgengine.Object) bool   { return true }
+func (*reloadCommitSpriteMgr) SetScale(pkgengine.Object, mathf.Vec2) {}
+func (*reloadCommitSpriteMgr) SetColliderRect(pkgengine.Object, mathf.Vec2, mathf.Vec2) {
+}
+func (*reloadCommitSpriteMgr) SetTriggerRect(pkgengine.Object, mathf.Vec2, mathf.Vec2) {}
+func (*reloadCommitSpriteMgr) SetPixelCollisionSamplingStep(int64)                     {}
+
+type reloadCommitExtMgr struct {
+	pkgengine.IExtMgr
+}
+
+func (*reloadCommitExtMgr) SetLayerSorterMode(int64) {}
+
+type reloadCommitPlatformMgr struct {
+	pkgengine.IPlatformMgr
+}
+
+func (*reloadCommitPlatformMgr) IsMainThread() bool               { return true }
+func (*reloadCommitPlatformMgr) GetWindowSize() mathf.Vec2        { return mathf.NewVec2(480, 360) }
+func (*reloadCommitPlatformMgr) SetWindowSize(int64, int64, bool) {}
+func (*reloadCommitPlatformMgr) SetWindowFullscreen(bool)         {}
+func (*reloadCommitPlatformMgr) SetMaxFps(int64)                  {}
+func (*reloadCommitPlatformMgr) SetStretchMode(bool)              {}
+func (*reloadCommitPlatformMgr) SetDebugMode(bool)                {}
+
+type reloadCommitCameraMgr struct {
+	pkgengine.ICameraMgr
+}
+
+func (*reloadCommitCameraMgr) SetCameraZoom(mathf.Vec2)    {}
+func (*reloadCommitCameraMgr) SetCameraLimit(int64, int64) {}
+func (*reloadCommitCameraMgr) SetCameraSmoothing(bool)     {}
+
+type reloadCommitInputMgr struct {
+	pkgengine.IInputMgr
+}
+
+func (*reloadCommitInputMgr) GetGlobalMousePos() mathf.Vec2 { return mathf.Vec2{} }
+func (*reloadCommitInputMgr) GetMouseState(int64) bool      { return false }
+
+type reloadCommitPenMgr struct {
+	pkgengine.IPenMgr
+}
+
+func (*reloadCommitPenMgr) DestroyAllPens()            {}
+func (*reloadCommitPenMgr) SetCanvasSize(int64, int64) {}
+
+type reloadCommitPhysicsMgr struct {
+	pkgengine.IPhysicsMgr
+}
+
+func (*reloadCommitPhysicsMgr) SetCollisionSystemType(bool) {}
+func (*reloadCommitPhysicsMgr) SetGlobalGravity(float64)    {}
+func (*reloadCommitPhysicsMgr) SetGlobalFriction(float64)   {}
+func (*reloadCommitPhysicsMgr) SetGlobalAirDrag(float64)    {}
+
+type reloadCommitResMgr struct {
+	pkgengine.IResMgr
+}
+
+func (*reloadCommitResMgr) GetBoundFromAlpha(string) mathf.Rect2 {
+	return mathf.Rect2{Size: mathf.NewVec2(10, 10)}
+}
 
 func setupReloadPreflightGame(t *testing.T, files reloadConfigFS) (*reloadPreflightGame, *reloadPreflightSprite, *coroutine.Coroutines) {
 	t.Helper()
@@ -86,6 +173,70 @@ func setupReloadPreflightGame(t *testing.T, files reloadConfigFS) (*reloadPrefli
 		engine.SetGame(originalGame)
 	})
 	return game, sprite, co
+}
+
+func setupReloadCommitGame(t *testing.T, files reloadConfigFS) *reloadCommitGame {
+	t.Helper()
+
+	cloneMgr := setupCloneSpriteMgr(t)
+	originalExtMgr := pkgengine.ExtMgr
+	originalPlatformMgr := pkgengine.PlatformMgr
+	originalCameraMgr := pkgengine.CameraMgr
+	originalInputMgr := pkgengine.InputMgr
+	originalPenMgr := pkgengine.PenMgr
+	originalPhysicsMgr := pkgengine.PhysicsMgr
+	originalResMgr := pkgengine.ResMgr
+	pkgengine.SpriteMgr = &reloadCommitSpriteMgr{spyCloneSpriteMgr: cloneMgr}
+	pkgengine.ExtMgr = &reloadCommitExtMgr{}
+	pkgengine.PlatformMgr = &reloadCommitPlatformMgr{}
+	pkgengine.CameraMgr = &reloadCommitCameraMgr{}
+	pkgengine.InputMgr = &reloadCommitInputMgr{}
+	pkgengine.PenMgr = &reloadCommitPenMgr{}
+	pkgengine.PhysicsMgr = &reloadCommitPhysicsMgr{}
+	pkgengine.ResMgr = &reloadCommitResMgr{}
+	t.Cleanup(func() {
+		pkgengine.SpriteMgr = cloneMgr
+		pkgengine.ExtMgr = originalExtMgr
+		pkgengine.PlatformMgr = originalPlatformMgr
+		pkgengine.CameraMgr = originalCameraMgr
+		pkgengine.InputMgr = originalInputMgr
+		pkgengine.PenMgr = originalPenMgr
+		pkgengine.PhysicsMgr = originalPhysicsMgr
+		pkgengine.ResMgr = originalResMgr
+	})
+
+	originalScheduler := gco
+	originalGame := engine.GetGame()
+	originalManagers := engine.Managers()
+	originalBounds := cachedBounds
+	co := coroutine.New(nil)
+	co.OnInited()
+	gco = co
+	engine.SetCoroutines(co)
+	cachedBounds = make(map[string]mathf.Rect2)
+
+	game := &reloadCommitGame{}
+	game.Game.initGame([]Sprite{&reloadCommitSprite{}})
+	game.Game.gamer = game
+	game.Game.startLoad(files)
+	game.Game.soundMgr.Init(&fakeAudioBackend{})
+	game.Game.tilemapMgr.init(&game.Game, files, "")
+	game.Game.setPhysicsEnabled(false)
+	game.Game.lifecycleState.IsRunned.Store(true)
+
+	t.Cleanup(func() {
+		if !co.AbortAllAndWait(time.Second) {
+			t.Error("reload commit test coroutines did not stop")
+		}
+		engine.ClearAllSprites()
+		gco = originalScheduler
+		engine.SetCoroutines(originalScheduler)
+		engine.SetManagers(originalManagers)
+		ui.Init(originalManagers)
+		engine.SetGame(originalGame)
+		cachedBounds = originalBounds
+	})
+	return game
 }
 
 func startReloadPreflightSentinelThread(t *testing.T, co *coroutine.Coroutines, owner any) (coroutine.Thread, func()) {
@@ -256,6 +407,51 @@ func TestReloadPreflightFailurePreservesLiveGame(t *testing.T) {
 			assertReloadPreflightPreservedLiveState(t, game, sprite, thread, events)
 			finishThread()
 		})
+	}
+}
+
+func TestReloadCommitInitializesLazyPrototypeWithNewPhysicsSettings(t *testing.T) {
+	files := reloadConfigFS{
+		"sprites/reloadCommitSprite/index.json": `{
+			"costumes":[{"name":"idle","imageWidth":10,"imageHeight":10}],
+			"size":1,
+			"visible":true
+		}`,
+	}
+	game := setupReloadCommitGame(t, files)
+
+	err := XGot_Game_Reload(game, strings.NewReader(`{
+		"physics":true,
+		"autoSetCollisionLayer":false,
+		"zorder":["reloadCommitSprite"]
+	}`))
+	if err != nil {
+		t.Fatalf("XGot_Game_Reload error = %v", err)
+	}
+
+	prototype, ok := game.Game.sprs["reloadCommitSprite"].(*reloadCommitSprite)
+	if !ok {
+		t.Fatalf("reload prototype type = %T, want *reloadCommitSprite", game.Game.sprs["reloadCommitSprite"])
+	}
+	if got := prototype.physics().collisionInfo.Type; got != physicsColliderAuto {
+		t.Fatalf("reload prototype collision type = %d, want physicsColliderAuto (%d)", got, physicsColliderAuto)
+	}
+}
+
+func TestReloadCommitAllowsEmptyStageSpriteGroupWithoutPrototypeConfig(t *testing.T) {
+	game := setupReloadCommitGame(t, reloadConfigFS{})
+
+	err := XGot_Game_Reload(game, strings.NewReader(`{
+		"zorder":[{"type":"sprites","target":"Empty","items":[]}]
+	}`))
+	if err != nil {
+		t.Fatalf("XGot_Game_Reload error = %v", err)
+	}
+	if len(game.Empty) != 0 {
+		t.Fatalf("empty stage sprite group length = %d, want 0", len(game.Empty))
+	}
+	if _, ok := game.Game.sprs["reloadCommitSprite"]; ok {
+		t.Fatal("empty stage sprite group created an unused prototype")
 	}
 }
 

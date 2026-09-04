@@ -25,17 +25,11 @@ import (
 	coreproject "github.com/goplus/spx/v3/internal/core/project"
 )
 
-type reloadSpritePrototype struct {
-	name string
-	typ  reflect.Type
-}
-
 type reloadPlan struct {
 	project         coreproject.ProjectConfig
 	spriteConfigs   map[string]coreproject.LoadedSpriteConfig
 	configNames     []string
 	directSprites   map[string]reflect.Type
-	prototypes      []reloadSpritePrototype
 	prototypeByName map[string]reflect.Type
 }
 
@@ -187,6 +181,12 @@ func (p *reloadPlan) validateStageSprites(shape coreproject.StageShape, shadow r
 	if itemType.Kind() != reflect.Struct {
 		return fmt.Errorf("stage sprites target %q has invalid item type %s", target, sliceType.Elem())
 	}
+	if !reflect.PointerTo(itemType).Implements(tySprite) {
+		return fmt.Errorf("stage sprites target %q has invalid item type %s", target, sliceType.Elem())
+	}
+	if len(items) == 0 {
+		return nil
+	}
 	if err := p.addPrototype(itemType.Name(), itemType, shadow, layer); err != nil {
 		return err
 	}
@@ -229,7 +229,6 @@ func (p *reloadPlan) addPrototype(name string, typ reflect.Type, shadow reflect.
 	}
 
 	p.prototypeByName[name] = spriteType
-	p.prototypes = append(p.prototypes, reloadSpritePrototype{name: name, typ: typ})
 	p.requireSpriteConfig(name)
 	return nil
 }
@@ -456,6 +455,7 @@ func validateReloadShapeField(shape coreproject.StageShape, key string, required
 }
 
 func (p *reloadPlan) loadSprites(g *Game, gamer reflect.Value) error {
+	loadSprite := p.spriteLoader(g)
 	err := coreproject.WalkFields(gamer, func(fieldIndex int) (string, any) {
 		return getFieldPtrOrAlloc(g, gamer, fieldIndex)
 	}, func(name string, val any) error {
@@ -463,28 +463,17 @@ func (p *reloadPlan) loadSprites(g *Game, gamer reflect.Value) error {
 		if !ok {
 			return nil
 		}
-		return p.loadSprite(g, sprite, name, gamer)
+		return loadSprite(sprite, name, gamer)
 	})
-	if err != nil {
-		return err
-	}
-
-	for _, prototype := range p.prototypes {
-		if _, ok := g.sprs[prototype.name]; ok {
-			continue
-		}
-		sprite := reflect.New(prototype.typ).Interface().(Sprite)
-		if err := p.loadSprite(g, sprite, prototype.name, gamer); err != nil {
-			return err
-		}
-	}
-	return nil
+	return err
 }
 
-func (p *reloadPlan) loadSprite(g *Game, sprite Sprite, name string, gamer reflect.Value) error {
-	loaded, ok := p.spriteConfigs[name]
-	if !ok {
-		return fmt.Errorf("reload plan has no sprite config for %q", name)
+func (p *reloadPlan) spriteLoader(g *Game) spriteLoader {
+	return func(sprite Sprite, name string, gamer reflect.Value) error {
+		loaded, ok := p.spriteConfigs[name]
+		if !ok {
+			return fmt.Errorf("reload plan has no sprite config for %q", name)
+		}
+		return g.loadSpriteConfig(sprite, name, gamer, &loaded.Config)
 	}
-	return g.loadSpriteConfig(sprite, name, gamer, &loaded.Config)
 }
