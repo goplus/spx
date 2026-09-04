@@ -22,6 +22,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/goplus/spx/v3/internal/cmd/codegen/gdextensionparser/clang"
 	"github.com/goplus/spx/v3/internal/cmd/codegen/generate/common"
 	"github.com/stretchr/testify/require"
 )
@@ -74,6 +75,27 @@ func TestGodotJsTemplateUsesModuleRelativeIncludes(t *testing.T) {
 	require.Contains(t, gdJsSpxCpp, `#include "../gdextension_spx_ext.h"`)
 	require.Contains(t, gdJsSpxCpp, `#include "../spx_engine.h"`)
 	require.NotContains(t, gdJsSpxCpp, `#include "modules/spx/`)
+}
+
+func TestGodotJsTemplateKeepsResStringOwned(t *testing.T) {
+	projectPath := t.TempDir()
+	ast := clang.CHeaderFileAST{Expr: []clang.Expr{{Function: &clang.TypedefFunction{
+		ReturnType: clang.PrimativeType{Name: "void"},
+		Name:       "GDExtensionSpxResFreeStr",
+		Arguments: []clang.Argument{{
+			Type: clang.Type{Primative: &clang.PrimativeType{Name: "GdString"}},
+			Name: "str",
+		}},
+	}}}}
+
+	require.NoError(t, os.MkdirAll(filepath.Join(projectPath, common.NativeRelDir), 0o755))
+	require.NoError(t, generateGdCppFile(projectPath, gdJsSpxCpp, ast, "godot_js_spx.cpp"))
+	generated, err := os.ReadFile(filepath.Join(projectPath, common.NativeRelDir, "godot_js_spx.cpp"))
+	require.NoError(t, err)
+	body := string(generated)
+	require.Contains(t, body, "void gdspx_res_free_str(GdString *str)")
+	require.Contains(t, body, "(void)str;")
+	require.NotContains(t, body, "resMgr->free_str(*str)")
 }
 
 func TestGenerateManagerHeaderRegistersDirectNativeArrayBridge(t *testing.T) {

@@ -573,7 +573,7 @@ void gdspx_res_reload_texture(GdString *path) {
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_res_free_str(GdString *str) {
-	 resMgr->free_str(*str);
+	(void)str;
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_res_apply_project_fonts(GdString *default_font_path, GdArray *font_paths, GdArray *font_families, GdArray *preferences, GdString *ret_val) {

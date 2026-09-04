@@ -77,6 +77,9 @@ void gd{{ loadProcAddressName $f.Name }}(
 	{{- if ne 0 (len $f.Arguments) -}}, {{ end -}}{{$f.ReturnType.CStyleString }} *ret_val
 	{{- end -}}
 ) {
+	{{- if isWebOwnedStringFree $f }}
+	(void)str;
+	{{- else }}
 	{{ if ne "void" $f.ReturnType.CStyleString -}} *ret_val = {{- end }} {{ getManagerName $f.Name}}Mgr->
 	{{- trimPrefix (trimPrefix (trimPrefix (loadProcAddressName $f.Name) "spx_") (getManagerName $f.Name)) "_" }}(
 	{{- range $j, $arg := $f.Arguments }}
@@ -84,6 +87,7 @@ void gd{{ loadProcAddressName $f.Name }}(
 			{{- $arg.ResolvedPtrName $j }}
 		{{- end -}}
 	);
+	{{- end }}
 }
 {{- end }}
 {{- end -}}

@@ -121,6 +121,7 @@ func generateGdCppFile(projectPath string, templateStr string, ast clang.CHeader
 		"loadProcAddressName":         LoadProcAddressName,
 		"isManagerMethod":             IsManagerMethod,
 		"getManagerName":              GetManagerName,
+		"isWebOwnedStringFree":        isWebOwnedStringFree,
 		"hasArrayTransformBridgeSpec": HasArrayTransformBridgeSpec,
 		"hasNativeArrayBridgeSpec":    HasNativeArrayBridgeSpec,
 		"getArrayTransformBridgeSpec": func(function *clang.TypedefFunction) ArrayTransformBridgeSpec {
@@ -187,4 +188,9 @@ func generateGdCppFile(projectPath string, templateStr string, ast clang.CHeader
 		return fmt.Errorf("write %s: %w", outputFileName, err)
 	}
 	return nil
+}
+
+// Web owns the value returned by this legacy method.
+func isWebOwnedStringFree(function *clang.TypedefFunction) bool {
+	return function != nil && function.Name == "GDExtensionSpxResFreeStr"
 }
