@@ -99,7 +99,21 @@ func LoadJSON(ret any, fs spxfs.Dir, file string) error {
 		return err
 	}
 	defer f.Close()
-	return json.NewDecoder(f).Decode(ret)
+	return decodeJSON(f, ret)
+}
+
+func decodeJSON(r io.Reader, ret any) error {
+	dec := json.NewDecoder(r)
+	if err := dec.Decode(ret); err != nil {
+		return err
+	}
+	if err := dec.Decode(new(any)); err != io.EOF {
+		if err == nil {
+			return fmt.Errorf("unexpected content after JSON value")
+		}
+		return err
+	}
+	return nil
 }
 
 func gdAssetDir(fs spxfs.Dir) (string, bool) {
@@ -119,7 +133,7 @@ func shouldReadConfigFromEngine(assetDir string) bool {
 func LoadConfig(ret any, fs spxfs.Dir, index any) error {
 	switch v := index.(type) {
 	case io.Reader:
-		return json.NewDecoder(v).Decode(ret)
+		return decodeJSON(v, ret)
 	case string:
 		return LoadJSON(ret, fs, v)
 	case nil:

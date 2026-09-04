@@ -82,6 +82,15 @@ func (d localDir) ReadDir(name string) ([]spxfs.DirEntry, error) {
 	return result, nil
 }
 
+func TestLoadConfigRejectsTrailingContent(t *testing.T) {
+	for _, input := range []string{`{} {}`, `{} trailing`} {
+		var config ProjectConfig
+		if err := LoadConfig(&config, nil, strings.NewReader(input)); err == nil {
+			t.Fatalf("LoadConfig(%q) error = nil", input)
+		}
+	}
+}
+
 func TestLoadProjectFontsFromSourceDirectory(t *testing.T) {
 	dir := t.TempDir()
 	writeProjectFile(t, dir, "index.json", `{"fontPreferences":["basic chinese", "Scratch", "default"]}`)

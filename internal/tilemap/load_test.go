@@ -79,6 +79,7 @@ func TestLoadNewFormatRequiresValidTilemapJSON(t *testing.T) {
 	}{
 		{name: "missing", files: map[string]string{}},
 		{name: "malformed", files: map[string]string{"tilemaps/map1/tilemap.json": `{`}},
+		{name: "trailing content", files: map[string]string{"tilemaps/map1/tilemap.json": `{} trailing`}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

@@ -27,12 +27,20 @@ import (
 )
 
 type reloadPlan struct {
-	project         coreproject.ProjectConfig
-	spriteConfigs   map[string]coreproject.LoadedSpriteConfig
-	configNames     []string
-	directSprites   map[string]reflect.Type
-	prototypeByName map[string]reflect.Type
-	tilemap         tm.LoadResult
+	project          coreproject.ProjectConfig
+	spriteConfigs    map[string]coreproject.LoadedSpriteConfig
+	costumeCounts    map[string]int
+	configNames      []string
+	directSprites    map[string]reflect.Type
+	prototypeByName  map[string]reflect.Type
+	costumeOverrides []reloadCostumeOverride
+	tilemap          tm.LoadResult
+}
+
+type reloadCostumeOverride struct {
+	sprite   string
+	location string
+	index    int
 }
 
 func prepareReload(g *Game, gamer reflect.Value, index any) (*reloadPlan, error) {
@@ -42,6 +50,7 @@ func prepareReload(g *Game, gamer reflect.Value, index any) (*reloadPlan, error)
 
 	plan := &reloadPlan{
 		spriteConfigs:   make(map[string]coreproject.LoadedSpriteConfig),
+		costumeCounts:   make(map[string]int),
 		directSprites:   make(map[string]reflect.Type),
 		prototypeByName: make(map[string]reflect.Type),
 	}
@@ -85,10 +94,15 @@ func prepareReload(g *Game, gamer reflect.Value, index any) (*reloadPlan, error)
 		if err != nil {
 			return nil, fmt.Errorf("reload preflight: load sprite config %q: %w", name, err)
 		}
-		if err := validateReloadSpriteConfig(&loaded.Config); err != nil {
+		costumeCount, err := validateReloadSpriteConfig(&loaded.Config)
+		if err != nil {
 			return nil, fmt.Errorf("reload preflight: sprite config %q: %w", name, err)
 		}
 		plan.spriteConfigs[name] = loaded
+		plan.costumeCounts[name] = costumeCount
+	}
+	if err := plan.validateCostumeOverrides(); err != nil {
+		return nil, fmt.Errorf("reload preflight: %w", err)
 	}
 	return plan, nil
 }
@@ -159,7 +173,11 @@ func (p *reloadPlan) validateStageSprite(shape coreproject.StageShape, shadow re
 	if _, ok := p.directSprites[target]; !ok {
 		return fmt.Errorf("stage sprite target %q is not reloadable", target)
 	}
-	return validateReloadSpriteProperties(shape)
+	if err := validateReloadSpriteProperties(shape); err != nil {
+		return err
+	}
+	p.recordCostumeOverride(target, fmt.Sprintf("stage sprite target %q", target), shape)
+	return nil
 }
 
 func (p *reloadPlan) validateStageSprites(shape coreproject.StageShape, shadow reflect.Value, layer int) error {
@@ -196,6 +214,7 @@ func (p *reloadPlan) validateStageSprites(shape coreproject.StageShape, shadow r
 	if err := p.addPrototype(itemType.Name(), itemType, shadow, layer); err != nil {
 		return err
 	}
+	prototype := itemType.Name()
 	for i, item := range items {
 		itemShape, ok := item.(coreproject.StageShape)
 		if !ok {
@@ -203,6 +222,28 @@ func (p *reloadPlan) validateStageSprites(shape coreproject.StageShape, shadow r
 		}
 		if err := validateReloadSpriteProperties(itemShape); err != nil {
 			return fmt.Errorf("stage sprites target %q item[%d]: %w", target, i, err)
+		}
+		p.recordCostumeOverride(prototype, fmt.Sprintf("stage sprites target %q item[%d]", target, i), itemShape)
+	}
+	return nil
+}
+
+func (p *reloadPlan) recordCostumeOverride(sprite, location string, shape coreproject.StageShape) {
+	if value, ok := shape["costumeIndex"]; ok {
+		p.costumeOverrides = append(p.costumeOverrides, reloadCostumeOverride{
+			sprite: sprite, location: location, index: int(value.(float64)),
+		})
+	}
+}
+
+func (p *reloadPlan) validateCostumeOverrides() error {
+	for _, override := range p.costumeOverrides {
+		count, ok := p.costumeCounts[override.sprite]
+		if !ok {
+			return fmt.Errorf("%s has no sprite configuration", override.location)
+		}
+		if override.index < 0 || override.index >= count {
+			return fmt.Errorf("%s costumeIndex %d is outside %d costumes", override.location, override.index, count)
 		}
 	}
 	return nil
@@ -252,16 +293,19 @@ func validateReloadSprite(sprite Sprite, gamer reflect.Value) error {
 }
 
 // validateReloadSpriteConfig rejects values that would panic during init.
-func validateReloadSpriteConfig(cfg *coreproject.SpriteConfig) error {
+func validateReloadSpriteConfig(cfg *coreproject.SpriteConfig) (int, error) {
 	if cfg == nil {
-		return fmt.Errorf("configuration is nil")
+		return 0, fmt.Errorf("configuration is nil")
 	}
 
 	costumeCount, costumeNames, err := reloadCostumeLayout(cfg)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	return validateReloadAnimationMap("fAnimations", cfg.FAnimations, costumeCount, costumeNames)
+	if err := validateReloadAnimationMap("fAnimations", cfg.FAnimations, costumeCount, costumeNames); err != nil {
+		return 0, err
+	}
+	return costumeCount, nil
 }
 
 func reloadCostumeLayout(cfg *coreproject.SpriteConfig) (int, map[string]int, error) {

@@ -47,7 +47,8 @@ func (reloadConfigFS) Close() error { return nil }
 
 type reloadPreflightGame struct {
 	Game
-	Sprite *reloadPreflightSprite
+	Sprite  *reloadPreflightSprite
+	Sprites []*reloadPreflightSprite
 }
 
 type reloadPreflightSprite struct {
@@ -385,6 +386,12 @@ func TestReloadPreflightFailurePreservesLiveGame(t *testing.T) {
 			wantError: "load project config",
 		},
 		{
+			name:      "trailing project JSON content",
+			project:   `{"zorder":[]} trailing`,
+			files:     reloadConfigFS{},
+			wantError: "load project config",
+		},
+		{
 			name:      "malformed sprite JSON",
 			project:   `{"zorder":["Sprite"]}`,
 			files:     reloadConfigFS{"sprites/Sprite/index.json": `{`},
@@ -407,6 +414,30 @@ func TestReloadPreflightFailurePreservesLiveGame(t *testing.T) {
 			project:   `{"zorder":[{"type":"measure","size":"large","x":0,"y":0}]}`,
 			files:     reloadConfigFS{},
 			wantError: `stage shape field "size" has type string`,
+		},
+		{
+			name:      "direct sprite costume index out of range",
+			project:   `{"zorder":[{"type":"sprite","target":"Sprite","costumeIndex":1}]}`,
+			files:     reloadConfigFS{"sprites/Sprite/index.json": validSprite},
+			wantError: `stage sprite target "Sprite" costumeIndex 1 is outside 1 costumes`,
+		},
+		{
+			name:    "sprite group costume index out of range",
+			project: `{"zorder":[{"type":"sprites","target":"Sprites","items":[{"costumeIndex":-1}]}]}`,
+			files: reloadConfigFS{
+				"sprites/Sprite/index.json":                validSprite,
+				"sprites/reloadPreflightSprite/index.json": validSprite,
+			},
+			wantError: `stage sprites target "Sprites" item[0] costumeIndex -1 is outside 1 costumes`,
+		},
+		{
+			name:    "sprite group costume index above range",
+			project: `{"zorder":[{"type":"sprites","target":"Sprites","items":[{"costumeIndex":1}]}]}`,
+			files: reloadConfigFS{
+				"sprites/Sprite/index.json":                validSprite,
+				"sprites/reloadPreflightSprite/index.json": validSprite,
+			},
+			wantError: `stage sprites target "Sprites" item[0] costumeIndex 1 is outside 1 costumes`,
 		},
 		{
 			name:      "invalid project system settings",
@@ -436,6 +467,12 @@ func TestReloadPreflightFailurePreservesLiveGame(t *testing.T) {
 			name:      "malformed new tilemap JSON",
 			project:   `{"tilemapPath":"tilemaps/bad","zorder":[]}`,
 			files:     reloadConfigFS{"tilemaps/bad/tilemap.json": `{`},
+			wantError: `load tilemap "tilemaps/bad"`,
+		},
+		{
+			name:      "trailing new tilemap JSON content",
+			project:   `{"tilemapPath":"tilemaps/bad","zorder":[]}`,
+			files:     reloadConfigFS{"tilemaps/bad/tilemap.json": `{} trailing`},
 			wantError: `load tilemap "tilemaps/bad"`,
 		},
 		{
@@ -671,7 +708,7 @@ func TestValidateReloadSpriteConfigLayout(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			err := validateReloadSpriteConfig(&test.config)
+			_, err := validateReloadSpriteConfig(&test.config)
 			if err == nil || !strings.Contains(err.Error(), test.wantError) {
 				t.Fatalf("validateReloadSpriteConfig error = %v, want substring %q", err, test.wantError)
 			}
@@ -693,7 +730,7 @@ func TestValidateReloadSpriteConfigAcceptsSupportedLayouts(t *testing.T) {
 	}
 
 	for i := range tests {
-		if err := validateReloadSpriteConfig(&tests[i]); err != nil {
+		if _, err := validateReloadSpriteConfig(&tests[i]); err != nil {
 			t.Errorf("validateReloadSpriteConfig(config %d) error = %v", i, err)
 		}
 	}
