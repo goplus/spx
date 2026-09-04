@@ -32,7 +32,7 @@ func TestFetchReleaseURLClassifiesUnavailableRelease(t *testing.T) {
 		response.WriteHeader(http.StatusNotFound)
 	}))
 	defer server.Close()
-	if err := fetchRuntimeURL(context.Background(), server.URL, io.Discard); !errors.Is(err, errReleaseUnavailable) {
+	if err := fetchReleaseURL(context.Background(), server.URL, io.Discard); !errors.Is(err, errReleaseUnavailable) {
 		t.Fatalf("fetch error = %v, want release unavailable", err)
 	}
 }
@@ -40,7 +40,7 @@ func TestFetchReleaseURLClassifiesUnavailableRelease(t *testing.T) {
 func TestFetchReleaseURLPreservesCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	err := fetchRuntimeURL(ctx, "https://example.invalid/runtime", io.Discard)
+	err := fetchReleaseURL(ctx, "https://example.invalid/runtime", io.Discard)
 	if !errors.Is(err, context.Canceled) || errors.Is(err, errReleaseUnavailable) {
 		t.Fatalf("canceled fetch error = %v", err)
 	}
@@ -52,7 +52,7 @@ func TestFetchReleaseURLPreservesDestinationFailure(t *testing.T) {
 	}))
 	defer server.Close()
 	want := errors.New("destination rejected payload")
-	err := fetchRuntimeURL(context.Background(), server.URL, errorWriter{err: want})
+	err := fetchReleaseURL(context.Background(), server.URL, errorWriter{err: want})
 	if !errors.Is(err, want) || errors.Is(err, errReleaseUnavailable) {
 		t.Fatalf("destination failure = %v", err)
 	}

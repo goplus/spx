@@ -48,6 +48,9 @@ func TestLocalRuntimeManifestWriteAndVerify(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if got := filepath.Base(manifestPath); got != "engine-source-manifest.json" {
+		t.Fatalf("local runtime manifest name = %q, want engine-source-manifest.json", got)
+	}
 	if err := PublishLocalRuntimeManifest(manifestPath, manifest, enginePath, packPath); err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +102,7 @@ func TestLocalRuntimeManifestWriteAndVerify(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, entry := range entries {
-		if strings.HasPrefix(entry.Name(), ".engine-manifest-") {
+		if strings.HasPrefix(entry.Name(), ".engine-source-manifest-") {
 			t.Fatalf("temporary manifest file was left behind: %s", entry.Name())
 		}
 	}

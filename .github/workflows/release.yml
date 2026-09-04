@@ -194,6 +194,7 @@ jobs:
           RELEASE_TAG: ${{ steps.release.outputs.release_tag }}
           RUNTIME_TAG: ${{ steps.release.outputs.runtime_tag }}
           RUNTIME_MANIFEST: ${{ steps.release.outputs.runtime_manifest }}
+          RUNTIME_STATE: ${{ steps.runtime.outputs.runtime_state }}
           REPOSITORY: ${{ steps.release.outputs.release_repository }}
           OPERATION: ${{ inputs.operation }}
         run: |
@@ -205,17 +206,42 @@ jobs:
             local tag="$1"
             local marker="$2"
             local label="$3"
-            local allow_public_reuse="$4"
             local is_draft
+            local ref_json
             local release_json
-            local target_commit
+            local release_target
+            local tag_commit
+            local tag_ref
+            local tag_type
 
-            if release_json="$(gh release view "$tag" --repo "$REPOSITORY" --json isDraft,assets 2>/dev/null)"; then
+            if release_json="$(gh release view "$tag" --repo "$REPOSITORY" --json isDraft,targetCommitish,assets 2>/dev/null)"; then
               is_draft="$(jq -r .isDraft <<< "$release_json")"
-              if [ "$allow_public_reuse" != true ] || [ "$is_draft" = true ]; then
-                target_commit="$(gh api "repos/$REPOSITORY/commits/$tag" --jq .sha)"
-                if [ "$target_commit" != "$GITHUB_SHA" ]; then
-                  echo "[error] $label tag $tag points to $target_commit, not this commit $GITHUB_SHA" >&2
+              release_target="$(jq -r .targetCommitish <<< "$release_json")"
+              if [[ ! "$release_target" =~ ^[0-9a-f]{40}$ ]]; then
+                echo "[error] $label release $tag has a non-canonical target: $release_target" >&2
+                exit 1
+              fi
+              if [ "$is_draft" = true ]; then
+                if [ "$release_target" != "$GITHUB_SHA" ]; then
+                  echo "[error] $label draft $tag targets $release_target, not this commit $GITHUB_SHA" >&2
+                  exit 1
+                fi
+              else
+                ref_json="$(gh api "repos/$REPOSITORY/git/ref/tags/$tag")"
+                tag_ref="$(jq -r .ref <<< "$ref_json")"
+                tag_type="$(jq -r .object.type <<< "$ref_json")"
+                tag_commit="$(jq -r .object.sha <<< "$ref_json")"
+                if [ "$tag_ref" != "refs/tags/$tag" ] || [ "$tag_type" != commit ] || \
+                  [[ ! "$tag_commit" =~ ^[0-9a-f]{40}$ ]]; then
+                  echo "[error] $label release $tag has no exact lightweight tag ref" >&2
+                  exit 1
+                fi
+                if [ "$tag_commit" != "$release_target" ]; then
+                  echo "[error] $label tag $tag and release target disagree" >&2
+                  exit 1
+                fi
+                if [ "$tag_commit" != "$GITHUB_SHA" ]; then
+                  echo "[error] $label tag $tag points to $tag_commit, not this commit $GITHUB_SHA" >&2
                   exit 1
                 fi
               fi
@@ -233,9 +259,11 @@ jobs:
             fi
           }
 
-          validate_target "$RUNTIME_TAG" "$RUNTIME_MANIFEST" Runtime true
+          if [ "$RUNTIME_STATE" != ready ]; then
+            validate_target "$RUNTIME_TAG" "$RUNTIME_MANIFEST" Runtime
+          fi
           if [ "$OPERATION" = publish-release ]; then
-            validate_target "$RELEASE_TAG" SHA256SUMS SPX false
+            validate_target "$RELEASE_TAG" SHA256SUMS SPX
           fi
 
       - name: Resolve SPX package targets
@@ -381,6 +409,14 @@ jobs:
     with:
       engine_artifacts: ${{ needs.setup.outputs.runtime_state == 'missing' }}
 
+  driver-assets:
+    name: Build project driver assets
+    needs: [setup, publish-runtime]
+    if: ${{ !cancelled() && inputs.operation == 'publish-release' && needs.publish-runtime.result == 'success' }}
+    uses: ./.github/workflows/release_driver.yml
+    with:
+      spx_version: ${{ needs.setup.outputs.release_tag }}
+
   assemble:
     name: Assemble and verify releases
     needs:
@@ -413,7 +449,14 @@ jobs:
           setup-mode: none
 
       - name: Download all build artifacts
-        if: needs.setup.outputs.runtime_state == 'missing' || inputs.operation != 'publish-runtime'
+        if: >-
+          ${{
+            needs.setup.outputs.runtime_state == 'missing' ||
+            needs.setup.outputs.run_web == 'true' ||
+            needs.setup.outputs.run_macos == 'true' ||
+            needs.setup.outputs.run_windows == 'true' ||
+            needs.setup.outputs.run_linux == 'true'
+          }}
         uses: actions/download-artifact@v8
         with:
           path: artifacts
@@ -541,8 +584,8 @@ jobs:
 
   publish-spx:
     name: Prepare SPX release draft
-    needs: [setup, assemble, publish-runtime]
-    if: ${{ !cancelled() && inputs.operation == 'publish-release' && needs.publish-runtime.result == 'success' }}
+    needs: [setup, assemble, publish-runtime, driver-assets]
+    if: ${{ !cancelled() && inputs.operation == 'publish-release' && needs.publish-runtime.result == 'success' && needs.driver-assets.result == 'success' }}
     runs-on: ubuntu-22.04
     permissions:
       contents: write
@@ -551,7 +594,56 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: spx-product-release-${{ needs.setup.outputs.version }}
-          path: dist
+          path: dist/product
+
+      - name: Download project driver assets
+        uses: actions/download-artifact@v8
+        with:
+          name: spx-driver-assets-${{ needs.setup.outputs.release_tag }}
+          path: dist/driver
+
+      - name: Assemble unified SPX release
+        shell: bash
+        run: |
+          set -euo pipefail
+          declare -A assets=()
+          for source in dist/product dist/driver; do
+            if [ ! -d "$source" ]; then
+              echo "[error] Missing release artifact directory: $source" >&2
+              exit 1
+            fi
+            nested_dir="$(find "$source" -mindepth 1 -type d -print -quit)"
+            if [ -n "$nested_dir" ]; then
+              echo "[error] Nested release artifact directory under $source" >&2
+              exit 1
+            fi
+            while IFS= read -r -d '' path; do
+              name="$(basename "$path")"
+              [ "$name" = SHA256SUMS ] && continue
+              if [ ! -f "$path" ]; then
+                echo "[error] Release asset is not a regular file: $path" >&2
+                exit 1
+              fi
+              if [ -n "${assets[$name]:-}" ]; then
+                echo "[error] Duplicate release asset $name: ${assets[$name]} and $path" >&2
+                exit 1
+              fi
+              assets[$name]="$path"
+              cp "$path" "dist/$name"
+            done < <(find "$source" -mindepth 1 -maxdepth 1 -type f -print0 | sort -z)
+          done
+          if [ "${#assets[@]}" -eq 0 ]; then
+            echo "[error] No SPX release assets were downloaded" >&2
+            exit 1
+          fi
+          rm -rf dist/product dist/driver
+          (
+            cd dist
+            find . -maxdepth 1 -type f ! -name SHA256SUMS -print0 |
+              sort -z |
+              xargs -0 sha256sum |
+              sed 's#  \./#  #' > SHA256SUMS
+          )
 
       - name: Prepare SPX release draft
         shell: bash
@@ -562,9 +654,44 @@ jobs:
         run: |
           set -euo pipefail
 
-          if gh release view "$RELEASE_TAG" --repo "$REPOSITORY" >/dev/null 2>&1; then
-            is_draft="$(gh release view "$RELEASE_TAG" --repo "$REPOSITORY" --json isDraft --jq .isDraft)"
+          public_release_target() {
+            local ref_json
+            local release_json
+            local tag_commit
+            local tag_ref
+            local tag_type
+            local target_commit
+
+            release_json="$(gh release view "$RELEASE_TAG" --repo "$REPOSITORY" --json isDraft,targetCommitish)"
+            if [ "$(jq -r .isDraft <<< "$release_json")" != false ]; then
+              echo "[error] SPX release is not public: $RELEASE_TAG" >&2
+              return 1
+            fi
+            target_commit="$(jq -r .targetCommitish <<< "$release_json")"
+            if [[ ! "$target_commit" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "[error] SPX release has a non-canonical target: $target_commit" >&2
+              return 1
+            fi
+            ref_json="$(gh api "repos/$REPOSITORY/git/ref/tags/$RELEASE_TAG")"
+            tag_ref="$(jq -r .ref <<< "$ref_json")"
+            tag_type="$(jq -r .object.type <<< "$ref_json")"
+            tag_commit="$(jq -r .object.sha <<< "$ref_json")"
+            if [ "$tag_ref" != "refs/tags/$RELEASE_TAG" ] || [ "$tag_type" != commit ] || \
+              [ "$tag_commit" != "$target_commit" ]; then
+              echo "[error] SPX release tag and target disagree: $RELEASE_TAG" >&2
+              return 1
+            fi
+            printf '%s\n' "$target_commit"
+          }
+
+          if release_json="$(gh release view "$RELEASE_TAG" --repo "$REPOSITORY" --json isDraft,targetCommitish 2>/dev/null)"; then
+            is_draft="$(jq -r .isDraft <<< "$release_json")"
             if [ "$is_draft" != true ]; then
+              published_target="$(public_release_target)"
+              if [ "$published_target" != "$GITHUB_SHA" ]; then
+                echo "[error] SPX release targets $published_target, not $GITHUB_SHA" >&2
+                exit 1
+              fi
               mkdir -p published
               gh release download "$RELEASE_TAG" --repo "$REPOSITORY" --dir published
               (cd published && sha256sum -c SHA256SUMS)
@@ -572,10 +699,20 @@ jobs:
               gh release view "$RELEASE_TAG" --repo "$REPOSITORY" --json assets --jq '.assets[].name' | sort > published/remote-assets.txt
               if cmp -s dist/SHA256SUMS published/SHA256SUMS && \
                 cmp -s published/local-assets.txt published/remote-assets.txt; then
+                rechecked_target="$(public_release_target)"
+                if [ "$rechecked_target" != "$published_target" ]; then
+                  echo "[error] SPX release target changed during verification: $RELEASE_TAG" >&2
+                  exit 1
+                fi
                 echo "[info] Identical SPX release already exists: $RELEASE_TAG"
                 exit 0
               fi
               echo "[error] SPX tag $RELEASE_TAG already exists with different assets" >&2
+              exit 1
+            fi
+            target_commit="$(jq -r .targetCommitish <<< "$release_json")"
+            if [[ ! "$target_commit" =~ ^[0-9a-f]{40}$ ]] || [ "$target_commit" != "$GITHUB_SHA" ]; then
+              echo "[error] SPX draft $RELEASE_TAG targets $target_commit, not $GITHUB_SHA" >&2
               exit 1
             fi
             while IFS= read -r name; do
@@ -591,6 +728,12 @@ jobs:
           fi
 
           gh release upload "$RELEASE_TAG" dist/* --repo "$REPOSITORY"
+          release_json="$(gh release view "$RELEASE_TAG" --repo "$REPOSITORY" --json isDraft,targetCommitish)"
+          if [ "$(jq -r .isDraft <<< "$release_json")" != true ] || \
+            [ "$(jq -r .targetCommitish <<< "$release_json")" != "$GITHUB_SHA" ]; then
+            echo "[error] SPX draft changed after upload: $RELEASE_TAG" >&2
+            exit 1
+          fi
 
   publish-web-package:
     name: Publish npm package
@@ -663,7 +806,52 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ needs.setup.outputs.release_tag }}
           REPOSITORY: ${{ needs.setup.outputs.release_repository }}
-        run: gh release edit "$RELEASE_TAG" --repo "$REPOSITORY" --draft=false
+        run: |
+          set -euo pipefail
+
+          public_release_target() {
+            local ref_json
+            local release_json
+            local tag_commit
+            local tag_ref
+            local tag_type
+            local target_commit
+
+            release_json="$(gh release view "$RELEASE_TAG" --repo "$REPOSITORY" --json isDraft,targetCommitish)"
+            if [ "$(jq -r .isDraft <<< "$release_json")" != false ]; then
+              echo "[error] SPX release is not public: $RELEASE_TAG" >&2
+              return 1
+            fi
+            target_commit="$(jq -r .targetCommitish <<< "$release_json")"
+            if [[ ! "$target_commit" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "[error] SPX release has a non-canonical target: $target_commit" >&2
+              return 1
+            fi
+            ref_json="$(gh api "repos/$REPOSITORY/git/ref/tags/$RELEASE_TAG")"
+            tag_ref="$(jq -r .ref <<< "$ref_json")"
+            tag_type="$(jq -r .object.type <<< "$ref_json")"
+            tag_commit="$(jq -r .object.sha <<< "$ref_json")"
+            if [ "$tag_ref" != "refs/tags/$RELEASE_TAG" ] || [ "$tag_type" != commit ] || \
+              [ "$tag_commit" != "$target_commit" ]; then
+              echo "[error] SPX release tag and target disagree: $RELEASE_TAG" >&2
+              return 1
+            fi
+            printf '%s\n' "$target_commit"
+          }
+
+          release_json="$(gh release view "$RELEASE_TAG" --repo "$REPOSITORY" --json isDraft,targetCommitish)"
+          target_commit="$(jq -r .targetCommitish <<< "$release_json")"
+          if [[ ! "$target_commit" =~ ^[0-9a-f]{40}$ ]] || [ "$target_commit" != "$GITHUB_SHA" ]; then
+            echo "[error] SPX release $RELEASE_TAG targets $target_commit, not $GITHUB_SHA" >&2
+            exit 1
+          fi
+          if [ "$(jq -r .isDraft <<< "$release_json")" = true ]; then
+            gh release edit "$RELEASE_TAG" --repo "$REPOSITORY" --draft=false
+          fi
+          if [ "$(public_release_target)" != "$GITHUB_SHA" ]; then
+            echo "[error] Published SPX identity changed: $RELEASE_TAG" >&2
+            exit 1
+          fi
 
   release-gate:
     name: Verify release operation completed
@@ -671,6 +859,7 @@ jobs:
       - setup
       - assemble
       - publish-runtime
+      - driver-assets
       - publish-spx
       - publish-web-package
       - finalize-spx
@@ -696,7 +885,7 @@ jobs:
               required+=(setup assemble publish-runtime)
               ;;
             publish-release)
-              required+=(setup assemble publish-runtime publish-spx publish-web-package finalize-spx)
+              required+=(setup assemble publish-runtime driver-assets publish-spx publish-web-package finalize-spx)
               ;;
             publish-dev-npm)
               required+=(dev-npm-guard publish-dev-web-package)

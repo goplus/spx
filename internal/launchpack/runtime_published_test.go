@@ -188,6 +188,39 @@ func TestAcquireRuntimeAssetsFromPublishedRelease(t *testing.T) {
 	if got, err := os.ReadFile(assets.PackPath); err != nil || string(got) != "fixture-pack" {
 		t.Fatalf("materialized pack = %q, err=%v", got, err)
 	}
+	if engineAcquisitionManifestName != "engine-acquisition-manifest.json" {
+		t.Fatalf("Engine acquisition manifest name = %q", engineAcquisitionManifestName)
+	}
+	engineDir := filepath.Dir(assets.EnginePath)
+	if _, err := os.Stat(filepath.Join(engineDir, "engine-acquisition-manifest.json")); err != nil {
+		t.Fatalf("materialized Engine acquisition manifest: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(engineDir, "runtime-manifest.json")); !os.IsNotExist(err) {
+		t.Fatalf("legacy Runtime Release manifest leaked into Engine cache: %v", err)
+	}
+}
+
+func TestAcquireRuntimeAssetsDoesNotFetchOversizedArchive(t *testing.T) {
+	fixture := newPublishedRuntimeFixture(t)
+	for i := range fixture.manifest.Assets {
+		if fixture.manifest.Assets[i].Name == fixture.spec.ArchiveName {
+			fixture.manifest.Assets[i].Size = runtimebundle.MaxArchiveBytes + 1
+		}
+	}
+	var err error
+	fixture.manifestData, err = fixture.manifest.JSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	cacheRoot := t.TempDir()
+	dependencies := fixture.dependencies(cacheRoot, fixture.fetcher(nil, &calls))
+	if _, err := acquireRuntimeAssetsWith(context.Background(), publishedRuntimeConfig(cacheRoot), IO{}, fixture.lock, dependencies); err == nil || !strings.Contains(err.Error(), "archive limit") {
+		t.Fatalf("oversized archive error = %v", err)
+	}
+	if calls != 1 {
+		t.Fatalf("fetch count = %d, want manifest only", calls)
+	}
 }
 
 func TestAcquireRuntimeAssetsDerivesURLsFromSelectedRuntimeVersion(t *testing.T) {

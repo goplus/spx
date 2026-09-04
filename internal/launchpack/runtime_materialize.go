@@ -45,7 +45,7 @@ type runtimeMaterializationInput struct {
 	releaseManifest release.RuntimeManifest
 }
 
-type runtimeBundleOrigin struct {
+type engineAcquisitionManifest struct {
 	Schema              string `json:"schema"`
 	Mode                string `json:"mode"`
 	RuntimeVersion      string `json:"runtime_version"`
@@ -166,7 +166,7 @@ func materializeRuntimeBundle(ctx context.Context, cacheRoot string, lock releas
 	if err != nil {
 		return Assets{}, err
 	}
-	origin := runtimeBundleOrigin{
+	acquisition := engineAcquisitionManifest{
 		Schema: "spx-runtime-acquisition/v1", Mode: "published", RuntimeVersion: lock.RuntimeVersion,
 		RuntimeABI: lock.RuntimeABI, LockSHA256: lockSHA, ManifestSHA256: input.manifestSHA256,
 		GOOS: spec.GOOS, GOARCH: spec.GOARCH, EngineName: spec.RuntimeName,
@@ -174,22 +174,22 @@ func materializeRuntimeBundle(ctx context.Context, cacheRoot string, lock releas
 		PackSize: packSize, PackSHA256: packSHA,
 	}
 	if local {
-		origin.Mode = "local"
+		acquisition.Mode = "local"
 	} else {
-		origin.EngineArchive = spec.ArchiveName
+		acquisition.EngineArchive = spec.ArchiveName
 		if asset, ok := input.releaseManifest.Asset(spec.ArchiveName); ok {
-			origin.EngineArchiveSHA256 = asset.SHA256
+			acquisition.EngineArchiveSHA256 = asset.SHA256
 		}
-		origin.PackArchive = release.RuntimeAssetZipName
+		acquisition.PackArchive = release.RuntimeAssetZipName
 		if asset, ok := input.releaseManifest.Asset(release.RuntimeAssetZipName); ok {
-			origin.PackArchiveSHA256 = asset.SHA256
+			acquisition.PackArchiveSHA256 = asset.SHA256
 		}
 	}
-	originBytes, err := json.Marshal(origin)
+	acquisitionBytes, err := json.Marshal(acquisition)
 	if err != nil {
 		return Assets{}, err
 	}
-	bundle, err := expectedEngineBundle(originBytes, spec, engineSize, engineSHA, packSize, packSHA)
+	bundle, err := expectedEngineBundle(acquisitionBytes, spec, engineSize, engineSHA, packSize, packSHA)
 	if err != nil {
 		return Assets{}, err
 	}
@@ -199,7 +199,7 @@ func materializeRuntimeBundle(ctx context.Context, cacheRoot string, lock releas
 	}
 	defer os.RemoveAll(bundleWork)
 	bundleZip := filepath.Join(bundleWork, "engine.bundle.zip")
-	if err := writeEngineBundle(bundleZip, originBytes, spec.RuntimeName, spec.PackName, input.enginePath, input.packPath); err != nil {
+	if err := writeEngineBundle(bundleZip, acquisitionBytes, spec.RuntimeName, spec.PackName, input.enginePath, input.packPath); err != nil {
 		return Assets{}, err
 	}
 	materialized, err := runtimebundle.NewCache(cacheRoot).Materialize(ctx, runtimebundle.NamespaceEngine, bundleZip, &bundle)

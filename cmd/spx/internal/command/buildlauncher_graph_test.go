@@ -24,6 +24,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/goplus/spx/v3/internal/envutil"
 )
 
 func TestResolveSPXSourceModes(t *testing.T) {
@@ -59,10 +61,28 @@ func TestResolveSPXSourceModes(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if gotRoot != wantRoot || selected != "v3.1.0" || mode != test.mode {
+			expectedRoot := ""
+			if test.mode {
+				expectedRoot = wantRoot
+			}
+			if gotRoot != expectedRoot || selected != "v3.1.0" || mode != test.mode {
 				t.Fatalf("source = root %q, selected %q, mode %v", gotRoot, selected, mode)
 			}
 		})
+	}
+}
+
+func TestResolveSPXSourceRejectsUnsupportedPublishedIdentities(t *testing.T) {
+	for _, module := range []listedModule{
+		{Path: spxModulePath, Version: "v3.2.5-0.20260821120000-0123456789ab"},
+		{
+			Path: spxModulePath, Version: "v3.2.4",
+			Replace: &listedModule{Path: spxModulePath, Version: "v3.2.3"},
+		},
+	} {
+		if _, _, _, _, err := resolveSPXSource(module); err == nil {
+			t.Fatalf("resolveSPXSource accepted %#v", module)
+		}
 	}
 }
 
@@ -110,6 +130,91 @@ func TestGraphFlagsFromEnvRejectsUnterminatedQuote(t *testing.T) {
 	}
 }
 
+func TestEffectiveGraphFlagsReadsPersistedGOFLAGS(t *testing.T) {
+	root := t.TempDir()
+	writeLauncherTestFile(t, filepath.Join(root, "go.mod"), "module example.test/base\n\ngo 1.25.0\n")
+	alternate := filepath.Join(root, "alternate.mod")
+	writeLauncherTestFile(t, alternate, "module example.test/alternate\n\ngo 1.25.0\n")
+	canonicalAlternate, err := canonicalFile(alternate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	goEnv := filepath.Join(t.TempDir(), "go.env")
+	writeLauncherTestFile(t, goEnv, "GOFLAGS=-modfile=alternate.mod\n")
+	goCommand, err := resolveGoCommand()
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := envutil.SetMany(os.Environ(),
+		envutil.Assignment{Key: "GOENV", Value: goEnv},
+		envutil.Assignment{Key: "GOWORK", Value: "off"},
+	)
+	for _, state := range []string{"empty", "unset"} {
+		t.Run(state, func(t *testing.T) {
+			env := envutil.SetMany(base, envutil.Assignment{Key: "GOFLAGS"})
+			if state == "unset" {
+				env = envutil.Without(env, "GOFLAGS")
+			}
+			flags, err := effectiveGraphFlags(context.Background(), goCommand, root, env)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := []string{"-modfile=" + canonicalAlternate}
+			if !reflect.DeepEqual(flags, want) {
+				t.Fatalf("effective graph flags = %#v, want %#v", flags, want)
+			}
+			args := append([]string{"list", "-m", "-f={{.Path}}"}, flags...)
+			command := exec.Command(goCommand, args...)
+			command.Dir = root
+			command.Env = launcherGraphEnvironment(env, "off")
+			output, err := command.Output()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := strings.TrimSpace(string(output)); got != "example.test/alternate" {
+				t.Fatalf("selected module = %q, want example.test/alternate", got)
+			}
+		})
+	}
+}
+
+func TestEffectiveGraphFlagsPrefersExplicitGOFLAGS(t *testing.T) {
+	root := t.TempDir()
+	persisted := filepath.Join(root, "persisted.mod")
+	explicit := filepath.Join(root, "explicit.mod")
+	writeLauncherTestFile(t, persisted, "module example.test/persisted\n\ngo 1.25.0\n")
+	writeLauncherTestFile(t, explicit, "module example.test/explicit\n\ngo 1.25.0\n")
+	canonicalExplicit, err := canonicalFile(explicit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	goEnv := filepath.Join(t.TempDir(), "go.env")
+	writeLauncherTestFile(t, goEnv, "GOFLAGS=-modfile="+persisted+"\n")
+	goCommand, err := resolveGoCommand()
+	if err != nil {
+		t.Fatal(err)
+	}
+	env := envutil.SetMany(os.Environ(),
+		envutil.Assignment{Key: "GOENV", Value: goEnv},
+		envutil.Assignment{Key: "GOFLAGS", Value: "-modfile=" + explicit},
+	)
+	flags, err := effectiveGraphFlags(context.Background(), goCommand, root, env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"-modfile=" + canonicalExplicit}
+	if !reflect.DeepEqual(flags, want) {
+		t.Fatalf("effective graph flags = %#v, want %#v", flags, want)
+	}
+}
+
+func TestEffectiveGraphFlagsRejectsDuplicateGOFLAGS(t *testing.T) {
+	_, err := effectiveGraphFlags(context.Background(), "go", t.TempDir(), []string{"GOFLAGS=-mod=mod", "GOFLAGS=-mod=readonly"})
+	if err == nil || !strings.Contains(err.Error(), "GOFLAGS is repeated") {
+		t.Fatalf("effectiveGraphFlags error = %v, want duplicate error", err)
+	}
+}
+
 func TestLauncherGraphProtectedFilesIncludesSums(t *testing.T) {
 	root := t.TempDir()
 	goMod := filepath.Join(root, "go.mod")
@@ -148,6 +253,14 @@ func TestSplitGOFLAGSMatchesGoQuotedFields(t *testing.T) {
 	}
 	if _, err := splitGOFLAGS(`'-trimpath`); err == nil {
 		t.Fatal("splitGOFLAGS accepted an unterminated quote")
+	}
+}
+
+func TestLauncherGraphEnvironmentUsesNeutralGOFLAGS(t *testing.T) {
+	env := launcherGraphEnvironment([]string{"PATH=/bin", "GOFLAGS=-mod=vendor"}, "off")
+	value, found, duplicate := envutil.Lookup(env, "GOFLAGS")
+	if value != envutil.NeutralGOFLAGS || !found || duplicate {
+		t.Fatalf("launcher GOFLAGS = %q, %t, %t", value, found, duplicate)
 	}
 }
 

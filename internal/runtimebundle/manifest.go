@@ -101,13 +101,13 @@ type Namespace string
 const (
 	NamespaceEngine  Namespace = "engine"
 	NamespaceBridge  Namespace = "bridge"
-	NamespaceProject Namespace = "project"
 	NamespaceDriver  Namespace = "driver"
+	NamespaceProject Namespace = "project"
 )
 
 func (n Namespace) valid() bool {
 	switch n {
-	case NamespaceEngine, NamespaceBridge, NamespaceProject, NamespaceDriver:
+	case NamespaceEngine, NamespaceBridge, NamespaceDriver, NamespaceProject:
 		return true
 	default:
 		return false
@@ -127,13 +127,15 @@ type Entry struct {
 
 // Bundle is the self-describing manifest used by the runtime cache. Digest is
 // metadata and is intentionally excluded from the identity calculation, so a
-// manifest cannot hash itself. A missing Schema is accepted when reading a
-// v1 fixture and is normalized to SchemaV1.
+// manifest cannot hash itself. ArchiveSHA256 optionally binds a materialized
+// bundle to the exact source archive whose contents were verified. A missing
+// Schema is accepted when reading a v1 fixture and is normalized to SchemaV1.
 type Bundle struct {
-	Schema    string    `json:"schema,omitempty"`
-	Namespace Namespace `json:"namespace,omitempty"`
-	Entries   []Entry   `json:"entries"`
-	Digest    string    `json:"digest,omitempty"`
+	Schema        string    `json:"schema,omitempty"`
+	Namespace     Namespace `json:"namespace,omitempty"`
+	ArchiveSHA256 string    `json:"archive_sha256,omitempty"`
+	Entries       []Entry   `json:"entries"`
+	Digest        string    `json:"digest,omitempty"`
 }
 
 var (
@@ -208,6 +210,11 @@ func (b Bundle) ValidateWithLimits(limits Limits) error {
 	if b.Namespace != "" && !b.Namespace.valid() {
 		return fmt.Errorf("%w: unsupported namespace %q", ErrInvalidManifest, b.Namespace)
 	}
+	if b.ArchiveSHA256 != "" {
+		if err := validateSHA256(b.ArchiveSHA256); err != nil {
+			return fmt.Errorf("%w: archive SHA-256: %v", ErrInvalidManifest, err)
+		}
+	}
 	if len(b.Entries) > limits.MaxEntries {
 		return fmt.Errorf("%w: %d entries exceeds limit %d", ErrArchiveLimit, len(b.Entries), limits.MaxEntries)
 	}
@@ -264,9 +271,10 @@ func (b Bundle) ValidateWithLimits(limits Limits) error {
 }
 
 type canonicalBundle struct {
-	Schema    string    `json:"schema"`
-	Namespace Namespace `json:"namespace,omitempty"`
-	Entries   []Entry   `json:"entries"`
+	Schema        string    `json:"schema"`
+	Namespace     Namespace `json:"namespace,omitempty"`
+	ArchiveSHA256 string    `json:"archive_sha256,omitempty"`
+	Entries       []Entry   `json:"entries"`
 }
 
 func (b Bundle) canonical() (canonicalBundle, error) {
@@ -278,7 +286,12 @@ func (b Bundle) canonical() (canonicalBundle, error) {
 	if err := withoutDigest.ValidateWithLimits(Limits{}); err != nil {
 		return canonicalBundle{}, err
 	}
-	out := canonicalBundle{Schema: b.Schema, Namespace: b.Namespace, Entries: make([]Entry, 0, len(b.Entries))}
+	out := canonicalBundle{
+		Schema:        b.Schema,
+		Namespace:     b.Namespace,
+		ArchiveSHA256: b.ArchiveSHA256,
+		Entries:       make([]Entry, 0, len(b.Entries)),
+	}
 	if out.Schema == "" {
 		out.Schema = SchemaV1
 	}
@@ -472,7 +485,7 @@ func manifestEntriesEqual(a, b Bundle) error {
 	if err != nil {
 		return err
 	}
-	if left.Schema != right.Schema || left.Namespace != right.Namespace || len(left.Entries) != len(right.Entries) {
+	if left.Schema != right.Schema || left.Namespace != right.Namespace || left.ArchiveSHA256 != right.ArchiveSHA256 || len(left.Entries) != len(right.Entries) {
 		return fmt.Errorf("%w: manifest identity fields differ", ErrDigestMismatch)
 	}
 	for i := range left.Entries {

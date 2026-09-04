@@ -65,7 +65,7 @@ Also complete at least these checks:
 - Regress live/offline capture, audio, SVG/complex fonts, and perform Android/iOS device smoke tests.
 - If Windows releases require ANGLE, ensure an ANGLE download failure fails the build instead of silently downgrading it.
 
-## Runtime-aware CI and three-stage bootstrap
+## Runtime-aware CI and runtime-to-driver-to-SPX bootstrap
 
 Ordinary CI resolves the locked runtime release before starting a runtime consumer. The resolver reads release metadata and the manifest only; without downloading every runtime asset, it confirms the tag is `runtime-v<selected-version>`, checks that the manifest's `runtime_version` equals the version selected by the lock, and validates the required asset-name set.
 
@@ -83,19 +83,19 @@ Use a frozen release branch in `goplus/spx` for the bootstrap operations:
 | --- | --- | --- |
 | `dry-run` | Build and verify the exact locked candidate without publishing; report canonical-ref ancestry | Usually `all` |
 | `publish-runtime` | Publish only the immutable `runtime-v*` bundle | Ignored |
-| `publish-release` | Publish runtime, SPX products, and npm | Must be `all` |
+| `publish-release` | Publish or reuse runtime, build driver assets, then publish SPX/npm in one run | Must be `all` |
 
 `release_tag` must exactly equal the SPX tag declared by the selected commit. Product `platforms=all` means Web, macOS, Windows, and Linux packages; Android and iOS belong to the complete runtime asset matrix and device smoke tests, not the SPX product targets.
 
 1. Run `release_tag=<declared-SPX-tag>`, `platforms=all`, and `operation=dry-run` against the exact locked Godot candidate. Check the workflow summary: a pre-merge candidate is allowed here but is explicitly marked as not publication-ready. Download and inspect every runtime/product artifact, then complete install and demo smoke tests.
 2. Promote that exact Godot commit into the canonical `godot.ref` and run the strict ancestry verifier. Rerun the same SPX commit with `operation=publish-runtime`. If no reusable runtime exists, this mode builds, verifies, and publishes the complete runtime asset set while skipping SPX products, the SPX release, and npm.
-3. Let ordinary CI automatically switch to the public-runtime path and pass the Web normal product smoke. If the merge makes runtime content incompatible, bump `runtime_version`; otherwise run the final SPX commit with `platforms=all` and `operation=publish-release`. The workflow verifies and reuses that runtime before publishing SPX products and npm.
+3. Let ordinary CI automatically switch to the public-runtime path and pass the Web normal product smoke. If the merge makes runtime content incompatible, bump `runtime_version`; otherwise run the final SPX commit with `platforms=all` and `operation=publish-release`. The workflow verifies and reuses that runtime, invokes the reusable driver workflow to build and verify the driver manifest and four host ZIPs, combines those files with the product assets in the same `v<SPX-tag>` draft, and then publishes SPX products and npm before finalizing that single SPX Release. The driver manifest's `spx_version` must equal the selected SPX version and its `runtime_version` must equal the version selected by the current lock. An SPX-only upgrade therefore reuses the unchanged runtime while publishing the corresponding driver for the new SPX version.
 
-The runtime manifest, `SHA256SUMS`, and the required asset set must be internally consistent. Runtime reuse compares `runtime_version`; it does not compare the published manifest or checksum files byte-for-byte with a later candidate build. Checksums protect downloaded content without creating a second compatibility identity. An unpublished runtime/SPX draft tag must target the current `GITHUB_SHA`, while a public same-version runtime may target the candidate commit from the previous stage. The SPX tag always targets the final commit. If runtime content changes incompatibly, bump `runtime_version` instead of replacing or silently reinterpreting an existing tag.
+The runtime manifest, `SHA256SUMS`, and the required asset set must be internally consistent. The driver manifest and every platform ZIP must also pass name, host, entry, size, and SHA-256 checks. Runtime reuse compares `runtime_version`; it does not compare the published manifest or checksum files byte-for-byte with a later candidate build. Driver assets compare `spx_version` and `runtime_version`. Checksums and ZIP validation protect downloaded content without creating a second compatibility identity. An unpublished runtime/SPX draft tag must target the current `GITHUB_SHA`, while a public same-version runtime may target the candidate commit from the previous stage. Driver files are assets in the SPX draft and have no second Release or tag. The SPX tag always targets the final commit. If runtime content changes incompatibly, bump `runtime_version` instead of replacing or silently reinterpreting an existing tag.
 
 ## Development npm package
 
-`publish-dev-npm` is an independent on-demand operation, not a fourth stage of the production release. It is restricted to the canonical `goplus/spx` `dev` branch; leave `release_tag` empty and note that `platforms` is ignored:
+`publish-dev-npm` is an independent on-demand operation, outside the production release flow. It is restricted to the canonical `goplus/spx` `dev` branch; leave `release_tag` empty and note that `platforms` is ignored:
 
 ```sh
 gh workflow run release.yml \
@@ -110,7 +110,7 @@ Do not restore publication on every push to `dev`. Explicit publication avoids r
 
 ## Maintaining later versions
 
-- If only SPX products change and the runtime version stays unchanged, an SPX-only mapping may retain the current runtime; the release flow reuses its public assets by runtime version.
+- If only SPX products change and the runtime version stays unchanged, an SPX-only mapping may retain the current runtime. The release flow reuses its public assets by runtime version and publishes the corresponding driver for the new SPX version.
 - If Godot, `godot_modules/spx`, toolchain inputs, or runtime pack output changes, advance both identities in one transaction:
 
   ```sh

@@ -46,6 +46,12 @@ type testPayload struct {
 	Files []testFile
 }
 
+func TestEngineComponentManifestName(t *testing.T) {
+	if EngineComponentManifestName != "engine-component-manifest.json" {
+		t.Fatalf("Engine component manifest name = %q", EngineComponentManifestName)
+	}
+}
+
 func buildPayload(config testPayload) ([]byte, string, string, error) {
 	cfg, sources := fileSources(config)
 	var output bytes.Buffer
@@ -568,7 +574,7 @@ func configFileData(t *testing.T, config testPayload, name string) []byte {
 func testBuildConfig(t *testing.T) testPayload {
 	t.Helper()
 	engineFiles := []testFile{
-		{Name: "runtime-manifest.json", Mode: 0o644, Data: []byte(`{"schema":"test-engine/v1"}`)},
+		{Name: EngineComponentManifestName, Mode: 0o644, Data: []byte(`{"schema":"test-engine/v1"}`)},
 		{Name: "engine", Mode: 0o755, Data: []byte("engine")},
 		{Name: "engine.pck", Mode: 0o644, Data: []byte("pack")},
 	}
@@ -619,7 +625,7 @@ func testBuildConfig(t *testing.T) testPayload {
 			},
 		},
 		Files: []testFile{
-			{Name: "engine/runtime-manifest.json", Mode: 0o644, Data: engineFiles[0].Data},
+			{Name: "engine/" + EngineComponentManifestName, Mode: 0o644, Data: engineFiles[0].Data},
 			{Name: "engine/engine", Mode: 0o755, Data: engineFiles[1].Data},
 			{Name: "engine/engine.pck", Mode: 0o644, Data: engineFiles[2].Data},
 			{Name: "bridge/bridge-manifest.json", Mode: 0o644, Data: bridgeFiles[0].Data},

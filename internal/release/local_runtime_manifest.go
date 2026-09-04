@@ -26,7 +26,10 @@ import (
 	"github.com/goplus/spx/v3/internal/strictjson"
 )
 
-const localRuntimeManifestSchema = "spx-local-engine/v1"
+const (
+	localRuntimeManifestSchema = "spx-local-engine/v1"
+	EngineSourceManifestName   = "engine-source-manifest.json"
+)
 
 // LocalRuntimeFile declares one local Engine/PCK output.
 type LocalRuntimeFile struct {
@@ -173,5 +176,5 @@ func LocalRuntimeManifestPath(repoRoot string, lock RuntimeLock, goos, goarch st
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(repoRoot, ".spx", "runtime", lock.RuntimeVersion, spec.GOOS+"-"+spec.GOARCH, "engine-manifest.json"), nil
+	return filepath.Join(repoRoot, ".spx", "runtime", lock.RuntimeVersion, spec.GOOS+"-"+spec.GOARCH, EngineSourceManifestName), nil
 }

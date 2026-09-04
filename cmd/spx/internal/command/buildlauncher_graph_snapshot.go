@@ -30,6 +30,8 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+
+	"github.com/goplus/spx/v3/internal/envutil"
 )
 
 type launcherGraphQuery struct {
@@ -257,23 +259,10 @@ func snapshotLauncherFiles(paths []string) ([]launcherFileIdentity, error) {
 }
 
 func launcherGraphEnvironment(base []string, goWork string) []string {
-	env := make([]string, 0, len(base)+5)
-	for _, entry := range base {
-		key, _, ok := strings.Cut(entry, "=")
-		if ok && (key == "GOFLAGS" || key == "GOWORK" || key == "GOOS" || key == "GOARCH" || key == "CGO_ENABLED") {
-			continue
-		}
-		env = append(env, entry)
-	}
-	return append(env, "GOFLAGS=", "GOWORK="+goWork, "GOOS="+runtime.GOOS, "GOARCH="+runtime.GOARCH)
-}
-
-func launcherEnvValue(env []string, name string) string {
-	for i := len(env) - 1; i >= 0; i-- {
-		key, value, ok := strings.Cut(env[i], "=")
-		if ok && key == name {
-			return value
-		}
-	}
-	return ""
+	return envutil.SetMany(envutil.Without(base, "CGO_ENABLED"),
+		envutil.Assignment{Key: "GOFLAGS", Value: envutil.NeutralGOFLAGS},
+		envutil.Assignment{Key: "GOWORK", Value: goWork},
+		envutil.Assignment{Key: "GOOS", Value: runtime.GOOS},
+		envutil.Assignment{Key: "GOARCH", Value: runtime.GOARCH},
+	)
 }

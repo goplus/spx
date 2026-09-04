@@ -23,9 +23,9 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"runtime"
-	"strings"
 
+	"github.com/goplus/spx/v3/internal/driverbundle"
+	"github.com/goplus/spx/v3/internal/envutil"
 	"github.com/goplus/spx/v3/internal/runtimebundle"
 	"github.com/goplus/spx/v3/internal/runtimepayload"
 )
@@ -101,19 +101,20 @@ func digestFileSource(source runtimepayload.FileSource) (string, error) {
 	return hex.EncodeToString(hasher.Sum(nil)), nil
 }
 
-func localEngineSourceDigests(engine, pack runtimepayload.FileSource) (interfaceDigest, engineDigest, packDigest string, err error) {
-	interfaceHasher := sha256.New()
-	engineHasher := sha256.New()
-	packHasher := sha256.New()
-	_, _ = interfaceHasher.Write([]byte("spx-local-engine-interface/v1\x00"))
-	if err := copyFileSource(io.MultiWriter(interfaceHasher, engineHasher), engine); err != nil {
+func engineSourceDigests(engine, pack runtimepayload.FileSource) (interfaceDigest, engineDigest, packDigest string, err error) {
+	engineDigest, err = digestFileSource(engine)
+	if err != nil {
 		return "", "", "", fmt.Errorf("launchpack: hash Engine: %w", err)
 	}
-	_, _ = interfaceHasher.Write([]byte{0})
-	if err := copyFileSource(io.MultiWriter(interfaceHasher, packHasher), pack); err != nil {
+	packDigest, err = digestFileSource(pack)
+	if err != nil {
 		return "", "", "", fmt.Errorf("launchpack: hash runtime PCK: %w", err)
 	}
-	return hex.EncodeToString(interfaceHasher.Sum(nil)), hex.EncodeToString(engineHasher.Sum(nil)), hex.EncodeToString(packHasher.Sum(nil)), nil
+	interfaceDigest, err = driverbundle.ComputeEngineInterfaceDigestFromSHA256(engineDigest, packDigest)
+	if err != nil {
+		return "", "", "", fmt.Errorf("launchpack: identify Engine interface: %w", err)
+	}
+	return interfaceDigest, engineDigest, packDigest, nil
 }
 
 func copyFileSource(dst io.Writer, source runtimepayload.FileSource) error {
@@ -148,35 +149,10 @@ func hasBuildFlag(flags []string, name string) bool {
 
 func traceEnabled(flags []string) bool { return hasBuildFlag(flags, "x") || hasBuildFlag(flags, "v") }
 
-func sanitizeEnvironment(env []string) []string {
-	if env == nil {
-		env = os.Environ()
-	}
-	result := make([]string, 0, len(env))
-	for _, entry := range env {
-		key, _, ok := strings.Cut(entry, "=")
-		if ok && (key == "GOFLAGS" || key == "GOWORK" || key == "GOOS" || key == "GOARCH" || key == "CGO_ENABLED") {
-			continue
-		}
-		result = append(result, entry)
-	}
-	return result
-}
-
 func hostGoEnv(cfg Config, base []string) []string {
-	env := sanitizeEnvironment(base)
-	return append(env, "GOFLAGS=", "GOWORK="+cfg.GoWork, "GOOS="+runtime.GOOS, "GOARCH="+runtime.GOARCH, "CGO_ENABLED=0")
+	return envutil.HostGoEnvironment(base, cfg.GoWork, false)
 }
 
 func sourceBridgeEnv(cfg Config, base []string) []string {
-	env := sanitizeEnvironment(base)
-	filtered := env[:0]
-	for _, entry := range env {
-		key, _, ok := strings.Cut(entry, "=")
-		if ok && strings.HasPrefix(key, "CGO_") {
-			continue
-		}
-		filtered = append(filtered, entry)
-	}
-	return append(filtered, "GOFLAGS=", "GOWORK="+cfg.GoWork, "GOOS="+runtime.GOOS, "GOARCH="+runtime.GOARCH, "CGO_ENABLED=1")
+	return envutil.HostGoEnvironment(envutil.WithoutPrefixes(base, "CGO_"), cfg.GoWork, true)
 }

@@ -23,6 +23,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/goplus/spx/v3/internal/envutil"
+	gomodule "golang.org/x/mod/module"
+	"golang.org/x/mod/semver"
 )
 
 type launcherSource struct {
@@ -54,6 +58,10 @@ type listedModule struct {
 
 func resolveLauncherInputs(ctx context.Context, projectDir, goCommand string) (launcherProject, launcherSource, error) {
 	env := append([]string(nil), os.Environ()...)
+	flags, err := effectiveGraphFlags(ctx, goCommand, projectDir, env)
+	if err != nil {
+		return launcherProject{}, launcherSource{}, err
+	}
 	goMod, err := queryGoEnv(ctx, goCommand, projectDir, env, "GOMOD")
 	if err != nil {
 		return launcherProject{}, launcherSource{}, fmt.Errorf("buildlauncher: resolve Go module file: %w", err)
@@ -84,10 +92,6 @@ func resolveLauncherInputs(ctx context.Context, projectDir, goCommand string) (l
 		if err != nil {
 			return launcherProject{}, launcherSource{}, fmt.Errorf("buildlauncher: Go workspace file: %w", err)
 		}
-	}
-	flags, err := graphFlagsFromEnvironment(projectDir, env)
-	if err != nil {
-		return launcherProject{}, launcherSource{}, err
 	}
 	graphEnv := launcherGraphEnvironment(env, goWork)
 	spx, verifier, err := resolveLauncherGraph(ctx, launcherGraphQuery{
@@ -135,15 +139,21 @@ func resolveSPXSource(module listedModule) (root, selectedVersion, effectiveVers
 		return "", "", "", false, fmt.Errorf("buildlauncher: Go graph selected %q for SPX, want %q", module.Path, spxModulePath)
 	}
 	sourceMode = module.Main || module.Replace != nil && module.Replace.Version == ""
+	if !sourceMode {
+		if module.Replace != nil {
+			return "", "", "", false, fmt.Errorf("buildlauncher: published SPX module must not use a versioned replacement")
+		}
+		if !semver.IsValid(module.Version) || semver.Canonical(module.Version) != module.Version || gomodule.IsPseudoVersion(module.Version) {
+			return "", "", "", false, fmt.Errorf("buildlauncher: published SPX requires an exact canonical release version, got %q", module.Version)
+		}
+		return "", module.Version, module.Version, false, nil
+	}
 	effective := module
 	if module.Replace != nil {
 		effective = *module.Replace
 	}
 	if effective.Dir == "" {
-		if sourceMode {
-			return "", "", "", false, fmt.Errorf("buildlauncher: local SPX module has no source directory")
-		}
-		return "", module.Version, effective.Version, false, nil
+		return "", "", "", false, fmt.Errorf("buildlauncher: local SPX module has no source directory")
 	}
 	root, err = canonicalDirectory(effective.Dir)
 	if err != nil {
@@ -169,11 +179,29 @@ func resolveGoCommand() (string, error) {
 }
 
 func graphFlagsFromEnv(workDir string) ([]string, error) {
-	return graphFlagsFromEnvironment(workDir, os.Environ())
+	goCommand, err := resolveGoCommand()
+	if err != nil {
+		return nil, err
+	}
+	return effectiveGraphFlags(context.Background(), goCommand, workDir, os.Environ())
 }
 
-func graphFlagsFromEnvironment(workDir string, env []string) ([]string, error) {
-	value := launcherEnvValue(env, "GOFLAGS")
+func effectiveGraphFlags(ctx context.Context, goCommand, workDir string, env []string) ([]string, error) {
+	value, found, duplicate := envutil.Lookup(env, "GOFLAGS")
+	if duplicate {
+		return nil, fmt.Errorf("buildlauncher: GOFLAGS is repeated")
+	}
+	if !found || value == "" {
+		var err error
+		value, err = queryGoEnv(ctx, goCommand, workDir, env, "GOFLAGS")
+		if err != nil {
+			return nil, fmt.Errorf("buildlauncher: resolve GOFLAGS: %w", err)
+		}
+	}
+	return parseGraphFlags(workDir, value)
+}
+
+func parseGraphFlags(workDir, value string) ([]string, error) {
 	if strings.TrimSpace(value) == "" {
 		return nil, nil
 	}

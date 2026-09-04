@@ -73,6 +73,10 @@ type Config struct {
 	RuntimeLock release.RuntimeLock
 	Source      SourceIdentity
 
+	// DriverAssetDir is an optional local mirror for published driver
+	// manifests and bundles. It is intentionally separate from runtime assets.
+	DriverAssetDir string
+
 	GoCommand  string
 	WorkDir    string
 	GoWork     string
@@ -81,18 +85,35 @@ type Config struct {
 	Output     string
 
 	BridgePackage string
-	VerifyGraph   func(context.Context) error
-	VerifyBridge  func(string) error
-	IO            IO
+	// Verification hooks receive the current package operation context;
+	// VerifyBridge also receives the built source bridge path.
+	VerifyGraph  func(context.Context) error
+	VerifyBridge func(context.Context, string) error
+	IO           IO
+}
+
+// PublishedDriverIdentity is the trust identity of one published driver
+// bundle and its materialized components.
+type PublishedDriverIdentity struct {
+	ManifestSHA256        string
+	BundleSHA256          string
+	BundleName            string
+	SPXVersion            string
+	EngineSHA256          string
+	PackSHA256            string
+	BridgeSHA256          string
+	EngineInterfaceDigest string
 }
 
 // Assets are the verified runtime and source bridge files used by a launcher
-// or a direct project run. The caller must invoke Cleanup when done.
+// or a direct project run. Published is nil for source assets. The caller
+// must invoke Cleanup when done.
 type Assets struct {
 	EnginePath string
 	PackPath   string
 	BridgePath string
 	Lock       release.RuntimeLock
+	Published  *PublishedDriverIdentity
 	Cleanup    func()
 }
 

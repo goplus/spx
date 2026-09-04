@@ -34,7 +34,7 @@ func writeLocalRuntimeManifest(path string, manifest LocalRuntimeManifest) error
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("create local runtime manifest directory: %w", err)
 	}
-	tmp, err := os.CreateTemp(dir, ".engine-manifest-*")
+	tmp, err := os.CreateTemp(dir, ".engine-source-manifest-*")
 	if err != nil {
 		return fmt.Errorf("create local runtime manifest: %w", err)
 	}

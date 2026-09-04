@@ -54,10 +54,11 @@ jobs:
           go test -v .github/scripts/runtime/manifest.go .github/scripts/runtime/manifest_test.go
           go test -v .github/scripts/runtime/resolution.go .github/scripts/runtime/resolution_test.go
           go test -v .github/scripts/runtime/version.go .github/scripts/runtime/version_test.go
+          go test -v ./.github/scripts/driverbundle
           PYTHONDONTWRITEBYTECODE=1 python3 .github/scripts/runtime_build_contract_test.py
           PYTHONDONTWRITEBYTECODE=1 python3 .github/scripts/release/workflow_test.py
-          PYTHONDONTWRITEBYTECODE=1 python3 .github/scripts/release_bump_test.py
           PYTHONDONTWRITEBYTECODE=1 python3 .github/scripts/driverbundle/workflow_test.py
+          PYTHONDONTWRITEBYTECODE=1 python3 .github/scripts/release_bump_test.py
           go run .github/scripts/runtime/digest.go pack-source HEAD >/dev/null
           go run .github/scripts/runtime/digest.go build-recipe HEAD >/dev/null
           go test -v $(go list ./... | grep -v /internal/webffi)

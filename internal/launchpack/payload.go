@@ -18,12 +18,10 @@ package launchpack
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 
@@ -32,80 +30,6 @@ import (
 	"github.com/goplus/spx/v3/internal/runtimebundle"
 	"github.com/goplus/spx/v3/internal/runtimepayload"
 )
-
-func buildSourceBridge(ctx context.Context, cfg Config, bridgeName string, streams IO) (string, func(), error) {
-	if err := cfg.validateGraphInputs(); err != nil {
-		return "", nil, err
-	}
-	if err := cfg.verifyGraph(ctx, "before source bridge build"); err != nil {
-		return "", nil, err
-	}
-	if cfg.BridgePackage == "" {
-		return "", nil, fmt.Errorf("launchpack: bridge package is required")
-	}
-	workDir, err := os.MkdirTemp("", "spx-launchpack-bridge-")
-	if err != nil {
-		return "", nil, fmt.Errorf("launchpack: create source bridge work directory: %w", err)
-	}
-	keepWork := hasBuildFlag(cfg.BuildFlags, "work")
-	cleanup := func() { _ = os.RemoveAll(workDir) }
-	if keepWork {
-		cleanup = func() {}
-		if streams.Stderr != nil {
-			_, _ = fmt.Fprintf(streams.Stderr, "SPXBRIDGEWORK=%s\n", workDir)
-		}
-	}
-	bridgePath := filepath.Join(workDir, bridgeName)
-	args := sourceBridgeBuildArgs(cfg, bridgePath)
-	command := exec.CommandContext(ctx, cfg.GoCommand, args...)
-	command.Dir = cfg.WorkDir
-	command.Env = sourceBridgeEnv(cfg, streams.Env)
-	command.Stdin = streams.Stdin
-	command.Stdout = streams.Stdout
-	command.Stderr = streams.Stderr
-	if err := command.Run(); err != nil {
-		cleanup()
-		return "", nil, fmt.Errorf("launchpack: build source interpreter bridge: %w", err)
-	}
-	if err := cfg.verifyGraph(ctx, "after source bridge build"); err != nil {
-		cleanup()
-		return "", nil, err
-	}
-	if err := validatePinnedFile("source interpreter bridge", bridgePath); err != nil {
-		cleanup()
-		return "", nil, err
-	}
-	return bridgePath, cleanup, nil
-}
-
-func sourceBridgeBuildArgs(cfg Config, bridgePath string) []string {
-	return sourceBridgeBuildArgsForGOOS(cfg, bridgePath, runtime.GOOS)
-}
-
-func sourceBridgeBuildArgsForGOOS(cfg Config, bridgePath, goos string) []string {
-	args := append([]string{"build"}, cfg.GraphFlags...)
-	args = append(args, normalizedGoBuildFlags(cfg.BuildFlags)...)
-	args = append(args, "-buildmode=c-shared")
-	if goos == "windows" {
-		args = append(args, "-ldflags=-extldflags=-Wl,--allow-multiple-definition")
-	}
-	return append(args, "-o", bridgePath, cfg.BridgePackage)
-}
-
-func bridgeFileName(goos, goarch string) (string, error) {
-	extension := ""
-	switch goos {
-	case "darwin":
-		extension = ".dylib"
-	case "linux":
-		extension = ".so"
-	case "windows":
-		extension = ".dll"
-	default:
-		return "", fmt.Errorf("launchpack: host platform %s/%s is not supported", goos, goarch)
-	}
-	return "gdspx-" + goos + "-" + goarch + extension, nil
-}
 
 func buildLauncher(ctx context.Context, cfg Config, assets Assets, configSnapshot projectpolicy.PortableConfigSnapshot, streams IO) (string, string, error) {
 	projectConfig, err := prepareProjectBundleConfig(cfg, configSnapshot)
@@ -176,7 +100,7 @@ func writeLauncherPayload(workDir string, dst io.Writer, cfg Config, assets Asse
 		}
 	}()
 
-	interfaceDigest, engineDigest, packDigest, err := localEngineSourceDigests(engine.source(""), pack.source(""))
+	interfaceDigest, engineDigest, packDigest, err := engineSourceDigests(engine.source(""), pack.source(""))
 	if err != nil {
 		return "", "", err
 	}
@@ -184,31 +108,8 @@ func writeLauncherPayload(workDir string, dst io.Writer, cfg Config, assets Asse
 	if err != nil {
 		return "", "", fmt.Errorf("launchpack: hash interpreter bridge: %w", err)
 	}
-	engineManifest, err := json.Marshal(struct {
-		Schema                string `json:"schema"`
-		Mode                  string `json:"mode"`
-		RuntimeVersion        string `json:"runtime_version"`
-		RuntimeABI            int    `json:"runtime_abi"`
-		EngineInterfaceDigest string `json:"engine_interface_digest"`
-		ExecutableSHA256      string `json:"executable_sha256"`
-		PackSHA256            string `json:"pack_sha256"`
-	}{
-		Schema: "spx-local-engine/v1", Mode: "source", RuntimeVersion: assets.Lock.RuntimeVersion,
-		RuntimeABI: assets.Lock.RuntimeABI, EngineInterfaceDigest: interfaceDigest,
-		ExecutableSHA256: engineDigest, PackSHA256: packDigest,
-	})
-	if err != nil {
-		return "", "", err
-	}
-	bridgeManifest, err := json.Marshal(struct {
-		Schema                string `json:"schema"`
-		Mode                  string `json:"mode"`
-		SPXSource             string `json:"spx_source"`
-		EngineInterfaceDigest string `json:"engine_interface_digest"`
-		BridgeSHA256          string `json:"bridge_sha256"`
-	}{
-		Schema: "spx-local-bridge/v1", Mode: "source", SPXSource: cfg.Source.EffectivePath,
-		EngineInterfaceDigest: interfaceDigest, BridgeSHA256: bridgeDigest,
+	engineManifest, bridgeManifest, err := componentManifests(cfg, assets, componentDigests{
+		interfaceDigest: interfaceDigest, engine: engineDigest, pack: packDigest, bridge: bridgeDigest,
 	})
 	if err != nil {
 		return "", "", err
@@ -218,7 +119,7 @@ func writeLauncherPayload(workDir string, dst io.Writer, cfg Config, assets Asse
 	packName := filepath.Base(assets.PackPath)
 	bridgeName := filepath.Base(assets.BridgePath)
 	engineSources := []runtimepayload.FileSource{
-		byteSource("runtime-manifest.json", 0o644, engineManifest),
+		byteSource(runtimepayload.EngineComponentManifestName, 0o644, engineManifest),
 		engine.source(engineName),
 		pack.source(packName),
 	}
@@ -242,7 +143,7 @@ func writeLauncherPayload(workDir string, dst io.Writer, cfg Config, assets Asse
 	}
 
 	payloadSources := []runtimepayload.FileSource{
-		byteSource("engine/runtime-manifest.json", 0o644, engineManifest),
+		byteSource("engine/"+runtimepayload.EngineComponentManifestName, 0o644, engineManifest),
 		engine.source("engine/" + engineName),
 		pack.source("engine/" + packName),
 		byteSource("bridge/bridge-manifest.json", 0o644, bridgeManifest),

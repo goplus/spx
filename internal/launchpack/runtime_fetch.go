@@ -27,6 +27,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/goplus/spx/v3/internal/envutil"
 	"github.com/goplus/spx/v3/internal/release"
 	"github.com/goplus/spx/v3/internal/runtimebundle"
 )
@@ -36,7 +37,7 @@ var runtimeHTTPClient = &http.Client{Timeout: 30 * time.Minute}
 var errReleaseUnavailable = errors.New("launchpack: release unavailable")
 
 func resolvePublishedRuntime(ctx context.Context, cacheRoot string, lock release.RuntimeLock, env []string, offline bool, dependencies runtimeAssetDependencies) (runtimeAssetSource, error) {
-	assetDir, assetDirSet, duplicate := environmentValue(env, runtimeAssetDirEnv)
+	assetDir, assetDirSet, duplicate := envutil.Lookup(env, runtimeAssetDirEnv)
 	if duplicate {
 		return runtimeAssetSource{}, fmt.Errorf("launchpack: duplicate %s", runtimeAssetDirEnv)
 	}
@@ -59,7 +60,16 @@ func resolvePublishedRuntime(ctx context.Context, cacheRoot string, lock release
 		MaxSize:   maxRuntimeManifestSize,
 		Fetch:     dependencies.fetch,
 	}, func(data []byte) (release.RuntimeManifest, error) {
-		return release.ParseRuntimeManifestForRelease(data, lock.RuntimeVersion, lock.RequiredAssets)
+		manifest, err := release.ParseRuntimeManifestForRelease(data, lock.RuntimeVersion, lock.RequiredAssets)
+		if err != nil {
+			return release.RuntimeManifest{}, err
+		}
+		for _, asset := range manifest.Assets {
+			if asset.Size > runtimebundle.MaxArchiveBytes {
+				return release.RuntimeManifest{}, fmt.Errorf("launchpack: runtime archive %q size %d exceeds archive limit %d", asset.Name, asset.Size, runtimebundle.MaxArchiveBytes)
+			}
+		}
+		return manifest, nil
 	}, func(manifest release.RuntimeManifest) string {
 		return manifest.RuntimeVersion
 	})
@@ -132,7 +142,7 @@ func digestBytes(data []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func fetchRuntimeURL(ctx context.Context, url string, dst io.Writer) error {
+func fetchReleaseURL(ctx context.Context, url string, dst io.Writer) error {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return err

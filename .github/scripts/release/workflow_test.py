@@ -126,7 +126,8 @@ class ReleaseWorkflowTest(unittest.TestCase):
             "runtime-ready": ("setup", "static-checks", "godot-runtime-build", "runtime-assets-build"),
             "assemble": ("setup", "runtime-ready", "web-build", "macos-build", "windows-build", "linux-build"),
             "publish-runtime": ("setup", "assemble"),
-            "publish-spx": ("setup", "assemble", "publish-runtime"),
+            "driver-assets": ("setup", "publish-runtime"),
+            "publish-spx": ("setup", "assemble", "publish-runtime", "driver-assets"),
             "publish-web-package": ("setup", "publish-spx"),
             "finalize-spx": ("setup", "publish-spx", "publish-web-package"),
             "dev-npm-guard": (),
@@ -148,7 +149,13 @@ class ReleaseWorkflowTest(unittest.TestCase):
                 "(needs.setup.outputs.run_linux!='true'||needs.linux-build.result=='success')"
             ),
             "publish-runtime": "!cancelled()&&inputs.operation!='dry-run'&&needs.assemble.result=='success'",
-            "publish-spx": "!cancelled()&&inputs.operation=='publish-release'&&needs.publish-runtime.result=='success'",
+            "driver-assets": (
+                "!cancelled()&&inputs.operation=='publish-release'&&needs.publish-runtime.result=='success'"
+            ),
+            "publish-spx": (
+                "!cancelled()&&inputs.operation=='publish-release'&&needs.publish-runtime.result=='success'&&"
+                "needs.driver-assets.result=='success'"
+            ),
             "publish-web-package": "!cancelled()&&inputs.operation=='publish-release'&&needs.publish-spx.result=='success'",
             "finalize-spx": "!cancelled()&&inputs.operation=='publish-release'&&needs.publish-web-package.result=='success'",
             "dev-npm-guard": "inputs.operation=='publish-dev-npm'",
@@ -184,6 +191,21 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn('echo "product_count=$product_count" >> "$GITHUB_OUTPUT"', script)
         self.assertIn("dist/runtime", script)
         self.assertIn("dist/product", script)
+
+    def test_publish_release_collects_driver_assets(self):
+        setup = self.jobs["setup"]
+        self.assertNotIn("driver_tag", setup)
+        driver = self.jobs["driver-assets"]
+        self.assertIn("uses: ./.github/workflows/release_driver.yml", driver)
+        self.assertIn("spx_version: ${{ needs.setup.outputs.release_tag }}", driver)
+        self.assertIn("needs.driver-assets.result=='success'", job_condition(self.jobs["publish-spx"]))
+        self.assertIn("spx-driver-assets-${{ needs.setup.outputs.release_tag }}", self.jobs["publish-spx"])
+        self.assertIn("Assemble unified SPX release", self.jobs["publish-spx"])
+        self.assertIn("path: dist/product", self.jobs["publish-spx"])
+        self.assertIn("path: dist/driver", self.jobs["publish-spx"])
+        self.assertIn("Duplicate release asset", self.jobs["publish-spx"])
+        self.assertIn("Missing release artifact directory", self.jobs["publish-spx"])
+        self.assertIn("Nested release artifact directory", self.jobs["publish-spx"])
 
     def test_runtime_publish_reuses_the_selected_version(self):
         block = self.jobs["publish-runtime"]
@@ -425,6 +447,7 @@ esac
             "setup",
             "assemble",
             "publish-runtime",
+            "driver-assets",
             "publish-spx",
             "publish-web-package",
             "finalize-spx",
@@ -437,14 +460,27 @@ esac
         self.assertIn("          NEEDS_JSON: ${{ toJSON(needs) }}", block)
 
         script = step_script(block, "Require the selected operation's terminal jobs")
+        final_release = {
+            job: "success"
+            for job in (
+                "setup",
+                "assemble",
+                "publish-runtime",
+                "driver-assets",
+                "publish-spx",
+                "publish-web-package",
+                "finalize-spx",
+            )
+        }
         cases = (
             ("dry-run", {"setup": "success", "assemble": "success"}, True),
             ("publish-runtime", {"setup": "success", "assemble": "success", "publish-runtime": "success"}, True),
-            ("publish-release", {job: "success" for job in terminal_jobs[:6]}, True),
+            ("publish-release", final_release, True),
+            ("publish-release", {"setup": "success", "assemble": "success", "publish-runtime": "success", "publish-spx": "success", "publish-web-package": "success", "finalize-spx": "success"}, False),
             ("publish-dev-npm", {"dev-npm-guard": "success", "publish-dev-web-package": "success"}, True),
             ("dry-run", {"setup": "success", "assemble": "skipped"}, False),
             ("publish-runtime", {"setup": "success", "assemble": "success", "publish-runtime": "skipped"}, False),
-            ("publish-release", {"setup": "success", "assemble": "success", "publish-runtime": "success", "publish-spx": "success", "publish-web-package": "skipped"}, False),
+            ("publish-release", {"setup": "success", "assemble": "success", "publish-runtime": "success", "driver-assets": "success", "publish-spx": "success", "publish-web-package": "skipped"}, False),
             ("publish-dev-npm", {"dev-npm-guard": "skipped", "publish-dev-web-package": "skipped"}, False),
             ("publish-dev-npm", {"dev-npm-guard": "success", "publish-dev-web-package": "failure"}, False),
             ("unknown", {}, False),

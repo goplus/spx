@@ -268,6 +268,29 @@ func (c *Cache) Materialize(ctx context.Context, namespace Namespace, zipPath st
 	return hit, nil
 }
 
+// Lookup returns a verified materialized bundle while holding its shared use
+// lease. It prepares the namespace and per-target lock even on a miss.
+func (c *Cache) Lookup(ctx context.Context, namespace Namespace, expected *Bundle) (*Materialized, bool, error) {
+	if c == nil {
+		return nil, false, fmt.Errorf("runtimebundle: nil cache")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	limits, err := c.Limits.withDefaults()
+	if err != nil {
+		return nil, false, err
+	}
+	if expected == nil {
+		return nil, false, fmt.Errorf("runtimebundle: expected bundle is required")
+	}
+	expected, err = normalizeExpectedBundle(namespace, expected, limits)
+	if err != nil {
+		return nil, false, err
+	}
+	return c.tryMaterializedHit(ctx, namespace, expected.Digest, expected)
+}
+
 func normalizeExpectedBundle(namespace Namespace, expected *Bundle, limits Limits) (*Bundle, error) {
 	if expected == nil {
 		return nil, nil
