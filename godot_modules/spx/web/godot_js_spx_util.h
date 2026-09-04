@@ -6,12 +6,16 @@
 #include <new>
 #include <vector>
 
-// A GdArray wrapper is a pointer-to-pointer allocated by the Web ABI pool.
-// The wrapper binding is kept private to the C++ bridge; callers must not
-// manufacture bindings from JavaScript memory.
+// GdString and GdArray wrappers are pointer-to-pointer values allocated by
+// Web ABI pools. Their bindings are kept in private C++ state; callers must
+// not manufacture bindings by writing directly into JavaScript memory.
 #ifdef __cplusplus
 extern "C" {
 #endif
+bool gdspx_bind_string_wrapper(GdString *wrapper, GdString value);
+bool gdspx_get_string_value(GdString *wrapper, GdString *r_value);
+bool gdspx_prepare_string_wrapper(GdString *wrapper);
+bool gdspx_validate_string_wrapper(GdString *wrapper);
 bool gdspx_bind_array_wrapper(GdArray *wrapper);
 bool gdspx_validate_array_wrapper(GdArray *wrapper);
 bool gdspx_prepare_array_wrapper(GdArray *wrapper);

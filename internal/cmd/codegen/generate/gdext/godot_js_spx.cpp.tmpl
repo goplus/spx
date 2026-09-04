@@ -78,12 +78,23 @@ void gd{{ loadProcAddressName $f.Name }}(
 	{{- if ne 0 (len $f.Arguments) -}}, {{ end -}}{{$f.ReturnType.CStyleString }} *ret_val
 	{{- end -}}
 ) {
+	{{- if isWebGdStringReturn $f }}
+	if (!gdspx_prepare_string_wrapper(ret_val)) {
+		return;
+	}
+	{{- end }}
 	{{- if isWebGdArrayReturn $f }}
 	if (!gdspx_prepare_array_wrapper(ret_val)) {
 		return;
 	}
 	{{- end }}
 	{{- range $j, $arg := $f.Arguments }}
+	{{- if isGdStringArgument $arg }}
+	GdString gdspx_string_arg_{{$j}} = nullptr;
+	if (!gdspx_get_string_value({{ $arg.ResolvedName $j }}, &gdspx_string_arg_{{$j}})) {
+		return;
+	}
+	{{- end }}
 	{{- if isGdArrayArgument $arg }}
 	if (!gdspx_validate_array_wrapper({{ $arg.ResolvedName $j }})) {
 		return;
@@ -91,14 +102,25 @@ void gd{{ loadProcAddressName $f.Name }}(
 	{{- end }}
 	{{- end }}
 	{{- if isWebOwnedStringFree $f }}
-	(void)str;
+	(void)gdspx_string_arg_0;
 	{{- else -}}
-	{{- if isWebGdArrayReturn $f }}
+	{{- if isWebGdStringReturn $f }}
+	GdString result = {{ getManagerName $f.Name}}Mgr->
+	{{- trimPrefix (trimPrefix (trimPrefix (loadProcAddressName $f.Name) "spx_") (getManagerName $f.Name)) "_" }}(
+	{{- range $j, $arg := $f.Arguments }}
+			{{- if gt $j 0 }}, {{ end -}}
+			{{- webManagerArgument $arg $j }}
+		{{- end -}}
+	);
+	if (!gdspx_bind_string_wrapper(ret_val, result)) {
+		return;
+	}
+	{{- else if isWebGdArrayReturn $f }}
 	GdArray result = {{ getManagerName $f.Name}}Mgr->
 	{{- trimPrefix (trimPrefix (trimPrefix (loadProcAddressName $f.Name) "spx_") (getManagerName $f.Name)) "_" }}(
 	{{- range $j, $arg := $f.Arguments }}
 			{{- if gt $j 0 }}, {{ end -}}
-			{{- $arg.ResolvedPtrName $j }}
+			{{- webManagerArgument $arg $j }}
 		{{- end -}}
 	);
 	*ret_val = result;
@@ -111,7 +133,7 @@ void gd{{ loadProcAddressName $f.Name }}(
 	{{- trimPrefix (trimPrefix (trimPrefix (loadProcAddressName $f.Name) "spx_") (getManagerName $f.Name)) "_" }}(
 	{{- range $j, $arg := $f.Arguments }}
 			{{- if gt $j 0 }}, {{ end -}}
-			{{- $arg.ResolvedPtrName $j }}
+			{{- webManagerArgument $arg $j }}
 		{{- end -}}
 	);
 	{{- end }}

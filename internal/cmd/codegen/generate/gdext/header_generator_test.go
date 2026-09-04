@@ -95,8 +95,33 @@ func TestGodotJsTemplateKeepsResStringOwned(t *testing.T) {
 	require.NoError(t, err)
 	body := string(generated)
 	require.Contains(t, body, "void gdspx_res_free_str(GdString *str)")
-	require.Contains(t, body, "(void)str;")
+	require.Contains(t, body, "gdspx_get_string_value(str, &gdspx_string_arg_0)")
+	require.Contains(t, body, "(void)gdspx_string_arg_0;")
 	require.NotContains(t, body, "resMgr->free_str(*str)")
+}
+
+func TestGodotJsTemplateValidatesAndBindsGdStrings(t *testing.T) {
+	projectPath := t.TempDir()
+	ast := clang.CHeaderFileAST{Expr: []clang.Expr{{Function: &clang.TypedefFunction{
+		ReturnType: clang.PrimativeType{Name: "GdString"},
+		Name:       "GDExtensionSpxResReadAllText",
+		Arguments: []clang.Argument{{
+			Type: clang.Type{Primative: &clang.PrimativeType{Name: "GdString"}},
+			Name: "p_path",
+		}},
+	}}}}
+
+	require.NoError(t, os.MkdirAll(filepath.Join(projectPath, common.NativeRelDir), 0o755))
+	require.NoError(t, generateGdCppFile(projectPath, gdJsSpxCpp, ast, "godot_js_spx.cpp"))
+	generated, err := os.ReadFile(filepath.Join(projectPath, common.NativeRelDir, "godot_js_spx.cpp"))
+	require.NoError(t, err)
+	body := string(generated)
+	require.Contains(t, body, "gdspx_prepare_string_wrapper(ret_val)")
+	require.Contains(t, body, "GdString gdspx_string_arg_0 = nullptr;")
+	require.Contains(t, body, "gdspx_get_string_value(p_path, &gdspx_string_arg_0)")
+	require.Contains(t, body, "GdString result = resMgr->read_all_text(gdspx_string_arg_0);")
+	require.Contains(t, body, "gdspx_bind_string_wrapper(ret_val, result)")
+	require.NotContains(t, body, "resMgr->read_all_text(*p_path)")
 }
 
 func TestGodotJsTemplateValidatesAndBindsGdArrays(t *testing.T) {

@@ -6,7 +6,7 @@
 #include <cstdint>
 #include <cstring>
 #include <limits>
-#include <string_view>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -30,17 +30,22 @@ struct CachedGdStringEntry {
     uint32_t len = 0;
     uint64_t refcount = 0;
     uint64_t last_used_tick = 0;
+    std::string value;
 };
 
 static constexpr size_t GDSPX_STRING_CACHE_MAX_ENTRIES = 128;
 static constexpr uint32_t GDSPX_STRING_CACHE_MAX_LEN = 256;
 static std::vector<CachedGdStringEntry> gdspxStringCache;
-static std::unordered_map<std::string_view, size_t> gdspxStringCacheByValue;
+static std::unordered_map<std::string, size_t> gdspxStringCacheByValue;
 static std::unordered_map<const char *, size_t> gdspxStringCacheByPtr;
 static uint64_t gdspxStringCacheTick = 0;
 
+static CachedGdStringEntry *find_cached_gdstring_by_value(const char *str, uint32_t len);
+static CachedGdStringEntry *find_cached_gdstring_by_ptr(const char *ptr);
+
 namespace {
 
+constexpr size_t GDSPX_MAX_STRING_BYTES = 256 * 1024 * 1024;
 constexpr size_t GDSPX_ARRAY_HEADER_SIZE = 8;
 // Keep malformed bridge inputs from turning a 32-bit count into a multi-GB
 // allocation. Normal game arrays are far below this limit.
@@ -114,6 +119,24 @@ static std::unordered_map<GdArray *, GdArrayInfo *> gdspxArrayBindings;
 static std::unordered_map<GdArrayInfo *, GdArrayMetadataSnapshot> gdspxArraySnapshots;
 static std::unordered_map<GdArrayInfo *, GdArray *> gdspxArrayOwners;
 
+enum class GdStringReleaseKind {
+    NONE,
+    MALLOC,
+    CACHE,
+};
+
+// This is the only ownership and length record consulted after a string
+// wrapper is created. The nested pointer remains ABI-visible to JavaScript,
+// but it is never trusted again after being written.
+struct GdStringSnapshot {
+    const char *ptr = nullptr;
+    uint32_t len = 0;
+    GdStringReleaseKind release_kind = GdStringReleaseKind::NONE;
+    bool bound = false;
+};
+
+static std::unordered_map<GdString *, GdStringSnapshot> gdspxStringSnapshots;
+
 static size_t bounded_cstr_len(const char *str, size_t max_len) {
     if (str == nullptr) {
         return 0;
@@ -123,6 +146,65 @@ static size_t bounded_cstr_len(const char *str, size_t max_len) {
         ++len;
     }
     return len;
+}
+
+static bool string_snapshot_matches_live(GdString *wrapper, const GdStringSnapshot &snapshot) {
+    // Reading the pointer value for equality is safe. Never dereference,
+    // measure, or free the value obtained from the mutable wrapper.
+    return wrapper != nullptr && *wrapper == snapshot.ptr;
+}
+
+static void release_string_snapshot(const GdStringSnapshot &snapshot) {
+    if (snapshot.ptr == nullptr) {
+        return;
+    }
+
+    if (snapshot.release_kind == GdStringReleaseKind::CACHE) {
+        // Lookup uses the trusted snapshot pointer, never the live nested
+        // pointer. Referenced cache entries cannot be evicted.
+        CachedGdStringEntry *cached = find_cached_gdstring_by_ptr(snapshot.ptr);
+        if (cached != nullptr && cached->data == snapshot.ptr && cached->len == snapshot.len &&
+                cached->refcount > 0) {
+            cached->refcount -= 1;
+        }
+        return;
+    }
+
+    if (snapshot.release_kind == GdStringReleaseKind::MALLOC) {
+        free(const_cast<char *>(snapshot.ptr));
+    }
+}
+
+static bool make_manager_string_snapshot(GdString value, GdStringSnapshot &r_snapshot) {
+    GdStringSnapshot snapshot;
+    snapshot.bound = true;
+    if (value == nullptr) {
+        r_snapshot = snapshot;
+        return true;
+    }
+
+    const char *ptr = static_cast<const char *>(value);
+    const size_t len = bounded_cstr_len(ptr, GDSPX_MAX_STRING_BYTES + 1);
+    if (len > GDSPX_MAX_STRING_BYTES || len > std::numeric_limits<uint32_t>::max()) {
+        return false;
+    }
+    snapshot.ptr = ptr;
+    snapshot.len = static_cast<uint32_t>(len);
+    snapshot.release_kind = GdStringReleaseKind::MALLOC;
+    r_snapshot = snapshot;
+    return true;
+}
+
+static void discard_manager_string_result(GdString value, GdString *wrapper) {
+    if (value == nullptr) {
+        return;
+    }
+    // Manager string returns are allocated by SpxBaseMgr::to_return_cstr.
+    // Avoid freeing the pool-owned wrapper if a broken manager violates that
+    // contract and returns the wrapper address itself.
+    if (value != static_cast<GdString>(wrapper)) {
+        free(const_cast<void *>(value));
+    }
 }
 
 static bool make_array_snapshot(GdArrayInfo *info, GdArrayMetadataSnapshot &r_snapshot) {
@@ -452,7 +534,7 @@ extern "C" bool gdspx_release_array_info(GdArray array) {
 }
 
 static CachedGdStringEntry *find_cached_gdstring_by_value(const char *str, uint32_t len) {
-    auto it = gdspxStringCacheByValue.find(std::string_view(str, len));
+    auto it = gdspxStringCacheByValue.find(std::string(str, len));
     if (it == gdspxStringCacheByValue.end()) {
         return nullptr;
     }
@@ -473,7 +555,7 @@ static bool should_cache_gdstring(uint32_t len) {
 
 static void remove_cached_gdstring_at(size_t index) {
     CachedGdStringEntry &entry = gdspxStringCache[index];
-    gdspxStringCacheByValue.erase(std::string_view(entry.data, entry.len));
+    gdspxStringCacheByValue.erase(entry.value);
     gdspxStringCacheByPtr.erase(entry.data);
     free(entry.data);
 
@@ -481,7 +563,7 @@ static void remove_cached_gdstring_at(size_t index) {
     if (index != last_index) {
         std::swap(gdspxStringCache[index], gdspxStringCache[last_index]);
         const CachedGdStringEntry &moved = gdspxStringCache[index];
-        gdspxStringCacheByValue[std::string_view(moved.data, moved.len)] = index;
+        gdspxStringCacheByValue[moved.value] = index;
         gdspxStringCacheByPtr[moved.data] = index;
     }
     gdspxStringCache.pop_back();
@@ -815,12 +897,27 @@ void gdspx_free_rect2(GdRect2* rect) {
 // string functions
 EMSCRIPTEN_KEEPALIVE
 GdString* gdspx_alloc_string() {
-    return stringPool.acquire();
+    GdString *wrapper = stringPool.acquire();
+    if (wrapper == nullptr) {
+        return nullptr;
+    }
+
+    // Pool reuse must never inherit either a nested pointer or ownership
+    // metadata from the previous lifetime.
+    auto stale_it = gdspxStringSnapshots.find(wrapper);
+    if (stale_it != gdspxStringSnapshots.end()) {
+        GdStringSnapshot stale = stale_it->second;
+        gdspxStringSnapshots.erase(stale_it);
+        release_string_snapshot(stale);
+    }
+    *wrapper = nullptr;
+    gdspxStringSnapshots.emplace(wrapper, GdStringSnapshot{});
+    return wrapper;
 }
 
 EMSCRIPTEN_KEEPALIVE
 GdString* gdspx_new_string(const char* str, uint32_t len) {
-    if (str == nullptr && len != 0) {
+    if ((str == nullptr && len != 0) || static_cast<size_t>(len) > GDSPX_MAX_STRING_BYTES) {
         return nullptr;
     }
     const size_t allocation_size = static_cast<size_t>(len) + 1;
@@ -833,16 +930,28 @@ GdString* gdspx_new_string(const char* str, uint32_t len) {
     if (ptr == nullptr) {
         return nullptr;
     }
-    CachedGdStringEntry *cached = find_cached_gdstring_by_value(input, len);
-    if (cached != nullptr) {
+    CachedGdStringEntry *cached = should_cache_gdstring(len) ?
+            find_cached_gdstring_by_value(input, len) : nullptr;
+    const bool cache_key_occupied = cached != nullptr;
+    const bool cached_value_intact = cached != nullptr && cached->data != nullptr &&
+            cached->len == len && cached->value.size() == static_cast<size_t>(len) &&
+            memcmp(cached->data, cached->value.data(), len) == 0 && cached->data[len] == '\0';
+    if (cached_value_intact && cached->refcount != std::numeric_limits<uint64_t>::max()) {
         cached->refcount += 1;
         cached->last_used_tick = ++gdspxStringCacheTick;
+        gdspxStringSnapshots[ptr] = GdStringSnapshot{
+            cached->data,
+            cached->len,
+            GdStringReleaseKind::CACHE,
+            true,
+        };
         *ptr = cached->data;
         return ptr;
     }
 
     char* result = (char*)malloc(allocation_size);
     if (result == nullptr) {
+        gdspxStringSnapshots.erase(ptr);
         stringPool.release(ptr);
         return nullptr;
     }
@@ -850,31 +959,101 @@ GdString* gdspx_new_string(const char* str, uint32_t len) {
         memcpy(result, input, len);
     }
     result[len] = '\0';
-    *ptr = result;
 
-    if (should_cache_gdstring(len)) {
-        if (gdspxStringCache.size() >= GDSPX_STRING_CACHE_MAX_ENTRIES && !evict_oldest_unused_gdstring()) {
-            return ptr;
+    GdStringReleaseKind release_kind = GdStringReleaseKind::MALLOC;
+    if (should_cache_gdstring(len) && !cache_key_occupied) {
+        bool cache_has_room = gdspxStringCache.size() < GDSPX_STRING_CACHE_MAX_ENTRIES;
+        if (!cache_has_room) {
+            cache_has_room = evict_oldest_unused_gdstring();
         }
-        size_t cache_index = gdspxStringCache.size();
-        gdspxStringCache.push_back(CachedGdStringEntry{
-            result,
-            len,
-            1,
-            ++gdspxStringCacheTick,
-        });
-        gdspxStringCacheByValue[std::string_view(result, len)] = cache_index;
-        gdspxStringCacheByPtr[result] = cache_index;
+        if (cache_has_room) {
+            size_t cache_index = gdspxStringCache.size();
+            gdspxStringCache.push_back(CachedGdStringEntry{
+                result,
+                len,
+                1,
+                ++gdspxStringCacheTick,
+                std::string(result, len),
+            });
+            gdspxStringCacheByValue[gdspxStringCache.back().value] = cache_index;
+            gdspxStringCacheByPtr[result] = cache_index;
+            release_kind = GdStringReleaseKind::CACHE;
+        }
     }
+
+    gdspxStringSnapshots[ptr] = GdStringSnapshot{
+        result,
+        len,
+        release_kind,
+        true,
+    };
+    *ptr = result;
     return ptr;
+}
+
+bool gdspx_prepare_string_wrapper(GdString *wrapper) {
+    if (wrapper == nullptr || !stringPool.is_active(wrapper)) {
+        return false;
+    }
+    auto snapshot_it = gdspxStringSnapshots.find(wrapper);
+    return snapshot_it != gdspxStringSnapshots.end() && !snapshot_it->second.bound &&
+            snapshot_it->second.ptr == nullptr &&
+            snapshot_it->second.release_kind == GdStringReleaseKind::NONE &&
+            string_snapshot_matches_live(wrapper, snapshot_it->second);
+}
+
+bool gdspx_bind_string_wrapper(GdString *wrapper, GdString value) {
+    if (!gdspx_prepare_string_wrapper(wrapper) || value == static_cast<GdString>(wrapper)) {
+        discard_manager_string_result(value, wrapper);
+        return false;
+    }
+
+    GdStringSnapshot snapshot;
+    if (!make_manager_string_snapshot(value, snapshot)) {
+        discard_manager_string_result(value, wrapper);
+        return false;
+    }
+
+    // Publish trusted metadata before exposing the nested pointer.
+    gdspxStringSnapshots[wrapper] = snapshot;
+    *wrapper = value;
+    return true;
+}
+
+bool gdspx_validate_string_wrapper(GdString *wrapper) {
+    if (wrapper == nullptr || !stringPool.is_active(wrapper)) {
+        return false;
+    }
+    auto snapshot_it = gdspxStringSnapshots.find(wrapper);
+    return snapshot_it != gdspxStringSnapshots.end() && snapshot_it->second.bound &&
+            string_snapshot_matches_live(wrapper, snapshot_it->second);
+}
+
+bool gdspx_get_string_value(GdString *wrapper, GdString *r_value) {
+    if (r_value == nullptr) {
+        return false;
+    }
+    *r_value = nullptr;
+    if (!gdspx_validate_string_wrapper(wrapper)) {
+        return false;
+    }
+    const GdStringSnapshot &snapshot = gdspxStringSnapshots.find(wrapper)->second;
+    // Managers consume GdString as a C string. Check only the terminator at
+    // the trusted allocation boundary; never scan the mutable wrapper value.
+    if (snapshot.ptr != nullptr && snapshot.ptr[snapshot.len] != '\0') {
+        return false;
+    }
+    *r_value = static_cast<GdString>(snapshot.ptr);
+    return true;
 }
 
 EMSCRIPTEN_KEEPALIVE
 const char* gdspx_get_string(GdString* ptr) {
-    if (ptr == nullptr || !stringPool.is_active(ptr)) {
+    GdString value = nullptr;
+    if (!gdspx_get_string_value(ptr, &value)) {
         return nullptr;
     }
-    return (const char *)(*ptr);
+    return static_cast<const char *>(value);
 }
 
 EMSCRIPTEN_KEEPALIVE
@@ -890,16 +1069,11 @@ void gdspx_free_cstr(const char* str) {
 
 EMSCRIPTEN_KEEPALIVE
 int32_t gdspx_get_string_len(GdString* ptr) {
-    if (ptr == nullptr || !stringPool.is_active(ptr)) {
+    if (!gdspx_validate_string_wrapper(ptr)) {
         return 0;
     }
-    const char *str = *(const char **)ptr;
-    if (str == nullptr) {
-        return 0;
-    }
-    const size_t len = bounded_cstr_len(str,
-            static_cast<size_t>(std::numeric_limits<int32_t>::max()) + 1);
-    if (len > static_cast<size_t>(std::numeric_limits<int32_t>::max())) {
+    const uint32_t len = gdspxStringSnapshots.find(ptr)->second.len;
+    if (len > static_cast<uint32_t>(std::numeric_limits<int32_t>::max())) {
         return 0;
     }
     return static_cast<int32_t>(len);
@@ -911,18 +1085,16 @@ void gdspx_free_string(GdString* p_gdstr) {
         return;
     }
 
-    if (*p_gdstr == nullptr) {
-        stringPool.release(p_gdstr);
-        return;
-    }
-
-    CachedGdStringEntry *cached = find_cached_gdstring_by_ptr((const char *)*p_gdstr);
-    if (cached != nullptr) {
-        if (cached->refcount > 0) {
-            cached->refcount -= 1;
-        }
-    } else {
-        free((void*)*p_gdstr);
+    auto snapshot_it = gdspxStringSnapshots.find(p_gdstr);
+    if (snapshot_it != gdspxStringSnapshots.end()) {
+        // This comparison detects corruption without ever using the mutable
+        // value as an address. Release always follows the trusted snapshot.
+        const bool live_pointer_matches =
+                string_snapshot_matches_live(p_gdstr, snapshot_it->second);
+        (void)live_pointer_matches;
+        GdStringSnapshot snapshot = snapshot_it->second;
+        gdspxStringSnapshots.erase(snapshot_it);
+        release_string_snapshot(snapshot);
     }
     *p_gdstr = nullptr;
     stringPool.release(p_gdstr);

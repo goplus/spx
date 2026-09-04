@@ -118,11 +118,19 @@ void gdspx_audio_get_volume(GdObj *obj, GdFloat *ret_val) {
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_audio_play_with_attenuation(GdObj *obj, GdString *path, GdObj *owner_id, GdFloat *attenuation, GdFloat *max_distance, GdInt *ret_val) {
-	*ret_val = audioMgr->play_with_attenuation(*obj, *path, *owner_id, *attenuation, *max_distance);
+	GdString gdspx_string_arg_1 = nullptr;
+	if (!gdspx_get_string_value(path, &gdspx_string_arg_1)) {
+		return;
+	}
+	*ret_val = audioMgr->play_with_attenuation(*obj, gdspx_string_arg_1, *owner_id, *attenuation, *max_distance);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_audio_play(GdObj *obj, GdString *path, GdInt *ret_val) {
-	*ret_val = audioMgr->play(*obj, *path);
+	GdString gdspx_string_arg_1 = nullptr;
+	if (!gdspx_get_string_value(path, &gdspx_string_arg_1)) {
+		return;
+	}
+	*ret_val = audioMgr->play(*obj, gdspx_string_arg_1);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_audio_pause(GdInt *aid) {
@@ -222,7 +230,11 @@ void gdspx_ext_request_restart() {
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_ext_on_runtime_panic(GdString *msg) {
-	 extMgr->on_runtime_panic(*msg);
+	GdString gdspx_string_arg_0 = nullptr;
+	if (!gdspx_get_string_value(msg, &gdspx_string_arg_0)) {
+		return;
+	}
+	 extMgr->on_runtime_panic(gdspx_string_arg_0);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_ext_pause() {
@@ -262,23 +274,47 @@ void gdspx_input_get_key_state(GdInt *key, GdInt *ret_val) {
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_input_get_axis(GdString *neg_action, GdString *pos_action, GdFloat *ret_val) {
-	*ret_val = inputMgr->get_axis(*neg_action, *pos_action);
+	GdString gdspx_string_arg_0 = nullptr;
+	if (!gdspx_get_string_value(neg_action, &gdspx_string_arg_0)) {
+		return;
+	}
+	GdString gdspx_string_arg_1 = nullptr;
+	if (!gdspx_get_string_value(pos_action, &gdspx_string_arg_1)) {
+		return;
+	}
+	*ret_val = inputMgr->get_axis(gdspx_string_arg_0, gdspx_string_arg_1);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_input_is_action_pressed(GdString *action, GdBool *ret_val) {
-	*ret_val = inputMgr->is_action_pressed(*action);
+	GdString gdspx_string_arg_0 = nullptr;
+	if (!gdspx_get_string_value(action, &gdspx_string_arg_0)) {
+		return;
+	}
+	*ret_val = inputMgr->is_action_pressed(gdspx_string_arg_0);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_input_is_action_just_pressed(GdString *action, GdBool *ret_val) {
-	*ret_val = inputMgr->is_action_just_pressed(*action);
+	GdString gdspx_string_arg_0 = nullptr;
+	if (!gdspx_get_string_value(action, &gdspx_string_arg_0)) {
+		return;
+	}
+	*ret_val = inputMgr->is_action_just_pressed(gdspx_string_arg_0);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_input_is_action_just_released(GdString *action, GdBool *ret_val) {
-	*ret_val = inputMgr->is_action_just_released(*action);
+	GdString gdspx_string_arg_0 = nullptr;
+	if (!gdspx_get_string_value(action, &gdspx_string_arg_0)) {
+		return;
+	}
+	*ret_val = inputMgr->is_action_just_released(gdspx_string_arg_0);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_input_register_action(GdString *action, GdInt *ret_val) {
-	*ret_val = inputMgr->register_action(*action);
+	GdString gdspx_string_arg_0 = nullptr;
+	if (!gdspx_get_string_value(action, &gdspx_string_arg_0)) {
+		return;
+	}
+	*ret_val = inputMgr->register_action(gdspx_string_arg_0);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_input_get_axis_id(GdInt *neg_action_id, GdInt *pos_action_id, GdFloat *ret_val) {
@@ -382,11 +418,19 @@ void gdspx_pen_set_pen_size_to(GdObj *obj, GdFloat *size) {
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_pen_set_pen_stamp_texture(GdObj *obj, GdString *texture_path) {
-	 penMgr->set_pen_stamp_texture(*obj, *texture_path);
+	GdString gdspx_string_arg_1 = nullptr;
+	if (!gdspx_get_string_value(texture_path, &gdspx_string_arg_1)) {
+		return;
+	}
+	 penMgr->set_pen_stamp_texture(*obj, gdspx_string_arg_1);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_pen_pen_stamp_with_transform(GdObj *obj, GdString *texture_path, GdVec2 *position, GdFloat *rotation_radians, GdVec2 *scale) {
-	 penMgr->pen_stamp_with_transform(*obj, *texture_path, *position, *rotation_radians, *scale);
+	GdString gdspx_string_arg_1 = nullptr;
+	if (!gdspx_get_string_value(texture_path, &gdspx_string_arg_1)) {
+		return;
+	}
+	 penMgr->pen_stamp_with_transform(*obj, gdspx_string_arg_1, *position, *rotation_radians, *scale);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_physics_raycast(GdVec2 *from, GdVec2 *to, GdInt *collision_mask, GdObj *ret_val) {
@@ -517,11 +561,21 @@ void gdspx_platform_get_window_size(GdVec2 *ret_val) {
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_platform_set_window_title(GdString *title) {
-	 platformMgr->set_window_title(*title);
+	GdString gdspx_string_arg_0 = nullptr;
+	if (!gdspx_get_string_value(title, &gdspx_string_arg_0)) {
+		return;
+	}
+	 platformMgr->set_window_title(gdspx_string_arg_0);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_platform_get_window_title(GdString *ret_val) {
-	*ret_val = platformMgr->get_window_title();
+	if (!gdspx_prepare_string_wrapper(ret_val)) {
+		return;
+	}
+	GdString result = platformMgr->get_window_title();
+	if (!gdspx_bind_string_wrapper(ret_val, result)) {
+		return;
+	}
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_platform_set_window_fullscreen(GdBool *enable) {
@@ -561,19 +615,45 @@ void gdspx_platform_set_max_fps(GdInt *fps) {
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_platform_get_persistant_data_dir(GdString *ret_val) {
-	*ret_val = platformMgr->get_persistant_data_dir();
+	if (!gdspx_prepare_string_wrapper(ret_val)) {
+		return;
+	}
+	GdString result = platformMgr->get_persistant_data_dir();
+	if (!gdspx_bind_string_wrapper(ret_val, result)) {
+		return;
+	}
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_platform_set_persistant_data_dir(GdString *path) {
-	 platformMgr->set_persistant_data_dir(*path);
+	GdString gdspx_string_arg_0 = nullptr;
+	if (!gdspx_get_string_value(path, &gdspx_string_arg_0)) {
+		return;
+	}
+	 platformMgr->set_persistant_data_dir(gdspx_string_arg_0);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_platform_is_in_persistant_data_dir(GdString *path, GdBool *ret_val) {
-	*ret_val = platformMgr->is_in_persistant_data_dir(*path);
+	GdString gdspx_string_arg_0 = nullptr;
+	if (!gdspx_get_string_value(path, &gdspx_string_arg_0)) {
+		return;
+	}
+	*ret_val = platformMgr->is_in_persistant_data_dir(gdspx_string_arg_0);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_res_create_animation(GdString *p_sprite_type, GdString *p_anim_name, GdString *p_json_ctx, GdInt *fps, GdBool *is_atlas) {
-	 resMgr->create_animation(*p_sprite_type, *p_anim_name, *p_json_ctx, *fps, *is_atlas);
+	GdString gdspx_string_arg_0 = nullptr;
+	if (!gdspx_get_string_value(p_sprite_type, &gdspx_string_arg_0)) {
+		return;
+	}
+	GdString gdspx_string_arg_1 = nullptr;
+	if (!gdspx_get_string_value(p_anim_name, &gdspx_string_arg_1)) {
+		return;
+	}
+	GdString gdspx_string_arg_2 = nullptr;
+	if (!gdspx_get_string_value(p_json_ctx, &gdspx_string_arg_2)) {
+		return;
+	}
+	 resMgr->create_animation(gdspx_string_arg_0, gdspx_string_arg_1, gdspx_string_arg_2, *fps, *is_atlas);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_res_set_load_mode(GdBool *is_direct_mode) {
@@ -585,34 +665,81 @@ void gdspx_res_get_load_mode(GdBool *ret_val) {
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_res_get_bound_from_alpha(GdString *p_path, GdRect2 *ret_val) {
-	*ret_val = resMgr->get_bound_from_alpha(*p_path);
+	GdString gdspx_string_arg_0 = nullptr;
+	if (!gdspx_get_string_value(p_path, &gdspx_string_arg_0)) {
+		return;
+	}
+	*ret_val = resMgr->get_bound_from_alpha(gdspx_string_arg_0);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_res_get_image_size(GdString *p_path, GdVec2 *ret_val) {
-	*ret_val = resMgr->get_image_size(*p_path);
+	GdString gdspx_string_arg_0 = nullptr;
+	if (!gdspx_get_string_value(p_path, &gdspx_string_arg_0)) {
+		return;
+	}
+	*ret_val = resMgr->get_image_size(gdspx_string_arg_0);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_res_read_all_text(GdString *p_path, GdString *ret_val) {
-	*ret_val = resMgr->read_all_text(*p_path);
+	if (!gdspx_prepare_string_wrapper(ret_val)) {
+		return;
+	}
+	GdString gdspx_string_arg_0 = nullptr;
+	if (!gdspx_get_string_value(p_path, &gdspx_string_arg_0)) {
+		return;
+	}
+	GdString result = resMgr->read_all_text(gdspx_string_arg_0);
+	if (!gdspx_bind_string_wrapper(ret_val, result)) {
+		return;
+	}
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_res_has_file(GdString *p_path, GdBool *ret_val) {
-	*ret_val = resMgr->has_file(*p_path);
+	GdString gdspx_string_arg_0 = nullptr;
+	if (!gdspx_get_string_value(p_path, &gdspx_string_arg_0)) {
+		return;
+	}
+	*ret_val = resMgr->has_file(gdspx_string_arg_0);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_res_list_directories(GdString *p_path, GdString *ret_val) {
-	*ret_val = resMgr->list_directories(*p_path);
+	if (!gdspx_prepare_string_wrapper(ret_val)) {
+		return;
+	}
+	GdString gdspx_string_arg_0 = nullptr;
+	if (!gdspx_get_string_value(p_path, &gdspx_string_arg_0)) {
+		return;
+	}
+	GdString result = resMgr->list_directories(gdspx_string_arg_0);
+	if (!gdspx_bind_string_wrapper(ret_val, result)) {
+		return;
+	}
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_res_reload_texture(GdString *path) {
-	 resMgr->reload_texture(*path);
+	GdString gdspx_string_arg_0 = nullptr;
+	if (!gdspx_get_string_value(path, &gdspx_string_arg_0)) {
+		return;
+	}
+	 resMgr->reload_texture(gdspx_string_arg_0);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_res_free_str(GdString *str) {
-	(void)str;
+	GdString gdspx_string_arg_0 = nullptr;
+	if (!gdspx_get_string_value(str, &gdspx_string_arg_0)) {
+		return;
+	}
+	(void)gdspx_string_arg_0;
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_res_apply_project_fonts(GdString *default_font_path, GdArray *font_paths, GdArray *font_families, GdArray *preferences, GdString *ret_val) {
+	if (!gdspx_prepare_string_wrapper(ret_val)) {
+		return;
+	}
+	GdString gdspx_string_arg_0 = nullptr;
+	if (!gdspx_get_string_value(default_font_path, &gdspx_string_arg_0)) {
+		return;
+	}
 	if (!gdspx_validate_array_wrapper(font_paths)) {
 		return;
 	}
@@ -622,15 +749,30 @@ void gdspx_res_apply_project_fonts(GdString *default_font_path, GdArray *font_pa
 	if (!gdspx_validate_array_wrapper(preferences)) {
 		return;
 	}
-	*ret_val = resMgr->apply_project_fonts(*default_font_path, *font_paths, *font_families, *preferences);
+	GdString result = resMgr->apply_project_fonts(gdspx_string_arg_0, *font_paths, *font_families, *preferences);
+	if (!gdspx_bind_string_wrapper(ret_val, result)) {
+		return;
+	}
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_res_set_default_font(GdString *font_path) {
-	 resMgr->set_default_font(*font_path);
+	GdString gdspx_string_arg_0 = nullptr;
+	if (!gdspx_get_string_value(font_path, &gdspx_string_arg_0)) {
+		return;
+	}
+	 resMgr->set_default_font(gdspx_string_arg_0);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_res_register_font_face(GdString *font_path, GdString *family) {
-	 resMgr->register_font_face(*font_path, *family);
+	GdString gdspx_string_arg_0 = nullptr;
+	if (!gdspx_get_string_value(font_path, &gdspx_string_arg_0)) {
+		return;
+	}
+	GdString gdspx_string_arg_1 = nullptr;
+	if (!gdspx_get_string_value(family, &gdspx_string_arg_1)) {
+		return;
+	}
+	 resMgr->register_font_face(gdspx_string_arg_0, gdspx_string_arg_1);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_res_set_font_preferences(GdArray *preferences) {
@@ -641,7 +783,11 @@ void gdspx_res_set_font_preferences(GdArray *preferences) {
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_scene_change_scene_to_file(GdString *path) {
-	 sceneMgr->change_scene_to_file(*path);
+	GdString gdspx_string_arg_0 = nullptr;
+	if (!gdspx_get_string_value(path, &gdspx_string_arg_0)) {
+		return;
+	}
+	 sceneMgr->change_scene_to_file(gdspx_string_arg_0);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_scene_destroy_all_sprites() {
@@ -661,7 +807,11 @@ void gdspx_scene_clear_pure_sprites() {
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_scene_create_pure_sprite(GdString *texture_path, GdVec2 *pos, GdInt *zindex) {
-	 sceneMgr->create_pure_sprite(*texture_path, *pos, *zindex);
+	GdString gdspx_string_arg_0 = nullptr;
+	if (!gdspx_get_string_value(texture_path, &gdspx_string_arg_0)) {
+		return;
+	}
+	 sceneMgr->create_pure_sprite(gdspx_string_arg_0, *pos, *zindex);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_scene_destroy_pure_sprite(GdObj *id) {
@@ -669,14 +819,22 @@ void gdspx_scene_destroy_pure_sprite(GdObj *id) {
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_scene_create_render_sprite(GdString *texture_path, GdVec2 *pos, GdFloat *degree, GdVec2 *scale, GdInt *zindex, GdVec2 *pivot, GdObj *ret_val) {
-	*ret_val = sceneMgr->create_render_sprite(*texture_path, *pos, *degree, *scale, *zindex, *pivot);
+	GdString gdspx_string_arg_0 = nullptr;
+	if (!gdspx_get_string_value(texture_path, &gdspx_string_arg_0)) {
+		return;
+	}
+	*ret_val = sceneMgr->create_render_sprite(gdspx_string_arg_0, *pos, *degree, *scale, *zindex, *pivot);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_scene_create_static_sprite(GdString *texture_path, GdVec2 *pos, GdFloat *degree, GdVec2 *scale, GdInt *zindex, GdVec2 *pivot, GdInt *collider_type, GdVec2 *collider_pivot, GdArray *collider_params, GdObj *ret_val) {
+	GdString gdspx_string_arg_0 = nullptr;
+	if (!gdspx_get_string_value(texture_path, &gdspx_string_arg_0)) {
+		return;
+	}
 	if (!gdspx_validate_array_wrapper(collider_params)) {
 		return;
 	}
-	*ret_val = sceneMgr->create_static_sprite(*texture_path, *pos, *degree, *scale, *zindex, *pivot, *collider_type, *collider_pivot, *collider_params);
+	*ret_val = sceneMgr->create_static_sprite(gdspx_string_arg_0, *pos, *degree, *scale, *zindex, *pivot, *collider_type, *collider_pivot, *collider_params);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_set_dont_destroy_on_load(GdObj *obj) {
@@ -692,7 +850,11 @@ void gdspx_sprite_set_physic_process(GdObj *obj, GdBool *is_on) {
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_set_type_name(GdObj *obj, GdString *type_name) {
-	 spriteMgr->set_type_name(*obj, *type_name);
+	GdString gdspx_string_arg_1 = nullptr;
+	if (!gdspx_get_string_value(type_name, &gdspx_string_arg_1)) {
+		return;
+	}
+	 spriteMgr->set_type_name(*obj, gdspx_string_arg_1);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_set_pivot(GdObj *obj, GdVec2 *pivot) {
@@ -704,27 +866,51 @@ void gdspx_sprite_get_pivot(GdObj *obj, GdVec2 *ret_val) {
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_set_child_position(GdObj *obj, GdString *path, GdVec2 *pos) {
-	 spriteMgr->set_child_position(*obj, *path, *pos);
+	GdString gdspx_string_arg_1 = nullptr;
+	if (!gdspx_get_string_value(path, &gdspx_string_arg_1)) {
+		return;
+	}
+	 spriteMgr->set_child_position(*obj, gdspx_string_arg_1, *pos);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_get_child_position(GdObj *obj, GdString *path, GdVec2 *ret_val) {
-	*ret_val = spriteMgr->get_child_position(*obj, *path);
+	GdString gdspx_string_arg_1 = nullptr;
+	if (!gdspx_get_string_value(path, &gdspx_string_arg_1)) {
+		return;
+	}
+	*ret_val = spriteMgr->get_child_position(*obj, gdspx_string_arg_1);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_set_child_rotation(GdObj *obj, GdString *path, GdFloat *rot) {
-	 spriteMgr->set_child_rotation(*obj, *path, *rot);
+	GdString gdspx_string_arg_1 = nullptr;
+	if (!gdspx_get_string_value(path, &gdspx_string_arg_1)) {
+		return;
+	}
+	 spriteMgr->set_child_rotation(*obj, gdspx_string_arg_1, *rot);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_get_child_rotation(GdObj *obj, GdString *path, GdFloat *ret_val) {
-	*ret_val = spriteMgr->get_child_rotation(*obj, *path);
+	GdString gdspx_string_arg_1 = nullptr;
+	if (!gdspx_get_string_value(path, &gdspx_string_arg_1)) {
+		return;
+	}
+	*ret_val = spriteMgr->get_child_rotation(*obj, gdspx_string_arg_1);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_set_child_scale(GdObj *obj, GdString *path, GdVec2 *scale) {
-	 spriteMgr->set_child_scale(*obj, *path, *scale);
+	GdString gdspx_string_arg_1 = nullptr;
+	if (!gdspx_get_string_value(path, &gdspx_string_arg_1)) {
+		return;
+	}
+	 spriteMgr->set_child_scale(*obj, gdspx_string_arg_1, *scale);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_get_child_scale(GdObj *obj, GdString *path, GdVec2 *ret_val) {
-	*ret_val = spriteMgr->get_child_scale(*obj, *path);
+	GdString gdspx_string_arg_1 = nullptr;
+	if (!gdspx_get_string_value(path, &gdspx_string_arg_1)) {
+		return;
+	}
+	*ret_val = spriteMgr->get_child_scale(*obj, gdspx_string_arg_1);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_check_collision(GdObj *obj, GdObj *target, GdBool *is_src_trigger, GdBool *is_dst_trigger, GdBool *ret_val) {
@@ -744,11 +930,19 @@ void gdspx_sprite_is_debug_collision_visible(GdObj *obj, GdBool *ret_val) {
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_create_backdrop(GdString *path, GdObj *ret_val) {
-	*ret_val = spriteMgr->create_backdrop(*path);
+	GdString gdspx_string_arg_0 = nullptr;
+	if (!gdspx_get_string_value(path, &gdspx_string_arg_0)) {
+		return;
+	}
+	*ret_val = spriteMgr->create_backdrop(gdspx_string_arg_0);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_create_sprite(GdString *path, GdVec2 *pos, GdObj *ret_val) {
-	*ret_val = spriteMgr->create_sprite(*path, *pos);
+	GdString gdspx_string_arg_0 = nullptr;
+	if (!gdspx_get_string_value(path, &gdspx_string_arg_0)) {
+		return;
+	}
+	*ret_val = spriteMgr->create_sprite(gdspx_string_arg_0, *pos);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_create_bare_sprite(GdVec2 *pos, GdObj *ret_val) {
@@ -812,59 +1006,119 @@ void gdspx_sprite_get_color(GdObj *obj, GdColor *ret_val) {
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_set_material_shader(GdObj *obj, GdString *path) {
-	 spriteMgr->set_material_shader(*obj, *path);
+	GdString gdspx_string_arg_1 = nullptr;
+	if (!gdspx_get_string_value(path, &gdspx_string_arg_1)) {
+		return;
+	}
+	 spriteMgr->set_material_shader(*obj, gdspx_string_arg_1);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_get_material_shader(GdObj *obj, GdString *ret_val) {
-	*ret_val = spriteMgr->get_material_shader(*obj);
+	if (!gdspx_prepare_string_wrapper(ret_val)) {
+		return;
+	}
+	GdString result = spriteMgr->get_material_shader(*obj);
+	if (!gdspx_bind_string_wrapper(ret_val, result)) {
+		return;
+	}
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_set_material_params(GdObj *obj, GdString *effect, GdFloat *amount) {
-	 spriteMgr->set_material_params(*obj, *effect, *amount);
+	GdString gdspx_string_arg_1 = nullptr;
+	if (!gdspx_get_string_value(effect, &gdspx_string_arg_1)) {
+		return;
+	}
+	 spriteMgr->set_material_params(*obj, gdspx_string_arg_1, *amount);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_get_material_params(GdObj *obj, GdString *effect, GdFloat *ret_val) {
-	*ret_val = spriteMgr->get_material_params(*obj, *effect);
+	GdString gdspx_string_arg_1 = nullptr;
+	if (!gdspx_get_string_value(effect, &gdspx_string_arg_1)) {
+		return;
+	}
+	*ret_val = spriteMgr->get_material_params(*obj, gdspx_string_arg_1);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_set_material_params_vec(GdObj *obj, GdString *effect, GdFloat *x, GdFloat *y, GdFloat *z, GdFloat *w) {
-	 spriteMgr->set_material_params_vec(*obj, *effect, *x, *y, *z, *w);
+	GdString gdspx_string_arg_1 = nullptr;
+	if (!gdspx_get_string_value(effect, &gdspx_string_arg_1)) {
+		return;
+	}
+	 spriteMgr->set_material_params_vec(*obj, gdspx_string_arg_1, *x, *y, *z, *w);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_set_material_params_vec4(GdObj *obj, GdString *effect, GdVec4 *vec4) {
-	 spriteMgr->set_material_params_vec4(*obj, *effect, *vec4);
+	GdString gdspx_string_arg_1 = nullptr;
+	if (!gdspx_get_string_value(effect, &gdspx_string_arg_1)) {
+		return;
+	}
+	 spriteMgr->set_material_params_vec4(*obj, gdspx_string_arg_1, *vec4);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_get_material_params_vec4(GdObj *obj, GdString *effect, GdVec4 *ret_val) {
-	*ret_val = spriteMgr->get_material_params_vec4(*obj, *effect);
+	GdString gdspx_string_arg_1 = nullptr;
+	if (!gdspx_get_string_value(effect, &gdspx_string_arg_1)) {
+		return;
+	}
+	*ret_val = spriteMgr->get_material_params_vec4(*obj, gdspx_string_arg_1);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_set_material_params_color(GdObj *obj, GdString *effect, GdColor *color) {
-	 spriteMgr->set_material_params_color(*obj, *effect, *color);
+	GdString gdspx_string_arg_1 = nullptr;
+	if (!gdspx_get_string_value(effect, &gdspx_string_arg_1)) {
+		return;
+	}
+	 spriteMgr->set_material_params_color(*obj, gdspx_string_arg_1, *color);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_get_material_params_color(GdObj *obj, GdString *effect, GdColor *ret_val) {
-	*ret_val = spriteMgr->get_material_params_color(*obj, *effect);
+	GdString gdspx_string_arg_1 = nullptr;
+	if (!gdspx_get_string_value(effect, &gdspx_string_arg_1)) {
+		return;
+	}
+	*ret_val = spriteMgr->get_material_params_color(*obj, gdspx_string_arg_1);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_set_texture_atlas(GdObj *obj, GdString *path, GdRect2 *rect2) {
-	 spriteMgr->set_texture_atlas(*obj, *path, *rect2);
+	GdString gdspx_string_arg_1 = nullptr;
+	if (!gdspx_get_string_value(path, &gdspx_string_arg_1)) {
+		return;
+	}
+	 spriteMgr->set_texture_atlas(*obj, gdspx_string_arg_1, *rect2);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_set_texture(GdObj *obj, GdString *path) {
-	 spriteMgr->set_texture(*obj, *path);
+	GdString gdspx_string_arg_1 = nullptr;
+	if (!gdspx_get_string_value(path, &gdspx_string_arg_1)) {
+		return;
+	}
+	 spriteMgr->set_texture(*obj, gdspx_string_arg_1);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_set_texture_atlas_direct(GdObj *obj, GdString *path, GdRect2 *rect2) {
-	 spriteMgr->set_texture_atlas_direct(*obj, *path, *rect2);
+	GdString gdspx_string_arg_1 = nullptr;
+	if (!gdspx_get_string_value(path, &gdspx_string_arg_1)) {
+		return;
+	}
+	 spriteMgr->set_texture_atlas_direct(*obj, gdspx_string_arg_1, *rect2);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_set_texture_direct(GdObj *obj, GdString *path) {
-	 spriteMgr->set_texture_direct(*obj, *path);
+	GdString gdspx_string_arg_1 = nullptr;
+	if (!gdspx_get_string_value(path, &gdspx_string_arg_1)) {
+		return;
+	}
+	 spriteMgr->set_texture_direct(*obj, gdspx_string_arg_1);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_get_texture(GdObj *obj, GdString *ret_val) {
-	*ret_val = spriteMgr->get_texture(*obj);
+	if (!gdspx_prepare_string_wrapper(ret_val)) {
+		return;
+	}
+	GdString result = spriteMgr->get_texture(*obj);
+	if (!gdspx_bind_string_wrapper(ret_val, result)) {
+		return;
+	}
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_set_visible(GdObj *obj, GdBool *visible) {
@@ -884,11 +1138,19 @@ void gdspx_sprite_set_z_index(GdObj *obj, GdInt *z) {
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_play_anim(GdObj *obj, GdString *p_name, GdFloat *p_speed, GdBool *isLoop, GdBool *p_revert) {
-	 spriteMgr->play_anim(*obj, *p_name, *p_speed, *isLoop, *p_revert);
+	GdString gdspx_string_arg_1 = nullptr;
+	if (!gdspx_get_string_value(p_name, &gdspx_string_arg_1)) {
+		return;
+	}
+	 spriteMgr->play_anim(*obj, gdspx_string_arg_1, *p_speed, *isLoop, *p_revert);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_play_backwards_anim(GdObj *obj, GdString *p_name) {
-	 spriteMgr->play_backwards_anim(*obj, *p_name);
+	GdString gdspx_string_arg_1 = nullptr;
+	if (!gdspx_get_string_value(p_name, &gdspx_string_arg_1)) {
+		return;
+	}
+	 spriteMgr->play_backwards_anim(*obj, gdspx_string_arg_1);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_pause_anim(GdObj *obj) {
@@ -904,11 +1166,21 @@ void gdspx_sprite_is_playing_anim(GdObj *obj, GdBool *ret_val) {
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_set_anim(GdObj *obj, GdString *p_name) {
-	 spriteMgr->set_anim(*obj, *p_name);
+	GdString gdspx_string_arg_1 = nullptr;
+	if (!gdspx_get_string_value(p_name, &gdspx_string_arg_1)) {
+		return;
+	}
+	 spriteMgr->set_anim(*obj, gdspx_string_arg_1);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_get_anim(GdObj *obj, GdString *ret_val) {
-	*ret_val = spriteMgr->get_anim(*obj);
+	if (!gdspx_prepare_string_wrapper(ret_val)) {
+		return;
+	}
+	GdString result = spriteMgr->get_anim(*obj);
+	if (!gdspx_bind_string_wrapper(ret_val, result)) {
+		return;
+	}
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_set_anim_frame(GdObj *obj, GdInt *p_frame) {
@@ -964,7 +1236,13 @@ void gdspx_sprite_is_anim_flipped_v(GdObj *obj, GdBool *ret_val) {
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_get_current_anim_name(GdObj *obj, GdString *ret_val) {
-	*ret_val = spriteMgr->get_current_anim_name(*obj);
+	if (!gdspx_prepare_string_wrapper(ret_val)) {
+		return;
+	}
+	GdString result = spriteMgr->get_current_anim_name(*obj);
+	if (!gdspx_bind_string_wrapper(ret_val, result)) {
+		return;
+	}
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_set_velocity(GdObj *obj, GdVec2 *velocity) {
@@ -1222,14 +1500,22 @@ void gdspx_tilemap_set_layer_index(GdInt *index) {
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_tilemap_set_tile(GdString *texture_path, GdBool *with_collision) {
-	 tilemapMgr->set_tile(*texture_path, *with_collision);
+	GdString gdspx_string_arg_0 = nullptr;
+	if (!gdspx_get_string_value(texture_path, &gdspx_string_arg_0)) {
+		return;
+	}
+	 tilemapMgr->set_tile(gdspx_string_arg_0, *with_collision);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_tilemap_set_tile_with_collision_info(GdString *texture_path, GdArray *collision_points) {
+	GdString gdspx_string_arg_0 = nullptr;
+	if (!gdspx_get_string_value(texture_path, &gdspx_string_arg_0)) {
+		return;
+	}
 	if (!gdspx_validate_array_wrapper(collision_points)) {
 		return;
 	}
-	 tilemapMgr->set_tile_with_collision_info(*texture_path, *collision_points);
+	 tilemapMgr->set_tile_with_collision_info(gdspx_string_arg_0, *collision_points);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_tilemap_set_layer_offset(GdInt *index, GdVec2 *offset) {
@@ -1244,22 +1530,38 @@ void gdspx_tilemap_place_tiles(GdArray *positions, GdString *texture_path) {
 	if (!gdspx_validate_array_wrapper(positions)) {
 		return;
 	}
-	 tilemapMgr->place_tiles(*positions, *texture_path);
+	GdString gdspx_string_arg_1 = nullptr;
+	if (!gdspx_get_string_value(texture_path, &gdspx_string_arg_1)) {
+		return;
+	}
+	 tilemapMgr->place_tiles(*positions, gdspx_string_arg_1);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_tilemap_place_tiles_with_layer(GdArray *positions, GdString *texture_path, GdInt *layer_index) {
 	if (!gdspx_validate_array_wrapper(positions)) {
 		return;
 	}
-	 tilemapMgr->place_tiles_with_layer(*positions, *texture_path, *layer_index);
+	GdString gdspx_string_arg_1 = nullptr;
+	if (!gdspx_get_string_value(texture_path, &gdspx_string_arg_1)) {
+		return;
+	}
+	 tilemapMgr->place_tiles_with_layer(*positions, gdspx_string_arg_1, *layer_index);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_tilemap_place_tile(GdVec2 *pos, GdString *texture_path) {
-	 tilemapMgr->place_tile(*pos, *texture_path);
+	GdString gdspx_string_arg_1 = nullptr;
+	if (!gdspx_get_string_value(texture_path, &gdspx_string_arg_1)) {
+		return;
+	}
+	 tilemapMgr->place_tile(*pos, gdspx_string_arg_1);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_tilemap_place_tile_with_layer(GdVec2 *pos, GdString *texture_path, GdInt *layer_index) {
-	 tilemapMgr->place_tile_with_layer(*pos, *texture_path, *layer_index);
+	GdString gdspx_string_arg_1 = nullptr;
+	if (!gdspx_get_string_value(texture_path, &gdspx_string_arg_1)) {
+		return;
+	}
+	 tilemapMgr->place_tile_with_layer(*pos, gdspx_string_arg_1, *layer_index);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_tilemap_erase_tile(GdVec2 *pos) {
@@ -1271,11 +1573,23 @@ void gdspx_tilemap_erase_tile_with_layer(GdVec2 *pos, GdInt *layer_index) {
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_tilemap_get_tile(GdVec2 *pos, GdString *ret_val) {
-	*ret_val = tilemapMgr->get_tile(*pos);
+	if (!gdspx_prepare_string_wrapper(ret_val)) {
+		return;
+	}
+	GdString result = tilemapMgr->get_tile(*pos);
+	if (!gdspx_bind_string_wrapper(ret_val, result)) {
+		return;
+	}
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_tilemap_get_tile_with_layer(GdVec2 *pos, GdInt *layer_index, GdString *ret_val) {
-	*ret_val = tilemapMgr->get_tile_with_layer(*pos, *layer_index);
+	if (!gdspx_prepare_string_wrapper(ret_val)) {
+		return;
+	}
+	GdString result = tilemapMgr->get_tile_with_layer(*pos, *layer_index);
+	if (!gdspx_bind_string_wrapper(ret_val, result)) {
+		return;
+	}
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_tilemap_close_draw_tiles() {
@@ -1287,11 +1601,19 @@ void gdspx_tilemap_exit_tilemap_editor_mode() {
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_tilemapparser_load_tilemap(GdString *json_path) {
-	 tilemapparserMgr->load_tilemap(*json_path);
+	GdString gdspx_string_arg_0 = nullptr;
+	if (!gdspx_get_string_value(json_path, &gdspx_string_arg_0)) {
+		return;
+	}
+	 tilemapparserMgr->load_tilemap(gdspx_string_arg_0);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_tilemapparser_unload_tilemap(GdString *name) {
-	 tilemapparserMgr->unload_tilemap(*name);
+	GdString gdspx_string_arg_0 = nullptr;
+	if (!gdspx_get_string_value(name, &gdspx_string_arg_0)) {
+		return;
+	}
+	 tilemapparserMgr->unload_tilemap(gdspx_string_arg_0);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_tilemapparser_destroy_all_tilemaps() {
@@ -1299,43 +1621,95 @@ void gdspx_tilemapparser_destroy_all_tilemaps() {
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_tilemapparser_has_tilemap(GdString *name, GdBool *ret_val) {
-	*ret_val = tilemapparserMgr->has_tilemap(*name);
+	GdString gdspx_string_arg_0 = nullptr;
+	if (!gdspx_get_string_value(name, &gdspx_string_arg_0)) {
+		return;
+	}
+	*ret_val = tilemapparserMgr->has_tilemap(gdspx_string_arg_0);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_tilemapparser_get_tilemap_layer_count(GdString *name, GdInt *ret_val) {
-	*ret_val = tilemapparserMgr->get_tilemap_layer_count(*name);
+	GdString gdspx_string_arg_0 = nullptr;
+	if (!gdspx_get_string_value(name, &gdspx_string_arg_0)) {
+		return;
+	}
+	*ret_val = tilemapparserMgr->get_tilemap_layer_count(gdspx_string_arg_0);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_ui_bind_node(GdObj *obj, GdString *rel_path, GdObj *ret_val) {
-	*ret_val = uiMgr->bind_node(*obj, *rel_path);
+	GdString gdspx_string_arg_1 = nullptr;
+	if (!gdspx_get_string_value(rel_path, &gdspx_string_arg_1)) {
+		return;
+	}
+	*ret_val = uiMgr->bind_node(*obj, gdspx_string_arg_1);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_ui_create_node(GdString *path, GdObj *ret_val) {
-	*ret_val = uiMgr->create_node(*path);
+	GdString gdspx_string_arg_0 = nullptr;
+	if (!gdspx_get_string_value(path, &gdspx_string_arg_0)) {
+		return;
+	}
+	*ret_val = uiMgr->create_node(gdspx_string_arg_0);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_ui_create_button(GdString *path, GdString *text, GdObj *ret_val) {
-	*ret_val = uiMgr->create_button(*path, *text);
+	GdString gdspx_string_arg_0 = nullptr;
+	if (!gdspx_get_string_value(path, &gdspx_string_arg_0)) {
+		return;
+	}
+	GdString gdspx_string_arg_1 = nullptr;
+	if (!gdspx_get_string_value(text, &gdspx_string_arg_1)) {
+		return;
+	}
+	*ret_val = uiMgr->create_button(gdspx_string_arg_0, gdspx_string_arg_1);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_ui_create_label(GdString *path, GdString *text, GdObj *ret_val) {
-	*ret_val = uiMgr->create_label(*path, *text);
+	GdString gdspx_string_arg_0 = nullptr;
+	if (!gdspx_get_string_value(path, &gdspx_string_arg_0)) {
+		return;
+	}
+	GdString gdspx_string_arg_1 = nullptr;
+	if (!gdspx_get_string_value(text, &gdspx_string_arg_1)) {
+		return;
+	}
+	*ret_val = uiMgr->create_label(gdspx_string_arg_0, gdspx_string_arg_1);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_ui_create_image(GdString *path, GdObj *ret_val) {
-	*ret_val = uiMgr->create_image(*path);
+	GdString gdspx_string_arg_0 = nullptr;
+	if (!gdspx_get_string_value(path, &gdspx_string_arg_0)) {
+		return;
+	}
+	*ret_val = uiMgr->create_image(gdspx_string_arg_0);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_ui_create_toggle(GdString *path, GdBool *value, GdObj *ret_val) {
-	*ret_val = uiMgr->create_toggle(*path, *value);
+	GdString gdspx_string_arg_0 = nullptr;
+	if (!gdspx_get_string_value(path, &gdspx_string_arg_0)) {
+		return;
+	}
+	*ret_val = uiMgr->create_toggle(gdspx_string_arg_0, *value);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_ui_create_slider(GdString *path, GdFloat *value, GdObj *ret_val) {
-	*ret_val = uiMgr->create_slider(*path, *value);
+	GdString gdspx_string_arg_0 = nullptr;
+	if (!gdspx_get_string_value(path, &gdspx_string_arg_0)) {
+		return;
+	}
+	*ret_val = uiMgr->create_slider(gdspx_string_arg_0, *value);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_ui_create_input(GdString *path, GdString *text, GdObj *ret_val) {
-	*ret_val = uiMgr->create_input(*path, *text);
+	GdString gdspx_string_arg_0 = nullptr;
+	if (!gdspx_get_string_value(path, &gdspx_string_arg_0)) {
+		return;
+	}
+	GdString gdspx_string_arg_1 = nullptr;
+	if (!gdspx_get_string_value(text, &gdspx_string_arg_1)) {
+		return;
+	}
+	*ret_val = uiMgr->create_input(gdspx_string_arg_0, gdspx_string_arg_1);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_ui_destroy_node(GdObj *obj, GdBool *ret_val) {
@@ -1347,19 +1721,39 @@ void gdspx_ui_get_type(GdObj *obj, GdInt *ret_val) {
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_ui_set_text(GdObj *obj, GdString *text) {
-	 uiMgr->set_text(*obj, *text);
+	GdString gdspx_string_arg_1 = nullptr;
+	if (!gdspx_get_string_value(text, &gdspx_string_arg_1)) {
+		return;
+	}
+	 uiMgr->set_text(*obj, gdspx_string_arg_1);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_ui_get_text(GdObj *obj, GdString *ret_val) {
-	*ret_val = uiMgr->get_text(*obj);
+	if (!gdspx_prepare_string_wrapper(ret_val)) {
+		return;
+	}
+	GdString result = uiMgr->get_text(*obj);
+	if (!gdspx_bind_string_wrapper(ret_val, result)) {
+		return;
+	}
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_ui_set_texture(GdObj *obj, GdString *path) {
-	 uiMgr->set_texture(*obj, *path);
+	GdString gdspx_string_arg_1 = nullptr;
+	if (!gdspx_get_string_value(path, &gdspx_string_arg_1)) {
+		return;
+	}
+	 uiMgr->set_texture(*obj, gdspx_string_arg_1);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_ui_get_texture(GdObj *obj, GdString *ret_val) {
-	*ret_val = uiMgr->get_texture(*obj);
+	if (!gdspx_prepare_string_wrapper(ret_val)) {
+		return;
+	}
+	GdString result = uiMgr->get_texture(*obj);
+	if (!gdspx_bind_string_wrapper(ret_val, result)) {
+		return;
+	}
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_ui_set_color(GdObj *obj, GdColor *color) {

@@ -122,8 +122,11 @@ func generateGdCppFile(projectPath string, templateStr string, ast clang.CHeader
 		"isManagerMethod":             IsManagerMethod,
 		"getManagerName":              GetManagerName,
 		"isWebOwnedStringFree":        isWebOwnedStringFree,
+		"isWebGdStringReturn":         isWebGdStringReturn,
 		"isWebGdArrayReturn":          isWebGdArrayReturn,
+		"isGdStringArgument":          isGdStringArgument,
 		"isGdArrayArgument":           isGdArrayArgument,
+		"webManagerArgument":          webManagerArgument,
 		"hasArrayTransformBridgeSpec": HasArrayTransformBridgeSpec,
 		"hasNativeArrayBridgeSpec":    HasNativeArrayBridgeSpec,
 		"getArrayTransformBridgeSpec": func(function *clang.TypedefFunction) ArrayTransformBridgeSpec {
@@ -201,6 +204,22 @@ func isWebGdArrayReturn(function *clang.TypedefFunction) bool {
 	return function != nil && function.ReturnType.Name == "GdArray" && !function.ReturnType.IsPointer
 }
 
+func isWebGdStringReturn(function *clang.TypedefFunction) bool {
+	return function != nil && function.ReturnType.Name == "GdString" && !function.ReturnType.IsPointer
+}
+
 func isGdArrayArgument(argument clang.Argument) bool {
 	return argument.Type.Primative != nil && argument.Type.Primative.Name == "GdArray"
+}
+
+func isGdStringArgument(argument clang.Argument) bool {
+	return argument.Type.Primative != nil && argument.Type.Primative.Name == "GdString" &&
+		!argument.Type.Primative.IsPointer
+}
+
+func webManagerArgument(argument clang.Argument, index int) string {
+	if isGdStringArgument(argument) {
+		return fmt.Sprintf("gdspx_string_arg_%d", index)
+	}
+	return argument.ResolvedPtrName(index)
 }
