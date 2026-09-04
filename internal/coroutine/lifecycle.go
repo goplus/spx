@@ -116,12 +116,14 @@ func (p *Coroutines) AbortAllAndWait(timeout stime.Duration) bool {
 
 // RunAfterAbortAll closes coroutine admission, aborts and drains every
 // registered thread, then runs call while admission remains closed. It must be
-// called outside a managed coroutine. If the timeout expires, call is not run.
+// called outside a managed coroutine or its panic handler. If the timeout
+// expires, call is not run and admission stays closed until a later successful
+// RunAfterAbortAll explicitly recovers the manager.
 // The callback must not create a coroutine through this manager because the
 // admission lock remains held until it returns.
 func (p *Coroutines) RunAfterAbortAll(timeout stime.Duration, call func()) bool {
-	if p.currentCoroutineThread() != nil {
-		panic("coroutine: RunAfterAbortAll called from a managed coroutine")
+	if p.currentCoroutineThread() != nil || p.isFinalizingCaller() {
+		panic("coroutine: RunAfterAbortAll called from a managed coroutine or its panic handler")
 	}
 	p.shutdownMu.Lock()
 	defer p.shutdownMu.Unlock()
@@ -134,11 +136,9 @@ func (p *Coroutines) RunAfterAbortAll(timeout stime.Duration, call func()) bool 
 	p.creationMu.Lock()
 	defer p.creationMu.Unlock()
 	if !completed || p.hasThreadsOtherThan(nil) {
-		// A timeout is fail-closed: no callback/reset may run while a canceled
-		// coroutine or native worker can still touch runtime state. The last
-		// lifecycle item to unregister reopens admission once the drain is real.
-		p.reopenWhenDrained = true
-		p.maybeReopenAfterDrainLocked()
+		// Fatal/reload barriers fail closed. The callback cannot safely be replayed
+		// after its caller observes a timeout, so only an explicit later barrier
+		// may recover this quarantined manager.
 		return false
 	}
 	defer p.endStoppingLocked()
@@ -231,6 +231,11 @@ func (p *Coroutines) callerThread() Thread {
 		return nil
 	}
 	return value.(Thread)
+}
+
+func (p *Coroutines) isFinalizingCaller() bool {
+	_, ok := p.finalizingGoroutines.Load(gid.Get())
+	return ok
 }
 
 func (p *Coroutines) newThread(obj ThreadObj) Thread {
@@ -407,6 +412,8 @@ func (p *Coroutines) finishThread(th Thread, gid uint64, recovered any) {
 	p.setCurrent(nil)
 	defer p.unregisterThread(th)
 	p.runMu.Unlock()
+	p.finalizingGoroutines.Store(gid, struct{}{})
+	defer p.finalizingGoroutines.Delete(gid)
 	p.goroutineThreads.Delete(gid)
 	p.handleThreadPanic(th, recovered)
 }

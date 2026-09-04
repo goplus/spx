@@ -158,7 +158,7 @@ func TestAbortCoroutinesAndResetReturnsBeforeExternalDrain(t *testing.T) {
 func TestAbortCoroutinesAndResetAbortsManagedCaller(t *testing.T) {
 	co := coroutine.New(nil)
 	co.OnInited()
-	setupAbortCoroutinesAndResetTest(t, co)
+	recorder := setupAbortCoroutinesAndResetTest(t, co)
 
 	entered := make(chan struct{})
 	callerDone := make(chan struct{})
@@ -187,6 +187,14 @@ func TestAbortCoroutinesAndResetAbortsManagedCaller(t *testing.T) {
 	case <-caller.Context().Done():
 	case <-time.After(time.Second):
 		t.Fatal("managed reset caller context was not canceled")
+	}
+	select {
+	case exitCode := <-recorder.calls:
+		if exitCode != 9 {
+			t.Fatalf("engine reset exit code = %d, want 9", exitCode)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("engine reset was not requested after managed caller drained")
 	}
 	waitForResetAdmissionOpen(t, co)
 }

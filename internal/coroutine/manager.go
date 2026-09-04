@@ -54,8 +54,8 @@ type Coroutines struct {
 	shutdownMu sync.Mutex
 	creationMu sync.RWMutex
 	stopping   bool
-	// reopenWhenDrained is set after a timed-out barrier. Admission remains
-	// closed until the final managed thread/native task unregisters.
+	// reopenWhenDrained is set only for a recoverable watchdog shutdown.
+	// Fatal/reload barrier timeouts remain quarantined until an explicit retry.
 	reopenWhenDrained bool
 
 	// threadsMu protects the thread and native-task registries.
@@ -89,6 +89,9 @@ type Coroutines struct {
 	// executes. A scheduler-wide Current value is not sufficient to identify
 	// the caller because external goroutines can observe it concurrently.
 	goroutineThreads sync.Map // map[uint64]Thread
+	// finalizingGoroutines prevents a panic callback from synchronously waiting
+	// for the thread whose teardown is invoking that callback.
+	finalizingGoroutines sync.Map // map[uint64]struct{}
 }
 
 // New creates a coroutine manager. onPanic is called when a coroutine exits

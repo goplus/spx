@@ -115,6 +115,8 @@ func (p *Coroutines) stopRunawayThreads() {
 
 	p.runMu.Lock()
 	p.creationMu.Lock()
+	wasStopping := p.stopping
+	reopenWhenDrained := p.reopenWhenDrained
 	p.beginStoppingLocked()
 	p.creationMu.Unlock()
 	p.runMu.Unlock()
@@ -126,7 +128,12 @@ func (p *Coroutines) stopRunawayThreads() {
 	// native worker outlives the bounded wait, keep admission closed; its final
 	// unregister path will reopen the manager once all lifecycle work drains.
 	p.creationMu.Lock()
-	if completed && !p.hasThreadsOtherThan(nil) {
+	if wasStopping {
+		// A watchdog must not weaken a quarantine established by a fatal/reload
+		// barrier. It also preserves an earlier watchdog's recovery policy.
+		p.reopenWhenDrained = reopenWhenDrained
+		p.maybeReopenAfterDrainLocked()
+	} else if completed && !p.hasThreadsOtherThan(nil) {
 		p.endStoppingLocked()
 	} else {
 		p.reopenWhenDrained = true

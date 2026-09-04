@@ -150,22 +150,22 @@ func TestRunAfterAbortAllWaitsForWaitToDoWorker(t *testing.T) {
 		t.Fatal("canceled WaitToDo caller did not finish")
 	}
 
-	// Worker completion reopens admission after the timed-out barrier has
-	// drained. Retry briefly to account for the unregister/reopen handoff.
-	deadline := time.Now().Add(time.Second)
-	var next Thread
-	for next == nil && time.Now().Before(deadline) {
-		candidate := co.Create("after-drain", func(Thread) int { return 0 })
-		if !candidate.Stopped() {
-			next = candidate
-			break
-		}
-		<-candidate.done
-		runtime.Gosched()
+	stillRejected := co.Create("after-drain-before-recovery", func(Thread) int {
+		t.Fatal("creation ran while the manager remained quarantined")
+		return 0
+	})
+	if !stillRejected.Stopped() {
+		t.Fatal("admission reopened after a fatal barrier timed out")
 	}
-	if next == nil {
-		t.Fatal("admission did not reopen after native worker drained")
+	select {
+	case <-stillRejected.done:
+	case <-time.After(time.Second):
+		t.Fatal("quarantined creation did not finish")
 	}
+	if !co.RunAfterAbortAll(time.Second, nil) {
+		t.Fatal("explicit recovery barrier did not complete after native drain")
+	}
+	next := co.Create("after-recovery", func(Thread) int { return 0 })
 	select {
 	case <-next.done:
 	case <-time.After(time.Second):
