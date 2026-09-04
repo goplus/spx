@@ -63,26 +63,16 @@ func OpenHttps(remotePath string) (fs.Dir, error) {
 	return openHttpWith(remotePath, "https://")
 }
 
-func openHttpWith(remotePath string, schema string) (dir fs.Dir, err error) {
-	remote, _, err := parseRemoteURL(remotePath, schema)
+func openHttpWith(remotePath, scheme string) (fs.Dir, error) {
+	remote, _, err := parseRemoteURL(remotePath, scheme)
 	if err != nil {
 		return nil, err
 	}
-	client := remoteHTTPClient
-	client = remoteClientForScheme(client, schema)
-	resp, err := client.Get(remote)
+	resp, err := getRemote(remote, scheme)
 	if err != nil {
 		return nil, err
 	}
-	if resp.Body != nil {
-		defer resp.Body.Close()
-	}
-	if err := checkFinalRemoteScheme(resp, schema); err != nil {
-		return nil, err
-	}
-	if err := checkRemoteHTTPResponse(resp, remote); err != nil {
-		return nil, err
-	}
+	defer resp.Body.Close()
 	body, err := readRemoteBody(resp)
 	if err != nil {
 		return nil, err

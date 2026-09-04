@@ -30,19 +30,15 @@ import (
 )
 
 const (
-	// MaxRemoteZipBytes bounds the amount of data accepted from an hzip/hzips
-	// response. The limit applies even when the server omits Content-Length.
+	// MaxRemoteZipBytes limits downloaded archive data.
 	MaxRemoteZipBytes int64 = 512 << 20
 )
 
 var (
-	// remoteHTTPClient is a package test hook. A nil value follows
-	// http.DefaultClient at request time, preserving the standard library's
-	// transport, proxy, cookie jar, and redirect configuration.
+	// remoteHTTPClient is a test hook; nil uses http.DefaultClient.
 	remoteHTTPClient  *http.Client
 	remoteHTTPTimeout = 5 * time.Minute
-	// maxRemoteZipBytes is kept separate from the public default to make the
-	// bound straightforward to exercise in tests.
+	// maxRemoteZipBytes allows a test-only limit override.
 	maxRemoteZipBytes int64 = MaxRemoteZipBytes
 
 	ErrInvalidRemoteURL = errors.New("zip: invalid remote URL")
@@ -73,8 +69,7 @@ func remoteMaxBytes() int64 {
 	return MaxRemoteZipBytes
 }
 
-// parseRemoteURL accepts the historical hzip form (host/path) and turns it
-// into an absolute URL. The original URL is never used as a filesystem path.
+// parseRemoteURL validates the legacy host/path form.
 func parseRemoteURL(raw, schema string) (remote, cacheKey string, err error) {
 	var expectedScheme string
 	switch schema {
@@ -136,14 +131,35 @@ func parseRemoteURL(raw, schema string) (remote, cacheKey string, err error) {
 		}
 	}
 
-	// Host names are case-insensitive. Keeping one canonical representation
-	// makes equivalent URLs share a cache entry while retaining the protocol in
-	// the key so hzip and hzips can never collide.
+	// Keep the protocol in the key so HTTP and HTTPS never share a cache entry.
 	canonicalURL := *parsed
 	canonicalURL.Host = strings.ToLower(parsed.Host)
 	remote = canonicalURL.String()
 	digest := sha256.Sum256([]byte(remote))
 	return remote, hex.EncodeToString(digest[:]), nil
+}
+
+func getRemote(remote, scheme string) (*http.Response, error) {
+	resp, err := remoteClientForScheme(remoteHTTPClient, scheme).Get(remote)
+	if err != nil {
+		return nil, err
+	}
+	if err := checkFinalRemoteScheme(resp, scheme); err != nil {
+		if resp != nil && resp.Body != nil {
+			_ = resp.Body.Close()
+		}
+		return nil, err
+	}
+	if err := checkRemoteHTTPResponse(resp, remote); err != nil {
+		if resp != nil && resp.Body != nil {
+			_ = resp.Body.Close()
+		}
+		return nil, err
+	}
+	if resp.Body == nil {
+		return nil, fmt.Errorf("zip: HTTP response has no body")
+	}
+	return resp, nil
 }
 
 func checkRemoteHTTPResponse(resp *http.Response, remote string) error {
@@ -181,7 +197,7 @@ func readRemoteBody(resp *http.Response) ([]byte, error) {
 	return body, nil
 }
 
-func remoteClientForScheme(client *http.Client, schema string) *http.Client {
+func remoteClientForScheme(client *http.Client, scheme string) *http.Client {
 	if client == nil {
 		client = http.DefaultClient
 	}
@@ -196,7 +212,7 @@ func remoteClientForScheme(client *http.Client, schema string) *http.Client {
 	if clone.Timeout <= 0 || clone.Timeout > timeout {
 		clone.Timeout = timeout
 	}
-	if schema != "https://" {
+	if scheme != "https://" {
 		return &clone
 	}
 	previous := clone.CheckRedirect

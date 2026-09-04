@@ -72,44 +72,34 @@ func OpenHttps(remotePath string) (fs.Dir, error) {
 	return openHttpWith(remotePath, "https://")
 }
 
-func openHttpWith(remotePath string, schema string) (dir fs.Dir, err error) {
-	remote, cacheKey, err := parseRemoteURL(remotePath, schema)
+func openHttpWith(remotePath, scheme string) (fs.Dir, error) {
+	remote, cacheKey, err := parseRemoteURL(remotePath, scheme)
 	if err != nil {
 		return nil, err
 	}
-	local, err := remoteCachePath(spxBaseDir, schema, cacheKey)
+	cachePath, err := remoteCachePath(spxBaseDir, scheme, cacheKey)
 	if err != nil {
 		return nil, err
 	}
-	if dir, ok := openCached(local); ok {
+	if dir, ok := openCached(cachePath); ok {
 		return dir, nil
 	}
 
-	client := remoteHTTPClient
-	client = remoteClientForScheme(client, schema)
-	resp, err := client.Get(remote)
+	resp, err := getRemote(remote, scheme)
 	if err != nil {
 		return nil, fmt.Errorf("zip: download %s: %w", remote, err)
 	}
-	if resp.Body != nil {
-		defer resp.Body.Close()
-	}
-	if err := checkFinalRemoteScheme(resp, schema); err != nil {
-		return nil, err
-	}
-	if err := checkRemoteHTTPResponse(resp, remote); err != nil {
-		return nil, err
-	}
+	defer resp.Body.Close()
 
-	if err := saveTo(local, resp); err != nil {
+	if err := saveTo(cachePath, resp); err != nil {
 		return nil, err
 	}
-	return Open(local)
+	return Open(cachePath)
 }
 
-func saveTo(local string, resp *http.Response) (err error) {
-	if local == "" || !filepath.IsAbs(local) {
-		return fmt.Errorf("zip: cache path must be absolute: %q", local)
+func saveTo(cachePath string, resp *http.Response) (err error) {
+	if cachePath == "" || !filepath.IsAbs(cachePath) {
+		return fmt.Errorf("zip: cache path must be absolute: %q", cachePath)
 	}
 	if err := checkRemoteHTTPResponse(resp, "remote archive"); err != nil {
 		return err
@@ -117,7 +107,7 @@ func saveTo(local string, resp *http.Response) (err error) {
 	if resp.Body == nil {
 		return fmt.Errorf("zip: HTTP response has no body")
 	}
-	cacheDir := filepath.Dir(local)
+	cacheDir := filepath.Dir(cachePath)
 	if err := ensureCacheDirectories(cacheDir); err != nil {
 		return err
 	}
@@ -162,26 +152,26 @@ func saveTo(local string, resp *http.Response) (err error) {
 	if closeErr := archive.Close(); closeErr != nil {
 		return fmt.Errorf("zip: close downloaded ZIP: %w", closeErr)
 	}
-	if err := publishCacheFile(tmpPath, local); err != nil {
+	if err := publishCacheFile(tmpPath, cachePath); err != nil {
 		return err
 	}
 	committed = true
 	return nil
 }
 
-func openCached(local string) (fs.Dir, bool) {
-	info, err := os.Lstat(local)
+func openCached(cachePath string) (fs.Dir, bool) {
+	info, err := os.Lstat(cachePath)
 	if err != nil || info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
 		return nil, false
 	}
-	dir, err := Open(local)
+	dir, err := Open(cachePath)
 	if err != nil {
 		return nil, false
 	}
 	return dir, true
 }
 
-func remoteCachePath(base, schema, cacheKey string) (string, error) {
+func remoteCachePath(base, scheme, cacheKey string) (string, error) {
 	if base == "" || !filepath.IsAbs(base) {
 		return "", fmt.Errorf("zip: cache directory must be an absolute clean path: %q", base)
 	}
@@ -190,13 +180,13 @@ func remoteCachePath(base, schema, cacheKey string) (string, error) {
 		return "", fmt.Errorf("zip: invalid remote cache key")
 	}
 	var protocol string
-	switch schema {
+	switch scheme {
 	case "http://":
 		protocol = "http"
 	case "https://":
 		protocol = "https"
 	default:
-		return "", fmt.Errorf("zip: unsupported remote transport %q", schema)
+		return "", fmt.Errorf("zip: unsupported remote transport %q", scheme)
 	}
 	return filepath.Join(base, protocol, cacheKey+".zip"), nil
 }
@@ -229,9 +219,7 @@ func publishCacheFile(tmpPath, local string) error {
 		return fmt.Errorf("zip: publish cache archive: %w", renameErr)
 	}
 
-	// Windows cannot replace an existing file with Rename. Remove only the
-	// target directory entry (never follow a symlink), then retry in the same
-	// directory. POSIX uses the atomic replacement above.
+	// Windows needs an explicit remove before replacing the target.
 	info, statErr := os.Lstat(local)
 	if statErr != nil {
 		return fmt.Errorf("zip: publish cache archive: %w", renameErr)
