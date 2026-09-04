@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"net/http"
 	"syscall"
 
 	"github.com/goplus/spx/v3/fs"
@@ -54,24 +53,37 @@ func (zipf *FS) Close() error {
 
 // OpenHttp opens hzip:<domain>/<path>
 // OpenHttp("open.qiniu.us/weather/res.zip")
-func OpenHttp(url string) (fs.Dir, error) {
-	return openHttpWith(url, "http://")
+func OpenHttp(remotePath string) (fs.Dir, error) {
+	return openHttpWith(remotePath, "http://")
 }
 
 // OpenHttps opens hzips:<domain>/<path>
 // OpenHttps("open.qiniu.us/weather/res.zip")
-func OpenHttps(url string) (fs.Dir, error) {
-	return openHttpWith(url, "https://")
+func OpenHttps(remotePath string) (fs.Dir, error) {
+	return openHttpWith(remotePath, "https://")
 }
 
-func openHttpWith(url string, schema string) (dir fs.Dir, err error) {
-	remote := schema + url
-	resp, err := http.Get(remote)
+func openHttpWith(remotePath string, schema string) (dir fs.Dir, err error) {
+	remote, _, err := parseRemoteURL(remotePath, schema)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
+	client := remoteHTTPClient
+	client = remoteClientForScheme(client, schema)
+	resp, err := client.Get(remote)
+	if err != nil {
+		return nil, err
+	}
+	if resp.Body != nil {
+		defer resp.Body.Close()
+	}
+	if err := checkFinalRemoteScheme(resp, schema); err != nil {
+		return nil, err
+	}
+	if err := checkRemoteHTTPResponse(resp, remote); err != nil {
+		return nil, err
+	}
+	body, err := readRemoteBody(resp)
 	if err != nil {
 		return nil, err
 	}
