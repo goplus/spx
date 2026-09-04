@@ -24,6 +24,10 @@ window/size/viewport_height=360
 obs_enable_combined_recording=true
 realtime_mode=true
 
+[physics]
+
+3d/physics_engine="Dummy"
+
 [rendering]
 
 environment/defaults/default_clear_color=Color(1, 1, 1, 1)
