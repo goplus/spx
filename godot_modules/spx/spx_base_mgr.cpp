@@ -29,6 +29,7 @@
 /**************************************************************************/
 
 #include "spx_base_mgr.h"
+#include <limits>
 
 #include <cstdlib>
 #include <cstring>
@@ -37,6 +38,19 @@
 #include "scene/main/window.h"
 
 #include "spx_engine.h"
+
+#ifdef __EMSCRIPTEN__
+extern "C" bool gdspx_register_array_info(GdArray array);
+extern "C" bool gdspx_release_array_info(GdArray array);
+extern "C" bool gdspx_validate_array_info(GdArray array);
+#endif
+
+namespace {
+
+constexpr int32_t SPX_MAX_ARRAY_ELEMENTS = 16 * 1024 * 1024;
+constexpr size_t SPX_MAX_ARRAY_BYTES = 256 * 1024 * 1024;
+
+} // namespace
 
 Node *SpxBaseMgr::create_owner_node() {
 	return memnew(Node2D);
@@ -112,21 +126,8 @@ void SpxBaseMgr::on_resume() {
 }
 
 GdArray SpxBaseMgr::create_array(int32_t type, int32_t size) {
-	if (size < 0) {
+	if (size < 0 || size > SPX_MAX_ARRAY_ELEMENTS) {
 		return nullptr;
-	}
-
-	GdArray array = (GdArray)malloc(sizeof(GdArrayInfo));
-	if (!array) {
-		return nullptr;
-	}
-
-	array->size = size;
-	array->type = type;
-
-	if (size == 0) {
-		array->data = nullptr;
-		return array;
 	}
 
 	constexpr auto get_element_size = [](int32_t array_type) -> size_t {
@@ -147,21 +148,45 @@ GdArray SpxBaseMgr::create_array(int32_t type, int32_t size) {
 				return 0;
 		}
 	};
-
 	const size_t element_size = get_element_size(type);
-	if (element_size == 0) {
-		free(array);
+	if (element_size == 0 || static_cast<size_t>(size) > std::numeric_limits<size_t>::max() / element_size ||
+			static_cast<size_t>(size) * element_size > SPX_MAX_ARRAY_BYTES) {
 		return nullptr;
 	}
 
-	// String arrays are released slot-by-slot. Zero initialization guarantees
-	// partially populated arrays never attempt to free indeterminate pointers;
-	// calloc also rejects a size multiplication overflow.
+	GdArray array = (GdArray)malloc(sizeof(GdArrayInfo));
+	if (!array) {
+		return nullptr;
+	}
+
+	array->size = size;
+	array->type = type;
+
+	if (size == 0) {
+		array->data = nullptr;
+#ifdef __EMSCRIPTEN__
+		if (!gdspx_register_array_info(array)) {
+			free(array);
+			return nullptr;
+		}
+#endif
+		return array;
+	}
+
+	// Zero-init string slots for safe partial construction.
 	array->data = calloc(static_cast<size_t>(size), element_size);
 	if (!array->data) {
 		free(array);
 		return nullptr;
 	}
+
+#ifdef __EMSCRIPTEN__
+	if (!gdspx_register_array_info(array)) {
+		free(array->data);
+		free(array);
+		return nullptr;
+	}
+#endif
 
 	return array;
 }
@@ -170,8 +195,13 @@ void SpxBaseMgr::free_array(GdArray array) {
 	if (!array) {
 		return;
 	}
-	// Special handling for string arrays - need to free each string
-	if (array->type == GD_ARRAY_TYPE_STRING && array->data) {
+#ifdef __EMSCRIPTEN__
+	// Web ownership lives in the private metadata registry.
+	gdspx_release_array_info(array);
+#else
+	// Release string elements before the backing array.
+	if (array->type == GD_ARRAY_TYPE_STRING && array->data && array->size > 0 &&
+			array->size <= SPX_MAX_ARRAY_ELEMENTS) {
 		char **strings = (char **)array->data;
 		for (int64_t i = 0; i < array->size; i++) {
 			if (strings[i]) {
@@ -184,11 +214,53 @@ void SpxBaseMgr::free_array(GdArray array) {
 		free(array->data);
 	}
 	free(array);
+#endif
 }
 
-void *SpxBaseMgr::_get_array(GdArray array, int64_t index, int type_size) {
-	if (!array || index < 0 || index >= array->size) {
+void *SpxBaseMgr::_get_array(GdArray array, int64_t index, int type_size, int32_t expected_type) {
+#ifdef __EMSCRIPTEN__
+	if (!gdspx_validate_array_info(array)) {
 		return nullptr;
 	}
-	return static_cast<char *>(array->data) + (index * type_size);
+#endif
+	if (!array || index < 0 || array->size <= 0 || array->size > SPX_MAX_ARRAY_ELEMENTS || index >= array->size ||
+			type_size <= 0 || array->data == nullptr) {
+		return nullptr;
+	}
+
+	const bool compatible_type =
+			array->type == expected_type ||
+			(expected_type == GD_ARRAY_TYPE_INT64 && array->type == GD_ARRAY_TYPE_GDOBJ) ||
+			(expected_type == GD_ARRAY_TYPE_BOOL && array->type == GD_ARRAY_TYPE_BYTE);
+	if (!compatible_type) {
+		return nullptr;
+	}
+
+	size_t element_size = 0;
+	switch (array->type) {
+		case GD_ARRAY_TYPE_INT64:
+		case GD_ARRAY_TYPE_GDOBJ:
+			element_size = sizeof(int64_t);
+			break;
+		case GD_ARRAY_TYPE_FLOAT:
+			element_size = sizeof(float);
+			break;
+		case GD_ARRAY_TYPE_BOOL:
+		case GD_ARRAY_TYPE_BYTE:
+			element_size = sizeof(uint8_t);
+			break;
+		case GD_ARRAY_TYPE_STRING:
+			element_size = sizeof(char *);
+			break;
+		default:
+			return nullptr;
+	}
+	if (element_size != static_cast<size_t>(type_size) ||
+			static_cast<uint64_t>(index) >
+					std::numeric_limits<size_t>::max() / element_size) {
+		return nullptr;
+	}
+
+	const size_t offset = static_cast<size_t>(index) * element_size;
+	return static_cast<char *>(array->data) + offset;
 }

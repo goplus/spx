@@ -39,6 +39,8 @@
 #include "tests/test_macros.h"
 #include "tests/test_utils.h"
 
+#include <limits>
+
 namespace TestSpxResMgr {
 
 struct ProjectFontStateReset {
@@ -215,11 +217,17 @@ TEST_CASE("[SceneTree][SPX] Malformed project font arrays are rejected atomicall
 	GdArrayInfo missing_data = {};
 	missing_data.size = 1;
 	missing_data.type = GD_ARRAY_TYPE_STRING;
+	GdString oversized_value = "unused";
+	GdArrayInfo oversized = {};
+	oversized.size = std::numeric_limits<int32_t>::max();
+	oversized.type = GD_ARRAY_TYPE_STRING;
+	oversized.data = &oversized_value;
 	GdStringArray one_path(Vector<String>{ font_path });
 
 	CHECK_FALSE(apply_fonts_raw(res_mgr, font_path, nullptr, empty.ptr(), empty.ptr()).is_empty());
 	CHECK_FALSE(apply_fonts_raw(res_mgr, font_path, &wrong_type, empty.ptr(), empty.ptr()).is_empty());
 	CHECK_FALSE(apply_fonts_raw(res_mgr, font_path, &missing_data, empty.ptr(), empty.ptr()).is_empty());
+	CHECK_FALSE(apply_fonts_raw(res_mgr, font_path, &oversized, empty.ptr(), empty.ptr()).is_empty());
 	CHECK_FALSE(apply_fonts_raw(res_mgr, font_path, one_path.ptr(), empty.ptr(), empty.ptr()).is_empty());
 
 	CHECK(SpxSvgUtils::get_font_registry_generation() == published_generation);

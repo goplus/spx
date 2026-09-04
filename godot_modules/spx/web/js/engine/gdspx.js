@@ -545,8 +545,8 @@ gdspx_input_is_action_just_released_id(action_id_low,action_id_high) {
 }
 gdspx_input_write_snapshot(out) {
 	var _gdFuncPtr = Module['_gdspx_input_write_snapshot'];
-	var _arg0 = RequireWasmFastArray(out, "gdspx_input_write_snapshot");
-	var _arg1 = out['count'];
+	var _arg0 = RequireWasmFastArray(out, "gdspx_input_write_snapshot", 2);
+	var _arg1 = FastArrayCount(out);
 	_gdFuncPtr(_arg0, _arg1);
 }
 gdspx_navigation_setup_path_finder_with_size(grid_size,cell_size,with_jump,with_debug) {
@@ -629,8 +629,8 @@ gdspx_pen_destroy_pen(obj_low,obj_high) {
 }
 gdspx_pen_batch_update_commands(buffer) {
 	var _gdFuncPtr = Module['_gdspx_pen_batch_update_commands'];
-	var _arg0 = GetFastArrayWasmPtr(buffer);
-	var _arg1 = buffer['count'];
+	var _arg0 = RequireFastArray(buffer, "gdspx_pen_batch_update_commands", 2);
+	var _arg1 = FastArrayCount(buffer);
 	_gdFuncPtr(_arg0, _arg1);
 }
 gdspx_pen_pen_stamp(obj_low,obj_high) {
@@ -1217,11 +1217,8 @@ gdspx_res_reload_texture(path) {
 }
 gdspx_res_free_str(str) {
 	var _gdFuncPtr = Module['_gdspx_res_free_str'];
-
-	var _arg0 = ToGdString(str);
-	_gdFuncPtr(_arg0);
-	FreeGdString(_arg0);
-
+	// Web strings are value-owned; there is no pointer to release.
+	return;
 }
 gdspx_res_apply_project_fonts(default_font_path,font_paths,font_families,preferences) {
 	var _gdFuncPtr = Module['_gdspx_res_apply_project_fonts'];
@@ -2735,20 +2732,20 @@ gdspx_sprite_get_pixel_collision_sampling_step() {
 }
 gdspx_sprite_batch_update_transforms(buffer) {
 	var _gdFuncPtr = Module['_gdspx_sprite_batch_update_transforms'];
-	var _arg0 = GetFastArrayWasmPtr(buffer);
-	var _arg1 = buffer['count'];
+	var _arg0 = RequireFastArray(buffer, "gdspx_sprite_batch_update_transforms", 2);
+	var _arg1 = FastArrayCount(buffer);
 	_gdFuncPtr(_arg0, _arg1);
 }
 gdspx_sprite_batch_update_visuals(buffer) {
 	var _gdFuncPtr = Module['_gdspx_sprite_batch_update_visuals'];
-	var _arg0 = GetFastArrayWasmPtr(buffer);
-	var _arg1 = buffer['count'];
+	var _arg0 = RequireFastArray(buffer, "gdspx_sprite_batch_update_visuals", 2);
+	var _arg1 = FastArrayCount(buffer);
 	_gdFuncPtr(_arg0, _arg1);
 }
 gdspx_sprite_batch_update_physics(buffer) {
 	var _gdFuncPtr = Module['_gdspx_sprite_batch_update_physics'];
-	var _arg0 = GetFastArrayWasmPtr(buffer);
-	var _arg1 = buffer['count'];
+	var _arg0 = RequireFastArray(buffer, "gdspx_sprite_batch_update_physics", 2);
+	var _arg1 = FastArrayCount(buffer);
 	_gdFuncPtr(_arg0, _arg1);
 }
 gdspx_tilemap_open_draw_tiles_with_size(tile_size_low,tile_size_high) {

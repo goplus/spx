@@ -32,6 +32,7 @@
 #define TEST_SPX_BASE_MGR_H
 
 #include "../spx_base_mgr.h"
+#include "../web/godot_js_spx_util.h"
 #include "tests/test_macros.h"
 
 namespace TestSpxBaseMgr {
@@ -46,9 +47,63 @@ TEST_CASE("[SPX] ABI string arrays are safe when only partially populated") {
 	CHECK_EQ(strings[1], nullptr);
 	CHECK_EQ(strings[2], nullptr);
 
-	strings[1] = (char *)SpxBaseMgr::to_return_cstr("value");
-	REQUIRE(strings[1] != nullptr);
+	GdString value = SpxBaseMgr::to_return_cstr("value");
+	REQUIRE(value != nullptr);
+	SpxBaseMgr::set_array<GdString>(array, 1, value);
+	GdString *stored = SpxBaseMgr::get_array<GdString>(array, 1);
+	REQUIRE(stored != nullptr);
+	CHECK_EQ(*stored, value);
 	SpxBaseMgr::free_array(array);
+}
+
+TEST_CASE("[SPX] ABI array access rejects type confusion and malformed storage") {
+	CHECK(SpxBaseMgr::create_array(GD_ARRAY_TYPE_UNKNOWN, 0) == nullptr);
+	CHECK(SpxBaseMgr::create_array(99, 0) == nullptr);
+
+	GdArray floats = SpxBaseMgr::create_array(GD_ARRAY_TYPE_FLOAT, 2);
+	REQUIRE(floats != nullptr);
+	CHECK(SpxBaseMgr::get_array<float>(floats, 0) != nullptr);
+	CHECK(SpxBaseMgr::get_array<int64_t>(floats, 0) == nullptr);
+	CHECK(SpxBaseMgr::get_array<float>(floats, 2) == nullptr);
+	SpxBaseMgr::free_array(floats);
+
+	GdArrayInfo malformed = {};
+	malformed.size = 1;
+	malformed.type = GD_ARRAY_TYPE_FLOAT;
+	malformed.data = nullptr;
+	CHECK(SpxBaseMgr::get_array<float>(&malformed, 0) == nullptr);
+
+	GdArray bytes = SpxBaseMgr::create_array(GD_ARRAY_TYPE_BYTE, 1);
+	REQUIRE(bytes != nullptr);
+	CHECK(SpxBaseMgr::get_array<uint8_t>(bytes, 0) != nullptr);
+	CHECK(SpxBaseMgr::get_array<float>(bytes, 0) == nullptr);
+	SpxBaseMgr::free_array(bytes);
+
+	// GdInt and GdObj are the same 64-bit C ABI type, so either matching
+	// 64-bit array tag must remain usable through the shared C++ typedef.
+	GdArray objects = SpxBaseMgr::create_array(GD_ARRAY_TYPE_GDOBJ, 1);
+	REQUIRE(objects != nullptr);
+	CHECK(SpxBaseMgr::get_array<GdObj>(objects, 0) != nullptr);
+	CHECK(SpxBaseMgr::get_array<GdInt>(objects, 0) != nullptr);
+	SpxBaseMgr::free_array(objects);
+}
+
+TEST_CASE("[SPX] ObjectPool rejects foreign and duplicate pointers") {
+	ObjectPool<int> pool(0);
+	int *owned = pool.acquire();
+	REQUIRE(owned != nullptr);
+	int *foreign = new int(0);
+
+	pool.release(owned);
+	pool.release(foreign);
+	int *reacquired = pool.acquire();
+	CHECK(reacquired == owned);
+	pool.release(reacquired);
+	pool.release(reacquired);
+
+	if (reacquired != foreign) {
+		delete foreign;
+	}
 }
 
 } // namespace TestSpxBaseMgr

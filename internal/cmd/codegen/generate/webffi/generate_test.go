@@ -188,9 +188,33 @@ func TestGetJsFuncBodyRequiresWasmArrayForInputSnapshot(t *testing.T) {
 	}
 
 	body := getJsFuncBody(function)
-	require.Contains(t, body, `RequireWasmFastArray(out, "gdspx_input_write_snapshot")`)
-	require.Contains(t, body, "var _arg1 = out['count'];")
+	require.Contains(t, body, `RequireWasmFastArray(out, "gdspx_input_write_snapshot", 2)`)
+	require.Contains(t, body, "var _arg1 = FastArrayCount(out);")
 	require.NotContains(t, body, "GetFastArrayWasmPtr(out)")
+}
+
+func TestGetJsFuncBodyTreatsWebFreeStrAsValueOperation(t *testing.T) {
+	body := getJsFuncBody(&clang.TypedefFunction{Name: "GDExtensionSpxResFreeStr"})
+	require.Contains(t, body, "Web strings are value-owned")
+	require.Contains(t, body, "return;")
+	require.NotContains(t, body, "ToGdString")
+}
+
+func TestGetJsFuncBodyValidatesNativeFastArray(t *testing.T) {
+	common.ClearNativeArrayBridgeSpecs()
+	t.Cleanup(common.ClearNativeArrayBridgeSpecs)
+	common.RegisterNativeArrayBridgeSpec(common.NativeArrayBridgeSpec{
+		BaseFunctionName: "GDExtensionSpxSpriteBatchUpdateTransforms",
+		BaseArgName:      "buffer",
+		FastArrayType:    2,
+	})
+
+	body := getJsFuncBody(&clang.TypedefFunction{
+		Name: "GDExtensionSpxSpriteBatchUpdateTransforms",
+	})
+	require.Contains(t, body, `RequireFastArray(buffer, "gdspx_sprite_batch_update_transforms", 2)`)
+	require.Contains(t, body, "var _arg1 = FastArrayCount(buffer);")
+	require.NotContains(t, body, "buffer['count']")
 }
 
 func TestJsTemplateUsesHeapU32ForFlatReads(t *testing.T) {
@@ -300,4 +324,33 @@ func TestRepositoryWebBridgeKeepsCrossCompilationABIStable(t *testing.T) {
 	require.Contains(t, audioLibrary, "if (index !== -1 && index !== newBus.getId())")
 	require.Contains(t, audioLibrary, "if (toIndex === -1) {\n\t\t\tbuses.push(movedBus);")
 	require.NotContains(t, audioLibrary, "positionWorker.onMessage")
+}
+
+func TestRepositoryWebBridgeKeepsFastArrayPointersPrivate(t *testing.T) {
+	repositoryRoot := filepath.Join("..", "..", "..", "..", "..")
+	utilPath := filepath.Join(repositoryRoot, "godot_modules", "spx", "web", "js", "engine", "gdspx.util.js")
+	body, err := os.ReadFile(utilPath)
+	require.NoError(t, err)
+	util := string(body)
+
+	// Raw pointers must come from bridge-created wrappers.
+	require.Contains(t, util, "const [GdspxBorrowFastArray, GetTrustedFastArrayMetadata] = (() => {")
+	require.Contains(t, util, "const registry = new WeakMap();")
+	require.Contains(t, util, "registry.set(wrapper, metadata);")
+	require.Contains(t, util, "return [borrow, get];")
+	require.NotContains(t, util, "const gdspxTrustedFastArrayMetadata = new WeakMap();")
+	require.NotContains(t, util, "globalThis['gdspxTrustedFastArrayMetadata']")
+	start := strings.Index(util, "const [GdspxBorrowFastArray, GetTrustedFastArrayMetadata] = (() => {")
+	require.NotEqual(t, -1, start)
+	endOffset := strings.Index(util[start:], "})();")
+	require.NotEqual(t, -1, endOffset)
+	closure := util[start : start+endOffset]
+	require.NotContains(t, closure, "globalThis")
+	require.NotContains(t, closure, "register")
+	require.Contains(t, util, "return Object.freeze(wrapper);")
+	require.Contains(t, util, "if (metadata === null || metadata.module !== Module")
+	require.Contains(t, util, "requires an internally allocated Wasm array")
+	require.Contains(t, util, "array['__gdspx_wasm_array'] === true && GetTrustedFastArrayMetadata(array) === null")
+	require.Contains(t, util, "input['__gdspx_wasm_array'] === true && GetTrustedFastArrayMetadata(input) === null")
+	require.NotContains(t, util, "return array['ptr'];")
 }

@@ -73,15 +73,22 @@ bool strings_from_array(GdArray p_values, const String &p_name, Vector<String> &
 		r_error = p_name + " has an invalid array payload.";
 		return false;
 	}
+	GdString *values = nullptr;
+	if (p_values->size > 0) {
+		values = SpxBaseMgr::get_array<GdString>(p_values, 0);
+		if (values == nullptr) {
+			r_error = p_name + " has an invalid array payload.";
+			return false;
+		}
+	}
 	r_values.resize(p_values->size);
 	for (int i = 0; i < p_values->size; i++) {
-		auto value = SpxBaseMgr::get_array<GdString>(p_values, i);
-		if (value == nullptr || *value == nullptr) {
+		if (values[i] == nullptr) {
 			r_values.clear();
 			r_error = p_name + " contains an invalid string at index " + itos(i) + ".";
 			return false;
 		}
-		r_values.write[i] = SpxStr(*value);
+		r_values.write[i] = SpxStr(values[i]);
 	}
 	return true;
 }

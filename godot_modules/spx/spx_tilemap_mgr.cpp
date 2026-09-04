@@ -80,10 +80,19 @@ void SpxTilemapMgr::set_tile(GdString texture_path, GdBool with_collision) {
 void SpxTilemapMgr::set_tile_with_collision_info(GdString texture_path, GdArray collision_points) {
 	Vector<Vector2> points = {};
 	auto len = collision_points == nullptr ? 0 : collision_points->size;
+	const float *data = nullptr;
+	if (len > 0) {
+		data = SpxBaseMgr::get_array<float>(collision_points, 0);
+		if (data == nullptr) {
+			print_error("Invalid collision points array");
+			return;
+		}
+	} else if (len < 0) {
+		print_error("Invalid collision points array");
+		return;
+	}
 	for (int i = 0; i + 1 < len; i += 2) {
-		auto x = *(SpxBaseMgr::get_array<real_t>(collision_points, i));
-		auto y = *(SpxBaseMgr::get_array<real_t>(collision_points, i + 1));
-		points.append(Vector2(x, y));
+		points.append(Vector2(data[i], data[i + 1]));
 	}
 	without_draw_tiles([&]() {
 		draw_tiles->set_tile_texture_spx(texture_path, &points);

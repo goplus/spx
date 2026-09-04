@@ -22,6 +22,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 	"syscall/js"
 	"unsafe"
@@ -39,6 +40,9 @@ const (
 	GdArrayTypeString  = 4
 	GdArrayTypeByte    = 5
 	GdArrayTypeGdObj   = 6
+	// Keep malformed bridge counts from requesting multi-GB allocations.
+	maxGdArrayElements = 16 * 1024 * 1024
+	maxGdArrayBytes    = 256 * 1024 * 1024
 )
 
 const (
@@ -67,9 +71,73 @@ type GdArrayInfo struct {
 	Data any
 }
 
-func serializeGdArray(info *GdArrayInfo) ([]byte, error) {
+func validateGdArraySize(info *GdArrayInfo) error {
 	if info == nil {
+		return fmt.Errorf("nil GdArrayInfo")
+	}
+	if info.Data == nil {
+		if info.Size != 0 {
+			return fmt.Errorf("array data is nil for non-empty array")
+		}
+		switch info.Type {
+		case GdArrayTypeInt64, GdArrayTypeFloat, GdArrayTypeBool,
+			GdArrayTypeString, GdArrayTypeByte, GdArrayTypeGdObj:
+			return nil
+		default:
+			return fmt.Errorf("array type is not supported: %d", info.Type)
+		}
+	}
+
+	var length int
+	switch info.Type {
+	case GdArrayTypeInt64, GdArrayTypeGdObj:
+		arr, ok := info.Data.([]int64)
+		if !ok {
+			return fmt.Errorf("array type is not supported: %T", info.Data)
+		}
+		length = len(arr)
+	case GdArrayTypeFloat:
+		switch arr := info.Data.(type) {
+		case []float32:
+			length = len(arr)
+		case []float64:
+			length = len(arr)
+		default:
+			return fmt.Errorf("array type is not supported: %T", info.Data)
+		}
+	case GdArrayTypeBool:
+		arr, ok := info.Data.([]bool)
+		if !ok {
+			return fmt.Errorf("array type is not supported: %T", info.Data)
+		}
+		length = len(arr)
+	case GdArrayTypeByte:
+		arr, ok := info.Data.([]byte)
+		if !ok {
+			return fmt.Errorf("array type is not supported: %T", info.Data)
+		}
+		length = len(arr)
+	case GdArrayTypeString:
+		arr, ok := info.Data.([]string)
+		if !ok {
+			return fmt.Errorf("array type is not supported: %T", info.Data)
+		}
+		length = len(arr)
+	default:
+		return fmt.Errorf("array type is not supported: %d", info.Type)
+	}
+	if length > maxGdArrayElements || int64(length) != int64(info.Size) {
+		return fmt.Errorf("array size does not match payload")
+	}
+	return nil
+}
+
+func serializeGdArray(info *GdArrayInfo) ([]byte, error) {
+	if info == nil || info.Size < 0 || info.Size > maxGdArrayElements {
 		return nil, fmt.Errorf("nil GdArrayInfo")
+	}
+	if err := validateGdArraySize(info); err != nil {
+		return nil, err
 	}
 
 	dataBytes, err := serializeDataByType(info.Type, info.Data)
@@ -77,11 +145,17 @@ func serializeGdArray(info *GdArrayInfo) ([]byte, error) {
 		return nil, err
 	}
 
+	if int64(len(dataBytes)) > int64(maxInt32)-8 {
+		return nil, fmt.Errorf("serialized array is too large")
+	}
+	if len(dataBytes) > maxGdArrayBytes-8 {
+		return nil, fmt.Errorf("serialized array is too large")
+	}
 	totalSize := 8 + len(dataBytes)
 	result := make([]byte, totalSize)
 
-	*(*uint32)(unsafe.Pointer(&result[0])) = uint32(info.Size)
-	*(*uint32)(unsafe.Pointer(&result[4])) = uint32(info.Type)
+	binary.LittleEndian.PutUint32(result[0:4], uint32(info.Size))
+	binary.LittleEndian.PutUint32(result[4:8], uint32(info.Type))
 
 	copy(result[8:], dataBytes)
 
@@ -92,9 +166,16 @@ func deserializeGdArray(data []byte) (*GdArrayInfo, error) {
 	if len(data) < 8 {
 		return nil, fmt.Errorf("data length is not enough")
 	}
+	if len(data) > maxGdArrayBytes {
+		return nil, fmt.Errorf("array data is too large")
+	}
 
-	size := int32(*(*uint32)(unsafe.Pointer(&data[0])))
-	arrayType := int32(*(*uint32)(unsafe.Pointer(&data[4])))
+	encodedSize := binary.LittleEndian.Uint32(data[0:4])
+	if encodedSize > uint32(maxInt32) || encodedSize > maxGdArrayElements {
+		return nil, fmt.Errorf("array size is invalid")
+	}
+	size := int32(encodedSize)
+	arrayType := int32(binary.LittleEndian.Uint32(data[4:8]))
 
 	arrayData, err := deserializeDataByType(arrayType, data[8:], size)
 	if err != nil {
@@ -126,10 +207,14 @@ func serializeDataByType(arrayType int32, data any) ([]byte, error) {
 
 	switch arrayType {
 	case GdArrayTypeInt64, GdArrayTypeGdObj:
-		if arr := data.([]int64); len(arr) == 0 {
+		arr, ok := data.([]int64)
+		if !ok {
+			return nil, fmt.Errorf("array type is not supported: %T", data)
+		}
+		if len(arr) == 0 {
 			return []byte{}, nil
 		}
-		return serializeInt64Array(data.([]int64))
+		return serializeInt64Array(arr)
 	case GdArrayTypeFloat:
 		val, ok := data.([]float32)
 		if !ok {
@@ -144,27 +229,48 @@ func serializeDataByType(arrayType int32, data any) ([]byte, error) {
 		}
 		return serializeFloatArray(val)
 	case GdArrayTypeBool:
-		if arr := data.([]bool); len(arr) == 0 {
+		arr, ok := data.([]bool)
+		if !ok {
+			return nil, fmt.Errorf("array type is not supported: %T", data)
+		}
+		if len(arr) == 0 {
 			return []byte{}, nil
 		}
-		return serializeBoolArray(data.([]bool))
+		return serializeBoolArray(arr)
 	case GdArrayTypeByte:
-		if arr := data.([]byte); len(arr) == 0 {
+		arr, ok := data.([]byte)
+		if !ok {
+			return nil, fmt.Errorf("array type is not supported: %T", data)
+		}
+		if len(arr) == 0 {
 			return []byte{}, nil
 		}
-		return data.([]byte), nil
+		return arr, nil
 	case GdArrayTypeString:
-		if arr := data.([]string); len(arr) == 0 {
+		arr, ok := data.([]string)
+		if !ok {
+			return nil, fmt.Errorf("array type is not supported: %T", data)
+		}
+		if len(arr) == 0 {
 			return []byte{}, nil
 		}
-		return serializeStringArray(data.([]string))
+		return serializeStringArray(arr)
 	default:
 		return nil, fmt.Errorf("array type is not supported: %d", arrayType)
 	}
 }
 
 func deserializeDataByType(arrayType int32, data []byte, size int32) (any, error) {
+	if size < 0 || size > maxGdArrayElements {
+		return nil, fmt.Errorf("array size is invalid")
+	}
+	if len(data) > maxGdArrayBytes-8 {
+		return nil, fmt.Errorf("array data is too large")
+	}
 	if len(data) == 0 || size == 0 {
+		if size != 0 || len(data) != 0 {
+			return nil, fmt.Errorf("array data length is not enough")
+		}
 		switch arrayType {
 		case GdArrayTypeInt64, GdArrayTypeGdObj:
 			return []int64{}, nil
@@ -189,9 +295,12 @@ func deserializeDataByType(arrayType int32, data []byte, size int32) (any, error
 	case GdArrayTypeBool:
 		return deserializeBoolArray(data, size)
 	case GdArrayTypeByte:
+		if int64(len(data)) != int64(size) {
+			return nil, fmt.Errorf("array data length is invalid")
+		}
 		return data, nil
 	case GdArrayTypeString:
-		return deserializeStringArray(data)
+		return deserializeStringArray(data, size)
 	default:
 		return nil, fmt.Errorf("array type is not supported: %d", arrayType)
 	}
@@ -209,8 +318,8 @@ func deserializeInt64Array(data []byte, size int32) ([]int64, error) {
 		return nil, fmt.Errorf("array size is invalid")
 	}
 	requiredBytes := int64(size) * 8
-	if int64(len(data)) < requiredBytes {
-		return nil, fmt.Errorf("array data length is not enough")
+	if int64(len(data)) != requiredBytes {
+		return nil, fmt.Errorf("array data length is invalid")
 	}
 	if size == 0 {
 		return []int64{}, nil
@@ -230,8 +339,8 @@ func deserializeFloatArray(data []byte, size int32) ([]float32, error) {
 		return nil, fmt.Errorf("array size is invalid")
 	}
 	requiredBytes := int64(size) * 4
-	if int64(len(data)) < requiredBytes {
-		return nil, fmt.Errorf("array data length is not enough")
+	if int64(len(data)) != requiredBytes {
+		return nil, fmt.Errorf("array data length is invalid")
 	}
 	if size == 0 {
 		return []float32{}, nil
@@ -252,8 +361,8 @@ func serializeBoolArray(data []bool) ([]byte, error) {
 }
 
 func deserializeBoolArray(data []byte, size int32) ([]bool, error) {
-	if len(data) < int(size) {
-		return nil, fmt.Errorf("array data length is not enough")
+	if size < 0 || int64(len(data)) != int64(size) {
+		return nil, fmt.Errorf("array data length is invalid")
 	}
 
 	result := make([]bool, size)
@@ -264,67 +373,121 @@ func deserializeBoolArray(data []byte, size int32) ([]bool, error) {
 }
 
 func serializeStringArray(data []string) ([]byte, error) {
-	var result []byte
+	if len(data) > maxGdArrayElements {
+		return nil, fmt.Errorf("array size is invalid")
+	}
+	result := make([]byte, 0)
 	for _, str := range data {
 		strBytes := []byte(str)
-		lengthBytes := make([]byte, 4)
+		if uint64(len(strBytes)) > uint64(^uint32(0)) {
+			return nil, fmt.Errorf("string is too long")
+		}
+		if len(result) > maxGdArrayBytes-8-4-len(strBytes) {
+			return nil, fmt.Errorf("serialized array is too large")
+		}
+		var lengthBytes [4]byte
+		binary.LittleEndian.PutUint32(lengthBytes[:], uint32(len(strBytes)))
 
-		*(*uint32)(unsafe.Pointer(&lengthBytes[0])) = uint32(len(strBytes))
-
-		result = append(result, lengthBytes...)
+		result = append(result, lengthBytes[:]...)
 		result = append(result, strBytes...)
 	}
 	return result, nil
 }
 
-func deserializeStringArray(data []byte) ([]string, error) {
+func deserializeStringArray(data []byte, size int32) ([]string, error) {
+	if size < 0 {
+		return nil, fmt.Errorf("array size is invalid")
+	}
 	var result []string
 	offset := 0
 
-	for offset < len(data) {
-		if offset+4 > len(data) {
-			break
-		}
-
-		strLen := int(binary.LittleEndian.Uint32(data[offset:]))
-		offset += 4
-
-		if offset+strLen > len(data) {
+	for i := int32(0); i < size; i++ {
+		if offset < 0 || offset > len(data) || len(data)-offset < 4 {
 			return nil, fmt.Errorf("string data is not complete")
 		}
+
+		encodedLen := uint64(binary.LittleEndian.Uint32(data[offset:]))
+		offset += 4
+
+		if encodedLen > uint64(len(data)-offset) {
+			return nil, fmt.Errorf("string data is not complete")
+		}
+		strLen := int(encodedLen)
 
 		str := string(data[offset : offset+strLen])
 		result = append(result, str)
 		offset += strLen
+	}
+	if offset != len(data) {
+		return nil, fmt.Errorf("string data has trailing bytes")
 	}
 
 	return result, nil
 }
 
 func arrayToGdArrayInfo(arrayPtr Array) *GdArrayInfo {
+	arraySize := checkedGdArraySize
 	switch data := arrayPtr.(type) {
 	case []int64:
-		return &GdArrayInfo{Size: int32(len(data)), Type: GdArrayTypeInt64, Data: data}
+		size, ok := arraySize(len(data))
+		if !ok {
+			return nil
+		}
+		return &GdArrayInfo{Size: size, Type: GdArrayTypeInt64, Data: data}
 	case []float32:
-		return &GdArrayInfo{Size: int32(len(data)), Type: GdArrayTypeFloat, Data: data}
+		size, ok := arraySize(len(data))
+		if !ok {
+			return nil
+		}
+		return &GdArrayInfo{Size: size, Type: GdArrayTypeFloat, Data: data}
 	case []float64:
+		size, ok := arraySize(len(data))
+		if !ok {
+			return nil
+		}
 		val := f64Tof32(data)
-		return &GdArrayInfo{Size: int32(len(data)), Type: GdArrayTypeFloat, Data: val}
+		return &GdArrayInfo{Size: size, Type: GdArrayTypeFloat, Data: val}
 	case []bool:
-		return &GdArrayInfo{Size: int32(len(data)), Type: GdArrayTypeBool, Data: data}
+		size, ok := arraySize(len(data))
+		if !ok {
+			return nil
+		}
+		return &GdArrayInfo{Size: size, Type: GdArrayTypeBool, Data: data}
 	case []string:
-		return &GdArrayInfo{Size: int32(len(data)), Type: GdArrayTypeString, Data: data}
+		size, ok := arraySize(len(data))
+		if !ok {
+			return nil
+		}
+		return &GdArrayInfo{Size: size, Type: GdArrayTypeString, Data: data}
 	case []byte:
-		return &GdArrayInfo{Size: int32(len(data)), Type: GdArrayTypeByte, Data: data}
+		size, ok := arraySize(len(data))
+		if !ok {
+			return nil
+		}
+		return &GdArrayInfo{Size: size, Type: GdArrayTypeByte, Data: data}
 	case []uint64:
+		size, ok := arraySize(len(data))
+		if !ok {
+			return nil
+		}
 		int64Data := make([]int64, len(data))
 		for i, v := range data {
 			int64Data[i] = int64(v)
 		}
-		return &GdArrayInfo{Size: int32(len(data)), Type: GdArrayTypeGdObj, Data: int64Data}
+		return &GdArrayInfo{Size: size, Type: GdArrayTypeGdObj, Data: int64Data}
 	default:
 		return nil
 	}
+}
+
+// checkedGdArraySize keeps the length conversion and its allocation guard in
+// one place. Callers must perform this check before copying/converting the
+// backing slice (notably []float64 -> []float32).
+func checkedGdArraySize(length int) (int32, bool) {
+	if length < 0 || length > maxGdArrayElements || int64(length) > int64(maxInt32) {
+		return 0, false
+	}
+	return int32(length), true
 }
 
 func jsValue2Go(value js.Value) any {
@@ -570,6 +733,12 @@ func newFastGdArrayValue(arrayType int32, count int, data []byte) js.Value {
 }
 
 func newBorrowedFastGdArrayValue(arrayType int32, count int, data []byte) (js.Value, bool) {
+	if count < 0 || count > maxGdArrayElements {
+		return js.Value{}, false
+	}
+	if elemSize, ok := fixedGdArrayElemSize(arrayType); !ok || count > maxInt/elemSize || len(data) != count*elemSize {
+		return js.Value{}, false
+	}
 	borrow := js.Global().Get("GdspxBorrowFastArray")
 	if borrow.Type() != js.TypeFunction {
 		return js.Value{}, false
@@ -581,11 +750,17 @@ func newBorrowedFastGdArrayValue(arrayType int32, count int, data []byte) (js.Va
 	}
 
 	bytes := wrapper.Get(fastGdArrayDataKey)
-	if bytes.IsUndefined() || bytes.IsNull() || bytes.Type() != js.TypeObject {
+	if bytes.IsUndefined() || bytes.IsNull() || bytes.Type() != js.TypeObject ||
+		!bytes.InstanceOf(jsUint8Array) {
 		return js.Value{}, false
 	}
 	byteLength := bytes.Get("length")
-	if byteLength.Type() != js.TypeNumber || byteLength.Int() < len(data) {
+	if byteLength.Type() != js.TypeNumber {
+		return js.Value{}, false
+	}
+	byteLengthFloat := byteLength.Float()
+	if !isSafeNonnegativeJSInt(byteLengthFloat) || byteLengthFloat > float64(maxInt) ||
+		int(byteLengthFloat) != len(data) {
 		return js.Value{}, false
 	}
 
@@ -598,11 +773,25 @@ func newBorrowedFastGdArrayValue(arrayType int32, count int, data []byte) (js.Va
 func arrayToFastGdArrayValue(arrayPtr Array) (js.Value, bool) {
 	switch data := arrayPtr.(type) {
 	case []float32:
+		if len(data) > maxGdArrayElements || len(data) > maxGdArrayBytes/4 {
+			return js.Value{}, false
+		}
 		return newFastGdArrayValue(GdArrayTypeFloat, len(data), bytesFromFloat32Slice(data)), true
 	case []int64:
+		if len(data) > maxGdArrayElements || len(data) > maxGdArrayBytes/8 {
+			return js.Value{}, false
+		}
 		return newFastGdArrayValue(GdArrayTypeInt64, len(data), bytesFromInt64Slice(data)), true
 	case []uint64:
+		if len(data) > maxGdArrayElements || len(data) > maxGdArrayBytes/8 {
+			return js.Value{}, false
+		}
 		return newFastGdArrayValue(GdArrayTypeGdObj, len(data), bytesFromUint64Slice(data)), true
+	case []byte:
+		if len(data) > maxGdArrayElements || len(data) > maxGdArrayBytes {
+			return js.Value{}, false
+		}
+		return newFastGdArrayValue(GdArrayTypeByte, len(data), data), true
 	default:
 		return js.Value{}, false
 	}
@@ -645,7 +834,19 @@ func JsToGdArray(val js.Value) Array {
 		return fastArray
 	}
 
-	length := val.Get("length").Int()
+	lengthVal := val.Get("length")
+	if lengthVal.Type() != js.TypeNumber {
+		return nil
+	}
+	lengthFloat := lengthVal.Float()
+	if !isSafeNonnegativeJSInt(lengthFloat) || lengthFloat < 8 ||
+		lengthFloat > float64(maxInt) || lengthFloat > maxGdArrayBytes {
+		return nil
+	}
+	if !val.InstanceOf(jsUint8Array) {
+		return nil
+	}
+	length := int(lengthFloat)
 	if length == 0 {
 		return nil
 	}
@@ -667,7 +868,8 @@ func fastGdArrayToGo(val js.Value) (Array, bool) {
 	}
 
 	dataVal := val.Get(fastGdArrayDataKey)
-	if dataVal.IsUndefined() || dataVal.IsNull() || dataVal.Type() != js.TypeObject {
+	if dataVal.IsUndefined() || dataVal.IsNull() || dataVal.Type() != js.TypeObject ||
+		!dataVal.InstanceOf(jsUint8Array) {
 		return nil, true
 	}
 
@@ -675,21 +877,31 @@ func fastGdArrayToGo(val js.Value) (Array, bool) {
 	if lengthVal.Type() != js.TypeNumber {
 		return nil, true
 	}
-	length := lengthVal.Int()
+	lengthFloat := lengthVal.Float()
+	if !isSafeNonnegativeJSInt(lengthFloat) || lengthFloat > float64(maxInt) {
+		return nil, true
+	}
+	length := int(lengthFloat)
 	arrayTypeVal := val.Get(fastGdArrayTypeKey)
 	countVal := val.Get(fastGdArrayCountKey)
 	if arrayTypeVal.Type() != js.TypeNumber || countVal.Type() != js.TypeNumber {
 		return nil, true
 	}
-	arrayType := int32(arrayTypeVal.Int())
-	count := countVal.Int()
-	if length < 0 || count < 0 || count > maxInt32 {
+	arrayTypeFloat := arrayTypeVal.Float()
+	countFloat := countVal.Float()
+	if !isSafeNonnegativeJSInt(arrayTypeFloat) || !isSafeNonnegativeJSInt(countFloat) ||
+		arrayTypeFloat > float64(maxInt32) || countFloat > float64(maxGdArrayElements) {
 		return nil, true
 	}
+	arrayType := int32(arrayTypeFloat)
+	count := int(countFloat)
 	if elemSize, ok := fixedGdArrayElemSize(arrayType); ok {
-		if count > maxInt/elemSize || length < count*elemSize {
+		if count > maxInt/elemSize || length != count*elemSize {
 			return nil, true
 		}
+	}
+	if length > maxGdArrayBytes-8 {
+		return nil, true
 	}
 
 	bytes := make([]byte, length)
@@ -707,7 +919,13 @@ func fastGdArrayToGo(val js.Value) (Array, bool) {
 const (
 	maxInt   = int(^uint(0) >> 1)
 	maxInt32 = int(^uint32(0) >> 1)
+	// JS numbers are exact only through Number.MAX_SAFE_INTEGER.
+	maxSafeJSInt = 1<<53 - 1
 )
+
+func isSafeNonnegativeJSInt(value float64) bool {
+	return !math.IsNaN(value) && !math.IsInf(value, 0) && value >= 0 && math.Trunc(value) == value && value <= maxSafeJSInt
+}
 
 func fixedGdArrayElemSize(arrayType int32) (int, bool) {
 	switch arrayType {

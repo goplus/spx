@@ -349,6 +349,14 @@ void SpxDrawTiles::_place_tiles_bulk_spx(GdArray positions) {
 	if (!positions) {
 		return;
 	}
+	auto len = positions->size;
+	if (len <= 0) {
+		return;
+	}
+	const float *data = SpxBaseMgr::get_array<float>(positions, 0);
+	if (data == nullptr) {
+		return;
+	}
 
 	TileMapLayer *layer = _get_layer(current_layer_index);
 	if (!layer) {
@@ -357,12 +365,8 @@ void SpxDrawTiles::_place_tiles_bulk_spx(GdArray positions) {
 
 	int source_id = _get_or_create_source_id(current_texture);
 
-	auto len = positions->size;
 	for (int i = 0; i + 1 < len; i += 2) {
-		auto x = *(SpxBaseMgr::get_array<float>(positions, i));
-		auto y = *(SpxBaseMgr::get_array<float>(positions, i + 1));
-
-		Vector2 pos = { x, y };
+		Vector2 pos = { data[i], data[i + 1] };
 		Vector2 local_pos = layer->to_local(spx_to_godot_vec2(pos));
 		Vector2i coords = layer->local_to_map(local_pos);
 

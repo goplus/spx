@@ -36,6 +36,7 @@
 #include "spx_mgr_access.h"
 #include "spx_utils.h"
 #include "svg_mgr.h"
+#include <type_traits>
 
 #define SPXCLASS(m_class, m_inherits)        \
 public:                                      \
@@ -60,7 +61,30 @@ class Window;
 class SceneTree;
 class SpxBaseMgr {
 private:
-	static void *_get_array(GdArray array, int64_t index, int type_size);
+	static void *_get_array(GdArray array, int64_t index, int type_size, int32_t expected_type);
+
+	template <typename T>
+	static constexpr int32_t _array_type_for() {
+		using U = std::remove_cv_t<std::remove_reference_t<T>>;
+		if constexpr (std::is_same_v<U, GdString> ||
+				(std::is_pointer_v<U> &&
+					std::is_same_v<std::remove_cv_t<std::remove_pointer_t<U>>, char>)) {
+			return GD_ARRAY_TYPE_STRING;
+		} else if constexpr (std::is_floating_point_v<U>) {
+			return GD_ARRAY_TYPE_FLOAT;
+		} else if constexpr (std::is_same_v<U, bool> ||
+				(std::is_integral_v<U> && sizeof(U) == sizeof(uint8_t))) {
+			// GdBool and byte are both one-byte ABI values. The underlying C
+			// aliases can be indistinguishable, so _get_array accepts either
+			// one-byte wire type for this category.
+			return GD_ARRAY_TYPE_BOOL;
+		} else if constexpr (std::is_integral_v<U> && sizeof(U) == sizeof(int64_t)) {
+			// GdInt and GdObj intentionally share the 64-bit ABI.
+			return GD_ARRAY_TYPE_INT64;
+		} else {
+			return GD_ARRAY_TYPE_UNKNOWN;
+		}
+	}
 
 public:
 	static GdString to_return_cstr(const String &ret_val);
@@ -99,7 +123,7 @@ public:
 
 template <typename T>
 T *SpxBaseMgr::get_array(GdArray array, int64_t index) {
-	return static_cast<T *>(_get_array(array, index, sizeof(T)));
+	return static_cast<T *>(_get_array(array, index, sizeof(T), _array_type_for<T>()));
 }
 template <typename T>
 void SpxBaseMgr::set_array(GdArray array, int64_t index, T value) {
