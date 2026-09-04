@@ -180,6 +180,7 @@ func init() {
 			"PenColorParamFromString":    reflect.ValueOf(q.PenColorParamFromString),
 			"PrepareInputRecording":      reflect.ValueOf(q.PrepareInputRecording),
 			"PrepareInputReplay":         reflect.ValueOf(q.PrepareInputReplay),
+			"Procedure":                  reflect.ValueOf(q.Procedure),
 			"Rand__0":                    reflect.ValueOf(q.Rand__0),
 			"Rand__1":                    reflect.ValueOf(q.Rand__1),
 			"Repeat":                     reflect.ValueOf(q.Repeat),
@@ -191,7 +192,6 @@ func init() {
 			"SetRandomSeed":              reflect.ValueOf(q.SetRandomSeed),
 			"SetRunWithoutScreenRefresh": reflect.ValueOf(q.SetRunWithoutScreenRefresh),
 			"Snapshot":                   reflect.ValueOf(q.Snapshot),
-			"StopThisScript":             reflect.ValueOf(q.StopThisScript),
 			"TimeSinceLevelLoad":         reflect.ValueOf(q.TimeSinceLevelLoad),
 			"WaitUntil":                  reflect.ValueOf(q.WaitUntil),
 			"Warp":                       reflect.ValueOf(q.Warp),
@@ -630,6 +630,7 @@ func init() {
 		"NewColor":                     func_NewColor,
 		"NewValue":                     func_NewValue,
 		"PenColorParamFromString":      func_PenColorParamFromString,
+		"Procedure":                    func_Procedure,
 		"Rand__0":                      func_Rand__0,
 		"Rand__1":                      func_Rand__1,
 		"Repeat":                       func_Repeat,
@@ -640,7 +641,6 @@ func init() {
 		"SetRandomSeed":                func_SetRandomSeed,
 		"SetRunWithoutScreenRefresh":   func_SetRunWithoutScreenRefresh,
 		"Snapshot":                     func_Snapshot,
-		"StopThisScript":               func_StopThisScript,
 		"TimeSinceLevelLoad":           func_TimeSinceLevelLoad,
 		"WaitUntil":                    func_WaitUntil,
 		"Warp":                         func_Warp,
@@ -801,6 +801,10 @@ func func_PenColorParamFromString(ctx ixgo.DirectCallContext) {
 	ctx.SetResult(q.PenColorParamFromString(ixgo.DirectCallArg[string](ctx, 0)))
 }
 
+func func_Procedure(ctx ixgo.DirectCallContext) {
+	q.Procedure(ixgo.DirectCallArg[func()](ctx, 0))
+}
+
 func func_Rand__0(ctx ixgo.DirectCallContext) {
 	ctx.SetResult(q.Rand__0(ixgo.DirectCallArg[int](ctx, 0), ixgo.DirectCallArg[int](ctx, 1)))
 }
@@ -943,10 +947,6 @@ func method_ptr_SpriteImpl_Xpos(ctx ixgo.DirectCallContext) {
 
 func method_ptr_SpriteImpl_Ypos(ctx ixgo.DirectCallContext) {
 	ctx.SetResult((*q.SpriteImpl).Ypos(ixgo.DirectCallArg[*q.SpriteImpl](ctx, 0)))
-}
-
-func func_StopThisScript(ctx ixgo.DirectCallContext) {
-	q.StopThisScript(ixgo.DirectCallArg[func()](ctx, 0))
 }
 
 func func_TimeSinceLevelLoad(ctx ixgo.DirectCallContext) {

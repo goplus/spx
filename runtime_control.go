@@ -33,7 +33,8 @@ func Warp(call func()) {
 	engine.RunWithoutScreenRefresh(call)
 }
 
-// StopThisScript catches a stop-this-script signal at a custom procedure boundary.
-func StopThisScript(call func()) {
+// Procedure runs call at a Scratch custom-procedure boundary.
+// A stop-this-script signal exits the procedure and resumes its caller.
+func Procedure(call func()) {
 	engine.RunStopThisScript(call)
 }

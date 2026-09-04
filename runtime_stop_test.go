@@ -24,13 +24,13 @@ import (
 	"github.com/goplus/spx/v3/internal/engine"
 )
 
-func TestStopThisScriptConsumesOnlyItsSentinel(t *testing.T) {
-	StopThisScript(func() {
+func TestProcedureConsumesStopThisScript(t *testing.T) {
+	Procedure(func() {
 		panic(coroutine.ErrStopThisScript)
 	})
 }
 
-func TestStopThisScriptPropagatesOtherPanics(t *testing.T) {
+func TestProcedurePropagatesOtherPanics(t *testing.T) {
 	tests := []struct {
 		name  string
 		panic any
@@ -45,14 +45,14 @@ func TestStopThisScriptPropagatesOtherPanics(t *testing.T) {
 					t.Fatalf("panic = %v, want %v", got, test.panic)
 				}
 			}()
-			StopThisScript(func() {
+			Procedure(func() {
 				panic(test.panic)
 			})
 		})
 	}
 }
 
-func TestStopThisScriptScopesToNearestProcedureAcrossRepeat(t *testing.T) {
+func TestProcedureScopesStopThisScriptAcrossRepeat(t *testing.T) {
 	co := coroutine.New(nil)
 	original := gco
 	gco = co
@@ -68,7 +68,7 @@ func TestStopThisScriptScopesToNearestProcedureAcrossRepeat(t *testing.T) {
 	done := make(chan string, 1)
 	co.CreateAndStart(true, "stop-this-script", func(coroutine.Thread) int {
 		trace := "outer-before;"
-		StopThisScript(func() {
+		Procedure(func() {
 			trace += "inner-before;"
 			Repeat(1, func() {
 				// Match a stop nested in a converted repeat callback.
