@@ -17,12 +17,11 @@
 package engine
 
 import (
-	"archive/zip"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
-	"strings"
+
+	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 )
 
 type binaryInstall struct {
@@ -68,63 +67,5 @@ func downloadBinariesFromZip(env engineDownloadEnv, zipName string, installs []b
 }
 
 func extractZip(srcZip, dstDir string) error {
-	reader, err := zip.OpenReader(srcZip)
-	if err != nil {
-		return err
-	}
-	defer reader.Close()
-
-	for _, file := range reader.File {
-		targetPath, err := resolveZipExtractPath(dstDir, file.Name)
-		if err != nil {
-			return err
-		}
-		if file.FileInfo().IsDir() {
-			if err := os.MkdirAll(targetPath, file.Mode()); err != nil {
-				return err
-			}
-			continue
-		}
-		if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
-			return err
-		}
-		if err := extractZipFile(file, targetPath); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func resolveZipExtractPath(dstDir, name string) (string, error) {
-	cleanBase := filepath.Clean(dstDir)
-	targetPath := filepath.Clean(filepath.Join(cleanBase, name))
-	basePrefix := cleanBase
-	if !strings.HasSuffix(basePrefix, string(filepath.Separator)) {
-		basePrefix += string(filepath.Separator)
-	}
-	targetPrefix := targetPath
-	if !strings.HasSuffix(targetPrefix, string(filepath.Separator)) {
-		targetPrefix += string(filepath.Separator)
-	}
-	if targetPath != cleanBase && !strings.HasPrefix(targetPrefix, basePrefix) {
-		return "", fmt.Errorf("illegal path in archive entry: %s", name)
-	}
-	return targetPath, nil
-}
-
-func extractZipFile(file *zip.File, dst string) error {
-	reader, err := file.Open()
-	if err != nil {
-		return err
-	}
-	defer reader.Close()
-
-	output, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, file.Mode())
-	if err != nil {
-		return err
-	}
-	defer output.Close()
-
-	_, err = io.Copy(output, reader)
-	return err
+	return shared.ExtractZip(srcZip, dstDir)
 }

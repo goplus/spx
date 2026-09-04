@@ -146,6 +146,7 @@ var runtimePackSourceDirectories = map[string]struct{}{
 	"internal/time":                    {},
 	"internal/tools":                   {},
 	"internal/ui":                      {},
+	"internal/zippreflight":            {},
 	"pkg/spx":                          {},
 	"pkg/spx/pkg/engine":               {},
 	"pkg/spx/pkg/gdspx":                {},

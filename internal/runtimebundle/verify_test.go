@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"io/fs"
 	"os"
@@ -131,6 +132,80 @@ func TestVerifyZipRejectsDuplicatesCollisionsAndSpecialFiles(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			if _, err := VerifyZip(writeTestZip(t, test.entries...)); err == nil {
 				t.Fatal("VerifyZip accepted unsafe archive")
+			}
+		})
+	}
+}
+
+func TestVerifyZipMaterializedSymlinkRejectsSpecialPermissions(t *testing.T) {
+	archive := writeTestZip(t, testZipEntry{
+		name: "link",
+		mode: fs.ModeSymlink | fs.ModeSetuid | fs.ModeSetgid | fs.ModeSticky | 0o777,
+		data: "target",
+	})
+	_, err := VerifyZip(archive, VerifyOptions{MaterializeSymlinksAsFiles: true})
+	if !errors.Is(err, ErrUnsupportedArchiveEntry) {
+		t.Fatalf("VerifyZip error = %v, want ErrUnsupportedArchiveEntry", err)
+	}
+}
+
+func TestExtractZipMaterializesVettedSymlinkAsFile(t *testing.T) {
+	archive := writeTestZip(t, testZipEntry{
+		name: "lib64/libc++.so",
+		mode: fs.ModeSymlink | 0o777,
+		data: "../lib/libc++.so",
+	})
+	if _, err := VerifyZip(archive); !errors.Is(err, ErrUnsupportedArchiveEntry) {
+		t.Fatalf("default VerifyZip error = %v, want ErrUnsupportedArchiveEntry", err)
+	}
+
+	dst := filepath.Join(t.TempDir(), "out")
+	bundle, err := ExtractZip(archive, dst, VerifyOptions{MaterializeSymlinksAsFiles: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(bundle.Entries) != 1 || bundle.Entries[0].Mode&uint32(fs.ModeType) != 0 {
+		t.Fatalf("materialized manifest entry = %#v, want one regular file", bundle.Entries)
+	}
+	path := filepath.Join(dst, "lib64", "libc++.so")
+	info, err := os.Lstat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !info.Mode().IsRegular() || info.Mode()&fs.ModeSymlink != 0 {
+		t.Fatalf("materialized mode = %v, want regular non-symlink", info.Mode())
+	}
+	if data, err := os.ReadFile(path); err != nil || string(data) != "../lib/libc++.so" {
+		t.Fatalf("materialized target = %q, err = %v", data, err)
+	}
+}
+
+func TestVerifyZipMaterializedSymlinkValidatesTarget(t *testing.T) {
+	tests := []struct {
+		name   string
+		target string
+		want   error
+	}{
+		{name: "too large", target: strings.Repeat("a", int(maxMaterializedSymlinkBytes)+1), want: ErrArchiveLimit},
+		{name: "empty", target: "", want: ErrUnsafeArchive},
+		{name: "non UTF-8", target: string([]byte{0xff}), want: ErrUnsafeArchive},
+		{name: "NUL", target: "target\x00suffix", want: ErrUnsafeArchive},
+		{name: "absolute", target: "/outside", want: ErrUnsafeArchive},
+		{name: "network absolute", target: "//server/share", want: ErrUnsafeArchive},
+		{name: "drive absolute", target: "C:/outside", want: ErrUnsafeArchive},
+		{name: "backslash", target: `..\outside`, want: ErrUnsafeArchive},
+		{name: "root escape", target: "../../outside", want: ErrUnsafeArchive},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			archive := writeTestZip(t, testZipEntry{
+				name: "dir/link",
+				mode: fs.ModeSymlink | 0o777,
+				data: test.target,
+			})
+			_, err := VerifyZip(archive, VerifyOptions{MaterializeSymlinksAsFiles: true})
+			if !errors.Is(err, test.want) {
+				t.Fatalf("VerifyZip error = %v, want %v", err, test.want)
 			}
 		})
 	}
@@ -311,5 +386,98 @@ func TestVerifyZipEnforcesCompressionRatio(t *testing.T) {
 	_, err := VerifyZip(path, VerifyOptions{Limits: Limits{MaxCompressionRatio: 2}})
 	if !errors.Is(err, ErrArchiveLimit) {
 		t.Fatalf("compression ratio error = %v", err)
+	}
+}
+
+func TestVerifyZipPreservesCallerMaxEntriesForDigest(t *testing.T) {
+	entries := make([]testZipEntry, MaxEntries+1)
+	for i := range entries {
+		entries[i] = testZipEntry{name: "entry-" + strconv.Itoa(i)}
+	}
+	limits := Limits{MaxEntries: len(entries)}
+	archive := writeTestZip(t, entries...)
+	bundle, err := VerifyZip(archive, VerifyOptions{Limits: limits})
+	if err != nil {
+		t.Fatalf("VerifyZip with caller MaxEntries returned error: %v", err)
+	}
+	if len(bundle.Entries) != len(entries) {
+		t.Fatalf("manifest entry count = %d, want %d", len(bundle.Entries), len(entries))
+	}
+	if err := bundle.ValidateWithLimits(limits); err != nil {
+		t.Fatalf("caller-limited manifest digest failed validation: %v", err)
+	}
+	if _, err := VerifyZip(archive, VerifyOptions{Limits: limits, Expected: &bundle}); err != nil {
+		t.Fatalf("VerifyZip with caller-limited expected manifest returned error: %v", err)
+	}
+}
+
+func TestBundleDigestMethodsPreserveCallerLimits(t *testing.T) {
+	emptyDigest := testDigest("")
+	entryLimited := Bundle{Entries: make([]Entry, MaxEntries+1)}
+	for i := range entryLimited.Entries {
+		entryLimited.Entries[i] = Entry{
+			Name:   "entry-" + strconv.Itoa(i),
+			SHA256: emptyDigest,
+		}
+	}
+	largeSize := MaxTotalSize + 1
+	totalLimited := Bundle{Entries: []Entry{{
+		Name:   "large",
+		Size:   largeSize,
+		SHA256: emptyDigest,
+	}}}
+
+	tests := []struct {
+		name   string
+		bundle Bundle
+		limits Limits
+	}{
+		{name: "entries", bundle: entryLimited, limits: Limits{MaxEntries: MaxEntries + 1}},
+		{name: "total bytes", bundle: totalLimited, limits: Limits{MaxEntrySize: largeSize, MaxTotalSize: largeSize}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if _, err := test.bundle.WithDigest(); !errors.Is(err, ErrArchiveLimit) {
+				t.Fatalf("default WithDigest error = %v, want ErrArchiveLimit", err)
+			}
+			withDigest, err := test.bundle.WithDigestWithLimits(test.limits)
+			if err != nil {
+				t.Fatalf("WithDigestWithLimits returned error: %v", err)
+			}
+			if err := withDigest.ValidateWithLimits(test.limits); err != nil {
+				t.Fatalf("ValidateWithLimits rejected caller-limited digest: %v", err)
+			}
+			data, err := json.Marshal(withDigest)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := ParseManifest(data); !errors.Is(err, ErrArchiveLimit) {
+				t.Fatalf("default ParseManifest error = %v, want ErrArchiveLimit", err)
+			}
+			if _, err := ParseManifestWithLimits(data, test.limits); err != nil {
+				t.Fatalf("ParseManifestWithLimits returned error: %v", err)
+			}
+		})
+	}
+}
+
+func TestManifestMethodsEnforceSerializedLimit(t *testing.T) {
+	bundle, err := (Bundle{Entries: []Entry{{
+		Name:   "runtime",
+		SHA256: testDigest("runtime"),
+	}}}).WithDigest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := json.Marshal(bundle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	limits := Limits{MaxManifestBytes: 1}
+	if _, err := ParseManifestWithLimits(data, limits); !errors.Is(err, ErrArchiveLimit) {
+		t.Fatalf("ParseManifestWithLimits error = %v, want ErrArchiveLimit", err)
+	}
+	if _, err := bundle.CanonicalBytesWithLimits(limits); !errors.Is(err, ErrArchiveLimit) {
+		t.Fatalf("CanonicalBytesWithLimits error = %v, want ErrArchiveLimit", err)
 	}
 }

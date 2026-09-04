@@ -17,16 +17,16 @@
 package shared
 
 import (
-	"archive/zip"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/goplus/spx/v3/internal/base/fileutil"
+	"github.com/goplus/spx/v3/internal/runtimebundle"
 )
 
 var fileDownloadHTTPClient = &http.Client{Timeout: 30 * time.Minute}
@@ -40,77 +40,26 @@ func zipDirectory(srcDir, dstZip string) (err error) {
 }
 
 func extractZip(srcZip, dstDir string) error {
-	reader, err := zip.OpenReader(srcZip)
-	if err != nil {
-		return err
-	}
-	defer reader.Close()
-
-	for _, file := range reader.File {
-		targetPath, err := resolveZipExtractPath(dstDir, file.Name)
-		if err != nil {
-			return err
-		}
-		if file.FileInfo().IsDir() {
-			if err := os.MkdirAll(targetPath, file.Mode()); err != nil {
-				return err
-			}
-			continue
-		}
-		if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
-			return err
-		}
-		if err := extractZipFile(file, targetPath); err != nil {
-			return err
-		}
-	}
-	return nil
+	return extractZipWithOptions(srcZip, dstDir, ZipExtractOptions{})
 }
 
-func resolveZipExtractPath(dstDir, name string) (string, error) {
-	cleanBase := filepath.Clean(dstDir)
-	targetPath := filepath.Clean(filepath.Join(cleanBase, name))
-	basePrefix := cleanBase
-	if !strings.HasSuffix(basePrefix, string(os.PathSeparator)) {
-		basePrefix += string(os.PathSeparator)
-	}
-	targetPrefix := targetPath
-	if !strings.HasSuffix(targetPrefix, string(os.PathSeparator)) {
-		targetPrefix += string(os.PathSeparator)
-	}
-	if targetPath != cleanBase && !strings.HasPrefix(targetPrefix, basePrefix) {
-		return "", fmt.Errorf("illegal path in archive entry: %s", name)
-	}
-	return targetPath, nil
-}
-
-func extractZipFile(file *zip.File, dst string) (err error) {
-	reader, err := file.Open()
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if cerr := reader.Close(); cerr != nil && err == nil {
-			err = cerr
-		}
-	}()
-
-	output, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, file.Mode())
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if cerr := output.Close(); cerr != nil && err == nil {
-			err = cerr
-		}
-	}()
-
-	_, err = io.Copy(output, reader)
+func extractZipWithOptions(srcZip, dstDir string, options ZipExtractOptions) error {
+	_, err := runtimebundle.ExtractZip(srcZip, dstDir, runtimebundle.VerifyOptions{
+		Limits:                     options.Limits,
+		MaterializeSymlinksAsFiles: options.MaterializeSymlinksAsFiles,
+	})
 	return err
 }
 
-func fetchURLToFile(url, dst string) (err error) {
-	resp, err := fileDownloadHTTPClient.Get(url)
+func fetchURLToFile(url, dst string) error {
+	return fetchURLToFileWithLimit(url, dst, runtimebundle.MaxArchiveBytes)
+}
+
+func fetchURLToFileWithLimit(url, dst string, maxBytes int64) (err error) {
+	if maxBytes <= 0 {
+		return fmt.Errorf("invalid download size limit %d", maxBytes)
+	}
+	resp, err := GetURL(fileDownloadHTTPClient, url)
 	if err != nil {
 		return err
 	}
@@ -122,6 +71,9 @@ func fetchURLToFile(url, dst string) (err error) {
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("download %s failed: %s", url, resp.Status)
+	}
+	if resp.ContentLength > maxBytes {
+		return fmt.Errorf("%w: download %s declares %d bytes, limit %d", runtimebundle.ErrArchiveLimit, url, resp.ContentLength, maxBytes)
 	}
 
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
@@ -141,7 +93,14 @@ func fetchURLToFile(url, dst string) (err error) {
 		}
 	}()
 
-	if _, err := io.Copy(file, resp.Body); err != nil {
+	downloaded, err := io.Copy(file, io.LimitReader(resp.Body, downloadLimitWithOverflow(maxBytes)))
+	if downloaded > maxBytes {
+		return fmt.Errorf("%w: download %s exceeds limit %d", runtimebundle.ErrArchiveLimit, url, maxBytes)
+	}
+	if resp.ContentLength > 0 && downloaded != resp.ContentLength {
+		return fmt.Errorf("download %s ended after %d bytes, want %d: %w", url, downloaded, resp.ContentLength, io.ErrUnexpectedEOF)
+	}
+	if err != nil {
 		return err
 	}
 	if err := file.Close(); err != nil {
@@ -149,5 +108,12 @@ func fetchURLToFile(url, dst string) (err error) {
 	}
 	file = nil
 
-	return os.Rename(tmpPath, dst)
+	return replaceFile(tmpPath, dst)
+}
+
+func downloadLimitWithOverflow(maxBytes int64) int64 {
+	if maxBytes == math.MaxInt64 {
+		return maxBytes
+	}
+	return maxBytes + 1
 }

@@ -17,6 +17,9 @@
 package shared
 
 import (
+	"archive/zip"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -26,7 +29,61 @@ import (
 	"time"
 
 	"github.com/goplus/spx/v3/internal/release"
+	"github.com/goplus/spx/v3/internal/runtimebundle"
 )
+
+type roundTripBodyTransport struct {
+	status        int
+	contentLength int64
+	body          string
+}
+
+func (transport roundTripBodyTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	return &http.Response{
+		StatusCode:    transport.status,
+		Status:        http.StatusText(transport.status),
+		Header:        make(http.Header),
+		Body:          io.NopCloser(strings.NewReader(transport.body)),
+		ContentLength: transport.contentLength,
+		Request:       req,
+	}, nil
+}
+
+type extractZipFixture struct {
+	name   string
+	data   string
+	method uint16
+}
+
+func writeExtractZipFixture(t *testing.T, entries ...extractZipFixture) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "archive.zip")
+	output, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writer := zip.NewWriter(output)
+	for _, item := range entries {
+		header := &zip.FileHeader{Name: item.name, Method: item.method}
+		entry, err := writer.CreateHeader(header)
+		if err != nil {
+			_ = output.Close()
+			t.Fatal(err)
+		}
+		if _, err := entry.Write([]byte(item.data)); err != nil {
+			_ = output.Close()
+			t.Fatal(err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		_ = output.Close()
+		t.Fatal(err)
+	}
+	if err := output.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
 
 func TestDefaultRuntimeVersionUsesRuntimeLock(t *testing.T) {
 	got, err := defaultRuntimeVersion()
@@ -36,6 +93,82 @@ func TestDefaultRuntimeVersionUsesRuntimeLock(t *testing.T) {
 	if want := release.DefaultRuntimeLock().RuntimeVersion; got != want {
 		t.Fatalf("default runtime version = %q, want locked version %q", got, want)
 	}
+}
+
+func TestExtractZipWithOptionsRejectsResourceExhaustion(t *testing.T) {
+	tests := []struct {
+		name    string
+		entries []extractZipFixture
+		limits  ZipLimits
+	}{
+		{
+			name: "entry count",
+			entries: []extractZipFixture{
+				{name: "one", data: "1", method: zip.Store},
+				{name: "two", data: "2", method: zip.Store},
+			},
+			limits: ZipLimits{MaxEntries: 1},
+		},
+		{
+			name:    "entry size",
+			entries: []extractZipFixture{{name: "large", data: "12345", method: zip.Store}},
+			limits:  ZipLimits{MaxEntrySize: 4},
+		},
+		{
+			name: "total size",
+			entries: []extractZipFixture{
+				{name: "one", data: "123", method: zip.Store},
+				{name: "two", data: "456", method: zip.Store},
+			},
+			limits: ZipLimits{MaxEntrySize: 5, MaxTotalSize: 5},
+		},
+		{
+			name:    "compression ratio",
+			entries: []extractZipFixture{{name: "repetitive", data: strings.Repeat("a", 4096), method: zip.Deflate}},
+			limits:  ZipLimits{MaxCompressionRatio: 2},
+		},
+		{
+			name:    "central directory",
+			entries: []extractZipFixture{{name: "metadata", data: "1", method: zip.Store}},
+			limits:  ZipLimits{MaxCentralDirectoryBytes: 1},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			archive := writeExtractZipFixture(t, test.entries...)
+			err := ExtractZipWithOptions(archive, filepath.Join(t.TempDir(), "out"), ZipExtractOptions{Limits: test.limits})
+			if !errors.Is(err, runtimebundle.ErrArchiveLimit) {
+				t.Fatalf("ExtractZipWithOptions error = %v, want ErrArchiveLimit", err)
+			}
+		})
+	}
+}
+
+func TestExtractZipRejectsUnsafePathAndDestinationSymlink(t *testing.T) {
+	t.Run("path traversal", func(t *testing.T) {
+		archive := writeExtractZipFixture(t, extractZipFixture{name: "../escape", data: "bad", method: zip.Store})
+		err := ExtractZip(archive, filepath.Join(t.TempDir(), "out"))
+		if !errors.Is(err, runtimebundle.ErrInvalidEntryName) {
+			t.Fatalf("ExtractZip error = %v, want ErrInvalidEntryName", err)
+		}
+	})
+
+	t.Run("destination symlink", func(t *testing.T) {
+		dst := t.TempDir()
+		outside := t.TempDir()
+		if err := os.Symlink(outside, filepath.Join(dst, "linked")); err != nil {
+			t.Skipf("symlink unavailable: %v", err)
+		}
+		archive := writeExtractZipFixture(t, extractZipFixture{name: "linked/escape", data: "bad", method: zip.Store})
+		err := ExtractZip(archive, dst)
+		if !errors.Is(err, runtimebundle.ErrUnsafeArchive) {
+			t.Fatalf("ExtractZip error = %v, want ErrUnsafeArchive", err)
+		}
+		if _, err := os.Stat(filepath.Join(outside, "escape")); !os.IsNotExist(err) {
+			t.Fatalf("outside destination changed: %v", err)
+		}
+	})
 }
 
 func TestFetchURLToFileLeavesDestinationUntouchedOnInterruptedDownload(t *testing.T) {
@@ -83,6 +216,130 @@ func TestFetchURLToFileLeavesDestinationUntouchedOnInterruptedDownload(t *testin
 		t.Fatalf("Glob returned error: %v", err)
 	} else if len(matches) != 0 {
 		t.Fatalf("unexpected temporary download files left behind: %v", matches)
+	}
+}
+
+func TestFetchURLToFileReplacesExistingDestination(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("replacement"))
+	}))
+	defer server.Close()
+
+	dst := filepath.Join(t.TempDir(), "asset.zip")
+	if err := os.WriteFile(dst, []byte("existing"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := fetchURLToFile(server.URL, dst); err != nil {
+		t.Fatalf("fetchURLToFile returned error: %v", err)
+	}
+	if data, err := os.ReadFile(dst); err != nil || string(data) != "replacement" {
+		t.Fatalf("destination content = %q, err = %v", data, err)
+	}
+}
+
+func TestFetchURLToFileWithLimitRejectsDeclaredSizeBeforeCreatingTempFile(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Length", "5")
+		_, _ = w.Write([]byte("12345"))
+	}))
+	defer server.Close()
+
+	parent := filepath.Join(t.TempDir(), "missing")
+	err := fetchURLToFileWithLimit(server.URL, filepath.Join(parent, "ndk.zip"), 4)
+	if !errors.Is(err, runtimebundle.ErrArchiveLimit) {
+		t.Fatalf("fetchURLToFileWithLimit error = %v, want ErrArchiveLimit", err)
+	}
+	if _, err := os.Stat(parent); !os.IsNotExist(err) {
+		t.Fatalf("download directory was created before Content-Length rejection: %v", err)
+	}
+}
+
+func TestFetchURLToFileWithLimitRejectsChunkedBodyAboveLimit(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		if flusher, ok := w.(http.Flusher); ok {
+			flusher.Flush()
+		}
+		_, _ = w.Write([]byte("12345"))
+	}))
+	defer server.Close()
+
+	tempDir := t.TempDir()
+	dst := filepath.Join(tempDir, "ndk.zip")
+	if err := os.WriteFile(dst, []byte("existing"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err := fetchURLToFileWithLimit(server.URL, dst, 4)
+	if !errors.Is(err, runtimebundle.ErrArchiveLimit) {
+		t.Fatalf("fetchURLToFileWithLimit error = %v, want ErrArchiveLimit", err)
+	}
+	if content, readErr := os.ReadFile(dst); readErr != nil || string(content) != "existing" {
+		t.Fatalf("destination content = %q, err = %v; want original content", content, readErr)
+	}
+	if matches, globErr := filepath.Glob(filepath.Join(tempDir, "ndk.zip.tmp-*")); globErr != nil || len(matches) != 0 {
+		t.Fatalf("temporary download files = %v, err = %v; want none", matches, globErr)
+	}
+}
+
+func TestFetchURLToFileWithLimitRejectsShortDeclaredBody(t *testing.T) {
+	oldClient := fileDownloadHTTPClient
+	fileDownloadHTTPClient = &http.Client{Transport: roundTripBodyTransport{
+		status:        http.StatusOK,
+		contentLength: 5,
+		body:          "123",
+	}}
+	t.Cleanup(func() { fileDownloadHTTPClient = oldClient })
+
+	dir := t.TempDir()
+	dst := filepath.Join(dir, "short.zip")
+	if err := os.WriteFile(dst, []byte("existing"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err := fetchURLToFileWithLimit("https://example.invalid/short.zip", dst, 10)
+	if !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("fetchURLToFileWithLimit error = %v, want io.ErrUnexpectedEOF", err)
+	}
+	if data, readErr := os.ReadFile(dst); readErr != nil || string(data) != "existing" {
+		t.Fatalf("destination content = %q, err = %v; want original content", data, readErr)
+	}
+	if matches, globErr := filepath.Glob(dst + ".tmp-*"); globErr != nil || len(matches) != 0 {
+		t.Fatalf("temporary download files = %v, err = %v", matches, globErr)
+	}
+}
+
+func TestFetchURLToFileRejectsHTTPSDowngrade(t *testing.T) {
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("replacement"))
+	}))
+	defer target.Close()
+
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		http.Redirect(w, req, target.URL, http.StatusFound)
+	}))
+	defer server.Close()
+
+	oldClient := fileDownloadHTTPClient
+	fileDownloadHTTPClient = server.Client()
+	callbackCalled := false
+	fileDownloadHTTPClient.CheckRedirect = func(*http.Request, []*http.Request) error {
+		callbackCalled = true
+		return nil
+	}
+	t.Cleanup(func() { fileDownloadHTTPClient = oldClient })
+
+	dst := filepath.Join(t.TempDir(), "asset.zip")
+	if err := os.WriteFile(dst, []byte("existing"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err := fetchURLToFile(server.URL, dst)
+	if !errors.Is(err, ErrInsecureRedirect) {
+		t.Fatalf("fetchURLToFile error = %v, want HTTPS downgrade rejection", err)
+	}
+	if callbackCalled {
+		t.Fatal("custom CheckRedirect ran before HTTPS downgrade validation")
+	}
+	if data, readErr := os.ReadFile(dst); readErr != nil || string(data) != "existing" {
+		t.Fatalf("destination content = %q, err = %v; want original content", data, readErr)
 	}
 }
 
