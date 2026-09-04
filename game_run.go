@@ -81,6 +81,7 @@ func XGot_Game_Reload(game Gamer, index any) (err error) {
 		engine.Panic(err)
 		return
 	}
+	g.tilemapMgr.replaceMap(plan.tilemap)
 	gco.OnRestart()
 	err = g.loadIndexWithSpriteLoader(v, proj, generation, plan.spriteLoader(g))
 	if err != nil {

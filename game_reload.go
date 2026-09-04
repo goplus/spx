@@ -23,6 +23,7 @@ import (
 
 	"github.com/goplus/spbase/mathf"
 	coreproject "github.com/goplus/spx/v3/internal/core/project"
+	tm "github.com/goplus/spx/v3/internal/tilemap"
 )
 
 type reloadPlan struct {
@@ -31,6 +32,7 @@ type reloadPlan struct {
 	configNames     []string
 	directSprites   map[string]reflect.Type
 	prototypeByName map[string]reflect.Type
+	tilemap         tm.LoadResult
 }
 
 func prepareReload(g *Game, gamer reflect.Value, index any) (*reloadPlan, error) {
@@ -49,10 +51,15 @@ func prepareReload(g *Game, gamer reflect.Value, index any) (*reloadPlan, error)
 	if err := validateReloadProjectConfig(&plan.project); err != nil {
 		return nil, fmt.Errorf("reload preflight: project config: %w", err)
 	}
+	loadedTilemap, err := tm.Load(g.fs, plan.project.TilemapPath)
+	if err != nil {
+		return nil, fmt.Errorf("reload preflight: load tilemap %q: %w", plan.project.TilemapPath, err)
+	}
+	plan.tilemap = loadedTilemap
 
 	// Mirror the field layout without changing the live game.
 	shadow := reflect.New(gamer.Type()).Elem()
-	err := coreproject.WalkFields(shadow, func(fieldIndex int) (string, any) {
+	err = coreproject.WalkFields(shadow, func(fieldIndex int) (string, any) {
 		return getFieldPtrOrAlloc(g, shadow, fieldIndex)
 	}, func(name string, val any) error {
 		sprite, ok := val.(Sprite)

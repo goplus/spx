@@ -153,6 +153,22 @@ func (*reloadCommitResMgr) GetBoundFromAlpha(string) mathf.Rect2 {
 	return mathf.Rect2{Size: mathf.NewVec2(10, 10)}
 }
 
+type reloadCommitTilemapparserMgr struct {
+	pkgengine.ITilemapparserMgr
+	loadedPath   string
+	destroyCalls int
+}
+
+func (m *reloadCommitTilemapparserMgr) LoadTilemap(path string) {
+	m.loadedPath = path
+}
+
+func (m *reloadCommitTilemapparserMgr) DestroyAllTilemaps() { m.destroyCalls++ }
+
+type reloadCommitSceneMgr struct{ pkgengine.ISceneMgr }
+
+func (*reloadCommitSceneMgr) ClearPureSprites() {}
+
 func setupReloadPreflightGame(t *testing.T, files reloadConfigFS) (*reloadPreflightGame, *reloadPreflightSprite, *coroutine.Coroutines) {
 	t.Helper()
 
@@ -173,6 +189,7 @@ func setupReloadPreflightGame(t *testing.T, files reloadConfigFS) (*reloadPrefli
 	game.Game.typs = map[string]reflect.Type{
 		"reloadPreflightSprite": reflect.TypeFor[reloadPreflightSprite](),
 	}
+	game.Game.tilemapMgr.currentMap = "live-map"
 	sprite.name = "live-sentinel"
 	engine.SetGame(&game.Game)
 
@@ -322,6 +339,9 @@ func assertReloadPreflightPreservedLiveState(
 	if game.Sprite != sprite || sprite.name != "live-sentinel" || sprite.reloadPreflightGame != game {
 		t.Fatal("reload preflight mutated the live sprite field")
 	}
+	if got := game.TilemapName(); got != "live-map" {
+		t.Fatalf("reload preflight changed live tilemap to %q", got)
+	}
 }
 
 func TestPrepareReloadSuccessDoesNotMutateLiveGame(t *testing.T) {
@@ -399,6 +419,24 @@ func TestReloadPreflightFailurePreservesLiveGame(t *testing.T) {
 			project:   `{"backdrops":[null],"zorder":[]}`,
 			files:     reloadConfigFS{},
 			wantError: "backdrops[0] is null",
+		},
+		{
+			name:      "malformed old tilemap JSON",
+			project:   `{"tilemapPath":"tilemaps/bad.json","zorder":[]}`,
+			files:     reloadConfigFS{"tilemaps/bad.json": `{`},
+			wantError: `load tilemap "tilemaps/bad.json"`,
+		},
+		{
+			name:      "missing new tilemap JSON",
+			project:   `{"tilemapPath":"tilemaps/missing","zorder":[]}`,
+			files:     reloadConfigFS{},
+			wantError: `load tilemap "tilemaps/missing"`,
+		},
+		{
+			name:      "malformed new tilemap JSON",
+			project:   `{"tilemapPath":"tilemaps/bad","zorder":[]}`,
+			files:     reloadConfigFS{"tilemaps/bad/tilemap.json": `{`},
+			wantError: `load tilemap "tilemaps/bad"`,
 		},
 		{
 			name:      "null animation",
@@ -496,6 +534,73 @@ func TestReloadCommitInitializesDirectSpriteWithNewPhysicsSettings(t *testing.T)
 			}
 			if got := game.DirectCommitSprite.physics().collisionInfo.Type; got != test.wantCollider {
 				t.Fatalf("direct sprite collision type = %d, want %d", got, test.wantCollider)
+			}
+		})
+	}
+}
+
+func TestReloadCommitReplacesConfiguredTilemap(t *testing.T) {
+	tests := []struct {
+		name          string
+		initialPath   string
+		project       string
+		wantName      string
+		wantLoaded    string
+		wantDestroyed int
+	}{
+		{
+			name:       "none to A",
+			project:    `{"tilemapPath":"tilemaps/a","zorder":[]}`,
+			wantName:   "a",
+			wantLoaded: engine.ToAssetPath("tilemaps/a/tilemap.json"),
+		},
+		{
+			name:          "A to B",
+			initialPath:   "tilemaps/a",
+			project:       `{"tilemapPath":"tilemaps/b","zorder":[]}`,
+			wantName:      "b",
+			wantLoaded:    engine.ToAssetPath("tilemaps/b/tilemap.json"),
+			wantDestroyed: 1,
+		},
+		{
+			name:          "A to none",
+			initialPath:   "tilemaps/a",
+			project:       `{"zorder":[]}`,
+			wantDestroyed: 1,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			parser := &reloadCommitTilemapparserMgr{}
+			originalParser, originalScene := pkgengine.TilemapparserMgr, pkgengine.SceneMgr
+			pkgengine.TilemapparserMgr = parser
+			pkgengine.SceneMgr = &reloadCommitSceneMgr{}
+			t.Cleanup(func() {
+				pkgengine.TilemapparserMgr = originalParser
+				pkgengine.SceneMgr = originalScene
+			})
+
+			files := reloadConfigFS{
+				"tilemaps/a/tilemap.json": `{}`,
+				"tilemaps/b/tilemap.json": `{}`,
+			}
+			game := setupReloadCommitGame(t, files)
+			if test.initialPath != "" {
+				game.tilemapMgr.loadMap(test.initialPath)
+				parser.loadedPath = ""
+			}
+
+			if err := XGot_Game_Reload(game, strings.NewReader(test.project)); err != nil {
+				t.Fatalf("XGot_Game_Reload error = %v", err)
+			}
+			if got := game.TilemapName(); got != test.wantName {
+				t.Fatalf("TilemapName = %q, want %q", got, test.wantName)
+			}
+			if parser.loadedPath != test.wantLoaded {
+				t.Fatalf("loaded tilemap path = %q, want %q", parser.loadedPath, test.wantLoaded)
+			}
+			if parser.destroyCalls != test.wantDestroyed {
+				t.Fatalf("DestroyAllTilemaps calls = %d, want %d", parser.destroyCalls, test.wantDestroyed)
 			}
 		})
 	}
