@@ -21,7 +21,7 @@ go run ./.github/scripts/runtime/version.go --json
 
 SPX 与 Godot Actions 都调用所选 SPX commit 中的 `.github/scripts/runtime_build_contract.py` 校验 lock 与 SCons profile。引擎 cache 的工具链摘要按平台收敛：native 只包含 SCons，Web 额外包含 EMSDK，Android 额外包含 JDK 与 NDK。未知的 NDK installer alias 只会阻断 Android 构建，不会误伤其他平台。
 
-manifest 记录 `module_tree`、`runtime_pack_source_sha256` 和 `build_recipe_sha256`，用于追踪构建来源和诊断问题；这些字段不参与已发布 runtime 的复用判定。复用只要求 release tag 为 `runtime-v<所选版本>`，且 manifest 的 `runtime_version` 等于 lock 选择的版本。若源码、ABI、工具链或资产契约发生了不兼容变化，发布者必须先提升 `runtime_version`。Godot SCons cache 使用独立的构建输入摘要；文档不进入 runtime 或 cache digest。
+manifest 记录的 `module_tree`、`runtime_pack_source_sha256` 和 `build_recipe_sha256` 共同构成会影响产物字节的源码身份。只有这些值与所选 SPX revision 一致，并且 lock 约束的 ABI、Godot commit、toolchain、repository 和资产契约也一致时，已发布 runtime 才能复用。任一输入发生变化，发布者都必须先提升 `runtime_version`。Godot SCons cache 使用独立的构建输入摘要；文档不进入 runtime 或 cache digest。
 
 module tree 仍严格覆盖完整的 `godot_modules/spx` tree。pack-source 摘要只跟踪专用 pack-only 命令 `spx exportpack` 的输入，并按固定的 Linux/amd64、CGO、无额外 tag 的 pack 构建目标解析 Go build constraints；`export_presets.cfg` 只投影 Linux preset，`gdspx.gdextension` 等实际进入 PCK 的文件仍完整计算。pack-only 路径直接写出 PCK，不依赖平台导出模板。独立的 `run`、`buildlauncher`、Web/mobile exporter、平台模板和 release 编排不进入摘要。build-recipe 摘要只跟踪专用的本地 Linux 引擎准备与 export-pack 路径；其他平台分发、远程下载、本地 manifest 发布和 CI 运输层也不进入摘要。这些摘要帮助定位构建差异，但不会替代显式版本升级。
 
@@ -44,7 +44,7 @@ module tree 仍严格覆盖完整的 `godot_modules/spx` tree。pack-source 摘�
    ```
 
    普通 merge 会保留 candidate 的祖先关系；squash 或 rebase 会改变源码身份，此时运行 `make pin-godot-unpublished GODOT_SHA=<resulting-sha>` 固定最终 commit 并重跑 dry-run，不能发布旧 candidate SHA。
-5. ancestry verifier 成功后才能发布新的 runtime。仅当所选 `runtime-v<runtime_version>` 尚未公开时，发布流程才会在构建前运行 verifier，并在创建或上传 release 前立即复验。相同 runtime version 的公开 release 可直接复用，不要求其历史 source ref 永久存在。
+5. ancestry verifier 成功后才能发布新的 runtime。仅当所选 `runtime-v<runtime_version>` 尚未公开时，发布流程才会在构建前运行 verifier，并在创建或上传 release 前立即复验。相同 runtime version 的公开 release 只有在其记录的 runtime 输入与当前 candidate 一致时才能复用；复用不要求其历史 source ref 永久存在。
 
 不要从 fork 发布。`publish-runtime` 与 `publish-release` 操作只允许在 lock 的 `release_repository`（当前为 `goplus/spx`）执行。
 
@@ -67,15 +67,15 @@ git diff --check
 
 ## runtime 感知的 CI 与三阶段自举
 
-普通 CI 会在启动 runtime consumer 前解析 lock 对应的 runtime release。resolver 只读取 release metadata 与 manifest，不下载全部 runtime 资产；它会确认 tag 为 `runtime-v<所选版本>`、manifest 的 `runtime_version` 等于 lock 选择的版本，并校验 required asset 名称集合。
+普通 CI 会在启动 runtime consumer 前解析 lock 对应的 runtime release。resolver 不下载全部 runtime 资产，但会校验 release metadata 与 manifest，计算当前 revision 的 module tree、runtime-pack source digest 和 build-recipe digest，并将它们与 manifest 及 lock 约束的 runtime 身份逐项比较。
 
-- runtime 不存在或仍为 draft 时，CI 跳过基于已发布 runtime 的 Web 产品 smoke，改为把当前 SPX module 放入 lock 的 Godot source，执行 Linux SPX tests 与 Web normal compile smoke。
-- runtime 已公开且版本一致时，下一次 CI 会跳过 source integration 重编译，强制执行使用已发布资产的 Web normal 产品 smoke。
+- runtime 不存在、仍为 draft，或本身合法但与当前源码身份不兼容时，CI 跳过基于已发布 runtime 的 Web 产品 smoke，改为把当前 SPX module 放入 lock 的 Godot source，执行 Linux SPX tests 与 Web normal compile smoke。源码不兼容会写入 summary，但其本身不会让普通 CI 失败。
+- runtime 已公开且完整复用身份一致时，下一次 CI 会跳过 source integration 重编译，强制执行使用已发布资产的 Web normal 产品 smoke。
 - 已公开 release 缺 manifest、版本不一致、资产集合不完整或 GitHub API 异常，都不属于前两种状态；resolver 与 CI gate 会 fail closed。
 
 这个切换同时避免发布循环与 runtime 重复构建。普通 CI 不构建完整 release runtime；只有 release workflow 执行该构建。release assemble 在复用或发布前仍会下载全部资产，并校验 `SHA256SUMS` 与 manifest 中每个文件的 checksum。
 
-canonical-ref ancestry 规则刻意只用于构建和发布新的 runtime。普通 runner 与 module-integration workflow 可以测试 lock 中精确的 candidate SHA，不要求它已经进入 `godot.ref`。解析时不存在相同版本的公开 runtime，release setup 才会调用共享 verifier：只有 verifier 已确认 exact commit 可从 canonical repo 获取、canonical ref tip 是该 commit 的祖先且反向尚不成立时，`dry-run` 才能以 pre-merge candidate 继续，并在 workflow summary 明确标记 candidate-only；publish 操作必须先证明 ancestry 才会开始新的 runtime 构建。ref 查询失败、ref 歧义、网络异常或比较失败会阻断新 runtime 发布。若 resolver 找到相同 runtime version 的公开 release 且 manifest 版本匹配，summary 会标记 source ancestry 无需检查。
+canonical-ref ancestry 规则刻意只用于构建和发布新的 runtime。普通 runner 与 module-integration workflow 可以测试 lock 中精确的 candidate SHA，不要求它已经进入 `godot.ref`。解析时不存在相同版本的公开 runtime，release setup 才会调用共享 verifier：只有 verifier 已确认 exact commit 可从 canonical repo 获取、canonical ref tip 是该 commit 的祖先且反向尚不成立时，`dry-run` 才能以 pre-merge candidate 继续，并在 workflow summary 明确标记 candidate-only；publish 操作必须先证明 ancestry 才会开始新的 runtime 构建。ref 查询失败、ref 歧义、网络异常或比较失败会阻断新 runtime 发布。如果已存在相同版本的公开 runtime，但其记录的输入不同，`dry-run`、`publish-runtime` 和 `publish-release` 都会停止并明确提示提升 `runtime_version`，绝不会重建或覆盖该 tag。只有 resolver 证明公开 runtime 可复用时，summary 才会标记 source ancestry 无需检查。
 
 三阶段自举仍在 `goplus/spx` 的冻结发布分支上执行：
 
@@ -91,7 +91,7 @@ canonical-ref ancestry 规则刻意只用于构建和发布新的 runtime。普�
 2. 将该 Godot commit 原样提升到 canonical `godot.ref` 并通过严格 ancestry verifier，再对同一个 SPX commit 设置 `operation=publish-runtime`。没有可复用版本时，该模式会构建、校验并公开全部 runtime 资产，但跳过 SPX 产品包、SPX release 和 npm。
 3. 让普通 CI 自动切换到已公开 runtime 路径，并通过 Web normal 产品 smoke。若合并导致 runtime 内容不兼容，先提升 `runtime_version`；否则在最终 SPX commit 上使用 `platforms=all`、`operation=publish-release`，流程会验证并复用同一 runtime，再发布 SPX 产品与 npm。
 
-runtime manifest、`SHA256SUMS` 和 required asset 集合必须内部自洽。runtime 复用比较 `runtime_version`，不会把已发布 manifest 或 checksum 文件与后续 candidate build 做逐字节比较；checksum 只保证下载内容完整，不形成第二套兼容性身份。未公开的 runtime/SPX draft tag 必须指向当前 `GITHUB_SHA`，相同版本的公开 runtime 则可来自前一阶段的 candidate commit。SPX tag 始终指向最终 commit。若 runtime 内容发生不兼容变化，必须先提升 `runtime_version`，不能覆盖或静默重新解释已有 tag。
+runtime manifest、`SHA256SUMS` 和 required asset 集合必须内部自洽。runtime 复用会比较所选版本、lock 约束身份，以及 module-tree、runtime-pack-source 和 build-recipe digest；它不会重新构建 candidate 资产再与已发布文件逐字节比较。checksum 用于保护下载内容。未公开的 runtime/SPX draft tag 必须指向当前 `GITHUB_SHA`，兼容的同版本公开 runtime 可以来自前一阶段的 candidate commit。SPX tag 始终指向最终 commit。若 runtime 内容发生不兼容变化，必须先提升 `runtime_version`，不能覆盖或静默重新解释已有 tag。
 
 ## 开发版 npm 包
 
@@ -104,13 +104,13 @@ gh workflow run release.yml \
   -f operation=publish-dev-npm
 ```
 
-该操作固定使用 dispatch 捕获的精确 commit SHA，构建 Web normal 包，计算 pseudo-version，并发布到 npm `dev` dist-tag。它不会构建 release runtime、平台产品包或创建 GitHub Release；Web 构建仍会下载 lock 对应的公开 runtime，因此该 runtime release 必须已经公开且完整，否则依赖准备会失败。如果目标 SHA 恰好已有正式 `v3.*` tag，则会 fail closed。开发版 npm 与正式发布共用 `spx-release` 并发组，避免不同 SHA 或正式/开发发布同时竞争 dist-tag。
+该操作固定使用 dispatch 捕获的精确 commit SHA，构建 Web normal 包，计算 pseudo-version，并发布到 npm `dev` dist-tag。它不会构建 release runtime、平台产品包或创建 GitHub Release。发布前会执行相同的源码身份复用校验，所选 runtime 必须已经公开、完整且兼容；runtime 不存在时应先发布，存在同版本但不兼容时必须提升版本。如果目标 SHA 恰好已有正式 `v3.*` tag，则会 fail closed。开发版 npm 与正式发布共用 `spx-release` 并发组，避免不同 SHA 或正式/开发发布同时竞争 dist-tag。
 
 不要恢复 `dev` 每次 push 自动发布。显式操作可以避免 runtime lock 已推进但对应 runtime 尚未公开时反复失败，也避免为每次合入产生不可撤销的 npm 版本。npm Trusted Publisher 应固定为 organization `goplus`、repository `spx`、workflow filename `release.yml`，environment 留空；正式版与开发版都通过该顶层 workflow 的 OIDC 身份发布。`publish_web_package.yml` 只是 reusable workflow，不应单独触发。
 
 ## 后续版本维护
 
-- 仅 SPX 产品变化且 runtime 版本不变时，可以用 SPX-only mapping 保留 current runtime；发布流程会按 runtime version 复用公开资产。
+- 仅 SPX 产品变化且 runtime 输入不变时，可以用 SPX-only mapping 保留 current runtime；发布流程只会在复用身份校验通过后使用其公开资产。
 - Godot、`godot_modules/spx`、toolchain 或 runtime pack 输出变化时，用一个事务同时提升两套身份：
 
   ```sh

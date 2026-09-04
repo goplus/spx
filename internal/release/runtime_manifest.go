@@ -208,8 +208,8 @@ func (m RuntimeManifest) Validate() error {
 	return nil
 }
 
-// ValidateForVersion checks a structurally valid manifest against the only
-// compatibility identity used by release consumers: the runtime version.
+// ValidateForVersion checks the version portion of a manifest's release
+// identity. Reuse callers must also validate the lock and scoped provenance.
 func (m RuntimeManifest) ValidateForVersion(runtimeVersion string) error {
 	if err := m.Validate(); err != nil {
 		return err
@@ -258,8 +258,8 @@ func (m RuntimeManifest) validateRequiredAssets(requiredAssets []string) error {
 	return nil
 }
 
-// ValidateForLock is producer-side validation for metadata generated from one
-// exact build lock. Published consumers use ParseRuntimeManifestForRelease.
+// ValidateForLock validates metadata generated from one exact build lock.
+// Published reuse checks compare the scoped source provenance separately.
 func (m RuntimeManifest) ValidateForLock(lock RuntimeLock) error {
 	if err := lock.Validate(); err != nil {
 		return err

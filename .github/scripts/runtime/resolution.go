@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -18,13 +20,16 @@ import (
 )
 
 const (
-	runtimeStateReady   = "ready"
-	runtimeStateMissing = "missing"
-	maxGitHubBodySize   = 8 << 20
+	runtimeStateReady        = "ready"
+	runtimeStateMissing      = "missing"
+	runtimeStateIncompatible = "incompatible"
+	maxGitHubBodySize        = 8 << 20
 )
 
 type runtimeResolutionConfig struct {
 	LockPath     string
+	RepoRoot     string
+	Revision     string
 	GitHubAPIURL string
 	GitHubToken  string
 	HTTPClient   *http.Client
@@ -60,6 +65,8 @@ func runRuntimeResolution(args []string) error {
 	config := runtimeResolutionConfig{}
 	var githubOutput string
 	fs.StringVar(&config.LockPath, "lock", "internal/release/runtime.lock.json", "runtime lock JSON")
+	fs.StringVar(&config.RepoRoot, "repo-root", ".", "SPX repository root")
+	fs.StringVar(&config.Revision, "revision", "HEAD", "SPX revision to verify")
 	fs.StringVar(&config.GitHubAPIURL, "github-api-url", "https://api.github.com", "GitHub API base URL")
 	fs.StringVar(&githubOutput, "github-output", "", "optional GitHub step output file")
 	fs.Usage = func() {
@@ -138,12 +145,22 @@ func resolveRuntime(ctx context.Context, config runtimeResolutionConfig) (runtim
 	if status != http.StatusOK {
 		return runtimeResolution{}, runtimeConflict(tag, "download manifest: HTTP %d %s", status, http.StatusText(status))
 	}
-	if _, err := release.ParseRuntimeManifestForRelease(body, lock.RuntimeVersion, lock.RequiredAssets); err != nil {
+	manifest, err := release.ParseRuntimeManifestForRelease(body, lock.RuntimeVersion, lock.RequiredAssets)
+	if err != nil {
 		return runtimeResolution{}, runtimeConflict(tag, "parse manifest: %v", err)
+	}
+	incompatibility, err := currentRuntimeIncompatibility(config, lock, manifest)
+	if err != nil {
+		return runtimeResolution{}, fmt.Errorf("resolve current runtime compatibility: %w", err)
+	}
+	if incompatibility != "" {
+		result.State = runtimeStateIncompatible
+		result.Reason = fmt.Sprintf("%s cannot be reused by %s: %s; bump runtime_version", tag, strings.TrimSpace(config.Revision), incompatibility)
+		return result, nil
 	}
 
 	result.State = runtimeStateReady
-	result.Reason = fmt.Sprintf("verified published %s", tag)
+	result.Reason = fmt.Sprintf("verified published %s against current runtime inputs at %s", tag, strings.TrimSpace(config.Revision))
 	return result, nil
 }
 
@@ -248,12 +265,66 @@ func verifyPublishedAssetNames(lock release.RuntimeLock, assets []gitHubAsset) (
 	return manifestURL, nil
 }
 
+func currentRuntimeIncompatibility(config runtimeResolutionConfig, lock release.RuntimeLock, manifest release.RuntimeManifest) (string, error) {
+	if err := manifest.ValidateForLock(lock); err != nil {
+		return err.Error(), nil
+	}
+
+	// SPXCommit is traceability metadata, not a reuse input. SPX-only commits
+	// remain reusable when all scoped runtime source identities are unchanged.
+	repoRoot := filepath.Clean(config.RepoRoot)
+	revision := strings.TrimSpace(config.Revision)
+	if revision == "" {
+		return "", errors.New("SPX revision must not be empty")
+	}
+	commit, err := gitRevision(repoRoot, revision+"^{commit}")
+	if err != nil {
+		return "", fmt.Errorf("resolve current SPX commit: %w", err)
+	}
+	moduleTree, err := gitRevision(repoRoot, commit+":"+lock.Module.Path)
+	if err != nil {
+		return "", fmt.Errorf("resolve current module tree: %w", err)
+	}
+	if manifest.Provenance.ModuleTree != moduleTree {
+		return fmt.Sprintf("module tree = %s, current runtime input = %s", manifest.Provenance.ModuleTree, moduleTree), nil
+	}
+	runtimePackDigest, err := release.RuntimePackSourceSHA256(repoRoot, commit)
+	if err != nil {
+		return "", err
+	}
+	if manifest.Provenance.RuntimePackSourceSHA256 != runtimePackDigest {
+		return fmt.Sprintf("runtime pack source digest = %s, current runtime input = %s", manifest.Provenance.RuntimePackSourceSHA256, runtimePackDigest), nil
+	}
+	buildRecipeDigest, err := release.RuntimeBuildRecipeSHA256(repoRoot, commit)
+	if err != nil {
+		return "", err
+	}
+	if manifest.Provenance.BuildRecipeSHA256 != buildRecipeDigest {
+		return fmt.Sprintf("runtime build recipe digest = %s, current runtime input = %s", manifest.Provenance.BuildRecipeSHA256, buildRecipeDigest), nil
+	}
+	return "", nil
+}
+
+func gitRevision(repoRoot, revision string) (string, error) {
+	command := exec.Command("git", "-C", repoRoot, "rev-parse", "--verify", "--end-of-options", revision)
+	output, err := command.Output()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			if detail := strings.TrimSpace(string(exitErr.Stderr)); detail != "" {
+				return "", errors.New(detail)
+			}
+		}
+		return "", err
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
 func runtimeConflict(tag, format string, args ...any) error {
 	return fmt.Errorf("runtime %s is not reusable: %s", tag, fmt.Sprintf(format, args...))
 }
 
 func writeRuntimeResolutionOutputs(path string, resolution runtimeResolution) error {
-	if resolution.State != runtimeStateReady && resolution.State != runtimeStateMissing {
+	if resolution.State != runtimeStateReady && resolution.State != runtimeStateMissing && resolution.State != runtimeStateIncompatible {
 		return fmt.Errorf("invalid runtime state %q", resolution.State)
 	}
 	if resolution.Reason == "" || strings.ContainsAny(resolution.Reason, "\r\n") {

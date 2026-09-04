@@ -96,8 +96,9 @@ jobs:
             echo "[error] Publishing is locked to $RELEASE_REPOSITORY, not $CURRENT_REPOSITORY" >&2
             exit 1
           fi
-      # Resolution is intentionally metadata-only. The assemble job downloads
-      # and checksum-verifies every published asset before reuse.
+      # Resolution downloads only release metadata and the manifest, then
+      # compares its runtime identity with this source. The assemble job
+      # downloads and checksum-verifies every published asset before reuse.
       - name: Resolve locked runtime release
         id: runtime
         shell: bash
@@ -107,7 +108,32 @@ jobs:
           set -euo pipefail
           go run ./.github/scripts/runtime/resolution.go \
             --lock internal/release/runtime.lock.json \
+            --repo-root . \
+            --revision HEAD \
             --github-output "$GITHUB_OUTPUT"
+
+      - name: Enforce runtime reuse policy
+        shell: bash
+        env:
+          RUNTIME_REASON: ${{ steps.runtime.outputs.runtime_reason }}
+          RUNTIME_STATE: ${{ steps.runtime.outputs.runtime_state }}
+        run: |
+          set -euo pipefail
+
+          case "$RUNTIME_STATE" in
+            ready|missing)
+              ;;
+            incompatible)
+              echo "::error title=Runtime version bump required::$RUNTIME_REASON"
+              echo "[error] $RUNTIME_REASON" >&2
+              echo "[error] Run make bump-release SPX_VERSION=v3.x.y RUNTIME_VERSION=x.y.z before releasing." >&2
+              exit 1
+              ;;
+            *)
+              echo "[error] Unknown runtime state: ${RUNTIME_STATE:-<empty>}" >&2
+              exit 1
+              ;;
+          esac
 
       - name: Verify locked Godot source ancestry
         id: godot-ancestry
@@ -129,7 +155,12 @@ jobs:
           python3 .github/scripts/runtime_lock_snapshot.py "${ancestry_args[@]}"
 
       - name: Summarize locked Godot source ancestry
-        if: always() && steps.runtime.outcome == 'success'
+        if: >-
+          ${{
+            always() &&
+            steps.runtime.outcome == 'success' &&
+            steps.runtime.outputs.runtime_state != 'incompatible'
+          }}
         shell: bash
         env:
           ANCESTRY_STATUS: ${{ steps.godot-ancestry.outputs.godot_ancestry_status }}
@@ -635,6 +666,53 @@ jobs:
             echo "[error] release_tag must be empty for publish-dev-npm" >&2
             exit 1
           fi
+
+      - name: Set up locked Go and XGo
+        uses: ./.github/actions/deps
+        with:
+          setup-mode: none
+
+      - name: Resolve development runtime release
+        id: runtime
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          go run ./.github/scripts/runtime/resolution.go \
+            --lock internal/release/runtime.lock.json \
+            --repo-root . \
+            --revision HEAD \
+            --github-output "$GITHUB_OUTPUT"
+
+      - name: Require reusable development runtime
+        shell: bash
+        env:
+          RUNTIME_REASON: ${{ steps.runtime.outputs.runtime_reason }}
+          RUNTIME_STATE: ${{ steps.runtime.outputs.runtime_state }}
+        run: |
+          set -euo pipefail
+
+          case "$RUNTIME_STATE" in
+            ready)
+              ;;
+            missing)
+              echo "::error title=Published runtime required::$RUNTIME_REASON"
+              echo "[error] $RUNTIME_REASON" >&2
+              echo "[error] Publish the declared runtime before publishing a development npm package." >&2
+              exit 1
+              ;;
+            incompatible)
+              echo "::error title=Runtime version bump required::$RUNTIME_REASON"
+              echo "[error] $RUNTIME_REASON" >&2
+              echo "[error] Run make bump-release SPX_VERSION=v3.x.y RUNTIME_VERSION=x.y.z before publishing." >&2
+              exit 1
+              ;;
+            *)
+              echo "[error] Unknown runtime state: ${RUNTIME_STATE:-<empty>}" >&2
+              exit 1
+              ;;
+          esac
 
   publish-dev-web-package:
     name: Publish development npm package
