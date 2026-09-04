@@ -325,3 +325,22 @@ func TestRepositoryWebBridgeKeepsCrossCompilationABIStable(t *testing.T) {
 	require.Contains(t, audioLibrary, "if (toIndex === -1) {\n\t\t\tbuses.push(movedBus);")
 	require.NotContains(t, audioLibrary, "positionWorker.onMessage")
 }
+
+func TestRepositoryWebBridgeKeepsFastArrayPointersPrivate(t *testing.T) {
+	repositoryRoot := filepath.Join("..", "..", "..", "..", "..")
+	utilPath := filepath.Join(repositoryRoot, "godot_modules", "spx", "web", "js", "engine", "gdspx.util.js")
+	body, err := os.ReadFile(utilPath)
+	require.NoError(t, err)
+	util := string(body)
+
+	// Raw Wasm pointers must only come from wrappers created by the bridge. The
+	// public shape is retained for the Go ABI, but it is not an authority record.
+	require.Contains(t, util, "const gdspxTrustedFastArrayMetadata = new WeakMap();")
+	require.Contains(t, util, "gdspxTrustedFastArrayMetadata.set(wrapper, metadata);")
+	require.Contains(t, util, "return Object.freeze(wrapper);")
+	require.Contains(t, util, "if (metadata === null || metadata.module !== Module")
+	require.Contains(t, util, "requires an internally allocated Wasm array")
+	require.Contains(t, util, "array['__gdspx_wasm_array'] === true && GetTrustedFastArrayMetadata(array) === null")
+	require.Contains(t, util, "input['__gdspx_wasm_array'] === true && GetTrustedFastArrayMetadata(input) === null")
+	require.NotContains(t, util, "return array['ptr'];")
+}

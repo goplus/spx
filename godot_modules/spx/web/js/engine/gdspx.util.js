@@ -504,6 +504,11 @@ const GDSPX_MAX_ALIGNED_BYTES = GDSPX_MAX_I32 - (GDSPX_MAX_I32 % GDSPX_FAST_RING
 let fastRingModule = null;
 const fastRings = new Map();
 const deferredFastRingFrees = [];
+// A fast-array wrapper contains a raw Wasm pointer. Keep its provenance in a
+// private registry instead of trusting the JavaScript-visible metadata. This
+// prevents callers from manufacturing a shape-valid wrapper that redirects a
+// raw bridge into an arbitrary range of the active Wasm heap.
+const gdspxTrustedFastArrayMetadata = new WeakMap();
 const inputActionRegistry = {
     module: null,
     epoch: 0,
@@ -683,34 +688,75 @@ function GdspxBorrowFastArray(arrayType, count, dataSize, poolName = GDSPX_FAST_
     ring.offset += alignedSize;
     ring.sequence += 1;
 
-    const wrapper = {
-        '__gdspx_fast_array': true,
-        '__gdspx_wasm_array': true,
-        'type': arrayType,
-        'count': count,
-        'ptr': ptr,
-        'module': Module,
-        'byteLength': dataSize,
-        'sequence': ring.sequence,
-        'pool': ring.pool,
-        'shared': typeof SharedArrayBuffer === 'function' && Module['HEAPU8'].buffer instanceof SharedArrayBuffer,
+    const metadata = {
+        module: Module,
+        ptr,
+        byteLength: dataSize,
+        type: arrayType,
+        count,
+        sequence: ring.sequence,
+        pool: ring.pool,
     };
-    Object.defineProperty(wrapper, "data", {
-        configurable: true,
-        enumerable: true,
-        get() {
-            return GetFastArrayDataView(this['ptr'], this['byteLength'], this['module']);
+    Object.freeze(metadata);
+    const wrapper = {};
+    // Define the ABI fields as immutable own properties. The data view remains
+    // writable, but its address and extent are captured from the private
+    // metadata rather than read from a mutable object field.
+    Object.defineProperties(wrapper, {
+        '__gdspx_fast_array': { value: true, enumerable: true },
+        '__gdspx_wasm_array': { value: true, enumerable: true },
+        'type': { value: arrayType, enumerable: true },
+        'count': { value: count, enumerable: true },
+        'ptr': { value: ptr, enumerable: true },
+        'module': { value: Module, enumerable: true },
+        'byteLength': { value: dataSize, enumerable: true },
+        'sequence': { value: ring.sequence, enumerable: true },
+        'pool': { value: ring.pool, enumerable: true },
+        'shared': {
+            value: typeof SharedArrayBuffer === 'function' && Module['HEAPU8'].buffer instanceof SharedArrayBuffer,
+            enumerable: true,
+        },
+        'data': {
+            configurable: false,
+            enumerable: true,
+            get() {
+                return GetFastArrayDataView(metadata.ptr, metadata.byteLength, metadata.module);
+            },
         },
     });
-    return wrapper;
+    gdspxTrustedFastArrayMetadata.set(wrapper, metadata);
+    return Object.freeze(wrapper);
+}
+
+function GetTrustedFastArrayMetadata(array) {
+    if (!array || typeof array !== 'object') {
+        return null;
+    }
+    return gdspxTrustedFastArrayMetadata.get(array) || null;
+}
+
+function FastArrayType(array) {
+    const metadata = GetTrustedFastArrayMetadata(array);
+    const value = metadata !== null ?
+        (metadata.module === Module ? metadata.type : -1) : Number(array && array['type']);
+    return Number.isSafeInteger(value) ? value : -1;
 }
 
 function FastArrayCount(array) {
-    const count = Number(array && array['count']);
+    const metadata = GetTrustedFastArrayMetadata(array);
+    // A wrapper from an old module must not remain usable after a restart.
+    const count = metadata !== null ?
+        (metadata.module === Module ? metadata.count : -1) : Number(array && array['count']);
     return IsSafeArrayCount(count) ? count : -1;
 }
 
 function FastArrayByteLength(array) {
+    const metadata = GetTrustedFastArrayMetadata(array);
+    if (metadata !== null) {
+        return metadata.module === Module && Number.isSafeInteger(metadata.byteLength) &&
+            metadata.byteLength >= 0 && metadata.byteLength <= GDSPX_MAX_ARRAY_BYTES ?
+            metadata.byteLength : -1;
+    }
     const data = array && array['data'];
     const length = Number(data && data.length);
     return Number.isSafeInteger(length) && length >= 0 && length <= GDSPX_MAX_ARRAY_BYTES ? length : -1;
@@ -720,12 +766,13 @@ function IsFastArrayLike(array) {
     if (!array || typeof array !== 'object') {
         return false;
     }
-    if (!Number.isSafeInteger(array['type']) || GetFastArrayElemSize(array['type']) === 0) {
+    const arrayType = FastArrayType(array);
+    if (!Number.isSafeInteger(arrayType) || GetFastArrayElemSize(arrayType) === 0) {
         return false;
     }
     const count = FastArrayCount(array);
     const byteLength = FastArrayByteLength(array);
-    const elemSize = GetFastArrayElemSize(array['type']);
+    const elemSize = GetFastArrayElemSize(arrayType);
     return count >= 0 && byteLength >= 0 && count <= Math.floor(GDSPX_MAX_ARRAY_BYTES / elemSize) &&
         byteLength === count * elemSize;
 }
@@ -763,7 +810,7 @@ function BorrowCopiedFastArray(array, poolName = GDSPX_INPUT_POOL) {
     }
     // Keep transient input copies separate from return buffers so fast-path
     // calls do not trample results that are still being read by Go.
-    const borrowed = GdspxBorrowFastArray(array['type'], count, dataSize, poolName);
+    const borrowed = GdspxBorrowFastArray(FastArrayType(array), count, dataSize, poolName);
     if (dataSize > 0 && (!borrowed || borrowed['ptr'] === 0)) {
         throw new Error("Failed to allocate fast GdArray input buffer");
     }
@@ -778,12 +825,13 @@ function GetFastArrayWasmPtr(array) {
         return 0;
     }
     if (array['__gdspx_wasm_array'] === true) {
-        if (array['module'] !== Module) {
+        const metadata = GetTrustedFastArrayMetadata(array);
+        if (metadata === null || metadata.module !== Module || array['module'] !== Module) {
             return 0;
         }
-        const byteLength = FastArrayByteLength(array);
-        const elemSize = GetFastArrayElemSize(array['type']);
-        const ptr = array['ptr'];
+        const byteLength = metadata.byteLength;
+        const elemSize = GetFastArrayElemSize(metadata.type);
+        const ptr = metadata.ptr;
         if (!IsHeapRange(ptr, byteLength) || (byteLength > 0 && ptr === 0) ||
                 (byteLength > 0 && elemSize > 1 && ptr % elemSize !== 0)) {
             return 0;
@@ -799,13 +847,16 @@ function RequireWasmFastArray(array, opName, expectedType = null) {
     if (!array || array['__gdspx_wasm_array'] !== true) {
         throw new Error(opName + " requires a pre-allocated Wasm array");
     }
+    if (GetTrustedFastArrayMetadata(array) === null) {
+        throw new Error(opName + " requires an internally allocated Wasm array");
+    }
     if (array['module'] !== Module) {
         throw new Error(opName + " requires a Wasm array from the active module");
     }
     if (!IsFastArrayLike(array)) {
         throw new Error(opName + " requires a valid Wasm array shape");
     }
-    if (expectedType !== null && array['type'] !== expectedType) {
+    if (expectedType !== null && FastArrayType(array) !== expectedType) {
         throw new Error(opName + " received an incompatible Wasm array type");
     }
     const ptr = GetFastArrayWasmPtr(array);
@@ -822,10 +873,13 @@ function RequireFastArray(array, opName, expectedType = null) {
     if (!array || array['__gdspx_fast_array'] !== true) {
         throw new Error(opName + " requires a fast array");
     }
+    if (array['__gdspx_wasm_array'] === true && GetTrustedFastArrayMetadata(array) === null) {
+        throw new Error(opName + " requires an internally allocated Wasm array");
+    }
     if (!IsFastArrayLike(array)) {
         throw new Error(opName + " requires a valid fast array shape");
     }
-    if (expectedType !== null && array['type'] !== expectedType) {
+    if (expectedType !== null && FastArrayType(array) !== expectedType) {
         throw new Error(opName + " received an incompatible fast array type");
     }
     const byteLength = FastArrayByteLength(array);
@@ -842,7 +896,10 @@ function TryArrayTransformFastPath(call, input, inputArrayType, outputArrayType,
     if (!IsFastArrayLike(input)) {
         return null;
     }
-    if (!IsCompatibleFastArrayType(input['type'], inputArrayType)) {
+    if (input['__gdspx_wasm_array'] === true && GetTrustedFastArrayMetadata(input) === null) {
+        return null;
+    }
+    if (!IsCompatibleFastArrayType(FastArrayType(input), inputArrayType)) {
         return null;
     }
 
@@ -882,12 +939,12 @@ function TryArrayTransformFastPath(call, input, inputArrayType, outputArrayType,
         outBytes,
         GDSPX_RET_POOL,
     );
-    if (!out || out['ptr'] === 0) {
+    if (!out || GetFastArrayWasmPtr(out) === 0) {
         return null;
     }
 
     if (count > 0) {
-        call(inputPtr, count, out['ptr'], outCount);
+        call(inputPtr, count, GetFastArrayWasmPtr(out), outCount);
     }
     return out;
 }
@@ -902,10 +959,10 @@ function GdspxInputSnapshot() {
     }
 
     const out = GdspxBorrowFastArray(GDSPX_ARRAY_TYPE_FLOAT, 3, 12, GDSPX_INPUT_SNAP_POOL);
-    if (!out || out['ptr'] === 0) {
+    if (!out || GetFastArrayWasmPtr(out) === 0) {
         return null;
     }
-    call(out['ptr'], out['count']);
+    call(GetFastArrayWasmPtr(out), FastArrayCount(out));
     return out;
 }
 
@@ -1032,10 +1089,14 @@ function GdspxInputAxisByID(negActionID, posActionID) {
 // -----------------------------------------------------------------------------
 
 function GdspxBatchSpritePhysics(buffer) {
+    if (buffer && buffer['__gdspx_wasm_array'] === true &&
+            GetTrustedFastArrayMetadata(buffer) === null) {
+        return false;
+    }
     if (!IsFastArrayLike(buffer) || buffer['__gdspx_fast_array'] !== true) {
         return false;
     }
-    if (buffer['type'] !== GDSPX_ARRAY_TYPE_FLOAT) {
+    if (FastArrayType(buffer) !== GDSPX_ARRAY_TYPE_FLOAT) {
         return false;
     }
     const count = FastArrayCount(buffer);
@@ -1063,6 +1124,9 @@ function ToGdArray(array) {
         throw new Error('Invalid array structure. Expected {type, count, data}');
     }
     if (array['__gdspx_fast_array'] === true) {
+        if (array['__gdspx_wasm_array'] === true && GetTrustedFastArrayMetadata(array) === null) {
+            throw new Error("Invalid untrusted Wasm fast GdArray");
+        }
         if (!IsFastArrayLike(array)) {
             throw new Error("Invalid fast GdArray structure");
         }
@@ -1075,7 +1139,7 @@ function ToGdArray(array) {
         if (dataSize > 0 && dataPtr === 0) {
             throw new Error("Failed to access fast GdArray data");
         }
-        const gdArrayPtr = gdspxToGdArrayRaw(dataPtr, dataSize, count, array['type']);
+        const gdArrayPtr = gdspxToGdArrayRaw(dataPtr, dataSize, count, FastArrayType(array));
         if (!gdArrayPtr) {
             throw new Error("Failed to deserialize fast GdArray");
         }
