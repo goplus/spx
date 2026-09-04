@@ -26,8 +26,7 @@ func TestQueueBlockDoesNotBlockManagedCoroutine(t *testing.T) {
 			t.Fatal("managed QueueBlock producer accepted an item into a full queue")
 		}
 	case <-time.After(time.Second):
-		// Release a direct-send implementation so cleanup cannot strand the
-		// scheduler lock after reporting the regression.
+		// Unblock an implementation that still holds the scheduler lock.
 		<-game.events
 		t.Fatal("managed QueueBlock producer blocked while holding the scheduler run slot")
 	}

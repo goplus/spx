@@ -58,10 +58,7 @@ func (p *Game) eventQueueSnapshot() eventQueueSnapshot {
 
 func (p *Game) queueEventWithPolicy(ev event) bool {
 	policy := p.gameRuntimeState.EventQueuePolicy
-	// A managed coroutine owns the scheduler run slot while it executes. A
-	// blocking send on a full event queue would hold that slot forever, so use
-	// the non-blocking variant for this caller only. Ordinary goroutines retain
-	// QueueBlock's backpressure semantics.
+	// A managed send must release the scheduler slot when the queue is full.
 	if policy == coreevent.QueueBlock && gco != nil && gco.IsInCoroutine() {
 		return coreevent.EnqueueWithPolicyNonBlocking(
 			p.events,
@@ -71,5 +68,11 @@ func (p *Game) queueEventWithPolicy(ev event) bool {
 			&p.gameRuntimeState.EventQueueMu,
 		)
 	}
-	return coreevent.EnqueueWithPolicy(p.events, ev, p.gameRuntimeState.EventQueuePolicy, &p.gameRuntimeState.EventQueueStats, &p.gameRuntimeState.EventQueueMu)
+	return coreevent.EnqueueWithPolicy(
+		p.events,
+		ev,
+		policy,
+		&p.gameRuntimeState.EventQueueStats,
+		&p.gameRuntimeState.EventQueueMu,
+	)
 }
