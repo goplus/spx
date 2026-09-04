@@ -40,7 +40,7 @@ func Open(file string) (fs.Dir, error) {
 func (zipf *FS) Open(name string) (io.ReadCloser, error) {
 	for _, f := range zipf.File {
 		if f.Name == name {
-			return f.Open()
+			return openZipEntry(f)
 		}
 	}
 	return nil, fmt.Errorf("`%s` not found in zipfile: %w", name, syscall.ENOENT)
@@ -80,6 +80,9 @@ func openHttpWith(remotePath, scheme string) (fs.Dir, error) {
 	r := bytes.NewReader(body)
 	zipf, err := zip.NewReader(r, int64(r.Len()))
 	if err != nil {
+		return nil, err
+	}
+	if err := validateZipReader(zipf); err != nil {
 		return nil, err
 	}
 	return &FS{zipf}, nil

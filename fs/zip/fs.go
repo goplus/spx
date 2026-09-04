@@ -42,6 +42,10 @@ func Open(file string) (fs.Dir, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := validateZipReader(&zipf.Reader); err != nil {
+		_ = zipf.Close()
+		return nil, err
+	}
 	return (*FS)(zipf), nil
 }
 
@@ -49,7 +53,7 @@ func Open(file string) (fs.Dir, error) {
 func (zipf *FS) Open(name string) (io.ReadCloser, error) {
 	for _, f := range zipf.File {
 		if f.Name == name {
-			return f.Open()
+			return openZipEntry(f)
 		}
 	}
 	return nil, fmt.Errorf("`%s` not found in zipfile: %w", name, syscall.ENOENT)
