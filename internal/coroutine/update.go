@@ -39,6 +39,10 @@ const (
 	updateAwaitInitialization
 
 	updateWatchdogTimeout = stime.Second
+	// Runaway shutdown must not let an uncooperative native worker freeze the
+	// engine update loop forever. A timed-out shutdown remains fail-closed and
+	// is reopened by the final lifecycle item that drains.
+	runawayShutdownTimeout = updateWatchdogTimeout
 )
 
 // Update processes queued wait jobs and resumes eligible coroutines.
@@ -115,19 +119,20 @@ func (p *Coroutines) stopRunawayThreads() {
 	p.creationMu.Unlock()
 	p.runMu.Unlock()
 
-	for {
-		p.waitForThreadsToStop(0, nil)
+	completed := p.waitForThreadsToStop(runawayShutdownTimeout, nil)
 
-		// Close the race between observing an empty registry and a concurrent
-		// registration. Creations during shutdown are rejected as canceled.
-		p.creationMu.Lock()
-		if !p.hasThreadsOtherThan(nil) {
-			p.endStoppingLocked()
-			p.creationMu.Unlock()
-			return
-		}
-		p.creationMu.Unlock()
+	// Close the race between observing an empty registry and a concurrent
+	// registration. Creations during shutdown are rejected as canceled. If a
+	// native worker outlives the bounded wait, keep admission closed; its final
+	// unregister path will reopen the manager once all lifecycle work drains.
+	p.creationMu.Lock()
+	if completed && !p.hasThreadsOtherThan(nil) {
+		p.endStoppingLocked()
+	} else {
+		p.reopenWhenDrained = true
+		p.maybeReopenAfterDrainLocked()
 	}
+	p.creationMu.Unlock()
 }
 
 func (p *Coroutines) nextUpdateAction(stats *UpdateJobsStats) updateAction {

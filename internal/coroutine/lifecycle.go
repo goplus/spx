@@ -132,13 +132,16 @@ func (p *Coroutines) RunAfterAbortAll(timeout stime.Duration, call func()) bool 
 	completed := p.waitForThreadsToStop(timeout, nil)
 
 	p.creationMu.Lock()
-	defer func() {
-		p.endStoppingLocked()
-		p.creationMu.Unlock()
-	}()
+	defer p.creationMu.Unlock()
 	if !completed || p.hasThreadsOtherThan(nil) {
+		// A timeout is fail-closed: no callback/reset may run while a canceled
+		// coroutine or native worker can still touch runtime state. The last
+		// lifecycle item to unregister reopens admission once the drain is real.
+		p.reopenWhenDrained = true
+		p.maybeReopenAfterDrainLocked()
 		return false
 	}
+	defer p.endStoppingLocked()
 	if call != nil {
 		call()
 	}
@@ -146,14 +149,24 @@ func (p *Coroutines) RunAfterAbortAll(timeout stime.Duration, call func()) bool 
 }
 
 func (p *Coroutines) beginStoppingLocked() {
-	p.stopping = true
-	p.abortEpoch.Add(1)
+	if !p.stopping {
+		p.stopping = true
+		p.abortEpoch.Add(1)
+	}
+	// A new barrier owns the admission decision until it completes. This also
+	// prevents a prior timed-out barrier's auto-reopen hook from firing while
+	// this barrier is preparing its callback.
+	p.reopenWhenDrained = false
 	p.abortAllLocked()
 }
 
 func (p *Coroutines) endStoppingLocked() {
+	if !p.stopping {
+		return
+	}
 	p.abortEpoch.Add(1)
 	p.stopping = false
+	p.reopenWhenDrained = false
 }
 
 // StopIf requests cancellation of every thread accepted by filter. Filters are
@@ -267,6 +280,45 @@ func (p *Coroutines) unregisterThread(th Thread) {
 	p.threadsMu.Lock()
 	delete(p.allThreads, th)
 	p.threadsMu.Unlock()
+	p.maybeReopenAfterDrain()
+}
+
+// admitNativeTask reserves lifecycle ownership for a WaitToDo worker. The
+// reservation is made under the same read barrier as coroutine creation, so a
+// shutdown either observes the worker or rejects its admission.
+func (p *Coroutines) admitNativeTask(me Thread) *nativeTask {
+	p.creationMu.RLock()
+	defer p.creationMu.RUnlock()
+	if p.stopping || p.abortEpoch.Load()&1 != 0 || p.isThreadCanceled(me) {
+		return nil
+	}
+	task := &nativeTask{id: p.nextNativeID.Add(1)}
+	p.threadsMu.Lock()
+	p.nativeTasks[task] = struct{}{}
+	p.threadsMu.Unlock()
+	return task
+}
+
+func (p *Coroutines) finishNativeTask(task *nativeTask) {
+	if task == nil {
+		return
+	}
+	p.threadsMu.Lock()
+	delete(p.nativeTasks, task)
+	p.threadsMu.Unlock()
+	p.maybeReopenAfterDrain()
+}
+
+func (p *Coroutines) maybeReopenAfterDrain() {
+	p.creationMu.Lock()
+	p.maybeReopenAfterDrainLocked()
+	p.creationMu.Unlock()
+}
+
+func (p *Coroutines) maybeReopenAfterDrainLocked() {
+	if p.stopping && p.reopenWhenDrained && !p.hasThreadsOtherThan(nil) {
+		p.endStoppingLocked()
+	}
 }
 
 func (p *Coroutines) snapshotThreads() []Thread {
@@ -287,7 +339,7 @@ func (p *Coroutines) hasThreadsOtherThan(skip Thread) bool {
 			return true
 		}
 	}
-	return false
+	return len(p.nativeTasks) != 0
 }
 
 func (p *Coroutines) waitForThreadsToStopFromCoroutine(timeout stime.Duration, caller Thread) bool {

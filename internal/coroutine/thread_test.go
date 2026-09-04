@@ -394,7 +394,7 @@ func TestAbortAllAndWaitRejectsCreationDuringBarrier(t *testing.T) {
 	}
 }
 
-func TestRunAfterAbortAllTimeoutReopensAdmission(t *testing.T) {
+func TestRunAfterAbortAllTimeoutKeepsAdmissionClosedUntilDrain(t *testing.T) {
 	co := New(nil)
 	co.OnInited()
 	blocker := co.newThread("barrier-blocker")
@@ -408,6 +408,23 @@ func TestRunAfterAbortAllTimeoutReopensAdmission(t *testing.T) {
 	}
 	if callbackRan.Load() {
 		t.Fatal("abort barrier ran callback after timing out")
+	}
+
+	var rejectedRan atomic.Bool
+	rejected := co.CreateAndStart(true, "during-timeout", func(Thread) int {
+		rejectedRan.Store(true)
+		return 0
+	})
+	if !rejected.Stopped() {
+		t.Fatal("creation was admitted while a timed-out barrier still had work")
+	}
+	select {
+	case <-rejected.done:
+	case <-time.After(time.Second):
+		t.Fatal("rejected creation did not finish")
+	}
+	if rejectedRan.Load() {
+		t.Fatal("creation during a timed-out barrier ran user code")
 	}
 
 	co.removeThreadState(blocker)
