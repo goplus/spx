@@ -57,5 +57,22 @@ func (p *Game) eventQueueSnapshot() eventQueueSnapshot {
 }
 
 func (p *Game) queueEventWithPolicy(ev event) bool {
-	return coreevent.EnqueueWithPolicy(p.events, ev, p.gameRuntimeState.EventQueuePolicy, &p.gameRuntimeState.EventQueueStats, &p.gameRuntimeState.EventQueueMu)
+	policy := p.gameRuntimeState.EventQueuePolicy
+	// A managed send must release the scheduler slot when the queue is full.
+	if policy == coreevent.QueueBlock && gco != nil && gco.IsInCoroutine() {
+		return coreevent.EnqueueWithPolicyNonBlocking(
+			p.events,
+			ev,
+			policy,
+			&p.gameRuntimeState.EventQueueStats,
+			&p.gameRuntimeState.EventQueueMu,
+		)
+	}
+	return coreevent.EnqueueWithPolicy(
+		p.events,
+		ev,
+		policy,
+		&p.gameRuntimeState.EventQueueStats,
+		&p.gameRuntimeState.EventQueueMu,
+	)
 }

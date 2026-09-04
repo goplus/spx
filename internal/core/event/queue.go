@@ -174,3 +174,11 @@ func EnqueueWithPolicy[T any](ch chan T, item T, policy QueuePolicy, stats *Queu
 		return false
 	}
 }
+
+// EnqueueWithPolicyNonBlocking never waits; Block drops newest when full.
+func EnqueueWithPolicyNonBlocking[T any](ch chan T, item T, policy QueuePolicy, stats *QueueStats, dropOldestMu *sync.Mutex) bool {
+	if policy == QueueBlock {
+		policy = QueueDropNewest
+	}
+	return EnqueueWithPolicy(ch, item, policy, stats, dropOldestMu)
+}
