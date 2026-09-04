@@ -249,6 +249,18 @@ GdObj SpxSceneMgr::create_static_sprite(GdString texture_path, GdVec2 pos, GdFlo
 	if (type == ColliderType::NONE) {
 		return create_render_sprite(texture_path, pos, degree, scale, zindex, pivot);
 	}
+	auto data_len = collider_params == nullptr ? 0 : collider_params->size;
+	const float *collider_data = nullptr;
+	if (data_len > 0) {
+		collider_data = SpxBaseMgr::get_array<float>(collider_params, 0);
+		if (collider_data == nullptr) {
+			print_error("Invalid collider parameters array");
+			return NULL_OBJECT_ID;
+		}
+	} else if (data_len < 0) {
+		print_error("Invalid collider parameters array");
+		return NULL_OBJECT_ID;
+	}
 
 	auto path_str = SpxStr(texture_path);
 	// Create StaticBody2D
@@ -271,7 +283,6 @@ GdObj SpxSceneMgr::create_static_sprite(GdString texture_path, GdVec2 pos, GdFlo
 	static_body->set_collider(collision_shape);
 	static_body->add_child(collision_shape);
 	collision_shape->set_position(spx_to_godot_vec2(collider_pivot));
-	auto data_len = collider_params == nullptr ? 0 : collider_params->size;
 	switch (type) {
 		case ColliderType::NONE:
 			if (texture.is_valid()) {
@@ -284,8 +295,7 @@ GdObj SpxSceneMgr::create_static_sprite(GdString texture_path, GdVec2 pos, GdFlo
 		case ColliderType::CIRCLE: {
 			Ref<CircleShape2D> circle = memnew(CircleShape2D);
 			if (data_len > 0) {
-				auto radius = *(SpxBaseMgr::get_array<real_t>(collider_params, 0));
-				circle->set_radius(radius);
+				circle->set_radius(collider_data[0]);
 			}
 			collision_shape->set_shape(circle);
 			break;
@@ -293,9 +303,7 @@ GdObj SpxSceneMgr::create_static_sprite(GdString texture_path, GdVec2 pos, GdFlo
 		case ColliderType::RECT: {
 			Ref<RectangleShape2D> rect = memnew(RectangleShape2D);
 			if (data_len >= 2) {
-				auto width = *(SpxBaseMgr::get_array<real_t>(collider_params, 0));
-				auto height = *(SpxBaseMgr::get_array<real_t>(collider_params, 1));
-				rect->set_size(Vector2(width, height));
+				rect->set_size(Vector2(collider_data[0], collider_data[1]));
 			}
 			collision_shape->set_shape(rect);
 			break;
@@ -303,10 +311,8 @@ GdObj SpxSceneMgr::create_static_sprite(GdString texture_path, GdVec2 pos, GdFlo
 		case ColliderType::CAPSULE: {
 			Ref<CapsuleShape2D> capsule = memnew(CapsuleShape2D);
 			if (data_len >= 2) {
-				auto radius = *(SpxBaseMgr::get_array<real_t>(collider_params, 0));
-				auto height = *(SpxBaseMgr::get_array<real_t>(collider_params, 1));
-				capsule->set_radius(radius / 2);
-				capsule->set_height(height);
+				capsule->set_radius(collider_data[0] / 2);
+				capsule->set_height(collider_data[1]);
 			}
 			collision_shape->set_shape(capsule);
 			break;
@@ -316,9 +322,7 @@ GdObj SpxSceneMgr::create_static_sprite(GdString texture_path, GdVec2 pos, GdFlo
 			Vector<Vector2> points = {};
 			auto len = data_len;
 			for (int i = 0; i + 1 < len; i += 2) {
-				auto x = *(SpxBaseMgr::get_array<real_t>(collider_params, i));
-				auto y = *(SpxBaseMgr::get_array<real_t>(collider_params, i + 1));
-				points.append(spx_to_godot_vec2(Vector2(x, y)));
+				points.append(spx_to_godot_vec2(Vector2(collider_data[i], collider_data[i + 1])));
 			}
 			polygon->set_points(points);
 			collision_shape->set_shape(polygon);

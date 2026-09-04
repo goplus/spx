@@ -60,6 +60,9 @@ bool build_polygon_points(GdArray p_points, Vector<Vector2> &r_points) {
 	}
 
 	const float *data = SpxBaseMgr::get_array<float>(p_points, 0);
+	if (data == nullptr) {
+		return false;
+	}
 	int point_count = p_points->size / 2;
 
 	for (int i = 0; i < point_count; ++i) {

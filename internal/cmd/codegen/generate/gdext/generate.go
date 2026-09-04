@@ -122,6 +122,8 @@ func generateGdCppFile(projectPath string, templateStr string, ast clang.CHeader
 		"isManagerMethod":             IsManagerMethod,
 		"getManagerName":              GetManagerName,
 		"isWebOwnedStringFree":        isWebOwnedStringFree,
+		"isWebGdArrayReturn":          isWebGdArrayReturn,
+		"isGdArrayArgument":           isGdArrayArgument,
 		"hasArrayTransformBridgeSpec": HasArrayTransformBridgeSpec,
 		"hasNativeArrayBridgeSpec":    HasNativeArrayBridgeSpec,
 		"getArrayTransformBridgeSpec": func(function *clang.TypedefFunction) ArrayTransformBridgeSpec {
@@ -193,4 +195,12 @@ func generateGdCppFile(projectPath string, templateStr string, ast clang.CHeader
 // Web owns the value returned by this legacy method.
 func isWebOwnedStringFree(function *clang.TypedefFunction) bool {
 	return function != nil && function.Name == "GDExtensionSpxResFreeStr"
+}
+
+func isWebGdArrayReturn(function *clang.TypedefFunction) bool {
+	return function != nil && function.ReturnType.Name == "GdArray" && !function.ReturnType.IsPointer
+}
+
+func isGdArrayArgument(argument clang.Argument) bool {
+	return argument.Type.Primative != nil && argument.Type.Primative.Name == "GdArray"
 }

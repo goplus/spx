@@ -104,7 +104,10 @@ SpxRaycastInfo SpxPhysicsMgr::_raycast(GdVec2 from, GdVec2 to, GdArray ignore_sp
 
 	HashSet<RID> ignore_set;
 	if (ignore_sprites && ignore_sprites->size > 0) {
-		GdObj *sprite_data = (SpxBaseMgr::get_array<GdObj>(ignore_sprites, 0));
+		const GdObj *sprite_data = SpxBaseMgr::get_array<GdObj>(ignore_sprites, 0);
+		if (sprite_data == nullptr) {
+			return info;
+		}
 		for (int i = 0; i < ignore_sprites->size; i++) {
 			auto obj = sprite_data[i];
 			auto sprite = spriteMgr->get_sprite(obj);

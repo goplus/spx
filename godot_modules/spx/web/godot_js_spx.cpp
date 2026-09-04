@@ -35,6 +35,7 @@
 #include "core/extension/gdextension_interface.h"
 #include "scene/main/window.h"
 #include "../spx_engine.h"
+#include "godot_js_spx_util.h"
 #include "../spx_audio_mgr.h"
 #include "../spx_camera_mgr.h"
 #include "../spx_debug_mgr.h"
@@ -313,7 +314,15 @@ void gdspx_navigation_set_obstacle(GdObj *obj, GdBool *enabled) {
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_navigation_find_path(GdVec2 *p_from, GdVec2 *p_to, GdBool *with_jump, GdArray *ret_val) {
-	*ret_val = navigationMgr->find_path(*p_from, *p_to, *with_jump);
+	if (!gdspx_prepare_array_wrapper(ret_val)) {
+		return;
+	}
+	GdArray result = navigationMgr->find_path(*p_from, *p_to, *with_jump);
+	*ret_val = result;
+	if (result != nullptr && !gdspx_bind_array_wrapper(ret_val)) {
+		*ret_val = nullptr;
+		gdspx_release_array_info(result);
+	}
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_pen_destroy_all_pens() {
@@ -441,15 +450,42 @@ void gdspx_physics_get_global_air_drag(GdFloat *ret_val) {
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_physics_check_collision_rect(GdVec2 *pos, GdVec2 *size, GdInt *collision_mask, GdArray *ret_val) {
-	*ret_val = physicsMgr->check_collision_rect(*pos, *size, *collision_mask);
+	if (!gdspx_prepare_array_wrapper(ret_val)) {
+		return;
+	}
+	GdArray result = physicsMgr->check_collision_rect(*pos, *size, *collision_mask);
+	*ret_val = result;
+	if (result != nullptr && !gdspx_bind_array_wrapper(ret_val)) {
+		*ret_val = nullptr;
+		gdspx_release_array_info(result);
+	}
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_physics_check_collision_circle(GdVec2 *pos, GdFloat *radius, GdInt *collision_mask, GdArray *ret_val) {
-	*ret_val = physicsMgr->check_collision_circle(*pos, *radius, *collision_mask);
+	if (!gdspx_prepare_array_wrapper(ret_val)) {
+		return;
+	}
+	GdArray result = physicsMgr->check_collision_circle(*pos, *radius, *collision_mask);
+	*ret_val = result;
+	if (result != nullptr && !gdspx_bind_array_wrapper(ret_val)) {
+		*ret_val = nullptr;
+		gdspx_release_array_info(result);
+	}
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_physics_raycast_with_details(GdVec2 *from, GdVec2 *to, GdArray *ignore_sprites, GdInt *collision_mask, GdBool *collide_with_areas, GdBool *collide_with_bodies, GdArray *ret_val) {
-	*ret_val = physicsMgr->raycast_with_details(*from, *to, *ignore_sprites, *collision_mask, *collide_with_areas, *collide_with_bodies);
+	if (!gdspx_prepare_array_wrapper(ret_val)) {
+		return;
+	}
+	if (!gdspx_validate_array_wrapper(ignore_sprites)) {
+		return;
+	}
+	GdArray result = physicsMgr->raycast_with_details(*from, *to, *ignore_sprites, *collision_mask, *collide_with_areas, *collide_with_bodies);
+	*ret_val = result;
+	if (result != nullptr && !gdspx_bind_array_wrapper(ret_val)) {
+		*ret_val = nullptr;
+		gdspx_release_array_info(result);
+	}
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_platform_set_stretch_mode(GdBool *enable) {
@@ -577,6 +613,15 @@ void gdspx_res_free_str(GdString *str) {
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_res_apply_project_fonts(GdString *default_font_path, GdArray *font_paths, GdArray *font_families, GdArray *preferences, GdString *ret_val) {
+	if (!gdspx_validate_array_wrapper(font_paths)) {
+		return;
+	}
+	if (!gdspx_validate_array_wrapper(font_families)) {
+		return;
+	}
+	if (!gdspx_validate_array_wrapper(preferences)) {
+		return;
+	}
 	*ret_val = resMgr->apply_project_fonts(*default_font_path, *font_paths, *font_families, *preferences);
 }
 EMSCRIPTEN_KEEPALIVE
@@ -589,6 +634,9 @@ void gdspx_res_register_font_face(GdString *font_path, GdString *family) {
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_res_set_font_preferences(GdArray *preferences) {
+	if (!gdspx_validate_array_wrapper(preferences)) {
+		return;
+	}
 	 resMgr->set_font_preferences(*preferences);
 }
 EMSCRIPTEN_KEEPALIVE
@@ -625,6 +673,9 @@ void gdspx_scene_create_render_sprite(GdString *texture_path, GdVec2 *pos, GdFlo
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_scene_create_static_sprite(GdString *texture_path, GdVec2 *pos, GdFloat *degree, GdVec2 *scale, GdInt *zindex, GdVec2 *pivot, GdInt *collider_type, GdVec2 *collider_pivot, GdArray *collider_params, GdObj *ret_val) {
+	if (!gdspx_validate_array_wrapper(collider_params)) {
+		return;
+	}
 	*ret_val = sceneMgr->create_static_sprite(*texture_path, *pos, *degree, *scale, *zindex, *pivot, *collider_type, *collider_pivot, *collider_params);
 }
 EMSCRIPTEN_KEEPALIVE
@@ -1081,6 +1132,9 @@ void gdspx_sprite_set_collider_capsule(GdObj *obj, GdVec2 *center, GdVec2 *size)
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_set_collider_polygon(GdObj *obj, GdVec2 *center, GdArray *points) {
+	if (!gdspx_validate_array_wrapper(points)) {
+		return;
+	}
 	 spriteMgr->set_collider_polygon(*obj, *center, *points);
 }
 EMSCRIPTEN_KEEPALIVE
@@ -1105,6 +1159,9 @@ void gdspx_sprite_set_trigger_capsule(GdObj *obj, GdVec2 *center, GdVec2 *size) 
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_set_trigger_polygon(GdObj *obj, GdVec2 *center, GdArray *points) {
+	if (!gdspx_validate_array_wrapper(points)) {
+		return;
+	}
 	 spriteMgr->set_trigger_polygon(*obj, *center, *points);
 }
 EMSCRIPTEN_KEEPALIVE
@@ -1169,6 +1226,9 @@ void gdspx_tilemap_set_tile(GdString *texture_path, GdBool *with_collision) {
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_tilemap_set_tile_with_collision_info(GdString *texture_path, GdArray *collision_points) {
+	if (!gdspx_validate_array_wrapper(collision_points)) {
+		return;
+	}
 	 tilemapMgr->set_tile_with_collision_info(*texture_path, *collision_points);
 }
 EMSCRIPTEN_KEEPALIVE
@@ -1181,10 +1241,16 @@ void gdspx_tilemap_get_layer_offset(GdInt *index, GdVec2 *ret_val) {
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_tilemap_place_tiles(GdArray *positions, GdString *texture_path) {
+	if (!gdspx_validate_array_wrapper(positions)) {
+		return;
+	}
 	 tilemapMgr->place_tiles(*positions, *texture_path);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_tilemap_place_tiles_with_layer(GdArray *positions, GdString *texture_path, GdInt *layer_index) {
+	if (!gdspx_validate_array_wrapper(positions)) {
+		return;
+	}
 	 tilemapMgr->place_tiles_with_layer(*positions, *texture_path, *layer_index);
 }
 EMSCRIPTEN_KEEPALIVE

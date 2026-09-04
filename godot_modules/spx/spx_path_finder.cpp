@@ -43,6 +43,8 @@
 #include "spx_sprite.h"
 #include "spx_sprite_mgr.h"
 
+#include <limits>
+
 void SpxPathFinder::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("setup_grid", "size", "cell_size", "with_debug"), &SpxPathFinder::setup);
 	ClassDB::bind_method(D_METHOD("add_all_obstacles", "root"), &SpxPathFinder::add_all_obstacles);
@@ -134,13 +136,25 @@ void SpxPathFinder::set_sprite_obstacle(GdObj obj, bool enabled) {
 GdArray SpxPathFinder::find_path_spx(GdVec2 p_from, GdVec2 p_to) {
 	auto path_points = find_path(spx_to_godot_vec2(p_from), spx_to_godot_vec2(p_to));
 	auto count = path_points.size();
-	GdArray result = SpxBaseMgr::create_array(GD_ARRAY_TYPE_FLOAT, count * 2);
+	if (count < 0 || count > std::numeric_limits<int32_t>::max() / 2) {
+		return nullptr;
+	}
+	const int32_t output_count = static_cast<int32_t>(count) * 2;
+	GdArray result = SpxBaseMgr::create_array(GD_ARRAY_TYPE_FLOAT, output_count);
+	if (result == nullptr || output_count == 0) {
+		return result;
+	}
+	float *output = SpxBaseMgr::get_array<float>(result, 0);
+	if (output == nullptr) {
+		SpxBaseMgr::free_array(result);
+		return nullptr;
+	}
 
 	for (auto i = 0; i < count; i++) {
 		auto idx = i * 2;
 		const Vector2 spx_point = godot_to_spx_vec2(path_points[i]);
-		SpxBaseMgr::set_array(result, idx, spx_point.x);
-		SpxBaseMgr::set_array(result, idx + 1, spx_point.y);
+		output[idx] = spx_point.x;
+		output[idx + 1] = spx_point.y;
 	}
 
 	return result;

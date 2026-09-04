@@ -35,6 +35,7 @@
 #include "core/extension/gdextension_interface.h"
 #include "scene/main/window.h"
 #include "../spx_engine.h"
+#include "godot_js_spx_util.h"
 {{ $view := . -}}
 
 {{ range $i, $name := $view.Mangers -}}
@@ -77,8 +78,34 @@ void gd{{ loadProcAddressName $f.Name }}(
 	{{- if ne 0 (len $f.Arguments) -}}, {{ end -}}{{$f.ReturnType.CStyleString }} *ret_val
 	{{- end -}}
 ) {
+	{{- if isWebGdArrayReturn $f }}
+	if (!gdspx_prepare_array_wrapper(ret_val)) {
+		return;
+	}
+	{{- end }}
+	{{- range $j, $arg := $f.Arguments }}
+	{{- if isGdArrayArgument $arg }}
+	if (!gdspx_validate_array_wrapper({{ $arg.ResolvedName $j }})) {
+		return;
+	}
+	{{- end }}
+	{{- end }}
 	{{- if isWebOwnedStringFree $f }}
 	(void)str;
+	{{- else -}}
+	{{- if isWebGdArrayReturn $f }}
+	GdArray result = {{ getManagerName $f.Name}}Mgr->
+	{{- trimPrefix (trimPrefix (trimPrefix (loadProcAddressName $f.Name) "spx_") (getManagerName $f.Name)) "_" }}(
+	{{- range $j, $arg := $f.Arguments }}
+			{{- if gt $j 0 }}, {{ end -}}
+			{{- $arg.ResolvedPtrName $j }}
+		{{- end -}}
+	);
+	*ret_val = result;
+	if (result != nullptr && !gdspx_bind_array_wrapper(ret_val)) {
+		*ret_val = nullptr;
+		gdspx_release_array_info(result);
+	}
 	{{- else }}
 	{{ if ne "void" $f.ReturnType.CStyleString -}} *ret_val = {{- end }} {{ getManagerName $f.Name}}Mgr->
 	{{- trimPrefix (trimPrefix (trimPrefix (loadProcAddressName $f.Name) "spx_") (getManagerName $f.Name)) "_" }}(
@@ -87,6 +114,7 @@ void gd{{ loadProcAddressName $f.Name }}(
 			{{- $arg.ResolvedPtrName $j }}
 		{{- end -}}
 	);
+	{{- end }}
 	{{- end }}
 }
 {{- end }}

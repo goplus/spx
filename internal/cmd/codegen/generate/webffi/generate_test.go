@@ -188,9 +188,33 @@ func TestGetJsFuncBodyRequiresWasmArrayForInputSnapshot(t *testing.T) {
 	}
 
 	body := getJsFuncBody(function)
-	require.Contains(t, body, `RequireWasmFastArray(out, "gdspx_input_write_snapshot")`)
-	require.Contains(t, body, "var _arg1 = out['count'];")
+	require.Contains(t, body, `RequireWasmFastArray(out, "gdspx_input_write_snapshot", 2)`)
+	require.Contains(t, body, "var _arg1 = FastArrayCount(out);")
 	require.NotContains(t, body, "GetFastArrayWasmPtr(out)")
+}
+
+func TestGetJsFuncBodyTreatsWebFreeStrAsValueOperation(t *testing.T) {
+	body := getJsFuncBody(&clang.TypedefFunction{Name: "GDExtensionSpxResFreeStr"})
+	require.Contains(t, body, "Web strings are value-owned")
+	require.Contains(t, body, "return;")
+	require.NotContains(t, body, "ToGdString")
+}
+
+func TestGetJsFuncBodyValidatesNativeFastArray(t *testing.T) {
+	common.ClearNativeArrayBridgeSpecs()
+	t.Cleanup(common.ClearNativeArrayBridgeSpecs)
+	common.RegisterNativeArrayBridgeSpec(common.NativeArrayBridgeSpec{
+		BaseFunctionName: "GDExtensionSpxSpriteBatchUpdateTransforms",
+		BaseArgName:      "buffer",
+		FastArrayType:    2,
+	})
+
+	body := getJsFuncBody(&clang.TypedefFunction{
+		Name: "GDExtensionSpxSpriteBatchUpdateTransforms",
+	})
+	require.Contains(t, body, `RequireFastArray(buffer, "gdspx_sprite_batch_update_transforms", 2)`)
+	require.Contains(t, body, "var _arg1 = FastArrayCount(buffer);")
+	require.NotContains(t, body, "buffer['count']")
 }
 
 func TestJsTemplateUsesHeapU32ForFlatReads(t *testing.T) {

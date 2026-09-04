@@ -528,6 +528,12 @@ func flatJsScratchAccessor(typeName string) string {
 }
 
 func getJsFuncBody(function *clang.TypedefFunction) string {
+	if function.Name == "GDExtensionSpxResFreeStr" {
+		// The Web signature exposes a copied JavaScript string, so there is no
+		// ownership-bearing pointer to release. Returned GdString wrappers are
+		// released by the normal JsToGdString/FreeGdString path.
+		return "// Web strings are value-owned; there is no pointer to release.\n\treturn;"
+	}
 	if spec, ok := GetArrayTransformBridgeSpec(function.Name); ok {
 		return "var _fastRetValue = TryArrayTransformFastPath(_gdFuncPtr, " + spec.ArrayArgName + ", " +
 			strconv.Itoa(int(spec.InputArrayType)) + ", " + strconv.Itoa(int(spec.OutputArrayType)) + ", " +
@@ -538,8 +544,8 @@ func getJsFuncBody(function *clang.TypedefFunction) string {
 			"\treturn _fastRetValue"
 	}
 	if function.Name == "GDExtensionSpxInputWriteSnapshot" {
-		return "var _arg0 = RequireWasmFastArray(out, \"gdspx_input_write_snapshot\");\n" +
-			"\tvar _arg1 = out['count'];\n" +
+		return "var _arg0 = RequireWasmFastArray(out, \"gdspx_input_write_snapshot\", 2);\n" +
+			"\tvar _arg1 = FastArrayCount(out);\n" +
 			"\t_gdFuncPtr(_arg0, _arg1);"
 	}
 	if spec, ok := GetNativeArrayBridgeSpec(function.Name); ok {
@@ -547,8 +553,8 @@ func getJsFuncBody(function *clang.TypedefFunction) string {
 			panic(fmt.Sprintf("native-array webffi path does not support return values: %s", function.Name))
 		}
 		argName := spec.BaseArgName
-		return "var _arg0 = GetFastArrayWasmPtr(" + argName + ");\n" +
-			"\tvar _arg1 = " + argName + "['count'];\n" +
+		return "var _arg0 = RequireFastArray(" + argName + ", \"gd" + LoadProcAddressName(function.Name) + "\", " + strconv.Itoa(int(spec.FastArrayType)) + ");\n" +
+			"\tvar _arg1 = FastArrayCount(" + argName + ");\n" +
 			"\t_gdFuncPtr(_arg0, _arg1);"
 	}
 	if function.Name == "GDExtensionSpxInputGetGlobalMousePos" {
