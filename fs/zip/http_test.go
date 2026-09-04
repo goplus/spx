@@ -21,6 +21,7 @@ package zip
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"net/http"
@@ -33,7 +34,23 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 )
+
+type zipRoundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f zipRoundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+type zipContextBody struct{ ctx context.Context }
+
+func (b zipContextBody) Read([]byte) (int, error) {
+	<-b.ctx.Done()
+	return 0, b.ctx.Err()
+}
+
+func (zipContextBody) Close() error { return nil }
 
 func TestOpenHTTPRejectsPathTraversalBeforeRequest(t *testing.T) {
 	root := t.TempDir()
@@ -92,6 +109,33 @@ func TestOpenHTTPStatusDoesNotPopulateCache(t *testing.T) {
 	}
 	if _, statErr := os.Stat(spxBaseDir); !errors.Is(statErr, os.ErrNotExist) {
 		t.Fatalf("cache root stat error = %v, want not exist", statErr)
+	}
+}
+
+func TestOpenHTTPRejectsPartialAndEmptySuccessResponses(t *testing.T) {
+	for _, status := range []int{http.StatusPartialContent, http.StatusNoContent} {
+		status := status
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			root := t.TempDir()
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(status)
+				if status == http.StatusPartialContent {
+					_, _ = io.WriteString(w, "partial")
+				}
+			}))
+			defer server.Close()
+			oldBase := spxBaseDir
+			spxBaseDir = filepath.Join(root, "cache")
+			t.Cleanup(func() { spxBaseDir = oldBase })
+
+			_, err := OpenHttp(server.Listener.Addr().String() + "/archive.zip")
+			if !errors.Is(err, ErrHTTPStatus) {
+				t.Fatalf("OpenHttp status %d error = %v, want ErrHTTPStatus", status, err)
+			}
+			if _, statErr := os.Stat(spxBaseDir); !errors.Is(statErr, os.ErrNotExist) {
+				t.Fatalf("cache root stat error = %v, want not exist", statErr)
+			}
+		})
 	}
 }
 
@@ -274,6 +318,59 @@ func TestHTTPSClientRejectsDowngradeRedirect(t *testing.T) {
 	request := &http.Request{URL: redirectURL}
 	if err := client.CheckRedirect(request, []*http.Request{{URL: requestURL}}); !errors.Is(err, ErrInsecureRedirect) {
 		t.Fatalf("CheckRedirect error = %v, want ErrInsecureRedirect", err)
+	}
+}
+
+func TestRemoteClientPreservesConfigurationAndBoundsTimeout(t *testing.T) {
+	transport := http.RoundTripper(http.DefaultTransport)
+	redirect := func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	original := &http.Client{
+		Transport:     transport,
+		CheckRedirect: redirect,
+		Timeout:       10 * time.Minute,
+	}
+
+	client := remoteClientForScheme(original, "http://")
+	if client == original {
+		t.Fatal("remoteClientForScheme returned the caller's mutable client")
+	}
+	if client.Transport != transport || client.CheckRedirect == nil {
+		t.Fatal("remote client did not preserve transport and redirect configuration")
+	}
+	if got, want := client.Timeout, 5*time.Minute; got != want {
+		t.Fatalf("remote client timeout = %v, want %v", got, want)
+	}
+	if got := original.Timeout; got != 10*time.Minute {
+		t.Fatalf("original client timeout changed to %v", got)
+	}
+
+	original.Timeout = time.Second
+	client = remoteClientForScheme(original, "http://")
+	if got := client.Timeout; got != time.Second {
+		t.Fatalf("short caller timeout was changed to %v", got)
+	}
+}
+
+func TestRemoteClientTimeoutCoversResponseBody(t *testing.T) {
+	original := &http.Client{
+		Transport: zipRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Status:     "200 OK",
+				Body:       zipContextBody{ctx: req.Context()},
+				Request:    req,
+			}, nil
+		}),
+		Timeout: 25 * time.Millisecond,
+	}
+	client := remoteClientForScheme(original, "http://")
+	resp, err := client.Get("http://example.test/archive.zip")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	defer resp.Body.Close()
+	if _, err := io.ReadAll(resp.Body); err == nil {
+		t.Fatal("response body read succeeded after timeout")
 	}
 }
 

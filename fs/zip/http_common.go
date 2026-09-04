@@ -36,9 +36,11 @@ const (
 )
 
 var (
-	// remoteHTTPClient is a variable so embedders and package tests can provide
-	// a transport without changing the public OpenHttp/OpenHttps API.
-	remoteHTTPClient = &http.Client{Timeout: 5 * time.Minute}
+	// remoteHTTPClient is a package test hook. A nil value follows
+	// http.DefaultClient at request time, preserving the standard library's
+	// transport, proxy, cookie jar, and redirect configuration.
+	remoteHTTPClient  *http.Client
+	remoteHTTPTimeout = 5 * time.Minute
 	// maxRemoteZipBytes is kept separate from the public default to make the
 	// bound straightforward to exercise in tests.
 	maxRemoteZipBytes int64 = MaxRemoteZipBytes
@@ -148,7 +150,7 @@ func checkRemoteHTTPResponse(resp *http.Response, remote string) error {
 	if resp == nil {
 		return fmt.Errorf("zip: nil HTTP response")
 	}
-	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+	if resp.StatusCode != http.StatusOK {
 		status := resp.Status
 		if status == "" {
 			status = http.StatusText(resp.StatusCode)
@@ -183,10 +185,20 @@ func remoteClientForScheme(client *http.Client, schema string) *http.Client {
 	if client == nil {
 		client = http.DefaultClient
 	}
-	if schema != "https://" {
-		return client
+	if client == nil {
+		client = &http.Client{}
 	}
 	clone := *client
+	timeout := remoteHTTPTimeout
+	if timeout <= 0 {
+		timeout = 5 * time.Minute
+	}
+	if clone.Timeout <= 0 || clone.Timeout > timeout {
+		clone.Timeout = timeout
+	}
+	if schema != "https://" {
+		return &clone
+	}
 	previous := clone.CheckRedirect
 	clone.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		if req == nil || req.URL == nil || req.URL.Scheme != "https" {
