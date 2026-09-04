@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"net/http"
 	"syscall"
 
 	"github.com/goplus/spx/v3/fs"
@@ -54,24 +53,27 @@ func (zipf *FS) Close() error {
 
 // OpenHttp opens hzip:<domain>/<path>
 // OpenHttp("open.qiniu.us/weather/res.zip")
-func OpenHttp(url string) (fs.Dir, error) {
-	return openHttpWith(url, "http://")
+func OpenHttp(remotePath string) (fs.Dir, error) {
+	return openHttpWith(remotePath, "http://")
 }
 
 // OpenHttps opens hzips:<domain>/<path>
 // OpenHttps("open.qiniu.us/weather/res.zip")
-func OpenHttps(url string) (fs.Dir, error) {
-	return openHttpWith(url, "https://")
+func OpenHttps(remotePath string) (fs.Dir, error) {
+	return openHttpWith(remotePath, "https://")
 }
 
-func openHttpWith(url string, schema string) (dir fs.Dir, err error) {
-	remote := schema + url
-	resp, err := http.Get(remote)
+func openHttpWith(remotePath, scheme string) (fs.Dir, error) {
+	remote, _, err := parseRemoteURL(remotePath, scheme)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := getRemote(remote, scheme)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
+	body, err := readRemoteBody(resp)
 	if err != nil {
 		return nil, err
 	}
