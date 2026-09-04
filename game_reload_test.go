@@ -69,6 +69,18 @@ type reloadCommitSprite struct {
 
 func (*reloadCommitSprite) Main() {}
 
+type reloadDirectCommitGame struct {
+	Game
+	DirectCommitSprite *DirectCommitSprite
+}
+
+type DirectCommitSprite struct {
+	SpriteImpl
+	*reloadDirectCommitGame
+}
+
+func (*DirectCommitSprite) Main() {}
+
 type reloadCommitSpriteMgr struct {
 	*spyCloneSpriteMgr
 }
@@ -175,7 +187,7 @@ func setupReloadPreflightGame(t *testing.T, files reloadConfigFS) (*reloadPrefli
 	return game, sprite, co
 }
 
-func setupReloadCommitGame(t *testing.T, files reloadConfigFS) *reloadCommitGame {
+func setupReloadCommitRuntime(t *testing.T, files reloadConfigFS, game Gamer, sprites []Sprite, physics bool) *Game {
 	t.Helper()
 
 	cloneMgr := setupCloneSpriteMgr(t)
@@ -215,14 +227,13 @@ func setupReloadCommitGame(t *testing.T, files reloadConfigFS) *reloadCommitGame
 	engine.SetCoroutines(co)
 	cachedBounds = make(map[string]mathf.Rect2)
 
-	game := &reloadCommitGame{}
-	game.Game.initGame([]Sprite{&reloadCommitSprite{}})
-	game.Game.gamer = game
-	game.Game.startLoad(files)
-	game.Game.soundMgr.Init(&fakeAudioBackend{})
-	game.Game.tilemapMgr.init(&game.Game, files, "")
-	game.Game.setPhysicsEnabled(false)
-	game.Game.lifecycleState.IsRunned.Store(true)
+	base := game.initGame(sprites)
+	base.gamer = game
+	base.startLoad(files)
+	base.soundMgr.Init(&fakeAudioBackend{})
+	base.tilemapMgr.init(base, files, "")
+	base.setPhysicsEnabled(physics)
+	base.lifecycleState.IsRunned.Store(true)
 
 	t.Cleanup(func() {
 		if !co.AbortAllAndWait(time.Second) {
@@ -236,6 +247,13 @@ func setupReloadCommitGame(t *testing.T, files reloadConfigFS) *reloadCommitGame
 		engine.SetGame(originalGame)
 		cachedBounds = originalBounds
 	})
+	return base
+}
+
+func setupReloadCommitGame(t *testing.T, files reloadConfigFS) *reloadCommitGame {
+	t.Helper()
+	game := &reloadCommitGame{}
+	setupReloadCommitRuntime(t, files, game, []Sprite{&reloadCommitSprite{}}, false)
 	return game
 }
 
@@ -435,6 +453,51 @@ func TestReloadCommitInitializesLazyPrototypeWithNewPhysicsSettings(t *testing.T
 	}
 	if got := prototype.physics().collisionInfo.Type; got != physicsColliderAuto {
 		t.Fatalf("reload prototype collision type = %d, want physicsColliderAuto (%d)", got, physicsColliderAuto)
+	}
+}
+
+func TestReloadCommitInitializesDirectSpriteWithNewPhysicsSettings(t *testing.T) {
+	const spriteConfig = `{
+		"costumes":[{"name":"idle","imageWidth":10,"imageHeight":10}],
+		"size":1,
+		"visible":true
+	}`
+	tests := []struct {
+		name         string
+		oldPhysics   bool
+		project      string
+		wantCollider int64
+	}{
+		{
+			name:         "enable physics",
+			oldPhysics:   false,
+			project:      `{"physics":true,"autoSetCollisionLayer":false,"zorder":["DirectCommitSprite"]}`,
+			wantCollider: physicsColliderAuto,
+		},
+		{
+			name:         "disable physics",
+			oldPhysics:   true,
+			project:      `{"physics":false,"zorder":["DirectCommitSprite"]}`,
+			wantCollider: physicsColliderNone,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			files := reloadConfigFS{"sprites/DirectCommitSprite/index.json": spriteConfig}
+			game := &reloadDirectCommitGame{}
+			setupReloadCommitRuntime(t, files, game, []Sprite{&DirectCommitSprite{}}, test.oldPhysics)
+
+			if err := XGot_Game_Reload(game, strings.NewReader(test.project)); err != nil {
+				t.Fatalf("XGot_Game_Reload error = %v", err)
+			}
+			if game.DirectCommitSprite == nil {
+				t.Fatal("reload did not initialize direct sprite")
+			}
+			if got := game.DirectCommitSprite.physics().collisionInfo.Type; got != test.wantCollider {
+				t.Fatalf("direct sprite collision type = %d, want %d", got, test.wantCollider)
+			}
+		})
 	}
 }
 

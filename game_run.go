@@ -73,14 +73,14 @@ func XGot_Game_Reload(game Gamer, index any) (err error) {
 	g.events = make(chan event, eventBufferSize)
 	g.resetEventQueueStats()
 
+	proj := &plan.project
+	g.applyStoredRuntimeConfig(proj)
+	setupGameSystems(g, proj)
 	err = plan.loadSprites(g, v)
 	if err != nil {
 		engine.Panic(err)
 		return
 	}
-	proj := &plan.project
-	g.applyStoredRuntimeConfig(proj)
-	setupGameSystems(g, proj)
 	gco.OnRestart()
 	err = g.loadIndexWithSpriteLoader(v, proj, generation, plan.spriteLoader(g))
 	if err != nil {
