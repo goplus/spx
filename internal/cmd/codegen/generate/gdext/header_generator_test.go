@@ -77,7 +77,7 @@ func TestGodotJsTemplateUsesModuleRelativeIncludes(t *testing.T) {
 	require.NotContains(t, gdJsSpxCpp, `#include "modules/spx/`)
 }
 
-func TestGodotJsTemplateKeepsWebResourceStringFreeValueOwned(t *testing.T) {
+func TestGodotJsTemplateKeepsResStringOwned(t *testing.T) {
 	projectPath := t.TempDir()
 	ast := clang.CHeaderFileAST{Expr: []clang.Expr{{Function: &clang.TypedefFunction{
 		ReturnType: clang.PrimativeType{Name: "void"},

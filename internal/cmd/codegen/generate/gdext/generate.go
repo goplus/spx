@@ -121,7 +121,7 @@ func generateGdCppFile(projectPath string, templateStr string, ast clang.CHeader
 		"loadProcAddressName":         LoadProcAddressName,
 		"isManagerMethod":             IsManagerMethod,
 		"getManagerName":              GetManagerName,
-		"isWebValueOwnedStringFree":   isWebValueOwnedStringFree,
+		"isWebOwnedStringFree":        isWebOwnedStringFree,
 		"hasArrayTransformBridgeSpec": HasArrayTransformBridgeSpec,
 		"hasNativeArrayBridgeSpec":    HasNativeArrayBridgeSpec,
 		"getArrayTransformBridgeSpec": func(function *clang.TypedefFunction) ArrayTransformBridgeSpec {
@@ -190,9 +190,7 @@ func generateGdCppFile(projectPath string, templateStr string, ast clang.CHeader
 	return nil
 }
 
-// The Web ABI receives a JavaScript string value for this legacy method, not
-// the native return pointer accepted by the native ABI. Keep its generated
-// wrapper as a no-op so regeneration preserves that ownership contract.
-func isWebValueOwnedStringFree(function *clang.TypedefFunction) bool {
+// Web owns the value returned by this legacy method.
+func isWebOwnedStringFree(function *clang.TypedefFunction) bool {
 	return function != nil && function.Name == "GDExtensionSpxResFreeStr"
 }

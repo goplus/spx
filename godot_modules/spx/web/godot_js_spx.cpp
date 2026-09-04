@@ -573,7 +573,6 @@ void gdspx_res_reload_texture(GdString *path) {
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_res_free_str(GdString *str) {
-	// Web strings are value-owned; there is no native pointer to release.
 	(void)str;
 }
 EMSCRIPTEN_KEEPALIVE

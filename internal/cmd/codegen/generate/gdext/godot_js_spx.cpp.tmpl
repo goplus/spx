@@ -77,8 +77,7 @@ void gd{{ loadProcAddressName $f.Name }}(
 	{{- if ne 0 (len $f.Arguments) -}}, {{ end -}}{{$f.ReturnType.CStyleString }} *ret_val
 	{{- end -}}
 ) {
-	{{- if isWebValueOwnedStringFree $f }}
-	// Web strings are value-owned; there is no native pointer to release.
+	{{- if isWebOwnedStringFree $f }}
 	(void)str;
 	{{- else }}
 	{{ if ne "void" $f.ReturnType.CStyleString -}} *ret_val = {{- end }} {{ getManagerName $f.Name}}Mgr->
