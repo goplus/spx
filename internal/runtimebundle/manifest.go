@@ -259,7 +259,7 @@ func (b Bundle) ValidateWithLimits(limits Limits) error {
 		if err := validateSHA256(b.Digest); err != nil {
 			return fmt.Errorf("%w: bundle digest: %v", ErrInvalidManifest, err)
 		}
-		digest, err := b.IdentityDigest()
+		digest, err := b.IdentityDigestWithLimits(limits)
 		if err != nil {
 			return err
 		}
@@ -277,12 +277,16 @@ type canonicalBundle struct {
 }
 
 func (b Bundle) canonical() (canonicalBundle, error) {
+	return b.canonicalWithLimits(Limits{})
+}
+
+func (b Bundle) canonicalWithLimits(limits Limits) (canonicalBundle, error) {
 	// Digest is a checksum over this canonical form, so it must not be
 	// validated while constructing the form itself (otherwise validation would
 	// recurse through IdentityDigest indefinitely).
 	withoutDigest := b
 	withoutDigest.Digest = ""
-	if err := withoutDigest.ValidateWithLimits(Limits{}); err != nil {
+	if err := withoutDigest.ValidateWithLimits(limits); err != nil {
 		return canonicalBundle{}, err
 	}
 	out := canonicalBundle{Schema: b.Schema, Namespace: b.Namespace, Entries: make([]Entry, 0, len(b.Entries))}
@@ -306,7 +310,13 @@ func (b Bundle) canonical() (canonicalBundle, error) {
 // these bytes by design; callers can put the resulting digest in Bundle.Digest
 // after calculating it.
 func (b Bundle) CanonicalBytes() ([]byte, error) {
-	canonical, err := b.canonical()
+	return b.CanonicalBytesWithLimits(Limits{})
+}
+
+// CanonicalBytesWithLimits is CanonicalBytes with caller-supplied manifest
+// size and count limits.
+func (b Bundle) CanonicalBytesWithLimits(limits Limits) ([]byte, error) {
+	canonical, err := b.canonicalWithLimits(limits)
 	if err != nil {
 		return nil, err
 	}
@@ -316,7 +326,13 @@ func (b Bundle) CanonicalBytes() ([]byte, error) {
 // IdentityDigest computes the full SHA-256 identity of the canonical bundle
 // manifest. It is not truncated and does not include Bundle.Digest.
 func (b Bundle) IdentityDigest() (string, error) {
-	data, err := b.CanonicalBytes()
+	return b.IdentityDigestWithLimits(Limits{})
+}
+
+// IdentityDigestWithLimits is IdentityDigest with caller-supplied manifest
+// size and count limits. The limits affect validation, not the digest bytes.
+func (b Bundle) IdentityDigestWithLimits(limits Limits) (string, error) {
+	data, err := b.CanonicalBytesWithLimits(limits)
 	if err != nil {
 		return "", err
 	}
@@ -333,12 +349,18 @@ func (b Bundle) Identity() string {
 
 // WithDigest returns a normalized copy with its identity digest populated.
 func (b Bundle) WithDigest() (Bundle, error) {
+	return b.WithDigestWithLimits(Limits{})
+}
+
+// WithDigestWithLimits is WithDigest with caller-supplied manifest size and
+// count limits.
+func (b Bundle) WithDigestWithLimits(limits Limits) (Bundle, error) {
 	withoutDigest := b
 	withoutDigest.Digest = ""
-	if err := withoutDigest.ValidateWithLimits(Limits{}); err != nil {
+	if err := withoutDigest.ValidateWithLimits(limits); err != nil {
 		return Bundle{}, err
 	}
-	digest, err := b.IdentityDigest()
+	digest, err := b.IdentityDigestWithLimits(limits)
 	if err != nil {
 		return Bundle{}, err
 	}
@@ -353,6 +375,12 @@ func (b Bundle) WithDigest() (Bundle, error) {
 // untrusted identity inputs, so unknown fields, duplicate object keys and
 // trailing JSON values are rejected instead of being silently ignored.
 func ParseManifest(data []byte) (Bundle, error) {
+	return ParseManifestWithLimits(data, Limits{})
+}
+
+// ParseManifestWithLimits is ParseManifest with caller-supplied manifest size
+// and count limits.
+func ParseManifestWithLimits(data []byte, limits Limits) (Bundle, error) {
 	var decoded *Bundle
 	if err := strictjson.Decode(data, &decoded); err != nil {
 		return Bundle{}, fmt.Errorf("%w: decode JSON: %v", ErrInvalidManifest, err)
@@ -361,7 +389,7 @@ func ParseManifest(data []byte) (Bundle, error) {
 		return Bundle{}, fmt.Errorf("%w: decode JSON: manifest top-level value must be an object", ErrInvalidManifest)
 	}
 	b := *decoded
-	if err := b.Validate(); err != nil {
+	if err := b.ValidateWithLimits(limits); err != nil {
 		return Bundle{}, err
 	}
 	if b.Schema == "" {
@@ -471,11 +499,15 @@ func entryPathKey(name string) string {
 }
 
 func manifestEntriesEqual(a, b Bundle) error {
-	left, err := a.canonical()
+	return manifestEntriesEqualWithLimits(a, b, Limits{})
+}
+
+func manifestEntriesEqualWithLimits(a, b Bundle, limits Limits) error {
+	left, err := a.canonicalWithLimits(limits)
 	if err != nil {
 		return err
 	}
-	right, err := b.canonical()
+	right, err := b.canonicalWithLimits(limits)
 	if err != nil {
 		return err
 	}

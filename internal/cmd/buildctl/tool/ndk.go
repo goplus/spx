@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
+	"github.com/goplus/spx/v3/internal/runtimebundle"
 )
 
 type toolSetupNDKConfig struct {
@@ -45,7 +46,7 @@ type androidNDKEnv struct {
 }
 
 var androidNDKResolveEnv = resolveAndroidNDKEnv
-var androidNDKFetcher = shared.FetchURLToFile
+var androidNDKFetcher = fetchAndroidNDK
 
 // These ceilings are calibrated against the pinned r23c archives published by
 // Google. The largest of darwin/linux/windows has 8,686 entries, a 1.37 MiB
@@ -61,6 +62,10 @@ var androidNDKZipLimits = shared.ZipLimits{
 	MaxEntrySize:             512 << 20,
 	MaxTotalSize:             6 << 30,
 	MaxCompressionRatio:      200,
+}
+
+func fetchAndroidNDK(url, dst string) error {
+	return shared.FetchURLToFileWithLimit(url, dst, androidNDKZipLimits.MaxArchiveBytes)
 }
 
 func parseToolSetupNDKArgs(args []string) (toolSetupNDKConfig, error) {
@@ -257,8 +262,17 @@ func verifyNDKArchive(path string) error {
 	if err != nil {
 		return err
 	}
-	if info.Size() < 900_000_000 {
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("archive is not a regular file: %s", path)
+	}
+	// The complete structural/resource validation happens in ExtractZipWithOptions.
+	// This quick check only rejects an obviously truncated download before caching;
+	// archive sizes differ substantially across the pinned host variants.
+	if info.Size() < 22 {
 		return fmt.Errorf("archive looks incomplete: %s (%d bytes)", path, info.Size())
+	}
+	if info.Size() > androidNDKZipLimits.MaxArchiveBytes {
+		return fmt.Errorf("%w: archive %s size %d exceeds limit %d", runtimebundle.ErrArchiveLimit, path, info.Size(), androidNDKZipLimits.MaxArchiveBytes)
 	}
 	return nil
 }

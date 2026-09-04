@@ -110,6 +110,50 @@ func TestFetchURLToFileLeavesDestinationUntouchedOnInterruptedDownload(t *testin
 	}
 }
 
+func TestFetchURLToFileRejectsDeclaredSizeBeforeCreatingTempFile(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Length", "5")
+		_, _ = w.Write([]byte("12345"))
+	}))
+	defer server.Close()
+
+	parent := filepath.Join(t.TempDir(), "missing")
+	err := fetchURLToFileWithLimit(server.URL, filepath.Join(parent, "asset.zip"), 4)
+	if !errors.Is(err, runtimebundle.ErrArchiveLimit) {
+		t.Fatalf("fetchURLToFileWithLimit error = %v, want ErrArchiveLimit", err)
+	}
+	if _, err := os.Stat(parent); !os.IsNotExist(err) {
+		t.Fatalf("download directory was created before Content-Length rejection: %v", err)
+	}
+}
+
+func TestFetchURLToFileRejectsChunkedBodyAboveLimit(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		if flusher, ok := w.(http.Flusher); ok {
+			flusher.Flush()
+		}
+		_, _ = w.Write([]byte("12345"))
+	}))
+	defer server.Close()
+
+	tempDir := t.TempDir()
+	dst := filepath.Join(tempDir, "asset.zip")
+	if err := os.WriteFile(dst, []byte("existing"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err := fetchURLToFileWithLimit(server.URL, dst, 4)
+	if !errors.Is(err, runtimebundle.ErrArchiveLimit) {
+		t.Fatalf("fetchURLToFileWithLimit error = %v, want ErrArchiveLimit", err)
+	}
+	if content, readErr := os.ReadFile(dst); readErr != nil || string(content) != "existing" {
+		t.Fatalf("destination content = %q, err = %v; want original content", content, readErr)
+	}
+	if matches, globErr := filepath.Glob(filepath.Join(tempDir, "asset.zip.tmp-*")); globErr != nil || len(matches) != 0 {
+		t.Fatalf("temporary download files = %v, err = %v; want none", matches, globErr)
+	}
+}
+
 func TestFetchURLToFileHonorsHTTPClientTimeout(t *testing.T) {
 	oldClient := engineDownloadHTTPClient
 	engineDownloadHTTPClient = &http.Client{Timeout: 20 * time.Millisecond}

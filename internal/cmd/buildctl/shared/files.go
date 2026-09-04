@@ -19,6 +19,7 @@ package shared
 import (
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -54,7 +55,14 @@ func extractZipWithOptions(srcZip, dstDir string, options ZipExtractOptions) err
 	return err
 }
 
-func fetchURLToFile(url, dst string) (err error) {
+func fetchURLToFile(url, dst string) error {
+	return fetchURLToFileWithLimit(url, dst, runtimebundle.MaxArchiveBytes)
+}
+
+func fetchURLToFileWithLimit(url, dst string, maxBytes int64) (err error) {
+	if maxBytes <= 0 {
+		return fmt.Errorf("invalid download size limit %d", maxBytes)
+	}
 	resp, err := fileDownloadHTTPClient.Get(url)
 	if err != nil {
 		return err
@@ -67,6 +75,9 @@ func fetchURLToFile(url, dst string) (err error) {
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("download %s failed: %s", url, resp.Status)
+	}
+	if resp.ContentLength > maxBytes {
+		return fmt.Errorf("%w: download %s declares %d bytes, limit %d", runtimebundle.ErrArchiveLimit, url, resp.ContentLength, maxBytes)
 	}
 
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
@@ -86,7 +97,11 @@ func fetchURLToFile(url, dst string) (err error) {
 		}
 	}()
 
-	if _, err := io.Copy(file, resp.Body); err != nil {
+	downloaded, err := io.Copy(file, io.LimitReader(resp.Body, downloadLimitWithOverflow(maxBytes)))
+	if downloaded > maxBytes {
+		return fmt.Errorf("%w: download %s exceeds limit %d", runtimebundle.ErrArchiveLimit, url, maxBytes)
+	}
+	if err != nil {
 		return err
 	}
 	if err := file.Close(); err != nil {
@@ -95,4 +110,11 @@ func fetchURLToFile(url, dst string) (err error) {
 	file = nil
 
 	return os.Rename(tmpPath, dst)
+}
+
+func downloadLimitWithOverflow(maxBytes int64) int64 {
+	if maxBytes == math.MaxInt64 {
+		return maxBytes
+	}
+	return maxBytes + 1
 }

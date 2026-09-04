@@ -67,7 +67,7 @@ func (c *Cache) materializePath(ctx context.Context, namespace Namespace, zipPat
 			return "", verifyErr
 		}
 		bundle.Namespace = namespace
-		bundle, err = bundle.WithDigest()
+		bundle, err = bundle.WithDigestWithLimits(limits)
 		if err != nil {
 			return "", err
 		}
@@ -170,7 +170,7 @@ func (c *Cache) materializePath(ctx context.Context, namespace Namespace, zipPat
 	defer closeSource.Close()
 	if source.bundle.Namespace != namespace {
 		source.bundle.Namespace = namespace
-		source.bundle, err = source.bundle.WithDigest()
+		source.bundle, err = source.bundle.WithDigestWithLimits(limits)
 		if err != nil {
 			return "", err
 		}
@@ -181,7 +181,7 @@ func (c *Cache) materializePath(ctx context.Context, namespace Namespace, zipPat
 	if err := extractVerifiedRoot(source, tempRoot); err != nil {
 		return "", fmt.Errorf("runtimebundle: materialize %s: %w", zipPath, err)
 	}
-	if err := writeMetadataRoot(tempRoot, source.bundle); err != nil {
+	if err := writeMetadataRoot(tempRoot, source.bundle, limits); err != nil {
 		return "", err
 	}
 	if err := syncRootDir(tempRoot); err != nil {
@@ -283,7 +283,7 @@ func normalizeExpectedBundle(namespace Namespace, expected *Bundle, limits Limit
 		// identity before deriving the namespace-specific cache identity.
 		namespaceLess := want
 		namespaceLess.Digest = ""
-		identity, err := namespaceLess.IdentityDigest()
+		identity, err := namespaceLess.IdentityDigestWithLimits(limits)
 		if err != nil {
 			return nil, err
 		}
@@ -296,7 +296,7 @@ func normalizeExpectedBundle(namespace Namespace, expected *Bundle, limits Limit
 	if err := want.ValidateWithLimits(limits); err != nil {
 		return nil, err
 	}
-	digest, err := want.IdentityDigest()
+	digest, err := want.IdentityDigestWithLimits(limits)
 	if err != nil {
 		return nil, err
 	}

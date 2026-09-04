@@ -107,6 +107,48 @@ func TestSetupAndroidNDKManualInstall(t *testing.T) {
 	}
 }
 
+func TestSetupAndroidNDKDownloadsPinnedArchive(t *testing.T) {
+	root := t.TempDir()
+	env := androidNDKEnv{
+		archiveName: "android-ndk-r23c-linux.zip",
+		downloadURL: "https://example.invalid/android-ndk-r23c-linux.zip",
+		sdkRoot:     filepath.Join(root, "sdk"),
+		ndkRoot:     filepath.Join(root, "sdk", "ndk", androidNDKVersion),
+		cacheDir:    filepath.Join(root, "cache"),
+	}
+
+	oldResolveEnv := androidNDKResolveEnv
+	oldFetcher := androidNDKFetcher
+	androidNDKResolveEnv = func() (androidNDKEnv, error) { return env, nil }
+	fetches := 0
+	androidNDKFetcher = func(url, dst string) error {
+		fetches++
+		if url != env.downloadURL {
+			t.Fatalf("download URL = %q, want %q", url, env.downloadURL)
+		}
+		return writeNDKZipFixture(dst)
+	}
+	t.Cleanup(func() {
+		androidNDKResolveEnv = oldResolveEnv
+		androidNDKFetcher = oldFetcher
+	})
+	t.Setenv("ANDROID_SDK_ROOT", "")
+	t.Setenv("ANDROID_NDK_ROOT", "")
+
+	if err := setupAndroidNDK(toolSetupNDKConfig{}); err != nil {
+		t.Fatalf("setupAndroidNDK download path returned error: %v", err)
+	}
+	if fetches != 1 {
+		t.Fatalf("download count = %d, want 1", fetches)
+	}
+	if !shared.FileExists(filepath.Join(env.cacheDir, env.archiveName)) {
+		t.Fatal("downloaded NDK archive was not persisted in the cache")
+	}
+	if !shared.FileExists(filepath.Join(env.ndkRoot, "source.properties")) {
+		t.Fatal("downloaded NDK archive was not installed")
+	}
+}
+
 func TestUpdateNDKShellConfigQuotesPaths(t *testing.T) {
 	shellConfig := filepath.Join(t.TempDir(), ".zshrc")
 	env := androidNDKEnv{

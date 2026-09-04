@@ -86,8 +86,8 @@ func writeRootPrivateFile(root *os.Root, name string, data []byte, executable bo
 	return nil
 }
 
-func writeMetadataRoot(root *os.Root, bundle Bundle) error {
-	manifest, err := bundle.WithDigest()
+func writeMetadataRoot(root *os.Root, bundle Bundle, limits Limits) error {
+	manifest, err := bundle.WithDigestWithLimits(limits)
 	if err != nil {
 		return err
 	}
@@ -163,7 +163,7 @@ func (c *Cache) validCacheHitRoot(namespaceRoot *os.Root, namespace, digest stri
 	if err != nil {
 		return false, nil
 	}
-	manifest, err := ParseManifest(manifestData)
+	manifest, err := ParseManifestWithLimits(manifestData, c.Limits)
 	if err != nil {
 		return false, nil
 	}
@@ -175,7 +175,7 @@ func (c *Cache) validCacheHitRoot(namespaceRoot *os.Root, namespace, digest stri
 		return false, nil
 	}
 	if expected != nil {
-		if err := manifestEntriesEqual(manifest, *expected); err != nil {
+		if err := manifestEntriesEqualWithLimits(manifest, *expected, c.Limits); err != nil {
 			return false, nil
 		}
 	}

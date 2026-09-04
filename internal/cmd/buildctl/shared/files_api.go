@@ -56,3 +56,9 @@ func ExtractZipWithOptions(srcZip, dstDir string, options ZipExtractOptions) err
 func FetchURLToFile(url, dst string) error {
 	return fetchURLToFile(url, dst)
 }
+
+// FetchURLToFileWithLimit downloads a URL atomically and rejects a response
+// larger than maxBytes before publishing it.
+func FetchURLToFileWithLimit(url, dst string, maxBytes int64) error {
+	return fetchURLToFileWithLimit(url, dst, maxBytes)
+}

@@ -19,10 +19,13 @@ package engine
 import (
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/goplus/spx/v3/internal/runtimebundle"
 )
 
 var engineDownloadHTTPClient = &http.Client{Timeout: 30 * time.Minute}
@@ -37,7 +40,14 @@ func (err *downloadHTTPStatusError) Error() string {
 	return fmt.Sprintf("download %s failed: %s", err.url, err.status)
 }
 
-func fetchURLToFile(url, dst string) (err error) {
+func fetchURLToFile(url, dst string) error {
+	return fetchURLToFileWithLimit(url, dst, runtimebundle.MaxArchiveBytes)
+}
+
+func fetchURLToFileWithLimit(url, dst string, maxBytes int64) (err error) {
+	if maxBytes <= 0 {
+		return fmt.Errorf("invalid download size limit %d", maxBytes)
+	}
 	fmt.Fprintf(os.Stdout, "Downloading %s -> %s\n", url, dst)
 
 	resp, err := engineDownloadHTTPClient.Get(url)
@@ -52,6 +62,9 @@ func fetchURLToFile(url, dst string) (err error) {
 			statusCode: resp.StatusCode,
 			status:     resp.Status,
 		}
+	}
+	if resp.ContentLength > maxBytes {
+		return fmt.Errorf("%w: download %s declares %d bytes, limit %d", runtimebundle.ErrArchiveLimit, url, resp.ContentLength, maxBytes)
 	}
 
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
@@ -71,22 +84,24 @@ func fetchURLToFile(url, dst string) (err error) {
 		}
 	}()
 
+	body := io.LimitReader(resp.Body, downloadLimitWithOverflow(maxBytes))
+	var downloaded int64
 	if resp.ContentLength <= 0 {
-		if _, err := io.Copy(file, resp.Body); err != nil {
-			return err
-		}
+		downloaded, err = io.Copy(file, body)
 	} else {
-		var downloaded int64
 		lastReport := time.Now().Add(-time.Second)
 		buffer := make([]byte, 128*1024)
 
 		for {
-			n, readErr := resp.Body.Read(buffer)
+			n, readErr := body.Read(buffer)
 			if n > 0 {
 				if _, err := file.Write(buffer[:n]); err != nil {
 					return err
 				}
 				downloaded += int64(n)
+				if downloaded > maxBytes {
+					return fmt.Errorf("%w: download %s exceeds limit %d", runtimebundle.ErrArchiveLimit, url, maxBytes)
+				}
 				if time.Since(lastReport) >= 500*time.Millisecond || downloaded == resp.ContentLength {
 					fmt.Fprintf(os.Stdout, "  %.1f%% (%s/%s)\r", float64(downloaded)*100/float64(resp.ContentLength), formatDownloadSize(downloaded), formatDownloadSize(resp.ContentLength))
 					lastReport = time.Now()
@@ -99,7 +114,14 @@ func fetchURLToFile(url, dst string) (err error) {
 				return readErr
 			}
 		}
-
+	}
+	if err != nil {
+		return err
+	}
+	if downloaded > maxBytes {
+		return fmt.Errorf("%w: download %s exceeds limit %d", runtimebundle.ErrArchiveLimit, url, maxBytes)
+	}
+	if resp.ContentLength > 0 {
 		fmt.Fprintf(os.Stdout, "  100.0%% (%s/%s)\n", formatDownloadSize(resp.ContentLength), formatDownloadSize(resp.ContentLength))
 	}
 
@@ -109,6 +131,13 @@ func fetchURLToFile(url, dst string) (err error) {
 	file = nil
 
 	return replaceDownloadedFile(tmpPath, dst)
+}
+
+func downloadLimitWithOverflow(maxBytes int64) int64 {
+	if maxBytes == math.MaxInt64 {
+		return maxBytes
+	}
+	return maxBytes + 1
 }
 
 func formatDownloadSize(size int64) string {

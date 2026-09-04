@@ -308,7 +308,7 @@ func verifyReaderAt(reader io.ReaderAt, size int64, options VerifyOptions) (veri
 	}
 	// ZIP manifests are independent of cache namespace. Namespace is supplied
 	// by the cache caller, not guessed from an archive's bytes.
-	bundle, err = bundle.WithDigest()
+	bundle, err = bundle.WithDigestWithLimits(limits)
 	if err != nil {
 		return verifiedArchive{}, err
 	}
@@ -321,7 +321,7 @@ func verifyReaderAt(reader io.ReaderAt, size int64, options VerifyOptions) (veri
 		want.Digest = ""
 		if want.Namespace != "" {
 			bundle.Namespace = want.Namespace
-			bundle, err = bundle.WithDigest()
+			bundle, err = bundle.WithDigestWithLimits(limits)
 			if err != nil {
 				return verifiedArchive{}, err
 			}
@@ -329,7 +329,7 @@ func verifyReaderAt(reader io.ReaderAt, size int64, options VerifyOptions) (veri
 		if err := want.ValidateWithLimits(limits); err != nil {
 			return verifiedArchive{}, err
 		}
-		if err := manifestEntriesEqual(bundle, want); err != nil {
+		if err := manifestEntriesEqualWithLimits(bundle, want, limits); err != nil {
 			return verifiedArchive{}, err
 		}
 		if originalDigest != "" && bundle.Digest != originalDigest {
