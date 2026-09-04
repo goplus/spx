@@ -34,19 +34,39 @@ import (
 // -------------------------------------------------------------------------------------
 
 // A FS represents a zip filesystem.
-type FS zip.ReadCloser
+type FS struct {
+	*zip.Reader
+	file *os.File
+}
 
 // Open opens a zip filesystem object.
 func Open(file string) (fs.Dir, error) {
-	zipf, err := zip.OpenReader(file)
+	source, err := os.Open(file)
 	if err != nil {
 		return nil, err
 	}
-	if err := validateZipReader(&zipf.Reader); err != nil {
-		_ = zipf.Close()
+	closeOnError := true
+	defer func() {
+		if closeOnError {
+			_ = source.Close()
+		}
+	}()
+	info, err := source.Stat()
+	if err != nil {
 		return nil, err
 	}
-	return (*FS)(zipf), nil
+	if err := preflightZipArchive(source, info.Size()); err != nil {
+		return nil, err
+	}
+	reader, err := zip.NewReader(source, info.Size())
+	if err != nil {
+		return nil, err
+	}
+	if err := validateZipReader(reader); err != nil {
+		return nil, err
+	}
+	closeOnError = false
+	return &FS{Reader: reader, file: source}, nil
 }
 
 // Open opens a zipped file object.
@@ -61,7 +81,10 @@ func (zipf *FS) Open(name string) (io.ReadCloser, error) {
 
 // Close closes the filesystem object.
 func (zipf *FS) Close() error {
-	return ((*zip.ReadCloser)(zipf)).Close()
+	if zipf == nil || zipf.file == nil {
+		return nil
+	}
+	return zipf.file.Close()
 }
 
 // OpenHttp opens hzip:<domain>/<path>

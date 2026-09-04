@@ -78,6 +78,9 @@ func openHttpWith(remotePath, scheme string) (fs.Dir, error) {
 		return nil, err
 	}
 	r := bytes.NewReader(body)
+	if err := preflightZipArchive(r, int64(r.Len())); err != nil {
+		return nil, err
+	}
 	zipf, err := zip.NewReader(r, int64(r.Len()))
 	if err != nil {
 		return nil, err
