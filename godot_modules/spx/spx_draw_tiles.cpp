@@ -353,8 +353,8 @@ void SpxDrawTiles::_place_tiles_bulk_spx(GdArray positions) {
 	if (len <= 0) {
 		return;
 	}
-	const float *data = SpxBaseMgr::get_array<float>(positions, 0);
-	if (data == nullptr) {
+	const float *position_data = SpxBaseMgr::get_array<float>(positions, 0);
+	if (position_data == nullptr) {
 		return;
 	}
 
@@ -366,7 +366,7 @@ void SpxDrawTiles::_place_tiles_bulk_spx(GdArray positions) {
 	int source_id = _get_or_create_source_id(current_texture);
 
 	for (int i = 0; i + 1 < len; i += 2) {
-		Vector2 pos = { data[i], data[i + 1] };
+		Vector2 pos = { position_data[i], position_data[i + 1] };
 		Vector2 local_pos = layer->to_local(spx_to_godot_vec2(pos));
 		Vector2i coords = layer->local_to_map(local_pos);
 
