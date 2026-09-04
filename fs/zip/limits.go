@@ -254,18 +254,6 @@ func readZipDirectoryInfo(reader io.ReaderAt, size int64, limits resolvedZipLimi
 	entries := binary.LittleEndian.Uint16(record[10:12])
 	directorySize := binary.LittleEndian.Uint32(record[12:16])
 	directoryOffset := binary.LittleEndian.Uint32(record[16:20])
-	needsZip64 := entriesThisDisk == math.MaxUint16 || entries == math.MaxUint16 ||
-		directorySize == math.MaxUint16 || directorySize == math.MaxUint32 ||
-		directoryOffset == math.MaxUint32
-	if !needsZip64 {
-		if entriesThisDisk != entries {
-			return zipDirectoryInfo{}, fmt.Errorf("zip: inconsistent central directory entry count: %w", zip.ErrFormat)
-		}
-		if int(entries) > limits.maxEntries {
-			return zipDirectoryInfo{}, fmt.Errorf("%w: %d entries exceeds limit %d", ErrArchiveLimit, entries, limits.maxEntries)
-		}
-	}
-
 	info := zipDirectoryInfo{
 		endOffset:  size - window + int64(endIndex),
 		eocdOffset: size - window + int64(endIndex),
@@ -273,47 +261,64 @@ func readZipDirectoryInfo(reader io.ReaderAt, size int64, limits resolvedZipLimi
 		size:       uint64(directorySize),
 		entries:    uint64(entries),
 	}
-	if !needsZip64 {
-		return info, nil
+	// archive/zip treats these boundary values as a ZIP64 probe, then falls
+	// back to the classic EOCD values when no locator is present. In
+	// particular, 0xffff is a valid value for the 32-bit directory-size field.
+	mayHaveZip64 := entries == math.MaxUint16 || directorySize == math.MaxUint16 ||
+		directorySize == math.MaxUint32 || directoryOffset == math.MaxUint32
+	if mayHaveZip64 {
+		zip64Info, found, err := readZip64DirectoryInfo(reader, size, info, limits)
+		if err != nil {
+			return zipDirectoryInfo{}, err
+		}
+		if found {
+			return zip64Info, nil
+		}
 	}
-	return readZip64DirectoryInfo(reader, size, info, limits)
+	if entriesThisDisk != entries {
+		return zipDirectoryInfo{}, fmt.Errorf("zip: inconsistent central directory entry count: %w", zip.ErrFormat)
+	}
+	if int(entries) > limits.maxEntries {
+		return zipDirectoryInfo{}, fmt.Errorf("%w: %d entries exceeds limit %d", ErrArchiveLimit, entries, limits.maxEntries)
+	}
+	return info, nil
 }
 
-func readZip64DirectoryInfo(reader io.ReaderAt, size int64, info zipDirectoryInfo, limits resolvedZipLimits) (zipDirectoryInfo, error) {
+func readZip64DirectoryInfo(reader io.ReaderAt, size int64, info zipDirectoryInfo, limits resolvedZipLimits) (zipDirectoryInfo, bool, error) {
 	locatorOffset := info.eocdOffset - zipDirectory64LocLen
 	if locatorOffset < 0 || size < zipDirectory64EndLen {
-		return zipDirectoryInfo{}, fmt.Errorf("zip: ZIP64 locator missing: %w", zip.ErrFormat)
+		return zipDirectoryInfo{}, false, nil
 	}
 	var locator [zipDirectory64LocLen]byte
 	if _, err := reader.ReadAt(locator[:], locatorOffset); err != nil {
-		return zipDirectoryInfo{}, err
+		return zipDirectoryInfo{}, false, err
 	}
 	if binary.LittleEndian.Uint32(locator[0:4]) != zipDirectory64LocSignature ||
 		binary.LittleEndian.Uint32(locator[4:8]) != 0 ||
 		binary.LittleEndian.Uint32(locator[16:20]) != 1 {
-		return zipDirectoryInfo{}, fmt.Errorf("zip: invalid ZIP64 locator: %w", zip.ErrFormat)
+		return zipDirectoryInfo{}, false, nil
 	}
 	recordOffset64 := binary.LittleEndian.Uint64(locator[8:16])
 	recordOffset, record, ok := readZip64EndAt(reader, size, locatorOffset, recordOffset64)
 	if !ok {
-		return zipDirectoryInfo{}, fmt.Errorf("zip: invalid ZIP64 end record: %w", zip.ErrFormat)
+		return zipDirectoryInfo{}, true, fmt.Errorf("zip: invalid ZIP64 end record: %w", zip.ErrFormat)
 	}
 	if binary.LittleEndian.Uint32(record[16:20]) != 0 || binary.LittleEndian.Uint32(record[20:24]) != 0 {
-		return zipDirectoryInfo{}, fmt.Errorf("zip: multi-disk ZIP64 archives are unsupported: %w", zip.ErrFormat)
+		return zipDirectoryInfo{}, true, fmt.Errorf("zip: multi-disk ZIP64 archives are unsupported: %w", zip.ErrFormat)
 	}
 	entriesThisDisk := binary.LittleEndian.Uint64(record[24:32])
 	entries := binary.LittleEndian.Uint64(record[32:40])
 	if entriesThisDisk != entries {
-		return zipDirectoryInfo{}, fmt.Errorf("zip: inconsistent ZIP64 entry count: %w", zip.ErrFormat)
+		return zipDirectoryInfo{}, true, fmt.Errorf("zip: inconsistent ZIP64 entry count: %w", zip.ErrFormat)
 	}
 	if entries > uint64(limits.maxEntries) {
-		return zipDirectoryInfo{}, fmt.Errorf("%w: %d entries exceeds limit %d", ErrArchiveLimit, entries, limits.maxEntries)
+		return zipDirectoryInfo{}, true, fmt.Errorf("%w: %d entries exceeds limit %d", ErrArchiveLimit, entries, limits.maxEntries)
 	}
 	info.endOffset = recordOffset
 	info.entries = entries
 	info.size = binary.LittleEndian.Uint64(record[40:48])
 	info.offset = binary.LittleEndian.Uint64(record[48:56])
-	return info, nil
+	return info, true, nil
 }
 
 func readZip64EndAt(reader io.ReaderAt, size, locatorOffset int64, offset uint64) (int64, [zipDirectory64EndLen]byte, bool) {

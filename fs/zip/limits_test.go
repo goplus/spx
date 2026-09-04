@@ -244,6 +244,38 @@ func TestPreflightAcceptsZip64DirectorySizeSentinel(t *testing.T) {
 	}
 }
 
+func TestPreflightAcceptsClassicDirectorySizeFFFF(t *testing.T) {
+	var output bytes.Buffer
+	writer := archivezip.NewWriter(&output)
+	header := &archivezip.FileHeader{
+		Name:    "x",
+		Method:  archivezip.Store,
+		Comment: strings.Repeat("c", math.MaxUint16-zipDirectoryHeaderLen-len("x")),
+	}
+	entry, err := writer.CreateHeader(header)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := entry.Write([]byte("x")); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	data := output.Bytes()
+	end := findLimitZipEnd(t, data)
+	if got := binary.LittleEndian.Uint32(data[end+12 : end+16]); got != math.MaxUint16 {
+		t.Fatalf("central directory size = %d, want %d", got, uint32(math.MaxUint16))
+	}
+
+	if err := preflightZipArchive(bytes.NewReader(data), int64(len(data))); err != nil {
+		t.Fatalf("classic directory size 0xffff rejected: %v", err)
+	}
+	if _, err := archivezip.NewReader(bytes.NewReader(data), int64(len(data))); err != nil {
+		t.Fatalf("archive/zip rejected classic directory size 0xffff: %v", err)
+	}
+}
+
 func TestReadZipArchiveBodyRejectsOversize(t *testing.T) {
 	useZipTestLimits(t, func(limits *resolvedZipLimits) { limits.maxArchiveBytes = 4 })
 
