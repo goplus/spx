@@ -101,6 +101,9 @@ func fetchURLToFileWithLimit(url, dst string, maxBytes int64) (err error) {
 	if downloaded > maxBytes {
 		return fmt.Errorf("%w: download %s exceeds limit %d", runtimebundle.ErrArchiveLimit, url, maxBytes)
 	}
+	if resp.ContentLength > 0 && downloaded != resp.ContentLength {
+		return fmt.Errorf("download %s ended after %d bytes, want %d: %w", url, downloaded, resp.ContentLength, io.ErrUnexpectedEOF)
+	}
 	if err != nil {
 		return err
 	}

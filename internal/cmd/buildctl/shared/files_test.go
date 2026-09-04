@@ -19,6 +19,7 @@ package shared
 import (
 	"archive/zip"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -30,6 +31,23 @@ import (
 	"github.com/goplus/spx/v3/internal/release"
 	"github.com/goplus/spx/v3/internal/runtimebundle"
 )
+
+type roundTripBodyTransport struct {
+	status        int
+	contentLength int64
+	body          string
+}
+
+func (transport roundTripBodyTransport) RoundTrip(*http.Request) (*http.Response, error) {
+	return &http.Response{
+		StatusCode:    transport.status,
+		Status:        http.StatusText(transport.status),
+		Header:        make(http.Header),
+		Body:          io.NopCloser(strings.NewReader(transport.body)),
+		ContentLength: transport.contentLength,
+		Request:       &http.Request{},
+	}, nil
+}
 
 type extractZipFixture struct {
 	name   string
@@ -242,6 +260,21 @@ func TestFetchURLToFileWithLimitRejectsChunkedBodyAboveLimit(t *testing.T) {
 	}
 	if matches, globErr := filepath.Glob(filepath.Join(tempDir, "ndk.zip.tmp-*")); globErr != nil || len(matches) != 0 {
 		t.Fatalf("temporary download files = %v, err = %v; want none", matches, globErr)
+	}
+}
+
+func TestFetchURLToFileWithLimitRejectsShortDeclaredBody(t *testing.T) {
+	oldClient := fileDownloadHTTPClient
+	fileDownloadHTTPClient = &http.Client{Transport: roundTripBodyTransport{
+		status:        http.StatusOK,
+		contentLength: 5,
+		body:          "123",
+	}}
+	t.Cleanup(func() { fileDownloadHTTPClient = oldClient })
+
+	err := fetchURLToFileWithLimit("https://example.invalid/short.zip", filepath.Join(t.TempDir(), "short.zip"), 10)
+	if !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("fetchURLToFileWithLimit error = %v, want io.ErrUnexpectedEOF", err)
 	}
 }
 
