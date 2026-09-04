@@ -47,10 +47,17 @@ func TestQueueBlockStillBlocksExternalCaller(t *testing.T) {
 	game.events <- &eventTimer{Time: 1}
 	game.setEventQueuePolicy(coreevent.QueueBlock)
 
+	started := make(chan struct{})
 	done := make(chan bool, 1)
 	go func() {
+		close(started)
 		done <- game.queueEventWithPolicy(&eventTimer{Time: 2})
 	}()
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("external QueueBlock caller did not start")
+	}
 
 	select {
 	case <-done:
