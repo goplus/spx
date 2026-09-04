@@ -114,13 +114,9 @@ func (p *Coroutines) AbortAllAndWait(timeout stime.Duration) bool {
 	return p.RunAfterAbortAll(timeout, nil)
 }
 
-// RunAfterAbortAll closes coroutine admission, aborts and drains every
-// registered thread, then runs call while admission remains closed. It must be
-// called outside a managed coroutine or its panic handler. If the timeout
-// expires, call is not run and admission stays closed until a later successful
-// RunAfterAbortAll explicitly recovers the manager.
-// The callback must not create a coroutine through this manager because the
-// admission lock remains held until it returns.
+// RunAfterAbortAll drains registered threads, then runs call with admission
+// closed. Call it outside managed code; a timeout leaves admission closed until
+// a later successful call. call must not create a coroutine.
 func (p *Coroutines) RunAfterAbortAll(timeout stime.Duration, call func()) bool {
 	if p.currentCoroutineThread() != nil || p.isFinalizingCaller() {
 		panic("coroutine: RunAfterAbortAll called from a managed coroutine or its panic handler")
@@ -136,9 +132,7 @@ func (p *Coroutines) RunAfterAbortAll(timeout stime.Duration, call func()) bool 
 	p.creationMu.Lock()
 	defer p.creationMu.Unlock()
 	if !completed || p.hasThreadsOtherThan(nil) {
-		// Fatal/reload barriers fail closed. The callback cannot safely be replayed
-		// after its caller observes a timeout, so only an explicit later barrier
-		// may recover this quarantined manager.
+		// Keep timed-out barriers closed until explicit recovery.
 		return false
 	}
 	defer p.endStoppingLocked()
@@ -153,9 +147,7 @@ func (p *Coroutines) beginStoppingLocked() {
 		p.stopping = true
 		p.abortEpoch.Add(1)
 	}
-	// A new barrier owns the admission decision until it completes. This also
-	// prevents a prior timed-out barrier's auto-reopen hook from firing while
-	// this barrier is preparing its callback.
+	// Each barrier owns recovery state until it completes.
 	p.reopenWhenDrained = false
 	p.abortAllLocked()
 }
@@ -288,9 +280,7 @@ func (p *Coroutines) unregisterThread(th Thread) {
 	p.maybeReopenAfterDrain()
 }
 
-// admitNativeTask reserves lifecycle ownership for a WaitToDo worker. The
-// reservation is made under the same read barrier as coroutine creation, so a
-// shutdown either observes the worker or rejects its admission.
+// admitNativeTask registers a WaitToDo worker under the admission barrier.
 func (p *Coroutines) admitNativeTask(me Thread) *nativeTask {
 	p.creationMu.RLock()
 	defer p.creationMu.RUnlock()

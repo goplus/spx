@@ -47,18 +47,15 @@ type Coroutines struct {
 	runMu   sync.Mutex
 	current atomic.Pointer[threadImpl]
 
-	// shutdownMu serializes fatal shutdowns. creationMu protects stopping and
-	// makes thread/native-task registration atomic with respect to shutdown
-	// transitions.
-	// Lock order is shutdownMu, runMu, then creationMu.
+	// shutdownMu serializes shutdowns; creationMu guards admission and lifecycle
+	// registration. Lock order is shutdownMu, runMu, then creationMu.
 	shutdownMu sync.Mutex
 	creationMu sync.RWMutex
 	stopping   bool
-	// reopenWhenDrained is set only for a recoverable watchdog shutdown.
-	// Fatal/reload barrier timeouts remain quarantined until an explicit retry.
+	// Watchdog shutdowns may reopen after drain; fatal barriers require retry.
 	reopenWhenDrained bool
 
-	// threadsMu protects the thread and native-task registries.
+	// threadsMu protects both lifecycle registries.
 	threadsMu   sync.Mutex
 	allThreads  map[Thread]struct{}
 	nativeTasks map[*nativeTask]struct{}
@@ -89,8 +86,7 @@ type Coroutines struct {
 	// executes. A scheduler-wide Current value is not sufficient to identify
 	// the caller because external goroutines can observe it concurrently.
 	goroutineThreads sync.Map // map[uint64]Thread
-	// finalizingGoroutines prevents a panic callback from synchronously waiting
-	// for the thread whose teardown is invoking that callback.
+	// Prevent reentry while a panic callback runs.
 	finalizingGoroutines sync.Map // map[uint64]struct{}
 }
 

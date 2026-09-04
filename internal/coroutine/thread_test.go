@@ -451,8 +451,7 @@ func TestRunAfterAbortAllTimeoutRequiresExplicitRecovery(t *testing.T) {
 	}
 	waitForThreadSignal(t, watchdogRejected.done, "post-watchdog quarantined creation did not finish")
 
-	// A later explicit barrier owns the recovery decision and may reopen once it
-	// proves that no lifecycle work remains.
+	// Explicit recovery reopens admission after the drain.
 	if !co.RunAfterAbortAll(time.Second, nil) {
 		t.Fatal("explicit recovery barrier did not complete after drain")
 	}

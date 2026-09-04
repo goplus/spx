@@ -39,9 +39,7 @@ const (
 	updateAwaitInitialization
 
 	updateWatchdogTimeout = stime.Second
-	// Runaway shutdown must not let an uncooperative native worker freeze the
-	// engine update loop forever. A timed-out shutdown remains fail-closed and
-	// is reopened by the final lifecycle item that drains.
+	// Bound watchdog shutdown; late workers reopen after draining.
 	runawayShutdownTimeout = updateWatchdogTimeout
 )
 
@@ -123,14 +121,10 @@ func (p *Coroutines) stopRunawayThreads() {
 
 	completed := p.waitForThreadsToStop(runawayShutdownTimeout, nil)
 
-	// Close the race between observing an empty registry and a concurrent
-	// registration. Creations during shutdown are rejected as canceled. If a
-	// native worker outlives the bounded wait, keep admission closed; its final
-	// unregister path will reopen the manager once all lifecycle work drains.
+	// Recheck admission after the bounded wait; late workers keep it closed.
 	p.creationMu.Lock()
 	if wasStopping {
-		// A watchdog must not weaken a quarantine established by a fatal/reload
-		// barrier. It also preserves an earlier watchdog's recovery policy.
+		// Preserve a fatal barrier's quarantine and any prior watchdog policy.
 		p.reopenWhenDrained = reopenWhenDrained
 		p.maybeReopenAfterDrainLocked()
 	} else if completed && !p.hasThreadsOtherThan(nil) {

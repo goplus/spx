@@ -43,8 +43,7 @@ type taskResult struct {
 	panicked   bool
 }
 
-// nativeTask is a lifecycle token for work running outside the coroutine
-// scheduler (for example, a WaitToDo/ExecuteNative worker).
+// nativeTask tracks work outside the scheduler.
 type nativeTask struct {
 	id uint64
 }
@@ -150,8 +149,7 @@ func (p *Coroutines) WaitToDo(fn func()) {
 	go func() {
 		defer p.finishNativeTask(task)
 		result := runTask(fn)
-		// Publish the result before waking the waiter. The buffered channel also
-		// lets a canceled waiter finish without leaking this worker goroutine.
+		// Publish before waking; buffering lets canceled waiters exit.
 		results <- result
 		p.markRunnableAndResume(me)
 	}()

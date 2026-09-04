@@ -277,9 +277,7 @@ func Panicf(format string, args ...any) {
 // Used on web, where the process cannot exit.
 func abortCoroutinesAndReset(exitCode int64) {
 	co := gco
-	// Panic handling has already dropped the caller identity but keeps its
-	// thread registered until the handler returns, so the drain must never run
-	// inline with the caller.
+	// Drain off-thread while the panic caller unwinds.
 	go requestResetAfterCoroutinesStop(co, 2*stime.Second, func() {
 		extMgr.RequestReset(exitCode)
 	})
