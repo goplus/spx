@@ -405,7 +405,7 @@ func (p *Coroutines) finishThread(th Thread, gid uint64, recovered any) {
 	close(th.done)
 	p.removeThreadState(th)
 	p.setCurrent(nil)
-	p.unregisterThread(th)
+	defer p.unregisterThread(th)
 	p.runMu.Unlock()
 	p.goroutineThreads.Delete(gid)
 	p.handleThreadPanic(th, recovered)
